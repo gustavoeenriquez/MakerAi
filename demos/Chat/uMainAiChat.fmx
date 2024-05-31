@@ -1,0 +1,1367 @@
+object Form64: TForm64
+  Left = 0
+  Top = 0
+  Caption = 'Chat Demo'
+  ClientHeight = 778
+  ClientWidth = 1099
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  DesignerMasterStyle = 0
+  object MainLayout: TLayout
+    Align = Client
+    Size.Width = 1099.000000000000000000
+    Size.Height = 778.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object Layout1: TLayout
+      Align = Top
+      Size.Width = 1099.000000000000000000
+      Size.Height = 50.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      object Rectangle1: TRectangle
+        Align = Top
+        Fill.Color = xFF99DBF8
+        Size.Width = 1099.000000000000000000
+        Size.Height = 50.000000000000000000
+        Size.PlatformDefault = False
+        Stroke.Kind = None
+        object Label1: TLabel
+          Align = Client
+          StyledSettings = [Family, Style, FontColor]
+          Size.Width = 1099.000000000000000000
+          Size.Height = 50.000000000000000000
+          Size.PlatformDefault = False
+          TextSettings.Font.Size = 18.000000000000000000
+          TextSettings.HorzAlign = Center
+          TextSettings.Trimming = None
+          Text = 'Multi Engine Chat Demo'
+          TabOrder = 0
+          object Label8: TLabel
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 1.000000000000000000
+            Position.X = 7.000000000000000000
+            Position.Y = 18.000000000000000000
+            Size.Width = 62.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = '  Engine'
+            TabOrder = 5
+          end
+          object ComboEngines: TComboEdit
+            Touch.InteractiveGestures = [LongTap, DoubleTap]
+            TabOrder = 4
+            ItemHeight = 19.000000000000000000
+            Items.Strings = (
+              'OpenAi'
+              'Anthropic'
+              'Groq'
+              'Ollama')
+            ItemIndex = 0
+            Text = 'OpenAi'
+            Position.X = 81.000000000000000000
+            Position.Y = 13.000000000000000000
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 1.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 150.000000000000000000
+            Size.Height = 26.000000000000000000
+            Size.PlatformDefault = False
+            OnChange = ComboEnginesChange
+          end
+        end
+      end
+    end
+    object LayChat: TLayout
+      Align = Client
+      Size.Width = 781.000000000000000000
+      Size.Height = 678.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      object Layout2: TLayout
+        Align = Client
+        Size.Width = 781.000000000000000000
+        Size.Height = 407.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 1
+        object MemoChat: TMemo
+          Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+          DataDetectorTypes = []
+          TextSettings.WordWrap = True
+          Align = Client
+          Margins.Top = 5.000000000000000000
+          Margins.Right = 5.000000000000000000
+          Size.Width = 776.000000000000000000
+          Size.Height = 402.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 0
+          Viewport.Width = 772.000000000000000000
+          Viewport.Height = 398.000000000000000000
+        end
+      end
+      object Layout3: TLayout
+        Align = Bottom
+        Position.Y = 414.000000000000000000
+        Size.Width = 781.000000000000000000
+        Size.Height = 264.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 0
+        object MemoPrompt: TMemo
+          Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+          DataDetectorTypes = []
+          TextSettings.WordWrap = True
+          Align = Client
+          Margins.Right = 5.000000000000000000
+          Margins.Bottom = 5.000000000000000000
+          Size.Width = 719.000000000000000000
+          Size.Height = 107.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 0
+          Viewport.Width = 715.000000000000000000
+          Viewport.Height = 103.000000000000000000
+        end
+        object BtnPlay: TSpeedButton
+          Align = Right
+          Margins.Left = 5.000000000000000000
+          Margins.Top = 5.000000000000000000
+          Margins.Right = 5.000000000000000000
+          Margins.Bottom = 5.000000000000000000
+          Position.X = 729.000000000000000000
+          Position.Y = 5.000000000000000000
+          Size.Width = 47.000000000000000000
+          Size.Height = 102.000000000000000000
+          Size.PlatformDefault = False
+          StyleLookup = 'playtoolbutton'
+          Text = 'BtnPlay'
+          TextSettings.Trimming = None
+          OnClick = BtnPlayClick
+        end
+        object Layout6: TLayout
+          Align = Bottom
+          Position.Y = 112.000000000000000000
+          Size.Width = 781.000000000000000000
+          Size.Height = 152.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 1
+          object ListImages: TListBox
+            Align = Client
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 777.000000000000000000
+            Size.Height = 116.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 0
+            OnDragOver = ListImagesDragOver
+            OnDragDrop = ListImagesDragDrop
+            DisableFocusEffect = True
+            DefaultItemStyles.ItemStyle = ''
+            DefaultItemStyles.GroupHeaderStyle = ''
+            DefaultItemStyles.GroupFooterStyle = ''
+            ListStyle = Horizontal
+            Viewport.Width = 773.000000000000000000
+            Viewport.Height = 112.000000000000000000
+          end
+          object Layout8: TLayout
+            Align = Bottom
+            Position.Y = 120.000000000000000000
+            Size.Width = 781.000000000000000000
+            Size.Height = 32.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 1
+            object SpeedButton3: TSpeedButton
+              Align = Left
+              Hint = 'Pegar una imagen desde el portapapeles'
+              Size.Width = 32.000000000000000000
+              Size.Height = 32.000000000000000000
+              Size.PlatformDefault = False
+              TextSettings.Trimming = None
+              OnClick = SpeedButton3Click
+              object Image3: TImage
+                MultiResBitmap.Height = 48
+                MultiResBitmap.Width = 48
+                MultiResBitmap = <
+                  item
+                    Width = 48
+                    Height = 48
+                    PNG = {
+                      89504E470D0A1A0A0000000D49484452000000300000003008060000005702F9
+                      870000000473424954080808087C086488000002FC494441546881ED99BD6F53
+                      5718879FF75C7FDCD8B11D3B409340C24720A4AA222115898F76A8A854606825
+                      86B05321211624562616FE01361610030BA8134397762C6AA5A620902A44DB0C
+                      A509AD104AFC157F5CFBBC1D5A241C1D07136CAE90EE33BE7EEF7B7ECFF5391E
+                      7C843E333F7FDB1BDDBB74D82A5F237C0E80F2BD11AEBFF87DFB8F77EE9C6EF7
+                      73BD583F8701E4F72C1FB1C217A8AEA97A173DC04AFB9815393EBA7709E0877E
+                      AE27AEE26F574F269F27D35FD93607DA68CE7479F84965829F56F6AC9F3805FC
+                      23D67C53F1E55E01A835824F8D985328DB80A7AFB61FCA2F3233BCEC9C6F0141
+                      8B9EF1EE6F6B56EEEEBBF06D637D8FF31BA8649243B6CE996C367D341E375954
+                      9CA24BD6879575452540ECCD84780BB72E5F28019CBD74650152A7801340E2D5
+                      F674CA674B21E714405483C0164BE5B57B7F6592DF01BD0994CBF13831FBF196
+                      4236974D0FE18E0F7F062958727DE2E59BA6B573FEF2EDE2D88BBF654D5A3BC5
+                      520044D775E67369A626DC0BA822A56A6D64B55439E895E371574FB7DD012046
+                      E81ABEEB43A827D8C3DA96F3D9E6B399C6486BC6A89C43F410A8F746B3048CFC
+                      3FB60B7D3FC48A1851FD408C9E8EA93D494B10D161942145367A619BA2670193
+                      9E203EFD65472D254F195AFC955ABD736B2A12434903A9FF0A2238DE62CA4F92
+                      DAF519C9B9C98E7AF0C75D6CD57DB0372D40CCC7CB75FEE28C4FFACCEDAFF1E8
+                      F122F56613EDDCE0CED00022829F883337BB9BF1A919BCDC78A740CCEF3D56CF
+                      9D0EC6B616F8E4E0478C8E645C025D11013F91E0C37D538C6DCDBF4D84B71348
+                      A77C66A727999D9E7C7DF380E8FBA17AD74402611309844D2410369140D84402
+                      611309844D2410369140D84402611309844D2410369140D84402611309844DEF
+                      FF4EB7EAB48B8B038CD2B956AFF42C60ABCB341E5EDB549E41F2DE6FA18D0454
+                      157ABC741908AABCBCF5E91AC3B985329920A8D6630BCF574A47574B95DC06B7
+                      9C034609DAB668C4FC1C6482C0D5E114182E376AB564ECC66AB1FA40D0EC6043
+                      6E8CA225CF78BFEC28376A61E688E8C6BF43FAE57FE2875D150000000049454E
+                      44AE426082}
+                    FileName = 
+                      'E:\Proyectos\Delphi11\Proyectos\Sitis\DemoIA\Recursos\Paste_40px' +
+                      '.png'
+                  end>
+                Align = Client
+                Locked = True
+                HitTest = False
+                Margins.Left = 1.000000000000000000
+                Margins.Top = 1.000000000000000000
+                Margins.Right = 1.000000000000000000
+                Margins.Bottom = 1.000000000000000000
+                Size.Width = 30.000000000000000000
+                Size.Height = 30.000000000000000000
+                Size.PlatformDefault = False
+              end
+            end
+            object SpeedButton4: TSpeedButton
+              Align = Left
+              Hint = 'Carga una imagen desde el disco'
+              Position.X = 32.000000000000000000
+              Size.Width = 32.000000000000000000
+              Size.Height = 32.000000000000000000
+              Size.PlatformDefault = False
+              TextSettings.Trimming = None
+              OnClick = SpeedButton4Click
+              object Image4: TImage
+                MultiResBitmap.Height = 48
+                MultiResBitmap.Width = 48
+                MultiResBitmap = <
+                  item
+                    Width = 48
+                    Height = 48
+                    PNG = {
+                      89504E470D0A1A0A0000000D49484452000000300000003008060000005702F9
+                      870000000473424954080808087C08648800000208494441546881ED97B14F13
+                      6114C07FEF7AF44A8225429904261636077170310E30301AC2AA89FF03C2E2C0
+                      A40BC17FC048E28A93262E24C6110709341A4CC0C4389A98E28043AFCFA19CB6
+                      BD9EDC77D0EBD7F8FDA67BEFBB7EF77E79AFD7AFE070381C8EFF19E996D42DA6
+                      513680DB4025E54EAB728F2797585BCAC776A0CF98C2630F18CBB05BEE125E2C
+                      5360932CC503288F758B8717ACC988B880327FA11D7396888FD07334AF879FC3
+                      778477282B729FA3A49BE21DB0870ACA5D60575F30997493CD021163846C242D
+                      0E8200280B494B832100A3490B832290886FFC0911A88CC3681986869A710EE8
+                      2E35A00ADE23B9F97127CA1B764060F21A4C54A058CCADF833CAC02D68BCD1F7
+                      B38B51D24CA03C0257462EBB30537C1AFA54B5F91B6626D0FFE29B08337C989D
+                      065381A0D4937A32512F34C044C01328157B568F2127CC55BF8189403120E1EF
+                      433FA88A34CF6CE90582A067D51823B21F5DA61718B6484039882E07B3035E98
+                      A103F6BC8114EA861DF07DF00B3DABC808E5ABDC38AE45613A019BC647FECE3F
+                      A4152859333EA0ECB78629052CEA8027193A60D308859E61074420B0E608F18B
+                      D389CFAD89F30582DCCFFDFFE293DC795B6F4D741338698B6C1A1FDABFC0D05D
+                      60A72DB2E90D24FAB23315170859037EFC89ED7903BDE2CBE1EBCE644C401E70
+                      88701DD8067EF67D841A610D58E76A7D499609FB5B8CC3E170386CE337948561
+                      FC39C2A34E0000000049454E44AE426082}
+                    FileName = 
+                      'E:\Proyectos\Delphi11\Proyectos\Sitis\DemoIA\Recursos\Open_48px.' +
+                      'png'
+                  end>
+                Align = Client
+                Locked = True
+                HitTest = False
+                Margins.Left = 1.000000000000000000
+                Margins.Top = 1.000000000000000000
+                Margins.Right = 1.000000000000000000
+                Margins.Bottom = 1.000000000000000000
+                Size.Width = 30.000000000000000000
+                Size.Height = 30.000000000000000000
+                Size.PlatformDefault = False
+              end
+            end
+            object SpeedButton5: TSpeedButton
+              Align = Left
+              Hint = 'Borra imagenes de la lista de imagenes'
+              Position.X = 96.000000000000000000
+              Size.Width = 32.000000000000000000
+              Size.Height = 32.000000000000000000
+              Size.PlatformDefault = False
+              TextSettings.Trimming = None
+              OnClick = SpeedButton5Click
+              object Image5: TImage
+                MultiResBitmap.Height = 48
+                MultiResBitmap.Width = 48
+                MultiResBitmap = <
+                  item
+                    Width = 48
+                    Height = 48
+                    PNG = {
+                      89504E470D0A1A0A0000000D49484452000000300000003008060000005702F9
+                      870000000473424954080808087C086488000002F1494441546881ED99CF4B54
+                      5114C7BFE7BEF766C6717E64592E840423888A32A26821E22CEB5F085CB40F8A
+                      5074A72B0BA3456B89F08F70A9429BD9F4138CA092280A351D9D46C737EFDD7B
+                      4F0B6DA16F7C6F8637F982DE67F70EE7DD733FF79EB3BA404CB450D805C6C7E7
+                      CD5CF96B97327007A04E22187EF9CC5000AFD5149EC9FCE995F1F1820C535F84
+                      F9190072E5CF3965E03A13FA01CE0757E43C08FD96A5AF25ED1FD9B0F5CDB00B
+                      48D338218002835F5806CDDC7B34F4D52FFFF183E91E36AC21A18D02B1B30860
+                      234C7D4F0B31334D4C3C4FE6D09ED615299C84EDDB66A61457089824A24957A8
+                      574CA8F81664640D45570934CAC09834F56BBFFC849362A14D6DCACCF6DDA737
+                      1D22625F8127F7A78FEB54DBA0491895527633C3F22B80DD5BCC005C05C805C0
+                      01F904B005501AC01600DF1920826B18E677C93C29410B630F6FEFBB314F0B71
+                      B2BD27993446CE9E3F732193CFB699A6D9E8A007F7BF978EA004292557362BC7
+                      3EBEFF34226AF6171C6839AF00D7B2ACDAFA4E75772532D90C0923F49C87422B
+                      4DE9F674DBA7C58F7DCCEC197AAF8062A1A44C2E7F5B8669859EF196205D49D2
+                      552956EC394DAF0061534AB5B0F8F23D00EECBE432C752E9D4916CF42076D5C6
+                      D6AFAD4D80DEFCD9DBC11CDFFE9E1A9E99BF7CE3D260EFB9DEBFB5475F963E2C
+                      E16DF1DDC2F0D450E1B09C681BBC053425E03A2E8A7345944BE586E2F52897CA
+                      28CE15E13A6E43F1209A12D05AA3B45AF214392C5E0FD771515A2D416BDD503C
+                      88FFAB85FE456281A88905A22616889A58206A6281A88905A22616889A58206A
+                      6281A88905A22616889A58206A9A12202224920990A086E275D7107BB9440DC5
+                      8368EA05C34A5818B835E079F8382C5E8F8ECE0E0CDC1A8095B01A8A07E17B03
+                      2468C7B16BAE5DB577BFF74E5A88FDBF1D16AF5B5088BA277D306E6FEFC0B11D
+                      471854F55BCFF7C80461766D65FD6475DBBE64182211B8BB16A29472AA95EA5B
+                      30CDFAE5F90AD4E0CE967E6EECACAFAC5D641DF8DCDA5284410E482C6AA5E78E
+                      B26E4CB3FC06CCB72B41D42B78900000000049454E44AE426082}
+                    FileName = 
+                      'E:\Proyectos\Delphi11\Proyectos\Sitis\DemoIA\Recursos\Trash Can_' +
+                      '40px.png'
+                  end>
+                Align = Client
+                Locked = True
+                HitTest = False
+                Margins.Left = 1.000000000000000000
+                Margins.Top = 1.000000000000000000
+                Margins.Right = 1.000000000000000000
+                Margins.Bottom = 1.000000000000000000
+                Size.Width = 30.000000000000000000
+                Size.Height = 30.000000000000000000
+                Size.PlatformDefault = False
+              end
+            end
+            object SpeedButton7: TSpeedButton
+              Align = Left
+              Hint = 'Captura la pantalla'
+              Position.X = 64.000000000000000000
+              Size.Width = 32.000000000000000000
+              Size.Height = 32.000000000000000000
+              Size.PlatformDefault = False
+              TextSettings.Trimming = None
+              object Image7: TImage
+                MultiResBitmap.Height = 48
+                MultiResBitmap.Width = 48
+                MultiResBitmap = <
+                  item
+                    Width = 48
+                    Height = 48
+                    PNG = {
+                      89504E470D0A1A0A0000000D49484452000000300000003008060000005702F9
+                      870000000473424954080808087C08648800000711494441546881ED99DB6B5C
+                      C71DC73F33732EBB6777B57B56D738F285D65E479424AD717193821B538C695F
+                      DA4249C97B4B288160F7A9853E85405F0A0ED42FA67F80A125B4690A35314D83
+                      53B0DDB8262924C6AA836DC99275D7AEF672F65CA70FB256DAE8B6C692ADA4F9
+                      3E9D39BFDFCE7CBF33BFF9FDE6CCC297F8120F05B1B271E1ECF79FD6323EBAD4
+                      3E74FC14DD032500662786B976E174CBB774E445F6968E01E0FB152EBDF53AA1
+                      5F0360B07494A1232FB57CAF5E7883F9891B00B80307397CFC64CB76FDCA39EE
+                      0E5F04C0B4B33CF7835F63DB7900EE0CFF83E12B7F68F9AAC8FCF3777FFED7B1
+                      959C8D950D2DE3A386E59CC9B9830058B6D39268D90E6E7FA9E59B768A2D9B92
+                      166EDF7EC2A0014026DFDF3635397710B45E7E5E61CBE4FB5BFD9A96839256CB
+                      9E768AB8FD25B44EA8CCDC2630A28F8136016D2BF0CEEF4FBCE2F697CE1C3E71
+                      8A9D84A059E3D25F5EC36BD68E7DEF67E7DF5B69938F89D396A12D840E1D3FB5
+                      18363B0CA695E6D9175E268A22E07C9BAD4D40F740E93341B53320A4A2D0F755
+                      48E255B62F5608CD4E0C63D90EB9E2E0E3E2B32674125399B97D3F84DAD126E0
+                      DA85D3B8FD25765A160A038F8FDE3B8BD7ACADB27DEE43E8732FA02D844A475E
+                      5CACB03B0C866973E0D08F0882800DD3E8DED2B11D9946A532D9B5FFB9FF8334
+                      EAFB1594B430ACF4E3E2B326B4D644418378F502B40BB8F4D6EBB87DFB79F6D8
+                      CB8F8A5B478882061F9CFF2D815F5F656B0BA1D0AFB58EC43B095A6B42BF4EF3
+                      8B5807DA4268B07474F163648BE10711B7C7CA4CCED64812BDBEA3002525A57D
+                      DD74171C0CB538BFCA30D9B5FF79E2C867C3343A74E4A52D4FA35A6B46EE5578
+                      FFDA2837472B08B9F1A2EB38A6D18CF8C6D000BD6E0621401936070EFDF07E1A
+                      FDD5FA02B61A5A6BEA5EC8C5AB77A83424434F1DA450C8AFEB9F24095353535C
+                      BD3E899332C8676D6C6B638ADBBA078230E6FC3F6F52AE2514DC22F97CD7C664
+                      A4A4AFAF0F2793E3E34FE7F8CF8DC94DC7680B980FDE7EF5959C3B78E6E0377F
+                      DC3149CF8FB8335EE6F28723946B4DE27839C6B5D6D4BC985D4FEEC6758B5896
+                      D5519FF5468389F131BC468594A55AEFC7A6163EF49AE13D29D4A538D66F9EFD
+                      CDAB9FB4ADCFFCC48DD6ED41A7282F78BCFFEF11EA8189B01C4CB13C270241A6
+                      A0C8175C4CD3ECB84F279DA6A7B78F6A2D43BCA27AEDDBD7F3F5308CBEB6505D
+                      D83B3D352B80D71E7A0FD4BD901BB76679E699A7C9663328A5D6F54D128D1F69
+                      9A41421869348B93A5A4C03224294B601A122104F97C9E7C7EF57EF183C01C1D
+                      E5C0D4D4ECB7E0339BD81D38C8D29D50A74892043F8C48A7531B920F234DC38F
+                      A9FB9A66A20813B17CAF049861422A88C9A521650AA45C349A2A269FF200A834
+                      D3605998A661C6499C5E25E0F0F193DB721A8D13CD7C3D62AE9E20AD14BBF7F4
+                      E2767761180AAD358DBACFF4E43CE363D3549B09030513C716480139BBC9E13D
+                      B700F8D79DAF30D7C8B4F5BDAD6974095395905A20E879A2873D7B07B02C0321
+                      054BB3659A06D95C9A81278A5CFFF836939580DE9CA2CB51CC7B0EEFFE770880
+                      305EBDC2DB9A46B5864633A6EAC5B8BD459E1CECC34E9948B518E742801020A5
+                      C03415995C9A83437BD0CAA2D68C09A204AD0541641044065AAF0E8F3601D7AF
+                      9C63E4FABB5B284053AEC7A47359DCEE2E9C8C8D10EBC7A85292AE4296624F9E
+                      589A34FC64D331DA04DC1DBEC8D4C8470FCFFC3E120D95464C97DB45369BDE90
+                      7C8B901474F7E611A6D59180557B200A3DE6278601C81577B73E6EA2C0A33A37
+                      DAF273BAFAB09DC2A603787E44DA4961D99DD7816C2E8D908A207A40015A4BAF
+                      3A7777FAEA3B6F0070F8C449DCFBFF0F54E747597A0F3074E4270C3EF51DE258
+                      9BC09A4A341025094AC9565AEC044A49106C7C725D4B40AE563E572E14DE5E6A
+                      9B66027EDC7A8ED4328966A4C18F79F3EF9F7C1BF8D35A9D0BC0548A384A8863
+                      8D617426228A62D08B05EE81043CFF8B4B1EE02DBFF9DB063F5DB4FDF497A7CB
+                      297BED338E10E0A414F57A839CEF6018A94D09012C541AE838C236D72F8C4BD8
+                      D6342A04B81983F26C85EA42A3A39048E284E9C97908039CD4E6F4B6570082AE
+                      8C22F17DE666CA542A35F43A22B486288C999C98A756A9628A18C7DA9CDEB656
+                      622120654A0A8E64A1B2C03D80049C8C8D611A4829014D1425047E4075A1C1E8
+                      AD716C19934B2B0CF5807B60BB50CC99202266A6E729CFD5D8B5BB17B7D8856D
+                      9B244942ADEA31335D66627C86AEB4A4276F91EE60F6E111091002DCAC816349
+                      AA5ECCE4E804B73F1D278812A410A44C49C696ECEDB1C8A55547D967098F4400
+                      801490B224861264D39A38D1245A231028B998324D25501D84CD4A3CB40053A8
+                      5808BC66B399320C43C80D6E1D8400D310981DD683B510040151188552CA266C
+                      81802889E694362E8C8D4FBC904AD959B991822D401844D142B57A53082EC316
+                      0848A58DD16614FD6E64F4AE9724494FA2F5E6D5E72120A56C0A212FEB58FC71
+                      3BC77964F81F31DDB41E179D1F880000000049454E44AE426082}
+                    FileName = 
+                      'E:\Proyectos\Delphi11\Proyectos\Sitis\DemoIA\Recursos\Screenshot' +
+                      '_40px.png'
+                  end>
+                Align = Client
+                Locked = True
+                HitTest = False
+                Margins.Left = 1.000000000000000000
+                Margins.Top = 1.000000000000000000
+                Margins.Right = 1.000000000000000000
+                Margins.Bottom = 1.000000000000000000
+                Size.Width = 30.000000000000000000
+                Size.Height = 30.000000000000000000
+                Size.PlatformDefault = False
+              end
+            end
+            object Label10: TLabel
+              Align = Client
+              Margins.Left = 10.000000000000000000
+              Size.Width = 643.000000000000000000
+              Size.Height = 32.000000000000000000
+              Size.PlatformDefault = False
+              Text = 'Arrastre imagenes desde el disco o desde web'
+              TabOrder = 1
+            end
+          end
+        end
+      end
+      object Splitter2: TSplitter
+        Align = Bottom
+        Cursor = crVSplit
+        MinSize = 20.000000000000000000
+        Position.Y = 407.000000000000000000
+        Size.Width = 781.000000000000000000
+        Size.Height = 7.000000000000000000
+        Size.PlatformDefault = False
+      end
+    end
+    object Layout4: TLayout
+      Align = Left
+      Position.Y = 100.000000000000000000
+      Size.Width = 209.000000000000000000
+      Size.Height = 678.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+      object ListBox1: TListBox
+        Align = Client
+        Size.Width = 209.000000000000000000
+        Size.Height = 678.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 0
+        DisableFocusEffect = True
+        DefaultItemStyles.ItemStyle = ''
+        DefaultItemStyles.GroupHeaderStyle = ''
+        DefaultItemStyles.GroupFooterStyle = ''
+        Viewport.Width = 205.000000000000000000
+        Viewport.Height = 674.000000000000000000
+        object ListBoxGroupHeader1: TListBoxGroupHeader
+          TabOrder = 0
+          Text = 'Estadisticas de Uso'
+        end
+        object ListBoxItem1: TListBoxItem
+          Position.Y = 19.000000000000000000
+          Size.Width = 205.000000000000000000
+          Size.Height = 45.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 12
+          object LblTotaltokens: TLabel
+            Align = Top
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 1.000000000000000000
+            Position.X = 3.000000000000000000
+            Position.Y = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Total Tokens'
+            TabOrder = 40
+          end
+          object EditTotalTokens: TEdit
+            Touch.InteractiveGestures = [LongTap, DoubleTap]
+            Align = Client
+            TabOrder = 41
+            ReadOnly = True
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 1.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 22.000000000000000000
+            Size.PlatformDefault = False
+          end
+        end
+        object ListBoxItem2: TListBoxItem
+          Position.Y = 64.000000000000000000
+          Size.Width = 205.000000000000000000
+          Size.Height = 45.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 10
+          object LblPrompTokens: TLabel
+            Align = Top
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 1.000000000000000000
+            Position.X = 3.000000000000000000
+            Position.Y = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Promp Tokens'
+            TabOrder = 40
+          end
+          object EditPromptTokens: TEdit
+            Touch.InteractiveGestures = [LongTap, DoubleTap]
+            Align = Client
+            TabOrder = 41
+            ReadOnly = True
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 1.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 22.000000000000000000
+            Size.PlatformDefault = False
+          end
+        end
+        object ListBoxItem3: TListBoxItem
+          Position.Y = 109.000000000000000000
+          Size.Width = 205.000000000000000000
+          Size.Height = 45.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 9
+          object LblCompletionTokens: TLabel
+            Align = Top
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 1.000000000000000000
+            Position.X = 3.000000000000000000
+            Position.Y = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Completion Tokens'
+            TabOrder = 40
+          end
+          object EditCompletionTokens: TEdit
+            Touch.InteractiveGestures = [LongTap, DoubleTap]
+            Align = Client
+            TabOrder = 41
+            ReadOnly = True
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 1.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 22.000000000000000000
+            Size.PlatformDefault = False
+          end
+        end
+        object ListBoxGroupHeader2: TListBoxGroupHeader
+          Position.Y = 154.000000000000000000
+          TabOrder = 13
+          Text = 'Opciones de Configuraci'#243'n'
+        end
+        object ListBoxItem5: TListBoxItem
+          Position.Y = 173.000000000000000000
+          Size.Width = 205.000000000000000000
+          Size.Height = 34.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 8
+          object ChAsincrono: TCheckBox
+            Align = Center
+            TabOrder = 40
+            Text = 'Asincrono'
+            OnChange = ChAsincronoChange
+          end
+        end
+        object ListBoxItem11: TListBoxItem
+          Position.Y = 207.000000000000000000
+          Size.Width = 205.000000000000000000
+          Size.Height = 34.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 7
+          object ChJSonFormat: TCheckBox
+            Align = Center
+            TabOrder = 40
+            Text = 'JSon Format'
+            OnChange = ChJSonFormatChange
+          end
+        end
+        object ListBoxItem12: TListBoxItem
+          Position.Y = 241.000000000000000000
+          Size.Width = 205.000000000000000000
+          Size.Height = 34.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 6
+          object ChUseTools: TCheckBox
+            Align = Center
+            TabOrder = 40
+            Text = 'Use Tools (Functions)'
+            OnChange = ChUseToolsChange
+          end
+        end
+        object ListBoxItem6: TListBoxItem
+          Position.Y = 275.000000000000000000
+          Size.Width = 205.000000000000000000
+          Size.Height = 45.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 1
+          object Label7: TLabel
+            Align = Top
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 1.000000000000000000
+            Position.X = 3.000000000000000000
+            Position.Y = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Modelo'
+            TabOrder = 40
+          end
+          object ComboModels: TComboEdit
+            Touch.InteractiveGestures = [LongTap, DoubleTap]
+            Align = Client
+            TabOrder = 41
+            ItemHeight = 19.000000000000000000
+            ItemIndex = -1
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 1.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 22.000000000000000000
+            Size.PlatformDefault = False
+            OnChange = ComboModelsChange
+          end
+        end
+        object ListBoxItem4: TListBoxItem
+          Position.Y = 320.000000000000000000
+          Size.Width = 205.000000000000000000
+          Size.Height = 45.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 5
+          object Label5: TLabel
+            Align = Top
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 1.000000000000000000
+            Position.X = 3.000000000000000000
+            Position.Y = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Max Tokens'
+            TabOrder = 40
+          end
+          object EditMaxTokens: TEdit
+            Touch.InteractiveGestures = [LongTap, DoubleTap]
+            Align = Client
+            TabOrder = 41
+            FilterChar = '0123456789'
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 1.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 22.000000000000000000
+            Size.PlatformDefault = False
+            OnTyping = EditMaxTokensTyping
+          end
+        end
+        object ListBoxItem7: TListBoxItem
+          Position.Y = 365.000000000000000000
+          Size.Width = 205.000000000000000000
+          Size.Height = 45.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 4
+          object Label2: TLabel
+            Align = Top
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 1.000000000000000000
+            Position.X = 3.000000000000000000
+            Position.Y = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Seed (Semilla)'
+            TabOrder = 40
+          end
+          object EditSeed: TEdit
+            Touch.InteractiveGestures = [LongTap, DoubleTap]
+            Align = Client
+            TabOrder = 41
+            FilterChar = '0123456789'
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 1.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 22.000000000000000000
+            Size.PlatformDefault = False
+            OnTyping = EditSeedTyping
+          end
+        end
+        object ListBoxItem8: TListBoxItem
+          Position.Y = 410.000000000000000000
+          Size.Width = 205.000000000000000000
+          Size.Height = 45.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 3
+          object Label3: TLabel
+            Align = Top
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 1.000000000000000000
+            Position.X = 3.000000000000000000
+            Position.Y = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Top_P'
+            TabOrder = 40
+          end
+          object TrackTopP: TTrackBar
+            Align = Client
+            CanParentFocus = True
+            Max = 10.000000000000000000
+            Orientation = Horizontal
+            Size.Width = 205.000000000000000000
+            Size.Height = 19.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 41
+            OnTracking = TrackTopPTracking
+          end
+        end
+        object ListBoxItem9: TListBoxItem
+          Position.Y = 455.000000000000000000
+          Size.Width = 205.000000000000000000
+          Size.Height = 45.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 2
+          object Label4: TLabel
+            Align = Top
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 1.000000000000000000
+            Position.X = 3.000000000000000000
+            Position.Y = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Termperature'
+            TabOrder = 40
+          end
+          object TrackTemperature: TTrackBar
+            Align = Client
+            CanParentFocus = True
+            Max = 20.000000000000000000
+            Orientation = Horizontal
+            Size.Width = 205.000000000000000000
+            Size.Height = 19.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 41
+            OnTracking = TrackTemperatureTracking
+          end
+        end
+        object ListBoxItem10: TListBoxItem
+          Position.Y = 500.000000000000000000
+          Size.Width = 205.000000000000000000
+          Size.Height = 45.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 11
+          object Label6: TLabel
+            Align = Top
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 1.000000000000000000
+            Position.X = 3.000000000000000000
+            Position.Y = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Url'
+            TabOrder = 40
+          end
+          object EditUrl: TComboEdit
+            Touch.InteractiveGestures = [LongTap, DoubleTap]
+            Align = Client
+            TabOrder = 41
+            ItemHeight = 19.000000000000000000
+            Items.Strings = (
+              'https://api.openai.com/v1/'
+              'http://192.168.101.13:11434/v1/'
+              'https://api.groq.com/openai/v1/')
+            ItemIndex = -1
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 1.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 199.000000000000000000
+            Size.Height = 22.000000000000000000
+            Size.PlatformDefault = False
+            OnChange = EditUrlChange
+          end
+        end
+      end
+    end
+    object Splitter1: TSplitter
+      Align = Left
+      Cursor = crHSplit
+      MinSize = 20.000000000000000000
+      Position.X = 209.000000000000000000
+      Position.Y = 100.000000000000000000
+      Size.Width = 7.000000000000000000
+      Size.Height = 678.000000000000000000
+      Size.PlatformDefault = False
+    end
+    object Layout5: TLayout
+      Align = Top
+      Position.Y = 50.000000000000000000
+      Size.Width = 1099.000000000000000000
+      Size.Height = 50.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 4
+      object SpeedButton1: TSpeedButton
+        Align = Left
+        Hint = 'Guarda la Conversaci'#243'n'
+        Margins.Left = 3.000000000000000000
+        Margins.Top = 3.000000000000000000
+        Margins.Right = 3.000000000000000000
+        Margins.Bottom = 3.000000000000000000
+        Position.X = 3.000000000000000000
+        Position.Y = 3.000000000000000000
+        Size.Width = 49.000000000000000000
+        Size.Height = 44.000000000000000000
+        Size.PlatformDefault = False
+        TextSettings.Trimming = None
+        OnClick = SpeedButton1Click
+        object Image1: TImage
+          MultiResBitmap.Height = 48
+          MultiResBitmap.Width = 48
+          MultiResBitmap = <
+            item
+              Width = 48
+              Height = 48
+              PNG = {
+                89504E470D0A1A0A0000000D49484452000000300000003008060000005702F9
+                870000000473424954080808087C08648800000170494441546881ED96CD4AC3
+                401485CFA4515184AEECC22E5C48712B18B7BE818F21A85B45DC350BC11F74E3
+                A67D0C05F12554EC56832268B1B8B322D5AA8D0B3110F3D36B9C711272BFD564
+                E64EE69CDCB933011886617422A206ACBAE37EB79F5BD7A1319B73A3D2846C5C
+                96BCB60BAC9F2D56B629F30C690A2422802DABE6D8945853B1168FB5D515DFF3
+                CEEE5EFC0481AA557370BA54B1E3C25299018F2F13765C48BA0D007D4DA4DF00
+                000854A386B261200636A09BCC1B20DD03865140AFF711E87FECBA280E465EE6
+                3EE2CEFDF65B81F48E506D94A081E21884115CE4C07945BBEB86CCA0F3F46EE0
+                F821F92F092903E6D008CCD244A0FF16C0FE4DE2B5A590F91A6003BA6103BA21
+                9D42F5F93266C687556BF171D2EC60F9A8D9378E9481FF160F00B365DA9AF9D8
+                423F695C5CC9D60100989E9AFCF59C7C6620C99752453E33C0352011AE01DD70
+                0DE8866B403724038DD68B6A1D01CEEF3BA438D2165A38BCFB931895647E0B31
+                0CC3E8E513A26848BE03CBA4720000000049454E44AE426082}
+              FileName = 
+                'E:\Proyectos\Delphi11\Proyectos\Sitis\DemoIA\Recursos\Save_48px.' +
+                'png'
+            end>
+          Align = Client
+          Locked = True
+          HitTest = False
+          Margins.Left = 3.000000000000000000
+          Margins.Top = 3.000000000000000000
+          Margins.Right = 3.000000000000000000
+          Margins.Bottom = 3.000000000000000000
+          Size.Width = 43.000000000000000000
+          Size.Height = 38.000000000000000000
+          Size.PlatformDefault = False
+        end
+      end
+      object SpeedButton2: TSpeedButton
+        Align = Left
+        Hint = 'Abre una Conversaci'#243'n'
+        Margins.Left = 3.000000000000000000
+        Margins.Top = 3.000000000000000000
+        Margins.Right = 3.000000000000000000
+        Margins.Bottom = 3.000000000000000000
+        Position.X = 58.000000000000000000
+        Position.Y = 3.000000000000000000
+        Size.Width = 49.000000000000000000
+        Size.Height = 44.000000000000000000
+        Size.PlatformDefault = False
+        TextSettings.Trimming = None
+        OnClick = SpeedButton2Click
+        object Image2: TImage
+          MultiResBitmap.Height = 48
+          MultiResBitmap.Width = 48
+          MultiResBitmap = <
+            item
+              Width = 48
+              Height = 48
+              PNG = {
+                89504E470D0A1A0A0000000D49484452000000300000003008060000005702F9
+                870000000473424954080808087C08648800000208494441546881ED97B14F13
+                6114C07FEF7AF44A8225429904261636077170310E30301AC2AA89FF03C2E2C0
+                A40BC17FC048E28A93262E24C6110709341A4CC0C4389A98E28043AFCFA19CB6
+                BD9EDC77D0EBD7F8FDA67BEFBB7EF77E79AFD7AFE070381C8EFF19E996D42DA6
+                513680DB4025E54EAB728F2797585BCAC776A0CF98C2630F18CBB05BEE125E2C
+                5360932CC503288F758B8717ACC988B880327FA11D7396888FD07334AF879FC3
+                778477282B729FA3A49BE21DB0870ACA5D60575F30997493CD021163846C242D
+                0E8200280B494B832100A3490B832290886FFC0911A88CC3681986869A710EE8
+                2E35A00ADE23B9F97127CA1B764060F21A4C54A058CCADF833CAC02D68BCD1F7
+                B38B51D24CA03C0257462EBB30537C1AFA54B5F91B6626D0FFE29B08337C989D
+                065381A0D4937A32512F34C044C01328157B568F2127CC55BF8189403120E1EF
+                433FA88A34CF6CE90582A067D51823B21F5DA61718B6484039882E07B3035E98
+                A103F6BC8114EA861DF07DF00B3DABC808E5ABDC38AE45613A019BC647FECE3F
+                A4152859333EA0ECB78629052CEA8027193A60D308859E61074420B0E608F18B
+                D389CFAD89F30582DCCFFDFFE293DC795B6F4D741338698B6C1A1FDABFC0D05D
+                60A72DB2E90D24FAB23315170859037EFC89ED7903BDE2CBE1EBCE644C401E70
+                88701DD8067EF67D841A610D58E76A7D499609FB5B8CC3E170386CE337948561
+                FC39C2A34E0000000049454E44AE426082}
+              FileName = 
+                'E:\Proyectos\Delphi11\Proyectos\Sitis\DemoIA\Recursos\Open_48px.' +
+                'png'
+            end>
+          Align = Client
+          Locked = True
+          HitTest = False
+          Margins.Left = 3.000000000000000000
+          Margins.Top = 3.000000000000000000
+          Margins.Right = 3.000000000000000000
+          Margins.Bottom = 3.000000000000000000
+          Size.Width = 43.000000000000000000
+          Size.Height = 38.000000000000000000
+          Size.PlatformDefault = False
+        end
+      end
+      object SpeedButton6: TSpeedButton
+        Align = Left
+        Hint = 'Inicia una nueva Conversaci'#243'n'
+        Margins.Left = 3.000000000000000000
+        Margins.Top = 3.000000000000000000
+        Margins.Right = 3.000000000000000000
+        Margins.Bottom = 3.000000000000000000
+        Position.X = 113.000000000000000000
+        Position.Y = 3.000000000000000000
+        Size.Width = 49.000000000000000000
+        Size.Height = 44.000000000000000000
+        Size.PlatformDefault = False
+        TextSettings.Trimming = None
+        OnClick = SpeedButton6Click
+        object Image6: TImage
+          MultiResBitmap.Height = 48
+          MultiResBitmap.Width = 48
+          MultiResBitmap = <
+            item
+              Width = 48
+              Height = 48
+              PNG = {
+                89504E470D0A1A0A0000000D49484452000000300000003008060000005702F9
+                870000000473424954080808087C086488000002DC494441546881ED98CD4F13
+                411C86DFCEB6055A3E6CA944C0446D1B1A0D174DD39A9820868F4888469070E0
+                0FD0C48386F4C4CD9B81932713CF266AC287558807C0A8080738184462C08A46
+                A8B4258018A1D076BBEBA12C21B05B6BF7AB26FB9CDA99DFCC3CEFCECC262DA0
+                A1A1F15FA3535B808F659FCFC6B2AC1F845841484B654FCFBC502D51522C1306
+                46274B1306A31F3ADD05B0EC692493AF963A3B9D42F53915A07F6CAC9C107AE2
+                435D938D36E6ADEF3657124226423EDF19BE3139136072A0AB94A2A997005C0C
+                45B9662E352ED37AC3EFDDEE320618E01B971301D88728F7ACDC1BAFD87ABBC1
+                B525F586EA99BAA6106D306EA68AD815BEB1BC97F8FE548C95C5940773228CEB
+                8146587652F774F4E4236C19ED7BFD84A6E7AA5F0F0759866E737477FF3A385E
+                D50007E539464E3D46D47082FB3ACD30FAFAD67AEF1ADF1CAA1D215322C22B0F
+                000DDF3A706CF3DD1B0053F1645EAD903CA05280FCE43AAE2D5CE595E7F086BA
+                2CC7B7469ADB1BDC878ECD7E140F604A44D03E5F8BA3D169C19AB0D90380BDE8
+                BE7277F56FF3291AC09488A02DD090F6C987CD1EF89D43D0DD44DA27CFA15880
+                7F918F512519CFAB4800B9E4010502C8290FC81C2033796FD6F2808C01D2BDE7
+                3952F28359CB03803EEB9169E0E4AD3B73823561B317CF9C438853C5A2D6927C
+                07949407240E5040AFA2E54B735AF990F9BC64F2808447A8805E456BE0326CDB
+                1F056B7E14D6E0B9D38F04314BB5AC343BA0963C20410035E50109029C8D3F40
+                09FD55B03F627263D0D12B8B3C20410017E9C5A6D38E98D172A82F585483FEAA
+                61C4A82362971144D4252E661751CC7E0700FC7454010B0479F1D46F8F60510D
+                5E38E43936FB11B5031BB34FF17ED10A00B0E033A28E0AC48CA58AC90322032C
+                CDCFE2CE1337C60365A9061D8369C72D0CD9FB149107441EA1B5F5283CD58598
+                22B7F129BF03DB3A9B545E19232AC0B91B7D7B9FB745AB64474EFCB125062D80
+                DA6801D4460BA0365A000D0D0D0D51FC018F12251C78AAD8D40000000049454E
+                44AE426082}
+              FileName = 
+                'E:\Proyectos\Delphi11\Proyectos\Sitis\DemoIA\Recursos\Create_48p' +
+                'x.png'
+            end>
+          Align = Client
+          Locked = True
+          HitTest = False
+          Margins.Left = 3.000000000000000000
+          Margins.Top = 3.000000000000000000
+          Margins.Right = 3.000000000000000000
+          Margins.Bottom = 3.000000000000000000
+          Size.Width = 43.000000000000000000
+          Size.Height = 38.000000000000000000
+          Size.PlatformDefault = False
+        end
+      end
+    end
+    object Layout7: TLayout
+      Align = Right
+      Position.X = 997.000000000000000000
+      Position.Y = 100.000000000000000000
+      Size.Width = 102.000000000000000000
+      Size.Height = 678.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      object ListaUsados: TListBox
+        Align = Client
+        Size.Width = 102.000000000000000000
+        Size.Height = 661.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 0
+        DisableFocusEffect = True
+        DefaultItemStyles.ItemStyle = ''
+        DefaultItemStyles.GroupHeaderStyle = ''
+        DefaultItemStyles.GroupFooterStyle = ''
+        Viewport.Width = 98.000000000000000000
+        Viewport.Height = 657.000000000000000000
+      end
+      object Label9: TLabel
+        Align = Top
+        Size.Width = 102.000000000000000000
+        Size.Height = 17.000000000000000000
+        Size.PlatformDefault = False
+        TextSettings.HorzAlign = Center
+        Text = 'Usadas'
+        TabOrder = 1
+      end
+    end
+  end
+  object SaveDialog1: TSaveDialog
+    Left = 584
+    Top = 192
+  end
+  object OpenDialog1: TOpenDialog
+    Left = 336
+    Top = 176
+  end
+  object OpenDialogImage: TOpenDialog
+    Filter = '*.jpg;*.png;*.bmp;*.jpeg|*.jpg;*.png;*.bmp;*.jpeg'
+    Left = 424
+    Top = 640
+  end
+  object OpenChat: TAiOpenChatExt
+    Model = 'gpt-4o'
+    Logprobs = False
+    Max_tokens = 300
+    N = 1
+    Response_format = tiaChatRfText
+    Seed = 0
+    Asynchronous = True
+    Temperature = 1.000000000000000000
+    Top_p = 1.000000000000000000
+    Tools.Strings = (
+      '['
+      '    {'
+      '        "type": "function",'
+      '        "function": {'
+      '            "name": "GetFecha",'
+      
+        '            "description": "Con esta funci'#243'n obtiene la fecha y ' +
+        'hora actual del sistema en formato DD\/MM\/YYY hh:nn:ss"'
+      '        }'
+      '    },'
+      '    {'
+      '        "type": "function",'
+      '        "function": {'
+      '            "name": "GetInternet",'
+      
+        '            "description": "Esta funci'#243'n retorna el contenido de' +
+        ' una p'#225'gina en internet, \r\nel par'#225'metro url contiene la p'#225'gina' +
+        ' que se quiere visitar\r\nretorna el contenido de la p'#225'gina web.' +
+        '",'
+      '            "parameters": {'
+      '                "type": "object",'
+      '                "properties": {'
+      '                    "Url": {'
+      '                        "type": "string",'
+      
+        '                        "description": "Esta es la url de la p'#225'g' +
+        'ina web que se quiere visitar, es obligatoria y se requiere para' +
+        ' hacer la consulta"'
+      '                    }'
+      '                },'
+      '                "required": ['
+      '                    "Url"'
+      '                ]'
+      '            }'
+      '        }'
+      '    },'
+      '    {'
+      '        "type": "function",'
+      '        "function": {'
+      '            "name": "GetClima",'
+      
+        '            "description": "Retonra la temperatura en una locali' +
+        'zaci'#243'n espec'#237'fica, usualmente la \r\nlocalizaci'#243'n esta dada por ' +
+        'la ciudad Ejemplo Bogot'#225' o Cali,\r\nTambi'#233'n puede ir la Ciudad,P' +
+        'ais, ejemplo  Cali, Colombia.\r\nRetorna la temperatura en la un' +
+        'idad especificada, si la unidad no se especifica\r\nse asumen Gr' +
+        'ados Cent'#237'grados.",'
+      '            "parameters": {'
+      '                "type": "object",'
+      '                "properties": {'
+      '                    "Ubicacion": {'
+      '                        "type": "string",'
+      
+        '                        "description": "La ubicaci'#243'n donde se de' +
+        'sea la temperatura, usualmente es la Ciudad o Ciudad, Pais"'
+      '                    },'
+      '                    "Unidad": {'
+      '                        "type": "string",'
+      
+        '                        "description": "La unidad de medida de l' +
+        'a temperatura, pueden ser Grados Centigrados o Farengeith"'
+      '                    }'
+      '                },'
+      '                "required": ['
+      '                    "Ubicacion"'
+      '                ]'
+      '            }'
+      '        }'
+      '    }'
+      ']')
+    Tool_Active = False
+    User = 'user'
+    InitialInstructions.Strings = (
+      'OpenAI Eres un asistente muy '#250'til y servicial'
+      'Op')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    OnReceiveData = AiOpenChat1ReceiveData
+    OnReceiveDataEnd = AiOpenChat1ReceiveDataEnd
+    Url = 'https://api.openai.com/v1/'
+    ResponseTimeOut = 60000
+    Functions = <
+      item
+        FunctionName = 'GetFecha'
+        OnAction = AiOpenChat1Functions0GetFechaAction
+        Description.Strings = (
+          
+            'Con esta funci'#243'n obtiene la fecha y hora actual del sistema en f' +
+            'ormato DD/MM/YYY hh:nn:ss')
+        Parameters = <>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'GetInternet'
+        Description.Strings = (
+          'Esta funci'#243'n retorna el contenido de una p'#225'gina en internet, '
+          'el par'#225'metro url contiene la p'#225'gina que se quiere visitar'
+          'retorna el contenido de la p'#225'gina web.')
+        Parameters = <
+          item
+            Name = 'Url'
+            ParamType = ptString
+            Description.Strings = (
+              
+                'Esta es la url de la p'#225'gina web que se quiere visitar, es obliga' +
+                'toria y se requiere para hacer la consulta')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'GetClima'
+        OnAction = AiOpenChat1Functions2GetClimaAction
+        Description.Strings = (
+          
+            'Retonra la temperatura en una localizaci'#243'n espec'#237'fica, usualment' +
+            'e la '
+          'localizaci'#243'n esta dada por la ciudad Ejemplo Bogot'#225' o Cali,'
+          'Tambi'#233'n puede ir la Ciudad,Pais, ejemplo  Cali, Colombia.'
+          
+            'Retorna la temperatura en la unidad especificada, si la unidad n' +
+            'o se especifica'
+          'se asumen Grados Cent'#237'grados.')
+        Parameters = <
+          item
+            Name = 'Ubicacion'
+            ParamType = ptString
+            Description.Strings = (
+              
+                'La ubicaci'#243'n donde se desea la temperatura, usualmente es la Ciu' +
+                'dad o Ciudad, Pais')
+            Required = True
+          end
+          item
+            Name = 'Unidad'
+            ParamType = ptString
+            Description.Strings = (
+              
+                'La unidad de medida de la temperatura, pueden ser Grados Centigr' +
+                'ados o Farengeith')
+            Enum = 'Centigrados, Farengeith'
+            Required = False
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end>
+    Left = 456
+    Top = 280
+  end
+  object OllamaChat: TAiOllamaChat
+    Model = 'llava:13b'
+    Logprobs = False
+    Max_tokens = 300
+    N = 1
+    Response_format = tiaChatRfText
+    Seed = 0
+    Asynchronous = False
+    Temperature = 1.000000000000000000
+    Top_p = 1.000000000000000000
+    Tools.Strings = (
+      '['
+      ']')
+    Tool_Active = False
+    User = 'user'
+    InitialInstructions.Strings = (
+      'Eres un asistente muy '#250'til y servicial')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    OnReceiveData = AiOpenChat1ReceiveData
+    OnReceiveDataEnd = AiOpenChat1ReceiveDataEnd
+    Url = 'http://192.168.101.13:11434/'
+    ResponseTimeOut = 350000
+    Functions = <>
+    Left = 456
+    Top = 448
+  end
+  object GroqChat: TAiGroqChat
+    Model = 'llama3-70b-8192'
+    Logit_bias = 'AiOpenChat1ReceiveData'
+    Logprobs = False
+    Max_tokens = 300
+    N = 1
+    Response_format = tiaChatRfText
+    Seed = 0
+    Asynchronous = False
+    Temperature = 1.000000000000000000
+    Top_p = 1.000000000000000000
+    Tools.Strings = (
+      '['
+      '    {'
+      '        "type": "function",'
+      '        "function": {'
+      '            "name": "GetFecha",'
+      
+        '            "description": "Retorna la fecha y la hora del siste' +
+        'ma",'
+      '            "parameters": {'
+      '                "type": "object",'
+      '                "properties": {'
+      '                    "Valor": {'
+      '                        "type": "string",'
+      
+        '                        "description": "siempre va un valor \"NA' +
+        '\""'
+      '                    }'
+      '                }'
+      '            }'
+      '        }'
+      '    }'
+      ']')
+    Tool_Active = True
+    User = 'user'
+    InitialInstructions.Strings = (
+      'Eres un asistente muy '#250'til y servicial')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    OnReceiveData = AiOpenChat1ReceiveData
+    OnReceiveDataEnd = AiOpenChat1ReceiveDataEnd
+    Url = 'https://api.groq.com/openai/v1/'
+    ResponseTimeOut = 60000
+    Functions = <
+      item
+        FunctionName = 'GetFecha'
+        OnAction = GroqChatFunctions0GetFechaAction
+        Description.Strings = (
+          'Retorna la fecha y la hora del sistema')
+        Parameters = <
+          item
+            Name = 'Valor'
+            ParamType = ptString
+            Description.Strings = (
+              'siempre va un valor "NA"')
+            Required = False
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end>
+    Left = 456
+    Top = 520
+  end
+  object ClaudChat: TAiClaudChat
+    Model = 'claude-3-haiku-20240307'
+    Logprobs = False
+    Max_tokens = 300
+    N = 1
+    Response_format = tiaChatRfText
+    Seed = 0
+    Asynchronous = False
+    Temperature = 1.000000000000000000
+    Top_p = 1.000000000000000000
+    Tools.Strings = (
+      '['
+      ']')
+    Tool_Active = False
+    User = 'user'
+    InitialInstructions.Strings = (
+      'Eres un asistente muy '#250'til y servicial')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    OnReceiveData = AiOpenChat1ReceiveData
+    OnReceiveDataEnd = AiOpenChat1ReceiveDataEnd
+    Url = 'https://api.anthropic.com/v1/'
+    ResponseTimeOut = 60000
+    Functions = <>
+    Left = 448
+    Top = 368
+  end
+end

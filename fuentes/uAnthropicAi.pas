@@ -76,7 +76,7 @@ procedure Register;
 implementation
 
 Const
-  GlAIUrl = 'http://160.79.104.10/v1/';
+  GlAIUrl = 'https://api.anthropic.com/v1/';
 
 procedure Register;
 begin

@@ -195,7 +195,7 @@ type
     FPrompt_tokens: integer;
     FTool_Active: Boolean;
     FUrl: String;
-    FAIEngine: TAiChatConfig;
+    FAIChatConfig: TAiChatConfig;
     FResponseTimeOut: integer;
     FOnInitChat: TAiOpenChatInitChat;
 
@@ -228,7 +228,7 @@ type
     procedure SetPrompt_tokens(const Value: integer);
     procedure SetTotal_tokens(const Value: integer);
     procedure SetUrl(const Value: String);
-    procedure SetAIEngine(const Value: TAiChatConfig);
+    procedure SetAIChatConfig(const Value: TAiChatConfig);
     procedure SetLastError(const Value: String);
     procedure SetResponseTimeOut(const Value: integer);
     procedure SetOnInitChat(const Value: TAiOpenChatInitChat);
@@ -318,7 +318,7 @@ type
     Property OnBeforeSendMessage: TAiOpenChatBeforeSendEvent read FOnBeforeSendMessage write SetOnBeforeSendMessage;
     Property OnInitChat: TAiOpenChatInitChat read FOnInitChat write SetOnInitChat;
     Property Url: String read FUrl write SetUrl;
-    Property AIEngine: TAiChatConfig read FAIEngine write SetAIEngine;
+    Property AIChatConfig: TAiChatConfig read FAIChatConfig write SetAIChatConfig;
     Property ResponseTimeOut: integer read FResponseTimeOut write SetResponseTimeOut;
   end;
 
@@ -557,6 +557,7 @@ begin
     Client.ContentType := 'application/json';
 
     Res := Client.Get(sUrl, Response, Headers);
+    //Response.SaveToFile('c:\temp\models.json.txt');
 
     if Res.StatusCode = 200 then
     Begin
@@ -565,7 +566,7 @@ begin
       Begin
         For JVal in JArr do
         Begin
-          sModel := JVal.GetValue<String>('object');
+          sModel := JVal.GetValue<String>('id');
           If sModel <> '' then
             Result.Add(sModel);
         End;
@@ -1031,26 +1032,26 @@ begin
     FMessages.Remove(Msg);
 end;
 
-procedure TAiOpenChat.SetAIEngine(const Value: TAiChatConfig);
+procedure TAiOpenChat.SetAIChatConfig(const Value: TAiChatConfig);
 begin
-  If Assigned(Value) and (FAIEngine <> Value) then
+  If Assigned(Value) and (FAIChatConfig <> Value) then
   Begin
-    FAIEngine := Value;
-    ApiKey := FAIEngine.ApiKey;
-    Self.Url := FAIEngine.UrlApi;
-    Self.Model := FAIEngine.Model;
+    FAIChatConfig := Value;
+    ApiKey := FAIChatConfig.ApiKey;
+    Self.Url := FAIChatConfig.UrlApi;
+    Self.Model := FAIChatConfig.Model;
 
-    Self.Max_tokens := FAIEngine.Max_tokens;
-    Self.N := FAIEngine.N;
-    Self.Presence_penalty := FAIEngine.Presence_penalty;
-    Self.Response_format := FAIEngine.Response_format;
-    Self.Seed := FAIEngine.Seed;
-    Self.Stop := FAIEngine.Stop;
-    Self.Temperature := FAIEngine.Temperature;
-    Self.Top_p := FAIEngine.Top_p;
-    Self.Tool_choice := FAIEngine.Tool_choice;
-    Self.Tool_Active := FAIEngine.Tool_Active;
-    Self.InitialInstructions := FAIEngine.InitialInstructions;
+    Self.Max_tokens := FAIChatConfig.Max_tokens;
+    Self.N := FAIChatConfig.N;
+    Self.Presence_penalty := FAIChatConfig.Presence_penalty;
+    Self.Response_format := FAIChatConfig.Response_format;
+    Self.Seed := FAIChatConfig.Seed;
+    Self.Stop := FAIChatConfig.Stop;
+    Self.Temperature := FAIChatConfig.Temperature;
+    Self.Top_p := FAIChatConfig.Top_p;
+    Self.Tool_choice := FAIChatConfig.Tool_choice;
+    Self.Tool_Active := FAIChatConfig.Tool_Active;
+    Self.InitialInstructions := FAIChatConfig.InitialInstructions;
   End;
 end;
 
@@ -1549,7 +1550,7 @@ begin
   End;
 end;
 
-{ TAiEngine }
+{ TAIChatConfig }
 
 constructor TAiChatConfig.Create(AOwner: TComponent);
 begin

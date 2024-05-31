@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>2024/01/31 06:52:25.000.302,=C:\Users\cimamaker\Documents\Embarcadero\Studio\Projects\Unit64.pas</Transaction>
+    <Transaction>2024/01/31 07:23:52.000.570,=C:\Users\cimamaker\Documents\Embarcadero\Studio\Projects\Unit64.pas</Transaction>
+    <Transaction>2024/01/31 07:51:23.000.171,=C:\Users\cimamaker\Documents\Embarcadero\Studio\Projects\Unit64.pas</Transaction>
+    <Transaction>2024/01/31 07:51:50.000.164,=C:\Users\cimamaker\Documents\Embarcadero\Studio\Projects\Unit64.pas</Transaction>
+    <Transaction>2024/01/31 07:52:38.000.665,=C:\Users\cimamaker\Documents\Embarcadero\Studio\Projects\Unit64.pas</Transaction>
+    <Transaction>2024/01/31 07:53:59.000.422,=C:\Users\cimamaker\Documents\Embarcadero\Studio\Projects\Unit64.pas</Transaction>
+    <Transaction>2024/01/31 07:56:44.000.736,=C:\Users\cimamaker\Documents\Embarcadero\Studio\Projects\Unit64.pas</Transaction>
+    <Transaction>2024/01/31 08:20:25.000.237,C:\Users\cimamaker\Documents\Embarcadero\Studio\Projects\Unit64.pas=E:\Proyectos\Delphi11\Compo\TdCompoFMX\OpenAi\Demos\SimpleChat\uMainSimpleChat.pas</Transaction>
+    <Transaction>2024/01/31 08:20:25.000.247,C:\Users\cimamaker\Documents\Embarcadero\Studio\Projects\Unit64.fmx=E:\Proyectos\Delphi11\Compo\TdCompoFMX\OpenAi\Demos\SimpleChat\uMainSimpleChat.fmx</Transaction>
+    <Transaction>2024/01/31 08:20:29.000.507,C:\Users\cimamaker\Documents\Embarcadero\Studio\Projects\Project56.dproj=E:\Proyectos\Delphi11\Compo\TdCompoFMX\OpenAi\Demos\SimpleChat\SimpleChat.dproj</Transaction>
+    <Transaction>2024/05/20 15:22:44.000.020,=E:\Proyectos\Delphi11\Compo\TdCompoFMX\OpenAi\Demos\SimpleChat\Unit1.pas</Transaction>
+    <Transaction>2024/05/30 17:57:19.000.760,=E:\Proyectos\Delphi11\Compo\TdCompoFMX\OpenAi\Demos\SimpleChat\Unit1.pas</Transaction>
+    <Transaction>2024/05/31 09:39:22.000.911,C:\Datos\GitHub\MakerAI\demos\Chat\SimpleChat.dproj=C:\Datos\GitHub\MakerAI\demos\Chat\AiChatDemo.dproj</Transaction>
+    <Transaction>2024/05/31 09:39:34.000.729,C:\Datos\GitHub\MakerAI\demos\Chat\uMainSimpleChat.fmx=C:\Datos\GitHub\MakerAI\demos\Chat\uMainAiChat.fmx</Transaction>
+    <Transaction>2024/05/31 09:39:34.000.729,C:\Datos\GitHub\MakerAI\demos\Chat\uMainSimpleChat.pas=C:\Datos\GitHub\MakerAI\demos\Chat\uMainAiChat.pas</Transaction>
+  </Transactions>
+</BorlandProject>

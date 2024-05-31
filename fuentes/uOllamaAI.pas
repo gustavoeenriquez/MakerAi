@@ -61,7 +61,6 @@ type
     Procedure DoCallFunction(ToolCall: TAiToolsFunction); Override;
     Class Function GetModels(aApiKey: String; aUrl: String = ''): TStringList; Override;
     Function GetMessages: TJSonArray; Override;
-
   Public
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
@@ -302,6 +301,7 @@ begin
     Result.Add(JObj);
   End;
 end;
+
 
 class function TAiOllamaChat.GetModels(aApiKey, aUrl: String): TStringList;
 Var
