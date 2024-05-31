@@ -1,0 +1,571 @@
+object Form69: TForm69
+  Left = 0
+  Top = 0
+  Caption = 'Form69'
+  ClientHeight = 625
+  ClientWidth = 1103
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+  object Layout1: TLayout
+    Align = Top
+    Size.Width = 1103.000000000000000000
+    Size.Height = 50.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    object BtnLoadData: TButton
+      Position.X = 241.000000000000000000
+      Position.Y = 8.000000000000000000
+      Size.Width = 137.000000000000000000
+      Size.Height = 34.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      Text = 'Abrir BD Json'
+      TextSettings.Trimming = None
+      OnClick = BtnLoadDataClick
+    end
+    object ChBDPostgres: TRadioButton
+      Position.X = 399.000000000000000000
+      Position.Y = 16.000000000000000000
+      Size.Width = 241.000000000000000000
+      Size.Height = 19.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Text = 'Utilizar Base de Datos Postgres'
+    end
+    object ChBDMemoria: TRadioButton
+      IsChecked = True
+      Position.X = 8.000000000000000000
+      Position.Y = 16.000000000000000000
+      Size.Width = 225.000000000000000000
+      Size.Height = 19.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      Text = 'Utilizar Base de Datos en Memoria'
+    end
+    object BtnConectarPostgres: TButton
+      Enabled = False
+      Position.X = 616.000000000000000000
+      Position.Y = 8.000000000000000000
+      Size.Width = 139.000000000000000000
+      Size.Height = 34.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+      Text = 'Conectar a Postgres'
+      TextSettings.Trimming = None
+      OnClick = BtnConectarPostgresClick
+    end
+  end
+  object TabControl1: TTabControl
+    Align = Client
+    Size.Width = 1103.000000000000000000
+    Size.Height = 575.000000000000000000
+    Size.PlatformDefault = False
+    TabIndex = 1
+    TabOrder = 11
+    TabPosition = PlatformDefault
+    Sizes = (
+      1103s
+      549s
+      1103s
+      549s)
+    object TabItemPreparacion: TTabItem
+      CustomIcon = <
+        item
+        end>
+      TextSettings.Trimming = None
+      IsSelected = False
+      Size.Width = 83.000000000000000000
+      Size.Height = 26.000000000000000000
+      Size.PlatformDefault = False
+      StyleLookup = ''
+      TabOrder = 0
+      Text = 'Preparaci'#243'n'
+      ExplicitSize.cx = 83.000000000000000000
+      ExplicitSize.cy = 26.000000000000000000
+      object Layout7: TLayout
+        Align = Bottom
+        Position.Y = 499.000000000000000000
+        Size.Width = 1103.000000000000000000
+        Size.Height = 50.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 0
+        object BtnParseJSon: TButton
+          Position.X = 365.000000000000000000
+          Position.Y = 8.000000000000000000
+          Size.Width = 145.000000000000000000
+          Size.Height = 34.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 0
+          Text = 'Prepara un JSonArray'
+          TextSettings.Trimming = None
+          OnClick = BtnParseJSonClick
+        end
+        object BtnSaveData: TButton
+          Position.X = 736.000000000000000000
+          Position.Y = 8.000000000000000000
+          Size.Width = 139.000000000000000000
+          Size.Height = 34.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 1
+          Text = 'Guardar BD JSon'
+          TextSettings.Trimming = None
+          OnClick = BtnSaveDataClick
+        end
+        object BtnPrepareTexto: TButton
+          Position.X = 544.000000000000000000
+          Position.Y = 8.000000000000000000
+          Size.Width = 153.000000000000000000
+          Size.Height = 34.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 2
+          Text = 'Prepara un Texto Plano'
+          TextSettings.Trimming = None
+          OnClick = BtnPrepareTextoClick
+        end
+        object BtnLoadFile: TButton
+          Position.X = 32.000000000000000000
+          Position.Y = 8.000000000000000000
+          Size.Width = 105.000000000000000000
+          Size.Height = 34.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 4
+          Text = 'Carga un Texto'
+          TextSettings.Trimming = None
+          OnClick = BtnLoadFileClick
+        end
+        object BtnSaveFile: TButton
+          Position.X = 160.000000000000000000
+          Position.Y = 8.000000000000000000
+          Size.Width = 105.000000000000000000
+          Size.Height = 34.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 3
+          Text = 'Guarda Texto'
+          TextSettings.Trimming = None
+          OnClick = BtnSaveFileClick
+        end
+      end
+      object Layout4: TLayout
+        Align = Client
+        Size.Width = 1103.000000000000000000
+        Size.Height = 499.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 1
+        object Layout8: TLayout
+          Align = Client
+          Size.Width = 724.000000000000000000
+          Size.Height = 499.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 1
+          object Label1: TLabel
+            Align = Top
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 3.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 3.000000000000000000
+            Position.X = 3.000000000000000000
+            Position.Y = 3.000000000000000000
+            Size.Width = 718.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Insumo para crear la base de datos'
+            TabOrder = 0
+          end
+          object MemoForParse: TMemo
+            Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+            DataDetectorTypes = []
+            Lines.Strings = (
+              
+                'Este demo permite realizar b'#250'squedas RAG ya sea de un archivo en' +
+                ' memoria'
+              
+                'como de una base de datos habilitada para b'#250'squeda por vectores ' +
+                'como'
+              'Postgres con la extensi'#243'n de PgVector.'
+              ''
+              'Preparaci'#243'n: '
+              
+                '1. Cargar un archivo de texto o un json con el bot'#243'n "Carga un T' +
+                'exto", '
+              
+                'este archivo puede ser un texto simple o un JsonArray que son la' +
+                's dos'
+              #250'nicas formas de cargar en este momento.'
+              ''
+              
+                '2. luego presionar el bot'#243'n de prerar si es un JsonArray se prep' +
+                'ara con el '
+              
+                'bot'#243'n Prepara un JsonArray, de lo contrario con Prepara un Texto' +
+                ' Plano.'
+              ''
+              
+                'con esto la base de datos ya est'#225' creada.  es de tener en cuenta' +
+                ' que si est'#225' '
+              
+                'marcada la casilla de Utilizar Base de Datos Postgrs, todo lo qu' +
+                'e se haga quedar'#225
+              
+                'guardado autom'#225'ticamente en la base de dato y no habr'#225' necesidad' +
+                ' de presionar'
+              'el bot'#243'n de Guardar BD Json.'
+              ''
+              
+                'Si el proceso se  hace en memoria, si es necesario guardar la ba' +
+                'se de datos en un'
+              
+                'archivo para evitar que se pierda la informaci'#243'n para futuras co' +
+                'nsultas.'
+              ''
+              
+                'Finalmente con la base de datos creada, ya solo resta utilizarla' +
+                '.'
+              ''
+              'Utilizaci'#243'n:'
+              ''
+              
+                'Si la base de datos ya est'#225' creada y es de memoria, solo basta c' +
+                'on abrira con el'
+              
+                'bot'#243'n Abrir BD Json.   si es para utilizarla con postgres se req' +
+                'uiere conectar a'
+              
+                'la base de datos postgres con el bot'#243'n Conectar a postgres, eso ' +
+                'es todo.'
+              '')
+            Align = Client
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 3.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 3.000000000000000000
+            Size.Width = 718.000000000000000000
+            Size.Height = 470.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 1
+            Viewport.Width = 714.000000000000000000
+            Viewport.Height = 466.000000000000000000
+            object SaveDialog1: TSaveDialog
+              Filter = '*.txt|*.txt'
+              Options = [ofOverwritePrompt, ofHideReadOnly, ofEnableSizing]
+              Left = 56
+              Top = 144
+            end
+            object OpenDialog1: TOpenDialog
+              Filter = '*.txt|*.txt'
+              Options = [ofHideReadOnly, ofPathMustExist, ofFileMustExist, ofEnableSizing]
+              Left = 56
+              Top = 216
+            end
+          end
+        end
+        object Layout9: TLayout
+          Align = Right
+          Position.X = 735.000000000000000000
+          Size.Width = 368.000000000000000000
+          Size.Height = 499.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 0
+          object Label2: TLabel
+            Align = Top
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 3.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 3.000000000000000000
+            Position.X = 3.000000000000000000
+            Position.Y = 3.000000000000000000
+            Size.Width = 362.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Base de Datos en Memoria - Representaci'#243'n Embedding de los Datos'
+            TabOrder = 0
+          end
+          object MemoDb: TMemo
+            Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+            DataDetectorTypes = []
+            Align = Client
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 3.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 3.000000000000000000
+            Size.Width = 362.000000000000000000
+            Size.Height = 470.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 1
+            Viewport.Width = 358.000000000000000000
+            Viewport.Height = 466.000000000000000000
+          end
+        end
+        object Splitter1: TSplitter
+          Align = Right
+          Cursor = crHSplit
+          MinSize = 20.000000000000000000
+          Position.X = 724.000000000000000000
+          Size.Width = 11.000000000000000000
+          Size.Height = 499.000000000000000000
+          Size.PlatformDefault = False
+        end
+      end
+    end
+    object TabItemRAG: TTabItem
+      CustomIcon = <
+        item
+        end>
+      TextSettings.Trimming = None
+      IsSelected = True
+      Size.Width = 98.000000000000000000
+      Size.Height = 26.000000000000000000
+      Size.PlatformDefault = False
+      StyleLookup = ''
+      TabOrder = 0
+      Text = 'Consultas RAG'
+      ExplicitSize.cx = 98.000000000000000000
+      ExplicitSize.cy = 26.000000000000000000
+      object Layout2: TLayout
+        Align = Client
+        Size.Width = 1103.000000000000000000
+        Size.Height = 549.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 1
+        object Layout5: TLayout
+          Align = Client
+          Size.Width = 1103.000000000000000000
+          Size.Height = 549.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 3
+          object LayChat: TLayout
+            Align = Client
+            Size.Width = 1103.000000000000000000
+            Size.Height = 549.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 1
+            object Layout3: TLayout
+              Align = Client
+              Size.Width = 1103.000000000000000000
+              Size.Height = 377.000000000000000000
+              Size.PlatformDefault = False
+              TabOrder = 1
+              object MemoChat: TMemo
+                Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+                DataDetectorTypes = []
+                StyledSettings = [Family, Style, FontColor]
+                TextSettings.Font.Size = 16.000000000000000000
+                TextSettings.WordWrap = True
+                Align = Client
+                Margins.Top = 5.000000000000000000
+                Margins.Right = 5.000000000000000000
+                Size.Width = 1098.000000000000000000
+                Size.Height = 372.000000000000000000
+                Size.PlatformDefault = False
+                TabOrder = 0
+                Viewport.Width = 1094.000000000000000000
+                Viewport.Height = 368.000000000000000000
+              end
+            end
+            object Layout6: TLayout
+              Align = Bottom
+              Position.Y = 384.000000000000000000
+              Size.Width = 1103.000000000000000000
+              Size.Height = 165.000000000000000000
+              Size.PlatformDefault = False
+              TabOrder = 0
+              object MemoPrompt: TMemo
+                Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+                DataDetectorTypes = []
+                StyledSettings = [Family, Style, FontColor]
+                TextSettings.Font.Size = 16.000000000000000000
+                TextSettings.WordWrap = True
+                Align = Client
+                Margins.Right = 5.000000000000000000
+                Margins.Bottom = 5.000000000000000000
+                Size.Width = 1041.000000000000000000
+                Size.Height = 110.000000000000000000
+                Size.PlatformDefault = False
+                TabOrder = 0
+                Viewport.Width = 1037.000000000000000000
+                Viewport.Height = 106.000000000000000000
+              end
+              object BtnPlay: TSpeedButton
+                Align = Right
+                Margins.Left = 5.000000000000000000
+                Margins.Top = 5.000000000000000000
+                Margins.Right = 5.000000000000000000
+                Margins.Bottom = 5.000000000000000000
+                Position.X = 1051.000000000000000000
+                Position.Y = 5.000000000000000000
+                Size.Width = 47.000000000000000000
+                Size.Height = 105.000000000000000000
+                Size.PlatformDefault = False
+                StyleLookup = 'playtoolbutton'
+                Text = 'BtnPlay'
+                TextSettings.Trimming = None
+                OnClick = BtnPlayClick
+              end
+              object Layout10: TLayout
+                Align = Bottom
+                Position.Y = 115.000000000000000000
+                Size.Width = 1103.000000000000000000
+                Size.Height = 50.000000000000000000
+                Size.PlatformDefault = False
+                TabOrder = 1
+                object Label3: TLabel
+                  Position.X = 22.000000000000000000
+                  Position.Y = 11.000000000000000000
+                  Size.Width = 259.000000000000000000
+                  Size.Height = 17.000000000000000000
+                  Size.PlatformDefault = False
+                  Text = 'L'#237'mite - No Registros a tomar para la respuesta'
+                  TabOrder = 2
+                end
+                object EditLimite: TEdit
+                  Touch.InteractiveGestures = [LongTap, DoubleTap]
+                  TabOrder = 3
+                  Text = '5'
+                  Position.X = 289.000000000000000000
+                  Position.Y = 8.000000000000000000
+                end
+                object Label4: TLabel
+                  Position.X = 414.000000000000000000
+                  Position.Y = 11.000000000000000000
+                  Size.Width = 307.000000000000000000
+                  Size.Height = 17.000000000000000000
+                  Size.PlatformDefault = False
+                  Text = 'Presici'#243'n: Valor de 0 a 1, donde 1 es la mas cercana'
+                  TabOrder = 0
+                end
+                object EditPrecision: TEdit
+                  Touch.InteractiveGestures = [LongTap, DoubleTap]
+                  TabOrder = 1
+                  Text = '0.7'
+                  Position.X = 737.000000000000000000
+                  Position.Y = 8.000000000000000000
+                end
+              end
+            end
+            object Splitter2: TSplitter
+              Align = Bottom
+              Cursor = crVSplit
+              MinSize = 20.000000000000000000
+              Position.Y = 377.000000000000000000
+              Size.Width = 1103.000000000000000000
+              Size.Height = 7.000000000000000000
+              Size.PlatformDefault = False
+            end
+          end
+        end
+      end
+    end
+  end
+  object SaveDialogDb: TSaveDialog
+    Filter = '*.bd.json.txt|*.bd.json.txt'
+    Options = [ofOverwritePrompt, ofHideReadOnly, ofEnableSizing]
+    Left = 160
+    Top = 152
+  end
+  object OpenDialogDB: TOpenDialog
+    Filter = '*.bd.json.txt|*.bd.json.txt'
+    Options = [ofHideReadOnly, ofPathMustExist, ofFileMustExist, ofEnableSizing]
+    Left = 152
+    Top = 224
+  end
+  object OpenChat: TAiOpenChatExt
+    Model = 'gpt-4o'
+    Logprobs = False
+    Max_tokens = 300
+    N = 1
+    Response_format = tiaChatRfText
+    Seed = 0
+    Asynchronous = True
+    Temperature = 1.000000000000000000
+    Top_p = 1.000000000000000000
+    Tools.Strings = (
+      '['
+      '    {'
+      '        "type": "function",'
+      '        "function": {'
+      '            "name": "get_fecha",'
+      '            "description": "Retorna la fecha y la hora actrual",'
+      '            "parameters": {'
+      '                "type": "object",'
+      '                "properties": {'
+      '                    "Localizacion": {'
+      '                        "type": "string",'
+      
+        '                        "description": "la ciudad o regi'#243'n donde' +
+        ' se solicita la fecha, ej, Colombia, Rusia, EEUU, etc."'
+      '                    }'
+      '                },'
+      '                "required": ['
+      '                    "Localizacion"'
+      '                ]'
+      '            }'
+      '        }'
+      '    }'
+      ']')
+    Tool_Active = False
+    User = 'user'
+    InitialInstructions.Strings = (
+      'Eres un asistente muy '#250'til y servicial')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    OnReceiveData = Chat1ReceiveData
+    OnReceiveDataEnd = Chat1ReceiveDataEnd
+    Url = 'https://api.openai.com/v1/'
+    ResponseTimeOut = 60000
+    Functions = <
+      item
+        FunctionName = 'get_fecha'
+        Description.Strings = (
+          'Retorna la fecha y la hora actrual')
+        Parameters = <
+          item
+            Name = 'Localizacion'
+            ParamType = ptString
+            Description.Strings = (
+              
+                'la ciudad o regi'#243'n donde se solicita la fecha, ej, Colombia, Rus' +
+                'ia, EEUU, etc.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end>
+    Left = 532
+    Top = 272
+  end
+  object RagChat: TAiRagChat
+    Chat = OpenChat
+    DataVec = DataVec1
+    Left = 448
+    Top = 168
+  end
+  object DataVec1: TAiDataVec
+    OnDataVecAddItem = DataVec1DataVecAddItem
+    OnDataVecSearch = DataVec1DataVecSearch
+    Embeddings = AiEmbeddings1
+    Left = 448
+    Top = 272
+  end
+  object DbConn: TFDConnection
+    Params.Strings = (
+      'Database=prueba'
+      'User_Name=usrcimadb'
+      'Server=192.168.101.11'
+      'Password=masterkey'
+      'DriverID=PG')
+    LoginPrompt = False
+    Left = 552
+    Top = 336
+  end
+  object AiEmbeddings1: TAiEmbeddings
+    Model = 'text-embedding-3-small'
+    Url = 'https://api.openai.com/v1/'
+    Dimensions = 1536
+    Left = 448
+    Top = 360
+  end
+end
