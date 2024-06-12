@@ -1,9 +1,9 @@
-program AiChatDemo;
+program SimpleChat;
 
 uses
   System.StartUpCopy,
   FMX.Forms,
-  uMainAiChat in 'uMainAiChat.pas' {Form64};
+  uMainSimpleChat in 'uMainSimpleChat.pas' {Form64};
 
 {$R *.res}
 

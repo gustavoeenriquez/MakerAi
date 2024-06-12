@@ -1,4 +1,4 @@
-unit uMainAiChat;
+unit uMainSimpleChat;
 
 interface
 
@@ -8,9 +8,9 @@ uses
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Memo.Types,
   FMX.StdCtrls, FMX.Controls.Presentation, FMX.ScrollBox, FMX.Memo,
   FMX.Objects, FMX.Layouts, REST.Json, System.Json, FMX.ListBox, FMX.TabControl,
-  FMX.Edit, FMX.Platform, FMX.ClipBoard, Fmx.Surfaces,
-  uAiOpenChat, uOpenAi, uOllamaAi, FMX.ComboEdit, FMX.Menus, uAiOpenChatExt,
-  uAiOpenAssistant, uGroqAi, uAnthropicAi;
+  FMX.Edit, FMX.Platform, FMX.ClipBoard, FMX.Surfaces, FMX.ComboEdit,
+  uAiOpenChat, uOpenAi, FMX.Menus, uAiToolFunctions,
+  uAiOpenAssistant, uAiAnthropic, uAiGroq, uAiOllama;
 
 type
   TImageData = Class
@@ -30,7 +30,7 @@ type
     BtnPlay: TSpeedButton;
     MemoChat: TMemo;
     Label1: TLabel;
-    OpenChat: TAiOpenChatExt;
+    OpenChat: TAiOpenChat;
     LayChat: TLayout;
     Layout4: TLayout;
     Splitter1: TSplitter;
@@ -82,7 +82,7 @@ type
     ChUseTools: TCheckBox;
     OllamaChat: TAiOllamaChat;
     GroqChat: TAiGroqChat;
-    ClaudChat: TAiClaudChat;
+    ClaudChat: TAiClaudeChat;
     Label8: TLabel;
     ComboEngines: TComboEdit;
     Layout6: TLayout;
@@ -133,7 +133,7 @@ type
     Procedure AddMsgImages(Msg: TAiOpenChatMessage);
     Function DownLoadFromUrl(sUrl: String): TMemoryStream;
     Procedure AddImageToSlide(FileName: String; BitMap: TBitMap);
-    Procedure CapturarPantalla(BitMap : TBitMap);
+    Procedure CapturarPantalla(BitMap: TBitMap);
   public
     GlChat: TAiOpenChat;
   end;
@@ -198,7 +198,7 @@ begin
       St := TMemoryStream.Create;
       ImageData.BitMap.SaveToStream(St);
       St.Position := 0;
-      Msg.AddStreamImage(St);
+      Msg.LoadMediaFromStream(ImageData.FileName, St);
     End;
   End;
 
@@ -669,8 +669,8 @@ var
   ClipboardService: IFMXClipboardService;
   BitMap: TBitMap;
   Kind: TTypeKind;
-  Sur : TBitMapSurface;
-  S : String;
+  Sur: TBitMapSurface;
+  S: String;
 begin
   if TPlatformServices.Current.SupportsPlatformService(IFMXClipboardService, IInterface(ClipboardService)) then
   begin
@@ -684,9 +684,9 @@ begin
         Sur := TBitMapSurface(ClipboardService.GetClipboard.AsObject);
 
         BitMap := TBitMap.Create;
-        Bitmap.SetSize(Sur.Width, Sur.Height);
-        Bitmap.Assign(Sur);
-        AddImageToSlide('',BitMap);
+        BitMap.SetSize(Sur.Width, Sur.Height);
+        BitMap.Assign(Sur);
+        AddImageToSlide('', BitMap);
       end
     end
     else
@@ -703,13 +703,13 @@ end;
 
 procedure TForm64.SpeedButton4Click(Sender: TObject);
 Var
-  BitMap : TBitMap;
+  BitMap: TBitMap;
 begin
   If OpenDialogImage.Execute then
   Begin
-     BitMap := TBitMap.Create;
-     BitMap.LoadFromFile(OpenDialogImage.FileName);
-     AddImageToSlide(ExtractFileName(OpenDialogImage.FileName),BitMap);
+    BitMap := TBitMap.Create;
+    BitMap.LoadFromFile(OpenDialogImage.FileName);
+    AddImageToSlide(ExtractFileName(OpenDialogImage.FileName), BitMap);
   End;
 end;
 

@@ -48,6 +48,7 @@ type
   TAiImageSize = (TiaSize256, TiaSize512, TiaSize1024, TiaSize1024_1792, TiaSize1792_1024);
   TAiImageResponseFormat = (tiaRUrl, tiaRB64);
   TAiImageAStyleFormat = (tiaStyleVivid, tiaStyleNatural);
+  TAiFileCategory = (Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_Document, Tfc_Text, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, Tfc_Aplication, Tfc_DiskImage, Tfc_GraphicDesign, Tfc_Unknow);
 
   TAiMetadata = Class;
   TAiMessage = Class;
@@ -67,11 +68,11 @@ type
     FApiKey: String;
     FUrl: String;
     procedure Setfilename(const Value: String);
-    function GetContent: TMemoryStream;
     procedure Setid(const Value: String);
     procedure SetApiKey(const Value: String);
     procedure SetUrl(const Value: String);
   Protected
+    function GetContent: TMemoryStream; Virtual;
   Public
     Constructor Create(aApiKey: String; aUrl: String = '');
     Destructor Destroy; Override;
@@ -356,6 +357,7 @@ type
     FApiKey: String;
     FContent: TAiMessageContentArray;
     FUrl: String;
+    FFinishReason: String;
     procedure Setrole(const Value: String);
     procedure Setfile_ids(const Value: TStringList);
     procedure SetMetadata(const Value: TAiMetadata);
@@ -366,6 +368,7 @@ type
     procedure SetApiKey(const Value: String);
     procedure SetContent(const Value: TAiMessageContentArray);
     procedure SetUrl(const Value: String);
+    procedure SetFinishReason(const Value: String);
   Public
     Constructor Create(aApiKey: String; aUrl: String = '');
     Destructor Destroy; Override;
@@ -379,6 +382,7 @@ type
     Property Files: TAiFileArray read FFiles;
     Property Metadata: TAiMetadata read FMetadata write SetMetadata;
     Property AssistantId: String read FAssisistantId write SetAssisistantId;
+    Property FinishReason: String read FFinishReason write SetFinishReason;
     Property ThReadId: String read FThReadId write SetThReadId;
     Property RunId: String read FRunId write SetRunId;
     Property ApiKey: String read FApiKey write SetApiKey;
@@ -714,7 +718,7 @@ type
     Procedure ParseGenerate(JObj: TJSonObject);
     Procedure ParseVariations(JObj: TJSonObject);
   Public
-    Constructor Create(aOwner: TComponent);
+    Constructor Create(aOwner: TComponent); Override;
     Destructor Destroy; Override;
     Function Generate(aPrompt: String; aSize: TAiImageSize; N: Integer): TAiImagesFile;
     Function Edit(aImage, aMask: TMemoryStream; aPrompt: String; aSize: TAiImageSize; N: Integer): TAiImagesFile;
@@ -748,18 +752,20 @@ type
     FUrl: String;
     procedure SetApiKey(const Value: String);
     procedure SetUrl(const Value: String);
+    procedure SetModel(const Value: String);
   Protected
     Function ParseVision(Response: TJSonObject): String;
   Public
-    Constructor Create(aOwner: TComponent);
+    Constructor Create(aOwner: TComponent); Override;
     Destructor Destroy; Override;
     Function GenerateByUrl(aPrompt, aUrl: String; aMax_tokens: Integer = 4000; aDetail: Boolean = False): String;
     function GenerateByBase64(aPrompt, aBase64: String; aMax_tokens: Integer = 4000; aDeetail: Boolean = False): String;
     function GenerateByStream(aPrompt: String; aStream: TMemoryStream; aMax_tokens: Integer = 4000; aDetail: Boolean = False): String;
 
+  Published
     Property ApiKey: String read FApiKey write SetApiKey;
     Property id: String read Fid;
-    Property Model: String read FModel;
+    Property Model: String read FModel write SetModel;
     Property Finish_reason: String read FFinish_reason;
     Property role: String read FRole;
     Property Content: String read FContent;
@@ -767,6 +773,61 @@ type
     Property completion_tokens: Integer read Fcompletion_tokens;
     Property total_tokens: Integer read Ftotal_tokens;
     Property Url: String read FUrl write SetUrl;
+  End;
+
+  TAiMediaFile = Class
+  Private
+    Ffilename: String;
+    FUrlMedia: String;
+    FFileType: String;
+    FContent: TMemoryStream;
+    FFullFileName: String;
+    FTranscription: String;
+    FProcesado: Boolean;
+    function GetBase64: String;
+    function GetContent: TMemoryStream;
+    procedure SetBase64(const Value: String);
+    procedure Setfilename(const Value: String);
+    procedure SetUrlMedia(const Value: String);
+    function GetBytes: Integer;
+    procedure SetFullFileName(const Value: String);
+    function GetMimeType: String;
+    function GetFileCategory: TAiFileCategory;
+    procedure SetTranscription(const Value: String);
+    procedure SetProcesado(const Value: Boolean);
+  Protected
+  Public
+    Constructor Create;
+    Destructor Destroy; Override;
+    Procedure LoadFromfile(aFileName: String);
+    Procedure LoadFromUrl(aUrl: String);
+    Procedure LoadFromBase64(aFileName, aBase64: String);
+    Procedure LoadFromStream(aFileName: String; Stream: TMemoryStream);
+    Procedure SaveToFile(aFileName: String);
+    Procedure Clear;
+    Property filename: String read Ffilename write Setfilename;
+    Property bytes: Integer read GetBytes;
+    Property Content: TMemoryStream read GetContent;
+    Property FileCategory: TAiFileCategory read GetFileCategory;
+    Property UrlMedia: String read FUrlMedia write SetUrlMedia;
+    Property Base64: String read GetBase64 write SetBase64;
+    Property FullFileName: String read FFullFileName write SetFullFileName;
+    Property MimeType: String read GetMimeType;
+    // Transcription- Si el archivo adjunto se procesa por separado aquí se guarda lo que retorna el modelo correspondiente
+    Property Transcription: String read FTranscription write SetTranscription;
+    Property Procesado: Boolean read FProcesado write SetProcesado; // Si ya se utilizó, para que no guarde nuevamente la información de este archivo
+  End;
+
+  TAiMediaFilesArray = Array of TAiMediaFile;
+
+  TAiMediaFiles = Class(TObjectList<TAiMediaFile>)
+  Private
+  Protected
+  Public
+    // Si el modelo nomaneja este tipo de media failes, se pueden preprocesar en el evento del chat
+    // y el texto del proceso se adiciona al prompt, y aquí ya no se tendrían en cuenta
+    Function GetMediaList(aFilter: TAiFileCategory; aProcesado: Boolean = False): TAiMediaFilesArray;
+    // = (Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_Document, Tfc_Text, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, Tfc_Aplication, Tfc_DiskImage, Tfc_GraphicDesign, Tfc_Unknow); :
   End;
 
 procedure Register;
@@ -811,9 +872,8 @@ begin
   Result := TNetEncoding.Base64.EncodeBytesToString(Stream.Memory, Stream.Size);
 end;
 
-function GetContentType(FileExtension: string): string;
+function GetMimeTypeFromFileName(FileExtension: string): string;
 begin
-
   FileExtension := LowerCase(Trim(StringReplace(FileExtension, '.', '', [rfReplaceAll])));
 
   if SameText(FileExtension, 'mp3') then
@@ -832,9 +892,111 @@ begin
     Result := 'audio/wav'
   else if SameText(FileExtension, 'webm') then
     Result := 'video/webm'
+  else if SameText(FileExtension, 'txt') then
+    Result := 'text/plain'
+  else if SameText(FileExtension, 'html') then
+    Result := 'text/html'
+  else if SameText(FileExtension, 'htm') then
+    Result := 'text/html'
+  else if SameText(FileExtension, 'css') then
+    Result := 'text/css'
+  else if SameText(FileExtension, 'csv') then
+    Result := 'text/csv'
+  else if SameText(FileExtension, 'xml') then
+    Result := 'application/xml'
+  else if SameText(FileExtension, 'json') then
+    Result := 'application/json'
+  else if SameText(FileExtension, 'pdf') then
+    Result := 'application/pdf'
+  else if SameText(FileExtension, 'zip') then
+    Result := 'application/zip'
+  else if SameText(FileExtension, 'gzip') then
+    Result := 'application/gzip'
+  else if SameText(FileExtension, 'tar') then
+    Result := 'application/x-tar'
+  else if SameText(FileExtension, 'rar') then
+    Result := 'application/vnd.rar'
+  else if SameText(FileExtension, 'exe') then
+    Result := 'application/vnd.microsoft.portable-executable'
+  else if SameText(FileExtension, 'gif') then
+    Result := 'image/gif'
+  else if SameText(FileExtension, 'jpeg') then
+    Result := 'image/jpeg'
+  else if SameText(FileExtension, 'jpg') then
+    Result := 'image/jpeg'
+  else if SameText(FileExtension, 'png') then
+    Result := 'image/png'
+  else if SameText(FileExtension, 'bmp') then
+    Result := 'image/bmp'
+  else if SameText(FileExtension, 'svg') then
+    Result := 'image/svg+xml'
+  else if SameText(FileExtension, 'ico') then
+    Result := 'image/vnd.microsoft.icon'
+  else if SameText(FileExtension, 'tiff') then
+    Result := 'image/tiff'
+  else if SameText(FileExtension, 'tif') then
+    Result := 'image/tiff'
+  else if SameText(FileExtension, 'avi') then
+    Result := 'video/x-msvideo'
+  else if SameText(FileExtension, 'mov') then
+    Result := 'video/quicktime'
+  else if SameText(FileExtension, 'wmv') then
+    Result := 'video/x-ms-wmv'
+  else if SameText(FileExtension, 'flv') then
+    Result := 'video/x-flv'
+  else if SameText(FileExtension, '3gp') then
+    Result := 'video/3gpp'
+  else if SameText(FileExtension, 'mkv') then
+    Result := 'video/x-matroska'
   else
-    Result := 'application/octet-stream';
-  // Tipo de contenido predeterminado para otras extensiones
+    Result := 'application/octet-stream'; // Tipo de contenido predeterminado para otras extensiones
+end;
+
+{ 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'svg', 'webp' Result := 'Imagen'
+  'mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a'   Result := 'Audio'
+  'avi', 'mp4', 'mkv', 'mov', 'wmv', 'flv', 'webm'   Result := 'Video'
+  'doc', 'docx', 'pdf', 'odt', 'rtf', 'tex'     Result := 'Documento'
+  'txt', 'md', 'rtf'     Result := 'Texto'
+  'xls', 'xlsx', 'ods', 'csv'  Result := 'Hoja de Cálculo'
+  'ppt', 'pptx', 'odp'   Result := 'Presentación'
+  'zip', 'rar', 'tar', 'gz', 'bz2', '7z', 'xz'   Result := 'Archivo comprimido'
+  'html', 'htm', 'xml', 'json', 'css', 'js'   Result := 'Web'
+  'exe', 'msi', 'bat', 'sh', 'bin', 'cmd'   Result := 'Aplicación'
+  'iso', 'img'   Result := 'Imagen de Disco'
+  'psd', 'ai'    Result := 'Diseño Gráfico'
+  Result := 'Desconocido';
+}
+
+function GetContentCategory(FileExtension: string): TAiFileCategory;
+begin
+  FileExtension := LowerCase(Trim(StringReplace(ExtractFileName(FileExtension), '.', '', [rfReplaceAll])));
+
+  if (FileExtension = 'jpg') or (FileExtension = 'jpeg') or (FileExtension = 'png') or (FileExtension = 'gif') or (FileExtension = 'bmp') or (FileExtension = 'tiff') or (FileExtension = 'svg') or (FileExtension = 'webp') then
+    Result := Tfc_Image
+  else if (FileExtension = 'mp3') or (FileExtension = 'wav') or (FileExtension = 'flac') or (FileExtension = 'aac') or (FileExtension = 'ogg') or (FileExtension = 'wma') or (FileExtension = 'm4a') then
+    Result := Tfc_Audio
+  else if (FileExtension = 'avi') or (FileExtension = 'mp4') or (FileExtension = 'mkv') or (FileExtension = 'mov') or (FileExtension = 'wmv') or (FileExtension = 'flv') or (FileExtension = 'webm') then
+    Result := Tfc_Video
+  else if (FileExtension = 'doc') or (FileExtension = 'docx') or (FileExtension = 'pdf') or (FileExtension = 'odt') or (FileExtension = 'rtf') or (FileExtension = 'tex') then
+    Result := Tfc_Document
+  else if (FileExtension = 'txt') or (FileExtension = 'md') or (FileExtension = 'rtf') then
+    Result := Tfc_Text
+  else if (FileExtension = 'xls') or (FileExtension = 'xlsx') or (FileExtension = 'ods') or (FileExtension = 'csv') then
+    Result := Tfc_CalcSheet
+  else if (FileExtension = 'ppt') or (FileExtension = 'pptx') or (FileExtension = 'odp') then
+    Result := Tfc_Presentation
+  else if (FileExtension = 'zip') or (FileExtension = 'rar') or (FileExtension = 'tar') or (FileExtension = 'gz') or (FileExtension = 'bz2') or (FileExtension = '7z') or (FileExtension = 'xz') then
+    Result := Tfc_CompressFile
+  else if (FileExtension = 'html') or (FileExtension = 'htm') or (FileExtension = 'xml') or (FileExtension = 'json') or (FileExtension = 'css') or (FileExtension = 'js') then
+    Result := Tfc_Web
+  else if (FileExtension = 'exe') or (FileExtension = 'msi') or (FileExtension = 'bat') or (FileExtension = 'sh') or (FileExtension = 'bin') or (FileExtension = 'cmd') then
+    Result := Tfc_Aplication
+  else if (FileExtension = 'iso') or (FileExtension = 'img') then
+    Result := Tfc_DiskImage
+  else if (FileExtension = 'psd') or (FileExtension = 'ai') then
+    Result := Tfc_GraphicDesign
+  else
+    Result := Tfc_Unknow;
 end;
 
 {$ENDREGION}
@@ -876,6 +1038,11 @@ end;
 procedure TAiMessage.Setfile_ids(const Value: TStringList);
 begin
   Ffile_ids := Value;
+end;
+
+procedure TAiMessage.SetFinishReason(const Value: String);
+begin
+  FFinishReason := Value;
 end;
 
 procedure TAiMessage.SetMessageId(const Value: String);
@@ -3569,7 +3736,7 @@ begin
   RunCommand(CommandLine);
 
   Destino := TMemoryStream.Create;
-  Destino.LoadFromFile(FDestino);
+  Destino.LoadFromfile(FDestino);
   Destino.Position := 0;
   DestinoFileName := ExtractFileName(FDestino);
 
@@ -3582,13 +3749,13 @@ begin
   Inherited;
   FUrl := GlOpenAIUrl;
   FModel := 'whisper-1';
-  FVoice := 'nova'; //alloy, echo, fable, onyx, nova, shimmer
+  FVoice := 'nova'; // alloy, echo, fable, onyx, nova, shimmer
   FFormat := 'mp3'; // "mp3", opus", "aac", "flac", and "pcm"
   FLanguaje := 'es';
   FSpeed := 1;
   FTemperature := 0;
   FResponseFormat := 'text'; // json, text, srt, verbose_json, or vtt
-  FQuality := 'tts-1-hd'; //tts-1, tts-1-hd
+  FQuality := 'tts-1-hd'; // tts-1, tts-1-hd
 end;
 
 destructor TAiAudio.Destroy;
@@ -3752,7 +3919,7 @@ begin
   Try
     aStream.Position := 0;
 
-    Body.AddStream('file', aStream, aFileName, GetContentType(ExtractFileExt(aFileName)));
+    Body.AddStream('file', aStream, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
     Body.AddField('model', FModel);
     Body.AddField('prompt', aPrompt);
     Body.AddField('response_format', FResponseFormat);
@@ -3809,7 +3976,7 @@ begin
   Try
     aStream.Position := 0;
 
-    Body.AddStream('file', aStream, aFileName, GetContentType(ExtractFileExt(aFileName)));
+    Body.AddStream('file', aStream, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
     Body.AddField('model', FModel);
     Body.AddField('prompt', aPrompt);
     Body.AddField('response_format', FResponseFormat);
@@ -4017,7 +4184,7 @@ begin
     Res := Client.Post(sUrl, St, Response, Headers);
     Response.Position := 0;
 
-    Response.SaveToFile('c:\temp\response.txt');
+    // Response.SaveToFile('c:\temp\response.txt');
 
     if Res.StatusCode = 200 then
     Begin
@@ -4683,6 +4850,11 @@ begin
   FApiKey := Value;
 end;
 
+procedure TAiVision.SetModel(const Value: String);
+begin
+  FModel := Value;
+end;
+
 procedure TAiVision.SetUrl(const Value: String);
 begin
   If Value <> '' then
@@ -4725,7 +4897,6 @@ Function TAiImagesFile.LoadImage(UrlFile: String): TMemoryStream;
 Var
   NetHttp: TNetHTTPClient;
   Resp: IHTTPResponse;
-
 Begin
   Result := Nil;
   FImage.Clear;
@@ -5542,30 +5713,198 @@ begin
   Result := Self.TryGetValue(AiVectorStoreId, AiVectorStoreFileBatch);
 end;
 
+{ TAiMediaFiles }
+
+procedure TAiMediaFile.Clear;
+begin
+  FContent.Clear;
+end;
+
+constructor TAiMediaFile.Create;
+begin
+  Inherited;
+  FContent := TMemoryStream.Create;
+  FProcesado := False;
+end;
+
+destructor TAiMediaFile.Destroy;
+begin
+  FContent.Free;
+  inherited;
+end;
+
+function TAiMediaFile.GetBase64: String;
+begin
+  FContent.Position := 0;
+  Result := TNetEncoding.Base64.EncodeBytesToString(FContent.Memory, FContent.Size);
+end;
+
+function TAiMediaFile.GetBytes: Integer;
+begin
+  Result := FContent.Size;
+end;
+
+function TAiMediaFile.GetContent: TMemoryStream;
+Var
+  Client: THTTPClient;
+  Headers: TNetHeaders;
+  Response: TMemoryStream;
+  Res: IHTTPResponse;
+  sUrl: String;
+begin
+
+  If FContent.Size > 5000 then // Si ya está cargado el archivo solo lo retorna
+  Begin
+    Result := FContent;
+    Exit;
+  End;
+
+  // Si tiene asignada una url la carga de la url y la deja en memoria
+
+  FContent.Clear;
+  FContent.Position := 0;
+
+  If FUrlMedia <> '' then
+  Begin
+
+    Client := THTTPClient.Create;
+    sUrl := FUrlMedia;
+    Response := TMemoryStream.Create;
+
+    Try
+
+      Res := Client.Get(sUrl, Response, Headers);
+
+      if Res.StatusCode = 200 then
+      Begin
+        Response.Position := 0;
+        FContent.LoadFromStream(Response);
+        FContent.Position := 0;
+        Result := FContent;
+      End
+      else
+        Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+
+    Finally
+      Client.Free;
+      Response.Free;
+    End;
+  End;
+end;
+
+function TAiMediaFile.GetFileCategory: TAiFileCategory;
+begin
+  Result := GetContentCategory(ExtractFileExt(LowerCase(Ffilename)));
+end;
+
+function TAiMediaFile.GetMimeType: String;
+begin
+  Result := GetMimeTypeFromFileName(LowerCase(ExtractFileExt(Ffilename)));
+end;
+
+procedure TAiMediaFile.LoadFromBase64(aFileName, aBase64: String);
+Var
+  St: TMemoryStream;
+begin
+  St := TBytesStream.Create(TNetEncoding.Base64.DecodeStringToBytes(Base64));
+  Try
+    If Assigned(St) then
+    Begin
+      FContent.Clear;
+      FContent.LoadFromStream(St);
+      FFullFileName := aFileName;
+      Ffilename := ExtractFileName(aFileName);
+      FFileType := ExtractFileExt(filename);
+    End;
+  Finally
+    St.Free;
+  End;
+end;
+
+procedure TAiMediaFile.LoadFromfile(aFileName: String);
+begin
+  If TFile.Exists(aFileName) then
+  Begin
+    FContent.Clear;
+    FContent.LoadFromfile(aFileName);
+    FFullFileName := aFileName;
+    Ffilename := ExtractFileName(aFileName);
+    FFileType := LowerCase(ExtractFileExt(Ffilename));
+  End;
+end;
+
+procedure TAiMediaFile.LoadFromStream(aFileName: String; Stream: TMemoryStream);
+begin
+  If Assigned(Stream) then
+  Begin
+    FContent.Clear;
+    FContent.LoadFromStream(Stream);
+    FFullFileName := aFileName;
+    Ffilename := ExtractFileName(aFileName);
+    FFileType := LowerCase(ExtractFileExt(Ffilename));
+  End;
+end;
+
+procedure TAiMediaFile.LoadFromUrl(aUrl: String);
+begin
+  FUrlMedia := aUrl;
+  FContent.Clear;
+  GetContent;
+end;
+
+procedure TAiMediaFile.SaveToFile(aFileName: String);
+begin
+  FContent.SaveToFile(aFileName);
+end;
+
+procedure TAiMediaFile.SetBase64(const Value: String);
+begin
+  LoadFromBase64('', Value);
+end;
+
+procedure TAiMediaFile.Setfilename(const Value: String);
+begin
+  Ffilename := Value;
+end;
+
+procedure TAiMediaFile.SetFullFileName(const Value: String);
+begin
+  FFullFileName := Value;
+end;
+
+procedure TAiMediaFile.SetProcesado(const Value: Boolean);
+begin
+  FProcesado := Value;
+end;
+
+procedure TAiMediaFile.SetTranscription(const Value: String);
+begin
+  FTranscription := Value;
+end;
+
+procedure TAiMediaFile.SetUrlMedia(const Value: String);
+begin
+  FUrlMedia := Value;
+end;
+
+{ TAiMediaFiles }
+
+function TAiMediaFiles.GetMediaList(aFilter: TAiFileCategory; aProcesado: Boolean = False): TAiMediaFilesArray;
+Var
+  i: Integer;
+  Item: TAiMediaFile;
+  Len: Integer;
+begin
+  For i := 0 to Self.Count - 1 do
+  Begin
+    Item := Self.Items[i];
+    If (Item.FileCategory = aFilter) and (Item.Procesado = aProcesado) then
+    Begin
+      Len := Length(Result);
+      SetLength(Result, Len + 1);
+      Result[Length(Result) - 1] := Item;
+    End;
+  End;
+end;
+
 end.
-
-  " Messages ": [
-{
-  "role": "user",
-  "content": [
-  {
-  "type": "text",
-  "text": "What'\''s in this image?"
-} ,
-{
-  "type": "image_url",
-  "image_url": {
-  "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
-}
-}]}],
-
-  " Messages ": [
-{
-  "role": "system",
-  "content": "You are a helpful assistant."
-} ,
-{
-  "role": "user",
-  "content": "Hello!"
-}
-]} '

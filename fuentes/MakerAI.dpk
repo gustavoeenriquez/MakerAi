@@ -1,6 +1,7 @@
 package MakerAI;
 
 {$R *.res}
+{$R *.dres}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
 {$ASSERTIONS ON}
@@ -39,12 +40,13 @@ contains
   uAiOpenAssistant in 'uAiOpenAssistant.pas',
   uOpenAi in 'uOpenAi.pas',
   uAiOpenChat in 'uAiOpenChat.pas',
-  uOllamaAI in 'uOllamaAI.pas',
-  uAiOpenChatExt in 'uAiOpenChatExt.pas',
-  uGroqAi in 'uGroqAi.pas',
-  uAnthropicAi in 'uAnthropicAi.pas',
+  uAiOllama in 'uAiOllama.pas',
+  uAiToolFunctions in 'uAiToolFunctions.pas',
+  uAiGroq in 'uAiGroq.pas',
+  uAiAnthropic in 'uAiAnthropic.pas',
   uAiPrompts in 'uAiPrompts.pas',
-  uGrafoAi in 'uGrafoAi.pas',
-  uAiVectors in 'uAiVectors.pas';
+  uAiVectors in 'uAiVectors.pas',
+  uAGraph in 'uAGraph.pas',
+  uAiGemini in 'uAiGemini.pas';
 
 end.

@@ -19,6 +19,7 @@ type
     FjData: TJSonObject;
     FIdx: Double;
     FOrden: Integer;
+    FModel: String;
     procedure SetData(const Value: TAiEmbeddingData);
     class function DotProduct(const A, B: TAiEmbeddingNode): Double;
     class function Magnitude(const A: TAiEmbeddingNode): Double;
@@ -28,6 +29,7 @@ type
     procedure SetText(const Value: String);
     procedure SetIdx(const Value: Double);
     procedure SetOrden(const Value: Integer);
+    procedure SetModel(const Value: String);
   public
     Constructor Create(aDim: Integer);
     Destructor Destroy; Override;
@@ -44,6 +46,7 @@ type
     Property Dim: Integer read FDim;
     Property Idx: Double read FIdx write SetIdx;
     Property Orden: Integer read FOrden write SetOrden;
+    Property Model: String read FModel write SetModel;
   end;
 
   TAiDataVec = Class;
@@ -75,12 +78,18 @@ type
     FItems: TList<TAiEmbeddingNode>;
     FOnDataVecAddItem: TOnDataVecAddItem;
     FOnDataVecSearch: TOnDataVecSearch;
+    FDim: Integer;
+    FModel: String;
+    FNameVec: String;
+    FDescription: String;
     procedure SetActive(const Value: Boolean);
     procedure SetRagIndex(const Value: TAIEmbeddingIndex);
     procedure SetEmbeddings(const Value: TAiEmbeddings);
     function GetItems: TList<TAiEmbeddingNode>;
     procedure SetOnDataVecAddItem(const Value: TOnDataVecAddItem);
     procedure SetOnDataVecSearch(const Value: TOnDataVecSearch);
+    procedure SetDescription(const Value: String);
+    procedure SetNameVec(const Value: String);
   Protected
 
   Public
@@ -94,10 +103,12 @@ type
     Function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TAiDataVec; Overload;
     Function Search(Prompt: String; aLimit: Integer; aPrecision: Double): TAiDataVec; Overload;
     procedure BuildIndex;
+
     Function AddItem(aItem: TAiEmbeddingNode): NativeInt; Overload; Virtual;
     Function AddItem(aText: String): TAiEmbeddingNode; Overload; Virtual;
+
     Function AddItemsFromJSonArray(aJSonArray: TJSonArray): Boolean; Virtual;
-    Function AddItemsFromPlainText(aText: String; aLenChunk: Integer = 1024; aLenOverlap: Integer = 120): Boolean; Virtual;
+    Function AddItemsFromPlainText(aText: String; aLenChunk: Integer = 512; aLenOverlap: Integer = 80): Boolean; Virtual;
     Function CreateEmbeddingNode(aText: String; aEmbeddings: TAiEmbeddings = Nil): TAiEmbeddingNode;
     Function Count: Integer;
     Procedure Clear;
@@ -109,6 +120,10 @@ type
     Property OnDataVecAddItem: TOnDataVecAddItem read FOnDataVecAddItem write SetOnDataVecAddItem;
     Property OnDataVecSearch: TOnDataVecSearch read FOnDataVecSearch write SetOnDataVecSearch;
     Property Embeddings: TAiEmbeddings read FEmbeddings write SetEmbeddings;
+    Property Model: String read FModel;
+    Property Dim: Integer read FDim;
+    Property NameVec: String read FNameVec write SetNameVec;
+    Property Description: String read FDescription write SetDescription;
   End;
 
   TAIBasicEmbeddingIndex = class(TAIEmbeddingIndex)
@@ -160,6 +175,11 @@ end;
 procedure TAiEmbeddingNode.SetjData(const Value: TJSonObject);
 begin
   FjData := Value;
+end;
+
+procedure TAiEmbeddingNode.SetModel(const Value: String);
+begin
+  FModel := Value;
 end;
 
 procedure TAiEmbeddingNode.SetOrden(const Value: Integer);
@@ -315,12 +335,20 @@ begin
   If Assigned(FOnDataVecAddItem) then
     FOnDataVecAddItem(Self, aItem, Handled);
 
-  If Handled = False then
+  If Handled = True then
   Begin
+    aItem.Free; // Si se almacena en la base de datos no se necesita en memoria
+  End
+  Else
+  Begin // Se almacena en memoria y se asigna al indice en memoria si lo hay
     Result := Self.FItems.Add(aItem);
     If Assigned(FRagIndex) then
       FRagIndex.Add(aItem);
   End;
+
+  // En cualquiera de los casos si logró almacenarlo, guarda el modelo y la longitud
+  FModel := aItem.Model;
+  FDim := aItem.Dim;
 end;
 
 function TAiDataVec.AddItem(aText: String): TAiEmbeddingNode;
@@ -336,8 +364,9 @@ begin
     Result := TAiEmbeddingNode.Create(1);
     Result.Text := aText;
     Result.Data := Ar;
+    Result.Model := FEmbeddings.Model;
 
-    Self.AddItem(Result);
+    Self.AddItem(Result); // LLama al additem(TAiEmbeddingNode);
   Finally
   End;
 end;
@@ -370,7 +399,7 @@ begin
   Repeat
     S := Copy(Text, 1, aLenChunk).trim;
 
-    Emb := AddItem(Text);
+    Emb := AddItem(S);
     Emb.Orden := i;
     Text := Copy(Text, aLenChunk - aLenOverlap, Length(Text));
     Inc(i);
@@ -410,11 +439,11 @@ begin
   inherited;
   FItems := TList<TAiEmbeddingNode>.Create;
 
-  //Por defecto crea un indice en memoria sencillo
-  //Si se personaliza con eventos no se utiliza
-  //Se pueden crear indices más complejos en memoria también
+  // Por defecto crea un indice en memoria sencillo
+  // Si se personaliza con eventos no se utiliza
+  // Se pueden crear indices más complejos en memoria también
   FRagIndex := TAIBasicEmbeddingIndex.Create;
-  BuildIndex;  //Inicializa el Indice
+  BuildIndex; // Inicializa el Indice
 end;
 
 function TAiDataVec.CreateEmbeddingNode(aText: String; aEmbeddings: TAiEmbeddings): TAiEmbeddingNode;
@@ -432,6 +461,7 @@ begin
     Result := TAiEmbeddingNode.Create(1);
     Result.Text := aText;
     Result.Data := Ar;
+    Result.Model := aEmbeddings.Model;
   Finally
   End;
 end;
@@ -450,7 +480,20 @@ end;
 procedure TAiDataVec.LoadFromFile(FileName: String);
 Var
   ST: TStringStream;
-  JObj: TJSonObject;
+begin
+  ST := TStringStream.Create;
+  Try
+    ST.LoadFromFile(FileName);
+    LoadFromStream(ST);
+  Finally
+    ST.Free;
+  End;
+end;
+
+procedure TAiDataVec.LoadFromStream(Stream: TMemoryStream);
+Var
+  ST: TStringStream;
+  JItem, JObj: TJSonObject;
   JArr: TJSonArray;
   JVal: TJsonValue;
   Emb: TAiEmbeddingNode;
@@ -458,26 +501,32 @@ begin
   ST := TStringStream.Create;
 
   Try
-    ST.LoadFromFile(FileName);
+    Stream.Position := 0;
+    ST.LoadFromStream(Stream);
+
+    JObj := TJSonObject(TJSonObject.ParseJSONValue(ST.DataString));
     Try
-      JArr := TJSonArray(TJSonObject.ParseJSONValue(ST.DataString));
-      For JVal in JArr do
+      JObj.TryGetValue<String>('name', FNameVec);
+      JObj.TryGetValue<String>('description', FDescription);
+      JObj.TryGetValue<String>('model', FModel);
+      JObj.TryGetValue<Integer>('dim', FDim);
+      JObj.TryGetValue<TJSonArray>('data', JArr);
+
+      If Assigned(JArr) then
       Begin
-        JObj := TJSonObject(JVal);
-        Emb := TAiEmbeddingNode.FromJSON(JObj);
-        Self.Items.Add(Emb);
+        For JVal in JArr do
+        Begin
+          JItem := TJSonObject(JVal);
+          Emb := TAiEmbeddingNode.FromJSON(JItem);
+          Self.Items.Add(Emb);
+        End;
       End;
     Finally
-      JArr.Free;
+      JObj.Free;
     End;
   Finally
     ST.Free;
   End;
-end;
-
-procedure TAiDataVec.LoadFromStream(Stream: TMemoryStream);
-begin
-
 end;
 
 procedure TAiDataVec.SaveToFile(FileName: String);
@@ -491,7 +540,6 @@ begin
   Finally
     ST.Free;
   End;
-
 end;
 
 procedure TAiDataVec.SaveToStream(Stream: TMemoryStream);
@@ -500,21 +548,28 @@ Var
   i: Integer;
   ST: TStringStream;
   JArr: TJSonArray;
-  JObj: TJSonObject;
+  JItem, JObj: TJSonObject;
 begin
   If Not Assigned(Stream) then
     Stream := TMemoryStream.Create;
 
   JArr := TJSonArray.Create;
 
+  JObj := TJSonObject.Create;
+  JObj.AddPair('name', FNameVec);
+  JObj.AddPair('description', FDescription);
+  JObj.AddPair('model', FModel);
+  JObj.AddPair('dim', FDim);
+  JObj.AddPair('data', JArr);
+
   For i := 0 to FItems.Count - 1 do
   Begin
     Emb := FItems[i];
-    JObj := Emb.ToJSON;
-    JArr.Add(JObj)
+    JItem := Emb.ToJSON;
+    JArr.Add(JItem)
   End;
 
-  ST := TStringStream.Create(JArr.Format, TEncoding.Ansi);
+  ST := TStringStream.Create(JObj.Format, TEncoding.Ansi);
   Try
     Stream.LoadFromStream(ST);
   Finally
@@ -537,6 +592,9 @@ begin
     If not Assigned(FRagIndex) then
       Raise Exception.Create('No existe un indice asignado');
 
+    If (FModel <> '') and (FModel <> Target.Model) then
+      Raise Exception.Create('Los modelos de embedding no coinciden BD="' + FModel + '" Búsqueda="' + Target.Model + '"');
+
     Result := FRagIndex.Search(Target, aLimit, aPrecision);
   End;
 end;
@@ -550,7 +608,7 @@ begin
 
   Target := CreateEmbeddingNode(Prompt);
   Try
-    Result := Search(Target, aLimit, aPrecision);
+    Result := Search(Target, aLimit, aPrecision); // Llama al search(TAiEmbeddingNode, Integer, Double);
   Finally
     Target.Free;
   End;
@@ -561,9 +619,19 @@ begin
   FActive := Value;
 end;
 
+procedure TAiDataVec.SetDescription(const Value: String);
+begin
+  FDescription := Value;
+end;
+
 procedure TAiDataVec.SetEmbeddings(const Value: TAiEmbeddings);
 begin
   FEmbeddings := Value;
+end;
+
+procedure TAiDataVec.SetNameVec(const Value: String);
+begin
+  FNameVec := Value;
 end;
 
 procedure TAiDataVec.SetOnDataVecAddItem(const Value: TOnDataVecAddItem);
@@ -643,7 +711,6 @@ Var
   Emb: TAiEmbeddingNode;
   Idx: Double;
   Text: String;
-  Res: String;
 begin
   Result := TAiDataVec.Create(Nil);
 

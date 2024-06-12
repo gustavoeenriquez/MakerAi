@@ -1,7 +1,7 @@
 object Form64: TForm64
   Left = 0
   Top = 0
-  Caption = 'Chat Demo'
+  Caption = 'Simple Chat'
   ClientHeight = 778
   ClientWidth = 1099
   Position = ScreenCenter
@@ -38,7 +38,7 @@ object Form64: TForm64
           TextSettings.Font.Size = 18.000000000000000000
           TextSettings.HorzAlign = Center
           TextSettings.Trimming = None
-          Text = 'Multi Engine Chat Demo'
+          Text = 'Chat OpenAI'
           TabOrder = 0
           object Label8: TLabel
             Margins.Left = 3.000000000000000000
@@ -1076,87 +1076,16 @@ object Form64: TForm64
     Left = 424
     Top = 640
   end
-  object OpenChat: TAiOpenChatExt
+  object OpenChat: TAiOpenChat
     Model = 'gpt-4o'
     Logprobs = False
     Max_tokens = 300
     N = 1
     Response_format = tiaChatRfText
     Seed = 0
-    Asynchronous = True
+    Asynchronous = False
     Temperature = 1.000000000000000000
     Top_p = 1.000000000000000000
-    Tools.Strings = (
-      '['
-      '    {'
-      '        "type": "function",'
-      '        "function": {'
-      '            "name": "GetFecha",'
-      
-        '            "description": "Con esta funci'#243'n obtiene la fecha y ' +
-        'hora actual del sistema en formato DD\/MM\/YYY hh:nn:ss"'
-      '        }'
-      '    },'
-      '    {'
-      '        "type": "function",'
-      '        "function": {'
-      '            "name": "GetInternet",'
-      
-        '            "description": "Esta funci'#243'n retorna el contenido de' +
-        ' una p'#225'gina en internet, \r\nel par'#225'metro url contiene la p'#225'gina' +
-        ' que se quiere visitar\r\nretorna el contenido de la p'#225'gina web.' +
-        '",'
-      '            "parameters": {'
-      '                "type": "object",'
-      '                "properties": {'
-      '                    "Url": {'
-      '                        "type": "string",'
-      
-        '                        "description": "Esta es la url de la p'#225'g' +
-        'ina web que se quiere visitar, es obligatoria y se requiere para' +
-        ' hacer la consulta"'
-      '                    }'
-      '                },'
-      '                "required": ['
-      '                    "Url"'
-      '                ]'
-      '            }'
-      '        }'
-      '    },'
-      '    {'
-      '        "type": "function",'
-      '        "function": {'
-      '            "name": "GetClima",'
-      
-        '            "description": "Retonra la temperatura en una locali' +
-        'zaci'#243'n espec'#237'fica, usualmente la \r\nlocalizaci'#243'n esta dada por ' +
-        'la ciudad Ejemplo Bogot'#225' o Cali,\r\nTambi'#233'n puede ir la Ciudad,P' +
-        'ais, ejemplo  Cali, Colombia.\r\nRetorna la temperatura en la un' +
-        'idad especificada, si la unidad no se especifica\r\nse asumen Gr' +
-        'ados Cent'#237'grados.",'
-      '            "parameters": {'
-      '                "type": "object",'
-      '                "properties": {'
-      '                    "Ubicacion": {'
-      '                        "type": "string",'
-      
-        '                        "description": "La ubicaci'#243'n donde se de' +
-        'sea la temperatura, usualmente es la Ciudad o Ciudad, Pais"'
-      '                    },'
-      '                    "Unidad": {'
-      '                        "type": "string",'
-      
-        '                        "description": "La unidad de medida de l' +
-        'a temperatura, pueden ser Grados Centigrados o Farengeith"'
-      '                    }'
-      '                },'
-      '                "required": ['
-      '                    "Ubicacion"'
-      '                ]'
-      '            }'
-      '        }'
-      '    }'
-      ']')
     Tool_Active = False
     User = 'user'
     InitialInstructions.Strings = (
@@ -1252,9 +1181,6 @@ object Form64: TForm64
     Asynchronous = False
     Temperature = 1.000000000000000000
     Top_p = 1.000000000000000000
-    Tools.Strings = (
-      '['
-      ']')
     Tool_Active = False
     User = 'user'
     InitialInstructions.Strings = (
@@ -1281,29 +1207,6 @@ object Form64: TForm64
     Asynchronous = False
     Temperature = 1.000000000000000000
     Top_p = 1.000000000000000000
-    Tools.Strings = (
-      '['
-      '    {'
-      '        "type": "function",'
-      '        "function": {'
-      '            "name": "GetFecha",'
-      
-        '            "description": "Retorna la fecha y la hora del siste' +
-        'ma",'
-      '            "parameters": {'
-      '                "type": "object",'
-      '                "properties": {'
-      '                    "Valor": {'
-      '                        "type": "string",'
-      
-        '                        "description": "siempre va un valor \"NA' +
-        '\""'
-      '                    }'
-      '                }'
-      '            }'
-      '        }'
-      '    }'
-      ']')
     Tool_Active = True
     User = 'user'
     InitialInstructions.Strings = (
@@ -1336,7 +1239,7 @@ object Form64: TForm64
     Left = 456
     Top = 520
   end
-  object ClaudChat: TAiClaudChat
+  object ClaudChat: TAiClaudeChat
     Model = 'claude-3-haiku-20240307'
     Logprobs = False
     Max_tokens = 300
@@ -1346,9 +1249,6 @@ object Form64: TForm64
     Asynchronous = False
     Temperature = 1.000000000000000000
     Top_p = 1.000000000000000000
-    Tools.Strings = (
-      '['
-      ']')
     Tool_Active = False
     User = 'user'
     InitialInstructions.Strings = (

@@ -14,15 +14,15 @@ uses
   FireDAC.Stan.Async, FireDAC.Phys, FireDAC.FMXUI.Wait, FireDAC.Stan.Param,
   FireDAC.DatS, FireDAC.DApt.Intf, FireDAC.DApt, Data.DB, FireDAC.Comp.DataSet,
   FireDAC.Comp.Client, FireDAC.Phys.PG, FireDAC.Phys.PGDef,
-  uAiOpenChat, uAiOpenChatExt, uOpenAi, uAiVectors,
-  FMX.TabControl, uOllamaAI, uAnthropicAi, uGroqAi, FMX.Edit;
+  uAiOpenChat, uAiToolFunctions, uOpenAi, uAiVectors,
+  FMX.TabControl, FMX.Edit, uAiOllama;
 
 type
 
   TForm69 = class(TForm)
     Layout1: TLayout;
     BtnLoadData: TButton;
-    OpenChat: TAiOpenChatExt;
+    OpenChat: TAiOpenChat;
     RagChat: TAiRagChat;
     DataVec1: TAiDataVec;
     DbConn: TFDConnection;
@@ -65,6 +65,8 @@ type
     EditLimite: TEdit;
     Label4: TLabel;
     EditPrecision: TEdit;
+    AiFunctions1: TAiFunctions;
+    AiOlamalEmbeddings1: TAiOlamalEmbeddings;
     procedure Chat1ReceiveDataEnd(const Sender: TObject; Msg: TAiOpenChatMessage; Response: TJSONObject; Role, Text: string);
     procedure Chat1ReceiveData(const Sender: TObject; Msg: TAiOpenChatMessage; Response: TJSONObject; Role, Text: string);
     procedure BtnPlayClick(Sender: TObject);
@@ -78,6 +80,8 @@ type
     procedure BtnSaveFileClick(Sender: TObject);
     procedure BtnLoadFileClick(Sender: TObject);
     procedure BtnConectarPostgresClick(Sender: TObject);
+    procedure ChBDMemoriaChange(Sender: TObject);
+    procedure ChBDPostgresClick(Sender: TObject);
   private
     // DataVec: TAiDataVec;
     GlChat: TAiOpenChat;
@@ -189,12 +193,12 @@ end;
 procedure TForm69.BtnPlayClick(Sender: TObject);
 Var
   Prompt, Res: String;
-  Limite : Integer;
-  Precision : Single;
+  Limite: Integer;
+  Precision: Single;
 Begin
 
-  Limite := StrToIntDef(EditLimite.Text,5);
-  Precision := StrToFloatDef(EditPrecision.Text,0.7);
+  Limite := StrToIntDef(EditLimite.Text, 5);
+  Precision := StrToFloatDef(EditPrecision.Text, 0.7);
 
   Prompt := MemoPrompt.Lines.Text;
 
@@ -279,6 +283,18 @@ begin
 
 end;
 
+procedure TForm69.ChBDMemoriaChange(Sender: TObject);
+begin
+  BtnLoadData.Enabled := ChBDMemoria.IsChecked;
+  BtnConectarPostgres.Enabled := Not ChBDMemoria.IsChecked;
+end;
+
+procedure TForm69.ChBDPostgresClick(Sender: TObject);
+begin
+  BtnLoadData.Enabled := ChBDPostgres.IsChecked;
+  BtnConectarPostgres.Enabled := Not ChBDPostgres.IsChecked;
+end;
+
 procedure TForm69.DataVec1DataVecAddItem(Sender: TObject; aItem: TAiEmbeddingNode; var Handled: Boolean);
 Var
   Query: TFDQuery;
@@ -301,7 +317,7 @@ begin
     End;
 
     Query.Sql.Clear;
-    Query.Sql.Add('Insert into RagData(categoria, texto, embedding)');
+    Query.Sql.Add('Insert into RagDemo(categoria, texto, embedding)');
     Query.Sql.Add('VALUES (:categoria, :texto, ''' + sEmbedding + ''')');
     Query.Sql.Add('Returning Id');
     Query.Params.ParamByName('categoria').AsString := 'motofacil';
@@ -339,7 +355,7 @@ begin
     Query.Sql.Clear;
     Query.Sql.Clear;
     Query.Sql.Add('SELECT id, texto, embedding <-> ''' + sEmbedding + ''' as distancia');
-    Query.Sql.Add('FROM RagData');
+    Query.Sql.Add('FROM RagDemo');
     Query.Sql.Add('ORDER BY embedding <-> ''' + sEmbedding + '''');
     Query.Sql.Add('LIMIT 5');
     Query.Open;

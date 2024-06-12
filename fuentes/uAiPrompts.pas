@@ -3,13 +3,14 @@ unit uAiPrompts;
 interface
 
 uses
-  SysUtils, Classes;
+  System.SysUtils, System.Classes, System.JSON;
 
 type
   TAiPromptItem = Class(TCollectionItem)
   Private
     fNombre: String;
     FString: TStrings;
+    function GetString: TStrings;
   Protected
     Procedure SetStrings(aValue: TStrings);
     function GetDisplayName: string; Override;
@@ -17,7 +18,7 @@ type
     constructor Create(Collection: TCollection); Override;
   Published
     Property Nombre: String read fNombre Write fNombre;
-    Property Strings: TStrings Read FString Write SetStrings; // stored;
+    Property Strings: TStrings Read GetString Write SetStrings; // stored;
   End;
 
   TAiPrompts = class(TComponent)
@@ -31,6 +32,8 @@ type
     Function AddString(Nombre, Data: String): TAiPromptItem;
     Function GetTemplate(Nombre: String; Params: Array of String): String; Overload;
     Function GetTemplate(Nombre: String; Params: TStringList): String; Overload;
+    Function GetTemplate(Nombre: String; Params: TJSonObject): String; Overload;
+
   published
     Property Items: TCollection Read FItems Write FItems;
   end;
@@ -60,6 +63,11 @@ Begin
   Result := fNombre;
 End;
 
+
+function TAiPromptItem.GetString: TStrings;
+begin
+  Result := FString;
+end;
 
 // *************************************************************
 // *************************************************************
@@ -138,6 +146,23 @@ begin
 
   Result := Res;
 
+end;
+
+function TAiPrompts.GetTemplate(Nombre: String; Params: TJSonObject): String;
+Var
+  Pair : TJSonPair;
+  I, P: Integer;
+  Res, S, Nom, Val: String;
+begin
+  Res := GetString(Nombre);
+  For Pair in Params do
+  Begin
+    Nom := Pair.JsonString.Value;
+    Val := Pair.JsonValue.Value;
+    Res := StringReplace(Res,'<#'+Nom+'>',Val,[rfReplaceAll,rfIgnoreCase]);
+  End;
+
+  Result := Res;
 end;
 
 Function TAiPrompts.AddString(Nombre, Data: String): TAiPromptItem;
