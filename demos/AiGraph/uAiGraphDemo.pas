@@ -33,13 +33,13 @@ type
     Label3: TLabel;
     procedure AIChain1Print(Sender: TObject; Value: string);
     procedure Button1Click(Sender: TObject);
+    procedure EndNodeExecute(Node, BeforeNode: TAIGraphNode; Link: TAIGraphLink; Input: string; var Output: string);
     procedure AiNodeExecute(Node, BeforeNode: TAIGraphNode; Link: TAIGraphLink; Input: string; var Output: string);
+    procedure Link4Execute(Node: TAIGraphNode; Link: TAIGraphLink; var IsOk: Boolean);
     procedure AIChain1End(Sender: TObject; Value: string);
     procedure ExcecuteNodeExecute(Node, BeforeNode: TAIGraphNode; Link: TAIGraphLink; Input: string; var Output: string);
     procedure StartNodeExecute(Node, BeforeNode: TAIGraphNode; Link: TAIGraphLink; Input: string; var Output: string);
     procedure EvalNodeExecute(Node, BeforeNode: TAIGraphNode; Link: TAIGraphLink; Input: string; var Output: string);
-    procedure EndNodeExecute(Node, BeforeNode: TAIGraphNode; Link: TAIGraphLink; Input: string; var Output: string);
-    procedure Link4Execute(Node: TAIGraphNode; Link: TAIGraphLink; var IsOk, Handled: Boolean);
   private
     { Private declarations }
   public
@@ -205,7 +205,7 @@ begin
   End;
 end;
 
-procedure TForm70.Link4Execute(Node: TAIGraphNode; Link: TAIGraphLink; var IsOk, Handled: Boolean);
+procedure TForm70.Link4Execute(Node: TAIGraphNode; Link: TAIGraphLink; var IsOk: Boolean);
 Var
   Prompt, Res: String;
   JObj: TJSonObject;

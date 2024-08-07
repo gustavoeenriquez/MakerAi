@@ -101,6 +101,7 @@ type
     SpeedButton7: TSpeedButton;
     Image7: TImage;
     Label10: TLabel;
+    AiVision1: TAiVision;
     procedure AiOpenChat1ReceiveData(const Sender: TObject; Msg: TAiOpenChatMessage; Response: TJSONObject; Role, Text: string);
     procedure BtnPlayClick(Sender: TObject);
     procedure AiOpenChat1ReceiveDataEnd(const Sender: TObject; Msg: TAiOpenChatMessage; Response: TJSONObject; Role, Text: string);
@@ -127,6 +128,8 @@ type
     procedure SpeedButton3Click(Sender: TObject);
     procedure SpeedButton4Click(Sender: TObject);
     procedure SpeedButton5Click(Sender: TObject);
+    procedure ClaudChatProcessMediaFile(const Sender: TObject; Prompt: string;
+      MediaFile: TAiMediaFile; var Respuesta: string; var aProcesado: Boolean);
   private
     Procedure UpdateMemo(Text: String);
     Procedure InitData;
@@ -359,18 +362,26 @@ begin
   If ChJSonFormat.IsChecked then
   Begin
     GlChat.Response_format := TAiOpenChatResponseFormat.tiaChatRfJson;
-    GlChat.AddMessageAndRun('a partir de ahora las respuestas serán en formato json', 'system');
+    GlChat.AddMessageAndRun('a partir de ahora las respuestas serán en formato json', 'system',[]);
   End
   Else
   Begin
     GlChat.Response_format := TAiOpenChatResponseFormat.tiaChatRfText;
-    GlChat.AddMessageAndRun('a partir de ahora las respuestas serán en formato de texto libre', 'system');
+    GlChat.AddMessageAndRun('a partir de ahora las respuestas serán en formato de texto libre', 'system',[]);
   End;
 end;
 
 procedure TForm64.ChUseToolsChange(Sender: TObject);
 begin
   GlChat.Tool_Active := ChUseTools.IsChecked;
+end;
+
+procedure TForm64.ClaudChatProcessMediaFile(const Sender: TObject;
+  Prompt: string; MediaFile: TAiMediaFile; var Respuesta: string;
+  var aProcesado: Boolean);
+begin
+   Respuesta := 'La imágen anexa se reemplaza por la descripción que te daré a continuación, describe a partir de esta descripcion y no hagas comentarios sobre si la imagen existe o no:'+sLineBreak+'La imagen anexa muestra un globo de helio rojo en un fondo blanco';
+   aProcesado := True;
 end;
 
 procedure TForm64.ComboEnginesChange(Sender: TObject);

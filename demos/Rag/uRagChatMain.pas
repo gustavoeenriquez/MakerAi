@@ -66,7 +66,8 @@ type
     Label4: TLabel;
     EditPrecision: TEdit;
     AiFunctions1: TAiFunctions;
-    AiOlamalEmbeddings1: TAiOlamalEmbeddings;
+    Button1: TButton;
+    Button2: TButton;
     procedure Chat1ReceiveDataEnd(const Sender: TObject; Msg: TAiOpenChatMessage; Response: TJSONObject; Role, Text: string);
     procedure Chat1ReceiveData(const Sender: TObject; Msg: TAiOpenChatMessage; Response: TJSONObject; Role, Text: string);
     procedure BtnPlayClick(Sender: TObject);
@@ -82,6 +83,8 @@ type
     procedure BtnConectarPostgresClick(Sender: TObject);
     procedure ChBDMemoriaChange(Sender: TObject);
     procedure ChBDPostgresClick(Sender: TObject);
+    procedure Button1Click(Sender: TObject);
+    procedure Button2Click(Sender: TObject);
   private
     // DataVec: TAiDataVec;
     GlChat: TAiOpenChat;
@@ -96,6 +99,8 @@ var
 implementation
 
 {$R *.fmx}
+
+uses uAiModule;
 { TAiEmbedding }
 
 { TForm69 }
@@ -120,7 +125,7 @@ End;
 
 procedure TForm69.BtnConectarPostgresClick(Sender: TObject);
 begin
-  showMessage('Esta opción abre la conexión a la base de datos postgres');
+  showMessage('Esta opciï¿½n abre la conexiï¿½n a la base de datos postgres');
 
   DbConn.Open;
   showMessage('Conectado a la base de datos');
@@ -128,13 +133,13 @@ end;
 
 procedure TForm69.BtnLoadDataClick(Sender: TObject);
 begin
-  showMessage('Esta opción lee un archivo json que representa una base de datos en memoria, debe tener el formato adecuado');
+  showMessage('Esta opciï¿½n lee un archivo json que representa una base de datos en memoria, debe tener el formato adecuado');
   If OpenDialogDB.Execute then
   Begin
     DataVec1.Clear;
     DataVec1.LoadFromFile(OpenDialogDB.FileName);
     DataVec1.BuildIndex;
-    showMessage('La base de datos se cargó correctamente');
+    showMessage('La base de datos se cargï¿½ correctamente');
 
     Var
       St: TStringStream := TStringStream.Create;
@@ -150,7 +155,7 @@ end;
 
 procedure TForm69.BtnLoadFileClick(Sender: TObject);
 begin
-  showMessage('Esta opción abre un archivo de texto y lo deja en el memo, no lo procesa todavía');
+  showMessage('Esta opciï¿½n abre un archivo de texto y lo deja en el memo, no lo procesa todavï¿½a');
 
   If OpenDialog1.Execute then
     MemoForParse.Lines.LoadFromFile(OpenDialog1.FileName);
@@ -161,8 +166,8 @@ Var
   JArr: TJSonArray;
 
 begin
-  showMessage('Esta opción requiere que en el memo exista un TJSonVector, no importa el formato');
-  // Crea un vector de búsquedas por medio de un json
+  showMessage('Esta opciï¿½n requiere que en el memo exista un TJSonVector, no importa el formato');
+  // Crea un vector de bï¿½squedas por medio de un json
   JArr := TJSonArray(TJSONObject.ParseJSONValue(MemoForParse.Lines.Text));
   DataVec1.AddItemsFromJSonArray(JArr);
 
@@ -180,11 +185,24 @@ procedure TForm69.BtnPrepareTextoClick(Sender: TObject);
 Var
   JArr: TJSonArray;
 begin
-  showMessage('Estas opción recibe un texto cualquiera, lo procesa por segmentos, esto puede tardar algunos minutos');
-  // Crea un vector de búsquedas por medio de un texto plano, no es tan exacta pero es la más básica
+  showMessage('Estas opciï¿½n recibe un texto cualquiera, lo procesa por segmentos, esto puede tardar algunos minutos');
+  // Crea un vector de bï¿½squedas por medio de un texto plano, no es tan exacta pero es la mï¿½s bï¿½sica
   Cursor := crHourGlass;
   Try
     DataVec1.AddItemsFromPlainText(MemoForParse.Lines.Text, 1024, 200);
+
+
+  Var
+    St: TStringStream := TStringStream.Create;
+  Try
+    DataVec1.SaveToStream(St);
+    MemoDb.Lines.Text := St.DataString;
+  Finally
+    St.Free;
+  End;
+
+
+
   Finally
     Cursor := crDefault;
   End;
@@ -206,14 +224,17 @@ Begin
 
   Res := RagChat.AskToAi(Prompt, Limite, Precision);
 
+  //Res := AiModule.AskToIA(Prompt, Limite, Precision);
+
   UpdateMemo(Res);
+
   MemoChat.Lines.Add('');
   MemoChat.Lines.Add('');
 end;
 
 procedure TForm69.BtnSaveDataClick(Sender: TObject);
 begin
-  showMessage('Esta opción guarda la base de datos de la memoria en un json en el disco');
+  showMessage('Esta opciï¿½n guarda la base de datos de la memoria en un json en el disco');
   If SaveDialogDb.Execute then
   Begin
     DataVec1.SaveToFile(SaveDialogDb.FileName);
@@ -222,7 +243,7 @@ end;
 
 procedure TForm69.BtnSaveFileClick(Sender: TObject);
 begin
-  showMessage('Esta opción guarda en un archivo de texto el contenido del memo, sin hacerle ningún cambio');
+  showMessage('Esta opciï¿½n guarda en un archivo de texto el contenido del memo, sin hacerle ningï¿½n cambio');
   If SaveDialog1.Execute then
     MemoForParse.Lines.SaveToFile(SaveDialog1.FileName);
 end;
@@ -252,6 +273,22 @@ begin
   End;
 end;
 
+procedure TForm69.Button1Click(Sender: TObject);
+begin
+   If OpenDialog1.Execute then
+   Begin
+     AiModule.LoadDataBaseFromfile(OpenDialog1.FileName);
+   End;
+end;
+
+procedure TForm69.Button2Click(Sender: TObject);
+begin
+   If OpenDialog1.Execute then
+   Begin
+      AiModule.LoadPacienteFromJSonFile(OpenDialog1.FileName);
+   End;
+end;
+
 procedure TForm69.Chat1Functions0getfechaAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
 Var
   Localizacion: String;
@@ -268,8 +305,8 @@ end;
 procedure TForm69.Chat1ReceiveDataEnd(const Sender: TObject; Msg: TAiOpenChatMessage; Response: TJSONObject; Role, Text: string);
 begin
 
-  // Si no es asincrono se puede obtener el resultado aquí
-  // o directamente en el llamado de la consulta en el botón de BtnPlay  Res := AiOpenChat1.AddMessageAndRun(MemoPrompt.Text, 'user');
+  // Si no es asincrono se puede obtener el resultado aquï¿½
+  // o directamente en el llamado de la consulta en el botï¿½n de BtnPlay  Res := AiOpenChat1.AddMessageAndRun(MemoPrompt.Text, 'user');
   // If AiOpenChat1.Asynchronous = False then
   // UpdateMemo(Text);
 
@@ -323,6 +360,9 @@ begin
     Query.Params.ParamByName('categoria').AsString := 'motofacil';
     Query.Params.ParamByName('texto').AsString := aItem.Text;
     Query.Open;
+
+    Handled := True;
+
   Finally
     Query.Free;
   End;
@@ -341,6 +381,7 @@ begin
     Exit;
   End;
 
+
   aDataVec := TAiDataVec.Create(Nil); // Crea un vector de respuesta temporal
 
   Query := NewQuery(DbConn, '');
@@ -352,7 +393,6 @@ begin
       JArr.Free;
     End;
 
-    Query.Sql.Clear;
     Query.Sql.Clear;
     Query.Sql.Add('SELECT id, texto, embedding <-> ''' + sEmbedding + ''' as distancia');
     Query.Sql.Add('FROM RagDemo');

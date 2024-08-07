@@ -59,13 +59,29 @@ object Form69: TForm69
       TextSettings.Trimming = None
       OnClick = BtnConectarPostgresClick
     end
+    object Button1: TButton
+      Position.X = 784.000000000000000000
+      Position.Y = 8.000000000000000000
+      TabOrder = 4
+      Text = 'DataBase'
+      TextSettings.Trimming = None
+      OnClick = Button1Click
+    end
+    object Button2: TButton
+      Position.X = 888.000000000000000000
+      Position.Y = 8.000000000000000000
+      TabOrder = 5
+      Text = 'Paciente'
+      TextSettings.Trimming = None
+      OnClick = Button2Click
+    end
   end
   object TabControl1: TTabControl
     Align = Client
     Size.Width = 1103.000000000000000000
     Size.Height = 575.000000000000000000
     Size.PlatformDefault = False
-    TabIndex = 0
+    TabIndex = 1
     TabOrder = 11
     TabPosition = PlatformDefault
     Sizes = (
@@ -78,7 +94,7 @@ object Form69: TForm69
         item
         end>
       TextSettings.Trimming = None
-      IsSelected = True
+      IsSelected = False
       Size.Width = 83.000000000000000000
       Size.Height = 26.000000000000000000
       Size.PlatformDefault = False
@@ -316,7 +332,7 @@ object Form69: TForm69
         item
         end>
       TextSettings.Trimming = None
-      IsSelected = False
+      IsSelected = True
       Size.Width = 98.000000000000000000
       Size.Height = 26.000000000000000000
       Size.PlatformDefault = False
@@ -473,6 +489,7 @@ object Form69: TForm69
     Top = 224
   end
   object OpenChat: TAiOpenChat
+    ApiKey = 'apikey'
     Model = 'gpt-4o'
     Logprobs = False
     Max_tokens = 300
@@ -513,21 +530,21 @@ object Form69: TForm69
         ToolType = tt_function
       end>
     AiFunctions = AiFunctions1
-    Left = 556
+    Left = 948
     Top = 192
   end
   object RagChat: TAiRagChat
     Chat = OpenChat
     DataVec = DataVec1
-    Left = 416
+    Left = 776
     Top = 192
   end
   object DataVec1: TAiDataVec
     OnDataVecAddItem = DataVec1DataVecAddItem
     OnDataVecSearch = DataVec1DataVecSearch
-    Embeddings = AiOlamalEmbeddings1
-    Left = 504
-    Top = 280
+    Embeddings = AiEmbeddings1
+    Left = 824
+    Top = 288
   end
   object DbConn: TFDConnection
     Params.Strings = (
@@ -537,27 +554,20 @@ object Form69: TForm69
       'Password=masterkey'
       'DriverID=PG')
     LoginPrompt = False
-    Left = 584
-    Top = 336
+    Left = 976
+    Top = 320
   end
   object AiEmbeddings1: TAiEmbeddings
+    ApiKey = 'apikey'
     Model = 'text-embedding-3-small'
     Url = 'https://api.openai.com/v1/'
     Dimensions = 1536
-    Left = 472
+    Left = 840
     Top = 392
   end
   object AiFunctions1: TAiFunctions
     Functions = <>
-    Left = 688
-    Top = 264
-  end
-  object AiOlamalEmbeddings1: TAiOlamalEmbeddings
-    ApiKey = 'sdfgsdgsgfsd'
-    Model = 'snowflake-arctic-embed'
-    Url = 'http://192.168.101.13:11434/'
-    Dimensions = 1024
-    Left = 608
-    Top = 448
+    Left = 568
+    Top = 224
   end
 end

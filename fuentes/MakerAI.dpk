@@ -34,19 +34,29 @@ requires
   bindengine,
   bindcomp,
   RESTComponents,
-  inet;
+  inet,
+  Python;
 
 contains
-  uAiOpenAssistant in 'uAiOpenAssistant.pas',
-  uOpenAi in 'uOpenAi.pas',
-  uAiOpenChat in 'uAiOpenChat.pas',
-  uAiOllama in 'uAiOllama.pas',
-  uAiToolFunctions in 'uAiToolFunctions.pas',
-  uAiGroq in 'uAiGroq.pas',
-  uAiAnthropic in 'uAiAnthropic.pas',
-  uAiPrompts in 'uAiPrompts.pas',
-  uAiVectors in 'uAiVectors.pas',
-  uAGraph in 'uAGraph.pas',
-  uAiGemini in 'uAiGemini.pas';
+  uMakerAi.Chat.OpenAssistant in 'uMakerAi.Chat.OpenAssistant.pas',
+  uMakerAi.Chat in 'uMakerAi.Chat.pas',
+  uMakerAi.Chat.Ollama in 'uMakerAi.Chat.Ollama.pas',
+  uMakerAi.ToolFunctions in 'uMakerAi.ToolFunctions.pas',
+  uMakerAi.Chat.Groq in 'uMakerAi.Chat.Groq.pas',
+  uMakerAi.Chat.Anthropic in 'uMakerAi.Chat.Anthropic.pas',
+  uMakerAi.Prompts in 'uMakerAi.Prompts.pas',
+  uMakerAi.Vectors in 'uMakerAi.Vectors.pas',
+  uMakerAi.Graph in 'uMakerAi.Graph.pas',
+  uMakerAi.Chat.Gemini in 'uMakerAi.Chat.Gemini.pas',
+  uMakerAi.Audio in 'uMakerAi.Audio.pas',
+  uMakerAi.Core in 'uMakerAi.Core.pas',
+  uMakerAi.Register in 'uMakerAi.Register.pas',
+  uMakerAi.Embeddings in 'uMakerAi.Embeddings.pas',
+  uMakerAi.Dalle in 'uMakerAi.Dalle.pas',
+  uMakerAi.Vision in 'uMakerAi.Vision.pas',
+  uMakerAi.Assistant.Core in 'uMakerAi.Assistant.Core.pas',
+  uMakerAi.Chat.Mistral in 'uMakerAi.Chat.Mistral.pas',
+  uMakerAi.Utils.Python in 'uMakerAi.Utils.Python.pas',
+  uMakerAi.Utils.system in 'uMakerAi.Utils.system.pas';
 
 end.

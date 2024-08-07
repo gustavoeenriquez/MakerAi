@@ -102,6 +102,7 @@ object Form70: TForm70
     EndNode = EndNode
     OnPrint = AIChain1Print
     AiPrompts = AiPrompts1
+    OnEnd = AIChain1End
     Left = 688
     Top = 240
   end
@@ -232,10 +233,11 @@ object Form70: TForm70
           'El mensaje que retorna el compilador es el siguiente:'
           '<#resultado>')
       end>
-    Left = 1064
-    Top = 136
+    Left = 1056
+    Top = 96
   end
   object OpenChat: TAiOpenChat
+    ApiKey = 'aquí va el apikey'
     Model = 'gpt-4o'
     Logprobs = False
     Max_tokens = 1000
@@ -261,6 +263,7 @@ object Form70: TForm70
     Top = 96
   end
   object ChatEval: TAiOpenChat
+    ApiKey = 'aquí va el apikey'
     Model = 'gpt-4o'
     Logprobs = False
     Max_tokens = 1000

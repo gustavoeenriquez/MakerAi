@@ -1197,6 +1197,7 @@ object Form64: TForm64
     Top = 448
   end
   object GroqChat: TAiGroqChat
+    ApiKey = 'aquí va el apikey'
     Model = 'llama3-70b-8192'
     Logit_bias = 'AiOpenChat1ReceiveData'
     Logprobs = False
@@ -1261,7 +1262,15 @@ object Form64: TForm64
     Url = 'https://api.anthropic.com/v1/'
     ResponseTimeOut = 60000
     Functions = <>
+    OnProcessMediaFile = ClaudChatProcessMediaFile
     Left = 448
     Top = 368
+  end
+  object AiVision1: TAiVision
+    ApiKey = 'aquí va el apikey'
+    Model = 'gpt-4o'
+    Url = 'https://api.openai.com/v1/'
+    Left = 752
+    Top = 336
   end
 end
