@@ -34,7 +34,6 @@ object Form69: TForm69
       Size.PlatformDefault = False
       TabOrder = 1
       Text = 'Utilizar Base de Datos Postgres'
-      OnClick = ChBDPostgresClick
     end
     object ChBDMemoria: TRadioButton
       IsChecked = True
@@ -45,7 +44,6 @@ object Form69: TForm69
       Size.PlatformDefault = False
       TabOrder = 2
       Text = 'Utilizar Base de Datos en Memoria'
-      OnChange = ChBDMemoriaChange
     end
     object BtnConectarPostgres: TButton
       Enabled = False
@@ -58,22 +56,6 @@ object Form69: TForm69
       Text = 'Conectar a Postgres'
       TextSettings.Trimming = None
       OnClick = BtnConectarPostgresClick
-    end
-    object Button1: TButton
-      Position.X = 784.000000000000000000
-      Position.Y = 8.000000000000000000
-      TabOrder = 4
-      Text = 'DataBase'
-      TextSettings.Trimming = None
-      OnClick = Button1Click
-    end
-    object Button2: TButton
-      Position.X = 888.000000000000000000
-      Position.Y = 8.000000000000000000
-      TabOrder = 5
-      Text = 'Paciente'
-      TextSettings.Trimming = None
-      OnClick = Button2Click
     end
   end
   object TabControl1: TTabControl
@@ -489,7 +471,6 @@ object Form69: TForm69
     Top = 224
   end
   object OpenChat: TAiOpenChat
-    ApiKey = 'apikey'
     Model = 'gpt-4o'
     Logprobs = False
     Max_tokens = 300
@@ -506,13 +487,12 @@ object Form69: TForm69
     Prompt_tokens = 0
     Completion_tokens = 0
     Total_tokens = 0
-    OnReceiveData = Chat1ReceiveData
-    OnReceiveDataEnd = Chat1ReceiveDataEnd
     Url = 'https://api.openai.com/v1/'
     ResponseTimeOut = 60000
     Functions = <
       item
         FunctionName = 'get_fecha'
+        OnAction = OpenChatFunctions0get_fechaAction
         Description.Strings = (
           'Retorna la fecha y la hora actrual')
         Parameters = <
@@ -530,21 +510,21 @@ object Form69: TForm69
         ToolType = tt_function
       end>
     AiFunctions = AiFunctions1
-    Left = 948
-    Top = 192
+    Left = 524
+    Top = 256
   end
   object RagChat: TAiRagChat
     Chat = OpenChat
     DataVec = DataVec1
-    Left = 776
-    Top = 192
+    Left = 448
+    Top = 168
   end
   object DataVec1: TAiDataVec
     OnDataVecAddItem = DataVec1DataVecAddItem
     OnDataVecSearch = DataVec1DataVecSearch
     Embeddings = AiEmbeddings1
-    Left = 824
-    Top = 288
+    Left = 376
+    Top = 280
   end
   object DbConn: TFDConnection
     Params.Strings = (
@@ -554,20 +534,19 @@ object Form69: TForm69
       'Password=masterkey'
       'DriverID=PG')
     LoginPrompt = False
-    Left = 976
-    Top = 320
+    Left = 552
+    Top = 336
   end
   object AiEmbeddings1: TAiEmbeddings
-    ApiKey = 'apikey'
     Model = 'text-embedding-3-small'
     Url = 'https://api.openai.com/v1/'
     Dimensions = 1536
-    Left = 840
-    Top = 392
+    Left = 456
+    Top = 336
   end
   object AiFunctions1: TAiFunctions
     Functions = <>
-    Left = 568
-    Top = 224
+    Left = 672
+    Top = 280
   end
 end
