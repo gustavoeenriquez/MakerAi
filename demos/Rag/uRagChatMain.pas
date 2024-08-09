@@ -79,11 +79,11 @@ type
     procedure OpenChatFunctions0get_fechaAction(Sender: TObject;
       FunctionAction: TFunctionActionItem; FunctionName: string;
       ToolCall: TAiToolsFunction; var Handled: Boolean);
+     procedure Chat1ReceiveDataEnd(const Sender: TObject;  aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
+     procedure Chat1ReceiveData(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
   private
     // DataVec: TAiDataVec;
     GlChat: TAiOpenChat;
-       procedure Chat1ReceiveDataEnd(const Sender: TObject;  aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
-       procedure Chat1ReceiveData(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
 
   public
     Procedure UpdateMemo(Text: String);
@@ -202,7 +202,7 @@ Begin
 
   Prompt := MemoPrompt.Lines.Text;
 
-  UpdateMemo('Asistant : ' + Prompt);
+  UpdateMemo('user : ' + Prompt);
 
   Res := RagChat.AskToAi(Prompt, Limite, Precision);
 
@@ -363,8 +363,6 @@ begin
 
   MemoChat.Lines.Add('');
   BtnPlay.StyleLookup := 'playtoolbutton';
-
-
 end;
 
 

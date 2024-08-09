@@ -471,6 +471,7 @@ object Form69: TForm69
     Top = 224
   end
   object OpenChat: TAiOpenChat
+    ApiKey = 'aqu'#237' va el apikey'
     Model = 'gpt-4o'
     Logprobs = False
     Max_tokens = 300
@@ -487,6 +488,8 @@ object Form69: TForm69
     Prompt_tokens = 0
     Completion_tokens = 0
     Total_tokens = 0
+    OnReceiveData = Chat1ReceiveData
+    OnReceiveDataEnd = Chat1ReceiveDataEnd
     Url = 'https://api.openai.com/v1/'
     ResponseTimeOut = 60000
     Functions = <
@@ -538,6 +541,7 @@ object Form69: TForm69
     Top = 336
   end
   object AiEmbeddings1: TAiEmbeddings
+    ApiKey = 'aqu'#237' va el apikey'
     Model = 'text-embedding-3-small'
     Url = 'https://api.openai.com/v1/'
     Dimensions = 1536
