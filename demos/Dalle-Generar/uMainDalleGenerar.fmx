@@ -1,0 +1,399 @@
+object Form76: TForm76
+  Left = 0
+  Top = 0
+  Caption = 'Form76'
+  ClientHeight = 678
+  ClientWidth = 813
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+  object MainLayout: TLayout
+    Align = Client
+    Size.Width = 813.000000000000000000
+    Size.Height = 678.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object Layout3: TLayout
+      Align = Bottom
+      Position.Y = 543.000000000000000000
+      Size.Width = 813.000000000000000000
+      Size.Height = 135.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      object MemoPrompt: TMemo
+        Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+        DataDetectorTypes = []
+        StyledSettings = [Family, Style, FontColor]
+        TextSettings.Font.Size = 18.000000000000000000
+        TextSettings.WordWrap = True
+        Align = Client
+        Margins.Left = 3.000000000000000000
+        Margins.Right = 3.000000000000000000
+        Margins.Bottom = 3.000000000000000000
+        Size.Width = 750.000000000000000000
+        Size.Height = 109.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 1
+        Viewport.Width = 750.000000000000000000
+        Viewport.Height = 109.000000000000000000
+      end
+      object BtnPlay: TSpeedButton
+        Align = Right
+        Margins.Left = 5.000000000000000000
+        Margins.Top = 5.000000000000000000
+        Margins.Right = 5.000000000000000000
+        Margins.Bottom = 5.000000000000000000
+        Position.X = 761.000000000000000000
+        Position.Y = 28.000000000000000000
+        Size.Width = 47.000000000000000000
+        Size.Height = 102.000000000000000000
+        Size.PlatformDefault = False
+        StyleLookup = 'playtoolbutton'
+        Text = 'BtnPlay'
+        TextSettings.Trimming = None
+        OnClick = BtnPlayClick
+      end
+      object Label4: TLabel
+        Align = Top
+        Margins.Left = 3.000000000000000000
+        Margins.Top = 3.000000000000000000
+        Margins.Right = 3.000000000000000000
+        Margins.Bottom = 3.000000000000000000
+        Position.X = 3.000000000000000000
+        Position.Y = 3.000000000000000000
+        Size.Width = 807.000000000000000000
+        Size.Height = 17.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'Prompt para generar la im'#225'gen'
+        TabOrder = 0
+      end
+    end
+    object Layout1: TLayout
+      Align = Top
+      Size.Width = 813.000000000000000000
+      Size.Height = 50.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      object Rectangle1: TRectangle
+        Align = Top
+        Fill.Color = xFF99DBF8
+        Size.Width = 813.000000000000000000
+        Size.Height = 50.000000000000000000
+        Size.PlatformDefault = False
+        Stroke.Kind = None
+        object Label1: TLabel
+          Align = Client
+          StyledSettings = [Family, Style, FontColor]
+          Size.Width = 813.000000000000000000
+          Size.Height = 50.000000000000000000
+          Size.PlatformDefault = False
+          TextSettings.Font.Size = 18.000000000000000000
+          TextSettings.HorzAlign = Center
+          TextSettings.Trimming = None
+          Text = 'Generar Imagen DALL-E 3  OpenAI'
+          TabOrder = 0
+          object SpeedButton1: TSpeedButton
+            Align = Right
+            Position.X = 761.000000000000000000
+            Size.Width = 52.000000000000000000
+            Size.Height = 50.000000000000000000
+            Size.PlatformDefault = False
+            StyleLookup = 'cameratoolbutton'
+            Text = 'SpeedButton1'
+            TextSettings.Trimming = None
+          end
+        end
+      end
+    end
+    object Layout2: TLayout
+      Align = Client
+      Size.Width = 813.000000000000000000
+      Size.Height = 493.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      object Image1: TImage
+        MultiResBitmap.Height = 1792
+        MultiResBitmap.Width = 1024
+        MultiResBitmap = <
+          item
+          end>
+        Align = Client
+        Size.Width = 588.000000000000000000
+        Size.Height = 313.000000000000000000
+        Size.PlatformDefault = False
+      end
+      object Label2: TLabel
+        Align = Top
+        Margins.Left = 3.000000000000000000
+        Margins.Top = 3.000000000000000000
+        Margins.Right = 3.000000000000000000
+        Margins.Bottom = 3.000000000000000000
+        Position.X = 3.000000000000000000
+        Position.Y = 3.000000000000000000
+        Size.Width = 807.000000000000000000
+        Size.Height = 17.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'Imagen Generada'
+        TabOrder = 0
+      end
+      object Layout4: TLayout
+        Align = Left
+        Position.Y = 23.000000000000000000
+        Size.Width = 225.000000000000000000
+        Size.Height = 313.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 1
+        object ListBox1: TListBox
+          Align = Client
+          Margins.Left = 3.000000000000000000
+          Margins.Top = 3.000000000000000000
+          Margins.Right = 3.000000000000000000
+          Margins.Bottom = 3.000000000000000000
+          Size.Width = 219.000000000000000000
+          Size.Height = 307.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 0
+          DisableFocusEffect = True
+          ItemHeight = 45.000000000000000000
+          DefaultItemStyles.ItemStyle = ''
+          DefaultItemStyles.GroupHeaderStyle = ''
+          DefaultItemStyles.GroupFooterStyle = ''
+          Viewport.Width = 215.000000000000000000
+          Viewport.Height = 303.000000000000000000
+          object ListBoxItem1: TListBoxItem
+            Size.Width = 215.000000000000000000
+            Size.Height = 45.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 5
+            object Label3: TLabel
+              Align = Top
+              Margins.Left = 3.000000000000000000
+              Margins.Right = 3.000000000000000000
+              Position.X = 3.000000000000000000
+              Size.Width = 209.000000000000000000
+              Size.Height = 17.000000000000000000
+              Size.PlatformDefault = False
+              Text = 'Api Key'
+              TabOrder = 39
+            end
+            object EditApiKey: TEdit
+              Touch.InteractiveGestures = [LongTap, DoubleTap]
+              Align = Top
+              TabOrder = 40
+              Text = 'aqu'#237' va el apikey'
+              Position.Y = 17.000000000000000000
+              Size.Width = 215.000000000000000000
+              Size.Height = 22.000000000000000000
+              Size.PlatformDefault = False
+            end
+          end
+          object ListBoxItem2: TListBoxItem
+            Position.Y = 45.000000000000000000
+            Size.Width = 215.000000000000000000
+            Size.Height = 45.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 4
+            object Label5: TLabel
+              Align = Top
+              Margins.Left = 3.000000000000000000
+              Margins.Right = 3.000000000000000000
+              Position.X = 3.000000000000000000
+              Size.Width = 209.000000000000000000
+              Size.Height = 17.000000000000000000
+              Size.PlatformDefault = False
+              Text = 'HD Quality'
+              TabOrder = 39
+            end
+            object EditQuality: TComboBox
+              Align = Top
+              Items.Strings = (
+                'HD Quality'
+                'Low Quality')
+              ItemIndex = 1
+              Position.Y = 17.000000000000000000
+              Size.Width = 215.000000000000000000
+              Size.Height = 22.000000000000000000
+              Size.PlatformDefault = False
+              TabOrder = 40
+            end
+          end
+          object ListBoxItem3: TListBoxItem
+            Position.Y = 90.000000000000000000
+            Size.Width = 215.000000000000000000
+            Size.Height = 45.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 3
+            object Label6: TLabel
+              Align = Top
+              Margins.Left = 3.000000000000000000
+              Margins.Right = 3.000000000000000000
+              Position.X = 3.000000000000000000
+              Size.Width = 209.000000000000000000
+              Size.Height = 17.000000000000000000
+              Size.PlatformDefault = False
+              Text = 'Response Format'
+              TabOrder = 39
+            end
+            object EditResponseFormat: TComboBox
+              Align = Top
+              Items.Strings = (
+                'tiaRB64'
+                'tiaRUrl')
+              ItemIndex = 1
+              Position.Y = 17.000000000000000000
+              Size.Width = 215.000000000000000000
+              Size.Height = 22.000000000000000000
+              Size.PlatformDefault = False
+              TabOrder = 40
+            end
+          end
+          object ListBoxItem4: TListBoxItem
+            Position.Y = 135.000000000000000000
+            Size.Width = 215.000000000000000000
+            Size.Height = 45.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 2
+            object Label7: TLabel
+              Align = Top
+              Margins.Left = 3.000000000000000000
+              Margins.Right = 3.000000000000000000
+              Position.X = 3.000000000000000000
+              Size.Width = 209.000000000000000000
+              Size.Height = 17.000000000000000000
+              Size.PlatformDefault = False
+              Text = 'Style Format'
+              TabOrder = 39
+            end
+            object EditStyleFormat: TComboBox
+              Align = Top
+              Items.Strings = (
+                'tiaStyleNatural'
+                'tiaStyleVivid')
+              ItemIndex = 0
+              Position.Y = 17.000000000000000000
+              Size.Width = 215.000000000000000000
+              Size.Height = 22.000000000000000000
+              Size.PlatformDefault = False
+              TabOrder = 40
+            end
+          end
+          object ListBoxItem5: TListBoxItem
+            Position.Y = 180.000000000000000000
+            Size.Width = 215.000000000000000000
+            Size.Height = 45.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 1
+            object Label8: TLabel
+              Align = Top
+              Margins.Left = 3.000000000000000000
+              Margins.Right = 3.000000000000000000
+              Position.X = 3.000000000000000000
+              Size.Width = 209.000000000000000000
+              Size.Height = 17.000000000000000000
+              Size.PlatformDefault = False
+              Text = 'Dall-E Version'
+              TabOrder = 39
+            end
+            object EditUseDalle3: TComboBox
+              Align = Top
+              Items.Strings = (
+                'Use Dall-E 2'
+                'Use Dall-E 3')
+              ItemIndex = 1
+              Position.Y = 17.000000000000000000
+              Size.Width = 215.000000000000000000
+              Size.Height = 22.000000000000000000
+              Size.PlatformDefault = False
+              TabOrder = 40
+            end
+          end
+          object ListBoxItem6: TListBoxItem
+            Position.Y = 225.000000000000000000
+            Size.Width = 215.000000000000000000
+            Size.Height = 45.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 0
+            object Label10: TLabel
+              Align = Top
+              Margins.Left = 3.000000000000000000
+              Margins.Right = 3.000000000000000000
+              Position.X = 3.000000000000000000
+              Size.Width = 209.000000000000000000
+              Size.Height = 17.000000000000000000
+              Size.PlatformDefault = False
+              Text = 'Image Size'
+              TabOrder = 39
+            end
+            object EditImageSize: TComboBox
+              Align = Top
+              Items.Strings = (
+                'TiaSize256'
+                'TiaSize512'
+                'TiaSize1024'
+                'TiaSize1024_1792'
+                'TiaSize1792_1024')
+              ItemIndex = 1
+              Position.Y = 17.000000000000000000
+              Size.Width = 215.000000000000000000
+              Size.Height = 22.000000000000000000
+              Size.PlatformDefault = False
+              TabOrder = 40
+            end
+          end
+        end
+      end
+      object Layout5: TLayout
+        Align = Bottom
+        Position.Y = 336.000000000000000000
+        Size.Width = 813.000000000000000000
+        Size.Height = 157.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 2
+        object MemoRevisedPrompt: TMemo
+          Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+          DataDetectorTypes = []
+          TextSettings.WordWrap = True
+          Align = Client
+          Margins.Left = 3.000000000000000000
+          Margins.Top = 3.000000000000000000
+          Margins.Right = 3.000000000000000000
+          Margins.Bottom = 3.000000000000000000
+          Size.Width = 807.000000000000000000
+          Size.Height = 128.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 1
+          Viewport.Width = 807.000000000000000000
+          Viewport.Height = 128.000000000000000000
+        end
+        object Label9: TLabel
+          Align = Top
+          Margins.Left = 3.000000000000000000
+          Margins.Top = 3.000000000000000000
+          Margins.Right = 3.000000000000000000
+          Margins.Bottom = 3.000000000000000000
+          Position.X = 3.000000000000000000
+          Position.Y = 3.000000000000000000
+          Size.Width = 807.000000000000000000
+          Size.Height = 17.000000000000000000
+          Size.PlatformDefault = False
+          Text = 
+            'Prompt Revisado generado por la IA que se env'#237'a finalmente a Dal' +
+            'l-E'
+          TabOrder = 0
+        end
+      end
+    end
+  end
+  object AiDalle: TAiDalle
+    Url = 'https://api.openai.com/v1/'
+    ResponseFormat = tiaRUrl
+    HdQuality = False
+    StyleFormat = tiaStyleVivid
+    UseDalle3 = True
+    User = 'user'
+    Left = 304
+    Top = 224
+  end
+end

@@ -28,6 +28,10 @@
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
+//--- Modificaciones ----
+// 30/08/2024 -- Mejora en la función Edit
+
+
 unit uMakerAi.Dalle;
 
 interface
@@ -236,7 +240,7 @@ begin
         Body.AddStream('image', aImage, ExtractFileName('origen.png'));
 
         If Assigned(aMask) then
-          Body.AddStream('mask', aImage, True, ExtractFileName('mask.png'));
+          Body.AddStream('mask', aMask, ExtractFileName('mask.png'));
 
         Body.AddField('prompt', aPrompt);
         Body.AddField('user', FUser);

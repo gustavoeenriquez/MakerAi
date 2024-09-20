@@ -93,6 +93,7 @@ begin
   Inherited;
   Url := GlOpenAIUrl;
   FModel := 'gpt-4o';
+  FRole := 'user';
 end;
 
 destructor TAiVision.Destroy;
