@@ -9,8 +9,8 @@ uses
   FMX.StdCtrls, FMX.Controls.Presentation, FMX.ScrollBox, FMX.Memo,
   FMX.Objects, FMX.Layouts, REST.Json, System.Json, FMX.ListBox, FMX.TabControl,
   FMX.Edit, FMX.Platform, FMX.ClipBoard, FMX.Surfaces, FMX.ComboEdit,
-  uAiOpenChat, uOpenAi, FMX.Menus, uAiToolFunctions,
-  uAiOpenAssistant, uAiAnthropic, uAiGroq, uAiOllama;
+  uMakerAi.Chat, uMakerAi.Core, FMX.Menus, uMakerAi.ToolFunctions,
+  uMakerAi.Assistant.Core, uMakerAi.Chat.Anthropic, uMakerAi.Chat.Groq, uMakerAi.Chat.Ollama,uMakerAi.Vision;
 
 type
   TImageData = Class
@@ -30,7 +30,7 @@ type
     BtnPlay: TSpeedButton;
     MemoChat: TMemo;
     Label1: TLabel;
-    OpenChat: TAiOpenChat;
+    AiOpenChat: TAiOpenChat;
     LayChat: TLayout;
     Layout4: TLayout;
     Splitter1: TSplitter;
@@ -102,9 +102,9 @@ type
     Image7: TImage;
     Label10: TLabel;
     AiVision1: TAiVision;
-    procedure AiOpenChat1ReceiveData(const Sender: TObject; Msg: TAiOpenChatMessage; Response: TJSONObject; Role, Text: string);
+    procedure AiOpenChatReceiveData(const Sender: TObject; Msg: TAiChatMessage; Response: TJSONObject; Role, Text: string);
     procedure BtnPlayClick(Sender: TObject);
-    procedure AiOpenChat1ReceiveDataEnd(const Sender: TObject; Msg: TAiOpenChatMessage; Response: TJSONObject; Role, Text: string);
+    procedure AiOpenChatReceiveDataEnd(const Sender: TObject; Msg: TAiChatMessage; Response: TJSONObject; Role, Text: string);
     procedure ChAsincronoChange(Sender: TObject);
     procedure EditMaxTokensTyping(Sender: TObject);
     procedure ComboModelsChange(Sender: TObject);
@@ -133,7 +133,7 @@ type
   private
     Procedure UpdateMemo(Text: String);
     Procedure InitData;
-    Procedure AddMsgImages(Msg: TAiOpenChatMessage);
+    Procedure AddMsgImages(Msg: TAiChatMessage);
     Function DownLoadFromUrl(sUrl: String): TMemoryStream;
     Procedure AddImageToSlide(FileName: String; BitMap: TBitMap);
     Procedure CapturarPantalla(BitMap: TBitMap);
@@ -166,7 +166,7 @@ begin
     Exit;
   end;
 
-  // Calcular la relaciÛn de aspecto
+  // Calcular la relaci√≥n de aspecto
   AspectRatio := X / Y;
 
   if X > Y then
@@ -185,7 +185,7 @@ begin
   Result := True; // Se ha escalado
 end;
 
-procedure TForm64.AddMsgImages(Msg: TAiOpenChatMessage);
+procedure TForm64.AddMsgImages(Msg: TAiChatMessage);
 Var
   I: Integer;
   ImageData: TImageData;
@@ -228,16 +228,16 @@ begin
   ToolCall.Response := '23 grados';
 end;
 
-procedure TForm64.AiOpenChat1ReceiveData(const Sender: TObject; Msg: TAiOpenChatMessage; Response: TJSONObject; Role, Text: string);
+procedure TForm64.AiOpenChatReceiveData(const Sender: TObject; Msg: TAiChatMessage; Response: TJSONObject; Role, Text: string);
 begin
   UpdateMemo(Text);
 end;
 
-procedure TForm64.AiOpenChat1ReceiveDataEnd(const Sender: TObject; Msg: TAiOpenChatMessage; Response: TJSONObject; Role, Text: string);
+procedure TForm64.AiOpenChatReceiveDataEnd(const Sender: TObject; Msg: TAiChatMessage; Response: TJSONObject; Role, Text: string);
 begin
 
-  // Si no es asincrono se puede obtener el resultado aquÌ
-  // o directamente en el llamado de la consulta en el botÛn de BtnPlay  Res := AiOpenChat1.AddMessageAndRun(MemoPrompt.Text, 'user');
+  // Si no es asincrono se puede obtener el resultado aqu√≠
+  // o directamente en el llamado de la consulta en el bot√≥n de BtnPlay  Res := AiOpenChat1.AddMessageAndRun(MemoPrompt.Text, 'user');
   // If AiOpenChat1.Asynchronous = False then
   // UpdateMemo(Text);
 
@@ -258,15 +258,15 @@ end;
 procedure TForm64.BtnPlayClick(Sender: TObject);
 Var
   Res: String;
-  Msg: TAiOpenChatMessage;
+  Msg: TAiChatMessage;
   ListaImagenes: TStringList;
 begin
   If GlChat.Busy and GlChat.Asynchronous then
     GlChat.Abort
   Else
   Begin
-    // Si est· en modo asincrono el resultado lo obtiene en el evento ondatarecieve
-    // En el mÈtodo OnDataRecieveEnd se obtiene el resultado final tanto si es Asincrono o no.
+    // Si est√° en modo asincrono el resultado lo obtiene en el evento ondatarecieve
+    // En el m√©todo OnDataRecieveEnd se obtiene el resultado final tanto si es Asincrono o no.
     UpdateMemo('User : ' + MemoPrompt.Text);
     MemoChat.Lines.Add('');
 
@@ -287,8 +287,8 @@ begin
 
     End
     Else
-    // Si NO est· en modo asincrono el resultado lo obtiene directamente en la funcion
-    // o tambiÈn lo puede obtener en el evento ondatarecieveend
+    // Si NO est√° en modo asincrono el resultado lo obtiene directamente en la funcion
+    // o tambi√©n lo puede obtener en el evento ondatarecieveend
     Begin
       Cursor := crHourGlass;
       Try
@@ -299,7 +299,7 @@ begin
         // If EditImagen.Text <> '' then
         // Msg.VisionUrls.Add(EditImagen.Text);
 
-        { //esta es la forma de adiconar im·genes ya sea url o base64
+        { //esta es la forma de adiconar im√°genes ya sea url o base64
           Msg.VisionUrls.Add('https://static.miscota.com/media/1/photos/products/114332/rascador-para-gatos-con-casita_1_g.jpeg');
 
           Var
@@ -343,14 +343,14 @@ end;
 
 procedure TForm64.CapturarPantalla(BitMap: TBitMap);
 begin
-  ShowMessage('Falta por implementar la captura de pantalla o una secciÛn de la pantalla');
+  ShowMessage('Falta por implementar la captura de pantalla o una secci√≥n de la pantalla');
 end;
 
 procedure TForm64.ChAsincronoChange(Sender: TObject);
 begin
   GlChat.Asynchronous := ChAsincrono.IsChecked;
 
-  // El conteo de tokens solo funciona cuando no es asincrÛnico
+  // El conteo de tokens solo funciona cuando no es asincr√≥nico
   LblCompletionTokens.Enabled := Not GlChat.Asynchronous;
   LblPrompTokens.Enabled := Not GlChat.Asynchronous;
   LblTotaltokens.Enabled := Not GlChat.Asynchronous;
@@ -362,12 +362,12 @@ begin
   If ChJSonFormat.IsChecked then
   Begin
     GlChat.Response_format := TAiOpenChatResponseFormat.tiaChatRfJson;
-    GlChat.AddMessageAndRun('a partir de ahora las respuestas ser·n en formato json', 'system',[]);
+    GlChat.AddMessageAndRun('a partir de ahora las respuestas ser√°n en formato json', 'system',[]);
   End
   Else
   Begin
     GlChat.Response_format := TAiOpenChatResponseFormat.tiaChatRfText;
-    GlChat.AddMessageAndRun('a partir de ahora las respuestas ser·n en formato de texto libre', 'system',[]);
+    GlChat.AddMessageAndRun('a partir de ahora las respuestas ser√°n en formato de texto libre', 'system',[]);
   End;
 end;
 
@@ -380,7 +380,7 @@ procedure TForm64.ClaudChatProcessMediaFile(const Sender: TObject;
   Prompt: string; MediaFile: TAiMediaFile; var Respuesta: string;
   var aProcesado: Boolean);
 begin
-   Respuesta := 'La im·gen anexa se reemplaza por la descripciÛn que te darÈ a continuaciÛn, describe a partir de esta descripcion y no hagas comentarios sobre si la imagen existe o no:'+sLineBreak+'La imagen anexa muestra un globo de helio rojo en un fondo blanco';
+   Respuesta := 'La im√°gen anexa se reemplaza por la descripci√≥n que te dar√© a continuaci√≥n, describe a partir de esta descripcion y no hagas comentarios sobre si la imagen existe o no:'+sLineBreak+'La imagen anexa muestra un globo de helio rojo en un fondo blanco';
    aProcesado := True;
 end;
 
@@ -388,7 +388,7 @@ procedure TForm64.ComboEnginesChange(Sender: TObject);
 begin
 
   If ComboEngines.Text = 'OpenAi' then
-    GlChat := OpenChat;
+    GlChat := AiOpenChat;
 
   If ComboEngines.Text = 'Anthropic' then
     GlChat := ClaudChat;
@@ -483,8 +483,8 @@ begin
 
       if Engine = 'openai' then
       Begin
-        OpenChat.ApiKey := ApiKey;
-        OpenChat.Url := Url;
+        AiOpenChat.ApiKey := ApiKey;
+        AiOpenChat.Url := Url;
         ComboEngines.Items.Add('OpenAi');
       End;
 
@@ -708,7 +708,7 @@ begin
   end
   else
   begin
-    ShowMessage('El servicio de portapapeles no est· disponible.');
+    ShowMessage('El servicio de portapapeles no est√° disponible.');
   end;
 end;
 
