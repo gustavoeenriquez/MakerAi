@@ -348,6 +348,7 @@ type
   Public
     // Function AddMessage(aRole, aContent, aFiles_ids: String): TAiMessage;
     Function ToJSon(ShowAll: Boolean = False): TJSonArray;
+    destructor Destroy; override;
   End;
 
   TAiAssistant = Class(TObject)
@@ -573,6 +574,9 @@ begin
   Ffile_ids.Free;
   FMetadata.Free;
   FFiles.Free;
+
+  FContent := nil;
+
   inherited Destroy;
 end;
 
@@ -697,6 +701,13 @@ begin
   Result := Con;
 end;
 
+destructor TAiMessages.Destroy;
+begin
+  for var item in Self do
+    Item.Free;
+  inherited;
+end;
+
 { TAiMessages }
 
 {
@@ -714,10 +725,8 @@ Var
   AiMessage: TAiMessage;
 begin
   Result := TJSonArray.Create;
-
   For AiMessage in Self do
     Result.Add(AiMessage.ToJSon(ShowAll));
-
 end;
 
 { TAssistant }
@@ -771,6 +780,8 @@ begin
   FVectorStoreIds.Free;
   FFiles.Free;
   FVectorStores.Free;
+  if Assigned(FJSonObject) then
+    FJSonObject.Free;
   Inherited Destroy;
 end;
 
@@ -895,7 +906,6 @@ begin
     End
     else
     begin
-      // FJSonObject := TJsonObject.Create.AddPair('error', Res.ContentAsString);
       Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
     end;
 
@@ -918,26 +928,30 @@ class function TAiAssistant.GetAssistantIdByName(aApiKey: String; AssistantName:
 Var
   JArr: TJSonArray;
   JVal: TJSonValue;
-  JObj: TJSonObject;
+  JList, JObj: TJSonObject;
   sId, sName: String;
 begin
   Result := '';
 
-  JObj := GetList(aApiKey, aUrl, 100);
-  JArr := JObj.GetValue<TJSonArray>('data');
+  JList := GetList(aApiKey, aUrl, 100);
+  try
+    JArr := JList.GetValue<TJSonArray>('data');
 
-  For JVal in JArr do
-  Begin
-    JObj := TJSonObject(JVal);
-    sId := JObj.GetValue<String>('id');
-    sName := JObj.GetValue<String>('name');
-
-    If SameText(AssistantName, sName) then
+    For JVal in JArr do
     Begin
-      Result := sId;
-      Break;
+      JObj := TJSonObject(JVal);
+      sId := JObj.GetValue<String>('id');
+      sName := JObj.GetValue<String>('name');
+
+      If SameText(AssistantName, sName) then
+      Begin
+        Result := sId;
+        Break;
+      End;
     End;
-  End;
+  finally
+    JList.Free;
+  end;
 end;
 
 Class function TAiAssistant.GetList(aApiKey: String; aUrl: String = ''; Limit: Integer = 20; Order: String = 'desc'): TJSonObject;
@@ -1188,6 +1202,7 @@ begin
 
     if Res.StatusCode = 200 then
     Begin
+      if Assigned(FJSONObject) then FreeAndNil(FJSONObject);
       FJSonObject := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
       Result := TJSonObject(FJSonObject.Clone);
       ParseAssistantJson(FJSonObject);
@@ -1221,19 +1236,19 @@ begin
   FFilesIds.Clear;
   FVectorStoreIds.Clear;
 
-  FAssistantId := FJSonObject.GetValue<String>('id');
-  FName := FJSonObject.GetValue<String>('name');
-  FModel := FJSonObject.GetValue<String>('model');
-  FInstructions := FJSonObject.GetValue<String>('instructions');
-  Tools := FJSonObject.GetValue<TJSonArray>('tools');
+  FAssistantId := Obj.GetValue<String>('id');
+  FName := Obj.GetValue<String>('name');
+  FModel := Obj.GetValue<String>('model');
+  FInstructions := Obj.GetValue<String>('instructions');
+  Tools := Obj.GetValue<TJSonArray>('tools');
 
-  If FJSonObject.TryGetValue<Double>('temperature', FNumTemp) then
+  If Obj.TryGetValue<Double>('temperature', FNumTemp) then
     Self.Temperature := FNumTemp;
 
-  If FJSonObject.TryGetValue<Double>('top_p', FNumTop) then
+  If Obj.TryGetValue<Double>('top_p', FNumTop) then
     Self.top_p := FNumTop;
 
-  Tools := FJSonObject.GetValue<TJSonArray>('tools');
+  Tools := Obj.GetValue<TJSonArray>('tools');
 
   Self.FFunciones.Clear; // Limpia la lista de funciones para actualizar
 
@@ -1258,7 +1273,7 @@ begin
     End;
   End;
 
-  If FJSonObject.TryGetValue<TJSonObject>('tool_resources', JToolResources) then
+  If Obj.TryGetValue<TJSonObject>('tool_resources', JToolResources) then
   Begin
     If JToolResources.TryGetValue<TJSonObject>('file_search', JFileSearch) then
     Begin
@@ -1279,7 +1294,7 @@ begin
     End;
   End;
 
-  jMetadata := FJSonObject.GetValue<TJSonObject>('metadata');
+  jMetadata := Obj.GetValue<TJSonObject>('metadata');
 
   For Pair in jMetadata do
     FMetadata.Add(Pair.JsonString.Value, Pair.JsonValue.Value);
@@ -1604,10 +1619,14 @@ begin
     if Res.StatusCode = 200 then
     Begin
       JRes := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      AiMessage := ParseMessage(JRes);
-      AiMessage.Url := FUrl;
-      FMessages.Insert(0, AiMessage);
-      Result := AiMessage;
+      try
+        AiMessage := ParseMessage(JRes);
+        AiMessage.Url := FUrl;
+        FMessages.Insert(0, AiMessage);
+        Result := AiMessage;
+      finally
+        JRes.Free;
+      end;
     End
     else
     begin
@@ -1674,6 +1693,7 @@ begin
 
     if Res.StatusCode = 200 then
     Begin
+      if Assigned(FJSONObject) then FreeAndNil(FJSONObject);
       FJSonObject := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
       ParseThReadJson(FJSonObject);
       Result := True;
@@ -1707,7 +1727,6 @@ Var
   i: Integer;
 
 begin
-
   FMessages.Clear;
   FMetadata.Clear;
 
@@ -1718,8 +1737,6 @@ begin
   JObj := TJSonObject.Create;
 
   JToolResources := TJSonObject.Create;
-  JFileSearch := TJSonObject.Create;
-  JCodeInterpreter := TJSonObject.Create;
   ListFilesIds := TStringList.Create;
 
   Try
@@ -1729,14 +1746,14 @@ begin
     If Assigned(aMetadata) and (aMetadata.Count > 0) then
       JObj.AddPair('metadata', aMetadata.ToJSon);
 
-    JCodeFiles := TJSonArray.Create;
-    JVectors := TJSonArray.Create;
-
     // Adiciona los VectorsIds de los archivos de filesearch
 
     ListFilesIds.CommaText := aVectorStoreIds;
     If ListFilesIds.Count > 0 then
     Begin
+      JFileSearch := TJSonObject.Create;
+      JVectors := TJSonArray.Create;
+
       JToolResources.AddPair('file_search', JFileSearch);
 
       For i := 0 to ListFilesIds.Count - 1 do
@@ -1749,6 +1766,9 @@ begin
     ListFilesIds.CommaText := aCodeFilesIds;
     If ListFilesIds.Count > 0 then
     Begin
+      JCodeInterpreter := TJSonObject.Create;
+      JCodeFiles := TJSonArray.Create;
+
       JToolResources.AddPair('code_interpreter', JCodeInterpreter);
 
       For i := 0 to ListFilesIds.Count - 1 do
@@ -1782,6 +1802,7 @@ begin
 
     if Res.StatusCode = 200 then
     Begin
+      if Assigned(FJSONObject) then FreeAndNil(FJSONObject);
       FJSonObject := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
       ParseThReadJson(FJSonObject);
       Result := True;
@@ -1804,7 +1825,8 @@ destructor TAiThRead.Destroy;
 begin
   FMessages.Free;
   FMetadata.Free;
-
+  if Assigned(FJSonObject) then
+    FJSonObject.Free;
   inherited;
 end;
 
@@ -1836,8 +1858,12 @@ begin
     if Res.StatusCode = 200 then
     Begin
       JRes := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      Result := ParseMessage(JRes);
-      Result.Url := FUrl;
+      try
+        Result := ParseMessage(JRes);
+        Result.Url := FUrl;
+      finally
+        JRes.Free;
+      end;
     End
     else
     begin
@@ -1975,16 +2001,19 @@ begin
       JRes := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
 
       AiMessages := TAiMessages.Create;
-
-      Data := JRes.GetValue<TJSonArray>('data');
-      For JVal in Data do
-      Begin
-        JObj := TJSonObject(JVal);
-        AiMessage := ParseMessage(JObj);
-        AiMessage.Url := FUrl;
-        // AiMessages.Insert(0, AiMessage);
-        AiMessages.Add(AiMessage);
-      End;
+      try
+        Data := JRes.GetValue<TJSonArray>('data');
+        For JVal in Data do
+        Begin
+          JObj := TJSonObject(JVal);
+          AiMessage := ParseMessage(JObj);
+          AiMessage.Url := FUrl;
+          // AiMessages.Insert(0, AiMessage);
+          AiMessages.Add(AiMessage);
+        End;
+      finally
+        JRes.Free;
+      end;
 
       Result := AiMessages;
     End
@@ -2026,6 +2055,7 @@ begin
 
     if Res.StatusCode = 200 then
     Begin
+      if Assigned(FJSONObject) then FreeAndNil(FJSONObject);
       FJSonObject := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
       ParseThReadJson(FJSonObject);
       Result := True;
@@ -2343,7 +2373,11 @@ begin
     if Res.StatusCode = 200 then
     Begin
       JRes := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      ParseRun(JRes);
+      try
+        ParseRun(JRes);
+      finally
+        JRes.Free;
+      end;
     End
     else
     begin
@@ -2390,7 +2424,11 @@ begin
     if Res.StatusCode = 200 then
     Begin
       JRes := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      ParseRun(JRes);
+      try
+        ParseRun(JRes);
+      finally
+        JRes.Free;
+      end;
     End
     else
     begin
@@ -2436,6 +2474,7 @@ end;
 
 destructor TAiRun.Destroy;
 begin
+  if Assigned(FJObjectRun) then  FJObjectRun.Free;
   FMetadata.Free;
   FToolsCalls.Free;
   FAssistant := Nil;
@@ -2453,22 +2492,16 @@ var
   Tipo: String;
 begin
   FToolsCalls.Clear;
-
   try
-
     Tipo := JSonObject.GetValue<String>('type');
-
     If Tipo = 'submit_tool_outputs' then
     Begin
       If JSonObject.TryGetValue<TJSonObject>('submit_tool_outputs', JSubmitTools) then
       Begin
-
         ToolCallsArray := JSubmitTools.GetValue<TJSonArray>('tool_calls');
-
         for JVal in ToolCallsArray do
         begin
           ToolCallObject := TJSonObject(JVal);
-
           ToolCall := TAiToolsFunction.Create;
           ToolCall.id := ToolCallObject.GetValue('id').Value;
           ToolCall.Tipo := ToolCallObject.GetValue('type').Value;
@@ -2480,11 +2513,10 @@ begin
       End;
     End;
   finally
-    JSonObject.Free;
+    // cant free child object
+    // JSonObject.Free;
   end;
-
   Result := FToolsCalls.Count > 0;
-
 end;
 
 procedure TAiRun.InternalCallToolFunction(AiToolCall: TAiToolsFunction);
@@ -2578,10 +2610,8 @@ var
   sRequiredAction: String;
   ToolCall: TAiToolsFunction;
   Clave: String;
-
 begin
-
-  Self.FRunId := JObj.GetValue<String>('id');
+  FRunId := JObj.GetValue<String>('id');
   FLastError := JObj.GetValue<String>('last_error');
   Fstatus := JObj.GetValue<String>('status');
 
@@ -2597,22 +2627,15 @@ begin
 
   If Assigned(JTool) then
   Begin
-    // JTool := JObj.GetValue<TJsonObject>('required_action');
-
     FToolsCalls.Clear;
-
     If ExtractToolCallsFromJson(JTool) = True then
     Begin
-
       NumTasks := FToolsCalls.Count;
       SetLength(TaskList, NumTasks);
-      // Ajusta el tamaño del array para el número de tareas
-
       i := 0;
       For Clave in FToolsCalls.Keys do
       Begin
         ToolCall := FToolsCalls[Clave];
-
         TaskList[i] := TTask.Create(
           procedure
           begin
@@ -2623,10 +2646,9 @@ begin
           end);
         TaskList[i].Start;
         Inc(i);
-
       End;
       TTask.WaitForAll(TaskList);
-      SubmitTool(Self.FToolsCalls);
+      SubmitTool(FToolsCalls);
     End;
   end;
 end;
@@ -2658,9 +2680,9 @@ begin
 
     if Res.StatusCode = 200 then
     Begin
-      JRes := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      FJObjectRun := JRes;
-      ParseRun(JRes);
+      if Assigned(FJObjectRun) then FreeAndNil(FJObjectRun);
+      FJObjectRun := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
+      ParseRun(FJObjectRun);
     End
     else
     begin
@@ -2758,7 +2780,11 @@ begin
     if Res.StatusCode = 200 then
     Begin
       JRes := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      ParseRun(JRes);
+      try
+        ParseRun(JRes);
+      finally
+        JRes.Free;
+      end;
     End
     else
     begin
@@ -2816,10 +2842,9 @@ begin
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'threads/' + ThRead.ThReadId + '/runs/' + RunId + '/submit_tool_outputs';
+
   JObj := TJSonObject.Create;
-
   Try
-
     If Assigned(AitoolsOutputs) and (AitoolsOutputs.Count > 0) then
       JObj.AddPair('tool_outputs', AitoolsOutputs.ToOutputJSon);
 
@@ -2842,7 +2867,11 @@ begin
     if Res.StatusCode = 200 then
     Begin
       JRes := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      ParseRun(JRes);
+      try
+        ParseRun(JRes);
+      finally
+        JRes.Free;
+      end;
     End
     else
     begin
@@ -2963,14 +2992,17 @@ begin
     if Res.StatusCode = 200 then
     Begin
       JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      JArr := JObj.GetValue<TJSonArray>('data');
-
-      For JVal in JArr do
-      Begin
-        AiFile := TJson.JsonToObject<TAiFile>(TJSonObject(JVal));
-        FFileList.Add(AiFile.id, AiFile);
-      End;
-      Result := FFileList;
+      try
+        JArr := JObj.GetValue<TJSonArray>('data');
+        For JVal in JArr do
+        Begin
+          AiFile := TJson.JsonToObject<TAiFile>(TJSonObject(JVal));
+          FFileList.Add(AiFile.id, AiFile);
+        End;
+        Result := FFileList;
+      finally
+        JObj.Free;
+      end;
     End
     else
       Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
@@ -3033,7 +3065,11 @@ begin
         if Res.StatusCode = 200 then
         Begin
           JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-          Result := TJson.JsonToObject<TAiFile>(JObj);
+          try
+            Result := TJson.JsonToObject<TAiFile>(JObj);
+          finally
+            JObj.Free;
+          end;
         End
         else
           Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
@@ -3209,7 +3245,6 @@ begin
       Finally
         JRes.Free;
       End;
-
     End
     else
     begin
@@ -3251,14 +3286,17 @@ begin
     if Res.StatusCode = 200 then
     Begin
       JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      JArr := JObj.GetValue<TJSonArray>('data');
-
-      For JVal in JArr do
-      Begin
-        StoreFile := TJson.JsonToObject<TAiVectorStoreFile>(TJSonObject(JVal));
-        FFileList.Add(StoreFile.id, StoreFile);
-      End;
-      Result := FFileList;
+      try
+        JArr := JObj.GetValue<TJSonArray>('data');
+        For JVal in JArr do
+        Begin
+          StoreFile := TJson.JsonToObject<TAiVectorStoreFile>(TJSonObject(JVal));
+          FFileList.Add(StoreFile.id, StoreFile);
+        End;
+        Result := FFileList;
+      finally
+        JObj.Free;
+      end;
     End
     else
       Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
@@ -3534,14 +3572,17 @@ begin
     if Res.StatusCode = 200 then
     Begin
       JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      JArr := JObj.GetValue<TJSonArray>('data');
-
-      For JVal in JArr do
-      Begin
-        StoreVector := ParseVectorStore(TJSonObject(JVal), FApiKey, FUrl);
-        FVectorStoreList.Add(StoreVector.id, StoreVector);
-      End;
-      Result := FVectorStoreList;
+      try
+        JArr := JObj.GetValue<TJSonArray>('data');
+        For JVal in JArr do
+        Begin
+          StoreVector := ParseVectorStore(TJSonObject(JVal), FApiKey, FUrl);
+          FVectorStoreList.Add(StoreVector.id, StoreVector);
+        End;
+        Result := FVectorStoreList;
+      finally
+        JObj.Free;
+      end;
     End
     else
       Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
@@ -3831,7 +3872,11 @@ begin
     if Res.StatusCode = 200 then
     Begin
       JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      Result := TJson.JsonToObject<TAiVectorStoreFileBatch>(JObj);
+      try
+        Result := TJson.JsonToObject<TAiVectorStoreFileBatch>(JObj);
+      finally
+        JObj.Free;
+      end;
     End
     else
       Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
@@ -3864,7 +3909,11 @@ begin
     if Res.StatusCode = 200 then
     Begin
       JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      Result := TJson.JsonToObject<TAiVectorStoreFileBatch>(JObj);
+      try
+        Result := TJson.JsonToObject<TAiVectorStoreFileBatch>(JObj);
+      finally
+        JObj.Free;
+      end;
     End
     else
       Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
@@ -3905,14 +3954,17 @@ begin
     if Res.StatusCode = 200 then
     Begin
       JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      JArr := JObj.GetValue<TJSonArray>('data');
-
-      For JVal in JArr do
-      Begin
-        StoreVector := TJson.JsonToObject<TAiVectorStoreFileBatch>(TJSonObject(JVal));
-        FileBatchList.Add(StoreVector.id, StoreVector);
-      End;
-      Result := FileBatchList;
+      try
+        JArr := JObj.GetValue<TJSonArray>('data');
+        For JVal in JArr do
+        Begin
+          StoreVector := TJson.JsonToObject<TAiVectorStoreFileBatch>(TJSonObject(JVal));
+          FileBatchList.Add(StoreVector.id, StoreVector);
+        End;
+        Result := FileBatchList;
+      finally
+        JObj.Free;
+      end;
     End
     else
       Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);

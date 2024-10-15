@@ -34,12 +34,10 @@ interface
 
 uses
   System.SysUtils, System.Types, System.UITypes, System.Classes,
-  System.Threading,
-  System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections,
-  System.NetEncoding,
-  System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
-  System.Net.HttpClientComponent,
-  REST.JSON, REST.Types, REST.Client;
+  System.Threading, System.Variants, System.Net.Mime, System.IOUtils,
+  System.Generics.Collections, System.NetEncoding, System.JSON,
+  System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
+  System.Net.HttpClientComponent, REST.JSON, REST.Types, REST.Client;
 
 Type
 
@@ -51,7 +49,6 @@ Type
   TAiFileCategory = (Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_Document, Tfc_Text, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, Tfc_Aplication, Tfc_DiskImage, Tfc_GraphicDesign, Tfc_Unknow);
 
   TOnCallToolFunction = Procedure(Sender: TObject; AiToolCall: TAiToolsFunction) of object;
-
 
   TAiMediaFile = Class
   Private
@@ -108,7 +105,6 @@ Type
     // = (Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_Document, Tfc_Text, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, Tfc_Aplication, Tfc_DiskImage, Tfc_GraphicDesign, Tfc_Unknow); :
   End;
 
-
   TAiMetadata = Class(TDictionary<String, String>)
   Private
     function GetAsText: String;
@@ -121,7 +117,6 @@ Type
     Property AsText: String Read GetAsText Write SetAsText;
     Property JsonText: String Read GetJSonText Write SetJsonText;
   End;
-
 
   TAiToolsFunction = class(TObject)
     id: string;
@@ -144,6 +139,7 @@ Type
   TAiToolsFunctions = Class(TDictionary<String, TAiToolsFunction>)
   Private
   Protected
+    procedure ValueNotify(const Value: TAiToolsFunction; Action: TCollectionNotification); override;
   Public
     Function ToOutputJSon: TJSonArray;
     Function ToFunctionsJSon: TJSonArray;
@@ -151,28 +147,23 @@ Type
     Procedure AddFunction(aBody: TJSonObject); Overload;
   End;
 
-
-
-
-
-  //Ejecuta un comando en el shel del sistema operativo correspondiente, Falta implementar bien en MACOS solo Linux, Windows y MACOS
+  // Ejecuta un comando en el shel del sistema operativo correspondiente, Falta implementar bien en MACOS solo Linux, Windows y MACOS
 procedure RunCommand(const Command: string);
 
-//Convierte un audio de un formato a otro utilizando ffmpeg, debe estar instalado en la máquina
+// Convierte un audio de un formato a otro utilizando ffmpeg, debe estar instalado en la máquina
 function ConvertAudioFileFormat(Origen: TMemoryStream; filename: String; out Destino: TMemoryStream; out DestinoFileName: String): Boolean;
 
-//Partiendo de la extensión del archivo obtiene la categoria TAiFileCategori
+// Partiendo de la extensión del archivo obtiene la categoria TAiFileCategori
 function GetContentCategory(FileExtension: string): TAiFileCategory;
 
-//Obtiene el mime de un archivo basado en la extensión .mp3 o mp3
+// Obtiene el mime de un archivo basado en la extensión .mp3 o mp3
 function GetMimeTypeFromFileName(FileExtension: string): string;
 
-//Convierte un stream en Base64
+// Convierte un stream en Base64
 function StreamToBase64(Stream: TMemoryStream): String;
 
-//convierte una lista de valores Key1=Value1  en una lista de parametros de query de una URL
+// convierte una lista de valores Key1=Value1  en una lista de parametros de query de una URL
 function GetParametrosURL(Parametros: TStringList): string;
-
 
 implementation
 
@@ -374,7 +365,6 @@ begin
     Result := Tfc_Unknow;
 end;
 
-
 { TAiMediaFiles }
 
 procedure TAiMediaFile.Clear;
@@ -456,7 +446,10 @@ end;
 
 function TAiMediaFile.GetFileCategory: TAiFileCategory;
 begin
-  Result := GetContentCategory(ExtractFileExt(LowerCase(Ffilename)));
+  If Trim(Ffilename) = '' then
+    Result := Tfc_Unknow
+  Else
+    Result := GetContentCategory(ExtractFileExt(LowerCase(Ffilename)));
 end;
 
 function TAiMediaFile.GetMimeType: String;
@@ -569,7 +562,6 @@ begin
   End;
 end;
 
-
 { TAiToolFunction }
 
 procedure TAiToolsFunction.Assign(aSource: TAiToolsFunction);
@@ -615,7 +607,6 @@ begin
     Body := JObj; // La funcion original completa
   End;
 end;
-
 
 { TAiMetadata }
 
@@ -683,11 +674,14 @@ Var
   JObj: TJSonObject;
   Pair: TJSONPair;
 begin
-  JObj := TJSonObject(TJSonObject.ParseJSONValue(Value));
-
   Self.Clear;
-  For Pair in JObj do
-    Self.Add(Pair.JsonString.Value, Pair.JsonValue.Value)
+  JObj := TJSonObject(TJSonObject.ParseJSONValue(Value));
+  try
+    For Pair in JObj do
+      Self.Add(Pair.JsonString.Value, Pair.JsonValue.Value)
+  finally
+    JObj.Free;
+  end;
 end;
 
 function TAiMetadata.ToJSon: TJSonObject;
@@ -695,11 +689,9 @@ Var
   Clave: String;
 begin
   Result := TJSonObject.Create;
-
   For Clave in Self.Keys do
     Result.AddPair(Clave, Self.Items[Clave]);
 end;
-
 
 { TAitools_outputs }
 
@@ -719,13 +711,21 @@ begin
   End;
 end;
 
+procedure TAiToolsFunctions.ValueNotify(const Value: TAiToolsFunction; Action: TCollectionNotification);
+begin
+  case Action of
+    cnDeleting, cnRemoved:
+      Value.Free;
+  end;
+  inherited;
+end;
+
 procedure TAiToolsFunctions.AddFunction(aBody: String);
 Var
   Func: TJSonObject;
 begin
   Func := TJSonObject(TJSonObject.ParseJSONValue(aBody));
   AddFunction(Func);
-
 end;
 
 function TAiToolsFunctions.ToFunctionsJSon: TJSonArray;
@@ -762,6 +762,5 @@ begin
     Result.Add(TObj);
   End;
 end;
-
 
 end.

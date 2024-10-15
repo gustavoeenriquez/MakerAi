@@ -50,7 +50,7 @@ uses
 
 type
 
-  TAiClaudeChat = Class(TAiOpenChat)
+  TAiClaudeChat = Class(TAiChat)
   Private
     Function GetToolJSon: TJSonArray;
   Protected
@@ -367,6 +367,7 @@ Var
   I: Integer;
   LAsincronico: Boolean;
   LastMsg: TAiChatMessage;
+  Res : String;
 begin
 
   If User = '' then
@@ -439,7 +440,11 @@ begin
     If Seed > 0 then
       AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
 
-    Result := UTF8ToString(AJSONObject.ToJSon);
+    Res := UTF8ToString(AJSONObject.ToJSon);
+
+    Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
+    Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
+
   Finally
     AJSONObject.Free;
     Lista.Free;

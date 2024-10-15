@@ -51,7 +51,7 @@ type
     Procedure ParseEmbedding(JObj: TJSonObject); Override;
   end;
 
-  TAiOllamaChat = Class(TAiOpenChat)
+  TAiOllamaChat = Class(TAiChat)
   Private
   Protected
     Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;

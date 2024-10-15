@@ -29,6 +29,18 @@ unit uMakerAi.Chat.Groq;
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
+// A Octubre del 2024 estas son las limitaciones de visión de groq
+{
+  Model ID: llama-3.2-11b-vision-preview
+  Description: Llama 3.2 11B Vision is a powerful multimodal model capable of processing both text and image inputs. It supports multilingual, multi-turn conversations, tool use, and JSON mode.
+  Context Window: 8,192 tokens
+  Limitations:
+  Preview Model: Currently in preview and should be used for experimentation.
+  Image Size Limit: The maximum allowed size for a request containing an image URL as input is 20MB. Requests larger than this limit will return a 400 error.
+  Single Image per Request: Only one image can be processed per request in the preview release. Requests with multiple images will return a 400 error.
+  System Prompt: The model does not support system prompts and images in the same request.
+}
+
 interface
 
 uses
@@ -44,14 +56,14 @@ Type
 
   TAiGroqEmbeddings = Class(TAiEmbeddings)
   Public
-    //groq actualmente no maneja modelos de embeddings
+    // groq actualmente no maneja modelos de embeddings
     Function CreateEmbedding(Input, User: String; Dimensions: Integer = 1536; Model: String = 'Llama3-8b-8192'; EncodingFormat: String = 'float'): TAiEmbeddingData; Override;
   End;
 
-  TAiGroqChat = Class(TAiOpenChat)
+  TAiGroqChat = Class(TAiChat)
   Private
   Protected
-    // Function InitChatCompletions: String; Override;
+    Function InitChatCompletions: String; Override;
   Public
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
@@ -85,34 +97,150 @@ begin
   inherited;
 end;
 
+function TAiGroqChat.InitChatCompletions: String;
+Var
+  AJSONObject, jObj, jToolChoice: TJSonObject;
+  JArr: TJSonArray;
+  JStop: TJSonArray;
+  Lista: TStringList;
+  I: Integer;
+  LAsincronico: Boolean;
+  LastMsg: TAiChatMessage;
+  Res: String;
+begin
+
+  If User = '' then
+    User := 'user';
+
+  If Model = '' then
+    Model := 'llama-3.2-11b-text-preview';
+
+  // Las funciones no trabajan en modo ascincrono
+  LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
+
+  // En groq hay una restricción sobre las imágenes
+
+  FClient.Asynchronous := LAsincronico;
+
+  AJSONObject := TJSonObject.Create;
+  Lista := TStringList.Create;
+
+  Try
+
+    AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
+
+    If Tool_Active and (Trim(Tools.Text) <> '') then
+    Begin
+      JArr := TJSonArray(TJSonArray.ParseJSONValue(Tools.Text));
+      If Not Assigned(JArr) then
+        Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
+      AJSONObject.AddPair('tools', JArr);
+
+      If (Trim(Tool_choice) <> '') then
+      Begin
+        jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
+        If Assigned(jToolChoice) then
+          AJSONObject.AddPair('tools_choice', jToolChoice);
+      End;
+    End;
+
+    LastMsg := Messages.Last;
+    If Assigned(LastMsg) then
+    Begin
+      If LastMsg.MediaFiles.Count > 0 then
+      Begin
+        AJSONObject.AddPair('messages', LastMsg.ToJSon); // Si tiene imágenes solo envia una entrada
+      End
+      Else
+      Begin
+        AJSONObject.AddPair('messages', GetMessages); // Si no tiene imágenes envía todos los mensajes
+      End;
+    End;
+
+    AJSONObject.AddPair('model', Model);
+
+    AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
+    AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+
+    If Top_p <> 0 then
+      AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
+
+    AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
+    AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
+    AJSONObject.AddPair('user', User);
+    AJSONObject.AddPair('n', TJSONNumber.Create(N));
+
+    If (FResponse_format = tiaChatRfJsonSchema) then
+    Begin
+      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_schema'))
+    End
+    Else If { LAsincronico or } (FResponse_format = tiaChatRfJson) then
+      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_object'))
+    Else If (FResponse_format = tiaChatRfText) then
+      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'text'))
+    Else
+      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'text'));
+
+    Lista.CommaText := Stop;
+    If Lista.Count > 0 then
+    Begin
+      JStop := TJSonArray.Create;
+      For I := 0 to Lista.Count - 1 do
+        JStop.Add(Lista[I]);
+      AJSONObject.AddPair('stop', JStop);
+    End;
+
+    If Logprobs = True then
+    Begin
+      If Logit_bias <> '' then
+        AJSONObject.AddPair('logit_bias', TJSONNumber.Create(Logit_bias));
+
+      AJSONObject.AddPair('logprobs', TJSONBool.Create(Logprobs));
+
+      If Top_logprobs <> '' then
+        AJSONObject.AddPair('top_logprobs', TJSONNumber.Create(Top_logprobs));
+    End;
+
+    If Seed > 0 then
+      AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
+
+    Res := UTF8ToString(AJSONObject.ToJSon);
+    Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
+    Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
+  Finally
+    AJSONObject.Free;
+    Lista.Free;
+  End;
+end;
+
 { TAiGroqEmbeddings }
 
 function TAiGroqEmbeddings.CreateEmbedding(Input, User: String; Dimensions: Integer; Model, EncodingFormat: String): TAiEmbeddingData;
 Var
   Client: THTTPClient;
   Headers: TNetHeaders;
-  JObj: TJSonObject;
+  jObj: TJSonObject;
   Res: IHTTPResponse;
   Response: TStringStream;
   St: TStringStream;
   sUrl: String;
 begin
-  //OJO OJO OJO OJO
+  // OJO OJO OJO OJO
   Raise Exception.Create('Actualmente Groq no maneja modelos de embeddings');
 
   Client := THTTPClient.Create;
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'embeddings';
-  JObj := TJSonObject.Create;
+  jObj := TJSonObject.Create;
 
   Try
-    JObj.AddPair('input', Input);
-    JObj.AddPair('model', Model);
-    JObj.AddPair('user', User);
-    JObj.AddPair('encoding_format', EncodingFormat);
+    jObj.AddPair('input', Input);
+    jObj.AddPair('model', Model);
+    jObj.AddPair('user', User);
+    jObj.AddPair('encoding_format', EncodingFormat);
 
-    St.WriteString(UTF8Encode(JObj.Format));
+    St.WriteString(UTF8Encode(jObj.Format));
     St.Position := 0;
 
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
@@ -121,12 +249,12 @@ begin
     Res := Client.Post(sUrl, St, Response, Headers);
     Response.Position := 0;
 
-    //Response.SaveToFile('c:\temp\response.txt');
+    // Response.SaveToFile('c:\temp\response.txt');
 
     if Res.StatusCode = 200 then
     Begin
-      JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      ParseEmbedding(JObj);
+      jObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
+      ParseEmbedding(jObj);
       Result := Self.FData;
 
     End
@@ -139,9 +267,8 @@ begin
     Client.Free;
     St.Free;
     Response.Free;
-    JObj.Free;
+    jObj.Free;
   End;
 end;
-
 
 end.

@@ -43,7 +43,7 @@ uses
 
 type
 
-  TAiGeminiChat = Class(TAiOpenChat)
+  TAiGeminiChat = Class(TAiChat)
   Private
     Function GetToolJSon: TJSonArray;
   Protected
@@ -73,6 +73,7 @@ implementation
 Const
   GlAIUrl = 'https://generativelanguage.googleapis.com/v1beta/';
   // https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=$GOOGLE_API_KEY
+  //https://ai.google.dev/gemini-api/docs/document-processing?hl=es-419&lang=python
 
 procedure Register;
 begin

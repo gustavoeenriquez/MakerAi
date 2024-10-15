@@ -28,6 +28,10 @@
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
+
+// --------- CAMBIOS --------------------
+// 29/08/2024 - Se adiciona el manejo de response_format = json_schema
+
 unit uMakerAi.Chat;
 
 interface
@@ -37,7 +41,6 @@ uses
   System.Threading, System.NetEncoding,
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
   System.JSON, Rest.JSON, uMakerAi.ToolFunctions, uMakerAi.Core;
-
 
 type
   TAiChatMessage = Class(TObject)
@@ -81,6 +84,7 @@ type
     // Procedure AddUrlImage(aUrl: String);
     // Procedure AddBase64Image(aBase64: String);
     Function StreamToBase64(Stream: TMemoryStream): String;
+    Function ToJSon: TJSonArray; // Convierte el Objeto en un json para enviar al api
 
     Property Id: integer Read FId Write SetFId;
     Property Role: String read FRole write SetRole;
@@ -111,7 +115,7 @@ type
     Property AsText: String Read GetAsText Write SetAsText;
   End;
 
-  TAiOpenChatResponseFormat = (tiaChatRfText, tiaChatRfJson);
+  TAiOpenChatResponseFormat = (tiaChatRfText, tiaChatRfJson, tiaChatRfJsonSchema);
   TAiOpenChatDataEvent = procedure(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject; aRole, aText: String) of object;
   TAiOpenChatBeforeSendEvent = procedure(const Sender: TObject; var aMsg: TAiChatMessage) of object;
   TAiOpenChatInitChat = procedure(const Sender: TObject; aRole: String; Var aText: String; Var aMemory: TJSonObject) of object;
@@ -179,7 +183,7 @@ type
     Property InitialInstructions: TStrings read FInitialInstructions write SetInitialInstructions;
   End;
 
-  TAiOpenChat = class(TComponent)
+  TAiChat = class(TComponent)
   Private
     FOwner: TObject;
     FApiKey: String;
@@ -213,6 +217,7 @@ type
     FAIEngine: TAiChatConfig;
     FAiFunctions: TAiFunctions;
     FOnProcessMediaFile: TAiOpenChatOnMediaFile;
+    FJsonSchema: TStrings;
 
     procedure SetApiKey(const Value: String);
     procedure SetFrequency_penalty(const Value: Double);
@@ -247,6 +252,7 @@ type
     procedure SetResponseTimeOut(const Value: integer);
     procedure SetOnInitChat(const Value: TAiOpenChatInitChat);
     procedure SetMemory(const Value: TStrings);
+    procedure SetJsonSchema(const Value: TStrings);
 
     procedure SetAiFunctions(const Value: TAiFunctions);
     procedure SetOnProcessMediaFile(const Value: TAiOpenChatOnMediaFile);
@@ -300,7 +306,7 @@ type
     Function GetModels: TStringList; Overload; Virtual;
     Function GetMessages: TJSonArray; Virtual;
 
-    Function PublicChatToSend : String;
+    Function PublicChatToSend: String;
 
     Property Messages: TAiChatMessages read FMessages;
     Property LastError: String read FLastError write SetLastError;
@@ -353,29 +359,30 @@ type
     Property Functions: TFunctionActionItems read FFunctions write FFunctions;
     Property AiFunctions: TAiFunctions read FAiFunctions write SetAiFunctions;
     Property OnProcessMediaFile: TAiOpenChatOnMediaFile read FOnProcessMediaFile write SetOnProcessMediaFile;
+    Property JsonSchema: TStrings read FJsonSchema write SetJsonSchema;
   end;
 
-procedure Register;
+  // procedure Register;
 
 implementation
 
-procedure Register;
-begin
-  RegisterComponents('MakerAI', [TAiOpenChat, TAiChatConfig]);
-end;
+{ procedure Register;
+  begin
+  RegisterComponents('MakerAI', [TAiChat, TAiChatConfig]);
+  end;
+}
 
 { TAiChat }
 
 Const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
 
-
-procedure TAiOpenChat.Abort;
+procedure TAiChat.Abort;
 begin
   FAbort := True;
 end;
 
-function TAiOpenChat.InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String;
+function TAiChat.InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String;
 Var
   Msg: TAiChatMessage;
   MensajeInicial: String;
@@ -411,7 +418,7 @@ begin
   End;
 end;
 
-function TAiOpenChat.InternalAddMessage(aPrompt, aRole: String; aMediaFiles: array of TAiMediaFile): String;
+function TAiChat.InternalAddMessage(aPrompt, aRole: String; aMediaFiles: array of TAiMediaFile): String;
 Var
   Msg: TAiChatMessage;
   MF: TAiMediaFile;
@@ -422,7 +429,7 @@ begin
 
   Try
     // Comienza con las instrucciones iniciales y le adiciona cada 20 mensajes para evitar que se olvide
-    If (FMessages.Count = 0) then //or ((FMessages.Count mod 20) = 0) then
+    If (FMessages.Count = 0) then // or ((FMessages.Count mod 20) = 0) then
     Begin
       MensajeInicial := Self.PrepareSystemMsg;
 
@@ -462,29 +469,29 @@ begin
   End;
 end;
 
-function TAiOpenChat.AddMessage(aPrompt, aRole: String): TAiChatMessage;
+function TAiChat.AddMessage(aPrompt, aRole: String): TAiChatMessage;
 begin
   InternalAddMessage(aPrompt, aRole, []);
 end;
 
-function TAiOpenChat.AddMessageAndRun(aPrompt, aRole: String; aMediaFiles: array of TAiMediaFile): String;
+function TAiChat.AddMessageAndRun(aPrompt, aRole: String; aMediaFiles: array of TAiMediaFile): String;
 begin
   InternalAddMessage(aPrompt, aRole, aMediaFiles);
   Result := Run;
 end;
 
-function TAiOpenChat.AddMessageAndRun(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String;
+function TAiChat.AddMessageAndRun(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String;
 begin
   InternalAddMessage(aPrompt, aRole, aToolCallId, aFunctionName);
   Result := Run;
 end;
 
-procedure TAiOpenChat.AddToMemory(Key, Value: String);
+procedure TAiChat.AddToMemory(Key, Value: String);
 begin
   FMemory.AddPair(Key, Value);
 end;
 
-constructor TAiOpenChat.Create(Sender: TComponent);
+constructor TAiChat.Create(Sender: TComponent);
 begin
   inherited;
   FOwner := Sender;
@@ -499,7 +506,7 @@ begin
   FClient.OnReceiveData := Self.OnInternalReceiveData;
   FClient.ResponseTimeOut := 60000;
 
-  FModel := 'gpt-3.5-turbo';
+  FModel := 'gpt4-o';
   FN := 1;
   FResponse_format := TAiOpenChatResponseFormat.tiaChatRfText;
   FTemperature := 1;
@@ -511,7 +518,7 @@ begin
   FResponseTimeOut := 60000;
 end;
 
-destructor TAiOpenChat.Destroy;
+destructor TAiChat.Destroy;
 begin
   FResponse.Free;
   FTools.Free;
@@ -522,7 +529,7 @@ begin
   inherited;
 end;
 
-procedure TAiOpenChat.DoCallFunction(ToolCall: TAiToolsFunction);
+procedure TAiChat.DoCallFunction(ToolCall: TAiToolsFunction);
 Var
   Funcion: TFunctionActionItem;
   Handle: Boolean;
@@ -548,7 +555,7 @@ begin
   End;
 end;
 
-procedure TAiOpenChat.DoProcessMediaFile(aPrompt: String; aAiMediaFile: TAiMediaFile; Var Respuesta: String; Var Procesado: Boolean);
+procedure TAiChat.DoProcessMediaFile(aPrompt: String; aAiMediaFile: TAiMediaFile; Var Respuesta: String; Var Procesado: Boolean);
 begin
   If Assigned(FOnProcessMediaFile) then
   Begin
@@ -560,7 +567,7 @@ begin
   End;
 end;
 
-function TAiOpenChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
+function TAiChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
 Var
   jObj, Msg, jFunc, Arg: TJSonObject;
   ArgVal, JVal, JVal1: TJSonValue;
@@ -621,24 +628,24 @@ begin
   End;
 end;
 
-function TAiOpenChat.GetLastMessage: TAiChatMessage;
+function TAiChat.GetLastMessage: TAiChatMessage;
 begin
   Result := Nil;
   If FMessages.Count > 0 then
     Result := FMessages[FMessages.Count - 1];
 end;
 
-function TAiOpenChat.GetMessages: TJSonArray;
+function TAiChat.GetMessages: TJSonArray;
 begin
   Result := FMessages.ToJSon;
 end;
 
-function TAiOpenChat.GetModels: TStringList;
+function TAiChat.GetModels: TStringList;
 begin
   Result := GetModels(ApiKey, Url);
 end;
 
-class function TAiOpenChat.GetModels(aApiKey, aUrl: String): TStringList;
+class function TAiChat.GetModels(aApiKey, aUrl: String): TStringList;
 Var
   Client: THTTPClient;
   Headers: TNetHeaders;
@@ -691,7 +698,7 @@ begin
   End;
 end;
 
-function TAiOpenChat.GetTools: TStrings;
+function TAiChat.GetTools: TStrings;
 Var
   Funcs: TJSonArray;
 begin
@@ -720,7 +727,7 @@ begin
   End;
 end;
 
-function TAiOpenChat.InitChatCompletions: String;
+function TAiChat.InitChatCompletions: String;
 Var
   AJSONObject, jObj, jToolChoice: TJSonObject;
   JArr: TJSonArray;
@@ -729,6 +736,7 @@ Var
   I: integer;
   LAsincronico: Boolean;
   LastMsg: TAiChatMessage;
+  Res: String;
 begin
 
   If FUser = '' then
@@ -787,8 +795,14 @@ begin
     AJSONObject.AddPair('user', User);
     AJSONObject.AddPair('n', TJSONNumber.Create(FN));
 
-    If { LAsincronico or } (FResponse_format = tiaChatRfJson) then
+    If (FResponse_format = tiaChatRfJsonSchema) then
+    Begin
+      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_schema'))
+    End
+    Else If { LAsincronico or } (FResponse_format = tiaChatRfJson) then
       AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_object'))
+    Else If (FResponse_format = tiaChatRfText) then
+      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'text'))
     Else
       AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'text'));
 
@@ -815,14 +829,16 @@ begin
     If Seed > 0 then
       AJSONObject.AddPair('seed', TJSONNumber.Create(FSeed));
 
-    Result := UTF8ToString(AJSONObject.ToJSon);
+    Res := UTF8ToString(AJSONObject.ToJSon);
+    Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
+    Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
   Finally
     AJSONObject.Free;
     Lista.Free;
   End;
 end;
 
-procedure TAiOpenChat.NewChat;
+procedure TAiChat.NewChat;
 Var
   I: integer;
 begin
@@ -834,12 +850,12 @@ begin
   FMessages.Clear;
 end;
 
-function TAiOpenChat.NewMessage(aPrompt, aRole: String): TAiChatMessage;
+function TAiChat.NewMessage(aPrompt, aRole: String): TAiChatMessage;
 begin
   Result := TAiChatMessage.Create(aPrompt, aRole);
 end;
 
-procedure TAiOpenChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
+procedure TAiChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
 Var
   jObj, Delta: TJSonObject;
   sJson, Value, Role1: String;
@@ -933,7 +949,7 @@ begin
   End;
 end;
 
-procedure TAiOpenChat.ParseChat(jObj: TJSonObject);
+procedure TAiChat.ParseChat(jObj: TJSonObject);
 Var
   choices, JToolCalls: TJSonArray;
   JItem: TJSonObject;
@@ -1042,7 +1058,7 @@ begin
   End;
 end;
 
-function TAiOpenChat.PrepareSystemMsg: String;
+function TAiChat.PrepareSystemMsg: String;
 Var
   S, Key, Val, MensajeInicial: String;
   I: integer;
@@ -1076,26 +1092,26 @@ begin
       FOnInitChat(Self, 'system', MensajeInicial, JMemory);
 
     If Trim(MensajeInicial) <> '' then
-       Result := MensajeInicial;
+      Result := MensajeInicial;
 
     If Length(Trim(JMemory.Format)) > 10 then
-       Result := Result + sLineBreak + 'Para Recordar= ' + JMemory.Format;
+      Result := Result + sLineBreak + 'Para Recordar= ' + JMemory.Format;
   Finally
     JMemory.Free;
   End;
 end;
 
-function TAiOpenChat.PublicChatToSend: String;
+function TAiChat.PublicChatToSend: String;
 begin
-   Result := InitChatCompletions;
+  Result := InitChatCompletions;
 end;
 
-procedure TAiOpenChat.RemoveFromMemory(Key: String);
+procedure TAiChat.RemoveFromMemory(Key: String);
 begin
   FMemory.Values[Key] := '';
 end;
 
-function TAiOpenChat.RemoveMesage(IdMsg: integer): Boolean;
+function TAiChat.RemoveMesage(IdMsg: integer): Boolean;
 Var
   I: integer;
   Msg: TAiChatMessage;
@@ -1112,7 +1128,7 @@ begin
   Result := True;
 end;
 
-function TAiOpenChat.Run(aMsg: TAiChatMessage = Nil): String;
+function TAiChat.Run(aMsg: TAiChatMessage = Nil): String;
 Var
   ABody: String;
   sUrl, MensajeInicial: String;
@@ -1184,15 +1200,17 @@ begin
 
     St.WriteString(ABody);
     St.Position := 0;
-    //St.SaveToFile('c:\temp\peticion.txt');
-    //St.Position := 0;
+
+    St.SaveToFile('c:\temp\peticion.txt');
+    St.Position := 0;
 
     FResponse.Clear;
     FResponse.Position := 0;
 
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
-    // FResponse.SaveToFile('c:\temp\respuesta.txt');
+    FResponse.Position := 0;
+    FResponse.SaveToFile('c:\temp\respuesta.txt');
     FResponse.Position := 0;
 
     FLastContent := '';
@@ -1223,13 +1241,13 @@ begin
   End;
 end;
 
-function TAiOpenChat.RemoveMesage(Msg: TAiChatMessage): Boolean;
+function TAiChat.RemoveMesage(Msg: TAiChatMessage): Boolean;
 begin
   If FMessages.ItemValue(Msg) >= 0 then
     FMessages.Remove(Msg);
 end;
 
-procedure TAiOpenChat.SetAIChatConfig(const Value: TAiChatConfig);
+procedure TAiChat.SetAIChatConfig(const Value: TAiChatConfig);
 begin
   If Assigned(Value) and (FAIChatConfig <> Value) then
   Begin
@@ -1252,118 +1270,123 @@ begin
   End;
 end;
 
-procedure TAiOpenChat.SetAiFunctions(const Value: TAiFunctions);
+procedure TAiChat.SetAiFunctions(const Value: TAiFunctions);
 begin
   FAiFunctions := Value;
 end;
 
-procedure TAiOpenChat.SetApiKey(const Value: String);
+procedure TAiChat.SetApiKey(const Value: String);
 begin
   FApiKey := Value;
 end;
 
-procedure TAiOpenChat.SetAsynchronous(const Value: Boolean);
+procedure TAiChat.SetAsynchronous(const Value: Boolean);
 begin
   FAsynchronous := Value;
   FClient.Asynchronous := Value;
 end;
 
-procedure TAiOpenChat.SetCompletion_tokens(const Value: integer);
+procedure TAiChat.SetCompletion_tokens(const Value: integer);
 begin
   FCompletion_tokens := Value;
 end;
 
-procedure TAiOpenChat.SetFrequency_penalty(const Value: Double);
+procedure TAiChat.SetFrequency_penalty(const Value: Double);
 begin
   FFrequency_penalty := Value;
 end;
 
-procedure TAiOpenChat.SetInitialInstructions(const Value: TStrings);
+procedure TAiChat.SetInitialInstructions(const Value: TStrings);
 begin
   FInitialInstructions.Text := Value.Text;
 end;
 
-procedure TAiOpenChat.SetLastError(const Value: String);
+procedure TAiChat.SetJsonSchema(const Value: TStrings);
+begin
+  FJsonSchema.Text := Value.Text;
+end;
+
+procedure TAiChat.SetLastError(const Value: String);
 begin
   FLastError := Value;
 end;
 
-procedure TAiOpenChat.SetLogit_bias(const Value: String);
+procedure TAiChat.SetLogit_bias(const Value: String);
 begin
   FLogit_bias := Value;
 end;
 
-procedure TAiOpenChat.SetLogprobs(const Value: Boolean);
+procedure TAiChat.SetLogprobs(const Value: Boolean);
 begin
   FLogprobs := Value;
 end;
 
-procedure TAiOpenChat.SetMax_tokens(const Value: integer);
+procedure TAiChat.SetMax_tokens(const Value: integer);
 begin
   FMax_tokens := Value;
 end;
 
-procedure TAiOpenChat.SetMemory(const Value: TStrings);
+procedure TAiChat.SetMemory(const Value: TStrings);
 begin
   FMemory.Text := Value.Text;
 end;
 
-procedure TAiOpenChat.SetModel(const Value: String);
+procedure TAiChat.SetModel(const Value: String);
 begin
   FModel := Value;
 end;
 
-procedure TAiOpenChat.SetN(const Value: integer);
+procedure TAiChat.SetN(const Value: integer);
 begin
   FN := Value;
 end;
 
-procedure TAiOpenChat.SetOnAddMessage(const Value: TAiOpenChatDataEvent);
+procedure TAiChat.SetOnAddMessage(const Value: TAiOpenChatDataEvent);
 begin
   FOnAddMessage := Value;
 end;
 
-procedure TAiOpenChat.SetOnBeforeSendMessage(const Value: TAiOpenChatBeforeSendEvent);
+procedure TAiChat.SetOnBeforeSendMessage(const Value: TAiOpenChatBeforeSendEvent);
 begin
   FOnBeforeSendMessage := Value;
 end;
 
-procedure TAiOpenChat.SetOnCallToolFunction(const Value: TOnCallToolFunction);
+procedure TAiChat.SetOnCallToolFunction(const Value: TOnCallToolFunction);
 begin
   FOnCallToolFunction := Value;
 end;
 
-procedure TAiOpenChat.SetOnInitChat(const Value: TAiOpenChatInitChat);
+procedure TAiChat.SetOnInitChat(const Value: TAiOpenChatInitChat);
 begin
   FOnInitChat := Value;
 end;
 
-procedure TAiOpenChat.SetOnProcessMediaFile(const Value: TAiOpenChatOnMediaFile);
+procedure TAiChat.SetOnProcessMediaFile(const Value: TAiOpenChatOnMediaFile);
 begin
   FOnProcessMediaFile := Value;
 end;
 
-procedure TAiOpenChat.SetOnReceiveDataEnd(const Value: TAiOpenChatDataEvent);
+procedure TAiChat.SetOnReceiveDataEnd(const Value: TAiOpenChatDataEvent);
 begin
   FOnReceiveDataEnd := Value;
 end;
 
-procedure TAiOpenChat.SetOnReceiveDataEvent(const Value: TAiOpenChatDataEvent);
+procedure TAiChat.SetOnReceiveDataEvent(const Value: TAiOpenChatDataEvent);
 begin
   FOnReceiveDataEvent := Value;
 end;
 
-procedure TAiOpenChat.SetPresence_penalty(const Value: Double);
+procedure TAiChat.SetPresence_penalty(const Value: Double);
 begin
   FPresence_penalty := Value;
 end;
 
-procedure TAiOpenChat.SetPrompt_tokens(const Value: integer);
+procedure TAiChat.SetPrompt_tokens(const Value: integer);
 begin
   FPrompt_tokens := Value;
 end;
 
-procedure TAiOpenChat.SetResponseTimeOut(const Value: integer);
+procedure TAiChat.SetResponseTimeOut(const Value: integer);
 begin
   If Value < 1000 then
     FResponseTimeOut := 1000
@@ -1373,42 +1396,42 @@ begin
   FClient.ResponseTimeOut := FResponseTimeOut;
 end;
 
-procedure TAiOpenChat.SetResponse_format(const Value: TAiOpenChatResponseFormat);
+procedure TAiChat.SetResponse_format(const Value: TAiOpenChatResponseFormat);
 begin
   FResponse_format := Value;
 end;
 
-procedure TAiOpenChat.SetSeed(const Value: integer);
+procedure TAiChat.SetSeed(const Value: integer);
 begin
   FSeed := Value;
 end;
 
-procedure TAiOpenChat.SetStop(const Value: string);
+procedure TAiChat.SetStop(const Value: string);
 begin
   FStop := Value;
 end;
 
-procedure TAiOpenChat.SetTemperature(const Value: Double);
+procedure TAiChat.SetTemperature(const Value: Double);
 begin
   FTemperature := Value;
 end;
 
-procedure TAiOpenChat.SetTool_Active(const Value: Boolean);
+procedure TAiChat.SetTool_Active(const Value: Boolean);
 begin
   FTool_Active := Value;
 end;
 
-procedure TAiOpenChat.SetTool_choice(const Value: string);
+procedure TAiChat.SetTool_choice(const Value: string);
 begin
   FTool_choice := Value;
 end;
 
-procedure TAiOpenChat.SetTop_logprobs(const Value: String);
+procedure TAiChat.SetTop_logprobs(const Value: String);
 begin
   FTop_logprobs := Value;
 end;
 
-procedure TAiOpenChat.SetTop_p(const Value: Double);
+procedure TAiChat.SetTop_p(const Value: Double);
 Var
   TmpVal: Double;
 begin
@@ -1422,12 +1445,12 @@ begin
   FTop_p := TmpVal;
 end;
 
-procedure TAiOpenChat.SetTotal_tokens(const Value: integer);
+procedure TAiChat.SetTotal_tokens(const Value: integer);
 begin
   FTotal_tokens := Value;
 end;
 
-procedure TAiOpenChat.SetUrl(const Value: String);
+procedure TAiChat.SetUrl(const Value: String);
 begin
   If Value <> '' then
     FUrl := Value
@@ -1435,7 +1458,7 @@ begin
     FUrl := GlOpenAIUrl;
 end;
 
-procedure TAiOpenChat.SetUser(const Value: String);
+procedure TAiChat.SetUser(const Value: String);
 begin
   FUser := Value;
 end;
@@ -1598,6 +1621,71 @@ begin
   Result := TNetEncoding.Base64.EncodeBytesToString(Stream.Memory, Stream.Size);
 end;
 
+function TAiChatMessage.ToJSon: TJSonArray;
+Var
+  Msg: TAiChatMessage;
+  jObj, JMsg, jMsgImagen: TJSonObject;
+  JObjImg, jImgUrl: TJSonObject;
+  JContent: TJSonArray;
+  ImagePayload: TStringStream;
+  Base64, Mime: String;
+  MediaArr: TAiMediaFilesArray;
+  S: String;
+begin
+  // Esta función solo toma el mensaje actual y una sola imágen, la primera que encuentra en la lista
+  // Esto se hace especialmente para modelos que solo aceptan una imágene por petición y no un chat completo
+
+  Result := TJSonArray.Create;
+
+  Msg := Self;
+  jObj := TJSonObject.Create;
+  jObj.AddPair('role', Msg.FRole);
+
+  If Msg.FTollCallId <> '' then
+    jObj.AddPair('tool_call_id', Msg.FTollCallId);
+
+  If Msg.FFunctionName <> '' then
+    jObj.AddPair('name', Msg.FFunctionName);
+
+  // de todos los archivos de medios selecciona las imágenes que es lo que podemos manejar por ahora
+  // y las imágenes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
+  // se deben haber procesado en en el momendo de adicionar el mensaje al chat
+  MediaArr := Msg.MediaFiles.GetMediaList(Tfc_Image, False);
+
+  If (Length(MediaArr) > 0) then
+  Begin
+
+    JContent := TJSonArray.Create;
+    JMsg := TJSonObject.Create;
+    JMsg.AddPair('type', 'text');
+    JMsg.AddPair('text', Msg.FPrompt);
+    JContent.Add(JMsg);
+
+    If Msg.MediaFiles.Count > 0 then // Solo toma la primera imagen
+    Begin
+      Base64 := Msg.MediaFiles[0].Base64;
+      Mime := Msg.MediaFiles[0].MimeType;
+
+      ImagePayload := TStringStream.Create('{"type": "image_url", "image_url": {"url": "data:' + Mime + ';base64,' + Base64 + '"}}', TEncoding.UTF8);
+      S := ImagePayload.DataString;
+      try
+        JContent.Add(TJSonObject.ParseJSONValue(ImagePayload.DataString) as TJSonObject);
+      finally
+        ImagePayload.Free;
+      end;
+
+    End;
+    jObj.AddPair('content', JContent);
+  End
+  Else
+    jObj.AddPair('content', Msg.FPrompt);
+
+  If Msg.FTool_calls <> '' then
+    jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
+
+  Result.Add(jObj);
+end;
+
 { TAiOpenChatMessages }
 
 function TAiChatMessages.GetAsText: String;
@@ -1741,10 +1829,12 @@ Var
   I, J: integer;
   Msg: TAiChatMessage;
   jObj, JMsg, jMsgImagen: TJSonObject;
+  JObjImg, jImgUrl: TJSonObject;
   JContent: TJSonArray;
   ImagePayload: TStringStream;
   Base64, Mime: String;
   MediaArr: TAiMediaFilesArray;
+  S: String;
 begin
   Result := TJSonArray.Create;
 
@@ -1796,11 +1886,26 @@ begin
         Mime := Msg.MediaFiles[J].MimeType;
 
         ImagePayload := TStringStream.Create('{"type": "image_url", "image_url": {"url": "data:' + Mime + ';base64,' + Base64 + '"}}', TEncoding.UTF8);
-        try
+        { S := ImagePayload.DataString;
+          try
           JContent.Add(TJSonObject.ParseJSONValue(ImagePayload.DataString) as TJSonObject);
-        finally
+          finally
           ImagePayload.Free;
-        end;
+          end;
+        }
+
+        // Esta es otra forma de hacer lo mismo con json directamente
+        S := 'data:' + Mime + ';base64,' + Base64;
+
+        jImgUrl := TJSonObject.Create;
+        jImgUrl.AddPair('url', S);
+
+        JObjImg := TJSonObject.Create;
+        JObjImg.AddPair('type', 'image_url');
+        JObjImg.AddPair('image_url', jImgUrl);
+
+        JContent.Add(JObjImg);
+
       End;
       jObj.AddPair('content', JContent);
     End

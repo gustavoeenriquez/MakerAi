@@ -34,8 +34,7 @@ requires
   bindengine,
   bindcomp,
   RESTComponents,
-  inet,
-  Python;
+  inet;
 
 contains
   uMakerAi.Chat.OpenAssistant in 'uMakerAi.Chat.OpenAssistant.pas',
@@ -56,7 +55,8 @@ contains
   uMakerAi.Vision in 'uMakerAi.Vision.pas',
   uMakerAi.Assistant.Core in 'uMakerAi.Assistant.Core.pas',
   uMakerAi.Chat.Mistral in 'uMakerAi.Chat.Mistral.pas',
-  uMakerAi.Utils.Python in 'uMakerAi.Utils.Python.pas',
-  uMakerAi.Utils.system in 'uMakerAi.Utils.system.pas';
+  uMakerAi.Utils.system in 'uMakerAi.Utils.system.pas',
+  uMakerAi.Chat.AiConn in 'uMakerAi.Chat.AiConn.pas',
+  uMakerAi.Chat.OpenAi in 'uMakerAi.Chat.OpenAi.pas';
 
 end.

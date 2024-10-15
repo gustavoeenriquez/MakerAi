@@ -166,8 +166,8 @@ type
   TAiRagChat = Class(TComponent)
   Private
     FDataVec: TAiDataVec;
-    FChat: TAiOpenChat;
-    procedure SetChat(const Value: TAiOpenChat);
+    FChat: TAiChat;
+    procedure SetChat(const Value: TAiChat);
     procedure SetDataVec(const Value: TAiDataVec);
   Protected
   Public
@@ -177,7 +177,7 @@ type
     Function AskToAi(aPrompt: TAiEmbeddingNode; aLimit: Integer = 10; aPresicion: Double = 0.5): String; Overload; Virtual;
     Function AskToAi(aPrompt: String; DataVec: TAiDataVec): String; Overload; Virtual;
   Published
-    Property Chat: TAiOpenChat read FChat write SetChat;
+    Property Chat: TAiChat read FChat write SetChat;
     Property DataVec: TAiDataVec read FDataVec write SetDataVec;
   End;
 
@@ -846,7 +846,7 @@ begin
   inherited;
 end;
 
-procedure TAiRagChat.SetChat(const Value: TAiOpenChat);
+procedure TAiRagChat.SetChat(const Value: TAiChat);
 begin
   FChat := Value;
 end;

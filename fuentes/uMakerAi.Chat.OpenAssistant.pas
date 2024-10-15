@@ -68,6 +68,7 @@ type
     FVectorStoreIds: TStringList;
     FTools: TStrings;
     FUrl: String;
+    FLastMessage: TAiMessage;
     function GetBusy: Boolean;
     procedure SetOnCallToolFunction(const Value: TOnCallToolFunction);
     procedure SetOnStatusChange(const Value: TOnStatusNotifyEvent);
@@ -257,8 +258,14 @@ begin
   End;
 
   If Assigned(Funciones) then
-    Tools.Text := Funciones.ToFunctionsJSon.Format;
-
+  begin
+    var tmp := Funciones.ToFunctionsJSon;
+    try
+      Tools.Text := tmp.Format;
+    finally
+      tmp.Free;
+    end;
+  end;
 end;
 
 function TAiOpenAssistant.InternalAddMessage(aMessage, aRole, aFiles_ids: String): TAiMessage;
@@ -376,7 +383,7 @@ begin
   FInstructions.Free;
   FTools.Free;
 
-  FAiRun := TAiRun.Create(FAssistant, FThRead);
+  FAiRun.Free;
   FMetadata.Free;
   FCodeFilesIds.Free;
   FVectorStoreIds.Free;
@@ -387,8 +394,13 @@ begin
       FThRead.Remove;
     FThRead.Free;
   End;
+
   If Assigned(FAssistant) then
     FAssistant.Free;
+
+  if Assigned(FLastMessage) then
+    FLastMessage.Free;
+
   inherited;
 end;
 
@@ -526,13 +538,22 @@ function TAiOpenAssistant.GetLasMessage: TAiMessage;
 Var
   AiMessages: TAiMessages;
 begin
-  Result := Nil;
+  if Assigned(FLastMessage) then FreeAndNil(FLastMessage);
+
+  FLastMessage := Nil;
   If Assigned(FThRead) then
   Begin
     AiMessages := FThRead.ListMessages(1);
-    If AiMessages.Count > 0 then
-      Result := AiMessages[0];
+    try
+      If AiMessages.Count > 0 then
+        FLastMessage := AiMessages.ExtractAt(0);
+//      FLastMessage := AiMessages[0];
+    finally
+      AiMessages.Free;
+    end;
   End;
+
+  Result := FLastMessage;
 end;
 
 function TAiOpenAssistant.GetAssistantsList: String;
@@ -596,8 +617,12 @@ begin
   If Assigned(FThRead) then
   Begin
     AiMessages := FThRead.ListMessages(1);
-    If AiMessages.Count > 0 then
-      Result := AiMessages[0].Content[0].Text;
+    try
+      If AiMessages.Count > 0 then
+        Result := AiMessages[0].Content[0].Text;
+    finally
+      AiMessages.Free;
+    end;
   End;
 end;
 

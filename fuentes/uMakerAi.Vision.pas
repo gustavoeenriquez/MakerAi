@@ -112,7 +112,7 @@ Var
   Response: TStringStream;
   ImagePayload: TStringStream;
   St: TStringStream;
-  sUrl: String;
+  sUrl, aBody: String;
 begin
   Client := THTTPClient.Create;
   St := TStringStream.Create('', TEncoding.UTF8);
@@ -146,11 +146,19 @@ begin
     JMessages.Add(JMsg);
     JObj.AddPair('messages', JMessages);
 
-    St.WriteString(UTF8Encode(JObj.Format));
+    aBody := UTF8Encode(JObj.ToJSON);
+    aBody := StringReplace(aBody, '\/', '/', [rfReplaceAll]);
+    aBody := StringReplace(aBody, '\r\n', '', [rfReplaceAll]);
+
+    St.WriteString(aBody);
     St.Position := 0;
 
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
     Client.ContentType := 'application/json';
+
+    St.SaveToFile('c:\temp\peticionvision.txt');
+    St.Position := 0;
+
 
     Res := Client.Post(sUrl, St, Response, Headers);
 
