@@ -33,8 +33,9 @@ unit uMakerAi.Chat.OpenAi;
 
 // --------- CAMBIOS --------------------
 // 29/08/2024 - Se adiciona el manejo de response_format = json_schema
-
-//unit uMakerAi.Chat;
+// 04/11/2024 - Se adiciona la propiedad TAiOpenChat.Modalities para el manejo de audio
+// 04/11/2024 - Se adicionan la propiedades TAiOpenChat.voice y voice_format
+// 04/11/2024 - se habilita la opción de recibir y generar audio utilizando TMediaFile
 
 interface
 
@@ -46,8 +47,17 @@ uses
 
 type
 
+  TAiModality = (Text, Audio);
+  TAiModilities = set of TAiModality;
+
   TAiOpenChat = class(TAiChat)
   Private
+    FModalities: TAiModilities;
+    FVoice: String;
+    Fvoice_format: String;
+    procedure SetModalities(const Value: TAiModilities);
+    procedure SetVoice(const Value: String);
+    procedure Setvoice_format(const Value: String);
   Protected
     Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
     Function InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String; Overload; Override;
@@ -67,6 +77,9 @@ type
     Function GetMessages: TJSonArray; Override;
 
   Published
+    Property Modalities: TAiModilities read FModalities write SetModalities;
+    Property Voice: String read FVoice write SetVoice;
+    Property voice_format: String read Fvoice_format write Setvoice_format;
   end;
 
 procedure Register;
@@ -169,7 +182,6 @@ begin
   End;
 end;
 
-
 constructor TAiOpenChat.Create(Sender: TComponent);
 begin
   inherited;
@@ -183,6 +195,8 @@ begin
   Url := GlOpenAIUrl;
   Top_p := 1;
   ResponseTimeOut := 60000;
+  FVoice := 'alloy';
+  Fvoice_format := 'wav';
 end;
 
 destructor TAiOpenChat.Destroy;
@@ -215,7 +229,6 @@ begin
       FOnCallToolFunction(Self, ToolCall)
   End;
 end;
-
 
 function TAiOpenChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
 Var
@@ -277,7 +290,6 @@ begin
     End;
   End;
 end;
-
 
 class function TAiOpenChat.GetModels(aApiKey, aUrl: String): TStringList;
 Var
@@ -368,8 +380,8 @@ end;
 
 function TAiOpenChat.InitChatCompletions: String;
 Var
-  AJSONObject, jToolChoice: TJSonObject;
-  JArr: TJSonArray;
+  AJSONObject, jToolChoice, jAudio, jStrOptions: TJSonObject;
+  JArr, jModalities: TJSonArray;
   JStop: TJSonArray;
   Lista: TStringList;
   I: integer;
@@ -402,6 +414,13 @@ begin
 
     AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
 
+    If (LAsincronico = True) and (Stream_Usage = True) then
+    Begin
+      jStrOptions := TJSonObject.Create;
+      jStrOptions.AddPair('include_usage', Stream_Usage);
+      AJSONObject.AddPair('stream_options', jStrOptions);
+    End;
+
     If Tool_Active and (Trim(Tools.Text) <> '') then
     Begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(Tools.Text));
@@ -432,13 +451,31 @@ begin
     AJSONObject.AddPair('user', User);
     AJSONObject.AddPair('n', TJSONNumber.Create(N));
 
+    If FModalities <> [] then
+    Begin
+      jModalities := TJSonArray.Create;
+      If TAiModality.Text in FModalities then
+        jModalities.Add('text');
+
+      If TAiModality.Audio in FModalities then
+        jModalities.Add('audio');
+
+      AJSONObject.AddPair('modalities', jModalities);
+    End;
+
+    If TAiModality.Audio in FModalities then
+    Begin
+      jAudio := TJSonObject.Create;
+      jAudio.AddPair('voice', FVoice);
+      jAudio.AddPair('format', Fvoice_format);
+      AJSONObject.AddPair('audio', jAudio);
+    End;
 
     If (FResponse_format = tiaChatRfJsonSchema) then
     Begin
       AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_schema'))
     End
-    Else
-    If { LAsincronico or } (FResponse_format = tiaChatRfJson) then
+    Else If { LAsincronico or } (FResponse_format = tiaChatRfJson) then
       AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_object'))
     Else If (FResponse_format = tiaChatRfText) then
       AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'text'))
@@ -474,7 +511,6 @@ begin
     Lista.Free;
   End;
 end;
-
 
 procedure TAiOpenChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
 Var
@@ -573,12 +609,13 @@ end;
 procedure TAiOpenChat.ParseChat(jObj: TJSonObject);
 Var
   choices, JToolCalls: TJSonArray;
-  JItem: TJSonObject;
+  JItem, jAudio: TJSonObject;
   JVal: TJSonValue;
   jMessage: TJSonObject;
   uso: TJSonObject;
   aPrompt_tokens, aCompletion_tokens, aTotal_tokens: integer;
-  Role, Respuesta: String;
+  Role, Respuesta, idAudio: String;
+  AudioExpiresAt: integer;
   Msg: TAiChatMessage;
   LFunciones: TAiToolsFunctions;
   ToolCall: TAiToolsFunction;
@@ -586,6 +623,8 @@ Var
   TaskList: array of ITask;
   I, NumTasks: integer;
   Clave, sToolCalls, sRes: String;
+  AudioBase64: String;
+  MediaFile: TAiMediaFile;
 
 begin
 
@@ -600,6 +639,9 @@ begin
 
   jObj.TryGetValue<TJSonArray>('choices', choices);
 
+  Msg := TAiChatMessage.Create('', '');
+
+
   For JVal in choices do
   Begin
     JItem := TJSonObject(JVal);
@@ -608,6 +650,27 @@ begin
 
     If jMessage.TryGetValue<String>('content', sRes) then
       Respuesta := Respuesta + sRes + sLineBreak;
+
+    If jMessage.TryGetValue<TJSonObject>('audio', jAudio) then
+    Begin
+      jAudio.TryGetValue<String>('id', idAudio);
+
+      jAudio.TryGetValue<String>('data', AudioBase64);
+
+      If jAudio.TryGetValue<String>('transcript', sRes) then
+        Respuesta := Respuesta + sRes + sLineBreak;
+
+      jAudio.TryGetValue<integer>('expires_at', AudioExpiresAt);
+
+      If (AudioBase64 <> '') then
+      Begin
+        MediaFile := TAiMediaFile.Create;
+        MediaFile.LoadFromBase64('archivo.' + voice_format, AudioBase64);
+        MediaFile.Transcription := sRes;
+        MediaFile.IdAudio := IdAudio;
+        Msg.AddMediaFile(MediaFile);
+      End;
+    End;
 
     If jMessage.TryGetValue<TJSonArray>('tool_calls', JToolCalls) then
       sToolCalls := JToolCalls.Format;
@@ -619,13 +682,15 @@ begin
   Completion_tokens := Completion_tokens + aCompletion_tokens;
   Total_tokens := Total_tokens + aTotal_tokens;
 
-  Msg := TAiChatMessage.Create(Respuesta, Role);
   Msg.Prompt := Respuesta;
+  Msg.Role := Role;
   Msg.Tool_calls := sToolCalls;
   Msg.Prompt_tokens := aPrompt_tokens;
   Msg.Completion_tokens := aCompletion_tokens;
   Msg.Total_tokens := aTotal_tokens;
   Msg.Id := FMessages.Count + 1;
+
+
   FMessages.Add(Msg);
 
   // If Assigned(FOnAddMessage) then
@@ -721,7 +786,6 @@ begin
     JMemory.Free;
   End;
 end;
-
 
 function TAiOpenChat.Run(aMsg: TAiChatMessage = Nil): String;
 Var
@@ -834,6 +898,21 @@ begin
     If FClient.Asynchronous = False then
       St.Free; // Esto no funciona en multiarea, así que se libera cuando no lo es.
   End;
+end;
+
+procedure TAiOpenChat.SetModalities(const Value: TAiModilities);
+begin
+  FModalities := Value;
+end;
+
+procedure TAiOpenChat.SetVoice(const Value: String);
+begin
+  FVoice := Value;
+end;
+
+procedure TAiOpenChat.Setvoice_format(const Value: String);
+begin
+  Fvoice_format := Value;
 end;
 
 function TAiOpenChat.GetMessages: TJSonArray;

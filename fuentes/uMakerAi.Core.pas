@@ -27,6 +27,10 @@
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
+//
+// --------- CAMBIOS --------------------
+// 04/11/2024 - adiciona el manejo de TAiMediaFile.detail para identificar la calidad de analisis de una imagen
+// 04/11/2024 - Se corrige error de asignación en TAiMediaFile.LoadFromBase64
 
 unit uMakerAi.Core;
 
@@ -47,9 +51,12 @@ Type
   TAiImageResponseFormat = (tiaRUrl, tiaRB64);
   TAiImageAStyleFormat = (tiaStyleVivid, tiaStyleNatural);
   TAiFileCategory = (Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_Document, Tfc_Text, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, Tfc_Aplication, Tfc_DiskImage, Tfc_GraphicDesign, Tfc_Unknow);
+  TAiFileCategories = set of TAiFileCategory;
 
+  //Evento callback cuando se utiliza la herramienta tools del chat
   TOnCallToolFunction = Procedure(Sender: TObject; AiToolCall: TAiToolsFunction) of object;
 
+  //Clase utilizada para el manejo de archivos de medios como audio, imágenes e incluso otros medios como pdf, etc.
   TAiMediaFile = Class
   Private
     Ffilename: String;
@@ -59,6 +66,8 @@ Type
     FFullFileName: String;
     FTranscription: String;
     FProcesado: Boolean;
+    FDetail: String;
+    FIdAudio: String;
     function GetBase64: String;
     function GetContent: TMemoryStream;
     procedure SetBase64(const Value: String);
@@ -70,6 +79,8 @@ Type
     function GetFileCategory: TAiFileCategory;
     procedure SetTranscription(const Value: String);
     procedure SetProcesado(const Value: Boolean);
+    procedure SetDetail(const Value: String);
+    procedure SetIdAudio(const Value: String);
   Protected
   Public
     Constructor Create;
@@ -88,11 +99,15 @@ Type
     Property Base64: String read GetBase64 write SetBase64;
     Property FullFileName: String read FFullFileName write SetFullFileName;
     Property MimeType: String read GetMimeType;
+    //Propiedad que se pasa con la imagen que indica si se analiza en detalle o "high" o en baja resolución "low"
+    Property Detail : String read FDetail write SetDetail;
     // Transcription- Si el archivo adjunto se procesa por separado aquí se guarda lo que retorna el modelo correspondiente
     Property Transcription: String read FTranscription write SetTranscription;
     Property Procesado: Boolean read FProcesado write SetProcesado; // Si ya se utilizó, para que no guarde nuevamente la información de este archivo
+    Property IdAudio : String read FIdAudio write SetIdAudio;
   End;
 
+  //Conjunto de archivos para su manejo en el chat
   TAiMediaFilesArray = Array of TAiMediaFile;
 
   TAiMediaFiles = Class(TObjectList<TAiMediaFile>)
@@ -101,10 +116,11 @@ Type
   Public
     // Si el modelo nomaneja este tipo de media failes, se pueden preprocesar en el evento del chat
     // y el texto del proceso se adiciona al prompt, y aquí ya no se tendrían en cuenta
-    Function GetMediaList(aFilter: TAiFileCategory; aProcesado: Boolean = False): TAiMediaFilesArray;
+    Function GetMediaList(aFilters: TAiFileCategories; aProcesado: Boolean = False): TAiMediaFilesArray;
     // = (Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_Document, Tfc_Text, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, Tfc_Aplication, Tfc_DiskImage, Tfc_GraphicDesign, Tfc_Unknow); :
   End;
 
+  //Clase de manejo de los metadatos que se pasan al api del chat de los llm
   TAiMetadata = Class(TDictionary<String, String>)
   Private
     function GetAsText: String;
@@ -118,6 +134,7 @@ Type
     Property JsonText: String Read GetJSonText Write SetJsonText;
   End;
 
+  //Clase que maneja las funciones de los tools
   TAiToolsFunction = class(TObject)
     id: string;
     Tipo: string;
@@ -377,6 +394,7 @@ begin
   Inherited;
   FContent := TMemoryStream.Create;
   FProcesado := False;
+  FDetail := ''; //por defecto utiliza vacío para no enviar nada y hacerlo compatible con otros modelos, detallado = "high" or "low"
 end;
 
 destructor TAiMediaFile.Destroy;
@@ -461,7 +479,7 @@ procedure TAiMediaFile.LoadFromBase64(aFileName, aBase64: String);
 Var
   St: TMemoryStream;
 begin
-  St := TBytesStream.Create(TNetEncoding.Base64.DecodeStringToBytes(Base64));
+  St := TBytesStream.Create(TNetEncoding.Base64.DecodeStringToBytes(aBase64));
   Try
     If Assigned(St) then
     Begin
@@ -517,6 +535,11 @@ begin
   LoadFromBase64('', Value);
 end;
 
+procedure TAiMediaFile.SetDetail(const Value: String);
+begin
+  FDetail := Value;
+end;
+
 procedure TAiMediaFile.Setfilename(const Value: String);
 begin
   Ffilename := Value;
@@ -525,6 +548,11 @@ end;
 procedure TAiMediaFile.SetFullFileName(const Value: String);
 begin
   FFullFileName := Value;
+end;
+
+procedure TAiMediaFile.SetIdAudio(const Value: String);
+begin
+  FIdAudio := Value;
 end;
 
 procedure TAiMediaFile.SetProcesado(const Value: Boolean);
@@ -544,6 +572,27 @@ end;
 
 { TAiMediaFiles }
 
+
+function TAiMediaFiles.GetMediaList(aFilters: TAiFileCategories; aProcesado: Boolean = False): TAiMediaFilesArray;
+var
+  i: Integer;
+  Item: TAiMediaFile;
+  Len: Integer;
+begin
+  SetLength(Result, 0); // Inicializamos el resultado para evitar basura
+  for i := 0 to Self.Count - 1 do
+  begin
+    Item := Self.Items[i];
+    if (Item.FileCategory in aFilters) and (Item.Procesado = aProcesado) then
+    begin
+      Len := Length(Result);
+      SetLength(Result, Len + 1);
+      Result[Len] := Item;
+    end;
+  end;
+end;
+
+{
 function TAiMediaFiles.GetMediaList(aFilter: TAiFileCategory; aProcesado: Boolean = False): TAiMediaFilesArray;
 Var
   i: Integer;
@@ -561,6 +610,7 @@ begin
     End;
   End;
 end;
+}
 
 { TAiToolFunction }
 
@@ -764,3 +814,7 @@ begin
 end;
 
 end.
+
+
+
+

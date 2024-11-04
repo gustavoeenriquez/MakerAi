@@ -31,6 +31,8 @@
 
 // --------- CAMBIOS --------------------
 // 29/08/2024 - Se adiciona el manejo de response_format = json_schema
+// 04/11/2024 - adiciona el manejo de detail como propiedad en mediafile
+// 04/11/2024 - adiciona el manejo de TAiChat.Stream_Usage - Estadistica de uso en modo stream OpenAi
 
 unit uMakerAi.Chat;
 
@@ -51,8 +53,6 @@ type
     procedure SetFunctionName(const Value: String);
     procedure SetTollCallId(const Value: String);
     procedure SetTool_calls(const Value: String);
-    // procedure SetVisionUrls(const Value: TStringList);
-    // procedure SetVisionBase64(const Value: TStringList);
     procedure SetFId(const Value: integer);
     procedure SetCompletion_tokens(const Value: integer);
     procedure SetPrompt_tokens(const Value: integer);
@@ -68,8 +68,6 @@ type
     FTollCallId: String;
     FFunctionName: String;
     FTool_calls: String;
-    // FVisionUrls: TStringList;
-    // FVisionBase64: TStringList;
     FMediaFiles: TAiMediaFiles;
   Public
     Constructor Create(aPrompt, aRole: String; aToolCallId: String = ''; aFunctionName: String = '');
@@ -80,9 +78,6 @@ type
     Procedure LoadMediaFromStream(aFileName: String; Stream: TMemoryStream);
     Procedure LoadMediaFromBase64(aFileName: String; aBase64: String);
 
-    // Procedure AddStreamImage(Stream: TMemoryStream);
-    // Procedure AddUrlImage(aUrl: String);
-    // Procedure AddBase64Image(aBase64: String);
     Function StreamToBase64(Stream: TMemoryStream): String;
     Function ToJSon: TJSonArray; // Convierte el Objeto en un json para enviar al api
 
@@ -96,8 +91,6 @@ type
     Property TollCallId: String read FTollCallId write SetTollCallId;
     Property FunctionName: String read FFunctionName write SetFunctionName;
     Property Tool_calls: String read FTool_calls write SetTool_calls;
-    // Property VisionUrls: TStringList read FVisionUrls write SetVisionUrls;
-    // Property VisionBase64: TStringList read FVisionBase64 write SetVisionBase64;
     Property MediaFiles: TAiMediaFiles Read FMediaFiles;
   End;
 
@@ -218,6 +211,7 @@ type
     FAiFunctions: TAiFunctions;
     FOnProcessMediaFile: TAiOpenChatOnMediaFile;
     FJsonSchema: TStrings;
+    FStream_Usage: Boolean;
 
     procedure SetApiKey(const Value: String);
     procedure SetFrequency_penalty(const Value: Double);
@@ -256,6 +250,7 @@ type
 
     procedure SetAiFunctions(const Value: TAiFunctions);
     procedure SetOnProcessMediaFile(const Value: TAiOpenChatOnMediaFile);
+    procedure SetStream_Usage(const Value: Boolean);
 
   Protected
     FClient: TNetHTTPClient;
@@ -360,6 +355,7 @@ type
     Property AiFunctions: TAiFunctions read FAiFunctions write SetAiFunctions;
     Property OnProcessMediaFile: TAiOpenChatOnMediaFile read FOnProcessMediaFile write SetOnProcessMediaFile;
     Property JsonSchema: TStrings read FJsonSchema write SetJsonSchema;
+    Property Stream_Usage: Boolean read FStream_Usage write SetStream_Usage;
   end;
 
   // procedure Register;
@@ -516,6 +512,7 @@ begin
   FUrl := GlOpenAIUrl;
   FTop_p := 1;
   FResponseTimeOut := 60000;
+  FStream_Usage := False; // Envia la estadistica de uso por token
 end;
 
 destructor TAiChat.Destroy;
@@ -1201,8 +1198,8 @@ begin
     St.WriteString(ABody);
     St.Position := 0;
 
-    St.SaveToFile('c:\temp\peticion.txt');
-    St.Position := 0;
+    //St.SaveToFile('c:\temp\peticion.txt');
+    //St.Position := 0;
 
     FResponse.Clear;
     FResponse.Position := 0;
@@ -1210,8 +1207,8 @@ begin
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
     FResponse.Position := 0;
-    FResponse.SaveToFile('c:\temp\respuesta.txt');
-    FResponse.Position := 0;
+    //FResponse.SaveToFile('c:\temp\respuesta.txt');
+    //FResponse.Position := 0;
 
     FLastContent := '';
 
@@ -1409,6 +1406,11 @@ end;
 procedure TAiChat.SetStop(const Value: string);
 begin
   FStop := Value;
+end;
+
+procedure TAiChat.SetStream_Usage(const Value: Boolean);
+begin
+  FStream_Usage := Value;
 end;
 
 procedure TAiChat.SetTemperature(const Value: Double);
@@ -1624,7 +1626,7 @@ end;
 function TAiChatMessage.ToJSon: TJSonArray;
 Var
   Msg: TAiChatMessage;
-  jObj, JMsg, jMsgImagen: TJSonObject;
+  jObj, JMsg, jMsgImagen, jAudio: TJSonObject;
   JObjImg, jImgUrl: TJSonObject;
   JContent: TJSonArray;
   ImagePayload: TStringStream;
@@ -1650,7 +1652,7 @@ begin
   // de todos los archivos de medios selecciona las imágenes que es lo que podemos manejar por ahora
   // y las imágenes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
   // se deben haber procesado en en el momendo de adicionar el mensaje al chat
-  MediaArr := Msg.MediaFiles.GetMediaList(Tfc_Image, False);
+  MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
 
   If (Length(MediaArr) > 0) then
   Begin
@@ -1678,7 +1680,10 @@ begin
     jObj.AddPair('content', JContent);
   End
   Else
+  Begin
+
     jObj.AddPair('content', Msg.FPrompt);
+  End;
 
   If Msg.FTool_calls <> '' then
     jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
@@ -1829,12 +1834,13 @@ Var
   I, J: integer;
   Msg: TAiChatMessage;
   jObj, JMsg, jMsgImagen: TJSonObject;
-  JObjImg, jImgUrl: TJSonObject;
+  JObjImg, jImgUrl, jAudio: TJSonObject;
   JContent: TJSonArray;
   ImagePayload: TStringStream;
   Base64, Mime: String;
   MediaArr: TAiMediaFilesArray;
   S: String;
+  MediaFile: TAiMediaFile;
 begin
   Result := TJSonArray.Create;
 
@@ -1853,7 +1859,7 @@ begin
     // de todos los archivos de medios selecciona las imágenes que es lo que podemos manejar por ahora
     // y las imágenes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
     // se deben haber procesado en en el momendo de adicionar el mensaje al chat
-    MediaArr := Msg.MediaFiles.GetMediaList(Tfc_Image, False);
+    MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
 
     If (Length(MediaArr) > 0) then
     Begin
@@ -1864,53 +1870,79 @@ begin
       JMsg.AddPair('text', Msg.FPrompt);
       JContent.Add(JMsg);
 
-      { //Esta es la forma como se envían las Url de imágenes a OpneAI, solo se utiliza el Base64 por estandar
-        If Msg.FVisionUrls.Count > 0 then
-        Begin
-        For J := 0 to Msg.FVisionUrls.Count - 1 do
-        Begin
-        JMsg := TJSonObject.Create;
-        JMsg.AddPair('type', 'image_url');
-        jMsgImagen := TJSonObject.Create;
-        jMsgImagen.AddPair('url', Msg.FVisionUrls[J]);
-        JMsg.AddPair('image_url', jMsgImagen);
-
-        JContent.Add(JMsg);
-        End;
-        End;
-      }
-
-      For J := 0 to Msg.MediaFiles.Count - 1 do // Open Ai permite subir el Base64 o el Url, siempre se sube el Base64, por estandar
+      For J := 0 to Length(MediaArr) - 1 do // Open Ai permite subir el Base64 o el Url, siempre se sube el Base64, por estandar
       Begin
-        Base64 := Msg.MediaFiles[J].Base64;
-        Mime := Msg.MediaFiles[J].MimeType;
+        MediaFile := MediaArr[J];
 
-        ImagePayload := TStringStream.Create('{"type": "image_url", "image_url": {"url": "data:' + Mime + ';base64,' + Base64 + '"}}', TEncoding.UTF8);
-        { S := ImagePayload.DataString;
-          try
-          JContent.Add(TJSonObject.ParseJSONValue(ImagePayload.DataString) as TJSonObject);
-          finally
-          ImagePayload.Free;
-          end;
-        }
+        Base64 := MediaFile.Base64;
+        Mime := MediaFile.MimeType;
 
-        // Esta es otra forma de hacer lo mismo con json directamente
-        S := 'data:' + Mime + ';base64,' + Base64;
+        If MediaFile.FileCategory = TAiFileCategory.Tfc_Image then
+        Begin
 
-        jImgUrl := TJSonObject.Create;
-        jImgUrl.AddPair('url', S);
+          // Esta es otra forma de hacer lo mismo con json directamente
+          S := 'data:' + Mime + ';base64,' + Base64;
 
-        JObjImg := TJSonObject.Create;
-        JObjImg.AddPair('type', 'image_url');
-        JObjImg.AddPair('image_url', jImgUrl);
+          jImgUrl := TJSonObject.Create;
+          jImgUrl.AddPair('url', S);
 
-        JContent.Add(JObjImg);
+          If Msg.MediaFiles[J].Detail <> '' then // Si define high or low.
+            jImgUrl.AddPair('detail', MediaFile.Detail);
+
+          JObjImg := TJSonObject.Create;
+          JObjImg.AddPair('type', 'image_url');
+          JObjImg.AddPair('image_url', jImgUrl);
+
+          JContent.Add(JObjImg);
+        End;
 
       End;
+
       jObj.AddPair('content', JContent);
     End
     Else
-      jObj.AddPair('content', Msg.FPrompt);
+    Begin
+      MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Audio], False);
+
+      If (Length(MediaArr) > 0) then
+      Begin
+        For J := 0 to Length(MediaArr) - 1 do // Open Ai permite subir el Base64 o el Url, siempre se sube el Base64, por estandar
+        Begin
+          MediaFile := MediaArr[J];
+
+          Base64 := MediaFile.Base64;
+          Mime := MediaFile.MimeType;
+
+          If MediaFile.FileCategory = TAiFileCategory.Tfc_Audio then
+          Begin
+            If MediaFile.IdAudio <> '' then // Si es una respuesta del modelo va esto
+            Begin
+              jAudio := TJSonObject.Create;
+              jAudio.AddPair('id', MediaFile.IdAudio);
+              jObj.AddPair('audio', jAudio);
+            End
+            Else // Si es un audio del usuario va esto
+            Begin
+              jAudio := TJSonObject.Create;
+              jAudio.AddPair('data',MediaFile.Base64);
+              jAudio.AddPair('format',StringReplace(MediaFile.MimeType,'audio/','',[rfReplaceAll]));
+
+              JContent := TJSonArray.Create;
+              JMsg := TJSonObject.Create;
+              JMsg.AddPair('type', 'input_audio');
+              JMsg.AddPair('input_audio', jAudio);
+              JContent.Add(JMsg);
+
+              jObj.AddPair('content', JContent);
+            End;
+          End;
+        End;
+      End
+      Else
+      Begin
+        jObj.AddPair('content', Msg.FPrompt);
+      End;
+    End;
 
     If Msg.FTool_calls <> '' then
       jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
