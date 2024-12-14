@@ -57,6 +57,7 @@ contains
   uMakerAi.Chat.Mistral in 'uMakerAi.Chat.Mistral.pas',
   uMakerAi.Utils.system in 'uMakerAi.Utils.system.pas',
   uMakerAi.Chat.AiConn in 'uMakerAi.Chat.AiConn.pas',
-  uMakerAi.Chat.OpenAi in 'uMakerAi.Chat.OpenAi.pas';
+  uMakerAi.Chat.OpenAi in 'uMakerAi.Chat.OpenAi.pas',
+  uMakerAi.Chat.Grok in 'uMakerAi.Chat.Grok.pas';
 
 end.

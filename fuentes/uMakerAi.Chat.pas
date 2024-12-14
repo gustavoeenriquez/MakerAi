@@ -96,8 +96,10 @@ type
 
   TAiChatMessages = Class(TList<TAiChatMessage>)
   Private
+    FNativeInputFiles: TAiFileCategories;
     function GetAsText: String;
     procedure SetAsText(const Value: String);
+    procedure SetNativeInputFiles(const Value: TAiFileCategories);
   Protected
   Public
     Function ToJSon: TJSonArray;
@@ -106,6 +108,7 @@ type
     Procedure LoadFromStream(Stream: TStream);
     Procedure LoadFromFile(FileName: String);
     Property AsText: String Read GetAsText Write SetAsText;
+    Property NativeInputFiles: TAiFileCategories read FNativeInputFiles write SetNativeInputFiles;
   End;
 
   TAiOpenChatResponseFormat = (tiaChatRfText, tiaChatRfJson, tiaChatRfJsonSchema);
@@ -212,6 +215,8 @@ type
     FOnProcessMediaFile: TAiOpenChatOnMediaFile;
     FJsonSchema: TStrings;
     FStream_Usage: Boolean;
+    FNativeInputFiles: TAiFileCategories;
+    FNativeOutputFiles: TAiFileCategories;
 
     procedure SetApiKey(const Value: String);
     procedure SetFrequency_penalty(const Value: Double);
@@ -251,6 +256,8 @@ type
     procedure SetAiFunctions(const Value: TAiFunctions);
     procedure SetOnProcessMediaFile(const Value: TAiOpenChatOnMediaFile);
     procedure SetStream_Usage(const Value: Boolean);
+    procedure SetNativeInputFiles(const Value: TAiFileCategories);
+    procedure SetNativeOutputFiles(const Value: TAiFileCategories);
 
   Protected
     FClient: TNetHTTPClient;
@@ -286,6 +293,7 @@ type
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
     Function AddMessageAndRun(aPrompt, aRole: String; aMediaFiles: Array of TAiMediaFile): String; Overload;
+    Function AddMessageAndRunMsg(aPrompt, aRole: String; aMediaFiles: Array of TAiMediaFile): TAiChatMessage; Overload;
 
     Function AddMessage(aPrompt, aRole: String): TAiChatMessage; // Crea un mensaje y lo adiciona a la conversación
     Function NewMessage(aPrompt, aRole: String): TAiChatMessage; // Crea un mensaje pero no lo adiciona a la conversación
@@ -356,6 +364,8 @@ type
     Property OnProcessMediaFile: TAiOpenChatOnMediaFile read FOnProcessMediaFile write SetOnProcessMediaFile;
     Property JsonSchema: TStrings read FJsonSchema write SetJsonSchema;
     Property Stream_Usage: Boolean read FStream_Usage write SetStream_Usage;
+    Property NativeInputFiles: TAiFileCategories read FNativeInputFiles write SetNativeInputFiles;
+    Property NativeOutputFiles: TAiFileCategories read FNativeOutputFiles write SetNativeOutputFiles;
   end;
 
   // procedure Register;
@@ -476,6 +486,17 @@ begin
   Result := Run;
 end;
 
+function TAiChat.AddMessageAndRunMsg(aPrompt, aRole: String; aMediaFiles: array of TAiMediaFile): TAiChatMessage;
+begin
+  if FAsynchronous = False then
+  Begin
+    AddMessageAndRun(aPrompt, aRole, aMediaFiles);
+    Result := Self.GetLastMessage; // Retorna el mensaje
+  End
+  Else
+    Raise Exception.Create('Esta función no es compatible con el modo asincrónico')
+end;
+
 function TAiChat.AddMessageAndRun(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String;
 begin
   InternalAddMessage(aPrompt, aRole, aToolCallId, aFunctionName);
@@ -513,6 +534,7 @@ begin
   FTop_p := 1;
   FResponseTimeOut := 60000;
   FStream_Usage := False; // Envia la estadistica de uso por token
+  FTool_choice := 'auto';
 end;
 
 destructor TAiChat.Destroy;
@@ -1198,8 +1220,8 @@ begin
     St.WriteString(ABody);
     St.Position := 0;
 
-    //St.SaveToFile('c:\temp\peticion.txt');
-    //St.Position := 0;
+    St.SaveToFile('c:\temp\peticion.txt');
+    St.Position := 0;
 
     FResponse.Clear;
     FResponse.Position := 0;
@@ -1207,8 +1229,8 @@ begin
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
     FResponse.Position := 0;
-    //FResponse.SaveToFile('c:\temp\respuesta.txt');
-    //FResponse.Position := 0;
+    // FResponse.SaveToFile('c:\temp\respuesta.txt');
+    // FResponse.Position := 0;
 
     FLastContent := '';
 
@@ -1336,6 +1358,17 @@ end;
 procedure TAiChat.SetN(const Value: integer);
 begin
   FN := Value;
+end;
+
+procedure TAiChat.SetNativeInputFiles(const Value: TAiFileCategories);
+begin
+  FNativeInputFiles := Value;
+  FMessages.NativeInputFiles := Value;
+end;
+
+procedure TAiChat.SetNativeOutputFiles(const Value: TAiFileCategories);
+begin
+  FNativeOutputFiles := Value;
 end;
 
 procedure TAiChat.SetOnAddMessage(const Value: TAiOpenChatDataEvent);
@@ -1829,7 +1862,121 @@ begin
   End;
 end;
 
+procedure TAiChatMessages.SetNativeInputFiles(const Value: TAiFileCategories);
+begin
+  FNativeInputFiles := Value;
+end;
+
 function TAiChatMessages.ToJSon: TJSonArray;
+Var
+  I, J: integer;
+  Msg: TAiChatMessage;
+  jObj, JMsg, jMsgImagen: TJSonObject;
+  JObjImg, jImgUrl, jAudio: TJSonObject;
+  JContent: TJSonArray;
+  ImagePayload: TStringStream;
+  Base64, Mime: String;
+  MediaArr: TAiMediaFilesArray;
+  S: String;
+  MediaFile: TAiMediaFile;
+begin
+  Result := TJSonArray.Create;
+
+  For I := 0 to Count - 1 do
+  Begin
+    Msg := Self.Items[I];
+    jObj := TJSonObject.Create;
+    jObj.AddPair('role', Msg.FRole);
+
+    If Msg.FTollCallId <> '' then
+      jObj.AddPair('tool_call_id', Msg.FTollCallId);
+
+    If Msg.FFunctionName <> '' then
+      jObj.AddPair('name', Msg.FFunctionName);
+
+    // de todos los archivos de medios selecciona las imágenes que es lo que podemos manejar por ahora
+    // y las imágenes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
+    // se deben haber procesado en en el momendo de adicionar el mensaje al chat
+    MediaArr := Msg.MediaFiles.GetMediaList(FNativeInputFiles, False);
+
+    If (Length(MediaArr) > 0) then
+    Begin
+
+      JContent := TJSonArray.Create;
+      JMsg := TJSonObject.Create;
+      JMsg.AddPair('type', 'text');
+      JMsg.AddPair('text', Msg.FPrompt);
+      JContent.Add(JMsg);
+
+      For J := 0 to Length(MediaArr) - 1 do // Open Ai permite subir el Base64 o el Url, siempre se sube el Base64, por estandar
+      Begin
+        MediaFile := MediaArr[J];
+
+        If MediaFile.FileCategory = TAiFileCategory.Tfc_Image then
+        Begin
+
+          Base64 := MediaFile.Base64;
+          Mime := MediaFile.MimeType;
+
+          // Esta es otra forma de hacer lo mismo con json directamente
+          S := 'data:' + Mime + ';base64,' + Base64;
+
+          jImgUrl := TJSonObject.Create;
+          jImgUrl.AddPair('url', S);
+
+          If Msg.MediaFiles[J].Detail <> '' then // Si define high or low.
+            jImgUrl.AddPair('detail', MediaFile.Detail);
+
+          JObjImg := TJSonObject.Create;
+          JObjImg.AddPair('type', 'image_url');
+          JObjImg.AddPair('image_url', jImgUrl);
+
+          JContent.Add(JObjImg);
+          jObj.AddPair('content', JContent);
+        End
+        Else If MediaFile.FileCategory = TAiFileCategory.Tfc_Audio then
+        Begin
+          If MediaFile.IdAudio <> '' then // Si es una respuesta del modelo va esto
+          Begin
+            jAudio := TJSonObject.Create;
+            jAudio.AddPair('id', MediaFile.IdAudio);
+            jObj.AddPair('audio', jAudio);
+          End
+          Else // Si es un audio del usuario va esto
+          Begin
+            jAudio := TJSonObject.Create;
+            jAudio.AddPair('data', MediaFile.Base64);
+            jAudio.AddPair('format', StringReplace(MediaFile.MimeType, 'audio/', '', [rfReplaceAll]));
+
+            JContent := TJSonArray.Create;
+            JMsg := TJSonObject.Create;
+            JMsg.AddPair('type', 'input_audio');
+            JMsg.AddPair('input_audio', jAudio);
+            JContent.Add(JMsg);
+
+            jObj.AddPair('content', JContent);
+          End;
+        End
+        Else
+        Begin
+          jObj.AddPair('content', Msg.FPrompt);
+        End;
+      End;
+    End
+    Else
+    Begin
+      jObj.AddPair('content', Msg.FPrompt);
+    End;
+
+    If Msg.FTool_calls <> '' then
+      jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
+
+    Result.Add(jObj);
+  End;
+end;
+
+// Esta es la versión original que si funciona
+{function TAiChatMessages.ToJSon: TJSonArray;
 Var
   I, J: integer;
   Msg: TAiChatMessage;
@@ -1873,6 +2020,7 @@ begin
       For J := 0 to Length(MediaArr) - 1 do // Open Ai permite subir el Base64 o el Url, siempre se sube el Base64, por estandar
       Begin
         MediaFile := MediaArr[J];
+        MediaFile.FileCategory;
 
         Base64 := MediaFile.Base64;
         Mime := MediaFile.MimeType;
@@ -1924,8 +2072,8 @@ begin
             Else // Si es un audio del usuario va esto
             Begin
               jAudio := TJSonObject.Create;
-              jAudio.AddPair('data',MediaFile.Base64);
-              jAudio.AddPair('format',StringReplace(MediaFile.MimeType,'audio/','',[rfReplaceAll]));
+              jAudio.AddPair('data', MediaFile.Base64);
+              jAudio.AddPair('format', StringReplace(MediaFile.MimeType, 'audio/', '', [rfReplaceAll]));
 
               JContent := TJSonArray.Create;
               JMsg := TJSonObject.Create;
@@ -1950,6 +2098,7 @@ begin
     Result.Add(jObj);
   End;
 end;
+}
 
 { TAIChatConfig }
 
@@ -2052,3 +2201,87 @@ begin
 end;
 
 end.
+
+  procedure TYourClass.CallNetSuiteAPI_OAuth2M2M
+();
+
+var
+  Client: THTTPClient;
+  TokenResponse, APIResponse: IHTTPResponse;
+  JWT, AccessToken: string;
+  TokenParams: TStringList;
+
+begin
+  Client := THTTPClient.Create;
+  TokenParams := TStringList.Create;
+  try
+    // Generate JWT Bearer Token
+    JWT := GenerateJWTBearerToken('PS256', // Algorithm
+    'your_kid', // Certificate ID
+    'your_iss', // Integration Token
+    'restlets' // Scope
+      );
+
+    // Request Access Token
+    TokenParams.Values['grant_type'] := 'client_credentials';
+    TokenParams.Values['client_assertion_type'] := 'urn:ieft:param:oauth:client-assertion-type:jwt-bearer';
+    TokenParams.Values['client_assertion'] := JWT;
+
+    TokenResponse := Client.Post('https://<accountid>.suitetalk.api.netsuite.com/token', TokenParams);
+
+    if TokenResponse.StatusCode = 200 then
+    begin
+      AccessToken := ExtractAccessTokenFromResponse(TokenResponse);
+
+      // Use Access Token for API Call
+      APIResponse := Client.Get('https://<accountid>.restlets.api.netsuite.com/your/endpoint', nil, [TNetHeader.Create('Authorization', 'Bearer ' + AccessToken)]);
+
+      if APIResponse.StatusCode = 200 then
+      begin
+        // Process successful API response
+      end;
+    end;
+  finally
+    Client.Free;
+    TokenParams.Free;
+  end;
+end;
+
+procedure TYourClass.CallNetSuiteAPI_OAuth2GrantFlow();
+var
+  Client: THTTPClient;
+  AuthCodeResponse, TokenResponse, APIResponse: IHTTPResponse;
+  AuthorizationCode, RefreshToken, AccessToken: string;
+begin
+  Client := THTTPClient.Create;
+  try
+    // Step 1: Get Authorization Code
+    AuthCodeResponse := Client.Post('https://<accountid>.app.netsuite.com/app/login/oauth2/authorize.nl', [TNetHeader.Create('client_id', 'your_client_id'), TNetHeader.Create('scope', 'restlets'),
+      TNetHeader.Create('redirect_uri', 'https://netsuite.com/callback'), TNetHeader.Create('state', 'yourstate'), TNetHeader.Create('response_type', 'code')]);
+
+    if AuthCodeResponse.StatusCode = 200 then
+    begin
+      AuthorizationCode := ExtractAuthorizationCode(AuthCodeResponse);
+
+      // Step 2: Exchange Authorization Code for Token
+      TokenResponse := Client.Post('https://<accountid>.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/token', [TNetHeader.Create('Authorization', 'Basic ' + EncodeBase64(ConsumerKey + ':' + ConsumerSecret)),
+        TNetHeader.Create('code', AuthorizationCode), TNetHeader.Create('redirect_uri', 'https://netusite.com/callback'), TNetHeader.Create('grant_type', 'authorization_code')]);
+
+      if TokenResponse.StatusCode = 200 then
+      begin
+        AccessToken := ExtractAccessToken(TokenResponse);
+        RefreshToken := ExtractRefreshToken(TokenResponse);
+
+        // Use Access Token for API Call
+        APIResponse := Client.Get('https://<accountid>.restlets.api.netsuite.com/your/endpoint', nil, [TNetHeader.Create('Authorization', 'Bearer ' + AccessToken)]);
+
+        if APIResponse.StatusCode = 200 then
+        begin
+          // Process successful API response
+        end;
+      end;
+    end;
+  finally
+    Client.Free;
+  end;
+end;

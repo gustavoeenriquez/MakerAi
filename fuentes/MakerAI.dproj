@@ -232,6 +232,7 @@
         <DCCReference Include="uMakerAi.Utils.system.pas"/>
         <DCCReference Include="uMakerAi.Chat.AiConn.pas"/>
         <DCCReference Include="uMakerAi.Chat.OpenAi.pas"/>
+        <DCCReference Include="uMakerAi.Chat.Grok.pas"/>
         <RcItem Include="TAIGraph.bmp">
             <ResourceType>BITMAP</ResourceType>
             <ResourceId>TAiGraph</ResourceId>
@@ -305,6 +306,12 @@
                     </Platform>
                 </DeployFile>
                 <DeployFile LocalName="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\MakerAI.bpl" Configuration="Debug" Class="ProjectOutput"/>
+                <DeployFile LocalName="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\MakerAI.bpl" Configuration="Debug" Class="ProjectOutput">
+                    <Platform Name="Win32">
+                        <RemoteName>MakerAI.bpl</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
                 <DeployClass Name="AdditionalDebugSymbols">
                     <Platform Name="OSX32">
                         <Operation>1</Operation>

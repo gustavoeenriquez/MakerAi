@@ -36,6 +36,7 @@ unit uMakerAi.Chat.OpenAi;
 // 04/11/2024 - Se adiciona la propiedad TAiOpenChat.Modalities para el manejo de audio
 // 04/11/2024 - Se adicionan la propiedades TAiOpenChat.voice y voice_format
 // 04/11/2024 - se habilita la opción de recibir y generar audio utilizando TMediaFile
+// 05/11/2024 - se adiciona la propiedad TAiOpenChat.Store
 
 interface
 
@@ -47,17 +48,23 @@ uses
 
 type
 
-  TAiModality = (Text, Audio);
-  TAiModilities = set of TAiModality;
+  //TAiModality = (Text, Audio);
+  //TAiModilities = set of TAiModality;
 
   TAiOpenChat = class(TAiChat)
   Private
-    FModalities: TAiModilities;
+    //FModalities: TAiModilities;
     FVoice: String;
     Fvoice_format: String;
-    procedure SetModalities(const Value: TAiModilities);
+    FStore: Boolean;
+    FParallel_ToolCalls: Boolean;
+    FService_Tier: String;
+    //procedure SetModalities(const Value: TAiModilities);
     procedure SetVoice(const Value: String);
     procedure Setvoice_format(const Value: String);
+    procedure SetStore(const Value: Boolean);
+    procedure SetParallel_ToolCalls(const Value: Boolean);
+    procedure SetService_Tier(const Value: String);
   Protected
     Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
     Function InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String; Overload; Override;
@@ -77,9 +84,12 @@ type
     Function GetMessages: TJSonArray; Override;
 
   Published
-    Property Modalities: TAiModilities read FModalities write SetModalities;
+    //Property Modalities: TAiModilities read FModalities write SetModalities;
     Property Voice: String read FVoice write SetVoice;
     Property voice_format: String read Fvoice_format write Setvoice_format;
+    Property Store: Boolean read FStore write SetStore;
+    Property Parallel_ToolCalls: Boolean read FParallel_ToolCalls write SetParallel_ToolCalls;
+    Property Service_Tier: String read FService_Tier write SetService_Tier;
   end;
 
 procedure Register;
@@ -197,6 +207,9 @@ begin
   ResponseTimeOut := 60000;
   FVoice := 'alloy';
   Fvoice_format := 'wav';
+  FStore := False; // no almacene la información para modelos de distilación o evaluaciones
+  FParallel_ToolCalls := True; // Por defecto realiza el llamado en paralelo, esto ahorra tiempo en las respuestas
+  FService_Tier := 'auto'; // posibles valore auto y default  ver API documentación.
 end;
 
 destructor TAiOpenChat.Destroy;
@@ -421,12 +434,16 @@ begin
       AJSONObject.AddPair('stream_options', jStrOptions);
     End;
 
+    AJSONObject.AddPair('store', FStore);
+
     If Tool_Active and (Trim(Tools.Text) <> '') then
     Begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(Tools.Text));
       If Not Assigned(JArr) then
         Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
+
+      AJSONObject.AddPair('parallel_tool_calls', FParallel_ToolCalls);
 
       If (Trim(Tool_choice) <> '') then
       Begin
@@ -451,19 +468,21 @@ begin
     AJSONObject.AddPair('user', User);
     AJSONObject.AddPair('n', TJSONNumber.Create(N));
 
-    If FModalities <> [] then
+
+    //Formato de salida puede generar texto y audio
+    If NativeOutputFiles <> [] then
     Begin
       jModalities := TJSonArray.Create;
-      If TAiModality.Text in FModalities then
+      If Tfc_Text in NativeOutputFiles then
         jModalities.Add('text');
 
-      If TAiModality.Audio in FModalities then
+      If Tfc_Audio in NativeOutputFiles then
         jModalities.Add('audio');
 
       AJSONObject.AddPair('modalities', jModalities);
     End;
 
-    If TAiModality.Audio in FModalities then
+    If Tfc_Audio in NativeOutputFiles  then
     Begin
       jAudio := TJSonObject.Create;
       jAudio.AddPair('voice', FVoice);
@@ -512,6 +531,28 @@ begin
   End;
 end;
 
+procedure AppendTextToFile(const FilePath, TextToAppend: string);
+var
+  LogFile: TextFile;
+begin
+  // Asignamos el archivo
+  AssignFile(LogFile, FilePath);
+
+  try
+    // Abrimos el archivo en modo "append" para añadir al final
+    if FileExists(FilePath) then
+      Append(LogFile) // Abrimos en modo "append"
+    else
+      Rewrite(LogFile); // Creamos el archivo si no existe
+
+    // Escribimos el texto al final del archivo
+    WriteLn(LogFile, TextToAppend);
+  finally
+    // Cerramos el archivo
+    CloseFile(LogFile);
+  end;
+end;
+
 procedure TAiOpenChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
 Var
   jObj, Delta: TJSonObject;
@@ -535,6 +576,8 @@ begin
   Try
     FTmpResponseText := FTmpResponseText + FResponse.DataString;
     FTmpResponseText1 := FTmpResponseText1 + FResponse.DataString;
+
+    // AppendTextToFile('C:\temp\logdata.txt', FResponse.DataString);
 
     FResponse.Clear;
     FResponse.Position := 0;
@@ -641,7 +684,6 @@ begin
 
   Msg := TAiChatMessage.Create('', '');
 
-
   For JVal in choices do
   Begin
     JItem := TJSonObject(JVal);
@@ -667,7 +709,7 @@ begin
         MediaFile := TAiMediaFile.Create;
         MediaFile.LoadFromBase64('archivo.' + voice_format, AudioBase64);
         MediaFile.Transcription := sRes;
-        MediaFile.IdAudio := IdAudio;
+        MediaFile.idAudio := idAudio;
         Msg.AddMediaFile(MediaFile);
       End;
     End;
@@ -683,13 +725,13 @@ begin
   Total_tokens := Total_tokens + aTotal_tokens;
 
   Msg.Prompt := Respuesta;
+  Msg.Content := Respuesta;
   Msg.Role := Role;
   Msg.Tool_calls := sToolCalls;
   Msg.Prompt_tokens := aPrompt_tokens;
   Msg.Completion_tokens := aCompletion_tokens;
   Msg.Total_tokens := aTotal_tokens;
   Msg.Id := FMessages.Count + 1;
-
 
   FMessages.Add(Msg);
 
@@ -860,8 +902,8 @@ begin
     St.WriteString(ABody);
     St.Position := 0;
 
-    //St.SaveToFile('c:\temp\peticion.txt');
-    //St.Position := 0;
+     St.SaveToFile('c:\temp\peticion.txt');
+     St.Position := 0;
 
     FResponse.Clear;
     FResponse.Position := 0;
@@ -869,8 +911,8 @@ begin
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
     FResponse.Position := 0;
-    //FResponse.SaveToFile('c:\temp\respuesta.txt');
-    //FResponse.Position := 0;
+    // FResponse.SaveToFile('c:\temp\respuesta.txt');
+    // FResponse.Position := 0;
 
     FLastContent := '';
 
@@ -900,9 +942,25 @@ begin
   End;
 end;
 
-procedure TAiOpenChat.SetModalities(const Value: TAiModilities);
+{procedure TAiOpenChat.SetModalities(const Value: TAiModilities);
 begin
   FModalities := Value;
+end;
+}
+
+procedure TAiOpenChat.SetParallel_ToolCalls(const Value: Boolean);
+begin
+  FParallel_ToolCalls := Value;
+end;
+
+procedure TAiOpenChat.SetService_Tier(const Value: String);
+begin
+  FService_Tier := Value;
+end;
+
+procedure TAiOpenChat.SetStore(const Value: Boolean);
+begin
+  FStore := Value;
 end;
 
 procedure TAiOpenChat.SetVoice(const Value: String);
@@ -921,3 +979,6 @@ begin
 end;
 
 end.
+
+
+
