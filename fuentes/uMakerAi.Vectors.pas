@@ -9,13 +9,16 @@ uses
 
 type
 
-  ///---------------------------------------------------------------------------
-  ///  TAiEmbeddingNode identifica un embedding, cincluyendo la longitud
-  ///  el modelo y los datos, permite adicionalmente comparar dos embeddings
-  ///  para conocer su similitud por coseno,  convierte de json a vector y de
-  ///  vector a json
-  ///  almacena también el dato de texto original del embedding
-  ///  -------------------------------------------------------------------------
+  /// ---------------------------------------------------------------------------
+  /// TAiEmbeddingNode identifica un embedding, cincluyendo la longitud
+  /// el modelo y los datos, permite adicionalmente comparar dos embeddings
+  /// para conocer su similitud por coseno,  convierte de json a vector y de
+  /// vector a json
+  /// almacena también el dato de texto original del embedding
+  /// -------------------------------------------------------------------------
+
+  TAiRagIndexType = (TAIBasicIndex, TAIHNSWIndex);
+
   TAiEmbeddingNode = class
   private
     FData: TAiEmbeddingData;
@@ -61,11 +64,11 @@ type
   TOnDataVecAddItem = Procedure(Sender: TObject; aItem: TAiEmbeddingNode; Var Handled: Boolean) of object;
   TOnDataVecSearch = Procedure(Sender: TObject; Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; Var aDataVec: TAiDataVec; Var Handled: Boolean) of object;
 
-  ///---------------------------------------------------------------------------
-  ///  TAIEmbeddingIndex representa la clase base para la búsqueda con embeddings en memoria
-  ///  consiste en un vector de nodos y un indice de punteros a embeddings que permite la
-  ///  búsqueda y seleccion de los candidatos que cumplen la condición
-  ///  -------------------------------------------------------------------------
+  /// ---------------------------------------------------------------------------
+  /// TAIEmbeddingIndex representa la clase base para la búsqueda con embeddings en memoria
+  /// consiste en un vector de nodos y un indice de punteros a embeddings que permite la
+  /// búsqueda y seleccion de los candidatos que cumplen la condición
+  /// -------------------------------------------------------------------------
   TAIEmbeddingIndex = class
   private
     FDataVec: TAiDataVec;
@@ -82,12 +85,12 @@ type
     Property Active: Boolean read FActive;
   end;
 
-  ///---------------------------------------------------------------------------
-  ///  TAIBasicEmbeddingIndex implementación sencilla de un Indice de embeddings
-  ///  el cual se asigna por defecto al vector para realizar búsquedas en memoria
-  ///  sin embargo hay maneras más eficientes de controlar esto en vectores de
-  ///  embeddings.
-  ///  -------------------------------------------------------------------------
+  /// ---------------------------------------------------------------------------
+  /// TAIBasicEmbeddingIndex implementación sencilla de un Indice de embeddings
+  /// el cual se asigna por defecto al vector para realizar búsquedas en memoria
+  /// sin embargo hay maneras más eficientes de controlar esto en vectores de
+  /// embeddings.
+  /// -------------------------------------------------------------------------
 
   TAIBasicEmbeddingIndex = class(TAIEmbeddingIndex)
   public
@@ -97,16 +100,56 @@ type
     Function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TAiDataVec; Override;
   end;
 
+  /// ---------------------------------------------------------------------------
+  /// THNSWIndex implementa un Approximate Nearest Neighbors (ANN) usando el algoritmo
+  /// HNSW (Hierarchical Navigable Small World) que es mucho más eficiente en la busqueda
+  /// en vectores embeddings
+  /// -------------------------------------------------------------------------
 
+  TConnListArray = array of TList<Integer>;
 
-  ///---------------------------------------------------------------------------
-  ///  TAiDataVec es la clase base que permite almacenar conjuntos de embeddings
-  ///  se utiliza tanto para representar bases de datos de embeddings en memoria
-  ///  como para la conexión con bases de datos de embeddings.
-  ///  Por si solo no indexa ni búsca, solo es el contenedor, para buscar
-  ///  es necesario adicionar un TAIEmbeddingIndex, aunque por defecto tiene
-  ///  un indice básico de búsqueda, pero hay modelos mejores.
- ///  -------------------------------------------------------------------------
+  THNSWNode = class
+  private
+    FID: Integer;
+    FVector: TAiEmbeddingNode;
+    FConnections: TConnListArray;
+  public
+    constructor Create(aID: Integer; aVector: TAiEmbeddingNode; aNumLevels: Integer);
+    destructor Destroy; override;
+    property ID: Integer read FID;
+    property Vector: TAiEmbeddingNode read FVector;
+    property Connections: TConnListArray read FConnections;
+  end;
+
+  THNSWIndex = class(TAIEmbeddingIndex)
+  private
+    FNodes: TDictionary<Integer, THNSWNode>;
+    FEntryPoint: Integer;
+    FMaxLevel: Integer;
+    FLevelMult: Double;
+    FEfConstruction: Integer;
+    FMaxConnections: Integer;
+
+    function GetRandomLevel: Integer;
+    procedure InsertConnection(Node: THNSWNode; Level: Integer; TargetID: Integer);
+    function SearchLayer(Query: TAiEmbeddingNode; EntryPoint: Integer; Level: Integer; Ef: Integer): TList<Integer>;
+  public
+    constructor Create; override;
+    destructor Destroy; override;
+
+    procedure BuildIndex(Points: TAiDataVec); override;
+    function Add(Point: TAiEmbeddingNode): Integer; override;
+    function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TAiDataVec; override;
+  end;
+
+  /// ---------------------------------------------------------------------------
+  /// TAiDataVec es la clase base que permite almacenar conjuntos de embeddings
+  /// se utiliza tanto para representar bases de datos de embeddings en memoria
+  /// como para la conexión con bases de datos de embeddings.
+  /// Por si solo no indexa ni búsca, solo es el contenedor, para buscar
+  /// es necesario adicionar un TAIEmbeddingIndex, aunque por defecto tiene
+  /// un indice básico de búsqueda, pero hay modelos mejores.
+  /// -------------------------------------------------------------------------
   TAiDataVec = Class(TComponent)
   Private
     FActive: Boolean;
@@ -119,6 +162,7 @@ type
     FModel: String;
     FNameVec: String;
     FDescription: String;
+    FInMemoryIndexType: TAiRagIndexType;
     procedure SetActive(const Value: Boolean);
     procedure SetRagIndex(const Value: TAIEmbeddingIndex);
     procedure SetEmbeddings(const Value: TAiEmbeddings);
@@ -127,6 +171,7 @@ type
     procedure SetOnDataVecSearch(const Value: TOnDataVecSearch);
     procedure SetDescription(const Value: String);
     procedure SetNameVec(const Value: String);
+    procedure SetInMemoryIndexType(const Value: TAiRagIndexType);
   Protected
 
   Public
@@ -161,6 +206,7 @@ type
     Property Dim: Integer read FDim;
     Property NameVec: String read FNameVec write SetNameVec;
     Property Description: String read FDescription write SetDescription;
+    Property InMemoryIndexType: TAiRagIndexType read FInMemoryIndexType write SetInMemoryIndexType;
   End;
 
   TAiRagChat = Class(TComponent)
@@ -468,11 +514,15 @@ begin
   inherited;
   FItems := TList<TAiEmbeddingNode>.Create;
 
-  // Por defecto crea un indice en memoria sencillo
-  // Si se personaliza con eventos no se utiliza
-  // Se pueden crear indices más complejos en memoria también
-  FRagIndex := TAIBasicEmbeddingIndex.Create;
+  FInMemoryIndexType := TAIHNSWIndex;
+
+  If FInMemoryIndexType = TAIBasicIndex then
+    FRagIndex := TAIBasicEmbeddingIndex.Create
+  Else If FInMemoryIndexType = TAIHNSWIndex then
+    FRagIndex := THNSWIndex.Create;
+
   BuildIndex; // Inicializa el Indice
+
 end;
 
 function TAiDataVec.CreateEmbeddingNode(aText: String; aEmbeddings: TAiEmbeddings): TAiEmbeddingNode;
@@ -658,6 +708,25 @@ begin
   FEmbeddings := Value;
 end;
 
+procedure TAiDataVec.SetInMemoryIndexType(const Value: TAiRagIndexType);
+begin
+
+  If FInMemoryIndexType <> Value then
+  Begin
+    FRagIndex.Free;
+
+    FInMemoryIndexType := Value;
+
+    If FInMemoryIndexType = TAIBasicIndex then
+      FRagIndex := TAIBasicEmbeddingIndex.Create
+    Else If FInMemoryIndexType = TAIHNSWIndex then
+      FRagIndex := THNSWIndex.Create;
+
+    BuildIndex; // Inicializa el Indice
+  End;
+
+end;
+
 procedure TAiDataVec.SetNameVec(const Value: String);
 begin
   FNameVec := Value;
@@ -775,6 +844,306 @@ begin
 
     Result.FItems.Add(Emb);
   End;
+end;
+
+
+
+
+// -----------------------------------------------------------------------------------------------
+
+{ THNSWNode }
+constructor THNSWNode.Create(aID: Integer; aVector: TAiEmbeddingNode; aNumLevels: Integer);
+var
+  i: Integer;
+begin
+  FID := aID;
+  FVector := aVector;
+  SetLength(FConnections, aNumLevels);
+  for i := 0 to aNumLevels - 1 do
+    FConnections[i] := TList<Integer>.Create;
+end;
+
+destructor THNSWNode.Destroy;
+var
+  i: Integer;
+begin
+  for i := 0 to Length(FConnections) - 1 do
+    FConnections[i].Free;
+  inherited;
+end;
+
+constructor THNSWIndex.Create;
+begin
+  inherited;
+  FNodes := TDictionary<Integer, THNSWNode>.Create;
+  FMaxLevel := 16;
+  FLevelMult := 1 / ln(2);
+  FEfConstruction := 40;
+  FMaxConnections := 16;
+  FEntryPoint := -1;
+end;
+
+destructor THNSWIndex.Destroy;
+var
+  Node: THNSWNode;
+begin
+  for Node in FNodes.Values do
+    Node.Free;
+  FNodes.Free;
+  inherited;
+end;
+
+function THNSWIndex.GetRandomLevel: Integer;
+begin
+  Result := Floor(-ln(Random) * FLevelMult);
+  if Result >= FMaxLevel then
+    Result := FMaxLevel - 1;
+end;
+
+{ THNSWIndex }
+
+procedure THNSWIndex.InsertConnection(Node: THNSWNode; Level: Integer; TargetID: Integer);
+begin
+  if Node.Connections[Level].Count >= FMaxConnections then
+  begin
+    // Implementar política de selección para mantener mejores conexiones
+    // Por ejemplo, mantener las conexiones más cercanas
+    Exit;
+  end;
+
+  if not Node.Connections[Level].Contains(TargetID) then
+    Node.Connections[Level].Add(TargetID);
+end;
+
+function THNSWIndex.SearchLayer(Query: TAiEmbeddingNode; EntryPoint: Integer; Level: Integer; Ef: Integer): TList<Integer>;
+var
+  Visited: TDictionary<Integer, Boolean>;
+  Candidates: TList<TPair<Double, Integer>>;
+  BestCandidates: TList<TPair<Double, Integer>>;
+  CurrentNode: THNSWNode;
+  Distance: Double;
+  i: Integer;
+begin
+  Result := TList<Integer>.Create;
+  Visited := TDictionary<Integer, Boolean>.Create;
+  Candidates := TList < TPair < Double, Integer >>.Create;
+  BestCandidates := TList < TPair < Double, Integer >>.Create;
+
+  try
+    // Inicializar con punto de entrada
+    CurrentNode := FNodes[EntryPoint];
+    Distance := TAiEmbeddingNode.CosineSimilarity(Query, CurrentNode.Vector);
+    Candidates.Add(TPair<Double, Integer>.Create(Distance, EntryPoint));
+    BestCandidates.Add(TPair<Double, Integer>.Create(Distance, EntryPoint));
+    Visited.Add(EntryPoint, True);
+
+    while Candidates.Count > 0 do
+    begin
+      // Obtener el candidato más cercano
+      Candidates.Sort(TComparer < TPair < Double, Integer >>.Construct(
+        function(const Left, Right: TPair<Double, Integer>): Integer
+        begin
+          if Left.Key > Right.Key then
+            Result := -1
+          else if Left.Key < Right.Key then
+            Result := 1
+          else
+            Result := 0;
+        end));
+
+      CurrentNode := FNodes[Candidates[0].Value];
+      Candidates.Delete(0);
+
+      // Explorar conexiones
+      for i in CurrentNode.Connections[Level] do
+      begin
+        if not Visited.ContainsKey(i) then
+        begin
+          Visited.Add(i, True);
+          Distance := TAiEmbeddingNode.CosineSimilarity(Query, FNodes[i].Vector);
+
+          if (BestCandidates.Count < Ef) or (Distance > BestCandidates.Last.Key) then
+          begin
+            Candidates.Add(TPair<Double, Integer>.Create(Distance, i));
+            BestCandidates.Add(TPair<Double, Integer>.Create(Distance, i));
+
+            if BestCandidates.Count > Ef then
+            begin
+              BestCandidates.Sort(TComparer < TPair < Double, Integer >>.Construct(
+                function(const Left, Right: TPair<Double, Integer>): Integer
+                begin
+                  if Left.Key > Right.Key then
+                    Result := -1
+                  else if Left.Key < Right.Key then
+                    Result := 1
+                  else
+                    Result := 0;
+                end));
+              BestCandidates.Delete(BestCandidates.Count - 1);
+            end;
+          end;
+        end;
+      end;
+    end;
+
+    // Convertir mejores candidatos a lista de resultados
+    for i := 0 to BestCandidates.Count - 1 do
+      Result.Add(BestCandidates[i].Value);
+
+  finally
+    Visited.Free;
+    Candidates.Free;
+    BestCandidates.Free;
+  end;
+end;
+
+function THNSWIndex.Add(Point: TAiEmbeddingNode): Integer;
+var
+  NodeID: Integer;
+  Level: Integer;
+  CurrentLevel: Integer;
+  EntryPointCopy: Integer;
+  W: TList<Integer>;
+  Node: THNSWNode;
+  i: Integer;
+begin
+  NodeID := FNodes.Count;
+  Level := GetRandomLevel;
+
+  // Crear nuevo nodo
+  Node := THNSWNode.Create(NodeID, Point, FMaxLevel);
+  FNodes.Add(NodeID, Node);
+
+  if FEntryPoint = -1 then
+  begin
+    FEntryPoint := NodeID;
+    Result := NodeID;
+    Exit;
+  end;
+
+  // Insertar en la estructura
+  EntryPointCopy := FEntryPoint;
+  CurrentLevel := FMaxLevel - 1;
+
+  while CurrentLevel > Level do
+  begin
+    W := SearchLayer(Point, EntryPointCopy, CurrentLevel, 1);
+    if W.Count > 0 then
+      EntryPointCopy := W[0];
+    Dec(CurrentLevel);
+    W.Free;
+  end;
+
+  while CurrentLevel >= 0 do
+  begin
+    W := SearchLayer(Point, EntryPointCopy, CurrentLevel, FEfConstruction);
+    try
+      for i in W do
+      begin
+        InsertConnection(Node, CurrentLevel, i);
+        InsertConnection(FNodes[i], CurrentLevel, NodeID);
+      end;
+
+      if W.Count > 0 then
+        EntryPointCopy := W[0];
+    finally
+      W.Free;
+    end;
+    Dec(CurrentLevel);
+  end;
+
+  if Level > -1 then
+    FEntryPoint := NodeID;
+
+  Result := NodeID;
+end;
+
+procedure THNSWIndex.BuildIndex(Points: TAiDataVec);
+var
+  i: Integer;
+  Point: TAiEmbeddingNode;
+begin
+  inherited;
+
+  // Construir el índice añadiendo todos los puntos
+  for i := 0 to Points.Count - 1 do
+  begin
+    Point := Points.Items[i];
+    Add(Point);
+  end;
+end;
+
+function THNSWIndex.Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TAiDataVec;
+var
+  CurrentLevel: Integer;
+  EntryPointCopy: Integer;
+  W: TList<Integer>;
+  ResultList: TList<TPair<Double, Integer>>;
+  i: Integer;
+  Distance: Double;
+  Node: THNSWNode;
+begin
+  Result := TAiDataVec.Create(nil);
+
+  if FEntryPoint = -1 then
+    Exit;
+
+  ResultList := TList < TPair < Double, Integer >>.Create;
+  try
+    EntryPointCopy := FEntryPoint;
+    CurrentLevel := FMaxLevel - 1;
+
+    // Descender por niveles hasta encontrar el más cercano
+    while CurrentLevel >= 0 do
+    begin
+      W := SearchLayer(Target, EntryPointCopy, CurrentLevel, 1);
+      try
+        if W.Count > 0 then
+          EntryPointCopy := W[0];
+      finally
+        W.Free;
+      end;
+      Dec(CurrentLevel);
+    end;
+
+    // Búsqueda final en el nivel base
+    W := SearchLayer(Target, EntryPointCopy, 0, aLimit * 2);
+    try
+      // Calcular similitudes y ordenar resultados
+      for i in W do
+      begin
+        Node := FNodes[i];
+        Distance := TAiEmbeddingNode.CosineSimilarity(Target, Node.Vector);
+        if Distance >= aPrecision then
+          ResultList.Add(TPair<Double, Integer>.Create(Distance, i));
+      end;
+
+      ResultList.Sort(TComparer < TPair < Double, Integer >>.Construct(
+        function(const Left, Right: TPair<Double, Integer>): Integer
+        begin
+          if Left.Key > Right.Key then
+            Result := -1
+          else if Left.Key < Right.Key then
+            Result := 1
+          else
+            Result := 0;
+        end));
+
+      // Tomar los mejores resultados
+      for i := 0 to Min(aLimit - 1, ResultList.Count - 1) do
+      begin
+        Node := FNodes[ResultList[i].Value];
+        Node.Vector.Idx := ResultList[i].Key;
+        Result.AddItem(Node.Vector);
+      end;
+
+    finally
+      W.Free;
+    end;
+
+  finally
+    ResultList.Free;
+  end;
 end;
 
 { TAiRagChat }
