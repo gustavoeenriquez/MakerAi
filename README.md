@@ -2,6 +2,9 @@ Aquí tienes una presentación completa y optimizada para tu proyecto en GitHub,
 
 ---
 
+This readme is also available in [English](README_en.MD)
+
+
 # TAiChat: Conectividad avanzada con modelos de IA para Delphi  
 
 ![Banner del Proyecto](https://via.placeholder.com/1024x300)  
