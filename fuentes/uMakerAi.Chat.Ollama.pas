@@ -60,11 +60,11 @@ type
     Function ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions; Override;
     Procedure DoCallFunction(ToolCall: TAiToolsFunction); Override;
     Class Function GetModels(aApiKey: String; aUrl: String = ''): TStringList; Override;
-    Function GetMessages: TJSonArray; Override;
   Public
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
     Function Run(aMsg: TAiChatMessage = Nil): String; Override;
+    Function GetMessages: TJSonArray; Override;
   Published
   End;
 
@@ -280,7 +280,7 @@ begin
     JObj.AddPair('role', Msg.Role);
     JObj.AddPair('content', Msg.Prompt);
 
-    MediaArr := Msg.MediaFiles.GetMediaList(Tfc_Image, False);
+    MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
 
     If (Length(MediaArr) > 0) then
     Begin
