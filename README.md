@@ -1,70 +1,95 @@
-Aquí tienes una presentación completa y optimizada para tu proyecto en GitHub, integrando las capacidades de TAiChat, TAiAudio y TAiDalle:  
+Con base en los archivos proporcionados, aquí tienes un nuevo **README.md** que refleja las capacidades actualizadas de la suite **MakerAI**, incluyendo **RAG** y **TAiGraph**:
 
 ---
 
-# TAiChat: Conectividad avanzada con modelos de IA para Delphi  
+# MakerAI Suite: Advanced AI Components for Delphi
 
-![Banner del Proyecto](https://via.placeholder.com/1024x300)  
 
-## 📌 Descripción del Proyecto  
+## 📌 Project Description
 
-**TAiChat** es un componente diseñado para simplificar la integración de modelos de lenguaje de inteligencia artificial (LLM) en aplicaciones desarrolladas con Delphi. Este proyecto proporciona herramientas para interactuar con múltiples APIs líderes en la industria, como OpenAI, Anthropic, Gemini y más, brindando flexibilidad y poder a los desarrolladores para crear soluciones innovadoras.  
+The **MakerAI Suite** is a comprehensive set of Delphi components designed to seamlessly integrate artificial intelligence into your applications. With support for state-of-the-art models and functionalities, the suite includes tools for natural language processing, audio transcription, image generation, task orchestration, and retrieval-augmented generation (RAG).
 
-El proyecto también incluye componentes adicionales, **TAiAudio** y **TAiDalle**, que expanden las capacidades a la transcripción de audio, síntesis de voz, y generación de imágenes.  
+### Core Components
 
----
-
-## 🌟 Características Principales  
-
-### TAiChat  
-- **Compatibilidad Extensa**: Conexión con modelos como GPT-4, Claude, Mistral, entre otros.  
-- **Multimedia**: Procesa imágenes, audios y otros archivos adjuntos.  
-- **Modo Asincrónico**: Retroalimentación en tiempo real para experiencias mejoradas.  
-- **Ejecución de Funciones**: Habilita herramientas externas para búsquedas y cálculos.  
-
-### TAiAudio  
-- **Transcripción**: Convierte audio en texto.  
-- **Traducción**: Traduce contenido de audio entre idiomas.  
-- **Síntesis de Voz**: Genera audio hablado a partir de texto.  
-
-### TAiDalle  
-- **Generación de Imágenes**: Crea imágenes desde descripciones textuales.  
-- **Edición de Imágenes**: Modifica imágenes existentes con máscaras.  
-- **Variaciones**: Genera versiones alternativas de imágenes.  
+- **Chat**: Integration with models like Anthropic, Gemini, Grok, Groq, Mistral, Ollama, and OpenAI.
+- **Embeddings**: Vector-based text representations using Grok, Groq, Mistral, Ollama, and OpenAI.
+- **Audio**: Powered by Whisper (OpenAI), for transcription and translation.
+- **RAG**: Retrieval-augmented generation using all supported models.
+- **Graph**: Task orchestration via TAiGraph, enabling visual workflow creation.
 
 ---
 
-## 🎯 Casos de Uso  
+## 🌟 Key Features
 
-### 🌐 **TAiChat**  
-1. **Asistentes Virtuales**: Gestionan consultas complejas y ofrecen soporte contextual.  
-2. **Análisis de Sentimientos**: Comprensión del tono en redes sociales y encuestas.  
-3. **Generación de Contenido**: Creación de resúmenes, informes o artículos.  
+### TAiChat
+- **Broad Compatibility**: Supports multiple AI models like GPT-4, Claude, Mistral, and more.
+- **File Attachments**: Processes images, audios, and other media inputs.
+- **Async Mode**: Real-time feedback for improved user experiences.
+- **Tool Integration**: Enables interaction with external tools for queries and tasks.
 
-### 🎧 **TAiAudio**  
-1. **Subtitulación Automática**: Generación de subtítulos para videos.  
-2. **Asistentes de Voz**: Comandos de voz para chatbots y aplicaciones.  
-3. **Documentación Automática**: Transcripción de reuniones y conferencias.  
+### TAiAudio
+- **Transcription**: Converts audio into text.
+- **Translation**: Translates audio content between languages.
+- **Voice Synthesis**: Generates spoken audio from text.
 
-### 🎨 **TAiDalle**  
-1. **Diseño Visual**: Creación de ilustraciones desde descripciones.  
-2. **Prototipos**: Generación de conceptos visuales rápidos.  
-3. **Edición Creativa**: Modificación de imágenes con inteligencia artificial.  
+### TAiDalle
+- **Image Generation**: Creates images from text descriptions.
+- **Image Editing**: Modifies existing images using masks.
+- **Variations**: Produces alternate versions of an image.
+
+### TAiGraph
+- **Visual Task Orchestration**: Simplifies workflow design using graph-based structures.
+- **Modular Design**: Facilitates the integration of AI components and external tools.
+- **Contextual Workflows**: Builds dynamic systems that adapt to changing contexts.
+
+### RAG Integration
+- **Contextual Queries**: Combines language models with context retrieved from vector databases.
+- **Database Support**: Works with PostgreSQL (pg_vector) and in-memory embeddings.
+- **Scalability**: Handles large datasets for advanced AI-powered systems.
 
 ---
 
-## 📚 Ejemplos de Uso  
+## 🎯 Use Cases
 
-### 🛠️ TAiChat  
+### 🌐 **TAiChat**
+1. **Virtual Assistants**: Manages complex queries and provides contextual support.
+2. **Sentiment Analysis**: Detects tones in social media or survey data.
+3. **Content Generation**: Summarizes, generates reports, or writes articles.
+
+### 🎧 **TAiAudio**
+1. **Automatic Subtitling**: Creates subtitles for videos.
+2. **Voice Assistants**: Enables voice commands for chatbots and applications.
+3. **Meeting Documentation**: Transcribes conferences or interviews.
+
+### 🎨 **TAiDalle**
+1. **Visual Design**: Creates illustrations from descriptions.
+2. **Prototyping**: Generates quick visual concepts.
+3. **Creative Editing**: Enhances images using AI.
+
+### 🧩 **TAiGraph**
+1. **Task Automation**: Builds workflows for business processes.
+2. **AI-Enhanced Operations**: Integrates AI models into dynamic, adaptive pipelines.
+3. **Visual System Design**: Creates modular systems with intuitive graph interfaces.
+
+### 🔍 **RAG**
+1. **Semantic Search**: Retrieves precise information from large datasets.
+2. **Knowledge-Based Systems**: Enhances AI responses with specific contextual knowledge.
+3. **Custom AI Assistants**: Builds powerful tools for industries like healthcare or finance.
+
+---
+
+## 📚 Examples
+
+### 🛠️ TAiChat
 ```delphi
 var
   Chat: TAiChat;
 begin
   Chat := TAiChat.Create(nil);
   try
-    Chat.ApiKey := 'tu-api-key';
+    Chat.ApiKey := 'your-api-key';
     Chat.Model := 'gpt-4';
-    Chat.AddMessage('¿Cuál es la capital de Francia?', 'user');
+    Chat.AddMessage('What is the capital of France?', 'user');
     ShowMessage(Chat.Run);
   finally
     Chat.Free;
@@ -72,77 +97,73 @@ begin
 end;
 ```
 
-### 🎧 TAiAudio  
+### 🧩 TAiGraph
 ```delphi
 var
-  AiAudio: TAiAudio;
-  TranscriptionText: String;
+  Graph: TAiGraph;
 begin
-  AiAudio := TAiAudio.Create(nil);
+  Graph := TAiGraph.Create(nil);
   try
-    AiAudio.ApiKey := 'tu-api-key';
-    TranscriptionText := AiAudio.Transcription('ruta/audio.mp3', 'audio.mp3', 'Transcribe esto');
-    ShowMessage(TranscriptionText);
+    Graph.AddNode('Start', 'Initial Task');
+    Graph.AddNode('AI Analysis', 'Analyze Data', [aiProcessing]);
+    Graph.ConnectNodes('Start', 'AI Analysis');
+    Graph.Execute;
   finally
-    AiAudio.Free;
+    Graph.Free;
   end;
 end;
 ```
 
-### 🎨 TAiDalle  
+### 🔍 RAG
 ```delphi
 var
-  DalleComponent: TAiDalle;
-  GeneratedImage: TAiDalleFile;
+  RagChat: TAiRagChat;
 begin
-  DalleComponent := TAiDalle.Create(nil);
+  RagChat := TAiRagChat.Create(nil);
   try
-    DalleComponent.ApiKey := 'tu-api-key';
-    GeneratedImage := DalleComponent.Generate(
-      'Un bosque encantado al atardecer',
-      TiaSize1024,  // 1024x1024
-      1             // Generar 1 imagen
-    );
-    GeneratedImage.Image.SaveToFile('bosque.png');
+    RagChat.DataVec := TAiDataVec.Create;
+    RagChat.ChatModel := TAiOpenChat.Create('config.json');
+    ShowMessage(RagChat.QueryWithContext('What is the system about?'));
   finally
-    DalleComponent.Free;
+    RagChat.Free;
   end;
 end;
 ```
 
 ---
 
-## 🛠️ Configuración  
+## 🛠️ Setup
 
-### **Requisitos**  
-1. Delphi 11 o superior.  
-2. Clave de API de OpenAI.  
-3. Dependencias instaladas:  
-   - `System.Net.HttpClient`  
-   - `System.JSON`  
-   - `REST.Client`  
+### Requirements
+1. Delphi 11 or higher.
+2. API keys for supported models (e.g., OpenAI, Anthropic).
+3. Dependencies:
+   - `System.Net.HttpClient`
+   - `System.JSON`
+   - `REST.Client`
 
-### **Instalación**  
-1. Descarga o clona este repositorio.  
-2. Configura tu clave de API en las propiedades de los componentes (ej. `ApiKey`).  
-3. Sigue los ejemplos para integrar TAiChat, TAiAudio o TAiDalle en tu proyecto.  
-
----
-
-## 📜 Licencia  
-
-Este proyecto está bajo la [licencia MIT](LICENSE).  
+### Installation
+1. Clone this repository.
+2. Configure API keys in the component properties (e.g., `ApiKey`).
+3. Follow the examples to integrate components into your Delphi project.
 
 ---
 
-## 👤 Autor  
+## 📜 License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## 👤 Author
 
 **Gustavo Enríquez**  
-- LinkedIn: [Perfil](https://www.linkedin.com/in/gustavo-enriquez-3937654a/)  
-- YouTube: [Canal](https://www.youtube.com/@cimamaker3945)  
-- GitHub: [Repositorio](https://github.com/gustavoeenriquez/)  
+- LinkedIn: [Profile](https://www.linkedin.com/in/gustavo-enriquez-3937654a/)  
+- YouTube: [Channel](https://www.youtube.com/@cimamaker3945)  
+- GitHub: [Repository](https://github.com/gustavoeenriquez/)  
 
-¿Quieres contribuir? ¡Siéntete libre de hacer un fork y proponer mejoras!  
+Want to contribute? Feel free to fork and suggest improvements!
 
+---
 
-
+Si necesitas ajustes adicionales o deseas personalizar más secciones, avísame.
