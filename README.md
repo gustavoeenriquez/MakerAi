@@ -41,7 +41,7 @@ The **MakerAI Suite** is a comprehensive set of Delphi components designed to se
 
 ### RAG Integration
 - **Contextual Queries**: Combines language models with context retrieved from vector databases.
-- **Database Support**: Works with PostgreSQL (pg_vector) and in-memory embeddings.
+- **Database Support**: Works with any vector database, like Pinecone or PostgreSQL (pg_vector) and in-memory embeddings.
 - **Scalability**: Handles large datasets for advanced AI-powered systems.
 
 ---
