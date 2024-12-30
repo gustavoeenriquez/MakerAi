@@ -1,6 +1,3 @@
-Con base en los archivos proporcionados, aquí tienes un nuevo **README.md** que refleja las capacidades actualizadas de la suite **MakerAI**, incluyendo **RAG** y **TAiGraph**:
-
----
 
 # MakerAI Suite: Advanced AI Components for Delphi
 
@@ -164,6 +161,3 @@ This project is licensed under the [MIT License](LICENSE).
 
 Want to contribute? Feel free to fork and suggest improvements!
 
----
-
-Si necesitas ajustes adicionales o deseas personalizar más secciones, avísame.
