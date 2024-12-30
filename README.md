@@ -94,37 +94,53 @@ begin
 end;
 ```
 
-### 🧩 TAiGraph
+### 🧩 TAiChat with images
 ```delphi
 var
-  Graph: TAiGraph;
-begin
-  Graph := TAiGraph.Create(nil);
-  try
-    Graph.AddNode('Start', 'Initial Task');
-    Graph.AddNode('AI Analysis', 'Analyze Data', [aiProcessing]);
-    Graph.ConnectNodes('Start', 'AI Analysis');
-    Graph.Execute;
-  finally
-    Graph.Free;
-  end;
-end;
+     Res: String;
+     MediaFile: TAiMediaFile;
+   begin
+     MediaFile := TAiMediaFile.Create;
+     MediaFile.LoadFromFile('ruta/del/archivo.jpg');
+     Res := Chat.AddMessageAndRun('Describe esta imagen', 'user', [MediaFile]);
+     ShowMessage(Res);
+     MediaFile.Free;
+   end;
 ```
 
-### 🔍 RAG
+### 🔍 TAiChat with voice files
 ```delphi
-var
-  RagChat: TAiRagChat;
+Var
+  Res: String;
+  MediaFile: TAiMediaFile;
+  Msg: TAiChatMessage;
+  FileName: String;
 begin
-  RagChat := TAiRagChat.Create(nil);
-  try
-    RagChat.DataVec := TAiDataVec.Create;
-    RagChat.ChatModel := TAiOpenChat.Create('config.json');
-    ShowMessage(RagChat.QueryWithContext('What is the system about?'));
-  finally
-    RagChat.Free;
-  end;
-end;
+
+  MediaFile := TAiMediaFile.Create;
+  MediaFile.LoadFromFile('c:\temp\prompt.wav');
+
+  Try
+    Msg := AiOpenChat1.AddMessageAndRunMsg(MemoPrompt.Lines.Text, 'user', [MediaFile]);
+  Finally
+    FreeAndNil(MediaFile);
+  End;
+
+  MemoResponse.Lines.Text := Msg.Content;
+
+  If (Msg.MediaFiles.Count > 0) and (Assigned(Msg.MediaFiles[0].Content)) then
+  Begin
+    FileName := 'c:\temp\respuesta3' + Cons.ToString + '.wav';
+    Msg.MediaFiles[0].Content.Position := 0;
+    Msg.MediaFiles[0].Content.SaveToFile(FileName);
+
+    Try
+      MediaPlayer1.FileName := FileName;
+      MediaPlayer1.Play;
+    Finally
+    End;
+  End;
+
 ```
 
 ---
