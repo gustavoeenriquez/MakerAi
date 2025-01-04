@@ -452,16 +452,16 @@ begin
 
     St.WriteString(ABody);
     St.Position := 0;
-    St.SaveToFile('c:\temp\peticion.txt');
-    St.Position := 0;
+    //St.SaveToFile('c:\temp\peticion.txt');
+    //St.Position := 0;
 
     FResponse.Clear;
     FResponse.Position := 0;
 
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
-    FResponse.SaveToFile('c:\temp\respuesta.txt');
-    FResponse.Position := 0;
+    //FResponse.SaveToFile('c:\temp\respuesta.txt');
+    //FResponse.Position := 0;
 
     FLastContent := '';
 

@@ -156,8 +156,8 @@ begin
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
     Client.ContentType := 'application/json';
 
-    St.SaveToFile('c:\temp\peticionvision.txt');
-    St.Position := 0;
+    //St.SaveToFile('c:\temp\peticionvision.txt');
+    //St.Position := 0;
 
 
     Res := Client.Post(sUrl, St, Response, Headers);

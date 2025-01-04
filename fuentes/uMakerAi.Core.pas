@@ -50,7 +50,7 @@ Type
   TAiImageSize = (TiaSize256, TiaSize512, TiaSize1024, TiaSize1024_1792, TiaSize1792_1024);
   TAiImageResponseFormat = (tiaRUrl, tiaRB64);
   TAiImageAStyleFormat = (tiaStyleVivid, tiaStyleNatural);
-  TAiFileCategory = (Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_Document, Tfc_Text, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, Tfc_Aplication, Tfc_DiskImage, Tfc_GraphicDesign, Tfc_Unknow);
+  TAiFileCategory = (Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_Document, Tfc_Text, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, Tfc_GraphicDesign, Tfc_Unknow);
   TAiFileCategories = set of TAiFileCategory;
 
   //Evento callback cuando se utiliza la herramienta tools del chat
@@ -210,6 +210,8 @@ Var
   FOrigen, FDestino: String;
   CommandLine: String;
 begin
+  Destino := Nil;
+  DestinoFileName := '';
   filename := LowerCase(filename);
   FDestino := ChangeFileExt(filename, '.mp3');
 
@@ -372,10 +374,6 @@ begin
     Result := Tfc_CompressFile
   else if (FileExtension = 'html') or (FileExtension = 'htm') or (FileExtension = 'xml') or (FileExtension = 'json') or (FileExtension = 'css') or (FileExtension = 'js') then
     Result := Tfc_Web
-  else if (FileExtension = 'exe') or (FileExtension = 'msi') or (FileExtension = 'bat') or (FileExtension = 'sh') or (FileExtension = 'bin') or (FileExtension = 'cmd') then
-    Result := Tfc_Aplication
-  else if (FileExtension = 'iso') or (FileExtension = 'img') then
-    Result := Tfc_DiskImage
   else if (FileExtension = 'psd') or (FileExtension = 'ai') then
     Result := Tfc_GraphicDesign
   else

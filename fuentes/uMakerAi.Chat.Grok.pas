@@ -29,16 +29,15 @@ unit uMakerAi.Chat.Grok;
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
-// A Octubre del 2024 estas son las limitaciones de visión de groq
+// A Diciembre del 2024 estas son las limitaciones de visión de grok
 {
-  Model ID: llama-3.2-11b-vision-preview
-  Description: Llama 3.2 11B Vision is a powerful multimodal model capable of processing both text and image inputs. It supports multilingual, multi-turn conversations, tool use, and JSON mode.
-  Context Window: 8,192 tokens
-  Limitations:
-  Preview Model: Currently in preview and should be used for experimentation.
-  Image Size Limit: The maximum allowed size for a request containing an image URL as input is 20MB. Requests larger than this limit will return a 400 error.
-  Single Image per Request: Only one image can be processed per request in the preview release. Requests with multiple images will return a 400 error.
-  System Prompt: The model does not support system prompts and images in the same request.
+Model	              Input	  Output	  Context	  Text	    Image	      Completion	  RPS	  RPM	  RPH	  RPD
+grok-beta	          TEXT	  TEXT	  131072	    $5.00	      -	         $15.00	      1	    60	  1200	  -
+grok-vision-beta	  TEXT	  TEXT	    8192      $5.00	    $10.00	    $15.00	      1	     3	    60	  -
+	IMAGE
+grok-2-vision-1212	TEXT	  TEXT	   32768	    $2.00	     $2.00	    $10.00	      1	     3	    60	  -
+	IMAGE
+grok-2-1212	        TEXT	  TEXT	  131072	    $2.00	      -	        $10.00	      1	    60	  1200    -
 }
 
 interface
@@ -99,7 +98,7 @@ end;
 
 function TAiGrokChat.InitChatCompletions: String;
 Var
-  AJSONObject, jObj, jToolChoice: TJSonObject;
+  AJSONObject, jToolChoice: TJSonObject;
   JArr: TJSonArray;
   JStop: TJSonArray;
   Lista: TStringList;

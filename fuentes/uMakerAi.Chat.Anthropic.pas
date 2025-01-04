@@ -31,8 +31,6 @@
 
 // OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO
 // No funciona el llamado en Stream
-// Falta el envío de imágenes
-
 // OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO OJO
 
 unit uMakerAi.Chat.Anthropic;
@@ -196,7 +194,7 @@ begin
 
       JObj.AddPair('role', Msg.Role);
 
-      MediaArr := Msg.MediaFiles.GetMediaList(Tfc_Image, False);
+      MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
 
       // Si es una respuesta a un llamado
       If (Msg.TollCallId <> '') or (Msg.Tool_calls <> '') or (Length(MediaArr) > 0) then
@@ -838,16 +836,16 @@ begin
 
     St.WriteString(ABody);
     St.Position := 0;
-    St.SaveToFile('c:\temp\peticion.txt');
-    St.Position := 0;
+    //St.SaveToFile('c:\temp\peticion.txt');
+    //St.Position := 0;
 
     FResponse.Clear;
     FResponse.Position := 0;
 
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
-    FResponse.SaveToFile('c:\temp\respuesta.txt');
-    FResponse.Position := 0;
+    //FResponse.SaveToFile('c:\temp\respuesta.txt');
+    //FResponse.Position := 0;
 
     FLastContent := '';
 

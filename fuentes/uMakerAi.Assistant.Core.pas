@@ -3090,6 +3090,7 @@ function TAiFileArray.GetFileById(AiFileId: String; Out AiFile: TAiFile): Boolea
 Var
   Clave: String;
 begin
+  AiFile := Nil;
   For Clave in Self.Keys do
   Begin
     If SameText(Self.Items[Clave].id, AiFileId) = True then
@@ -3103,7 +3104,8 @@ end;
 
 function TAiFileArray.GetFileByName(aFileName: String; Out AiFile: TAiFile): Boolean;
 begin
-  Result := Self.TryGetValue(aFileName, AiFile);
+   AiFile := Nil;
+   Result := Self.TryGetValue(aFileName, AiFile);
 end;
 
 { TAiFile }
@@ -3118,7 +3120,7 @@ end;
 
 destructor TAiFile.Destroy;
 begin
-
+  FContent.Free;
   inherited;
 end;
 
@@ -3978,6 +3980,7 @@ end;
 
 function TAiVectorStoreFileBatchArray.GetVectorStoreFileBatchById(AiVectorStoreId: String; out AiVectorStoreFileBatch: TAiVectorStoreFileBatch): Boolean;
 begin
+  AiVectorStoreFileBatch := Nil;
   Result := Self.TryGetValue(AiVectorStoreId, AiVectorStoreFileBatch);
 end;
 
