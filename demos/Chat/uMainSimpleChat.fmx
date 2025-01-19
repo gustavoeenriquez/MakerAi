@@ -1172,7 +1172,7 @@ object Form64: TForm64
         ToolType = tt_function
       end>
     Stream_Usage = False
-    NativeInputFiles = []
+    NativeInputFiles = [Tfc_Image]
     NativeOutputFiles = []
     Voice = 'alloy'
     voice_format = 'wav'

@@ -399,6 +399,7 @@ Var
   Lista: TStringList;
   I: integer;
   LAsincronico: Boolean;
+  Res : String;
 begin
 
   If User = '' then
@@ -524,7 +525,9 @@ begin
     If Seed > 0 then
       AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
 
-    Result := UTF8ToString(AJSONObject.ToString);
+    Res := AJSONObject.ToString;
+    Result := UTF8ToString(Res);
+
   Finally
     AJSONObject.Free;
     Lista.Free;
@@ -885,8 +888,6 @@ begin
         DoProcessMediaFile(aMsg.Prompt, MF, Respuesta, Procesado); // Envía el archivo por si lo quiere procesar otra AI especializada, Ej.
         If Procesado then // Se asegura que el prompt sea complementado por las respuestas a los MediaFiles si el usuario lo aplica
           aMsg.Prompt := aMsg.Prompt + sLineBreak + Respuesta;
-
-        aMsg.AddMediaFile(MF);
       End;
 
       aMsg.Id := FMessages.Count + 1;
@@ -941,12 +942,6 @@ begin
       St.Free; // Esto no funciona en multiarea, así que se libera cuando no lo es.
   End;
 end;
-
-{procedure TAiOpenChat.SetModalities(const Value: TAiModilities);
-begin
-  FModalities := Value;
-end;
-}
 
 procedure TAiOpenChat.SetParallel_ToolCalls(const Value: Boolean);
 begin

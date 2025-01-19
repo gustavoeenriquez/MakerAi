@@ -1220,8 +1220,8 @@ begin
     St.WriteString(ABody);
     St.Position := 0;
 
-    //St.SaveToFile('c:\temp\peticion.txt');
-    //St.Position := 0;
+    // St.SaveToFile('c:\temp\peticion.txt');
+    // St.Position := 0;
 
     FResponse.Clear;
     FResponse.Position := 0;
@@ -1896,7 +1896,7 @@ begin
 
     // de todos los archivos de medios selecciona las imágenes que es lo que podemos manejar por ahora
     // y las imágenes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
-    // se deben haber procesado en en el momendo de adicionar el mensaje al chat
+    // se deben haber procesado en en el momento de adicionar el mensaje al chat
     MediaArr := Msg.MediaFiles.GetMediaList(FNativeInputFiles, False);
 
     If (Length(MediaArr) > 0) then
@@ -1914,7 +1914,6 @@ begin
 
         If MediaFile.FileCategory = TAiFileCategory.Tfc_Image then
         Begin
-
           Base64 := MediaFile.Base64;
           Mime := MediaFile.MimeType;
 
@@ -1932,7 +1931,9 @@ begin
           JObjImg.AddPair('image_url', jImgUrl);
 
           JContent.Add(JObjImg);
+
           jObj.AddPair('content', JContent);
+
         End
         Else If MediaFile.FileCategory = TAiFileCategory.Tfc_Audio then
         Begin
@@ -1976,8 +1977,8 @@ begin
 end;
 
 // Esta es la versión original que si funciona
-{function TAiChatMessages.ToJSon: TJSonArray;
-Var
+{ function TAiChatMessages.ToJSon: TJSonArray;
+  Var
   I, J: integer;
   Msg: TAiChatMessage;
   jObj, JMsg, jMsgImagen: TJSonObject;
@@ -1988,116 +1989,116 @@ Var
   MediaArr: TAiMediaFilesArray;
   S: String;
   MediaFile: TAiMediaFile;
-begin
+  begin
   Result := TJSonArray.Create;
 
   For I := 0 to Count - 1 do
   Begin
-    Msg := Self.Items[I];
-    jObj := TJSonObject.Create;
-    jObj.AddPair('role', Msg.FRole);
+  Msg := Self.Items[I];
+  jObj := TJSonObject.Create;
+  jObj.AddPair('role', Msg.FRole);
 
-    If Msg.FTollCallId <> '' then
-      jObj.AddPair('tool_call_id', Msg.FTollCallId);
+  If Msg.FTollCallId <> '' then
+  jObj.AddPair('tool_call_id', Msg.FTollCallId);
 
-    If Msg.FFunctionName <> '' then
-      jObj.AddPair('name', Msg.FFunctionName);
+  If Msg.FFunctionName <> '' then
+  jObj.AddPair('name', Msg.FFunctionName);
 
-    // de todos los archivos de medios selecciona las imágenes que es lo que podemos manejar por ahora
-    // y las imágenes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
-    // se deben haber procesado en en el momendo de adicionar el mensaje al chat
-    MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
+  // de todos los archivos de medios selecciona las imágenes que es lo que podemos manejar por ahora
+  // y las imágenes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
+  // se deben haber procesado en en el momendo de adicionar el mensaje al chat
+  MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
 
-    If (Length(MediaArr) > 0) then
-    Begin
+  If (Length(MediaArr) > 0) then
+  Begin
 
-      JContent := TJSonArray.Create;
-      JMsg := TJSonObject.Create;
-      JMsg.AddPair('type', 'text');
-      JMsg.AddPair('text', Msg.FPrompt);
-      JContent.Add(JMsg);
+  JContent := TJSonArray.Create;
+  JMsg := TJSonObject.Create;
+  JMsg.AddPair('type', 'text');
+  JMsg.AddPair('text', Msg.FPrompt);
+  JContent.Add(JMsg);
 
-      For J := 0 to Length(MediaArr) - 1 do // Open Ai permite subir el Base64 o el Url, siempre se sube el Base64, por estandar
-      Begin
-        MediaFile := MediaArr[J];
-        MediaFile.FileCategory;
+  For J := 0 to Length(MediaArr) - 1 do // Open Ai permite subir el Base64 o el Url, siempre se sube el Base64, por estandar
+  Begin
+  MediaFile := MediaArr[J];
+  MediaFile.FileCategory;
 
-        Base64 := MediaFile.Base64;
-        Mime := MediaFile.MimeType;
+  Base64 := MediaFile.Base64;
+  Mime := MediaFile.MimeType;
 
-        If MediaFile.FileCategory = TAiFileCategory.Tfc_Image then
-        Begin
+  If MediaFile.FileCategory = TAiFileCategory.Tfc_Image then
+  Begin
 
-          // Esta es otra forma de hacer lo mismo con json directamente
-          S := 'data:' + Mime + ';base64,' + Base64;
+  // Esta es otra forma de hacer lo mismo con json directamente
+  S := 'data:' + Mime + ';base64,' + Base64;
 
-          jImgUrl := TJSonObject.Create;
-          jImgUrl.AddPair('url', S);
+  jImgUrl := TJSonObject.Create;
+  jImgUrl.AddPair('url', S);
 
-          If Msg.MediaFiles[J].Detail <> '' then // Si define high or low.
-            jImgUrl.AddPair('detail', MediaFile.Detail);
+  If Msg.MediaFiles[J].Detail <> '' then // Si define high or low.
+  jImgUrl.AddPair('detail', MediaFile.Detail);
 
-          JObjImg := TJSonObject.Create;
-          JObjImg.AddPair('type', 'image_url');
-          JObjImg.AddPair('image_url', jImgUrl);
+  JObjImg := TJSonObject.Create;
+  JObjImg.AddPair('type', 'image_url');
+  JObjImg.AddPair('image_url', jImgUrl);
 
-          JContent.Add(JObjImg);
-        End;
-
-      End;
-
-      jObj.AddPair('content', JContent);
-    End
-    Else
-    Begin
-      MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Audio], False);
-
-      If (Length(MediaArr) > 0) then
-      Begin
-        For J := 0 to Length(MediaArr) - 1 do // Open Ai permite subir el Base64 o el Url, siempre se sube el Base64, por estandar
-        Begin
-          MediaFile := MediaArr[J];
-
-          Base64 := MediaFile.Base64;
-          Mime := MediaFile.MimeType;
-
-          If MediaFile.FileCategory = TAiFileCategory.Tfc_Audio then
-          Begin
-            If MediaFile.IdAudio <> '' then // Si es una respuesta del modelo va esto
-            Begin
-              jAudio := TJSonObject.Create;
-              jAudio.AddPair('id', MediaFile.IdAudio);
-              jObj.AddPair('audio', jAudio);
-            End
-            Else // Si es un audio del usuario va esto
-            Begin
-              jAudio := TJSonObject.Create;
-              jAudio.AddPair('data', MediaFile.Base64);
-              jAudio.AddPair('format', StringReplace(MediaFile.MimeType, 'audio/', '', [rfReplaceAll]));
-
-              JContent := TJSonArray.Create;
-              JMsg := TJSonObject.Create;
-              JMsg.AddPair('type', 'input_audio');
-              JMsg.AddPair('input_audio', jAudio);
-              JContent.Add(JMsg);
-
-              jObj.AddPair('content', JContent);
-            End;
-          End;
-        End;
-      End
-      Else
-      Begin
-        jObj.AddPair('content', Msg.FPrompt);
-      End;
-    End;
-
-    If Msg.FTool_calls <> '' then
-      jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
-
-    Result.Add(jObj);
+  JContent.Add(JObjImg);
   End;
-end;
+
+  End;
+
+  jObj.AddPair('content', JContent);
+  End
+  Else
+  Begin
+  MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Audio], False);
+
+  If (Length(MediaArr) > 0) then
+  Begin
+  For J := 0 to Length(MediaArr) - 1 do // Open Ai permite subir el Base64 o el Url, siempre se sube el Base64, por estandar
+  Begin
+  MediaFile := MediaArr[J];
+
+  Base64 := MediaFile.Base64;
+  Mime := MediaFile.MimeType;
+
+  If MediaFile.FileCategory = TAiFileCategory.Tfc_Audio then
+  Begin
+  If MediaFile.IdAudio <> '' then // Si es una respuesta del modelo va esto
+  Begin
+  jAudio := TJSonObject.Create;
+  jAudio.AddPair('id', MediaFile.IdAudio);
+  jObj.AddPair('audio', jAudio);
+  End
+  Else // Si es un audio del usuario va esto
+  Begin
+  jAudio := TJSonObject.Create;
+  jAudio.AddPair('data', MediaFile.Base64);
+  jAudio.AddPair('format', StringReplace(MediaFile.MimeType, 'audio/', '', [rfReplaceAll]));
+
+  JContent := TJSonArray.Create;
+  JMsg := TJSonObject.Create;
+  JMsg.AddPair('type', 'input_audio');
+  JMsg.AddPair('input_audio', jAudio);
+  JContent.Add(JMsg);
+
+  jObj.AddPair('content', JContent);
+  End;
+  End;
+  End;
+  End
+  Else
+  Begin
+  jObj.AddPair('content', Msg.FPrompt);
+  End;
+  End;
+
+  If Msg.FTool_calls <> '' then
+  jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
+
+  Result.Add(jObj);
+  End;
+  end;
 }
 
 { TAIChatConfig }
@@ -2201,5 +2202,3 @@ begin
 end;
 
 end.
-
-
