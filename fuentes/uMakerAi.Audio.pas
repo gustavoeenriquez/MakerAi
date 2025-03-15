@@ -278,14 +278,16 @@ Var
   Body: TMultipartFormData;
   Client: THTTPClient;
   Headers: TNetHeaders;
-  sUrl, FileNameDestino: String;
-  Destino: TMemoryStream;
+  sUrl: String;
   Res: IHTTPResponse;
 begin
 
 
   //Valida que la extensión del audio sea compatible, sino utiliza ffmpeg para convertirla
-  {If IsValidExtension(ExtractFileExt(aFileName)) = False then
+  {
+  var Destino: TMemoryStream;
+  var FileNameDestino: String;
+  If IsValidExtension(ExtractFileExt(aFileName)) = False then
   Begin
     ConvertAudioFileFormat(aStream, aFileName, Destino, FileNameDestino);
     aStream.Clear;
@@ -347,11 +349,12 @@ Var
   Body: TMultipartFormData;
   Client: THTTPClient;
   Headers: TNetHeaders;
-  sUrl, FileNameDestino: String;
-  Destino: TMemoryStream;
+  sUrl: String;
   Res: IHTTPResponse;
 begin
 {
+  var FileNameDestino: string;
+  var Destino: TMemoryStream;
   If IsValidExtension(ExtractFileExt(aFileName)) = False then
   Begin
     ConvertAudioFileFormat(aStream, aFileName, Destino, FileNameDestino);

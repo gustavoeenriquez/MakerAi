@@ -99,7 +99,7 @@ end;
 
 function TAiGroqChat.InitChatCompletions: String;
 Var
-  AJSONObject, jObj, jToolChoice: TJSonObject;
+  AJSONObject, jToolChoice: TJSonObject;
   JArr: TJSonArray;
   JStop: TJSonArray;
   Lista: TStringList;

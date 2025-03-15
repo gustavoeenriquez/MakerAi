@@ -72,8 +72,6 @@ type
   End;
 
   TAiMistralEmbeddings = Class(TAiEmbeddings)
-  private
-    FSuffix: String;
   Public
     // groq actualmente no maneja modelos de embeddings
     Constructor Create(aOwner: TComponent); Override;
@@ -103,8 +101,6 @@ Var
   St: TStringStream;
   FHeaders: TNetHeaders;
   jObj: TJSonObject;
-  Respuesta: String;
-  Procesado: Boolean;
 begin
 
   FBusy := True; // Marca como ocupado al sistema
@@ -173,7 +169,7 @@ end;
 function TAiMistralChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
 Var
   jObj, Msg, jFunc, Arg: TJSonObject;
-  ArgVal, JVal, JVal1: TJSonValue;
+  JVal, JVal1: TJSonValue;
   Fun: TAiToolsFunction;
   JToolCalls: TJSonArray;
   Nom, Valor: String;
@@ -231,13 +227,12 @@ end;
 
 function TAiMistralChat.InitChatCompletions: String;
 Var
-  AJSONObject, jObj, jToolChoice: TJSonObject;
+  AJSONObject, jToolChoice: TJSonObject;
   JArr: TJSonArray;
   JStop: TJSonArray;
   Lista: TStringList;
   I: Integer;
   LAsincronico: Boolean;
-  LastMsg: TAiChatMessage;
   Res : String;
 begin
 
@@ -315,13 +310,11 @@ end;
 
 function TAiMistralChat.InitChatCompletionsFim(aPrompt, aSuffix: String): String;
 Var
-  AJSONObject, jObj, jToolChoice: TJSonObject;
-  JArr: TJSonArray;
+  AJSONObject: TJSonObject;
   JStop: TJSonArray;
   Lista: TStringList;
   I: Integer;
   LAsincronico: Boolean;
-  LastMsg: TAiChatMessage;
 begin
 
   If Model = '' then
@@ -331,6 +324,7 @@ begin
   Lista := TStringList.Create;
 
   Try
+    LAsincronico:=True;
     AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
 
     AJSONObject.AddPair('prompt', aPrompt);

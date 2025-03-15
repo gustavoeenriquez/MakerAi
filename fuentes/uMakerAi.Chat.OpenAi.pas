@@ -529,7 +529,7 @@ begin
     Result := UTF8ToString(Res);
 
   Finally
-    AJSONObject.Free;
+//    AJSONObject.Free;
     Lista.Free;
   End;
 end;

@@ -216,7 +216,6 @@ Var
   JObj, Fun: TJsonObject;
   JVal: TJSonValue;
   JArr: TJsonArray;
-  I: Integer;
   FName: String;
   AiTool: TAiToolsFunction;
   BSave: Boolean;

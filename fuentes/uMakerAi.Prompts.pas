@@ -111,8 +111,8 @@ End;
 
 function TAiPrompts.GetTemplate(Nombre: String; Params: TStringList): String;
 Var
-  I, P: Integer;
-  Res, S, Nom, Val: String;
+  I: Integer;
+  Res, Nom, Val: String;
 begin
   Res := GetString(Nombre);
 
@@ -151,8 +151,7 @@ end;
 function TAiPrompts.GetTemplate(Nombre: String; Params: TJSonObject): String;
 Var
   Pair : TJSonPair;
-  I, P: Integer;
-  Res, S, Nom, Val: String;
+  Res, Nom, Val: String;
 begin
   Res := GetString(Nombre);
   For Pair in Params do

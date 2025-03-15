@@ -1240,7 +1240,6 @@ begin
   FName := Obj.GetValue<String>('name');
   FModel := Obj.GetValue<String>('model');
   FInstructions := Obj.GetValue<String>('instructions');
-  Tools := Obj.GetValue<TJSonArray>('tools');
 
   If Obj.TryGetValue<Double>('temperature', FNumTemp) then
     Self.Temperature := FNumTemp;
@@ -1543,7 +1542,7 @@ Var
   Client: THTTPClient;
   Headers: TNetHeaders;
   JObj: TJSonObject;
-  JFiles: TJSonArray;
+//  JFiles: TJSonArray;
   Res: IHTTPResponse;
   Response: TStringStream;
   St: TStringStream;
@@ -1580,7 +1579,7 @@ begin
       JObj.AddPair('attachments', JAttachments);
 
       ListFilesIds.CommaText := aFiles_ids;
-      JFiles := TJSonArray.Create;
+//      JFiles := TJSonArray.Create;
 
       For i := 0 to ListFilesIds.Count - 1 do
       Begin
@@ -2130,7 +2129,7 @@ function TAiThRead.ParseMessage(JObj: TJSonObject): TAiMessage;
 Var
   JObj1, jText, JObjAnn: TJSonObject;
   JContent: TJSonArray;
-  JFiles, JAnnotations: TJSonArray;
+  JAnnotations: TJSonArray;
   JVal, JVal1: TJSonValue;
   AiFile: TAiFile;
   AiFiles: TAiFiles;
@@ -2153,6 +2152,7 @@ begin
 
     { TODO : Version 2. Falta implementar aquí el filesearch y code_interpreter fileids }
     {
+      var JFiles: TJSonArray;
       JFiles := JObj.GetValue<TJSonArray>('file_ids');
       For JVal in JFiles do
       Begin
@@ -2607,7 +2607,6 @@ var
   i, NumTasks: Integer;
 
   JTool: TJSonObject;
-  sRequiredAction: String;
   ToolCall: TAiToolsFunction;
   Clave: String;
 begin
@@ -2659,7 +2658,6 @@ Var
   Headers: TNetHeaders;
   Res: IHTTPResponse;
   sUrl: String;
-  JRes: TJSonObject;
 begin
   Client := THTTPClient.Create;
   sUrl := FUrl + 'threads/' + FThRead.ThReadId + '/runs/' + RunId;
@@ -3556,7 +3554,7 @@ Var
 
   Res: IHTTPResponse;
   sUrl: String;
-  TmpSv, StoreVector: TAiVectorStore;
+  StoreVector: TAiVectorStore;
 begin
   FVectorStoreList.Clear;
 

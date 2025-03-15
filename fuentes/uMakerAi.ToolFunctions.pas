@@ -215,7 +215,6 @@ end;
 procedure TFunctionActionItem.SetDefault(const Value: Boolean);
 var
   I: Integer;
-  Action: TFunctionActionItem;
 begin
   // Primero elimina el default de los otros items
   If Value = True then
@@ -269,14 +268,13 @@ end;
 
 procedure TFunctionActionItem.SetJSon(Value: TJSonObject);
 Var
-  aTipo, aName, aDescription, aParamName, aScript: String;
+  aTipo, aDescription, aParamName, aScript: String;
   jFunc, jParameters, jProperties, jParam: TJSonObject;
   jReq: TJSonArray;
   jVal: TJSonValue;
   aEnabled, aDefault: Boolean;
   aParam: TFunctionParamsItem;
   I: Integer;
-  Lista: TStringList;
 begin
   aTipo := Value.GetValue<String>('type');
   If aTipo = 'function' then
@@ -574,23 +572,24 @@ begin
   try
     Lista.LoadFromFile(FileName);
     Funcs := TJSonObject.ParseJSONValue(Lista.DataString) as TJSonArray;
+    try
+      Self.Clear;
 
-    Self.Clear;
-
-    For jVal in Funcs do
-    Begin
-      jFunc := TJSonObject(jVal);
-      If jFunc.GetValue<String>('type') = 'function' then
+      For jVal in Funcs do
       Begin
-        FuncName := jFunc.GetValue<TJSonObject>('function').GetValue<String>('name');
-        Item := Self.Add;
-        Item.FunctionName := FuncName;
-        Item.SetJSon(jFunc);
+        jFunc := TJSonObject(jVal);
+        If jFunc.GetValue<String>('type') = 'function' then
+        Begin
+          FuncName := jFunc.GetValue<TJSonObject>('function').GetValue<String>('name');
+          Item := Self.Add;
+          Item.FunctionName := FuncName;
+          Item.SetJSon(jFunc);
+        End;
       End;
+    Finally
+      Funcs.Free;
     End;
-
   Finally
-    Funcs.Free;
     Lista.Free;
   End;
 end;
@@ -734,7 +733,7 @@ end;
 
 procedure TFunctionParamsItem.SetJSon(Value: TJSonObject);
 Var
-  aType, aDescription, aEnum: String;
+  aType, aDescription: String;
   jEnum: TJSonArray;
   jVal: TJSonValue;
   Lista: TStringList;
@@ -794,10 +793,9 @@ end;
 
 function TFunctionParamsItem.ToJSon(Detail: Boolean = False): TJSonObject;
 Var
-  Tipo, Descripcion: String;
+  Tipo: String;
   jEnum: TJSonArray;
   I: Integer;
-  S: String;
   Lista: TStringList;
 begin
   Result := TJSonObject.Create;
@@ -874,12 +872,10 @@ end;
 function TFunctionParamsItems.GetParamByName(aParamName: String): TFunctionParamsItem;
 var
   I: Integer;
-  CurItem, DefItem: TFunctionParamsItem;
-
+  CurItem: TFunctionParamsItem;
 begin
   I := 0;
   Result := Nil;
-  DefItem := Nil;
   while I < Count do
   begin
     CurItem := Items[I] as TFunctionParamsItem;
@@ -935,7 +931,7 @@ end;
 function TFunctionParamsItems.ToJSon(Detail: Boolean = False): TJSonObject;
 Var
   CurItem: TFunctionParamsItem;
-  jParam, jProperties: TJSonObject;
+  jProperties: TJSonObject;
   jRequired: TJSonArray;
   I: Integer;
 begin
@@ -991,7 +987,6 @@ end;
 function TAiFunctions.DoCallFunction(ToolCall: TAiToolsFunction): Boolean;
 Var
   Funcion: TFunctionActionItem;
-  Handle: Boolean;
 begin
   Result := False;
   Funcion := FFunctions.GetFunction(ToolCall.Name);
