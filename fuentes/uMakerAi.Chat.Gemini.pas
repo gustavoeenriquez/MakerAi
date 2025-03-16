@@ -56,10 +56,10 @@ type
     Function ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions; Override;
     function ExtractToolCallJson(jChoices: TJSonArray): TJSonArray; // construye el llamado a las funciones en el mensaje
 
-    Class Function GetModels(aApiKey: String; aUrl: String = ''): TStringList; Override;
-    Function GetMessages: TJSonArray; Override;
 
   Public
+    Function GetMessages: TJSonArray; Override;
+    Class Function GetModels(aApiKey: String; aUrl: String = ''): TStringList; Override;
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
     Function Run(aMsg: TAiChatMessage = Nil): String; Override;
@@ -108,12 +108,10 @@ end;
 
 function TAiGeminiChat.GetMessages: TJSonArray;
 Var
-  I, J: Integer;
+  I: Integer;
   Msg: TAiChatMessage;
   JObj1, jPartItem: TJSonObject;
   JParts: TJSonArray;
-  ImagePayload: TStringStream;
-  Base64: String;
 begin
   Result := TJSonArray.Create;
 
@@ -153,13 +151,12 @@ end;
 
 function TAiGeminiChat.InitChatCompletions: String;
 Var
-  AJSONObject, JObj, jToolChoice, JConfig: TJSonObject;
+  AJSONObject, jToolChoice, JConfig: TJSonObject;
   JArr: TJSonArray;
   JStop: TJSonArray;
   Lista: TStringList;
   I: Integer;
   LAsincronico: Boolean;
-  LastMsg: TAiChatMessage;
 begin
 
   If User = '' then
@@ -230,7 +227,6 @@ end;
 function TAiGeminiChat.InternalAddMessage(aPrompt, aRole: String; aMediaFiles: array of TAiMediaFile): String;
 Var
   Msg: TAiChatMessage;
-  I: Integer;
   MensajeInicial: String;
   MF: TAiMediaFile;
   Procesado: Boolean;
@@ -285,8 +281,6 @@ end;
 function TAiGeminiChat.InternalAddMessage(aPrompt, aRole, aToolCallId, aFunctionName: String): String;
 Var
   Msg: TAiChatMessage;
-  I: Integer;
-  S, JSonResponse: String;
   MensajeInicial: String;
 begin
 
@@ -367,6 +361,12 @@ begin
     aPrompt_tokens := Uso.GetValue<Integer>('promptTokenCount');
     aCompletion_tokens := Uso.GetValue<Integer>('candidatesTokenCount');
     atotal_tokens := Uso.GetValue<Integer>('totalTokenCount');
+  End
+  else
+  Begin
+    aPrompt_tokens := 0;
+    aCompletion_tokens := 0;
+    atotal_tokens := 0;
   End;
 
   Respuesta := Trim(Respuesta);
@@ -388,12 +388,13 @@ end;
 function TAiGeminiChat.Run(aMsg: TAiChatMessage): String;
 Var
   ABody: String;
-  sUrl, MensajeInicial: String;
+  sUrl: String;
+//  MensajeInicial: String;
   Res: IHTTPResponse;
   St: TStringStream;
   FHeaders: TNetHeaders;
   JObj: TJSonObject;
-  Msg: TAiChatMessage;
+//  Msg: TAiChatMessage;
 begin
 
   FBusy := True; // Marca como ocupado al sistema

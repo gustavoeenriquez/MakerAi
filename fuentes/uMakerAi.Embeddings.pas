@@ -145,7 +145,7 @@ Var
   JArr, jData: TJSonArray;
   Emb: TAiEmbeddingData;
   JVal: TJSonValue;
-  i, J: Integer;
+  J: Integer;
   Usage: TJSonObject;
 
 begin
@@ -161,7 +161,7 @@ begin
 
   SetLength(FData, jData.Count);
 
-  i := 0;
+  var i := 0;
   For JVal in jData do
   Begin
     // El embedding de OpenAi Retorna un array, pero solo se toma el primero de la fila

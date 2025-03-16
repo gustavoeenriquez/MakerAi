@@ -94,7 +94,7 @@ type
 
   TAIBasicEmbeddingIndex = class(TAIEmbeddingIndex)
   public
-    constructor Create; virtual;
+    constructor Create; override;
     destructor Destroy; override;
     procedure BuildIndex(Points: TAiDataVec); Override;
     Function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TAiDataVec; Override;

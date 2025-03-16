@@ -210,7 +210,6 @@ type
     FMemory: TStrings;
 
     FFunctions: TFunctionActionItems;
-    FAIEngine: TAiChatConfig;
     FAiFunctions: TAiFunctions;
     FOnProcessMediaFile: TAiOpenChatOnMediaFile;
     FJsonSchema: TStrings;
@@ -391,7 +390,6 @@ end;
 function TAiChat.InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String;
 Var
   Msg: TAiChatMessage;
-  MensajeInicial: String;
 begin
   Try
     // Este es el CallBack de los ToolsFunctions,
@@ -399,6 +397,7 @@ begin
     // Comienza con las instrucciones iniciales y le adiciona cada 20 mensajes para evitar que se olvide
     {
       If (FMessages.Count = 0) or ((FMessages.Count mod 20) = 0) then
+      var MensajeInicial: String;
       Begin
       MensajeInicial := Self.PrepareSystemMsg;
 
@@ -589,7 +588,7 @@ end;
 function TAiChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
 Var
   jObj, Msg, jFunc, Arg: TJSonObject;
-  ArgVal, JVal, JVal1: TJSonValue;
+  JVal, JVal1: TJSonValue;
   Fun: TAiToolsFunction;
   JToolCalls: TJSonArray;
   Nom, Valor: String;
@@ -748,13 +747,12 @@ end;
 
 function TAiChat.InitChatCompletions: String;
 Var
-  AJSONObject, jObj, jToolChoice: TJSonObject;
+  AJSONObject, jToolChoice: TJSonObject;
   JArr: TJSonArray;
   JStop: TJSonArray;
   Lista: TStringList;
   I: integer;
   LAsincronico: Boolean;
-  LastMsg: TAiChatMessage;
   Res: String;
 begin
 
@@ -1659,8 +1657,7 @@ end;
 function TAiChatMessage.ToJSon: TJSonArray;
 Var
   Msg: TAiChatMessage;
-  jObj, JMsg, jMsgImagen, jAudio: TJSonObject;
-  JObjImg, jImgUrl: TJSonObject;
+  jObj, JMsg: TJSonObject;
   JContent: TJSonArray;
   ImagePayload: TStringStream;
   Base64, Mime: String;
@@ -1762,7 +1759,6 @@ Var
   JArr: TJSonArray;
   sJson, Model, S: String;
   St: TStringStream;
-  Data: TAiChatMessages;
   Item: TAiChatMessage;
   I: integer;
 begin
@@ -1871,10 +1867,9 @@ function TAiChatMessages.ToJSon: TJSonArray;
 Var
   I, J: integer;
   Msg: TAiChatMessage;
-  jObj, JMsg, jMsgImagen: TJSonObject;
+  jObj, JMsg: TJSonObject;
   JObjImg, jImgUrl, jAudio: TJSonObject;
   JContent: TJSonArray;
-  ImagePayload: TStringStream;
   Base64, Mime: String;
   MediaArr: TAiMediaFilesArray;
   S: String;

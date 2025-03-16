@@ -196,7 +196,8 @@ end;
 
 function TAiChatConn.RemoveMesage(Msg: TAiChatMessage): Boolean;
 begin
-  If FMessages.IndexOf(Msg) >= 0 then
+  result:=(FMessages.IndexOf(Msg) >= 0);
+  if result then
     FMessages.Remove(Msg);
 end;
 

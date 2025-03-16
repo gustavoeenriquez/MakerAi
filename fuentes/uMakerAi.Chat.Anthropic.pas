@@ -60,11 +60,9 @@ type
     Procedure ParseChat(JObj: TJSonObject); Override;
     Function ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions; Override;
     function ExtractToolCallJson(jChoices: TJSonArray): TJSonArray; // construye el llamado a las funciones en el mensaje
-
+  Public
     Class Function GetModels(aApiKey: String; aUrl: String = ''): TStringList; Override;
     Function GetMessages: TJSonArray; Override;
-
-  Public
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
     Function Run(aMsg: TAiChatMessage = Nil): String; Override;
@@ -112,10 +110,9 @@ end;
 
 function TAiClaudeChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
 Var
-  JObj, Msg, Arg: TJSonObject;
-  JVal, JVal1: TJSonValue;
+  Arg: TJSonObject;
+  JVal1: TJSonValue;
   Fun: TAiToolsFunction;
-  JToolCalls: TJSonArray;
   I: Integer;
   Nom, Valor: String;
 begin
@@ -147,12 +144,8 @@ end;
 
 function TAiClaudeChat.ExtractToolCallJson(jChoices: TJSonArray): TJSonArray;
 Var
-  JObj, Msg, Arg: TJSonObject;
-  JVal, JVal1: TJSonValue;
-  Fun: TAiToolsFunction;
-  JToolCalls: TJSonArray;
-  I: Integer;
-  Nom, Valor: String;
+  JObj, Arg: TJSonObject;
+  JVal1: TJSonValue;
 begin
 
   Result := TJSonArray.Create;
@@ -176,8 +169,8 @@ function TAiClaudeChat.GetMessages: TJSonArray;
 Var
   I, J: Integer;
   Msg: TAiChatMessage;
-  JObj, JObj1, jMsgImagen, jSource: TJSonObject;
-  jImages, jContentArr: TJSonArray;
+  JObj, JObj1, jSource: TJSonObject;
+  jContentArr: TJSonArray;
   ImagePayload: TStringStream;
   Base64: String;
   MediaArr: TAiMediaFilesArray;
@@ -308,7 +301,7 @@ Var
   I, J: Integer;
   Item: TFunctionActionItem;
   Param: TFunctionParamsItem;
-  JObj, jParam, jProperties, jInputSchema, jDet: TJSonObject;
+  JObj, jProperties, jInputSchema: TJSonObject;
   jRequired: TJSonArray;
 begin
   Result := TJSonArray.Create;
@@ -358,13 +351,12 @@ end;
 
 function TAiClaudeChat.InitChatCompletions: String;
 Var
-  AJSONObject, JObj, jToolChoice: TJSonObject;
+  AJSONObject, jToolChoice: TJSonObject;
   JArr: TJSonArray;
   JStop: TJSonArray;
   Lista: TStringList;
   I: Integer;
   LAsincronico: Boolean;
-  LastMsg: TAiChatMessage;
   Res : String;
 begin
 
@@ -643,7 +635,6 @@ Var
   choices: TJSonArray;
   JItem, JToolCalls: TJSonObject;
   JVal: TJSonValue;
-  jMessage: TJSonObject;
   uso: TJSonObject;
   aPrompt_tokens, aCompletion_tokens, aTotal_tokens: Integer;
   Role, Respuesta: String;
@@ -653,7 +644,7 @@ Var
 
   TaskList: array of ITask;
   I, NumTasks: Integer;
-  Id, Clave, sToolCalls, sRes: String;
+  Id, Clave, sToolCalls: String;
 
 begin
 
@@ -667,6 +658,12 @@ begin
     aPrompt_tokens := uso.GetValue<Integer>('input_tokens');
     aCompletion_tokens := uso.GetValue<Integer>('output_tokens');
     aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
+  End
+  else
+  Begin
+    aPrompt_tokens := 0;
+    aCompletion_tokens := 0;
+    aTotal_tokens := 0;
   End;
 
   JObj.TryGetValue<TJSonArray>('content', choices);

@@ -47,7 +47,8 @@ type
   Public
     Constructor Create(aOwner: TComponent); Override;
     Destructor Destroy; Override;
-    Function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float'): TAiEmbeddingData; Override;
+    Function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float')
+      : TAiEmbeddingData; Override;
     Procedure ParseEmbedding(JObj: TJSonObject); Override;
   end;
 
@@ -58,9 +59,9 @@ type
     Function InitChatCompletions: String; Override;
     Procedure ParseChat(JObj: TJSonObject); Override;
     Function ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions; Override;
-    Procedure DoCallFunction(ToolCall: TAiToolsFunction); Override;
-    Class Function GetModels(aApiKey: String; aUrl: String = ''): TStringList; Override;
+    //Procedure DoCallFunction(ToolCall: TAiToolsFunction); Override;
   Public
+    Class Function GetModels(aApiKey: String; aUrl: String = ''): TStringList; Override;
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
     Function Run(aMsg: TAiChatMessage = Nil): String; Override;
@@ -100,7 +101,8 @@ end;
   Url para llamado http://IPOLLAMASERVER:11434/
 }
 
-function TAiOlamalEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
+function TAiOlamalEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String)
+  : TAiEmbeddingData;
 Var
   Client: THTTPClient;
   Headers: TNetHeaders;
@@ -202,23 +204,73 @@ begin
   inherited;
 end;
 
-procedure TAiOllamaChat.DoCallFunction(ToolCall: TAiToolsFunction);
+{procedure TAiOllamaChat.DoCallFunction(ToolCall: TAiToolsFunction);
 begin
   If Assigned(FOnCallToolFunction) then
     FOnCallToolFunction(Self, ToolCall)
 end;
+}
 
-function TAiOllamaChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
-Var
+{ //esta es la original, pero no funciona en la revisión del 2025 se modifica
+  function TAiOllamaChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
+  Var
   JObj, Msg, Arg: TJSonObject;
   JVal, JVal1: TJSonValue;
   Fun: TAiToolsFunction;
   JToolCalls: TJSonArray;
   I: Integer;
   Nom, Valor: String;
+  begin
+  Result := TAiToolsFunctions.Create;
+
+  For JVal1 in jChoices do
+  Begin
+  Msg := TJSonObject(JVal1).GetValue<TJSonObject>('message');
+
+  If Msg.TryGetValue<TJSonArray>('tool_calls', JToolCalls) then
+  Begin
+  For JVal in JToolCalls do
+  Begin
+  JObj := TJSonObject(JVal);
+  If JObj.GetValue<String>('type') = 'function' then
+  Begin
+  JObj := TJSonObject(JVal);
+  Fun := TAiToolsFunction.Create;
+  Fun.Id := JObj.GetValue<String>('id');
+  Fun.Tipo := JObj.GetValue<String>('type');
+  Fun.Name := JObj.GetValue<TJSonObject>('function').GetValue<String>('name');
+  Fun.Arguments := JObj.GetValue<TJSonObject>('function').GetValue<String>('arguments');
+
+  Arg := JObj.GetValue<TJSonObject>('function').GetValue<TJSonObject>('arguments');
+  For I := 0 to Arg.Count - 1 do
+  Begin
+  Nom := Arg.Pairs[I].JsonString.Value;
+  Valor := Arg.Pairs[I].JsonValue.Value;
+  Fun.Params.Values[Nom] := Valor;
+  End;
+
+  Result.Add(Fun.Id, Fun);
+  End;
+  End;
+  End;
+  End;
+  end;
+
+}
+
+// Se simplifica la recepción debido a que en la versión 2025 se eliminan parámetros
+function TAiOllamaChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
+Var
+  JObj, Msg, Arg: TJSonObject;
+  JVal, JVal1: TJSonValue;
+  Fun: TAiToolsFunction;
+  JToolCalls: TJSonArray;
+  FunId, I: Integer;
+  Nom, Valor: String;
 begin
   Result := TAiToolsFunctions.Create;
 
+  FunId := 0;
   For JVal1 in jChoices do
   Begin
     Msg := TJSonObject(JVal1).GetValue<TJSonObject>('message');
@@ -228,25 +280,22 @@ begin
       For JVal in JToolCalls do
       Begin
         JObj := TJSonObject(JVal);
-        If JObj.GetValue<String>('type') = 'function' then
+        Fun := TAiToolsFunction.Create;
+        Fun.Id := FunId.ToString;
+        Fun.Tipo := 'function';
+        Fun.Name := JObj.GetValue<TJSonObject>('function').GetValue<String>('name');
+        Fun.Arguments := JObj.GetValue<TJSonObject>('function').GetValue<TJSonObject>('arguments').ToString;
+
+        Arg := JObj.GetValue<TJSonObject>('function').GetValue<TJSonObject>('arguments');
+        For I := 0 to Arg.Count - 1 do
         Begin
-          JObj := TJSonObject(JVal);
-          Fun := TAiToolsFunction.Create;
-          Fun.Id := JObj.GetValue<String>('id');
-          Fun.Tipo := JObj.GetValue<String>('type');
-          Fun.Name := JObj.GetValue<TJSonObject>('function').GetValue<String>('name');
-          Fun.Arguments := JObj.GetValue<TJSonObject>('function').GetValue<String>('arguments');
-
-          Arg := JObj.GetValue<TJSonObject>('function').GetValue<TJSonObject>('arguments');
-          For I := 0 to Arg.Count - 1 do
-          Begin
-            Nom := Arg.Pairs[I].JsonString.Value;
-            Valor := Arg.Pairs[I].JsonValue.Value;
-            Fun.Params.Values[Nom] := Valor;
-          End;
-
-          Result.Add(Fun.Id, Fun);
+          Nom := Arg.Pairs[I].JsonString.Value;
+          Valor := Arg.Pairs[I].JsonValue.Value;
+          Fun.Params.Values[Nom] := Valor;
         End;
+
+        Result.Add(Fun.id, Fun);
+        Inc(FunId);
       End;
     End;
   End;
@@ -256,9 +305,8 @@ function TAiOllamaChat.GetMessages: TJSonArray;
 Var
   I, J: Integer;
   Msg: TAiChatMessage;
-  JObj, jMsgImagen: TJSonObject;
+  JObj: TJSonObject;
   jImages: TJSonArray;
-  ImagePayload: TStringStream;
 
   Base64: String;
   MediaArr: TAiMediaFilesArray;
@@ -383,7 +431,7 @@ end;
 
 function TAiOllamaChat.InitChatCompletions: String;
 Var
-  AJSONObject, JObj, jToolChoice: TJSonObject;
+  AJSONObject, jToolChoice: TJSonObject;
   JArr: TJSonArray;
   JStop: TJSonArray;
   Lista: TStringList;
@@ -395,7 +443,7 @@ begin
     User := 'user';
 
   If Model = '' then
-    Model := 'llama3:7b';
+    Model := 'llama3.2:7b';
 
   LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
 
@@ -411,7 +459,7 @@ begin
 
     AJSONObject.AddPair('keep_alive', 1);
 
-    If Tool_Active and (Trim(FTools.Text) <> '') then
+    If Tool_Active and (Trim(Tools.Text) <> '') then
     Begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(FTools.Text));
       If Not Assigned(JArr) then
@@ -478,7 +526,7 @@ end;
 procedure TAiOllamaChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
 Var
   JObj, Delta: TJSonObject;
-  sJson, Content: String;
+  sJson: String;
   Done: Boolean;
   Msg: TAiChatMessage;
   aPrompt_tokens, aCompletion_tokens, aTotal_tokens: Integer;
@@ -651,8 +699,8 @@ begin
   }
 end;
 
-procedure TAiOllamaChat.ParseChat(JObj: TJSonObject);
-Var
+{ procedure TAiOllamaChat.ParseChat(JObj: TJSonObject);
+  Var
   choices: TJSonObject;
   JToolCalls: TJSonArray;
   JItem: TJSonObject;
@@ -669,8 +717,104 @@ Var
   I, NumTasks: Integer;
   Clave, sToolCalls: String;
 
+  begin
+
+  Model := JObj.GetValue('model').Value;
+  aPrompt_tokens := JObj.GetValue<Integer>('prompt_eval_count');
+  aCompletion_tokens := JObj.GetValue<Integer>('eval_count');
+  aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
+
+  If JObj.TryGetValue<TJSonObject>('message', jMessage) then
+  Begin
+  Respuesta := jMessage.GetValue<String>('content').Trim + sLineBreak;
+  Role := jMessage.GetValue<String>('role');
+
+  If jMessage.TryGetValue<TJSonArray>('tool_calls', JToolCalls) then
+  sToolCalls := JToolCalls.Format;
+  End;
+
+  Self.FLastContent := Respuesta;
+  Prompt_tokens := Prompt_tokens + aPrompt_tokens;
+  Completion_tokens := Completion_tokens + aCompletion_tokens;
+  Total_tokens := Total_tokens + aTotal_tokens;
+
+  Msg := TAiChatMessage.Create(Respuesta, Role);
+  Msg.Prompt := Respuesta;
+  Msg.Tool_calls := sToolCalls;
+  Msg.Prompt_tokens := aPrompt_tokens;
+  Msg.Completion_tokens := aCompletion_tokens;
+  Msg.Total_tokens := aTotal_tokens;
+  Msg.Id := FMessages.Count + 1;
+  FMessages.Add(Msg);
+
+  LFunciones := ExtractToolCallFromJson(choices);
+
+  Try
+  If LFunciones.Count > 0 then
+  Begin
+
+  NumTasks := LFunciones.Count;
+  SetLength(TaskList, NumTasks);
+  // Ajusta el tamaño del array para el número de tareas
+
+  I := 0;
+  For Clave in LFunciones.Keys do
+  Begin
+  ToolCall := LFunciones[Clave];
+
+  TaskList[I] := TTask.Create(
+  procedure
+  begin
+  DoCallFunction(ToolCall);
+  end);
+  TaskList[I].Start;
+  Inc(I);
+
+  End;
+  TTask.WaitForAll(TaskList);
+
+  For Clave in LFunciones.Keys do
+  Begin
+  ToolCall := LFunciones[Clave];
+  Msg := TAiOpenChatMessage.Create(ToolCall.Response, 'tool', ToolCall.Id, ToolCall.Name);
+  Msg.Id := FMessages.Count + 1;
+  FMessages.Add(Msg);
+  End;
+
+  Self.Run;
+
+  End
+  Else
+  Begin
+  FBusy := False;
+  If Assigned(FOnReceiveDataEnd) then
+  FOnReceiveDataEnd(Self, Msg, JObj, Role, Respuesta);
+  End;
+  Finally
+  LFunciones.Free;
+  End;
+  end;
+}
+
+procedure TAiOllamaChat.ParseChat(JObj: TJSonObject);
+Var
+  choices, JToolCalls: TJSonArray;
+  jMessage: TJSonObject;
+  aPrompt_tokens, aCompletion_tokens, aTotal_tokens: Integer;
+  Role, Respuesta: String;
+  Msg: TAiChatMessage;
+  LFunciones: TAiToolsFunctions;
+  ToolCall: TAiToolsFunction;
+
+  TaskList: array of ITask;
+  I, NumTasks: Integer;
+  Clave, sToolCalls: String;
+
 begin
 
+  // Id := JObj.GetValue('id').Value;
+  // IdObject := JObj.GetValue('object').Value;
+  // IdCreate := JObj.GetValue('created').GetValue<String>;
   Model := JObj.GetValue('model').Value;
   aPrompt_tokens := JObj.GetValue<Integer>('prompt_eval_count');
   aCompletion_tokens := JObj.GetValue<Integer>('eval_count');
@@ -699,54 +843,59 @@ begin
   Msg.Id := FMessages.Count + 1;
   FMessages.Add(Msg);
 
-  {
-    LFunciones := ExtractToolCallFromJson(choices);
+  // If Assigned(FOnAddMessage) then
+  // FOnAddMessage(Self, jObj, Role, Respuesta);
 
-    Try
+  choices := TJSonArray.Create;
+  choices.Add(JObj);
+  LFunciones := ExtractToolCallFromJson(choices);
+  Choices.Remove(0);
+  choices.Free;
+
+  Try
     If LFunciones.Count > 0 then
     Begin
 
-    NumTasks := LFunciones.Count;
-    SetLength(TaskList, NumTasks);
-    // Ajusta el tamaño del array para el número de tareas
+      NumTasks := LFunciones.Count;
+      SetLength(TaskList, NumTasks);
+      // Ajusta el tamaño del array para el número de tareas
 
-    I := 0;
-    For Clave in LFunciones.Keys do
-    Begin
-    ToolCall := LFunciones[Clave];
+      I := 0;
+      For Clave in LFunciones.Keys do
+      Begin
+        ToolCall := LFunciones[Clave];
 
-    TaskList[I] := TTask.Create(
-    procedure
-    begin
-    DoCallFunction(ToolCall);
-    end);
-    TaskList[I].Start;
-    Inc(I);
+        TaskList[I] := TTask.Create(
+          procedure
+          begin
+            DoCallFunction(ToolCall);
+          end);
+        TaskList[I].Start;
+        Inc(I);
 
-    End;
-    TTask.WaitForAll(TaskList);
+      End;
+      TTask.WaitForAll(TaskList);
 
-    For Clave in LFunciones.Keys do
-    Begin
-    ToolCall := LFunciones[Clave];
-    Msg := TAiOpenChatMessage.Create(ToolCall.Response, 'tool', ToolCall.Id, ToolCall.Name);
-    Msg.Id := FMessages.Count + 1;
-    FMessages.Add(Msg);
-    End;
+      For Clave in LFunciones.Keys do
+      Begin
+        ToolCall := LFunciones[Clave];
+        Msg := TAiChatMessage.Create(ToolCall.Response, 'tool', ToolCall.Id, ToolCall.Name);
+        Msg.Id := FMessages.Count + 1;
+        FMessages.Add(Msg);
+      End;
 
-    Self.Run;
+      Self.Run;
 
     End
     Else
     Begin
-    FBusy := False;
-    If Assigned(FOnReceiveDataEnd) then
-    FOnReceiveDataEnd(Self, Msg, JObj, Role, Respuesta);
+      FBusy := False;
+      If Assigned(FOnReceiveDataEnd) then
+        FOnReceiveDataEnd(Self, Msg, JObj, Role, Respuesta);
     End;
-    Finally
+  Finally
     LFunciones.Free;
-    End;
-  }
+  End;
 end;
 
 function TAiOllamaChat.Run(aMsg: TAiChatMessage): String;
@@ -758,9 +907,6 @@ Var
   FHeaders: TNetHeaders;
   JObj: TJSonObject;
   Msg: TAiChatMessage;
-  Key, Val: String;
-  I: Integer;
-  JMemory: TJSonObject;
 begin
 
   FBusy := True; // Marca como ocupado al sistema
@@ -818,8 +964,8 @@ begin
 
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
-    // FResponse.SaveToFile('c:\temp\respuesta.txt');
-    // FResponse.Position := 0;
+    FResponse.SaveToFile('c:\temp\respuesta.txt');
+    FResponse.Position := 0;
 
     FLastContent := '';
 

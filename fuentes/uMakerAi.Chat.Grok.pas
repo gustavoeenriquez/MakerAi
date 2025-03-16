@@ -104,7 +104,6 @@ Var
   Lista: TStringList;
   I: Integer;
   LAsincronico: Boolean;
-  LastMsg: TAiChatMessage;
   Res: String;
 begin
 
@@ -142,8 +141,6 @@ begin
           AJSONObject.AddPair('tools_choice', jToolChoice);
       End;
     End;
-
-    LastMsg := Messages.Last;
 
     AJSONObject.AddPair('messages', GetMessages);
 

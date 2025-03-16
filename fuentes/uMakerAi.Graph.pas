@@ -36,7 +36,6 @@ type
     FNoCicles: Integer;
     FMaxCicles: Integer;
     FReady: Boolean;
-    FResponse: String;
     procedure SetNextA(const Value: TAIGraphNode);
     procedure SetNextB(const Value: TAIGraphNode);
     procedure SetNextC(const Value: TAIGraphNode);
@@ -485,7 +484,7 @@ end;
 procedure TAIGraphNode.DoExecute(aNode: TAIGraphNode; aLink: TAIGraphLink);
 Var
   Link: TAIGraphLink;
-  Ready, IsOk, IsCicle: Boolean;
+  Ready, IsCicle: Boolean;
   texto, TextoCic: String;
 begin
   // Si llegan varios nodos al tiempo, debe esperar que todos estén ejecutados, excepto si es un ciclo
