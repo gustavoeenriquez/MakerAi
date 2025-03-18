@@ -54,7 +54,7 @@ type
     Function InitChatCompletions: String; Override;
     Procedure ParseChat(JObj: TJSonObject); Override;
     Function ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions; Override;
-    function ExtractToolCallJson(jChoices: TJSonArray): TJSonArray; // construye el llamado a las funciones en el mensaje
+//    function ExtractToolCallJson(jChoices: TJSonArray): TJSonArray; // construye el llamado a las funciones en el mensaje
 
 
   Public
@@ -98,13 +98,13 @@ end;
 
 function TAiGeminiChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
 begin
-
+  result:=nil;
 end;
 
-function TAiGeminiChat.ExtractToolCallJson(jChoices: TJSonArray): TJSonArray;
-begin
-
-end;
+//function TAiGeminiChat.ExtractToolCallJson(jChoices: TJSonArray): TJSonArray;
+//begin
+//
+//end;
 
 function TAiGeminiChat.GetMessages: TJSonArray;
 Var

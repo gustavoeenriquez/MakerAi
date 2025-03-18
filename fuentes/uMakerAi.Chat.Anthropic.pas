@@ -668,6 +668,7 @@ begin
 
   JObj.TryGetValue<TJSonArray>('content', choices);
 
+  JItem:=nil;
   For JVal in choices do
   Begin
     JItem := TJSonObject(JVal);
@@ -676,7 +677,7 @@ begin
   End;
 
   // Solo toma el último elemento de la lista para construir este item
-  If JItem.GetValue<String>('type') = 'tool_use' then
+  If Assigned(JItem) and (JItem.GetValue<String>('type') = 'tool_use') then
   Begin
     JToolCalls := TJSonObject.Create;
     JToolCalls.AddPair('role', Role);

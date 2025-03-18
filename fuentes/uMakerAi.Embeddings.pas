@@ -161,7 +161,7 @@ begin
 
   SetLength(FData, jData.Count);
 
-  var i := 0;
+//  var i := 0;
   For JVal in jData do
   Begin
     // El embedding de OpenAi Retorna un array, pero solo se toma el primero de la fila
@@ -174,7 +174,7 @@ begin
       Emb[J] := JArr.Items[J].GetValue<Double>;
 
     FData := Emb;
-    Inc(i);
+//    Inc(i);
     Break; // Si el embedding de OpenAI retorna varios solo tomamos el primero, usualmente solo hay uno
   End;
 end;

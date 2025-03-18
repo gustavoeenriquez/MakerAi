@@ -1261,7 +1261,9 @@ end;
 function TAiChat.RemoveMesage(Msg: TAiChatMessage): Boolean;
 begin
   If FMessages.ItemValue(Msg) >= 0 then
-    FMessages.Remove(Msg);
+    Result:=(FMessages.Remove(Msg)<>-1)
+  else
+    result:=False;
 end;
 
 procedure TAiChat.SetAIChatConfig(const Value: TAiChatConfig);
