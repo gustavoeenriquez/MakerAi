@@ -168,7 +168,7 @@ Type
 procedure RunCommand(const Command: string);
 
 // Convierte un audio de un formato a otro utilizando ffmpeg, debe estar instalado en la máquina
-function ConvertAudioFileFormat(Origen: TMemoryStream; filename: String; out Destino: TMemoryStream; out DestinoFileName: String): Boolean;
+procedure ConvertAudioFileFormat(Origen: TMemoryStream; filename: String; out Destino: TMemoryStream; out DestinoFileName: String);
 
 // Partiendo de la extensión del archivo obtiene la categoria TAiFileCategori
 function GetContentCategory(FileExtension: string): TAiFileCategory;
@@ -205,7 +205,7 @@ begin
 {$ENDIF}
 end;
 
-function ConvertAudioFileFormat(Origen: TMemoryStream; filename: String; out Destino: TMemoryStream; out DestinoFileName: String): Boolean;
+procedure ConvertAudioFileFormat(Origen: TMemoryStream; filename: String; out Destino: TMemoryStream; out DestinoFileName: String);
 Var
   FOrigen, FDestino: String;
   CommandLine: String;
@@ -421,11 +421,9 @@ Var
   sUrl: String;
 begin
 
+  Result := FContent;
   If FContent.Size > 5000 then // Si ya está cargado el archivo solo lo retorna
-  Begin
-    Result := FContent;
     Exit;
-  End;
 
   // Si tiene asignada una url la carga de la url y la deja en memoria
 
@@ -448,7 +446,6 @@ begin
         Response.Position := 0;
         FContent.LoadFromStream(Response);
         FContent.Position := 0;
-        Result := FContent;
       End
       else
         Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);

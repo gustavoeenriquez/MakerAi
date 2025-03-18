@@ -230,7 +230,7 @@ type
 
     Class Function CreateNewStore(aApiKey, aVectorName: String; aUrl: String = ''): TAiVectorStore;
     Function List(Limit: Integer = 20; OrderDesc: Boolean = False; After: String = ''; Before: String = ''): TAiVectorStoreArray;
-    Function Retrive(aVectorStoreId: String): TAiVectorStore;
+    Function Retrieve(aVectorStoreId: String): TAiVectorStore;
     Function Modify(aVectorStoreId, aVectorName: String): TAiVectorStore;
     Function Delete(aVectorStoreId: String): Boolean;
     Property VectorStoreList: TAiVectorStoreArray Read GetVectorStoreList;
@@ -268,7 +268,7 @@ type
   Protected
   Public
     Class Function CreateNewVectorStoreBatch(aApiKey, aVectorStoreId, FileIdsList: String): TAiVectorStoreFileBatch;
-    Class Function Retrive(aApiKey, aVectorStoreId, aBatchId: String): TAiVectorStoreFileBatch;
+    Class Function Retrieve(aApiKey, aVectorStoreId, aBatchId: String): TAiVectorStoreFileBatch;
     Class Function Cancel(aApiKey, aVectorStoreId, aBatchId: String): TAiVectorStoreFileBatch;
     Class Function List(aApiKey, aVectorStoreId, aBatchId: String): TAiVectorStoreFileBatchArray;
   End;
@@ -326,7 +326,7 @@ type
     Constructor Create(aApiKey: String; aUrl: String = '');
     Destructor Destroy; Override;
     Function ToJSon(ShowAll: Boolean = False): TJSonObject;
-    Function ToString: String;
+    Function ToString: String; override;
 
     Property MessageId: String read FMessageId write SetMessageId;
     Property role: String read FRole write Setrole;
@@ -409,16 +409,16 @@ type
     Function Remove: TJSonObject;
 
     { TODO : Falta implementar los archivos del code_interperter }
-    Function CodeFileAttach(FileId: String): Boolean;
-    Function CodeFileUploadAndAttach(FileId: String): Boolean;
-    Function CodeFileDetach(FileId: String): Boolean;
-    Function CodeFileList: TJSonObject;
-    Function CodeFileListFilesArray: TAiFileArray;
+//    Function CodeFileAttach(FileId: String): Boolean;
+//    Function CodeFileUploadAndAttach(FileId: String): Boolean;
+//    Function CodeFileDetach(FileId: String): Boolean;
+//    Function CodeFileList: TJSonObject;
+//    Function CodeFileListFilesArray: TAiFileArray;
 
-    Function VectorStoreFileAttach(VectorStoreId, FileId: String): Boolean;
-    Function VectorStoreFileUploadAndAttach(VectorStoreId, filename: String): TAiFile;
-    Function VectorStoreFileDetach(VectorStoreId, FileId: String): Boolean;
-    Function VectorStoreFileList(VectorStoreId: String): TAiVectorStoreFileArray;
+//    procedure VectorStoreFileAttach(VectorStoreId, FileId: String);
+//    Function VectorStoreFileUploadAndAttach(VectorStoreId, filename: String): TAiFile;
+//    procedure VectorStoreFileDetach(VectorStoreId, FileId: String);
+//    Function VectorStoreFileList(VectorStoreId: String): TAiVectorStoreFileArray;
 
     Property Model: String read FModel write SetModel;
     Property Name: String read FName write SetName;
@@ -509,17 +509,17 @@ type
     Constructor Create(aAssistant: TAiAssistant; aThRead: TAiThRead; aAditionalInstructions: String = ''; aMetadata: TAiMetadata = Nil); Overload;
     Destructor Destroy; Override;
 
-    Function Run: Boolean;
+    procedure Run;
 
     Function ListRuns: TJSonObject;
     Function ListRunsSteps: TJSonObject;
-    Function Retrieve: TJSonObject;
+    procedure Retrieve;
     Function RetrieveStep(StepId: String): TJSonObject;
 
-    Function ApplyUpdates: TJSonObject;
+    procedure ApplyUpdates;
 
-    Function SubmitTool(AitoolsOutputs: TAiToolsFunctions): TJSonObject;
-    Function Cancel: TJSonObject;
+    procedure SubmitTool(AitoolsOutputs: TAiToolsFunctions);
+    procedure Cancel;
 
     Property Assistant: TAiAssistant read FAssistant;
     Property ThRead: TAiThRead read FThRead;
@@ -731,30 +731,29 @@ end;
 
 { TAssistant }
 
-function TAiAssistant.CodeFileAttach(FileId: String): Boolean;
-begin
-
-end;
-
-function TAiAssistant.CodeFileDetach(FileId: String): Boolean;
-begin
-
-end;
-
-function TAiAssistant.CodeFileList: TJSonObject;
-begin
-
-end;
-
-function TAiAssistant.CodeFileListFilesArray: TAiFileArray;
-begin
-
-end;
-
-function TAiAssistant.CodeFileUploadAndAttach(FileId: String): Boolean;
-begin
-
-end;
+//function TAiAssistant.CodeFileAttach(FileId: String): Boolean;
+//begin
+//end;
+//
+//function TAiAssistant.CodeFileDetach(FileId: String): Boolean;
+//begin
+//
+//end;
+//
+//function TAiAssistant.CodeFileList: TJSonObject;
+//begin
+//
+//end;
+//
+//function TAiAssistant.CodeFileListFilesArray: TAiFileArray;
+//begin
+//
+//end;
+//
+//function TAiAssistant.CodeFileUploadAndAttach(FileId: String): Boolean;
+//begin
+//
+//end;
 
 constructor TAiAssistant.Create(aApiKey: String; aUrl: String = '');
 begin
@@ -1446,86 +1445,86 @@ begin
     FVectorStores.Url := FUrl;
 end;
 
-function TAiAssistant.VectorStoreFileAttach(VectorStoreId, FileId: String): Boolean;
-Var
-  Lista: TAiVectorStoreArray;
-  Store: TAiVectorStore;
-begin
-  If VectorStoreId <> '' then
-  Begin
-    Store := VectorStores.Retrive(VectorStoreId);
-  End
-  Else
-  Begin
-    Lista := VectorStores.List; // Este hace parte del objeto, no se elimina
-    If Lista.Count <= 0 then
-      Raise Exception.Create('El Assistente no tiene asignado un VectorStore');
-    Store := Lista.ToArray[0].Value;
-  End;
-
-  Try
-    Store.Files.AtachFile(FileId);
-  Finally
-    Store.Free;
-  End;
-end;
-
-function TAiAssistant.VectorStoreFileUploadAndAttach(VectorStoreId, filename: String): TAiFile;
-begin
-  Result := FFiles.UploadFile(filename, True);
-
-  If Assigned(Result) then
-    Self.VectorStoreFileAttach(VectorStoreId, Result.id);
-end;
-
-function TAiAssistant.VectorStoreFileDetach(VectorStoreId, FileId: String): Boolean;
-Var
-  Lista: TAiVectorStoreArray;
-  Store: TAiVectorStore;
-begin
-  If VectorStoreId <> '' then
-  Begin
-    Store := VectorStores.Retrive(VectorStoreId);
-  End
-  Else
-  Begin
-    Lista := VectorStores.List; // Este hace parte del objeto, no se elimina
-    If Lista.Count <= 0 then
-      Raise Exception.Create('El Assistente no tiene asignado un VectorStore');
-    Store := Lista.ToArray[0].Value;
-  End;
-
-  Try
-    Store.Files.DetachFile(FileId);
-  Finally
-    Store.Free;
-  End;
-end;
-
-function TAiAssistant.VectorStoreFileList(VectorStoreId: String): TAiVectorStoreFileArray;
-Var
-  Lista: TAiVectorStoreArray;
-  Store: TAiVectorStore;
-begin
-  If VectorStoreId <> '' then
-  Begin
-    Store := VectorStores.Retrive(VectorStoreId);
-  End
-  Else
-  Begin
-    Lista := VectorStores.List; // Este hace parte del objeto, no se elimina
-    If Lista.Count <= 0 then
-      Raise Exception.Create('El Assistente no tiene asignado un VectorStore');
-    Store := Lista.ToArray[0].Value;
-  End;
-
-  Try
-    Store.Files.ListFiles;
-  Finally
-    Store.Free;
-  End;
-end;
-
+//function TAiAssistant.VectorStoreFileAttach(VectorStoreId, FileId: String): Boolean;
+//Var
+//  Lista: TAiVectorStoreArray;
+//  Store: TAiVectorStore;
+//begin
+//  If VectorStoreId <> '' then
+//  Begin
+//    Store := VectorStores.Retrieve(VectorStoreId);
+//  End
+//  Else
+//  Begin
+//    Lista := VectorStores.List; // Este hace parte del objeto, no se elimina
+//    If Lista.Count <= 0 then
+//      Raise Exception.Create('El Assistente no tiene asignado un VectorStore');
+//    Store := Lista.ToArray[0].Value;
+//  End;
+//
+//  Try
+//    Store.Files.AtachFile(FileId);
+//  Finally
+//    Store.Free;
+//  End;
+//end;
+//
+//function TAiAssistant.VectorStoreFileUploadAndAttach(VectorStoreId, filename: String): TAiFile;
+//begin
+//  Result := FFiles.UploadFile(filename, True);
+//
+//  If Assigned(Result) then
+//    Self.VectorStoreFileAttach(VectorStoreId, Result.id);
+//end;
+//
+//function TAiAssistant.VectorStoreFileDetach(VectorStoreId, FileId: String): Boolean;
+//Var
+//  Lista: TAiVectorStoreArray;
+//  Store: TAiVectorStore;
+//begin
+//  If VectorStoreId <> '' then
+//  Begin
+//    Store := VectorStores.Retrieve(VectorStoreId);
+//  End
+//  Else
+//  Begin
+//    Lista := VectorStores.List; // Este hace parte del objeto, no se elimina
+//    If Lista.Count <= 0 then
+//      Raise Exception.Create('El Assistente no tiene asignado un VectorStore');
+//    Store := Lista.ToArray[0].Value;
+//  End;
+//
+//  Try
+//    Store.Files.DetachFile(FileId);
+//  Finally
+//    Store.Free;
+//  End;
+//end;
+//
+//function TAiAssistant.VectorStoreFileList(VectorStoreId: String): TAiVectorStoreFileArray;
+//Var
+//  Lista: TAiVectorStoreArray;
+//  Store: TAiVectorStore;
+//begin
+//  If VectorStoreId <> '' then
+//  Begin
+//    Store := VectorStores.Retrieve(VectorStoreId);
+//  End
+//  Else
+//  Begin
+//    Lista := VectorStores.List; // Este hace parte del objeto, no se elimina
+//    If Lista.Count <= 0 then
+//      Raise Exception.Create('El Assistente no tiene asignado un VectorStore');
+//    Store := Lista.ToArray[0].Value;
+//  End;
+//
+//  Try
+//    Store.Files.ListFiles;
+//  Finally
+//    Store.Free;
+//  End;
+//end;
+//
 { TAiThRead }
 
 constructor TAiThRead.Create(aAiAssistant: TAiAssistant);
@@ -2332,7 +2331,7 @@ end;
 
 { TAiRun }
 
-function TAiRun.ApplyUpdates: TJSonObject;
+procedure TAiRun.ApplyUpdates;
 Var
   Client: THTTPClient;
   Headers: TNetHeaders;
@@ -2392,7 +2391,7 @@ begin
   End;
 end;
 
-function TAiRun.Cancel: TJSonObject;
+procedure TAiRun.Cancel;
 Var
   Client: THTTPClient;
   Headers: TNetHeaders;
@@ -2652,7 +2651,7 @@ begin
   end;
 end;
 
-function TAiRun.Retrieve: TJSonObject;
+procedure TAiRun.Retrieve;
 Var
   Client: THTTPClient;
   Headers: TNetHeaders;
@@ -2730,7 +2729,7 @@ begin
   End;
 end;
 
-function TAiRun.Run: Boolean;
+procedure TAiRun.Run;
 Var
   Client: THTTPClient;
   Headers: TNetHeaders;
@@ -2825,7 +2824,7 @@ begin
     FUrl := GlOpenAIUrl;
 end;
 
-function TAiRun.SubmitTool(AitoolsOutputs: TAiToolsFunctions): TJSonObject;
+procedure TAiRun.SubmitTool(AitoolsOutputs: TAiToolsFunctions);
 Var
   Client: THTTPClient;
   Headers: TNetHeaders;
@@ -3089,6 +3088,7 @@ Var
   Clave: String;
 begin
   AiFile := Nil;
+  result:=False;
   For Clave in Self.Keys do
   Begin
     If SameText(Self.Items[Clave].id, AiFileId) = True then
@@ -3413,6 +3413,8 @@ function TAiVectorStoreFileArray.GetFileByVectorStoreId(AiVectorStoreFileId: Str
 Var
   Clave: String;
 begin
+  Result:=False;
+  AiStoreFile:=nil;
   For Clave in Self.Keys do
   Begin
     If SameText(Self.Items[Clave].id, AiVectorStoreFileId) = True then
@@ -3494,6 +3496,8 @@ Var
   St: TStringStream;
   sUrl, EndPointUrl: String;
 begin
+
+  Result:=nil;
 
   if aUrl <> '' then
     EndPointUrl := aUrl
@@ -3592,7 +3596,7 @@ begin
   End;
 end;
 
-function TAiVectorStores.Retrive(aVectorStoreId: String): TAiVectorStore;
+function TAiVectorStores.Retrieve(aVectorStoreId: String): TAiVectorStore;
 Var
   Client: THTTPClient;
   Headers: TNetHeaders;
@@ -3649,6 +3653,7 @@ Var
   St: TStringStream;
   sUrl: String;
 begin
+  Result:=nil;
 
   Client := THTTPClient.Create;
   St := TStringStream.Create('', TEncoding.UTF8);
@@ -3770,6 +3775,8 @@ function TAiVectorStoreArray.GetVectorStoreByName(AiVectorStoreName: String; out
 Var
   Clave: String;
 begin
+  Result:=False;
+  AiVectorStore:=nil;
   For Clave in Self.Keys do
   Begin
     If SameText(Self.Items[Clave].name, AiVectorStoreName) = True then
@@ -3796,7 +3803,7 @@ Var
   Lista: TStringList;
   i: Integer;
 begin
-
+  Result:=nil;
   Client := THTTPClient.Create;
   Lista := TStringList.Create;
   St := TStringStream.Create('', TEncoding.UTF8);
@@ -3849,7 +3856,7 @@ begin
   End;
 end;
 
-Class function TAiVectorStoresFileBatch.Retrive(aApiKey, aVectorStoreId, aBatchId: String): TAiVectorStoreFileBatch;
+Class function TAiVectorStoresFileBatch.Retrieve(aApiKey, aVectorStoreId, aBatchId: String): TAiVectorStoreFileBatch;
 Var
   Client: THTTPClient;
   Headers: TNetHeaders;

@@ -26,13 +26,14 @@ type
     FRequired: Boolean;
     FDescription: TStrings;
     FEnum: String;
-    function GetDisplayName: string; Override;
-    procedure SetDisplayName(const Value: string); Override;
     procedure SetName(const Value: String);
     procedure SetDescription(const Value: TStrings);
     procedure SetEnum(const Value: String);
     procedure SetParamType(const Value: TToolsParamType);
     procedure SetRequired(const Value: Boolean);
+  protected
+    function GetDisplayName: string; Override;
+    procedure SetDisplayName(const Value: string); Override;
   public
     constructor Create(Collection: TCollection); Override;
     Destructor Destroy; Override;
