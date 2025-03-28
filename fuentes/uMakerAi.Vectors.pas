@@ -190,7 +190,7 @@ type
     Function AddItem(aText: String): TAiEmbeddingNode; Overload; Virtual;
 
     Function AddItemsFromJSonArray(aJSonArray: TJSonArray): Boolean; Virtual;
-    Function AddItemsFromPlainText(aText: String; aLenChunk: Integer = 512; aLenOverlap: Integer = 80): Boolean; Virtual;
+    procedure AddItemsFromPlainText(aText: String; aLenChunk: Integer = 512; aLenOverlap: Integer = 80); Virtual;
     Function CreateEmbeddingNode(aText: String; aEmbeddings: TAiEmbeddings = Nil): TAiEmbeddingNode;
     Function Count: Integer;
     Procedure Clear;
@@ -462,7 +462,7 @@ begin
   Result := True;
 end;
 
-function TAiDataVec.AddItemsFromPlainText(aText: String; aLenChunk, aLenOverlap: Integer): Boolean;
+procedure TAiDataVec.AddItemsFromPlainText(aText: String; aLenChunk, aLenOverlap: Integer);
 Var
   i: Integer;
   S, Text: String;
@@ -749,6 +749,7 @@ end;
 
 function TAIEmbeddingIndex.Add(Point: TAiEmbeddingNode): Integer;
 begin
+  Result:=-1;
   // Esta función se debe implementar en cada modelo solo cuando sea necesario
 end;
 
@@ -777,7 +778,7 @@ end;
 
 function TAIEmbeddingIndex.Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TAiDataVec;
 begin
-
+  result:=nil;
 end;
 
 procedure TAIEmbeddingIndex.SetDataVec(const Value: TAiDataVec);

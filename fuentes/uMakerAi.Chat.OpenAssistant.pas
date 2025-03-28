@@ -195,6 +195,7 @@ begin
   Try
     If Self.FAsynchronous then
     Begin
+      Result:=nil;
       TTask.Run(
         Procedure
         Begin
@@ -302,6 +303,7 @@ begin
 
   If Self.FAsynchronous then
   Begin
+    Result:=nil;
     TThread.Synchronize(nil,
       procedure
       begin
@@ -520,7 +522,7 @@ end;
 function TAiOpenAssistant.GetBusy: Boolean;
 begin
   If Assigned(FAiRun) then
-    Result := FAiRun.Busy;
+    Result := FAiRun.Busy
 end;
 
 function TAiOpenAssistant.GetCode_Interpreter: Boolean;
@@ -827,7 +829,9 @@ begin
     Begin
       Result := AiFiles.UploadFile(FileName, True);
       VectorStore.Files.AtachFile(Result.id); // No se libera el vectorStore, es parte de Files
-    End;
+    End
+    else
+      Result:=nil;
   Finally
     AiFiles.Free;
   End;
