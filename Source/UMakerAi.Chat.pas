@@ -264,9 +264,9 @@ type
     Procedure OnRequestExceptionEvent(const Sender: TObject; const AError: Exception); Virtual;
     Procedure OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse); Virtual;
 
-    Function InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String; Overload; Virtual;
-    Function InternalAddMessage(aPrompt, aRole: String; aMediaFiles: Array of TAiMediaFile): String; Overload; Virtual;
-    Function InternalAddMessage(aMsg: TAiChatMessage): String; Overload; Virtual;
+    Function InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): TAiChatMessage; Overload; Virtual;
+    Function InternalAddMessage(aPrompt, aRole: String; aMediaFiles: Array of TAiMediaFile): TAiChatMessage; Overload; Virtual;
+    Function InternalAddMessage(aMsg: TAiChatMessage): TAiChatMessage; Overload; Virtual;
 
     function InternalRunSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
     function InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
@@ -410,7 +410,9 @@ begin
   FAbort := True;
 end;
 
-function TAiChat.InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String;
+
+//--- Este mensaje se envía cuando es una función toll, es indepenciente a los otros dos
+function TAiChat.InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): TAiChatMessage;
 Var
   Msg: TAiChatMessage;
 begin
@@ -421,14 +423,17 @@ begin
     FMessages.Add(Msg);
     FLastPrompt := aPrompt;
 
-    If Assigned(FOnBeforeSendMessage) then
-      FOnBeforeSendMessage(Self, Msg);
+    Result := Msg;
+
+    //------ al llamar una herramienta tool no se valida un before message debe ser manejado solo por el código -------
+     //If Assigned(FOnBeforeSendMessage) then FOnBeforeSendMessage(Self, Msg);
 
   Finally
   End;
 end;
 
-function TAiChat.InternalAddMessage(aPrompt, aRole: String; aMediaFiles: array of TAiMediaFile): String;
+//------- Metodo para el manejo de mensajes del chat normal
+function TAiChat.InternalAddMessage(aPrompt, aRole: String; aMediaFiles: array of TAiMediaFile): TAiChatMessage;
 Var
   Msg: TAiChatMessage;
   MF: TAiMediaFile;
@@ -441,13 +446,14 @@ begin
     For MF in aMediaFiles do
       Msg.AddMediaFile(MF);
 
-    InternalAddMessage(Msg);
+    Result := InternalAddMessage(Msg);
 
   Finally
   End;
 end;
 
-function TAiChat.InternalAddMessage(aMsg: TAiChatMessage): String;
+//------- Metodo para el manejo de mensajes del chat normal
+function TAiChat.InternalAddMessage(aMsg: TAiChatMessage): TAiChatMessage;
 Var
   TmpMsg: TAiChatMessage;
   MF: TAiMediaFile;
@@ -455,6 +461,9 @@ Var
   Respuesta: String;
   Procesado: Boolean;
 begin
+
+  If Not Assigned(aMsg) then
+      Raise Exception.Create('El parámetro aMsg debe estar instanciado');
 
   Try
     // Comienza con las instrucciones iniciales, en cada modelo es diferente
@@ -489,8 +498,14 @@ begin
 
     FLastPrompt := aMsg.Prompt; // aqui lleva el Prompt Inicial + la conversión de los MediaFiles a texto si el usuario lo permite
 
+    if Assigned(FOnAddMessage) then
+      FOnAddMessage(Self, aMsg, Nil, aMsg.Role, aMsg.Prompt);
+
+
     If Assigned(FOnBeforeSendMessage) then
       FOnBeforeSendMessage(Self, aMsg);
+
+    Result := aMsg;
 
   Finally
   End;

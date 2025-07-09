@@ -74,8 +74,10 @@ type
     function InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunImageDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
 
-    Function InternalAddMessage(aPrompt, aRole: String; aToolCallId: String = ''; aFunctionName: String = ''): String; Override;
-    Function InternalAddMessage(aPrompt, aRole: String; aMediaFiles: Array of TAiMediaFile): String; Override;
+    Function InternalAddMessage(aPrompt, aRole: String; aToolCallId: String = ''; aFunctionName: String = ''): TAiChatMessage; Override;
+    Function InternalAddMessage(aPrompt, aRole: String; aMediaFiles: Array of TAiMediaFile): TAiChatMessage; Override;
+    function InternalAddMessage(aMsg: TAiChatMessage): TAiChatMessage; Override;
+
 
     Function InitChatCompletions: String; Override;
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Override;
@@ -756,15 +758,34 @@ begin
   end;
 end;
 
-function TAiGeminiChat.InternalAddMessage(aPrompt, aRole: String; aMediaFiles: array of TAiMediaFile): String;
+function TAiGeminiChat.InternalAddMessage(aPrompt, aRole: String; aMediaFiles: array of TAiMediaFile): TAiChatMessage;
 Var
   Msg: TAiChatMessage;
+  MF: TAiMediaFile;
+begin
+
+  Try
+    // Adiciona el mensaje a la lista
+    Msg := TAiChatMessage.Create(aPrompt, aRole);
+
+    For MF in aMediaFiles do
+      Msg.AddMediaFile(MF);
+
+    Result := InternalAddMessage(Msg);
+
+  Finally
+  End;
+end;
+
+function TAiGeminiChat.InternalAddMessage(aMsg: TAiChatMessage): TAiChatMessage;
+Var
+  InitMsg: TAiChatMessage;
   MensajeInicial: String;
   MF: TAiMediaFile;
   Procesado: Boolean;
   Respuesta: String;
 begin
-  Result := '';
+  Result := Nil;
   Procesado := False;
   Respuesta := '';
 
@@ -774,42 +795,45 @@ begin
       MensajeInicial := Self.PrepareSystemMsg;
       if Trim(MensajeInicial) <> '' then
       begin
-        Msg := TAiChatMessage.Create(MensajeInicial, 'user');
-        Msg.Id := FMessages.Count + 1;
-        FMessages.Add(Msg);
+        InitMsg := TAiChatMessage.Create(MensajeInicial, 'user');
+        InitMsg.Id := FMessages.Count + 1;
+        FMessages.Add(InitMsg);
 
-        Msg := TAiChatMessage.Create('De acuerdo, seguiré las instrucciones', 'model');
-        Msg.Id := FMessages.Count + 1;
-        FMessages.Add(Msg);
+        InitMsg := TAiChatMessage.Create('De acuerdo, seguiré las instrucciones', 'model');
+        InitMsg.Id := FMessages.Count + 1;
+        FMessages.Add(InitMsg);
 
         if Assigned(FOnAddMessage) then
-          FOnAddMessage(Self, Msg, Nil, 'system', MensajeInicial);
+          FOnAddMessage(Self, InitMsg, Nil, 'system', MensajeInicial);
       end;
     End;
 
-    Msg := TAiChatMessage.Create(aPrompt, aRole);
-    Msg.Id := FMessages.Count + 1;
+    //aMsg := TAiChatMessage.Create(aMsg.Prompt, aMsg.Role);
+    aMsg.Id := FMessages.Count + 1;
+    FMessages.Add(aMsg);
 
-    for MF in aMediaFiles do
+    for MF in aMsg.MediaFiles do
     Begin
-      DoProcessMediaFile(aPrompt, MF, Respuesta, Procesado);
+      DoProcessMediaFile(aMsg.Prompt, MF, Respuesta, Procesado);
       if Procesado then
       begin
-        Msg.Prompt := Msg.Prompt + sLineBreak + Respuesta;
+        aMsg.Prompt := aMsg.Prompt + sLineBreak + Respuesta;
         MF.Procesado := True;
         MF.Transcription := Respuesta;
       end;
-      Msg.AddMediaFile(MF);
+      //aMsg.AddMediaFile(MF);
     End;
 
-    FMessages.Add(Msg);
-    FLastPrompt := Msg.Prompt;
+    //FMessages.Add(Msg);
+    FLastPrompt := aMsg.Prompt;
 
     if Assigned(FOnAddMessage) then
-      FOnAddMessage(Self, Msg, Nil, aRole, aPrompt);
+      FOnAddMessage(Self, aMsg, Nil, aMsg.Role, aMsg.Prompt);
 
     if Assigned(FOnBeforeSendMessage) then
-      FOnBeforeSendMessage(Self, Msg);
+      FOnBeforeSendMessage(Self, aMsg);
+
+    Result := aMsg;
 
   Finally
   End;
@@ -1400,12 +1424,14 @@ begin
   Result := ''; // Implementar si es necesario
 end;
 
-function TAiGeminiChat.InternalAddMessage(aPrompt, aRole, aToolCallId, aFunctionName: String): String;
+
+//------- Mensaje de tool no debe llamar el BeforeSendMessage ------
+function TAiGeminiChat.InternalAddMessage(aPrompt, aRole, aToolCallId, aFunctionName: String): TAiChatMessage;
 Var
   Msg: TAiChatMessage;
   MensajeInicial: String;
 begin
-  Result := '';
+  Result := Nil;
   Try
     If (FMessages.Count = 0) then
     Begin
@@ -1430,8 +1456,9 @@ begin
     FMessages.Add(Msg);
     FLastPrompt := aPrompt;
 
-    if Assigned(FOnBeforeSendMessage) then
-      FOnBeforeSendMessage(Self, Msg);
+    Result := Msg;
+    //El mensaje del tool no debe llamar un before
+    //if Assigned(FOnBeforeSendMessage) then  FOnBeforeSendMessage(Self, Msg);
 
   Finally
   End;

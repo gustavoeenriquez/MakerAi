@@ -75,8 +75,6 @@ type
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
 
-    function InternalAddMessage(aPrompt, aRole: String; aMediaFiles: Array of TAiMediaFile): String; Overload; Override;
-    function InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String; Overload; Override;
     Function InitChatCompletions: String; Override;
     Function GetTools(Funcion: TAiFunctions): TJSonArray;
     Function GetToolsItems(Functions: TFunctionActionItems): TJSonArray;
@@ -627,11 +625,6 @@ begin
     Result := TJSonArray.Create;
 end;
 
-// Implementacion de la sobreescritura, se ejecuta antes del envio del mensaje
-function TAiOpenAiResponses.InternalAddMessage(aPrompt, aRole: String; aMediaFiles: array of TAiMediaFile): String;
-begin
-  Result := inherited InternalAddMessage(aPrompt, aRole, aMediaFiles);
-end;
 
 function TAiOpenAiResponses.InitChatCompletions: String;
 var
@@ -941,14 +934,6 @@ begin
   end;
 end;
 
-// Implementacion de la sobreescritura, se ejecuta antes del envio del mensaje
-function TAiOpenAiResponses.InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String;
-// Var
-// Msg: TAiChatMessage;
-begin
-  Inherited;
-  // Result := inherited InternalAddMessage(aPrompt, aRole, ToolCallId, aFunctionName);
-end;
 
 function TAiOpenAiResponses.InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String;
 Var

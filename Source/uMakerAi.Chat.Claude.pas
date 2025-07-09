@@ -73,7 +73,7 @@ type
   Protected
     Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
 
-    Function InternalAddMessage(aMsg: TAiChatMessage): String; Overload; Override;
+    Function InternalAddMessage(aMsg: TAiChatMessage): TAiChatMessage; Overload; Override;
 
     Function InitChatCompletions: String; Override;
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Override;
@@ -904,9 +904,9 @@ end;
   end;
 }
 
-function TAiClaudeChat.InternalAddMessage(aMsg: TAiChatMessage): String;
+function TAiClaudeChat.InternalAddMessage(aMsg: TAiChatMessage): TAiChatMessage;
 Var
-  TmpMsg: TAiChatMessage;
+  InitMsg: TAiChatMessage;
   MensajeInicial: String;
   MF: TAiMediaFile;
   Procesado: Boolean;
@@ -921,16 +921,16 @@ begin
       // Si el formato de respuesta es Json, siempre debe llevar en la instrucción que el formato sea json
       MensajeInicial := Self.PrepareSystemMsg;
 
-      TmpMsg := TAiChatMessage.Create(MensajeInicial, 'user');
-      TmpMsg.Id := FMessages.Count + 1;
-      FMessages.Add(TmpMsg);
+      InitMsg := TAiChatMessage.Create(MensajeInicial, 'user');
+      InitMsg.Id := FMessages.Count + 1;
+      FMessages.Add(InitMsg);
 
-      TmpMsg := TAiChatMessage.Create('De acuerdo, seguiré las instrucciones', 'assistant');
-      TmpMsg.Id := FMessages.Count + 1;
-      FMessages.Add(TmpMsg);
+      InitMsg := TAiChatMessage.Create('De acuerdo, seguiré las instrucciones', 'assistant');
+      InitMsg.Id := FMessages.Count + 1;
+      FMessages.Add(InitMsg);
 
       If Assigned(FOnAddMessage) then
-        FOnAddMessage(Self, TmpMsg, Nil, 'system', MensajeInicial);
+        FOnAddMessage(Self, InitMsg, Nil, 'system', MensajeInicial);
     End;
 
     // Adiciona el mensaje a la lista
@@ -954,6 +954,9 @@ begin
 
     If Assigned(FOnBeforeSendMessage) then
       FOnBeforeSendMessage(Self, aMsg);
+
+    Result := aMsg;
+
   Finally
 
   End;
