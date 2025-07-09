@@ -84,20 +84,22 @@ begin
 end;
 ```
 Delphi
-Roadmap:
-Support for more platforms and models.
-New AI Drivers.
-Visual components to facilitate the creation of user interfaces for AI.
 
-License:
+## Roadmap
+- Support for more platforms and models
+- New AI Drivers
+- Visual components to facilitate the creation of user interfaces for AI
+
+## License
 This project is licensed under the MIT license.
 
-Contributions:
+## Contributions
 Contributions are welcome! If you have ideas to improve MakerAI, feel free to open an issue or submit a pull request.
 
-Support:
+## Support
 If you have any questions or need help, you can contact me through:
-   GitHub Issues Email: gustavoeenriquez@gmail.com
+- GitHub Issues
+- Email: gustavoeenriquez@gmail.com
 
-Acknowledgements:
-   I thank the Delphi community for their support.
+## Acknowledgements
+I thank the Delphi community for their support.
