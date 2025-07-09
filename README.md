@@ -48,8 +48,9 @@ Tired of dealing with fragmented and complex AI APIs? **MakerAI** offers `TAiCon
 ## Installation
 
 1.  Download the source code.
-2.  Open the design project (`.dpk`) corresponding to your IDE (VCL or FMX).
+2.  Open the design project (`MakerAI.dpk`, `MakerAiDsg.dpk`) corresponding to your IDE (VCL).
 3.  Install the package.
+4.  Add path to Delphi Library paths
 
 ## Basic Usage Example 
 
