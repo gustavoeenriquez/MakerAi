@@ -80,7 +80,7 @@ begin
     MediaFile.Free;
   end;
 end;
-Use code with caution.
+```
 Delphi
 Roadmap
 Support for more platforms.
