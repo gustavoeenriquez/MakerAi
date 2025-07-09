@@ -51,7 +51,7 @@ Tired of dealing with fragmented and complex AI APIs? **MakerAI** offers `TAiCon
 2.  Open the design project (`.dpk`) corresponding to your IDE (VCL or FMX).
 3.  Install the package.
 
-## Basic Usage Example (VCL)
+## Basic Usage Example 
 
 ```delphi
 procedure TForm1.Button1Click(Sender: TObject);
@@ -65,7 +65,7 @@ end;
 ```
 
 
-Image Usage Example (VCL)
+## Image Usage Example
 
 ```delphi
 procedure TForm1.Button2Click(Sender: TObject);
