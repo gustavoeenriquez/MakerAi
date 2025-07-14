@@ -73,10 +73,10 @@ begin
   Response := AiConnection1.AddMessageAndRun('What is the capital of France?', 'user', []);
   Memo1.Lines.Add('IA: ' + Response);
 end;
-Use code with caution.
-Markdown
+```
+
 Image Usage Example
-Generated delphi
+```delphi
 procedure TForm1.Button2Click(Sender: TObject);
 var
   MediaFile : TAiMediaFile;
