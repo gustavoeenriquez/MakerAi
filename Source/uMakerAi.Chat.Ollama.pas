@@ -40,7 +40,7 @@ uses
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core, uMakerAi.Embeddings;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Utils.CodeExtractor;
 
 type
 
@@ -58,13 +58,13 @@ type
     Class Function GetModels(aApiKey: String; aUrl: String = ''): TStringList; Override;
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
-    //Function Run(aMsg: TAiChatMessage = Nil): String; Override;
+    // Function Run(aMsg: TAiChatMessage = Nil): String; Override;
     Function GetMessages: TJSonArray; Override;
     class function GetDriverName: string; Override;
     class procedure RegisterDefaultParams(Params: TStrings); Override;
     class function CreateInstance(Sender: TComponent): TAiChat; Override;
   Published
-     property keep_alive : String read Fkeep_alive write Setkeep_alive;
+    property keep_alive: String read Fkeep_alive write Setkeep_alive;
   End;
 
   TAiOllamalEmbeddings = class(TAiEmbeddings)
@@ -99,10 +99,7 @@ Begin
   Params.Add('ApiKey=@OLLAMA_API_KEY');
   Params.Add('Model=llama3');
   Params.Add('MaxTokens=4096');
-  Params.Add('Temperature=0.7');
-  Params.Add('TopP=1.0');
-  Params.Add('TopK=5');
-  Params.Add('BaseURL=http://localhost:11434/');
+  Params.Add('URL=http://localhost:11434/');
 End;
 
 procedure TAiOllamaChat.Setkeep_alive(const Value: String);
@@ -316,6 +313,8 @@ Var
   JArr: TJSonArray;
   JVal: TJSonValue;
   sModel: string;
+  CustomModels: TArray<string>;
+  I: Integer;
 begin
   Result := TStringList.Create;
 
@@ -346,6 +345,16 @@ begin
             Result.Add(sModel);
         End;
       End;
+
+      // Agregar modelos personalizados
+      CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
+
+      for I := Low(CustomModels) to High(CustomModels) do
+      begin
+        if not Result.Contains(CustomModels[I]) then
+          Result.Add(CustomModels[I]);
+      end;
+
     End
     else
     begin
@@ -365,13 +374,16 @@ Var
   Lista: TStringList;
   I: Integer;
   LAsincronico: Boolean;
+  LModel: String;
 begin
 
   If User = '' then
     User := 'user';
 
-  If Model = '' then
-    Model := 'llama3.2:7b';
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+  If LModel = '' then
+    LModel := 'llama3.2:7b';
 
   LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
 
@@ -404,7 +416,7 @@ begin
     End;
 
     AJSONObject.AddPair('messages', GetMessages); // FMessages.ToJSon);
-    AJSONObject.AddPair('model', Model);
+    AJSONObject.AddPair('model', LModel);
 
     AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
     AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
@@ -482,7 +494,6 @@ begin
     St.SaveToFile('c:\temp\peticion.txt');
     St.Position := 0;
 {$ENDIF}
-
     FResponse.Clear;
     FResponse.Position := 0;
 
@@ -492,7 +503,6 @@ begin
     FResponse.SaveToFile('c:\temp\respuesta.txt');
     FResponse.Position := 0;
 {$ENDIF}
-
     FLastContent := '';
 
     If FClient.Asynchronous = False then
@@ -529,6 +539,7 @@ Var
   Msg: TAiChatMessage;
   aPrompt_tokens, aCompletion_tokens, aTotal_tokens: Integer;
   Role, Respuesta: String;
+  LModel: String;
 
 begin
 
@@ -545,7 +556,7 @@ begin
   End;
 
   Try
-    sJson :=  UTF8Encode(FResponse.DataString);
+    sJson := UTF8Encode(FResponse.DataString);
     FResponse.Clear;
     FTmpResponseText := FTmpResponseText + sJson;
 
@@ -560,7 +571,7 @@ begin
           // Cuando termina de recibir el mensaje
           If Done = True then
           Begin
-            Model := JObj.GetValue('model').Value;
+            LModel := JObj.GetValue('model').Value;
             aPrompt_tokens := JObj.GetValue<Integer>('prompt_eval_count');
             aCompletion_tokens := JObj.GetValue<Integer>('eval_count');
             aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
@@ -630,14 +641,21 @@ Var
   jMessage: TJSonObject;
   aPrompt_tokens, aCompletion_tokens, aTotal_tokens: Integer;
   Role, Respuesta: String;
-  ToolMsg, AskMsg : TAiChatMessage;
-  //Msg: TAiChatMessage;
+  ToolMsg, AskMsg: TAiChatMessage;
+  // Msg: TAiChatMessage;
   LFunciones: TAiToolsFunctions;
   ToolCall: TAiToolsFunction;
 
   TaskList: array of ITask;
   I, NumTasks: Integer;
   Clave, sToolCalls: String;
+  LModel: String;
+
+  Code: TMarkdownCodeExtractor;
+  CodeFile: TCodeFile;
+  CodeFiles: TCodeFileList;
+  MF: TAiMediaFile;
+  St: TStringStream;
 
 begin
   AskMsg := GetLastMessage; // Obtiene el mensaje de la solicitud
@@ -645,7 +663,7 @@ begin
   // Id := JObj.GetValue('id').Value;
   // IdObject := JObj.GetValue('object').Value;
   // IdCreate := JObj.GetValue('created').GetValue<String>;
-  Model := JObj.GetValue('model').Value;
+  LModel := JObj.GetValue('model').Value;
   aPrompt_tokens := JObj.GetValue<Integer>('prompt_eval_count');
   aCompletion_tokens := JObj.GetValue<Integer>('eval_count');
   aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
@@ -659,7 +677,7 @@ begin
       sToolCalls := JToolCalls.Format;
   End;
 
-  ///Msg := TAiChatMessage.Create(Respuesta, Role);
+  /// Msg := TAiChatMessage.Create(Respuesta, Role);
 
   DoProcessResponse(GetLastMessage, ResMsg, Respuesta);
 
@@ -668,13 +686,13 @@ begin
   Completion_tokens := Completion_tokens + aCompletion_tokens;
   Total_tokens := Total_tokens + aTotal_tokens;
 
-  ResMsg.Prompt := Trim(ResMsg.Prompt+sLineBreak+Respuesta);
+  ResMsg.Prompt := Trim(ResMsg.Prompt + sLineBreak + Respuesta);
   ResMsg.Tool_calls := sToolCalls;
   ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aPrompt_tokens;
   ResMsg.Completion_tokens := ResMsg.Completion_tokens + aCompletion_tokens;
   ResMsg.Total_tokens := ResMsg.Total_tokens + aTotal_tokens;
-  //ResMsg.Id := FMessages.Count + 1;
-  //ResFMessages.Add(Msg);
+  // ResMsg.Id := FMessages.Count + 1;
+  // ResFMessages.Add(Msg);
 
   // If Assigned(FOnAddMessage) then
   // FOnAddMessage(Self, jObj, Role, Respuesta);
@@ -724,6 +742,36 @@ begin
     End
     Else
     Begin
+
+      If tfc_textFile in NativeOutputFiles then
+      Begin
+        Code := TMarkdownCodeExtractor.Create;
+        Try
+
+          CodeFiles := Code.ExtractCodeFiles(Respuesta);
+          For CodeFile in CodeFiles do
+          Begin
+            St := TStringStream.Create(CodeFile.Code);
+            Try
+              St.Position := 0;
+
+              MF := TAiMediaFile.Create;
+              MF.LoadFromStream('file.' + CodeFile.FileType, St);
+              ResMsg.MediaFiles.Add(MF);
+            Finally
+              St.Free;
+            End;
+
+          End;
+        Finally
+          Code.Free;
+        End;
+      End;
+
+      DoProcessResponse(AskMsg, ResMsg, Respuesta);
+
+      ResMsg.Prompt := Respuesta;
+
       FBusy := False;
       If Assigned(FOnReceiveDataEnd) then
         FOnReceiveDataEnd(Self, ResMsg, JObj, Role, Respuesta);

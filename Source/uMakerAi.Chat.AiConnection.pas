@@ -103,6 +103,7 @@ type
     constructor Create(Sender: TComponent); override;
     destructor Destroy; override;
 
+    Procedure UpdateParamsFromRegistry;
     function AddMessageAndRun(aPrompt, aRole: String; aMediaFiles: array of TAiMediaFile): String; overload;
     function AddMessage(aPrompt, aRole: String): TAiChatMessage;
     function NewMessage(aPrompt, aRole: String): TAiChatMessage;
@@ -284,6 +285,11 @@ begin
   begin
     ApplyParamsToChat(FChat, FParams);
   end;
+end;
+
+procedure TAiChatConnection.UpdateParamsFromRegistry;
+begin
+  UpdateAndApplyParams;
 end;
 
 procedure TAiChatConnection.ValideChat;

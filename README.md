@@ -4,6 +4,8 @@
 [![GitHub Issues](https://img.shields.io/github/issues/gustavoeenriquez/MakerAi)](https://github.com/gustavoeenriquez/MakerAi/issues)
 [![License](https://img.shields.io/github/license/gustavoeenriquez/MakerAi)](LICENSE)
 
+**MakerAI is not just an API wrapper for LLM services.** It's a tool designed to optimize the use of LLMs in production environments.  Focus on the essence of your business, leaving the technical complexities to MakerAI.
+
 **One component. All AIs. Full Compatibility.**
 
 Tired of dealing with fragmented and complex AI APIs? **MakerAI** offers `TAiConnection`, a **universal** Delphi component that simplifies integration with the leading Language Models (LLMs) and Artificial Intelligences on the market.
@@ -25,6 +27,7 @@ Tired of dealing with fragmented and complex AI APIs? **MakerAI** offers `TAiCon
 *   **Native Multimodal Support:**
     *   Processes input documents such as: Audio, Images, Text, PDFs, and Videos.
     *   Native generation of: Audio, Images, Videos, and Text.
+*   **Native RAG Support:** Integrates Retrieval-Augmented Generation (RAG) capabilities, enabling the LLM to leverage external knowledge sources for more accurate and context-aware responses.
 *   **Function Calling (Tool Functions):** Allows AI to execute functions directly in your application.
 *   **Cross-Platform Compatibility:**
     *   Windows (VCL & FMX)
@@ -45,6 +48,13 @@ Tired of dealing with fragmented and complex AI APIs? **MakerAI** offers `TAiCon
 *   **Portability:** Deploy your applications on multiple platforms.
 *   **Future-Proof:** MakerAI is constantly updated to integrate the latest advancements in the world of AI.
 
+## Updates
+
+### New Version 2.1
+- Added CustomModels utility to allow customization of model behavior.
+- Enabled generation of text files such as html, js, css, txt, pas, c, py, etc.
+- Fixed several reported bugs.
+
 ## Installation
 
 1.  Download the source code.
@@ -63,12 +73,10 @@ begin
   Response := AiConnection1.AddMessageAndRun('What is the capital of France?', 'user', []);
   Memo1.Lines.Add('IA: ' + Response);
 end;
-```
-
-
-## Image Usage Example
-
-```delphi
+Use code with caution.
+Markdown
+Image Usage Example
+Generated delphi
 procedure TForm1.Button2Click(Sender: TObject);
 var
   MediaFile : TAiMediaFile;
@@ -84,25 +92,27 @@ begin
   end;
 end;
 ```
-
-## Delphi
-
-
 ## Roadmap
-- Support for more platforms and models
-- New AI Drivers
-- Visual components to facilitate the creation of user interfaces for AI
+
+*   Support for more platforms and models
+*   New AI Drivers
+*   Visual components to facilitate the creation of user interfaces for AI
 
 ## License
+
 This project is licensed under the MIT license.
 
 ## Contributions
+
 Contributions are welcome! If you have ideas to improve MakerAI, feel free to open an issue or submit a pull request.
 
 ## Support
+
 If you have any questions or need help, you can contact me through:
-- GitHub Issues
-- Email: gustavoeenriquez@gmail.com
+
+*   [GitHub Issues](https://github.com/gustavoeenriquez/MakerAi/issues)
+*   Email: gustavoeenriquez@gmail.com
 
 ## Acknowledgements
+
 I thank the Delphi community for their support.

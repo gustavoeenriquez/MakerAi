@@ -46,7 +46,8 @@ uses
   System.Net.Mime,
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
   System.JSON, Rest.JSON,
-  uMakerAi.ParamsRegistry, uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Chat, uMakerAi.Embeddings;
+  uMakerAi.ParamsRegistry, uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Chat,
+  uMakerAi.Embeddings, uMakerAi.Utils.CodeExtractor;
 
 type
 
@@ -69,16 +70,16 @@ type
 
     function InternalRunSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
-    function InternalRunImageDalleGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+    //function InternalRunImageDalleGeneration(ResMsg, AskMsg: TAiChatMessage): String;
     function InternalRunImageVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunWebSearch(ResMsg, AskMsg: TAiChatMessage): String; Override;
 
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
-    function InternalRunImageDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
+    //function InternalRunImageDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
+    function InternalRunPDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
 
-    // Function InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String; Overload; Override;
-    // Function InternalAddMessage(aPrompt, aRole: String; aMediaFiles: Array of TAiMediaFile): String; Overload; Override;
+
     Function InitChatCompletions: String; Override;
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Override;
     procedure ParseJsonTranscript(jObj: TJSonObject; ResMsg: TAiChatMessage; aMediaFile: TAiMediaFile);
@@ -91,7 +92,6 @@ type
   Public
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
-    // Function Run(AskMsg, ResMsg: TAiChatMessage): String; Override;
     Class Function GetModels(aApiKey: String; aUrl: String = ''): TStringList; Overload; Override;
     Function GetModels: TStringList; Overload; Override;
     Function GetMessages: TJSonArray; Override;
@@ -103,24 +103,19 @@ type
     class function CreateInstance(Sender: TComponent): TAiChat; Override;
 
   Published
-    // Property Modalities: TAiModilities read FModalities write SetModalities;
-    // Property Voice: String read FVoice write SetVoice;
-    // Property voice_format: String read Fvoice_format write Setvoice_format;
     Property Store: Boolean read FStore write SetStore;
     Property Parallel_ToolCalls: Boolean read FParallel_ToolCalls write SetParallel_ToolCalls;
     Property Service_Tier: String read FService_Tier write SetService_Tier;
   end;
 
-
   TAiOpenAiEmbeddings = class(TAiEmbeddings)
   Public
     Constructor Create(aOwner: TComponent); Override;
     Destructor Destroy; Override;
-    Function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float')
+    Function CreateEmbedding(aInput, aUser: String; aDimensions: integer = -1; aModel: String = ''; aEncodingFormat: String = 'float')
       : TAiEmbeddingData; Override;
-    Procedure ParseEmbedding(JObj: TJSonObject); Override;
+    Procedure ParseEmbedding(jObj: TJSonObject); Override;
   end;
-
 
 procedure Register;
 
@@ -147,10 +142,7 @@ Begin
   Params.Add('ApiKey=@OPENAI_API_KEY');
   Params.Add('Model=gpt-4o');
   Params.Add('MaxTokens=4096');
-  Params.Add('Temperature=0.7');
-  Params.Add('TopP=1.0');
-  Params.Add('TopK=5');
-  Params.Add('BaseURL=https://api.openai.com/v1/');
+  Params.Add('URL=https://api.openai.com/v1/');
 End;
 
 class function TAiOpenChat.CreateInstance(Sender: TComponent): TAiChat;
@@ -190,7 +182,6 @@ begin
     St.SaveToFile('c:\temp\peticion.txt');
     St.Position := 0;
 {$ENDIF}
-
     FResponse.Clear;
     FResponse.Position := 0;
 
@@ -201,7 +192,6 @@ begin
     FResponse.SaveToFile('c:\temp\respuesta.txt');
     FResponse.Position := 0;
 {$ENDIF}
-
     FLastContent := '';
 
     // If Self.Asynchronous = False then
@@ -230,13 +220,174 @@ begin
   End;
 end;
 
-function TAiOpenChat.InternalRunImageDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
+{function TAiOpenChat.InternalRunImageDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
 begin
 
 end;
+}
 
 function TAiOpenChat.InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
-Var
+var
+  LUrl: string;
+  LBodyStream, LResponseStream: TStringStream;
+  LHeaders: TNetHeaders;
+  LResponse: IHTTPResponse;
+  LJsonObject, LResponseJson, LImageObject: TJSonObject;
+  LDataArray: TJSonArray;
+  LBase64Data: string;
+  // LBinaryStream: TMemoryStream;
+  LNewImageFile: TAiMediaFile;
+  LErrorResponse: string;
+  aPrompt_tokens, aCompletion_tokens, aTotal_tokens: integer;
+  LModel : String;
+begin
+
+  Result := ''; // La función principal no devuelve texto, la imagen va en ResMsg
+  FBusy := True;
+  FLastError := '';
+  FLastContent := '';
+  FLastPrompt := AskMsg.Prompt;
+
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+
+  // 1. Añadir el mensaje del usuario al historial
+  if FMessages.IndexOf(AskMsg) < 0 then
+  begin
+    AskMsg.Id := FMessages.Count + 1;
+    FMessages.Add(AskMsg);
+    if Assigned(FOnAddMessage) then
+      FOnAddMessage(Self, AskMsg, Nil, AskMsg.Role, AskMsg.Prompt);
+  end;
+
+  // 2. Preparar parámetros para la API de DALL-E
+  LUrl := Url + 'images/generations'; // Asume que 'Url' es la URL base de OpenAI
+  LJsonObject := TJSonObject.Create;
+  LBodyStream := nil;
+  LResponseStream := nil;
+  LResponseJson := nil;
+
+  try
+    LJsonObject.AddPair('model', LModel); // Debería ser 'gpt-image-1'
+    LJsonObject.AddPair('prompt', TJSONString.Create(AskMsg.Prompt));
+    LJsonObject.AddPair('n', TJSONNumber.Create(n));
+    // LJsonObject.AddPair('response_format', TJSONString.Create('b64_json'));
+    // LJsonObject.AddPair('size', '1024x1024');
+
+    // Parámetros opcionales,  puedes agregar controles para esto.
+    // LJsonObject.AddPair('size', '1024x1024');
+    // LJsonObject.AddPair('quality', 'high');
+    // LJsonObject.AddPair('output_format', 'png');
+
+    if LModel = 'dall-e-2' then
+    begin
+      // LJsonObject.AddPair('quality', TJSONString.Create('hd'));
+      // LJsonObject.AddPair('style', TJSONString.Create('vivid')); // vivid or natural
+    end
+    Else if LModel = 'dall-e-3' then
+    begin
+      // LJsonObject.AddPair('quality', TJSONString.Create('hd'));
+      // LJsonObject.AddPair('style', TJSONString.Create('vivid')); // vivid or natural
+    end;
+
+    // Añadir identificador de usuario
+    if not User.IsEmpty then
+      LJsonObject.AddPair('user', TJSONString.Create(User));
+
+    // 4. Ejecutar la petición HTTP
+    LBodyStream := TStringStream.Create(LJsonObject.ToString, TEncoding.UTF8);
+    LResponseStream := TStringStream.Create('', TEncoding.UTF8);
+
+    LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
+    FClient.ContentType := 'application/json';
+
+    LResponse := FClient.Post(LUrl, LBodyStream, LResponseStream, LHeaders);
+
+    LResponseStream.SaveToFile('c:\temp\respuesta.txt');
+    LResponseStream.Position := 0;
+
+    // 5. Procesar la respuesta
+    if LResponse.StatusCode = 200 then
+    begin
+      LResponseJson := TJSonObject.ParseJSONValue(LResponseStream.DataString) as TJSonObject;
+      if LResponseJson = nil then
+        raise Exception.Create('Error parsing JSON response from DALL-E.');
+
+      // El objeto 'usage' puede no venir en respuestas con errores
+      Var
+        uso: TJSonObject;
+
+      if LResponseJson.TryGetValue<TJSonObject>('usage', uso) then
+      begin
+        aPrompt_tokens := uso.GetValue<integer>('input_tokens');
+        aCompletion_tokens := uso.GetValue<integer>('output_tokens');
+        aTotal_tokens := uso.GetValue<integer>('total_tokens');
+      end
+      else
+      begin
+        aPrompt_tokens := 0;
+        aCompletion_tokens := 0;
+        aTotal_tokens := 0;
+      end;
+
+      Self.Prompt_tokens := Self.Prompt_tokens + aPrompt_tokens;
+      Self.Completion_tokens := Self.Completion_tokens + aCompletion_tokens;
+      Self.Total_tokens := Self.Total_tokens + aTotal_tokens;
+
+      LDataArray := LResponseJson.GetValue<TJSonArray>('data');
+
+      if (LDataArray <> nil) and (LDataArray.Count > 0) then
+      begin
+        LImageObject := LDataArray.Items[0] as TJSonObject;
+        LBase64Data := LImageObject.GetValue<string>('b64_json');
+
+        Var
+          RevisedPrompt: String;
+        LImageObject.TryGetValue<String>('revised_prompt', RevisedPrompt);
+
+        FLastContent := Trim(FLastContent + sLineBreak + RevisedPrompt);
+
+        // Crear el archivo de media y adjuntarlo al mensaje de respuesta
+        LNewImageFile := TAiMediaFile.Create;
+        try
+          // DALL-E genera imágenes en formato PNG
+          LNewImageFile.LoadFromBase64('generated_image.png', LBase64Data);
+          ResMsg.MediaFiles.Add(LNewImageFile);
+          ResMsg.Prompt := FLastContent;
+
+          // Disparar el evento de fin de recepción de datos
+          if Assigned(FOnReceiveDataEnd) then
+            FOnReceiveDataEnd(Self, ResMsg, nil, 'model', '');
+
+        except
+          LNewImageFile.Free; // Liberar si algo falla después de crearlo
+          raise;
+        end;
+      end
+      else
+      begin
+        FLastError := LModel + ' response OK but no image data received.';
+        DoError(FLastError, nil);
+      end;
+    end
+    else
+    begin
+      LErrorResponse := LResponseStream.DataString;
+      FLastError := Format('Error generating image: %d, %s', [LResponse.StatusCode, LErrorResponse]);
+      DoError(FLastError, nil);
+    end;
+  finally
+    LJsonObject.Free;
+    LBodyStream.Free;
+    LResponseStream.Free;
+    // LBinaryStream.Free;
+    LResponseJson.Free; // ParseJSONValue crea un objeto que debemos liberar
+    FBusy := False;
+  end;
+end;
+
+{ function TAiOpenChat.InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+  Var
   LBodyJson, LToolObject: TJSonObject;
   LToolsArray: TJSonArray;
   LBodyStream: TStringStream;
@@ -246,17 +397,17 @@ Var
   LResponse: IHTTPResponse;
   LResponseJson: TJSonObject;
   Res: String;
-begin
+  begin
 
   if (Pos('dall-e', LowerCase(Self.Model)) > 0) then
   begin
-    // Usa la API de DALL-E legacy
-    Result := InternalRunImageDalleGeneration(ResMsg, AskMsg);
-    Exit
+  // Usa la API de DALL-E legacy
+  Result := InternalRunImageDalleGeneration(ResMsg, AskMsg);
+  Exit
   end;
 
   if FMessages.Count = 0 then
-    raise Exception.Create('No hay mensajes en el historial para generar una imagen.');
+  raise Exception.Create('No hay mensajes en el historial para generar una imagen.');
   LastMessage := GetLastMessage;
 
   FBusy := True;
@@ -269,52 +420,67 @@ begin
   LBodyStream := TStringStream.Create('', TEncoding.UTF8);
 
   try
-    LBodyJson.AddPair('model', Self.Model);
-    LBodyJson.AddPair('input', LastMessage.Prompt);
+  LBodyJson.AddPair('model', Self.Model); // Debería ser 'gpt-image-1'
+  LBodyJson.AddPair('prompt', LastMessage.Prompt); // Usar el prompt del último mensaje
+  LBodyJson.AddPair('n', 1); //Cantidad de imágenes.
 
-    LToolsArray := TJSonArray.Create;
-    LToolObject := TJSonObject.Create;
-    LToolObject.AddPair('type', 'image_generation');
-    LToolsArray.Add(LToolObject);
-    LBodyJson.AddPair('tools', LToolsArray);
+  //Parámetros opcionales,  puedes agregar controles para esto.
+  //LBodyJson.AddPair('size', '1024x1024');
+  //LBodyJson.AddPair('quality', 'high');
+  //LBodyJson.AddPair('output_format', 'png');
 
-    LUrl := Url + 'responses';
-    LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
-    FClient.ContentType := 'application/json';
 
-    Res := UTF8ToString(LBodyJson.ToJSon);
-    LBodyStream.WriteString(Res);
-    LBodyStream.Position := 0;
 
-    FResponse.Clear;
-    FResponse.Position := 0;
+  //LUrl := Url + 'responses';
+  LUrl := Url + 'images/generations'; // Asume que 'Url' es la URL base de OpenAI
 
-    LResponse := FClient.Post(LUrl, LBodyStream, FResponse, LHeaders);
+  LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
+  FClient.ContentType := 'application/json';
 
-    FLastContent := '';
-    if LResponse.StatusCode = 200 then
-    begin
-      LResponseJson := TJSonObject(TJSonObject.ParseJSONValue(LResponse.ContentAsString));
-      try
-        FBusy := False;
-        ParseResponse(LResponseJson, ResMsg);
-        Result := FLastContent;
-      finally
-        FreeAndNil(LResponseJson);
-      end;
-    end
-    else
-    begin
-      FBusy := False;
-      Raise Exception.CreateFmt('Error desde el endpoint /v1/responses: %d, %s', [LResponse.StatusCode, LResponse.ContentAsString]);
-    end;
+  Res := UTF8ToString(LBodyJson.ToJSon);
+  LBodyStream.WriteString(Res);
+  LBodyStream.Position := 0;
+
+  FResponse.Clear;
+  FResponse.Position := 0;
+
+
+
+  LResponse := FClient.Post(LUrl, LBodyStream, FResponse, LHeaders);
+
+  //$IFDEF APIDEBUG
+  FResponse.SaveToFile('c:\temp\respuesta.txt');
+  FResponse.Position := 0;
+  //$ENDIF
+
+
+  FLastContent := '';
+
+
+  if LResponse.StatusCode = 200 then
+  begin
+  LResponseJson := TJSonObject(TJSonObject.ParseJSONValue(LResponse.ContentAsString));
+  try
+  FBusy := False;
+  ParseResponse(LResponseJson, ResMsg);
+  Result := FLastContent;
   finally
-    LBodyJson.Free;
-    LBodyStream.Free;
+  FreeAndNil(LResponseJson);
   end;
-end;
+  end
+  else
+  begin
+  FBusy := False;
+  Raise Exception.CreateFmt('Error desde el endpoint /v1/images/generations: %d, %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+  end;
+  finally
+  LBodyJson.Free;
+  LBodyStream.Free;
+  end;
+  end;
+}
 
-function TAiOpenChat.InternalRunImageDalleGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+{function TAiOpenChat.InternalRunImageDalleGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 var
   LUrl: string;
   LBodyStream, LResponseStream: TStringStream;
@@ -431,10 +597,16 @@ begin
     FBusy := False;
   end;
 end;
+}
 
 function TAiOpenChat.InternalRunImageVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 begin
   Raise Exception.Create('Todavía no se ha implementado esta opción para este modelo');
+end;
+
+function TAiOpenChat.InternalRunPDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
+begin
+  Raise Exception.Create('Todavía no se ha implementado esta opción para este modelo, debe ejecutarlos desde Responses');
 end;
 
 { //Tiene la misma estructura de la clase padre
@@ -540,7 +712,7 @@ begin
 
   // 2. Preparar parámetros para la API de TTS
   LUrl := Url + 'audio/speech';
-  LModel := Self.Model; // 'tts-1'; // O podrías tener una propiedad específica para el modelo TTS
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model); // 'tts-1'; // O podrías tener una propiedad específica para el modelo TTS
   LVoice := Self.Voice; // Usamos la propiedad del componente
   LResponseFormat := Self.voice_format; // Usamos la propiedad del componente
 
@@ -570,7 +742,6 @@ begin
     LBodyStream.SaveToFile('c:\temp\peticionAudio.json.txt');
     LBodyStream.Position := 0;
 {$ENDIF}
-
     LResponse := FClient.Post(LUrl, LBodyStream, LResponseStream, LHeaders);
 
     // 4. Procesar la respuesta
@@ -623,12 +794,15 @@ var
   LResponseObj: TJSonObject;
   Granularities: TStringList; // Para procesar las granularidades
   I: integer;
+  LModel : String;
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
     raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripción.');
 
   sUrl := Url + 'audio/transcriptions';
+
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   Client := THTTPClient.Create;
   LResponseStream := TMemoryStream.Create;
@@ -647,11 +821,7 @@ begin
     // --- 1. CONSTRUCCIÓN DEL BODY MULTIPART CON PARÁMETROS GENÉRICOS ---
     Body.AddStream('file', LTempStream, aMediaFile.Filename, aMediaFile.MimeType);
 
-    // Modelo: usa el modelo principal si es de transcripción, si no, usa un default.
-    if (Pos('transcribe', Self.Model) > 0) or (Pos('whisper', Self.Model) > 0) then
-      Body.AddField('model', Self.Model)
-    else
-      Body.AddField('model', Model); // Default seguro
+    Body.AddField('model', LModel); // Default seguro
 
     if not AskMsg.Prompt.IsEmpty then
       Body.AddField('prompt', AskMsg.Prompt);
@@ -744,6 +914,7 @@ Var
   LToolObject: TJSonObject;
   LBodyStream: TStringStream;
   LUrl: String;
+  LModel : String;
   LHeaders: TNetHeaders;
   LastMessage: TAiChatMessage;
 
@@ -762,6 +933,8 @@ begin
   if not Assigned(LastMessage) then
     raise Exception.Create('No se pudo obtener el último mensaje para la búsqueda web.');
 
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
   FBusy := True;
   FAbort := False;
   FLastError := '';
@@ -775,7 +948,7 @@ begin
     // --- 1. CONSTRUCCIÓN DEL CUERPO JSON PARA LA API DE /v1/responses ---
 
     // Parámetro 'model' (requerido)
-    LBodyJson.AddPair('model', Self.Model); // Debe ser un modelo compatible
+    LBodyJson.AddPair('model', LModel); // Debe ser un modelo compatible
 
     // Parámetro 'input' - La API de 'Responses' usa 'input' con el prompt del usuario
     // A diferencia de 'messages', aquí solo se envía el último prompt.
@@ -810,7 +983,6 @@ begin
     LBodyStream.SaveToFile('c:\temp\peticion_responses_websearch.json.txt');
     LBodyStream.Position := 0;
 {$ENDIF}
-
     // --- 2. EJECUCIÓN DE LA PETICIÓN HTTP AL ENDPOINT CORRECTO ---
     LUrl := Url + 'responses'; // <<< APUNTANDO AL NUEVO ENDPOINT
     LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
@@ -828,7 +1000,6 @@ begin
 {$IFDEF APIDEBUG}
     FResponse.SaveToFile('c:\temp\respuesta_responses_websearch.json.txt');
 {$ENDIF}
-
     // Asumimos que la respuesta de este endpoint no es por stream (síncrona)
     if LResponse.StatusCode = 200 then
     begin
@@ -864,7 +1035,7 @@ begin
 
   ApiKey := '@OPENAI_API_KEY';
   Model := 'gpt4-o';
-  N := 1;
+  n := 1;
   Response_format := TAiChatResponseFormat.tiaChatRfText;
   Temperature := 1;
   User := 'user';
@@ -983,6 +1154,8 @@ Var
   JArr: TJSonArray;
   JVal: TJSonValue;
   sModel: string;
+  CustomModels: TArray<string>;
+  I: integer;
 begin
   Result := TStringList.Create;
 
@@ -1013,6 +1186,16 @@ begin
             Result.Add(sModel);
         End;
       End;
+
+      // Agregar modelos personalizados
+      CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
+
+      for I := Low(CustomModels) to High(CustomModels) do
+      begin
+        if not Result.Contains(CustomModels[I]) then
+          Result.Add(CustomModels[I]);
+      end;
+
     End
     else
     begin
@@ -1060,13 +1243,16 @@ Var
   Res: String;
   MessagesJson, NewContentArray: TJSonArray;
   LastMessageJson, JTextObj, JImageObj: TJSonObject;
+  lModel : String;
 begin
   // Inicialización de variables y valores por defecto
   If User = '' then
     User := 'user';
 
-  If Model = '' then
-    Model := 'gpt-4o'; // Un buen modelo por defecto que maneja multimodalidad
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+  If LModel = '' then
+    LModel := 'gpt-4o'; // Un buen modelo por defecto que maneja multimodalidad
 
   // Las funciones y la generación de audio contextual no suelen funcionar en modo stream
   LAsincronico := Self.Asynchronous and (not Self.Tool_Active) and (Not(Tfc_Audio in NativeOutputFiles)) and
@@ -1122,7 +1308,7 @@ begin
     end;
 
     // --- 1. PARÁMETROS BÁSICOS DE LA PETICIÓN ---
-    AJSONObject.AddPair('model', Model);
+    AJSONObject.AddPair('model', LModel);
     AJSONObject.AddPair('messages', MessagesJson);
     AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
 
@@ -1251,7 +1437,7 @@ begin
       AJSONObject.AddPair('temperature', TJSONNumber.Create(Temperature));
       AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Frequency_penalty));
       AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Presence_penalty));
-      AJSONObject.AddPair('n', TJSONNumber.Create(N));
+      AJSONObject.AddPair('n', TJSONNumber.Create(n));
 
     End;
 
@@ -1573,11 +1759,19 @@ var
   jAnnotationItemValue: TJSonValue;
   jAnnotations: TJSonArray;
   LItem: TAiWebSearchItem;
+  LModel : String;
+
+  Code: TMarkdownCodeExtractor;
+  CodeFile: TCodeFile;
+  CodeFiles: TCodeFileList;
+  MF: TAiMediaFile;
+  St: TStringStream;
+
 begin
   AskMsg := GetLastMessage; // Obtiene el mensaje de la solicitud
 
   // --- 1. EXTRACCIÓN DE METADATOS Y TOKENS ---
-  Model := jObj.GetValue<string>('model');
+  LModel := jObj.GetValue<string>('model');
 
   // El objeto 'usage' puede no venir en respuestas con errores
   if jObj.TryGetValue<TJSonObject>('usage', uso) then
@@ -1795,7 +1989,36 @@ begin
 
         // Permitir al usuario final procesar o modificar la respuesta antes de guardarla.
         // Se pasa el mensaje de solicitud y el mensaje de respuesta más la respuesta del modelo en texto
+
+      If tfc_textFile in NativeOutputFiles then
+      Begin
+        Code := TMarkdownCodeExtractor.Create;
+        Try
+
+          CodeFiles := Code.ExtractCodeFiles(Respuesta);
+          For CodeFile in CodeFiles do
+          Begin
+            St := TStringStream.Create(CodeFile.Code);
+            Try
+              St.Position := 0;
+
+              MF := TAiMediaFile.Create;
+              MF.LoadFromStream('file.' + CodeFile.FileType, St);
+              ResMsg.MediaFiles.Add(MF);
+            Finally
+              St.Free;
+            End;
+
+          End;
+        Finally
+          Code.Free;
+        End;
+      End;
+
+
         DoProcessResponse(AskMsg, ResMsg, Respuesta);
+
+        ResMsg.Prompt := Respuesta;
 
         FBusy := False;
         if Assigned(FOnReceiveDataEnd) then
@@ -2358,11 +2581,12 @@ begin
   FModel := 'text-embedding-3-small';
 end;
 
-function TAiOpenAiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
+function TAiOpenAiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: integer; aModel, aEncodingFormat: String)
+  : TAiEmbeddingData;
 Var
   Client: THTTPClient;
   Headers: TNetHeaders;
-  JObj: TJSonObject;
+  jObj: TJSonObject;
   Res: IHTTPResponse;
   Response: TStringStream;
   St: TStringStream;
@@ -2373,7 +2597,7 @@ begin
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'embeddings';
-  JObj := TJSonObject.Create;
+  jObj := TJSonObject.Create;
 
   If aModel = '' then
     aModel := FModel;
@@ -2382,14 +2606,14 @@ begin
     aDimensions := FDimensions;
 
   Try
-    JObj.AddPair('input', aInput); // Este se adiciona por compatibilidad con ollama
-    JObj.AddPair('prompt', aInput);
-    JObj.AddPair('model', aModel);
-    JObj.AddPair('user', aUser);
-    JObj.AddPair('dimensions', aDimensions);
-    JObj.AddPair('encoding_format', aEncodingFormat);
+    jObj.AddPair('input', aInput); // Este se adiciona por compatibilidad con ollama
+    jObj.AddPair('prompt', aInput);
+    jObj.AddPair('model', aModel);
+    jObj.AddPair('user', aUser);
+    jObj.AddPair('dimensions', aDimensions);
+    jObj.AddPair('encoding_format', aEncodingFormat);
 
-    St.WriteString(UTF8Encode(JObj.Format));
+    St.WriteString(UTF8Encode(jObj.Format));
     St.Position := 0;
 
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
@@ -2404,8 +2628,8 @@ begin
 {$ENDIF}
     if Res.StatusCode = 200 then
     Begin
-      JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      ParseEmbedding(JObj);
+      jObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
+      ParseEmbedding(jObj);
       Result := Self.FData;
 
     End
@@ -2418,7 +2642,7 @@ begin
     Client.Free;
     St.Free;
     Response.Free;
-    JObj.Free;
+    jObj.Free;
   End;
 end;
 
@@ -2428,24 +2652,24 @@ begin
   inherited;
 end;
 
-procedure TAiOpenAiEmbeddings.ParseEmbedding(JObj: TJSonObject);
+procedure TAiOpenAiEmbeddings.ParseEmbedding(jObj: TJSonObject);
 Var
   JArr, jData: TJSonArray;
   Emb: TAiEmbeddingData;
   JVal: TJSonValue;
-  J: Integer;
+  j: integer;
   Usage: TJSonObject;
 
 begin
-  JObj.TryGetValue<String>('model', FModel);
+  jObj.TryGetValue<String>('model', FModel);
 
-  If JObj.TryGetValue<TJSonObject>('usage', Usage) then
+  If jObj.TryGetValue<TJSonObject>('usage', Usage) then
   Begin
-    Usage.TryGetValue<Integer>('prompt_tokens', Fprompt_tokens);
-    Usage.TryGetValue<Integer>('total_tokens', Ftotal_tokens);
+    Usage.TryGetValue<integer>('prompt_tokens', Fprompt_tokens);
+    Usage.TryGetValue<integer>('total_tokens', Ftotal_tokens);
   End;
 
-  jData := JObj.GetValue<TJSonArray>('data');
+  jData := jObj.GetValue<TJSonArray>('data');
 
   SetLength(FData, jData.Count);
 
@@ -2454,12 +2678,12 @@ begin
   Begin
     // El embedding de OpenAi Retorna un array, pero solo se toma el primero de la fila
     JArr := TJSonObject(JVal).GetValue<TJSonArray>('embedding');
-    J := JArr.Count;
-    SetLength(Emb, J);
+    j := JArr.Count;
+    SetLength(Emb, j);
     // FillChar(Emb, Length(Emb) * SizeOf(Double), 0);
 
-    For J := 0 to JArr.Count - 1 do
-      Emb[J] := JArr.Items[J].GetValue<Double>;
+    For j := 0 to JArr.Count - 1 do
+      Emb[j] := JArr.Items[j].GetValue<Double>;
 
     FData := Emb;
     // Inc(i);

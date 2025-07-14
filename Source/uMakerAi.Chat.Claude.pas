@@ -45,7 +45,7 @@ uses
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.ToolFunctions, uMakerAi.Core;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Utils.CodeExtractor;
 
 type
 
@@ -151,10 +151,7 @@ Begin
   Params.Add('ApiKey=@CLAUDE_API_KEY');
   Params.Add('Model=claude-3-sonnet-20240229');
   Params.Add('MaxTokens=4096');
-  Params.Add('Temperature=0.7');
-  Params.Add('TopP=1.0');
-  Params.Add('TopK=5');
-  Params.Add('BaseURL=https://api.anthropic.com/v1/');
+  Params.Add('URL=https://api.anthropic.com/v1/');
 End;
 
 function TAiClaudeChat.RetrieveFile(aFileId: string): TAiMediaFile;
@@ -595,11 +592,26 @@ begin
         begin
           // Recordatorio: La API de Claude v1/messages solo soporta imágenes inline.
           // Tu GetMediaList ya debería filtrar por tipo, pero una doble comprobación no hace daño.
-          if not LMediaFile.MimeType.StartsWith('image/') then
-            Continue;
 
           LPartObj := TJSonObject.Create;
-          LPartObj.AddPair('type', 'image');
+          Case LMediaFile.FileCategory of
+            tfc_textFile:
+              Begin
+                LPartObj.AddPair('type', 'text');
+              End;
+            Tfc_Document:
+              Begin
+                LPartObj.AddPair('type', 'document');
+              End;
+            Tfc_Image:
+              Begin
+                LPartObj.AddPair('type', 'image');
+              End;
+            Tfc_pdf:
+              Begin
+                LPartObj.AddPair('type', 'document');
+              End;
+          End;
 
           LSourceObj := TJSonObject.Create;
           LSourceObj.AddPair('type', 'base64');
@@ -628,7 +640,6 @@ begin
   end;
 end;
 
-
 class function TAiClaudeChat.GetModels(aApiKey, aUrl: String): TStringList;
 var
   Client: THTTPClient;
@@ -639,6 +650,8 @@ var
   jRes: TJSonObject;
   jArr: TJSonArray;
   JVal: TJSONValue;
+  CustomModels: TArray<string>;
+  I: Integer;
 begin
   Result := TStringList.Create;
 
@@ -680,6 +693,16 @@ begin
         finally
           jRes.Free;
         end;
+
+      // Agregar modelos personalizados
+      CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
+
+      for I := Low(CustomModels) to High(CustomModels) do
+      begin
+        if not Result.Contains(CustomModels[I]) then
+          Result.Add(CustomModels[I]);
+      end;
+
     end
     else
     begin
@@ -691,7 +714,6 @@ begin
   end;
 end;
 
-
 function TAiClaudeChat.InitChatCompletions: String;
 Var
   AJSONObject, jToolChoice: TJSonObject;
@@ -699,14 +721,17 @@ Var
   Lista: TStringList;
   I: Integer;
   LAsincronico: Boolean;
-  Res: String;
+  Res, LModel: String;
 begin
   // --- 1. CONFIGURACIÓN INICIAL Y VALORES POR DEFECTO ---
   if User = '' then
     User := 'user';
   // Usamos un modelo más reciente como default, ej. el nuevo Sonnet 3.5
-  if Model = '' then
-    Model := 'claude-3-5-sonnet-20240620';
+
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+  if LModel = '' then
+    LModel := 'claude-3-5-sonnet-20240620';
 
   // Deshabilitar streaming si se están usando herramientas es una práctica segura.
   LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
@@ -716,17 +741,8 @@ begin
   Lista := TStringList.Create;
   Try
     // --- 2. PARÁMETROS PRINCIPALES DE LA API DE CLAUDE ---
-    AJSONObject.AddPair('model', Model);
+    AJSONObject.AddPair('model', LModel);
     AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
-
-    // MEJORA: Añadir el parámetro 'system' si está definido.
-    // Es la forma preferida de Anthropic para las instrucciones de sistema.
-    { //Esta función se implementa en un mensaje inicial
-      if not Self.System.IsEmpty then
-      begin
-      AJSONObject.AddPair('system', Self.System);
-      end;
-    }
 
     // Llamada a la función GetMessages corregida, que genera el 'content' como un array.
     AJSONObject.AddPair('messages', GetMessages);
@@ -1003,7 +1019,6 @@ begin
       St.SaveToFile('c:\temp\peticion.txt');
       St.Position := 0;
 {$ENDIF}
-
       FResponse.Clear;
 
       Res := FClient.Post(sUrl, St, FResponse, FHeaders);
@@ -1013,7 +1028,6 @@ begin
       FResponse.SaveToFile('c:\temp\respuesta.txt');
       FResponse.Position := 0;
 {$ENDIF}
-
       if not FClient.Asynchronous then
       begin
         // --- MODO SÍNCRONO ---
@@ -1108,13 +1122,19 @@ Var
 
   TaskList: array of ITask;
   I, NumTasks: Integer;
-  Id, Clave, sToolCalls: String;
+  Id, Clave, sToolCalls, LModel: String;
+
+  Code: TMarkdownCodeExtractor;
+  CodeFile: TCodeFile;
+  CodeFiles: TCodeFileList;
+  MF: TAiMediaFile;
+  St: TStringStream;
 
 begin
   AskMsg := GetLastMessage; // Obtiene la pregunta, ya que ResMsg se adiciona a la lista si no hay errores.
 
   Id := jObj.GetValue('id').Value;
-  Model := jObj.GetValue('model').Value;
+  LModel := jObj.GetValue('model').Value;
   Role := jObj.GetValue('role').Value;
   If jObj.TryGetValue<TJSonObject>('usage', uso) then
   Begin
@@ -1217,7 +1237,38 @@ begin
     End
     Else
     Begin
+
+      If tfc_textFile in NativeOutputFiles then
+      Begin
+        Code := TMarkdownCodeExtractor.Create;
+        Try
+
+          CodeFiles := Code.ExtractCodeFiles(Respuesta);
+          For CodeFile in CodeFiles do
+          Begin
+            St := TStringStream.Create(CodeFile.Code);
+            Try
+              St.Position := 0;
+
+              MF := TAiMediaFile.Create;
+              MF.LoadFromStream('file.' + CodeFile.FileType, St);
+              ResMsg.MediaFiles.Add(MF);
+            Finally
+              St.Free;
+            End;
+
+          End;
+        Finally
+          Code.Free;
+        End;
+      End;
+
+      DoProcessResponse(AskMsg, ResMsg, Respuesta);
+
+      ResMsg.Prompt := Respuesta;
+
       FBusy := False;
+
       If Assigned(FOnReceiveDataEnd) then
         FOnReceiveDataEnd(Self, ResMsg, jObj, Role, Respuesta);
     End;

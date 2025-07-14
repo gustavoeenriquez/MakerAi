@@ -46,8 +46,8 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   System.Threading, System.TypInfo, System.Types, System.Net.Mime,
   System.NetConsts, System.NetEncoding, System.Net.URLClient,
-  System.Net.HttpClient, System.Net.HttpClientComponent,
-  System.JSON, Rest.JSON, uMakerAi.ToolFunctions, uMakerAi.Core;
+  System.Net.HttpClient, System.Net.HttpClientComponent, System.JSON, Rest.JSON,
+  uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Utils.CodeExtractor;
 
 type
   TAiChatMessage = Class(TObject)
@@ -188,6 +188,8 @@ type
     FTranscription_ResponseFormat: string;
     FTranscription_TimestampGranularities: string;
     FChatMediaSupports: TAiChatMediaSupports;
+    FReasoningFormat: String;
+    FReasoningEffort: String;
 
     procedure SetApiKey(const Value: String);
     procedure SetFrequency_penalty(const Value: Double);
@@ -238,6 +240,8 @@ type
     procedure SetTranscription_TimestampGranularities(const Value: string);
     procedure SetChatMediaSupports(const Value: TAiChatMediaSupports);
     function GetApiKey: String;
+    procedure SetReasoningEffort(const Value: String);
+    procedure SetReasoningFormat(const Value: String);
 
   Protected
     FClient: TNetHTTPClient;
@@ -276,6 +280,7 @@ type
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
     function InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Virtual;
     function InternalRunImageDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Virtual;
+    function InternalRunPDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Virtual;
 
     // Inicializa el json de completions, se saca apaarte porque es complejo
     Function InitChatCompletions: String; Virtual;
@@ -299,7 +304,7 @@ type
 
     Function AddMessage(aPrompt, aRole: String): TAiChatMessage; // Crea un mensaje y lo adiciona a la conversación
     Function NewMessage(aPrompt, aRole: String): TAiChatMessage; // Crea un mensaje pero no lo adiciona a la conversación
-    Function Run(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage= Nil): String; Virtual;
+    Function Run(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage = Nil): String; Virtual;
     Function GetLastMessage: TAiChatMessage;
     Function RemoveMesage(Msg: TAiChatMessage): Boolean; Overload;
     Function RemoveMesage(IdMsg: integer): Boolean; Overload;
@@ -394,11 +399,16 @@ type
     // 'json', 'text', 'verbose_json', etc.
     property Transcription_TimestampGranularities: string read FTranscription_TimestampGranularities
       write SetTranscription_TimestampGranularities; // 'word', 'segment', 'word,segment'
+    Property ReasoningFormat: String read FReasoningFormat write SetReasoningFormat;
+    Property ReasoningEffort: String read FReasoningEffort write SetReasoningEffort;
+
   end;
 
   // procedure Register;
 
 implementation
+
+uses uMakerAi.ParamsRegistry;
 
 { TAiChat }
 
@@ -410,8 +420,7 @@ begin
   FAbort := True;
 end;
 
-
-//--- Este mensaje se envía cuando es una función toll, es indepenciente a los otros dos
+// --- Este mensaje se envía cuando es una función toll, es indepenciente a los otros dos
 function TAiChat.InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): TAiChatMessage;
 Var
   Msg: TAiChatMessage;
@@ -425,14 +434,14 @@ begin
 
     Result := Msg;
 
-    //------ al llamar una herramienta tool no se valida un before message debe ser manejado solo por el código -------
-     //If Assigned(FOnBeforeSendMessage) then FOnBeforeSendMessage(Self, Msg);
+    // ------ al llamar una herramienta tool no se valida un before message debe ser manejado solo por el código -------
+    // If Assigned(FOnBeforeSendMessage) then FOnBeforeSendMessage(Self, Msg);
 
   Finally
   End;
 end;
 
-//------- Metodo para el manejo de mensajes del chat normal
+// ------- Metodo para el manejo de mensajes del chat normal
 function TAiChat.InternalAddMessage(aPrompt, aRole: String; aMediaFiles: array of TAiMediaFile): TAiChatMessage;
 Var
   Msg: TAiChatMessage;
@@ -444,7 +453,10 @@ begin
     Msg := TAiChatMessage.Create(aPrompt, aRole);
 
     For MF in aMediaFiles do
-      Msg.AddMediaFile(MF);
+    Begin
+      If Assigned(MF) then
+        Msg.AddMediaFile(MF);
+    End;
 
     Result := InternalAddMessage(Msg);
 
@@ -452,7 +464,7 @@ begin
   End;
 end;
 
-//------- Metodo para el manejo de mensajes del chat normal
+// ------- Metodo para el manejo de mensajes del chat normal
 function TAiChat.InternalAddMessage(aMsg: TAiChatMessage): TAiChatMessage;
 Var
   TmpMsg: TAiChatMessage;
@@ -463,7 +475,7 @@ Var
 begin
 
   If Not Assigned(aMsg) then
-      Raise Exception.Create('El parámetro aMsg debe estar instanciado');
+    Raise Exception.Create('El parámetro aMsg debe estar instanciado');
 
   Try
     // Comienza con las instrucciones iniciales, en cada modelo es diferente
@@ -490,17 +502,19 @@ begin
 
     For MF in aMsg.MediaFiles do
     Begin
-      DoProcessMediaFile(aMsg.Prompt, MF, Respuesta, Procesado); // Envía el archivo por si lo quiere procesar otra AI especializada, Ej.
-      MF.Procesado := Procesado;
-      MF.Transcription := Respuesta;
-      // Guarda las transcripciones en los MediaFile,  luego construye la respuesta definitiva con todos los mediafiles
+      If Assigned(MF) then
+      Begin
+        DoProcessMediaFile(aMsg.Prompt, MF, Respuesta, Procesado); // Envía el archivo por si lo quiere procesar otra AI especializada, Ej.
+        MF.Procesado := Procesado;
+        MF.Transcription := Respuesta;
+        // Guarda las transcripciones en los MediaFile,  luego construye la respuesta definitiva con todos los mediafiles
+      End;
     End;
 
     FLastPrompt := aMsg.Prompt; // aqui lleva el Prompt Inicial + la conversión de los MediaFiles a texto si el usuario lo permite
 
     if Assigned(FOnAddMessage) then
       FOnAddMessage(Self, aMsg, Nil, aMsg.Role, aMsg.Prompt);
-
 
     If Assigned(FOnBeforeSendMessage) then
       FOnBeforeSendMessage(Self, aMsg);
@@ -598,6 +612,11 @@ begin
   Raise Exception.Create('No está implementada la función runVideoGeneration en este modelo');
 end;
 
+function TAiChat.InternalRunPDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
+begin
+  Raise Exception.Create('No está implementada la función runVideoGeneration en este modelo');
+end;
+
 function TAiChat.InternalRunSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 var
   LUrl, LModel, LVoice, LResponseFormat: string;
@@ -618,7 +637,7 @@ begin
 
   // 2. Preparar parámetros para la API de TTS
   LUrl := Url + 'audio/speech';
-  LModel := Self.Model; // 'tts-1'; // O podrías tener una propiedad específica para el modelo TTS
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
   LVoice := Self.Voice; // Usamos la propiedad del componente
   LResponseFormat := Self.voice_format; // Usamos la propiedad del componente
 
@@ -663,10 +682,11 @@ begin
       LNewAudioFile := TAiMediaFile.Create;
       try
         LResponseStream.Position := 0;
-{$IFDEF DEBUG}
+
+{$IFDEF APIDEBUG}
         LResponseStream.SaveToFile('c:\temp\respuestavoice.txt');
         LResponseStream.Position := 0;
-{$ENDIF DEBUG}
+{$ENDIF}
         LNewAudioFile.LoadFromStream('generated_audio.' + LResponseFormat, LResponseStream);
         LResponseMsg := TAiChatMessage.Create(AskMsg.Prompt, 'assistant');
         LResponseMsg.MediaFiles.Add(LNewAudioFile);
@@ -708,6 +728,7 @@ var
   LResponseObj: TJSonObject;
   Granularities: TStringList; // Para procesar las granularidades
   I: integer;
+  LModel: String;
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
@@ -719,6 +740,7 @@ begin
   LResponseStream := TMemoryStream.Create;
   Body := TMultipartFormData.Create;
   Granularities := TStringList.Create;
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   try
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
@@ -733,10 +755,7 @@ begin
     Body.AddStream('file', LTempStream, aMediaFile.FileName, aMediaFile.MimeType);
 
     // Modelo: usa el modelo principal si es de transcripción, si no, usa un default.
-    if (Pos('transcribe', Self.Model) > 0) or (Pos('whisper', Self.Model) > 0) then
-      Body.AddField('model', Self.Model)
-    else
-      Body.AddField('model', Model); // Default seguro
+    Body.AddField('model', LModel); // Default seguro
 
     if not AskMsg.Prompt.IsEmpty then
       Body.AddField('prompt', AskMsg.Prompt);
@@ -1036,7 +1055,7 @@ begin
   end;
 
   // En modo de ejecución
-  if (FApiKey <> '') and (Copy(FApiKey,1,1) = '@') then
+  if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
     // Retorna el valor de la variable de entorno, quitando el '@'
     Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
   else
@@ -1071,6 +1090,8 @@ Var
   JArr: TJSonArray;
   JVal: TJSonValue;
   sModel: string;
+  CustomModels: TArray<string>;
+  I: integer;
 begin
   Result := TStringList.Create;
 
@@ -1102,6 +1123,16 @@ begin
             Result.Add(sModel);
         End;
       End;
+
+      // Agregar modelos personalizados
+      CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
+
+      for I := Low(CustomModels) to High(CustomModels) do
+      begin
+        if not Result.Contains(CustomModels[I]) then
+          Result.Add(CustomModels[I]);
+      end;
+
     End
     else
     begin
@@ -1135,14 +1166,16 @@ Var
   Lista: TStringList;
   I: integer;
   LAsincronico: Boolean;
-  Res: String;
+  Res, LModel: String;
 begin
 
   If FUser = '' then
     FUser := 'user';
 
-  If FModel = '' then
-    FModel := 'gpt-4o';
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+  If LModel = '' then
+    LModel := 'gpt-4o';
 
   // Las funciones no trabajan en modo ascincrono
   LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
@@ -1179,7 +1212,7 @@ begin
     End;
 
     AJSONObject.AddPair('messages', GetMessages); // FMessages.ToJSon);
-    AJSONObject.AddPair('model', FModel);
+    AJSONObject.AddPair('model', LModel);
     AJSONObject.AddPair('user', User);
 
     AJSONObject.AddPair('max_tokens', TJSONNumber.Create(FMax_tokens));
@@ -1628,6 +1661,12 @@ Var
   I, NumTasks: integer;
   Clave, sToolCalls, sRes: String;
 
+  Code: TMarkdownCodeExtractor;
+  CodeFile: TCodeFile;
+  CodeFiles: TCodeFileList;
+  MF: TAiMediaFile;
+  St: TStringStream;
+
 begin
 
   // Id := JObj.GetValue('id').Value;
@@ -1756,6 +1795,38 @@ begin
     Else
     Begin
       FBusy := False;
+
+      // Si está marcado que genere archivos tomará el resultado y extraerá los archivos y los adicona como mediafiles a ResMsg
+
+      If tfc_textFile in NativeOutputFiles then
+      Begin
+        Code := TMarkdownCodeExtractor.Create;
+        Try
+
+          CodeFiles := Code.ExtractCodeFiles(Respuesta);
+          For CodeFile in CodeFiles do
+          Begin
+            St := TStringStream.Create(CodeFile.Code);
+            Try
+              St.Position := 0;
+
+              MF := TAiMediaFile.Create;
+              MF.LoadFromStream('file.' + CodeFile.FileType, St);
+              ResMsg.MediaFiles.Add(MF);
+            Finally
+              St.Free;
+            End;
+
+          End;
+        Finally
+          Code.Free;
+        End;
+      End;
+
+      DoProcessResponse(AskMsg, ResMsg, Respuesta);
+
+      ResMsg.Prompt := Respuesta;
+
       If Assigned(FOnReceiveDataEnd) then
         FOnReceiveDataEnd(Self, ResMsg, jObj, Role, Respuesta);
     End;
@@ -1963,6 +2034,11 @@ begin
               // Internamente se va construyendo la respuesta
               InternalRunTranscription(MF, ResMsg, AskMsg);
             end
+            else if (not(Tcm_pdf in ChatMediaSupports)) and (MF.FileCategory = Tfc_pdf) and (not MF.Procesado) then
+            begin
+              // Internamente se va construyendo la respuesta
+              InternalRunPDFDescription(MF, ResMsg, AskMsg);
+            end
             Else
               // Si InternalRunCompletions no soporta el manejo de este archvio se ejecuta por aquí
               if (not(Tcm_Image in ChatMediaSupports)) and (MF.FileCategory = Tfc_Image) and (not MF.Procesado) and
@@ -1985,7 +2061,17 @@ begin
                   ResMsg := Nil;
                 End;
               End;
-          end;
+          end
+          Else
+          Begin
+            InternalRunCompletions(ResMsg, AskMsg);
+            If FClient.Asynchronous = True then // Si es ascincrono se adiciona en el evento ondataeventreceive
+            Begin
+              ResMsg.Free;
+              ResMsg := Nil;
+            End;
+          End;
+
         end;
       end
       Else
@@ -2212,6 +2298,16 @@ end;
 procedure TAiChat.SetPrompt_tokens(const Value: integer);
 begin
   FPrompt_tokens := Value;
+end;
+
+procedure TAiChat.SetReasoningEffort(const Value: String);
+begin
+  FReasoningEffort := Value;
+end;
+
+procedure TAiChat.SetReasoningFormat(const Value: String);
+begin
+  FReasoningFormat := Value;
 end;
 
 procedure TAiChat.SetResponseTimeOut(const Value: integer);
@@ -2907,6 +3003,29 @@ begin
 
           TAiFileCategory.Tfc_Video:
             Begin
+            end;
+          TAiFileCategory.Tfc_pdf: // El completions no maneja pdf todavía hay que usar el Responses
+            Begin
+              {
+                var
+                JDocumentObject := TJSonObject.Create;
+                JDocumentObject.AddPair('type', 'input_file');
+                JDocumentObject.AddPair('filename', MediaFile.FileName);
+
+                // Por facilidad no manejamos el ID del documento solo subimos el Base64
+                // Podría adicionarse también el manejo de archivos por los vectores de openAi
+                // Asignar directamente el base64 como cadena, no como objeto
+                if MediaFile.UrlMedia <> '' then
+                Raise Exception.Create('En documentos no se maneja la url') // JDocumentObject.AddPair('image_url', MediaFile.UrlMedia)
+                else
+                JDocumentObject.AddPair('file_data', 'data:' + MediaFile.MimeType + ';base64,' + MediaFile.Base64);
+
+                // Si tiene la propiedad Detail, la agregamos
+                if MediaFile.Detail <> '' then
+                JDocumentObject.AddPair('detail', MediaFile.Detail);
+
+                JContent.Add(JDocumentObject);
+              }
             end;
           TAiFileCategory.Tfc_Document:
             Begin

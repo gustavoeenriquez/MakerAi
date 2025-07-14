@@ -41,7 +41,8 @@ uses
   System.NetEncoding, System.Net.URLClient, System.Net.HttpClient,
   System.Net.Mime,
   System.Net.HttpClientComponent, System.JSON, Rest.JSON,
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core, uMakerAi.ToolFunctions;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core,
+  uMakerAi.ToolFunctions, uMakerAi.Utils.CodeExtractor;
 
 type
 
@@ -125,10 +126,7 @@ Begin
   Params.Add('ApiKey=@OPENAI_API_KEY');
   Params.Add('Model=gpt-4o');
   Params.Add('MaxTokens=4096');
-  Params.Add('Temperature=0.7');
-  Params.Add('TopP=1.0');
-  Params.Add('TopK=5');
-  Params.Add('BaseURL=https://api.openai.com/v1/');
+  Params.Add('URL=https://api.openai.com/v1/');
 End;
 
 class function TAiOpenAiResponses.CreateInstance(Sender: TComponent): TAiChat;
@@ -195,6 +193,13 @@ var
   ToolCalls: TObjectList<TAiToolsFunction>; // Lista para almacenar ToolCalls
   TaskList: array of ITask;
   NumTasks: Integer;
+
+  Code: TMarkdownCodeExtractor;
+  CodeFile: TCodeFile;
+  CodeFiles: TCodeFileList;
+  MF: TAiMediaFile;
+  St: TStringStream;
+
 begin
   AskMsg := GetLastMessage; // Obtiene el mensaje de la solicitud
 
@@ -381,9 +386,40 @@ begin
 
           // Self.Messages.Add(newMsg);
 
+          If tfc_textFile in NativeOutputFiles then
+          Begin
+            Code := TMarkdownCodeExtractor.Create;
+            Try
+
+              CodeFiles := Code.ExtractCodeFiles(ResMsg.Prompt);
+              For CodeFile in CodeFiles do
+              Begin
+                St := TStringStream.Create(CodeFile.Code);
+                Try
+                  St.Position := 0;
+
+                  MF := TAiMediaFile.Create;
+                  MF.LoadFromStream('file.' + CodeFile.FileType, St);
+                  ResMsg.MediaFiles.Add(MF);
+                Finally
+                  St.Free;
+                End;
+
+              End;
+            Finally
+              Code.Free;
+            End;
+          End;
+
+
+
+          DoProcessResponse(AskMsg, ResMsg, FLastContent);
+
+          ResMsg.Prompt := FLastContent;
+
           // Si no hay llamadas a funciones, ejecutar el código normal
           If Assigned(FOnReceiveDataEnd) then
-            FOnReceiveDataEnd(Self, ResMsg, jObj, 'assistant', ''); // Respuesta);
+            FOnReceiveDataEnd(Self, ResMsg, jObj, 'assistant', FLastContent); // Respuesta);
         end;
 
       except
@@ -625,7 +661,6 @@ begin
     Result := TJSonArray.Create;
 end;
 
-
 function TAiOpenAiResponses.InitChatCompletions: String;
 var
   JResult, JReasoning: TJSonObject;
@@ -639,12 +674,16 @@ var
   JToolObject, jToolCall: TJSonObject;
   i: Integer; // Contador para iterar sobre MediaFiles
   MediaArr: TAiMediaFilesArray;
+  LModel: String;
 
 begin
   JResult := TJSonObject.Create;
+
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
   try
     // Model - requerido
-    JResult.AddPair('model', Self.Model);
+    JResult.AddPair('model', LModel);
 
     // Determinar si enviar input o previous_response_id
     if FMessages.Count > 0 then
@@ -696,10 +735,7 @@ begin
       Else
       Begin
 
-        // de todos los archivos de medios selecciona las imágenes que es lo que podemos manejar por ahora
-        // y las imágenes que no han sido preprocesadas, por si el modelo no maneja imagenes, previamente
-        // se deben haber procesado en en el momento de adicionar el mensaje al chat
-
+        // Filtra solo los archivos de medios que puede manejar y están en NativeInputFiles
         MediaArr := LastMessage.MediaFiles.GetMediaList(NativeInputFiles, False);
 
         // Para mensajes con documentos, el input debe ser un array (si hay al menos un archivo multimedia)
@@ -778,7 +814,7 @@ begin
                 begin
                   // TODO: Implementar soporte para video
                 end;
-              Tfc_Document:
+              Tfc_Pdf:
                 begin
                   JDocumentObject := TJSonObject.Create;
                   JDocumentObject.AddPair('type', 'input_file');
@@ -798,6 +834,10 @@ begin
 
                   JContentArray.Add(JDocumentObject);
                 end;
+              Tfc_Document:
+                Begin
+
+                End;
 
               TAiFileCategory.Tfc_Text:
                 Begin
@@ -934,7 +974,6 @@ begin
   end;
 end;
 
-
 function TAiOpenAiResponses.InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String;
 Var
   ABody: String;
@@ -1041,7 +1080,7 @@ begin
 
   // 2. Preparar parámetros para la API de TTS
   LUrl := Url + 'audio/speech';
-  LModel := Self.Model; // 'tts-1'; // O podrías tener una propiedad específica para el modelo TTS
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
   LVoice := Self.Voice; // Usamos la propiedad del componente
   LResponseFormat := Self.voice_format; // Usamos la propiedad del componente
 
@@ -1123,6 +1162,7 @@ var
   LResponseObj: TJSonObject;
   Granularities: TStringList; // Para procesar las granularidades
   i: Integer;
+  LModel: String;
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
@@ -1134,6 +1174,7 @@ begin
   LResponseStream := TMemoryStream.Create;
   Body := TMultipartFormData.Create;
   Granularities := TStringList.Create;
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   try
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
@@ -1147,11 +1188,7 @@ begin
     // --- 1. CONSTRUCCIÓN DEL BODY MULTIPART CON PARÁMETROS GENÉRICOS ---
     Body.AddStream('file', LTempStream, aMediaFile.FileName, aMediaFile.MimeType);
 
-    // Modelo: usa el modelo principal si es de transcripción, si no, usa un default.
-    if (Pos('transcribe', Self.Model) > 0) or (Pos('whisper', Self.Model) > 0) then
-      Body.AddField('model', Self.Model)
-    else
-      Body.AddField('model', Model); // Default seguro
+    Body.AddField('model', LModel); // Default seguro
 
     if not AskMsg.Prompt.IsEmpty then
       Body.AddField('prompt', AskMsg.Prompt);

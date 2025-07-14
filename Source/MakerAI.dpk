@@ -1,6 +1,7 @@
 package MakerAI;
 
 {$R *.res}
+{$R *.dres}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
 {$ASSERTIONS ON}
@@ -41,8 +42,13 @@ contains
   uMakerAi.ToolFunctions in 'uMakerAi.ToolFunctions.pas',
   uMakerAi.Prompts in 'uMakerAi.Prompts.pas',
   uMakerAi.RAG.Vectors in 'uMakerAi.RAG.Vectors.pas',
+  uMakerAi.Graph.Core in 'uMakerAi.Graph.Core.pas',
+  uMakerAi.Whisper in 'uMakerAi.Whisper.pas',
   uMakerAi.Core in 'uMakerAi.Core.pas',
+  uMakerAi.Register in 'uMakerAi.Register.pas',
   uMakerAi.Embeddings in 'uMakerAi.Embeddings.pas',
+  uMakerAi.Dalle in 'uMakerAi.Dalle.pas',
+  uMakerAi.Utils.system in 'uMakerAi.Utils.system.pas',
   uMakerAi.Chat.AiConnection in 'uMakerAi.Chat.AiConnection.pas',
   UMakerAi.ParamsRegistry in 'UMakerAi.ParamsRegistry.pas',
   uMakerAi.Chat.Groq in 'uMakerAi.Chat.Groq.pas',
@@ -53,6 +59,8 @@ contains
   uMakerAi.Chat.Claude in 'uMakerAi.Chat.Claude.pas',
   uMakerAi.Chat.Grok in 'uMakerAi.Chat.Grok.pas',
   uMakerAi.Chat.OpenAiResponses in 'uMakerAi.Chat.OpenAiResponses.pas',
-  uMakerAi.Chat.Initializations in 'uMakerAi.Chat.Initializations.pas';
+  uMakerAi.Chat.Initializations in 'uMakerAi.Chat.Initializations.pas',
+  uMakerAi.Utils.CodeExtractor in 'uMakerAi.Utils.CodeExtractor.pas',
+  uMakerAi.Utils.PcmToWav in 'uMakerAi.Utils.PcmToWav.pas';
 
 end.

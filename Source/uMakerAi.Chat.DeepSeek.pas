@@ -82,10 +82,7 @@ Begin
   Params.Add('ApiKey=@DEEPSEEK_API_KEY');
   Params.Add('Model=deepseek-chat');
   Params.Add('MaxTokens=4096');
-  Params.Add('Temperature=0.7');
-  Params.Add('TopP=1.0');
-  Params.Add('TopK=5');
-  Params.Add('BaseURL=https://api.deepseek.com/v1/');
+  Params.Add('URL=https://api.deepseek.com/v1/');
 End;
 
 class function TAiDeepSeekChat.CreateInstance(Sender: TComponent): TAiChat;
@@ -116,14 +113,17 @@ Var
   Lista: TStringList;
   I: Integer;
   LAsincronico: Boolean;
-  Res: String;
+  Res, LModel : String;
 begin
 
   If User = '' then
     User := 'user';
 
-  If Model = '' then
-    Model := 'deepseek-chat';
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+
+  If LModel = '' then
+    LModel := 'deepseek-chat';
 
   // Las funciones no trabajan en modo ascincrono
   LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
@@ -156,7 +156,7 @@ begin
 
     AJSONObject.AddPair('messages', GetMessages);
 
-    AJSONObject.AddPair('model', Model);
+    AJSONObject.AddPair('model', LModel);
 
     AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
     AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));

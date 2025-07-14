@@ -45,7 +45,8 @@ uses
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.ToolFunctions, uMakerAi.Core;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.ToolFunctions, uMakerAi.Core,
+  uMakerAi.Utils.PcmToWav, uMakerAi.Utils.CodeExtractor;
 
 type
 
@@ -78,7 +79,6 @@ type
     Function InternalAddMessage(aPrompt, aRole: String; aMediaFiles: Array of TAiMediaFile): TAiChatMessage; Override;
     function InternalAddMessage(aMsg: TAiChatMessage): TAiChatMessage; Override;
 
-
     Function InitChatCompletions: String; Override;
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Override;
     Function ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions; Override;
@@ -90,13 +90,11 @@ type
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
 
-
     Function UploadFile(aMediaFile: TAiMediaFile): String; Override;
     Function DownLoadFile(aMediaFile: TAiMediaFile): String; Override;
     Function DeleteFile(aMediaFile: TAiMediaFile): String; Override;
     Function CheckFileState(aMediaFile: TAiMediaFile): String; Override;
     Function UploadFileToCache(aMediaFile: TAiMediaFile; aTTL_Seconds: Integer = 3600): String; Override;
-
 
     class function GetDriverName: string; Override;
     class procedure RegisterDefaultParams(Params: TStrings); Override;
@@ -134,10 +132,7 @@ Begin
   Params.Add('ApiKey=@GEMINI_API_KEY');
   Params.Add('Model=gemini-1.5-flash-latest');
   Params.Add('MaxTokens=8192');
-  Params.Add('Temperature=0.7');
-  Params.Add('TopP=1.0');
-  Params.Add('TopK=40');
-  Params.Add('BaseURL=https://generativelanguage.googleapis.com/v1beta/');
+  Params.Add('URL=https://generativelanguage.googleapis.com/v1beta/');
 End;
 
 procedure TAiGeminiChat.SetVideoParams(const Value: TStrings);
@@ -551,6 +546,8 @@ Var
   JArr: TJSonArray;
   JVal: TJSONValue;
   sModel: string;
+  CustomModels: TArray<string>;
+  I: Integer;
 begin
   Result := TStringList.Create;
 
@@ -587,6 +584,16 @@ begin
         finally
           jRes.Free;
         end;
+
+      // Agregar modelos personalizados
+      CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
+
+      for I := Low(CustomModels) to High(CustomModels) do
+      begin
+        if not Result.Contains(CustomModels[I]) then
+          Result.Add(CustomModels[I]);
+      end;
+
     End
     else
     begin
@@ -785,7 +792,7 @@ Var
   Procesado: Boolean;
   Respuesta: String;
 begin
-  Result := Nil;
+
   Procesado := False;
   Respuesta := '';
 
@@ -808,7 +815,7 @@ begin
       end;
     End;
 
-    //aMsg := TAiChatMessage.Create(aMsg.Prompt, aMsg.Role);
+    // aMsg := TAiChatMessage.Create(aMsg.Prompt, aMsg.Role);
     aMsg.Id := FMessages.Count + 1;
     FMessages.Add(aMsg);
 
@@ -821,10 +828,10 @@ begin
         MF.Procesado := True;
         MF.Transcription := Respuesta;
       end;
-      //aMsg.AddMediaFile(MF);
+      // aMsg.AddMediaFile(MF);
     End;
 
-    //FMessages.Add(Msg);
+    // FMessages.Add(Msg);
     FLastPrompt := aMsg.Prompt;
 
     if Assigned(FOnAddMessage) then
@@ -841,7 +848,7 @@ end;
 
 function TAiGeminiChat.InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String;
 Var
-  ABody, sUrl: String;
+  ABody, sUrl, LModel: String;
   Res: IHTTPResponse;
   St: TStringStream;
   jObj: TJSonObject;
@@ -852,8 +859,10 @@ begin
   FLastContent := '';
   FLastPrompt := AskMsg.Prompt;
 
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
   St := TStringStream.Create('', TEncoding.UTF8);
-  sUrl := Url + 'models/' + Model + ':generateContent?key=' + ApiKey;
+  sUrl := Url + 'models/' + LModel + ':generateContent?key=' + ApiKey;
 
   try
     FClient.ContentType := 'application/json';
@@ -870,7 +879,6 @@ begin
     St.SaveToFile('c:\temp\peticion.json.txt');
     St.Position := 0;
 {$ENDIF}
-
     Res := FClient.Post(sUrl, St, FResponse);
 
     FResponse.Position := 0;
@@ -878,7 +886,6 @@ begin
     FResponse.SaveToFile('c:\temp\Respuesta.json.txt');
     FResponse.Position := 0;
 {$ENDIF}
-
     FLastContent := '';
 
     if FClient.Asynchronous = False then
@@ -1003,35 +1010,35 @@ begin
     if Length(MediaArr) > 0 then
     Begin
 
-      //---- primera forma de hacerlo al parecer no funcionó
+      // ---- primera forma de hacerlo al parecer no funcionó
 
       {
-      begin
+        begin
         LImagePart := TJSonObject.Create;
         //LImagePart.AddPair('mime_type', MediaArr[0].MimeType);
         LImagePart.AddPair('data', MediaArr[0].Base64);
         LInstance.AddPair('image', LImagePart);
-      end;
+        end;
       }
 
 
 
 
       // Buscamos un archivo de imagen en el mensaje de petición
-      //---------- segunda forma de hacerlo al parecer esta si funciona
+      // ---------- segunda forma de hacerlo al parecer esta si funciona
 
       {
-      if Assigned(MediaArr[0]) then
-      begin
+        if Assigned(MediaArr[0]) then
+        begin
         // Creamos el objeto 'image' con el campo 'bytes_value'
         LImageObject := TJSonObject.Create;
         // La API espera los bytes de la imagen codificados en Base64
         LImageObject.AddPair('bytes_value', MediaArr[0].Base64);
         LInstance.AddPair('image', LImageObject);
-      end;
+        end;
       }
 
-      //No funciona ninguna de las dos alternativas ni otras probadas,  no hay más información en la documentación oficial.
+      // No funciona ninguna de las dos alternativas ni otras probadas,  no hay más información en la documentación oficial.
 
     End;
 
@@ -1078,7 +1085,6 @@ begin
     LBodyStream.SaveToFile('c:\temp\videopeticion.json.txt');
     LBodyStream.Position := 0;
 {$ENDIF}
-
     try
       LResponse := FClient.Post(LUrl, LBodyStream, nil, LHeaders);
     finally
@@ -1131,7 +1137,7 @@ begin
                 procedure
                 begin
                   if Assigned(FOnReceiveDataEvent) then
-                    FOnReceiveDataEvent(Self, ResMsg, nil, 'model', 'Consultando estado...');
+                    FOnReceiveDataEvent(Self, ResMsg, nil, 'model', 'Procesando Video...');
                 end);
 
               TaskResp := TaskClient.Get(PollingUrl, nil, LHeaders);
@@ -1283,7 +1289,7 @@ begin
 
   // 1. Preparar parámetros para la API de Gemini TTS
   // Usamos un modelo TTS específico. Puedes hacerlo configurable si lo deseas.
-  LModelName := Model; // 'gemini-2.5-flash-preview-tts';
+  LModelName := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
   LUrl := Format('%smodels/%s:generateContent?key=%s', [Self.Url, LModelName, ApiKey]);
 
   // 2. Construir el cuerpo de la petición JSON
@@ -1342,7 +1348,6 @@ begin
     LBodyStream.SaveToFile('c:\temp\peticion.json.txt');
     LBodyStream.Position := 0;
 {$ENDIF}
-
     FClient.ContentType := 'application/json';
 
     // Para Gemini, la ApiKey ya está en la URL, por lo que no se necesita el header 'Authorization'.
@@ -1390,6 +1395,22 @@ begin
             // reproducirlo en memoria, el formato raw puede ser suficiente.
             // Le damos una extensión 'pcm' para ser descriptivos.
             LNewAudioFile.LoadFromBase64('generated_audio.pcm', LBase64AudioData);
+
+            Var
+              WavStream: TMemoryStream;
+            WavStream := Nil;
+
+            if ConvertPCMStreamToWAVStream(LNewAudioFile.Content, WavStream, 24000, 1, 16) then
+            Begin
+              Try
+                LNewAudioFile.Clear;
+                WavStream.Position := 0;
+                LNewAudioFile.LoadFromStream('generated_audio.wav', WavStream);
+              Finally
+                FreeAndNil(WavStream);
+              End;
+            End;
+
             ResMsg.MediaFiles.Add(LNewAudioFile);
 
             // Disparamos el evento de finalización
@@ -1424,14 +1445,13 @@ begin
   Result := ''; // Implementar si es necesario
 end;
 
-
-//------- Mensaje de tool no debe llamar el BeforeSendMessage ------
+// ------- Mensaje de tool no debe llamar el BeforeSendMessage ------
 function TAiGeminiChat.InternalAddMessage(aPrompt, aRole, aToolCallId, aFunctionName: String): TAiChatMessage;
 Var
   Msg: TAiChatMessage;
   MensajeInicial: String;
 begin
-  Result := Nil;
+
   Try
     If (FMessages.Count = 0) then
     Begin
@@ -1457,8 +1477,8 @@ begin
     FLastPrompt := aPrompt;
 
     Result := Msg;
-    //El mensaje del tool no debe llamar un before
-    //if Assigned(FOnBeforeSendMessage) then  FOnBeforeSendMessage(Self, Msg);
+    // El mensaje del tool no debe llamar un before
+    // if Assigned(FOnBeforeSendMessage) then  FOnBeforeSendMessage(Self, Msg);
 
   Finally
   End;
@@ -1704,6 +1724,12 @@ Var
   I, NumTasks: Integer;
   Clave: String;
 
+  Code: TMarkdownCodeExtractor;
+  CodeFile: TCodeFile;
+  CodeFiles: TCodeFileList;
+  MF: TAiMediaFile;
+  St: TStringStream;
+
 begin
   LRespuesta := '';
   LRole := 'model';
@@ -1909,6 +1935,35 @@ begin
     End
     Else
     Begin
+
+      If tfc_textFile in NativeOutputFiles then
+      Begin
+        Code := TMarkdownCodeExtractor.Create;
+        Try
+
+          CodeFiles := Code.ExtractCodeFiles(LRespuesta);
+          For CodeFile in CodeFiles do
+          Begin
+            St := TStringStream.Create(CodeFile.Code);
+            Try
+              St.Position := 0;
+
+              MF := TAiMediaFile.Create;
+              MF.LoadFromStream('file.' + CodeFile.FileType, St);
+              ResMsg.MediaFiles.Add(MF);
+            Finally
+              St.Free;
+            End;
+
+          End;
+        Finally
+          Code.Free;
+        End;
+      End;
+
+      DoProcessResponse(AskMsg, ResMsg, LRespuesta);
+      ResMsg.Prompt := LRespuesta;
+
       FBusy := False;
       If Assigned(FOnReceiveDataEnd) then
         FOnReceiveDataEnd(Self, ResMsg, jObj, LRole, LRespuesta);
@@ -2007,11 +2062,13 @@ var
   LResponse: IHTTPResponse;
   LRequestBody, LJson, LPart, LInlineData: TJSonObject;
   LPartsArray, LContentsArray: TJSonArray;
-  CacheName: string;
+  CacheName, LModel: string;
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Base64 = '') then
     raise Exception.Create('Se necesita un archivo con contenido Base64 para crear una caché.');
+
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   LHttpClient := THTTPClient.Create;
   try
@@ -2019,7 +2076,7 @@ begin
 
     LRequestBody := TJSonObject.Create;
     try
-      LRequestBody.AddPair('model', TJSONString.Create(Self.Model));
+      LRequestBody.AddPair('model', TJSONString.Create(LModel));
       LRequestBody.AddPair('ttl', TJSONString.Create(aTTL_Seconds.ToString + 's'));
 
       LContentsArray := TJSonArray.Create;

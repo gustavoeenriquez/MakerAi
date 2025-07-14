@@ -29,16 +29,9 @@ unit uMakerAi.Chat.Grok;
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
-// A Diciembre del 2024 estas son las limitaciones de visión de grok
-{
-  Model	              Input	  Output	  Context	  Text	    Image	      Completion	  RPS	  RPM	  RPH	  RPD
-  grok-beta	          TEXT	  TEXT	  131072	    $5.00	      -	         $15.00	      1	    60	  1200	  -
-  grok-vision-beta	  TEXT	  TEXT	    8192      $5.00	    $10.00	    $15.00	      1	     3	    60	  -
-  IMAGE
-  grok-2-vision-1212	TEXT	  TEXT	   32768	    $2.00	     $2.00	    $10.00	      1	     3	    60	  -
-  IMAGE
-  grok-2-1212	        TEXT	  TEXT	  131072	    $2.00	      -	        $10.00	      1	    60	  1200    -
-}
+
+//--Cambios--
+//--10-Jul-2025---se habilita la búsqueda en internet nativo del modelo
 
 interface
 
@@ -59,6 +52,7 @@ Type
   Protected
     Function InitChatCompletions: String; Override;
     function InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
+
 
   Public
     Constructor Create(Sender: TComponent); Override;
@@ -94,10 +88,7 @@ Begin
   Params.Add('ApiKey=@GROK_API_KEY');
   Params.Add('Model=grok-2-1212');
   Params.Add('MaxTokens=4096');
-  Params.Add('Temperature=0.7');
-  Params.Add('TopP=1.0');
-  Params.Add('TopK=5');
-  Params.Add('BaseURL=https://api.x.ai/v1/');
+  Params.Add('URL=https://api.x.ai/v1/');
 End;
 
 class function TAiGrokChat.CreateInstance(Sender: TComponent): TAiChat;
@@ -127,14 +118,17 @@ Var
   Lista: TStringList;
   I: Integer;
   LAsincronico: Boolean;
-  Res: String;
+  Res, LModel: String;
 begin
 
   If User = '' then
     User := 'user';
 
-  If Model = '' then
-    Model := 'grok-2-1212';
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+
+  If LModel = '' then
+    LModel := 'grok-2-1212';
 
   // Las funciones no trabajan en modo ascincrono
   LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
@@ -167,7 +161,7 @@ begin
 
     AJSONObject.AddPair('messages', GetMessages);
 
-    AJSONObject.AddPair('model', Model);
+    AJSONObject.AddPair('model', LModel);
 
     AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
     AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
@@ -175,10 +169,29 @@ begin
     If Top_p <> 0 then
       AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
 
-    AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
-    AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
+    //AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
+    //AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
+
+    if ReasoningFormat <> '' then
+      AJSONObject.AddPair('reasoning_format', ReasoningFormat); // 'parsed, raw, hidden';
+
+    if ReasoningEffort <> '' then
+      AJSONObject.AddPair('reasoning_effort', ReasoningEffort); // 'none, default');
+
+
     AJSONObject.AddPair('user', User);
     AJSONObject.AddPair('n', TJSONNumber.Create(N));
+
+
+    if tcm_WebSearch in ChatMediaSupports then
+    begin
+      Var
+      jWebSearchOptions := TJSonObject.Create;
+      jWebSearchOptions.AddPair('mode', 'auto');
+      //jWebSearchOptions.AddPair('return_citations', 'true');
+      AJSONObject.AddPair('search_parameters', jWebSearchOptions);
+    end;
+
 
     {
       If (FResponse_format = tiaChatRfJsonSchema) then
@@ -235,6 +248,7 @@ var
   LResponse: IHTTPResponse;
   LNewMediaFile: TAiMediaFile;
   LImageUrl, LRevisedPrompt, LBase64Data: string;
+  LModel : String;
 begin
   Result := ''; // La salida principal es el MediaFile en ResMsg
   FBusy := True;
@@ -247,8 +261,10 @@ begin
   if AskMsg.Prompt.IsEmpty then
     raise Exception.Create('Se requiere un prompt para generar una imagen.');
 
-  if Self.Model = '' then
-    Self.Model := 'grok-2-image'; // Asignar un modelo de imagen por defecto
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+  if LModel = '' then
+    LModel := 'grok-2-image'; // Asignar un modelo de imagen por defecto
 
   LUrl := Url + 'images/generations'; // Url base + endpoint
 
@@ -257,7 +273,7 @@ begin
   LBodyStream := TStringStream.Create('', TEncoding.UTF8);
   try
     LBodyJson.AddPair('prompt', AskMsg.Prompt);
-    LBodyJson.AddPair('model', Self.Model);
+    LBodyJson.AddPair('model', LModel);
 
     if Self.N > 0 then
       LBodyJson.AddPair('n', TJSONNumber.Create(Self.N));

@@ -63,8 +63,6 @@ Type
   Private
     FReasoningFormat: TAiReasoningFormat;
     FReasoningEffort: TAiReasoningEffort;
-    procedure SetReasoningEffort(const Value: TAiReasoningEffort);
-    procedure SetReasoningFormat(const Value: TAiReasoningFormat);
   Protected
     Function InitChatCompletions: String; Override;
   Public
@@ -74,8 +72,6 @@ Type
     class procedure RegisterDefaultParams(Params: TStrings); Override;
     class function CreateInstance(Sender: TComponent): TAiChat; Override;
   Published
-    Property ReasoningFormat: TAiReasoningFormat read FReasoningFormat write SetReasoningFormat default rfAuto;
-    Property ReasoningEffort: TAiReasoningEffort read FReasoningEffort write SetReasoningEffort default reAuto;
   End;
 
   TAiGroqEmbeddings = Class(TAiEmbeddings)
@@ -110,21 +106,8 @@ Begin
   Params.Add('ApiKey=@GROQ_API_KEY');
   Params.Add('Model=Llama3-8b-8192');
   Params.Add('MaxTokens=4096');
-  Params.Add('Temperature=0.7');
-  Params.Add('TopP=1.0');
-  Params.Add('TopK=5');
-  Params.Add('BaseURL=https://api.groq.com/openai/v1/');
+  Params.Add('URL=https://api.groq.com/openai/v1/');
 End;
-
-procedure TAiGroqChat.SetReasoningEffort(const Value: TAiReasoningEffort);
-begin
-  FReasoningEffort := Value;
-end;
-
-procedure TAiGroqChat.SetReasoningFormat(const Value: TAiReasoningFormat);
-begin
-  FReasoningFormat := Value;
-end;
 
 class function TAiGroqChat.CreateInstance(Sender: TComponent): TAiChat;
 Begin
@@ -156,14 +139,17 @@ Var
   I: Integer;
   LAsincronico: Boolean;
   LastMsg: TAiChatMessage;
-  Res: String;
+  Res, LModel: String;
 begin
 
   If User = '' then
     User := 'user';
 
-  If Model = '' then
-    Model := 'llama-3.2-11b-text-preview';
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+
+  If LModel = '' then
+    LModel := 'llama-3.2-11b-text-preview';
 
   // Las funciones no trabajan en modo ascincrono
   LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
@@ -177,7 +163,7 @@ begin
 
   Try
 
-    if (ReasoningFormat = rfRaw) and (Tool_Active or (Response_format = tiaChatRfJson) or (Response_format = tiaChatRfJsonSchema)) then
+    if (ReasoningFormat = 'Raw') and (Tool_Active or (Response_format = tiaChatRfJson) or (Response_format = tiaChatRfJsonSchema)) then
     begin
       Raise Exception.Create('Groq Error: ReasoningFormat no puede ser "raw" cuando se usan Tools o JSON mode. Use "parsed" o "hidden".');
     end;
@@ -212,32 +198,13 @@ begin
       End;
     End;
 
-    AJSONObject.AddPair('model', Model);
+    AJSONObject.AddPair('model', LModel);
 
-    // --- NUEVO: AÑADIR PARÁMETROS DE REASONING ---
-    if ReasoningFormat <> rfAuto then
-    begin
-      case ReasoningFormat of
-        rfParsed:
-          AJSONObject.AddPair('reasoning_format', 'parsed');
-        rfRaw:
-          AJSONObject.AddPair('reasoning_format', 'raw');
-        rfHidden:
-          AJSONObject.AddPair('reasoning_format', 'hidden');
-      end;
-    end;
+    if ReasoningFormat <> '' then
+      AJSONObject.AddPair('reasoning_format', ReasoningFormat); // 'parsed, raw, hidden';
 
-    if ReasoningEffort <> reAuto then
-    begin
-      // Nota: Este parámetro solo es compatible con qwen/qwen3-32b
-      case ReasoningEffort of
-        reNone:
-          AJSONObject.AddPair('reasoning_effort', 'none');
-        reDefault:
-          AJSONObject.AddPair('reasoning_effort', 'default');
-      end;
-    end;
-    // --- FIN NUEVO ---
+    if ReasoningEffort <> '' then
+      AJSONObject.AddPair('reasoning_effort', ReasoningEffort); // 'none, default');
 
     AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
     AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
@@ -332,7 +299,6 @@ begin
 {$IFDEF APIDEBUG}
     Response.SaveToFile('c:\temp\response.txt');
 {$ENDIF}
-
     if Res.StatusCode = 200 then
     Begin
       jObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));

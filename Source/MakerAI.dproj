@@ -150,8 +150,13 @@
         <DCCReference Include="uMakerAi.ToolFunctions.pas"/>
         <DCCReference Include="uMakerAi.Prompts.pas"/>
         <DCCReference Include="uMakerAi.RAG.Vectors.pas"/>
+        <DCCReference Include="uMakerAi.Graph.Core.pas"/>
+        <DCCReference Include="uMakerAi.Whisper.pas"/>
         <DCCReference Include="uMakerAi.Core.pas"/>
+        <DCCReference Include="uMakerAi.Register.pas"/>
         <DCCReference Include="uMakerAi.Embeddings.pas"/>
+        <DCCReference Include="uMakerAi.Dalle.pas"/>
+        <DCCReference Include="uMakerAi.Utils.system.pas"/>
         <DCCReference Include="uMakerAi.Chat.AiConnection.pas"/>
         <DCCReference Include="UMakerAi.ParamsRegistry.pas"/>
         <DCCReference Include="uMakerAi.Chat.Groq.pas"/>
@@ -163,6 +168,20 @@
         <DCCReference Include="uMakerAi.Chat.Grok.pas"/>
         <DCCReference Include="uMakerAi.Chat.OpenAiResponses.pas"/>
         <DCCReference Include="uMakerAi.Chat.Initializations.pas"/>
+        <DCCReference Include="uMakerAi.Utils.CodeExtractor.pas"/>
+        <DCCReference Include="uMakerAi.Utils.PcmToWav.pas"/>
+        <RcItem Include="TAIGraph.bmp">
+            <ResourceType>BITMAP</ResourceType>
+            <ResourceId>TAiGraph</ResourceId>
+        </RcItem>
+        <RcItem Include="TAIGraphLink.bmp">
+            <ResourceType>BITMAP</ResourceType>
+            <ResourceId>TAiGraphLink</ResourceId>
+        </RcItem>
+        <RcItem Include="TAIGraphNode.bmp">
+            <ResourceType>BITMAP</ResourceType>
+            <ResourceId>TAiGraphNode</ResourceId>
+        </RcItem>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

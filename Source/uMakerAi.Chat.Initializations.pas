@@ -15,7 +15,6 @@ Begin
   // ------------------------- OLLAMA ----------------------------------
   // https://notes.kodekloud.com/docs/Running-Local-LLMs-With-Ollama/Building-AI-Applications/Ollama-REST-API-Endpoints
   // ------------------------- OLLAMA ----------------------------------
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Temperature', '0.7');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Max_Tokens', '4096');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeInputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeOutupFiles', '[]');
@@ -70,10 +69,27 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Tool_Active', 'False');
 
+
+//Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('Ollama', 'aa_whisper', 'whisper');
+
+
+
+  // ------- OLLAMA Modelo Whisper localhost ------------------------------
+  Model := 'aa_whisper';
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Asynchronous', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeInputFiles', '[Tfc_Audio]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeOutputFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Url', 'http://localhost:7890/');
+
+
+
+
+
   // ------------------------- OPENAI ----------------------------------
   // https://platform.openai.com/docs/guides/text?api-mode=responses
   // ------------------------- OPENAI ----------------------------------
-  TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'Temperature', '0.7');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'Max_Tokens', '4096');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'NativeInputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'NativeOutupFiles', '[]');
@@ -130,12 +146,70 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active', 'False');
 
+  // ------- OPENAI gpt-image-1 ------------------------------
+  Model := 'gpt-image-1';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ChatMediaSupports', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'NativeInputFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'NativeOutputFiles', '[Tfc_image]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ResponseTimeOut', '36000');
+
+
+
+  // ------- OPENAI dall-e-2 ------------------------------
+  Model := 'dall-e-2';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ChatMediaSupports', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'NativeInputFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'NativeOutputFiles', '[Tfc_image]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active', 'False');
+
+
+  // ------- OPENAI dall-e-3 ------------------------------
+  Model := 'dall-e-3';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ChatMediaSupports', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'NativeInputFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'NativeOutputFiles', '[Tfc_image]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active', 'False');
+
   // Falta por implmentar estos si se llega a necesitar {gpt-4.1 gpt-4.1-mini gpt-4.1-nano gpt-4o gpt-4o-mini }
+
+
+
+  // ------------------------- OPENAI Responses ----------------------------------
+  // https://platform.openai.com/docs/guides/text?api-mode=responses
+  // ------------------------- OPENAI Responses  ----------------------------------
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'Max_Tokens', '4096');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'NativeInputFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'NativeOutupFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'ChatMediaSupports', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'Tool_Active', 'False');
+
+
+  // ------- OPENAI Modelo gpt-4o ------------------------------
+  Model := 'gpt-4.1';
+
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'ChatMediaSupports', '[tcm_pdf, tcm_image]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'NativeInputFiles', '[tfc_pdf, tcm_image]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'NativeOutputFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'Tool_Active', 'False');
+
+
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAiResponses', 'aa_gpt-4.1-pdf', 'gpt-4.1');
+
+  // ------- OPENAI Modelo aa_gpt-4o-pdf ------------------------------
+  Model := 'aa_gpt-4.1-pdf';
+
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'ChatMediaSupports', '[tcm_pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'NativeInputFiles', '[tfc_pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'NativeOutputFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'Tool_Active', 'False');
+
 
   // ------------------------- GEMINI ----------------------------------
   // https://ai.google.dev/gemini-api/docs/text-generation
   // ------------------------- GEMINI ----------------------------------
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', 'Temperature', '0.7');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', 'Max_Tokens', '30096');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', 'NativeInputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', 'NativeOutputFiles', '[]');
@@ -145,18 +219,18 @@ Begin
 
   // ------- GEMINI Modelo gemini-1.5-pro ------------------------------
   Model := 'gemini-1.5-pro';
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active', 'True');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Asynchronous', 'False');
 
   // ------- GEMINI Modelo gemini-2.5-flash ------------------------------
   Model := 'gemini-2.5-flash';
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_audio, tfc_image, Tfc_Video, Tfc_pdf, tfc_textFile]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_audio, tcm_image, Tcm_Video, Tcm_pdf, tcm_textFile]');
 
   // ------- GEMINI Modelo gemini-2.5-pro ------------------------------
   Model := 'gemini-2.5-pro';
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_audio, tfc_image, Tfc_Video, Tfc_pdf, tfc_textFile]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_audio, tcm_image, Tcm_Video, Tcm_pdf, tcm_textFile]');
 
   // ------- GEMINI Modelo gemini-2.5-flash-preview-tts ------------------------------
   Model := 'gemini-2.5-flash-preview-tts';
@@ -183,16 +257,39 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeOutputFiles', '[Tfc_image]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_image]');
 
-  // ------- GEMINI aqa ------------------------------
-  Model := 'aqa';
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_veo-2.0-generate-001', 'veo-2.0-generate-001');
+
+  // ------- OPENAI Modelo veo-2.0-generate-001 ------------------------------
+  Model := 'aa_veo-2.0-generate-001';
+
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeOutputFiles', '[Tfc_video]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Asynchronous', 'False'); //Arreglar para que funcione en modo Asincrónico
+
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-2.5-pro-pdf', 'gemini-2.5-pro');
+
+  // ------- GEMINI Modelo gemini-2.5-pro ------------------------------
+  Model := 'aa_gemini-2.5-pro-pdf';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_pdf]');
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-2.5-flash-pdf', 'gemini-2.5-flash');
+
+  // ------- GEMINI Modelo gemini-2.5-flash ------------------------------
+  Model := 'aa_gemini-2.5-flash-pdf';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_pdf]');
+
 
   // ------------------------- GROQ ----------------------------------
   //https://console.groq.com/docs/api-reference#chat-create
   // ------------------------- GROQ ----------------------------------
-  TAiChatFactory.Instance.RegisterUserParam('Groq', 'Temperature', '0.7');
   TAiChatFactory.Instance.RegisterUserParam('Groq', 'Max_Tokens', '4096');
   TAiChatFactory.Instance.RegisterUserParam('Groq', 'NativeInputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Groq', 'NativeOutputFiles', '[]');
@@ -235,7 +332,6 @@ Begin
   // ------------------------- CLAUDE ----------------------------------
   //https://docs.anthropic.com/en/docs/build-with-claude/streaming
   // ------------------------- CLAUDE ----------------------------------
-  TAiChatFactory.Instance.RegisterUserParam('Claude', 'Temperature', '0.7');
   TAiChatFactory.Instance.RegisterUserParam('Claude', 'Max_Tokens', '4096');
   TAiChatFactory.Instance.RegisterUserParam('Claude', 'NativeInputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Claude', 'NativeOutputFiles', '[]');
@@ -249,10 +345,21 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Tool_Active', 'False');
 
 
+
+
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('Claude', 'aa_claude-3-7-sonnet-20250219-pdf', 'claude-3-7-sonnet-20250219');
+
+  // ------- GEMINI Modelo claude-3-7-sonnet-20250219 ------------------------------
+  Model := 'aa_claude-3-7-sonnet-20250219-pdf';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'NativeInputFiles', '[Tfc_pdf, tfc_image]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ChatMediaSupports', '[Tcm_pdf, tcm_image]');
+
+
   // ------------------------- MISTRAL ----------------------------------
   //https://docs.mistral.ai/api/
-  // ------------------------- CLAUDE ----------------------------------
-  TAiChatFactory.Instance.RegisterUserParam('Mistral', 'Temperature', '0.7');
+  // ------------------------- MISTRAL ----------------------------------
   TAiChatFactory.Instance.RegisterUserParam('Mistral', 'Max_Tokens', '4096');
   TAiChatFactory.Instance.RegisterUserParam('Mistral', 'NativeInputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Mistral', 'NativeOutputFiles', '[]');
@@ -265,11 +372,46 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Asynchronous', 'False');
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'True');
 
+  // ------- pixtral-12b-latest ------------------------------
+  Model := 'pixtral-12b-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Asynchronous', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'True');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[tfc_image]'); //Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[tcm_image]');  //Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
+
+
+  // ------- Mistral pixtral-large-latest ------------------------------
+  Model := 'pixtral-large-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Asynchronous', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'True');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[tfc_image]'); //Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[tcm_image]');  //Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
+
+  // ------- mistral-ocr-latest ------------------------------
+  Model := 'mistral-ocr-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Asynchronous', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'True');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[tfc_pdf]'); //Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[]');  //Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
+
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('Mistral', 'aa_mistral-ocr-latest-pdf', 'mistral-ocr-latest');
+
+  // ------- OPENAI Modelo aa_mistral-ocr-latest-pdf ------------------------------
+  Model := 'aa_mistral-ocr-latest-pdf';
+
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Asynchronous', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'True');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[tfc_pdf]'); //Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[]');  //Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
+
+
+
 
   // ------------------------- GROK ----------------------------------
   //https://docs.x.ai/docs/api-reference#chat-completions
   // ------------------------- GROK ----------------------------------
-  TAiChatFactory.Instance.RegisterUserParam('Grok', 'Temperature', '0.7');
   TAiChatFactory.Instance.RegisterUserParam('Grok', 'Max_Tokens', '4096');
   TAiChatFactory.Instance.RegisterUserParam('Grok', 'NativeInputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', 'NativeOutputFiles', '[]');
