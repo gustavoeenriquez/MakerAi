@@ -50,7 +50,7 @@ Tired of dealing with fragmented and complex AI APIs? **MakerAI** offers `TAiCon
 
 ## Updates
 
-### New Version 2.1
+### New Version 2.1 (14 Jul 2025)
 - Added CustomModels utility to allow customization of model behavior.
 - Enabled generation of text files such as html, js, css, txt, pas, c, py, etc.
 - Fixed several reported bugs.
