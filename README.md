@@ -52,6 +52,7 @@ Tired of dealing with fragmented and complex AI APIs? **MakerAI** offers `TAiCon
 
 ### New Version 2.1 (15 Jul 2025)
 - Fixed some reported bugs.
+- Add demo 001.
 
 ### New Version 2.1 (14 Jul 2025)
 - Added CustomModels utility to allow customization of model behavior.
