@@ -70,15 +70,14 @@ type
 
     function InternalRunSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
-    //function InternalRunImageDalleGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+    function InternalRunImageDalleGeneration(ResMsg, AskMsg: TAiChatMessage): String;
     function InternalRunImageVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunWebSearch(ResMsg, AskMsg: TAiChatMessage): String; Override;
 
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
-    //function InternalRunImageDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
+    // function InternalRunImageDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunPDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
-
 
     Function InitChatCompletions: String; Override;
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Override;
@@ -220,10 +219,10 @@ begin
   End;
 end;
 
-{function TAiOpenChat.InternalRunImageDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
-begin
+{ function TAiOpenChat.InternalRunImageDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
+  begin
 
-end;
+  end;
 }
 
 function TAiOpenChat.InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
@@ -239,17 +238,23 @@ var
   LNewImageFile: TAiMediaFile;
   LErrorResponse: string;
   aPrompt_tokens, aCompletion_tokens, aTotal_tokens: integer;
-  LModel : String;
+  LModel: String;
 begin
+
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+  if (Pos('dall-e', LowerCase(LModel)) > 0) then
+  begin
+    // Usa la API de DALL-E legacy
+    Result := InternalRunImageDalleGeneration(ResMsg, AskMsg);
+    Exit
+  end;
 
   Result := ''; // La función principal no devuelve texto, la imagen va en ResMsg
   FBusy := True;
   FLastError := '';
   FLastContent := '';
   FLastPrompt := AskMsg.Prompt;
-
-  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
-
 
   // 1. Añadir el mensaje del usuario al historial
   if FMessages.IndexOf(AskMsg) < 0 then
@@ -422,16 +427,14 @@ end;
   try
   LBodyJson.AddPair('model', Self.Model); // Debería ser 'gpt-image-1'
   LBodyJson.AddPair('prompt', LastMessage.Prompt); // Usar el prompt del último mensaje
-  LBodyJson.AddPair('n', 1); //Cantidad de imágenes.
+  LBodyJson.AddPair('n', 1); // Cantidad de imágenes.
 
-  //Parámetros opcionales,  puedes agregar controles para esto.
-  //LBodyJson.AddPair('size', '1024x1024');
-  //LBodyJson.AddPair('quality', 'high');
-  //LBodyJson.AddPair('output_format', 'png');
+  // Parámetros opcionales,  puedes agregar controles para esto.
+  // LBodyJson.AddPair('size', '1024x1024');
+  // LBodyJson.AddPair('quality', 'high');
+  // LBodyJson.AddPair('output_format', 'png');
 
-
-
-  //LUrl := Url + 'responses';
+  // LUrl := Url + 'responses';
   LUrl := Url + 'images/generations'; // Asume que 'Url' es la URL base de OpenAI
 
   LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
@@ -444,18 +447,14 @@ end;
   FResponse.Clear;
   FResponse.Position := 0;
 
-
-
   LResponse := FClient.Post(LUrl, LBodyStream, FResponse, LHeaders);
 
-  //$IFDEF APIDEBUG
+  $IFDEF APIDEBUG
   FResponse.SaveToFile('c:\temp\respuesta.txt');
   FResponse.Position := 0;
-  //$ENDIF
-
+  $ENDIF
 
   FLastContent := '';
-
 
   if LResponse.StatusCode = 200 then
   begin
@@ -471,7 +470,8 @@ end;
   else
   begin
   FBusy := False;
-  Raise Exception.CreateFmt('Error desde el endpoint /v1/images/generations: %d, %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+  Raise Exception.CreateFmt('Error desde el endpoint /v1/images/generations: %d, %s',
+  [LResponse.StatusCode, LResponse.ContentAsString]);
   end;
   finally
   LBodyJson.Free;
@@ -480,7 +480,7 @@ end;
   end;
 }
 
-{function TAiOpenChat.InternalRunImageDalleGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+function TAiOpenChat.InternalRunImageDalleGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 var
   LUrl: string;
   LBodyStream, LResponseStream: TStringStream;
@@ -597,7 +597,6 @@ begin
     FBusy := False;
   end;
 end;
-}
 
 function TAiOpenChat.InternalRunImageVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 begin
@@ -712,7 +711,8 @@ begin
 
   // 2. Preparar parámetros para la API de TTS
   LUrl := Url + 'audio/speech';
-  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model); // 'tts-1'; // O podrías tener una propiedad específica para el modelo TTS
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+  // 'tts-1'; // O podrías tener una propiedad específica para el modelo TTS
   LVoice := Self.Voice; // Usamos la propiedad del componente
   LResponseFormat := Self.voice_format; // Usamos la propiedad del componente
 
@@ -794,7 +794,7 @@ var
   LResponseObj: TJSonObject;
   Granularities: TStringList; // Para procesar las granularidades
   I: integer;
-  LModel : String;
+  LModel: String;
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
@@ -914,7 +914,7 @@ Var
   LToolObject: TJSonObject;
   LBodyStream: TStringStream;
   LUrl: String;
-  LModel : String;
+  LModel: String;
   LHeaders: TNetHeaders;
   LastMessage: TAiChatMessage;
 
@@ -1243,7 +1243,7 @@ Var
   Res: String;
   MessagesJson, NewContentArray: TJSonArray;
   LastMessageJson, JTextObj, JImageObj: TJSonObject;
-  lModel : String;
+  LModel: String;
 begin
   // Inicialización de variables y valores por defecto
   If User = '' then
@@ -1759,7 +1759,7 @@ var
   jAnnotationItemValue: TJSonValue;
   jAnnotations: TJSonArray;
   LItem: TAiWebSearchItem;
-  LModel : String;
+  LModel: String;
 
   Code: TMarkdownCodeExtractor;
   CodeFile: TCodeFile;
@@ -1990,31 +1990,30 @@ begin
         // Permitir al usuario final procesar o modificar la respuesta antes de guardarla.
         // Se pasa el mensaje de solicitud y el mensaje de respuesta más la respuesta del modelo en texto
 
-      If tfc_textFile in NativeOutputFiles then
-      Begin
-        Code := TMarkdownCodeExtractor.Create;
-        Try
+        If tfc_textFile in NativeOutputFiles then
+        Begin
+          Code := TMarkdownCodeExtractor.Create;
+          Try
 
-          CodeFiles := Code.ExtractCodeFiles(Respuesta);
-          For CodeFile in CodeFiles do
-          Begin
-            St := TStringStream.Create(CodeFile.Code);
-            Try
-              St.Position := 0;
+            CodeFiles := Code.ExtractCodeFiles(Respuesta);
+            For CodeFile in CodeFiles do
+            Begin
+              St := TStringStream.Create(CodeFile.Code);
+              Try
+                St.Position := 0;
 
-              MF := TAiMediaFile.Create;
-              MF.LoadFromStream('file.' + CodeFile.FileType, St);
-              ResMsg.MediaFiles.Add(MF);
-            Finally
-              St.Free;
+                MF := TAiMediaFile.Create;
+                MF.LoadFromStream('file.' + CodeFile.FileType, St);
+                ResMsg.MediaFiles.Add(MF);
+              Finally
+                St.Free;
+              End;
+
             End;
-
+          Finally
+            Code.Free;
           End;
-        Finally
-          Code.Free;
         End;
-      End;
-
 
         DoProcessResponse(AskMsg, ResMsg, Respuesta);
 

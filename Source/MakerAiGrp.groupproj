@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{AED0CEA3-8901-4C52-B391-49EFCEEDB413}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="MakerAI.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="MakerAiDsg.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="MakerAI">
+        <MSBuild Projects="MakerAI.dproj"/>
+    </Target>
+    <Target Name="MakerAI:Clean">
+        <MSBuild Projects="MakerAI.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MakerAI:Make">
+        <MSBuild Projects="MakerAI.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MakerAiDsg">
+        <MSBuild Projects="MakerAiDsg.dproj"/>
+    </Target>
+    <Target Name="MakerAiDsg:Clean">
+        <MSBuild Projects="MakerAiDsg.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MakerAiDsg:Make">
+        <MSBuild Projects="MakerAiDsg.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="MakerAI;MakerAiDsg"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="MakerAI:Clean;MakerAiDsg:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="MakerAI:Make;MakerAiDsg:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

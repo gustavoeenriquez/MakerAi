@@ -1,7 +1,6 @@
 package MakerAI;
 
 {$R *.res}
-{$R *.dres}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
 {$ASSERTIONS ON}
@@ -42,12 +41,8 @@ contains
   uMakerAi.ToolFunctions in 'uMakerAi.ToolFunctions.pas',
   uMakerAi.Prompts in 'uMakerAi.Prompts.pas',
   uMakerAi.RAG.Vectors in 'uMakerAi.RAG.Vectors.pas',
-  uMakerAi.Graph.Core in 'uMakerAi.Graph.Core.pas',
-  uMakerAi.Whisper in 'uMakerAi.Whisper.pas',
   uMakerAi.Core in 'uMakerAi.Core.pas',
-  uMakerAi.Register in 'uMakerAi.Register.pas',
   uMakerAi.Embeddings in 'uMakerAi.Embeddings.pas',
-  uMakerAi.Dalle in 'uMakerAi.Dalle.pas',
   uMakerAi.Utils.system in 'uMakerAi.Utils.system.pas',
   uMakerAi.Chat.AiConnection in 'uMakerAi.Chat.AiConnection.pas',
   UMakerAi.ParamsRegistry in 'UMakerAi.ParamsRegistry.pas',

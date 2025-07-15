@@ -8,7 +8,6 @@ uses
 type
   // Registro para almacenar información del archivo extraído
   TCodeFile = record
-    FileName: string;
     FileType: string;
     Code: string;
     LineNumber: Integer; // Línea donde se encontró el bloque
@@ -23,7 +22,6 @@ type
     FCodeFiles: TCodeFileList;
     function GetLanguageFromExtension(const AExtension: string): string;
     function NormalizeLanguage(const ALanguage: string): string;
-    function ExtractFileName(ALine: string; out AFileType: string): string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -123,50 +121,6 @@ begin
     Result := LowerLang;
 end;
 
-
-function TMarkdownCodeExtractor.ExtractFileName( ALine: string; out AFileType: string): string;
-var
-  Parts: TArray<string>;
-  FileName: string;
-  FileTypeExtension: string;
-  i: Integer;
-begin
-  Result := '';
-  AFileType := '';
-
-  // Eliminar espacios al principio y al final
-  ALine := Trim(ALine);
-
-  // Dividir la línea por el caracter ':'
-  Parts := ALine.Split([':'], 0);
-
-  if Length(Parts) > 1 then
-  begin
-    // El primer elemento es el tipo de archivo y el segundo el nombre del archivo
-    AFileType := Trim(Parts[0]);
-    FileName := Trim(Parts[1]);
-
-    // Limpiar el nombre del archivo de caracteres no válidos y asteriscos
-    FileName := StringReplace(FileName, '*', '', [rfReplaceAll]);
-    FileName := StringReplace(FileName, '`', '', [rfReplaceAll]);
-    FileName := Trim(FileName);
-
-    //Validar si el tipo de archivo esta en el nombre del archivo, si no esta lo agregamos
-    if not FileName.Contains('.' + AFileType) then
-    begin
-      FileTypeExtension := '.' + AFileType;
-      if Pos(FileTypeExtension, FileName) = 0 then
-      begin
-        FileName := FileName + FileTypeExtension;
-      end;
-    end;
-
-    Result := FileName;
-    AFileType := NormalizeLanguage(AFileType);
-  end;
-end;
-
-
 function TMarkdownCodeExtractor.ExtractCodeFiles(const AMarkdownText: string): TCodeFileList;
 var
   Lines: TStringList;
@@ -179,7 +133,6 @@ var
   StartLineNumber: Integer;
   RegexPattern: string;
   Match: TMatch;
-  FileName: string;
 begin
   Clear;
   Result := FCodeFiles;
@@ -194,7 +147,6 @@ begin
     InCodeBlock := False;
     CurrentLanguage := '';
     StartLineNumber := 0;
-    FileName := '';
 
     // Patrón para detectar bloques de código con ```
     RegexPattern := '^\s*```\s*(\w+)?\s*$';
@@ -213,28 +165,11 @@ begin
           StartLineNumber := i + 1; // +1 porque las líneas se cuentan desde 1
           CodeContent.Clear;
 
-          // Intentar extraer el nombre del archivo y el lenguaje desde la línea anterior
-          if (i > 0) then
-          begin
-            FileName := ExtractFileName(Lines[i-1], CurrentLanguage);
-            if FileName = '' then
-            begin
-                // Extraer el lenguaje si está especificado dentro del bloque ```language
-                if Match.Groups.Count > 1 then
-                  CurrentLanguage := NormalizeLanguage(Match.Groups[1].Value)
-                else
-                  CurrentLanguage := 'text';
-            end;
-          end
+          // Extraer el lenguaje si está especificado
+          if Match.Groups.Count > 1 then
+            CurrentLanguage := NormalizeLanguage(Match.Groups[1].Value)
           else
-          begin
-              // Extraer el lenguaje si está especificado dentro del bloque ```language
-              if Match.Groups.Count > 1 then
-                CurrentLanguage := NormalizeLanguage(Match.Groups[1].Value)
-              else
-                CurrentLanguage := 'text';
-          end;
-
+            CurrentLanguage := 'text';
         end
         else
         begin
@@ -245,7 +180,6 @@ begin
           CodeFile.FileType := CurrentLanguage;
           CodeFile.Code := CodeContent.ToString;
           CodeFile.LineNumber := StartLineNumber;
-          CodeFile.FileName := FileName;
 
           // Agregar solo si hay contenido
           if Trim(CodeFile.Code) <> '' then
@@ -254,7 +188,6 @@ begin
           // Resetear variables
           CurrentLanguage := '';
           CodeContent.Clear;
-          FileName := ''; // Resetear el nombre del archivo
         end;
       end
       else if InCodeBlock then
@@ -272,7 +205,6 @@ begin
       CodeFile.FileType := CurrentLanguage;
       CodeFile.Code := CodeContent.ToString;
       CodeFile.LineNumber := StartLineNumber;
-      CodeFile.FileName := FileName;
       FCodeFiles.Add(CodeFile);
     end;
 
@@ -291,7 +223,7 @@ program TestMarkdownExtractor;
 
 uses
   System.SysUtils,
-  uMakerAi.Utils.CodeExtractor;
+  MarkdownCodeExtractor;
 
 procedure TestExtractor;
 var
@@ -325,32 +257,7 @@ begin
                   '        return 1' + sLineBreak +
                   '    else:' + sLineBreak +
                   '        return fibonacci(n-1) + fibonacci(n-2)' + sLineBreak +
-                  '```' + sLineBreak +
-                  'html:nombrearchivo.html' + sLineBreak +
-                  '```' + sLineBreak +
-                  '<!DOCTYPE html>' + sLineBreak +
-                  '<html>' + sLineBreak +
-                  '  <head>' + sLineBreak +
-                  '    <title>Mi primera página web</title>' + sLineBreak +
-                  '  </head>' + sLineBreak +
-                  '  <body>' + sLineBreak +
-                  '    <h1>Hola mundo</h1>' + sLineBreak +
-                  '  </body>' + sLineBreak +
-                  '</html>' + sLineBreak +
-                  '```' + sLineBreak +
-                  'html:***nombrearchivo2.html***' + sLineBreak +
-                  '```' + sLineBreak +
-                  '<!DOCTYPE html>' + sLineBreak +
-                  '<html>' + sLineBreak +
-                  '  <head>' + sLineBreak +
-                  '    <title>Mi primera página web</title>' + sLineBreak +
-                  '  </head>' + sLineBreak +
-                  '  <body>' + sLineBreak +
-                  '    <h1>Hola mundo</h1>' + sLineBreak +
-                  '  </body>' + sLineBreak +
-                  '</html>' + sLineBreak +
                   '```';
-
 
   Extractor := TMarkdownCodeExtractor.Create;
   try
@@ -363,7 +270,6 @@ begin
     begin
       WriteLn('Archivo ', i + 1, ':');
       WriteLn('Tipo: ', CodeFiles[i].FileType);
-      WriteLn('Nombre Archivo: ', CodeFiles[i].FileName);
       WriteLn('Línea: ', CodeFiles[i].LineNumber);
       WriteLn('Código:');
       WriteLn(CodeFiles[i].Code);

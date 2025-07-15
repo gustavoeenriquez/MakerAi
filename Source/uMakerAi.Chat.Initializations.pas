@@ -76,12 +76,13 @@ Begin
 
 
   // ------- OLLAMA Modelo Whisper localhost ------------------------------
-  Model := 'aa_whisper';
+{  Model := 'aa_whisper';
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Asynchronous', 'False');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeInputFiles', '[Tfc_Audio]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Url', 'http://localhost:7890/');
+}
 
 
 
@@ -345,9 +346,6 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Tool_Active', 'False');
 
 
-
-
-
   //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('Claude', 'aa_claude-3-7-sonnet-20250219-pdf', 'claude-3-7-sonnet-20250219');
 
@@ -355,6 +353,9 @@ Begin
   Model := 'aa_claude-3-7-sonnet-20250219-pdf';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'NativeInputFiles', '[Tfc_pdf, tfc_image]');
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ChatMediaSupports', '[Tcm_pdf, tcm_image]');
+
+
+
 
 
   // ------------------------- MISTRAL ----------------------------------
@@ -432,7 +433,30 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Tool_Active', 'False');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeInputFiles', '[tfc_image]'); //Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[tcm_image]');  //Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
+
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('Grok', 'aa-grok-3-search', 'grok-3');
+
+
+  // ------- GROK grok-3-search ------------------------------
+  Model := 'aa-grok-3-search';
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Asynchronous', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Tool_Active', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeInputFiles', '[]'); //Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[tcm_WebSearch]');  //Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
+
+
+
+//tcm_WebSearch in ChatMediaSupports
+
+
 End;
+
+
+
+
+
 
 Initialization
 

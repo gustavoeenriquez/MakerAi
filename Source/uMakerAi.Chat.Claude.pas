@@ -937,16 +937,20 @@ begin
       // Si el formato de respuesta es Json, siempre debe llevar en la instrucción que el formato sea json
       MensajeInicial := Self.PrepareSystemMsg;
 
-      InitMsg := TAiChatMessage.Create(MensajeInicial, 'user');
-      InitMsg.Id := FMessages.Count + 1;
-      FMessages.Add(InitMsg);
+      If MensajeInicial <> '' then
+      Begin
 
-      InitMsg := TAiChatMessage.Create('De acuerdo, seguiré las instrucciones', 'assistant');
-      InitMsg.Id := FMessages.Count + 1;
-      FMessages.Add(InitMsg);
+        InitMsg := TAiChatMessage.Create(MensajeInicial, 'user');
+        InitMsg.Id := FMessages.Count + 1;
+        FMessages.Add(InitMsg);
 
-      If Assigned(FOnAddMessage) then
-        FOnAddMessage(Self, InitMsg, Nil, 'system', MensajeInicial);
+        InitMsg := TAiChatMessage.Create('De acuerdo, seguiré las instrucciones', 'assistant');
+        InitMsg.Id := FMessages.Count + 1;
+        FMessages.Add(InitMsg);
+
+        If Assigned(FOnAddMessage) then
+          FOnAddMessage(Self, InitMsg, Nil, 'system', MensajeInicial);
+      End;
     End;
 
     // Adiciona el mensaje a la lista
