@@ -85,6 +85,7 @@ object Form7: TForm7
       Size.PlatformDefault = False
       TabOrder = 0
       object ComboDrivers: TComboBox
+        DropDownCount = 15
         Position.X = 24.000000000000000000
         Position.Y = 40.000000000000000000
         Size.Width = 201.000000000000000000
@@ -106,6 +107,7 @@ object Form7: TForm7
         TabOrder = 2
       end
       object ComboModels: TComboBox
+        DropDownCount = 15
         Position.X = 248.000000000000000000
         Position.Y = 40.000000000000000000
         Size.Width = 337.000000000000000000
@@ -428,7 +430,8 @@ object Form7: TForm7
           Size.PlatformDefault = False
           Text = 
             '    Algunos ejemplos de configuraciones para cada tarea (No cubr' +
-            'e todas las posibilidades)'
+            'e todas las posibilidades)  - Revisa los modelos pregonfigurados' +
+            ' en: uMakerAi.Chat.Initializations'
           TabOrder = 0
         end
         object GridPanelLayout1: TGridPanelLayout
@@ -2217,7 +2220,7 @@ object Form7: TForm7
           object Button71: TButton
             Align = Center
             Images = ImageList1
-            ImageIndex = 0
+            ImageIndex = 1
             Margins.Left = 2.000000000000000000
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
