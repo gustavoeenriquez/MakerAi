@@ -98,6 +98,7 @@ type
     procedure SetupChatFromDriver;
     procedure ApplyParamsToChat(AChat: TAiChat; AParams: TStrings);
     procedure ApplyEventsToChat(AChat: TAiChat; SetToNil: Boolean = False);
+    Procedure OnInternalReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject; aRole, aText: String);
 
   public
     constructor Create(Sender: TComponent); override;
@@ -124,14 +125,14 @@ type
 
     procedure RegisterUserParam(const DriverName, ModelName, ParamName, ParamValue: string); overload;
     procedure RegisterUserParam(const DriverName, ParamName, ParamValue: string); overload;
-    procedure ClearRegisterParams(const DriverName : String; ModelName: string = '');
+    procedure ClearRegisterParams(const DriverName: String; ModelName: string = '');
 
     function CreateChatForDriver(const aDriverName, aModel: string): TAiChat;
 
     function UploadFile(aMediaFile: TAiMediaFile): String;
     function CheckFileState(aMediaFile: TAiMediaFile): String;
     function DeleteFile(aMediaFile: TAiMediaFile): String;
-    function UploadFileToCache(aMediaFile: TAiMediaFile; aTTL_Seconds: Integer = 3600): String;
+    function UploadFileToCache(aMediaFile: TAiMediaFile; aTTL_Seconds: integer = 3600): String;
 
     property Messages: TAiChatMessages read FMessages;
     property LastError: String read GetLastError;
@@ -140,7 +141,7 @@ type
 
   published
     property DriverName: String read FDriverName write SetDriverName;
-    property Model: String read FModel write SetModel; // <--- RENOMBRADO de ModelName
+    property Model: String read FModel write SetModel;
     property Params: TStrings read FParams write SetParams;
     property InitialInstructions: TStrings read FInitialInstructions write SetInitialInstructions;
     property Memory: TStrings read FMemory write SetMemory;
@@ -214,7 +215,7 @@ begin
   if FModel <> Value then
   begin
     FModel := Value;
-    //Params.Values['model'] := FModel;
+    // Params.Values['model'] := FModel;
     TAiChatFactory.Instance.RegisterUserParam(FDriverName, FModel, 'Model', FModel);
 
     UpdateAndApplyParams;
@@ -275,7 +276,8 @@ begin
 
   if TAiChatFactory.Instance.HasDriver(FDriverName) then
   begin
-    Var ShouldExpand := not (csDesigning in ComponentState);
+    Var
+    ShouldExpand := not(csDesigning in ComponentState);
     TAiChatFactory.Instance.GetDriverParams(FDriverName, FModel, FParams, ShouldExpand)
   end
   else
@@ -302,7 +304,6 @@ begin
   if not Assigned(FChat) then
     raise Exception.Create('A valid DriverName must be specified to create a Chat instance.');
 end;
-
 
 procedure TAiChatConnection.ApplyParamsToChat(AChat: TAiChat; AParams: TStrings);
 var
@@ -368,22 +369,29 @@ begin
             tkSet:
               begin
                 // La lógica para 'tkSet' ya era auto-contenida y no necesita SetValue.
-                var LSetType := LProp.PropertyType as TRttiSetType;
+                var
+                LSetType := LProp.PropertyType as TRttiSetType;
                 if LSetType.ElementType.TypeKind = tkEnumeration then
                 begin
-                  var LEnumType := LSetType.ElementType;
-                  var SetAsInt: NativeInt := 0;
+                  var
+                  LEnumType := LSetType.ElementType;
+                  var
+                    SetAsInt: NativeInt := 0;
                   if (not ParamValue.IsEmpty) and (ParamValue <> '[]') then
                   begin
-                    var CleanValue := ParamValue.Trim(['[', ']', ' ']);
-                    var EnumNames := CleanValue.Split([',']);
+                    var
+                    CleanValue := ParamValue.Trim(['[', ']', ' ']);
+                    var
+                    EnumNames := CleanValue.Split([',']);
                     for var EnumName in EnumNames do
                     begin
-                      var TrimmedName := Trim(EnumName);
+                      var
+                      TrimmedName := Trim(EnumName);
                       if not TrimmedName.IsEmpty then
                       begin
                         try
-                          var OrdinalValue := GetEnumValue(LEnumType.Handle, TrimmedName);
+                          var
+                          OrdinalValue := GetEnumValue(LEnumType.Handle, TrimmedName);
                           if OrdinalValue >= 0 then
                             SetAsInt := SetAsInt or (1 shl OrdinalValue);
                         except
@@ -403,7 +411,8 @@ begin
                 // Usamos EndsText para ser más flexibles (acepta TStrings, TStringList, etc.)
                 if LProp.PropertyType.QualifiedName.EndsWith('TStrings') then
                 begin
-                  var LStringsProp := LProp.GetValue(AChat).AsObject as TStrings;
+                  var
+                  LStringsProp := LProp.GetValue(AChat).AsObject as TStrings;
                   if Assigned(LStringsProp) then
                   begin
                     // Modificamos el contenido del objeto directamente. No se necesita SetValue.
@@ -442,7 +451,7 @@ begin
   else
   begin
     AChat.OnReceiveData := Self.OnReceiveData;
-    AChat.OnReceiveDataEnd := Self.OnReceiveDataEnd;
+    AChat.OnReceiveDataEnd := OnInternalReceiveDataEnd; //Self.OnReceiveDataEnd;
     AChat.OnAddMessage := Self.OnAddMessage;
     AChat.OnCallToolFunction := Self.OnCallToolFunction;
     AChat.OnBeforeSendMessage := Self.OnBeforeSendMessage;
@@ -472,7 +481,7 @@ begin
     UpdateAndApplyParams;
 end;
 
-procedure TAiChatConnection.ClearRegisterParams(const DriverName : String; ModelName: string);
+procedure TAiChatConnection.ClearRegisterParams(const DriverName: String; ModelName: string);
 begin
   TAiChatFactory.Instance.ClearRegisterParams(DriverName, ModelName);
   if (DriverName = FDriverName) then
@@ -492,7 +501,8 @@ begin
 
   LParams := TStringList.Create;
   try
-    Var ShouldExpand := not (csDesigning in ComponentState);
+    Var
+    ShouldExpand := not(csDesigning in ComponentState);
     TAiChatFactory.Instance.GetDriverParams(aDriverName, aModel, LParams, ShouldExpand);
     ApplyParamsToChat(Result, LParams);
   finally
@@ -606,6 +616,19 @@ begin
   Result := FChat.NewMessage(aPrompt, aRole);
 end;
 
+procedure TAiChatConnection.OnInternalReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject;
+  aRole, aText: String);
+begin
+
+  Prompt_tokens := Prompt_tokens + aMsg.Prompt_tokens;
+  Completion_tokens := Completion_tokens + aMsg.Completion_tokens;
+  Total_tokens := Total_tokens + aMsg.Total_tokens;
+
+  If Assigned(FOnReceiveDataEnd) then
+    FOnReceiveDataEnd(Sender, aMsg, aResponse, aRole, aText);
+
+end;
+
 procedure TAiChatConnection.RemoveFromMemory(Key: String);
 begin
   ValideChat;
@@ -637,7 +660,7 @@ begin
   Result := FChat.UploadFile(aMediaFile);
 end;
 
-function TAiChatConnection.UploadFileToCache(aMediaFile: TAiMediaFile; aTTL_Seconds: Integer): String;
+function TAiChatConnection.UploadFileToCache(aMediaFile: TAiMediaFile; aTTL_Seconds: integer): String;
 begin
   ValideChat;
   Result := FChat.UploadFileToCache(aMediaFile, aTTL_Seconds);
@@ -751,8 +774,8 @@ end;
 procedure TAiChatConnection.SetOnReceiveDataEnd(const Value: TAiChatOnDataEvent);
 begin
   FOnReceiveDataEnd := Value;
-  if Assigned(FChat) then
-    FChat.OnReceiveDataEnd := Value;
+  //if Assigned(FChat) then
+  //  FChat.OnReceiveDataEnd := Value;
 end;
 
 procedure TAiChatConnection.SetPrompt_tokens(const Value: integer);

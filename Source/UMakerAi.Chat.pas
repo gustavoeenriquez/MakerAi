@@ -478,10 +478,12 @@ begin
     Raise Exception.Create('El parámetro aMsg debe estar instanciado');
 
   Try
+
+      MensajeInicial := Trim(Self.PrepareSystemMsg);
+
     // Comienza con las instrucciones iniciales, en cada modelo es diferente
-    If (FMessages.Count = 0) then
+    If (FMessages.Count = 0) and (MensajeInicial <> '') then
     Begin
-      MensajeInicial := Self.PrepareSystemMsg;
 
       TmpMsg := TAiChatMessage.Create(MensajeInicial, 'system');
       TmpMsg.FId := FMessages.Count + 1;
@@ -504,6 +506,7 @@ begin
     Begin
       If Assigned(MF) then
       Begin
+        Procesado := False;
         DoProcessMediaFile(aMsg.Prompt, MF, Respuesta, Procesado); // Envía el archivo por si lo quiere procesar otra AI especializada, Ej.
         MF.Procesado := Procesado;
         MF.Transcription := Respuesta;
@@ -960,9 +963,10 @@ end;
 
 procedure TAiChat.DoProcessMediaFile(aPrompt: String; aAiMediaFile: TAiMediaFile; Var Respuesta: String; Var Procesado: Boolean);
 begin
+  Procesado := False;
+
   If Assigned(FOnProcessMediaFile) then
   Begin
-    Procesado := False;
     Respuesta := '';
     FOnProcessMediaFile(Self, aPrompt, aAiMediaFile, Self.NativeInputFiles, Respuesta, Procesado);
     aAiMediaFile.Procesado := Procesado;
@@ -1215,8 +1219,6 @@ begin
     AJSONObject.AddPair('model', LModel);
     AJSONObject.AddPair('user', User);
 
-    AJSONObject.AddPair('max_tokens', TJSONNumber.Create(FMax_tokens));
-
     If (FResponse_format = tiaChatRfJsonSchema) then
     Begin
       AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_schema'))
@@ -1227,6 +1229,18 @@ begin
       AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'text'))
     Else
       AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'text'));
+
+    If FReasoningEffort <> '' then // OpenAi reasoning effort
+    Begin
+      var
+      jeffort := TJSonObject.Create;
+      jeffort.AddPair('effort', FReasoningEffort);
+      AJSONObject.AddPair('reasoning', jeffort);
+
+      AJSONObject.AddPair('max_completion_tokens', TJSONNumber.Create(FMax_tokens));
+    End
+    Else
+      AJSONObject.AddPair('max_tokens', TJSONNumber.Create(FMax_tokens));
 
     Lista.CommaText := FStop;
     If Lista.Count > 0 then
@@ -2173,6 +2187,7 @@ procedure TAiChat.SetChatMediaSupports(const Value: TAiChatMediaSupports);
 begin
   FChatMediaSupports := Value;
 end;
+
 
 procedure TAiChat.SetCompletion_tokens(const Value: integer);
 begin

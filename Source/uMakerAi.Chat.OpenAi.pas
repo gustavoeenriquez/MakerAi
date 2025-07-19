@@ -1351,7 +1351,18 @@ begin
     end;
 
     // --- 3. CONFIGURACIÓN DE GENERACIÓN Y MODALIDADES ---
-    AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+
+    If ReasoningEffort <> '' then // OpenAi reasoning effort
+    Begin
+      // var jeffort := TJSonObject.Create;
+      // jeffort.AddPair('effort', ReasoningEffort);
+      // AJSONObject.AddPair('reasoning', jeffort);
+
+      AJSONObject.AddPair('max_completion_tokens', TJSONNumber.Create(Max_tokens));
+    End
+    Else
+      AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+
     AJSONObject.AddPair('user', User);
     AJSONObject.AddPair('store', FStore); // Para modelos de evaluación
 

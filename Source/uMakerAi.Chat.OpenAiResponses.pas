@@ -411,8 +411,6 @@ begin
             End;
           End;
 
-
-
           DoProcessResponse(AskMsg, ResMsg, FLastContent);
 
           ResMsg.Prompt := FLastContent;
@@ -951,19 +949,44 @@ begin
         end;
       end;
     End
+    Else if (Tcm_Image in ChatMediaSupports) and (Tfc_Image in NativeOutputFiles) then // Si el modelo maneja la búsqueda  web
+    begin
+      JToolsArray := TJSonArray.Create;
+      JToolObject := TJSonObject.Create;
+      JToolObject.AddPair('type', 'image_generation');
+      JToolsArray.Add(JToolObject);
+      JResult.AddPair('tools', JToolsArray);
+    end
     Else if tcm_WebSearch in ChatMediaSupports then // Si el modelo maneja la búsqueda  web
     begin
       JToolsArray := TJSonArray.Create;
       JToolObject := TJSonObject.Create;
       JToolObject.AddPair('type', 'web_search_preview');
       JToolsArray.Add(JToolObject);
+
+      If tcm_code_Interpreter in ChatMediaSupports then
+      Begin
+        JToolObject := TJSonObject.Create;
+        var
+        jContainer := TJSonObject.Create;
+        jContainer.AddPair('type', 'auto');;
+        JToolObject.AddPair('container', jContainer);
+        JToolObject.AddPair('type', 'code_interpreter');
+        JToolsArray.Add(JToolObject);
+      End;
+
       JResult.AddPair('tools', JToolsArray);
     end
-    Else if (Tcm_Image in ChatMediaSupports) and (Tfc_Image in NativeOutputFiles) then // Si el modelo maneja la búsqueda  web
+    Else if (tcm_code_interpreter in ChatMediaSupports) then // Si el modelo maneja la búsqueda  web
     begin
       JToolsArray := TJSonArray.Create;
+
       JToolObject := TJSonObject.Create;
-      JToolObject.AddPair('type', 'image_generation');
+      var
+      jContainer := TJSonObject.Create;
+      jContainer.AddPair('type', 'auto');;
+      JToolObject.AddPair('container', jContainer);
+      JToolObject.AddPair('type', 'code_interpreter');
       JToolsArray.Add(JToolObject);
       JResult.AddPair('tools', JToolsArray);
     end;
@@ -1011,10 +1034,10 @@ begin
     St.WriteString(ABody);
     St.Position := 0;
 
-{$IFDEF APIDEBUG}
+//$IFDEF APIDEBUG
     St.SaveToFile('c:\temp\peticion_responses.txt'); // Para Debug
     St.Position := 0;
-{$ENDIF}
+//$ENDIF
     FResponse.Clear;
     FResponse.Position := 0;
 

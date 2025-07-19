@@ -718,6 +718,7 @@ function TAiClaudeChat.InitChatCompletions: String;
 Var
   AJSONObject, jToolChoice: TJSonObject;
   jArrTools, jArrStop: TJSonArray;
+  JTools: TJSonObject;
   Lista: TStringList;
   I: Integer;
   LAsincronico: Boolean;
@@ -774,7 +775,31 @@ begin
         on E: Exception do
           Raise Exception.Create('Error al procesar la propiedad Tools: ' + E.Message);
       end;
-    end;
+    end
+    Else
+    Begin
+
+      If (tcm_WebSearch in ChatMediaSupports) or (tcm_code_interpreter in ChatMediaSupports) then
+      Begin
+        jArrTools := TJSonArray.Create;
+        if tcm_WebSearch in ChatMediaSupports then
+        Begin
+          JTools := TJSonObject.Create;
+          JTools.AddPair('type', 'web_search_20250305');
+          JTools.AddPair('name', 'web_search');
+          jArrTools.Add(JTools);
+        End;
+
+        if tcm_code_interpreter in ChatMediaSupports then
+        Begin
+          JTools := TJSonObject.Create;
+          JTools.AddPair('type', 'code_execution_20250522');
+          JTools.AddPair('name', 'code_execution');
+          jArrTools.Add(JTools);
+        End;
+        AJSONObject.AddPair('tools', jArrTools);
+      End;
+    End;
 
     // --- 4. OTROS PARÁMETROS SOPORTADOS POR CLAUDE ---
     AJSONObject.AddPair('temperature', TJSONNumber.Create(Self.Temperature)); // Claude prefiere valores entre 0.0 y 1.0
@@ -964,6 +989,7 @@ begin
 
     For MF in aMsg.MediaFiles do
     Begin
+      Procesado := False;
       DoProcessMediaFile(aMsg.Prompt, MF, Respuesta, Procesado); // Envía el archivo por si lo quiere procesar otra AI especializada, Ej.
       MF.Procesado := Procesado;
       MF.Transcription := Respuesta;
@@ -1003,8 +1029,12 @@ begin
   try
     FHeaders := [TNetHeader.Create('x-api-key', ApiKey), TNetHeader.Create('anthropic-version', CLAUDE_API_VERSION),
       TNetHeader.Create('content-type', 'application/json')];
+
     if Tool_Active then
       FHeaders := FHeaders + [TNetHeader.Create('anthropic-beta', CLAUDE_TOOLS_BETA_HEADER)];
+
+    if tcm_code_interpreter in ChatMediaSupports then
+      FHeaders := FHeaders + [TNetHeader.Create('anthropic-beta', 'code-execution-2025-05-22')];
 
     FClient.ContentType := 'application/json';
     FClient.Asynchronous := Self.Asynchronous; // Usar la propiedad del componente
@@ -1019,10 +1049,10 @@ begin
     St := TStringStream.Create(ABody, TEncoding.UTF8);
     try
       St.Position := 0;
-{$IFDEF APIDEBUG}
+      // $IFDEF APIDEBUG
       St.SaveToFile('c:\temp\peticion.txt');
       St.Position := 0;
-{$ENDIF}
+      // $ENDIF
       FResponse.Clear;
 
       Res := FClient.Post(sUrl, St, FResponse, FHeaders);
@@ -1128,7 +1158,7 @@ Var
   I, NumTasks: Integer;
   Id, Clave, sToolCalls, LModel: String;
 
-  Code: TMarkdownCodeExtractor;
+  code: TMarkdownCodeExtractor;
   CodeFile: TCodeFile;
   CodeFiles: TCodeFileList;
   MF: TAiMediaFile;
@@ -1244,13 +1274,13 @@ begin
 
       If tfc_textFile in NativeOutputFiles then
       Begin
-        Code := TMarkdownCodeExtractor.Create;
+        code := TMarkdownCodeExtractor.Create;
         Try
 
-          CodeFiles := Code.ExtractCodeFiles(Respuesta);
+          CodeFiles := code.ExtractCodeFiles(Respuesta);
           For CodeFile in CodeFiles do
           Begin
-            St := TStringStream.Create(CodeFile.Code);
+            St := TStringStream.Create(CodeFile.code);
             Try
               St.Position := 0;
 
@@ -1263,7 +1293,7 @@ begin
 
           End;
         Finally
-          Code.Free;
+          code.Free;
         End;
       End;
 

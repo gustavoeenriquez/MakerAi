@@ -126,7 +126,7 @@ object Form7: TForm7
       object Layout5: TLayout
         Align = Client
         Size.Width = 536.000000000000000000
-        Size.Height = 344.000000000000000000
+        Size.Height = 324.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 2
         object MemoRespuesta: TMemo
@@ -135,11 +135,11 @@ object Form7: TForm7
           TextSettings.WordWrap = True
           Align = Client
           Size.Width = 536.000000000000000000
-          Size.Height = 321.000000000000000000
+          Size.Height = 301.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 0
           Viewport.Width = 532.000000000000000000
-          Viewport.Height = 317.000000000000000000
+          Viewport.Height = 297.000000000000000000
         end
         object Label2: TLabel
           Align = Top
@@ -160,24 +160,24 @@ object Form7: TForm7
         Align = Right
         Position.X = 755.000000000000000000
         Size.Width = 375.000000000000000000
-        Size.Height = 344.000000000000000000
+        Size.Height = 324.000000000000000000
         Size.PlatformDefault = False
-        TabIndex = 0
+        TabIndex = 2
         TabOrder = 3
         TabPosition = PlatformDefault
         Sizes = (
           375s
-          318s
+          298s
           375s
-          318s
+          298s
           375s
-          318s)
+          298s)
         object TabTexto: TTabItem
           CustomIcon = <
             item
             end>
           TextSettings.Trimming = None
-          IsSelected = True
+          IsSelected = False
           Size.Width = 48.000000000000000000
           Size.Height = 26.000000000000000000
           Size.PlatformDefault = False
@@ -192,11 +192,11 @@ object Form7: TForm7
             TextSettings.WordWrap = True
             Align = Client
             Size.Width = 375.000000000000000000
-            Size.Height = 318.000000000000000000
+            Size.Height = 298.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 0
             Viewport.Width = 371.000000000000000000
-            Viewport.Height = 314.000000000000000000
+            Viewport.Height = 294.000000000000000000
           end
         end
         object TabImagen: TTabItem
@@ -219,7 +219,7 @@ object Form7: TForm7
               end>
             Align = Client
             Size.Width = 375.000000000000000000
-            Size.Height = 318.000000000000000000
+            Size.Height = 298.000000000000000000
             Size.PlatformDefault = False
           end
         end
@@ -228,7 +228,7 @@ object Form7: TForm7
             item
             end>
           TextSettings.Trimming = None
-          IsSelected = False
+          IsSelected = True
           Size.Width = 45.000000000000000000
           Size.Height = 26.000000000000000000
           Size.PlatformDefault = False
@@ -240,7 +240,7 @@ object Form7: TForm7
           object WebBrowser1: TWebBrowser
             Align = Client
             Size.Width = 375.000000000000000000
-            Size.Height = 318.000000000000000000
+            Size.Height = 298.000000000000000000
             Size.PlatformDefault = False
             WindowsEngine = EdgeIfAvailable
           end
@@ -252,19 +252,19 @@ object Form7: TForm7
         MinSize = 20.000000000000000000
         Position.X = 745.000000000000000000
         Size.Width = 10.000000000000000000
-        Size.Height = 344.000000000000000000
+        Size.Height = 324.000000000000000000
         Size.PlatformDefault = False
       end
       object Layout6: TLayout
         Align = Left
         Size.Width = 209.000000000000000000
-        Size.Height = 344.000000000000000000
+        Size.Height = 324.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 4
         object ListBox1: TListBox
           Align = Client
           Size.Width = 209.000000000000000000
-          Size.Height = 344.000000000000000000
+          Size.Height = 324.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 0
           DisableFocusEffect = True
@@ -272,7 +272,7 @@ object Form7: TForm7
           DefaultItemStyles.GroupHeaderStyle = ''
           DefaultItemStyles.GroupFooterStyle = ''
           Viewport.Width = 205.000000000000000000
-          Viewport.Height = 340.000000000000000000
+          Viewport.Height = 320.000000000000000000
           object ListBoxGroupHeader1: TListBoxGroupHeader
             TabOrder = 0
             Text = 'Estadisticas de Uso'
@@ -412,9 +412,9 @@ object Form7: TForm7
       end
       object Layout7: TLayout
         Align = Bottom
-        Position.Y = 344.000000000000000000
+        Position.Y = 324.000000000000000000
         Size.Width = 1130.000000000000000000
-        Size.Height = 244.000000000000000000
+        Size.Height = 264.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 1
         object Label5: TLabel
@@ -441,49 +441,61 @@ object Form7: TForm7
           Margins.Right = 2.000000000000000000
           Margins.Bottom = 2.000000000000000000
           Size.Width = 1126.000000000000000000
-          Size.Height = 217.000000000000000000
+          Size.Height = 237.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 1
           ColumnCollection = <
             item
               SizeStyle = Absolute
-              Value = 100.000000000000000000
+              Value = 70.000000000000000000
             end
             item
               SizeStyle = Absolute
-              Value = 100.000000000000000000
+              Value = 70.000000000000000000
             end
             item
               SizeStyle = Absolute
-              Value = 100.000000000000000000
+              Value = 70.000000000000000000
             end
             item
               SizeStyle = Absolute
-              Value = 100.000000000000000000
+              Value = 70.000000000000000000
             end
             item
               SizeStyle = Absolute
-              Value = 100.000000000000000000
+              Value = 70.000000000000000000
             end
             item
               SizeStyle = Absolute
-              Value = 100.000000000000000000
+              Value = 70.000000000000000000
             end
             item
               SizeStyle = Absolute
-              Value = 100.000000000000000000
+              Value = 70.000000000000000000
             end
             item
               SizeStyle = Absolute
-              Value = 100.000000000000000000
+              Value = 70.000000000000000000
             end
             item
               SizeStyle = Absolute
-              Value = 100.000000000000000000
+              Value = 70.000000000000000000
             end
             item
               SizeStyle = Absolute
-              Value = 100.000000000000000000
+              Value = 70.000000000000000000
+            end
+            item
+              SizeStyle = Absolute
+              Value = 70.000000000000000000
+            end
+            item
+              SizeStyle = Absolute
+              Value = 70.000000000000000000
+            end
+            item
+              SizeStyle = Absolute
+              Value = 70.000000000000000000
             end>
           ControlCollection = <
             item
@@ -935,8 +947,212 @@ object Form7: TForm7
               Column = 9
               Control = Button72
               Row = 8
+            end
+            item
+              Column = 10
+              Control = Label24
+              Row = 0
+            end
+            item
+              Column = 10
+              Control = Button73
+              Row = 1
+            end
+            item
+              Column = 10
+              Control = Button74
+              Row = 2
+            end
+            item
+              Column = 10
+              Control = Button75
+              Row = 3
+            end
+            item
+              Column = 10
+              Control = Button76
+              Row = 4
+            end
+            item
+              Column = 10
+              Control = Button77
+              Row = 5
+            end
+            item
+              Column = 10
+              Control = Button78
+              Row = 6
+            end
+            item
+              Column = 10
+              Control = Button79
+              Row = 7
+            end
+            item
+              Column = 10
+              Control = Button80
+              Row = 8
+            end
+            item
+              Column = 11
+              Control = Label25
+              Row = 0
+            end
+            item
+              Column = 11
+              Control = Button82
+              Row = 1
+            end
+            item
+              Column = 12
+              Control = Button83
+              Row = 1
+            end
+            item
+              Column = 11
+              Control = Button84
+              Row = 2
+            end
+            item
+              Column = 12
+              Control = Button85
+              Row = 2
+            end
+            item
+              Column = 11
+              Control = Button86
+              Row = 3
+            end
+            item
+              Column = 12
+              Control = Button87
+              Row = 3
+            end
+            item
+              Column = 11
+              Control = Button88
+              Row = 4
+            end
+            item
+              Column = 12
+              Control = Button89
+              Row = 4
+            end
+            item
+              Column = 11
+              Control = Button90
+              Row = 5
+            end
+            item
+              Column = 12
+              Control = Button91
+              Row = 5
+            end
+            item
+              Column = 11
+              Control = Button92
+              Row = 6
+            end
+            item
+              Column = 12
+              Control = Button93
+              Row = 6
+            end
+            item
+              Column = 11
+              Control = Button94
+              Row = 7
+            end
+            item
+              Column = 12
+              Control = Button95
+              Row = 7
+            end
+            item
+              Column = 11
+              Control = Button96
+              Row = 8
+            end
+            item
+              Column = 12
+              Control = Button97
+              Row = 8
+            end
+            item
+              Column = 12
+              Control = Label26
+              Row = 0
+            end
+            item
+              Column = 0
+              Control = Label27
+              Row = 9
+            end
+            item
+              Column = 1
+              Control = Button81
+              Row = 9
+            end
+            item
+              Column = 2
+              Control = Button98
+              Row = 9
+            end
+            item
+              Column = 3
+              Control = Button99
+              Row = 9
+            end
+            item
+              Column = 4
+              Control = Button100
+              Row = 9
+            end
+            item
+              Column = 5
+              Control = Button101
+              Row = 9
+            end
+            item
+              Column = 6
+              Control = Button102
+              Row = 9
+            end
+            item
+              Column = 7
+              Control = Button103
+              Row = 9
+            end
+            item
+              Column = 8
+              Control = Button104
+              Row = 9
+            end
+            item
+              Column = 9
+              Control = Button105
+              Row = 9
+            end
+            item
+              Column = 10
+              Control = Button106
+              Row = 9
+            end
+            item
+              Column = 11
+              Control = Button107
+              Row = 9
+            end
+            item
+              Column = 12
+              Control = Button108
+              Row = 9
             end>
           RowCollection = <
+            item
+              SizeStyle = Absolute
+              Value = 23.000000000000000000
+            end
             item
               SizeStyle = Absolute
               Value = 23.000000000000000000
@@ -983,7 +1199,7 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TextSettings.HorzAlign = Center
@@ -996,7 +1212,7 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TextSettings.HorzAlign = Center
@@ -1009,7 +1225,7 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TextSettings.HorzAlign = Center
@@ -1022,7 +1238,7 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TextSettings.HorzAlign = Center
@@ -1035,7 +1251,7 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TextSettings.HorzAlign = Center
@@ -1048,7 +1264,7 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TextSettings.HorzAlign = Center
@@ -1061,7 +1277,7 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TextSettings.HorzAlign = Center
@@ -1074,7 +1290,7 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TextSettings.HorzAlign = Center
@@ -1087,11 +1303,11 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TextSettings.HorzAlign = Center
-            Text = 'Reasoning'
+            Text = 'Transcription'
             TabOrder = 1
           end
           object Label16: TLabel
@@ -1100,7 +1316,7 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             Text = 'Claude'
@@ -1117,14 +1333,14 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 83
+            TabOrder = 120
             TextSettings.Trimming = None
             OnClick = Button1Click
           end
           object Button2: TButton
             Align = Center
             Images = ImageList1
-            ImageIndex = 1
+            ImageIndex = 0
             Margins.Left = 2.000000000000000000
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
@@ -1132,8 +1348,9 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 82
+            TabOrder = 119
             TextSettings.Trimming = None
+            OnClick = Button2Click
           end
           object Button3: TButton
             Align = Center
@@ -1146,7 +1363,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 81
+            TabOrder = 118
             TextSettings.Trimming = None
           end
           object Button4: TButton
@@ -1160,7 +1377,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 80
+            TabOrder = 117
             TextSettings.Trimming = None
           end
           object Button5: TButton
@@ -1174,7 +1391,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 79
+            TabOrder = 116
             TextSettings.Trimming = None
           end
           object Button6: TButton
@@ -1188,7 +1405,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 78
+            TabOrder = 115
             TextSettings.Trimming = None
             OnClick = Button6Click
           end
@@ -1203,14 +1420,14 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 76
+            TabOrder = 113
             TextSettings.Trimming = None
             OnClick = Button7Click
           end
           object Button8: TButton
             Align = Center
             Images = ImageList1
-            ImageIndex = 0
+            ImageIndex = 1
             Margins.Left = 2.000000000000000000
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
@@ -1218,14 +1435,14 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 75
+            TabOrder = 112
             TextSettings.Trimming = None
-            OnClick = Button8Click
+            OnClick = EventFaltaImplementar
           end
           object Button9: TButton
             Align = Center
             Images = ImageList1
-            ImageIndex = 2
+            ImageIndex = 1
             Margins.Left = 2.000000000000000000
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
@@ -1233,9 +1450,8 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 74
+            TabOrder = 111
             TextSettings.Trimming = None
-            OnClick = Button9Click
           end
           object Label17: TLabel
             Align = Client
@@ -1243,11 +1459,11 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             Text = 'DeepSeek'
-            TabOrder = 84
+            TabOrder = 121
           end
           object Button10: TButton
             Align = Center
@@ -1260,7 +1476,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 73
+            TabOrder = 85
             TextSettings.Trimming = None
             OnClick = Button10Click
           end
@@ -1275,7 +1491,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 72
+            TabOrder = 84
             TextSettings.Trimming = None
           end
           object Button12: TButton
@@ -1289,7 +1505,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 71
+            TabOrder = 83
             TextSettings.Trimming = None
           end
           object Button13: TButton
@@ -1303,7 +1519,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 70
+            TabOrder = 82
             TextSettings.Trimming = None
           end
           object Button14: TButton
@@ -1317,7 +1533,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 69
+            TabOrder = 81
             TextSettings.Trimming = None
           end
           object Button15: TButton
@@ -1331,7 +1547,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 68
+            TabOrder = 80
             TextSettings.Trimming = None
           end
           object Button16: TButton
@@ -1345,7 +1561,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 66
+            TabOrder = 76
             TextSettings.Trimming = None
           end
           object Button17: TButton
@@ -1359,13 +1575,13 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 65
+            TabOrder = 75
             TextSettings.Trimming = None
           end
           object Button18: TButton
             Align = Center
             Images = ImageList1
-            ImageIndex = 2
+            ImageIndex = 1
             Margins.Left = 2.000000000000000000
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
@@ -1373,7 +1589,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 64
+            TabOrder = 73
             TextSettings.Trimming = None
           end
           object Label18: TLabel
@@ -1382,11 +1598,11 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             Text = 'Gemini'
-            TabOrder = 85
+            TabOrder = 122
           end
           object Button19: TButton
             Align = Center
@@ -1399,7 +1615,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 63
+            TabOrder = 72
             TextSettings.Trimming = None
             OnClick = Button19Click
           end
@@ -1414,7 +1630,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 62
+            TabOrder = 71
             TextSettings.Trimming = None
             OnClick = Button20Click
           end
@@ -1429,7 +1645,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 61
+            TabOrder = 70
             TextSettings.Trimming = None
             OnClick = Button21Click
           end
@@ -1444,7 +1660,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 60
+            TabOrder = 69
             TextSettings.Trimming = None
             OnClick = Button22Click
           end
@@ -1459,7 +1675,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 59
+            TabOrder = 68
             TextSettings.Trimming = None
             OnClick = Button23Click
           end
@@ -1474,7 +1690,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 58
+            TabOrder = 67
             TextSettings.Trimming = None
             OnClick = Button24Click
           end
@@ -1489,7 +1705,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 57
+            TabOrder = 66
             TextSettings.Trimming = None
             OnClick = Button25Click
           end
@@ -1504,14 +1720,14 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 56
+            TabOrder = 65
             TextSettings.Trimming = None
             OnClick = Button26Click
           end
           object Button27: TButton
             Align = Center
             Images = ImageList1
-            ImageIndex = 2
+            ImageIndex = 0
             Margins.Left = 2.000000000000000000
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
@@ -1519,8 +1735,9 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 55
+            TabOrder = 64
             TextSettings.Trimming = None
+            OnClick = Button27Click
           end
           object Label19: TLabel
             Align = Client
@@ -1528,11 +1745,11 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             Text = 'Grok'
-            TabOrder = 86
+            TabOrder = 123
           end
           object Button28: TButton
             Align = Center
@@ -1545,7 +1762,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 54
+            TabOrder = 63
             TextSettings.Trimming = None
             OnClick = Button28Click
           end
@@ -1560,7 +1777,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 53
+            TabOrder = 62
             TextSettings.Trimming = None
             OnClick = Button29Click
           end
@@ -1575,7 +1792,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 52
+            TabOrder = 61
             TextSettings.Trimming = None
             OnClick = Button30Click
           end
@@ -1590,7 +1807,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 51
+            TabOrder = 60
             TextSettings.Trimming = None
           end
           object Button32: TButton
@@ -1604,7 +1821,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 50
+            TabOrder = 59
             TextSettings.Trimming = None
           end
           object Button33: TButton
@@ -1618,7 +1835,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 49
+            TabOrder = 58
             TextSettings.Trimming = None
             OnClick = Button33Click
           end
@@ -1633,7 +1850,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 48
+            TabOrder = 57
             TextSettings.Trimming = None
           end
           object Button35: TButton
@@ -1647,13 +1864,13 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 47
+            TabOrder = 56
             TextSettings.Trimming = None
           end
           object Button36: TButton
             Align = Center
             Images = ImageList1
-            ImageIndex = 2
+            ImageIndex = 1
             Margins.Left = 2.000000000000000000
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
@@ -1661,7 +1878,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 46
+            TabOrder = 55
             TextSettings.Trimming = None
           end
           object Label20: TLabel
@@ -1670,11 +1887,11 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             Text = 'Mistral'
-            TabOrder = 89
+            TabOrder = 126
           end
           object Button37: TButton
             Align = Center
@@ -1687,7 +1904,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 45
+            TabOrder = 54
             TextSettings.Trimming = None
             OnClick = Button37Click
           end
@@ -1702,7 +1919,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 43
+            TabOrder = 52
             TextSettings.Trimming = None
           end
           object Button39: TButton
@@ -1716,7 +1933,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 41
+            TabOrder = 50
             TextSettings.Trimming = None
           end
           object Button40: TButton
@@ -1730,7 +1947,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 39
+            TabOrder = 48
             TextSettings.Trimming = None
           end
           object Button41: TButton
@@ -1744,7 +1961,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 37
+            TabOrder = 46
             TextSettings.Trimming = None
           end
           object Button42: TButton
@@ -1758,7 +1975,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 34
+            TabOrder = 43
             TextSettings.Trimming = None
             OnClick = Button42Click
           end
@@ -1773,7 +1990,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 30
+            TabOrder = 39
             TextSettings.Trimming = None
             OnClick = Button43Click
           end
@@ -1788,13 +2005,13 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 25
+            TabOrder = 33
             TextSettings.Trimming = None
           end
           object Button45: TButton
             Align = Center
             Images = ImageList1
-            ImageIndex = 2
+            ImageIndex = 1
             Margins.Left = 2.000000000000000000
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
@@ -1802,7 +2019,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 17
+            TabOrder = 21
             TextSettings.Trimming = None
           end
           object Label6: TLabel
@@ -1811,10 +2028,10 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 88
+            TabOrder = 125
           end
           object Label21: TLabel
             Align = Client
@@ -1822,11 +2039,11 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             Text = 'Ollama'
-            TabOrder = 87
+            TabOrder = 124
           end
           object Button46: TButton
             Align = Center
@@ -1839,7 +2056,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 44
+            TabOrder = 53
             TextSettings.Trimming = None
             OnClick = Button46Click
           end
@@ -1854,7 +2071,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 42
+            TabOrder = 51
             TextSettings.Trimming = None
           end
           object Button48: TButton
@@ -1868,7 +2085,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 40
+            TabOrder = 49
             TextSettings.Trimming = None
           end
           object Button49: TButton
@@ -1882,7 +2099,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 38
+            TabOrder = 47
             TextSettings.Trimming = None
           end
           object Button50: TButton
@@ -1896,7 +2113,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 36
+            TabOrder = 45
             TextSettings.Trimming = None
           end
           object Button51: TButton
@@ -1910,7 +2127,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 32
+            TabOrder = 41
             TextSettings.Trimming = None
             OnClick = Button51Click
           end
@@ -1925,7 +2142,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 28
+            TabOrder = 37
             TextSettings.Trimming = None
           end
           object Button53: TButton
@@ -1939,7 +2156,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 21
+            TabOrder = 27
             TextSettings.Trimming = None
             OnClick = Button53Click
           end
@@ -1954,8 +2171,9 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 13
+            TabOrder = 15
             TextSettings.Trimming = None
+            OnClick = EventFaltaImplementar
           end
           object Label22: TLabel
             Align = Client
@@ -1963,11 +2181,11 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             Text = 'OpenAi'
-            TabOrder = 77
+            TabOrder = 114
           end
           object Button55: TButton
             Align = Center
@@ -1980,7 +2198,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 35
+            TabOrder = 44
             TextSettings.Trimming = None
             OnClick = Button55Click
           end
@@ -1995,7 +2213,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 33
+            TabOrder = 42
             TextSettings.Trimming = None
             OnClick = Button56Click
           end
@@ -2010,7 +2228,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 31
+            TabOrder = 40
             TextSettings.Trimming = None
             OnClick = Button57Click
           end
@@ -2025,7 +2243,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 29
+            TabOrder = 38
             TextSettings.Trimming = None
             OnClick = Button58Click
           end
@@ -2040,9 +2258,9 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 27
+            TabOrder = 36
             TextSettings.Trimming = None
-            OnClick = Button59Click
+            OnClick = EventFaltaImplementar
           end
           object Button60: TButton
             Align = Center
@@ -2055,7 +2273,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 23
+            TabOrder = 30
             TextSettings.Trimming = None
             OnClick = Button60Click
           end
@@ -2070,7 +2288,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 19
+            TabOrder = 24
             TextSettings.Trimming = None
           end
           object Button62: TButton
@@ -2084,14 +2302,14 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 15
+            TabOrder = 18
             TextSettings.Trimming = None
             OnClick = Button62Click
           end
           object Button63: TButton
             Align = Center
             Images = ImageList1
-            ImageIndex = 2
+            ImageIndex = 0
             Margins.Left = 2.000000000000000000
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
@@ -2099,8 +2317,9 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 11
+            TabOrder = 12
             TextSettings.Trimming = None
+            OnClick = Button63Click
           end
           object Label23: TLabel
             Align = Client
@@ -2108,11 +2327,11 @@ object Form7: TForm7
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
             Margins.Bottom = 2.000000000000000000
-            Size.Width = 96.000000000000000000
+            Size.Width = 66.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             Text = 'OpenResponses'
-            TabOrder = 67
+            TabOrder = 79
           end
           object Button64: TButton
             Align = Center
@@ -2125,7 +2344,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 26
+            TabOrder = 35
             TextSettings.Trimming = None
             OnClick = Button64Click
           end
@@ -2140,7 +2359,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 24
+            TabOrder = 32
             TextSettings.Trimming = None
             OnClick = Button65Click
           end
@@ -2155,9 +2374,9 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 22
+            TabOrder = 29
             TextSettings.Trimming = None
-            OnClick = Button66Click
+            OnClick = EventFaltaImplementar
           end
           object Button67: TButton
             Align = Center
@@ -2170,7 +2389,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 20
+            TabOrder = 26
             TextSettings.Trimming = None
           end
           object Button68: TButton
@@ -2184,7 +2403,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 18
+            TabOrder = 23
             TextSettings.Trimming = None
           end
           object Button69: TButton
@@ -2198,7 +2417,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 16
+            TabOrder = 20
             TextSettings.Trimming = None
             OnClick = Button69Click
           end
@@ -2213,7 +2432,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 14
+            TabOrder = 17
             TextSettings.Trimming = None
             OnClick = Button70Click
           end
@@ -2228,7 +2447,7 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 12
+            TabOrder = 14
             TextSettings.Trimming = None
             OnClick = Button71Click
           end
@@ -2243,7 +2462,582 @@ object Form7: TForm7
             Size.Width = 25.000000000000000000
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
+            TabOrder = 11
+            TextSettings.Trimming = None
+            OnClick = EventFaltaImplementar
+          end
+          object Label24: TLabel
+            Anchors = []
+            Position.X = 705.000000000000000000
+            Position.Y = 3.000000000000000000
+            Size.Width = 60.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Reasoning'
+            TabOrder = 129
+          end
+          object Button73: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 110
+            TextSettings.Trimming = None
+            OnClick = EventFaltaImplementar
+          end
+          object Button74: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 108
+            TextSettings.Trimming = None
+            OnClick = Button74Click
+          end
+          object Button75: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 2
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 106
+            TextSettings.Trimming = None
+            OnClick = EventFaltaImplementar
+          end
+          object Button76: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 104
+            TextSettings.Trimming = None
+            OnClick = Button76Click
+          end
+          object Button77: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 102
+            TextSettings.Trimming = None
+            OnClick = Button77Click
+          end
+          object Button78: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 98
+            TextSettings.Trimming = None
+            OnClick = Button78Click
+          end
+          object Button79: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 93
+            TextSettings.Trimming = None
+            OnClick = Button79Click
+          end
+          object Button80: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 89
+            TextSettings.Trimming = None
+            OnClick = Button80Click
+          end
+          object Label25: TLabel
+            Anchors = []
+            Position.X = 775.000000000000000000
+            Position.Y = 3.000000000000000000
+            Size.Width = 60.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Deep R.'
+            TabOrder = 128
+          end
+          object Button82: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 2
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 107
+            TextSettings.Trimming = None
+            OnClick = EventFaltaImplementar
+          end
+          object Button83: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 105
+            TextSettings.Trimming = None
+            OnClick = Button83Click
+          end
+          object Button84: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 103
+            TextSettings.Trimming = None
+            OnClick = EventFaltaImplementar
+          end
+          object Button85: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 100
+            TextSettings.Trimming = None
+            OnClick = EventFaltaImplementar
+          end
+          object Button86: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 2
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 95
+            TextSettings.Trimming = None
+            OnClick = EventFaltaImplementar
+          end
+          object Button87: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 91
+            TextSettings.Trimming = None
+            OnClick = Button87Click
+          end
+          object Button88: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 87
+            TextSettings.Trimming = None
+          end
+          object Button89: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 101
+            TextSettings.Trimming = None
+            OnClick = EventFaltaImplementar
+          end
+          object Button90: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 2
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 99
+            TextSettings.Trimming = None
+            OnClick = EventFaltaImplementar
+          end
+          object Button91: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 97
+            TextSettings.Trimming = None
+            OnClick = EventFaltaImplementar
+          end
+          object Button92: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 94
+            TextSettings.Trimming = None
+          end
+          object Button93: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 92
+            TextSettings.Trimming = None
+            OnClick = EventFaltaImplementar
+          end
+          object Button94: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 90
+            TextSettings.Trimming = None
+          end
+          object Button95: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 88
+            TextSettings.Trimming = None
+            OnClick = EventFaltaImplementar
+          end
+          object Button96: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 86
+            TextSettings.Trimming = None
+            OnClick = Button96Click
+          end
+          object Button97: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 109
+            TextSettings.Trimming = None
+            OnClick = Button97Click
+          end
+          object Label26: TLabel
+            Anchors = []
+            Position.X = 845.000000000000000000
+            Position.Y = 3.000000000000000000
+            Size.Width = 60.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Code Int.'
+            TabOrder = 127
+          end
+          object Label27: TLabel
+            Align = Client
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 66.000000000000000000
+            Size.Height = 19.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Groq'
+            TabOrder = 77
+          end
+          object Button81: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 34
+            TextSettings.Trimming = None
+            OnClick = Button81Click
+          end
+          object Button98: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 31
+            TextSettings.Trimming = None
+            OnClick = Button98Click
+          end
+          object Button99: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 28
+            TextSettings.Trimming = None
+          end
+          object Button100: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 25
+            TextSettings.Trimming = None
+            OnClick = Button100Click
+          end
+          object Button101: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 22
+            TextSettings.Trimming = None
+          end
+          object Button102: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 19
+            TextSettings.Trimming = None
+            OnClick = Button102Click
+          end
+          object Button103: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 16
+            TextSettings.Trimming = None
+          end
+          object Button104: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 13
+            TextSettings.Trimming = None
+          end
+          object Button105: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
             TabOrder = 10
+            TextSettings.Trimming = None
+            OnClick = Button105Click
+          end
+          object Button106: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 78
+            TextSettings.Trimming = None
+            OnClick = Button106Click
+          end
+          object Button107: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 0
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 20.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 74
+            TextSettings.Trimming = None
+            OnClick = Button107Click
+          end
+          object Button108: TButton
+            Align = Center
+            Images = ImageList1
+            ImageIndex = 1
+            Margins.Left = 2.000000000000000000
+            Margins.Top = 2.000000000000000000
+            Margins.Right = 2.000000000000000000
+            Margins.Bottom = 2.000000000000000000
+            Size.Width = 25.000000000000000000
+            Size.Height = 18.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 96
             TextSettings.Trimming = None
           end
         end
@@ -2256,8 +3050,8 @@ object Form7: TForm7
     Position.Y = 274.000000000000000000
   end
   object MediaPlayer1: TMediaPlayer
-    Left = 704
-    Top = 216
+    Left = 616
+    Top = 176
   end
   object OpenDialog1: TOpenDialog
     Left = 360
@@ -2480,6 +3274,6 @@ object Form7: TForm7
           end>
       end>
     Left = 760
-    Top = 384
+    Top = 280
   end
 end

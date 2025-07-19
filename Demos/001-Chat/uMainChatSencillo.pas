@@ -1,4 +1,3 @@
-
 unit uMainChatSencillo;
 
 // IT License
@@ -30,7 +29,6 @@ unit uMainChatSencillo;
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
-
 
 interface
 
@@ -189,6 +187,46 @@ type
     Button71: TButton;
     Button72: TButton;
     ImageList1: TImageList;
+    Label24: TLabel;
+    Button73: TButton;
+    Button74: TButton;
+    Button75: TButton;
+    Button76: TButton;
+    Button77: TButton;
+    Button78: TButton;
+    Button79: TButton;
+    Button80: TButton;
+    Label25: TLabel;
+    Button82: TButton;
+    Button83: TButton;
+    Button84: TButton;
+    Button85: TButton;
+    Button86: TButton;
+    Button87: TButton;
+    Button88: TButton;
+    Button89: TButton;
+    Button90: TButton;
+    Button91: TButton;
+    Button92: TButton;
+    Button93: TButton;
+    Button94: TButton;
+    Button95: TButton;
+    Button96: TButton;
+    Button97: TButton;
+    Label26: TLabel;
+    Label27: TLabel;
+    Button81: TButton;
+    Button98: TButton;
+    Button99: TButton;
+    Button100: TButton;
+    Button101: TButton;
+    Button102: TButton;
+    Button103: TButton;
+    Button104: TButton;
+    Button105: TButton;
+    Button106: TButton;
+    Button107: TButton;
+    Button108: TButton;
     procedure BtnPreguntarClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure ComboDriversChange(Sender: TObject);
@@ -205,7 +243,6 @@ type
     procedure Button46Click(Sender: TObject);
     procedure Button55Click(Sender: TObject);
     procedure Button64Click(Sender: TObject);
-    procedure Button20Click(Sender: TObject);
     procedure Button29Click(Sender: TObject);
     procedure Button56Click(Sender: TObject);
     procedure Button65Click(Sender: TObject);
@@ -228,13 +265,33 @@ type
     procedure Button25Click(Sender: TObject);
     procedure Button43Click(Sender: TObject);
     procedure Button70Click(Sender: TObject);
-    procedure Button8Click(Sender: TObject);
     procedure Button26Click(Sender: TObject);
     procedure Button53Click(Sender: TObject);
     procedure Button62Click(Sender: TObject);
     procedure Button71Click(Sender: TObject);
-    procedure Button9Click(Sender: TObject);
     procedure AiConnError(Sender: TObject; const ErrorMsg: string; Exception: Exception; const aResponse: IHTTPResponse);
+    procedure EventFaltaImplementar(Sender: TObject);
+    procedure Button63Click(Sender: TObject);
+    procedure Button27Click(Sender: TObject);
+    procedure Button74Click(Sender: TObject);
+    procedure Button77Click(Sender: TObject);
+    procedure Button78Click(Sender: TObject);
+    procedure Button79Click(Sender: TObject);
+    procedure Button80Click(Sender: TObject);
+    procedure Button76Click(Sender: TObject);
+    procedure Button81Click(Sender: TObject);
+    procedure Button100Click(Sender: TObject);
+    procedure Button102Click(Sender: TObject);
+    procedure Button105Click(Sender: TObject);
+    procedure Button106Click(Sender: TObject);
+    procedure Button98Click(Sender: TObject);
+    procedure Button107Click(Sender: TObject);
+    procedure Button96Click(Sender: TObject);
+    procedure Button97Click(Sender: TObject);
+    procedure Button87Click(Sender: TObject);
+    procedure Button2Click(Sender: TObject);
+    procedure Button83Click(Sender: TObject);
+    procedure Button20Click(Sender: TObject);
   private
     Procedure UpdateMemo(Text: String);
     Function EnviarPrompt: String;
@@ -343,6 +400,33 @@ begin
   EnviarPrompt;
 end;
 
+procedure TForm7.Button100Click(Sender: TObject);
+begin
+  SetModelo('Groq', 'playai-tts');
+end;
+
+procedure TForm7.Button102Click(Sender: TObject);
+begin
+  SetModelo('Groq', 'meta-llama/llama-4-scout-17b-16e-instruct');
+  ChConAnexos.IsChecked := True;
+end;
+
+procedure TForm7.Button105Click(Sender: TObject);
+begin
+  SetModelo('Groq', 'whisper-large-v3');
+  ChConAnexos.IsChecked := True;
+end;
+
+procedure TForm7.Button106Click(Sender: TObject);
+begin
+  SetModelo('Groq', 'deepseek-r1-distill-llama-70b');
+end;
+
+procedure TForm7.Button107Click(Sender: TObject);
+begin
+  SetModelo('Groq', 'compound-beta');
+end;
+
 procedure TForm7.Button10Click(Sender: TObject);
 begin
   SetModelo('deepseek', 'deepseek-chat');
@@ -360,7 +444,7 @@ end;
 
 procedure TForm7.Button20Click(Sender: TObject);
 begin
-  ShowMessage('Falta por implementar');
+  SetModelo('Gemini', 'aa_gemini-2.5-flash-web-search');
 end;
 
 procedure TForm7.Button21Click(Sender: TObject);
@@ -396,6 +480,12 @@ begin
   ChConAnexos.IsChecked := True;
 end;
 
+procedure TForm7.Button27Click(Sender: TObject);
+begin
+  SetModelo('Gemini', 'gemini-2.5-flash');
+  ChConAnexos.IsChecked := True;
+end;
+
 procedure TForm7.Button28Click(Sender: TObject);
 begin
   SetModelo('Grok', 'grok-3');
@@ -404,6 +494,11 @@ end;
 procedure TForm7.Button29Click(Sender: TObject);
 begin
   SetModelo('Grok', 'aa-grok-3-search');
+end;
+
+procedure TForm7.Button2Click(Sender: TObject);
+begin
+  SetModelo('Claude','aa_claude-3-7-sonnet-20250219-web-search');
 end;
 
 procedure TForm7.Button30Click(Sender: TObject);
@@ -486,6 +581,12 @@ begin
   ChConAnexos.IsChecked := True;
 end;
 
+procedure TForm7.Button63Click(Sender: TObject);
+begin
+  SetModelo('OpenAi', 'gpt-4o-transcribe');
+  ChConAnexos.IsChecked := True;
+end;
+
 procedure TForm7.Button64Click(Sender: TObject);
 begin
   SetModelo('OpenAiResponses', 'gpt-4o-mini');
@@ -522,8 +623,33 @@ end;
 
 procedure TForm7.Button71Click(Sender: TObject);
 begin
-  //SetModelo('OpenAiResponses', 'gpt-4o-audio-preview');
-  //ChConAnexos.IsChecked := True;
+  // SetModelo('OpenAiResponses', 'gpt-4o-audio-preview');
+  // ChConAnexos.IsChecked := True;
+end;
+
+procedure TForm7.Button74Click(Sender: TObject);
+begin
+  SetModelo('DeepSeek', 'deepseek-reasoner');
+end;
+
+procedure TForm7.Button76Click(Sender: TObject);
+begin
+  SetModelo('Grok', 'grok-4-0709');
+end;
+
+procedure TForm7.Button77Click(Sender: TObject);
+begin
+  SetModelo('Mistral', 'magistral-small-2506');
+end;
+
+procedure TForm7.Button78Click(Sender: TObject);
+begin
+  SetModelo('Ollama', 'deepseek-r1:8b');
+end;
+
+procedure TForm7.Button79Click(Sender: TObject);
+begin
+  SetModelo('OpenAi', 'o1');
 end;
 
 procedure TForm7.Button7Click(Sender: TObject);
@@ -532,14 +658,39 @@ begin
   ChConAnexos.IsChecked := True;
 end;
 
-procedure TForm7.Button8Click(Sender: TObject);
+procedure TForm7.Button80Click(Sender: TObject);
 begin
-  ShowMessage('No Implementado aún');
+  SetModelo('OpenAiResponses', 'aa_o4-mini-reasoning');
 end;
 
-procedure TForm7.Button9Click(Sender: TObject);
+procedure TForm7.Button81Click(Sender: TObject);
 begin
-  ShowMessage('Falta por Implementar');
+  SetModelo('Groq', 'llama-3.3-70b-versatile');
+end;
+
+procedure TForm7.Button83Click(Sender: TObject);
+begin
+  SetModelo('Claude','aa_claude-3-7-sonnet-20250219-code-interpreter');
+end;
+
+procedure TForm7.Button87Click(Sender: TObject);
+begin
+  SetModelo('Gemini', 'aa_gemini-2.5-flash-code-interpreter');
+end;
+
+procedure TForm7.Button96Click(Sender: TObject);
+begin
+  SetModelo('OpenAiResponses', 'o3-deep-research');
+end;
+
+procedure TForm7.Button97Click(Sender: TObject);
+begin
+  SetModelo('OpenAiResponses', 'aa_o4-mini-code-interpreter');
+end;
+
+procedure TForm7.Button98Click(Sender: TObject);
+begin
+  SetModelo('Groq', 'compound-beta-mini');
 end;
 
 procedure TForm7.ComboDriversChange(Sender: TObject);
@@ -574,6 +725,8 @@ Var
   LastMessage: TAiChatMessage;
 begin
   MF := Nil; // Importante inicializar el MF
+
+  AiConn.UpdateParamsFromRegistry;
 
   If ChUseTools.IsChecked then
   Begin
@@ -626,6 +779,11 @@ begin
   // ..Aquí se procesan los mensajes..
   // End;
 
+end;
+
+procedure TForm7.EventFaltaImplementar(Sender: TObject);
+begin
+  ShowMessage('Falta por implementar');
 end;
 
 procedure TForm7.FormCreate(Sender: TObject);

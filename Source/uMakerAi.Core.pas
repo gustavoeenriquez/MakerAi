@@ -51,14 +51,15 @@ Type
   TAiImageResponseFormat = (tiaRUrl, tiaRB64);
   TAiImageAStyleFormat = (tiaStyleVivid, tiaStyleNatural);
 
-  TAiFileCategory = (Tfc_Text, Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_pdf,  Tfc_Document, //
+  TAiFileCategory = (Tfc_Text, Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_pdf, Tfc_Document, //
     Tfc_WebSearch, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, //
-    Tfc_GraphicDesign, tfc_textFile, Tfc_Unknow); //
+    Tfc_GraphicDesign, tfc_textFile, tfc_code_interpreter, Tfc_Unknow); //
 
   TAiFileCategories = set of TAiFileCategory;
 
-  TAiChatMediaSupport = (Tcm_Text, Tcm_Image, Tcm_Audio, Tcm_Video, Tcm_Document, tcm_pdf, tcm_WebSearch, Tcm_CalcSheet, Tcm_Presentation,
-    Tcm_CompressFile, Tcm_Web, Tcm_GraphicDesign, tcm_textFile);
+  TAiChatMediaSupport = (Tcm_Text, Tcm_Image, Tcm_Audio, Tcm_Video, tcm_pdf, Tcm_Document, //
+    tcm_WebSearch, Tcm_CalcSheet, Tcm_Presentation, Tcm_CompressFile, Tcm_Web, Tcm_GraphicDesign, tcm_textFile, tcm_code_interpreter,
+    Tcm_Unknow); //
 
   TAiChatMediaSupports = set of TAiChatMediaSupport;
 
@@ -429,11 +430,11 @@ begin
   else if (FileExtension = 'avi') or (FileExtension = 'mp4') or (FileExtension = 'mkv') or (FileExtension = 'mov') or
     (FileExtension = 'wmv') or (FileExtension = 'flv') or (FileExtension = 'webm') then
     Result := Tfc_Video
-  else if (FileExtension = 'doc') or (FileExtension = 'docx') or  (FileExtension = 'odt') or
-    (FileExtension = 'rtf') or (FileExtension = 'tex') then
+  else if (FileExtension = 'doc') or (FileExtension = 'docx') or (FileExtension = 'odt') or (FileExtension = 'rtf') or
+    (FileExtension = 'tex') then
     Result := Tfc_Document
-  else if  (FileExtension = 'pdf')  then
-    Result := Tfc_PDF
+  else if (FileExtension = 'pdf') then
+    Result := Tfc_pdf
   else if (FileExtension = 'txt') or (FileExtension = 'md') or (FileExtension = 'rtf') then
     Result := Tfc_Text
   else if (FileExtension = 'xls') or (FileExtension = 'xlsx') or (FileExtension = 'ods') or (FileExtension = 'csv') then

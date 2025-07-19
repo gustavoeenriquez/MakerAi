@@ -43,7 +43,6 @@ contains
   uMakerAi.RAG.Vectors in 'uMakerAi.RAG.Vectors.pas',
   uMakerAi.Core in 'uMakerAi.Core.pas',
   uMakerAi.Embeddings in 'uMakerAi.Embeddings.pas',
-  uMakerAi.Utils.system in 'uMakerAi.Utils.system.pas',
   uMakerAi.Chat.AiConnection in 'uMakerAi.Chat.AiConnection.pas',
   UMakerAi.ParamsRegistry in 'UMakerAi.ParamsRegistry.pas',
   uMakerAi.Chat.Groq in 'uMakerAi.Chat.Groq.pas',

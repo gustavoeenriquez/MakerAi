@@ -39,7 +39,7 @@ interface
 
 uses
   System.SysUtils, System.Types, System.UITypes, System.Classes,
-  System.Threading,
+  System.Threading, System.NetConsts,
   System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections,
   System.NetEncoding,
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
@@ -683,12 +683,35 @@ begin
     if not ActiveCacheName.IsEmpty then
       LRequest.AddPair('cachedContent', TJSONString.Create(ActiveCacheName));
 
+    JTools := Nil;
+
     if Tool_Active then
     begin
       JTools := GetToolJSon;
-      if Assigned(JTools) then
-        LRequest.AddPair('tools', JTools);
     end;
+
+    if tcm_code_interpreter in ChatMediaSupports then
+    Begin
+      If not Assigned(JTools) then
+        JTools := TJSonArray.Create;
+      var
+      LCodeTool := TJSonObject.Create;
+      LCodeTool.AddPair('code_execution', TJSonObject.Create); // {"code_execution": {}}
+      JTools.Add(LCodeTool);
+    End;
+
+    if tcm_WebSearch in ChatMediaSupports then
+    Begin
+      If not Assigned(JTools) then
+        JTools := TJSonArray.Create;
+      var
+      LCodeTool := TJSonObject.Create;
+      LCodeTool.AddPair('google_search', TJSonObject.Create); // {"code_execution": {}}
+      JTools.Add(LCodeTool);
+    End;
+
+    if Assigned(JTools) then
+      LRequest.AddPair('tools', JTools);
 
     JConfig := TJSonObject.Create;
     LRequest.AddPair('generationConfig', JConfig);
@@ -821,6 +844,7 @@ begin
 
     for MF in aMsg.MediaFiles do
     Begin
+      Procesado := False;
       DoProcessMediaFile(aMsg.Prompt, MF, Respuesta, Procesado);
       if Procesado then
       begin
@@ -1784,6 +1808,34 @@ begin
         if LPartObj.TryGetValue<string>('text', sText) then
         begin
           LRespuesta := Trim(LRespuesta + sText);
+        end;
+
+        // 2. Buscamos CÓDIGO EJECUTABLE
+        var
+          LExecCodeObj: TJSonObject;
+        var
+          LCode: String;
+        if LPartObj.TryGetValue<TJSonObject>('executableCode', LExecCodeObj) then
+        begin
+          if LExecCodeObj.TryGetValue<string>('code', LCode) then
+          begin
+            // Formateamos el código usando Markdown para una mejor visualización
+            LRespuesta := LRespuesta + sLineBreak + '```python' + sLineBreak + Trim(LCode) + sLineBreak + '```';
+          end;
+        end;
+
+        // 3. Buscamos el RESULTADO de la ejecución del código
+        var
+          LCodeResultObj: TJSonObject;
+        var
+          LCodeOutput: String;
+        if LPartObj.TryGetValue<TJSonObject>('codeExecutionResult', LCodeResultObj) then
+        begin
+          if LCodeResultObj.TryGetValue<string>('output', LCodeOutput) then
+          begin
+            // Añadimos el resultado de forma clara
+            LRespuesta := LRespuesta + sLineBreak + '**Resultado de la Ejecución:**' + sLineBreak + Trim(LCodeOutput);
+          end;
         end;
 
         Var

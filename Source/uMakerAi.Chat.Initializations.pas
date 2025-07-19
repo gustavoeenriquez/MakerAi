@@ -172,6 +172,16 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'NativeOutputFiles', '[Tfc_image]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active', 'False');
 
+
+  // ------- OPENAI Modelo o1 ------------------------------
+  Model := 'o1';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'medium');
+
+  // ------- OPENAI Modelo o3 ------------------------------
+  Model := 'o3';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'medium');
+
+
   // Falta por implmentar estos si se llega a necesitar {gpt-4.1 gpt-4.1-mini gpt-4.1-nano gpt-4o gpt-4o-mini }
 
 
@@ -206,6 +216,28 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'NativeInputFiles', '[tfc_pdf]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'Tool_Active', 'False');
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAiResponses', 'aa_o4-mini-reasoning', '4o-mini');
+
+  // ------- OPENAI Modelo aa_o4-mini-reasoning ------------------------------
+  Model := 'aa_o4-mini-reasoning';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'ReasoningEffort', 'medium');
+
+  // ------- OPENAI o3-deep-research ------------------------------
+  Model := 'o3-deep-research';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'ChatMediaSupports', '[tcm_code_interpreter, tcm_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'ResponseTimeOut', '72000');
+
+
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAiResponses', 'aa_o4-mini-code-interpreter', 'gpt-4.1');
+
+  // ------- OPENAI Modelo aa_o4-mini-code-interpreter ------------------------------
+  Model := 'aa_o4-mini-code-interpreter';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'ChatMediaSupports', '[tcm_code_interpreter, tcm_WebSearch]');
+
 
 
   // ------------------------- GEMINI ----------------------------------
@@ -253,7 +285,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeOutputFiles', '[Tfc_image]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_image]');
 
-  // ------- GEMINI gemini-2.0-flas-exp-image-generation ------------------------------
+  // ------- GEMINI gemini-2.0-flash-exp-image-generation ------------------------------
   Model := 'gemini-2.0-flash-exp-image-generation';
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeOutputFiles', '[Tfc_image]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_image]');
@@ -286,6 +318,21 @@ Begin
   Model := 'aa_gemini-2.5-flash-pdf';
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_pdf]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_pdf]');
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-2.5-flash-code-interpreter', 'gemini-2.5-flash');
+
+  // ------- GEMINI Modelo aa_gemini-2.5-flash-code-interpreter ------------------------------
+  Model := 'aa_gemini-2.5-flash-code-interpreter';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[tcm_code_interpreter, tcm_WebSearch]');
+
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-2.5-flash-web-search', 'gemini-2.5-flash');
+
+  // ------- GEMINI Modelo aa_gemini-2.5-flash-web-search ------------------------------
+  Model := 'aa_gemini-2.5-flash-web-search';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[tcm_WebSearch]');
 
 
   // ------------------------- GROQ ----------------------------------
@@ -345,15 +392,37 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Asynchronous', 'False');
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Tool_Active', 'False');
 
+  // ------- CLAUDE claude-3-7-sonnet-20250219 ------------------------------
+  Model := 'claude-3-7-sonnet-20250219';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Asynchronous', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Tool_Active', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'NativeInputFiles', '[Tfc_audio]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ChatMediaSupports', '[Tcm_audio]');
+
 
   //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('Claude', 'aa_claude-3-7-sonnet-20250219-pdf', 'claude-3-7-sonnet-20250219');
 
-  // ------- GEMINI Modelo claude-3-7-sonnet-20250219 ------------------------------
+  // ------- CLAUDE Modelo claude-3-7-sonnet-20250219 ------------------------------
   Model := 'aa_claude-3-7-sonnet-20250219-pdf';
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'NativeInputFiles', '[Tfc_pdf, tfc_image]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ChatMediaSupports', '[Tcm_pdf, tcm_image]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'NativeInputFiles', '[Tfc_pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ChatMediaSupports', '[Tcm_pdf]');
 
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('Claude', 'aa_claude-3-7-sonnet-20250219-web-search', 'claude-3-7-sonnet-20250219');
+
+  // ------- CLAUDE Modelo aa_claude-3-7-sonnet-20250219-web-search ------------------------------
+  Model := 'aa_claude-3-7-sonnet-20250219-web-search';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ChatMediaSupports', '[tcm_WebSearch]');
+
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('Claude', 'aa_claude-3-7-sonnet-20250219-code-interpreter', 'claude-3-7-sonnet-20250219');
+
+  // ------- CLAUDE Modelo aa_claude-3-7-sonnet-20250219-code-interpreter ------------------------------
+  Model := 'aa_claude-3-7-sonnet-20250219-code-interpreter';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ChatMediaSupports', '[tcm_code_interpreter]');
 
 
 
@@ -445,17 +514,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Tool_Active', 'False');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeInputFiles', '[]'); //Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[tcm_WebSearch]');  //Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
-
-
-
-//tcm_WebSearch in ChatMediaSupports
-
-
 End;
-
-
-
-
 
 
 Initialization

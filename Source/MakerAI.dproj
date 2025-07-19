@@ -152,7 +152,6 @@
         <DCCReference Include="uMakerAi.RAG.Vectors.pas"/>
         <DCCReference Include="uMakerAi.Core.pas"/>
         <DCCReference Include="uMakerAi.Embeddings.pas"/>
-        <DCCReference Include="uMakerAi.Utils.system.pas"/>
         <DCCReference Include="uMakerAi.Chat.AiConnection.pas"/>
         <DCCReference Include="UMakerAi.ParamsRegistry.pas"/>
         <DCCReference Include="uMakerAi.Chat.Groq.pas"/>
