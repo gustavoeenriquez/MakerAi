@@ -725,7 +725,7 @@ begin
         jToolCall.AddPair('type', 'function_call_output');
         jToolCall.AddPair('id', LastMessage.TollCallId);
         jToolCall.AddPair('call_id', LastMessage.TollCallId);
-        jToolCall.AddPair('output', 'hoy es 5 de abril del 2025'); // LastMessage.Prompt);
+        jToolCall.AddPair('output', LastMessage.Prompt);
         jToolCalls.Add(jToolCall);
 
         JResult.AddPair('input', jToolCalls);
@@ -900,6 +900,38 @@ begin
       JResult.AddPair('reasoning', JReasoning);
     end;
 
+    // ----------------- DESDE AQUÍ VA EL CAMBIO A text.format.type ----------
+    // Crear el objeto 'text'
+    Var
+    JTextConfig := TJSonObject.Create;
+    // Crear el objeto 'format' dentro de 'text'
+    var
+    JFormatConfig := TJSonObject.Create;
+
+    If (FResponse_format = tiaChatRfJsonSchema) then
+    Begin
+      // Nota: La documentación actual de OpenAI Responses API (para text.format.type)
+      // solo lista "text" y "json_object". "json_schema" no es un tipo directamente soportado
+      // para este parámetro de formato de salida. Si se necesita validar la salida contra
+      // un esquema JSON, lo usual es guiar al modelo con las instrucciones y luego
+      // realizar la validación del JSON resultante en la aplicación.
+      // Para este caso, enviaremos "json_object" para que sea un JSON estructurado.
+      JFormatConfig.AddPair('type', 'json_object');
+    End
+    Else If (FResponse_format = tiaChatRfJson) then
+      JFormatConfig.AddPair('type', 'json_object')
+    Else If (FResponse_format = tiaChatRfText) then
+      JFormatConfig.AddPair('type', 'text')
+    Else
+      JFormatConfig.AddPair('type', 'text'); // Por defecto, si no se especifica o es un tipo desconocido
+
+    // Añadir el objeto 'format' al objeto 'text'
+    JTextConfig.AddPair('format', JFormatConfig);
+    // Añadir el objeto 'text' al resultado principal JResult
+    JResult.AddPair('text', JTextConfig);
+
+    // <----------------- hasta aquí debe ir el cambio a text.format.type ----------
+
 
     // Funciones para la generación de medios de salida, audio (Todavía no está disponible para Responses pero lo estará
 
@@ -977,7 +1009,7 @@ begin
 
       JResult.AddPair('tools', JToolsArray);
     end
-    Else if (tcm_code_interpreter in ChatMediaSupports) then // Si el modelo maneja la búsqueda  web
+    Else if (tcm_code_Interpreter in ChatMediaSupports) then // Si el modelo maneja la búsqueda  web
     begin
       JToolsArray := TJSonArray.Create;
 

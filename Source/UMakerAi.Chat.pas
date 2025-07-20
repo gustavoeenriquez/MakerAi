@@ -97,6 +97,7 @@ type
     Function StreamToBase64(Stream: TMemoryStream): String;
     Function ToJSon: TJSonArray; // Convierte el Objeto en un json para enviar al api
 
+
     Property Id: integer Read FId Write SetFId;
     Property Role: String read FRole write SetRole;
     Property Content: String read FContent write SetContent;
@@ -479,7 +480,7 @@ begin
 
   Try
 
-      MensajeInicial := Trim(Self.PrepareSystemMsg);
+    MensajeInicial := Trim(Self.PrepareSystemMsg);
 
     // Comienza con las instrucciones iniciales, en cada modelo es diferente
     If (FMessages.Count = 0) and (MensajeInicial <> '') then
@@ -2187,7 +2188,6 @@ procedure TAiChat.SetChatMediaSupports(const Value: TAiChatMediaSupports);
 begin
   FChatMediaSupports := Value;
 end;
-
 
 procedure TAiChat.SetCompletion_tokens(const Value: integer);
 begin

@@ -121,6 +121,7 @@ Type
     Procedure LoadFromBase64(aFileName, aBase64: String); Virtual;
     Procedure LoadFromStream(aFileName: String; Stream: TMemoryStream); Virtual;
     Procedure SaveToFile(aFileName: String); Virtual;
+    Function ToString: String;
     Procedure Clear; Virtual;
     Property filename: String read Ffilename write Setfilename;
     Property bytes: Integer read GetBytes;
@@ -677,6 +678,19 @@ end;
 procedure TAiMediaFile.SetUrlMedia(const Value: String);
 begin
   FUrlMedia := Value;
+end;
+
+function TAiMediaFile.ToString: String;
+Var
+  St: TStringStream;
+begin
+  St := TStringStream.Create;
+  Try
+    St.LoadFromStream(Self.Content);
+    Result := St.DataString;
+  Finally
+    St.Free;
+  End;
 end;
 
 { TAiMediaFiles }
