@@ -1034,10 +1034,10 @@ begin
     St.WriteString(ABody);
     St.Position := 0;
 
-//$IFDEF APIDEBUG
+{$IFDEF APIDEBUG}
     St.SaveToFile('c:\temp\peticion_responses.txt'); // Para Debug
     St.Position := 0;
-//$ENDIF
+{$ENDIF}
     FResponse.Clear;
     FResponse.Position := 0;
 

@@ -112,7 +112,8 @@ Const
   GlAIUrl = 'https://generativelanguage.googleapis.com/v1beta/';
   // Endpoints VEO
   GlAIUploadUrl = 'https://generativelanguage.googleapis.com/upload/v1beta/';
-  GlAIVeoModel = 'veo-2.0-generate-001';
+  // GlAIVeoModel = 'veo-2.0-generate-001';
+  // GlAIVeoModel = 'veo-3.0-generate-preview';
 
 procedure Register;
 begin
@@ -285,9 +286,10 @@ begin
   // Inicializar los parámetros de video con valores por defecto
   FVideoParams := TStringList.Create;
   FVideoParams.AddPair('aspectRatio', '16:9');
-  FVideoParams.AddPair('personGeneration', 'allow_adult'); // # "dont_allow" or "allow_adult"
+  FVideoParams.AddPair('personGeneration', 'allow_adult'); // # "dont_allow" or "allow_adult" or allow_all
+  // FVideoParams.AddPair('personGeneration', 'allow_all'); // # "dont_allow" or "allow_adult" or allow_all
   // FVideoParams.AddPair('numberOfVideos', '1');
-  FVideoParams.AddPair('durationSeconds', '5'); // Rango válido 5-8
+  // FVideoParams.AddPair('durationSeconds', '5'); // Rango válido 5-8
   // FVideoParams.AddPair('enhance_prompt', 'true');
 
 end;
@@ -1005,7 +1007,7 @@ var
   LBodyStream: TStringStream;
   LInitialResponse: TJSonObject;
   I: Integer;
-  LKey, LValueStr: string;
+  LKey, LValueStr, LModel: string;
   VideoTask: ITask;
   MediaArr: TAiMediaFilesArray;
 
@@ -1021,12 +1023,27 @@ begin
 
   LRequest := TJSonObject.Create;
   try
-    LUrl := Url + 'models/' + GlAIVeoModel + ':predictLongRunning';
+
+    LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+    LUrl := Url + 'models/' + LModel + ':predictLongRunning';
     LInstances := TJSonArray.Create;
     LRequest.AddPair('instances', LInstances);
     LInstance := TJSonObject.Create;
     LInstances.Add(LInstance);
     LInstance.AddPair('prompt', AskMsg.Prompt);
+
+
+    //Garantiza los permisos para cada modelo, en Europa se debe cambiar estas restricciones
+    If LModel = 'veo-2.0-generate-001' then
+      FVideoParams.Values['personGeneration'] := 'allow_adult' // # "dont_allow" or "allow_adult" or allow_all
+    Else If LModel = 'veo-3.0-generate-preview' then
+      FVideoParams.Values['personGeneration'] := 'allow_all' // # "dont_allow" or "allow_adult" or
+    Else
+      FVideoParams.Values['personGeneration'] := ''; // # "dont_allow" or "allow_adult" or
+
+
+    // FVideoParams.AddPair('personGeneration', 'allow_all'); // # "dont_allow" or "allow_adult" or allow_all
 
     // Revisa si hay imagenes anexas al mensaje de entrada para generar el video a partir de esta imagen
     MediaArr := AskMsg.MediaFiles.GetMediaList([Tfc_Image], False);
@@ -1036,16 +1053,13 @@ begin
 
       // ---- primera forma de hacerlo al parecer no funcionó
 
-      {
-        begin
+      begin
+        var
         LImagePart := TJSonObject.Create;
-        //LImagePart.AddPair('mime_type', MediaArr[0].MimeType);
-        LImagePart.AddPair('data', MediaArr[0].Base64);
+        LImagePart.AddPair('mimeType', MediaArr[0].MimeType);
+        LImagePart.AddPair('bytesBase64Encoded', MediaArr[0].Base64);
         LInstance.AddPair('image', LImagePart);
-        end;
-      }
-
-
+      end;
 
 
       // Buscamos un archivo de imagen en el mensaje de petición
@@ -1098,7 +1112,6 @@ begin
       end;
     end;
     LRequest.AddPair('parameters', LParams);
-    // --- FIN DE SECCIÓN CORREGIDA ---
 
     FClient.ContentType := 'application/json';
     LHeaders := [TNetHeader.Create('x-goog-api-key', Self.ApiKey)];

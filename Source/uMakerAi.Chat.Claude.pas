@@ -1049,10 +1049,10 @@ begin
     St := TStringStream.Create(ABody, TEncoding.UTF8);
     try
       St.Position := 0;
-      // $IFDEF APIDEBUG
+      {$IFDEF APIDEBUG}
       St.SaveToFile('c:\temp\peticion.txt');
       St.Position := 0;
-      // $ENDIF
+      {$ENDIF}
       FResponse.Clear;
 
       Res := FClient.Post(sUrl, St, FResponse, FHeaders);

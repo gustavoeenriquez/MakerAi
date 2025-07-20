@@ -297,7 +297,18 @@ Begin
   // ------- OPENAI Modelo veo-2.0-generate-001 ------------------------------
   Model := 'aa_veo-2.0-generate-001';
 
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeOutputFiles', '[Tfc_video]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Asynchronous', 'False'); //Arreglar para que funcione en modo Asincrónico
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_veo-3.0-generate-preview', 'veo-3.0-generate-preview');
+
+  // ------- OPENAI Modelo veo-3.0-generate-preview ------------------------------
+  Model := 'aa_veo-3.0-generate-preview';
+
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeOutputFiles', '[Tfc_video]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Asynchronous', 'False'); //Arreglar para que funcione en modo Asincrónico
