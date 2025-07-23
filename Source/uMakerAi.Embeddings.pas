@@ -256,7 +256,7 @@ end;
 
 function TAiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
 Var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   JObj: TJSonObject;
   Res: IHTTPResponse;
@@ -265,7 +265,8 @@ Var
   sUrl: String;
 begin
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'embeddings';

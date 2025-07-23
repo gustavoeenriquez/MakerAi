@@ -1723,7 +1723,7 @@ end;
 function TAiMistralEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: integer; aModel, aEncodingFormat: String)
   : TAiEmbeddingData;
 Var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   jObj: TJSONObject;
   Res: IHTTPResponse;
@@ -1733,7 +1733,8 @@ Var
   jInput: TJSonArray;
 begin
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'embeddings';

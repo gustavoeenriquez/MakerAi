@@ -723,7 +723,7 @@ end;
 function TAiChat.InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
 var
   Body: TMultipartFormData;
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   sUrl: String;
   Res: IHTTPResponse;
@@ -740,7 +740,9 @@ begin
 
   sUrl := Url + 'audio/transcriptions';
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Self);
+  Client.SynchronizeEvents := False;
+
   LResponseStream := TMemoryStream.Create;
   Body := TMultipartFormData.Create;
   Granularities := TStringList.Create;
@@ -890,6 +892,7 @@ begin
 
   FResponse := TStringStream.Create('', TEncoding.UTF8);
   FClient := TNetHTTPClient.Create(Self);
+  FClient.SynchronizeEvents := False;
   FClient.OnReceiveData := Self.OnInternalReceiveData;
   FClient.OnRequestException := Self.OnRequestExceptionEvent;
   FClient.OnRequestError := Self.OnRequestErrorEvent;
@@ -1086,7 +1089,7 @@ end;
 
 class function TAiChat.GetModels(aApiKey, aUrl: String): TStringList;
 Var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   Res: IHTTPResponse;
   Response: TStringStream;
@@ -1105,7 +1108,7 @@ begin
   Else
     EndPointUrl := GlOpenAIUrl;
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := EndPointUrl + 'models';
 

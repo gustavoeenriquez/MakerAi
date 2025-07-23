@@ -202,6 +202,7 @@ var
 
 begin
   AskMsg := GetLastMessage; // Obtiene el mensaje de la solicitud
+  WebSearch := Nil;
 
   // Extraer los datos del JObj
   if Assigned(jObj) then
@@ -1208,7 +1209,7 @@ end;
 function TAiOpenAiResponses.InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
 var
   Body: TMultipartFormData;
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   sUrl: String;
   Res: IHTTPResponse;
@@ -1225,7 +1226,8 @@ begin
 
   sUrl := Url + 'audio/transcriptions';
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   LResponseStream := TMemoryStream.Create;
   Body := TMultipartFormData.Create;
   Granularities := TStringList.Create;

@@ -233,7 +233,7 @@ end;
 
 function TAiGeminiChat.CheckFileState(aMediaFile: TAiMediaFile): String;
 var
-  LHttpClient: THTTPClient;
+  LHttpClient: TNetHTTPClient;
   LCheckUrl, CloudState: string;
   LResponse: IHTTPResponse;
   LResponseObj, LFileObj: TJSonObject;
@@ -243,7 +243,8 @@ begin
   if aMediaFile.CloudName = '' then
     raise Exception.Create('El archivo no tiene un nombre de recurso en la nube (CloudName). Primero debe ser subido con UploadFile.');
 
-  LHttpClient := THTTPClient.Create;
+  LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient.SynchronizeEvents := False;
   try
     LCheckUrl := 'https://generativelanguage.googleapis.com/v1beta/' + aMediaFile.CloudName + '?key=' + Self.ApiKey;
     LResponse := LHttpClient.Get(LCheckUrl);
@@ -296,7 +297,7 @@ end;
 
 function TAiGeminiChat.DeleteFile(aMediaFile: TAiMediaFile): String;
 var
-  LHttpClient: THTTPClient;
+  LHttpClient: TNetHTTPClient;
   LDeleteUrl: string;
   LResponse: IHTTPResponse;
 begin
@@ -304,7 +305,8 @@ begin
   if not Assigned(aMediaFile) or (aMediaFile.CloudName = '') then
     raise Exception.Create('No se puede eliminar un archivo sin un nombre de recurso en la nube (CloudName).');
 
-  LHttpClient := THTTPClient.Create;
+  LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient.SynchronizeEvents := False;
   try
     LDeleteUrl := 'https://generativelanguage.googleapis.com/v1beta/' + aMediaFile.CloudName + '?key=' + Self.ApiKey;
 
@@ -329,7 +331,7 @@ end;
 
 function TAiGeminiChat.DownLoadFile(aMediaFile: TAiMediaFile): String;
 var
-  LHttpClient: THTTPClient;
+  LHttpClient: TNetHTTPClient;
   LDownloadUrl: string;
   LResponse: IHTTPResponse;
   LHeaders: TNetHeaders;
@@ -341,7 +343,8 @@ begin
   if not Assigned(aMediaFile) or (aMediaFile.UrlMedia = '') then
     raise Exception.Create('No se puede descargar el archivo. La propiedad CloudUri está vacía.');
 
-  LHttpClient := THTTPClient.Create;
+  LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient.SynchronizeEvents := False;
   LFileStream := TMemoryStream.Create;
   try
     LDownloadUrl := aMediaFile.UrlMedia;
@@ -541,7 +544,7 @@ end;
 
 class function TAiGeminiChat.GetModels(aApiKey, aUrl: String): TStringList;
 Var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Res: IHTTPResponse;
   sUrl, EndPointUrl: String;
   jRes: TJSonObject;
@@ -558,7 +561,8 @@ begin
   Else
     EndPointUrl := GlAIUrl;
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   Try
     sUrl := TPath.Combine(EndPointUrl, 'models') + '?key=' + aApiKey;
     Client.ContentType := 'application/json';
@@ -1153,13 +1157,14 @@ begin
     VideoTask := TTask.Run(
       procedure
       var
-        TaskClient: THTTPClient;
+        TaskClient: TNetHTTPClient;
         TaskResp: IHTTPResponse;
         TaskPollingResponse, TaskFinalResponse, TaskErrorObj: TJSonObject;
         TaskIsDone: Boolean;
         TaskFinalResultText: String;
       begin
-        TaskClient := THTTPClient.Create;
+        TaskClient := TNetHTTPClient.Create(Nil);
+        TaskClient.SynchronizeEvents := False;
         TaskIsDone := False;
         TaskFinalResponse := nil;
         Try
@@ -2040,7 +2045,7 @@ end;
 
 function TAiGeminiChat.UploadFile(aMediaFile: TAiMediaFile): String;
 var
-  LHttpClient: THTTPClient;
+  LHttpClient: TNetHTTPClient;
   LStartUrl, LUploadUrl, LFileUri, CloudName, CloudState: string;
   LResponse: IHTTPResponse;
   LHeaders: TNetHeaders;
@@ -2049,7 +2054,8 @@ var
   LNumBytes: Int64;
 begin
   Result := '';
-  LHttpClient := THTTPClient.Create;
+  LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient.SynchronizeEvents := False;
   try
     LStartUrl := GlAIUploadUrl + 'files?key=' + Self.ApiKey;
 
@@ -2122,7 +2128,7 @@ end;
 
 function TAiGeminiChat.UploadFileToCache(aMediaFile: TAiMediaFile; aTTL_Seconds: Integer): String;
 var
-  LHttpClient: THTTPClient;
+  LHttpClient: TNetHTTPClient;
   LUrl: string;
   LResponse: IHTTPResponse;
   LRequestBody, LJson, LPart, LInlineData: TJSonObject;
@@ -2135,7 +2141,8 @@ begin
 
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
-  LHttpClient := THTTPClient.Create;
+  LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient.SynchronizeEvents := False;
   try
     LUrl := Url + 'cachedContents?key=' + Self.ApiKey;
 
@@ -2212,3 +2219,7 @@ initialization
 TAiChatFactory.Instance.RegisterDriver(TAiGeminiChat);
 
 end.
+
+
+
+

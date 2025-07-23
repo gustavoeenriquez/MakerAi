@@ -264,7 +264,7 @@ end;
 
 function TAiGroqEmbeddings.CreateEmbedding(Input, User: String; Dimensions: Integer; Model, EncodingFormat: String): TAiEmbeddingData;
 Var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   jObj: TJSonObject;
   Res: IHTTPResponse;
@@ -275,7 +275,8 @@ begin
   // OJO OJO OJO OJO
   Raise Exception.Create('Actualmente Groq no maneja modelos de embeddings');
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'embeddings';

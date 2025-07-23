@@ -785,7 +785,7 @@ end;
 function TAiOpenChat.InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
 var
   Body: TMultipartFormData;
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   sUrl: String;
   Res: IHTTPResponse;
@@ -804,7 +804,8 @@ begin
 
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   LResponseStream := TMemoryStream.Create;
   Body := TMultipartFormData.Create;
   Granularities := TStringList.Create;
@@ -1145,7 +1146,7 @@ end;
 
 class function TAiOpenChat.GetModels(aApiKey, aUrl: String): TStringList;
 Var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   Res: IHTTPResponse;
   Response: TStringStream;
@@ -1164,7 +1165,8 @@ begin
   Else
     EndPointUrl := GlOpenAIUrl;
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := EndPointUrl + 'models';
 
@@ -2503,7 +2505,7 @@ end;
 function TAiOpenChat.UploadFileToCache(aMediaFile: TAiMediaFile; aTTL_Seconds: integer): String;
 var
   Body: TMultipartFormData;
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   sUrl: String;
   Res: IHTTPResponse;
@@ -2517,7 +2519,8 @@ begin
   // El endpoint para subir archivos es /v1/files
   sUrl := Url + 'files';
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   Body := TMultipartFormData.Create;
 
   try
@@ -2594,7 +2597,7 @@ end;
 function TAiOpenAiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: integer; aModel, aEncodingFormat: String)
   : TAiEmbeddingData;
 Var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   jObj: TJSonObject;
   Res: IHTTPResponse;
@@ -2603,7 +2606,8 @@ Var
   sUrl: String;
 begin
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'embeddings';

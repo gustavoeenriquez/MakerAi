@@ -489,7 +489,7 @@ end;
 
 procedure TAiMediaFile.DownloadFileFromUrl(Url: String);
 Var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   Response: TMemoryStream;
   Res: IHTTPResponse;
@@ -498,7 +498,8 @@ begin
   If Url <> '' then
   Begin
 
-    Client := THTTPClient.Create;
+    Client := TNetHTTPClient.Create(Nil);
+    Client.SynchronizeEvents := False;
     Response := TMemoryStream.Create;
 
     Try

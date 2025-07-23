@@ -304,7 +304,7 @@ end;
 
 class function TAiOllamaChat.GetModels(aApiKey, aUrl: String): TStringList;
 Var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   Res: IHTTPResponse;
   Response: TStringStream;
@@ -323,7 +323,8 @@ begin
   Else
     EndPointUrl := GlAIUrl;
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := EndPointUrl + 'api/tags';
 
@@ -807,7 +808,7 @@ end;
 function TAiOllamalEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String)
   : TAiEmbeddingData;
 Var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   JObj: TJSonObject;
   Res: IHTTPResponse;
@@ -822,7 +823,8 @@ begin
   If aDimensions <= 0 then
     aDimensions := FDimensions;
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := Url + 'api/embeddings';
@@ -839,7 +841,6 @@ begin
     St.Position := 0;
 
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
-    // Headers := Headers + [TNetHeader.Create('OpenAI-Beta', 'assistants=v2')];
     Client.ContentType := 'application/json';
 
     Res := Client.Post(sUrl, St, Response, Headers);

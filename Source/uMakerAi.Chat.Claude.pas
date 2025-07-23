@@ -156,7 +156,7 @@ End;
 
 function TAiClaudeChat.RetrieveFile(aFileId: string): TAiMediaFile;
 var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   ResponseStream: TMemoryStream;
   Res: IHTTPResponse;
@@ -167,7 +167,8 @@ begin
     raise Exception.Create('Se requiere un ID de archivo (aFileId) para recuperarlo.');
 
   sUrl := Url + 'files/' + aFileId;
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   ResponseStream := TMemoryStream.Create;
   try
     Headers := GetFileHeaders;
@@ -198,7 +199,7 @@ end;
 
 function TAiClaudeChat.RetrieveFileList: TAiMediaFiles;
 var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   ResponseStream: TMemoryStream;
   Res: IHTTPResponse;
@@ -210,7 +211,8 @@ var
 begin
   Result := TAiMediaFiles.Create;
   sUrl := Url + 'files';
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   ResponseStream := TMemoryStream.Create;
   try
     Headers := GetFileHeaders;
@@ -251,7 +253,7 @@ end;
 
 function TAiClaudeChat.UploadFile(aMediaFile: TAiMediaFile): String;
 var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   Body: TMultipartFormData;
   ResponseStream: TMemoryStream;
@@ -265,7 +267,8 @@ begin
     raise Exception.Create('Se necesita un TAiMediaFile con contenido para subirlo.');
 
   sUrl := Url + 'files';
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   ResponseStream := TMemoryStream.Create;
   Body := TMultipartFormData.Create;
   TempStream := TMemoryStream.Create;
@@ -377,7 +380,7 @@ end;
 
 function TAiClaudeChat.DeleteFile(aMediaFile: TAiMediaFile): String;
 var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   ResponseStream: TMemoryStream;
   Res: IHTTPResponse;
@@ -389,7 +392,8 @@ begin
     raise Exception.Create('Se necesita un TAiMediaFile con un IdFile válido para eliminarlo.');
 
   sUrl := Url + 'files/' + aMediaFile.IdFile;
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   ResponseStream := TMemoryStream.Create;
   try
     Headers := GetFileHeaders;
@@ -435,7 +439,7 @@ end;
 
 function TAiClaudeChat.DownLoadFile(aMediaFile: TAiMediaFile): String;
 var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   Res: IHTTPResponse;
   sUrl: string;
@@ -445,7 +449,8 @@ begin
     raise Exception.Create('Se necesita un TAiMediaFile con un IdFile válido para descargarlo.');
 
   sUrl := Url + 'files/' + aMediaFile.IdFile + '/content';
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   try
     Headers := GetFileHeaders;
     aMediaFile.Content.Clear; // Preparamos el stream para recibir los datos
@@ -642,7 +647,7 @@ end;
 
 class function TAiClaudeChat.GetModels(aApiKey, aUrl: String): TStringList;
 var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   Headers: TNetHeaders;
   Res: IHTTPResponse;
   ResponseStream: TStringStream;
@@ -660,7 +665,8 @@ begin
   else
     EndPointUrl := GlAIUrl;
 
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.SynchronizeEvents := False;
   ResponseStream := TStringStream.Create('', TEncoding.UTF8);
   sUrl := EndPointUrl + 'models';
 
