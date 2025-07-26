@@ -123,6 +123,9 @@ If you have any questions or need help, you can contact me through:
 
 *   [GitHub Issues](https://github.com/gustavoeenriquez/MakerAi/issues)
 *   Email: gustavoeenriquez@gmail.com
+*   [Telegram group](https://t.me/+7LaihFwqgsk1ZjQx)
+
+  
 
 ## Acknowledgements
 
