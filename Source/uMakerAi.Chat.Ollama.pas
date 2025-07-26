@@ -500,10 +500,10 @@ begin
 
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
-{$IFDEF APIDEBUG}
+//$IFDEF APIDEBUG
     FResponse.SaveToFile('c:\temp\respuesta.txt');
     FResponse.Position := 0;
-{$ENDIF}
+//$ENDIF
     FLastContent := '';
 
     If FClient.Asynchronous = False then
@@ -665,8 +665,9 @@ begin
   // IdObject := JObj.GetValue('object').Value;
   // IdCreate := JObj.GetValue('created').GetValue<String>;
   LModel := JObj.GetValue('model').Value;
-  aPrompt_tokens := JObj.GetValue<Integer>('prompt_eval_count');
-  aCompletion_tokens := JObj.GetValue<Integer>('eval_count');
+
+  JObj.TryGetValue<Integer>('prompt_eval_count', aPrompt_tokens);
+  JObj.GetValue<Integer>('eval_count', aCompletion_tokens);
   aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
 
   If JObj.TryGetValue<TJSonObject>('message', jMessage) then

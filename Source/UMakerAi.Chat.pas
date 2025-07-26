@@ -97,7 +97,6 @@ type
     Function StreamToBase64(Stream: TMemoryStream): String;
     Function ToJSon: TJSonArray; // Convierte el Objeto en un json para enviar al api
 
-
     Property Id: integer Read FId Write SetFId;
     Property Role: String read FRole write SetRole;
     Property Content: String read FContent write SetContent;
@@ -495,8 +494,11 @@ begin
     End;
 
     // Adiciona el mensaje a la lista
-    aMsg.FId := FMessages.Count + 1;
-    FMessages.Add(aMsg);
+    If Assigned(FMessages) and Assigned(aMsg) then
+    Begin
+      aMsg.FId := FMessages.Count + 1;
+      FMessages.Add(aMsg);
+    End;
 
     If Assigned(FOnAddMessage) then
     Begin

@@ -76,6 +76,7 @@ type
     function GetLastError: String;
     function GetBusy: Boolean;
     procedure ParamsChanged(Sender: TObject);
+
     procedure SetAiFunctions(const Value: TAiFunctions);
     procedure SetCompletion_tokens(const Value: integer);
     procedure SetInitialInstructions(const Value: TStrings);
@@ -99,6 +100,8 @@ type
     procedure ApplyParamsToChat(AChat: TAiChat; AParams: TStrings);
     procedure ApplyEventsToChat(AChat: TAiChat; SetToNil: Boolean = False);
     Procedure OnInternalReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject; aRole, aText: String);
+    // Adiciona los parametros de orgien a destino,  retorna destino si se necesita,  el resultado queda almacenado en destino
+    Function MergeParams(Origin, Destination: TStrings): TStrings;
 
   public
     constructor Create(Sender: TComponent); override;
@@ -182,6 +185,8 @@ begin
   FMessages := TAiChatMessages.Create;
   FParams := TStringList.Create;
   TStringList(FParams).OnChange := ParamsChanged;
+  TStringList(FInitialInstructions).OnChange := ParamsChanged;
+  TStringList(FMemory).OnChange := ParamsChanged;
 end;
 
 destructor TAiChatConnection.Destroy;
@@ -267,6 +272,8 @@ begin
 end;
 
 procedure TAiChatConnection.UpdateAndApplyParams;
+Var
+  LParams: TStringList;
 begin
   if FDriverName = '' then
   begin
@@ -278,7 +285,13 @@ begin
   begin
     Var
     ShouldExpand := not(csDesigning in ComponentState);
-    TAiChatFactory.Instance.GetDriverParams(FDriverName, FModel, FParams, ShouldExpand)
+    LParams := TStringList.Create;
+    Try
+      TAiChatFactory.Instance.GetDriverParams(FDriverName, FModel, LParams, ShouldExpand);
+      MergeParams(LParams, FParams).Text; // Adiciona o actualiza FParams a LParams
+    Finally
+      LParams.Free;
+    End;
   end
   else
     FParams.Clear;
@@ -451,7 +464,7 @@ begin
   else
   begin
     AChat.OnReceiveData := Self.OnReceiveData;
-    AChat.OnReceiveDataEnd := OnInternalReceiveDataEnd; //Self.OnReceiveDataEnd;
+    AChat.OnReceiveDataEnd := OnInternalReceiveDataEnd; // Self.OnReceiveDataEnd;
     AChat.OnAddMessage := Self.OnAddMessage;
     AChat.OnCallToolFunction := Self.OnCallToolFunction;
     AChat.OnBeforeSendMessage := Self.OnBeforeSendMessage;
@@ -604,6 +617,22 @@ begin
   Result := TAiChatFactory.Instance.HasDriver(DriverName);
 end;
 
+function TAiChatConnection.MergeParams(Origin, Destination: TStrings): TStrings;
+Var
+  Name, Value: String;
+  I: integer;
+begin
+  Result := Destination;
+
+  For I := 0 to Origin.Count - 1 do
+  Begin
+    Name := Origin.Names[I];
+    Value := Origin.Values[Name];
+    Result.Values[Name] := Value;
+  End;
+
+end;
+
 procedure TAiChatConnection.NewChat;
 begin
   ValideChat;
@@ -680,13 +709,17 @@ begin
   if FChat <> Value then
   begin
     if Assigned(FChat) then
-      ApplyEventsToChat(FChat, True); // Desconectar eventos del chat antiguo
+    Begin
+      ApplyEventsToChat(FChat);
+      ApplyParamsToChat(FChat, FParams);
+    End;
 
     FChat := Value;
 
     if Assigned(FChat) then
     begin
-      ApplyEventsToChat(FChat); // Conectar eventos al chat nuevo
+      ApplyEventsToChat(FChat);
+      ApplyParamsToChat(FChat, FParams);
       FMessages := FChat.Messages; // Sincronizar la lista de mensajes
     end
     else
@@ -774,8 +807,8 @@ end;
 procedure TAiChatConnection.SetOnReceiveDataEnd(const Value: TAiChatOnDataEvent);
 begin
   FOnReceiveDataEnd := Value;
-  //if Assigned(FChat) then
-  //  FChat.OnReceiveDataEnd := Value;
+  // if Assigned(FChat) then
+  // FChat.OnReceiveDataEnd := Value;
 end;
 
 procedure TAiChatConnection.SetPrompt_tokens(const Value: integer);
