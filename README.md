@@ -50,7 +50,7 @@ Tired of dealing with fragmented and complex AI APIs? **MakerAI** offers `TAiCon
 
 ## Updates
 
-### New Version 2.1.002 (23 Jul 2025)
+### New Version 2.1.002 (25 Jul 2025)
 - Fixed some reported bugs.
 - Update demo 001.
 - Implementation of Transcription, Reasoning, DeepResearch and Code Interpreter.
