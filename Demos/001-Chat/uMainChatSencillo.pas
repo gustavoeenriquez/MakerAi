@@ -42,7 +42,9 @@ uses
   uMakerAi.Core, uMakerAi.Chat, uMakerAi.Chat.Ollama, uMakerAi.Chat.OpenAi, uMakerAi.ToolFunctions, uMakerAi.Chat.Grok, uMakerAi.Chat.Groq,
   uMakerAi.Chat.Mistral, uMakerAi.Chat.Claude, uMakerAi.Chat.OpenAiResponses, uMakerAi.Chat.DeepSeek, uMakerAi.Chat.Gemini,
 
-  FMX.TabControl, FMX.WebBrowser, FMX.Objects, FMX.Media, FMX.Edit, System.ImageList, FMX.ImgList;
+  uMakerAi.Utils.System,
+
+  FMX.TabControl, FMX.WebBrowser, FMX.Objects, FMX.Media, FMX.Edit, System.ImageList, FMX.ImgList, uMakerAi.Embeddings;
 
 type
   TForm7 = class(TForm)
@@ -227,6 +229,10 @@ type
     Button106: TButton;
     Button107: TButton;
     Button108: TButton;
+    BtnNewChat: TButton;
+    BtnListarMensajes: TButton;
+    Layout8: TLayout;
+    LblStatus: TLabel;
     procedure BtnPreguntarClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure ComboDriversChange(Sender: TObject);
@@ -292,6 +298,8 @@ type
     procedure Button2Click(Sender: TObject);
     procedure Button83Click(Sender: TObject);
     procedure Button20Click(Sender: TObject);
+    procedure BtnNewChatClick(Sender: TObject);
+    procedure BtnListarMensajesClick(Sender: TObject);
   private
     Procedure UpdateMemo(Text: String);
     Function EnviarPrompt: String;
@@ -393,6 +401,18 @@ ToolCall: TAiToolsFunction; var Handled: Boolean);
 begin
   ToolCall.Response := FormatDateTime('YYYY-MM-DD hh:nn:ss.zzz', Now);
   Handled := True;
+end;
+
+procedure TForm7.BtnListarMensajesClick(Sender: TObject);
+begin
+  MemoAux.Lines.Text := AiConn.Messages.ToJSon.Format;
+  TabControl1.ActiveTab := TabTexto;
+end;
+
+procedure TForm7.BtnNewChatClick(Sender: TObject);
+begin
+  AiConn.NewChat;
+  MemoRespuesta.Lines.Clear;
 end;
 
 procedure TForm7.BtnPreguntarClick(Sender: TObject);
@@ -498,7 +518,7 @@ end;
 
 procedure TForm7.Button2Click(Sender: TObject);
 begin
-  SetModelo('Claude','aa_claude-3-7-sonnet-20250219-web-search');
+  SetModelo('Claude', 'aa_claude-3-7-sonnet-20250219-web-search');
 end;
 
 procedure TForm7.Button30Click(Sender: TObject);
@@ -572,6 +592,7 @@ end;
 procedure TForm7.Button60Click(Sender: TObject);
 begin
   SetModelo('OpenAi', 'gpt-4.1');
+  // AiConn.Params.Values['Response_format'] := 'tiaChatRfJson';
   ChConAnexos.IsChecked := True;
 end;
 
@@ -670,7 +691,7 @@ end;
 
 procedure TForm7.Button83Click(Sender: TObject);
 begin
-  SetModelo('Claude','aa_claude-3-7-sonnet-20250219-code-interpreter');
+  SetModelo('Claude', 'aa_claude-3-7-sonnet-20250219-code-interpreter');
 end;
 
 procedure TForm7.Button87Click(Sender: TObject);
@@ -723,10 +744,11 @@ Var
   Res, Prompt: String;
   MF: TAiMediaFile;
   LastMessage: TAiChatMessage;
+  Msg: TAiChatMessage;
 begin
   MF := Nil; // Importante inicializar el MF
 
-  AiConn.UpdateParamsFromRegistry;
+  // AiConn.UpdateParamsFromRegistry;
 
   If ChUseTools.IsChecked then
   Begin
@@ -743,6 +765,7 @@ begin
     AiConn.Params.Values['Tool_Active'] := 'False';
     AiConn.Params.Values['Asynchronous'] := 'False';
   End;
+
 
   // Obtiene el Prompt
   Prompt := MemoPrompt.Lines.Text;
@@ -790,13 +813,15 @@ procedure TForm7.FormCreate(Sender: TObject);
 var
   DriverNames: TStringList;
 begin
+
   ComboDrivers.Clear;
+
+  // TAiChatFactory.Instance.RegisterUserParam('Ollama', 'URL', 'http://localhost:11434/');
 
   // 1. Obtener el array de drivers desde la factoría
   DriverNames := AiConn.GetDriversNames;
   DriverNames.Sort;
   Try
-
     ComboDrivers.Items.Assign(DriverNames);
 
     // Opcional: seleccionar el primer ítem si la lista no está vacía
@@ -805,6 +830,7 @@ begin
   Finally
     DriverNames.Free;
   End;
+
 end;
 
 procedure TForm7.SetModelo(DriverName, ModelName: String);
@@ -817,17 +843,21 @@ end;
 
 procedure TForm7.UpdateMemo(Text: String);
 begin
-  MemoRespuesta.BeginUpdate;
-  Try
-    MemoRespuesta.Lines.Text := MemoRespuesta.Lines.Text + Text;
-    MemoRespuesta.SelStart := Length(MemoRespuesta.Text);
+  TThread.Synchronize(nil,
+    procedure
+    begin
+      MemoRespuesta.BeginUpdate;
+      Try
+        MemoRespuesta.Lines.Text := MemoRespuesta.Lines.Text + Text;
+        MemoRespuesta.SelStart := Length(MemoRespuesta.Text);
 
-    If Text = '' then
-      MemoRespuesta.Lines.Add('');
+        If Text = '' then
+          MemoRespuesta.Lines.Add('');
 
-  Finally
-    MemoRespuesta.EndUpdate;
-  End;
+      Finally
+        MemoRespuesta.EndUpdate;
+      End;
+    end);
 
 end;
 

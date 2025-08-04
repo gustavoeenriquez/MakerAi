@@ -1,0 +1,259 @@
+object Form8: TForm8
+  Left = 0
+  Top = 0
+  Caption = 'Form8'
+  ClientHeight = 815
+  ClientWidth = 1221
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  DesignerMasterStyle = 0
+  object Layout1: TLayout
+    Align = Top
+    Size.Width = 1221.000000000000000000
+    Size.Height = 73.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object Text1: TText
+      Align = Center
+      Size.Width = 521.000000000000000000
+      Size.Height = 50.000000000000000000
+      Size.PlatformDefault = False
+      Text = 
+        'Este demo muestra como adicionar informaci'#243'n a una base de datos' +
+        ' postgres con pgvector de diferentes tipos de documentos'
+      TextSettings.Font.Size = 14.000000000000000000
+    end
+  end
+  object BtnAddText: TButton
+    Position.X = 32.000000000000000000
+    Position.Y = 96.000000000000000000
+    Size.Width = 217.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 3
+    Text = 'Add Text'
+    TextSettings.Trimming = None
+    OnClick = BtnAddTextClick
+  end
+  object MemoTextToAdd: TMemo
+    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+    DataDetectorTypes = []
+    Position.X = 8.000000000000000000
+    Position.Y = 152.000000000000000000
+    Size.Width = 289.000000000000000000
+    Size.Height = 633.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 6
+    Viewport.Width = 285.000000000000000000
+    Viewport.Height = 629.000000000000000000
+  end
+  object Grid1: TGrid
+    CanFocus = True
+    ClipChildren = True
+    Position.X = 320.000000000000000000
+    Position.Y = 152.000000000000000000
+    Size.Width = 536.000000000000000000
+    Size.Height = 337.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 11
+    RowCount = 0
+    Viewport.Width = 532.000000000000000000
+    Viewport.Height = 312.000000000000000000
+  end
+  object EditPrompt: TEdit
+    Touch.InteractiveGestures = [LongTap, DoubleTap]
+    TabOrder = 14
+    Position.X = 456.000000000000000000
+    Position.Y = 110.000000000000000000
+    Size.Width = 553.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TextPrompt = 'Digita aqu'#237' tu consulta'
+  end
+  object Label1: TLabel
+    Position.X = 456.000000000000000000
+    Position.Y = 85.000000000000000000
+    Text = 'Buscar'
+    TabOrder = 15
+  end
+  object BtnBuscar: TButton
+    Position.X = 1017.000000000000000000
+    Position.Y = 110.000000000000000000
+    Size.Width = 97.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 16
+    Text = 'Buscar'
+    TextSettings.Trimming = None
+    OnClick = BtnBuscarClick
+  end
+  object Memo1: TMemo
+    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+    DataDetectorTypes = []
+    TextSettings.WordWrap = True
+    Position.X = 864.000000000000000000
+    Position.Y = 152.000000000000000000
+    Size.Width = 321.000000000000000000
+    Size.Height = 337.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 17
+    Viewport.Width = 317.000000000000000000
+    Viewport.Height = 333.000000000000000000
+  end
+  object MemoRes: TMemo
+    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+    DataDetectorTypes = []
+    TextSettings.WordWrap = True
+    Position.X = 320.000000000000000000
+    Position.Y = 497.000000000000000000
+    Size.Width = 865.000000000000000000
+    Size.Height = 296.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 20
+    Viewport.Width = 861.000000000000000000
+    Viewport.Height = 292.000000000000000000
+  end
+  object DbConn: TFDConnection
+    Params.Strings = (
+      'Database=lunaidb'
+      'User_Name=postgres'
+      'Server=localhost'
+      'Password=masterkey'
+      'DriverID=PG')
+    Connected = True
+    LoginPrompt = False
+    Left = 188
+    Top = 16
+  end
+  object RAGVectorAdicion: TAiRAGVector
+    OnDataVecAddItem = RAGVectorAdicionDataVecAddItem
+    Embeddings = AiOllamalEmbeddings1
+    InMemoryIndexType = TAIHNSWIndex
+    Left = 128
+    Top = 280
+  end
+  object AiOllamalEmbeddings1: TAiOllamalEmbeddings
+    ApiKey = '@OLLAMA_API_KEY'
+    Model = 'mxbai-embed-large:latest'
+    Url = 'http://localhost:11434/'
+    Dimensions = 1024
+    Left = 128
+    Top = 360
+  end
+  object BusQuery: TFDQuery
+    Connection = DbConn
+    SQL.Strings = (
+      
+        'Select id, FechaDoc, Categoria, PathDoc, FileName, Resumen,0.345' +
+        ' as distancia'
+      'from anexos'
+      'where id in (1,2)')
+    Left = 392
+    Top = 256
+    object BusQueryid: TLargeintField
+      DisplayWidth = 4
+      FieldName = 'id'
+      Origin = 'id'
+      ProviderFlags = [pfInUpdate, pfInWhere, pfInKey]
+    end
+    object BusQueryfechadoc: TSQLTimeStampField
+      FieldName = 'fechadoc'
+      Origin = 'fechadoc'
+      ProviderFlags = [pfInUpdate]
+      Visible = False
+    end
+    object BusQuerycategoria: TWideStringField
+      DisplayWidth = 15
+      FieldName = 'categoria'
+      Origin = 'categoria'
+      Size = 300
+    end
+    object BusQuerypathdoc: TWideStringField
+      DisplayWidth = 15
+      FieldName = 'pathdoc'
+      Origin = 'pathdoc'
+      Size = 300
+    end
+    object BusQueryfilename: TWideStringField
+      DisplayWidth = 20
+      FieldName = 'filename'
+      Origin = 'filename'
+      Size = 300
+    end
+    object BusQueryresumen: TWideMemoField
+      FieldName = 'resumen'
+      Origin = 'resumen'
+      Visible = False
+      BlobType = ftWideMemo
+    end
+    object BusQuerydistancia: TFloatField
+      DisplayWidth = 10
+      FieldName = 'distancia'
+      ReadOnly = True
+    end
+  end
+  object BindSourceDB1: TBindSourceDB
+    DataSet = BusQuery
+    ScopeMappings = <>
+    Left = 88
+    Top = 16
+  end
+  object BindingsList1: TBindingsList
+    Methods = <>
+    OutputConverters = <>
+    Left = 20
+    Top = 5
+    object LinkGridToDataSourceBindSourceDB1: TLinkGridToDataSource
+      Category = 'Quick Bindings'
+      DataSource = BindSourceDB1
+      GridControl = Grid1
+      Columns = <>
+    end
+    object LinkControlToField1: TLinkControlToField
+      Category = 'Quick Bindings'
+      DataSource = BindSourceDB1
+      FieldName = 'resumen'
+      Control = Memo1
+      Track = False
+    end
+  end
+  object RagChat: TAiRagChat
+    Chat = AiChatConnection1
+    DataVec = RAGVectorConsulta
+    Left = 576
+    Top = 560
+  end
+  object RAGVectorConsulta: TAiRAGVector
+    OnDataVecSearch = RAGVectorConsultaDataVecSearch
+    Embeddings = AiOllamalEmbeddings1
+    InMemoryIndexType = TAIHNSWIndex
+    Left = 720
+    Top = 592
+  end
+  object AiChatConnection1: TAiChatConnection
+    DriverName = 'Ollama'
+    Model = 'phi3:latest'
+    Params.Strings = (
+      'ApiKey=@OLLAMA_API_KEY'
+      'Model=phi3:latest'
+      'MaxTokens=4096'
+      'Temperature=0.7'
+      'TopP=1.0'
+      'TopK=5'
+      'BaseURL=http://localhost:11434/'
+      'Max_Tokens=4096'
+      'NativeInputFiles=[]'
+      'NativeOutupFiles=[]'
+      'ChatMediaSupports=[]'
+      'Tool_Active=False'
+      'Asynchronous=True')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    OnReceiveData = AiChatConnection1ReceiveData
+    Left = 792
+    Top = 528
+  end
+end

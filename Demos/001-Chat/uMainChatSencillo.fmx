@@ -116,17 +116,39 @@ object Form7: TForm7
         TabOrder = 0
         OnChange = ComboModelsChange
       end
+      object BtnNewChat: TButton
+        Position.X = 607.000000000000000000
+        Position.Y = 40.000000000000000000
+        Size.Width = 122.000000000000000000
+        Size.Height = 22.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 4
+        Text = 'New Chat'
+        TextSettings.Trimming = None
+        OnClick = BtnNewChatClick
+      end
+      object BtnListarMensajes: TButton
+        Position.X = 745.000000000000000000
+        Position.Y = 40.000000000000000000
+        Size.Width = 119.000000000000000000
+        Size.Height = 22.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 5
+        Text = 'Listar Mensajes'
+        TextSettings.Trimming = None
+        OnClick = BtnListarMensajesClick
+      end
     end
     object Layout2: TLayout
       Align = Client
       Size.Width = 1130.000000000000000000
-      Size.Height = 588.000000000000000000
+      Size.Height = 552.000000000000000000
       Size.PlatformDefault = False
       TabOrder = 2
       object Layout5: TLayout
         Align = Client
         Size.Width = 536.000000000000000000
-        Size.Height = 324.000000000000000000
+        Size.Height = 288.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 2
         object MemoRespuesta: TMemo
@@ -135,11 +157,11 @@ object Form7: TForm7
           TextSettings.WordWrap = True
           Align = Client
           Size.Width = 536.000000000000000000
-          Size.Height = 301.000000000000000000
+          Size.Height = 265.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 0
           Viewport.Width = 532.000000000000000000
-          Viewport.Height = 297.000000000000000000
+          Viewport.Height = 261.000000000000000000
         end
         object Label2: TLabel
           Align = Top
@@ -160,24 +182,24 @@ object Form7: TForm7
         Align = Right
         Position.X = 755.000000000000000000
         Size.Width = 375.000000000000000000
-        Size.Height = 324.000000000000000000
+        Size.Height = 288.000000000000000000
         Size.PlatformDefault = False
-        TabIndex = 2
+        TabIndex = 0
         TabOrder = 3
         TabPosition = PlatformDefault
         Sizes = (
           375s
-          298s
+          262s
           375s
-          298s
+          262s
           375s
-          298s)
+          262s)
         object TabTexto: TTabItem
           CustomIcon = <
             item
             end>
           TextSettings.Trimming = None
-          IsSelected = False
+          IsSelected = True
           Size.Width = 48.000000000000000000
           Size.Height = 26.000000000000000000
           Size.PlatformDefault = False
@@ -192,11 +214,11 @@ object Form7: TForm7
             TextSettings.WordWrap = True
             Align = Client
             Size.Width = 375.000000000000000000
-            Size.Height = 298.000000000000000000
+            Size.Height = 262.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 0
             Viewport.Width = 371.000000000000000000
-            Viewport.Height = 294.000000000000000000
+            Viewport.Height = 258.000000000000000000
           end
         end
         object TabImagen: TTabItem
@@ -219,7 +241,7 @@ object Form7: TForm7
               end>
             Align = Client
             Size.Width = 375.000000000000000000
-            Size.Height = 298.000000000000000000
+            Size.Height = 262.000000000000000000
             Size.PlatformDefault = False
           end
         end
@@ -228,7 +250,7 @@ object Form7: TForm7
             item
             end>
           TextSettings.Trimming = None
-          IsSelected = True
+          IsSelected = False
           Size.Width = 45.000000000000000000
           Size.Height = 26.000000000000000000
           Size.PlatformDefault = False
@@ -240,7 +262,7 @@ object Form7: TForm7
           object WebBrowser1: TWebBrowser
             Align = Client
             Size.Width = 375.000000000000000000
-            Size.Height = 298.000000000000000000
+            Size.Height = 262.000000000000000000
             Size.PlatformDefault = False
             WindowsEngine = EdgeIfAvailable
           end
@@ -252,19 +274,19 @@ object Form7: TForm7
         MinSize = 20.000000000000000000
         Position.X = 745.000000000000000000
         Size.Width = 10.000000000000000000
-        Size.Height = 324.000000000000000000
+        Size.Height = 288.000000000000000000
         Size.PlatformDefault = False
       end
       object Layout6: TLayout
         Align = Left
         Size.Width = 209.000000000000000000
-        Size.Height = 324.000000000000000000
+        Size.Height = 288.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 4
         object ListBox1: TListBox
           Align = Client
           Size.Width = 209.000000000000000000
-          Size.Height = 324.000000000000000000
+          Size.Height = 288.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 0
           DisableFocusEffect = True
@@ -272,7 +294,7 @@ object Form7: TForm7
           DefaultItemStyles.GroupHeaderStyle = ''
           DefaultItemStyles.GroupFooterStyle = ''
           Viewport.Width = 205.000000000000000000
-          Viewport.Height = 320.000000000000000000
+          Viewport.Height = 284.000000000000000000
           object ListBoxGroupHeader1: TListBoxGroupHeader
             TabOrder = 0
             Text = 'Estadisticas de Uso'
@@ -412,7 +434,7 @@ object Form7: TForm7
       end
       object Layout7: TLayout
         Align = Bottom
-        Position.Y = 324.000000000000000000
+        Position.Y = 288.000000000000000000
         Size.Width = 1130.000000000000000000
         Size.Height = 264.000000000000000000
         Size.PlatformDefault = False
@@ -2148,7 +2170,7 @@ object Form7: TForm7
           object Button53: TButton
             Align = Center
             Images = ImageList1
-            ImageIndex = 0
+            ImageIndex = 1
             Margins.Left = 2.000000000000000000
             Margins.Top = 2.000000000000000000
             Margins.Right = 2.000000000000000000
@@ -3043,6 +3065,29 @@ object Form7: TForm7
         end
       end
     end
+    object Layout8: TLayout
+      Align = Top
+      Margins.Left = 3.000000000000000000
+      Margins.Top = 3.000000000000000000
+      Margins.Right = 3.000000000000000000
+      Margins.Bottom = 3.000000000000000000
+      Position.X = 3.000000000000000000
+      Position.Y = 84.000000000000000000
+      Size.Width = 1124.000000000000000000
+      Size.Height = 30.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+      object LblStatus: TLabel
+        Align = Client
+        StyledSettings = [Family, Size, FontColor]
+        Size.Width = 1124.000000000000000000
+        Size.Height = 30.000000000000000000
+        Size.PlatformDefault = False
+        TextSettings.Font.StyleExt = {00070000000000000004000000}
+        Text = 'Status: '
+        TabOrder = 0
+      end
+    end
   end
   object MediaPlayerControl1: TMediaPlayerControl
     MediaPlayer = MediaPlayer1
@@ -3054,7 +3099,7 @@ object Form7: TForm7
     Top = 176
   end
   object OpenDialog1: TOpenDialog
-    Left = 360
+    Left = 464
     Top = 288
   end
   object SaveDialog1: TSaveDialog
@@ -3062,6 +3107,17 @@ object Form7: TForm7
     Top = 288
   end
   object AiConn: TAiChatConnection
+    DriverName = 'Ollama'
+    Params.Strings = (
+      'ApiKey=@OLLAMA_API_KEY'
+      'Model=llama3'
+      'MaxTokens=4096'
+      'URL=http://localhost:11434/'
+      'Max_Tokens=4096'
+      'NativeInputFiles=[]'
+      'NativeOutupFiles=[]'
+      'ChatMediaSupports=[]'
+      'Tool_Active=False')
     AiFunctions = AiFunctions1
     Prompt_tokens = 0
     Completion_tokens = 0
@@ -3069,8 +3125,8 @@ object Form7: TForm7
     OnReceiveData = AiConnReceiveData
     OnReceiveDataEnd = AiConnReceiveDataEnd
     OnError = AiConnError
-    Left = 288
-    Top = 288
+    Left = 280
+    Top = 296
   end
   object AiFunctions1: TAiFunctions
     Functions = <
@@ -3079,12 +3135,74 @@ object Form7: TForm7
         OnAction = AiFunctions1Functions0GetFechayHoraAction
         Description.Strings = (
           'Obtiene la Fecha y la Hora del Sistema')
-        Parameters = <>
+        Parameters = <
+          item
+            Name = 'Param1'
+            ParamType = ptString
+            Description.Strings = (
+              'no lleva par'#225'metros es solo or compatibilidad con grok')
+            Required = False
+          end>
         Default = False
         Tag = 0
         ToolType = tt_function
       end>
-    Left = 448
+    MCPClients = <
+      item
+        Connected = False
+        Enabled = False
+        Name = 'filesystem'
+        TransportType = tpStdIo
+        Params.Strings = (
+          'Command=npx'
+          
+            'Arguments=@modelcontextprotocol/server-filesystem C:\mcp\fs-root' +
+            ' C:\mcp\pruebas'
+          'Timeout=15000')
+        Configuration = '(Properties, Click [...] to edit)'
+      end
+      item
+        Connected = False
+        Enabled = False
+        Name = 'PostgresServer'
+        TransportType = tpStdIo
+        Params.Strings = (
+          
+            'Command=C:\Users\genri\AppData\Roaming\Python\Python313\Scripts\' +
+            'postgres-mcp.exe '
+          'Arguments=--access-mode=unrestricted'
+          'Timeout=15000')
+        EnvVars.Strings = (
+          'DATABASE_URI=postgresql://postgres:masterkey@localhost/lunaidb')
+        Configuration = '(Properties, Click [...] to edit)'
+      end
+      item
+        Connected = False
+        Enabled = False
+        Name = 'DelphiMCP'
+        TransportType = tpHttp
+        Params.Strings = (
+          
+            'Command=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Pr' +
+            'ojects\MCPServersDemo\001-Basico\Win32\Debug\Basico001.exe'
+          'Arguments=--port=3000 '
+          'URL=http://localhost:3000/mcp'
+          'Timeout=15000')
+        Configuration = '(Properties, Click [...] to edit)'
+      end
+      item
+        Connected = False
+        Enabled = True
+        Name = 'MakerAiMCPServer'
+        TransportType = tpMakerAi
+        Params.Strings = (
+          'URL=http://localhost:8080/datasnap/api/TMcp'
+          'Login=login'
+          'Password=password'
+          'Timeout=15000')
+        Configuration = '(Properties, Click [...] to edit)'
+      end>
+    Left = 368
     Top = 288
   end
   object ImageList1: TImageList

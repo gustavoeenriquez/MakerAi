@@ -4,6 +4,13 @@
 [![GitHub Issues](https://img.shields.io/github/issues/gustavoeenriquez/MakerAi)](https://github.com/gustavoeenriquez/MakerAi/issues)
 [![License](https://img.shields.io/github/license/gustavoeenriquez/MakerAi)](LICENSE)
 
+
+> ⚠️ **Important Notice:**  
+> This is **MakerAI Suite Version 2**, a complete redesign of the original MakerAI.  
+> **It is not compatible with Version 1.**  
+> Please migrate your projects accordingly if you are upgrading from the earlier version.
+
+
 **MakerAI is not just an API wrapper for LLM services.** It's a tool designed to optimize the use of LLMs in production environments.  Focus on the essence of your business, leaving the technical complexities to MakerAI.
 
 **One component. All AIs. Full Compatibility.**
@@ -49,6 +56,14 @@ Tired of dealing with fragmented and complex AI APIs? **MakerAI** offers `TAiCon
 *   **Future-Proof:** MakerAI is constantly updated to integrate the latest advancements in the world of AI.
 
 ## Updates
+
+### New Version 2.5.0.01 (4 Aug 2025)
+- Added support for **MCP (Model Context Protocol) Servers** on Windows and Linux:
+  - Supports **MCP StdIO**, **HTTP**, and **MakerAiHttp** modes.
+  - **Note:** Server-Sent Events (SSE) are not yet supported.
+- New component **TGeminiEmbedding** added (contributed by Pedro Luque).
+- Source code reorganized into folders for improved readability and maintainability.
+- Various **bug fixes** and internal improvements.
 
 ### New Version 2.1.002 (25 Jul 2025)
 - Fixed some reported bugs.
