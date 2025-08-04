@@ -36,6 +36,11 @@ Tired of dealing with fragmented and complex AI APIs? **MakerAI** offers `TAiCon
     *   Native generation of: Audio, Images, Videos, and Text.
 *   **Native RAG Support:** Integrates Retrieval-Augmented Generation (RAG) capabilities, enabling the LLM to leverage external knowledge sources for more accurate and context-aware responses.
 *   **Function Calling (Tool Functions):** Allows AI to execute functions directly in your application.
+*   **MCP (Model Context Protocol) Support:**  
+    Version 2.5 introduces native support for **MCP servers**, enabling dynamic tool/function discovery and execution via:
+    *   `StdIO`, `Http`, and `MakerAiHttp` backends  
+    *   Available for both **Windows** and **Linux**  
+    *   Allows seamless connection to external tool servers following the MCP standard
 *   **Cross-Platform Compatibility:**
     *   Windows (VCL & FMX)
     *   Linux (FMX)
