@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,14 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo EnrÃ­quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 // - Telegram: +57 3128441700
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
-
 
 unit uMakerAi.RAG.Vectors;
 
@@ -36,7 +35,7 @@ interface
 uses
   System.SysUtils, System.Math, System.Generics.Collections,
   System.Generics.Defaults, System.Classes, System.JSon, Rest.JSon,
-  System.NetEncoding, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Chat.AiConnection;
+  System.NetEncoding, uMakerAi.Embeddings.Core; // , uMakerAi.Chat, uMakerAi.Chat.AiConnection;
 
 type
 
@@ -45,7 +44,7 @@ type
   /// el modelo y los datos, permite adicionalmente comparar dos embeddings
   /// para conocer su similitud por coseno,  convierte de json a vector y de
   /// vector a json
-  /// almacena también el dato de texto original del embedding
+  /// almacena tambiÃ©n el dato de texto original del embedding
   /// -------------------------------------------------------------------------
 
   TAiRagIndexType = (TAIBasicIndex, TAIHNSWIndex);
@@ -113,9 +112,9 @@ type
     Var Handled: Boolean) of object;
 
   /// ---------------------------------------------------------------------------
-  /// TAIEmbeddingIndex representa la clase base para la búsqueda con embeddings en memoria
+  /// TAIEmbeddingIndex representa la clase base para la bÃºsqueda con embeddings en memoria
   /// consiste en un vector de nodos y un indice de punteros a embeddings que permite la
-  /// búsqueda y seleccion de los candidatos que cumplen la condición
+  /// bÃºsqueda y seleccion de los candidatos que cumplen la condiciÃ³n
   /// -------------------------------------------------------------------------
   TAIEmbeddingIndex = class
   private
@@ -134,9 +133,9 @@ type
   end;
 
   /// ---------------------------------------------------------------------------
-  /// TAIBasicEmbeddingIndex implementación sencilla de un Indice de embeddings
-  /// el cual se asigna por defecto al vector para realizar búsquedas en memoria
-  /// sin embargo hay maneras más eficientes de controlar esto en vectores de
+  /// TAIBasicEmbeddingIndex implementaciÃ³n sencilla de un Indice de embeddings
+  /// el cual se asigna por defecto al vector para realizar bÃºsquedas en memoria
+  /// sin embargo hay maneras mÃ¡s eficientes de controlar esto en vectores de
   /// embeddings.
   /// -------------------------------------------------------------------------
 
@@ -150,7 +149,7 @@ type
 
   /// ---------------------------------------------------------------------------
   /// THNSWIndex implementa un Approximate Nearest Neighbors (ANN) usando el algoritmo
-  /// HNSW (Hierarchical Navigable Small World) que es mucho más eficiente en la busqueda
+  /// HNSW (Hierarchical Navigable Small World) que es mucho mÃ¡s eficiente en la busqueda
   /// en vectores embeddings
   /// -------------------------------------------------------------------------
 
@@ -193,16 +192,16 @@ type
   /// ---------------------------------------------------------------------------
   /// TAiDataVec es la clase base que permite almacenar conjuntos de embeddings
   /// se utiliza tanto para representar bases de datos de embeddings en memoria
-  /// como para la conexión con bases de datos de embeddings.
-  /// Por si solo no indexa ni búsca, solo es el contenedor, para buscar
+  /// como para la conexiÃ³n con bases de datos de embeddings.
+  /// Por si solo no indexa ni bÃºsca, solo es el contenedor, para buscar
   /// es necesario adicionar un TAIEmbeddingIndex, aunque por defecto tiene
-  /// un indice básico de búsqueda, pero hay modelos mejores.
+  /// un indice bÃ¡sico de bÃºsqueda, pero hay modelos mejores.
   /// -------------------------------------------------------------------------
   TAiRAGVector = Class(TComponent)
   Private
     FActive: Boolean;
     FRagIndex: TAIEmbeddingIndex;
-    FEmbeddings: TAiEmbeddings;
+    FEmbeddings: TAiEmbeddingsCore;
     FItems: TList<TAiEmbeddingNode>;
     FOnDataVecAddItem: TOnDataVecAddItem;
     FOnDataVecSearch: TOnDataVecSearch;
@@ -211,9 +210,10 @@ type
     FNameVec: String;
     FDescription: String;
     FInMemoryIndexType: TAiRagIndexType;
+    FOnGetEmbedding: TOnGetEmbedding;
     procedure SetActive(const Value: Boolean);
     procedure SetRagIndex(const Value: TAIEmbeddingIndex);
-    procedure SetEmbeddings(const Value: TAiEmbeddings);
+    procedure SetEmbeddings(const Value: TAiEmbeddingsCore);
     function GetItems: TList<TAiEmbeddingNode>;
     procedure SetOnDataVecAddItem(const Value: TOnDataVecAddItem);
     procedure SetOnDataVecSearch(const Value: TOnDataVecSearch);
@@ -221,6 +221,9 @@ type
     procedure SetNameVec(const Value: String);
     procedure SetInMemoryIndexType(const Value: TAiRagIndexType);
   Protected
+
+    function DoOnGetEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float')
+      : TAiEmbeddingData;
 
   Public
     Constructor Create(aOwner: TComponent); Override;
@@ -232,6 +235,11 @@ type
     Function Connect(aHost, aPort, aLogin, aPassword: String): Boolean;
     Function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TAiRAGVector; Overload;
     Function Search(Prompt: String; aLimit: Integer; aPrecision: Double): TAiRAGVector; Overload;
+
+    Function SearchText(aPrompt: String; aLimit: Integer = 10; aPresicion: Double = 0.5): String; Overload; Virtual;
+    Function SearchText(aPrompt: TAiEmbeddingNode; aLimit: Integer = 10; aPresicion: Double = 0.5): String; Overload; Virtual;
+    Function SearchText(aPrompt: String; DataVec: TAiRAGVector): String; Overload; Virtual;
+
     procedure BuildIndex;
 
     Function AddItem(aItem: TAiEmbeddingNode; MetaData: TAiEmbeddingMetaData): NativeInt; Overload; Virtual;
@@ -239,7 +247,7 @@ type
 
     Function AddItemsFromJSonArray(aJSonArray: TJSonArray): Boolean; Virtual;
     procedure AddItemsFromPlainText(aText: String; aLenChunk: Integer = 512; aLenOverlap: Integer = 80); Virtual;
-    Function CreateEmbeddingNode(aText: String; aEmbeddings: TAiEmbeddings = Nil): TAiEmbeddingNode;
+    Function CreateEmbeddingNode(aText: String; aEmbeddings: TAiEmbeddingsCore = Nil): TAiEmbeddingNode;
     Function Count: Integer;
     Procedure Clear;
 
@@ -249,7 +257,8 @@ type
   Published
     Property OnDataVecAddItem: TOnDataVecAddItem read FOnDataVecAddItem write SetOnDataVecAddItem;
     Property OnDataVecSearch: TOnDataVecSearch read FOnDataVecSearch write SetOnDataVecSearch;
-    Property Embeddings: TAiEmbeddings read FEmbeddings write SetEmbeddings;
+    Property OnGetEmbedding: TOnGetEmbedding read FOnGetEmbedding write FOnGetEmbedding;
+    Property Embeddings: TAiEmbeddingsCore read FEmbeddings write SetEmbeddings;
     Property Model: String read FModel;
     Property Dim: Integer read FDim;
     Property NameVec: String read FNameVec write SetNameVec;
@@ -257,11 +266,10 @@ type
     Property InMemoryIndexType: TAiRagIndexType read FInMemoryIndexType write SetInMemoryIndexType;
   End;
 
+  {
   TAiRagChat = Class(TComponent)
   Private
     FDataVec: TAiRAGVector;
-    FChat: TAiChatConnection;
-    procedure SetChat(const Value: TAiChatConnection);
     procedure SetDataVec(const Value: TAiRAGVector);
   Protected
   Public
@@ -271,9 +279,9 @@ type
     Function AskToAi(aPrompt: TAiEmbeddingNode; aLimit: Integer = 10; aPresicion: Double = 0.5): String; Overload; Virtual;
     Function AskToAi(aPrompt: String; DataVec: TAiRAGVector): String; Overload; Virtual;
   Published
-    Property Chat: TAiChatConnection read FChat write SetChat;
     Property DataVec: TAiRAGVector read FDataVec write SetDataVec;
   End;
+  }
 
 procedure Register;
 
@@ -281,7 +289,7 @@ implementation
 
 procedure Register;
 begin
-  RegisterComponents('MakerAI', [TAiRagChat, TAiRAGVector]);
+  RegisterComponents('MakerAI', [TAiRAGVector]);
 
 end;
 
@@ -469,7 +477,7 @@ begin
       FRagIndex.Add(aItem);
   End;
 
-  // En cualquiera de los casos si logró almacenarlo, guarda el modelo y la longitud
+  // En cualquiera de los casos si logrÃ³ almacenarlo, guarda el modelo y la longitud
   FModel := aItem.Model;
   FDim := aItem.Dim;
 end;
@@ -481,8 +489,16 @@ begin
   If not Assigned(FEmbeddings) then
     Raise Exception.Create('No se ha asignado un modelo de embeddings');
 
+  If Trim(aText) = '' then
+    Raise Exception.Create('El texto no puede estÃ¡r vacÃ­o');
+
   Try
-    Ar := FEmbeddings.CreateEmbedding(aText, 'user');
+
+    // Si no existe el Embeddign le da la oportunidad al mÃ©todo para generarlo
+    If Assigned(FEmbeddings) then
+      Ar := FEmbeddings.CreateEmbedding(aText, 'user')
+    Else
+      Ar := DoOnGetEmbedding(aText, 'user');
 
     Result := TAiEmbeddingNode.Create(1);
     Result.Text := aText;
@@ -518,9 +534,9 @@ Var
 begin
 
   i := 0;
-  Text := aText.trim;
+  Text := aText.Trim;
   Repeat
-    S := Copy(Text, 1, aLenChunk).trim;
+    S := Copy(Text, 1, aLenChunk).Trim;
 
     Emb := AddItem(S);
     Emb.Orden := i;
@@ -573,7 +589,7 @@ begin
 
 end;
 
-function TAiRAGVector.CreateEmbeddingNode(aText: String; aEmbeddings: TAiEmbeddings): TAiEmbeddingNode;
+function TAiRAGVector.CreateEmbeddingNode(aText: String; aEmbeddings: TAiEmbeddingsCore): TAiEmbeddingNode;
 Var
   Ar: TAiEmbeddingData;
 begin
@@ -602,6 +618,16 @@ end;
 function TAiRAGVector.GetItems: TList<TAiEmbeddingNode>;
 begin
   Result := FItems;
+end;
+
+function TAiRAGVector.DoOnGetEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
+begin
+
+  if Assigned(FOnGetEmbedding) then
+    FOnGetEmbedding(Self, aInput, aUser, aModel, aEncodingFormat, aDimensions, Result)
+  Else
+    raise Exception.Create('El evento OnGetEmbedding no ha sido asignado. No se puede generar el embedding.');
+
 end;
 
 procedure TAiRAGVector.LoadFromFile(FileName: String);
@@ -720,7 +746,7 @@ begin
       Raise Exception.Create('No existe un indice asignado');
 
     If (FModel <> '') and (FModel <> Target.Model) then
-      Raise Exception.Create('Los modelos de embedding no coinciden BD="' + FModel + '" Búsqueda="' + Target.Model + '"');
+      Raise Exception.Create('Los modelos de embedding no coinciden BD="' + FModel + '" BÃºsqueda="' + Target.Model + '"');
 
     Result := FRagIndex.Search(Target, aLimit, aPrecision);
   End;
@@ -741,6 +767,50 @@ begin
   End;
 end;
 
+function TAiRAGVector.SearchText(aPrompt: String; aLimit: Integer; aPresicion: Double): String;
+Var
+  TmpVec: TAiRAGVector;
+Begin
+  TmpVec := Search(aPrompt, aLimit, aPresicion);
+
+  Try
+    Result := SearchText(aPrompt, TmpVec)
+  Finally
+    TmpVec.Free;
+  End;
+
+end;
+
+function TAiRAGVector.SearchText(aPrompt: TAiEmbeddingNode; aLimit: Integer; aPresicion: Double): String;
+Var
+  TmpVec: TAiRAGVector;
+Begin
+  TmpVec := Search(aPrompt, aLimit, aPresicion);
+
+  Try
+    Result := SearchText(aPrompt.Text, TmpVec)
+  Finally
+    TmpVec.Free;
+  End;
+end;
+
+function TAiRAGVector.SearchText(aPrompt: String; DataVec: TAiRAGVector): String;
+Var
+  Prompt, Text: String;
+  i: Integer;
+  Emb: TAiEmbeddingNode;
+Begin
+
+  Text := '';
+  For i := 0 to DataVec.Count - 1 do
+  Begin
+    Emb := DataVec.FItems[i];
+    Text := Text + Emb.Text.Trim + #$D#$A;
+  End;
+
+  Result := Text;
+end;
+
 procedure TAiRAGVector.SetActive(const Value: Boolean);
 begin
   FActive := Value;
@@ -751,7 +821,7 @@ begin
   FDescription := Value;
 end;
 
-procedure TAiRAGVector.SetEmbeddings(const Value: TAiEmbeddings);
+procedure TAiRAGVector.SetEmbeddings(const Value: TAiEmbeddingsCore);
 begin
   FEmbeddings := Value;
 end;
@@ -798,7 +868,7 @@ end;
 function TAIEmbeddingIndex.Add(Point: TAiEmbeddingNode): Integer;
 begin
   Result := -1;
-  // Esta función se debe implementar en cada modelo solo cuando sea necesario
+  // Esta funciÃ³n se debe implementar en cada modelo solo cuando sea necesario
 end;
 
 { TOAIIndex }
@@ -869,7 +939,7 @@ begin
     Emb.Idx := Idx;
   End;
 
-  // Ordena toda la lista por los más cercanos a 1 donde 1 es lo máximo de similitud
+  // Ordena toda la lista por los mÃ¡s cercanos a 1 donde 1 es lo mÃ¡ximo de similitud
   DataVec.FItems.Sort(TComparer<TAiEmbeddingNode>.Construct(
     function(const Left, Right: TAiEmbeddingNode): Integer
     const
@@ -955,8 +1025,8 @@ procedure THNSWIndex.InsertConnection(Node: THNSWNode; Level: Integer; TargetID:
 begin
   if Node.Connections[Level].Count >= FMaxConnections then
   begin
-    // Implementar política de selección para mantener mejores conexiones
-    // Por ejemplo, mantener las conexiones más cercanas
+    // Implementar polÃ­tica de selecciÃ³n para mantener mejores conexiones
+    // Por ejemplo, mantener las conexiones mÃ¡s cercanas
     Exit;
   end;
 
@@ -988,7 +1058,7 @@ begin
 
     while Candidates.Count > 0 do
     begin
-      // Obtener el candidato más cercano
+      // Obtener el candidato mÃ¡s cercano
       Candidates.Sort(TComparer < TPair < Double, Integer >>.Construct(
         function(const Left, Right: TPair<Double, Integer>): Integer
         begin
@@ -1114,7 +1184,7 @@ var
 begin
   inherited;
 
-  // Construir el índice añadiendo todos los puntos
+  // Construir el Ã­ndice aÃ±adiendo todos los puntos
   for i := 0 to Points.Count - 1 do
   begin
     Point := Points.Items[i];
@@ -1142,7 +1212,7 @@ begin
     EntryPointCopy := FEntryPoint;
     CurrentLevel := FMaxLevel - 1;
 
-    // Descender por niveles hasta encontrar el más cercano
+    // Descender por niveles hasta encontrar el mÃ¡s cercano
     while CurrentLevel >= 0 do
     begin
       W := SearchLayer(Target, EntryPointCopy, CurrentLevel, 1);
@@ -1155,7 +1225,7 @@ begin
       Dec(CurrentLevel);
     end;
 
-    // Búsqueda final en el nivel base
+    // BÃºsqueda final en el nivel base
     W := SearchLayer(Target, EntryPointCopy, 0, aLimit * 2);
     try
       // Calcular similitudes y ordenar resultados
@@ -1198,7 +1268,7 @@ end;
 
 { TAiRagChat }
 
-function TAiRagChat.AskToAi(aPrompt: String; aLimit: Integer = 10; aPresicion: Double = 0.5): String;
+{function TAiRagChat.AskToAi(aPrompt: String; aLimit: Integer = 10; aPresicion: Double = 0.5): String;
 Var
   TmpVec: TAiRAGVector;
 Begin
@@ -1235,25 +1305,10 @@ Begin
   For i := 0 to DataVec.Count - 1 do
   Begin
     Emb := DataVec.FItems[i];
-    Text := Text + Emb.Text.trim + #$D#$A;
+    Text := Text + Emb.Text.Trim + #$D#$A;
   End;
 
-  If Text.trim = '' then
-    Prompt := 'Al siguiente prompt: "' + aPrompt + '" Responde que no hemos encontrado información sobre el tema solicitado'
-  Else
-  Begin
-    Prompt := 'Teniendo en cuenta la siguiente información, responde la solicitud' + #$D#$A + 'Información:' + Text + #$D#$A + 'Solicitud: '
-      + aPrompt;
-  End;
-
-  { If FChat.Asynchronous then
-    Begin
-    Result := '';
-    FChat.AddMessageAndRun(Prompt, 'user', []);
-    End
-    Else
-  }
-  Result := FChat.AddMessageAndRun(Prompt, 'user', []);
+  Result := Text;
 end;
 
 constructor TAiRagChat.Create(aOwner: TComponent);
@@ -1267,15 +1322,11 @@ begin
   inherited;
 end;
 
-procedure TAiRagChat.SetChat(const Value: TAiChatConnection);
-begin
-  FChat := Value;
-end;
-
 procedure TAiRagChat.SetDataVec(const Value: TAiRAGVector);
 begin
   FDataVec := Value;
 end;
+}
 
 { TAiEmbeddingMetaData }
 

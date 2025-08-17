@@ -46,7 +46,7 @@ uses
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.ToolFunctions, uMakerAi.Core,
-  uMakerAi.Utils.PcmToWav, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings;
+  uMakerAi.Utils.PcmToWav, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings, uMakerAi.Embeddings.core;
 
 type
 

@@ -68,6 +68,7 @@ Type
     procedure SetResponseFormat(const Value: String);
     procedure SetQuality(const Value: String);
     procedure Settimestamp_granularities(const Value: String);
+    function GetApiKey: String;
   Protected
     Function IsValidExtension(FileExtension: String): Boolean;
     procedure ConvertAudioIfNeeded(var aStream: TMemoryStream; var aFileName: String);
@@ -78,7 +79,7 @@ Type
     Function Transcription(aStream: TMemoryStream; aFileName, aPrompt: String): String;
     Function Translation(aStream: TMemoryStream; aFileName, aPrompt: String): String;
   Published
-    Property ApiKey: String read FApiKey write SetApiKey;
+    Property ApiKey: String read GetApiKey write SetApiKey;
     Property Url: String read FUrl write SetUrl;
     Property Model: String read FModel write SetModel;
     Property Voice: String read FVoice write SetVoice;
@@ -141,6 +142,23 @@ destructor TAIWhisper.Destroy;
 begin
 
   inherited;
+end;
+
+function TAIWhisper.GetApiKey: String;
+begin
+  // Si está en modo de diseño, simplemente retorna el valor tal cual
+  if (csDesigning in ComponentState) or (csDestroying in ComponentState) then
+  begin
+    Result := FApiKey;
+    Exit;
+  end;
+
+  // En modo de ejecución
+  if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
+    // Retorna el valor de la variable de entorno, quitando el '@'
+    Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
+  else
+    Result := FApiKey;
 end;
 
 function TAIWhisper.IsValidExtension(FileExtension: String): Boolean;

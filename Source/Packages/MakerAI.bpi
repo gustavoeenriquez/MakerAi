@@ -1,3 +1,0 @@
-/* 'MakerAI' Package */
-OUTPUT_FORMAT(elf64-x86-64)
-GROUP ( bplMakerAI.so MakerAI_nonshared.a )

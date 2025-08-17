@@ -47,7 +47,7 @@ uses
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
   System.JSON, Rest.JSON,
   uMakerAi.ParamsRegistry, uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Chat,
-  uMakerAi.Embeddings, uMakerAi.Utils.CodeExtractor;
+  uMakerAi.Embeddings, uMakerAi.Embeddings.core, uMakerAi.Utils.CodeExtractor;
 
 type
 
@@ -177,20 +177,20 @@ begin
     St.WriteString(ABody);
     St.Position := 0;
 
-{$IFDEF APIDEBUG}
+//$IFDEF APIDEBUG
     St.SaveToFile('c:\temp\peticion.txt');
     St.Position := 0;
-{$ENDIF}
+//$ENDIF
     FResponse.Clear;
     FResponse.Position := 0;
 
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
     FResponse.Position := 0;
-{$IFDEF APIDEBUG}
+//$IFDEF APIDEBUG
     FResponse.SaveToFile('c:\temp\respuesta.txt');
     FResponse.Position := 0;
-{$ENDIF}
+//$ENDIF
     FLastContent := '';
 
     // If Self.Asynchronous = False then

@@ -33,7 +33,10 @@ requires
   bindengine,
   bindcomp,
   RESTComponents,
-  inet;
+  inet,
+  IndySystem,
+  IndyProtocols,
+  IndyCore;
 
 contains
   uMakerAi.MCPClient.Core in '..\MCPClient\uMakerAi.MCPClient.Core.pas',
@@ -60,7 +63,12 @@ contains
   uMakerAi.Dalle in '..\Tools\uMakerAi.Dalle.pas',
   uMakerAI.StableDiffusion in '..\Tools\uMakerAI.StableDiffusion.pas',
   uMakerAi.Whisper in '..\Tools\uMakerAi.Whisper.pas',
-  uMakerAi.Assistant in '..\Assistant\uMakerAi.Assistant.pas',
-  uMakerAi.Graph.Core in '..\Assistant\uMakerAi.Graph.Core.pas';
+  uMakerAi.Agents in '..\Agents\uMakerAi.Agents.pas',
+  UMakerAi.MCPServer.Http in '..\MCPServer\UMakerAi.MCPServer.Http.pas',
+  uMakerAi.MCPServer.Core in '..\MCPServer\uMakerAi.MCPServer.Core.pas',
+  UMakerAi.MCPServer.Stdio in '..\MCPServer\UMakerAi.MCPServer.Stdio.pas',
+  UMakerAi.MCPServer.Direct in '..\MCPServer\UMakerAi.MCPServer.Direct.pas',
+  uMakerAi.Utils.VoiceMonitor in '..\Utils\uMakerAi.Utils.VoiceMonitor.pas',
+  uMakerAi.Embeddings.core in '..\Core\uMakerAi.Embeddings.core.pas';
 
 end.

@@ -51,7 +51,7 @@ uses
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core, uMakerAi.Embeddings.core;
 
 Type
   // Este modelo de reasoning por ahora solo se ha detectado en Groq, así que se implementa solo aquí

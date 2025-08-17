@@ -95,6 +95,7 @@ type
     procedure SetStyleFormat(const Value: TAiImageAStyleFormat);
     procedure SetUseDalle3(const Value: Boolean);
     procedure SetUser(const Value: String);
+    function GetApiKey: String;
   Protected
     Procedure ParseGenerate(JObj: TJSonObject);
     Procedure ParseVariations(JObj: TJSonObject);
@@ -107,7 +108,7 @@ type
 
   Published
     Property Url: String read FUrl write SetUrl;
-    Property ApiKey: String read FApiKey write SetApiKey;
+    Property ApiKey: String read GetApiKey write SetApiKey;
     Property Revised_Prompt: String read Frevised_prompt write Setrevised_prompt;
     Property Images: TAiDalleFiles read FImages write SetImages;
     Property Prompt: String Read FPrompt;
@@ -412,6 +413,23 @@ begin
     JObj.Free;
   End;
 
+end;
+
+function TAiDalle.GetApiKey: String;
+begin
+  // Si está en modo de diseño, simplemente retorna el valor tal cual
+  if (csDesigning in ComponentState) or (csDestroying in ComponentState) then
+  begin
+    Result := FApiKey;
+    Exit;
+  end;
+
+  // En modo de ejecución
+  if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
+    // Retorna el valor de la variable de entorno, quitando el '@'
+    Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
+  else
+    Result := FApiKey;
 end;
 
 procedure TAiDalle.ParseGenerate(JObj: TJSonObject);

@@ -39,129 +39,47 @@ uses
   System.NetEncoding,
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
-  REST.JSON, REST.Types, REST.Client, uMakerAi.Core;
+  REST.JSON, REST.Types, REST.Client,
+  uMakerAi.Embeddings.core;
 
 type
-
-  TAiEmbeddingData = TArray<Double>;
-
-  TAiEmbeddings = Class(TComponent)
-  Private
+  // Por compatibilidad, mantenemos el nombre, pero ahora hereda de la clase base.
+  TAiEmbeddings = class(TAiEmbeddingsCore)
+  private
     procedure SetApiKey(const Value: String);
-    procedure SetModel(const Value: String);
-    procedure SetData(const Value: TAiEmbeddingData);
-    procedure SetUrl(const Value: String);
-    procedure SetDimensions(const Value: Integer);
     function GetApiKey: String;
-  Protected
+    procedure SetUrl(const Value: String);
+  protected
     FApiKey: String;
-    FModel: String;
-    Ftotal_tokens: Integer;
-    Fprompt_tokens: Integer;
-    FData: TAiEmbeddingData;
     FUrl: String;
-    FDimensions: Integer;
-  Public
-    Constructor Create(aOwner: TComponent); Override;
-    Destructor Destroy; Override;
-    Function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float')
-      : TAiEmbeddingData; Virtual;
-    Procedure ParseEmbedding(JObj: TJSonObject); Virtual;
-    Function ToJsonArray: TJSonArray; Overload;
-    class Function ToJsonArray(Val: TAiEmbeddingData): TJSonArray; Overload;
-
-    class function Magnitude(const V: TAiEmbeddingData): Double;
-    class function DotProduct(const A, B: TAiEmbeddingData): Double;
-    class function CosineSimilarity(const A, B: TAiEmbeddingData): Double;
-
-    Property Data: TAiEmbeddingData read FData write SetData;
-
-  Published
-    Property ApiKey: String read GetApiKey write SetApiKey;
-    Property Model: String read FModel write SetModel;
-    Property prompt_tokens: Integer read Fprompt_tokens;
-    Property total_tokens: Integer read Ftotal_tokens;
-    Property Url: String read FUrl write SetUrl;
-    Property Dimensions: Integer read FDimensions write SetDimensions;
-  End;
+    // Este método es ahora 'override' para proporcionar la implementación específica.
+    function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float')
+      : TAiEmbeddingData; override;
+  public
+    constructor Create(aOwner: TComponent); override;
+    // Este método es específico de la implementación de OpenAI
+    procedure ParseEmbedding(JObj: TJsonObject); Virtual;
+  published
+    // Propiedades específicas de esta implementación
+    property ApiKey: String read GetApiKey write SetApiKey;
+    property Url: String read FUrl write SetUrl;
+  end;
 
 implementation
 
-Const
+const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
 
-  { TEmbeddings }
-
-class function TAiEmbeddings.CosineSimilarity(const A, B: TAiEmbeddingData): Double;
-var
-  MagA, MagB: Double;
-begin
-  MagA := Magnitude(A);
-  MagB := Magnitude(B);
-  if (MagA = 0) or (MagB = 0) then
-    Result := 0 // Para evitar división por cero
-  else
-    Result := DotProduct(A, B) / (MagA * MagB);
-end;
+  { TAiEmbeddings }
 
 constructor TAiEmbeddings.Create(aOwner: TComponent);
 begin
-  Inherited;
+  inherited; // Llama al constructor de Core.TAiEmbeddings
   Url := GlOpenAIUrl;
-  FDimensions := 1536;
   FModel := 'text-embedding-3-small';
 end;
 
-destructor TAiEmbeddings.Destroy;
-begin
-
-  inherited;
-end;
-
-class function TAiEmbeddings.DotProduct(const A, B: TAiEmbeddingData): Double;
-var
-  i: Integer;
-begin
-  Result := 0.0;
-  for i := Low(A) to High(A) do
-    Result := Result + A[i] * B[i];
-end;
-
-function TAiEmbeddings.GetApiKey: String;
-begin
-  // Si está en modo de diseño, simplemente retorna el valor tal cual
-  if (csDesigning in ComponentState) or (csDestroying in ComponentState) then
-  begin
-    Result := FApiKey;
-    Exit;
-  end;
-
-  // En modo de ejecución
-  if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
-  Begin
-    // Retorna el valor de la variable de entorno, quitando el '@'
-    Try
-      Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
-    Except
-      Result := FApiKey;
-    End;
-  End
-  else
-    Result := FApiKey;
-end;
-
-class function TAiEmbeddings.Magnitude(const V: TAiEmbeddingData): Double;
-var
-  Sum: Double;
-  i: Integer;
-begin
-  Sum := 0.0;
-  for i := Low(V) to High(V) do
-    Sum := Sum + V[i] * V[i];
-  Result := Sqrt(Sum);
-end;
-
-procedure TAiEmbeddings.ParseEmbedding(JObj: TJSonObject);
+procedure TAiEmbeddings.ParseEmbedding(JObj: TJsonObject);
 Var
   JArr, jData: TJSonArray;
   Emb: TAiEmbeddingData;
@@ -198,61 +116,9 @@ begin
     // Inc(i);
     Break; // Si el embedding de OpenAI retorna varios solo tomamos el primero, usualmente solo hay uno
   End;
+
 end;
 
-procedure TAiEmbeddings.SetApiKey(const Value: String);
-begin
-  FApiKey := Value;
-end;
-
-procedure TAiEmbeddings.SetData(const Value: TAiEmbeddingData);
-begin
-  FData := Value;
-end;
-
-procedure TAiEmbeddings.SetDimensions(const Value: Integer);
-begin
-  FDimensions := Value;
-end;
-
-procedure TAiEmbeddings.SetModel(const Value: String);
-begin
-  FModel := Value;
-end;
-
-procedure TAiEmbeddings.SetUrl(const Value: String);
-begin
-  If Value <> '' then
-    FUrl := Value
-  Else
-    FUrl := GlOpenAIUrl;
-end;
-
-class function TAiEmbeddings.ToJsonArray(Val: TAiEmbeddingData): TJSonArray;
-Var
-  i: Integer;
-begin
-  Result := TJSonArray.Create;
-
-  For i := 0 to Length(Val) - 1 do
-    Result.Add(Val[i]);
-end;
-
-function TAiEmbeddings.ToJsonArray: TJSonArray;
-Var
-  J: Integer;
-  JEmb: TJSonArray;
-begin
-  Try
-    JEmb := TJSonArray.Create;
-    For J := 0 to Length(FData) - 1 do
-      JEmb.Add(FData[J]);
-
-    Result := JEmb;
-  Finally
-
-  End;
-end;
 
 function TAiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
 Var
@@ -264,6 +130,13 @@ Var
   St: TStringStream;
   sUrl: String;
 begin
+
+  if Assigned(OnGetEmbedding) then
+  begin
+    Result := inherited CreateEmbedding(aInput, aUser, aDimensions, aModel, aEncodingFormat);
+    Exit;
+  end;
+
 
   Client := TNetHTTPClient.Create(Nil);
   Client.SynchronizeEvents := False;
@@ -317,6 +190,32 @@ begin
     Response.Free;
     JObj.Free;
   End;
+End;
+
+function TAiEmbeddings.GetApiKey: String;
+begin
+  if (csDesigning in ComponentState) or (csDestroying in ComponentState) then
+  begin
+    Result := FApiKey;
+    Exit;
+  end;
+  if (FApiKey <> '') and (FApiKey.StartsWith('@')) then
+    Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
+  else
+    Result := FApiKey;
+end;
+
+procedure TAiEmbeddings.SetApiKey(const Value: String);
+begin
+  FApiKey := Value;
+end;
+
+procedure TAiEmbeddings.SetUrl(const Value: String);
+begin
+  if Value <> '' then
+    FUrl := Value
+  else
+    FUrl := GlOpenAIUrl;
 end;
 
 end.

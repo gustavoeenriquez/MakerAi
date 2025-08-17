@@ -17,7 +17,7 @@ Begin
   // ------------------------- OLLAMA ----------------------------------
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Max_Tokens', '4096');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeInputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeOutupFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeOutuptFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'ChatMediaSupports', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Tool_Active', 'False');
 
@@ -94,7 +94,7 @@ Begin
   // ------------------------- OPENAI ----------------------------------
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'Max_Tokens', '4096');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'NativeInputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'NativeOutupFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'NativeOutuptFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'ChatMediaSupports', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'Tool_Active', 'False');
 
@@ -182,17 +182,68 @@ Begin
   Model := 'o3';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'medium');
 
+  // ------- OPENAI Modelo GPT-5 ------------------------------
+
+  Model := 'gpt-5';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'medium');
+
+  Model := 'gpt-5-chat:latest';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'medium');
+
+  Model := 'gpt-5-mini';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'medium');
+
+  Model := 'gpt-5-nano';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'medium');
+
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5-high', 'gpt-5');
+  Model := 'aa-gpt-5-high';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'high');
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5-low', 'gpt-5');
+  Model := 'aa-gpt-5-low';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'low');
+
+
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5-chat-high', 'gpt-5-chat:latest');
+  Model := 'aa-gpt-5-chat-high';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'high');
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5-chat-low', 'gpt-5-chat:latest');
+  Model := 'aa-gpt-5-chat-low';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'low');
+
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5-mini-high', 'gpt-5-mini');
+  Model := 'aa-gpt-5-mini-high';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'high');
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5-mini-low', 'gpt-5-mini');
+  Model := 'aa-gpt-5-mini-low';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'low');
+
+
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5-nano-high', 'gpt-5-nano');
+  Model := 'aa-gpt-5-nano-high';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'high');
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5-nano-low', 'gpt-5-nano');
+  Model := 'aa-gpt-5-nano-low';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ReasoningEffort', 'low');
 
   // Falta por implmentar estos si se llega a necesitar {gpt-4.1 gpt-4.1-mini gpt-4.1-nano gpt-4o gpt-4o-mini }
-
-
 
   // ------------------------- OPENAI Responses ----------------------------------
   // https://platform.openai.com/docs/guides/text?api-mode=responses
   // ------------------------- OPENAI Responses  ----------------------------------
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'Max_Tokens', '4096');
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'NativeInputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'NativeOutupFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'NativeOutuptFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'ChatMediaSupports', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'Tool_Active', 'False');
 
@@ -238,6 +289,64 @@ Begin
   // ------- OPENAI Modelo aa_o4-mini-code-interpreter ------------------------------
   Model := 'aa_o4-mini-code-interpreter';
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', Model, 'ChatMediaSupports', '[tcm_code_interpreter, tcm_WebSearch]');
+
+
+
+    // ------- OPENAI Modelo GPT-5 ------------------------------
+
+  Model := 'gpt-5';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ReasoningEffort', 'medium');
+
+  Model := 'gpt-5-chat:latest';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ReasoningEffort', 'medium');
+
+  Model := 'gpt-5-mini';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ReasoningEffort', 'medium');
+
+  Model := 'gpt-5-nano';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ReasoningEffort', 'medium');
+
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAiRespnses', 'aa-gpt-5-high', 'gpt-5');
+  Model := 'aa-gpt-5-high';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ReasoningEffort', 'high');
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAiRespnses', 'aa-gpt-5-low', 'gpt-5');
+  Model := 'aa-gpt-5-low';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ReasoningEffort', 'low');
+
+
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAiRespnses', 'aa-gpt-5-chat-high', 'gpt-5-chat:latest');
+  Model := 'aa-gpt-5-chat-high';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ReasoningEffort', 'high');
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAiRespnses', 'aa-gpt-5-chat-low', 'gpt-5-chat:latest');
+  Model := 'aa-gpt-5-chat-low';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ReasoningEffort', 'low');
+
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAiRespnses', 'aa-gpt-5-mini-high', 'gpt-5-mini');
+  Model := 'aa-gpt-5-mini-high';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ReasoningEffort', 'high');
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAiRespnses', 'aa-gpt-5-mini-low', 'gpt-5-mini');
+  Model := 'aa-gpt-5-mini-low';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ReasoningEffort', 'low');
+
+
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAiRespnses', 'aa-gpt-5-nano-high', 'gpt-5-nano');
+  Model := 'aa-gpt-5-nano-high';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ReasoningEffort', 'high');
+
+  //Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAiRespnses', 'aa-gpt-5-nano-low', 'gpt-5-nano');
+  Model := 'aa-gpt-5-nano-low';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ReasoningEffort', 'low');
+
+
 
 
 
@@ -468,7 +577,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'True');
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[tfc_image]'); //Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[tcm_image]');  //Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
-  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeOutupFiles', '[tfc_textFile]'); //Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeOutuptFiles', '[tfc_textFile]'); //Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
 
   // ------- mistral-ocr-latest ------------------------------
   Model := 'mistral-ocr-latest';

@@ -117,7 +117,7 @@ uses
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Embeddings;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Embeddings.core;
 
 { TODO : Falta crear las siguientes funciones de Mistral }
 /// -----------------------------------------------------------------------------

@@ -11,8 +11,8 @@ const
 // Version String Formats
 const
   MAKERAI_VERSION_SHORT    = '2.5';
-  MAKERAI_VERSION_FULL     = '2.5.0.1';
-  MAKERAI_VERSION_STRING   = 'MakerAi Suite v2.5.0.1';
+  MAKERAI_VERSION_FULL     = '2.5.0.2';
+  MAKERAI_VERSION_STRING   = 'MakerAi Suite v2.5.0.2';
   MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v2.5 - MCP Support';
 
 // Product Information
@@ -24,7 +24,7 @@ const
 
 // Build Information
 const
-  MAKERAI_BUILD_DATE       = '2025-08-04';
+  MAKERAI_BUILD_DATE       = '2025-08-17';
   MAKERAI_BUILD_TIME       = '12:00:00';
   MAKERAI_BUILD_PLATFORM   = {$IFDEF WIN32}'Win32'{$ENDIF}
                             {$IFDEF WIN64}'Win64'{$ENDIF}
@@ -80,12 +80,17 @@ const
   - NOT compatible with v1.x
   - Migration from API wrapper to AI assistant tool
 
-  Version 2.5.0 (2025-08-04) - CURRENT
+  Version 2.5.0 (2025-08-04) -
   - Added MCP (Model Context Protocol) support
   - Enhanced multi-platform compatibility
   - Improved interactive process management
   - Linux/POSIX full support
-}
+
+
+  Version 2.5.2 (2025-08-17) - CURRENT
+  - Added MCP Server (Model Context Protocol)
+  - added Agents for complex flow
+  }
 {******************************************************************************}
 
 // Feature Flags (Current Version)

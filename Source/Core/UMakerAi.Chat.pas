@@ -889,6 +889,7 @@ begin
   FMessages := TAiChatMessages.Create;
   FTools := TStringList.Create;
   FMemory := TStringList.Create;
+  FJsonSchema := TStringList.Create;
   FInitialInstructions := TStringList.Create;
   // FFunctions := TFunctionActionItems.Create(Self, TFunctionActionItem);
 
@@ -900,6 +901,8 @@ begin
   FClient.OnRequestError := Self.OnRequestErrorEvent;
   FClient.OnRequestCompleted := Self.OnRequestCompletedEvent;
   FClient.ResponseTimeOut := 60000;
+
+
 
   FNativeInputFiles := [];
   FNativeOutputFiles := [];
@@ -916,8 +919,6 @@ begin
   FResponseTimeOut := 60000;
   FStream_Usage := False; // Envia la estadistica de uso por token
   FTool_choice := 'auto';
-  FAiFunctions := Nil;
-  // FWebSearch := False;
 end;
 
 function TAiChat.DeleteFile(aMediaFile: TAiMediaFile): String;
@@ -931,7 +932,7 @@ begin
   FTools.Free;
   FClient.Free;
   FMemory.Free;
-  // FFunctions.Free;
+  FJsonSchema.Free;
   inherited;
 end;
 
@@ -2226,7 +2227,7 @@ end;
 
 procedure TAiChat.SetJsonSchema(const Value: TStrings);
 begin
-  FJsonSchema.Text := Value.Text;
+  FJsonSchema.Assign(Value);
 end;
 
 procedure TAiChat.SetLanguage(const Value: string);
