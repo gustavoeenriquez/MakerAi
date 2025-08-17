@@ -62,7 +62,12 @@ Tired of dealing with fragmented and complex AI APIs? **MakerAI** offers `TAiCon
 
 ## Updates
 
-### New Version 2.5.0.01 (4 Aug 2025)
+### New Version 2.5.0.02 (17 Aug 2025)
+- Added MCP Server on Windows and Linux:
+  - Supports **MCP StdIO**, **HTTP**, and **MakerAiHttp** modes.
+-Added Agents support for complex workflow   
+
+### 2.5.0.01 (4 Aug 2025)
 - Added support for **MCP (Model Context Protocol) Servers** on Windows and Linux:
   - Supports **MCP StdIO**, **HTTP**, and **MakerAiHttp** modes.
   - **Note:** Server-Sent Events (SSE) are not yet supported.
