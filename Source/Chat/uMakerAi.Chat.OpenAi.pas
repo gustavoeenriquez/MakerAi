@@ -46,8 +46,11 @@ uses
   System.Net.Mime,
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
   System.JSON, Rest.JSON,
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
   uMakerAi.ParamsRegistry, uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Chat,
-  uMakerAi.Embeddings, uMakerAi.Embeddings.core, uMakerAi.Utils.CodeExtractor;
+  uMakerAi.Embeddings, uMakerAi.Embeddings.Core, uMakerAi.Utils.CodeExtractor;
 
 type
 
@@ -86,7 +89,7 @@ type
 
     Function ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions; Override;
     Procedure DoCallFunction(ToolCall: TAiToolsFunction); Override;
-    function GetTools(aToolFormat : TToolFormat): TStrings; Override;
+    function GetTools(aToolFormat: TToolFormat): TStrings; Override;
     Function PrepareSystemMsg: String; Override; // Crea el primer mensaje del chat para system, para configurar el asistente
   Public
     Constructor Create(Sender: TComponent); Override;
@@ -111,8 +114,7 @@ type
   Public
     Constructor Create(aOwner: TComponent); Override;
     Destructor Destroy; Override;
-    Function CreateEmbedding(aInput, aUser: String; aDimensions: integer = -1; aModel: String = ''; aEncodingFormat: String = 'float')
-      : TAiEmbeddingData; Override;
+    Function CreateEmbedding(aInput, aUser: String; aDimensions: integer = -1; aModel: String = ''; aEncodingFormat: String = 'float'): TAiEmbeddingData; Override;
     Procedure ParseEmbedding(jObj: TJSonObject); Override;
   end;
 
@@ -177,20 +179,20 @@ begin
     St.WriteString(ABody);
     St.Position := 0;
 
-//$IFDEF APIDEBUG
+    // $IFDEF APIDEBUG
     St.SaveToFile('c:\temp\peticion.txt');
     St.Position := 0;
-//$ENDIF
+    // $ENDIF
     FResponse.Clear;
     FResponse.Position := 0;
 
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
     FResponse.Position := 0;
-//$IFDEF APIDEBUG
+    // $IFDEF APIDEBUG
     FResponse.SaveToFile('c:\temp\respuesta.txt');
     FResponse.Position := 0;
-//$ENDIF
+    // $ENDIF
     FLastContent := '';
 
     // If Self.Asynchronous = False then
@@ -390,7 +392,6 @@ begin
     FBusy := False;
   end;
 end;
-
 
 function TAiOpenChat.InternalRunImageDalleGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 var
@@ -717,7 +718,9 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
   LResponseStream := TMemoryStream.Create;
   Body := TMultipartFormData.Create;
   Granularities := TStringList.Create;
@@ -970,17 +973,16 @@ begin
 end;
 
 procedure TAiOpenChat.DoCallFunction(ToolCall: TAiToolsFunction);
-//Var
- // LFuncion: TFunctionActionItem;
-  //Handle: Boolean;
+// Var
+// LFuncion: TFunctionActionItem;
+// Handle: Boolean;
 begin
   If Not Assigned(AiFunctions) then
     Exit;
 
-
   If AiFunctions.DoCallFunction(ToolCall) then
   Begin
-     //Si ejecutó la función
+    // Si ejecutó la función
   End
   Else
   Begin
@@ -989,23 +991,23 @@ begin
   End;
 
   {
-  LFuncion := AiFunctions.Functions.GetFunction(ToolCall.Name);
+    LFuncion := AiFunctions.Functions.GetFunction(ToolCall.Name);
 
 
-  If Assigned(LFuncion) then
-  Begin
+    If Assigned(LFuncion) then
+    Begin
     LFuncion.OnAction(Self, LFuncion, ToolCall.Name, ToolCall, Handle);
     If Handle = False then
     Begin
-      If Assigned(FOnCallToolFunction) then
-        FOnCallToolFunction(Self, ToolCall)
-    End;
-  End
-  Else
-  Begin
     If Assigned(FOnCallToolFunction) then
-      FOnCallToolFunction(Self, ToolCall)
-  End;
+    FOnCallToolFunction(Self, ToolCall)
+    End;
+    End
+    Else
+    Begin
+    If Assigned(FOnCallToolFunction) then
+    FOnCallToolFunction(Self, ToolCall)
+    End;
   }
 end;
 
@@ -1092,7 +1094,9 @@ begin
     EndPointUrl := GlOpenAIUrl;
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := EndPointUrl + 'models';
 
@@ -1118,12 +1122,23 @@ begin
       // Agregar modelos personalizados
       CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
 
+      { for I := Low(CustomModels) to High(CustomModels) do
+        begin
+        if not Result.Contains(CustomModels[I]) then
+        Result.Add(CustomModels[I]);
+        end;
+      }
+
       for I := Low(CustomModels) to High(CustomModels) do
       begin
+{$IF CompilerVersion <= 35.0}
+        if Result.IndexOf(CustomModels[I]) = -1 then
+          Result.Add(CustomModels[I]);
+{$ELSE}
         if not Result.Contains(CustomModels[I]) then
           Result.Add(CustomModels[I]);
+{$ENDIF}
       end;
-
     End
     else
     begin
@@ -1140,7 +1155,7 @@ begin
   Result := GetModels(ApiKey, Url);
 end;
 
-function TAiOpenChat.GetTools(aToolFormat : TToolFormat): TStrings;
+function TAiOpenChat.GetTools(aToolFormat: TToolFormat): TStrings;
 begin
   If Assigned(AiFunctions) and Tool_Active then // Si utiliza tools functions
   Begin
@@ -1183,8 +1198,7 @@ begin
     LModel := 'gpt-4o'; // Un buen modelo por defecto que maneja multimodalidad
 
   // Las funciones y la generación de audio contextual no suelen funcionar en modo stream
-  LAsincronico := Self.Asynchronous and (not Self.Tool_Active) and (Not(Tfc_Audio in NativeOutputFiles)) and
-    (Not(Tfc_Image in NativeOutputFiles)) and (Not(Tfc_Video in NativeOutputFiles));
+  LAsincronico := Self.Asynchronous and (not Self.Tool_Active) and (Not(Tfc_Audio in NativeOutputFiles)) and (Not(Tfc_Image in NativeOutputFiles)) and (Not(Tfc_Video in NativeOutputFiles));
 
   FClient.Asynchronous := LAsincronico;
 
@@ -1252,7 +1266,12 @@ begin
     if Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAI).Text) <> '') then
     begin
       try
+
+{$IF CompilerVersion < 35}
+        JArr := TJSONUtils.ParseAsArray(GetTools(TToolFormat.tfOpenAI).Text);
+{$ELSE}
         JArr := TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAI).Text) as TJSonArray;
+{$ENDIF}
         if not Assigned(JArr) then
           Raise Exception.Create('La propiedad Tools tiene un formato JSON inválido.')
         else
@@ -1574,6 +1593,7 @@ Var
   sJson, Value, Role1: String;
   P: integer;
   Msg: TAiChatMessage;
+
 begin
 
   If FClient.Asynchronous = False then
@@ -1636,11 +1656,56 @@ begin
         Try
           If Assigned(jObj) then
           Begin
+{$IF CompilerVersion >= 35} // Delphi 11 Alexandria y posteriores
+
             Delta := jObj.GetValue<TJSonArray>('choices')[0].GetValue<TJSonObject>('delta');
             Value := '';
             Delta.TryGetValue<String>('content', Value);
             Delta.TryGetValue<String>('role', Role1);
+{$ELSE}     // Para versiones anteriores como Delphi 10
 
+            Delta := nil; // Inicializamos por seguridad
+            var
+            ChoicesArray := jObj.GetValueAsArray('choices'); // 1. Obtener el array 'choices' de forma segura
+
+            // Asegurarse de que el array existe y no está vacío
+            if Assigned(ChoicesArray) and (ChoicesArray.Count > 0) then
+            begin
+              // 2. Obtener el primer elemento como un objeto de forma segura
+              var
+              FirstChoice := ChoicesArray.GetItemAsObject(0);
+
+              if Assigned(FirstChoice) then
+              begin
+                // 3. Obtener el objeto 'delta' de forma segura
+                Delta := FirstChoice.GetValueAsObject('delta');
+              end;
+            end;
+
+            // Ahora, solo continuamos si hemos encontrado el objeto 'delta'
+            if Assigned(Delta) then
+            begin
+              Value := '';
+              Role1 := '';
+
+              Delta.TryGetValueAsString('content', Value);
+
+              Delta.TryGetValueAsString('role', Role1);
+
+              // por la comprobación 'if Assigned(Delta)'
+              If Role1 <> '' then
+                FTmpRole := Role1;
+
+              FLastContent := FLastContent + Value;
+
+              If (Value <> '') and Assigned(FOnReceiveDataEvent) then
+              Begin
+                Value := StringReplace(Value, #$A, sLineBreak, [rfReplaceAll]);
+                FOnReceiveDataEvent(Self, Nil, jObj, FTmpRole, Value);
+              End;
+            end;
+
+{$ENDIF}
             If Role1 <> '' then
               FTmpRole := Role1;
 
@@ -2201,7 +2266,16 @@ begin
     // Asignar los resultados de la búsqueda web
     if Assigned(WebSearch) then
     begin
+
+{$IF CompilerVersion < 35}
+      if Assigned(ResMsg.WebSearchResponse) then
+      Begin
+        ResMsg.WebSearchResponse.Free;
+        ResMsg.WebSearchResponse := Nil;
+      End;
+{$ELSE}
       FreeAndNil(ResMsg.WebSearchResponse);
+{$ENDIF}
       ResMsg.WebSearchResponse := WebSearch;
       WebSearch := nil; // Evitar doble liberación
     end;
@@ -2446,7 +2520,10 @@ begin
   sUrl := Url + 'files';
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
+
   Body := TMultipartFormData.Create;
 
   try
@@ -2520,8 +2597,7 @@ begin
   FModel := 'text-embedding-3-small';
 end;
 
-function TAiOpenAiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: integer; aModel, aEncodingFormat: String)
-  : TAiEmbeddingData;
+function TAiOpenAiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
 Var
   Client: TNetHTTPClient;
   Headers: TNetHeaders;
@@ -2533,7 +2609,10 @@ Var
 begin
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
+
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'embeddings';

@@ -405,10 +405,7 @@ begin
   sUrl := FUrl + 'audio/translations';
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
-{$ENDIF}
-
   Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
   Client.ContentType := 'application/json';
   Body := TMultipartFormData.Create;

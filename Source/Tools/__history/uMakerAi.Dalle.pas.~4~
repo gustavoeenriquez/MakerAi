@@ -543,10 +543,7 @@ begin
   aImage.Position := 0;
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
-{$ENDIF}
-
   Try
     Body := TMultipartFormData.Create;
     Try

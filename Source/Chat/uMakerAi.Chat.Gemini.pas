@@ -45,8 +45,13 @@ uses
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
+
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.ToolFunctions, uMakerAi.Core,
-  uMakerAi.Utils.PcmToWav, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings, uMakerAi.Embeddings.core;
+  uMakerAi.Utils.PcmToWav, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings,
+  uMakerAi.Embeddings.Core;
 
 type
 
@@ -104,16 +109,13 @@ type
     Property VideoParams: TStrings read FVideoParams Write SetVideoParams;
   End;
 
-
   TAiGeminiEmbeddings = class(TAiEmbeddings)
   Public
     Constructor Create(aOwner: TComponent); Override;
     Destructor Destroy; Override;
-    Function CreateEmbedding(aInput, aUser: String; aDimensions: integer = -1; aModel: String = ''; aEncodingFormat: String = 'float')
-      : TAiEmbeddingData; Override;
+    Function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float'): TAiEmbeddingData; Override;
     Procedure ParseEmbedding(jObj: TJSonObject); Override;
   end;
-
 
 procedure Register;
 
@@ -255,7 +257,10 @@ begin
     raise Exception.Create('El archivo no tiene un nombre de recurso en la nube (CloudName). Primero debe ser subido con UploadFile.');
 
   LHttpClient := TNetHTTPClient.Create(Nil);
+
+{$IF CompilerVersion >= 35}
   LHttpClient.SynchronizeEvents := False;
+{$ENDIF}
   try
     LCheckUrl := 'https://generativelanguage.googleapis.com/v1beta/' + aMediaFile.CloudName + '?key=' + Self.ApiKey;
     LResponse := LHttpClient.Get(LCheckUrl);
@@ -298,7 +303,8 @@ begin
   // Inicializar los parámetros de video con valores por defecto
   FVideoParams := TStringList.Create;
   FVideoParams.AddPair('aspectRatio', '16:9');
-  FVideoParams.AddPair('personGeneration', 'allow_adult'); // # "dont_allow" or "allow_adult" or allow_all
+  FVideoParams.AddPair('personGeneration', 'allow_adult');
+  // # "dont_allow" or "allow_adult" or allow_all
   // FVideoParams.AddPair('personGeneration', 'allow_all'); // # "dont_allow" or "allow_adult" or allow_all
   // FVideoParams.AddPair('numberOfVideos', '1');
   // FVideoParams.AddPair('durationSeconds', '5'); // Rango válido 5-8
@@ -317,7 +323,10 @@ begin
     raise Exception.Create('No se puede eliminar un archivo sin un nombre de recurso en la nube (CloudName).');
 
   LHttpClient := TNetHTTPClient.Create(Nil);
+
+{$IF CompilerVersion >= 35}
   LHttpClient.SynchronizeEvents := False;
+{$ENDIF}
   try
     LDeleteUrl := 'https://generativelanguage.googleapis.com/v1beta/' + aMediaFile.CloudName + '?key=' + Self.ApiKey;
 
@@ -325,8 +334,7 @@ begin
 
     if LResponse.StatusCode <> 200 then
     begin
-      raise Exception.CreateFmt('Error al eliminar el archivo: %d %s'#13#10'%s', [LResponse.StatusCode, LResponse.StatusText,
-        LResponse.ContentAsString]);
+      raise Exception.CreateFmt('Error al eliminar el archivo: %d %s'#13#10'%s', [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
     end;
     Result := 'DELETED';
   finally
@@ -355,7 +363,10 @@ begin
     raise Exception.Create('No se puede descargar el archivo. La propiedad CloudUri está vacía.');
 
   LHttpClient := TNetHTTPClient.Create(Nil);
+
+{$IF CompilerVersion >= 35}
   LHttpClient.SynchronizeEvents := False;
+{$ENDIF}
   LFileStream := TMemoryStream.Create;
   try
     LDownloadUrl := aMediaFile.UrlMedia;
@@ -390,8 +401,7 @@ begin
     else
     begin
       // Si falla, lanzamos una excepción con el detalle del error
-      raise Exception.CreateFmt('Error al descargar el archivo: %d %s'#13#10'%s', [LResponse.StatusCode, LResponse.StatusText,
-        LResponse.ContentAsString(TEncoding.UTF8)]);
+      raise Exception.CreateFmt('Error al descargar el archivo: %d %s'#13#10'%s', [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString(TEncoding.UTF8)]);
     end;
 
   finally
@@ -417,8 +427,7 @@ begin
 
   Result := TAiToolsFunctions.Create;
 
-  if not TJSonObject(jCandidateValue).TryGetValue<TJSonObject>('content', jContent) or not jContent.TryGetValue<TJSonArray>('parts', jParts)
-  then
+  if not TJSonObject(jCandidateValue).TryGetValue<TJSonObject>('content', jContent) or not jContent.TryGetValue<TJSonArray>('parts', jParts) then
   begin
     FreeAndNil(Result);
     Exit;
@@ -478,8 +487,7 @@ begin
 
       var
       jModelObj := TJSonObject.Create;
-      jModelObj.AddPair('role', 'model').AddPair('parts',
-        TJSonArray.Create(TJSonObject.Create.AddPair('text', 'De acuerdo, seguiré las instrucciones.')));
+      jModelObj.AddPair('role', 'model').AddPair('parts', TJSonArray.Create(TJSonObject.Create.AddPair('text', 'De acuerdo, seguiré las instrucciones.')));
       Result.Add(jModelObj);
 
       jObj.Free;
@@ -573,7 +581,9 @@ begin
     EndPointUrl := GlAIUrl;
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
   Try
     sUrl := TPath.Combine(EndPointUrl, 'models') + '?key=' + aApiKey;
     Client.ContentType := 'application/json';
@@ -605,10 +615,22 @@ begin
       // Agregar modelos personalizados
       CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
 
+      { for I := Low(CustomModels) to High(CustomModels) do
+        begin
+        if not Result.Contains(CustomModels[I]) then
+        Result.Add(CustomModels[I]);
+        end;
+      }
+
       for I := Low(CustomModels) to High(CustomModels) do
       begin
+{$IF CompilerVersion <= 35.0}
+        if Result.IndexOf(CustomModels[I]) = -1 then
+          Result.Add(CustomModels[I]);
+{$ELSE}
         if not Result.Contains(CustomModels[I]) then
           Result.Add(CustomModels[I]);
+{$ENDIF}
       end;
 
     End
@@ -624,7 +646,7 @@ end;
 function TAiGeminiChat.GetToolJSon: TJSonArray;
 var
   LJsonFunctions: String;
-  LOpenAITools : TJSonArray;
+  LOpenAITools: TJSonArray;
 begin
 
   LJsonFunctions := Trim(inherited GetTools(tfGemini).Text);
@@ -637,22 +659,22 @@ begin
   if not Assigned(LOpenAITools) then
     Exit;
 
-  Result := LOpenAiTools;
+  Result := LOpenAITools;
 
-{
+  {
 
 
-  Result := nil;
-  LJsonFunctions := inherited GetTools(tfOpenAi).Text;
+    Result := nil;
+    LJsonFunctions := inherited GetTools(tfOpenAi).Text;
 
-  if (LJsonFunctions = '') or (not Tool_Active) then
+    if (LJsonFunctions = '') or (not Tool_Active) then
     Exit;
 
-  LOpenAITools := TJSonObject.ParseJSONValue(LJsonFunctions) as TJSonArray;
-  if not Assigned(LOpenAITools) then
+    LOpenAITools := TJSonObject.ParseJSONValue(LJsonFunctions) as TJSonArray;
+    if not Assigned(LOpenAITools) then
     Exit;
 
-  try
+    try
     LToolsArray := TJSonArray.Create;
     LToolObject := TJSonObject.Create;
     LFuncDeclarations := TJSonArray.Create;
@@ -662,21 +684,21 @@ begin
 
     for var LOpenAIFuncValue in LOpenAITools do
     begin
-      if (LOpenAIFuncValue is TJSonObject) and ((LOpenAIFuncValue as TJSonObject).TryGetValue<TJSonObject>('function', LFuncObject)) then
-      begin
-        LFuncDeclarations.Add(LFuncObject.Clone as TJSonObject);
-      end;
+    if (LOpenAIFuncValue is TJSonObject) and ((LOpenAIFuncValue as TJSonObject).TryGetValue<TJSonObject>('function', LFuncObject)) then
+    begin
+    LFuncDeclarations.Add(LFuncObject.Clone as TJSonObject);
+    end;
     end;
 
     if LFuncDeclarations.Count > 0 then
-      Result := LToolsArray
+    Result := LToolsArray
     else
-      LToolsArray.Free;
+    LToolsArray.Free;
 
-  finally
+    finally
     LOpenAITools.Free;
-  end;
-}
+    end;
+  }
 end;
 
 function TAiGeminiChat.InitChatCompletions: String;
@@ -728,7 +750,8 @@ begin
         JTools := TJSonArray.Create;
       var
       LCodeTool := TJSonObject.Create;
-      LCodeTool.AddPair('code_execution', TJSonObject.Create); // {"code_execution": {}}
+      LCodeTool.AddPair('code_execution', TJSonObject.Create);
+      // {"code_execution": {}}
       JTools.Add(LCodeTool);
     End;
 
@@ -738,7 +761,8 @@ begin
         JTools := TJSonArray.Create;
       var
       LCodeTool := TJSonObject.Create;
-      LCodeTool.AddPair('google_search', TJSonObject.Create); // {"code_execution": {}}
+      LCodeTool.AddPair('google_search', TJSonObject.Create);
+      // {"code_execution": {}}
       JTools.Add(LCodeTool);
     End;
 
@@ -1063,14 +1087,16 @@ begin
     LInstances.Add(LInstance);
     LInstance.AddPair('prompt', AskMsg.Prompt);
 
-
-    //Garantiza los permisos para cada modelo, en Europa se debe cambiar estas restricciones
+    // Garantiza los permisos para cada modelo, en Europa se debe cambiar estas restricciones
     If LModel = 'veo-2.0-generate-001' then
-      FVideoParams.Values['personGeneration'] := 'allow_adult' // # "dont_allow" or "allow_adult" or allow_all
+      FVideoParams.Values['personGeneration'] := 'allow_adult'
+      // # "dont_allow" or "allow_adult" or allow_all
     Else If LModel = 'veo-3.0-generate-preview' then
-      FVideoParams.Values['personGeneration'] := 'allow_all' // # "dont_allow" or "allow_adult" or
+      FVideoParams.Values['personGeneration'] := 'allow_all'
+      // # "dont_allow" or "allow_adult" or
     Else
-      FVideoParams.Values['personGeneration'] := ''; // # "dont_allow" or "allow_adult" or
+      FVideoParams.Values['personGeneration'] := '';
+    // # "dont_allow" or "allow_adult" or
 
 
     // FVideoParams.AddPair('personGeneration', 'allow_all'); // # "dont_allow" or "allow_adult" or allow_all
@@ -1190,7 +1216,10 @@ begin
         TaskFinalResultText: String;
       begin
         TaskClient := TNetHTTPClient.Create(Nil);
+
+{$IF CompilerVersion >= 35}
         TaskClient.SynchronizeEvents := False;
+{$ENDIF}
         TaskIsDone := False;
         TaskFinalResponse := nil;
         Try
@@ -1344,7 +1373,8 @@ var
   LBase64AudioData, LErrorResponse: string;
   LNewAudioFile: TAiMediaFile;
 begin
-  Result := ''; // La función devuelve texto, pero para TTS la salida principal es el audio en ResMsg.
+  Result := '';
+  // La función devuelve texto, pero para TTS la salida principal es el audio en ResMsg.
   FBusy := True;
   FLastError := '';
   FLastContent := '';
@@ -1425,7 +1455,8 @@ begin
     LResponseStream.Position := 0;
     LResponseReader := TStreamReader.Create(LResponseStream, TEncoding.UTF8);
     try
-      LErrorResponse := LResponseReader.ReadToEnd; // Leemos toda la respuesta como texto
+      LErrorResponse := LResponseReader.ReadToEnd;
+      // Leemos toda la respuesta como texto
     finally
       LResponseReader.Free;
     end;
@@ -1588,8 +1619,7 @@ begin
       // Iterar sobre los candidatos
       for jCandidate in jCandidates do
       begin
-        if (jCandidate is TJSonObject) and (jCandidate as TJSonObject).TryGetValue<TJSonObject>('content', jContent) and
-          jContent.TryGetValue<TJSonArray>('parts', jParts) then
+        if (jCandidate is TJSonObject) and (jCandidate as TJSonObject).TryGetValue<TJSonObject>('content', jContent) and jContent.TryGetValue<TJSonArray>('parts', jParts) then
         begin
           // Iterar sobre las partes
           for jValPart in jParts do
@@ -1940,7 +1970,8 @@ begin
 
   LFunciones := ExtractToolCallFromJson(LCandidates);
 
-  If (Not Assigned(LFunciones)) or (LFunciones.Count <= 0) then // Si no hay funciones debe continuar la conversación
+  If (Not Assigned(LFunciones)) or (LFunciones.Count <= 0) then
+  // Si no hay funciones debe continuar la conversación
   Begin
     ResMsg.Role := LRole;
     ResMsg.Tool_calls := '';
@@ -1990,7 +2021,8 @@ begin
       For Clave in LFunciones.Keys do
       Begin
         ToolCall := LFunciones[Clave];
-        ToolCall.ResMsg := ResMsg; // Se pasan los mensajes por si desean procesarlos
+        ToolCall.ResMsg := ResMsg;
+        // Se pasan los mensajes por si desean procesarlos
         ToolCall.AskMsg := AskMsg;
 
         TaskList[I] := TTask.Create(
@@ -2081,7 +2113,12 @@ var
 begin
   Result := '';
   LHttpClient := TNetHTTPClient.Create(Nil);
+
+{$IF CompilerVersion >= 35}
   LHttpClient.SynchronizeEvents := False;
+{$ENDIF}
+
+
   try
     LStartUrl := GlAIUploadUrl + 'files?key=' + Self.ApiKey;
 
@@ -2093,9 +2130,8 @@ begin
       raise Exception.Create('No se pudo obtener el contenido del archivo para subir.');
 
     try
-      LHeaders := [TNetHeader.Create('X-Goog-Upload-Protocol', 'resumable'), TNetHeader.Create('X-Goog-Upload-Command', 'start'),
-        TNetHeader.Create('X-Goog-Upload-Header-Content-Length', LNumBytes.ToString), TNetHeader.Create('X-Goog-Upload-Header-Content-Type',
-        aMediaFile.MimeType)];
+      LHeaders := [TNetHeader.Create('X-Goog-Upload-Protocol', 'resumable'), TNetHeader.Create('X-Goog-Upload-Command', 'start'), TNetHeader.Create('X-Goog-Upload-Header-Content-Length', LNumBytes.ToString),
+        TNetHeader.Create('X-Goog-Upload-Header-Content-Type', aMediaFile.MimeType)];
 
       LJsonBody := TJSonObject.Create;
       try
@@ -2116,15 +2152,13 @@ begin
         raise Exception.Create('No se recibió la URL de subida desde la API de Google.');
 
       LFileStream.Position := 0;
-      LHeaders := [TNetHeader.Create('Content-Length', LNumBytes.ToString), TNetHeader.Create('X-Goog-Upload-Offset', '0'),
-        TNetHeader.Create('X-Goog-Upload-Command', 'upload, finalize')];
+      LHeaders := [TNetHeader.Create('Content-Length', LNumBytes.ToString), TNetHeader.Create('X-Goog-Upload-Offset', '0'), TNetHeader.Create('X-Goog-Upload-Command', 'upload, finalize')];
 
       LHttpClient.ContentType := 'application/octet-stream';
       LResponse := LHttpClient.Post(LUploadUrl, LFileStream, nil, LHeaders);
 
       if LResponse.StatusCode <> 200 then
-        raise Exception.CreateFmt('Error al subir los bytes del archivo: %d %s'#13#10'%s',
-          [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
+        raise Exception.CreateFmt('Error al subir los bytes del archivo: %d %s'#13#10'%s', [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
 
       LUploadResponseObj := TJSonObject.ParseJSONValue(LResponse.ContentAsString) as TJSonObject;
       if Assigned(LUploadResponseObj) then
@@ -2168,7 +2202,11 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   LHttpClient := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   LHttpClient.SynchronizeEvents := False;
+{$ENDIF}
+
+
   try
     LUrl := Url + 'cachedContents?key=' + Self.ApiKey;
 
@@ -2224,8 +2262,7 @@ begin
     end
     else
     begin
-      raise Exception.CreateFmt('Error al crear la caché de contenido: %d %s'#13#10'%s',
-        [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
+      raise Exception.CreateFmt('Error al crear la caché de contenido: %d %s'#13#10'%s', [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
     end;
   finally
     LHttpClient.Free;
@@ -2239,7 +2276,6 @@ begin
   // inherited;  //Aquí no hace nada, el descarga el modelo despues
 
 end;
-
 
 { TAiGeminiEmbeddings }
 
@@ -2258,33 +2294,32 @@ end;
   Crea un vector de embedding para un texto de entrada utilizando la API de Google Gemini.
 
   Parámetros:
-    aInput: El texto que se va a convertir en embedding.
-    aUser: (Ignorado por la API de Gemini) Identificador de usuario final.
-    aDimensions:  El número de dimensiones para el embedding.
-    aModel: El modelo a utilizar (ej. 'models/embedding-001').
-    aEncodingFormat: (Ignorado por la API de Gemini) El formato del embedding.
+  aInput: El texto que se va a convertir en embedding.
+  aUser: (Ignorado por la API de Gemini) Identificador de usuario final.
+  aDimensions:  El número de dimensiones para el embedding.
+  aModel: El modelo a utilizar (ej. 'models/embedding-001').
+  aEncodingFormat: (Ignorado por la API de Gemini) El formato del embedding.
 
   Devuelve:
-    Un registro TAiEmbeddingData que contiene el vector de embedding y otra información.
+  Un registro TAiEmbeddingData que contiene el vector de embedding y otra información.
 
   Notas:
-    - FUrl debe ser 'https://generativelanguage.googleapis.com'.
-    - FApiKey debe contener tu clave de la API de Google AI.
+  - FUrl debe ser 'https://generativelanguage.googleapis.com'.
+  - FApiKey debe contener tu clave de la API de Google AI.
 
 }
-function TAiGeminiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: integer; aModel,
-  aEncodingFormat: String): TAiEmbeddingData;
+function TAiGeminiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
 var
   Client: THTTPClient;
-  jRequestRoot, jContent, jPart: TJSONObject;
-  jParts: TJSONArray;
-  jResponseRoot: TJSONObject;
+  jRequestRoot, jContent, jPart: TJSonObject;
+  jParts: TJSonArray;
+  jResponseRoot: TJSonObject;
   Res: IHTTPResponse;
   St: TStringStream;
   sUrl: String;
 begin
   Client := THTTPClient.Create;
-  jRequestRoot := TJSONObject.Create;
+  jRequestRoot := TJSonObject.Create;
   try
     if aModel.IsEmpty then
       aModel := FModel;
@@ -2295,15 +2330,15 @@ begin
     // La estructura base es: { "model": "...", "content": { "parts": [{"text": "..."}] } }
 
     // Crear el objeto 'part'
-    jPart := TJSONObject.Create;
+    jPart := TJSonObject.Create;
     jPart.AddPair('text', TJSONString.Create(aInput));
 
     // Crear el array 'parts' y añadir el objeto 'part'
-    jParts := TJSONArray.Create;
+    jParts := TJSonArray.Create;
     jParts.AddElement(jPart);
 
     // Crear el objeto 'content' y añadir el array 'parts'
-    jContent := TJSONObject.Create;
+    jContent := TJSonObject.Create;
     jContent.AddPair('parts', jParts);
 
     // Construir el objeto JSON raíz
@@ -2311,7 +2346,7 @@ begin
     jRequestRoot.AddPair('content', jContent);
 
     if aDimensions > 0 then
-     jRequestRoot.AddPair('output_dimensionality', TJSONNumber.Create(aDimensions));
+      jRequestRoot.AddPair('output_dimensionality', TJSONNumber.Create(aDimensions));
 
     St := TStringStream.Create(jRequestRoot.ToString, TEncoding.UTF8);
     try
@@ -2321,14 +2356,13 @@ begin
       St.Free;
     end;
 
-  {$IFDEF APIDEBUG}
+{$IFDEF APIDEBUG}
     TFile.WriteAllText('c:\temp\gemini_response.txt', Res.ContentAsString);
-  {$ENDIF}
-
+{$ENDIF}
     if Res.StatusCode = 200 then
     begin
       // La respuesta: { "embedding": { "values": [...] } }
-      jResponseRoot := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
+      jResponseRoot := TJSonObject.ParseJSONValue(Res.ContentAsString) as TJSonObject;
       try
         // Llama a tu método para analizar la respuesta de Gemini.
         ParseEmbedding(jResponseRoot);
@@ -2346,8 +2380,6 @@ begin
   end;
 end;
 
-
-
 destructor TAiGeminiEmbeddings.Destroy;
 begin
 
@@ -2356,34 +2388,28 @@ end;
 
 procedure TAiGeminiEmbeddings.ParseEmbedding(jObj: TJSonObject);
 var
-  LEmbeddingObj: TJSONObject;
-  LValuesArray: TJSONArray;
+  LEmbeddingObj: TJSonObject;
+  LValuesArray: TJSonArray;
   Emb: TAiEmbeddingData;
-  i: integer;
+  I: Integer;
 begin
-  if not jObj.TryGetValue<TJSONObject>('embedding', LEmbeddingObj) then
+  if not jObj.TryGetValue<TJSonObject>('embedding', LEmbeddingObj) then
     Exit;
 
-  if not LEmbeddingObj.TryGetValue<TJSONArray>('values', LValuesArray) then
+  if not LEmbeddingObj.TryGetValue<TJSonArray>('values', LValuesArray) then
     Exit;
 
   SetLength(Emb, LValuesArray.Count);
 
-  for i := 0 to LValuesArray.Count - 1 do
-    Emb[i] := LValuesArray.Items[i].GetValue<Double>;
+  for I := 0 to LValuesArray.Count - 1 do
+    Emb[I] := LValuesArray.Items[I].GetValue<Double>;
 
   FData := Emb;
 
- end;
-
-
+end;
 
 initialization
 
 TAiChatFactory.Instance.RegisterDriver(TAiGeminiChat);
 
 end.
-
-
-
-

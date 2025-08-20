@@ -268,7 +268,7 @@ uses uMakerAi.Utils.System;
 {$ENDIF}
 {$IFDEF MSWINDOWS}
 
-uses ShellAPI, WinApi.Windows;
+uses Winapi.ShellAPI, WinApi.Windows;
 {$ENDIF}
 {$REGION 'Utilidades varias' }
 
@@ -945,7 +945,9 @@ begin
   Begin
 
     Client := TNetHTTPClient.Create(Nil);
+    {$IF CompilerVersion >= 34} // Delphi 10.3 Rio y posteriores
     Client.SynchronizeEvents := False;
+    {$IFEND}
     Response := TMemoryStream.Create;
 
     Try

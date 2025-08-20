@@ -1,0 +1,60 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{15DF676B-A224-4C53-A9EF-6E9A7DE517D7}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="MakerAI_D10.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="MakerAiDsg_D10.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\..\Demos\001-Chat\ChatSencillo.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="MakerAI_D10">
+        <MSBuild Projects="MakerAI_D10.dproj"/>
+    </Target>
+    <Target Name="MakerAI_D10:Clean">
+        <MSBuild Projects="MakerAI_D10.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MakerAI_D10:Make">
+        <MSBuild Projects="MakerAI_D10.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MakerAiDsg_D10">
+        <MSBuild Projects="MakerAiDsg_D10.dproj"/>
+    </Target>
+    <Target Name="MakerAiDsg_D10:Clean">
+        <MSBuild Projects="MakerAiDsg_D10.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MakerAiDsg_D10:Make">
+        <MSBuild Projects="MakerAiDsg_D10.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ChatSencillo">
+        <MSBuild Projects="..\..\Demos\001-Chat\ChatSencillo.dproj"/>
+    </Target>
+    <Target Name="ChatSencillo:Clean">
+        <MSBuild Projects="..\..\Demos\001-Chat\ChatSencillo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ChatSencillo:Make">
+        <MSBuild Projects="..\..\Demos\001-Chat\ChatSencillo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="MakerAI_D10;MakerAiDsg_D10;ChatSencillo"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="MakerAI_D10:Clean;MakerAiDsg_D10:Clean;ChatSencillo:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="MakerAI_D10:Make;MakerAiDsg_D10:Make;ChatSencillo:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

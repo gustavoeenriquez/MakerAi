@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo EnrÃ­quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 // - Telegram: +57 3128441700
@@ -40,6 +40,10 @@ uses
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings.core;
 
 type
@@ -136,7 +140,7 @@ end;
   end;
 }
 
-{ //esta es la original, pero no funciona en la revisión del 2025 se modifica
+{ //esta es la original, pero no funciona en la revisiÃ³n del 2025 se modifica
   function TAiOllamaChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
   Var
   JObj, Msg, Arg: TJSonObject;
@@ -183,7 +187,7 @@ end;
 
 }
 
-// Se simplifica la recepción debido a que en la versión 2025 se eliminan parámetros
+// Se simplifica la recepciÃ³n debido a que en la versiÃ³n 2025 se eliminan parÃ¡metros
 function TAiOllamaChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
 Var
   JObj, Msg, Arg: TJSonObject;
@@ -296,7 +300,15 @@ begin
     }
 
     If Msg.Tool_calls <> '' then
+
+
+
+{$IF CompilerVersion < 35}
+      JObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.Tool_calls));
+{$ELSE}
       JObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.Tool_calls)));
+{$ENDIF}
+
 
     Result.Add(JObj);
   End;
@@ -324,7 +336,10 @@ begin
     EndPointUrl := GlAIUrl;
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
+
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := EndPointUrl + 'api/tags';
 
@@ -350,10 +365,21 @@ begin
       // Agregar modelos personalizados
       CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
 
-      for I := Low(CustomModels) to High(CustomModels) do
+      {for I := Low(CustomModels) to High(CustomModels) do
       begin
         if not Result.Contains(CustomModels[I]) then
           Result.Add(CustomModels[I]);
+      end;
+      }
+      for I := Low(CustomModels) to High(CustomModels) do
+      begin
+       {$IF CompilerVersion <= 35.0}
+        if Result.IndexOf(CustomModels[I]) = -1 then
+          Result.Add(CustomModels[I]);
+       {$ELSE}
+        if not Result.Contains(CustomModels[I]) then
+          Result.Add(CustomModels[I]);
+       {$ENDIF}
       end;
 
     End
@@ -402,14 +428,24 @@ begin
 
     If Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAi).Text) <> '') then
     Begin
+{$IF CompilerVersion < 35}
+      JArr := TJSONUtils.ParseAsArray(GetTools(TToolFormat.tfOpenAi).Text);
+{$ELSE}
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
+{$ENDIF}
+
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
+        Raise Exception.Create('La propiedad Tools estÃ¡n mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then
       Begin
+{$IF CompilerVersion < 35}
+        jToolChoice := TJSONUtils.ParseAsObject(Tool_choice);
+{$ELSE}
         jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
+{$ENDIF}
+
         If Assigned(jToolChoice) then
           AJSONObject.AddPair('tools_choice', jToolChoice);
       End;
@@ -528,113 +564,145 @@ begin
   Finally
     If FClient.Asynchronous = False then
       St.Free;
-    // Esto no funciona en multiarea, así que se libera cuando no lo es.
+    // Esto no funciona en multiarea, asÃ­ que se libera cuando no lo es.
   End;
 end;
 
-procedure TAiOllamaChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
-Var
-  JObj, Delta: TJSonObject;
+
+function IsCompleteJson(const S: string): Boolean;
+var
+  I, Balance: Integer;
+  InString, Escape: Boolean;
+begin
+  Balance := 0;
+  InString := False;
+  Escape := False;
+
+  for I := 1 to Length(S) do
+  begin
+    if Escape then
+    begin
+      Escape := False;
+      Continue;
+    end;
+
+    case S[I] of
+      '\': if InString then
+              Escape := True;
+
+      '"': InString := not InString;
+
+      '{': if not InString then
+              Inc(Balance);
+
+      '}': if not InString then
+              Dec(Balance);
+    end;
+  end;
+
+  Result := (Balance = 0) and (not InString);
+end;
+
+procedure TAiOllamaChat.OnInternalReceiveData(const Sender: TObject;
+  AContentLength, AReadCount: Int64; var AAbort: Boolean);
+var
+  JObj, Delta: TJSONObject;
   sJson: String;
   Done: Boolean;
   Msg: TAiChatMessage;
   aPrompt_tokens, aCompletion_tokens, aTotal_tokens: Integer;
   Role, Respuesta: String;
   LModel: String;
-
 begin
-
-  If FClient.Asynchronous = False then
+  if not FClient.Asynchronous then
     Exit;
 
   AAbort := FAbort;
 
-  If FAbort = True then
-  Begin
+  if FAbort then
+  begin
     FBusy := False;
-    If Assigned(FOnReceiveDataEnd) then
+    if Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, Nil, Nil, 'system', 'abort');
-  End;
+    Exit;
+  end;
 
-  Try
+  try
+    // Recuperar chunk recibido
     sJson := UTF8Encode(FResponse.DataString);
     FResponse.Clear;
+
+    // Acumular
     FTmpResponseText := FTmpResponseText + sJson;
 
-    If sJson <> '' then
-    Begin
-      JObj := TJSonObject(TJSonObject.ParseJSONValue(sJson));
-
-      If Assigned(JObj) then
-      Begin
-        If JObj.TryGetValue<Boolean>('done', Done) then
-        Begin
-          // Cuando termina de recibir el mensaje
-          If Done = True then
-          Begin
-            LModel := JObj.GetValue('model').Value;
-            aPrompt_tokens := JObj.GetValue<Integer>('prompt_eval_count');
-            aCompletion_tokens := JObj.GetValue<Integer>('eval_count');
-            aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
-
-            // Actualiza los valores del componente
-            Prompt_tokens := Prompt_tokens + aPrompt_tokens;
-            Completion_tokens := Completion_tokens + aCompletion_tokens;
-            Total_tokens := Total_tokens + aTotal_tokens;
-
-            If JObj.TryGetValue<TJSonObject>('message', Delta) then
-            Begin
-              Respuesta := Delta.GetValue<String>('content');
-              Role := Delta.GetValue<String>('role');
-              FLastContent := FLastContent + Respuesta;
-
-              Msg := TAiChatMessage.Create(FLastContent, Role);
-              Msg.Prompt := FLastContent;
-              // Msg.Tool_calls := sToolCalls;
-              Msg.Prompt_tokens := aPrompt_tokens;
-              Msg.Completion_tokens := aCompletion_tokens;
-              Msg.Total_tokens := aTotal_tokens;
-              Msg.Id := FMessages.Count + 1;
-              FMessages.Add(Msg);
-              FBusy := False;
-
-              If Assigned(FOnReceiveDataEnd) then
-                FOnReceiveDataEnd(Self, Msg, Nil, Role, FLastContent);
-
-              // If Delta.TryGetValue<TJSonArray>('tool_calls', JToolCalls) then
-              // sToolCalls := JToolCalls.Format;
-            End;
-
-          End
-          Else // Todavía no ha terminado el mensaje
-          Begin
-
-            If JObj.TryGetValue<TJSonObject>('message', Delta) then
-            Begin
-              Respuesta := Delta.GetValue<String>('content');
-              Role := Delta.GetValue<String>('role');
-              FLastContent := FLastContent + Respuesta;
-
-              Respuesta := StringReplace(Respuesta, #$A, sLineBreak, [rfReplaceAll]);
-              If Assigned(FOnReceiveDataEvent) then
-                FOnReceiveDataEvent(Self, Nil, JObj, Role, Respuesta);
-
-            End;
-
-          End;
-        End;
-      End;
-    End;
-
-  Except
-    On E: Exception do
+    // Solo procesar si el JSON estÃ¡ completo
+    if (sJson <> '') and IsCompleteJson(FTmpResponseText) then
     begin
-      LastError := 'El json "' + sJson + '" no es válido';
+      JObj := TJSONObject(TJSONObject.ParseJSONValue(FTmpResponseText));
+      try
+        if Assigned(JObj) then
+        begin
+          if JObj.TryGetValue<Boolean>('done', Done) then
+          begin
+            if Done then
+            begin
+              // âœ… Cuando termina de recibir
+              LModel := JObj.GetValue('model').Value;
+              aPrompt_tokens := JObj.GetValue<Integer>('prompt_eval_count');
+              aCompletion_tokens := JObj.GetValue<Integer>('eval_count');
+              aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
+
+              // Actualiza contadores
+              Prompt_tokens := Prompt_tokens + aPrompt_tokens;
+              Completion_tokens := Completion_tokens + aCompletion_tokens;
+              Total_tokens := Total_tokens + aTotal_tokens;
+
+              if JObj.TryGetValue<TJSONObject>('message', Delta) then
+              begin
+                Respuesta := Delta.GetValue<String>('content');
+                Role := Delta.GetValue<String>('role');
+                FLastContent := FLastContent + Respuesta;
+
+                Msg := TAiChatMessage.Create(FLastContent, Role);
+                Msg.Prompt := FLastContent;
+                Msg.Prompt_tokens := aPrompt_tokens;
+                Msg.Completion_tokens := aCompletion_tokens;
+                Msg.Total_tokens := aTotal_tokens;
+                Msg.Id := FMessages.Count + 1;
+                FMessages.Add(Msg);
+                FBusy := False;
+
+                if Assigned(FOnReceiveDataEnd) then
+                  FOnReceiveDataEnd(Self, Msg, Nil, Role, FLastContent);
+              end;
+            end
+            else
+            begin
+              // âœ… TodavÃ­a no termina el mensaje
+              if JObj.TryGetValue<TJSONObject>('message', Delta) then
+              begin
+                Respuesta := Delta.GetValue<String>('content');
+                Role := Delta.GetValue<String>('role');
+                FLastContent := FLastContent + Respuesta;
+
+                Respuesta := StringReplace(Respuesta, #$A, sLineBreak, [rfReplaceAll]);
+                if Assigned(FOnReceiveDataEvent) then
+                  FOnReceiveDataEvent(Self, Nil, JObj, Role, Respuesta);
+              end;
+            end;
+          end;
+        end;
+      finally
+        JObj.Free;
+        FTmpResponseText := ''; // ðŸ”¹ Limpiamos buffer ya procesado
+      end;
     end;
-
-  End;
-
+  except
+    on E: Exception do
+      LastError := 'El json "' + FTmpResponseText + '" no es vÃ¡lido. ' + E.Message;
+  end;
 end;
+
 
 procedure TAiOllamaChat.ParseChat(JObj: TJSonObject; ResMsg: TAiChatMessage);
 Var
@@ -716,7 +784,7 @@ begin
 
       NumTasks := LFunciones.Count;
       SetLength(TaskList, NumTasks);
-      // Ajusta el tamaño del array para el número de tareas
+      // Ajusta el tamaÃ±o del array para el nÃºmero de tareas
 
       I := 0;
       For Clave in LFunciones.Keys do
@@ -806,7 +874,7 @@ end;
   Model := 'mxbai-embed-large'; //Vector[1024]
   Model := 'nomic-embed-text'; // Vector[768]
   Model := 'all-minilm';      //Vector[384]
-  Model := 'snowflake-arctic-embed'; //Vector[1024]    //Esta es la mejor versión a mayo/2024
+  Model := 'snowflake-arctic-embed'; //Vector[1024]    //Esta es la mejor versiÃ³n a mayo/2024
 
   Url para llamado http://IPOLLAMASERVER:11434/
 }
@@ -830,7 +898,10 @@ begin
     aDimensions := FDimensions;
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
+
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := Url + 'api/embeddings';

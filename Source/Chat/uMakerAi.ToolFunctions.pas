@@ -5,7 +5,14 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   System.JSON, Rest.JSON, System.IOUtils,
-  Data.Db, uMakerAi.Core, uMakerAi.MCPClient.Core;
+  Data.Db,
+
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+
+
+  uMakerAi.Core, uMakerAi.MCPClient.Core;
 
 type
 

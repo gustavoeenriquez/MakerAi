@@ -40,11 +40,16 @@ uses
   FMX.Memo, FMX.Layouts,
 
   uMakerAi.Core, uMakerAi.Chat, uMakerAi.Chat.Ollama, uMakerAi.Chat.OpenAi, uMakerAi.ToolFunctions, uMakerAi.Chat.Grok, uMakerAi.Chat.Groq,
-  uMakerAi.Chat.Mistral, uMakerAi.Chat.Claude, uMakerAi.Chat.OpenAiResponses, uMakerAi.Chat.DeepSeek, uMakerAi.Chat.Gemini,
+  uMakerAi.Chat.Mistral, uMakerAi.Chat.Claude, uMakerAi.Chat.OpenAiResponses, uMakerAi.Chat.DeepSeek, uMakerAi.Chat.Gemini, uMakerAi.Embeddings,
 
   uMakerAi.Utils.System,
 
-  FMX.TabControl, FMX.WebBrowser, FMX.Objects, FMX.Media, FMX.Edit, System.ImageList, FMX.ImgList, uMakerAi.Embeddings;
+  // Si desea utilizar la funcionalidad de script de python debe instalar Delphi4Pyton desde el Gettit
+  // y tambien debe tener instalado python en sus sistema previamente
+  //
+  // uMakerAi.Utils.Python,
+
+  FMX.TabControl, FMX.WebBrowser, FMX.Objects, FMX.Media, FMX.Edit, System.ImageList, FMX.ImgList;
 
 type
   TForm7 = class(TForm)
@@ -237,8 +242,7 @@ type
     procedure FormCreate(Sender: TObject);
     procedure ComboDriversChange(Sender: TObject);
     procedure ComboModelsChange(Sender: TObject);
-    procedure AiFunctions1Functions0GetFechayHoraAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string;
-      ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure AiFunctions1Functions0GetFechayHoraAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
     procedure AiConnReceiveData(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
     procedure AiConnReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
     procedure Button1Click(Sender: TObject);
@@ -300,6 +304,7 @@ type
     procedure Button20Click(Sender: TObject);
     procedure BtnNewChatClick(Sender: TObject);
     procedure BtnListarMensajesClick(Sender: TObject);
+    procedure AiFunctions1Functions1CreaListaDeNumerosPrimosAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
   private
     Procedure UpdateMemo(Text: String);
     Function EnviarPrompt: String;
@@ -360,7 +365,13 @@ begin
 
           If (Ext = 'mp4') then
           Begin
-            // aqí algún proceso con el mp4
+            TThread.Synchronize(nil,
+              procedure
+              begin
+                WebBrowser1.Navigate('file:///D:/taller/Medios/'+FileNameOutput);
+                TabControl1.ActiveTab := TabWeb;
+              end);
+
           End
           Else If (Ext = 'wav') or (Ext = 'mp3') then
           Begin
@@ -377,8 +388,7 @@ begin
                 TabControl1.ActiveTab := TabImagen;
               end);
           End
-          Else If (Ext = 'texto') or (Ext = 'text') or (Ext = 'txt') or (Ext = 'pas') or (Ext = 'delphi') or (Ext = 'js') or (Ext = 'css')
-          then
+          Else If (Ext = 'texto') or (Ext = 'text') or (Ext = 'txt') or (Ext = 'pas') or (Ext = 'delphi') or (Ext = 'js') or (Ext = 'css') then
           Begin
             TabControl1.ActiveTab := TabTexto;
             MF.Content.Position := 0;
@@ -396,11 +406,35 @@ begin
   end;
 end;
 
-procedure TForm7.AiFunctions1Functions0GetFechayHoraAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string;
-ToolCall: TAiToolsFunction; var Handled: Boolean);
+procedure TForm7.AiFunctions1Functions0GetFechayHoraAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
 begin
   ToolCall.Response := FormatDateTime('YYYY-MM-DD hh:nn:ss.zzz', Now);
   Handled := True;
+end;
+
+procedure TForm7.AiFunctions1Functions1CreaListaDeNumerosPrimosAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+Var
+  N: Integer;
+  Resultado, Script: String;
+begin
+
+  // Si desea utilizar la funcionalidad de script de python debe instalar Delphi4Pyton desde el Gettit
+  // y tambien debe tener instalado python en sus sistema previamente
+  {
+
+    N := StrToIntDef(ToolCall.Params.Values['N'],1);
+    Script := FunctionAction.Script.Text;
+
+    Try
+    Resultado := TUtilsPython.ExecuteScript(Script,[N]);
+    ToolCall.Response := Resultado;
+    Except
+    On E : Exception do
+    ToolCall.Response := E.Message;
+    End;
+
+    Handled := True;
+  }
 end;
 
 procedure TForm7.BtnListarMensajesClick(Sender: TObject);
@@ -765,7 +799,6 @@ begin
     AiConn.Params.Values['Tool_Active'] := 'False';
     AiConn.Params.Values['Asynchronous'] := 'False';
   End;
-
 
   // Obtiene el Prompt
   Prompt := MemoPrompt.Lines.Text;

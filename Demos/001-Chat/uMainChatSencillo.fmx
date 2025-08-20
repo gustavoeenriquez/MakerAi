@@ -1,7 +1,7 @@
 object Form7: TForm7
   Left = 0
   Top = 0
-  Caption = 'Form7'
+  Caption = 'Form7 - Updated 2025-08-20'
   ClientHeight = 794
   ClientWidth = 1130
   Position = ScreenCenter
@@ -3146,6 +3146,42 @@ object Form7: TForm7
         Default = False
         Tag = 0
         ToolType = tt_function
+      end
+      item
+        Enabled = False
+        FunctionName = 'CreaListaDeNumerosPrimos'
+        OnAction = AiFunctions1Functions1CreaListaDeNumerosPrimosAction
+        Description.Strings = (
+          'Genera una lista de los N primeros n'#250'meros primos encontrados.')
+        Script.Strings = (
+          'def primos(n):'
+          '    """Calcula los primeros n n'#250'meros primos"""'
+          '    primos_list = []'
+          '    num = 2'
+          '    while len(primos_list) < n:'
+          '        es_primo = True'
+          '        for i in range(2, int(num ** 0.5) + 1):'
+          '            if num % i == 0:'
+          '                es_primo = False'
+          '                break'
+          '        if es_primo:'
+          '            primos_list.append(num)'
+          '        num += 1'
+          '    return primos_list'
+          ''
+          '# Llamar la funci'#243'n con el par'#225'metro recibido'
+          'result = primos(param1)')
+        Parameters = <
+          item
+            Name = 'N'
+            ParamType = ptString
+            Description.Strings = (
+              'Describe la Cantidad de Numeros Primos a Calcular.')
+            Required = False
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
       end>
     MCPClients = <
       item
@@ -3192,13 +3228,23 @@ object Form7: TForm7
       end
       item
         Connected = False
-        Enabled = True
+        Enabled = False
         Name = 'MakerAiMCPServer'
         TransportType = tpMakerAi
         Params.Strings = (
           'URL=http://localhost:8080/datasnap/api/TMcp'
           'Login=login'
           'Password=password'
+          'Timeout=15000')
+        Configuration = '(Properties, Click [...] to edit)'
+      end
+      item
+        Connected = False
+        Enabled = True
+        Name = 'NewMCPClient'
+        TransportType = tpHttp
+        Params.Strings = (
+          'URL=http://localhost:3000/mcp'
           'Timeout=15000')
         Configuration = '(Properties, Click [...] to edit)'
       end>

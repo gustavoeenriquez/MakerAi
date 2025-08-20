@@ -117,6 +117,10 @@ uses
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Embeddings.core;
 
 { TODO : Falta crear las siguientes funciones de Mistral }
@@ -756,7 +760,12 @@ begin
 
     if Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAi).Text) <> '') then
     begin
+{$IF CompilerVersion < 35}
+      JArr := TJSONUtils.ParseAsArray(GetTools(TToolFormat.tfOpenAi).Text);
+{$ELSE}
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
+{$ENDIF}
+
       if Not Assigned(JArr) then
         Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
@@ -764,7 +773,12 @@ begin
       if (Trim(Tool_choice) <> '') then
       begin
         try
-          jToolChoice := TJSONObject(TJSONObject.ParseJSONValue(Tool_choice));
+{$IF CompilerVersion < 35}
+        jToolChoice := TJSONUtils.ParseAsObject(Tool_choice);
+{$ELSE}
+        jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
+{$ENDIF}
+
           if Assigned(jToolChoice) then
             AJSONObject.AddPair('tool_choice', jToolChoice);
         except
@@ -1734,7 +1748,10 @@ Var
 begin
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
+
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'embeddings';

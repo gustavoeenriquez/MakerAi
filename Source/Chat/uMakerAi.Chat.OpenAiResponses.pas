@@ -41,6 +41,11 @@ uses
   System.NetEncoding, System.Net.URLClient, System.Net.HttpClient,
   System.Net.Mime,
   System.Net.HttpClientComponent, System.JSON, Rest.JSON,
+
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core,
   uMakerAi.ToolFunctions, uMakerAi.Utils.CodeExtractor;
 
@@ -1227,7 +1232,10 @@ begin
   sUrl := Url + 'audio/transcriptions';
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
+
   LResponseStream := TMemoryStream.Create;
   Body := TMultipartFormData.Create;
   Granularities := TStringList.Create;

@@ -43,10 +43,6 @@ uses
   System.NetEncoding,
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
-{$IF CompilerVersion < 35}
-  uJSONHelper,
-{$ENDIF}
-
   REST.JSON, REST.Types, REST.Client, uMakerAi.Core;
 
 Const
@@ -543,10 +539,7 @@ begin
   aImage.Position := 0;
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
-{$ENDIF}
-
   Try
     Body := TMultipartFormData.Create;
     Try

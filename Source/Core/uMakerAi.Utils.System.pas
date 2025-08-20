@@ -33,27 +33,27 @@ unit uMakerAi.Utils.system;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.IOUtils, System.SyncObjs, System.Character,
+  system.SysUtils, system.Classes, system.IOUtils, system.SyncObjs,
+  system.Character,
 
 {$IFDEF MSWINDOWS}
   Winapi.Windows, Winapi.ShellAPI;
 {$ENDIF}
-
 {$IFDEF POSIX}
-  Posix.String_, Posix.Unistd, Posix.Base, Posix.Errno, Posix.SysWait, Posix.Signal,
-  Posix.Fcntl, Posix.Stdlib, Posix.SysTypes;
+Posix.String_, Posix.Unistd, Posix.Base, Posix.Errno, Posix.SysWait, Posix.Signal, Posix.Fcntl, Posix.Stdlib, Posix.SysTypes;
 {$ENDIF}
 
 type
-  {$IFDEF MSWINDOWS}
-  TProcessHandle = THandle; // TProcessHandle es ahora idéntico a THandle en Windows
-  TPipeHandle = THandle;    // TPipeHandle es ahora idéntico a THandle en Windows
-  {$ENDIF}
-  {$IFDEF POSIX}
-  TProcessHandle = pid_t;   // TProcessHandle es idéntico a pid_t (que es un Integer)
-  TPipeHandle = Integer;    // TPipeHandle es idéntico a Integer (file descriptor)
-  {$ENDIF}
-
+{$IFDEF MSWINDOWS}
+  TProcessHandle = THandle;
+  // TProcessHandle es ahora idéntico a THandle en Windows
+  TPipeHandle = THandle; // TPipeHandle es ahora idéntico a THandle en Windows
+{$ENDIF}
+{$IFDEF POSIX}
+  TProcessHandle = pid_t;
+  // TProcessHandle es idéntico a pid_t (que es un Integer)
+  TPipeHandle = Integer; // TPipeHandle es idéntico a Integer (file descriptor)
+{$ENDIF}
 
   TPipeHandles = record
     InputRead: TPipeHandle;
@@ -66,15 +66,15 @@ type
 
   TInteractiveProcessInfo = class
   private
-    {$IFDEF POSIX}
+{$IFDEF POSIX}
     FChildPID: pid_t;
-    {$ENDIF}
+{$ENDIF}
   public
     ProcessHandle: TProcessHandle;
-    {$IFDEF MSWINDOWS}
+{$IFDEF MSWINDOWS}
     ThreadHandle: THandle;
     ProcessID: Cardinal;
-    {$ENDIF}
+{$ENDIF}
     PipeHandles: TPipeHandles;
     Running: Boolean;
     ExitCode: Cardinal;
@@ -86,7 +86,7 @@ type
     // En POSIX, el timeout es ignorado y la espera es indefinida
     function WaitOnExit(ATimeoutMs: Cardinal = Cardinal(-1)): Boolean;
     procedure Terminate; // Terminación suave (SIGTERM en POSIX)
-    procedure Kill;      // Terminación forzada (SIGKILL en POSIX)
+    procedure Kill; // Terminación forzada (SIGKILL en POSIX)
     function WriteInput(const Buffer; Count: Integer): Integer;
     function ReadOutput(var Buffer; Count: Integer): Integer;
     function ReadError(var Buffer; Count: Integer): Integer;
@@ -97,8 +97,7 @@ type
     class function RunCommandLine(ACommand: string): String; overload;
     class function ExcecuteCommandLine(ACommand: string): Boolean;
 
-    class function StartInteractiveProcess(const ACommand: string; ACurrentDirectory: string = ''; AEnvironment: TStrings = nil)
-      : TInteractiveProcessInfo;
+    class function StartInteractiveProcess(const ACommand: string; ACurrentDirectory: string = ''; AEnvironment: TStrings = nil): TInteractiveProcessInfo;
     class procedure StopInteractiveProcess(var AProcessInfo: TInteractiveProcessInfo);
 
     class function GetSystemEnvironment: TStringList;
@@ -112,13 +111,13 @@ constructor TInteractiveProcessInfo.Create;
 begin
   inherited Create;
   ProcessHandle := 0;
-  {$IFDEF MSWINDOWS}
+{$IFDEF MSWINDOWS}
   ThreadHandle := 0;
   ProcessID := 0;
-  {$ENDIF}
-  {$IFDEF POSIX}
+{$ENDIF}
+{$IFDEF POSIX}
   FChildPID := 0;
-  {$ENDIF}
+{$ENDIF}
   FillChar(PipeHandles, SizeOf(TPipeHandles), 0);
   Running := False;
   ExitCode := 0;
@@ -129,22 +128,33 @@ begin
   if Running then
     Terminate;
 
-  {$IFDEF MSWINDOWS}
-  if PipeHandles.InputRead <> 0 then CloseHandle(PipeHandles.InputRead);
-  if PipeHandles.InputWrite <> 0 then CloseHandle(PipeHandles.InputWrite);
-  if PipeHandles.OutputRead <> 0 then CloseHandle(PipeHandles.OutputRead);
-  if PipeHandles.OutputWrite <> 0 then CloseHandle(PipeHandles.OutputWrite);
-  if PipeHandles.ErrorRead <> 0 then CloseHandle(PipeHandles.ErrorRead);
-  if PipeHandles.ErrorWrite <> 0 then CloseHandle(PipeHandles.ErrorWrite);
-  if ProcessHandle <> 0 then CloseHandle(ProcessHandle);
-  if ThreadHandle <> 0 then CloseHandle(ThreadHandle);
-  {$ENDIF}
-  {$IFDEF POSIX}
+{$IFDEF MSWINDOWS}
+  if PipeHandles.InputRead <> 0 then
+    CloseHandle(PipeHandles.InputRead);
+  if PipeHandles.InputWrite <> 0 then
+    CloseHandle(PipeHandles.InputWrite);
+  if PipeHandles.OutputRead <> 0 then
+    CloseHandle(PipeHandles.OutputRead);
+  if PipeHandles.OutputWrite <> 0 then
+    CloseHandle(PipeHandles.OutputWrite);
+  if PipeHandles.ErrorRead <> 0 then
+    CloseHandle(PipeHandles.ErrorRead);
+  if PipeHandles.ErrorWrite <> 0 then
+    CloseHandle(PipeHandles.ErrorWrite);
+  if ProcessHandle <> 0 then
+    CloseHandle(ProcessHandle);
+  if ThreadHandle <> 0 then
+    CloseHandle(ThreadHandle);
+{$ENDIF}
+{$IFDEF POSIX}
   // En POSIX, el padre solo cierra los descriptores que usa.
-  if PipeHandles.InputWrite <> 0 then Posix.Unistd.__close(PipeHandles.InputWrite);
-  if PipeHandles.OutputRead <> 0 then Posix.Unistd.__close(PipeHandles.OutputRead);
-  if PipeHandles.ErrorRead <> 0 then Posix.Unistd.__close(PipeHandles.ErrorRead);
-  {$ENDIF}
+  if PipeHandles.InputWrite <> 0 then
+    Posix.Unistd.__close(PipeHandles.InputWrite);
+  if PipeHandles.OutputRead <> 0 then
+    Posix.Unistd.__close(PipeHandles.OutputRead);
+  if PipeHandles.ErrorRead <> 0 then
+    Posix.Unistd.__close(PipeHandles.ErrorRead);
+{$ENDIF}
   inherited;
 end;
 
@@ -228,7 +238,7 @@ begin
     end
     else if not IsRunning then
     begin
-       if Winapi.Windows.ReadFile(PipeHandles.OutputRead, Buffer, Count, BytesRead, nil) then
+      if Winapi.Windows.ReadFile(PipeHandles.OutputRead, Buffer, Count, BytesRead, nil) then
         Result := BytesRead;
     end;
   end;
@@ -244,7 +254,7 @@ begin
     BytesAvailable := 0;
     if PeekNamedPipe(PipeHandles.ErrorRead, nil, 0, nil, @BytesAvailable, nil) and (BytesAvailable > 0) then
     begin
-       if Winapi.Windows.ReadFile(PipeHandles.ErrorRead, Buffer, Count, BytesRead, nil) then
+      if Winapi.Windows.ReadFile(PipeHandles.ErrorRead, Buffer, Count, BytesRead, nil) then
         Result := BytesRead;
     end
     else if not IsRunning then
@@ -256,7 +266,6 @@ begin
 end;
 
 {$ENDIF}
-
 {$IFDEF POSIX}
 
 function TInteractiveProcessInfo.IsRunning: Boolean;
@@ -306,7 +315,8 @@ begin
   begin
     IsRunning;
     Result := True;
-  end else
+  end
+  else
     Result := False;
 end;
 
@@ -314,7 +324,7 @@ procedure TInteractiveProcessInfo.Terminate;
 begin
   if IsRunning then
   begin
-    Posix.Signal.kill(FChildPID, SIGTERM);
+    Posix.Signal.Kill(FChildPID, SIGTERM);
     WaitOnExit(5000);
   end;
 end;
@@ -323,7 +333,7 @@ procedure TInteractiveProcessInfo.Kill;
 begin
   if IsRunning then
   begin
-    Posix.Signal.kill(FChildPID, SIGKILL);
+    Posix.Signal.Kill(FChildPID, SIGKILL);
     WaitOnExit(5000);
   end;
 end;
@@ -343,7 +353,7 @@ begin
   if PipeHandles.OutputRead <> 0 then
   begin
     Result := Posix.Unistd.__read(PipeHandles.OutputRead, Pointer(Buffer), Count);
-    if (Result = -1) and (errno = EAGAIN) then
+    if (Result = -1) and (Errno = EAGAIN) then
       Result := 0;
   end;
 end;
@@ -354,19 +364,17 @@ begin
   if PipeHandles.ErrorRead <> 0 then
   begin
     Result := Posix.Unistd.__read(PipeHandles.ErrorRead, Pointer(Buffer), Count);
-    if (Result = -1) and (errno = EAGAIN) then
+    if (Result = -1) and (Errno = EAGAIN) then
       Result := 0;
   end;
 end;
 
 {$ENDIF}
-
 { TUtilsSystem }
 
 {$IFDEF MSWINDOWS}
 
-class function TUtilsSystem.StartInteractiveProcess(const ACommand: string;
-  ACurrentDirectory: string; AEnvironment: TStrings): TInteractiveProcessInfo;
+class function TUtilsSystem.StartInteractiveProcess(const ACommand: string; ACurrentDirectory: string; AEnvironment: TStrings): TInteractiveProcessInfo;
 var
   SA: TSecurityAttributes;
   SI: TStartupInfo;
@@ -384,9 +392,8 @@ begin
     SA.nLength := SizeOf(SA);
     SA.bInheritHandle := True;
 
-    if not CreatePipe(Result.PipeHandles.InputRead, Result.PipeHandles.InputWrite, @SA, 0) or
-       not CreatePipe(Result.PipeHandles.OutputRead, Result.PipeHandles.OutputWrite, @SA, 0) or
-       not CreatePipe(Result.PipeHandles.ErrorRead, Result.PipeHandles.ErrorWrite, @SA, 0) then
+    if not CreatePipe(Result.PipeHandles.InputRead, Result.PipeHandles.InputWrite, @SA, 0) or not CreatePipe(Result.PipeHandles.OutputRead, Result.PipeHandles.OutputWrite, @SA, 0) or
+      not CreatePipe(Result.PipeHandles.ErrorRead, Result.PipeHandles.ErrorWrite, @SA, 0) then
     begin
       Result.Free;
       Result := nil;
@@ -432,10 +439,14 @@ begin
       Result.ProcessID := PI.dwProcessId;
       Result.Running := True;
 
-      CloseHandle(Result.PipeHandles.InputRead); Result.PipeHandles.InputRead := 0;
-      CloseHandle(Result.PipeHandles.OutputWrite); Result.PipeHandles.OutputWrite := 0;
-      CloseHandle(Result.PipeHandles.ErrorWrite); Result.PipeHandles.ErrorWrite := 0;
-    end else
+      CloseHandle(Result.PipeHandles.InputRead);
+      Result.PipeHandles.InputRead := 0;
+      CloseHandle(Result.PipeHandles.OutputWrite);
+      Result.PipeHandles.OutputWrite := 0;
+      CloseHandle(Result.PipeHandles.ErrorWrite);
+      Result.PipeHandles.ErrorWrite := 0;
+    end
+    else
     begin
       Result.Free;
       Result := nil;
@@ -459,16 +470,16 @@ begin
   Result := TStringList.Create;
   pStart := GetEnvironmentStringsW;
   if pStart <> nil then
-  try
-    pEnv := pStart;
-    while pEnv^ <> #0 do
-    begin
-      Result.Add(string(pEnv));
-      pEnv := pEnv + StrLen(pEnv) + 1;
+    try
+      pEnv := pStart;
+      while pEnv^ <> #0 do
+      begin
+        Result.Add(string(pEnv));
+        pEnv := pEnv + StrLen(pEnv) + 1;
+      end;
+    finally
+      FreeEnvironmentStringsW(pStart);
     end;
-  finally
-    FreeEnvironmentStringsW(pStart);
-  end;
 end;
 
 class function TUtilsSystem.RunCommandLine(ACommand: string): String;
@@ -477,10 +488,13 @@ var
   ReadPipe, WritePipe: THandle;
   SI: TStartupInfo;
   PI: TProcessInformation;
-  Buffer: array[0..2047] of AnsiChar;
+  Buffer: array [0 .. 2047] of AnsiChar;
   BytesRead: DWORD;
   Cmd: string;
   Output: TStringBuilder;
+{$IF CompilerVersion < 35}
+  TempStr: AnsiString;
+{$ENDIF}
 begin
   Result := '';
   Output := TStringBuilder.Create;
@@ -490,38 +504,49 @@ begin
     SA.bInheritHandle := True;
 
     if CreatePipe(ReadPipe, WritePipe, @SA, 0) then
-    try
-      SetHandleInformation(ReadPipe, HANDLE_FLAG_INHERIT, 0);
-
-      FillChar(SI, SizeOf(SI), 0);
-      SI.cb := SizeOf(SI);
-      SI.hStdOutput := WritePipe;
-      SI.hStdError := WritePipe;
-      SI.dwFlags := STARTF_USESTDHANDLES or STARTF_USESHOWWINDOW;
-      SI.wShowWindow := SW_HIDE;
-
-      Cmd := 'cmd.exe /C ' + ACommand;
-      UniqueString(Cmd);
-
-      if CreateProcess(nil, PChar(Cmd), nil, nil, True, CREATE_NO_WINDOW, nil, nil, SI, PI) then
       try
-        CloseHandle(WritePipe);
-        WritePipe := 0;
-        repeat
-          BytesRead := 0;
-          if ReadFile(ReadPipe, Buffer, SizeOf(Buffer), BytesRead, nil) and (BytesRead > 0) then
-            Output.Append(Buffer, BytesRead);
-        until not (BytesRead > 0);
-        WaitForSingleObject(PI.hProcess, INFINITE);
+        SetHandleInformation(ReadPipe, HANDLE_FLAG_INHERIT, 0);
+
+        FillChar(SI, SizeOf(SI), 0);
+        SI.cb := SizeOf(SI);
+        SI.hStdOutput := WritePipe;
+        SI.hStdError := WritePipe;
+        SI.dwFlags := STARTF_USESTDHANDLES or STARTF_USESHOWWINDOW;
+        SI.wShowWindow := SW_HIDE;
+
+        Cmd := 'cmd.exe /C ' + ACommand;
+        UniqueString(Cmd);
+
+        if CreateProcess(nil, PChar(Cmd), nil, nil, True, CREATE_NO_WINDOW, nil, nil, SI, PI) then
+          try
+            CloseHandle(WritePipe);
+            WritePipe := 0;
+            repeat
+              BytesRead := 0;
+              if ReadFile(ReadPipe, Buffer, SizeOf(Buffer), BytesRead, nil) and (BytesRead > 0) then
+              Begin
+
+{$IF CompilerVersion < 35}
+                // Para versiones anteriores a Delphi 11 (CompilerVersion 35)
+                SetString(TempStr, Buffer, BytesRead);
+                Output.Append(string(TempStr));
+{$ELSE}
+                // Para Delphi XE y versiones posteriores
+                Output.Append(Buffer, BytesRead);
+{$IFEND}
+              End;
+            until not(BytesRead > 0);
+            WaitForSingleObject(PI.hProcess, INFINITE);
+          finally
+            CloseHandle(PI.hProcess);
+            CloseHandle(PI.hThread);
+          end;
+        Result := Output.ToString;
       finally
-        CloseHandle(PI.hProcess);
-        CloseHandle(PI.hThread);
+        CloseHandle(ReadPipe);
+        if WritePipe <> 0 then
+          CloseHandle(WritePipe);
       end;
-      Result := Output.ToString;
-    finally
-      CloseHandle(ReadPipe);
-      if WritePipe <> 0 then CloseHandle(WritePipe);
-    end;
   finally
     Output.Free;
   end;
@@ -555,9 +580,7 @@ begin
 end;
 
 {$ENDIF}
-
 {$IFDEF POSIX}
-
 function popen(const command: MarshaledAString; const _type: MarshaledAString): Pointer; cdecl; external libc name _PU + 'popen';
 function pclose(filehandle: Pointer): int32; cdecl; external libc name _PU + 'pclose';
 function fgets(Buffer: PAnsiChar; size: int32; Stream: Pointer): PAnsiChar; cdecl; external libc name _PU + 'fgets';
@@ -565,14 +588,57 @@ function system(const command: MarshaledAString): Integer; cdecl; external libc 
 
 procedure ParseCommand(const ACommand: string; out AProgram: string; out AArgs: TArray<string>);
 var
-  ArgsList: TStringList; I: Integer; CurrentArg: string; InQuotes: Boolean; C: Char;
+  ArgsList: TStringList;
+  i: Integer;
+  CurrentArg: string;
+  InQuotes: Boolean;
+  C: Char;
 begin
-  ArgsList := TStringList.Create; try CurrentArg := ''; InQuotes := False; for C in ACommand do begin if (C = ' ') and not InQuotes then begin if CurrentArg <> '' then begin ArgsList.Add(CurrentArg); CurrentArg := ''; end; end else if C = '"' then begin InQuotes := not InQuotes; end else begin CurrentArg := CurrentArg + C; end; end; if CurrentArg <> '' then ArgsList.Add(CurrentArg); if ArgsList.Count > 0 then begin AProgram := ArgsList[0]; SetLength(AArgs, ArgsList.Count); for I := 0 to ArgsList.Count - 1 do AArgs[I] := ArgsList[I]; end else begin AProgram := ''; SetLength(AArgs, 0); end; finally ArgsList.Free; end;
+  ArgsList := TStringList.Create;
+  try
+    CurrentArg := '';
+    InQuotes := False;
+    for C in ACommand do
+    begin
+      if (C = ' ') and not InQuotes then
+      begin
+        if CurrentArg <> '' then
+        begin
+          ArgsList.Add(CurrentArg);
+          CurrentArg := '';
+        end;
+      end
+      else if C = '"' then
+      begin
+        InQuotes := not InQuotes;
+      end
+      else
+      begin
+        CurrentArg := CurrentArg + C;
+      end;
+    end;
+    if CurrentArg <> '' then
+      ArgsList.Add(CurrentArg);
+    if ArgsList.Count > 0 then
+    begin
+      AProgram := ArgsList[0];
+      SetLength(AArgs, ArgsList.Count);
+      for i := 0 to ArgsList.Count - 1 do
+        AArgs[i] := ArgsList[i];
+    end
+    else
+    begin
+      AProgram := '';
+      SetLength(AArgs, 0);
+    end;
+  finally
+    ArgsList.Free;
+  end;
 end;
 
 class function TUtilsSystem.StartInteractiveProcess(const ACommand: string; ACurrentDirectory: string; AEnvironment: TStrings): TInteractiveProcessInfo;
 var
-  PipeIn, PipeOut, PipeErr: array[0..1] of Integer;
+  PipeIn, PipeOut, PipeErr: array [0 .. 1] of Integer;
   PID: pid_t;
   ProgramName: string;
   Args: TArray<string>;
@@ -581,18 +647,16 @@ var
 begin
   Result := TInteractiveProcessInfo.Create;
   try
-    if (Posix.Unistd.pipe(@PipeIn[0]) <> 0) or
-       (Posix.Unistd.pipe(@PipeOut[0]) <> 0) or
-       (Posix.Unistd.pipe(@PipeErr[0]) <> 0) then
+    if (Posix.Unistd.pipe(@PipeIn[0]) <> 0) or (Posix.Unistd.pipe(@PipeOut[0]) <> 0) or (Posix.Unistd.pipe(@PipeErr[0]) <> 0) then
     begin
-      raise Exception.Create('Failed to create pipes. Error: ' + strerror(errno));
+      raise Exception.Create('Failed to create pipes. Error: ' + strerror(Errno));
     end;
 
     PID := Posix.Unistd.fork;
 
     if PID < 0 then
     begin
-      raise Exception.Create('Failed to fork process. Error: ' + strerror(errno));
+      raise Exception.Create('Failed to fork process. Error: ' + strerror(Errno));
     end;
 
     if PID = 0 then // --- HIJO ---
@@ -630,20 +694,21 @@ begin
       Posix.Unistd.__close(PipeOut[1]);
       Posix.Unistd.__close(PipeErr[1]);
 
-      Result.PipeHandles.InputWrite  := PipeIn[1];
-      Result.PipeHandles.OutputRead  := PipeOut[0];
-      Result.PipeHandles.ErrorRead   := PipeErr[0];
+      Result.PipeHandles.InputWrite := PipeIn[1];
+      Result.PipeHandles.OutputRead := PipeOut[0];
+      Result.PipeHandles.ErrorRead := PipeErr[0];
       Result.ProcessHandle := PID;
       Result.FChildPID := PID;
       Result.Running := True;
 
-      Posix.Fcntl.fcntl(Result.PipeHandles.OutputRead, F_SETFL, O_NONBLOCK);
-      Posix.Fcntl.fcntl(Result.PipeHandles.ErrorRead, F_SETFL, O_NONBLOCK);
+      Posix.Fcntl.Fcntl(Result.PipeHandles.OutputRead, F_SETFL, O_NONBLOCK);
+      Posix.Fcntl.Fcntl(Result.PipeHandles.ErrorRead, F_SETFL, O_NONBLOCK);
     end;
   except
     on E: Exception do
     begin
-      if Assigned(Result) then Result.Free;
+      if Assigned(Result) then
+        Result.Free;
       Result := nil;
       raise;
     end;
@@ -670,7 +735,7 @@ end;
 class function TUtilsSystem.RunCommandLine(ACommand: string): String;
 var
   Handle: Pointer;
-  Buffer: array[0..1023] of AnsiChar;
+  Buffer: array [0 .. 1023] of AnsiChar;
   Output: TStringBuilder;
   M: TMarshaller;
 begin

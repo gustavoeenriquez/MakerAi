@@ -40,6 +40,11 @@ uses
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
+
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+
   uMakerAi.Embeddings.core;
 
 type
@@ -53,8 +58,7 @@ type
     FApiKey: String;
     FUrl: String;
     // Este método es ahora 'override' para proporcionar la implementación específica.
-    function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float')
-      : TAiEmbeddingData; override;
+    function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float'): TAiEmbeddingData; override;
   public
     constructor Create(aOwner: TComponent); override;
     // Este método es específico de la implementación de OpenAI
@@ -85,12 +89,12 @@ Var
   Emb: TAiEmbeddingData;
   JVal: TJSonValue;
   J: Integer;
-  Usage: TJSonObject;
+  Usage: TJsonObject;
 
 begin
   JObj.TryGetValue<String>('model', FModel);
 
-  If JObj.TryGetValue<TJSonObject>('usage', Usage) then
+  If JObj.TryGetValue<TJsonObject>('usage', Usage) then
   Begin
     Usage.TryGetValue<Integer>('prompt_tokens', Fprompt_tokens);
     Usage.TryGetValue<Integer>('total_tokens', Ftotal_tokens);
@@ -104,7 +108,7 @@ begin
   For JVal in jData do
   Begin
     // El embedding de OpenAi Retorna un array, pero solo se toma el primero de la fila
-    JArr := TJSonObject(JVal).GetValue<TJSonArray>('embedding');
+    JArr := TJsonObject(JVal).GetValue<TJSonArray>('embedding');
     J := JArr.Count;
     SetLength(Emb, J);
     // FillChar(Emb, Length(Emb) * SizeOf(Double), 0);
@@ -119,12 +123,11 @@ begin
 
 end;
 
-
 function TAiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
 Var
   Client: TNetHTTPClient;
   Headers: TNetHeaders;
-  JObj: TJSonObject;
+  JObj: TJsonObject;
   Res: IHTTPResponse;
   Response: TStringStream;
   St: TStringStream;
@@ -137,13 +140,14 @@ begin
     Exit;
   end;
 
-
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'embeddings';
-  JObj := TJSonObject.Create;
+  JObj := TJsonObject.Create;
 
   If aModel = '' then
     aModel := FModel;
@@ -174,7 +178,7 @@ begin
 {$ENDIF}
     if Res.StatusCode = 200 then
     Begin
-      JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
+      JObj := TJsonObject(TJsonObject.ParseJSONValue(Res.ContentAsString));
       ParseEmbedding(JObj);
       Result := Self.FData;
 

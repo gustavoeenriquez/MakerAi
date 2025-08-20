@@ -51,7 +51,11 @@ uses
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core, uMakerAi.Embeddings.core;
+
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core, uMakerAi.Embeddings.Core;
 
 Type
   // Este modelo de reasoning por ahora solo se ha detectado en Groq, así que se implementa solo aquí
@@ -77,8 +81,7 @@ Type
   TAiGroqEmbeddings = Class(TAiEmbeddings)
   Public
     // groq actualmente no maneja modelos de embeddings
-    Function CreateEmbedding(Input, User: String; Dimensions: Integer = 1536; Model: String = 'Llama3-8b-8192';
-      EncodingFormat: String = 'float'): TAiEmbeddingData; Override;
+    Function CreateEmbedding(Input, User: String; Dimensions: Integer = 1536; Model: String = 'Llama3-8b-8192'; EncodingFormat: String = 'float'): TAiEmbeddingData; Override;
   End;
 
 procedure Register;
@@ -147,7 +150,6 @@ begin
 
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
-
   If LModel = '' then
     LModel := 'llama-3.2-11b-text-preview';
 
@@ -172,14 +174,22 @@ begin
 
     If Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAi).Text) <> '') then
     Begin
+{$IF CompilerVersion < 35}
+      JArr := TJSONUtils.ParseAsArray(GetTools(TToolFormat.tfOpenAi).Text);
+{$ELSE}
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
+{$ENDIF}
       If Not Assigned(JArr) then
         Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then
       Begin
+{$IF CompilerVersion < 35}
+        jToolChoice := TJSONUtils.ParseAsObject(Tool_choice);
+{$ELSE}
         jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
+{$ENDIF}
         If Assigned(jToolChoice) then
           AJSONObject.AddPair('tools_choice', jToolChoice);
       End;
@@ -276,7 +286,10 @@ begin
   Raise Exception.Create('Actualmente Groq no maneja modelos de embeddings');
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
+
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'embeddings';

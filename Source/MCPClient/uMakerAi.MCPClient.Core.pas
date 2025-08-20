@@ -13,6 +13,9 @@ uses
 {$ENDIF}
 {$IFDEF POSIX}
 {$ENDIF}
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
   uMakerAi.Utils.System, uMakerAi.Core; // Dependencia de tu unidad de utilidades de consola
 
 // --- Tipos de Eventos ---
@@ -102,10 +105,8 @@ type
     // Métodos públicos principales (ciclo de vida completo)
     // Son virtuales y abstractos porque su implementación depende del protocolo
     function ListTools: TJSONObject; virtual; abstract;
-    function CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload;
-      virtual; abstract;
-    function CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload;
-      virtual; abstract;
+    function CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; virtual; abstract;
+    function CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; virtual; abstract;
 
     // Propiedades públicas
     property Name: string read FName write FName;
@@ -164,10 +165,8 @@ type
 
     // Implementación de los métodos públicos (orquestan el ciclo de vida)
     function ListTools: TJSONObject; override;
-    function CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
-      overload; override;
-    function CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
-      overload; override;
+    function CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; override;
+    function CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; override;
   end;
 
   TMCPClientHttp = class(TMCPClientCustom)
@@ -189,10 +188,8 @@ type
     function Initialize: Boolean; override; // Sobrescribimos el Initialize de la base
 
     function ListTools: TJSONObject; override;
-    function CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
-      overload; override;
-    function CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
-      overload; override;
+    function CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; override;
+    function CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; override;
   end;
 
   TMCPClientMakerAi = class(TMCPClientCustom)
@@ -222,12 +219,10 @@ type
 
     // Sobrescribe CallTool para llamar a los endpoints /calltool/{toolname} de la API.
     // Acepta argumentos como un TJSONObject.
-    function CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
-      overload; override;
+    function CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; override;
 
     // Sobrecarga de CallTool que acepta argumentos como un TStrings para mayor comodidad.
-    function CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
-      overload; override;
+    function CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; override;
   end;
 
   TMCPClientSSE = Class(TMCPClientHttp);
@@ -421,8 +416,7 @@ end;
 
 function TMCPClientCustom.IsBinaryContentType(const ContentType: string): Boolean;
 begin
-  Result := SameText(ContentType, 'image') or SameText(ContentType, 'audio') or SameText(ContentType, 'video') or
-    SameText(ContentType, 'document') or // Para PDFs, Word, Excel, etc.
+  Result := SameText(ContentType, 'image') or SameText(ContentType, 'audio') or SameText(ContentType, 'video') or SameText(ContentType, 'document') or // Para PDFs, Word, Excel, etc.
     SameText(ContentType, 'archive') or // Para ZIP, RAR, etc.
     SameText(ContentType, 'executable') or // Para EXE, DLL, etc.
     SameText(ContentType, 'font') or // Para TTF, OTF, etc.
@@ -481,8 +475,7 @@ begin
       if LContentItem.TryGetValue<string>('type', LItemType) and IsBinaryContentType(LItemType) then
       begin
         // Intentar obtener los datos base64 y el tipo mime.
-        if LContentItem.TryGetValue<string>('data', LBase64Data) and LContentItem.TryGetValue<string>('mimeType', LMimeType) and
-          not LBase64Data.IsEmpty then
+        if LContentItem.TryGetValue<string>('data', LBase64Data) and LContentItem.TryGetValue<string>('mimeType', LMimeType) and not LBase64Data.IsEmpty then
         begin
           // -- Se encontró un binario --
           var
@@ -641,8 +634,7 @@ begin
   end;
 end;
 
-function TMCPClientStdIo.CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>)
-  : TJSONObject;
+function TMCPClientStdIo.CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
 var
   InitResponse: TJSONObject;
 begin
@@ -952,8 +944,7 @@ begin
   end;
 end;
 
-function TMCPClientStdIo.InternalCallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>)
-  : TJSONObject;
+function TMCPClientStdIo.InternalCallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
 var
   RequestObj, Response: TJSONObject;
   ResultPair: TJSonValue;
@@ -1146,8 +1137,7 @@ begin
         end
         else
         begin
-          DoLog(Format('DEBUG: Ignoring message with ID %d (expected %d) or unsolicited notification.',
-            [ReceivedJson.GetValue<Integer>('id', -1), AExpectedID]));
+          DoLog(Format('DEBUG: Ignoring message with ID %d (expected %d) or unsolicited notification.', [ReceivedJson.GetValue<Integer>('id', -1), AExpectedID]));
           ReceivedJson.Free; // Free the unwanted object
         end;
       except
@@ -1231,8 +1221,7 @@ begin
 
     // 6. Normalizar el esquema de entrada (input schema)
     // El formato MCP usa 'inputSchema', Anthropic usa 'input_schema', OpenAI usa 'parameters'
-    if LSourceTool.TryGetValue('inputSchema', LInputSchemaValue) or LSourceTool.TryGetValue('input_schema', LInputSchemaValue) or
-      LSourceTool.TryGetValue('parameters', LInputSchemaValue) then
+    if LSourceTool.TryGetValue('inputSchema', LInputSchemaValue) or LSourceTool.TryGetValue('input_schema', LInputSchemaValue) or LSourceTool.TryGetValue('parameters', LInputSchemaValue) then
     begin
       if LInputSchemaValue is TJSONObject then
       begin
@@ -1507,7 +1496,9 @@ begin
       LRequestBodyStream.SaveToFile('c:\temp\mcp_init_request.txt');
       LRequestBodyStream.Position := 0;
 {$ENDIF}
+{$IF CompilerVersion >= 35}
       FHttpClient.SendTimeout := StrToIntDef(GetParamByName('Timeout'), 15000);
+{$ENDIF}
       FHttpClient.ResponseTimeout := StrToIntDef(GetParamByName('Timeout'), 15000);
       FHttpClient.ConnectionTimeout := StrToIntDef(GetParamByName('Timeout'), 15000);
 
@@ -1543,8 +1534,7 @@ begin
         DoLog(Format('SERVER -> CLIENT (HTTP %d): %s', [LHttpResponse.StatusCode, ResponseContent]));
 
         if LHttpResponse.StatusCode <> 200 then
-          raise EMCPClientException.CreateFmt('HTTP initialization failed with status code %d: %s',
-            [LHttpResponse.StatusCode, ResponseContent]);
+          raise EMCPClientException.CreateFmt('HTTP initialization failed with status code %d: %s', [LHttpResponse.StatusCode, ResponseContent]);
 
         var
         LResponseObj := TJSONObject.ParseJSONValue(ResponseContent) as TJSONObject;
@@ -1554,8 +1544,7 @@ begin
           var
             LResponseID: Integer;
           if not LResponseObj.TryGetValue<Integer>('id', LResponseID) or (LResponseID <> FRequestIDCounter) then
-            raise EMCPClientException.CreateFmt('Mismatched response ID during initialize. Expected %d, got %d. Raw: %s',
-              [FRequestIDCounter, LResponseID, LResponseObj.ToJSON]);
+            raise EMCPClientException.CreateFmt('Mismatched response ID during initialize. Expected %d, got %d. Raw: %s', [FRequestIDCounter, LResponseID, LResponseObj.ToJSON]);
 
           var
             LErrorObj: TJSONObject;
@@ -1571,8 +1560,7 @@ begin
               DoLog('WARNING: Server capabilities not found in initialization response.');
 
             if TJSONObject(LResultPair).TryGetValue<TJSONObject>('serverInfo', LServerInfo) then
-              DoLog(Format('Server Info: Name="%s", Version="%s"', [LServerInfo.GetValue<string>('name', ''),
-                LServerInfo.GetValue<string>('version', '')]));
+              DoLog(Format('Server Info: Name="%s", Version="%s"', [LServerInfo.GetValue<string>('name', ''), LServerInfo.GetValue<string>('version', '')]));
           end
           else
           begin
@@ -1702,7 +1690,9 @@ begin
       LRequestBodyStream.Position := 0; // Resetear la posición para la lectura por el TNetHTTPClient
 {$ENDIF}
       // Configurar los timeouts del cliente HTTP
+{$IF CompilerVersion >= 35}
       FHttpClient.SendTimeout := StrToIntDef(GetParamByName('Timeout'), 15000);
+{$ENDIF}
       FHttpClient.ResponseTimeout := StrToIntDef(GetParamByName('Timeout'), 15000);
       FHttpClient.ConnectionTimeout := StrToIntDef(GetParamByName('Timeout'), 15000);
 
@@ -1756,8 +1746,7 @@ begin
           var
             LResponseID: Integer;
           if not LResponseObj.TryGetValue<Integer>('id', LResponseID) or (LResponseID <> FRequestIDCounter) then
-            raise EMCPClientException.CreateFmt('Mismatched response ID. Expected %d, got %d. Raw: %s',
-              [FRequestIDCounter, LResponseID, LResponseObj.ToJSON]);
+            raise EMCPClientException.CreateFmt('Mismatched response ID. Expected %d, got %d. Raw: %s', [FRequestIDCounter, LResponseID, LResponseObj.ToJSON]);
 
           // Verificar si la respuesta JSON-RPC contiene un error
           var
@@ -1842,8 +1831,7 @@ begin
   end;
 end;
 
-function TMCPClientMakerAi.CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>)
-  : TJSONObject;
+function TMCPClientMakerAi.CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
 var
   LBodyStream: TStringStream;
   LResultRaw: TJSONObject;
@@ -1948,7 +1936,9 @@ begin
   // 2. Configurar el cliente HTTP
   FHttpClient.ConnectionTimeout := LTimeout;
   FHttpClient.ResponseTimeout := LTimeout;
+{$IF CompilerVersion >= 35}
   FHttpClient.SendTimeout := LTimeout;
+{$ENDIF}
   FHttpClient.Accept := 'application/json';
   FHttpClient.ContentType := 'application/json';
 

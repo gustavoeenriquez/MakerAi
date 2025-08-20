@@ -40,6 +40,10 @@ uses
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
+
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Utils.CodeExtractor;
 
 type
@@ -130,8 +134,7 @@ end;
 
 function TAiClaudeChat.GetFileHeaders: TNetHeaders;
 begin
-  Result := [TNetHeader.Create('x-api-key', ApiKey), TNetHeader.Create('anthropic-version', CLAUDE_API_VERSION),
-    TNetHeader.Create('anthropic-beta', CLAUDE_FILES_BETA_HEADER)];
+  Result := [TNetHeader.Create('x-api-key', ApiKey), TNetHeader.Create('anthropic-version', CLAUDE_API_VERSION), TNetHeader.Create('anthropic-beta', CLAUDE_FILES_BETA_HEADER)];
 end;
 
 class function TAiClaudeChat.GetDriverName: string;
@@ -162,7 +165,10 @@ begin
 
   sUrl := Url + 'files/' + aFileId;
   Client := TNetHTTPClient.Create(Nil);
+
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
   ResponseStream := TMemoryStream.Create;
   try
     Headers := GetFileHeaders;
@@ -182,8 +188,7 @@ begin
     else
     begin
       ResponseStream.Position := 0;
-      raise Exception.CreateFmt('Error al recuperar el archivo "%s" de Claude: %d - %s',
-        [aFileId, Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
+      raise Exception.CreateFmt('Error al recuperar el archivo "%s" de Claude: %d - %s', [aFileId, Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
     end;
   finally
     ResponseStream.Free;
@@ -206,7 +211,10 @@ begin
   Result := TAiMediaFiles.Create;
   sUrl := Url + 'files';
   Client := TNetHTTPClient.Create(Nil);
+
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
   ResponseStream := TMemoryStream.Create;
   try
     Headers := GetFileHeaders;
@@ -262,7 +270,9 @@ begin
 
   sUrl := Url + 'files';
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
   ResponseStream := TMemoryStream.Create;
   Body := TMultipartFormData.Create;
   TempStream := TMemoryStream.Create;
@@ -387,7 +397,9 @@ begin
 
   sUrl := Url + 'files/' + aMediaFile.IdFile;
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
   ResponseStream := TMemoryStream.Create;
   try
     Headers := GetFileHeaders;
@@ -406,8 +418,7 @@ begin
     else
     begin
       ResponseStream.Position := 0;
-      raise Exception.CreateFmt('Error al eliminar el archivo "%s" de Claude: %d - %s',
-        [aMediaFile.IdFile, Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
+      raise Exception.CreateFmt('Error al eliminar el archivo "%s" de Claude: %d - %s', [aMediaFile.IdFile, Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
     end;
   finally
     ResponseStream.Free;
@@ -444,7 +455,9 @@ begin
 
   sUrl := Url + 'files/' + aMediaFile.IdFile + '/content';
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
   try
     Headers := GetFileHeaders;
     aMediaFile.Content.Clear; // Preparamos el stream para recibir los datos
@@ -554,8 +567,14 @@ begin
     else if (LMessage.Role = 'assistant') and (LMessage.Tool_calls <> '') then
     begin
       try
+
+{$IF CompilerVersion < 35}
+        var
+        LToolUseArray := TJSONUtils.ParseAsArray(LMessage.Tool_calls);
+{$ELSE}
         var
         LToolUseArray := TJSonArray.ParseJSONValue(LMessage.Tool_calls) as TJSonArray;
+{$ENDIF}
         LContentArray.Free;
         LContentArray := LToolUseArray;
       except
@@ -660,7 +679,9 @@ begin
     EndPointUrl := GlAIUrl;
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
   ResponseStream := TStringStream.Create('', TEncoding.UTF8);
   sUrl := EndPointUrl + 'models';
 
@@ -697,10 +718,23 @@ begin
       // Agregar modelos personalizados
       CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
 
+      {
+        for I := Low(CustomModels) to High(CustomModels) do
+        begin
+        if not Result.Contains(CustomModels[I]) then
+        Result.Add(CustomModels[I]);
+        end;
+      }
+
       for I := Low(CustomModels) to High(CustomModels) do
       begin
+{$IF CompilerVersion <= 35.0}
+        if Result.IndexOf(CustomModels[I]) = -1 then
+          Result.Add(CustomModels[I]);
+{$ELSE}
         if not Result.Contains(CustomModels[I]) then
           Result.Add(CustomModels[I]);
+{$ENDIF}
       end;
 
     end
@@ -1045,8 +1079,7 @@ begin
   sUrl := Url + 'messages';
 
   try
-    FHeaders := [TNetHeader.Create('x-api-key', ApiKey), TNetHeader.Create('anthropic-version', CLAUDE_API_VERSION),
-      TNetHeader.Create('content-type', 'application/json')];
+    FHeaders := [TNetHeader.Create('x-api-key', ApiKey), TNetHeader.Create('anthropic-version', CLAUDE_API_VERSION), TNetHeader.Create('content-type', 'application/json')];
 
     if Tool_Active then
       FHeaders := FHeaders + [TNetHeader.Create('anthropic-beta', CLAUDE_TOOLS_BETA_HEADER)];
@@ -1067,19 +1100,19 @@ begin
     St := TStringStream.Create(ABody, TEncoding.UTF8);
     try
       St.Position := 0;
-      {$IFDEF APIDEBUG}
+{$IFDEF APIDEBUG}
       St.SaveToFile('c:\temp\peticion.txt');
       St.Position := 0;
-      {$ENDIF}
+{$ENDIF}
       FResponse.Clear;
 
       Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
       FResponse.Position := 0;
-      {$IFDEF APIDEBUG}
+{$IFDEF APIDEBUG}
       FResponse.SaveToFile('c:\temp\respuesta.txt');
       FResponse.Position := 0;
-      {$ENDIF}
+{$ENDIF}
       if not FClient.Asynchronous then
       begin
         // --- MODO SÍNCRONO ---

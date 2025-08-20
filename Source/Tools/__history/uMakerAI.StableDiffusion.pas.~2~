@@ -770,12 +770,7 @@ end;
 procedure TStableDiffusion.SetSendTimeout(const Value: Integer);
 begin
   FSendTimeout := Value;
-
-{$IF CompilerVersion >= 35}
   FHttpClient.SendTimeout := Value;
-{$ENDIF}
-
-
 end;
 
 procedure TStableDiffusion.SetOnProgress(const Value: TSDProgressEvent);

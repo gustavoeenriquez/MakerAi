@@ -47,6 +47,10 @@ uses
   System.Threading, System.TypInfo, System.Types, System.Net.Mime,
   System.NetConsts, System.NetEncoding, System.Net.URLClient,
   System.Net.HttpClient, System.Net.HttpClientComponent, System.JSON, Rest.JSON,
+
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
   uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Utils.CodeExtractor;
 
 type
@@ -136,8 +140,7 @@ type
   TAiChatOnDataEvent = procedure(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject; aRole, aText: String) of object;
   TAiChatOnBeforeSendEvent = procedure(const Sender: TObject; var aMsg: TAiChatMessage) of object;
   TAiChatOnInitChatEvent = procedure(const Sender: TObject; aRole: String; Var aText: String; Var aMemory: TJSonObject) of object;
-  TAiChatOnMediaFileEvent = Procedure(Const Sender: TObject; Prompt: String; MediaFile: TAiMediaFile; aNativeInputFiles: TAiFileCategories;
-    Var Respuesta: String; Var aProcesado: Boolean) of object;
+  TAiChatOnMediaFileEvent = Procedure(Const Sender: TObject; Prompt: String; MediaFile: TAiMediaFile; aNativeInputFiles: TAiFileCategories; Var Respuesta: String; Var aProcesado: Boolean) of object;
   TAiChatOnProcessResponseEvent = procedure(const Sender: TObject; LastMsg, ResMsg: TAiChatMessage; var Response: String) of object;
 
   // Evento callback cuando se utiliza la herramienta tools del chat
@@ -290,7 +293,7 @@ type
 
     Function ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions; Virtual;
     Procedure DoCallFunction(ToolCall: TAiToolsFunction); Virtual;
-    function GetTools(aToolFormat : TToolFormat): TStrings; virtual;
+    function GetTools(aToolFormat: TToolFormat): TStrings; virtual;
     Function PrepareSystemMsg: String; Virtual; // Crea el primer mensaje del chat para system, para configurar el asistente
     Procedure DoProcessMediaFile(aPrompt: String; aAiMediaFile: TAiMediaFile; Var Respuesta: String; Var Procesado: Boolean);
     Function AddMessageAndRun(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String; Overload;
@@ -360,7 +363,7 @@ type
     // Defaults to 1  between 0 and 2.
     Property Top_p: Double read FTop_p write SetTop_p;
     // Defaults to 0 si es 0 no se envía,  entre 0 y 1
-    //Property Tools: TStrings read GetTools;
+    // Property Tools: TStrings read GetTools;
     Property Tool_choice: string read FTool_choice write SetTool_choice;
     Property Tool_Active: Boolean read FTool_Active write SetTool_Active;
     Property User: String read FUser write SetUser;
@@ -397,8 +400,7 @@ type
     property Language: string read FLanguage write SetLanguage; // e.g., 'es', 'en', 'es-419'
     property Transcription_ResponseFormat: string read FTranscription_ResponseFormat write SetTranscription_ResponseFormat;
     // 'json', 'text', 'verbose_json', etc.
-    property Transcription_TimestampGranularities: string read FTranscription_TimestampGranularities
-      write SetTranscription_TimestampGranularities; // 'word', 'segment', 'word,segment'
+    property Transcription_TimestampGranularities: string read FTranscription_TimestampGranularities write SetTranscription_TimestampGranularities; // 'word', 'segment', 'word,segment'
     Property ReasoningFormat: String read FReasoningFormat write SetReasoningFormat;
     Property ReasoningEffort: String read FReasoningEffort write SetReasoningEffort;
 
@@ -743,8 +745,10 @@ begin
   sUrl := Url + 'audio/transcriptions';
 
   Client := TNetHTTPClient.Create(Self);
-  Client.SynchronizeEvents := False;
 
+{$IF CompilerVersion >= 35}
+  Client.SynchronizeEvents := False;
+{$ENDIF}
   LResponseStream := TMemoryStream.Create;
   Body := TMultipartFormData.Create;
   Granularities := TStringList.Create;
@@ -895,14 +899,14 @@ begin
 
   FResponse := TStringStream.Create('', TEncoding.UTF8);
   FClient := TNetHTTPClient.Create(Self);
+{$IF CompilerVersion >= 35}
   FClient.SynchronizeEvents := False;
-  FClient.OnReceiveData := Self.OnInternalReceiveData;
   FClient.OnRequestException := Self.OnRequestExceptionEvent;
+{$ENDIF}
+  FClient.OnReceiveData := Self.OnInternalReceiveData;
   FClient.OnRequestError := Self.OnRequestErrorEvent;
   FClient.OnRequestCompleted := Self.OnRequestCompletedEvent;
   FClient.ResponseTimeOut := 60000;
-
-
 
   FNativeInputFiles := [];
   FNativeOutputFiles := [];
@@ -944,36 +948,35 @@ begin
 
   If AiFunctions.DoCallFunction(ToolCall) then
   Begin
-     //Si ejecutó la función
+    // Si ejecutó la función
   End
   Else
-  Begin //Ejecuta la función por defecto en el componente TAiChat
+  Begin // Ejecuta la función por defecto en el componente TAiChat
     If Assigned(FOnCallToolFunction) then
       FOnCallToolFunction(Self, ToolCall)
   End;
 
-
-{
-  If Assigned(FAiFunctions) then // Si está asignado el componente, busca la función en el componente
+  {
+    If Assigned(FAiFunctions) then // Si está asignado el componente, busca la función en el componente
     Funcion := FAiFunctions.Functions.GetFunction(ToolCall.Name);
-  // Else // Si no está asignado el componente, lo busca directamente en las funciones locales
-  // Funcion := FFunctions.GetFunction(ToolCall.Name);
+    // Else // Si no está asignado el componente, lo busca directamente en las funciones locales
+    // Funcion := FFunctions.GetFunction(ToolCall.Name);
 
-  If Assigned(Funcion) then
-  Begin
+    If Assigned(Funcion) then
+    Begin
     Funcion.OnAction(Self, Funcion, ToolCall.Name, ToolCall, Handle);
     If Handle = False then
     Begin
-      If Assigned(FOnCallToolFunction) then
-        FOnCallToolFunction(Self, ToolCall)
-    End;
-  End
-  Else
-  Begin
     If Assigned(FOnCallToolFunction) then
-      FOnCallToolFunction(Self, ToolCall)
-  End;
-}
+    FOnCallToolFunction(Self, ToolCall)
+    End;
+    End
+    Else
+    Begin
+    If Assigned(FOnCallToolFunction) then
+    FOnCallToolFunction(Self, ToolCall)
+    End;
+  }
 
 end;
 
@@ -1024,8 +1027,7 @@ begin
 
     // Msg.TryGetValue<TJSonValue>('tool_calls', JValToolCall);
 
-    If Msg.TryGetValue<TJSonValue>('tool_calls', jValToolCall) and (jValToolCall is TJSonArray) and
-      Msg.TryGetValue<TJSonArray>('tool_calls', JToolCalls) then
+    If Msg.TryGetValue<TJSonValue>('tool_calls', jValToolCall) and (jValToolCall is TJSonArray) and Msg.TryGetValue<TJSonArray>('tool_calls', JToolCalls) then
     Begin
       For JVal in JToolCalls do
       Begin
@@ -1153,10 +1155,23 @@ begin
       // Agregar modelos personalizados
       CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
 
+      {
+        for I := Low(CustomModels) to High(CustomModels) do
+        begin
+        if not Result.Contains(CustomModels[I]) then
+        Result.Add(CustomModels[I]);
+        end;
+      }
+
       for I := Low(CustomModels) to High(CustomModels) do
       begin
+{$IF CompilerVersion <= 35.0}
+        if Result.IndexOf(CustomModels[I]) = -1 then
+          Result.Add(CustomModels[I]);
+{$ELSE}
         if not Result.Contains(CustomModels[I]) then
           Result.Add(CustomModels[I]);
+{$ENDIF}
       end;
 
     End
@@ -1170,7 +1185,7 @@ begin
   End;
 end;
 
-function TAiChat.GetTools(aToolFormat : TToolFormat): TStrings;
+function TAiChat.GetTools(aToolFormat: TToolFormat): TStrings;
 begin
   If Assigned(FAiFunctions) and FTool_Active then // Si está asignado el componente lo obtiene del componente
   Begin
@@ -1224,14 +1239,24 @@ begin
 
     If Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAi).Text) <> '') then
     Begin
+
+{$IF CompilerVersion < 35}
+      JArr := TJSONUtils.ParseAsArray(GetTools(TToolFormat.tfOpenAi).Text);
+{$ELSE}
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
+{$ENDIF}
       If Not Assigned(JArr) then
         Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(FTool_choice) <> '') then
       Begin
+
+{$IF CompilerVersion < 35}
+        jToolChoice := TJSONUtils.ParseAsObject(FTool_choice);
+{$ELSE}
         jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(FTool_choice));
+{$ENDIF}
         If Assigned(jToolChoice) then
           AJSONObject.AddPair('tools_choice', jToolChoice);
       End;
@@ -1262,7 +1287,7 @@ begin
       AJSONObject.AddPair('max_completion_tokens', TJSONNumber.Create(FMax_tokens));
     End
     Else
-      AJSONObject.AddPair('max_tokens', TJSONNumber.Create(FMax_tokens));
+      AJSONObject.AddPair('max_tokens', FMax_tokens);
 
     Lista.CommaText := FStop;
     If Lista.Count > 0 then
@@ -1441,11 +1466,50 @@ begin
         Try
           If Assigned(jObj) then
           Begin
+{$IF CompilerVersion >= 35} // Delphi 11 Alexandria y posteriores
             Delta := jObj.GetValue<TJSonArray>('choices')[0].GetValue<TJSonObject>('delta');
             Value := '';
             Delta.TryGetValue<String>('content', Value);
             Delta.TryGetValue<String>('role', Role1);
+{$ELSE}     // Para versiones anteriores como Delphi 10
+            var
+              ChoicesArray: TJSonArray;
+            var
+              FirstChoice: TJSonObject;
 
+            ChoicesArray := jObj.GetValueAsArray('choices');
+            if Assigned(ChoicesArray) and (ChoicesArray.Count > 0) then
+            begin
+              FirstChoice := ChoicesArray.GetItemAsObject(0);
+              if Assigned(FirstChoice) then
+              begin
+                Delta := FirstChoice.GetValueAsObject('delta');
+                if Assigned(Delta) then
+                begin
+                  Value := Delta.GetValueAsString('content');
+                  Role1 := Delta.GetValueAsString('role');
+                end
+                else
+                begin
+                  Value := '';
+                  Role1 := '';
+                end;
+              end
+              else
+              begin
+                Delta := nil;
+                Value := '';
+                Role1 := '';
+              end;
+            end
+            else
+            begin
+              Delta := nil;
+              Value := '';
+              Role1 := '';
+            end;
+
+{$ENDIF}
             If Role1 <> '' then
               FTmpRole := Role1;
 
@@ -1742,8 +1806,7 @@ begin
       Respuesta := Trim(Respuesta + sLineBreak + sReasoning);
 
     sToolCalls := '';
-    If jMessage.TryGetValue<TJSonValue>('tool_calls', JToolCallsValue) and Assigned(JToolCallsValue) and (JToolCallsValue is TJSonArray)
-    then
+    If jMessage.TryGetValue<TJSonValue>('tool_calls', JToolCallsValue) and Assigned(JToolCallsValue) and (JToolCallsValue is TJSonArray) then
     Begin
       sToolCalls := TJSonArray(JToolCallsValue).Format;
     End;
@@ -2077,8 +2140,7 @@ begin
             end
             Else
               // Si InternalRunCompletions no soporta el manejo de este archvio se ejecuta por aquí
-              if (not(Tcm_Image in ChatMediaSupports)) and (MF.FileCategory = Tfc_Image) and (not MF.Procesado) and
-                (Not(Tfc_Video in NativeOutputFiles)) then
+              if (not(Tcm_Image in ChatMediaSupports)) and (MF.FileCategory = Tfc_Image) and (not MF.Procesado) and (Not(Tfc_Video in NativeOutputFiles)) then
               begin
                 // Internamente se va construyendo la respuesta
                 InternalRunImageDescription(MF, ResMsg, AskMsg);
@@ -2156,7 +2218,7 @@ begin
       If Assigned(ResMsg) then
         Result := ResMsg.Prompt;
 
-      If (AskMsg.Role <> 'tool') and (AskMsg.TollCallId ='')  then
+      If (AskMsg.Role <> 'tool') and (AskMsg.TollCallId = '') then
       Begin
         If Assigned(ResMsg) then
         Begin
@@ -2742,8 +2804,7 @@ begin
       Base64 := Msg.MediaFiles[0].Base64;
       Mime := Msg.MediaFiles[0].MimeType;
 
-      ImagePayload := TStringStream.Create('{"type": "image_url", "image_url": {"url": "data:' + Mime + ';base64,' + Base64 + '"}}',
-        TEncoding.UTF8);
+      ImagePayload := TStringStream.Create('{"type": "image_url", "image_url": {"url": "data:' + Mime + ';base64,' + Base64 + '"}}', TEncoding.UTF8);
       S := ImagePayload.DataString;
       try
         JContent.Add(TJSonObject.ParseJSONValue(ImagePayload.DataString) as TJSonObject);
@@ -2761,8 +2822,12 @@ begin
   End;
 
   If Msg.FTool_calls <> '' then
-    jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
 
+{$IF CompilerVersion < 35}
+    jObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.FTool_calls));
+{$ELSE}
+    jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
+{$ENDIF}
   Result.Add(jObj);
 end;
 
@@ -2861,8 +2926,12 @@ begin
 
         For I := 0 to JArr.Count - 1 do
         Begin
-          JItem := TJSonObject(JArr[I]);
 
+{$IF CompilerVersion < 35}
+          JItem := JArr.GetItemAsObject(I);
+{$ELSE}
+          JItem := TJSonObject(JArr[I]);
+{$ENDIF}
           Item := TJSon.JsonToObject<TAiChatMessage>(JItem);
           Self.Add(Item);
         End;
@@ -3093,7 +3162,14 @@ begin
         End;
       End;
       If Msg.FTool_calls <> '' then
+
+{$IF CompilerVersion < 35}
+        jObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.FTool_calls));
+{$ELSE}
         jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
+{$ENDIF}
+
+
 
       // Result.Add(jObj);
 
@@ -3104,8 +3180,12 @@ begin
     End;
 
     If Msg.FTool_calls <> '' then
-      jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
 
+{$IF CompilerVersion < 35}
+      jObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.FTool_calls));
+{$ELSE}
+      jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
+{$ENDIF}
     Result.Add(jObj);
   end;
 

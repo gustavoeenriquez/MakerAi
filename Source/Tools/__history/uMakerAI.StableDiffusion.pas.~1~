@@ -278,17 +278,11 @@ begin
   FUrl := DEFAULT_BASE_URL;
 
   FHttpClient := TNetHTTPClient.Create(Self);
-{$IF CompilerVersion >= 35}
   FHttpClient.SynchronizeEvents := False; // Importante para permitir que los callbacks se ejecuten en hilos (o que TTask no los bloquee)
-{$ENDIF}
-
   FResponseTimeout := 8 * 60000; // 8 minutos por defecto
   FSendTimeout := 8 * 60000; // 8 minutos por defecto
   FHttpClient.ResponseTimeout := FResponseTimeout;
-{$IF CompilerVersion >= 35}
   FHttpClient.SendTimeout := FSendTimeout;
-{$ENDIF}
-
 
   FIsGenerating := False;
   FProgressMonitorThread := nil; // No thread instance initially
@@ -770,12 +764,7 @@ end;
 procedure TStableDiffusion.SetSendTimeout(const Value: Integer);
 begin
   FSendTimeout := Value;
-
-{$IF CompilerVersion >= 35}
   FHttpClient.SendTimeout := Value;
-{$ENDIF}
-
-
 end;
 
 procedure TStableDiffusion.SetOnProgress(const Value: TSDProgressEvent);

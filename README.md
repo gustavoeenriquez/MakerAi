@@ -1,102 +1,112 @@
-# MakerAI - Universal LLM Connector for Delphi
+# MakerAI Suite: The Definitive AI Framework for Delphi
+
+🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
 
 [![GitHub Stars](https://img.shields.io/github/stars/gustavoeenriquez/MakerAi?style=social)](https://github.com/gustavoeenriquez/MakerAi)
 [![GitHub Issues](https://img.shields.io/github/issues/gustavoeenriquez/MakerAi)](https://github.com/gustavoeenriquez/MakerAi/issues)
-[![License](https://img.shields.io/github/license/gustavoeenriquez/MakerAi)](LICENSE)
+[![License](https://img.shields.io/github/license/gustavoeenriquez/MakerAi)](LICENSE.txt)
+[![Telegram](https://img.shields.io/badge/Join-Telegram%20Chat-blue.svg)](https://t.me/+7LaihFwqgsk1ZjQx)
 
+**Build powerful, intelligent, and context-aware applications with a 100% native AI framework for Delphi.**
 
-> ⚠️ **Important Notice:**  
-> This is **MakerAI Suite Version 2**, a complete redesign of the original MakerAI.  
-> **It is not compatible with Version 1.**  
-> Please migrate your projects accordingly if you are upgrading from the earlier version.
+MakerAI Suite is a comprehensive framework designed for Delphi developers to integrate state-of-the-art AI capabilities into their VCL and FMX applications. It covers the entire AI lifecycle, from model connectivity to the creation of autonomous agents.
 
+---
 
-**MakerAI is not just an API wrapper for LLM services.** It's a tool designed to optimize the use of LLMs in production environments.  Focus on the essence of your business, leaving the technical complexities to MakerAI.
+## The Power of MakerAI Suite
 
-**One component. All AIs. Full Compatibility.**
+MakerAI Suite provides the building blocks to create sophisticated, high-performance AI systems.
 
-Tired of dealing with fragmented and complex AI APIs? **MakerAI** offers `TAiConnection`, a **universal** Delphi component that simplifies integration with the leading Language Models (LLMs) and Artificial Intelligences on the market.
+*   🚀 **Create Sophisticated AI Agents:** Orchestrate complex workflows, equip your agents with short and long-term memory, and allow them to execute tools to interact with your application and the outside world.
+*   🧠 **Connect AI with Your Own Data (RAG):** Leverage the powerful **Retrieval-Augmented Generation (RAG)** engine. Enable language models to answer questions based on your documents, databases, or any private knowledge source.
+*   🛠️ **Enjoy 100% Native Performance:** MakerAI is pure Delphi. This ensures optimal performance, seamless integration, and compilation without heavy external dependencies.
+*   🌐 **Access a Global Ecosystem of Models:** The suite includes the acclaimed universal connector, `TAiConnection`, for unified integration with OpenAI, Gemini, Claude, Ollama, Groq, and many more.
+*   🏗️ **Enterprise-Grade Architecture:** Its robust and modular design serves as the perfect foundation for AI in your **ERP, CRM, LMS, and industrial solutions**.
 
-**With MakerAI, you connect *once* and forget about the differences.**
+---
 
-## Key Features
+## ✨ Key Features
 
-*   **Universal LLM Connector:** Compatible with:
-    *   OpenAI
-    *   Gemini (Google)
-    *   Claude (Anthropic)
-    *   Grok (xAI)
-    *   DeepSeek
-    *   Mistral
-    *   Ollama (local models)
-    *   Groq
-    *   And more to come!
-*   **Native Multimodal Support:**
-    *   Processes input documents such as: Audio, Images, Text, PDFs, and Videos.
-    *   Native generation of: Audio, Images, Videos, and Text.
-*   **Native RAG Support:** Integrates Retrieval-Augmented Generation (RAG) capabilities, enabling the LLM to leverage external knowledge sources for more accurate and context-aware responses.
-*   **Function Calling (Tool Functions):** Allows AI to execute functions directly in your application.
-*   **MCP (Model Context Protocol) Support:**  
-    Version 2.5 introduces native support for **MCP servers**, enabling dynamic tool/function discovery and execution via:
-    *   `StdIO`, `Http`, and `MakerAiHttp` backends  
-    *   Available for both **Windows** and **Linux**  
-    *   Allows seamless connection to external tool servers following the MCP standard
-*   **Cross-Platform Compatibility:**
-    *   Windows (VCL & FMX)
-    *   Linux (FMX)
-    *   Android (FMX)
-*   **Extensible Framework:** Easily adaptable to integrate new AI providers.
-*   **Simple to Use:** Minimizes complexity, allowing you to focus on your application's logic.
+MakerAI Suite is organized into powerful and easy-to-use modules:
 
-## Slogan
+#### 🧠 **RAG (Retrieval-Augmented Generation) Engine**
+*   **Vector Databases:** Compatible with PostgreSQL+pgvector, SQLite, Firebird, and more.
+*   **Commercial Databases:** Integration with Pinecone, Weaviate, Milvus, Qdrant, etc.
+*   **In-Memory Engine:** Ideal for rapid prototyping, with persistence to disk.
 
-**MakerAI: Universal LLM Connector - One component, infinite possibilities.**
+#### 🔄 **Workflow Engine (Graphs)**
+*   **Visual and Code-Based Orchestration:** Define complex workflows by connecting nodes and edges, either programmatically or by dragging components onto a form.
+*   **Autonomous Agents:** Facilitates the creation of agents that follow a defined logic to complete complex tasks.
 
-## Why use MakerAI?
+#### 📞 **Function Calling and Tools**
+*   **Extend the AI:** Allows the language model to execute native functions in your Delphi application to perform actions, such as querying a database, sending an email, or controlling a device.
 
-*   **Time Saving:** Forget about rewriting code for each AI API.
-*   **Flexibility:** Switch AI providers instantly without modifying your application.
-*   **Multimodal Power:** Create applications that see, hear, and generate multimedia content.
-*   **Portability:** Deploy your applications on multiple platforms.
-*   **Future-Proof:** MakerAI is constantly updated to integrate the latest advancements in the world of AI.
+#### 💾 **Conversational Memory Management**
+*   **Short and Long-Term Memory:** Equips agents with the ability to recall past interactions for more coherent and personalized conversations.
 
-## Updates
+#### 🔌 **MCP (Model Context Protocol) Support**
+*   **Native MCP Client:** Connect your application to external tool servers that follow the MCP standard (via HTTP, stdio).
+*   **Native MCP Server:** Expose your own Delphi application's functions as tools for any MCP client to consume.
 
-### New Version 2.5.0.02 (17 Aug 2025)
-- Added MCP Server on Windows and Linux:
-  - Supports **MCP StdIO**, **HTTP**, and **MakerAiHttp** modes.
--Added Agents support for complex workflow   
+#### 🌐 **Universal LLM Connector**
+*   **One Component to Rule Them All:** `TAiConnection` provides access to **OpenAI, Gemini, Claude, Groq, Ollama, Mistral,** and more, through a unified interface.
+*   **Native Multimodal Support:** Natively process and generate text, images, audio, and more.
 
-### 2.5.0.01 (4 Aug 2025)
-- Added support for **MCP (Model Context Protocol) Servers** on Windows and Linux:
-  - Supports **MCP StdIO**, **HTTP**, and **MakerAiHttp** modes.
-  - **Note:** Server-Sent Events (SSE) are not yet supported.
-- New component **TGeminiEmbedding** added (contributed by Pedro Luque).
-- Source code reorganized into folders for improved readability and maintainability.
-- Various **bug fixes** and internal improvements.
+---
 
-### New Version 2.1.002 (25 Jul 2025)
-- Fixed some reported bugs.
-- Update demo 001.
-- Implementation of Transcription, Reasoning, DeepResearch and Code Interpreter.
-- VEO3 support and VEO2 Image to Video 
-- Support for taiconnection to work within threads
+## 📦 Detailed Installation Guide
 
-### New Version 2.1.001 (15 Jul 2025)
-- Fixed some reported bugs.
-- Add demo 001.
+Follow these steps carefully to ensure a correct installation in the Delphi IDE.
 
-### New Version 2.1.000 (14 Jul 2025)
-- Added CustomModels utility to allow customization of model behavior.
-- Enabled generation of text files such as html, js, css, txt, pas, c, py, etc.
-- Fixed several reported bugs.
+#### **Step 1: Get the Source Code**
 
-## Installation
+Clone the repository using Git (recommended) or download the ZIP file from GitHub.
+```bash
+git clone https://github.com/gustavoeenriquez/MakerAi.git
+```
+Unzip the file to a folder of your choice. For example: `C:\Delphi\MakerAI`.
 
-1.  Download the source code.
-2.  Open the design project (`MakerAI.dpk`, `MakerAiDsg.dpk`) corresponding to your IDE (VCL).
-3.  Install the package.
-4.  Add path to Delphi Library paths
+#### **Step 2: Configure Paths in the Delphi IDE**
+
+This is a crucial step. You must tell the Delphi IDE where to find the MakerAI source files.
+
+1.  Open your Delphi IDE (10.3 Rio, 11 Alexandria, or higher).
+2.  Go to the menu: **Tools > Options...**.
+3.  In the Options dialog, navigate to **Language > Delphi > Library**.
+4.  Ensure you have the correct platform selected (e.g., **Windows 32-bit**). You will need to repeat this step for each platform you intend to use.
+5.  Click the `...` button next to the "Library path" field.
+6.  In the new window, add the path to **each of the subfolders** inside the MakerAI `Source` directory. The folder structure is as follows:
+
+    ```
+    ...\MakerAi\Source\Agents
+    ...\MakerAi\Source\Chat
+    ...\MakerAi\Source\Core
+    ...\MakerAi\Source\Design
+    ...\MakerAi\Source\MCPClient
+    ...\MakerAi\Source\MCPServer
+    ...\MakerAi\Source\Packages
+    ...\MakerAi\Source\RAG
+    ...\MakerAi\Source\Tools
+    ...\MakerAi\Source\Utils
+    ```
+    *Tip: Add the full path to each of these folders to prevent compilation issues.*
+
+7.  Click **OK** and then **Save** to store the configuration.
+
+#### **Step 3: Compile and Install the Components**
+
+This will install the components into the Tool Palette.
+
+1.  In Delphi, go to **File > Open Project...**.
+2.  Navigate to the folder where you cloned the repository and open the project group file: `...\MakerAi\Source\Packages\MakerAI.groupproj`.
+3.  In the *Project Manager*, right-click on the design-time package `MakerAiDsg.dpk` and select **Compile**.
+4.  Once it has compiled without errors, right-click on `MakerAiDsg.dpk` again and select **Install**.
+5.  An IDE message will confirm that the components have been installed successfully.
+
+Congratulations! MakerAI Suite is now installed and ready to be used in your projects.
+
+---
+
 
 ## Basic Usage Example 
 
@@ -128,30 +138,38 @@ begin
   end;
 end;
 ```
-## Roadmap
 
-*   Support for more platforms and models
-*   New AI Drivers
-*   Visual components to facilitate the creation of user interfaces for AI
 
-## License
+## 🔄 Changelog
 
-This project is licensed under the MIT license.
+**(NEW) Version 2.6.0 (August 20, 2025)**
+*   **New Compatibility!** Added official support for Delphi 10.3 Rio and Delphi 11 Alexandria.
+*   **Fix (Ollama):** Fixed a bug in the Ollama connector that occurred during asynchronous calls.
 
-## Contributions
+**Version 2.5.0.02 (August 17, 2025)**
+*   Added MCP Server on Windows and Linux with support for StdIO, HTTP, and MakerAiHttp modes.
+*   Added Agent support for complex workflows.
 
-Contributions are welcome! If you have ideas to improve MakerAI, feel free to open an issue or submit a pull request.
+**Version 2.5.0.01 (August 4, 2025)**
+*   Added support for MCP (Model Context Protocol) Servers on Windows and Linux.
+*   New component `TGeminiEmbedding` (contribution by Pedro Luque).
+*   Reorganized source code into folders for improved readability.
 
-## Support
+**(The rest of the history remains)...**
 
-If you have any questions or need help, you can contact me through:
+---
 
-*   [GitHub Issues](https://github.com/gustavoeenriquez/MakerAi/issues)
-*   Email: gustavoeenriquez@gmail.com
-*   [Telegram group](https://t.me/+7LaihFwqgsk1ZjQx)
+## 🤝 Contributing
 
-  
+Contributions are welcome. If you have ideas, improvements, or find a bug, please open an issue or submit a pull request. Together, we can make MakerAI the definitive AI tool for the Delphi community.
 
-## Acknowledgements
+## 💬 Community & Support
 
-I thank the Delphi community for their support.
+*   **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
+*   **GitHub Issues:** For reporting bugs and suggesting features.
+*   **Telegram Group:** [Join the conversation](https://t.me/+7LaihFwqgsk1ZjQx) for help and to share your projects.
+*   **Email:** gustavoeenriquez@gmail.com
+
+## 📜 License
+
+This project is licensed under the **MIT License**. See the [LICENSE.txt](LICENSE.txt) file for details.
