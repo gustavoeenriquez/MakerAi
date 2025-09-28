@@ -1,0 +1,530 @@
+unit uWinSoundMonitor;
+
+interface
+
+Uses
+  System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
+  System.IOUtils, System.SyncObjs, System.Math,
+
+{$IFDEF MSWINDOWS}
+  Winapi.Windows, Winapi.MMSystem;
+{$ENDIF}
+{$IFDEF ANDROID}
+AndroidApi.JNI.Media, AndroidApi.JNIBridge, AndroidApi.Helpers, FMX.Helpers.Android, AndroidApi.JNI.JavaTypes,
+  AndroidApi.JNI.GraphicsContentViewText;
+{$ENDIF}
+
+const
+  DEFAULT_SAMPLE_RATE = 44100;
+  DEFAULT_CHANNELS = 1;
+  DEFAULT_BITS_PER_SAMPLE = 16;
+  DEFAULT_BUFFER_DURATION_MS = 100; // 100 ms de audio por buffer
+
+type
+  // --- Estructuras de formato WAV (comunes para todas las plataformas) ---
+  TRiffHeader = packed record
+    ChunkID: array [0 .. 3] of AnsiChar;
+    ChunkSize: LongWord;
+    Format: array [0 .. 3] of AnsiChar;
+  end;
+
+  TFmtChunk = packed record
+    Subchunk1ID: array [0 .. 3] of AnsiChar;
+    Subchunk1Size: LongWord;
+    AudioFormat: SmallInt;
+    NumChannels: SmallInt;
+    SampleRate: LongWord;
+    ByteRate: LongWord;
+    BlockAlign: SmallInt;
+    BitsPerSample: SmallInt;
+  end;
+
+  TDataChunk = packed record
+    Subchunk2ID: array [0 .. 3] of AnsiChar;
+    Subchunk2Size: LongWord;
+  end;
+
+  TAudioMonitorOnChange = procedure(Sender: TObject; aState: Boolean; aStream: TMemoryStream) of object;
+
+  TAudioMonitor = class(TObject)
+  private
+    FCS: TCriticalSection; // Para seguridad de hilos
+    FBuffer: TBytes;
+    FArrBuf: array [0 .. 9] of Boolean;
+    FFileStream: TMemoryStream;
+
+    FSoundLevel: Int64;
+    FIdxArr: Integer;
+    FSensitivity: Integer;
+    FIsSpeaking: Boolean;
+    FOnChangeState: TAudioMonitorOnChange;
+    FActive: Boolean;
+
+    // Configuración de audio
+    FSampleRate: Integer;
+    FChannels: Integer;
+    FBitsPerSample: Integer;
+    FBufferSize: Integer;
+
+{$IFDEF MSWINDOWS}
+    FhWaveIn: HWAVEIN;
+    FWaveHdr: TWaveHdr;
+{$ENDIF}
+{$IFDEF ANDROID}
+    FAudioRecord: JAudioRecord;
+    FCaptureThread: TThread;
+{$ENDIF}
+    procedure SetSoundLevel(const Value: Int64);
+    function GetSoundLevel: Int64;
+    procedure SetSensitivity(const Value: Integer);
+    function GetIsSpeaking: Boolean;
+    procedure SetOnChangeState(const Value: TAudioMonitorOnChange);
+    function GetActive: Boolean;
+    procedure SetActive(const Value: Boolean);
+
+  protected
+    procedure CalcSilencio;
+    procedure DoChangeState(aIsSpeaking: Boolean);
+    procedure CalcSoundLevel;
+    procedure ConvertPCMToWAV(PCMStream, WAVStream: TMemoryStream);
+
+{$IFDEF MSWINDOWS}
+    procedure StartCaptureAudioWindows;
+    procedure StopCaptureAudioWindows;
+{$ENDIF}
+{$IFDEF ANDROID}
+    procedure StartCaptureAudioAndroid;
+    procedure StopCaptureAudioAndroid;
+{$ENDIF}
+  public
+    constructor Create(const aSampleRate: Integer = DEFAULT_SAMPLE_RATE; const aChannels: Integer = DEFAULT_CHANNELS;
+      const aBitsPerSample: Integer = DEFAULT_BITS_PER_SAMPLE);
+    destructor Destroy; override;
+
+    procedure Start;
+    procedure Stop;
+
+    property SoundLevel: Int64 read GetSoundLevel write SetSoundLevel;
+    property Sensitivity: Integer read FSensitivity write SetSensitivity default 55;
+    property IsSpeaking: Boolean read GetIsSpeaking;
+    property OnChangeState: TAudioMonitorOnChange read FOnChangeState write SetOnChangeState;
+    property Active: Boolean read GetActive write SetActive;
+  end;
+
+implementation
+
+{$IFDEF MSWINDOWS}
+
+// Callback mejorado: No depende de una variable global.
+procedure AudioCallback(HWAVEIN: HWAVEIN; uMsg: UINT; dwInstance, dwParam1, dwParam2: DWORD_PTR); stdcall;
+var
+  Monitor: TAudioMonitor;
+begin
+  if uMsg = WIM_DATA then
+  begin
+    Monitor := TAudioMonitor(dwInstance); // Obtener la instancia desde el puntero
+    if Assigned(Monitor) then
+    begin
+      Monitor.CalcSoundLevel;
+      // Re-add the buffer for continuous capture
+      waveInAddBuffer(HWAVEIN, @Monitor.FWaveHdr, SizeOf(TWaveHdr));
+    end;
+  end;
+end;
+{$ENDIF}
+{ TAudioMonitor }
+
+constructor TAudioMonitor.Create(const aSampleRate: Integer; const aChannels: Integer; const aBitsPerSample: Integer);
+begin
+  inherited Create;
+  FCS := TCriticalSection.Create;
+
+  // Inicializar configuración de audio
+  FSampleRate := aSampleRate;
+  FChannels := aChannels;
+  FBitsPerSample := aBitsPerSample;
+
+  // Calcular tamaño del buffer basado en la duración y el formato
+  FBufferSize := (FSampleRate * FChannels * (FBitsPerSample div 8) * DEFAULT_BUFFER_DURATION_MS) div 1000;
+  SetLength(FBuffer, FBufferSize);
+
+  // Inicializar estado
+  FActive := False;
+  FillChar(FArrBuf, SizeOf(FArrBuf), 0);
+  FIdxArr := 0;
+  FSensitivity := 55;
+  FIsSpeaking := False;
+  FFileStream := TMemoryStream.Create;
+
+{$IFDEF ANDROID}
+  var
+    ChannelConfig, AudioFormat, MinBufferSize: Integer;
+  ChannelConfig := TJAudioFormat.JavaClass.CHANNEL_IN_MONO;
+  AudioFormat := TJAudioFormat.JavaClass.ENCODING_PCM_16BIT;
+  MinBufferSize := TJAudioRecord.JavaClass.getMinBufferSize(FSampleRate, ChannelConfig, AudioFormat);
+
+  // Usar el mayor entre nuestro buffer y el mínimo requerido por el sistema
+  if FBufferSize < MinBufferSize then
+    FBufferSize := MinBufferSize;
+  SetLength(FBuffer, FBufferSize);
+
+  FAudioRecord := TJAudioRecord.JavaClass.init(TJMediaRecorder_AudioSource.JavaClass.MIC, FSampleRate, ChannelConfig, AudioFormat,
+    FBufferSize);
+{$ENDIF}
+end;
+
+destructor TAudioMonitor.Destroy;
+begin
+  Stop;
+  FFileStream.Free; // ¡CORREGIDO: Fuga de memoria eliminada!
+  FCS.Free;
+  inherited;
+end;
+
+procedure TAudioMonitor.Start;
+begin
+{$IFDEF MSWINDOWS}
+  StartCaptureAudioWindows;
+{$ENDIF}
+{$IFDEF ANDROID}
+  if (FAudioRecord = nil) or (FAudioRecord.getState <> TJAudioRecord.JavaClass.STATE_INITIALIZED) then
+    Exit;
+
+  FCaptureThread := TThread.CreateAnonymousThread(StartCaptureAudioAndroid);
+  FCaptureThread.FreeOnTerminate := True;
+  FAudioRecord.startRecording;
+  FCaptureThread.Start;
+{$ENDIF}
+end;
+
+procedure TAudioMonitor.Stop;
+begin
+{$IFDEF MSWINDOWS}
+  StopCaptureAudioWindows;
+{$ENDIF}
+{$IFDEF ANDROID}
+  StopCaptureAudioAndroid;
+{$ENDIF}
+end;
+
+procedure TAudioMonitor.CalcSilencio;
+var
+  I: Integer;
+  AllFalse: Boolean;
+  PrevState: Boolean;
+begin
+  FCS.Enter;
+  try
+    PrevState := FIsSpeaking;
+
+    if (FArrBuf[High(FArrBuf) - 1]) and (FArrBuf[High(FArrBuf)]) then
+    begin
+      FIsSpeaking := True;
+    end
+    else
+    begin
+      AllFalse := True;
+      for I := 0 to High(FArrBuf) do
+      begin
+        if FArrBuf[I] then
+        begin
+          AllFalse := False;
+          Break;
+        end;
+      end;
+      if AllFalse then
+        FIsSpeaking := False;
+    end;
+
+    if FIsSpeaking <> PrevState then
+      TThread.Queue(nil,
+        procedure
+        begin
+          DoChangeState(FIsSpeaking);
+        end);
+  finally
+    FCS.Leave;
+  end;
+end;
+
+procedure TAudioMonitor.CalcSoundLevel;
+var
+  Sum: Double;
+  RMS: Double;
+  NumSamples, I: Integer;
+  SampleValue: SmallInt;
+begin
+  FCS.Enter;
+  try
+    // Escribir el buffer de audio crudo al stream acumulador
+    FFileStream.WriteBuffer(FBuffer[0], FBufferSize);
+
+    Sum := 0.0;
+    NumSamples := FBufferSize div (FBitsPerSample div 8);
+
+    // Calcular la suma del cuadrado de las muestras
+    for I := 0 to NumSamples - 1 do
+    begin
+      SampleValue := PSmallInt(@FBuffer[I * 2])^;
+      Sum := Sum + (Int64(SampleValue) * Int64(SampleValue));
+    end;
+
+    // Calcular RMS (Root Mean Square)
+    if NumSamples > 0 then
+      RMS := Sqrt(Sum / NumSamples)
+    else
+      RMS := 0;
+
+    // Convertir RMS a decibelios (dB)
+    if RMS > 1 then
+      Self.SoundLevel := Round(20 * Log10(RMS))
+    else
+      Self.SoundLevel := 0;
+  finally
+    FCS.Leave;
+  end;
+end;
+
+procedure TAudioMonitor.ConvertPCMToWAV(PCMStream, WAVStream: TMemoryStream);
+var
+  RiffHeader: TRiffHeader;
+  FmtChunk: TFmtChunk;
+  DataChunk: TDataChunk;
+begin
+  PCMStream.Position := 0;
+  WAVStream.Clear;
+
+  // Fmt Chunk
+  FmtChunk.Subchunk1ID := 'fmt ';
+  FmtChunk.Subchunk1Size := 16;
+  FmtChunk.AudioFormat := 1; // PCM
+  FmtChunk.NumChannels := FChannels;
+  FmtChunk.SampleRate := FSampleRate;
+  FmtChunk.BitsPerSample := FBitsPerSample;
+  FmtChunk.BlockAlign := FChannels * (FmtChunk.BitsPerSample div 8);
+  FmtChunk.ByteRate := FSampleRate * FmtChunk.BlockAlign;
+
+  // Data Chunk
+  DataChunk.Subchunk2ID := 'data';
+  DataChunk.Subchunk2Size := PCMStream.Size;
+
+  // Riff Header
+  RiffHeader.ChunkID := 'RIFF';
+  RiffHeader.Format := 'WAVE';
+  RiffHeader.ChunkSize := SizeOf(TFmtChunk) + SizeOf(TDataChunk) + 8 + PCMStream.Size;
+
+  // Escribir las cabeceras y datos al stream WAV
+  WAVStream.WriteBuffer(RiffHeader, SizeOf(RiffHeader));
+  WAVStream.WriteBuffer(FmtChunk, SizeOf(FmtChunk));
+  WAVStream.WriteBuffer(DataChunk, SizeOf(DataChunk));
+  WAVStream.CopyFrom(PCMStream, 0);
+
+  WAVStream.Position := 0;
+end;
+
+procedure TAudioMonitor.DoChangeState(aIsSpeaking: Boolean);
+var
+  WAVStream: TMemoryStream;
+begin
+  if aIsSpeaking then
+  begin
+    // El usuario ha comenzado a hablar.
+    FCS.Enter;
+    try
+      FFileStream.Clear; // Limpiar para nueva grabación
+    finally
+      FCS.Leave;
+    end;
+    if Assigned(FOnChangeState) then
+      FOnChangeState(Self, True, nil);
+  end
+  else
+  begin
+    // El usuario ha dejado de hablar. Convertir y entregar el audio.
+    WAVStream := TMemoryStream.Create;
+    FCS.Enter;
+    try
+      ConvertPCMToWAV(FFileStream, WAVStream);
+    finally
+      FCS.Leave;
+    end;
+
+    if Assigned(FOnChangeState) then
+    begin
+      try
+        FOnChangeState(Self, False, WAVStream);
+      finally
+        // La responsabilidad de liberar WavStream es del receptor del evento.
+      end;
+    end
+    else
+    begin
+      WAVStream.Free; // Si nadie escucha el evento, liberamos el stream.
+    end;
+  end;
+end;
+
+function TAudioMonitor.GetActive: Boolean;
+begin
+  Result := FActive;
+end;
+
+function TAudioMonitor.GetIsSpeaking: Boolean;
+begin
+  FCS.Enter;
+  try
+    Result := FIsSpeaking;
+  finally
+    FCS.Leave;
+  end;
+end;
+
+function TAudioMonitor.GetSoundLevel: Int64;
+begin
+  FCS.Enter;
+  try
+    Result := FSoundLevel;
+  finally
+    FCS.Leave;
+  end;
+end;
+
+procedure TAudioMonitor.SetActive(const Value: Boolean);
+begin
+  if Value <> FActive then
+  begin
+    FActive := Value;
+    if FActive then
+      Start
+    else
+      Stop;
+  end;
+end;
+
+procedure TAudioMonitor.SetOnChangeState(const Value: TAudioMonitorOnChange);
+begin
+  FOnChangeState := Value;
+end;
+
+procedure TAudioMonitor.SetSensitivity(const Value: Integer);
+begin
+  FSensitivity := Value;
+end;
+
+procedure TAudioMonitor.SetSoundLevel(const Value: Int64);
+var
+  I: Integer;
+begin
+  FCS.Enter;
+  try
+    FSoundLevel := Value;
+
+    // Desplazar el buffer de detección de silencio
+    for I := 0 to High(FArrBuf) - 1 do
+      FArrBuf[I] := FArrBuf[I + 1];
+
+    if FSoundLevel > FSensitivity then
+      FArrBuf[High(FArrBuf)] := True
+    else
+      FArrBuf[High(FArrBuf)] := False;
+  finally
+    FCS.Leave;
+  end;
+  // Llamar a CalcSilencio fuera del bloqueo para evitar deadlocks con DoChangeState
+  CalcSilencio;
+end;
+
+{$IFDEF MSWINDOWS}
+
+procedure TAudioMonitor.StartCaptureAudioWindows;
+var
+  WaveFormat: TWaveFormatEx;
+  Res: MMRESULT;
+begin
+  if FActive then
+  begin
+    // Definir formato de audio
+    WaveFormat.wFormatTag := WAVE_FORMAT_PCM;
+    WaveFormat.nChannels := FChannels;
+    WaveFormat.nSamplesPerSec := FSampleRate;
+    WaveFormat.wBitsPerSample := FBitsPerSample;
+    WaveFormat.nBlockAlign := FChannels * (WaveFormat.wBitsPerSample div 8);
+    WaveFormat.nAvgBytesPerSec := FSampleRate * WaveFormat.nBlockAlign;
+    WaveFormat.cbSize := 0;
+
+    // Abrir dispositivo de audio, pasando 'Self' como dato de instancia
+    Res := waveInOpen(@FhWaveIn, WAVE_MAPPER, @WaveFormat, DWORD_PTR(@AudioCallback), DWORD_PTR(Self), CALLBACK_FUNCTION);
+    if Res <> MMSYSERR_NOERROR then
+      raise Exception.Create('Error al abrir el dispositivo de entrada de audio: ' + IntToStr(Res));
+
+    // Preparar el buffer
+    FillChar(FWaveHdr, SizeOf(FWaveHdr), 0);
+    FWaveHdr.lpData := @FBuffer[0];
+    FWaveHdr.dwBufferLength := FBufferSize;
+    waveInPrepareHeader(FhWaveIn, @FWaveHdr, SizeOf(FWaveHdr));
+    waveInAddBuffer(FhWaveIn, @FWaveHdr, SizeOf(FWaveHdr));
+
+    // Iniciar captura
+    Res := waveInStart(FhWaveIn);
+    if Res <> MMSYSERR_NOERROR then
+    begin
+      waveInClose(FhWaveIn);
+      raise Exception.Create('Error al iniciar la captura de audio: ' + IntToStr(Res));
+    end;
+  end;
+end;
+
+procedure TAudioMonitor.StopCaptureAudioWindows;
+begin
+// Solo proceder si el handle es válido (la captura estaba activa)
+  if FhWaveIn <> 0 then
+  begin
+    // 1. Detener la adición de nuevos buffers. waveInStop marca el buffer actual
+    waveInStop(FhWaveIn);
+
+    waveInUnprepareHeader(FhWaveIn, @FWaveHdr, SizeOf(FWaveHdr));
+
+    waveInClose(FhWaveIn);
+
+    FhWaveIn := 0;
+  end;
+end;
+{$ENDIF}
+{$IFDEF ANDROID}
+
+procedure TAudioMonitor.StartCaptureAudioAndroid;
+var
+  BytesRead: Integer;
+begin
+  while not TThread.CurrentThread.CheckTerminated do
+  begin
+    BytesRead := FAudioRecord.read(FBuffer, 0, FBufferSize);
+    if BytesRead > 0 then
+    begin
+      // Para ejecutar CalcSoundLevel en un contexto seguro para la UI/hilo principal
+      TThread.Queue(nil, CalcSoundLevel);
+    end;
+  end;
+end;
+
+procedure TAudioMonitor.StopCaptureAudioAndroid;
+begin
+  if FCaptureThread <> nil then
+  begin
+    FCaptureThread.Terminate;
+    // No se puede esperar aquí (deadlock), FreeOnTerminate se encargará
+    FCaptureThread := nil;
+  end;
+
+  if FAudioRecord <> nil then
+  begin
+    if FAudioRecord.getRecordingState = TJAudioRecord.JavaClass.RECORDSTATE_RECORDING then
+      FAudioRecord.Stop;
+    if FAudioRecord.getState = TJAudioRecord.JavaClass.STATE_INITIALIZED then
+      FAudioRecord.release;
+    FAudioRecord := nil;
+  end;
+end;
+{$ENDIF}
+
+end.

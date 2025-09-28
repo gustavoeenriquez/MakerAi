@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<ProjectSortOrder AutoSort="0" SortType="0">
+    <File Path="..\..\Source"/>
+    <File Path="..\Agents"/>
+    <File Path="..\Agents\uMakerAi.Agents.pas"/>
+    <File Path="..\Chat"/>
+    <File Path="..\Chat\uMakerAi.Chat.AiConnection.pas"/>
+    <File Path="..\Chat\uMakerAi.Chat.Claude.pas"/>
+    <File Path="..\Chat\uMakerAi.Chat.DeepSeek.pas"/>
+    <File Path="..\Chat\uMakerAi.Chat.Gemini.pas"/>
+    <File Path="..\Chat\uMakerAi.Chat.Grok.pas"/>
+    <File Path="..\Chat\uMakerAi.Chat.Groq.pas"/>
+    <File Path="..\Chat\uMakerAi.Chat.Initializations.pas"/>
+    <File Path="..\Chat\uMakerAi.Chat.Mistral.pas"/>
+    <File Path="..\Chat\uMakerAi.Chat.Ollama.pas"/>
+    <File Path="..\Chat\uMakerAi.Chat.OpenAi.pas"/>
+    <File Path="..\Chat\uMakerAi.Chat.OpenAiResponses.pas"/>
+    <File Path="..\Chat\uMakerAi.ToolFunctions.pas"/>
+    <File Path="..\Core"/>
+    <File Path="..\Core\UMakerAi.Chat.pas"/>
+    <File Path="..\Core\uMakerAi.Core.pas"/>
+    <File Path="..\Core\uMakerAi.Embeddings.core.pas"/>
+    <File Path="..\Core\uMakerAi.Embeddings.pas"/>
+    <File Path="..\Core\uMakerAi.Prompts.pas"/>
+    <File Path="..\Core\uMakerAi.Utils.CodeExtractor.pas"/>
+    <File Path="..\Core\uMakerAi.Utils.PcmToWav.pas"/>
+    <File Path="..\Core\uMakerAi.Utils.System.pas"/>
+    <File Path="..\Core\uMakerAi.Version.inc"/>
+    <File Path="..\MCPClient"/>
+    <File Path="..\MCPClient\uMakerAi.MCPClient.Core.pas"/>
+    <File Path="..\MCPServer"/>
+    <File Path="..\MCPServer\uMakerAi.MCPServer.Core.pas"/>
+    <File Path="..\MCPServer\UMakerAi.MCPServer.Direct.pas"/>
+    <File Path="..\MCPServer\UMakerAi.MCPServer.Http.pas"/>
+    <File Path="..\MCPServer\UMakerAi.MCPServer.Stdio.pas"/>
+    <File Path="..\RAG"/>
+    <File Path="..\RAG\uMakerAi.RAG.Vectors.pas"/>
+    <File Path="..\Tools"/>
+    <File Path="..\Tools\uMakerAi.Dalle.pas"/>
+    <File Path="..\Tools\uMakerAi.Whisper.pas"/>
+    <File Path="..\Utils"/>
+    <File Path="..\Utils\uMakerAi.Utils.VoiceMonitor.pas"/>
+    <File Path="bindcomp.dcp"/>
+    <File Path="bindengine.dcp"/>
+    <File Path="IndyCore.dcp"/>
+    <File Path="IndyProtocols.dcp"/>
+    <File Path="IndySystem.dcp"/>
+    <File Path="inet.dcp"/>
+    <File Path="RESTComponents.dcp"/>
+    <File Path="rtl.dcp"/>
+  </ProjectSortOrder>  <Transactions>
+    <Transaction>2025/09/27 19:07:18.269,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Tools\uMakerAI.StableDiffusion.pas=</Transaction>
+  </Transactions>
+</BorlandProject>

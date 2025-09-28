@@ -1,0 +1,242 @@
+[
+  {
+    "categoria": "Clásicos que Nunca Fallan",
+    "nombre": "¿Quién soy? / El Post-it en la frente",
+    "como_se_juega": "Cada jugador tiene el nombre de un personaje pegado en su frente sin verlo. Por turnos, hace preguntas de 'sí' o 'no' al resto para adivinar quién es. Quien adivina primero, gana.",
+    "que_necesita": "Post-its (o papel y cinta) y bolígrafos.",
+    "ideal_para": "Romper el hielo y empezar la reunión de forma divertida. Grupos de cualquier tamaño.",
+    "edades": "+8"
+  },
+  {
+    "categoria": "Clásicos que Nunca Fallan",
+    "nombre": "Mímica o Charadas",
+    "como_se_juega": "Por equipos. Un miembro del equipo actúa (sin hablar) una película, objeto o acción que lee en un papel. Su equipo debe adivinar antes de que se acabe el tiempo (ej. 1 minuto).",
+    "que_necesita": "Papelitos con conceptos para adivinar y un cronómetro.",
+    "ideal_para": "Grupos competitivos y gente extrovertida que no teme hacer el ridículo.",
+    "edades": "+10"
+  },
+  {
+    "categoria": "Clásicos que Nunca Fallan",
+    "nombre": "Dos Verdades y una Mentira",
+    "como_se_juega": "Por turnos, cada persona comparte tres 'hechos' sobre sí misma: dos son reales y uno es falso. El resto del grupo debe debatir y votar para adivinar cuál es la mentira.",
+    "que_necesita": "¡Nada! Solo imaginación.",
+    "ideal_para": "Conocerse mejor de una forma muy entretenida y sorprendente.",
+    "edades": "+12"
+  },
+  {
+    "categoria": "Clásicos que Nunca Fallan",
+    "nombre": "El Teléfono Descompuesto (Oral)",
+    "como_se_juega": "Los jugadores se sientan en círculo. El primero inventa una frase y se la susurra al oído al de al lado. El mensaje se va pasando de persona a persona. El último lo dice en voz alta para comparar con el original.",
+    "que_necesita": "¡Nada!",
+    "ideal_para": "Grupos grandes y para demostrar cómo se tergiversa la información con muchas risas.",
+    "edades": "Todas las edades"
+  },
+  {
+    "categoria": "Clásicos que Nunca Fallan",
+    "nombre": "El Juego del Diccionario (Fictionary)",
+    "como_se_juega": "Una persona elige una palabra muy rara de un diccionario. Los demás jugadores inventan y escriben una definición creíble. Se leen todas las definiciones junto con la real, y los jugadores votan por la que creen que es la correcta.",
+    "que_necesita": "Un diccionario, papel y bolígrafos para todos.",
+    "ideal_para": "Amantes de las palabras, la creatividad y el engaño.",
+    "edades": "+14"
+  },
+  {
+    "categoria": "Juegos de Creatividad y Dibujo",
+    "nombre": "Pictionary",
+    "como_se_juega": "Similar a la mímica, pero un miembro del equipo debe dibujar el concepto en una pizarra o papel para que su equipo lo adivine en un tiempo límite. No se puede hablar ni escribir letras/números.",
+    "que_necesita": "Pizarra y rotuladores, o un bloc grande de hojas y lápices.",
+    "ideal_para": "Reírse de las habilidades artísticas (o la falta de ellas) de cada uno.",
+    "edades": "+8"
+  },
+  {
+    "categoria": "Juegos de Creatividad y Dibujo",
+    "nombre": "Teléfono Descompuesto (Versión Dibujo)",
+    "como_se_juega": "Cada uno escribe una frase en una hoja y la pasa. El siguiente lee la frase, la oculta y la dibuja. El siguiente mira el dibujo, lo oculta y escribe lo que cree que es. Se alterna hasta que la hoja vuelve a su dueño. Los resultados son hilarantes.",
+    "que_necesita": "Hojas de papel y bolígrafos para todos.",
+    "ideal_para": "Garantizar sorpresas y risas por los malentendidos visuales.",
+    "edades": "+10"
+  },
+  {
+    "categoria": "Juegos de Creatividad y Dibujo",
+    "nombre": "Gartic Phone",
+    "como_se_juega": "Es la versión online y automatizada del 'Teléfono Descompuesto de Dibujo'. Cada jugador necesita un móvil o un PC para unirse a la sala. Es extremadamente divertido y no requiere instalación.",
+    "que_necesita": "Un dispositivo con navegador de internet por jugador.",
+    "ideal_para": "Jugar a distancia o todos juntos en una sala, viendo los resultados en una pantalla grande.",
+    "edades": "+12"
+  },
+  {
+    "categoria": "Juegos de Roles y Engaño (Deducción Social)",
+    "nombre": "El Pueblo Duerme / El Lobo / Mafia",
+    "como_se_juega": "Juego de roles ocultos. Una minoría de 'lobos' debe eliminar a los 'aldeanos' por la noche. Durante el día, todos debaten y votan para linchar a quien creen que es un lobo. Ganan los lobos si igualan en número a los aldeanos, o los aldeanos si eliminan a todos los lobos.",
+    "que_necesita": "Un narrador que conozca las reglas. Opcional: cartas para asignar roles.",
+    "ideal_para": "Grupos grandes (+6 personas) a los que les guste el debate, la estrategia y la acusación.",
+    "edades": "+14"
+  },
+  {
+    "categoria": "Juegos de Roles y Engaño (Deducción Social)",
+    "nombre": "Among Us (Versión Real)",
+    "como_se_juega": "Se asignan en secreto roles de 'Tripulantes' e 'Impostores'. Los tripulantes deben completar tareas simples por la casa, mientras los impostores los 'eliminan' discretamente. Cuando alguien encuentra un 'cuerpo' (o convoca una reunión), todos debaten y votan para expulsar a un sospechoso.",
+    "que_necesita": "Papelitos para asignar roles. Opcional: una lista de tareas simples.",
+    "ideal_para": "Fans del videojuego y grupos que disfruten de la tensión y el engaño.",
+    "edades": "+12"
+  },
+  {
+    "categoria": "Juegos de Roles y Engaño (Deducción Social)",
+    "nombre": "The Resistance: Avalon",
+    "como_se_juega": "Juego de mesa de roles ocultos. Los jugadores son Leales a Arturo o Esbirros de Mordred. Deben ir a misiones. Los leales quieren que las misiones tengan éxito; los esbirros quieren que fracasen. No hay eliminación de jugadores, se basa puramente en la deducción y el engaño.",
+    "que_necesita": "El juego de mesa 'The Resistance: Avalon'.",
+    "ideal_para": "Grupos que prefieren la deducción social sin eliminación de jugadores.",
+    "edades": "+14"
+  },
+  {
+    "categoria": "Juegos de Roles y Engaño (Deducción Social)",
+    "nombre": "Coup",
+    "como_se_juega": "Juego de cartas rápido de roles ocultos y faroleo. Cada jugador tiene dos cartas de personaje boca abajo y debe usar sus influencias (o mentir sobre ellas) para eliminar a los demás y ser el último en pie.",
+    "que_necesita": "El juego de cartas 'Coup'.",
+    "ideal_para": "Partidas rápidas, llenas de faroles, acusaciones y giros inesperados.",
+    "edades": "+13"
+  },
+  {
+    "categoria": "Juegos de Palabras y Conocimiento",
+    "nombre": "Código Secreto (Codenames)",
+    "como_se_juega": "Dos equipos compiten por contactar a sus espías. En el centro hay una cuadrícula de 25 palabras. El líder de cada equipo da una pista de una sola palabra y un número para que su equipo adivine varias de sus palabras. El primer equipo que encuentre a todos sus espías, gana.",
+    "que_necesita": "El juego de mesa 'Código Secreto' o una versión online.",
+    "ideal_para": "Fomentar el pensamiento lateral y la comunicación en equipo.",
+    "edades": "+12"
+  },
+  {
+    "categoria": "Juegos de Palabras y Conocimiento",
+    "nombre": "Scattergories / Basta / Tutti Frutti",
+    "como_se_juega": "Se elige una letra al azar y varias categorías (ej. 'animal', 'país', 'comida'). Todos tienen un tiempo límite para escribir una palabra que empiece con esa letra para cada categoría. Se ganan puntos por respuestas únicas que nadie más haya escrito.",
+    "que_necesita": "Papel y bolígrafo para cada jugador, y un cronómetro.",
+    "ideal_para": "Personas con agilidad mental y vocabulario amplio.",
+    "edades": "+10"
+  },
+  {
+    "categoria": "Juegos de Palabras y Conocimiento",
+    "nombre": "Tabú",
+    "como_se_juega": "Por equipos. Un jugador debe hacer que su equipo adivine una palabra clave sin usar una lista de palabras 'tabú' relacionadas. Hay un tiempo límite, y el equipo contrario vigila que no se usen las palabras prohibidas.",
+    "que_necesita": "El juego de mesa 'Tabú' o crear tarjetas propias.",
+    "ideal_para": "Partidas rápidas, ruidosas y muy competitivas.",
+    "edades": "+13"
+  },
+  {
+    "categoria": "Juegos de Palabras y Conocimiento",
+    "nombre": "Trivial Pursuit",
+    "como_se_juega": "El clásico juego de preguntas y respuestas. Los jugadores avanzan por un tablero y responden preguntas de diferentes categorías (Historia, Geografía, Arte, etc.). El objetivo es conseguir un 'quesito' de cada color y responder a una pregunta final.",
+    "que_necesita": "El juego de mesa 'Trivial Pursuit'.",
+    "ideal_para": "Amantes de la cultura general y los desafíos de conocimiento.",
+    "edades": "+15"
+  },
+  {
+    "categoria": "Juegos con el Móvil o Apps",
+    "nombre": "Heads Up!",
+    "como_se_juega": "Versión moderna de '¿Quién soy?'. Un jugador se pone el móvil en la frente mostrando una palabra. El resto del equipo le da pistas para que la adivine. El jugador inclina el móvil para marcar acierto o pasar.",
+    "que_necesita": "Un smartphone con la app 'Heads Up!' o similar.",
+    "ideal_para": "Partidas muy dinámicas y animadas en cualquier lugar.",
+    "edades": "+10"
+  },
+  {
+    "categoria": "Juegos con el Móvil o Apps",
+    "nombre": "Jackbox Games (Quiplash, Drawful, etc.)",
+    "como_se_juega": "Una colección de juegos que se muestran en una pantalla principal (TV/PC). Los jugadores usan sus móviles como mandos para responder preguntas ingeniosas, dibujar conceptos absurdos o competir en trivias. Gana el más votado por el resto.",
+    "que_necesita": "Una TV/PC/Consola para proyectar el juego y un móvil por jugador.",
+    "ideal_para": "Cualquier grupo. Son la cúspide de los juegos de salón modernos y garantizan risas sin parar.",
+    "edades": "+13"
+  },
+  {
+    "categoria": "Juegos con el Móvil o Apps",
+    "nombre": "Keep Talking and Nobody Explodes",
+    "como_se_juega": "Un jugador (el 'desactivador') ve una bomba con módulos complejos en una pantalla (PC/VR). Los demás ('expertos') tienen el manual para desactivarla, pero no pueden ver la bomba. La clave es la comunicación precisa y bajo presión.",
+    "que_necesita": "El juego en PC/Consola/VR y el manual (se puede ver en un móvil o imprimir).",
+    "ideal_para": "Grupos que buscan un desafío cooperativo, intenso y de comunicación.",
+    "edades": "+14"
+  },
+  {
+    "categoria": "Juegos con el Móvil o Apps",
+    "nombre": "Spaceteam",
+    "como_se_juega": "Juego cooperativo y caótico. Cada jugador tiene en su móvil un panel de control de una nave espacial. En la pantalla aparecen instrucciones que deben gritar a sus compañeros, mientras atienden las que les gritan a ellos. El objetivo es sobrevivir el mayor tiempo posible.",
+    "que_necesita": "Un smartphone o tablet por jugador con la app gratuita 'Spaceteam'.",
+    "ideal_para": "Grupos que no tienen miedo a gritar y disfrutar del caos cooperativo.",
+    "edades": "+10"
+  },
+  {
+    "categoria": "Juegos de Mesa Modernos",
+    "nombre": "Catan",
+    "como_se_juega": "Los jugadores son colonos que buscan dominar la isla de Catán. Deben recolectar recursos (madera, ovejas, trigo...) para construir poblados, ciudades y carreteras. La negociación con otros jugadores es clave para obtener los recursos que te faltan.",
+    "que_necesita": "El juego de mesa 'Catan'.",
+    "ideal_para": "Grupos que disfrutan de la estrategia, la gestión de recursos y la negociación.",
+    "edades": "+10"
+  },
+  {
+    "categoria": "Juegos de Mesa Modernos",
+    "nombre": "Carcassonne",
+    "como_se_juega": "Juego de colocación de losetas. Por turnos, los jugadores sacan una loseta de paisaje y la colocan en la mesa para construir un mapa medieval. Pueden poner a sus 'meeples' (muñecos) en ciudades, caminos o monasterios para ganar puntos.",
+    "que_necesita": "El juego de mesa 'Carcassonne'.",
+    "ideal_para": "Introducir a nuevos jugadores a los juegos de mesa modernos. Es fácil de aprender pero con profundidad estratégica.",
+    "edades": "+8"
+  },
+  {
+    "categoria": "Juegos de Mesa Modernos",
+    "nombre": "Dixit",
+    "como_se_juega": "Un juego de creatividad y narración. En su turno, un jugador elige una carta con una ilustración surrealista y dice una pista (una palabra, una frase, una canción). Los demás eligen una carta de su mano que se ajuste a la pista. Se barajan todas y se vota por la carta original. Hay que ser sutil para que solo algunos te adivinen.",
+    "que_necesita": "El juego de mesa 'Dixit'.",
+    "ideal_para": "Grupos creativos e imaginativos que disfrutan de la interpretación y la subjetividad.",
+    "edades": "+8"
+  },
+  {
+    "categoria": "Juegos de Cartas y Fiesta",
+    "nombre": "Cards Against Humanity / Manzanas con Manzanas",
+    "como_se_juega": "Un jugador (el 'juez') lee una carta negra con una pregunta o una frase para completar. Los demás jugadores eligen una de sus cartas blancas de respuesta. El juez lee las respuestas en voz alta y elige la más divertida/ingeniosa/absurda. 'Manzanas con Manzanas' es la versión familiar.",
+    "que_necesita": "El juego de cartas correspondiente.",
+    "ideal_para": "Grupos con humor negro e irreverente (CAH) o para todas las edades (Manzanas).",
+    "edades": "+18 (CAH) / +10 (Manzanas)"
+  },
+  {
+    "categoria": "Juegos de Cartas y Fiesta",
+    "nombre": "Exploding Kittens",
+    "como_se_juega": "Una versión de la ruleta rusa con cartas. Los jugadores roban cartas hasta que alguien saca un 'Exploding Kitten', momento en el que queda eliminado. Hay cartas de acción para evitar robar, ver el futuro, atacar a otros jugadores o desactivar al gatito.",
+    "que_necesita": "El juego de cartas 'Exploding Kittens'.",
+    "ideal_para": "Partidas rápidas, sencillas y con mucho azar y momentos de tensión divertidos.",
+    "edades": "+7"
+  },
+  {
+    "categoria": "Juegos de Cartas y Fiesta",
+    "nombre": "UNO",
+    "como_se_juega": "El objetivo es quedarse sin cartas en la mano. Los jugadores deben jugar una carta que coincida en color o número con la del mazo de descarte. Hay cartas especiales (+2, +4, cambio de sentido) que arruinan amistades. ¡No olvides gritar 'UNO' cuando te quede una carta!",
+    "que_necesita": "Una baraja de 'UNO'.",
+    "ideal_para": "Juego intergeneracional, fácil de aprender y que siempre genera piques y risas.",
+    "edades": "+7"
+  },
+  {
+    "categoria": "Juegos de Cartas y Fiesta",
+    "nombre": "The Mind",
+    "como_se_juega": "Juego cooperativo donde el grupo debe jugar cartas numeradas del 1 al 100 en orden ascendente, pero sin hablar ni hacer señas. Deben sincronizar sus mentes para saber cuándo es el momento de jugar su carta. Una experiencia única y casi telepática.",
+    "que_necesita": "El juego de cartas 'The Mind'.",
+    "ideal_para": "Una experiencia de juego diferente, centrada en la conexión y la intuición del grupo.",
+    "edades": "+8"
+  },
+  {
+    "categoria": "Juegos Activos y de Habilidad",
+    "nombre": "Jenga",
+    "como_se_juega": "Se construye una torre con bloques de madera. Por turnos, cada jugador debe retirar un bloque de cualquier nivel inferior y colocarlo en la parte superior de la torre, usando solo una mano. El jugador que derrumbe la torre, pierde.",
+    "que_necesita": "El juego 'Jenga'.",
+    "ideal_para": "Crear tensión y concentración. Perfecto para jugar mientras se charla.",
+    "edades": "Todas las edades"
+  },
+  {
+    "categoria": "Juegos Activos y de Habilidad",
+    "nombre": "El Limbo",
+    "como_se_juega": "Se sostiene un palo (o una cuerda) horizontalmente. Los jugadores deben pasar por debajo del palo inclinándose hacia atrás. Tras cada ronda, el palo se baja un poco más. Quedan eliminados quienes toquen el palo o el suelo.",
+    "que_necesita": "Un palo de escoba o una cuerda, y música para ambientar.",
+    "ideal_para": "Grupos con ganas de moverse un poco y probar su flexibilidad.",
+    "edades": "Todas las edades"
+  },
+  {
+    "categoria": "Juegos Activos y de Habilidad",
+    "nombre": "Beer Pong (o Water Pong)",
+    "como_se_juega": "Dos equipos se colocan en extremos opuestos de una mesa. Cada equipo tiene 6 o 10 vasos colocados en forma de triángulo. El objetivo es lanzar una pelota de ping-pong e intentar que caiga dentro de los vasos del equipo contrario. Si aciertas, el otro equipo retira el vaso. Gana el primero que elimine todos los vasos del oponente. Se puede jugar con agua o cualquier otra bebida.",
+    "que_necesita": "Una mesa larga, vasos de plástico y pelotas de ping-pong.",
+    "ideal_para": "Ambientes de fiesta, competitivo y para poner a prueba la puntería.",
+    "edades": "+18 (con alcohol) / Todas (con agua)"
+  }
+]
