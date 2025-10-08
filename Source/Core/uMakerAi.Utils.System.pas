@@ -101,7 +101,11 @@ type
     class procedure StopInteractiveProcess(var AProcessInfo: TInteractiveProcessInfo);
 
     class function GetSystemEnvironment: TStringList;
+
+    {$IFDEF MSWINDOWS}
     class function ShellOpenFile(const AFileName: string): Boolean;
+    {$ENDIF}
+
   end;
 
 implementation

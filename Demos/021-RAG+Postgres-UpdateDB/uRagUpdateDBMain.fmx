@@ -34,6 +34,7 @@ object Form8: TForm8
     Size.PlatformDefault = False
     TabOrder = 3
     Text = 'Add Text'
+    TextSettings.Trimming = None
     OnClick = BtnAddTextClick
   end
   object MemoTextToAdd: TMemo
@@ -85,6 +86,7 @@ object Form8: TForm8
     Size.PlatformDefault = False
     TabOrder = 16
     Text = 'Buscar'
+    TextSettings.Trimming = None
     OnClick = BtnBuscarClick
   end
   object Memo1: TMemo
@@ -122,22 +124,22 @@ object Form8: TForm8
       'DriverID=PG')
     Connected = True
     LoginPrompt = False
-    Left = 188
-    Top = 16
+    Left = 212
+    Top = 32
   end
   object RAGVectorAdicion: TAiRAGVector
     OnDataVecAddItem = RAGVectorAdicionDataVecAddItem
     Embeddings = AiOllamalEmbeddings1
     InMemoryIndexType = TAIHNSWIndex
-    Left = 128
-    Top = 280
+    Left = 112
+    Top = 272
   end
   object AiOllamalEmbeddings1: TAiOllamalEmbeddings
     Model = 'mxbai-embed-large:latest'
     Dimensions = 1024
     ApiKey = '@OLLAMA_API_KEY'
     Url = 'http://localhost:11434/'
-    Left = 128
+    Left = 176
     Top = 360
   end
   object BusQuery: TFDQuery
@@ -220,32 +222,34 @@ object Form8: TForm8
   object RAGVectorConsulta: TAiRAGVector
     OnDataVecSearch = RAGVectorConsultaDataVecSearch
     Embeddings = AiOllamalEmbeddings1
-    InMemoryIndexType = TAIHNSWIndex
-    Left = 664
-    Top = 600
+    InMemoryIndexType = TAIEuclideanIndex
+    Left = 592
+    Top = 528
   end
   object AiChatConnection1: TAiChatConnection
-    DriverName = 'Ollama'
-    Model = 'phi3:latest'
+    DriverName = 'OpenAi'
+    Model = 'gpt-4o'
     Params.Strings = (
-      'ApiKey=@OLLAMA_API_KEY'
-      'Model=phi3:latest'
+      'ApiKey=@OPENAI_API_KEY'
+      'Model=gpt-4o'
       'MaxTokens=4096'
-      'Temperature=0.7'
+      'Temperature=1.1'
       'TopP=1.0'
       'TopK=5'
       'BaseURL=http://localhost:11434/'
-      'Max_Tokens=4096'
+      'Max_Tokens=8000'
       'NativeInputFiles=[]'
       'NativeOutupFiles=[]'
       'ChatMediaSupports=[]'
       'Tool_Active=False'
-      'Asynchronous=True')
+      'Asynchronous=False'
+      'URL=https://api.openai.com/v1/'
+      'NativeOutputFiles=[]')
     Prompt_tokens = 0
     Completion_tokens = 0
     Total_tokens = 0
     OnReceiveData = AiChatConnection1ReceiveData
-    Left = 792
-    Top = 528
+    Left = 840
+    Top = 512
   end
 end

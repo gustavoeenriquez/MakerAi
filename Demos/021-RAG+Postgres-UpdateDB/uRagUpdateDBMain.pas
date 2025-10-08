@@ -13,6 +13,7 @@ uses
   FireDAC.Phys, FireDAC.Phys.PG, FireDAC.Phys.PGDef, FireDAC.FMXUI.Wait,
   Data.DB, FireDAC.Comp.Client,
   uMakerAi.RAG.Vectors, uMakerAi.Embeddings, uMakerAi.Chat.Ollama, uMakerAi.Core, uMakerAi.Chat,
+  uMakerAi.Chat.OpenAi,
 
   FMX.Controls.Presentation, FMX.StdCtrls, FMX.Memo.Types, FMX.ScrollBox, FMX.Memo, FireDAC.Stan.Param, FireDAC.DatS, FireDAC.DApt.Intf,
   FireDAC.DApt, FireDAC.Comp.DataSet,
@@ -202,7 +203,7 @@ begin
   Try
 
     Md.Data.Values['fechadoc'] := FormatDateTime('YYYY-MM-DD hh:nn:ss', Now);
-    Md.Data.Values['categoria'] := 'Pruebas';
+    Md.Data.Values['categoria'] := 'Ejercicio';
     Md.Data.Values['pathdoc'] := '';
     Md.Data.Values['filename'] := '';
     Md.Data.Values['resumen'] := '';
@@ -210,7 +211,7 @@ begin
     Md.Data.Values['fileformat'] := 'txt';
     Md.TagString := Texto;
 
-    RAGVectorConsulta.AddItem(Texto, Md);
+    RAGVectorAdicion.AddItem(Texto, Md);
   Finally
     Md.Free;
   End;
@@ -218,7 +219,7 @@ end;
 
 procedure TForm8.BtnBuscarClick(Sender: TObject);
 Var
-  Prompt, Res: String;
+  Prompt, Res, ResFinal, promptIA: String;
   Limit: Integer;
   Presicion: Double;
 
@@ -228,6 +229,14 @@ begin
   Prompt := EditPrompt.Text;
   Res := RAGVectorConsulta.SearchText(Prompt, Limit, Presicion);
   MemoRes.Lines.Text := Res;
+
+  PromptIa := 'Responde a la pregunta '+sLineBreak+Prompt +slineBreak+'utilizando esta información, estrae de estos datos lo que te estoy pidiendo '+slineBreak+Res;
+
+  ResFinal := AiChatConnection1.AddMessageAndRun(PromptIA, 'user', []);
+
+  ShowMessage(ResFinal);
+
+
 end;
 
 procedure TForm8.FormCreate(Sender: TObject);

@@ -1,9 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <BorlandProject>
-  <Transactions>
-    <Transaction>2025/09/27 19:24:12.430,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\DemosVersion3.groupproj=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ProjectGroup1.groupproj</Transaction>
+	<Transactions>
+    <Transaction>2025/09/27 19:24:12.000.430,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\DemosVersion3.groupproj=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ProjectGroup1.groupproj</Transaction>
   </Transactions>
-  <Default.Personality>
-    <Projects ActiveProject="E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\031-MCPServer\AiMCPServerDemo.dproj"/>
-  </Default.Personality>
+	<Default.Personality>
+		<Projects ActiveProject="E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\025-RAGGraph\RagGraphDemo.dproj"/>
+	</Default.Personality>
 </BorlandProject>

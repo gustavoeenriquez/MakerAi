@@ -17,7 +17,7 @@ Begin
   // ------------------------- OLLAMA ----------------------------------
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Max_Tokens', '8000');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeInputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeOutuptFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'ChatMediaSupports', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Tool_Active', 'False');
 
@@ -87,7 +87,7 @@ Begin
   // ------------------------- OPENAI ----------------------------------
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'Max_Tokens', '8000');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'NativeInputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'NativeOutuptFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'ChatMediaSupports', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'Tool_Active', 'False');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'Asynchronous', 'False');
@@ -231,7 +231,7 @@ Begin
   // ------------------------- OPENAI Responses  ----------------------------------
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'Max_Tokens', '8000');
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'NativeInputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'NativeOutuptFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'ChatMediaSupports', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'Tool_Active', 'False');
 
@@ -547,7 +547,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'True');
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[tfc_image]'); // Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[tcm_image]'); // Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
-  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeOutuptFiles', '[tfc_textFile]'); // Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeOutputFiles', '[tfc_textFile]'); // Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
 
   // ------- mistral-ocr-latest ------------------------------
   Model := 'mistral-ocr-latest';

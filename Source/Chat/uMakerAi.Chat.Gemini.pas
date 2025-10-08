@@ -294,7 +294,7 @@ constructor TAiGeminiChat.Create(Sender: TComponent);
 begin
   inherited;
   ApiKey := '@GEMINI_API_KEY';
-  Model := 'gemini-1.5-flash-latest';
+  Model := 'gemini-2.5-flash-latest';
   Url := GlAIUrl;
   Top_p := 1;
   // Habilitar la generación de video por defecto
@@ -303,7 +303,11 @@ begin
   // Inicializar los parámetros de video con valores por defecto
   FVideoParams := TStringList.Create;
   FVideoParams.AddPair('aspectRatio', '16:9');
-  FVideoParams.AddPair('personGeneration', 'allow_adult');
+  //FVideoParams.AddPair('personGeneration', 'allow_adult');
+  FVideoParams.AddPair('personGeneration', 'allow_all');
+
+
+
   // # "dont_allow" or "allow_adult" or allow_all
   // FVideoParams.AddPair('personGeneration', 'allow_all'); // # "dont_allow" or "allow_adult" or allow_all
   // FVideoParams.AddPair('numberOfVideos', '1');
@@ -1102,7 +1106,8 @@ begin
       FVideoParams.Values['personGeneration'] := 'allow_adult'
       // # "dont_allow" or "allow_adult" or allow_all
     Else If LModel = 'veo-3.0-generate-preview' then
-      FVideoParams.Values['personGeneration'] := 'allow_all'
+      FVideoParams.Values['personGeneration'] := 'allow_adult'
+      //FVideoParams.Values['personGeneration'] := 'allow_all'
       // # "dont_allow" or "allow_adult" or
     Else
       FVideoParams.Values['personGeneration'] := '';

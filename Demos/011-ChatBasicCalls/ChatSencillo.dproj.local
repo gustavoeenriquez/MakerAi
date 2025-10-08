@@ -191,4 +191,7 @@
     <File Path="uMainChatSencillo.pas"/>
     <File Path="uMainChatSencillo.fmx"/>
   </ProjectSortOrder>
+	<ActiveMobileDevice>
+		<NoProfile Android="" Android64=""/>
+	</ActiveMobileDevice>
 </BorlandProject>

@@ -111,12 +111,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.FontColor = claLightslategray
               Text = 'Total Tokens'
-              TabOrder = 40
+              TabOrder = 39
             end
             object EditTotalTokens: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               ReadOnly = True
               TextSettings.HorzAlign = Trailing
               Margins.Left = 3.000000000000000000
@@ -148,12 +148,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.FontColor = claLightslategray
               Text = 'Promp Tokens'
-              TabOrder = 40
+              TabOrder = 39
             end
             object EditPromptTokens: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               ReadOnly = True
               TextSettings.HorzAlign = Trailing
               Margins.Left = 3.000000000000000000
@@ -185,12 +185,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.FontColor = claLightslategray
               Text = 'Completion Tokens'
-              TabOrder = 40
+              TabOrder = 39
             end
             object EditCompletionTokens: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               ReadOnly = True
               TextSettings.HorzAlign = Trailing
               Margins.Left = 3.000000000000000000
@@ -223,12 +223,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.FontColor = claLightslategray
               Text = 'Used Model'
-              TabOrder = 40
+              TabOrder = 39
             end
             object CompletionModel: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               ReadOnly = True
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
@@ -278,7 +278,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 39
               Text = 'Asincrono'
             end
           end
@@ -295,7 +295,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 39
               Text = 'JSon Format'
             end
           end
@@ -766,12 +766,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
               Text = 'Reasoning Effort'
-              TabOrder = 39
+              TabOrder = 40
             end
             object EditReasoningEffort: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 40
+              TabOrder = 41
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
               Margins.Right = 3.000000000000000000
@@ -801,12 +801,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
               Text = 'Max Tokens'
-              TabOrder = 39
+              TabOrder = 40
             end
             object EditMaxTokens: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 40
+              TabOrder = 41
               FilterChar = '0123456789'
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
@@ -837,7 +837,7 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
               Text = 'Termperature'
-              TabOrder = 39
+              TabOrder = 40
             end
             object TrackTemperature: TTrackBar
               Align = Client
@@ -847,7 +847,7 @@ object Form2: TForm2
               Size.Width = 200.000000000000000000
               Size.Height = 19.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 41
               Value = 10.000000000000000000
               OnTracking = TrackTemperatureTracking
             end
@@ -873,7 +873,7 @@ object Form2: TForm2
           Margins.Top = 5.000000000000000000
           Margins.Right = 5.000000000000000000
           Size.Width = 1019.000000000000000000
-          Size.Height = 580.000000000000000000
+          Size.Height = 598.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 1
           InboundColor = claLightcyan
@@ -883,7 +883,7 @@ object Form2: TForm2
           OnBeforeAddBubble = ChatList1BeforeAddBubble
           OnMediaFileDblClick = ChatList1MediaFileDblClick
           Viewport.Width = 1019.000000000000000000
-          Viewport.Height = 580.000000000000000000
+          Viewport.Height = 598.000000000000000000
         end
         object LblLog: TLabel
           Align = Bottom
@@ -892,7 +892,7 @@ object Form2: TForm2
           Margins.Right = 3.000000000000000000
           Margins.Bottom = 3.000000000000000000
           Position.X = 10.000000000000000000
-          Position.Y = 588.000000000000000000
+          Position.Y = 606.000000000000000000
           Size.Width = 1016.000000000000000000
           Size.Height = 17.000000000000000000
           Size.PlatformDefault = False
@@ -905,9 +905,9 @@ object Form2: TForm2
           Margins.Top = 5.000000000000000000
           Margins.Right = 5.000000000000000000
           Position.X = 5.000000000000000000
-          Position.Y = 613.000000000000000000
+          Position.Y = 631.000000000000000000
           Size.Width = 1019.000000000000000000
-          Size.Height = 89.000000000000000000
+          Size.Height = 71.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 0
           ImagesVisible = False

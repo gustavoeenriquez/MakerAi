@@ -212,4 +212,7 @@
     <File Path="uMainChatFull.pas"/>
     <File Path="uMainChatFull.fmx"/>
   </ProjectSortOrder>
+	<ActiveMobileDevice>
+		<NoProfile Android="" Android64=""/>
+	</ActiveMobileDevice>
 </BorlandProject>

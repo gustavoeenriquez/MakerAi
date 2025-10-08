@@ -29,7 +29,8 @@ type
     MainChatLayout: TLayout;
     ChatList1: TChatList;
     Layout3: TLayout;
-    Layout2: TLayout;
+       Layout2: TLayout;
+
     ComboDriver: TComboBox;
     Label1: TLabel;
     Label2: TLabel;
@@ -601,6 +602,8 @@ Var
   InputMediaFiles, OutputMediaFiles, ChatMediaSuports, Opt: String;
 begin
 
+  AiConn.Params.Clear;
+
   // Se asegura de configurar los parámetros antes de hacer la pregunta
   AiConn.Params.Values['Max_Tokens'] := StrToIntDef(EditMaxTokens.Text, 8000).ToString;
   AiConn.Params.Values['Temperature'] := (TrackTemperature.Value / 10).ToString;
@@ -608,9 +611,9 @@ begin
   AiConn.Params.Values['Asynchronous'] := BoolToStr(ChAsincrono.IsChecked, True);
 
   If ChJSonFormat.IsChecked then
-    AiConn.Params.Values['Response_format'] := 'tiaChatRfJson'
-  Else
-    AiConn.Params.Values['Response_format'] := 'tiaChatRfText';
+    AiConn.Params.Values['Response_format'] := 'tiaChatRfJson';
+  //Else
+  //  AiConn.Params.Values['Response_format'] := 'tiaChatRfText';
 
   AiConn.Params.Values['Voice'] := EditVoices.Text;
   AiConn.Params.Values['Voice_Format'] := EditVoiceFormat.Text;
@@ -646,37 +649,51 @@ begin
   If Opt.Contains('pdf') then
     ChatMediaSuports := ChatMediaSuports + ',tcm_pdf';
 
+
+    //------ NATIVE INPUT FILES ------------
   Opt := LowerCase(EditNativeInputFiles.Text);
 
   If Opt.Contains('image') then
-    InputMediaFiles := InputMediaFiles + ',tcm_image';
+    InputMediaFiles := InputMediaFiles + ',tfc_image';
 
   If Opt.Contains('audio') then
-    InputMediaFiles := InputMediaFiles + ',tcm_audio';
+    InputMediaFiles := InputMediaFiles + ',tfc_audio';
 
   If Opt.Contains('video') then
-    InputMediaFiles := InputMediaFiles + ',tcm_video';
+    InputMediaFiles := InputMediaFiles + ',tfc_video';
 
   If Opt.Contains('pdf') then
-    InputMediaFiles := InputMediaFiles + ',tcm_pdf';
+    InputMediaFiles := InputMediaFiles + ',tfc_pdf';
 
+    //------ NATIVE OUTPUT FILES ------------
   Opt := LowerCase(EditNativeOutputFiles.Text);
 
   If Opt.Contains('image') then
-    OutputMediaFiles := OutputMediaFiles + ',tcm_image';
+    OutputMediaFiles := OutputMediaFiles + ',tfc_image';
 
   If Opt.Contains('audio') then
-    OutputMediaFiles := OutputMediaFiles + ',tcm_audio';
+    OutputMediaFiles := OutputMediaFiles + ',tfc_audio';
 
   If Opt.Contains('video') then
-    OutputMediaFiles := OutputMediaFiles + ',tcm_video';
+    OutputMediaFiles := OutputMediaFiles + ',tfc_video';
 
   If Opt.Contains('pdf') then
-    OutputMediaFiles := OutputMediaFiles + ',tcm_pdf';
+    OutputMediaFiles := OutputMediaFiles + ',tfc_pdf';
+
+  if copy(InputMediaFiles,1,1) = ',' then
+      InputMediaFiles := Copy(InputMediaFiles, 2, Length(InputMediaFiles));
+
+  if copy(OutputMediaFiles,1,1) = ',' then
+      OutputMediaFiles := Copy(OutputMediaFiles, 2, Length(OutputMediaFiles));
+
+  if copy(ChatMediaSuports,1,1) = ',' then
+      ChatMediaSuports := Copy(ChatMediaSuports, 2, Length(ChatMediaSuports));
 
   AiConn.Params.Values['NativeInputFiles'] := '[' + InputMediaFiles + ']';
   AiConn.Params.Values['NativeOutputFiles'] := '[' + OutputMediaFiles + ']';
   AiConn.Params.Values['ChatMediaSupports'] := '[' + ChatMediaSuports + ']';
+
+  ShowMessage(AiConn.Params.Text);
 
 end;
 
