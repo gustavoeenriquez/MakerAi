@@ -1,5 +1,6 @@
 
-# MakerAI 3.0 — The AI Operating System for Delphi
+
+# MakerAI 3.0 Suite — The AI Operating System for Delphi
 
 🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
 
