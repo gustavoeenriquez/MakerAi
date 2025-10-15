@@ -31,6 +31,8 @@
 // --------- CAMBIOS --------------------
 // 04/11/2024 - adiciona el manejo de TAiMediaFile.detail para identificar la calidad de analisis de una imagen
 // 04/11/2024 - Se corrige error de asignación en TAiMediaFile.LoadFromBase64
+// 15/10/2025 - Code Cleanup
+
 
 unit uMakerAi.Core;
 
@@ -86,7 +88,8 @@ Type
 
   TAiMediaFiles = Class;
 
-  // Clase utilizada para el manejo de archivos de medios como audio, imágenes e incluso otros medios como pdf, etc.
+  // Clase utilizada para el manejo de archivos de medios como audio, imágenes, pdf, text, etc.
+
   TAiMediaFile = Class
   Private
     Ffilename: String;
@@ -98,7 +101,6 @@ Type
     FProcesado: Boolean;
     FDetail: String;
     FIdAudio: String;
-    // FCloudUri: String;
     FCloudState: String;
     FCloudName: String;
     FCacheName: String;
@@ -130,14 +132,13 @@ Type
     Procedure LoadFromBase64(aFileName, aBase64: String); Virtual;
     Procedure LoadFromStream(aFileName: String; Stream: TMemoryStream); Virtual;
     Procedure SaveToFile(aFileName: String); Virtual;
-    Function ToString: String;
+    Function ToString: String; override;
     Procedure Clear; Virtual;
 
     function ToJsonObject: TJSONObject; //Exporta el objeto completo a un json
     procedure LoadFromJsonObject(AObject: TJSONObject);
 
     procedure Assign(Source: TAiMediaFile);
-    // function CopyToClipboard: Boolean;
 
     Property filename: String read Ffilename write Setfilename;
     Property bytes: Integer read GetBytes;
@@ -146,8 +147,6 @@ Type
     // Uri de donde se encuentra el archivo para ser subido al modelo
     Property UrlMedia: String read FUrlMedia write SetUrlMedia;
 
-    // Propiedad para almacenar la URI del archvio ya subido al modelo, id que retorna la API, es la url temporal que asinga el modelo
-    // Property CloudUri: String read FCloudUri write SetCloudUri;
     Property CloudState: String read FCloudState write FCloudState;
     // Nombre del archivo con que fue guardado dentro del modelo disponible para la API
     Property CloudName: String read FCloudName write FCloudName;
@@ -177,7 +176,7 @@ Type
   Private
   Protected
   Public
-    // Si el modelo nomaneja este tipo de media failes, se pueden preprocesar en el evento del chat
+    // Si el modelo no maneja este tipo de media files, se pueden preprocesar en el evento del chat
     // y el texto del proceso se adiciona al prompt, y aquí ya no se tendrían en cuenta
     Function GetMediaList(aFilters: TAiFileCategories; aProcesado: Boolean = False): TAiMediaFilesArray;
     Function ToMediaFileArray: TAiMediaFilesArray;  //Retrona una lista con clones de los objetos
@@ -246,11 +245,6 @@ Type
     Constructor Create;
   End;
 
-  // Ejecuta un comando en el shel del sistema operativo correspondiente, Falta implementar bien en MACOS solo Linux, Windows y MACOS
-procedure RunCommand(const Command: string);
-
-// Convierte un audio de un formato a otro utilizando ffmpeg, debe estar instalado en la máquina
-procedure ConvertAudioFileFormat(Origen: TMemoryStream; filename: String; out Destino: TMemoryStream; out DestinoFileName: String);
 
 // Partiendo de la extensión del archivo obtiene la categoria TAiFileCategori
 function GetContentCategory(FileExtension: string): TAiFileCategory;
@@ -278,45 +272,6 @@ uses Winapi.ShellAPI, Winapi.Windows;
 {$REGION 'Utilidades varias' }
 {$I uMakerAi.Version.inc}
 
-procedure RunCommand(const Command: string);
-begin
-
-{$IFDEF LINUX}
-  TUtilsSystem.RunCommandLine(Command);
-{$ENDIF}
-{$IFDEF MSWINDOWS}
-  ShellExecute(0, nil, 'cmd.exe', PChar('/C ' + Command), nil, SW_HIDE);
-{$ENDIF}
-end;
-
-procedure ConvertAudioFileFormat(Origen: TMemoryStream; filename: String; out Destino: TMemoryStream; out DestinoFileName: String);
-Var
-  FOrigen, FDestino: String;
-  CommandLine: String;
-begin
-  Destino := Nil;
-  DestinoFileName := '';
-  filename := LowerCase(filename);
-  FDestino := ChangeFileExt(filename, '.mp3');
-
-  FOrigen := System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetTempPath, filename);
-  FDestino := System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetTempPath, FDestino);
-
-  Origen.Position := 0;
-  Origen.SaveToFile(FOrigen);
-
-  CommandLine := 'ffmpeg -i ' + FOrigen + ' ' + FDestino;
-
-  RunCommand(CommandLine);
-
-  Destino := TMemoryStream.Create;
-  Destino.LoadFromfile(FDestino);
-  Destino.Position := 0;
-  DestinoFileName := ExtractFileName(FDestino);
-
-  TFile.Delete(FOrigen);
-  TFile.Delete(FDestino);
-end;
 
 function GetParametrosURL(Parametros: TStringList): string;
 var
@@ -1552,9 +1507,4 @@ end.
 
 
 
-Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_pdf, Tfc_WebSearch, tfc_textFile, tfc_code_interpreter
-Tcm_Image, Tcm_Audio, Tcm_Video, tcm_pdf, Tcm_WebSearch, tcm_textFile, tcm_code_interpreter
 
-
-
-ReasoningEffort, Voice

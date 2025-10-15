@@ -4,7 +4,6 @@
 
 // --- Imágenes para botones individuales ---
 BTN_MENU_PNG           RCDATA "Resources/Plus_48px.png"
-//BTN_SEND_PNG           RCDATA "Resources/Circled Play_50px.png"
 BTN_SEND_PNG           RCDATA "Resources/Play_52px.png"
 BTN_SOUND_PNG          RCDATA "Resources/Audio Wave_64px.png"
 
@@ -33,5 +32,4 @@ MIC_PREPARING_PNG      RCDATA "Resources/mic_rojo.png"     // O el que uses para
 MIC_LISTENING_PNG      RCDATA "Resources/mic_verde.png"
 MIC_USERTALKING_PNG    RCDATA "Resources/mic_verde_1.png" // O el que uses para 'User Talking'
 MIC_IATALKING_PNG      RCDATA "Resources/mic_verde_2.png" // O el que uses para 'IA Talking'
-// Nota: Tu FMX tiene más imágenes de mic, las he incluido por si las necesitas
 MIC_VERDE_3_PNG        RCDATA "Resources/mic_verde_3.png"

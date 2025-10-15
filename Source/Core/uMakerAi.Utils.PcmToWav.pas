@@ -1,3 +1,63 @@
+// IT License
+//
+// Copyright (c) <year> <copyright holders>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enríquez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+// - Telegram: +57 3128441700
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
+
+// Ejemplo de uso:
+{
+  uses AudioConverter;
+
+  procedure TForm1.Button1Click(Sender: TObject);
+  begin
+  try
+  // Convertir archivo PCM mono de 24kHz y 16 bits
+  if ConvertPCMToWAV('c:\temp\imagen.pcm', 'c:\temp\imagen.wav', 24000, 1, 16) then
+  ShowMessage('Conversión exitosa')
+  else
+  ShowMessage('Error en la conversión');
+  except
+  on E: Exception do
+  ShowMessage('Error: ' + E.Message);
+  end;
+  end;
+
+  // Otros ejemplos:
+  // Estéreo 44.1kHz, 16 bits (valores por defecto)
+  // ConvertPCMToWAV('audio.pcm', 'audio.wav');
+
+  // Mono 8kHz, 16 bits (calidad telefónica)
+  // ConvertPCMToWAV('voice.pcm', 'voice.wav', 8000, 1, 16);
+
+  // Estéreo 48kHz, 16 bits (calidad CD+)
+  // ConvertPCMToWAV('music.pcm', 'music.wav', 48000, 2, 16);
+}
+
 unit uMakerAi.Utils.PcmToWav;
 
 interface
@@ -200,31 +260,4 @@ end;
 
 end.
 
-// Ejemplo de uso:
-{
-  uses AudioConverter;
 
-  procedure TForm1.Button1Click(Sender: TObject);
-  begin
-  try
-  // Convertir archivo PCM mono de 24kHz y 16 bits
-  if ConvertPCMToWAV('c:\temp\imagen.pcm', 'c:\temp\imagen.wav', 24000, 1, 16) then
-  ShowMessage('Conversión exitosa')
-  else
-  ShowMessage('Error en la conversión');
-  except
-  on E: Exception do
-  ShowMessage('Error: ' + E.Message);
-  end;
-  end;
-
-  // Otros ejemplos:
-  // Estéreo 44.1kHz, 16 bits (valores por defecto)
-  // ConvertPCMToWAV('audio.pcm', 'audio.wav');
-
-  // Mono 8kHz, 16 bits (calidad telefónica)
-  // ConvertPCMToWAV('voice.pcm', 'voice.wav', 8000, 1, 16);
-
-  // Estéreo 48kHz, 16 bits (calidad CD+)
-  // ConvertPCMToWAV('music.pcm', 'music.wav', 48000, 2, 16);
-}

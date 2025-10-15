@@ -125,8 +125,6 @@ Const
   GlAIUrl = 'https://generativelanguage.googleapis.com/v1beta/';
   // Endpoints VEO
   GlAIUploadUrl = 'https://generativelanguage.googleapis.com/upload/v1beta/';
-  // GlAIVeoModel = 'veo-2.0-generate-001';
-  // GlAIVeoModel = 'veo-3.0-generate-preview';
 
 procedure Register;
 begin
@@ -305,7 +303,6 @@ begin
   FVideoParams.AddPair('aspectRatio', '16:9');
   //FVideoParams.AddPair('personGeneration', 'allow_adult');
   FVideoParams.AddPair('personGeneration', 'allow_all');
-
 
 
   // # "dont_allow" or "allow_adult" or allow_all
@@ -626,13 +623,6 @@ begin
       // Agregar modelos personalizados
       CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
 
-      { for I := Low(CustomModels) to High(CustomModels) do
-        begin
-        if not Result.Contains(CustomModels[I]) then
-        Result.Add(CustomModels[I]);
-        end;
-      }
-
       for I := Low(CustomModels) to High(CustomModels) do
       begin
 {$IF CompilerVersion <= 35.0}
@@ -674,44 +664,6 @@ begin
 
   Result := LOpenAITools;
 
-  {
-
-
-    Result := nil;
-    LJsonFunctions := inherited GetTools(tfOpenAi).Text;
-
-    if (LJsonFunctions = '') or (not Tool_Active) then
-    Exit;
-
-    LOpenAITools := TJSonObject.ParseJSONValue(LJsonFunctions) as TJSonArray;
-    if not Assigned(LOpenAITools) then
-    Exit;
-
-    try
-    LToolsArray := TJSonArray.Create;
-    LToolObject := TJSonObject.Create;
-    LFuncDeclarations := TJSonArray.Create;
-
-    LToolObject.AddPair('functionDeclarations', LFuncDeclarations);
-    LToolsArray.Add(LToolObject);
-
-    for var LOpenAIFuncValue in LOpenAITools do
-    begin
-    if (LOpenAIFuncValue is TJSonObject) and ((LOpenAIFuncValue as TJSonObject).TryGetValue<TJSonObject>('function', LFuncObject)) then
-    begin
-    LFuncDeclarations.Add(LFuncObject.Clone as TJSonObject);
-    end;
-    end;
-
-    if LFuncDeclarations.Count > 0 then
-    Result := LToolsArray
-    else
-    LToolsArray.Free;
-
-    finally
-    LOpenAITools.Free;
-    end;
-  }
 end;
 
 function TAiGeminiChat.InitChatCompletions: String;
@@ -908,7 +860,6 @@ begin
       end;
     End;
 
-    // aMsg := TAiChatMessage.Create(aMsg.Prompt, aMsg.Role);
     aMsg.Id := FMessages.Count + 1;
     FMessages.Add(aMsg);
 
@@ -922,10 +873,8 @@ begin
         MF.Procesado := True;
         MF.Transcription := Respuesta;
       end;
-      // aMsg.AddMediaFile(MF);
     End;
 
-    // FMessages.Add(Msg);
     FLastPrompt := aMsg.Prompt;
 
     if Assigned(FOnAddMessage) then
@@ -1087,7 +1036,6 @@ begin
   FLastPrompt := AskMsg.Prompt;
 
   // --- PASO 1: Petición inicial ---
-  // LHttpClient := THTTPClient.Create;
 
   LRequest := TJSonObject.Create;
   try
@@ -1122,8 +1070,6 @@ begin
     if Length(MediaArr) > 0 then
     Begin
 
-      // ---- primera forma de hacerlo al parecer no funcionó
-
       begin
         var
         LImagePart := TJSonObject.Create;
@@ -1131,24 +1077,6 @@ begin
         LImagePart.AddPair('bytesBase64Encoded', MediaArr[0].Base64);
         LInstance.AddPair('image', LImagePart);
       end;
-
-
-      // Buscamos un archivo de imagen en el mensaje de petición
-      // ---------- segunda forma de hacerlo al parecer esta si funciona
-
-      {
-        if Assigned(MediaArr[0]) then
-        begin
-        // Creamos el objeto 'image' con el campo 'bytes_value'
-        LImageObject := TJSonObject.Create;
-        // La API espera los bytes de la imagen codificados en Base64
-        LImageObject.AddPair('bytes_value', MediaArr[0].Base64);
-        LInstance.AddPair('image', LImageObject);
-        end;
-      }
-
-      // No funciona ninguna de las dos alternativas ni otras probadas,  no hay más información en la documentación oficial.
-
     End;
 
     LParams := TJSonObject.Create;
@@ -1358,7 +1286,7 @@ begin
         end;
       end);
 
-    // --- AQUÍ LA MAGIA: Esperar a que termine ---
+    // --- Esperar a que termine ---
     VideoTask.Wait;
 
     // Obtener el resultado final
@@ -1591,8 +1519,6 @@ begin
     FLastPrompt := aPrompt;
 
     Result := Msg;
-    // El mensaje del tool no debe llamar un before
-    // if Assigned(FOnBeforeSendMessage) then  FOnBeforeSendMessage(Self, Msg);
 
   Finally
   End;
@@ -1624,7 +1550,9 @@ begin
       FOnReceiveDataEnd(Self, Nil, Nil, 'system', 'abort');
   End;
 
-  S := Trim(UTF8Encode(FResponse.DataString));
+  //S := Trim(UTF8Encode(FResponse.DataString));
+  S := Trim(UTF8ToString(UTF8Encode(FResponse.DataString)));
+
   LRespuesta := '';
   If S <> '' then
   Begin
@@ -1682,145 +1610,6 @@ begin
   End;
 end;
 
-{
-  procedure TAiGeminiChat.ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage);
-  Var
-  LCandidates: TJSonArray;
-  LContent, LUso, LPart, LInlineData: TJSonObject; // <-- Añadido LPart, LInlineData
-  LRespuesta, LRole, sText, sAudioBase64, LClave: String; // <-- Añadido sAudioBase64
-  aPrompt_tokens, aCompletion_tokens, atotal_tokens: Integer;
-  ToolMsg, AskMsg: TAiChatMessage;
-  LFunciones: TAiToolsFunctions;
-  LToolCall: TAiToolsFunction;
-  IsAudioResponse: Boolean; // <-- Flag para saber qué tipo de respuesta es
-  begin
-  LRespuesta := '';
-  sAudioBase64 := '';
-  IsAudioResponse := False;
-  LRole := 'model';
-  // ... (el resto de las inicializaciones) ...
-
-  if not jObj.TryGetValue<TJSonArray>('candidates', LCandidates) or (LCandidates.Count = 0) then
-  begin
-  // ... (el manejo de errores está bien) ...
-  end;
-
-  // ... (la extracción de tool calls está bien) ...
-
-  // --- SECCIÓN MODIFICADA PARA PARSEAR TEXTO O AUDIO ---
-  var LCandidate := LCandidates.Items[0] as TJSonObject;
-  if LCandidate.TryGetValue<TJSonObject>('content', LContent) then
-  begin
-  LContent.TryGetValue<string>('role', LRole);
-  var LParts: TJSonArray;
-  if LContent.TryGetValue<TJSonArray>('parts', LParts) then
-  begin
-  if LParts.Count > 0 then
-  begin
-  // Tomamos la primera "part" para analizarla
-  LPart := LParts.Items[0] as TJSonObject;
-  if LPart.TryGetValue<TJSonObject>('inlineData', LInlineData) then
-  begiVar
-  S: String;
-  jObj: TJSonObject;
-  jContent: TJSonObject;
-  jParts, jCandidates: TJSonArray;
-  jValPart, jCandidate: TJSonValue;
-  LRespuesta, sText: String;
-  begin
-  If FClient.Asynchronous = False then
-  Exit;
-  AAbort := FAbort;
-  If FAbort = True then
-  Begin
-  FBusy := False;
-  If Assigned(FOnReceiveDataEnd) then
-  FOnReceiveDataEnd(Self, Nil, Nil, 'system', 'abort');
-  End;
-  S := Trim(UTF8Encode(FResponse.DataString));
-  LRespuesta := '';
-  If S <> '' then
-  Begin
-  jObj := TJSonObject.ParseJSONValue(S) as TJSonObject;
-  if Assigned(jObj) and jObj.TryGetValue<TJSonArray>('candidates', jCandidates) then
-  Begin
-  // Iterar sobre los candidatos
-  for jCandidate in jCandidates do
-  begin
-  if (jCandidate is TJSonObject) and
-  (jCandidate as TJSonObject).TryGetValue<TJSonObject>('content', jContent) and
-  jContent.TryGetValue<TJSonArray>('parts', jParts) then
-  begin
-  // Iterar sobre las partes
-  for jValPart in jParts do
-  if (jValPart is TJSonObject) and
-  (jValPart as TJSonObject).TryGetValue<string>('text', sText) then
-  LRespuesta := Trim(LRespuesta + sText);
-  end;
-  end;
-  End;
-
-  // No olvides liberar la memoria
-  jObj.Free;
-  End;
-  end;n
-  // ¡Es una respuesta de AUDIO!
-  IsAudioResponse := True;
-  LInlineData.TryGetValue<string>('data', sAudioBase64);
-  end
-  else if LPart.TryGetValue<string>('text', sText) then
-  begin
-  // Es una respuesta de TEXTO
-  LRespuesta := sText;
-  end;
-  end;
-  end;
-  end;
-  // --- FIN DE LA SECCIÓN MODIFICADA ---
-
-  // ... (el parseo de usageMetadata está bien) ...
-
-  if IsAudioResponse then
-  begin
-  // --- FLUJO DE RESPUESTA DE AUDIO ---
-  var AudioFile := TAiMediaFile.Create;
-  try
-  // La respuesta es audio PCM, lo guardamos en el MediaFile
-  AudioFile.LoadFromBase64('generated_audio.pcm', sAudioBase64);
-  ResMsg.AddMediaFile(AudioFile);
-  // El contenido de texto de la respuesta es vacío
-  Self.FLastContent := '';
-  ResMsg.Prompt := '';
-  ResMsg.Content := '';
-  except
-  AudioFile.Free;
-  raise;
-  end;
-  end
-  else
-  begin
-  // --- FLUJO DE RESPUESTA DE TEXTO (código existente) ---
-  LRespuesta := Trim(LRespuesta);
-  DoProcessResponse(AskMsg, ResMsg, LRespuesta);
-
-  Self.FLastContent := LRespuesta;
-  ResMsg.Prompt := LRespuesta;
-  ResMsg.Content := LRespuesta;
-  end;
-
-  // Asignar tokens, rol, etc. (esto es común para ambos flujos)
-  ResMsg.Role := LRole;
-  ResMsg.Prompt_tokens := aPrompt_tokens;
-  // ... (resto del código de asignación de tokens) ...
-
-  // Notificar al final
-  FBusy := False;
-  if Assigned(FOnAddMessage) then
-  FOnAddMessage(Self, ResMsg, jObj, LRole, LRespuesta);
-  if Assigned(FOnReceiveDataEnd) then
-  FOnReceiveDataEnd(Self, ResMsg, jObj, LRole, LRespuesta); // El evento se dispara igual, pero aText estará vacío si es audio
-  end;
-}
 
 procedure TAiGeminiChat.ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage);
 Var
@@ -1878,13 +1667,6 @@ begin
       LParts: TJSonArray;
     if LContent.TryGetValue<TJSonArray>('parts', LParts) then
     Begin
-      {
-        for var jValPart in LParts do
-        Begin
-        if (jValPart is TJSonObject) and (jValPart as TJSonObject).TryGetValue<string>('text', sText) then
-        LRespuesta := Trim(LRespuesta + sText);
-        End;
-      }
       for var jValPart in LParts do
       begin
         if not(jValPart is TJSonObject) then
@@ -1990,6 +1772,7 @@ begin
   Begin
     ResMsg.Role := LRole;
     ResMsg.Tool_calls := '';
+    ResMsg.Model := ModelVersion;
     ResMsg.Prompt := ResMsg.Prompt + LRespuesta;
     ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aPrompt_tokens;
     ResMsg.Completion_tokens := ResMsg.Completion_tokens + aCompletion_tokens;

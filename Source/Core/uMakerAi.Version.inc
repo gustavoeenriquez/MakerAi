@@ -1,19 +1,17 @@
 //uMakerAi.Version;
-
-
 // Version Information
 const
-  MAKERAI_VERSION_MAJOR    = 2;
-  MAKERAI_VERSION_MINOR    = 5;
+  MAKERAI_VERSION_MAJOR    = 3;
+  MAKERAI_VERSION_MINOR    = 0;
   MAKERAI_VERSION_RELEASE  = 0;
   MAKERAI_VERSION_BUILD    = 1;
 
 // Version String Formats
 const
-  MAKERAI_VERSION_SHORT    = '2.5';
-  MAKERAI_VERSION_FULL     = '2.5.0.2';
-  MAKERAI_VERSION_STRING   = 'MakerAi Suite v2.5.0.2';
-  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v2.5 - MCP Support';
+  MAKERAI_VERSION_SHORT    = '3.0';
+  MAKERAI_VERSION_FULL     = '3.0.0.1';
+  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.0.0.1';
+  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.0 - UI Components & Graph RAG';
 
 // Product Information
 const
@@ -24,7 +22,7 @@ const
 
 // Build Information
 const
-  MAKERAI_BUILD_DATE       = '2025-08-17';
+  MAKERAI_BUILD_DATE       = '2025-10-14';
   MAKERAI_BUILD_TIME       = '12:00:00';
   MAKERAI_BUILD_PLATFORM   = {$IFDEF WIN32}'Win32'{$ENDIF}
                             {$IFDEF WIN64}'Win64'{$ENDIF}
@@ -35,14 +33,14 @@ const
 
 // Compatibility Information
 const
-  MAKERAI_MIN_DELPHI_VERSION = '12.0';  // Minimum Delphi version required
-  MAKERAI_TESTED_DELPHI      = '12.2';  // Latest tested Delphi version
+  MAKERAI_MIN_DELPHI_VERSION = '10.4';  // Minimum Delphi version required (10.4 Sydney)
+  MAKERAI_TESTED_DELPHI      = '13.0';  // Latest tested Delphi version (Delphi 13 Athens)
 
 // API Compatibility
 const
-  MAKERAI_API_LEVEL        = 25;        // Internal API level for compatibility
+  MAKERAI_API_LEVEL        = 30;        // Internal API level for compatibility
   MAKERAI_BREAKING_CHANGE  = True;      // True if this version has breaking changes
-  MAKERAI_LEGACY_SUPPORT   = False;     // False = No support for v1.x
+  MAKERAI_LEGACY_SUPPORT   = True;      // True = Support for v2.x components
 
 {******************************************************************************}
 {                              VERSION HISTORY                                 }
@@ -80,17 +78,25 @@ const
   - NOT compatible with v1.x
   - Migration from API wrapper to AI assistant tool
 
-  Version 2.5.0 (2025-08-04) -
+  Version 2.5.0 (2025-08-04)
   - Added MCP (Model Context Protocol) support
   - Enhanced multi-platform compatibility
   - Improved interactive process management
   - Linux/POSIX full support
 
-
-  Version 2.5.2 (2025-08-17) - CURRENT
+  Version 2.5.2 (2025-08-17)
   - Added MCP Server (Model Context Protocol)
-  - added Agents for complex flow
-  }
+  - Added Agents for complex flow
+
+  Version 3.0.0 (2025-10-14) - MAJOR RELEASE
+  - NEW: Visual UI components for rapid chat development
+  - NEW: Graph-based vector database (RAG-Graph)
+  - ENHANCED: Traditional vector database (RAG-Vector)
+  - Compatible with Delphi 10.4 Sydney through Delphi 13 Athens
+  - Improved visual component integration
+  - Enhanced RAG capabilities with graph relationships
+  - Backward compatible with v2.x components
+}
 {******************************************************************************}
 
 // Feature Flags (Current Version)
@@ -99,10 +105,13 @@ const
   MAKERAI_HAS_WHISPER      = True;
   MAKERAI_HAS_EMBEDDINGS   = True;
   MAKERAI_HAS_TOOL_CALLING = True;
-  MAKERAI_HAS_RAG          = True;
+  MAKERAI_HAS_RAG_VECTOR   = True;  // Traditional vector-based RAG
+  MAKERAI_HAS_RAG_GRAPH    = True;  // NEW: Graph-based RAG
   MAKERAI_HAS_ASSISTANTS   = True;
   MAKERAI_HAS_MCP          = True;
   MAKERAI_HAS_CHAT_CONNECTION = True;
+  MAKERAI_HAS_UI_COMPONENTS = True; // NEW: Visual UI components
+  MAKERAI_HAS_AGENTS       = True;
 
 // Platform Support
 const
@@ -119,9 +128,7 @@ const
 {******************************************************************************}
 {                                UTILITIES                                     }
 {******************************************************************************}
-
 {
-
 // Function to get full version info at runtime
 function GetMakerAiVersionInfo: string;
 begin
@@ -149,16 +156,18 @@ begin
   else if SameText(FeatureName, 'Whisper') then Result := MAKERAI_HAS_WHISPER
   else if SameText(FeatureName, 'Embeddings') then Result := MAKERAI_HAS_EMBEDDINGS
   else if SameText(FeatureName, 'ToolCalling') then Result := MAKERAI_HAS_TOOL_CALLING
-  else if SameText(FeatureName, 'RAG') then Result := MAKERAI_HAS_RAG
+  else if SameText(FeatureName, 'RAG') then Result := MAKERAI_HAS_RAG_VECTOR
+  else if SameText(FeatureName, 'RAG-Vector') then Result := MAKERAI_HAS_RAG_VECTOR
+  else if SameText(FeatureName, 'RAG-Graph') then Result := MAKERAI_HAS_RAG_GRAPH
   else if SameText(FeatureName, 'Assistants') then Result := MAKERAI_HAS_ASSISTANTS
   else if SameText(FeatureName, 'MCP') then Result := MAKERAI_HAS_MCP
-  else if SameText(FeatureName, 'ChatConnection') then Result := MAKERAI_HAS_CHAT_CONNECTION;
+  else if SameText(FeatureName, 'ChatConnection') then Result := MAKERAI_HAS_CHAT_CONNECTION
+  else if SameText(FeatureName, 'UI') then Result := MAKERAI_HAS_UI_COMPONENTS
+  else if SameText(FeatureName, 'UIComponents') then Result := MAKERAI_HAS_UI_COMPONENTS
+  else if SameText(FeatureName, 'Agents') then Result := MAKERAI_HAS_AGENTS;
 end;
 
-
-
 //Mostrar en el versión about dialog
-
 procedure TFormAbout.FormShow(Sender: TObject);
 begin
   lblVersion.Caption := MAKERAI_VERSION_STRING;
@@ -167,21 +176,18 @@ begin
   memoVersionInfo.Text := GetMakerAiVersionInfo;
 end;
 
+//Para verificar compatibilidad
+if not IsMakerAiVersionCompatible(3, 0) then
+  raise Exception.Create('This feature requires MakerAi v3.0 or higher');
 
-//para verificar compatibilidad
+if not IsMakerAiFeatureAvailable('RAG-Graph') then
+  raise Exception.Create('RAG-Graph support not available in this version');
 
-if not IsMakerAiVersionCompatible(2, 0) then
-  raise Exception.Create('This feature requires MakerAi v2.0 or higher');
+if not IsMakerAiFeatureAvailable('UIComponents') then
+  raise Exception.Create('UI Components not available in this version');
 
-if not IsMakerAiFeatureAvailable('MCP') then
-  raise Exception.Create('MCP support not available in this version');
-
-
-  //para utilizar en recurso .rc de windows
-
-  // En tu archivo de recursos
+//Para utilizar en recurso .rc de Windows
+// En tu archivo de recursos
 1 VERSIONINFO
 FILEVERSION MAKERAI_VERSION_MAJOR,MAKERAI_VERSION_MINOR,MAKERAI_VERSION_RELEASE,MAKERAI_VERSION_BUILD
-
-
 }

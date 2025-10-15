@@ -100,6 +100,12 @@ Procedure Register;
 
 implementation
 
+
+{$IFDEF MSWINDOWS}
+uses Winapi.ShellAPI, Winapi.Windows;
+{$ENDIF}
+
+
 { TAiAudio }
 
 Const
@@ -109,6 +115,48 @@ procedure Register;
 begin
   RegisterComponents('MakerAI', [TAIWhisper]);
 end;
+
+
+procedure RunCommand(const Command: string);
+begin
+
+{$IFDEF LINUX}
+  TUtilsSystem.RunCommandLine(Command);
+{$ENDIF}
+{$IFDEF MSWINDOWS}
+  ShellExecute(0, nil, 'cmd.exe', PChar('/C ' + Command), nil, SW_HIDE);
+{$ENDIF}
+end;
+
+procedure ConvertAudioFileFormat(Origen: TMemoryStream; filename: String; out Destino: TMemoryStream; out DestinoFileName: String);
+Var
+  FOrigen, FDestino: String;
+  CommandLine: String;
+begin
+  Destino := Nil;
+  DestinoFileName := '';
+  filename := LowerCase(filename);
+  FDestino := ChangeFileExt(filename, '.mp3');
+
+  FOrigen := System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetTempPath, filename);
+  FDestino := System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetTempPath, FDestino);
+
+  Origen.Position := 0;
+  Origen.SaveToFile(FOrigen);
+
+  CommandLine := 'ffmpeg -i ' + FOrigen + ' ' + FDestino;
+
+  RunCommand(CommandLine);
+
+  Destino := TMemoryStream.Create;
+  Destino.LoadFromfile(FDestino);
+  Destino.Position := 0;
+  DestinoFileName := ExtractFileName(FDestino);
+
+  TFile.Delete(FOrigen);
+  TFile.Delete(FDestino);
+end;
+
 
 
 procedure TAIWhisper.ConvertAudioIfNeeded(var aStream: TMemoryStream; var aFileName: String);
@@ -272,7 +320,7 @@ begin
     JObj.AddPair('response_format', FFormat);
     JObj.AddPair('speed', FSpeed);
 
-    St.WriteString(UTF8Encode(JObj.Format));
+    St.WriteString(JObj.ToJSON);
     St.Position := 0;
 
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
@@ -344,7 +392,7 @@ begin
   Try
     aStream.Position := 0;
 
-    Body.AddStream('file', aStream, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    Body.AddStream('file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
     Body.AddField('model', FModel);
     Body.AddField('prompt', aPrompt);
     Body.AddField('response_format', FResponseFormat);
@@ -416,7 +464,7 @@ begin
   Try
     aStream.Position := 0;
 
-    Body.AddStream('file', aStream, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    Body.AddStream('file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
     Body.AddField('model', FModel);
     Body.AddField('prompt', aPrompt);
     Body.AddField('response_format', FResponseFormat);

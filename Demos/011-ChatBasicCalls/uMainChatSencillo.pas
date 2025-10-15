@@ -337,7 +337,7 @@ end;
 procedure TForm7.AiConnReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
 Var
   MF: TAiMediaFile;
-  S, Ext, FileNameInput, FileNameOutput, FileName: String;
+  Ext, FileNameOutput, FileName: String;
 begin
   Randomize;
 
@@ -413,9 +413,10 @@ begin
 end;
 
 procedure TForm7.AiFunctions1Functions1CreaListaDeNumerosPrimosAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
-Var
+{Var
   N: Integer;
   Resultado, Script: String;
+}
 begin
 
   // Si desea utilizar la funcionalidad de script de python debe instalar Delphi4Pyton desde el Gettit
@@ -778,10 +779,7 @@ function TForm7.EnviarPrompt: String;
 Var
   Res, Prompt: String;
   MF: TAiMediaFile;
-  LastMessage: TAiChatMessage;
-  Msg: TAiChatMessage;
 begin
-  MF := Nil; // Importante inicializar el MF
 
   // AiConn.UpdateParamsFromRegistry;
 

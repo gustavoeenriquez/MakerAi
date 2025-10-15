@@ -1,7 +1,7 @@
 ﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{4893F379-DA69-4647-BB19-9BD6EACC11BD}</ProjectGuid>
-        <MainSource>uMakerAi.UI.dpk</MainSource>
+        <MainSource>MakerAi.UI.dpk</MainSource>
         <ProjectVersion>20.3</ProjectVersion>
         <FrameworkType>FMX</FrameworkType>
         <Base>True</Base>
@@ -9,7 +9,7 @@
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <TargetedPlatforms>32771</TargetedPlatforms>
         <AppType>Package</AppType>
-        <ProjectName Condition="'$(ProjectName)'==''">uMakerAi.UI</ProjectName>
+        <ProjectName Condition="'$(ProjectName)'==''">MakerAi.UI</ProjectName>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
@@ -72,7 +72,7 @@
         <GenPackage>true</GenPackage>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
         <DCC_CBuilderOutput>All</DCC_CBuilderOutput>
-        <SanitizedProjectName>uMakerAi_UI</SanitizedProjectName>
+        <SanitizedProjectName>MakerAi_UI</SanitizedProjectName>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Android)'!=''">
         <DCC_CBuilderOutput>None</DCC_CBuilderOutput>
@@ -141,6 +141,7 @@
         <DCCReference Include="..\ChatUI\uMakerAi.UI.ChatBubble.pas"/>
         <DCCReference Include="..\ChatUI\uMakerAi.UI.ChatInput.pas"/>
         <DCCReference Include="..\ChatUI\uMakerAi.UI.ChatList.pas"/>
+        <DCCReference Include="..\ChatUI\uMakerAi.Utils.ScreenCapture.pas"/>
         <RcCompile Include="..\ChatUI\UIResources.rc">
             <Form>UIResources.res</Form>
         </RcCompile>
@@ -162,7 +163,7 @@
         <BorlandProject>
             <Delphi.Personality>
                 <Source>
-                    <Source Name="MainSource">uMakerAi.UI.dpk</Source>
+                    <Source Name="MainSource">MakerAi.UI.dpk</Source>
                 </Source>
                 <Excluded_Packages>
                     <Excluded_Packages Name="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\23.0\CatalogRepository\TeeBI\Sources\Compiled\Delphi29.win32\Bin\DclTeeBI29.bpl">File C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\23.0\CatalogRepository\TeeBI\Sources\Compiled\Delphi29.win32\Bin\DclTeeBI29.bpl not found</Excluded_Packages>
@@ -189,9 +190,9 @@
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
-                <DeployFile LocalName="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\uMakerAi.UI.bpl" Configuration="Debug" Class="ProjectOutput">
+                <DeployFile LocalName="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\MakerAi.UI.bpl" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
-                        <RemoteName>uMakerAi.UI.bpl</RemoteName>
+                        <RemoteName>MakerAi.UI.bpl</RemoteName>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>

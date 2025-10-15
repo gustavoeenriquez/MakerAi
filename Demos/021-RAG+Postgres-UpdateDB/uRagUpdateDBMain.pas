@@ -30,7 +30,6 @@ type
     RAGVectorAdicion: TAiRAGVector;
     BtnAddText: TButton;
     MemoTextToAdd: TMemo;
-    AiOllamalEmbeddings1: TAiOllamalEmbeddings;
     BusQuery: TFDQuery;
     Grid1: TGrid;
     BindSourceDB1: TBindSourceDB;
@@ -51,6 +50,7 @@ type
     RAGVectorConsulta: TAiRAGVector;
     AiChatConnection1: TAiChatConnection;
     BusQuerydistancia: TFloatField;
+    AiOllamaEmbeddings1: TAiOllamaEmbeddings;
     procedure BtnAddTextClick(Sender: TObject);
     procedure RAGVectorAdicionDataVecAddItem(Sender: TObject; aItem: TAiEmbeddingNode; MetaData: TAiEmbeddingMetaData;
       var Handled: Boolean);
@@ -59,6 +59,7 @@ type
       var aDataVec: TAiRAGVector; var Handled: Boolean);
     procedure FormCreate(Sender: TObject);
     procedure AiChatConnection1ReceiveData(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
+    procedure MemoTextToAddChange(Sender: TObject);
   private
     GlLista: TStringList;
     Function NewQuery: TFDQuery;
@@ -243,6 +244,11 @@ procedure TForm8.FormCreate(Sender: TObject);
 begin
   GlLista := TStringList.Create;
 
+end;
+
+procedure TForm8.MemoTextToAddChange(Sender: TObject);
+begin
+  RAGVectorAdicion.BuildIndex
 end;
 
 function TForm8.NewQuery: TFDQuery;

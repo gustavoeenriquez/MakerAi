@@ -53,7 +53,7 @@ contains
   uMakerAi.Chat.OpenAi in '..\Chat\uMakerAi.Chat.OpenAi.pas',
   uMakerAi.Chat.OpenAiResponses in '..\Chat\uMakerAi.Chat.OpenAiResponses.pas',
   uMakerAi.ToolFunctions in '..\Chat\uMakerAi.ToolFunctions.pas',
-  UMakerAi.Chat in '..\Core\uMakerAi.Chat.pas',
+  uMakerAi.Chat in '..\Core\uMakerAi.Chat.pas',
   uMakerAi.Core in '..\Core\uMakerAi.Core.pas',
   uMakerAi.Embeddings in '..\Core\uMakerAi.Embeddings.pas',
   uMakerAi.Prompts in '..\Core\uMakerAi.Prompts.pas',
@@ -71,6 +71,12 @@ contains
   uMakerAi.Embeddings.core in '..\Core\uMakerAi.Embeddings.core.pas',
   uMakerAi.RAG.Graph.Builder in '..\RAG\uMakerAi.RAG.Graph.Builder.pas',
   uMakerAi.RAG.Graph.Core in '..\RAG\uMakerAi.RAG.Graph.Core.pas',
-  uMakerAi.RAG.Vectors in '..\RAG\uMakerAi.RAG.Vectors.pas';
+  uMakerAi.RAG.Vectors in '..\RAG\uMakerAi.RAG.Vectors.pas',
+  uMakerAi.Agents.Attributes in '..\Agents\uMakerAi.Agents.Attributes.pas',
+  uMakerAi.Agents.EngineRegistry in '..\Agents\uMakerAi.Agents.EngineRegistry.pas',
+  UMakerAi.ParamsRegistry in '..\Design\UMakerAi.ParamsRegistry.pas';
 
 end.
+
+
+

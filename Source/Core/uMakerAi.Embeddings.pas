@@ -104,21 +104,18 @@ begin
 
   SetLength(FData, jData.Count);
 
-  // var i := 0;
   For JVal in jData do
   Begin
     // El embedding de OpenAi Retorna un array, pero solo se toma el primero de la fila
     JArr := TJsonObject(JVal).GetValue<TJSonArray>('embedding');
     J := JArr.Count;
     SetLength(Emb, J);
-    // FillChar(Emb, Length(Emb) * SizeOf(Double), 0);
 
     For J := 0 to JArr.Count - 1 do
       Emb[J] := JArr.Items[J].GetValue<Double>;
 
     FData := Emb;
-    // Inc(i);
-    Break; // Si el embedding de OpenAI retorna varios solo tomamos el primero, usualmente solo hay uno
+    Break;
   End;
 
 end;
@@ -163,7 +160,8 @@ begin
     JObj.AddPair('dimensions', aDimensions);
     JObj.AddPair('encoding_format', aEncodingFormat);
 
-    St.WriteString(UTF8Encode(JObj.Format));
+    //St.WriteString(UTF8Encode(JObj.Format));
+    St.WriteString(JObj.Format); // Sin conversión
     St.Position := 0;
 
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];

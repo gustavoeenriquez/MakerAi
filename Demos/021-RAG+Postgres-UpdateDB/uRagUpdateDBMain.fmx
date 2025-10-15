@@ -40,6 +40,7 @@ object Form8: TForm8
   object MemoTextToAdd: TMemo
     Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
     DataDetectorTypes = []
+    OnChange = MemoTextToAddChange
     Position.X = 8.000000000000000000
     Position.Y = 152.000000000000000000
     Size.Width = 289.000000000000000000
@@ -129,18 +130,10 @@ object Form8: TForm8
   end
   object RAGVectorAdicion: TAiRAGVector
     OnDataVecAddItem = RAGVectorAdicionDataVecAddItem
-    Embeddings = AiOllamalEmbeddings1
+    Embeddings = AiOllamaEmbeddings1
     InMemoryIndexType = TAIHNSWIndex
     Left = 112
     Top = 272
-  end
-  object AiOllamalEmbeddings1: TAiOllamalEmbeddings
-    Model = 'mxbai-embed-large:latest'
-    Dimensions = 1024
-    ApiKey = '@OLLAMA_API_KEY'
-    Url = 'http://localhost:11434/'
-    Left = 176
-    Top = 360
   end
   object BusQuery: TFDQuery
     Connection = DbConn
@@ -221,7 +214,7 @@ object Form8: TForm8
   end
   object RAGVectorConsulta: TAiRAGVector
     OnDataVecSearch = RAGVectorConsultaDataVecSearch
-    Embeddings = AiOllamalEmbeddings1
+    Embeddings = AiOllamaEmbeddings1
     InMemoryIndexType = TAIEuclideanIndex
     Left = 592
     Top = 528
@@ -248,8 +241,19 @@ object Form8: TForm8
     Prompt_tokens = 0
     Completion_tokens = 0
     Total_tokens = 0
+    WebSearch = False
+    CodeInterpreter = False
+    ExtractTextFiles = False
     OnReceiveData = AiChatConnection1ReceiveData
     Left = 840
     Top = 512
+  end
+  object AiOllamaEmbeddings1: TAiOllamaEmbeddings
+    Model = 'snowflake-arctic-embed'
+    Dimensions = 1024
+    ApiKey = '@OLLAMA_API_KEY'
+    Url = 'http://localhost:11434/'
+    Left = 600
+    Top = 392
   end
 end

@@ -180,7 +180,9 @@
         <DCCReference Include="..\RAG\uMakerAi.RAG.Graph.Builder.pas"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Graph.Core.pas"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Vectors.pas"/>
-        <None Include="..\Core\uMakerAi.Version.inc"/>
+        <DCCReference Include="..\Agents\uMakerAi.Agents.Attributes.pas"/>
+        <DCCReference Include="..\Agents\uMakerAi.Agents.EngineRegistry.pas"/>
+        <DCCReference Include="..\Design\UMakerAi.ParamsRegistry.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

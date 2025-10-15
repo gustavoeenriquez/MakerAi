@@ -62,7 +62,6 @@ type
     Class Function GetModels(aApiKey: String; aUrl: String = ''): TStringList; Override;
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
-    // Function Run(aMsg: TAiChatMessage = Nil): String; Override;
     Function GetMessages: TJSonArray; Override;
     class function GetDriverName: string; Override;
     class procedure RegisterDefaultParams(Params: TStrings); Override;
@@ -71,7 +70,7 @@ type
     property keep_alive: String read Fkeep_alive write Setkeep_alive;
   End;
 
-  TAiOllamalEmbeddings = class(TAiEmbeddings)
+  TAiOllamaEmbeddings = class(TAiEmbeddings)
   Public
     Constructor Create(aOwner: TComponent); Override;
     Destructor Destroy; Override;
@@ -89,7 +88,7 @@ Const
 
 procedure Register;
 begin
-  RegisterComponents('MakerAI', [TAiOllamaChat, TAiOllamalEmbeddings]);
+  RegisterComponents('MakerAI', [TAiOllamaChat, TAiOllamaEmbeddings]);
 end;
 
 class function TAiOllamaChat.GetDriverName: string;
@@ -133,59 +132,6 @@ begin
   inherited;
 end;
 
-{ procedure TAiOllamaChat.DoCallFunction(ToolCall: TAiToolsFunction);
-  begin
-  If Assigned(FOnCallToolFunction) then
-  FOnCallToolFunction(Self, ToolCall)
-  end;
-}
-
-{ //esta es la original, pero no funciona en la revisión del 2025 se modifica
-  function TAiOllamaChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
-  Var
-  JObj, Msg, Arg: TJSonObject;
-  JVal, JVal1: TJSonValue;
-  Fun: TAiToolsFunction;
-  JToolCalls: TJSonArray;
-  I: Integer;
-  Nom, Valor: String;
-  begin
-  Result := TAiToolsFunctions.Create;
-
-  For JVal1 in jChoices do
-  Begin
-  Msg := TJSonObject(JVal1).GetValue<TJSonObject>('message');
-
-  If Msg.TryGetValue<TJSonArray>('tool_calls', JToolCalls) then
-  Begin
-  For JVal in JToolCalls do
-  Begin
-  JObj := TJSonObject(JVal);
-  If JObj.GetValue<String>('type') = 'function' then
-  Begin
-  JObj := TJSonObject(JVal);
-  Fun := TAiToolsFunction.Create;
-  Fun.Id := JObj.GetValue<String>('id');
-  Fun.Tipo := JObj.GetValue<String>('type');
-  Fun.Name := JObj.GetValue<TJSonObject>('function').GetValue<String>('name');
-  Fun.Arguments := JObj.GetValue<TJSonObject>('function').GetValue<String>('arguments');
-
-  Arg := JObj.GetValue<TJSonObject>('function').GetValue<TJSonObject>('arguments');
-  For I := 0 to Arg.Count - 1 do
-  Begin
-  Nom := Arg.Pairs[I].JsonString.Value;
-  Valor := Arg.Pairs[I].JsonValue.Value;
-  Fun.Params.Values[Nom] := Valor;
-  End;
-
-  Result.Add(Fun.Id, Fun);
-  End;
-  End;
-  End;
-  End;
-  end;
-
-}
 
 // Se simplifica la recepción debido a que en la versión 2025 se eliminan parámetros
 function TAiOllamaChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
@@ -274,34 +220,7 @@ begin
       End;
     End;
 
-
-    // Solo crea una lista de imagenes y siempre en base64
-    { If (Msg.VisionUrls.Count > 0) or (Msg.VisionBase64.Count > 0) then
-      Begin
-      jImages := TJSonArray.Create;
-
-      If Msg.VisionUrls.Count > 0 then
-      Begin
-      For J := 0 to Msg.VisionUrls.Count - 1 do
-      Begin
-      jImages.Add(Msg.VisionUrls[J]);
-      End;
-      End;
-
-      If Msg.VisionBase64.Count > 0 then
-      Begin
-      For J := 0 to Msg.VisionBase64.Count - 1 do
-      Begin
-      jImages.Add(Msg.VisionBase64[J]);
-      End;
-      End;
-      JObj.AddPair('images', jImages);
-      End;
-    }
-
     If Msg.Tool_calls <> '' then
-
-
 
 {$IF CompilerVersion < 35}
       JObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.Tool_calls));
@@ -365,12 +284,6 @@ begin
       // Agregar modelos personalizados
       CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
 
-      {for I := Low(CustomModels) to High(CustomModels) do
-      begin
-        if not Result.Contains(CustomModels[I]) then
-          Result.Add(CustomModels[I]);
-      end;
-      }
       for I := Low(CustomModels) to High(CustomModels) do
       begin
        {$IF CompilerVersion <= 35.0}
@@ -468,7 +381,6 @@ begin
 
     If LAsincronico or (FResponse_format = tiaChatRfJson) then
       AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_object'));
-    // Else AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'text'));
 
     Lista.CommaText := Stop;
     If Lista.Count > 0 then
@@ -493,7 +405,10 @@ begin
     If Seed > 0 then
       AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
 
-    Result := UTF8ToString(AJSONObject.ToJSon);
+    var Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
+    Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
+    Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
+
   Finally
     AJSONObject.Free;
     Lista.Free;
@@ -629,7 +544,8 @@ begin
 
   try
     // Recuperar chunk recibido
-    sJson := UTF8Encode(FResponse.DataString);
+    sJson := FResponse.DataString;
+
     FResponse.Clear;
 
     // Acumular
@@ -734,9 +650,6 @@ begin
 
   AskMsg := GetLastMessage; // Obtiene el mensaje de la solicitud
 
-  // Id := JObj.GetValue('id').Value;
-  // IdObject := JObj.GetValue('object').Value;
-  // IdCreate := JObj.GetValue('created').GetValue<String>;
   LModel := JObj.GetValue('model').Value;
 
   JObj.TryGetValue<Integer>('prompt_eval_count', aPrompt_tokens);
@@ -752,8 +665,6 @@ begin
       sToolCalls := JToolCalls.Format;
   End;
 
-  /// Msg := TAiChatMessage.Create(Respuesta, Role);
-
   DoProcessResponse(GetLastMessage, ResMsg, Respuesta);
 
   Self.FLastContent := Respuesta;
@@ -766,11 +677,7 @@ begin
   ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aPrompt_tokens;
   ResMsg.Completion_tokens := ResMsg.Completion_tokens + aCompletion_tokens;
   ResMsg.Total_tokens := ResMsg.Total_tokens + aTotal_tokens;
-  // ResMsg.Id := FMessages.Count + 1;
-  // ResFMessages.Add(Msg);
-
-  // If Assigned(FOnAddMessage) then
-  // FOnAddMessage(Self, jObj, Role, Respuesta);
+  ResMsg.Model := LModel;
 
   choices := TJSonArray.Create;
   choices.Add(JObj);
@@ -858,7 +765,7 @@ end;
 
 { TAiOlamalEmbeddings }
 
-constructor TAiOllamalEmbeddings.Create(aOwner: TComponent);
+constructor TAiOllamaEmbeddings.Create(aOwner: TComponent);
 begin
   inherited;
   ApiKey := '@OLLAMA_API_KEY';
@@ -879,7 +786,7 @@ end;
   Url para llamado http://IPOLLAMASERVER:11434/
 }
 
-function TAiOllamalEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String)
+function TAiOllamaEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String)
   : TAiEmbeddingData;
 Var
   Client: TNetHTTPClient;
@@ -914,7 +821,7 @@ begin
     JObj.AddPair('dimensions', aDimensions);
     JObj.AddPair('encoding_format', aEncodingFormat);
 
-    St.WriteString(UTF8Encode(JObj.Format));
+    St.WriteString(JObj.ToJson);
     St.Position := 0;
 
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
@@ -941,13 +848,13 @@ begin
   End;
 end;
 
-destructor TAiOllamalEmbeddings.Destroy;
+destructor TAiOllamaEmbeddings.Destroy;
 begin
 
   inherited;
 end;
 
-procedure TAiOllamalEmbeddings.ParseEmbedding(JObj: TJSonObject);
+procedure TAiOllamaEmbeddings.ParseEmbedding(JObj: TJSonObject);
 Var
   JArr: TJSonArray;
   J: Integer;

@@ -4,13 +4,14 @@ interface
 
 uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants, System.JSON,
-  System.Generics.Collections,
+  System.Generics.Collections, System.Rtti,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Controls.Presentation, FMX.StdCtrls,
   uMakerAi.RAG.Graph.Core, uMakerAi.RAG.Graph.Builder, FMX.Memo.Types, FMX.ScrollBox, FMX.Memo, uMakerAi.Embeddings.Core,
   uMakerAi.Embeddings, uMakerAi.Chat.OpenAi, uMakerAi.RAG.Vectors, FMX.Edit, uMakerAi.Prompts,
   uMakerAi.Chat.AiConnection, uMakerAi.Chat, uMakerAi.Core, FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Param, FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf, FireDAC.DApt.Intf, FireDAC.Stan.Async, FireDAC.DApt,
   uMakerAi.Chat.Gemini,
-  FireDAC.UI.Intf, FireDAC.Stan.Def, FireDAC.Stan.Pool, FireDAC.Phys, FireDAC.Phys.PGDef, FireDAC.FMXUI.Wait, FireDAC.Comp.UI, FireDAC.Phys.PG, Data.DB, FireDAC.Comp.Client, FireDAC.Comp.DataSet, FMX.Objects, FMX.Layouts, FMX.TabControl;
+  FireDAC.UI.Intf, FireDAC.Stan.Def, FireDAC.Stan.Pool, FireDAC.Phys, FireDAC.Phys.PGDef, FireDAC.FMXUI.Wait, FireDAC.Comp.UI, FireDAC.Phys.PG, Data.DB, FireDAC.Comp.Client, FireDAC.Comp.DataSet, FMX.Objects, FMX.Layouts, FMX.TabControl,
+  FMX.ListBox, FMX.EditBox, FMX.SpinBox, FMX.SearchBox, uMakerAi.RAG.Graph.Driver.Postgres;
 
 type
 
@@ -29,7 +30,7 @@ type
     SaveDialog1: TSaveDialog;
     DbConn: TFDConnection;
     MainLayout: TLayout;
-    Builder1: TAiRagGraphBuilder;
+    RAGBuilder1: TAiRagGraphBuilder;
     Layout1: TLayout;
     Button1: TButton;
     Image1: TImage;
@@ -71,6 +72,47 @@ type
     Image7: TImage;
     BtnBusquedaRAG: TButton;
     Image4: TImage;
+    TabMatch: TTabItem;
+    Layout8: TLayout;
+    Layout9: TLayout;
+    cbDirection: TComboBox;
+    Label7: TLabel;
+    cbStartNodeLabel: TComboBox;
+    cbTargetNodeLabel: TComboBox;
+    cbEdgeLabel: TComboBox;
+    Label8: TLabel;
+    Label9: TLabel;
+    Label10: TLabel;
+    edtStartNodeName: TEdit;
+    Label11: TLabel;
+    BtnInitMatch: TButton;
+    BtnListTriplets: TButton;
+    popSuggestions: TPopup;
+    lbSuggestions: TListBox;
+    numDepth: TSpinBox;
+    chMatchShowProperties: TCheckBox;
+    RAGPgDriver: TAiRagGraphPostgresDriver;
+    Label13: TLabel;
+    Layout10: TLayout;
+    Layout11: TLayout;
+    Splitter4: TSplitter;
+    Label14: TLabel;
+    lbQuerySteps: TListBox;
+    Layout12: TLayout;
+    Label15: TLabel;
+    MemoResults: TMemo;
+    Layout13: TLayout;
+    BtnClear: TButton;
+    btnAddStep: TButton;
+    btnSearch: TButton;
+    GroupBox1: TGroupBox;
+    BtnUseInMemoryData: TSpeedButton;
+    BtnUseDataBase: TSpeedButton;
+    Image9: TImage;
+    Image8: TImage;
+    BtnLoadText: TButton;
+    Image10: TImage;
+    Label16: TLabel;
     procedure BtnSaveClick(Sender: TObject);
     procedure BtnLoadClick(Sender: TObject);
     procedure BtnBusquedaRAGClick(Sender: TObject);
@@ -80,22 +122,52 @@ type
     procedure RagGraphAddNode(Sender: TObject; ANode: TAiRagGraphNode; var Handled: Boolean);
     procedure RagGraphDeleteEdge(Sender: TObject; const AEdgeID: string; var Handled: Boolean);
     procedure RagGraphDeleteNode(Sender: TObject; const ANodeID: string; var Handled: Boolean);
-    procedure RagGraphFindNodeByID(Sender: TObject; const ANodeID: string; var ResultNode: TAiRagGraphNode; var Handled: Boolean);
+    procedure RagGraphFindNodeByID(Sender: TObject; const ANodeID: string; out ANodeData: TNodeDataRecord; var Found: Boolean);
     procedure RagGraphLoad(Sender: TObject; Graph: TAiRagGraph; var Handled: Boolean);
     procedure RagGraphQuery(Sender: TObject; const APlan: TQueryPlan; ADepth, ALimit: Integer; APrecision: Double; ResultNodes: TArray<uMakerAi.RAG.Graph.Core.TAiRagGraphNode>; var Handled: Boolean);
     procedure RagGraphSearchNodes(Sender: TObject; const APrompt: string; ADepth, ALimit: Integer; APrecision: Double; out ResultNodes: TArray<uMakerAi.RAG.Graph.Core.TAiRagGraphNode>; var Handled: Boolean);
     procedure BtnConsultaQueryLLMClick(Sender: TObject);
     procedure BtnMatchClick(Sender: TObject);
     procedure Button1Click(Sender: TObject);
+    procedure btnAddStepClick(Sender: TObject);
+    procedure BtnClearClick(Sender: TObject);
+    procedure btnSearchClick(Sender: TObject);
+    procedure BtnInitMatchClick(Sender: TObject);
+    procedure BtnListTripletsClick(Sender: TObject);
+    procedure edtStartNodeNameChangeTracking(Sender: TObject);
+    procedure lbSuggestionsItemClick(const Sender: TCustomListBox; const Item: TListBoxItem);
+    procedure cbStartNodeLabelChange(Sender: TObject);
+    procedure edtStartNodeNameExit(Sender: TObject);
+    procedure RagGetUniqueNodeLabels(Sender: TObject; Graph: TAiRagGraph; var ResultLabels: TArray<System.string>; var Handled: Boolean);
+    procedure RagGetUniqueEdgeLabels(Sender: TObject; Graph: TAiRagGraph; var ResultLabels: TArray<System.string>; var Handled: Boolean);
+    procedure RagFindNodeByName(Sender: TObject; Graph: TAiRagGraph; const AName, ANodeLabel: string; var ResultNode: TAiRagGraphNode; var Handled: Boolean);
+    procedure RagFindNodesByProperty(Sender: TObject; Graph: TAiRagGraph; const AKey: string; const AValue: Variant; var ResultNodes: TArray<uMakerAi.RAG.Graph.Core.TAiRagGraphNode>; var Handled: Boolean);
+    procedure RagFindNodesByLabel(Sender: TObject; Graph: TAiRagGraph; const ALabel: string; var ResultNodes: TArray<uMakerAi.RAG.Graph.Core.TAiRagGraphNode>; var Handled: Boolean);
+    procedure RagGraphFindEdgeByID(Sender: TObject; const AEdgeID: string; out AEdgeData: TEdgeDataRecord; var Found: Boolean);
+    procedure RagGetNodeEdges(Sender: TObject; ANode: TAiRagGraphNode; var Handled: Boolean);
+    procedure RagFindNodeNamesByLabel(Sender: TObject; const ANodeLabel, ASearchText: string; ALimit: Integer; out ResultNames: TArray<System.string>; var Handled: Boolean);
+    procedure BtnUseDataBaseClick(Sender: TObject);
+    procedure BtnUseInMemoryDataClick(Sender: TObject);
+    procedure BtnLoadTextClick(Sender: TObject);
   private
     FCurrentEntidad: String;
+
+    // Variables para búsquedas por match
+    FCurrentQuery: TGraphMatchQuery;
+    FNodeVarCounter: Integer;
+
     Function NewQuery: TFDQuery;
     function EmbeddingToString(const AData: TAiEmbeddingData): string;
     function PropertiesToJSONString(const AProperties: TDictionary<string, Variant>): string;
-    function JSONValueToVariant(AJsonValue: TJSONValue): Variant;
-    procedure JSONStringToProperties(const AJSONString: string; const AProperties: TDictionary<string, Variant>);
-    function StringToEmbedding(const AVectorString: string): TAiEmbeddingData;
     function HydrateNodeFromQuery(AQuery: TFDQuery; AGraph: TAiRagGraph): TAiRagGraphNode;
+
+    procedure MatchBuilder_PopulateComboBoxes;
+    function MatchBuilder_GetNextNodeVar: string;
+    procedure MatchBuilder_UpdateQueryVisualizer;
+    procedure MatchBuilder_PopulateSuggestions(const SearchText: string);
+    procedure MatchBuilder_DisplayMatchResults(const AResults: TArray<TDictionary<string, TObject>>; AShowProperties: Boolean);
+    procedure MatchBuilder_DisplaySubgraphResults(const AResults: TArray<TDictionary<string, TObject>>; AShowProperties: Boolean);
+    procedure MatchBuilder_DisplayProperties(AProperties: TDictionary<string, Variant>; AOutput: TStrings; const AIndentation: string);
 
   public
     function ParseJsonToQueryPlan(const AJSONString: string): TQueryPlan;
@@ -104,21 +176,6 @@ type
 var
   MainRagGraphDemo: TMainRagGraphDemo;
 
-const
-  // JSON de prueba con una entidad duplicada ("Apple Inc.") para probar la reconciliación
-  JSON_TRIPLETAS_1 = '[' + '  {' + '    "subject": {"name": "Steve Jobs", "nodeLabel": "Persona"},' + '    "predicate": {"edgeLabel": "FUNDÓ", "name": "Cofundador en 1976", "properties": {"rol": "Cofundador"}},' +
-    '    "object": {"name": "Apple Inc.", "nodeLabel": "Empresa", "properties": {"industria": "Tecnología"}}' + '  },' + '  {' + '    "subject": {"name": "Steve Wozniak", "nodeLabel": "Persona"},' +
-    '    "predicate": {"edgeLabel": "FUNDÓ", "name": "Cofundador en 1976", "properties": {"rol": "Cofundador"}},' + '    "object": {"name": "Apple Inc.", "nodeLabel": "Empresa"}' + '  },' + '  {' +
-    '    "subject": {"name": "Mike Markkula", "nodeLabel": "Persona"},' + '    "predicate": {"edgeLabel": "INVIRTIÓ_EN", "name": "Inversión Ángel", "properties": {"cantidad_usd": 250000}},' +
-    '    "object": {"name": "Apple Inc.", "nodeLabel": "Empresa"}' + '  }' + ']';
-
-  // Segundo JSON para probar la fusión de propiedades en nodos existentes
-  JSON_TRIPLETAS_2 = '[' + '  {' + '    "subject": {"name": "Apple Inc.", "nodeLabel": "Empresa", "properties": {"sede": "Cupertino, CA"}},' + '    "predicate": {"edgeLabel": "TIENE_SEDE_EN"},' +
-    '    "object": {"name": "Cupertino", "nodeLabel": "Ciudad"}' + '  }' + ']';
-
-  JSON_SOBRESCRITURA = '[' + '  {' + '    "subject": {"name": "Apple Inc.", "nodeLabel": "Empresa", "properties": {"industria": "Electrónica de Consumo"}},' + '    "predicate": {"edgeLabel": "ACTUALIZAR_PROPIEDAD"},' +
-    '    "object": {"name": "Apple Inc.", "nodeLabel": "Empresa"}' + // El objeto puede ser el mismo sujeto
-    '  }' + ']';
 
 implementation
 
@@ -133,12 +190,12 @@ begin
   Ent := Trim(MemoToProcess.Lines.Text);
 
   If Ent = '' then
-     Raise Exception.Create('Primero adicione el texto a procesar en el memo y luego presione el botón para crear el grafo');
+    Raise Exception.Create('Primero adicione el texto a procesar en el memo y luego presione el botón para crear el grafo');
 
-  Prompt := AiPrompts1.GetTemplate('CreaJSonFromTextoMejorado', ['texto=' + Ent]);
+  Prompt := AiPrompts1.GetTemplate('CreaJSonFromTexto', ['texto=' + Ent]);
+  // Prompt := AiPrompts1.GetTemplate('CreaJSonFromTextoMejorado', ['texto=' + Ent]);
 
   // Memo1.Lines.Text := Prompt;
-
 
   AiConn.Params.Values['NativeOutputFiles'] := '[tfc_textFile]';
   AiConn.Params.Values['Max_Tokens'] := '16000';
@@ -158,12 +215,63 @@ begin
       MemoProcessOut.Lines.Add('');
       MemoProcessOut.Lines.Add('');
       MemoProcessOut.Lines.Add(MF.ToString);
-      Builder1.Process(MF.ToString);
+      RAGBuilder1.Process(MF.ToString);
     End;
-    ShowMessage('Se almacenó correctamente el json- Nodos:'+RAG.NodeCount.ToString);
+    ShowMessage('Se almacenó correctamente el json- Nodos:' + RAG.NodeCount.ToString);
   End
   Else
     ShowMessage('Error al almacenar el Json');
+end;
+
+procedure TMainRagGraphDemo.btnAddStepClick(Sender: TObject);
+var
+  SourceVar, TargetVar: string;
+  SourcePattern, TargetPattern: TMatchNodePattern;
+  EdgePattern: TMatchEdgePattern;
+begin
+  // Si es el primer paso, usamos el ancla
+  if FCurrentQuery.MatchClauses.Count = 0 then
+  begin
+    // Crear el nodo de origen (ancla)
+    SourceVar := MatchBuilder_GetNextNodeVar; // n0
+    SourcePattern := TMatchNodePattern.Create;
+    SourcePattern.Variable := SourceVar;
+    SourcePattern.NodeLabel := cbStartNodeLabel.Text;
+    if Trim(edtStartNodeName.Text) <> '' then
+      SourcePattern.Properties.Add('name', edtStartNodeName.Text);
+    FCurrentQuery.AddNodePattern(SourcePattern);
+  end
+  else
+  begin
+    // Si no, el origen es el destino del paso anterior
+    SourceVar := FCurrentQuery.MatchClauses.Last.TargetNodeVar;
+  end;
+
+  // Crear el nodo de destino para este paso
+  TargetVar := MatchBuilder_GetNextNodeVar; // n1, n2, ...
+  TargetPattern := TMatchNodePattern.Create;
+  TargetPattern.Variable := TargetVar;
+  TargetPattern.NodeLabel := cbTargetNodeLabel.Text;
+  FCurrentQuery.AddNodePattern(TargetPattern);
+
+  // Crear el patrón de la arista
+  EdgePattern := TMatchEdgePattern.Create;
+  EdgePattern.Variable := 'e' + IntToStr(FCurrentQuery.MatchClauses.Count);
+  EdgePattern.EdgeLabel := cbEdgeLabel.Text;
+  case cbDirection.ItemIndex of
+    0:
+      EdgePattern.Direction := gdOutgoing;
+    1:
+      EdgePattern.Direction := gdIncoming;
+    2:
+      EdgePattern.Direction := gdBoth;
+  end;
+
+  // Añadir la cláusula a la consulta
+  FCurrentQuery.AddMatchClause(TMatchClause.Create(SourceVar, EdgePattern, TargetVar));
+
+  // Actualizar la visualización
+  MatchBuilder_UpdateQueryVisualizer;
 end;
 
 procedure TMainRagGraphDemo.BtnBusquedaRAGClick(Sender: TObject);
@@ -183,11 +291,22 @@ begin
   MemoResultados.Lines.Add(Res);
 end;
 
+procedure TMainRagGraphDemo.BtnClearClick(Sender: TObject);
+Begin
+  // Liberar la consulta actual y crear una nueva
+  FCurrentQuery.Free;
+  FCurrentQuery := TGraphMatchQuery.Create;
+  FNodeVarCounter := 0;
+
+  // Limpiar la UI
+  lbQuerySteps.Clear;
+  MemoResults.Lines.Clear;
+end;
+
 procedure TMainRagGraphDemo.BtnConsultaQueryLLMClick(Sender: TObject);
 var
   Ent, Prompt, Res, JSonPlanStr: String;
   Msg: TAiChatMessage;
-  MF: TAiMediaFile;
   Plan: TQueryPlan;
   Results: TArray<TAiRagGraphNode>;
   Node: TAiRagGraphNode;
@@ -301,27 +420,93 @@ begin
   end;
 End;
 
+procedure TMainRagGraphDemo.BtnInitMatchClick(Sender: TObject);
+begin
+  FCurrentQuery := TGraphMatchQuery.Create;
+  FNodeVarCounter := 0;
+
+  // Poblar los ComboBox con datos del grafo
+  MatchBuilder_PopulateComboBoxes;
+end;
+
+procedure TMainRagGraphDemo.BtnListTripletsClick(Sender: TObject);
+var
+  Graph: TAiRagGraph;
+  EdgeNode: TAiEmbeddingNode;
+  Edge: TAiRagGraphEdge;
+  TripletList: TStringList;
+  Subject, Predicate, Obj: string;
+begin
+  // 1. Asegurarse de que el grafo está asignado
+  Graph := RAG;
+  if not Assigned(Graph) then
+  begin
+    ShowMessage('El componente del grafo (RAG) no está asignado.');
+    Exit;
+  end;
+
+  // 2. Usar un TStringList para recolectar y ordenar las tripletas
+  TripletList := TStringList.Create;
+  try
+    // 3. Iterar sobre todas las aristas del grafo
+    // Graph.Edges devuelve un TAiRAGVector, y su propiedad Items es una lista de los nodos de embedding (en este caso, las aristas)
+    for EdgeNode in Graph.Edges.Items do
+    begin
+      // Asegurarse de que el elemento es realmente una arista
+      if EdgeNode is TAiRagGraphEdge then
+      begin
+        Edge := EdgeNode as TAiRagGraphEdge;
+
+        // 4. Formatear la tripleta en un formato legible
+        Subject := Format('%s (%s)', [Edge.FromNode.Name, Edge.FromNode.NodeLabel]);
+        Predicate := Edge.EdgeLabel;
+        Obj := Format('%s (%s)', [Edge.ToNode.Name, Edge.ToNode.NodeLabel]);
+
+        // Añadir la tripleta formateada a la lista
+        TripletList.Add(Format('%-35s --[%s]--> %s', [Subject, Predicate, Obj]));
+      end;
+    end;
+
+    // 5. Ordenar la lista para que sea más fácil de leer
+    TripletList.Sort;
+
+    // 6. Mostrar los resultados en el TMemo
+    MemoResults.Lines.Clear;
+    MemoResults.Lines.Add(Format('--- Se encontraron %d tripletas en el grafo ---', [TripletList.Count]));
+    MemoResults.Lines.Add('');
+    MemoResults.Lines.AddStrings(TripletList);
+
+  finally
+    TripletList.Free;
+  end;
+end;
+
 procedure TMainRagGraphDemo.BtnLoadClick(Sender: TObject);
-Var
+var
   St: TMemoryStream;
 begin
-  OpenDialog1.DefaultExt := '.json';
-  OpenDialog1.InitialDir := 'c:\temp\'; // raggraph.data.json
+  OpenDialog1.Filter := 'MakerAi Graph (*.mkai)|*.mkai';
+  OpenDialog1.DefaultExt := '.mkai';
+  OpenDialog1.FilterIndex := 1;
+  OpenDialog1.InitialDir := 'c:\temp\';
 
-  If OpenDialog1.Execute then
-  Begin
+  if OpenDialog1.Execute then
+  begin
     St := TMemoryStream.Create;
-    St.LoadFromFile(OpenDialog1.FileName);
-    St.Position := 0;
-    RAG.LoadFromStream(St);
-    SaveDialog1.FileName := OpenDialog1.FileName;
-    St.Free;
-  End;
+    try
+      St.LoadFromFile(OpenDialog1.FileName);
+      St.Position := 0;
+      RAG.LoadFromStream(St);
+      SaveDialog1.FileName := OpenDialog1.FileName;
+    finally
+      St.Free;
+    end;
+  end;
 end;
 
 procedure TMainRagGraphDemo.BtnMatchClick(Sender: TObject);
 begin
-  Raise Exception.Create('Falta por Implementar en el grafo');
+  TabControl1.ActiveTab := TabMatch;
 end;
 
 procedure TMainRagGraphDemo.BtnSaveClick(Sender: TObject);
@@ -369,12 +554,113 @@ begin
   end;
 end;
 
+procedure TMainRagGraphDemo.btnSearchClick(Sender: TObject);
+var
+  Results: TArray<TDictionary<string, TObject>>;
+  Depth: Integer;
+begin
+  if FCurrentQuery.MatchClauses.Count = 0 then
+  begin
+    ShowMessage('Por favor, añada al menos un paso a la consulta.');
+    Exit;
+  end;
+
+  Depth := Round(numDepth.Value); // Obtener el valor del control de profundidad
+
+  MemoResults.Lines.Clear;
+  MemoResults.Lines.Add('Ejecutando consulta...');
+  Application.ProcessMessages;
+
+  Results := RAG.Match(FCurrentQuery, Depth);
+
+  MemoResults.Lines.Clear;
+  MemoResults.Lines.Add(Format('Se encontraron %d coincidencias.', [Length(Results)]));
+  MemoResults.Lines.Add('----------------------------------');
+
+  if Length(Results) > 0 then
+  begin
+    // El código para mostrar ahora debe diferenciar entre el resultado del Match y el del subgrafo
+    if Depth = 0 then
+      MatchBuilder_DisplayMatchResults(Results, chMatchShowProperties.IsChecked) // Un nuevo método para mostrar resultados de Match
+    else
+      MatchBuilder_DisplaySubgraphResults(Results, chMatchShowProperties.IsChecked); // Un nuevo método para mostrar el subgrafo
+  end;
+end;
+
+procedure TMainRagGraphDemo.BtnUseDataBaseClick(Sender: TObject);
+begin
+   Rag.Driver := RAGPgDriver;
+   Rag.Clear;
+   BtnSave.Enabled := False;
+   BtnLoad.Enabled := False;
+   ShowMessage('Now the Graph work with DataBase data');
+end;
+
+procedure TMainRagGraphDemo.BtnUseInMemoryDataClick(Sender: TObject);
+begin
+   Rag.Driver := Nil;
+   Rag.Clear;
+   BtnSave.Enabled := True;
+   BtnLoad.Enabled := True;
+   ShowMessage('Now the Graph work with memory data');
+end;
+
 procedure TMainRagGraphDemo.Button1Click(Sender: TObject);
 begin
-  Rag.Clear;
+  RAG.Clear;
   MemoToProcess.Lines.Clear;
   MemoProcessOut.Lines.Clear;
+  MemoResultados.Lines.Clear;
+  MemoPrompt.Lines.Clear;
+end;
 
+procedure TMainRagGraphDemo.BtnLoadTextClick(Sender: TObject);
+var
+  TextStream: TStringStream;
+begin
+  OpenDialog1.Filter := 'Archivos de Texto (*.txt)|*.txt|' +
+                        'Archivos Text (*.text)|*.text|' +
+                        'Archivos JSON (*.json)|*.json|' +
+                        'Archivos CSV (*.csv)|*.csv|' +
+                        'Todos los archivos de texto (*.txt;*.text;*.json;*.csv)|*.txt;*.text;*.json;*.csv|' +
+                        'Todos los archivos (*.*)|*.*';
+  OpenDialog1.DefaultExt := '.txt';
+  OpenDialog1.FilterIndex := 5; // Selecciona "Todos los archivos de texto" por defecto
+  OpenDialog1.InitialDir := 'c:\temp\';
+
+  if OpenDialog1.Execute then
+  begin
+    TextStream := TStringStream.Create('', TEncoding.UTF8);
+    try
+      TextStream.LoadFromFile(OpenDialog1.FileName);
+      MemoToProcess.Lines.Text := TextStream.DataString;
+    finally
+      TextStream.Free;
+    end;
+  end;
+end;
+
+
+procedure TMainRagGraphDemo.cbStartNodeLabelChange(Sender: TObject);
+begin
+  edtStartNodeName.Text := '';
+  popSuggestions.IsOpen := False;
+end;
+
+procedure TMainRagGraphDemo.edtStartNodeNameChangeTracking(Sender: TObject);
+begin
+  MatchBuilder_PopulateSuggestions(edtStartNodeName.Text);
+end;
+
+procedure TMainRagGraphDemo.edtStartNodeNameExit(Sender: TObject);
+begin
+  // Pequeño retraso para permitir que el clic en el ListBox se procese primero
+  TThread.ForceQueue(nil,
+    procedure
+    begin
+      if not lbSuggestions.IsFocused then
+        popSuggestions.IsOpen := False;
+    end);
 end;
 
 function TMainRagGraphDemo.NewQuery: TFDQuery;
@@ -433,52 +719,20 @@ begin
     Result.Data := StringToEmbedding(AQuery.FieldByName('embedding').AsString);
 end;
 
-procedure TMainRagGraphDemo.JSONStringToProperties(const AJSONString: string; const AProperties: TDictionary<string, Variant>);
-var
-  JsonValue: TJSONValue;
-  JsonObj: TJSONObject;
-  Pair: TJSonPair;
+
+
+procedure TMainRagGraphDemo.lbSuggestionsItemClick(const Sender: TCustomListBox; const Item: TListBoxItem);
 begin
-  if (AProperties = nil) or AJSONString.IsEmpty or (AJSONString = '{}') then
-    Exit;
-
-  AProperties.Clear; // Limpiamos el diccionario antes de poblarlo.
-  JsonValue := TJSONObject.ParseJSONValue(AJSONString);
-  if JsonValue = nil then
-    Exit; // JSON inválido
-
-  try
-    if JsonValue is TJSONObject then
-    begin
-      JsonObj := JsonValue as TJSONObject;
-      for Pair in JsonObj do
-      begin
-        AProperties.Add(Pair.JsonString.Value, JSONValueToVariant(Pair.JsonValue));
-      end;
-    end;
-  finally
-    JsonValue.Free;
+  if Item <> nil then
+  begin
+    // 1. Poner el texto seleccionado en el TEdit
+    edtStartNodeName.Text := Item.Text;
+    // 2. Mover el cursor al final del texto
+    edtStartNodeName.SetFocus;
+    edtStartNodeName.GoToTextEnd;
+    // 3. Ocultar el popup
+    popSuggestions.IsOpen := False;
   end;
-end;
-
-function TMainRagGraphDemo.JSONValueToVariant(AJsonValue: TJSONValue): Variant;
-begin
-  if AJsonValue = nil then
-    Result := Null
-  else if AJsonValue is TJSONString then
-    Result := AJsonValue.Value
-  else if AJsonValue is TJSONNumber then
-    Result := StrToFloat(AJsonValue.Value) // Considerar StrToFloat con TFormatSettings.Invariant si hay problemas de localización
-  else if AJsonValue is TJSONTrue then
-    Result := True
-  else if AJsonValue is TJSONFalse then
-    Result := False
-  else if AJsonValue is TJSONNull then
-    Result := Null
-  else
-    // Para objetos y arrays anidados, por simplicidad los devolvemos como string.
-    // Una versión más avanzada podría convertirlos a TObjectDictionary o TArray<Variant>.
-    Result := AJsonValue.ToString;
 end;
 
 function TMainRagGraphDemo.ParseJsonToQueryPlan(const AJSONString: string): TQueryPlan;
@@ -542,16 +796,339 @@ begin
   if (AProperties = nil) or (AProperties.Count = 0) then
     Exit('{}');
 
+  // La lógica es muy similar a la que acabamos de poner en el Core.
+  // Podríamos incluso reutilizarla si tuviéramos una unidad de helpers común.
   JsonObj := TJSONObject.Create;
   try
     for Pair in AProperties do
     begin
-      // Una implementación más robusta usaría una función VariantToJSONValue
-      JsonObj.AddPair(Pair.Key, TJSONString.Create(VarToStr(Pair.Value)));
+      // Para no depender de VariantToJSONValue (que está en el Core),
+      // podemos replicar su lógica simple aquí.
+      case VarType(Pair.Value) of
+        varBoolean: JsonObj.AddPair(Pair.Key, TJSONBool.Create(Boolean(Pair.Value)));
+        varSmallint, varInteger, varByte, varShortInt, varWord, varLongWord, varInt64, varUInt64, varSingle, varDouble, varCurrency:
+            JsonObj.AddPair(Pair.Key, TJSONNumber.Create(Extended(Pair.Value)));
+      else // varString y otros
+        JsonObj.AddPair(Pair.Key, TJSONString.Create(VarToStr(Pair.Value)));
+      end;
     end;
     Result := JsonObj.ToString;
   finally
     JsonObj.Free;
+  end;
+end;
+
+procedure TMainRagGraphDemo.RagFindNodeByName(Sender: TObject; Graph: TAiRagGraph; const AName, ANodeLabel: string; var ResultNode: TAiRagGraphNode; var Handled: Boolean);
+var
+  Query: TFDQuery;
+begin
+  Query := NewQuery;
+  try
+    Query.SQL.Text := 'SELECT * FROM graph_nodes WHERE entidad = :entidad AND node_label = :node_label AND name = :name LIMIT 1';
+    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('node_label').AsString := ANodeLabel;
+    Query.ParamByName('name').AsString := AName;
+    Query.Open;
+
+    if not Query.Eof then
+    begin
+      // Función auxiliar para "hidratar" un nodo desde un TFDQuery
+      ResultNode := HydrateNodeFromQuery(Query, Graph);
+      Handled := True;
+    end
+    else
+    begin
+      ResultNode := nil;
+      Handled := True;
+    end;
+  finally
+    Query.Free;
+  end;
+end;
+
+procedure TMainRagGraphDemo.RagFindNodeNamesByLabel(Sender: TObject; const ANodeLabel, ASearchText: string; ALimit: Integer; out ResultNames: TArray<System.string>; var Handled: Boolean);
+var
+  Query: TFDQuery;
+  NameList: TStringList;
+begin
+  Query := NewQuery;
+  NameList := TStringList.Create;
+  try
+    // La consulta es perfecta. Usa LIKE y es case-insensitive gracias a UPPER.
+    Query.SQL.Text := 'SELECT name FROM graph_nodes ' +
+                      'WHERE entidad = :entidad AND node_label = :node_label AND UPPER(name) LIKE :search_text ' +
+                      'ORDER BY name LIMIT :limit';
+
+    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('node_label').AsString := ANodeLabel;
+    Query.ParamByName('search_text').AsString := '%' + ASearchText.ToUpper + '%';
+    Query.ParamByName('limit').AsInteger := ALimit;
+
+    Query.Open;
+
+    while not Query.Eof do
+    begin
+      NameList.Add(Query.Fields[0].AsString);
+      Query.Next;
+    end;
+
+    ResultNames := NameList.ToStringArray;
+    Handled := True;
+  finally
+    Query.Free;
+    NameList.Free;
+  end;
+end;
+
+procedure TMainRagGraphDemo.RagFindNodesByLabel(Sender: TObject; Graph: TAiRagGraph; const ALabel: string; var ResultNodes: TArray<uMakerAi.RAG.Graph.Core.TAiRagGraphNode>; var Handled: Boolean);
+var
+  Query: TFDQuery;
+  NodeIDs: TStringList;
+  i: Integer;
+begin
+  if not (Sender is TAiRagGraph) then Exit;
+
+  Query := NewQuery;
+  NodeIDs := TStringList.Create;
+  try
+    // 1. Obtener solo los IDs de los nodos que coinciden.
+    Query.SQL.Text := 'SELECT id FROM graph_nodes WHERE entidad = :entidad AND node_label = :node_label';
+    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('node_label').AsString := ALabel;
+    Query.Open;
+
+    while not Query.Eof do
+    begin
+      NodeIDs.Add(Query.FieldByName('id').AsString);
+      Query.Next;
+    end;
+
+    // 2. Pedirle al grafo que "hidrate" o devuelva cada nodo desde su caché.
+    SetLength(ResultNodes, NodeIDs.Count);
+    for i := 0 to NodeIDs.Count - 1 do
+    begin
+      // FindNodeByID es ahora nuestro único punto de entrada para obtener nodos.
+      // Se encargará de crear el objeto si no existe, o devolver el
+      // existente si ya fue cargado.
+      ResultNodes[i] := Graph.FindNodeByID(NodeIDs[i]);
+    end;
+
+    Handled := True;
+  finally
+    Query.Free;
+    NodeIDs.Free;
+  end;
+end;
+
+procedure TMainRagGraphDemo.RagFindNodesByProperty(Sender: TObject; Graph: TAiRagGraph; const AKey: string; const AValue: Variant; var ResultNodes: TArray<uMakerAi.RAG.Graph.Core.TAiRagGraphNode>; var Handled: Boolean);
+var
+  Query: TFDQuery;
+  NodeList: TObjectList<TAiRagGraphNode>;
+begin
+  Query := NewQuery;
+  NodeList := TObjectList<TAiRagGraphNode>.Create(True); // <-- LÍNEA AÑADIDA
+  try
+    if SameText(AKey, 'name') then
+    begin
+      Query.SQL.Text := 'SELECT * FROM graph_nodes WHERE entidad = :entidad AND name = :value';
+      Query.ParamByName('value').AsString := VarToStr(AValue);
+    end
+    else
+    begin
+      Query.SQL.Text := 'SELECT * FROM graph_nodes WHERE entidad = :entidad AND properties ->> :key = :value';
+      Query.ParamByName('key').AsString := AKey;
+      Query.ParamByName('value').AsString := VarToStr(AValue);
+    end;
+
+    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.Open;
+
+    while not Query.Eof do
+    begin
+      NodeList.Add(HydrateNodeFromQuery(Query, Graph)); // Pasamos 'Graph' en lugar de 'RAG'
+      Query.Next;
+    end;
+
+    ResultNodes := NodeList.ToArray;
+    NodeList.OwnsObjects := False;
+    Handled := True;
+  finally
+    Query.Free;
+    NodeList.Free;
+  end;
+end;
+
+{
+procedure TMainRagGraphDemo.RagGetNodeEdges(Sender: TObject; ANode: TAiRagGraphNode; var Handled: Boolean);
+var
+  Query: TFDQuery;
+  Graph: TAiRagGraph;
+  EdgeID: string;
+begin
+  if not (Sender is TAiRagGraph) or (ANode = nil) then
+    Exit;
+
+  Graph := Sender as TAiRagGraph;
+  Query := NewQuery;
+  try
+    // 1. Buscamos los IDs de todas las aristas conectadas a este nodo.
+    // Solo necesitamos los IDs, el resto del trabajo lo hará el grafo.
+    Query.SQL.Text := 'SELECT id FROM graph_edges ' +
+                      'WHERE entidad = :entidad AND ' +
+                      '(source_node_id = :node_id OR target_node_id = :node_id)';
+    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('node_id').AsString := ANode.ID;
+    Query.Open;
+
+    // 2. Iteramos sobre los IDs y le pedimos al grafo que cargue cada arista.
+    while not Query.Eof do
+    begin
+      EdgeID := Query.FieldByName('id').AsString;
+      // Esta es la llamada clave.
+      // FindEdgeByID es ahora un "get-or-create-from-db".
+      // Se encargará de todo el proceso de carga y conexión.
+      Graph.FindEdgeByID(EdgeID);
+      Query.Next;
+    end;
+
+    Handled := True;
+  finally
+    Query.Free;
+  end;
+end;
+}
+
+procedure TMainRagGraphDemo.RagGetNodeEdges(Sender: TObject; ANode: TAiRagGraphNode; var Handled: Boolean);
+var
+  Query: TFDQuery;
+  Graph: TAiRagGraph;
+  EdgeData: TEdgeDataRecord;
+  EdgeID: string;
+begin
+  if not (Sender is TAiRagGraph) or (ANode = nil) then Exit;
+
+  Graph := Sender as TAiRagGraph;
+  Query := NewQuery;
+  try
+    // 1. Traemos TODOS los datos de las aristas en UNA SOLA consulta.
+    Query.SQL.Text := 'SELECT id, edge_label, name, source_node_id, target_node_id, ' +
+                      'weight, properties, embedding ' +
+                      'FROM graph_edges ' +
+                      'WHERE entidad = :entidad AND ' +
+                      '(source_node_id = :node_id OR target_node_id = :node_id)';
+    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('node_id').AsString := ANode.ID;
+    Query.Open;
+
+    // 2. Iteramos sobre los resultados y le pedimos al grafo que hidrate cada arista.
+    while not Query.Eof do
+    begin
+      EdgeID := Query.FieldByName('id').AsString;
+
+      // --- ¡LÓGICA CORREGIDA Y LIMPIA! ---
+      // Usamos la nueva función pública para comprobar si la arista ya existe en memoria.
+      if not Graph.EdgeExistsInMemory(EdgeID) then
+      begin
+        // La arista no existe en memoria, así que la creamos e hidratamos.
+        EdgeData.ID := EdgeID;
+        EdgeData.EdgeLabel := Query.FieldByName('edge_label').AsString;
+        EdgeData.Name := Query.FieldByName('name').AsString;
+        EdgeData.SourceNodeID := Query.FieldByName('source_node_id').AsString;
+        EdgeData.TargetNodeID := Query.FieldByName('target_node_id').AsString;
+        EdgeData.Weight := Query.FieldByName('weight').AsFloat;
+
+        if not Query.FieldByName('properties').IsNull then
+          EdgeData.PropertiesJSON := Query.FieldByName('properties').AsString
+        else
+          EdgeData.PropertiesJSON := '{}';
+
+        if not Query.FieldByName('embedding').IsNull then
+          EdgeData.EmbeddingStr := Query.FieldByName('embedding').AsString
+        else
+          EdgeData.EmbeddingStr := '[]';
+
+        // Usamos el método protegido del grafo para crear el objeto desde los datos.
+        // Para llamarlo, SÍ necesitamos el class helper aquí.
+        Graph.InternalHydrateEdge(EdgeData);
+      end;
+      // --- FIN DE LA LÓGICA ---
+
+      Query.Next;
+    end;
+    Handled := True;
+  finally
+    Query.Free;
+  end;
+end;
+
+procedure TMainRagGraphDemo.RagGetUniqueEdgeLabels(Sender: TObject; Graph: TAiRagGraph; var ResultLabels: TArray<System.string>; var Handled: Boolean);
+var
+  Query: TFDQuery;
+  LabelList: TStringList;
+begin
+  Query := NewQuery;
+  LabelList := TStringList.Create;
+  try
+    // 1. Definir la consulta SQL
+    Query.SQL.Text := 'SELECT DISTINCT edge_label FROM graph_edges WHERE entidad = :entidad ORDER BY edge_label';
+    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+
+    // 2. Ejecutar la consulta
+    Query.Open;
+
+    // 3. Recorrer los resultados
+    while not Query.Eof do
+    begin
+      LabelList.Add(Query.Fields[0].AsString);
+      Query.Next;
+    end;
+
+    // 4. Poblar el array de resultado
+    ResultLabels := LabelList.ToStringArray;
+
+    // 5. Marcar como manejado
+    Handled := True;
+
+  finally
+    Query.Free;
+    LabelList.Free;
+  end;
+end;
+
+procedure TMainRagGraphDemo.RagGetUniqueNodeLabels(Sender: TObject; Graph: TAiRagGraph; var ResultLabels: TArray<string>; var Handled: Boolean);
+var
+  Query: TFDQuery;
+  LabelList: TStringList;
+begin
+  // Asumimos que la conexión a la base de datos ya está activa.
+  // Si no es así, puedes añadir una comprobación aquí.
+
+  Query := NewQuery; // Usando tu función helper
+  LabelList := TStringList.Create;
+  try
+    // 1. Definir la consulta SQL
+    Query.SQL.Text := 'SELECT DISTINCT node_label FROM graph_nodes WHERE entidad = :entidad ORDER BY node_label';
+    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+
+    // 2. Ejecutar la consulta
+    Query.Open;
+
+    // 3. Recorrer los resultados y añadirlos a la lista
+    while not Query.Eof do
+    begin
+      LabelList.Add(Query.Fields[0].AsString);
+      Query.Next;
+    end;
+
+    // 4. Convertir la TStringList a un TArray<string> para el resultado
+    ResultLabels := LabelList.ToStringArray;
+
+    // 5. Indicar que la solicitud ha sido manejada por la base de datos
+    Handled := True;
+
+  finally
+    Query.Free;
+    LabelList.Free;
   end;
 end;
 
@@ -658,45 +1235,84 @@ begin
   end;
 end;
 
-procedure TMainRagGraphDemo.RagGraphFindNodeByID(Sender: TObject; const ANodeID: string; var ResultNode: TAiRagGraphNode; var Handled: Boolean);
+procedure TMainRagGraphDemo.RagGraphFindEdgeByID(Sender: TObject; const AEdgeID: string; out AEdgeData: TEdgeDataRecord; var Found: Boolean);
 var
   Query: TFDQuery;
-  Graph: TAiRagGraph;
-  Dim: Integer;
 begin
-  ResultNode := nil;
+  Found := False;
   Query := NewQuery;
   try
-    Query.SQL.Text := 'SELECT id, node_label, name, properties, embedding ' + 'FROM graph_nodes ' + 'WHERE id = :id AND entidad = :entidad';
+    Query.SQL.Text := 'SELECT id, edge_label, name, source_node_id, target_node_id, ' +
+                      'weight, properties, embedding ' +
+                      'FROM graph_edges ' +
+                      'WHERE id = :id AND entidad = :entidad';
+    Query.ParamByName('id').AsString := AEdgeID;
+    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.Open;
 
+    if not Query.IsEmpty then
+    begin
+      // Llenamos el record con los datos crudos de la BD.
+      AEdgeData.ID := Query.FieldByName('id').AsString;
+      AEdgeData.EdgeLabel := Query.FieldByName('edge_label').AsString;
+      AEdgeData.Name := Query.FieldByName('name').AsString;
+      AEdgeData.SourceNodeID := Query.FieldByName('source_node_id').AsString;
+      AEdgeData.TargetNodeID := Query.FieldByName('target_node_id').AsString;
+      AEdgeData.Weight := Query.FieldByName('weight').AsFloat;
+
+      if not Query.FieldByName('properties').IsNull then
+        AEdgeData.PropertiesJSON := Query.FieldByName('properties').AsString
+      else
+        AEdgeData.PropertiesJSON := '{}';
+
+      if not Query.FieldByName('embedding').IsNull then
+        AEdgeData.EmbeddingStr := Query.FieldByName('embedding').AsString
+      else
+        AEdgeData.EmbeddingStr := '[]';
+
+      Found := True;
+    end;
+  finally
+    Query.Free;
+  end;
+end;
+
+procedure TMainRagGraphDemo.RagGraphFindNodeByID(Sender: TObject; const ANodeID: string; out ANodeData: TNodeDataRecord; var Found: Boolean);
+var
+  Query: TFDQuery;
+begin
+  Found := False;
+  Query := NewQuery;
+  try
+    Query.SQL.Text := 'SELECT id, node_label, name, properties, embedding ' +
+                      'FROM graph_nodes ' +
+                      'WHERE id = :id AND entidad = :entidad';
     Query.ParamByName('id').AsString := ANodeID;
     Query.ParamByName('entidad').AsString := FCurrentEntidad;
     Query.Open;
 
     if not Query.IsEmpty then
     begin
-      // Nodo encontrado, ahora lo reconstruimos en un objeto Delphi.
-      Graph := Sender as TAiRagGraph;
-      // Determinar la dimensión. Si no está establecida, podríamos intentar inferirla
-      // del primer embedding que carguemos, pero es mejor tenerla pre-configurada.
-      if Graph.Nodes.Dim > 0 then
-        Dim := Graph.Nodes.Dim
-      else
-        Dim := 1536;
-
-      ResultNode := TAiRagGraphNode.Create(Graph, Dim);
-      ResultNode.ID := Query.FieldByName('id').AsString;
-      ResultNode.NodeLabel := Query.FieldByName('node_label').AsString;
-      ResultNode.Name := Query.FieldByName('name').AsString;
+      // En lugar de crear un objeto, llenamos el record con los datos crudos.
+      ANodeData.ID := Query.FieldByName('id').AsString;
+      ANodeData.NodeLabel := Query.FieldByName('node_label').AsString;
+      ANodeData.Name := Query.FieldByName('name').AsString;
 
       if not Query.FieldByName('properties').IsNull then
-        JSONStringToProperties(Query.FieldByName('properties').AsString, ResultNode.Properties);
+        ANodeData.PropertiesJSON := Query.FieldByName('properties').AsString
+      else
+        ANodeData.PropertiesJSON := '{}';
 
       if not Query.FieldByName('embedding').IsNull then
-        ResultNode.Data := StringToEmbedding(Query.FieldByName('embedding').AsString);
+        ANodeData.EmbeddingStr := Query.FieldByName('embedding').AsString
+      else
+        ANodeData.EmbeddingStr := '[]';
+
+      Found := True; // Indicamos que encontramos los datos.
     end;
 
-    Handled := True;
+    // Ya no hay un `Handled` en la nueva firma, `Found` cumple ese rol.
+    // Ya no creamos ningún TAiRagGraphNode aquí.
 
   finally
     Query.Free;
@@ -709,73 +1325,76 @@ begin
 end;
 
 procedure TMainRagGraphDemo.RagGraphQuery(Sender: TObject; const APlan: TQueryPlan; ADepth, ALimit: Integer; APrecision: Double; ResultNodes: TArray<uMakerAi.RAG.Graph.Core.TAiRagGraphNode>; var Handled: Boolean);
-Var
+var
   Graph: TAiRagGraph;
   Query: TFDQuery;
   Step: TQueryStep;
   QueryEmbedding: TAiEmbeddingData;
   EmbeddingStr: String;
+  NodeIDs: TStringList;
 begin
-  // NOTA: Esta es una implementación simplificada para demostrar el concepto.
-  // Un manejador completo necesitaría un generador de SQL dinámico que parsee todos los pasos.
+  SetLength(ResultNodes, 0);
+  if not (Sender is TAiRagGraph) then Exit;
+  Graph := Sender as TAiRagGraph;
 
-  // Solo manejaremos planes con un ancla y un solo paso hacia adelante.
+  // Solo manejaremos planes con un ancla y un solo paso, como antes.
+  // Podrías extender esto con un generador de SQL dinámico en el futuro.
   if Length(APlan.Steps) <> 1 then
   begin
-    Handled := False; // Dejamos que la implementación en memoria se encargue
+    Handled := False;
     Exit;
   end;
 
-  Graph := Sender as TAiRagGraph;
   Query := NewQuery;
+  NodeIDs := TStringList.Create;
   Step := APlan.Steps[0];
-  QueryEmbedding := Graph.Embeddings.CreateEmbedding(APlan.AnchorPrompt, 'user');
-  EmbeddingStr := EmbeddingToString(QueryEmbedding);
-  var
-  NodeDict := TDictionary<string, TAiRagGraphNode>.Create;
-  var
-  NodeList := TObjectList<TAiRagGraphNode>.Create;
-
   try
-    // La consulta combina la búsqueda semántica con un JOIN estructural
-    Query.FetchOptions.Mode := fmAll;
-    Query.ResourceOptions.CmdExecMode := amBlocking;
-    Query.SQL.Clear;
-    Query.SQL.Add('WITH AnchorNodes AS (');
-    Query.SQL.Add('  SELECT id');
-    Query.SQL.Add('  FROM graph_nodes');
-    Query.SQL.Add('  WHERE entidad = :entidad AND (embedding <-> ''' + EmbeddingStr + ''') < :distance_threshold');
-    Query.SQL.Add('  ORDER BY embedding <-> ''' + EmbeddingStr + ''' LIMIT :limit');
-    Query.SQL.Add(')');
-    Query.SQL.Add('SELECT final_node.*');
-    Query.SQL.Add('FROM AnchorNodes an');
-    Query.SQL.Add('JOIN graph_edges e ON an.id = e.source_node_id AND e.entidad = :entidad AND e.edge_label = :edge_label');
-    Query.SQL.Add('JOIN graph_nodes final_node ON e.target_node_id = final_node.id AND final_node.entidad = :entidad');
-    Query.SQL.Add('WHERE final_node.node_label = :target_label');
+    // Paso 1: Obtener embedding (sin cambios)
+    QueryEmbedding := Graph.Embeddings.CreateEmbedding(APlan.AnchorPrompt, 'user');
+    EmbeddingStr := EmbeddingToString(QueryEmbedding);
+
+    // Paso 2: Construir y ejecutar la consulta SQL. Seleccionamos solo los IDs del resultado final.
+    Query.SQL.Text :=
+      'WITH AnchorNodes AS (' +
+      '  SELECT id' +
+      '  FROM graph_nodes' +
+      '  WHERE entidad = :entidad AND (embedding <-> ''' + EmbeddingStr + ''') < :distance_threshold' +
+      '  ORDER BY embedding <-> ''' + EmbeddingStr + ''' LIMIT :limit' +
+      ')' +
+      // Consulta final: Obtener los IDs de los nodos de destino.
+      'SELECT final_node.id ' +
+      'FROM AnchorNodes an ' +
+      'JOIN graph_edges e ON an.id = e.source_node_id AND e.entidad = :entidad AND e.edge_label = :edge_label ' +
+      'JOIN graph_nodes final_node ON e.target_node_id = final_node.id AND final_node.entidad = :entidad ' +
+      'WHERE final_node.node_label = :target_label';
 
     Query.ParamByName('entidad').AsString := FCurrentEntidad;
-    // Query.ParamByName('embedding').AsString := EmbeddingStr;
     Query.ParamByName('distance_threshold').AsFloat := 1 - APrecision;
     Query.ParamByName('limit').AsInteger := ALimit;
     Query.ParamByName('edge_label').AsString := Step.EdgeLabel;
     Query.ParamByName('target_label').AsString := Step.TargetNodeLabel;
     Query.Open;
 
-    // Hidratar los nodos resultantes
     while not Query.Eof do
     begin
-      NodeList.Add(HydrateNodeFromQuery(Query, Graph));
+      NodeIDs.Add(Query.Fields[0].AsString);
       Query.Next;
     end;
 
-    ResultNodes := NodeList.ToArray;
-    NodeList.Clear;
+    // Paso 3: Hidratación delegada y construcción del resultado
+    SetLength(ResultNodes, NodeIDs.Count);
+    for var i := 0 to NodeIDs.Count - 1 do
+    begin
+      // FindNodeByID se asegura de que el nodo exista en memoria,
+      // cargándolo si es necesario.
+      ResultNodes[i] := Graph.FindNodeByID(NodeIDs[i]);
+    end;
+
     Handled := True;
 
   finally
     Query.Free;
-    NodeDict.Free;
-    NodeList.Free;
+    NodeIDs.Free;
   end;
 end;
 
@@ -785,183 +1404,130 @@ var
   Graph: TAiRagGraph;
   QueryEmbedding: TAiEmbeddingData;
   EmbeddingStr: string;
-  NodeDict: TDictionary<string, TAiRagGraphNode>;
-  NodeList: TObjectList<TAiRagGraphNode>;
-  SourceNode, TargetNode: TAiRagGraphNode;
+  NodeIDs: TStringList;
+  InitialNodeIDs: TStringList; // Para guardar los nodos semilla
+  Node: TAiRagGraphNode;
 begin
   SetLength(ResultNodes, 0);
+  if not (Sender is TAiRagGraph) then Exit;
   Graph := Sender as TAiRagGraph;
 
-  // Paso 1: Obtener el embedding para el prompt de búsqueda
+  // Paso 1: Obtener el embedding (sin cambios)
   if not Assigned(Graph.Embeddings) then
     raise Exception.Create('El motor de Embeddings no está asignado al grafo.');
   QueryEmbedding := Graph.Embeddings.CreateEmbedding(APrompt, 'user');
   EmbeddingStr := EmbeddingToString(QueryEmbedding);
 
   Query := NewQuery;
-  NodeDict := TDictionary<string, TAiRagGraphNode>.Create;
-  NodeList := TObjectList<TAiRagGraphNode>.Create; // TObjectList para gestionar la memoria
+  NodeIDs := TStringList.Create;
+  InitialNodeIDs := TStringList.Create;
   try
-    // Paso 2: Construir y ejecutar la consulta SQL
+    // Paso 2: Ejecutar la consulta SQL (la consulta en sí casi no cambia)
     if ADepth = 0 then
     begin
-      // --- CASO SIMPLE: Solo búsqueda semántica ---
-      Query.SQL.Add('SELECT id, node_label, name, properties, embedding, embedding <-> ''' + EmbeddingStr + ''' AS distance ');
-      Query.SQL.Add('FROM graph_nodes ');
-      Query.SQL.Add('WHERE entidad = :entidad');
-      Query.SQL.Add('  AND (embedding <-> ''' + EmbeddingStr + ''') < :distance_threshold ');
-      Query.SQL.Add('ORDER BY distance LIMIT :limit');
-
+      // CASO SIMPLE: Búsqueda semántica. Solo necesitamos los IDs.
+      Query.SQL.Text := 'SELECT id FROM graph_nodes ' +
+                        'WHERE entidad = :entidad AND (embedding <-> ''' + EmbeddingStr + ''') < :distance_threshold ' +
+                        'ORDER BY embedding <-> ''' + EmbeddingStr + ''' LIMIT :limit';
       Query.ParamByName('distance_threshold').AsFloat := 1 - APrecision;
     end
     else
     begin
-      // --- CASO COMPLEJO: Búsqueda semántica + Expansión Estructural con CTE Recursiva ---
-      // Esta consulta es el corazón del sistema híbrido en la base de datos.
-      Query.FetchOptions.Mode := fmAll;
-      Query.ResourceOptions.CmdExecMode := amBlocking;
-      Query.SQL.Clear;
-      Query.SQL.Add('WITH RECURSIVE traversal AS (');
-      Query.SQL.Add('  -- Ancla: Nodos iniciales de la búsqueda semántica');
-      Query.SQL.Add('  SELECT id, 1 AS depth, ARRAY[id] AS path');
-      Query.SQL.Add('  FROM (');
-      Query.SQL.Add('    SELECT id');
-      Query.SQL.Add('    FROM graph_nodes');
-      Query.SQL.Add('    WHERE entidad = :entidad AND (embedding <-> ''' + EmbeddingStr + ''') < :distance_threshold');
-      Query.SQL.Add('    ORDER BY embedding <-> ''' + EmbeddingStr + '''');
-      Query.SQL.Add('    LIMIT :limit');
-      Query.SQL.Add('  ) AS initial');
-      Query.SQL.Add(' ');
-      Query.SQL.Add('  UNION ALL');
-      Query.SQL.Add(' ');
-      Query.SQL.Add('  -- Paso recursivo: expandir a los vecinos');
-      Query.SQL.Add('  SELECT');
-      Query.SQL.Add('    CASE WHEN e.source_node_id = t.id THEN e.target_node_id ELSE e.source_node_id END AS id,');
-      Query.SQL.Add('    t.depth + 1,');
-      Query.SQL.Add('    t.path || CASE WHEN e.source_node_id = t.id THEN e.target_node_id ELSE e.source_node_id END');
-      Query.SQL.Add('  FROM traversal t');
-      Query.SQL.Add('  JOIN graph_edges e ON (e.source_node_id = t.id OR e.target_node_id = t.id) AND e.entidad = :entidad');
-      Query.SQL.Add('  WHERE t.depth < :depth');
-      Query.SQL.Add('    AND NOT (CASE WHEN e.source_node_id = t.id THEN e.target_node_id ELSE e.source_node_id END = ANY(t.path))');
-      Query.SQL.Add(')');
-      Query.SQL.Add(' ');
-      Query.SQL.Add('-- Consulta final: obtener todos los nodos y aristas del subgrafo');
-      Query.SQL.Add('SELECT');
-      Query.SQL.Add('  n.id, n.node_label, n.name, n.properties, n.embedding,');
-      Query.SQL.Add('  e.id AS edge_id, e.edge_label, e.source_node_id, e.target_node_id, e.weight, e.properties AS edge_properties');
-      Query.SQL.Add('FROM traversal');
-      Query.SQL.Add('JOIN graph_nodes n ON n.id = traversal.id AND n.entidad = :entidad');
-      Query.SQL.Add('LEFT JOIN graph_edges e ON (e.source_node_id = n.id OR e.target_node_id = n.id) AND e.entidad = :entidad');
+      // CASO COMPLEJO: Expansión. La CTE es perfecta. Solo seleccionamos los IDs al final.
+      Query.SQL.Text :=
+        'WITH RECURSIVE traversal AS (' +
+        '  SELECT id, 1 AS depth, ARRAY[id] AS path' +
+        '  FROM (' +
+        '    SELECT id' +
+        '    FROM graph_nodes' +
+        '    WHERE entidad = :entidad AND (embedding <-> ''' + EmbeddingStr + ''') < :distance_threshold' +
+        '    ORDER BY embedding <-> ''' + EmbeddingStr + '''' +
+        '    LIMIT :limit' +
+        '  ) AS initial' +
+        '  UNION ALL' +
+        '  SELECT' +
+        '    CASE WHEN e.source_node_id = t.id THEN e.target_node_id ELSE e.source_node_id END AS id,' +
+        '    t.depth + 1,' +
+        '    t.path || CASE WHEN e.source_node_id = t.id THEN e.target_node_id ELSE e.source_node_id END' +
+        '  FROM traversal t' +
+        '  JOIN graph_edges e ON (e.source_node_id = t.id OR e.target_node_id = t.id) AND e.entidad = :entidad' +
+        '  WHERE t.depth <= :depth' + // <= para incluir el nivel de profundidad final
+        '    AND NOT (CASE WHEN e.source_node_id = t.id THEN e.target_node_id ELSE e.source_node_id END = ANY(t.path))' +
+        ')' +
+        // Consulta final: solo queremos los IDs únicos de todos los nodos del subgrafo
+        'SELECT DISTINCT id FROM traversal';
 
       Query.ParamByName('distance_threshold').AsFloat := 1 - APrecision;
       Query.ParamByName('depth').AsInteger := ADepth;
     end;
 
-    // Parámetros comunes a ambas consultas
     Query.ParamByName('entidad').AsString := FCurrentEntidad;
     Query.ParamByName('limit').AsInteger := ALimit;
     Query.Open;
 
-    // Paso 3: Hidratar los objetos desde el resultado de la consulta
-    // Usamos el patrón de 2 pasadas para reconstruir las relaciones
-
-    // Pasada 1: Crear todos los nodos y guardarlos en un diccionario para acceso rápido
-    Query.First;
+    // Guardamos los IDs de los nodos semilla (los primeros resultados)
+    // para saber qué devolver al final.
     while not Query.Eof do
     begin
-      if not NodeDict.ContainsKey(Query.FieldByName('id').AsString) then
-      begin
-        var
-        Node := HydrateNodeFromQuery(Query, Graph);
-        NodeDict.Add(Node.ID, Node);
-        NodeList.Add(Node); // TObjectList se encargará de liberar la memoria
-      end;
+      NodeIDs.Add(Query.Fields[0].AsString);
+      if ADepth = 0 then
+         InitialNodeIDs.Add(Query.Fields[0].AsString);
       Query.Next;
     end;
 
-    // Pasada 2 (solo para ADepth > 0): Conectar los nodos con las aristas
+    // Si la búsqueda fue con expansión, necesitamos determinar los nodos semilla por separado.
     if ADepth > 0 then
     begin
-      Query.First;
-      while not Query.Eof do
-      begin
-        if not Query.FieldByName('edge_id').IsNull then
+        Query.SQL.Text := 'SELECT id FROM graph_nodes ' +
+                          'WHERE entidad = :entidad AND (embedding <-> ''' + EmbeddingStr + ''') < :distance_threshold ' +
+                          'ORDER BY embedding <-> ''' + EmbeddingStr + ''' LIMIT :limit';
+        Query.Open;
+        while not Query.Eof do
         begin
-          if NodeDict.TryGetValue(Query.FieldByName('source_node_id').AsString, SourceNode) and NodeDict.TryGetValue(Query.FieldByName('target_node_id').AsString, TargetNode) then
-          begin
-            // Comprobar si la arista ya fue creada para este par de nodos
-            if Graph.FindEdge(SourceNode, TargetNode, Query.FieldByName('edge_label').AsString) = nil then
-            begin
-              var
-              Edge := TAiRagGraphEdge.Create(Graph, Graph.Edges.Dim);
-              Edge.ID := Query.FieldByName('edge_id').AsString;
-              Edge.EdgeLabel := Query.FieldByName('edge_label').AsString;
-              Edge.Weight := Query.FieldByName('weight').AsFloat;
-              Edge.FromNode := SourceNode;
-              Edge.ToNode := TargetNode;
-              if not Query.FieldByName('edge_properties').IsNull then
-                JSONStringToProperties(Query.FieldByName('edge_properties').AsString, Edge.Properties);
-
-              // Conectar la arista a los nodos en memoria
-              SourceNode.InternalAddOutgoingEdge(Edge);
-              TargetNode.InternalAddIncomingEdge(Edge);
-            end;
-          end;
+           InitialNodeIDs.Add(Query.Fields[0].AsString);
+           Query.Next;
         end;
-        Query.Next;
-      end;
     end;
 
-    ResultNodes := NodeList.ToArray;
-    NodeList.OwnsObjects := False;
-    NodeList.Clear; // Limpiamos la lista para no liberar los nodos que vamos a devolver
+
+    // Paso 3: "Hidratación" delegada. Le pedimos al grafo que se asegure
+    // de que todos los nodos del subgrafo existan en memoria.
+    for var NodeID in NodeIDs do
+    begin
+      // FindNodeByID se encargará de cargar el nodo desde la BD si no está
+      // ya en memoria. ¡Esto es mucho más limpio!
+      Graph.FindNodeByID(NodeID);
+    end;
+
+    // Si hubo expansión, también debemos asegurarnos de que todas las aristas
+    // entre los nodos del subgrafo estén cargadas.
+    if ADepth > 0 then
+    begin
+        for var NodeID in NodeIDs do
+        begin
+            Node := Graph.FindNodeByID(NodeID);
+            if Node <> nil then
+                Node.EnsureEdgesAreLoaded; // Esto disparará OnGetNodeEdges
+        end;
+    end;
+
+    // Paso 4: Construir el resultado final a partir de los nodos semilla.
+    // Los objetos ya están en la caché del grafo.
+    SetLength(ResultNodes, InitialNodeIDs.Count);
+    for var i := 0 to InitialNodeIDs.Count - 1 do
+    begin
+      ResultNodes[i] := Graph.FindNodeByID(InitialNodeIDs[i]);
+    end;
+
     Handled := True;
 
   finally
     Query.Free;
-    NodeDict.Free;
-    NodeList.Free; // Libera la memoria de los nodos si hubo una excepción
+    NodeIDs.Free;
+    InitialNodeIDs.Free;
   end;
 end;
 
-function TMainRagGraphDemo.StringToEmbedding(const AVectorString: string): TAiEmbeddingData;
-var
-  CleanedString: string;
-  ValueStrings: TArray<string>;
-  i: Integer;
-  FormatSettings: TFormatSettings;
-begin
-  Result := []; // Devuelve un array vacío por defecto
-  if AVectorString.IsEmpty or (AVectorString = '[]') then
-    Exit;
-
-  // 1. Limpiar el string, quitando los corchetes
-  CleanedString := AVectorString.Trim(['[', ']']);
-  if CleanedString.IsEmpty then
-    Exit;
-
-  // 2. Separar los valores por la coma
-  ValueStrings := CleanedString.Split([',']);
-
-  // 3. Preparar para la conversión de float insensible a la localización
-  // Esto asegura que el '.' siempre se interprete como el separador decimal.
-  FormatSettings := TFormatSettings.Invariant;
-
-  // 4. Convertir cada valor y añadirlo al resultado
-  SetLength(Result, Length(ValueStrings));
-  for i := 0 to High(ValueStrings) do
-  begin
-    // Usamos TryStrToFloat para más seguridad contra datos mal formados
-    if TryStrToFloat(ValueStrings[i], Result[i], FormatSettings) then
-    begin
-      // La conversión fue exitosa, continuar.
-    end
-    else
-    begin
-      Result[i] := 0.0; // O manejar el error como se prefiera
-    end;
-  end;
-end;
 
 { TAiRagGraphNodeHacker }
 
@@ -973,6 +1539,289 @@ end;
 procedure TAiRagGraphNodeHacker.InternalAddOutgoingEdge(AEdge: TAiRagGraphEdge);
 begin
   Self.AddOutgoingEdge(AEdge); // Llama al método 'protected' original
+end;
+
+procedure TMainRagGraphDemo.MatchBuilder_DisplayMatchResults(const AResults: TArray<TDictionary<string, TObject>>; AShowProperties: Boolean);
+var
+  Match: TDictionary<string, TObject>;
+  VarName: TPair<string, TObject>;
+  Node: TAiRagGraphNode;
+  Edge: TAiRagGraphEdge;
+  MatchIndex: Integer;
+begin
+  MatchIndex := 0;
+  for Match in AResults do
+    try
+      Inc(MatchIndex);
+      MemoResults.Lines.Add(Format('*** Coincidencia #%d ***', [MatchIndex]));
+      for VarName in Match do
+      begin
+        if VarName.Value is TAiRagGraphNode then
+        begin
+          Node := VarName.Value as TAiRagGraphNode;
+          MemoResults.Lines.Add(Format('  %s (%s): %s', [VarName.Key, Node.NodeLabel, Node.Name]));
+
+          if AShowProperties then
+            MatchBuilder_DisplayProperties(Node.Properties, MemoResults.Lines, '    ');
+        end
+        else if VarName.Value is TAiRagGraphEdge then
+        begin
+          Edge := VarName.Value as TAiRagGraphEdge;
+          MemoResults.Lines.Add(Format('  %s (%s): %s --%s--> %s', [VarName.Key, Edge.EdgeLabel, Edge.FromNode.Name, Edge.EdgeLabel, Edge.ToNode.Name]));
+
+          if AShowProperties then
+            MatchBuilder_DisplayProperties(Edge.Properties, MemoResults.Lines, '    ');
+        end;
+      end;
+      MemoResults.Lines.Add('');
+    finally
+      Match.Free;
+    end;
+end;
+
+procedure TMainRagGraphDemo.MatchBuilder_DisplayProperties(AProperties: TDictionary<string, Variant>; AOutput: TStrings; const AIndentation: string);
+var
+  Pair: TPair<string, Variant>;
+begin
+  if (AProperties = nil) or (AProperties.Count = 0) then
+    Exit;
+
+  for Pair in AProperties do
+  begin
+    AOutput.Add(Format('%s• %s: %s', [AIndentation, Pair.Key, VarToStr(Pair.Value)]));
+  end;
+end;
+
+procedure TMainRagGraphDemo.MatchBuilder_DisplaySubgraphResults(const AResults: TArray<TDictionary<string, TObject>>; AShowProperties: Boolean);
+var
+  Item: TDictionary<string, TObject>;
+  ElementTypeObj: TObject;
+  ElementTypeStr: string;
+  ElementObj: TObject;
+  Node: TAiRagGraphNode;
+  Edge: TAiRagGraphEdge;
+  NodeList: TStringList;
+  EdgeList: TStringList;
+begin
+  NodeList := TStringList.Create;
+  EdgeList := TStringList.Create;
+  try
+    for Item in AResults do
+      try
+        ElementTypeStr := '';
+        if Item.TryGetValue('type', ElementTypeObj) and (ElementTypeObj is TStringWrapper) then
+          ElementTypeStr := (ElementTypeObj as TStringWrapper).Value;
+
+        if Item.TryGetValue('element', ElementObj) then
+        begin
+          if (ElementTypeStr = 'node') and (ElementObj is TAiRagGraphNode) then
+          begin
+            Node := ElementObj as TAiRagGraphNode;
+            NodeList.Add(Format('- %s (%s)', [Node.Name, Node.NodeLabel]));
+            // --- INICIO DE LA MEJORA ---
+            if AShowProperties then
+              MatchBuilder_DisplayProperties(Node.Properties, NodeList, '    ');
+            // --- FIN DE LA MEJORA ---
+          end
+          else if (ElementTypeStr = 'edge') and (ElementObj is TAiRagGraphEdge) then
+          begin
+            Edge := ElementObj as TAiRagGraphEdge;
+            EdgeList.Add(Format('- %s --[%s]--> %s', [Edge.FromNode.Name, Edge.EdgeLabel, Edge.ToNode.Name]));
+            // --- INICIO DE LA MEJORA ---
+            if AShowProperties then
+              MatchBuilder_DisplayProperties(Edge.Properties, EdgeList, '    ');
+            // --- FIN DE LA MEJORA ---
+          end;
+        end;
+      finally
+        if Item.TryGetValue('type', ElementTypeObj) then
+          ElementTypeObj.Free;
+        Item.Free;
+      end;
+
+    // ... (El código para mostrar los TStringList en el TMemo no cambia)
+    MemoResults.Lines.Clear;
+    MemoResults.Lines.Add(Format('--- Subgrafo Expandido: %d Nodos y %d Aristas ---', [NodeList.Count, EdgeList.Count]));
+    MemoResults.Lines.Add('');
+    MemoResults.Lines.Add('--- Nodos ---');
+    if NodeList.Count > 0 then
+    begin
+      NodeList.Sort;
+      MemoResults.Lines.AddStrings(NodeList);
+    end
+    else
+      MemoResults.Lines.Add('(No se encontraron nodos)');
+    MemoResults.Lines.Add('');
+    MemoResults.Lines.Add('--- Aristas ---');
+    if EdgeList.Count > 0 then
+    begin
+      EdgeList.Sort;
+      MemoResults.Lines.AddStrings(EdgeList);
+    end
+    else
+      MemoResults.Lines.Add('(No se encontraron aristas internas)');
+  finally
+    NodeList.Free;
+    EdgeList.Free;
+  end;
+end;
+
+// ----- Funciones de búsqueda por match ------
+
+function TMainRagGraphDemo.MatchBuilder_GetNextNodeVar: string;
+begin
+  Result := 'n' + IntToStr(FNodeVarCounter);
+  Inc(FNodeVarCounter);
+end;
+
+procedure TMainRagGraphDemo.MatchBuilder_PopulateComboBoxes;
+var
+  ALabel: string;
+  List: TStringList;
+begin
+
+  List := TStringList.Create;
+  Try
+
+    // Limpiar y llenar ComboBoxes de etiquetas de nodos
+    cbStartNodeLabel.Items.Clear;
+    cbTargetNodeLabel.Items.Clear;
+    for ALabel in RAG.GetUniqueNodeLabels do
+    begin
+      List.Add(ALabel);
+    end;
+
+    List.Sort;
+    List.Insert(0, '');
+
+    cbStartNodeLabel.Items.Text := List.Text;
+    cbTargetNodeLabel.Items.Text := List.Text;
+
+    if cbStartNodeLabel.Items.Count > 0 then
+      cbStartNodeLabel.ItemIndex := 0;
+
+    if cbTargetNodeLabel.Items.Count > 0 then
+      cbTargetNodeLabel.ItemIndex := 0;
+
+    // Limpiar y llenar ComboBox de etiquetas de aristas
+    cbEdgeLabel.Items.Clear;
+    List.Clear;
+    for ALabel in RAG.GetUniqueEdgeLabels do
+    begin
+      List.Add(ALabel);
+    end;
+    List.Sort;
+    List.Insert(0, '');
+
+    cbEdgeLabel.Items.Text := List.Text;
+
+    if cbEdgeLabel.Items.Count > 0 then
+      cbEdgeLabel.ItemIndex := 0;
+  Finally
+    List.Free;
+  End;
+end;
+
+procedure TMainRagGraphDemo.MatchBuilder_PopulateSuggestions(const SearchText: string);
+var
+  SelectedLabel: string;
+  SuggestedNames: TArray<string>;
+  AName: string;
+begin
+  // Si no hay texto, ocultamos el popup y salimos
+  if SearchText.Trim.IsEmpty then
+  begin
+    popSuggestions.IsOpen := False;
+    Exit;
+  end;
+
+  // Obtenemos la etiqueta seleccionada.
+  if (cbStartNodeLabel.ItemIndex <= 0) or (cbStartNodeLabel.Selected = nil) then // <= 0 para ignorar el item vacío
+  begin
+      popSuggestions.IsOpen := False;
+      Exit;
+  end;
+  SelectedLabel := cbStartNodeLabel.Selected.Text;
+  if SelectedLabel.IsEmpty then
+  begin
+      popSuggestions.IsOpen := False;
+      Exit;
+  end;
+
+
+  // Limpiamos la lista de sugerencias anterior
+  lbSuggestions.Clear;
+
+  // --- LÍNEA CLAVE CORREGIDA ---
+  // Llamamos a la nueva función del grafo, que delegará a nuestra consulta SQL.
+  SuggestedNames := RAG.FindNodeNamesByLabel(SelectedLabel, SearchText, 15); // Límite de 15 sugerencias
+
+  // Poblamos el ListBox con los resultados
+  for AName in SuggestedNames do
+  begin
+    lbSuggestions.Items.Add(AName);
+  end;
+  // --- FIN DE LA CORRECCIÓN ---
+
+  // Mostramos u ocultamos el popup basado en si encontramos resultados
+  if lbSuggestions.Items.Count > 0 then
+  begin
+    // Posicionar el popup debajo del TEdit
+    {
+    var LPoint := TPointF.Create(0, edtStartNodeName.Height);
+    LPoint := edtStartNodeName.LocalToAbsolute(LPoint);
+    LPoint := Self.AbsoluteToLocal(LPoint);
+    popSuggestions.Position.Point := LPoint;
+    popSuggestions.Width := edtStartNodeName.Width;
+    }
+    popSuggestions.IsOpen := True;
+  end
+  else
+  begin
+    popSuggestions.IsOpen := False;
+  end;
+end;
+
+procedure TMainRagGraphDemo.MatchBuilder_UpdateQueryVisualizer;
+var
+  i: Integer;
+  Clause: TMatchClause;
+  SourcePattern, TargetPattern: TMatchNodePattern;
+  DirectionStr: string;
+begin
+  lbQuerySteps.Clear;
+  if FCurrentQuery.MatchClauses.Count = 0 then
+    Exit;
+
+  // Visualizar la primera cláusula de forma completa
+  Clause := FCurrentQuery.MatchClauses[0];
+  SourcePattern := FCurrentQuery.NodePatternByVariable[Clause.SourceNodeVar];
+  TargetPattern := FCurrentQuery.NodePatternByVariable[Clause.TargetNodeVar];
+  case Clause.EdgePattern.Direction of
+    gdOutgoing:
+      DirectionStr := '-[' + Clause.EdgePattern.Variable + ':' + Clause.EdgePattern.EdgeLabel + ']->';
+    gdIncoming:
+      DirectionStr := '<-[' + Clause.EdgePattern.Variable + ':' + Clause.EdgePattern.EdgeLabel + ']-';
+  else
+    DirectionStr := '-[' + Clause.EdgePattern.Variable + ':' + Clause.EdgePattern.EdgeLabel + ']-';
+  end;
+  lbQuerySteps.Items.Add(Format('(%s:%s) %s (%s:%s)', [SourcePattern.Variable, SourcePattern.NodeLabel, DirectionStr, TargetPattern.Variable, TargetPattern.NodeLabel]));
+
+  // Visualizar las cláusulas siguientes
+  for i := 1 to FCurrentQuery.MatchClauses.Count - 1 do
+  begin
+    Clause := FCurrentQuery.MatchClauses[i];
+    TargetPattern := FCurrentQuery.NodePatternByVariable[Clause.TargetNodeVar];
+    case Clause.EdgePattern.Direction of
+      gdOutgoing:
+        DirectionStr := '-[' + Clause.EdgePattern.Variable + ':' + Clause.EdgePattern.EdgeLabel + ']->';
+      gdIncoming:
+        DirectionStr := '<-[' + Clause.EdgePattern.Variable + ':' + Clause.EdgePattern.EdgeLabel + ']-';
+    else
+      DirectionStr := '-[' + Clause.EdgePattern.Variable + ':' + Clause.EdgePattern.EdgeLabel + ']-';
+    end;
+    lbQuerySteps.Items.Add(Format('%s (%s:%s)', [DirectionStr, TargetPattern.Variable, TargetPattern.NodeLabel]));
+  end;
 end;
 
 end.

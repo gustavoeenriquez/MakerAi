@@ -1,3 +1,34 @@
+// IT License
+//
+// Copyright (c) <year> <copyright holders>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enríquez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+// - Telegram: +57 3128441700
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
+
 unit uMakerAi.RAG.Graph.Builder;
 
 interface
@@ -8,12 +39,6 @@ uses
   uMakerAi.RAG.Graph.core; // Incluimos la unidad del grafo
 
 type
-  { TMergeStrategy }
-  TMergeStrategy = (msAddNewOnly, // (Default) Solo añade propiedades que no existen.
-    msOverwrite, // Sobrescribe las propiedades existentes con las nuevas.
-    msKeepExisting // No realiza ningún cambio en las propiedades del elemento existente.
-    );
-
   { TAiRagGraphBuilder }
   TAiRagGraphBuilder = class(TComponent)
   private
@@ -157,74 +182,48 @@ end;
 function TAiRagGraphBuilder.GetOrCreateNode(ANodeObject: TJSONObject; AMergeStrategy: TMergeStrategy): TAiRagGraphNode;
 var
   NodeName, NodeLabel, NewNodeID, NodeText, AdditionalText: string;
-  ExistingNode: TAiRagGraphNode;
   PropertiesValue: TJSONValue;
   NewProperties: TJSONObject;
-  NodeEmbedding: TAiEmbeddingData;
-  AddedNode: TAiRagGraphNode;
 begin
-  // ... (código para extraer NodeName, NodeLabel, NewProperties igual que antes)
   NodeName := ANodeObject.GetValue<string>('name', '');
   NodeLabel := ANodeObject.GetValue<string>('nodeLabel', 'Undefined');
 
   if NodeName.IsEmpty then
     raise Exception.Create('Node name cannot be empty in JSON input.');
 
-  // Usar la función optimizada
-  ExistingNode := FindExistingNode(NodeName, NodeLabel);
+  // 1. Intenta encontrar el nodo existente. Esta es la parte crucial que ahora funcionará.
+  Result := FGraph.FindNodeByName(NodeName, NodeLabel);
 
   NewProperties := nil;
   PropertiesValue := ANodeObject.FindValue('properties');
   if (PropertiesValue <> nil) and (PropertiesValue is TJSONObject) then
     NewProperties := PropertiesValue as TJSONObject;
 
-  if ExistingNode <> nil then
+  if Result <> nil then
   begin
-    // Nodo encontrado: Fusionar propiedades y devolver.
-    Result := ExistingNode;
+    // Nodo encontrado: Simplemente fusiona las propiedades.
     if NewProperties <> nil then
       MergeNodeProperties(Result, NewProperties, AMergeStrategy);
   end
   else
   begin
-    // Nodo no encontrado: Crear, poblar completamente y LUEGO añadir.
-
-    // 1. Crear la instancia del nodo.
-    Result := TAiRagGraphNode.Create(FGraph, FGraph.Nodes.Dim);
+    // Nodo no encontrado: Créalo y añádelo.
     NewNodeID := TGuid.NewGuid.ToString;
 
-    // 2. Poblar TODOS los datos.
-    Result.ID := NewNodeID;
-    Result.NodeLabel := NodeLabel;
-    Result.Name := NodeName;
+    // Dejamos que el grafo cree y registre el nodo.
+    Result := FGraph.AddNode(NewNodeID, NodeLabel, NodeName);
 
-    // Poblar propiedades ANTES de generar el embedding.
+    // Ahora poblamos las propiedades y el embedding en el nodo recién creado.
     if NewProperties <> nil then
-      MergeNodeProperties(Result, NewProperties, msOverwrite);
+      MergeNodeProperties(Result, NewProperties, msOverwrite); // Al crear, siempre sobrescribimos las propiedades iniciales.
 
-    // Generar texto y embedding.
     if Assigned(FEmbeddings) then
     begin
       AdditionalText := ANodeObject.GetValue<string>('text', '');
       NodeText := GenerateTextForEmbedding(Result.Name, Result.NodeLabel, NewProperties, AdditionalText);
-      NodeEmbedding := FEmbeddings.CreateEmbedding(NodeText, 'user');
-      Result.Text := NodeText;
-      Result.Data := NodeEmbedding;
+      Result.Text := NodeText; // Guardamos el texto usado para el embedding
+      Result.Data := FEmbeddings.CreateEmbedding(NodeText, 'user');
     end;
-
-    // 3. Añadir el nodo COMPLETAMENTE POBLADO al grafo.
-    AddedNode := FGraph.AddNode(Result); // Llama a la nueva sobrecarga.
-
-    // 4. Manejar el resultado.
-    if AddedNode <> Result then // Esto sucederá si el manejador de DB se hizo cargo
-    begin
-      // El manejador de DB ha persistido los datos. El objeto en memoria `Result`
-      // ya no es necesario y debe ser liberado por el llamador (el Builder).
-      Result.Free;
-      // Necesitamos encontrar el nodo en la BD para continuar (por si necesitamos conectar una arista).
-      Result := FindExistingNode(NodeName, NodeLabel);
-    end;
-    // Si no, el nodo fue añadido al grafo en memoria y `Result` es el puntero correcto.
   end;
 end;
 

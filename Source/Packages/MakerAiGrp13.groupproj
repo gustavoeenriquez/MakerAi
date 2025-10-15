@@ -12,7 +12,7 @@
         <Projects Include="uMakerAi.UI.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="..\..\Demos\025-RAGGraph\RagGraphDemo.dproj">
+        <Projects Include="uMakerAi.RAG.Drivers.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -50,23 +50,23 @@
     <Target Name="uMakerAi_UI:Make">
         <MSBuild Projects="uMakerAi.UI.dproj" Targets="Make"/>
     </Target>
-    <Target Name="RagGraphDemo">
-        <MSBuild Projects="..\..\Demos\025-RAGGraph\RagGraphDemo.dproj"/>
+    <Target Name="uMakerAi_RAG_Drivers">
+        <MSBuild Projects="uMakerAi.RAG.Drivers.dproj"/>
     </Target>
-    <Target Name="RagGraphDemo:Clean">
-        <MSBuild Projects="..\..\Demos\025-RAGGraph\RagGraphDemo.dproj" Targets="Clean"/>
+    <Target Name="uMakerAi_RAG_Drivers:Clean">
+        <MSBuild Projects="uMakerAi.RAG.Drivers.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="RagGraphDemo:Make">
-        <MSBuild Projects="..\..\Demos\025-RAGGraph\RagGraphDemo.dproj" Targets="Make"/>
+    <Target Name="uMakerAi_RAG_Drivers:Make">
+        <MSBuild Projects="uMakerAi.RAG.Drivers.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="MakerAI;MakerAiDsg;uMakerAi_UI;RagGraphDemo"/>
+        <CallTarget Targets="MakerAI;MakerAiDsg;uMakerAi_UI;uMakerAi_RAG_Drivers"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MakerAI:Clean;MakerAiDsg:Clean;uMakerAi_UI:Clean;RagGraphDemo:Clean"/>
+        <CallTarget Targets="MakerAI:Clean;MakerAiDsg:Clean;uMakerAi_UI:Clean;uMakerAi_RAG_Drivers:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MakerAI:Make;MakerAiDsg:Make;uMakerAi_UI:Make;RagGraphDemo:Make"/>
+        <CallTarget Targets="MakerAI:Make;MakerAiDsg:Make;uMakerAi_UI:Make;uMakerAi_RAG_Drivers:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

@@ -4,13 +4,13 @@
     <Transaction>2025/09/05 18:10:26.000.734,=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit6.pas</Transaction>
     <Transaction>2025/09/10 15:03:29.000.483,=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit6.pas</Transaction>
     <Transaction>2025/09/11 16:30:37.000.963,=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit6.pas</Transaction>
-    <Transaction>2025/09/11 16:31:22.000.928,C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit6.fmx=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\uMainChatVisual.fmx</Transaction>
-    <Transaction>2025/09/11 16:31:22.000.928,C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit6.pas=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\uMainChatVisual.pas</Transaction>
-    <Transaction>2025/09/11 16:31:26.000.686,C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project6.dproj=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\ChatVisual.dproj</Transaction>
+    <Transaction>2025/09/11 16:31:22.000.928,C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\uMainChatVisual.fmx=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit6.fmx</Transaction>
+    <Transaction>2025/09/11 16:31:22.000.928,C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\uMainChatVisual.pas=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit6.pas</Transaction>
+    <Transaction>2025/09/11 16:31:26.000.686,C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\ChatVisual.dproj=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project6.dproj</Transaction>
     <Transaction>2025/09/12 15:54:43.000.364,=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\Unit1.pas</Transaction>
     <Transaction>2025/09/12 19:05:43.000.177,=E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\uChatBubble.pas</Transaction>
     <Transaction>2025/09/13 06:37:08.000.428,=E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\FMXChatBubble.pas</Transaction>
-    <Transaction>2025/09/15 11:01:08.000.162,E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\uMakerAi.UI.ChatBubble.pas=E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\FMXChatBubble.pas</Transaction>
+    <Transaction>2025/09/15 11:01:08.000.162,E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\FMXChatBubble.pas=E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\uMakerAi.UI.ChatBubble.pas</Transaction>
     <Transaction>2025/09/15 11:02:57.000.529,=E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\uMakerAi.UI.ChatBubble.pas</Transaction>
     <Transaction>2025/09/15 18:21:45.000.554,=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\Unit2.pas</Transaction>
     <Transaction>2025/09/15 18:25:53.000.524,=E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\uMakerAi.UI.ChatList.pas</Transaction>
@@ -19,16 +19,16 @@
     <Transaction>2025/09/23 10:22:48.000.262,=E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\uChatInputFrame.pas</Transaction>
     <Transaction>2025/09/23 10:25:44.000.449,E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\uChatInputFrame.pas=</Transaction>
     <Transaction>2025/09/23 10:28:48.000.509,=E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\uChatInputFrame.pas</Transaction>
+    <Transaction>2025/09/25 07:06:57.000.722,E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\uMakerAi.UI.ChatList.pas=</Transaction>
     <Transaction>2025/09/25 07:06:57.000.768,E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\uMakerAi.UI.ChatInput.pas=</Transaction>
     <Transaction>2025/09/25 07:06:57.000.702,E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\uMakerAi.UI.ChatBubble.pas=</Transaction>
-    <Transaction>2025/09/25 07:06:57.000.722,E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\uMakerAi.UI.ChatList.pas=</Transaction>
     <Transaction>2025/09/25 07:06:57.000.769,E:\Delphi\Delphi12\Compo\FMXCompo\AiMakerEx\ChatDesign\uChatInputFrame.pas=</Transaction>
     <Transaction>2025/09/27 10:48:07.000.762,=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\Unit4.pas</Transaction>
-    <Transaction>2025/09/27 10:52:56.000.390,C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\uAddRagData.pas=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\Unit4.pas</Transaction>
-    <Transaction>2025/09/27 10:52:56.000.390,C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\uAddRagData.fmx=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\Unit4.fmx</Transaction>
-    <Transaction>2025/09/27 18:57:02.000.248,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\ChatAllFunctions\uMainChatFull.fmx=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\ChatAllFunctions\Unit2.fmx</Transaction>
-    <Transaction>2025/09/27 18:57:02.000.248,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\ChatAllFunctions\uMainChatFull.pas=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\ChatAllFunctions\Unit2.pas</Transaction>
-    <Transaction>2025/09/27 18:57:08.000.719,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\ChatAllFunctions\ChatFull.dproj=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\ChatAllFunctions\ChatVisual.dproj</Transaction>
+    <Transaction>2025/09/27 10:52:56.000.390,C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\Unit4.pas=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\uAddRagData.pas</Transaction>
+    <Transaction>2025/09/27 10:52:56.000.390,C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\Unit4.fmx=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\ChatVisual\uAddRagData.fmx</Transaction>
+    <Transaction>2025/09/27 18:57:02.000.248,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\ChatAllFunctions\Unit2.fmx=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\ChatAllFunctions\uMainChatFull.fmx</Transaction>
+    <Transaction>2025/09/27 18:57:02.000.248,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\ChatAllFunctions\Unit2.pas=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\ChatAllFunctions\uMainChatFull.pas</Transaction>
+    <Transaction>2025/09/27 18:57:08.000.719,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\ChatAllFunctions\ChatVisual.dproj=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\ChatAllFunctions\ChatFull.dproj</Transaction>
   </Transactions>
 	<ProjectSortOrder AutoSort="0" SortType="0">
     <File Path="activity-1.7.2.dex.jar"/>

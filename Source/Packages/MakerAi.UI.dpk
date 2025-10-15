@@ -1,4 +1,4 @@
-package uMakerAi.UI;
+package MakerAi.UI;
 
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
@@ -39,6 +39,10 @@ requires
 contains
   uMakerAi.UI.ChatBubble in '..\ChatUI\uMakerAi.UI.ChatBubble.pas',
   uMakerAi.UI.ChatInput in '..\ChatUI\uMakerAi.UI.ChatInput.pas',
-  uMakerAi.UI.ChatList in '..\ChatUI\uMakerAi.UI.ChatList.pas';
+  uMakerAi.UI.ChatList in '..\ChatUI\uMakerAi.UI.ChatList.pas',
+  uMakerAi.Utils.ScreenCapture in '..\ChatUI\uMakerAi.Utils.ScreenCapture.pas';
 
 end.
+
+
+

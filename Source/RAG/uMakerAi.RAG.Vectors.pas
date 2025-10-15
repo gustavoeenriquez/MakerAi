@@ -64,7 +64,7 @@ type
     procedure SetFTagString(const Value: String);
   Public
     Constructor Create;
-    Destructor Destroy;
+    Destructor Destroy; Override;
     Property Data: TStrings read FData write SetData;
     Property TagObject: TObject read FTagObject write SetTagObject;
     Property TagString: String read FTagString write SetFTagString;
@@ -467,6 +467,8 @@ Function TAiRAGVector.AddItem(aItem: TAiEmbeddingNode; MetaData: TAiEmbeddingMet
 Var
   Handled: Boolean;
 begin
+  Result := 0;
+
   Handled := False;
 
   If Assigned(FOnDataVecAddItem) then
@@ -807,7 +809,7 @@ end;
 
 function TAiRAGVector.SearchText(aPrompt: String; DataVec: TAiRAGVector): String;
 Var
-  Prompt, Text: String;
+  Text: String;
   i: Integer;
   Emb: TAiEmbeddingNode;
 Begin
@@ -890,11 +892,12 @@ end;
 
 function TAIEmbeddingIndex.Connect(aHost, aPort, aLogin, aPassword: String): Boolean;
 begin
-
+   Result := False;
 end;
 
 constructor TAIEmbeddingIndex.Create;
 begin
+  inherited;
 
 end;
 

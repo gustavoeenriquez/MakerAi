@@ -46,7 +46,7 @@ type
     // CAMBIO: La función ahora devuelve TJSONObject
     function ExecuteWithParams(const AParams: TListFilesParams; const AuthContext: TAiAuthContext): TJSONObject; override;
   public
-    constructor Create;
+    constructor Create; Override;
     class constructor Create;
     class destructor Destroy;
     class procedure AddAllowedPath(const APath: string);
@@ -74,7 +74,7 @@ type
     // CAMBIO: La función ahora devuelve TJSONObject
     function ExecuteWithParams(const AParams: TReadFileParams; const AuthContext: TAiAuthContext): TJSONObject; override;
   public
-    constructor Create;
+    constructor Create; Override;
   end;
 
   // =============================================================================
@@ -105,7 +105,7 @@ type
     // CAMBIO: La función ahora devuelve TJSONObject
     function ExecuteWithParams(const AParams: TWriteFileParams; const AuthContext: TAiAuthContext): TJSONObject; override;
   public
-    constructor Create;
+    constructor Create; Override;
   end;
 
 procedure RegisterTools(ALogicServer: TAiMCPServer);
