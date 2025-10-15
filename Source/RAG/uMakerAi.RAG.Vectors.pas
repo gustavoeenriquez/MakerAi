@@ -51,7 +51,8 @@ type
   /// almacena también el dato de texto original del embedding
   /// -------------------------------------------------------------------------
 
-  TAiRagIndexType = (TAIBasicIndex, TAIHNSWIndex);
+  TAiRagIndexType = (TAIBasicIndex, TAIHNSWIndex, TAIEuclideanIndex);
+
 
   TAiEmbeddingMetaData = Class
   private
@@ -63,7 +64,7 @@ type
     procedure SetFTagString(const Value: String);
   Public
     Constructor Create;
-    Destructor Destroy;
+    Destructor Destroy; Override;
     Property Data: TStrings read FData write SetData;
     Property TagObject: TObject read FTagObject write SetTagObject;
     Property TagString: String read FTagString write SetFTagString;
@@ -95,9 +96,12 @@ type
     Destructor Destroy; Override;
     class function CosineSimilarity(const A, B: TAiEmbeddingNode): Double;
     class Function ToJsonArray(Val: TAiEmbeddingNode): TJSonArray; Overload;
+    class function FromJSON(AJSONObject: TJSonObject): TAiEmbeddingNode;
+
     Function ToJsonArray: TJSonArray; Overload;
     function ToJSON: TJSonObject;
-    class function FromJSON(AJSONObject: TJSonObject): TAiEmbeddingNode;
+    Procedure SetDataLength(aDim: Integer);
+
     property Data: TAiEmbeddingData read FData write SetData;
     Property jData: TJSonObject read FjData write SetjData;
     Property Text: String read FText write SetText;
@@ -143,6 +147,17 @@ type
   /// -------------------------------------------------------------------------
 
   TAIBasicEmbeddingIndex = class(TAIEmbeddingIndex)
+  public
+    constructor Create; override;
+    destructor Destroy; override;
+    procedure BuildIndex(Points: TAiRAGVector); Override;
+    Function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TAiRAGVector; Override;
+  end;
+
+
+  TL2Pair = TPair<Double, TAiEmbeddingNode>;
+
+  TAIEuclideanDistanceIndex = class(TAIEmbeddingIndex)
   public
     constructor Create; override;
     destructor Destroy; override;
@@ -247,8 +262,8 @@ type
     Function AddItem(aItem: TAiEmbeddingNode; MetaData: TAiEmbeddingMetaData): NativeInt; Overload; Virtual;
     Function AddItem(aText: String; MetaData: TAiEmbeddingMetaData = Nil): TAiEmbeddingNode; Overload; Virtual;
 
-    Function AddItemsFromJSonArray(aJSonArray: TJSonArray): Boolean; Virtual;
-    procedure AddItemsFromPlainText(aText: String; aLenChunk: Integer = 512; aLenOverlap: Integer = 80); Virtual;
+    Function AddItemsFromJSonArray(aJSonArray: TJSonArray; MetaData: TAiEmbeddingMetaData = Nil): Boolean; Virtual;
+    procedure AddItemsFromPlainText(aText: String; MetaData: TAiEmbeddingMetaData = Nil; aLenChunk: Integer = 512; aLenOverlap: Integer = 80); Virtual;
     Function CreateEmbeddingNode(aText: String; aEmbeddings: TAiEmbeddingsCore = Nil): TAiEmbeddingNode;
     Function Count: Integer;
     Procedure Clear;
@@ -268,23 +283,6 @@ type
     Property InMemoryIndexType: TAiRagIndexType read FInMemoryIndexType write SetInMemoryIndexType;
   End;
 
-  {
-    TAiRagChat = Class(TComponent)
-    Private
-    FDataVec: TAiRAGVector;
-    procedure SetDataVec(const Value: TAiRAGVector);
-    Protected
-    Public
-    Constructor Create(aOwner: TComponent); Override;
-    Destructor Destroy; Override;
-    Function AskToAi(aPrompt: String; aLimit: Integer = 10; aPresicion: Double = 0.5): String; Overload; Virtual;
-    Function AskToAi(aPrompt: TAiEmbeddingNode; aLimit: Integer = 10; aPresicion: Double = 0.5): String; Overload; Virtual;
-    Function AskToAi(aPrompt: String; DataVec: TAiRAGVector): String; Overload; Virtual;
-    Published
-    Property DataVec: TAiRAGVector read FDataVec write SetDataVec;
-    End;
-  }
-
 procedure Register;
 
 implementation
@@ -298,6 +296,12 @@ end;
 procedure TAiEmbeddingNode.SetData(const Value: TAiEmbeddingData);
 begin
   FData := Value;
+end;
+
+procedure TAiEmbeddingNode.SetDataLength(aDim: Integer);
+begin
+  FDim := aDim;
+  SetLength(FData, FDim);
 end;
 
 procedure TAiEmbeddingNode.SetIdx(const Value: Double);
@@ -463,6 +467,8 @@ Function TAiRAGVector.AddItem(aItem: TAiEmbeddingNode; MetaData: TAiEmbeddingMet
 Var
   Handled: Boolean;
 begin
+  Result := 0;
+
   Handled := False;
 
   If Assigned(FOnDataVecAddItem) then
@@ -512,7 +518,7 @@ begin
   End;
 end;
 
-function TAiRAGVector.AddItemsFromJSonArray(aJSonArray: TJSonArray): Boolean;
+function TAiRAGVector.AddItemsFromJSonArray(aJSonArray: TJSonArray; MetaData: TAiEmbeddingMetaData): Boolean;
 Var
   JVal: TJsonValue;
   Emb: TAiEmbeddingNode;
@@ -521,14 +527,14 @@ begin
   i := 0;
   For JVal in aJSonArray do
   Begin
-    Emb := AddItem(JVal.Format);
+    Emb := AddItem(JVal.Format, MetaData);
     Emb.Orden := i;
     Inc(i);
   End;
   Result := True;
 end;
 
-procedure TAiRAGVector.AddItemsFromPlainText(aText: String; aLenChunk, aLenOverlap: Integer);
+procedure TAiRAGVector.AddItemsFromPlainText(aText: String; MetaData: TAiEmbeddingMetaData; aLenChunk, aLenOverlap: Integer);
 Var
   i: Integer;
   S, Text: String;
@@ -540,7 +546,7 @@ begin
   Repeat
     S := Copy(Text, 1, aLenChunk).Trim;
 
-    Emb := AddItem(S);
+    Emb := AddItem(S, MetaData);
     Emb.Orden := i;
     Text := Copy(Text, aLenChunk - aLenOverlap, Length(Text));
     Inc(i);
@@ -673,8 +679,13 @@ begin
         Begin
           JItem := TJSonObject(JVal);
           Emb := TAiEmbeddingNode.FromJSON(JItem);
+
           Self.Items.Add(Emb);
         End;
+
+        If Assigned(FRagIndex) then
+          FRagIndex.BuildIndex(Self);
+
       End;
     Finally
       JObj.Free;
@@ -798,7 +809,7 @@ end;
 
 function TAiRAGVector.SearchText(aPrompt: String; DataVec: TAiRAGVector): String;
 Var
-  Prompt, Text: String;
+  Text: String;
   i: Integer;
   Emb: TAiEmbeddingNode;
 Begin
@@ -830,21 +841,20 @@ end;
 
 procedure TAiRAGVector.SetInMemoryIndexType(const Value: TAiRagIndexType);
 begin
-
-  If FInMemoryIndexType <> Value then
-  Begin
+  if FInMemoryIndexType <> Value then
+  begin
     FRagIndex.Free;
 
     FInMemoryIndexType := Value;
 
-    If FInMemoryIndexType = TAIBasicIndex then
-      FRagIndex := TAIBasicEmbeddingIndex.Create
-    Else If FInMemoryIndexType = TAIHNSWIndex then
-      FRagIndex := THNSWIndex.Create;
+    case FInMemoryIndexType of
+      TAIBasicIndex: FRagIndex := TAIBasicEmbeddingIndex.Create;
+      TAIHNSWIndex: FRagIndex := THNSWIndex.Create;
+      TAIEuclideanIndex: FRagIndex := TAIEuclideanDistanceIndex.Create;
+    end;
 
     BuildIndex; // Inicializa el Indice
-  End;
-
+  end;
 end;
 
 procedure TAiRAGVector.SetNameVec(const Value: String);
@@ -882,11 +892,12 @@ end;
 
 function TAIEmbeddingIndex.Connect(aHost, aPort, aLogin, aPassword: String): Boolean;
 begin
-
+   Result := False;
 end;
 
 constructor TAIEmbeddingIndex.Create;
 begin
+  inherited;
 
 end;
 
@@ -1268,67 +1279,70 @@ begin
   end;
 end;
 
-{ TAiRagChat }
+{ TAIEuclideanDistanceIndex }
 
-{ function TAiRagChat.AskToAi(aPrompt: String; aLimit: Integer = 10; aPresicion: Double = 0.5): String;
-  Var
-  TmpVec: TAiRAGVector;
-  Begin
-  TmpVec := FDataVec.Search(aPrompt, aLimit, aPresicion);
+procedure TAIEuclideanDistanceIndex.BuildIndex(Points: TAiRAGVector);
+begin
+  Inherited; // La implementación base es suficiente
+end;
 
-  Try
-  Result := AskToAi(aPrompt, TmpVec)
-  Finally
-  TmpVec.Free;
-  End;
-  end;
+constructor TAIEuclideanDistanceIndex.Create;
+begin
+  Inherited;
+end;
 
-  function TAiRagChat.AskToAi(aPrompt: TAiEmbeddingNode; aLimit: Integer; aPresicion: Double): String;
-  Var
-  TmpVec: TAiRAGVector;
-  Begin
-  TmpVec := FDataVec.Search(aPrompt, aLimit, aPresicion);
+destructor TAIEuclideanDistanceIndex.Destroy;
+begin
+  Inherited;
+end;
 
-  Try
-  Result := AskToAi(aPrompt.Text, TmpVec)
-  Finally
-  TmpVec.Free;
-  End;
-  end;
-
-  function TAiRagChat.AskToAi(aPrompt: String; DataVec: TAiRAGVector): String;
-  Var
-  Prompt, Text: String;
+function TAIEuclideanDistanceIndex.Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TAiRAGVector;
+Var
   i: Integer;
   Emb: TAiEmbeddingNode;
-  Begin
+  Distance: Double;
+  Pair : TL2Pair;
+  Results: TList<TL2Pair>; // Usamos una lista temporal para no modificar la original
+begin
+  Result := TAiRAGVector.Create(Nil);
+  Results := TList < TPair < Double, TAiEmbeddingNode >>.Create;
 
-  Text := '';
-  For i := 0 to DataVec.Count - 1 do
-  Begin
-  Emb := DataVec.FItems[i];
-  Text := Text + Emb.Text.Trim + #$D#$A;
-  End;
+  try
+    // 1. Calcula la distancia Euclidiana para todos los elementos y los guarda en una lista temporal
+    for i := 0 to DataVec.Count - 1 do
+    begin
+      Emb := DataVec.Items[i];
+      // Aquí usamos la función de la unidad Core, que ya tienes
+      Distance := TAiEmbeddingsCore.EuclideanDistance(Emb.Data, Target.Data);
+      Emb.Idx := Distance; // Guardamos la distancia para referencia/debugging
 
-  Result := Text;
+      // aPrecision en este contexto significa "distancia máxima"
+      // Si aPrecision <= 0, ignoramos el filtro de precisión
+      if (aPrecision <= 0) or (Distance <= aPrecision) then
+      begin
+        Pair := TL2Pair.Create(Distance, Emb);
+        Results.Add(Pair);
+      end;
+    end;
+
+    // 2. Ordena la lista de resultados por distancia en orden ASCENDENTE (menor es mejor)
+    Results.Sort(TComparer < TPair < Double, TAiEmbeddingNode >>.Construct(
+      function(const Left, Right: TPair<Double, TAiEmbeddingNode>): Integer
+      begin
+        // Left.Key vs Right.Key para orden ascendente
+        Result := CompareValue(Left.Key, Right.Key);
+      end));
+
+    // 3. Recorre la lista ordenada y añade los mejores 'aLimit' resultados
+    for i := 0 to Min(aLimit - 1, Results.Count - 1) do
+    begin
+      Result.FItems.Add(Results[i].Value);
+    end;
+
+  finally
+    Results.Free;
   end;
-
-  constructor TAiRagChat.Create(aOwner: TComponent);
-  begin
-  Inherited;
-  end;
-
-  destructor TAiRagChat.Destroy;
-  begin
-
-  inherited;
-  end;
-
-  procedure TAiRagChat.SetDataVec(const Value: TAiRAGVector);
-  begin
-  FDataVec := Value;
-  end;
-}
+end;
 
 { TAiEmbeddingMetaData }
 

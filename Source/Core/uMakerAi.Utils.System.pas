@@ -101,6 +101,10 @@ type
     class procedure StopInteractiveProcess(var AProcessInfo: TInteractiveProcessInfo);
 
     class function GetSystemEnvironment: TStringList;
+
+{$IFDEF MSWINDOWS}
+    class function ShellOpenFile(const AFileName: string): Boolean;
+{$ENDIF}
   end;
 
 implementation
@@ -374,6 +378,35 @@ end;
 
 {$IFDEF MSWINDOWS}
 
+class function TUtilsSystem.ShellOpenFile(const AFileName: string): Boolean;
+var
+  ErrorCode: Integer;
+begin
+
+{$IFDEF MSWINDOWS}
+  // Para Windows, usamos la API ShellExecuteW (la versión Unicode)
+  // El handle es 0 (escritorio), 'open' es la acción por defecto.
+  // PChar(AFileName) es la ruta al archivo.
+  // nil para parámetros, nil para directorio, SW_SHOWNORMAL para mostrar la app.
+  ErrorCode := Integer(ShellExecuteW(0, 'open', PChar(AFileName), nil, nil, SW_SHOWNORMAL));
+
+  // ShellExecute devuelve un valor > 32 en caso de éxito.
+  Result := ErrorCode > 32;
+{$ENDIF}
+{$IFDEF MACOS}
+  // En macOS, la lógica es diferente. Se usa NSWorkspace.
+  // Esto requeriría más código y uses de Macapi.*
+  // Por ahora, dejamos un placeholder.
+  ShowMessage('Abrir archivos no está implementado para macOS en este ejemplo.');
+  Result := False;
+{$ENDIF}
+{$IFDEF ANDROID}
+  // En Android, se usan Intents. Es aún más complejo por los permisos y File Providers.
+  ShowMessage('Abrir archivos no está implementado para Android en este ejemplo.');
+  Result := False;
+{$ENDIF}
+end;
+
 class function TUtilsSystem.StartInteractiveProcess(const ACommand: string; ACurrentDirectory: string; AEnvironment: TStrings): TInteractiveProcessInfo;
 var
   SA: TSecurityAttributes;
@@ -457,7 +490,6 @@ begin
     begin
       if Assigned(Result) then
         Result.Free;
-      Result := nil;
       raise;
     end;
   end;
@@ -492,9 +524,7 @@ var
   BytesRead: DWORD;
   Cmd: string;
   Output: TStringBuilder;
-{$IF CompilerVersion < 35}
   TempStr: AnsiString;
-{$ENDIF}
 begin
   Result := '';
   Output := TStringBuilder.Create;
@@ -526,14 +556,9 @@ begin
               if ReadFile(ReadPipe, Buffer, SizeOf(Buffer), BytesRead, nil) and (BytesRead > 0) then
               Begin
 
-{$IF CompilerVersion < 35}
-                // Para versiones anteriores a Delphi 11 (CompilerVersion 35)
                 SetString(TempStr, Buffer, BytesRead);
                 Output.Append(string(TempStr));
-{$ELSE}
-                // Para Delphi XE y versiones posteriores
-                Output.Append(Buffer, BytesRead);
-{$IFEND}
+
               End;
             until not(BytesRead > 0);
             WaitForSingleObject(PI.hProcess, INFINITE);

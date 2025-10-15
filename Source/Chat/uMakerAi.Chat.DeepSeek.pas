@@ -131,8 +131,6 @@ begin
   // Las funciones no trabajan en modo ascincrono
   LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
 
-  // En groq hay una restricción sobre las imágenes
-
   FClient.Asynchronous := LAsincronico;
 
   AJSONObject := TJSonObject.Create;
@@ -205,7 +203,8 @@ begin
     If Seed > 0 then
       AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
 
-    Res := UTF8ToString(AJSONObject.ToJSon);
+    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
+
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
   Finally

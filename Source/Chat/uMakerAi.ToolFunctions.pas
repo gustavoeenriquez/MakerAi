@@ -1,4 +1,34 @@
-﻿unit uMakerAi.ToolFunctions;
+﻿// MIT License
+//
+// Copyright (c) 2013 Gustavo Enríquez - CimaMaker
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enríquez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+// - Telegram: +57 3128441700
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
+unit uMakerAi.ToolFunctions;
 
 interface
 
@@ -10,16 +40,13 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-
-
   uMakerAi.Core, uMakerAi.MCPClient.Core;
 
 type
 
   TFunctionActionItem = class;
 
-  TFunctionEvent = Procedure(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: String; ToolCall: TAiToolsFunction;
-    Var Handled: Boolean) Of Object;
+  TFunctionEvent = Procedure(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: String; ToolCall: TAiToolsFunction; Var Handled: Boolean) Of Object;
 
   TToolstype = (tt_function, ttNone);
 
@@ -114,7 +141,6 @@ type
     property Enabled: Boolean read FEnabled write SetEnabled default True;
     property FunctionName: string read GetDisplayName write SetDisplayName;
     property OnAction: TFunctionEvent read FOnAction write SetOnAction;
-    // Property OnFunctionGetInfo: TFunctionGetInfoEvent read FOnFunctionGetInoAction write SetOnActionTag;
     Property Description: TStrings read FDescription write SetFunctionDoc;
     Property Script: TStrings read FScript write SetScript;
     Property Parameters: TFunctionParamsItems Read FParams Write FParams;
@@ -154,6 +180,8 @@ type
     FEnabled: Boolean;
     FMCPClient: TMCPClientCustom;
     FConnected: Boolean;
+    FParams: TStrings;
+    FEnvVars: TStrings;
     // Propiedades "proxy" para facilitar la configuración en el Inspector de Objetos
     function GetName: string;
     function GetTransportType: TToolTransportType;
@@ -161,9 +189,9 @@ type
     procedure SetTransportType(const Value: TToolTransportType);
     procedure SetEnabled(const Value: Boolean);
     procedure SetConnected(const Value: Boolean);
-    function GetDisabledFunctions: TStrings;
+    // function GetDisabledFunctions: TStrings;
     function GetParams: TStrings;
-    procedure SetDisabledFunctions(const Value: TStrings);
+    //procedure SetDisabledFunctions(const Value: TStrings);
     procedure SetParams(const Value: TStrings);
     function GetConfiguration: string;
     procedure SetConfiguration(const Value: string);
@@ -174,6 +202,7 @@ type
   public
     constructor Create(Collection: TCollection); override;
     destructor Destroy; override;
+    procedure UpdateClientProperties;
     // Propiedad para acceder al objeto cliente real
     property MCPClient: TMCPClientCustom read FMCPClient;
   published
@@ -185,19 +214,23 @@ type
     Property EnvVars: TStrings read GetEnvVars write SetEnvVars;
     // property DisabledFunctions: TStrings read GetDisabledFunctions write SetDisabledFunctions;
     property Configuration: string read GetConfiguration write SetConfiguration;
+
   end;
 
   TMCPClientItems = class(TOwnedCollection)
   private
     [weak]
     FOwner: TPersistent;
+
     function GetClient(Index: Integer): TMCPClientItem;
     procedure SetClient(Index: Integer; const Value: TMCPClientItem);
+
   protected
     function GetOwner: TPersistent; override;
     procedure Update(Item: TCollectionItem); override;
   public
     constructor Create(AOwner: TPersistent);
+    Destructor Destroy; Override;
     function Add: TMCPClientItem;
     function GetClientByName(const AName: string): TMCPClientItem;
     Function GetClientsList: TStringList;
@@ -224,7 +257,6 @@ type
     // SetFunctionEnable  Retorna True si encuentra la función y puede actualizar el estado
     Function SetFunctionEnable(FunctionName: String; Enabled: Boolean): Boolean;
     Function SetMCPClientEnable(Name: String; Enabled: Boolean): Boolean;
-    // function ExtractFunctionNames1: TStringList;
     function ExtractFunctionNames: TStringList;
 
     // IMPORTANTE: el parámetro aMCPClient debe ser creado con owner = Nil  aMCPClient:= TMCPClientCustom(NIL);
@@ -274,8 +306,7 @@ type
     class function FormatAsGeminiFunctionDeclaration(ANormalizedTool: TNormalizedTool): TJSonObject;
 
     // Versión original explícita (útil si la detección falla o para casos específicos)
-    class function MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; AInputFormat: TToolFormat; ATargetJson: TJSonObject;
-      AOutputFormat: TToolFormat): TJSonObject; overload;
+    class function MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; AInputFormat: TToolFormat; ATargetJson: TJSonObject; AOutputFormat: TToolFormat): TJSonObject; overload;
 
     class procedure CleanInputSchema(ASchema: TJSonObject);
 
@@ -283,8 +314,7 @@ type
   public
 
     // Sobrecarga con detección automática del formato de entrada
-    class function MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; ATargetJson: TJSonObject; AOutputFormat: TToolFormat)
-      : TJSonObject; overload;
+    class function MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; ATargetJson: TJSonObject; AOutputFormat: TToolFormat): TJSonObject; overload;
 
     // Normaliza las herramientas de un objeto JSON fuente y las añade a una lista.
     class procedure NormalizeToolsFromSource(const ASourceName: string; ASourceJson: TJSonObject; ANormalizedList: TList<TNormalizedTool>);
@@ -304,8 +334,6 @@ procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiFunctions]);
 end;
-
-
 
 { TWebTagActionItem }
 
@@ -1530,16 +1558,21 @@ end;
 constructor TMCPClientItem.Create(Collection: TCollection);
 begin
   inherited Create(Collection);
-  FEnabled := False;
+  FEnabled := True;
   FConnected := False;
+  FParams := TStringList.Create;
+  FEnvVars := TStringList.Create;
 
   // Por defecto, creamos un cliente StdIo
-  FMCPClient := TMCPClientStdIo.Create(nil); // Sin Owner para controlarlo nosotros
-  FMCPClient.Name := 'NewMCPClient';
+  FMCPClient := Nil; // TMCPClientStdIo.Create(nil); // Sin Owner para controlarlo nosotros
+  // FMCPClient.Name := 'NewMCPClient';
 end;
 
 destructor TMCPClientItem.Destroy;
 begin
+  FParams.Free;;
+  FEnvVars.Free;
+
   If Assigned(FMCPClient) then
     FreeAndNil(FMCPClient);
   inherited;
@@ -1550,14 +1583,15 @@ begin
   Result := Format('(%s, Click [...] to edit)', ['Properties']);
 end;
 
+{
 function TMCPClientItem.GetDisabledFunctions: TStrings;
 begin
-  { if Assigned(FMCPClient) then
+   if Assigned(FMCPClient) then
     Result := FMCPClient.DisabledFunctions
     else
     Result := nil;
-  }
 end;
+}
 
 function TMCPClientItem.GetDisplayName: string;
 begin
@@ -1568,29 +1602,37 @@ end;
 
 function TMCPClientItem.GetEnvVars: TStrings;
 begin
-  if Assigned(FMCPClient) then
-  Begin
+  Result := FEnvVars;
+  {
+    if Assigned(FMCPClient) then
+    Begin
     Result := FMCPClient.EnvVars;
-  End
-  else
+    End
+    else
     Result := nil;
+  }
 end;
 
 function TMCPClientItem.GetName: string;
 begin
   Result := '';
   if Assigned(FMCPClient) then
-    Result := FMCPClient.Name;
+    Result := FMCPClient.Name
+  else
+    Result := inherited GetDisplayName;
 end;
 
 function TMCPClientItem.GetParams: TStrings;
 begin
-  if Assigned(FMCPClient) then
-  Begin
+  Result := FParams;
+  {
+    if Assigned(FMCPClient) then
+    Begin
     Result := FMCPClient.Params;
-  End
-  else
+    End
+    else
     Result := nil;
+  }
 end;
 
 function TMCPClientItem.GetTransportType: TToolTransportType;
@@ -1607,11 +1649,11 @@ end;
 
 procedure TMCPClientItem.SetConnected(const Value: Boolean);
 var
-  //OwnerComponent: TAiFunctions;
-  IsDesignTime: Boolean;
+  // OwnerComponent: TAiFunctions;
+  // IsDesignTime: Boolean;
   ClientTools: TJSonObject;
-  ToolCount: Integer;
-  ToolArray: TJSonArray;
+  // ToolCount: Integer;
+  // ToolArray: TJSonArray;
 begin
   // Solo actuar si el valor realmente cambia
   if FConnected = Value then
@@ -1635,9 +1677,7 @@ begin
       if Not Assigned(ClientTools) then
       begin
         // Si ListTools devuelve nil, es un error de conexión o protocolo.
-        Raise Exception.Create
-          (Format('❌ Fallo de conexión para "%s".'#13#10#13#10'Revise la configuración (Command, URL, etc.) y los logs del servidor.',
-          [Self.Name]));
+        Raise Exception.Create(Format('❌ Fallo de conexión para "%s".'#13#10#13#10'Revise la configuración (Command, URL, etc.) y los logs del servidor.', [Self.Name]));
       end
       Else
       Begin
@@ -1656,15 +1696,16 @@ begin
   end;
 end;
 
+{
 procedure TMCPClientItem.SetDisabledFunctions(const Value: TStrings);
 begin
-  { if Assigned(FMCPClient) and Assigned(Value) then
+   if Assigned(FMCPClient) and Assigned(Value) then
     begin
     FMCPClient.DisabledFunctions.Assign(Value);
     Changed(False); // Notifica al IDE que el item ha cambiado.
     end;
-  }
 end;
+}
 
 procedure TMCPClientItem.SetEnabled(const Value: Boolean);
 begin
@@ -1677,6 +1718,8 @@ end;
 
 procedure TMCPClientItem.SetEnvVars(const Value: TStrings);
 begin
+  FEnvVars.Assign(Value);
+
   if Assigned(FMCPClient) and Assigned(Value) then
   begin
     FMCPClient.EnvVars.Assign(Value);
@@ -1686,6 +1729,7 @@ end;
 
 procedure TMCPClientItem.SetName(const Value: string);
 begin
+  SetDisplayName(Value);
   if Assigned(FMCPClient) then
   begin
     if FMCPClient.Name <> Value then
@@ -1698,20 +1742,47 @@ end;
 
 procedure TMCPClientItem.SetParams(const Value: TStrings);
 begin
+  FParams.Assign(Value);
+
   if Assigned(FMCPClient) and Assigned(Value) then
   begin
-    FMCPClient.Params.Assign(Value);
+    If Assigned(FMCPClient) then
+      FMCPClient.Params.Assign(Value);
     Changed(False); // Muy importante: Notifica al IDE que el item ha cambiado.
   end;
 end;
 
 procedure TMCPClientItem.SetTransportType(const Value: TToolTransportType);
-var
-  OldName: string;
+// var  OldName: string;
 begin
+  { if not Assigned(FMCPClient) or (FMCPClient.TransportType <> Value) then
+    begin
+    OldName := GetName; // Guardar el nombre actual
+    FreeAndNil(FMCPClient);
+    case Value of
+    tpStdIo:
+    FMCPClient := TMCPClientStdIo.Create(nil);
+    tpHttp:
+    FMCPClient := TMCPClientHttp.Create(nil);
+    tpSSE:
+    FMCPClient := TMCPClientSSE.Create(nil);
+    tpMakerAi:
+    FMCPClient := TMCPClientMakerAi.Create(nil);
+    // tpWs: // Añadir en el futuro
+    else
+    raise EProgrammerNotFound.Create('Protocolo MCP no soportado');
+    end;
+    FMCPClient.TransportType := Value;
+    FMCPClient.Name := OldName; // Restaurar el nombre
+    Changed(False);
+    end;
+  }
+
+  // No necesitamos la variable OldName si usamos UpdateClientProperties
+  // OldName := GetName;
+
   if not Assigned(FMCPClient) or (FMCPClient.TransportType <> Value) then
   begin
-    OldName := GetName; // Guardar el nombre actual
     FreeAndNil(FMCPClient);
     case Value of
       tpStdIo:
@@ -1722,14 +1793,40 @@ begin
         FMCPClient := TMCPClientSSE.Create(nil);
       tpMakerAi:
         FMCPClient := TMCPClientMakerAi.Create(nil);
-      // tpWs: // Añadir en el futuro
     else
-      raise EProgrammerNotFound.Create('Protocolo MCP no soportado');
+      // EProgrammerNotFound no es una clase estándar de Delphi,
+      // usa una excepción estándar como ENotSupportedException
+      raise ENotSupportedException.Create('Protocolo MCP no soportado');
     end;
-    FMCPClient.TransportType := Value;
-    FMCPClient.Name := OldName; // Restaurar el nombre
+
+    // --- SINCRONIZACIÓN ---
+    // El nuevo cliente ha sido creado. Ahora transferimos todas las propiedades.
+    UpdateClientProperties;
+
     Changed(False);
   end;
+end;
+
+procedure TMCPClientItem.UpdateClientProperties;
+begin
+  // Asegurarnos de que tenemos un cliente al que transferirle los datos
+  if not Assigned(FMCPClient) then
+    Exit;
+
+  // 1. Transferir el tipo de transporte
+  FMCPClient.TransportType := Self.GetTransportType; // Obtenemos el tipo desde el FMCPClient mismo
+
+  // 2. Transferir el nombre (usando GetDisplayName que es el setter de 'Name')
+  FMCPClient.Name := Self.GetDisplayName;
+
+  // 3. Transferir el estado de 'Enabled'
+  FMCPClient.Enabled := Self.FEnabled;
+
+  // 4. Transferir los parámetros (copiar el contenido de nuestra lista local)
+  FMCPClient.Params.Assign(Self.FParams);
+
+  // 5. Transferir las variables de entorno
+  FMCPClient.EnvVars.Assign(Self.FEnvVars);
 end;
 
 { TMCPClientItems }
@@ -1743,6 +1840,12 @@ constructor TMCPClientItems.Create(AOwner: TPersistent);
 begin
   FOwner := AOwner;
   inherited Create(Self, TMCPClientItem);
+
+end;
+
+destructor TMCPClientItems.Destroy;
+begin
+  inherited;
 end;
 
 function TMCPClientItems.GetClient(Index: Integer): TMCPClientItem;
@@ -1775,14 +1878,17 @@ begin
 end;
 
 function TMCPClientItems.GetFunctionList(Name: String): TStringList;
-Var
+{ Var
   Item: TMCPClientItem;
   jTools: TJSonObject;
+}
 begin
-  Item := GetClientByName(Name);
+  Result := Nil;
+  { Item := GetClientByName(Name);
 
-  If Assigned(Item) and Assigned(Item.MCPClient) then
+    If Assigned(Item) and Assigned(Item.MCPClient) then
     jTools := Item.MCPClient.ListTools;
+  }
 end;
 
 function TMCPClientItems.GetOwner: TPersistent;
@@ -2016,8 +2122,7 @@ begin
   AToolList.Add(TNormalizedTool.Create(LName, LDescription, LInputSchema));
 end;
 
-class procedure TJsonToolUtils.NormalizeToolsFromSource(const ASourceName: string; ASourceJson: TJSonObject;
-  ANormalizedList: TList<TNormalizedTool>);
+class procedure TJsonToolUtils.NormalizeToolsFromSource(const ASourceName: string; ASourceJson: TJSonObject; ANormalizedList: TList<TNormalizedTool>);
 var
   LSourceToolsArray: TJSonArray;
   I: Integer;
@@ -2236,8 +2341,7 @@ end;
 // ==============================================================================
 
 // SOBRECARGA con detección automática
-class function TJsonToolUtils.MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; ATargetJson: TJSonObject;
-  AOutputFormat: TToolFormat): TJSonObject;
+class function TJsonToolUtils.MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; ATargetJson: TJSonObject; AOutputFormat: TToolFormat): TJSonObject;
 var
   LSourceToolsArray: TJSonArray;
   LFirstTool: TJSonObject;
@@ -2245,8 +2349,7 @@ var
 begin
   // 1. Intentar detectar el formato a partir de la primera herramienta en el array
   LDetectedFormat := tfUnknown;
-  if Assigned(ASourceJson) and ASourceJson.TryGetValue<TJSonArray>('tools', LSourceToolsArray) and (LSourceToolsArray.Count > 0) and
-    (LSourceToolsArray.Items[0] is TJSonObject) then
+  if Assigned(ASourceJson) and ASourceJson.TryGetValue<TJSonArray>('tools', LSourceToolsArray) and (LSourceToolsArray.Count > 0) and (LSourceToolsArray.Items[0] is TJSonObject) then
   begin
     LFirstTool := LSourceToolsArray.Items[0] as TJSonObject;
     LDetectedFormat := DetectInputFormat(LFirstTool);
@@ -2350,8 +2453,7 @@ end;
 }
 
 // VERSIÓN EXPLÍCITA (lógica principal corregida y final)
-class function TJsonToolUtils.MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; AInputFormat: TToolFormat;
-  ATargetJson: TJSonObject; AOutputFormat: TToolFormat): TJSonObject;
+class function TJsonToolUtils.MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; AInputFormat: TToolFormat; ATargetJson: TJSonObject; AOutputFormat: TToolFormat): TJSonObject;
 var
   LSourceToolsArray, LFinalToolsArray: TJSonArray;
   LNormalizedTools: TList<TNormalizedTool>;

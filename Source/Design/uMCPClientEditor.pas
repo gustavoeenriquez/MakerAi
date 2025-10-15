@@ -84,6 +84,8 @@ begin
       MCPClient := TMCPClientSSE.Create(Self);
     3:
       MCPClient := TMCPClientMakerAi.Create(Self);
+  Else
+    MCPClient := TMCPClientStdIo.Create(Self);
   End;
 
   Try

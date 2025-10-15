@@ -43,6 +43,10 @@ uses
   System.NetEncoding,
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+
   REST.JSON, REST.Types, REST.Client, uMakerAi.Core;
 
 Const
@@ -64,8 +68,6 @@ type
   Public
     Constructor Create;
     Destructor Destroy; Override;
-
-  Published
     Property Revised_Prompt: String read Frevised_prompt;
     Property Base64: String read FBase64;
     Property UrlFile: String read FUrlFile;
@@ -539,7 +541,10 @@ begin
   aImage.Position := 0;
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
+
   Try
     Body := TMultipartFormData.Create;
     Try
@@ -593,7 +598,5 @@ begin
     Client.Free;
   End;
 end;
-
-
 
 end.

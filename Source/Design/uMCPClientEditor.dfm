@@ -181,8 +181,8 @@ object FMCPClientEditor: TFMCPClientEditor
         object LblStatus: TLabel
           Left = 1
           Top = 1
-          Width = 565
-          Height = 25
+          Width = 50
+          Height = 15
           Align = alClient
           Caption = '   Status: '
           Font.Charset = DEFAULT_CHARSET
@@ -191,8 +191,6 @@ object FMCPClientEditor: TFMCPClientEditor
           Font.Name = 'Segoe UI'
           Font.Style = [fsBold]
           ParentFont = False
-          ExplicitWidth = 50
-          ExplicitHeight = 15
         end
       end
     end

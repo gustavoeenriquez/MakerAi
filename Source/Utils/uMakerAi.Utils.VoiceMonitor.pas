@@ -1,3 +1,33 @@
+// IT License
+//
+// Copyright (c) <year> <copyright holders>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enríquez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+// - Telegram: +57 3128441700
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
 unit uMakerAi.Utils.VoiceMonitor;
 
 interface
@@ -11,7 +41,7 @@ uses
   Winapi.Windows, Winapi.MMSystem;
 {$ENDIF}
 {$IFDEF ANDROID}
-  AndroidApi.JNI.Media, AndroidApi.JNIBridge, AndroidApi.Helpers, FMX.Helpers.Android, AndroidApi.JNI.JavaTypes;
+AndroidApi.JNI.Media, AndroidApi.JNIBridge, AndroidApi.Helpers, FMX.Helpers.Android, AndroidApi.JNI.JavaTypes;
 {$ENDIF}
 
 const
@@ -27,6 +57,15 @@ const
   DEFAULT_FRAGMENT_SPLIT_RATIO = 0.35;
 
 type
+
+{$IFDEF MSWINDOWS}
+  // Listar los dispositivos de windows disponibles para captura de audio
+  TWaveInDeviceInfo = record
+    DeviceID: UINT;
+    DeviceName: string;
+  end;
+{$ENDIF}
+
   TRiffHeader = packed record
     ChunkID: array [0 .. 3] of AnsiChar;
     ChunkSize: LongWord;
@@ -50,8 +89,10 @@ type
   end;
 
   TAiMonitorState = (msIdle, msRequestingPermission, msCalibrating, msMonitoring, msError);
-  TAIVoiceMonitorOnChange = procedure(Sender: TObject; aState: Boolean; aIsValidForIA: Boolean; aStream: TMemoryStream) of object;
-  TWakeWordCheckEvent = Procedure(Sender: TObject; aWakeWordStream: TMemoryStream; var IsValid : Boolean) of object;
+
+  TAIVoiceMonitorOnChange = procedure(Sender: TObject; aUserSpeak: Boolean; aIsValidForIA: Boolean; aStream: TMemoryStream) of object;
+  TSpeechEndEvent = procedure(Sender: TObject; aIsValidForIA: Boolean; aStream: TMemoryStream) of object;
+  TWakeWordCheckEvent = Procedure(Sender: TObject; aWakeWordStream: TMemoryStream; var IsValid: Boolean) of object;
   TAIVoiceMonitorOnCalibrated = procedure(Sender: TObject; const aNoiseLevel, aSensitivity, aStopSensitivity: Integer) of object;
   TAIVoiceMonitorOnUpdate = procedure(Sender: TObject; const aSoundLevel: Int64) of object;
   TAIVoiceMonitorOnError = procedure(Sender: TObject; const ErrorMessage: string) of object;
@@ -103,12 +144,16 @@ type
 {$IFDEF MSWINDOWS}
     FhWaveIn: HWAVEIN;
     FWaveHdr: TWaveHdr;
+    FNoiseLevel: Integer;
+    FDeviceID: UINT;
+    FWakeWordActive: Boolean;
+    FWakeWord: String;
+    FOnSpeechEnd: TSpeechEndEvent;
 {$ENDIF}
 {$IFDEF ANDROID}
     FAudioRecord: JAudioRecord;
     FCaptureThread: TThread;
 {$ENDIF}
-
     procedure SetActive(const Value: Boolean);
     procedure SetSilenceDuration(const Value: Integer);
     procedure DoError(const aMessage: string);
@@ -117,6 +162,13 @@ type
     procedure StopCapture;
     procedure UpdateAudioBuffers;
     procedure FireTranscriptionFragment;
+    procedure SetBitsPerSample(const Value: Integer);
+    procedure SetChannels(const Value: Integer);
+    procedure SetSampleRate(const Value: Integer);
+    procedure SetDeviceID(const Value: UINT);
+    procedure SetWakeWordActive(const Value: Boolean);
+    procedure SetWakeWord(const Value: String);
+    procedure SetOnSpeechEnd(const Value: TSpeechEndEvent);
 
   protected
     procedure Loaded; override;
@@ -135,7 +187,7 @@ type
     procedure AndroidCaptureLoop;
     procedure HandlePermissionRequest(Sender: TObject; const APermissions: TArray<string>; const AGrantResults: TArray<TPermissionStatus>);
 {$ENDIF}
-
+    property DeviceID: UINT read FDeviceID write SetDeviceID default WAVE_MAPPER; // No está funcionando, se deja para analizar después.
   public
     constructor Create(aOwner: TComponent); Override;
     destructor Destroy; override;
@@ -146,6 +198,7 @@ type
     property StopSensitivity: Integer read FStopSensitivity;
     property State: TAiMonitorState read FMonitorState;
     property SoundLevel: Int64 read FSoundLevel;
+    property NoiseLevel: Integer read FNoiseLevel;
 
   published
     property SilenceDuration: Integer read FSilenceDuration write SetSilenceDuration default DEFAULT_SILENCE_DURATION_MS;
@@ -160,9 +213,19 @@ type
     property OnUpdate: TAIVoiceMonitorOnUpdate read FOnUpdate write FOnUpdate;
     property OnError: TAIVoiceMonitorOnError read FOnError write FOnError;
     property OnWakeWordCheck: TWakeWordCheckEvent read FOnWakeWordCheck write FOnWakeWordCheck;
+    property OnSpeechEnd: TSpeechEndEvent read FOnSpeechEnd write SetOnSpeechEnd;
     property OnTranscriptionFragment: TTranscriptionFragmentEvent read FOnTranscriptionFragment write FOnTranscriptionFragment;
+    property SampleRate: Integer read FSampleRate write SetSampleRate default DEFAULT_SAMPLE_RATE;
+    property Channels: Integer read FChannels write SetChannels default DEFAULT_CHANNELS;
+    property BitsPerSample: Integer read FBitsPerSample write SetBitsPerSample default DEFAULT_BITS_PER_SAMPLE;
+    property WakeWord: String read FWakeWord write SetWakeWord;
+    property WakeWordActive: Boolean read FWakeWordActive write SetWakeWordActive;
   end;
 
+{$IFDEF MSWINDOWS}
+
+function GetWaveInDevices: TArray<TWaveInDeviceInfo>;
+{$ENDIF}
 procedure Register;
 
 implementation
@@ -173,6 +236,7 @@ begin
 end;
 
 {$IFDEF MSWINDOWS}
+
 procedure AudioCallback(HWAVEIN: HWAVEIN; uMsg: UINT; dwInstance, dwParam1, dwParam2: DWORD_PTR); stdcall;
 var
   Monitor: TAIVoiceMonitor;
@@ -190,8 +254,30 @@ begin
     end;
   end;
 end;
-{$ENDIF}
 
+function GetWaveInDevices: TArray<TWaveInDeviceInfo>;
+var
+  NumDevs, I: Integer;
+  Caps: TWaveInCaps;
+  DeviceInfo: TWaveInDeviceInfo;
+begin
+  NumDevs := waveInGetNumDevs;
+  SetLength(Result, NumDevs);
+  if NumDevs > 0 then
+  begin
+    for I := 0 to NumDevs - 1 do
+    begin
+      if waveInGetDevCaps(I, @Caps, SizeOf(Caps)) = MMSYSERR_NOERROR then
+      begin
+        DeviceInfo.DeviceID := I;
+        DeviceInfo.DeviceName := Caps.szPname;
+        Result[I] := DeviceInfo;
+      end;
+    end;
+  end;
+End;
+
+{$ENDIF}
 { TAIVoiceMonitor }
 
 constructor TAIVoiceMonitor.Create(aOwner: TComponent);
@@ -218,11 +304,19 @@ begin
   FPeakLevelInFragment := 0;
   FFragmentSplitRatio := DEFAULT_FRAGMENT_SPLIT_RATIO;
 
+  FNoiseLevel := 0;
+
   FIsSpeaking := False;
   FMonitorState := msIdle;
   FSensitivity := 2000;
   FStopSensitivity := 1000;
 
+  FWakeWordActive := False;
+  FWakeWord := 'natalia';
+
+{$IFDEF MSWINDOWS}
+  FDeviceID := WAVE_MAPPER;
+{$ENDIF}
   UpdateAudioBuffers;
 end;
 
@@ -242,7 +336,8 @@ begin
   FBufferSize := (FSampleRate * FChannels * (FBitsPerSample div 8) * DEFAULT_BUFFER_DURATION_MS) div 1000;
   SetLength(FBuffer, FBufferSize);
   NewSilenceArraySize := FSilenceDuration div DEFAULT_BUFFER_DURATION_MS;
-  if NewSilenceArraySize < 2 then NewSilenceArraySize := 2;
+  if NewSilenceArraySize < 2 then
+    NewSilenceArraySize := 2;
   SetLength(FArrBuf, NewSilenceArraySize);
 end;
 
@@ -271,9 +366,74 @@ begin
     StopCapture;
 end;
 
+procedure TAIVoiceMonitor.SetBitsPerSample(const Value: Integer);
+begin
+  if FBitsPerSample = Value then
+    Exit;
+  if Active then
+    raise EInvalidOperation.Create('Cannot change audio format while monitor is active.');
+  // Típicamente 8 o 16
+  if not(Value in [8, 16]) then
+    raise EArgumentException.Create('BitsPerSample must be 8 or 16.');
+  FBitsPerSample := Value;
+  UpdateAudioBuffers;
+end;
+
+procedure TAIVoiceMonitor.SetChannels(const Value: Integer);
+begin
+  if FChannels = Value then
+    Exit;
+  if Active then
+    raise EInvalidOperation.Create('Cannot change audio format while monitor is active.');
+  // Típicamente 1 (mono) o 2 (estéreo)
+  if not(Value in [1, 2]) then
+    raise EArgumentException.Create('Channels must be 1 (mono) or 2 (stereo).');
+  FChannels := Value;
+  UpdateAudioBuffers;
+end;
+
+procedure TAIVoiceMonitor.SetDeviceID(const Value: UINT);
+begin
+
+{$IFDEF MSWINDOWS}
+  if FDeviceID = Value then
+    Exit;
+  if Active then
+    raise EInvalidOperation.Create('Cannot change DeviceID while monitor is active.');
+  FDeviceID := Value;
+{$ENDIF}
+end;
+
+procedure TAIVoiceMonitor.SetOnSpeechEnd(const Value: TSpeechEndEvent);
+begin
+  FOnSpeechEnd := Value;
+end;
+
+procedure TAIVoiceMonitor.SetSampleRate(const Value: Integer);
+begin
+  if FSampleRate = Value then
+    Exit;
+  if Active then
+    raise EInvalidOperation.Create('Cannot change audio format while monitor is active.');
+  // Podríamos añadir validación, ej. que solo se acepten valores comunes
+  // como 8000, 16000, 22050, 44100, 48000. Por ahora lo dejamos simple.
+  FSampleRate := Value;
+  UpdateAudioBuffers; // Es importante recalcular el tamaño del buffer
+end;
+
 procedure TAIVoiceMonitor.SetSilenceDuration(const Value: Integer);
 begin
   FSilenceDuration := Max(300, Value);
+end;
+
+procedure TAIVoiceMonitor.SetWakeWordActive(const Value: Boolean);
+begin
+  FWakeWordActive := Value;
+end;
+
+procedure TAIVoiceMonitor.SetWakeWord(const Value: String);
+begin
+  FWakeWord := Value;
 end;
 
 procedure TAIVoiceMonitor.StartCapture;
@@ -284,6 +444,7 @@ begin
     FMonitorState := msCalibrating;
     FCalibrationSamples := 0;
     FCalibrationAccumulator := 0;
+    FNoiseLevel := 0;
     FIsSpeaking := False;
     FWakeWordChecked := False;
     FIsWakeWordValid := False;
@@ -318,7 +479,7 @@ begin
       TThread.Queue(nil,
         procedure
         begin
-          if not (csDestroying in ComponentState) then
+          if not(csDestroying in ComponentState) then
             DoChangeState(False);
         end);
     end;
@@ -335,10 +496,12 @@ var
   SampleValue: SmallInt;
   isSilentMoment, isWaitTooLong: Boolean;
 begin
-  if aSize = 0 then Exit;
+  if aSize = 0 then
+    Exit;
   Sum := 0;
   NumSamples := aSize div (FBitsPerSample div 8);
-  if NumSamples = 0 then Exit;
+  if NumSamples = 0 then
+    Exit;
 
   for I := 0 to NumSamples - 1 do
   begin
@@ -361,6 +524,7 @@ begin
             if FCalibrationSamples > 0 then
             begin
               NoiseLevel := FCalibrationAccumulator div FCalibrationSamples;
+              FNoiseLevel := NoiseLevel;
               FSensitivity := Max(500, Round(NoiseLevel * FSensitivityMultiplier));
               FStopSensitivity := Max(250, Round(NoiseLevel * FStopSensitivityMultiplier));
               if FStopSensitivity >= FSensitivity then
@@ -368,6 +532,7 @@ begin
             end
             else
             begin
+              FNoiseLevel := 0;
               FSensitivity := 1500;
               FStopSensitivity := 750;
             end;
@@ -382,7 +547,7 @@ begin
         end;
       msMonitoring:
         begin
-          if FIsSpeaking then
+          if FIsSpeaking or (CurrentLevel > FSensitivity) then
           begin
             FFileStream.WriteBuffer(aBuffer, aSize);
 
@@ -439,7 +604,11 @@ begin
                       WakeStreamWAV := TMemoryStream.Create;
                       try
                         ConvertPCMToWAV(WakeStreamPCM, WakeStreamWAV);
-                        FOnWakeWordCheck(Self, WakeStreamWAV, IsValid);
+
+                        IsValid := False;
+
+                        If Assigned(FOnWakeWordCheck) and FWakeWordActive then // Solo lo llama si está activo
+                          FOnWakeWordCheck(Self, WakeStreamWAV, IsValid);
                       finally
                         WakeStreamWAV.Free;
                       end;
@@ -472,11 +641,12 @@ begin
     FCS.Leave;
   end;
 
-  TThread.Queue(nil, procedure
-  begin
-    if Assigned(FOnUpdate) then
-      FOnUpdate(Self, CurrentLevel);
-  end);
+  TThread.Queue(nil,
+    procedure
+    begin
+      if Assigned(FOnUpdate) then
+        FOnUpdate(Self, CurrentLevel);
+    end);
 
   if FMonitorState = msMonitoring then
     CalcSilencio;
@@ -510,15 +680,17 @@ begin
     if NewState <> PrevState then
     begin
       FIsSpeaking := NewState;
-      TThread.Queue(nil, procedure
-      begin
-        DoChangeState(FIsSpeaking);
-      end);
+      TThread.Queue(nil,
+        procedure
+        begin
+          DoChangeState(FIsSpeaking);
+        end);
     end;
   finally
     FCS.Leave;
   end;
 end;
+
 
 procedure TAIVoiceMonitor.DoChangeState(aIsSpeaking: Boolean);
 var
@@ -535,31 +707,42 @@ begin
       FWaitingForFragmentSplit := False;
       FPeakLevelInFragment := 0;
       FTranscriptionStopwatch.Reset;
+      FTranscriptionStopwatch.Start;
     finally
       FCS.Leave;
     end;
+    // El OnChangeState para "start" se mantiene igual
     if Assigned(FOnChangeState) then
       FOnChangeState(Self, True, False, nil);
   end
   else
   begin
     FTranscriptionStopwatch.Stop;
+    FTranscriptionStopwatch.Reset;
     if Assigned(FOnTranscriptionFragment) then
       FireTranscriptionFragment;
     FWaitingForFragmentSplit := False;
     FPeakLevelInFragment := 0;
 
     WAVStream := TMemoryStream.Create;
-    FCS.Enter;
-    try
-      ConvertPCMToWAV(FFileStream, WAVStream);
-    finally
-      FCS.Leave;
-    end;
-    if Assigned(FOnChangeState) then
-      FOnChangeState(Self, False, FIsWakeWordValid, WAVStream)
-    else
+    Try
+      FCS.Enter;
+      try
+        ConvertPCMToWAV(FFileStream, WAVStream);
+      finally
+        FCS.Leave;
+      end;
+
+      // Llamamos al nuevo evento OnSpeechEnd con los datos finales.
+      if Assigned(FOnSpeechEnd) then
+        FOnSpeechEnd(Self, FIsWakeWordValid, WAVStream);
+
+      // Opcionalmente, también llamamos a OnChangeState para notificar el fin del habla
+      if Assigned(FOnChangeState) then
+        FOnChangeState(Self, False, FIsWakeWordValid, WAVStream)
+    Finally
       WAVStream.Free;
+    End;
   end;
 end;
 
@@ -567,13 +750,49 @@ procedure TAIVoiceMonitor.FireTranscriptionFragment;
 var
   FragmentPCM, FragmentWAV: TMemoryStream;
   FragmentSize: Int64;
+  PeakLevel: Int64; // Variable local para almacenar el pico de sonido
 begin
+  // Adquirimos el nivel pico del fragmento actual de forma segura
+  FCS.Enter;
+  try
+    PeakLevel := FPeakLevelInFragment;
+  finally
+    FCS.Leave;
+  end;
+
+  // --- INICIO DE LA NUEVA LÓGICA DE VALIDACIÓN ---
+  // Si el pico de sonido en este fragmento no superó la sensibilidad,
+  // lo consideramos silencio y no lo enviamos a la IA.
+  if PeakLevel < FSensitivity then
+  begin
+    // El fragmento es silencio. Lo descartamos, pero debemos actualizar
+    // la posición y reiniciar los contadores para el siguiente fragmento.
+    FCS.Enter;
+    try
+      // Marcamos el audio silencioso como 'procesado' para no revisarlo de nuevo
+      FLastTranscriptionPosition := FFileStream.Size;
+    finally
+      FCS.Leave;
+    end;
+
+    // Reiniciamos todo para el siguiente ciclo de detección.
+    FTranscriptionStopwatch.Reset;
+    FTranscriptionStopwatch.Start;
+    FPeakLevelInFragment := 0;
+    Exit; // Salimos del procedimiento, no hay nada que enviar.
+  end;
+  // --- FIN DE LA NUEVA LÓGICA DE VALIDACIÓN ---
+
+  // Si llegamos aquí, el fragmento contiene audio significativo.
+  // Procedemos a extraerlo y enviarlo.
   FragmentPCM := TMemoryStream.Create;
   try
     FCS.Enter;
     try
+      // Comprobación de seguridad: ¿hay datos nuevos para procesar?
       if FFileStream.Size <= FLastTranscriptionPosition then
         Exit;
+
       FragmentSize := FFileStream.Size - FLastTranscriptionPosition;
       FFileStream.Position := FLastTranscriptionPosition;
       FragmentPCM.CopyFrom(FFileStream, FragmentSize);
@@ -582,22 +801,26 @@ begin
       FCS.Leave;
     end;
 
+    // Reiniciamos contadores para el *próximo* fragmento.
     FTranscriptionStopwatch.Reset;
+    FTranscriptionStopwatch.Start;
     FPeakLevelInFragment := 0;
 
+    // Si por alguna razón el fragmento está vacío, no continuamos.
     if FragmentPCM.Size = 0 then
       Exit;
 
     FragmentWAV := TMemoryStream.Create;
     try
       ConvertPCMToWAV(FragmentPCM, FragmentWAV);
-      TThread.Queue(nil, procedure
-      begin
-        if not (csDestroying in ComponentState) and Assigned(FOnTranscriptionFragment) then
-          FOnTranscriptionFragment(Self, FragmentWAV)
-        else
-          FragmentWAV.Free;
-      end);
+      TThread.Queue(nil,
+        procedure
+        begin
+          if not(csDestroying in ComponentState) and Assigned(FOnTranscriptionFragment) then
+            FOnTranscriptionFragment(Self, FragmentWAV)
+          else
+            FragmentWAV.Free;
+        end);
     except
       FragmentWAV.Free;
       raise;
@@ -655,7 +878,8 @@ var
   WaveFormat: TWaveFormatEx;
   Res: MMRESULT;
 begin
-  if not FActive then Exit;
+  if not FActive then
+    Exit;
   WaveFormat.wFormatTag := WAVE_FORMAT_PCM;
   WaveFormat.nChannels := FChannels;
   WaveFormat.nSamplesPerSec := FSampleRate;
@@ -663,7 +887,8 @@ begin
   WaveFormat.nBlockAlign := FChannels * (WaveFormat.wBitsPerSample div 8);
   WaveFormat.nAvgBytesPerSec := FSampleRate * WaveFormat.nBlockAlign;
   WaveFormat.cbSize := 0;
-  Res := waveInOpen(@FhWaveIn, WAVE_MAPPER, @WaveFormat, DWORD_PTR(@AudioCallback), DWORD_PTR(Self), CALLBACK_FUNCTION);
+  // Res := waveInOpen(@FhWaveIn, WAVE_MAPPER, @WaveFormat, DWORD_PTR(@AudioCallback), DWORD_PTR(Self), CALLBACK_FUNCTION);
+  Res := waveInOpen(@FhWaveIn, FDeviceID, @WaveFormat, DWORD_PTR(@AudioCallback), DWORD_PTR(Self), CALLBACK_FUNCTION);
   if Res <> MMSYSERR_NOERROR then
   begin
     DoError('Error al abrir dispositivo de audio: ' + IntToStr(Res));
@@ -694,11 +919,9 @@ begin
   end;
 end;
 {$ENDIF}
-
 {$IFDEF ANDROID}
 
-procedure TAIVoiceMonitor.HandlePermissionRequest(Sender: TObject; const APermissions: TArray<string>;
-const AGrantResults: TArray<TPermissionStatus>);
+procedure TAIVoiceMonitor.HandlePermissionRequest(Sender: TObject; const APermissions: TArray<string>; const AGrantResults: TArray<TPermissionStatus>);
 begin
   if (Length(AGrantResults) > 0) and (AGrantResults[0] = TPermissionStatus.Granted) then
     StartCaptureAudioAndroid
@@ -710,7 +933,8 @@ procedure TAIVoiceMonitor.StartCaptureAudioAndroid;
 var
   AudioSource, ChannelConfig, AudioFormat, MinBufferSize: Integer;
 begin
-  if not FActive then Exit;
+  if not FActive then
+    Exit;
   try
     AudioSource := TJMediaRecorder_AudioSource.JavaClass.MIC;
     ChannelConfig := TJAudioFormat.JavaClass.CHANNEL_IN_MONO;

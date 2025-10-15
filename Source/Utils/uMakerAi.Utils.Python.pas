@@ -353,3 +353,21 @@ finalization
 FreeAndNil(GlPythonEngine);
 
 end.
+
+
+
+ def primos(n):
+     primos_list = []
+     num = 2
+     while len(primos_list) < n:
+         es_primo = True
+         for i in range(2, int(num ** 0.5) + 1):
+             if num % i == 0:
+                 es_primo = False
+                 break
+         if es_primo:
+             primos_list.append(num)
+         num += 1
+     return primos_list
+ result = primos(param1)
+

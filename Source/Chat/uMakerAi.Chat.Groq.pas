@@ -261,7 +261,7 @@ begin
     If Seed > 0 then
       AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
 
-    Res := UTF8ToString(AJSONObject.ToJSon);
+    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
   Finally
@@ -301,7 +301,8 @@ begin
     jObj.AddPair('user', User);
     jObj.AddPair('encoding_format', EncodingFormat);
 
-    St.WriteString(UTF8Encode(jObj.Format));
+    //St.WriteString(UTF8Encode(jObj.Format));
+    St.WriteString(jObj.Format);
     St.Position := 0;
 
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];

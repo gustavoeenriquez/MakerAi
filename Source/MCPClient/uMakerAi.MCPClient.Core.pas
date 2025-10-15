@@ -1,3 +1,33 @@
+// MIT License
+//
+// Copyright (c) 2013 Gustavo Enríquez - CimaMaker
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enríquez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+// - Telegram: +57 3128441700
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
 unit uMakerAi.MCPClient.Core;
 
 interface
@@ -16,23 +46,7 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-  uMakerAi.Utils.System, uMakerAi.Core; // Dependencia de tu unidad de utilidades de consola
-
-// --- Tipos de Eventos ---
-{ type
-  //Las siguientes definiciones Se movieron a uMakerAi.Core
-
-
-  // Evento para notificar mensajes de log
-  TMCPLogEvent = procedure(Sender: TObject; const Msg: string) of object;
-
-  // Evento para notificar cambios de estado del servidor (iniciado, detenido, etc.)
-  TMCPStatusEvent = procedure(Sender: TObject; const StatusMsg: string) of object;
-
-  TToolFormat = (tfUnknown, tfOpenAI, tfClaude, tfGemini, tfMCP);
-  TToolTransportType = (tpStdIo, tpHttp, tpSSE, tpMakerAi);
-
-}
+  uMakerAi.Utils.System, uMakerAi.Core;
 
 // --- Clase Base Abstracta ---
 type
@@ -61,11 +75,10 @@ type
     procedure SetAvailable(const Value: Boolean);
     procedure SetEnabled(const Value: Boolean);
     procedure SetInitialized(const Value: Boolean);
-    Procedure SetTools(Const Value: TStrings);
     procedure SetParams(const Value: TStrings);
-    procedure SetDisabledFunctions(const Value: TStrings);
+    //procedure SetDisabledFunctions(const Value: TStrings);
     function GetParams: TStrings;
-    procedure SetCommand(const Value: string);
+    //procedure SetCommand(const Value: string);
     function GetEnvVars: TStrings;
     procedure SetEnvVars(const Value: TStrings);
     procedure SetURL(const Value: String);
@@ -104,9 +117,9 @@ type
 
     // Métodos públicos principales (ciclo de vida completo)
     // Son virtuales y abstractos porque su implementación depende del protocolo
-    function ListTools: TJSONObject; virtual; abstract;
-    function CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; virtual; abstract;
-    function CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; virtual; abstract;
+    function ListTools: TJSONObject; virtual;
+    function CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; virtual;
+    function CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; virtual;
 
     // Propiedades públicas
     property Name: string read FName write FName;
@@ -154,7 +167,6 @@ type
     function InternalCallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
 
     // Helpers de comunicación
-    procedure ReadProcessOutput;
     procedure InternalSendRawMessage(const AJsonString: string);
     function InternalReceiveJSONResponse(AExpectedID: Integer; ATimeoutMs: Cardinal = 10000): TJSONObject;
     function IsServerRunning: Boolean;
@@ -162,6 +174,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure ReadProcessOutput;  //Falta por implementar el uso
 
     // Implementación de los métodos públicos (orquestan el ciclo de vida)
     function ListTools: TJSONObject; override;
@@ -230,6 +243,16 @@ type
 implementation
 
 { TMCPClientCustom }
+
+function TMCPClientCustom.CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
+begin
+   Result := Nil;
+end;
+
+function TMCPClientCustom.CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
+begin
+   Result := Nil;
+end;
 
 constructor TMCPClientCustom.Create(AOwner: TComponent);
 Var
@@ -336,6 +359,8 @@ Var
   jTools: TJSONObject;
   jValue: TJSonValue;
 begin
+  Result := False;
+
   Try
     jTools := ListTools;
 
@@ -345,12 +370,14 @@ begin
       Initialized := True;
       Enabled := True;
       Available := True;
+      Result := True;
     End;
   Except
     FTools.Clear;
     Initialized := True;
     Enabled := False;
     Available := False;
+    Result := False;
   End;
 end;
 
@@ -427,15 +454,10 @@ begin
     SameText(ContentType, 'binary'); // Tipo genérico para binarios
 end;
 
-{ procedure TMCPClientCustom.ParamsChanged(Sender: TObject);
-  begin
-  FCommand := FParams.Values['Command'];
-  FArguments := FParams.Values['Arguments'];
-  FRootDirectory := FParams.Values['RootDir'];
-  FURL := FParams.Values['URL'];
-  FTimeout := StrToIntDef(FParams.Values['FTimeout'], 15000);
-  end;
-}
+function TMCPClientCustom.ListTools: TJSONObject;
+begin
+   Result := Nil;
+end;
 
 function TMCPClientCustom.ProcessAndExtractMedia(const AJsonResult: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
 var
@@ -508,15 +530,17 @@ begin
   FAvailable := Value;
 end;
 
-procedure TMCPClientCustom.SetCommand(const Value: string);
+{procedure TMCPClientCustom.SetCommand(const Value: string);
 begin
   // FCommand := Value;
 end;
+}
 
-procedure TMCPClientCustom.SetDisabledFunctions(const Value: TStrings);
+{procedure TMCPClientCustom.SetDisabledFunctions(const Value: TStrings);
 begin
   FDisabledFunctions.Assign(Value);
 end;
+}
 
 procedure TMCPClientCustom.SetEnabled(const Value: Boolean);
 begin
@@ -555,10 +579,6 @@ begin
   FURL := Value;
 end;
 
-procedure TMCPClientCustom.SetTools(const Value: TStrings);
-begin
-  FTools.Assign(Value);
-end;
 
 { TMCPClientStdIo }
 
@@ -690,10 +710,120 @@ begin
 end;
 
 // En la clase TMCPClientStdIo
-procedure TMCPClientStdIo.InternalStartServerProcess;
-var
+{ procedure TMCPClientStdIo.InternalStartServerProcess;
+  var
   CommandToExecute: string;
   Command, Arguments, RootDir, Path, CurrentPath, NewPath: String;
+  AEnvironment: TStringList;
+  begin
+  if IsServerRunning then
+  begin
+  DoLog('Server is already running.');
+  Exit;
+  end;
+
+  DoLog('Starting MCP server process...');
+  DoStatusUpdate('Starting server...');
+  try
+  // Prepara los parámetros principales
+  Command := GetParamByName('Command');
+  Arguments := GetParamByName('Arguments');
+  RootDir := GetParamByName('RootDir');
+  Path := Trim(GetParamByName('Path'));
+
+  if Trim(Command) = '' then
+  begin
+  DoLog('ERROR: "Command" parameter cannot be null.');
+  Exit;
+  end;
+
+  // Construir el comando correctamente (esto ya está bien)
+
+  //$IFDEF MSWINDOWS
+  CommandToExecute := Format('cmd.exe /c "%s %s"', [Command, Arguments]);
+  //$ENDIF
+  //$IFDEF POSIX
+  CommandToExecute := Format('%s %s', [Command, Arguments]);
+  //$ENDIF
+  DoLog('Executing: ' + CommandToExecute);
+
+  // --- CAMBIO CLAVE: Preparar el entorno COMPLETO ---
+  AEnvironment := TUtilsSystem.GetSystemEnvironment;
+  try
+  // 1. Cargar TODAS las variables de entorno del sistema y del usuario
+
+  // 2. (Opcional) Sobrescribir o añadir variables desde las propiedades del componente si es necesario
+  // Por ejemplo, si el usuario define algo en FEnvVars, debería tener prioridad.
+  if FEnvVars.Count > 0 then
+  begin
+  for var s in FEnvVars do
+  begin
+  var
+  Pair := s.Split(['=']);
+  if Length(Pair) = 2 then
+  begin
+  AEnvironment.Values[Pair[0]] := Pair[1];
+  DoLog(Format('Overriding/Adding Env Var: %s=%s', [Pair[0], Pair[1]]));
+  end;
+  end;
+  end;
+
+  If Path <> '' then
+  Begin
+  CurrentPath := System.SysUtils.GetEnvironmentVariable('PATH');
+  DoLog(Format('Adding to Path: %s', [Path]));
+  NewPath := Path + PathDelim + CurrentPath;
+  AEnvironment.Values['PATH'] := NewPath;
+  End;
+
+  // Lanzar el proceso con el entorno COMPLETO
+  FInteractiveProcess := TUtilsSystem.StartInteractiveProcess(CommandToExecute, RootDir, AEnvironment);
+
+  finally
+  AEnvironment.Free;
+  end;
+
+  if not Assigned(FInteractiveProcess) or not FInteractiveProcess.IsRunning then
+  begin
+  DoStatusUpdate('Server failed to start. '+Command);
+  DoLog('ERROR: MCP server failed to start.' + Command);
+  if Assigned(FInteractiveProcess) then
+  begin
+  DoLog('Exit Code (if available): ' + IntToStr(FInteractiveProcess.ExitCode));
+  FInteractiveProcess.Free;
+  FInteractiveProcess := nil;
+  end;
+  Exit;
+  end;
+
+  FIsRunning := True;
+
+  FReadThread := TThread.CreateAnonymousThread(
+  procedure
+  begin
+  Self.ReadProcessOutput;
+  end);
+  FReadThread.FreeOnTerminate := True;
+  FReadThread.Start;
+
+  DoLog('MCP Server started successfully.');
+  DoStatusUpdate('Server running.');
+  Sleep(300); // Dar tiempo para que el servidor arranque completamente
+  except
+  on E: Exception do
+  begin
+  DoStatusUpdate('Error starting server.');
+  DoLog('EXCEPTION during server start: ' + E.Message);
+  FIsRunning := False;
+  end;
+  end;
+  end;
+}
+
+procedure TMCPClientStdIo.InternalStartServerProcess;
+var
+  Command, Arguments, RootDir: String;
+  FullCommand: string; // Nueva variable para la línea de comandos completa
   AEnvironment: TStringList;
 begin
   if IsServerRunning then
@@ -705,11 +835,10 @@ begin
   DoLog('Starting MCP server process...');
   DoStatusUpdate('Starting server...');
   try
-    // Prepara los parámetros principales
+    // 1. Obtener los parámetros como antes
     Command := GetParamByName('Command');
     Arguments := GetParamByName('Arguments');
-    RootDir := GetParamByName('RootDir');
-    Path := Trim(GetParamByName('Path'));
+    RootDir := GetParamByName('RootDir'); // Asegúrate que el nombre del param es 'RootDir'
 
     if Trim(Command) = '' then
     begin
@@ -717,84 +846,53 @@ begin
       Exit;
     end;
 
-    // Construir el comando correctamente (esto ya está bien)
+    // 2. *** LA CORRECCIÓN CLAVE ***
+    // Construir la línea de comandos completa en UNA SOLA CADENA.
 
-{$IFDEF MSWINDOWS}
-    CommandToExecute := Format('cmd.exe /c "%s %s"', [Command, Arguments]);
-{$ENDIF}
-{$IFDEF POSIX}
-    CommandToExecute := Format('%s %s', [Command, Arguments]);
-{$ENDIF}
-    DoLog('Executing: ' + CommandToExecute);
+    // Para robustez, si la ruta del comando tiene espacios, la entrecomillamos.
+    if (Pos(' ', Command) > 0) and (Command[1] <> '"') then
+      FullCommand := AnsiQuotedStr(Command, '"')
+    else
+      FullCommand := Command;
 
-    // --- CAMBIO CLAVE: Preparar el entorno COMPLETO ---
-    AEnvironment := TUtilsSystem.GetSystemEnvironment;
+    // Añadimos los argumentos a la cadena.
+    if Trim(Arguments) <> '' then
+      FullCommand := FullCommand + ' ' + Arguments;
+
+    DoLog(Format('Executing command line: %s', [FullCommand]));
+
+    // 3. Llamar a TUtilsSystem.StartInteractiveProcess con los parámetros correctos
+    AEnvironment := TStringList.Create;
     try
-      // 1. Cargar TODAS las variables de entorno del sistema y del usuario
+      AEnvironment.AddStrings(Self.EnvVars);
 
-      // 2. (Opcional) Sobrescribir o añadir variables desde las propiedades del componente si es necesario
-      // Por ejemplo, si el usuario define algo en FEnvVars, debería tener prioridad.
-      if FEnvVars.Count > 0 then
-      begin
-        for var s in FEnvVars do
-        begin
-          var
-          Pair := s.Split(['=']);
-          if Length(Pair) = 2 then
-          begin
-            AEnvironment.Values[Pair[0]] := Pair[1];
-            DoLog(Format('Overriding/Adding Env Var: %s=%s', [Pair[0], Pair[1]]));
-          end;
-        end;
-      end;
-
-      If Path <> '' then
-      Begin
-        CurrentPath := System.SysUtils.GetEnvironmentVariable('PATH');
-        DoLog(Format('Adding to Path: %s', [Path]));
-        NewPath := Path + PathDelim + CurrentPath;
-        AEnvironment.Values['PATH'] := NewPath;
-      End;
-
-      // Lanzar el proceso con el entorno COMPLETO
-      FInteractiveProcess := TUtilsSystem.StartInteractiveProcess(CommandToExecute, RootDir, AEnvironment);
+      // Llamamos a la función con la LÍNEA DE COMANDO COMPLETA
+      FInteractiveProcess := TUtilsSystem.StartInteractiveProcess(FullCommand, RootDir, AEnvironment);
 
     finally
       AEnvironment.Free;
     end;
 
-    if not Assigned(FInteractiveProcess) or not FInteractiveProcess.IsRunning then
+    // 4. Verificar el resultado (esto ya lo tenías implícitamente)
+    if not Assigned(FInteractiveProcess) or (FInteractiveProcess.ProcessID = 0) then
     begin
-      DoStatusUpdate('Server failed to start.');
-      DoLog('ERROR: MCP server failed to start.');
-      if Assigned(FInteractiveProcess) then
-      begin
-        DoLog('Exit Code (if available): ' + IntToStr(FInteractiveProcess.ExitCode));
-        FInteractiveProcess.Free;
-        FInteractiveProcess := nil;
-      end;
-      Exit;
+      DoStatusUpdate('Failed to start server.');
+      DoLog(Format('ERROR: Failed to start process for command: %s', [FullCommand]));
+      FIsRunning := False;
+    end
+    else
+    begin
+      FIsRunning := True;
+      DoStatusUpdate('Server started.');
+      DoLog(Format('Server process started successfully (PID: %d).', [FInteractiveProcess.ProcessID]));
     end;
 
-    FIsRunning := True;
-
-    FReadThread := TThread.CreateAnonymousThread(
-      procedure
-      begin
-        Self.ReadProcessOutput;
-      end);
-    FReadThread.FreeOnTerminate := True;
-    FReadThread.Start;
-
-    DoLog('MCP Server started successfully.');
-    DoStatusUpdate('Server running.');
-    Sleep(300); // Dar tiempo para que el servidor arranque completamente
   except
     on E: Exception do
     begin
-      DoStatusUpdate('Error starting server.');
-      DoLog('EXCEPTION during server start: ' + E.Message);
       FIsRunning := False;
+      DoStatusUpdate('Error starting server.');
+      DoLog(Format('EXCEPTION starting server: %s - %s', [E.ClassName, E.Message]));
     end;
   end;
 end;
@@ -1662,7 +1760,6 @@ var
   LHeaders: TNetHeaders;
   LResponseContent: string; // Para almacenar el contenido de la respuesta
 begin
-  Result := nil;
   FBusy := True;
   FLastError := '';
   LRequestObj := TJSONObject.Create;
@@ -1678,110 +1775,113 @@ begin
 
     // Crear un StringStream para el cuerpo de la solicitud HTTP
     LRequestBodyStream := TStringStream.Create(LRequestObj.ToJSON, TEncoding.UTF8);
-    try
-      // Obtener la URL completa para la solicitud RPC
-      LURL := GetParamByName('URL') + GetParamByName('RpcEndpointSuffix');
-
-      DoLog(Format('CLIENT -> SERVER (HTTP POST to %s): %s', [LURL, LRequestBodyStream.DataString]));
-
-{$IFDEF APIDEBUG}
-      // Guardar la petición en un archivo para depuración
-      LRequestBodyStream.SaveToFile('c:\temp\mcp_rpc_request_' + AMethod.Replace('/', '_') + '.txt');
-      LRequestBodyStream.Position := 0; // Resetear la posición para la lectura por el TNetHTTPClient
-{$ENDIF}
-      // Configurar los timeouts del cliente HTTP
-{$IF CompilerVersion >= 35}
-      FHttpClient.SendTimeout := StrToIntDef(GetParamByName('Timeout'), 15000);
-{$ENDIF}
-      FHttpClient.ResponseTimeout := StrToIntDef(GetParamByName('Timeout'), 15000);
-      FHttpClient.ConnectionTimeout := StrToIntDef(GetParamByName('Timeout'), 15000);
-
-      // Configurar los encabezados Accept y Content-Type
-      FHttpClient.Accept := 'application/json';
-      FHttpClient.ContentType := 'application/json';
-
-      // Preparar los encabezados HTTP personalizados (ej. Authorization)
-      var
-      BearerToken := GetParamByName('ApiBearerToken');
-      if not BearerToken.IsEmpty and (BearerToken <> '@MCPBearerToken') then
-      begin
-        var
-        HeaderName := GetParamByName('ApiHeaderName');
-        if HeaderName.IsEmpty then
-          HeaderName := 'Authorization';
-        LHeaders := [TNetHeader.Create(HeaderName, 'Bearer ' + BearerToken)];
-      end
-      else
-        LHeaders := []; // Array vacío si no hay token
-
-      // Crear un MemoryStream para recibir la respuesta HTTP
-      var
-        LResponseStream: TMemoryStream;
-      LResponseStream := TMemoryStream.Create;
+    Try
       try
-        // Realizar la solicitud HTTP POST
-        LHttpResponse := FHttpClient.Post(LURL, LRequestBodyStream, LResponseStream, LHeaders);
-        LResponseStream.Position := 0; // Resetear la posición para la lectura del contenido
+        // Obtener la URL completa para la solicitud RPC
+        LURL := GetParamByName('URL') + GetParamByName('RpcEndpointSuffix');
+
+        DoLog(Format('CLIENT -> SERVER (HTTP POST to %s): %s', [LURL, LRequestBodyStream.DataString]));
 
 {$IFDEF APIDEBUG}
-        // Guardar la respuesta en un archivo para depuración
-        LResponseStream.SaveToFile('c:\temp\mcp_rpc_response_' + AMethod.Replace('/', '_') + '.txt');
-        LResponseStream.Position := 0; // Resetear la posición para la lectura del contenido
+        // Guardar la petición en un archivo para depuración
+        LRequestBodyStream.SaveToFile('c:\temp\mcp_rpc_request_' + AMethod.Replace('/', '_') + '.txt');
+        LRequestBodyStream.Position := 0; // Resetear la posición para la lectura por el TNetHTTPClient
 {$ENDIF}
-        // Leer el contenido de la respuesta HTTP
-        LResponseContent := (LHttpResponse.ContentAsString(TEncoding.UTF8));
-        DoLog(Format('SERVER -> CLIENT (HTTP %d): %s', [LHttpResponse.StatusCode, LResponseContent]));
+        // Configurar los timeouts del cliente HTTP
+{$IF CompilerVersion >= 35}
+        FHttpClient.SendTimeout := StrToIntDef(GetParamByName('Timeout'), 15000);
+{$ENDIF}
+        FHttpClient.ResponseTimeout := StrToIntDef(GetParamByName('Timeout'), 15000);
+        FHttpClient.ConnectionTimeout := StrToIntDef(GetParamByName('Timeout'), 15000);
 
-        // Verificar el código de estado HTTP
-        if LHttpResponse.StatusCode <> 200 then
-          raise EMCPClientException.CreateFmt('HTTP request failed with status code %d: %s', [LHttpResponse.StatusCode, LResponseContent]);
+        // Configurar los encabezados Accept y Content-Type
+        FHttpClient.Accept := 'application/json';
+        FHttpClient.ContentType := 'application/json';
 
-        // Intentar parsear la respuesta JSON
+        // Preparar los encabezados HTTP personalizados (ej. Authorization)
         var
-        LResponseObj := TJSONObject.ParseJSONValue(LResponseContent) as TJSONObject;
-        if not Assigned(LResponseObj) then
-          raise EMCPClientException.Create('Failed to parse JSON response from server.');
+        BearerToken := GetParamByName('ApiBearerToken');
+        if not BearerToken.IsEmpty and (BearerToken <> '@MCPBearerToken') then
+        begin
+          var
+          HeaderName := GetParamByName('ApiHeaderName');
+          if HeaderName.IsEmpty then
+            HeaderName := 'Authorization';
+          LHeaders := [TNetHeader.Create(HeaderName, 'Bearer ' + BearerToken)];
+        end
+        else
+          LHeaders := []; // Array vacío si no hay token
+
+        // Crear un MemoryStream para recibir la respuesta HTTP
+        var
+          LResponseStream: TMemoryStream;
+        LResponseStream := TMemoryStream.Create;
         try
-          // Verificar que el ID de la respuesta JSON-RPC coincida con el de la solicitud
-          var
-            LResponseID: Integer;
-          if not LResponseObj.TryGetValue<Integer>('id', LResponseID) or (LResponseID <> FRequestIDCounter) then
-            raise EMCPClientException.CreateFmt('Mismatched response ID. Expected %d, got %d. Raw: %s', [FRequestIDCounter, LResponseID, LResponseObj.ToJSON]);
+          // Realizar la solicitud HTTP POST
+          LHttpResponse := FHttpClient.Post(LURL, LRequestBodyStream, LResponseStream, LHeaders);
+          LResponseStream.Position := 0; // Resetear la posición para la lectura del contenido
 
-          // Verificar si la respuesta JSON-RPC contiene un error
-          var
-            LErrorObj: TJSONObject;
-          if LResponseObj.TryGetValue<TJSONObject>('error', LErrorObj) then
-            raise EMCPClientException.Create('Server returned a JSON-RPC error: ' + LErrorObj.ToJSON);
+{$IFDEF APIDEBUG}
+          // Guardar la respuesta en un archivo para depuración
+          LResponseStream.SaveToFile('c:\temp\mcp_rpc_response_' + AMethod.Replace('/', '_') + '.txt');
+          LResponseStream.Position := 0; // Resetear la posición para la lectura del contenido
+{$ENDIF}
+          // Leer el contenido de la respuesta HTTP
+          LResponseContent := (LHttpResponse.ContentAsString(TEncoding.UTF8));
+          DoLog(Format('SERVER -> CLIENT (HTTP %d): %s', [LHttpResponse.StatusCode, LResponseContent]));
 
-          // Extraer el resultado de la respuesta JSON-RPC y clonarlo para el llamador
-          if LResponseObj.TryGetValue('result', LResultPair) and (LResultPair is TJSONObject) then
-            Result := TJSONObject(LResultPair.Clone)
-          else
-            raise EMCPClientException.Create('JSON-RPC response is invalid or does not contain a result object.');
+          // Verificar el código de estado HTTP
+          if LHttpResponse.StatusCode <> 200 then
+            raise EMCPClientException.CreateFmt('HTTP request failed with status code %d: %s', [LHttpResponse.StatusCode, LResponseContent]);
+
+          // Intentar parsear la respuesta JSON
+          var
+          LResponseObj := TJSONObject.ParseJSONValue(LResponseContent) as TJSONObject;
+          if not Assigned(LResponseObj) then
+            raise EMCPClientException.Create('Failed to parse JSON response from server.');
+          try
+            // Verificar que el ID de la respuesta JSON-RPC coincida con el de la solicitud
+            var
+              LResponseID: Integer;
+            if not LResponseObj.TryGetValue<Integer>('id', LResponseID) or (LResponseID <> FRequestIDCounter) then
+              raise EMCPClientException.CreateFmt('Mismatched response ID. Expected %d, got %d. Raw: %s', [FRequestIDCounter, LResponseID, LResponseObj.ToJSON]);
+
+            // Verificar si la respuesta JSON-RPC contiene un error
+            var
+              LErrorObj: TJSONObject;
+            if LResponseObj.TryGetValue<TJSONObject>('error', LErrorObj) then
+              raise EMCPClientException.Create('Server returned a JSON-RPC error: ' + LErrorObj.ToJSON);
+
+            // Extraer el resultado de la respuesta JSON-RPC y clonarlo para el llamador
+            if LResponseObj.TryGetValue('result', LResultPair) and (LResultPair is TJSONObject) then
+              Result := TJSONObject(LResultPair.Clone)
+            else
+              raise EMCPClientException.Create('JSON-RPC response is invalid or does not contain a result object.');
+          finally
+            // Liberar el objeto JSON de la respuesta
+            LResponseObj.Free;
+          end;
         finally
-          // Liberar el objeto JSON de la respuesta
-          LResponseObj.Free;
+          // Liberar el MemoryStream de la respuesta
+          LResponseStream.Free;
         end;
-      finally
-        // Liberar el MemoryStream de la respuesta
-        LResponseStream.Free;
+      except
+        on E: Exception do
+        begin
+          // Capturar cualquier excepción durante el proceso HTTP/JSON, logearla y re-lanzarla
+          FLastError := 'EXCEPTION during HTTP request: ' + E.Message;
+          DoLog(FLastError);
+          DoStatusUpdate('Network Error: ' + E.Message);
+          raise; // Re-lanzar la excepción para que el método llamador (ej. Initialize) la maneje
+        end;
       end;
-    except
-      on E: Exception do
-      begin
-        // Capturar cualquier excepción durante el proceso HTTP/JSON, logearla y re-lanzarla
-        FLastError := 'EXCEPTION during HTTP request: ' + E.Message;
-        DoLog(FLastError);
-        DoStatusUpdate('Network Error: ' + E.Message);
-        raise; // Re-lanzar la excepción para que el método llamador (ej. Initialize) la maneje
-      end;
-    end;
+    Finally
+      LRequestBodyStream.Free;
+    End;
   finally
     // Liberar el objeto de solicitud JSON-RPC (también liberará AParams, del cual se hizo propietario)
     LRequestObj.Free;
     // Liberar el StringStream del cuerpo de la solicitud
-    LRequestBodyStream.Free;
     // Restablecer el estado de ocupado
     FBusy := False;
   end;
@@ -1916,7 +2016,6 @@ var
   LJsonRpcObject: TJSONObject; // Objeto JSON-RPC anidado
   LResultPair: TJSonValue; // El resultado final del JSON-RPC
 begin
-  Result := nil;
   FBusy := True;
   FLastError := '';
   LJsonRpcObject := nil;

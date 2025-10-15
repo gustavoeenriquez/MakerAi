@@ -43,6 +43,10 @@ uses
   System.NetEncoding,
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+
   REST.JSON, REST.Types, REST.Client, uMakerAi.Core;
 
 Const
@@ -322,7 +326,10 @@ begin
   FPrompt := aPrompt;
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
+
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'images/generations';
@@ -536,7 +543,10 @@ begin
   aImage.Position := 0;
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
+
   Try
     Body := TMultipartFormData.Create;
     Try
@@ -590,7 +600,5 @@ begin
     Client.Free;
   End;
 end;
-
-
 
 end.

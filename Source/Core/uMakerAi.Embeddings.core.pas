@@ -48,6 +48,8 @@ TAiEmbeddingDataRec = record
     class operator Divide(const A: TAiEmbeddingDataRec; const Scalar: Double): TAiEmbeddingDataRec;
     class operator Equal(const A, B: TAiEmbeddingDataRec): Boolean;
     class operator NotEqual(const A, B: TAiEmbeddingDataRec): Boolean;
+    Class function StringToEmbedding(Const AVectorString: String): TAiEmbeddingData; static;
+    Class Function EmbeddingToString(Const AEmbedding : TAiEmbeddingData) : String; static;
 
     // --- Métodos útiles ---
     function Magnitude: Double;
@@ -369,6 +371,85 @@ begin
   for I := 0 to High(A.FData) do
     Result.FData[I] := A.FData[I] + B.FData[I];
 end;
+
+class function TAiEmbeddingDataRec.StringToEmbedding(Const AVectorString: String): TAiEmbeddingData;
+var
+  CleanedString: string;
+  ValueStrings: TArray<string>;
+  I: Integer;
+  FormatSettings: TFormatSettings;
+begin
+  Result := []; // Devuelve un array vacío por defecto
+  if AVectorString.IsEmpty or (AVectorString = '[]') then
+    Exit;
+
+  // 1. Limpiar el string, quitando los corchetes
+  CleanedString := AVectorString.Trim(['[', ']']);
+  if CleanedString.IsEmpty then
+    Exit;
+
+  // 2. Separar los valores por la coma
+  ValueStrings := CleanedString.Split([',']);
+
+  // 3. Preparar para la conversión de float insensible a la localización
+  // Esto asegura que el '.' siempre se interprete como el separador decimal.
+  FormatSettings := TFormatSettings.Invariant;
+
+  // 4. Convertir cada valor y añadirlo al resultado
+  SetLength(Result, Length(ValueStrings));
+  for I := 0 to High(ValueStrings) do
+  begin
+    // Usamos TryStrToFloat para más seguridad contra datos mal formados
+    if TryStrToFloat(ValueStrings[I], Result[I], FormatSettings) then
+    begin
+      // La conversión fue exitosa, continuar.
+    end
+    else
+    begin
+      Result[I] := 0.0; // O manejar el error como se prefiera
+    end;
+  end;
+end;
+
+
+class function TAiEmbeddingDataRec.EmbeddingToString(Const AEmbedding : TAiEmbeddingData) : String;
+var
+  I: Integer;
+  FormatSettings: TFormatSettings;
+  StringBuilder: TStringBuilder;
+begin
+  // Si el array está vacío, devolver '[]'
+  if Length(AEmbedding) = 0 then
+  begin
+    Result := '[]';
+    Exit;
+  end;
+
+  // Preparar FormatSettings para usar punto como separador decimal
+  FormatSettings := TFormatSettings.Invariant;
+
+  // Usar StringBuilder para mejor performance con strings largos
+  StringBuilder := TStringBuilder.Create;
+  try
+    StringBuilder.Append('[');
+
+    // Agregar el primer elemento
+    StringBuilder.Append(FloatToStr(AEmbedding[0], FormatSettings));
+
+    // Agregar los elementos restantes con coma
+    for I := 1 to High(AEmbedding) do
+    begin
+      StringBuilder.Append(',');
+      StringBuilder.Append(FloatToStr(AEmbedding[I], FormatSettings));
+    end;
+
+    StringBuilder.Append(']');
+    Result := StringBuilder.ToString;
+  finally
+    StringBuilder.Free;
+  end;
+end;
+
 
 class operator TAiEmbeddingDataRec.Subtract(const A, B: TAiEmbeddingDataRec): TAiEmbeddingDataRec;
 var

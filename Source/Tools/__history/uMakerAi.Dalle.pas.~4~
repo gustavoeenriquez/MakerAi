@@ -68,8 +68,6 @@ type
   Public
     Constructor Create;
     Destructor Destroy; Override;
-
-  Published
     Property Revised_Prompt: String read Frevised_prompt;
     Property Base64: String read FBase64;
     Property UrlFile: String read FUrlFile;
@@ -252,7 +250,8 @@ begin
     Body := TMultipartFormData.Create;
     Try
       Try
-        Body.AddStream('image', aImage, ExtractFileName('origen.png'));
+        Body.AddStream('image', aImage, False, ExtractFileName('origen.png'));
+
 
         If Assigned(aMask) then
           Body.AddStream('mask', aMask, ExtractFileName('mask.png'));
@@ -543,7 +542,10 @@ begin
   aImage.Position := 0;
 
   Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
+{$ENDIF}
+
   Try
     Body := TMultipartFormData.Create;
     Try
@@ -597,7 +599,5 @@ begin
     Client.Free;
   End;
 end;
-
-
 
 end.

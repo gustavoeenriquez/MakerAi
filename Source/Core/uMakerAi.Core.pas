@@ -31,6 +31,8 @@
 // --------- CAMBIOS --------------------
 // 04/11/2024 - adiciona el manejo de TAiMediaFile.detail para identificar la calidad de analisis de una imagen
 // 04/11/2024 - Se corrige error de asignación en TAiMediaFile.LoadFromBase64
+// 15/10/2025 - Code Cleanup
+
 
 unit uMakerAi.Core;
 
@@ -41,7 +43,8 @@ uses
   System.Threading, System.Variants, System.Net.Mime, System.IOUtils,
   System.Generics.Collections, System.NetEncoding, System.JSON,
   System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
-  System.Net.HttpClientComponent, REST.JSON, REST.Types, REST.Client;
+  System.Net.HttpClientComponent, REST.JSON, REST.Types, REST.Client,
+  System.Rtti;
 
 Type
 
@@ -58,8 +61,7 @@ Type
   TAiFileCategories = set of TAiFileCategory;
 
   TAiChatMediaSupport = (Tcm_Text, Tcm_Image, Tcm_Audio, Tcm_Video, tcm_pdf, Tcm_Document, //
-    tcm_WebSearch, Tcm_CalcSheet, Tcm_Presentation, Tcm_CompressFile, Tcm_Web, Tcm_GraphicDesign, tcm_textFile, tcm_code_interpreter,
-    Tcm_Unknow); //
+    tcm_WebSearch, Tcm_CalcSheet, Tcm_Presentation, Tcm_CompressFile, Tcm_Web, Tcm_GraphicDesign, tcm_textFile, tcm_code_interpreter, Tcm_Unknow); //
 
   TAiChatMediaSupports = set of TAiChatMediaSupport;
 
@@ -86,7 +88,8 @@ Type
 
   TAiMediaFiles = Class;
 
-  // Clase utilizada para el manejo de archivos de medios como audio, imágenes e incluso otros medios como pdf, etc.
+  // Clase utilizada para el manejo de archivos de medios como audio, imágenes, pdf, text, etc.
+
   TAiMediaFile = Class
   Private
     Ffilename: String;
@@ -98,7 +101,6 @@ Type
     FProcesado: Boolean;
     FDetail: String;
     FIdAudio: String;
-    // FCloudUri: String;
     FCloudState: String;
     FCloudName: String;
     FCacheName: String;
@@ -130,8 +132,14 @@ Type
     Procedure LoadFromBase64(aFileName, aBase64: String); Virtual;
     Procedure LoadFromStream(aFileName: String; Stream: TMemoryStream); Virtual;
     Procedure SaveToFile(aFileName: String); Virtual;
-    Function ToString: String;
+    Function ToString: String; override;
     Procedure Clear; Virtual;
+
+    function ToJsonObject: TJSONObject; //Exporta el objeto completo a un json
+    procedure LoadFromJsonObject(AObject: TJSONObject);
+
+    procedure Assign(Source: TAiMediaFile);
+
     Property filename: String read Ffilename write Setfilename;
     Property bytes: Integer read GetBytes;
     Property Content: TMemoryStream read GetContent;
@@ -139,8 +147,6 @@ Type
     // Uri de donde se encuentra el archivo para ser subido al modelo
     Property UrlMedia: String read FUrlMedia write SetUrlMedia;
 
-    // Propiedad para almacenar la URI del archvio ya subido al modelo, id que retorna la API, es la url temporal que asinga el modelo
-    // Property CloudUri: String read FCloudUri write SetCloudUri;
     Property CloudState: String read FCloudState write FCloudState;
     // Nombre del archivo con que fue guardado dentro del modelo disponible para la API
     Property CloudName: String read FCloudName write FCloudName;
@@ -170,10 +176,10 @@ Type
   Private
   Protected
   Public
-    // Si el modelo nomaneja este tipo de media failes, se pueden preprocesar en el evento del chat
+    // Si el modelo no maneja este tipo de media files, se pueden preprocesar en el evento del chat
     // y el texto del proceso se adiciona al prompt, y aquí ya no se tendrían en cuenta
     Function GetMediaList(aFilters: TAiFileCategories; aProcesado: Boolean = False): TAiMediaFilesArray;
-    // = (Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_Document, Tfc_Text, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, Tfc_Aplication, Tfc_DiskImage, Tfc_GraphicDesign, Tfc_Unknow); :
+    Function ToMediaFileArray: TAiMediaFilesArray;  //Retrona una lista con clones de los objetos
   End;
 
   // Clase de manejo de los metadatos que se pasan al api del chat de los llm
@@ -239,11 +245,6 @@ Type
     Constructor Create;
   End;
 
-  // Ejecuta un comando en el shel del sistema operativo correspondiente, Falta implementar bien en MACOS solo Linux, Windows y MACOS
-procedure RunCommand(const Command: string);
-
-// Convierte un audio de un formato a otro utilizando ffmpeg, debe estar instalado en la máquina
-procedure ConvertAudioFileFormat(Origen: TMemoryStream; filename: String; out Destino: TMemoryStream; out DestinoFileName: String);
 
 // Partiendo de la extensión del archivo obtiene la categoria TAiFileCategori
 function GetContentCategory(FileExtension: string): TAiFileCategory;
@@ -260,60 +261,17 @@ function GetParametrosURL(Parametros: TStringList): string;
 
 implementation
 
-
-
 {$IFDEF LINUX}
 
 uses uMakerAi.Utils.System;
 {$ENDIF}
 {$IFDEF MSWINDOWS}
 
-uses Winapi.ShellAPI, WinApi.Windows;
+uses Winapi.ShellAPI, Winapi.Windows;
 {$ENDIF}
 {$REGION 'Utilidades varias' }
-
-
 {$I uMakerAi.Version.inc}
 
-procedure RunCommand(const Command: string);
-begin
-
-{$IFDEF LINUX}
-  TUtilsSystem.RunCommandLine(Command);
-{$ENDIF}
-{$IFDEF MSWINDOWS}
-  ShellExecute(0, nil, 'cmd.exe', PChar('/C ' + Command), nil, SW_HIDE);
-{$ENDIF}
-end;
-
-procedure ConvertAudioFileFormat(Origen: TMemoryStream; filename: String; out Destino: TMemoryStream; out DestinoFileName: String);
-Var
-  FOrigen, FDestino: String;
-  CommandLine: String;
-begin
-  Destino := Nil;
-  DestinoFileName := '';
-  filename := LowerCase(filename);
-  FDestino := ChangeFileExt(filename, '.mp3');
-
-  FOrigen := System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetTempPath, filename);
-  FDestino := System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetTempPath, FDestino);
-
-  Origen.Position := 0;
-  Origen.SaveToFile(FOrigen);
-
-  CommandLine := 'ffmpeg -i ' + FOrigen + ' ' + FDestino;
-
-  RunCommand(CommandLine);
-
-  Destino := TMemoryStream.Create;
-  Destino.LoadFromfile(FDestino);
-  Destino.Position := 0;
-  DestinoFileName := ExtractFileName(FDestino);
-
-  TFile.Delete(FOrigen);
-  TFile.Delete(FDestino);
-end;
 
 function GetParametrosURL(Parametros: TStringList): string;
 var
@@ -828,21 +786,18 @@ begin
   FileExtension := LowerCase(Trim(StringReplace(FileExtension, '.', '', [rfReplaceAll])));
 
   // Image formats
-  if (FileExtension = 'jpg') or (FileExtension = 'jpeg') or (FileExtension = 'png') or (FileExtension = 'gif') or (FileExtension = 'bmp') or
-    (FileExtension = 'tiff') or (FileExtension = 'tif') or (FileExtension = 'svg') or (FileExtension = 'webp') or (FileExtension = 'avif')
-    or (FileExtension = 'heic') or (FileExtension = 'heif') or (FileExtension = 'ico') then
+  if (FileExtension = 'jpg') or (FileExtension = 'jpeg') or (FileExtension = 'png') or (FileExtension = 'gif') or (FileExtension = 'bmp') or (FileExtension = 'tiff') or (FileExtension = 'tif') or (FileExtension = 'svg') or
+    (FileExtension = 'webp') or (FileExtension = 'avif') or (FileExtension = 'heic') or (FileExtension = 'heif') or (FileExtension = 'ico') then
     Result := Tfc_Image
 
     // Audio formats
-  else if (FileExtension = 'mp3') or (FileExtension = 'wav') or (FileExtension = 'flac') or (FileExtension = 'aac') or
-    (FileExtension = 'ogg') or (FileExtension = 'wma') or (FileExtension = 'm4a') or (FileExtension = 'opus') or (FileExtension = 'mpga')
-  then
+  else if (FileExtension = 'mp3') or (FileExtension = 'wav') or (FileExtension = 'flac') or (FileExtension = 'aac') or (FileExtension = 'ogg') or (FileExtension = 'wma') or (FileExtension = 'm4a') or (FileExtension = 'opus') or
+    (FileExtension = 'mpga') then
     Result := Tfc_Audio
 
     // Video formats
-  else if (FileExtension = 'avi') or (FileExtension = 'mp4') or (FileExtension = 'mkv') or (FileExtension = 'mov') or
-    (FileExtension = 'wmv') or (FileExtension = 'flv') or (FileExtension = 'webm') or (FileExtension = 'mpeg') or (FileExtension = 'mpg') or
-    (FileExtension = '3gp') or (FileExtension = 'm4v') then
+  else if (FileExtension = 'avi') or (FileExtension = 'mp4') or (FileExtension = 'mkv') or (FileExtension = 'mov') or (FileExtension = 'wmv') or (FileExtension = 'flv') or (FileExtension = 'webm') or (FileExtension = 'mpeg') or
+    (FileExtension = 'mpg') or (FileExtension = '3gp') or (FileExtension = 'm4v') then
     Result := Tfc_Video
 
     // PDF (categoría separada)
@@ -850,8 +805,7 @@ begin
     Result := Tfc_pdf
 
     // Document formats (Word processors)
-  else if (FileExtension = 'doc') or (FileExtension = 'docx') or (FileExtension = 'odt') or (FileExtension = 'rtf') or
-    (FileExtension = 'tex') then
+  else if (FileExtension = 'doc') or (FileExtension = 'docx') or (FileExtension = 'odt') or (FileExtension = 'rtf') or (FileExtension = 'tex') then
     Result := Tfc_Document
 
     // Spreadsheets
@@ -867,32 +821,26 @@ begin
     Result := Tfc_Text
 
     // Programming/Code files
-  else if (FileExtension = 'py') or (FileExtension = 'java') or (FileExtension = 'c') or (FileExtension = 'cpp') or (FileExtension = 'cs')
-    or (FileExtension = 'php') or (FileExtension = 'rb') or (FileExtension = 'go') or (FileExtension = 'rs') or (FileExtension = 'swift') or
-    (FileExtension = 'kt') or (FileExtension = 'scala') or (FileExtension = 'r') or (FileExtension = 'sql') or (FileExtension = 'sh') or
-    (FileExtension = 'bat') or (FileExtension = 'ps1') or (FileExtension = 'dockerfile') then
+  else if (FileExtension = 'py') or (FileExtension = 'java') or (FileExtension = 'c') or (FileExtension = 'cpp') or (FileExtension = 'cs') or (FileExtension = 'php') or (FileExtension = 'rb') or (FileExtension = 'go') or
+    (FileExtension = 'rs') or (FileExtension = 'swift') or (FileExtension = 'kt') or (FileExtension = 'scala') or (FileExtension = 'r') or (FileExtension = 'sql') or (FileExtension = 'sh') or (FileExtension = 'bat') or
+    (FileExtension = 'ps1') or (FileExtension = 'dockerfile') then
     Result := tfc_code_interpreter
 
     // Web files
-  else if (FileExtension = 'html') or (FileExtension = 'htm') or (FileExtension = 'xml') or (FileExtension = 'json') or
-    (FileExtension = 'css') or (FileExtension = 'js') or (FileExtension = 'jsx') or (FileExtension = 'ts') or (FileExtension = 'tsx') or
-    (FileExtension = 'vue') or (FileExtension = 'angular') or (FileExtension = 'php') or (FileExtension = 'asp') or (FileExtension = 'aspx')
-    or (FileExtension = 'jsp') then
+  else if (FileExtension = 'html') or (FileExtension = 'htm') or (FileExtension = 'xml') or (FileExtension = 'json') or (FileExtension = 'css') or (FileExtension = 'js') or (FileExtension = 'jsx') or (FileExtension = 'ts') or
+    (FileExtension = 'tsx') or (FileExtension = 'vue') or (FileExtension = 'angular') or (FileExtension = 'php') or (FileExtension = 'asp') or (FileExtension = 'aspx') or (FileExtension = 'jsp') then
     Result := Tfc_Web
 
     // Compressed files
-  else if (FileExtension = 'zip') or (FileExtension = 'rar') or (FileExtension = 'tar') or (FileExtension = 'gz') or (FileExtension = 'bz2')
-    or (FileExtension = '7z') or (FileExtension = 'xz') or (FileExtension = 'gzip') then
+  else if (FileExtension = 'zip') or (FileExtension = 'rar') or (FileExtension = 'tar') or (FileExtension = 'gz') or (FileExtension = 'bz2') or (FileExtension = '7z') or (FileExtension = 'xz') or (FileExtension = 'gzip') then
     Result := Tfc_CompressFile
 
     // Graphic Design files
-  else if (FileExtension = 'psd') or (FileExtension = 'ai') or (FileExtension = 'eps') or (FileExtension = 'indd') or
-    (FileExtension = 'sketch') or (FileExtension = 'fig') or (FileExtension = 'xd') then
+  else if (FileExtension = 'psd') or (FileExtension = 'ai') or (FileExtension = 'eps') or (FileExtension = 'indd') or (FileExtension = 'sketch') or (FileExtension = 'fig') or (FileExtension = 'xd') then
     Result := Tfc_GraphicDesign
 
     // Text-based files that are not plain text
-  else if (FileExtension = 'yaml') or (FileExtension = 'yml') or (FileExtension = 'toml') or (FileExtension = 'ini') or
-    (FileExtension = 'cfg') or (FileExtension = 'conf') then
+  else if (FileExtension = 'yaml') or (FileExtension = 'yml') or (FileExtension = 'toml') or (FileExtension = 'ini') or (FileExtension = 'cfg') or (FileExtension = 'conf') then
     Result := tfc_textFile
 
     // Default case
@@ -901,6 +849,63 @@ begin
 end;
 
 { TAiMediaFiles }
+
+procedure TAiMediaFile.Assign(Source: TAiMediaFile);
+begin
+  // 1. Protección contra auto-asignación y fuentes nulas.
+  if (Source = nil) or (Source = Self) then
+    Exit;
+
+  // 2. Copiar todas las propiedades "planas" (campos de valor).
+  // Usamos los campos privados (F...) para evitar disparar lógica
+  // innecesaria que podría estar en los setters.
+  Self.Ffilename := Source.Ffilename;
+  Self.FUrlMedia := Source.FUrlMedia;
+  Self.FFileType := Source.FFileType; // No tiene setter, así que copiamos el campo.
+  Self.FFullFileName := Source.FFullFileName;
+  Self.FTranscription := Source.FTranscription;
+  Self.FProcesado := Source.FProcesado;
+  Self.FDetail := Source.FDetail;
+  Self.FIdAudio := Source.FIdAudio;
+  Self.FCloudState := Source.FCloudState;
+  Self.FCloudName := Source.FCloudName;
+  Self.FCacheName := Source.FCacheName;
+  Self.FIdFile := Source.FIdFile;
+
+  // 3. Copia profunda (Deep Copy) del contenido del TMemoryStream.
+  // Este es el paso más crítico para evitar que ambos objetos compartan
+  // el mismo stream de memoria.
+  if Assigned(Source.Content) and (Source.Content.Size > 0) then
+  begin
+    // Si nuestro propio stream no existe, lo creamos.
+    if not Assigned(Self.FContent) then
+      Self.FContent := TMemoryStream.Create;
+
+    // Preparamos los streams para la copia.
+    Self.FContent.Clear;
+    Source.Content.Position := 0; // Aseguramos que leemos el origen desde el principio.
+
+    // Copiamos el contenido.
+    Self.FContent.CopyFrom(Source.Content, 0);
+
+    // Buena práctica: Dejar ambos streams en su posición inicial.
+    Self.FContent.Position := 0;
+    Source.Content.Position := 0;
+  end
+  else
+  begin
+    // Si el stream de origen está vacío o no existe, nos aseguramos
+    // de que nuestro propio stream también esté vacío.
+    if Assigned(Self.FContent) then
+      Self.FContent.Clear;
+  end;
+
+  // 4. Propiedades que NO se copian.
+  // Self.FMediaFiles: Esta es una referencia al contenedor padre.
+  // El nuevo objeto clonado será añadido a una nueva lista,
+  // y esa lista le asignará su propia referencia. No la tocamos aquí.
+
+end;
 
 procedure TAiMediaFile.Clear;
 begin
@@ -915,6 +920,67 @@ begin
   FIdAudio := '';
   // FCloudUri := ''
 end;
+
+{ function TAiMediaFile.CopyToClipboard: Boolean;
+  var
+  ClipboardSvc: IFMXClipboardService;
+  LBitmap: FMX.Graphics.TBitmap;
+  LText: string;
+  begin
+  Result := False;
+  if not TPlatformServices.Current.SupportsPlatformService(IFMXClipboardService, IInterface(ClipboardSvc)) then
+  Exit; // No hay servicio de portapapeles disponible
+
+  // Antes de cualquier operación, asegurarnos de que el stream esté al principio.
+  if Assigned(FContent) then
+  FContent.Position := 0;
+
+  // La lógica de copiado depende de la categoría del archivo
+  case Self.FileCategory of
+  Tfc_Image:
+  begin
+  if (FContent = nil) or (FContent.Size = 0) then Exit;
+  LBitmap := FMX.Graphics.TBitmap.Create;
+  try
+  LBitmap.LoadFromStream(FContent);
+  ClipboardSvc.SetClipboard(LBitmap); // FMX sabe cómo poner un TBitmap en el portapapeles
+  Result := True;
+  finally
+  LBitmap.Free;
+  end;
+  end;
+
+  Tfc_Text, tfc_textFile, tfc_code_interpreter:
+  begin
+  if (FContent = nil) or (FContent.Size = 0) then Exit;
+
+  // Leemos el contenido del stream como texto UTF-8 (el más común)
+  var LReader := TStreamReader.Create(FContent, TEncoding.UTF8);
+  try
+  LText := LReader.ReadToEnd;
+  // Usamos TValue.From<string> para pasarlo al portapapeles como texto plano
+  ClipboardSvc.SetClipboard(TValue.From<string>(LText));
+  Result := True;
+  finally
+  LReader.Free;
+  end;
+  end;
+
+  // Para otros tipos de archivo (PDF, DOC, Audio, etc.), el portapapeles estándar
+  // no tiene un formato "nativo" para ellos. La mejor opción es copiar
+  // la RUTA del archivo si existe, o no hacer nada.
+  // En este caso, como el contenido está en un TMemoryStream, no hay una ruta
+  // que podamos copiar que otra aplicación pueda entender.
+  // Por lo tanto, para estos tipos, no hacemos nada y el método devuelve False.
+  else
+  Result := False;
+  end;
+
+  // Volvemos a rebobinar el stream por si se necesita reutilizar después.
+  if Assigned(FContent) then
+  FContent.Position := 0;
+  end;
+}
 
 constructor TAiMediaFile.Create;
 begin
@@ -945,9 +1011,9 @@ begin
   Begin
 
     Client := TNetHTTPClient.Create(Nil);
-    {$IF CompilerVersion >= 34} // Delphi 10.3 Rio y posteriores
+{$IF CompilerVersion >= 34} // Delphi 10.3 Rio y posteriores
     Client.SynchronizeEvents := False;
-    {$IFEND}
+{$IFEND}
     Response := TMemoryStream.Create;
 
     Try
@@ -1045,6 +1111,34 @@ begin
   End;
 end;
 
+procedure TAiMediaFile.LoadFromJsonObject(AObject: TJSONObject);
+var
+  LBase64: string;
+  LFilename: string;
+begin
+  // Limpiamos el estado actual antes de cargar
+  Clear;
+
+  AObject.TryGetValue<string>('filename', Self.Ffilename);
+  AObject.TryGetValue<string>('urlMedia', Self.FUrlMedia);
+  AObject.TryGetValue<string>('fullFileName', Self.FFullFileName);
+  AObject.TryGetValue<string>('transcription', Self.FTranscription);
+  AObject.TryGetValue<Boolean>('procesado', Self.FProcesado);
+  AObject.TryGetValue<string>('detail', Self.FDetail);
+  AObject.TryGetValue<string>('idAudio', Self.FIdAudio);
+  AObject.TryGetValue<string>('cloudState', Self.FCloudState);
+  AObject.TryGetValue<string>('cloudName', Self.FCloudName);
+  AObject.TryGetValue<string>('cacheName', Self.FCacheName);
+  AObject.TryGetValue<string>('idFile', Self.FIdFile);
+
+  // Cargamos el contenido usando el método existente
+  if AObject.TryGetValue<string>('base64', LBase64) and (LBase64 <> '') then
+  begin
+    AObject.TryGetValue<string>('filename', LFilename);
+    Self.LoadFromBase64(LFilename, LBase64);
+  end;
+end;
+
 procedure TAiMediaFile.LoadFromStream(aFileName: String; Stream: TMemoryStream);
 begin
   If Assigned(Stream) then
@@ -1129,6 +1223,23 @@ begin
   FUrlMedia := Value;
 end;
 
+function TAiMediaFile.ToJsonObject: TJSONObject;
+begin
+  Result := TJSONObject.Create;
+  Result.AddPair('filename', Self.filename);
+  Result.AddPair('urlMedia', Self.UrlMedia);
+  Result.AddPair('fullFileName', Self.FullFileName);
+  Result.AddPair('transcription', Self.Transcription);
+  Result.AddPair('procesado', TJSONBool.Create(Self.Procesado));
+  Result.AddPair('detail', Self.Detail);
+  Result.AddPair('idAudio', Self.IdAudio);
+  Result.AddPair('cloudState', Self.CloudState);
+  Result.AddPair('cloudName', Self.CloudName);
+  Result.AddPair('cacheName', Self.CacheName);
+  Result.AddPair('idFile', Self.IdFile);
+  Result.AddPair('base64', Self.Base64);
+end;
+
 function TAiMediaFile.ToString: String;
 Var
   St: TStringStream;
@@ -1162,26 +1273,6 @@ begin
     end;
   end;
 end;
-
-{
-  function TAiMediaFiles.GetMediaList(aFilter: TAiFileCategory; aProcesado: Boolean = False): TAiMediaFilesArray;
-  Var
-  i: Integer;
-  Item: TAiMediaFile;
-  Len: Integer;
-  begin
-  For i := 0 to Self.Count - 1 do
-  Begin
-  Item := Self.Items[i];
-  If (Item.FileCategory = aFilter) and (Item.Procesado = aProcesado) then
-  Begin
-  Len := Length(Result);
-  SetLength(Result, Len + 1);
-  Result[Length(Result) - 1] := Item;
-  End;
-  End;
-  end;
-}
 
 { TAiToolFunction }
 
@@ -1227,6 +1318,25 @@ begin
     &Function := JFunc.Format;
     Body := JObj; // La funcion original completa
   End;
+end;
+
+function TAiMediaFiles.ToMediaFileArray: TAiMediaFilesArray;
+var
+  i: Integer;
+  Item, NewItem: TAiMediaFile;
+  Len: Integer;
+begin
+  SetLength(Result, 0); // Inicializamos el resultado para evitar basura
+  for i := 0 to Self.Count - 1 do
+  begin
+    Item := Self.Items[i];
+    NewItem := TAiMediaFile.Create;
+    NewItem.Assign(Item);
+
+    Len := Length(Result);
+    SetLength(Result, Len + 1);
+    Result[Len] := NewItem;
+  end;
 end;
 
 { TAiMetadata }
@@ -1394,3 +1504,7 @@ begin
 end;
 
 end.
+
+
+
+

@@ -1,0 +1,96 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{F23F6AFA-4622-42DC-863E-7308F69E56AA}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="Demos\011-ChatBasicCalls\ChatSencillo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Demos\012-ChatAllFunctions\ChatFull.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Demos\021-RAG+Postgres-UpdateDB\RagUpdateDb.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Demos\022-1-RAG_SQLite\Sqlite_RAG.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Demos\031-MCPServer\AiMCPServerDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Demos\025-RAGGraph\RagGraphDemo.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="ChatSencillo">
+        <MSBuild Projects="Demos\011-ChatBasicCalls\ChatSencillo.dproj"/>
+    </Target>
+    <Target Name="ChatSencillo:Clean">
+        <MSBuild Projects="Demos\011-ChatBasicCalls\ChatSencillo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ChatSencillo:Make">
+        <MSBuild Projects="Demos\011-ChatBasicCalls\ChatSencillo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ChatFull">
+        <MSBuild Projects="Demos\012-ChatAllFunctions\ChatFull.dproj"/>
+    </Target>
+    <Target Name="ChatFull:Clean">
+        <MSBuild Projects="Demos\012-ChatAllFunctions\ChatFull.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ChatFull:Make">
+        <MSBuild Projects="Demos\012-ChatAllFunctions\ChatFull.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="RagUpdateDb">
+        <MSBuild Projects="Demos\021-RAG+Postgres-UpdateDB\RagUpdateDb.dproj"/>
+    </Target>
+    <Target Name="RagUpdateDb:Clean">
+        <MSBuild Projects="Demos\021-RAG+Postgres-UpdateDB\RagUpdateDb.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="RagUpdateDb:Make">
+        <MSBuild Projects="Demos\021-RAG+Postgres-UpdateDB\RagUpdateDb.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Sqlite_RAG">
+        <MSBuild Projects="Demos\022-1-RAG_SQLite\Sqlite_RAG.dproj"/>
+    </Target>
+    <Target Name="Sqlite_RAG:Clean">
+        <MSBuild Projects="Demos\022-1-RAG_SQLite\Sqlite_RAG.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Sqlite_RAG:Make">
+        <MSBuild Projects="Demos\022-1-RAG_SQLite\Sqlite_RAG.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="AiMCPServerDemo">
+        <MSBuild Projects="Demos\031-MCPServer\AiMCPServerDemo.dproj"/>
+    </Target>
+    <Target Name="AiMCPServerDemo:Clean">
+        <MSBuild Projects="Demos\031-MCPServer\AiMCPServerDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="AiMCPServerDemo:Make">
+        <MSBuild Projects="Demos\031-MCPServer\AiMCPServerDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="RagGraphDemo">
+        <MSBuild Projects="Demos\025-RAGGraph\RagGraphDemo.dproj"/>
+    </Target>
+    <Target Name="RagGraphDemo:Clean">
+        <MSBuild Projects="Demos\025-RAGGraph\RagGraphDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="RagGraphDemo:Make">
+        <MSBuild Projects="Demos\025-RAGGraph\RagGraphDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="ChatSencillo;ChatFull;RagUpdateDb;Sqlite_RAG;AiMCPServerDemo;RagGraphDemo"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="ChatSencillo:Clean;ChatFull:Clean;RagUpdateDb:Clean;Sqlite_RAG:Clean;AiMCPServerDemo:Clean;RagGraphDemo:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="ChatSencillo:Make;ChatFull:Make;RagUpdateDb:Make;Sqlite_RAG:Make;AiMCPServerDemo:Make;RagGraphDemo:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
