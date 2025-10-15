@@ -1,4 +1,34 @@
-﻿unit uMakerAi.ToolFunctions;
+﻿// MIT License
+//
+// Copyright (c) 2013 Gustavo Enríquez - CimaMaker
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enríquez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+// - Telegram: +57 3128441700
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
+unit uMakerAi.ToolFunctions;
 
 interface
 
@@ -111,7 +141,6 @@ type
     property Enabled: Boolean read FEnabled write SetEnabled default True;
     property FunctionName: string read GetDisplayName write SetDisplayName;
     property OnAction: TFunctionEvent read FOnAction write SetOnAction;
-    // Property OnFunctionGetInfo: TFunctionGetInfoEvent read FOnFunctionGetInoAction write SetOnActionTag;
     Property Description: TStrings read FDescription write SetFunctionDoc;
     Property Script: TStrings read FScript write SetScript;
     Property Parameters: TFunctionParamsItems Read FParams Write FParams;
@@ -160,9 +189,9 @@ type
     procedure SetTransportType(const Value: TToolTransportType);
     procedure SetEnabled(const Value: Boolean);
     procedure SetConnected(const Value: Boolean);
-    function GetDisabledFunctions: TStrings;
+    // function GetDisabledFunctions: TStrings;
     function GetParams: TStrings;
-    procedure SetDisabledFunctions(const Value: TStrings);
+    //procedure SetDisabledFunctions(const Value: TStrings);
     procedure SetParams(const Value: TStrings);
     function GetConfiguration: string;
     procedure SetConfiguration(const Value: string);
@@ -228,7 +257,6 @@ type
     // SetFunctionEnable  Retorna True si encuentra la función y puede actualizar el estado
     Function SetFunctionEnable(FunctionName: String; Enabled: Boolean): Boolean;
     Function SetMCPClientEnable(Name: String; Enabled: Boolean): Boolean;
-    // function ExtractFunctionNames1: TStringList;
     function ExtractFunctionNames: TStringList;
 
     // IMPORTANTE: el parámetro aMCPClient debe ser creado con owner = Nil  aMCPClient:= TMCPClientCustom(NIL);
@@ -1555,14 +1583,15 @@ begin
   Result := Format('(%s, Click [...] to edit)', ['Properties']);
 end;
 
+{
 function TMCPClientItem.GetDisabledFunctions: TStrings;
 begin
-  { if Assigned(FMCPClient) then
+   if Assigned(FMCPClient) then
     Result := FMCPClient.DisabledFunctions
     else
     Result := nil;
-  }
 end;
+}
 
 function TMCPClientItem.GetDisplayName: string;
 begin
@@ -1621,10 +1650,10 @@ end;
 procedure TMCPClientItem.SetConnected(const Value: Boolean);
 var
   // OwnerComponent: TAiFunctions;
-  IsDesignTime: Boolean;
+  // IsDesignTime: Boolean;
   ClientTools: TJSonObject;
-  ToolCount: Integer;
-  ToolArray: TJSonArray;
+  // ToolCount: Integer;
+  // ToolArray: TJSonArray;
 begin
   // Solo actuar si el valor realmente cambia
   if FConnected = Value then
@@ -1667,15 +1696,16 @@ begin
   end;
 end;
 
+{
 procedure TMCPClientItem.SetDisabledFunctions(const Value: TStrings);
 begin
-  { if Assigned(FMCPClient) and Assigned(Value) then
+   if Assigned(FMCPClient) and Assigned(Value) then
     begin
     FMCPClient.DisabledFunctions.Assign(Value);
     Changed(False); // Notifica al IDE que el item ha cambiado.
     end;
-  }
 end;
+}
 
 procedure TMCPClientItem.SetEnabled(const Value: Boolean);
 begin
@@ -1779,7 +1809,7 @@ end;
 
 procedure TMCPClientItem.UpdateClientProperties;
 begin
-// Asegurarnos de que tenemos un cliente al que transferirle los datos
+  // Asegurarnos de que tenemos un cliente al que transferirle los datos
   if not Assigned(FMCPClient) then
     Exit;
 
@@ -1848,14 +1878,17 @@ begin
 end;
 
 function TMCPClientItems.GetFunctionList(Name: String): TStringList;
-Var
+{ Var
   Item: TMCPClientItem;
   jTools: TJSonObject;
+}
 begin
-  Item := GetClientByName(Name);
+  Result := Nil;
+  { Item := GetClientByName(Name);
 
-  If Assigned(Item) and Assigned(Item.MCPClient) then
+    If Assigned(Item) and Assigned(Item.MCPClient) then
     jTools := Item.MCPClient.ListTools;
+  }
 end;
 
 function TMCPClientItems.GetOwner: TPersistent;

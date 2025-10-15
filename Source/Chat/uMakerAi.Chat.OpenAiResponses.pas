@@ -45,7 +45,6 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core,
   uMakerAi.ToolFunctions, uMakerAi.Utils.CodeExtractor;
 
@@ -69,20 +68,17 @@ type
     procedure SetReasoningEffort(const Value: String); // Setter para reasoning effort
 
   protected
-    // function CallResponsesApi(ABody: string): TJSonObject;
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Override;
     procedure ParseJsonTranscript(jObj: TJSonObject; ResMsg: TAiChatMessage; aMediaFile: TAiMediaFile);
 
     procedure UpdateResponseStatus(aStatus: String);
-
-    // function GetMessages: TJSonArray; override;  //Ya no es necesario sobreescribir GetMessage
 
     function InternalRunSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
 
     Function InitChatCompletions: String; Override;
-    Function GetTools(Funcion: TAiFunctions): TJSonArray;
+    Function GetTools(Funcion: TAiFunctions): TJSonArray; Reintroduce;
     Function GetToolsItems(Functions: TFunctionActionItems): TJSonArray;
 
     procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
@@ -91,7 +87,6 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    // function Run(aMsg: TAiChatMessage = Nil): String; override;
     class function GetDriverName: string; Override;
     class procedure RegisterDefaultParams(Params: TStrings); Override;
     class function CreateInstance(Sender: TComponent): TAiChat; Override;
@@ -208,6 +203,7 @@ var
 begin
   AskMsg := GetLastMessage; // Obtiene el mensaje de la solicitud
   WebSearch := Nil;
+  ToolCalls := Nil;
 
   // Extraer los datos del JObj
   if Assigned(jObj) then
@@ -276,8 +272,7 @@ begin
               else if S = 'function_call' then
               begin
                 // Procesar la llamada a la función
-                if JOutputItem.TryGetValue<String>('id', FunctionCallId) and JOutputItem.TryGetValue<String>('name', FunctionName) and
-                  JOutputItem.TryGetValue<String>('arguments', FunctionArguments) then
+                if JOutputItem.TryGetValue<String>('id', FunctionCallId) and JOutputItem.TryGetValue<String>('name', FunctionName) and JOutputItem.TryGetValue<String>('arguments', FunctionArguments) then
                 begin
                   // Aquí tienes la información para ejecutar la función
                   // FunctionCallId: Identificador único de la llamada a la función
@@ -381,11 +376,6 @@ begin
         end
         else
         begin
-          // Crear un nuevo TAiChatMessage para guardar la respuesta localmente
-          // newMsg := TAiChatMessage.Create(FLastContent, 'assistant'); // El rol es 'assistant' según el JSON
-          // newMsg.Id := Self.Messages.Count + 1;
-          // newMsg.PreviousResponseId := FResponseId; // Asignar el FResponseId a la propiedad PreviousResponseId
-
           // Asignar la búsqueda web al mensaje (si hubo resultados)
           ResMsg.WebSearchResponse := WebSearch;
           ResMsg.Prompt := FLastContent;
@@ -512,9 +502,6 @@ begin
   Self.Total_tokens := Self.Total_tokens + aTotal_tokens;
   Self.Prompt_tokens := Self.Prompt_tokens + aInput_tokens; // 'input' equivale a 'prompt'
   Self.Completion_tokens := Self.Completion_tokens + aOutput_tokens; // 'output' equivale a 'completion'
-
-  // Guardamos el resultado principal
-  // Self.FLastContent := sTextoTranscrito;
 
   If Trim(sTextoWords + sLineBreak + sTextoSegments) <> '' then
   Begin
@@ -710,21 +697,7 @@ begin
 
       If LastMessage.TollCallId <> '' then
       Begin
-
-        // JResult.AddPair('previous_response_id', LastMessage.PreviousResponseId);
-
         jToolCalls := TJSonArray.Create;
-
-
-        // ------------------ Type Function_Call ------------------
-        { jToolCall := TJSonObject.Create;
-          jToolCall.AddPair('type', 'function_call');
-          jToolCall.AddPair('id', LastMessage.TollCallId); //es el que comienza con rc_  toolcallid
-          jToolCall.AddPair('call_id', 'call_001'); //LastMessage.TollCallId);
-          jToolCall.AddPair('name', LastMessage.FunctionName);
-          jToolCall.AddPair('arguments', 'NA');
-          jToolCalls.Add(jToolCall);
-        }
 
         // ------------------ Type Function_Call_Output ------------------
         jToolCall := TJSonObject.Create;
@@ -1059,13 +1032,6 @@ begin
     FHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
     FClient.ContentType := 'application/json';
 
-    { If Assigned(aMsg) then  //Esto se hace en el run
-      Begin
-      // Añadimos el objeto a la lista antes de enviarlo a OPENAI
-      Self.Messages.Add(aMsg);
-      End;
-    }
-
     // Construir el request body (usando el método específico de la API responses)
     ABody := InitChatCompletions;
 
@@ -1155,13 +1121,8 @@ begin
     LJsonObject.AddPair('voice', LVoice);
     LJsonObject.AddPair('response_format', LResponseFormat);
 
-    LBodyStream := TStringStream.Create(UTF8ToString(LJsonObject.Format), TEncoding.UTF8);
-    // LBodyStream := TStringStream.Create(LJsonObject.ToString, TEncoding.UTF8);
-
-    // S := LJsonObject.ToString;
-
-    // LBodyStream := TStringStream.Create;
-    // LBodyStream.WriteString(S);
+    // LBodyStream := TStringStream.Create(UTF8ToString(LJsonObject.ToJSON), TEncoding.UTF8);
+    LBodyStream := TStringStream.Create(LJsonObject.ToJSON, TEncoding.UTF8);
 
     LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
     FClient.ContentType := 'application/json';
@@ -1235,23 +1196,27 @@ begin
 {$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
 {$ENDIF}
-
   LResponseStream := TMemoryStream.Create;
   Body := TMultipartFormData.Create;
   Granularities := TStringList.Create;
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
+  LTempStream := TMemoryStream.Create;
   try
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
 
     // Crear un stream temporal para pasarlo al formulario multipart
-    LTempStream := TMemoryStream.Create;
     aMediaFile.Content.Position := 0;
     LTempStream.LoadFromStream(aMediaFile.Content);
     LTempStream.Position := 0;
 
     // --- 1. CONSTRUCCIÓN DEL BODY MULTIPART CON PARÁMETROS GENÉRICOS ---
+
+{$IF CompilerVersion >= 35}
+    Body.AddStream('file', LTempStream, False, aMediaFile.FileName, aMediaFile.MimeType);
+{$ELSE}
     Body.AddStream('file', LTempStream, aMediaFile.FileName, aMediaFile.MimeType);
+{$ENDIF}
 
     Body.AddField('model', LModel); // Default seguro
 
@@ -1334,7 +1299,7 @@ begin
     Client.Free;
     LResponseStream.Free;
     // Granularities.Free;
-    // LTempStream es propiedad de Body
+    LTempStream.Free;
   end;
 end;
 

@@ -132,10 +132,16 @@
         <DCCReference Include="bindcomp.dcp"/>
         <DCCReference Include="MakerAI.dcp"/>
         <DCCReference Include="..\Design\uAiEditors.ChatConnectionEditor.pas"/>
-        <DCCReference Include="..\Design\uMakerAi.Dsg.AboutDialog.pas"/>
+        <DCCReference Include="..\Design\uMakerAi.Dsg.AboutDialog.pas">
+            <Form>AboutDialog</Form>
+            <FormType>dfm</FormType>
+        </DCCReference>
         <DCCReference Include="..\Design\uMakerAi.VersionPropertyEditor.pas"/>
         <DCCReference Include="..\Design\uMCP.ClientEditorProperties.pas"/>
-        <DCCReference Include="..\Design\uMCPClientEditor.pas"/>
+        <DCCReference Include="..\Design\uMCPClientEditor.pas">
+            <Form>FMCPClientEditor</Form>
+            <FormType>dfm</FormType>
+        </DCCReference>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

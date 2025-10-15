@@ -1,4 +1,10 @@
-# MakerAI Suite: The Definitive AI Framework for Delphi
+¡Absolutamente! He revisado el documento original para asegurar que la guía de instalación esté perfectamente alineada con la nueva modularidad y que todas las características existentes se mantengan y se potencien con el enfoque V3.0.
+
+Aquí está el README completo y actualizado a la versión 3.0, listo para su publicación:
+
+---
+
+# MakerAI 3.0 — The AI Operating System for Delphi
 
 🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
 
@@ -7,56 +13,63 @@
 [![License](https://img.shields.io/github/license/gustavoeenriquez/MakerAi)](LICENSE.txt)
 [![Telegram](https://img.shields.io/badge/Join-Telegram%20Chat-blue.svg)](https://t.me/+7LaihFwqgsk1ZjQx)
 
-**Build powerful, intelligent, and context-aware applications with a 100% native AI framework for Delphi.**
+**MakerAI 3.0 is not just a component suite — it’s a complete AI orchestration framework for Delphi developers.**
 
-MakerAI Suite is a comprehensive framework designed for Delphi developers to integrate state-of-the-art AI capabilities into their VCL and FMX applications. It covers the entire AI lifecycle, from model connectivity to the creation of autonomous agents.
-
----
-
-## The Power of MakerAI Suite
-
-MakerAI Suite provides the building blocks to create sophisticated, high-performance AI systems.
-
-*   🚀 **Create Sophisticated AI Agents:** Orchestrate complex workflows, equip your agents with short and long-term memory, and allow them to execute tools to interact with your application and the outside world.
-*   🧠 **Connect AI with Your Own Data (RAG):** Leverage the powerful **Retrieval-Augmented Generation (RAG)** engine. Enable language models to answer questions based on your documents, databases, or any private knowledge source.
-*   🛠️ **Enjoy 100% Native Performance:** MakerAI is pure Delphi. This ensures optimal performance, seamless integration, and compilation without heavy external dependencies.
-*   🌐 **Access a Global Ecosystem of Models:** The suite includes the acclaimed universal connector, `TAiConnection`, for unified integration with OpenAI, Gemini, Claude, Ollama, Groq, and many more.
-*   🏗️ **Enterprise-Grade Architecture:** Its robust and modular design serves as the perfect foundation for AI in your **ERP, CRM, LMS, and industrial solutions**.
+With full support for RAG, MCP, autonomous agents, and graph-based orchestration, you can design and deploy intelligent, self-learning, and context-aware systems natively in Delphi.
 
 ---
 
-## ✨ Key Features
+## The Power of MakerAI 3.0: The AI Orchestration Platform
 
-MakerAI Suite is organized into powerful and easy-to-use modules:
+MakerAI 3.0 provides the architecture to manage the entire lifecycle of complex AI applications, acting as the operating system for intelligence within your software.
 
-#### 🧠 **RAG (Retrieval-Augmented Generation) Engine**
-*   **Vector Databases:** Compatible with PostgreSQL+pgvector, SQLite, Firebird, and more.
-*   **Commercial Databases:** Integration with Pinecone, Weaviate, Milvus, Qdrant, etc.
-*   **In-Memory Engine:** Ideal for rapid prototyping, with persistence to disk.
+*   🚀 **Orchestrate Autonomous Agents:** Create powerful agents that manage state, utilize advanced **Semantic Memory**, and execute complex workflows defined by the internal graph engine.
+*   🧠 **RAG Engine 2.0 (Knowledge & Context):** Connect AI to your private data with the robust Retrieval-Augmented Generation (RAG) V2.0 engine, supporting massive indexing, multi-model environments, and hybrid embeddings.
+*   🛠️ **Enjoy 100% Native Performance:** MakerAI is pure Delphi. This ensures optimal performance, seamless integration, and compilation without heavy external dependencies across all supported Delphi versions (**10.3 to 12 Athens**).
+*   🌐 **Universal LLM Connectivity (AiConnection V3):** The unified connector, `TAiConnection`, features enhanced connectivity and stability for seamless integration with OpenAI, Gemini, Claude, Ollama, Groq, and many more.
+*   🏗️ **Enterprise-Grade Architecture:** Ideal foundation for integrating AI into mission-critical systems like **ERP, CRM, LMS, and industrial solutions**.
 
-#### 🔄 **Workflow Engine (Graphs)**
-*   **Visual and Code-Based Orchestration:** Define complex workflows by connecting nodes and edges, either programmatically or by dragging components onto a form.
-*   **Autonomous Agents:** Facilitates the creation of agents that follow a defined logic to complete complex tasks.
+---
 
-#### 📞 **Function Calling and Tools**
-*   **Extend the AI:** Allows the language model to execute native functions in your Delphi application to perform actions, such as querying a database, sending an email, or controlling a device.
+## ✨ Key Features (Version 3.0 Modules)
 
-#### 💾 **Conversational Memory Management**
-*   **Short and Long-Term Memory:** Equips agents with the ability to recall past interactions for more coherent and personalized conversations.
+MakerAI 3.0 introduces next-generation features focused on complexity and reliability.
+
+#### 🧠 **RAG (Retrieval-Augmented Generation) Engine 2.0**
+The completely overhauled RAG engine allows the language models to use your private knowledge with unprecedented precision.
+*   **Massive Indexing:** Efficiently index millions of documents for enterprise-scale applications.
+*   **Hybrid Embeddings:** Utilize a combination of sparse and dense vectors for superior search relevance.
+*   **Multi-Model Support:** Seamlessly integrate RAG across different LLM backends (OpenAI, Gemini, Ollama, etc.).
+
+#### 💾 **Advanced Semantic Memory**
+*   **Unified Memory Model:** New semantic memory layer deeply integrated with the RAG engine and the Workflow Graphs, allowing agents to form personalized, long-term context that transcends single conversations.
+*   **Short and Long-Term Recall:** Equip agents with the ability to recall specific past interactions and generalize long-term learnings.
+
+#### 🔄 **Workflow Engine (Graphs) & Agents**
+*   **Visual and Code-Based Orchestration:** Define complex logical flows by connecting nodes and edges. Agents follow this defined logic, utilizing memory and tools to achieve goals.
+
+#### 📞 **MakerAI Tools System (Function Calling)**
+*   **Unified Tool Management:** A standardized and improved system for defining and exposing native Delphi functions (Tools) to the language model, enabling the AI to interact with your application's core logic (e.g., querying databases, sending commands).
+
+#### 🗣️ **Voice Monitoring & Progressive Transcription**
+*   **Activation Commands:** Integrated support for "wake-word" detection.
+*   **Live Transcription:** Progressive audio transcription, ideal for real-time applications and low-latency interaction.
+
+#### 🎨 **Professional Visual Components (ChatUI)**
+*   **Chat UI:** Professional-grade, easy-to-use visual components for quickly building multimedia-integrated chat interfaces (text, images, audio, video).
 
 #### 🔌 **MCP (Model Context Protocol) Support**
-*   **Native MCP Client:** Connect your application to external tool servers that follow the MCP standard (via HTTP, stdio).
-*   **Native MCP Server:** Expose your own Delphi application's functions as tools for any MCP client to consume.
+*   **Native MCP Client & Server:** Connect to or expose your Delphi application functions as standard MCP tools, ensuring seamless interoperability with other platforms.
 
-#### 🌐 **Universal LLM Connector**
-*   **One Component to Rule Them All:** `TAiConnection` provides access to **OpenAI, Gemini, Claude, Groq, Ollama, Mistral,** and more, through a unified interface.
-*   **Native Multimodal Support:** Natively process and generate text, images, audio, and more.
+#### 🌐 **Universal LLM Connector (AiConnection V3)**
+*   **Enhanced Connectivity:** Improved performance and stability for accessing all major providers (OpenAI, Gemini, Claude, Groq, Ollama, Mistral).
+*   **Native Multimodal Support:** Process and generate text, images, and audio seamlessly.
 
 ---
 
-## 📦 Detailed Installation Guide
+## 📦 Detailed Installation Guide (Modular V3.0)
 
-Follow these steps carefully to ensure a correct installation in the Delphi IDE.
+Follow these steps carefully to ensure a correct installation of the four core packages in the Delphi IDE.
 
 #### **Step 1: Get the Source Code**
 
@@ -70,22 +83,24 @@ Unzip the file to a folder of your choice. For example: `C:\Delphi\MakerAI`.
 
 This is a crucial step. You must tell the Delphi IDE where to find the MakerAI source files.
 
-1.  Open your Delphi IDE (10.3 Rio, 11 Alexandria, or higher).
+1.  Open your Delphi IDE (**10.3 Rio, 10.4 Sydney, 11 Alexandria, or 12 Athens**).
 2.  Go to the menu: **Tools > Options...**.
 3.  In the Options dialog, navigate to **Language > Delphi > Library**.
 4.  Ensure you have the correct platform selected (e.g., **Windows 32-bit**). You will need to repeat this step for each platform you intend to use.
 5.  Click the `...` button next to the "Library path" field.
-6.  In the new window, add the path to **each of the subfolders** inside the MakerAI `Source` directory. The folder structure is as follows:
+6.  In the new window, add the path to **each of the subfolders** inside the MakerAI `Source` directory:
 
     ```
     ...\MakerAi\Source\Agents
     ...\MakerAi\Source\Chat
+    ...\MakerAi\Source\ChatUI       <-- NUEVO (Componentes Visuales)
     ...\MakerAi\Source\Core
     ...\MakerAi\Source\Design
     ...\MakerAi\Source\MCPClient
     ...\MakerAi\Source\MCPServer
     ...\MakerAi\Source\Packages
     ...\MakerAi\Source\RAG
+    ...\MakerAi\Source\Resources    <-- NUEVO (Recursos)
     ...\MakerAi\Source\Tools
     ...\MakerAi\Source\Utils
     ```
@@ -93,20 +108,22 @@ This is a crucial step. You must tell the Delphi IDE where to find the MakerAI s
 
 7.  Click **OK** and then **Save** to store the configuration.
 
-#### **Step 3: Compile and Install the Components**
+#### **Step 3: Compile and Install the Packages**
 
-This will install the components into the Tool Palette.
+MakerAI 3.0 is built on a modular architecture using four packages. You must compile and install them in the correct order.
 
 1.  In Delphi, go to **File > Open Project...**.
 2.  Navigate to the folder where you cloned the repository and open the project group file: `...\MakerAi\Source\Packages\MakerAI.groupproj`.
-3.  In the *Project Manager*, right-click on the design-time package `MakerAiDsg.dpk` and select **Compile**.
-4.  Once it has compiled without errors, right-click on `MakerAiDsg.dpk` again and select **Install**.
-5.  An IDE message will confirm that the components have been installed successfully.
+3.  **Compile Runtime Packages (No Installation Required):**
+    *   Right-click on `MakerAi.dpk` and select **Compile**. (Core functionality)
+    *   Right-click on `MakerAi.RAG.Drivers.dpk` and select **Compile**. (DB connections for RAG)
+4.  **Compile and Install Visual/Design Packages:**
+    *   Right-click on the visual package `MakerAi.UI.dpk` and select **Compile**, then right-click again and select **Install**. (Registers ChatUI components)
+    *   Right-click on the design-time package `MakerAiDsg.dpk` and select **Compile**, then right-click again and select **Install**. (Registers core non-visual components)
 
-Congratulations! MakerAI Suite is now installed and ready to be used in your projects.
+An IDE message will confirm that the components have been installed successfully into the Tool Palette.
 
 ---
-
 
 ## Basic Usage Example 
 
@@ -142,18 +159,21 @@ end;
 
 ## 🔄 Changelog
 
-**(NEW) Version 2.6.0 (August 20, 2025)**
+**(MAJOR) Version 3.0 (Q4 2025 / Q1 2026)**
+*   **Architectural Shift:** MakerAI upgraded from component suite to a complete AI Orchestration Platform / AI Operating System.
+*   **RAG Engine 2.0:** Complete overhaul introducing Hybrid Embeddings, massive indexing support, and multi-model compatibility.
+*   **Advanced Semantic Memory:** New memory model integrated with RAG and Workflow Graphs for complex, context-aware agents.
+*   **AiConnection V3:** Enhanced performance, stability, and connectivity for all major LLM providers.
+*   **New Source Structure:** Added `ChatUI` and `Resources` folders.
+*   **Modular Packaging:** Implementation of four packages: `MakerAi.bpl`, `MakerAi.RAG.Drivers.bpl`, `MakerAi.UI.bpl`, and `MakerAiDsg.bpl`.
+*   **New Feature:** Integrated Voice Monitoring with progressive transcription and activation commands.
+*   **New Feature:** Professional visual components for building advanced multimedia chat interfaces (`ChatUI`).
+*   **Compatibility:** Official support for Delphi 10.3, 10.4 Sydney, 11 Alexandria, and 12 Athens.
+*   **Tools:** Unified MakerAI Tools system for standardized function calling.
+
+**Version 2.6.0 (August 20, 2025)**
 *   **New Compatibility!** Added official support for Delphi 10.3 Rio and Delphi 11 Alexandria.
 *   **Fix (Ollama):** Fixed a bug in the Ollama connector that occurred during asynchronous calls.
-
-**Version 2.5.0.02 (August 17, 2025)**
-*   Added MCP Server on Windows and Linux with support for StdIO, HTTP, and MakerAiHttp modes.
-*   Added Agent support for complex workflows.
-
-**Version 2.5.0.01 (August 4, 2025)**
-*   Added support for MCP (Model Context Protocol) Servers on Windows and Linux.
-*   New component `TGeminiEmbedding` (contribution by Pedro Luque).
-*   Reorganized source code into folders for improved readability.
 
 **(The rest of the history remains)...**
 

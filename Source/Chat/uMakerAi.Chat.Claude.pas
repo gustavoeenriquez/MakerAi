@@ -87,7 +87,6 @@ type
     Function GetMessages: TJSonArray; Override;
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
-    // Function Run(aMsg: TAiChatMessage = Nil): String; Override;
 
     // --- Implementación de Gestión de Archivos para Claude ---
     Function UploadFile(aMediaFile: TAiMediaFile): String; Override;
@@ -285,7 +284,11 @@ begin
     TempStream.LoadFromStream(aMediaFile.Content);
     TempStream.Position := 0;
 
+{$IF CompilerVersion >= 35}
+    Body.AddStream('file', TempStream, False, aMediaFile.FileName, aMediaFile.MimeType);
+{$ELSE}
     Body.AddStream('file', TempStream, aMediaFile.FileName, aMediaFile.MimeType);
+{$ENDIF}
 
     Res := Client.Post(sUrl, Body, ResponseStream, Headers);
 
@@ -753,6 +756,8 @@ var
   LJsonFunctions: String;
   LOpenAITools: TJSonArray;
 begin
+  Result := Nil;
+
   LJsonFunctions := Trim(inherited GetTools(tfClaude).Text);
 
   if (LJsonFunctions = '') or (not Tool_Active) then
@@ -877,7 +882,8 @@ begin
     // soportados por la API de Claude y han sido eliminados de esta función.
 
     // --- 6. GENERACIÓN FINAL DEL JSON ---
-    Res := UTF8ToString(AJSONObject.ToJSon);
+    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
+
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
 
@@ -1269,6 +1275,7 @@ begin
   if sToolCalls.IsEmpty then // Si es una respuesta normal adiciona los datos al ResMsg
   Begin
     ResMsg.Role := Role;
+    ResMsg.Model := LModel;
     ResMsg.Tool_calls := sToolCalls;
     ResMsg.Prompt := ResMsg.Prompt + Respuesta;
     ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aPrompt_tokens;

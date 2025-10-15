@@ -1,3 +1,33 @@
+// MIT License
+//
+// Copyright (c) 2013 Gustavo Enríquez - CimaMaker
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enríquez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+// - Telegram: +57 3128441700
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
 unit uMakerAi.Chat.Initializations;
 
 interface
@@ -12,12 +42,13 @@ Var
   Model: String;
 Begin
 
+
   // ------------------------- OLLAMA ----------------------------------
   // https://notes.kodekloud.com/docs/Running-Local-LLMs-With-Ollama/Building-AI-Applications/Ollama-REST-API-Endpoints
   // ------------------------- OLLAMA ----------------------------------
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Max_Tokens', '8000');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeInputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeOutuptFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'ChatMediaSupports', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Tool_Active', 'False');
 
@@ -87,7 +118,7 @@ Begin
   // ------------------------- OPENAI ----------------------------------
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'Max_Tokens', '8000');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'NativeInputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'NativeOutuptFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'ChatMediaSupports', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'Tool_Active', 'False');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'Asynchronous', 'False');
@@ -231,7 +262,7 @@ Begin
   // ------------------------- OPENAI Responses  ----------------------------------
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'Max_Tokens', '8000');
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'NativeInputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'NativeOutuptFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'ChatMediaSupports', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAiResponses', 'Tool_Active', 'False');
 
@@ -547,7 +578,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'True');
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[tfc_image]'); // Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[tcm_image]'); // Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
-  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeOutuptFiles', '[tfc_textFile]'); // Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeOutputFiles', '[tfc_textFile]'); // Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_textFile
 
   // ------- mistral-ocr-latest ------------------------------
   Model := 'mistral-ocr-latest';

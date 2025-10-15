@@ -18,6 +18,9 @@
         <Projects Include="Demos\031-MCPServer\AiMCPServerDemo.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="Demos\025-RAGGraph\RagGraphDemo.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -71,14 +74,23 @@
     <Target Name="AiMCPServerDemo:Make">
         <MSBuild Projects="Demos\031-MCPServer\AiMCPServerDemo.dproj" Targets="Make"/>
     </Target>
+    <Target Name="RagGraphDemo">
+        <MSBuild Projects="Demos\025-RAGGraph\RagGraphDemo.dproj"/>
+    </Target>
+    <Target Name="RagGraphDemo:Clean">
+        <MSBuild Projects="Demos\025-RAGGraph\RagGraphDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="RagGraphDemo:Make">
+        <MSBuild Projects="Demos\025-RAGGraph\RagGraphDemo.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="ChatSencillo;ChatFull;RagUpdateDb;Sqlite_RAG;AiMCPServerDemo"/>
+        <CallTarget Targets="ChatSencillo;ChatFull;RagUpdateDb;Sqlite_RAG;AiMCPServerDemo;RagGraphDemo"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="ChatSencillo:Clean;ChatFull:Clean;RagUpdateDb:Clean;Sqlite_RAG:Clean;AiMCPServerDemo:Clean"/>
+        <CallTarget Targets="ChatSencillo:Clean;ChatFull:Clean;RagUpdateDb:Clean;Sqlite_RAG:Clean;AiMCPServerDemo:Clean;RagGraphDemo:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="ChatSencillo:Make;ChatFull:Make;RagUpdateDb:Make;Sqlite_RAG:Make;AiMCPServerDemo:Make"/>
+        <CallTarget Targets="ChatSencillo:Make;ChatFull:Make;RagUpdateDb:Make;Sqlite_RAG:Make;AiMCPServerDemo:Make;RagGraphDemo:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

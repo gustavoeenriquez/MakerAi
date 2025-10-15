@@ -15,7 +15,7 @@ uses
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Memo.Types, FMX.Layouts,
   FMX.Styles.Objects, FMX.Platform, FMX.ScrollBox, FMX.Memo, FMX.Edit, FMX.StdCtrls,
   FMX.Controls.Presentation, FMX.Objects, FMX.Menus, FMX.ListBox, uMakerAi.Chat.Mistral, uMakerAi.Chat.Ollama, uMakerAi.Chat.Groq, uMakerAi.Chat.Grok, uMakerAi.Whisper, uMakerAi.Utils.VoiceMonitor, System.Actions, FMX.ActnList,
-  System.ImageList, FMX.ImgList, uMakerAi.RAG.Vectors, uMakerAi.ToolFunctions, uMakerAi.Embeddings.Core, uMakerAi.Embeddings;
+  System.ImageList, FMX.ImgList, uMakerAi.RAG.Vectors, uMakerAi.ToolFunctions, uMakerAi.Embeddings.Core, uMakerAi.Embeddings, UMakerAi.MCPServer.Direct, uMakerAi.MCPServer.Core, UMakerAi.MCPServer.Http;
 
 type
   TForm2 = class(TForm)
@@ -29,7 +29,8 @@ type
     MainChatLayout: TLayout;
     ChatList1: TChatList;
     Layout3: TLayout;
-    Layout2: TLayout;
+       Layout2: TLayout;
+
     ComboDriver: TComboBox;
     Label1: TLabel;
     Label2: TLabel;
@@ -172,6 +173,12 @@ type
     ac_LoadMCPConfig: TAction;
     BtnLoadMcpServerConfig: TButton;
     Image10: TImage;
+    BtnShowBilling: TButton;
+    Image11: TImage;
+    LayoutTokenUsageHistory: TLayout;
+    Label18: TLabel;
+    MemoTokenUsageHistory: TMemo;
+    AiOpenChat1: TAiOpenChat;
     procedure ChatInput1SendEvent(Sender: TObject; APrompt: string; aMediaFiles: TAiMediaFiles; aAudioStream: TMemoryStream);
     procedure ChatList1MediaFileDblClick(Sender: TObject; const ABubble: TChatBubble; const AMediaFile: TAiMediaFile);
     procedure ChatList1BeforeAddBubble(Sender: TObject; ABubble: TChatBubble);
@@ -216,9 +223,10 @@ type
     procedure AiFunctions1Functions2SearchInRagAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
     procedure ac_LoadMCPConfigExecute(Sender: TObject);
     procedure BtnLoadMcpServerConfigClick(Sender: TObject);
+    procedure AiConnCallToolFunction(Sender: TObject; AiToolCall: TAiToolsFunction);
+    procedure BtnShowBillingClick(Sender: TObject);
   private
     FLastBubble: TChatBubble;
-    FAsincrono: Boolean;
     FPrompt_tokens: Integer;
     FCompletion_tokens: Integer;
     FTotal_tokens: Integer;
@@ -228,8 +236,8 @@ type
     Procedure AssignModel(Const DriverName, ModelName: String);
     Procedure InitModelCapabilitiesCombo(Edit: TEdit);
     Procedure AssignAiConnParams;
-    function PackString(const Texto: string): TMemoryStream;
-    function UnpackString(StreamComprimido: TStream): string;
+    function PackString(const Texto: string): TMemoryStream;  //para comprimir los archivos de salida
+    function UnpackString(StreamComprimido: TStream): string; //para descomprimir los archivos de salida
     Function PackStream(StreamOrigen: TStream): TMemoryStream;
     Function UnpackStream(StreamComprimido: TStream): TMemoryStream;
     procedure SaveCombinedChatToStream(AContainerStream: TStream; AChatUIStream, AHistoryStream: TStream);
@@ -471,6 +479,15 @@ begin
 
 end;
 
+procedure TForm2.AiConnCallToolFunction(Sender: TObject; AiToolCall: TAiToolsFunction);
+Var
+   FunctionName : String;
+begin
+  FunctionName := AIToolCall.name;
+  //LLamado por defecto a la función siempre se ejectua para cualquier función
+
+end;
+
 procedure TForm2.AiConnError(Sender: TObject; const ErrorMsg: string; Exception: Exception; const aResponse: IHTTPResponse);
 begin
 
@@ -512,6 +529,8 @@ begin
       AniIndicator1.Visible := False;
       AniIndicator1.Enabled := False;
     end);
+
+  MemoTokenUsageHistory.Lines.Add(Format('Model: %s, Input: %d, Output %d, Total: %d',[aMsg.Model, aMsg.Prompt_tokens, aMsg.Completion_tokens, aMsg.Total_tokens]));
 
   FPrompt_tokens := FPrompt_tokens + aMsg.Prompt_tokens;
   FCompletion_tokens := FCompletion_tokens + aMsg.Completion_tokens;
@@ -601,6 +620,8 @@ Var
   InputMediaFiles, OutputMediaFiles, ChatMediaSuports, Opt: String;
 begin
 
+  AiConn.Params.Clear;
+
   // Se asegura de configurar los parámetros antes de hacer la pregunta
   AiConn.Params.Values['Max_Tokens'] := StrToIntDef(EditMaxTokens.Text, 8000).ToString;
   AiConn.Params.Values['Temperature'] := (TrackTemperature.Value / 10).ToString;
@@ -608,9 +629,9 @@ begin
   AiConn.Params.Values['Asynchronous'] := BoolToStr(ChAsincrono.IsChecked, True);
 
   If ChJSonFormat.IsChecked then
-    AiConn.Params.Values['Response_format'] := 'tiaChatRfJson'
-  Else
-    AiConn.Params.Values['Response_format'] := 'tiaChatRfText';
+    AiConn.Params.Values['Response_format'] := 'tiaChatRfJson';
+  //Else
+  //  AiConn.Params.Values['Response_format'] := 'tiaChatRfText';
 
   AiConn.Params.Values['Voice'] := EditVoices.Text;
   AiConn.Params.Values['Voice_Format'] := EditVoiceFormat.Text;
@@ -619,6 +640,7 @@ begin
   InputMediaFiles := '';
   OutputMediaFiles := '';
   ChatMediaSuports := '';
+
 
   If ChWebSearch.IsChecked then
     ChatMediaSuports := ChatMediaSuports + ',Tcm_WebSearch';
@@ -631,6 +653,7 @@ begin
     ChatMediaSuports := ChatMediaSuports + ',tcm_textFile';
     OutputMediaFiles := OutputMediaFiles + ',tfc_textFile';
   End;
+
 
   Opt := LowerCase(EditChatMediaSupports.Text);
 
@@ -646,37 +669,51 @@ begin
   If Opt.Contains('pdf') then
     ChatMediaSuports := ChatMediaSuports + ',tcm_pdf';
 
+
+    //------ NATIVE INPUT FILES ------------
   Opt := LowerCase(EditNativeInputFiles.Text);
 
   If Opt.Contains('image') then
-    InputMediaFiles := InputMediaFiles + ',tcm_image';
+    InputMediaFiles := InputMediaFiles + ',tfc_image';
 
   If Opt.Contains('audio') then
-    InputMediaFiles := InputMediaFiles + ',tcm_audio';
+    InputMediaFiles := InputMediaFiles + ',tfc_audio';
 
   If Opt.Contains('video') then
-    InputMediaFiles := InputMediaFiles + ',tcm_video';
+    InputMediaFiles := InputMediaFiles + ',tfc_video';
 
   If Opt.Contains('pdf') then
-    InputMediaFiles := InputMediaFiles + ',tcm_pdf';
+    InputMediaFiles := InputMediaFiles + ',tfc_pdf';
 
+    //------ NATIVE OUTPUT FILES ------------
   Opt := LowerCase(EditNativeOutputFiles.Text);
 
   If Opt.Contains('image') then
-    OutputMediaFiles := OutputMediaFiles + ',tcm_image';
+    OutputMediaFiles := OutputMediaFiles + ',tfc_image';
 
   If Opt.Contains('audio') then
-    OutputMediaFiles := OutputMediaFiles + ',tcm_audio';
+    OutputMediaFiles := OutputMediaFiles + ',tfc_audio';
 
   If Opt.Contains('video') then
-    OutputMediaFiles := OutputMediaFiles + ',tcm_video';
+    OutputMediaFiles := OutputMediaFiles + ',tfc_video';
 
   If Opt.Contains('pdf') then
-    OutputMediaFiles := OutputMediaFiles + ',tcm_pdf';
+    OutputMediaFiles := OutputMediaFiles + ',tfc_pdf';
+
+  if copy(InputMediaFiles,1,1) = ',' then
+      InputMediaFiles := Copy(InputMediaFiles, 2, Length(InputMediaFiles));
+
+  if copy(OutputMediaFiles,1,1) = ',' then
+      OutputMediaFiles := Copy(OutputMediaFiles, 2, Length(OutputMediaFiles));
+
+  if copy(ChatMediaSuports,1,1) = ',' then
+      ChatMediaSuports := Copy(ChatMediaSuports, 2, Length(ChatMediaSuports));
 
   AiConn.Params.Values['NativeInputFiles'] := '[' + InputMediaFiles + ']';
   AiConn.Params.Values['NativeOutputFiles'] := '[' + OutputMediaFiles + ']';
   AiConn.Params.Values['ChatMediaSupports'] := '[' + ChatMediaSuports + ']';
+
+  ShowMessage(AiConn.Params.Text);
 
 end;
 
@@ -757,9 +794,15 @@ begin
   // ChatMediaSuport
   MediaConf := LowerCase(AiConn.Params.Values['ChatMediaSupports']);
 
-  ChWebSearch.IsChecked := MediaConf.Contains(LowerCase('Tcm_WebSearch'));
-  ChCodeInterpreter.IsChecked := MediaConf.Contains(LowerCase('Tcm_code_interpreter'));
-  ChExtractFiles.IsChecked := MediaConf.Contains(LowerCase('Tcm_textFile'));
+  //ChWebSearch.IsChecked := MediaConf.Contains(LowerCase('Tcm_WebSearch'));
+  //ChCodeInterpreter.IsChecked := MediaConf.Contains(LowerCase('Tcm_code_interpreter'));
+  //ChExtractFiles.IsChecked := MediaConf.Contains(LowerCase('Tcm_textFile'));
+
+
+  ChWebSearch.IsChecked := AiConn.WebSearch;
+  ChCodeInterpreter.IsChecked := AiConn.CodeInterpreter;
+  ChExtractFiles.IsChecked := AiConn.ExtractTextFiles;
+
 
   sOpt := '';
   If MediaConf.Contains(LowerCase('image')) then
@@ -799,6 +842,11 @@ end;
 procedure TForm2.BtnSaveDataBaseClick(Sender: TObject);
 begin
   ac_SaveKnowledgeToFileExecute(Sender);
+end;
+
+procedure TForm2.BtnShowBillingClick(Sender: TObject);
+begin
+    LayoutTokenUsageHistory.Visible := Not LayoutTokenUsageHistory.Visible;
 end;
 
 procedure TForm2.BtnOpenDataBaseClick(Sender: TObject);
@@ -1285,7 +1333,6 @@ var
   LVersion: Word;
   ZStream: TZDecompressionStream;
 begin
-  Result := nil;
   AContainerStream.Position := 0;
 
   if (AContainerStream.Read(LHeader, SizeOf(LHeader)) <> SizeOf(LHeader)) or (not CompareMem(@LHeader, @MKRAG_MAGIC_HEADER, SizeOf(LHeader))) then

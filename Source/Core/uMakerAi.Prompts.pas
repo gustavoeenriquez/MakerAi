@@ -177,7 +177,6 @@ begin
   End;
 
   Result := Res;
-
 end;
 
 function TAiPrompts.GetTemplate(Nombre: String; Params: TJSonObject): String;

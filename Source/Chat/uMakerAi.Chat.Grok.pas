@@ -210,20 +210,6 @@ begin
       AJSONObject.AddPair('search_parameters', jWebSearchOptions);
     end;
 
-
-    {
-      If (FResponse_format = tiaChatRfJsonSchema) then
-      Begin
-      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_schema'))
-      End
-      Else If  (FResponse_format = tiaChatRfJson) then
-      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_object'))
-      Else If (FResponse_format = tiaChatRfText) then
-      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'text'))
-      Else
-      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'text'));
-    }
-
     Lista.CommaText := Stop;
     If Lista.Count > 0 then
     Begin
@@ -247,7 +233,8 @@ begin
     If Seed > 0 then
       AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
 
-    Res := UTF8ToString(AJSONObject.ToJSon);
+    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
+
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
   Finally

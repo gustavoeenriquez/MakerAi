@@ -68,8 +68,6 @@ type
   Public
     Constructor Create;
     Destructor Destroy; Override;
-
-  Published
     Property Revised_Prompt: String read Frevised_prompt;
     Property Base64: String read FBase64;
     Property UrlFile: String read FUrlFile;
@@ -252,10 +250,11 @@ begin
     Body := TMultipartFormData.Create;
     Try
       Try
-        Body.AddStream('image', aImage, ExtractFileName('origen.png'));
+        Body.AddStream('image', aImage, False, ExtractFileName('origen.png'));
+
 
         If Assigned(aMask) then
-          Body.AddStream('mask', aMask, ExtractFileName('mask.png'));
+          Body.AddStream('mask', aMask, False, ExtractFileName('mask.png'));
 
         Body.AddField('prompt', aPrompt);
         Body.AddField('user', FUser);
@@ -397,7 +396,7 @@ begin
 
     JObj.AddPair('user', FUser);
 
-    St.WriteString(UTF8Encode(JObj.Format));
+    St.WriteString(JObj.ToJson);
     St.Position := 0;
 
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
@@ -551,7 +550,7 @@ begin
     Body := TMultipartFormData.Create;
     Try
       Try
-        Body.AddStream('image', aImage, ExtractFileName('origen.png'));
+        Body.AddStream('image', aImage, False, ExtractFileName('origen.png'));
 
         Body.AddField('user', FUser);
         Body.AddField('model', 'dall-e-2'); // Solo acepta esta versión
@@ -600,7 +599,5 @@ begin
     Client.Free;
   End;
 end;
-
-
 
 end.

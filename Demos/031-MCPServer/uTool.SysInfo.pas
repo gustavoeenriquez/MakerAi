@@ -49,7 +49,7 @@ type
     // CAMBIO: La firma ahora devuelve TJSONObject
     function ExecuteWithParams(const AParams: TSysInfoParams; const AuthContext: TAiAuthContext): TJSONObject; override;
   public
-    constructor Create;
+    constructor Create; Override;
   end;
 
 procedure RegisterTools(ALogicServer: TAiMCPServer);
@@ -91,7 +91,6 @@ var
   ResultJson: TJSONObject;
 begin
   LInfoType := Trim(LowerCase(AParams.InfoType));
-  ResultJson := nil;
   ResultText := '';
   try
     // Decidir si se devuelve JSON o texto

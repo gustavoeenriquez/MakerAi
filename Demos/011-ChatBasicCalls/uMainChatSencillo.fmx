@@ -39,6 +39,7 @@ object Form7: TForm7
           Size.PlatformDefault = False
           TabOrder = 0
           Text = 'Preguntar'
+          TextSettings.Trimming = None
           OnClick = BtnPreguntarClick
         end
         object ChConAnexos: TCheckBox
@@ -123,6 +124,7 @@ object Form7: TForm7
         Size.PlatformDefault = False
         TabOrder = 4
         Text = 'New Chat'
+        TextSettings.Trimming = None
         OnClick = BtnNewChatClick
       end
       object BtnListarMensajes: TButton
@@ -133,6 +135,7 @@ object Form7: TForm7
         Size.PlatformDefault = False
         TabOrder = 5
         Text = 'Listar Mensajes'
+        TextSettings.Trimming = None
         OnClick = BtnListarMensajesClick
       end
     end
@@ -195,6 +198,7 @@ object Form7: TForm7
           CustomIcon = <
             item
             end>
+          TextSettings.Trimming = None
           IsSelected = True
           Size.Width = 48.000000000000000000
           Size.Height = 26.000000000000000000
@@ -221,6 +225,7 @@ object Form7: TForm7
           CustomIcon = <
             item
             end>
+          TextSettings.Trimming = None
           IsSelected = False
           Size.Width = 60.000000000000000000
           Size.Height = 26.000000000000000000
@@ -244,6 +249,7 @@ object Form7: TForm7
           CustomIcon = <
             item
             end>
+          TextSettings.Trimming = None
           IsSelected = False
           Size.Width = 45.000000000000000000
           Size.Height = 26.000000000000000000
@@ -1350,6 +1356,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 120
+            TextSettings.Trimming = None
             OnClick = Button1Click
           end
           object Button2: TButton
@@ -1364,6 +1371,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 119
+            TextSettings.Trimming = None
             OnClick = Button2Click
           end
           object Button3: TButton
@@ -1378,6 +1386,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 118
+            TextSettings.Trimming = None
           end
           object Button4: TButton
             Align = Center
@@ -1391,6 +1400,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 117
+            TextSettings.Trimming = None
           end
           object Button5: TButton
             Align = Center
@@ -1404,6 +1414,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 116
+            TextSettings.Trimming = None
           end
           object Button6: TButton
             Align = Center
@@ -1417,6 +1428,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 115
+            TextSettings.Trimming = None
             OnClick = Button6Click
           end
           object Button7: TButton
@@ -1431,6 +1443,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 113
+            TextSettings.Trimming = None
             OnClick = Button7Click
           end
           object Button8: TButton
@@ -1445,6 +1458,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 112
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button9: TButton
@@ -1459,6 +1473,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 111
+            TextSettings.Trimming = None
           end
           object Label17: TLabel
             Align = Client
@@ -1484,6 +1499,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 85
+            TextSettings.Trimming = None
             OnClick = Button10Click
           end
           object Button11: TButton
@@ -1498,6 +1514,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 84
+            TextSettings.Trimming = None
           end
           object Button12: TButton
             Align = Center
@@ -1511,6 +1528,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 83
+            TextSettings.Trimming = None
           end
           object Button13: TButton
             Align = Center
@@ -1524,6 +1542,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 82
+            TextSettings.Trimming = None
           end
           object Button14: TButton
             Align = Center
@@ -1537,6 +1556,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 81
+            TextSettings.Trimming = None
           end
           object Button15: TButton
             Align = Center
@@ -1550,6 +1570,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 80
+            TextSettings.Trimming = None
           end
           object Button16: TButton
             Align = Center
@@ -1563,6 +1584,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 76
+            TextSettings.Trimming = None
           end
           object Button17: TButton
             Align = Center
@@ -1576,6 +1598,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 75
+            TextSettings.Trimming = None
           end
           object Button18: TButton
             Align = Center
@@ -1589,6 +1612,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 73
+            TextSettings.Trimming = None
           end
           object Label18: TLabel
             Align = Client
@@ -1614,6 +1638,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 72
+            TextSettings.Trimming = None
             OnClick = Button19Click
           end
           object Button20: TButton
@@ -1628,6 +1653,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 71
+            TextSettings.Trimming = None
             OnClick = Button20Click
           end
           object Button21: TButton
@@ -1642,6 +1668,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 70
+            TextSettings.Trimming = None
             OnClick = Button21Click
           end
           object Button22: TButton
@@ -1656,6 +1683,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 69
+            TextSettings.Trimming = None
             OnClick = Button22Click
           end
           object Button23: TButton
@@ -1670,6 +1698,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 68
+            TextSettings.Trimming = None
             OnClick = Button23Click
           end
           object Button24: TButton
@@ -1684,6 +1713,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 67
+            TextSettings.Trimming = None
             OnClick = Button24Click
           end
           object Button25: TButton
@@ -1698,6 +1728,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 66
+            TextSettings.Trimming = None
             OnClick = Button25Click
           end
           object Button26: TButton
@@ -1712,6 +1743,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 65
+            TextSettings.Trimming = None
             OnClick = Button26Click
           end
           object Button27: TButton
@@ -1726,6 +1758,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 64
+            TextSettings.Trimming = None
             OnClick = Button27Click
           end
           object Label19: TLabel
@@ -1752,6 +1785,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 63
+            TextSettings.Trimming = None
             OnClick = Button28Click
           end
           object Button29: TButton
@@ -1766,6 +1800,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 62
+            TextSettings.Trimming = None
             OnClick = Button29Click
           end
           object Button30: TButton
@@ -1780,6 +1815,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 61
+            TextSettings.Trimming = None
             OnClick = Button30Click
           end
           object Button31: TButton
@@ -1794,6 +1830,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 60
+            TextSettings.Trimming = None
           end
           object Button32: TButton
             Align = Center
@@ -1807,6 +1844,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 59
+            TextSettings.Trimming = None
           end
           object Button33: TButton
             Align = Center
@@ -1820,6 +1858,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 58
+            TextSettings.Trimming = None
             OnClick = Button33Click
           end
           object Button34: TButton
@@ -1834,6 +1873,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 57
+            TextSettings.Trimming = None
           end
           object Button35: TButton
             Align = Center
@@ -1847,6 +1887,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 56
+            TextSettings.Trimming = None
           end
           object Button36: TButton
             Align = Center
@@ -1860,6 +1901,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 55
+            TextSettings.Trimming = None
           end
           object Label20: TLabel
             Align = Client
@@ -1885,6 +1927,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 54
+            TextSettings.Trimming = None
             OnClick = Button37Click
           end
           object Button38: TButton
@@ -1899,6 +1942,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 52
+            TextSettings.Trimming = None
           end
           object Button39: TButton
             Align = Center
@@ -1912,6 +1956,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 50
+            TextSettings.Trimming = None
           end
           object Button40: TButton
             Align = Center
@@ -1925,6 +1970,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 48
+            TextSettings.Trimming = None
           end
           object Button41: TButton
             Align = Center
@@ -1938,6 +1984,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 46
+            TextSettings.Trimming = None
           end
           object Button42: TButton
             Align = Center
@@ -1951,6 +1998,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 43
+            TextSettings.Trimming = None
             OnClick = Button42Click
           end
           object Button43: TButton
@@ -1965,6 +2013,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 39
+            TextSettings.Trimming = None
             OnClick = Button43Click
           end
           object Button44: TButton
@@ -1979,6 +2028,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 33
+            TextSettings.Trimming = None
           end
           object Button45: TButton
             Align = Center
@@ -1992,6 +2042,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 21
+            TextSettings.Trimming = None
           end
           object Label6: TLabel
             Align = Client
@@ -2028,6 +2079,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 53
+            TextSettings.Trimming = None
             OnClick = Button46Click
           end
           object Button47: TButton
@@ -2042,6 +2094,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 51
+            TextSettings.Trimming = None
           end
           object Button48: TButton
             Align = Center
@@ -2055,6 +2108,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 49
+            TextSettings.Trimming = None
           end
           object Button49: TButton
             Align = Center
@@ -2068,6 +2122,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 47
+            TextSettings.Trimming = None
           end
           object Button50: TButton
             Align = Center
@@ -2081,6 +2136,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 45
+            TextSettings.Trimming = None
           end
           object Button51: TButton
             Align = Center
@@ -2094,6 +2150,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 41
+            TextSettings.Trimming = None
             OnClick = Button51Click
           end
           object Button52: TButton
@@ -2108,6 +2165,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 37
+            TextSettings.Trimming = None
           end
           object Button53: TButton
             Align = Center
@@ -2121,6 +2179,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 27
+            TextSettings.Trimming = None
             OnClick = Button53Click
           end
           object Button54: TButton
@@ -2135,6 +2194,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 15
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Label22: TLabel
@@ -2161,6 +2221,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 44
+            TextSettings.Trimming = None
             OnClick = Button55Click
           end
           object Button56: TButton
@@ -2175,6 +2236,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 42
+            TextSettings.Trimming = None
             OnClick = Button56Click
           end
           object Button57: TButton
@@ -2189,6 +2251,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 40
+            TextSettings.Trimming = None
             OnClick = Button57Click
           end
           object Button58: TButton
@@ -2203,6 +2266,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 38
+            TextSettings.Trimming = None
             OnClick = Button58Click
           end
           object Button59: TButton
@@ -2217,6 +2281,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 36
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button60: TButton
@@ -2231,6 +2296,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 30
+            TextSettings.Trimming = None
             OnClick = Button60Click
           end
           object Button61: TButton
@@ -2245,6 +2311,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 24
+            TextSettings.Trimming = None
           end
           object Button62: TButton
             Align = Center
@@ -2258,6 +2325,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 18
+            TextSettings.Trimming = None
             OnClick = Button62Click
           end
           object Button63: TButton
@@ -2272,6 +2340,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 12
+            TextSettings.Trimming = None
             OnClick = Button63Click
           end
           object Label23: TLabel
@@ -2298,6 +2367,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 35
+            TextSettings.Trimming = None
             OnClick = Button64Click
           end
           object Button65: TButton
@@ -2312,6 +2382,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 32
+            TextSettings.Trimming = None
             OnClick = Button65Click
           end
           object Button66: TButton
@@ -2326,6 +2397,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 29
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button67: TButton
@@ -2340,6 +2412,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 26
+            TextSettings.Trimming = None
           end
           object Button68: TButton
             Align = Center
@@ -2353,6 +2426,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 23
+            TextSettings.Trimming = None
           end
           object Button69: TButton
             Align = Center
@@ -2366,6 +2440,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 20
+            TextSettings.Trimming = None
             OnClick = Button69Click
           end
           object Button70: TButton
@@ -2380,6 +2455,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 17
+            TextSettings.Trimming = None
             OnClick = Button70Click
           end
           object Button71: TButton
@@ -2394,6 +2470,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 14
+            TextSettings.Trimming = None
             OnClick = Button71Click
           end
           object Button72: TButton
@@ -2408,6 +2485,7 @@ object Form7: TForm7
             Size.Height = 19.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 11
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Label24: TLabel
@@ -2432,6 +2510,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 110
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button74: TButton
@@ -2446,6 +2525,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 108
+            TextSettings.Trimming = None
             OnClick = Button74Click
           end
           object Button75: TButton
@@ -2460,6 +2540,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 106
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button76: TButton
@@ -2474,6 +2555,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 104
+            TextSettings.Trimming = None
             OnClick = Button76Click
           end
           object Button77: TButton
@@ -2488,6 +2570,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 102
+            TextSettings.Trimming = None
             OnClick = Button77Click
           end
           object Button78: TButton
@@ -2502,6 +2585,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 98
+            TextSettings.Trimming = None
             OnClick = Button78Click
           end
           object Button79: TButton
@@ -2516,6 +2600,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 93
+            TextSettings.Trimming = None
             OnClick = Button79Click
           end
           object Button80: TButton
@@ -2530,6 +2615,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 89
+            TextSettings.Trimming = None
             OnClick = Button80Click
           end
           object Label25: TLabel
@@ -2554,6 +2640,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 107
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button83: TButton
@@ -2568,6 +2655,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 105
+            TextSettings.Trimming = None
             OnClick = Button83Click
           end
           object Button84: TButton
@@ -2582,6 +2670,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 103
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button85: TButton
@@ -2596,6 +2685,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 100
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button86: TButton
@@ -2610,6 +2700,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 95
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button87: TButton
@@ -2624,6 +2715,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 91
+            TextSettings.Trimming = None
             OnClick = Button87Click
           end
           object Button88: TButton
@@ -2638,6 +2730,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 87
+            TextSettings.Trimming = None
           end
           object Button89: TButton
             Align = Center
@@ -2651,6 +2744,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 101
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button90: TButton
@@ -2665,6 +2759,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 99
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button91: TButton
@@ -2679,6 +2774,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 97
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button92: TButton
@@ -2693,6 +2789,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 94
+            TextSettings.Trimming = None
           end
           object Button93: TButton
             Align = Center
@@ -2706,6 +2803,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 92
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button94: TButton
@@ -2720,6 +2818,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 90
+            TextSettings.Trimming = None
           end
           object Button95: TButton
             Align = Center
@@ -2733,6 +2832,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 88
+            TextSettings.Trimming = None
             OnClick = EventFaltaImplementar
           end
           object Button96: TButton
@@ -2747,6 +2847,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 86
+            TextSettings.Trimming = None
             OnClick = Button96Click
           end
           object Button97: TButton
@@ -2761,6 +2862,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 109
+            TextSettings.Trimming = None
             OnClick = Button97Click
           end
           object Label26: TLabel
@@ -2797,6 +2899,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 34
+            TextSettings.Trimming = None
             OnClick = Button81Click
           end
           object Button98: TButton
@@ -2811,6 +2914,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 31
+            TextSettings.Trimming = None
             OnClick = Button98Click
           end
           object Button99: TButton
@@ -2825,6 +2929,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 28
+            TextSettings.Trimming = None
           end
           object Button100: TButton
             Align = Center
@@ -2838,6 +2943,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 25
+            TextSettings.Trimming = None
             OnClick = Button100Click
           end
           object Button101: TButton
@@ -2852,6 +2958,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 22
+            TextSettings.Trimming = None
           end
           object Button102: TButton
             Align = Center
@@ -2865,6 +2972,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 19
+            TextSettings.Trimming = None
             OnClick = Button102Click
           end
           object Button103: TButton
@@ -2879,6 +2987,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 16
+            TextSettings.Trimming = None
           end
           object Button104: TButton
             Align = Center
@@ -2892,6 +3001,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 13
+            TextSettings.Trimming = None
           end
           object Button105: TButton
             Align = Center
@@ -2905,6 +3015,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 10
+            TextSettings.Trimming = None
             OnClick = Button105Click
           end
           object Button106: TButton
@@ -2919,6 +3030,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 78
+            TextSettings.Trimming = None
             OnClick = Button106Click
           end
           object Button107: TButton
@@ -2933,6 +3045,7 @@ object Form7: TForm7
             Size.Height = 20.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 74
+            TextSettings.Trimming = None
             OnClick = Button107Click
           end
           object Button108: TButton
@@ -2947,6 +3060,7 @@ object Form7: TForm7
             Size.Height = 18.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 96
+            TextSettings.Trimming = None
           end
         end
       end
@@ -3008,6 +3122,9 @@ object Form7: TForm7
     Prompt_tokens = 0
     Completion_tokens = 0
     Total_tokens = 0
+    WebSearch = False
+    CodeInterpreter = False
+    ExtractTextFiles = False
     OnReceiveData = AiConnReceiveData
     OnReceiveDataEnd = AiConnReceiveDataEnd
     OnError = AiConnError
@@ -3175,29 +3292,29 @@ object Form7: TForm7
             Height = 48
             PNG = {
               89504E470D0A1A0A0000000D49484452000000300000003008060000005702F9
-              870000000473424954080808087C086488000002AA494441546881ED994F6892
-              611CC7BFBF970E4174A8431DBA786AD03AC44A70A4424230ED9216AB085A4274
-              E8D0B6D04111AC3F10B42D52D80E45101414A336176DBA4B424204B37668EBD2
-              C1907908DA9FCC3597CE9E0EA5A4F3799DAFCFFB9AF07E6EFE7ECFFB3C9FAFCF
-              A3AFBC023A3A3A3AF5842A0DE88B388E11A113C05E00DBB4D1C212083304F27B
-              CC13A372036503F447EC7741D4255CAF1A181BF05A435E5E9B1BE0EF3BFF5C35
-              B12A20C69C1E6B68AC5C4FE25EF4E7D8FC173019176E00002DEAE82881F6F33A
-              9B64AEDA525A386F7C284C498EFB517769692B6FACDC0E34047A807AA307A885
-              F0871758F9B95CD31C7509C0C0F028ECC393D743E81BF56079F5BBE2B9340FC0
-              C0F038EC47E463100090988F6120D0A33884E60146DE3C28C8E749CCC7301B7F
-              A768BE9A02E47EE5B098FABAA1B1F9633339FDACA84E24A1C3D60D53934D9183
-              E200D9B50C06C77B7173F802120B9F65C7961E9B3C4412CE1CEA84A5D9AE5443
-              5980EC5A0643C1EB98894F21954EE24EA0871B424D79280DF0F6D32BCCC6A385
-              D7A97412BEB1CBF8B23457344E6D79280D60DD6387E3C0A9A2DAB79545DC1EB9
-              54D809AE3C48983C6AF90CB85ADDEB42E48FD3DC428C2F6FEB12268F0A3FA72B
-              E26A75830898883E2DD452E9246E0D5F443697291AAB863C44DC079C26378E18
-              8B77422B7988BA91394D6E388C27CBF6D49487C83BF151D359ECDA6E58573737
-              B7A9260F91012448B876FA1E0C3B9B0AB5B6967674D8BA452DC159572004C295
-              763F0C3B76E3F03E178E1F3C2772FAB2D4F42D540E0912AE9E18143DADCC7A0D
-              8E1EA0DE347C00B90FF18FD2A773659E9869458AD790DB8169755C94C0DEF33A
-              320158BF4A3655C388EFC20DE0B5845E32623754B3DA20C4A8B7C73C19E4F62B
-              4DF0CF5F4C46009B851B966715842930C9E7B58C07345A534747474701BF01EA
-              E3E648AC5222440000000049454E44AE426082}
+              870000000473424954080808087C086488000002AB494441546881ED994B4854
+              511C87BF736911448B5AD4A28DAB846C11D6C0482A3410A86DD2C28A201B8816
+              2D52C3118AC01E10A4460ABA2882A0A090F211F9DA242444A0E5226DD3C2105D
+              04F9C8C61CF3D169513334E39C3B7AE6DC9984FBEDE6FF3FF79CEF37E7CCDCE1
+              0EB8B8B8B8A4139168406D7FD131212807F602DB9C57026006C1B0403456E576
+              B5D90DB40D50D75F7817212ACCBAAD1329EB03F93D01555B19E0EF3BFFDC19AB
+              F521A42CAECAEFE988D7B39417FD3936FF05D2C6451900C876C04513B15FD5D9
+              6473D596D8C279CF43233A89B83FE88F2D6D558DB5DB810D811B20DDB80192A1
+              EFC30BE67FCE2535475A0248248FFA1A78F2BA99DAB62AE616BE6BCF95F20012
+              C9E3BE46FA3F76033031394A7D7BB576889407687DF320221F6662729491B177
+              5AF3251560E5D70AD3C1AF6B1A1B3E36BD43CFA2EA425894F92AF166FAB41CB4
+              032C2D2FD2D459C3CD960B4C4C7DB61D1B7B6CC2086171E65039795985BA1A7A
+              0196961769EEBECEF0D800C1D02C77DAAB95219C9407CD006F3FBD62646C30F2
+              3A189AA5A1E3325F66C6A3C6392D0F9A01F2F7145274E05454EDDBFC34B75B2F
+              457642298F30260F497C064A72FCAB42848FD3F8D4A85ADE57614C1EEC7F4E27
+              A424C78F10D035F834520B8666B9D57291A595C5A8B14EC88381FB40B1D7CF11
+              4FF44EA44A1E0CDDC88ABD7E8A3C27E3F69C94078377E2A3DEB3ECDA9EB1AA9E
+              9B55E0983C180C606171EDF43D327666466A05D9A594F92A4D2DA158D72002C1
+              95D2463276ECE6F0BE128E1F3C6772FAB824F52D140F0B8BAB279A4C4F6BB3DE
+              06C70D906E367C00BB0FF10F629ECEC57962962A82AA86DD0E0C3920A2897CAF
+              EAD80490754EA8E82085DA45192090D7F3520A79C319A5B523A4A8A9CEEDED56
+              F6134DF0CF5F4C1E60B349391B16100C20AD86405E677B8AD674717171D1E037
+              EAE3E6482BB327CF0000000049454E44AE426082}
             FileName = 
               'E:\Delphi\Delphi12\Proyectos\RipsServer\Recursos\Checked Checkbo' +
               'x_48px.png'
@@ -3213,49 +3330,50 @@ object Form7: TForm7
             Height = 50
             PNG = {
               89504E470D0A1A0A0000000D49484452000000320000003208060000001E3F88
-              B10000000473424954080808087C08648800000536494441546881ED595B681C
-              5518FEFEB3DDA4284A41F0D297AA6083ADD697168988466A152FADB55AB23B67
-              D4501F54B482A8855A2F05FB224AC50B0A3EC49A9D33BB7184DA82D4866A1529
-              AD22B64D5A8A15D1175B44B3F6A67167BAE7F7A11949B633BB6766365E20DFD3
-              EE7FFECBF7F1CFF967CE0C308D694C09A81D4956AE5CD9D1D1D1B18899BB8968
-              3E802E00B300740218035025A243CC7C808876D56AB5FD9EE7D5DB513B442621
-              B66D2F01F000332F07706E82D02A008F99FB5DD7FD2A0B8710A9845896752B80
-              0D44B4B00D1C868410EB4AA5D2D759922412522C162F1242BC0DE0EE2C4523A0
-              01BC238478AA542AFD9E2681B19062B178BD106210C0EC34850C719088EE711C
-              E7DBA4814642A494BD00060074A4A2970CC7886899E3385F24096A29C4B6EDE5
-              CCEC019891895E329C64E69B930C82A6422CCBBA01C0101175B6855E328C3273
-              B7EBBADF9938C70AE9EBEBBB380882FD002E6C2BBD6438E8FBFE22CFF3C65A39
-              8AB885200836FECB2200607E3E9F5F6BE218D91129E562003BDA4E2B0598B906
-              E0EA5697585C475E9C1A5AC941449D44F45C2BBFB3848C6FF0EE04B51C002B00
-              F886FEC789E82666FE34418DA26559739A399C2584881E4E50E02DA5D4FD4AA9
-              CD009602F8B385FF2833F7388EF3591004B701D86A58670680079B394C12D2D7
-              D73713C05D86C941449F036000504A0D3173A149678E0B21EE705D771F00789E
-              E703D8655A0B406FB3C54942EAF5FA7500CE31CDCCCCAE94D20EFFBBAEBB8599
-              9745746694997B4AA5D297A1414AB90EC04BA6B588686EB3CB6B9210AD7592BD
-              01003900FD9665AD080DAEEB6E27A2228060DC7402C09D612770661F3E9E72A0
-              C4F26BDC23F35224CF13D1FB133BE338CE87CCBC14C01166BE5129B5275C9352
-              AE23A2D7521E2162F9350AB92C4572849D9152FEFD78EFBAEE7600574EEC8494
-              727596D14E44B1FC1A859C9FB608803C00CFB22C191A945227C2DFB66D3F03E0
-              F58CA7D259710B938410D1CC0C45002027847875D5AA55E74D34160A854BB5D6
-              CF67CC0D00B1FC260961E63F32161AD55ADFD2DFDF7F72A2B152A9FC484451D3
-              2C29624F8F8D97D6B10C45A2A6D3E5E16FA5D450C3344B83587E8D428C9EFD23
-              301A339D0EC74CB3549D21A2C3716B8D97D6A114F94F68AD97C64CA7B86966A5
-              E94C337E8D1DD9993077B55EAFF794CBE5DDA121623AE50178133BA394DA9C62
-              CFD4F3F97C2CBF49428220D807E057D3CCCCDC5BA954F64E10F118336F8870CD
-              01E8B76D7B7968701CE763225A6D5A0BC0379B366D32DB239EE7D59959996626
-              A2F5E1A89552AE65E6379ADC27F2CCFC41789F29140AB3B5D64F9BEB40A92997
-              46836DDBD730F3DE0437AE9D003E02F0B2618C0FE011004F00B8CAB0C698EFFB
-              733CCFFB25CE21B2B06DDB5BC7A7CB7F02CCBCD175DD279BF9C41D75D70368EB
-              DBF20C382E8478A595532ECA383C3C7C74C182051700B8764AA825C31AA5D427
-              AD9C625F0755ABD53500F6C5ADFF43D8A2947AD3C43156C8B66DDB6A5A6B1BC0
-              6F6DA5668E1FB4D60F8547E95688150200E572F92080DB019C6CE637053872FA
-              F4E925E572F967D380A64270E62EBC67FC087C24333D338C10D1C2C1C1C1EF93
-              04B51482F1CE30730F110DA7A667861DBEEF2F761CE768D2C0C8A91585919191
-              6A5757D77BB95C6E26804549620D708A889EF57DFF51CFF34EA54990EAD829A5
-              9C07E00500F79A76350ACC5C23A27773B9DC868181819FD2E641D6AFBA96655D
-              01E03E00BD4434D7304C13D17E66AED4EB75A752A9B465EFB5E53B3BCE3CD65C
-              A2B5EE1642CC07D0C5CCB3007412D118335799F99010E240AD56DBED795EB55D
-              75A7318D694CE3FF89BF00E13808FE7D2EA33A0000000049454E44AE426082}
+              B10000000473424954080808087C0864880000053C494441546881ED995B881B
+              6514C77F67D2EC164529085EFA5215EC62ABF5A5455644576A152FADB55A7633
+              33EA521F54B482A8855A2F05FB224AC50B0A3EAC753333C93A42AD20B54BB58A
+              945611DBEEB6142BA22FB6886EEC4DD724CD1C1FDCC86E9A496626A917D8FF53
+              72BEF39DFFFFCF99EF245F02D398C61981B4A3C8CA952B3B3A3A3A16A96AB788
+              CC07BA80594027300E1444E4A0AAEE17919DC562719FEFFB95767057D19211DB
+              B69700F7A9EA72E0EC185B0B80AFAA039EE77DD98A862A1219314DF366608388
+              2C6C838661C330D665B3D9AF5A2912CB482693B9C0308C37813B5B21AD830078
+              CB308C27B2D9EC6F490A443692C964AE350C6308989D8428220E88C85D8EE37C
+              13776324239665F5028340475C8204382A22CB1CC7F93CCEA6A6466CDB5EAEAA
+              3E3023B1B4F838A1AA37C619040D8D98A6791D302C229D2D4B8B8F3155EDF63C
+              EFDB28C9A146FAFBFB2F2C97CBFB80F3DB262D3E0E944AA545BEEF8F374B34C2
+              16CAE5F246FE5D1300F3D3E9F4DA2889753B6259D662607B5B252584AA16812B
+              9B3D62611D79BEFD929241443A45E4996679A7199938E0DD31B81C6005508A98
+              7F4C446E50D54F6270644CD39CD328E1342322F2600C82375CD7BDD775DDCDC0
+              52E08F26F963AADAE338CEA7E572F916E083883C3380FB1B254C31D2DFDF3F13
+              B823627144E43340015CD71D56D53EC23B73CC308CDB3CCFDB0BE0FB7E09D819
+              950BE86DB438C548A552B906382B6A6555F52CCBB2ABEF3DCFDBA2AACB38BD33
+              63AADA93CD66BFA8062CCB5A07BC10954B44E6367ABCA618098220CED9004801
+              03A669AEA8063CCFDB262219A03C113A0EDC5EED0480699A8F926CA084EAAB3D
+              23F312144F8BC8BB933BE338CEFBAABA1438ACAAD7BBAEBBBBBA6659D63A1179
+              85645788507DB5462E49501C263A6359D6DF5FEF3DCFDB065C3EB9139665ADA6
+              85D12E22A1FA6A8D9C9B94044803BE699A5635E0BAEEF1EA6BDBB69F025EA5B5
+              5BE9ACB08529464464660B240029C3305E5EB56AD53993837D7D7D170741F06C
+              8BB50142F54D31A2AABFB748341604C14D030303272607F3F9FC0F22526F9AC5
+              45E8EDB1F6D13ADA0249BDE97469F5B5EBBAC335D32C0942F5D51A89F4DDBF0E
+              C642A6D3A1906996A8332272286CADF6D13A98A0FEF1200896864CA7B0696692
+              A0338DF4D5766447CCDA854AA5D293CBE576550375A6531AF02777C675DDCD09
+              CE4C259D4E87EA9B62A45C2EEF057E895A59557BF3F9FC9EEA7BDBB61F51D50D
+              755253C0806DDBCBAB01C7713E1291D551B980AF376DDA14ED8CF8BE5F515537
+              6A6511595F1DB59665AD55D5D708FF9C48ABEA7BD5CF99BEBEBED941103C1995
+              0BC836D4521BB06DFB2A55DDD340502D76001F022F46DC53021E021E03AE88C8
+              315E2A95E6F8BEFF7358425D62DBB63F98982EFF09A8EA46CFF31E6F941376D5
+              5D0FB4F5D7F21670CC308C979A25A5EA054746468E2C58B0E03CE0EAB6CB8A8F
+              35AEEB7EDC2C29F4E7A042A1B006D81BB6FE0F618BEBBAAF47490C35B275EBD6
+              62100436F06BDB64C5C3F741103CC0C455BA19428D00E472B903C0ADC0894679
+              6700874F9D3AB52497CBFD147543432300AEEBEE9EB8021F6E495A748C8AC8C2
+              A1A1A1EFE26C6A6A04FEEA8CAAF688C848326D91B1BD542A2D761CE748DC8D75
+              A7563D8C8E8E16BABABADE49A55233814571F646C0491179BA542A3DECFBFEC9
+              2405125D3B2DCB9A073C07DC4DC4AED683AA1645E4ED542AB5617070F0C7A475
+              A0C57F754DD3BC0CB807E81591B911B70522B24F55F3954AC5C9E7F36D397B6D
+              F99F1DC0B6ED8B8220E8360C633ED0A5AAB3804E111957D582AA1E340C637FB1
+              58DCE5FB7EA15DBCD398C634A6F1FFC49FE13808FE9534266B0000000049454E
+              44AE426082}
             FileName = 'E:\Delphi\Delphi12\Proyectos\RipsServer\Recursos\No_50px.png'
           end>
         Name = 'No'
@@ -3269,57 +3387,57 @@ object Form7: TForm7
             Height = 50
             PNG = {
               89504E470D0A1A0A0000000D49484452000000320000003208060000001E3F88
-              B10000000473424954080808087C0864880000062B494441546881ED987F8C54
-              D515C73FE7BD796F765D36EAF2A395DAA6E92A9A0D51CC825A5AD0046B5D7FE1
-              0A8B4401F1070BAE128D82D5C656DB3FBAD22C1A3554FC4D441459708D125484
-              0421428C924525510B18A26061916CD9B26CD779EF9EFE3133BBB333EFCDCECE
-              0C6DD2CCF7AFFBCEBDE7C7F7DEFBCE39EF41092594504209FF0348A10646DCAF
-              95152718A1165543D5F595C3079F920385C640BE446A1AD4ED19C13C849B81F1
-              856C8828BFFFFA6969CE57BFCFCE5015C634E90435BC06542B7C2EC27B02FB0D
-              74E4E4505956358A8EF32FE6FB9DDB38F358279D7B97CB84BCA24F4164288B6B
-              E6691D1E6D40A742FD17CFCA9B437558D3A87FFD7125C77F5EC125FBCBD8D563
-              86164318723632B651AB6D65B5180E886172FB8BF25D3E0E1D1FCA3D38CD8372
-              038EC9C74A26722652EED1AC508670DD2779920088289C62E0741FCA141CCDD7
-              529ADD5C16FDEA561D6D0CD3816776AC90DD8538740D94FB8913F1E327540CE4
-              44C4F6B8C206C1B0B250878E81610AA77B10F5FECB57CB318C4141A076CA8D3A
-              B6208F3E95478FD27BFC083B7ABA38C3F1F8BE207B09E44424E2333291A79F2C
-              D8A3C281230C6FD9147F72E0A9826DE65A47EA1A74A4E55019366FF9AC57E852
-              9B1BD3E40F01B7189BEA203D8D716243AB1CCA23EE0CE47422EFB4CA11E048D8
-              7C7D83F60265A2FC6240A0CAA9006DAFCBD783F96868D0F218345A3043E13CA0
-              02F807C2DB088FB5BD2E7FCFA65F70AF0530639AB603E3C2E6D7AC93AC7E664E
-              D3F1065603D5027B143623740367A34C015C853FB6AE63094860C22E4A554D64
-              9E4F555824F027946A1566897207707D36DD9BA66A0D86CD36F400D7AC6A93F5
-              A9F3B3EB7594816540F3AC7A86BFD2C6E2203B56B1883886CE57DF904D8E4F87
-              63E8498CBFC99E5E551C78D931E0785C9A4E0260659B74AC6A638663581D312C
-              9A3B55AF3C7944B4BF1E38296D87ABD9EBC4EDD7729963A875953FAF785BBE0C
-              5F29EABA2C700C1D8EE1E1A0158157EBB6DF6A95EB3057943192C37BA43E3F55
-              F827895E2AA9619BF8F0CEABF49910BD5A20A6F0E2603E9E6D9563775EA52F29
-              DCBFE06AFDC9F2F572302B9185751AB594ED789C3398F120A41271BDBE716316
-              95BD4FBC2B9DA982A64B759853460B503B2021F95401227036909D48B961A251
-              CE51E59EA5EFF364589648C5A2CBB59DC42A57C124C68EC60B60CBC6EC592B1D
-              A7B8DC8A613EB015F82165AA13D86706CA8289D81EA7DA020A9FA6925858A7D1
-              0A8F7B821C8BE14724AE56C4C483A73F9BF1C06FF477417AAABCB664937C932E
-              770D550AFCE0316DE916C9A985C92012058C012B2D0D0CEFA1DC583C1A664895
-              AF924492DBEF9A3E4E817A96C547400691486203A251726E2933888841230A92
-              66E2E12D1C7BF4D7C13F1862113E488E6DC3ECB20876620C80E305EBF546F857
-              90DC31A802A6979F3D32454F4B9FAFB039BC78A3746725E2FA7D3BD4D47C898E
-              4CCA438F22EEB812E528C0235BE4789FADE489D85C16A41755689EACC71EDC2A
-              1B0704E5B33B71ACED4167128B3115782B2B9107B74A7BCB245D8EB20068C812
-              7F3AF6671054E25B0B6BB2E81D04CE4C153CB08D37964EA24135ADD954268830
-              4D34F34747601D59B44DEE583A59FF12318CCA8982E1D5A0DC669B44BAB0181F
-              A2371BB8FBB15FEA59F7EE90BD49B120CA36D6A62F7F62A2AE44E989B8647CA5
-              86F65AF76D956F816F73E1F1B78BF44450D94CD691A6EDB233486FF945DA6584
-              BB1C6131303F9B8F6513759C186E005A9B52AE6F12C5EBB502BEBDC3E4492CF8
-              48F6383E2F381EF39EBF506F0F5BF7C2053ADA8DB1D6F1F97799CF1F82D614B3
-              FBCD946B7F4D0943B4977B35C258159E5B51AB93D4E2F15B3E965D006B6A7458
-              7719D34568B60D55080D733F09FEB6291A91A0D2ED7AA083D4F4399F49F7CBE7
-              E9E54E84C755B90DC39C5517E851A03B0667B88A83F2A52AD367ED920FC3EC9C
-              D413B14DBC311A0C733E936EA071F5585D625BCC40FA3ED20EA9B2B9D3E19DF9
-              3B2596CD46717E57865C21B73FFDE68499BB651F90D70FEDE29C48C80B6D875C
-              B99381625EAD8C0C18F5B154067BDD8B83E25C2DC33E81BA4DE7EA7D16F1FEC9
-              181C4BA957654F317C0C1A43318CD8CA43B67221D0326042E95225B43E141345
-              BBC21BCED2E8F018A32DB7DFA6DBC5E1F30F0FEC524B28A184124AF8BFC27F00
-              59873DE487492AA20000000049454E44AE426082}
+              B10000000473424954080808087C0864880000062D494441546881ED987F6C55
+              E519C73FCF39F73DB7B5346AF9B1C9DC6256C1A5218A29F803079AE0D4CE1FD8
+              41913840FC41C1AAD128385DDC74FB6395A568D0B0E12F24223FA46A9749D021
+              24081162941495441D6088829322A9544A57EF39EFB33F7A6FB9DC9E737BDB7B
+              D992E57EFF7ACFF3BECF8FEFFBBEE7799E73A088228A28A288FF01245F03C31E
+              D4F2B2E30C53878A81EA06CAA1834FCB817C63804112A9AA53AF6B1873116E01
+              C60DD60E8028BFFDFCAFD23858FD5E3B035518DDA0E3D5B206A854F858847F08
+              ECB7D09693436569C508DA2EB8846F766EE3ECA3EDB4EF5D26E3071C79066203
+              595C35576BF06901DA156A3F7956FE36508755F5FAE71F9673EC9C322EDF5FC2
+              AE2E3BB018A290B39131F55AE92A6BC572402C935A97CB578371680228F5E10C
+              1F4A2D183B182B7D913391529F468512841B3F1824098098C26916CE0CA044C1
+              E8602D65D8CD65D165B7E9486B99063CB36385ECCEC7A167A134489E48D07342
+              85404E445C9F6B5C102C2BF375682C0C5138D387B8FF5FBE5AC6321A0581EAC9
+              37EB98BC3C06941F3942F7B1C3ECE8EAE02CE3F34D5EF692C889482C6078324F
+              3F95B74785038719DAB4A9E7C9C0D379DB24C73A5253A7C31D4379D4BC13B05E
+              A1435D6ECE903F02DC6A5D2AC3F434C1F10DCDF2F580228E404E27F266B31C06
+              0E47CDD7D669375022CA4FD3E5AA9C0ED0F28A7CDE9F8FBA3A2D4D40BD03D315
+              CE07CA807F21BC81F044CB2BF2CF6CFA79F75A00D3A76A2B30366A7EDD6B92D5
+              CF8CA93ACEC25AA052608FC266844E6014CA64C053F87DF36B2C02094DD805A9
+              AAC9CCF3A10A0B04FE8052A9C24C51EE047E954DF7D753B40ACB6617BA80EB57
+              B5C8FAF4F959B53AC2C252A071662D435F6E6161981DA750448CA57DF5EBB2C9
+              04B4194B5772FC45F6F4AA62E02563C1F85C91490260658BB4AD6A61BAB1AC8D
+              5916CC99A2BF3C7544F4443D30696D87A7D9EBC41D3770A5B1547BCA1F57BC21
+              9F46AF14F53CE61B4B9BB13C1AB622F46ADD7EB556788639A28C961CDE230DF8
+              B1C2B790ACD4490DD7F60CEFBA569F89D0AB06120ACBFBF3F16CB31CBDEB5A7D
+              51E1C1F9D7E98F96AD97835989DC53A37147D98ECF79FD190F433A11CFEF1DD7
+              6751D9BBE42D694F17345CA1434C094D4035E91B19500188C028203B9152CB04
+              AB9CA7CA7D8BDFE6A9A82C918E0557692BC9559E824D8E8D020A4D1BB367AD4C
+              9CE6711B9679C056E0FBB4A976609F3D59164EC4F539DD1550F8309DC43D351A
+              2FF3B92FCCB1587E40F26AC56C4FF070E2FD78E817FA9B303D55D62CDA245F64
+              CA3D4B8502DFFB4C5DBC45726A61FA108903D6829391068676516A1D1E8F32A4
+              CA672922A9EDF76C2FA7503DC7E13DA00F91587203E271726E29FB10118BC614
+              24C3C4A35B38FAF8CFC37F302462BC931ABB96592531DCE41800E387EB75C7F8
+              2E4C6E2CAA80EDE6278F4DD63332E7CB5C0E2DDC289D59897841EF0E35345EAE
+              C353F2C8A3E8715C8E7204E0B12D72ACD756EA445CAE0CD38B2B344ED2A30F6F
+              958D270515B03B79ACAD616792483005F87B56220F6F95D6A689BA0C653E5097
+              25FE4CECCF1418A5676B615D16BD83C0D9E98287B6F1FAE289D4A966349BCA78
+              11A68AF6FDD1115A47166C933B174FD23FC52C23FA0D1FC0B23A2CB7B936992E
+              1CC645E8CD02EE7DE2523DF7FE1DB237251644D9C6AB99CB974CD095285D318F
+              3E5FA991BDD6035BE54BE0CB5C78FCE5623D1E56365375A461BBEC0CD35B76B1
+              7658E16E232C04E665F3B174828E15CB4D407343DAF54DA170BD56C8B777943C
+              85F9EFC91E13F082F199FBFC457A47D4BA172ED4915E82574DC0BF4B027E17B6
+              A690DD6F5F79B2206643BC9BFB35C618159E5B51AD13D5E1C95BDF975D00EBAA
+              74486709D34468742D150875733E08FFB6291891B0D2EDF9A0FDD4F4D91F49E7
+              4BE7EB5526C693AADC8E65F6AA0BF508D09980B33CC5A07CAACAB499BBE4DD28
+              3BA7F4445CDBD318F587D91F492750BF768C2E721DA623BD1F695FABB2B9DDF0
+              E6BC9D92C866A330BF2B23AE907722FDE68419BB651F30A81FDA8539918817DA
+              8DB872A70285BC5A7D32603CC051E9EF752F0C0A73B52CFB046A36FD4C1F70E8
+              E99FACC5384AAD2A7B0AE1A3DF180A61C4551E71958B80A69326940E5522EB43
+              2151B02BBCE15C8D0F4D30D2F14ED8F43A3874C1A193BBD4228A28A28822FEAF
+              F01F59873DE44AF12C210000000049454E44AE426082}
             FileName = 'E:\Delphi\Delphi12\Proyectos\RipsServer\Recursos\Work_50px.png'
           end>
         Name = 'work'

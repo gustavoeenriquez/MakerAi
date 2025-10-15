@@ -1,3 +1,33 @@
+// IT License
+//
+// Copyright (c) <year> <copyright holders>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enríquez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+// - Telegram: +57 3128441700
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
 unit uMakerAi.Utils.CodeExtractor;
 
 interface
@@ -20,7 +50,7 @@ type
   TMarkdownCodeExtractor = class
   private
     FCodeFiles: TCodeFileList;
-    function GetLanguageFromExtension(const AExtension: string): string;
+    //function GetLanguageFromExtension(const AExtension: string): string;
     function NormalizeLanguage(const ALanguage: string): string;
   public
     constructor Create;
@@ -57,7 +87,7 @@ begin
   FCodeFiles.Clear;
 end;
 
-function TMarkdownCodeExtractor.GetLanguageFromExtension(const AExtension: string): string;
+{function TMarkdownCodeExtractor.GetLanguageFromExtension(const AExtension: string): string;
 begin
   // Mapeo de extensiones a lenguajes
   if SameText(AExtension, '.pas') or SameText(AExtension, '.dpr') or SameText(AExtension, '.dpk') then
@@ -97,6 +127,8 @@ begin
   else
     Result := 'text'; // Tipo por defecto
 end;
+}
+
 
 function TMarkdownCodeExtractor.NormalizeLanguage(const ALanguage: string): string;
 var
@@ -216,74 +248,4 @@ end;
 
 end.
 
-// Ejemplo de uso:
-{
-program TestMarkdownExtractor;
-{$APPTYPE CONSOLE}
 
-uses
-  System.SysUtils,
-  MarkdownCodeExtractor;
-
-procedure TestExtractor;
-var
-  Extractor: TMarkdownCodeExtractor;
-  MarkdownText: string;
-  CodeFiles: TCodeFileList;
-  i: Integer;
-begin
-  MarkdownText := 'Aquí tienes un ejemplo de código en Delphi para calcular la serie de Fibonacci.' + sLineBreak +
-                  '```delphi' + sLineBreak +
-                  'program FibonacciSeries;' + sLineBreak +
-                  '{$APPTYPE CONSOLE}' + sLineBreak +
-                  'uses' + sLineBreak +
-                  '  SysUtils;' + sLineBreak +
-                  'function Fibonacci(n: Integer): Integer;' + sLineBreak +
-                  'begin' + sLineBreak +
-                  '  if n <= 0 then' + sLineBreak +
-                  '    Result := 0' + sLineBreak +
-                  '  else if n = 1 then' + sLineBreak +
-                  '    Result := 1' + sLineBreak +
-                  '  else' + sLineBreak +
-                  '    Result := Fibonacci(n - 1) + Fibonacci(n - 2);' + sLineBreak +
-                  'end;' + sLineBreak +
-                  '```' + sLineBreak +
-                  'Y aquí hay un ejemplo en Python:' + sLineBreak +
-                  '```python' + sLineBreak +
-                  'def fibonacci(n):' + sLineBreak +
-                  '    if n <= 0:' + sLineBreak +
-                  '        return 0' + sLineBreak +
-                  '    elif n == 1:' + sLineBreak +
-                  '        return 1' + sLineBreak +
-                  '    else:' + sLineBreak +
-                  '        return fibonacci(n-1) + fibonacci(n-2)' + sLineBreak +
-                  '```';
-
-  Extractor := TMarkdownCodeExtractor.Create;
-  try
-    CodeFiles := Extractor.ExtractCodeFiles(MarkdownText);
-
-    WriteLn('Archivos de código encontrados: ', CodeFiles.Count);
-    WriteLn('');
-
-    for i := 0 to CodeFiles.Count - 1 do
-    begin
-      WriteLn('Archivo ', i + 1, ':');
-      WriteLn('Tipo: ', CodeFiles[i].FileType);
-      WriteLn('Línea: ', CodeFiles[i].LineNumber);
-      WriteLn('Código:');
-      WriteLn(CodeFiles[i].Code);
-      WriteLn('----------------------------------------');
-    end;
-
-  finally
-    Extractor.Free;
-  end;
-
-  ReadLn;
-end;
-
-begin
-  TestExtractor;
-end.
-}

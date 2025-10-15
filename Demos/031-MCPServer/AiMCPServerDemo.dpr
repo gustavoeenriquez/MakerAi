@@ -111,6 +111,7 @@ begin
   // --- NUEVOS VALORES POR DEFECTO PARA CORS ---
   CorsEnabled := False;
   CorsOrigins := '*';
+  LoadSettings := False;
 
   MCPServer := nil;
 

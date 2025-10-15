@@ -60,6 +60,7 @@ type
     FWebSearchResponse: TAiWebSearch;
     FReasoning: String;
     FIsTollCallResponse: Boolean;
+    FModel: String;
     procedure SetContent(const Value: String);
     procedure SetRole(const Value: String);
     procedure SetPrompt(const Value: String);
@@ -74,6 +75,7 @@ type
     procedure SetWebSearchResponse(const Value: TAiWebSearch);
     procedure SetReasoning(const Value: String);
     procedure SetIsTollCallResponse(const Value: Boolean);
+    procedure SetModel(const Value: String);
   Protected
     FRole: String;
     FContent: String;
@@ -108,6 +110,7 @@ type
     Property Prompt_tokens: integer read FPrompt_tokens Write SetPrompt_tokens;
     Property Completion_tokens: integer read FCompletion_tokens Write SetCompletion_tokens;
     Property Total_tokens: integer read FTotal_tokens Write SetTotal_tokens;
+    Property Model: String read FModel write SetModel;
     Property TollCallId: String read FTollCallId write SetTollCallId;
     Property FunctionName: String read FFunctionName write SetFunctionName;
     Property Tool_calls: String read FTool_calls write SetTool_calls;
@@ -175,14 +178,12 @@ type
     FOnInitChat: TAiChatOnInitChatEvent;
     FMemory: TStrings;
 
-    // FFunctions: TFunctionActionItems;
     FAiFunctions: TAiFunctions;
     FOnProcessMediaFile: TAiChatOnMediaFileEvent;
     FJsonSchema: TStrings;
     FStream_Usage: Boolean;
     FNativeInputFiles: TAiFileCategories;
     FNativeOutputFiles: TAiFileCategories;
-    // FWebSearch: Boolean;
     FOnError: TAiErrorEvent;
     FOnProcessResponse: TAiChatOnProcessResponseEvent;
     FVoice: String;
@@ -233,7 +234,6 @@ type
     procedure SetStream_Usage(const Value: Boolean);
     procedure SetNativeInputFiles(const Value: TAiFileCategories);
     procedure SetNativeOutputFiles(const Value: TAiFileCategories);
-    // procedure SetWebSearch(const Value: Boolean);
     procedure SetOnError(const Value: TAiErrorEvent);
     procedure SetOnProcessResponse(const Value: TAiChatOnProcessResponseEvent);
     procedure SetVoice(const Value: String);
@@ -384,7 +384,6 @@ type
     Property Url: String read FUrl write SetUrl;
     Property ResponseTimeOut: integer read FResponseTimeOut write SetResponseTimeOut;
     Property Memory: TStrings read FMemory Write SetMemory;
-    // Property Functions: TFunctionActionItems read FFunctions write FFunctions;
     Property AiFunctions: TAiFunctions read FAiFunctions write SetAiFunctions;
     Property OnProcessMediaFile: TAiChatOnMediaFileEvent read FOnProcessMediaFile write SetOnProcessMediaFile;
     Property JsonSchema: TStrings read FJsonSchema write SetJsonSchema;
@@ -395,7 +394,6 @@ type
 
     Property Voice: String read FVoice write SetVoice;
     Property voice_format: String read Fvoice_format write Setvoice_format;
-    // Property WebSearch: Boolean read FWebSearch write SetWebSearch;
     property OnError: TAiErrorEvent read FOnError write SetOnError;
     property Language: string read FLanguage write SetLanguage; // e.g., 'es', 'en', 'es-419'
     property Transcription_ResponseFormat: string read FTranscription_ResponseFormat write SetTranscription_ResponseFormat;
@@ -422,7 +420,7 @@ begin
   FAbort := True;
 end;
 
-// --- Este mensaje se envía cuando es una función toll, es indepenciente a los otros dos
+// --- Este mensaje se envía cuando es una función toll, es indepensiente a los otros dos
 function TAiChat.InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): TAiChatMessage;
 Var
   Msg: TAiChatMessage;
@@ -435,10 +433,6 @@ begin
     FLastPrompt := aPrompt;
 
     Result := Msg;
-
-    // ------ al llamar una herramienta tool no se valida un before message debe ser manejado solo por el código -------
-    // If Assigned(FOnBeforeSendMessage) then FOnBeforeSendMessage(Self, Msg);
-
   Finally
   End;
 end;
@@ -582,7 +576,6 @@ begin
 {$ENDIF}
     FLastContent := '';
 
-    // If Self.Asynchronous = False then
     If FClient.Asynchronous = False then
     Begin
       if Res.StatusCode = 200 then
@@ -666,10 +659,6 @@ begin
 
     LJsonObject.AddPair('response_format', voice_format);
 
-
-    // LBodyStream := TStringStream.Create(UTF8ToString(LJsonObject.ToString), TEncoding.UTF8);
-    // LBodyStream := TStringStream.Create(LJsonObject.ToString, TEncoding.UTF8);
-
     S := LJsonObject.ToString;
 
     LBodyStream := TStringStream.Create;
@@ -712,7 +701,6 @@ begin
     end
     else
     begin
-      // ... (el resto del código de manejo de errores es correcto)
       LResponseStream.Position := 0;
       LErrorResponse := TStreamReader.Create(LResponseStream).ReadToEnd;
       FLastError := Format('Error generando audio: %d, %s', [LResponse.StatusCode, LErrorResponse]);
@@ -756,18 +744,22 @@ begin
   Body := TMultipartFormData.Create;
   Granularities := TStringList.Create;
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
-
+  LTempStream := TMemoryStream.Create;
   try
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
 
     // Crear un stream temporal para pasarlo al formulario multipart
-    LTempStream := TMemoryStream.Create;
     aMediaFile.Content.Position := 0;
     LTempStream.LoadFromStream(aMediaFile.Content);
     LTempStream.Position := 0;
 
     // --- 1. CONSTRUCCIÓN DEL BODY MULTIPART CON PARÁMETROS GENÉRICOS ---
+
+{$IF CompilerVersion >= 35}
+    Body.AddStream('file', LTempStream, False, aMediaFile.FileName, aMediaFile.MimeType);
+{$ELSE}
     Body.AddStream('file', LTempStream, aMediaFile.FileName, aMediaFile.MimeType);
+{$ENDIF}
 
     // Modelo: usa el modelo principal si es de transcripción, si no, usa un default.
     Body.AddField('model', LModel); // Default seguro
@@ -839,10 +831,9 @@ begin
 
   finally
     Body.Free;
+    LTempStream.Free;
     Client.Free;
     LResponseStream.Free;
-    // Granularities.Free;
-    // LTempStream es propiedad de Body
   end;
 end;
 
@@ -853,7 +844,7 @@ end;
 
 function TAiChat.AddMessage(aPrompt, aRole: String): TAiChatMessage;
 begin
-  InternalAddMessage(aPrompt, aRole, []);
+  Result := InternalAddMessage(aPrompt, aRole, []);
 end;
 
 function TAiChat.AddMessageAndRun(aPrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): String;
@@ -898,7 +889,6 @@ begin
   FMemory := TStringList.Create;
   FJsonSchema := TStringList.Create;
   FInitialInstructions := TStringList.Create;
-  // FFunctions := TFunctionActionItems.Create(Self, TFunctionActionItem);
 
   FResponse := TStringStream.Create('', TEncoding.UTF8);
   FClient := TNetHTTPClient.Create(Self);
@@ -914,7 +904,7 @@ begin
   FNativeInputFiles := [];
   FNativeOutputFiles := [];
 
-  FModel := 'gpt4-o';
+  FModel := 'gpt-5';
   FN := 1;
   FResponse_format := TAiChatResponseFormat.tiaChatRfText;
   FTemperature := 1;
@@ -944,9 +934,6 @@ begin
 end;
 
 procedure TAiChat.DoCallFunction(ToolCall: TAiToolsFunction);
-Var
-  Funcion: TFunctionActionItem;
-  Handle: Boolean;
 begin
 
   If AiFunctions.DoCallFunction(ToolCall) then
@@ -958,29 +945,6 @@ begin
     If Assigned(FOnCallToolFunction) then
       FOnCallToolFunction(Self, ToolCall)
   End;
-
-  {
-    If Assigned(FAiFunctions) then // Si está asignado el componente, busca la función en el componente
-    Funcion := FAiFunctions.Functions.GetFunction(ToolCall.Name);
-    // Else // Si no está asignado el componente, lo busca directamente en las funciones locales
-    // Funcion := FFunctions.GetFunction(ToolCall.Name);
-
-    If Assigned(Funcion) then
-    Begin
-    Funcion.OnAction(Self, Funcion, ToolCall.Name, ToolCall, Handle);
-    If Handle = False then
-    Begin
-    If Assigned(FOnCallToolFunction) then
-    FOnCallToolFunction(Self, ToolCall)
-    End;
-    End
-    Else
-    Begin
-    If Assigned(FOnCallToolFunction) then
-    FOnCallToolFunction(Self, ToolCall)
-    End;
-  }
-
 end;
 
 procedure TAiChat.DoError(const ErrorMsg: string; E: Exception);
@@ -1027,8 +991,6 @@ begin
   For JVal1 in jChoices do
   Begin
     Msg := TJSonObject(JVal1).GetValue<TJSonObject>('message');
-
-    // Msg.TryGetValue<TJSonValue>('tool_calls', JValToolCall);
 
     If Msg.TryGetValue<TJSonValue>('tool_calls', jValToolCall) and (jValToolCall is TJSonArray) and Msg.TryGetValue<TJSonArray>('tool_calls', JToolCalls) then
     Begin
@@ -1140,7 +1102,6 @@ begin
     Client.ContentType := 'application/json';
 
     Res := Client.Get(sUrl, Response, Headers);
-    // Response.SaveToFile('c:\temp\models.json.txt');
 
     if Res.StatusCode = 200 then
     Begin
@@ -1157,14 +1118,6 @@ begin
 
       // Agregar modelos personalizados
       CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
-
-      {
-        for I := Low(CustomModels) to High(CustomModels) do
-        begin
-        if not Result.Contains(CustomModels[I]) then
-        Result.Add(CustomModels[I]);
-        end;
-      }
 
       for I := Low(CustomModels) to High(CustomModels) do
       begin
@@ -1223,14 +1176,6 @@ begin
 
   // Las funciones no trabajan en modo ascincrono
   LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
-
-  // estas líneas no hacen falta, se dejan como gúia para proximas implementaciones
-  // LastMsg := Messages.Last;
-  { If Assigned(LastMsg) then
-    Begin
-    LAsincronico := LAsincronico and (Not(LastMsg.VisionUrls.Count > 0) or (LastMsg.VisionBase64.Count > 0));
-    End;
-  }
 
   FClient.Asynchronous := LAsincronico;
 
@@ -1334,7 +1279,7 @@ begin
 
     End;
 
-    Res := UTF8ToString(AJSONObject.ToJSon);
+    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
   Finally
@@ -1557,193 +1502,6 @@ begin
     FOnError(Self, AError.Message, AError, Nil);
 
 end;
-{
-  procedure TAiChat.ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage);
-  Var
-  choices: TJSonArray;
-  JItem, jMessage, uso: TJSonObject;
-  JVal, JToolCallsValue: TJSonValue;
-  aPrompt_tokens, aCompletion_tokens, aTotal_tokens: integer;
-  Role, Respuesta, sReasoning, sToolCalls, sRes: String;
-  ToolMsg, AskMsg: TAiChatMessage;
-  LFunciones: TAiToolsFunctions;
-  ToolCall: TAiToolsFunction;
-  TaskList: array of ITask;
-  I, NumTasks: integer;
-  Clave: String;
-  begin
-  // 1. EXTRAER INFORMACIÓN BÁSICA DE LA RESPUESTA JSON
-  // ---------------------------------------------------------------------------
-  Model := jObj.GetValue('model').Value;
-  if jObj.TryGetValue('usage', uso) then
-  begin
-  uso.TryGetValue<integer>('prompt_tokens', aPrompt_tokens);
-  uso.TryGetValue<integer>('completion_tokens', aCompletion_tokens);
-  uso.TryGetValue<integer>('total_tokens', aTotal_tokens);
-  end
-  else
-  begin
-  aPrompt_tokens := 0;
-  aCompletion_tokens := 0;
-  aTotal_tokens := 0;
-  end;
-
-  AskMsg := GetLastMessage; // Obtiene el mensaje del usuario que originó esta respuesta.
-
-  // 2. PARSEAR EL ARRAY 'CHOICES' PARA OBTENER EL CONTENIDO
-  // ---------------------------------------------------------------------------
-  jObj.TryGetValue<TJSonArray>('choices', choices);
-
-  Respuesta := '';
-  sToolCalls := '';
-  Role := 'assistant'; // Default role
-
-  if Assigned(choices) then
-  begin
-  For JVal in choices do
-  Begin
-  JItem := TJSonObject(JVal);
-  jMessage := JItem.GetValue<TJSonObject>('message');
-  Role := jMessage.GetValue<String>('role');
-
-  // Parsea información adicional como 'reasoning' si existe (para Groq, DeepSeek, etc.)
-  if jMessage.TryGetValue<String>('reasoning', sReasoning) then
-  ResMsg.Reasoning := sReasoning
-  else if jMessage.TryGetValue<String>('reasoning_content', sReasoning) then
-  ResMsg.Reasoning := sReasoning;
-
-  // Obtiene el contenido de texto (puede estar vacío en una llamada a función)
-  jMessage.TryGetValue<String>('content', sRes);
-  if Not Trim(sRes).IsEmpty then
-  Respuesta := Trim(Respuesta + sLineBreak + sRes);
-
-  // Obtiene las llamadas a funciones si existen
-  if jMessage.TryGetValue<TJSonValue>('tool_calls', JToolCallsValue) and (JToolCallsValue is TJSonArray) then
-  begin
-  sToolCalls := TJSonArray(JToolCallsValue).Format;
-  end;
-
-  End;
-  end;
-
-  Respuesta := Trim(Respuesta);
-
-  // 3. EVENTO PARA PROCESAMIENTO PERSONALIZADO DE LA RESPUESTA
-  // ---------------------------------------------------------------------------
-  // Permite al usuario modificar el texto de la respuesta antes de que se guarde.
-  DoProcessResponse(AskMsg, ResMsg, Respuesta);
-
-  // 4. POBLAR EL OBJETO ResMsg Y ACTUALIZAR CONTADORES
-  // ---------------------------------------------------------------------------
-  // Preparamos el objeto de mensaje de respuesta del asistente con toda la info.
-  ResMsg.Role := Role;
-  ResMsg.FPrompt := Respuesta;
-  ResMsg.FContent := Respuesta; // Asignamos a ambos por consistencia
-  ResMsg.FTool_calls := sToolCalls;
-  ResMsg.FPrompt_tokens := aPrompt_tokens;
-  ResMsg.FCompletion_tokens := aCompletion_tokens;
-  ResMsg.FTotal_tokens := aTotal_tokens;
-
-  // Actualizamos los contadores globales del componente
-  Self.FLastContent := Respuesta;
-  FPrompt_tokens := FPrompt_tokens + aPrompt_tokens;
-  FCompletion_tokens := FCompletion_tokens + aCompletion_tokens;
-  FTotal_tokens := FTotal_tokens + aTotal_tokens;
-
-  // 5. PROCESAR EL FLUJO DE FUNCTION CALLING O RESPUESTA DE TEXTO
-  // ---------------------------------------------------------------------------
-  LFunciones := ExtractToolCallFromJson(choices);
-  try
-  if LFunciones.Count > 0 then
-  begin
-  // --- A. FLUJO DE FUNCTION CALLING ---
-
-  // PASO CRÍTICO 1: Añadir el mensaje del 'assistant' al historial.
-  // Este mensaje contiene las 'tool_calls' que la API solicita ejecutar.
-  // El historial ahora es: [..., user_message, assistant_message_with_tool_calls]
-
-  ResMsg.Id := FMessages.Count + 1;
-  FMessages.Add(ResMsg);
-
-  if Assigned(FOnAddMessage) then
-  FOnAddMessage(Self, ResMsg, jObj, ResMsg.Role, ResMsg.Prompt);
-
-  // PASO 2: Ejecutar las funciones solicitadas en paralelo.
-  NumTasks := LFunciones.Count;
-  SetLength(TaskList, NumTasks);
-  I := 0;
-  for Clave in LFunciones.Keys do
-  begin
-  ToolCall := LFunciones[Clave];
-  TaskList[I] := TTask.Create(
-  procedure
-  begin
-  try
-  DoCallFunction(ToolCall);
-  except
-  on E: Exception do
-  TThread.Queue(nil,
-  procedure
-  begin
-  DoError('Error in "' + ToolCall.Name + '"', E);
-  end);
-  end;
-  end);
-  TaskList[I].Start;
-  Inc(I);
-  end;
-  TTask.WaitForAll(TaskList);
-
-  // PASO 3: Añadir los resultados de las funciones como mensajes de tipo 'tool'.
-  // El historial ahora es: [..., user, assistant, tool, (otro tool...)]
-  for Clave in LFunciones.Keys do
-  begin
-  ToolCall := LFunciones[Clave];
-  ToolMsg := TAiChatMessage.Create(ToolCall.Response, 'tool', ToolCall.Id, ToolCall.Name);
-  ToolMsg.FId := FMessages.Count + 1;
-  FMessages.Add(ToolMsg);
-  if Assigned(FOnAddMessage) then
-  FOnAddMessage(Self, ToolMsg, nil, ToolMsg.Role, ToolMsg.Prompt);
-  end;
-
-  // PASO 4: Realizar la segunda llamada a la API con el historial completo.
-  // Pasamos (Nil, Nil) porque los mensajes ya están en el historial, y esperamos
-  // que la API nos devuelva la respuesta final en lenguaje natural.
-  Var
-  aMsg := TAiChatMessage.Create('', '');
-
-  aMsg.IsTollCallResponse := True;
-
-  Self.Run(Nil, aMsg);
-
-  ResMsg.Role := aMsg.Role;
-  ResMsg.Prompt := aMsg.Prompt;
-  ResMsg.Content := '';
-  end
-  else
-  begin
-  // --- B. FLUJO DE RESPUESTA DE TEXTO NORMAL ---
-
-  // El mensaje ResMsg ya tiene el contenido de texto. Lo añadimos al historial.
-  If ResMsg.IsTollCallResponse = False then
-  Begin
-  ResMsg.Id := FMessages.Count + 1;
-  FMessages.Add(ResMsg);
-  End;
-
-  // Señalamos que la interacción ha terminado.
-  FBusy := False;
-  if Assigned(FOnAddMessage) then
-  FOnAddMessage(Self, ResMsg, jObj, ResMsg.Role, ResMsg.Prompt);
-  if Assigned(FOnReceiveDataEnd) then
-  FOnReceiveDataEnd(Self, ResMsg, jObj, ResMsg.Role, Respuesta);
-  end;
-  finally
-  LFunciones.Free;
-  end;
-  end;
-
-}
 
 procedure TAiChat.ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage);
 Var
@@ -1769,13 +1527,10 @@ Var
   CodeFiles: TCodeFileList;
   MF: TAiMediaFile;
   St: TStringStream;
+  ModelVersion: String;
 
 begin
 
-  // Id := JObj.GetValue('id').Value;
-  // IdObject := JObj.GetValue('object').Value;
-  // IdCreate := JObj.GetValue('created').GetValue<String>;
-  Var
   ModelVersion := jObj.GetValue('model').Value;
   uso := jObj.GetValue('usage') as TJSonObject;
   aPrompt_tokens := uso.GetValue<integer>('prompt_tokens');
@@ -1790,6 +1545,7 @@ begin
   Begin
     JItem := TJSonObject(JVal);
     jMessage := JItem.GetValue<TJSonObject>('message');
+
     Role := jMessage.GetValue<String>('role');
 
     if jMessage.TryGetValue<String>('reasoning', sReasoning) then // Groq
@@ -1825,6 +1581,7 @@ begin
   if sToolCalls.IsEmpty then // Si es una respuesta normal adiciona los datos al ResMsg
   Begin
     ResMsg.Role := Role;
+    ResMsg.FModel := ModelVersion;
     ResMsg.FTool_calls := sToolCalls;
     ResMsg.FPrompt := ResMsg.FPrompt + Respuesta;
     ResMsg.FPrompt_tokens := ResMsg.FPrompt_tokens + aPrompt_tokens;
@@ -1960,7 +1717,7 @@ begin
   begin
     FLastError := 'La respuesta de la API no contiene el campo "text" con la transcripción.';
     DoError(FLastError, nil);
-    FBusy := False; // Asumiendo que usas FBusy como en ParseChat
+    FBusy := False;
     Exit;
   end;
 
@@ -1993,9 +1750,6 @@ begin
   Self.Total_tokens := Self.Total_tokens + aTotal_tokens;
   Self.Prompt_tokens := Self.Prompt_tokens + aInput_tokens; // 'input' equivale a 'prompt'
   Self.Completion_tokens := Self.Completion_tokens + aOutput_tokens; // 'output' equivale a 'completion'
-
-  // Guardamos el resultado principal
-  // Self.FLastContent := sTextoTranscrito;
 
   If Trim(sTextoWords + sLineBreak + sTextoSegments) <> '' then
   Begin
@@ -2088,12 +1842,12 @@ end;
 
 function TAiChat.RetrieveFile(aFileId: string): TAiMediaFile;
 begin
-
+  Result := Nil; //Clase base no hace nada
 end;
 
 function TAiChat.RetrieveFileList: TAiMediaFiles;
 begin
-
+  Result := Nil; //Clase base no hace nada
 end;
 
 function TAiChat.Run(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
@@ -2513,12 +2267,6 @@ begin
   Fvoice_format := Value;
 end;
 
-{ procedure TAiChat.SetWebSearch(const Value: Boolean);
-  begin
-  FWebSearch := Value;
-  end;
-}
-
 Function TAiChat.FileCategoriesToString(const ACategories: TAiFileCategories): string;
 var
   Category: TAiFileCategory;
@@ -2571,13 +2319,6 @@ begin
 end;
 
 { TAOpeniChatMessage }
-
-{
-  procedure TAiOpenChatMessage.AddBase64Image(aBase64: String);
-  begin
-  VisionBase64.Add(aBase64);
-  end;
-}
 
 procedure TAiChatMessage.AddMediaFile(aMediaFile: TAiMediaFile);
 begin
@@ -2704,6 +2445,11 @@ end;
 procedure TAiChatMessage.SetIsTollCallResponse(const Value: Boolean);
 begin
   FIsTollCallResponse := Value;
+end;
+
+procedure TAiChatMessage.SetModel(const Value: String);
+begin
+  FModel := Value;
 end;
 
 procedure TAiChatMessage.SetPrompt(const Value: String);
@@ -3112,26 +2858,6 @@ begin
             end;
           TAiFileCategory.Tfc_pdf: // El completions no maneja pdf todavía hay que usar el Responses
             Begin
-              {
-                var
-                JDocumentObject := TJSonObject.Create;
-                JDocumentObject.AddPair('type', 'input_file');
-                JDocumentObject.AddPair('filename', MediaFile.FileName);
-
-                // Por facilidad no manejamos el ID del documento solo subimos el Base64
-                // Podría adicionarse también el manejo de archivos por los vectores de openAi
-                // Asignar directamente el base64 como cadena, no como objeto
-                if MediaFile.UrlMedia <> '' then
-                Raise Exception.Create('En documentos no se maneja la url') // JDocumentObject.AddPair('image_url', MediaFile.UrlMedia)
-                else
-                JDocumentObject.AddPair('file_data', 'data:' + MediaFile.MimeType + ';base64,' + MediaFile.Base64);
-
-                // Si tiene la propiedad Detail, la agregamos
-                if MediaFile.Detail <> '' then
-                JDocumentObject.AddPair('detail', MediaFile.Detail);
-
-                JContent.Add(JDocumentObject);
-              }
             end;
           TAiFileCategory.Tfc_Document:
             Begin

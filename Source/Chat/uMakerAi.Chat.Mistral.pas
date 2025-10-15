@@ -120,8 +120,7 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Embeddings.core;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Embeddings.Core;
 
 { TODO : Falta crear las siguientes funciones de Mistral }
 /// -----------------------------------------------------------------------------
@@ -204,8 +203,7 @@ type
   Public
     // groq actualmente no maneja modelos de embeddings
     Constructor Create(aOwner: TComponent); Override;
-    Function CreateEmbedding(aInput, aUser: String; aDimensions: integer = 1536; aModel: String = 'mistral-embed';
-      aEncodingFormat: String = 'float'): TAiEmbeddingData; Override;
+    Function CreateEmbedding(aInput, aUser: String; aDimensions: integer = 1536; aModel: String = 'mistral-embed'; aEncodingFormat: String = 'float'): TAiEmbeddingData; Override;
 
   End;
 
@@ -429,55 +427,6 @@ begin
   FOcrPagesNumbers := Value;
 end;
 
-{ function TAiMistralChat.UploadFile(aMediaFile: TAiMediaFile): String;
-  var
-  LBody: TMultipartFormData;
-  LTempStream: TMemoryStream;
-  LResponse: IHTTPResponse;
-  LUrl: string;
-  LResponseObj: TJSONObject;
-  begin
-  Result := '';
-  if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
-  raise Exception.Create('Se necesita un TAiMediaFile con contenido para subir.');
-
-  LUrl := Url + 'files';
-  LBody := TMultipartFormData.Create;
-  LTempStream := TMemoryStream.Create;
-  try
-  aMediaFile.Content.Position := 0;
-  LTempStream.LoadFromStream(aMediaFile.Content);
-  LTempStream.Position := 0;
-
-  // Se debe especificar el propósito, para OCR es 'ocr'
-  LBody.AddField('purpose', 'ocr');
-  LBody.AddStream('file', LTempStream, aMediaFile.Filename, aMediaFile.MimeType);
-
-  // FClient.ContentType := LBody.ContentType;
-  LResponse := FClient.Post(LUrl, LBody);
-
-  if LResponse.StatusCode = 200 then
-  begin
-  LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
-  try
-  Result := LResponseObj.GetValue<string>('id');
-  // Guardamos el ID en el objeto MediaFile para uso futuro
-  aMediaFile.IDFile := Result;
-  finally
-  LResponseObj.Free;
-  end;
-  end
-  else
-  begin
-  FLastError := LResponse.ContentAsString;
-  DoError(Format('Error al subir archivo: %d - %s', [LResponse.StatusCode, FLastError]), nil);
-  end;
-  finally
-  LBody.Free;
-  end;
-  end;
-}
-
 function TAiMistralChat.UploadFile(aMediaFile: TAiMediaFile): String;
 var
   LBody: TMultipartFormData;
@@ -501,14 +450,16 @@ begin
 
     // Se debe especificar el propósito, para OCR es 'ocr'
     LBody.AddField('purpose', 'ocr');
-    LBody.AddStream('file', LTempStream, aMediaFile.Filename, aMediaFile.MimeType);
 
-    // FClient.ContentType := LBody.ContentType;
+{$IF CompilerVersion >= 35}
+    LBody.AddStream('file', LTempStream, False, aMediaFile.Filename, aMediaFile.MimeType);
+{$ELSE}
+    LBody.AddStream('file', LTempStream, aMediaFile.Filename, aMediaFile.MimeType);
+{$ENDIF}
     LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)]; // Añadir el Header de autorización
 
     Var
     LResponseStream := TMemoryStream.Create;
-    // LResponse := FClient.Post(LUrl, LBody, LHeaders); //Añadir Header a la petición.
     LResponse := FClient.Post(LUrl, LBody, LResponseStream, LHeaders);
 
     if LResponse.StatusCode = 200 then
@@ -615,8 +566,7 @@ begin
   Begin
     Msg := TJSONObject(JVal1).GetValue<TJSONObject>('message');
 
-    If Msg.TryGetValue<TJSonValue>('tool_calls', jValToolCall) and (jValToolCall is TJSonArray) and
-      Msg.TryGetValue<TJSonArray>('tool_calls', JToolCalls) then
+    If Msg.TryGetValue<TJSonValue>('tool_calls', jValToolCall) and (jValToolCall is TJSonArray) and Msg.TryGetValue<TJSonArray>('tool_calls', JToolCalls) then
     Begin
       For JVal in JToolCalls do
       Begin
@@ -765,7 +715,6 @@ begin
 {$ELSE}
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
 {$ENDIF}
-
       if Not Assigned(JArr) then
         Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
@@ -774,11 +723,10 @@ begin
       begin
         try
 {$IF CompilerVersion < 35}
-        jToolChoice := TJSONUtils.ParseAsObject(Tool_choice);
+          jToolChoice := TJSONUtils.ParseAsObject(Tool_choice);
 {$ELSE}
-        jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
+          jToolChoice := TJSONObject(TJSonArray.ParseJSONValue(Tool_choice));
 {$ENDIF}
-
           if Assigned(jToolChoice) then
             AJSONObject.AddPair('tool_choice', jToolChoice);
         except
@@ -823,96 +771,16 @@ begin
     AJSONObject.AddPair('stream', TJSONBool.Create(FClient.Asynchronous));
 
     // 7. --- Finalización y Devolución del JSON ---
-    Res := AJSONObject.ToJSON;
+
+    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
+    Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
+
   finally
     AJSONObject.Free;
     Lista.Free;
   end;
 end;
-
-{ function TAiMistralChat.InitChatCompletions: String;
-  Var
-  AJSONObject, jToolChoice: TJSONObject;
-  JArr: TJSonArray;
-  JStop: TJSonArray;
-  Lista: TStringList;
-  I: Integer;
-  LAsincronico: Boolean;
-  Res: String;
-  begin
-
-  If User = '' then
-  User := 'user';
-
-  If Model = '' then
-  Model := 'open-mistral-7b';
-
-  // Las funciones no trabajan en modo ascincrono
-  LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
-
-  FClient.Asynchronous := LAsincronico;
-
-  AJSONObject := TJSONObject.Create;
-  Lista := TStringList.Create;
-
-  Try
-
-  AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
-
-  If Tool_Active and (Trim(Tools.Text) <> '') then
-  Begin
-  JArr := TJSonArray(TJSonArray.ParseJSONValue(Tools.Text));
-  If Not Assigned(JArr) then
-  Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
-  AJSONObject.AddPair('tools', JArr);
-
-  If (Trim(Tool_choice) <> '') then
-  Begin
-  jToolChoice := TJSONObject(TJSonArray.ParseJSONValue(Tool_choice));
-  If Assigned(jToolChoice) then
-  AJSONObject.AddPair('tools_choice', jToolChoice);
-  End;
-  End;
-
-  AJSONObject.AddPair('messages', GetMessages); // FMessages.ToJSon);
-  AJSONObject.AddPair('model', Model);
-
-  AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
-  AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
-
-  If Top_p <> 0 then
-  AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
-
-  // AJSONObject.AddPair('user', User);
-
-  If (FResponse_format = tiaChatRfJson) then
-  AJSONObject.AddPair('response_format', TJSONObject.Create.AddPair('type', 'json_object'))
-  Else
-  AJSONObject.AddPair('response_format', TJSONObject.Create.AddPair('type', 'text'));
-
-  Lista.CommaText := Stop;
-  If Lista.Count > 0 then
-  Begin
-  JStop := TJSonArray.Create;
-  For I := 0 to Lista.Count - 1 do
-  JStop.Add(Lista[I]);
-  AJSONObject.AddPair('stop', JStop);
-  End;
-
-  If Seed > 0 then
-  AJSONObject.AddPair('random_seed', TJSONNumber.Create(Seed));
-
-  Res := UTF8ToString(AJSONObject.ToJSon);
-  Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
-  Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
-
-  Finally
-  AJSONObject.Free;
-  Lista.Free;
-  End;
-  end;
-}
 
 function TAiMistralChat.InitChatCompletionsFim(aPrompt, aSuffix: String): String;
 Var
@@ -958,334 +826,17 @@ begin
     If Seed > 0 then
       AJSONObject.AddPair('random_seed', TJSONNumber.Create(Seed));
 
-    Result := UTF8ToString(AJSONObject.ToJSON);
+    var
+    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
+
+    Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
+    Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
+
   Finally
     AJSONObject.Free;
     Lista.Free;
   End;
 end;
-
-{ function TAiMistralChat.InternalRunOcr(aMediaFile: TAiMediaFile): String;
-  var
-  LBodyStream: TStringStream;
-  LResponseStream: TMemoryStream;
-  LHeaders: TNetHeaders;
-  LResponse: IHTTPResponse;
-  LJsonObject, LDocumentObj: TJSONObject;
-  LUrl: string;
-  LDataUri: string;
-  LResponseObj: TJSONObject;
-  begin
-  Result := '';
-  if not Assigned(aMediaFile) then
-  raise Exception.Create('Se requiere un TAiMediaFile para el proceso de OCR.');
-
-  FBusy := True;
-  FLastError := '';
-  LUrl := Url + 'ocr/process';
-  LJsonObject := TJSONObject.Create;
-  LDocumentObj := TJSONObject.Create;
-  LBodyStream := TStringStream.Create('', TEncoding.UTF8);
-  LResponseStream := TMemoryStream.Create;
-
-  try
-  // 1. Construir el cuerpo de la petición JSON
-  LJsonObject.AddPair('model', TJSONString.Create('mistral-ocr-latest'));
-  LJsonObject.AddPair('include_image_base64', TJSONBool.Create(FOcrIncludeImages));
-
-  // 2. Determinar el tipo y origen del documento
-  aMediaFile.CloudState := 'ocr-processing'; // Actualizar estado
-
-  if not aMediaFile.IDFile.IsEmpty then
-  begin
-  // Escenario A: El archivo ya fue subido a Mistral.
-  // Necesitamos una URL firmada para que el servicio de OCR pueda acceder a él.
-  aMediaFile.CloudState := 'ocr-getting-signed-url';
-  LDataUri := GetSignedUrl(aMediaFile); // Esta función actualiza aMediaFile.CloudUri
-
-  if LDataUri.IsEmpty then
-  begin
-  // GetSignedUrl ya habrá reportado el error.
-  DoError('No se pudo obtener la URL firmada para el archivo con ID: ' + aMediaFile.IDFile, nil);
-  aMediaFile.CloudState := 'ocr-failed: signed-url';
-  Exit;
-  end;
-
-  // La API de OCR espera una `document_url`, incluso para archivos subidos.
-  LDocumentObj.AddPair('type', 'document_url');
-  LDocumentObj.AddPair('document_url', LDataUri);
-  end
-  else if LowerCase(Copy(aMediaFile.Filename, 1, 4)) = 'http' then
-  begin
-  // Escenario B: El archivo está en una URL pública.
-  if aMediaFile.FileCategory = Tfc_Image then
-  begin
-  LDocumentObj.AddPair('type', 'image_url');
-  LDocumentObj.AddPair('image_url', aMediaFile.Filename);
-  end
-  else // Asumimos PDF u otro tipo de documento
-  begin
-  LDocumentObj.AddPair('type', 'document_url');
-  LDocumentObj.AddPair('document_url', aMediaFile.Filename);
-  end;
-  end
-  else
-  begin
-  // Escenario C: El archivo es local y se enviará como Base64.
-  if aMediaFile.Base64.IsEmpty then
-  begin
-  DoError('El archivo local no tiene contenido en Base64 para enviar a OCR.', nil);
-  aMediaFile.CloudState := 'ocr-failed: no-base64';
-  Exit;
-  end;
-
-  LDataUri := 'data:' + aMediaFile.MimeType + ';base64,' + aMediaFile.Base64;
-
-  if aMediaFile.FileCategory = Tfc_Image then
-  begin
-  LDocumentObj.AddPair('type', 'image_url');
-  LDocumentObj.AddPair('image_url', LDataUri);
-  end
-  else // Documentos como PDF
-  begin
-  LDocumentObj.AddPair('type', 'document_url');
-  LDocumentObj.AddPair('document_url', LDataUri);
-  end;
-  end;
-
-  LJsonObject.AddPair('document', LDocumentObj);
-  LBodyStream.WriteString(LJsonObject.ToJSON);
-  LBodyStream.Position := 0;
-
-  // 3. Realizar la petición POST a la API
-  LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
-  FClient.ContentType := 'application/json';
-
-  LResponse := FClient.Post(LUrl, LBodyStream, LResponseStream, LHeaders);
-
-  // 4. Procesar la respuesta
-  LResponseStream.Position := 0;
-  if LResponse.StatusCode = 200 then
-  begin
-  LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
-
-  try
-  Result := ParseOcrResponse(LResponseObj, ResMsg);
-  aMediaFile.CloudState := 'ocr-completed';
-  finally
-  LResponseObj.Free;
-  end;
-  end
-  else
-  begin
-  FLastError := LResponse.ContentAsString;
-  aMediaFile.CloudState := Format('ocr-failed: http-%d', [LResponse.StatusCode]);
-  DoError(Format('Error en OCR: %d - %s', [LResponse.StatusCode, FLastError]), nil);
-  end;
-
-  finally
-  LBodyStream.Free;
-  LResponseStream.Free;
-  LJsonObject.Free; // LDocumentObj es propiedad de LJsonObject
-  FBusy := False;
-  end;
-  end;
-}
-
-{
-  function TAiMistralChat.InternalRunPDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
-  var
-  LBodyStream: TStringStream;
-  LResponseStream: TMemoryStream;
-  LHeaders: TNetHeaders;
-  LResponse: IHTTPResponse;
-  LJsonObject, LDocumentObj, LBboxAnnotationFormatObj, LDocumentAnnotationFormatObj: TJSONObject;
-  LUrl: string;
-  LDataUri: string;
-  LResponseObj: TJSONObject;
-  LPagesArray: TJSonArray;
-  I: integer;
-  LModel: String;
-
-  PageNumbers: TStringDynArray;
-  PageNumber: string;
-  PageIndex: Integer;
-
-  begin
-  Result := '';
-  if not Assigned(aMediaFile) then
-  raise Exception.Create('Se requiere un TAiMediaFile para el proceso de OCR.');
-
-  FBusy := True;
-  FLastError := '';
-  LUrl := Url + 'ocr'; // Endpoint correcto /v1/ocr omitiendo /process como estaba.
-  LJsonObject := TJSONObject.Create;
-  LDocumentObj := TJSONObject.Create;
-  LBodyStream := TStringStream.Create('', TEncoding.UTF8);
-  LResponseStream := TMemoryStream.Create;
-  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model); // Obtener el modelo base.
-  LBboxAnnotationFormatObj := nil;
-  LDocumentAnnotationFormatObj := nil;
-
-  try
-  // 1. Construir el cuerpo de la petición JSON
-  if LModel.IsEmpty then
-  begin
-  // Si el modelo base esta vacio, utilizar el modelo por defecto.
-  LJsonObject.AddPair('model', TJSONString.Create('mistral-ocr-latest'));
-  end
-  else
-  LJsonObject.AddPair('model', TJSONString.Create(LModel));
-
-  // Id del documento.
-  LJsonObject.AddPair('id', TJSONString.Create(aMediaFile.IDFile));
-
-  // 2. Determinar el tipo y origen del documento
-  aMediaFile.CloudState := 'ocr-processing'; // Actualizar estado
-
-  if not aMediaFile.IDFile.IsEmpty then
-  begin
-  // Escenario A: El archivo ya fue subido a Mistral.
-  // Necesitamos una URL firmada para que el servicio de OCR pueda acceder a él.
-  aMediaFile.CloudState := 'ocr-getting-signed-url';
-  LDataUri := GetSignedUrl(aMediaFile); // Esta función actualiza aMediaFile.CloudUri
-
-  if LDataUri.IsEmpty then
-  begin
-  // GetSignedUrl ya habrá reportado el error.
-  DoError('No se pudo obtener la URL firmada para el archivo con ID: ' + aMediaFile.IDFile, nil);
-  aMediaFile.CloudState := 'ocr-failed: signed-url';
-  Exit;
-  end;
-
-  // La API de OCR espera una `document_url`, incluso para archivos subidos.
-  LDocumentObj.AddPair('document_url', LDataUri);
-  LDocumentObj.AddPair('document_name', aMediaFile.Filename);
-  LDocumentObj.AddPair('type', TJSONString.Create('document_url'));
-
-  end
-  else if LowerCase(Copy(aMediaFile.Filename, 1, 4)) = 'http' then
-  begin
-  // Escenario B: El archivo está en una URL pública.
-  LDocumentObj.AddPair('document_url', aMediaFile.Filename);
-  LDocumentObj.AddPair('document_name', aMediaFile.Filename);
-  LDocumentObj.AddPair('type', TJSONString.Create('document_url'));
-  end
-  else
-  begin
-  // Escenario C: El archivo es local y se enviará como Base64.
-  // ESTE ESCENARIO NO ESTÁ SOPORTADO POR EL API.
-  DoError('El archivo local no puede ser enviado como Base64 para OCR.', nil);
-  aMediaFile.CloudState := 'ocr-failed: no-base64';
-  Exit;
-  end;
-
-  LJsonObject.AddPair('document', LDocumentObj);
-
-  // Parámetros Opcionales
-  LJsonObject.AddPair('include_image_base64', TJSONBool.Create(FOcrIncludeImages));
-
-  // Pages
-  LPagesArray := TJSonArray.Create;
-  try
-  // Verifica si OcrAnnotationPages está vacío
-  if not OcrAnnotationPages.IsEmpty then
-  begin
-  // Divide el string OcrAnnotationPages por comas para obtener los números de página
-  PageNumbers := SplitString(OcrAnnotationPages, ',');
-
-  // Itera sobre los números de página y añádelos al array JSON
-  for PageNumber in PageNumbers do
-  begin
-  // Elimina espacios en blanco al principio y al final del número de página
-
-
-  // Verifica si el número de página es un entero válido
-  if TryStrToInt(Trim(PageNumber), PageIndex) then
-  begin
-  // Añade el número de página al array JSON
-  LPagesArray.Add(PageIndex);
-  end
-  else
-  begin
-  // Manejar el caso en que el número de página no es válido (opcional)
-  DoError('Número de página no válido: ' + PageNumber, nil);
-  end;
-  end;
-  end
-  else
-  begin
-  // Si no se especifican las páginas, añade la primera página (página 0)
-  LPagesArray.Add(0);
-  end;
-  LJsonObject.AddPair('pages', LPagesArray);
-  finally
-  // LPagesArray.Free; //Es controlado por LJsonObject
-  end;
-
-  // Anotaciones
-  if (Assigned(OcrDocumentAnnotationSchema) and (OcrDocumentAnnotationSchema.Text <> '')) then
-  begin
-  LDocumentAnnotationFormatObj := TJSONObject.Create;
-  LDocumentAnnotationFormatObj.AddPair('type', 'json_schema');
-  LDocumentAnnotationFormatObj.AddPair('json_schema', TJSONObject.ParseJSONValue(OcrDocumentAnnotationSchema.Text));
-  // Asumo que OcrDocumentAnnotationSchema es un string Json
-  LJsonObject.AddPair('document_annotation_format', LDocumentAnnotationFormatObj);
-
-  end;
-
-  // bbox_annotation_format
-  // Solo soportan jSon_schema
-
-  // document_annotation_format
-  // Solo soportan jSon_schema
-
-  // 3. Realizar la petición POST a la API
-  ResMsg.Prompt := LJsonObject.ToString; // Guardamos la petición
-  LBodyStream.WriteString(LJsonObject.ToString);
-  LBodyStream.Position := 0;
-
-  LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
-  FClient.ContentType := 'application/json';
-
-  LResponse := FClient.Post(LUrl, LBodyStream, LResponseStream, LHeaders);
-
-  // 4. Procesar la respuesta
-  LResponseStream.Position := 0;
-  ResMsg.Content := LResponse.ContentAsString;
-  if LResponse.StatusCode = 200 then
-  begin
-  LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
-
-  try
-  Result := ParseOcrResponse(LResponseObj, aMediaFile);
-
-  // Mover el contenido del aMediaFile a el ResMsg
-  ResMsg.Prompt := aMediaFile.Transcription;
-  aMediaFile.CloudState := 'ocr-completed';
-  finally
-  LResponseObj.Free;
-  end;
-  end
-  else
-  begin
-  FLastError := LResponse.ContentAsString;
-  aMediaFile.CloudState := Format('ocr-failed: http-%d', [LResponse.StatusCode]);
-  DoError(Format('Error en OCR: %d - %s', [LResponse.StatusCode, FLastError]), nil);
-  end;
-
-  finally
-  LBodyStream.Free;
-  LResponseStream.Free;
-  LJsonObject.Free; // LDocumentObj es propiedad de LJsonObject
-  if Assigned(LBboxAnnotationFormatObj) then
-  LBboxAnnotationFormatObj.Free;
-  if Assigned(LDocumentAnnotationFormatObj) then
-  LDocumentAnnotationFormatObj.Free;
-  FBusy := False;
-  end;
-  end;
-}
 
 function TAiMistralChat.InternalRunPDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
 var
@@ -1375,23 +926,6 @@ begin
       LDocumentObj.AddPair('type', TJSONString.Create('document_url'));
 
     end;
-    {
-      else if LowerCase(Copy(aMediaFile.Filename, 1, 4)) = 'http' then
-      begin
-      // Escenario B: El archivo está en una URL pública.
-      LDocumentObj.AddPair('document_url', aMediaFile.Filename);
-      LDocumentObj.AddPair('document_name', aMediaFile.Filename);
-      LDocumentObj.AddPair('type', TJSONString.Create('document_url'));
-      end
-      else
-      begin
-      // Escenario C: El archivo es local y se enviará como Base64.
-      // ESTE ESCENARIO NO ESTÁ SOPORTADO POR EL API.
-      DoError('El archivo local no puede ser enviado como Base64 para OCR.', nil);
-      aMediaFile.CloudState := 'ocr-failed: no-base64';
-      Exit;
-      end;
-    }
 
     LJsonObject.AddPair('document', LDocumentObj);
 
@@ -1595,8 +1129,7 @@ begin
               // embeddedImage.MimeType := imageMimeType;
 
               // Añadir información adicional a la descripción de la imagen
-              embeddedImage.Detail := Format('top_left_x: %d, top_left_y: %d, bottom_right_x: %d, bottom_right_y: %d',
-                [topLeftX, topLeftY, bottomRightX, bottomRightY]);
+              embeddedImage.Detail := Format('top_left_x: %d, top_left_y: %d, bottom_right_x: %d, bottom_right_y: %d', [topLeftX, topLeftY, bottomRightX, bottomRightY]);
 
               // Añadimos la imagen extraída a la lista de media files del documento principal.
               ResMsg.MediaFiles.Add(embeddedImage);
@@ -1621,108 +1154,6 @@ begin
   end;
 end;
 
-{
-  function TAiMistralChat.ParseOcrResponse(jResponse: TJSONObject; aMediaFile: TAiMediaFile): string;
-  var
-  jPages: TJSonArray;
-  jPage, jImage: TJSONObject;
-  pageValue, blockValue: TJSonValue;
-  sb: TStringBuilder;
-  I, K: integer;
-  imageB64, imageMimeType: string;
-  embeddedImage: TAiMediaFile;
-  begin
-  Result := '';
-  if not Assigned(jResponse) or not Assigned(aMediaFile) then
-  Exit;
-
-  // El objeto aMediaFile ya existe, vamos a limpiarlo por si tiene datos previos.
-  aMediaFile.Transcription := '';
-  aMediaFile.Detail := '';
-  // Limpiamos los MediaFiles anidados (imágenes extraídas del OCR)
-  aMediaFile.MediaFiles.Clear;
-
-  sb := TStringBuilder.Create;
-  try
-  // La respuesta principal es un objeto que contiene un array 'pages'.
-  if not jResponse.TryGetValue<TJSonArray>('pages', jPages) then
-  begin
-  // Si la estructura no es la esperada, devolvemos el JSON crudo.
-  Result := jResponse.Format;
-  aMediaFile.Detail := Result; // Guardar el detalle del error.
-  Exit;
-  end;
-
-  // Iteramos por cada página del documento.
-  K := 0;
-  for pageValue in jPages do
-  begin
-  Inc(K);
-  if not(pageValue is TJSONObject) then
-  continue;
-  jPage := pageValue as TJSONObject;
-
-  // Cada página tiene un campo "content" con el Markdown ya formateado.
-  // Esta es la forma más rápida y sencilla de obtener el texto.
-  if jPage.TryGetValue('content', blockValue) then
-  begin
-  sb.AppendLine(blockValue.Value);
-  sb.AppendLine('--- Page Break ---'); // Añadir un separador de página.
-  end;
-
-  // Además, podemos procesar los datos estructurados si es necesario,
-  // como las imágenes incrustadas en el documento.
-  Var
-  jImagesArray := TJSonArray.Create;
-
-  if jPage.TryGetValue<TJSonArray>('images', jImagesArray) then
-  begin
-  for I := 0 to jImagesArray.Count - 1 do
-  begin
-  if not(jImagesArray.Items[I] is TJSONObject) then
-  continue;
-  jImage := jImagesArray.Items[I] as TJSONObject;
-
-  // La API devuelve la imagen en Base64 si 'include_image_base64' fue true.
-  if jImage.TryGetValue<string>('base64', imageB64) and (imageB64 <> '') then
-  begin
-  jImage.TryGetValue<string>('mime_type', imageMimeType);
-  if imageMimeType = '' then
-  imageMimeType := 'image/jpeg'; // Default
-
-  // Creamos un nuevo TAiMediaFile para la imagen extraída.
-  embeddedImage := TAiMediaFile.Create;
-  try
-  // Le damos un nombre descriptivo.
-  embeddedImage.LoadFromBase64(Format('embedded_img_p%d_i%d.jpg', [K, I]), imageB64);
-  // embeddedImage.MimeType := imageMimeType;
-
-  // Añadimos la imagen extraída a la lista de media files del documento principal.
-  aMediaFile.MediaFiles.Add(embeddedImage);
-  except
-  embeddedImage.Free;
-  // Manejar el error si es necesario.
-  end;
-  end;
-  end;
-  end;
-  end;
-
-  // El resultado principal es el contenido Markdown concatenado de todas las páginas.
-  Result := sb.ToString;
-
-  // Guardamos el texto en las propiedades correspondientes de TAiMediaFile.
-  // Usamos 'Transcription' para el texto principal.
-  aMediaFile.Transcription := Result;
-  // Podríamos usar 'Detail' para guardar el JSON original completo para depuración.
-  aMediaFile.Detail := jResponse.Format;
-
-  finally
-  sb.Free;
-  end;
-  end;
-}
-
 { TAiMistralEmbeddings }
 
 constructor TAiMistralEmbeddings.Create(aOwner: TComponent);
@@ -1734,8 +1165,7 @@ begin
   FModel := 'mistral-embed';
 end;
 
-function TAiMistralEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: integer; aModel, aEncodingFormat: String)
-  : TAiEmbeddingData;
+function TAiMistralEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
 Var
   Client: TNetHTTPClient;
   Headers: TNetHeaders;
@@ -1751,7 +1181,6 @@ begin
 {$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
 {$ENDIF}
-
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'embeddings';
@@ -1772,7 +1201,7 @@ begin
     // JObj.AddPair('dimensions', aDimensions);
     jObj.AddPair('encoding_format', aEncodingFormat);
 
-    St.WriteString(UTF8Encode(jObj.Format));
+    St.WriteString(jObj.Format);
     St.Position := 0;
 
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];

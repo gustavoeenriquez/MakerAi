@@ -38,9 +38,9 @@ requires
 
 contains
   uAiEditors.ChatConnectionEditor in '..\Design\uAiEditors.ChatConnectionEditor.pas',
-  uMakerAi.Dsg.AboutDialog in '..\Design\uMakerAi.Dsg.AboutDialog.pas',
+  uMakerAi.Dsg.AboutDialog in '..\Design\uMakerAi.Dsg.AboutDialog.pas' {AboutDialog},
   uMakerAi.VersionPropertyEditor in '..\Design\uMakerAi.VersionPropertyEditor.pas',
   uMCP.ClientEditorProperties in '..\Design\uMCP.ClientEditorProperties.pas',
-  uMCPClientEditor in '..\Design\uMCPClientEditor.pas';
+  uMCPClientEditor in '..\Design\uMCPClientEditor.pas' {FMCPClientEditor};
 
 end.

@@ -13,6 +13,7 @@ uses
   FireDAC.Phys, FireDAC.Phys.PG, FireDAC.Phys.PGDef, FireDAC.FMXUI.Wait,
   Data.DB, FireDAC.Comp.Client,
   uMakerAi.RAG.Vectors, uMakerAi.Embeddings, uMakerAi.Chat.Ollama, uMakerAi.Core, uMakerAi.Chat,
+  uMakerAi.Chat.OpenAi,
 
   FMX.Controls.Presentation, FMX.StdCtrls, FMX.Memo.Types, FMX.ScrollBox, FMX.Memo, FireDAC.Stan.Param, FireDAC.DatS, FireDAC.DApt.Intf,
   FireDAC.DApt, FireDAC.Comp.DataSet,
@@ -29,7 +30,6 @@ type
     RAGVectorAdicion: TAiRAGVector;
     BtnAddText: TButton;
     MemoTextToAdd: TMemo;
-    AiOllamalEmbeddings1: TAiOllamalEmbeddings;
     BusQuery: TFDQuery;
     Grid1: TGrid;
     BindSourceDB1: TBindSourceDB;
@@ -50,6 +50,7 @@ type
     RAGVectorConsulta: TAiRAGVector;
     AiChatConnection1: TAiChatConnection;
     BusQuerydistancia: TFloatField;
+    AiOllamaEmbeddings1: TAiOllamaEmbeddings;
     procedure BtnAddTextClick(Sender: TObject);
     procedure RAGVectorAdicionDataVecAddItem(Sender: TObject; aItem: TAiEmbeddingNode; MetaData: TAiEmbeddingMetaData;
       var Handled: Boolean);
@@ -58,6 +59,7 @@ type
       var aDataVec: TAiRAGVector; var Handled: Boolean);
     procedure FormCreate(Sender: TObject);
     procedure AiChatConnection1ReceiveData(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
+    procedure MemoTextToAddChange(Sender: TObject);
   private
     GlLista: TStringList;
     Function NewQuery: TFDQuery;
@@ -202,7 +204,7 @@ begin
   Try
 
     Md.Data.Values['fechadoc'] := FormatDateTime('YYYY-MM-DD hh:nn:ss', Now);
-    Md.Data.Values['categoria'] := 'Pruebas';
+    Md.Data.Values['categoria'] := 'Ejercicio';
     Md.Data.Values['pathdoc'] := '';
     Md.Data.Values['filename'] := '';
     Md.Data.Values['resumen'] := '';
@@ -210,7 +212,7 @@ begin
     Md.Data.Values['fileformat'] := 'txt';
     Md.TagString := Texto;
 
-    RAGVectorConsulta.AddItem(Texto, Md);
+    RAGVectorAdicion.AddItem(Texto, Md);
   Finally
     Md.Free;
   End;
@@ -218,7 +220,7 @@ end;
 
 procedure TForm8.BtnBuscarClick(Sender: TObject);
 Var
-  Prompt, Res: String;
+  Prompt, Res, ResFinal, promptIA: String;
   Limit: Integer;
   Presicion: Double;
 
@@ -228,12 +230,25 @@ begin
   Prompt := EditPrompt.Text;
   Res := RAGVectorConsulta.SearchText(Prompt, Limit, Presicion);
   MemoRes.Lines.Text := Res;
+
+  PromptIa := 'Responde a la pregunta '+sLineBreak+Prompt +slineBreak+'utilizando esta información, estrae de estos datos lo que te estoy pidiendo '+slineBreak+Res;
+
+  ResFinal := AiChatConnection1.AddMessageAndRun(PromptIA, 'user', []);
+
+  ShowMessage(ResFinal);
+
+
 end;
 
 procedure TForm8.FormCreate(Sender: TObject);
 begin
   GlLista := TStringList.Create;
 
+end;
+
+procedure TForm8.MemoTextToAddChange(Sender: TObject);
+begin
+  RAGVectorAdicion.BuildIndex
 end;
 
 function TForm8.NewQuery: TFDQuery;
