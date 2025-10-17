@@ -236,7 +236,7 @@ end;
 - **Modular Packaging:** Implementation of four packages: MakerAi.bpl, MakerAi.RAG.Drivers.bpl, MakerAi.UI.bpl, and MakerAiDsg.bpl.
 - **New Feature:** Integrated Voice Monitoring with progressive transcription and activation commands.
 - **New Feature:** Professional visual components for building advanced multimedia chat interfaces (ChatUI).
-- **Compatibility:** Official support for Delphi 10.3, 10.4 Sydney, 11 Alexandria, and 12 Athens.
+- **Compatibility:** Official support for Delphi 10.3, 10.4 Sydney, 11 Alexandria, 12 Athens and 13 Florence.
 - **Tools:** Unified MakerAI Tools system for standardized function calling.
 
 ### Version 2.6.0 (August 20, 2025)
