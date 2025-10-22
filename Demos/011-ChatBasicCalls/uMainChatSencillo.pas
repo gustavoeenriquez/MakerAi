@@ -305,6 +305,7 @@ type
     procedure BtnNewChatClick(Sender: TObject);
     procedure BtnListarMensajesClick(Sender: TObject);
     procedure AiFunctions1Functions1CreaListaDeNumerosPrimosAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure AiFunctions1Functions2GetTemperaturaAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
   private
     Procedure UpdateMemo(Text: String);
     Function EnviarPrompt: String;
@@ -368,7 +369,7 @@ begin
             TThread.Synchronize(nil,
               procedure
               begin
-                WebBrowser1.Navigate('file:///D:/taller/Medios/'+FileNameOutput);
+                WebBrowser1.Navigate('file:///D:/taller/Medios/' + FileNameOutput);
                 TabControl1.ActiveTab := TabWeb;
               end);
 
@@ -413,11 +414,13 @@ begin
 end;
 
 procedure TForm7.AiFunctions1Functions1CreaListaDeNumerosPrimosAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
-{Var
+Var
   N: Integer;
   Resultado, Script: String;
-}
+
 begin
+
+  N := StrToIntDef(ToolCall.Params.Values['N'], 1);
 
   // Si desea utilizar la funcionalidad de script de python debe instalar Delphi4Pyton desde el Gettit
   // y tambien debe tener instalado python en sus sistema previamente
@@ -436,6 +439,16 @@ begin
 
     Handled := True;
   }
+end;
+
+procedure TForm7.AiFunctions1Functions2GetTemperaturaAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+Var
+  Ciudad: String;
+begin
+  Ciudad := ToolCall.Params.Values['Ciudad'];
+
+  ToolCall.Response := 'La temperatura para la ciudad de ' + Ciudad + ' es de 32 grados centígrados';
+  Handled := True;
 end;
 
 procedure TForm7.BtnListarMensajesClick(Sender: TObject);
@@ -771,7 +784,7 @@ end;
 
 procedure TForm7.ComboModelsChange(Sender: TObject);
 begin
-  AiConn.Params.Clear;  //Limpia los parámetros anteriores de lo contrario los suma
+  AiConn.Params.Clear; // Limpia los parámetros anteriores de lo contrario los suma
   AiConn.model := ComboModels.Text;
 end;
 
