@@ -1,8 +1,8 @@
-unit uMakerAi.Chat.AiConnection;
+Ôªøunit uMakerAi.Chat.AiConnection;
 
 // MIT License
 //
-// Copyright (c) 2013 Gustavo EnrÌquez - CimaMaker
+// Copyright (c) 2013 Gustavo Enr√≠quez - CimaMaker
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,7 @@ unit uMakerAi.Chat.AiConnection;
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 // - Telegram: +57 3128441700
@@ -49,6 +49,7 @@ type
     FModel: String;
     FParams: TStrings;
     FMessages: TAiChatMessages;
+    FMessagesOwn: TAiChatMessages; //Instancia de mensajes que poseemos
     FInitialInstructions: TStrings;
     FMemory: TStrings;
     FAiFunctions: TAiFunctions;
@@ -197,7 +198,8 @@ begin
   FChat := nil;
   FInitialInstructions := TStringList.Create;
   FMemory := TStringList.Create;
-  FMessages := TAiChatMessages.Create;
+  FMessagesOwn := TAiChatMessages.Create;
+  FMessages := FMessagesOwn;  // Por defecto, FMessages apunta a nuestra instancia
   FParams := TStringList.Create;
   TStringList(FParams).OnChange := ParamsChanged;
   TStringList(FInitialInstructions).OnChange := ParamsChanged;
@@ -209,9 +211,12 @@ destructor TAiChatConnection.Destroy;
 begin
   if Assigned(FChat) then
     FChat.Free;
+
   FInitialInstructions.Free;
   FMemory.Free;
-  FMessages.Free;
+
+  // FMessages es solo una referencia, NO se libera
+  FMessagesOwn.Free;
   FParams.Free;
   inherited;
 end;
@@ -395,7 +400,7 @@ begin
       begin
         try
           // --- ESTRUCTURA REFACTORIZADA ---
-          // Cada rama ahora es completamente responsable de su lÛgica,
+          // Cada rama ahora es completamente responsable de su l√≥gica,
           // incluyendo la llamada a SetValue.
           case LProp.PropertyType.TypeKind of
             tkInteger, tkInt64:
@@ -423,7 +428,7 @@ begin
               end;
             tkSet:
               begin
-                // La lÛgica para 'tkSet' ya era auto-contenida y no necesita SetValue.
+                // La l√≥gica para 'tkSet' ya era auto-contenida y no necesita SetValue.
                 var
                 LSetType := LProp.PropertyType as TRttiSetType;
                 if LSetType.ElementType.TypeKind = tkEnumeration then
@@ -450,20 +455,20 @@ begin
                           if OrdinalValue >= 0 then
                             SetAsInt := SetAsInt or (1 shl OrdinalValue);
                         except
-                          // Ignorar valores inv·lidos
+                          // Ignorar valores inv√°lidos
                         end;
                       end;
                     end;
                   end;
                   TValue.Make(@SetAsInt, LSetType.Handle, LValue);
-                  // La llamada a SetValue se hace con el TValue reciÈn creado.
+                  // La llamada a SetValue se hace con el TValue reci√©n creado.
                   LProp.SetValue(AChat, LValue);
                 end;
               end;
             tkClass:
               begin
-                // La lÛgica para 'tkClass' es especial. Modifica el objeto existente.
-                // Usamos EndsText para ser m·s flexibles (acepta TStrings, TStringList, etc.)
+                // La l√≥gica para 'tkClass' es especial. Modifica el objeto existente.
+                // Usamos EndsText para ser m√°s flexibles (acepta TStrings, TStringList, etc.)
                 if LProp.PropertyType.QualifiedName.EndsWith('TStrings') then
                 begin
                   var
@@ -485,7 +490,7 @@ begin
     LContext.Free;
   end;
 
-  // Verifica par·metros adicionales como WebSearch, CodeInterpreter y ExtractTextFiles
+  // Verifica par√°metros adicionales como WebSearch, CodeInterpreter y ExtractTextFiles
 
   If FWebSearch then
     AChat.ChatMediaSupports := AChat.ChatMediaSupports + [TAiChatMediaSupport.tcm_WebSearch];
@@ -587,7 +592,7 @@ begin
   Result.Model := aModel;
 end;
 
-// --- MÈtodos de acciÛn y fachada ---
+// --- M√©todos de acci√≥n y fachada ---
 
 procedure TAiChatConnection.Abort;
 begin
@@ -777,23 +782,31 @@ procedure TAiChatConnection.SetChat(const Value: TAiChat);
 begin
   if FChat <> Value then
   begin
+    // Si hab√≠a un chat anterior, aplicar configuraci√≥n
     if Assigned(FChat) then
     Begin
       ApplyEventsToChat(FChat);
       ApplyParamsToChat(FChat, FParams);
     End;
 
+    // Asignar el nuevo chat
     FChat := Value;
 
     if Assigned(FChat) then
     begin
+      // Aplicar eventos y par√°metros al nuevo chat
       ApplyEventsToChat(FChat);
       ApplyParamsToChat(FChat, FParams);
-      FMessages := FChat.Messages; // Sincronizar la lista de mensajes
+
+      // ‚≠ê CORRECCI√ìN: Apuntar FMessages a los mensajes del chat
+      // (NO creamos ni liberamos nada, solo cambiamos la referencia)
+      FMessages := FChat.Messages;
     end
     else
     begin
-      FMessages := TAiChatMessages.Create; // Crear una lista vacÌa si no hay chat
+      // ‚≠ê CORRECCI√ìN: Si no hay chat, volver a usar nuestra instancia propia
+      // (NO creamos una nueva, usamos FMessagesOwn que ya existe)
+      FMessages := FMessagesOwn;
     end;
   end;
 end;

@@ -417,6 +417,9 @@ var
   jContent, jFunctionCall, LArgsObject: TJSonObject;
   jParts: TJSonArray;
   LFunction: TAiToolsFunction;
+  I: Integer;
+  Nom, Valor: String;
+
 begin
   Result := nil;
   if not Assigned(jChoices) or (jChoices.Count = 0) then
@@ -441,10 +444,20 @@ begin
       LFunction := TAiToolsFunction.Create;
       try
         jFunctionCall.TryGetValue<string>('name', LFunction.Name);
+
         if jFunctionCall.TryGetValue<TJSonObject>('args', LArgsObject) then
           LFunction.Arguments := LArgsObject.ToJSON
         else
           LFunction.Arguments := '{}';
+
+
+        For I := 0 to LArgsObject.Count - 1 do
+        Begin
+          Nom := LArgsObject.Pairs[I].JsonString.Value;
+          Valor := LArgsObject.Pairs[I].JsonValue.Value;
+          LFunction.Params.Values[Nom] := Valor;
+        End;
+
 
         LFunction.Id := 'call_' + TGuid.NewGuid.ToString;
         LFunction.Tipo := 'function';

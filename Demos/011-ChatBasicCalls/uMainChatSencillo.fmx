@@ -3185,6 +3185,29 @@ object Form7: TForm7
         Default = False
         Tag = 0
         ToolType = tt_function
+      end
+      item
+        FunctionName = 'GetTemperatura'
+        OnAction = AiFunctions1Functions2GetTemperaturaAction
+        Description.Strings = (
+          'Retorna la temperatura de una ciudad en particular. '
+          ''
+          'Ej. Cali'
+          ''
+          'o tambi'#233'n podr'#237'a ser Cali, Colombia.')
+        Parameters = <
+          item
+            Name = 'Ciudad'
+            ParamType = ptString
+            Description.Strings = (
+              
+                'Debe describir la ciudad de la cual se desea obtener la temperat' +
+                'ura')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
       end>
     MCPClients = <
       item

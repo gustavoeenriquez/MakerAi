@@ -7,21 +7,21 @@
     <File Path="..\Agents\uMakerAi.Agents.EngineRegistry.pas"/>
     <File Path="..\Agents\uMakerAi.Agents.pas"/>
     <File Path="..\Chat"/>
+    <File Path="..\Chat\uMakerAi.Chat.AiConnection.pas"/>
     <File Path="..\Chat\uMakerAi.Chat.Claude.pas"/>
     <File Path="..\Chat\uMakerAi.Chat.DeepSeek.pas"/>
     <File Path="..\Chat\uMakerAi.Chat.Gemini.pas"/>
     <File Path="..\Chat\uMakerAi.Chat.Grok.pas"/>
     <File Path="..\Chat\uMakerAi.Chat.Groq.pas"/>
+    <File Path="..\Chat\uMakerAi.Chat.Initializations.pas"/>
     <File Path="..\Chat\uMakerAi.Chat.Mistral.pas"/>
     <File Path="..\Chat\uMakerAi.Chat.Ollama.pas"/>
     <File Path="..\Chat\uMakerAi.Chat.OpenAi.pas"/>
     <File Path="..\Chat\uMakerAi.Chat.OpenAiResponses.pas"/>
     <File Path="..\Chat\uMakerAi.ToolFunctions.pas"/>
-    <File Path="..\Chat\uMakerAi.Chat.AiConnection.pas"/>
-    <File Path="..\Chat\uMakerAi.Chat.Initializations.pas"/>
     <File Path="..\Core"/>
-    <File Path="..\Core\uMakerAi.Core.pas"/>
     <File Path="..\Core\uMakerAi.Chat.pas"/>
+    <File Path="..\Core\uMakerAi.Core.pas"/>
     <File Path="..\Core\uMakerAi.Embeddings.core.pas"/>
     <File Path="..\Core\uMakerAi.Embeddings.pas"/>
     <File Path="..\Core\uMakerAi.Prompts.pas"/>
@@ -62,14 +62,14 @@
     <Transaction>2025/10/05 11:00:52.000.260,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\RAG\uMakerAi.RAG.Graph.Builder.pas</Transaction>
     <Transaction>2025/10/06 09:23:49.000.790,=xmlrtl.dcp</Transaction>
     <Transaction>2025/10/13 07:14:06.000.152,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas</Transaction>
-    <Transaction>2025/10/13 07:15:18.000.376,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\RAG\uMakerAi.RAG.Graph.Driver.Postgres.pas</Transaction>
+    <Transaction>2025/10/13 07:15:18.000.376,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\RAG\uMakerAi.RAG.Graph.Driver.Postgres.pas=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas</Transaction>
     <Transaction>2025/10/13 10:46:44.000.346,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\RAG\uMakerAi.RAG.Graph.Driver.Postgres.pas=</Transaction>
     <Transaction>2025/10/14 15:22:05.000.839,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas</Transaction>
-    <Transaction>2025/10/14 15:22:44.000.395,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\uMakerAiResources.pas</Transaction>
-    <Transaction>2025/10/14 15:24:01.000.721,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\uMakerAiResources.rc=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Resources\uMakerAiResources.rc</Transaction>
+    <Transaction>2025/10/14 15:22:44.000.395,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\uMakerAiResources.pas=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas</Transaction>
+    <Transaction>2025/10/14 15:24:01.000.721,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Resources\uMakerAiResources.rc=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\uMakerAiResources.rc</Transaction>
     <Transaction>2025/10/14 15:26:06.000.058,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Resources\uMakerAiResources.rc</Transaction>
-    <Transaction>2025/10/15 04:02:26.840,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Agents\uMakerAi.Agents.Attributes.pas</Transaction>
-    <Transaction>2025/10/15 04:02:26.862,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Agents\uMakerAi.Agents.EngineRegistry.pas</Transaction>
-    <Transaction>2025/10/15 04:03:23.784,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Design\UMakerAi.ParamsRegistry.pas</Transaction>
+    <Transaction>2025/10/15 04:02:26.000.840,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Agents\uMakerAi.Agents.Attributes.pas</Transaction>
+    <Transaction>2025/10/15 04:02:26.000.862,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Agents\uMakerAi.Agents.EngineRegistry.pas</Transaction>
+    <Transaction>2025/10/15 04:03:23.000.784,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Design\UMakerAi.ParamsRegistry.pas</Transaction>
   </Transactions>
 </BorlandProject>
