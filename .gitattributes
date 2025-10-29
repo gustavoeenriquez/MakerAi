@@ -1,0 +1,32 @@
+# Configuración por defecto
+* text=auto
+
+# Archivos de código fuente Delphi (normalizar finales de línea)
+*.pas text
+*.dfm text
+*.dpr text
+*.inc text
+*.txt text
+*.md text
+
+# Archivos de proyecto Delphi (NO convertir - mantener CRLF)
+*.dpk -text
+*.dproj -text
+*.groupproj -text
+*.dsk -text
+*.identcache -text
+*.local -text
+*.cfg -text
+
+# Archivos binarios
+*.exe binary
+*.dll binary
+*.bpl binary
+*.dcu binary
+*.res binary
+*.dcr binary
+*.bmp binary
+*.ico binary
+*.jpg binary
+*.png binary
+*.gif binary

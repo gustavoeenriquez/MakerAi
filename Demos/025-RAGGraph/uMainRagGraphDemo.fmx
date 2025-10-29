@@ -1481,8 +1481,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Size.Height = 573.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
-            Viewport.Width = 399.000000000000000000
-            Viewport.Height = 573.000000000000000000
+            Viewport.Width = 395.000000000000000000
+            Viewport.Height = 569.000000000000000000
           end
           object Layout7: TLayout
             Align = Bottom
@@ -2341,8 +2341,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Size.Height = 625.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
-            Viewport.Width = 600.000000000000000000
-            Viewport.Height = 625.000000000000000000
+            Viewport.Width = 596.000000000000000000
+            Viewport.Height = 621.000000000000000000
           end
         end
         object Splitter2: TSplitter
@@ -3571,8 +3571,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Size.Height = 53.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
-            Viewport.Width = 1017.000000000000000000
-            Viewport.Height = 53.000000000000000000
+            Viewport.Width = 1013.000000000000000000
+            Viewport.Height = 49.000000000000000000
           end
         end
         object Layout4: TLayout
@@ -3606,8 +3606,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Size.Height = 479.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
-            Viewport.Width = 1017.000000000000000000
-            Viewport.Height = 479.000000000000000000
+            Viewport.Width = 1013.000000000000000000
+            Viewport.Height = 475.000000000000000000
           end
         end
         object Splitter1: TSplitter

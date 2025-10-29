@@ -179,6 +179,7 @@ type
     Label18: TLabel;
     MemoTokenUsageHistory: TMemo;
     AiOpenChat1: TAiOpenChat;
+    AiGeminiChat1: TAiGeminiChat;
     procedure ChatInput1SendEvent(Sender: TObject; APrompt: string; aMediaFiles: TAiMediaFiles; aAudioStream: TMemoryStream);
     procedure ChatList1MediaFileDblClick(Sender: TObject; const ABubble: TChatBubble; const AMediaFile: TAiMediaFile);
     procedure ChatList1BeforeAddBubble(Sender: TObject; ABubble: TChatBubble);
@@ -627,6 +628,8 @@ begin
   AiConn.Params.Values['Temperature'] := (TrackTemperature.Value / 10).ToString;
   AiConn.Params.Values['Tool_Active'] := BoolToStr(ChUseTools.IsChecked, True);
   AiConn.Params.Values['Asynchronous'] := BoolToStr(ChAsincrono.IsChecked, True);
+  AiConn.Params.Values['ResponseTimeOut'] := '240000';  //Aumenta el timeout
+
 
   If ChJSonFormat.IsChecked then
     AiConn.Params.Values['Response_format'] := 'tiaChatRfJson';

@@ -9,7 +9,7 @@ uses
   uMakerAi.RAG.Graph.Core, uMakerAi.RAG.Graph.Builder, FMX.Memo.Types, FMX.ScrollBox, FMX.Memo, uMakerAi.Embeddings.Core,
   uMakerAi.Embeddings, uMakerAi.Chat.OpenAi, uMakerAi.RAG.Vectors, FMX.Edit, uMakerAi.Prompts,
   uMakerAi.Chat.AiConnection, uMakerAi.Chat, uMakerAi.Core, FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Param, FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf, FireDAC.DApt.Intf, FireDAC.Stan.Async, FireDAC.DApt,
-  uMakerAi.Chat.Gemini,
+  uMakerAi.Chat.Gemini, uMakerAi.Chat.Initializations,
   FireDAC.UI.Intf, FireDAC.Stan.Def, FireDAC.Stan.Pool, FireDAC.Phys, FireDAC.Phys.PGDef, FireDAC.FMXUI.Wait, FireDAC.Comp.UI, FireDAC.Phys.PG, Data.DB, FireDAC.Comp.Client, FireDAC.Comp.DataSet, FMX.Objects, FMX.Layouts, FMX.TabControl,
   FMX.ListBox, FMX.EditBox, FMX.SpinBox, FMX.SearchBox, uMakerAi.RAG.Graph.Driver.Postgres;
 
@@ -191,6 +191,8 @@ begin
 
   If Ent = '' then
     Raise Exception.Create('Primero adicione el texto a procesar en el memo y luego presione el botón para crear el grafo');
+
+
 
   Prompt := AiPrompts1.GetTemplate('CreaJSonFromTexto', ['texto=' + Ent]);
   // Prompt := AiPrompts1.GetTemplate('CreaJSonFromTextoMejorado', ['texto=' + Ent]);
