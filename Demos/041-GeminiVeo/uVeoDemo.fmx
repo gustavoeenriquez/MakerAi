@@ -1,0 +1,466 @@
+object Form11: TForm11
+  Left = 0
+  Top = 0
+  Caption = 'Form11'
+  ClientHeight = 923
+  ClientWidth = 1121
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+  object MainLayout: TLayout
+    Align = Client
+    Size.Width = 1121.000000000000000000
+    Size.Height = 923.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    object Layout1: TLayout
+      Align = Top
+      Size.Width = 1121.000000000000000000
+      Size.Height = 67.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+      object Modo: TGroupBox
+        Align = Left
+        Size.Width = 329.000000000000000000
+        Size.Height = 67.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'Modo'
+        TabOrder = 0
+        object rbAuto: TRadioButton
+          IsChecked = True
+          Position.X = 8.000000000000000000
+          Position.Y = 24.000000000000000000
+          Size.Width = 93.000000000000000000
+          Size.Height = 19.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 2
+          Text = 'Autom'#225'tico'
+        end
+        object rbInter: TRadioButton
+          Position.X = 103.000000000000000000
+          Position.Y = 24.000000000000000000
+          Size.Width = 86.000000000000000000
+          Size.Height = 19.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 1
+          Text = 'Interpolar'
+        end
+        object rbReference: TRadioButton
+          Position.X = 191.000000000000000000
+          Position.Y = 24.000000000000000000
+          Size.Width = 135.000000000000000000
+          Size.Height = 19.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 0
+          Text = 'Referencia de Estilo'
+        end
+      end
+      object cbModel: TComboBox
+        Items.Strings = (
+          'vmCustom'
+          'vmVeo3_1'
+          'vmVeo3_1_Fast'
+          'vmVeo3_0'
+          'vmVeo3_0_Fast'
+          'vmVeo2_0')
+        ItemIndex = 1
+        Position.X = 339.000000000000000000
+        Position.Y = 31.000000000000000000
+        Size.Width = 94.000000000000000000
+        Size.Height = 22.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 8
+      end
+      object Model: TLabel
+        Position.X = 339.000000000000000000
+        Position.Y = 6.000000000000000000
+        Text = 'Model'
+        TabOrder = 10
+      end
+      object Label2: TLabel
+        Position.X = 450.000000000000000000
+        Position.Y = 6.000000000000000000
+        Text = 'Aspect  Ratio'
+        TabOrder = 9
+      end
+      object cbAspectRatio: TComboBox
+        Items.Strings = (
+          'arDefault'
+          'ar16x9 '
+          'ar9x16')
+        ItemIndex = 0
+        Position.X = 450.000000000000000000
+        Position.Y = 31.000000000000000000
+        Size.Width = 87.000000000000000000
+        Size.Height = 22.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 4
+      end
+      object Label3: TLabel
+        Position.X = 559.000000000000000000
+        Position.Y = 6.000000000000000000
+        Text = 'Resolution'
+        TabOrder = 7
+      end
+      object cbResolution: TComboBox
+        Items.Strings = (
+          'vrDefault'
+          'vr720p'
+          'vr1080p')
+        ItemIndex = 0
+        Position.X = 559.000000000000000000
+        Position.Y = 31.000000000000000000
+        Size.Width = 120.000000000000000000
+        Size.Height = 22.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 3
+      end
+      object Label1: TLabel
+        Position.X = 820.000000000000000000
+        Position.Y = 6.000000000000000000
+        Text = 'Person Generation'
+        TabOrder = 6
+      end
+      object cbPersonGeneration: TComboBox
+        Items.Strings = (
+          'pgDefault'
+          'pgAllowAll'
+          'pgAllowAdult'
+          'pgDontAllow')
+        ItemIndex = 0
+        Position.X = 820.000000000000000000
+        Position.Y = 31.000000000000000000
+        Size.Width = 120.000000000000000000
+        Size.Height = 22.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 2
+      end
+      object Label4: TLabel
+        Position.X = 687.000000000000000000
+        Position.Y = 6.000000000000000000
+        Text = 'Duration'
+        TabOrder = 5
+      end
+      object cbDuration: TComboBox
+        Items.Strings = (
+          '4'
+          '5'
+          '6'
+          '7'
+          '8')
+        ItemIndex = 4
+        Position.X = 687.000000000000000000
+        Position.Y = 31.000000000000000000
+        Size.Width = 120.000000000000000000
+        Size.Height = 22.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 1
+      end
+    end
+    object Layout2: TLayout
+      Align = Client
+      Size.Width = 1121.000000000000000000
+      Size.Height = 856.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 4
+      object Splitter1: TSplitter
+        Align = Bottom
+        Cursor = crVSplit
+        MinSize = 20.000000000000000000
+        Position.Y = 850.000000000000000000
+        Size.Width = 1121.000000000000000000
+        Size.Height = 6.000000000000000000
+        Size.PlatformDefault = False
+      end
+      object Layout4: TLayout
+        Align = Client
+        Size.Width = 1121.000000000000000000
+        Size.Height = 638.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 3
+        object Memo1: TMemo
+          Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+          DataDetectorTypes = []
+          Lines.Strings = (
+            '--------------------------------------'
+            '        '#55357#56960' C'#211'MO FUNCIONA '#55357#56960
+            '--------------------------------------'
+            'La magia est'#225' en lo que adjuntas:'
+            ''
+            ''
+            #9997#65039'  Sin Archivos Adjuntos'
+            '    Acci'#243'n: TEXTO A VIDEO'
+            '    Escribe tu idea y VEO crear'#225' un'
+            '    video desde cero.'
+            ''
+            ''
+            #55357#56526'  Con 1 Archivo Adjunto'
+            ''
+            '    '#55357#56764#65039'  Si es una IMAGEN:'
+            '        Acci'#243'n: IMAGEN A VIDEO'
+            '        VEO animar'#225' tu imagen bas'#225'ndose'
+            '        en el prompt.'
+            ''
+            '    '#55356#57246#65039'  Si es un VIDEO (de VEO):'
+            '        Acci'#243'n: EXTENSI'#211'N DE VIDEO'
+            '        VEO continuar'#225' la historia.'
+            '        ('#161'Recuerda que necesita su'
+            '        archivo .veometa asociado!)'
+            ''
+            ''
+            #55357#56764#65039'+'#55357#56764#65039'  Con 2 Im'#225'genes Adjuntas'
+            '    '#161'Aqu'#237' es donde decides el "Modo"!'
+            ''
+            '    - Modo Autom'#225'tico o Interpolar:'
+            '      Crea una transici'#243'n suave entre'
+            '      la primera y la segunda imagen.'
+            ''
+            '    - Modo Referencia de Estilo:'
+            '      Usa ambas im'#225'genes como'
+            '      inspiraci'#243'n visual.'
+            ''
+            ''
+            #55356#57256'  Con 3 Im'#225'genes Adjuntas'
+            '    Acci'#243'n: REFERENCIA DE ESTILO'
+            '    VEO usar'#225' las im'#225'genes para'
+            '    mantener la apariencia de'
+            '    personajes u objetos.'
+            ''
+            ''
+            '--------------------------------------'
+            ' '#55358#56596' '#191'CU'#193'NDO CAMBIAR EL "MODO"? '#55358#56596
+            '--------------------------------------'
+            'Usa los selectores de Modo para casos'
+            'espec'#237'ficos, principalmente con 2'
+            'im'#225'genes.'
+            ''
+            ''
+            #9898' Autom'#225'tico'
+            '   La opci'#243'n segura. D'#233'jalo aqu'#237' y la'
+            '   demo tomar'#225' la decisi'#243'n m'#225's com'#250'n.'
+            '   Para 2 im'#225'genes, asumir'#225' INTERPOLAR.'
+            ''
+            ''
+            #9898' Interpolar'
+            '   Selecciona esto si quieres crear una'
+            '   transici'#243'n fluida entre 2 im'#225'genes'
+            '   (de un punto A -> a un punto B).'
+            ''
+            ''
+            #55357#56629' Referencia de Estilo'
+            '   Selecciona esto para que VEO copie'
+            '   la apariencia de los sujetos en'
+            '   1, 2 o 3 im'#225'genes.'
+            ''
+            ''
+            '======================================'
+            '     '#161'Ahora a crear! '#55356#57253
+            '======================================')
+          ReadOnly = True
+          TextSettings.WordWrap = True
+          Align = Right
+          Position.X = 778.000000000000000000
+          Size.Width = 343.000000000000000000
+          Size.Height = 638.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 1
+          Viewport.Width = 323.000000000000000000
+          Viewport.Height = 634.000000000000000000
+        end
+        object Layout3: TLayout
+          Align = Client
+          Size.Width = 778.000000000000000000
+          Size.Height = 638.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 2
+          object Layout5: TLayout
+            Align = Client
+            Size.Width = 778.000000000000000000
+            Size.Height = 468.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 1
+            object Label6: TLabel
+              Align = Top
+              Margins.Left = 3.000000000000000000
+              Margins.Top = 3.000000000000000000
+              Margins.Right = 3.000000000000000000
+              Margins.Bottom = 3.000000000000000000
+              Position.X = 3.000000000000000000
+              Position.Y = 3.000000000000000000
+              Size.Width = 772.000000000000000000
+              Size.Height = 17.000000000000000000
+              Size.PlatformDefault = False
+              Text = 
+                'Historial de Mensajes (No es un Chat, el modelo no recuerda llam' +
+                'ados anteriores)'
+              TabOrder = 0
+            end
+            object ChatList1: TChatList
+              Align = Client
+              Size.Width = 778.000000000000000000
+              Size.Height = 445.000000000000000000
+              Size.PlatformDefault = False
+              TabOrder = 1
+              MaxBubbleWidthPercent = 0.899999976158142100
+              DefaultWordWrap = True
+              AttachmentPopupMenu = PopupMenu1
+              Viewport.Width = 778.000000000000000000
+              Viewport.Height = 445.000000000000000000
+            end
+          end
+          object LayoutLog: TLayout
+            Align = Bottom
+            Position.Y = 478.000000000000000000
+            Size.Width = 778.000000000000000000
+            Size.Height = 160.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 2
+            object Label5: TLabel
+              Align = Top
+              Margins.Left = 3.000000000000000000
+              Margins.Top = 3.000000000000000000
+              Margins.Right = 3.000000000000000000
+              Margins.Bottom = 3.000000000000000000
+              Position.X = 3.000000000000000000
+              Position.Y = 3.000000000000000000
+              Size.Width = 772.000000000000000000
+              Size.Height = 17.000000000000000000
+              Size.PlatformDefault = False
+              Text = 'Log'
+              TabOrder = 0
+            end
+            object memoLog: TMemo
+              Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+              DataDetectorTypes = []
+              ReadOnly = True
+              Align = Client
+              Size.Width = 778.000000000000000000
+              Size.Height = 137.000000000000000000
+              Size.PlatformDefault = False
+              TabOrder = 1
+              Viewport.Width = 774.000000000000000000
+              Viewport.Height = 133.000000000000000000
+            end
+          end
+          object Splitter2: TSplitter
+            Align = Bottom
+            Cursor = crVSplit
+            MinSize = 20.000000000000000000
+            Position.Y = 468.000000000000000000
+            Size.Width = 778.000000000000000000
+            Size.Height = 10.000000000000000000
+            Size.PlatformDefault = False
+          end
+        end
+      end
+      object Layout6: TLayout
+        Align = Bottom
+        Position.Y = 638.000000000000000000
+        Size.Width = 1121.000000000000000000
+        Size.Height = 212.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 4
+        object ChatInput1: TChatInput
+          Align = Client
+          Size.Width = 1121.000000000000000000
+          Size.Height = 122.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 4
+          ImagesVisible = False
+          MicVisible = False
+          SoundVisible = False
+          UseSoundMonitor = False
+          ValidExtensions = 'jpg,jpeg,png,bmp,pdf,mp3,wav,mp4,avi'
+          OnSendEvent = ChatInput1SendEvent
+          OnCancel = ChatInput1Cancel
+          OnSlideChange = ChatInput1SlideChange
+          Busy = False
+          object AniIndicator1: TAniIndicator
+            Align = Center
+            Size.Width = 109.000000000000000000
+            Size.Height = 87.000000000000000000
+            Size.PlatformDefault = False
+          end
+        end
+        object LayoutNegativePrompt: TLayout
+          Align = Bottom
+          Position.Y = 145.000000000000000000
+          Size.Width = 1121.000000000000000000
+          Size.Height = 67.000000000000000000
+          Size.PlatformDefault = False
+          TabOrder = 2
+          object Label7: TLabel
+            Align = Top
+            Margins.Left = 3.000000000000000000
+            Margins.Top = 3.000000000000000000
+            Margins.Right = 3.000000000000000000
+            Margins.Bottom = 3.000000000000000000
+            Position.X = 3.000000000000000000
+            Position.Y = 3.000000000000000000
+            Size.Width = 1115.000000000000000000
+            Size.Height = 17.000000000000000000
+            Size.PlatformDefault = False
+            Text = 'Negative Prompt'
+            TabOrder = 0
+          end
+          object MemoNegativePrompt: TMemo
+            Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+            DataDetectorTypes = []
+            Align = Client
+            Size.Width = 1121.000000000000000000
+            Size.Height = 44.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 1
+            Viewport.Width = 1117.000000000000000000
+            Viewport.Height = 40.000000000000000000
+          end
+        end
+        object Label8: TLabel
+          Align = Top
+          Margins.Left = 3.000000000000000000
+          Margins.Top = 3.000000000000000000
+          Margins.Right = 3.000000000000000000
+          Margins.Bottom = 3.000000000000000000
+          Position.X = 3.000000000000000000
+          Position.Y = 3.000000000000000000
+          Size.Width = 1115.000000000000000000
+          Size.Height = 17.000000000000000000
+          Size.PlatformDefault = False
+          Text = 'Input Prompt'
+          TabOrder = 0
+        end
+      end
+    end
+  end
+  object PopupMenu1: TPopupMenu
+    Left = 560
+    Top = 384
+    object MnuCopy: TMenuItem
+      Text = 'Copy'
+      OnClick = MnuCopyClick
+    end
+    object MnuSave: TMenuItem
+      Text = 'Save to File'
+      OnClick = MnuSaveClick
+    end
+    object MnuPlay: TMenuItem
+      Text = 'Show Media'
+      OnClick = MnuPlayClick
+    end
+  end
+  object AiVeo: TAiVeoGenerator
+    ApiKey = '@GEMINI_API_KEY'
+    PersonGeneration = pgDefault
+    OnProgress = AiVeoProgress
+    OnSuccess = AiVeoSuccess
+    OnError = AiVeoError
+    Left = 320
+    Top = 232
+  end
+  object SaveDialog1: TSaveDialog
+    Left = 472
+    Top = 312
+  end
+end

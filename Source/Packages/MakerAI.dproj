@@ -168,7 +168,7 @@
         <DCCReference Include="..\Core\uMakerAi.Utils.CodeExtractor.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Utils.PcmToWav.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Utils.System.pas"/>
-        <DCCReference Include="..\Tools\uMakerAi.Dalle.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.OpenAi.Dalle.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Whisper.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.Agents.pas"/>
         <DCCReference Include="..\MCPServer\UMakerAi.MCPServer.Http.pas"/>
@@ -183,6 +183,11 @@
         <DCCReference Include="..\Agents\uMakerAi.Agents.Attributes.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.Agents.EngineRegistry.pas"/>
         <DCCReference Include="..\Design\UMakerAi.ParamsRegistry.pas"/>
+        <DCCReference Include="..\Chat\uMakerAi.Chat.Kimi.pas"/>
+        <DCCReference Include="..\Chat\uMakerAi.Chat.LMStudio.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Gemini.Veo.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.OpenAI.Sora.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.OpenAI.Audio.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

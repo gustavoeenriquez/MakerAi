@@ -18,6 +18,8 @@ TAIMISTRALCHAT       BITMAP "icons\TAiMistralChat_24.bmp"
 TAIOLLAMACHAT        BITMAP "icons\TAiOllamaChat_24.bmp"
 TAIOPENCHAT          BITMAP "icons\TAiOpenAIChat_24.bmp"
 TAIOPENAIRESPONSES   BITMAP "icons\TAiOpenAIResponsesChat_24.bmp"
+TAILMSTUDIOCHAT      BITMAP "icons\TAiLMStudioChat_24.bmp"
+TAIKIMICHAT          BITMAP "icons\TAiKimiChat_24.bmp"
 TAIFUNCTIONS         BITMAP "icons\TAiFunctions_24.bmp"
 TAIPROMPTS           BITMAP "icons\TAiPrompts_24.bmp"
 //------------------------------------------------------------------------------
@@ -39,6 +41,7 @@ TAIOPENAIEMBEDDINGS     BITMAP "icons\TAiOpenAiEmbeddings_24.bmp"
 TAIMISTRALEMBEDDINGS    BITMAP "icons\TAiMistralEmbeddings_24.bmp"
 TAIOLLAMAEMBEDDINGS     BITMAP "icons\TAiOllamaEmbeddings_24.bmp"
 TAIGEMINIEMBEDDINGS     BITMAP "icons\TAiGeminiEmbeddings_24.bmp"
+TAILMSTUDIOEMBEDDINGS   BITMAP "icons\TAiGeminiEmbeddings_24.bmp"
 //------------------------------------------------------------------------------
 // RAG COMPONENTS - Retrieval-Augmented Generation
 //------------------------------------------------------------------------------

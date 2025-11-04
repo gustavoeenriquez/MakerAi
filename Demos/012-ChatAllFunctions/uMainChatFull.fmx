@@ -11,8 +11,8 @@ object Form2: TForm2
   OnCreate = FormCreate
   DesignerMasterStyle = 0
   object PopupMenu1: TPopupMenu
-    Left = 896
-    Top = 400
+    Left = 832
+    Top = 408
     object MnuCopy: TMenuItem
       Text = 'Copy'
       OnClick = MnuCopyClick
@@ -111,12 +111,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.FontColor = claLightslategray
               Text = 'Total Tokens'
-              TabOrder = 39
+              TabOrder = 40
             end
             object EditTotalTokens: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 40
+              TabOrder = 41
               ReadOnly = True
               TextSettings.HorzAlign = Trailing
               Margins.Left = 3.000000000000000000
@@ -148,12 +148,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.FontColor = claLightslategray
               Text = 'Promp Tokens'
-              TabOrder = 39
+              TabOrder = 40
             end
             object EditPromptTokens: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 40
+              TabOrder = 41
               ReadOnly = True
               TextSettings.HorzAlign = Trailing
               Margins.Left = 3.000000000000000000
@@ -185,12 +185,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.FontColor = claLightslategray
               Text = 'Completion Tokens'
-              TabOrder = 39
+              TabOrder = 40
             end
             object EditCompletionTokens: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 40
+              TabOrder = 41
               ReadOnly = True
               TextSettings.HorzAlign = Trailing
               Margins.Left = 3.000000000000000000
@@ -223,12 +223,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.FontColor = claLightslategray
               Text = 'Used Model'
-              TabOrder = 39
+              TabOrder = 40
             end
             object CompletionModel: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 40
+              TabOrder = 41
               ReadOnly = True
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
@@ -278,7 +278,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 39
+              TabOrder = 40
               Text = 'Asincrono'
             end
           end
@@ -295,7 +295,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 39
+              TabOrder = 40
               Text = 'JSon Format'
             end
           end
@@ -312,7 +312,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 39
+              TabOrder = 40
               Text = 'Use Tools (Function Calling)'
             end
           end
@@ -329,7 +329,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 39
+              TabOrder = 40
               Text = 'Web Search'
             end
           end
@@ -346,7 +346,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 39
+              TabOrder = 40
               Text = 'Code Interpreter'
             end
           end
@@ -363,7 +363,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 39
+              TabOrder = 40
               Text = 'Extract Text Files'
             end
           end
@@ -413,12 +413,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
               Text = 'Model Capabilities'
-              TabOrder = 39
+              TabOrder = 40
             end
             object EditChatMediaSupports: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 40
+              TabOrder = 41
               ReadOnly = True
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
@@ -451,12 +451,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
               Text = 'Input Expected Files'
-              TabOrder = 39
+              TabOrder = 40
             end
             object EditNativeInputFiles: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 40
+              TabOrder = 41
               ReadOnly = True
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
@@ -489,12 +489,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
               Text = 'Output Expected Files'
-              TabOrder = 39
+              TabOrder = 40
             end
             object EditNativeOutputFiles: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 40
+              TabOrder = 41
               ReadOnly = True
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
@@ -553,12 +553,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
               Text = 'Voices'
-              TabOrder = 39
+              TabOrder = 40
             end
             object EditVoices: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 40
+              TabOrder = 41
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
               Margins.Right = 3.000000000000000000
@@ -588,12 +588,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
               Text = 'Voice Format'
-              TabOrder = 39
+              TabOrder = 40
             end
             object EditVoiceFormat: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 40
+              TabOrder = 41
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
               Margins.Right = 3.000000000000000000
@@ -957,8 +957,8 @@ object Form2: TForm2
             Size.Height = 591.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 4
-            Viewport.Width = 478.000000000000000000
-            Viewport.Height = 591.000000000000000000
+            Viewport.Width = 474.000000000000000000
+            Viewport.Height = 587.000000000000000000
           end
         end
       end
@@ -18961,6 +18961,18 @@ object Form2: TForm2
         Default = False
         Tag = 0
         ToolType = tt_function
+      end
+      item
+        FunctionName = 'AdicionaFacturaAlERP'
+        Parameters = <
+          item
+            Name = 'JsonFactura'
+            ParamType = ptString
+            Required = False
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
       end>
     MCPClients = <>
     Left = 512
@@ -18969,8 +18981,8 @@ object Form2: TForm2
   object AiRAGVector1: TAiRAGVector
     Embeddings = AiOpenAiEmbeddings1
     InMemoryIndexType = TAIHNSWIndex
-    Left = 512
-    Top = 328
+    Left = 712
+    Top = 208
   end
   object AiOpenAiEmbeddings1: TAiOpenAiEmbeddings
     Model = 'text-embedding-3-small'
@@ -18979,69 +18991,5 @@ object Form2: TForm2
     Url = 'https://api.openai.com/v1/'
     Left = 504
     Top = 408
-  end
-  object AiOpenChat1: TAiOpenChat
-    ApiKey = '@OPENAI_API_KEY'
-    Model = 'gpt4-o'
-    Logprobs = False
-    Max_tokens = 300
-    N = 1
-    Response_format = tiaChatRfText
-    Seed = 0
-    Asynchronous = False
-    Temperature = 1.000000000000000000
-    Top_p = 1.000000000000000000
-    Tool_choice = 'auto'
-    Tool_Active = False
-    User = 'user'
-    InitialInstructions.Strings = (
-      'Eres un asistente muy '#250'til y servicial')
-    Prompt_tokens = 0
-    Completion_tokens = 0
-    Total_tokens = 0
-    Url = 'https://api.openai.com/v1/'
-    ResponseTimeOut = 60000
-    Stream_Usage = False
-    NativeInputFiles = []
-    NativeOutputFiles = []
-    ChatMediaSupports = []
-    Voice = 'alloy'
-    voice_format = 'mp3'
-    Store = False
-    Parallel_ToolCalls = True
-    Service_Tier = 'auto'
-    Left = 664
-    Top = 400
-  end
-  object AiGeminiChat1: TAiGeminiChat
-    ApiKey = '@GEMINI_API_KEY'
-    Model = 'gemini-2.5-flash-latest'
-    Logprobs = False
-    Max_tokens = 3000
-    N = 1
-    Response_format = tiaChatRfText
-    Seed = 0
-    Asynchronous = False
-    Temperature = 1.000000000000000000
-    Top_p = 1.000000000000000000
-    Tool_choice = 'auto'
-    Tool_Active = False
-    User = 'user'
-    InitialInstructions.Strings = (
-      'Eres un asistente muy '#250'til y servicial')
-    Prompt_tokens = 0
-    Completion_tokens = 0
-    Total_tokens = 0
-    Url = 'https://generativelanguage.googleapis.com/v1beta/'
-    ResponseTimeOut = 60000
-    Stream_Usage = False
-    NativeInputFiles = []
-    NativeOutputFiles = []
-    ChatMediaSupports = []
-    VideoParams.Strings = (
-      'aspectRatio=16:9'
-      'personGeneration=allow_all')
-    Left = 776
-    Top = 392
   end
 end

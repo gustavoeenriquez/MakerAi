@@ -50,9 +50,9 @@ Type
 
   TAiToolsFunction = Class;
 
-  TAiImageSize = (TiaSize256, TiaSize512, TiaSize1024, TiaSize1024_1792, TiaSize1792_1024);
-  TAiImageResponseFormat = (tiaRUrl, tiaRB64);
-  TAiImageAStyleFormat = (tiaStyleVivid, tiaStyleNatural);
+  //TAiImageSize = (TiaSize256, TiaSize512, TiaSize1024, TiaSize1024_1792, TiaSize1792_1024);
+  //TAiImageResponseFormat = (tiaRUrl, tiaRB64);
+  //TAiImageAStyleFormat = (tiaStyleVivid, tiaStyleNatural);
 
   TAiFileCategory = (Tfc_Text, Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_pdf, Tfc_Document, //
     Tfc_WebSearch, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, //
@@ -921,66 +921,6 @@ begin
   // FCloudUri := ''
 end;
 
-{ function TAiMediaFile.CopyToClipboard: Boolean;
-  var
-  ClipboardSvc: IFMXClipboardService;
-  LBitmap: FMX.Graphics.TBitmap;
-  LText: string;
-  begin
-  Result := False;
-  if not TPlatformServices.Current.SupportsPlatformService(IFMXClipboardService, IInterface(ClipboardSvc)) then
-  Exit; // No hay servicio de portapapeles disponible
-
-  // Antes de cualquier operación, asegurarnos de que el stream esté al principio.
-  if Assigned(FContent) then
-  FContent.Position := 0;
-
-  // La lógica de copiado depende de la categoría del archivo
-  case Self.FileCategory of
-  Tfc_Image:
-  begin
-  if (FContent = nil) or (FContent.Size = 0) then Exit;
-  LBitmap := FMX.Graphics.TBitmap.Create;
-  try
-  LBitmap.LoadFromStream(FContent);
-  ClipboardSvc.SetClipboard(LBitmap); // FMX sabe cómo poner un TBitmap en el portapapeles
-  Result := True;
-  finally
-  LBitmap.Free;
-  end;
-  end;
-
-  Tfc_Text, tfc_textFile, tfc_code_interpreter:
-  begin
-  if (FContent = nil) or (FContent.Size = 0) then Exit;
-
-  // Leemos el contenido del stream como texto UTF-8 (el más común)
-  var LReader := TStreamReader.Create(FContent, TEncoding.UTF8);
-  try
-  LText := LReader.ReadToEnd;
-  // Usamos TValue.From<string> para pasarlo al portapapeles como texto plano
-  ClipboardSvc.SetClipboard(TValue.From<string>(LText));
-  Result := True;
-  finally
-  LReader.Free;
-  end;
-  end;
-
-  // Para otros tipos de archivo (PDF, DOC, Audio, etc.), el portapapeles estándar
-  // no tiene un formato "nativo" para ellos. La mejor opción es copiar
-  // la RUTA del archivo si existe, o no hacer nada.
-  // En este caso, como el contenido está en un TMemoryStream, no hay una ruta
-  // que podamos copiar que otra aplicación pueda entender.
-  // Por lo tanto, para estos tipos, no hacemos nada y el método devuelve False.
-  else
-  Result := False;
-  end;
-
-  // Volvemos a rebobinar el stream por si se necesita reutilizar después.
-  if Assigned(FContent) then
-  FContent.Position := 0;
-  end;
-}
 
 constructor TAiMediaFile.Create;
 begin

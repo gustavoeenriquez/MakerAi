@@ -21,6 +21,9 @@
         <Projects Include="Demos\025-RAGGraph\RagGraphDemo.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="Demos\041-GeminiVeo\VeoDemo.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -83,14 +86,23 @@
     <Target Name="RagGraphDemo:Make">
         <MSBuild Projects="Demos\025-RAGGraph\RagGraphDemo.dproj" Targets="Make"/>
     </Target>
+    <Target Name="VeoDemo">
+        <MSBuild Projects="Demos\041-GeminiVeo\VeoDemo.dproj"/>
+    </Target>
+    <Target Name="VeoDemo:Clean">
+        <MSBuild Projects="Demos\041-GeminiVeo\VeoDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VeoDemo:Make">
+        <MSBuild Projects="Demos\041-GeminiVeo\VeoDemo.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="ChatSencillo;ChatFull;RagUpdateDb;Sqlite_RAG;AiMCPServerDemo;RagGraphDemo"/>
+        <CallTarget Targets="ChatSencillo;ChatFull;RagUpdateDb;Sqlite_RAG;AiMCPServerDemo;RagGraphDemo;VeoDemo"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="ChatSencillo:Clean;ChatFull:Clean;RagUpdateDb:Clean;Sqlite_RAG:Clean;AiMCPServerDemo:Clean;RagGraphDemo:Clean"/>
+        <CallTarget Targets="ChatSencillo:Clean;ChatFull:Clean;RagUpdateDb:Clean;Sqlite_RAG:Clean;AiMCPServerDemo:Clean;RagGraphDemo:Clean;VeoDemo:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="ChatSencillo:Make;ChatFull:Make;RagUpdateDb:Make;Sqlite_RAG:Make;AiMCPServerDemo:Make;RagGraphDemo:Make"/>
+        <CallTarget Targets="ChatSencillo:Make;ChatFull:Make;RagUpdateDb:Make;Sqlite_RAG:Make;AiMCPServerDemo:Make;RagGraphDemo:Make;VeoDemo:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

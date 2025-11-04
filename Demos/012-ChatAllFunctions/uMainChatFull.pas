@@ -11,6 +11,7 @@ uses
   uMakerAi.Utils.System, uMakerAi.UI.ChatList, uMakerAi.Chat.AiConnection,
   uMakerAi.Chat.OpenAi, uMakerAi.Chat.Initializations,
   uMakerAi.Chat.DeepSeek, uMakerAi.Chat.Claude, uMakerAi.Chat.Gemini, uMakerAi.Chat.OpenAiResponses,
+  uMakerAi.chat.Kimi, uMakerAi.Chat.LMStudio,
 
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Memo.Types, FMX.Layouts,
   FMX.Styles.Objects, FMX.Platform, FMX.ScrollBox, FMX.Memo, FMX.Edit, FMX.StdCtrls,
@@ -178,8 +179,6 @@ type
     LayoutTokenUsageHistory: TLayout;
     Label18: TLabel;
     MemoTokenUsageHistory: TMemo;
-    AiOpenChat1: TAiOpenChat;
-    AiGeminiChat1: TAiGeminiChat;
     procedure ChatInput1SendEvent(Sender: TObject; APrompt: string; aMediaFiles: TAiMediaFiles; aAudioStream: TMemoryStream);
     procedure ChatList1MediaFileDblClick(Sender: TObject; const ABubble: TChatBubble; const AMediaFile: TAiMediaFile);
     procedure ChatList1BeforeAddBubble(Sender: TObject; ABubble: TChatBubble);

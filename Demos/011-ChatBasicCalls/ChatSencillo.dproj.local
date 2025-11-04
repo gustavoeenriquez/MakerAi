@@ -2,12 +2,12 @@
 <BorlandProject>
 	<Transactions>
     <Transaction>2025/07/05 11:25:27.000.102,=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit7.pas</Transaction>
-    <Transaction>2025/07/05 11:35:47.000.734,C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit7.fmx=D:\Taller\Demos\001-ChatSencillo\uMainChatSencillo.fmx</Transaction>
-    <Transaction>2025/07/05 11:35:47.000.734,C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit7.pas=D:\Taller\Demos\001-ChatSencillo\uMainChatSencillo.pas</Transaction>
-    <Transaction>2025/07/05 11:35:52.000.018,C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project5.dproj=D:\Taller\Demos\001-ChatSencillo\ChatSencillo.dproj</Transaction>
+    <Transaction>2025/07/05 11:35:47.000.734,D:\Taller\Demos\001-ChatSencillo\uMainChatSencillo.pas=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit7.pas</Transaction>
+    <Transaction>2025/07/05 11:35:47.000.734,D:\Taller\Demos\001-ChatSencillo\uMainChatSencillo.fmx=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit7.fmx</Transaction>
+    <Transaction>2025/07/05 11:35:52.000.018,D:\Taller\Demos\001-ChatSencillo\ChatSencillo.dproj=C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project5.dproj</Transaction>
     <Transaction>2025/07/15 08:01:07.000.378,=D:\Taller\Demos\001-ChatSencillo\Unit1.pas</Transaction>
-    <Transaction>2025/07/15 08:01:48.000.051,D:\Taller\Demos\001-ChatSencillo\Unit1.fmx=D:\Taller\Demos\001-ChatSencillo\uDialogSaveToFile.fmx</Transaction>
-    <Transaction>2025/07/15 08:01:48.000.051,D:\Taller\Demos\001-ChatSencillo\Unit1.pas=D:\Taller\Demos\001-ChatSencillo\uDialogSaveToFile.pas</Transaction>
+    <Transaction>2025/07/15 08:01:48.000.051,D:\Taller\Demos\001-ChatSencillo\uDialogSaveToFile.fmx=D:\Taller\Demos\001-ChatSencillo\Unit1.fmx</Transaction>
+    <Transaction>2025/07/15 08:01:48.000.051,D:\Taller\Demos\001-ChatSencillo\uDialogSaveToFile.pas=D:\Taller\Demos\001-ChatSencillo\Unit1.pas</Transaction>
   </Transactions>
 	<ProjectSortOrder AutoSort="0" SortType="0">
     <File Path="activity-1.7.2.dex.jar"/>

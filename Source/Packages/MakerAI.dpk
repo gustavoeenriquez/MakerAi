@@ -60,7 +60,7 @@ contains
   uMakerAi.Utils.CodeExtractor in '..\Core\uMakerAi.Utils.CodeExtractor.pas',
   uMakerAi.Utils.PcmToWav in '..\Core\uMakerAi.Utils.PcmToWav.pas',
   uMakerAi.Utils.System in '..\Core\uMakerAi.Utils.System.pas',
-  uMakerAi.Dalle in '..\Tools\uMakerAi.Dalle.pas',
+  uMakerAi.OpenAi.Dalle in '..\Tools\uMakerAi.OpenAi.Dalle.pas',
   uMakerAi.Whisper in '..\Tools\uMakerAi.Whisper.pas',
   uMakerAi.Agents in '..\Agents\uMakerAi.Agents.pas',
   UMakerAi.MCPServer.Http in '..\MCPServer\UMakerAi.MCPServer.Http.pas',
@@ -74,7 +74,12 @@ contains
   uMakerAi.RAG.Vectors in '..\RAG\uMakerAi.RAG.Vectors.pas',
   uMakerAi.Agents.Attributes in '..\Agents\uMakerAi.Agents.Attributes.pas',
   uMakerAi.Agents.EngineRegistry in '..\Agents\uMakerAi.Agents.EngineRegistry.pas',
-  UMakerAi.ParamsRegistry in '..\Design\UMakerAi.ParamsRegistry.pas';
+  UMakerAi.ParamsRegistry in '..\Design\UMakerAi.ParamsRegistry.pas',
+  uMakerAi.Chat.Kimi in '..\Chat\uMakerAi.Chat.Kimi.pas',
+  uMakerAi.Chat.LMStudio in '..\Chat\uMakerAi.Chat.LMStudio.pas',
+  uMakerAi.Gemini.Veo in '..\Tools\uMakerAi.Gemini.Veo.pas',
+  uMakerAi.OpenAI.Sora in '..\Tools\uMakerAi.OpenAI.Sora.pas',
+  uMakerAi.OpenAI.Audio in '..\Tools\uMakerAi.OpenAI.Audio.pas';
 
 end.
 

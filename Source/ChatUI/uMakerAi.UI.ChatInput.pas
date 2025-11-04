@@ -38,7 +38,6 @@ uses
   System.AnsiStrings, System.Math, System.Threading, System.Generics.Collections, System.NetConsts,
   uMakerAi.Chat, uMakerAi.Core, uMakerAi.Chat.AiConnection,
 
-
   WinApi.Windows,
   {}
 
@@ -49,15 +48,19 @@ uses
   FMX.ImgList, System.Actions, FMX.ActnList, FMX.Menus, uMakerAi.Utils.VoiceMonitor;
 
 type
+  TImageData = Class;
 
   TChatSendEvent = Procedure(Sender: TObject; APrompt: String; aMediaFiles: TAiMediaFiles; aAudioStream: TMemoryStream) of Object;
   TChatTranscriptEvent = Procedure(Sender: TObject; aFragmentStream: TMemoryStream; Out aTransriptText: String) of Object;
+
+  TChatSlideImageEvent = Procedure(Sender: TObject; Data: TImageData) of Object;
 
   TImageStatus = (isInactivo, isPreparing, isListening, isUserTalking, isIaTalking);
   TContentType = (ctImage, ctPDF, ctAudio, ctVideo, ctDocument, ctText, ctUnknown);
 
   TImageData = Class
     FileName: String;
+    FullFileName : String;
     Checked: TCheckBox;
     Item: TLayout;
     BitMap: TBitMap;
@@ -116,10 +119,12 @@ type
 
     FSendBitmap: TBitMap;
     FCancelBitmap: TBitMap;
+    FOnSlideChange: TChatSlideImageEvent;
 
     procedure SetFont(const Value: TFont);
     procedure SetOnCancel(const Value: TNotifyEvent);
     procedure SetBusy(const Value: Boolean);
+    procedure SetOnSlideChange(const Value: TChatSlideImageEvent);
 
   Protected
     FImagesVisible: Boolean;
@@ -163,6 +168,7 @@ type
     procedure SetOnSendEvent(const Value: TChatSendEvent);
     Procedure DoSendEvent(aAudioFile: TMemoryStream);
     Procedure DoTranscriptText(aFragmentStream: TMemoryStream; Out aTransriptText: String);
+    Procedure DoChangeImage(ImageData: TImageData);
     procedure SetMicVisible(const Value: Boolean);
     procedure SetSoundVisible(const Value: Boolean);
     Procedure StartMonitoring;
@@ -176,7 +182,6 @@ type
     function GetContentTypeFromText(const Text: string): TContentType;
     function GetImageIndexFromContentType(ContentType: TContentType): Integer;
     function CreateBitmapFromImageList(ImageIndex: Integer): TBitMap;
-    function GetContentTypeFromValidExtensions(const Extension: string): TContentType;
     procedure SetValidExtensions(const Value: String);
     function BuildFileDialogFilter: string;
     procedure SetVoiceMonitor(const Value: TAIVoiceMonitor);
@@ -187,13 +192,15 @@ type
     function AddBitmapToImageList(ABitmap: TBitMap; ImageList: TImageList; const ItemName: string = ''): Integer;
     procedure FontChanged(Sender: TObject);
     Procedure RecalcLayoutSend;
-    Procedure SetMicImageStatus(IdImage : Integer);
+    Procedure SetMicImageStatus(IdImage: Integer);
 
   public
     constructor Create(AOwner: TComponent); override;
     Destructor Destroy; Override;
-    Procedure AddImageToSlide(FileName: String; BitMap: TBitMap; aStream: TMemoryStream);
+    Procedure AddImageToSlide(FullFileName: String; BitMap: TBitMap; aStream: TMemoryStream);
     Procedure AddStatus(Msg: String);
+    function GetAttachments: TArray<TImageData>;
+    function GetContentTypeFromValidExtensions(const Extension: string): TContentType;
   Published
     Property ImagesVisible: Boolean read FImagesVisible write SetImagesVisible;
     Property MicVisible: Boolean read FMicVisible write SetMicVisible;
@@ -205,6 +212,7 @@ type
     Property OnSendEvent: TChatSendEvent read FOnSendEvent write SetOnSendEvent;
     Property OnTranscriptText: TChatTranscriptEvent read FOnTranscriptText write SetOnTranscriptText;
     Property OnCancel: TNotifyEvent read FOnCancel write SetOnCancel;
+    Property OnSlideChange: TChatSlideImageEvent read FOnSlideChange write SetOnSlideChange;
     Property Busy: Boolean read FBusy write SetBusy;
   end;
 
@@ -407,7 +415,7 @@ begin
   end;
 end;
 
-procedure TChatInput.AddImageToSlide(FileName: String; BitMap: TBitMap; aStream: TMemoryStream);
+procedure TChatInput.AddImageToSlide(FullFileName: String; BitMap: TBitMap; aStream: TMemoryStream);
 Var
   X, Y, X1, Y1: Double;
   Image: TImage;
@@ -415,8 +423,10 @@ Var
   Item: TLayout;
   ImageData: TImageData;
   btnDelete: TSpeedButton;
-
+  FileName : String;
 begin
+  FileName :=ExtractFileName(FullFileName);
+
   X := BitMap.Width;
   Y := BitMap.Height;
   ScaleRectangle(150, X, Y, X1, Y1);
@@ -455,6 +465,7 @@ begin
 
   ImageData := TImageData.Create;
   ImageData.FileName := FileName;
+  ImageData.FullFileName := FullFileName;
   ImageData.Checked := Check;
   ImageData.Item := Item;
   ImageData.BitMap := BitMap;
@@ -467,9 +478,7 @@ begin
 
   btnDelete.TagObject := Item;
 
-  // btnDelete.StyleLookup := 'deletetoolbutton';
-  // btnDelete.ApplyStyleLookup;
-
+  DoChangeImage(ImageData);
 end;
 
 procedure TChatInput.AddStatus(Msg: String);
@@ -486,7 +495,7 @@ begin
   AddStatus('Escuchando...');
 
   SetMicImageStatus(Integer(TImageStatus.isListening));
-  //FBtnMic.ImageIndex := Integer(TImageStatus.isListening);
+  // FBtnMic.ImageIndex := Integer(TImageStatus.isListening);
 end;
 
 procedure TChatInput.AIVoiceMonitorChangeState(Sender: TObject; aUserSpeak, aIsValidForIA: Boolean; aStream: TMemoryStream);
@@ -494,15 +503,15 @@ begin
   if aUserSpeak then
   begin
     // El monitor ha detectado que el usuario ha empezado a hablar.
-  SetMicImageStatus(Integer(TImageStatus.isUserTalking));
-    //FBtnMic.ImageIndex := Integer(TImageStatus.isUserTalking);
+    SetMicImageStatus(Integer(TImageStatus.isUserTalking));
+    // FBtnMic.ImageIndex := Integer(TImageStatus.isUserTalking);
     AddStatus('usuario hablando...');
   end
   else
   begin
     // El monitor ha detectado silencio y ha terminado la grabación.
-  SetMicImageStatus(Integer(TImageStatus.isListening));
-    //FBtnMic.ImageIndex := Integer(TImageStatus.isListening);
+    SetMicImageStatus(Integer(TImageStatus.isListening));
+    // FBtnMic.ImageIndex := Integer(TImageStatus.isListening);
     AddStatus('Escuchando...');
   end;
 end;
@@ -535,7 +544,7 @@ begin
           FMemoPrompt.GoToTextEnd;
         Finally
           FMemoPrompt.EndUpdate;
-          //Application.ProcessMessages;
+          // Application.ProcessMessages;
         End;
 
         DoSendEvent(aStream);
@@ -614,7 +623,7 @@ Begin
   Begin
     IsValid := Res.Contains(Trim(LowerCase(FVoiceMonitor.WakeWord)));
     FWakeWordDetectedInSession := IsValid;
-    Res := 'Valido --- '+Res;
+    Res := 'Valido --- ' + Res;
   End;
 
   OutputDebugString(PChar(Res));
@@ -770,6 +779,8 @@ begin
     end;
   end;
 
+  DoChangeImage(Nil);
+
   FImageLayout.DeleteChildren;
   ImagesVisible := False;
   FMemoPrompt.SetFocus;
@@ -896,7 +907,7 @@ begin
   FBtnMic.OnClick := BtnMicClick;
   FImageBtnMic := TImage.Create(FBtnMic);
   FImageBtnMic.Stored := False;
-  //OJO FImageBtnMic.Parent := FBtnMic;  //Se crea pero no se asigna para pruebas
+  // OJO FImageBtnMic.Parent := FBtnMic;  //Se crea pero no se asigna para pruebas
   FImageBtnMic.Align := TAlignLayout.Client;
 
   LoadImageFromResource(FImageBtnMic.BitMap, 'MIC_INACTIVO_PNG');
@@ -1141,7 +1152,7 @@ begin
         end;
 
         // Agregar el elemento a la lista
-        AddImageToSlide(ExtractFileName(FileName), BitMap, St);
+        AddImageToSlide(FileName, BitMap, St);
 
       except
         on E: Exception do
@@ -1460,6 +1471,11 @@ begin
   FOnSendEvent := Value;
 end;
 
+procedure TChatInput.SetOnSlideChange(const Value: TChatSlideImageEvent);
+begin
+  FOnSlideChange := Value;
+end;
+
 procedure TChatInput.SetOnTranscriptText(const Value: TChatTranscriptEvent);
 begin
   FOnTranscriptText := Value;
@@ -1635,6 +1651,12 @@ begin
   FSendBitmap.Free;
   FCancelBitmap.Free;
   inherited;
+end;
+
+procedure TChatInput.DoChangeImage(ImageData: TImageData);
+begin
+  If Assigned(FOnSlideChange) then
+    FOnSlideChange(Self, ImageData);
 end;
 
 procedure TChatInput.DocsDragDrop(Sender: TObject; const Data: TDragObject; const Point: TPointF);
@@ -1869,6 +1891,39 @@ begin
   // Heredamos el comportamiento por defecto
   inherited;
 
+end;
+
+function TChatInput.GetAttachments: TArray<TImageData>;
+var
+  I: Integer;
+  Child: TFMXObject;
+  ImageData: TImageData;
+begin
+  // Inicializamos el array resultado con una longitud de 0
+  SetLength(Result, 0);
+
+  // Verificación de seguridad por si el layout no estuviera creado
+  if not Assigned(FImageLayout) then
+    Exit;
+
+  // Iteramos sobre todos los controles hijos del FlowLayout
+  for I := 0 to FImageLayout.ChildrenCount - 1 do
+  begin
+    Child := FImageLayout.Children[I];
+
+    // Nos aseguramos que el hijo sea un TLayout y que su TagObject sea un TImageData
+    if (Child is TLayout) and (Child.TagObject is TImageData) then
+    begin
+      // Hacemos un typecast seguro del TagObject para obtener nuestra data
+      ImageData := TImageData(Child.TagObject);
+
+      // Aumentamos el tamaño del array resultado en 1
+      SetLength(Result, Length(Result) + 1);
+
+      // Asignamos el objeto TImageData encontrado a la última posición del array
+      Result[High(Result)] := ImageData;
+    end;
+  end;
 end;
 
 function TChatInput.GetContentTypeFromData(const Data: TBytes): TContentType;
@@ -2193,6 +2248,7 @@ begin
             // OJO: Asumimos que LoadFromStream hace una copia de los datos del stream
             // y no toma posesión del stream `St`.
             MF.LoadFromStream(Data.FileName, St);
+            MF.FullFileName := Data.FullFileName;  //Asegura que si es un archivo contiene la ruta completa.
             MediaFiles.Add(MF);
           finally
             St.Free; // `St` es temporal y se libera aquí.

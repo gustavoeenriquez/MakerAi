@@ -28,6 +28,12 @@
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
+//--------------------------------------------------------------------------------
+
+// Whisper mantiene la compatibilidad con la versión de Github de whisper opensource
+// el modelo estandar de OpenAi se mueva a uMakerAi.OpenAi.Audio con las nuevas
+// caracteristicas.
+
 unit uMakerAi.Whisper;
 
 interface
@@ -100,12 +106,10 @@ Procedure Register;
 
 implementation
 
-
 {$IFDEF MSWINDOWS}
+
 uses Winapi.ShellAPI, Winapi.Windows;
 {$ENDIF}
-
-
 { TAiAudio }
 
 Const
@@ -115,7 +119,6 @@ procedure Register;
 begin
   RegisterComponents('MakerAI', [TAIWhisper]);
 end;
-
 
 procedure RunCommand(const Command: string);
 begin
@@ -156,8 +159,6 @@ begin
   TFile.Delete(FOrigen);
   TFile.Delete(FDestino);
 end;
-
-
 
 procedure TAIWhisper.ConvertAudioIfNeeded(var aStream: TMemoryStream; var aFileName: String);
 var
@@ -303,7 +304,6 @@ begin
 {$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
 {$ENDIF}
-
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TMemoryStream.Create;
   sUrl := FUrl + 'audio/speech';
@@ -384,7 +384,6 @@ begin
 {$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
 {$ENDIF}
-
   Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
   Client.ContentType := 'application/json';
   Body := TMultipartFormData.Create;
@@ -456,7 +455,6 @@ begin
 {$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
 {$ENDIF}
-
   Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
   Client.ContentType := 'application/json';
   Body := TMultipartFormData.Create;
