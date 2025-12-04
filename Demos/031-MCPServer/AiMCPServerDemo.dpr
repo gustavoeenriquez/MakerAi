@@ -1,91 +1,124 @@
-program AiMCPServerDemo;
+Ôªø// MIT License
+//
+// Copyright (c) 2013 Gustavo Enr√≠quez - CimaMaker
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enr√≠quez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
+program AiMCPSseServerDemo;
 
 {$APPTYPE CONSOLE}
-{$R *.res}
 
 uses
   System.SysUtils,
   System.Classes,
-  uTool.FileAccess in 'uTool.FileAccess.pas',
-  uTool.SysInfo in 'uTool.SysInfo.pas',
+  // Unidades Core
   uMakerAi.MCPServer.Core in '..\..\Source\MCPServer\uMakerAi.MCPServer.Core.pas',
-  UMakerAi.MCPServer.Http in '..\..\Source\MCPServer\UMakerAi.MCPServer.Http.pas',
-  UMakerAi.MCPServer.Stdio in '..\..\Source\MCPServer\UMakerAi.MCPServer.Stdio.pas';
+  uMakerAi.MCPServer.Http in '..\..\Source\MCPServer\UMakerAi.MCPServer.Http.pas',
+  uMakerAi.MCPServer.Stdio in '..\..\Source\MCPServer\UMakerAi.MCPServer.Stdio.pas',
+  uMakerAi.MCPServer.SSE in '..\..\Source\MCPServer\UMakerAi.MCPServer.SSE.pas', // <--- NUEVA UNIDAD
 
-// --- AÒade aquÌ las unidades de tus herramientas y recursos ---
-// uMyCoolTool in 'uMyCoolTool.pas',
-// uMyAwesomeResource in 'uMyAwesomeResource.pas';
+  // Unidades de Herramientas (Reutilizamos las que ya tienes)
+  uTool.FileAccess in 'uTool.FileAccess.pas',
+  uTool.SysInfo in 'uTool.SysInfo.pas';
 
-// --- DeclaraciÛn de variables para los servidores ---
 var
   MCPServer: TAiMCPServer;
 
-
-  // Registro de funciones de las diferentes clases.
-
-  {
-    procedure RegisterFileAccessTools(ALogicServer: TAiMCPServer);
-    begin
-    if not Assigned(ALogicServer) then
-    raise Exception.Create('LogicServer no puede ser nulo para registrar herramientas.');
-
-    // 1. Registrar la herramienta para listar archivos
-    ALogicServer.RegisterTool('list_files',
-    function: IAiMCPTool
-    begin
-    Result := TListFilesTool.Create;
-    end);
-
-    // 2. Registrar la herramienta para leer archivos
-    ALogicServer.RegisterTool('read_file',
-    function: IAiMCPTool
-    begin
-    Result := TReadFileTool.Create;
-    end);
-
-    // 3. Registrar la herramienta para escribir archivos
-    ALogicServer.RegisterTool('write_file',
-    function: IAiMCPTool
-    begin
-    Result := TWriteFileTool.Create;
-    end);
-    end;
-  }
-
-  // --- Muestra la informaciÛn de ayuda en la consola ---
+  // --- Muestra la informaci√≥n de ayuda ---
 procedure ShowHelp;
 begin
-  WriteLn('MakerAI MCP Console Server');
-  WriteLn('--------------------------');
-  WriteLn('Usage: MCPConsoleServer.exe [options]');
-  WriteLn;
-  WriteLn('Options:');
-  WriteLn('  --protocol <http|stdio>  Specifies the communication protocol. Default: http');
-  WriteLn;
-  WriteLn('HTTP Server Options:');
-  WriteLn('  --port <number>          The port for the HTTP server. Default: 3000');
-  WriteLn('  --cors-enabled <true|false>');
-  WriteLn('                           Enables or disables CORS. Default: true');
+  WriteLn('');
+  WriteLn('==============================================================================');
+  WriteLn('  MAKERAI MCP SERVER DEMO (Multi-Protocol)');
+  WriteLn('==============================================================================');
+  WriteLn('');
+  WriteLn('Usage:');
+  WriteLn('  AiMCPSseServerDemo.exe [options]');
+  WriteLn('');
+  WriteLn('------------------------------------------------------------------------------');
+  WriteLn('  AVAILABLE PROTOCOLS (--protocol)');
+  WriteLn('------------------------------------------------------------------------------');
+  WriteLn('  1. sse    (Default) Server-Sent Events over HTTP.');
+  WriteLn('            Best for: Modern MCP Clients (Claude Desktop, MakerAi Clients).');
+  WriteLn('            Endpoints:');
+  WriteLn('              GET  /sse      -> Event Stream (Connect here first)');
+  WriteLn('              POST /messages -> JSON-RPC Commands');
+  WriteLn('');
+  WriteLn('  2. http   Standard JSON-RPC over HTTP (Request/Response).');
+  WriteLn('            Best for: Simple REST-like clients, stateless interactions.');
+  WriteLn('            Endpoints:');
+  WriteLn('              POST /mcp      -> JSON-RPC Commands');
+  WriteLn('              GET  /mcp      -> Server Info');
+  WriteLn('');
+  WriteLn('  3. stdio  Standard Input/Output (Console Pipe).');
+  WriteLn('            Best for: Local integration, subprocess execution.');
+  WriteLn('            Mechanism: Reads JSON-RPC from Stdin, writes to Stdout.');
+  WriteLn('');
+  WriteLn('------------------------------------------------------------------------------');
+  WriteLn('  CONFIGURATION OPTIONS');
+  WriteLn('------------------------------------------------------------------------------');
+  WriteLn('  --port <number>');
+  WriteLn('      Sets the listening port for SSE/HTTP servers.');
+  WriteLn('      Default: 8080');
+  WriteLn('');
   WriteLn('  --cors-origins "<origins>"');
-  WriteLn('                           Comma-separated list of allowed origins.');
-  WriteLn('                           Use "*" for all. Example: "http://localhost:8000,https://my-app.com"');
-  WriteLn('                           Default: *');
-  WriteLn;
-  WriteLn('General Options:');
-  WriteLn('  -h, --help               Displays this help information and exits.');
-  WriteLn;
-  WriteLn('Example (HTTP): MCPConsoleServer.exe --port 8080 --cors-origins "http://my.domain.com"');
-  WriteLn('Example (Stdio): MCPConsoleServer.exe --protocol stdio');
+  WriteLn('      Comma-separated list of allowed origins for CORS.');
+  WriteLn('      Use "*" to allow all.');
+  WriteLn('      Default: *');
+  WriteLn('');
+  WriteLn('  -h, --help');
+  WriteLn('      Displays this help information.');
+  WriteLn('');
+  WriteLn('------------------------------------------------------------------------------');
+  WriteLn('  EXAMPLES');
+  WriteLn('------------------------------------------------------------------------------');
+  WriteLn('  > Start SSE Server on port 3000:');
+  WriteLn('      AiMCPSseServerDemo.exe --protocol sse --port 3000');
+  WriteLn('');
+  WriteLn('  > Start standard HTTP Server:');
+  WriteLn('      AiMCPSseServerDemo.exe --protocol http --port 8080');
+  WriteLn('');
+  WriteLn('  > Start Stdio Server (for pipe usage):');
+  WriteLn('      AiMCPSseServerDemo.exe --protocol stdio');
+  WriteLn('');
+  WriteLn('==============================================================================');
 end;
 
-// --- Lugar centralizado para registrar todas tus herramientas y recursos ---
+// --- Registro centralizado de herramientas ---
 procedure RegisterAllToolsAndResources(ALogicServer: TAiMCPServer);
 begin
   if not Assigned(ALogicServer) then
     Exit;
+  WriteLn('Registering tools...');
 
-  WriteLn('Registering tools and resources...');
-
+  // Reutilizamos tus herramientas existentes sin modificar una sola l√≠nea de c√≥digo
   uTool.FileAccess.RegisterTools(ALogicServer);
   uTool.SysInfo.RegisterTools(ALogicServer);
 
@@ -96,29 +129,29 @@ end;
 var
   Protocol: string;
   Port: Integer;
-  CorsEnabled: Boolean;
   CorsOrigins: string;
   ShowHelpFlag: Boolean;
-  FileSettings : String;
-  LoadSettings : Boolean;
+  FileSettings: String;
+  LoadSettings: Boolean;
   i: Integer;
 
 begin
-  // --- 1. Valores por defecto ---
-  Protocol := 'http';
-  Port := 3000;
-  ShowHelpFlag := False;
-  // --- NUEVOS VALORES POR DEFECTO PARA CORS ---
-  CorsEnabled := False;
+
+  ShowHelp;
+
+  // 1. Valores por defecto
+  Protocol := 'sse'; // Por defecto SSE en este demo
+  Port := 8080; // SSE suele usar 8080 u 8000
   CorsOrigins := '*';
+  ShowHelpFlag := False;
   LoadSettings := False;
 
   MCPServer := nil;
 
-  // --- 2. Parsear los par·metros de la lÌnea de comandos (secciÛn actualizada) ---
-  If ParamCount >= 1 then
-  Begin
-  i := 1;
+  // 2. Parsear par√°metros
+  if ParamCount >= 1 then
+  begin
+    i := 1;
     while i <= ParamCount do
     begin
       var
@@ -139,43 +172,26 @@ begin
           Port := StrToIntDef(ParamStr(i), Port);
         end;
       end
-      // --- NUEVO: PARSEO DE PAR¡METROS CORS ---
-      else if Param = '--cors-enabled' then
-      begin
-        if (i + 1) <= ParamCount then
-        begin
-          Inc(i);
-          if SameText(ParamStr(i), 'false') then
-            CorsEnabled := False
-          else
-            CorsEnabled := True; // Cualquier otro valor (incluido 'true') lo activa
-        end;
-      end
       else if Param = '--cors-origins' then
       begin
         if (i + 1) <= ParamCount then
         begin
           Inc(i);
-          CorsOrigins := ParamStr(i); // Mantener may˙sculas/min˙sculas de los dominios
+          CorsOrigins := ParamStr(i);
         end;
       end
-      // ---------------------------------------
       else if (Param = '--help') or (Param = '-h') then
-      begin
         ShowHelpFlag := True;
-      end;
+
       Inc(i);
     end;
-  End
-  Else
-  Begin
-     //aquÌ puede asignar el nombre del archivo con los par·metros por defecto
-     //Se asigna el mismo nombre del ejecutable.ini
-     FileSettings  := ChangeFileExt(ParamStr(0),'.ini');
-     LoadSettings := FileExists(FileSettings);  //Si el archivo existe lo marca para cargarlo
-  End;
+  end
+  else
+  begin
+    FileSettings := ChangeFileExt(ParamStr(0), '.ini');
+    LoadSettings := FileExists(FileSettings);
+  end;
 
-  // --- 3. Mostrar ayuda y salir ---
   if ShowHelpFlag then
   begin
     ShowHelp;
@@ -183,11 +199,16 @@ begin
   end;
 
   try
-    Try
+    try
       WriteLn(Format('Starting server with protocol: %s', [Protocol]));
 
-      // --- 4. Crear la instancia del servidor ---
-      if SameText(Protocol, 'http') then
+      // 3. Crear instancia seg√∫n protocolo
+      if SameText(Protocol, 'sse') then
+      begin
+        // --- AQU√ç INSTANCIAMOS EL SERVIDOR SSE ---
+        MCPServer := TAiMCPSSEHttpServer.Create(nil);
+      end
+      else if SameText(Protocol, 'http') then
       begin
         MCPServer := TAiMCPHttpServer.Create(nil);
       end
@@ -197,77 +218,64 @@ begin
       end
       else
       begin
-        WriteLn(Format('Error: Unknown protocol "%s". Use "http" or "stdio".', [Protocol]));
-        ShowHelp;
+        WriteLn(Format('Error: Unknown protocol "%s".', [Protocol]));
         Halt(1);
       end;
 
-
-
-      If LoadSettings then
-      Begin
-         MCPServer.SettingsFile := FileSettings;
-         MCPServer.LoadSettingsFromFile;
-
-      End
-      Else
-      Begin
-      // --- 5. APLICAR CONFIGURACI”N DESDE LÕNEA DE COMANDOS ---
-      if Assigned(MCPServer) then
+      // 4. Configuraci√≥n
+      if LoadSettings then
       begin
-        MCPServer.Port := Port;
-        MCPServer.CorsEnabled := CorsEnabled;
-        MCPServer.CorsAllowedOrigins := CorsOrigins;
-        MCPServer.User := '';
+        MCPServer.SettingsFile := FileSettings;
+        MCPServer.LoadSettingsFromFile;
+      end
+      else
+      begin
+        if Assigned(MCPServer) then
+        begin
+          MCPServer.Port := Port;
+          MCPServer.CorsEnabled := True; // SSE suele necesitar CORS
+          MCPServer.CorsAllowedOrigins := CorsOrigins;
+        end;
       end;
-      End;
 
-      // --- 6. Registrar herramientas ---
+      // 5. Registrar herramientas
       RegisterAllToolsAndResources(MCPServer);
 
-      // --- 7. Iniciar el servidor ---
+      // 6. Iniciar
       if Assigned(MCPServer) then
       begin
-        MCPServer.Start; // Start ahora usar· el puerto actualizado
-        WriteLn(Format('HTTP server listening on port %d.', [MCPServer.Port]));
-        WriteLn(Format('CORS Enabled: %s, Allowed Origins: %s', [BoolToStr(CorsEnabled, True), CorsOrigins]));
-      end
-      else if Assigned(MCPServer) then
-      begin
         MCPServer.Start;
-        WriteLn('Stdio server listening on standard input/output.');
+
+        if MCPServer is TAiMCPSSEHttpServer then
+        begin
+          WriteLn(Format('‚úÖ MCP SSE Server listening on http://localhost:%d/sse', [MCPServer.Port]));
+          WriteLn(Format('   POST Endpoint: http://localhost:%d/messages', [MCPServer.Port]));
+        end
+        else if MCPServer is TAiMCPHttpServer then
+          WriteLn(Format('‚úÖ MCP HTTP Server listening on port %d.', [MCPServer.Port]))
+        else
+          WriteLn('‚úÖ MCP Stdio Server running.');
       end;
 
-      WriteLn('Server is running. Press Ctrl+C to stop.');
+      WriteLn('Press Ctrl+C to stop.');
 
-      // --- 8. Bucle infinito ---
+      // Bucle infinito
       while True do
-      begin
         Sleep(1000);
-      end;
 
     except
-      on E: EControlC do
-      begin
-        WriteLn;
-        WriteLn('Ctrl+C detected. Shutting down gracefully...');
-      end;
       on E: Exception do
       begin
-        WriteLn(Format('FATAL ERROR: %s', [E.Message]));
+        WriteLn('Error: ' + E.Message);
         Halt(1);
       end;
     end;
-
-    // --- 9. Limpieza final ---
   finally
-    WriteLn('Stopping server...');
     if Assigned(MCPServer) then
     begin
       MCPServer.Stop;
       MCPServer.Free;
     end;
-    WriteLn('Server stopped. Goodbye!');
   end;
 
 end.

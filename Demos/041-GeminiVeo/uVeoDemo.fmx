@@ -266,8 +266,8 @@ object Form11: TForm11
           Size.Height = 638.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 1
-          Viewport.Width = 323.000000000000000000
-          Viewport.Height = 634.000000000000000000
+          Viewport.Width = 343.000000000000000000
+          Viewport.Height = 638.000000000000000000
         end
         object Layout3: TLayout
           Align = Client
@@ -340,8 +340,8 @@ object Form11: TForm11
               Size.Height = 137.000000000000000000
               Size.PlatformDefault = False
               TabOrder = 1
-              Viewport.Width = 774.000000000000000000
-              Viewport.Height = 133.000000000000000000
+              Viewport.Width = 778.000000000000000000
+              Viewport.Height = 137.000000000000000000
             end
           end
           object Splitter2: TSplitter
@@ -413,8 +413,8 @@ object Form11: TForm11
             Size.Height = 44.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
-            Viewport.Width = 1117.000000000000000000
-            Viewport.Height = 40.000000000000000000
+            Viewport.Width = 1121.000000000000000000
+            Viewport.Height = 44.000000000000000000
           end
         end
         object Label8: TLabel
@@ -450,6 +450,10 @@ object Form11: TForm11
       OnClick = MnuPlayClick
     end
   end
+  object SaveDialog1: TSaveDialog
+    Left = 472
+    Top = 312
+  end
   object AiVeo: TAiVeoGenerator
     ApiKey = '@GEMINI_API_KEY'
     PersonGeneration = pgDefault
@@ -458,9 +462,5 @@ object Form11: TForm11
     OnError = AiVeoError
     Left = 320
     Top = 232
-  end
-  object SaveDialog1: TSaveDialog
-    Left = 472
-    Top = 312
   end
 end

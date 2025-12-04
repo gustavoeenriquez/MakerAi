@@ -5,14 +5,14 @@
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,10 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez & Asistente de IA para portabilidad a Linux
+// Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
-// - Telegram: +57 3128441700
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
@@ -95,7 +98,7 @@ type
   TUtilsSystem = class
   public
     class function RunCommandLine(ACommand: string): String; overload;
-    class function ExcecuteCommandLine(ACommand: string): Boolean;
+    class function ExecuteCommandLine(ACommand: string): Boolean;
 
     class function StartInteractiveProcess(const ACommand: string; ACurrentDirectory: string = ''; AEnvironment: TStrings = nil): TInteractiveProcessInfo;
     class procedure StopInteractiveProcess(var AProcessInfo: TInteractiveProcessInfo);
@@ -577,7 +580,7 @@ begin
   end;
 end;
 
-class function TUtilsSystem.ExcecuteCommandLine(ACommand: string): Boolean;
+class function TUtilsSystem.ExecuteCommandLine(ACommand: string): Boolean;
 var
   SI: TStartupInfo;
   PI: TProcessInformation;
@@ -606,6 +609,16 @@ end;
 
 {$ENDIF}
 {$IFDEF POSIX}
+
+{
+  Mejora a futuro:
+  No soporta comillas simples ('), ni escapar caracteres con barra invertida (\),
+  ni tuberías (|) o redirecciones (>) propias de bash,
+  ya que usa execvp directamente y no una shell (/bin/sh).
+  Si intenta ejecutar ls -la | grep x fallará porque | y grep serán tratados como argumentos de ls.
+
+}
+
 function popen(const command: MarshaledAString; const _type: MarshaledAString): Pointer; cdecl; external libc name _PU + 'popen';
 function pclose(filehandle: Pointer): int32; cdecl; external libc name _PU + 'pclose';
 function fgets(Buffer: PAnsiChar; size: int32; Stream: Pointer): PAnsiChar; cdecl; external libc name _PU + 'fgets';
@@ -787,7 +800,7 @@ begin
   end;
 end;
 
-class function TUtilsSystem.ExcecuteCommandLine(ACommand: string): Boolean;
+class function TUtilsSystem.ExecuteCommandLine(ACommand: string): Boolean;
 var
   Status: Integer;
   M: TMarshaller;

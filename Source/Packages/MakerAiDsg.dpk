@@ -25,6 +25,7 @@ package MakerAiDsg;
 {$IMAGEBASE $400000}
 {$DEFINE DEBUG}
 {$ENDIF IMPLICITBUILDING}
+{$DESCRIPTION 'MakerAI Design Time Package'}
 {$IMPLICITBUILD ON}
 
 requires

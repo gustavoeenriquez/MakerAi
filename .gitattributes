@@ -1,5 +1,5 @@
 # Configuración por defecto
-* text=auto
+* -text
 
 # Archivos de código fuente Delphi (normalizar finales de línea)
 *.pas text

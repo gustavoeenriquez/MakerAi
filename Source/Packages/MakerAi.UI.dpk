@@ -25,6 +25,7 @@ package MakerAi.UI;
 {$IMAGEBASE $400000}
 {$DEFINE DEBUG}
 {$ENDIF IMPLICITBUILDING}
+{$DESCRIPTION 'MakerAI UI Components for FireMonkey'}
 {$IMPLICITBUILD ON}
 
 requires

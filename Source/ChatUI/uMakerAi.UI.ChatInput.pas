@@ -23,10 +23,14 @@
 // Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
-// - Telegram: +57 3128441700
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
+
 
 unit uMakerAi.UI.ChatInput;
 
@@ -254,7 +258,7 @@ begin
   FValidExtensions := 'jpg,jpeg,png,bmp,pdf,mp3,wav,mp4,avi';
   FWakeWordDetectedInSession := False;
   Width := 400; // Un ancho por defecto razonable
-  Height := MIN_FRAME_HEIGHT;; // Una altura inicial mínima
+  Height := 100; //MIN_FRAME_HEIGHT;; // Una altura inicial mínima
 
   // --- 2. Crear y cargar los ImageLists desde recursos ---
   FImageList1 := TImageList.Create(Self);

@@ -23,7 +23,10 @@
 // Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
-// - Telegram: +57 3128441700
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
@@ -663,7 +666,7 @@ begin
     ConvertAudioIfNeeded(AAudioFile);
 
     AAudioFile.Content.Position := 0;
-    Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
+    Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
     BuildTranscriptionBody(Body, AAudioFile, APrompt);
 
     Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
@@ -697,7 +700,7 @@ begin
 
     ConvertAudioIfNeeded(AAudioFile);
     AAudioFile.Content.Position := 0;
-    Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
+    Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
     BuildTranscriptionBody(Body, AAudioFile);
     Body.AddField('stream', 'true');
 
@@ -741,7 +744,7 @@ begin
   try
     ConvertAudioIfNeeded(AAudioFile);
     AAudioFile.Content.Position := 0;
-    Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
+    Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
 
     // El modelo es fijo para traducciones según la API
     Body.AddField('model', 'whisper-1');

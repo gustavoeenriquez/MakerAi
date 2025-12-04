@@ -25,8 +25,9 @@ package MakerAI;
 {$IMAGEBASE $400000}
 {$DEFINE DEBUG}
 {$ENDIF IMPLICITBUILDING}
-{$DESCRIPTION 'OpenAi Gustavo'}
+{$DESCRIPTION 'MakerAI Delphi Suite'}
 {$IMPLICITBUILD ON}
+
 
 requires
   rtl,
@@ -51,8 +52,7 @@ contains
   uMakerAi.Chat.Mistral in '..\Chat\uMakerAi.Chat.Mistral.pas',
   uMakerAi.Chat.Ollama in '..\Chat\uMakerAi.Chat.Ollama.pas',
   uMakerAi.Chat.OpenAi in '..\Chat\uMakerAi.Chat.OpenAi.pas',
-  uMakerAi.Chat.OpenAiResponses in '..\Chat\uMakerAi.Chat.OpenAiResponses.pas',
-  uMakerAi.ToolFunctions in '..\Chat\uMakerAi.ToolFunctions.pas',
+  uMakerAi.Tools.Functions in '..\Tools\uMakerAi.Tools.Functions.pas',
   uMakerAi.Chat in '..\Core\uMakerAi.Chat.pas',
   uMakerAi.Core in '..\Core\uMakerAi.Core.pas',
   uMakerAi.Embeddings in '..\Core\uMakerAi.Embeddings.pas',
@@ -79,7 +79,12 @@ contains
   uMakerAi.Chat.LMStudio in '..\Chat\uMakerAi.Chat.LMStudio.pas',
   uMakerAi.Gemini.Veo in '..\Tools\uMakerAi.Gemini.Veo.pas',
   uMakerAi.OpenAI.Sora in '..\Tools\uMakerAi.OpenAI.Sora.pas',
-  uMakerAi.OpenAI.Audio in '..\Tools\uMakerAi.OpenAI.Audio.pas';
+  uMakerAi.OpenAI.Audio in '..\Tools\uMakerAi.OpenAI.Audio.pas',
+  uMakerAi.Utils.DiffUpdater in '..\Utils\uMakerAi.Utils.DiffUpdater.pas',
+  uMakerAi.Tools.Shell in '..\Tools\uMakerAi.Tools.Shell.pas',
+  uMakerAi.Chat.GenericLLM in '..\Chat\uMakerAi.Chat.GenericLLM.pas',
+  UMakerAi.MCPServer.SSE in '..\MCPServer\UMakerAi.MCPServer.SSE.pas',
+  uMakerAi.Tools.TextEditor in '..\Tools\uMakerAi.Tools.TextEditor.pas';
 
 end.
 

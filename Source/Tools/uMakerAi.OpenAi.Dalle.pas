@@ -23,10 +23,14 @@
 // Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
-// - Telegram: +57 3128441700
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
+
 
 // --- Modificaciones ----
 // 30/08/2024 -- Mejora en la función Edit
@@ -312,15 +316,15 @@ begin
     begin
       MediaFile.Content.Position := 0;
       if FModel = imGptImage1 then
-        Body.AddStream('image[]', MediaFile.Content, MediaFile.Filename)
+        Body.AddStream('image[]', MediaFile.Content, False, MediaFile.Filename)
       else
-        Body.AddStream('image', MediaFile.Content, MediaFile.Filename);
+        Body.AddStream('image', MediaFile.Content, False, MediaFile.Filename);
     end;
 
     if Assigned(aMaskFile) then
     begin
       aMaskFile.Content.Position := 0;
-      Body.AddStream('mask', aMaskFile.Content, aMaskFile.Filename);
+      Body.AddStream('mask', aMaskFile.Content, False, aMaskFile.Filename);
     end;
 
     Body.AddField('prompt', aPrompt);
@@ -745,7 +749,7 @@ begin
   Body := TMultipartFormData.Create;
   try
     aImageFile.Content.Position := 0;
-    Body.AddStream('image', aImageFile.Content, aImageFile.Filename);
+    Body.AddStream('image', aImageFile.Content, False, aImageFile.Filename);
     Body.AddField('user', FUser);
     Body.AddField('n', N.ToString);
 

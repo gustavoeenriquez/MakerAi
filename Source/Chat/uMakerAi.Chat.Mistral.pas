@@ -23,10 +23,14 @@
 // Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
-// - Telegram: +57 3128441700
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
+
 
 {
   -----------------------------------------------------------------------------
@@ -120,7 +124,7 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Embeddings.Core;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Embeddings.Core;
 
 { TODO : Falta crear las siguientes funciones de Mistral }
 /// -----------------------------------------------------------------------------

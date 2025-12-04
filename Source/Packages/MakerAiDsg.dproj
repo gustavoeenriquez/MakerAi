@@ -113,6 +113,9 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
         <DCC_RemoteDebug>false</DCC_RemoteDebug>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <DCC_Description>MakerAI Design Time Package</DCC_Description>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
@@ -162,6 +165,18 @@
                 <Source>
                     <Source Name="MainSource">MakerAiDsg.dpk</Source>
                 </Source>
+                <Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\MakerAi.RAG.Drivers.bpl">(untitled)</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\MakerAi.UI.bpl">(untitled)</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\uMakerAi.RAG.Drivers.bpl">(untitled)</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\uMakerAi.UI.bpl">(untitled)</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\23.0\CatalogRepository\TeeBI\Sources\Compiled\Delphi29.win32\Bin\DclTeeBI29.bpl">File C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\23.0\CatalogRepository\TeeBI\Sources\Compiled\Delphi29.win32\Bin\DclTeeBI29.bpl not found</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\23.0\CatalogRepository\TeeBI\Sources\Compiled\Delphi29.win32\Bin\DclFMXTeeBI29.bpl">File C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\23.0\CatalogRepository\TeeBI\Sources\Compiled\Delphi29.win32\Bin\DclFMXTeeBI29.bpl not found</Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\bcboffice2k290.bpl">Embarcadero C++Builder Office 2000 Servers Package</Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\bcbofficexp290.bpl">Embarcadero C++Builder Office XP Servers Package</Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\dcloffice2k290.bpl">Microsoft Office 2000 Sample Automation Server Wrapper Components</Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\dclofficexp290.bpl">Microsoft Office XP Sample Automation Server Wrapper Components</Excluded_Packages>
+                </Excluded_Packages>
             </Delphi.Personality>
             <Deployment Version="5">
                 <DeployFile LocalName="$(BDS)\Redist\iossimulator\libcgunwind.1.0.dylib" Class="DependencyModule">

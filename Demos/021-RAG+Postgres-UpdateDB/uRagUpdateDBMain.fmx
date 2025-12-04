@@ -47,8 +47,8 @@ object Form8: TForm8
     Size.Height = 633.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 6
-    Viewport.Width = 285.000000000000000000
-    Viewport.Height = 629.000000000000000000
+    Viewport.Width = 289.000000000000000000
+    Viewport.Height = 633.000000000000000000
   end
   object Grid1: TGrid
     CanFocus = True
@@ -60,8 +60,8 @@ object Form8: TForm8
     Size.PlatformDefault = False
     TabOrder = 11
     RowCount = 0
-    Viewport.Width = 532.000000000000000000
-    Viewport.Height = 312.000000000000000000
+    Viewport.Width = 536.000000000000000000
+    Viewport.Height = 337.000000000000000000
   end
   object EditPrompt: TEdit
     Touch.InteractiveGestures = [LongTap, DoubleTap]
@@ -100,8 +100,8 @@ object Form8: TForm8
     Size.Height = 337.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 17
-    Viewport.Width = 317.000000000000000000
-    Viewport.Height = 333.000000000000000000
+    Viewport.Width = 321.000000000000000000
+    Viewport.Height = 337.000000000000000000
   end
   object MemoRes: TMemo
     Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
@@ -113,8 +113,8 @@ object Form8: TForm8
     Size.Height = 296.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 20
-    Viewport.Width = 861.000000000000000000
-    Viewport.Height = 292.000000000000000000
+    Viewport.Width = 865.000000000000000000
+    Viewport.Height = 296.000000000000000000
   end
   object DbConn: TFDConnection
     Params.Strings = (
@@ -132,17 +132,16 @@ object Form8: TForm8
     OnDataVecAddItem = RAGVectorAdicionDataVecAddItem
     Embeddings = AiOllamaEmbeddings1
     InMemoryIndexType = TAIHNSWIndex
-    Left = 112
-    Top = 272
+    Left = 128
+    Top = 288
   end
   object BusQuery: TFDQuery
     Connection = DbConn
     SQL.Strings = (
-      
-        'Select id, FechaDoc, Categoria, PathDoc, FileName, Resumen,0.345' +
-        ' as distancia'
-      'from anexos'
-      'where id in (1,2)')
+      'SELECT id, FechaDoc, Categoria, PathDoc, FileName, Resumen,'
+      '  0.345::double precision AS distancia'
+      'FROM anexos'
+      'WHERE id IN (1, 2);')
     Left = 392
     Top = 256
     object BusQueryid: TLargeintField
@@ -182,8 +181,9 @@ object Form8: TForm8
       BlobType = ftWideMemo
     end
     object BusQuerydistancia: TFloatField
-      DisplayWidth = 10
+      AutoGenerateValue = arDefault
       FieldName = 'distancia'
+      Origin = 'distancia'
       ReadOnly = True
     end
   end
@@ -216,8 +216,8 @@ object Form8: TForm8
     OnDataVecSearch = RAGVectorConsultaDataVecSearch
     Embeddings = AiOllamaEmbeddings1
     InMemoryIndexType = TAIEuclideanIndex
-    Left = 592
-    Top = 528
+    Left = 520
+    Top = 560
   end
   object AiChatConnection1: TAiChatConnection
     DriverName = 'OpenAi'
@@ -241,19 +241,16 @@ object Form8: TForm8
     Prompt_tokens = 0
     Completion_tokens = 0
     Total_tokens = 0
-    WebSearch = False
-    CodeInterpreter = False
-    ExtractTextFiles = False
     OnReceiveData = AiChatConnection1ReceiveData
-    Left = 840
-    Top = 512
+    Left = 816
+    Top = 520
   end
   object AiOllamaEmbeddings1: TAiOllamaEmbeddings
     Model = 'snowflake-arctic-embed'
     Dimensions = 1024
     ApiKey = '@OLLAMA_API_KEY'
     Url = 'http://localhost:11434/'
-    Left = 600
-    Top = 392
+    Left = 616
+    Top = 360
   end
 end

@@ -1,18 +1,18 @@
-// MIT License
+// IT License
 //
-// Copyright (c) 2024 Gustavo Enríquez
+// Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -23,7 +23,14 @@
 // Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
+
 
 unit uMakerAi.Gemini.Veo;
 
@@ -77,7 +84,7 @@ type
     procedure InternalExecuteGeneration(ARequestBody: TJSONObject);
     function DownloadVideoFile(const AVideoUri: string): TAiMediaFile;
     function GetApiKey: string;
-    function WaitForFileToBeActive(const ACloudName: string): Boolean;
+    //function WaitForFileToBeActive(const ACloudName: string): Boolean;
 
   public
     constructor Create(AOwner: TComponent); override;
@@ -90,7 +97,7 @@ type
     function ExtendVideo(const APrompt: string; AVideoToExtend: TAiMediaFile): ITask;
 
     function UploadFile(aMediaFile: TAiMediaFile): String;
-    function UploadFileToCache(aMediaFile: TAiMediaFile; aTTL_Seconds: Integer): String;
+    //function UploadFileToCache(aMediaFile: TAiMediaFile; aTTL_Seconds: Integer): String;
     procedure UploadFileSync(aMediaFile: TAiMediaFile);
 
   published
@@ -353,12 +360,17 @@ end;
 
 function TAiVeoGenerator.GenerateFromImage(const APrompt: string; AImage: TAiMediaFile): ITask;
 var
-  LImageClone: TAiMediaFile; // Usamos un nombre más descriptivo
+  LImageClone: TAiMediaFile;
 begin
-  if not Assigned(AImage) or AImage.Base64.IsEmpty then
-    raise Exception.Create('An image with Base64 content is required.');
+  // Validación básica antes de crear el hilo
+  if not Assigned(AImage) then
+    raise Exception.Create('An image object is required.');
 
-  // 1. Creamos el clon en el hilo principal.
+  if AImage.UrlMedia.IsEmpty and AImage.Base64.IsEmpty then
+    raise Exception.Create('The image must have either a Cloud URI (UrlMedia) or Base64 content.');
+
+  // Clonamos el objeto de imagen para garantizar la seguridad de hilos (Thread Safety)
+  // ya que la TTask se ejecutará en paralelo.
   LImageClone := TAiMediaFile.Create;
   LImageClone.Assign(AImage);
 
@@ -368,33 +380,54 @@ begin
       LRequest, LInstance, LImagePart: TJSONObject;
       LInstances: TJSONArray;
     begin
-      // 2. La tarea usa el clon. Envolvemos TODO en un try...finally.
       try
         LRequest := TJSONObject.Create;
         try
+          // Estructura JSON: { "instances": [ { ... } ], "parameters": { ... } }
           LInstances := TJSONArray.Create;
           LRequest.AddPair('instances', LInstances);
+
           LInstance := TJSONObject.Create;
           LInstances.AddElement(LInstance);
+
+          // 1. Agregar el Prompt
           LInstance.AddPair('prompt', TJSONString.Create(APrompt));
 
+          // 2. Agregar la Imagen
           LImagePart := TJSONObject.Create;
-          // Usamos el clon (LImageClone)
-          LImagePart.AddPair('mimeType', LImageClone.MimeType);
-          LImagePart.AddPair('bytesBase64Encoded', LImageClone.Base64);
+
+          // ESTRATEGIA HÍBRIDA:
+          // Preferimos usar la URI de la File API si existe (mejor rendimiento para Veo).
+          if not LImageClone.UrlMedia.IsEmpty then
+          begin
+            // Para Veo/Vertex AI, cuando es un archivo subido, usamos 'uri' o 'gcsUri'
+            // La API de Gemini Files devuelve una URI accesible internamente.
+            LImagePart.AddPair('uri', LImageClone.UrlMedia);
+            LImagePart.AddPair('mimeType', LImageClone.MimeType); // Ayuda al modelo
+          end
+          else
+          begin
+            // Fallback: Si no está subido, usamos Base64 (Inline)
+            // Nota: Esto solo funciona para imágenes pequeñas (<20MB en total request)
+            LImagePart.AddPair('bytesBase64Encoded', LImageClone.Base64);
+            LImagePart.AddPair('mimeType', LImageClone.MimeType);
+          end;
+
           LInstance.AddPair('image', LImagePart);
 
-          // La lógica de añadir los parámetros generales debería estar aquí también
+          // 3. Agregar los parámetros de configuración (Resolución, FPS, etc.)
+          // Nota: BuildParametersJson devuelve un objeto nuevo, AddPair toma propiedad.
           LRequest.AddPair('parameters', BuildParametersJson);
 
+          // Ejecutar la petición (InternalExecuteGeneration se encarga de liberar LRequest)
           InternalExecuteGeneration(LRequest);
         except
-          // InternalExecuteGeneration libera LRequest, pero si falla antes, lo liberamos aquí.
+          // Si ocurre un error antes de entrar a InternalExecuteGeneration, liberamos aquí.
           LRequest.Free;
           raise;
         end;
       finally
-        // 3. ¡Paso crucial! La tarea libera el clon cuando termina, sin importar si hubo éxito o error.
+        // Liberamos el clon creado específicamente para esta tarea
         LImageClone.Free;
       end;
     end);
@@ -425,7 +458,6 @@ end;
 function TAiVeoGenerator.GenerateWithReferences(const APrompt: string; AReferenceImages: TAiMediaFilesArray): ITask;
 var
   LClonedImages: TArray<TAiMediaFile>; // Un array para guardar los clones
-  Img: TAiMediaFile;
   i: Integer;
 begin
   if Length(AReferenceImages) = 0 then
@@ -540,7 +572,6 @@ var
   LPollCount: Integer;
   LResultVideo: TAiMediaFile;
 begin
-  LResultVideo := nil;
   LFinalResponse := nil;
   LHttpClient := TNetHTTPClient.Create(nil);
   try
@@ -723,7 +754,7 @@ begin
   end;
 end;
 
-procedure TAiVeoGenerator.UploadFileSync(aMediaFile: TAiMediaFile);
+{procedure TAiVeoGenerator.UploadFileSync(aMediaFile: TAiMediaFile);
 var
   LHttpClient: TNetHTTPClient;
   LStartUrl, LUploadUrl, LFileUri, CloudName, CloudState: string;
@@ -827,9 +858,9 @@ begin
   LModel := GetEffectiveModelName; // TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   LHttpClient := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
+//$IF CompilerVersion >= 35
   LHttpClient.SynchronizeEvents := False;
-{$ENDIF}
+//$ENDIF
   try
     LUrl := GEMINI_API_BASE_URL + 'cachedContents?key=' + Self.ApiKey;
 
@@ -891,7 +922,127 @@ begin
     LHttpClient.Free;
   end;
 end;
+}
 
+
+procedure TAiVeoGenerator.UploadFileSync(aMediaFile: TAiMediaFile);
+var
+  LHttpClient: TNetHTTPClient;
+  LStartUrl, LUploadUrl, LFileUri, CloudName, CloudState: string;
+  LResponse: IHTTPResponse;
+  LHeaders: TNetHeaders;
+  LJsonBody, LFileMeta, LUploadResponseObj, LFileObj: TJSONObject;
+  LBodyStream: TStringStream;
+  LFileStream: TStream;
+  LNumBytes: Int64;
+begin
+  // Resetear estado del objeto
+  aMediaFile.CloudName := '';
+  aMediaFile.UrlMedia := '';
+  aMediaFile.CloudState := 'UPLOADING';
+
+  LHttpClient := TNetHTTPClient.Create(Nil);
+  try
+    // --- PASO 1: Iniciar la sesión de subida (Handshake) ---
+    LStartUrl := GEMINI_API_UPLOAD_URL + 'files?key=' + Self.ApiKey;
+
+    LFileStream := aMediaFile.Content;
+    LFileStream.Position := 0;
+    LNumBytes := LFileStream.Size;
+
+    if LNumBytes = 0 then
+      raise Exception.Create('Cannot upload an empty file.');
+
+    // Construir el JSON de metadatos para el inicio
+    LJsonBody := TJSONObject.Create;
+    try
+      LFileMeta := TJSONObject.Create;
+      // Usamos el nombre del archivo o un default
+      LFileMeta.AddPair('display_name', TJSONString.Create(ExtractFileName(aMediaFile.FileName)));
+      LJsonBody.AddPair('file', LFileMeta);
+
+      // Convertir JSON a Stream
+      LBodyStream := TStringStream.Create(LJsonBody.ToJSON, TEncoding.UTF8);
+    finally
+      LJsonBody.Free;
+    end;
+
+    try
+      LHttpClient.ContentType := 'application/json';
+      LHeaders := [
+        TNetHeader.Create('X-Goog-Upload-Protocol', 'resumable'),
+        TNetHeader.Create('X-Goog-Upload-Command', 'start'),
+        TNetHeader.Create('X-Goog-Upload-Header-Content-Length', LNumBytes.ToString),
+        TNetHeader.Create('X-Goog-Upload-Header-Content-Type', aMediaFile.MimeType)
+      ];
+
+      // POST inicial con los metadatos
+      LResponse := LHttpClient.Post(LStartUrl, LBodyStream, nil, LHeaders);
+    finally
+      LBodyStream.Free;
+    end;
+
+    if LResponse.StatusCode <> 200 then
+      raise Exception.CreateFmt('Error initiating upload handshake: %d %s'#13#10'%s',
+        [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
+
+    // Obtener la URL de subida de los headers
+    LUploadUrl := LResponse.HeaderValue['X-Goog-Upload-Url'];
+    if LUploadUrl = '' then
+      raise Exception.Create('Did not receive the X-Goog-Upload-Url header from Google API.');
+
+    // --- PASO 2: Subir los bytes del archivo (Payload) ---
+    LFileStream.Position := 0;
+
+    // Headers para la transferencia de bytes
+    LHeaders := [
+      TNetHeader.Create('Content-Length', LNumBytes.ToString),
+      TNetHeader.Create('X-Goog-Upload-Offset', '0'),
+      TNetHeader.Create('X-Goog-Upload-Command', 'upload, finalize')
+    ];
+
+    LHttpClient.ContentType := aMediaFile.MimeType; // Importante: el tipo real del archivo aquí
+    LResponse := LHttpClient.Post(LUploadUrl, LFileStream, nil, LHeaders);
+
+    if LResponse.StatusCode <> 200 then
+      raise Exception.CreateFmt('Error uploading file bytes: %d %s'#13#10'%s',
+        [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
+
+    // --- PASO 3: Procesar la respuesta final ---
+    LUploadResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
+    if Assigned(LUploadResponseObj) then
+      try
+        // La respuesta exitosa contiene un objeto "file"
+        if LUploadResponseObj.TryGetValue<TJSONObject>('file', LFileObj) then
+        begin
+          LFileObj.TryGetValue<string>('uri', LFileUri);
+          LFileObj.TryGetValue<string>('name', CloudName); // Formato: files/abc-123
+          LFileObj.TryGetValue<string>('state', CloudState); // Generalmente PROCESSING o ACTIVE
+
+          aMediaFile.UrlMedia := LFileUri;
+          aMediaFile.CloudName := CloudName;
+          aMediaFile.CloudState := CloudState;
+
+          if aMediaFile.UrlMedia.IsEmpty then
+            raise Exception.Create('File uploaded but URI is missing in response.');
+        end
+        else
+        begin
+          raise Exception.Create('Unexpected JSON format in upload response: "file" object missing.');
+        end;
+      finally
+        LUploadResponseObj.Free;
+      end
+    else
+      raise Exception.Create('File uploaded but response is not a valid JSON.');
+
+  finally
+    LHttpClient.Free;
+  end;
+end;
+
+
+{
 function TAiVeoGenerator.WaitForFileToBeActive(const ACloudName: string): Boolean;
 var
   LHttpClient: TNetHTTPClient;
@@ -911,8 +1062,8 @@ begin
 
   LHttpClient := TNetHTTPClient.Create(nil);
   try
-    // La URL para consultar el estado de un archivo es /v1beta/files/{ID}
-    // ACloudName tiene el formato "files/{ID}", así que lo usamos directamente.
+    // La URL para consultar el estado de un archivo es /v1beta/files/ID
+    // ACloudName tiene el formato "files/ID", así que lo usamos directamente.
     LUrl := TPath.Combine(GEMINI_API_BASE_URL, ACloudName) + '?key=' + Self.ApiKey;
     LHeaders := []; // No se necesitan headers especiales para un GET simple
 
@@ -965,5 +1116,6 @@ begin
     LHttpClient.Free;
   end;
 end;
+}
 
 end.

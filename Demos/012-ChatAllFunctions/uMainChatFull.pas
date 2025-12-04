@@ -1,3 +1,36 @@
+// MIT License
+//
+// Copyright (c) 2013 Gustavo Enríquez - CimaMaker
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enríquez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
 unit uMainChatFull;
 
 interface
@@ -5,18 +38,25 @@ interface
 uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   System.IOUtils, System.Rtti, System.JSON, System.Net.HttpClient, System.Threading, System.ZLib,
-  System.StrUtils,
+  System.StrUtils, System.TypInfo, System.Math, System.Generics.Collections,
+  System.Net.HttpClientComponent,
 
   uMakerAi.UI.ChatBubble, uMakerAi.UI.ChatInput, uMakerAi.Core, uMakerAi.Chat,
   uMakerAi.Utils.System, uMakerAi.UI.ChatList, uMakerAi.Chat.AiConnection,
   uMakerAi.Chat.OpenAi, uMakerAi.Chat.Initializations,
-  uMakerAi.Chat.DeepSeek, uMakerAi.Chat.Claude, uMakerAi.Chat.Gemini, uMakerAi.Chat.OpenAiResponses,
-  uMakerAi.chat.Kimi, uMakerAi.Chat.LMStudio,
+  uMakerAi.Chat.DeepSeek, uMakerAi.Chat.Claude, uMakerAi.Chat.Gemini,
+  uMakerAi.Chat.Kimi, uMakerAi.Chat.LMStudio, uMakerAi.OpenAi.Sora,
+  uMakerAi.Chat.GenericLLM, uMakerAi.Utils.ScreenCapture,
 
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Memo.Types, FMX.Layouts,
   FMX.Styles.Objects, FMX.Platform, FMX.ScrollBox, FMX.Memo, FMX.Edit, FMX.StdCtrls,
-  FMX.Controls.Presentation, FMX.Objects, FMX.Menus, FMX.ListBox, uMakerAi.Chat.Mistral, uMakerAi.Chat.Ollama, uMakerAi.Chat.Groq, uMakerAi.Chat.Grok, uMakerAi.Whisper, uMakerAi.Utils.VoiceMonitor, System.Actions, FMX.ActnList,
-  System.ImageList, FMX.ImgList, uMakerAi.RAG.Vectors, uMakerAi.ToolFunctions, uMakerAi.Embeddings.Core, uMakerAi.Embeddings, UMakerAi.MCPServer.Direct, uMakerAi.MCPServer.Core, UMakerAi.MCPServer.Http;
+  FMX.Controls.Presentation, FMX.Objects, FMX.Menus, FMX.ListBox,
+
+  uMakerAi.Chat.Mistral, uMakerAi.Chat.Ollama, uMakerAi.Chat.Groq, uMakerAi.Chat.Grok, uMakerAi.Whisper,
+  uMakerAi.Utils.VoiceMonitor, System.Actions, FMX.ActnList, uMakerAi.RAG.Vectors, uMakerAi.Tools.Functions,
+  uMakerAi.Embeddings.Core, uMakerAi.Embeddings, uMakerAi.MCPServer.Core, uMakerAi.MCPServer.Http,
+
+  System.ImageList, FMX.ImgList, FMX.TabControl, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Utils.DiffUpdater;
 
 type
   TForm2 = class(TForm)
@@ -30,7 +70,7 @@ type
     MainChatLayout: TLayout;
     ChatList1: TChatList;
     Layout3: TLayout;
-       Layout2: TLayout;
+    Layout2: TLayout;
 
     ComboDriver: TComboBox;
     Label1: TLabel;
@@ -61,7 +101,7 @@ type
     TrackTemperature: TTrackBar;
     ListBoxItem8: TListBoxItem;
     Label4: TLabel;
-    CompletionModel: TEdit;
+    EditCompletionModel: TEdit;
     ListBoxItem10: TListBoxItem;
     ChWebSearch: TCheckBox;
     ListBoxItem13: TListBoxItem;
@@ -70,7 +110,7 @@ type
     ChExtractFiles: TCheckBox;
     ListBoxItem15: TListBoxItem;
     Label6: TLabel;
-    EditReasoningEffort: TEdit;
+    EditThinkingLevel: TComboBox;
     ListBoxItem16: TListBoxItem;
     Label7: TLabel;
     EditVoices: TEdit;
@@ -176,9 +216,57 @@ type
     Image10: TImage;
     BtnShowBilling: TButton;
     Image11: TImage;
-    LayoutTokenUsageHistory: TLayout;
-    Label18: TLabel;
+    AiOpenChat1: TAiOpenChat;
+    Layout10: TLayout;
+    MemoThinking: TMemo;
+    Splitter1: TSplitter;
+    ChModelAny: TCheckBox;
+    ListBoxItem24: TListBoxItem;
+    Label19: TLabel;
+    EditThinkingTokens: TEdit;
+    LayoutArtefacts: TLayout;
+    TabControl1: TTabControl;
+    TabUsageItem: TTabItem;
+    TabShellTool: TTabItem;
+    TabEditTool: TTabItem;
     MemoTokenUsageHistory: TMemo;
+    MemoShellTool: TMemo;
+    AiShell1: TAiShell;
+    ListBoxItem25: TListBoxItem;
+    ChShellTool: TCheckBox;
+    ListBoxItem26: TListBoxItem;
+    ChEditTool: TCheckBox;
+    MemoEditTool: TMemo;
+    SplitterArtefacts: TSplitter;
+    Rectangle7: TRectangle;
+    ListBoxItem27: TListBoxItem;
+    Label22: TLabel;
+    EditURL: TEdit;
+    AiTextEditorTool1: TAiTextEditorTool;
+    Layout4: TLayout;
+    MemoEditCommandLog: TMemo;
+    Splitter3: TSplitter;
+    TabChatParams: TTabItem;
+    MemoUsedChatParams: TMemo;
+    Button2: TButton;
+    Image12: TImage;
+    Rectangle8: TRectangle;
+    Label25: TLabel;
+    Rectangle9: TRectangle;
+    Label26: TLabel;
+    Rectangle10: TRectangle;
+    Label24: TLabel;
+    Rectangle11: TRectangle;
+    Label21: TLabel;
+    Rectangle12: TRectangle;
+    Label23: TLabel;
+    Rectangle13: TRectangle;
+    Label20: TLabel;
+    Layout5: TLayout;
+    EditCaption: TEdit;
+    Edit1: TEdit;
+    BtnJSonShema: TSpeedButton;
+
     procedure ChatInput1SendEvent(Sender: TObject; APrompt: string; aMediaFiles: TAiMediaFiles; aAudioStream: TMemoryStream);
     procedure ChatList1MediaFileDblClick(Sender: TObject; const ABubble: TChatBubble; const AMediaFile: TAiMediaFile);
     procedure ChatList1BeforeAddBubble(Sender: TObject; ABubble: TChatBubble);
@@ -225,19 +313,34 @@ type
     procedure BtnLoadMcpServerConfigClick(Sender: TObject);
     procedure AiConnCallToolFunction(Sender: TObject; AiToolCall: TAiToolsFunction);
     procedure BtnShowBillingClick(Sender: TObject);
+    procedure AiConnReceiveThinking(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
+    procedure ChShellToolChange(Sender: TObject);
+    procedure ChEditToolChange(Sender: TObject);
+    procedure AiShell1ConsoleLog(Sender: TObject; const Command, StdOut, StdErr: string; ExitCode: Integer);
+    procedure AiTextEditorTool1BeforeCommand(Sender: TObject; const Command, Path: string; Args: TJSONObject; var Result: string; var Handled: Boolean);
+    procedure AiTextEditorTool1EnsureDirectory(Sender: TObject; const Path: string; var Handled: Boolean);
+    procedure AiTextEditorTool1FileExists(Sender: TObject; const Path: string; var Exists, Handled: Boolean);
+    procedure AiTextEditorTool1LoadFile(Sender: TObject; const Path: string; var Content: string; var Handled: Boolean);
+    procedure AiTextEditorTool1SaveFile(Sender: TObject; const Path, Content: string; var Handled: Boolean);
+    procedure Button2Click(Sender: TObject);
+    procedure BtnJSonShemaClick(Sender: TObject);
   private
     FLastBubble: TChatBubble;
     FPrompt_tokens: Integer;
     FCompletion_tokens: Integer;
     FTotal_tokens: Integer;
+    FThinking_tokens: Integer;
     FActiveModelEdit: TEdit;
+    FLastNewText: String;
+    FJSonShema: String; // Almacena temporalmente el jsonshemma
+    FNoImage: Integer; // Temporal para la captura de la imagen;
 
     Function CopyToClipBoard(AMediaFile: TAiMediaFile): Boolean;
     Procedure AssignModel(Const DriverName, ModelName: String);
     Procedure InitModelCapabilitiesCombo(Edit: TEdit);
     Procedure AssignAiConnParams;
-    function PackString(const Texto: string): TMemoryStream;  //para comprimir los archivos de salida
-    function UnpackString(StreamComprimido: TStream): string; //para descomprimir los archivos de salida
+    function PackString(const Texto: string): TMemoryStream; // para comprimir los archivos de salida
+    function UnpackString(StreamComprimido: TStream): string; // para descomprimir los archivos de salida
     Function PackStream(StreamOrigen: TStream): TMemoryStream;
     Function UnpackStream(StreamComprimido: TStream): TMemoryStream;
     procedure SaveCombinedChatToStream(AContainerStream: TStream; AChatUIStream, AHistoryStream: TStream);
@@ -246,9 +349,9 @@ type
     function LoadRAGFromStream(AContainerStream: TStream): TMemoryStream;
     Procedure AddLog(Value: String);
     procedure LoadMCPClientsFromJSON(AJsonString: string; AFunctions: TAiFunctions);
-
+    function WebSearchToString(AWebSearch: TAiWebSearch): String; // Recupera los detalles de la búsqueda web
   public
-    { Public declarations }
+    Procedure ShowArtefacts(Visible: Boolean);
   end;
 
 var
@@ -258,6 +361,8 @@ implementation
 
 {$R *.fmx}
 
+uses uMemoPropertiesEdit;
+
 const
   // Opciones de versionado del formato creado para este modelo.
   MKCHAT_MAGIC_HEADER: array [0 .. 3] of AnsiChar = 'MKCH';
@@ -266,9 +371,53 @@ const
   MKRAG_MAGIC_HEADER: array [0 .. 3] of AnsiChar = 'MKRG';
   MKRAG_FORMAT_VERSION: Word = 1;
 
-procedure TForm2.ac_aboutExecute(Sender: TObject);
+procedure LogPruebas(const Mensaje: string);
+var
+  Archivo: TextFile;
+  RutaLog: string;
 begin
-  //
+  // ---------------------------------------------------------------------------------
+  // -------- OPCIÓN DESHABILITADA ES SOLO UN LOG DE PRUEBAS--------------------------
+  // ---------------------------------------------------------------------------------
+
+  { RutaLog := 'd:\videos\logPruebas.txt';
+
+    try
+    AssignFile(Archivo, RutaLog);
+
+    // Si el archivo existe, lo abre para agregar; si no, lo crea
+    if FileExists(RutaLog) then
+    Append(Archivo)
+    else
+    Rewrite(Archivo);
+
+    // Escribe la línea con fecha/hora
+    // WriteLn(Archivo, FormatDateTime('yyyy-mm-dd hh:nn:ss', Now) + ' - ' + Mensaje);
+    WriteLn(Archivo, Mensaje);
+
+    finally
+    CloseFile(Archivo);
+    end;
+  }
+end;
+
+procedure TForm2.ac_aboutExecute(Sender: TObject);
+Var
+  Bm: TBitMap;
+  FileName: String;
+begin
+  // ---------------------------------------------------------------------------------
+  // -------- OPCIÓN DESHABILITADA ES SOLO UN LOG DE PRUEBAS--------------------------
+  // ---------------------------------------------------------------------------------
+
+  {  Inc(FNoImage);
+  Bm := TScreenCapture.CaptureFullScreen;
+  FileName := Edit1.Text + ':' + '_' + FNoImage.ToString + '_' + EditCaption.Text;
+  FileName := StringReplace(FileName, ' ', '_', [rfReplaceAll]);
+  FileName := StringReplace(FileName, ':', '_', [rfReplaceAll]);
+  FileName := 'D:\Videos\' + FileName + '.png';
+  TScreenCapture.SaveToFile(Bm, FileName)
+}
 end;
 
 procedure TForm2.ac_AddItemToDatabaseExecute(Sender: TObject);
@@ -348,7 +497,7 @@ begin
       if Assigned(LDataStream) then
       begin
         AiRAGVector1.LoadFromStream(LDataStream);
-        ShowMessage('Knowledge database loaded "'+OpenDialog1.FileName+'"');
+        ShowMessage('Knowledge database loaded "' + OpenDialog1.FileName + '"');
       end;
     finally
       // Liberamos los streams. LDataStream fue creado por LoadRAGFromStream.
@@ -400,7 +549,7 @@ begin
   AiConn.NewChat;
   ChatList1.Clear;
   AiRAGVector1.Clear;
-
+  MemoThinking.Lines.Clear;
 end;
 
 procedure TForm2.ac_SaveChatToFileExecute(Sender: TObject);
@@ -481,10 +630,10 @@ end;
 
 procedure TForm2.AiConnCallToolFunction(Sender: TObject; AiToolCall: TAiToolsFunction);
 Var
-   FunctionName : String;
+  FunctionName: String;
 begin
-  FunctionName := AIToolCall.name;
-  //LLamado por defecto a la función siempre se ejectua para cualquier función
+  FunctionName := AiToolCall.name;
+  // LLamado por defecto a la función siempre se ejectua para cualquier función
 
 end;
 
@@ -496,7 +645,8 @@ begin
     begin
       AniIndicator1.Visible := False;
       AniIndicator1.Enabled := False;
-      showMessage(ErrorMsg);
+      ChatInput1.Busy := False;
+      ShowMessage(ErrorMsg);
     end);
 end;
 
@@ -504,6 +654,9 @@ procedure TForm2.AiConnReceiveData(const Sender: TObject; aMsg: TAiChatMessage; 
 begin
 
   if Not ChAsincrono.IsChecked then
+    Exit;
+
+  If aText = '' then
     Exit;
 
   TThread.Queue(nil,
@@ -516,7 +669,6 @@ begin
 
       ChatList1.RecalcSize;
     end);
-
 end;
 
 procedure TForm2.AiConnReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
@@ -530,26 +682,96 @@ begin
       AniIndicator1.Enabled := False;
     end);
 
-  MemoTokenUsageHistory.Lines.Add(Format('Model: %s, Input: %d, Output %d, Total: %d',[aMsg.Model, aMsg.Prompt_tokens, aMsg.Completion_tokens, aMsg.Total_tokens]));
+  MemoTokenUsageHistory.Lines.Add(Format('Model: %s, Input: %d, Output %d, Total: %d', [aMsg.Model, aMsg.Prompt_tokens, aMsg.Completion_tokens, aMsg.Total_tokens]));
 
   FPrompt_tokens := FPrompt_tokens + aMsg.Prompt_tokens;
   FCompletion_tokens := FCompletion_tokens + aMsg.Completion_tokens;
   FTotal_tokens := FTotal_tokens + aMsg.Total_tokens;
+  FThinking_tokens := FThinking_tokens + aMsg.Thinking_tokens;
 
   EditPromptTokens.Text := Format('%d', [FPrompt_tokens]);
   EditCompletionTokens.Text := Format('%d', [FCompletion_tokens]);
   EditTotalTokens.Text := Format('%d', [FTotal_tokens]);
+  EditThinkingTokens.Text := Format('%d', [FThinking_tokens]);
+  EditCompletionModel.Text := aMsg.Model;
 
   // aMsg.Model;
-
-  if ChAsincrono.IsChecked then
-    Exit;
 
   TThread.Queue(nil,
     procedure
     begin
-      FLastBubble := ChatList1.AddBubble(aText, aRole, aMsg.MediaFiles);
+      if Not ChAsincrono.IsChecked then
+        FLastBubble := ChatList1.AddBubble(aText, aRole, aMsg.MediaFiles)
+      else
+      Begin
+
+        If aMsg.MediaFiles.Count > 0 then
+        Begin
+          // If Assigned(FLastBubble) then
+          // FLastBubble.AddContent('', aMsg.MediaFiles)
+          // Else
+          FLastBubble := ChatList1.AddBubble('', aRole, aMsg.MediaFiles);
+        End;
+      End;
+
+      // Adiciona el detalle de la búsqueda web, info adicional de fuentes
+      If Assigned(aMsg.WebSearchResponse) and (aMsg.WebSearchResponse.annotations.Count > 0) then
+      Begin
+        Var
+        WebRes := WebSearchToString(aMsg.WebSearchResponse);
+        If Assigned(FLastBubble) then
+          FLastBubble.AppendText(WebRes);
+      End;
+
+      // Adiciona la transcripción en (traanscripciones o generación de imagenes)
+
+      For Var MF in aMsg.MediaFiles do
+      Begin
+
+        If MF.Transcription <> '' then
+        Begin
+          If Assigned(FLastBubble) then
+            FLastBubble.AppendText(MF.Transcription)
+          else
+            FLastBubble := ChatList1.AddBubble(MF.Transcription, aRole, Nil);
+        End;
+      End;
+
       FLastBubble := Nil;
+    end);
+
+  TTask.Run(
+    procedure
+    begin
+      Try
+        Sleep(2000);
+
+        LogPruebas('');
+        LogPruebas('Result: ' + aRole);
+        LogPruebas('   ' + aText);
+        LogPruebas('');
+        LogPruebas('-----------------------------------------------------------------------------------------------');
+
+        ac_aboutExecute(Nil);
+      Except
+
+      End;
+    end);
+
+end;
+
+procedure TForm2.AiConnReceiveThinking(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
+begin
+  TThread.Queue(nil,
+    procedure
+    begin
+      MemoThinking.BeginUpdate;
+      Try
+        MemoThinking.Lines.Text := MemoThinking.Lines.Text + aText;
+        MemoThinking.GoToTextEnd;
+      Finally
+        MemoThinking.EndUpdate;
+      End;
     end);
 end;
 
@@ -600,7 +822,7 @@ begin
     If SearchText <> '' then
     Begin
       Try
-        ToolCall.Response := AiRAGVector1.SearchText(SearchText, 10, 0.3); //03 es mas permisivo para el indice que maneja RAG
+        ToolCall.Response := AiRAGVector1.SearchText(SearchText, 10, 0.3); // 03 es mas permisivo para el indice que maneja RAG
       Except
         ON E: Exception do
         Begin
@@ -615,215 +837,259 @@ begin
   End;
 end;
 
-procedure TForm2.AssignAiConnParams;
-Var
-  InputMediaFiles, OutputMediaFiles, ChatMediaSuports, Opt: String;
+procedure TForm2.AiShell1ConsoleLog(Sender: TObject; const Command, StdOut, StdErr: string; ExitCode: Integer);
 begin
+  // Capturamos los datos necesarios para el hilo principal
+  // TThread.Queue toma un método anónimo
+  TThread.Queue(nil,
+    procedure
+    begin
+      // --- AQUI DENTRO YA ESTAMOS EN EL HILO PRINCIPAL (UI) ---
 
-  AiConn.Params.Clear;
+      // 1. Pintar Comando
+      MemoShellTool.Lines.Add(Format('root@makerai:~$ %s', [Command]));
 
-  // Se asegura de configurar los parámetros antes de hacer la pregunta
-  AiConn.Params.Values['Max_Tokens'] := StrToIntDef(EditMaxTokens.Text, 8000).ToString;
-  AiConn.Params.Values['Temperature'] := (TrackTemperature.Value / 10).ToString;
-  AiConn.Params.Values['Tool_Active'] := BoolToStr(ChUseTools.IsChecked, True);
-  AiConn.Params.Values['Asynchronous'] := BoolToStr(ChAsincrono.IsChecked, True);
-  AiConn.Params.Values['ResponseTimeOut'] := '240000';  //Aumenta el timeout
+      // 2. Pintar Salidas
+      if StdOut <> '' then
+      Begin
+        Var
+        aStdOut := StringReplace(StdOut, #$A, #$D#$A, [rfReplaceAll]);
+        MemoShellTool.Lines.Add(aStdOut);
+      End;
 
+      if StdErr <> '' then
+        MemoShellTool.Lines.Add('ERROR: ' + StdErr);
 
-  If ChJSonFormat.IsChecked then
-    AiConn.Params.Values['Response_format'] := 'tiaChatRfJson';
-  //Else
-  //  AiConn.Params.Values['Response_format'] := 'tiaChatRfText';
+      // 3. Scroll al final (Versión VCL)
+      MemoShellTool.GoToTextEnd;
+    end);
+end;
 
-  AiConn.Params.Values['Voice'] := EditVoices.Text;
-  AiConn.Params.Values['Voice_Format'] := EditVoiceFormat.Text;
-  AiConn.Params.Values['ReasoningEffort'] := EditReasoningEffort.Text;
+procedure TForm2.AssignAiConnParams;
 
-  InputMediaFiles := '';
-  OutputMediaFiles := '';
-  ChatMediaSuports := '';
+// Función auxiliar para agregar elementos a la cadena del SET limpiamente
+  procedure AddToSet(var ASetString: String; const AValue: String);
+  begin
+    if ASetString = '' then
+      ASetString := AValue
+    else
+      ASetString := ASetString + ',' + AValue;
+  end;
 
+Var
+  InputMediaFiles, OutputMediaFiles, ChatMediaSuports, Opt, sUrl: String;
+begin
+  AiConn.Params.BeginUpdate; // Importante para rendimiento si hay muchos cambios
+  try
+    AiConn.Params.Clear;
 
-  If ChWebSearch.IsChecked then
-    ChatMediaSuports := ChatMediaSuports + ',Tcm_WebSearch';
+    sUrl := Trim(EditURL.Text);
 
-  If ChCodeInterpreter.IsChecked then
-    ChatMediaSuports := ChatMediaSuports + ',tcm_code_interpreter';
+    If sUrl <> '' then
+      AiConn.Params.Values['Url'] := sUrl;
 
-  If ChExtractFiles.IsChecked then
-  Begin
-    ChatMediaSuports := ChatMediaSuports + ',tcm_textFile';
-    OutputMediaFiles := OutputMediaFiles + ',tfc_textFile';
-  End;
+    // 1. BOOLEANOS:
+    // BoolToStr(Valor, True) devuelve los strings 'True' o 'False'.
+    // Esto es correcto. Al hacer Clear, si aquí pasas 'False', la RTTI leerá 'False' y actualizará el objeto.
+    AiConn.Params.Values['Tool_Active'] := BoolToStr(ChUseTools.IsChecked, True);
+    AiConn.Params.Values['Asynchronous'] := BoolToStr(ChAsincrono.IsChecked, True);
 
+    // Otros valores simples
+    AiConn.Params.Values['Max_Tokens'] := StrToIntDef(EditMaxTokens.Text, 8000).ToString;
+    AiConn.Params.Values['Temperature'] := FloatToStr(TrackTemperature.Value / 10); // FloatToStr maneja mejor el punto decimal según locale
+    AiConn.Params.Values['ResponseTimeOut'] := '600000';
+    AiConn.Params.Values['Voice'] := EditVoices.Text;
+    AiConn.Params.Values['Voice_Format'] := EditVoiceFormat.Text;
 
-  Opt := LowerCase(EditChatMediaSupports.Text);
+    // 2. ENUMERADOS (El error grave estaba aquí):
+    // Si no está chequeado, DEBES enviar el valor por defecto explícitamente.
+    // Si lo omites, el objeto mantiene el valor anterior.
+    If ChJSonFormat.IsChecked then
+    Begin
+      If FJSonShema <> '' then
+        AiConn.Params.Values['Response_format'] := 'tiaChatRfJsonSchema'
+      Else
+        AiConn.Params.Values['Response_format'] := 'tiaChatRfJson';
+    End
+    Else
+      AiConn.Params.Values['Response_format'] := 'tiaChatRfText';
 
-  If Opt.Contains('image') then
-    ChatMediaSuports := ChatMediaSuports + ',tcm_image';
+    If (FJSonShema <> '') and ChJSonFormat.IsChecked then
+      AiConn.Params.Values['JsonSchema'] := FJSonShema;
 
-  If Opt.Contains('audio') then
-    ChatMediaSuports := ChatMediaSuports + ',tcm_audio';
+    // Para ThinkingLevel, no envíes cadena vacía '', envía el Default.
+    // Si la RTTI intenta convertir '' a un Enum, fallará o no hará nada.
+    If EditThinkingLevel.ItemIndex >= 0 then
+      AiConn.Params.Values['ThinkingLevel'] := GetEnumName(TypeInfo(TAiThinkingLevel), Ord(EditThinkingLevel.ItemIndex))
+    Else
+      AiConn.Params.Values['ThinkingLevel'] := 'tlDefault'; // <--- CORRECCIÓN: Asigna el valor base del Enum
 
-  If Opt.Contains('video') then
-    ChatMediaSuports := ChatMediaSuports + ',tcm_video';
+    // 3. SETS (Conjuntos):
+    InputMediaFiles := '';
+    OutputMediaFiles := '';
+    ChatMediaSuports := '';
 
-  If Opt.Contains('pdf') then
-    ChatMediaSuports := ChatMediaSuports + ',tcm_pdf';
+    // Lógica ChatMediaSuports
 
+    If ChExtractFiles.IsChecked then
+      AddToSet(OutputMediaFiles, 'tfc_ExtracttextFile');
 
-    //------ NATIVE INPUT FILES ------------
-  Opt := LowerCase(EditNativeInputFiles.Text);
+    If ChWebSearch.IsChecked then
+      AddToSet(ChatMediaSuports, 'Tcm_WebSearch');
+    If ChCodeInterpreter.IsChecked then
+      AddToSet(ChatMediaSuports, 'Tcm_code_interpreter');
 
-  If Opt.Contains('image') then
-    InputMediaFiles := InputMediaFiles + ',tfc_image';
+    Opt := LowerCase(EditChatMediaSupports.Text);
 
-  If Opt.Contains('audio') then
-    InputMediaFiles := InputMediaFiles + ',tfc_audio';
+    If Opt.Contains('image') then
+      AddToSet(ChatMediaSuports, 'Tcm_Image');
+    If Opt.Contains('audio') then
+      AddToSet(ChatMediaSuports, 'Tcm_Audio');
+    If Opt.Contains('video') then
+      AddToSet(ChatMediaSuports, 'Tcm_Video');
+    If Opt.Contains('pdf') then
+      AddToSet(ChatMediaSuports, 'tcm_pdf');
+    If Opt.Contains('any') then
+      AddToSet(ChatMediaSuports, 'Tcm_Any');
 
-  If Opt.Contains('video') then
-    InputMediaFiles := InputMediaFiles + ',tfc_video';
+    // Lógica NativeInputFiles
+    Opt := LowerCase(EditNativeInputFiles.Text);
+    If Opt.Contains('image') then
+      AddToSet(InputMediaFiles, 'Tfc_Image');
+    If Opt.Contains('audio') then
+      AddToSet(InputMediaFiles, 'Tfc_Audio');
+    If Opt.Contains('video') then
+      AddToSet(InputMediaFiles, 'Tfc_Video');
+    If Opt.Contains('pdf') then
+      AddToSet(InputMediaFiles, 'Tfc_pdf');
+    If Opt.Contains('any') then
+      AddToSet(InputMediaFiles, 'Tfc_Any');
 
-  If Opt.Contains('pdf') then
-    InputMediaFiles := InputMediaFiles + ',tfc_pdf';
+    // Lógica NativeOutputFiles
+    Opt := LowerCase(EditNativeOutputFiles.Text);
+    If Opt.Contains('image') then
+      AddToSet(OutputMediaFiles, 'Tfc_Image');
+    If Opt.Contains('audio') then
+      AddToSet(OutputMediaFiles, 'Tfc_Audio');
+    If Opt.Contains('video') then
+      AddToSet(OutputMediaFiles, 'Tfc_Video');
+    If Opt.Contains('pdf') then
+      AddToSet(OutputMediaFiles, 'Tfc_pdf');
 
-    //------ NATIVE OUTPUT FILES ------------
-  Opt := LowerCase(EditNativeOutputFiles.Text);
+    If ChShellTool.IsChecked then
+      AddToSet(ChatMediaSuports, 'tcm_Shell');
 
-  If Opt.Contains('image') then
-    OutputMediaFiles := OutputMediaFiles + ',tfc_image';
+    If ChEditTool.IsChecked then
+      AddToSet(ChatMediaSuports, 'tcm_TextEditor');
 
-  If Opt.Contains('audio') then
-    OutputMediaFiles := OutputMediaFiles + ',tfc_audio';
+    // Asignación final con formato de Set [a,b,c]
+    AiConn.Params.Values['NativeInputFiles'] := '[' + InputMediaFiles + ']';
+    AiConn.Params.Values['NativeOutputFiles'] := '[' + OutputMediaFiles + ']';
+    AiConn.Params.Values['ChatMediaSupports'] := '[' + ChatMediaSuports + ']';
 
-  If Opt.Contains('video') then
-    OutputMediaFiles := OutputMediaFiles + ',tfc_video';
+    // Estos son los parámetros con los que se ejecuta la petición actual
+    MemoUsedChatParams.Lines.Assign(AiConn.Params);
+    MemoUsedChatParams.Lines.Add('');
+    MemoUsedChatParams.Lines.Add('------------------------------------------------------------');
+    MemoUsedChatParams.Lines.Add('-- These are properties on TAIChatConnection, not params. --');
+    MemoUsedChatParams.Lines.Add('------------------------------------------------------------');
+    MemoUsedChatParams.Lines.Add('');
+    MemoUsedChatParams.Lines.Add('drivename=' + AiConn.DriverName);
+    MemoUsedChatParams.Lines.Add('model=' + AiConn.Model);
+    MemoUsedChatParams.Lines.Values['ApiKey'] := '';
 
-  If Opt.Contains('pdf') then
-    OutputMediaFiles := OutputMediaFiles + ',tfc_pdf';
+    MemoUsedChatParams.Lines.Insert(0, 'ApiKey=@' + UpperCase(ComboDriver.Text) + '_API_KEY');
 
-  if copy(InputMediaFiles,1,1) = ',' then
-      InputMediaFiles := Copy(InputMediaFiles, 2, Length(InputMediaFiles));
-
-  if copy(OutputMediaFiles,1,1) = ',' then
-      OutputMediaFiles := Copy(OutputMediaFiles, 2, Length(OutputMediaFiles));
-
-  if copy(ChatMediaSuports,1,1) = ',' then
-      ChatMediaSuports := Copy(ChatMediaSuports, 2, Length(ChatMediaSuports));
-
-  AiConn.Params.Values['NativeInputFiles'] := '[' + InputMediaFiles + ']';
-  AiConn.Params.Values['NativeOutputFiles'] := '[' + OutputMediaFiles + ']';
-  AiConn.Params.Values['ChatMediaSupports'] := '[' + ChatMediaSuports + ']';
-
-  ShowMessage(AiConn.Params.Text);
+  finally
+    AiConn.Params.EndUpdate;
+  end;
 
 end;
 
 procedure TForm2.AssignModel(const DriverName, ModelName: String);
+
+// Función auxiliar para reconstruir el texto de la interfaz (Image, Audio, Video...)
+// basado en el contenido del parámetro raw (tcm_Image, tfc_Audio, etc.)
+  function BuildMediaString(const AParamValue: String): String;
+  var
+    LConf: String;
+  begin
+    Result := '';
+    LConf := LowerCase(AParamValue);
+
+    // Usamos Contains para detectar la presencia.
+    // Nota: Esto asume que no hay conflictos de nombres (ej: 'image' vs 'imagery')
+    if LConf.Contains('image') then
+      Result := Result + ',Image';
+    if LConf.Contains('audio') then
+      Result := Result + ',Audio';
+    if LConf.Contains('video') then
+      Result := Result + ',Video';
+    if LConf.Contains('pdf') then
+      Result := Result + ',Pdf';
+    if LConf.Contains('any') then
+      Result := Result + ',Any'; // Agregado 'Any' que usabas en el guardado
+
+    // Quitar la primera coma si existe
+    if (Result.Length > 0) and (Result[1] = ',') then
+      Delete(Result, 1, 1);
+  end;
+
 Var
   Max_Tokens: Integer;
   Tool_Active, Asynchronous, JSonFormat: Boolean;
-  Temperature: Integer;
-  MediaConf, sOpt: String;
+  Temperature: Double;
+  LEnumIndex: Integer;
 begin
-
-  // Clear old params
-  AiConn.Params.Clear;
-
+  // 1. ¡CRÍTICO! NO hacer AiConn.Params.Clear aquí.
+  // Primero asignamos el driver y modelo para que el componente cargue sus DEFAULTS internos a Params.
   AiConn.DriverName := DriverName;
   AiConn.Model := ModelName;
 
-  // showMessage(AiConn.Params.Text);
+  // Ahora leemos de Params (que ya tiene los defaults del modelo cargado)
 
+  // 2. Valores Simples
   Max_Tokens := StrToIntDef(AiConn.Params.Values['Max_Tokens'], 8000);
-  Temperature := Round(StrToIntDef(AiConn.Params.Values['Temperature'], 1) * 10);
-  Tool_Active := UpperCase(AiConn.Params.Values['Tool_Active']) = 'TRUE';
-  Asynchronous := UpperCase(AiConn.Params.Values['Asynchronous']) = 'TRUE';
-  JSonFormat := UpperCase(AiConn.Params.Values['Response_format']) = UpperCase('tiaChatRfJson');
 
+  EditURL.Text := AiConn.Params.Values['Url'];
+
+  // Ojo con la temperatura: Guardamos Float, recuperamos para TrackBar (Integer)
+  // Usamos StrToFloatDef para manejar '0.7' o '1' correctamente segun locale.
+  Temperature := StrToFloatDef(AiConn.Params.Values['Temperature'], 0.7);
+
+  Tool_Active := StrToBoolDef(AiConn.Params.Values['Tool_Active'], False);
+  Asynchronous := StrToBoolDef(AiConn.Params.Values['Asynchronous'], False);
+
+  // Comparamos sin importar mayúsculas/minúsculas
+  JSonFormat := SameText(AiConn.Params.Values['Response_format'], 'tiaChatRfJson') or SameText(AiConn.Params.Values['Response_format'], 'tiaChatRfJsonSchema');
+  FJSonShema := AiConn.Params.Values['JsonSchema'];
+
+  // 3. Asignar a la Interfaz (UI)
+  EditMaxTokens.Text := Max_Tokens.ToString;
+  TrackTemperature.Value := Temperature * 10; // Si es 0.7 -> 7
   ChAsincrono.IsChecked := Asynchronous;
   ChUseTools.IsChecked := Tool_Active;
-  EditMaxTokens.Text := Max_Tokens.ToString;
-  TrackTemperature.Value := Temperature;
   ChJSonFormat.IsChecked := JSonFormat;
 
   EditVoices.Text := AiConn.Params.Values['Voice'];
   EditVoiceFormat.Text := AiConn.Params.Values['Voice_Format'];
-  EditReasoningEffort.Text := AiConn.Params.Values['ReasoningEffort'];
 
-  // Native InputFiles
-  MediaConf := LowerCase(AiConn.Params.Values['NativeInputFiles']);
+  // 4. Thinking Level
+  // GetEnumValue retorna -1 si no encuentra el texto.
+  LEnumIndex := GetEnumValue(TypeInfo(TAiThinkingLevel), AiConn.Params.Values['ThinkingLevel']);
+  if LEnumIndex = -1 then
+    EditThinkingLevel.ItemIndex := 0 // Default (tlDefault) si no existe el param
+  else
+    EditThinkingLevel.ItemIndex := LEnumIndex;
 
-  sOpt := '';
-  If MediaConf.Contains(LowerCase('image')) then
-    sOpt := sOpt + ',Image';
+  // 5. Native Input Files (Reutilizando lógica con la función auxiliar)
+  EditNativeInputFiles.Text := BuildMediaString(AiConn.Params.Values['NativeInputFiles']);
 
-  If MediaConf.Contains(LowerCase('Audio')) then
-    sOpt := sOpt + ',Audio';
+  // 6. Native Output Files
+  EditNativeOutputFiles.Text := BuildMediaString(AiConn.Params.Values['NativeOutputFiles']);
 
-  If MediaConf.Contains(LowerCase('Video')) then
-    sOpt := sOpt + ',Video';
-
-  If MediaConf.Contains(LowerCase('Pdf')) then
-    sOpt := sOpt + ',Pdf';
-
-  If Copy(sOpt, 1, 1) = ',' then
-    sOpt := Copy(sOpt, 2, length(sOpt));
-
-  EditNativeInputFiles.Text := sOpt;
-
-  // NativeOutputFiles
-  MediaConf := LowerCase(AiConn.Params.Values['NativeOutputFiles']);
-
-  sOpt := '';
-  If MediaConf.Contains(LowerCase('image')) then
-    sOpt := sOpt + ',Image';
-
-  If MediaConf.Contains(LowerCase('Audio')) then
-    sOpt := sOpt + ',Audio';
-
-  If MediaConf.Contains(LowerCase('Video')) then
-    sOpt := sOpt + ',Video';
-
-  If MediaConf.Contains(LowerCase('Pdf')) then
-    sOpt := sOpt + ',Pdf';
-
-  If Copy(sOpt, 1, 1) = ',' then
-    sOpt := Copy(sOpt, 2, length(sOpt));
-
-  EditNativeOutputFiles.Text := sOpt;
-
-  // ChatMediaSuport
-  MediaConf := LowerCase(AiConn.Params.Values['ChatMediaSupports']);
-
-  //ChWebSearch.IsChecked := MediaConf.Contains(LowerCase('Tcm_WebSearch'));
-  //ChCodeInterpreter.IsChecked := MediaConf.Contains(LowerCase('Tcm_code_interpreter'));
-  //ChExtractFiles.IsChecked := MediaConf.Contains(LowerCase('Tcm_textFile'));
-
-
-  ChWebSearch.IsChecked := AiConn.WebSearch;
-  ChCodeInterpreter.IsChecked := AiConn.CodeInterpreter;
-  ChExtractFiles.IsChecked := AiConn.ExtractTextFiles;
-
-
-  sOpt := '';
-  If MediaConf.Contains(LowerCase('image')) then
-    sOpt := sOpt + ',Image';
-
-  If MediaConf.Contains(LowerCase('Audio')) then
-    sOpt := sOpt + ',Audio';
-
-  If MediaConf.Contains(LowerCase('Video')) then
-    sOpt := sOpt + ',Video';
-
-  If MediaConf.Contains(LowerCase('Pdf')) then
-    sOpt := sOpt + ',Pdf';
-
-  If Copy(sOpt, 1, 1) = ',' then
-    sOpt := Copy(sOpt, 2, length(sOpt));
-
-  EditChatMediaSupports.Text := sOpt;
-
+  // Para el texto de capacidades multimedia, leemos del param string
+  EditChatMediaSupports.Text := BuildMediaString(AiConn.Params.Values['ChatMediaSupports']);
 end;
 
 procedure TForm2.BtnNewChatClick(Sender: TObject);
@@ -848,7 +1114,14 @@ end;
 
 procedure TForm2.BtnShowBillingClick(Sender: TObject);
 begin
-    LayoutTokenUsageHistory.Visible := Not LayoutTokenUsageHistory.Visible;
+  ShowArtefacts(Not LayoutArtefacts.Visible);
+  TabControl1.ActiveTab := TabUsageItem;
+end;
+
+procedure TForm2.Button2Click(Sender: TObject);
+begin
+  ShowArtefacts(Not LayoutArtefacts.Visible);
+  TabControl1.ActiveTab := TabChatParams;
 end;
 
 procedure TForm2.BtnOpenDataBaseClick(Sender: TObject);
@@ -895,22 +1168,47 @@ end;
 
 procedure TForm2.ChatInput1SendEvent(Sender: TObject; APrompt: string; aMediaFiles: TAiMediaFiles; aAudioStream: TMemoryStream);
 Var
-  Mf: TAiMediaFile;
+  MF: TAiMediaFile;
 begin
+
+  // Estos son los parámetros con los que se ejecuta la petición actual
+  AssignAiConnParams;
+
+  // ---------------------------------------------------------------------------------
+  // -------- OPCIÓN DESHABILITADA ES SOLO UN LOG DE PRUEBAS--------------------------
+  // ---------------------------------------------------------------------------------
+  LogPruebas('');
+  LogPruebas('Prueba: ' + EditCaption.Text);
+  LogPruebas('');
+  LogPruebas('Parámetros:');
+
+  For Var I := 0 to MemoUsedChatParams.Lines.Count - 1 do
+  Begin
+    Var
+    S := MemoUsedChatParams.Lines[I];
+    LogPruebas('   ' + S);
+  End;
+
+  LogPruebas('');
+  LogPruebas('Prompt:');
+  LogPruebas('   ' + APrompt);
+  // ---------------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------------
 
   AniIndicator1.Visible := True;
   AniIndicator1.Enabled := True;
 
-  AssignAiConnParams;
+  // Limpia el memoThinking para el proximo llamado
+  MemoThinking.Lines.Clear;
 
   If ChSendAudioToIA.IsChecked then
   Begin
     // Si hay un audio grabado por el control se adiciona, solo si la comunicación es solo audio ya que el texto se transcribió en APrompt
     If Assigned(aAudioStream) and (aAudioStream.size > 100) then
     Begin
-      Mf := TAiMediaFile.Create;
-      Mf.LoadFromStream('miaudio.wav', aAudioStream);
-      aMediaFiles.Add(Mf);
+      MF := TAiMediaFile.Create;
+      MF.LoadFromStream('miaudio.wav', aAudioStream);
+      aMediaFiles.Add(MF);
     End;
   End
   Else
@@ -961,7 +1259,15 @@ end;
 
 procedure TForm2.ChatList1MediaFileDblClick(Sender: TObject; const ABubble: TChatBubble; const AMediaFile: TAiMediaFile);
 begin
-  showMessage(AMediaFile.FileName);
+  ShowMessage(AMediaFile.FileName);
+end;
+
+procedure TForm2.ChEditToolChange(Sender: TObject);
+begin
+  ShowArtefacts(ChEditTool.IsChecked);
+
+  If ChEditTool.IsChecked then
+    TabControl1.ActiveTab := TabEditTool;
 end;
 
 procedure TForm2.ChEnableListeningChange(Sender: TObject);
@@ -988,11 +1294,21 @@ begin
       List.Add('Video');
     if ChModelPDF.IsChecked then
       List.Add('PDF');
+    if ChModelAny.IsChecked then
+      List.Add('ANY');
 
     FActiveModelEdit.Text := List.CommaText;
   Finally
     List.Free;
   End;
+end;
+
+procedure TForm2.ChShellToolChange(Sender: TObject);
+begin
+  ShowArtefacts(ChShellTool.IsChecked);
+
+  If ChShellTool.IsChecked then
+    TabControl1.ActiveTab := TabShellTool;
 end;
 
 procedure TForm2.ComboDriverChange(Sender: TObject);
@@ -1003,8 +1319,12 @@ begin
   If Assigned(ComboDriver.Selected) then
   Begin
     DriverName := Trim(ComboDriver.Text);
+
+    Edit1.Text := DriverName;
+
     AiConn.DriverName := DriverName;
     Cursor := crHourGlass;
+    EditURL.Text := '';
 
     List := AiConn.GetModels;
     Try
@@ -1033,7 +1353,7 @@ end;
 function TForm2.CopyToClipBoard(AMediaFile: TAiMediaFile): Boolean;
 var
   ClipboardSvc: IFMXClipboardService;
-  LBitmap: FMX.Graphics.TBitmap;
+  LBitmap: FMX.Graphics.TBitMap;
   LText: string;
 begin
   Result := False;
@@ -1050,7 +1370,7 @@ begin
       begin
         if (AMediaFile.Content = nil) or (AMediaFile.Content.size = 0) then
           Exit;
-        LBitmap := FMX.Graphics.TBitmap.Create;
+        LBitmap := FMX.Graphics.TBitMap.Create;
         try
           LBitmap.LoadFromStream(AMediaFile.Content);
           ClipboardSvc.SetClipboard(LBitmap); // FMX sabe cómo poner un TBitmap en el portapapeles
@@ -1060,7 +1380,7 @@ begin
         end;
       end;
 
-    Tfc_Text, tfc_textFile, tfc_code_interpreter:
+    Tfc_Text, tfc_ExtracttextFile:
       begin
         if (AMediaFile.Content = nil) or (AMediaFile.Content.size = 0) then
           Exit;
@@ -1103,6 +1423,7 @@ begin
   If Sender is TEdit then
     InitModelCapabilitiesCombo(Sender as TEdit);
 
+  ChModelAny.Visible := (Sender = EditNativeInputFiles) or (Sender = EditChatMediaSupports);
 end;
 
 procedure TForm2.EditChatMediaSupportsExit(Sender: TObject);
@@ -1115,10 +1436,18 @@ Var
   List: TStringList;
 begin
 
+  FNoImage := 0;
+  ShowArtefacts(False);
+
   FPrompt_tokens := 0;
   FCompletion_tokens := 0;
   FTotal_tokens := 0;
+  FThinking_tokens := 0;
+
   ModelCapabilitiesCombo.Visible := False;
+
+  // BtnJSonShema.Visible := False;  //Funcionalidad no implementada todavía
+
   Try
     List := AiConn.GetDriversNames;
     Try
@@ -1153,6 +1482,7 @@ begin
   ChModelVideo.IsChecked := Opt.Contains('video');
   ChModelAudio.IsChecked := Opt.Contains('audio');
   ChModelPDF.IsChecked := Opt.Contains('pdf');
+  ChModelAny.IsChecked := Opt.Contains('any');
   ModelCapabilitiesCombo.Visible := True;
 end;
 
@@ -1198,7 +1528,6 @@ begin
     LCompressedStream.Free;
   end;
 end;
-
 
 procedure TForm2.LoadMCPClientsFromJSON(AJsonString: string; AFunctions: TAiFunctions);
 var
@@ -1247,7 +1576,7 @@ begin
 
       // 4. Crear un nuevo TMCPClientItem en la colección y configurar propiedades básicas
       LClientItem := AFunctions.MCPClients.Add;
-      LClientItem.Name := LServerName;
+      LClientItem.name := LServerName;
       LClientItem.Enabled := True; // Habilitado por defecto
 
       // 5. Determinar el tipo de transporte y construir los parámetros
@@ -1282,7 +1611,7 @@ begin
         end;
         // --- FIN DE LA SECCIÓN CORREGIDA ---
         LClientItem.UpdateClientProperties;
-       // LClientItem.Connected := True;
+        // LClientItem.Connected := True;
 
       end
       else if LServerConfig.TryGetValue<string>('url', LUrl) then
@@ -1297,8 +1626,8 @@ begin
         // Otros parámetros como 'timeout' también van a 'Params'
         if LServerConfig.TryGetValue<string>('timeout', LTimeoutStr) then
         begin
-            LClientItem.Params.Add('Timeout=' + LTimeoutStr);
-            AddLog(Format('  - Param[Timeout]=%s', [LTimeoutStr]));
+          LClientItem.Params.Add('Timeout=' + LTimeoutStr);
+          AddLog(Format('  - Param[Timeout]=%s', [LTimeoutStr]));
         end;
       end
       else
@@ -1326,8 +1655,6 @@ begin
     LJson.Free;
   end;
 end;
-
-
 
 function TForm2.LoadRAGFromStream(AContainerStream: TStream): TMemoryStream;
 var
@@ -1372,7 +1699,7 @@ begin
     else
     begin
       // Opcional: Notificar si el tipo de archivo no es copiable
-      showMessage('Este tipo de archivo no se puede copiar al portapapeles.');
+      ShowMessage('Este tipo de archivo no se puede copiar al portapapeles.');
     end;
   end;
 end;
@@ -1389,14 +1716,14 @@ begin
 
   if LMediaFile = nil then
   begin
-    showMessage('Error: No se ha seleccionado ningún archivo.');
+    ShowMessage('Error: No se ha seleccionado ningún archivo.');
     Exit;
   end;
 
   // 2. Verificar que el archivo tenga contenido para guardar
   if (LMediaFile.Content = nil) or (LMediaFile.Content.size = 0) then
   begin
-    showMessage('El archivo seleccionado está vacío.');
+    ShowMessage('El archivo seleccionado está vacío.');
     Exit;
   end;
 
@@ -1419,19 +1746,19 @@ begin
     begin
       if not TUtilsSystem.ShellOpenFile(LTempPath) then
       begin
-        showMessage('No se pudo abrir el archivo. Verifique si tiene una aplicación instalada para este tipo de archivo (' + System.IOUtils.TPath.GetExtension(LMediaFile.FileName) + ').');
+        ShowMessage('No se pudo abrir el archivo. Verifique si tiene una aplicación instalada para este tipo de archivo (' + System.IOUtils.TPath.GetExtension(LMediaFile.FileName) + ').');
       end;
     end
     else
     begin
-      showMessage('El servicio para abrir archivos no está disponible en esta plataforma.');
+      ShowMessage('El servicio para abrir archivos no está disponible en esta plataforma.');
     end;
 
   except
     on E: Exception do
     begin
       // Capturar cualquier error durante la creación del archivo
-      showMessage('Ocurrió un error al intentar abrir el archivo: ' + E.Message);
+      ShowMessage('Ocurrió un error al intentar abrir el archivo: ' + E.Message);
     end;
   end;
 end;
@@ -1501,6 +1828,57 @@ begin
   end;
 end;
 
+function TForm2.WebSearchToString(AWebSearch: TAiWebSearch): String;
+var
+  Sb: TStringBuilder;
+  I: Integer;
+  Item: TAiWebSearchItem;
+begin
+  Result := '';
+
+  // 1. Validaciones de seguridad
+  if not Assigned(AWebSearch) then
+    Exit;
+  if not Assigned(AWebSearch.annotations) then
+    Exit;
+  if AWebSearch.annotations.Count = 0 then
+    Exit;
+
+  Sb := TStringBuilder.Create;
+  try
+    Sb.AppendLine;
+    Sb.AppendLine('--- Fuentes consultadas ---');
+
+    // 2. Iterar sobre las anotaciones
+    for I := 0 to AWebSearch.annotations.Count - 1 do
+    begin
+      Item := AWebSearch.annotations[I];
+
+      // Formato: [1] Título del sitio
+      // URL: https://...
+
+      Sb.Append('[').Append(I + 1).Append('] ');
+
+      if Item.Title <> '' then
+        Sb.AppendLine(Item.Title)
+      else
+        Sb.AppendLine('Sin título');
+
+      if Item.Url <> '' then
+        Sb.Append('    Enlace: ').AppendLine(Item.Url);
+
+      // Opcional: Mostrar índices si estás depurando donde encajan en el texto
+      // Sb.AppendFormat('    (Index: %d - %d)', [Item.start_index, Item.end_index]);
+
+      Sb.AppendLine;
+    end;
+
+    Result := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
+end;
+
 function TForm2.PackStream(StreamOrigen: TStream): TMemoryStream;
 var
   ZStream: TZCompressionStream;
@@ -1531,7 +1909,7 @@ begin
   try
     // Convertir el string a bytes UTF-8
     Datos := TEncoding.UTF8.GetBytes(Texto);
-    StreamOrigen.WriteBuffer(Datos[0], length(Datos));
+    StreamOrigen.WriteBuffer(Datos[0], Length(Datos));
     StreamOrigen.Position := 0;
 
     // Comprimir al stream de resultado
@@ -1593,12 +1971,325 @@ begin
 
   // Comprimimos directamente al stream final para mayor eficiencia de memoria
   ASourceDataStream.Position := 0;
-  ZStream := TZCompressionStream.Create(AContainerStream); // *** MODIFICADO ***
+  ZStream := TZCompressionStream.Create(AContainerStream);
   try
-    ZStream.CopyFrom(ASourceDataStream, 0); // *** MODIFICADO ***
+    ZStream.CopyFrom(ASourceDataStream, 0);
   finally
-    ZStream.Free; // *** MODIFICADO ***
+    ZStream.Free;
   end;
+end;
+
+procedure TForm2.ShowArtefacts(Visible: Boolean);
+begin
+  If Not(ChShellTool.IsChecked or ChEditTool.IsChecked) then
+  Begin
+    LayoutArtefacts.Visible := Visible;
+    SplitterArtefacts.Visible := Visible;
+  End
+  Else
+  Begin
+    Var
+    Vis := ChShellTool.IsChecked or ChEditTool.IsChecked or Visible;
+    LayoutArtefacts.Visible := Vis;
+    SplitterArtefacts.Visible := Vis;
+
+  End;
+
+  If SplitterArtefacts.Visible then
+    SplitterArtefacts.Position.X := 100;
+
+end;
+
+procedure TForm2.BtnJSonShemaClick(Sender: TObject);
+begin
+  FMemoPropertiesEdit := TFMemoPropertiesEdit.Create(Self);
+  FMemoPropertiesEdit.SetData('Edit JSonschema, empty for free json', FJSonShema, False, False);
+  If FMemoPropertiesEdit.ShowModal = MrOk then
+    FJSonShema := FMemoPropertiesEdit.GetContent;
+  FMemoPropertiesEdit.Free;
+end;
+
+{
+  -------------------------------------------------------------------------------
+  TAiTextEditorTool - Componente de Edición de Texto para IA
+  -------------------------------------------------------------------------------
+
+  ADVERTENCIA SOBRE EL MODO DE OPERACIÓN:
+
+  Este componente está diseñado con un sistema de eventos para virtualizar la
+  entrada y salida (I/O).
+
+  1. MODO POR DEFECTO (Acceso a Disco):
+  Si NO se asignan los eventos (OnLoadFile, OnSaveFile, etc.) o si el parámetro
+  "Handled" se deja en False, el componente ejecutará las operaciones directamente
+  sobre el SISTEMA DE ARCHIVOS FÍSICO del sistema operativo.
+
+  2. MODO INTERCEPTADO (Memoria/UI/DB):
+  Para evitar el acceso al disco (ej. para editar un TMemo o un registro de BD),
+  el programador debe asignar los eventos correspondientes, realizar la lógica
+  personalizada y establecer explícitamente:
+  Handled := True;
+
+  Esto detiene la ejecución de la lógica predeterminada de archivos.
+  -------------------------------------------------------------------------------
+}
+
+// 1. Carga de Archivo: En lugar de leer del disco, leemos lo que hay en el Memo.
+procedure TForm2.AiTextEditorTool1LoadFile(Sender: TObject; const Path: string; var Content: string; var Handled: Boolean);
+begin
+  // Asignamos el texto actual del Memo a la variable Content que espera el componente
+  Content := MemoEditTool.Lines.Text;
+
+  // Indicamos que ya lo manejamos nosotros, así no busca en disco
+  Handled := True;
+end;
+
+// 2. Guardado de Archivo: En lugar de escribir en disco, actualizamos el Memo.
+procedure TForm2.AiTextEditorTool1SaveFile(Sender: TObject; const Path, Content: string; var Handled: Boolean);
+begin
+  // Actualizamos el Memo con el nuevo contenido procesado por la herramienta
+
+  TThread.Queue(nil,
+    procedure
+
+    var
+      SelPos: Integer;
+    begin
+      // 1. Actualización Atómica en FMX
+      // FMX suele ser más eficiente asignando directamente a .Text
+      MemoEditTool.Model.Lines.BeginUpdate; // Congela el repintado
+      try
+        MemoEditTool.Text := Content;
+      finally
+        MemoEditTool.Model.Lines.EndUpdate;
+      end;
+
+      // 2. Lógica visual: Buscar y resaltar
+      if FLastNewText <> '' then
+      begin
+        // Buscamos la posición (Base 1)
+        SelPos := Pos(FLastNewText, Content);
+
+        if SelPos > 0 then
+        begin
+          MemoEditTool.SetFocus;
+
+          // FMX: SelStart es Base 0
+          MemoEditTool.SelStart := SelPos - 1;
+          MemoEditTool.SelLength := Length(FLastNewText);
+
+          // FMX SCROLL HACK:
+          // FMX no tiene un "ScrollToCaret" nativo público simple en todas las versiones.
+          // Sin embargo, al dar foco y poner la selección, la mayoría de plataformas (Android/iOS/Win)
+          // intentan mostrar el cursor.
+
+          // Si notas que no hace scroll en tu versión de Delphi, este código
+          // fuerza al Memo a reconocer la posición del cursor:
+          MemoEditTool.Repaint;
+        end;
+      end;
+
+    end);
+
+  // Opcional: Hacer scroll al final o al inicio si deseas
+  // MemoEditTool.GoToTextEnd;
+
+  Handled := True;
+end;
+
+// 3. Verificar Existencia: Simulamos si el archivo existe o no.
+procedure TForm2.AiTextEditorTool1FileExists(Sender: TObject; const Path: string; var Exists, Handled: Boolean);
+begin
+  // LÓGICA:
+  // Si vamos a ejecutar el comando 'create', el componente espera que el archivo NO exista.
+  // Si vamos a ejecutar 'str_replace' o 'view', espera que SÍ exista.
+
+  // Para este demo, asumimos que el archivo "existe" si el Memo tiene algo escrito.
+  // Si el Memo está vacío, decimos que no existe (permitiendo usar el comando 'create').
+  Exists := (MemoEditTool.Lines.Count > 0) or (Trim(MemoEditTool.Text) <> '');
+
+  Handled := True;
+end;
+
+// 4. Directorios: Como es en memoria, siempre "tenemos éxito" con los directorios.
+procedure TForm2.AiTextEditorTool1EnsureDirectory(Sender: TObject; const Path: string; var Handled: Boolean);
+begin
+  // No necesitamos crear carpetas reales.
+  // Simplemente decimos "listo, carpeta creada/verificada".
+  Handled := True;
+end;
+
+// 5. Antes del Comando: Útil para depuración o validación previa.
+procedure TForm2.AiTextEditorTool1BeforeCommand(Sender: TObject; const Command, Path: string; Args: TJSONObject; var Result: string; var Handled: Boolean);
+var
+  sArgs: string;
+  OldStr, NewStr, FileContent: string;
+  Occurrences: Integer;
+
+  // Función local para normalizar TODO a #10 (Estándar Unix/AI)
+  function NormalizeToLF(const S: string): string;
+  begin
+    // Paso 1: Convertir Windows CRLF a LF
+    Result := StringReplace(S, #13#10, #10, [rfReplaceAll]);
+    // Paso 2: Convertir Mac antiguo CR a LF (por si acaso)
+    Result := StringReplace(Result, #13, #10, [rfReplaceAll]);
+  end;
+
+// Conteo de ocurrencias sobre texto normalizado
+  function CountOccurrencesLocal(const Text, SubText: string): Integer;
+  var
+    P, Offset: Integer;
+  begin
+    Result := 0;
+    if (Text = '') or (SubText = '') then
+      Exit;
+    Offset := 1;
+    P := Pos(SubText, Text, Offset);
+    while P > 0 do
+    begin
+      Inc(Result);
+      Offset := P + Length(SubText);
+      P := Pos(SubText, Text, Offset);
+    end;
+  end;
+
+begin
+  // --- LOGGING ---
+  sArgs := '';
+  FLastNewText := '';
+
+  if Assigned(Args) then
+    sArgs := Args.Format;
+
+  if sArgs <> '' then
+  begin
+    TThread.Queue(nil,
+      procedure
+      begin
+        MemoEditCommandLog.BeginUpdate;
+        try
+          MemoEditCommandLog.Lines.Add(Command + ' : ' + Path + sLineBreak + sArgs);
+          MemoEditCommandLog.Lines.Add('');
+          MemoEditCommandLog.GoToTextEnd;
+        finally
+          MemoEditCommandLog.EndUpdate;
+        end;
+      end);
+  end;
+
+  // --- INTERCEPTAR STR_REPLACE ---
+  if Command = 'str_replace' then
+  begin
+    // 1. Obtener argumentos crudos
+    OldStr := Args.GetValue<string>('old_str');
+    NewStr := Args.GetValue<string>('new_str');
+
+    // Guardamos para efectos visuales (scroll)
+    FLastNewText := NewStr;
+
+    // 2. NORMALIZACIÓN (La clave del éxito)
+    // Convertimos lo que hay en el Memo a formato LF
+    FileContent := NormalizeToLF(MemoEditTool.Text);
+
+    // Convertimos lo que manda Claude a formato LF
+    OldStr := NormalizeToLF(OldStr);
+    NewStr := NormalizeToLF(NewStr);
+
+    // 3. VALIDACIÓN (Usando las variables normalizadas)
+    Occurrences := CountOccurrencesLocal(FileContent, OldStr);
+
+    if Occurrences = 0 then
+    begin
+      // Tip: Agregamos una pista al error para debugging visual
+      Result := 'Error: No match found for replacement.' + sLineBreak + 'Hint: Check whitespace and indentation exactly.';
+      Handled := True;
+      Exit;
+    end
+    else if Occurrences > 1 then
+    begin
+      Result := 'Error: Found ' + IntToStr(Occurrences) + ' matches. Context must be unique.';
+      Handled := True;
+      Exit;
+    end;
+
+    // 4. EJECUCIÓN (Sobre texto normalizado)
+    // rfReplaceAll no es necesario porque validamos count=1, pero mal no hace.
+    FileContent := StringReplace(FileContent, OldStr, NewStr, []);
+
+    // 5. ACTUALIZACIÓN VISUAL
+    MemoEditTool.Model.Lines.BeginUpdate;
+    try
+      // TMemo en FMX/VCL acepta #10 y lo renderiza bien.
+      // Al asignarlo, el Memo internamente podría reconvertirlo a OS native,
+      // pero el reemplazo ya fue exitoso.
+      MemoEditTool.Text := FileContent;
+    finally
+      MemoEditTool.Model.Lines.EndUpdate;
+    end;
+
+    Result := 'Successfully replaced text at exactly one location.';
+    Handled := True;
+  end
+  else if Command = 'str_replace' then
+  begin
+    // ... tu lógica existente ...
+  end
+  // --- NUEVO: INTERCEPTAR APPLY_DIFF (Opcional, para normalización) ---
+  else if Command = 'apply_diff' then
+  begin
+    // GPT-5 a veces manda diffs con saltos de línea LF (#10),
+    // mientras que tu Memo en Windows podría tener CRLF (#13#10).
+    // Para asegurar que el parcheo no falle por culpa de los saltos de línea invisibles:
+
+    // 1. Obtener argumentos
+    var
+    DiffText := Args.GetValue<string>('diff_text');
+
+    // 2. Normalizar el contenido del Memo (Original) a LF
+    FileContent := NormalizeToLF(MemoEditTool.Text);
+
+    // 3. Normalizar el Diff a LF (solo por seguridad)
+    DiffText := NormalizeToLF(DiffText);
+
+    // 4. Instanciar el aplicador manualmente aquí para usar los textos normalizados
+    var
+    Applier := TDiffApplier.Create;
+    var
+      NewContent, ErrorMsg: string;
+    try
+      if Applier.Apply(FileContent, DiffText, NewContent, ErrorMsg) then
+      begin
+        // ÉXITO: Actualizar Memo
+        TThread.Queue(nil,
+          procedure
+          begin
+            MemoEditTool.Model.Lines.BeginUpdate;
+            try
+              MemoEditTool.Text := NewContent;
+            finally
+              MemoEditTool.Model.Lines.EndUpdate;
+            end;
+          end);
+
+        Result := 'Diff aplicado exitosamente.';
+      end
+      else
+      begin
+        // FALLO
+        Result := 'Error al aplicar diff: ' + ErrorMsg;
+      end;
+    finally
+      Applier.Free;
+    end;
+
+    // Marcamos como manejado para que el componente no intente hacerlo de nuevo
+    Handled := True;
+  end
+  else
+  begin
+    Handled := False;
+  end;
+
 end;
 
 end.

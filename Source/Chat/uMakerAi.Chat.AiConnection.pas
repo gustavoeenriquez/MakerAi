@@ -1,20 +1,20 @@
 ﻿unit uMakerAi.Chat.AiConnection;
 
-// MIT License
+// IT License
 //
-// Copyright (c) 2013 Gustavo Enríquez - CimaMaker
+// Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -25,10 +25,14 @@
 // Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
-// - Telegram: +57 3128441700
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
+
 
 interface
 
@@ -37,7 +41,8 @@ uses
   System.Threading, System.NetEncoding, System.Rtti, System.TypInfo, System.StrUtils,
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
   System.JSON, Rest.JSON,
-  uMakerAi.ParamsRegistry, uMakerAi.ToolFunctions, uMakerAi.Core, uMakerAi.Chat, uMakerAi.Chat.Initializations;
+  uMakerAi.ParamsRegistry, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Chat,
+  uMakerAi.Chat.Initializations, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor;
 
 type
   TOnChatModelChangeEvent = procedure(Sender: TObject; const OldChat, NewChat: TAiChat) of object;
@@ -69,9 +74,10 @@ type
     FOnChatModelChange: TOnChatModelChangeEvent;
     FOnProcessResponse: TAiChatOnProcessResponseEvent;
     FVersion: String;
-    FWebSearch: Boolean;
-    FCodeInterpreter: Boolean;
-    FExtractTextFiles: Boolean;
+
+    FOnReceiveThinking: TAiChatOnDataEvent;
+    FShellTool: TAiShell;
+    FTextEditorTool: TAiTextEditorTool;
 
     // Setters y Getters
     procedure SetDriverName(const Value: String);
@@ -97,9 +103,9 @@ type
     procedure SetOnReceiveDataEnd(const Value: TAiChatOnDataEvent);
     procedure SetPrompt_tokens(const Value: integer);
     procedure SetTotal_tokens(const Value: integer);
-    procedure SetCodeInterpreter(const Value: Boolean);
-    procedure SetExtractTextFiles(const Value: Boolean);
-    procedure SetWebSearch(const Value: Boolean);
+    procedure SetOnReceiveThinking(const Value: TAiChatOnDataEvent);
+    procedure SetShellTool(const Value: TAiShell);
+    procedure SetTextEditorTool(const Value: TAiTextEditorTool);
 
   protected
     procedure ValideChat;
@@ -161,10 +167,8 @@ type
     property Prompt_tokens: integer read FPrompt_tokens write SetPrompt_tokens;
     property Completion_tokens: integer read FCompletion_tokens write SetCompletion_tokens;
     property Total_tokens: integer read FTotal_tokens write SetTotal_tokens;
-    Property WebSearch: Boolean read FWebSearch write SetWebSearch;
-    Property CodeInterpreter: Boolean read FCodeInterpreter write SetCodeInterpreter;
-    Property ExtractTextFiles: Boolean read FExtractTextFiles write SetExtractTextFiles;
 
+    Property OnReceiveThinking: TAiChatOnDataEvent read FOnReceiveThinking write SetOnReceiveThinking;
     property OnReceiveData: TAiChatOnDataEvent read FOnReceiveData write SetOnReceiveData;
     property OnReceiveDataEnd: TAiChatOnDataEvent read FOnReceiveDataEnd write SetOnReceiveDataEnd;
     property OnAddMessage: TAiChatOnDataEvent read FOnAddMessage write SetOnAddMessage;
@@ -176,6 +180,9 @@ type
     property OnChatModelChange: TOnChatModelChangeEvent read FOnChatModelChange write FOnChatModelChange;
     property OnProcessResponse: TAiChatOnProcessResponseEvent read FOnProcessResponse write SetOnProcessResponse;
     Property Version: String Read FVersion;
+    property ShellTool: TAiShell read FShellTool write SetShellTool;
+    Property TextEditorTool : TAiTextEditorTool read FTextEditorTool write SetTextEditorTool;
+
   end;
 
 procedure Register;
@@ -221,7 +228,7 @@ begin
   inherited;
 end;
 
-procedure TAiChatConnection.SetDriverName(const Value: String);
+{procedure TAiChatConnection.SetDriverName(const Value: String);
 begin
   if FDriverName <> Value then
   begin
@@ -235,11 +242,38 @@ begin
     end;
   end;
 end;
+}
 
-procedure TAiChatConnection.SetExtractTextFiles(const Value: Boolean);
+procedure TAiChatConnection.SetDriverName(const Value: String);
 begin
-  FExtractTextFiles := Value;
+  if FDriverName <> Value then
+  begin
+    FDriverName := Value;
+    FModel := '';
+
+    // Solo actualizamos la lista FParams con los defaults del nuevo driver,
+    // pero NO los aplicamos al chat viejo si vamos a cambiarlo inmediatamente.
+
+    // Opción A (Simple): Dejarlo como está (funciona, pero aplica params al chat viejo).
+    // UpdateAndApplyParams;
+
+    // Opción B (Optimización): Cargar params pero no aplicar al chat viejo.
+    if not (csDesigning in ComponentState) then
+    begin
+        // Cargamos los defaults en FParams sin aplicarlos al FChat actual
+        // (Puedes refactorizar UpdateAndApplyParams para aceptar un booleano 'ApplyToChat')
+        UpdateAndApplyParams;
+        SetupChatFromDriver; // Esto creará el nuevo chat y le aplicará los params
+    end
+    else
+    begin
+       // En diseño solo actualizamos params visualmente
+       UpdateAndApplyParams;
+    end;
+  end;
 end;
+
+
 
 procedure TAiChatConnection.SetModel(const Value: String);
 begin
@@ -267,7 +301,7 @@ begin
   end;
 end;
 
-procedure TAiChatConnection.SetupChatFromDriver;
+{procedure TAiChatConnection.SetupChatFromDriver;
 var
   OldChat, NewChat: TAiChat;
 begin
@@ -300,11 +334,43 @@ begin
   if Assigned(OldChat) then
     OldChat.Free;
 end;
+}
 
-procedure TAiChatConnection.SetWebSearch(const Value: Boolean);
+procedure TAiChatConnection.SetupChatFromDriver;
+var
+  OldChat, NewChat: TAiChat;
 begin
-  FWebSearch := Value;
+  if csLoading in ComponentState then
+    Exit;
+
+  if FDriverName = '' then
+  begin
+    if Assigned(FChat) then
+      FreeAndNil(FChat);
+    Exit;
+  end;
+
+  OldChat := FChat;
+  FChat := nil; // Desvinculamos temporalmente para evitar efectos secundarios en el Setter
+
+  NewChat := TAiChatFactory.Instance.CreateDriver(FDriverName);
+  if not Assigned(NewChat) then
+    raise Exception.CreateFmt('Failed to create driver instance for "%s"', [FDriverName]);
+
+  if Assigned(FOnChatModelChange) then
+    FOnChatModelChange(Self, OldChat, NewChat);
+
+  // Al llamar a SetChat, este se encargará de aplicar Params y Eventos
+  SetChat(NewChat);
+
+  if Assigned(OldChat) then
+    OldChat.Free;
 end;
+
+
+
+
+
 
 procedure TAiChatConnection.UpdateAndApplyParams;
 Var
@@ -338,14 +404,6 @@ begin
   if Assigned(FChat) then
   begin
     ApplyParamsToChat(FChat, FParams);
-
-    Var
-    MediaConf := LowerCase(FParams.Values['ChatMediaSupports']);
-    FWebSearch := MediaConf.Contains(LowerCase('Tcm_WebSearch'));
-    FCodeInterpreter := MediaConf.Contains(LowerCase('Tcm_code_interpreter'));
-
-    MediaConf := LowerCase(FParams.Values['NativeOutputFiles']);
-    FExtractTextFiles := MediaConf.Contains(LowerCase('tfc_textFile'));
   end;
 end;
 
@@ -379,6 +437,10 @@ begin
 
   // Asignaciones directas primero
   AChat.AiFunctions := Self.AiFunctions;
+  AChat.ShellTool := Self.ShellTool;
+  AChat.TextEditorTool := Self.TextEditorTool;
+
+
   AChat.Memory.Text := Self.Memory.Text;
   AChat.InitialInstructions.Text := Self.InitialInstructions.Text;
 
@@ -489,17 +551,6 @@ begin
   finally
     LContext.Free;
   end;
-
-  // Verifica parámetros adicionales como WebSearch, CodeInterpreter y ExtractTextFiles
-
-  If FWebSearch then
-    AChat.ChatMediaSupports := AChat.ChatMediaSupports + [TAiChatMediaSupport.tcm_WebSearch];
-
-  If FCodeInterpreter then
-    AChat.ChatMediaSupports := AChat.ChatMediaSupports + [TAiChatMediaSupport.tcm_code_interpreter];
-
-  If FExtractTextFiles then
-    AChat.NativeOutputFiles := AChat.NativeOutputFiles + [TAiFileCategory.tfc_textFile];
 end;
 
 procedure TAiChatConnection.ApplyEventsToChat(AChat: TAiChat; SetToNil: Boolean);
@@ -511,6 +562,7 @@ begin
   begin
     AChat.OnReceiveData := nil;
     AChat.OnReceiveDataEnd := nil;
+    AChat.OnReceiveThinking := Nil;
     AChat.OnAddMessage := nil;
     AChat.OnCallToolFunction := nil;
     AChat.OnBeforeSendMessage := nil;
@@ -518,11 +570,13 @@ begin
     AChat.OnProcessMediaFile := nil;
     AChat.OnProcessResponse := nil;
     AChat.OnError := nil;
+
   end
   else
   begin
     AChat.OnReceiveData := Self.OnReceiveData;
     AChat.OnReceiveDataEnd := OnInternalReceiveDataEnd; // Self.OnReceiveDataEnd;
+    AChat.OnReceiveThinking := Self.OnReceiveThinking;
     AChat.OnAddMessage := Self.OnAddMessage;
     AChat.OnCallToolFunction := Self.OnCallToolFunction;
     AChat.OnBeforeSendMessage := Self.OnBeforeSendMessage;
@@ -811,10 +865,6 @@ begin
   end;
 end;
 
-procedure TAiChatConnection.SetCodeInterpreter(const Value: Boolean);
-begin
-  FCodeInterpreter := Value;
-end;
 
 procedure TAiChatConnection.SetCompletion_tokens(const Value: integer);
 begin
@@ -898,9 +948,24 @@ begin
   // FChat.OnReceiveDataEnd := Value;
 end;
 
+procedure TAiChatConnection.SetOnReceiveThinking(const Value: TAiChatOnDataEvent);
+begin
+  FOnReceiveThinking := Value;
+end;
+
 procedure TAiChatConnection.SetPrompt_tokens(const Value: integer);
 begin
   FPrompt_tokens := Value;
+end;
+
+procedure TAiChatConnection.SetShellTool(const Value: TAiShell);
+begin
+  FShellTool := Value;
+end;
+
+procedure TAiChatConnection.SetTextEditorTool(const Value: TAiTextEditorTool);
+begin
+  FTextEditorTool := Value;
 end;
 
 procedure TAiChatConnection.SetTotal_tokens(const Value: integer);

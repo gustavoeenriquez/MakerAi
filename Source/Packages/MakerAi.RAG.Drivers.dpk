@@ -25,6 +25,7 @@ package MakerAi.RAG.Drivers;
 {$IMAGEBASE $400000}
 {$DEFINE DEBUG}
 {$ENDIF IMPLICITBUILDING}
+{$DESCRIPTION 'MakerAI RAG Database Drivers'}
 {$IMPLICITBUILD ON}
 
 requires

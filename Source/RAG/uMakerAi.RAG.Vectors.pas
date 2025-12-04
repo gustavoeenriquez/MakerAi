@@ -23,7 +23,10 @@
 // Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
-// - Telegram: +57 3128441700
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
@@ -267,6 +270,9 @@ type
     Function CreateEmbeddingNode(aText: String; aEmbeddings: TAiEmbeddingsCore = Nil): TAiEmbeddingNode;
     Function Count: Integer;
     Procedure Clear;
+
+    Procedure Rerank(Target: TAiEmbeddingNode); Overload;
+    Procedure Rerank(NewPrompt: String); Overload;
 
     Property RagIndex: TAIEmbeddingIndex read FRagIndex write SetRagIndex;
     Property Active: Boolean read FActive write SetActive;
@@ -695,6 +701,60 @@ begin
   End;
 end;
 
+procedure TAiRAGVector.Rerank(Target: TAiEmbeddingNode);
+var
+  i: Integer;
+  Emb: TAiEmbeddingNode;
+begin
+  // 1. Validaciones básicas
+  if FItems.Count = 0 then Exit;
+
+  if (FModel <> '') and (FModel <> Target.Model) then
+      Raise Exception.Create('Rerank Error: El modelo del nuevo query (' + Target.Model +
+                             ') no coincide con el del vector (' + FModel + ')');
+
+  // 2. Recalcular la puntuación (Idx) para cada elemento en la lista actual
+  //    contra el nuevo Target.
+  for i := 0 to FItems.Count - 1 do
+  begin
+    Emb := FItems[i];
+    // Calculamos qué tan similar es este item al nuevo concepto
+    Emb.Idx := TAiEmbeddingNode.CosineSimilarity(Emb, Target);
+  end;
+
+  // 3. Reordenar la lista basada en la nueva puntuación (Mayor a menor)
+  FItems.Sort(TComparer<TAiEmbeddingNode>.Construct(
+    function(const Left, Right: TAiEmbeddingNode): Integer
+    const
+      TOLERANCE = 1.0E-12;
+    begin
+      // Comparamos Idx (Similitud). Queremos orden Descendente (1.0 -> 0.0)
+      if Abs(Left.Idx - Right.Idx) < TOLERANCE then
+        Result := 0
+      else if Left.Idx > Right.Idx then
+        Result := -1 // Left va antes porque es mayor
+      else
+        Result := 1; // Right va antes
+    end));
+end;
+
+procedure TAiRAGVector.Rerank(NewPrompt: String);
+var
+  Target: TAiEmbeddingNode;
+begin
+  if Not Assigned(FEmbeddings) then
+    Raise Exception.Create('Rerank: Debe asignar primero un modelo de Embeddings para convertir el texto.');
+
+  // Creamos el nodo temporal para el nuevo prompt
+  Target := CreateEmbeddingNode(NewPrompt);
+  try
+    // Llamamos a la versión que procesa el nodo
+    Rerank(Target);
+  finally
+    Target.Free;
+  End;
+end;
+
 procedure TAiRAGVector.SaveToFile(FileName: String);
 Var
   ST: TMemoryStream;
@@ -1035,17 +1095,65 @@ end;
 { THNSWIndex }
 
 procedure THNSWIndex.InsertConnection(Node: THNSWNode; Level: Integer; TargetID: Integer);
+var
+  CurrentList: TList<Integer>;
+  TargetNode, NeighborNode: THNSWNode;
+  TargetSim, NeighborSim, MinSim: Double;
+  WorstIndex, i: Integer;
 begin
-  if Node.Connections[Level].Count >= FMaxConnections then
+  CurrentList := Node.Connections[Level];
+
+  // 1. Evitar duplicados
+  if CurrentList.Contains(TargetID) then Exit;
+
+  // 2. Si hay espacio, simplemente agregamos y salimos
+  if CurrentList.Count < FMaxConnections then
   begin
-    // Implementar política de selección para mantener mejores conexiones
-    // Por ejemplo, mantener las conexiones más cercanas
+    CurrentList.Add(TargetID);
     Exit;
   end;
 
-  if not Node.Connections[Level].Contains(TargetID) then
-    Node.Connections[Level].Add(TargetID);
+  // ---------------------------------------------------------
+  // 3. POLÍTICA DE SELECCIÓN (Mejora implementada)
+  // La lista está llena. Debemos ver si el nuevo candidato es
+  // mejor que el "peor" vecino actual.
+  // ---------------------------------------------------------
+
+  // Obtener el nodo objetivo para comparar su vector
+  if not FNodes.TryGetValue(TargetID, TargetNode) then Exit;
+
+  // Calcular similitud del nuevo candidato con el nodo origen
+  TargetSim := TAiEmbeddingNode.CosineSimilarity(Node.Vector, TargetNode.Vector);
+
+  // Inicializamos variables para buscar el peor vecino
+  MinSim := 2.0; // Valor inicial alto (el coseno máx es 1.0)
+  WorstIndex := -1;
+
+  // Buscamos cuál de los vecinos actuales es el menos similar (el más lejano)
+  for i := 0 to CurrentList.Count - 1 do
+  begin
+    if FNodes.TryGetValue(CurrentList[i], NeighborNode) then
+    begin
+      NeighborSim := TAiEmbeddingNode.CosineSimilarity(Node.Vector, NeighborNode.Vector);
+
+      // Si encontramos un vecino con menor similitud, lo marcamos como el peor candidato
+      if NeighborSim < MinSim then
+      begin
+        MinSim := NeighborSim;
+        WorstIndex := i;
+      end;
+    end;
+  end;
+
+  // 4. Decisión: ¿Reemplazar o descartar?
+  // Si el nuevo candidato tiene MAYOR similitud que el PEOR vecino actual,
+  // reemplazamos al peor vecino. De lo contrario, descartamos el nuevo.
+  if (WorstIndex > -1) and (TargetSim > MinSim) then
+  begin
+    CurrentList[WorstIndex] := TargetID;
+  end;
 end;
+
 
 function THNSWIndex.SearchLayer(Query: TAiEmbeddingNode; EntryPoint: Integer; Level: Integer; Ef: Integer): TList<Integer>;
 var
@@ -1374,5 +1482,8 @@ procedure TAiEmbeddingMetaData.SetTagObject(const Value: TObject);
 begin
   FTagObject := Value;
 end;
+
+
+
 
 end.

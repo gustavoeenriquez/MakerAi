@@ -1,0 +1,34 @@
+object Form12: TForm12
+  Left = 0
+  Top = 0
+  Caption = 'Form12'
+  ClientHeight = 346
+  ClientWidth = 456
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+  object BtnOllama: TButton
+    Position.X = 56.000000000000000000
+    Position.Y = 64.000000000000000000
+    Size.Width = 313.000000000000000000
+    Size.Height = 91.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    Text = 'Utilizando TAIOllamaChat gpt-oss:20b'
+    TextSettings.Trimming = None
+    OnClick = BtnOllamaClick
+  end
+  object BtnTAiChatConnection: TButton
+    Position.X = 56.000000000000000000
+    Position.Y = 166.000000000000000000
+    Size.Width = 313.000000000000000000
+    Size.Height = 91.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 2
+    Text = 'Utilizando TAIChatConnection gpt-oss:20b'
+    TextSettings.Trimming = None
+    OnClick = BtnTAiChatConnectionClick
+  end
+end

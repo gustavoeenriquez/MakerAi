@@ -1,0 +1,180 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{F23F6AFA-4622-42DC-863E-7308F69E56AA}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="010-Minimalchat\MinimalChat.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="012-ChatAllFunctions\ChatFull.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="021-RAG+Postgres-UpdateDB\RagUpdateDb.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="022-1-RAG_SQLite\Sqlite_RAG.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="031-MCPServer\AiMCPServerDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="032-MCPServerDataSnap\MCPDataSnapServer.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="025-RAGGraph\RagGraphDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="041-GeminiVeo\VeoDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="090-Varios\ListAllModels.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="090-Varios\CompareEmbeddings\CompareEmbeddings.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="014-ChatTest\ClaudeChatTest.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="051-AgentDemo\AiAgentDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\..\..\..\Proyectos\Avance\RagDemo\RagDemoAvance.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="MinimalChat">
+        <MSBuild Projects="010-Minimalchat\MinimalChat.dproj"/>
+    </Target>
+    <Target Name="MinimalChat:Clean">
+        <MSBuild Projects="010-Minimalchat\MinimalChat.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MinimalChat:Make">
+        <MSBuild Projects="010-Minimalchat\MinimalChat.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ChatFull">
+        <MSBuild Projects="012-ChatAllFunctions\ChatFull.dproj"/>
+    </Target>
+    <Target Name="ChatFull:Clean">
+        <MSBuild Projects="012-ChatAllFunctions\ChatFull.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ChatFull:Make">
+        <MSBuild Projects="012-ChatAllFunctions\ChatFull.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="RagUpdateDb">
+        <MSBuild Projects="021-RAG+Postgres-UpdateDB\RagUpdateDb.dproj"/>
+    </Target>
+    <Target Name="RagUpdateDb:Clean">
+        <MSBuild Projects="021-RAG+Postgres-UpdateDB\RagUpdateDb.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="RagUpdateDb:Make">
+        <MSBuild Projects="021-RAG+Postgres-UpdateDB\RagUpdateDb.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Sqlite_RAG">
+        <MSBuild Projects="022-1-RAG_SQLite\Sqlite_RAG.dproj"/>
+    </Target>
+    <Target Name="Sqlite_RAG:Clean">
+        <MSBuild Projects="022-1-RAG_SQLite\Sqlite_RAG.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Sqlite_RAG:Make">
+        <MSBuild Projects="022-1-RAG_SQLite\Sqlite_RAG.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="AiMCPServerDemo">
+        <MSBuild Projects="031-MCPServer\AiMCPServerDemo.dproj"/>
+    </Target>
+    <Target Name="AiMCPServerDemo:Clean">
+        <MSBuild Projects="031-MCPServer\AiMCPServerDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="AiMCPServerDemo:Make">
+        <MSBuild Projects="031-MCPServer\AiMCPServerDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MCPDataSnapServer">
+        <MSBuild Projects="032-MCPServerDataSnap\MCPDataSnapServer.dproj"/>
+    </Target>
+    <Target Name="MCPDataSnapServer:Clean">
+        <MSBuild Projects="032-MCPServerDataSnap\MCPDataSnapServer.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MCPDataSnapServer:Make">
+        <MSBuild Projects="032-MCPServerDataSnap\MCPDataSnapServer.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="RagGraphDemo">
+        <MSBuild Projects="025-RAGGraph\RagGraphDemo.dproj"/>
+    </Target>
+    <Target Name="RagGraphDemo:Clean">
+        <MSBuild Projects="025-RAGGraph\RagGraphDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="RagGraphDemo:Make">
+        <MSBuild Projects="025-RAGGraph\RagGraphDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="VeoDemo">
+        <MSBuild Projects="041-GeminiVeo\VeoDemo.dproj"/>
+    </Target>
+    <Target Name="VeoDemo:Clean">
+        <MSBuild Projects="041-GeminiVeo\VeoDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VeoDemo:Make">
+        <MSBuild Projects="041-GeminiVeo\VeoDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ListAllModels">
+        <MSBuild Projects="090-Varios\ListAllModels.dproj"/>
+    </Target>
+    <Target Name="ListAllModels:Clean">
+        <MSBuild Projects="090-Varios\ListAllModels.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ListAllModels:Make">
+        <MSBuild Projects="090-Varios\ListAllModels.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="CompareEmbeddings">
+        <MSBuild Projects="090-Varios\CompareEmbeddings\CompareEmbeddings.dproj"/>
+    </Target>
+    <Target Name="CompareEmbeddings:Clean">
+        <MSBuild Projects="090-Varios\CompareEmbeddings\CompareEmbeddings.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="CompareEmbeddings:Make">
+        <MSBuild Projects="090-Varios\CompareEmbeddings\CompareEmbeddings.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ClaudeChatTest">
+        <MSBuild Projects="014-ChatTest\ClaudeChatTest.dproj"/>
+    </Target>
+    <Target Name="ClaudeChatTest:Clean">
+        <MSBuild Projects="014-ChatTest\ClaudeChatTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ClaudeChatTest:Make">
+        <MSBuild Projects="014-ChatTest\ClaudeChatTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="AiAgentDemo">
+        <MSBuild Projects="051-AgentDemo\AiAgentDemo.dproj"/>
+    </Target>
+    <Target Name="AiAgentDemo:Clean">
+        <MSBuild Projects="051-AgentDemo\AiAgentDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="AiAgentDemo:Make">
+        <MSBuild Projects="051-AgentDemo\AiAgentDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="RagDemoAvance">
+        <MSBuild Projects="..\..\..\..\Proyectos\Avance\RagDemo\RagDemoAvance.dproj"/>
+    </Target>
+    <Target Name="RagDemoAvance:Clean">
+        <MSBuild Projects="..\..\..\..\Proyectos\Avance\RagDemo\RagDemoAvance.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="RagDemoAvance:Make">
+        <MSBuild Projects="..\..\..\..\Proyectos\Avance\RagDemo\RagDemoAvance.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="MinimalChat;ChatFull;RagUpdateDb;Sqlite_RAG;AiMCPServerDemo;MCPDataSnapServer;RagGraphDemo;VeoDemo;ListAllModels;CompareEmbeddings;ClaudeChatTest;AiAgentDemo;RagDemoAvance"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="MinimalChat:Clean;ChatFull:Clean;RagUpdateDb:Clean;Sqlite_RAG:Clean;AiMCPServerDemo:Clean;MCPDataSnapServer:Clean;RagGraphDemo:Clean;VeoDemo:Clean;ListAllModels:Clean;CompareEmbeddings:Clean;ClaudeChatTest:Clean;AiAgentDemo:Clean;RagDemoAvance:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="MinimalChat:Make;ChatFull:Make;RagUpdateDb:Make;Sqlite_RAG:Make;AiMCPServerDemo:Make;MCPDataSnapServer:Make;RagGraphDemo:Make;VeoDemo:Make;ListAllModels:Make;CompareEmbeddings:Make;ClaudeChatTest:Make;AiAgentDemo:Make;RagDemoAvance:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

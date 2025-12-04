@@ -23,7 +23,10 @@
 // Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
-// - Telegram: +57 3128441700
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
@@ -32,7 +35,6 @@
 // 04/11/2024 - adiciona el manejo de TAiMediaFile.detail para identificar la calidad de analisis de una imagen
 // 04/11/2024 - Se corrige error de asignación en TAiMediaFile.LoadFromBase64
 // 15/10/2025 - Code Cleanup
-
 
 unit uMakerAi.Core;
 
@@ -44,30 +46,32 @@ uses
   System.Generics.Collections, System.NetEncoding, System.JSON,
   System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent, REST.JSON, REST.Types, REST.Client,
-  System.Rtti;
+  System.Rtti, uMakerAi.Tools.TextEditor;
 
 Type
 
   TAiToolsFunction = Class;
 
-  //TAiImageSize = (TiaSize256, TiaSize512, TiaSize1024, TiaSize1024_1792, TiaSize1792_1024);
-  //TAiImageResponseFormat = (tiaRUrl, tiaRB64);
-  //TAiImageAStyleFormat = (tiaStyleVivid, tiaStyleNatural);
+  // TAiImageSize = (TiaSize256, TiaSize512, TiaSize1024, TiaSize1024_1792, TiaSize1792_1024);
+  // TAiImageResponseFormat = (tiaRUrl, tiaRB64);
+  // TAiImageAStyleFormat = (tiaStyleVivid, tiaStyleNatural);
 
   TAiFileCategory = (Tfc_Text, Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_pdf, Tfc_Document, //
     Tfc_WebSearch, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, //
-    Tfc_GraphicDesign, tfc_textFile, tfc_code_interpreter, Tfc_Unknow); //
+    Tfc_GraphicDesign, tfc_ExtracttextFile, Tfc_Any, Tfc_Unknow); //
 
   TAiFileCategories = set of TAiFileCategory;
 
   TAiChatMediaSupport = (Tcm_Text, Tcm_Image, Tcm_Audio, Tcm_Video, tcm_pdf, Tcm_Document, //
-    tcm_WebSearch, Tcm_CalcSheet, Tcm_Presentation, Tcm_CompressFile, Tcm_Web, Tcm_GraphicDesign, tcm_textFile, tcm_code_interpreter, Tcm_Unknow); //
+    tcm_WebSearch, Tcm_CalcSheet, Tcm_Presentation, Tcm_CompressFile, Tcm_Web, Tcm_GraphicDesign, tcm_code_interpreter, tcm_Memory, tcm_TextEditor, tcm_ComputerUse, tcm_Shell, tcm_Any, Tcm_Unknow); //
 
   TAiChatMediaSupports = set of TAiChatMediaSupport;
 
   // Tipo de evento para manejar errores
   TAiErrorEvent = procedure(Sender: TObject; const ErrorMsg: string; Exception: Exception; const AResponse: IHTTPResponse) of object;
 
+  TAiThinkingLevel = (tlDefault, tlLow, tlMedium, tlHigh); // Default es medium en la mayoría de los casos
+  TAiMediaResolution = (mrDefault, mrLow, mrMedium, mrHigh);
 
   // Se utiliza especialmente en OpenAi en la transcripción
 
@@ -83,8 +87,26 @@ Type
   // Evento para notificar cambios de estado del servidor (iniciado, detenido, etc.)
   TMCPStatusEvent = procedure(Sender: TObject; const StatusMsg: string) of object;
 
-  TToolFormat = (tfUnknown, tfOpenAI, tfClaude, tfGemini, tfMCP);
+  TToolFormat = (tfUnknown, tfOpenAI, tfOpenAIResponses, tfClaude, tfGemini, tfMCP);
   TToolTransportType = (tpStdIo, tpHttp, tpSSE, tpMakerAi);
+
+
+  TAiChatState = (
+    acsIdle,           // Inactivo
+    acsConnecting,     // Conectando / Enviando Request
+    acsCreated,        // Servidor aceptó (Recibido ID)
+    acsReasoning,      // Pensando / Razonando (Chain of Thought)
+    acsWriting,        // Escribiendo respuesta visible
+    acsToolCalling,    // El modelo pide usar una herramienta
+    acsToolExecuting,  // Ejecutando la herramienta (Local o Remota)
+    acsFinished,       // Completado con éxito
+    acsAborted,        // Abortado por el usuario
+    acsError           // Error
+  );
+
+  // Definición del evento
+  TAiStateChangeEvent = procedure(Sender: TObject; State: TAiChatState; const Description: string) of object;
+
 
   TAiMediaFiles = Class;
 
@@ -106,6 +128,10 @@ Type
     FCacheName: String;
     FIdFile: String;
     FMediaFiles: TAiMediaFiles;
+    FCacheControl: Boolean;
+    FEnableCitations: Boolean;
+    FContext: string;
+    FTitle: string;
     function GetBase64: String;
     procedure SetBase64(const Value: String);
     procedure Setfilename(const Value: String);
@@ -135,7 +161,7 @@ Type
     Function ToString: String; override;
     Procedure Clear; Virtual;
 
-    function ToJsonObject: TJSONObject; //Exporta el objeto completo a un json
+    function ToJsonObject: TJSONObject; // Exporta el objeto completo a un json
     procedure LoadFromJsonObject(AObject: TJSONObject);
 
     procedure Assign(Source: TAiMediaFile);
@@ -167,6 +193,11 @@ Type
     Property Transcription: String read FTranscription write SetTranscription;
     Property Procesado: Boolean read FProcesado write SetProcesado;
     Property MediaFiles: TAiMediaFiles read FMediaFiles write SetMediaFiles;
+    Property CacheControl: Boolean read FCacheControl write FCacheControl;
+
+    Property Title: string read FTitle write FTitle; // Titulo del documento
+    Property Context: string read FContext write FContext; // Información adicional del documento es solo contexto
+    Property EnableCitations: Boolean read FEnableCitations write FEnableCitations; // Si este documento se incluye para ser citado por la IA
   End;
 
   // Conjunto de archivos para su manejo en el chat
@@ -179,7 +210,7 @@ Type
     // Si el modelo no maneja este tipo de media files, se pueden preprocesar en el evento del chat
     // y el texto del proceso se adiciona al prompt, y aquí ya no se tendrían en cuenta
     Function GetMediaList(aFilters: TAiFileCategories; aProcesado: Boolean = False): TAiMediaFilesArray;
-    Function ToMediaFileArray: TAiMediaFilesArray;  //Retrona una lista con clones de los objetos
+    Function ToMediaFileArray: TAiMediaFilesArray; // Retrona una lista con clones de los objetos
   End;
 
   // Clase de manejo de los metadatos que se pasan al api del chat de los llm
@@ -213,7 +244,8 @@ Type
 
     Constructor Create;
     Destructor Destroy; Override;
-    Procedure ParseFunction(JObj: TJSONObject);
+    Procedure ParseFunction(JObj: TJSONObject); // Esta función se reemplazará por estas dos según la necesidad
+
     Procedure Assign(aSource: TAiToolsFunction);
   end;
 
@@ -233,7 +265,7 @@ Type
     start_index: Integer;
     end_index: Integer;
     Url: String;
-    title: String;
+    Title: String;
   End;
 
   TAiWebSearchArray = Class(TObjectList<TAiWebSearchItem>);
@@ -246,7 +278,7 @@ Type
   End;
 
 
-// Partiendo de la extensión del archivo obtiene la categoria TAiFileCategori
+  // Partiendo de la extensión del archivo obtiene la categoria TAiFileCategori
 function GetContentCategory(FileExtension: string): TAiFileCategory;
 
 // Obtiene el mime de un archivo basado en la extensión .mp3 o mp3
@@ -271,7 +303,6 @@ uses Winapi.ShellAPI, Winapi.Windows;
 {$ENDIF}
 {$REGION 'Utilidades varias' }
 {$I uMakerAi.Version.inc}
-
 
 function GetParametrosURL(Parametros: TStringList): string;
 var
@@ -821,10 +852,12 @@ begin
     Result := Tfc_Text
 
     // Programming/Code files
+    {
   else if (FileExtension = 'py') or (FileExtension = 'java') or (FileExtension = 'c') or (FileExtension = 'cpp') or (FileExtension = 'cs') or (FileExtension = 'php') or (FileExtension = 'rb') or (FileExtension = 'go') or
     (FileExtension = 'rs') or (FileExtension = 'swift') or (FileExtension = 'kt') or (FileExtension = 'scala') or (FileExtension = 'r') or (FileExtension = 'sql') or (FileExtension = 'sh') or (FileExtension = 'bat') or
     (FileExtension = 'ps1') or (FileExtension = 'dockerfile') then
     Result := tfc_code_interpreter
+    }
 
     // Web files
   else if (FileExtension = 'html') or (FileExtension = 'htm') or (FileExtension = 'xml') or (FileExtension = 'json') or (FileExtension = 'css') or (FileExtension = 'js') or (FileExtension = 'jsx') or (FileExtension = 'ts') or
@@ -841,7 +874,7 @@ begin
 
     // Text-based files that are not plain text
   else if (FileExtension = 'yaml') or (FileExtension = 'yml') or (FileExtension = 'toml') or (FileExtension = 'ini') or (FileExtension = 'cfg') or (FileExtension = 'conf') then
-    Result := tfc_textFile
+    Result := tfc_ExtracttextFile
 
     // Default case
   else
@@ -920,7 +953,6 @@ begin
   FIdAudio := '';
   // FCloudUri := ''
 end;
-
 
 constructor TAiMediaFile.Create;
 begin
@@ -1195,6 +1227,7 @@ end;
 
 { TAiMediaFiles }
 
+{
 function TAiMediaFiles.GetMediaList(aFilters: TAiFileCategories; aProcesado: Boolean = False): TAiMediaFilesArray;
 var
   i: Integer;
@@ -1206,6 +1239,31 @@ begin
   begin
     Item := Self.Items[i];
     if (Item.FileCategory in aFilters) and (Item.Procesado = aProcesado) then
+    begin
+      Len := Length(Result);
+      SetLength(Result, Len + 1);
+      Result[Len] := Item;
+    end;
+  end;
+end;
+}
+
+
+function TAiMediaFiles.GetMediaList(aFilters: TAiFileCategories; aProcesado: Boolean = False): TAiMediaFilesArray;
+var
+  i: Integer;
+  Item: TAiMediaFile;
+  Len: Integer;
+  IncludeAll: Boolean;
+begin
+  SetLength(Result, 0);
+  IncludeAll := Tfc_Any in aFilters; // Verificar si debe incluir todos los tipos
+
+  for i := 0 to Self.Count - 1 do
+  begin
+    Item := Self.Items[i];
+    // Si IncludeAll es True, solo verifica aProcesado; si no, aplica ambos filtros
+    if (IncludeAll or (Item.FileCategory in aFilters)) and (Item.Procesado = aProcesado) then
     begin
       Len := Length(Result);
       SetLength(Result, Len + 1);
@@ -1444,7 +1502,3 @@ begin
 end;
 
 end.
-
-
-
-

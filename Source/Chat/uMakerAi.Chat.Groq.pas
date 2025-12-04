@@ -24,10 +24,14 @@ unit uMakerAi.Chat.Groq;
 // Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
-// - Telegram: +57 3128441700
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
+
 
 // A Octubre del 2024 estas son las limitaciones de visión de groq
 {
@@ -107,7 +111,7 @@ class procedure TAiGroqChat.RegisterDefaultParams(Params: TStrings);
 Begin
   Params.Clear;
   Params.Add('ApiKey=@GROQ_API_KEY');
-  Params.Add('Model=Llama3-8b-8192');
+  Params.Add('Model=llama-3.1-8b-instant');
   Params.Add('MaxTokens=4096');
   Params.Add('URL=https://api.groq.com/openai/v1/');
 End;
@@ -121,7 +125,7 @@ constructor TAiGroqChat.Create(Sender: TComponent);
 begin
   inherited;
   ApiKey := '@GROQ_API_KEY';
-  Model := 'Llama3-8b-8192';
+  Model := 'llama-3.1-8b-instant';
   Url := GlAIUrl;
   FReasoningFormat := rfAuto;
   FReasoningEffort := reAuto;
@@ -151,10 +155,11 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   If LModel = '' then
-    LModel := 'llama-3.2-11b-text-preview';
+    LModel := 'llama-3.1-8b-instant';
 
   // Las funciones no trabajan en modo ascincrono
-  LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
+  // LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
+  LAsincronico := Self.Asynchronous;
 
   // En groq hay una restricción sobre las imágenes
 
@@ -213,8 +218,17 @@ begin
     if ReasoningFormat <> '' then
       AJSONObject.AddPair('reasoning_format', ReasoningFormat); // 'parsed, raw, hidden';
 
-    if ReasoningEffort <> '' then
-      AJSONObject.AddPair('reasoning_effort', ReasoningEffort); // 'none, default');
+    if ThinkingLevel <> tlDefault then
+    begin
+      case ThinkingLevel of
+        tlLow:
+          AJSONObject.AddPair('reasoning_effort', 'low');
+        tlMedium:
+          AJSONObject.AddPair('reasoning_effort', 'medium');
+        tlHigh:
+          AJSONObject.AddPair('reasoning_effort', 'high');
+      end;
+    end;
 
     AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
     AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
@@ -227,16 +241,58 @@ begin
     AJSONObject.AddPair('user', User);
     AJSONObject.AddPair('n', TJSONNumber.Create(N));
 
-    If (FResponse_format = tiaChatRfJsonSchema) then
-    Begin
-      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_schema'))
-    End
-    Else If { LAsincronico or } (FResponse_format = tiaChatRfJson) then
-      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_object'))
-    Else If (FResponse_format = tiaChatRfText) then
-      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'text'))
-    Else
-      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'text'));
+    // 1. JSON Schema (Structured Outputs)
+    if (FResponse_format = tiaChatRfJsonSchema) then
+    begin
+      var
+      JResponseFormat := TJSonObject.Create;
+      JResponseFormat.AddPair('type', 'json_schema');
+
+      if JsonSchema.Text <> '' then
+      begin
+        Var sShema := StringReplace(JsonSchema.Text,'\n',' ',[rfReplaceAll]);
+
+        var
+        JInnerSchema := TJSonObject.ParseJSONValue(sShema) as TJSonObject;
+        if Assigned(JInnerSchema) then
+        begin
+          // Wrapper para Groq (Estilo OpenAI Classic)
+          var
+          JSchemaWrapper := TJSonObject.Create;
+
+          // 'name' es OBLIGATORIO en esta estructura
+          JSchemaWrapper.AddPair('name', 'structured_response');
+
+          // El esquema va dentro de 'schema'
+          JSchemaWrapper.AddPair('schema', JInnerSchema);
+
+          // NOTA: No enviamos "strict": true por defecto para maximizar compatibilidad
+          // con modelos Groq que no soportan constrained decoding completo aún.
+
+          JResponseFormat.AddPair('json_schema', JSchemaWrapper);
+        end;
+      end;
+
+      AJSONObject.AddPair('response_format', JResponseFormat);
+    end
+
+    // 2. JSON Mode (Simple)
+    else if (FResponse_format = tiaChatRfJson) then
+    begin
+      var
+      JResponseFormat := TJSonObject.Create;
+      JResponseFormat.AddPair('type', 'json_object');
+      AJSONObject.AddPair('response_format', JResponseFormat);
+    end
+
+    // 3. Text Mode (Solo si se especifica explícitamente, o dejar por defecto)
+    else if (FResponse_format = tiaChatRfText) then
+    begin
+      var
+      JResponseFormat := TJSonObject.Create;
+      JResponseFormat.AddPair('type', 'text');
+      AJSONObject.AddPair('response_format', JResponseFormat);
+    end;
 
     Lista.CommaText := Stop;
     If Lista.Count > 0 then
@@ -261,7 +317,7 @@ begin
     If Seed > 0 then
       AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
 
-    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
+    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSon));
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
   Finally
@@ -289,7 +345,6 @@ begin
 {$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
 {$ENDIF}
-
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'embeddings';
@@ -301,7 +356,7 @@ begin
     jObj.AddPair('user', User);
     jObj.AddPair('encoding_format', EncodingFormat);
 
-    //St.WriteString(UTF8Encode(jObj.Format));
+    // St.WriteString(UTF8Encode(jObj.Format));
     St.WriteString(jObj.Format);
     St.Position := 0;
 

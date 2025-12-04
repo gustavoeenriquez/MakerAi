@@ -1,3 +1,37 @@
+// IT License
+//
+// Copyright (c) <year> <copyright holders>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enríquez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
+
 unit uMainRagGraphDemo;
 
 interface
@@ -199,7 +233,7 @@ begin
 
   // Memo1.Lines.Text := Prompt;
 
-  AiConn.Params.Values['NativeOutputFiles'] := '[tfc_textFile]';
+  AiConn.Params.Values['NativeOutputFiles'] := '[tfc_ExtracttextFile]';
   AiConn.Params.Values['Max_Tokens'] := '16000';
 
   Res := AiConn.AddMessageAndRun(Prompt, 'user', []);
@@ -344,7 +378,7 @@ begin
 
       // --- Paso 2: Llamar al LLM para generar el plan de consulta JSON ---
       // Tu configuración para forzar la salida de un archivo de texto es excelente.
-      AiConn.Params.Values['NativeOutputFiles'] := '[tfc_textFile]';
+      AiConn.Params.Values['NativeOutputFiles'] := '[tfc_ExtracttextFile]';
       Res := AiConn.AddMessageAndRun(Prompt, 'user', []);
       Msg := AiConn.GetLastMessage;
 

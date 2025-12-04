@@ -1,4 +1,6 @@
-# MakerAI 3.0 Suite — The AI Operating System for Delphi
+***
+
+# MakerAI 3.1 Suite — The AI Operating System for Delphi
 
 🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
 
@@ -6,257 +8,203 @@
 [![GitHub Issues](https://img.shields.io/github/issues/gustavoeenriquez/MakerAi)](https://github.com/gustavoeenriquez/MakerAi/issues)
 [![License](https://img.shields.io/github/license/gustavoeenriquez/MakerAi)](LICENSE.txt)
 [![Telegram](https://img.shields.io/badge/Join-Telegram%20Chat-blue.svg)](https://t.me/+7LaihFwqgsk1ZjQx)
+[![Delphi Supported Versions](https://img.shields.io/badge/Delphi%20Support-11%20Alexandria%20to%2013%20Florence-blue.svg)](https://www.embarcadero.com/products/delphi)
 
-**MakerAI 3.0 is not just a component suite — it's a complete AI orchestration framework for Delphi developers.**
+**MakerAI 3.1 is the definitive AI orchestration framework for Delphi developers.**
 
-With full support for RAG, MCP, autonomous agents, and graph-based orchestration, you can design and deploy intelligent, self-learning, and context-aware systems natively in Delphi.
-
----
-
-## The Power of MakerAI 3.0: The AI Orchestration Platform
-
-MakerAI 3.0 provides the architecture to manage the entire lifecycle of complex AI applications, acting as the operating system for intelligence within your software.
-
-- 🚀 **Orchestrate Autonomous Agents:** Create powerful agents that manage state, utilize advanced **Semantic Memory**, and execute complex workflows defined by the internal graph engine.
-- 🧠 **RAG Engine 2.0 (Knowledge & Context):** Connect AI to your private data with the robust Retrieval-Augmented Generation (RAG) V2.0 engine, supporting massive indexing, multi-model environments, and hybrid embeddings.
-- 🛠️ **Enjoy 100% Native Performance:** MakerAI is pure Delphi. This ensures optimal performance, seamless integration, and compilation without heavy external dependencies across all supported Delphi versions (**10.3 to 12 Athens**).
-- 🌐 **Universal LLM Connectivity (AiConnection V3):** The unified connector, `TAiConnection`, features enhanced connectivity and stability for seamless integration with OpenAI, Gemini, Claude, Ollama, Groq, and many more.
-- 🏗️ **Enterprise-Grade Architecture:** Ideal foundation for integrating AI into mission-critical systems like **ERP, CRM, LMS, and industrial solutions**.
+Now featuring support for **GPT-5.1**, **Gemini 3.0**, and **Claude 4.5**, MakerAI allows you to design and deploy intelligent, self-learning, and context-aware systems natively in Delphi with full support for RAG, Knowledge Graphs, MCP Servers, and autonomous agents.
 
 ---
 
-## ✨ Key Features (Version 3.0 Modules)
+## 🚀 What's New in MakerAI 3.1 (Dec 2025)
 
-MakerAI 3.0 introduces next-generation features focused on complexity and reliability.
+MakerAI 3.1 represents a massive leap forward in native AI capabilities:
 
-### 🧠 RAG (Retrieval-Augmented Generation) Engine 2.0
-
-The completely overhauled RAG engine allows the language models to use your private knowledge with unprecedented precision.
-
-- **Massive Indexing:** Efficiently index millions of documents for enterprise-scale applications.
-- **Hybrid Embeddings:** Utilize a combination of sparse and dense vectors for superior search relevance.
-- **Multi-Model Support:** Seamlessly integrate RAG across different LLM backends (OpenAI, Gemini, Ollama, etc.).
-
-### 💾 Advanced Semantic Memory
-
-- **Unified Memory Model:** New semantic memory layer deeply integrated with the RAG engine and the Workflow Graphs, allowing agents to form personalized, long-term context that transcends single conversations.
-- **Short and Long-Term Recall:** Equip agents with the ability to recall specific past interactions and generalize long-term learnings.
-
-### 🔄 Workflow Engine (Graphs) & Agents
-
-- **Visual and Code-Based Orchestration:** Define complex logical flows by connecting nodes and edges. Agents follow this defined logic, utilizing memory and tools to achieve goals.
-
-### 📞 MakerAI Tools System (Function Calling)
-
-- **Unified Tool Management:** A standardized and improved system for defining and exposing native Delphi functions (Tools) to the language model, enabling the AI to interact with your application's core logic (e.g., querying databases, sending commands).
-
-### 🗣️ Voice Monitoring & Progressive Transcription
-
-- **Activation Commands:** Integrated support for "wake-word" detection.
-- **Live Transcription:** Progressive audio transcription, ideal for real-time applications and low-latency interaction.
-
-### 🎨 Professional Visual Components (ChatUI)
-
-- **Chat UI:** Professional-grade, easy-to-use visual components for quickly building multimedia-integrated chat interfaces (text, images, audio, video).
-
-### 🔌 MCP (Model Context Protocol) Support
-
-- **Native MCP Client & Server:** Connect to or expose your Delphi application functions as standard MCP tools, ensuring seamless interoperability with other platforms.
-
-### 🌐 Universal LLM Connector (AiConnection V3)
-
-- **Enhanced Connectivity:** Improved performance and stability for accessing all major providers (OpenAI, Gemini, Claude, Groq, Ollama, Mistral).
-- **Native Multimodal Support:** Process and generate text, images, and audio seamlessly.
+- 🧠 **Next-Gen Models:** Full support for **OpenAI GPT-5.1** & **Sora 2** (Video), **Gemini 3.0** (NanoBanana & Veo 3), and **Claude 4.5**.
+- 🎨 **Professional FMX UI:** New set of FireMonkey visual components for building modern, multimodal chat interfaces (Text + Voice + Vision) effortlessly.
+- 🎯 **High-Precision RAG:** Added **Embedding Rerank** functionality to drastically improve search relevance in large document sets.
+- 🕸️ **RagGraph Engine:** A new graph-based knowledge engine that goes beyond vector similarity.
+- 🔗 **MCP Server Framework:** Create your own MCP Servers natively using **SSE** or **DataSnap**.
 
 ---
 
-## 🛠️ MakerAI 3.0 Core Modules & Components
+## 📊 Feature Support Matrix
 
-The suite is composed of non-visual and visual components designed for maximum modularity and ease of integration into the Delphi environment.
+Overview of capabilities across supported providers in MakerAI 3.1.
+
+| Feature Category | Feature | OpenAI (GPT-5.1) | Claude (4.5) | Gemini (3.0) | Ollama (Local) | LM Studio | Groq | DeepSeek | Kimi 2 |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Chat** | Text Generation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| | JSON Mode | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| | JSON Schema | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
+| **Input** | Image Input | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ |
+| | PDF / Files | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| | Video Input | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| | Audio Input | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Output (Gen)** | Image Gen | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| | Video Gen (**Sora 2/Veo 3**) | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| | Audio (TTS) | ⚠️ | ❌ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Tools** | Function Calling | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| | Web Search | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| | Code Interpreter | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| | Computer Use | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **MakerAI Native** | **RAG (Vector/Graph)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| | **MCP Client/Server**| ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| | **Agents/Voice** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+> **Legend:** ✅ = Full Support (Sync & Async) | ⚠️ = Partial Support (Sync Only) | ❌ = Not Supported by Provider/Driver
+
+---
+
+## 🛠️ MakerAI 3.1 Core Modules & Components
+
+The suite is composed of non-visual and visual components designed for maximum modularity.
 
 ### 🌐 Universal Connectivity & LLMs (AiConnection V3)
 
 | Component | Description |
 |:---|:---|
 | `TAIChatConnections` | Unified universal connector for managing messages, contexts, and sessions with any LLM provider. |
-| `TAIChatOpenAi` | Driver for OpenAI (GPT-3.5, GPT-4, DALL-E). |
-| `TAIChatClaude` | Driver for Anthropic Claude. |
-| `TAIChatGemini` | Driver for Google Gemini. |
-| `TAIChatGrok` | Driver for xAI Grok. |
-| `TAIChatMistral` | Driver for Mistral AI. |
-| `TAIChatOllama` | Driver for local and open-source models via Ollama. |
+| `TAIChatOpenAi` | **Updated:** Support for **GPT-5.1** and **Sora 2** (Video Generation). |
+| `TAIChatGemini` | **Updated:** Support for Gemini 3.0 (**NanoBanana, Veo 3**). |
+| `TAIChatClaude` | **Updated:** Driver for Anthropic **Claude 4.5**. |
+| `TAIChatOllama` | **Updated:** Native API support for local models. |
+| `TAIChatLMStudio` | **NEW:** Driver for connecting to local LM Studio instances. |
+| `TAIChatKimi` | **NEW:** Driver for Kimi 2 AI. |
+| `TAIChatGroq` | Driver for Groq (LPU high-speed processing). |
 | `TAIChatDeepSeek` | Driver for DeepSeek AI. |
-| `TAIChatGroq` | Driver for Groq (high-speed processing). |
+
+### 🎨 Visual Multimodal Interface (FMX Only)
+
+| Component | Description |
+|:---|:---|
+| `TAIChatList` | A professional, visually rich chat container for FireMonkey. Supports markdown rendering, image previews, and video playback inline. |
+| `TAIMultimodalInput` | An all-in-one input bar that handles text, voice recording (whisper-ready), and attachment dropping/selection seamlessly. |
+| `VoiceMonitor` | Engine for real-time voice processing, including wake-word detection and progressive transcription. |
 
 ### 🧠 Knowledge & Memory Engines (RAG)
 
 | Component | Description |
 |:---|:---|
-| `RAGVector` | Vector and embedding-based Retrieval Augmented Generation (RAG) system. Ideal for massive indexing of unstructured documents. |
-| `RAGGraph` | Graph-based RAG system for context retrieval based on graph database structure and relationships. |
-| `GraphDB` | Component for administering and querying the graph-based knowledge database (for relational knowledge). |
+| `RAGVector` | Vector and embedding-based RAG system. **New:** Includes **Rerank** functionality to re-order search results for maximum context precision. |
+| `RAGGraph` | **NEW:** Graph-based RAG system. Creates and queries knowledge graphs for deep context understanding and relationship mapping. |
+| `GraphDB` | Component for administering and querying the graph-based knowledge database. |
 
-### 🚀 Autonomous Agents & Workflow Orchestration
-
-| Component | Description |
-|:---|:---|
-| `TAiAgentManager` | The central orchestration engine that manages the lifecycle and execution of workflows and agents. |
-| `TAiAgent` | Defines an autonomous unit capable of managing state, memory, and executing complex tasks within the workflow. |
-| `TAiAgentNode` | Represents a specific step or task within a workflow. |
-| `TAiAgentLink` | Defines the logical connections and transitions between workflow nodes (tasks). |
-| **Benefits** | Eliminates multitasking complexity, simplifies debugging, and ensures workflow extensibility. |
-
-### 📞 Tools & Protocol (Function Calling / MCP)
+### 📞 Tools & Protocol (MCP & Functions)
 
 | Component | Description |
 |:---|:---|
 | `TAIFunctions` | Enables and manages the *Function Calling* system for the LLM to interact with native Delphi functions. |
-| **MCP Client** | Client implementation within `TAIFunctions` to consume functions from other MCP servers. |
-| `MCPServer` | Dedicated server to expose Delphi application functions as standardized tools via HTTP or StdIO. |
-
-### 🎨 User Interface & Multimedia
-
-| Component | Description |
-|:---|:---|
-| `VoiceMonitor` | Engine for real-time voice processing, including wake-word detection and progressive transcription. |
-| `ChatInput` | Visual component for text and multimedia input in chat interfaces. |
-| `ChatList` | Visual component acting as the main container to display conversation history. |
-| `Bubbles` | Specialized visual components for rendering chat messages (text, images, videos) with a professional format. |
+| **MCP Client** | Client implementation to consume external MCP servers. |
+| `MCPServer` | **NEW:** Framework to build your own MCP Servers in Delphi. Supports **SSE (Server-Sent Events)** and **DataSnap** protocols. |
 
 ---
 
 ## 📦 Detailed Installation Guide (Modular V3.0)
 
-Follow these steps carefully to ensure a correct installation of the four core packages in the Delphi IDE.
+Follow these steps carefully to ensure a correct installation of the core packages.
 
 ### Step 1: Get the Source Code
-
-Clone the repository using Git (recommended) or download the ZIP file from GitHub.
 
 ```bash
 git clone https://github.com/gustavoeenriquez/MakerAi.git
 ```
 
-Unzip the file to a folder of your choice. For example: `C:\Delphi\MakerAI`.
-
 ### Step 2: Configure Paths in the Delphi IDE
 
-This is a crucial step. You must tell the Delphi IDE where to find the MakerAI source files.
-
-1. Open your Delphi IDE (10.3 Rio, 10.4 Sydney, 11 Alexandria, or 12 Athens).
-2. Go to the menu: **Tools > Options...**.
-3. In the Options dialog, navigate to **Language > Delphi > Library**.
-4. Ensure you have the correct platform selected (e.g., Windows 32-bit). You will need to repeat this step for each platform you intend to use.
-5. Click the **...** button next to the "Library path" field.
-6. In the new window, add the path to each of the subfolders inside the MakerAI Source directory:
+Add the following subfolders to your **Library Path** (Tools > Options > Language > Delphi > Library):
 
 ```
 ...\MakerAi\Source\Agents
 ...\MakerAi\Source\Chat
-...\MakerAi\Source\ChatUI       <-- NEW (Visual Components)
+...\MakerAi\Source\ChatUI       <-- (FMX Visual Components)
 ...\MakerAi\Source\Core
 ...\MakerAi\Source\Design
 ...\MakerAi\Source\MCPClient
 ...\MakerAi\Source\MCPServer
 ...\MakerAi\Source\Packages
 ...\MakerAi\Source\RAG
-...\MakerAi\Source\Resources    <-- NEW (Resources)
+...\MakerAi\Source\Resources
 ...\MakerAi\Source\Tools
 ...\MakerAi\Source\Utils
 ```
 
-**Tip:** Add the full path to each of these folders to prevent compilation issues.
-
-7. Click **OK** and then **Save** to store the configuration.
-
 ### Step 3: Compile and Install the Packages
 
-MakerAI 3.0 is built on a modular architecture using four packages. You must compile and install them in the correct order.
+Compile and Install in this specific order:
 
-1. In Delphi, go to **File > Open Project...**.
-2. Navigate to the folder where you cloned the repository and open the project group file: `...\MakerAi\Source\Packages\MakerAI.groupproj`.
-
-**Compile and Install Runtime Packages:**
-
-3. Right-click on `MakerAi.dpk` and select **Compile**. (Core functionality), then right-click again and select **Install**. (Registers ChatUI components)
-4. Right-click on `MakerAi.RAG.Drivers.dpk` and select **Compile**. (DB connections for RAG), then right-click again and select **Install**. (Registers ChatUI components)
-
-**Compile and Install Visual/Design Packages:**
-
-5. Right-click on the visual package `MakerAi.UI.dpk` and select **Compile**, then right-click again and select **Install**. (Registers ChatUI components)
-6. Right-click on the design-time package `MakerAiDsg.dpk` and select **Compile**, then right-click again and select **Install**. (Registers core non-visual components)
-
-An IDE message will confirm that the components have been installed successfully into the Tool Palette.
+1.  `MakerAi.dpk` (Runtime Core)
+2.  `MakerAi.RAG.Drivers.dpk` (Database Connectors)
+3.  `MakerAi.UI.dpk` (FMX Visual Components)
+4.  `MakerAiDsg.dpk` (Design-Time Editors)
 
 ---
 
-## 💡 Basic Usage Example
+## 💡 Usage: Connecting to GPT-5.1
 
 ```delphi
 procedure TForm1.Button1Click(Sender: TObject);
 var
   Response: string;
 begin
-  // Make sure you have configured DriverName and Model in the Object Inspector
-  Response := AiConnection1.AddMessageAndRun('What is the capital of France?', 'user', []);
-  Memo1.Lines.Add('AI: ' + Response);
+  // Ensure DriverName is 'OpenAI' and Model is 'gpt-5.1-turbo'
+  AiConnection1.DriverName := 'OpenAI';
+  AiConnection1.Model := 'gpt-5.1-turbo';
+  
+  Response := AiConnection1.AddMessageAndRun('Explain the theory of relativity in one sentence.', 'user', []);
+  Memo1.Lines.Add('GPT-5.1: ' + Response);
 end;
 ```
 
-### Image Usage Example
+---
 
-```delphi
-procedure TForm1.Button2Click(Sender: TObject);
-var
-  MediaFile : TAiMediaFile;
-  Response : string;
-begin
-  MediaFile := TAiMediaFile.Create;
-  try
-    MediaFile.LoadFromFile('C:\my_image.jpg'); // Replace with the path to your image
-    Response := AiConnection1.AddMessageAndRun('Describe this image', 'user', [MediaFile]);
-    Memo1.Lines.Add('AI: ' + Response);
-  finally
-    MediaFile.Free;
-  end;
-end;
-```
+## ⚠️ Known Issues & Limitations
+
+Please be aware of the following behaviors in version 3.1.0:
+
+1.  **MCP SSE Server:** The Server-Sent Events (SSE) implementation for the MCP Server framework is currently experimental. Connectivity is not yet 100% functional, and you may experience intermittent drops.
+2.  **Linux Compilation:** Compiling for Linux currently requires significant manual adjustments to library paths and dependencies. Seamless support is planned for a future patch.
+3.  **Delphi Compatibility:**
+    -   **Full Support:** Delphi 11 Alexandria, 12 Athens, and 13 Florence.
+    -   **Limited Support:** Delphi 10.4 Sydney (some advanced features or new FMX components may not function as expected).
 
 ---
 
 ## 🔄 Changelog
 
-### (MAJOR) Version 3.0 (Q4 2025 / Q1 2026)
+### Version 3.1.0 (December 3, 2025) - OFFICIAL RELEASE
 
-- **Architectural Shift:** MakerAI upgraded from component suite to a complete AI Orchestration Platform / AI Operating System.
-- **RAG Engine 2.0:** Complete overhaul introducing Hybrid Embeddings, massive indexing support, and multi-model compatibility.
-- **Advanced Semantic Memory:** New memory model integrated with RAG and Workflow Graphs for complex, context-aware agents.
-- **AiConnection V3:** Enhanced performance, stability, and connectivity for all major LLM providers.
-- **New Source Structure:** Added ChatUI and Resources folders.
-- **Modular Packaging:** Implementation of four packages: MakerAi.bpl, MakerAi.RAG.Drivers.bpl, MakerAi.UI.bpl, and MakerAiDsg.bpl.
-- **New Feature:** Integrated Voice Monitoring with progressive transcription and activation commands.
-- **New Feature:** Professional visual components for building advanced multimedia chat interfaces (ChatUI).
-- **Compatibility:** Official support for Delphi 10.3, 10.4 Sydney, 11 Alexandria, 12 Athens and 13 Florence.
-- **Tools:** Unified MakerAI Tools system for standardized function calling.
+-   **New Model Support:**
+    -   **OpenAI:** Added full support for `Responses` API, `gpt-5.1` models, and **Sora 2** (Video).
+    -   **Gemini:** Added support for Gemini 3.0 series (**NanoBanana**, **Veo 3**).
+    -   **Claude:** Added support for Claude 4.5 API.
+-   **Visual Interface (FMX):**
+    -   Added professional-grade FMX visual components: `TAIChatList` and `TAIMultimodalInput` for rich text/voice/video interaction.
+-   **RAG Engine:**
+    -   Introduced **Rerank** capabilities in embeddings to improved search precision.
+    -   Introduced `RAGGraph` for Knowledge Graph based retrieval.
+-   **New Drivers:**
+    -   Added `TAIChatLMStudio` for local inference compatibility.
+    -   Added `TAIChatKimi` (Kimi 2).
+    -   Updated `TAIChatOllama` to support the new native local API.
+-   **MCP Protocol:**
+    -   Added **MCP Server** framework with support for **SSE (Server-Sent Events)** and **MakerAI+DataSnap** protocols.
 
-### Version 2.6.0 (August 20, 2025)
-
-- **New Compatibility!** Added official support for Delphi 10.3 Rio and Delphi 11 Alexandria.
-- **Fix (Ollama):** Fixed a bug in the Ollama connector that occurred during asynchronous calls.
+### Version 2.6.0 (August 2025)
+-   Added Delphi 11 Alexandria official support.
+-   Preliminary support for Ollama async calls.
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome. If you have ideas, improvements, or find a bug, please open an issue or submit a pull request. Together, we can make MakerAI the definitive AI tool for the Delphi community.
+Contributions are welcome. Please open an issue or submit a pull request on GitHub.
 
 ---
 
 ## 💬 Community & Support
 
 - **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
-- **GitHub Issues:** For reporting bugs and suggesting features.
-- **Telegram Group:** Join the conversation for help and to share your projects.
 - **Email:** gustavoeenriquez@gmail.com
 
 ---

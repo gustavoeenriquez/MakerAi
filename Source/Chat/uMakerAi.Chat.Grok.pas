@@ -1,4 +1,3 @@
-unit uMakerAi.Chat.Grok;
 // IT License
 //
 // Copyright (c) <year> <copyright holders>
@@ -24,14 +23,16 @@ unit uMakerAi.Chat.Grok;
 // Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
-// - Telegram: +57 3128441700
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
 
-//--Cambios--
-//--10-Jul-2025---se habilita la búsqueda en internet nativo del modelo
+unit uMakerAi.Chat.Grok;
 
 interface
 
@@ -47,7 +48,6 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core;
 
 Type
@@ -57,7 +57,6 @@ Type
   Protected
     Function InitChatCompletions: String; Override;
     function InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
-
 
   Public
     Constructor Create(Sender: TComponent); Override;
@@ -131,7 +130,6 @@ begin
 
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
-
   If LModel = '' then
     LModel := 'grok-2-1212';
 
@@ -153,11 +151,10 @@ begin
     Begin
 
 {$IF CompilerVersion < 35}
-      JArr := TJSONUtils.ParseAsArray(GetTools(TToolFormat.tfOpenAi).Text);
+      JArr := TJSONUtils.ParseAsArray(GetTools(TToolFormat.tfOpenAI).Text);
 {$ELSE}
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAI).Text));
 {$ENDIF}
-
       If Not Assigned(JArr) then
         Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
@@ -170,8 +167,6 @@ begin
 {$ELSE}
         jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
 {$ENDIF}
-
-
         If Assigned(jToolChoice) then
           AJSONObject.AddPair('tools_choice', jToolChoice);
       End;
@@ -187,26 +182,33 @@ begin
     If Top_p <> 0 then
       AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
 
-    //AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
-    //AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
+    // AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
+    // AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
 
     if ReasoningFormat <> '' then
       AJSONObject.AddPair('reasoning_format', ReasoningFormat); // 'parsed, raw, hidden';
 
-    if ReasoningEffort <> '' then
-      AJSONObject.AddPair('reasoning_effort', ReasoningEffort); // 'none, default');
-
+    if ThinkingLevel <> tlDefault then
+    begin
+      case ThinkingLevel of
+        tlLow:
+          AJSONObject.AddPair('reasoning_effort', 'low');
+        tlMedium:
+          AJSONObject.AddPair('reasoning_effort', 'medium');
+        tlHigh:
+          AJSONObject.AddPair('reasoning_effort', 'high');
+      end;
+    end;
 
     AJSONObject.AddPair('user', User);
     AJSONObject.AddPair('n', TJSONNumber.Create(N));
-
 
     if tcm_WebSearch in ChatMediaSupports then
     begin
       Var
       jWebSearchOptions := TJSonObject.Create;
       jWebSearchOptions.AddPair('mode', 'auto');
-      //jWebSearchOptions.AddPair('return_citations', 'true');
+      // jWebSearchOptions.AddPair('return_citations', 'true');
       AJSONObject.AddPair('search_parameters', jWebSearchOptions);
     end;
 
@@ -253,7 +255,7 @@ var
   LResponse: IHTTPResponse;
   LNewMediaFile: TAiMediaFile;
   LImageUrl, LRevisedPrompt, LBase64Data: string;
-  LModel : String;
+  LModel: String;
 begin
   Result := ''; // La salida principal es el MediaFile en ResMsg
   FBusy := True;
@@ -287,7 +289,7 @@ begin
     // LBodyJson.AddPair('response_format', Self.ImageResponseFormat);
 
     // 3. Preparar y ejecutar la llamada HTTP
-    LBodyStream.WriteString(LBodyJson.ToJSon);
+    LBodyStream.WriteString(LBodyJson.ToJSON);
     LBodyStream.Position := 0;
 {$IFDEF APIDEBUG}
     LBodyStream.SaveToFile('c:\temp\grok_image_request.json');
@@ -306,7 +308,6 @@ begin
 {$IFDEF APIDEBUG}
     FResponse.SaveToFile('c:\temp\grok_image_response.json');
 {$ENDIF}
-
     if LResponse.StatusCode = 200 then
     begin
       LResponseJson := TJSonObject.ParseJSONValue(FLastContent) as TJSonObject;

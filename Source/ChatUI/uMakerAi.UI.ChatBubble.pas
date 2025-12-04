@@ -23,7 +23,10 @@
 // Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
-// - Telegram: +57 3128441700
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
@@ -709,76 +712,6 @@ begin
   end;
 end;
 
-{ procedure TChatBubble.AddContent(const AText: string; AMediaFiles: TAiMediaFiles);
-  var
-  LMediaFile: TAiMediaFile;
-  NewMediaFile: TAiMediaFile; // Para la copia
-  LContentControl: TControl;
-  LMemo: TMemo;
-  begin
-  // 1. Limpiar contenido anterior (visual y de datos)
-  ClearContentControls;
-  FMediaFiles.Clear; // Limpiamos nuestra lista interna de archivos.
-
-  // 2. Procesar, COPIAR y mostrar los archivos de medios
-  if Assigned(AMediaFiles) then
-  begin
-  // Iteramos sobre la lista original que nos pasan
-  for LMediaFile in AMediaFiles do
-  begin
-  // --- INICIO DE LA LÓGICA DE COPIA ---
-  // a) Creamos un nuevo objeto TAiMediaFile vacío en nuestra lista interna.
-  NewMediaFile := TAiMediaFile.Create;
-  // b) Usamos el método Assign para clonar el archivo original.
-  NewMediaFile.Assign(LMediaFile);
-
-  FMediaFiles.Add(NewMediaFile);
-
-  // --- CREACIÓN DE LA VISTA (sin cambios, usa el LMediaFile original) ---
-  LContentControl := nil;
-  if LMediaFile.FileCategory = Tfc_Image then
-  begin
-  LContentControl := CreateImageView(NewMediaFile);
-  end;
-
-  if not Assigned(LContentControl) then
-  LContentControl := CreateDocumentView(NewMediaFile);
-
-  if Assigned(LContentControl) then
-  LContentControl.Parent := FContentLayout;
-  end;
-  end;
-
-  // 3. Añadir el contenido de texto (tu código existente)
-  if not AText.IsEmpty then
-  begin
-  LMemo := TMemo.Create(nil);
-  LMemo.Parent := FContentLayout;
-  LMemo.Align := TAlignLayout.Top;
-  LMemo.WordWrap := True;
-  LMemo.ReadOnly := True;
-  LMemo.HitTest := True;
-  LMemo.StyledSettings := [];
-  LMemo.TextSettings.Font.Assign(FContentFont);
-  LMemo.TextSettings.HorzAlign := TTextAlign.Leading;
-  LMemo.Text := AText;
-  LMemo.Height := 50;
-  LMemo.Margins.Top := 4;
-
-  LMemo.StyleLookup := 'memostyle';
-  LMemo.ApplyStyleLookup;
-
-
-  var
-  Bg: TFmxObject;
-  Bg := LMemo.FindStyleResource('background');
-
-  If Bg is TActiveStyleObject then
-  TActiveStyleObject(Bg).Opacity := 0;
-  end;
-  end;
-}
-
 procedure TChatBubble.AddContent(const AText: string; AMediaFiles: TAiMediaFiles);
 var
   LMediaFile: TAiMediaFile;
@@ -883,6 +816,7 @@ begin
   end;
 end;
 
+{
 procedure TChatBubble.AppendText(const ATextFragment: string);
 var
   LMemo: TMemo;
@@ -914,6 +848,68 @@ begin
   // if Assigned(FOnRecalculateRequired) then
   // FOnRecalculateRequired(Self);
 end;
+}
+
+
+
+procedure TChatBubble.AppendText(const ATextFragment: string);
+var
+  LMemo: TMemo;
+  Bg: TFmxObject;
+begin
+  // 1. Buscamos el control TMemo dentro de la burbuja.
+  LMemo := FindFirstChild<TMemo>;
+
+  // 2. Si no hay un TMemo (ej. solo había una imagen), LO CREAMOS AHORA.
+  if not Assigned(LMemo) then
+  begin
+    LMemo := TMemo.Create(nil);
+    LMemo.Parent := FContentLayout;
+    LMemo.Align := TAlignLayout.Client;
+    LMemo.WordWrap := True;
+    LMemo.ReadOnly := True;
+    LMemo.HitTest := True;
+    LMemo.StyledSettings := [];
+    LMemo.TextSettings.Font.Assign(FContentFont);
+    LMemo.TextSettings.HorzAlign := TTextAlign.Leading;
+    LMemo.Margins.Top := 4;
+
+    // Configuración de estilo (mismo código que en AddContent)
+    LMemo.StyleLookup := 'memostyle';
+    LMemo.ApplyStyleLookup;
+
+    Bg := LMemo.FindStyleResource('background');
+    if Bg is TActiveStyleObject then
+      TActiveStyleObject(Bg).Opacity := 0
+    else
+    begin
+      TThread.Queue(nil, procedure
+      var DelayedBg: TFmxObject;
+      begin
+        if Assigned(LMemo) and not (csDestroying in LMemo.ComponentState) then
+        begin
+          LMemo.StyleLookup := 'memostyle';
+          LMemo.ApplyStyleLookup;
+          DelayedBg := LMemo.FindStyleResource('background');
+          if DelayedBg is TActiveStyleObject then
+            TActiveStyleObject(DelayedBg).Opacity := 0;
+        end;
+      end);
+    end;
+  end;
+
+  // 3. Añadimos el nuevo fragmento de texto.
+  LMemo.Lines.Text := LMemo.Lines.Text + ATextFragment;
+
+  // 4. Hacemos scroll al final y notificamos cambios
+  LMemo.GoToTextEnd;
+
+  // Forzar recalculo de layout
+  InvalidateLayout;
+  if Assigned(FOnRecalculateRequired) then
+    FOnRecalculateRequired(Self);
+end;
+
 
 function TChatBubble.CalculateBubbleSizeForContent(const AContentSize: TSizeF): TSizeF;
 var
@@ -999,44 +995,6 @@ begin
   FLayoutCalculated := True;
   UpdateScaledAvatar;
 end;
-
-{ class function TChatBubble.CalculateMemoSize(const AMemo: TMemo; AMaxWidth: Single): TSizeF;
-  var
-  Layout: TTextLayout;
-  begin
-  if not Assigned(AMemo) or (AMemo.Lines.Text = '') then
-  begin
-  Result := TSizeF.Create(0, 0);
-  Exit;
-  end;
-
-  Layout := TTextLayoutManager.DefaultTextLayout.Create;
-  try
-  Layout.BeginUpdate;
-  try
-  Layout.WordWrap := AMemo.WordWrap;
-  Layout.Font.Assign(AMemo.TextSettings.Font);
-  Layout.Color := AMemo.TextSettings.FontColor;
-  Layout.HorizontalAlign := AMemo.TextAlign;
-  // Layout.VerticalAlign := AMemo.VertTextAlign;
-  Layout.Trimming := TTextTrimming.None;
-  Layout.Text := AMemo.Lines.Text;
-  Layout.MaxSize := TPointF.Create(AMaxWidth, 999999);
-  finally
-  Layout.EndUpdate;
-  end;
-
-  // Calculamos la altura necesaria, pero para el ancho, usamos el AMaxWidth completo.
-  // Esto asegura que la burbuja se estire al máximo permitido, igual que la de TText.
-  var
-  LHeight := Layout.TextRect.Height + AMemo.Padding.Top + AMemo.Padding.Bottom + 30;
-  Result := TSizeF.Create(AMaxWidth, LHeight); // <-- Usamos AMaxWidth directamente
-
-  finally
-  Layout.Free;
-  end;
-  end;
-}
 
 class function TChatBubble.CalculateMemoSize(const AMemo: TMemo; AMaxWidth: Single): TSizeF;
 begin

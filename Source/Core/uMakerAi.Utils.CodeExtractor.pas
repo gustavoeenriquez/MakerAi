@@ -23,10 +23,14 @@
 // Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
-// - Telegram: +57 3128441700
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
+
 
 unit uMakerAi.Utils.CodeExtractor;
 
@@ -38,6 +42,7 @@ uses
 type
   // Registro para almacenar información del archivo extraído
   TCodeFile = record
+    FileName : String;
     FileType: string;
     Code: string;
     LineNumber: Integer; // Línea donde se encontró el bloque

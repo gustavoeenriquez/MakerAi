@@ -1,8 +1,8 @@
-# -------------------------------------------
+# ============================================================
 # Delphi & C++Builder - Build and IDE files
-# -------------------------------------------
+# ============================================================
 
-# Compilados
+# ----- Compilados -----
 *.dcu
 *.dcp
 *.dcpil
@@ -21,17 +21,23 @@
 *.o
 *.ocx
 
-# Archivos temporales del IDE
+# C++Builder
+*.pch
+*.pch2
+*.sbr
+
+# ----- Temporales del IDE -----
 *.local
 *.identcache
 *.tvsconfig
 *.stat
-*.cfg
 *.skincfg
 *.projdata
 *.dproj.local
 *.groupproj.local
+*.deployproj.local
 *.dsk
+*.cfg
 *.bak
 *.old
 *.tmp
@@ -39,18 +45,18 @@
 *~*
 *.~*
 
-# Backups
+# Archivos de backup comunes
 *.orig
 *.dfm.bak
 *.pas.bak
 *.inc.bak
+*.dproj.bak
+*.groupproj.bak
 Backup/
 backup/
 bak/
 
-# -------------------------------------------
-# Directorios de compilación
-# -------------------------------------------
+# ----- Directorios generados por compilación -----
 Win32/
 Win64/
 OSX32/
@@ -61,27 +67,24 @@ iOSDevice32/
 iOSDevice64/
 iOSSimulator/
 
+# ----- Carpetas generadas por Delphi -----
 __history/
 __recovery/
 __debug_info/
+__design__/
+.apt_generated/
 
-# -------------------------------------------
-# Archivos generados por FastMM, Logs, etc.
-# -------------------------------------------
+# ----- Logs -----
 *.log
 *.elc
 
-# -------------------------------------------
-# Archivos de base de datos (opcional)
-# -------------------------------------------
+# ----- Bases de datos (opcional) -----
 *.db
 *.fdb
 *.gdb
 *.ib
 
-# -------------------------------------------
-# Archivos del sistema operativo
-# -------------------------------------------
+# ----- Archivos del sistema -----
 Thumbs.db
 Desktop.ini
 ehthumbs.db
@@ -90,19 +93,14 @@ ehthumbs.db
 ._*
 .Spotlight-V100
 .Trashes
-*~
 
-# -------------------------------------------
-# Carpetas de IDEs / entornos
-# -------------------------------------------
+# ----- Carpetas de entornos -----
 .vscode/
 .idea/
 .env/
 node_modules/
 
-# -------------------------------------------
-# Archivos comprimidos o empaquetados
-# -------------------------------------------
+# ----- Archivos comprimidos -----
 *.zip
 *.rar
 *.7z
@@ -110,9 +108,7 @@ node_modules/
 *.tar
 *.gz
 
-# -------------------------------------------
-# Archivos específicos de versiones Delphi
-# -------------------------------------------
+# ----- Versiones antiguas específicas de Delphi -----
 *.dproj.2007
 *.dproj.2009
 *.dproj.2010
@@ -122,11 +118,6 @@ node_modules/
 *.dproj.12
 *.dproj.13
 
-# -------------------------------------------
-# Evitar incluir control de versiones dentro
-# -------------------------------------------
+# ----- Control de versiones accidental -----
 .svn/
 .hg/
-
-# ⚠️ Git folder should not be ignored globally
-# .git/

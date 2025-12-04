@@ -3,7 +3,8 @@ program ChatFull;
 uses
   System.StartUpCopy,
   FMX.Forms,
-  uMainChatFull in 'uMainChatFull.pas' {Form2};
+  uMainChatFull in 'uMainChatFull.pas' {Form2},
+  uMemoPropertiesEdit in 'uMemoPropertiesEdit.pas' {FMemoPropertiesEdit};
 
 {$R *.res}
 

@@ -6,10 +6,10 @@
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Debug</Config>
         <Platform Condition="'$(Platform)'==''">Win64</Platform>
-        <ProjectName Condition="'$(ProjectName)'==''">ChatFull</ProjectName>
         <TargetedPlatforms>32915</TargetedPlatforms>
         <AppType>Application</AppType>
         <MainSource>ChatFull.dpr</MainSource>
+        <ProjectName Condition="'$(ProjectName)'==''">ChatFull</ProjectName>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
@@ -206,6 +206,8 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
+        <VerInfo_Locale>1033</VerInfo_Locale>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
@@ -225,6 +227,10 @@
         </DelphiCompile>
         <DCCReference Include="uMainChatFull.pas">
             <Form>Form2</Form>
+        </DCCReference>
+        <DCCReference Include="uMemoPropertiesEdit.pas">
+            <Form>FMemoPropertiesEdit</Form>
+            <FormType>fmx</FormType>
         </DCCReference>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
@@ -247,6 +253,8 @@
                     <Source Name="MainSource">ChatFull.dpr</Source>
                 </Source>
                 <Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\uMakerAi.RAG.Drivers.bpl">(untitled)</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\uMakerAi.UI.bpl">(untitled)</Excluded_Packages>
                     <Excluded_Packages Name="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\23.0\CatalogRepository\TeeBI\Sources\Compiled\Delphi29.win32\Bin\DclTeeBI29.bpl">File C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\23.0\CatalogRepository\TeeBI\Sources\Compiled\Delphi29.win32\Bin\DclTeeBI29.bpl not found</Excluded_Packages>
                     <Excluded_Packages Name="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\23.0\CatalogRepository\TeeBI\Sources\Compiled\Delphi29.win32\Bin\DclFMXTeeBI29.bpl">File C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\23.0\CatalogRepository\TeeBI\Sources\Compiled\Delphi29.win32\Bin\DclFMXTeeBI29.bpl not found</Excluded_Packages>
                     <Excluded_Packages Name="$(BDSBIN)\bcboffice2k290.bpl">Embarcadero C++Builder Office 2000 Servers Package</Excluded_Packages>

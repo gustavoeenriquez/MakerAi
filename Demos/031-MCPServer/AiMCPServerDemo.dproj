@@ -192,11 +192,12 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="uTool.FileAccess.pas"/>
-        <DCCReference Include="uTool.SysInfo.pas"/>
         <DCCReference Include="..\..\Source\MCPServer\uMakerAi.MCPServer.Core.pas"/>
         <DCCReference Include="..\..\Source\MCPServer\UMakerAi.MCPServer.Http.pas"/>
         <DCCReference Include="..\..\Source\MCPServer\UMakerAi.MCPServer.Stdio.pas"/>
+        <DCCReference Include="..\..\Source\MCPServer\UMakerAi.MCPServer.SSE.pas"/>
+        <DCCReference Include="uTool.FileAccess.pas"/>
+        <DCCReference Include="uTool.SysInfo.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

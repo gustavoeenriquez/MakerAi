@@ -128,6 +128,7 @@
         <DCC_RemoteDebug>false</DCC_RemoteDebug>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
+        <DCC_Description>MakerAI Delphi Suite</DCC_Description>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
@@ -159,8 +160,7 @@
         <DCCReference Include="..\Chat\uMakerAi.Chat.Mistral.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.Ollama.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.OpenAi.pas"/>
-        <DCCReference Include="..\Chat\uMakerAi.Chat.OpenAiResponses.pas"/>
-        <DCCReference Include="..\Chat\uMakerAi.ToolFunctions.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Tools.Functions.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Chat.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Core.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Embeddings.pas"/>
@@ -188,6 +188,11 @@
         <DCCReference Include="..\Tools\uMakerAi.Gemini.Veo.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.OpenAI.Sora.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.OpenAI.Audio.pas"/>
+        <DCCReference Include="..\Utils\uMakerAi.Utils.DiffUpdater.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Tools.Shell.pas"/>
+        <DCCReference Include="..\Chat\uMakerAi.Chat.GenericLLM.pas"/>
+        <DCCReference Include="..\MCPServer\UMakerAi.MCPServer.SSE.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Tools.TextEditor.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -208,29 +213,7 @@
                 <Source>
                     <Source Name="MainSource">MakerAI.dpk</Source>
                 </Source>
-                <Excluded_Packages>
-                    <Excluded_Packages Name="$(BDSBIN)\dclsbridge280.bpl">Devart SecureBridge Components</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfsFD28.bpl">FastScript 1.9 FireDAC Components</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfsTee28.bpl">FastScript 1.9 Tee Components</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfsDB28.bpl">FastScript 1.9 DB Components</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfs28.bpl">FastScript 1.9 Components</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfrx28.bpl">FastReport VCL Components</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfrxPDF28.bpl">FastReport VCL PDF Component</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfrxFD28.bpl">FastReport VCL FireDAC Components - Designtime Package</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfrxe28.bpl">FastReport VCL Exports</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfrxDBX28.bpl">FastReport VCL DBX Components</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfrxTee28.bpl">FastReport VCL Tee Components</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfrxIntIO28.bpl">FastReport VCL Internet transports</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfrxIntIOIndy28.bpl">FastReport VCL Internet transports</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfrxHTML28.bpl">FastReport VCL HTMLView Components</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfrxDB28.bpl">FastReport VCL DB Components</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\dclfrxADO28.bpl">FastReport VCL ADO Components</Excluded_Packages>
-                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\CEF4Delphi_designtime.bpl">File C:\Users\Public\Documents\Embarcadero\Studio\22.0\Bpl\CEF4Delphi_designtime.bpl not found</Excluded_Packages>
-                    <Excluded_Packages Name="$(BDSBIN)\bcboffice2k280.bpl">Embarcadero C++Builder Office 2000 Servers Package</Excluded_Packages>
-                    <Excluded_Packages Name="$(BDSBIN)\bcbofficexp280.bpl">Embarcadero C++Builder Office XP Servers Package</Excluded_Packages>
-                    <Excluded_Packages Name="$(BDSBIN)\dcloffice2k280.bpl">Microsoft Office 2000 Sample Automation Server Wrapper Components</Excluded_Packages>
-                    <Excluded_Packages Name="$(BDSBIN)\dclofficexp280.bpl">Microsoft Office XP Sample Automation Server Wrapper Components</Excluded_Packages>
-                </Excluded_Packages>
+                <Excluded_Packages/>
             </Delphi.Personality>
             <Deployment Version="5">
                 <DeployFile LocalName="$(BDS)\Redist\iossimulator\libcgunwind.1.0.dylib" Class="DependencyModule">
