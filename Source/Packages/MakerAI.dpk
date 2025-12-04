@@ -28,7 +28,6 @@ package MakerAI;
 {$DESCRIPTION 'MakerAI Delphi Suite'}
 {$IMPLICITBUILD ON}
 
-
 requires
   rtl,
   bindengine,
