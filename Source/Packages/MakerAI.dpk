@@ -1,0 +1,92 @@
+package MakerAI;
+
+{$R *.res}
+{$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
+{$ALIGN 8}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA ON}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS ON}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS ON}
+{$OPTIMIZATION OFF}
+{$OVERFLOWCHECKS ON}
+{$RANGECHECKS ON}
+{$REFERENCEINFO ON}
+{$SAFEDIVIDE OFF}
+{$STACKFRAMES ON}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST OFF}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
+{$DEFINE DEBUG}
+{$ENDIF IMPLICITBUILDING}
+{$DESCRIPTION 'MakerAI Delphi Suite'}
+{$IMPLICITBUILD ON}
+
+
+requires
+  rtl,
+  bindengine,
+  bindcomp,
+  RESTComponents,
+  inet,
+  IndySystem,
+  IndyProtocols,
+  IndyCore,
+  xmlrtl;
+
+contains
+  uMakerAi.MCPClient.Core in '..\MCPClient\uMakerAi.MCPClient.Core.pas',
+  uMakerAi.Chat.AiConnection in '..\Chat\uMakerAi.Chat.AiConnection.pas',
+  uMakerAi.Chat.Claude in '..\Chat\uMakerAi.Chat.Claude.pas',
+  uMakerAi.Chat.DeepSeek in '..\Chat\uMakerAi.Chat.DeepSeek.pas',
+  uMakerAi.Chat.Gemini in '..\Chat\uMakerAi.Chat.Gemini.pas',
+  uMakerAi.Chat.Grok in '..\Chat\uMakerAi.Chat.Grok.pas',
+  uMakerAi.Chat.Groq in '..\Chat\uMakerAi.Chat.Groq.pas',
+  uMakerAi.Chat.Initializations in '..\Chat\uMakerAi.Chat.Initializations.pas',
+  uMakerAi.Chat.Mistral in '..\Chat\uMakerAi.Chat.Mistral.pas',
+  uMakerAi.Chat.Ollama in '..\Chat\uMakerAi.Chat.Ollama.pas',
+  uMakerAi.Chat.OpenAi in '..\Chat\uMakerAi.Chat.OpenAi.pas',
+  uMakerAi.Tools.Functions in '..\Tools\uMakerAi.Tools.Functions.pas',
+  uMakerAi.Chat in '..\Core\uMakerAi.Chat.pas',
+  uMakerAi.Core in '..\Core\uMakerAi.Core.pas',
+  uMakerAi.Embeddings in '..\Core\uMakerAi.Embeddings.pas',
+  uMakerAi.Prompts in '..\Core\uMakerAi.Prompts.pas',
+  uMakerAi.Utils.CodeExtractor in '..\Core\uMakerAi.Utils.CodeExtractor.pas',
+  uMakerAi.Utils.PcmToWav in '..\Core\uMakerAi.Utils.PcmToWav.pas',
+  uMakerAi.Utils.System in '..\Core\uMakerAi.Utils.System.pas',
+  uMakerAi.OpenAi.Dalle in '..\Tools\uMakerAi.OpenAi.Dalle.pas',
+  uMakerAi.Whisper in '..\Tools\uMakerAi.Whisper.pas',
+  uMakerAi.Agents in '..\Agents\uMakerAi.Agents.pas',
+  UMakerAi.MCPServer.Http in '..\MCPServer\UMakerAi.MCPServer.Http.pas',
+  uMakerAi.MCPServer.Core in '..\MCPServer\uMakerAi.MCPServer.Core.pas',
+  UMakerAi.MCPServer.Stdio in '..\MCPServer\UMakerAi.MCPServer.Stdio.pas',
+  UMakerAi.MCPServer.Direct in '..\MCPServer\UMakerAi.MCPServer.Direct.pas',
+  uMakerAi.Utils.VoiceMonitor in '..\Utils\uMakerAi.Utils.VoiceMonitor.pas',
+  uMakerAi.Embeddings.core in '..\Core\uMakerAi.Embeddings.core.pas',
+  uMakerAi.RAG.Graph.Builder in '..\RAG\uMakerAi.RAG.Graph.Builder.pas',
+  uMakerAi.RAG.Graph.Core in '..\RAG\uMakerAi.RAG.Graph.Core.pas',
+  uMakerAi.RAG.Vectors in '..\RAG\uMakerAi.RAG.Vectors.pas',
+  uMakerAi.Agents.Attributes in '..\Agents\uMakerAi.Agents.Attributes.pas',
+  uMakerAi.Agents.EngineRegistry in '..\Agents\uMakerAi.Agents.EngineRegistry.pas',
+  UMakerAi.ParamsRegistry in '..\Design\UMakerAi.ParamsRegistry.pas',
+  uMakerAi.Chat.Kimi in '..\Chat\uMakerAi.Chat.Kimi.pas',
+  uMakerAi.Chat.LMStudio in '..\Chat\uMakerAi.Chat.LMStudio.pas',
+  uMakerAi.Gemini.Veo in '..\Tools\uMakerAi.Gemini.Veo.pas',
+  uMakerAi.OpenAI.Sora in '..\Tools\uMakerAi.OpenAI.Sora.pas',
+  uMakerAi.OpenAI.Audio in '..\Tools\uMakerAi.OpenAI.Audio.pas',
+  uMakerAi.Utils.DiffUpdater in '..\Utils\uMakerAi.Utils.DiffUpdater.pas',
+  uMakerAi.Tools.Shell in '..\Tools\uMakerAi.Tools.Shell.pas',
+  uMakerAi.Chat.GenericLLM in '..\Chat\uMakerAi.Chat.GenericLLM.pas',
+  UMakerAi.MCPServer.SSE in '..\MCPServer\UMakerAi.MCPServer.SSE.pas',
+  uMakerAi.Tools.TextEditor in '..\Tools\uMakerAi.Tools.TextEditor.pas';
+
+end.
+
+
+

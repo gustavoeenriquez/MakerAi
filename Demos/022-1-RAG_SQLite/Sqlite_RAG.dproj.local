@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>2025/05/27 21:35:27.000.162,=C:\Users\AFORN\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit5.pas</Transaction>
+    <Transaction>2025/07/05 18:14:59.000.894,=C:\Users\AFORN\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit5.pas</Transaction>
+    <Transaction>2025/07/05 18:20:42.000.122,=C:\Users\AFORN\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit5.pas</Transaction>
+    <Transaction>2025/08/22 11:07:15.000.942,=C:\Users\AFORN\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit5.pas</Transaction>
+    <Transaction>2025/08/22 11:07:43.000.667,C:\Users\AFORN\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit5.pas=D:\Programacio\Delphi\AI\RAG\UMain.pas</Transaction>
+    <Transaction>2025/08/22 11:07:43.000.667,C:\Users\AFORN\OneDrive\Documentos\Embarcadero\Studio\Projects\Unit5.dfm=D:\Programacio\Delphi\AI\RAG\UMain.dfm</Transaction>
+    <Transaction>2025/08/22 11:08:00.000.422,C:\Users\AFORN\OneDrive\Documentos\Embarcadero\Studio\Projects\Project4.dproj=D:\Programacio\Delphi\AI\RAG\Sqlite_RAG.dproj</Transaction>
+  </Transactions>
+</BorlandProject>

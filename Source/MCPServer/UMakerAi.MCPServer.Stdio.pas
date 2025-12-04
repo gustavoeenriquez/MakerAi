@@ -1,0 +1,201 @@
+// IT License
+//
+// Copyright (c) <year> <copyright holders>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enríquez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
+
+unit UMakerAi.MCPServer.Stdio;
+
+interface
+
+uses
+  System.SysUtils, System.Classes, System.SyncObjs, System.Threading, System.AnsiStrings, system.IOUtils,
+  uMakerAi.MCPServer.Core;
+
+type
+  // Declaración adelantada para el hilo
+  TAiMCPStdioServer = class;
+
+  { TStdioWorkerThread
+    Este hilo se encarga de la tarea bloqueante de leer desde Standard Input }
+  TStdioWorkerThread = class(TThread)
+  private
+    FServer: TAiMCPStdioServer;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AServer: TAiMCPStdioServer);
+  end;
+
+  { TAiMCPStdioServer
+    El componente principal que gestiona la comunicación Stdio }
+  TAiMCPStdioServer = class(TAiMCPServer)
+  private
+    FWorkerThread: TStdioWorkerThread;
+    FOutputLock: TCriticalSection; // Para escrituras seguras a Stdout desde múltiples hilos
+
+    procedure ProcessRequest(const ARequestJson: string);
+    procedure SendResponse(const AResponseJson: string);
+  public
+    constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
+
+    procedure Start; Override;
+    procedure Stop; Override;
+  end;
+
+procedure Register;
+
+implementation
+
+uses System.Character;
+
+procedure Register;
+begin
+  RegisterComponents('MakerAI', [TAiMCPStdioServer]);
+end;
+
+{ TStdioWorkerThread }
+
+constructor TStdioWorkerThread.Create(AServer: TAiMCPStdioServer);
+begin
+  inherited Create(False); // El hilo se crea suspendido
+  FServer := AServer;
+  FreeOnTerminate := True; // El hilo se liberará automáticamente al terminar
+end;
+
+procedure TStdioWorkerThread.Execute;
+var
+  JsonRequestLine: string;
+begin
+  while not Terminated do
+  begin
+    try
+      // Leemos una línea completa desde Standard Input.
+      // Esta llamada es bloqueante y esperará hasta recibir un LF (#10).
+      System.ReadLn(JsonRequestLine);
+
+      // Si el hilo fue terminado mientras esperaba o la línea está vacía, continuamos.
+      if Terminated or (JsonRequestLine = '') then
+        Continue;
+
+      // Cada línea es un request JSON completo. Lo procesamos.
+      TThread.Queue(nil,
+        procedure
+        begin
+          if Assigned(FServer) and FServer.IsActive then
+            FServer.ProcessRequest(JsonRequestLine);
+        end);
+    except
+      on E: EInOutError do
+      begin
+        // Esto ocurre si el pipe de Stdin se cierra. Es la forma normal de terminar.
+        if not Terminated then
+          Break;
+      end;
+      on E: Exception do
+      begin
+        // Otro tipo de error, terminamos el bucle.
+        if not Terminated then
+          Break;
+      end;
+    end;
+  end;
+end;
+
+{ TAiMCPStdioServer }
+
+constructor TAiMCPStdioServer.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  FOutputLock := TCriticalSection.Create; // Para proteger Stdout
+end;
+
+destructor TAiMCPStdioServer.Destroy;
+begin
+  FOutputLock.Free;
+  inherited Destroy;
+end;
+
+procedure TAiMCPStdioServer.Start;
+begin
+  Inherited Start;
+  FWorkerThread := TStdioWorkerThread.Create(Self);
+  FWorkerThread.Start;
+end;
+
+procedure TAiMCPStdioServer.Stop;
+begin
+  if not IsActive then Exit;
+
+  if Assigned(FWorkerThread) then
+    FWorkerThread.Terminate;
+
+  inherited Stop;
+end;
+
+procedure TAiMCPStdioServer.ProcessRequest(const ARequestJson: string);
+var
+  ResponseBody: string;
+begin
+  if not IsActive then Exit;
+
+  // Delegamos el trabajo pesado al servidor lógico
+  ResponseBody := FLogicServer.ExecuteRequest(ARequestJson, ''); // La sesión no aplica en Stdio
+
+  // Si hay una respuesta que enviar (no es una notificación)
+  if ResponseBody <> '' then
+  begin
+    SendResponse(ResponseBody);
+  end;
+end;
+
+procedure TAiMCPStdioServer.SendResponse(const AResponseJson: string);
+begin
+  // El cliente espera el JSON seguido de un salto de línea (#10).
+  // WriteLn hace esto automáticamente.
+
+  FOutputLock.Enter;
+  try
+    // System.WriteLn es la forma más simple y correcta aquí.
+    // Envía el string y el terminador de línea apropiado.
+    System.WriteLn(AResponseJson);
+
+    // Usar TOutput.Flush para asegurar que se envíe inmediatamente.
+    Flush(Output);
+  finally
+    FOutputLock.Leave;
+  end;
+end;
+
+
+
+end.

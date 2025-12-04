@@ -1,0 +1,324 @@
+object Form70: TForm70
+  Left = 0
+  Top = 0
+  Caption = 'Form70'
+  ClientHeight = 713
+  ClientWidth = 1131
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+  object Memo1: TMemo
+    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+    DataDetectorTypes = []
+    Position.X = 56.000000000000000000
+    Position.Y = 72.000000000000000000
+    Size.Width = 505.000000000000000000
+    Size.Height = 457.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 12
+    Viewport.Width = 501.000000000000000000
+    Viewport.Height = 453.000000000000000000
+  end
+  object Button1: TButton
+    Position.X = 1009.000000000000000000
+    Position.Y = 657.000000000000000000
+    TabOrder = 13
+    Text = 'Ejecutar'
+    TextSettings.Trimming = None
+    OnClick = Button1Click
+  end
+  object MemoPrompt: TMemo
+    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+    DataDetectorTypes = []
+    Lines.Strings = (
+      'pregunta sobre delphi')
+    TextSettings.WordWrap = True
+    Position.X = 56.000000000000000000
+    Position.Y = 568.000000000000000000
+    Size.Width = 1033.000000000000000000
+    Size.Height = 81.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 27
+    Viewport.Width = 1029.000000000000000000
+    Viewport.Height = 77.000000000000000000
+  end
+  object Memo2: TMemo
+    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+    DataDetectorTypes = []
+    Align = Scale
+    Position.X = 569.000000000000000000
+    Position.Y = 72.000000000000000000
+    Size.Width = 513.000000000000000000
+    Size.Height = 457.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 11
+    Viewport.Width = 509.000000000000000000
+    Viewport.Height = 453.000000000000000000
+  end
+  object Label1: TLabel
+    Position.X = 64.000000000000000000
+    Position.Y = 47.000000000000000000
+    Size.Width = 481.000000000000000000
+    Size.Height = 17.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'Programa Generado'
+    TabOrder = 44
+  end
+  object Label2: TLabel
+    Position.X = 64.000000000000000000
+    Position.Y = 551.000000000000000000
+    Size.Width = 1033.000000000000000000
+    Size.Height = 17.000000000000000000
+    Size.PlatformDefault = False
+    Text = 
+      'Prompt del programa que se desea desarrollar, ya est'#225' configurad' +
+      'o para que genere un progrma de consola'
+    TabOrder = 42
+  end
+  object Label3: TLabel
+    Position.X = 569.000000000000000000
+    Position.Y = 47.000000000000000000
+    Size.Width = 481.000000000000000000
+    Size.Height = 17.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'Resultado de la Funci'#243'n Print de cada Nodo'
+    TabOrder = 43
+  end
+  object Button2: TButton
+    Position.X = 64.000000000000000000
+    Position.Y = 672.000000000000000000
+    TabOrder = 64
+    Text = 'Button2'
+    TextSettings.Trimming = None
+    OnClick = Button2Click
+  end
+  object Link2: TAIAgentsLink
+    NextA = ExcecuteNode
+    Graph = AIGraph1
+    ConditionalKey = 'next_route'
+    ManualTargetsKey = 'next_targets'
+    Left = 712
+    Top = 232
+  end
+  object StartNode: TAIAgentsNode
+    Description = 'Start Node, do Nothing'
+    Next = Link1
+    Graph = AIGraph1
+    OnExecute = StartNodeExecute
+    Left = 800
+    Top = 80
+  end
+  object AIGraph1: TAIAgents
+    StartNode = StartNode
+    EndNode = EndNode
+    OnPrint = AIChain1Print
+    Left = 624
+    Top = 280
+  end
+  object AiNode: TAIAgentsNode
+    Next = Link2
+    Graph = AIGraph1
+    OnExecute = AiNodeExecute
+    Left = 704
+    Top = 178
+  end
+  object ExcecuteNode: TAIAgentsNode
+    Next = Link3
+    Graph = AIGraph1
+    OnExecute = ExcecuteNodeExecute
+    Left = 712
+    Top = 300
+  end
+  object EndNode: TAIAgentsNode
+    Graph = AIGraph1
+    OnExecute = EndNodeExecute
+    Left = 928
+    Top = 328
+  end
+  object EvalNode: TAIAgentsNode
+    Next = Link4
+    Graph = AIGraph1
+    OnExecute = EvalNodeExecute
+    Left = 808
+    Top = 406
+  end
+  object Link1: TAIAgentsLink
+    NextA = AiNode
+    Graph = AIGraph1
+    ConditionalKey = 'next_route'
+    ManualTargetsKey = 'next_targets'
+    Left = 808
+    Top = 144
+  end
+  object Link3: TAIAgentsLink
+    NextA = EvalNode
+    Graph = AIGraph1
+    ConditionalKey = 'next_route'
+    ManualTargetsKey = 'next_targets'
+    Left = 712
+    Top = 392
+  end
+  object Link4: TAIAgentsLink
+    NextA = EndNode
+    NextNo = AiNode
+    Graph = AIGraph1
+    OnExecute = Link4Execute
+    ConditionalKey = 'next_route'
+    ManualTargetsKey = 'next_targets'
+    Left = 840
+    Top = 320
+  end
+  object AiPrompts1: TAiPrompts
+    Items = <
+      item
+        Nombre = 'AiPrompt'
+        Strings.Strings = (
+          ''
+          'genera un programa de consola en Delphi pascal '#250'ltima versi'#243'n'
+          'Los programas de consola si tienen la extensi'#243'n .dpr y '
+          'tienen la siguiente estructura'
+          ''
+          'program Nombre_del_Proyecto;'
+          ''
+          '{$APPTYPE CONSOLE}'
+          ''
+          'uses'
+          '  System.SysUtils, Otras_Unidades_que_se_requieran;'
+          ''
+          'begin'
+          '  try'
+          ''
+          '    { TODO -oUser -cConsole Main : Insert code here }'
+          ''
+          ''
+          '   Write('#39'digite enter para terminar'#39');'
+          '   Readln;'
+          '  except'
+          '    on E: Exception do'
+          '      Writeln(E.ClassName, '#39': '#39', E.Message);'
+          '  end;'
+          'end.'
+          ''
+          ''
+          
+            'Al generar el c'#243'digo debes tener en cuenta que el Nombre_del_Pro' +
+            'yecto debe'
+          
+            'ser '#250'nico y no puede existir una variable o clase con el mismo n' +
+            'ombre.'
+          ''
+          ''
+          'Genera un json de la siguiente forma'
+          '{'
+          '  "languaje":"lenguaje_de_programacion",'
+          '  "filename":"nombre_del_archivo_sin_ruta",'
+          '  "codigo":"codigo_generado",'
+          '}'
+          ''
+          'El c'#243'digo se refiere a:'
+          '<#prompt>')
+      end
+      item
+        Nombre = 'Eval'
+        Strings.Strings = (
+          'El siguiente texto corresponde al resultado de la compilaci'#243'n de'
+          'una aplicaci'#243'n en Delphi con la linea de comando DCC64,'
+          'Revisa el texto en busca de mensajes de error los cuales pueden'
+          
+            'estar representados por las palabars Fatal o Error, aqu'#237' te dejo' +
+            ' dos ejemplos:'
+          '  Ejemplo1: Fatal: F2613 Unit '#39#39'Classes'#39#39' not found.'
+          
+            '  Ejemplo2: Error: E2009 Incompatible types: '#39'method pointer and' +
+            ' regular procedure'#39' '
+          ''
+          ''
+          
+            'Si el texto no muestra ning'#250'n error retorna la palabra <CONFIRMA' +
+            'DO>,'
+          
+            'pero si el resultado_compilacion muestra alg'#250'n error retorna la ' +
+            'palabra <ERROR> y al frente el mensaje de error.  Ejemplo: <ERRO' +
+            'R>:Fatal: F2613 Unit '#39#39'Classes'#39#39' not found. '
+          ''
+          ''
+          'El mensaje que retorna el compilador es el siguiente:'
+          '<#resultado>')
+      end>
+    Left = 1016
+    Top = 96
+  end
+  object AIAgents1: TAIAgents
+    StartNode = NodoInicio
+    EndNode = NodoFinal
+    OnPrint = AIChain1Print
+    Left = 88
+    Top = 168
+  end
+  object NodoInicio: TAIAgentsNode
+    Description = 'Inicio'
+    Next = AIAgentsLink1
+    Graph = AIAgents1
+    OnExecute = NodoInicioExecute
+    Left = 264
+    Top = 96
+  end
+  object TareaB: TAIAgentsNode
+    Description = 'TareaB'
+    Next = AIAgentsLink3
+    Graph = AIAgents1
+    OnExecute = TareaBExecute
+    Left = 344
+    Top = 248
+  end
+  object TareaA: TAIAgentsNode
+    Description = 'TareaA'
+    Next = AIAgentsLink2
+    Graph = AIAgents1
+    OnExecute = TareaAExecute
+    Left = 160
+    Top = 248
+  end
+  object NodoFinal: TAIAgentsNode
+    Description = 'Final'
+    Graph = AIAgents1
+    OnExecute = NodoFinalExecute
+    JoinMode = jmAll
+    Left = 240
+    Top = 416
+  end
+  object AIAgentsLink1: TAIAgentsLink
+    NextA = TareaA
+    NextB = TareaB
+    Graph = AIAgents1
+    OnExecute = AIAgentsLink1Execute
+    ConditionalKey = 'next_route'
+    ManualTargetsKey = 'next_targets'
+    Left = 264
+    Top = 152
+  end
+  object AIAgentsLink2: TAIAgentsLink
+    NextA = NodoFinal
+    Graph = AIAgents1
+    OnExecute = AIAgentsLink2Execute
+    ConditionalKey = 'next_route'
+    ManualTargetsKey = 'next_targets'
+    Left = 160
+    Top = 304
+  end
+  object AIAgentsLink3: TAIAgentsLink
+    NextA = NodoFinal
+    Graph = AIAgents1
+    OnExecute = AIAgentsLink3Execute
+    ConditionalKey = 'next_route'
+    ManualTargetsKey = 'next_targets'
+    Left = 344
+    Top = 304
+  end
+  object AIAgentsNode1: TAIAgentsNode
+    Left = 440
+    Top = 440
+  end
+end

@@ -1,0 +1,132 @@
+# -------------------------------------------
+# Delphi & C++Builder - Build and IDE files
+# -------------------------------------------
+
+# Compilados
+*.dcu
+*.dcp
+*.dcpil
+*.dres
+*.rsm
+*.map
+*.tds
+*.drc
+*.obj
+*.exe
+*.dll
+*.bpl
+*.bpi
+*.lib
+*.a
+*.o
+*.ocx
+
+# Archivos temporales del IDE
+*.local
+*.identcache
+*.tvsconfig
+*.stat
+*.cfg
+*.skincfg
+*.projdata
+*.dproj.local
+*.groupproj.local
+*.dsk
+*.bak
+*.old
+*.tmp
+*.temp
+*~*
+*.~*
+
+# Backups
+*.orig
+*.dfm.bak
+*.pas.bak
+*.inc.bak
+Backup/
+backup/
+bak/
+
+# -------------------------------------------
+# Directorios de compilación
+# -------------------------------------------
+Win32/
+Win64/
+OSX32/
+OSX64/
+Linux64/
+Android/
+iOSDevice32/
+iOSDevice64/
+iOSSimulator/
+
+__history/
+__recovery/
+__debug_info/
+
+# -------------------------------------------
+# Archivos generados por FastMM, Logs, etc.
+# -------------------------------------------
+*.log
+*.elc
+
+# -------------------------------------------
+# Archivos de base de datos (opcional)
+# -------------------------------------------
+*.db
+*.fdb
+*.gdb
+*.ib
+
+# -------------------------------------------
+# Archivos del sistema operativo
+# -------------------------------------------
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+*~
+
+# -------------------------------------------
+# Carpetas de IDEs / entornos
+# -------------------------------------------
+.vscode/
+.idea/
+.env/
+node_modules/
+
+# -------------------------------------------
+# Archivos comprimidos o empaquetados
+# -------------------------------------------
+*.zip
+*.rar
+*.7z
+*.tar.gz
+*.tar
+*.gz
+
+# -------------------------------------------
+# Archivos específicos de versiones Delphi
+# -------------------------------------------
+*.dproj.2007
+*.dproj.2009
+*.dproj.2010
+*.dproj.XE*
+*.dproj.10*
+*.dproj.11
+*.dproj.12
+*.dproj.13
+
+# -------------------------------------------
+# Evitar incluir control de versiones dentro
+# -------------------------------------------
+.svn/
+.hg/
+
+# ⚠️ Git folder should not be ignored globally
+# .git/

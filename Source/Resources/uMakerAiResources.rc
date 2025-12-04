@@ -1,0 +1,61 @@
+//------------------------------------------------------------------------------
+// Archivo de Recursos para MakerAi Suite v3.0
+// Copyright © 2024-2025 Gustavo Enríquez - CimaMaker
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// CORE COMPONENTS - Componentes principales
+//------------------------------------------------------------------------------
+TAICHATCONNECTION   BITMAP "icons\TAiChatConnection_24.bmp"
+//------------------------------------------------------------------------------
+// CHAT COMPONENTS - Componentes de chat por proveedor
+//------------------------------------------------------------------------------
+TAICLAUDECHAT        BITMAP "icons\TAiClaudeChat_24.bmp"
+TAIDEEPSEEKCHAT      BITMAP "icons\TAiDeepSeekChat_24.bmp"
+TAIGEMINICHAT        BITMAP "icons\TAiGeminiChat_24.bmp"
+TAIGROKCHAT          BITMAP "icons\TAiGrokChat_24.bmp"
+TAIGROQCHAT          BITMAP "icons\TAiGroqChat_24.bmp"
+TAIMISTRALCHAT       BITMAP "icons\TAiMistralChat_24.bmp"
+TAIOLLAMACHAT        BITMAP "icons\TAiOllamaChat_24.bmp"
+TAIOPENCHAT          BITMAP "icons\TAiOpenAIChat_24.bmp"
+TAIOPENAIRESPONSES   BITMAP "icons\TAiOpenAIResponsesChat_24.bmp"
+TAILMSTUDIOCHAT      BITMAP "icons\TAiLMStudioChat_24.bmp"
+TAIKIMICHAT          BITMAP "icons\TAiKimiChat_24.bmp"
+TAIFUNCTIONS         BITMAP "icons\TAiFunctions_24.bmp"
+TAIPROMPTS           BITMAP "icons\TAiPrompts_24.bmp"
+//------------------------------------------------------------------------------
+// AI SERVICES - Servicios de IA
+//------------------------------------------------------------------------------
+TAIWHISPER          BITMAP "icons\TAiWhisper_24.bmp"
+TAIDALLE            BITMAP "icons\TAiDalle_24.bmp"
+TAIVOICEMONITOR     BITMAP "icons\TAiVoiceMonitor_24.bmp"
+//------------------------------------------------------------------------------
+// MCP SERVICES - Server
+//------------------------------------------------------------------------------
+TAIMCPDIRECTCONNECTION BITMAP "icons\TAiMCPDirectConnection_24.bmp"
+TAIMCPHTTPSERVER       BITMAP "icons\TAiMCPHttpServer_24.bmp"
+TAIMCPSTDIOSERVER      BITMAP "icons\TAiMCPStdIoServer_24.bmp"
+//------------------------------------------------------------------------------
+// EMBEDDINGS
+//------------------------------------------------------------------------------
+TAIOPENAIEMBEDDINGS     BITMAP "icons\TAiOpenAiEmbeddings_24.bmp"
+TAIMISTRALEMBEDDINGS    BITMAP "icons\TAiMistralEmbeddings_24.bmp"
+TAIOLLAMAEMBEDDINGS     BITMAP "icons\TAiOllamaEmbeddings_24.bmp"
+TAIGEMINIEMBEDDINGS     BITMAP "icons\TAiGeminiEmbeddings_24.bmp"
+TAILMSTUDIOEMBEDDINGS   BITMAP "icons\TAiGeminiEmbeddings_24.bmp"
+//------------------------------------------------------------------------------
+// RAG COMPONENTS - Retrieval-Augmented Generation
+//------------------------------------------------------------------------------
+TAIRAGVECTOR        BITMAP "icons\TAiRAGVector_24.bmp"
+TAIRAGGRAPH         BITMAP "icons\TAiRAGGraph_24.bmp"
+TAIRAGGRAPHBUILDER  BITMAP "icons\TAiRAGBuilder_24.bmp"
+//------------------------------------------------------------------------------
+// AGENTS - Sistema de agentes
+//------------------------------------------------------------------------------
+TAIAGENTSLINK        BITMAP "icons\TAiAgentsLink_24.bmp"
+TAIAGENTSNODE        BITMAP "icons\TAiAgentsNode_24.bmp"
+TAIAGENTS            BITMAP "icons\TAiAgents_24.bmp"
+TAIAGENTMANAGER      BITMAP "icons\TAiAgentManager_24.bmp"
+TAIAGENTSTOOLSAMPLE  BITMAP "icons\TAiAgentsToolSample_24.bmp"
+//------------------------------------------------------------------------------
+// Fin del archivo de recursos
+//------------------------------------------------------------------------------
