@@ -130,3 +130,5 @@ node_modules/
 
 # ⚠️ Git folder should not be ignored globally
 # .git/
+ 
+Source/Packages/hpp/
