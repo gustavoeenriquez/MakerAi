@@ -61,7 +61,7 @@ Begin
   Model := 'deepseek-r1:8b';
 
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Asynchronous', 'False');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'InitialInstructions', 'Eres un asistente de IA ligero y rápido  llamado PENSANTE. Proporciona respuestas concisas y directas.');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'SystemPrompt', 'Eres un asistente de IA ligero y rápido  llamado PENSANTE. Proporciona respuestas concisas y directas.');
 
   // ------- OLLAMA Modelo bakllava ------------------------------
   Model := 'bakllava:latest';

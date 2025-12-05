@@ -251,7 +251,7 @@ type
     FAsynchronous: Boolean;
     FTop_logprobs: String;
     FModel: String;
-    FInitialInstructions: TStrings;
+    FSystemPrompt: TStrings;
     FCompletion_tokens: Integer;
     FTotal_tokens: Integer;
     FPrompt_tokens: Integer;
@@ -305,7 +305,7 @@ type
     procedure SetOnReceiveDataEvent(const Value: TAiChatOnDataEvent);
     procedure SetOnReceiveDataEnd(const Value: TAiChatOnDataEvent);
     procedure SetModel(const Value: String);
-    procedure SetInitialInstructions(const Value: TStrings);
+    procedure SetSystemPrompt(const Value: TStrings);
     procedure SetOnAddMessage(const Value: TAiChatOnDataEvent);
     procedure SetOnCallToolFunction(const Value: TOnCallToolFunction);
     procedure SetTool_Active(const Value: Boolean);
@@ -406,6 +406,7 @@ type
     procedure DoError(const ErrorMsg: string; E: Exception); virtual;
     Procedure DoProcessResponse(aLastMsg, aResMsg: TAiChatMessage; var aResponse: String);
     procedure DoStateChange(State: TAiChatState; const Description: string = '');
+    property InitialInstructions : TStrings read FSystemPrompt write SetSystemPrompt; //deprecated 'use SystemPrompt property instead';
   Public
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
@@ -475,7 +476,7 @@ type
     Property Tool_choice: string read FTool_choice write SetTool_choice;
     Property Tool_Active: Boolean read FTool_Active write SetTool_Active;
     Property User: String read FUser write SetUser;
-    Property InitialInstructions: TStrings read FInitialInstructions write SetInitialInstructions;
+    Property SystemPrompt: TStrings read FSystemPrompt write SetSystemPrompt;
     Property Prompt_tokens: Integer read FPrompt_tokens write SetPrompt_tokens;
     Property Completion_tokens: Integer read FCompletion_tokens write SetCompletion_tokens;
     Property Total_tokens: Integer read FTotal_tokens write SetTotal_tokens;
@@ -1050,7 +1051,7 @@ begin
   FTools := TStringList.Create;
   FMemory := TStringList.Create;
   FJsonSchema := TStringList.Create;
-  FInitialInstructions := TStringList.Create;
+  FSystemPrompt := TStringList.Create;
   FWebSearchParams := TStringList.Create;
   FTmpToolCallBuffer := TDictionary<Integer, TJSonObject>.Create;
   FTextEditorTool := Nil;
@@ -1075,7 +1076,7 @@ begin
   FResponse_format := TAiChatResponseFormat.tiaChatRfText;
   FTemperature := 1;
   FUser := 'user';
-  FInitialInstructions.Text := 'Eres un asistente muy útil y servicial';
+  FSystemPrompt.Text := 'Eres un asistente muy útil y servicial';
   FMax_tokens := 3000;
   FUrl := GlOpenAIUrl;
   FTop_p := 1;
@@ -1103,7 +1104,7 @@ begin
   FVideoParams.Free;
   FImageParams.Free;
   FWebSearchParams.Free;
-  FInitialInstructions.Free;
+  FSystemPrompt.Free;
 
   inherited;
 end;
@@ -2216,7 +2217,7 @@ begin
   Else
     S := '';
 
-  MensajeInicial := FInitialInstructions.Text + sLineBreak + S;
+  MensajeInicial := FSystemPrompt.Text + sLineBreak + S;
 
   JMemory := TJSonObject.Create;
   Try
@@ -2466,9 +2467,9 @@ begin
   FImageParams.Assign(Value);
 end;
 
-procedure TAiChat.SetInitialInstructions(const Value: TStrings);
+procedure TAiChat.SetSystemPrompt(const Value: TStrings);
 begin
-  FInitialInstructions.Text := Value.Text;
+  FSystemPrompt.Assign(Value);
 end;
 
 procedure TAiChat.SetJsonSchema(const Value: TStrings);

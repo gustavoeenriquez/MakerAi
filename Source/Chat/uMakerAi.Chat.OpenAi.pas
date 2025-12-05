@@ -634,8 +634,8 @@ begin
     JSystemMsg := '';
     if (FMessages.Count > 0) and (FMessages[0].Role = 'system') then
       JSystemMsg := FMessages[0].Prompt
-    else if InitialInstructions.Text <> '' then
-      JSystemMsg := InitialInstructions.Text;
+    else if SystemPrompt.Text <> '' then
+      JSystemMsg := SystemPrompt.Text;
 
     if Memory.Count > 0 then
       JSystemMsg := JSystemMsg + sLineBreak + 'Memory context: ' + Memory.Text;
