@@ -1,15 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <BorlandProject>
 	<ProjectSortOrder AutoSort="0" SortType="0">
-    <File Path="bindcomp.dcp"/>
-    <File Path="bindengine.dcp"/>
-    <File Path="IndyCore.dcp"/>
-    <File Path="IndyProtocols.dcp"/>
-    <File Path="IndySystem.dcp"/>
-    <File Path="inet.dcp"/>
-    <File Path="RESTComponents.dcp"/>
-    <File Path="rtl.dcp"/>
-    <File Path="xmlrtl.dcp"/>
     <File Path="..\..\Source"/>
     <File Path="..\Agents"/>
     <File Path="..\Agents\uMakerAi.Agents.Attributes.pas"/>
@@ -64,6 +55,15 @@
     <File Path="..\Utils"/>
     <File Path="..\Utils\uMakerAi.Utils.DiffUpdater.pas"/>
     <File Path="..\Utils\uMakerAi.Utils.VoiceMonitor.pas"/>
+    <File Path="bindcomp.dcp"/>
+    <File Path="bindengine.dcp"/>
+    <File Path="IndyCore.dcp"/>
+    <File Path="IndyProtocols.dcp"/>
+    <File Path="IndySystem.dcp"/>
+    <File Path="inet.dcp"/>
+    <File Path="RESTComponents.dcp"/>
+    <File Path="rtl.dcp"/>
+    <File Path="xmlrtl.dcp"/>
   </ProjectSortOrder>
 	<Transactions>
     <Transaction>2025/09/27 19:07:18.000.269,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Tools\uMakerAI.StableDiffusion.pas=</Transaction>

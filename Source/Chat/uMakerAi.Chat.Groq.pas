@@ -1,4 +1,3 @@
-unit uMakerAi.Chat.Groq;
 // IT License
 //
 // Copyright (c) <year> <copyright holders>
@@ -44,6 +43,8 @@ unit uMakerAi.Chat.Groq;
   Single Image per Request: Only one image can be processed per request in the preview release. Requests with multiple images will return a 400 error.
   System Prompt: The model does not support system prompts and images in the same request.
 }
+
+unit uMakerAi.Chat.Groq;
 
 interface
 
