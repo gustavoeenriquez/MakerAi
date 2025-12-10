@@ -1,5 +1,3 @@
-***
-
 # MakerAI 3.1 Suite — The AI Operating System for Delphi
 
 🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
@@ -16,7 +14,7 @@ Now featuring support for **GPT-5.1**, **Gemini 3.0**, and **Claude 4.5**, Maker
 
 ---
 
-## 🚀 What's New in MakerAI 3.1 (Dec 2025)
+## 🚀 What's New in MakerAI 3.1.001 (Dec-10-2025)
 
 MakerAI 3.1 represents a massive leap forward in native AI capabilities:
 
@@ -140,7 +138,9 @@ Compile and Install in this specific order:
 
 ---
 
-## 💡 Usage: Connecting to GPT-5.1
+## 💡 Usage Examples
+
+### Example 1: Simple Text Generation with GPT-5.1
 
 ```delphi
 procedure TForm1.Button1Click(Sender: TObject);
@@ -155,6 +155,72 @@ begin
   Memo1.Lines.Add('GPT-5.1: ' + Response);
 end;
 ```
+
+### Example 2: Multimodal Input Using TAiChatConnection (Universal Connector)
+
+```delphi
+procedure TForm18.BtnFromAiConnectionClick(Sender: TObject);
+var
+  AiChat: TAiChatConnection;
+  MF: TAiMediaFile;
+  Prompt, Res: String;
+begin
+  AiChat := TAiChatConnection.Create(nil);
+  try
+    AiChat.DriverName := 'OpenAi';
+    AiChat.Model := 'gpt-5.1';
+    AiChat.Params.Values['NativeInputFiles'] := '[Tfc_Image, tfc_pdf]';
+    AiChat.Params.Values['ChatMediaSupports'] := '[Tcm_Image, tcm_pdf]';
+    
+    MF := TAiMediaFile.Create;
+    try
+      MF.LoadFromFile('MyFile.png');
+      Prompt := 'Describe this image';
+      Res := AiChat.AddMessageAndRun(Prompt, 'user', [MF]);
+      ShowMessage(Res);
+    finally
+      MF.Free;
+    end;
+  finally
+    AiChat.Free;
+  end;
+end;
+```
+
+### Example 3: Multimodal Input Using TAiOpenChat (OpenAI-Specific Driver)
+
+```delphi
+procedure TForm18.BtnFromOpenAIClick(Sender: TObject);
+var
+  OpenAiChat: TAiOpenChat;
+  MF: TAiMediaFile;
+  Prompt, Res: String;
+begin
+  OpenAiChat := TAiOpenChat.Create(nil);
+  try
+    OpenAiChat.Model := 'gpt-5.1';
+    OpenAiChat.NativeInputFiles := [Tfc_Image, tfc_pdf];
+    OpenAiChat.ChatMediaSupports := [Tcm_Image, tcm_pdf];
+    
+    MF := TAiMediaFile.Create;
+    try
+      MF.LoadFromFile('MyFile.png');
+      Prompt := 'Describe this image';
+      Res := OpenAiChat.AddMessageAndRun(Prompt, 'user', [MF]);
+      ShowMessage(Res);
+    finally
+      MF.Free;
+    end;
+  finally
+    OpenAiChat.Free;
+  end;
+end;
+```
+
+> **Note:**  
+> - **Example 2** uses the universal `TAiChatConnection` component, which allows you to easily switch between providers (OpenAI, Claude, Gemini, etc.) by changing the `DriverName` property.  
+> - **Example 3** uses the OpenAI-specific `TAiOpenChat` component, providing direct access to OpenAI-native properties and features.  
+> - Both examples demonstrate **multimodal input** support through the `TAiMediaFile` class, enabling you to send images, PDFs, and other supported file types directly to the AI model.
 
 ---
 
@@ -191,6 +257,7 @@ Please be aware of the following behaviors in version 3.1.0:
     -   Added **MCP Server** framework with support for **SSE (Server-Sent Events)** and **MakerAI+DataSnap** protocols.
 
 ### Version 2.6.0 (August 2025)
+
 -   Added Delphi 11 Alexandria official support.
 -   Preliminary support for Ollama async calls.
 
