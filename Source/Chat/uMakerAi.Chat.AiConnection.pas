@@ -55,7 +55,7 @@ type
     FParams: TStrings;
     FMessages: TAiChatMessages;
     FMessagesOwn: TAiChatMessages; //Instancia de mensajes que poseemos
-    FInitialInstructions: TStrings;
+    //FInitialInstructions: TStrings;
     FMemory: TStrings;
     FAiFunctions: TAiFunctions;
     FPrompt_tokens: integer;
@@ -78,6 +78,7 @@ type
     FOnReceiveThinking: TAiChatOnDataEvent;
     FShellTool: TAiShell;
     FTextEditorTool: TAiTextEditorTool;
+    FSystemPrompt: TStrings;
 
     // Setters y Getters
     procedure SetDriverName(const Value: String);
@@ -107,6 +108,7 @@ type
     procedure SetShellTool(const Value: TAiShell);
     procedure SetTextEditorTool(const Value: TAiTextEditorTool);
 
+    procedure SetSystemPrompt(const Value: TStrings);
   protected
     procedure ValideChat;
     procedure UpdateAndApplyParams;
@@ -161,7 +163,8 @@ type
     property DriverName: String read FDriverName write SetDriverName;
     property Model: String read FModel write SetModel;
     property Params: TStrings read FParams write SetParams;
-    property InitialInstructions: TStrings read FInitialInstructions write SetInitialInstructions;
+    //property InitialInstructions: TStrings read FInitialInstructions write SetInitialInstructions;
+    property SystemPrompt : TStrings read FSystemPrompt write SetSystemPrompt;
     property Memory: TStrings read FMemory write SetMemory;
     property AiFunctions: TAiFunctions read FAiFunctions write SetAiFunctions;
     property Prompt_tokens: integer read FPrompt_tokens write SetPrompt_tokens;
@@ -203,13 +206,13 @@ constructor TAiChatConnection.Create(Sender: TComponent);
 begin
   inherited;
   FChat := nil;
-  FInitialInstructions := TStringList.Create;
+  FSystemPrompt := TStringList.Create;
   FMemory := TStringList.Create;
   FMessagesOwn := TAiChatMessages.Create;
   FMessages := FMessagesOwn;  // Por defecto, FMessages apunta a nuestra instancia
   FParams := TStringList.Create;
   TStringList(FParams).OnChange := ParamsChanged;
-  TStringList(FInitialInstructions).OnChange := ParamsChanged;
+  TStringList(FSystemPrompt).OnChange := ParamsChanged;
   TStringList(FMemory).OnChange := ParamsChanged;
   FVersion := MAKERAI_VERSION_FULL;
 end;
@@ -219,7 +222,7 @@ begin
   if Assigned(FChat) then
     FChat.Free;
 
-  FInitialInstructions.Free;
+  FSystemPrompt.Free;
   FMemory.Free;
 
   // FMessages es solo una referencia, NO se libera
@@ -442,7 +445,7 @@ begin
 
 
   AChat.Memory.Text := Self.Memory.Text;
-  AChat.InitialInstructions.Text := Self.InitialInstructions.Text;
+  AChat.SystemPrompt.Text := Self.SystemPrompt.Text;
 
   if not Assigned(AParams) or (AParams.Count <= 0) then
     Exit;
@@ -873,9 +876,9 @@ end;
 
 procedure TAiChatConnection.SetInitialInstructions(const Value: TStrings);
 begin
-  FInitialInstructions.Assign(Value);
+  FSystemPrompt.Assign(Value);
   if Assigned(FChat) then
-    FChat.InitialInstructions.Assign(Value);
+    FChat.SystemPrompt.Assign(Value);
 end;
 
 procedure TAiChatConnection.SetMemory(const Value: TStrings);
@@ -961,6 +964,11 @@ end;
 procedure TAiChatConnection.SetShellTool(const Value: TAiShell);
 begin
   FShellTool := Value;
+end;
+
+procedure TAiChatConnection.SetSystemPrompt(const Value: TStrings);
+begin
+  FSystemPrompt.Assign(Value);
 end;
 
 procedure TAiChatConnection.SetTextEditorTool(const Value: TAiTextEditorTool);

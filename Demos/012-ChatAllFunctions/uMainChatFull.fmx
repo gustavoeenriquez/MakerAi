@@ -111,12 +111,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.FontColor = claLightslategray
               Text = 'Total Tokens'
-              TabOrder = 40
+              TabOrder = 39
             end
             object EditTotalTokens: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               ReadOnly = True
               TextSettings.HorzAlign = Trailing
               Margins.Left = 3.000000000000000000
@@ -148,12 +148,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.FontColor = claLightslategray
               Text = 'Promp Tokens'
-              TabOrder = 40
+              TabOrder = 39
             end
             object EditPromptTokens: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               ReadOnly = True
               TextSettings.HorzAlign = Trailing
               Margins.Left = 3.000000000000000000
@@ -185,12 +185,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.FontColor = claLightslategray
               Text = 'Completion Tokens'
-              TabOrder = 40
+              TabOrder = 39
             end
             object EditCompletionTokens: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               ReadOnly = True
               TextSettings.HorzAlign = Trailing
               Margins.Left = 3.000000000000000000
@@ -222,12 +222,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.FontColor = claLightslategray
               Text = 'Thinking Tokens'
-              TabOrder = 40
+              TabOrder = 39
             end
             object EditThinkingTokens: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               ReadOnly = True
               TextSettings.HorzAlign = Trailing
               Margins.Left = 3.000000000000000000
@@ -260,12 +260,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.FontColor = claLightslategray
               Text = 'Used Model'
-              TabOrder = 40
+              TabOrder = 39
             end
             object EditCompletionModel: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               ReadOnly = True
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
@@ -315,7 +315,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 39
               Text = 'Asincrono'
             end
           end
@@ -332,7 +332,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 39
               Text = 'JSon Format'
             end
             object BtnJSonShema: TSpeedButton
@@ -365,7 +365,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 39
               Text = 'Use Tools (Function Calling)'
             end
           end
@@ -382,7 +382,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 39
               Text = 'Web Search'
             end
           end
@@ -399,7 +399,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 39
               Text = 'Code Interpreter'
             end
           end
@@ -416,7 +416,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 39
               Text = 'Extract Text Files'
             end
           end
@@ -433,7 +433,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 39
               Text = 'Shell Tool'
               OnChange = ChShellToolChange
             end
@@ -451,7 +451,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 39
               Text = 'Edit Tool'
               OnChange = ChEditToolChange
             end
@@ -502,12 +502,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
               Text = 'Model Capabilities'
-              TabOrder = 40
+              TabOrder = 39
             end
             object EditChatMediaSupports: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               ReadOnly = True
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
@@ -540,12 +540,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
               Text = 'Input Expected Files'
-              TabOrder = 40
+              TabOrder = 39
             end
             object EditNativeInputFiles: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               ReadOnly = True
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
@@ -578,12 +578,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
               Text = 'Output Expected Files'
-              TabOrder = 40
+              TabOrder = 39
             end
             object EditNativeOutputFiles: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               ReadOnly = True
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
@@ -642,12 +642,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
               Text = 'Voices'
-              TabOrder = 40
+              TabOrder = 39
             end
             object EditVoices: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
               Margins.Right = 3.000000000000000000
@@ -677,12 +677,12 @@ object Form2: TForm2
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
               Text = 'Voice Format'
-              TabOrder = 40
+              TabOrder = 39
             end
             object EditVoiceFormat: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
-              TabOrder = 41
+              TabOrder = 40
               Margins.Left = 3.000000000000000000
               Margins.Top = 1.000000000000000000
               Margins.Right = 3.000000000000000000
@@ -731,7 +731,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 39
               Text = 'Enable Listening Button'
               OnChange = ChEnableListeningChange
             end
@@ -749,7 +749,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 39
               Text = 'Wake Word Detection'
               OnChange = ChEnableWordDetectionChange
             end
@@ -767,7 +767,7 @@ object Form2: TForm2
               Size.Width = 190.000000000000000000
               Size.Height = 25.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 40
+              TabOrder = 39
               Text = 'Send Audio to IA'
               OnChange = ChEnableWordDetectionChange
             end
@@ -1004,7 +1004,7 @@ object Form2: TForm2
           Margins.Top = 5.000000000000000000
           Margins.Right = 5.000000000000000000
           Size.Width = 775.000000000000000000
-          Size.Height = 484.000000000000000000
+          Size.Height = 490.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 1
           InboundColor = claLightcyan
@@ -1014,7 +1014,7 @@ object Form2: TForm2
           OnBeforeAddBubble = ChatList1BeforeAddBubble
           OnMediaFileDblClick = ChatList1MediaFileDblClick
           Viewport.Width = 775.000000000000000000
-          Viewport.Height = 484.000000000000000000
+          Viewport.Height = 490.000000000000000000
         end
         object LblLog: TLabel
           Align = Bottom
@@ -1023,7 +1023,7 @@ object Form2: TForm2
           Margins.Right = 3.000000000000000000
           Margins.Bottom = 3.000000000000000000
           Position.X = 10.000000000000000000
-          Position.Y = 612.000000000000000000
+          Position.Y = 618.000000000000000000
           Size.Width = 1260.000000000000000000
           Size.Height = 17.000000000000000000
           Size.PlatformDefault = False
@@ -1036,9 +1036,9 @@ object Form2: TForm2
           Margins.Top = 5.000000000000000000
           Margins.Right = 5.000000000000000000
           Position.X = 5.000000000000000000
-          Position.Y = 637.000000000000000000
+          Position.Y = 643.000000000000000000
           Size.Width = 1263.000000000000000000
-          Size.Height = 98.000000000000000000
+          Size.Height = 92.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 0
           ImagesVisible = False
@@ -1062,7 +1062,7 @@ object Form2: TForm2
         end
         object Layout10: TLayout
           Align = Bottom
-          Position.Y = 496.000000000000000000
+          Position.Y = 502.000000000000000000
           Size.Width = 1273.000000000000000000
           Size.Height = 113.000000000000000000
           Size.PlatformDefault = False
@@ -1077,8 +1077,8 @@ object Form2: TForm2
             Size.PlatformDefault = False
             StyleLookup = 'transparentedit'
             TabOrder = 0
-            Viewport.Width = 1267.000000000000000000
-            Viewport.Height = 90.000000000000000000
+            Viewport.Width = 1273.000000000000000000
+            Viewport.Height = 94.000000000000000000
           end
           object Rectangle8: TRectangle
             Align = Top
@@ -1104,7 +1104,7 @@ object Form2: TForm2
           Align = Bottom
           Cursor = crVSplit
           MinSize = 20.000000000000000000
-          Position.Y = 489.000000000000000000
+          Position.Y = 495.000000000000000000
           Size.Width = 1273.000000000000000000
           Size.Height = 7.000000000000000000
           Size.PlatformDefault = False
@@ -1113,26 +1113,26 @@ object Form2: TForm2
           Align = Right
           Position.X = 795.000000000000000000
           Size.Width = 478.000000000000000000
-          Size.Height = 489.000000000000000000
+          Size.Height = 495.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 4
           object TabControl1: TTabControl
             Align = Client
             Size.Width = 478.000000000000000000
-            Size.Height = 489.000000000000000000
+            Size.Height = 495.000000000000000000
             Size.PlatformDefault = False
             TabIndex = 3
             TabOrder = 3
             TabPosition = PlatformDefault
             Sizes = (
               478s
-              463s
+              469s
               478s
-              463s
+              469s
               478s
-              463s
+              469s
               478s
-              463s)
+              469s)
             object TabUsageItem: TTabItem
               CustomIcon = <
                 item
@@ -1152,11 +1152,11 @@ object Form2: TForm2
                 DataDetectorTypes = []
                 Align = Client
                 Size.Width = 478.000000000000000000
-                Size.Height = 441.000000000000000000
+                Size.Height = 447.000000000000000000
                 Size.PlatformDefault = False
                 TabOrder = 3
-                Viewport.Width = 474.000000000000000000
-                Viewport.Height = 437.000000000000000000
+                Viewport.Width = 478.000000000000000000
+                Viewport.Height = 447.000000000000000000
               end
               object Rectangle13: TRectangle
                 Align = Top
@@ -1200,7 +1200,7 @@ object Form2: TForm2
                 Align = Contents
                 Fill.Color = claBlack
                 Size.Width = 478.000000000000000000
-                Size.Height = 463.000000000000000000
+                Size.Height = 469.000000000000000000
                 Size.PlatformDefault = False
               end
               object MemoShellTool: TMemo
@@ -1212,12 +1212,12 @@ object Form2: TForm2
                 TextSettings.FontColor = claChartreuse
                 Align = Client
                 Size.Width = 478.000000000000000000
-                Size.Height = 441.000000000000000000
+                Size.Height = 447.000000000000000000
                 Size.PlatformDefault = False
                 StyleLookup = 'transparentedit'
                 TabOrder = 14
-                Viewport.Width = 472.000000000000000000
-                Viewport.Height = 437.000000000000000000
+                Viewport.Width = 478.000000000000000000
+                Viewport.Height = 447.000000000000000000
               end
               object Rectangle12: TRectangle
                 Align = Top
@@ -1265,16 +1265,16 @@ object Form2: TForm2
                 TextSettings.Font.Size = 14.000000000000000000
                 Align = Client
                 Size.Width = 478.000000000000000000
-                Size.Height = 201.000000000000000000
+                Size.Height = 207.000000000000000000
                 Size.PlatformDefault = False
                 StyleLookup = 'Memo1Style1'
                 TabOrder = 0
-                Viewport.Width = 474.000000000000000000
-                Viewport.Height = 197.000000000000000000
+                Viewport.Width = 478.000000000000000000
+                Viewport.Height = 207.000000000000000000
               end
               object Layout4: TLayout
                 Align = Bottom
-                Position.Y = 232.000000000000000000
+                Position.Y = 238.000000000000000000
                 Size.Width = 478.000000000000000000
                 Size.Height = 231.000000000000000000
                 Size.PlatformDefault = False
@@ -1291,8 +1291,8 @@ object Form2: TForm2
                   Size.PlatformDefault = False
                   StyleLookup = 'Memo1Style1'
                   TabOrder = 0
-                  Viewport.Width = 474.000000000000000000
-                  Viewport.Height = 205.000000000000000000
+                  Viewport.Width = 478.000000000000000000
+                  Viewport.Height = 209.000000000000000000
                 end
                 object Rectangle11: TRectangle
                   Align = Top
@@ -1322,7 +1322,7 @@ object Form2: TForm2
                 Align = Bottom
                 Cursor = crVSplit
                 MinSize = 20.000000000000000000
-                Position.Y = 223.000000000000000000
+                Position.Y = 229.000000000000000000
                 Size.Width = 478.000000000000000000
                 Size.Height = 9.000000000000000000
                 Size.PlatformDefault = False
@@ -1378,11 +1378,11 @@ object Form2: TForm2
                 Margins.Right = 3.000000000000000000
                 Margins.Bottom = 3.000000000000000000
                 Size.Width = 472.000000000000000000
-                Size.Height = 435.000000000000000000
+                Size.Height = 441.000000000000000000
                 Size.PlatformDefault = False
                 TabOrder = 0
-                Viewport.Width = 468.000000000000000000
-                Viewport.Height = 431.000000000000000000
+                Viewport.Width = 472.000000000000000000
+                Viewport.Height = 441.000000000000000000
               end
               object Rectangle9: TRectangle
                 Align = Top
@@ -1416,7 +1416,7 @@ object Form2: TForm2
           MinSize = 20.000000000000000000
           Position.X = 785.000000000000000000
           Size.Width = 10.000000000000000000
-          Size.Height = 489.000000000000000000
+          Size.Height = 495.000000000000000000
           Size.PlatformDefault = False
         end
       end
@@ -19893,7 +19893,7 @@ object Form2: TForm2
     Tool_choice = 'auto'
     Tool_Active = False
     User = 'user'
-    InitialInstructions.Strings = (
+    SystemPrompt.Strings = (
       'Eres un asistente muy '#250'til y servicial')
     Prompt_tokens = 0
     Completion_tokens = 0
