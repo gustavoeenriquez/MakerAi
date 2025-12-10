@@ -91,7 +91,6 @@ type
 
     procedure SetAiFunctions(const Value: TAiFunctions);
     procedure SetCompletion_tokens(const Value: integer);
-    procedure SetInitialInstructions(const Value: TStrings);
     procedure SetMemory(const Value: TStrings);
     procedure SetOnAddMessage(const Value: TAiChatOnDataEvent);
     procedure SetOnBeforeSendMessage(const Value: TAiChatOnBeforeSendEvent);
@@ -868,18 +867,11 @@ begin
   end;
 end;
 
-
 procedure TAiChatConnection.SetCompletion_tokens(const Value: integer);
 begin
   FCompletion_tokens := Value;
 end;
 
-procedure TAiChatConnection.SetInitialInstructions(const Value: TStrings);
-begin
-  FSystemPrompt.Assign(Value);
-  if Assigned(FChat) then
-    FChat.SystemPrompt.Assign(Value);
-end;
 
 procedure TAiChatConnection.SetMemory(const Value: TStrings);
 begin
@@ -969,6 +961,8 @@ end;
 procedure TAiChatConnection.SetSystemPrompt(const Value: TStrings);
 begin
   FSystemPrompt.Assign(Value);
+  if Assigned(FChat) then
+    FChat.SystemPrompt.Assign(Value);
 end;
 
 procedure TAiChatConnection.SetTextEditorTool(const Value: TAiTextEditorTool);

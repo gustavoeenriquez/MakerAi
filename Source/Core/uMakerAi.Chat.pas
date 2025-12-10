@@ -406,7 +406,7 @@ type
     procedure DoError(const ErrorMsg: string; E: Exception); virtual;
     Procedure DoProcessResponse(aLastMsg, aResMsg: TAiChatMessage; var aResponse: String);
     procedure DoStateChange(State: TAiChatState; const Description: string = '');
-    property InitialInstructions : TStrings read FSystemPrompt write SetSystemPrompt; //deprecated 'use SystemPrompt property instead';
+    //property InitialInstructions : TStrings read FSystemPrompt write SetSystemPrompt; //deprecated 'use SystemPrompt property instead';
   Public
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
