@@ -43,7 +43,7 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-  uMakerAi.Core, uMakerAi.MCPClient.Core;
+  uMakerAi.Core, uMakerAi.MCPClient.Core, uMakerAi.Chat.Messages;
 
 type
 

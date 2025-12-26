@@ -46,7 +46,7 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings.Core;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages;
 
 type
 
@@ -1341,7 +1341,7 @@ var
   LResponse: IHTTPResponse;
   LUrl: string;
 begin
-  Result := nil;
+  //Result := nil;
   LUrl := TPath.Combine(Self.Url, 'api/show');
   LJsonObject := TJSonObject.Create;
   LBodyStream := TStringStream.Create('', TEncoding.UTF8);

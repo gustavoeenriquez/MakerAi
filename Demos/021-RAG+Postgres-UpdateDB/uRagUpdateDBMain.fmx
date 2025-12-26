@@ -47,8 +47,8 @@ object Form8: TForm8
     Size.Height = 633.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 6
-    Viewport.Width = 289.000000000000000000
-    Viewport.Height = 633.000000000000000000
+    Viewport.Width = 285.000000000000000000
+    Viewport.Height = 629.000000000000000000
   end
   object Grid1: TGrid
     CanFocus = True
@@ -60,8 +60,8 @@ object Form8: TForm8
     Size.PlatformDefault = False
     TabOrder = 11
     RowCount = 0
-    Viewport.Width = 536.000000000000000000
-    Viewport.Height = 337.000000000000000000
+    Viewport.Width = 532.000000000000000000
+    Viewport.Height = 312.000000000000000000
   end
   object EditPrompt: TEdit
     Touch.InteractiveGestures = [LongTap, DoubleTap]
@@ -100,8 +100,8 @@ object Form8: TForm8
     Size.Height = 337.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 17
-    Viewport.Width = 321.000000000000000000
-    Viewport.Height = 337.000000000000000000
+    Viewport.Width = 317.000000000000000000
+    Viewport.Height = 333.000000000000000000
   end
   object MemoRes: TMemo
     Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
@@ -113,8 +113,8 @@ object Form8: TForm8
     Size.Height = 296.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 20
-    Viewport.Width = 865.000000000000000000
-    Viewport.Height = 296.000000000000000000
+    Viewport.Width = 861.000000000000000000
+    Viewport.Height = 292.000000000000000000
   end
   object DbConn: TFDConnection
     Params.Strings = (
@@ -252,5 +252,52 @@ object Form8: TForm8
     Url = 'http://localhost:11434/'
     Left = 616
     Top = 360
+  end
+  object AIWhisper1: TAIWhisper
+    ApiKey = '@OPENAI_API_KEY'
+    Url = 'https://api.openai.com/v1/'
+    Model = 'whisper-1'
+    Voice = 'nova'
+    Format = 'mp3'
+    Languaje = 'es'
+    Speed = 1.000000000000000000
+    ResponseFormat = 'text'
+    Quality = 'tts-1'
+    Left = 968
+    Top = 632
+  end
+  object AiOllamaChat1: TAiOllamaChat
+    ApiKey = '@OLLAMA_API_KEY'
+    Model = 'gpt-oss:20b'
+    Logprobs = False
+    Max_tokens = 3000
+    N = 1
+    Response_format = tiaChatRfText
+    Seed = 0
+    Asynchronous = False
+    Temperature = 1.000000000000000000
+    Top_p = 1.000000000000000000
+    K = 0
+    Tool_choice = 'auto'
+    Tool_Active = False
+    User = 'user'
+    SystemPrompt.Strings = (
+      'Eres un asistente muy '#250'til y servicial')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    Thinking_tokens = 0
+    Url = 'http://localhost:11434/'
+    ResponseTimeOut = 60000
+    AudioTool = AIWhisper1
+    Stream_Usage = False
+    NativeInputFiles = []
+    NativeOutputFiles = []
+    ChatMediaSupports = []
+    ThinkingLevel = tlDefault
+    MediaResolution = mrDefault
+    keep_alive = '1m'
+    Left = 800
+    Top = 632
   end
 end

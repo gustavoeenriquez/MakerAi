@@ -50,20 +50,19 @@ uses
 
 Type
 
-  TAiToolsFunction = Class;
 
   // TAiImageSize = (TiaSize256, TiaSize512, TiaSize1024, TiaSize1024_1792, TiaSize1792_1024);
   // TAiImageResponseFormat = (tiaRUrl, tiaRB64);
   // TAiImageAStyleFormat = (tiaStyleVivid, tiaStyleNatural);
 
-  TAiFileCategory = (Tfc_Text, Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_pdf, Tfc_Document, //
-    Tfc_WebSearch, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, //
-    Tfc_GraphicDesign, tfc_ExtracttextFile, Tfc_Any, Tfc_Unknow); //
+  { A. Capas de Archivos (Física) - Define tipos de datos binarios/físicos }
+  TAiFileCategory = (Tfc_Text, Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_Pdf, Tfc_Document, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, Tfc_GraphicDesign, Tfc_ExtractTextFile, Tfc_Any, Tfc_Unknown);
 
   TAiFileCategories = set of TAiFileCategory;
 
-  TAiChatMediaSupport = (Tcm_Text, Tcm_Image, Tcm_Audio, Tcm_Video, tcm_pdf, Tcm_Document, //
-    tcm_WebSearch, Tcm_CalcSheet, Tcm_Presentation, Tcm_CompressFile, Tcm_Web, Tcm_GraphicDesign, tcm_code_interpreter, tcm_Memory, tcm_TextEditor, tcm_ComputerUse, tcm_Shell, tcm_Any, Tcm_Unknow); //
+  { B. Capas de Habilidades (Lógica) - Define capacidades intelectuales o herramientas }
+  TAiChatMediaSupport = (Tcm_Text, Tcm_Image, Tcm_Audio, Tcm_Video, Tcm_Pdf, Tcm_WebSearch, Tcm_CodeInterpreter, Tcm_Memory, Tcm_TextEditor, Tcm_ComputerUse, Tcm_Shell, Tcm_Reasoning, // Capacidad de CoT (Chain of Thought)
+    Tcm_Any, Tcm_Unknown);
 
   TAiChatMediaSupports = set of TAiChatMediaSupport;
 
@@ -90,23 +89,22 @@ Type
   TToolFormat = (tfUnknown, tfOpenAI, tfOpenAIResponses, tfClaude, tfGemini, tfMCP);
   TToolTransportType = (tpStdIo, tpHttp, tpSSE, tpMakerAi);
 
-
-  TAiChatState = (
-    acsIdle,           // Inactivo
-    acsConnecting,     // Conectando / Enviando Request
-    acsCreated,        // Servidor aceptó (Recibido ID)
-    acsReasoning,      // Pensando / Razonando (Chain of Thought)
-    acsWriting,        // Escribiendo respuesta visible
-    acsToolCalling,    // El modelo pide usar una herramienta
-    acsToolExecuting,  // Ejecutando la herramienta (Local o Remota)
-    acsFinished,       // Completado con éxito
-    acsAborted,        // Abortado por el usuario
-    acsError           // Error
-  );
+  TAiChatState = (acsIdle, // Inactivo
+    acsConnecting, // Conectando / Enviando Request
+    acsCreated, // Servidor aceptó (Recibido ID)
+    acsReasoning, // Pensando / Razonando (Chain of Thought)
+    acsWriting, // Escribiendo respuesta visible
+    acsToolCalling, // El modelo pide usar una herramienta
+    acsToolExecuting, // Ejecutando la herramienta (Local o Remota)
+    acsFinished, // Completado con éxito
+    acsAborted, // Abortado por el usuario
+    acsLoading,
+    acsProcessing,
+    acsError // Error
+    );
 
   // Definición del evento
   TAiStateChangeEvent = procedure(Sender: TObject; State: TAiChatState; const Description: string) of object;
-
 
   TAiMediaFiles = Class;
 
@@ -227,38 +225,6 @@ Type
     Property JsonText: String Read GetJSonText Write SetJsonText;
   End;
 
-  // Clase que maneja las funciones de los tools
-  TAiToolsFunction = class(TObject)
-    id: string;
-    Tipo: string;
-    name: string;
-    Description: String; // Descripción de la función
-    Arguments: string; // Si tiene parámetros en forma de json se utiliza este
-    Params: TStringList; // Si tiene parámetros en forma de name=value se utiliza este si arguments = ''
-    &Function: string; // Nombre de la función
-    Response: String; // String que responde la función al LLM
-    Body: TJSONObject; // El body en json que retorna la función, se utiliza para depuración o para obtener información adicional
-    Metadata: TAiMetadata; // Metadatos adicionales que se pueden enviar a la función
-    AskMsg: TObject; // TAiChatMessage que representa la pregunta
-    ResMsg: TObject; // TAiChatMessage que representa la respuesta
-
-    Constructor Create;
-    Destructor Destroy; Override;
-    Procedure ParseFunction(JObj: TJSONObject); // Esta función se reemplazará por estas dos según la necesidad
-
-    Procedure Assign(aSource: TAiToolsFunction);
-  end;
-
-  TAiToolsFunctions = Class(TDictionary<String, TAiToolsFunction>)
-  Private
-  Protected
-    procedure ValueNotify(const Value: TAiToolsFunction; Action: TCollectionNotification); override;
-  Public
-    Function ToOutputJSon: TJSonArray;
-    Function ToFunctionsJSon: TJSonArray;
-    Procedure AddFunction(aBody: String); Overload;
-    Procedure AddFunction(aBody: TJSONObject); Overload;
-  End;
 
   TAiWebSearchItem = Class
     &type: String;
@@ -276,7 +242,6 @@ Type
     annotations: TAiWebSearchArray;
     Constructor Create;
   End;
-
 
   // Partiendo de la extensión del archivo obtiene la categoria TAiFileCategori
 function GetContentCategory(FileExtension: string): TAiFileCategory;
@@ -817,68 +782,43 @@ begin
   FileExtension := LowerCase(Trim(StringReplace(FileExtension, '.', '', [rfReplaceAll])));
 
   // Image formats
-  if (FileExtension = 'jpg') or (FileExtension = 'jpeg') or (FileExtension = 'png') or (FileExtension = 'gif') or (FileExtension = 'bmp') or (FileExtension = 'tiff') or (FileExtension = 'tif') or (FileExtension = 'svg') or
-    (FileExtension = 'webp') or (FileExtension = 'avif') or (FileExtension = 'heic') or (FileExtension = 'heif') or (FileExtension = 'ico') then
+  if MatchStr(FileExtension, ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'svg', 'webp', 'avif', 'heic', 'heif', 'ico']) then
     Result := Tfc_Image
-
-    // Audio formats
-  else if (FileExtension = 'mp3') or (FileExtension = 'wav') or (FileExtension = 'flac') or (FileExtension = 'aac') or (FileExtension = 'ogg') or (FileExtension = 'wma') or (FileExtension = 'm4a') or (FileExtension = 'opus') or
-    (FileExtension = 'mpga') then
+  // Audio formats
+  else if MatchStr(FileExtension, ['mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a', 'opus', 'mpga']) then
     Result := Tfc_Audio
-
-    // Video formats
-  else if (FileExtension = 'avi') or (FileExtension = 'mp4') or (FileExtension = 'mkv') or (FileExtension = 'mov') or (FileExtension = 'wmv') or (FileExtension = 'flv') or (FileExtension = 'webm') or (FileExtension = 'mpeg') or
-    (FileExtension = 'mpg') or (FileExtension = '3gp') or (FileExtension = 'm4v') then
+  // Video formats
+  else if MatchStr(FileExtension, ['avi', 'mp4', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'mpeg', 'mpg', '3gp', 'm4v']) then
     Result := Tfc_Video
-
-    // PDF (categoría separada)
+  // PDF
   else if (FileExtension = 'pdf') then
-    Result := Tfc_pdf
-
-    // Document formats (Word processors)
-  else if (FileExtension = 'doc') or (FileExtension = 'docx') or (FileExtension = 'odt') or (FileExtension = 'rtf') or (FileExtension = 'tex') then
+    Result := Tfc_Pdf
+  // Document formats
+  else if MatchStr(FileExtension, ['doc', 'docx', 'odt', 'rtf', 'tex']) then
     Result := Tfc_Document
-
-    // Spreadsheets
-  else if (FileExtension = 'xls') or (FileExtension = 'xlsx') or (FileExtension = 'ods') or (FileExtension = 'csv') then
+  // Spreadsheets
+  else if MatchStr(FileExtension, ['xls', 'xlsx', 'ods', 'csv']) then
     Result := Tfc_CalcSheet
-
-    // Presentations
-  else if (FileExtension = 'ppt') or (FileExtension = 'pptx') or (FileExtension = 'odp') then
+  // Presentations
+  else if MatchStr(FileExtension, ['ppt', 'pptx', 'odp']) then
     Result := Tfc_Presentation
-
-    // Plain text files
-  else if (FileExtension = 'txt') or (FileExtension = 'md') or (FileExtension = 'log') or (FileExtension = 'readme') then
+  // Plain text
+  else if MatchStr(FileExtension, ['txt', 'md', 'log', 'readme']) then
     Result := Tfc_Text
-
-    // Programming/Code files
-    {
-  else if (FileExtension = 'py') or (FileExtension = 'java') or (FileExtension = 'c') or (FileExtension = 'cpp') or (FileExtension = 'cs') or (FileExtension = 'php') or (FileExtension = 'rb') or (FileExtension = 'go') or
-    (FileExtension = 'rs') or (FileExtension = 'swift') or (FileExtension = 'kt') or (FileExtension = 'scala') or (FileExtension = 'r') or (FileExtension = 'sql') or (FileExtension = 'sh') or (FileExtension = 'bat') or
-    (FileExtension = 'ps1') or (FileExtension = 'dockerfile') then
-    Result := tfc_code_interpreter
-    }
-
-    // Web files
-  else if (FileExtension = 'html') or (FileExtension = 'htm') or (FileExtension = 'xml') or (FileExtension = 'json') or (FileExtension = 'css') or (FileExtension = 'js') or (FileExtension = 'jsx') or (FileExtension = 'ts') or
-    (FileExtension = 'tsx') or (FileExtension = 'vue') or (FileExtension = 'angular') or (FileExtension = 'php') or (FileExtension = 'asp') or (FileExtension = 'aspx') or (FileExtension = 'jsp') then
+  // Web (Archivos físicos HTML/JSON/JS)
+  else if MatchStr(FileExtension, ['html', 'htm', 'xml', 'json', 'css', 'js', 'jsx', 'ts', 'tsx', 'vue', 'php']) then
     Result := Tfc_Web
-
-    // Compressed files
-  else if (FileExtension = 'zip') or (FileExtension = 'rar') or (FileExtension = 'tar') or (FileExtension = 'gz') or (FileExtension = 'bz2') or (FileExtension = '7z') or (FileExtension = 'xz') or (FileExtension = 'gzip') then
+  // Compressed
+  else if MatchStr(FileExtension, ['zip', 'rar', 'tar', 'gz', 'bz2', '7z', 'xz', 'gzip']) then
     Result := Tfc_CompressFile
-
-    // Graphic Design files
-  else if (FileExtension = 'psd') or (FileExtension = 'ai') or (FileExtension = 'eps') or (FileExtension = 'indd') or (FileExtension = 'sketch') or (FileExtension = 'fig') or (FileExtension = 'xd') then
+  // Graphic Design
+  else if MatchStr(FileExtension, ['psd', 'ai', 'eps', 'indd', 'sketch', 'fig', 'xd']) then
     Result := Tfc_GraphicDesign
-
-    // Text-based files that are not plain text
-  else if (FileExtension = 'yaml') or (FileExtension = 'yml') or (FileExtension = 'toml') or (FileExtension = 'ini') or (FileExtension = 'cfg') or (FileExtension = 'conf') then
-    Result := tfc_ExtracttextFile
-
-    // Default case
+  // Config files
+  else if MatchStr(FileExtension, ['yaml', 'yml', 'toml', 'ini', 'cfg', 'conf']) then
+    Result := Tfc_ExtractTextFile
   else
-    Result := Tfc_Unknow;
+    Result := Tfc_Unknown;
 end;
 
 { TAiMediaFiles }
@@ -1042,7 +982,7 @@ end;
 function TAiMediaFile.GetFileCategory: TAiFileCategory;
 begin
   If Trim(Ffilename) = '' then
-    Result := Tfc_Unknow
+    Result := Tfc_Unknown
   Else
     Result := GetContentCategory(ExtractFileExt(LowerCase(Ffilename)));
 end;
@@ -1228,26 +1168,25 @@ end;
 { TAiMediaFiles }
 
 {
-function TAiMediaFiles.GetMediaList(aFilters: TAiFileCategories; aProcesado: Boolean = False): TAiMediaFilesArray;
-var
+  function TAiMediaFiles.GetMediaList(aFilters: TAiFileCategories; aProcesado: Boolean = False): TAiMediaFilesArray;
+  var
   i: Integer;
   Item: TAiMediaFile;
   Len: Integer;
-begin
+  begin
   SetLength(Result, 0); // Inicializamos el resultado para evitar basura
   for i := 0 to Self.Count - 1 do
   begin
-    Item := Self.Items[i];
-    if (Item.FileCategory in aFilters) and (Item.Procesado = aProcesado) then
-    begin
-      Len := Length(Result);
-      SetLength(Result, Len + 1);
-      Result[Len] := Item;
-    end;
+  Item := Self.Items[i];
+  if (Item.FileCategory in aFilters) and (Item.Procesado = aProcesado) then
+  begin
+  Len := Length(Result);
+  SetLength(Result, Len + 1);
+  Result[Len] := Item;
   end;
-end;
+  end;
+  end;
 }
-
 
 function TAiMediaFiles.GetMediaList(aFilters: TAiFileCategories; aProcesado: Boolean = False): TAiMediaFilesArray;
 var
@@ -1272,51 +1211,6 @@ begin
   end;
 end;
 
-{ TAiToolFunction }
-
-procedure TAiToolsFunction.Assign(aSource: TAiToolsFunction);
-begin
-  Self.id := aSource.id;
-  Self.Tipo := aSource.Tipo;
-  Self.name := aSource.name;
-  Self.Description := aSource.Description;
-  Self.Arguments := aSource.Arguments;
-  Self.&Function := aSource.&Function;
-  Self.Response := aSource.Response;
-  Self.Body := aSource.Body;
-  Metadata.JsonText := aSource.Metadata.JsonText;
-end;
-
-constructor TAiToolsFunction.Create;
-begin
-  inherited;
-  Metadata := TAiMetadata.Create;
-  Params := TStringList.Create;
-
-end;
-
-destructor TAiToolsFunction.Destroy;
-begin
-  Metadata.Free;
-  Params.Free;
-  inherited;
-end;
-
-procedure TAiToolsFunction.ParseFunction(JObj: TJSONObject);
-Var
-  JFunc: TJSONObject;
-  FunName: String;
-begin
-  JFunc := JObj.GetValue<TJSONObject>('function');
-  FunName := JFunc.GetValue<string>('name');
-
-  Begin
-    Name := JFunc.GetValue<String>('name');
-    Self.Description := JFunc.GetValue<String>('description');
-    &Function := JFunc.Format;
-    Body := JObj; // La funcion original completa
-  End;
-end;
 
 function TAiMediaFiles.ToMediaFileArray: TAiMediaFilesArray;
 var
@@ -1422,75 +1316,6 @@ begin
     Result.AddPair(Clave, Self.Items[Clave]);
 end;
 
-{ TAitools_outputs }
-
-procedure TAiToolsFunctions.AddFunction(aBody: TJSONObject);
-Var
-  Func, Func1: TAiToolsFunction;
-begin
-  Func := TAiToolsFunction.Create;
-  Func.ParseFunction(aBody);
-
-  If Self.TryGetValue(Func.name, Func1) = False then
-    Self.Add(Func.name, Func)
-  Else
-  Begin
-    Func1.Assign(Func);
-    Func.Free;
-  End;
-end;
-
-procedure TAiToolsFunctions.ValueNotify(const Value: TAiToolsFunction; Action: TCollectionNotification);
-begin
-  case Action of
-    cnDeleting, cnRemoved:
-      Value.Free;
-  end;
-  inherited;
-end;
-
-procedure TAiToolsFunctions.AddFunction(aBody: String);
-Var
-  Func: TJSONObject;
-begin
-  Func := TJSONObject(TJSONObject.ParseJSONValue(aBody));
-  AddFunction(Func);
-end;
-
-function TAiToolsFunctions.ToFunctionsJSon: TJSonArray;
-Var
-  Clave: String;
-  TObj: TJSONObject;
-  Func: TAiToolsFunction;
-begin
-  Result := TJSonArray.Create;
-
-  For Clave in Self.Keys do
-  Begin
-    Func := Self.Items[Clave];
-    // Result.Add(TJSonObject(TJSonObject.ParseJSONValue(Self.Items[Clave].&Function)));
-    TObj := TJSONObject(Func.Body.Clone);
-    // TObj.AddPair('type', 'function');
-    // TObj.AddPair('function', TJsonObject(Func.Body.Clone));
-    Result.Add(TObj);
-  End;
-end;
-
-function TAiToolsFunctions.ToOutputJSon: TJSonArray;
-Var
-  Clave: String;
-  TObj: TJSONObject;
-begin
-  Result := TJSonArray.Create;
-
-  For Clave in Self.Keys do // La clave es el nombre de la función
-  Begin
-    TObj := TJSONObject.Create;
-    TObj.AddPair('tool_call_id', Self.Items[Clave].id);
-    TObj.AddPair('output', Self.Items[Clave].Response);
-    Result.Add(TObj);
-  End;
-end;
 
 { TAiWebSearch }
 

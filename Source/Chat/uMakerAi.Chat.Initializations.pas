@@ -48,75 +48,132 @@ Var
 Begin
 
 
-  // ------------------------- OLLAMA ----------------------------------
-  // https://notes.kodekloud.com/docs/Running-Local-LLMs-With-Ollama/Building-AI-Applications/Ollama-REST-API-Endpoints
-  // ------------------------- OLLAMA ----------------------------------
+  // ===================================================================
+  // CONFIGURACIÓN GLOBAL DE OLLAMA (Defaults para todos sus modelos)
+  // ===================================================================
+  // Por defecto, Ollama es texto puro y no tiene herramientas nativas
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Max_Tokens', '8000');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeInputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeOutputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'ChatMediaSupports', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Temperature', '0.7');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Asynchronous', 'True');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Tool_Active', 'False');
 
-  // ------- OLLAMA Modelo deepseek-r1:8b ------------------------------
+  // Capa Física: Ollama por defecto no acepta binarios (solo texto)
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeInputFiles', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeOutputFiles', '[]');
+
+  // Capa Lógica: Habilidades nativas mínimas
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'ChatMediaSupports', '[Tcm_Text]');
+
+  // Intención: Por defecto queremos que todos tengan texto y razonamiento si lo exponen
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'EnabledFeatures', '[Tcm_Text]');
+
+  // ===================================================================
+  // MODELOS DE RAZONAMIENTO (DEEPSEEK R1)
+  // ===================================================================
+  // DeepSeek-R1 en Ollama expone el pensamiento entre etiquetas <think>
   Model := 'deepseek-r1:8b';
+  // (Aplica también para 14b, 32b, etc.)
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Text, Tcm_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'EnabledFeatures', '[Tcm_Text, Tcm_Reasoning]');
 
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Asynchronous', 'False');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'SystemPrompt', 'Eres un asistente de IA ligero y rápido  llamado PENSANTE. Proporciona respuestas concisas y directas.');
+  // ===================================================================
+  // MODELOS MULTIMODALES / VISIÓN (Soportan Imagen Nativa)
+  // ===================================================================
 
-  // ------- OLLAMA Modelo bakllava ------------------------------
-  Model := 'bakllava:latest';
-
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Image]');
+  // --- Llama 3.2 Vision (El nuevo estándar de Meta) ---
+  Model := 'llama3.2-vision:latest';
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Text, Tcm_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeInputFiles', '[Tfc_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeOutputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Tool_Active', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'EnabledFeatures', '[Tcm_Text, Tcm_Image]');
 
-  // ------- OLLAMA Modelo llava:latest ------------------------------
+  // --- Qwen 2.5 VL (Estado del arte en visión de Alibaba) ---
+  Model := 'qwen2.5-vl:latest';
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Text, Tcm_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeInputFiles', '[Tfc_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'EnabledFeatures', '[Tcm_Text, Tcm_Image]');
+
+  // --- Llava / Bakllava (Clásicos) ---
   Model := 'llava:latest';
-
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Text, Tcm_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeInputFiles', '[Tfc_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeOutputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Tool_Active', 'False');
 
-  // ------- OLLAMA Modelo qwen2.5vl:7b ------------------------------
-  Model := 'qwen2.5vl:7b';
+  // ===================================================================
+  // MODELOS CON SOPORTE NATIVO DE HERRAMIENTAS (Function Calling)
+  // ===================================================================
+  // Modelos como Llama 3.1/3.3 y Qwen 2.5 soportan tools en Ollama
+  Model := 'llama3.1:latest';
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Tool_Active', 'True');
 
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeInputFiles', '[Tfc_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeOutputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Tool_Active', 'False');
+  Model := 'qwen2.5:latest';
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Tool_Active', 'True');
 
-  // ------- OLLAMA Modelo llama3.2:latest ------------------------------
+  // ===================================================================
+  // ORQUESTACIÓN AVANZADA (Modelos con "Superpoderes" vía Bridge)
+  // ===================================================================
+
+  // Ejemplo: Queremos un Llama 3 que pueda navegar por la web
+  // No lo marcamos en ChatMediaSupports porque Ollama no navega.
+  // Al marcarlo en EnabledFeatures, el Orquestador usará el Bridge.
   Model := 'llama3.2:latest';
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Asynchronous', 'False');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Tool_Active', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'EnabledFeatures', '[Tcm_Text, Tcm_WebSearch]');
 
-  // ------- OLLAMA Modelo phi3:latest ------------------------------
-  Model := 'phi3:latest';
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Asynchronous', 'False');
+  // ===================================================================
+  // MODELOS PERSONALIZADOS (ALIAS)
+  // ===================================================================
+  // Creamos un alias que use whisper para transcripción
+  TAiChatFactory.Instance.RegisterCustomModel('Ollama', 'Transcripción-Expert', 'whisper:latest');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Transcripción-Expert', 'EnabledFeatures', '[Tcm_Audio]');
 
-  // ------- OLLAMA Modelo gemma3n:e4b ------------------------------
-  Model := 'gemma3n:e4b';
 
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Image]');
+
+// ------- OLLAMA Modelo DeepSeek-OCR (Especialista) ------------------
+  Model := 'deepseek-ocr:latest';
+
+  // Capa Física: Ollama sabe enviarle imágenes a este modelo
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeInputFiles', '[Tfc_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeOutputFiles', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Tool_Active', 'False');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
-  TAiChatFactory.Instance.RegisterCustomModel('Ollama', 'aa_whisper', 'whisper');
+  // Capa Lógica: El modelo soporta texto e imagen (Visión)
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Text, Tcm_Image]');
+
+  // Intención: Queremos usar su visión
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'EnabledFeatures', '[Tcm_Text, Tcm_Image]');
+
+  // Prompt de Especialidad: Forzamos al modelo a comportarse como un motor OCR de alta precisión
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'SystemPrompt',
+    'You are a high-precision OCR assistant. ' +
+    'To extract text use: Extract the text in the image. ' +
+    'To convert to markdown use: <|grounding|>Convert the document to markdown. ' +
+    'Be precise and preserve the layout.');
 
 
+// ===================================================================
+  // OLLAMA gpt-oss:20b / 120b (Modelos Agénticos Nativos)
+  // ===================================================================
+  // Estos modelos cambian la tabla de Ollama: Soportan TODO nativamente.
+  Model := 'gpt-oss:20b';
 
-  // ------- OLLAMA Modelo Whisper localhost ------------------------------
-  { Model := 'aa_whisper';
-    TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Asynchronous', 'False');
-    TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeInputFiles', '[Tfc_Audio]');
-    TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeOutputFiles', '[]');
-    TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[]');
-    TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Url', 'http://localhost:7890/');
-  }
+  // Capa Lógica: Soporte Nativo total (No requiere Bridges)
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports',
+    '[Tcm_Text, Tcm_Reasoning, Tcm_WebSearch, Tcm_CodeInterpreter]');
+
+  // Intención: Activamos todo para aprovechar su poder agéntico
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'EnabledFeatures',
+    '[Tcm_Text, Tcm_Reasoning, Tcm_WebSearch, Tcm_CodeInterpreter]');
+
+  // Activación de Herramientas
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Tool_Active', 'True');
+
+  // Configuración de Razonamiento (CoT)
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ThinkingLevel', 'tlMedium');
+
+  // Repetimos para la versión 120b
+  Model := 'gpt-oss:120b';
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports',
+    '[Tcm_Text, Tcm_Reasoning, Tcm_WebSearch, Tcm_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'EnabledFeatures',
+    '[Tcm_Text, Tcm_Reasoning, Tcm_WebSearch, Tcm_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Tool_Active', 'True');
+
 
   {
   // ------------------------- OPENAI ----------------------------------

@@ -70,7 +70,7 @@ uses
   uJSONHelper,
 {$ENDIF}
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core,
-  uMakerAi.Utils.CodeExtractor;
+  uMakerAi.Utils.CodeExtractor, uMakerAi.Chat.Messages;
 
 type
 
@@ -515,7 +515,7 @@ begin
       BetaFeatures.Add(BETA_HDR_MEMORY);
 
     // 3. Code Interpreter (Code Execution)
-    if tcm_code_interpreter in ChatMediaSupports then
+    if Tcm_CodeInterpreter in ChatMediaSupports then
       BetaFeatures.Add(BETA_HDR_CODE);
 
     // 4. Computer Use (NUEVO)
@@ -612,7 +612,7 @@ begin
       begin
         if LMedia.IdFile.IsEmpty then
         begin
-          if (tcm_code_interpreter in ChatMediaSupports) or (not(LMedia.FileCategory in [Tfc_Image, Tfc_pdf])) then
+          if (Tcm_CodeInterpreter in ChatMediaSupports) or (not(LMedia.FileCategory in [Tfc_Image, Tfc_pdf])) then
           begin
             try
               UploadFile(LMedia);
@@ -795,7 +795,7 @@ begin
       jArrTools.Add(JTools);
     end;
 
-    if tcm_code_interpreter in ChatMediaSupports then
+    if Tcm_CodeInterpreter in ChatMediaSupports then
     begin
       JTools := TJSONObject.Create;
       JTools.AddPair('type', 'code_execution_20250522');
@@ -2119,7 +2119,7 @@ begin
   Result := TJSonArray.Create;
 
   // Verificamos si el Code Interpreter está activo
-  IsCodeExecutionEnabled := tcm_code_interpreter in ChatMediaSupports;
+  IsCodeExecutionEnabled := Tcm_CodeInterpreter in ChatMediaSupports;
 
   // --- LÓGICA DE FILTRADO DINÁMICO ---
   if IsCodeExecutionEnabled then

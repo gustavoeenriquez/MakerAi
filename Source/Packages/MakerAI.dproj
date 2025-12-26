@@ -162,7 +162,7 @@
         <DCCReference Include="..\Chat\uMakerAi.Chat.Ollama.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.OpenAi.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Tools.Functions.pas"/>
-        <DCCReference Include="..\Core\uMakerAi.Chat.pas"/>
+        <DCCReference Include="..\Core\UMakerAi.Chat.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Core.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Embeddings.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Prompts.pas"/>
@@ -186,7 +186,7 @@
         <DCCReference Include="..\Design\UMakerAi.ParamsRegistry.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.Kimi.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.LMStudio.pas"/>
-        <DCCReference Include="..\Tools\uMakerAi.Gemini.Veo.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Gemini.Video.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.OpenAI.Sora.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.OpenAI.Audio.pas"/>
         <DCCReference Include="..\Utils\uMakerAi.Utils.DiffUpdater.pas"/>
@@ -194,6 +194,13 @@
         <DCCReference Include="..\Chat\uMakerAi.Chat.GenericLLM.pas"/>
         <DCCReference Include="..\MCPServer\UMakerAi.MCPServer.SSE.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Tools.TextEditor.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Tools.ComputerUse.pas"/>
+        <DCCReference Include="..\Core\uMakerAi.Chat.Tools.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Gemini.Speech.pas"/>
+        <DCCReference Include="..\Core\uMakerAi.Chat.Bridge.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Gemini.WebSearch.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Ollama.Ocr.pas"/>
+        <DCCReference Include="..\Core\uMakerAi.Chat.Messages.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

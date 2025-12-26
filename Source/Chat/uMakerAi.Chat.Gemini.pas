@@ -38,20 +38,17 @@ unit uMakerAi.Chat.Gemini;
 interface
 
 uses
-  System.SysUtils, System.Types, System.UITypes, System.Classes,
-  System.Threading, System.NetConsts,
-  System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections,
-  System.NetEncoding,
-  System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
-  System.Net.HttpClientComponent,
-  REST.JSON, REST.Types, REST.Client,
+  System.SysUtils, System.Types, System.UITypes, System.Classes, System.Threading, System.NetConsts,
+  System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections, System.NetEncoding,
+  System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
+  REST.JSON, REST.Types, REST.Client, uMakerAi.Chat.Messages,
 
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core,
   uMakerAi.Utils.PcmToWav, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings,
-  uMakerAi.Embeddings.Core;
+  uMakerAi.Embeddings.Core, uMakerAi.Tools.ComputerUse;
 
 type
 
@@ -67,6 +64,7 @@ type
     FMediaResolution: TAiMediaResolution;
     // Diccionario para almacenar las firmas de pensamiento asociadas a los mensajes del modelo
     FThoughtSignatures: TObjectDictionary<TAiChatMessage, TStringList>;
+    FPendingScreenshots: TObjectDictionary<string, TAiMediaFile>;
 
     // Nuevo helper para agregar firmas fácilmente
     procedure AddThoughtSignature(Msg: TAiChatMessage; const Signature: string);
@@ -107,6 +105,8 @@ type
     function BuildSpeechConfigJson: TJSONObject;
     procedure ParseGroundingMetadata(jCandidate: TJSONObject; ResMsg: TAiChatMessage);
     procedure OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse); Override;
+
+    procedure DoCallFunction(ToolCall: TAiToolsFunction); Override;
 
   Public
     Constructor Create(Sender: TComponent); Override;
@@ -192,18 +192,6 @@ begin
   end;
 end;
 
-{ function TAiGeminiChat.ThinkingLevelToString(Level: TAiThinkingLevel): string;
-  begin
-  case Level of
-  tlLow:
-  Result := 'LOW';
-  tlHigh:
-  Result := 'HIGH'; // Gemini solo soporta high y low
-  else
-  Result := ''; // tlDefault y tlMedium no se envían
-  end;
-  end;
-}
 
 // Métodos de Cache existentes (RetrieveCache, DeleteCache, ListCaches)...
 
@@ -269,7 +257,7 @@ constructor TAiGeminiChat.Create(Sender: TComponent);
 begin
   inherited;
   ApiKey := '@GEMINI_API_KEY';
-  Model := 'gemini-2.0-flash';
+  Model := 'gemini-3-pro';
   Url := GlAIUrl;
 
   // [V3 UPDATE] Gemini 3 recomienda Temperature 1.0 por defecto para razonamiento
@@ -292,11 +280,17 @@ begin
   FIncludeThoughts := False;
 
   FThoughtSignatures := TObjectDictionary<TAiChatMessage, TStringList>.Create([doOwnsValues]);
+
+  // Dictionary que es dueño de los MediaFiles (los libera automáticamente)
+  // OJO Revisar porque si los MediaFile se adicionan a los messages probablemnte los manje el componente de mensajes
+  FPendingScreenshots := TObjectDictionary<string, TAiMediaFile>.Create([doOwnsValues]);
+
 end;
 
 destructor TAiGeminiChat.Destroy;
 begin
   FThoughtSignatures.Free;
+  FPendingScreenshots.Free;
   inherited;
 end;
 
@@ -640,33 +634,138 @@ begin
       // -----------------------------------------------------------------------
       // 2. TOOL RESPONSE (User -> Model)
       // -----------------------------------------------------------------------
-      if Msg.Role = 'tool' then
-      begin
+      { if Msg.Role = 'tool' then
+        begin
         jFuncResponse := TJSONObject.Create;
         jFuncResponse.AddPair('name', Msg.FunctionName);
         jResponseContent := TJSONObject.Create;
 
         var
-          JValArgs: TJSONValue := TJSONObject.ParseJSONValue(Msg.Prompt);
+        JValArgs: TJSONValue := TJSONObject.ParseJSONValue(Msg.Prompt);
         try
-          if Assigned(JValArgs) and (JValArgs is TJSONObject) then
-            jResponseContent.AddPair('content', JValArgs.Clone as TJSONObject)
-          else
-          begin
-            var
-            SimpleContent := TJSONObject.Create;
-            SimpleContent.AddPair('result', Msg.Prompt);
-            jResponseContent.AddPair('content', SimpleContent);
-          end;
+        if Assigned(JValArgs) and (JValArgs is TJSONObject) then
+        jResponseContent.AddPair('content', JValArgs.Clone as TJSONObject)
+        else
+        begin
+        var
+        SimpleContent := TJSONObject.Create;
+        SimpleContent.AddPair('result', Msg.Prompt);
+        jResponseContent.AddPair('content', SimpleContent);
+        end;
         finally
-          if Assigned(JValArgs) then
-            JValArgs.Free;
+        if Assigned(JValArgs) then
+        JValArgs.Free;
         end;
 
         jFuncResponse.AddPair('response', jResponseContent);
         jPartItem := TJSONObject.Create.AddPair('functionResponse', jFuncResponse);
         jParts.Add(jPartItem);
-      end
+
+        // [COMPUTER USE]
+        // Si la herramienta devuelve una captura de pantalla (u otra imagen),
+        // debemos adjuntarla en el mismo array de partes.
+        MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
+
+        if Length(MediaArr) > 0 then
+        begin
+        for MediaFile in MediaArr do
+        begin
+        jPartItem := TJSONObject.Create;
+
+        if (MediaFile.UrlMedia <> '') and (MediaFile.UrlMedia.StartsWith('https://generativelanguage.googleapis.com')) then
+        begin
+        var
+        jFileData := TJSONObject.Create;
+        jFileData.AddPair('mimeType', MediaFile.MimeType);
+        jFileData.AddPair('fileUri', MediaFile.UrlMedia);
+        jPartItem.AddPair('fileData', jFileData);
+        end
+        else
+        begin
+        jInlineData := TJSONObject.Create;
+        jInlineData.AddPair('mime_type', MediaFile.MimeType);
+        jInlineData.AddPair('data', MediaFile.Base64);
+        jPartItem.AddPair('inline_data', jInlineData);
+        end;
+
+        jParts.Add(jPartItem);
+        end;
+        end;
+
+        end
+      }
+
+      // -----------------------------------------------------------------------
+      // 2. TOOL RESPONSE (User -> Model)
+      // -----------------------------------------------------------------------
+      if Msg.Role = 'tool' then
+      begin
+        jFuncResponse := TJSONObject.Create;
+        jFuncResponse.AddPair('name', Msg.FunctionName);
+
+        // --- CORRECCIÓN JSON RESPONSE ---
+        var
+          JValArgs: TJSONValue := TJSONObject.ParseJSONValue(Msg.Prompt);
+        try
+          // Si el mensaje es un JSON válido (como el que devuelve ComputerUseTool)
+          // lo usamos directamente como la estructura de 'response'.
+          if Assigned(JValArgs) and (JValArgs is TJSONObject) then
+          begin
+            jFuncResponse.AddPair('response', JValArgs.Clone as TJSONObject);
+          end
+          else
+          begin
+            // Si es texto plano o inválido, usamos la estructura legacy envolvente
+            jResponseContent := TJSONObject.Create;
+            var
+            SimpleContent := TJSONObject.Create;
+
+            // Usamos 'content' o 'result' según prefieras para texto plano,
+            // pero ComputerUse siempre entrará en el IF de arriba.
+            SimpleContent.AddPair('result', Msg.Prompt);
+
+            jResponseContent.AddPair('content', SimpleContent);
+            jFuncResponse.AddPair('response', jResponseContent);
+          end;
+        finally
+          if Assigned(JValArgs) then
+            JValArgs.Free;
+        end;
+        // --------------------------------
+
+        jPartItem := TJSONObject.Create.AddPair('functionResponse', jFuncResponse);
+        jParts.Add(jPartItem);
+
+        // [COMPUTER USE - IMÁGENES]
+        // (Tu código de adjuntar imágenes que hicimos antes va aquí, justo después)
+        MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
+        if Length(MediaArr) > 0 then
+          if Length(MediaArr) > 0 then
+          begin
+            for MediaFile in MediaArr do
+            begin
+              jPartItem := TJSONObject.Create;
+
+              if (MediaFile.UrlMedia <> '') and (MediaFile.UrlMedia.StartsWith('https://generativelanguage.googleapis.com')) then
+              begin
+                var
+                jFileData := TJSONObject.Create;
+                jFileData.AddPair('mimeType', MediaFile.MimeType);
+                jFileData.AddPair('fileUri', MediaFile.UrlMedia);
+                jPartItem.AddPair('fileData', jFileData);
+              end
+              else
+              begin
+                jInlineData := TJSONObject.Create;
+                jInlineData.AddPair('mime_type', MediaFile.MimeType);
+                jInlineData.AddPair('data', MediaFile.Base64);
+                jPartItem.AddPair('inline_data', jInlineData);
+              end;
+
+              jParts.Add(jPartItem);
+            end;
+          end;
+        end
 
       // -----------------------------------------------------------------------
       // 3. MODEL TOOLS / CODE EXECUTION (Model -> User)
@@ -764,7 +863,7 @@ begin
           Var
             TargetCategories: TAiFileCategories;
 
-          if (tcm_code_interpreter in ChatMediaSupports) then
+          if (Tcm_CodeInterpreter in ChatMediaSupports) then
             TargetCategories := [Low(TAiFileCategory) .. High(TAiFileCategory)] // Permitir todo
           else
             TargetCategories := NativeInputFiles; // Filtro estricto estándar
@@ -1034,7 +1133,7 @@ begin
     end;
 
     // B. Code Execution (Solo si está explícitamente en el Set)
-    if (tcm_code_interpreter in ChatMediaSupports) then
+    if (Tcm_CodeInterpreter in ChatMediaSupports) then
     begin
       LToolObj := TJSONObject.Create;
       LToolObj.AddPair('codeExecution', TJSONObject.Create);
@@ -1048,6 +1147,30 @@ begin
       LToolObj.AddPair('googleSearch', TJSONObject.Create);
       JArrTools.Add(LToolObj);
     end;
+
+    // D. Computer Use
+    if (tcm_ComputerUse in ChatMediaSupports) then
+    Begin
+      // En Gemini 2.5, Computer Use es una herramienta de primer nivel,
+      // al igual que 'googleSearch' o 'codeExecution'.
+      var
+      JComputerTool := TJSONObject.Create;
+      var
+      JCompSettings := TJSONObject.Create;
+
+      // La documentación especifica el entorno.
+      // Valores posibles suelen ser 'BROWSER' o 'ENVIRONMENT_BROWSER'.
+      // Usaremos 'only_name' si la API lo infiere, pero mejor ser explícitos.
+      // Si falla con 400, probaremos quitando el par 'environment'.
+      // JCompSettings.AddPair('environment', 'BROWSER');
+
+      // Nota: Si quieres excluir acciones (como drag_and_drop), se configuran aquí.
+      // Por ahora enviamos el objeto vacío o con configuración mínima si es necesario.
+
+      JComputerTool.AddPair('computer_use', JCompSettings);
+
+      JArrTools.Add(JComputerTool);
+    End;
 
     // IMPORTANTE: Solo enviamos "tools" si hay algo dentro.
     if JArrTools.Count > 0 then
@@ -1107,7 +1230,8 @@ begin
     begin
       JConfig.AddPair('responseMimeType', 'application/json');
       try
-        Var sShema := StringReplace(JsonSchema.Text,'\n',' ',[rfReplaceAll]);
+        Var
+        sShema := StringReplace(JsonSchema.Text, '\n', ' ', [rfReplaceAll]);
         var
         JSchema := TJSONObject.ParseJSONValue(sShema) as TJSONObject;
         if Assigned(JSchema) then
@@ -1572,6 +1696,25 @@ begin
         ToolCall := LFunciones[Clave];
         var
         ToolMsg := TAiChatMessage.Create(ToolCall.Response, 'tool', ToolCall.Id, ToolCall.Name);
+
+        TMonitor.Enter(FPendingScreenshots);
+        try
+          var
+            LScreen: TAiMediaFile;
+          if FPendingScreenshots.TryGetValue(ToolCall.Id, LScreen) then
+          begin
+            // Transferimos la propiedad del objeto al mensaje (Extract)
+            ToolMsg.AddMediaFile(LScreen);
+
+            // Lo quitamos del diccionario sin liberarlo (porque usamos ExtractPair implícito al reasignar propiedad o manual)
+            // Como el diccionario tiene doOwnsValues, debemos tener cuidado.
+            // Truco: ExtractPair devuelve el par y lo saca del diccionario SIN liberar el valor.
+            FPendingScreenshots.ExtractPair(ToolCall.Id);
+          end;
+        finally
+          TMonitor.Exit(FPendingScreenshots);
+        end;
+
         ToolMsg.Id := FMessages.Count + 1;
         FMessages.Add(ToolMsg);
       End;
@@ -2054,6 +2197,68 @@ begin
       Result := 'DELETED';
   finally
     LHttpClient.Free;
+  end;
+end;
+
+procedure TAiGeminiChat.DoCallFunction(ToolCall: TAiToolsFunction);
+var
+  ResponseJson: string;
+  Screenshot: TAiMediaFile;
+  IsComputerAction: Boolean;
+begin
+  IsComputerAction := False;
+
+  // 1. Verificar si ComputerUse está activo y tenemos el componente enlazado
+
+  if (tcm_ComputerUse in ChatMediaSupports) and Assigned(ComputerUseTool) then
+  begin
+    // Lista de acciones conocidas de Gemini 2.5
+    if MatchStr(LowerCase(ToolCall.Name), ['click_at', 'left_click', 'right_click', 'middle_click', 'double_click', 'type_text_at', 'type', 'key_combination', 'scroll_at', 'scroll_document', 'drag_and_drop', 'hover_at', 'mouse_move',
+      'navigate', 'search', 'open_web_browser', 'screenshot', 'wait_5_seconds', 'image_edit_at', 'draw_box_at']) then
+    begin
+      IsComputerAction := True;
+    end;
+  end;
+
+  if IsComputerAction then
+  begin
+    // 2. Delegar al componente ComputerTool
+    // Nota: ProcessToolCall es thread-safe siempre que tus eventos lo sean.
+    // Como estamos dentro de un TTask (hilo), el evento OnExecuteAction se disparará en un hilo secundario.
+    // Asegúrate de usar TThread.Synchronize en tu formulario si tocas la GUI.
+
+    Screenshot := nil;
+    try
+      ResponseJson := ComputerUseTool.ProcessToolCall(ToolCall, Screenshot);
+
+      // Asignar la respuesta JSON
+      ToolCall.Response := ResponseJson;
+
+      // 3. Guardar la captura en el buffer temporal (Thread-Safe Lock)
+      if Assigned(Screenshot) then
+      begin
+        TMonitor.Enter(FPendingScreenshots);
+        try
+          FPendingScreenshots.Add(ToolCall.Id, Screenshot);
+        finally
+          TMonitor.Exit(FPendingScreenshots);
+        end;
+      end;
+
+    except
+      on E: Exception do
+      begin
+        ToolCall.Response := Format('{"error": "%s", "url": "%s"}', [E.Message, ComputerUseTool.CurrentUrl]);
+        if Assigned(Screenshot) then
+          Screenshot.Free;
+      end;
+    end;
+  end
+  else
+  begin
+    // 4. Si no es acción de computadora, usar el comportamiento estándar (AiFunctions o Evento)
+    ToolCall.Response := 'Command '+ToolCall.name+' not found';
+    //inherited DoCallFunction(ToolCall);
   end;
 end;
 

@@ -124,7 +124,7 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Embeddings.Core;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages;
 
 { TODO : Falta crear las siguientes funciones de Mistral }
 /// -----------------------------------------------------------------------------

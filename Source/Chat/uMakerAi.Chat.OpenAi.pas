@@ -47,7 +47,7 @@ uses
 {$ENDIF}
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core,
   uMakerAi.Embeddings, uMakerAi.Embeddings.Core,
-  uMakerAi.Tools.Functions, uMakerAi.Utils.CodeExtractor, uMakerAi.Utils.System;
+  uMakerAi.Tools.Functions, uMakerAi.Utils.CodeExtractor, uMakerAi.Utils.System, uMakerAi.Chat.Messages;
 
 type
 
@@ -106,7 +106,6 @@ type
     function InternalRunSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
 
-    // Streaming (Pendiente de implementación SSE específica para Responses)
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -181,7 +180,7 @@ begin
     Model := 'gpt-5.1';
 
   // Configurar capacidades soportadas por este driver
-  ChatMediaSupports := [Tcm_Text, Tcm_Image, Tcm_WebSearch, tcm_code_interpreter, tcm_pdf];
+  ChatMediaSupports := [Tcm_Text, Tcm_Image, Tcm_WebSearch, Tcm_CodeInterpreter, tcm_pdf];
   // Audio NO se incluye aquí para evitar que TAiChat intente procesarlo en el flujo principal
   // NativeInputFiles indica qué archivos se pueden enviar "crudos" en el input
   NativeInputFiles := [Tfc_Text, Tfc_Image, Tfc_pdf];
@@ -867,7 +866,7 @@ JFormatConfig := Nil;
       JToolsArray.Add(JImgTool);
     end;
 
-    if (tcm_code_interpreter in ChatMediaSupports) then
+    if (Tcm_CodeInterpreter in ChatMediaSupports) then
     begin
       if not Assigned(JToolsArray) then
         JToolsArray := TJSonArray.Create;

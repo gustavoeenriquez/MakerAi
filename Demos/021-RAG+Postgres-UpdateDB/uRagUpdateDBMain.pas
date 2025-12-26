@@ -85,6 +85,8 @@ type
     AiChatConnection1: TAiChatConnection;
     AiOllamaEmbeddings1: TAiOllamaEmbeddings;
     BusQuerydistancia: TFloatField;
+    AIWhisper1: TAIWhisper;
+    AiOllamaChat1: TAiOllamaChat;
     procedure BtnAddTextClick(Sender: TObject);
     procedure RAGVectorAdicionDataVecAddItem(Sender: TObject; aItem: TAiEmbeddingNode; MetaData: TAiEmbeddingMetaData;
       var Handled: Boolean);
