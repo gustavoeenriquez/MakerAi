@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -40,7 +40,7 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections, System.Threading,
   System.JSON, System.Net.HttpClient, System.Net.URLClient,
   uMakerAi.chat.Gemini,
-  uMakerAi.Core, System.Net.HttpClientComponent;
+  uMakerAi.Core, System.Net.HttpClientComponent, uJSONHelper;
 
 type
   // Enums for typed properties, improving Developer Experience (DX)
@@ -249,12 +249,12 @@ function TAiVeoGenerator.ExtendVideo(const APrompt: string; AVideoToExtend: TAiM
 Var
   VideoUrlMedia: String;
 begin
-  // --- VALIDACIÓN ---
+  // --- VALIDACIï¿½N ---
   // Validamos que el objeto TAiMediaFile tenga la URI del activo de VEO.
   if (not Assigned(AVideoToExtend)) or (AVideoToExtend.UrlMedia.IsEmpty) then
     raise Exception.Create('To extend a video, you must provide a TAiMediaFile object with its original UrlMedia property set from a previous VEO generation.');
 
-  // Verificación simple de que parece una URL válida
+  // Verificaciï¿½n simple de que parece una URL vï¿½lida
   if not AVideoToExtend.UrlMedia.StartsWith('https') then
     raise Exception.Create('The UrlMedia property does not appear to be a valid VEO asset URI. It should start with "https".');
 
@@ -268,7 +268,7 @@ begin
     begin
       DoProgress('Starting extension for existing VEO video asset: ' + TPath.GetFileName(AVideoToExtend.UrlMedia));
 
-      // --- Construir el cuerpo de la petición directamente ---
+      // --- Construir el cuerpo de la peticiï¿½n directamente ---
       LRequest := TJSONObject.Create;
       try
         LInstances := TJSONArray.Create;
@@ -286,7 +286,7 @@ begin
         LParams := BuildParametersJson;
         LRequest.AddPair('parameters', LParams);
 
-        // --- Ejecutar la generación ---
+        // --- Ejecutar la generaciï¿½n ---
         InternalExecuteGeneration(LRequest);
       except
         LRequest.Free;
@@ -303,7 +303,7 @@ begin
   if not Assigned(AFirstFrame) or AFirstFrame.Base64.IsEmpty or not Assigned(ALastFrame) or ALastFrame.Base64.IsEmpty then
     raise Exception.Create('Both a first and a last frame are required for interpolation.');
 
-  // Clonamos para la tarea asíncrona
+  // Clonamos para la tarea asï¿½ncrona
   LFirstFrameClone := TAiMediaFile.Create;
   LFirstFrameClone.Assign(AFirstFrame);
   LLastFrameClone := TAiMediaFile.Create;
@@ -325,23 +325,23 @@ begin
           LInstances.AddElement(LInstance);
           LInstance.AddPair('prompt', TJSONString.Create(APrompt));
 
-          // --- INICIO DE LA CORRECCIÓN ---
-          // 1. Creamos y añadimos la primera imagen AL INSTANCE
+          // --- INICIO DE LA CORRECCIï¿½N ---
+          // 1. Creamos y aï¿½adimos la primera imagen AL INSTANCE
           LImagePart := TJSONObject.Create;
           LImagePart.AddPair('mimeType', LFirstFrameClone.MimeType);
           LImagePart.AddPair('bytesBase64Encoded', LFirstFrameClone.Base64);
           LInstance.AddPair('image', LImagePart);
 
-          // 2. Creamos y añadimos la segunda imagen (lastFrame) TAMBIÉN AL INSTANCE
+          // 2. Creamos y aï¿½adimos la segunda imagen (lastFrame) TAMBIï¿½N AL INSTANCE
           LLastFramePart := TJSONObject.Create;
           LLastFramePart.AddPair('mimeType', LLastFrameClone.MimeType);
           LLastFramePart.AddPair('bytesBase64Encoded', LLastFrameClone.Base64);
           LInstance.AddPair('lastFrame', LLastFramePart);
 
-          // 3. El objeto de parámetros ahora solo contiene la configuración general
+          // 3. El objeto de parï¿½metros ahora solo contiene la configuraciï¿½n general
           LParams := BuildParametersJson;
           LRequest.AddPair('parameters', LParams);
-          // --- FIN DE LA CORRECCIÓN ---
+          // --- FIN DE LA CORRECCIï¿½N ---
 
           InternalExecuteGeneration(LRequest);
         except
@@ -362,7 +362,7 @@ function TAiVeoGenerator.GenerateFromImage(const APrompt: string; AImage: TAiMed
 var
   LImageClone: TAiMediaFile;
 begin
-  // Validación básica antes de crear el hilo
+  // Validaciï¿½n bï¿½sica antes de crear el hilo
   if not Assigned(AImage) then
     raise Exception.Create('An image object is required.');
 
@@ -370,7 +370,7 @@ begin
     raise Exception.Create('The image must have either a Cloud URI (UrlMedia) or Base64 content.');
 
   // Clonamos el objeto de imagen para garantizar la seguridad de hilos (Thread Safety)
-  // ya que la TTask se ejecutará en paralelo.
+  // ya que la TTask se ejecutarï¿½ en paralelo.
   LImageClone := TAiMediaFile.Create;
   LImageClone.Assign(AImage);
 
@@ -396,7 +396,7 @@ begin
           // 2. Agregar la Imagen
           LImagePart := TJSONObject.Create;
 
-          // ESTRATEGIA HÍBRIDA:
+          // ESTRATEGIA Hï¿½BRIDA:
           // Preferimos usar la URI de la File API si existe (mejor rendimiento para Veo).
           if not LImageClone.UrlMedia.IsEmpty then
           begin
@@ -407,27 +407,27 @@ begin
           end
           else
           begin
-            // Fallback: Si no está subido, usamos Base64 (Inline)
-            // Nota: Esto solo funciona para imágenes pequeñas (<20MB en total request)
+            // Fallback: Si no estï¿½ subido, usamos Base64 (Inline)
+            // Nota: Esto solo funciona para imï¿½genes pequeï¿½as (<20MB en total request)
             LImagePart.AddPair('bytesBase64Encoded', LImageClone.Base64);
             LImagePart.AddPair('mimeType', LImageClone.MimeType);
           end;
 
           LInstance.AddPair('image', LImagePart);
 
-          // 3. Agregar los parámetros de configuración (Resolución, FPS, etc.)
+          // 3. Agregar los parï¿½metros de configuraciï¿½n (Resoluciï¿½n, FPS, etc.)
           // Nota: BuildParametersJson devuelve un objeto nuevo, AddPair toma propiedad.
           LRequest.AddPair('parameters', BuildParametersJson);
 
-          // Ejecutar la petición (InternalExecuteGeneration se encarga de liberar LRequest)
+          // Ejecutar la peticiï¿½n (InternalExecuteGeneration se encarga de liberar LRequest)
           InternalExecuteGeneration(LRequest);
         except
-          // Si ocurre un error antes de entrar a InternalExecuteGeneration, liberamos aquí.
+          // Si ocurre un error antes de entrar a InternalExecuteGeneration, liberamos aquï¿½.
           LRequest.Free;
           raise;
         end;
       finally
-        // Liberamos el clon creado específicamente para esta tarea
+        // Liberamos el clon creado especï¿½ficamente para esta tarea
         LImageClone.Free;
       end;
     end);
@@ -521,14 +521,14 @@ end;
 
 function TAiVeoGenerator.GetApiKey: string;
 Begin
-  // Si está en modo de diseño, simplemente retorna el valor tal cual
+  // Si estï¿½ en modo de diseï¿½o, simplemente retorna el valor tal cual
   if (csDesigning in ComponentState) or (csDestroying in ComponentState) then
   begin
     Result := FApiKey;
     Exit;
   end;
 
-  // En modo de ejecución
+  // En modo de ejecuciï¿½n
   if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
     // Retorna el valor de la variable de entorno, quitando el '@'
     Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
@@ -576,12 +576,12 @@ begin
   LHttpClient := TNetHTTPClient.Create(nil);
   try
     try
-      // --- PASO 1: Iniciar la operación de larga duración ---
+      // --- PASO 1: Iniciar la operaciï¿½n de larga duraciï¿½n ---
       LModelName := GetEffectiveModelName;
       LUrl := TPath.Combine(GEMINI_API_BASE_URL, 'models/' + LModelName + ':predictLongRunning');
 
-      // --- LÍNEA CORREGIDA AQUÍ ---
-      // Si los parámetros no fueron añadidos por un método específico, los añadimos ahora.
+      // --- Lï¿½NEA CORREGIDA AQUï¿½ ---
+      // Si los parï¿½metros no fueron aï¿½adidos por un mï¿½todo especï¿½fico, los aï¿½adimos ahora.
       if ARequestBody.FindValue('parameters') = nil then
         ARequestBody.AddPair('parameters', BuildParametersJson);
 
@@ -645,7 +645,7 @@ begin
       if LVideoUri.IsEmpty then
         raise Exception.Create('Final response did not contain a video URI.');
 
-      // --- PASO 4: Descargar el video y notificar el éxito ---
+      // --- PASO 4: Descargar el video y notificar el ï¿½xito ---
       DoProgress('Video generated. Downloading...');
       LResultVideo := DownloadVideoFile(LVideoUri);
       DoSuccess(LResultVideo);
@@ -717,7 +717,7 @@ begin
 
       LUploadUrl := LResponse.HeaderValue['X-Goog-Upload-Url'];
       if LUploadUrl = '' then
-        raise Exception.Create('No se recibió la URL de subida desde la API de Google.');
+        raise Exception.Create('No se recibiï¿½ la URL de subida desde la API de Google.');
 
       LFileStream.Position := 0;
       LHeaders := [TNetHeader.Create('Content-Length', LNumBytes.ToString), TNetHeader.Create('X-Goog-Upload-Offset', '0'), TNetHeader.Create('X-Goog-Upload-Command', 'upload, finalize')];
@@ -745,9 +745,9 @@ begin
           LUploadResponseObj.Free;
         end;
       if Result = '' then
-        raise Exception.Create('La API subió el archivo pero no devolvió una URI.');
+        raise Exception.Create('La API subiï¿½ el archivo pero no devolviï¿½ una URI.');
     finally
-      // El stream no se libera aquí porque es propiedad de TAiMediaFile
+      // El stream no se libera aquï¿½ porque es propiedad de TAiMediaFile
     end;
   finally
     LHttpClient.Free;
@@ -780,12 +780,12 @@ begin
     if LNumBytes = 0 then
       raise Exception.Create('Cannot upload an empty file.');
 
-    // La petición de inicio NO LLEVA CUERPO. La metadata va en los headers.
+    // La peticiï¿½n de inicio NO LLEVA CUERPO. La metadata va en los headers.
     LHttpClient.ContentType := 'application/json'; // El ContentType sigue siendo necesario
     LHeaders := [TNetHeader.Create('X-Goog-Upload-Protocol', 'resumable'), TNetHeader.Create('X-Goog-Upload-Command', 'start'), TNetHeader.Create('X-Goog-Upload-Header-Content-Length', LNumBytes.ToString),
       TNetHeader.Create('X-Goog-Upload-Header-Content-Type', aMediaFile.MimeType)];
 
-    // Enviamos la petición POST con un cuerpo NIL
+    // Enviamos la peticiï¿½n POST con un cuerpo NIL
     LResponse := LHttpClient.Post(LStartUrl, TStream(nil), nil, LHeaders);
 
     if LResponse.StatusCode <> 200 then
@@ -805,7 +805,7 @@ begin
     if LResponse.StatusCode <> 200 then
       raise Exception.CreateFmt('Error uploading file bytes: %d %s'#13#10'%s', [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
 
-    // --- PASO 3: Procesar la respuesta final (con la corrección) ---
+    // --- PASO 3: Procesar la respuesta final (con la correcciï¿½n) ---
     LUploadResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
     if Assigned(LUploadResponseObj) then
       try
@@ -815,7 +815,7 @@ begin
           // Obtenemos el objeto anidado que se llama "file"
         if LUploadResponseObj.TryGetValue<TJSONObject>('file', LFileObj) then
         begin
-          // Ahora que tenemos LFileObj, extraemos los valores de ÉL
+          // Ahora que tenemos LFileObj, extraemos los valores de ï¿½L
           LFileObj.TryGetValue<string>('uri', LFileUri);
           LFileObj.TryGetValue<string>('name', CloudName);
           LFileObj.TryGetValue<string>('state', CloudState);
@@ -853,7 +853,7 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Base64 = '') then
-    raise Exception.Create('Se necesita un archivo con contenido Base64 para crear una caché.');
+    raise Exception.Create('Se necesita un archivo con contenido Base64 para crear una cachï¿½.');
 
   LModel := GetEffectiveModelName; // TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
@@ -908,7 +908,7 @@ begin
             aMediaFile.CacheName := CacheName;
             Result := CacheName;
             if aMediaFile.CacheName = '' then
-              raise Exception.Create('La API no devolvió un nombre de caché (CacheName).');
+              raise Exception.Create('La API no devolviï¿½ un nombre de cachï¿½ (CacheName).');
           end;
         finally
           LResponseObj.Free;
@@ -916,7 +916,7 @@ begin
     end
     else
     begin
-      raise Exception.CreateFmt('Error al crear la caché de contenido: %d %s'#13#10'%s', [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
+      raise Exception.CreateFmt('Error al crear la cachï¿½ de contenido: %d %s'#13#10'%s', [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
     end;
   finally
     LHttpClient.Free;
@@ -943,7 +943,7 @@ begin
 
   LHttpClient := TNetHTTPClient.Create(Nil);
   try
-    // --- PASO 1: Iniciar la sesión de subida (Handshake) ---
+    // --- PASO 1: Iniciar la sesiï¿½n de subida (Handshake) ---
     LStartUrl := GEMINI_API_UPLOAD_URL + 'files?key=' + Self.ApiKey;
 
     LFileStream := aMediaFile.Content;
@@ -1001,7 +1001,7 @@ begin
       TNetHeader.Create('X-Goog-Upload-Command', 'upload, finalize')
     ];
 
-    LHttpClient.ContentType := aMediaFile.MimeType; // Importante: el tipo real del archivo aquí
+    LHttpClient.ContentType := aMediaFile.MimeType; // Importante: el tipo real del archivo aquï¿½
     LResponse := LHttpClient.Post(LUploadUrl, LFileStream, nil, LHeaders);
 
     if LResponse.StatusCode <> 200 then
@@ -1063,7 +1063,7 @@ begin
   LHttpClient := TNetHTTPClient.Create(nil);
   try
     // La URL para consultar el estado de un archivo es /v1beta/files/ID
-    // ACloudName tiene el formato "files/ID", así que lo usamos directamente.
+    // ACloudName tiene el formato "files/ID", asï¿½ que lo usamos directamente.
     LUrl := TPath.Combine(GEMINI_API_BASE_URL, ACloudName) + '?key=' + Self.ApiKey;
     LHeaders := []; // No se necesitan headers especiales para un GET simple
 
@@ -1089,7 +1089,7 @@ begin
               begin
                 DoProgress('File is now active and ready to use.');
                 Result := True;
-                Exit; // Salimos del bucle y de la función con éxito
+                Exit; // Salimos del bucle y de la funciï¿½n con ï¿½xito
               end
               else if LState.Equals('FAILED') then
               begin

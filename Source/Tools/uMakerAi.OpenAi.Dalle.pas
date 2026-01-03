@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,13 +33,13 @@
 
 
 // --- Modificaciones ----
-// 30/08/2024 -- Mejora en la función Edit
+// 30/08/2024 -- Mejora en la funciï¿½n Edit
 
 // --------- CAMBIOS --------------------
-// 4/11/2025 - Refactorización completa para soportar dall-e-2, dall-e-3, y gpt-image-1.
-// 4/11/2025 - Añadido soporte para streaming con eventos (OnPartialImageReceived, OnStreamCompleted).
-// 4/11/2025 - Integración con uMakerAi.Core: Edit y Variation ahora usan TAiMediaFile.
-// 4/11/2025 - Modernización de enums y nombres de propiedades para mayor claridad.
+// 4/11/2025 - Refactorizaciï¿½n completa para soportar dall-e-2, dall-e-3, y gpt-image-1.
+// 4/11/2025 - Aï¿½adido soporte para streaming con eventos (OnPartialImageReceived, OnStreamCompleted).
+// 4/11/2025 - Integraciï¿½n con uMakerAi.Core: Edit y Variation ahora usan TAiMediaFile.
+// 4/11/2025 - Modernizaciï¿½n de enums y nombres de propiedades para mayor claridad.
 
 unit uMakerAi.OpenAi.Dalle;
 
@@ -52,8 +52,8 @@ uses
   System.Math,
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
-  // Dependencia clave de la librería central
-  uMakerAi.Core;
+  // Dependencia clave de la libreria central
+  uMakerAi.Core, uJSONHelper;
 
 const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
@@ -97,7 +97,7 @@ type
   TOnStreamCompleted = procedure(Sender: TObject; const AFinalImage: TAiDalleImage) of object;
   TOnStreamError = procedure(Sender: TObject; const AErrorMessage: string) of object;
 
-  // Enums para los parámetros de la API
+  // Enums para los parï¿½metros de la API
   TAiImageModel = (imDallE2, imDallE3, imGptImage1);
   TAiImageQuality = (iqAuto, iqStandard, iqHD, iqHigh, iqMedium, iqLow);
   TAiImageBackground = (ibAuto, ibTransparent, ibOpaque);
@@ -108,9 +108,9 @@ type
   TAiImageSize = (is256x256, // Solo para DALL-E 2
     is512x512, // Solo para DALL-E 2
     is1024x1024, // Soportado por TODOS los modelos
-    is1792x1024, // Solo para DALL-E 3 (Formato panorámico/horizontal)
+    is1792x1024, // Solo para DALL-E 3 (Formato panorï¿½mico/horizontal)
     is1024x1792, // Solo para DALL-E 3 (Formato retrato/vertical)
-    is1536x1024, // Solo para gpt-image-1 (Formato panorámico/horizontal)
+    is1536x1024, // Solo para gpt-image-1 (Formato panorï¿½mico/horizontal)
     is1024x1536 // Solo para gpt-image-1 (Formato retrato/vertical)
     );
 
@@ -316,15 +316,27 @@ begin
     begin
       MediaFile.Content.Position := 0;
       if FModel = imGptImage1 then
+        {$IF CompilerVersion >= 35}
         Body.AddStream('image[]', MediaFile.Content, False, MediaFile.Filename)
+        {$ELSE}
+        Body.AddStream('image[]', MediaFile.Content, MediaFile.Filename)
+        {$ENDIF}
       else
+        {$IF CompilerVersion >= 35}
         Body.AddStream('image', MediaFile.Content, False, MediaFile.Filename);
+        {$ELSE}
+        Body.AddStream('image', MediaFile.Content, MediaFile.Filename);
+        {$ENDIF}
     end;
 
     if Assigned(aMaskFile) then
     begin
       aMaskFile.Content.Position := 0;
+      {$IF CompilerVersion >= 35}
       Body.AddStream('mask', aMaskFile.Content, False, aMaskFile.Filename);
+      {$ELSE}
+      Body.AddStream('mask', aMaskFile.Content, aMaskFile.Filename);
+      {$ENDIF}
     end;
 
     Body.AddField('prompt', aPrompt);
@@ -388,7 +400,7 @@ var
   ContentStream: TStringStream;
   ResponseStream: TMemoryStream; // Usado solo para llamadas no-streaming
   sUrl: string;
-  AbortFlag: Boolean; // Variable para el parámetro 'var'
+  AbortFlag: Boolean; // Variable para el parï¿½metro 'var'
   StreamReader: TStreamReader; // Para leer la respuesta de forma robusta
 begin
   Result := nil;
@@ -551,8 +563,8 @@ begin
       FActiveResponseStream := nil;
     end;
 
-    // El JObj de la petición se libera aquí solo si no es streaming,
-    // porque en streaming ya se habría liberado antes del bloque finally.
+    // El JObj de la peticiï¿½n se libera aquï¿½ solo si no es streaming,
+    // porque en streaming ya se habrï¿½a liberado antes del bloque finally.
     if not(FStream and (FModel = imGptImage1)) then
       JObj.Free;
   end;
@@ -573,7 +585,7 @@ var
   NewBytes: TBytes;
   NewDataSize: Int64;
 begin
-  // Verificación de seguridad: solo proceder si tenemos un stream activo
+  // Verificaciï¿½n de seguridad: solo proceder si tenemos un stream activo
   if not Assigned(FActiveResponseStream) then
     Exit;
 
@@ -749,7 +761,11 @@ begin
   Body := TMultipartFormData.Create;
   try
     aImageFile.Content.Position := 0;
+    {$IF CompilerVersion >= 35}
     Body.AddStream('image', aImageFile.Content, False, aImageFile.Filename);
+    {$ELSE}
+    Body.AddStream('image', aImageFile.Content, aImageFile.Filename);
+    {$ENDIF}
     Body.AddField('user', FUser);
     Body.AddField('n', N.ToString);
 
