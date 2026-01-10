@@ -110,7 +110,7 @@ object Form70: TForm70
     Left = 800
     Top = 80
   end
-  object AIGraph1: TAIAgents
+  object AIGraph1: TAIAgentManager
     StartNode = StartNode
     EndNode = EndNode
     OnPrint = AIChain1Print
@@ -250,17 +250,17 @@ object Form70: TForm70
     Left = 1016
     Top = 96
   end
-  object AIAgents1: TAIAgents
+  object AIAgentsManager: TAIAgents
     StartNode = NodoInicio
     EndNode = NodoFinal
     OnPrint = AIChain1Print
-    Left = 88
-    Top = 168
+    Left = 72
+    Top = 144
   end
   object NodoInicio: TAIAgentsNode
     Description = 'Inicio'
     Next = AIAgentsLink1
-    Graph = AIAgents1
+    Graph = AIAgentsManager
     OnExecute = NodoInicioExecute
     Left = 264
     Top = 96
@@ -268,7 +268,7 @@ object Form70: TForm70
   object TareaB: TAIAgentsNode
     Description = 'TareaB'
     Next = AIAgentsLink3
-    Graph = AIAgents1
+    Graph = AIAgentsManager
     OnExecute = TareaBExecute
     Left = 344
     Top = 248
@@ -276,23 +276,23 @@ object Form70: TForm70
   object TareaA: TAIAgentsNode
     Description = 'TareaA'
     Next = AIAgentsLink2
-    Graph = AIAgents1
+    Graph = AIAgentsManager
     OnExecute = TareaAExecute
     Left = 160
     Top = 248
   end
   object NodoFinal: TAIAgentsNode
     Description = 'Final'
-    Graph = AIAgents1
+    Graph = AIAgentsManager
     OnExecute = NodoFinalExecute
     JoinMode = jmAll
-    Left = 240
-    Top = 416
+    Left = 272
+    Top = 440
   end
   object AIAgentsLink1: TAIAgentsLink
     NextA = TareaA
     NextB = TareaB
-    Graph = AIAgents1
+    Graph = AIAgentsManager
     OnExecute = AIAgentsLink1Execute
     ConditionalKey = 'next_route'
     ManualTargetsKey = 'next_targets'
@@ -301,7 +301,7 @@ object Form70: TForm70
   end
   object AIAgentsLink2: TAIAgentsLink
     NextA = NodoFinal
-    Graph = AIAgents1
+    Graph = AIAgentsManager
     OnExecute = AIAgentsLink2Execute
     ConditionalKey = 'next_route'
     ManualTargetsKey = 'next_targets'
@@ -310,7 +310,7 @@ object Form70: TForm70
   end
   object AIAgentsLink3: TAIAgentsLink
     NextA = NodoFinal
-    Graph = AIAgents1
+    Graph = AIAgentsManager
     OnExecute = AIAgentsLink3Execute
     ConditionalKey = 'next_route'
     ManualTargetsKey = 'next_targets'

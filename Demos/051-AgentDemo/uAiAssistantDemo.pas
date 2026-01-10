@@ -47,7 +47,7 @@ type
   TForm70 = class(TForm)
     Link2: TAIAgentsLink;
     StartNode: TAIAgentsNode;
-    AIGraph1: TAIAgents;
+    AIGraph1: TAIAgentManager;
     AiNode: TAIAgentsNode;
     ExcecuteNode: TAIAgentsNode;
     EndNode: TAIAgentsNode;
@@ -68,7 +68,7 @@ type
     TareaA: TAIAgentsNode;
     NodoFinal: TAIAgentsNode;
     Button2: TButton;
-    AIAgents1: TAIAgents;
+    AIAgentsManager: TAIAgents;
     AIAgentsLink1: TAIAgentsLink;
     AIAgentsNode1: TAIAgentsNode;
     procedure AIChain1Print(Sender: TObject; Value: string);
@@ -166,7 +166,7 @@ end;
 
 procedure TForm70.Button2Click(Sender: TObject);
 begin
-  AIAgents1.Run('Mensaje');
+  AIAgentsManager.Run('Mensaje');
 end;
 
 procedure TForm70.EndNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);

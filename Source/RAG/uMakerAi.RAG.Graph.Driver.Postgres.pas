@@ -1,4 +1,4 @@
-// IT License
+Ôªø// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -31,16 +31,14 @@
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
-
 unit uMakerAi.RAG.Graph.Driver.Postgres;
 
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
-  Data.DB, FireDAC.Comp.Client, FireDac.Stan.Param,  uMakerAi.RAG.Vectors, uMakerAi.Embeddings.core,
+  System.SysUtils, System.Classes, System.Generics.Collections, System.StrUtils,
+  Data.DB, FireDAC.Comp.Client, FireDAC.Stan.Param, uMakerAi.RAG.Vectors, uMakerAi.Embeddings.core,
   uMakerAi.RAG.Graph.core;
-
 
 type
   TAiRagGraphPostgresDriver = class(TAiRagGraphDriverBase)
@@ -67,7 +65,8 @@ type
     function FindNodesByLabel(const ALabel: string): TArray<TAiRagGraphNode>; override;
     function FindNodesByProperty(const AKey: string; const AValue: Variant): TArray<TAiRagGraphNode>; override;
     function FindNodeNamesByLabel(const ANodeLabel, ASearchText: string; ALimit: Integer): TArray<string>; override;
-    function SearchNodes(const APrompt: string; ADepth, ALimit: Integer; APrecision: Double): TArray<TAiRagGraphNode>; override;
+    function SearchNodes(const APrompt: string; ADepth, ALimit: Integer; APrecision: Double; AFilter: TAiEmbeddingMetaData = nil): TArray<TAiRagGraphNode>; Override;
+
     function Query(const APlan: TQueryPlan; ADepth, ALimit: Integer; APrecision: Double): TArray<TAiRagGraphNode>; override;
   public
     constructor Create(AOwner: TComponent); override;
@@ -100,6 +99,122 @@ begin
   FNodesTableName := FTableName + 'nodes';
 end;
 
+{ procedure TAiRagGraphPostgresDriver.CreateSchema(const ABaseTableName: string; AVectorDim: Integer);
+  var
+  Query: TFDQuery;
+  NodesTableName, EdgesTableName: string;
+  VectorType: string;
+  begin
+  if not Assigned(FConnection) or not FConnection.Connected then
+  raise Exception.Create('La conexi√≥n a la base de datos no est√° activa.');
+
+  // Configuramos nombres basados en el par√°metro de entrada
+  NodesTableName := ABaseTableName + 'nodes';
+  EdgesTableName := ABaseTableName + 'edges';
+  VectorType := Format('vector(%d)', [AVectorDim]);
+
+  Query := NewQuery;
+  try
+  // --- 1. Crear la extensi√≥n vector si no existe (pgvector) ---
+  // NOTA: Esto solo funcionar√° si el usuario tiene permisos de superusuario.
+  // Si la BD ya est√° configurada, fallar√° inofensivamente con 'CREATE EXTENSION IF NOT EXISTS'.
+  try
+  Query.SQL.Text := 'CREATE EXTENSION IF NOT EXISTS vector;';
+  Query.ExecSQL;
+  except
+  on E: Exception do
+  // Generalmente, no es fatal si la extensi√≥n ya existe o el usuario no puede crearla.
+  // Si no se puede crear, la siguiente CREATE TABLE fallar√°.
+  ;
+  end;
+
+  // --- 2. Crear la Tabla de Nodos ---
+  Query.SQL.Clear;
+  Query.SQL.Add(Format('CREATE TABLE IF NOT EXISTS public.%s (', [NodesTableName]));
+  Query.SQL.Add('    entidad character varying(20) COLLATE pg_catalog."default" NOT NULL,'); // Cambi√© char(20) a varying(20)
+  Query.SQL.Add('    id text COLLATE pg_catalog."default" NOT NULL,');
+  Query.SQL.Add('    node_label text COLLATE pg_catalog."default" NOT NULL,');
+  Query.SQL.Add('    name text COLLATE pg_catalog."default",');
+  Query.SQL.Add('    properties jsonb,');
+  Query.SQL.Add(Format('    embedding %s,', [VectorType])); // Dimensi√≥n din√°mica
+  Query.SQL.Add(Format('    CONSTRAINT %s_pkey PRIMARY KEY (id, entidad)', [NodesTableName]));
+  Query.SQL.Add(') TABLESPACE pg_default;');
+  Query.ExecSQL;
+
+  // --- 3. Crear √çndices de Nodos ---
+  // √çndice HNSW (vectorial)
+  Query.SQL.Clear;
+  Query.SQL.Add(Format('CREATE INDEX IF NOT EXISTS idx_%s_embedding_hnsw', [NodesTableName]));
+  Query.SQL.Add(Format('    ON public.%s USING hnsw', [NodesTableName]));
+  Query.SQL.Add('    (embedding vector_cosine_ops)');
+  Query.SQL.Add('    TABLESPACE pg_default;');
+  Query.ExecSQL;
+
+  // √çndice BTree (entidad y label)
+  Query.SQL.Clear;
+  Query.SQL.Add(Format('CREATE INDEX IF NOT EXISTS idx_%s_entidad_label', [NodesTableName]));
+  Query.SQL.Add(Format('    ON public.%s USING btree', [NodesTableName]));
+  Query.SQL.Add('    (entidad COLLATE pg_catalog."default" ASC NULLS LAST, node_label COLLATE pg_catalog."default" ASC NULLS LAST)');
+  Query.SQL.Add('    TABLESPACE pg_default;');
+  Query.ExecSQL;
+
+  // --- 4. Crear la Tabla de Aristas ---
+  Query.SQL.Clear;
+  Query.SQL.Add(Format('CREATE TABLE IF NOT EXISTS public.%s (', [EdgesTableName]));
+  Query.SQL.Add('    entidad character varying(20) COLLATE pg_catalog."default" NOT NULL,');
+  Query.SQL.Add('    id text COLLATE pg_catalog."default" NOT NULL,');
+  Query.SQL.Add('    edge_label text COLLATE pg_catalog."default" NOT NULL,');
+  Query.SQL.Add('    name text COLLATE pg_catalog."default",');
+  Query.SQL.Add('    source_node_id text COLLATE pg_catalog."default" NOT NULL,');
+  Query.SQL.Add('    target_node_id text COLLATE pg_catalog."default" NOT NULL,');
+  Query.SQL.Add('    weight double precision DEFAULT 1.0,');
+  Query.SQL.Add('    properties jsonb,');
+  Query.SQL.Add(Format('    embedding %s,', [VectorType])); // Dimensi√≥n din√°mica
+  Query.SQL.Add(Format('    CONSTRAINT %s_pkey PRIMARY KEY (id, entidad),', [EdgesTableName]));
+
+  // Opcional: A√±adir restricciones de clave externa para garantizar la integridad
+  // Esto es muy recomendable si se usa una tabla externa.
+  Query.SQL.Add(Format('    CONSTRAINT fk_source_node FOREIGN KEY (source_node_id, entidad) REFERENCES %s (id, entidad) ON DELETE CASCADE,', [NodesTableName]));
+  Query.SQL.Add(Format('    CONSTRAINT fk_target_node FOREIGN KEY (target_node_id, entidad) REFERENCES %s (id, entidad) ON DELETE CASCADE', [NodesTableName]));
+
+  Query.SQL.Add(') TABLESPACE pg_default;');
+  Query.ExecSQL;
+
+  // --- 5. Crear √çndices de Aristas ---
+  // √çndice BTree (entidad y label)
+  Query.SQL.Clear;
+  Query.SQL.Add(Format('CREATE INDEX IF NOT EXISTS idx_%s_entidad_label', [EdgesTableName]));
+  Query.SQL.Add(Format('    ON public.%s USING btree', [EdgesTableName]));
+  Query.SQL.Add('    (entidad COLLATE pg_catalog."default" ASC NULLS LAST, edge_label COLLATE pg_catalog."default" ASC NULLS LAST)');
+  Query.SQL.Add('    TABLESPACE pg_default;');
+  Query.ExecSQL;
+
+  // √çndice BTree (entidad y source)
+  Query.SQL.Clear;
+  Query.SQL.Add(Format('CREATE INDEX IF NOT EXISTS idx_%s_entidad_source', [EdgesTableName]));
+  Query.SQL.Add(Format('    ON public.%s USING btree', [EdgesTableName]));
+  Query.SQL.Add('    (entidad COLLATE pg_catalog."default" ASC NULLS LAST, source_node_id COLLATE pg_catalog."default" ASC NULLS LAST)');
+  Query.SQL.Add('    TABLESPACE pg_default;');
+  Query.ExecSQL;
+
+  // √çndice BTree (entidad y target)
+  Query.SQL.Clear;
+  Query.SQL.Add(Format('CREATE INDEX IF NOT EXISTS idx_%s_entidad_target', [EdgesTableName]));
+  Query.SQL.Add(Format('    ON public.%s USING btree', [EdgesTableName]));
+  Query.SQL.Add('    (entidad COLLATE pg_catalog."default" ASC NULLS LAST, target_node_id COLLATE pg_catalog."default" ASC NULLS LAST)');
+  Query.SQL.Add('    TABLESPACE pg_default;');
+  Query.ExecSQL;
+
+  // 6. Configurar el driver para usar las nuevas tablas
+  Self.TableName := ABaseTableName;
+  Self.CurrentEntidad := 'DEFAULT'; // O la entidad inicial que decidas
+
+  finally
+  Query.Free;
+  end;
+  end;
+}
+
 procedure TAiRagGraphPostgresDriver.CreateSchema(const ABaseTableName: string; AVectorDim: Integer);
 var
   Query: TFDQuery;
@@ -107,113 +222,103 @@ var
   VectorType: string;
 begin
   if not Assigned(FConnection) or not FConnection.Connected then
-    raise Exception.Create('La conexiÛn a la base de datos no est· activa.');
+    raise Exception.Create('La conexi√≥n a la base de datos no est√° activa.');
 
-  // Configuramos nombres basados en el par·metro de entrada
+  // Configuraci√≥n de nombres de tablas
   NodesTableName := ABaseTableName + 'nodes';
   EdgesTableName := ABaseTableName + 'edges';
   VectorType := Format('vector(%d)', [AVectorDim]);
 
   Query := NewQuery;
   try
-    // --- 1. Crear la extensiÛn vector si no existe (pgvector) ---
-    // NOTA: Esto solo funcionar· si el usuario tiene permisos de superusuario.
-    // Si la BD ya est· configurada, fallar· inofensivamente con 'CREATE EXTENSION IF NOT EXISTS'.
+    // 1. EXTENSI√ìN PGVECTOR
+    // Necesaria para el soporte de vectores y el √≠ndice HNSW
     try
       Query.SQL.Text := 'CREATE EXTENSION IF NOT EXISTS vector;';
       Query.ExecSQL;
     except
-      on E: Exception do
-        // Generalmente, no es fatal si la extensiÛn ya existe o el usuario no puede crearla.
-        // Si no se puede crear, la siguiente CREATE TABLE fallar·.
-        ;
+      on E: Exception do; // Ignorar si ya existe o no hay permisos de superusuario
     end;
 
-    // --- 2. Crear la Tabla de Nodos ---
+    // 2. TABLA DE NODOS (Entidades)
     Query.SQL.Clear;
     Query.SQL.Add(Format('CREATE TABLE IF NOT EXISTS public.%s (', [NodesTableName]));
-    Query.SQL.Add('    entidad character varying(20) COLLATE pg_catalog."default" NOT NULL,'); // CambiÈ char(20) a varying(20)
-    Query.SQL.Add('    id text COLLATE pg_catalog."default" NOT NULL,');
-    Query.SQL.Add('    node_label text COLLATE pg_catalog."default" NOT NULL,');
-    Query.SQL.Add('    name text COLLATE pg_catalog."default",');
+    Query.SQL.Add('    entidad character varying(20) NOT NULL,');
+    Query.SQL.Add('    id text NOT NULL,');
+    Query.SQL.Add('    node_label text NOT NULL,');
+    Query.SQL.Add('    name text,');
+    Query.SQL.Add('    node_text text,'); // <--- Campo vital para el contexto RAG
     Query.SQL.Add('    properties jsonb,');
-    Query.SQL.Add(Format('    embedding %s,', [VectorType])); // DimensiÛn din·mica
+    Query.SQL.Add(Format('    embedding %s,', [VectorType]));
+
+    // --- MOTOR DE B√öSQUEDA H√çBRIDA (TSVECTOR) ---
+    // Indexamos Nombre (A), Etiqueta (B) y el Texto descriptivo (C)
+    Query.SQL.Add('    search_vector tsvector GENERATED ALWAYS AS (');
+    Query.SQL.Add('       setweight(to_tsvector(''spanish'', coalesce(name, '''')), ''A'') || ');
+    Query.SQL.Add('       setweight(to_tsvector(''spanish'', coalesce(node_label, '''')), ''B'') || ');
+    Query.SQL.Add('       setweight(to_tsvector(''spanish'', coalesce(node_text, '''')), ''C'')) STORED,');
+
     Query.SQL.Add(Format('    CONSTRAINT %s_pkey PRIMARY KEY (id, entidad)', [NodesTableName]));
-    Query.SQL.Add(') TABLESPACE pg_default;');
+    Query.SQL.Add(');');
     Query.ExecSQL;
 
-    // --- 3. Crear Õndices de Nodos ---
-    // Õndice HNSW (vectorial)
-    Query.SQL.Clear;
-    Query.SQL.Add(Format('CREATE INDEX IF NOT EXISTS idx_%s_embedding_hnsw', [NodesTableName]));
-    Query.SQL.Add(Format('    ON public.%s USING hnsw', [NodesTableName]));
-    Query.SQL.Add('    (embedding vector_cosine_ops)');
-    Query.SQL.Add('    TABLESPACE pg_default;');
+    // 3. √çNDICES DE NODOS
+    // √çndice Vectorial HNSW para b√∫squeda sem√°ntica (Coseno)
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_embedding_hnsw ON public.%s USING hnsw (embedding vector_cosine_ops);', [NodesTableName, NodesTableName]);
     Query.ExecSQL;
 
-    // Õndice BTree (entidad y label)
-    Query.SQL.Clear;
-    Query.SQL.Add(Format('CREATE INDEX IF NOT EXISTS idx_%s_entidad_label', [NodesTableName]));
-    Query.SQL.Add(Format('    ON public.%s USING btree', [NodesTableName]));
-    Query.SQL.Add('    (entidad COLLATE pg_catalog."default" ASC NULLS LAST, node_label COLLATE pg_catalog."default" ASC NULLS LAST)');
-    Query.SQL.Add('    TABLESPACE pg_default;');
+    // √çndice GIN para b√∫squeda l√©xica (Palabras clave)
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_fts ON public.%s USING gin(search_vector);', [NodesTableName, NodesTableName]);
     Query.ExecSQL;
 
-    // --- 4. Crear la Tabla de Aristas ---
+    // √çndice GIN para metadatos JSONB (Filtros r√°pidos)
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_props ON public.%s USING gin(properties);', [NodesTableName, NodesTableName]);
+    Query.ExecSQL;
+
+    // √çndice BTree para b√∫squedas exactas por nombre
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_name ON public.%s (name);', [NodesTableName, NodesTableName]);
+    Query.ExecSQL;
+
+    // 4. TABLA DE ARISTAS (Relaciones)
     Query.SQL.Clear;
     Query.SQL.Add(Format('CREATE TABLE IF NOT EXISTS public.%s (', [EdgesTableName]));
-    Query.SQL.Add('    entidad character varying(20) COLLATE pg_catalog."default" NOT NULL,');
-    Query.SQL.Add('    id text COLLATE pg_catalog."default" NOT NULL,');
-    Query.SQL.Add('    edge_label text COLLATE pg_catalog."default" NOT NULL,');
-    Query.SQL.Add('    name text COLLATE pg_catalog."default",');
-    Query.SQL.Add('    source_node_id text COLLATE pg_catalog."default" NOT NULL,');
-    Query.SQL.Add('    target_node_id text COLLATE pg_catalog."default" NOT NULL,');
+    Query.SQL.Add('    entidad character varying(20) NOT NULL,');
+    Query.SQL.Add('    id text NOT NULL,');
+    Query.SQL.Add('    edge_label text NOT NULL,');
+    Query.SQL.Add('    name text,');
+    Query.SQL.Add('    node_text text,'); // <--- Contexto descriptivo de la relaci√≥n
+    Query.SQL.Add('    source_node_id text NOT NULL,');
+    Query.SQL.Add('    target_node_id text NOT NULL,');
     Query.SQL.Add('    weight double precision DEFAULT 1.0,');
     Query.SQL.Add('    properties jsonb,');
-    Query.SQL.Add(Format('    embedding %s,', [VectorType])); // DimensiÛn din·mica
+    Query.SQL.Add(Format('    embedding %s,', [VectorType]));
+
+    // Primary Key y Foreign Keys
     Query.SQL.Add(Format('    CONSTRAINT %s_pkey PRIMARY KEY (id, entidad),', [EdgesTableName]));
-
-    // Opcional: AÒadir restricciones de clave externa para garantizar la integridad
-    // Esto es muy recomendable si se usa una tabla externa.
-    Query.SQL.Add(Format('    CONSTRAINT fk_source_node FOREIGN KEY (source_node_id, entidad) REFERENCES %s (id, entidad) ON DELETE CASCADE,', [NodesTableName]));
-    Query.SQL.Add(Format('    CONSTRAINT fk_target_node FOREIGN KEY (target_node_id, entidad) REFERENCES %s (id, entidad) ON DELETE CASCADE', [NodesTableName]));
-
-    Query.SQL.Add(') TABLESPACE pg_default;');
+    Query.SQL.Add(Format('    CONSTRAINT fk_source_%s FOREIGN KEY (source_node_id, entidad) REFERENCES %s (id, entidad) ON DELETE CASCADE,', [EdgesTableName, NodesTableName]));
+    Query.SQL.Add(Format('    CONSTRAINT fk_target_%s FOREIGN KEY (target_node_id, entidad) REFERENCES %s (id, entidad) ON DELETE CASCADE', [EdgesTableName, NodesTableName]));
+    Query.SQL.Add(');');
     Query.ExecSQL;
 
-    // --- 5. Crear Õndices de Aristas ---
-    // Õndice BTree (entidad y label)
-    Query.SQL.Clear;
-    Query.SQL.Add(Format('CREATE INDEX IF NOT EXISTS idx_%s_entidad_label', [EdgesTableName]));
-    Query.SQL.Add(Format('    ON public.%s USING btree', [EdgesTableName]));
-    Query.SQL.Add('    (entidad COLLATE pg_catalog."default" ASC NULLS LAST, edge_label COLLATE pg_catalog."default" ASC NULLS LAST)');
-    Query.SQL.Add('    TABLESPACE pg_default;');
+    // 5. √çNDICES DE ARISTAS
+    // √çndice para filtrar por tipo de relaci√≥n
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_edge_label ON public.%s (entidad, edge_label);', [EdgesTableName, EdgesTableName]);
     Query.ExecSQL;
 
-    // Õndice BTree (entidad y source)
-    Query.SQL.Clear;
-    Query.SQL.Add(Format('CREATE INDEX IF NOT EXISTS idx_%s_entidad_source', [EdgesTableName]));
-    Query.SQL.Add(Format('    ON public.%s USING btree', [EdgesTableName]));
-    Query.SQL.Add('    (entidad COLLATE pg_catalog."default" ASC NULLS LAST, source_node_id COLLATE pg_catalog."default" ASC NULLS LAST)');
-    Query.SQL.Add('    TABLESPACE pg_default;');
+    // √çndices fundamentales para navegaci√≥n de grafos (JOINs r√°pidos)
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_source_id ON public.%s (source_node_id, entidad);', [EdgesTableName, EdgesTableName]);
+    Query.ExecSQL;
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_target_id ON public.%s (target_node_id, entidad);', [EdgesTableName, EdgesTableName]);
     Query.ExecSQL;
 
-    // Õndice BTree (entidad y target)
-    Query.SQL.Clear;
-    Query.SQL.Add(Format('CREATE INDEX IF NOT EXISTS idx_%s_entidad_target', [EdgesTableName]));
-    Query.SQL.Add(Format('    ON public.%s USING btree', [EdgesTableName]));
-    Query.SQL.Add('    (entidad COLLATE pg_catalog."default" ASC NULLS LAST, target_node_id COLLATE pg_catalog."default" ASC NULLS LAST)');
-    Query.SQL.Add('    TABLESPACE pg_default;');
-    Query.ExecSQL;
-
-    // 6. Configurar el driver para usar las nuevas tablas
+    // 6. Sincronizaci√≥n del Driver
     Self.TableName := ABaseTableName;
-    Self.CurrentEntidad := 'DEFAULT'; // O la entidad inicial que decidas
 
   finally
     Query.Free;
   end;
 end;
+
 
 procedure TAiRagGraphPostgresDriver.DeleteEdge(const AEdgeID: string);
 var
@@ -281,6 +386,7 @@ begin
       AEdgeData.SourceNodeID := Query.FieldByName('source_node_id').AsString;
       AEdgeData.TargetNodeID := Query.FieldByName('target_node_id').AsString;
       AEdgeData.Weight := Query.FieldByName('weight').AsFloat;
+      AEdgeData.NodeText := Query.FieldByName('node_text').AsString;
 
       if not Query.FieldByName('properties').IsNull then
         AEdgeData.PropertiesJSON := Query.FieldByName('properties').AsString
@@ -335,43 +441,40 @@ function TAiRagGraphPostgresDriver.FindNodeDataByID(const ANodeID: string; out A
 var
   Query: TFDQuery;
 begin
+  Result := False;
   Query := NewQuery;
   try
-    Query.SQL.Add('SELECT id, node_label, name, properties, embedding ');
-    Query.SQL.Add('FROM  ' + FNodesTableName);
-    Query.SQL.Add('WHERE id = :id');
-    Query.SQL.Add('  AND entidad = :entidad');
-
+    Query.SQL.Add('SELECT id, node_label, name, node_text, properties, embedding ');
+    Query.SQL.Add('FROM ' + FNodesTableName);
+    Query.SQL.Add('WHERE id = :id AND entidad = :entidad');
     Query.ParamByName('id').AsString := ANodeID;
     Query.ParamByName('entidad').AsString := FCurrentEntidad;
     Query.Open;
-
     if not Query.IsEmpty then
     begin
-      // En lugar de crear un objeto, llenamos el record con los datos crudos.
       ANodeData.ID := Query.FieldByName('id').AsString;
       ANodeData.NodeLabel := Query.FieldByName('node_label').AsString;
       ANodeData.Name := Query.FieldByName('name').AsString;
+      ANodeData.NodeText := Query.FieldByName('node_text').AsString;
 
       if not Query.FieldByName('properties').IsNull then
         ANodeData.PropertiesJSON := Query.FieldByName('properties').AsString
       else
         ANodeData.PropertiesJSON := '{}';
 
+      // ‚úì Mantener el manejo de NULL del embedding
       if not Query.FieldByName('embedding').IsNull then
         ANodeData.EmbeddingStr := Query.FieldByName('embedding').AsString
       else
         ANodeData.EmbeddingStr := '[]';
-      Result := True;
-    end
-    Else
-      Result := False;
 
+      Result := True;
+    end;
   finally
     Query.Free;
   end;
-
 end;
+
 
 function TAiRagGraphPostgresDriver.FindNodeNamesByLabel(const ANodeLabel, ASearchText: string; ALimit: Integer): TArray<string>;
 var
@@ -435,12 +538,12 @@ begin
       Query.Next;
     end;
 
-    // 2. Pedirle al grafo que "hidrate" o devuelva cada nodo desde su cachÈ.
+    // 2. Pedirle al grafo que "hidrate" o devuelva cada nodo desde su cach√©.
     SetLength(Result, NodeIDs.Count);
     for i := 0 to NodeIDs.Count - 1 do
     begin
-      // FindNodeByID es ahora nuestro ˙nico punto de entrada para obtener nodos.
-      // Se encargar· de crear el objeto si no existe, o devolver el
+      // FindNodeByID es ahora nuestro √∫nico punto de entrada para obtener nodos.
+      // Se encargar√° de crear el objeto si no existe, o devolver el
       // existente si ya fue cargado.
       Result[i] := Graph.FindNodeByID(NodeIDs[i]);
     end;
@@ -459,14 +562,19 @@ begin
   Query := NewQuery;
   NodeIDs := TStringList.Create;
   try
+    // Si buscamos por nombre, usamos ILIKE para que sea insensible a may√∫sculas
+    // Esto ayuda mucho con el nuevo Parser
     if SameText(AKey, 'name') then
     begin
-      Query.SQL.Text := 'SELECT * FROM ' + FNodesTableName + ' WHERE entidad = :entidad AND name = :value';
+      Query.SQL.Text := 'SELECT id FROM ' + FNodesTableName +
+                        ' WHERE entidad = :entidad AND name ILIKE :value';
       Query.ParamByName('value').AsString := VarToStr(AValue);
     end
     else
     begin
-      Query.SQL.Text := 'SELECT * FROM ' + FNodesTableName + ' WHERE entidad = :entidad AND properties ->> :key = :value';
+      // B√∫squeda en JSONB. Nota: properties ->> :key es case-sensitive en Postgres
+      Query.SQL.Text := 'SELECT id FROM ' + FNodesTableName +
+                        ' WHERE entidad = :entidad AND properties ->> :key = :value';
       Query.ParamByName('key').AsString := AKey;
       Query.ParamByName('value').AsString := VarToStr(AValue);
     end;
@@ -482,9 +590,7 @@ begin
 
     SetLength(Result, NodeIDs.Count);
     for var i := 0 to NodeIDs.Count - 1 do
-    begin
       Result[i] := Graph.FindNodeByID(NodeIDs[i]);
-    end;
 
   finally
     Query.Free;
@@ -492,37 +598,39 @@ begin
   end;
 end;
 
+
 procedure TAiRagGraphPostgresDriver.GetNodeEdges(ANode: TAiRagGraphNode);
 var
   Query: TFDQuery;
   EdgeData: TEdgeDataRecord;
   EdgeID: string;
 begin
+  // Evitamos carga innecesaria si la conexi√≥n no est√° lista
+  if (ANode = nil) or (FConnection = nil) then Exit;
 
   Query := NewQuery;
   try
-    // 1. Traemos TODOS los datos de las aristas en UNA SOLA consulta.
+    // 1. SELECT METICULOSO: Traemos todos los campos necesarios para reconstruir la arista
     Query.SQL.Add('SELECT id, edge_label, name, source_node_id, target_node_id, ');
-    Query.SQL.Add('   weight, properties, embedding ');
+    Query.SQL.Add('       weight, properties, embedding ');
     Query.SQL.Add('FROM ' + FEdgesTableName);
     Query.SQL.Add('WHERE entidad = :entidad');
-    Query.SQL.Add('  AND (source_node_id = :node_id');
-    Query.SQL.Add('       OR target_node_id = :node_id)');
+    // Buscamos donde el nodo sea ORIGEN o DESTINO (Carga bidireccional)
+    Query.SQL.Add('  AND (source_node_id = :node_id OR target_node_id = :node_id)');
 
     Query.ParamByName('entidad').AsString := FCurrentEntidad;
     Query.ParamByName('node_id').AsString := ANode.ID;
     Query.Open;
 
-    // 2. Iteramos sobre los resultados y le pedimos al grafo que hidrate cada arista.
     while not Query.Eof do
     begin
       EdgeID := Query.FieldByName('id').AsString;
 
-      // --- °L”GICA CORREGIDA Y LIMPIA! ---
-      // Usamos la nueva funciÛn p˙blica para comprobar si la arista ya existe en memoria.
+      // 2. IDENTITY MAP: Verificamos si la arista ya existe en la memoria de Delphi
+      // Esto evita crear objetos duplicados si ya cargamos esta arista desde el otro nodo extremo
       if not Graph.EdgeExistsInMemory(EdgeID) then
       begin
-        // La arista no existe en memoria, asÌ que la creamos e hidratamos.
+        // Llenamos el Record intermedio (Mantenemos la estructura del Core)
         EdgeData.ID := EdgeID;
         EdgeData.EdgeLabel := Query.FieldByName('edge_label').AsString;
         EdgeData.Name := Query.FieldByName('name').AsString;
@@ -530,6 +638,7 @@ begin
         EdgeData.TargetNodeID := Query.FieldByName('target_node_id').AsString;
         EdgeData.Weight := Query.FieldByName('weight').AsFloat;
 
+        // Manejo de nulos en JSONB y Embedding
         if not Query.FieldByName('properties').IsNull then
           EdgeData.PropertiesJSON := Query.FieldByName('properties').AsString
         else
@@ -540,17 +649,18 @@ begin
         else
           EdgeData.EmbeddingStr := '[]';
 
-        // Usamos el mÈtodo protegido del grafo para crear el objeto desde los datos.
-        // Para llamarlo, SÕ necesitamos el class helper aquÌ.
+        // 3. HIDRATACI√ìN: El grafo crea el objeto y conecta los nodos
+        // InternalHydrateEdge llamar√° a FindNodeByID para los extremos.
+        // Si el nodo vecino no est√° en RAM, se cargar√° autom√°ticamente de la BD.
         Graph.InternalHydrateEdge(EdgeData);
       end;
-
       Query.Next;
     end;
   finally
     Query.Free;
   end;
 end;
+
 
 function TAiRagGraphPostgresDriver.GetUniqueEdgeLabels: TArray<string>;
 var
@@ -588,10 +698,10 @@ var
   Query: TFDQuery;
   LabelList: TStringList;
 begin
-  // Asumimos que la conexiÛn a la base de datos ya est· activa.
-  // Si no es asÌ, puedes aÒadir una comprobaciÛn aquÌ.
+  // Asumimos que la conexi√≥n a la base de datos ya est√° activa.
+  // Si no es as√≠, puedes a√±adir una comprobaci√≥n aqu√≠.
 
-  Query := NewQuery; // Usando tu funciÛn helper
+  Query := NewQuery; // Usando tu funci√≥n helper
   LabelList := TStringList.Create;
   try
     // 1. Definir la consulta SQL
@@ -601,7 +711,7 @@ begin
     // 2. Ejecutar la consulta
     Query.Open;
 
-    // 3. Recorrer los resultados y aÒadirlos a la lista
+    // 3. Recorrer los resultados y a√±adirlos a la lista
     while not Query.Eof do
     begin
       LabelList.Add(Query.Fields[0].AsString);
@@ -616,7 +726,6 @@ begin
   end;
 end;
 
-
 function TAiRagGraphPostgresDriver.PropertiesToJSONString(const AProperties: TDictionary<string, Variant>): string;
 var
   JsonObj: TJSONObject;
@@ -625,14 +734,14 @@ begin
   if (AProperties = nil) or (AProperties.Count = 0) then
     Exit('{}');
 
-  // La lÛgica es muy similar a la que acabamos de poner en el Core.
-  // PodrÌamos incluso reutilizarla si tuviÈramos una unidad de helpers com˙n.
+  // La l√≥gica es muy similar a la que acabamos de poner en el Core.
+  // Podr√≠amos incluso reutilizarla si tuvi√©ramos una unidad de helpers com√∫n.
   JsonObj := TJSONObject.Create;
   try
     for Pair in AProperties do
     begin
-      // Para no depender de VariantToJSONValue (que est· en el Core),
-      // podemos replicar su lÛgica simple aquÌ.
+      // Para no depender de VariantToJSONValue (que est√° en el Core),
+      // podemos replicar su l√≥gica simple aqu√≠.
       case VarType(Pair.Value) of
         varBoolean:
           JsonObj.AddPair(Pair.Key, TJSONBool.Create(Boolean(Pair.Value)));
@@ -648,300 +757,324 @@ begin
   end;
 end;
 
-function TAiRagGraphPostgresDriver.Query(const APlan: TQueryPlan; ADepth, ALimit: Integer; APrecision: Double): TArray<TAiRagGraphNode>;
+function TAiRagGraphPostgresDriver.Query(const APlan: TQueryPlan;
+  ADepth, ALimit: Integer; APrecision: Double): TArray<TAiRagGraphNode>;
 var
   Query: TFDQuery;
+  SQL: TStringBuilder;
   Step: TQueryStep;
   QueryEmbedding: TAiEmbeddingData;
   EmbeddingStr: String;
   NodeIDs: TStringList;
-  DirectionChar: string; // Para manejar la direcciÛn de la arista
+  i: Integer;
+  CurrentStepVar, PrevStepVar: string;
 begin
+  SetLength(Result, 0);
 
-
-  // --------------------------------------------------------------------------
-  // TODO: Soporte para Query Multipaso.
-  // La lÛgica actual solo maneja UN paso estructural despuÈs del anclaje sem·ntico.
-  // La implementaciÛn futura requerir·:
-  // 1. Un bucle sobre APlan.Steps.
-  // 2. GeneraciÛn de SQL con m˙ltiples CTEs o una CTE recursiva compleja.
-  // --------------------------------------------------------------------------
-
-  SetLength(Result, 0); // Corregido: Usar Result en lugar de ResultNodes
-
-  if Graph = nil then Exit;
-
-  // El driver en esta versiÛn simplificada solo maneja un paso estructural
-  if Length(APlan.Steps) <> 1 then
-  begin
-    // Si no es un plan de un solo paso, devolvemos un array vacÌo o podrÌamos
-    // delegar a la lÛgica en memoria si queremos fallar suavemente.
-    // Pero en el driver, el contrato es manejar la BD o fallar.
+  if (Graph = nil) or (APlan.AnchorPrompt.IsEmpty) then
     Exit;
-  end;
+
+  // Validar que hay pasos definidos
+  if Length(APlan.Steps) = 0 then
+    Exit;
 
   Query := NewQuery;
+  SQL := TStringBuilder.Create;
   NodeIDs := TStringList.Create;
-  Step := APlan.Steps[0];
-
   try
-    // Paso 1: Obtener embedding
+    // -----------------------------------------------------------------------
+    // PASO 1: Obtener embedding del ancla
+    // -----------------------------------------------------------------------
     if not Assigned(Graph.Embeddings) then
-      raise Exception.Create('El motor de Embeddings no est· asignado al grafo.');
+      raise Exception.Create('El motor de Embeddings no est√° asignado al grafo.');
 
     QueryEmbedding := Graph.Embeddings.CreateEmbedding(APlan.AnchorPrompt, 'user');
     EmbeddingStr := EmbeddingToString(QueryEmbedding);
 
-    // Determinar la direcciÛn de la b˙squeda para el JOIN
-    if Step.IsReversed then
-      DirectionChar := 'INCOMING'
-    else
-      DirectionChar := 'OUTGOING';
+    // -----------------------------------------------------------------------
+    // PASO 2: Construir SQL con CTEs recursivos
+    // -----------------------------------------------------------------------
+    SQL.AppendLine('WITH RECURSIVE ');
 
-    // -------------------------------------------------------------------------
-    // Paso 2: Construir y ejecutar la consulta SQL HÌbrida
-    // -------------------------------------------------------------------------
-    Query.SQL.Clear;
+    // CTE de Anclaje: B√∫squeda Sem√°ntica Inicial
+    SQL.AppendLine(Format('  %s AS (', [APlan.AnchorVariable]));
+    SQL.AppendLine('    SELECT id FROM ' + FNodesTableName);
+    SQL.AppendLine('    WHERE entidad = :entidad');
 
-    // CTE 1: AnchorNodes (B˙squeda Sem·ntica)
-    Query.SQL.Add('WITH AnchorNodes AS (');
-    Query.SQL.Add('  SELECT id');
-    Query.SQL.Add('  FROM ' + FNodesTableName); // Usar nombre de tabla din·mico
-    Query.SQL.Add('  WHERE entidad = :entidad');
-    // Usamos el literal del embedding para el operador vectorial
-    Query.SQL.Add('    AND (embedding <-> ''' + EmbeddingStr + ''') < :distance_threshold');
-    Query.SQL.Add('  ORDER BY embedding <-> ''' + EmbeddingStr + '''');
-    Query.SQL.Add('  LIMIT :limit');
-    Query.SQL.Add(')');
+    // USAR OPERADOR DE COSENO (mejor para embeddings de texto)
+    SQL.AppendLine('      AND (1 - (embedding <=> ''' + EmbeddingStr + ''')) >= :precision');
+    SQL.AppendLine('    ORDER BY embedding <=> ''' + EmbeddingStr + ''' ASC');
+    SQL.AppendLine('    LIMIT :limit');
+    SQL.AppendLine('  )');
 
-    // Consulta final: Obtener los IDs de los nodos de destino (JOIN estructural)
-    Query.SQL.Add('SELECT final_node.id ');
-    Query.SQL.Add('FROM AnchorNodes an ');
-
-    // JOIN a la tabla de aristas, condicionando por la etiqueta de la arista
-    Query.SQL.Add('JOIN ' + FEdgesTableName + ' e ON e.entidad = :entidad AND e.edge_label = :edge_label ');
-
-    // CondiciÛn de DirecciÛn (Source vs Target)
-    if Step.IsReversed then
+    // CTEs de Navegaci√≥n Estructural (Multi-Hop)
+    for i := 0 to High(APlan.Steps) do
     begin
-      // B˙squeda inversa: Ancla es el nodo DESTINO, Resultado es el nodo ORIGEN
-      Query.SQL.Add('  AND an.id = e.target_node_id ');
-      Query.SQL.Add('JOIN ' + FNodesTableName + ' final_node ON e.source_node_id = final_node.id AND final_node.entidad = :entidad ');
-    end
-    else
-    begin
-      // B˙squeda directa: Ancla es el nodo ORIGEN, Resultado es el nodo DESTINO
-      Query.SQL.Add('  AND an.id = e.source_node_id ');
-      Query.SQL.Add('JOIN ' + FNodesTableName + ' final_node ON e.target_node_id = final_node.id AND final_node.entidad = :entidad ');
+      Step := APlan.Steps[i];
+      PrevStepVar := Step.SourceVariable;
+      CurrentStepVar := Step.TargetVariable;
+
+      SQL.AppendLine(Format('  , %s AS (', [CurrentStepVar]));
+      SQL.AppendLine('    SELECT DISTINCT ');
+
+      // Direcci√≥n de la arista
+      if Step.IsReversed then
+        SQL.AppendLine('      e.source_node_id as id')
+      else
+        SQL.AppendLine('      e.target_node_id as id');
+
+      SQL.AppendLine('    FROM ' + FEdgesTableName + ' e');
+      SQL.AppendLine(Format('    JOIN %s prev ON ', [PrevStepVar]));
+
+      if Step.IsReversed then
+        SQL.AppendLine('      e.target_node_id = prev.id')
+      else
+        SQL.AppendLine('      e.source_node_id = prev.id');
+
+      SQL.AppendLine('    WHERE e.entidad = :entidad');
+      SQL.AppendLine(Format('      AND e.edge_label = :step_label_%d', [i]));
+
+      // Filtro opcional por tipo de nodo destino
+      if not Step.TargetNodeLabel.IsEmpty then
+      begin
+        SQL.AppendLine('      AND EXISTS (');
+        SQL.AppendLine('        SELECT 1 FROM ' + FNodesTableName + ' fn');
+        SQL.AppendLine('        WHERE fn.id = ' +
+          IfThen(Step.IsReversed, 'e.source_node_id', 'e.target_node_id'));
+        SQL.AppendLine(Format('          AND fn.node_label = :target_label_%d', [i]));
+        SQL.AppendLine('          AND fn.entidad = :entidad');
+        SQL.AppendLine('      )');
+      end;
+
+      SQL.AppendLine('  )');
     end;
 
-    // Filtro de etiqueta del nodo de destino (si se especificÛ)
-    if not Step.TargetNodeLabel.IsEmpty then
-    begin
-      Query.SQL.Add('WHERE final_node.node_label = :target_label');
-      Query.ParamByName('target_label').AsString := Step.TargetNodeLabel;
-    end
-    else
-    begin
-      // Aseguramos que el par·metro :target_label sea ignorado si no se usa
-      Query.ParamByName('target_label').AsString := '';
-    end;
+    // Selecci√≥n final
+    SQL.AppendLine(Format('SELECT DISTINCT id FROM %s', [APlan.ResultVariable]));
 
-
-    // Asignar par·metros comunes
+    // -----------------------------------------------------------------------
+    // PASO 3: Asignar par√°metros y ejecutar
+    // -----------------------------------------------------------------------
+    Query.SQL.Text := SQL.ToString;
     Query.ParamByName('entidad').AsString := FCurrentEntidad;
-    // La distancia es 1 - Similaridad, ya que el operador <-> devuelve distancia (0 = perfecto match)
-    Query.ParamByName('distance_threshold').AsFloat := 1 - APrecision;
+    Query.ParamByName('precision').AsFloat := APrecision;
     Query.ParamByName('limit').AsInteger := ALimit;
-    Query.ParamByName('edge_label').AsString := Step.EdgeLabel;
+
+    // Par√°metros din√°micos de los pasos
+    for i := 0 to High(APlan.Steps) do
+    begin
+      Query.ParamByName(Format('step_label_%d', [i])).AsString :=
+        APlan.Steps[i].EdgeLabel;
+
+      // SOLO asignar si el par√°metro existe en el SQL
+      if not APlan.Steps[i].TargetNodeLabel.IsEmpty then
+        Query.ParamByName(Format('target_label_%d', [i])).AsString :=
+          APlan.Steps[i].TargetNodeLabel;
+    end;
 
     Query.Open;
 
+    // -----------------------------------------------------------------------
+    // PASO 4: Recolectar IDs
+    // -----------------------------------------------------------------------
     while not Query.Eof do
     begin
       NodeIDs.Add(Query.Fields[0].AsString);
       Query.Next;
     end;
 
-    // -------------------------------------------------------------------------
-    // Paso 3: HidrataciÛn delegada y construcciÛn del resultado
-    // -------------------------------------------------------------------------
-
-    // El resultado final es la lista de nodos obtenidos en el paso 2.
+    // -----------------------------------------------------------------------
+    // PASO 5: Hidrataci√≥n con soporte para ADepth
+    // -----------------------------------------------------------------------
     SetLength(Result, NodeIDs.Count);
-    for var i := 0 to NodeIDs.Count - 1 do
+    for i := 0 to NodeIDs.Count - 1 do
     begin
-      // FindNodeByID se asegura de que el nodo exista en memoria,
-      // carg·ndolo si es necesario.
       Result[i] := Graph.FindNodeByID(NodeIDs[i]);
+
+      // Pre-cargar aristas si se requiere contexto
+      if (Result[i] <> nil) and (ADepth > 0) then
+        Result[i].EnsureEdgesAreLoaded;
     end;
 
-    // Si ADepth > 0 (aunque actualmente no se usa para Query, est· en el contrato),
-    // se podrÌa forzar la carga de vecindario como en SearchNodes.
-    // AquÌ no lo incluimos para mantener la Query simple (sin expansiÛn).
-
   finally
+    SQL.Free;
     Query.Free;
     NodeIDs.Free;
   end;
 end;
 
-Function TAiRagGraphPostgresDriver.SearchNodes(const APrompt: string; ADepth, ALimit: Integer; APrecision: Double): TArray<TAiRagGraphNode>;
+
+function TAiRagGraphPostgresDriver.SearchNodes(
+  const APrompt: string;
+  ADepth, ALimit: Integer;
+  APrecision: Double;
+  AFilter: TAiEmbeddingMetaData = nil
+): TArray<TAiRagGraphNode>;
 var
   Query: TFDQuery;
-  QueryEmbedding: TAiEmbeddingData;
   EmbeddingStr: string;
-  NodeIDs: TStringList;
-  InitialNodeIDs: TStringList; // Para guardar los nodos semilla
-  Node: TAiRagGraphNode;
-  InitialQuery: TFDQuery; // Query separada para obtener los nodos ancla
-  InitialIDsList: TStringList; // Lista para formatear los IDs para la CTE
-  AnchorIDs: string;
+  EmbeddingLiteral: string;
+  AnchorIDs: TStringList;
+  AnchorIDsList: TStringList;
+  SQL: TStringBuilder;
+  i: Integer;
 begin
-  SetLength(Result, 0); // Inicializar Result
+  SetLength(Result, 0);
 
-  if Graph = nil then Exit;
+  if (Graph = nil) or APrompt.IsEmpty then
+    Exit;
 
-  // Paso 1: Obtener el embedding
+  // -------------------------------------------------------------
+  // 1. Obtener embedding del prompt
+  // -------------------------------------------------------------
   if not Assigned(Graph.Embeddings) then
-    raise Exception.Create('El motor de Embeddings no est· asignado al grafo.');
+    raise Exception.Create('El motor de Embeddings no est√° asignado al grafo.');
 
-  QueryEmbedding := Graph.Embeddings.CreateEmbedding(APrompt, 'user');
-  EmbeddingStr := EmbeddingToString(QueryEmbedding);
+  EmbeddingStr := EmbeddingToString(
+    Graph.Embeddings.CreateEmbedding(APrompt, 'user')
+  );
+  EmbeddingLiteral := '''' + EmbeddingStr + '''';
 
-  // InicializaciÛn de recursos
   Query := NewQuery;
-  InitialQuery := NewQuery;
-  NodeIDs := TStringList.Create;
-  InitialNodeIDs := TStringList.Create;
-  InitialIDsList := TStringList.Create;
-
+  AnchorIDs := TStringList.Create;
+  SQL := TStringBuilder.Create;
   try
+    // -------------------------------------------------------------
+    // FASE A: B√öSQUEDA H√çBRIDA DE NODOS ANCLA
+    // -------------------------------------------------------------
+    SQL.AppendLine('WITH HybridScores AS (');
+    SQL.AppendLine('  SELECT id, ');
+    SQL.AppendLine('    (1 - (embedding <=> ' + EmbeddingLiteral + ')) AS semantic_score,');
+    SQL.AppendLine('    ts_rank_cd(search_vector, websearch_to_tsquery(''spanish'', :prompt)) AS lexical_score');
+    SQL.AppendLine('  FROM ' + FNodesTableName);
+    SQL.AppendLine('  WHERE entidad = :entidad');
 
-    // -----------------------------------------------------------------
-    // FASE A: Obtener Nodos Ancla Sem·nticos (InitialNodeIDs)
-    // -----------------------------------------------------------------
-    InitialQuery.SQL.Clear;
-    InitialQuery.SQL.Add('SELECT id');
-    InitialQuery.SQL.Add('FROM ' + FNodesTableName);
-    InitialQuery.SQL.Add('WHERE entidad = :entidad');
-    InitialQuery.SQL.Add('  AND (embedding <-> ''' + EmbeddingStr + ''') < :distance_threshold');
-    InitialQuery.SQL.Add('ORDER BY embedding <-> ''' + EmbeddingStr + '''');
-    InitialQuery.SQL.Add('LIMIT :limit');
-
-    InitialQuery.ParamByName('entidad').AsString := FCurrentEntidad;
-    InitialQuery.ParamByName('distance_threshold').AsFloat := 1 - APrecision;
-    InitialQuery.ParamByName('limit').AsInteger := ALimit;
-    InitialQuery.Open;
-
-    while not InitialQuery.Eof do
+    // -------------------------------------------------------------
+    // Filtros por metadata (JSONB)
+    // -------------------------------------------------------------
+    if Assigned(AFilter) and (AFilter.Data.Count > 0) then
     begin
-      InitialNodeIDs.Add(InitialQuery.Fields[0].AsString);
-      InitialQuery.Next;
+      for i := 0 to AFilter.Data.Count - 1 do
+        SQL.AppendLine(
+          Format(
+            '    AND properties ->> %s = %s',
+            [
+              QuotedStr(AFilter.Data.Names[i]),
+              QuotedStr(AFilter.Data.ValueFromIndex[i])
+            ]
+          )
+        );
     end;
 
-    if InitialNodeIDs.Count = 0 then
-      Exit; // No se encontraron anclas, salimos.
+    // Umbral h√≠brido
+    SQL.AppendLine('  AND ( (1 - (embedding <=> ' + EmbeddingLiteral + ')) >= :precision');
+    SQL.AppendLine('        OR search_vector @@ websearch_to_tsquery(''spanish'', :prompt) )');
+    SQL.AppendLine(')');
 
+    // Ranking h√≠brido ponderado
+    SQL.AppendLine('SELECT id FROM HybridScores');
+    SQL.AppendLine(
+      'ORDER BY (semantic_score * 0.7 + (1 - 1/(1 + lexical_score)) * 0.3) DESC'
+    );
+    SQL.AppendLine('LIMIT :limit');
 
-    // -----------------------------------------------------------------
-    // FASE B: Ejecutar la consulta de Grafo (ExpansiÛn o simple)
-    // -----------------------------------------------------------------
-    if ADepth = 0 then
+    Query.SQL.Text := SQL.ToString;
+    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('prompt').AsString := APrompt;
+    Query.ParamByName('precision').AsFloat := APrecision;
+    Query.ParamByName('limit').AsInteger := ALimit;
+    Query.Open;
+
+    while not Query.Eof do
     begin
-      // CASO SIMPLE: Solo usamos los IDs ancla ya encontrados
-      NodeIDs.Assign(InitialNodeIDs);
-    end
-    else
-    begin
-      // CASO COMPLEJO: ExpansiÛn (CTE)
-
-      // 1. Formatear la lista de IDs para inyectar en la CTE: ('ID1', 'ID2', 'ID3')
-      for var I := 0 to InitialNodeIDs.Count - 1 do
-          InitialIDsList.Add(QuotedStr(InitialNodeIDs[I]));
-
-      AnchorIDs := InitialIDsList.CommaText;
-
-      Query.SQL.Clear;
-      Query.SQL.Add('WITH RECURSIVE traversal AS (');
-
-      // La consulta inicial de la CTE usa los IDs ancla ya encontrados
-      Query.SQL.Add('  SELECT id, 1 AS depth, ARRAY[id] AS path');
-      Query.SQL.Add('  FROM ' + FNodesTableName);
-      Query.SQL.Add('  WHERE entidad = :entidad');
-      Query.SQL.Add('    AND id IN (' + AnchorIDs + ')'); // Usamos los IDs ya encontrados
-
-      Query.SQL.Add('  UNION ALL');
-
-      // La parte recursiva: encuentra vecinos en aristas (source o target)
-      Query.SQL.Add('  SELECT');
-      Query.SQL.Add('    CASE WHEN e.source_node_id = t.id THEN e.target_node_id ELSE e.source_node_id END AS id,');
-      Query.SQL.Add('    t.depth + 1,');
-      Query.SQL.Add('    t.path || CASE WHEN e.source_node_id = t.id THEN e.target_node_id ELSE e.source_node_id END');
-      Query.SQL.Add('  FROM traversal t');
-      Query.SQL.Add('  JOIN ' + FEdgesTableName + ' e');
-      Query.SQL.Add('    ON (e.source_node_id = t.id OR e.target_node_id = t.id)');
-      Query.SQL.Add('    AND e.entidad = :entidad');
-      Query.SQL.Add('  WHERE t.depth <= :depth'); // LÌmite de profundidad
-      Query.SQL.Add('    AND NOT (CASE WHEN e.source_node_id = t.id THEN e.target_node_id ELSE e.source_node_id END = ANY(t.path))');
-      Query.SQL.Add(')');
-
-      // Consulta final: IDs ˙nicos de todos los nodos en el subgrafo expandido
-      Query.SQL.Add('SELECT DISTINCT id FROM traversal');
-
-      Query.ParamByName('entidad').AsString := FCurrentEntidad;
-      Query.ParamByName('depth').AsInteger := ADepth;
-      Query.Open;
-
-      // Recolectar todos los IDs del subgrafo expandido
-      while not Query.Eof do
-      begin
-        NodeIDs.Add(Query.Fields[0].AsString);
-        Query.Next;
-      end;
-    end; // Fin del if ADepth > 0
-
-
-    // -----------------------------------------------------------------
-    // FASE C: HidrataciÛn (Carga de objetos en memoria)
-    // -----------------------------------------------------------------
-
-    // Cargar todos los nodos relevantes (ancla + expandidos)
-    for var NodeID in NodeIDs do
-    begin
-      Graph.FindNodeByID(NodeID);
+      AnchorIDs.Add(Query.FieldByName('id').AsString);
+      Query.Next;
     end;
 
-    // Forzar la carga de aristas para el subgrafo expandido.
+    if AnchorIDs.Count = 0 then
+      Exit;
+
+    // -------------------------------------------------------------
+    // FASE B: EXPANSI√ìN DEL GRAFO (CTE RECURSIVA)
+    // -------------------------------------------------------------
     if ADepth > 0 then
     begin
-      for var NodeID in NodeIDs do
-      begin
-        Node := Graph.FindNodeByID(NodeID);
-        if Node <> nil then
-          Node.EnsureEdgesAreLoaded;
+      AnchorIDsList := TStringList.Create;
+      try
+        for i := 0 to AnchorIDs.Count - 1 do
+          AnchorIDsList.Add(QuotedStr(AnchorIDs[i]));
+
+        Query.Close;
+        Query.SQL.Clear;
+
+        Query.SQL.Add('WITH RECURSIVE traversal AS (');
+        Query.SQL.Add('  SELECT id, 1 AS depth, ARRAY[id] AS path');
+        Query.SQL.Add('  FROM ' + FNodesTableName);
+        Query.SQL.Add('  WHERE entidad = :entidad');
+        Query.SQL.Add('    AND id IN (' + AnchorIDsList.CommaText + ')');
+
+        Query.SQL.Add('  UNION ALL');
+
+        Query.SQL.Add(
+          '  SELECT CASE WHEN e.source_node_id = t.id ' +
+          '              THEN e.target_node_id ' +
+          '              ELSE e.source_node_id END,'
+        );
+        Query.SQL.Add('         t.depth + 1,');
+        Query.SQL.Add(
+          '         t.path || CASE WHEN e.source_node_id = t.id ' +
+          '                         THEN e.target_node_id ' +
+          '                         ELSE e.source_node_id END'
+        );
+
+        Query.SQL.Add('  FROM traversal t');
+        Query.SQL.Add(
+          '  JOIN ' + FEdgesTableName +
+          ' e ON (e.source_node_id = t.id OR e.target_node_id = t.id)'
+        );
+        Query.SQL.Add('  WHERE e.entidad = :entidad');
+        Query.SQL.Add('    AND t.depth < :depth');
+        Query.SQL.Add(
+          '    AND NOT (CASE WHEN e.source_node_id = t.id ' +
+          '                  THEN e.target_node_id ' +
+          '                  ELSE e.source_node_id END = ANY(t.path))'
+        );
+        Query.SQL.Add(')');
+        Query.SQL.Add('SELECT DISTINCT id FROM traversal');
+
+        Query.ParamByName('entidad').AsString := FCurrentEntidad;
+        Query.ParamByName('depth').AsInteger := ADepth;
+        Query.Open;
+
+        while not Query.Eof do
+        begin
+          // Hidratamos el subgrafo completo en memoria
+          Graph.FindNodeByID(Query.Fields[0].AsString);
+          Query.Next;
+        end;
+      finally
+        AnchorIDsList.Free;
       end;
     end;
 
-    // -----------------------------------------------------------------
-    // FASE D: Construir el resultado final (solo los nodos ancla)
-    // -----------------------------------------------------------------
-
-    SetLength(Result, InitialNodeIDs.Count);
-
-    for var i := 0 to InitialNodeIDs.Count - 1 do
+    // -------------------------------------------------------------
+    // FASE C: RESULTADO FINAL (NODOS ANCLA)
+    // -------------------------------------------------------------
+    SetLength(Result, AnchorIDs.Count);
+    for i := 0 to AnchorIDs.Count - 1 do
     begin
-      Result[i] := Graph.FindNodeByID(InitialNodeIDs[i]);
+      Result[i] := Graph.FindNodeByID(AnchorIDs[i]);
+      if Result[i] <> nil then
+        Result[i].EnsureEdgesAreLoaded;
     end;
 
   finally
     Query.Free;
-    InitialQuery.Free;
-    NodeIDs.Free;
-    InitialNodeIDs.Free;
-    InitialIDsList.Free;
+    AnchorIDs.Free;
+    SQL.Free;
   end;
 end;
+
 
 procedure TAiRagGraphPostgresDriver.SetTableName(const Value: String);
 begin
@@ -949,7 +1082,6 @@ begin
   FEdgesTableName := FTableName + 'edges';
   FNodesTableName := FTableName + 'nodes';
 end;
-
 
 procedure TAiRagGraphPostgresDriver.AddEdge(AEdge: TAiRagGraphEdge);
 var
@@ -961,16 +1093,16 @@ begin
 
     if Length(AEdge.Data) > 0 then
     Begin
-      Query.SQL.Add('INSERT INTO ' + FEdgesTableName + ' (entidad, id, edge_label, name, source_node_id, target_node_id, weight, properties, embedding) ');
-      Query.SQL.Add('VALUES (:entidad, :id, :edge_label, :name, :source_node_id, :target_node_id, :weight, :properties::JsonB, ''' + EmbeddingToString(AEdge.Data) + ''')');
+      Query.SQL.Add('INSERT INTO ' + FEdgesTableName + ' (entidad, id, edge_label, name, node_text, source_node_id, target_node_id, weight, properties, embedding) ');
+      Query.SQL.Add('VALUES (:entidad, :id, :edge_label, :name, :node_text, :source_node_id, :target_node_id, :weight, :properties::JsonB, ''' + EmbeddingToString(AEdge.Data) + ''')');
     End
     Else
     Begin
-      Query.SQL.Add('INSERT INTO ' + FEdgesTableName + ' (entidad, id, edge_label, name, source_node_id, target_node_id, weight, properties) ');
-      Query.SQL.Add('VALUES (:entidad, :id, :edge_label, :name, :source_node_id, :target_node_id, :weight, :properties::JsonB)');
+      Query.SQL.Add('INSERT INTO ' + FEdgesTableName + ' (entidad, id, edge_label, name, node_text, source_node_id, target_node_id, weight, properties) ');
+      Query.SQL.Add('VALUES (:entidad, :id, :edge_label, :name, :node_text, :source_node_id, :target_node_id, :weight, :properties::JsonB)');
     End;
 
-    // Asignar valores a los par·metros
+    // Asignar valores a los par√°metros
     Query.ParamByName('entidad').AsString := FCurrentEntidad;
     Query.ParamByName('id').AsString := AEdge.ID;
     Query.ParamByName('edge_label').AsString := AEdge.EdgeLabel;
@@ -979,6 +1111,7 @@ begin
     Query.ParamByName('target_node_id').AsString := AEdge.ToNode.ID;
     Query.ParamByName('weight').AsFloat := AEdge.Weight;
     Query.ParamByName('properties').AsString := PropertiesToJSONString(AEdge.Properties);
+    Query.ParamByName('node_text').AsString := AEdge.Text;
 
     Query.ExecSQL;
 
@@ -986,36 +1119,45 @@ begin
     Query.Free;
   end;
 end;
+
+
 
 procedure TAiRagGraphPostgresDriver.AddNode(ANode: TAiRagGraphNode);
 var
   Query: TFDQuery;
+  EmbeddingSQL: string;
 begin
   Query := NewQuery;
   try
     if Length(ANode.Data) > 0 then
-    Begin
-      Query.SQL.Add('INSERT INTO ' + FNodesTableName + ' (entidad, id, node_label, name, properties, embedding) ');
-      Query.SQL.Add('VALUES (:entidad, :id, :node_label, :name, :properties::jsonb, ''' + EmbeddingToString(ANode.Data) + ''')');
-    End
-    Else
-    Begin
-      Query.SQL.Add('INSERT INTO ' + FNodesTableName + ' (entidad, id, node_label, name, properties) ');
-      Query.SQL.Add('VALUES (:entidad, :id, :node_label, :name, :properties::jsonb)');
-    End;
+      EmbeddingSQL := '''' + EmbeddingToString(ANode.Data) + ''''
+    else
+      EmbeddingSQL := 'NULL';
 
-    // Asignar valores a los par·metros
+    Query.SQL.Add('INSERT INTO ' + FNodesTableName +
+      ' (entidad, id, node_label, name, node_text, properties, embedding)'); // A√±adido node_text
+    Query.SQL.Add(' VALUES (:entidad, :id, :node_label, :name, :node_text, :properties::jsonb, ' + EmbeddingSQL + ')');
+
+    Query.SQL.Add(' ON CONFLICT (id, entidad) DO UPDATE SET ');
+    Query.SQL.Add('   name = EXCLUDED.name, ');
+    Query.SQL.Add('   node_text = EXCLUDED.node_text, '); // <--- Vital para actualizar el contexto
+    Query.SQL.Add('   properties = EXCLUDED.properties');
+
+    if Length(ANode.Data) > 0 then
+      Query.SQL.Add(', embedding = EXCLUDED.embedding');
+
     Query.ParamByName('entidad').AsString := FCurrentEntidad;
     Query.ParamByName('id').AsString := ANode.ID;
     Query.ParamByName('node_label').AsString := ANode.NodeLabel;
     Query.ParamByName('name').AsString := ANode.Name;
-    Query.ParamByName('properties').AsString := PropertiesToJSONString(ANode.Properties);
+    Query.ParamByName('node_text').AsString := ANode.Text;
+    Query.ParamByName('properties').Value := PropertiesToJSONString(ANode.Properties);
 
     Query.ExecSQL;
   finally
     Query.Free;
   end;
-
 end;
+
 
 end.

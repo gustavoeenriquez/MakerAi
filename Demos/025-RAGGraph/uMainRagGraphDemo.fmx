@@ -2,8 +2,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
   Left = 0
   Top = 0
   Caption = 'Demo Grafos de Conocimiento'
-  ClientHeight = 740
-  ClientWidth = 1027
+  ClientHeight = 721
+  ClientWidth = 1042
   Position = ScreenCenter
   FormFactor.Width = 320
   FormFactor.Height = 480
@@ -11,8 +11,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
   OnCreate = FormCreate
   DesignerMasterStyle = 0
   object OpenDialog1: TOpenDialog
-    Left = 720
-    Top = 384
+    Left = 800
+    Top = 408
   end
   object SaveDialog1: TSaveDialog
     Left = 736
@@ -20,13 +20,13 @@ object MainRagGraphDemo: TMainRagGraphDemo
   end
   object MainLayout: TLayout
     Align = Contents
-    Size.Width = 1027.000000000000000000
-    Size.Height = 740.000000000000000000
+    Size.Width = 1042.000000000000000000
+    Size.Height = 721.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 45
     object Layout1: TLayout
       Align = Top
-      Size.Width = 1027.000000000000000000
+      Size.Width = 1042.000000000000000000
       Size.Height = 63.000000000000000000
       Size.PlatformDefault = False
       TabOrder = 1
@@ -1418,22 +1418,33 @@ object MainRagGraphDemo: TMainRagGraphDemo
           end
         end
       end
+      object BtnCrearRepositorio: TButton
+        Position.X = 397.000000000000000000
+        Position.Y = 8.000000000000000000
+        Size.Width = 158.000000000000000000
+        Size.Height = 41.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 11
+        Text = 'BtnCrearRepositorio'
+        TextSettings.Trimming = None
+        OnClick = BtnCrearRepositorioClick
+      end
     end
     object TabControl1: TTabControl
       Align = Client
-      Size.Width = 1027.000000000000000000
-      Size.Height = 677.000000000000000000
+      Size.Width = 1042.000000000000000000
+      Size.Height = 658.000000000000000000
       Size.PlatformDefault = False
-      TabIndex = 2
+      TabIndex = 1
       TabOrder = 39
       TabPosition = PlatformDefault
       Sizes = (
-        1027s
-        651s
-        1027s
-        651s
-        1027s
-        651s)
+        1042s
+        632s
+        1042s
+        632s
+        1042s
+        632s)
       object TabAddItems: TTabItem
         CustomIcon = <
           item
@@ -1451,7 +1462,7 @@ object MainRagGraphDemo: TMainRagGraphDemo
         object Layout5: TLayout
           Align = Left
           Size.Width = 409.000000000000000000
-          Size.Height = 651.000000000000000000
+          Size.Height = 632.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 43
           object Label5: TLabel
@@ -1478,15 +1489,15 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Margins.Right = 5.000000000000000000
             Margins.Bottom = 5.000000000000000000
             Size.Width = 399.000000000000000000
-            Size.Height = 573.000000000000000000
+            Size.Height = 554.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
-            Viewport.Width = 399.000000000000000000
-            Viewport.Height = 573.000000000000000000
+            Viewport.Width = 395.000000000000000000
+            Viewport.Height = 550.000000000000000000
           end
           object Layout7: TLayout
             Align = Bottom
-            Position.Y = 599.000000000000000000
+            Position.Y = 580.000000000000000000
             Size.Width = 409.000000000000000000
             Size.Height = 52.000000000000000000
             Size.PlatformDefault = False
@@ -2311,8 +2322,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
         end
         object Layout6: TLayout
           Align = Client
-          Size.Width = 610.000000000000000000
-          Size.Height = 651.000000000000000000
+          Size.Width = 625.000000000000000000
+          Size.Height = 632.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 42
           object Label6: TLabel
@@ -2322,7 +2333,7 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Margins.Right = 5.000000000000000000
             Position.X = 5.000000000000000000
             Position.Y = 2.000000000000000000
-            Size.Width = 600.000000000000000000
+            Size.Width = 615.000000000000000000
             Size.Height = 17.000000000000000000
             Size.PlatformDefault = False
             Text = 'Tripletas adicionadas'
@@ -2337,12 +2348,12 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Margins.Top = 2.000000000000000000
             Margins.Right = 5.000000000000000000
             Margins.Bottom = 5.000000000000000000
-            Size.Width = 600.000000000000000000
-            Size.Height = 625.000000000000000000
+            Size.Width = 615.000000000000000000
+            Size.Height = 606.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
-            Viewport.Width = 600.000000000000000000
-            Viewport.Height = 625.000000000000000000
+            Viewport.Width = 611.000000000000000000
+            Viewport.Height = 602.000000000000000000
           end
         end
         object Splitter2: TSplitter
@@ -2351,7 +2362,7 @@ object MainRagGraphDemo: TMainRagGraphDemo
           MinSize = 20.000000000000000000
           Position.X = 409.000000000000000000
           Size.Width = 8.000000000000000000
-          Size.Height = 651.000000000000000000
+          Size.Height = 632.000000000000000000
           Size.PlatformDefault = False
         end
       end
@@ -2360,7 +2371,7 @@ object MainRagGraphDemo: TMainRagGraphDemo
           item
           end>
         TextSettings.Trimming = None
-        IsSelected = False
+        IsSelected = True
         Size.Width = 56.000000000000000000
         Size.Height = 26.000000000000000000
         Size.PlatformDefault = False
@@ -2371,7 +2382,7 @@ object MainRagGraphDemo: TMainRagGraphDemo
         ExplicitSize.cy = 26.000000000000000000
         object Layout2: TLayout
           Align = Top
-          Size.Width = 1027.000000000000000000
+          Size.Width = 1042.000000000000000000
           Size.Height = 59.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 41
@@ -3541,9 +3552,9 @@ object MainRagGraphDemo: TMainRagGraphDemo
         end
         object Layout3: TLayout
           Align = Bottom
-          Position.Y = 572.000000000000000000
-          Size.Width = 1027.000000000000000000
-          Size.Height = 79.000000000000000000
+          Position.Y = 496.000000000000000000
+          Size.Width = 1042.000000000000000000
+          Size.Height = 136.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 42
           object Label3: TLabel
@@ -3553,10 +3564,10 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Margins.Right = 5.000000000000000000
             Position.X = 5.000000000000000000
             Position.Y = 2.000000000000000000
-            Size.Width = 1017.000000000000000000
+            Size.Width = 1032.000000000000000000
             Size.Height = 17.000000000000000000
             Size.PlatformDefault = False
-            Text = 'Texto de la consulta'
+            Text = 'Text for Embedding Search'
             TabOrder = 0
           end
           object MemoPrompt: TMemo
@@ -3567,18 +3578,18 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Margins.Top = 2.000000000000000000
             Margins.Right = 5.000000000000000000
             Margins.Bottom = 5.000000000000000000
-            Size.Width = 1017.000000000000000000
-            Size.Height = 53.000000000000000000
+            Size.Width = 1032.000000000000000000
+            Size.Height = 110.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
-            Viewport.Width = 1017.000000000000000000
-            Viewport.Height = 53.000000000000000000
+            Viewport.Width = 1028.000000000000000000
+            Viewport.Height = 106.000000000000000000
           end
         end
         object Layout4: TLayout
           Align = Client
-          Size.Width = 1027.000000000000000000
-          Size.Height = 505.000000000000000000
+          Size.Width = 1042.000000000000000000
+          Size.Height = 429.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 43
           object Label4: TLabel
@@ -3588,7 +3599,7 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Margins.Right = 5.000000000000000000
             Position.X = 5.000000000000000000
             Position.Y = 2.000000000000000000
-            Size.Width = 1017.000000000000000000
+            Size.Width = 1032.000000000000000000
             Size.Height = 17.000000000000000000
             Size.PlatformDefault = False
             Text = 'Respuesta del RAG'
@@ -3602,20 +3613,20 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Margins.Top = 2.000000000000000000
             Margins.Right = 5.000000000000000000
             Margins.Bottom = 5.000000000000000000
-            Size.Width = 1017.000000000000000000
-            Size.Height = 479.000000000000000000
+            Size.Width = 1032.000000000000000000
+            Size.Height = 403.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
-            Viewport.Width = 1017.000000000000000000
-            Viewport.Height = 479.000000000000000000
+            Viewport.Width = 1028.000000000000000000
+            Viewport.Height = 399.000000000000000000
           end
         end
         object Splitter1: TSplitter
           Align = Bottom
           Cursor = crVSplit
           MinSize = 20.000000000000000000
-          Position.Y = 564.000000000000000000
-          Size.Width = 1027.000000000000000000
+          Position.Y = 488.000000000000000000
+          Size.Width = 1042.000000000000000000
           Size.Height = 8.000000000000000000
           Size.PlatformDefault = False
         end
@@ -3625,7 +3636,7 @@ object MainRagGraphDemo: TMainRagGraphDemo
           item
           end>
         TextSettings.Trimming = None
-        IsSelected = True
+        IsSelected = False
         Size.Width = 108.000000000000000000
         Size.Height = 26.000000000000000000
         Size.PlatformDefault = False
@@ -3636,13 +3647,13 @@ object MainRagGraphDemo: TMainRagGraphDemo
         ExplicitSize.cy = 26.000000000000000000
         object Layout8: TLayout
           Align = Client
-          Size.Width = 1027.000000000000000000
-          Size.Height = 651.000000000000000000
+          Size.Width = 1042.000000000000000000
+          Size.Height = 632.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 0
           object Layout9: TLayout
             Align = Top
-            Size.Width = 1027.000000000000000000
+            Size.Width = 1042.000000000000000000
             Size.Height = 123.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 0
@@ -3799,7 +3810,7 @@ object MainRagGraphDemo: TMainRagGraphDemo
               Margins.Bottom = 3.000000000000000000
               Position.X = 3.000000000000000000
               Position.Y = 3.000000000000000000
-              Size.Width = 1021.000000000000000000
+              Size.Width = 1036.000000000000000000
               Size.Height = 17.000000000000000000
               Size.PlatformDefault = False
               TextSettings.Font.StyleExt = {00070000000000000004000000}
@@ -3833,14 +3844,14 @@ object MainRagGraphDemo: TMainRagGraphDemo
           end
           object Layout10: TLayout
             Align = Client
-            Size.Width = 1027.000000000000000000
-            Size.Height = 528.000000000000000000
+            Size.Width = 1042.000000000000000000
+            Size.Height = 509.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 3
             object Layout11: TLayout
               Align = Left
               Size.Width = 381.000000000000000000
-              Size.Height = 528.000000000000000000
+              Size.Height = 509.000000000000000000
               Size.PlatformDefault = False
               TabOrder = 0
               object Label14: TLabel
@@ -3861,7 +3872,7 @@ object MainRagGraphDemo: TMainRagGraphDemo
                 Align = Left
                 Position.Y = 23.000000000000000000
                 Size.Width = 385.000000000000000000
-                Size.Height = 455.000000000000000000
+                Size.Height = 436.000000000000000000
                 Size.PlatformDefault = False
                 TabOrder = 1
                 DisableFocusEffect = True
@@ -3869,11 +3880,11 @@ object MainRagGraphDemo: TMainRagGraphDemo
                 DefaultItemStyles.GroupHeaderStyle = ''
                 DefaultItemStyles.GroupFooterStyle = ''
                 Viewport.Width = 381.000000000000000000
-                Viewport.Height = 451.000000000000000000
+                Viewport.Height = 432.000000000000000000
               end
               object Layout13: TLayout
                 Align = Bottom
-                Position.Y = 478.000000000000000000
+                Position.Y = 459.000000000000000000
                 Size.Width = 381.000000000000000000
                 Size.Height = 50.000000000000000000
                 Size.PlatformDefault = False
@@ -3919,39 +3930,236 @@ object MainRagGraphDemo: TMainRagGraphDemo
               MinSize = 20.000000000000000000
               Position.X = 381.000000000000000000
               Size.Width = 13.000000000000000000
-              Size.Height = 528.000000000000000000
+              Size.Height = 509.000000000000000000
               Size.PlatformDefault = False
             end
             object Layout12: TLayout
               Align = Client
-              Size.Width = 633.000000000000000000
-              Size.Height = 528.000000000000000000
+              Size.Width = 648.000000000000000000
+              Size.Height = 509.000000000000000000
               Size.PlatformDefault = False
               TabOrder = 2
-              object Label15: TLabel
-                Align = Top
-                Margins.Left = 3.000000000000000000
-                Margins.Top = 3.000000000000000000
-                Margins.Right = 3.000000000000000000
-                Margins.Bottom = 3.000000000000000000
-                Position.X = 3.000000000000000000
-                Position.Y = 3.000000000000000000
-                Size.Width = 627.000000000000000000
-                Size.Height = 17.000000000000000000
-                Size.PlatformDefault = False
-                Text = 'Query Result'
-                TabOrder = 0
-              end
-              object MemoResults: TMemo
-                Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
-                DataDetectorTypes = []
+              object Layout14: TLayout
                 Align = Client
-                Size.Width = 633.000000000000000000
-                Size.Height = 505.000000000000000000
+                Size.Width = 648.000000000000000000
+                Size.Height = 326.000000000000000000
                 Size.PlatformDefault = False
-                TabOrder = 1
-                Viewport.Width = 633.000000000000000000
-                Viewport.Height = 505.000000000000000000
+                TabOrder = 3
+                object Label15: TLabel
+                  Align = Top
+                  Margins.Left = 3.000000000000000000
+                  Margins.Top = 3.000000000000000000
+                  Margins.Right = 3.000000000000000000
+                  Margins.Bottom = 3.000000000000000000
+                  Position.X = 3.000000000000000000
+                  Position.Y = 3.000000000000000000
+                  Size.Width = 642.000000000000000000
+                  Size.Height = 17.000000000000000000
+                  Size.PlatformDefault = False
+                  Text = 'Query Result'
+                  TabOrder = 0
+                end
+                object MemoResults: TMemo
+                  Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+                  DataDetectorTypes = []
+                  Align = Client
+                  Size.Width = 648.000000000000000000
+                  Size.Height = 303.000000000000000000
+                  Size.PlatformDefault = False
+                  TabOrder = 1
+                  Viewport.Width = 644.000000000000000000
+                  Viewport.Height = 299.000000000000000000
+                end
+              end
+              object Layout15: TLayout
+                Align = Bottom
+                Position.Y = 336.000000000000000000
+                Size.Width = 648.000000000000000000
+                Size.Height = 173.000000000000000000
+                Size.PlatformDefault = False
+                TabOrder = 2
+                object Label17: TLabel
+                  Align = Top
+                  Margins.Left = 3.000000000000000000
+                  Margins.Top = 3.000000000000000000
+                  Margins.Right = 3.000000000000000000
+                  Margins.Bottom = 3.000000000000000000
+                  Position.X = 3.000000000000000000
+                  Position.Y = 3.000000000000000000
+                  Size.Width = 642.000000000000000000
+                  Size.Height = 17.000000000000000000
+                  Size.PlatformDefault = False
+                  Text = 'MakerGQL (Graph Query Languaje) Query'
+                  TabOrder = 0
+                end
+                object Layout16: TLayout
+                  Align = Client
+                  Size.Width = 648.000000000000000000
+                  Size.Height = 150.000000000000000000
+                  Size.PlatformDefault = False
+                  TabOrder = 1
+                  object Layout17: TLayout
+                    Align = Right
+                    Position.X = 568.000000000000000000
+                    Size.Width = 80.000000000000000000
+                    Size.Height = 150.000000000000000000
+                    Size.PlatformDefault = False
+                    TabOrder = 0
+                    object BtnExecuteMakerGQL: TButton
+                      Hint = 
+                        'Realiza una b'#250'squeda MATCH sobre el grafo sin utilizar Embedding' +
+                        's'
+                      Margins.Top = 3.000000000000000000
+                      Margins.Right = 3.000000000000000000
+                      Margins.Bottom = 3.000000000000000000
+                      Position.X = 21.000000000000000000
+                      Position.Y = 50.000000000000000000
+                      Size.Width = 52.000000000000000000
+                      Size.Height = 40.000000000000000000
+                      Size.PlatformDefault = False
+                      TabOrder = 2
+                      TextSettings.Trimming = None
+                      OnClick = BtnExecuteMakerGQLClick
+                      object Image11: TImage
+                        MultiResBitmap.Height = 152
+                        MultiResBitmap.Width = 152
+                        MultiResBitmap = <
+                          item
+                            Width = 152
+                            Height = 152
+                            PNG = {
+                              89504E470D0A1A0A0000000D494844520000009800000098080600000018C220
+                              210000000473424954080808087C08648800000B3B49444154789CEDDDDD6EDB
+                              D81107F0FFCC392229518ED7DBA248DA0458EC5D3FB217BDDE8BEC43A4CF93E7
+                              691E602F9B67D8A0D9A2488D144EEB743789615BA4F871CE995E5052E238B21D
+                              6F8E49CBF303021896058C327F9187D290049452EABAA2E50F0F1FFD3529AB49
+                              4E4626A3C0B943E03E0BBB2809528ED81507E94EF1E4D17755DFF57C0E0F1EFD
+                              2DDBA90FF236D89C98267DD77311161C5A0E85782A2759593C7EF497A6FBFD42
+                              594D72C3FE1E05BEEB807B2418F557EE2760FB5284F76E35472F016C44C06E35
+                              47DB22C95D62BE47E2EFF65DCF4538426B02F684FDCBB29AEC013819303232A1
+                              C07701FE8609F785CCB8B76A3F01417EF04C46888F00FCAFEF7A3E87C07C4B88
+                              BE2291FB20F34DDFF55C0443E6107E4A02909137000E80F702D6ED16718F09F7
+                              05F80E90696FD57E0202594838369E5EF45DCBE7621DDD0A2C5F11F8CF0279D0
+                              773D1721C08C0808C207A380E7CBDFAF02E6109804A36ECB255363CC963106D6
+                              18186BFAA9FA23BC0FF0DEC1390FEF3D004C004A9C09C329F21772460C0B2700
+                              2600BA3E5803632C8C19CED2D83B0FE7BB3E78EF21A031891F39C2AA48BBEEC9
+                              C61864598A344D9165D9D5547C014DD3A0AA6AD475B50CD8C61B8D2CD2344396
+                              A54892A4EF7256AAAA425DD7A8AA7A6D2FD606CC1A83344D319D4E319D0E676F
+                              5996258808DE3B0075DFE55C096B2DC6E30C799E633219CE41E56C360300B8D6
+                              752BFA8F58BF05B3065996613A9DE28B2FB663D47729C61878EF51551B71C078
+                              21D65A645986ADAD2D6C6D0DE7CD0E00CEB9337B319C1DBADA481A301595064C
+                              45A501535169C054541A301595064C45B5F673B01004DE7BB46D8BA659F731DA
+                              D56BDB16DE7B84207D977265AE732FD606ACFB30B3863105444294022F633EAF
+                              309F5770CEF55DCA9571CE613EAF404470AEEDBB9C95B29C9FF93511706EC02A
+                              841050D7C379D738D7BD8B6F5AC0AA6A8E10BA37FD50344D83A6692E1730E71C
+                              420868DB1665594629F0324404210488DC9C5DA4730EDE7BD47503223AFF0957
+                              64D98B10D6EFE1D6068C88404C6066181ECEB14058ECAE6FCA24C51233C31806
+                              D3707AE143804040426BDFF0678EEBA4698A344D90A669B4223F55D3B4689A1A
+                              755D0F6AD71D5337AE9322495224C97026D9973DA8EB7AED566CFDB88EB5C8B2
+                              14799E23CF873322329F57280A82F7C35A1BC664ED0859D68DEB8CC7C399CD2B
+                              8A1244C5EA08F763CEDD824DA739B6B78733AE63ED6CB51EB929DE8DEB0C6B36
+                              AF3BAA75671E789CB106EBF6FBCC06C60C671A99D9809931A0B56E74D7B917C3
+                              5931AA8DA401535169C054541A301595064C45A501535169C054541A30159506
+                              4C45A501535169C054541A301595064C45A5015351AD1DD7F9254464713A53E8
+                              AE7CF7C134AD31CBD113060F681C7B13753D0808C1C3FB9353A744DDDC5F378E
+                              6DA2CCFB4709583710F86E9CF6C379EDE528763702AC018BC939BF1831EF7AF1
+                              3E223A31166FEDE78F4394802D4F752B8A0245519E9AD7CEF30944F2C5F0DC70
+                              66CC3791F7DDC4E9B217EF63E6D538FC6814A70F51B7604551E2F0F0F0D41940
+                              22026BBB6BC0AAB8BA5E5498CD0A1C1E1E9E786C391DBBBC44670C91D660EFCE
+                              995B5E81F87D2174A79BDFA0531B7B23D25D7AA05B839D3ED56F798E69AC5EE8
+                              024845A501535169C054541A301595064C45A501535169C054541A301595064C
+                              45A501535169C054541A301595064C45A50153514519D7198A070F1ED8636B73
+                              D4669298346F208378BD09C835BE2E90FA72CBB9E2C993271B7BD1FF41FC87C7
+                              F23649D25193DE6113EE3A09F70C21EFBB26007022051BBB175CF2F26D52EF01
+                              D0805D47F931A56D2AB701FA2311DD07E8CBBE6B020022792BC05382B8FC987E
+                              0250F45D532C1B1DB08AD36C247247803F80F02D20BFEDBBA685FF42C833F053
+                              C5E93FFB2E26A68D0E589606F20E2322CE009902D8EABBA685298132481865A9
+                              6CF4F5B2F5285245A501535169C054541BBD066B02D596683F50F89141A900BF
+                              EEBB260020E0755713EF3741867303C808363A60594B753DF2FB24F477219991
+                              0C63912F846308FEEDC9EF67ADD1805D570707693DFE4DF58A7C28C5CA5E089C
+                              F45D130090090D3C1D89E5A383835403765D3D7BF6B8C133BC06F0BAEF5A6E2A
+                              5DE4ABA834602A2A0D988A6AA3D7600F1F3E34BBBB553A1E87B4B6925AE641DC
+                              CDD385E05347F57CCEF5D75F67F5E3C78F37F60EF71B1DB0DDDD2AC5B6B95309
+                              DD3612EE788741DC7C9C99CB6AC4FB48F8D5EE6EB50FA03CF749D7D446076C3C
+                              0E6925749B45FE04F0EF41D8E9BBA6850316F93120201B87B7D0805D4FB595D4
+                              48B803F0EF05F22D08B7FBAE09000478452018096F6A2BFFEABB9E98363A6096
+                              D9788709083B8B70FDAEEF9A9644B003C1C4DA61AC0B63D1A3481595064C45A5
+                              0153516DF41AAC6A7D9390792D147601FA1509FED3774D0020849F41619704AF
+                              ABD6377DD713D346072C695053825722FC8C109AC03C88711D0EE158C0CF49C2
+                              ABA4814E535C576FBE44BD3D6BF76DC82A18EC036118777E20D4E4E96D8BF6E0
+                              F04BD6805D57CFBFFFBE06B0BFF8A77AA08B7C1595064C45A501535169C05454
+                              1A301595064C45A501535169C054541A301595064C45A501535169C054541A30
+                              1595064C45A501535169C054541A301595064C45A501535169C054541A301595
+                              064C4515E5B435228088C0CC30E6F4C563980D9809B4D1B7811A06228099C06C
+                              4EF5C21803660651BC5E4409983106699A22CFBB0B0A86104E3C9EE713A469F6
+                              D1F0A9CFABEB4586E9D4833E4811332F7A9146EB4594803133D2B4BBE781B516
+                              2272E2F1344D91A6098CD9E8F37E07C1188B2C4B4144188D46271E23A2552F98
+                              E3AC96A26EC146A311C6E30C1FE40BC6F06293AD4BC0D8AC3520CA16BD189F78
+                              8CE8DD6EF25A6DC18808D6EAD669089879B175EAA71FBA09515169C054541A30
+                              1595064C45A501535169C054541A301595064C45A501535169C054541A301595
+                              064C45A501535169C054546B673844BA49D4103CBC1FCE3DCB43F008219C9A31
+                              DB64D7B9176B03E6BD475DD798CD8A5313A97D9ACF2B545505E75CDFA55C19E7
+                              1CAAAAC2F1B119D4EB2E8A12755D9F19FAB501EB5E540D1141DBB6510ABC8CA6
+                              69D134359C1B4E4DB139D7A2AA2A8420A8EBE1DC3BABAE6BD4757366E8CFDC82
+                              557585B66D312FE7510ABC8C2001DE8741ED2A626B5B8710044DD3806938CB66
+                              1F027CF0083EACFD9B33D6600209828030A85DA4889C3A4BE92658BEE640C3EA
+                              850439331F6B0366ADC568344292244892244A8197E15C8BA66916BBCA8DBE59
+                              EC8AB51649D2F5C2DAD1F94FB8225D1F1AB46DBB7619B53660C6186459863C9F
+                              603219AFFBB32B379F5728CBF96A977113586B9165634C26638CC759DFE5AC94
+                              E51C4551228470D980A5C8F31CDBDBB7A215F9A9ACED8E6A6F4AB8802E60E371
+                              86ADAD2D4CA779DFE5AC10F1EAD38675D6068C99608C59ED268762346A16E7F2
+                              DD9CEB0E0CB717A3737B319C4312B59134602A2A0D988A4A03A6A2D280A9A834
+                              602A2A0D988A6AFD97DDCEA3AA2ACC66B3ABACE75C6559DEE0719DE3417DC93F
+                              9BCD505515BCBBCCB8CE7B9FD00EA9994DD3A0AAEA41D5149B730EF37935B86F
+                              30AAAA425DD770979907F3DE778D6CBB77CF5074A33A0EEE8C77CDA6695B0791
+                              39DAB61DD45521BDF370FEEC295BFBEE070E8ED032642EC0CC2F9E389CF7CB5A
+                              25208DF5B43189B39E7C6069002A011CFB551307DD8D1941E681B8B5C06A9E6A
+                              15B096436102F620FC940810D0704628CE20901F84E885B3E1A8EF5A3E1767E5
+                              88845F40640BA06BB11620C81C82A78CB0D7328AE5EF5701134FA5B07F490204
+                              E103123F9CC1A3330899972684BDC09B13300EE18803BDF0C49EC4BFEEBB9E8B
+                              08C42D23EC098597E24DB9FCFD2A6093AC2CCA6AB24746DE8C029E3BBA1E1F61
+                              487025B12B8E929DE2FCBFBE1E8E925B873BF58193607F06D33FFAAEE7222C10
+                              5A4621DE9493ACDC985E28A56EB2FF039A2B54C2D5A92ABE0000000049454E44
+                              AE426082}
+                            FileName = 
+                              'E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Resources\Equivalent_4' +
+                              '0px.png'
+                          end>
+                        Align = Client
+                        Locked = True
+                        HitTest = False
+                        Opacity = 0.800000011920929000
+                        Margins.Left = 4.000000000000000000
+                        Margins.Top = 4.000000000000000000
+                        Margins.Right = 4.000000000000000000
+                        Margins.Bottom = 4.000000000000000000
+                        Size.Width = 44.000000000000000000
+                        Size.Height = 32.000000000000000000
+                        Size.PlatformDefault = False
+                      end
+                    end
+                  end
+                  object MemoMakerGQL: TMemo
+                    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+                    DataDetectorTypes = []
+                    Align = Client
+                    Size.Width = 568.000000000000000000
+                    Size.Height = 150.000000000000000000
+                    Size.PlatformDefault = False
+                    TabOrder = 1
+                    Viewport.Width = 564.000000000000000000
+                    Viewport.Height = 146.000000000000000000
+                  end
+                end
+              end
+              object Splitter3: TSplitter
+                Align = Bottom
+                Cursor = crVSplit
+                MinSize = 20.000000000000000000
+                Position.Y = 326.000000000000000000
+                Size.Width = 648.000000000000000000
+                Size.Height = 10.000000000000000000
+                Size.PlatformDefault = False
               end
             end
           end
@@ -3960,19 +4168,9 @@ object MainRagGraphDemo: TMainRagGraphDemo
     end
   end
   object Rag: TAiRagGraph
-    Embeddings = AiOpenAiEmbeddings1
-    InMemoryIndexType = TAIEuclideanIndex
-    Driver = RAGPgDriver
-    Left = 128
-    Top = 328
-  end
-  object AiOpenAiEmbeddings1: TAiOpenAiEmbeddings
-    Model = 'text-embedding-3-small'
-    Dimensions = 1536
-    ApiKey = '@OPENAI_API_KEY'
-    Url = 'https://api.openai.com/v1/'
-    Left = 88
-    Top = 512
+    Embeddings = AiOllamaEmbeddings1
+    Left = 80
+    Top = 312
   end
   object AiConn: TAiChatConnection
     DriverName = 'Gemini'
@@ -4004,416 +4202,263 @@ object MainRagGraphDemo: TMainRagGraphDemo
         Strings.Strings = (
           
             'Eres un asistente experto en an'#225'lisis de texto y construcci'#243'n de' +
-            ' grafos de conocimiento. Tu tarea es leer el texto proporcionado' +
-            ' y extraer todas las entidades y las relaciones sem'#225'nticas entre' +
-            ' ellas en forma de tripletas (sujeto, predicado, objeto).'
+            ' grafos de conocimiento. Tu tarea es extraer entidades y relacio' +
+            'nes sem'#225'nticas en forma de tripletas JSON para alimentar un sist' +
+            'ema RAG de alta precisi'#243'n.'
           ''
-          'Sigue estas instrucciones cuidadosamente:'
+          'CONTEXTO DEL SISTEMA:'
           
-            '1.  **Identifica Entidades:** Primero, identifica todas las enti' +
-            'dades importantes en el texto. Las entidades pueden ser personas' +
-            ', organizaciones, lugares, fechas, productos, conceptos, etc.'
+            '- El grafo usa b'#250'squeda h'#237'brida: l'#233'xica (BM25) y sem'#225'ntica (embe' +
+            'ddings)'
           
-            '2.  **Asigna Etiquetas:** Para cada entidad, asigna una etiqueta' +
-            ' categ'#243'rica apropiada. Utiliza etiquetas de la siguiente lista s' +
-            'i es posible: [Persona, Empresa, Ciudad, Producto, Concepto, Fec' +
-            'ha]. Si una entidad no encaja, puedes usar una etiqueta gen'#233'rica' +
-            ' o sugerir una nueva.'
+            '- Las propiedades se usan para filtrado y consultas estructurada' +
+            's'
           
-            '3.  **Extrae Relaciones:** Identifica las relaciones expl'#237'citas ' +
-            'o impl'#237'citas entre las entidades. La relaci'#243'n debe ser un verbo ' +
-            'o una frase verbal que conecte un sujeto con un objeto.'
-          
-            '4.  **Extrae Propiedades:** Captura cualquier atributo o dato es' +
-            'pec'#237'fico sobre una entidad o una relaci'#243'n como una propiedad cla' +
-            've-valor.'
-          
-            '5.  **Genera la Salida:** Formatea toda la informaci'#243'n extra'#237'da ' +
-            'como un array JSON. Cada elemento del array debe ser un objeto q' +
-            'ue represente una '#250'nica tripleta con la siguiente estructura:'
+            '- El campo "text" se usa para generar embeddings y b'#250'squeda por ' +
+            'texto completo'
+          '- La normalizaci'#243'n de nombres es CR'#205'TICA para evitar duplicados'
           ''
-          '**ESQUEMA JSON DE SALIDA:**'
+          'REGLAS DE EXTRACCI'#211'N:'
           ''
-          '```json'
+          '1. IDENTIFICACI'#211'N Y NORMALIZACI'#211'N DE ENTIDADES:'
+          '   '#10003' Usa el nombre can'#243'nico m'#225's com'#250'n y reconocible'
+          '   '#10003' Mant'#233'n may'#250'sculas solo donde corresponda (nombres propios)'
+          '   '#10003' Evita art'#237'culos, adjetivos descriptivos y pronombres'
+          
+            '   '#10003' Para personas: Usa "Nombre Apellido" completo si est'#225' dispo' +
+            'nible'
+          '   '#10003' Para empresas: Usa el nombre legal o comercial oficial'
+          '   '#10003' Para lugares: Usa el nombre geogr'#225'fico est'#225'ndar'
+          '   '
+          '   Ejemplos de normalizaci'#243'n:'
+          
+            '   '#10060' "la empresa Apple", "Apple Inc.", "la compa'#241#237'a de Cupertino' +
+            '"'
+          '   '#9989' "Apple"'
+          '   '
+          '   '#10060' "el se'#241'or Steve Jobs", "Jobs", "el cofundador"'
+          '   '#9989' "Steve Jobs"'
+          ''
+          '2. CATEGORIZACI'#211'N (nodeLabel):'
+          '   - Usa SOLO estas categor'#237'as estandarizadas:'
+          '     * Persona, Empresa, Organizaci'#243'n, Producto, Servicio'
+          '     * Ciudad, Pa'#237's, Regi'#243'n, Lugar'
+          '     * Concepto, Tecnolog'#237'a, Metodolog'#237'a'
+          '     * Fecha, Evento, Proyecto'
+          '     * Documento, Ley, Regulaci'#243'n'
+          '   - Si no encaja claramente, usa "Concepto"'
+          '   - NO inventes nuevas categor'#237'as'
+          ''
+          '3. RELACIONES (edgeLabel):'
+          
+            '   '#10003' Usa verbos en infinitivo o constantes en MAY'#218'SCULAS_CON_GUI' +
+            'ONES'
+          '   '#10003' S'#233' espec'#237'fico y sem'#225'nticamente rico'
+          
+            '   '#10003' Mant'#233'n coherencia: usa el mismo predicado para la misma rel' +
+            'aci'#243'n'
+          '   '
+          '   Predicados preferidos por dominio:'
+          
+            '   - Organizacional: TRABAJA_EN, DIRIGE, FUND'#211', ES_CEO_DE, PERTE' +
+            'NECE_A'
+          '   - Geogr'#225'fico: UBICADO_EN, SEDE_EN, NACI'#211'_EN, OPERA_EN'
+          '   - Temporal: OCURRI'#211'_EN, FUNDADO_EN, DUR'#211'_HASTA'
+          '   - Jer'#225'rquico: ES_PARTE_DE, SUBSIDIARIA_DE, REPORTA_A'
+          '   - Relacional: CONOCE, HIJO_DE, CASADO_CON, SOCIO_DE'
+          '   - T'#233'cnico: DESARROLLA, UTILIZA_TECNOLOG'#205'A, IMPLEMENTA'
+          '   - Comercial: VENDE, COMPR'#211', INVIRTI'#211'_EN, CLIENTE_DE'
+          ''
+          '4. PROPIEDADES (CR'#205'TICO PARA FILTRADO):'
+          '   '#10003' Extrae atributos cuantificables y estructurados'
+          '   '#10003' Usa tipos de datos consistentes'
+          '   '#10003' NO dupliques informaci'#243'n que ya est'#225' en name o nodeLabel'
+          '   '
+          '   Formatos estandarizados:'
+          '   - Fechas: "AAAA-MM-DD" (ISO 8601)'
+          
+            '   - Cantidades: n'#250'meros sin unidades '#8594' propiedad aparte para la' +
+            ' unidad'
+          '   - Booleanos: true/false (no "s'#237'"/"no")'
+          
+            '   - Enumeraciones: valores consistentes ("activo"/"inactivo", n' +
+            'o "s'#237'"/"no")'
+          '   '
+          '   Ejemplos:'
+          '   '#10003' "edad": 45, "unidad_edad": "a'#241'os"'
+          '   '#10003' "fecha_fundacion": "1976-04-01"'
+          '   '#10003' "ingresos_anuales": 394328000000, "moneda": "USD"'
+          '   '#10003' "empleados": 164000'
+          '   '#10003' "es_publica": true'
+          ''
+          '5. TEXTO NARRATIVO (text):'
+          '   '#10003' Incluye la oraci'#243'n o fragmento completo del texto original'
+          '   '#10003' Este texto se usa para generar embeddings y b'#250'squeda BM25'
+          
+            '   '#10003' Debe ser autocontenido y comprensible sin contexto adiciona' +
+            'l'
+          
+            '   '#10003' NO incluyas texto si la entidad es obvia (ej: pa'#237'ses conoci' +
+            'dos)'
+          
+            '   '#10003' S'#205' incluye texto para entidades espec'#237'ficas del dominio o c' +
+            'on matices'
+          '   '
+          '   Ejemplo:'
+          
+            '   '#10003' "text": "Apple Inc., fundada en 1976, revolucion'#243' la indust' +
+            'ria tecnol'#243'gica con productos innovadores como el iPhone y el iP' +
+            'ad."'
+          '   '#10060' "text": "Apple" (muy corto, sin contexto)'
+          ''
+          '6. CALIDAD Y COMPLETITUD:'
+          
+            '   '#10003' Extrae TODAS las entidades relevantes, no solo las principa' +
+            'les'
+          '   '#10003' Captura relaciones impl'#237'citas cuando sean evidentes'
+          
+            '   '#10003' Si una entidad aparece m'#250'ltiples veces, crea m'#250'ltiples trip' +
+            'letas'
+          
+            '   '#10003' Mant'#233'n la granularidad: mejor muchas tripletas simples que ' +
+            'pocas complejas'
+          ''
+          'ESQUEMA JSON DE SALIDA:'
+          ''
+          
+            'Devuelve '#218'NICAMENTE un array JSON v'#225'lido. NO incluyas texto expl' +
+            'icativo, markdown, ni comentarios.'
+          ''
           '['
           '  {'
           '    "subject": {'
-          '      "name": "string (Requerido)",'
-          '      "nodeLabel": "string (Requerido)",'
+          '      "name": "string (nombre can'#243'nico)",'
+          '      "nodeLabel": "string (categor'#237'a estandarizada)",'
+          '      "text": "string (contexto narrativo completo) - OPCIONAL",'
           '      "properties": {'
-          '        "clave": "valor",'
-          '        "...": "..."'
-          '      }'
-          '    },'
-          '    "predicate": {'
-          '      "edgeLabel": "string (Requerido)",'
-          '      "name": "string (Opcional, descripci'#243'n legible)",'
-          '      "properties": {'
-          '        "clave": "valor",'
-          '        "...": "..."'
-          '      }'
-          '    },'
-          '    "object": {'
-          '      "name": "string (Requerido)",'
-          '      "nodeLabel": "string (Requerido)",'
-          '      "properties": {'
-          '        "clave": "valor",'
-          '        "...": "..."'
-          '      }'
-          '    }'
-          '  }'
-          ']'
-          'EJEMPLO DE USO:'
-          'Texto de Entrada de Ejemplo:'
-          
-            '"Apple, cofundada por Steve Jobs y Steve Wozniak el 1 de abril d' +
-            'e 1976, tiene su sede principal en Cupertino. La compa'#241#237'a revolu' +
-            'cion'#243' la industria de la m'#250'sica con el iPod en 2001."'
-          'Salida JSON de Ejemplo:'
-          'code'
-          'JSON'
-          '['
-          '  {'
-          '    "subject": { "name": "Steve Jobs", "nodeLabel": "Persona" },'
-          
-            '    "predicate": { "edgeLabel": "COFUND'#211'", "properties": { "fech' +
-            'a": "1976-04-01" } },'
-          '    "object": { "name": "Apple", "nodeLabel": "Empresa" }'
-          '  },'
-          '  {'
-          
-            '    "subject": { "name": "Steve Wozniak", "nodeLabel": "Persona"' +
-            ' },'
-          
-            '    "predicate": { "edgeLabel": "COFUND'#211'", "properties": { "fech' +
-            'a": "1976-04-01" } },'
-          '    "object": { "name": "Apple", "nodeLabel": "Empresa" }'
-          '  },'
-          '  {'
-          '    "subject": { "name": "Apple", "nodeLabel": "Empresa" },'
-          '    "predicate": { "edgeLabel": "TIENE_SEDE_EN" },'
-          '    "object": { "name": "Cupertino", "nodeLabel": "Ciudad" }'
-          '  },'
-          '  {'
-          '    "subject": { "name": "Apple", "nodeLabel": "Empresa" },'
-          
-            '    "predicate": { "edgeLabel": "LANZ'#211'", "properties": { "a'#241'o": ' +
-            '2001 } },'
-          '    "object": { "name": "iPod", "nodeLabel": "Producto" }'
-          '  }'
-          ']'
-          'AHORA, PROCESA EL SIGUIENTE TEXTO:'
-          'Texto de Entrada:'
-          '<#texto>')
-      end
-      item
-        Nombre = 'CreaJSonFromTextoMejorado'
-        Descripcion = 
-          'crea el json a partir de un texto adicionando propiedades comune' +
-          's'
-        Strings.Strings = (
-          
-            'Eres un asistente experto en an'#225'lisis de texto y construcci'#243'n de' +
-            ' grafos de conocimiento. Tu tarea es leer el texto proporcionado' +
-            ' y extraer todas las entidades y las relaciones sem'#225'nticas entre' +
-            ' ellas en forma de tripletas (sujeto, predicado, objeto).'
-          'INSTRUCCIONES:'
-          '1. Identificar Metadatos Transversales'
-          
-            'PRIMER PASO CR'#205'TICO: Identifica los metadatos contextuales que a' +
-            'plican a TODO el contenido extra'#237'do. Estos metadatos proporciona' +
-            'n trazabilidad y deben incluirse como propiedades en cada elemen' +
-            'to de las tripletas.'
-          'Metadatos comunes a identificar:'
-          ''
-          'Identificador de documento o fuente'
-          'Autor o creador del contenido'
-          
-            'Ubicaci'#243'n estructural (cap'#237'tulo, secci'#243'n, p'#225'gina, p'#225'rrafo, l'#237'nea' +
-            ')'
-          'Fecha o per'#237'odo temporal'
-          'Versi'#243'n del documento'
-          'Idioma'
-          'Tipo de documento'
-          'Cualquier otro contexto relevante proporcionado'
-          ''
-          
-            'REGLA: Estos metadatos deben a'#241'adirse a las propiedades de subje' +
-            'ct, predicate y object en TODAS las tripletas extra'#237'das.'
-          '2. Identificar Entidades'
-          
-            'Identifica todas las entidades relevantes en el texto. Las entid' +
-            'ades pueden incluir:'
-          ''
-          'Personas, personajes, autores'
-          'Organizaciones, instituciones, empresas'
-          'Lugares, ubicaciones geogr'#225'ficas'
-          'Fechas, per'#237'odos temporales'
-          'Productos, servicios, tecnolog'#237'as'
-          'Conceptos, ideas, teor'#237'as'
-          'Eventos, sucesos'
-          'Objetos, artefactos'
-          'Obras (literarias, art'#237'sticas, cient'#237'ficas)'
-          'Cualquier otra entidad con significado sem'#225'ntico'
-          ''
-          '3. Asignar Etiquetas (nodeLabel)'
-          
-            'Para cada entidad identificada, asigna una etiqueta categ'#243'rica q' +
-            'ue represente su tipo.'
-          'Etiquetas sugeridas (adapta seg'#250'n el dominio):'
-          
-            'Persona, Personaje, Organizaci'#243'n, Empresa, Instituci'#243'n, Lugar, C' +
-            'iudad, Pa'#237's, Fecha, Per'#237'odo, Producto, Tecnolog'#237'a, Concepto, Teo' +
-            'r'#237'a, Evento, Objeto, Obra, Animal, Documento'
-          'Puedes crear etiquetas personalizadas si el dominio lo requiere.'
-          '4. Extraer Relaciones'
-          
-            'Identifica las relaciones sem'#225'nticas entre las entidades. Las re' +
-            'laciones pueden ser:'
-          ''
-          'Expl'#237'citas: Directamente mencionadas en el texto'
-          'Impl'#237'citas: Se infieren del contexto'
-          ''
-          'Las relaciones deben expresarse como:'
-          ''
-          'Un verbo o frase verbal que conecte el sujeto con el objeto'
-          
-            'En formato normalizado (ej: TRABAJA_EN, PERTENECE_A, CREA, LOCAL' +
-            'IZADO_EN)'
-          ''
-          '5. Extraer Propiedades Espec'#237'ficas'
-          
-            'Identifica atributos o caracter'#237'sticas espec'#237'ficas de cada entid' +
-            'ad o relaci'#243'n:'
-          'Para entidades (subject/object):'
-          ''
-          'Atributos descriptivos (edad, tipo, descripci'#243'n, rol, etc.)'
-          'Caracter'#237'sticas cuantitativas (cantidad, tama'#241'o, duraci'#243'n, etc.)'
-          'Estados o condiciones'
-          'Clasificaciones o categor'#237'as adicionales'
-          ''
-          'Para relaciones (predicate):'
-          ''
-          'Tiempo o duraci'#243'n de la relaci'#243'n'
-          'Modo o manera'
-          'Causa o motivo'
-          'Intensidad o grado'
-          'Contexto espec'#237'fico'
-          ''
-          '6. Combinar Propiedades'
-          'En cada elemento de la tripleta:'
-          ''
-          'Propiedades transversales (metadatos identificados en paso 1)'
-          
-            'Propiedades espec'#237'ficas (atributos particulares identificados en' +
-            ' paso 5)'
-          ''
-          ''
-          'FORMATO DE SALIDA:'
-          
-            'IMPORTANTE: La salida debe ser EXCLUSIVAMENTE un array JSON v'#225'li' +
-            'do, sin texto adicional antes o despu'#233's.'
-          'json['
-          '  {'
-          '    "subject": {'
-          
-            '      "name": "string (Requerido: nombre o identificador de la e' +
-            'ntidad)",'
-          
-            '      "nodeLabel": "string (Requerido: categor'#237'a/tipo de entidad' +
-            ')",'
-          '      "properties": {'
-          '        "metadato_1": "valor (ej: fuente, autor, p'#225'gina)",'
-          '        "metadato_2": "valor",'
-          '        "propiedad_especifica_1": "valor",'
-          '        "propiedad_especifica_2": "valor"'
+          '        "clave": "valor tipado correctamente"'
           '      }'
           '    },'
           '    "predicate": {'
           
-            '      "edgeLabel": "string (Requerido: tipo de relaci'#243'n en forma' +
-            'to normalizado)",'
-          
-            '      "name": "string (Opcional: descripci'#243'n legible de la relac' +
-            'i'#243'n)",'
+            '      "edgeLabel": "string (VERBO_EN_INFINITIVO o CONSTANTE_MAY'#218 +
+            'SCULAS)",'
           '      "properties": {'
-          '        "metadato_1": "valor",'
-          '        "metadato_2": "valor",'
-          '        "propiedad_especifica_1": "valor"'
+          '        "fecha": "AAAA-MM-DD",'
+          '        "otros_atributos": "valor"'
           '      }'
           '    },'
           '    "object": {'
-          
-            '      "name": "string (Requerido: nombre o identificador de la e' +
-            'ntidad)",'
-          
-            '      "nodeLabel": "string (Requerido: categor'#237'a/tipo de entidad' +
-            ')",'
+          '      "name": "string (nombre can'#243'nico)",'
+          '      "nodeLabel": "string (categor'#237'a estandarizada)",'
+          '      "text": "string (contexto narrativo completo) - OPCIONAL",'
           '      "properties": {'
-          '        "metadato_1": "valor",'
-          '        "metadato_2": "valor",'
-          '        "propiedad_especifica_1": "valor"'
+          '        "clave": "valor tipado correctamente"'
           '      }'
           '    }'
           '  }'
           ']'
           ''
-          'PRINCIPIOS DE CALIDAD:'
+          'EJEMPLO DE SALIDA DE CALIDAD:'
           ''
           
-            'Exhaustividad: Extrae todas las relaciones relevantes, no solo l' +
-            'as m'#225's evidentes'
-          'Consistencia:'
+            'Texto: "Steve Jobs cofund'#243' Apple en 1976 junto a Steve Wozniak e' +
+            'n Cupertino, California. Apple desarroll'#243' el iPhone, que revoluc' +
+            'ion'#243' la industria m'#243'vil en 2007."'
           ''
-          'Usa nomenclatura uniforme para entidades similares'
-          
-            'Normaliza las etiquetas de relaciones (ej: TRABAJA_EN no trabaja' +
-            'En o trabaja_en)'
-          
-            'Mant'#233'n los mismos valores para metadatos transversales en todas ' +
-            'las tripletas del mismo fragmento'
-          ''
-          ''
-          'Granularidad apropiada:'
-          ''
-          'Prefiere m'#250'ltiples tripletas simples sobre tripletas complejas'
-          'Cada tripleta debe representar una '#250'nica relaci'#243'n at'#243'mica'
-          ''
-          ''
-          'Trazabilidad completa:'
-          ''
-          'Todas las tripletas deben contener los metadatos de origen'
-          'Esto permite rastrear cada relaci'#243'n hasta su fuente'
-          ''
-          ''
-          'Precisi'#243'n sem'#225'ntica:'
-          ''
-          'Las relaciones deben ser espec'#237'ficas y significativas'
-          
-            'Evita relaciones gen'#233'ricas cuando existe una m'#225's espec'#237'fica (ej:' +
-            ' COFUND'#211' en lugar de RELACIONADO_CON)'
-          ''
-          ''
-          'Manejo de ambig'#252'edad:'
-          ''
-          
-            'Si una entidad puede tener m'#250'ltiples interpretaciones, elige la ' +
-            'm'#225's coherente con el contexto'
-          'Usa propiedades adicionales para aclarar cuando sea necesario'
-          ''
-          ''
-          ''
-          ''
-          'EJEMPLO ILUSTRATIVO:'
-          'Entrada:'
-          'Documento: Informe Anual 2024'
-          'Secci'#243'n: Innovaci'#243'n Tecnol'#243'gica'
-          'P'#225'gina: 15'
-          ''
-          
-            'La empresa TechCorp lanz'#243' la plataforma CloudAI en marzo de 2024' +
-            ', desarrollada por el equipo liderado por la Dra. Ana Mart'#237'nez. ' +
-            'Esta plataforma utiliza inteligencia artificial para optimizar p' +
-            'rocesos empresariales.'
-          'Salida:'
-          'json['
+          '['
           '  {'
           '    "subject": {'
-          '      "name": "TechCorp",'
+          '      "name": "Steve Jobs",'
+          '      "nodeLabel": "Persona",'
+          
+            '      "text": "Steve Jobs cofund'#243' Apple en 1976 junto a Steve Wo' +
+            'zniak en Cupertino, California.",'
+          '      "properties": {'
+          '        "rol": "cofundador"'
+          '      }'
+          '    },'
+          '    "predicate": {'
+          '      "edgeLabel": "COFUND'#211'",'
+          '      "properties": {'
+          '        "fecha": "1976-01-01",'
+          '        "lugar": "Cupertino"'
+          '      }'
+          '    },'
+          '    "object": {'
+          '      "name": "Apple",'
           '      "nodeLabel": "Empresa",'
+          
+            '      "text": "Apple fue cofundada en 1976 y desarroll'#243' producto' +
+            's revolucionarios como el iPhone.",'
           '      "properties": {'
-          '        "documento": "Informe Anual 2024",'
-          '        "seccion": "Innovaci'#243'n Tecnol'#243'gica",'
-          '        "pagina": 15'
-          '      }'
-          '    },'
-          '    "predicate": {'
-          '      "edgeLabel": "LANZ'#211'",'
-          '      "name": "lanz'#243' al mercado",'
-          '      "properties": {'
-          '        "documento": "Informe Anual 2024",'
-          '        "seccion": "Innovaci'#243'n Tecnol'#243'gica",'
-          '        "pagina": 15,'
-          '        "fecha": "marzo 2024"'
-          '      }'
-          '    },'
-          '    "object": {'
-          '      "name": "CloudAI",'
-          '      "nodeLabel": "Producto",'
-          '      "properties": {'
-          '        "documento": "Informe Anual 2024",'
-          '        "seccion": "Innovaci'#243'n Tecnol'#243'gica",'
-          '        "pagina": 15,'
-          '        "tipo": "plataforma tecnol'#243'gica"'
+          '        "a'#241'o_fundacion": 1976,'
+          '        "industria": "tecnolog'#237'a"'
           '      }'
           '    }'
           '  },'
           '  {'
           '    "subject": {'
-          '      "name": "Dra. Ana Mart'#237'nez",'
+          '      "name": "Apple",'
+          '      "nodeLabel": "Empresa"'
+          '    },'
+          '    "predicate": {'
+          '      "edgeLabel": "SEDE_EN"'
+          '    },'
+          '    "object": {'
+          '      "name": "Cupertino",'
+          '      "nodeLabel": "Ciudad",'
+          '      "properties": {'
+          '        "estado": "California",'
+          '        "pais": "Estados Unidos"'
+          '      }'
+          '    }'
+          '  },'
+          '  {'
+          '    "subject": {'
+          '      "name": "Apple",'
+          '      "nodeLabel": "Empresa"'
+          '    },'
+          '    "predicate": {'
+          '      "edgeLabel": "DESARROLL'#211'",'
+          '      "properties": {'
+          '        "fecha_lanzamiento": "2007-06-29"'
+          '      }'
+          '    },'
+          '    "object": {'
+          '      "name": "iPhone",'
+          '      "nodeLabel": "Producto",'
+          
+            '      "text": "El iPhone revolucion'#243' la industria m'#243'vil cuando f' +
+            'ue lanzado en 2007.",'
+          '      "properties": {'
+          '        "categoria": "smartphone",'
+          '        "impacto": "revolucionario"'
+          '      }'
+          '    }'
+          '  },'
+          '  {'
+          '    "subject": {'
+          '      "name": "Steve Wozniak",'
           '      "nodeLabel": "Persona",'
           '      "properties": {'
-          '        "documento": "Informe Anual 2024",'
-          '        "seccion": "Innovaci'#243'n Tecnol'#243'gica",'
-          '        "pagina": 15,'
-          '        "titulo": "Doctora"'
+          '        "rol": "cofundador"'
           '      }'
           '    },'
           '    "predicate": {'
-          '      "edgeLabel": "LIDERA",'
-          '      "name": "lidera el equipo de",'
+          '      "edgeLabel": "COFUND'#211'",'
           '      "properties": {'
-          '        "documento": "Informe Anual 2024",'
-          '        "seccion": "Innovaci'#243'n Tecnol'#243'gica",'
-          '        "pagina": 15'
+          '        "fecha": "1976-01-01"'
           '      }'
           '    },'
           '    "object": {'
-          '      "name": "Equipo de desarrollo CloudAI",'
-          '      "nodeLabel": "Organizaci'#243'n",'
-          '      "properties": {'
-          '        "documento": "Informe Anual 2024",'
-          '        "seccion": "Innovaci'#243'n Tecnol'#243'gica",'
-          '        "pagina": 15,'
-          '        "tipo": "equipo de desarrollo"'
-          '      }'
-          '    }'
-          '  },'
-          '  {'
-          '    "subject": {'
-          '      "name": "CloudAI",'
-          '      "nodeLabel": "Producto",'
-          '      "properties": {'
-          '        "documento": "Informe Anual 2024",'
-          '        "seccion": "Innovaci'#243'n Tecnol'#243'gica",'
-          '        "pagina": 15'
-          '      }'
-          '    },'
-          '    "predicate": {'
-          '      "edgeLabel": "UTILIZA",'
-          '      "name": "utiliza tecnolog'#237'a de",'
-          '      "properties": {'
-          '        "documento": "Informe Anual 2024",'
-          '        "seccion": "Innovaci'#243'n Tecnol'#243'gica",'
-          '        "pagina": 15,'
-          '        "proposito": "optimizaci'#243'n de procesos"'
-          '      }'
-          '    },'
-          '    "object": {'
-          '      "name": "Inteligencia Artificial",'
-          '      "nodeLabel": "Tecnolog'#237'a",'
-          '      "properties": {'
-          '        "documento": "Informe Anual 2024",'
-          '        "seccion": "Innovaci'#243'n Tecnol'#243'gica",'
-          '        "pagina": 15,'
-          '        "aplicacion": "procesos empresariales"'
-          '      }'
+          '      "name": "Apple",'
+          '      "nodeLabel": "Empresa"'
           '    }'
           '  }'
           ']'
           ''
-          'AHORA, PROCESA EL SIGUIENTE TEXTO:'
-          'Texto de Entrada:'
+          'TEXTO A PROCESAR:'
           '<#texto>')
       end
       item
@@ -4596,20 +4641,27 @@ object MainRagGraphDemo: TMainRagGraphDemo
       'DriverID=PG')
     Connected = True
     LoginPrompt = False
-    Left = 620
+    Left = 484
     Top = 288
   end
   object RAGBuilder1: TAiRagGraphBuilder
     Graph = Rag
-    Embeddings = AiOpenAiEmbeddings1
-    Left = 216
-    Top = 328
+    Left = 176
+    Top = 296
   end
   object RAGPgDriver: TAiRagGraphPostgresDriver
     Connection = DbConn
-    CurrentEntidad = 'CLIENTE01'
+    CurrentEntidad = 'LEGAL'
     TableName = 'graph_'
-    Left = 304
-    Top = 328
+    Left = 296
+    Top = 280
+  end
+  object AiOllamaEmbeddings1: TAiOllamaEmbeddings
+    Model = 'snowflake-arctic-embed'
+    Dimensions = 1024
+    ApiKey = '@OLLAMA_API_KEY'
+    Url = 'http://localhost:11434/'
+    Left = 88
+    Top = 424
   end
 end

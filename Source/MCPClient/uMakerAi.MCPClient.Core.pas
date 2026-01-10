@@ -763,7 +763,7 @@ end;
 procedure TMCPClientStdIo.InternalStartServerProcess;
 var
   Command, Arguments, RootDir: String;
-  FullCommand: string; // Nueva variable para la línea de comandos completa
+  FullCommand: string;
   AEnvironment: TStringList;
 begin
   if IsServerRunning then
@@ -775,10 +775,9 @@ begin
   DoLog('Starting MCP server process...');
   DoStatusUpdate('Starting server...');
   try
-    // 1. Obtener los parámetros como antes
     Command := GetParamByName('Command');
     Arguments := GetParamByName('Arguments');
-    RootDir := GetParamByName('RootDir'); // Asegúrate que el nombre del param es 'RootDir'
+    RootDir := GetParamByName('RootDir');
 
     if Trim(Command) = '' then
     begin
@@ -786,56 +785,53 @@ begin
       Exit;
     end;
 
-    // 2. *** LA CORRECCIÓN CLAVE ***
-    // Construir la línea de comandos completa en UNA SOLA CADENA.
-
-    // Para robustez, si la ruta del comando tiene espacios, la entrecomillamos.
+    // --- CORRECCIÓN 1: Construcción robusta del comando ---
+    // Si la ruta tiene espacios y no tiene comillas, las agregamos.
     if (Pos(' ', Command) > 0) and (Command[1] <> '"') then
       FullCommand := AnsiQuotedStr(Command, '"')
     else
       FullCommand := Command;
 
-    // Añadimos los argumentos a la cadena.
     if Trim(Arguments) <> '' then
       FullCommand := FullCommand + ' ' + Arguments;
 
     DoLog(Format('Executing command line: %s', [FullCommand]));
 
-    // 3. Llamar a TUtilsSystem.StartInteractiveProcess con los parámetros correctos
+    // --- Iniciar el proceso ---
     AEnvironment := TStringList.Create;
     try
       AEnvironment.AddStrings(Self.EnvVars);
-
-      // Llamamos a la función con la LÍNEA DE COMANDO COMPLETA
       FInteractiveProcess := TUtilsSystem.StartInteractiveProcess(FullCommand, RootDir, AEnvironment);
-
     finally
       AEnvironment.Free;
     end;
 
-    // 4. Verificar el resultado (esto ya lo tenías implícitamente)
     if not Assigned(FInteractiveProcess) or (FInteractiveProcess.ProcessID = 0) then
     begin
-      DoStatusUpdate('Failed to start server.');
-      DoLog(Format('ERROR: Failed to start process for command: %s', [FullCommand]));
       FIsRunning := False;
+      DoLog('ERROR: Failed to start process.');
     end
     else
     begin
       FIsRunning := True;
-      DoStatusUpdate('Server started.');
       DoLog(Format('Server process started successfully (PID: %d).', [FInteractiveProcess.ProcessID]));
+
+      // --- CORRECCIÓN 2: ARRANCAR EL HILO DE LECTURA ---
+      // Sin esto, el cliente es sordo.
+      FReadThread := TThread.CreateAnonymousThread(ReadProcessOutput);
+      FReadThread.FreeOnTerminate := False; // Lo liberamos nosotros en el Stop
+      FReadThread.Start;
     end;
 
   except
     on E: Exception do
     begin
       FIsRunning := False;
-      DoStatusUpdate('Error starting server.');
-      DoLog(Format('EXCEPTION starting server: %s - %s', [E.ClassName, E.Message]));
+      DoLog(Format('EXCEPTION starting server: %s', [E.Message]));
     end;
   end;
 end;
+
 
 procedure TMCPClientStdIo.InternalStopServerProcess;
 begin
@@ -1051,82 +1047,82 @@ var
   LineFeedPos: Integer;
   CurrentLine: string;
   ParsedJson: TJSONObject;
-  TempBytes: TBytes;
 begin
   SetLength(LineBuffer, 0);
-  DoLog('Hilo de lectura de salida iniciado.');
-  try
-    while FIsRunning and Assigned(FInteractiveProcess) and FInteractiveProcess.IsRunning do
+  // DoLog('Read thread started.');
+
+  // Mantenemos el bucle mientras el proceso esté vivo y nosotros queramos correr
+  while FIsRunning and Assigned(FInteractiveProcess) and FInteractiveProcess.IsRunning do
+  begin
+    // Leer STDOUT
+    BytesRead := FInteractiveProcess.ReadOutput(ReadBuffer, SizeOf(ReadBuffer));
+
+    if BytesRead > 0 then
     begin
-      // Leer STDOUT
-      BytesRead := FInteractiveProcess.ReadOutput(ReadBuffer, SizeOf(ReadBuffer));
-      if BytesRead > 0 then
+      // Añadir al buffer acumulativo
+      var OldLen := Length(LineBuffer);
+      SetLength(LineBuffer, OldLen + BytesRead);
+      Move(ReadBuffer[0], LineBuffer[OldLen], BytesRead);
+
+      // Procesar líneas completas (buscando el #10)
+      while True do
       begin
-        var
-        OldLen := Length(LineBuffer);
-        SetLength(LineBuffer, OldLen + BytesRead);
-        Move(ReadBuffer[0], LineBuffer[OldLen], BytesRead);
-
-        while True do
-        begin
-          LineFeedPos := -1;
-          for var i := 0 to Length(LineBuffer) - 1 do
-            if LineBuffer[i] = 10 then
-            begin
-              LineFeedPos := i;
-              Break;
-            end;
-
-          if LineFeedPos = -1 then
-            Break;
-
-          CurrentLine := TEncoding.UTF8.GetString(LineBuffer, 0, LineFeedPos).Trim;
-
-          if not CurrentLine.IsEmpty then
+        LineFeedPos := -1;
+        for var i := 0 to Length(LineBuffer) - 1 do
+          if LineBuffer[i] = 10 then // LF
           begin
-            if CurrentLine.StartsWith('{') and CurrentLine.EndsWith('}') then
-            begin
-              try
-                ParsedJson := TJSONObject.ParseJSONValue(CurrentLine) as TJSONObject;
-                if Assigned(ParsedJson) then
-                begin
-                  DoLog('SERVER -> CLIENT (queueing): ' + CurrentLine);
-                  // FIX: Usar PushItem en lugar de Enqueue.
-                  if FIncomingMessages.PushItem(ParsedJson) <> wrSignaled then
-                  begin
-                    DoLog('ERROR: La cola de mensajes está llena, se descartó el mensaje.');
-                    ParsedJson.Free; // Importante liberar el objeto no encolado.
-                  end;
-                end;
-              except
-                on E: Exception do
-                  DoLog('Error al parsear JSON (stdout): ' + E.Message + '. Línea: ' + CurrentLine);
-              end;
-            end
-            else
-              DoLog('[SERVER RAW STDOUT]: ' + CurrentLine);
+            LineFeedPos := i;
+            Break;
           end;
-          System.Delete(LineBuffer, 0, LineFeedPos + 1);
+
+        if LineFeedPos = -1 then
+          Break; // No hay línea completa aún
+
+        // Extraer línea y convertir a String UTF8
+        // Nota: LineFeedPos incluye hasta justo antes del LF.
+        CurrentLine := TEncoding.UTF8.GetString(LineBuffer, 0, LineFeedPos).Trim;
+
+        // Limpiar CR si existe (#13)
+        if (CurrentLine <> '') and (CurrentLine[Length(CurrentLine)] = #13) then
+           SetLength(CurrentLine, Length(CurrentLine) - 1);
+
+        if not CurrentLine.IsEmpty then
+        begin
+          // Intentar detectar si es JSON
+          if CurrentLine.StartsWith('{') then
+          begin
+            try
+              ParsedJson := TJSONObject.ParseJSONValue(CurrentLine) as TJSONObject;
+              if Assigned(ParsedJson) then
+              begin
+                // --- CORRECCIÓN 3: Meter en la cola ---
+                DoLog('SERVER -> CLIENT: ' + CurrentLine);
+                FIncomingMessages.PushItem(ParsedJson);
+              end;
+            except
+              // Si falla el parseo, solo lo logeamos como texto raw
+               DoLog('[RAW]: ' + CurrentLine);
+            end;
+          end
+          else
+            DoLog('[STDOUT]: ' + CurrentLine);
         end;
+
+        // Eliminar la línea procesada del buffer (incluyendo el LF)
+        var RemoveLen := LineFeedPos + 1;
+        var NewLen := Length(LineBuffer) - RemoveLen;
+        if NewLen > 0 then
+          Move(LineBuffer[RemoveLen], LineBuffer[0], NewLen);
+        SetLength(LineBuffer, NewLen);
       end;
-
-      // Leer STDERR
-      BytesRead := FInteractiveProcess.ReadError(ReadBuffer, SizeOf(ReadBuffer));
-      if BytesRead > 0 then
-      begin
-        // FIX: Uso correcto de GetString para un array de bytes.
-        // DoLog('[SERVER RAW STDERR]: ' + TEncoding.UTF8.GetString(ReadBuffer, BytesRead).Trim);
-
-        SetLength(TempBytes, SizeOf(ReadBuffer));
-        Move(ReadBuffer[0], TempBytes[0], SizeOf(ReadBuffer));
-        DoLog('[SERVER RAW STDERR]: ' + TEncoding.UTF8.GetString(TempBytes, 0, BytesRead).Trim);
-
-      end;
+    end
+    else
+    begin
+      // Pequeña pausa para no quemar CPU si no hay datos
       Sleep(10);
     end;
-  finally
-    SetLength(LineBuffer, 0);
-    DoLog('Hilo de lectura de salida terminado.');
+
+    // Aquí podrías leer ReadError también si quieres ver el STDERR
   end;
 end;
 
@@ -1134,19 +1130,16 @@ procedure TMCPClientStdIo.InternalSendRawMessage(const AJsonString: string);
 var
   Bytes: TBytes;
 begin
-  if not IsServerRunning then
-  begin
-    DoLog('ERROR: Server not running to send message.');
-    Exit;
-  end;
+  if not IsServerRunning then Exit;
 
-  DoLog('CLIENT -> SERVER: ' + AJsonString.Trim);
+  DoLog('CLIENT -> SERVER: ' + AJsonString);
   try
+    // IMPORTANTE: + #10 al final
     Bytes := TEncoding.UTF8.GetBytes(AJsonString + #10);
     FInteractiveProcess.WriteInput(Bytes[0], Length(Bytes));
   except
     on E: Exception do
-      DoLog('ERROR writing to server STDIN: ' + E.Message);
+      DoLog('ERROR writing to server: ' + E.Message);
   end;
 end;
 

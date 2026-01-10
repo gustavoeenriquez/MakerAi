@@ -1075,7 +1075,7 @@ object Form2: TForm2
           Margins.Top = 5.000000000000000000
           Margins.Right = 5.000000000000000000
           Size.Width = 775.000000000000000000
-          Size.Height = 643.000000000000000000
+          Size.Height = 593.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 1
           InboundColor = claLightcyan
@@ -1085,7 +1085,7 @@ object Form2: TForm2
           OnBeforeAddBubble = ChatList1BeforeAddBubble
           OnMediaFileDblClick = ChatList1MediaFileDblClick
           Viewport.Width = 775.000000000000000000
-          Viewport.Height = 643.000000000000000000
+          Viewport.Height = 593.000000000000000000
         end
         object LblLog: TLabel
           Align = Bottom
@@ -1094,7 +1094,7 @@ object Form2: TForm2
           Margins.Right = 3.000000000000000000
           Margins.Bottom = 3.000000000000000000
           Position.X = 10.000000000000000000
-          Position.Y = 771.000000000000000000
+          Position.Y = 721.000000000000000000
           Size.Width = 1260.000000000000000000
           Size.Height = 17.000000000000000000
           Size.PlatformDefault = False
@@ -1107,9 +1107,9 @@ object Form2: TForm2
           Margins.Top = 5.000000000000000000
           Margins.Right = 5.000000000000000000
           Position.X = 5.000000000000000000
-          Position.Y = 796.000000000000000000
+          Position.Y = 746.000000000000000000
           Size.Width = 1263.000000000000000000
-          Size.Height = 60.000000000000000000
+          Size.Height = 110.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 0
           ImagesVisible = False
@@ -1133,7 +1133,7 @@ object Form2: TForm2
         end
         object Layout10: TLayout
           Align = Bottom
-          Position.Y = 655.000000000000000000
+          Position.Y = 605.000000000000000000
           Size.Width = 1273.000000000000000000
           Size.Height = 113.000000000000000000
           Size.PlatformDefault = False
@@ -1175,7 +1175,7 @@ object Form2: TForm2
           Align = Bottom
           Cursor = crVSplit
           MinSize = 20.000000000000000000
-          Position.Y = 648.000000000000000000
+          Position.Y = 598.000000000000000000
           Size.Width = 1273.000000000000000000
           Size.Height = 7.000000000000000000
           Size.PlatformDefault = False
@@ -1184,26 +1184,26 @@ object Form2: TForm2
           Align = Right
           Position.X = 795.000000000000000000
           Size.Width = 478.000000000000000000
-          Size.Height = 648.000000000000000000
+          Size.Height = 598.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 4
           object TabControl1: TTabControl
             Align = Client
             Size.Width = 478.000000000000000000
-            Size.Height = 648.000000000000000000
+            Size.Height = 598.000000000000000000
             Size.PlatformDefault = False
             TabIndex = 2
             TabOrder = 3
             TabPosition = PlatformDefault
             Sizes = (
               478s
-              622s
+              572s
               478s
-              622s
+              572s
               478s
-              622s
+              572s
               478s
-              622s)
+              572s)
             object TabUsageItem: TTabItem
               CustomIcon = <
                 item
@@ -1223,11 +1223,11 @@ object Form2: TForm2
                 DataDetectorTypes = []
                 Align = Client
                 Size.Width = 478.000000000000000000
-                Size.Height = 600.000000000000000000
+                Size.Height = 550.000000000000000000
                 Size.PlatformDefault = False
                 TabOrder = 3
                 Viewport.Width = 474.000000000000000000
-                Viewport.Height = 596.000000000000000000
+                Viewport.Height = 546.000000000000000000
               end
               object Rectangle13: TRectangle
                 Align = Top
@@ -1271,7 +1271,7 @@ object Form2: TForm2
                 Align = Contents
                 Fill.Color = claBlack
                 Size.Width = 478.000000000000000000
-                Size.Height = 622.000000000000000000
+                Size.Height = 572.000000000000000000
                 Size.PlatformDefault = False
               end
               object MemoShellTool: TMemo
@@ -1283,12 +1283,12 @@ object Form2: TForm2
                 TextSettings.FontColor = claChartreuse
                 Align = Client
                 Size.Width = 478.000000000000000000
-                Size.Height = 600.000000000000000000
+                Size.Height = 550.000000000000000000
                 Size.PlatformDefault = False
                 StyleLookup = 'transparentedit'
                 TabOrder = 14
                 Viewport.Width = 472.000000000000000000
-                Viewport.Height = 596.000000000000000000
+                Viewport.Height = 546.000000000000000000
               end
               object Rectangle12: TRectangle
                 Align = Top
@@ -1336,16 +1336,16 @@ object Form2: TForm2
                 TextSettings.Font.Size = 14.000000000000000000
                 Align = Client
                 Size.Width = 478.000000000000000000
-                Size.Height = 360.000000000000000000
+                Size.Height = 310.000000000000000000
                 Size.PlatformDefault = False
                 StyleLookup = 'Memo1Style1'
                 TabOrder = 0
                 Viewport.Width = 474.000000000000000000
-                Viewport.Height = 356.000000000000000000
+                Viewport.Height = 306.000000000000000000
               end
               object Layout4: TLayout
                 Align = Bottom
-                Position.Y = 391.000000000000000000
+                Position.Y = 341.000000000000000000
                 Size.Width = 478.000000000000000000
                 Size.Height = 231.000000000000000000
                 Size.PlatformDefault = False
@@ -1393,7 +1393,7 @@ object Form2: TForm2
                 Align = Bottom
                 Cursor = crVSplit
                 MinSize = 20.000000000000000000
-                Position.Y = 382.000000000000000000
+                Position.Y = 332.000000000000000000
                 Size.Width = 478.000000000000000000
                 Size.Height = 9.000000000000000000
                 Size.PlatformDefault = False
@@ -1449,11 +1449,11 @@ object Form2: TForm2
                 Margins.Right = 3.000000000000000000
                 Margins.Bottom = 3.000000000000000000
                 Size.Width = 472.000000000000000000
-                Size.Height = 594.000000000000000000
+                Size.Height = 544.000000000000000000
                 Size.PlatformDefault = False
                 TabOrder = 0
                 Viewport.Width = 468.000000000000000000
-                Viewport.Height = 590.000000000000000000
+                Viewport.Height = 540.000000000000000000
               end
               object Rectangle9: TRectangle
                 Align = Top
@@ -1487,7 +1487,7 @@ object Form2: TForm2
           MinSize = 20.000000000000000000
           Position.X = 785.000000000000000000
           Size.Width = 10.000000000000000000
-          Size.Height = 648.000000000000000000
+          Size.Height = 598.000000000000000000
           Size.PlatformDefault = False
         end
       end
@@ -19936,13 +19936,33 @@ object Form2: TForm2
     MCPClients = <
       item
         Connected = False
-        Enabled = False
+        Enabled = True
         Name = 'MCPClient'
         TransportType = tpHttp
         Params.Strings = (
           'URL=http://localhost:8080/mcp'
           'Login=login'
           'Password=password'
+          'Timeout=15000')
+        Configuration = '(Properties, Click [...] to edit)'
+      end
+      item
+        Connected = False
+        Enabled = False
+        Name = 'MCPClient'
+        TransportType = tpStdIo
+        Params.Strings = (
+          'Command=C:\mcp\\servers\McpFileServerStIO.exe'
+          'Timeout=15000')
+        Configuration = '(Properties, Click [...] to edit)'
+      end
+      item
+        Connected = False
+        Enabled = False
+        Name = 'MCPClient'
+        TransportType = tpStdIo
+        Params.Strings = (
+          'Command=c:\mcp\servers\MCPServerFileSystem.exe'
           'Timeout=15000')
         Configuration = '(Properties, Click [...] to edit)'
       end>
@@ -19997,8 +20017,8 @@ object Form2: TForm2
     MediaResolution = mrDefault
     Store = False
     Truncation = 'disabled'
-    Left = 504
-    Top = 344
+    Left = 496
+    Top = 608
   end
   object AiShell1: TAiShell
     ShellPath = 'cmd.exe'
@@ -20050,8 +20070,8 @@ object Form2: TForm2
     EnabledFeatures = []
     ThinkingLevel = tlDefault
     MediaResolution = mrDefault
-    Left = 616
-    Top = 344
+    Left = 576
+    Top = 632
   end
   object AiComputerUseTool1: TAiComputerUseTool
     CurrentUrl = 'app://desktop'
@@ -20094,7 +20114,7 @@ object Form2: TForm2
     ThinkingLevel = tlDefault
     MediaResolution = mrDefault
     keep_alive = '1m'
-    Left = 736
-    Top = 480
+    Left = 400
+    Top = 600
   end
 end

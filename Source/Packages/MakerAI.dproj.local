@@ -3,9 +3,9 @@
 	<ProjectSortOrder AutoSort="0" SortType="0">
     <File Path="..\..\Source"/>
     <File Path="..\Agents"/>
+    <File Path="..\Agents\uMakerAi.Agents.pas"/>
     <File Path="..\Agents\uMakerAi.Agents.Attributes.pas"/>
     <File Path="..\Agents\uMakerAi.Agents.EngineRegistry.pas"/>
-    <File Path="..\Agents\uMakerAi.Agents.pas"/>
     <File Path="..\Chat"/>
     <File Path="..\Chat\uMakerAi.Chat.AiConnection.pas"/>
     <File Path="..\Chat\uMakerAi.Chat.Claude.pas"/>
@@ -37,14 +37,18 @@
     <File Path="..\MCPClient"/>
     <File Path="..\MCPClient\uMakerAi.MCPClient.Core.pas"/>
     <File Path="..\MCPServer"/>
+    <File Path="..\MCPServer\uMakerAi.MCPServer.Bridge.pas"/>
     <File Path="..\MCPServer\uMakerAi.MCPServer.Core.pas"/>
     <File Path="..\MCPServer\UMakerAi.MCPServer.Direct.pas"/>
     <File Path="..\MCPServer\UMakerAi.MCPServer.Http.pas"/>
     <File Path="..\MCPServer\UMakerAi.MCPServer.SSE.pas"/>
     <File Path="..\MCPServer\UMakerAi.MCPServer.Stdio.pas"/>
     <File Path="..\RAG"/>
+    <File Path="..\RAG\RagGraph_Prompt_Example.md"/>
     <File Path="..\RAG\uMakerAi.RAG.Graph.Builder.pas"/>
     <File Path="..\RAG\uMakerAi.RAG.Graph.Core.pas"/>
+    <File Path="..\RAG\uMakerAi.RAG.Graph.Lexer.pas"/>
+    <File Path="..\RAG\uMakerAi.RAG.Graph.Parser.pas"/>
     <File Path="..\RAG\uMakerAi.RAG.Vectors.pas"/>
     <File Path="..\Tools"/>
     <File Path="..\Tools\uMakerAi.Gemini.Speech.pas"/>
@@ -74,8 +78,8 @@
   </ProjectSortOrder>
 	<Transactions>
     <Transaction>2025/09/27 19:07:18.000.269,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Tools\uMakerAI.StableDiffusion.pas=</Transaction>
-    <Transaction>2025/10/05 11:00:52.000.268,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\RAG\uMakerAi.RAG.Graph.Core.pas</Transaction>
     <Transaction>2025/10/05 11:00:52.000.260,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\RAG\uMakerAi.RAG.Graph.Builder.pas</Transaction>
+    <Transaction>2025/10/05 11:00:52.000.268,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\RAG\uMakerAi.RAG.Graph.Core.pas</Transaction>
     <Transaction>2025/10/06 09:23:49.000.790,=xmlrtl.dcp</Transaction>
     <Transaction>2025/10/13 07:14:06.000.152,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas</Transaction>
     <Transaction>2025/10/13 07:15:18.000.376,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\RAG\uMakerAi.RAG.Graph.Driver.Postgres.pas=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas</Transaction>
@@ -84,8 +88,8 @@
     <Transaction>2025/10/14 15:22:44.000.395,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\uMakerAiResources.pas=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas</Transaction>
     <Transaction>2025/10/14 15:24:01.000.721,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Resources\uMakerAiResources.rc=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\uMakerAiResources.rc</Transaction>
     <Transaction>2025/10/14 15:26:06.000.058,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Resources\uMakerAiResources.rc</Transaction>
-    <Transaction>2025/10/15 04:02:26.000.862,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Agents\uMakerAi.Agents.EngineRegistry.pas</Transaction>
     <Transaction>2025/10/15 04:02:26.000.840,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Agents\uMakerAi.Agents.Attributes.pas</Transaction>
+    <Transaction>2025/10/15 04:02:26.000.862,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Agents\uMakerAi.Agents.EngineRegistry.pas</Transaction>
     <Transaction>2025/10/15 04:03:23.000.784,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Design\UMakerAi.ParamsRegistry.pas</Transaction>
     <Transaction>2025/10/31 06:46:23.000.505,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Chat\uMakerAi.Chat.Kimi.pas</Transaction>
     <Transaction>2025/10/31 10:00:16.000.901,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas</Transaction>
@@ -135,5 +139,13 @@
     <Transaction>2025/12/23 16:56:49.000.209,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Tools\uMakerAi.Ollama.Ocr.pas</Transaction>
     <Transaction>2025/12/24 17:02:09.000.051,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas</Transaction>
     <Transaction>2025/12/24 17:02:57.000.041,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Core\uMakerAi.Chat.Messages.pas</Transaction>
+    <Transaction>2026/01/06 19:08:50.000.342,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Untitled1.md</Transaction>
+    <Transaction>2026/01/06 19:09:44.000.241,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\RAG\RagGraph_Prompt_Example.md=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Untitled1.md</Transaction>
+    <Transaction>2026/01/08 08:25:51.000.334,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas</Transaction>
+    <Transaction>2026/01/08 08:26:10.000.347,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\RAG\uMakerAi.RAG.Graph.Lexer.pas</Transaction>
+    <Transaction>2026/01/08 08:27:12.000.129,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas</Transaction>
+    <Transaction>2026/01/08 08:27:26.000.449,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\RAG\uMakerAi.RAG.Graph.Parser.pas</Transaction>
+    <Transaction>2026/01/09 08:32:17.000.536,=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas</Transaction>
+    <Transaction>2026/01/09 08:32:56.000.023,E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\Unit1.pas=E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\MCPServer\uMakerAi.MCPServer.Bridge.pas</Transaction>
   </Transactions>
 </BorlandProject>

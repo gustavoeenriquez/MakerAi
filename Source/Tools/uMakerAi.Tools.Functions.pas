@@ -1077,19 +1077,19 @@ end;
 
 { TAiFunctions }
 
-{procedure TAiFunctions.AddMCPClient(aMCPClient: TMCPClientCustom);
-var
+{ procedure TAiFunctions.AddMCPClient(aMCPClient: TMCPClientCustom);
+  var
   NewItem: TMCPClientItem;
-begin
+  begin
   if not Assigned(aMCPClient) then
-    raise Exception.Create('Se intentó añadir un objeto TMCPClient nulo.');
+  raise Exception.Create('Se intentó añadir un objeto TMCPClient nulo.');
 
   if aMCPClient.Name.Trim.IsEmpty then
-    raise Exception.Create('El TMCPClient debe tener una propiedad Name asignada antes de ser añadido.');
+  raise Exception.Create('El TMCPClient debe tener una propiedad Name asignada antes de ser añadido.');
 
   // 1. Verificar si ya existe un cliente con el mismo nombre para evitar duplicados.
   if Assigned(FMCPClients.GetClientByName(aMCPClient.Name)) then
-    raise Exception.CreateFmt('Ya existe un cliente MCP con el nombre "%s".', [aMCPClient.Name]);
+  raise Exception.CreateFmt('Ya existe un cliente MCP con el nombre "%s".', [aMCPClient.Name]);
 
   aMCPClient.OnStreamMessage := FOnMCPStreamMessage;
 
@@ -1116,7 +1116,7 @@ begin
 
   // Opcional: registrar el evento
   DoLog(Format('Cliente MCP "%s" añadido programáticamente.', [aMCPClient.Name]));
-end;
+  end;
 }
 
 procedure TAiFunctions.AddMCPClient(aMCPClient: TMCPClientCustom);
@@ -1142,17 +1142,18 @@ begin
   NewItem := FMCPClients.Add;
 
   // 3. Reemplazar cliente interno
-  if Assigned(NewItem.FMCPClient) then FreeAndNil(NewItem.FMCPClient);
+  if Assigned(NewItem.FMCPClient) then
+    FreeAndNil(NewItem.FMCPClient);
   NewItem.FMCPClient := aMCPClient;
 
   // 4. --- [CORRECCIÓN CRÍTICA] SINCRONIZACIÓN INVERSA ---
   // Debemos copiar la configuración del cliente real HACIA el wrapper (Item)
   // para que el wrapper tenga la "verdad" y no sobrescriba con vacíos después.
 
-  NewItem.FParams.Assign(aMCPClient.Params);       // <--- ESTO FALTABA
-  NewItem.FEnvVars.Assign(aMCPClient.EnvVars);     // <--- ESTO FALTABA
-  NewItem.Name := aMCPClient.Name;                 // Sincroniza nombre
-  NewItem.Enabled := aMCPClient.Enabled;           // Sincroniza enabled
+  NewItem.FParams.Assign(aMCPClient.Params); // <--- ESTO FALTABA
+  NewItem.FEnvVars.Assign(aMCPClient.EnvVars); // <--- ESTO FALTABA
+  NewItem.Name := aMCPClient.Name; // Sincroniza nombre
+  NewItem.Enabled := aMCPClient.Enabled; // Sincroniza enabled
 
   // Importante: Sincronizar el TransportType en el wrapper sin disparar la recreación del cliente
   // Accedemos a la variable privada o usamos un cast si es necesario,
@@ -1588,67 +1589,89 @@ end;
 
 function TAiFunctions.ImportClaudeMCPConfiguration(const AJsonFilePath: string): Integer;
 var
-  FinalPath: string;
-  JsonContent: string;
-  RootObj: TJSonObject;
+  LFinalPath: string;
+  LJsonContent: string;
+  LRootObj: TJSonObject;
 begin
   Result := 0;
-  FinalPath := AJsonFilePath;
+  LFinalPath := AJsonFilePath;
 
-  // 1. Detección automática de ruta si viene vacía
-  if FinalPath.IsEmpty then
+  // 1. Detección de ruta por defecto más robusta
+  if LFinalPath.IsEmpty then
   begin
 {$IFDEF MSWINDOWS}
-    FinalPath := TPath.Combine(GetEnvironmentVariable('APPDATA'), 'Claude\claude_desktop_config.json');
+    // TPath.GetHomePath en Windows suele ir a 'Documents',
+    // para Claude necesitamos 'AppData\Roaming'
+    LFinalPath := TPath.Combine(GetEnvironmentVariable('APPDATA'), 'Claude\claude_desktop_config.json');
 {$ENDIF}
-{$IFDEF POSIX}
-    FinalPath := TPath.Combine(TPath.GetHomePath, 'Library/Application Support/Claude/claude_desktop_config.json');
+{$IFDEF MACOS}
+    // En macOS la ruta estándar es ~/Library/Application Support/...
+    LFinalPath := TPath.Combine(TPath.GetHomePath, 'Library/Application Support/Claude/claude_desktop_config.json');
+{$ENDIF}
+{$IFDEF LINUX}
+    LFinalPath := TPath.Combine(TPath.GetHomePath, '.config/Claude/claude_desktop_config.json');
 {$ENDIF}
   end;
 
-  if not TFile.Exists(FinalPath) then
+  // 2. Validación de existencia
+  if not TFile.Exists(LFinalPath) then
   begin
-    DoLog('ImportClaude: File not found at ' + FinalPath);
+    DoLog('ImportClaude: Archivo no encontrado en ' + LFinalPath);
     Exit;
   end;
 
-  DoLog('Importing MCP servers from file: ' + FinalPath);
-
   try
-    // 2. Leer archivo y convertir a JSON
-    JsonContent := TFile.ReadAllText(FinalPath, TEncoding.UTF8);
-    RootObj := TJSonObject.ParseJSONValue(JsonContent) as TJSonObject;
+    // 3. Carga segura del contenido
+    LJsonContent := TFile.ReadAllText(LFinalPath, TEncoding.UTF8);
 
-    if Assigned(RootObj) then
+    if LJsonContent.Trim.IsEmpty then
+    begin
+      DoLog('ImportClaude: El archivo está vacío.');
+      Exit;
+    end;
+
+    // 4. Parseo y validación del objeto JSON
+    var
+    LJsonValue := TJSonObject.ParseJSONValue(LJsonContent);
+
+    if Assigned(LJsonValue) and (LJsonValue is TJSonObject) then
+    begin
+      LRootObj := LJsonValue as TJSonObject;
       try
-        // 3. LLAMAR A LA OTRA SOBRECARGA
-        Result := ImportClaudeMCPConfiguration(RootObj);
+        DoLog('Importando servidores MCP desde: ' + LFinalPath);
+        // LLAMADA A LA VERSIÓN REFACTOREADA (La que maneja StdIo y SSE)
+        Result := ImportClaudeMCPConfiguration(LRootObj);
       finally
-        RootObj.Free; // Importante: Liberamos el JSON aquí porque este método lo creó
-      end
+        LRootObj.Free;
+      end;
+    end
     else
-      DoLog('ImportClaude: File content is not a valid JSON object.');
+    begin
+      if Assigned(LJsonValue) then
+        LJsonValue.Free;
+      DoLog('ImportClaude: El contenido no es un objeto JSON válido.');
+    end;
 
   except
     on E: Exception do
-      DoLog('ImportClaude: Fatal error reading file: ' + E.Message);
+      DoLog('ImportClaude: Error fatal al leer o parsear: ' + E.Message);
   end;
 end;
 
 procedure TAiFunctions.Loaded;
 var
-  i: Integer;
+  I: Integer;
 begin
   inherited;
   // Forzamos una actualización final de propiedades una vez cargado todo el FMX.
   // Esto corrige cualquier desajuste por el orden de carga.
   if Assigned(FMCPClients) then
   begin
-    for i := 0 to FMCPClients.Count - 1 do
+    for I := 0 to FMCPClients.Count - 1 do
     begin
       // Aseguramos que el cliente interno exista y tenga los datos correctos
-      if Assigned(FMCPClients[i]) then
-        FMCPClients[i].UpdateClientProperties;
+      if Assigned(FMCPClients[I]) then
+        FMCPClients[I].UpdateClientProperties;
     end;
   end;
 end;
@@ -1656,8 +1679,8 @@ end;
 // =============================================================================
 // SOBRECARGA 1: Lógica Núcleo (Recibe TJSONObject)
 // =============================================================================
-function TAiFunctions.ImportClaudeMCPConfiguration(AConfig: TJSonObject): Integer;
-var
+{ function TAiFunctions.ImportClaudeMCPConfiguration(AConfig: TJSonObject): Integer;
+  var
   McpServers, ServerObj, EnvObj: TJSonObject;
   ArgsArray: TJSonArray;
   ServerPair, EnvPair: TJSONPair;
@@ -1665,105 +1688,193 @@ var
   ArgsString, ArgValStr, ServerName: string;
   I: Integer;
   Val: TJSONValue;
-begin
+  begin
   Result := 0;
 
   if not Assigned(AConfig) then
   begin
-    DoLog('ImportClaude: JSON Configuration object is nil.');
-    Exit;
+  DoLog('ImportClaude: JSON Configuration object is nil.');
+  Exit;
   end;
 
   try
-    // Buscar la clave raíz "mcpServers"
-    if AConfig.TryGetValue<TJSonObject>('mcpServers', McpServers) then
-    begin
-      for ServerPair in McpServers do
-      begin
-        ServerName := ServerPair.JsonString.Value;
+  // Buscar la clave raíz "mcpServers"
+  if AConfig.TryGetValue<TJSonObject>('mcpServers', McpServers) then
+  begin
+  for ServerPair in McpServers do
+  begin
+  ServerName := ServerPair.JsonString.Value;
 
-        // 1. Evitar duplicados
-        if Assigned(FMCPClients.GetClientByName(ServerName)) then
-        begin
-          DoLog(Format('ImportClaude: Client "%s" already exists. Skipping.', [ServerName]));
-          Continue;
-        end;
+  // 1. Evitar duplicados
+  if Assigned(FMCPClients.GetClientByName(ServerName)) then
+  begin
+  DoLog(Format('ImportClaude: Client "%s" already exists. Skipping.', [ServerName]));
+  Continue;
+  end;
 
-        ServerObj := ServerPair.JsonValue as TJSonObject;
-        if not Assigned(ServerObj) then
-          Continue;
+  ServerObj := ServerPair.JsonValue as TJSonObject;
+  if not Assigned(ServerObj) then
+  Continue;
 
-        // 2. Crear el cliente StdIo (Owner = nil)
-        NewClient := TMCPClientStdIo.Create(nil);
-        try
-          NewClient.Name := ServerName;
+  // 2. Crear el cliente StdIo (Owner = nil)
+  NewClient := TMCPClientStdIo.Create(nil);
+  try
+  NewClient.Name := ServerName;
 
-          // --- COMMAND ---
-          if ServerObj.TryGetValue('command', Val) then
-            NewClient.Params.Values['Command'] := Val.Value;
+  // --- COMMAND ---
+  if ServerObj.TryGetValue('command', Val) then
+  NewClient.Params.Values['Command'] := Val.Value;
 
-          // --- ARGS ---
-          ArgsString := '';
-          if ServerObj.TryGetValue<TJSonArray>('args', ArgsArray) then
-          begin
-            for I := 0 to ArgsArray.Count - 1 do
-            begin
-              ArgValStr := ArgsArray.Items[I].Value;
-              // Manejo de espacios en argumentos: Envolver en comillas si es necesario
-              if (Pos(' ', ArgValStr) > 0) and (not ArgValStr.StartsWith('"')) then
-                ArgValStr := '"' + ArgValStr + '"';
+  // --- ARGS ---
+  ArgsString := '';
+  if ServerObj.TryGetValue<TJSonArray>('args', ArgsArray) then
+  begin
+  for I := 0 to ArgsArray.Count - 1 do
+  begin
+  ArgValStr := ArgsArray.Items[I].Value;
+  // Manejo de espacios en argumentos: Envolver en comillas si es necesario
+  if (Pos(' ', ArgValStr) > 0) and (not ArgValStr.StartsWith('"')) then
+  ArgValStr := '"' + ArgValStr + '"';
 
-              if ArgsString.IsEmpty then
-                ArgsString := ArgValStr
-              else
-                ArgsString := ArgsString + ' ' + ArgValStr;
-            end;
-          end;
-          NewClient.Params.Values['Arguments'] := ArgsString;
+  if ArgsString.IsEmpty then
+  ArgsString := ArgValStr
+  else
+  ArgsString := ArgsString + ' ' + ArgValStr;
+  end;
+  end;
+  NewClient.Params.Values['Arguments'] := ArgsString;
 
-          // --- ENV ---
-          if ServerObj.TryGetValue<TJSonObject>('env', EnvObj) then
-          begin
-            for EnvPair in EnvObj do
-            begin
-              NewClient.EnvVars.Values[EnvPair.JsonString.Value] := EnvPair.JsonValue.Value;
-            end;
-          end;
+  // --- ENV ---
+  if ServerObj.TryGetValue<TJSonObject>('env', EnvObj) then
+  begin
+  for EnvPair in EnvObj do
+  begin
+  NewClient.EnvVars.Values[EnvPair.JsonString.Value] := EnvPair.JsonValue.Value;
+  end;
+  end;
 
-          // Directorio raíz por defecto (opcional)
-          NewClient.Params.Values['RootDir'] := TPath.GetHomePath;
+  // Directorio raíz por defecto (opcional)
+  NewClient.Params.Values['RootDir'] := TPath.GetHomePath;
 
-          // 3. Agregar a la colección central
-          try
-            AddMCPClient(NewClient);
-            Inc(Result);
-            DoLog(Format('ImportClaude: Imported server "%s".', [ServerName]));
-          except
-            on E: Exception do
-            begin
-              DoLog(Format('ImportClaude: Error adding "%s": %s', [ServerName, E.Message]));
-              if NewClient.Owner = nil then
-                NewClient.Free;
-            end;
-          end;
-
-        except
-          on E: Exception do
-          begin
-            DoLog('ImportClaude: Unexpected error processing server entry: ' + E.Message);
-            if NewClient.Owner = nil then
-              NewClient.Free;
-          end;
-        end;
-      end;
-    end
-    else
-    begin
-      DoLog('ImportClaude: "mcpServers" key not found in JSON.');
-    end;
+  // 3. Agregar a la colección central
+  try
+  AddMCPClient(NewClient);
+  Inc(Result);
+  DoLog(Format('ImportClaude: Imported server "%s".', [ServerName]));
   except
-    on E: Exception do
-      DoLog('ImportClaude: Error parsing configuration object: ' + E.Message);
+  on E: Exception do
+  begin
+  DoLog(Format('ImportClaude: Error adding "%s": %s', [ServerName, E.Message]));
+  if NewClient.Owner = nil then
+  NewClient.Free;
+  end;
+  end;
+
+  except
+  on E: Exception do
+  begin
+  DoLog('ImportClaude: Unexpected error processing server entry: ' + E.Message);
+  if NewClient.Owner = nil then
+  NewClient.Free;
+  end;
+  end;
+  end;
+  end
+  else
+  begin
+  DoLog('ImportClaude: "mcpServers" key not found in JSON.');
+  end;
+  except
+  on E: Exception do
+  DoLog('ImportClaude: Error parsing configuration object: ' + E.Message);
+  end;
+  end;
+}
+
+function TAiFunctions.ImportClaudeMCPConfiguration(AConfig: TJSonObject): Integer;
+var
+  LMcpServers, LServerObj, LEnvObj: TJSonObject;
+  LArgsArray: TJSonArray;
+  LServerPair, LEnvPair: TJSONPair;
+  LClientItem: TMCPClientItem;
+  LServerName, LCommand, LUrl, LArgsString: string;
+  I: Integer;
+begin
+  Result := 0;
+  if not Assigned(AConfig) then
+    Exit;
+
+  // Intentamos encontrar el nodo raíz
+  if not AConfig.TryGetValue<TJSonObject>('mcpServers', LMcpServers) then
+  begin
+    DoLog('ImportClaude: No se encontró el nodo "mcpServers".');
+    Exit;
+  end;
+
+  for LServerPair in LMcpServers do
+  begin
+    LServerName := LServerPair.JsonString.Value;
+
+    // 1. Evitar duplicados
+    if Assigned(FMCPClients.GetClientByName(LServerName)) then
+      Continue;
+
+    LServerObj := LServerPair.JsonValue as TJSonObject;
+
+    // 2. Crear el Item en la colección (el Wrapper)
+    LClientItem := FMCPClients.Add;
+    LClientItem.Name := LServerName;
+
+    // --- CASO A: Servidor Local (StdIo) ---
+    if LServerObj.TryGetValue<string>('command', LCommand) then
+    begin
+      LClientItem.TransportType := tpStdIo;
+      LClientItem.Params.Values['Command'] := LCommand;
+
+      // Procesar Argumentos
+      if LServerObj.TryGetValue<TJSonArray>('args', LArgsArray) then
+      begin
+        LArgsString := '';
+        for I := 0 to LArgsArray.Count - 1 do
+        begin
+          var
+          LArg := LArgsArray.Items[I].Value;
+          // Si el argumento tiene espacios y no tiene comillas, lo envolvemos
+          if (Pos(' ', LArg) > 0) and (not LArg.StartsWith('"')) then
+            LArg := '"' + LArg + '"';
+
+          LArgsString := LArgsString + LArg + ' ';
+        end;
+        LClientItem.Params.Values['Arguments'] := LArgsString.Trim;
+      end;
+
+      // RootDir por defecto
+      LClientItem.Params.Values['RootDir'] := TPath.GetHomePath;
+    end
+    // --- CASO B: Servidor Remoto (URL / SSE) ---
+    else if LServerObj.TryGetValue<string>('url', LUrl) then
+    begin
+      LClientItem.TransportType := tpSSE; // Estándar para MCP remoto
+      LClientItem.Params.Values['URL'] := LUrl;
+    end;
+
+    // --- VARIABLES DE ENTORNO (Común a ambos) ---
+    if LServerObj.TryGetValue<TJSonObject>('env', LEnvObj) then
+    begin
+      for LEnvPair in LEnvObj do
+      begin
+        LClientItem.EnvVars.Values[LEnvPair.JsonString.Value] := LEnvPair.JsonValue.Value;
+      end;
+    end;
+
+    // 3. FINALIZACIÓN Y SINCRONIZACIÓN (Crucial en tu librería)
+    LClientItem.Enabled := True;
+
+    // Esto transfiere Params y EnvVars del Item al FMCPClient interno
+    LClientItem.UpdateClientProperties;
+
+    Inc(Result);
+    DoLog(Format('ImportClaude: Servidor "%s" cargado exitosamente.', [LServerName]));
   end;
 end;
 
@@ -1820,13 +1931,11 @@ begin
   FMCPClient := Nil; // TMCPClientStdIo.Create(nil); // Sin Owner para controlarlo nosotros
   // FMCPClient.Name := 'NewMCPClient';
 
-
-
   // CORRECCIÓN: Crear siempre el cliente por defecto (StdIo).
   // Esto asegura que si SetParams se llama antes que SetTransportType,
   // haya un objeto donde guardar los datos.
   FMCPClient := TMCPClientStdIo.Create(nil);
-//  FMCPClient.Name := 'MCPClient' + IntToStr(ID); // Nombre temporal
+  // FMCPClient.Name := 'MCPClient' + IntToStr(ID); // Nombre temporal
 
   // Sincronizar params iniciales (defaults del StdIo hacia el Wrapper)
   FParams.Assign(FMCPClient.Params);

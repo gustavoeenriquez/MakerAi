@@ -201,6 +201,10 @@
         <DCCReference Include="..\Tools\uMakerAi.Gemini.WebSearch.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Ollama.Ocr.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Chat.Messages.pas"/>
+        <DCCReference Include="..\RAG\uMakerAi.RAG.Graph.Lexer.pas"/>
+        <DCCReference Include="..\RAG\uMakerAi.RAG.Graph.Parser.pas"/>
+        <DCCReference Include="..\MCPServer\uMakerAi.MCPServer.Bridge.pas"/>
+        <None Include="..\RAG\RagGraph_Prompt_Example.md"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

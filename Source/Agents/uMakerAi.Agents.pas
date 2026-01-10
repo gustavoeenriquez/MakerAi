@@ -31,7 +31,6 @@
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
-
 unit uMakerAi.Agents;
 
 interface
@@ -56,7 +55,7 @@ type
   TLinkMode = (lmFanout, lmConditional, lmManual, lmExpression); // --- NUEVO: Modo lmExpression ---
 
   // Forward Declarations
-  TAIAgents = class;
+  TAIAgentManager = class;
   TAIAgentsBase = class;
   TAIAgentsNode = class;
   TAIAgentsLink = class;
@@ -109,7 +108,7 @@ type
     procedure Run(ANode: TAIAgentsNode; const AInput: string; var AOutput: string);
   published
     property Description: string read FDescription write SetDescription;
-    Property ID : String read FID write SetID; //GUID que identifica cada nodo
+    Property ID: String read FID write SetID; // GUID que identifica cada nodo
   end;
 
   TAiAgentsToolSample = class(TAiToolBase)
@@ -126,7 +125,7 @@ type
     procedure SetID(const Value: String);
   Published
     Property Description: String read FDescription write SetDescription;
-    Property ID : String read FID write SetID; //GUID que identifica cada nodo
+    Property ID: String read FID write SetID; // GUID que identifica cada nodo
   end;
 
   // --- Link (Edge) ---
@@ -137,7 +136,7 @@ type
     FNextC: TAIAgentsNode;
     FNextA: TAIAgentsNode;
     FNextD: TAIAgentsNode;
-    FGraph: TAIAgents;
+    FGraph: TAIAgentManager;
     FOnExecute: TAIAgentsLinkOnExecute;
     FNoCycles: Integer;
     FMaxCycles: Integer;
@@ -157,7 +156,7 @@ type
     procedure SetNextC(const Value: TAIAgentsNode);
     procedure SetNextD(const Value: TAIAgentsNode);
     procedure SetNextNo(const Value: TAIAgentsNode);
-    procedure SetGraph(const Value: TAIAgents);
+    procedure SetGraph(const Value: TAIAgentManager);
     procedure SetOnExecute(const Value: TAIAgentsLinkOnExecute);
     procedure SetMaxCycles(const Value: Integer);
     procedure SetMode(const Value: TLinkMode);
@@ -178,7 +177,7 @@ type
     property NextC: TAIAgentsNode read FNextC write SetNextC;
     property NextD: TAIAgentsNode read FNextD write SetNextD;
     property NextNo: TAIAgentsNode read FNextNo write SetNextNo;
-    property Graph: TAIAgents read FGraph write SetGraph;
+    property Graph: TAIAgentManager read FGraph write SetGraph;
     property OnExecute: TAIAgentsLinkOnExecute read FOnExecute write SetOnExecute;
     property MaxCycles: Integer read FMaxCycles write SetMaxCycles default 1;
     property Mode: TLinkMode read FMode write SetMode default lmFanout;
@@ -197,7 +196,7 @@ type
     FOutput: String;
     FInput: String;
     FNext: TAIAgentsLink;
-    FGraph: TAIAgents;
+    FGraph: TAIAgentManager;
     FInEdges: TList<TAIAgentsLink>;
     FOnExecute: TAIAgentsNodeOnExecute;
     FPromptName: String;
@@ -211,7 +210,7 @@ type
     procedure SetInput(const Value: String);
     procedure SetNext(const Value: TAIAgentsLink);
     procedure SetOutput(const Value: String);
-    procedure SetGraph(const Value: TAIAgents);
+    procedure SetGraph(const Value: TAIAgentManager);
     procedure SetOnExecute(const Value: TAIAgentsNodeOnExecute);
     procedure SetPromptName(const Value: String);
     procedure SetJoinMode(const Value: TJoinMode);
@@ -232,7 +231,7 @@ type
     property Input: String read FInput write SetInput;
     property Output: String read FOutput write SetOutput;
     property Next: TAIAgentsLink read FNext write SetNext;
-    property Graph: TAIAgents read FGraph write SetGraph;
+    property Graph: TAIAgentManager read FGraph write SetGraph;
     property OnExecute: TAIAgentsNodeOnExecute read FOnExecute write SetOnExecute;
     property PromptName: String read FPromptName write SetPromptName;
     property JoinMode: TJoinMode read FJoinMode write SetJoinMode default jmAny;
@@ -240,7 +239,8 @@ type
   end;
 
   // --- Orchestrator ---
-  TAIAgents = class(TComponent)
+
+  TAIAgentManager = class(TComponent)
   private
     FEndNode: TAIAgentsNode;
     FStartNode: TAIAgentsNode;
@@ -295,11 +295,11 @@ type
 
     procedure SetOnPrintEvent(const APrintProc: TAgentPrintRef);
     procedure ClearGraph;
-    function AddNode(const AName: string; AExecuteProc: TAIAgentsNodeOnExecute): TAIAgents;
-    function AddEdge(const AStartNodeName, AEndNodeName: string): TAIAgents;
-    function AddConditionalEdge(const AStartNodeName: string; const AConditionalLinkName: string; AConditionalTargets: TDictionary<string, string>): TAIAgents;
-    function SetEntryPoint(const ANodeName: string): TAIAgents;
-    function SetFinishPoint(const ANodeName: string): TAIAgents;
+    function AddNode(const AName: string; AExecuteProc: TAIAgentsNodeOnExecute): TAIAgentManager;
+    function AddEdge(const AStartNodeName, AEndNodeName: string): TAIAgentManager;
+    function AddConditionalEdge(const AStartNodeName: string; const AConditionalLinkName: string; AConditionalTargets: TDictionary<string, string>): TAIAgentManager;
+    function SetEntryPoint(const ANodeName: string): TAIAgentManager;
+    function SetFinishPoint(const ANodeName: string): TAIAgentManager;
     procedure Compile;
     procedure SaveToStream(AStream: TStream);
     Procedure LoadFromStream(AStream: TStream);
@@ -324,6 +324,9 @@ type
     Property Description: String read FDescription write SetDescription;
   end;
 
+  TAIAgents = Class(TAIAgentManager)
+  End deprecated 'Use TAIAgentManager instead';
+
 function EvalCondition(const Expr: string; Vars: TDictionary<string, TValue>): Boolean;
 
 procedure Register;
@@ -334,7 +337,7 @@ uses uMakerAi.Agents.EngineRegistry;
 
 procedure Register;
 begin
-  RegisterComponents('MakerAI', [TAIAgents, TAIAgentsNode, TAIAgentsLink, TAiAgentsToolSample]);
+  RegisterComponents('MakerAI', [TAIAgentManager, TAIAgentsNode, TAIAgentsLink, TAiAgentsToolSample, TAIAgents]);
 end;
 
 function EvalCondition(const Expr: string; Vars: TDictionary<string, TValue>): Boolean;
@@ -503,7 +506,8 @@ begin
   ABlackboard.Clear;
   for LPair in AJSONObject do
   begin
-    var LJsonValue := LPair.JsonValue;
+    var
+    LJsonValue := LPair.JsonValue;
     if LJsonValue is TJSONString then
       ABlackboard.SetString(LPair.JsonString.Value, LJsonValue.Value)
     else if LJsonValue is TJSONNumber then
@@ -607,12 +611,12 @@ end;
 
 { TAIAgents }
 
-procedure TAIAgents.Abort;
+procedure TAIAgentManager.Abort;
 begin
   FAbort := True;
 end;
 
-function TAIAgents.AddEdge(const AStartNodeName, AEndNodeName: string): TAIAgents;
+function TAIAgentManager.AddEdge(const AStartNodeName, AEndNodeName: string): TAIAgentManager;
 var
   StartNode, EndNode: TAIAgentsNode;
   Link: TAIAgentsLink;
@@ -634,7 +638,7 @@ begin
   Result := Self;
 end;
 
-function TAIAgents.AddNode(const AName: string; AExecuteProc: TAIAgentsNodeOnExecute): TAIAgents;
+function TAIAgentManager.AddNode(const AName: string; AExecuteProc: TAIAgentsNodeOnExecute): TAIAgentManager;
 var
   Node: TAIAgentsNode;
 begin
@@ -649,7 +653,7 @@ begin
   Result := Self;
 end;
 
-procedure TAIAgents.AddComponentToList(AComponent: TAIAgentsBase);
+procedure TAIAgentManager.AddComponentToList(AComponent: TAIAgentsBase);
 begin
   if AComponent is TAIAgentsNode then
   begin
@@ -663,7 +667,7 @@ begin
   end;
 end;
 
-function TAIAgents.AddConditionalEdge(const AStartNodeName, AConditionalLinkName: string; AConditionalTargets: TDictionary<string, string>): TAIAgents;
+function TAIAgentManager.AddConditionalEdge(const AStartNodeName, AConditionalLinkName: string; AConditionalTargets: TDictionary<string, string>): TAIAgentManager;
 var
   StartNode, TargetNode: TAIAgentsNode;
   Link: TAIAgentsLink;
@@ -692,7 +696,7 @@ begin
   Result := Self;
 end;
 
-procedure TAIAgents.ClearGraph;
+procedure TAIAgentManager.ClearGraph;
 begin
   FStartNode := nil;
   FEndNode := nil;
@@ -706,7 +710,7 @@ begin
   FCompiled := False;
 end;
 
-procedure TAIAgents.Compile;
+procedure TAIAgentManager.Compile;
 var
   Node: TAIAgentsNode;
   Link: TAIAgentsLink;
@@ -773,7 +777,7 @@ begin
   end;
 end;
 
-constructor TAIAgents.Create(aOwner: TComponent);
+constructor TAIAgentManager.Create(aOwner: TComponent);
 begin
   inherited;
   FBlackboard := TAIBlackboard.Create;
@@ -789,7 +793,7 @@ begin
   FThreadPool.SetMaxWorkerThreads(FMaxConcurrentTasks);
 end;
 
-destructor TAIAgents.Destroy;
+destructor TAIAgentManager.Destroy;
 begin
   FNodes.Free;
   FLinks.Free;
@@ -801,7 +805,7 @@ begin
 end;
 
 // ... (métodos DoConfirm, DoError, DoPrint, FindNode, etc. sin cambios) ...
-procedure TAIAgents.DoError(Node: TAIAgentsNode; Link: TAIAgentsLink; E: Exception);
+procedure TAIAgentManager.DoError(Node: TAIAgentsNode; Link: TAIAgentsLink; E: Exception);
 var
   LAbort: Boolean;
 begin
@@ -812,7 +816,7 @@ begin
     Abort;
 end;
 
-function TAIAgents.DoConfirm(Node: TAIAgentsNode; const AQuestion: string; Buttons: TMsgStates; var AResponse: string): TMsgState;
+function TAIAgentManager.DoConfirm(Node: TAIAgentsNode; const AQuestion: string; Buttons: TMsgStates; var AResponse: string): TMsgState;
 begin
   Result := msCancel;
   if Assigned(FOnConfirm) then
@@ -824,19 +828,19 @@ begin
   end;
 end;
 
-procedure TAIAgents.DoPrint(Sender: TObject; Value: String);
+procedure TAIAgentManager.DoPrint(Sender: TObject; Value: String);
 begin
   if Assigned(FOnPrint) then
     FOnPrint(Sender, Value);
 end;
 
-procedure TAIAgents.DoPrintFromRef(Sender: TObject; Value: String);
+procedure TAIAgentManager.DoPrintFromRef(Sender: TObject; Value: String);
 begin
   if Assigned(FOnPrintRef) then
     FOnPrintRef(Sender, Value);
 end;
 
-function TAIAgents.FindNode(const AName: string): TAIAgentsNode;
+function TAIAgentManager.FindNode(const AName: string): TAIAgentsNode;
 var
   i: Integer;
 begin
@@ -855,9 +859,9 @@ end;
 // ... (El helper DeserializeToolProperties y la clase TAgentHandlerRegistry se mantienen como antes) ...
 
 // -----------------------------------------------------------------------------
-// IMPLEMENTACIÓN FINAL DE TAIAgents.LoadFromStream
+// IMPLEMENTACIÓN FINAL DE TAIAgentManager.LoadFromStream
 // -----------------------------------------------------------------------------
-procedure TAIAgents.LoadFromStream(AStream: TStream);
+procedure TAIAgentManager.LoadFromStream(AStream: TStream);
 var
   LRoot, LGraphJSON, LNodeJSON, LLinkJSON, LTargetsJSON: TJSONObject;
   LNodesArray, LLinksArray: TJSONArray;
@@ -1075,11 +1079,11 @@ begin
   end;
 end;
 
-procedure TAIAgents.LoadStateFromStream(AStream: TStream);
+procedure TAIAgentManager.LoadStateFromStream(AStream: TStream);
 var
   LRoot, LStateObj, LBlackboardObj, LNodeStatesObj, LLinkStatesObj, LNodeStateObj, LJoinInputsObj: TJSONObject;
   LReader: TStreamReader;
-  LJSONValue: TJSONValue;
+  LJsonValue: TJSONValue;
   LNode: TAIAgentsNode;
   LLink: TAIAgentsLink;
   LPair: TJSONPair;
@@ -1096,11 +1100,12 @@ begin
 
   LReader := TStreamReader.Create(AStream, TEncoding.UTF8);
   try
-    LJSONValue := TJSONObject.ParseJSONValue(LReader.ReadToEnd);
-    LRoot := LJSONValue as TJSONObject;
+    LJsonValue := TJSONObject.ParseJSONValue(LReader.ReadToEnd);
+    LRoot := LJsonValue as TJSONObject;
     try
       LStateObj := LRoot.GetValue('executionState') as TJSONObject;
-      if not Assigned(LStateObj) then Exit;
+      if not Assigned(LStateObj) then
+        Exit;
 
       // 1. Restaurar el Blackboard
       LBlackboardObj := LStateObj.GetValue('blackboard') as TJSONObject;
@@ -1143,7 +1148,8 @@ begin
         begin
           if LLinkMap.TryGetValue(LPair.JsonString.Value, LLink) then
           begin
-            var LLinkStateObj := LPair.JsonValue as TJSONObject;
+            var
+            LLinkStateObj := LPair.JsonValue as TJSONObject;
             LLink.FNoCycles := LLinkStateObj.GetValue<Integer>('noCycles', 0);
           end;
         end;
@@ -1157,7 +1163,8 @@ begin
     LLinkMap.Free;
   end;
 end;
-procedure TAIAgents.Notification(AComponent: TComponent; Operation: TOperation);
+
+procedure TAIAgentManager.Notification(AComponent: TComponent; Operation: TOperation);
 begin
   inherited;
   if (AComponent is TAIAgentsBase) then
@@ -1169,7 +1176,7 @@ begin
   end;
 end;
 
-procedure TAIAgents.RemoveComponentFromList(AComponent: TAIAgentsBase);
+procedure TAIAgentManager.RemoveComponentFromList(AComponent: TAIAgentsBase);
 begin
   if AComponent is TAIAgentsNode then
     FNodes.Remove(TAIAgentsNode(AComponent))
@@ -1177,7 +1184,7 @@ begin
     FLinks.Remove(TAIAgentsLink(AComponent));
 end;
 
-function TAIAgents.Run(Msg: String): ITask;
+function TAIAgentManager.Run(Msg: String): ITask;
 begin
   if Busy then
   begin
@@ -1302,7 +1309,7 @@ begin
 end;
 
 // --- NUEVO: Setter para MaxConcurrentTasks ---
-procedure TAIAgents.SetMaxConcurrentTasks(const Value: Integer);
+procedure TAIAgentManager.SetMaxConcurrentTasks(const Value: Integer);
 var
   LNewValue: Integer;
 begin
@@ -1321,7 +1328,7 @@ begin
   end;
 end;
 
-procedure TAIAgents.SaveStateToStream(AStream: TStream);
+procedure TAIAgentManager.SaveStateToStream(AStream: TStream);
 var
   LRoot, LStateObj, LBlackboardObj, LNodeStatesObj, LLinkStatesObj, LNodeStateObj, LJoinInputsObj: TJSONObject;
   LNode: TAIAgentsNode;
@@ -1366,7 +1373,8 @@ begin
     LLinkStatesObj := TJSONObject.Create;
     for LLink in FLinks do
     begin
-      var LLinkStateObj := TJSONObject.Create;
+      var
+      LLinkStateObj := TJSONObject.Create;
       LLinkStateObj.AddPair('noCycles', LLink.NoCycles);
       LLinkStatesObj.AddPair(LLink.Name, LLinkStateObj);
     end;
@@ -1385,7 +1393,7 @@ begin
   end;
 end;
 
-procedure TAIAgents.SaveToStream(AStream: TStream);
+procedure TAIAgentManager.SaveToStream(AStream: TStream);
 var
   LRoot, LGraphObj, LNodeObj, LLinkObj, LTargetsObj, LExpressionsObj, LCondTargetsObj: TJSONObject;
   LNodesArray, LLinksArray: TJSONArray;
@@ -1542,13 +1550,13 @@ begin
   end;
 end;
 
-procedure TAIAgents.SetDescription(const Value: String);
+procedure TAIAgentManager.SetDescription(const Value: String);
 begin
   FDescription := Value;
 end;
 
 // ... (Setters restantes sin cambios) ...
-procedure TAIAgents.SetEndNode(const Value: TAIAgentsNode);
+procedure TAIAgentManager.SetEndNode(const Value: TAIAgentsNode);
 begin
   if FEndNode <> Value then
   begin
@@ -1557,7 +1565,7 @@ begin
   end;
 end;
 
-function TAIAgents.SetEntryPoint(const ANodeName: string): TAIAgents;
+function TAIAgentManager.SetEntryPoint(const ANodeName: string): TAIAgentManager;
 begin
   Self.StartNode := FindNode(ANodeName);
   if not Assigned(Self.StartNode) then
@@ -1565,7 +1573,7 @@ begin
   Result := Self;
 end;
 
-function TAIAgents.SetFinishPoint(const ANodeName: string): TAIAgents;
+function TAIAgentManager.SetFinishPoint(const ANodeName: string): TAIAgentManager;
 begin
   Self.EndNode := FindNode(ANodeName);
   if not Assigned(Self.EndNode) then
@@ -1573,44 +1581,44 @@ begin
   Result := Self;
 end;
 
-procedure TAIAgents.SetOnConfirm(const Value: TAIAgentsOnConfirm);
+procedure TAIAgentManager.SetOnConfirm(const Value: TAIAgentsOnConfirm);
 begin
   FOnConfirm := Value;
 end;
 
-procedure TAIAgents.SetOnEnd(const Value: TAIAgentsOnEnd);
+procedure TAIAgentManager.SetOnEnd(const Value: TAIAgentsOnEnd);
 begin
   FOnEnd := Value;
 end;
 
-procedure TAIAgents.SetOnEnterNode(const Value: TAIAgentsOnEnterNode);
+procedure TAIAgentManager.SetOnEnterNode(const Value: TAIAgentsOnEnterNode);
 begin
   FOnEnterNode := Value;
 end;
 
-procedure TAIAgents.SetOnError(const Value: TAIAgentsOnError);
+procedure TAIAgentManager.SetOnError(const Value: TAIAgentsOnError);
 begin
   FOnError := Value;
 end;
 
-procedure TAIAgents.SetOnExitNode(const Value: TAIAgentsOnExitNode);
+procedure TAIAgentManager.SetOnExitNode(const Value: TAIAgentsOnExitNode);
 begin
   FOnExitNode := Value;
 end;
 
-procedure TAIAgents.SetOnFinish(const Value: TAIAgentsOnFinish);
+procedure TAIAgentManager.SetOnFinish(const Value: TAIAgentsOnFinish);
 begin
   FOnFinish := Value;
 end;
 
-procedure TAIAgents.SetOnPrint(const Value: TAIAgentsOnPrint);
+procedure TAIAgentManager.SetOnPrint(const Value: TAIAgentsOnPrint);
 begin
   if Assigned(Value) then
     FOnPrintRef := nil;
   FOnPrint := Value;
 end;
 
-procedure TAIAgents.SetOnPrintEvent(const APrintProc: TAgentPrintRef);
+procedure TAIAgentManager.SetOnPrintEvent(const APrintProc: TAgentPrintRef);
 begin
   FOnPrintRef := APrintProc;
   if Assigned(FOnPrintRef) then
@@ -1619,12 +1627,12 @@ begin
     FOnPrint := nil;
 end;
 
-procedure TAIAgents.SetOnStart(const Value: TAIAgentsOnStart);
+procedure TAIAgentManager.SetOnStart(const Value: TAIAgentsOnStart);
 begin
   FOnStart := Value;
 end;
 
-procedure TAIAgents.SetStartNode(const Value: TAIAgentsNode);
+procedure TAIAgentManager.SetStartNode(const Value: TAIAgentsNode);
 begin
   if FStartNode <> Value then
   begin
@@ -1870,8 +1878,7 @@ begin
     FGraph.DoPrint(Self, Value);
 end;
 
-// ... (Setters de TAIAgentsLink sin cambios) ...
-procedure TAIAgentsLink.SetGraph(const Value: TAIAgents);
+procedure TAIAgentsLink.SetGraph(const Value: TAIAgentManager);
 begin
   if Value <> FGraph then
   begin
@@ -2109,8 +2116,7 @@ begin
     Result := False;
 end;
 
-// ... (Setters de TAIAgentsNode sin cambios) ...
-procedure TAIAgentsNode.SetGraph(const Value: TAIAgents);
+procedure TAIAgentsNode.SetGraph(const Value: TAIAgentManager);
 begin
   if Value <> FGraph then
   begin

@@ -287,9 +287,10 @@ type
     Procedure LoadFromFile(FileName: String);
     Function Connect(aHost, aPort, aLogin, aPassword: String): Boolean;
     Function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; aFilter: TAiEmbeddingMetaData = nil): TAiRAGVector; Overload;
-    Function Search(Prompt: String; aLimit: Integer; aPrecision: Double): TAiRAGVector; Overload;
+    Function Search(Prompt: String; aLimit: Integer; aPrecision: Double; aFilter: TAiEmbeddingMetaData = nil): TAiRAGVector; Overload;
 
-    Function SearchText(aPrompt: String; aLimit: Integer = 10; aPresicion: Double = 0.5): String; Overload; Virtual;
+    //Function SearchText(aPrompt: String; aLimit: Integer = 10; aPresicion: Double = 0.5): String; Overload; Virtual;
+    Function SearchText(aPrompt: String; aLimit: Integer = 10; aPrecision: Double = 0.5; aFilter: TAiEmbeddingMetaData = nil): String; Overload; Virtual;
     Function SearchText(aPrompt: TAiEmbeddingNode; aLimit: Integer = 10; aPresicion: Double = 0.5): String; Overload; Virtual;
     Function SearchText(aPrompt: String; DataVec: TAiRAGVector): String; Overload; Virtual;
 
@@ -600,6 +601,7 @@ begin
   Result := True;
 end;
 
+{
 procedure TAiRAGVector.AddItemsFromPlainText(aText: String; MetaData: TAiEmbeddingMetaData; aLenChunk, aLenOverlap: Integer);
 Var
   i: Integer;
@@ -618,6 +620,53 @@ begin
     Inc(i);
   Until Length(Text) <= 0;
 end;
+}
+
+
+procedure TAiRAGVector.AddItemsFromPlainText(aText: String; MetaData: TAiEmbeddingMetaData; aLenChunk, aLenOverlap: Integer);
+var
+  i, CurrentPos, NextSplit: Integer;
+  S, RemainingText: String;
+  Emb: TAiEmbeddingNode;
+begin
+  i := 0;
+  RemainingText := aText.Trim;
+
+  while Length(RemainingText) > 0 do
+  begin
+    if Length(RemainingText) <= aLenChunk then
+    begin
+      S := RemainingText;
+      RemainingText := '';
+    end
+    else
+    begin
+      // Buscamos el último espacio, punto o salto de línea dentro del límite del chunk
+      NextSplit := aLenChunk;
+      while (NextSplit > (aLenChunk - aLenOverlap)) and
+            not (RemainingText[NextSplit] in [' ', '.', #10, #13]) do
+        Dec(NextSplit);
+
+      // Si no encontramos un separador razonable, forzamos el corte en el límite
+      if NextSplit <= (aLenChunk - aLenOverlap) then
+        NextSplit := aLenChunk;
+
+      S := Copy(RemainingText, 1, NextSplit).Trim;
+
+      // El nuevo inicio considera el overlap (solapamiento) para mantener contexto
+      Delete(RemainingText, 1, NextSplit - aLenOverlap);
+    end;
+
+    if S <> '' then
+    begin
+      Emb := AddItem(S, MetaData);
+      if Assigned(Emb) then
+        Emb.Orden := i;
+      Inc(i);
+    end;
+  end;
+end;
+
 
 procedure TAiRAGVector.BuildIndex;
 begin
@@ -1115,33 +1164,35 @@ begin
   End;
 end;
 
-function TAiRAGVector.Search(Prompt: String; aLimit: Integer; aPrecision: Double): TAiRAGVector;
+function TAiRAGVector.Search(Prompt: String; aLimit: Integer; aPrecision: Double; aFilter: TAiEmbeddingMetaData): TAiRAGVector;
 Var
   Target: TAiEmbeddingNode;
 begin
-  If Not Assigned(FEmbeddings) then
-    Raise Exception.Create('Debe asignar primero un modelo de Embeddigns');
+  If Not Assigned(FEmbeddings) and Not Assigned(FOnGetEmbedding) then
+    Raise Exception.Create('Debe asignar primero un modelo de Embeddings o el evento OnGetEmbedding');
 
+  // Creamos el nodo temporal (que ahora incluye el texto para la búsqueda híbrida)
   Target := CreateEmbeddingNode(Prompt);
   Try
-    Result := Search(Target, aLimit, aPrecision); // Llama al search(TAiEmbeddingNode, Integer, Double);
+    // LLamamos a la otra sobrecarga de Search pasándole el filtro
+    Result := Search(Target, aLimit, aPrecision, aFilter);
   Finally
     Target.Free;
   End;
 end;
 
-function TAiRAGVector.SearchText(aPrompt: String; aLimit: Integer; aPresicion: Double): String;
+
+function TAiRAGVector.SearchText(aPrompt: String; aLimit: Integer; aPrecision: Double; aFilter: TAiEmbeddingMetaData): String;
 Var
   TmpVec: TAiRAGVector;
 Begin
-  TmpVec := Search(aPrompt, aLimit, aPresicion);
-
+  // Ahora pasamos el filtro a la función Search principal que ya tiene la lógica híbrida
+  TmpVec := Search(aPrompt, aLimit, aPrecision, aFilter);
   Try
-    Result := SearchText(aPrompt, TmpVec)
+    Result := SearchText(aPrompt, TmpVec);
   Finally
     TmpVec.Free;
   End;
-
 end;
 
 function TAiRAGVector.SearchText(aPrompt: TAiEmbeddingNode; aLimit: Integer; aPresicion: Double): String;
@@ -1888,6 +1939,7 @@ begin
   FAvgDocLength := 0;
 end;
 
+{
 procedure TAIBm25Index.Tokenize(const aText: string; aList: TStrings);
 var
   Words: TArray<string>;
@@ -1899,6 +1951,26 @@ begin
   for W in Words do
     if Length(W) > 2 then // Filtramos palabras muy cortas (preposiciones, etc)
       aList.Add(W);
+end;
+}
+
+procedure TAIBm25Index.Tokenize(const aText: string; aList: TStrings);
+var
+  Words: TArray<string>;
+  W: string;
+const
+  // Lista básica de Stop Words en Español
+  SPANISH_STOP_WORDS = ',el,la,los,las,un,una,unos,unas,de,del,al,y,o,ni,que,en,a,ante,bajo,con,contra,desde,durante,este,esta,estos,estas,';
+begin
+  aList.Clear;
+  Words := aText.ToLower.Split([' ', '.', ',', ';', ':', '-', '_', '(', ')', '[', ']', '{', '}', '"', #13, #10], TStringSplitOptions.ExcludeEmpty);
+
+  for W in Words do
+  begin
+    // Filtro: longitud mínima y que no esté en la lista de stop words
+    if (Length(W) > 2) and (Pos(',' + W + ',', SPANISH_STOP_WORDS) = 0) then
+      aList.Add(W);
+  end;
 end;
 
 procedure TAIBm25Index.AddNode(aNode: TAiEmbeddingNode);

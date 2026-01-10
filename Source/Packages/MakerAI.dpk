@@ -90,7 +90,10 @@ contains
   uMakerAi.Chat.Bridge in '..\Core\uMakerAi.Chat.Bridge.pas',
   uMakerAi.Gemini.WebSearch in '..\Tools\uMakerAi.Gemini.WebSearch.pas',
   uMakerAi.Ollama.Ocr in '..\Tools\uMakerAi.Ollama.Ocr.pas',
-  uMakerAi.Chat.Messages in '..\Core\uMakerAi.Chat.Messages.pas';
+  uMakerAi.Chat.Messages in '..\Core\uMakerAi.Chat.Messages.pas',
+  uMakerAi.RAG.Graph.Lexer in '..\RAG\uMakerAi.RAG.Graph.Lexer.pas',
+  uMakerAi.RAG.Graph.Parser in '..\RAG\uMakerAi.RAG.Graph.Parser.pas',
+  uMakerAi.MCPServer.Bridge in '..\MCPServer\uMakerAi.MCPServer.Bridge.pas';
 
 end.
 
