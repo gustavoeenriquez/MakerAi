@@ -3098,32 +3098,3 @@ end.
 
 
 
-ChatMode
-NativeInputFiles  : TAiFileCategory
-NativeOutputFiles : TAiFileCategory
-ChatMediaSupports : TAiChatMediaSupport;
-EnabledFeatures :TAiChatMediaSupport
-
-
-
-
-  TAiChatMode = (cmConversation, // Modo diálogo (Orquestación Inteligente)
-    cmImageGeneration, // Forzar Generación de Imagen
-    cmVideoGeneration, // Forzar Generación de Video
-    cmSpeechGeneration, // Forzar Texto a Voz (TTS)
-    cmTranscription, // Forzar Transcripción
-    cmWebSearch // Forzar Búsqueda Web
-    );
-
-
-
-  TAiFileCategory = (Tfc_Text, Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_Pdf, Tfc_Document, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, Tfc_GraphicDesign, Tfc_ExtractTextFile, Tfc_Any, Tfc_Unknown);
-
-  TAiFileCategories = set of TAiFileCategory;
-
-  { B. Capas de Habilidades (Lógica) - Define capacidades intelectuales o herramientas }
-  TAiChatMediaSupport = (Tcm_Text, Tcm_Image, Tcm_Audio, Tcm_Video, Tcm_Pdf, Tcm_WebSearch, Tcm_CodeInterpreter, Tcm_Memory, Tcm_TextEditor, Tcm_ComputerUse, Tcm_Shell, Tcm_Reasoning, // Capacidad de CoT (Chain of Thought)
-    Tcm_Any, Tcm_Unknown);
-
-  TAiChatMediaSupports = set of TAiChatMediaSupport;
-

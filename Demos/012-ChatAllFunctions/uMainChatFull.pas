@@ -862,6 +862,7 @@ end;
 procedure TForm2.AiFunctions1Functions0GetSystemDateTimeAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
 begin
   ToolCall.Response := FormatDateTime('YYYY-MM-DD  hh:nn:ss', Now);
+  Handled := True;
 end;
 
 procedure TForm2.AiFunctions1Functions1AddInfoToRAGAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
@@ -893,6 +894,9 @@ begin
   Finally
     AddLog('');
   End;
+
+  Handled := True;
+
 end;
 
 procedure TForm2.AiFunctions1Functions2SearchInRagAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
@@ -919,6 +923,9 @@ begin
   Finally
     AddLog('');
   End;
+
+  Handled := True;
+
 end;
 
 procedure TForm2.AiFunctions1Functions3AdicionaFacturaAlERPAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
@@ -1220,40 +1227,8 @@ begin
 end;
 
 procedure TForm2.BtnAboutClick(Sender: TObject);
-Var
-  Prompt, Res, FileName : String;
-  MF : TAiMediaFile;
-  LastMsg :  TAiChatMessage;
 begin
-//  ac_aboutExecute(Sender);
-
-
-AiConn.DriverName := 'Ollama';
-AiConn.Model := 'gpt-oss:20b';
-AiConn.Params.Values['NativeInputFiles'] := '[]';
-AiConn.Params.Values['NativeOutputFiles'] := '[]';
-AiConn.Params.Values['ChatMediaSuport'] := '[]';
-AiConn.Params.Values['NativeOutputFiles'] := '[]';
-AiConn.Params.Values['ChatMode'] := '...';
-
-
-//debe configurar el FileName
-
-MF := TAIMediaFile.Create;
-MF.LoadFromfile(FileName);
-
-Res := AiConn.AddMessageAndRun(Prompt, 'user',[MF]);
-
-//aquí obtiene los mediafiles de salida si los hay  en modo sincrónico
-
-  LastMsg := AiConn.GetLastMessage;
-
-  For Var MFOut in LastMsg.MediaFiles do
-  Begin
-    //--- aquí se procesan los archivos de respuesta
-    MFOut.SaveToFile(nuevo nombre de archivo)
-  End;
-
+  ac_aboutExecute(Sender);
 end;
 
 procedure TForm2.BtnHelpClick(Sender: TObject);

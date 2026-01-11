@@ -185,6 +185,7 @@ type
     FConnected: Boolean;
     FParams: TStrings;
     FEnvVars: TStrings;
+    FName: string;
     // Propiedades "proxy" para facilitar la configuración en el Inspector de Objetos
     function GetName: string;
     function GetTransportType: TToolTransportType;
@@ -1929,13 +1930,14 @@ begin
 
   // Por defecto, creamos un cliente StdIo
   FMCPClient := Nil; // TMCPClientStdIo.Create(nil); // Sin Owner para controlarlo nosotros
+  FName := 'MCPClient';
   // FMCPClient.Name := 'NewMCPClient';
 
   // CORRECCIÓN: Crear siempre el cliente por defecto (StdIo).
   // Esto asegura que si SetParams se llama antes que SetTransportType,
   // haya un objeto donde guardar los datos.
   FMCPClient := TMCPClientStdIo.Create(nil);
-  // FMCPClient.Name := 'MCPClient' + IntToStr(ID); // Nombre temporal
+  FMCPClient.Name := FName; //'MCPClient' + IntToStr(ID); // Nombre temporal
 
   // Sincronizar params iniciales (defaults del StdIo hacia el Wrapper)
   FParams.Assign(FMCPClient.Params);
@@ -1989,11 +1991,17 @@ end;
 
 function TMCPClientItem.GetName: string;
 begin
-  Result := '';
-  if Assigned(FMCPClient) then
-    Result := FMCPClient.Name
-  else
+  Result := FName;
+
+  if Result.IsEmpty then
     Result := inherited GetDisplayName;
+
+  {
+    if Assigned(FMCPClient) then
+    Result := FMCPClient.Name
+    else
+    Result := inherited GetDisplayName;
+  }
 end;
 
 function TMCPClientItem.GetParams: TStrings;
@@ -2103,15 +2111,32 @@ end;
 
 procedure TMCPClientItem.SetName(const Value: string);
 begin
-  SetDisplayName(Value);
-  if Assigned(FMCPClient) then
+
+  if FName <> Value then
   begin
+    FName := Value;
+
+    // Sincronizamos con el método estándar de colecciones para que se vea en el TreeView
+    inherited SetDisplayName(Value);
+
+    // Si el cliente interno existe, le pasamos el nombre
+    if Assigned(FMCPClient) then
+      FMCPClient.Name := Value;
+
+    Changed(False);
+  end;
+
+  {
+    SetDisplayName(Value);
+    if Assigned(FMCPClient) then
+    begin
     if FMCPClient.Name <> Value then
     begin
-      FMCPClient.Name := Value;
-      Changed(False);
+    FMCPClient.Name := Value;
+    Changed(False);
     end;
-  end;
+    end;
+  }
 end;
 
 procedure TMCPClientItem.SetParams(const Value: TStrings);
@@ -2171,7 +2196,7 @@ begin
   FMCPClient.TransportType := Self.GetTransportType; // Obtenemos el tipo desde el FMCPClient mismo
 
   // 2. Transferir el nombre (usando GetDisplayName que es el setter de 'Name')
-  FMCPClient.Name := Self.GetDisplayName;
+  FMCPClient.Name := FName;  //Self.GetDisplayName;
 
   // 3. Transferir el estado de 'Enabled'
   FMCPClient.Enabled := Self.FEnabled;
