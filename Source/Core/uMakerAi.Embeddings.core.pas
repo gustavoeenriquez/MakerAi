@@ -238,16 +238,37 @@ var
   i: Integer;
   bestScore: Double;
   currentScore: Double;
+  QueryMag, CandidateMag, Dot: Double;
 begin
   if Length(Candidates) = 0 then
     raise Exception.Create('The list of candidates cannot be empty.');
 
-  bestScore := -2.0; // Start with a value lower than any possible cosine similarity (-1 to 1).
+  bestScore := -2.0; // Iniciar más bajo que cualquier similitud coseno posible (-1 a 1).
   Result.Index := -1;
+
+  // OPTIMIZACIÓN: Calcular la magnitud del Query UNA SOLA VEZ fuera del bucle.
+  QueryMag := Magnitude(Query);
+
+  // Si el Query es un vector cero, no se puede buscar similitud.
+  if QueryMag = 0 then Exit;
 
   for i := 0 to High(Candidates) do
   begin
-    currentScore := CosineSimilarity(Query, Candidates[i]);
+    // Calculamos los componentes manualmente para aprovechar el QueryMag pre-calculado
+    // en lugar de llamar a CosineSimilarity() que lo recalcularía.
+    Dot := DotProduct(Query, Candidates[i]);
+
+    if IsZero(Dot) then
+      currentScore := 0.0
+    else
+    begin
+      CandidateMag := Magnitude(Candidates[i]);
+      if CandidateMag = 0 then
+        currentScore := 0.0
+      else
+        currentScore := Dot / (QueryMag * CandidateMag);
+    end;
+
     if currentScore > bestScore then
     begin
       bestScore := currentScore;
@@ -260,33 +281,59 @@ begin
     Result.Vector := Candidates[Result.Index];
 end;
 
+
 class function TAiEmbeddingsCore.FindTopK(const Query: TAiEmbeddingData; const Candidates: TAiEmbeddingList; K: Integer): TAiSimilarityList;
 var
   AllResults: TList<TAiSimilarityResult>;
   i: Integer;
   aResult: TAiSimilarityResult;
+  QueryMag, CandidateMag, Dot: Double;
 begin
   AllResults := TList<TAiSimilarityResult>.Create;
   try
+    // OPTIMIZACIÓN: Pre-calcular magnitud del Query
+    QueryMag := Magnitude(Query);
+
     for i := 0 to High(Candidates) do
     begin
       aResult.Index := i;
-      aResult.Score := CosineSimilarity(Query, Candidates[i]);
       aResult.Vector := Candidates[i];
+
+      // Lógica de similitud optimizada inline
+      if QueryMag = 0 then
+        aResult.Score := 0
+      else
+      begin
+        Dot := DotProduct(Query, Candidates[i]);
+        if IsZero(Dot) then
+          aResult.Score := 0
+        else
+        begin
+          CandidateMag := Magnitude(Candidates[i]);
+          if CandidateMag = 0 then
+            aResult.Score := 0
+          else
+            aResult.Score := Dot / (QueryMag * CandidateMag);
+        end;
+      end;
+
       AllResults.Add(aResult);
     end;
 
-    // Sort the list of results by score in descending order.
+    // Ordenar resultados por Score descendente
     AllResults.Sort(TComparer<TAiSimilarityResult>.Construct(
       function(const L, R: TAiSimilarityResult): Integer
       begin
-        Result := CompareValue(R.Score, L.Score); // R vs L for descending
+        Result := CompareValue(R.Score, L.Score);
       end));
 
-    // Return the top K results.
-    if K > AllResults.Count then
-      K := AllResults.Count;
-    Result := Copy(AllResults.ToArray, 0, K);
+    // OPTIMIZACIÓN DE MEMORIA:
+    // En lugar de hacer Copy() sobre el array (que duplica memoria),
+    // recortamos la lista si es necesario y devolvemos su array directo.
+    if K < AllResults.Count then
+      AllResults.Count := K; // Esto elimina el exceso de elementos internamente
+
+    Result := AllResults.ToArray;
 
   finally
     AllResults.Free;
@@ -325,14 +372,24 @@ end;
 
 class function TAiEmbeddingsCore.CosineSimilarity(const A, B: TAiEmbeddingData): Double;
 var
-  MagA, MagB: Double;
+  MagA, MagB, Dot: Double;
 begin
+  // 1. Calcular Producto Punto
+  Dot := DotProduct(A, B);
+
+  // Optimización: Si los vectores son ortogonales (dot=0), la similitud es 0.
+  // Esto evita calcular raíces cuadradas costosas innecesariamente.
+  if IsZero(Dot) then
+    Exit(0.0);
+
+  // 2. Calcular Magnitudes
   MagA := Magnitude(A);
   MagB := Magnitude(B);
+
   if (MagA = 0) or (MagB = 0) then
-    Result := 0 // To avoid division by zero.
+    Result := 0 // Evitar división por cero
   else
-    Result := DotProduct(A, B) / (MagA * MagB);
+    Result := Dot / (MagA * MagB);
 end;
 
 class function TAiEmbeddingsCore.ToEmbeddingData(Value: TJsonArray): TAiEmbeddingData;

@@ -88,115 +88,153 @@ begin
 end;
 
 procedure TAiEmbeddings.ParseEmbedding(JObj: TJsonObject);
-Var
-  JArr, jData: TJSonArray;
+var
+  JArrData, JArrVector: TJSONArray;
   Emb: TAiEmbeddingData;
-  JVal: TJSonValue;
-  J: Integer;
-  Usage: TJsonObject;
-
+  JVal: TJSONValue;
+  Usage: TJSONObject;
+  i: Integer;
 begin
+  // Validación inicial
+  if not Assigned(JObj) then
+    Exit;
+
+  // 1. Obtener el modelo
   JObj.TryGetValue<String>('model', FModel);
 
-  If JObj.TryGetValue<TJsonObject>('usage', Usage) then
-  Begin
+  // 2. Uso de tokens (opcional)
+  if JObj.TryGetValue<TJSONObject>('usage', Usage) then
+  begin
     Usage.TryGetValue<Integer>('prompt_tokens', Fprompt_tokens);
     Usage.TryGetValue<Integer>('total_tokens', Ftotal_tokens);
-  End;
+  end;
 
-  jData := JObj.GetValue<TJSonArray>('data');
+  // 3. Obtener el array 'data' con validación
+  if not JObj.TryGetValue<TJSONArray>('data', JArrData) then
+    raise Exception.Create('La respuesta de la API no contiene el array de datos esperado ("data").');
 
-  SetLength(FData, jData.Count);
+  if JArrData.Count = 0 then
+    raise Exception.Create('El array de datos ("data") está vacío.');
 
-  For JVal in jData do
-  Begin
-    // El embedding de OpenAi Retorna un array, pero solo se toma el primero de la fila
-    JArr := TJsonObject(JVal).GetValue<TJSonArray>('embedding');
-    J := JArr.Count;
-    SetLength(Emb, J);
+  // Preparar array para múltiples embeddings (aunque solo usemos el primero)
+  SetLength(FData, JArrData.Count);
 
-    For J := 0 to JArr.Count - 1 do
-      Emb[J] := JArr.Items[J].GetValue<Double>;
+  // 4. Procesar el primer embedding (compatibilidad con versión original)
+  for JVal in JArrData do
+  begin
+    // Validar que sea un objeto
+    if not (JVal is TJSONObject) then
+      raise Exception.Create('Formato de ítem de datos inválido en la respuesta JSON.');
 
+    // 5. Obtener el vector de embedding
+    if not TJSONObject(JVal).TryGetValue<TJSONArray>('embedding', JArrVector) then
+      raise Exception.Create('No se encontró el campo "embedding" en los datos de respuesta.');
+
+    if JArrVector.Count = 0 then
+      raise Exception.Create('El vector de embedding está vacío.');
+
+    // 6. Dimensionar y llenar el vector con validación de tipo
+    SetLength(Emb, JArrVector.Count);
+    for i := 0 to JArrVector.Count - 1 do
+    begin
+      if not JArrVector.Items[i].TryGetValue<Double>(Emb[i]) then
+        Emb[i] := 0.0; // Valor por defecto si falla la conversión
+    end;
+
+    // 7. Asignar el embedding procesado
     FData := Emb;
-    Break;
-  End;
 
+    // Solo procesamos el primer elemento (comportamiento original)
+    Break;
+  end;
 end;
 
 function TAiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
-Var
+var
   Client: TNetHTTPClient;
   Headers: TNetHeaders;
-  JObj: TJsonObject;
+  RequestBody, ResponseJSON: TJSONObject;
   Res: IHTTPResponse;
-  Response: TStringStream;
-  St: TStringStream;
+  ResponseStream: TStringStream;
+  RequestStream: TStringStream;
   sUrl: String;
 begin
-
+  // Delegación a evento si está asignado
   if Assigned(OnGetEmbedding) then
   begin
     Result := inherited CreateEmbedding(aInput, aUser, aDimensions, aModel, aEncodingFormat);
     Exit;
   end;
 
-  Client := TNetHTTPClient.Create(Nil);
+  Client := TNetHTTPClient.Create(nil);
 {$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
 {$ENDIF}
-  St := TStringStream.Create('', TEncoding.UTF8);
-  Response := TStringStream.Create('', TEncoding.UTF8);
-  sUrl := FUrl + 'embeddings';
-  JObj := TJsonObject.Create;
+  RequestStream := TStringStream.Create('', TEncoding.UTF8);
+  ResponseStream := TStringStream.Create('', TEncoding.UTF8);
+  RequestBody := TJSONObject.Create;
 
-  If aModel = '' then
-    aModel := FModel;
+  try
+    // Construir URL limpiando barras finales
+    sUrl := FUrl.TrimRight(['/']) + '/embeddings';
 
-  if aDimensions <= 0 then
-    aDimensions := FDimensions;
+    // Configurar valores por defecto
+    if aModel = '' then
+      aModel := FModel;
+    if aDimensions <= 0 then
+      aDimensions := FDimensions;
 
-  Try
-    JObj.AddPair('input', aInput); // Este se adiciona por compatibilidad con ollama
-    JObj.AddPair('prompt', aInput);
-    JObj.AddPair('model', aModel);
-    JObj.AddPair('user', aUser);
-    JObj.AddPair('dimensions', aDimensions);
-    JObj.AddPair('encoding_format', aEncodingFormat);
+    // Construcción del JSON de petición
+    RequestBody.AddPair('input', aInput);     // OpenAI
+    RequestBody.AddPair('prompt', aInput);    // Compatibilidad con Ollama
+    RequestBody.AddPair('model', aModel);
+    RequestBody.AddPair('user', aUser);
+    RequestBody.AddPair('dimensions', TJSONNumber.Create(aDimensions));
+    RequestBody.AddPair('encoding_format', aEncodingFormat);
 
-    //St.WriteString(UTF8Encode(JObj.Format));
-    St.WriteString(JObj.Format); // Sin conversión
-    St.Position := 0;
+    // Escribir el JSON al stream
+    RequestStream.WriteString(RequestBody.Format);
+    RequestStream.Position := 0;
 
+    // Configurar headers
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
     Headers := Headers + [TNetHeader.Create('OpenAI-Beta', 'assistants=v2')];
+
     Client.ContentType := 'application/json';
 
-    Res := Client.Post(sUrl, St, Response, Headers);
-    Response.Position := 0;
+    // Realizar la petición
+    Res := Client.Post(sUrl, RequestStream, ResponseStream, Headers);
+    ResponseStream.Position := 0;
 
 {$IFDEF APIDEBUG}
-    Response.SaveToFile('c:\temp\response.txt');
+    ResponseStream.SaveToFile('c:\temp\response.txt');
 {$ENDIF}
-    if Res.StatusCode = 200 then
-    Begin
-      JObj := TJsonObject(TJsonObject.ParseJSONValue(Res.ContentAsString));
-      ParseEmbedding(JObj);
-      Result := Self.FData;
 
-    End
+    if Res.StatusCode = 200 then
+    begin
+      // Parsear la respuesta JSON
+      ResponseJSON := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
+      try
+        if not Assigned(ResponseJSON) then
+          raise Exception.Create('La respuesta de la API no es un JSON válido.');
+
+        ParseEmbedding(ResponseJSON);
+        Result := Self.FData;
+      finally
+        ResponseJSON.Free;
+      end;
+    end
     else
     begin
-      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
     end;
-
-  Finally
+  finally
     Client.Free;
-    St.Free;
-    Response.Free;
-    JObj.Free;
-  End;
-End;
+    RequestStream.Free;
+    ResponseStream.Free;
+    RequestBody.Free;
+  end;
+end;
 
 function TAiEmbeddings.GetApiKey: String;
 begin

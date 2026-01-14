@@ -21,7 +21,9 @@ type
     FKeepAlive: string;
     FStream: Boolean;
     FApiKey: string;
+    FTimeout: Integer;
     function GetApiKey: string;
+    procedure SetTimeout(const Value: Integer);
   protected
     procedure ExecuteImageDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage); override;
     function InternalRunOllamaOCR(aMediaFile: TAiMediaFile; ResMsg: TAiChatMessage; const AOverridePrompt: string): string;
@@ -40,6 +42,7 @@ type
     property KeepAlive: string read FKeepAlive write FKeepAlive;
     property Stream: Boolean read FStream write FStream default False;
     property Prompt: string read FPrompt write FPrompt;
+    Property Timeout : Integer read FTimeout write SetTimeout;
   end;
 
 procedure Register;
@@ -61,6 +64,7 @@ begin
   FModel := 'deepseek-ocr:latest';
   FPrompt := '<|grounding|>Convert the document to markdown';
   FKeepAlive := '1m';
+  FTimeout := 60000;
   FStream := False;
 end;
 
@@ -145,7 +149,7 @@ begin
     LBody := TStringStream.Create(LRequestJson.ToJSON, TEncoding.UTF8);
     try
       HTTP.ContentType := 'application/json';
-      HTTP.ResponseTimeout := 300000; // 5 minutos (como en tu Chat)
+      HTTP.ResponseTimeout := FTimeOut; // 5 minutos (como en tu Chat)
 
       if not LActualApiKey.IsEmpty then
         HTTP.CustomHeaders['Authorization'] := 'Bearer ' + LActualApiKey;
@@ -189,6 +193,14 @@ begin
     LRequestJson.Free;
     HTTP.Free;
   end;
+end;
+
+procedure TAiOllamaOcrTool.SetTimeout(const Value: Integer);
+begin
+  If Value <= 30000 then
+     FTimeOut := 30000
+  Else
+    FTimeout := Value;
 end;
 
 { --- MÉTODOS ESTÁTICOS --- }

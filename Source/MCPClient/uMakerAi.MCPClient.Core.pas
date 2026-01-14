@@ -46,9 +46,7 @@ uses
 {$ENDIF}
 {$IFDEF POSIX}
 {$ENDIF}
-{$IF CompilerVersion < 35}
   uJSONHelper,
-{$ENDIF}
   uMakerAi.Utils.System, uMakerAi.Core;
 
 // --- Clase Base Abstracta ---

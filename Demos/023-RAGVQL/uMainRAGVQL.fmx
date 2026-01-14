@@ -1,0 +1,328 @@
+object Form21: TForm21
+  Left = 0
+  Top = 0
+  Caption = 'S'
+  ClientHeight = 797
+  ClientWidth = 1430
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+  object BtnUploadFile: TButton
+    Position.X = 104.000000000000000000
+    Position.Y = 56.000000000000000000
+    Size.Width = 185.000000000000000000
+    Size.Height = 35.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    Text = 'BtnUploadFile'
+    TextSettings.Trimming = None
+    OnClick = BtnUploadFileClick
+  end
+  object OpenDialog1: TOpenDialog
+    Left = 64
+    Top = 328
+  end
+  object ProgressBar1: TProgressBar
+    Orientation = Horizontal
+    Position.X = 32.000000000000000000
+    Position.Y = 488.000000000000000000
+    Size.Width = 393.000000000000000000
+    Size.Height = 20.000000000000000000
+    Size.PlatformDefault = False
+  end
+  object BtnCancelar: TButton
+    Position.X = 104.000000000000000000
+    Position.Y = 93.000000000000000000
+    Size.Width = 185.000000000000000000
+    Size.Height = 35.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 6
+    Text = 'BtnCancelar'
+    TextSettings.Trimming = None
+  end
+  object ChShowProperties: TCheckBox
+    IsChecked = True
+    Position.X = 360.000000000000000000
+    Position.Y = 32.000000000000000000
+    TabOrder = 7
+    Text = 'ChShowProperties'
+  end
+  object EditLimit: TEdit
+    Touch.InteractiveGestures = [LongTap, DoubleTap]
+    TabOrder = 8
+    Text = '10'
+    Position.X = 360.000000000000000000
+    Position.Y = 136.000000000000000000
+  end
+  object EditPrecision: TEdit
+    Touch.InteractiveGestures = [LongTap, DoubleTap]
+    TabOrder = 9
+    Text = '0.7'
+    Position.X = 360.000000000000000000
+    Position.Y = 86.000000000000000000
+  end
+  object Label10: TLabel
+    Position.X = 360.000000000000000000
+    Position.Y = 61.000000000000000000
+    Text = 'Precision'
+    TabOrder = 11
+  end
+  object Label2: TLabel
+    Position.X = 360.000000000000000000
+    Position.Y = 116.000000000000000000
+    Text = 'Limit'
+    TabOrder = 10
+  end
+  object BtnSaveToFile: TButton
+    Position.X = 104.000000000000000000
+    Position.Y = 130.000000000000000000
+    Size.Width = 185.000000000000000000
+    Size.Height = 35.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 13
+    Text = 'BtnSaveToFile'
+    TextSettings.Trimming = None
+    OnClick = BtnSaveToFileClick
+  end
+  object BtnLoadFromfile: TButton
+    Position.X = 104.000000000000000000
+    Position.Y = 168.000000000000000000
+    Size.Width = 185.000000000000000000
+    Size.Height = 35.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 14
+    Text = 'BtnLoadFromfile'
+    TextSettings.Trimming = None
+    OnClick = BtnLoadFromfileClick
+  end
+  object ChLexicalSearch: TCheckBox
+    Position.X = 488.000000000000000000
+    Position.Y = 83.000000000000000000
+    TabOrder = 16
+    Text = 'ChLexicalSearch'
+    OnChange = ChLexicalSearchChange
+  end
+  object SaveDialog1: TSaveDialog
+    Left = 184
+    Top = 344
+  end
+  object ChEnableRRF: TCheckBox
+    Position.X = 488.000000000000000000
+    Position.Y = 110.000000000000000000
+    TabOrder = 22
+    Text = 'ChEnableRRF'
+    OnChange = ChEnableRRFChange
+  end
+  object ChReorderABC: TCheckBox
+    Position.X = 488.000000000000000000
+    Position.Y = 137.000000000000000000
+    TabOrder = 23
+    Text = 'ChReorderABC'
+  end
+  object ChSemanticSearch: TCheckBox
+    IsChecked = True
+    Position.X = 488.000000000000000000
+    Position.Y = 56.000000000000000000
+    TabOrder = 24
+    Text = 'ChSemanticSearch'
+    OnChange = ChSemanticSearchChange
+  end
+  object BtnCreateTable: TButton
+    Position.X = 304.000000000000000000
+    Position.Y = 224.000000000000000000
+    Size.Width = 176.000000000000000000
+    Size.Height = 31.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 31
+    Text = 'BtnCreateTable'
+    TextSettings.Trimming = None
+    OnClick = BtnCreateTableClick
+  end
+  object Layout1: TLayout
+    Align = Right
+    Position.X = 692.000000000000000000
+    Size.Width = 738.000000000000000000
+    Size.Height = 797.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 38
+    object Layout2: TLayout
+      Align = Top
+      Size.Width = 738.000000000000000000
+      Size.Height = 50.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+    end
+    object Layout3: TLayout
+      Align = Client
+      Size.Width = 738.000000000000000000
+      Size.Height = 346.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      object Label3: TLabel
+        Align = Top
+        Margins.Left = 3.000000000000000000
+        Margins.Top = 3.000000000000000000
+        Margins.Right = 3.000000000000000000
+        Margins.Bottom = 3.000000000000000000
+        Position.X = 3.000000000000000000
+        Position.Y = 3.000000000000000000
+        Size.Width = 732.000000000000000000
+        Size.Height = 17.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'Label1'
+        TabOrder = 0
+      end
+      object MemoResponse: TMemo
+        Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+        DataDetectorTypes = []
+        TextSettings.WordWrap = True
+        Align = Client
+        Margins.Left = 3.000000000000000000
+        Margins.Right = 3.000000000000000000
+        Margins.Bottom = 3.000000000000000000
+        Size.Width = 732.000000000000000000
+        Size.Height = 320.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 7
+        Viewport.Width = 728.000000000000000000
+        Viewport.Height = 316.000000000000000000
+      end
+    end
+    object Layout4: TLayout
+      Align = Bottom
+      Position.Y = 402.000000000000000000
+      Size.Width = 738.000000000000000000
+      Size.Height = 270.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      object Label1: TLabel
+        Align = Top
+        Margins.Left = 3.000000000000000000
+        Margins.Top = 3.000000000000000000
+        Margins.Right = 3.000000000000000000
+        Margins.Bottom = 3.000000000000000000
+        Position.X = 3.000000000000000000
+        Position.Y = 3.000000000000000000
+        Size.Width = 732.000000000000000000
+        Size.Height = 17.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'Label1'
+        TabOrder = 0
+      end
+      object MemoPrompt: TMemo
+        Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+        DataDetectorTypes = []
+        TextSettings.WordWrap = True
+        Align = Client
+        Margins.Left = 3.000000000000000000
+        Margins.Right = 3.000000000000000000
+        Margins.Bottom = 3.000000000000000000
+        Size.Width = 732.000000000000000000
+        Size.Height = 244.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 7
+        Viewport.Width = 728.000000000000000000
+        Viewport.Height = 240.000000000000000000
+      end
+    end
+    object Layout5: TLayout
+      Align = Bottom
+      Position.Y = 672.000000000000000000
+      Size.Width = 738.000000000000000000
+      Size.Height = 125.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      object BtnConsultar: TButton
+        Position.X = 65.000000000000000000
+        Position.Y = 8.000000000000000000
+        Size.Width = 193.000000000000000000
+        Size.Height = 33.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 9
+        Text = 'BtnConsultar'
+        TextSettings.Trimming = None
+        OnClick = BtnConsultarClick
+      end
+      object BtnBuscarVGQL: TButton
+        Position.X = 292.000000000000000000
+        Position.Y = 8.000000000000000000
+        Size.Width = 193.000000000000000000
+        Size.Height = 33.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 18
+        Text = 'BtnBuscarVGQL'
+        TextSettings.Trimming = None
+        OnClick = BtnBuscarVGQLClick
+      end
+      object BtnVGqlToText: TButton
+        Position.X = 292.000000000000000000
+        Position.Y = 49.000000000000000000
+        Size.Width = 193.000000000000000000
+        Size.Height = 33.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 41
+        Text = 'BtnVGqlToText'
+        TextSettings.Trimming = None
+        OnClick = BtnVGqlToTextClick
+      end
+      object BtnConsultaToText: TButton
+        Position.X = 64.000000000000000000
+        Position.Y = 49.000000000000000000
+        Size.Width = 193.000000000000000000
+        Size.Height = 33.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 40
+        Text = 'BtnVGqlToText'
+        TextSettings.Trimming = None
+        OnClick = BtnConsultaToTextClick
+      end
+    end
+    object Splitter1: TSplitter
+      Align = Bottom
+      Cursor = crVSplit
+      MinSize = 20.000000000000000000
+      Position.Y = 396.000000000000000000
+      Size.Width = 738.000000000000000000
+      Size.Height = 6.000000000000000000
+      Size.PlatformDefault = False
+    end
+  end
+  object AiOllamaEmbeddings1: TAiOllamaEmbeddings
+    Model = 'snowflake-arctic-embed'
+    Dimensions = 1024
+    ApiKey = '@OLLAMA_API_KEY'
+    Url = 'http://192.168.10.121:11434/'
+    Left = 64
+    Top = 208
+  end
+  object RAG: TAiRAGVector
+    OnImportProgress = RAGImportProgress
+    Embeddings = AiOllamaEmbeddings1
+    LexicalLanguage = alSpanish
+    OwnsObjects = True
+    SearchOptions.UseBM25 = False
+    SearchOptions.BM25Weight = 0.700000000000000000
+    SearchOptions.EmbeddingWeight = 0.300000000000000000
+    Left = 64
+    Top = 136
+  end
+  object DbConn: TFDConnection
+    Params.Strings = (
+      'Database=lunaidb'
+      'User_Name=postgres'
+      'Password=masterkey'
+      'Server=localhost'
+      'DriverID=PG')
+    Left = 520
+    Top = 296
+  end
+  object PgDriver: TAiRAGVectorPostgresDriver
+    Connection = DbConn
+    TableName = 'vector_store'
+    CurrentEntidad = 'DEFAULT'
+    Left = 520
+    Top = 368
+  end
+end

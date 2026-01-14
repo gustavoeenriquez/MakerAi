@@ -36,21 +36,23 @@ unit uJSONHelper;
 interface
 
 uses
-  System.JSON, System.SysUtils;
+  System.JSON, System.SysUtils, System.Generics.Collections;
 
 type
-  // Helper unificado para TJSONObject que combina la creación y la navegación segura.
   TJSONObjectHelper = class helper for TJSONObject
   public
-    // Métodos para añadir pares de forma fluida (compatibilidad con versiones antiguas)
+    // Solo definimos los AddPair para versiones anteriores a Delphi 11 (35.0)
+    // En Delphi 11, 12 y 13 ya existen de forma nativa.
+    {$IF CompilerVersion < 35.0}
     function AddPair(const AKey: string; const AValue: Integer): TJSONObject; overload;
     function AddPair(const AKey: string; const AValue: Int64): TJSONObject; overload;
     function AddPair(const AKey: string; const AValue: Double): TJSONObject; overload;
     function AddPair(const AKey: string; const AValue: Single): TJSONObject; overload;
     function AddPair(const AKey: string; const AValue: Boolean): TJSONObject; overload;
     function AddPair(const AKey: string; const AValue: string): TJSONObject; overload;
+    {$IFEND}
 
-    // Métodos de navegación segura
+    // Métodos de navegación segura (estos no existen nativamente en ninguna versión con esta firma)
     function GetValueSafe(const Name: string): TJSONValue;
     function GetValueAsString(const Name: string; const DefaultValue: string = ''): string;
     function GetValueAsInteger(const Name: string; const DefaultValue: Integer = 0): Integer;
@@ -62,7 +64,6 @@ type
     function TryGetValueAsString(const Name: string; out Value: string): Boolean;
   end;
 
-  // Helper para TJSONArray para abstraer diferencias entre versiones
   TJSONArrayHelper = class helper for TJSONArray
   public
     function GetItem(Index: Integer): TJSONValue;
@@ -70,7 +71,6 @@ type
     function GetItemAsArray(Index: Integer): TJSONArray;
   end;
 
-  // Clase de utilidad para operaciones globales de JSON
   TJSONUtils = class
   public
     class function Parse(const Data: string): TJSONValue; static;
@@ -82,6 +82,7 @@ implementation
 
 { TJSONObjectHelper }
 
+{$IF CompilerVersion < 35.0}
 function TJSONObjectHelper.AddPair(const AKey: string; const AValue: Integer): TJSONObject;
 begin
   Result := Self.AddPair(AKey, TJSONNumber.Create(AValue));
@@ -111,10 +112,13 @@ function TJSONObjectHelper.AddPair(const AKey: string; const AValue: string): TJ
 begin
   Result := Self.AddPair(AKey, TJSONString.Create(AValue));
 end;
+{$IFEND}
 
 function TJSONObjectHelper.GetValueSafe(const Name: string): TJSONValue;
 begin
-  Result := Self.GetValue(Name); // Devuelve nil si no existe, no lanza excepción
+  // En 10.3 GetValue retorna nil si no existe.
+  // En versiones nuevas es igual, pero este helper asegura consistencia.
+  Result := Self.GetValue(Name);
 end;
 
 function TJSONObjectHelper.GetValueAsString(const Name: string; const DefaultValue: string): string;
@@ -122,7 +126,7 @@ var
   LValue: TJSONValue;
 begin
   LValue := GetValueSafe(Name);
-  if Assigned(LValue) and (LValue is TJSONString) then // También se puede usar LValue.TryGetValue<string>() en versiones nuevas
+  if Assigned(LValue) and not (LValue is TJSONNull) then
     Result := LValue.Value
   else
     Result := DefaultValue;
@@ -134,7 +138,7 @@ var
 begin
   LValue := GetValueSafe(Name);
   if Assigned(LValue) and (LValue is TJSONNumber) then
-    Result := Trunc(TJSONNumber(LValue).AsDouble)
+    Result := StrToIntDef(LValue.Value, DefaultValue)
   else
     Result := DefaultValue;
 end;
@@ -145,7 +149,7 @@ var
 begin
   LValue := GetValueSafe(Name);
   if Assigned(LValue) and (LValue is TJSONNumber) then
-    Result := Trunc(TJSONNumber(LValue).AsDouble)
+    Result := StrToInt64Def(LValue.Value, DefaultValue)
   else
     Result := DefaultValue;
 end;
@@ -166,8 +170,12 @@ var
   LValue: TJSONValue;
 begin
   LValue := GetValueSafe(Name);
-  if Assigned(LValue) and (LValue is TJSONBool) then
-    Result := TJSONBool(LValue).Value.ToBoolean
+  if Assigned(LValue) then
+  begin
+    // En todas las versiones de Delphi, .Value devuelve 'true' o 'false' para tipos booleanos.
+    // Usamos SameText para una comparación segura que no dependa de tipos nativos.
+    Result := SameText(LValue.Value, 'true');
+  end
   else
     Result := DefaultValue;
 end;
@@ -197,7 +205,7 @@ var
   LJSONValue: TJSONValue;
 begin
   LJSONValue := GetValueSafe(Name);
-  Result := Assigned(LJSONValue) and (LJSONValue is TJSONString);
+  Result := Assigned(LJSONValue) and not (LJSONValue is TJSONNull);
   if Result then
     Value := LJSONValue.Value
   else
@@ -208,11 +216,10 @@ end;
 
 function TJSONArrayHelper.GetItem(Index: Integer): TJSONValue;
 begin
-  // Abstrae la diferencia entre .Items[Index] (versiones antiguas) y la propiedad por defecto (versiones nuevas)
-  {$IF CompilerVersion >= 35.0} // Delphi 11+
-  Result := Self[Index];
+  {$IF CompilerVersion >= 35.0}
+    Result := Self[Index];
   {$ELSE}
-  Result := Self.Items[Index];
+    Result := Self.Items[Index];
   {$IFEND}
 end;
 
@@ -246,8 +253,6 @@ end;
 
 class function TJSONUtils.Parse(const Data: string): TJSONValue;
 begin
-  // TJSONObject.ParseJSONValue es el método estándar y funciona en todas las versiones.
-  // No se necesita directiva de compilador aquí.
   Result := TJSONObject.ParseJSONValue(Data);
 end;
 
@@ -257,10 +262,13 @@ var
 begin
   Result := nil;
   LJSONValue := Parse(Data);
-  if Assigned(LJSONValue) and (LJSONValue is TJSONObject) then
-    Result := TJSONObject(LJSONValue)
-  else if Assigned(LJSONValue) then
-    LJSONValue.Free; // ¡Correcto! Evita fugas de memoria.
+  if Assigned(LJSONValue) then
+  begin
+    if LJSONValue is TJSONObject then
+      Result := TJSONObject(LJSONValue)
+    else
+      LJSONValue.Free;
+  end;
 end;
 
 class function TJSONUtils.ParseAsArray(const Data: string): TJSONArray;
@@ -269,10 +277,13 @@ var
 begin
   Result := nil;
   LJSONValue := Parse(Data);
-  if Assigned(LJSONValue) and (LJSONValue is TJSONArray) then
-    Result := TJSONArray(LJSONValue)
-  else if Assigned(LJSONValue) then
-    LJSONValue.Free; // ¡Correcto! Evita fugas de memoria.
+  if Assigned(LJSONValue) then
+  begin
+    if LJSONValue is TJSONArray then
+      Result := TJSONArray(LJSONValue)
+    else
+      LJSONValue.Free;
+  end;
 end;
 
 end.

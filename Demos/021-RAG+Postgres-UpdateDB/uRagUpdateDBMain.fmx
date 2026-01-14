@@ -289,11 +289,11 @@ object Form8: TForm8
     Thinking_tokens = 0
     Url = 'http://localhost:11434/'
     ResponseTimeOut = 60000
-    AudioTool = AIWhisper1
     Stream_Usage = False
     NativeInputFiles = []
     NativeOutputFiles = []
     ChatMediaSupports = []
+    EnabledFeatures = []
     ThinkingLevel = tlDefault
     MediaResolution = mrDefault
     keep_alive = '1m'
