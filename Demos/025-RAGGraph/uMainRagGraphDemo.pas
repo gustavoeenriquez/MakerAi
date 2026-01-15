@@ -42,6 +42,7 @@ uses
   FMX.Memo.Types, FMX.ScrollBox, FMX.Memo, uMakerAi.Embeddings.Core,
 
   uMakerAi.RAG.Graph.Core, uMakerAi.RAG.Graph.Builder, uMakerAi.RAG.Graph.Driver.Postgres,
+  uMakerAI.RAG.Vectors.Index, uMakerAI.RAG.MetaData,
   uMakerAi.Embeddings, uMakerAi.Chat.OpenAi, uMakerAi.RAG.Vectors, FMX.Edit, uMakerAi.Prompts,
   uMakerAi.Chat.AiConnection, uMakerAi.Chat, uMakerAi.Core, FireDAC.Stan.Intf, FireDAC.Stan.Option,
   uMakerAi.Chat.Gemini, uMakerAi.Chat.Initializations, uMakerAi.Chat.Messages, uMakerAi.Chat.Ollama,

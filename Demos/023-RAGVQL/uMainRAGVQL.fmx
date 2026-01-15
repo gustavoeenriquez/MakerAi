@@ -2,8 +2,8 @@ object Form21: TForm21
   Left = 0
   Top = 0
   Caption = 'S'
-  ClientHeight = 797
-  ClientWidth = 1430
+  ClientHeight = 637
+  ClientWidth = 1387
   Position = ScreenCenter
   FormFactor.Width = 320
   FormFactor.Height = 480
@@ -26,9 +26,9 @@ object Form21: TForm21
   end
   object ProgressBar1: TProgressBar
     Orientation = Horizontal
-    Position.X = 32.000000000000000000
-    Position.Y = 488.000000000000000000
-    Size.Width = 393.000000000000000000
+    Position.X = 8.000000000000000000
+    Position.Y = 592.000000000000000000
+    Size.Width = 617.000000000000000000
     Size.Height = 20.000000000000000000
     Size.PlatformDefault = False
   end
@@ -142,9 +142,9 @@ object Form21: TForm21
   end
   object Layout1: TLayout
     Align = Right
-    Position.X = 692.000000000000000000
+    Position.X = 649.000000000000000000
     Size.Width = 738.000000000000000000
-    Size.Height = 797.000000000000000000
+    Size.Height = 637.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 38
     object Layout2: TLayout
@@ -157,7 +157,7 @@ object Form21: TForm21
     object Layout3: TLayout
       Align = Client
       Size.Width = 738.000000000000000000
-      Size.Height = 346.000000000000000000
+      Size.Height = 186.000000000000000000
       Size.PlatformDefault = False
       TabOrder = 2
       object Label3: TLabel
@@ -183,16 +183,16 @@ object Form21: TForm21
         Margins.Right = 3.000000000000000000
         Margins.Bottom = 3.000000000000000000
         Size.Width = 732.000000000000000000
-        Size.Height = 320.000000000000000000
+        Size.Height = 160.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 7
         Viewport.Width = 728.000000000000000000
-        Viewport.Height = 316.000000000000000000
+        Viewport.Height = 156.000000000000000000
       end
     end
     object Layout4: TLayout
       Align = Bottom
-      Position.Y = 402.000000000000000000
+      Position.Y = 242.000000000000000000
       Size.Width = 738.000000000000000000
       Size.Height = 270.000000000000000000
       Size.PlatformDefault = False
@@ -229,7 +229,7 @@ object Form21: TForm21
     end
     object Layout5: TLayout
       Align = Bottom
-      Position.Y = 672.000000000000000000
+      Position.Y = 512.000000000000000000
       Size.Width = 738.000000000000000000
       Size.Height = 125.000000000000000000
       Size.PlatformDefault = False
@@ -283,7 +283,7 @@ object Form21: TForm21
       Align = Bottom
       Cursor = crVSplit
       MinSize = 20.000000000000000000
-      Position.Y = 396.000000000000000000
+      Position.Y = 236.000000000000000000
       Size.Width = 738.000000000000000000
       Size.Height = 6.000000000000000000
       Size.PlatformDefault = False
@@ -322,7 +322,7 @@ object Form21: TForm21
     Connection = DbConn
     TableName = 'vector_store'
     CurrentEntidad = 'DEFAULT'
-    Left = 520
-    Top = 368
+    Left = 344
+    Top = 296
   end
 end

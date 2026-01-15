@@ -56,6 +56,7 @@ type
   TAiEmbeddingMetaData = class;
   TAiFilterCriteria = class; // Forward declaration
 
+
   { Estructura para almacenar una condición individual O un subgrupo }
   TFilterCriterion = record
     Key: string;
@@ -379,11 +380,46 @@ end;
 function TAiEmbeddingMetaData.CompareNumbers(const A, B: Variant; Op: TFilterOperator): Boolean;
 var
   D1, D2: Double;
+  I1, I2: Int64;
+  TypeA, TypeB: Word;
+  IsIntA, IsIntB: Boolean;
 begin
+  TypeA := VarType(A) and varTypeMask;
+  TypeB := VarType(B) and varTypeMask;
+
+  // Comprobamos si son tipos enteros nativos (Byte, Integer, Int64, etc.)
+  // Esto es crucial para IDs grandes que Double perdería precisión.
+  IsIntA := (TypeA = varInt64) or (TypeA = varInteger) or (TypeA = varSmallint) or (TypeA = varByte) or (TypeA = varShortInt) or (TypeA = varWord) or (TypeA = varLongWord);
+  IsIntB := (TypeB = varInt64) or (TypeB = varInteger) or (TypeB = varSmallint) or (TypeB = varByte) or (TypeB = varShortInt) or (TypeB = varWord) or (TypeB = varLongWord);
+
+  // 1. Camino Rápido y Preciso: Comparación de Enteros de 64 bits
+  if IsIntA and IsIntB then
+  begin
+    try
+      I1 := A;
+      I2 := B;
+      case Op of
+        foEqual:          Result := I1 = I2;
+        foNotEqual:       Result := I1 <> I2;
+        foGreater:        Result := I1 > I2;
+        foGreaterOrEqual: Result := I1 >= I2;
+        foLess:           Result := I1 < I2;
+        foLessOrEqual:    Result := I1 <= I2;
+      else
+        Result := False;
+      end;
+      Exit;
+    except
+      // Si falla la conversión directa (raro si VarType dice que es int), caemos al Double
+    end;
+  end;
+
+  // 2. Camino Estándar: Comparación de Punto Flotante
   try
     D1 := Double(A);
     D2 := Double(B);
   except
+    // Si no se puede convertir a número, retornamos falso
     Exit(False);
   end;
 
@@ -480,12 +516,18 @@ begin
   Result := Evaluate(Name, Op, Value, Unassigned);
 end;
 
+{ --- Implementación de Evaluate --- }
+
+{ --- Implementación de Evaluate --- }
+
 function TAiEmbeddingMetaData.Evaluate(const Name: string; Op: TFilterOperator; const Value, Value2: Variant; const ANodeText: string = ''): Boolean;
 var
   PropValue: Variant;
   Exists: Boolean;
   DTProp, DTVal1, DTVal2: TDateTime;
   IsDateComparison: Boolean;
+  i, j: Integer;
+  Found: Boolean;
 begin
   // 1. Inyección de campo virtual 'text' (Contenido del nodo)
   if SameText(Name, 'text') then
@@ -514,20 +556,56 @@ begin
   if Op in [foIn, foNotIn] then
     Exit(CheckInList(PropValue, Value, Op = foNotIn));
 
-  // 4. Operadores de patrón de texto (LIKE / ILIKE)
+  // 4. Operadores de Conjuntos (Arrays JSON) - ExistsAny / ExistsAll
+  if Op in [foExistsAny, foExistsAll] then
+  begin
+    // Solo soportamos si la propiedad es un Array (ej: Tags: ["A", "B"])
+    if VarIsArray(PropValue) then
+    begin
+      // Si el valor buscado es un array (¿Alguna de estas etiquetas existe?)
+      if VarIsArray(Value) then
+      begin
+        if Op = foExistsAny then
+        begin
+          // ?| : ¿Algún elemento de Value está en PropValue?
+          for i := VarArrayLowBound(Value, 1) to VarArrayHighBound(Value, 1) do
+            if CheckInList(VarArrayGet(Value, [i]), PropValue, False) then
+              Exit(True);
+          Exit(False);
+        end
+        else // foExistsAll
+        begin
+          // ?& : ¿Todos los elementos de Value están en PropValue?
+          for i := VarArrayLowBound(Value, 1) to VarArrayHighBound(Value, 1) do
+            if not CheckInList(VarArrayGet(Value, [i]), PropValue, False) then
+              Exit(False);
+          Exit(True);
+        end;
+      end
+      else
+      begin
+        // Si Value es simple, se comporta como un CONTAINS en lista
+        Exit(CheckInList(Value, PropValue, False));
+      end;
+    end;
+    // Si la propiedad no es array, fallamos (o podrías tratarlo como string contains)
+    Exit(False);
+  end;
+
+  // 5. Operadores de patrón de texto (LIKE / ILIKE)
   if Op in [foLike, foILike] then
     Exit(CheckLike(VarToStr(PropValue), VarToStr(Value), Op = foILike));
 
-  // 5. DETECCIÓN DE COMPARACIÓN DE FECHAS
+  // 6. DETECCIÓN DE COMPARACIÓN DE FECHAS
   // Comprobamos si la propiedad es una fecha o un string con formato ISO8601
-  IsDateComparison := (VarType(PropValue) and varTypeMask = varDate) or
-                      ((VarType(PropValue) and varTypeMask = varString) and
-                       TryISO8601ToDate(VarToStr(PropValue), DTProp));
+  IsDateComparison := (VarType(PropValue) = varDate) or
+                      ((VarType(PropValue) = varString) and TryISO8601ToDate(VarToStr(PropValue), DTProp));
 
   if IsDateComparison then
   begin
-    // Si la propiedad era varDate, la extraemos directamente
-    if (VarType(PropValue) and varTypeMask = varDate) then DTProp := VarToDateTime(PropValue);
+    // Asegurar que DTProp tenga el valor correcto
+    if VarType(PropValue) = varDate then
+      DTProp := VarToDateTime(PropValue); // Ya lo tenemos, pero por seguridad en el flujo
 
     if Op = foBetween then
     begin
@@ -551,8 +629,8 @@ begin
     end;
   end;
 
-  // 6. DETECCIÓN DE COMPARACIÓN NUMÉRICA
-  // Usamos VarIsNumeric para evitar excepciones de conversión "String to Double"
+  // 7. DETECCIÓN DE COMPARACIÓN NUMÉRICA
+  // Usamos VarIsNumeric para evitar excepciones. CompareNumbers maneja la precisión.
   if VarIsNumeric(PropValue) and VarIsNumeric(Value) then
   begin
     if Op = foBetween then
@@ -563,18 +641,19 @@ begin
         Exit(False);
     end;
 
-    // Llamada al helper de comparación numérica que ya tienes
+    // Llamada al helper optimizado
     Exit(CompareNumbers(PropValue, Value, Op));
   end;
 
-  // 7. COMPARACIÓN POR DEFECTO (STRINGS / TEXTO)
-  // Si llegamos aquí, es porque no son números ni fechas, o falló la conversión
+  // 8. COMPARACIÓN POR DEFECTO (STRINGS / TEXTO)
+  // Fallback final para strings
   if Op = foBetween then
   begin
     Exit((VarToStr(PropValue) >= VarToStr(Value)) and
          (VarToStr(PropValue) <= VarToStr(Value2)));
   end;
 
+  // Delegamos en CompareStrings (que maneja Contains, StartsWith, EndsWith, etc.)
   Result := CompareStrings(VarToStr(PropValue), VarToStr(Value), Op);
 end;
 
@@ -654,7 +733,7 @@ begin
         varBoolean:
           JVal := TJSONBool.Create(Boolean(V));
         varDate:
-          JVal := TJSONString.Create(DateToISO8601(TDateTime(V), False));
+          JVal := TJSONString.Create(DateToISO8601(TDateTime(V), True));
         varNull, varEmpty:
           JVal := TJSONNull.Create;
       else

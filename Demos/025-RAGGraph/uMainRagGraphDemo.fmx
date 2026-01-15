@@ -1435,7 +1435,7 @@ object MainRagGraphDemo: TMainRagGraphDemo
       Size.Width = 1042.000000000000000000
       Size.Height = 658.000000000000000000
       Size.PlatformDefault = False
-      TabIndex = 1
+      TabIndex = 2
       TabOrder = 39
       TabPosition = PlatformDefault
       Sizes = (
@@ -1492,8 +1492,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Size.Height = 554.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
-            Viewport.Width = 395.000000000000000000
-            Viewport.Height = 550.000000000000000000
+            Viewport.Width = 399.000000000000000000
+            Viewport.Height = 554.000000000000000000
           end
           object Layout7: TLayout
             Align = Bottom
@@ -2352,8 +2352,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Size.Height = 606.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
-            Viewport.Width = 611.000000000000000000
-            Viewport.Height = 602.000000000000000000
+            Viewport.Width = 615.000000000000000000
+            Viewport.Height = 606.000000000000000000
           end
         end
         object Splitter2: TSplitter
@@ -2371,7 +2371,7 @@ object MainRagGraphDemo: TMainRagGraphDemo
           item
           end>
         TextSettings.Trimming = None
-        IsSelected = True
+        IsSelected = False
         Size.Width = 56.000000000000000000
         Size.Height = 26.000000000000000000
         Size.PlatformDefault = False
@@ -3582,8 +3582,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Size.Height = 110.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
-            Viewport.Width = 1028.000000000000000000
-            Viewport.Height = 106.000000000000000000
+            Viewport.Width = 1032.000000000000000000
+            Viewport.Height = 110.000000000000000000
           end
         end
         object Layout4: TLayout
@@ -3617,8 +3617,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
             Size.Height = 403.000000000000000000
             Size.PlatformDefault = False
             TabOrder = 1
-            Viewport.Width = 1028.000000000000000000
-            Viewport.Height = 399.000000000000000000
+            Viewport.Width = 1032.000000000000000000
+            Viewport.Height = 403.000000000000000000
           end
         end
         object Splitter1: TSplitter
@@ -3636,7 +3636,7 @@ object MainRagGraphDemo: TMainRagGraphDemo
           item
           end>
         TextSettings.Trimming = None
-        IsSelected = False
+        IsSelected = True
         Size.Width = 108.000000000000000000
         Size.Height = 26.000000000000000000
         Size.PlatformDefault = False
@@ -3967,8 +3967,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
                   Size.Height = 303.000000000000000000
                   Size.PlatformDefault = False
                   TabOrder = 1
-                  Viewport.Width = 644.000000000000000000
-                  Viewport.Height = 299.000000000000000000
+                  Viewport.Width = 648.000000000000000000
+                  Viewport.Height = 303.000000000000000000
                 end
               end
               object Layout15: TLayout
@@ -4147,8 +4147,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
                     Size.Height = 150.000000000000000000
                     Size.PlatformDefault = False
                     TabOrder = 1
-                    Viewport.Width = 564.000000000000000000
-                    Viewport.Height = 146.000000000000000000
+                    Viewport.Width = 568.000000000000000000
+                    Viewport.Height = 150.000000000000000000
                   end
                 end
               end
@@ -4169,6 +4169,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
   end
   object Rag: TAiRagGraph
     Embeddings = AiOllamaEmbeddings1
+    SearchOptions.BM25Weight = 0.700000000000000000
+    SearchOptions.EmbeddingWeight = 0.300000000000000000
     Left = 80
     Top = 312
   end
@@ -4646,8 +4648,8 @@ object MainRagGraphDemo: TMainRagGraphDemo
   end
   object RAGBuilder1: TAiRagGraphBuilder
     Graph = Rag
-    Left = 176
-    Top = 296
+    Left = 184
+    Top = 312
   end
   object RAGPgDriver: TAiRagGraphPostgresDriver
     Connection = DbConn

@@ -42,9 +42,13 @@ uses
 
 type
   { TAiRagGraphBuilder }
+
+  TOnImportProgress = procedure(Sender: TObject; Position, Total: Integer; var Cancel: Boolean) of object;
+
   TAiRagGraphBuilder = class(TComponent)
   private
     FGraph: TAiRagGraph;
+    FOnImportProgress: TOnImportProgress;
     procedure SetGraph(const Value: TAiRagGraph);
   protected
     procedure MergeNodeProperties(ANode: TAiRagGraphNode; ANewProperties: TJSONObject; AStrategy: TMergeStrategy);
@@ -56,11 +60,13 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    procedure Process(AJsonTripletArray: string; AMergeStrategy: TMergeStrategy = msAddNewOnly);
+    Function Process(AJsonTripletArray: string; AMergeStrategy: TMergeStrategy = msAddNewOnly): Integer; // Retorna el número de items insertados
     function FindExistingNode(AName, ALabel: string): TAiRagGraphNode;
 
   published
     property Graph: TAiRagGraph read FGraph write SetGraph;
+    Property OnImportProgress: TOnImportProgress read FOnImportProgress write FOnImportProgress;
+
   end;
 
 procedure Register;
@@ -120,7 +126,6 @@ begin
   end;
 end;
 
-
 procedure TAiRagGraphBuilder.MergeNodeProperties(ANode: TAiRagGraphNode; ANewProperties: TJSONObject; AStrategy: TMergeStrategy);
 var
   Pair: TJSONPair;
@@ -152,7 +157,6 @@ begin
   if (Operation = opRemove) and (AComponent = FGraph) then
     FGraph := nil;
 end;
-
 
 function TAiRagGraphBuilder.GenerateTextForEmbedding(AName, ANodeLabel: string; AProperties: TJSONObject; AAdditionalText: String = ''): string;
 var
@@ -324,9 +328,7 @@ begin
   end;
 end;
 
-
-procedure TAiRagGraphBuilder.Process(AJsonTripletArray: string;
-  AMergeStrategy: TMergeStrategy);
+Function TAiRagGraphBuilder.Process(AJsonTripletArray: string; AMergeStrategy: TMergeStrategy): Integer;
 var
   JsonValue, TripletValue: TJSONValue;
   JsonArray: TJSONArray;
@@ -339,6 +341,8 @@ var
   NewEdge: TAiRagGraphEdge;
   LEmbeddings: TAiEmbeddingsCore;
   NeedEmbeddingUpdate: Boolean;
+  I, TotCount: Integer;
+  Cancel: Boolean;
 begin
   if FGraph = nil then
     raise Exception.Create('Graph property is not assigned to the builder.');
@@ -349,17 +353,31 @@ begin
   // 2. Parseo del JSON
   JsonValue := TJSONObject.ParseJSONValue(AJsonTripletArray);
   try
-    if not (JsonValue is TJSONArray) then
+    if not(JsonValue is TJSONArray) then
       raise Exception.Create('Input JSON is not a valid JSON array of triplets.');
 
     JsonArray := JsonValue as TJSONArray;
 
     FGraph.BeginUpdate;
     try
+
+      I := 0;
+      TotCount := JsonArray.Count;
+
       for TripletValue in JsonArray do
       begin
-        if not (TripletValue is TJSONObject) then
+        if not(TripletValue is TJSONObject) then
           continue;
+
+        Inc(I);
+
+        if Assigned(FOnImportProgress) then
+        begin
+          // Reportamos el índice actual 'i' sobre el total
+          FOnImportProgress(Self, I, TotCount, Cancel);
+          if Cancel then
+            Break;
+        end;
 
         TripletObject := TripletValue as TJSONObject;
 
@@ -426,16 +444,13 @@ begin
             // CRÍTICO: Si tu Core no sincroniza automáticamente, forzar UPDATE
             // Descomenta si es necesario:
             // if NeedEmbeddingUpdate then
-            //   FGraph.UpdateEdge(ExistingEdge);
+            // FGraph.UpdateEdge(ExistingEdge);
           end
           else
           begin
             // --- ARISTA NUEVA (Optimizado) ---
             // 1. Crear objeto arista en memoria (sin persistir)
-            NewEdge := FGraph.NewEdge(SubjectNode, ObjectNode,
-                                      TGuid.NewGuid.ToString,
-                                      EdgeLabel,
-                                      EdgeName);
+            NewEdge := FGraph.NewEdge(SubjectNode, ObjectNode, TGuid.NewGuid.ToString, EdgeLabel, EdgeName);
 
             // 2. Aplicar propiedades en memoria
             if PredicateProps <> nil then
@@ -456,6 +471,8 @@ begin
     finally
       FGraph.EndUpdate;
     end;
+
+    Result := I;
   finally
     JsonValue.Free;
   end;
@@ -470,6 +487,5 @@ begin
       FGraph.FreeNotification(Self);
   end;
 end;
-
 
 end.

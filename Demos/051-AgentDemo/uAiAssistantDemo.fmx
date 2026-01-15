@@ -254,8 +254,10 @@ object Form70: TForm70
     StartNode = NodoInicio
     EndNode = NodoFinal
     OnPrint = AIChain1Print
+    OnFinish = AIAgentsManagerFinish
+    TimeoutMs = 900000
     Left = 72
-    Top = 144
+    Top = 136
   end
   object NodoInicio: TAIAgentsNode
     Description = 'Inicio'
@@ -271,7 +273,7 @@ object Form70: TForm70
     Graph = AIAgentsManager
     OnExecute = TareaBExecute
     Left = 344
-    Top = 248
+    Top = 240
   end
   object TareaA: TAIAgentsNode
     Description = 'TareaA'
@@ -286,7 +288,7 @@ object Form70: TForm70
     Graph = AIAgentsManager
     OnExecute = NodoFinalExecute
     JoinMode = jmAll
-    Left = 272
+    Left = 248
     Top = 440
   end
   object AIAgentsLink1: TAIAgentsLink
@@ -320,5 +322,39 @@ object Form70: TForm70
   object AIAgentsNode1: TAIAgentsNode
     Left = 440
     Top = 440
+  end
+  object AiOpenChat1: TAiOpenChat
+    ApiKey = '@OPENAI_API_KEY'
+    Model = 'gpt-5'
+    Logprobs = False
+    Max_tokens = 3000
+    N = 1
+    Response_format = tiaChatRfText
+    Seed = 0
+    Asynchronous = False
+    Temperature = 1.000000000000000000
+    Top_p = 1.000000000000000000
+    K = 0
+    Tool_choice = 'auto'
+    Tool_Active = False
+    User = 'user'
+    SystemPrompt.Strings = (
+      'Eres un asistente muy '#250'til y servicial')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    Thinking_tokens = 0
+    Url = 'https://api.openai.com/v1/'
+    ResponseTimeOut = 60000
+    Stream_Usage = False
+    NativeInputFiles = []
+    NativeOutputFiles = []
+    ChatMediaSupports = [Tcm_WebSearch]
+    EnabledFeatures = [Tcm_WebSearch]
+    ThinkingLevel = tlDefault
+    MediaResolution = mrDefault
+    Truncation = 'disabled'
+    Left = 424
+    Top = 120
   end
 end

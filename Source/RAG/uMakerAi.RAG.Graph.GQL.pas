@@ -4,12 +4,9 @@ interface
 
 uses
 
-
-
   System.SysUtils, System.Character, System.Generics.Collections, System.Variants, System.TypInfo,
   uMakerAi.RAG.Graph.Core, // Necesario para TBinaryOp, TGraphExpression, etc.
   uMakerAi.RAG.MetaData; // Necesario para TFilterOperator
-
 
 type
   { Tipos de tokens soportados por el lenguaje GQL Lite de MakerAI }
@@ -52,8 +49,9 @@ type
     tkLike, // LIKE (Nuevo)
     tkILike, // ILIKE (Nuevo)
     tkContains, // CONTAINS
-    tkIn, // IN (Nuevo)
-    tkIs, // IS (Nuevo)
+    tkIn, // IN
+    tkIs, // IS
+    tkAsterisk,
 
     // Funciones de Agregación y Modificadores
     tkCount, tkSum, tkAvg, tkDepth,
@@ -62,7 +60,6 @@ type
     tkShortest, tkPath, tkTo, tkGet, tkCentrality, tkDegrees, tkTop);
 
   TGraphCommandType = (cmdNone, cmdShowLabels, cmdShowEdges, cmdShortestPath, cmdCentrality, cmdDegrees);
-
 
   TToken = record
     Kind: TTokenKind;
@@ -91,10 +88,9 @@ type
     function NextToken: TToken;
   end;
 
-  //================================================
-  //============ GRAPH PARSER ======================
-  //================================================
-
+  // ================================================
+  // ============ GRAPH PARSER ======================
+  // ================================================
 
   TGraphParser = class
   private
@@ -137,8 +133,6 @@ type
     property CommandTargetPattern: TMatchNodePattern read FCommandTargetPattern;
     property CommandLimit: Integer read FCommandLimit;
   end;
-
-
 
 implementation
 
@@ -389,6 +383,12 @@ begin
         Next;
         Result.Kind := tkEqual;
       end;
+    '*':
+      begin
+        Result.Text := '*';
+        Next;
+        Result.Kind := tkAsterisk; // O usa un token genérico si prefieres
+      end;
 
     // Operadores Compuestos que empiezan con '<'
     '<':
@@ -472,10 +472,9 @@ begin
 end;
 
 
-  //================================================
-  //============ GRAPH PARSER ======================
-  //================================================
-
+// ================================================
+// ============ GRAPH PARSER ======================
+// ================================================
 
 { TGraphParser }
 
@@ -865,6 +864,7 @@ end;
 function TGraphParser.ParsePrimary: TGraphExpression;
 var
   V, P: string;
+  Negate: Boolean;
 begin
   case FCurrent.Kind of
     tkLParen: // Agrupación: (expresión)
@@ -886,10 +886,18 @@ begin
     // Literales (cadenas, números, booleanos, null)
     tkString:
       Result := TLiteralExpr.Create(GetTokenTextAndNext);
-    tkNumber:
-      Result := TLiteralExpr.Create(StrToFloat(GetTokenTextAndNext, TFormatSettings.Invariant));
     tkBoolean:
       Result := TLiteralExpr.Create(SameText(GetTokenTextAndNext, 'true'));
+
+    tkNumber:
+      begin
+        // Aplicar el negativo si existía
+        if Negate then
+          Result := TLiteralExpr.Create(-StrToFloat(GetTokenTextAndNext, TFormatSettings.Invariant))
+        else
+          Result := TLiteralExpr.Create(StrToFloat(GetTokenTextAndNext, TFormatSettings.Invariant));
+      end;
+
     tkNull:
       begin
         Next;
@@ -1081,7 +1089,5 @@ begin
     raise;
   end;
 end;
-
-
 
 end.

@@ -45,7 +45,7 @@ uses
 
   Xml.XMLDoc, Xml.XMLIntf, Xml.XMLDom,
 
-  uMakerAi.Embeddings.Core, uMakerAi.Embeddings, uMakerAi.rag.Vectors.Index,
+  uMakerAi.Embeddings.Core, uMakerAi.Embeddings, uMakerAi.RAG.Vectors.Index,
   // Incluimos tu unidad base de MakerAi
   uMakerAi.RAG.Vectors, uMakerAi.RAG.MetaData;
 
@@ -439,7 +439,9 @@ type
 
     function Query(const APlan: TQueryPlan; ADepth: Integer = 0; const ALimit: Integer = 5; const APrecision: Double = 0.5): TArray<TAiRagGraphNode>;
 
-    function ExecuteMakerGQL(const ACode: string; ADepth: Integer = 0): TArray<TDictionary<string, TObject>>;
+    function ExecuteMakerGQL(const ACode: string; out AResultObjects: TArray<TDictionary<string, TObject>>; ADepth: Integer = 0): string; Overload;
+    function ExecuteMakerGQL(const ACode: string): string; Overload;
+
 
     // todo Implementar Detección de Comunidades (Community Detection) Algoritmo de Louvain
 
@@ -456,6 +458,8 @@ type
     procedure MergeNodes(ASurvivingNode, ASubsumedNode: TAiRagGraphNode; APropertyMergeStrategy: TMergeStrategy = msAddNewOnly);
     function FindNodeNamesByLabel(const ANodeLabel, ASearchText: string; ALimit: Integer = 10): TArray<string>;
     function EdgeExistsInMemory(const AEdgeID: string): Boolean;
+
+    function GraphToContextText(const ANodes: TArray<TAiRagGraphNode>): string;
 
     property NodeCount: Integer read GetNodeCount;
     property EdgeCount: Integer read GetEdgeCount;
@@ -999,10 +1003,7 @@ begin
   end;
 end;
 
-function TAiRagGraph.EvaluateGraphExpression(
-  AExpr: TGraphExpression;
-  ABoundElements: TDictionary<string, TObject>
-): Variant;
+function TAiRagGraph.EvaluateGraphExpression(AExpr: TGraphExpression; ABoundElements: TDictionary<string, TObject>): Variant;
 var
   Left, Right: Variant;
   Node: TAiRagGraphNode;
@@ -1024,14 +1025,15 @@ var
     end;
   end;
 
-  // ------------------------------------------------------------------
-  // LIKE / ILIKE (SQL -> Delphi)
-  // ------------------------------------------------------------------
+// ------------------------------------------------------------------
+// LIKE / ILIKE (SQL -> Delphi)
+// ------------------------------------------------------------------
   function MatchLike(const Val, Pat: string; CaseInsensitive: Boolean): Boolean;
   var
     P, V: string;
   begin
-    if Val = '' then Exit(False);
+    if Val = '' then
+      Exit(False);
 
     P := Pat.Replace('%', '*').Replace('_', '?');
     if CaseInsensitive then
@@ -1049,23 +1051,24 @@ var
     end;
   end;
 
-  // ------------------------------------------------------------------
-  // IN / NOT IN
-  // ------------------------------------------------------------------
+// ------------------------------------------------------------------
+// IN / NOT IN
+// ------------------------------------------------------------------
   function CheckInList(const Val, List: Variant): Boolean;
   var
-    i: Integer;
+    I: Integer;
     Item: Variant;
   begin
     Result := False;
-    if VarIsNull(Val) or VarIsEmpty(Val) then Exit;
+    if VarIsNull(Val) or VarIsEmpty(Val) then
+      Exit;
 
     try
       if VarIsArray(List) then
       begin
-        for i := VarArrayLowBound(List, 1) to VarArrayHighBound(List, 1) do
+        for I := VarArrayLowBound(List, 1) to VarArrayHighBound(List, 1) do
         begin
-          Item := VarArrayGet(List, [i]);
+          Item := VarArrayGet(List, [I]);
           if VarToStr(Val) = VarToStr(Item) then
             Exit(True);
         end;
@@ -1095,7 +1098,8 @@ begin
     ekProperty:
       begin
         Result := Null;
-        var P := TPropertyExpr(AExpr);
+        var
+        P := TPropertyExpr(AExpr);
 
         if ABoundElements.TryGetValue(P.Variable, Obj) then
         begin
@@ -1136,15 +1140,17 @@ begin
         Left := EvaluateGraphExpression(B.Left, ABoundElements);
 
         // Operadores unarios
-        if not (B.Op in [opIsNull, opIsNotNull]) then
+        if not(B.Op in [opIsNull, opIsNotNull]) then
           Right := EvaluateGraphExpression(B.Right, ABoundElements)
         else
           Right := Null;
 
         case B.Op of
           // --- LOGICAL ---
-          opAnd: Result := SafeBool(Left) and SafeBool(Right);
-          opOr:  Result := SafeBool(Left) or SafeBool(Right);
+          opAnd:
+            Result := SafeBool(Left) and SafeBool(Right);
+          opOr:
+            Result := SafeBool(Left) or SafeBool(Right);
 
           // --- COMPARISON ---
           opEqual:
@@ -1154,25 +1160,43 @@ begin
               Result := (Left = Right);
 
           opNotEqual:
-            try Result := (Left <> Right); except Result := False; end;
+            try
+              Result := (Left <> Right);
+            except
+              Result := False;
+            end;
 
           opGreater:
-            try Result := (Left > Right); except Result := False; end;
+            try
+              Result := (Left > Right);
+            except
+              Result := False;
+            end;
           opGreaterEqual:
-            try Result := (Left >= Right); except Result := False; end;
+            try
+              Result := (Left >= Right);
+            except
+              Result := False;
+            end;
           opLess:
-            try Result := (Left < Right); except Result := False; end;
+            try
+              Result := (Left < Right);
+            except
+              Result := False;
+            end;
           opLessEqual:
-            try Result := (Left <= Right); except Result := False; end;
+            try
+              Result := (Left <= Right);
+            except
+              Result := False;
+            end;
 
           // --- TEXT ---
           opContains:
             if VarIsNull(Left) or VarIsNull(Right) then
               Result := False
             else
-              Result := System.StrUtils.ContainsText(
-                VarToStr(Left), VarToStr(Right)
-              );
+              Result := System.StrUtils.ContainsText(VarToStr(Left), VarToStr(Right));
 
           opLike:
             Result := MatchLike(VarToStr(Left), VarToStr(Right), False);
@@ -1185,7 +1209,7 @@ begin
             Result := VarIsNull(Left) or VarIsEmpty(Left);
 
           opIsNotNull:
-            Result := not (VarIsNull(Left) or VarIsEmpty(Left));
+            Result := not(VarIsNull(Left) or VarIsEmpty(Left));
 
           // --- IN ---
           opIn:
@@ -1204,9 +1228,9 @@ begin
   end;
 end;
 
-
-function TAiRagGraph.ExecuteMakerGQL(const ACode: string; ADepth: Integer = 0): TArray<TDictionary<string, TObject>>;
-var
+{
+  function TAiRagGraph.ExecuteMakerGQL(const ACode: string; ADepth: Integer = 0): TArray<TDictionary<string, TObject>>;
+  var
   Parser: TGraphParser;
   QueryObj: TGraphMatchQuery;
 
@@ -1227,8 +1251,225 @@ var
 
   // -----------------------------------------------------------------------
   // Función auxiliar anidada:
-  // Convierte un patrón (ej: p:Persona {name:'Juan'}) en un Nodo real del Grafo
   // -----------------------------------------------------------------------
+  function FindNodeByPattern(APattern: TMatchNodePattern): TAiRagGraphNode;
+  var
+  Candidates: TArray<TAiRagGraphNode>;
+  Cand: TAiRagGraphNode;
+  begin
+  Result := nil;
+  if APattern = nil then
+  Exit;
+
+  // 1. Optimización: Si hay etiqueta, buscamos solo en ese índice
+  if not APattern.NodeLabel.IsEmpty then
+  Candidates := Self.FindNodesByLabel(APattern.NodeLabel)
+  else
+  Candidates := FNodeRegistry.Values.ToArray;
+
+  // 2. Búsqueda lineal sobre los candidatos para coincidir propiedades
+  for Cand in Candidates do
+  begin
+  if APattern.Matches(Cand) then
+  begin
+  Result := Cand;
+  Exit; // Devolvemos el primero encontrado
+  end;
+  end;
+  end;
+  // -----------------------------------------------------------------------
+
+  begin
+  Result := [];
+  if ACode.Trim.IsEmpty then
+  Exit;
+
+  Parser := TGraphParser.Create(ACode);
+  try
+  // Parseamos el código.
+  // Si es un comando especial, QueryObj será nil y CommandType tendrá valor.
+  // Si es una consulta normal, QueryObj tendrá el objeto y CommandType será cmdNone.
+  QueryObj := Parser.Parse;
+  try
+
+  if Parser.CommandType <> cmdNone then
+  begin
+  // =========================================================
+  // EJECUCIÓN DE COMANDOS
+  // =========================================================
+  case Parser.CommandType of
+
+  // -------------------------------------------------------
+  // 1. INTROSPECCIÓN (SHOW ...)
+  // -------------------------------------------------------
+  cmdShowLabels:
+  begin
+  StringListResult := Self.GetUniqueNodeLabels;
+  SetLength(Result, Length(StringListResult));
+  for I := 0 to High(StringListResult) do
+  begin
+  ResDict := TDictionary<string, TObject>.Create;
+  ResDict.Add('type', TStringWrapper.Create('label'));
+  ResDict.Add('value', TStringWrapper.Create(StringListResult[I]));
+  Result[I] := ResDict;
+  end;
+  end;
+
+  cmdShowEdges:
+  begin
+  StringListResult := Self.GetUniqueEdgeLabels;
+  SetLength(Result, Length(StringListResult));
+  for I := 0 to High(StringListResult) do
+  begin
+  ResDict := TDictionary<string, TObject>.Create;
+  ResDict.Add('type', TStringWrapper.Create('edge'));
+  ResDict.Add('value', TStringWrapper.Create(StringListResult[I]));
+  Result[I] := ResDict;
+  end;
+  end;
+
+  // -------------------------------------------------------
+  // 2. ALGORITMOS: CAMINO MÁS CORTO
+  // -------------------------------------------------------
+  cmdShortestPath:
+  begin
+  // Resolvemos los patrones a nodos reales usando la función anidada
+  StartNode := FindNodeByPattern(Parser.CommandSourcePattern);
+  EndNode := FindNodeByPattern(Parser.CommandTargetPattern);
+
+  if (StartNode <> nil) and (EndNode <> nil) then
+  begin
+  PathResult := Self.GetShortestPath(StartNode, EndNode);
+
+  SetLength(Result, Length(PathResult));
+  for I := 0 to High(PathResult) do
+  begin
+  ResDict := TDictionary<string, TObject>.Create;
+  PathObj := PathResult[I];
+
+  // El camino puede contener Nodos y Aristas mezclados
+  if PathObj is TAiRagGraphNode then
+  begin
+  ResDict.Add('type', TStringWrapper.Create('node'));
+  ResDict.Add('element', PathObj); // Referencia al objeto vivo
+  end
+  else if PathObj is TAiRagGraphEdge then
+  begin
+  ResDict.Add('type', TStringWrapper.Create('edge'));
+  ResDict.Add('element', PathObj);
+  end;
+
+  Result[I] := ResDict;
+  end;
+  end;
+  // Si StartNode o EndNode son nil, devuelve array vacío (no encontrado)
+  end;
+
+  // -------------------------------------------------------
+  // 3. ALGORITMOS: CENTRALIDAD
+  // -------------------------------------------------------
+  cmdCentrality:
+  begin
+  StartNode := FindNodeByPattern(Parser.CommandSourcePattern);
+  if StartNode <> nil then
+  begin
+  Score := Self.GetClosenessCentrality(StartNode);
+
+  SetLength(Result, 1);
+  ResDict := TDictionary<string, TObject>.Create;
+
+  // Tipo especial para que el visualizador sepa mostrarlo
+  ResDict.Add('type', TStringWrapper.Create('centrality_score'));
+  ResDict.Add('node', TStringWrapper.Create(StartNode.Name));
+  ResDict.Add('value', TStringWrapper.Create(FormatFloat('0.####', Score)));
+
+  Result[0] := ResDict;
+  end;
+  end;
+
+  // -------------------------------------------------------
+  // 4. ALGORITMOS: TOP DEGREES (HUBS)
+  // -------------------------------------------------------
+  cmdDegrees:
+  begin
+  // Obtenemos los N nodos con más conexiones
+  NodeListResult := Self.GetNodesByDegree(Parser.CommandLimit, dtTotal);
+
+  SetLength(Result, Length(NodeListResult));
+  for I := 0 to High(NodeListResult) do
+  begin
+  ResDict := TDictionary<string, TObject>.Create;
+  ResDict.Add('type', TStringWrapper.Create('node'));
+  ResDict.Add('element', NodeListResult[I]);
+  Result[I] := ResDict;
+  end;
+  end;
+  end;
+  end
+  // =========================================================
+  // CONSULTA MATCH ESTÁNDAR
+  // =========================================================
+  else if Assigned(QueryObj) then
+  begin
+  // Ejecutamos la lógica clásica de Matching (Nodos y Relaciones)
+
+  if QueryObj.Depth > 0 then
+  FinalDepth := QueryObj.Depth
+  else
+  FinalDepth := ADepth;
+
+  Result := Self.Match(QueryObj, FinalDepth);
+  end;
+
+  finally
+  if Assigned(QueryObj) then
+  QueryObj.Free;
+  end;
+  finally
+  Parser.Free;
+  end;
+  end;
+}
+
+function TAiRagGraph.ExecuteMakerGQL(const ACode: string): string;
+Var
+  Data: TArray<TDictionary<string, TObject>>;
+begin
+  Result := ExecuteMakerGQL(ACode, Data);
+
+  // 3. ¡IMPORTANTE! Liberar la memoria de los diccionarios de salida
+  If Assigned(Data) then
+    for var Dict in Data do
+      Dict.Free;
+end;
+
+function TAiRagGraph.ExecuteMakerGQL(const ACode: string; out AResultObjects: TArray<TDictionary<string, TObject>>; ADepth: Integer = 0): string;
+var
+  Parser: TGraphParser;
+  QueryObj: TGraphMatchQuery;
+
+  // Variables para resultados internos
+  StringListResult: TArray<string>;
+  NodeListResult: TArray<TAiRagGraphNode>;
+  PathResult: TArray<TObject>;
+
+  // Variables de trabajo
+  ResDict: TDictionary<string, TObject>;
+  I: Integer;
+  PathObj: TObject;
+  Score: Double;
+  Obj: TObject;
+  ElementType: string;
+
+  // Variables para resolución de algoritmos
+  StartNode, EndNode: TAiRagGraphNode;
+  FinalDepth: Integer;
+
+  // Variables para la construcción del contexto de texto
+  ContextNodes: TList<TAiRagGraphNode>;
+  ContextBuilder: TStringBuilder;
+
+  // --- Función auxiliar FindNodeByPattern (se mantiene igual) ---
   function FindNodeByPattern(APattern: TMatchNodePattern): TAiRagGraphNode;
   var
     Candidates: TArray<TAiRagGraphNode>;
@@ -1237,165 +1478,204 @@ var
     Result := nil;
     if APattern = nil then
       Exit;
-
-    // 1. Optimización: Si hay etiqueta, buscamos solo en ese índice
     if not APattern.NodeLabel.IsEmpty then
       Candidates := Self.FindNodesByLabel(APattern.NodeLabel)
     else
       Candidates := FNodeRegistry.Values.ToArray;
-
-    // 2. Búsqueda lineal sobre los candidatos para coincidir propiedades
     for Cand in Candidates do
-    begin
       if APattern.Matches(Cand) then
-      begin
-        Result := Cand;
-        Exit; // Devolvemos el primero encontrado
-      end;
-    end;
+        Exit(Cand);
   end;
-// -----------------------------------------------------------------------
+// -----------------------------------------------------------
 
 begin
-  Result := [];
+  AResultObjects := [];
+  Result := ''; // Default empty string
+
   if ACode.Trim.IsEmpty then
     Exit;
 
   Parser := TGraphParser.Create(ACode);
   try
-    // Parseamos el código.
-    // Si es un comando especial, QueryObj será nil y CommandType tendrá valor.
-    // Si es una consulta normal, QueryObj tendrá el objeto y CommandType será cmdNone.
     QueryObj := Parser.Parse;
     try
-
       if Parser.CommandType <> cmdNone then
       begin
         // =========================================================
-        // EJECUCIÓN DE COMANDOS
+        // EJECUCIÓN DE COMANDOS (Algoritmos / Introspección)
         // =========================================================
-        case Parser.CommandType of
-
-          // -------------------------------------------------------
-          // 1. INTROSPECCIÓN (SHOW ...)
-          // -------------------------------------------------------
-          cmdShowLabels:
-            begin
-              StringListResult := Self.GetUniqueNodeLabels;
-              SetLength(Result, Length(StringListResult));
-              for I := 0 to High(StringListResult) do
+        ContextBuilder := TStringBuilder.Create;
+        try
+          case Parser.CommandType of
+            // -------------------------------------------------------
+            // SHOW LABELS / EDGES
+            // -------------------------------------------------------
+            cmdShowLabels, cmdShowEdges:
               begin
-                ResDict := TDictionary<string, TObject>.Create;
-                ResDict.Add('type', TStringWrapper.Create('label'));
-                ResDict.Add('value', TStringWrapper.Create(StringListResult[I]));
-                Result[I] := ResDict;
-              end;
-            end;
+                if Parser.CommandType = cmdShowLabels then
+                begin
+                  StringListResult := Self.GetUniqueNodeLabels;
+                  ElementType := 'label';
+                  ContextBuilder.AppendLine('### AVAILABLE NODE LABELS ###');
+                end
+                else
+                begin
+                  StringListResult := Self.GetUniqueEdgeLabels;
+                  ElementType := 'edge';
+                  ContextBuilder.AppendLine('### AVAILABLE EDGE TYPES ###');
+                end;
 
-          cmdShowEdges:
-            begin
-              StringListResult := Self.GetUniqueEdgeLabels;
-              SetLength(Result, Length(StringListResult));
-              for I := 0 to High(StringListResult) do
-              begin
-                ResDict := TDictionary<string, TObject>.Create;
-                ResDict.Add('type', TStringWrapper.Create('edge'));
-                ResDict.Add('value', TStringWrapper.Create(StringListResult[I]));
-                Result[I] := ResDict;
-              end;
-            end;
-
-          // -------------------------------------------------------
-          // 2. ALGORITMOS: CAMINO MÁS CORTO
-          // -------------------------------------------------------
-          cmdShortestPath:
-            begin
-              // Resolvemos los patrones a nodos reales usando la función anidada
-              StartNode := FindNodeByPattern(Parser.CommandSourcePattern);
-              EndNode := FindNodeByPattern(Parser.CommandTargetPattern);
-
-              if (StartNode <> nil) and (EndNode <> nil) then
-              begin
-                PathResult := Self.GetShortestPath(StartNode, EndNode);
-
-                SetLength(Result, Length(PathResult));
-                for I := 0 to High(PathResult) do
+                SetLength(AResultObjects, Length(StringListResult));
+                for I := 0 to High(StringListResult) do
                 begin
                   ResDict := TDictionary<string, TObject>.Create;
-                  PathObj := PathResult[I];
+                  ResDict.Add('type', TStringWrapper.Create(ElementType));
+                  ResDict.Add('value', TStringWrapper.Create(StringListResult[I]));
+                  AResultObjects[I] := ResDict;
 
-                  // El camino puede contener Nodos y Aristas mezclados
-                  if PathObj is TAiRagGraphNode then
+                  // Generar texto simple
+                  ContextBuilder.AppendLine('- ' + StringListResult[I]);
+                end;
+                Result := ContextBuilder.ToString;
+              end;
+
+            // -------------------------------------------------------
+            // SHORTEST PATH
+            // -------------------------------------------------------
+            cmdShortestPath:
+              begin
+                StartNode := FindNodeByPattern(Parser.CommandSourcePattern);
+                EndNode := FindNodeByPattern(Parser.CommandTargetPattern);
+
+                if (StartNode <> nil) and (EndNode <> nil) then
+                begin
+                  PathResult := Self.GetShortestPath(StartNode, EndNode);
+                  SetLength(AResultObjects, Length(PathResult));
+
+                  ContextBuilder.AppendLine('### SHORTEST PATH ###');
+                  ContextBuilder.AppendFormat('From "%s" to "%s":', [StartNode.Name, EndNode.Name]).AppendLine;
+
+                  for I := 0 to High(PathResult) do
                   begin
-                    ResDict.Add('type', TStringWrapper.Create('node'));
-                    ResDict.Add('element', PathObj); // Referencia al objeto vivo
-                  end
-                  else if PathObj is TAiRagGraphEdge then
-                  begin
-                    ResDict.Add('type', TStringWrapper.Create('edge'));
-                    ResDict.Add('element', PathObj);
+                    ResDict := TDictionary<string, TObject>.Create;
+                    PathObj := PathResult[I];
+
+                    if PathObj is TAiRagGraphNode then
+                    begin
+                      ResDict.Add('type', TStringWrapper.Create('node'));
+                      ResDict.Add('element', PathObj);
+                      ContextBuilder.AppendFormat('(%s)', [TAiRagGraphNode(PathObj).Name]);
+                    end
+                    else if PathObj is TAiRagGraphEdge then
+                    begin
+                      ResDict.Add('type', TStringWrapper.Create('edge'));
+                      ResDict.Add('element', PathObj);
+                      ContextBuilder.AppendFormat(' -[%s]-> ', [TAiRagGraphEdge(PathObj).EdgeLabel]);
+                    end;
+                    AResultObjects[I] := ResDict;
                   end;
+                  Result := ContextBuilder.ToString;
+                end
+                else
+                  Result := 'No path found or nodes do not exist.';
+              end;
 
-                  Result[I] := ResDict;
+            // -------------------------------------------------------
+            // CENTRALITY
+            // -------------------------------------------------------
+            cmdCentrality:
+              begin
+                StartNode := FindNodeByPattern(Parser.CommandSourcePattern);
+                if StartNode <> nil then
+                begin
+                  Score := Self.GetClosenessCentrality(StartNode);
+
+                  SetLength(AResultObjects, 1);
+                  ResDict := TDictionary<string, TObject>.Create;
+                  ResDict.Add('type', TStringWrapper.Create('centrality_score'));
+                  ResDict.Add('node', TStringWrapper.Create(StartNode.Name));
+                  ResDict.Add('value', TStringWrapper.Create(FormatFloat('0.####', Score)));
+                  AResultObjects[0] := ResDict;
+
+                  Result := Format('Centrality Score for node "%s" (%s): %s', [StartNode.Name, StartNode.NodeLabel, FormatFloat('0.####', Score)]);
+                end
+                else
+                  Result := 'Node not found for centrality calculation.';
+              end;
+
+            // -------------------------------------------------------
+            // DEGREES (TOP NODES)
+            // -------------------------------------------------------
+            cmdDegrees:
+              begin
+                NodeListResult := Self.GetNodesByDegree(Parser.CommandLimit, dtTotal);
+                SetLength(AResultObjects, Length(NodeListResult));
+
+                // Para generar el texto enriquecido de estos nodos, usamos GraphToContextText
+                // ya que son nodos puros.
+                Result := Self.GraphToContextText(NodeListResult);
+
+                // Llenar el objeto de salida
+                for I := 0 to High(NodeListResult) do
+                begin
+                  ResDict := TDictionary<string, TObject>.Create;
+                  ResDict.Add('type', TStringWrapper.Create('node'));
+                  ResDict.Add('element', NodeListResult[I]);
+                  AResultObjects[I] := ResDict;
                 end;
               end;
-              // Si StartNode o EndNode son nil, devuelve array vacío (no encontrado)
-            end;
-
-          // -------------------------------------------------------
-          // 3. ALGORITMOS: CENTRALIDAD
-          // -------------------------------------------------------
-          cmdCentrality:
-            begin
-              StartNode := FindNodeByPattern(Parser.CommandSourcePattern);
-              if StartNode <> nil then
-              begin
-                Score := Self.GetClosenessCentrality(StartNode);
-
-                SetLength(Result, 1);
-                ResDict := TDictionary<string, TObject>.Create;
-
-                // Tipo especial para que el visualizador sepa mostrarlo
-                ResDict.Add('type', TStringWrapper.Create('centrality_score'));
-                ResDict.Add('node', TStringWrapper.Create(StartNode.Name));
-                ResDict.Add('value', TStringWrapper.Create(FormatFloat('0.####', Score)));
-
-                Result[0] := ResDict;
-              end;
-            end;
-
-          // -------------------------------------------------------
-          // 4. ALGORITMOS: TOP DEGREES (HUBS)
-          // -------------------------------------------------------
-          cmdDegrees:
-            begin
-              // Obtenemos los N nodos con más conexiones
-              NodeListResult := Self.GetNodesByDegree(Parser.CommandLimit, dtTotal);
-
-              SetLength(Result, Length(NodeListResult));
-              for I := 0 to High(NodeListResult) do
-              begin
-                ResDict := TDictionary<string, TObject>.Create;
-                ResDict.Add('type', TStringWrapper.Create('node'));
-                ResDict.Add('element', NodeListResult[I]);
-                Result[I] := ResDict;
-              end;
-            end;
+          end;
+        finally
+          ContextBuilder.Free;
         end;
       end
       // =========================================================
-      // CONSULTA MATCH ESTÁNDAR
+      // CONSULTA MATCH ESTÁNDAR (La más común)
       // =========================================================
       else if Assigned(QueryObj) then
       begin
-        // Ejecutamos la lógica clásica de Matching (Nodos y Relaciones)
-
         if QueryObj.Depth > 0 then
           FinalDepth := QueryObj.Depth
         else
           FinalDepth := ADepth;
 
-        Result := Self.Match(QueryObj, FinalDepth);
+        // 1. Ejecutar Match
+        AResultObjects := Self.Match(QueryObj, FinalDepth);
+
+        // 2. Extraer Nodos únicos para generar el contexto
+        ContextNodes := TList<TAiRagGraphNode>.Create;
+        try
+          for ResDict in AResultObjects do
+          begin
+            // Los resultados del Match pueden venir mezclados (nodos, aristas, valores)
+            // Extraemos solo los nodos para pasárselos al generador de contexto.
+            for var Pair in ResDict do
+            begin
+              // Caso A: El objeto directo es un Nodo (formato antiguo/simple)
+              if Pair.Value is TAiRagGraphNode then
+              begin
+                if ContextNodes.IndexOf(TAiRagGraphNode(Pair.Value)) = -1 then
+                  ContextNodes.Add(TAiRagGraphNode(Pair.Value));
+              end
+              // Caso B: El objeto viene envuelto en un diccionario de tipo (formato nuevo estandarizado)
+              // ej: { 'type': 'node', 'element': <TAiRagGraphNode> }
+              else if SameText(Pair.Key, 'element') and (Pair.Value is TAiRagGraphNode) then
+              begin
+                if ContextNodes.IndexOf(TAiRagGraphNode(Pair.Value)) = -1 then
+                  ContextNodes.Add(TAiRagGraphNode(Pair.Value));
+              end;
+            end;
+          end;
+
+          // 3. Generar el Texto Formateado usando GraphToContextText
+          if ContextNodes.Count > 0 then
+            Result := Self.GraphToContextText(ContextNodes.ToArray)
+          else
+            Result := 'No matching subgraphs found.';
+
+        finally
+          ContextNodes.Free;
+        end;
       end;
 
     finally
@@ -2728,6 +3008,135 @@ begin
   Result := FNodeLabelIndex.Keys.ToArray;
 end;
 
+function TAiRagGraph.GraphToContextText(const ANodes: TArray<TAiRagGraphNode>): string;
+var
+  SB: TStringBuilder;
+  NodeSet: TDictionary<string, TAiRagGraphNode>; // Usamos ID para búsqueda rápida
+  RelevantEdges: TDictionary<string, TAiRagGraphEdge>; // Para evitar duplicados
+  Node: TAiRagGraphNode;
+  Edge: TAiRagGraphEdge;
+  Chunk: TAiEmbeddingNode;
+  Pair: TPair<string, Variant>;
+  IsFirst: Boolean;
+begin
+  if Length(ANodes) = 0 then
+    Exit('No data found.');
+
+  SB := TStringBuilder.Create;
+  NodeSet := TDictionary<string, TAiRagGraphNode>.Create;
+  RelevantEdges := TDictionary<string, TAiRagGraphEdge>.Create;
+  try
+    // 1. Indexar los nodos encontrados para búsqueda rápida O(1)
+    // Esto nos sirve para filtrar solo las aristas que conectan nodos de este conjunto.
+    for Node in ANodes do
+    begin
+      if not NodeSet.ContainsKey(Node.ID) then
+        NodeSet.Add(Node.ID, Node);
+    end;
+
+    // =========================================================================
+    // SECCIÓN 1: ENTIDADES Y CONTENIDO (Conocimiento Semántico)
+    // =========================================================================
+    SB.AppendLine('### ENTITIES & CONTENT ###');
+
+    for Node in ANodes do
+    begin
+      // Formato: - [ID] Nombre (Tipo)
+      SB.AppendFormat('- [%s] %s (%s)', [Node.ID, Node.Name, Node.NodeLabel]);
+
+      // Incluir propiedades clave del nodo (Metadata)
+      if Node.MetaData.InternalDictionary.Count > 0 then
+      begin
+        SB.Append(' {');
+        IsFirst := True;
+        for Pair in Node.MetaData.InternalDictionary do
+        begin
+          if not IsFirst then
+            SB.Append(', ');
+          SB.AppendFormat('%s: %s', [Pair.Key, VarToStr(Pair.Value)]);
+          IsFirst := False;
+        end;
+        SB.Append('}');
+      end;
+      SB.AppendLine;
+
+      // Resumen del nodo (si tiene)
+      if not Node.Text.Trim.IsEmpty then
+        SB.AppendFormat('  Summary: %s', [Node.Text]).AppendLine;
+
+      // Fragmentos detallados (Chunks del RAG)
+      if Node.Chunks.Count > 0 then
+      begin
+        for Chunk in Node.Chunks do
+        begin
+          // Identamos para mostrar jerarquía
+          SB.AppendFormat('  + Detail: %s', [Chunk.Text]).AppendLine;
+        end;
+      end;
+
+      // Separador visual entre nodos
+      SB.AppendLine;
+    end;
+
+    // =========================================================================
+    // SECCIÓN 2: RELACIONES / HECHOS (Conocimiento Estructural)
+    // =========================================================================
+    // Aquí ocurre la magia del grafo: reconstruimos la historia conectando los puntos.
+
+    // Recolectar aristas INTERNAS (donde Origen Y Destino están en nuestro resultado)
+    for Node in ANodes do
+    begin
+      for Edge in Node.OutgoingEdges do
+      begin
+        // ¿El nodo destino también fue encontrado en la búsqueda?
+        if NodeSet.ContainsKey(Edge.ToNode.ID) then
+        begin
+          if not RelevantEdges.ContainsKey(Edge.ID) then
+            RelevantEdges.Add(Edge.ID, Edge);
+        end;
+      end;
+    end;
+
+    if RelevantEdges.Count > 0 then
+    begin
+      SB.AppendLine('### RELATIONSHIPS (FACTS) ###');
+      for Edge in RelevantEdges.Values do
+      begin
+        // Formato Cypher-like simplificado para el LLM: (A)-[REL]->(B)
+        SB.AppendFormat('(%s)-[%s]->(%s)', [Edge.FromNode.Name, Edge.EdgeLabel.ToUpper, Edge.ToNode.Name]);
+
+        // Incluir detalles de la relación (ej: since: 2020, weight: 0.9)
+        if Edge.MetaData.InternalDictionary.Count > 0 then
+        begin
+          SB.Append(' properties: {');
+          IsFirst := True;
+          for Pair in Edge.MetaData.InternalDictionary do
+          begin
+            if not IsFirst then
+              SB.Append(', ');
+            SB.AppendFormat('%s: %s', [Pair.Key, VarToStr(Pair.Value)]);
+            IsFirst := False;
+          end;
+          SB.Append('}');
+        end;
+
+        // Incluir peso si es relevante (distinto de 1)
+        if Abs(Edge.Weight - 1.0) > 0.001 then
+          SB.AppendFormat(' (Weight: %s)', [FormatFloat('0.##', Edge.Weight)]);
+
+        SB.AppendLine;
+      end;
+    end;
+
+    Result := SB.ToString;
+
+  finally
+    NodeSet.Free;
+    RelevantEdges.Free;
+    SB.Free;
+  end;
+end;
+
 function TAiRagGraph.InternalAddEdge(AEdge: TAiRagGraphEdge; AShouldPersist: Boolean): TAiRagGraphEdge;
 begin
   if (AEdge = nil) or (AEdge.OwnerGraph <> Self) or (AEdge.FromNode = nil) or (AEdge.ToNode = nil) then
@@ -2910,12 +3319,12 @@ begin
     if not ANodeData.PropertiesJSON.IsEmpty then
     begin
       JObj := TJSONObject.ParseJSONValue(ANodeData.PropertiesJSON) as TJSONObject;
-      if Assigned(JObj) then
-        try
-          NewNode.MetaData.FromJSON(JObj);
-        finally
-          JObj.Free;
-        end;
+      try
+        if (JObj <> nil) and (JObj is TJSONObject) then // Validación de tipo
+          NewNode.MetaData.FromJSON(JObj as TJSONObject);
+      finally
+        JObj.Free;
+      end;
     end;
 
     // Hidratar el vector de resumen (Data)
@@ -3718,7 +4127,14 @@ var
   SB: TStringBuilder;
   Node: TAiRagGraphNode;
   Edge: TAiRagGraphEdge;
+
+  function EscapeDot(const S: string): string;
+  begin
+    Result := S.Replace('"', '\"').Replace(sLineBreak, '\n');
+  end;
+
 begin
+
   SB := TStringBuilder.Create;
   try
     SB.AppendLine('digraph KnowledgeGraph {');
@@ -3731,9 +4147,9 @@ begin
       SB.Append('  "');
       SB.Append(Node.ID); // Usar ID para unicidad, ya que el nombre puede repetirse
       SB.Append('" [label="');
-      SB.Append(Node.Name);
+      SB.Append(EscapeDot(Node.Name)); // <--- ESCAPAR
       SB.Append('\n(');
-      SB.Append(Node.NodeLabel);
+      SB.Append(EscapeDot(Node.NodeLabel)); // <--- ESCAPAR
       SB.Append(')"];');
       SB.AppendLine;
     end;
