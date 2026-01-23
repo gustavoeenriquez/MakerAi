@@ -294,6 +294,9 @@ procedure Register;
 
 implementation
 
+uses
+  System.TypInfo;
+
 {$IFNDEF UIRESOURCES_LOADED}
 {$DEFINE UIRESOURCES_LOADED}
 {$R UIResources.res}
@@ -1142,15 +1145,18 @@ begin
   Repaint;
 end;
 
+type
+  TControlA = class(TControl);
+
 procedure TChatBubble.HandleMouseDownOnAttachment(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Single);
 var
-  LControl: TControl;
+  LControl: TControlA;
   LMediaFile: TAiMediaFile;
   LScreenPos: TPointF;
 begin
   if (Button = TMouseButton.mbRight) and Assigned(FOnAttachmentContextPopup) then
   begin
-    LControl := Sender as TControl;
+    LControl := Sender as TControlA;
     if (LControl.TagObject is TAiMediaFile) then
     begin
       LMediaFile := LControl.TagObject as TAiMediaFile;
@@ -1728,9 +1734,9 @@ begin
   Result.AddPair('username', FUserName);
   Result.AddPair('title', FTitle);
   Result.AddPair('timestamp', FTimestamp);
-  Result.AddPair('tailPosition', Ord(FTailPosition));
-  Result.AddPair('bubbleColor', FBubbleColor);
-  Result.AddPair('imageIndex', FImageIndex);
+  Result.AddPair('tailPosition', Ord(FTailPosition).ToString);
+  Result.AddPair('bubbleColor', GetEnumName(TypeInfo(TAlphaColor), Ord(FBubbleColor)));
+  Result.AddPair('imageIndex', FImageIndex.ToString);
 
   // 2. Guardar el texto (si existe)
   LMemo := FindFirstChild<TMemo>;

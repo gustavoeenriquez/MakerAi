@@ -1367,7 +1367,7 @@ begin
     for LLink in FLinks do
     begin
       var LLinkStateObj := TJSONObject.Create;
-      LLinkStateObj.AddPair('noCycles', LLink.NoCycles);
+      LLinkStateObj.AddPair('noCycles', LLink.NoCycles.ToString);
       LLinkStatesObj.AddPair(LLink.Name, LLinkStateObj);
     end;
     LStateObj.AddPair('linkStates', LLinkStatesObj);
@@ -1462,7 +1462,7 @@ begin
       LLinkObj.AddPair('name', LLink.Name);
       LLinkObj.AddPair('description', LLink.Description);
       LLinkObj.AddPair('mode', GetEnumName(TypeInfo(TLinkMode), Ord(LLink.Mode)));
-      LLinkObj.AddPair('maxCycles', LLink.MaxCycles);
+      LLinkObj.AddPair('maxCycles', LLink.MaxCycles.ToString);
 
       if Assigned(LLink.FSourceNode) then
         LLinkObj.AddPair('sourceNode', LLink.FSourceNode.Name)

@@ -394,7 +394,7 @@ begin
   Try
     aStream.Position := 0;
 
-    Body.AddStream('file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    Body.AddStream('file', aStream, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
     Body.AddField('model', FModel);
     Body.AddField('prompt', aPrompt);
     Body.AddField('response_format', FResponseFormat);
@@ -465,7 +465,7 @@ begin
   Try
     aStream.Position := 0;
 
-    Body.AddStream('file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    Body.AddStream('file', aStream, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
     Body.AddField('model', FModel);
     Body.AddField('prompt', aPrompt);
     Body.AddField('response_format', FResponseFormat);

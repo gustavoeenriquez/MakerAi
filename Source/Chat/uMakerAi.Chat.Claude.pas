@@ -2186,7 +2186,7 @@ begin
       begin
         try
           var
-          LToolUseArray := TJSonArray.ParseJSONValue(LMessage.Tool_calls) as TJSonArray;
+          LToolUseArray := TJsonObject.ParseJSONValue(LMessage.Tool_calls) as TJSonArray;
           if Assigned(LToolUseArray) then
           begin
             for var Val in LToolUseArray do

@@ -292,7 +292,7 @@ begin
       if Assigned(AInputImage) then
       begin
         AInputImage.Content.Position := 0;
-        LFormData.AddStream('input_reference', AInputImage.Content, False, AInputImage.Filename, AInputImage.MimeType);
+        LFormData.AddStream('input_reference', AInputImage.Content, AInputImage.Filename, AInputImage.MimeType);
       end;
 
       LResponse := LHttpClient.Post(LUrl, LFormData, nil, LHeaders);

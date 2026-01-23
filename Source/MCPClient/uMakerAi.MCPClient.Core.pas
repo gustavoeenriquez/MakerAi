@@ -2092,7 +2092,7 @@ begin
   FHttpClient.SynchronizeEvents := False;
 
   // --- ASIGNACIÓN DE EVENTOS (Estilo Clásico) ---
-  FHttpClient.OnReceiveDataEx := DoReceiveDataEx;
+//  FHttpClient.OnReceiveDataEx := DoReceiveDataEx;
   FHttpClient.OnRequestCompleted := DoRequestCompleted;
 
   // Aquí asignamos directamente el método de la clase.

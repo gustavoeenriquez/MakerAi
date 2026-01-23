@@ -307,10 +307,21 @@ var
   Ext: string;
   NewStream: TMemoryStream;
   NewFilename: string;
+  Contains: Boolean;
+  I: Integer;
 begin
   Result := False;
   Ext := LowerCase(ExtractFileExt(aMediaFile.Filename));
-  if not TArray.Contains<string>(VALID_EXTS, Ext) then
+  Contains := False;
+  for I := Low(VALID_EXTS) to High(VALID_EXTS) do
+  begin
+    Contains := Ext = VALID_EXTS[I];
+    if Contains then
+    begin
+      Break;
+    end;
+  end;
+  if not Contains then
   begin
     ConvertAudioFileFormat(aMediaFile.Content, aMediaFile.Filename, NewStream, NewFilename);
     if Assigned(NewStream) then
@@ -666,7 +677,7 @@ begin
     ConvertAudioIfNeeded(AAudioFile);
 
     AAudioFile.Content.Position := 0;
-    Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
+    Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
     BuildTranscriptionBody(Body, AAudioFile, APrompt);
 
     Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
@@ -700,7 +711,7 @@ begin
 
     ConvertAudioIfNeeded(AAudioFile);
     AAudioFile.Content.Position := 0;
-    Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
+    Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
     BuildTranscriptionBody(Body, AAudioFile);
     Body.AddField('stream', 'true');
 
@@ -744,7 +755,7 @@ begin
   try
     ConvertAudioIfNeeded(AAudioFile);
     AAudioFile.Content.Position := 0;
-    Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
+    Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
 
     // El modelo es fijo para traducciones según la API
     Body.AddField('model', 'whisper-1');

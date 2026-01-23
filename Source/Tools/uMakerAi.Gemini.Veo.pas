@@ -167,7 +167,7 @@ begin
         Result.AddPair('resolution', '1080p');
     end;
   if FDurationSeconds > 0 then
-    Result.AddPair('durationSeconds', FDurationSeconds);
+    Result.AddPair('durationSeconds', FDurationSeconds.ToString);
   if FPersonGeneration <> TVeoPersonGeneration.pgDefault then
     case FPersonGeneration of
       pgAllowAll:
@@ -180,7 +180,7 @@ begin
   if not FNegativePrompt.IsEmpty then
     Result.AddPair('negativePrompt', FNegativePrompt);
   if FSeed > 0 then
-    Result.AddPair('seed', FSeed);
+    Result.AddPair('seed', FSeed.ToString);
 end;
 
 procedure TAiVeoGenerator.DoError(const AMessage: string);

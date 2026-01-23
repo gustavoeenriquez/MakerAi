@@ -1040,8 +1040,17 @@ begin
 end;
 
 class function TInternalSchemaGenerator.IsRequiredProperty(Prop: TRttiProperty): Boolean;
+var
+  Arr: TArray<TCustomAttribute>;
+  I: Integer;
 begin
-  Result := not Prop.HasAttribute<AiMCPOptionalAttribute>;
+  Arr := Prop.GetAttributes;
+  Result := False;
+  for I := Low(Arr) to High(Arr) do
+  begin
+    Result := Result or (Arr[I] is AiMCPOptionalAttribute);
+  end;
+  Result := not Result;
 end;
 
 // -----------------------------------------------------------------------------

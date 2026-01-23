@@ -692,6 +692,9 @@ begin
   end;
 end;
 
+type
+  TControlA = class(TControl);
+
 procedure TChatInput.BtnMenuClick(Sender: TObject);
 var
   Pt: TPointF;
@@ -700,7 +703,7 @@ begin
 
   if TControl(Sender).GetInterface(IControl, Obj) then
   begin
-    Pt := TControl(Sender).LocalToScreen(TPointF.Create(TControl(Sender).Width, 0));
+    Pt := TControlA(Sender).LocalToScreen(TPointF.Create(TControl(Sender).Width, 0));
     Obj.ShowContextMenu(Pt);
   end;
 

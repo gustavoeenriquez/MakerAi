@@ -373,7 +373,7 @@ begin
     LBody.AddField('purpose', APurpose); // Por defecto 'user_data'
 
     // stream, nombre, content-type (opcional, automático por extensión usualmente)
-    LBody.AddStream('file', aMediaFile.Content, False, LFileName);
+    LBody.AddStream('file', aMediaFile.Content, LFileName);
 
     // 5. Ejecutar Request usando FClient (Hereda Proxies/Timeouts)
     LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
@@ -1740,7 +1740,7 @@ begin
           if Assigned(CaptureImageFile) then
           begin
             CaptureImageFile.Content.Position := 0;
-            AsyncFormData.AddStream('input_reference', CaptureImageFile.Content, False, CaptureImageFile.FileName, CaptureImageFile.MimeType);
+            AsyncFormData.AddStream('input_reference', CaptureImageFile.Content, CaptureImageFile.FileName, CaptureImageFile.MimeType);
           end;
 
           // LLAMADA CORREGIDA (Idéntica a tu unidad Sora)

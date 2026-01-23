@@ -316,15 +316,15 @@ begin
     begin
       MediaFile.Content.Position := 0;
       if FModel = imGptImage1 then
-        Body.AddStream('image[]', MediaFile.Content, False, MediaFile.Filename)
+        Body.AddStream('image[]', MediaFile.Content, MediaFile.Filename)
       else
-        Body.AddStream('image', MediaFile.Content, False, MediaFile.Filename);
+        Body.AddStream('image', MediaFile.Content, MediaFile.Filename);
     end;
 
     if Assigned(aMaskFile) then
     begin
       aMaskFile.Content.Position := 0;
-      Body.AddStream('mask', aMaskFile.Content, False, aMaskFile.Filename);
+      Body.AddStream('mask', aMaskFile.Content, aMaskFile.Filename);
     end;
 
     Body.AddField('prompt', aPrompt);
@@ -404,7 +404,7 @@ begin
     case FModel of
       imDallE2:
         begin
-          JObj.AddPair('model', 'dall-e-2').AddPair('n', Min(10, Max(1, N)));
+          JObj.AddPair('model', 'dall-e-2').AddPair('n', IntToStr(Min(10, Max(1, N))));
           case aSize of
             is256x256:
               JObj.AddPair('size', '256x256');
@@ -416,7 +416,7 @@ begin
         end;
       imDallE3:
         begin
-          JObj.AddPair('model', 'dall-e-3').AddPair('n', 1);
+          JObj.AddPair('model', 'dall-e-3').AddPair('n', '1');
           case aSize of
             is1792x1024:
               JObj.AddPair('size', '1792x1024');
@@ -436,7 +436,7 @@ begin
         end;
       imGptImage1:
         begin
-          JObj.AddPair('model', 'gpt-image-1').AddPair('n', Min(10, Max(1, N)));
+          JObj.AddPair('model', 'gpt-image-1').AddPair('n', IntToStr(Min(10, Max(1, N))));
           case aSize of
             is1536x1024:
               JObj.AddPair('size', '1536x1024');
@@ -749,7 +749,7 @@ begin
   Body := TMultipartFormData.Create;
   try
     aImageFile.Content.Position := 0;
-    Body.AddStream('image', aImageFile.Content, False, aImageFile.Filename);
+    Body.AddStream('image', aImageFile.Content, aImageFile.Filename);
     Body.AddField('user', FUser);
     Body.AddField('n', N.ToString);
 
