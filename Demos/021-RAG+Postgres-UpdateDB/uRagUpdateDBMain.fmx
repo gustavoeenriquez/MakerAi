@@ -131,7 +131,11 @@ object Form8: TForm8
   object RAGVectorAdicion: TAiRAGVector
     OnDataVecAddItem = RAGVectorAdicionDataVecAddItem
     Embeddings = AiOllamaEmbeddings1
-    InMemoryIndexType = TAIHNSWIndex
+    LexicalLanguage = alSpanish
+    OwnsObjects = True
+    SearchOptions.UseBM25 = False
+    SearchOptions.BM25Weight = 0.700000000000000000
+    SearchOptions.EmbeddingWeight = 0.300000000000000000
     Left = 128
     Top = 288
   end
@@ -216,6 +220,11 @@ object Form8: TForm8
     OnDataVecSearch = RAGVectorConsultaDataVecSearch
     Embeddings = AiOllamaEmbeddings1
     InMemoryIndexType = TAIEuclideanIndex
+    LexicalLanguage = alSpanish
+    OwnsObjects = True
+    SearchOptions.UseBM25 = False
+    SearchOptions.BM25Weight = 0.700000000000000000
+    SearchOptions.EmbeddingWeight = 0.300000000000000000
     Left = 520
     Top = 560
   end
@@ -288,7 +297,7 @@ object Form8: TForm8
     Total_tokens = 0
     Thinking_tokens = 0
     Url = 'http://localhost:11434/'
-    ResponseTimeOut = 60000
+    ResponseTimeOut = 61000
     Stream_Usage = False
     NativeInputFiles = []
     NativeOutputFiles = []

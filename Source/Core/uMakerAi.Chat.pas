@@ -1084,7 +1084,7 @@ begin
   FClient.OnReceiveData := Self.OnInternalReceiveData;
   FClient.OnRequestError := Self.OnRequestErrorEvent;
   FClient.OnRequestCompleted := Self.OnRequestCompletedEvent;
-  FClient.ResponseTimeOut := 60000;
+  FClient.ResponseTimeOut := 120000;
 
   FNativeInputFiles := [];
   FNativeOutputFiles := [];
@@ -1098,7 +1098,7 @@ begin
   FMax_tokens := 3000;
   FUrl := GlOpenAIUrl;
   FTop_p := 1;
-  FResponseTimeOut := 60000;
+  FResponseTimeOut := 120000;
   FStream_Usage := False; // Envia la estadistica de uso por token
   FTool_choice := 'auto';
   FVideoParams := TStringList.Create;
@@ -2881,8 +2881,8 @@ end;
 
 procedure TAiChat.SetResponseTimeOut(const Value: Integer);
 begin
-  If Value < 1000 then
-    FResponseTimeOut := 1000
+  If Value < 61000 then
+    FResponseTimeOut := 61000
   Else
     FResponseTimeOut := Value;
 
@@ -3095,6 +3095,5 @@ end;
 
 
 end.
-
 
 

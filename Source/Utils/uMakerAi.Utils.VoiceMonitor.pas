@@ -294,7 +294,7 @@ begin
   FSampleRate := DEFAULT_SAMPLE_RATE;
   FChannels := DEFAULT_CHANNELS;
   FBitsPerSample := DEFAULT_BITS_PER_SAMPLE;
-  FSensitivityMultiplier := 4.0;
+  FSensitivityMultiplier := 2.0;
   FStopSensitivityMultiplier := 2.0;
   FWakeWordDurationMs := DEFAULT_WAKE_WORD_DURATION_MS;
   FCalibrationDurationSec := DEFAULT_CALIBRATION_DURATION_SEC;
@@ -315,7 +315,7 @@ begin
   FStopSensitivity := 1000;
 
   FWakeWordActive := False;
-  FWakeWord := 'natalia';
+  FWakeWord := 'andrea';
 
 {$IFDEF MSWINDOWS}
   FDeviceID := WAVE_MAPPER;
@@ -506,6 +506,9 @@ begin
   if NumSamples = 0 then
     Exit;
 
+  if (CurrentLevel > FSensitivity) then
+    OutputDebugString(PChar(Format('SUPERÓ UMBRAL: Lvl %d > Sens %d', [CurrentLevel, FSensitivity])));
+
   for I := 0 to NumSamples - 1 do
   begin
     SampleValue := PSmallInt(@aBuffer[I * 2])^;
@@ -693,7 +696,6 @@ begin
     FCS.Leave;
   end;
 end;
-
 
 procedure TAIVoiceMonitor.DoChangeState(aIsSpeaking: Boolean);
 var

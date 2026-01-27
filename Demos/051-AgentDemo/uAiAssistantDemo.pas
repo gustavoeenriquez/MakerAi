@@ -123,7 +123,8 @@ end;
 
 procedure TForm70.AIAgentsManagerFinish(Sender: TObject; const Input, Output: string; Status: string; E: Exception);
 begin
-    Memo1.Lines.Text := Input;
+    //Memo1.Lines.Text := Input;
+    //Siempre se dispara incluso en caso de error, el status decide si es correcto
 end;
 
 procedure TForm70.AIChain1End(Sender: TObject; Value: string);
@@ -292,6 +293,7 @@ Var
   FileName, Codigo, resultado_compilacion: String;
 begin
 
+
   JObj := TJSonObject(TJSonObject.ParseJSONValue(Node.Output));
   Try
     If JObj.TryGetValue<String>('filename', FileName) and JObj.TryGetValue<String>('resultado_compilacion', resultado_compilacion) then
@@ -344,7 +346,8 @@ begin
   Node.Print(Node.Name + '--> TareaA - Buscando en Internet');
   //Sleep(1500);
 
-  Output := AiOpenChat1.AddMessageAndRun(Input,'user',[]);
+  //Output := AiOpenChat1.AddMessageAndRun(Input,'user',[]);
+  Output := 'Valor encontrado en WEB';
 
   Node.Print(Node.Name + '--> TareaA - Buscando en Internet '+ Output);
 

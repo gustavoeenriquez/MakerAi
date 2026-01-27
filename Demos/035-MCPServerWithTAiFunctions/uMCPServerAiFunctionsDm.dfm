@@ -33,21 +33,21 @@ object MCPServerAiFunctionsDm: TMCPServerAiFunctionsDm
         Configuration = '(Properties, Click [...] to edit)'
       end>
     Left = 352
-    Top = 264
+    Top = 240
   end
   object AiMCPServer1: TAiMCPStdioServer
     ServerName = 'Delphi-DataModule-Server StdIO'
     AiFunctions = AiFunctions1
-    Left = 128
-    Top = 184
+    Left = 144
+    Top = 112
   end
   object AiMCPHttpServer1: TAiMCPHttpServer
     ServerName = 'Delphi-DataModule-Server HTTP'
     AiFunctions = AiFunctions1
     Port = 3000
-    CorsEnabled = False
+    CorsEnabled = True
     CorsAllowedOrigins = '*'
-    Left = 296
-    Top = 152
+    Left = 392
+    Top = 104
   end
 end

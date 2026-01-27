@@ -39,6 +39,15 @@ begin
   Handled := True;
 end;
 
+
+procedure TMCPServerAiFunctionsDm.StartServer;
+begin
+  //AiMCPServer1.Start;
+  AiMCPHttpServer1.Start;
+  WriteLn(ErrOutput, '✅ Servidor MCP iniciado desde DataModule.');
+end;
+
+
 procedure TMCPServerAiFunctionsDm.DataModuleCreate(Sender: TObject);
 begin
   SetupAiFunctions;
@@ -85,10 +94,5 @@ begin
 
 end;
 
-procedure TMCPServerAiFunctionsDm.StartServer;
-begin
-  AiMCPServer1.Start;
-  WriteLn(ErrOutput, '✅ Servidor MCP iniciado desde DataModule.');
-end;
 
 end.

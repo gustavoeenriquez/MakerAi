@@ -2,13 +2,11 @@ unit uMakerAi.Chat.Messages;
 
 interface
 
-
 uses
   System.SysUtils, System.Classes, System.Generics.Collections, System.JSON,
-  Rest.JSON, System.Net.Mime, System.NetEncoding, System.TypInfo, System.Types,
+  Rest.JSON, System.Net.Mime, System.NetEncoding, System.TypInfo, System.Types, System.SyncObjs,
   uMakerAi.Core, // Asumiendo que TAiMediaFiles, TAiWebSearch y TAiMetadata están aquí
   uMakerAi.Utils.CodeExtractor;
-
 
 Type
 
@@ -21,8 +19,6 @@ Type
   // se utiliza especialmente como propiedad en TAiMessage.
 
   TAiCitationSourceType = (cstUnknown, cstDocument, cstWeb, cstFile, cstDatabase);
-
-
 
   // Clase que maneja las funciones de los tools
   TAiToolsFunction = class(TObject)
@@ -57,7 +53,6 @@ Type
     Procedure AddFunction(aBody: TJSONObject); Overload;
   End;
 
-
   TAiChatMessage = Class(TObject)
   Private
     FPreviousResponseId: String;
@@ -73,6 +68,7 @@ Type
     FThinking_tokens: Integer;
     FFinishReason: String;
     FCached_tokens: Integer;
+    FLock: TCriticalSection;
     procedure SetContent(const Value: String);
     procedure SetRole(const Value: String);
     procedure SetPrompt(const Value: String);
@@ -121,7 +117,7 @@ Type
     Function StreamToBase64(Stream: TMemoryStream): String;
     Function ToJSon: TJSonArray; // Convierte el Objeto en un json para enviar al api
 
-    Property Id: Integer Read FId Write SetFId;
+    Property id: Integer Read FId Write SetFId;
     Property Role: String read FRole write SetRole;
     Property Content: String read FContent write SetContent;
     Property Prompt: String read FPrompt write SetPrompt;
@@ -157,7 +153,7 @@ Type
   Protected
   Public
     Function ToJSon: TJSonArray;
-    Function ExportChatHistory: TJSonObject;
+    Function ExportChatHistory: TJSONObject;
     Procedure SaveToStream(Stream: TStream);
     Procedure SaveToFile(FileName: String);
     Procedure LoadFromStream(Stream: TStream);
@@ -166,11 +162,10 @@ Type
     Property NativeInputFiles: TAiFileCategories read FNativeInputFiles write SetNativeInputFiles;
   End;
 
-
   // Clase base para cualquier tipo de fuente de datos.
   TAiSourceData = class
   public
-    Id: string; // ID interno (ej: 'doc-0', 'file-123')
+    id: string; // ID interno (ej: 'doc-0', 'file-123')
     Title: string; // Título de la página web, del documento, etc.
     Content: string; // Snippet, contenido del archivo, etc.
     Url: string; // URL si es una fuente web.
@@ -211,8 +206,6 @@ Type
     procedure Assign(Source: TAiMsgCitations);
   end;
 
-
-
 implementation
 
 { TAOpeniChatMessage }
@@ -225,8 +218,7 @@ end;
 constructor TAiChatMessage.Create(aPrompt, aRole: String; aToolCallId: String = ''; aFunctionName: String = '');
 begin
   Inherited Create;
-  // FVisionUrls := TStringList.Create;
-  // FVisionBase64 := TStringList.Create;
+  FLock := TCriticalSection.Create;
   Self.FRole := aRole;
   Self.FPrompt := aPrompt;
   Self.FFunctionName := aFunctionName;
@@ -243,6 +235,7 @@ begin
   FMediaFiles.Free;
   FCitations.Free;
   FWebSearchResponse.Free;
+  FLock.Free;
   inherited;
 end;
 
@@ -250,77 +243,108 @@ function TAiChatMessage.GetMediaTranscription: String;
 Var
   MF: TAiMediaFile;
 begin
-  Result := '';
+  FLock.Enter;
+  Try
+    Result := '';
 
-  for MF in MediaFiles do
-  begin
-    If MF.Procesado = True then
-      Result := Trim(Result + sLineBreak + MF.Transcription);
-  end;
+    for MF in MediaFiles do
+    begin
+      If MF.Procesado = True then
+        Result := Trim(Result + sLineBreak + MF.Transcription);
+    end;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 function TAiChatMessage.HasUnprocessedItems: Boolean;
 Var
   MF: TAiMediaFile;
 begin
-  Result := False;
+  FLock.Enter;
+  Try
+    Result := False;
 
-  for MF in MediaFiles do
-  begin
-    If MF.Procesado = False then
-    Begin
-      Result := True;
-      Break;
-    End;
-  end;
+    for MF in MediaFiles do
+    begin
+      If MF.Procesado = False then
+      Begin
+        Result := True;
+        Break;
+      End;
+    end;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.LoadMediaFromBase64(aFileName, aBase64: String);
 Var
   Media: TAiMediaFile;
 begin
-  If Length(Trim(aBase64)) < 100 then
-    Raise Exception.Create('El Base64 está vacío, no se cargará');
+  FLock.Enter;
+  Try
+    If Length(Trim(aBase64)) < 100 then
+      Raise Exception.Create('El Base64 está vacío, no se cargará');
 
-  If aFileName = '' then // Ver como se asigna un nombre a partir del contenido del stream
-    aFileName := 'imagen.jpg';
+    If aFileName = '' then // Ver como se asigna un nombre a partir del contenido del stream
+      aFileName := 'imagen.jpg';
 
-  Media := TAiMediaFile.Create;
-  Media.LoadFromBase64(aFileName, aBase64);
+    Media := TAiMediaFile.Create;
+    Media.LoadFromBase64(aFileName, aBase64);
 
-  AddMediaFile(Media);
+    AddMediaFile(Media);
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.LoadMediaFromFile(aFileName: String);
 Var
   Media: TAiMediaFile;
 begin
-  If Not FileExists(aFileName) then
-    Raise Exception.Create('El archivo "' + aFileName + '" no se encuentra');
+  FLock.Enter;
+  Try
+    If Not FileExists(aFileName) then
+      Raise Exception.Create('El archivo "' + aFileName + '" no se encuentra');
 
-  Media := TAiMediaFile.Create;
-  Media.LoadFromFile(aFileName);
-  AddMediaFile(Media);
+    Media := TAiMediaFile.Create;
+    Media.LoadFromFile(aFileName);
+    AddMediaFile(Media);
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.LoadMediaFromStream(aFileName: String; Stream: TMemoryStream);
 Var
   Media: TAiMediaFile;
 begin
-  If Stream.Size <= 100 then
-    Raise Exception.Create('El stream está vacío');
+  FLock.Enter;
+  Try
+    If Stream.Size <= 100 then
+      Raise Exception.Create('El stream está vacío');
 
-  If aFileName = '' then // Ver como se asigna un nombre a partir del contenido del stream
-    aFileName := 'imagen.jpg';
+    If aFileName = '' then // Ver como se asigna un nombre a partir del contenido del stream
+      aFileName := 'imagen.jpg';
 
-  Media := TAiMediaFile.Create;
-  Media.LoadFromStream(aFileName, Stream);
-  Self.AddMediaFile(Media);
+    Media := TAiMediaFile.Create;
+    Media.LoadFromStream(aFileName, Stream);
+    Self.AddMediaFile(Media);
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetCached_tokens(const Value: Integer);
 begin
-  FCached_tokens := Value;
+  FLock.Enter;
+  Try
+    FCached_tokens := Value;
+  Finally
+    FLock.Leave;
+
+  End;
 end;
 
 procedure TAiChatMessage.SetCitations(const Value: TAiMsgCitations);
@@ -328,148 +352,244 @@ var
   SourceCitation: TAiMsgCitation;
   NewCitation: TAiMsgCitation;
 begin
-  // Siempre limpiar la lista de destino primero.
-  // Como la lista es dueña de sus objetos, esto los destruirá correctamente.
-  FCitations.Clear;
+  FLock.Enter;
+  Try
 
-  // Si la lista de origen es nula o está vacía, ya hemos terminado.
-  if not Assigned(Value) or (Value.Count = 0) then
-    Exit;
+    // Siempre limpiar la lista de destino primero.
+    // Como la lista es dueña de sus objetos, esto los destruirá correctamente.
+    FCitations.Clear;
 
-  // Iterar sobre la lista de origen y crear clones de cada objeto.
-  for SourceCitation in Value do
-  begin
-    // 1. Crear una nueva instancia del objeto de cita.
-    NewCitation := TAiMsgCitation.Create;
-    try
-      // 2. Usar el método Assign que acabamos de crear para clonar el contenido.
-      NewCitation.Assign(SourceCitation);
-      // 3. Añadir el nuevo objeto clonado a nuestra lista.
-      FCitations.Add(NewCitation);
-    except
-      // En caso de error durante la asignación, asegurarse de liberar la memoria.
-      NewCitation.Free;
-      raise;
+    // Si la lista de origen es nula o está vacía, ya hemos terminado.
+    if not Assigned(Value) or (Value.Count = 0) then
+      Exit;
+
+    // Iterar sobre la lista de origen y crear clones de cada objeto.
+    for SourceCitation in Value do
+    begin
+      // 1. Crear una nueva instancia del objeto de cita.
+      NewCitation := TAiMsgCitation.Create;
+      try
+        // 2. Usar el método Assign que acabamos de crear para clonar el contenido.
+        NewCitation.Assign(SourceCitation);
+        // 3. Añadir el nuevo objeto clonado a nuestra lista.
+        FCitations.Add(NewCitation);
+      except
+        // En caso de error durante la asignación, asegurarse de liberar la memoria.
+        NewCitation.Free;
+        raise;
+      end;
     end;
-  end;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetCompletion_tokens(const Value: Integer);
 begin
-  FCompletion_tokens := Value;
+  FLock.Enter;
+  Try
+    FCompletion_tokens := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetContent(const Value: String);
 begin
-  FContent := Value;
+  FLock.Enter;
+  Try
+    FContent := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetFId(const Value: Integer);
 begin
-  FId := Value;
+  FLock.Enter;
+  Try
+    FId := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetFinishReason(const Value: String);
 begin
-  FFinishReason := Value;
+  FLock.Enter;
+  Try
+    FFinishReason := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetFPreviousResponseId(const Value: String);
 begin
-  FPreviousResponseId := Value;
+  FLock.Enter;
+  Try
+    FPreviousResponseId := Value;
+  Finally
+    FLock.Leave;
+
+  End;
 end;
 
 procedure TAiChatMessage.SetFunctionName(const Value: String);
 begin
-  FFunctionName := Value;
+  FLock.Enter;
+  Try
+    FFunctionName := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetIsRefusal(const Value: Boolean);
 begin
-  FIsRefusal := Value;
+  FLock.Enter;
+  Try
+    FIsRefusal := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetIsTollCallResponse(const Value: Boolean);
 begin
-  FIsTollCallResponse := Value;
+  FLock.Enter;
+  Try
+    FIsTollCallResponse := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetModel(const Value: String);
 begin
-  FModel := Value;
+  FLock.Enter;
+  Try
+    FModel := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetPrompt(const Value: String);
 begin
-  FPrompt := Value;
+  FLock.Enter;
+  Try
+    FPrompt := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetPrompt_tokens(const Value: Integer);
 begin
-  FPrompt_tokens := Value;
+  FLock.Enter;
+  Try
+    FPrompt_tokens := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetReasoningContent(const Value: String);
 begin
-  FReasoningContent := Value;
+  FLock.Enter;
+  Try
+    FReasoningContent := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetRole(const Value: String);
 begin
-  FRole := Value;
+  FLock.Enter;
+  Try
+    FRole := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetStopReason(const Value: String);
 begin
-  FStopReason := Value;
+  FLock.Enter;
+  Try
+    FStopReason := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetThinking_tokens(const Value: Integer);
 begin
-  FThinking_tokens := Value;
+  FLock.Enter;
+  Try
+    FThinking_tokens := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetTollCallId(const Value: String);
 begin
-  FTollCallId := Value;
+  FLock.Enter;
+  Try
+    FTollCallId := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetTool_calls(const Value: String);
 begin
-  FTool_calls := Value;
+  FLock.Enter;
+  Try
+    FTool_calls := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetTotal_tokens(const Value: Integer);
 begin
-  FTotal_tokens := Value;
+  FLock.Enter;
+  Try
+    FTotal_tokens := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 procedure TAiChatMessage.SetWebSearchResponse(const Value: TAiWebSearch);
 begin
-  FWebSearchResponse := Value;
+  FLock.Enter;
+  Try
+    FWebSearchResponse := Value;
+  Finally
+    FLock.Leave;
+  End;
 end;
-
-{ procedure TAiOpenChatMessage.SetVisionBase64(const Value: TStringList);
-  begin
-  FVisionBase64.Text := Value.Text;
-  end;
-
-  procedure TAiOpenChatMessage.SetVisionUrls(const Value: TStringList);
-  begin
-  FVisionUrls.Text := Value.Text;
-  end;
-}
 
 function TAiChatMessage.StreamToBase64(Stream: TMemoryStream): String;
 begin
-  Stream.Position := 0;
-  Result := TNetEncoding.Base64.EncodeBytesToString(Stream.Memory, Stream.Size);
+  FLock.Enter;
+  Try
+    Stream.Position := 0;
+    Result := TNetEncoding.Base64.EncodeBytesToString(Stream.Memory, Stream.Size);
+  Finally
+    FLock.Leave;
+  End;
 end;
 
 function TAiChatMessage.ToJSon: TJSonArray;
 Var
   Msg: TAiChatMessage;
-  jObj, JMsg: TJSonObject;
+  JObj, JMsg: TJSONObject;
   JContent: TJSonArray;
   ImagePayload: TStringStream;
   Base64, Mime: String;
@@ -479,83 +599,94 @@ begin
   // Esta función solo toma el mensaje actual y una sola imágen, la primera que encuentra en la lista
   // Esto se hace especialmente para modelos que solo aceptan una imágen por petición y no un chat completo
 
-  Result := TJSonArray.Create;
+  FLock.Enter;
+  Try
 
-  Msg := Self;
-  jObj := TJSonObject.Create;
-  jObj.AddPair('role', Msg.FRole);
+    Result := TJSonArray.Create;
 
-  If Msg.FTollCallId <> '' then
-    jObj.AddPair('tool_call_id', Msg.FTollCallId);
+    Msg := Self;
+    JObj := TJSONObject.Create;
+    JObj.AddPair('role', Msg.FRole);
 
-  If (Msg.FFunctionName <> '') then // and (Msg.FRole <> 'tool') then
-    jObj.AddPair('name', Msg.FFunctionName);
+    If Msg.FTollCallId <> '' then
+      JObj.AddPair('tool_call_id', Msg.FTollCallId);
 
-  // de todos los archivos de medios selecciona las imágenes que es lo que podemos manejar por ahora
-  // y las imágenes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
-  // se deben haber procesado en en el momendo de adicionar el mensaje al chat
-  MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
+    If (Msg.FFunctionName <> '') then // and (Msg.FRole <> 'tool') then
+      JObj.AddPair('name', Msg.FFunctionName);
 
-  If (Length(MediaArr) > 0) then
-  Begin
+    // de todos los archivos de medios selecciona las imágenes que es lo que podemos manejar por ahora
+    // y las imágenes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
+    // se deben haber procesado en en el momendo de adicionar el mensaje al chat
+    MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
 
-    JContent := TJSonArray.Create;
-    JMsg := TJSonObject.Create;
-    JMsg.AddPair('type', 'text');
-    JMsg.AddPair('text', Msg.FPrompt);
-    JContent.Add(JMsg);
-
-    If Msg.MediaFiles.Count > 0 then // Solo toma la primera imagen
+    If (Length(MediaArr) > 0) then
     Begin
-      Base64 := Msg.MediaFiles[0].Base64;
-      Mime := Msg.MediaFiles[0].MimeType;
 
-      ImagePayload := TStringStream.Create('{"type": "image_url", "image_url": {"url": "data:' + Mime + ';base64,' + Base64 + '"}}', TEncoding.UTF8);
-      S := ImagePayload.DataString;
-      try
-        JContent.Add(TJSonObject.ParseJSONValue(ImagePayload.DataString) as TJSonObject);
-      finally
-        ImagePayload.Free;
-      end;
+      JContent := TJSonArray.Create;
+      JMsg := TJSONObject.Create;
+      JMsg.AddPair('type', 'text');
+      JMsg.AddPair('text', Msg.FPrompt);
+      JContent.Add(JMsg);
 
+      If Msg.MediaFiles.Count > 0 then // Solo toma la primera imagen
+      Begin
+        Base64 := Msg.MediaFiles[0].Base64;
+        Mime := Msg.MediaFiles[0].MimeType;
+
+        ImagePayload := TStringStream.Create('{"type": "image_url", "image_url": {"url": "data:' + Mime + ';base64,' + Base64 + '"}}', TEncoding.UTF8);
+        S := ImagePayload.DataString;
+        try
+          JContent.Add(TJSONObject.ParseJSONValue(ImagePayload.DataString) as TJSONObject);
+        finally
+          ImagePayload.Free;
+        end;
+
+      End;
+      JObj.AddPair('content', JContent);
+    End
+    Else
+    Begin
+
+      JObj.AddPair('content', Msg.FPrompt);
     End;
-    jObj.AddPair('content', JContent);
-  End
-  Else
-  Begin
 
-    jObj.AddPair('content', Msg.FPrompt);
-  End;
-
-  If Msg.FTool_calls <> '' then
+    If Msg.FTool_calls <> '' then
 
 {$IF CompilerVersion < 35}
-    jObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.FTool_calls));
+      JObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.FTool_calls));
 {$ELSE}
-    jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
+      JObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
 {$ENDIF}
-  Result.Add(jObj);
+    Result.Add(JObj);
+  Finally
+    FLock.Leave;
+  End;
 end;
 
-function TAiChatMessages.ExportChatHistory: TJSonObject;
+
+
+
+{ TAiOpenChatMessages }
+
+function TAiChatMessages.ExportChatHistory: TJSONObject;
 Var
-  jObj, JItem: TJSonObject;
+  JObj, JItem: TJSONObject;
   JArr: TJSonArray;
   I: Integer;
   Item: TAiChatMessage;
 begin
-  jObj := TJSonObject.Create;
+  JObj := TJSONObject.Create;
   JArr := TJSonArray.Create;
 
   Try
-    jObj.AddPair('model', 'MakerAiChat');
-    jObj.AddPair('type', 'Messages');
-    jObj.AddPair('ver', '1.0');
+    JObj.AddPair('model', 'MakerAiChat');
+    JObj.AddPair('type', 'Messages');
+    JObj.AddPair('ver', '1.0');
 
     For I := 0 to Self.Count - 1 do
     Begin
       Item := Self.Items[I];
-      JItem := TJSonObject.Create;
+      JItem := TJSONObject.Create;
 
       JItem.AddPair('role', Item.Role);
       If Trim(Item.Content) <> '' then
@@ -564,15 +695,15 @@ begin
         JItem.AddPair('prompt', Item.Prompt);
       JArr.Add(JItem);
     End;
-    jObj.AddPair('data', JArr);
-    Result := jObj;
+    JObj.AddPair('data', JArr);
+    Result := JObj;
 
   Finally
     // jObj.Free;
   End;
 end;
 
-{ TAiOpenChatMessages }
+
 
 function TAiChatMessages.GetAsText: String;
 Var
@@ -606,7 +737,7 @@ end;
 
 procedure TAiChatMessages.LoadFromStream(Stream: TStream);
 Var
-  jObj, JItem: TJSonObject;
+  JObj, JItem: TJSONObject;
   JArr: TJSonArray;
   sJson, Model, S: String;
   St: TStringStream;
@@ -618,13 +749,13 @@ begin
     St.LoadFromStream(Stream);
     sJson := St.DataString;
 
-    jObj := TJSonObject(TJSonObject.ParseJSONValue(sJson));
+    JObj := TJSONObject(TJSONObject.ParseJSONValue(sJson));
 
-    If Assigned(jObj) and (jObj.TryGetValue<String>('model', Model)) then
+    If Assigned(JObj) and (JObj.TryGetValue<String>('model', Model)) then
     Begin
       If Model = 'AiOpenChat' then
       Begin
-        JArr := TJSonArray(jObj.GetValue<TJSonArray>('data'));
+        JArr := TJSonArray(JObj.GetValue<TJSonArray>('data'));
 
         S := JArr.Format;
         If JArr.Count > 0 then
@@ -636,7 +767,7 @@ begin
 {$IF CompilerVersion < 35}
           JItem := JArr.GetItemAsObject(I);
 {$ELSE}
-          JItem := TJSonObject(JArr[I]);
+          JItem := TJSONObject(JArr[I]);
 {$ENDIF}
           Item := TJSon.JsonToObject<TAiChatMessage>(JItem);
           Self.Add(Item);
@@ -645,7 +776,7 @@ begin
     End;
   Finally
     St.Free;
-    FreeAndNil(jObj);
+    FreeAndNil(JObj);
   End;
 end;
 
@@ -665,20 +796,20 @@ end;
 
 procedure TAiChatMessages.SaveToStream(Stream: TStream);
 Var
-  jObj, JItem: TJSonObject;
+  JObj, JItem: TJSONObject;
   JArr: TJSonArray;
   St: TStringStream;
   I: Integer;
   Item: TAiChatMessage;
 begin
   St := TStringStream.Create('', TEncoding.UTF8);
-  jObj := TJSonObject.Create;
+  JObj := TJSONObject.Create;
   JArr := TJSonArray.Create;
 
   Try
-    jObj.AddPair('model', 'MakerAiChat');
-    jObj.AddPair('type', 'Messages');
-    jObj.AddPair('ver', '1.0');
+    JObj.AddPair('model', 'MakerAiChat');
+    JObj.AddPair('type', 'Messages');
+    JObj.AddPair('ver', '1.0');
 
     For I := 0 to Self.Count - 1 do
     Begin
@@ -687,12 +818,12 @@ begin
       JArr.Add(JItem);
     End;
 
-    jObj.AddPair('data', JArr);
-    St.WriteString(jObj.Format);
+    JObj.AddPair('data', JArr);
+    St.WriteString(JObj.Format);
     St.SaveToStream(Stream);
   Finally
     St.Free;
-    jObj.Free;
+    JObj.Free;
   End;
 end;
 
@@ -722,8 +853,8 @@ function TAiChatMessages.ToJSon: TJSonArray;
 Var
   I, J: Integer;
   Msg: TAiChatMessage;
-  jObj, JMsg: TJSonObject;
-  JObjImg, jImgUrl, jAudio: TJSonObject;
+  JObj, JMsg: TJSONObject;
+  JObjImg, jImgUrl, jAudio: TJSONObject;
   JContent: TJSonArray;
   Base64, Mime: String;
   MediaArr: TAiMediaFilesArray;
@@ -735,14 +866,14 @@ begin
   For I := 0 to Count - 1 do
   Begin
     Msg := Self.Items[I];
-    jObj := TJSonObject.Create;
-    jObj.AddPair('role', Msg.FRole);
+    JObj := TJSONObject.Create;
+    JObj.AddPair('role', Msg.FRole);
 
     If Msg.FTollCallId <> '' then
-      jObj.AddPair('tool_call_id', Msg.FTollCallId);
+      JObj.AddPair('tool_call_id', Msg.FTollCallId);
 
     If Msg.FFunctionName <> '' then
-      jObj.AddPair('name', Msg.FFunctionName);
+      JObj.AddPair('name', Msg.FFunctionName);
 
     // de todos los archivos de medios selecciona las imágenes que es lo que podemos manejar por ahora
     // y las imágenes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
@@ -753,7 +884,7 @@ begin
     Begin
 
       JContent := TJSonArray.Create;
-      JMsg := TJSonObject.Create;
+      JMsg := TJSONObject.Create;
       JMsg.AddPair('type', 'text');
       JMsg.AddPair('text', Msg.FPrompt);
       JContent.Add(JMsg);
@@ -771,42 +902,42 @@ begin
               // Esta es otra forma de hacer lo mismo con json directamente
               S := 'data:' + Mime + ';base64,' + Base64;
 
-              jImgUrl := TJSonObject.Create;
+              jImgUrl := TJSONObject.Create;
               jImgUrl.AddPair('url', S);
 
               If Msg.MediaFiles[J].Detail <> '' then // Si define high or low.
                 jImgUrl.AddPair('detail', MediaFile.Detail);
 
-              JObjImg := TJSonObject.Create;
+              JObjImg := TJSONObject.Create;
               JObjImg.AddPair('type', 'image_url');
               JObjImg.AddPair('image_url', jImgUrl);
 
               JContent.Add(JObjImg);
 
-              jObj.AddPair('content', JContent);
+              JObj.AddPair('content', JContent);
 
             End;
           TAiFileCategory.Tfc_Audio:
             Begin
               If MediaFile.IdAudio <> '' then // Si es una respuesta del modelo va esto
               Begin
-                jAudio := TJSonObject.Create;
+                jAudio := TJSONObject.Create;
                 jAudio.AddPair('id', MediaFile.IdAudio);
-                jObj.AddPair('audio', jAudio);
+                JObj.AddPair('audio', jAudio);
               End
               Else // Si es un audio del usuario va esto
               Begin
-                jAudio := TJSonObject.Create;
+                jAudio := TJSONObject.Create;
                 jAudio.AddPair('data', MediaFile.Base64);
                 jAudio.AddPair('format', StringReplace(MediaFile.MimeType, 'audio/', '', [rfReplaceAll]));
 
                 JContent := TJSonArray.Create;
-                JMsg := TJSonObject.Create;
+                JMsg := TJSONObject.Create;
                 JMsg.AddPair('type', 'input_audio');
                 JMsg.AddPair('input_audio', jAudio);
                 JContent.Add(JMsg);
 
-                jObj.AddPair('content', JContent);
+                JObj.AddPair('content', JContent);
               End;
             End;
 
@@ -843,16 +974,16 @@ begin
 
         Else
           Begin
-            jObj.AddPair('content', Msg.FPrompt);
+            JObj.AddPair('content', Msg.FPrompt);
           End;
         End;
       End;
       If Msg.FTool_calls <> '' then
 
 {$IF CompilerVersion < 35}
-        jObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.FTool_calls));
+        JObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.FTool_calls));
 {$ELSE}
-        jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
+        JObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
 {$ENDIF}
 
 
@@ -862,17 +993,17 @@ begin
     End
     Else // Si no tiene archivos de medios simplemente envía el prompt
     Begin
-      jObj.AddPair('content', Msg.FPrompt);
+      JObj.AddPair('content', Msg.FPrompt);
     End;
 
     If Msg.FTool_calls <> '' then
 
 {$IF CompilerVersion < 35}
-      jObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.FTool_calls));
+      JObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.FTool_calls));
 {$ELSE}
-      jObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
+      JObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
 {$ENDIF}
-    Result.Add(jObj);
+    Result.Add(JObj);
   end;
 end;
 
@@ -883,7 +1014,7 @@ begin
   if not Assigned(Source) or (Source = Self) then
     Exit;
 
-  Self.Id := Source.Id;
+  Self.id := Source.id;
   Self.Title := Source.Title;
   Self.Content := Source.Content;
   Self.Url := Source.Url;
@@ -898,7 +1029,6 @@ begin
     Self.Metadata.Add(Pair.Key, Pair.Value);
   end;
 end;
-
 
 { ------------------------------------------------------------------------------ }
 { TAiSourceData }
@@ -1144,6 +1274,5 @@ begin
     Result.Add(TObj);
   End;
 end;
-
 
 end.
