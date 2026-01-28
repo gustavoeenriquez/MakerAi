@@ -66,6 +66,9 @@
         <Projects Include="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\WhisperTranscriptionDemo.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="090-Varios\VoiceMonitorAndWhisperDemo\VoiceMonitorAndWhisperDemo.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -263,14 +266,23 @@
     <Target Name="WhisperTranscriptionDemo:Make">
         <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\WhisperTranscriptionDemo.dproj" Targets="Make"/>
     </Target>
+    <Target Name="VoiceMonitorAndWhisperDemo">
+        <MSBuild Projects="090-Varios\VoiceMonitorAndWhisperDemo\VoiceMonitorAndWhisperDemo.dproj"/>
+    </Target>
+    <Target Name="VoiceMonitorAndWhisperDemo:Clean">
+        <MSBuild Projects="090-Varios\VoiceMonitorAndWhisperDemo\VoiceMonitorAndWhisperDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="VoiceMonitorAndWhisperDemo:Make">
+        <MSBuild Projects="090-Varios\VoiceMonitorAndWhisperDemo\VoiceMonitorAndWhisperDemo.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="MinimalChat;ChatFull;RagUpdateDb;RagVectorQL;Sqlite_RAG;AiMCPServerDemo;McpFileServerStIO;McpFileServerHttp;MCPServerAiFunctions;McpFileServerSSE;MCPDataSnapServer;BasicRAGGraph;RagGraphDemo;RagDemoAvance;VeoDemo;ListAllModels;CompareEmbeddings;ClaudeChatTest;AiAgentDemo;DemoRagDataBase;WhisperTranscriptionDemo"/>
+        <CallTarget Targets="MinimalChat;ChatFull;RagUpdateDb;RagVectorQL;Sqlite_RAG;AiMCPServerDemo;McpFileServerStIO;McpFileServerHttp;MCPServerAiFunctions;McpFileServerSSE;MCPDataSnapServer;BasicRAGGraph;RagGraphDemo;RagDemoAvance;VeoDemo;ListAllModels;CompareEmbeddings;ClaudeChatTest;AiAgentDemo;DemoRagDataBase;WhisperTranscriptionDemo;VoiceMonitorAndWhisperDemo"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MinimalChat:Clean;ChatFull:Clean;RagUpdateDb:Clean;RagVectorQL:Clean;Sqlite_RAG:Clean;AiMCPServerDemo:Clean;McpFileServerStIO:Clean;McpFileServerHttp:Clean;MCPServerAiFunctions:Clean;McpFileServerSSE:Clean;MCPDataSnapServer:Clean;BasicRAGGraph:Clean;RagGraphDemo:Clean;RagDemoAvance:Clean;VeoDemo:Clean;ListAllModels:Clean;CompareEmbeddings:Clean;ClaudeChatTest:Clean;AiAgentDemo:Clean;DemoRagDataBase:Clean;WhisperTranscriptionDemo:Clean"/>
+        <CallTarget Targets="MinimalChat:Clean;ChatFull:Clean;RagUpdateDb:Clean;RagVectorQL:Clean;Sqlite_RAG:Clean;AiMCPServerDemo:Clean;McpFileServerStIO:Clean;McpFileServerHttp:Clean;MCPServerAiFunctions:Clean;McpFileServerSSE:Clean;MCPDataSnapServer:Clean;BasicRAGGraph:Clean;RagGraphDemo:Clean;RagDemoAvance:Clean;VeoDemo:Clean;ListAllModels:Clean;CompareEmbeddings:Clean;ClaudeChatTest:Clean;AiAgentDemo:Clean;DemoRagDataBase:Clean;WhisperTranscriptionDemo:Clean;VoiceMonitorAndWhisperDemo:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MinimalChat:Make;ChatFull:Make;RagUpdateDb:Make;RagVectorQL:Make;Sqlite_RAG:Make;AiMCPServerDemo:Make;McpFileServerStIO:Make;McpFileServerHttp:Make;MCPServerAiFunctions:Make;McpFileServerSSE:Make;MCPDataSnapServer:Make;BasicRAGGraph:Make;RagGraphDemo:Make;RagDemoAvance:Make;VeoDemo:Make;ListAllModels:Make;CompareEmbeddings:Make;ClaudeChatTest:Make;AiAgentDemo:Make;DemoRagDataBase:Make;WhisperTranscriptionDemo:Make"/>
+        <CallTarget Targets="MinimalChat:Make;ChatFull:Make;RagUpdateDb:Make;RagVectorQL:Make;Sqlite_RAG:Make;AiMCPServerDemo:Make;McpFileServerStIO:Make;McpFileServerHttp:Make;MCPServerAiFunctions:Make;McpFileServerSSE:Make;MCPDataSnapServer:Make;BasicRAGGraph:Make;RagGraphDemo:Make;RagDemoAvance:Make;VeoDemo:Make;ListAllModels:Make;CompareEmbeddings:Make;ClaudeChatTest:Make;AiAgentDemo:Make;DemoRagDataBase:Make;WhisperTranscriptionDemo:Make;VoiceMonitorAndWhisperDemo:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>
