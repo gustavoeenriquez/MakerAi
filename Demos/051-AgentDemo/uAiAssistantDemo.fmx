@@ -8,6 +8,7 @@ object Form70: TForm70
   FormFactor.Width = 320
   FormFactor.Height = 480
   FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
   DesignerMasterStyle = 0
   object Memo1: TMemo
     Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
@@ -18,16 +19,8 @@ object Form70: TForm70
     Size.Height = 457.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 12
-    Viewport.Width = 501.000000000000000000
-    Viewport.Height = 453.000000000000000000
-  end
-  object Button1: TButton
-    Position.X = 1009.000000000000000000
-    Position.Y = 657.000000000000000000
-    TabOrder = 13
-    Text = 'Ejecutar'
-    TextSettings.Trimming = None
-    OnClick = Button1Click
+    Viewport.Width = 505.000000000000000000
+    Viewport.Height = 457.000000000000000000
   end
   object MemoPrompt: TMemo
     Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
@@ -40,9 +33,9 @@ object Form70: TForm70
     Size.Width = 1033.000000000000000000
     Size.Height = 81.000000000000000000
     Size.PlatformDefault = False
-    TabOrder = 27
-    Viewport.Width = 1029.000000000000000000
-    Viewport.Height = 77.000000000000000000
+    TabOrder = 26
+    Viewport.Width = 1033.000000000000000000
+    Viewport.Height = 81.000000000000000000
   end
   object Memo2: TMemo
     Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
@@ -54,8 +47,8 @@ object Form70: TForm70
     Size.Height = 457.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 11
-    Viewport.Width = 509.000000000000000000
-    Viewport.Height = 453.000000000000000000
+    Viewport.Width = 513.000000000000000000
+    Viewport.Height = 457.000000000000000000
   end
   object Label1: TLabel
     Position.X = 64.000000000000000000
@@ -64,7 +57,7 @@ object Form70: TForm70
     Size.Height = 17.000000000000000000
     Size.PlatformDefault = False
     Text = 'Programa Generado'
-    TabOrder = 44
+    TabOrder = 43
   end
   object Label2: TLabel
     Position.X = 64.000000000000000000
@@ -75,7 +68,7 @@ object Form70: TForm70
     Text = 
       'Prompt del programa que se desea desarrollar, ya est'#225' configurad' +
       'o para que genere un progrma de consola'
-    TabOrder = 42
+    TabOrder = 41
   end
   object Label3: TLabel
     Position.X = 569.000000000000000000
@@ -84,91 +77,15 @@ object Form70: TForm70
     Size.Height = 17.000000000000000000
     Size.PlatformDefault = False
     Text = 'Resultado de la Funci'#243'n Print de cada Nodo'
-    TabOrder = 43
+    TabOrder = 42
   end
   object Button2: TButton
     Position.X = 64.000000000000000000
     Position.Y = 672.000000000000000000
-    TabOrder = 64
+    TabOrder = 63
     Text = 'Button2'
     TextSettings.Trimming = None
     OnClick = Button2Click
-  end
-  object Link2: TAIAgentsLink
-    NextA = ExcecuteNode
-    Graph = AIGraph1
-    ConditionalKey = 'next_route'
-    ManualTargetsKey = 'next_targets'
-    Left = 712
-    Top = 232
-  end
-  object StartNode: TAIAgentsNode
-    Description = 'Start Node, do Nothing'
-    Next = Link1
-    Graph = AIGraph1
-    OnExecute = StartNodeExecute
-    Left = 800
-    Top = 80
-  end
-  object AIGraph1: TAIAgentManager
-    StartNode = StartNode
-    EndNode = EndNode
-    OnPrint = AIChain1Print
-    Left = 624
-    Top = 280
-  end
-  object AiNode: TAIAgentsNode
-    Next = Link2
-    Graph = AIGraph1
-    OnExecute = AiNodeExecute
-    Left = 704
-    Top = 178
-  end
-  object ExcecuteNode: TAIAgentsNode
-    Next = Link3
-    Graph = AIGraph1
-    OnExecute = ExcecuteNodeExecute
-    Left = 712
-    Top = 300
-  end
-  object EndNode: TAIAgentsNode
-    Graph = AIGraph1
-    OnExecute = EndNodeExecute
-    Left = 928
-    Top = 328
-  end
-  object EvalNode: TAIAgentsNode
-    Next = Link4
-    Graph = AIGraph1
-    OnExecute = EvalNodeExecute
-    Left = 808
-    Top = 406
-  end
-  object Link1: TAIAgentsLink
-    NextA = AiNode
-    Graph = AIGraph1
-    ConditionalKey = 'next_route'
-    ManualTargetsKey = 'next_targets'
-    Left = 808
-    Top = 144
-  end
-  object Link3: TAIAgentsLink
-    NextA = EvalNode
-    Graph = AIGraph1
-    ConditionalKey = 'next_route'
-    ManualTargetsKey = 'next_targets'
-    Left = 712
-    Top = 392
-  end
-  object Link4: TAIAgentsLink
-    NextA = EndNode
-    NextNo = AiNode
-    Graph = AIGraph1
-    OnExecute = Link4Execute
-    ConditionalKey = 'next_route'
-    ManualTargetsKey = 'next_targets'
-    Left = 840
-    Top = 320
   end
   object AiPrompts1: TAiPrompts
     Items = <
@@ -247,14 +164,13 @@ object Form70: TForm70
           'El mensaje que retorna el compilador es el siguiente:'
           '<#resultado>')
       end>
-    Left = 1016
-    Top = 96
+    Left = 504
+    Top = 192
   end
   object AIAgentsManager: TAIAgents
     StartNode = NodoInicio
     EndNode = NodoFinal
     OnPrint = AIChain1Print
-    OnFinish = AIAgentsManagerFinish
     TimeoutMs = 900000
     Left = 72
     Top = 136
@@ -345,7 +261,7 @@ object Form70: TForm70
     Total_tokens = 0
     Thinking_tokens = 0
     Url = 'https://api.openai.com/v1/'
-    ResponseTimeOut = 60000
+    ResponseTimeOut = 61000
     Stream_Usage = False
     NativeInputFiles = []
     NativeOutputFiles = []

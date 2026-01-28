@@ -1075,7 +1075,7 @@ object Form2: TForm2
           Margins.Top = 5.000000000000000000
           Margins.Right = 5.000000000000000000
           Size.Width = 775.000000000000000000
-          Size.Height = 611.000000000000000000
+          Size.Height = 617.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 1
           InboundColor = claLightcyan
@@ -1085,7 +1085,7 @@ object Form2: TForm2
           OnBeforeAddBubble = ChatList1BeforeAddBubble
           OnMediaFileDblClick = ChatList1MediaFileDblClick
           Viewport.Width = 775.000000000000000000
-          Viewport.Height = 611.000000000000000000
+          Viewport.Height = 617.000000000000000000
         end
         object LblLog: TLabel
           Align = Bottom
@@ -1094,7 +1094,7 @@ object Form2: TForm2
           Margins.Right = 3.000000000000000000
           Margins.Bottom = 3.000000000000000000
           Position.X = 10.000000000000000000
-          Position.Y = 739.000000000000000000
+          Position.Y = 745.000000000000000000
           Size.Width = 1260.000000000000000000
           Size.Height = 17.000000000000000000
           Size.PlatformDefault = False
@@ -1107,9 +1107,9 @@ object Form2: TForm2
           Margins.Top = 5.000000000000000000
           Margins.Right = 5.000000000000000000
           Position.X = 5.000000000000000000
-          Position.Y = 764.000000000000000000
+          Position.Y = 770.000000000000000000
           Size.Width = 1263.000000000000000000
-          Size.Height = 92.000000000000000000
+          Size.Height = 86.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 0
           ImagesVisible = False
@@ -1133,7 +1133,7 @@ object Form2: TForm2
         end
         object Layout10: TLayout
           Align = Bottom
-          Position.Y = 623.000000000000000000
+          Position.Y = 629.000000000000000000
           Size.Width = 1273.000000000000000000
           Size.Height = 113.000000000000000000
           Size.PlatformDefault = False
@@ -1175,7 +1175,7 @@ object Form2: TForm2
           Align = Bottom
           Cursor = crVSplit
           MinSize = 20.000000000000000000
-          Position.Y = 616.000000000000000000
+          Position.Y = 622.000000000000000000
           Size.Width = 1273.000000000000000000
           Size.Height = 7.000000000000000000
           Size.PlatformDefault = False
@@ -1184,26 +1184,26 @@ object Form2: TForm2
           Align = Right
           Position.X = 795.000000000000000000
           Size.Width = 478.000000000000000000
-          Size.Height = 616.000000000000000000
+          Size.Height = 622.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 4
           object TabControl1: TTabControl
             Align = Client
             Size.Width = 478.000000000000000000
-            Size.Height = 616.000000000000000000
+            Size.Height = 622.000000000000000000
             Size.PlatformDefault = False
             TabIndex = 2
             TabOrder = 3
             TabPosition = PlatformDefault
             Sizes = (
               478s
-              590s
+              596s
               478s
-              590s
+              596s
               478s
-              590s
+              596s
               478s
-              590s)
+              596s)
             object TabUsageItem: TTabItem
               CustomIcon = <
                 item
@@ -1223,11 +1223,11 @@ object Form2: TForm2
                 DataDetectorTypes = []
                 Align = Client
                 Size.Width = 478.000000000000000000
-                Size.Height = 568.000000000000000000
+                Size.Height = 574.000000000000000000
                 Size.PlatformDefault = False
                 TabOrder = 3
                 Viewport.Width = 474.000000000000000000
-                Viewport.Height = 564.000000000000000000
+                Viewport.Height = 570.000000000000000000
               end
               object Rectangle13: TRectangle
                 Align = Top
@@ -1271,7 +1271,7 @@ object Form2: TForm2
                 Align = Contents
                 Fill.Color = claBlack
                 Size.Width = 478.000000000000000000
-                Size.Height = 590.000000000000000000
+                Size.Height = 596.000000000000000000
                 Size.PlatformDefault = False
               end
               object MemoShellTool: TMemo
@@ -1283,12 +1283,12 @@ object Form2: TForm2
                 TextSettings.FontColor = claChartreuse
                 Align = Client
                 Size.Width = 478.000000000000000000
-                Size.Height = 568.000000000000000000
+                Size.Height = 574.000000000000000000
                 Size.PlatformDefault = False
                 StyleLookup = 'transparentedit'
                 TabOrder = 14
                 Viewport.Width = 472.000000000000000000
-                Viewport.Height = 564.000000000000000000
+                Viewport.Height = 570.000000000000000000
               end
               object Rectangle12: TRectangle
                 Align = Top
@@ -1336,16 +1336,16 @@ object Form2: TForm2
                 TextSettings.Font.Size = 14.000000000000000000
                 Align = Client
                 Size.Width = 478.000000000000000000
-                Size.Height = 328.000000000000000000
+                Size.Height = 334.000000000000000000
                 Size.PlatformDefault = False
                 StyleLookup = 'Memo1Style1'
                 TabOrder = 0
                 Viewport.Width = 474.000000000000000000
-                Viewport.Height = 324.000000000000000000
+                Viewport.Height = 330.000000000000000000
               end
               object Layout4: TLayout
                 Align = Bottom
-                Position.Y = 359.000000000000000000
+                Position.Y = 365.000000000000000000
                 Size.Width = 478.000000000000000000
                 Size.Height = 231.000000000000000000
                 Size.PlatformDefault = False
@@ -1393,7 +1393,7 @@ object Form2: TForm2
                 Align = Bottom
                 Cursor = crVSplit
                 MinSize = 20.000000000000000000
-                Position.Y = 350.000000000000000000
+                Position.Y = 356.000000000000000000
                 Size.Width = 478.000000000000000000
                 Size.Height = 9.000000000000000000
                 Size.PlatformDefault = False
@@ -1449,11 +1449,11 @@ object Form2: TForm2
                 Margins.Right = 3.000000000000000000
                 Margins.Bottom = 3.000000000000000000
                 Size.Width = 472.000000000000000000
-                Size.Height = 562.000000000000000000
+                Size.Height = 568.000000000000000000
                 Size.PlatformDefault = False
                 TabOrder = 0
                 Viewport.Width = 468.000000000000000000
-                Viewport.Height = 558.000000000000000000
+                Viewport.Height = 564.000000000000000000
               end
               object Rectangle9: TRectangle
                 Align = Top
@@ -1487,7 +1487,7 @@ object Form2: TForm2
           MinSize = 20.000000000000000000
           Position.X = 785.000000000000000000
           Size.Width = 10.000000000000000000
-          Size.Height = 616.000000000000000000
+          Size.Height = 622.000000000000000000
           Size.PlatformDefault = False
         end
       end
@@ -19966,22 +19966,26 @@ object Form2: TForm2
           'Timeout=15000')
         Configuration = '(Properties, Click [...] to edit)'
       end>
-    Left = 456
-    Top = 264
+    Left = 464
+    Top = 304
   end
   object AiRAGVector1: TAiRAGVector
     Embeddings = AiOpenAiEmbeddings1
-    InMemoryIndexType = TAIHNSWIndex
-    Left = 792
-    Top = 248
+    LexicalLanguage = alSpanish
+    OwnsObjects = True
+    SearchOptions.UseBM25 = False
+    SearchOptions.BM25Weight = 0.700000000000000000
+    SearchOptions.EmbeddingWeight = 0.300000000000000000
+    Left = 672
+    Top = 288
   end
   object AiOpenAiEmbeddings1: TAiOpenAiEmbeddings
     Model = 'text-embedding-3-small'
     Dimensions = 1536
     ApiKey = '@OPENAI_API_KEY'
     Url = 'https://api.openai.com/v1/'
-    Left = 496
-    Top = 424
+    Left = 808
+    Top = 288
   end
   object AiOpenChat1: TAiOpenChat
     ApiKey = '@OPENAI_API_KEY'
@@ -20005,7 +20009,7 @@ object Form2: TForm2
     Total_tokens = 0
     Thinking_tokens = 0
     Url = 'https://api.openai.com/v1/'
-    ResponseTimeOut = 60000
+    ResponseTimeOut = 61000
     Stream_Usage = False
     NativeInputFiles = []
     NativeOutputFiles = []
@@ -20062,7 +20066,7 @@ object Form2: TForm2
     Total_tokens = 0
     Thinking_tokens = 0
     Url = 'https://generativelanguage.googleapis.com/v1beta/'
-    ResponseTimeOut = 60000
+    ResponseTimeOut = 61000
     Stream_Usage = False
     NativeInputFiles = []
     NativeOutputFiles = []
@@ -20105,7 +20109,7 @@ object Form2: TForm2
     Total_tokens = 0
     Thinking_tokens = 0
     Url = 'http://localhost:11434/'
-    ResponseTimeOut = 60000
+    ResponseTimeOut = 61000
     Stream_Usage = False
     NativeInputFiles = []
     NativeOutputFiles = []

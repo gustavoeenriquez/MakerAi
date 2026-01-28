@@ -876,6 +876,7 @@ begin
     Begin
       Try
         AiRAGVector1.AddItem(InfoToSave);
+
         ToolCall.Response := 'Ok';
 
         AddLog('');
@@ -911,6 +912,7 @@ begin
     Begin
       Try
         ToolCall.Response := AiRAGVector1.SearchText(SearchText, 10, 0.3); // 03 es mas permisivo para el indice que maneja RAG
+
       Except
         ON E: Exception do
         Begin

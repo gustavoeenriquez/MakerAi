@@ -38,8 +38,8 @@ object MCPServerAiFunctionsDm: TMCPServerAiFunctionsDm
   object AiMCPServer1: TAiMCPStdioServer
     ServerName = 'Delphi-DataModule-Server StdIO'
     AiFunctions = AiFunctions1
-    Left = 144
-    Top = 112
+    Left = 208
+    Top = 104
   end
   object AiMCPHttpServer1: TAiMCPHttpServer
     ServerName = 'Delphi-DataModule-Server HTTP'

@@ -45,18 +45,7 @@ uses
 
 type
   TForm70 = class(TForm)
-    Link2: TAIAgentsLink;
-    StartNode: TAIAgentsNode;
-    AIGraph1: TAIAgentManager;
-    AiNode: TAIAgentsNode;
-    ExcecuteNode: TAIAgentsNode;
-    EndNode: TAIAgentsNode;
-    EvalNode: TAIAgentsNode;
-    Link1: TAIAgentsLink;
-    Link3: TAIAgentsLink;
-    Link4: TAIAgentsLink;
     Memo1: TMemo;
-    Button1: TButton;
     AiPrompts1: TAiPrompts;
     MemoPrompt: TMemo;
     Memo2: TMemo;
@@ -73,7 +62,6 @@ type
     AIAgentsNode1: TAIAgentsNode;
     AiOpenChat1: TAiOpenChat;
     procedure AIChain1Print(Sender: TObject; Value: string);
-    procedure Button1Click(Sender: TObject);
     procedure EndNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
     procedure AiNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
     procedure AIChain1End(Sender: TObject; Value: string);
@@ -90,8 +78,9 @@ type
     procedure AIAgentsLink2Execute(Node: TAIAgentsNode; Link: TAIAgentsLink; var IsOk, Handled: Boolean);
     procedure AIAgentsLink3Execute(Node: TAIAgentsNode; Link: TAIAgentsLink; var IsOk, Handled: Boolean);
     procedure AIAgentsManagerFinish(Sender: TObject; const Input, Output: string; Status: string; E: Exception);
+    procedure FormCreate(Sender: TObject);
   private
-    { Private declarations }
+    Procedure clickdellabel(Sender: TObject);
   public
     { Public declarations }
   end;
@@ -165,16 +154,16 @@ begin
   Output := 'Este es el codigo que retorn la IA';
 end;
 
-procedure TForm70.Button1Click(Sender: TObject);
-begin
-  // OJO OpenChat.Messages.Clear;
-  // OJO ChatEval.Messages.Clear;
-  AIGraph1.Run(MemoPrompt.Lines.Text);
-end;
-
 procedure TForm70.Button2Click(Sender: TObject);
 begin
+  //Label4.Text := 'Este es el texto del label';
+
   AIAgentsManager.Run(MemoPrompt.Lines.Text);
+end;
+
+procedure TForm70.clickdellabel(Sender: TObject);
+begin
+   Label4.Text := 'este es el evento del label';
 end;
 
 procedure TForm70.EndNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
@@ -284,6 +273,11 @@ begin
     JObj.Free;
     Lista.Free;
   End;
+end;
+
+procedure TForm70.FormCreate(Sender: TObject);
+begin
+  Label4.OnClick :=  clickdellabel;
 end;
 
 procedure TForm70.Link4Execute(Node: TAIAgentsNode; Link: TAIAgentsLink; var IsOk, Handled: Boolean);
