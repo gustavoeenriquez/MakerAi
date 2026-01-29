@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -41,7 +41,8 @@ uses
   System.Bindings.Evaluator, System.Bindings.Helper, System.Bindings.Expression, System.Bindings.Consts,
   System.JSON, System.Math,
   System.Bindings.EvalSys, System.Bindings.Factories, System.Bindings.EvalProtocol, System.Bindings.ObjEval,
-  System.Threading, System.Rtti, System.SyncObjs, System.Types, System.StrUtils;
+  System.Threading, System.Rtti, System.SyncObjs, System.Types, System.StrUtils,
+  uJSONHelper;
 
 type
 
@@ -49,10 +50,10 @@ type
   TMsgState = (msYes, msNo, msOK, msCancel, msAbort, msRetry, msIgnore, msAll, msNoToAll, msYesToAll, msHelp, msClose);
   TMsgStates = set of TMsgState;
 
-  // Modo de unión para los nodos
+  // Modo de uniï¿½n para los nodos
   TJoinMode = (jmAny, jmAll);
 
-  // Modo de ejecución del enlace
+  // Modo de ejecuciï¿½n del enlace
   TLinkMode = (lmFanout, lmConditional, lmManual, lmExpression); // --- NUEVO: Modo lmExpression ---
 
   // Forward Declarations
@@ -170,7 +171,7 @@ type
     constructor Create(aOwner: TComponent); override;
     destructor Destroy; override;
     procedure Print(Value: String);
-    procedure DoExecute(Sender: TAIAgentsNode); // --- MODIFICADO: Ahora es el único método de ejecución
+    procedure DoExecute(Sender: TAIAgentsNode); // --- MODIFICADO: Ahora es el ï¿½nico mï¿½todo de ejecuciï¿½n
     procedure AddConditionalTarget(const AKey: string; ANode: TAIAgentsNode);
   published
     property NextA: TAIAgentsNode read FNextA write SetNextA;
@@ -361,7 +362,7 @@ begin
       if Value.IsType<Boolean> then
         Result := Value.AsBoolean
       else
-        raise Exception.CreateFmt('La expresión "%s" no devolvió un Boolean', [Expr]);
+        raise Exception.CreateFmt('La expresiï¿½n "%s" no devolviï¿½ un Boolean', [Expr]);
     finally
       BindingExpression.Free;
     end;
@@ -471,7 +472,7 @@ procedure SerializeBlackboard(ABlackboard: TAIBlackboard; AJSONObject: TJSONObje
 var
   LPair: TPair<string, TValue>;
 begin
-  // ADVERTENCIA: Esto solo funcionará para tipos de TValue simples.
+  // ADVERTENCIA: Esto solo funcionarï¿½ para tipos de TValue simples.
   // No se pueden serializar objetos complejos, punteros o records.
   ABlackboard.FLock.Enter;
   try
@@ -507,7 +508,7 @@ begin
     if LJsonValue is TJSONString then
       ABlackboard.SetString(LPair.JsonString.Value, LJsonValue.Value)
     else if LJsonValue is TJSONNumber then
-      // Simplificación: lo guardamos como float, se puede refinar
+      // Simplificaciï¿½n: lo guardamos como float, se puede refinar
       ABlackboard.SetValue(LPair.JsonString.Value, StrToFloat(LJsonValue.Value))
     else if LJsonValue is TJSONBool then
       ABlackboard.SetBoolean(LPair.JsonString.Value, (LJsonValue as TJSONBool).AsBoolean);
@@ -782,7 +783,7 @@ begin
   FActiveTasks := TList<ITask>.Create;
   FActiveTasksLock := TCriticalSection.Create;
   FCompiled := False;
-  // --- NUEVO: Inicialización del Scheduler ---
+  // --- NUEVO: Inicializaciï¿½n del Scheduler ---
   FMaxConcurrentTasks := 4;
   FTimeoutMs := 60000;
   FThreadPool := TThreadPool.Create;
@@ -795,12 +796,12 @@ begin
   FLinks.Free;
   FActiveTasks.Free;
   FActiveTasksLock.Free;
-  FThreadPool.Free; // --- NUEVO: Liberación del Scheduler ---
+  FThreadPool.Free; // --- NUEVO: Liberaciï¿½n del Scheduler ---
   FBlackboard.Free;
   inherited;
 end;
 
-// ... (métodos DoConfirm, DoError, DoPrint, FindNode, etc. sin cambios) ...
+// ... (mï¿½todos DoConfirm, DoError, DoPrint, FindNode, etc. sin cambios) ...
 procedure TAIAgents.DoError(Node: TAIAgentsNode; Link: TAIAgentsLink; E: Exception);
 var
   LAbort: Boolean;
@@ -849,13 +850,13 @@ begin
     end;
 end;
 
-// Asegúrate de tener estas unidades en la cláusula 'uses' de la implementation:
+// Asegï¿½rate de tener estas unidades en la clï¿½usula 'uses' de la implementation:
 // System.JSON, System.JSON.Types, System.Rtti, System.TypInfo, uEngineRegistry
 
 // ... (El helper DeserializeToolProperties y la clase TAgentHandlerRegistry se mantienen como antes) ...
 
 // -----------------------------------------------------------------------------
-// IMPLEMENTACIÓN FINAL DE TAIAgents.LoadFromStream
+// IMPLEMENTACIï¿½N FINAL DE TAIAgents.LoadFromStream
 // -----------------------------------------------------------------------------
 procedure TAIAgents.LoadFromStream(AStream: TStream);
 var
@@ -910,7 +911,7 @@ begin
           LJoinModeStr := LNodeJSON.GetValue<string>('joinMode', 'jmAny');
           LNode.JoinMode := TJoinMode(GetEnumValue(TypeInfo(TJoinMode), LJoinModeStr));
 
-          // --- SECCIÓN CORREGIDA ---
+          // --- SECCIï¿½N CORREGIDA ---
           var
           LToolValue := LNodeJSON.GetValue('tool');
           if Assigned(LToolValue) and (LToolValue is TJSONObject) then
@@ -924,7 +925,7 @@ begin
               // 1. Buscar el TIPO de clase en TU registro
               LToolClass := TEngineRegistry.Instance.FindToolClass(LToolClassName);
 
-              // 2. Si se encontró, crear una instancia de esa clase
+              // 2. Si se encontrï¿½, crear una instancia de esa clase
               if Assigned(LToolClass) and LToolClass.InheritsFrom(TAiToolBase) then
               begin
                 // Creamos la instancia usando el NODO como propietario
@@ -938,7 +939,7 @@ begin
               end;
             end;
           end;
-          // --- FIN DE LA CORRECCIÓN ---
+          // --- FIN DE LA CORRECCIï¿½N ---
 
           LNodeMap.Add(LKey, LNode);
         end;
@@ -1088,7 +1089,7 @@ begin
   if ComponentCount = 0 then
     raise Exception.Create('Cannot load state into an empty graph. Load the graph structure first.');
 
-  // Crear mapa de links para una búsqueda rápida
+  // Crear mapa de links para una bï¿½squeda rï¿½pida
   LLinkMap := TDictionary<string, TAIAgentsLink>.Create;
   for var i := 0 to ComponentCount - 1 do
     if Components[i] is TAIAgentsLink then
@@ -1246,12 +1247,12 @@ begin
 
             if not WaitResult then
             begin
-              // El tiempo de espera se agotó. Esto es un error.
+              // El tiempo de espera se agotï¿½. Esto es un error.
               raise Exception.CreateFmt('Graph execution timed out after %d ms.', [FTimeoutMs]);
             end;
           end;
 
-          // Si llegamos aquí sin errores y sin ser abortados, fue un éxito.
+          // Si llegamos aquï¿½ sin errores y sin ser abortados, fue un ï¿½xito.
           if not FAbort then
             FinalStatus := 'Completed';
 
@@ -1259,13 +1260,13 @@ begin
           on E: Exception do
           begin
             Abort; // Aseguramos que todo se detenga
-            FinalException := E; // Guardamos la excepción
+            FinalException := E; // Guardamos la excepciï¿½n
             // Determinamos el status a partir del mensaje de error
             if E.Message.Contains('timed out') then
               FinalStatus := 'Timeout'
             else
               FinalStatus := 'Error';
-            DoError(nil, nil, E); // Notificamos al evento OnError también
+            DoError(nil, nil, E); // Notificamos al evento OnError tambiï¿½n
           end;
         end;
       finally
@@ -1277,7 +1278,7 @@ begin
 
         if Assigned(FEndNode) then
         begin
-          // El EndNode se puede usar para una última acción de limpieza
+          // El EndNode se puede usar para una ï¿½ltima acciï¿½n de limpieza
           FEndNode.ForceFinalExecute;
         end;
 
@@ -1315,7 +1316,7 @@ begin
     FMaxConcurrentTasks := LNewValue;
     // --- CORREGIDO: TThreadPool ---
     // En lugar de recrear, simplemente ajustamos el pool existente.
-    // Esto es más seguro si hay tareas en ejecución.
+    // Esto es mï¿½s seguro si hay tareas en ejecuciï¿½n.
     if Assigned(FThreadPool) then
       FThreadPool.SetMaxWorkerThreads(FMaxConcurrentTasks);
   end;
@@ -1323,7 +1324,7 @@ end;
 
 procedure TAIAgents.SaveStateToStream(AStream: TStream);
 var
-  LRoot, LStateObj, LBlackboardObj, LNodeStatesObj, LLinkStatesObj, LNodeStateObj, LJoinInputsObj: TJSONObject;
+  LRoot, LStateObj, LBlackboardObj, LNodeStatesObj, LLinkStatesObj, LNodeStateObj, LJoinInputsObj, LLinkStateObj: TJSONObject;
   LNode: TAIAgentsNode;
   LLink: TAIAgentsLink;
   LWriter: TStreamWriter;
@@ -1366,7 +1367,7 @@ begin
     LLinkStatesObj := TJSONObject.Create;
     for LLink in FLinks do
     begin
-      var LLinkStateObj := TJSONObject.Create;
+      LLinkStateObj := TJSONObject.Create;
       LLinkStateObj.AddPair('noCycles', LLink.NoCycles);
       LLinkStatesObj.AddPair(LLink.Name, LLinkStateObj);
     end;
@@ -1396,7 +1397,7 @@ var
 begin
   LRoot := TJSONObject.Create;
   try
-    // 1. Sección "graph"
+    // 1. Secciï¿½n "graph"
     LGraphObj := TJSONObject.Create;
     LGraphObj.AddPair('description', Self.Description);
     if Assigned(FStartNode) then
@@ -1413,7 +1414,7 @@ begin
     LGraphObj.AddPair('timeoutMs', TJSONNumber.Create(FTimeoutMs));
     LRoot.AddPair('graph', LGraphObj);
 
-    // 2. Sección "nodes"
+    // 2. Secciï¿½n "nodes"
     LNodesArray := TJSONArray.Create;
     for LNode in FNodes do
     begin
@@ -1425,21 +1426,21 @@ begin
 
       if Assigned(LNode.Tool) then
       begin
-        // --- SECCIÓN MODIFICADA ---
+        // --- SECCIï¿½N MODIFICADA ---
         var
         LToolDataObj := TJSONObject.Create;
         LToolDataObj.AddPair('className', LNode.Tool.ClassName);
         LToolDataObj.AddPair('properties', SerializeToolProperties(LNode.Tool));
         LNodeObj.AddPair('tool', LToolDataObj);
-        // --- FIN DE LA MODIFICACIÓN ---
+        // --- FIN DE LA MODIFICACIï¿½N ---
       end
       else
       begin
         LNodeObj.AddPair('tool', TJSONNull.Create);
       end;
 
-      // --- MANEJO DE EVENTOS (requiere lógica adicional) ---
-      // Aquí guardarías un identificador del evento. Por ahora, un placeholder.
+      // --- MANEJO DE EVENTOS (requiere lï¿½gica adicional) ---
+      // Aquï¿½ guardarï¿½as un identificador del evento. Por ahora, un placeholder.
       if Assigned(LNode.OnExecute) then
         LNodeObj.AddPair('onExecuteHandler', 'HandlerFor_' + LNode.Name) // Placeholder
       else
@@ -1454,7 +1455,7 @@ begin
     end;
     LRoot.AddPair('nodes', LNodesArray);
 
-    // 3. Sección "links"
+    // 3. Secciï¿½n "links"
     LLinksArray := TJSONArray.Create;
     for LLink in FLinks do
     begin
@@ -1532,7 +1533,7 @@ begin
     // 4. Escribir el JSON al Stream
     LWriter := TStreamWriter.Create(AStream, TEncoding.UTF8);
     try
-      LWriter.Write(LRoot.ToString); // O LRoot.ToJSON para una versión más compacta
+      LWriter.Write(LRoot.ToString); // O LRoot.ToJSON para una versiï¿½n mï¿½s compacta
     finally
       LWriter.Free;
     end;
@@ -1687,12 +1688,13 @@ begin
 end;
 
 procedure TAIAgentsLink.CreateAndQueueTask(ANodeToExecute, ASourceNode: TAIAgentsNode; ACurrentLink: TAIAgentsLink);
+var
+  LTask: ITask;
 begin
-  var
   LTask := TTask.Run(
     procedure
     begin
-      // Esta clausura ahora captura los parámetros del método, que son estables y únicos.
+      // Esta clausura ahora captura los parametros del metodo, que son estables y unicos.
       if (ACurrentLink.FGraph <> nil) and ACurrentLink.FGraph.FAbort then
         Exit;
       ANodeToExecute.DoExecute(ASourceNode, ACurrentLink);
@@ -1713,17 +1715,19 @@ begin
   inherited;
 end;
 
-// --- MODIFICADO: Método de ejecución completamente refactorizado ---
+// --- MODIFICADO: Mï¿½todo de ejecuciï¿½n completamente refactorizado ---
 procedure TAIAgentsLink.DoExecute(Sender: TAIAgentsNode);
 var
   IsOk, Handled: Boolean;
   NodesToRun: TList<TAIAgentsNode>;
   Decision: string;
+  LTask: ITask;
+  E: Exception;
 begin
   if (FGraph = nil) or FGraph.FAbort then
     Exit;
 
-  // PASO 1: Ejecutar evento OnExecute para intervención manual
+  // PASO 1: Ejecutar evento OnExecute para intervenciï¿½n manual
   Handled := False;
   IsOk := True;
   if Assigned(FOnExecute) then
@@ -1748,7 +1752,6 @@ begin
     Inc(FNoCycles);
     if FNoCycles >= FMaxCycles then
     begin
-      var
       E := Exception.CreateFmt('Maximum retry cycles (%d) reached on link "%s" from node "%s". Aborting this path.', [FMaxCycles, Self.Name, Sender.Name]);
       FGraph.DoError(Sender, Self, E);
       Exit;
@@ -1757,7 +1760,6 @@ begin
     begin
       if Assigned(FNextNo) then
       begin
-        var
         LTask := TTask.Run(
           procedure
           begin
@@ -1776,7 +1778,7 @@ begin
     end;
   end;
 
-  // PASO 3: IsOk es TRUE. Construir la lista de nodos de destino según el modo.
+  // PASO 3: IsOk es TRUE. Construir la lista de nodos de destino segï¿½n el modo.
   NodesToRun := nil;
   try
     NodesToRun := TList<TAIAgentsNode>.Create;
@@ -1841,7 +1843,7 @@ begin
   end;
 
   // ---------------------------------------------------------------------------
-  // PASO 4: Despachar la ejecución a los nodos de destino.
+  // PASO 4: Despachar la ejecuciï¿½n a los nodos de destino.
   // ---------------------------------------------------------------------------
   try
     if (NodesToRun = nil) or (NodesToRun.Count = 0) then
@@ -1958,7 +1960,7 @@ begin
   FMsgError := '';
 end;
 
-// --- MODIFICADO: Método DoExecute con lógica de JOIN corregida ---
+// --- MODIFICADO: Mï¿½todo DoExecute con lï¿½gica de JOIN corregida ---
 procedure TAIAgentsNode.DoExecute(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink);
 var
   CanExecute: Boolean;
@@ -1996,7 +1998,7 @@ begin
             if FJoinInputs.Count >= FInEdges.Count then
             begin
               CanExecute := True;
-              // Consolidamos todas las entradas en un único string (ej. multilínea)
+              // Consolidamos todas las entradas en un ï¿½nico string (ej. multilï¿½nea)
               var
               sb := TStringBuilder.Create;
               try
@@ -2045,13 +2047,13 @@ begin
       Next.DoExecute(Self);
     end;
   finally
-    // --- NUEVO: Limpieza del estado del join después de la ejecución ---
+    // --- NUEVO: Limpieza del estado del join despuï¿½s de la ejecuciï¿½n ---
     if CanExecute and (FInEdges.Count > 1) then
     begin
       FJoinLock.Enter;
       try
         if FJoinMode = jmAny then
-          FJoinInputs.Clear; // Limpiamos para la siguiente ejecución
+          FJoinInputs.Clear; // Limpiamos para la siguiente ejecuciï¿½n
         if (FJoinMode = jmAll) and (FJoinInputs.Count >= FInEdges.Count) then
           FJoinInputs.Clear; // Reseteamos el estado del join
       finally

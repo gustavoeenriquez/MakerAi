@@ -40,10 +40,10 @@ uses
   System.SysUtils, System.Classes, System.Types, System.UITypes, System.Math.Vectors, System.Math,
   System.UIConsts, System.Generics.Collections, System.IOUtils, FMX.Styles.Objects, System.JSON,
 
-  uMakerAi.Core,
+  uMakerAi.Core, uJSONHelper,
 
   FMX.Types, FMX.Controls, FMX.Graphics, FMX.Layouts, FMX.Memo, FMX.TextLayout, FMX.ImgList,
-  FMX.StdCtrls, FMX.Objects;
+  FMX.StdCtrls, FMX.Objects, FMX.Forms;
 
 type
   TChatBubbleTailPosition = (tpLeft, tpRight);
@@ -1156,9 +1156,14 @@ begin
       LMediaFile := LControl.TagObject as TAiMediaFile;
 
       // Convertimos las coordenadas a la pantalla
-      // LScreenPos := LControl.LocalToAbsolute(PointF(X, Y));
-      // LScreenPos := LControl.LocalToScreen(LScreenPos);
+      {$IF CompilerVersion >= 35}
       LScreenPos := LControl.LocalToScreen(PointF(X, Y));
+      {$ELSE}
+      // En Delphi 10.4.2, LocalToScreen es protected, usamos LocalToAbsolute + Scene
+      LScreenPos := LControl.LocalToAbsolute(PointF(X, Y));
+      if (LControl.Root <> nil) and (LControl.Root.GetObject is TCommonCustomForm) then
+        LScreenPos := TCommonCustomForm(LControl.Root.GetObject).ClientToScreen(LScreenPos);
+      {$ENDIF}
 
       // Disparamos el evento hacia el padre (TChatList)
       FOnAttachmentContextPopup(Self, LMediaFile, LScreenPos);

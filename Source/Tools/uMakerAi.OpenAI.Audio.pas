@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -34,11 +34,11 @@
 // --------- CAMBIOS --------------------
 // 04/11/2025 - Renombrado de TAIWhisper a TAiAudio y unidad a uMakerAi.OpenAI.Audio.pas.
 // 04/11/2025 - Uso de Enums para modelos, voces y formatos para mayor seguridad.
-// 04/11/2025 - Integración con TAiMediaFile de uMakerAi.Core.
-// 04/11/2025 - Añadido soporte para modelos GPT-4o, diarización e 'instructions' en TTS.
-// 04/11/2025 - Implementación completa de streaming para TTS y Transcripción con eventos.
-// 04/11/2025 - Métodos de Transcripción/Traducción devuelven un objeto TTranscriptionResult.
-// 04/11/2025 - Mantenida la lógica de conversión de audio con ffmpeg.
+// 04/11/2025 - Integraciï¿½n con TAiMediaFile de uMakerAi.Core.
+// 04/11/2025 - Aï¿½adido soporte para modelos GPT-4o, diarizaciï¿½n e 'instructions' en TTS.
+// 04/11/2025 - Implementaciï¿½n completa de streaming para TTS y Transcripciï¿½n con eventos.
+// 04/11/2025 - Mï¿½todos de Transcripciï¿½n/Traducciï¿½n devuelven un objeto TTranscriptionResult.
+// 04/11/2025 - Mantenida la lï¿½gica de conversiï¿½n de audio con ffmpeg.
 
 unit uMakerAi.OpenAI.Audio;
 
@@ -123,7 +123,7 @@ type
     procedure HandleStreamEvent(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
     procedure ProcessSpeechStreamBuffer;
     procedure ProcessTranscriptionStreamBuffer;
-    // Helper para construir la petición de transcripción
+    // Helper para construir la peticiï¿½n de transcripciï¿½n
     procedure BuildTranscriptionBody(const ABody: TMultipartFormData; const AAudioFile: TAiMediaFile; const APrompt: string = '');
 
   public
@@ -187,7 +187,7 @@ begin
 {$IFDEF MSWINDOWS}
   ShellExecute(0, nil, 'cmd.exe', PChar('/C ' + Command), nil, SW_HIDE);
 {$ELSE}
-  // Implementación para otras plataformas si es necesario
+  // Implementaciï¿½n para otras plataformas si es necesario
 {$ENDIF}
 end;
 
@@ -197,7 +197,7 @@ var
   Buffer: TBytes;
 begin
   ADestStream := nil;
-  // Aseguramos un nombre de archivo único para evitar conflictos
+  // Aseguramos un nombre de archivo ï¿½nico para evitar conflictos
   ADestFilename := ChangeFileExt(TPath.GetRandomFileName + '_' + ASourceFilename, '.mp3');
   TempSourcePath := TPath.Combine(TPath.GetTempPath, ASourceFilename);
   TempDestPath := TPath.Combine(TPath.GetTempPath, ADestFilename);
@@ -307,10 +307,20 @@ var
   Ext: string;
   NewStream: TMemoryStream;
   NewFilename: string;
+  I: Integer;
+  ExtFound: Boolean;
 begin
   Result := False;
   Ext := LowerCase(ExtractFileExt(aMediaFile.Filename));
-  if not TArray.Contains<string>(VALID_EXTS, Ext) then
+  // Verificar si la extension esta en la lista de validas
+  ExtFound := False;
+  for I := Low(VALID_EXTS) to High(VALID_EXTS) do
+    if VALID_EXTS[I] = Ext then
+    begin
+      ExtFound := True;
+      Break;
+    end;
+  if not ExtFound then
   begin
     ConvertAudioFileFormat(aMediaFile.Content, aMediaFile.Filename, NewStream, NewFilename);
     if Assigned(NewStream) then
@@ -327,7 +337,7 @@ var
   ModelStr: string;
   FormatStr: string;
 begin
-  // --- CORRECCIÓN: Reemplazar TEnum con una sentencia 'case' ---
+  // --- CORRECCIï¿½N: Reemplazar TEnum con una sentencia 'case' ---
   case FTranscriptionModel of
     tmWhisper1:
       ModelStr := 'whisper-1';
@@ -340,7 +350,7 @@ begin
   else
     ModelStr := 'whisper-1'; // Default seguro
   end;
-  // --- FIN DE LA CORRECCIÓN ---
+  // --- FIN DE LA CORRECCIï¿½N ---
 
   ABody.AddField('model', ModelStr);
   if APrompt <> '' then
@@ -351,7 +361,7 @@ begin
   if FTranscriptionTemperature <> 0.0 then
     ABody.AddField('temperature', Format('%f', [FTranscriptionTemperature]));
 
-  // --- CORRECCIÓN: Reemplazar TEnum con una sentencia 'case' ---
+  // --- CORRECCIï¿½N: Reemplazar TEnum con una sentencia 'case' ---
   case FTranscriptionResponseFormat of
     trfJson:
       FormatStr := 'json';
@@ -368,7 +378,7 @@ begin
   else
     FormatStr := 'json'; // Default seguro
   end;
-  // --- FIN DE LA CORRECCIÓN ---
+  // --- FIN DE LA CORRECCIï¿½N ---
 
   ABody.AddField('response_format', FormatStr);
 
@@ -403,7 +413,7 @@ begin
                 FOnAudioChunkReceived(Self, NewBytes);
               end);
         end;
-      soTranscription: // Estamos recibiendo un stream de texto SSE para Transcripción
+      soTranscription: // Estamos recibiendo un stream de texto SSE para Transcripciï¿½n
         begin
           FStreamBuffer.Append(TEncoding.UTF8.GetString(NewBytes));
           ProcessTranscriptionStreamBuffer; // Llamamos al parser de texto
@@ -417,13 +427,13 @@ end;
 procedure TAiOpenAiAudio.ProcessSpeechStreamBuffer;
 // Procesa el buffer para eventos de TTS (sse)
 begin
-  // TODO: Implementar lógica de parseo para speech.audio.delta y speech.audio.done
+  // TODO: Implementar lï¿½gica de parseo para speech.audio.delta y speech.audio.done
 end;
 
 procedure TAiOpenAiAudio.ProcessTranscriptionStreamBuffer;
-// Procesa el buffer para eventos de Transcripción (sse)
+// Procesa el buffer para eventos de Transcripciï¿½n (sse)
 begin
-  // TODO: Implementar lógica de parseo para transcript.text.delta y transcript.text.done
+  // TODO: Implementar lï¿½gica de parseo para transcript.text.delta y transcript.text.done
 end;
 
 function TAiOpenAiAudio.Speech(const AInput: string): TMemoryStream;
@@ -444,7 +454,7 @@ var
   ReqStream: TStringStream;
   Res: IHTTPResponse;
   ModelStr, VoiceStr, FormatStr: string;
-  sUrl: string; // Declarar sUrl aquí
+  sUrl: string; // Declarar sUrl aquï¿½
 begin
   sUrl := FUrl + 'audio/speech';
   Client := TNetHTTPClient.Create(nil);
@@ -666,7 +676,11 @@ begin
     ConvertAudioIfNeeded(AAudioFile);
 
     AAudioFile.Content.Position := 0;
+    {$IF CompilerVersion >= 35}
     Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
+    {$ELSE}
+    Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
+    {$ENDIF}
     BuildTranscriptionBody(Body, AAudioFile, APrompt);
 
     Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
@@ -700,7 +714,11 @@ begin
 
     ConvertAudioIfNeeded(AAudioFile);
     AAudioFile.Content.Position := 0;
+    {$IF CompilerVersion >= 35}
     Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
+    {$ELSE}
+    Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
+    {$ENDIF}
     BuildTranscriptionBody(Body, AAudioFile);
     Body.AddField('stream', 'true');
 
@@ -744,9 +762,13 @@ begin
   try
     ConvertAudioIfNeeded(AAudioFile);
     AAudioFile.Content.Position := 0;
+    {$IF CompilerVersion >= 35}
     Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
+    {$ELSE}
+    Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
+    {$ENDIF}
 
-    // El modelo es fijo para traducciones según la API
+    // El modelo es fijo para traducciones segï¿½n la API
     Body.AddField('model', 'whisper-1');
 
     if APrompt <> '' then Body.AddField('prompt', APrompt);
