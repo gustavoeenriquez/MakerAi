@@ -2185,8 +2185,22 @@ begin
       if LMessage.Tool_calls <> '' then
       begin
         try
+
+
+
+{$IF CompilerVersion < 35}
+          var
+          LToolUseArray := TJSONUtils.ParseAsArray(LMessage.Tool_calls) as TJSonArray;
+{$ELSE}
           var
           LToolUseArray := TJSonArray.ParseJSONValue(LMessage.Tool_calls) as TJSonArray;
+{$ENDIF}
+
+
+
+
+
+
           if Assigned(LToolUseArray) then
           begin
             for var Val in LToolUseArray do
