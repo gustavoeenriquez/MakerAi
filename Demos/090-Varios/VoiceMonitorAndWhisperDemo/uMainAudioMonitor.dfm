@@ -180,7 +180,6 @@ object Form6: TForm6
     SensitivityMultiplier = 2.000000000000000000
     StopSensitivityMultiplier = 1.500000000000000000
     WakeWordDurationMs = 2000
-    TranscriptionIntervalMs = 3000
     TranscriptionMaxWaitMs = 5000
     FragmentSplitRatio = 0.350000000000000000
     OnChangeState = AIVoiceMonitorChangeState

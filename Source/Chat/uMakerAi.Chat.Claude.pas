@@ -700,7 +700,8 @@ begin
       if (JsonSchema.Text <> '') then
       begin
         try
-          var sShema := StringReplace(JsonSchema.Text,'\n',' ',[rfReplaceAll]);
+          var
+          sShema := StringReplace(JsonSchema.Text, '\n', ' ', [rfReplaceAll]);
           jSchemaParsed := TJSONObject.ParseJSONValue(sShema);
           if Assigned(jSchemaParsed) and (jSchemaParsed is TJSONObject) then
           begin
@@ -2186,8 +2187,6 @@ begin
       begin
         try
 
-
-
 {$IF CompilerVersion < 35}
           var
           LToolUseArray := TJSONUtils.ParseAsArray(LMessage.Tool_calls) as TJSonArray;
@@ -2195,12 +2194,6 @@ begin
           var
           LToolUseArray := TJSonArray.ParseJSONValue(LMessage.Tool_calls) as TJSonArray;
 {$ENDIF}
-
-
-
-
-
-
           if Assigned(LToolUseArray) then
           begin
             for var Val in LToolUseArray do

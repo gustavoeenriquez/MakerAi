@@ -50,7 +50,7 @@ type
     procedure AIVoiceMonitorCalibrated(Sender: TObject; const aNoiseLevel, aSensitivity, aStopSensitivity: Integer);
     procedure AIVoiceMonitorError(Sender: TObject; const ErrorMessage: string);
     procedure AIVoiceMonitorUpdate(Sender: TObject; const aSoundLevel: Int64);
-    procedure AIVoiceMonitorWakeWordCheck(Sender: TObject; aWakeWordStream: TMemoryStream; var IsValid: Boolean);
+    procedure AIVoiceMonitorWakeWordCheck(Sender: TObject; aWakeWordStream: TMemoryStream);
     procedure AIVoiceMonitorTranscriptionFragment(Sender: TObject; aFragmentStream: TMemoryStream);
     procedure AIVoiceMonitorSpeechEnd(Sender: TObject; aIsValidForIA: Boolean; aStream: TMemoryStream);
     procedure ComboBoxDevicesChange(Sender: TObject);
@@ -592,49 +592,10 @@ begin
   FCurrentSoundLevel := aSoundLevel;
 end;
 
+
+
+{
 procedure TForm6.AIVoiceMonitorWakeWordCheck(Sender: TObject; aWakeWordStream: TMemoryStream; var IsValid: Boolean);
-
-  // --- Función auxiliar: Distancia de Levenshtein (Cálculo de similitud) ---
-  function LevenshteinDistance(const s, t: string): Integer;
-  var
-    d: array of array of Integer;
-    i, j, cost: Integer;
-    lenS, lenT: Integer;
-  begin
-    lenS := Length(s);
-    lenT := Length(t);
-    SetLength(d, lenS + 1, lenT + 1);
-
-    for i := 0 to lenS do d[i, 0] := i;
-    for j := 0 to lenT do d[0, j] := j;
-
-    for i := 1 to lenS do
-    begin
-      for j := 1 to lenT do
-      begin
-        if LowerCase(s[i]) = LowerCase(t[j]) then cost := 0 else cost := 1;
-        d[i, j] := Min(Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + cost);
-      end;
-    end;
-    Result := d[lenS, lenT];
-  end;
-
-  // --- Función auxiliar: Eliminar acentos para mejor comparación ---
-  function RemoveAccents(const Text: string): string;
-  const
-    Accented = 'áéíóúàèìòùäëïöüâêîôûñÁÉÍÓÚÀÈÌÒÙÄËÏÖÜÂÊÎÔÛÑ';
-    Normal   = 'aeiouaeiouaeiouaeiounAEIOUAEIOUAEIOUAEIOUN';
-  var
-    i, p: Integer;
-  begin
-    Result := Text;
-    for i := 1 to Length(Result) do
-    begin
-      p := Pos(Result[i], Accented);
-      if p > 0 then
-        Result[i] := Normal[p];
-    end;
-  end;
 
 var
   Res: string;
@@ -684,7 +645,7 @@ begin
     if TargetWakeWord = '' then TargetWakeWord := 'andrea';
 
     // Normalizamos el objetivo (sin acentos, minúsculas)
-    CleanTarget := LowerCase(RemoveAccents(TargetWakeWord));
+    CleanTarget := LowerCase( TAIVoiceMonitor.RemoveAccents(TargetWakeWord));
 
     // 4. LÓGICA DE DETECCIÓN DIFUSA (FUZZY MATCHING)
     IsValid := False;
@@ -696,7 +657,7 @@ begin
     for Word in Words do
     begin
       // Limpiamos la palabra capturada (sin acentos, minúsculas)
-      CleanWord := LowerCase(RemoveAccents(Word));
+      CleanWord := LowerCase(TAIVoiceMonitor.RemoveAccents(Word));
 
       // A) Coincidencia exacta
       if CleanWord = CleanTarget then
@@ -708,7 +669,7 @@ begin
 
       // B) Coincidencia aproximada (Levenshtein)
       // Calculamos la distancia
-      Distance := LevenshteinDistance(CleanWord, CleanTarget);
+      Distance := TAIVoiceMonitor.LevenshteinDistance(CleanWord, CleanTarget);
 
       // Permitimos hasta 2 errores (ej: "Andrea" vs "Andreas" es 1, "Andrea" vs "Andre" es 1)
       // Ajustamos tolerancia: Si la palabra es muy corta (<=4), solo permitimos 1 error.
@@ -751,6 +712,86 @@ begin
     end;
   end;
 end;
+}
+
+
+procedure TForm6.AIVoiceMonitorWakeWordCheck(Sender: TObject; aWakeWordStream: TMemoryStream);
+var
+  StreamCopy: TMemoryStream;
+begin
+  // Creamos una copia del stream porque el original se liberará al salir de este evento
+  StreamCopy := TMemoryStream.Create;
+  StreamCopy.CopyFrom(aWakeWordStream, 0);
+  StreamCopy.Position := 0;
+
+  // Lanzamos la validación pesada en un hilo aparte
+  TTask.Run(procedure
+    var
+      Res, TargetWakeWord, CleanTarget, CleanWord, DetectedWord: string;
+      LWhisper: TAIWhisper;
+      Words: TArray<string>;
+      Word: string;
+      Distance: Integer;
+      IsValidResult: Boolean;
+    begin
+      try
+        try
+          LWhisper := NewWhisper; // Tu función creadora
+          try
+            Res := LWhisper.Transcription(StreamCopy, 'wakeword.wav', '');
+          finally
+            LWhisper.Free;
+          end;
+
+          // --- Lógica de limpieza y comparación ---
+          Res := Trim(Res);
+          TargetWakeWord := Trim(AIVoiceMonitor.WakeWord);
+          if TargetWakeWord = '' then TargetWakeWord := 'andrea';
+
+          //RemoveAccents es solo una estrategía en el idioma español, cambiar para otros idiomas
+          CleanTarget := LowerCase(TAIVoiceMonitor.RemoveAccents(TargetWakeWord));
+
+          IsValidResult := False;
+          DetectedWord := '';
+          Words := Res.Split([' ', ',', '.', '!', '?', ';', ':'], TStringSplitOptions.ExcludeEmpty);
+
+          for Word in Words do
+          begin
+            CleanWord := LowerCase(TAIVoiceMonitor.RemoveAccents(Word));
+            Distance := TAIVoiceMonitor.LevenshteinDistance(CleanWord, CleanTarget);
+
+            if (CleanWord = CleanTarget) or
+               ((Length(CleanTarget) > 4) and (Distance <= 2)) or
+               ((Length(CleanTarget) <= 4) and (Distance <= 1)) then
+            begin
+              IsValidResult := True;
+              DetectedWord := Word;
+              Break;
+            end;
+          end;
+
+          // --- NOTIFICAR AL COMPONENTE EL RESULTADO ---
+          AIVoiceMonitor.ConfirmWakeWord(IsValidResult);
+
+          // Log en el hilo principal
+          TThread.Queue(nil, procedure
+          begin
+            if IsValidResult then
+              MemoLog.Lines.Add('WakeWord detectada: ' + DetectedWord)
+            else
+              MemoLog.Lines.Add('WakeWord no reconocida en: ' + Res);
+          end);
+
+        finally
+          StreamCopy.Free;
+        end;
+      except
+        on E: Exception do
+          TThread.Queue(nil, procedure begin MemoLog.Lines.Add('Error: ' + E.Message); end);
+      end;
+    end);
+end;
+
 
 procedure TForm6.AnimationTimerTimer(Sender: TObject);
 const

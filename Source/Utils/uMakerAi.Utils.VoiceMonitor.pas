@@ -162,7 +162,10 @@ type
 
   // IMPORTANTE: El stream (aWakeWordStream) es válido SOLO durante la ejecución del evento.
   // Si necesita retener los datos, debe copiar el stream a una instancia local.
-  TWakeWordCheckEvent = procedure(Sender: TObject; aWakeWordStream: TMemoryStream; var IsValid: Boolean) of object;
+
+  // TWakeWordCheckEvent = procedure(Sender: TObject; aWakeWordStream: TMemoryStream; var IsValid: Boolean) of object;
+  // Se elimina el isvalid de aquí para pasar a un evento asíncrono
+  TWakeWordCheckEvent = procedure(Sender: TObject; aWakeWordStream: TMemoryStream) of object;
 
   TAIVoiceMonitorOnCalibrated = procedure(Sender: TObject; const aNoiseLevel, aSensitivity, aStopSensitivity: Integer) of object;
   TAIVoiceMonitorOnUpdate = procedure(Sender: TObject; const aSoundLevel: Int64) of object;
@@ -269,6 +272,11 @@ type
     constructor Create(aOwner: TComponent); Override;
     destructor Destroy; override;
     class function GetWaveInDevices: TArray<TWaveInDeviceInfo>;
+    procedure ConfirmWakeWord(AIsValid: Boolean);
+
+    // Functiones auxiliares para el español para detectar similitud entre palabras
+    class function LevenshteinDistance(const s, t: string): Integer;
+    class function RemoveAccents(const Text: string): string;
 
     property Active: Boolean read FActive write SetActive;
     property IsSpeaking: Boolean read FIsSpeaking;
@@ -330,7 +338,7 @@ begin
     begin
       Monitor.ProcessAudioBuffer(Monitor.FBuffer, WaveHdr^.dwBytesRecorded);
       if Monitor.Active then
-        //waveInAddBuffer(HWAVEIN, @Monitor.FWaveHdr, SizeOf(TWaveHdr));
+        // waveInAddBuffer(HWAVEIN, @Monitor.FWaveHdr, SizeOf(TWaveHdr));
         waveInAddBuffer(HWAVEIN, WaveHdr, SizeOf(TWaveHdr));
     end;
   end;
@@ -455,6 +463,30 @@ begin
   // Calcular cuántos bytes ocupan FPreBufferDurationMs milisegundos
   BytesPerSecond := FSampleRate * FChannels * (FBitsPerSample div 8);
   FPreBufferMaxSize := (BytesPerSecond * FPreBufferDurationMs) div 1000;
+end;
+
+class function TAIVoiceMonitor.LevenshteinDistance(const s, t: string): Integer;
+var
+  d: array of array of Integer;
+  I, j, cost, lenS, lenT: Integer;
+begin
+  lenS := Length(s);
+  lenT := Length(t);
+  SetLength(d, lenS + 1, lenT + 1);
+  for I := 0 to lenS do
+    d[I, 0] := I;
+  for j := 0 to lenT do
+    d[0, j] := j;
+  for I := 1 to lenS do
+    for j := 1 to lenT do
+    begin
+      if LowerCase(s[I]) = LowerCase(t[j]) then
+        cost := 0
+      else
+        cost := 1;
+      d[I, j] := Min(Min(d[I - 1, j] + 1, d[I, j - 1] + 1), d[I - 1, j - 1] + cost);
+    end;
+  Result := d[lenS, lenT];
 end;
 
 procedure TAIVoiceMonitor.Loaded;
@@ -831,55 +863,94 @@ begin
                 FWakeWordChecked := True;
 
                 // Ejecutar verificación en tarea asíncrona para no bloquear captura
+                {
+                  TTask.Run(
+                  procedure
+                  var
+                  WakeStreamPCM, WakeStreamWAV: TMemoryStream;
+                  FragmentSize: Int64;
+                  IsValid: Boolean;
+                  begin
+                  WakeStreamPCM := TMemoryStream.Create;
+                  try
+                  // Extraer el fragmento de wake word del inicio del audio
+                  FCS.Enter;
+                  try
+                  FFileStream.Position := 0;
+                  FragmentSize := (FWakeWordDurationMs * BytesPerSecond) div 1000;
+
+                  if FragmentSize > FFileStream.Size then
+                  FragmentSize := FFileStream.Size;
+
+                  WakeStreamPCM.CopyFrom(FFileStream, FragmentSize);
+                  FFileStream.Position := FFileStream.Size;
+                  finally
+                  FCS.Leave;
+                  end;
+
+                  // Convertir a WAV para enviar al verificador
+                  WakeStreamWAV := TMemoryStream.Create;
+                  try
+                  ConvertPCMToWAV(WakeStreamPCM, WakeStreamWAV);
+                  IsValid := False;
+
+                  // Solo llamar al evento si la wake word está activa
+                  if Assigned(FOnWakeWordCheck) and FWakeWordActive then
+                  FOnWakeWordCheck(Self, WakeStreamWAV, IsValid);
+                  finally
+                  WakeStreamWAV.Free;
+                  end;
+
+
+                  // Guardar el resultado de la validación
+                  FCS.Enter;
+                  try
+                  FIsWakeWordValid := IsValid;
+                  finally
+                  FCS.Leave;
+                  end;
+                  finally
+                  WakeStreamPCM.Free;
+                  end;
+                  end);
+                }
+
                 TTask.Run(
                   procedure
                   var
                     WakeStreamPCM, WakeStreamWAV: TMemoryStream;
                     FragmentSize: Int64;
-                    IsValid: Boolean;
                   begin
                     WakeStreamPCM := TMemoryStream.Create;
                     try
-                      // Extraer el fragmento de wake word del inicio del audio
                       FCS.Enter;
                       try
                         FFileStream.Position := 0;
                         FragmentSize := (FWakeWordDurationMs * BytesPerSecond) div 1000;
-
                         if FragmentSize > FFileStream.Size then
                           FragmentSize := FFileStream.Size;
-
                         WakeStreamPCM.CopyFrom(FFileStream, FragmentSize);
                         FFileStream.Position := FFileStream.Size;
                       finally
                         FCS.Leave;
                       end;
 
-                      // Convertir a WAV para enviar al verificador
                       WakeStreamWAV := TMemoryStream.Create;
                       try
                         ConvertPCMToWAV(WakeStreamPCM, WakeStreamWAV);
-                        IsValid := False;
-
-                        // Solo llamar al evento si la wake word está activa
+                        // DISPARAR EVENTO ASINCRÓNICO (No esperamos resultado aquí)
                         if Assigned(FOnWakeWordCheck) and FWakeWordActive then
-                          FOnWakeWordCheck(Self, WakeStreamWAV, IsValid);
+                          FOnWakeWordCheck(Self, WakeStreamWAV);
                       finally
                         WakeStreamWAV.Free;
-                      end;
-
-                      // Guardar el resultado de la validación
-                      FCS.Enter;
-                      try
-                        FIsWakeWordValid := IsValid;
-                      finally
-                        FCS.Leave;
                       end;
                     finally
                       WakeStreamPCM.Free;
                     end;
                   end);
+
               end;
+
             end;
           end;
 
@@ -913,6 +984,22 @@ begin
   // --- CALCULAR DETECCIÓN DE SILENCIO ---
   if FMonitorState = msMonitoring then
     CalcSilencio;
+end;
+
+class function TAIVoiceMonitor.RemoveAccents(const Text: string): string;
+const
+  Accented = 'áéíóúàèìòùäëïöüâêîôûñÁÉÍÓÚÀÈÌÒÙÄËÏÖÜÂÊÎÔÛÑ';
+  Normal = 'aeiouaeiouaeiouaeiounAEIOUAEIOUAEIOUAEIOUN';
+var
+  I, p: Integer;
+begin
+  Result := Text;
+  for I := 1 to Length(Result) do
+  begin
+    p := Pos(Result[I], Accented);
+    if p > 0 then
+      Result[I] := Normal[p];
+  end;
 end;
 
 procedure TAIVoiceMonitor.CalcSilencio;
@@ -1171,6 +1258,21 @@ begin
     end);
 end;
 
+procedure TAIVoiceMonitor.ConfirmWakeWord(AIsValid: Boolean);
+begin
+  FCS.Enter;
+  try
+    FIsWakeWordValid := AIsValid;
+  finally
+    FCS.Leave;
+  end;
+
+  // Es posible que el habla haya terminado antes de la confirmación así que
+  // a futuro se puede implementar una rutina para disparar un evento con el audio aquí
+  // Opcional: Si el habla ya terminó pero estábamos esperando confirmación,
+  // podrías disparar un evento extra aquí si lo necesitas.
+end;
+
 procedure TAIVoiceMonitor.ConvertPCMToWAV(PCMStream, WAVStream: TMemoryStream);
 var
   RiffHeader: TRiffHeader;
@@ -1280,7 +1382,7 @@ begin
   // FDeviceID debe contener el ID del dispositivo específico (0, 1, 2...)
   // O el valor WAVE_MAPPER ($FFFFFFFF) para el dispositivo por defecto.
 
-  //FDeviceID := WAVE_MAPPER;
+  // FDeviceID := WAVE_MAPPER;
 
   Res := waveInOpen(@FhWaveIn, FDeviceID, @WaveFormat, DWORD_PTR(@AudioCallback), DWORD_PTR(Self), CALLBACK_FUNCTION);
 

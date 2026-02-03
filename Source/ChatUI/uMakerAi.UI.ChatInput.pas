@@ -31,7 +31,6 @@
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
-
 unit uMakerAi.UI.ChatInput;
 
 interface
@@ -64,7 +63,7 @@ type
 
   TImageData = Class
     FileName: String;
-    FullFileName : String;
+    FullFileName: String;
     Checked: TCheckBox;
     Item: TLayout;
     BitMap: TBitMap;
@@ -113,7 +112,7 @@ type
     procedure AIVoiceMonitorChangeState(Sender: TObject; aUserSpeak, aIsValidForIA: Boolean; aStream: TMemoryStream);
     procedure AIVoiceMonitorError(Sender: TObject; const ErrorMessage: string);
     procedure AIVoiceMonitorUpdate(Sender: TObject; const aSoundLevel: Int64);
-    procedure AIVoiceMonitorWakeWordCheck(Sender: TObject; aWakeWordStream: TMemoryStream; var IsValid: Boolean);
+    procedure AIVoiceMonitorWakeWordCheck(Sender: TObject; aWakeWordStream: TMemoryStream);
     procedure AIVoiceMonitorTranscriptionFragment(Sender: TObject; aFragmentStream: TMemoryStream);
     procedure AIVoiceMonitorSpeechEnd(Sender: TObject; aIsValidForIA: Boolean; aStream: TMemoryStream);
   private
@@ -226,7 +225,7 @@ var
 const
   IMAGE_WIDTH = 50;
   MAX_MEMO_HEIGHT = 200;
-  MIN_FRAME_HEIGHT = 60;
+  MIN_FRAME_HEIGHT = 80;
 
   IMG_INDEX_IMAGE = 4;
   IMG_INDEX_PDF = 5;
@@ -258,7 +257,7 @@ begin
   FValidExtensions := 'jpg,jpeg,png,bmp,pdf,mp3,wav,mp4,avi';
   FWakeWordDetectedInSession := False;
   Width := 400; // Un ancho por defecto razonable
-  Height := 100; //MIN_FRAME_HEIGHT;; // Una altura inicial mínima
+  Height := 100; // MIN_FRAME_HEIGHT;; // Una altura inicial mínima
 
   // --- 2. Crear y cargar los ImageLists desde recursos ---
   FImageList1 := TImageList.Create(Self);
@@ -427,9 +426,9 @@ Var
   Item: TLayout;
   ImageData: TImageData;
   btnDelete: TSpeedButton;
-  FileName : String;
+  FileName: String;
 begin
-  FileName :=ExtractFileName(FullFileName);
+  FileName := ExtractFileName(FullFileName);
 
   X := BitMap.Width;
   Y := BitMap.Height;
@@ -615,22 +614,87 @@ begin
   FCurrentSoundLevel := aSoundLevel;
 end;
 
-procedure TChatInput.AIVoiceMonitorWakeWordCheck(Sender: TObject; aWakeWordStream: TMemoryStream; var IsValid: Boolean);
-Var
+procedure TChatInput.AIVoiceMonitorWakeWordCheck(Sender: TObject; aWakeWordStream: TMemoryStream);
+{ Var
   Res: String;
-Begin
-  IsValid := False;
+  Begin
   DoTranscriptText(aWakeWordStream, Res);
   Res := Trim(LowerCase(Res));
 
   If Res <> '' then
   Begin
-    IsValid := Res.Contains(Trim(LowerCase(FVoiceMonitor.WakeWord)));
-    FWakeWordDetectedInSession := IsValid;
-    Res := 'Valido --- ' + Res;
+  IsValid := Res.Contains(Trim(LowerCase(FVoiceMonitor.WakeWord)));
+  FWakeWordDetectedInSession := IsValid;
+  Res := 'Valido --- ' + Res;
   End;
 
   OutputDebugString(PChar(Res));
+}
+
+var
+  StreamCopy: TMemoryStream;
+begin
+  // Creamos una copia del stream porque el original se liberará al salir de este evento
+  StreamCopy := TMemoryStream.Create;
+  StreamCopy.CopyFrom(aWakeWordStream, 0);
+  StreamCopy.Position := 0;
+
+  // Lanzamos la validación pesada en un hilo aparte
+  TTask.Run(
+    procedure
+    var
+      Res, TargetWakeWord, CleanTarget, CleanWord, DetectedWord: string;
+      Words: TArray<string>;
+      Word: string;
+      Distance: Integer;
+      IsValidResult: Boolean;
+    begin
+      try
+        try
+          DoTranscriptText(aWakeWordStream, Res);
+
+          // --- Lógica de limpieza y comparación ---
+          Res := Trim(Res);
+          TargetWakeWord := Trim(FVoiceMonitor.WakeWord);
+          if TargetWakeWord = '' then
+            TargetWakeWord := 'andrea';
+
+          // RemoveAccents es solo una estrategía en el idioma español, cambiar para otros idiomas
+          CleanTarget := LowerCase(TAIVoiceMonitor.RemoveAccents(TargetWakeWord));
+
+          IsValidResult := False;
+          DetectedWord := '';
+          Words := Res.Split([' ', ',', '.', '!', '?', ';', ':'], TStringSplitOptions.ExcludeEmpty);
+
+          for Word in Words do
+          begin
+            CleanWord := LowerCase(TAIVoiceMonitor.RemoveAccents(Word));
+            Distance := TAIVoiceMonitor.LevenshteinDistance(CleanWord, CleanTarget);
+
+            if (CleanWord = CleanTarget) or ((Length(CleanTarget) > 4) and (Distance <= 2)) or ((Length(CleanTarget) <= 4) and (Distance <= 1)) then
+            begin
+              IsValidResult := True;
+              DetectedWord := Word;
+              Break;
+            end;
+          end;
+
+          // --- NOTIFICAR AL COMPONENTE EL RESULTADO ---
+          FVoiceMonitor.ConfirmWakeWord(IsValidResult);
+          FWakeWordDetectedInSession := IsValidResult;
+
+        finally
+          StreamCopy.Free;
+        end;
+      except
+        on E: Exception do
+          TThread.Queue(nil,
+            procedure
+            begin
+              OutputDebugString(PChar(Res));
+            end);
+      end;
+    end);
 
 end;
 
@@ -889,6 +953,8 @@ begin
   FMemoPrompt.OnDragOver := DocsDragOver;
   FMemoPrompt.OnDragDrop := DocsDragDrop;
   FMemoPrompt.StyleLookup := '';
+  FMemoPrompt.TextSettings.WordWrap := True;
+  FMemoPrompt.TextSettings.Font.Size := 16;
 
   // Layout inferior (contiene botones, etc.)
   FLayoutSend := TLayout.Create(Self);
@@ -2252,7 +2318,7 @@ begin
             // OJO: Asumimos que LoadFromStream hace una copia de los datos del stream
             // y no toma posesión del stream `St`.
             MF.LoadFromStream(Data.FileName, St);
-            MF.FullFileName := Data.FullFileName;  //Asegura que si es un archivo contiene la ruta completa.
+            MF.FullFileName := Data.FullFileName; // Asegura que si es un archivo contiene la ruta completa.
             MediaFiles.Add(MF);
           finally
             St.Free; // `St` es temporal y se libera aquí.
