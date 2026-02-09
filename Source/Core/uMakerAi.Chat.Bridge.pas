@@ -1,17 +1,24 @@
-// MIT License
-// Copyright (c) 2025 Gustavo Enríquez
+ï»¿// MIT License
+// Copyright (c) 2025 Gustavo EnrÃ­quez
 // uMakerAi Framework - Bridge System
 
 unit uMakerAi.Chat.Bridge;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Classes, System.JSON, System.Net.HttpClient,
-  uMakerAi.Core, uMakerAi.Chat.Tools, uMakerAi.Chat, uMakerAi.Chat.Messages;
+  {$ENDIF}
+  uMakerAi.Core, uMakerAi.Chat.Tools, uMakerAi.Chat, uMakerAi.Chat.Messages,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
-  { TAiBaseChatBridge: Motor interno de delegación }
+  { TAiBaseChatBridge: Motor interno de delegaciÃ³n }
   TAiBaseChatBridge = class(TAICustomTool)
   private
     FTargetChat: TAiChat;
@@ -49,7 +56,7 @@ type
     property PromptTranscription: string read FPromptTranscription write FPromptTranscription;
   end;
 
-  { Visión }
+  { VisiÃ³n }
   TAiChatVisionBridge = class(TAiVisionToolBase)
   private
     FEngine: TAiBaseChatBridge;
@@ -66,7 +73,7 @@ type
     property PromptVision: string read FPromptVision write FPromptVision;
   end;
 
-  { Imágenes }
+  { ImÃ¡genes }
   TAiChatImageBridge = class(TAiImageToolBase)
   private
     FEngine: TAiBaseChatBridge;
@@ -132,7 +139,7 @@ type
     property Chat: TAiChat read GetChat write SetChat;
   end;
 
-  { Búsqueda Web }
+  { BÃºsqueda Web }
   TAiChatWebSearchBridge = class(TAiWebSearchToolBase)
   private
     FEngine: TAiBaseChatBridge;
@@ -214,10 +221,10 @@ end;
 
 procedure TAiBaseChatBridge.HandleTargetError(Sender: TObject; const ErrorMsg: string; Exception: Exception; const aResponse: IHTTPResponse);
 begin
-  ReportError(ErrorMsg, Exception);
+  ReportError(ErrorMsg);
 end;
 
-{ --- IMPLEMENTACIÓN DE BRIDGES --- }
+{ --- IMPLEMENTACIÃ“N DE BRIDGES --- }
 
 { TAiChatSpeechBridge }
 constructor TAiChatSpeechBridge.Create(AOwner: TComponent);
@@ -246,14 +253,14 @@ end;
 procedure TAiChatSpeechBridge.ExecuteTranscription(AMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg, AMediaFile);
-  ReportState(acsReasoning, 'Delegando transcripción...');
+  ReportState(acsReasoning, 'Delegando transcripciÃ³n...');
   FEngine.TargetChat.AddMessageAndRun(FPromptTranscription, 'user', [AMediaFile]);
 end;
 
 procedure TAiChatSpeechBridge.ExecuteSpeechGeneration(const aText: string; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg);
-  ReportState(acsWriting, 'Delegando generación de voz...');
+  ReportState(acsWriting, 'Delegando generaciÃ³n de voz...');
   FEngine.TargetChat.AddMessageAndRun('Genera un audio con el siguiente texto: ' + aText, 'user', []);
 end;
 
@@ -284,7 +291,7 @@ end;
 procedure TAiChatVisionBridge.ExecuteImageDescription(AMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg, AMediaFile);
-  ReportState(acsReasoning, 'Delegando visión...');
+  ReportState(acsReasoning, 'Delegando visiÃ³n...');
   FEngine.TargetChat.AddMessageAndRun(FPromptVision, 'user', [AMediaFile]);
 end;
 
@@ -293,7 +300,7 @@ constructor TAiChatImageBridge.Create(AOwner: TComponent);
 begin
   inherited;
   FEngine := TAiBaseChatBridge.Create(nil);
-  FPromptImage := 'Genera una imagen basada en esta descripción: ';
+  FPromptImage := 'Genera una imagen basada en esta descripciÃ³n: ';
 end;
 
 destructor TAiChatImageBridge.Destroy;
@@ -315,7 +322,7 @@ end;
 procedure TAiChatImageBridge.ExecuteImageGeneration(const APrompt: string; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg);
-  ReportState(acsWriting, 'Delegando generación de imagen...');
+  ReportState(acsWriting, 'Delegando generaciÃ³n de imagen...');
   FEngine.TargetChat.AddMessageAndRun(FPromptImage + APrompt, 'user', []);
 end;
 
@@ -324,7 +331,7 @@ constructor TAiChatVideoBridge.Create(AOwner: TComponent);
 begin
   inherited;
   FEngine := TAiBaseChatBridge.Create(nil);
-  FPromptVideo := 'Genera un video corto basado en esta descripción: ';
+  FPromptVideo := 'Genera un video corto basado en esta descripciÃ³n: ';
 end;
 
 destructor TAiChatVideoBridge.Destroy;
@@ -346,7 +353,7 @@ end;
 procedure TAiChatVideoBridge.ExecuteVideoGeneration(ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg);
-  ReportState(acsWriting, 'Delegando generación de video...');
+  ReportState(acsWriting, 'Delegando generaciÃ³n de video...');
   FEngine.TargetChat.AddMessageAndRun(FPromptVideo + TAiChatMessage(AskMsg).Prompt, 'user', []);
 end;
 
@@ -377,7 +384,7 @@ end;
 procedure TAiChatDocumentBridge.ExecuteDocumentAnalysis(AMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg, AMediaFile);
-  ReportState(acsReasoning, 'Delegando análisis de documento...');
+  ReportState(acsReasoning, 'Delegando anÃ¡lisis de documento...');
   FEngine.TargetChat.AddMessageAndRun(FPromptDocument, 'user', [AMediaFile]);
 end;
 
@@ -407,8 +414,8 @@ end;
 procedure TAiChatCodeInterpreterBridge.ExecuteCode(const ACode, ALanguage: string; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg);
-  ReportState(acsWriting, 'Delegando ejecución de código...');
-  FEngine.TargetChat.AddMessageAndRun('Ejecuta o explica este código en ' + ALanguage + ': ' + ACode, 'user', []);
+  ReportState(acsWriting, 'Delegando ejecuciÃ³n de cÃ³digo...');
+  FEngine.TargetChat.AddMessageAndRun('Ejecuta o explica este cÃ³digo en ' + ALanguage + ': ' + ACode, 'user', []);
 end;
 
 { TAiChatWebSearchBridge }
@@ -437,8 +444,8 @@ end;
 procedure TAiChatWebSearchBridge.ExecuteSearch(const AQuery: string; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg);
-  ReportState(acsReasoning, 'Delegando búsqueda web...');
-  FEngine.TargetChat.AddMessageAndRun('Busca en internet información sobre: ' + AQuery, 'user', []);
+  ReportState(acsReasoning, 'Delegando bÃºsqueda web...');
+  FEngine.TargetChat.AddMessageAndRun('Busca en internet informaciÃ³n sobre: ' + AQuery, 'user', []);
 end;
 
 end.

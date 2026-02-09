@@ -1,18 +1,18 @@
-﻿// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -35,20 +35,24 @@
 
 unit uMakerAi.Chat.Gemini;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  // FPC: Unidades estándar de FPC sin prefijo System
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye Net/HTTP/JSON/REST nativos
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Threading, System.NetConsts,
   System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections, System.NetEncoding,
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
-  REST.JSON, REST.Types, REST.Client, uMakerAi.Chat.Messages,
+  REST.JSON, REST.Types, REST.Client, 
 
-{$IF CompilerVersion < 35}
-  uJSONHelper,
-{$ENDIF}
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core,
-  uMakerAi.Utils.PcmToWav, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings,
-  uMakerAi.Embeddings.Core, uMakerAi.Tools.ComputerUse;
+  {$ENDIF}
+  uMakerAi.Chat.Messages, uMakerAi.Chat.Bridge, uMakerAi.Chat.Tools, uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Utils.PcmToWav, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings, uMakerAi.Embeddings.Core, uMakerAi.Tools.ComputerUse,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
 
@@ -82,7 +86,7 @@ type
     procedure SetMediaResolution(const Value: TAiMediaResolution);
 
   Protected
-    Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
+    Procedure OnInternalReceiveData(const Sender: TObject; {$IFDEF FPC}const{$ENDIF} AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
 
     function InternalRunSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
@@ -202,6 +206,7 @@ var
   LResponse: IHTTPResponse;
 begin
   LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient.ConfigureForAsync;
   try
     LUrl := GlAIUrl + CacheName + '?key=' + Self.ApiKey;
     LResponse := LHttpClient.Get(LUrl);
@@ -221,6 +226,7 @@ var
   LResponse: IHTTPResponse;
 begin
   LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient.ConfigureForAsync;
   try
     LUrl := GlAIUrl + CacheName + '?key=' + Self.ApiKey;
     LResponse := LHttpClient.Delete(LUrl);
@@ -238,6 +244,7 @@ var
 begin
   Result := nil;
   LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient.ConfigureForAsync;
   try
     LUrl := GlAIUrl + 'cachedContents?key=' + Self.ApiKey;
     LResponse := LHttpClient.Get(LUrl);
@@ -264,7 +271,6 @@ begin
   Top_p := 0.95;
   Temperature := 1.0;
 
-  NativeOutputFiles := [];
   NativeOutputFiles := [];
   ChatMediaSupports := [];
 
@@ -302,18 +308,24 @@ var
   LRequest, LInput, LOutput, LGcsDest: TJSONObject;
   LResponse: IHTTPResponse;
   LStream: TStringStream;
+  JResp: TJSONObject;
+  LUris: TJSonArray;
 begin
   Result := '';
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
   LUrl := GlAIUrl + 'jobs?key=' + Self.ApiKey;
   LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient.ConfigureForAsync;
   LRequest := TJSONObject.Create;
   try
     LRequest.AddPair('displayName', 'Batch Job from Delphi');
     LRequest.AddPair('model', 'models/' + LModel);
     LInput := TJSONObject.Create;
-    LInput.AddPair('gcsSource', TJSONObject.Create.AddPair('uris', TJSonArray.Create.Add(SourceFileUri)));
+    LUris := TJSonArray.Create;
+    LUris.Add(SourceFileUri);
+    LInput.AddPair('gcsSource', TJSONObject.Create.AddPair('uris', LUris));
     LRequest.AddPair('inputConfig', LInput);
+
     LOutput := TJSONObject.Create;
     LGcsDest := TJSONObject.Create;
     LGcsDest.AddPair('outputUriPrefix', OutputUri);
@@ -325,10 +337,9 @@ begin
       LResponse := LHttpClient.Post(LUrl, LStream);
       if LResponse.StatusCode = 200 then
       begin
-        var
         JResp := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
         try
-          JResp.TryGetValue<string>('name', Result);
+          JResp.TryGetValue('name', Result);
         finally
           JResp.Free;
         end;
@@ -347,18 +358,19 @@ var
   LHttpClient: TNetHTTPClient;
   LUrl, LState: string;
   LResponse: IHTTPResponse;
+  JResp: TJSONObject;
 begin
   Result := 'UNKNOWN';
   LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient.ConfigureForAsync;
   try
     LUrl := GlAIUrl + JobName + '?key=' + Self.ApiKey;
     LResponse := LHttpClient.Get(LUrl);
     if LResponse.StatusCode = 200 then
     begin
-      var
       JResp := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       try
-        if JResp.TryGetValue<string>('state', LState) then
+        if JResp.TryGetValue('state', LState) then
           Result := LState;
       finally
         JResp.Free;
@@ -389,6 +401,8 @@ function TAiGeminiChat.GetSystemInstructionJson: TJSONObject;
 var
   I: Integer;
   FullSystemPrompt: string;
+  Parts: TJSonArray;
+  Part: TJSONObject;
 begin
   Result := nil;
   FullSystemPrompt := '';
@@ -401,9 +415,7 @@ begin
   if FullSystemPrompt <> '' then
   begin
     Result := TJSONObject.Create;
-    var
     Parts := TJSonArray.Create;
-    var
     Part := TJSONObject.Create;
     Part.AddPair('text', FullSystemPrompt);
     Parts.Add(Part);
@@ -434,6 +446,7 @@ var
   LSpeakerList: TJSonArray;
   SL: TStringList;
   I, EqPos: Integer;
+
   RawVal, SpeakerName, VoiceName: string;
 begin
   Result := nil;
@@ -467,8 +480,9 @@ begin
         // --- NUEVA LÓGICA DE PARSEO MANUAL (MÁS SEGURA) ---
         EqPos := Pos('=', RawVal);
 
-        if EqPos > 0 then
+        if RawVal.Contains('=') then
         begin
+          EqPos := Pos('=', RawVal); // Obtenemos posición para el split
           // Encontró el '=', separamos:
           // Speaker: desde el inicio hasta antes del '='
           SpeakerName := Trim(Copy(RawVal, 1, EqPos - 1));
@@ -510,8 +524,11 @@ begin
       // Parseo manual también aquí para limpiar "Gustavo=Puck" -> "Puck"
       EqPos := Pos('=', RawVal);
 
-      if EqPos > 0 then
+      if RawVal.Contains('=') then
+      begin
+        EqPos := Pos('=', RawVal);
         VoiceName := Trim(Copy(RawVal, EqPos + 1, Length(RawVal)))
+      end
       else
         VoiceName := RawVal;
 
@@ -539,12 +556,12 @@ var
   LNormalizedTools: TList<TNormalizedTool>;
   LFinalToolsObj: TJSONObject;
   LToolsArray: TJSonArray;
+  LParsed: TJSONValue;
 begin
   Result := Nil;
   LJsonFunctionsStr := Trim(inherited GetTools(tfOpenAI).Text);
   if (LJsonFunctionsStr = '') or (not Tool_Active) then
     Exit;
-  var
   LParsed := TJSONObject.ParseJSONValue(LJsonFunctionsStr);
   if not Assigned(LParsed) then
     Exit;
@@ -566,7 +583,7 @@ begin
       TJsonToolUtils.NormalizeToolsFromSource('', LSourceJson, LNormalizedTools);
       LFinalToolsObj := TJsonToolUtils.FormatToolList(LNormalizedTools, tfGemini);
       try
-        if LFinalToolsObj.TryGetValue<TJSonArray>('tools', LToolsArray) then
+        if LFinalToolsObj.TryGetValue('tools', LToolsArray) then
           Result := LToolsArray.Clone as TJSonArray;
       finally
         LFinalToolsObj.Free;
@@ -599,6 +616,10 @@ Var
   SigIndex: Integer;
   LResolutionStr: String;
   IsModelRole: Boolean;
+  ClonedPart: TJSONObject;
+  JValArgs: TJSONValue;
+  SimpleContent, jFileData: TJSONObject;
+  TargetCategories: TAiFileCategories;
 begin
   ResArr := TJSonArray.Create;
   Try
@@ -704,8 +725,7 @@ begin
         jFuncResponse.AddPair('name', Msg.FunctionName);
 
         // --- CORRECCIÓN JSON RESPONSE ---
-        var
-          JValArgs: TJSONValue := TJSONObject.ParseJSONValue(Msg.Prompt);
+          JValArgs := TJSONObject.ParseJSONValue(Msg.Prompt);
         try
           // Si el mensaje es un JSON válido (como el que devuelve ComputerUseTool)
           // lo usamos directamente como la estructura de 'response'.
@@ -717,7 +737,6 @@ begin
           begin
             // Si es texto plano o inválido, usamos la estructura legacy envolvente
             jResponseContent := TJSONObject.Create;
-            var
             SimpleContent := TJSONObject.Create;
 
             // Usamos 'content' o 'result' según prefieras para texto plano,
@@ -748,7 +767,6 @@ begin
 
               if (MediaFile.UrlMedia <> '') and (MediaFile.UrlMedia.StartsWith('https://generativelanguage.googleapis.com')) then
               begin
-                var
                 jFileData := TJSONObject.Create;
                 jFileData.AddPair('mimeType', MediaFile.MimeType);
                 jFileData.AddPair('fileUri', MediaFile.UrlMedia);
@@ -779,7 +797,7 @@ begin
             WrapperObj := jToolCallValue as TJSONObject;
 
             // Caso A: Historial crudo de Gemini (gemini_parts)
-            if WrapperObj.TryGetValue<TJSonArray>('gemini_parts', JGeminiParts) then
+            if WrapperObj.TryGetValue('gemini_parts', JGeminiParts) then
             begin
               // Texto explicativo previo (si existe)
               if not Msg.Prompt.IsEmpty then
@@ -805,7 +823,6 @@ begin
                     Continue;
                   // -------------------------------
 
-                  var
                   ClonedPart := TJSONObject(jPartVal).Clone as TJSONObject;
 
                   // Inyectar firma si falta
@@ -860,8 +877,7 @@ begin
         if not IsModelRole then
         begin
 
-          Var
-            TargetCategories: TAiFileCategories;
+            // Var removed (TargetCategories declared above)
 
           if (Tcm_CodeInterpreter in ChatMediaSupports) then
             TargetCategories := [Low(TAiFileCategory) .. High(TAiFileCategory)] // Permitir todo
@@ -879,7 +895,6 @@ begin
 
               if (MediaFile.UrlMedia <> '') and (MediaFile.UrlMedia.StartsWith('https://generativelanguage.googleapis.com')) then
               begin
-                var
                 jFileData := TJSONObject.Create;
                 jFileData.AddPair('mimeType', MediaFile.MimeType);
                 jFileData.AddPair('fileUri', MediaFile.UrlMedia);
@@ -916,7 +931,7 @@ Var
   Client: TNetHTTPClient;
   Res: IHTTPResponse;
   BaseEndPoint, RequestUrl, sNextPageToken: String;
-  jRes: TJSONObject;
+  jRes, jObj: TJSONObject;
   JArr: TJSonArray;
   JVal, JMethod: TJSONValue;
   sModel: string;
@@ -943,6 +958,7 @@ begin
     BaseEndPoint := BaseEndPoint + '/';
 
   Client := TNetHTTPClient.Create(Nil);
+  Client.ConfigureForAsync;
   try
     Client.ContentType := 'application/json';
     sNextPageToken := '';
@@ -964,13 +980,12 @@ begin
           if Assigned(jRes) then
           begin
             // A. Procesar Modelos de esta página
-            if jRes.TryGetValue<TJSonArray>('models', JArr) then
+            if jRes.TryGetValue('models', JArr) then
             Begin
               For JVal in JArr do
               Begin
                 if (JVal is TJSONObject) then
                 begin
-                  var
                   jObj := TJSONObject(JVal);
 
                   // --- EXTRACCIÓN DE VARIABLES ---
@@ -989,24 +1004,24 @@ begin
                   IsGenerative := False;
 
                   // 1. Datos Básicos
-                  jObj.TryGetValue<string>('name', LName);
-                  jObj.TryGetValue<string>('version', LVersion);
-                  jObj.TryGetValue<string>('displayName', LDisplayName);
-                  jObj.TryGetValue<string>('description', LDescription);
+                  jObj.TryGetValue('name', LName);
+                  jObj.TryGetValue('version', LVersion);
+                  jObj.TryGetValue('displayName', LDisplayName);
+                  jObj.TryGetValue('description', LDescription);
 
                   // 2. Limits
-                  jObj.TryGetValue<Int64>('inputTokenLimit', LInputTokenLimit);
-                  jObj.TryGetValue<Int64>('outputTokenLimit', LOutputTokenLimit);
+                  jObj.TryGetValue('inputTokenLimit', LInputTokenLimit);
+                  jObj.TryGetValue('outputTokenLimit', LOutputTokenLimit);
 
                   // 3. Params
-                  jObj.TryGetValue<Double>('temperature', LTemperature);
-                  jObj.TryGetValue<Double>('maxTemperature', LMaxTemperature);
-                  jObj.TryGetValue<Double>('topP', LTopP);
-                  jObj.TryGetValue<Integer>('topK', LTopK);
-                  jObj.TryGetValue<Boolean>('thinking', LThinking);
+                  jObj.TryGetValue('temperature', LTemperature);
+                  jObj.TryGetValue('maxTemperature', LMaxTemperature);
+                  jObj.TryGetValue('topP', LTopP);
+                  jObj.TryGetValue('topK', LTopK);
+                  jObj.TryGetValue('thinking', LThinking);
 
                   // --- FILTRADO DE MÉTODOS ---
-                  if jObj.TryGetValue<TJSonArray>('supportedGenerationMethods', SupportedMethods) then
+                  if jObj.TryGetValue('supportedGenerationMethods', SupportedMethods) then
                   begin
                     for JMethod in SupportedMethods do
                     begin
@@ -1014,7 +1029,7 @@ begin
                       // - generateContent: Chat/Texto standard
                       // - predict: Imagen (Imagen 3/4)
                       // - predictLongRunning: Video (Veo)
-                      if SameText(JMethod.Value, 'generateContent') or SameText(JMethod.Value, 'predict') or SameText(JMethod.Value, 'predictLongRunning') then
+                      if SameText(string(JMethod.Value), 'generateContent') or SameText(string(JMethod.Value), 'predict') or SameText(string(JMethod.Value), 'predictLongRunning') then
                       begin
                         IsGenerative := True;
                         Break;
@@ -1036,7 +1051,7 @@ begin
             End;
 
             // C. Obtener el Token para la siguiente página (si hay)
-            if not jRes.TryGetValue<string>('nextPageToken', sNextPageToken) then
+            if not jRes.TryGetValue('nextPageToken', sNextPageToken) then
               sNextPageToken := ''; // Si no hay token, terminamos el bucle
           end;
         finally
@@ -1075,6 +1090,13 @@ var
   Lista: TStringList;
   I: Integer;
   ActiveCacheName: string;
+  // Vars moved from inline
+  Msg: TAiChatMessage;
+  MediaFile: TAiMediaFile;
+  JVal: TJSONValue;
+  JComputerTool, JCompSettings, JImageConfig, JSchema, JThinking: TJSONObject;
+  sShema: string;
+  LBudget: Integer;
 begin
   LRequest := TJSONObject.Create;
   Lista := TStringList.Create;
@@ -1086,10 +1108,9 @@ begin
     ActiveCacheName := '';
     for I := FMessages.Count - 1 downto 0 do
     begin
-      var
       Msg := FMessages[I];
       if Assigned(Msg.MediaFiles) then
-        for var MediaFile in Msg.MediaFiles do
+        for MediaFile in Msg.MediaFiles do
           if not MediaFile.CacheName.IsEmpty then
           begin
             ActiveCacheName := MediaFile.CacheName;
@@ -1126,7 +1147,7 @@ begin
       if Assigned(JUserTools) then
       begin
         // Clonamos las funciones de usuario al array principal
-        for var JVal in JUserTools do
+        for JVal in JUserTools do
           JArrTools.Add(JVal.Clone as TJSONObject);
         JUserTools.Free;
       end;
@@ -1153,9 +1174,7 @@ begin
     Begin
       // En Gemini 2.5, Computer Use es una herramienta de primer nivel,
       // al igual que 'googleSearch' o 'codeExecution'.
-      var
       JComputerTool := TJSONObject.Create;
-      var
       JCompSettings := TJSONObject.Create;
 
       // La documentación especifica el entorno.
@@ -1186,13 +1205,13 @@ begin
 
     // A. Parámetros Estándar (No perder funcionalidad básica)
     if Temperature >= 0 then
-      JConfig.AddPair('temperature', TJSONNumber.Create(Temperature));
+      JConfig.AddPair('temperature', CreateJSONNumber(Temperature));
 
     if Top_p >= 0 then
-      JConfig.AddPair('topP', TJSONNumber.Create(Top_p));
+      JConfig.AddPair('topP', CreateJSONNumber(Top_p));
 
     if Max_tokens > 0 then
-      JConfig.AddPair('maxOutputTokens', TJSONNumber.Create(Max_tokens));
+      JConfig.AddPair('maxOutputTokens', CreateJSONNumber(Max_tokens));
 
     // Stop Sequences
     if Stop <> '' then
@@ -1210,7 +1229,6 @@ begin
     // B. Configuración de Imagen (Gemini 3 Image / Imagen 3)
     if ImageParams.Count > 0 then
     begin
-      var
       JImageConfig := TJSONObject.Create;
       if ImageParams.Values['aspectRatio'] <> '' then
         JImageConfig.AddPair('aspectRatio', ImageParams.Values['aspectRatio']);
@@ -1230,9 +1248,7 @@ begin
     begin
       JConfig.AddPair('responseMimeType', 'application/json');
       try
-        Var
         sShema := StringReplace(JsonSchema.Text, '\n', ' ', [rfReplaceAll]);
-        var
         JSchema := TJSONObject.ParseJSONValue(sShema) as TJSONObject;
         if Assigned(JSchema) then
           // CORRECCIÓN: La documentación exige 'responseJsonSchema', no 'responseSchema'
@@ -1247,12 +1263,10 @@ begin
 
     if (ThinkingLevel <> tlDefault) or (FThinkingBudget > 0) then
     begin
-      var
       JThinking := TJSONObject.Create;
 
       // 1. Calcular Budget
-      var
-        LBudget: Integer := 0;
+      LBudget := 0;
 
       if FThinkingBudget > 0 then
         LBudget := FThinkingBudget // Prioridad al valor manual
@@ -1274,9 +1288,9 @@ begin
 
       // Solo añadimos budget si es mayor a 0 (0 deshabilita thinking en Flash 2.5)
       if LBudget > 0 then
-        JThinking.AddPair('thinkingBudget', TJSONNumber.Create(LBudget));
+        JThinking.AddPair('thinkingBudget', CreateJSONNumber(LBudget));
 
-      JThinking.AddPair('includeThoughts', TJSONBool.Create(FIncludeThoughts));
+      JThinking.AddPair('includeThoughts', CreateJSONBool(FIncludeThoughts));
       JConfig.AddPair('thinkingConfig', JThinking);
     end;
 
@@ -1296,6 +1310,7 @@ Var
   St: TStringStream;
   jObj: TJSONObject;
   MF: TAiMediaFile;
+  ErrMsg: string;
 begin
   FBusy := True;
   FAbort := False;
@@ -1319,7 +1334,7 @@ begin
         except
           on E: Exception do
             // Opcional: Loguear error o dejar que falle, pero mejor intentamos seguir
-            DoError('Error Auto-Uploading file for Code Interpreter: ' + E.Message, E);
+            DoError('Error Auto-Uploading file for Code Interpreter: ' + E.Message);
         end;
       end;
     end;
@@ -1376,9 +1391,8 @@ begin
       else
       begin
         FBusy := False;
-        var
         ErrMsg := Format('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
-        DoError(ErrMsg, nil);
+        DoError(ErrMsg);
         Result := '';
       end;
     end
@@ -1416,28 +1430,41 @@ Var
   LPartObj, LExecCodeObj, LCodeResultObj, LInlineData: TJSONObject;
   LCode, LLang, LCodeOutput, LMimeType, LBase64Data: String;
   LExt: String;
+  // Vars moved from inline
+  LCandidate: TJSONObject;
+  ToolMsg: TAiChatMessage;
+  // Variables V3 para Tools
+
+  jCall, jArgs, jWrapper, JWrapperParts: TJSONObject;
+  LScreen: TAiMediaFile;
+
+  LParts, JToolsArr: TJSonArray;
+  LNewMediaFile: TAiMediaFile;
+  Msg: TAiChatMessage;
+  SrcList: TStringList; // Compatibilidad FPC
+  Sig: string; // Compatibilidad FPC
 begin
   LRespuesta := '';
   LRole := 'model';
   AskMsg := GetLastMessage;
 
   // 1. Validaciones de Seguridad y Candidatos
-  if not jObj.TryGetValue<TJSonArray>('candidates', LCandidates) or (LCandidates.Count = 0) then
+  if not jObj.TryGetValue('candidates', LCandidates) or (LCandidates.Count = 0) then
   begin
-    if jObj.TryGetValue<TJSONObject>('promptFeedback', JPromptFeedback) then
+    if jObj.TryGetValue('promptFeedback', JPromptFeedback) then
     begin
-      DoError('Bloqueado por seguridad: ' + JPromptFeedback.ToJSON, nil);
+      DoError('Bloqueado por seguridad: ' + JPromptFeedback.ToJSON);
       Exit;
     end;
     FBusy := False;
     // Si no hay candidatos ni feedback, puede ser un error de estructura o un finishReason raro
-    DoError('La respuesta de Gemini no contiene candidatos válidos.', nil);
+    DoError('La respuesta de Gemini no contiene candidatos válidos.');
     Exit;
   end;
 
   // 2. Extracción de Metadatos Generales
-  jObj.TryGetValue<String>('modelVersion', ModelVersion);
-  jObj.TryGetValue<String>('responseId', ResponseId);
+  jObj.TryGetValue('modelVersion', ModelVersion);
+  jObj.TryGetValue('responseId', ResponseId);
 
   // 3. Conteo de Tokens (Standard + Thinking)
   aPrompt_tokens := 0;
@@ -1445,29 +1472,26 @@ begin
   atotal_tokens := 0;
   aThoughts_tokens := 0;
 
-  if jObj.TryGetValue<TJSONObject>('usageMetadata', LUso) then
+  if jObj.TryGetValue('usageMetadata', LUso) then
   begin
-    LUso.TryGetValue<Integer>('promptTokenCount', aPrompt_tokens);
-    LUso.TryGetValue<Integer>('candidatesTokenCount', aCompletion_tokens);
-    LUso.TryGetValue<Integer>('totalTokenCount', atotal_tokens);
-    // [V3] Token count específico para pensamientos
-    LUso.TryGetValue<Integer>('thoughtsTokenCount', aThoughts_tokens);
+    LUso.TryGetValue('promptTokenCount', aPrompt_tokens);
+    LUso.TryGetValue('candidatesTokenCount', aCompletion_tokens);
+    LUso.TryGetValue('totalTokenCount', atotal_tokens);
+    //
+    LUso.TryGetValue('thoughtsTokenCount', aThoughts_tokens);
   end;
 
-  var
   LCandidate := LCandidates.Items[0] as TJSONObject;
 
   // 4. Procesar Grounding (Búsqueda Web)
   ParseGroundingMetadata(LCandidate, ResMsg);
 
   // 5. Procesar Contenido (Partes del mensaje)
-  if LCandidate.TryGetValue<TJSONObject>('content', LContent) then
+  if LCandidate.TryGetValue('content', LContent) then
   begin
-    LContent.TryGetValue<string>('role', LRole);
-    var
-      LParts: TJSonArray;
+    LContent.TryGetValue('role', LRole);
 
-    if LContent.TryGetValue<TJSonArray>('parts', LParts) then
+    if LContent.TryGetValue('parts', LParts) then
     Begin
       for jValPart in LParts do
       begin
@@ -1478,51 +1502,50 @@ begin
         // [V3] CAPTURAR THOUGHT SIGNATURE (De cualquier parte)
         // Se guarda temporalmente en ResMsg. Si luego resulta ser un ToolCall,
         // transferiremos estas firmas al mensaje intermedio.
-        if LPartObj.TryGetValue<string>('thoughtSignature', LPartSig) then
+        if LPartObj.TryGetValue('thoughtSignature', LPartSig) then
         begin
           AddThoughtSignature(ResMsg, LPartSig);
         end;
 
         // A. Texto Normal
-        if LPartObj.TryGetValue<string>('text', sText) then
+        if LPartObj.TryGetValue('text', sText) then
           LRespuesta := Trim(LRespuesta + sText);
 
         // B. Code Execution: Código generado (Historial)
-        if LPartObj.TryGetValue<TJSONObject>('executableCode', LExecCodeObj) then
+        if LPartObj.TryGetValue('executableCode', LExecCodeObj) then
         begin
-          LExecCodeObj.TryGetValue<string>('language', LLang);
-          if LExecCodeObj.TryGetValue<string>('code', LCode) then
+          LExecCodeObj.TryGetValue('language', LLang);
+          if LExecCodeObj.TryGetValue('code', LCode) then
             LRespuesta := LRespuesta + sLineBreak + '```' + LowerCase(LLang) + sLineBreak + Trim(LCode) + sLineBreak + '```';
         end;
 
         // C. Code Execution: Resultado (Historial)
-        if LPartObj.TryGetValue<TJSONObject>('codeExecutionResult', LCodeResultObj) then
+        if LPartObj.TryGetValue('codeExecutionResult', LCodeResultObj) then
         begin
-          if LCodeResultObj.TryGetValue<string>('output', LCodeOutput) then
+          if LCodeResultObj.TryGetValue('output', LCodeOutput) then
             LRespuesta := LRespuesta + sLineBreak + '> **Output:**' + sLineBreak + '```' + sLineBreak + Trim(LCodeOutput) + sLineBreak + '```';
         end;
 
         // D. Multimedia Inline (Imágenes/Audio generados)
-        if LPartObj.TryGetValue<TJSONObject>('inlineData', LInlineData) then
+        if LPartObj.TryGetValue('inlineData', LInlineData) then
         begin
-          LInlineData.TryGetValue<string>('mimeType', LMimeType);
-          LInlineData.TryGetValue<string>('data', LBase64Data);
+          LInlineData.TryGetValue('mimeType', LMimeType);
+          LInlineData.TryGetValue('data', LBase64Data);
 
           if (LBase64Data <> '') then
           begin
-            var
             LNewMediaFile := TAiMediaFile.Create;
             try
               // Determinar extensión aproximada para guardar
-              LExt := 'bin';
-              if LMimeType.Contains('wav') then
-                LExt := 'wav'
-              else if LMimeType.Contains('mp3') then
-                LExt := 'mp3'
-              else if LMimeType.Contains('png') then
-                LExt := 'png'
-              else if LMimeType.Contains('jpeg') then
-                LExt := 'jpg';
+               LExt := 'bin';
+               if Pos('wav', LMimeType) > 0 then
+                 LExt := 'wav'
+               else if Pos('mp3', LMimeType) > 0 then
+                 LExt := 'mp3'
+               else if Pos('png', LMimeType) > 0 then
+                 LExt := 'png'
+               else if Pos('jpeg', LMimeType) > 0 then
+                 LExt := 'jpg';
 
               LNewMediaFile.LoadFromBase64('generated.' + LExt, LBase64Data);
               // LNewMediaFile.MimeType := LMimeType; // Propiedad readonly derivada del nombre, o ajustar clase base
@@ -1588,28 +1611,23 @@ begin
   Else
   Begin
 
-    var
     Msg := TAiChatMessage.Create(LRespuesta, LRole);
 
     // Construir el JSON de tool_calls para el historial
-    var
     JToolsArr := TJSonArray.Create;
     for Clave in LFunciones.Keys do
     begin
       ToolCall := LFunciones[Clave];
-      var
       jCall := TJSONObject.Create;
       jCall.AddPair('name', ToolCall.Name);
 
-      var
-      jArgs := TJSONObject.ParseJSONValue(ToolCall.Arguments);
+       jArgs := TJSONObject.ParseJSONValue(ToolCall.Arguments) as TJSONObject;
       if not Assigned(jArgs) then
         jArgs := TJSONObject.Create;
 
       jCall.AddPair('args', jArgs);
 
       // Wrapper de Gemini para FunctionCall
-      var
       jWrapper := TJSONObject.Create;
       jWrapper.AddPair('functionCall', jCall);
       JToolsArr.Add(jWrapper);
@@ -1626,7 +1644,6 @@ begin
     else
     begin
       // Múltiples funciones: usamos gemini_parts
-      var
       JWrapperParts := TJSONObject.Create;
       JWrapperParts.AddPair('gemini_parts', JToolsArr);
       Msg.Tool_calls := JWrapperParts.ToJSON;
@@ -1644,11 +1661,9 @@ begin
     // Pero en el flujo de herramientas, 'ResMsg' se recicla para el resultado final de la recursión.
     // El mensaje que contiene la llamada a la función (y por tanto la firma) es 'Msg'.
     // Debemos mover las firmas de ResMsg a Msg.
-    var
-      SrcList: TStringList;
     if FThoughtSignatures.TryGetValue(ResMsg, SrcList) then
     begin
-      for var Sig in SrcList do
+      for Sig in SrcList do
         AddThoughtSignature(Msg, Sig);
 
       // Limpiamos las firmas de ResMsg para que no se dupliquen cuando se llene con la respuesta final
@@ -1672,19 +1687,17 @@ begin
         ToolCall.AskMsg := AskMsg;
 
         TaskList[I] := TTask.Create(
-          procedure
+          TProc(procedure
           begin
             Try
               DoCallFunction(ToolCall);
             Except
               On E: Exception do
-                TThread.Queue(nil,
-                  procedure
-                  begin
-                    DoError('Error in "' + ToolCall.Name + '"', E);
-                  end);
+              begin
+                DoError('Error in "' + ToolCall.Name + '"');
+              end;
             End;
-          end);
+          end));
         TaskList[I].Start;
         Inc(I);
       End;
@@ -1694,13 +1707,12 @@ begin
       For Clave in LFunciones.Keys do
       Begin
         ToolCall := LFunciones[Clave];
-        var
+
         ToolMsg := TAiChatMessage.Create(ToolCall.Response, 'tool', ToolCall.Id, ToolCall.Name);
 
         TMonitor.Enter(FPendingScreenshots);
+
         try
-          var
-            LScreen: TAiMediaFile;
           if FPendingScreenshots.TryGetValue(ToolCall.Id, LScreen) then
           begin
             // Transferimos la propiedad del objeto al mensaje (Extract)
@@ -1744,18 +1756,18 @@ begin
   if not Assigned(ResMsg.WebSearchResponse) then
     ResMsg.WebSearchResponse := TAiWebSearch.Create;
   ResMsg.WebSearchResponse.annotations.Clear;
-  if not jCandidate.TryGetValue<TJSONObject>('groundingMetadata', jGroundingMeta) then
+  if not jCandidate.TryGetValue('groundingMetadata', jGroundingMeta) then
     Exit;
-  if jGroundingMeta.TryGetValue<TJSonArray>('groundingChunks', jChunksArray) then
+  if jGroundingMeta.TryGetValue('groundingChunks', jChunksArray) then
   begin
     for I := 0 to jChunksArray.Count - 1 do
     begin
       jChunk := jChunksArray.Items[I] as TJSONObject;
-      if jChunk.TryGetValue<TJSONObject>('web', jWeb) then
+      if jChunk.TryGetValue('web', jWeb) then
       begin
         ChunkItem := TAiWebSearchItem.Create;
-        jWeb.TryGetValue<string>('title', WebTitle);
-        jWeb.TryGetValue<string>('uri', WebUri);
+        jWeb.TryGetValue('title', WebTitle);
+        jWeb.TryGetValue('uri', WebUri);
         ChunkItem.title := WebTitle;
         ChunkItem.Url := WebUri;
         ChunkItem.&type := 'web_page';
@@ -1781,27 +1793,27 @@ begin
   if not(jCandidateValue is TJSONObject) then
     Exit;
   Result := TAiToolsFunctions.Create;
-  if not TJSONObject(jCandidateValue).TryGetValue<TJSONObject>('content', jContent) or not jContent.TryGetValue<TJSonArray>('parts', jParts) then
+  if not TJSONObject(jCandidateValue).TryGetValue('content', jContent) or not jContent.TryGetValue('parts', jParts) then
   begin
     FreeAndNil(Result);
     Exit;
   end;
   for jPartValue in jParts do
   begin
-    if (jPartValue is TJSONObject) and TJSONObject(jPartValue).TryGetValue<TJSONObject>('functionCall', jFunctionCall) then
+    if (jPartValue is TJSONObject) and TJSONObject(jPartValue).TryGetValue('functionCall', jFunctionCall) then
     begin
       LFunction := TAiToolsFunction.Create;
       try
-        jFunctionCall.TryGetValue<string>('name', LFunction.Name);
-        if jFunctionCall.TryGetValue<TJSONObject>('args', LArgsObject) then
+        jFunctionCall.TryGetValue('name', LFunction.Name);
+        if jFunctionCall.TryGetValue('args', LArgsObject) then
           LFunction.Arguments := LArgsObject.ToJSON
         else
           LFunction.Arguments := '{}';
         if Assigned(LArgsObject) then
           For I := 0 to LArgsObject.Count - 1 do
           Begin
-            Nom := LArgsObject.Pairs[I].JsonString.Value;
-            Valor := LArgsObject.Pairs[I].JsonValue.Value;
+            Nom := GetJSONStringValue(LArgsObject.Pairs[I].JsonString);
+            Valor := GetJSONStringValue(LArgsObject.Pairs[I].JsonValue);
             LFunction.Params.Values[Nom] := Valor;
           End;
         LFunction.Id := 'call_' + TGuid.NewGuid.ToString;
@@ -1915,7 +1927,7 @@ Var
   K: Integer;
   PartObj, jInlineData: TJSONObject;
   LNewMediaFile: TAiMediaFile;
-  LBase64Data, LMimeType, LSig: String;
+  LBase64Data, LMimeType, LSig, LExt: String;
 
   Code: TMarkdownCodeExtractor;
   CodeFile: TCodeFile;
@@ -1942,28 +1954,28 @@ begin
   begin
     JArrParts := TJSonArray.Create;
     Keys := FTmpToolCallBuffer.Keys.ToArray;
-    TArray.Sort<Integer>(Keys);
+    // Cross-platform helper: TArrayUtils.Sort works in both Delphi and FPC
+    TArrayUtils.Sort(Keys);
 
     for K in Keys do
     begin
       PartObj := FTmpToolCallBuffer[K];
 
       // [Gemini 3] Recuperar firmas guardadas en el buffer
-      if PartObj.TryGetValue<string>('thoughtSignature', LSig) then
+      if PartObj.TryGetValue('thoughtSignature', LSig) then
         AddThoughtSignature(ResMsg, LSig);
 
       // Recuperar Archivos generados
-      if PartObj.TryGetValue<TJSONObject>('inlineData', jInlineData) then
+      if PartObj.TryGetValue('inlineData', jInlineData) then
       begin
-        jInlineData.TryGetValue<string>('mimeType', LMimeType);
-        jInlineData.TryGetValue<string>('data', LBase64Data);
+        jInlineData.TryGetValue('mimeType', LMimeType);
+        jInlineData.TryGetValue('data', LBase64Data);
 
         if (LBase64Data <> '') then
         begin
           LNewMediaFile := TAiMediaFile.Create;
           try
             // Lógica simple de extensión
-            var
             LExt := 'bin';
             if LMimeType.Contains('png') then
               LExt := 'png'
@@ -2090,10 +2102,8 @@ var
   LNumBytes: Int64;
 begin
   Result := '';
-  LHttpClient := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
-  LHttpClient.SynchronizeEvents := False;
-{$ENDIF}
+  LHttpClient := TNetHTTPClient.Create(nil);
+  LHttpClient.ConfigureForAsync;
   try
     LStartUrl := GlAIUploadUrl + 'files?key=' + Self.ApiKey;
     LFileStream := aMediaFile.Content;
@@ -2126,12 +2136,17 @@ begin
       LUploadResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       if Assigned(LUploadResponseObj) then
         try
-          if LUploadResponseObj.TryGetValue<TJSONObject>('file', LFileObj) then
+        if LUploadResponseObj.TryGetValue('file', LFileObj) then
           begin
-            if LFileObj.TryGetValue<string>('uri', LFileUri) then
+            if LFileObj.TryGetValue('uri', LFileUri) then
+            begin
               Result := LFileUri;
-            LFileObj.TryGetValue<string>('name', CloudName);
-            LFileObj.TryGetValue<string>('state', CloudState);
+              // Use robust helper for filename extraction from URI
+              if aMediaFile.FileName.IsEmpty then
+                 aMediaFile.FileName := ExtractFileNameFromUrl(LFileUri);
+            end;
+            LFileObj.TryGetValue('name', CloudName);
+            LFileObj.TryGetValue('state', CloudState);
             aMediaFile.UrlMedia := LFileUri;
             aMediaFile.CloudName := CloudName;
             aMediaFile.CloudState := CloudState;
@@ -2156,7 +2171,8 @@ begin
   CloudState := 'UNDEFINED';
   if aMediaFile.CloudName = '' then
     raise Exception.Create('No CloudName');
-  LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient := TNetHTTPClient.Create(nil);
+  LHttpClient.ConfigureForAsync;
   try
     LCheckUrl := GlAIUrl + aMediaFile.CloudName + '?key=' + Self.ApiKey;
     LResponse := LHttpClient.Get(LCheckUrl);
@@ -2165,8 +2181,8 @@ begin
       LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       if Assigned(LResponseObj) then
         try
-          if LResponseObj.TryGetValue<TJSONObject>('file', LFileObj) then
-            LFileObj.TryGetValue<string>('state', CloudState);
+          if LResponseObj.TryGetValue('file', LFileObj) then
+            LFileObj.TryGetValue('state', CloudState);
         finally
           LResponseObj.Free;
         end;
@@ -2189,7 +2205,8 @@ begin
   Result := '';
   if aMediaFile.CloudName = '' then
     Exit;
-  LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient := TNetHTTPClient.Create(nil);
+  LHttpClient.ConfigureForAsync;
   try
     LDeleteUrl := GlAIUrl + aMediaFile.CloudName + '?key=' + Self.ApiKey;
     LResponse := LHttpClient.Delete(LDeleteUrl);
@@ -2273,7 +2290,8 @@ begin
   Result := 'FAILED';
   if aMediaFile.UrlMedia = '' then
     Exit;
-  LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient := TNetHTTPClient.Create(nil);
+  LHttpClient.ConfigureForAsync;
   LFileStream := TMemoryStream.Create;
   try
     LDownloadUrl := aMediaFile.UrlMedia;
@@ -2286,7 +2304,8 @@ begin
       aMediaFile.Content.CopyFrom(LFileStream, 0);
       aMediaFile.Content.Position := 0;
       if aMediaFile.FileName = '' then
-        aMediaFile.FileName := ExtractFileName(TURI.Create(LDownloadUrl).Path);
+        // Delphi/FPC: Use PathDelim (Delphi) or PathSeparator helper
+        aMediaFile.FileName := ExtractFileName(StringReplace(LDownloadUrl, '/', PathDelim, [rfReplaceAll]));
       Result := 'DOWNLOADED';
     end;
   finally
@@ -2300,14 +2319,16 @@ var
   LHttpClient: TNetHTTPClient;
   LUrl, CacheName, LModel: string;
   LResponse: IHTTPResponse;
-  LRequestBody, LJson, LPart, LInlineData: TJSONObject;
+  LRequestBody, LJson, LPart, LInlineData, LResponseObj: TJSONObject;
   LPartsArray, LContentsArray: TJSonArray;
+  LBodyStream: TStringStream;
 begin
   Result := '';
   if aMediaFile.Base64 = '' then
     Exit;
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
-  LHttpClient := TNetHTTPClient.Create(Nil);
+  LHttpClient := TNetHTTPClient.Create(nil);
+  LHttpClient.ConfigureForAsync;
   try
     LUrl := Url + 'cachedContents?key=' + Self.ApiKey;
     LRequestBody := TJSONObject.Create;
@@ -2328,7 +2349,7 @@ begin
       LContentsArray.Add(LJson);
       LRequestBody.AddPair('contents', LContentsArray);
       LHttpClient.ContentType := 'application/json';
-      var
+      
       LBodyStream := TStringStream.Create(LRequestBody.ToJSON, TEncoding.UTF8);
       try
         LResponse := LHttpClient.Post(LUrl, LBodyStream);
@@ -2340,11 +2361,10 @@ begin
     end;
     if LResponse.StatusCode = 200 then
     begin
-      var
       LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       if Assigned(LResponseObj) then
         try
-          if LResponseObj.TryGetValue<string>('name', CacheName) then
+          if LResponseObj.TryGetValue('name', CacheName) then
           begin
             aMediaFile.CacheName := CacheName;
             Result := CacheName;
@@ -2373,7 +2393,16 @@ var
   LKey, LValueStr: string;
   VideoTask: ITask;
   MediaArr: TAiMediaFilesArray;
+
   // HasImageInput: Boolean;
+  LNumInt: Integer;
+  LNumFloat: Extended;
+  ErrMsg: string;
+  LVideoResponse, LSample0: TJSONObject;
+  LSamples: TJSONArray;
+  DownloadHeaders: TNetHeaders;
+
+
 begin
   Result := '';
   FBusy := True;
@@ -2427,7 +2456,7 @@ begin
       else
         LImagePart.Free;
     end;
-
+    
     // 3. Construir "parameters" (Configuración de Veo)
     LParams := TJSONObject.Create;
 
@@ -2440,26 +2469,21 @@ begin
     begin
       LKey := VideoParams.Names[I];
       LValueStr := VideoParams.ValueFromIndex[I];
-
-      var
-        LNumInt: Integer;
-      var
-        LNumFloat: Extended;
-
-        // Lógica específica para strings de Veo que NO deben ser números
+      
+      // Lógica específica para strings de Veo que NO deben ser números
       if SameText(LKey, 'aspectRatio') or SameText(LKey, 'resolution') or SameText(LKey, 'personGeneration') then
       begin
         LParams.AddPair(LKey, TJSONString.Create(LValueStr));
       end
       // Detección de tipos para el resto (seed, durationSeconds, etc)
       else if TryStrToInt(LValueStr, LNumInt) then
-        LParams.AddPair(LKey, TJSONNumber.Create(LNumInt))
+        LParams.AddPair(LKey, CreateJSONNumber(LNumInt))
       else if TryStrToFloat(LValueStr, LNumFloat) then
-        LParams.AddPair(LKey, TJSONNumber.Create(LNumFloat))
+        LParams.AddPair(LKey, CreateJSONNumber(LNumFloat))
       else if SameText(LValueStr, 'true') then
-        LParams.AddPair(LKey, TJSONBool.Create(True))
+        LParams.AddPair(LKey, CreateJSONBool(True))
       else if SameText(LValueStr, 'false') then
-        LParams.AddPair(LKey, TJSONBool.Create(False))
+        LParams.AddPair(LKey, CreateJSONBool(False))
       else
         LParams.AddPair(LKey, TJSONString.Create(LValueStr));
     end;
@@ -2474,6 +2498,10 @@ begin
       LogDebug('Veo Request URL: ' + LUrl);
       LogDebug('Veo Request Body: ' + LRequest.ToJSON);
 
+      // [COMPATIBILIDAD FPC] Usamos nil como stream de respuesta porque:
+      // 1. Para respuestas JSON/texto, ContentAsString es más simple y compatible.
+      // 2. Evita crear/destruir TStreamReader manualmente.
+      // 3. El contenido queda accesible via LResponse.ContentAsString directamente.
       LResponse := FClient.Post(LUrl, LBodyStream, nil, []);
     finally
       LBodyStream.Free;
@@ -2482,20 +2510,19 @@ begin
     if (LResponse.StatusCode <> 200) then
     begin
       FBusy := False;
-      var
       ErrMsg := Format('Video Generation Error (Start): %d, %s', [LResponse.StatusCode, LResponse.ContentAsString]);
       LogDebug(ErrMsg);
-      DoError(ErrMsg, nil);
+      DoError(ErrMsg);
       Exit;
     end;
 
     // 5. Obtener Operation Name (ID de la tarea de larga duración)
     LInitialResponse := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
     try
-      if not LInitialResponse.TryGetValue<string>('name', LOpName) then
+      if not LInitialResponse.TryGetValue('name', LOpName) then
       begin
         FBusy := False;
-        DoError('API Error: No operation name returned in response.', nil);
+        DoError('API Error: No operation name returned in response.');
         Exit;
       end;
     finally
@@ -2507,7 +2534,7 @@ begin
 
     // 6. Iniciar Tarea Asíncrona de Polling
     VideoTask := TTask.Run(
-      procedure
+      TProc(procedure
       var
         TaskClient: TNetHTTPClient;
         TaskResp: IHTTPResponse;
@@ -2515,8 +2542,10 @@ begin
         TaskIsDone: Boolean;
         LVideoUri: String;
         LFileStream: TMemoryStream;
+        LResponseStream: TStringStream;
       begin
         TaskClient := TNetHTTPClient.Create(Nil);
+        TaskClient.ConfigureForAsync;
         TaskIsDone := False;
         TaskFinalResponse := nil;
         LVideoUri := '';
@@ -2530,7 +2559,7 @@ begin
               Sleep(5000);
 
               // Notificar progreso a la UI
-              TThread.Queue(nil,
+              QueueInMainThread(
                 procedure
                 begin
                   if Assigned(FOnReceiveDataEvent) then
@@ -2542,10 +2571,10 @@ begin
 
               if TaskResp.StatusCode <> 200 then
               begin
-                TThread.Queue(nil,
+                QueueInMainThread(
                   procedure
                   begin
-                    DoError('Polling Error: ' + TaskResp.StatusText, nil);
+                    DoError('Polling Error: ' + TaskResp.StatusText);
                   end);
                 Break;
               end;
@@ -2553,7 +2582,7 @@ begin
               TaskPollingResponse := TJSONObject.ParseJSONValue(TaskResp.ContentAsString) as TJSONObject;
               try
                 // Verificar si terminó ("done": true)
-                if TaskPollingResponse.TryGetValue<Boolean>('done', TaskIsDone) and TaskIsDone then
+                if TaskPollingResponse.TryGetValue('done', TaskIsDone) and TaskIsDone then
                 begin
                   // Clonar respuesta final porque TaskPollingResponse se liberará
                   TaskFinalResponse := TaskPollingResponse.Clone as TJSONObject;
@@ -2567,26 +2596,23 @@ begin
             if Assigned(TaskFinalResponse) then
             begin
               // Verificar errores devueltos por la operación
-              if TaskFinalResponse.TryGetValue<TJSONObject>('error', TaskErrorObj) then
-              begin
-                var
-                ErrMsg := TaskErrorObj.GetValue<string>('message', 'Unknown error');
-                raise Exception.Create('Veo Operation Failed: ' + ErrMsg);
-              end;
+                if TaskFinalResponse.TryGetValue('error', TaskErrorObj) then
+                begin
+                  ErrMsg := TaskErrorObj.GetValueAsString('message', 'Unknown error');
+                  raise Exception.Create('Veo Operation Failed: ' + ErrMsg);
+                end;
 
               // Extraer URI del video
               // Ruta JSON: response.generateVideoResponse.generatedSamples[0].video.uri
-              var
-              LVideoResponse := TaskFinalResponse.GetValue<TJSONObject>('response.generateVideoResponse');
+              // Ruta JSON: response.generateVideoResponse.generatedSamples[0].video.uri
+              LVideoResponse := TaskFinalResponse.GetValueAsObject('response.generateVideoResponse');
               if Assigned(LVideoResponse) then
               begin
-                var
-                LSamples := LVideoResponse.GetValue<TJSonArray>('generatedSamples');
+                LSamples := LVideoResponse.GetValueAsArray('generatedSamples');
                 if Assigned(LSamples) and (LSamples.Count > 0) then
                 begin
-                  var
                   LSample0 := LSamples.Items[0] as TJSONObject;
-                  LVideoUri := LSample0.GetValue<string>('video.uri', '');
+                  LVideoUri := LSample0.GetValueAsString('video.uri', '');
                 end;
               end;
 
@@ -2595,10 +2621,8 @@ begin
                 // DESCARGAR EL VIDEO
                 LFileStream := TMemoryStream.Create;
                 try
-                  // --- CORRECCIÓN AQUÍ ---
+                   // --- CORRECCIÓN AQUÍ ---
                   // 1. Preparamos los headers con la API Key
-                  var
-                    DownloadHeaders: TNetHeaders;
                   DownloadHeaders := [TNetHeader.Create('x-goog-api-key', Self.ApiKey)];
 
                   // 2. Pasamos los headers en el GET
@@ -2606,11 +2630,11 @@ begin
 
                   if TaskResp.StatusCode = 200 then
                   begin
-                    LFileStream.CopyFrom(TaskResp.ContentStream, 0);
+                    CopyResponseToStream(TaskResp, LFileStream);
                     LFileStream.Position := 0;
 
                     // Actualizar UI en hilo principal
-                    TThread.Synchronize(nil,
+                    SynchronizeInMainThread(
                       procedure
                       var
                         NewVideoFile: TAiMediaFile;
@@ -2643,11 +2667,9 @@ begin
 
           except
             On E: Exception do
-              TThread.Queue(nil,
-                procedure
-                begin
-                  DoError('Video Generation Task Exception: ' + E.Message, E);
-                end);
+            begin
+              DoError('Video Generation Task Exception: ' + E.Message);
+            end;
           end;
         finally
           TaskClient.Free;
@@ -2657,7 +2679,7 @@ begin
           FBusy := False;
 
           // Notificación final
-          TThread.Queue(nil,
+          QueueInMainThread(
             procedure
             begin
               DoStateChange(acsFinished, 'Done');
@@ -2665,7 +2687,7 @@ begin
                 FOnReceiveDataEnd(Self, ResMsg, nil, 'model', FLastContent);
             end);
         end;
-      end); // Fin TTask
+      end)); // Fin TTask
 
     // No hacemos VideoTask.Wait para no bloquear la UI principal.
     // El TTask se ejecutará en segundo plano y notificará vía eventos.
@@ -2688,7 +2710,8 @@ var
   LResponseJson: TJSONObject;
   LBase64AudioData, LErrorResponse: string;
   LNewAudioFile: TAiMediaFile;
-  LResponseReader: TStreamReader;
+  LDefaultVoice, LPre, LConf: TJSONObject;
+
   WavStream: TMemoryStream;
   OldAsync: Boolean;
 begin
@@ -2703,7 +2726,7 @@ begin
 
   LRequestJson := TJSONObject.Create;
   LBodyStream := nil;
-  LResponseStream := TMemoryStream.Create;
+
 
   try
     // 2. Construir Payload
@@ -2729,13 +2752,10 @@ begin
     begin
       // Si no hay voz configurada, usamos una por defecto 'Puck' para que no falle
       // O lanzamos error según tu preferencia. Aquí pongo un default seguro.
-      var
       LDefaultVoice := TJSONObject.Create;
-      var
       LPre := TJSONObject.Create;
       LPre.AddPair('voiceName', 'Puck');
       LDefaultVoice.AddPair('prebuiltVoiceConfig', LPre);
-      var
       LConf := TJSONObject.Create;
       LConf.AddPair('voiceConfig', LDefaultVoice);
       LGenConfigJson.AddPair('speechConfig', LConf);
@@ -2760,7 +2780,7 @@ begin
     FClient.Asynchronous := False;
 
     Try
-      LResponse := FClient.Post(LUrl, LBodyStream, LResponseStream, []);
+      LResponse := FClient.Post(LUrl, LBodyStream, nil, []);
     Finally
       FClient.Asynchronous := OldAsync;
     End;
@@ -2769,13 +2789,10 @@ begin
     LogDebug(LResponse.ContentAsString);
 
     // 4. Procesar Respuesta
-    LResponseStream.Position := 0;
-    LResponseReader := TStreamReader.Create(LResponseStream, TEncoding.UTF8);
-    try
-      LErrorResponse := LResponseReader.ReadToEnd;
-    finally
-      LResponseReader.Free;
-    end;
+    // [COMPATIBILIDAD FPC] ContentAsString reemplaza el patrón TStreamReader:
+    // Antes: LResponseStream + TStreamReader.ReadToEnd (7 líneas)
+    // Ahora: LResponse.ContentAsString (1 línea, más limpio y compatible)
+    LErrorResponse := LResponse.ContentAsString;
 
     if LResponse.StatusCode = 200 then
     begin
@@ -2783,7 +2800,7 @@ begin
       try
         if Assigned(LResponseJson) then
         begin
-          LBase64AudioData := LResponseJson.GetValue<string>('candidates[0].content.parts[0].inlineData.data', '');
+          LBase64AudioData := LResponseJson.GetValueAsString('candidates[0].content.parts[0].inlineData.data', '');
 
           if not LBase64AudioData.IsEmpty then
           begin
@@ -2820,7 +2837,7 @@ begin
           else
           begin
             // A veces Gemini devuelve finishReason: SAFETY sin datos
-            DoError('No audio data received. Check safety settings or prompt.', nil);
+            DoError('No audio data received. Check safety settings or prompt.');
           end;
         end;
       finally
@@ -2830,13 +2847,13 @@ begin
     else
     begin
       FLastError := LErrorResponse;
-      DoError(Format('Error Audio Generation: %d - %s', [LResponse.StatusCode, FLastError]), nil);
+      DoError(Format('Error Audio Generation: %d - %s', [LResponse.StatusCode, FLastError]));
     end;
 
   finally
     LRequestJson.Free;
     LBodyStream.Free;
-    LResponseStream.Free;
+
     FBusy := False;
   end;
 end;
@@ -2868,7 +2885,7 @@ end;
 // LogDebug('--OnInternalReceiveData--');
 // LogDebug(FResponse.DataString);
 
-procedure TAiGeminiChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
+procedure TAiGeminiChat.OnInternalReceiveData(const Sender: TObject; {$IFDEF FPC}const{$ENDIF} AContentLength, AReadCount: Int64; var AAbort: Boolean);
 Var
   S, JsonStr, sText, sThoughtContent, sFinishReason: String;
   P_End, Level, I: Integer;
@@ -2888,12 +2905,17 @@ Var
   K: Integer;
   PartObj, jInlineData, jArgs: TJSONObject;
   LNewMediaFile: TAiMediaFile;
-  LBase64Data, LMimeType, LSig: String;
+  LBase64Data, LMimeType, LSig, LExt: String;
   HasTools: Boolean;
   LFunciones: TAiToolsFunctions;
   LFunction: TAiToolsFunction;
   LName, LArgsStr: String;
   LModelVersion: String;
+  LCandidate: TJSONObject; // FPC
+  jValPart: TJSONValue; // FPC
+  LPartObj: TJSONObject; // FPC
+  tmpPrompt, tmpCand, tmpTotal, tmpThought: Integer; // FPC
+  ArgIdx: Integer; // FPC
 begin
   if (not FClient.Asynchronous) or AAbort then
     Exit;
@@ -2982,7 +3004,7 @@ begin
       // Raro: Estructura parecía bien balanceada pero falló el parseo.
       // Opcion: Borrar este bloque corrupto para no bloquear, o esperar.
       // En este caso, asumimos corrupción y avanzamos para no colgar el bucle.
-      DoError('JSON Parse Error en chunk asíncrono', nil);
+      DoError('JSON Parse Error en chunk asíncrono');
       Delete(FTmpResponseText, 1, P_End);
       Continue;
     end;
@@ -2992,34 +3014,32 @@ begin
 
     try
 
-      jObj.TryGetValue<string>('modelVersion', LModelVersion);
+      jObj.TryGetValue('modelVersion', LModelVersion);
 
       IsStreamFinished := False;
 
       // D. Procesar Candidatos
-      if jObj.TryGetValue<TJSonArray>('candidates', LCandidates) and (LCandidates.Count > 0) then
+      if jObj.TryGetValue('candidates', LCandidates) and (LCandidates.Count > 0) then
       begin
-        var
         LCandidate := LCandidates.Items[0] as TJSONObject;
 
         // 1. Detección de Finalización (FinishReason)
-        if LCandidate.TryGetValue<string>('finishReason', sFinishReason) then
+        if LCandidate.TryGetValue('finishReason', sFinishReason) then
         begin
           if (sFinishReason <> '') and (sFinishReason <> 'null') then
             IsStreamFinished := True;
         end;
 
         // 2. Procesar Contenido
-        if LCandidate.TryGetValue<TJSONObject>('content', LContent) and LContent.TryGetValue<TJSonArray>('parts', LParts) then
+        if LCandidate.TryGetValue('content', LContent) and LContent.TryGetValue('parts', LParts) then
         begin
-          for var jValPart in LParts do
+          for jValPart in LParts do
           begin
-            var
             LPartObj := jValPart as TJSONObject;
 
             // [BUFFER] Guardar partes estructurales (Tools, Code, Signatures)
             if (LPartObj.GetValue('functionCall') <> nil) or (LPartObj.GetValue('executableCode') <> nil) or (LPartObj.GetValue('codeExecutionResult') <> nil) or (LPartObj.GetValue('inlineData') <> nil) or
-              (LPartObj.TryGetValue<string>('thoughtSignature', LPartSig)) then
+              (LPartObj.TryGetValue('thoughtSignature', LPartSig)) then
             begin
               // Clonamos para asegurar persistencia
               FTmpToolCallBuffer.Add(FTmpToolCallBuffer.Count, LPartObj.Clone as TJSONObject);
@@ -3036,11 +3056,11 @@ begin
               else if (JThoughtVal is TJSONString) then
               begin
                 IsThought := True;
-                sThoughtContent := JThoughtVal.Value;
+                sThoughtContent := string(JThoughtVal.Value);
               end;
             end;
 
-            if LPartObj.TryGetValue<string>('text', sText) then
+            if LPartObj.TryGetValue('text', sText) then
             begin
               if IsThought or (sThoughtContent <> '') then
               begin
@@ -3075,17 +3095,15 @@ begin
       end;
 
       // E. Actualizar Tokens
-      if jObj.TryGetValue<TJSONObject>('usageMetadata', LUso) then
+      if jObj.TryGetValue('usageMetadata', LUso) then
       begin
-        var
-          tmpPrompt, tmpCand, tmpTotal, tmpThought: Integer;
-        if LUso.TryGetValue<Integer>('promptTokenCount', tmpPrompt) then
+        if LUso.TryGetValue('promptTokenCount', tmpPrompt) then
           Self.Prompt_tokens := tmpPrompt;
-        if LUso.TryGetValue<Integer>('candidatesTokenCount', tmpCand) then
+        if LUso.TryGetValue('candidatesTokenCount', tmpCand) then
           Self.Completion_tokens := tmpCand;
-        if LUso.TryGetValue<Integer>('totalTokenCount', tmpTotal) then
+        if LUso.TryGetValue('totalTokenCount', tmpTotal) then
           Self.Total_tokens := tmpTotal;
-        if LUso.TryGetValue<Integer>('thoughtsTokenCount', tmpThought) then
+        if LUso.TryGetValue('thoughtsTokenCount', tmpThought) then
           Self.Thinking_tokens := tmpThought;
       end;
 
@@ -3116,7 +3134,7 @@ begin
         begin
           JArrParts := TJSonArray.Create;
           Keys := FTmpToolCallBuffer.Keys.ToArray;
-          TArray.Sort<Integer>(Keys);
+          TArrayUtils.Sort(Keys);
 
           LFunciones := TAiToolsFunctions.Create;
 
@@ -3125,18 +3143,18 @@ begin
             PartObj := FTmpToolCallBuffer[K];
 
             // Recuperar Firmas (V3)
-            if PartObj.TryGetValue<string>('thoughtSignature', LSig) then
+            if PartObj.TryGetValue('thoughtSignature', LSig) then
               AddThoughtSignature(ResMsg, LSig);
 
             // Detectar Function Call
-            if PartObj.TryGetValue<TJSONObject>('functionCall', jFuncCall) then
+            if PartObj.TryGetValue('functionCall', jFuncCall) then
             begin
               HasTools := True;
               LFunction := TAiToolsFunction.Create;
-              jFuncCall.TryGetValue<string>('name', LName);
+              jFuncCall.TryGetValue('name', LName);
               LFunction.Name := LName;
 
-              if jFuncCall.TryGetValue<TJSONObject>('args', jArgs) then
+              if jFuncCall.TryGetValue('args', jArgs) then
                 LArgsStr := jArgs.ToJSON
               else
                 LArgsStr := '{}';
@@ -3144,8 +3162,8 @@ begin
               LFunction.Arguments := LArgsStr;
 
               if Assigned(jArgs) then
-                for var ArgIdx := 0 to jArgs.Count - 1 do
-                  LFunction.Params.Values[jArgs.Pairs[ArgIdx].JsonString.Value] := jArgs.Pairs[ArgIdx].JsonValue.Value;
+                for ArgIdx := 0 to jArgs.Count - 1 do
+                  LFunction.Params.Values[GetJSONStringValue(jArgs.Pairs[ArgIdx].JsonString)] := GetJSONStringValue(jArgs.Pairs[ArgIdx].JsonValue);
 
               LFunction.Id := 'call_' + TGuid.NewGuid.ToString;
               LFunction.Tipo := 'function';
@@ -3153,16 +3171,15 @@ begin
             end;
 
             // Recuperar Inline Data (Archivos Generados)
-            if PartObj.TryGetValue<TJSONObject>('inlineData', jInlineData) then
+            if PartObj.TryGetValue('inlineData', jInlineData) then
             begin
-              jInlineData.TryGetValue<string>('mimeType', LMimeType);
-              jInlineData.TryGetValue<string>('data', LBase64Data);
+              jInlineData.TryGetValue('mimeType', LMimeType);
+              jInlineData.TryGetValue('data', LBase64Data);
 
               if (LBase64Data <> '') then
               begin
                 LNewMediaFile := TAiMediaFile.Create;
                 try
-                  var
                   LExt := 'bin';
                   if LMimeType.Contains('png') then
                     LExt := 'png'
@@ -3205,58 +3222,68 @@ begin
 
           // Ejecutar Tools en Tarea separada
           TTask.Run(
-            procedure
+            TProc(procedure
             var
               LocalFuncs: TAiToolsFunctions;
               LocalTasks: array of ITask;
               LocalFn: TAiToolsFunction;
               TaskIdx: Integer;
+              LocalKey: string;  // Declaración tradicional para compatibilidad Delphi <10.3 y FPC
+              ToolMsg: TAiChatMessage;
             begin
               LocalFuncs := LFunciones;
               try
                 SetLength(LocalTasks, LocalFuncs.Count);
                 TaskIdx := 0;
-                for var LocalKey in LocalFuncs.Keys do
+                for LocalKey in LocalFuncs.Keys do
                 begin
                   LocalFn := LocalFuncs[LocalKey];
                   LocalFn.ResMsg := ResMsg;
                   LocalFn.AskMsg := AskMsg;
 
                   LocalTasks[TaskIdx] := TTask.Create(
-                    procedure
+                    TProc(procedure
                     begin
                       try
                         DoCallFunction(LocalFn);
                       except
                         on E: Exception do
-                          TThread.Queue(nil,
-                            procedure
-                            begin
-                              DoError('Error Tool: ' + LocalFn.Name, E);
-                            end);
+                        begin
+                          DoError('Error Tool: ' + LocalFn.Name + ' - ' + E.Message);
+                        end;
                       end;
-                    end);
+                    end));
                   LocalTasks[TaskIdx].Start;
                   Inc(TaskIdx);
                 end;
 
                 TTask.WaitForAll(LocalTasks);
 
-                TThread.Synchronize(nil,
+                // [COMPATIBILIDAD] Usamos for-to con índice en lugar de for-in
+                // porque la variable de control del for loop en lambda anidada
+                // debe ser local. No usamos inline vars para compatibilidad con
+                // Delphi <10.3 y FPC.
+                SynchronizeInMainThread(
                   procedure
+                  var
+                    KeyIdx: Integer;
+                    KeysArray: TArray<string>;
+                    LK: string;
+                    TM: TAiChatMessage;
                   begin
-                    for var LocalKey in LocalFuncs.Keys do
+                    KeysArray := LocalFuncs.Keys.ToArray;
+                    for KeyIdx := 0 to Length(KeysArray) - 1 do
                     begin
-                      LocalFn := LocalFuncs[LocalKey];
-                      var
-                      ToolMsg := TAiChatMessage.Create(LocalFn.Response, 'tool', LocalFn.Id, LocalFn.Name);
-                      ToolMsg.Id := FMessages.Count + 1;
-                      FMessages.Add(ToolMsg);
+                      LK := KeysArray[KeyIdx];
+                      LocalFn := LocalFuncs[LK];
+                      TM := TAiChatMessage.Create(LocalFn.Response, 'tool', LocalFn.Id, LocalFn.Name);
+                      TM.Id := FMessages.Count + 1;
+                      FMessages.Add(TM);
                     end;
                   end);
 
                 // RECURSIÓN
-                TThread.Queue(nil,
+                QueueInMainThread(
                   procedure
                   begin
                     Self.Run(nil, ResMsg);
@@ -3265,7 +3292,7 @@ begin
               finally
                 LocalFuncs.Free;
               end;
-            end);
+            end));
         end
         else
         begin
@@ -3330,7 +3357,7 @@ end;
 
 function TAiGeminiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
 var
-  Client: THTTPClient;
+  Client: TNetHTTPClient;
   jRequestRoot, jContent, jPart: TJSONObject;
   jParts: TJSonArray;
   jResponseRoot: TJSONObject;
@@ -3338,7 +3365,8 @@ var
   St: TStringStream;
   sUrl: String;
 begin
-  Client := THTTPClient.Create;
+  Client := TNetHTTPClient.Create(Nil);
+  Client.ConfigureForAsync;
   jRequestRoot := TJSONObject.Create;
   try
     if aModel.IsEmpty then
@@ -3353,7 +3381,7 @@ begin
     jRequestRoot.AddPair('model', TJSONString.Create('models/' + aModel));
     jRequestRoot.AddPair('content', jContent);
     if aDimensions > 0 then
-      jRequestRoot.AddPair('outputDimensionality', TJSONNumber.Create(aDimensions));
+      jRequestRoot.AddPair('outputDimensionality', CreateJSONNumber(aDimensions));
 
     St := TStringStream.Create(jRequestRoot.ToString, TEncoding.UTF8);
     try
@@ -3388,13 +3416,13 @@ var
   Emb: TAiEmbeddingData;
   I: Integer;
 begin
-  if not jObj.TryGetValue<TJSONObject>('embedding', LEmbeddingObj) then
+  if not jObj.TryGetValue('embedding', LEmbeddingObj) then
     Exit;
-  if not LEmbeddingObj.TryGetValue<TJSonArray>('values', LValuesArray) then
+  if not LEmbeddingObj.TryGetValue('values', LValuesArray) then
     Exit;
   SetLength(Emb, LValuesArray.Count);
   for I := 0 to LValuesArray.Count - 1 do
-    Emb[I] := LValuesArray.Items[I].GetValue<Double>;
+    Emb[I] := (LValuesArray.Items[I] as TJSONNumber).AsDouble;
   FData := Emb;
 end;
 

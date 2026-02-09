@@ -1,18 +1,18 @@
-// IT License
+ï»¿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo EnrÃ­quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -34,16 +34,23 @@
 
 unit uMakerAi.Agents.EngineRegistry;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
-  System.SysUtils, System.Classes, System.JSON, System.Generics.Collections, System.Variants, System.TypInfo,
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, Rtti, SyncObjs, Math, TypInfo,
+  {$ELSE}
+  System.SysUtils, System.Classes, System.JSON, System.Generics.Collections, System.Variants, System.TypInfo, System.Rtti,
   // Dependencias del "Motor"
-  uMakerAi.Agents, uMakerAi.Agents.Attributes;
+  {$ENDIF}
+  uMakerAi.Agents, uMakerAi.Agents.Attributes,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper;
 
 type
-  // Este es el "contrato" de datos que el Diseñador recibirá.
-  // Es un simple registro, no contiene clases ni lógica compleja.
+  // Este es el "contrato" de datos que el DiseÃ±ador recibirÃ¡.
+  // Es un simple registro, no contiene clases ni lÃ³gica compleja.
   TToolBlueprint = record
     ToolClassName: string;
     DisplayName: string;
@@ -53,13 +60,14 @@ type
   end;
 
   // --- CAMBIO 1: Nueva estructura para almacenar la clase Y el nombre de su unidad. ---
-  // Esto enriquece el registro para que el generador de código sepa qué unidades incluir.
+  // Esto enriquece el registro para que el generador de cÃ³digo sepa quÃ© unidades incluir.
+  // [Compatibility] Necessary for FPC Code Generation where UnitName extraction via RTTI differs.
   TToolInfo = record
     ToolClass: TClass;
     UnitName: string;
   end;
 
-  // El Singleton que actúa como nuestra "caja negra".
+  // El Singleton que actÃºa como nuestra "caja negra".
   TEngineRegistry = class
   private
     class var
@@ -71,12 +79,12 @@ type
     destructor Destroy; override;
     class property Instance: TEngineRegistry read FInstance;
 
-    // --- CAMBIO 3: El método de registro ahora requiere el nombre de la unidad. ---
+    // --- CAMBIO 3: El mÃ©todo de registro ahora requiere el nombre de la unidad. ---
     procedure RegisterTool(ToolClass: TClass; const AUnitName: string);
 
     function FindToolClass(const AToolClassName: string): TClass;
 
-    // --- CAMBIO 4: Nuevo método para que el generador consulte el nombre de la unidad. ---
+    // --- CAMBIO 4: Nuevo mÃ©todo para que el generador consulte el nombre de la unidad. ---
     function GetUnitForToolClass(const AToolClassName: string): string;
 
     function GetToolBlueprints: TArray<TToolBlueprint>;
@@ -102,9 +110,8 @@ type
 
 implementation
 
-uses System.Rtti;
 
-// Helper interno para generar los esquemas JSON de los parámetros.
+// Helper interno para generar los esquemas JSON de los parÃ¡metros.
 // No requiere cambios.
 type
   TSchemaGen_Internal = class
@@ -134,14 +141,14 @@ function TEngineRegistry.FindToolClass(const AToolClassName: string): TClass;
 var
   LToolInfo: TToolInfo;
 begin
-  // --- CAMBIO 6: La búsqueda ahora extrae el TClass desde el registro TToolInfo. ---
+  // --- CAMBIO 6: La bÃºsqueda ahora extrae el TClass desde el registro TToolInfo. ---
   if FRegisteredTools.TryGetValue(AToolClassName, LToolInfo) then
     Result := LToolInfo.ToolClass
   else
     Result := nil;
 end;
 
-// --- CAMBIO 7: Implementación del nuevo método para obtener la unidad. ---
+// --- CAMBIO 7: ImplementaciÃ³n del nuevo mÃ©todo para obtener la unidad. ---
 function TEngineRegistry.GetUnitForToolClass(const AToolClassName: string): string;
 var
   LToolInfo: TToolInfo;
@@ -152,7 +159,7 @@ begin
     Result := '';
 end;
 
-// --- CAMBIO 8: Implementación del método de registro modificado. ---
+// --- CAMBIO 8: ImplementaciÃ³n del mÃ©todo de registro modificado. ---
 procedure TEngineRegistry.RegisterTool(ToolClass: TClass; const AUnitName: string);
 var
   LToolInfo: TToolInfo;
@@ -160,7 +167,7 @@ begin
   if not ToolClass.InheritsFrom(TAiToolBase) then
     raise Exception.CreateFmt('Cannot register class "%s" because it does not inherit from TAiToolBase.', [ToolClass.ClassName]);
 
-  // Se llena el registro con toda la información necesaria.
+  // Se llena el registro con toda la informaciÃ³n necesaria.
   LToolInfo.ToolClass := ToolClass;
   LToolInfo.UnitName := AUnitName;
 
@@ -170,10 +177,11 @@ end;
 function TEngineRegistry.GetToolBlueprints: TArray<TToolBlueprint>;
 var
   LToolInfo: TToolInfo;   // La variable del bucle ahora es del tipo TToolInfo.
-  ToolClass: TClass;      // Variable local para mantener la claridad del código existente.
+  ToolClass: TClass;      // Variable local para mantener la claridad del cÃ³digo existente.
   LContext: TRttiContext;
   LRttiType: TRttiType;
   ClassToolAttr: TToolAttribute;
+  Attr: TCustomAttribute;
   i: Integer;
 begin
   SetLength(Result, FRegisteredTools.Count);
@@ -183,13 +191,13 @@ begin
     // --- CAMBIO 9: El bucle itera sobre los valores TToolInfo del diccionario. ---
     for LToolInfo in FRegisteredTools.Values do
     begin
-      // Se extrae la clase del registro para que el resto del código funcione sin cambios.
+      // Se extrae la clase del registro para que el resto del cÃ³digo funcione sin cambios.
       ToolClass := LToolInfo.ToolClass;
 
       LRttiType := LContext.GetType(ToolClass);
       ClassToolAttr := nil;
 
-      for var Attr in LRttiType.GetAttributes do
+      for Attr in LRttiType.GetAttributes do
       begin
         if Attr is TToolAttribute then
         begin
@@ -224,15 +232,21 @@ end;
 
 { TSchemaGen_Internal }
 
-// Esta clase no necesita ninguna modificación.
+// Esta clase no necesita ninguna modificaciÃ³n.
 class function TSchemaGen_Internal.GenerateSchemaFor(AClass: TClass): TJSONObject;
 var
   LContext: TRttiContext;
   LRttiType: TRttiType;
   LProp: TRttiProperty;
   ParamAttr: TToolParameterAttribute;
+  Attr: TCustomAttribute;
   LProperties, LPropSchema: TJSONObject;
+  LEnumArray: TJSONArray;
+  RttiEnum: TRttiEnumerationType;
+  EnumName: string;
   JsonType: string;
+  LFormat: string;
+  PropTypeKind: TTypeKind;
 begin
   Result := TJSONObject.Create;
   LProperties := TJSONObject.Create;
@@ -246,7 +260,7 @@ begin
     for LProp in LRttiType.GetProperties do
     begin
       ParamAttr := nil;
-      for var Attr in LProp.GetAttributes do
+      for Attr in LProp.GetAttributes do
         if Attr is TToolParameterAttribute then
         begin
           ParamAttr := Attr as TToolParameterAttribute;
@@ -261,19 +275,17 @@ begin
         JsonType := DelphiTypeToJSONType(LProp.PropertyType);
         LPropSchema.AddPair('type', JsonType);
 
-        var
         LFormat := DelphiTypeToJSONFormat(LProp.PropertyType);
         if not LFormat.IsEmpty then
           LPropSchema.AddPair('format', LFormat);
 
         if not ParamAttr.DefaultValue.IsEmpty then
         begin
-          var
           PropTypeKind := LProp.PropertyType.TypeKind;
           if (PropTypeKind = tkInteger) or (PropTypeKind = tkInt64) then
-            LPropSchema.AddPair('default', TJSONNumber.Create(StrToIntDef(ParamAttr.DefaultValue, 0)))
+            LPropSchema.AddPair('default', CreateJSONNumber(StrToIntDef(ParamAttr.DefaultValue, 0)))
           else if PropTypeKind = tkFloat then
-            LPropSchema.AddPair('default', TJSONNumber.Create(StrToFloatDef(ParamAttr.DefaultValue, 0.0)))
+            LPropSchema.AddPair('default', CreateJSONNumber(StrToFloatDef(ParamAttr.DefaultValue, 0.0)))
           else if PropTypeKind = tkEnumeration then
             if LProp.PropertyType.Handle = TypeInfo(Boolean) then
               LPropSchema.AddPair('default', TJSONBool.Create(SameText(ParamAttr.DefaultValue, 'True')))
@@ -285,11 +297,9 @@ begin
 
         if (LProp.PropertyType.TypeKind = tkEnumeration) and (LProp.PropertyType.Handle <> TypeInfo(Boolean)) then
         begin
-          var
           LEnumArray := TJSONArray.Create;
-          var
           RttiEnum := LProp.PropertyType as TRttiEnumerationType;
-          for var EnumName in RttiEnum.GetNames do
+          for EnumName in RttiEnum.GetNames do
             LEnumArray.Add(EnumName);
           LPropSchema.AddPair('enum', LEnumArray);
         end;
@@ -347,7 +357,7 @@ end;
 
 { TAgentHandlerRegistry }
 
-// Esta clase no necesita ninguna modificación.
+// Esta clase no necesita ninguna modificaciÃ³n.
 constructor TAgentHandlerRegistry.Create;
 begin
   inherited;

@@ -1,18 +1,18 @@
-// IT License
+Ôªø// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -34,9 +34,16 @@
 
 unit uMakerAi.Embeddings;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  // FPC: Unidades est√°ndar de FPC sin prefijo System
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye Net/HTTP/JSON/REST nativos
   System.SysUtils, System.Types, System.UITypes, System.Classes,
   System.Threading, System.NetConsts,
   System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections,
@@ -45,11 +52,9 @@ uses
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
 
-{$IF CompilerVersion < 35}
-  uJSONHelper,
-{$ENDIF}
-
-  uMakerAi.Embeddings.core;
+  {$ENDIF}
+  uMakerAi.Embeddings.Core,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
   // Por compatibilidad, mantenemos el nombre, pero ahora hereda de la clase base.
@@ -61,14 +66,14 @@ type
   protected
     FApiKey: String;
     FUrl: String;
-    // Este mÈtodo es ahora 'override' para proporcionar la implementaciÛn especÌfica.
+    // Este m√©todo es ahora 'override' para proporcionar la implementaci√≥n espec√≠fica.
   public
     constructor Create(aOwner: TComponent); override;
-    // Este mÈtodo es especÌfico de la implementaciÛn de OpenAI
+    // Este m√©todo es espec√≠fico de la implementaci√≥n de OpenAI
     procedure ParseEmbedding(JObj: TJsonObject); Virtual;
     function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float'): TAiEmbeddingData; override;
   published
-    // Propiedades especÌficas de esta implementaciÛn
+    // Propiedades espec√≠ficas de esta implementaci√≥n
     property ApiKey: String read GetApiKey write SetApiKey;
     property Url: String read FUrl write SetUrl;
   end;
@@ -91,54 +96,57 @@ procedure TAiEmbeddings.ParseEmbedding(JObj: TJsonObject);
 var
   JArrData, JArrVector: TJSONArray;
   Emb: TAiEmbeddingData;
-  JVal: TJSONValue;
+  JVal, LItem: TJSONValue;
   Usage: TJSONObject;
   i: Integer;
 begin
-  // ValidaciÛn inicial
+  // Validaci√≥n inicial
   if not Assigned(JObj) then
     Exit;
 
   // 1. Obtener el modelo
-  JObj.TryGetValue<String>('model', FModel);
+  JObj.TryGetValue('model', FModel);
 
   // 2. Uso de tokens (opcional)
-  if JObj.TryGetValue<TJSONObject>('usage', Usage) then
+  if JObj.TryGetValue('usage', Usage) then
   begin
-    Usage.TryGetValue<Integer>('prompt_tokens', Fprompt_tokens);
-    Usage.TryGetValue<Integer>('total_tokens', Ftotal_tokens);
+    Usage.TryGetValue('prompt_tokens', Fprompt_tokens);
+    Usage.TryGetValue('total_tokens', Ftotal_tokens);
   end;
 
-  // 3. Obtener el array 'data' con validaciÛn
-  if not JObj.TryGetValue<TJSONArray>('data', JArrData) then
+  // 3. Obtener el array 'data' con validaci√≥n
+  if not JObj.TryGetValue('data', JArrData) then
     raise Exception.Create('La respuesta de la API no contiene el array de datos esperado ("data").');
 
   if JArrData.Count = 0 then
-    raise Exception.Create('El array de datos ("data") est· vacÌo.');
+    raise Exception.Create('El array de datos ("data") est√° vac√≠o.');
 
-  // Preparar array para m˙ltiples embeddings (aunque solo usemos el primero)
+  // Preparar array para m√∫ltiples embeddings (aunque solo usemos el primero)
   SetLength(FData, JArrData.Count);
 
-  // 4. Procesar el primer embedding (compatibilidad con versiÛn original)
+  // 4. Procesar el primer embedding (compatibilidad con versi√≥n original)
   for JVal in JArrData do
   begin
     // Validar que sea un objeto
     if not (JVal is TJSONObject) then
-      raise Exception.Create('Formato de Ìtem de datos inv·lido en la respuesta JSON.');
+      raise Exception.Create('Formato de √≠tem de datos inv√°lido en la respuesta JSON.');
 
     // 5. Obtener el vector de embedding
-    if not TJSONObject(JVal).TryGetValue<TJSONArray>('embedding', JArrVector) then
-      raise Exception.Create('No se encontrÛ el campo "embedding" en los datos de respuesta.');
+    if not TJSONObject(JVal).TryGetValue('embedding', JArrVector) then
+      raise Exception.Create('No se encontr√≥ el campo "embedding" en los datos de respuesta.');
 
     if JArrVector.Count = 0 then
-      raise Exception.Create('El vector de embedding est· vacÌo.');
+      raise Exception.Create('El vector de embedding est√° vac√≠o.');
 
-    // 6. Dimensionar y llenar el vector con validaciÛn de tipo
+    // 6. Dimensionar y llenar el vector con validaci√≥n de tipo
     SetLength(Emb, JArrVector.Count);
     for i := 0 to JArrVector.Count - 1 do
     begin
-      if not JArrVector.Items[i].TryGetValue<Double>(Emb[i]) then
-        Emb[i] := 0.0; // Valor por defecto si falla la conversiÛn
+      LItem := JArrVector.Items[i];
+      if LItem is TJSONNumber then
+        Emb[i] := TJSONNumber(LItem).AsDouble
+      else
+        Emb[i] := 0.0;
     end;
 
     // 7. Asignar el embedding procesado
@@ -159,7 +167,7 @@ var
   RequestStream: TStringStream;
   sUrl: String;
 begin
-  // DelegaciÛn a evento si est· asignado
+  // Delegaci√≥n a evento si est√° asignado
   if Assigned(OnGetEmbedding) then
   begin
     Result := inherited CreateEmbedding(aInput, aUser, aDimensions, aModel, aEncodingFormat);
@@ -167,9 +175,7 @@ begin
   end;
 
   Client := TNetHTTPClient.Create(nil);
-{$IF CompilerVersion >= 35}
-  Client.SynchronizeEvents := False;
-{$ENDIF}
+  Client.ConfigureForAsync;
   RequestStream := TStringStream.Create('', TEncoding.UTF8);
   ResponseStream := TStringStream.Create('', TEncoding.UTF8);
   RequestBody := TJSONObject.Create;
@@ -184,12 +190,12 @@ begin
     if aDimensions <= 0 then
       aDimensions := FDimensions;
 
-    // ConstrucciÛn del JSON de peticiÛn
+    // Construcci√≥n del JSON de petici√≥n
     RequestBody.AddPair('input', aInput);     // OpenAI
     RequestBody.AddPair('prompt', aInput);    // Compatibilidad con Ollama
     RequestBody.AddPair('model', aModel);
     RequestBody.AddPair('user', aUser);
-    RequestBody.AddPair('dimensions', TJSONNumber.Create(aDimensions));
+    RequestBody.AddPair('dimensions', CreateJSONNumber(aDimensions));
     RequestBody.AddPair('encoding_format', aEncodingFormat);
 
     // Escribir el JSON al stream
@@ -202,7 +208,7 @@ begin
 
     Client.ContentType := 'application/json';
 
-    // Realizar la peticiÛn
+    // Realizar la petici√≥n
     Res := Client.Post(sUrl, RequestStream, ResponseStream, Headers);
     ResponseStream.Position := 0;
 
@@ -216,7 +222,7 @@ begin
       ResponseJSON := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
       try
         if not Assigned(ResponseJSON) then
-          raise Exception.Create('La respuesta de la API no es un JSON v·lido.');
+          raise Exception.Create('La respuesta de la API no es un JSON v√°lido.');
 
         ParseEmbedding(ResponseJSON);
         Result := Self.FData;
@@ -244,7 +250,7 @@ begin
     Exit;
   end;
   if (FApiKey <> '') and (FApiKey.StartsWith('@')) then
-    Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
+    Result := CompatGetEnvVar(Copy(FApiKey, 2, Length(FApiKey)))
   else
     Result := FApiKey;
 end;
@@ -263,4 +269,3 @@ begin
 end;
 
 end.
-

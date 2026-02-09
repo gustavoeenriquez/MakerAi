@@ -1,18 +1,18 @@
-// IT License
+Ôªø// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,20 +33,28 @@
 
 
 
-///Esta librerÌa est· en proceso,  no funciona todavÌa.
+///Esta librer√≠a est√° en proceso,  no funciona todav√≠a.
 
 ///https://docs.cohere.com/reference/chat
 
 unit uMakerAi.Chat.Cohere;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  // FPC: Unidades est√°ndar de FPC sin prefijo System
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math, URIParser,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye Net/HTTP/JSON/REST nativos
   System.SysUtils, System.Classes, System.Generics.Collections, System.JSON,
   System.Net.HttpClientComponent, System.Threading,
   System.Net.HttpClient, System.Net.URLClient, // Necesario para IHTTPResponse en TAiErrorEvent
-  uMakerAi.Core, uMakerAi.Chat, uMakerAi.ParamsRegistry,
-  uMakerAi.Embeddings, uMakerAi.Embeddings.Core;
+  {$ENDIF}
+  uMakerAi.Core, uMakerAi.Chat, uMakerAi.ParamsRegistry, uMakerAi.Embeddings, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
   // Forward declarations para claridad
@@ -96,26 +104,26 @@ type
     FStreamingCitations: TAiMsgCitations; // Para construir citaciones
     FToolResultsForNextCall: TJSONArray;
 
-    procedure ProcessStreamBuffer; // Nuevo mÈtodo helper para procesar el buffer
+    procedure ProcessStreamBuffer; // Nuevo m√©todo helper para procesar el buffer
 
     procedure SetStop_sequences(const Value: TStrings);
     procedure SetDocuments(const Value: TCohereDocuments);
     procedure ExecuteAndRespondToToolCalls(ToolCalls: TEnumerable<TAiToolsFunction>; ResMsg: TAiChatMessage);
   protected
-    // --- Sobrescribimos los mÈtodos clave ---
+    // --- Sobrescribimos los m√©todos clave ---
     function InitChatCompletions: String; override;
     procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); override;
     function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; override;
-    procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); override;
+    procedure OnInternalReceiveData(const Sender: TObject; {$IFDEF FPC}const{$ENDIF} AContentLength, AReadCount: Int64; var AAbort: Boolean); override;
 
   public
     constructor Create(Sender: TComponent); override;
     destructor Destroy; override;
 
-    // --- Nuevo MÈtodo para Rerank ---
+    // --- Nuevo M√©todo para Rerank ---
     function Rerank(const AQuery: string; ADocuments: TStrings; ATopN: Integer = -1): TRerankResponse;
 
-    // --- MÈtodos de F·brica ---
+    // --- M√©todos de F√°brica ---
     class function GetDriverName: string; override;
     class procedure RegisterDefaultParams(Params: TStrings); override;
     class function CreateInstance(Sender: TComponent): TAiChat; override;
@@ -124,9 +132,9 @@ type
   published
     // Re-publicamos propiedades de TAiChat para que aparezcan en el inspector
     property Temperature;
-    property Top_p; // Se mapear· a 'p'
+    property Top_p; // Se mapear√° a 'p'
 
-    // --- Propiedades especÌficas de Cohere ---
+    // --- Propiedades espec√≠ficas de Cohere ---
     property Stop_sequences: TStrings read FStop_sequences write SetStop_sequences;
     property Documents: TCohereDocuments read FDocuments write SetDocuments;
     property RerankModel: string read FRerankModel write FRerankModel;
@@ -149,21 +157,21 @@ type
   { TAiCohereEmbeddings }
   { ------------------------------------------------------------------------------ }
   {
-    Esta clase proporciona una implementaciÛn para generar embeddings de texto
+    Esta clase proporciona una implementaci√≥n para generar embeddings de texto
     utilizando la API v2 de Cohere. Hereda de TAiEmbeddings y se integra
     en el framework de MakerAi.
 
-    **Consideraciones de ImplementaciÛn y Compatibilidad:**
+    **Consideraciones de Implementaci√≥n y Compatibilidad:**
 
-    La arquitectura actual del framework (a travÈs de `TAiEmbeddingsCore`) est·
-    diseÒada para generar y devolver un ˙nico vector de embedding por llamada al
-    mÈtodo `CreateEmbedding`.
+    La arquitectura actual del framework (a trav√©s de `TAiEmbeddingsCore`) est√°
+    dise√±ada para generar y devolver un √∫nico vector de embedding por llamada al
+    m√©todo `CreateEmbedding`.
 
     Para respetar esta interfaz y asegurar la compatibilidad entre diferentes
-    "drivers" (OpenAI, Mistral, etc.), esta implementaciÛn de Cohere ha sido
+    "drivers" (OpenAI, Mistral, etc.), esta implementaci√≥n de Cohere ha sido
     adaptada:
 
-    1.  **Procesamiento Individual:** El mÈtodo `CreateEmbedding` acepta un ˙nico
+    1.  **Procesamiento Individual:** El m√©todo `CreateEmbedding` acepta un √∫nico
     string de entrada (`aInput`). Internamente, este string se empaqueta en
     un array de un solo elemento `["texto"]` para cumplir con el formato
     requerido por la API de Cohere.
@@ -172,12 +180,12 @@ type
     de embeddings, solo se extrae y se devuelve el primer vector,
     correspondiente al texto de entrada.
 
-    **Oportunidad de OptimizaciÛn:**
-    La API de Cohere est· altamente optimizada para el procesamiento por lotes,
-    aceptando un array de hasta 96 textos en una ˙nica peticiÛn (`"texts": ["t1", "t2", ...]`).
-    Esto es significativamente m·s eficiente que realizar m˙ltiples llamadas
-    individuales. Para aprovechar esta capacidad, se podrÌa extender esta clase
-    en el futuro con un mÈtodo especÌfico para lotes, como por ejemplo:
+    **Oportunidad de Optimizaci√≥n:**
+    La API de Cohere est√° altamente optimizada para el procesamiento por lotes,
+    aceptando un array de hasta 96 textos en una √∫nica petici√≥n (`"texts": ["t1", "t2", ...]`).
+    Esto es significativamente m√°s eficiente que realizar m√∫ltiples llamadas
+    individuales. Para aprovechar esta capacidad, se podr√≠a extender esta clase
+    en el futuro con un m√©todo espec√≠fico para lotes, como por ejemplo:
 
     `function CreateEmbeddingsBatch(const aInputs: TStrings): TAiEmbeddingList;`
   }
@@ -189,11 +197,11 @@ type
     FInputType: TAiCohereInputType;
     function GetInputTypeAsString: string;
   protected
-    // Este mÈtodo es para procesar la respuesta especÌfica de Cohere.
+    // Este m√©todo es para procesar la respuesta espec√≠fica de Cohere.
     procedure ParseCohereEmbedding(jObj: TJSonObject);
   public
     constructor Create(aOwner: TComponent); override;
-    // Sobrescribimos el mÈtodo principal para la implementaciÛn de Cohere.
+    // Sobrescribimos el m√©todo principal para la implementaci√≥n de Cohere.
     function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float'): TAiEmbeddingData; override;
   published
     property InputType: TAiCohereInputType read FInputType write FInputType;
@@ -203,8 +211,11 @@ procedure Register;
 
 implementation
 
+// Delphi: usa System.StrUtils y System.IOUtils del RTL. FPC las importa en interface
+{$IFNDEF FPC}
 uses
   System.StrUtils, System.IOUtils;
+{$ENDIF}
 
 procedure Register;
 begin
@@ -306,12 +317,12 @@ var
   I: Integer;
   ToolCallList: TList<TAiToolsFunction>;
 begin
-  // El mensaje anterior (AskMsg) es el del asistente que contenÌa los tool_calls.
-  // Ya fue aÒadido al historial en ParseChat.
+  // El mensaje anterior (AskMsg) es el del asistente que conten√≠a los tool_calls.
+  // Ya fue a√±adido al historial en ParseChat.
   AskMsg := GetLastMessage;
 
   // 1. EJECUTAR TODAS LAS FUNCIONES SOLICITADAS
-  // Convertimos el enumerable a una lista para poder usar Ìndices con TTask
+  // Convertimos el enumerable a una lista para poder usar √≠ndices con TTask
   ToolCallList := TList<TAiToolsFunction>.Create(ToolCalls);
   try
     SetLength(TaskList, ToolCallList.Count);
@@ -319,20 +330,20 @@ begin
     begin
       ToolCall := ToolCallList[I];
       ToolCall.ResMsg := ResMsg; // Pasa el mensaje de respuesta (puede ser nil)
-      ToolCall.AskMsg := AskMsg; // Pasa el mensaje de peticiÛn
+      ToolCall.AskMsg := AskMsg; // Pasa el mensaje de petici√≥n
 
       TaskList[I] := TTask.Create(
         procedure
         begin
           try
-            // Usamos la propiedad AiFunctions del componente para llamar a la funciÛn
+            // Usamos la propiedad AiFunctions del componente para llamar a la funci√≥n
             if Assigned(Self.AiFunctions) then
               Self.AiFunctions.DoCallFunction(ToolCall)
             else
               ToolCall.Response := TJSonObject.Create.AddPair('error', 'AiFunctions component not assigned.').ToString;
           except
             on E: Exception do
-              // En caso de error en la ejecuciÛn, devolvemos un JSON de error.
+              // En caso de error en la ejecuci√≥n, devolvemos un JSON de error.
               ToolCall.Response := TJSonObject.Create.AddPair('error', E.Message).ToString;
           end;
         end);
@@ -341,7 +352,7 @@ begin
     TTask.WaitForAll(TaskList); // Esperamos a que todas las funciones terminen
 
     // 2. CONSTRUIR EL MENSAJE DE RESULTADO DE HERRAMIENTA (role: 'tool')
-    // Este mensaje contendr· los resultados de todas las herramientas ejecutadas.
+    // Este mensaje contendr√° los resultados de todas las herramientas ejecutadas.
     jToolOutputsArray := TJSONArray.Create;
     for ToolCall in ToolCallList do
     begin
@@ -353,32 +364,32 @@ begin
       jCall.AddPair('arguments', ToolCall.Arguments); // El string JSON de argumentos
       jToolOutput.AddPair('call', jCall);
 
-      // b) Construir el array "outputs" que contiene el resultado de la funciÛn
+      // b) Construir el array "outputs" que contiene el resultado de la funci√≥n
       jOutputsArray := TJSONArray.Create;
-      // Parseamos la respuesta de la funciÛn para asegurar que sea un objeto JSON
-      jOutputValue := TJSONValue.ParseJSONValue(ToolCall.Response, True); // Parseo seguro
+      // Parseamos la respuesta de la funci√≥n para asegurar que sea un objeto JSON
+      jOutputValue := TJSONObject.ParseJSONValue(ToolCall.Response); // Parseo seguro
       if not Assigned(jOutputValue) then
       begin
-        // Si la respuesta no es un JSON v·lido (ej. un simple string),
-        // la envolvemos en un objeto JSON est·ndar.
+        // Si la respuesta no es un JSON v√°lido (ej. un simple string),
+        // la envolvemos en un objeto JSON est√°ndar.
         jOutputValue := TJSonObject.Create.AddPair('result', ToolCall.Response);
       end;
       jOutputsArray.Add(TJSonObject(jOutputValue));
       jToolOutput.AddPair('outputs', jOutputsArray);
 
-      // c) AÒadir el resultado de esta herramienta al array principal de resultados
+      // c) A√±adir el resultado de esta herramienta al array principal de resultados
       jToolOutputsArray.Add(jToolOutput);
     end;
 
-    // 3. A—ADIR EL NUEVO MENSAJE 'tool' A LA CONVERSACI”N
-    // El 'prompt' de nuestro TAiChatMessage contendr· el string JSON del array de resultados.
+    // 3. A√ëADIR EL NUEVO MENSAJE 'tool' A LA CONVERSACI√ìN
+    // El 'prompt' de nuestro TAiChatMessage contendr√° el string JSON del array de resultados.
     ToolOutputMsg := TAiChatMessage.Create(jToolOutputsArray.ToJSon, 'tool');
     InternalAddMessage(ToolOutputMsg);
     jToolOutputsArray.Free; // ToJSon hizo una copia, podemos liberar el original
 
     // 4. VOLVER A LLAMAR A RUN PARA OBTENER LA RESPUESTA FINAL
-    // Llamamos a Run sin par·metros para que tome el historial de mensajes actualizado
-    // (que ahora incluye el mensaje 'tool') y haga la siguiente peticiÛn a la API.
+    // Llamamos a Run sin par√°metros para que tome el historial de mensajes actualizado
+    // (que ahora incluye el mensaje 'tool') y haga la siguiente petici√≥n a la API.
     Self.Run(nil, nil);
 
   finally
@@ -413,7 +424,7 @@ var
   LModelValue: TJSONValue;
   LModelObj: TJSonObject;
   LModelName: string;
-  LUri: TURI;
+  LUri: TAiURI;
 begin
   Result := TStringList.Create;
   Client := TNetHTTPClient.Create(nil);
@@ -425,15 +436,15 @@ begin
     else
       BaseUrl := 'https://api.cohere.ai/';
 
-    LUri := TURI.Create(BaseUrl);
+    LUri := ParseUriCompat(BaseUrl);
     FullUrl := LUri.Scheme + '://' + LUri.Host + '/v1/models';
     FullUrl := FullUrl + '?endpoint=chat';
 
     // 3. Preparar las cabeceras correctamente
-    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + aApiKey), TNetHeader.Create('accept', 'application/json') // AÒadido para ser como cURL
+    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + aApiKey), TNetHeader.Create('accept', 'application/json') // A√±adido para ser como cURL
       ];
 
-    // Se pasa el par·metro AHeaders a la llamada GET.
+    // Se pasa el par√°metro AHeaders a la llamada GET.
     HttpResponse := Client.Get(FullUrl, ResponseStream, Headers);
 
     // 4. Procesar la respuesta (sin cambios)
@@ -443,14 +454,14 @@ begin
       LResponseJson := TJSonObject.ParseJSONValue(ResponseStream.DataString) as TJSonObject;
       if Assigned(LResponseJson) then
         try
-          if LResponseJson.TryGetValue<TJSONArray>('models', LModelsArray) then
+          if LResponseJson.TryGetValue('models', LModelsArray) then
           begin
             for LModelValue in LModelsArray do
             begin
               if LModelValue is TJSonObject then
               begin
                 LModelObj := LModelValue as TJSonObject;
-                if LModelObj.TryGetValue<string>('name', LModelName) then
+                if LModelObj.TryGetValue('name', LModelName) then
                 begin
                   Result.Add(LModelName);
                 end;
@@ -471,7 +482,7 @@ begin
   end;
 end;
 
-// ImplementaciÛn principal del mÈtodo
+// Implementaci√≥n principal del m√©todo
 function TCohereChat.InitChatCompletions: String;
 var
   LJsonObject: TJSonObject;
@@ -481,7 +492,7 @@ var
   I: Integer;
   LStopList: TStringList;
   LToolsJsonString: string;
-  LJsonValue, LToolOutputsValue, LToolCallsValue: TJSONValue;
+  LToolOutputsValue, LToolCallsValue: TJSONValue;
   LMsgObj: TJSonObject;
   LRoleStr: string;
   LMediaFile: TAiMediaFile;
@@ -493,25 +504,25 @@ begin
   LStopList := TStringList.Create;
   HasToolResults := False; // Para saber si estamos en la fase 2 del tool-use
   try
-    // --- 1. CONFIGURACI”N DEL MODELO Y PAR¡METROS DE GENERACI”N ---
+    // --- 1. CONFIGURACI√ìN DEL MODELO Y PAR√ÅMETROS DE GENERACI√ìN ---
     LJsonObject.AddPair('model', Self.Model);
     if Self.Asynchronous then
-      LJsonObject.AddPair('stream', TJSONBool.Create(True));
-    LJsonObject.AddPair('temperature', TJSONNumber.Create(Self.Temperature));
+      LJsonObject.AddPair('stream', CreateJSONBool(True));
+    LJsonObject.AddPair('temperature', CreateJSONNumber(Self.Temperature));
     if Self.Max_tokens > 0 then
-      LJsonObject.AddPair('max_tokens', TJSONNumber.Create(Self.Max_tokens));
+      LJsonObject.AddPair('max_tokens', CreateJSONNumber(Self.Max_tokens));
     if Self.Top_p > 0 then
-      LJsonObject.AddPair('p', TJSONNumber.Create(Self.Top_p));
+      LJsonObject.AddPair('p', CreateJSONNumber(Self.Top_p));
     if Self.K > 0 then
-      LJsonObject.AddPair('k', TJSONNumber.Create(Self.K));
+      LJsonObject.AddPair('k', CreateJSONNumber(Self.K));
     if Self.Frequency_penalty <> 0 then
-      LJsonObject.AddPair('frequency_penalty', TJSONNumber.Create(Self.Frequency_penalty));
+      LJsonObject.AddPair('frequency_penalty', CreateJSONNumber(Self.Frequency_penalty));
     if Self.Presence_penalty <> 0 then
-      LJsonObject.AddPair('presence_penalty', TJSONNumber.Create(Self.Presence_penalty));
+      LJsonObject.AddPair('presence_penalty', CreateJSONNumber(Self.Presence_penalty));
     if Self.Seed > 0 then
-      LJsonObject.AddPair('seed', TJSONNumber.Create(Self.Seed));
+      LJsonObject.AddPair('seed', CreateJSONNumber(Self.Seed));
 
-    // --- 2. CONSTRUCCI”N DEL HISTORIAL DE MENSAJES ('messages') ---
+    // --- 2. CONSTRUCCI√ìN DEL HISTORIAL DE MENSAJES ('messages') ---
     LMessagesArray := TJSONArray.Create;
     for LMessage in Self.Messages do
     begin
@@ -521,8 +532,8 @@ begin
 
       if (LRoleStr = 'chatbot') and (not LMessage.Tool_calls.IsEmpty) then
       begin
-        // Mensaje del asistente que CONTIENE la peticiÛn de tool_calls.
-        LToolCallsValue := TJSONValue.ParseJSONValue(LMessage.Tool_calls, True);
+        // Mensaje del asistente que CONTIENE la petici√≥n de tool_calls.
+        LToolCallsValue := TJSONObject.ParseJSONValue(LMessage.Tool_calls);
         if Assigned(LToolCallsValue) and (LToolCallsValue is TJSONArray) then
           LMsgObj.AddPair('tool_calls', LToolCallsValue)
         else
@@ -539,8 +550,8 @@ begin
       else if (LRoleStr = 'tool') then
       begin
         // Mensaje de resultado de herramienta.
-        HasToolResults := True; // Marcamos que esta peticiÛn incluye resultados.
-        LToolOutputsValue := TJSONValue.ParseJSONValue(LMessage.Prompt, True);
+        HasToolResults := True; // Marcamos que esta petici√≥n incluye resultados.
+        LToolOutputsValue := TJSONObject.ParseJSONValue(LMessage.Prompt);
         if Assigned(LToolOutputsValue) and (LToolOutputsValue is TJSONArray) then
           LMsgObj.AddPair('tool_outputs', LToolOutputsValue)
         else
@@ -552,7 +563,7 @@ begin
       end
       else if (LMessage.MediaFiles.Count > 0) and (LRoleStr = 'user') then
       begin
-        // Mensaje multimodal (con im·genes).
+        // Mensaje multimodal (con im√°genes).
         LContentArray := TJSONArray.Create;
         LTextPart := TJSonObject.Create;
         LTextPart.AddPair('type', 'text');
@@ -583,32 +594,29 @@ begin
     end;
     LJsonObject.AddPair('messages', LMessagesArray);
 
-    // --- 3. INCLUSI”N DE HERRAMIENTAS ('tools' y 'tool_choice') ---
-    // No envÌes la definiciÛn de herramientas si ya est·s enviando resultados.
+    // --- 3. INCLUSI√ìN DE HERRAMIENTAS ('tools' y 'tool_choice') ---
+    // No env√≠es la definici√≥n de herramientas si ya est√°s enviando resultados.
     if not HasToolResults and Tool_Active and Assigned(AiFunctions) and (AiFunctions.Functions.Count > 0) then
     begin
       LToolsJsonString := AiFunctions.GetTools(tfOpenAI);
       if not LToolsJsonString.IsEmpty then
       begin
-        LJsonValue := TJSONValue.ParseJSONValue(LToolsJsonString, True);
-        if Assigned(LJsonValue) and (LJsonValue is TJSONArray) then
-        begin
-          LToolsJsonArray := LJsonValue as TJSONArray;
-          if LToolsJsonArray.Count > 0 then
+          LToolsJsonArray := TJSONObject.ParseAsArray(LToolsJsonString);
+          if Assigned(LToolsJsonArray) then
           begin
-            LJsonObject.AddPair('tools', LToolsJsonArray);
-            if (Self.Tool_choice <> '') and (UpperCase(Self.Tool_choice) <> 'AUTO') then
-              LJsonObject.AddPair('tool_choice', UpperCase(Self.Tool_choice));
-          end
-          else
-            LToolsJsonArray.Free;
-        end
-        else if Assigned(LJsonValue) then
-          LJsonValue.Free;
+            if LToolsJsonArray.Count > 0 then
+            begin
+              LJsonObject.AddPair('tools', LToolsJsonArray);
+              if (Self.Tool_choice <> '') and (UpperCase(Self.Tool_choice) <> 'AUTO') then
+                LJsonObject.AddPair('tool_choice', UpperCase(Self.Tool_choice));
+            end
+            else
+              LToolsJsonArray.Free;
+          end;
       end;
     end;
 
-    // --- 4. INCLUSI”N DE DOCUMENTOS PARA RAG ('documents') ---
+    // --- 4. INCLUSI√ìN DE DOCUMENTOS PARA RAG ('documents') ---
     if Assigned(Self.FDocuments) and (Self.FDocuments.Count > 0) then
     begin
       LDocsArray := TJSONArray.Create;
@@ -629,7 +637,7 @@ begin
       LJsonObject.AddPair('stop_sequences', LStopArray);
     end;
 
-    // --- 6. GENERACI”N DEL STRING FINAL ---
+    // --- 6. GENERACI√ìN DEL STRING FINAL ---
     Result := LJsonObject.ToJSon;
 
   finally
@@ -647,23 +655,23 @@ Var
   Headers: TNetHeaders;
   jObj: TJSonObject;
 begin
-  // InicializaciÛn est·ndar
+  // Inicializaci√≥n est√°ndar
   FBusy := True;
   FAbort := False;
   FLastError := '';
   FLastContent := '';
   St := TStringStream.Create('', TEncoding.UTF8);
 
-  // ConstrucciÛn de la URL correcta para el endpoint de Chat NATIVO de Cohere.
+  // Construcci√≥n de la URL correcta para el endpoint de Chat NATIVO de Cohere.
   // Usamos TPath.Combine para unir la URL base ('.../v2/') con el endpoint ('chat').
-  sUrl := TPath.Combine(System.SysUtils.ExcludeTrailingPathDelimiter(Self.Url), 'chat');
+  sUrl := TPath.Combine(SysUtils.ExcludeTrailingPathDelimiter(Self.Url), 'chat');
 
   try
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
     FClient.ContentType := 'application/json';
 
-    // Obtenemos el cuerpo JSON de nuestro mÈtodo `InitChatCompletions` que ya
-    // est· preparado para generar el formato nativo de Cohere.
+    // Obtenemos el cuerpo JSON de nuestro m√©todo `InitChatCompletions` que ya
+    // est√° preparado para generar el formato nativo de Cohere.
     ABody := InitChatCompletions;
 
     St.WriteString(ABody);
@@ -677,7 +685,7 @@ begin
     St.Position := 0;
     // $ENDIF
 
-    // Lanzamos la peticiÛn POST a la URL correcta.
+    // Lanzamos la petici√≥n POST a la URL correcta.
     Res := FClient.Post(sUrl, St, FResponse, Headers);
 
     FResponse.Position := 0;
@@ -688,8 +696,8 @@ begin
     FResponse.Position := 0;
     // $ENDIF
 
-    // Asumimos modo sÌncrono para esta funciÛn.
-    // La lÛgica de modo asÌncrono se manejarÌa en los eventos OnReceiveData.
+    // Asumimos modo s√≠ncrono para esta funci√≥n.
+    // La l√≥gica de modo as√≠ncrono se manejar√≠a en los eventos OnReceiveData.
     if FClient.Asynchronous = False then
     begin
       if Res.StatusCode = 200 then
@@ -697,7 +705,7 @@ begin
         jObj := TJSonObject.ParseJSONValue(Res.ContentAsString) as TJSonObject;
         try
           FBusy := False;
-          // Llamamos a nuestro mÈtodo de parseo `ParseChat`, que entiende
+          // Llamamos a nuestro m√©todo de parseo `ParseChat`, que entiende
           // la respuesta nativa de Cohere.
           ParseChat(jObj, ResMsg);
           Result := FLastContent;
@@ -713,7 +721,7 @@ begin
     end
     else
     begin
-      // Si por alguna razÛn se llama en modo asÌncrono, la respuesta se gestionar· en los eventos.
+      // Si por alguna raz√≥n se llama en modo as√≠ncrono, la respuesta se gestionar√° en los eventos.
       Result := '';
     end;
   finally
@@ -725,12 +733,12 @@ begin
   end;
 end;
 
-procedure TCohereChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
+procedure TCohereChat.OnInternalReceiveData(const Sender: TObject; {$IFDEF FPC}const{$ENDIF} AContentLength, AReadCount: Int64; var AAbort: Boolean);
 begin
   if FClient.Asynchronous = False then
     Exit;
 
-  // Heredamos la lÛgica de aborto de la clase base
+  // Heredamos la l√≥gica de aborto de la clase base
   AAbort := Self.FAbort;
   if AAbort then
   begin
@@ -763,26 +771,26 @@ var
   ToolCall: TAiToolsFunction;
   jMessage: TJSonObject;
 begin
-  // --- 1. INICIALIZACI”N Y EXTRACCI”N DE DATOS GLOBALES ---
+  // --- 1. INICIALIZACI√ìN Y EXTRACCI√ìN DE DATOS GLOBALES ---
   LResponseText := '';
   LFinishReason := '';
   LRole := 'assistant';
 
-  jObj.TryGetValue<string>('finish_reason', LFinishReason);
+  jObj.TryGetValue('finish_reason', LFinishReason);
 
   jUsage := nil;
-  if jObj.TryGetValue<TJSonObject>('usage', jUsage) then
+  if jObj.TryGetValue('usage', jUsage) then
   begin
     jTokensNode := nil;
-    if not jUsage.TryGetValue<TJSonObject>('tokens', jTokensNode) then
+    if not jUsage.TryGetValue('tokens', jTokensNode) then
       jTokensNode := jUsage;
 
     if Assigned(jTokensNode) then
     begin
       LInputTokens := 0;
       LOutputTokens := 0;
-      jTokensNode.TryGetValue<Integer>('input_tokens', LInputTokens);
-      jTokensNode.TryGetValue<Integer>('output_tokens', LOutputTokens);
+      jTokensNode.TryGetValue('input_tokens', LInputTokens);
+      jTokensNode.TryGetValue('output_tokens', LOutputTokens);
       ResMsg.Prompt_tokens := LInputTokens;
       ResMsg.Completion_tokens := LOutputTokens;
       ResMsg.Total_tokens := LInputTokens + LOutputTokens;
@@ -793,38 +801,38 @@ begin
   end;
 
   jMessage := nil;
-  jObj.TryGetValue<TJSonObject>('message', jMessage);
+  jObj.TryGetValue('message', jMessage);
 
   // El texto puede ser el 'thinking' o un 'text' normal
-  if not jObj.TryGetValue<string>('text', LResponseText) then
+  if not jObj.TryGetValue('text', LResponseText) then
   begin
     jContentArray := nil;
-    if Assigned(jMessage) and jMessage.TryGetValue<TJSONArray>('content', jContentArray) and (jContentArray.Count > 0) then
+    if Assigned(jMessage) and jMessage.TryGetValue('content', jContentArray) and (jContentArray.Count > 0) then
     begin
       if (jContentArray.Items[0] is TJSonObject) then
-        (jContentArray.Items[0] as TJSonObject).TryGetValue<string>('thinking', LResponseText);
+        (jContentArray.Items[0] as TJSonObject).TryGetValue('thinking', LResponseText);
     end;
   end;
 
   if Assigned(jMessage) then
-    jMessage.TryGetValue<string>('role', LRole);
+    jMessage.TryGetValue('role', LRole);
   ResMsg.Role := LRole;
 
   // --- 2. PROCESAMIENTO DE CITACIONES (RAG) ---
   jCitations := nil;
-  if jObj.TryGetValue<TJSONArray>('citations', jCitations) then
+  if jObj.TryGetValue('citations', jCitations) then
   begin
-    // (Esta lÛgica se mantiene igual, es correcta)
+    // (Esta l√≥gica se mantiene igual, es correcta)
     ResMsg.Citations.Clear;
     for jCitationValue in jCitations do
     begin
-      // ... (cÛdigo de parseo de citaciones) ...
+      // ... (c√≥digo de parseo de citaciones) ...
     end;
   end;
 
   // --- 3. MANEJO DE LLAMADAS A HERRAMIENTAS (TOOL CALLS) ---
   jToolCalls := nil;
-  if (UpperCase(LFinishReason) = 'TOOL_CALL') and Assigned(jMessage) and jMessage.TryGetValue<TJSONArray>('tool_calls', jToolCalls) then
+  if (UpperCase(LFinishReason) = 'TOOL_CALL') and Assigned(jMessage) and jMessage.TryGetValue('tool_calls', jToolCalls) then
   begin
     LFuncionesList := TList<TAiToolsFunction>.Create;
     try
@@ -834,14 +842,14 @@ begin
           Continue;
 
         // La estructura es { "function": { "name": ..., "arguments": "..." } }
-        jToolCallObj := (jToolCallValue as TJSonObject).GetValue<TJSonObject>('function');
+        (jToolCallValue as TJSonObject).TryGetValue('function', jToolCallObj);
         if not Assigned(jToolCallObj) then
           Continue;
 
         ToolCall := TAiToolsFunction.Create;
-        (jToolCallValue as TJSonObject).TryGetValue<string>('id', ToolCall.Id);
-        jToolCallObj.TryGetValue<string>('name', ToolCall.Name);
-        if not jToolCallObj.TryGetValue<string>('arguments', ToolCall.Arguments) then
+        (jToolCallValue as TJSonObject).TryGetValue('id', ToolCall.Id);
+        jToolCallObj.TryGetValue('name', ToolCall.Name);
+        if not jToolCallObj.TryGetValue('arguments', ToolCall.Arguments) then
           ToolCall.Arguments := '{}';
 
         LFuncionesList.Add(ToolCall);
@@ -854,11 +862,11 @@ begin
         ResMsg.Prompt := LResponseText;
         ResMsg.Tool_calls := jToolCalls.ToJSon; // Guardamos el JSON de las tool_calls
 
-        // b) AÒadir este mensaje del 'assistant' al historial de la conversaciÛn.
+        // b) A√±adir este mensaje del 'assistant' al historial de la conversaci√≥n.
         // Este es el mensaje que dice "voy a llamar a estas herramientas".
         InternalAddMessage(ResMsg);
 
-        // c) Llamar a la funciÛn que ejecutar· las herramientas y continuar· el ciclo.
+        // c) Llamar a la funci√≥n que ejecutar√° las herramientas y continuar√° el ciclo.
         ExecuteAndRespondToToolCalls(LFuncionesList, nil);
 
         // d) Salir, porque el control del chat ahora lo tiene ExecuteAndRespondToToolCalls.
@@ -871,7 +879,7 @@ begin
     end;
   end;
 
-  // --- 4. FINALIZACI”N NORMAL (SI NO HUBO TOOL CALLS) ---
+  // --- 4. FINALIZACI√ìN NORMAL (SI NO HUBO TOOL CALLS) ---
   Self.FLastContent := LResponseText;
   ResMsg.Content := LResponseText;
   ResMsg.Prompt := LResponseText;
@@ -889,7 +897,15 @@ var
   JsonData, jCitation, jToolCall: TJSonObject;
   CurrentToolCall: TAiToolsFunction;
   CurrentCitation: TAiMsgCitation;
+
   Index: Integer;
+  // Vars moved
+  DocIds, jToolCalls, jToolCallsArr: TJSONArray;
+  docId, jToolCallValue: TJSONValue;
+  LSource: TAiCitationSource;
+  jParams, jFinalToolCall, jResponse, jUsage: TJSonObject;
+  LFinishReason: string;
+  LInputTokens, LOutputTokens: Integer;
 begin
   Lines := TStringList.Create;
   try
@@ -914,14 +930,14 @@ begin
       end;
 
       if EventData = '' then
-        Continue; // Ignorar pings o mensajes vacÌos
+        Continue; // Ignorar pings o mensajes vac√≠os
 
       JsonData := TJSonObject.ParseJSONValue(EventData) as TJSonObject;
       if not Assigned(JsonData) then
         Continue;
 
       try
-        // --- 2. PROCESAR EL EVENTO SEG⁄N SU TIPO ---
+        // --- 2. PROCESAR EL EVENTO SEG√öN SU TIPO ---
         if EventName = 'stream-start' then
         begin
           // Reiniciar el estado para un nuevo stream.
@@ -933,7 +949,7 @@ begin
         else if EventName = 'text-generation' then // Evento principal para el texto
         begin
           TextChunk := '';
-          if JsonData.TryGetValue<string>('text', TextChunk) then
+          if JsonData.TryGetValue('text', TextChunk) then
           begin
             if (TextChunk <> '') and Assigned(FOnReceiveDataEvent) then
             begin
@@ -945,20 +961,17 @@ begin
         else if EventName = 'citation-generation' then
         begin
           // En streaming, las citas vienen con su texto.
-          // Las creamos y aÒadimos directamente.
+          // Las creamos y a√±adimos directamente.
           CurrentCitation := TAiMsgCitation.Create;
           try
-            JsonData.TryGetValue<string>('text', CurrentCitation.Text);
-            Var
-              DocIds: TJSONArray;
-            if JsonData.TryGetValue<TJSONArray>('document_ids', DocIds) then
+            JsonData.TryGetValue('text', CurrentCitation.Text);
+            if JsonData.TryGetValue('document_ids', DocIds) then
             begin
-              for var docId in DocIds do
+              for docId in DocIds do
               begin
-                var
                 LSource := TAiCitationSource.Create;
                 LSource.SourceType := cstDocument;
-                LSource.DataSource.Id := docId.Value;
+                LSource.DataSource.Id := docId.AsString;
                 CurrentCitation.Sources.Add(LSource);
               end;
             end;
@@ -970,26 +983,21 @@ begin
         end
         else if EventName = 'tool-calls-generation' then
         begin
-          // Este evento envÌa el bloque COMPLETO de tool_calls.
-          // No es un delta, asÌ que podemos parsearlo directamente.
-          Var
-            jToolCalls: TJSONArray;
-
-          if JsonData.TryGetValue<TJSONArray>('tool_calls', jToolCalls) then
+          // Este evento env√≠a el bloque COMPLETO de tool_calls.
+          // No es un delta, as√≠ que podemos parsearlo directamente.
+          if JsonData.TryGetValue('tool_calls', jToolCalls) then
           begin
             FStreamingToolCalls.Clear; // Limpiamos por si acaso
-            for var jToolCallValue in jToolCalls do
+            for jToolCallValue in jToolCalls do
             begin
               if not(jToolCallValue is TJSonObject) then
                 Continue;
               jToolCall := jToolCallValue as TJSonObject;
 
               CurrentToolCall := TAiToolsFunction.Create;
-              jToolCall.TryGetValue<string>('name', CurrentToolCall.Name);
+              jToolCall.TryGetValue('name', CurrentToolCall.Name);
 
-              Var
-                jParams: TJSonObject;
-              if jToolCall.TryGetValue<TJSonObject>('parameters', jParams) then
+              if jToolCall.TryGetValue('parameters', jParams) then
                 CurrentToolCall.Arguments := jParams.ToJSon
               else
                 CurrentToolCall.Arguments := '{}';
@@ -1003,32 +1011,28 @@ begin
         end
         else if EventName = 'stream-end' then
         begin
-          // El stream ha terminado. Decidimos quÈ hacer a continuaciÛn.
+          // El stream ha terminado. Decidimos qu√© hacer a continuaci√≥n.
           FStreamResponseMsg := TAiChatMessage.Create(FLastContent, FStreamLastRole);
           try
-            // AÒadir las citaciones que se hayan acumulado
+            // A√±adir las citaciones que se hayan acumulado
             FStreamResponseMsg.Citations.Assign(FStreamingCitations);
 
-            var
-              LFinishReason: string;
-            JsonData.TryGetValue<string>('finish_reason', LFinishReason);
+            JsonData.TryGetValue('finish_reason', LFinishReason);
 
             if (UpperCase(LFinishReason) = 'TOOL_CALLS') and (FStreamingToolCalls.Count > 0) then
             begin
-              // El stream terminÛ porque se generaron llamadas a herramientas.
+              // El stream termin√≥ porque se generaron llamadas a herramientas.
               // 1. Guardamos el mensaje actual del asistente (que puede contener el plan)
               // y le adjuntamos las herramientas que se construyeron.
               if FStreamingToolCalls.Count > 0 then
               begin
-                var
                 jToolCallsArr := TJSONArray.Create;
                 try
                   for CurrentToolCall in FStreamingToolCalls.Values do
                   begin
-                    var
                     jFinalToolCall := TJSonObject.Create;
                     jFinalToolCall.AddPair('name', CurrentToolCall.Name);
-                    jFinalToolCall.AddPair('parameters', TJSONValue.ParseJSONValue(CurrentToolCall.Arguments));
+                    jFinalToolCall.AddPair('parameters', TJSONObject.ParseJSONValue(CurrentToolCall.Arguments));
                     jToolCallsArr.Add(jFinalToolCall);
                   end;
                   FStreamResponseMsg.Tool_calls := jToolCallsArr.ToJSon;
@@ -1038,27 +1042,20 @@ begin
               end;
 
               InternalAddMessage(FStreamResponseMsg);
-              FStreamResponseMsg := nil; // Evitar doble liberaciÛn
+              FStreamResponseMsg := nil; // Evitar doble liberaci√≥n
 
               // 2. Ejecutamos las herramientas
               ExecuteAndRespondToToolCalls(FStreamingToolCalls.Values, nil);
             end
             else
             begin
-              // Flujo normal: el stream terminÛ con una respuesta de texto completa.
-              Var
-                jResponse: TJSonObject;
-              Var
-                jUsage: TJSonObject;
-
-              if JsonData.TryGetValue<TJSonObject>('response', jResponse) then
-                if jResponse.TryGetValue<TJSonObject>('usage', jUsage) then
+              // Flujo normal: el stream termin√≥ con una respuesta de texto completa.
+              if JsonData.TryGetValue('response', jResponse) then
+                if jResponse.TryGetValue('usage', jUsage) then
                 begin
                   // Parsear 'usage' final
-                  var
-                    LInputTokens, LOutputTokens: Integer;
-                  jUsage.TryGetValue<Integer>('input_tokens', LInputTokens);
-                  jUsage.TryGetValue<Integer>('output_tokens', LOutputTokens);
+                  jUsage.TryGetValue('input_tokens', LInputTokens);
+                  jUsage.TryGetValue('output_tokens', LOutputTokens);
                   FStreamResponseMsg.Prompt_tokens := LInputTokens;
                   FStreamResponseMsg.Completion_tokens := LOutputTokens;
                   FStreamResponseMsg.Total_tokens := LInputTokens + LOutputTokens;
@@ -1111,10 +1108,10 @@ var
 begin
   Result := nil;
   if not Assigned(ADocuments) or (ADocuments.Count = 0) then
-    raise Exception.Create('La lista de documentos para Rerank no puede estar vacÌa.');
+    raise Exception.Create('La lista de documentos para Rerank no puede estar vac√≠a.');
 
   // El endpoint de Rerank es diferente al de Chat
-  LUrl := TPath.Combine(System.SysUtils.ExcludeTrailingPathDelimiter(Self.Url), 'rerank');
+  LUrl := TPath.Combine(SysUtils.ExcludeTrailingPathDelimiter(Self.Url), 'rerank');
 
   LJsonObject := TJSonObject.Create;
   LBodyStream := TStringStream.Create('', TEncoding.UTF8);
@@ -1131,7 +1128,7 @@ begin
     LJsonObject.AddPair('documents', LDocsArray);
 
     if ATopN > 0 then
-      LJsonObject.AddPair('top_n', TJSONNumber.Create(ATopN));
+      LJsonObject.AddPair('top_n', CreateJSONNumber(ATopN));
 
     LBodyStream.WriteString(LJsonObject.ToString);
     LBodyStream.Position := 0;
@@ -1146,19 +1143,19 @@ begin
       Result := TRerankResponse.Create;
       LResponseJson := TJSonObject.ParseJSONValue(LResponseStream.DataString) as TJSonObject;
       try
-        LResponseJson.TryGetValue<string>('id', Result.FId);
-        if LResponseJson.TryGetValue<TJSonObject>('meta', LMeta) then
-          if LMeta.TryGetValue<TJSonObject>('billed_units', LBilledUnits) then
-            LBilledUnits.TryGetValue<Integer>('search_units', Result.FSearchUnits);
+        LResponseJson.TryGetValue('id', Result.FId);
+        if LResponseJson.TryGetValue('meta', LMeta) then
+          if LMeta.TryGetValue('billed_units', LBilledUnits) then
+            LBilledUnits.TryGetValue('search_units', Result.FSearchUnits);
 
-        if LResponseJson.TryGetValue<TJSONArray>('results', LResultsArray) then
+        if LResponseJson.TryGetValue('results', LResultsArray) then
         begin
           for LResultItem in LResultsArray do
           begin
             LResultJson := LResultItem as TJSonObject;
             LNewResult := TRerankResult.Create;
-            LResultJson.TryGetValue<Integer>('index', LNewResult.FIndex);
-            LResultJson.TryGetValue<Double>('relevance_score', LNewResult.FRelevanceScore);
+            LResultJson.TryGetValue('index', LNewResult.FIndex);
+            LResultJson.TryGetValue('relevance_score', LNewResult.FRelevanceScore);
             if (LNewResult.FIndex >= 0) and (LNewResult.FIndex < ADocuments.Count) then
               LNewResult.FDocumentText := ADocuments[LNewResult.FIndex];
             Result.Results.Add(LNewResult);
@@ -1218,7 +1215,7 @@ begin
   Self.ApiKey := '@COHERE_API_KEY';
   Self.Url := 'https://api.cohere.ai/v2/';
   Self.FModel := 'embed-english-v3.0'; // Modelo por defecto de Cohere
-  Self.FInputType := citSearchQuery; // Un valor por defecto com˙n
+  Self.FInputType := citSearchQuery; // Un valor por defecto com√∫n
 end;
 
 function TAiCohereEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
@@ -1234,7 +1231,7 @@ var
   LModel: string;
   LResponseJson: TJSonObject;
 begin
-  // Si el evento est· asignado, se delega la lÛgica (comportamiento de la clase base)
+  // Si el evento est√° asignado, se delega la l√≥gica (comportamiento de la clase base)
   if Assigned(OnGetEmbedding) then
   begin
     Result := inherited CreateEmbedding(aInput, aUser, aDimensions, aModel, aEncodingFormat);
@@ -1242,6 +1239,7 @@ begin
   end;
 
   Client := TNetHTTPClient.Create(Nil);
+  Client.ConfigureForAsync;
   BodyStream := TStringStream.Create('', TEncoding.UTF8);
   ResponseStream := TStringStream.Create('', TEncoding.UTF8);
   jObj := TJSonObject.Create;
@@ -1253,11 +1251,11 @@ begin
     else
       LModel := FModel;
 
-    // 1. Construir el cuerpo de la peticiÛn JSON
+    // 1. Construir el cuerpo de la petici√≥n JSON
     jObj.AddPair('model', LModel);
     jObj.AddPair('input_type', GetInputTypeAsString);
 
-    // La API espera un array de textos. Creamos uno con el ˙nico input.
+    // La API espera un array de textos. Creamos uno con el √∫nico input.
     JTexts := TJSONArray.Create;
     JTexts.Add(aInput);
     jObj.AddPair('texts', JTexts);
@@ -1268,15 +1266,15 @@ begin
     jObj.AddPair('embedding_types', JEmbeddingTypes);
 
     // Opcional: Cohere no usa 'dimensions' como OpenAI, sino 'output_dimension'.
-    // Lo aÒadimos si es un valor v·lido para Cohere.
+    // Lo a√±adimos si es un valor v√°lido para Cohere.
     if (aDimensions = 256) or (aDimensions = 512) or (aDimensions = 1024) or (aDimensions = 1536) then
     begin
       jObj.AddPair('output_dimension', aDimensions);
     end
     else if (aDimensions > 0) then
     begin
-      // Opcional: Lanzar un warning o un error si el usuario especifica una dimensiÛn
-      // que no es v·lida para este modelo, para evitar confusiones.
+      // Opcional: Lanzar un warning o un error si el usuario especifica una dimensi√≥n
+      // que no es v√°lida para este modelo, para evitar confusiones.
       // Por ahora, simplemente lo ignoramos.
     end;
 
@@ -1296,7 +1294,7 @@ begin
       // 1. Parsear el string de respuesta y castearlo a un TJSONObject.
       LResponseJson := TJSonObject.ParseJSONValue(ResponseStream.DataString) as TJSonObject;
       try
-        // 2. Pasar el objeto JSON parseado directamente al mÈtodo de parseo.
+        // 2. Pasar el objeto JSON parseado directamente al m√©todo de parseo.
         ParseCohereEmbedding(LResponseJson);
         Result := Self.FData;
       finally
@@ -1347,17 +1345,17 @@ begin
   Ftotal_tokens := 0;
 
   // Extraer el uso de tokens
-  if jObj.TryGetValue<TJSonObject>('meta', JMeta) then
-    if JMeta.TryGetValue<TJSonObject>('billed_units', JBilledUnits) then
-      JBilledUnits.TryGetValue<Integer>('input_tokens', Fprompt_tokens);
+  if jObj.TryGetValue('meta', JMeta) then
+    if JMeta.TryGetValue('billed_units', JBilledUnits) then
+      JBilledUnits.TryGetValue('input_tokens', Fprompt_tokens);
 
   Ftotal_tokens := Fprompt_tokens; // En embeddings, total = prompt
 
   // Navegar la estructura de respuesta de Cohere
-  if jObj.TryGetValue<TJSonObject>('embeddings', JEmbeddingsObj) then
+  if jObj.TryGetValue('embeddings', JEmbeddingsObj) then
   begin
     // Buscamos el array de embeddings de tipo 'float'
-    if JEmbeddingsObj.TryGetValue<TJSONArray>('float', JFloatEmbeddingsArray) then
+    if JEmbeddingsObj.TryGetValue('float', JFloatEmbeddingsArray) then
     begin
       // Como solo pedimos un texto, solo nos interesa el primer vector
       if JFloatEmbeddingsArray.Count > 0 then
@@ -1368,7 +1366,7 @@ begin
           // Convertir el TJSONArray a nuestro TAiEmbeddingData (TArray<Double>)
           SetLength(FData, JFirstEmbedding.Count);
           for J := 0 to JFirstEmbedding.Count - 1 do
-            FData[J] := JFirstEmbedding.Items[J].GetValue<Double>;
+            FData[J] := (JFirstEmbedding.Items[J] as TJSONNumber).AsDouble; // Fixed: Semantic parity for Delphi/FPC
         end;
       end;
     end;

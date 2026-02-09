@@ -1,20 +1,22 @@
-unit uMakerAi.Chat.DeepSeek;
+﻿unit uMakerAi.Chat.DeepSeek;
 
-// IT License
+{$INCLUDE ../CompilerDirectives.inc}
+
+// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -22,7 +24,7 @@ unit uMakerAi.Chat.DeepSeek;
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr�quez
+// Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -36,6 +38,11 @@ unit uMakerAi.Chat.DeepSeek;
 interface
 
 uses
+  // FPC: Unidades estándar de FPC sin prefijo System
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye Net/HTTP/JSON/REST nativos
   System.SysUtils, System.Types, System.UITypes, System.Classes,
   System.Threading,
   System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections,
@@ -44,10 +51,9 @@ uses
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
 
-{$IF CompilerVersion < 35}
-  uJSONHelper,
-{$ENDIF}
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core;
+  {$ENDIF}
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 Type
 
@@ -114,7 +120,8 @@ end;
 
 function TAiDeepSeekChat.InitChatCompletions: String;
 Var
-  AJSONObject, jToolChoice: TJSonObject;
+  AJSONObject: TJSonObject;
+  jToolChoice: TJSonObject;
   JArr: TJSonArray;
   JStop: TJSonArray;
   Lista: TStringList;
@@ -141,28 +148,21 @@ begin
 
   Try
 
-    AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
+    AJSONObject.AddPair('stream', CreateJSONBool(LAsincronico));
 
     If Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAi).Text) <> '') then
     Begin
 
-{$IF CompilerVersion < 35}
-      JArr := TJSONUtils.ParseAsArray(GetTools(TToolFormat.tfOpenAi).Text);
-{$ELSE}
-      JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
-{$ENDIF}
+      JArr := TJSONObject.ParseAsArray(GetTools(TToolFormat.tfOpenAi).Text);
+      
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools est�n mal definido, debe ser un JsonArray');
+        Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then
       Begin
 
-{$IF CompilerVersion < 35}
-        jToolChoice := TJSONUtils.ParseAsObject(Tool_choice);
-{$ELSE}
-        jToolChoice := TJSonObject(TJSONObject.ParseJSONValue(Tool_choice));
-{$ENDIF}
+        jToolChoice := TJSONObject.ParseJSONValue(Tool_choice) as TJSONObject;
         If Assigned(jToolChoice) then
           AJSONObject.AddPair('tools_choice', jToolChoice);
       End;
@@ -172,16 +172,16 @@ begin
 
     AJSONObject.AddPair('model', LModel);
 
-    AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
-    AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+    AJSONObject.AddPair('temperature', CreateJSONNumber(Trunc(Temperature * 100) / 100));
+    AJSONObject.AddPair('max_tokens', CreateJSONNumber(Max_tokens));
 
     If Top_p <> 0 then
-      AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
+      AJSONObject.AddPair('top_p', CreateJSONNumber(Top_p));
 
-    AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
-    AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
+    AJSONObject.AddPair('frequency_penalty', CreateJSONNumber(Trunc(Frequency_penalty * 100) / 100));
+    AJSONObject.AddPair('presence_penalty', CreateJSONNumber(Trunc(Presence_penalty * 100) / 100));
     AJSONObject.AddPair('user', User);
-    AJSONObject.AddPair('n', TJSONNumber.Create(N));
+    AJSONObject.AddPair('n', CreateJSONNumber(N));
 
     Lista.CommaText := Stop;
     If Lista.Count > 0 then
@@ -195,18 +195,18 @@ begin
     If Logprobs = True then
     Begin
       If Logit_bias <> '' then
-        AJSONObject.AddPair('logit_bias', TJSONNumber.Create(Logit_bias));
+        AJSONObject.AddPair('logit_bias', TJSONObject.ParseJSONValue(Logit_bias));
 
-      AJSONObject.AddPair('logprobs', TJSONBool.Create(Logprobs));
+      AJSONObject.AddPair('logprobs', CreateJSONBool(Logprobs));
 
       If Top_logprobs <> '' then
-        AJSONObject.AddPair('top_logprobs', TJSONNumber.Create(Top_logprobs));
+        AJSONObject.AddPair('top_logprobs', CreateJSONNumber(StrToIntDef(Top_logprobs, 0)));
     End;
 
     If Seed > 0 then
-      AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
+      AJSONObject.AddPair('seed', CreateJSONNumber(Seed));
 
-    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
+    Res := AJSONObject.ToJSONString;
 
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);

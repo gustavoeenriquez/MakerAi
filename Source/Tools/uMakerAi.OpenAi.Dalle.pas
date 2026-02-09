@@ -1,18 +1,18 @@
-// IT License
+Ôªø// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,27 +33,32 @@
 
 
 // --- Modificaciones ----
-// 30/08/2024 -- Mejora en la funciÛn Edit
+// 30/08/2024 -- Mejora en la funci√≥n Edit
 
 // --------- CAMBIOS --------------------
-// 4/11/2025 - RefactorizaciÛn completa para soportar dall-e-2, dall-e-3, y gpt-image-1.
-// 4/11/2025 - AÒadido soporte para streaming con eventos (OnPartialImageReceived, OnStreamCompleted).
-// 4/11/2025 - IntegraciÛn con uMakerAi.Core: Edit y Variation ahora usan TAiMediaFile.
-// 4/11/2025 - ModernizaciÛn de enums y nombres de propiedades para mayor claridad.
+// 4/11/2025 - Refactorizaci√≥n completa para soportar dall-e-2, dall-e-3, y gpt-image-1.
+// 4/11/2025 - A√±adido soporte para streaming con eventos (OnPartialImageReceived, OnStreamCompleted).
+// 4/11/2025 - Integraci√≥n con uMakerAi.Core: Edit y Variation ahora usan TAiMediaFile.
+// 4/11/2025 - Modernizaci√≥n de enums y nombres de propiedades para mayor claridad.
 
 unit uMakerAi.OpenAi.Dalle;
+
+{$INCLUDE ../CompilerDirectives.inc}
 
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Types, System.UITypes, System.Classes,
   System.Threading, System.Variants, System.Net.Mime, System.IOUtils,
   System.Generics.Collections, System.NetEncoding, System.JSON, System.StrUtils,
   System.Math,
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
-  // Dependencia clave de la librerÌa central
-  uMakerAi.Core;
+  {$ENDIF}
+  uMakerAi.Core, uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
@@ -97,7 +102,7 @@ type
   TOnStreamCompleted = procedure(Sender: TObject; const AFinalImage: TAiDalleImage) of object;
   TOnStreamError = procedure(Sender: TObject; const AErrorMessage: string) of object;
 
-  // Enums para los par·metros de la API
+  // Enums para los par√°metros de la API
   TAiImageModel = (imDallE2, imDallE3, imGptImage1, imSDXL);
 
   TAiImageQuality = (iqAuto, iqStandard, iqHD, iqHigh, iqMedium, iqLow);
@@ -150,7 +155,7 @@ type
   protected
     procedure ClearImages;
     procedure ParseResponse(JObj: TJSONObject);
-    procedure HandleStreamData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
+    procedure HandleStreamData(const Sender: TObject; {$IFDEF FPC}const{$ENDIF} AContentLength, AReadCount: Int64; var AAbort: Boolean);
     procedure ProcessStreamBuffer;
     function SizeToString(ASize: TAiImageSize): string;
   public
@@ -193,6 +198,67 @@ procedure Register;
 
 implementation
 
+type
+  // Helper class for synchronizing events in FPC/Delphi cross-platform way
+  TStreamCallbackRunner = class
+  private
+    FDalle: TAiDalle;
+    FImage: TAiDalleImage;
+    FIndex: Integer;
+    FErrorMsg: string;
+  public
+    constructor Create(ADalle: TAiDalle; AImage: TAiDalleImage; AIndex: Integer); overload;
+    constructor Create(ADalle: TAiDalle; AImage: TAiDalleImage); overload;
+    constructor Create(ADalle: TAiDalle; const AErrorMsg: string); overload;
+    
+    procedure DoPartial;
+    procedure DoComplete;
+    procedure DoError;
+  end;
+
+constructor TStreamCallbackRunner.Create(ADalle: TAiDalle; AImage: TAiDalleImage; AIndex: Integer);
+begin
+  FDalle := ADalle;
+  FImage := AImage;
+  FIndex := AIndex;
+end;
+
+constructor TStreamCallbackRunner.Create(ADalle: TAiDalle; AImage: TAiDalleImage);
+begin
+  FDalle := ADalle;
+  FImage := AImage;
+  FIndex := 0;
+end;
+
+constructor TStreamCallbackRunner.Create(ADalle: TAiDalle; const AErrorMsg: string);
+begin
+  FDalle := ADalle;
+  FErrorMsg := AErrorMsg;
+end;
+
+procedure TStreamCallbackRunner.DoPartial;
+begin
+  if Assigned(FDalle.OnPartialImageReceived) then
+    FDalle.OnPartialImageReceived(FDalle, FImage, FIndex);
+  // The logic implies ownership is passed, or not?
+  // We mirror the original logic. 
+  Self.Free;
+end;
+
+procedure TStreamCallbackRunner.DoComplete;
+begin
+  if Assigned(FDalle.OnStreamCompleted) then
+    FDalle.OnStreamCompleted(FDalle, FImage);
+  Self.Free;
+end;
+
+procedure TStreamCallbackRunner.DoError;
+begin
+  if Assigned(FDalle.OnStreamError) then
+    FDalle.OnStreamError(FDalle, FErrorMsg);
+  Self.Free;
+end;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiDalle]);
@@ -231,6 +297,7 @@ var
 begin
   FImageStream.Clear;
   NetHttp := TNetHTTPClient.Create(nil);
+  NetHttp.ConfigureForAsync;
   try
     NetHttp.Get(AUrlFile, FImageStream);
     FImageStream.Position := 0;
@@ -241,33 +308,33 @@ end;
 
 procedure TAiDalleImage.ParseData(JObj: TJSONObject);
 begin
-  JObj.TryGetValue<string>('url', FUrlFile);
-  if JObj.TryGetValue<string>('b64_json', FBase64) then
+  JObj.TryGetValue('url', FUrlFile);
+  if JObj.TryGetValue('b64_json', FBase64) then
   begin
     FImageStream.Free;
     FImageStream := Base64ToStream(FBase64);
   end;
-  JObj.TryGetValue<string>('revised_prompt', FRevisedPrompt);
-  JObj.TryGetValue<string>('background', FBackground);
-  JObj.TryGetValue<string>('output_format', FOutputFormat);
-  JObj.TryGetValue<string>('size', FSize);
-  JObj.TryGetValue<string>('quality', FQuality);
-  if JObj.TryGetValue<TJSONObject>('usage', FUsage) then
+  JObj.TryGetValue('revised_prompt', FRevisedPrompt);
+  JObj.TryGetValue('background', FBackground);
+  JObj.TryGetValue('output_format', FOutputFormat);
+  JObj.TryGetValue('size', FSize);
+  JObj.TryGetValue('quality', FQuality);
+  if JObj.TryGetValue('usage', FUsage) then
     FUsage := TJSONObject(FUsage.Clone);
 end;
 
 procedure TAiDalleImage.ParseStreamEvent(JObj: TJSONObject);
 begin
-  if JObj.TryGetValue<string>('b64_json', FBase64) then
+  if JObj.TryGetValue('b64_json', FBase64) then
   begin
     FImageStream.Free;
     FImageStream := Base64ToStream(FBase64);
   end;
-  JObj.TryGetValue<string>('background', FBackground);
-  JObj.TryGetValue<string>('output_format', FOutputFormat);
-  JObj.TryGetValue<string>('size', FSize);
-  JObj.TryGetValue<string>('quality', FQuality);
-  if JObj.TryGetValue<TJSONObject>('usage', FUsage) then
+  JObj.TryGetValue('background', FBackground);
+  JObj.TryGetValue('output_format', FOutputFormat);
+  JObj.TryGetValue('size', FSize);
+  JObj.TryGetValue('quality', FQuality);
+  if JObj.TryGetValue('usage', FUsage) then
     FUsage := TJSONObject(FUsage.Clone);
 end;
 
@@ -333,21 +400,22 @@ begin
 
   sUrl := FUrl + 'images/edits';
   Client := TNetHTTPClient.Create(nil);
+  Client.ConfigureForAsync;
   Body := TMultipartFormData.Create;
   try
     for MediaFile in aMediaFiles do
     begin
       MediaFile.Content.Position := 0;
       if FModel = imGptImage1 then
-        Body.AddStream('image[]', MediaFile.Content, False, MediaFile.Filename)
+        AddStreamToMultipart(Body, 'image[]', MediaFile.Content, False, MediaFile.Filename, '')
       else
-        Body.AddStream('image', MediaFile.Content, False, MediaFile.Filename);
+        AddStreamToMultipart(Body, 'image', MediaFile.Content, False, MediaFile.Filename, '');
     end;
 
     if Assigned(aMaskFile) then
     begin
       aMaskFile.Content.Position := 0;
-      Body.AddStream('mask', aMaskFile.Content, False, aMaskFile.Filename);
+      AddStreamToMultipart(Body, 'mask', aMaskFile.Content, False, aMaskFile.Filename, '');
     end;
 
     Body.AddField('prompt', aPrompt);
@@ -381,7 +449,7 @@ begin
         end;
     end;
 
-    Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
+    Client.SetHeader('Authorization', 'Bearer ' + ApiKey);
     Res := Client.Post(sUrl, Body);
 
     if Res.StatusCode = 200 then
@@ -411,14 +479,20 @@ var
   ContentStream: TStringStream;
   ResponseStream: TMemoryStream; // Usado solo para llamadas no-streaming
   sUrl: string;
-  AbortFlag: Boolean; // Variable para el par·metro 'var'
+  AbortFlag: Boolean; // Variable para el par√°metro 'var'
+  // Delphi: TStreamReader para lectura robusta. FPC usa TStringStream como alternativa
+  {$IFNDEF FPC}
   StreamReader: TStreamReader; // Para leer la respuesta de forma robusta
+  {$ELSE}
+  SS: TStringStream;
+  {$ENDIF}
 begin
   Result := nil;
   ClearImages;
   FPrompt := aPrompt;
   sUrl := FUrl + 'images/generations';
   Client := TNetHTTPClient.Create(nil);
+  Client.ConfigureForAsync;
   JObj := TJSONObject.Create;
   ContentStream := TStringStream.Create('', TEncoding.UTF8);
   FActiveResponseStream := nil;
@@ -428,13 +502,12 @@ begin
       imDallE2:
         begin
           JObj.AddPair('model', 'dall-e-2').AddPair('n', Min(10, Max(1, N)));
-          JObj.AddPair('size', SizeToString(ASize));
+          JObj.AddPair('size', SizeToString(aSize));
         end;
-
       imDallE3:
         begin
           JObj.AddPair('model', 'dall-e-3').AddPair('n', 1);
-          JObj.AddPair('size', SizeToString(ASize));
+          JObj.AddPair('size', SizeToString(aSize));
           if FQuality in [iqHD, iqHigh] then
             JObj.AddPair('quality', 'hd')
           else
@@ -444,11 +517,10 @@ begin
           else
             JObj.AddPair('style', 'natural');
         end;
-
       imGptImage1:
         begin
           JObj.AddPair('model', 'gpt-image-1').AddPair('n', Min(10, Max(1, N)));
-          JObj.AddPair('size', SizeToString(ASize));
+          JObj.AddPair('size', SizeToString(aSize));
 
           case FQuality of
             iqHigh:
@@ -471,7 +543,7 @@ begin
               JObj.AddPair('output_format', 'webp');
           end;
           if FStream then
-            JObj.AddPair('stream', TJSONBool.Create(True));
+            JObj.AddPair('stream', CreateJSONBool(True));
         end;
 
       imSDXL:
@@ -485,14 +557,14 @@ begin
           If Assigned(aImage) and (aImage.Size > 2000) then
             JObj.AddPair('image', TNetEncoding.Base64.EncodeBytesToString(aImage.Memory, aImage.Size));
 
-          JObj.AddPair('steps', TJSONNumber.Create(FSteps));
-          JObj.AddPair('guidance_scale', TJSONNumber.Create(FGuidanceScale));
+          JObj.AddPair('steps', CreateJSONNumber(FSteps));
+          JObj.AddPair('guidance_scale', CreateJSONNumber(FGuidanceScale));
 
           if FSeed >= 0 then
-            JObj.AddPair('seed', TJSONNumber.Create(FSeed));
+            JObj.AddPair('seed', CreateJSONNumber(FSeed));
 
           if FUseRefiner then
-            JObj.AddPair('use_refiner', TJSONBool.Create(True));
+            JObj.AddPair('use_refiner', CreateJSONBool(True));
 
           JObj.AddPair('size', SizeToString(ASize));
         end;
@@ -508,7 +580,7 @@ begin
 
     ContentStream.WriteString(JObj.ToJSON);
     ContentStream.Position := 0;
-    Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
+    Client.SetHeader('Authorization', 'Bearer ' + ApiKey);
     Client.ContentType := 'application/json';
 
     if FStream and (FModel = imGptImage1) then
@@ -540,12 +612,22 @@ begin
         if Res.StatusCode = 200 then
         begin
           JObj.Free;
+          {$IFDEF FPC}
+          SS := TStringStream.Create('');
+          try
+            SS.CopyFrom(ResponseStream, 0);
+            JObj := TJSONObject.ParseJSONValue(SS.DataString) as TJSONObject;
+          finally
+            SS.Free;
+          end;
+          {$ELSE}
           StreamReader := TStreamReader.Create(ResponseStream, TEncoding.UTF8);
           try
             JObj := TJSONObject.ParseJSONValue(StreamReader.ReadToEnd) as TJSONObject;
           finally
             StreamReader.Free;
           end;
+          {$ENDIF}
 
           try
             ParseResponse(JObj);
@@ -557,12 +639,22 @@ begin
         end
         else
         begin
+          {$IFDEF FPC}
+          SS := TStringStream.Create('');
+          try
+            SS.CopyFrom(ResponseStream, 0);
+            raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, SS.DataString]);
+          finally
+            SS.Free;
+          end;
+          {$ELSE}
           StreamReader := TStreamReader.Create(ResponseStream, TEncoding.UTF8);
           try
             raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, StreamReader.ReadToEnd]);
           finally
             StreamReader.Free;
           end;
+          {$ENDIF}
         end;
       finally
         ResponseStream.Free;
@@ -579,8 +671,8 @@ begin
       FActiveResponseStream := nil;
     end;
 
-    // El JObj de la peticiÛn se libera aquÌ solo si no es streaming,
-    // porque en streaming ya se habrÌa liberado antes del bloque finally.
+    // El JObj de la petici√≥n se libera aqu√≠ solo si no es streaming,
+    // porque en streaming ya se habr√≠a liberado antes del bloque finally.
     // if not(FStream and (FModel = imGptImage1)) then
     // JObj.Free;
   end;
@@ -591,17 +683,17 @@ begin
   if (csDesigning in ComponentState) then
     Result := FApiKey
   else if (FApiKey <> '') and (FApiKey.StartsWith('@')) then
-    Result := GetEnvironmentVariable(FApiKey.Substring(1))
+    Result := CompatGetEnvVar(FApiKey.Substring(1))
   else
     Result := FApiKey;
 end;
 
-procedure TAiDalle.HandleStreamData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
+procedure TAiDalle.HandleStreamData(const Sender: TObject; {$IFDEF FPC}const{$ENDIF} AContentLength, AReadCount: Int64; var AAbort: Boolean);
 var
   NewBytes: TBytes;
   NewDataSize: Int64;
 begin
-  // VerificaciÛn de seguridad: solo proceder si tenemos un stream activo
+  // Verificaci√≥n de seguridad: solo proceder si tenemos un stream activo
   if not Assigned(FActiveResponseStream) then
     Exit;
 
@@ -628,21 +720,24 @@ var
   ImageEvent: TAiDalleImage;
   PartialImageIndex: Integer;
   EventType: string;
+  Runner: TStreamCallbackRunner;
+  LErrorMsg: string;
 begin
   BufferContent := FStreamBuffer.ToString;
   if not BufferContent.Contains(#10) then
     Exit; // No complete line yet
 
-  Lines := BufferContent.Split([#10], TStringSplitOptions.ExcludeEmpty);
+  Lines := CompatSplit(BufferContent, [#10], TStringSplitOptions.ExcludeEmpty);
   FStreamBuffer.Clear;
 
   for Line in Lines do
   begin
+    LErrorMsg := ''; // Reset error flag para cada l√≠nea
     if Line.Trim.EndsWith('}') then // A potentially complete JSON line
     begin
       if Line.StartsWith('data: ') then
       begin
-        JsonStr := Line.Substring('data: '.Length);
+        JsonStr := Line.Substring(Length('data: '));
         if JsonStr.Trim.Equals('[DONE]') then
           continue;
 
@@ -653,15 +748,19 @@ begin
             ImageEvent := TAiDalleImage.Create;
             try
               ImageEvent.ParseStreamEvent(JObj as TJSONObject);
-              if (JObj as TJSONObject).TryGetValue<string>('type', EventType) then
+              if (JObj as TJSONObject).TryGetValue('type', EventType) then
               begin
-                TThread.Queue(nil,
+                QueueInMainThread(
                   procedure
                   begin
                     // NOTE: The event handler is responsible for freeing the ImageEvent object.
+                    // Adaptaci√≥n para simular el comportamiento espec√≠fico de cada plataforma si fuera necesario,
+                    // pero mantenemos la l√≥gica unificada aqu√≠.
+                    // Para FPC, QueueInMainThread adapta el TThreadProc.
+                    
                     if EventType.Contains('partial_image') then
                     begin
-                      (JObj as TJSONObject).TryGetValue<Integer>('partial_image_index', PartialImageIndex);
+                      (JObj as TJSONObject).TryGetValue('partial_image_index', PartialImageIndex);
                       if Assigned(FOnPartialImageReceived) then
                         FOnPartialImageReceived(Self, ImageEvent, PartialImageIndex);
                     end
@@ -683,12 +782,24 @@ begin
           end;
         except
           on E: Exception do
-            TThread.Queue(nil,
-              procedure
-              begin
-                if Assigned(FOnStreamError) then
-                  FOnStreamError(Self, 'Error parsing stream event: ' + E.Message);
-              end);
+          begin
+            // COMPAT FPC: Las closures an√≥nimas NO son soportadas dentro de
+            // bloques except en FPC 3.3. Se captura el mensaje y se reporta
+            // DESPU√âS del bloque except usando el flag LErrorMsg.
+            LErrorMsg := 'Error parsing stream event: ' + E.Message;
+          end;
+        end;
+
+        // Reportar error fuera del except para compatibilidad con FPC 3.3
+        if LErrorMsg <> '' then
+        begin
+          QueueInMainThread(
+            procedure
+            begin
+              if Assigned(FOnStreamError) then
+                FOnStreamError(Self, LErrorMsg);
+            end);
+          LErrorMsg := ''; // Reset para el siguiente ciclo
         end;
       end;
     end
@@ -705,7 +816,7 @@ var
   i: Integer;
 begin
   ClearImages;
-  if JObj.TryGetValue<TJSONArray>('data', Data) then
+  if JObj.TryGetValue('data', Data) then
   begin
     SetLength(FImages, Data.Count);
     for i := 0 to Data.Count - 1 do
@@ -817,8 +928,8 @@ begin
 
     // Modelo
     Req.AddPair('model', 'real-esrgan');
-    Req.AddPair('scale', TJSONNumber.Create(AScale));
-    Req.AddPair('face_enhance', TJSONBool.Create(AFaceEnhance));
+    Req.AddPair('scale', CreateJSONNumber(AScale));
+    Req.AddPair('face_enhance', CreateJSONBool(AFaceEnhance));
 
     // Imagen
     ImageObj := TJSONObject.Create;
@@ -828,8 +939,9 @@ begin
     Req.AddPair('image', ImageObj);
 
     // Headers
-    Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
-    Client.CustomHeaders['Content-Type'] := 'application/json';
+    // COMPAT: SetHeader en vez de CustomHeaders[] (Delphi 10.2 no soporta acceso indexado)
+    Client.SetHeader('Authorization', 'Bearer ' + ApiKey);
+    Client.ContentType := 'application/json';
 
     // POST
     Res := Client.Post(sUrl, TStringStream.Create(Req.ToString, TEncoding.UTF8));
@@ -842,12 +954,13 @@ begin
     Req.Free;
     Req := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
 
-    RespImage := Req.GetValue<TJSONObject>('image');
+    // COMPAT: Usar getters expl√≠citos en vez de GetValue<T> gen√©rico (KI master_portability_patterns ¬ßJSON)
+    RespImage := Req.GetValueAsObject('image');
 
     Result := TAiMediaFile.Create;
     Result.LoadFromBase64(
-      RespImage.GetValue<string>('filename'),
-      RespImage.GetValue<string>('b64')
+      RespImage.GetValueAsString('filename'),
+      RespImage.GetValueAsString('b64')
     );
 
   finally
@@ -857,6 +970,7 @@ begin
 end;
 
 function TAiDalle.Variation(aImageFile: TAiMediaFile; ASize: TAiImageSize; N: Integer): TAiDalleImage;
+
 var
   Body: TMultipartFormData;
   Client: TNetHTTPClient;
@@ -874,14 +988,15 @@ begin
 
   sUrl := FUrl + 'images/variations';
   Client := TNetHTTPClient.Create(nil);
+  Client.ConfigureForAsync;
   Body := TMultipartFormData.Create;
   try
     aImageFile.Content.Position := 0;
-    Body.AddStream('image', aImageFile.Content, False, aImageFile.Filename);
+    AddStreamToMultipart(Body, 'image', aImageFile.Content, False, aImageFile.Filename, '');
     Body.AddField('user', FUser);
     Body.AddField('n', N.ToString);
 
-    case ASize of
+    case aSize of
       is256x256:
         Body.AddField('size', '256x256');
       is512x512:
@@ -895,7 +1010,7 @@ begin
     else
       Body.AddField('response_format', 'b64_json');
 
-    Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
+    Client.SetHeader('Authorization', 'Bearer ' + ApiKey);
     Res := Client.Post(sUrl, Body);
 
     if Res.StatusCode = 200 then

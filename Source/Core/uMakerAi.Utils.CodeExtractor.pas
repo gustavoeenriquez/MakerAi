@@ -1,18 +1,18 @@
-// IT License
+ï»¿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo EnrÃ­quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -34,24 +34,31 @@
 
 unit uMakerAi.Utils.CodeExtractor;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections, System.RegularExpressions;
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
+  System.SysUtils, System.Classes, System.Generics.Collections, System.RegularExpressions,
+  {$ENDIF}
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRegularExpressionsHelper, uRttiHelper;
 
 type
-  // Registro para almacenar información del archivo extraído
+  // Registro para almacenar informaciÃ³n del archivo extraÃ­do
   TCodeFile = record
     FileName : String;
     FileType: string;
     Code: string;
-    LineNumber: Integer; // Línea donde se encontró el bloque
+    LineNumber: Integer; // LÃ­nea donde se encontrÃ³ el bloque
   end;
 
-  // Lista de archivos de código
+  // Lista de archivos de cÃ³digo
   TCodeFileList = TList<TCodeFile>;
 
-  // Clase principal para extraer archivos de código
+  // Clase principal para extraer archivos de cÃ³digo
   TMarkdownCodeExtractor = class
   private
     FCodeFiles: TCodeFileList;
@@ -61,13 +68,13 @@ type
     constructor Create;
     destructor Destroy; override;
 
-    // Método principal para extraer archivos de código del texto markdown
+    // MÃ©todo principal para extraer archivos de cÃ³digo del texto markdown
     function ExtractCodeFiles(const AMarkdownText: string): TCodeFileList;
 
-    // Método para limpiar la lista de archivos
+    // MÃ©todo para limpiar la lista de archivos
     procedure Clear;
 
-    // Propiedad para acceder a los archivos extraídos
+    // Propiedad para acceder a los archivos extraÃ­dos
     property CodeFiles: TCodeFileList read FCodeFiles;
   end;
 
@@ -185,9 +192,10 @@ begin
     CurrentLanguage := '';
     StartLineNumber := 0;
 
-    // Patrón para detectar bloques de código con ```
+    // PatrÃ³n para detectar bloques de cÃ³digo con ```
     RegexPattern := '^\s*```\s*(\w+)?\s*$';
-
+    
+    // Usamos TRegEx (Helper en FPC, Native en Delphi)
     for i := 0 to Lines.Count - 1 do
     begin
       CurrentLine := Lines[i];
@@ -197,12 +205,12 @@ begin
       begin
         if not InCodeBlock then
         begin
-          // Inicio de bloque de código
+          // Inicio de bloque de cÃ³digo
           InCodeBlock := True;
-          StartLineNumber := i + 1; // +1 porque las líneas se cuentan desde 1
+          StartLineNumber := i + 1; // +1 porque las lÃ­neas se cuentan desde 1
           CodeContent.Clear;
 
-          // Extraer el lenguaje si está especificado
+          // Extraer el lenguaje si estÃ¡ especificado
           if Match.Groups.Count > 1 then
             CurrentLanguage := NormalizeLanguage(Match.Groups[1].Value)
           else
@@ -210,10 +218,10 @@ begin
         end
         else
         begin
-          // Fin de bloque de código
+          // Fin de bloque de cÃ³digo
           InCodeBlock := False;
 
-          // Crear el registro del archivo de código
+          // Crear el registro del archivo de cÃ³digo
           CodeFile.FileType := CurrentLanguage;
           CodeFile.Code := CodeContent.ToString;
           CodeFile.LineNumber := StartLineNumber;
@@ -229,14 +237,14 @@ begin
       end
       else if InCodeBlock then
       begin
-        // Línea dentro del bloque de código
+        // LÃ­nea dentro del bloque de cÃ³digo
         if CodeContent.Length > 0 then
           CodeContent.AppendLine;
         CodeContent.Append(CurrentLine);
       end;
     end;
 
-    // Si quedó un bloque abierto al final del texto
+    // Si quedÃ³ un bloque abierto al final del texto
     if InCodeBlock and (CodeContent.Length > 0) then
     begin
       CodeFile.FileType := CurrentLanguage;
@@ -252,5 +260,4 @@ begin
 end;
 
 end.
-
 

@@ -1,12 +1,19 @@
-unit uMakerAi.Chat.Messages;
+Ôªøunit uMakerAi.Chat.Messages;
+
+{$INCLUDE ../CompilerDirectives.inc}
 
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Classes, System.Generics.Collections, System.JSON,
   Rest.JSON, System.Net.Mime, System.NetEncoding, System.TypInfo, System.Types, System.SyncObjs,
-  uMakerAi.Core, // Asumiendo que TAiMediaFiles, TAiWebSearch y TAiMetadata est·n aquÌ
-  uMakerAi.Utils.CodeExtractor;
+  {$ENDIF}
+  uMakerAi.Core, // Asumiendo que TAiMediaFiles, TAiWebSearch y TAiMetadata est√°n aqu√≠
+  uMakerAi.Utils.CodeExtractor,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 Type
 
@@ -15,7 +22,7 @@ Type
   TAiChatMessage = Class;
 
   // Las citaciones relacionan el detalle de la respuesta con el texto origianl
-  // puede funcionar como detalles de b˙squedas web,  dentro de un pdf, en RAG, etc.
+  // puede funcionar como detalles de b√∫squedas web,  dentro de un pdf, en RAG, etc.
   // se utiliza especialmente como propiedad en TAiMessage.
 
   TAiCitationSourceType = (cstUnknown, cstDocument, cstWeb, cstFile, cstDatabase);
@@ -25,19 +32,19 @@ Type
     id: string;
     Tipo: string;
     name: string;
-    Description: String; // DescripciÛn de la funciÛn
-    Arguments: string; // Si tiene par·metros en forma de json se utiliza este
-    Params: TStringList; // Si tiene par·metros en forma de name=value se utiliza este si arguments = ''
-    &Function: string; // Nombre de la funciÛn
-    Response: String; // String que responde la funciÛn al LLM
-    Body: TJSONObject; // El body en json que retorna la funciÛn, se utiliza para depuraciÛn o para obtener informaciÛn adicional
-    Metadata: TAiMetadata; // Metadatos adicionales que se pueden enviar a la funciÛn
+    Description: String; // Descripci√≥n de la funci√≥n
+    Arguments: string; // Si tiene par√°metros en forma de json se utiliza este
+    Params: TStringList; // Si tiene par√°metros en forma de name=value se utiliza este si arguments = ''
+    &Function: string; // Nombre de la funci√≥n
+    Response: String; // String que responde la funci√≥n al LLM
+    Body: TJSONObject; // El body en json que retorna la funci√≥n, se utiliza para depuraci√≥n o para obtener informaci√≥n adicional
+    Metadata: TAiMetadata; // Metadatos adicionales que se pueden enviar a la funci√≥n
     AskMsg: TAiChatMessage; // TAiChatMessage que representa la pregunta
     ResMsg: TAiChatMessage; // TAiChatMessage que representa la respuesta
 
     Constructor Create;
     Destructor Destroy; Override;
-    Procedure ParseFunction(JObj: TJSONObject); // Esta funciÛn se reemplazar· por estas dos seg˙n la necesidad
+    Procedure ParseFunction(JObj: TJSONObject); // Esta funci√≥n se reemplazar√° por estas dos seg√∫n la necesidad
 
     Procedure Assign(aSource: TAiToolsFunction);
   end;
@@ -144,7 +151,7 @@ Type
     Property FinishReason: String read FFinishReason write SetFinishReason;
   End;
 
-  TAiChatMessages = Class(TList<TAiChatMessage>) // futura actualizaciÛn cambiar tlist por TObjectList
+  TAiChatMessages = Class(TList<TAiChatMessage>) // futura actualizaci√≥n cambiar tlist por TObjectList
   Private
     FNativeInputFiles: TAiFileCategories;
     function GetAsText: String;
@@ -166,7 +173,7 @@ Type
   TAiSourceData = class
   public
     id: string; // ID interno (ej: 'doc-0', 'file-123')
-    Title: string; // TÌtulo de la p·gina web, del documento, etc.
+    Title: string; // T√≠tulo de la p√°gina web, del documento, etc.
     Content: string; // Snippet, contenido del archivo, etc.
     Url: string; // URL si es una fuente web.
     Metadata: TAiMetadata; // Para cualquier otro dato (autor, fecha, etc.)
@@ -176,7 +183,7 @@ Type
     procedure Assign(Source: TAiSourceData);
   end;
 
-  // Representa una fuente especÌfica vinculada a una cita.
+  // Representa una fuente espec√≠fica vinculada a una cita.
   TAiCitationSource = class
   public
     SourceType: TAiCitationSourceType;
@@ -190,8 +197,8 @@ Type
   // Representa una cita dentro del texto de respuesta del modelo.
   TAiMsgCitation = class
   public
-    StartIndex: Integer; // PosiciÛn inicial del texto citado en la respuesta.
-    EndIndex: Integer; // PosiciÛn final.
+    StartIndex: Integer; // Posici√≥n inicial del texto citado en la respuesta.
+    EndIndex: Integer; // Posici√≥n final.
     Text: String; // El fragmento de texto exacto que fue citado.
     Sources: TObjectList<TAiCitationSource>; // Lista de fuentes para este fragmento.
 
@@ -200,7 +207,7 @@ Type
     procedure Assign(Source: TAiMsgCitation);
   end;
 
-  // Una colecciÛn de citas para un mensaje.
+  // Una colecci√≥n de citas para un mensaje.
   TAiMsgCitations = class(TObjectList<TAiMsgCitation>)
   public
     procedure Assign(Source: TAiMsgCitations);
@@ -285,7 +292,7 @@ begin
   FLock.Enter;
   Try
     If Length(Trim(aBase64)) < 100 then
-      Raise Exception.Create('El Base64 est· vacÌo, no se cargar·');
+      Raise Exception.Create('El Base64 est√° vac√≠o, no se cargar√°');
 
     If aFileName = '' then // Ver como se asigna un nombre a partir del contenido del stream
       aFileName := 'imagen.jpg';
@@ -323,7 +330,7 @@ begin
   FLock.Enter;
   Try
     If Stream.Size <= 100 then
-      Raise Exception.Create('El stream est· vacÌo');
+      Raise Exception.Create('El stream est√° vac√≠o');
 
     If aFileName = '' then // Ver como se asigna un nombre a partir del contenido del stream
       aFileName := 'imagen.jpg';
@@ -356,10 +363,10 @@ begin
   Try
 
     // Siempre limpiar la lista de destino primero.
-    // Como la lista es dueÒa de sus objetos, esto los destruir· correctamente.
+    // Como la lista es due√±a de sus objetos, esto los destruir√° correctamente.
     FCitations.Clear;
 
-    // Si la lista de origen es nula o est· vacÌa, ya hemos terminado.
+    // Si la lista de origen es nula o est√° vac√≠a, ya hemos terminado.
     if not Assigned(Value) or (Value.Count = 0) then
       Exit;
 
@@ -369,12 +376,12 @@ begin
       // 1. Crear una nueva instancia del objeto de cita.
       NewCitation := TAiMsgCitation.Create;
       try
-        // 2. Usar el mÈtodo Assign que acabamos de crear para clonar el contenido.
+        // 2. Usar el m√©todo Assign que acabamos de crear para clonar el contenido.
         NewCitation.Assign(SourceCitation);
-        // 3. AÒadir el nuevo objeto clonado a nuestra lista.
+        // 3. A√±adir el nuevo objeto clonado a nuestra lista.
         FCitations.Add(NewCitation);
       except
-        // En caso de error durante la asignaciÛn, asegurarse de liberar la memoria.
+        // En caso de error durante la asignaci√≥n, asegurarse de liberar la memoria.
         NewCitation.Free;
         raise;
       end;
@@ -596,8 +603,8 @@ Var
   MediaArr: TAiMediaFilesArray;
   S: String;
 begin
-  // Esta funciÛn solo toma el mensaje actual y una sola im·gen, la primera que encuentra en la lista
-  // Esto se hace especialmente para modelos que solo aceptan una im·gen por peticiÛn y no un chat completo
+  // Esta funci√≥n solo toma el mensaje actual y una sola im√°gen, la primera que encuentra en la lista
+  // Esto se hace especialmente para modelos que solo aceptan una im√°gen por petici√≥n y no un chat completo
 
   FLock.Enter;
   Try
@@ -614,8 +621,8 @@ begin
     If (Msg.FFunctionName <> '') then // and (Msg.FRole <> 'tool') then
       JObj.AddPair('name', Msg.FFunctionName);
 
-    // de todos los archivos de medios selecciona las im·genes que es lo que podemos manejar por ahora
-    // y las im·genes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
+    // de todos los archivos de medios selecciona las im√°genes que es lo que podemos manejar por ahora
+    // y las im√°genes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
     // se deben haber procesado en en el momendo de adicionar el mensaje al chat
     MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
 
@@ -652,19 +659,12 @@ begin
 
     If Msg.FTool_calls <> '' then
 
-{$IF CompilerVersion < 35}
-      JObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.FTool_calls));
-{$ELSE}
-      JObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
-{$ENDIF}
-    Result.Add(JObj);
+    JObj.AddPair('tool_calls', TJSONObject.ParseJSONValue(Msg.FTool_calls) as TJSONArray);
+  Result.Add(JObj);
   Finally
     FLock.Leave;
   End;
 end;
-
-
-
 
 { TAiOpenChatMessages }
 
@@ -699,11 +699,9 @@ begin
     Result := JObj;
 
   Finally
-    // jObj.Free;
+    // JObj.Free;
   End;
 end;
-
-
 
 function TAiChatMessages.GetAsText: String;
 Var
@@ -751,27 +749,23 @@ begin
 
     JObj := TJSONObject(TJSONObject.ParseJSONValue(sJson));
 
-    If Assigned(JObj) and (JObj.TryGetValue<String>('model', Model)) then
+    If Assigned(JObj) and (JObj.TryGetValue('model', Model)) then
     Begin
       If Model = 'AiOpenChat' then
       Begin
-        JArr := TJSonArray(JObj.GetValue<TJSonArray>('data'));
+        if JObj.TryGetValue('data', JArr) then
+        begin
+          S := JArr.Format;
+          If JArr.Count > 0 then
+            Self.Clear;
 
-        S := JArr.Format;
-        If JArr.Count > 0 then
-          Self.Clear;
-
-        For I := 0 to JArr.Count - 1 do
-        Begin
-
-{$IF CompilerVersion < 35}
-          JItem := JArr.GetItemAsObject(I);
-{$ELSE}
-          JItem := TJSONObject(JArr[I]);
-{$ENDIF}
-          Item := TJSon.JsonToObject<TAiChatMessage>(JItem);
-          Self.Add(Item);
-        End;
+          For I := 0 to JArr.Count - 1 do
+          Begin
+            JItem := JArr.GetItemAsObject(I);
+            Item := TJSon.JsonToObject<TAiChatMessage>(JItem);
+            Self.Add(Item);
+          End;
+        end;
       End;
     End;
   Finally
@@ -875,8 +869,8 @@ begin
     If Msg.FFunctionName <> '' then
       JObj.AddPair('name', Msg.FFunctionName);
 
-    // de todos los archivos de medios selecciona las im·genes que es lo que podemos manejar por ahora
-    // y las im·genes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
+    // de todos los archivos de medios selecciona las im√°genes que es lo que podemos manejar por ahora
+    // y las im√°genes que no han sigo preprocesadas, por si el modelo no maneja imagenes, previamente
     // se deben haber procesado en en el momento de adicionar el mensaje al chat
     MediaArr := Msg.MediaFiles.GetMediaList(FNativeInputFiles, False);
 
@@ -944,7 +938,7 @@ begin
           TAiFileCategory.Tfc_Video:
             Begin
             end;
-          TAiFileCategory.Tfc_Pdf: // El completions no maneja pdf todavÌa hay que usar el Responses
+          TAiFileCategory.Tfc_Pdf: // El completions no maneja pdf todav√≠a hay que usar el Responses
             Begin
             end;
           TAiFileCategory.Tfc_Document:
@@ -980,29 +974,21 @@ begin
       End;
       If Msg.FTool_calls <> '' then
 
-{$IF CompilerVersion < 35}
-        JObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.FTool_calls));
-{$ELSE}
-        JObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
-{$ENDIF}
+        JObj.AddPair('tool_calls', TJSONObject.ParseJSONValue(Msg.FTool_calls) as TJSONArray);
 
 
 
-      // Result.Add(jObj);
+      // Result.Add(JObj);
 
     End
-    Else // Si no tiene archivos de medios simplemente envÌa el prompt
+    Else // Si no tiene archivos de medios simplemente env√≠a el prompt
     Begin
       JObj.AddPair('content', Msg.FPrompt);
     End;
 
     If Msg.FTool_calls <> '' then
 
-{$IF CompilerVersion < 35}
-      JObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.FTool_calls));
-{$ELSE}
-      JObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
-{$ENDIF}
+      JObj.AddPair('tool_calls', TJSONObject.ParseJSONValue(Msg.FTool_calls) as TJSONArray);
     Result.Add(JObj);
   end;
 end;
@@ -1023,12 +1009,13 @@ begin
   Self.Metadata.Clear;
 
   // Iterar sobre cada par clave-valor en el diccionario de origen
-  // y aÒadirlo al diccionario de destino. Esta es la forma correcta.
+  // y a√±adirlo al diccionario de destino. Esta es la forma correcta.
   for Pair in Source.Metadata do
   begin
     Self.Metadata.Add(Pair.Key, Pair.Value);
   end;
 end;
+
 
 { ------------------------------------------------------------------------------ }
 { TAiSourceData }
@@ -1064,7 +1051,7 @@ begin
   inherited Create;
   // Inicializamos el tipo de fuente a un valor por defecto seguro.
   SourceType := cstUnknown;
-  // Instanciamos el contenedor de datos para que estÈ listo para ser usado.
+  // Instanciamos el contenedor de datos para que est√© listo para ser usado.
   DataSource := TAiSourceData.Create;
 end;
 
@@ -1108,16 +1095,16 @@ begin
   StartIndex := 0;
   EndIndex := 0;
   Text := '';
-  // Creamos la lista de fuentes y le indicamos que es dueÒa de los objetos
-  // que contiene (el par·metro 'True'). Esto simplifica la gestiÛn de memoria,
-  // ya que al liberar la lista, se liberar·n autom·ticamente todas las fuentes.
+  // Creamos la lista de fuentes y le indicamos que es due√±a de los objetos
+  // que contiene (el par√°metro 'True'). Esto simplifica la gesti√≥n de memoria,
+  // ya que al liberar la lista, se liberar√°n autom√°ticamente todas las fuentes.
   Sources := TObjectList<TAiCitationSource>.Create(True);
 end;
 
 destructor TAiMsgCitation.Destroy;
 begin
   // Liberamos la lista de fuentes. Gracias a AOwnsObjects=True,
-  // todos los TAiCitationSource en la lista se destruir·n autom·ticamente.
+  // todos los TAiCitationSource en la lista se destruir√°n autom√°ticamente.
   Sources.Free;
   inherited Destroy;
 end;
@@ -1129,15 +1116,15 @@ var
   SourceCitation: TAiMsgCitation;
   NewCitation: TAiMsgCitation;
 begin
-  // 1. Evitar la auto-asignaciÛn
+  // 1. Evitar la auto-asignaci√≥n
   if Source = Self then
     Exit;
 
   // 2. Limpiar la lista de destino. Como TObjectList es el propietario,
-  // esto liberar· cualquier objeto TAiMsgCitation que ya exista.
+  // esto liberar√° cualquier objeto TAiMsgCitation que ya exista.
   Self.Clear;
 
-  // 3. Si la fuente es nula, no hay nada m·s que hacer.
+  // 3. Si la fuente es nula, no hay nada m√°s que hacer.
   if not Assigned(Source) then
     Exit;
 
@@ -1147,9 +1134,9 @@ begin
     // 5. Crear una nueva instancia del objeto de destino
     NewCitation := TAiMsgCitation.Create;
     try
-      // 6. Usar el mÈtodo Assign del objeto individual para copiar los datos (copia profunda)
+      // 6. Usar el m√©todo Assign del objeto individual para copiar los datos (copia profunda)
       NewCitation.Assign(SourceCitation);
-      // 7. AÒadir el objeto reciÈn clonado a nuestra lista (Self)
+      // 7. A√±adir el objeto reci√©n clonado a nuestra lista (Self)
       Self.Add(NewCitation);
     except
       // En caso de un error, asegurarse de liberar el objeto que acabamos de crear
@@ -1194,12 +1181,12 @@ Var
   JFunc: TJSONObject;
   FunName: String;
 begin
-  JFunc := JObj.GetValue<TJSONObject>('function');
-  FunName := JFunc.GetValue<string>('name');
+  if JObj.TryGetValue('function', JFunc) then
+    FunName := JFunc.GetValueAsString('name');
 
   Begin
-    Name := JFunc.GetValue<String>('name');
-    Self.Description := JFunc.GetValue<String>('description');
+    Name := JFunc.GetValueAsString('name');
+    Self.Description := JFunc.GetValueAsString('description');
     &Function := JFunc.Format;
     Body := JObj; // La funcion original completa
   End;
@@ -1226,7 +1213,12 @@ end;
 procedure TAiToolsFunctions.ValueNotify(const Value: TAiToolsFunction; Action: TCollectionNotification);
 begin
   case Action of
-    cnDeleting, cnRemoved:
+    {$IFNDEF FPC}
+    {$IF CompilerVersion >= 33.0}
+    cnDeleting,
+    {$ENDIF}
+    {$ENDIF}
+    cnRemoved:
       Value.Free;
   end;
   inherited;
@@ -1251,10 +1243,10 @@ begin
   For Clave in Self.Keys do
   Begin
     Func := Self.Items[Clave];
-    // Result.Add(TJSonObject(TJSonObject.ParseJSONValue(Self.Items[Clave].&Function)));
+    // Result.Add(TJSONObject(TJSONObject.ParseJSONValue(Self.Items[Clave].&Function)));
     TObj := TJSONObject(Func.Body.Clone);
     // TObj.AddPair('type', 'function');
-    // TObj.AddPair('function', TJsonObject(Func.Body.Clone));
+    // TObj.AddPair('function', TJSONObject(Func.Body.Clone));
     Result.Add(TObj);
   End;
 end;
@@ -1266,7 +1258,7 @@ Var
 begin
   Result := TJSonArray.Create;
 
-  For Clave in Self.Keys do // La clave es el nombre de la funciÛn
+  For Clave in Self.Keys do // La clave es el nombre de la funci√≥n
   Begin
     TObj := TJSONObject.Create;
     TObj.AddPair('tool_call_id', Self.Items[Clave].id);
@@ -1274,5 +1266,6 @@ begin
     Result.Add(TObj);
   End;
 end;
+
 
 end.

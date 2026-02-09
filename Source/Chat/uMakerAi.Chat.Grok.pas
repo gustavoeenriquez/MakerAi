@@ -1,18 +1,18 @@
-// IT License
+ï»¿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo EnrÃ­quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -34,9 +34,16 @@
 
 unit uMakerAi.Chat.Grok;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  // FPC: Unidades estÃ¡ndar de FPC sin prefijo System
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye Net/HTTP/JSON/REST nativos
   System.SysUtils, System.Types, System.UITypes, System.Classes,
   System.Threading,
   System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections,
@@ -45,10 +52,9 @@ uses
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
 
-{$IF CompilerVersion < 35}
-  uJSONHelper,
-{$ENDIF}
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core, uMakerAi.Chat.Messages;
+  {$ENDIF}
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core, uMakerAi.Chat.Messages,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 Type
 
@@ -123,6 +129,7 @@ Var
   I: Integer;
   LAsincronico: Boolean;
   Res, LModel: String;
+  jWebSearchOptions: TJSONObject;
 begin
 
   If User = '' then
@@ -136,7 +143,7 @@ begin
   // Las funciones no trabajan en modo ascincrono
   LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
 
-  // En groq hay una restricción sobre las imágenes
+  // En groq hay una restricciÃ³n sobre las imÃ¡genes
 
   FClient.Asynchronous := LAsincronico;
 
@@ -145,28 +152,21 @@ begin
 
   Try
 
-    AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
+    AJSONObject.AddPair('stream', CreateJSONBool(LAsincronico));
 
     If Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAI).Text) <> '') then
     Begin
 
-{$IF CompilerVersion < 35}
-      JArr := TJSONUtils.ParseAsArray(GetTools(TToolFormat.tfOpenAI).Text);
-{$ELSE}
-      JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAI).Text));
-{$ENDIF}
-      If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
+      JArr := TJSONObject.ParseAsArray(GetTools(TToolFormat.tfOpenAI).Text);
+
+      if Not Assigned(JArr) then
+        Raise Exception.Create('La propiedad Tools estÃ¡n mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then
       Begin
 
-{$IF CompilerVersion < 35}
-        jToolChoice := TJSONUtils.ParseAsObject(Tool_choice);
-{$ELSE}
-        jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
-{$ENDIF}
+        jToolChoice := TJSONObject.ParseJSONValue(Tool_choice) as TJSONObject;
         If Assigned(jToolChoice) then
           AJSONObject.AddPair('tools_choice', jToolChoice);
       End;
@@ -176,14 +176,14 @@ begin
 
     AJSONObject.AddPair('model', LModel);
 
-    AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
-    AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+    AJSONObject.AddPair('temperature', CreateJSONNumber(Trunc(Temperature * 100) / 100));
+    AJSONObject.AddPair('max_tokens', CreateJSONNumber(Max_tokens));
 
     If Top_p <> 0 then
-      AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
+      AJSONObject.AddPair('top_p', CreateJSONNumber(Top_p));
 
-    // AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
-    // AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
+    // AJSONObject.AddPair('frequency_penalty', CreateJSONNumber(Trunc(Frequency_penalty * 100) / 100));
+    // AJSONObject.AddPair('presence_penalty', CreateJSONNumber(Trunc(Presence_penalty * 100) / 100));
 
     if ReasoningFormat <> '' then
       AJSONObject.AddPair('reasoning_format', ReasoningFormat); // 'parsed, raw, hidden';
@@ -201,11 +201,10 @@ begin
     end;
 
     AJSONObject.AddPair('user', User);
-    AJSONObject.AddPair('n', TJSONNumber.Create(N));
+    AJSONObject.AddPair('n', CreateJSONNumber(N));
 
     if tcm_WebSearch in ChatMediaSupports then
     begin
-      Var
       jWebSearchOptions := TJSonObject.Create;
       jWebSearchOptions.AddPair('mode', 'auto');
       // jWebSearchOptions.AddPair('return_citations', 'true');
@@ -224,19 +223,18 @@ begin
     If Logprobs = True then
     Begin
       If Logit_bias <> '' then
-        AJSONObject.AddPair('logit_bias', TJSONNumber.Create(Logit_bias));
+        AJSONObject.AddPair('logit_bias', TJSONObject.ParseJSONValue(Logit_bias));
 
-      AJSONObject.AddPair('logprobs', TJSONBool.Create(Logprobs));
+      AJSONObject.AddPair('logprobs', CreateJSONBool(Logprobs));
 
       If Top_logprobs <> '' then
-        AJSONObject.AddPair('top_logprobs', TJSONNumber.Create(Top_logprobs));
+        AJSONObject.AddPair('top_logprobs', TJSONObject.ParseJSONValue(Top_logprobs));
     End;
 
     If Seed > 0 then
-      AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
+      AJSONObject.AddPair('seed', CreateJSONNumber(Seed));
 
-    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
-
+    Res := AJSONObject.ToJSONString;
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
   Finally
@@ -256,6 +254,8 @@ var
   LNewMediaFile: TAiMediaFile;
   LImageUrl, LRevisedPrompt, LBase64Data: string;
   LModel: String;
+  jWebSearchOptions: TJSonObject; // FPC
+  LJsonValue: TJSONValue; // FPC
 begin
   Result := ''; // La salida principal es el MediaFile en ResMsg
   FBusy := True;
@@ -264,7 +264,7 @@ begin
   FLastContent := '';
   FLastPrompt := AskMsg.Prompt;
 
-  // 1. Validaciones y configuración
+  // 1. Validaciones y configuraciÃ³n
   if AskMsg.Prompt.IsEmpty then
     raise Exception.Create('Se requiere un prompt para generar una imagen.');
 
@@ -275,7 +275,7 @@ begin
 
   LUrl := Url + 'images/generations'; // Url base + endpoint
 
-  // 2. Construir el cuerpo de la petición JSON
+  // 2. Construir el cuerpo de la peticiÃ³n JSON
   LBodyJson := TJSonObject.Create;
   LBodyStream := TStringStream.Create('', TEncoding.UTF8);
   try
@@ -283,7 +283,7 @@ begin
     LBodyJson.AddPair('model', LModel);
 
     if Self.N > 0 then
-      LBodyJson.AddPair('n', TJSONNumber.Create(Self.N));
+      LBodyJson.AddPair('n', CreateJSONNumber(Self.N));
 
     // if not Self.ImageResponseFormat.IsEmpty then
     // LBodyJson.AddPair('response_format', Self.ImageResponseFormat);
@@ -295,7 +295,7 @@ begin
     LBodyStream.SaveToFile('c:\temp\grok_image_request.json');
     LBodyStream.Position := 0;
 {$ENDIF}
-    // Grok usa Bearer token para la autorización
+    // Grok usa Bearer token para la autorizaciÃ³n
     LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
     FClient.ContentType := 'application/json';
     FResponse.Clear;
@@ -304,17 +304,17 @@ begin
 
     // 4. Procesar la respuesta
     FResponse.Position := 0;
-    FLastContent := LResponse.ContentAsString(TEncoding.UTF8);
+    FLastContent := ExtractResponseString(LResponse);
 {$IFDEF APIDEBUG}
     FResponse.SaveToFile('c:\temp\grok_image_response.json');
 {$ENDIF}
     if LResponse.StatusCode = 200 then
     begin
-      LResponseJson := TJSonObject.ParseJSONValue(FLastContent) as TJSonObject;
+      LResponseJson := TJSONObject.ParseJSONValue(FLastContent) as TJSonObject;
       try
-        if LResponseJson.TryGetValue<TJSonArray>('data', LDataArray) then
+        if LResponseJson.TryGetValue('data', LDataArray) then
         begin
-          for var LJsonValue in LDataArray do
+          for LJsonValue in LDataArray do
           begin
             if not(LJsonValue is TJSonObject) then
               continue;
@@ -322,26 +322,26 @@ begin
             LImageObject := LJsonValue as TJSonObject;
             LNewMediaFile := TAiMediaFile.Create;
             try
-              // Extraer el prompt revisado y guardarlo (es información útil)
-              LImageObject.TryGetValue<string>('revised_prompt', LRevisedPrompt);
+              // Extraer el prompt revisado y guardarlo (es informaciÃ³n Ãºtil)
+              LImageObject.TryGetValue('revised_prompt', LRevisedPrompt);
               LNewMediaFile.Transcription := LRevisedPrompt;
               FLastContent := LRevisedPrompt;
               ResMsg.Prompt := FLastContent;
 
               // CASO A: La respuesta es una URL
-              if LImageObject.TryGetValue<string>('url', LImageUrl) then
+              if LImageObject.TryGetValue('url', LImageUrl) then
               begin
                 // Descargamos la imagen desde la URL y la cargamos en el MediaFile
-                // Necesitarás una función para descargar, por ejemplo:
-                LNewMediaFile.LoadFromUrl(LImageUrl); // Asumiendo que tienes esta función
+                // NecesitarÃ¡s una funciÃ³n para descargar, por ejemplo:
+                LNewMediaFile.LoadFromUrl(LImageUrl); // Asumiendo que tienes esta funciÃ³n
               end
               // CASO B: La respuesta es Base64
-              else if LImageObject.TryGetValue<string>('b64_json', LBase64Data) then
+              else if LImageObject.TryGetValue('b64_json', LBase64Data) then
               begin
                 LNewMediaFile.LoadFromBase64('generated_image.png', LBase64Data);
               end;
 
-              // Añadir el MediaFile al mensaje de respuesta
+              // AÃ±adir el MediaFile al mensaje de respuesta
               ResMsg.MediaFiles.Add(LNewMediaFile);
             except
               LNewMediaFile.Free;
@@ -350,7 +350,7 @@ begin
           end;
         end;
 
-        // Disparamos el evento de finalización
+        // Disparamos el evento de finalizaciÃ³n
         if Assigned(FOnReceiveDataEnd) then
           FOnReceiveDataEnd(Self, ResMsg, LResponseJson, 'model', '');
 
@@ -361,7 +361,7 @@ begin
     else
     begin
       FLastError := Format('Error generando imagen con Grok: %d, %s', [LResponse.StatusCode, FLastContent]);
-      DoError(FLastError, nil);
+      DoError(FLastError);
     end;
 
   finally

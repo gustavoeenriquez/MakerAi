@@ -1,0 +1,625 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <Package Version="5">
+    <PathDelim Value="/"/>
+    <Name Value="MakerAI"/>
+    <Type Value="RunAndDesignTime"/>
+    <Author Value="Gustavo - MakerAI Project"/>
+    <CompilerOptions>
+      <Version Value="11"/>
+      <PathDelim Value="/"/>
+      <SearchPaths>
+        <IncludeFiles Value="..;../Core;../Utils;../Chat;../Tools;../Agents;../MCPClient;../MCPServer;../RAG;../Design"/>
+        <OtherUnitFiles Value="..;../Core;../Utils;../Chat;../Tools;../Agents;../MCPClient;../MCPServer;../RAG;../Design;../Compatibility"/>
+        <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
+      </SearchPaths>
+      <Parsing>
+        <SyntaxOptions>
+          <SyntaxMode Value="Delphi"/>
+        </SyntaxOptions>
+      </Parsing>
+    </CompilerOptions>
+    <Description Value="MakerAI - OpenAI/Anthropic/Gemini Integration Framework for Free Pascal"/>
+    <License Value="MIT"/>
+    <Version Major="1"/>
+    <Files>
+      <Item>
+        <Filename Value="MakerAI_Icons.rc"/>
+        <Type Value="Text"/>
+      </Item>
+      <Item>
+        <Filename Value="../MCPClient/uMakerAi.MCPClient.Core.pas"/>
+        <UnitName Value="uMakerAi.MCPClient.Core"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.AiConnection.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.AiConnection"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.Claude.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Claude"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.DeepSeek.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.DeepSeek"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.Gemini.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Gemini"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.Grok.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Grok"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.Groq.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Groq"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.Initializations.pas"/>
+        <UnitName Value="uMakerAi.Chat.Initializations"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.Mistral.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Mistral"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.Ollama.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Ollama"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.OpenAi.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.OpenAi"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.LMStudio.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.LMStudio"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.Kimi.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Kimi"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.GenericLLM.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.GenericLLM"/>
+      </Item>
+      <Item>
+        <Filename Value="../Chat/uMakerAi.Chat.Cohere.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Cohere"/>
+      </Item>
+      <Item>
+        <Filename Value="../Agents/uMakerAi.Agents.GraphBuilder.pas"/>
+        <UnitName Value="uMakerAi.Agents.GraphBuilder"/>
+      </Item>
+      <Item>
+        <Filename Value="../Agents/uMakerAi.Agents.DmGenerator.pas"/>
+        <UnitName Value="uMakerAi.Agents.DmGenerator"/>
+      </Item>
+      <Item>
+        <Filename Value="../Core/uMakerAi.Chat.pas"/>
+        <UnitName Value="uMakerAi.Chat"/>
+      </Item>
+      <Item>
+        <Filename Value="../Core/uMakerAi.Core.pas"/>
+        <UnitName Value="uMakerAi.Core"/>
+      </Item>
+      <Item>
+        <Filename Value="../Core/uMakerAi.Embeddings.pas"/>
+        <UnitName Value="uMakerAi.Embeddings"/>
+      </Item>
+      <Item>
+        <Filename Value="../Core/uMakerAi.Embeddings.Core.pas"/>
+        <UnitName Value="uMakerAi.Embeddings.Core"/>
+      </Item>
+      <Item>
+        <Filename Value="../Core/uMakerAi.Prompts.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Prompts"/>
+      </Item>
+      <Item>
+        <Filename Value="../Core/uMakerAi.Utils.CodeExtractor.pas"/>
+        <UnitName Value="uMakerAi.Utils.CodeExtractor"/>
+      </Item>
+      <Item>
+        <Filename Value="../Core/uMakerAi.Utils.PcmToWav.pas"/>
+        <UnitName Value="uMakerAi.Utils.PcmToWav"/>
+      </Item>
+      <Item>
+        <Filename Value="../Core/uMakerAi.Utils.SysWrapper.pas"/>
+        <UnitName Value="uMakerAi.Utils.SysWrapper"/>
+      </Item>
+      <Item>
+        <Filename Value="../Compatibility/uThreadingHelper.pas"/>
+        <UnitName Value="uThreadingHelper"/>
+      </Item>
+      <Item>
+        <Filename Value="../Tools/uMakerAi.Whisper.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Whisper"/>
+      </Item>
+      <Item>
+        <Filename Value="../Tools/uMakerAi.Tools.Shell.pas"/>
+        <UnitName Value="uMakerAi.Tools.Shell"/>
+      </Item>
+      <Item>
+        <Filename Value="../Tools/uMakerAi.Tools.TextEditor.pas"/>
+        <UnitName Value="uMakerAi.Tools.TextEditor"/>
+      </Item>
+      <Item>
+        <Filename Value="../Agents/uMakerAi.Agents.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Agents"/>
+      </Item>
+      <Item>
+        <Filename Value="../Agents/uMakerAi.Agents.Attributes.pas"/>
+        <UnitName Value="uMakerAi.Agents.Attributes"/>
+      </Item>
+      <Item>
+        <Filename Value="../Agents/uMakerAi.Agents.EngineRegistry.pas"/>
+        <UnitName Value="uMakerAi.Agents.EngineRegistry"/>
+      </Item>
+      <Item>
+        <Filename Value="../MCPServer/uMakerAi.MCPServer.Http.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.MCPServer.Http"/>
+      </Item>
+      <Item>
+        <Filename Value="../MCPServer/uMakerAi.MCPServer.Core.pas"/>
+        <UnitName Value="uMakerAi.MCPServer.Core"/>
+      </Item>
+      <Item>
+        <Filename Value="../MCPServer/uMakerAi.MCPServer.Stdio.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.MCPServer.Stdio"/>
+      </Item>
+      <Item>
+        <Filename Value="../MCPServer/uMakerAi.MCPServer.Direct.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.MCPServer.Direct"/>
+      </Item>
+      <Item>
+        <Filename Value="../Utils/uMakerAi.Utils.Python.pas"/>
+        <UnitName Value="uMakerAi.Utils.Python"/>
+      </Item>
+      <Item>
+        <Filename Value="../Utils/uMakerAi.Utils.VoiceMonitor.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Utils.VoiceMonitor"/>
+      </Item>
+      <Item>
+        <Filename Value="../RAG/uMakerAi.RAG.Graph.Builder.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.RAG.Graph.Builder"/>
+      </Item>
+      <Item>
+        <Filename Value="../RAG/uMakerAi.RAG.Graph.Core.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.RAG.Graph.Core"/>
+      </Item>
+      <Item>
+        <Filename Value="../RAG/uMakerAi.RAG.Vectors.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.RAG.Vectors"/>
+      </Item>
+
+      <Item>
+        <Filename Value="../Tools/uMakerAi.Tools.Functions.pas"/>
+        <UnitName Value="uMakerAi.Tools.Functions"/>
+      </Item>
+      <Item>
+        <Filename Value="../MCPServer/uMakerAi.MCPServer.SSE.pas"/>
+        <UnitName Value="uMakerAi.MCPServer.SSE"/>
+      </Item>
+      <Item>
+        <Filename Value="../Tools/uMakerAi.Tools.ComputerUse.pas"/>
+        <UnitName Value="uMakerAi.Tools.ComputerUse"/>
+      </Item>
+      <Item>
+        <Filename Value="../Core/uMakerAi.Chat.Tools.pas"/>
+        <UnitName Value="uMakerAi.Chat.Tools"/>
+      </Item>
+      <Item>
+        <Filename Value="../Tools/uMakerAi.Gemini.Speech.pas"/>
+        <UnitName Value="uMakerAi.Gemini.Speech"/>
+      </Item>
+      <Item>
+        <Filename Value="../Core/uMakerAi.Chat.Bridge.pas"/>
+        <UnitName Value="uMakerAi.Chat.Bridge"/>
+      </Item>
+      <Item>
+        <Filename Value="../Tools/uMakerAi.Gemini.WebSearch.pas"/>
+        <UnitName Value="uMakerAi.Gemini.WebSearch"/>
+      </Item>
+      <Item>
+        <Filename Value="../Tools/uMakerAi.Ollama.Ocr.pas"/>
+        <UnitName Value="uMakerAi.Ollama.Ocr"/>
+      </Item>
+      <Item>
+        <Filename Value="../Core/uMakerAi.Chat.Messages.pas"/>
+        <UnitName Value="uMakerAi.Chat.Messages"/>
+      </Item>
+      <Item>
+        <Filename Value="../RAG/uMakerAi.RAG.Graph.GQL.pas"/>
+        <UnitName Value="uMakerAi.RAG.Graph.GQL"/>
+      </Item>
+      <Item>
+        <Filename Value="../MCPServer/uMakerAi.MCPServer.Bridge.pas"/>
+        <UnitName Value="uMakerAi.MCPServer.Bridge"/>
+      </Item>
+      <Item>
+        <Filename Value="../RAG/uMakerAi.RAG.MetaData.pas"/>
+        <UnitName Value="uMakerAi.RAG.MetaData"/>
+      </Item>
+      <Item>
+        <Filename Value="../RAG/uMakerAi.RAG.Vectors.VQL.pas"/>
+        <UnitName Value="uMakerAi.RAG.Vectors.VQL"/>
+      </Item>
+      <Item>
+        <Filename Value="../RAG/uMakerAi.RAG.Vectors.Index.pas"/>
+        <UnitName Value="uMakerAi.RAG.Vectors.Index"/>
+      </Item>
+      <Item>
+        <Filename Value="../Tools/uMakerAi.Gemini.Video.pas"/>
+        <UnitName Value="uMakerAi.Gemini.Video"/>
+      </Item>
+      <Item>
+        <Filename Value="../Tools/uMakerAi.OpenAI.Sora.pas"/>
+        <UnitName Value="uMakerAi.OpenAI.Sora"/>
+      </Item>
+      <Item>
+        <Filename Value="../Tools/uMakerAi.OpenAI.Audio.pas"/>
+        <UnitName Value="uMakerAi.OpenAI.Audio"/>
+      </Item>
+      <Item>
+        <Filename Value="../Tools/uMakerAi.OpenAi.Dalle.pas"/>
+        <UnitName Value="uMakerAi.OpenAi.Dalle"/>
+      </Item>
+      <Item>
+        <Filename Value="../Utils/uMakerAi.Utils.DiffUpdater.pas"/>
+        <UnitName Value="uMakerAi.Utils.DiffUpdater"/>
+      </Item>
+      <Item>
+        <Filename Value="../Compatibility/uHttpHelper.pas"/>
+        <UnitName Value="uHttpHelper"/>
+      </Item>
+      <Item>
+        <Filename Value="../Compatibility/uJsonHelper.pas"/>
+        <UnitName Value="uJsonHelper"/>
+      </Item>
+      <Item>
+        <Filename Value="../Compatibility/uBase64Helper.pas"/>
+        <UnitName Value="uBase64Helper"/>
+      </Item>
+      <Item>
+        <Filename Value="../Compatibility/uRegularExpressionsHelper.pas"/>
+        <UnitName Value="uRegularExpressionsHelper"/>
+      </Item>
+      <Item>
+        <Filename Value="../Compatibility/uExpressionHelper.pas"/>
+        <UnitName Value="uExpressionHelper"/>
+      </Item>
+      <Item>
+        <Filename Value="../Compatibility/uXMLHelper.pas"/>
+        <UnitName Value="uXMLHelper"/>
+      </Item>
+      <Item>
+        <Filename Value="../Compatibility/uSSEHelper.pas"/>
+        <UnitName Value="uSSEHelper"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.AiConnection.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.AiConnection"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.Claude.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Claude"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.DeepSeek.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.DeepSeek"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.Gemini.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Gemini"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.Grok.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Grok"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.Groq.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Groq"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.Initializations.pas"/>
+        <UnitName Value="uMakerAi.Chat.Initializations"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.Mistral.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Mistral"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.Ollama.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Ollama"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.OpenAi.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.OpenAi"/>
+      </Item>
+
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.LMStudio.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.LMStudio"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.Kimi.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Kimi"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.GenericLLM.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.GenericLLM"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Chat\uMakerAi.Chat.Cohere.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Chat.Cohere"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Agents\uMakerAi.Agents.GraphBuilder.pas"/>
+        <UnitName Value="uMakerAi.Agents.GraphBuilder"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Agents\uMakerAi.Agents.DmGenerator.pas"/>
+        <UnitName Value="uMakerAi.Agents.DmGenerator"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Core\uMakerAi.Chat.pas"/>
+        <UnitName Value="uMakerAi.Chat"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Core\uMakerAi.Core.pas"/>
+        <UnitName Value="uMakerAi.Core"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Core\uMakerAi.Embeddings.pas"/>
+        <UnitName Value="uMakerAi.Embeddings"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Core\uMakerAi.Embeddings.Core.pas"/>
+        <UnitName Value="uMakerAi.Embeddings.Core"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Core\uMakerAi.Prompts.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Prompts"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Core\uMakerAi.Utils.CodeExtractor.pas"/>
+        <UnitName Value="uMakerAi.Utils.CodeExtractor"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Core\uMakerAi.Utils.PcmToWav.pas"/>
+        <UnitName Value="uMakerAi.Utils.PcmToWav"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Core\uMakerAi.Utils.SysWrapper.pas"/>
+        <UnitName Value="uMakerAi.Utils.SysWrapper"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Compatibility\uThreadingHelper.pas"/>
+        <UnitName Value="uThreadingHelper"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Tools\uMakerAi.Whisper.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Whisper"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Tools\uMakerAi.Tools.Shell.pas"/>
+        <UnitName Value="uMakerAi.Tools.Shell"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Tools\uMakerAi.Tools.TextEditor.pas"/>
+        <UnitName Value="uMakerAi.Tools.TextEditor"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Agents\uMakerAi.Agents.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Agents"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Agents\uMakerAi.Agents.Attributes.pas"/>
+        <UnitName Value="uMakerAi.Agents.Attributes"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Agents\uMakerAi.Agents.EngineRegistry.pas"/>
+        <UnitName Value="uMakerAi.Agents.EngineRegistry"/>
+      </Item>
+      <Item>
+        <Filename Value="..\MCPServer\uMakerAi.MCPServer.Http.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.MCPServer.Http"/>
+      </Item>
+      <Item>
+        <Filename Value="..\MCPServer\uMakerAi.MCPServer.Core.pas"/>
+        <UnitName Value="uMakerAi.MCPServer.Core"/>
+      </Item>
+      <Item>
+        <Filename Value="..\MCPServer\uMakerAi.MCPServer.Stdio.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.MCPServer.Stdio"/>
+      </Item>
+      <Item>
+        <Filename Value="..\MCPServer\uMakerAi.MCPServer.Direct.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.MCPServer.Direct"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Utils\uMakerAi.Utils.Python.pas"/>
+        <UnitName Value="uMakerAi.Utils.Python"/>
+      </Item>
+
+      <Item>
+        <Filename Value="..\Utils\uMakerAi.Utils.VoiceMonitor.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.Utils.VoiceMonitor"/>
+      </Item>
+      <Item>
+        <Filename Value="..\RAG\uMakerAi.RAG.Graph.Builder.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.RAG.Graph.Builder"/>
+      </Item>
+      <Item>
+        <Filename Value="..\RAG\uMakerAi.RAG.Graph.Core.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.RAG.Graph.Core"/>
+      </Item>
+      <Item>
+        <Filename Value="..\RAG\uMakerAi.RAG.Vectors.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.RAG.Vectors"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Compatibility\uEnvHelper.pas"/>
+        <UnitName Value="uEnvHelper"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Tools\uMakerAi.Tools.Functions.pas"/>
+        <UnitName Value="uMakerAi.Tools.Functions"/>
+      </Item>
+      <Item>
+        <Filename Value="..\MCPServer\uMakerAi.MCPServer.SSE.pas"/>
+        <UnitName Value="uMakerAi.MCPServer.SSE"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Tools\uMakerAi.Tools.ComputerUse.pas"/>
+        <UnitName Value="uMakerAi.Tools.ComputerUse"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Core\uMakerAi.Chat.Tools.pas"/>
+        <UnitName Value="uMakerAi.Chat.Tools"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Tools\uMakerAi.Gemini.Speech.pas"/>
+        <UnitName Value="uMakerAi.Gemini.Speech"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Core\uMakerAi.Chat.Bridge.pas"/>
+        <UnitName Value="uMakerAi.Chat.Bridge"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Tools\uMakerAi.Gemini.WebSearch.pas"/>
+        <UnitName Value="uMakerAi.Gemini.WebSearch"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Tools\uMakerAi.Ollama.Ocr.pas"/>
+        <UnitName Value="uMakerAi.Ollama.Ocr"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Core\uMakerAi.Chat.Messages.pas"/>
+        <UnitName Value="uMakerAi.Chat.Messages"/>
+      </Item>
+      <Item>
+        <Filename Value="..\RAG\uMakerAi.RAG.Graph.GQL.pas"/>
+        <UnitName Value="uMakerAi.RAG.Graph.GQL"/>
+      </Item>
+      <Item>
+        <Filename Value="..\MCPServer\uMakerAi.MCPServer.Bridge.pas"/>
+        <UnitName Value="uMakerAi.MCPServer.Bridge"/>
+      </Item>
+      <Item>
+        <Filename Value="..\RAG\uMakerAi.RAG.MetaData.pas"/>
+        <UnitName Value="uMakerAi.RAG.MetaData"/>
+      </Item>
+      <Item>
+        <Filename Value="..\RAG\uMakerAi.RAG.Vectors.VQL.pas"/>
+        <UnitName Value="uMakerAi.RAG.Vectors.VQL"/>
+      </Item>
+      <Item>
+        <Filename Value="..\RAG\uMakerAi.RAG.Vectors.Index.pas"/>
+        <UnitName Value="uMakerAi.RAG.Vectors.Index"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Tools\uMakerAi.Gemini.Video.pas"/>
+        <UnitName Value="uMakerAi.Gemini.Video"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Tools\uMakerAi.OpenAI.Sora.pas"/>
+        <UnitName Value="uMakerAi.OpenAI.Sora"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Tools\uMakerAi.OpenAI.Audio.pas"/>
+        <UnitName Value="uMakerAi.OpenAI.Audio"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Tools\uMakerAi.OpenAi.Dalle.pas"/>
+        <UnitName Value="uMakerAi.OpenAi.Dalle"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Utils\uMakerAi.Utils.DiffUpdater.pas"/>
+        <UnitName Value="uMakerAi.Utils.DiffUpdater"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Compatibility\uGenericsHelper.pas"/>
+        <UnitName Value="uGenericsHelper"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Design\uMakerAi.ParamsRegistry.pas"/>
+        <UnitName Value="uMakerAi.ParamsRegistry"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Compatibility\uRttiHelper.pas"/>
+        <UnitName Value="uRttiHelper"/>
+      </Item>
+      <Item>
+        <Filename Value="..\Compatibility\uSysUtilsHelper.pas"/>
+        <UnitName Value="uSysUtilsHelper"/>
+      </Item>
+    </Files>
+
+    <RequiredPkgs>
+      <Item>
+        <PackageName Value="indylaz"/>
+      </Item>
+      <Item>
+        <PackageName Value="LCL"/>
+      </Item>
+      <Item>
+        <PackageName Value="FCL"/>
+      </Item>
+    </RequiredPkgs>
+    <UsageOptions>
+      <UnitPath Value="$(PkgOutDir);.;../Core;../Utils;../Chat;../Tools;../Agents;../MCPClient;../MCPServer;../RAG;../Design"/>
+      <IncludePath Value=".;../Core;../Utils;../Chat;../Tools;../Agents;../MCPClient;../MCPServer;../RAG;..;../Design"/>
+    </UsageOptions>
+    <PublishOptions>
+      <Version Value="2"/>
+      <UseFileFilters Value="True"/>
+    </PublishOptions>
+  </Package>
+</CONFIG>

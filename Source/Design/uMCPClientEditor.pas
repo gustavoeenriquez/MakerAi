@@ -1,18 +1,18 @@
-﻿// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -33,13 +33,23 @@
 
 unit uMCPClientEditor;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  Forms, Controls, Graphics, Dialogs, ExtCtrls, StdCtrls, ComCtrls, Grids, Buttons, TypInfo,
+  LMessages,
+  {$ELSE}
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   System.JSon, System.Rtti, System.TypInfo,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.ExtCtrls, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.Grids,
-  uMakerAi.Core, uMakerAi.Tools.Functions, uMakerAi.MCPClient.Core, Vcl.Buttons;
+  Vcl.Buttons,
+  {$ENDIF}
+  uMakerAi.Core, uMakerAi.Tools.Functions, uMakerAi.MCPClient.Core,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper;
 
 type
   TFMCPClientEditor = class(TForm)
@@ -82,7 +92,12 @@ var
 
 implementation
 
+// Delphi: Usa recursos .dfm. FPC/Lazarus usa .lfm
+{$IFNDEF FPC}
 {$R *.dfm}
+{$ELSE}
+{$R *.lfm}
+{$ENDIF}
 
 procedure TFMCPClientEditor.BtnSetDefaultParamsClick(Sender: TObject);
 begin
@@ -220,7 +235,7 @@ begin
 
             PageControl1.ActivePage := TabLog;
             ShowMessage('✅ ¡Conexión Exitosa!' + sLineBreak +
-                        'Se detectaron ' + IntToStr(jTools.GetValue<TJSONArray>('tools').Count) + ' herramientas.');
+                        'Se detectaron ' + IntToStr(jTools.GetValueAsArray('tools').Count) + ' herramientas.');
           end
           else
           begin
@@ -371,25 +386,31 @@ end;
 
 procedure TFMCPClientEditor.MCPLogEvent(Sender: TObject; const Msg: string);
 begin
-  TThread.Queue(nil,
+  // Cast explícito a TThreadProcedure requerido para resolver ambigüedad de sobrecarga en Delphi 10.2
+  TThread.Queue(nil, TThreadProcedure(
     procedure
     begin
       MemoLog.Lines.Add(FormatDateTime('hh:nn:ss.zzz', Now) + ' - ' + Msg);
       MemoLog.SelStart := MemoLog.GetTextLen;
       MemoLog.SelLength := 0;
+      // Delphi: WM_VSCROLL para scroll. FPC: sin equivalente directo
+      {$IFNDEF FPC}
       MemoLog.Perform(WM_VSCROLL, SB_BOTTOM, 0);
-    end);
+      {$ELSE}
+      // FPC: scroll to end
+      {$ENDIF}
+    end));
 
 end;
 
 procedure TFMCPClientEditor.MCPStatusEvent(Sender: TObject; const StatusMsg: string);
 begin
-  TThread.Queue(nil,
+  TThread.Synchronize(nil, TThreadProcedure(
     procedure
     begin
       LblStatus.Caption := '   Status: ' + StatusMsg;
       Application.processMessages;
-    end);
+    end));
 end;
 
 procedure TFMCPClientEditor.sgPropertiesDrawCell(Sender: TObject; ACol, ARow: LongInt; Rect: TRect; State: TGridDrawState);

@@ -1,11 +1,18 @@
-unit uMakerAi.RAG.Vectors.VQL;
+Ôªøunit uMakerAi.RAG.Vectors.VQL;
+
+{$INCLUDE ../CompilerDirectives.inc}
 
 
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math, TypInfo, Character,
+  {$ELSE}
   System.SysUtils, System.Variants, System.Character, System.TypInfo, System.Generics.Collections,
-  uMakerAi.RAG.MetaData;
+  {$ENDIF}
+  uMakerAi.RAG.MetaData,
+  uJsonHelper, uRttiHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper;
 
 type
   // Tipos de token
@@ -23,13 +30,13 @@ type
     // Delimitadores
     tkLParen, tkRParen, tkColon, tkComma, tkDot,
 
-    // Operadores comparaciÛn
+    // Operadores comparaci√≥n
     tkEqual, tkNotEqual, tkGreater, tkGreaterEqual, tkLess, tkLessEqual, tkContains,
 
-    // Operadores lÛgicos
+    // Operadores l√≥gicos
     tkAnd, tkOr,
 
-    // Palabras reservadas / cl·usulas
+    // Palabras reservadas / cl√°usulas
     tkMatch, tkSearch, tkUsing, tkWhere, tkRerank, tkThreshold, tkOptimize, tkReturn, tkWith, tkLimit, tkHybrid, tkEmbeddings, tkBm25, tkWeights, tkLanguage, tkFusion, tkRrf, tkWeighted, tkRegenerate, tkGlobal, tkSemantic, tkLexical,
     tkReorder, tkAbc, tkText, tkMetadata, tkScore);
 
@@ -133,7 +140,7 @@ TBinaryOperator = (
     property IsNot: Boolean read FIsNot write FIsNot; // True si es "NOT IN"
   end;
 
-  // ExpresiÛn para: campo BETWEEN min AND max
+  // Expresi√≥n para: campo BETWEEN min AND max
   TBetweenExpression = class(TExpression)
   private
     FLeft: TExpression;
@@ -146,7 +153,7 @@ TBinaryOperator = (
     property Max: TExpression read FMax write FMax;
   end;
 
-  // ===== CL¡USULAS =====
+  // ===== CL√ÅUSULAS =====
   TMatchClause = class(TASTNode)
   private
     FEntityName: string;
@@ -274,7 +281,7 @@ TBinaryOperator = (
     function Check(AKind: TVGQLTokenKind): Boolean;
     function Match(AKind: TVGQLTokenKind): Boolean;
 
-    // Parsers de cl·usulas
+    // Parsers de cl√°usulas
     function ParseMatch: TMatchClause;
     function ParseSearch: TSearchClause;
     function ParseUsing: TUsingClause;
@@ -349,12 +356,12 @@ TBinaryOperator = (
 
   EVGQLTranslationError = class(Exception);
 
-  { El Compilador transforma el AST (Sintaxis) en un TVGQLRequest (EjecuciÛn) }
+  { El Compilador transforma el AST (Sintaxis) en un TVGQLRequest (Ejecuci√≥n) }
   TVGQLCompiler = class
   private
     FRequest: TVGQLRequest;
 
-    // MÈtodos de traducciÛn de cl·usulas
+    // M√©todos de traducci√≥n de cl√°usulas
     procedure TranslateMatch(AClause: TMatchClause);
     procedure TranslateSearch(AClause: TSearchClause);
     procedure TranslateUsing(AClause: TUsingClause);
@@ -364,7 +371,7 @@ TBinaryOperator = (
     procedure TranslateOptimize(AClause: TOptimizeClause);
     procedure TranslateReturn(AClause: TReturnClause);
 
-    // Motor de traducciÛn de expresiones (Recursivo)
+    // Motor de traducci√≥n de expresiones (Recursivo)
     procedure BuildFilter(AExpr: TExpression; ACriteria: TAiFilterCriteria);
     function GetLiteralValue(AExpr: TExpression): Variant;
 
@@ -448,17 +455,17 @@ var
   S, U: string;
 begin
   Start := FPos;
-  // Permitir letras, n˙meros y guiones bajos (tÌpico de identificadores/claves)
+  // Permitir letras, n√∫meros y guiones bajos (t√≠pico de identificadores/claves)
   while (not IsEOF) and (Peek.IsLetterOrDigit or (Peek = '_')) do
     Next;
 
   S := Copy(FText, Start, FPos - Start);
-  U := S.ToUpper; // Para comparaciÛn insensible a may˙sculas
+  U := S.ToUpper; // Para comparaci√≥n insensible a may√∫sculas
 
   Result.Text := S;
   Result.Position := Start;
 
-  // --- CL¡USULAS PRINCIPALES ---
+  // --- CL√ÅUSULAS PRINCIPALES ---
   if U = 'MATCH' then Result.Kind := tkMatch
   else if U = 'SEARCH' then Result.Kind := tkSearch
   else if U = 'USING' then Result.Kind := tkUsing
@@ -470,7 +477,7 @@ begin
   else if U = 'OPTIMIZE' then Result.Kind := tkOptimize
   else if U = 'THRESHOLD' then Result.Kind := tkThreshold
 
-  // --- OPERADORES L”GICOS ---
+  // --- OPERADORES L√ìGICOS ---
   else if U = 'AND' then Result.Kind := tkAnd
   else if U = 'OR' then Result.Kind := tkOr
   else if U = 'NOT' then Result.Kind := tkNot
@@ -488,7 +495,7 @@ begin
   else if U = 'EXISTS_ANY' then Result.Kind := tkExistsAny
   else if U = 'EXISTS_ALL' then Result.Kind := tkExistsAll
 
-  // --- CONFIGURACI”N DE B⁄SQUEDA / RAG ---
+  // --- CONFIGURACI√ìN DE B√öSQUEDA / RAG ---
   else if U = 'HYBRID' then Result.Kind := tkHybrid
   else if U = 'EMBEDDINGS' then Result.Kind := tkEmbeddings
   else if U = 'BM25' then Result.Kind := tkBm25
@@ -612,7 +619,7 @@ begin
     if Peek.IsLetter or (Peek = '_') then
       Exit(ReadIdentifier)
     else
-      raise Exception.CreateFmt('Error lÈxico: car·cter inesperado "%s" en posiciÛn %d', [Peek, FPos]);
+      raise Exception.CreateFmt('Error l√©xico: car√°cter inesperado "%s" en posici√≥n %d', [Peek, FPos]);
   end;
 end;
 
@@ -715,7 +722,7 @@ var
   Expr: TExpression;
 begin
   FLeft.Free;
-  // Liberar cada expresiÛn de la lista de valores
+  // Liberar cada expresi√≥n de la lista de valores
   for Expr in FValues do
     Expr.Free;
   FValues.Free;
@@ -775,9 +782,9 @@ begin
   if not Check(AKind) then
   begin
     if AMsg <> '' then
-      ErrorMsg := Format('LÌnea %d: se esperaba %s (%s)', [FCurrent.Position, GetEnumName(TypeInfo(TVGQLTokenKind), Ord(AKind)), AMsg])
+      ErrorMsg := Format('L√≠nea %d: se esperaba %s (%s)', [FCurrent.Position, GetEnumName(TypeInfo(TVGQLTokenKind), Ord(AKind)), AMsg])
     else
-      ErrorMsg := Format('LÌnea %d: se esperaba %s', [FCurrent.Position, GetEnumName(TypeInfo(TVGQLTokenKind), Ord(AKind))]);
+      ErrorMsg := Format('L√≠nea %d: se esperaba %s', [FCurrent.Position, GetEnumName(TypeInfo(TVGQLTokenKind), Ord(AKind))]);
     raise EVGQLParserError.Create(ErrorMsg);
   end;
   Next;
@@ -797,7 +804,7 @@ begin
     if Check(tkSearch) then
       Result.Search := ParseSearch
     else
-      raise EVGQLParserError.Create('Se requiere cl·usula SEARCH');
+      raise EVGQLParserError.Create('Se requiere cl√°usula SEARCH');
 
     // USING (opcional)
     if Check(tkUsing) then
@@ -827,14 +834,14 @@ begin
     if Match(tkLimit) then
     begin
       // Al usar Match(tkLimit), ya saltamos el token "LIMIT"
-      // Ahora FCurrent apunta al supuesto n˙mero
+      // Ahora FCurrent apunta al supuesto n√∫mero
       if Check(tkNumber) then
       begin
         Result.Limit := StrToInt(FCurrent.Text);
-        Next; // Ahora sÌ, consumimos el n˙mero para pasar al siguiente token
+        Next; // Ahora s√≠, consumimos el n√∫mero para pasar al siguiente token
       end
       else
-        raise EVGQLParserError.Create('Se requiere un valor numÈrico para la cl·usula LIMIT');
+        raise EVGQLParserError.Create('Se requiere un valor num√©rico para la cl√°usula LIMIT');
     end;
 
     // Verificar fin de consulta
@@ -894,7 +901,7 @@ begin
       Next; // Avanzar
     end
     else
-      Expect(tkString, 'texto de b˙squeda');
+      Expect(tkString, 'texto de b√∫squeda');
   except
     Result.Free;
     raise;
@@ -917,7 +924,7 @@ begin
       tkBm25:
         Result.Mode := smBM25;
     else
-      raise EVGQLParserError.CreateFmt('Modo USING inv·lido en %d', [FCurrent.Position]);
+      raise EVGQLParserError.CreateFmt('Modo USING inv√°lido en %d', [FCurrent.Position]);
     end;
     Next; // Consumir el modo
 
@@ -943,14 +950,14 @@ begin
     // FUSION
    if Match(tkFusion) then
     begin
-      // CORRECCI”N: Aceptamos tkIdentifier O los tokens especÌficos RRF/WEIGHTED
+      // CORRECCI√ìN: Aceptamos tkIdentifier O los tokens espec√≠ficos RRF/WEIGHTED
       if Check(tkIdentifier) or Check(tkRrf) or Check(tkWeighted) then
       begin
         Result.Fusion := FCurrent.Text;
         Next;
       end
       else
-        raise EVGQLParserError.CreateFmt('Se esperaba un modo de fusiÛn v·lido (RRF, WEIGHTED) en la posiciÛn %d', [FCurrent.Position]);
+        raise EVGQLParserError.CreateFmt('Se esperaba un modo de fusi√≥n v√°lido (RRF, WEIGHTED) en la posici√≥n %d', [FCurrent.Position]);
     end;
 
 
@@ -1037,7 +1044,7 @@ begin
   if Match(tkIs) then
   begin
     IsNegated := Match(tkNot);
-    Expect(tkNull, 'NULL despuÈs de IS');
+    Expect(tkNull, 'NULL despu√©s de IS');
 
     BinExpr := TBinaryExpression.Create;
     BinExpr.Left := Left;
@@ -1080,7 +1087,7 @@ begin
     Exit(BetExpr);
   end;
 
-  // 4. Caso: Operadores Binarios Est·ndar y Texto
+  // 4. Caso: Operadores Binarios Est√°ndar y Texto
   if FCurrent.Kind in [tkEqual, tkNotEqual, tkGreater, tkGreaterEqual, tkLess, tkLessEqual, tkContains, tkLike, tkILike, tkStartsWith, tkEndsWith] then
   begin
     case FCurrent.Kind of
@@ -1136,14 +1143,14 @@ begin
 
         while Match(tkDot) do
         begin
-          // TambiÈn permitimos palabras reservadas despuÈs de un punto (ej: meta.text)
+          // Tambi√©n permitimos palabras reservadas despu√©s de un punto (ej: meta.text)
           if FCurrent.Kind in [tkIdentifier, tkText, tkMetadata, tkScore] then
           begin
             FullName := FullName + '.' + FCurrent.Text;
             Next;
           end
           else
-            raise EVGQLParserError.CreateFmt('Se esperaba un nombre en la posiciÛn %d', [FCurrent.Position]);
+            raise EVGQLParserError.CreateFmt('Se esperaba un nombre en la posici√≥n %d', [FCurrent.Position]);
         end;
 
         IdExpr := TIdentifierExpression.Create;
@@ -1194,7 +1201,7 @@ begin
         Expect(tkRParen, ')');
       end;
   else
-    raise EVGQLParserError.CreateFmt('ExpresiÛn inv·lida en posiciÛn %d: token inesperado "%s"', [FCurrent.Position, FCurrent.Text]);
+    raise EVGQLParserError.CreateFmt('Expresi√≥n inv√°lida en posici√≥n %d: token inesperado "%s"', [FCurrent.Position, FCurrent.Text]);
   end;
 end;
 
@@ -1206,7 +1213,7 @@ begin
   try
     Next; // Consumir el token 'RERANK'
 
-    // CORRECCI”N: Verificar primero, asignar, y luego avanzar.
+    // CORRECCI√ìN: Verificar primero, asignar, y luego avanzar.
     if Check(tkString) then
     begin
       Result.Query := FCurrent.Text; // Capturamos el texto ACTUAL
@@ -1218,7 +1225,7 @@ begin
       Expect(tkString, 'texto para rerank');
 
       // NOTA: Si quisieras que el string fuera OPCIONAL (para usar la query original),
-      // simplemente quitarÌas el 'else' y el 'Expect'.
+      // simplemente quitar√≠as el 'else' y el 'Expect'.
     end;
 
     // REGENERATE opcional
@@ -1244,18 +1251,18 @@ begin
       tkSemantic: Result.Scope := tsSemantic;
       tkLexical:  Result.Scope := tsLexical;
     else
-      raise EVGQLParserError.CreateFmt('Scope de THRESHOLD inv·lido en %d. Use GLOBAL, SEMANTIC o LEXICAL', [FCurrent.Position]);
+      raise EVGQLParserError.CreateFmt('Scope de THRESHOLD inv√°lido en %d. Use GLOBAL, SEMANTIC o LEXICAL', [FCurrent.Position]);
     end;
     Next; // Consumir el Scope (ej: GLOBAL)
 
-    // 2. Leer el n˙mero ANTES de avanzar
+    // 2. Leer el n√∫mero ANTES de avanzar
     if Check(tkNumber) then
     begin
       Result.Value := StrToFloat(FCurrent.Text, TFormatSettings.Invariant);
-      Next; // Ahora sÌ avanzamos al siguiente token
+      Next; // Ahora s√≠ avanzamos al siguiente token
     end
     else
-      raise EVGQLParserError.CreateFmt('Se esperaba un valor numÈrico para el umbral en la posiciÛn %d', [FCurrent.Position]);
+      raise EVGQLParserError.CreateFmt('Se esperaba un valor num√©rico para el umbral en la posici√≥n %d', [FCurrent.Position]);
 
   except
     Result.Free;
@@ -1297,7 +1304,7 @@ begin
         tkScore:
           Result.Fields.Add(rfScore);
       else
-        raise EVGQLParserError.CreateFmt('Campo RETURN inv·lido en posiciÛn %d. Use: TEXT, METADATA o SCORE', [FCurrent.Position]);
+        raise EVGQLParserError.CreateFmt('Campo RETURN inv√°lido en posici√≥n %d. Use: TEXT, METADATA o SCORE', [FCurrent.Position]);
       end;
       Next;
 
@@ -1330,11 +1337,11 @@ begin
     if Assigned(AQuery.Match) then
       TranslateMatch(AQuery.Match);
 
-    // 2. SEARCH (Texto de b˙squeda - OBLIGATORIO)
+    // 2. SEARCH (Texto de b√∫squeda - OBLIGATORIO)
     if Assigned(AQuery.Search) then
       TranslateSearch(AQuery.Search)
     else
-      raise EVGQLTranslationError.Create('La cl·usula SEARCH es obligatoria');
+      raise EVGQLTranslationError.Create('La cl√°usula SEARCH es obligatoria');
 
     // 3. USING (Modo y pesos)
     if Assigned(AQuery.UsingClause) then
@@ -1370,7 +1377,7 @@ begin
     on E: Exception do
     begin
       FRequest.Free;
-      raise EVGQLTranslationError.CreateFmt('Error de compilaciÛn VGQL: %s', [E.Message]);
+      raise EVGQLTranslationError.CreateFmt('Error de compilaci√≥n VGQL: %s', [E.Message]);
     end;
   end;
 end;
@@ -1390,13 +1397,13 @@ procedure TVGQLCompiler.TranslateUsing(AClause: TUsingClause);
 var
   TotalWeight: Double;
 begin
-  // 1. Mapeo de Modos y NormalizaciÛn de Pesos
+  // 1. Mapeo de Modos y Normalizaci√≥n de Pesos
   case AClause.Mode of
     TSearchMode.smHybrid:
     begin
       FRequest.Mode := smHybrid;
 
-      // En modo hÌbrido, nos aseguramos de que los pesos sumen exactamente 1.0
+      // En modo h√≠brido, nos aseguramos de que los pesos sumen exactamente 1.0
       TotalWeight := AClause.SemanticWeight + AClause.LexicalWeight;
 
       if TotalWeight > 0 then
@@ -1415,7 +1422,7 @@ begin
     TSearchMode.smEmbeddings:
     begin
       FRequest.Mode := smEmbeddings;
-      // Si solo usamos embeddings, el peso sem·ntico DEBE ser 100%
+      // Si solo usamos embeddings, el peso sem√°ntico DEBE ser 100%
       FRequest.WeightSemantic := 1.0;
       FRequest.WeightLexical := 0.0;
     end;
@@ -1423,13 +1430,13 @@ begin
     TSearchMode.smBM25:
     begin
       FRequest.Mode := TSearchMode.smBM25;
-      // Si solo usamos BM25, el peso lÈxico DEBE ser 100%
+      // Si solo usamos BM25, el peso l√©xico DEBE ser 100%
       FRequest.WeightSemantic := 0.0;
       FRequest.WeightLexical := 1.0;
     end;
   end;
 
-  // 2. FusiÛn (Solo relevante si el modo es Hybrid)
+  // 2. Fusi√≥n (Solo relevante si el modo es Hybrid)
   if AClause.Fusion <> '' then
   begin
     if SameText(AClause.Fusion, 'RRF') then
@@ -1437,7 +1444,7 @@ begin
     else if SameText(AClause.Fusion, 'WEIGHTED') then
       FRequest.Fusion := fmWeighted
     else
-      raise EVGQLTranslationError.CreateFmt('Modo de fusiÛn desconocido: %s', [AClause.Fusion]);
+      raise EVGQLTranslationError.CreateFmt('Modo de fusi√≥n desconocido: %s', [AClause.Fusion]);
   end;
 end;
 
@@ -1446,12 +1453,12 @@ begin
   if Assigned(AClause.Expression) then
   begin
     FRequest.Filter.Clear;
-    FRequest.Filter.LogicalOp := loAnd; // RaÌz por defecto AND
+    FRequest.Filter.LogicalOp := loAnd; // Ra√≠z por defecto AND
     BuildFilter(AClause.Expression, FRequest.Filter);
   end;
 end;
 
-{ --- MOTOR DE COMPILACI”N DE EXPRESIONES --- }
+{ --- MOTOR DE COMPILACI√ìN DE EXPRESIONES --- }
 
 function TVGQLCompiler.GetLiteralValue(AExpr: TExpression): Variant;
 var
@@ -1487,7 +1494,7 @@ begin
   if not Assigned(AExpr) then
     Exit;
 
-  // 1. GRUPOS L”GICOS (AND / OR)
+  // 1. GRUPOS L√ìGICOS (AND / OR)
   if (AExpr is TBinaryExpression) and (TBinaryExpression(AExpr).Operator in [boAnd, boOr]) then
   begin
     Bin := TBinaryExpression(AExpr);
@@ -1501,7 +1508,7 @@ begin
     end
     else
     begin
-      // Cambio de lÛgica detectado -> Crear Nodo Grupo
+      // Cambio de l√≥gica detectado -> Crear Nodo Grupo
       if Bin.Operator = boAnd then
         BuildFilter(Bin, ACriteria.AddGroup(loAnd))
       else
@@ -1509,7 +1516,7 @@ begin
     end;
   end
 
-  // 2. COMPARACI”N ENTRE (BETWEEN)
+  // 2. COMPARACI√ìN ENTRE (BETWEEN)
   else if AExpr is TBetweenExpression then
   begin
     Bet := TBetweenExpression(AExpr);
@@ -1519,7 +1526,7 @@ begin
     ACriteria.AddBetween(TIdentifierExpression(Bet.Left).Name, GetLiteralValue(Bet.Min), GetLiteralValue(Bet.Max));
   end
 
-  // 3. COMPARACI”N EN LISTA (IN)
+  // 3. COMPARACI√ìN EN LISTA (IN)
   else if AExpr is TInExpression then
   begin
     InExp := TInExpression(AExpr);
@@ -1537,12 +1544,12 @@ begin
       ACriteria.AddIn(FieldName, VArray);
   end
 
-  // 4. COMPARACIONES BINARIAS EST¡NDAR
+  // 4. COMPARACIONES BINARIAS EST√ÅNDAR
   else if AExpr is TBinaryExpression then
   begin
     Bin := TBinaryExpression(AExpr);
     if not(Bin.Left is TIdentifierExpression) then
-      raise EVGQLTranslationError.Create('El lado izquierdo de la comparaciÛn debe ser un campo');
+      raise EVGQLTranslationError.Create('El lado izquierdo de la comparaci√≥n debe ser un campo');
 
     FieldName := TIdentifierExpression(Bin.Left).Name;
 
@@ -1639,5 +1646,4 @@ end;
 
 
 end.
-
 

@@ -1,10 +1,17 @@
-unit uMakerAi.Agents.GraphBuilder;
+锘縰nit uMakerAi.Agents.GraphBuilder;
+
+{$INCLUDE ../CompilerDirectives.inc}
 
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants,  SyncObjs, Math, TypInfo,
+  {$ELSE}
   System.SysUtils, System.JSON, System.Generics.Collections, System.Classes, System.Math,
-  uMakerAi.Agents;
+  {$ENDIF}
+  uMakerAi.Agents,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
   TGraphBuilder = class
@@ -76,7 +83,6 @@ type
 implementation
 
 uses
-  System.Rtti, System.TypInfo,
   uMakerAi.Agents.EngineRegistry;
 
 { TGraphBuilder }
@@ -115,15 +121,15 @@ begin
 
   finally
     FJsonGraph.Free;
-    FJsonGraph := nil; // Buena pr醕tica para evitar punteros colgantes
+    FJsonGraph := nil; // Buena pr谩ctica para evitar punteros colgantes
   end;
 end;
 
-// MEJORA: Se mantiene la funci髇 original, pero se a馻de un comentario sobre su naturaleza.
-// Esta funci髇 realiza una b鷖queda recursiva profunda para encontrar un objeto con la clave 'engine'.
-// Es robusta si la ubicaci髇 del objeto 'engine' no es fija.
+// MEJORA: Se mantiene la funci贸n original, pero se a帽ade un comentario sobre su naturaleza.
+// Esta funci贸n realiza una b煤squeda recursiva profunda para encontrar un objeto con la clave 'engine'.
+// Es robusta si la ubicaci贸n del objeto 'engine' no es fija.
 // Si la estructura del JSON fuera constante (ej: 'properties.engine'),
-// una b鷖queda directa ser韆 m醩 eficiente.
+// una b煤squeda directa ser铆a m谩s eficiente.
 function TGraphBuilder.FindEngineObject(JsonObj: TJSONObject): TJSONObject;
 var
   Pair: TJSONPair;
@@ -136,7 +142,7 @@ begin
 
   for Pair in JsonObj do
   begin
-    if SameText(Pair.JsonString.Value, cJsonEngine) and (Pair.JsonValue is TJSONObject) then
+    if SameText(Pair.JsonString.AsString, cJsonEngine) and (Pair.JsonValue is TJSONObject) then
       Exit(TJSONObject(Pair.JsonValue));
 
     Value := Pair.JsonValue;
@@ -171,16 +177,17 @@ var
   LToolClass: TClass;
   LTool: TAiToolBase;
   LJoinModeOrdinal: Integer;
+  LJsonValue: TJSONValue;
 begin
-  LNodesArray := FJsonGraph.GetValue<TJSONArray>(cJsonNodes);
+  LNodesArray := FJsonGraph.GetValueAsArray(cJsonNodes);
   if not Assigned(LNodesArray) then
     raise Exception.CreateFmt('JSON graph must contain a "%s" array.', [cJsonNodes]);
 
-  for var LJsonValue in LNodesArray do
+  for LJsonValue in LNodesArray do
   begin
     LNodeJson := LJsonValue as TJSONObject;
-    LNodeGuid := LNodeJson.GetValue<string>(cJsonNodeId);
-    LLabel := LNodeJson.GetValue<string>(cJsonNodeLabel, 'Node_' + Copy(LNodeGuid, 2, 8));
+    LNodeGuid := LNodeJson.GetValueAsString(cJsonNodeId);
+    LLabel := LNodeJson.GetValueAsString(cJsonNodeLabel, 'Node_' + Copy(LNodeGuid, 2, 8));
 
     LLabel := StringReplace(LLabel, ' ', '', [rfReplaceAll]); // Los nombres no pueden tener espacios
 
@@ -192,14 +199,14 @@ begin
     LNode.Name := LLabel;
     LNode.Graph := FAgents;
     LNode.JoinMode := jmAny;
-    LTool := nil; // Buena pr醕tica inicializar la referencia
+    LTool := nil; // Buena pr谩ctica inicializar la referencia
 
     // 3. Procesar las propiedades del JSON
-    if LNodeJson.TryGetValue<TJSONObject>(cJsonProperties, LPropertiesJson) then
+    if LNodeJson.TryGetValue(cJsonProperties, LPropertiesJson) then
     begin
-      // 3.1. Leer la descripci髇 (de forma anidada y segura)
-      if LPropertiesJson.TryGetValue<TJSONObject>(cJsonMetadata, LMetadataJson) then
-        LDescription := LMetadataJson.GetValue<string>(cJsonDescription, '')
+      // 3.1. Leer la descripci贸n (de forma anidada y segura)
+      if LPropertiesJson.TryGetValue(cJsonMetadata, LMetadataJson) then
+        LDescription := LMetadataJson.GetValueAsString(cJsonDescription, '')
       else
         LDescription := '';
       LNode.Description := LDescription;
@@ -208,14 +215,14 @@ begin
       LEngineJson := FindEngineObject(LPropertiesJson);
       if Assigned(LEngineJson) then
       begin
-        LJoinModeStr := LEngineJson.GetValue<string>(cJsonEngineJoinMode, 'jmAny');
+        LJoinModeStr := LEngineJson.GetValueAsString(cJsonEngineJoinMode, 'jmAny');
         LJoinModeOrdinal := GetEnumValue(TypeInfo(TJoinMode), LJoinModeStr);
         if LJoinModeOrdinal <> -1 then
           LNode.JoinMode := TJoinMode(LJoinModeOrdinal);
       end;
 
       // 3.3. Crear y configurar la herramienta (Tool) asociada
-      LToolClassName := LPropertiesJson.GetValue<string>(cJsonToolClassName,'');
+      LToolClassName := LPropertiesJson.GetValueAsString(cJsonToolClassName,'');
       if not LToolClassName.IsEmpty then
       begin
         LToolClass := TEngineRegistry.Instance.FindToolClass(LToolClassName);
@@ -223,10 +230,10 @@ begin
         begin
           LTool := TAiToolBase(TComponentClass(LToolClass).Create(LNode));
           LNode.Tool := LTool;
-          LTool.Description := LDescription; // Asignar la descripci髇 tambi閚 a la herramienta
+          LTool.Description := LDescription; // Asignar la descripci贸n tambi茅n a la herramienta
 
-          // Asignar par醡etros a la herramienta usando RTTI
-          if LPropertiesJson.TryGetValue<TJSONObject>(cJsonParameters, LParametersJson) then
+          // Asignar par谩metros a la herramienta usando RTTI
+          if LPropertiesJson.TryGetValue(cJsonParameters, LParametersJson) then
             SetToolParameters(LTool, LParametersJson);
         end
         else
@@ -256,17 +263,21 @@ var
   LLink: TAIAgentsLink;
   LLinkModeStr: string;
   LLinkModeOrdinal: Integer;
+  LJsonValue: TJSONValue;
+  LNextSlots: array [0 .. 3] of PPointer;
+  LAssigned: Boolean;
+  I, J: Integer;
 begin
-  LEdgesArray := FJsonGraph.GetValue<TJSONArray>(cJsonEdges);
+  LEdgesArray := FJsonGraph.GetValueAsArray(cJsonEdges);
   if not Assigned(LEdgesArray) then
     Exit;
 
-  for var LJsonValue in LEdgesArray do
+  for LJsonValue in LEdgesArray do
   begin
     LEdgeJson := LJsonValue as TJSONObject;
-    LSourceNodeId := LEdgeJson.GetValue<string>(cJsonEdgeSourceNodeId);
-    LTargetNodeId := LEdgeJson.GetValue<string>(cJsonEdgeTargetNodeId);
-    LSourceTerminalId := LEdgeJson.GetValue<string>(cJsonEdgeSourceTerminal);
+    LSourceNodeId := LEdgeJson.GetValueAsString(cJsonEdgeSourceNodeId);
+    LTargetNodeId := LEdgeJson.GetValueAsString(cJsonEdgeTargetNodeId);
+    LSourceTerminalId := LEdgeJson.GetValueAsString(cJsonEdgeSourceTerminal);
 
     if not(FNodeMap.TryGetValue(LSourceNodeId, LSourceNode) and FNodeMap.TryGetValue(LTargetNodeId, LTargetNode)) then
       Continue; // Or raise an error for an edge pointing to a non-existent node
@@ -278,12 +289,12 @@ begin
     if not Assigned(LSourcePortJson) then
       Continue;
 
-    LSourcePortCategory := LSourcePortJson.GetValue<string>(cJsonPortCategory, 'tool');
+    LSourcePortCategory := LSourcePortJson.GetValueAsString(cJsonPortCategory, 'tool');
     if SameText(LSourcePortCategory, cJsonPortCategoryAccessory) then
       Continue;
 
-    // MEJORA: La l骻ica de creaci髇 del Link es m醩 expl韈ita.
-    // Se crea un 鷑ico Link por nodo de origen la primera vez que se encuentra una arista saliente.
+    // MEJORA: La l贸gica de creaci贸n del Link es m谩s expl铆cita.
+    // Se crea un 煤nico Link por nodo de origen la primera vez que se encuentra una arista saliente.
     LLink := LSourceNode.Next;
     if not Assigned(LLink) then
     begin
@@ -296,27 +307,27 @@ begin
       LEngineJson := FindEngineObject(LSourceNodeJson);
       if Assigned(LEngineJson) then
       begin
-        LLinkModeStr := LEngineJson.GetValue<string>(cJsonEngineLinkMode, 'lmFanout');
+        LLinkModeStr := LEngineJson.GetValueAsString(cJsonEngineLinkMode, 'lmFanout');
         LLinkModeOrdinal := GetEnumValue(TypeInfo(TLinkMode), LLinkModeStr);
         if LLinkModeOrdinal <> -1 then
           LLink.Mode := TLinkMode(LLinkModeOrdinal);
 
-        LLink.MaxCycles := LEngineJson.GetValue<Integer>(cJsonEngineLinkMaxCycles, 1);
-        LLink.ConditionalKey := LEngineJson.GetValue<string>(cJsonEngineLinkCondKey, 'next_route');
-        LLink.ManualTargetsKey := LEngineJson.GetValue<string>(cJsonEngineLinkManualKey, 'next_targets');
-        LLink.ExpressionA := LEngineJson.GetValue<string>(cJsonEngineLinkExprA, '');
-        LLink.ExpressionB := LEngineJson.GetValue<string>(cJsonEngineLinkExprB, '');
-        LLink.ExpressionC := LEngineJson.GetValue<string>(cJsonEngineLinkExprC, '');
-        LLink.ExpressionD := LEngineJson.GetValue<string>(cJsonEngineLinkExprD, '');
+        LLink.MaxCycles := LEngineJson.GetValueAsInteger(cJsonEngineLinkMaxCycles, 1);
+        LLink.ConditionalKey := LEngineJson.GetValueAsString(cJsonEngineLinkCondKey, 'next_route');
+        LLink.ManualTargetsKey := LEngineJson.GetValueAsString(cJsonEngineLinkManualKey, 'next_targets');
+        LLink.ExpressionA := LEngineJson.GetValueAsString(cJsonEngineLinkExprA, '');
+        LLink.ExpressionB := LEngineJson.GetValueAsString(cJsonEngineLinkExprB, '');
+        LLink.ExpressionC := LEngineJson.GetValueAsString(cJsonEngineLinkExprC, '');
+        LLink.ExpressionD := LEngineJson.GetValueAsString(cJsonEngineLinkExprD, '');
       end;
 
-      if LEdgeJson.TryGetValue<TJSONObject>(cJsonProperties, LPropertiesJson) then
+      if LEdgeJson.TryGetValue(cJsonProperties, LPropertiesJson) then
       begin
-        LLink.Description := LPropertiesJson.GetValue<string>(cJsonEdgeDescription, '');
+        LLink.Description := LPropertiesJson.GetValueAsString(cJsonEdgeDescription, '');
       end;
     end;
 
-    LSourcePortId := LSourcePortJson.GetValue<string>(cJsonPortId, LSourceTerminalId);
+    LSourcePortId := LSourcePortJson.GetValueAsString(cJsonPortId, LSourceTerminalId);
 
     if LLink.Mode = lmConditional then
     begin
@@ -330,17 +341,14 @@ begin
       end
       else
       begin
-        // MEJORA: L骻ica de asignaci髇 a NextA/B/C/D simplificada y menos repetitiva.
-        var
-          LNextSlots: array [0 .. 3] of PPointer;
+        // MEJORA: L贸gica de asignaci贸n a NextA/B/C/D simplificada y menos repetitiva.
         LNextSlots[0] := @LLink.NextA;
         LNextSlots[1] := @LLink.NextB;
         LNextSlots[2] := @LLink.NextC;
         LNextSlots[3] := @LLink.NextD;
 
-        var
         LAssigned := False;
-        for var I := 0 to High(LNextSlots) do
+        for I := 0 to High(LNextSlots) do
         begin
           if LNextSlots[I]^ = nil then
           begin
@@ -364,45 +372,39 @@ var
   LRttiProp: TRttiProperty;
   LParamPair: TJSONPair;
   LParamValue: TJSONValue;
+  LBoolValue: Boolean;
+  LOrdinalValue: Integer;
+  LEnumValue: TValue;
 begin
   LRttiContext := TRttiContext.Create;
   try
     LRttiType := LRttiContext.GetType(ATool.ClassType);
     for LParamPair in AParamsJson do
     begin
-      LRttiProp := LRttiType.GetProperty(LParamPair.JsonString.Value);
+      LRttiProp := LRttiType.GetProperty(LParamPair.JsonString.AsString);
       if Assigned(LRttiProp) and LRttiProp.IsWritable then
       begin
         LParamValue := LParamPair.JsonValue;
 
-        case LRttiProp.PropertyType.TypeKind of
-          tkString, tkUString:
-            LRttiProp.SetValue(ATool, LParamValue.Value);
+        case PTypeInfo(LRttiProp.PropertyType.Handle)^.Kind of
+          tkString, tkLString, tkWString, tkUString:
+            LRttiProp.SetValue(ATool, LParamValue.AsString);
           tkInteger, tkInt64:
-            LRttiProp.SetValue(ATool, StrToIntDef(LParamValue.Value, 0));
+            LRttiProp.SetValue(ATool, LParamValue.AsInteger);
           tkFloat:
-            LRttiProp.SetValue(ATool, StrToFloatDef(LParamValue.Value, 0.0, TFormatSettings.Invariant));
+            LRttiProp.SetValue(ATool, StrToFloatDef(LParamValue.AsString, 0.0, TFormatSettings.Invariant));
           tkEnumeration:
             begin
               if LRttiProp.PropertyType.Handle = TypeInfo(Boolean) then
               begin
-                var
-                LBoolValue := False;
-                if LParamValue is TJSONTrue then
-                  LBoolValue := True
-                else if LParamValue is TJSONFalse then
-                  LBoolValue := False
-                else
-                  LBoolValue := SameText(LParamValue.Value, 'true');
-                LRttiProp.SetValue(ATool, TValue.From<Boolean>(LBoolValue));
+                LBoolValue := LParamValue.AsBoolean;
+                LRttiProp.SetValue(ATool, LBoolValue);
               end
               else
               begin
-                var
-                LOrdinalValue := GetEnumValue(LRttiProp.PropertyType.Handle, LParamValue.Value);
+                LOrdinalValue := GetEnumValue(LRttiProp.PropertyType.Handle, LParamValue.AsString);
                 if LOrdinalValue <> -1 then
                 begin
-                  var
                   LEnumValue := TValue.FromOrdinal(LRttiProp.PropertyType.Handle, LOrdinalValue);
                   if not LEnumValue.IsEmpty then
                     LRttiProp.SetValue(ATool, LEnumValue);
@@ -421,17 +423,18 @@ function TGraphBuilder.FindPortJsonByTerminalId(ANodeJson: TJSONObject; const AP
 var
   LPortsArray: TJSONArray;
   LPortJson: TJSONObject;
+  LJsonValue: TJSONValue;
 begin
   Result := nil;
   if not Assigned(ANodeJson) then
     Exit;
-  if not ANodeJson.TryGetValue<TJSONArray>(cJsonNodePorts, LPortsArray) then
+  if not ANodeJson.TryGetValue(cJsonNodePorts, LPortsArray) then
     Exit;
 
-  for var LJsonValue in LPortsArray do
+  for LJsonValue in LPortsArray do
   begin
     LPortJson := LJsonValue as TJSONObject;
-    if SameText(LPortJson.GetValue<string>(cJsonPortInternalId), APortTerminalId) then
+    if SameText(LPortJson.GetValueAsString(cJsonPortInternalId), APortTerminalId) then
     begin
       Result := LPortJson;
       Exit;

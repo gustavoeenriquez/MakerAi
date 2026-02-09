@@ -1,12 +1,19 @@
-unit uMakerAi.Tools.ComputerUse.Windows;
+Ôªøunit uMakerAi.Tools.ComputerUse.Windows;
+
+{$INCLUDE ../CompilerDirectives.inc}
 
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math, Windows,
+  {$ELSE}
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes,
   System.Generics.Collections,
   System.StrUtils, Vcl.Forms, Vcl.Graphics, System.Types,
-  uMakerAi.Tools.ComputerUse, uMakerAi.Core;
+  {$ENDIF}
+  uMakerAi.Tools.ComputerUse, uMakerAi.Core,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
   TAiWindowsExecutor = class
@@ -18,7 +25,7 @@ type
     class procedure ParseAndExecuteCombo(const Combo: string);
     class procedure SmoothMouseMove(DestX, DestY: Integer);
   public
-    // Ejecuta la acciÛn fÌsica basada en los datos procesados
+    // Ejecuta la acci√≥n f√≠sica basada en los datos procesados
     class function Execute(const Action: TAiActionData): TAiActionResult;
 
     // Helper para capturar la pantalla y devolverla como TAiMediaFile
@@ -29,7 +36,12 @@ type
 implementation
 
 uses
+  // Delphi: System.IOUtils y Vcl.Imaging para captura de pantalla. FPC usa Graphics b√°sico
+  {$IFNDEF FPC}
   System.IOUtils, Vcl.Imaging.jpeg, Vcl.Imaging.pngimage;
+  {$ELSE}
+  Graphics; // Fallback for FPC
+  {$ENDIF}
 
 { TAiWindowsExecutor }
 
@@ -76,8 +88,8 @@ end;
 
 class procedure TAiWindowsExecutor.SmoothMouseMove(DestX, DestY: Integer);
 begin
-  // SetCursorPos es instant·neo y es lo que Gemini espera generalmente.
-  // Si se quisiera simular movimiento humano, aquÌ irÌa un algoritmo de interpolaciÛn.
+  // SetCursorPos es instant√°neo y es lo que Gemini espera generalmente.
+  // Si se quisiera simular movimiento humano, aqu√≠ ir√≠a un algoritmo de interpolaci√≥n.
   SetCursorPos(DestX, DestY);
 end;
 
@@ -139,7 +151,7 @@ begin
       end;
     end;
 
-    // PequeÒa pausa para asegurar que la app detecte el combo
+    // Peque√±a pausa para asegurar que la app detecte el combo
     Sleep(50);
 
     // 2. Release Sequence (Reverse Order)
@@ -197,7 +209,7 @@ begin
         SmoothMouseMove(Action.X, Action.Y);
         SendMouseInput(MOUSEEVENTF_LEFTDOWN);
         SendMouseInput(MOUSEEVENTF_LEFTUP);
-        Sleep(100); // Pausa tÌpica para doble clic
+        Sleep(100); // Pausa t√≠pica para doble clic
         SendMouseInput(MOUSEEVENTF_LEFTDOWN);
         SendMouseInput(MOUSEEVENTF_LEFTUP);
       end;
@@ -221,7 +233,7 @@ begin
 
       catScroll:
       begin
-        // Mover mouse a posiciÛn para asegurar que el scroll afecte a la ventana correcta
+        // Mover mouse a posici√≥n para asegurar que el scroll afecte a la ventana correcta
         SmoothMouseMove(Action.X, Action.Y);
 
         // Magnitude default en Gemini es 800 (WHEEL_DELTA es 120)
@@ -272,13 +284,13 @@ begin
 
       catNavigate:
       begin
-         // AquÌ no hacemos nada fÌsico en Desktop,
-         // pero podrÌamos abrir el navegador default si quisiÈramos.
-         // Por ahora, asumimos Èxito lÛgico y retornamos la URL en el componente principal.
+         // Aqu√≠ no hacemos nada f√≠sico en Desktop,
+         // pero podr√≠amos abrir el navegador default si quisi√©ramos.
+         // Por ahora, asumimos √©xito l√≥gico y retornamos la URL en el componente principal.
       end;
 
     else
-      // catScreenshot y otros se manejan fuera o no requieren acciÛn de input
+      // catScreenshot y otros se manejan fuera o no requieren acci√≥n de input
     end;
 
   except
@@ -305,7 +317,7 @@ begin
     MediaFile := TAiMediaFile.Create;
 
   // 1. Obtener dimensiones reales del monitor principal
-  // Nota: Para soporte multimonitor, se requerirÌa lÛgica extra (EnumDisplayMonitors)
+  // Nota: Para soporte multimonitor, se requerir√≠a l√≥gica extra (EnumDisplayMonitors)
   ScreenWidth := GetSystemMetrics(SM_CXSCREEN);
   ScreenHeight := GetSystemMetrics(SM_CYSCREEN);
 
@@ -314,13 +326,13 @@ begin
     Bmp.SetSize(ScreenWidth, ScreenHeight);
     DC := GetDC(0); // 0 = Desktop HWND
     try
-      // Copia r·pida BitBlt
+      // Copia r√°pida BitBlt
       BitBlt(Bmp.Canvas.Handle, 0, 0, ScreenWidth, ScreenHeight, DC, 0, 0, SRCCOPY);
     finally
       ReleaseDC(0, DC);
     end;
 
-    // Opcional: Dibujar cursor (Gemini ayuda a saber dÛnde est· el mouse)
+    // Opcional: Dibujar cursor (Gemini ayuda a saber d√≥nde est√° el mouse)
 
     var CursorPos: TPoint;
     var IconInfo: TIconInfo;
@@ -337,7 +349,7 @@ begin
     Jpg := TJPEGImage.Create;
     try
       Jpg.Assign(Bmp);
-      Jpg.CompressionQuality := Quality; // 70 es buen balance calidad/tamaÒo
+      Jpg.CompressionQuality := Quality; // 70 es buen balance calidad/tama√±o
       Jpg.Compress;
 
       Stream := TMemoryStream.Create;
@@ -347,7 +359,7 @@ begin
       // 3. Cargar en MediaFile
       MediaFile.LoadFromStream('screenshot.jpg', Stream);
 
-      // Liberar Stream (LoadFromStream suele hacer copia, o TAiMediaFile se adueÒa, revisar implementaciÛn base)
+      // Liberar Stream (LoadFromStream suele hacer copia, o TAiMediaFile se adue√±a, revisar implementaci√≥n base)
       // Asumiendo que LoadFromStream copia:
       Stream.Free;
     finally
@@ -377,11 +389,11 @@ begin
   if not Assigned(MediaFile) then
     MediaFile := TAiMediaFile.Create;
 
-  // 2. Calcular dimensiones basadas en el Rect·ngulo solicitado
+  // 2. Calcular dimensiones basadas en el Rect√°ngulo solicitado
   W := TargetArea.Width;
   H := TargetArea.Height;
 
-  // Fallback de seguridad: Si el ·rea es inv·lida, capturar monitor principal completo
+  // Fallback de seguridad: Si el √°rea es inv√°lida, capturar monitor principal completo
   if (W <= 0) or (H <= 0) then
   begin
     W := GetSystemMetrics(SM_CXSCREEN);
@@ -391,19 +403,19 @@ begin
 
   Bmp := TBitmap.Create;
   try
-    // pf24bit es suficiente y m·s r·pido para JPEGs
+    // pf24bit es suficiente y m√°s r√°pido para JPEGs
     Bmp.PixelFormat := pf24bit;
     Bmp.SetSize(W, H);
 
     DC := GetDC(0); // 0 = Handle del Escritorio completo
     try
-      // 3. Captura de PÌxeles (BitBlt)
+      // 3. Captura de P√≠xeles (BitBlt)
       // Copiamos desde el DC de pantalla hacia el Canvas del Bitmap.
       // Usamos TargetArea.Left y Top como coordenadas origen (Source X, Source Y).
       BitBlt(Bmp.Canvas.Handle, 0, 0, W, H, DC, TargetArea.Left, TargetArea.Top, SRCCOPY);
 
       // 4. Dibujar el Cursor (Overlay)
-      // Esto es crucial para que la IA sepa donde est· el puntero relativo a la imagen.
+      // Esto es crucial para que la IA sepa donde est√° el puntero relativo a la imagen.
       {
       CursorInfo.cbSize := SizeOf(CursorInfo);
       if GetCursorInfo(CursorInfo) and (CursorInfo.flags = CURSOR_SHOWING) then
@@ -413,7 +425,7 @@ begin
         try
           if GetIconInfo(hIcon, IconInfo) then
           begin
-            // Calcular posiciÛn relativa:
+            // Calcular posici√≥n relativa:
             // PosicionRealMouse - InicioDeCaptura - OffsetDelHotspotIcono
             DrawIcon(Bmp.Canvas.Handle,
                      CursorInfo.ptScreenPos.x - TargetArea.Left - IconInfo.xHotspot,
@@ -434,11 +446,11 @@ begin
       ReleaseDC(0, DC);
     end;
 
-    // 5. CompresiÛn y Guardado
+    // 5. Compresi√≥n y Guardado
     Jpg := TJPEGImage.Create;
     try
       Jpg.Assign(Bmp);
-      Jpg.CompressionQuality := Quality; // Recomendado: 60-75 para velocidad/tamaÒo
+      Jpg.CompressionQuality := Quality; // Recomendado: 60-75 para velocidad/tama√±o
       Jpg.Compress;
 
       Stream := TMemoryStream.Create;

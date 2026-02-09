@@ -1,17 +1,24 @@
-unit uMakerAi.Ollama.Ocr;
+Ôªøunit uMakerAi.Ollama.Ocr;
+
+{$INCLUDE ../CompilerDirectives.inc}
 
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Classes, System.JSON, System.Net.HttpClient,
   System.Net.HttpClientComponent, System.Net.URLClient, System.Threading,
   System.StrUtils,
+  {$ENDIF}
   uMakerAi.Core,
   uMakerAi.Chat.Tools,
-  uMakerAi.Chat.Messages;
+  uMakerAi.Chat.Messages,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
-  { TAiOllamaOcrTool: Herramienta de OCR utilizando modelos de visiÛn en Ollama }
+  { TAiOllamaOcrTool: Herramienta de OCR utilizando modelos de visi√≥n en Ollama }
 
   TAiOllamaOcrTool = class(TAiVisionToolBase)
   private
@@ -30,7 +37,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
 
-    { MÈtodos Est·ticos }
+    { M√©todos Est√°ticos }
     class function ExtractText(AMediaFile: TAiMediaFile; const APrompt: string = ''; const AUrl: string = ''): string;
     class function ExtractTextFromFile(const AFilePath: string; const APrompt: string = ''; const AUrl: string = ''): string;
     class function ExtractTextFromStream(AStream: TStream; const AFileName: string; const APrompt: string = ''; const AUrl: string = ''): string;
@@ -59,7 +66,7 @@ end;
 constructor TAiOllamaOcrTool.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  // Importante: La URL base. El InternalRun se encargar· de asegurar el endpoint /api/chat
+  // Importante: La URL base. El InternalRun se encargar√° de asegurar el endpoint /api/chat
   FUrl := 'http://localhost:11434/';
   FModel := 'deepseek-ocr:latest';
   FPrompt := '<|grounding|>Convert the document to markdown';
@@ -72,7 +79,7 @@ function TAiOllamaOcrTool.GetApiKey: string;
 begin
   if (csDesigning in ComponentState) then Exit(FApiKey);
   if FApiKey.StartsWith('@') then
-    Result := GetEnvironmentVariable(Copy(FApiKey, 2, MaxInt))
+    Result := CompatGetEnvVar(Copy(FApiKey, 2, MaxInt))
   else
     Result := FApiKey;
 end;
@@ -105,24 +112,25 @@ begin
   if LFinalPrompt.IsEmpty then LFinalPrompt := '<|grounding|>Convert the document to markdown';
 
   //El prompt para DeepSeek OCR es muy estricto,  debe ir un #10 y luego el texto sin espacio
-  //El texto del prompt debe ser en chino o en inglÈs no acepta prompts en otro idioma
-  //El texto del pdf o im·gen si puede estar en espaÒol o en otros idiomas
-  //se utiliza por defecto <|grounding|>  para que extraiga tambiÈn los boundings de los textos
+  //El texto del prompt debe ser en chino o en ingl√©s no acepta prompts en otro idioma
+  //El texto del pdf o im√°gen si puede estar en espa√±ol o en otros idiomas
+  //se utiliza por defecto <|grounding|>  para que extraiga tambi√©n los boundings de los textos
   //Los boundings son proporcionales, no corresponden al valor real, es necesario escalarlos de acuerdo
-  //al tamaÒo de la imagen
+  //al tama√±o de la imagen
   //LFinalPrompt := ' Free OCR';  //Ok algunos documentos
-  //LFinalPrompt := #10+'<|grounding|>Convert the document to markdown'; //el m·s preciso extrae los boundings y los textos con presiciÛn
+  //LFinalPrompt := #10+'<|grounding|>Convert the document to markdown'; //el m√°s preciso extrae los boundings y los textos con presici√≥n
 
   LFinalPrompt := #10 + LFinalPrompt;
 
   HTTP := TNetHTTPClient.Create(nil);
+  HTTP.ConfigureForAsync;
   LRequestJson := TJSONObject.Create;
   try
     LActualApiKey := GetApiKey;
 
-    // A. Payload RaÌz
+    // A. Payload Ra√≠z
     LRequestJson.AddPair('model', FModel);
-    LRequestJson.AddPair('stream', TJSONBool.Create(FStream));
+    LRequestJson.AddPair('stream', CreateJSONBool(FStream));
     LRequestJson.AddPair('keep_alive', FKeepAlive);
 
     // B. Estructura de Mensajes (Igual a tu TAiOllamaChat.GetMessages)
@@ -140,9 +148,9 @@ begin
 
     // C. Opciones (Crucial para DeepSeek-OCR)
     LOptions := TJSONObject.Create;
-    LOptions.AddPair('temperature', TJSONNumber.Create(0.12));
-    LOptions.AddPair('num_predict', TJSONNumber.Create(16000));
-    LOptions.AddPair('top_p', TJSONNumber.Create(1.0));
+    LOptions.AddPair('temperature', CreateJSONNumber(0.12));
+    LOptions.AddPair('num_predict', CreateJSONNumber(16000));
+    LOptions.AddPair('top_p', CreateJSONNumber(1.0));
     LRequestJson.AddPair('options', LOptions);
 
 
@@ -152,7 +160,7 @@ begin
       HTTP.ResponseTimeout := FTimeOut; // 5 minutos (como en tu Chat)
 
       if not LActualApiKey.IsEmpty then
-        HTTP.CustomHeaders['Authorization'] := 'Bearer ' + LActualApiKey;
+        HTTP.SetHeader('Authorization', 'Bearer ' + LActualApiKey);
 
       ReportState(acsWriting, 'Ollama analizando imagen...');
       LResponse := HTTP.Post(LFullUrl, LBody);
@@ -165,9 +173,9 @@ begin
           begin
             // Ollama /api/chat devuelve { "message": { "content": "..." } }
             if LResponseJson.TryGetValue('message', LMsgResponse) then
-              LContent := LMsgResponse.GetValue<string>('content', '')
+              LContent := LMsgResponse.GetValueAsString('content', '')
             else
-              LContent := LResponseJson.GetValue<string>('response', '');
+              LContent := LResponseJson.GetValueAsString('response', '');
 
             ResMsg.Content := LContent;
             ResMsg.Role := 'assistant';
@@ -185,7 +193,7 @@ begin
         end;
       end
       else
-        ReportError(Format('Ollama HTTP %d: %s', [LResponse.StatusCode, LResponse.ContentAsString]), nil);
+        ReportError(Format('Ollama HTTP %d: %s', [LResponse.StatusCode, LResponse.ContentAsString]));
     finally
       LBody.Free;
     end;
@@ -203,7 +211,7 @@ begin
     FTimeout := Value;
 end;
 
-{ --- M…TODOS EST¡TICOS --- }
+{ --- M√âTODOS EST√ÅTICOS --- }
 
 class function TAiOllamaOcrTool.ExtractText(AMediaFile: TAiMediaFile; const APrompt, AUrl: string): string;
 var
@@ -214,6 +222,8 @@ begin
   if not Assigned(AMediaFile) then Exit;
   LInstance := TAiOllamaOcrTool.Create(nil);
   LResMsg := TAiChatMessage.Create('', 'assistant');
+  LResMsg.Prompt := '';
+  LResMsg.Role := 'assistant';
   try
     if AUrl <> '' then LInstance.Url := AUrl;
     Result := LInstance.InternalRunOllamaOCR(AMediaFile, LResMsg, APrompt);

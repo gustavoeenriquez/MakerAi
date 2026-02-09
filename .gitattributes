@@ -1,32 +1,78 @@
 # Configuración por defecto
 * text=auto
 
-# Archivos de código fuente Delphi (normalizar finales de línea)
+# ============================================================
+# Archivos de código fuente (normalizar finales de línea)
+# ============================================================
 *.pas text
-*.dfm text
-*.dpr text
 *.inc text
-*.txt text
-*.md text
+*.rc  text
 
-# Archivos de proyecto Delphi (NO convertir - mantener CRLF)
-*.dpk -text
-*.dproj -text
+# Archivos de formularios y diseño visual
+*.dfm text
+*.fmx text
+*.lfm text
+
+# Archivos de proyecto principal
+*.dpr text
+*.dpk text
+
+# Documentación y configuración
+*.txt      text
+*.md       text
+*.xml      text
+*.graphml  text
+*.example  text
+*.mcpconf  text
+
+# Archivos MakerAI (JSON)
+*.mkai text
+
+# ============================================================
+# Archivos de proyecto (NO convertir - mantener CRLF nativo)
+# ============================================================
+*.dproj     -text
 *.groupproj -text
-*.dsk -text
+*.lpk       -text
+*.dsk       -text
 *.identcache -text
-*.local -text
-*.cfg -text
+*.local     -text
+*.cfg       -text
 
+# ============================================================
 # Archivos binarios
+# ============================================================
+
+# Ejecutables y librerías
 *.exe binary
 *.dll binary
 *.bpl binary
 *.dcu binary
+
+# Recursos compilados
 *.res binary
 *.dcr binary
+
+# Imágenes
 *.bmp binary
 *.ico binary
 *.jpg binary
 *.png binary
 *.gif binary
+
+# Documentos de oficina
+*.pdf  binary
+*.docx binary
+*.xlsx binary
+
+# Audio
+*.m4a binary
+
+# Diseño gráfico
+*.cdr binary
+
+# Delphi Visual LiveBindings
+*.vlb binary
+
+# MakerAI RAG embeddings (JSON con vectores numéricos masivos)
+*.mkvrag binary

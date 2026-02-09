@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <Package Version="5">
+    <PathDelim Value="/"/>
+    <Name Value="MakerAi.RAG.Drivers"/>
+    <Type Value="RunAndDesignTime"/>
+    <Author Value="Gustavo - MakerAI Project"/>
+    <CompilerOptions>
+      <Version Value="11"/>
+      <PathDelim Value="/"/>
+      <SearchPaths>
+        <IncludeFiles Value="../RAG"/>
+        <OtherUnitFiles Value="../RAG"/>
+        <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
+      </SearchPaths>
+      <Parsing>
+        <SyntaxOptions>
+          <SyntaxMode Value="Delphi"/>
+        </SyntaxOptions>
+      </Parsing>
+    </CompilerOptions>
+    <Description Value="MakerAI - RAG Drivers Package"/>
+    <License Value="MIT"/>
+    <Version Major="1"/>
+    <Files>
+      <Item>
+        <Filename Value="../RAG/uMakerAi.RAG.Graph.Driver.Postgres.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.RAG.Graph.Driver.Postgres"/>
+      </Item>
+      <Item>
+        <Filename Value="../RAG/uMakerAi.RAG.Vector.Driver.Postgres.pas"/>
+        <UnitName Value="uMakerAi.RAG.Vector.Driver.Postgres"/>
+      </Item>
+    </Files>
+    <RequiredPkgs>
+      <Item>
+        <PackageName Value="MakerAI"/>
+      </Item>
+      <Item>
+        <PackageName Value="sqldblaz"/>
+      </Item>
+      <Item>
+        <PackageName Value="zcomponent"/>
+      </Item>
+      <Item>
+        <PackageName Value="FCL"/>
+      </Item>
+      <Item>
+        <PackageName Value="LCL"/>
+      </Item>
+    </RequiredPkgs>
+    <UsageOptions>
+      <UnitPath Value="$(PkgOutDir)"/>
+    </UsageOptions>
+    <PublishOptions>
+      <Version Value="2"/>
+      <UseFileFilters Value="True"/>
+    </PublishOptions>
+  </Package>
+</CONFIG>

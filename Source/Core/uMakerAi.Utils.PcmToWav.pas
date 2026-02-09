@@ -1,18 +1,18 @@
-// IT License
+ï»¿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo EnrÃ­quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -42,9 +42,9 @@
   try
   // Convertir archivo PCM mono de 24kHz y 16 bits
   if ConvertPCMToWAV('c:\temp\imagen.pcm', 'c:\temp\imagen.wav', 24000, 1, 16) then
-  ShowMessage('Conversión exitosa')
+  ShowMessage('ConversiÃ³n exitosa')
   else
-  ShowMessage('Error en la conversión');
+  ShowMessage('Error en la conversiÃ³n');
   except
   on E: Exception do
   ShowMessage('Error: ' + E.Message);
@@ -52,36 +52,43 @@
   end;
 
   // Otros ejemplos:
-  // Estéreo 44.1kHz, 16 bits (valores por defecto)
+  // EstÃ©reo 44.1kHz, 16 bits (valores por defecto)
   // ConvertPCMToWAV('audio.pcm', 'audio.wav');
 
-  // Mono 8kHz, 16 bits (calidad telefónica)
+  // Mono 8kHz, 16 bits (calidad telefÃ³nica)
   // ConvertPCMToWAV('voice.pcm', 'voice.wav', 8000, 1, 16);
 
-  // Estéreo 48kHz, 16 bits (calidad CD+)
+  // EstÃ©reo 48kHz, 16 bits (calidad CD+)
   // ConvertPCMToWAV('music.pcm', 'music.wav', 48000, 2, 16);
 }
 
 unit uMakerAi.Utils.PcmToWav;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
-  System.SysUtils, System.Classes;
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
+  System.SysUtils, System.Classes,
+  {$ENDIF}
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
   // Estructura del header WAV
   TWAVHeader = packed record
     // Chunk RIFF
     ChunkID: array [0 .. 3] of AnsiChar; // "RIFF"
-    ChunkSize: Cardinal; // Tamaño del archivo - 8 bytes
+    ChunkSize: Cardinal; // TamaÃ±o del archivo - 8 bytes
     Format: array [0 .. 3] of AnsiChar; // "WAVE"
 
     // Subchunk fmt
     Subchunk1ID: array [0 .. 3] of AnsiChar; // "fmt "
     Subchunk1Size: Cardinal; // 16 para PCM
     AudioFormat: Word; // 1 para PCM
-    NumChannels: Word; // Número de canales
+    NumChannels: Word; // NÃºmero de canales
     SampleRate: Cardinal; // Frecuencia de muestreo
     ByteRate: Cardinal; // SampleRate * NumChannels * BitsPerSample/8
     BlockAlign: Word; // NumChannels * BitsPerSample/8
@@ -89,14 +96,14 @@ type
 
     // Subchunk data
     Subchunk2ID: array [0 .. 3] of AnsiChar; // "data"
-    Subchunk2Size: Cardinal; // Tamaño de los datos PCM
+    Subchunk2Size: Cardinal; // TamaÃ±o de los datos PCM
   end;
 
-  // Función principal para convertir PCM a WAV
+  // FunciÃ³n principal para convertir PCM a WAV
 function ConvertPCMToWAV(const PCMFilePath, WAVFilePath: string; SampleRate: Cardinal = 44100; Channels: Word = 2;
   BitsPerSample: Word = 16): Boolean;
 
-// Función para convertir PCM a WAV desde TMemoryStream
+// FunciÃ³n para convertir PCM a WAV desde TMemoryStream
 function ConvertPCMStreamToWAVStream(const PCMStream: TMemoryStream; out WAVStream: TMemoryStream; SampleRate: Cardinal = 44100;
   Channels: Word = 2; BitsPerSample: Word = 16): Boolean;
 
@@ -122,7 +129,7 @@ begin
     // Abrir archivo PCM
     PCMFile := TFileStream.Create(PCMFilePath, fmOpenRead);
     try
-      // Obtener tamaño del archivo PCM
+      // Obtener tamaÃ±o del archivo PCM
       PCMSize := PCMFile.Size;
 
       // Crear archivo WAV
@@ -175,7 +182,7 @@ begin
   except
     on E: Exception do
     begin
-      // Si hay error y el archivo WAV se creó parcialmente, eliminarlo
+      // Si hay error y el archivo WAV se creÃ³ parcialmente, eliminarlo
       if FileExists(WAVFilePath) then
         DeleteFile(WAVFilePath);
       raise;
@@ -183,7 +190,7 @@ begin
   end;
 end;
 
-// Función para convertir PCM a WAV desde TMemoryStream
+// FunciÃ³n para convertir PCM a WAV desde TMemoryStream
 function ConvertPCMStreamToWAVStream(const PCMStream: TMemoryStream; out WAVStream: TMemoryStream; SampleRate: Cardinal = 44100;
   Channels: Word = 2; BitsPerSample: Word = 16): Boolean;
 var
@@ -199,7 +206,7 @@ begin
     // Crear el stream de salida WAV
     WAVStream := TMemoryStream.Create;
     try
-      // Obtener el tamaño del stream PCM
+      // Obtener el tamaÃ±o del stream PCM
       PCMSize := PCMStream.Size;
 
       // Configurar el header WAV
@@ -236,7 +243,7 @@ begin
           WAVStream.WriteBuffer(Buffer, BytesRead);
       end;
 
-      // Resetear la posición del stream WAV a 0 para su posterior lectura
+      // Resetear la posiciÃ³n del stream WAV a 0 para su posterior lectura
       WAVStream.Position := 0;
 
       Result := True;
@@ -244,7 +251,7 @@ begin
     except
       on E: Exception do
       begin
-        // Si hay un error, liberar el stream WAV y propagar la excepción
+        // Si hay un error, liberar el stream WAV y propagar la excepciÃ³n
         WAVStream.Free;
         WAVStream := nil;
         raise;
@@ -263,5 +270,4 @@ begin
 end;
 
 end.
-
 

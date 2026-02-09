@@ -1,18 +1,18 @@
-// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr�quez
+// Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -34,10 +34,19 @@
 
 unit uMakerAi.Prompts;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
-  System.SysUtils, System.Classes, System.JSON;
+  // FPC: Unidades estándar de FPC sin prefijo System
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
+  // Delphi: Unidades con namespace System
+  System.SysUtils, System.Classes, System.JSON,
+  {$ENDIF}
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
   TAiPromptItem = Class(TCollectionItem)
@@ -173,7 +182,7 @@ begin
     S := Params[I];
     P := Pos('=',S);
     If  p <= 0 then
-      Raise Exception.Create('Los par�metros deben tener la forma Nombre=Valor');
+      Raise Exception.Create('Los parámetros deben tener la forma Nombre=Valor');
 
     Nom := Copy(S, 1, P - 1);
     Val := Copy(S, P + 1, Length(S));
@@ -191,8 +200,8 @@ begin
   Res := GetString(Nombre);
   For Pair in Params do
   Begin
-    Nom := Pair.JsonString.Value;
-    Val := Pair.JsonValue.Value;
+    Nom := GetJSONStringValue(Pair.JsonString);  // COMPAT: FPC usa .AsString, Delphi usa .Value
+    Val := GetJSONStringValue(Pair.JsonValue);   // COMPAT: Helper unificado
     Res := StringReplace(Res,'<#'+Nom+'>',Val,[rfReplaceAll,rfIgnoreCase]);
   End;
 

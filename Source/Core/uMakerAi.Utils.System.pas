@@ -1,18 +1,18 @@
-// IT License
+Ôªø// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -31,32 +31,40 @@
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
-unit uMakerAi.Utils.system;
+unit uMakerAi.Utils.System;
+
+{$INCLUDE ../CompilerDirectives.inc}
 
 interface
 
 uses
-  system.SysUtils, system.Classes, system.IOUtils, system.SyncObjs,
-  system.Character,
-
-{$IFDEF MSWINDOWS}
-  Winapi.Windows, Winapi.ShellAPI;
-{$ENDIF}
-{$IFDEF POSIX}
-Posix.String_, Posix.Unistd, Posix.Base, Posix.Errno, Posix.SysWait, Posix.Signal, Posix.Fcntl, Posix.Stdlib, Posix.SysTypes;
-{$ENDIF}
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math, Process,
+    {$IFDEF UNIX}
+    BaseUnix, Unix, uPosixHelper,
+    {$ENDIF}
+    {$IFDEF MSWINDOWS}
+    Windows, ShellApi,
+    {$ENDIF}
+  {$ELSE}
+  // [Compatibility] Delphi Core Units
+  System.SysUtils, System.Classes, System.IOUtils, System.SyncObjs,
+  System.Character,
+    {$IFDEF MSWINDOWS}
+    Winapi.Windows, Winapi.ShellAPI,
+    {$ENDIF}
+  {$ENDIF}
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
-{$IFDEF MSWINDOWS}
-  TProcessHandle = THandle;
-  // TProcessHandle es ahora idÈntico a THandle en Windows
-  TPipeHandle = THandle; // TPipeHandle es ahora idÈntico a THandle en Windows
-{$ENDIF}
-{$IFDEF POSIX}
-  TProcessHandle = pid_t;
-  // TProcessHandle es idÈntico a pid_t (que es un Integer)
-  TPipeHandle = Integer; // TPipeHandle es idÈntico a Integer (file descriptor)
-{$ENDIF}
+  {$IFDEF MSWINDOWS}
+  TProcessHandle = THandle; // TProcessHandle es ahora id√©ntico a THandle en Windows
+  TPipeHandle = THandle; // TPipeHandle es ahora id√©ntico a THandle en Windows
+  {$ELSE} // POSIX (Linux, macOS, etc.)
+  // [Compatibility] FPC/Unix Type Mappings
+  TProcessHandle = pid_t; // TProcessHandle es id√©ntico a pid_t (que es un Integer)
+  TPipeHandle = Integer; // TPipeHandle es id√©ntico a Integer (file descriptor)
+  {$ENDIF}
 
   TPipeHandles = record
     InputRead: TPipeHandle;
@@ -69,15 +77,15 @@ type
 
   TInteractiveProcessInfo = class
   private
-{$IFDEF POSIX}
+{$IFDEF UNIX}
     FChildPID: pid_t;
 {$ENDIF}
   public
     ProcessHandle: TProcessHandle;
 {$IFDEF MSWINDOWS}
     ThreadHandle: THandle;
-    ProcessID: Cardinal;
 {$ENDIF}
+    ProcessID: Cardinal;
     PipeHandles: TPipeHandles;
     Running: Boolean;
     ExitCode: Cardinal;
@@ -88,8 +96,8 @@ type
     function IsRunning: Boolean;
     // En POSIX, el timeout es ignorado y la espera es indefinida
     function WaitOnExit(ATimeoutMs: Cardinal = Cardinal(-1)): Boolean;
-    procedure Terminate; // TerminaciÛn suave (SIGTERM en POSIX)
-    procedure Kill; // TerminaciÛn forzada (SIGKILL en POSIX)
+    procedure Terminate; // Terminaci√≥n suave (SIGTERM en POSIX)
+    procedure Kill; // Terminaci√≥n forzada (SIGKILL en POSIX)
     function WriteInput(const Buffer; Count: Integer): Integer;
     function ReadOutput(var Buffer; Count: Integer): Integer;
     function ReadError(var Buffer; Count: Integer): Integer;
@@ -118,11 +126,11 @@ constructor TInteractiveProcessInfo.Create;
 begin
   inherited Create;
   ProcessHandle := 0;
+  ProcessID := 0;
 {$IFDEF MSWINDOWS}
   ThreadHandle := 0;
-  ProcessID := 0;
 {$ENDIF}
-{$IFDEF POSIX}
+{$IFDEF UNIX}
   FChildPID := 0;
 {$ENDIF}
   FillChar(PipeHandles, SizeOf(TPipeHandles), 0);
@@ -153,14 +161,14 @@ begin
   if ThreadHandle <> 0 then
     CloseHandle(ThreadHandle);
 {$ENDIF}
-{$IFDEF POSIX}
+{$IFDEF UNIX}
   // En POSIX, el padre solo cierra los descriptores que usa.
   if PipeHandles.InputWrite <> 0 then
-    Posix.Unistd.__close(PipeHandles.InputWrite);
+    FpClose(PipeHandles.InputWrite);
   if PipeHandles.OutputRead <> 0 then
-    Posix.Unistd.__close(PipeHandles.OutputRead);
+    FpClose(PipeHandles.OutputRead);
   if PipeHandles.ErrorRead <> 0 then
-    Posix.Unistd.__close(PipeHandles.ErrorRead);
+    FpClose(PipeHandles.ErrorRead);
 {$ENDIF}
   inherited;
 end;
@@ -204,7 +212,7 @@ procedure TInteractiveProcessInfo.Terminate;
 begin
   if IsRunning then
   begin
-    Winapi.Windows.TerminateProcess(ProcessHandle, 0);
+    TerminateProcess(ProcessHandle, 0);
     WaitOnExit(5000);
   end;
 end;
@@ -213,7 +221,7 @@ procedure TInteractiveProcessInfo.Kill;
 begin
   if IsRunning then
   begin
-    Winapi.Windows.TerminateProcess(ProcessHandle, 1);
+    TerminateProcess(ProcessHandle, 1);
     WaitOnExit(5000);
   end;
 end;
@@ -225,7 +233,7 @@ begin
   Result := 0;
   if (PipeHandles.InputWrite <> 0) and IsRunning then
   begin
-    if Winapi.Windows.WriteFile(PipeHandles.InputWrite, Buffer, Count, BytesWritten, nil) then
+    if WriteFile(PipeHandles.InputWrite, Buffer, Count, BytesWritten, nil) then
       Result := BytesWritten;
   end;
 end;
@@ -240,12 +248,12 @@ begin
     BytesAvailable := 0;
     if PeekNamedPipe(PipeHandles.OutputRead, nil, 0, nil, @BytesAvailable, nil) and (BytesAvailable > 0) then
     begin
-      if Winapi.Windows.ReadFile(PipeHandles.OutputRead, Buffer, Count, BytesRead, nil) then
+      if ReadFile(PipeHandles.OutputRead, Buffer, Count, BytesRead, nil) then
         Result := BytesRead;
     end
     else if not IsRunning then
     begin
-      if Winapi.Windows.ReadFile(PipeHandles.OutputRead, Buffer, Count, BytesRead, nil) then
+      if ReadFile(PipeHandles.OutputRead, Buffer, Count, BytesRead, nil) then
         Result := BytesRead;
     end;
   end;
@@ -261,19 +269,19 @@ begin
     BytesAvailable := 0;
     if PeekNamedPipe(PipeHandles.ErrorRead, nil, 0, nil, @BytesAvailable, nil) and (BytesAvailable > 0) then
     begin
-      if Winapi.Windows.ReadFile(PipeHandles.ErrorRead, Buffer, Count, BytesRead, nil) then
+      if ReadFile(PipeHandles.ErrorRead, Buffer, Count, BytesRead, nil) then
         Result := BytesRead;
     end
     else if not IsRunning then
     begin
-      if Winapi.Windows.ReadFile(PipeHandles.ErrorRead, Buffer, Count, BytesRead, nil) then
+      if ReadFile(PipeHandles.ErrorRead, Buffer, Count, BytesRead, nil) then
         Result := BytesRead;
     end;
   end;
 end;
 
 {$ENDIF}
-{$IFDEF POSIX}
+{$IFDEF UNIX}
 
 function TInteractiveProcessInfo.IsRunning: Boolean;
 var
@@ -287,7 +295,7 @@ begin
     Exit;
   end;
 
-  Res := Posix.SysWait.waitpid(FChildPID, @Status, WNOHANG);
+  Res := FpWaitPid(FChildPID, @Status, WNOHANG);
   if Res = 0 then
   begin
     Running := True;
@@ -318,7 +326,7 @@ begin
   if FChildPID <= 0 then
     Exit(True);
 
-  if Posix.SysWait.waitpid(FChildPID, @Status, 0) = FChildPID then
+  if FpWaitPid(FChildPID, @Status, 0) = FChildPID then
   begin
     IsRunning;
     Result := True;
@@ -331,7 +339,7 @@ procedure TInteractiveProcessInfo.Terminate;
 begin
   if IsRunning then
   begin
-    Posix.Signal.Kill(FChildPID, SIGTERM);
+    uPosixHelper.Kill(FChildPID, SIGTERM);
     WaitOnExit(5000);
   end;
 end;
@@ -340,7 +348,7 @@ procedure TInteractiveProcessInfo.Kill;
 begin
   if IsRunning then
   begin
-    Posix.Signal.Kill(FChildPID, SIGKILL);
+    uPosixHelper.Kill(FChildPID, SIGKILL);
     WaitOnExit(5000);
   end;
 end;
@@ -350,7 +358,7 @@ begin
   Result := -1;
   if (PipeHandles.InputWrite <> 0) and IsRunning then
   begin
-    Result := Posix.Unistd.__write(PipeHandles.InputWrite, Pointer(Buffer), Count);
+    Result := FpWrite(PipeHandles.InputWrite, Pointer(Buffer), Count);
   end;
 end;
 
@@ -359,8 +367,8 @@ begin
   Result := -1;
   if PipeHandles.OutputRead <> 0 then
   begin
-    Result := Posix.Unistd.__read(PipeHandles.OutputRead, Pointer(Buffer), Count);
-    if (Result = -1) and (Errno = EAGAIN) then
+    Result := FpRead(PipeHandles.OutputRead, Pointer(Buffer), Count);
+    if (Result = -1) and (fpGetErrno = ESysEAGAIN) then
       Result := 0;
   end;
 end;
@@ -370,8 +378,8 @@ begin
   Result := -1;
   if PipeHandles.ErrorRead <> 0 then
   begin
-    Result := Posix.Unistd.__read(PipeHandles.ErrorRead, Pointer(Buffer), Count);
-    if (Result = -1) and (Errno = EAGAIN) then
+    Result := FpRead(PipeHandles.ErrorRead, Pointer(Buffer), Count);
+    if (Result = -1) and (fpGetErrno = ESysEAGAIN) then
       Result := 0;
   end;
 end;
@@ -387,25 +395,25 @@ var
 begin
 
 {$IFDEF MSWINDOWS}
-  // Para Windows, usamos la API ShellExecuteW (la versiÛn Unicode)
-  // El handle es 0 (escritorio), 'open' es la acciÛn por defecto.
+  // Para Windows, usamos la API ShellExecuteW (la versi√≥n Unicode)
+  // El handle es 0 (escritorio), 'open' es la acci√≥n por defecto.
   // PChar(AFileName) es la ruta al archivo.
-  // nil para par·metros, nil para directorio, SW_SHOWNORMAL para mostrar la app.
-  ErrorCode := Integer(ShellExecuteW(0, 'open', PChar(AFileName), nil, nil, SW_SHOWNORMAL));
+  // nil para par√°metros, nil para directorio, SW_SHOWNORMAL para mostrar la app.
+  ErrorCode := Integer(ShellExecuteW(0, 'open', PWideChar(WideString(AFileName)), nil, nil, SW_SHOWNORMAL));
 
-  // ShellExecute devuelve un valor > 32 en caso de Èxito.
+  // ShellExecute devuelve un valor > 32 en caso de √©xito.
   Result := ErrorCode > 32;
 {$ENDIF}
 {$IFDEF MACOS}
-  // En macOS, la lÛgica es diferente. Se usa NSWorkspace.
-  // Esto requerirÌa m·s cÛdigo y uses de Macapi.*
+  // En macOS, la l√≥gica es diferente. Se usa NSWorkspace.
+  // Esto requerir√≠a m√°s c√≥digo y uses de Macapi.*
   // Por ahora, dejamos un placeholder.
-  ShowMessage('Abrir archivos no est· implementado para macOS en este ejemplo.');
+  ShowMessage('Abrir archivos no est√° implementado para macOS en este ejemplo.');
   Result := False;
 {$ENDIF}
 {$IFDEF ANDROID}
-  // En Android, se usan Intents. Es a˙n m·s complejo por los permisos y File Providers.
-  ShowMessage('Abrir archivos no est· implementado para Android en este ejemplo.');
+  // En Android, se usan Intents. Es a√∫n m√°s complejo por los permisos y File Providers.
+  ShowMessage('Abrir archivos no est√° implementado para Android en este ejemplo.');
   Result := False;
 {$ENDIF}
 end;
@@ -468,7 +476,7 @@ begin
     else
       DirToUse := PChar(Trim(ACurrentDirectory));
 
-    if CreateProcess(nil, PChar(Cmd), nil, nil, True, CreationFlags, EnvPtr, DirToUse, SI, PI) then
+    if CreateProcess(nil, PChar(Cmd), nil, nil, True, CreationFlags, EnvPtr, PChar(DirToUse), SI, PI) then
     begin
       Result.ProcessHandle := PI.hProcess;
       Result.ThreadHandle := PI.hThread;
@@ -608,21 +616,25 @@ begin
 end;
 
 {$ENDIF}
-{$IFDEF POSIX}
+{$IFDEF UNIX}
 
 {
   Mejora a futuro:
   No soporta comillas simples ('), ni escapar caracteres con barra invertida (\),
-  ni tuberÌas (|) o redirecciones (>) propias de bash,
+  ni tuber√≠as (|) o redirecciones (>) propias de bash,
   ya que usa execvp directamente y no una shell (/bin/sh).
-  Si intenta ejecutar ls -la | grep x fallar· porque | y grep ser·n tratados como argumentos de ls.
+  Si intenta ejecutar ls -la | grep x fallar√° porque | y grep ser√°n tratados como argumentos de ls.
 
 }
 
+{$IFNDEF FPC}
+// COMPAT: These declarations use Delphi POSIX types (libc, _PU, MarshaledAString) not available in FPC.
+// FPC uses TProcess for RunCommandLine and uPosixHelper.system for ExecuteCommandLine.
 function popen(const command: MarshaledAString; const _type: MarshaledAString): Pointer; cdecl; external libc name _PU + 'popen';
 function pclose(filehandle: Pointer): int32; cdecl; external libc name _PU + 'pclose';
 function fgets(Buffer: PAnsiChar; size: int32; Stream: Pointer): PAnsiChar; cdecl; external libc name _PU + 'fgets';
 function system(const command: MarshaledAString): Integer; cdecl; external libc name _PU + 'system';
+{$ENDIF}
 
 procedure ParseCommand(const ACommand: string; out AProgram: string; out AArgs: TArray<string>);
 var
@@ -676,7 +688,7 @@ end;
 
 class function TUtilsSystem.StartInteractiveProcess(const ACommand: string; ACurrentDirectory: string; AEnvironment: TStrings): TInteractiveProcessInfo;
 var
-  PipeIn, PipeOut, PipeErr: array [0 .. 1] of Integer;
+  PipeIn, PipeOut, PipeErr: TFilDes;
   PID: pid_t;
   ProgramName: string;
   Args: TArray<string>;
@@ -685,12 +697,12 @@ var
 begin
   Result := TInteractiveProcessInfo.Create;
   try
-    if (Posix.Unistd.pipe(@PipeIn[0]) <> 0) or (Posix.Unistd.pipe(@PipeOut[0]) <> 0) or (Posix.Unistd.pipe(@PipeErr[0]) <> 0) then
+    if (FpPipe(PipeIn) <> 0) or (FpPipe(PipeOut) <> 0) or (FpPipe(PipeErr) <> 0) then
     begin
       raise Exception.Create('Failed to create pipes. Error: ' + strerror(Errno));
     end;
 
-    PID := Posix.Unistd.fork;
+    PID := FpFork;
 
     if PID < 0 then
     begin
@@ -699,38 +711,38 @@ begin
 
     if PID = 0 then // --- HIJO ---
     begin
-      Posix.Unistd.__close(PipeIn[1]);
-      Posix.Unistd.__close(PipeOut[0]);
-      Posix.Unistd.__close(PipeErr[0]);
+      FpClose(PipeIn[1]);
+      FpClose(PipeOut[0]);
+      FpClose(PipeErr[0]);
 
-      Posix.Unistd.dup2(PipeIn[0], STDIN_FILENO);
-      Posix.Unistd.dup2(PipeOut[1], STDOUT_FILENO);
-      Posix.Unistd.dup2(PipeErr[1], STDERR_FILENO);
+      FpDup2(PipeIn[0], STDIN_FILENO);
+      FpDup2(PipeOut[1], STDOUT_FILENO);
+      FpDup2(PipeErr[1], STDERR_FILENO);
 
-      Posix.Unistd.__close(PipeIn[0]);
-      Posix.Unistd.__close(PipeOut[1]);
-      Posix.Unistd.__close(PipeErr[1]);
+      FpClose(PipeIn[0]);
+      FpClose(PipeOut[1]);
+      FpClose(PipeErr[1]);
 
       if ACurrentDirectory <> '' then
-        Posix.Unistd.__chdir(PAnsiChar(AnsiString(ACurrentDirectory)));
+        FpChdir(PAnsiChar(AnsiString(ACurrentDirectory)));
 
       ParseCommand(ACommand, ProgramName, Args);
       if ProgramName = '' then
-        Posix.Unistd._exit(127);
+        FpExit(127);
 
       SetLength(PArgs, Length(Args) + 1);
       for i := 0 to High(Args) do
         PArgs[i] := PAnsiChar(AnsiString(Args[i]));
       PArgs[Length(Args)] := nil;
 
-      Posix.Unistd.execvp(PAnsiChar(AnsiString(ProgramName)), @PArgs[0]);
-      Posix.Unistd._exit(127);
+      FpExecVP(PAnsiChar(AnsiString(ProgramName)), @PArgs[0]);
+      FpExit(127);
     end
     else // --- PADRE ---
     begin
-      Posix.Unistd.__close(PipeIn[0]);
-      Posix.Unistd.__close(PipeOut[1]);
-      Posix.Unistd.__close(PipeErr[1]);
+      FpClose(PipeIn[0]);
+      FpClose(PipeOut[1]);
+      FpClose(PipeErr[1]);
 
       Result.PipeHandles.InputWrite := PipeIn[1];
       Result.PipeHandles.OutputRead := PipeOut[0];
@@ -739,8 +751,8 @@ begin
       Result.FChildPID := PID;
       Result.Running := True;
 
-      Posix.Fcntl.Fcntl(Result.PipeHandles.OutputRead, F_SETFL, O_NONBLOCK);
-      Posix.Fcntl.Fcntl(Result.PipeHandles.ErrorRead, F_SETFL, O_NONBLOCK);
+      FpFcntl(Result.PipeHandles.OutputRead, F_SETFL, O_NONBLOCK);
+      FpFcntl(Result.PipeHandles.ErrorRead, F_SETFL, O_NONBLOCK);
     end;
   except
     on E: Exception do
@@ -758,7 +770,7 @@ var
   p: PPAnsiChar;
 begin
   Result := TStringList.Create;
-  p := Posix.Unistd.environ;
+  p := PPAnsiChar(uPosixHelper.environ);
 
   if p <> nil then
   begin
@@ -772,15 +784,39 @@ end;
 
 class function TUtilsSystem.RunCommandLine(ACommand: string): String;
 var
+  {$IFDEF FPC}
+  AProcess: TProcess;
+  AStringList: TStringList;
+  {$ELSE}
   Handle: Pointer;
   Buffer: array [0 .. 1023] of AnsiChar;
   Output: TStringBuilder;
   M: TMarshaller;
+  {$ENDIF}
 begin
   Result := '';
+  {$IFDEF FPC}
+  AProcess := TProcess.Create(nil);
+  AStringList := TStringList.Create;
+  try
+    AProcess.CommandLine := ACommand;
+    AProcess.Options := [poUsePipes, poWaitOnExit];
+    try
+      AProcess.Execute;
+      AStringList.LoadFromStream(AProcess.Output);
+      Result := Trim(AStringList.Text);
+    except
+      on E: Exception do
+        Result := 'Error: ' + E.Message;
+    end;
+  finally
+    AStringList.Free;
+    AProcess.Free;
+  end;
+  {$ELSE}
   Output := TStringBuilder.Create;
   try
-    // CORRECCI”N: Usar .ToPointer para obtener el puntero crudo del wrapper.
+    // CORRECCI√ìN: Usar .ToPointer para obtener el puntero crudo del wrapper.
     Handle := popen(M.AsAnsi(ACommand).ToPointer, 'r');
     if Handle = nil then
       raise Exception.CreateFmt('Failed to popen command: %s', [ACommand]);
@@ -789,7 +825,7 @@ begin
       begin
         Output.Append(Buffer);
       end;
-      // La salida de popen/fgets ya est· en la codificaciÛn de la consola (a menudo UTF-8 en Linux).
+      // La salida de popen/fgets ya est√° en la codificaci√≥n de la consola (a menudo UTF-8 en Linux).
       // El paso UTF8ToString es correcto si el buffer es AnsiChar y contiene UTF-8.
       Result := Trim(UTF8ToString(Output.ToString));
     finally
@@ -798,6 +834,7 @@ begin
   finally
     Output.Free;
   end;
+  {$ENDIF}
 end;
 
 class function TUtilsSystem.ExecuteCommandLine(ACommand: string): Boolean;
@@ -805,7 +842,7 @@ var
   Status: Integer;
   M: TMarshaller;
 begin
-  Status := system(M.AsAnsi(ACommand).ToPointer);
+  Status := uPosixHelper.system(M.AsAnsi(ACommand).ToPointer);
   Result := (Status = 0);
 end;
 

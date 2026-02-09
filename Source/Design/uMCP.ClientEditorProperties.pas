@@ -1,18 +1,18 @@
-// IT License
+Ôªø// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,12 +33,17 @@
 
 unit uMCP.ClientEditorProperties;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
+// Delphi: DesignIntf/DesignEditors para editores de propiedades IDE. FPC usa sistema Lazarus diferente
+{$IFNDEF FPC}
 uses
   System.SysUtils, DesignIntf, DesignEditors, System.UITypes,
-  uMakerAi.Tools.Functions, // Para TMCPClientItem
-  uMCPClientEditor; // Para TFMCPClientEditor, asumiendo que est· en esta unidad
+  uMCPClientEditor,
+  uMakerAi.Tools.Functions,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper;
 
 type
   TMCPClientItemEditor = class(TClassProperty) // Usamos TClassProperty porque editamos un objeto
@@ -46,11 +51,14 @@ type
     procedure Edit; override;
     function GetAttributes: TPropertyAttributes; override;
   end;
+{$ENDIF}
 
 procedure Register;
 
 implementation
 
+// Delphi: Implementaci√≥n completa del editor de propiedades. FPC usa RegisterPropertyEditor de Lazarus
+{$IFNDEF FPC}
 uses
   System.Classes, Vcl.Dialogs, uMakerAi.Core,
   uMakerAi.MCPClient.Core; // Necesario para Get/SetProperties
@@ -73,7 +81,7 @@ var
   EditorForm: TFMCPClientEditor;
   Props, VarEnv: TStringList;
 begin
-  // GetComponent(0) devuelve la instancia de TMCPClientItem que se est· editando.
+  // GetComponent(0) devuelve la instancia de TMCPClientItem que se est√° editando.
   ClientItem := GetComponent(0) as TMCPClientItem;
 
   // Creamos el formulario editor
@@ -86,7 +94,7 @@ begin
     Props := TStringList.Create;
     VarEnv := TStringList.Create;
     try
-      // Puedes aÒadir tambiÈn los TStrings de Params y DisabledFunctions si quieres
+      // Puedes a√±adir tambi√©n los TStrings de Params y DisabledFunctions si quieres
       Props.AddStrings(ClientItem.Params);
       VarEnv.AddStrings(ClientItem.EnvVars);
 
@@ -122,9 +130,15 @@ end;
 
 function TMCPClientItemEditor.GetAttributes: TPropertyAttributes;
 begin
-  // paDialog: Muestra el botÛn [...]
+  // paDialog: Muestra el bot√≥n [...]
   // paReadOnly: Hace que el valor no se pueda editar directamente en la rejilla.
   Result := [paDialog, paReadOnly];
 end;
+{$ELSE}
+procedure Register;
+begin
+  // Dummy para FPC - Lazarus usa su propio sistema de registro
+end;
+{$ENDIF}
 
 end.

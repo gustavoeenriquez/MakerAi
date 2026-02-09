@@ -20,6 +20,9 @@
 *.a
 *.o
 *.ocx
+*.ppu
+*.compiled
+*.vlb
 
 # Archivos temporales del IDE
 *.local
@@ -38,6 +41,7 @@
 *.temp
 *~*
 *.~*
+packagefiles.xml
 
 # Backups
 *.orig
@@ -98,6 +102,7 @@ ehthumbs.db
 .vscode/
 .idea/
 .env/
+*.env
 node_modules/
 
 # -------------------------------------------
@@ -132,3 +137,38 @@ node_modules/
 # .git/
  
 Source/Packages/hpp/
+Source/Packages/lib/
+Output/
+
+# -------------------------------------------
+# Archivos de diseño gráfico (CorelDRAW)
+# -------------------------------------------
+*.cdr
+
+# -------------------------------------------
+# Archivos .res auto-generados por el IDE (se regeneran al compilar)
+# Los siguientes .res SÍ se incluyen porque contienen iconos
+# de componentes compilados manualmente desde archivos .rc:
+#   - Source/ChatUI/UIResources.res
+#   - Source/Packages/UIResources.res
+#   - Source/Packages/uMakerAiResources.res
+#   - Source/Resources/uMakerAiResources.RES
+# -------------------------------------------
+# Paquetes Delphi - auto-generados por el IDE
+Source/Packages/MakerAI.res
+Source/Packages/MakerAi.RAG.Drivers.res
+Source/Packages/MakerAi.UI.res
+Source/Packages/MakerAiDsg.res
+Source/Packages/MakerAIPkg.res
+Source/Packages/uMakerAi.RAG.Drivers.res
+Source/Packages/uMakerAi.UI.res
+# ChatUI - auto-generados
+Source/ChatUI/uMakerAi.Chat.UI.res
+Source/ChatUI/uMakerAi.Chat.Visual.res
+Source/ChatUI/uMakerAi.UI.res
+
+# -------------------------------------------
+# Archivos .res auto-generados de Demos
+# (se regeneran al compilar, no necesitan versionarse)
+# -------------------------------------------
+Demos/**/*.res

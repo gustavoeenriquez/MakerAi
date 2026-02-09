@@ -1,18 +1,18 @@
-// IT License
+Ôªø// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -32,7 +32,7 @@
 // - GitHub: https://github.com/gustavoeenriquez/
 
 
-// A Octubre del 2024 estas son las limitaciones de visiÛn de groq
+// A Octubre del 2024 estas son las limitaciones de visi√≥n de groq
 {
   Model ID: llama-3.2-11b-vision-preview
   Description: Llama 3.2 11B Vision is a powerful multimodal model capable of processing both text and image inputs. It supports multilingual, multi-turn conversations, tool use, and JSON mode.
@@ -46,9 +46,16 @@
 
 unit uMakerAi.Chat.Groq;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  // FPC: Unidades est√°ndar de FPC sin prefijo System
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye Net/HTTP/JSON/REST nativos
   System.SysUtils, System.Types, System.UITypes, System.Classes,
   System.Threading,
   System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections,
@@ -57,13 +64,12 @@ uses
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
 
-{$IF CompilerVersion < 35}
-  uJSONHelper,
-{$ENDIF}
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages;
+  {$ENDIF}
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 Type
-  // Este modelo de reasoning por ahora solo se ha detectado en Groq, asÌ que se implementa solo aquÌ
+  // Este modelo de reasoning por ahora solo se ha detectado en Groq, as√≠ que se implementa solo aqu√≠
 
   TAiReasoningFormat = (rfAuto, rfParsed, rfRaw, rfHidden);
   TAiReasoningEffort = (reAuto, reNone, reDefault);
@@ -148,6 +154,9 @@ Var
   LAsincronico: Boolean;
   LastMsg: TAiChatMessage;
   Res, LModel: String;
+  // FPC Compatibility vars
+  JResponseFormat, JInnerSchema, JSchemaWrapper: TJSONObject;
+  sShema: String;
 begin
 
   If User = '' then
@@ -162,7 +171,7 @@ begin
   // LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
   LAsincronico := Self.Asynchronous;
 
-  // En groq hay una restricciÛn sobre las im·genes
+  // En groq hay una restricci√≥n sobre las im√°genes
 
   FClient.Asynchronous := LAsincronico;
 
@@ -176,26 +185,19 @@ begin
       Raise Exception.Create('Groq Error: ReasoningFormat no puede ser "raw" cuando se usan Tools o JSON mode. Use "parsed" o "hidden".');
     end;
 
-    AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
+    AJSONObject.AddPair('stream', CreateJSONBool(LAsincronico));
 
     If Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAi).Text) <> '') then
     Begin
-{$IF CompilerVersion < 35}
-      JArr := TJSONUtils.ParseAsArray(GetTools(TToolFormat.tfOpenAi).Text);
-{$ELSE}
-      JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
-{$ENDIF}
-      If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools est·n mal definido, debe ser un JsonArray');
+      JArr := TJSONObject.ParseAsArray(GetTools(TToolFormat.tfOpenAi).Text);
+
+      if Not Assigned(JArr) then
+        Raise Exception.Create('La propiedad Tools est√°n mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then
       Begin
-{$IF CompilerVersion < 35}
-        jToolChoice := TJSONUtils.ParseAsObject(Tool_choice);
-{$ELSE}
-        jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
-{$ENDIF}
+        jToolChoice := TJSONObject.ParseJSONValue(Tool_choice) as TJSONObject;
         If Assigned(jToolChoice) then
           AJSONObject.AddPair('tools_choice', jToolChoice);
       End;
@@ -206,11 +208,11 @@ begin
     Begin
       If LastMsg.MediaFiles.Count > 0 then
       Begin
-        AJSONObject.AddPair('messages', LastMsg.ToJSon); // Si tiene im·genes solo envia una entrada
+        AJSONObject.AddPair('messages', LastMsg.ToJSon); // Si tiene im√°genes solo envia una entrada
       End
       Else
       Begin
-        AJSONObject.AddPair('messages', GetMessages); // Si no tiene im·genes envÌa todos los mensajes
+        AJSONObject.AddPair('messages', GetMessages); // Si no tiene im√°genes env√≠a todos los mensajes
       End;
     End;
 
@@ -231,34 +233,31 @@ begin
       end;
     end;
 
-    AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
-    AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+    AJSONObject.AddPair('temperature', CreateJSONNumber(Trunc(Temperature * 100) / 100));
+    AJSONObject.AddPair('max_tokens', CreateJSONNumber(Max_tokens));
 
     If Top_p <> 0 then
-      AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
+      AJSONObject.AddPair('top_p', CreateJSONNumber(Top_p));
 
-    AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
-    AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
+    AJSONObject.AddPair('frequency_penalty', CreateJSONNumber(Trunc(Frequency_penalty * 100) / 100));
+    AJSONObject.AddPair('presence_penalty', CreateJSONNumber(Trunc(Presence_penalty * 100) / 100));
     AJSONObject.AddPair('user', User);
-    AJSONObject.AddPair('n', TJSONNumber.Create(N));
+    AJSONObject.AddPair('n', CreateJSONNumber(N));
 
     // 1. JSON Schema (Structured Outputs)
     if (FResponse_format = tiaChatRfJsonSchema) then
     begin
-      var
       JResponseFormat := TJSonObject.Create;
       JResponseFormat.AddPair('type', 'json_schema');
 
       if JsonSchema.Text <> '' then
       begin
-        Var sShema := StringReplace(JsonSchema.Text,'\n',' ',[rfReplaceAll]);
+        sShema := StringReplace(JsonSchema.Text,'\n',' ',[rfReplaceAll]);
 
-        var
-        JInnerSchema := TJSonObject.ParseJSONValue(sShema) as TJSonObject;
+        JInnerSchema := TJSONObject.ParseJSONValue(sShema) as TJSonObject;
         if Assigned(JInnerSchema) then
         begin
           // Wrapper para Groq (Estilo OpenAI Classic)
-          var
           JSchemaWrapper := TJSonObject.Create;
 
           // 'name' es OBLIGATORIO en esta estructura
@@ -268,7 +267,7 @@ begin
           JSchemaWrapper.AddPair('schema', JInnerSchema);
 
           // NOTA: No enviamos "strict": true por defecto para maximizar compatibilidad
-          // con modelos Groq que no soportan constrained decoding completo a˙n.
+          // con modelos Groq que no soportan constrained decoding completo a√∫n.
 
           JResponseFormat.AddPair('json_schema', JSchemaWrapper);
         end;
@@ -280,16 +279,14 @@ begin
     // 2. JSON Mode (Simple)
     else if (FResponse_format = tiaChatRfJson) then
     begin
-      var
       JResponseFormat := TJSonObject.Create;
       JResponseFormat.AddPair('type', 'json_object');
       AJSONObject.AddPair('response_format', JResponseFormat);
     end
 
-    // 3. Text Mode (Solo si se especifica explÌcitamente, o dejar por defecto)
+    // 3. Text Mode (Solo si se especifica expl√≠citamente, o dejar por defecto)
     else if (FResponse_format = tiaChatRfText) then
     begin
-      var
       JResponseFormat := TJSonObject.Create;
       JResponseFormat.AddPair('type', 'text');
       AJSONObject.AddPair('response_format', JResponseFormat);
@@ -307,18 +304,18 @@ begin
     If Logprobs = True then
     Begin
       If Logit_bias <> '' then
-        AJSONObject.AddPair('logit_bias', TJSONNumber.Create(Logit_bias));
+        AJSONObject.AddPair('logit_bias', TJSONObject.ParseJSONValue(Logit_bias));
 
-      AJSONObject.AddPair('logprobs', TJSONBool.Create(Logprobs));
+      AJSONObject.AddPair('logprobs', CreateJSONBool(Logprobs));
 
       If Top_logprobs <> '' then
-        AJSONObject.AddPair('top_logprobs', TJSONNumber.Create(Top_logprobs));
+        AJSONObject.AddPair('top_logprobs', TJSONObject.ParseJSONValue(Top_logprobs));
     End;
 
     If Seed > 0 then
-      AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
+      AJSONObject.AddPair('seed', CreateJSONNumber(Seed));
 
-    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSon));
+    Res := AJSONObject.ToJSONString;
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
   Finally
@@ -343,9 +340,7 @@ begin
   Raise Exception.Create('Actualmente Groq no maneja modelos de embeddings');
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
-  Client.SynchronizeEvents := False;
-{$ENDIF}
+  Client.ConfigureForAsync;
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := FUrl + 'embeddings';
@@ -372,7 +367,7 @@ begin
 {$ENDIF}
     if Res.StatusCode = 200 then
     Begin
-      jObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
+      jObj := TJSonObject(TJSONObject.ParseJSONValue(Res.ContentAsString));
       ParseEmbedding(jObj);
       Result := Self.FData;
 

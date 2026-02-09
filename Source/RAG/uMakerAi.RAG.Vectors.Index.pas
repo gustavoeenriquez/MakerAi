@@ -1,19 +1,19 @@
 ﻿
-// IT License
+// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -34,15 +34,22 @@
 
 unit uMakerAi.RAG.Vectors.Index;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Generics.Defaults, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Math, System.Generics.Collections, System.Variants, System.StrUtils,
   System.Generics.Defaults, System.Classes, System.JSon, Rest.JSon, System.SyncObjs,
   System.NetEncoding, System.Hash,
-
-  uMakerAi.Embeddings.Core, uMakerAi.RAG.MetaData;
+  {$ENDIF}
+  uMakerAi.Embeddings.Core, uMakerAi.RAG.MetaData,
+  uJsonHelper, uRttiHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper,
+  uGenericsHelper;
 
 Type
 
@@ -164,6 +171,8 @@ Type
   private
     procedure BuildIndex(Points: TRagItems);
     function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems;
+  protected
+    procedure InternalClear; override;
   public
     /// <summary>
     /// Versión thread-safe que NO modifica los nodos originales
@@ -179,6 +188,7 @@ Type
   end;
 
   TL2Pair = TPair<Double, TAiEmbeddingNode>;
+  TScorePair = TPair<Double, Integer>;
 
 
   TAIEuclideanDistanceIndex = class(TAIEmbeddingIndex)
@@ -187,6 +197,8 @@ Type
     destructor Destroy; override;
     procedure BuildIndex(Points: TRagItems); Override;
     Function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems; Override;
+  protected
+    procedure InternalClear; override;
   end;
 
 
@@ -309,15 +321,15 @@ end;
 procedure TAiEmbeddingNode.SetData(const Value: TAiEmbeddingData);
 var
   i: Integer;
-  Sum: Double;
+  LSum: Double;
 begin
   FData := Value;
   FDim := Length(Value);
-  Sum := 0;
+  LSum := 0;
   // Calculamos la magnitud al vuelo para que MagnitudeValue no sea 0
   for i := 0 to High(FData) do
-    Sum := Sum + (FData[i] * FData[i]);
-  FMagnitude := Sqrt(Sum);
+    LSum := LSum + (FData[i] * FData[i]);
+  FMagnitude := Sqrt(LSum);
 end;
 
 procedure TAiEmbeddingNode.SetDataLength(aDim: Integer);
@@ -334,7 +346,7 @@ begin
   Result := TJSONObject.Create;
   try
     // Array de embeddings
-    JSONArray := TJSonArray.Create;
+    JSONArray := TJSONArray.Create;
     for Value in FData do
       JSONArray.Add(Value);
     Result.AddPair('data', JSONArray);
@@ -357,43 +369,47 @@ end;
 
 class function TAiEmbeddingNode.FromJSON(AJSONObject: TJSONObject): TAiEmbeddingNode;
 var
-  JSONArray: TJSonArray;
+  JSONArray: TJSONArray;
   i: Integer;
-  jMeta: TJSONObject;
-  Sum: Double; // <--- 1. Agregamos variable para acumular
+  LSum: Double;
+  MetaObj: TJSONObject;
 begin
   if not Assigned(AJSONObject) then
     raise Exception.Create('AJSONObject no puede ser nil');
 
-  // Crear instancia
-  JSONArray := AJSONObject.GetValue<TJSonArray>('data');
+  // Obtener array 'data' usando helper (abstrae FPC/Delphi)
+  JSONArray := AJSONObject.GetValueAsArray('data');
+  if not Assigned(JSONArray) then
+    raise Exception.Create('Field "data" missing or not an array');
+    
   Result := TAiEmbeddingNode.Create(JSONArray.Count);
 
   try
-    Sum := 0.0; // <--- 2. Inicializamos suma
+    LSum := 0.0; // <--- 2. Inicializamos suma
 
-    // Cargar datos del embedding
+    // Cargar datos del embedding usando helper
     for i := 0 to JSONArray.Count - 1 do
     begin
-      Result.FData[i] := JSONArray.Items[i].AsType<Double>;
-
-      // <--- 3. Calculamos la suma de cuadrados al vuelo (sin recorrer el array dos veces)
-      Sum := Sum + (Result.FData[i] * Result.FData[i]);
+      Result.FData[i] := JSONArray.GetFloatValue(i);
+      
+      // Calculamos la suma de cuadrados al vuelo
+      LSum := LSum + (Result.FData[i] * Result.FData[i]);
     end;
 
-    // <--- 4. Asignamos la magnitud final
-    Result.FMagnitude := Sqrt(Sum);
+    // As ignamos la magnitud final
+    Result.FMagnitude := Sqrt(LSum);
 
     // Campos básicos
-    AJSONObject.TryGetValue<String>('text', Result.FText);
-    AJSONObject.TryGetValue<String>('model', Result.FModel);
-    AJSONObject.TryGetValue<String>('tag', Result.FTag);
-    AJSONObject.TryGetValue<Integer>('orden', Result.FOrden);
-    AJSONObject.TryGetValue<Double>('idx', Result.FIdx);
+    AJSONObject.TryGetValue('text', Result.FText);
+    AJSONObject.TryGetValue('model', Result.FModel);
+    AJSONObject.TryGetValue('tag', Result.FTag);
+    AJSONObject.TryGetValue('orden', Result.FOrden);
+    AJSONObject.TryGetValue('idx', Result.FIdx);
 
-    // Metadatos
-    if AJSONObject.TryGetValue<TJSONObject>('metadata', jMeta) then
-      Result.FMetaData.FromJSON(jMeta);
+    // Metadatos usando helper GetValueAsObject (abstrae casting)
+    MetaObj := AJSONObject.GetValueAsObject('metadata');
+    if Assigned(MetaObj) then
+      Result.FMetaData.FromJSON(MetaObj);
   except
     Result.Free;
     raise;
@@ -435,13 +451,13 @@ end;
 
 class function TAiEmbeddingNode.Magnitude(const A: TAiEmbeddingNode): Double;
 var
-  Sum: Double;
+  LSum: Double;
   i: Integer;
 begin
-  Sum := 0.0;
+  LSum := 0.0;
   for i := Low(A.FData) to High(A.FData) do
-    Sum := Sum + A.FData[i] * A.FData[i];
-  Result := Sqrt(Sum);
+    LSum := LSum + A.FData[i] * A.FData[i];
+  Result := Sqrt(LSum);
 end;
 
 class function TAiEmbeddingNode.CosineSimilarity(const A, B: TAiEmbeddingNode): Double;
@@ -534,6 +550,11 @@ begin
   if not Assigned(Points) then
     Exit; // ← Protección
   inherited;
+end;
+
+procedure TAIBasicEmbeddingIndex.InternalClear;
+begin
+  // No internal state
 end;
 
 constructor TAIBasicEmbeddingIndex.Create;
@@ -658,6 +679,11 @@ begin
   Inherited;
 end;
 
+procedure TAIEuclideanDistanceIndex.InternalClear;
+begin
+  // No internal state
+end;
+
 function TAIEuclideanDistanceIndex.Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems;
 Var
   i: Integer;
@@ -667,7 +693,7 @@ Var
   Results: TList<TL2Pair>; // Usamos una lista temporal para no modificar la original
 begin
   Result := TRagItems.Create;
-  Results := TList < TPair < Double, TAiEmbeddingNode >>.Create;
+  Results := TList<TL2Pair>.Create;
 
   try
     // 1. Calcula la distancia Euclidiana para todos los elementos y los guarda en una lista temporal
@@ -688,8 +714,8 @@ begin
     end;
 
     // 2. Ordena la lista de resultados por distancia en orden ASCENDENTE (menor es mejor)
-    Results.Sort(TComparer < TPair < Double, TAiEmbeddingNode >>.Construct(
-      function(const Left, Right: TPair<Double, TAiEmbeddingNode>): Integer
+    Results.Sort(TComparer<TL2Pair>.Construct(
+      function(const Left, Right: TL2Pair): Integer
       begin
         // Left.Key vs Right.Key para orden ascendente
         Result := CompareValue(Left.Key, Right.Key);
@@ -892,29 +918,29 @@ end;
 function THNSWIndex.SearchLayer(Query: TAiEmbeddingNode; EntryPoint: Integer; Level: Integer; Ef: Integer): TList<Integer>;
 var
   Visited: TDictionary<Integer, Boolean>;
-  Candidates: TList<TPair<Double, Integer>>;
-  BestCandidates: TList<TPair<Double, Integer>>;
+  Candidates: TList<TScorePair>;
+  BestCandidates: TList<TScorePair>;
   CurrentNode: THNSWNode;
   Distance: Double;
   i: Integer;
 begin
   Result := TList<Integer>.Create;
   Visited := TDictionary<Integer, Boolean>.Create;
-  Candidates := TList < TPair < Double, Integer >>.Create;
-  BestCandidates := TList < TPair < Double, Integer >>.Create;
+  Candidates := TList<TScorePair>.Create;
+  BestCandidates := TList<TScorePair>.Create;
 
   try
     CurrentNode := FNodes[EntryPoint];
     Distance := TAiEmbeddingNode.CosineSimilarity(Query, CurrentNode.Vector);
 
-    Candidates.Add(TPair<Double, Integer>.Create(Distance, EntryPoint));
-    BestCandidates.Add(TPair<Double, Integer>.Create(Distance, EntryPoint));
+    Candidates.Add(TScorePair.Create(Distance, EntryPoint));
+    BestCandidates.Add(TScorePair.Create(Distance, EntryPoint));
     Visited.Add(EntryPoint, True);
 
     while Candidates.Count > 0 do
     begin
-      Candidates.Sort(TComparer < TPair < Double, Integer >>.Construct(
-        function(const Left, Right: TPair<Double, Integer>): Integer
+      Candidates.Sort(TComparer<TScorePair>.Construct(
+        function(const Left, Right: TScorePair): Integer
         begin
           if Left.Key > Right.Key then
             Result := -1
@@ -936,13 +962,13 @@ begin
 
           if (BestCandidates.Count < Ef) or (Distance > BestCandidates.Last.Key) then
           begin
-            Candidates.Add(TPair<Double, Integer>.Create(Distance, i));
-            BestCandidates.Add(TPair<Double, Integer>.Create(Distance, i));
+            Candidates.Add(TScorePair.Create(Distance, i));
+            BestCandidates.Add(TScorePair.Create(Distance, i));
 
             if BestCandidates.Count > Ef then
             begin
-              BestCandidates.Sort(TComparer < TPair < Double, Integer >>.Construct(
-                function(const Left, Right: TPair<Double, Integer>): Integer
+              BestCandidates.Sort(TComparer<TScorePair>.Construct(
+                function(const Left, Right: TScorePair): Integer
                 begin
                   if Left.Key > Right.Key then
                     Result := -1
@@ -1086,7 +1112,7 @@ var
   CurrentLevel: Integer;
   EntryPointCopy: Integer;
   W: TList<Integer>;
-  ResultList: TList<TPair<Double, Integer>>;
+  ResultList: TList<TScorePair>;
   i: Integer;
   Distance: Double;
   Node: THNSWNode;
@@ -1096,7 +1122,7 @@ begin
   if FEntryPoint = -1 then
     Exit;
 
-  ResultList := TList < TPair < Double, Integer >>.Create;
+  ResultList := TList<TScorePair>.Create;
   try
     EntryPointCopy := FEntryPoint;
     CurrentLevel := FMaxLevel - 1;
@@ -1123,11 +1149,11 @@ begin
         Node := FNodes[i];
         Distance := TAiEmbeddingNode.CosineSimilarity(Target, Node.Vector);
         if Distance >= aPrecision then
-          ResultList.Add(TPair<Double, Integer>.Create(Distance, i));
+          ResultList.Add(TScorePair.Create(Distance, i));
       end;
 
-      ResultList.Sort(TComparer < TPair < Double, Integer >>.Construct(
-        function(const Left, Right: TPair<Double, Integer>): Integer
+      ResultList.Sort(TComparer<TScorePair>.Construct(
+        function(const Left, Right: TScorePair): Integer
         begin
           if Left.Key > Right.Key then
             Result := -1
@@ -1177,11 +1203,16 @@ end;
 
 procedure TAIBm25Index.LoadDefaultStopWords(Lang: TAiLanguage);
 const
-  S_ES = 'el,la,lo,los,las,un,una,unos,unas,de,del,al,y,o,u,e,ni,que,en,a,ante,bajo,con,contra,desde,donde,durante,este,esta,estos,estas,ese,esa,esos,esas,aquel,aquella,aquellos,aquellas,mi,tu,su,nuestro,vuestro,me,te,se,nos,os,le,les,ser,estar,haber,tener,hacer,hay,he,ha,han,son,es,fue,sido,está,están,estaba,como,más,pero,por,para,sin,sobre,también,muy,ya,sí,no,cuando,si,entre';
-  S_EN = 'the,a,an,and,or,but,if,then,else,when,at,from,by,for,with,about,against,between,into,through,during,before,after,above,below,to,of,in,is,are,was,were,be,been,being,have,has,had,do,does,did,will,would,should,could,may,might,can,this,that,these,those,i,you,he,she,it,we,they,me,him,her,us,them';
+  S_ES = 'el,la,lo,los,las,un,una,unos,unas,de,del,al,y,o,u,e,ni,que,en,a,ante,bajo,con,contra,desde,donde,durante,' +
+         'este,esta,estos,estas,ese,esa,esos,esas,aquel,aquella,aquellos,aquellas,mi,tu,su,nuestro,vuestro,' +
+         'me,te,se,nos,os,le,les,ser,estar,haber,tener,hacer,hay,he,ha,han,son,es,fue,sido,' +
+         'está,están,estaba,como,más,pero,por,para,sin,sobre,también,muy,ya,sí,no,cuando,si,entre';
+  S_EN = 'the,a,an,and,or,but,if,then,else,when,at,from,by,for,with,about,against,between,into,through,' +
+         'during,before,after,above,below,to,of,in,is,are,was,were,be,been,being,have,has,had,' +
+         'do,does,did,will,would,should,could,may,might,can,this,that,these,those,i,you,he,she,it,we,they,me,him,her,us,them';
 var
   S: string;
-  Words: TArray<string>;
+  Words: TStringArray;
   W, CleanWord: string;
 begin
   FStopWords.Clear;
@@ -1200,7 +1231,7 @@ begin
     Words := S.Split([',']);
     for W in Words do
     begin
-      CleanWord := W.Trim.ToLower;
+      CleanWord := LowerCase(Trim(W));
       if CleanWord <> '' then
         FStopWords.Add(CleanWord);
     end;
@@ -1220,21 +1251,21 @@ end;
 
 procedure TAIBm25Index.Tokenize(const aText: string; aList: TStrings);
 var
-  Words: TArray<string>;
+  Words: TStringArray;
   W: string;
 begin
   aList.Clear;
   if aText.IsEmpty then
     Exit;
 
-  // Split con separadores extendidos (incluyendo caracteres especiales de español)
-  Words := aText.ToLower.Split([' ', '.', ',', ';', ':', '-', '_', '(', ')', '[', ']', '{', '}', '"', '¿', '?', '¡', '!', '/', '\', '|', #13, #10, #9], // Añadí TAB (#9)
-  TStringSplitOptions.ExcludeEmpty);
+  // Split con separadores extendidos
+  // ExcludeEmpty se maneja en el filtrado del loop abajo (Length(W) > 2)
+  Words := aText.ToLower.Split([' ', '.', ',', ';', ':', '-', '_', '(', ')', '[', ']', '{', '}', '"', '?', '!', '/', '\', '|', #13, #10, #9]);
 
   for W in Words do
   begin
-    // Filtro de longitud mínima y stop words (usando el HashSet para O(1))
-    if (W.Length > 2) and not FStopWords.Contains(W) then
+    // Filtro de longitud mínima y stop words
+    if (Length(W) > 2) and not FStopWords.Contains(W) then
     begin
       // OPCIONAL: Lematización básica para mejorar búsquedas
       // if W.EndsWith('s') and (W.Length > 3) then
@@ -1324,7 +1355,7 @@ var
   IDF, Score, D_len: Double;
   Pair: TPair<TAiEmbeddingNode, Double>;
 begin
-  Result := TList < TPair < Double, TAiEmbeddingNode >>.Create;
+  Result := TList<TL2Pair>.Create;
 
   // 1. Validaciones iniciales
   if aQuery.IsEmpty or (FDocLengths.Count = 0) then
@@ -1384,18 +1415,18 @@ begin
 
     // 4. Convertir a lista
     for Pair in Scores do
-      Result.Add(TPair<Double, TAiEmbeddingNode>.Create(Pair.Value, Pair.Key));
+      Result.Add(TL2Pair.Create(Pair.Value, Pair.Key));
 
     // 5. Ordenar por score descendente
-    Result.Sort(TComparer < TPair < Double, TAiEmbeddingNode >>.Construct(
-      function(const L, R: TPair<Double, TAiEmbeddingNode>): Integer
+    Result.Sort(TComparer<TL2Pair>.Construct(
+      function(const L, R: TL2Pair): Integer
       begin
         Result := CompareValue(R.Key, L.Key);
       end));
 
     // 6. Limitar resultados
     if (aLimit > 0) and (Result.Count > aLimit) then
-      Result.Count := aLimit;
+      Result.DeleteRange(aLimit, Result.Count - aLimit);
 
   finally
     Scores.Free;
@@ -1415,3 +1446,4 @@ end;
 
 
 end.
+

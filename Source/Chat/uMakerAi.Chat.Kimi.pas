@@ -1,18 +1,18 @@
-﻿// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -33,13 +33,21 @@
 
 unit uMakerAi.Chat.Kimi;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Classes, System.JSON, System.StrUtils,
   System.Generics.Collections, System.Net.URLClient, System.Net.HttpClient,
-  System.Net.HttpClientComponent, uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core;
+  System.Net.HttpClientComponent, 
+  {$ENDIF}
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
   TAiKimiChat = class(TAiChat)
@@ -125,17 +133,17 @@ begin
   AJSONObject := TJSONObject.Create;
   Lista := TStringList.Create;
   try
-    AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
+    AJSONObject.AddPair('stream', CreateJSONBool(LAsincronico));
     AJSONObject.AddPair('messages', GetMessages);
     AJSONObject.AddPair('model', LModel);
-    AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
-    AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+    AJSONObject.AddPair('temperature', CreateJSONNumber(Trunc(Temperature * 100) / 100));
+    AJSONObject.AddPair('max_tokens', CreateJSONNumber(Max_tokens));
 
     if Top_p <> 0 then
-      AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
+      AJSONObject.AddPair('top_p', CreateJSONNumber(Top_p));
 
     AJSONObject.AddPair('user', User);
-    AJSONObject.AddPair('n', TJSONNumber.Create(N));
+    AJSONObject.AddPair('n', CreateJSONNumber(N));
 
     // 🔧 Tool Calling (compatibilidad futura o experimental)
     if Tool_Active then
@@ -176,4 +184,3 @@ initialization
   TAiChatFactory.Instance.RegisterDriver(TAiKimiChat);
 
 end.
-

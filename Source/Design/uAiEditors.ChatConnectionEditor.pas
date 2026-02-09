@@ -1,18 +1,18 @@
-// IT License
+ï»¿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo EnrÃ­quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,11 +33,21 @@
 
 unit uAiEditors.ChatConnectionEditor;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
-  System.Classes, System.SysUtils, DesignIntf, DesignEditors, uMakerAi.Chat.AiConnection;
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, Rtti, SyncObjs, Math,
+  {$ELSE}
+  System.Classes, System.SysUtils, DesignIntf, DesignEditors,
+  {$ENDIF}
+  uMakerAi.Chat.AiConnection,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper;
 
+// Delphi: Editores de propiedades/componentes para IDE. FPC usa sistema Lazarus
+{$IFNDEF FPC}
 type
   // Property Editor para la propiedad DriverName
   TAiChatDriverNamePropertyEditor = class(TStringProperty)
@@ -53,11 +63,14 @@ type
     function GetVerb(Index: Integer): string; override;
     procedure ExecuteVerb(Index: Integer); override;
   end;
+{$ENDIF}
 
 procedure Register;
 
 implementation
 
+// Delphi: ImplementaciÃ³n completa de editores. FPC usa LCL
+{$IFNDEF FPC}
 uses
   Vcl.Dialogs;
 
@@ -66,8 +79,8 @@ uses
 function TAiChatDriverNamePropertyEditor.GetAttributes: TPropertyAttributes;
 begin
   // paValueList: Muestra lista desplegable
-  // paSortList: Ordena la lista alfabéticamente
-  // paMultiSelect: Permite selección múltiple (opcional)
+  // paSortList: Ordena la lista alfabÃ©ticamente
+  // paMultiSelect: Permite selecciÃ³n mÃºltiple (opcional)
   Result := [paValueList, paSortList];
 end;
 
@@ -83,7 +96,7 @@ begin
     Exit;
 
   try
-    // Agregar opción vacía
+    // Agregar opciÃ³n vacÃ­a
     Proc('');
 
     // Obtener drivers disponibles
@@ -93,7 +106,7 @@ begin
     for Driver in Drivers do
       Proc(Driver);
   except
-    // Si hay error, al menos mostrar opción vacía
+    // Si hay error, al menos mostrar opciÃ³n vacÃ­a
     Proc('');
   end;
 end;
@@ -102,7 +115,7 @@ end;
 
 function TAiChatConnectionComponentEditor.GetVerbCount: Integer;
 begin
-  Result := 1; // Una acción en el menú contextual
+  Result := 1; // Una acciÃ³n en el menÃº contextual
 end;
 
 function TAiChatConnectionComponentEditor.GetVerb(Index: Integer): string;
@@ -153,5 +166,11 @@ begin
     TAiChatConnectionComponentEditor      // Clase del Component Editor
   );
 end;
+{$ELSE}
+procedure Register;
+begin
+  // Dummy para FPC - Lazarus usa su propio sistema de registro
+end;
+{$ENDIF}
 
 end.

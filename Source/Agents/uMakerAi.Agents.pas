@@ -1,18 +1,18 @@
-// IT License
+Ôªø// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,29 +33,47 @@
 
 unit uMakerAi.Agents;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections, System.Generics.Defaults, System.TypInfo,
+  {$IFDEF FPC}
+  Classes, Generics.Collections, Generics.Defaults,
+  StrUtils, SyncObjs, SysUtils, Types, TypInfo, Rtti,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye Bindings/LiveBindings avanzados
+  System.SysUtils, System.Classes, System.Generics.Collections, System.Generics.Defaults, System.Rtti,
+  System.TypInfo,  // <-- Required for GetEnumName/GetEnumValue/mvPublished
   System.Bindings.Evaluator, System.Bindings.Helper, System.Bindings.Expression, System.Bindings.Consts,
   System.JSON, System.Math,
   System.Bindings.EvalSys, System.Bindings.Factories, System.Bindings.EvalProtocol, System.Bindings.ObjEval,
-  System.Threading, System.Rtti, System.SyncObjs, System.Types, System.StrUtils,
-
-  uMakerAi.Chat, uMakerAi.Core, uMakerAi.Chat.Messages;
+  System.Threading, System.SyncObjs, System.Types, System.StrUtils,
+  {$ENDIF}
+  uMakerAi.Chat, uMakerAi.Core, uMakerAi.Chat.Messages,
+  uBase64Helper, uHttpHelper, uGenericsHelper,
+  uJsonHelper, uThreadingHelper, uSysUtilsHelper, uRttiHelper, uExpressionHelper;
 
 type
 
+// Directiva RTTI: Solo Delphi soporta $RTTI para reflexi√≥n avanzada de propiedades publicadas.
+// FPC usa su propio sistema de RTTI con TypeInfo() y no tiene esta directiva.
+// IMPORTANTE: La ausencia de {$RTTI} en FPC NO afecta el comportamiento en este c√≥digo.
+// Ambos compiladores generan RTTI completa para propiedades 'published' (usadas en SerializeToolProperties).
+// Esta directiva es solo optimizaci√≥n/documentaci√≥n en Delphi, el resultado funcional es id√©ntico.
+{$IFNDEF FPC}
 {$RTTI INHERIT}
+{$ENDIF}
+
   TMsgState = (msYes, msNo, msOK, msCancel, msAbort, msRetry, msIgnore, msAll, msNoToAll, msYesToAll, msHelp, msClose);
   TMsgStates = set of TMsgState;
 
   TAgentExecutionStatus = (esUnknown, esRunning, esCompleted, esError, esTimeout, esAborted);
 
-  // Modo de uniÛn para los nodos
+  // Modo de uni√≥n para los nodos
   TJoinMode = (jmAny, jmAll);
 
-  // Modo de ejecuciÛn del enlace
+  // Modo de ejecuci√≥n del enlace
   TLinkMode = (lmFanout, lmConditional, lmManual, lmExpression); // --- NUEVO: Modo lmExpression ---
 
   // Forward Declarations
@@ -181,7 +199,7 @@ type
     constructor Create(aOwner: TComponent); override;
     destructor Destroy; override;
     procedure Print(Value: String);
-    procedure DoExecute(Sender: TAIAgentsNode); // --- MODIFICADO: Ahora es el ˙nico mÈtodo de ejecuciÛn
+    procedure DoExecute(Sender: TAIAgentsNode); // --- MODIFICADO: Ahora es el √∫nico m√©todo de ejecuci√≥n
     procedure AddConditionalTarget(const AKey: string; ANode: TAIAgentsNode);
     property NoCycles: Integer read FNoCycles write FNoCycles;
   published
@@ -293,7 +311,8 @@ type
     procedure SetDescription(const Value: String);
     procedure SetAsynchronous(const Value: Boolean);
   protected
-    // --- CORREGIDO: TThreadPool ---
+    // TThreadPool: En Delphi usa System.Threading.TThreadPool nativo.
+    // En FPC usa TThreadPoolManager via uThreadingHelper (paridad completa).
     FThreadPool: TThreadPool;
     procedure DoPrint(Sender: TObject; Value: String);
     procedure DoPrintFromRef(Sender: TObject; Value: String);
@@ -365,43 +384,10 @@ begin
 end;
 
 function EvalCondition(const Expr: string; Vars: TDictionary<string, TValue>): Boolean;
-var
-  LScope: IScope; // Mantiene la referencia viva (Interface)
-  LDictScope: TDictionaryScope; // Referencia de clase para acceder a .Map
-  BindingExpression: TBindingExpression;
-  Pair: TPair<string, TValue>;
-  Value: TValue;
-  ValueWrapper: IValue;
+// Motor de expresiones unificado: usa fpexprparser en FPC y LiveBindings en Delphi.
+// Centralizado en uExpressionHelper para mantener paridad entre compiladores.
 begin
-  // 1. Crear la instancia de clase
-  LDictScope := TDictionaryScope.Create;
-
-  // 2. VITAL: Asignar a una variable de Interfaz inmediatamente.
-  // Esto sube el RefCount a 1 y evita que se destruya prematuramente.
-  LScope := LDictScope;
-
-  // No necesitamos try..finally para el Scope, las interfaces se limpian solas.
-
-  // 3. Llenar las variables usando la referencia de clase (LDictScope)
-  for Pair in Vars do
-  begin
-    ValueWrapper := TValueWrapper.Create(Pair.Value);
-    LDictScope.Map.Add(Pair.Key, ValueWrapper);
-  end;
-
-  // 4. Crear la expresiÛn pasando la INTERFAZ (LScope)
-  BindingExpression := TBindings.CreateExpression([LScope], Expr);
-  try
-    ValueWrapper := BindingExpression.Evaluate;
-    Value := ValueWrapper.GetValue;
-
-    if Value.IsType<Boolean> then
-      Result := Value.AsBoolean
-    else
-      raise Exception.CreateFmt('La expresiÛn "%s" no devolviÛ un Boolean', [Expr]);
-  finally
-    BindingExpression.Free;
-  end;
+  Result := EvaluateExpression(Expr, Vars);
 end;
 
 function SerializeToolProperties(ATool: TAiToolBase): TJSONObject;
@@ -431,9 +417,9 @@ begin
       // Convertir el TValue a un tipo JSON compatible
       case LValue.Kind of
         tkInteger, tkInt64:
-          Result.AddPair(LProp.Name, TJSONNumber.Create(LValue.AsInt64));
+          Result.AddPair(LProp.Name, CreateJSONNumber(LValue.AsInt64));
         tkFloat:
-          Result.AddPair(LProp.Name, TJSONNumber.Create(LValue.AsExtended));
+          Result.AddPair(LProp.Name, CreateJSONNumber(LValue.AsExtended));
         tkString, tkUString, tkLString, tkWString:
           Result.AddPair(LProp.Name, TJSONString.Create(LValue.AsString));
         tkEnumeration:
@@ -466,7 +452,7 @@ begin
     LRttiType := LContext.GetType(ATool.ClassType);
     for LPair in APropertiesJSON do
     begin
-      LProp := LRttiType.GetProperty(LPair.JsonString.Value);
+      LProp := LRttiType.GetProperty(GetJSONStringValue(LPair.JsonString));
       if Assigned(LProp) and LProp.IsWritable then
       begin
         LJsonValue := LPair.JsonValue;
@@ -480,13 +466,13 @@ begin
           tkFloat:
             LValue := TValue.From<Double>((LJsonValue as TJSONNumber).AsDouble);
           tkString, tkUString, tkLString, tkWString:
-            LValue := TValue.From<string>((LJsonValue as TJSONString).Value);
+            LValue := TValue.From<string>(GetJSONStringValue(LJsonValue));
           tkEnumeration:
             if LProp.PropertyType.Handle = TypeInfo(Boolean) then
               LValue := TValue.From<Boolean>((LJsonValue as TJSONBool).AsBoolean)
             else
             begin
-              OrdValue := GetEnumValue(LProp.PropertyType.Handle, (LJsonValue as TJSONString).Value);
+              OrdValue := GetEnumValue(LProp.PropertyType.Handle, GetJSONStringValue(LJsonValue));
               if OrdValue >= 0 then
                 LValue := TValue.FromOrdinal(LProp.PropertyType.Handle, OrdValue);
             end;
@@ -504,20 +490,20 @@ end;
 procedure SerializeBlackboard(ABlackboard: TAIBlackboard; AJSONObject: TJSONObject);
 var
   LPair: TPair<string, TValue>;
+  LValue: TValue;
 begin
-  // ADVERTENCIA: Esto solo funcionar· para tipos de TValue simples.
+  // ADVERTENCIA: Esto solo funcionar√° para tipos de TValue simples.
   // No se pueden serializar objetos complejos, punteros o records.
   ABlackboard.FLock.Enter;
   try
     for LPair in ABlackboard.FData do
     begin
-      var
       LValue := LPair.Value;
       case LValue.Kind of
         tkInteger, tkInt64:
-          AJSONObject.AddPair(LPair.Key, TJSONNumber.Create(LValue.AsInt64));
+          AJSONObject.AddPair(LPair.Key, CreateJSONNumber(LValue.AsInt64));
         tkFloat:
-          AJSONObject.AddPair(LPair.Key, TJSONNumber.Create(LValue.AsExtended));
+          AJSONObject.AddPair(LPair.Key, CreateJSONNumber(LValue.AsExtended));
         tkString, tkUString:
           AJSONObject.AddPair(LPair.Key, TJSONString.Create(LValue.AsString));
         tkEnumeration:
@@ -533,19 +519,19 @@ end;
 procedure DeserializeBlackboard(AJSONObject: TJSONObject; ABlackboard: TAIBlackboard);
 var
   LPair: TJSONPair;
+  LJsonValue: TJSONValue;
 begin
   ABlackboard.Clear;
   for LPair in AJSONObject do
   begin
-    var
     LJsonValue := LPair.JsonValue;
     if LJsonValue is TJSONString then
-      ABlackboard.SetString(LPair.JsonString.Value, LJsonValue.Value)
+      ABlackboard.SetString(GetJSONStringValue(LPair.JsonString), GetJSONStringValue(LJsonValue))
     else if LJsonValue is TJSONNumber then
-      // SimplificaciÛn: lo guardamos como float, se puede refinar
-      ABlackboard.SetValue(LPair.JsonString.Value, StrToFloat(LJsonValue.Value))
+      // Simplificaci√≥n: lo guardamos como float, se puede refinar
+      ABlackboard.SetValue(GetJSONStringValue(LPair.JsonString), (LJsonValue as TJSONNumber).AsDouble)
     else if LJsonValue is TJSONBool then
-      ABlackboard.SetBoolean(LPair.JsonString.Value, (LJsonValue as TJSONBool).AsBoolean);
+      ABlackboard.SetBoolean(GetJSONStringValue(LPair.JsonString), (LJsonValue as TJSONBool).AsBoolean);
   end;
 end;
 
@@ -564,7 +550,7 @@ begin
     begin
       LMsg := TAiChatMessage(LValue.AsObject);
 
-      // Verificamos si es un objeto v·lido antes de liberar
+      // Verificamos si es un objeto v√°lido antes de liberar
       if LValue.IsObject and Assigned(LMsg) then
         LMsg.Free;
     end;
@@ -616,7 +602,7 @@ function TAIBlackboard.GetBoolean(const AKey: string; const ADefault: Boolean): 
 var
   LValue: TValue;
 begin
-  if TryGetValue(AKey, LValue) and LValue.IsType<Boolean> then
+  if TryGetValue(AKey, LValue) and (LValue.IsType<Boolean>) then
     Result := LValue.AsBoolean
   else
     Result := ADefault;
@@ -626,7 +612,7 @@ function TAIBlackboard.GetInteger(const AKey: string; const ADefault: Integer): 
 var
   LValue: TValue;
 begin
-  if TryGetValue(AKey, LValue) and LValue.IsType<Integer> then
+  if TryGetValue(AKey, LValue) and (LValue.IsType<Integer>) then
     Result := LValue.AsInteger
   else
     Result := ADefault;
@@ -657,7 +643,7 @@ function TAIBlackboard.GetString(const AKey, ADefault: string): string;
 var
   LValue: TValue;
 begin
-  if TryGetValue(AKey, LValue) and LValue.IsType<string> then
+  if TryGetValue(AKey, LValue) and (LValue.IsType<string>) then
     Result := LValue.AsString
   else
     Result := ADefault;
@@ -665,8 +651,9 @@ end;
 
 procedure TAIBlackboard.SetAskMsg(const Value: TAiChatMessage);
 begin
-  // SetValue tambiÈn es Thread-Safe
-  SetValue('Sys.AskMsg', TValue.From(Value));
+  // SetValue tambi√©n es Thread-Safe
+  // Usa helper unificado para crear TValue desde objeto (FPC/Delphi compatible)
+  SetValue('Sys.AskMsg', TValueFromObject(TypeInfo(TAiChatMessage), Value));
 end;
 
 procedure TAIBlackboard.SetBoolean(const AKey: string; AValue: Boolean);
@@ -681,13 +668,14 @@ end;
 
 procedure TAIBlackboard.SetResMsg(const Value: TAiChatMessage);
 begin
-  SetValue('Sys.ResMsg', TValue.From(Value));
+  // Usar helper universal para crear TValue desde clase
+  SetValue('Sys.ResMsg', TValueFromObject(TypeInfo(TAiChatMessage), Value));
 end;
 
 procedure TAIBlackboard.SetStatus(Value: TAgentExecutionStatus);
 begin
-  // Guardamos el Enum dentro del TValue
-  SetValue('Execution.Status', TValue.From(Value));
+  // Usar helper universal para crear TValue desde enum
+  SetValue('Execution.Status', TValueFromEnum(TypeInfo(TAgentExecutionStatus), Ord(Value)));
 end;
 
 procedure TAIBlackboard.SetString(const AKey, AValue: string);
@@ -749,7 +737,7 @@ begin
   // Configuramos el mensaje en el Blackboard
   Blackboard.AskMsg := NewMessage(APrompt, aRole, aMediaFiles);
 
-  // Llamamos a Run, que manejar· la lÛgica Sync/Async
+  // Llamamos a Run, que manejar√° la l√≥gica Sync/Async
   Result := Run(APrompt);
 end;
 
@@ -758,7 +746,7 @@ begin
   if FAsynchronous then
     raise Exception.Create('AddMessageAndRunMsg is only compatible with Asynchronous = False (Synchronous mode).');
 
-  // Ejecutamos (esto esperar· a terminar)
+  // Ejecutamos (esto esperar√° a terminar)
   AddMessageAndRun(APrompt, aRole, aMediaFiles);
 
   // Retornamos el objeto completo del Blackboard
@@ -824,12 +812,14 @@ begin
 end;
 
 procedure TAIAgentManager.ClearGraph;
+var
+  i: Integer;
 begin
   FStartNode := nil;
   FEndNode := nil;
   FNodes.Clear;
   FLinks.Clear;
-  for var i := ComponentCount - 1 downto 0 do
+  for i := ComponentCount - 1 downto 0 do
   begin
     if Components[i] is TAIAgentsBase then
       Components[i].Free;
@@ -916,9 +906,11 @@ begin
   FAsynchronous := True; // Default VCL behavior
   FBusy := False;
 
-  // --- NUEVO: InicializaciÛn del Scheduler ---
+  // --- NUEVO: Inicializaci√≥n del Scheduler ---
   FMaxConcurrentTasks := 4;
   FTimeoutMs := 60000;
+  // TThreadPool: Delphi usa System.Threading.TThreadPool
+  // FPC: uThreadingHelper provee TThreadPool = TThreadPoolManager con API compatible
   FThreadPool := TThreadPool.Create;
   FThreadPool.SetMaxWorkerThreads(FMaxConcurrentTasks);
 end;
@@ -929,7 +921,9 @@ begin
   FLinks.Free;
   FActiveTasks.Free;
   FActiveTasksLock.Free;
-  FThreadPool.Free; // --- NUEVO: LiberaciÛn del Scheduler ---
+  // TThreadPool: Delphi usa System.Threading.TThreadPool
+  // FPC: uThreadingHelper provee TThreadPool = TThreadPoolManager con API compatible
+  FThreadPool.Free;
   FBlackboard.Free;
   inherited;
 end;
@@ -989,19 +983,19 @@ begin
     end;
 end;
 
-// Aseg˙rate de tener estas unidades en la cl·usula 'uses' de la implementation:
+// Aseg√∫rate de tener estas unidades en la cl√°usula 'uses' de la implementation:
 // System.JSON, System.JSON.Types, System.Rtti, System.TypInfo, uEngineRegistry
 
 // ... (El helper DeserializeToolProperties y la clase TAgentHandlerRegistry se mantienen como antes) ...
 
 // -----------------------------------------------------------------------------
-// IMPLEMENTACI”N FINAL DE TAIAgentManager.LoadFromStream
+// IMPLEMENTACI√ìN FINAL DE TAIAgentManager.LoadFromStream
 // -----------------------------------------------------------------------------
 procedure TAIAgentManager.LoadFromStream(AStream: TStream);
 var
   LRoot, LGraphJSON, LNodeJSON, LLinkJSON, LTargetsJSON: TJSONObject;
   LNodesArray, LLinksArray: TJSONArray;
-  LReader: TStreamReader;
+
   LJsonValue: TJSONValue;
   LNode: TAIAgentsNode;
   LLink: TAIAgentsLink;
@@ -1009,6 +1003,18 @@ var
   LLinkMap: TDictionary<string, TAIAgentsLink>;
   LKey: string;
   LToolClass: TClass; // Variable para almacenar el tipo de clase de la herramienta
+  LJoinModeStr, LLinkModeStr, LNextLinkName, LHandlerName, LSourceNodeName: string;
+  LStartNodeName, LEndNodeName: string;
+  LToolValue: TJSONValue;
+  LToolDataObj: TJSONObject;
+  LToolClassName: string;
+  LToolPropertiesJSON: TJSONObject;
+  LCondTargetsJSON: TJSONObject;
+  LTargetNodeName: string;
+  LExpressionsJSON: TJSONObject;
+  LPair: TJSONPair;
+  LPropertiesJSON: TJSONObject;
+  LReader: TStreamReader;
 begin
   if not Assigned(AStream) or (AStream.Size = 0) then
     Exit;
@@ -1035,7 +1041,7 @@ begin
         for LJsonValue in LNodesArray do
         begin
           LNodeJSON := LJsonValue as TJSONObject;
-          LKey := LNodeJSON.GetValue<string>('name', '');
+          LKey := LNodeJSON.GetValueAsString('name', '');
           if LKey = '' then
             raise Exception.Create('Node found without a name in JSON.');
           if LNodeMap.ContainsKey(LKey) then
@@ -1043,42 +1049,37 @@ begin
 
           LNode := TAIAgentsNode.Create(Self);
           LNode.Name := LKey;
-          LNode.Description := LNodeJSON.GetValue<string>('description', '');
-          LNode.PromptName := LNodeJSON.GetValue<string>('promptName', '');
-
-          var
-          LJoinModeStr := LNodeJSON.GetValue<string>('joinMode', 'jmAny');
+          LNode.Description := LNodeJSON.GetValueAsString('description', '');
+          LNode.PromptName := LNodeJSON.GetValueAsString('promptName', '');
+          LJoinModeStr := LNodeJSON.GetValueAsString('joinMode', 'jmAny');
           LNode.JoinMode := TJoinMode(GetEnumValue(TypeInfo(TJoinMode), LJoinModeStr));
 
-          // --- SECCI”N CORREGIDA ---
-          var
+          // --- SECCI√ìN CORREGIDA ---
           LToolValue := LNodeJSON.GetValue('tool');
           if Assigned(LToolValue) and (LToolValue is TJSONObject) then
           begin
-            var
             LToolDataObj := LToolValue as TJSONObject;
-            var
-            LToolClassName := LToolDataObj.GetValue<string>('className');
+            LToolClassName := LToolDataObj.GetValueAsString('className');
             if LToolClassName <> '' then
             begin
               // 1. Buscar el TIPO de clase en TU registro
               LToolClass := TEngineRegistry.Instance.FindToolClass(LToolClassName);
 
-              // 2. Si se encontrÛ, crear una instancia de esa clase
+              // 2. Si se encontr√≥, crear una instancia de esa clase
               if Assigned(LToolClass) and LToolClass.InheritsFrom(TAiToolBase) then
               begin
                 // Creamos la instancia usando el NODO como propietario
-                LNode.Tool := TAiToolBase(LToolClass).Create(LNode);
+                // LToolClass es TClass, lo casteamos a TComponentClass para llamar Create(AOwner)
+                LNode.Tool := TComponentClass(LToolClass).Create(LNode) as TAiToolBase;
 
                 // 3. Deserializar las propiedades en la nueva instancia
-                var
                 LPropertiesJSON := LToolDataObj.GetValue('properties') as TJSONObject;
                 if Assigned(LPropertiesJSON) then
                   DeserializeToolProperties(LNode.Tool, LPropertiesJSON);
               end;
             end;
           end;
-          // --- FIN DE LA CORRECCI”N ---
+          // --- FIN DE LA CORRECCI√ìN ---
 
           LNodeMap.Add(LKey, LNode);
         end;
@@ -1091,7 +1092,7 @@ begin
         for LJsonValue in LLinksArray do
         begin
           LLinkJSON := LJsonValue as TJSONObject;
-          LKey := LLinkJSON.GetValue<string>('name', '');
+          LKey := LLinkJSON.GetValueAsString('name', '');
           if LKey = '' then
             raise Exception.Create('Link found without a name in JSON.');
           if LLinkMap.ContainsKey(LKey) then
@@ -1099,26 +1100,24 @@ begin
 
           LLink := TAIAgentsLink.Create(Self);
           LLink.Name := LKey;
-          LLink.Description := LLinkJSON.GetValue<string>('description', '');
-          LLink.MaxCycles := LLinkJSON.GetValue<Integer>('maxCycles', 1);
+          LLink.Description := LLinkJSON.GetValueAsString('description', '');
+          LLink.MaxCycles := LLinkJSON.GetValueAsInteger('maxCycles', 1);
 
-          var
-          LLinkModeStr := LLinkJSON.GetValue<string>('mode', 'lmFanout');
+          LLinkModeStr := LLinkJSON.GetValueAsString('mode', 'lmFanout');
           LLink.Mode := TLinkMode(GetEnumValue(TypeInfo(TLinkMode), LLinkModeStr));
 
           if LLink.Mode = lmConditional then
-            LLink.ConditionalKey := LLinkJSON.GetValue<string>('conditionalKey', 'next_route');
+            LLink.ConditionalKey := LLinkJSON.GetValueAsString('conditionalKey', 'next_route');
 
           if LLink.Mode = lmExpression then
           begin
-            var
             LExpressionsJSON := LLinkJSON.GetValue('expressions') as TJSONObject;
             if Assigned(LExpressionsJSON) then
             begin
-              LLink.ExpressionA := LExpressionsJSON.GetValue<string>('expressionA', '');
-              LLink.ExpressionB := LExpressionsJSON.GetValue<string>('expressionB', '');
-              LLink.ExpressionC := LExpressionsJSON.GetValue<string>('expressionC', '');
-              LLink.ExpressionD := LExpressionsJSON.GetValue<string>('expressionD', '');
+              LLink.ExpressionA := LExpressionsJSON.GetValueAsString('expressionA', '');
+              LLink.ExpressionB := LExpressionsJSON.GetValueAsString('expressionB', '');
+              LLink.ExpressionC := LExpressionsJSON.GetValueAsString('expressionC', '');
+              LLink.ExpressionD := LExpressionsJSON.GetValueAsString('expressionD', '');
             end;
           end;
 
@@ -1135,13 +1134,11 @@ begin
         for LJsonValue in LNodesArray do
         begin
           LNodeJSON := LJsonValue as TJSONObject;
-          LNode := LNodeMap[LNodeJSON.GetValue<string>('name')];
-          var
-          LNextLinkName := LNodeJSON.GetValue<string>('nextLink', '');
+          LNode := LNodeMap[LNodeJSON.GetValueAsString('name')];
+          LNextLinkName := LNodeJSON.GetValueAsString('nextLink');
           if (LNextLinkName <> '') and LLinkMap.TryGetValue(LNextLinkName, LLink) then
             LNode.Next := LLink;
-          var
-          LHandlerName := LNodeJSON.GetValue<string>('onExecuteHandler', '');
+          LHandlerName := LNodeJSON.GetValueAsString('onExecuteHandler', '');
           if LHandlerName <> '' then
             LNode.OnExecute := TAgentHandlerRegistry.Instance.FindNodeHandler(LHandlerName);
         end;
@@ -1152,35 +1149,32 @@ begin
         for LJsonValue in LLinksArray do
         begin
           LLinkJSON := LJsonValue as TJSONObject;
-          LLink := LLinkMap[LLinkJSON.GetValue<string>('name')];
-          var
-          LSourceNodeName := LLinkJSON.GetValue<string>('sourceNode', '');
+          LLink := LLinkMap[LLinkJSON.GetValueAsString('name')];
+          LSourceNodeName := LLinkJSON.GetValueAsString('sourceNode', '');
           if (LSourceNodeName <> '') and LNodeMap.TryGetValue(LSourceNodeName, LNode) then
             LLink.FSourceNode := LNode;
           LTargetsJSON := LLinkJSON.GetValue('targets') as TJSONObject;
           if Assigned(LTargetsJSON) then
           begin
-            if LNodeMap.TryGetValue(LTargetsJSON.GetValue<string>('nextA', ''), LNode) then
+            if LNodeMap.TryGetValue(LTargetsJSON.GetValueAsString('nextA'), LNode) then
               LLink.NextA := LNode;
-            if LNodeMap.TryGetValue(LTargetsJSON.GetValue<string>('nextB', ''), LNode) then
+            if LNodeMap.TryGetValue(LTargetsJSON.GetValueAsString('nextB'), LNode) then
               LLink.NextB := LNode;
-            if LNodeMap.TryGetValue(LTargetsJSON.GetValue<string>('nextC', ''), LNode) then
+            if LNodeMap.TryGetValue(LTargetsJSON.GetValueAsString('nextC', ''), LNode) then
               LLink.NextC := LNode;
-            if LNodeMap.TryGetValue(LTargetsJSON.GetValue<string>('nextD', ''), LNode) then
+            if LNodeMap.TryGetValue(LTargetsJSON.GetValueAsString('nextD', ''), LNode) then
               LLink.NextD := LNode;
-            if LNodeMap.TryGetValue(LTargetsJSON.GetValue<string>('nextNo', ''), LNode) then
+            if LNodeMap.TryGetValue(LTargetsJSON.GetValueAsString('nextNo', ''), LNode) then
               LLink.NextNo := LNode;
           end;
-          var
           LCondTargetsJSON := LLinkJSON.GetValue('conditionalTargets') as TJSONObject;
           if Assigned(LCondTargetsJSON) then
           begin
-            for var LPair in LCondTargetsJSON do
+            for LPair in LCondTargetsJSON do
             begin
-              var
-              LTargetNodeName := LPair.JsonValue.Value;
+              LTargetNodeName := GetJSONStringValue(LPair.JsonValue);
               if LNodeMap.TryGetValue(LTargetNodeName, LNode) then
-                LLink.AddConditionalTarget(LPair.JsonString.Value, LNode);
+                LLink.AddConditionalTarget(GetJSONStringValue(LPair.JsonString), LNode);
             end;
           end;
         end;
@@ -1192,15 +1186,13 @@ begin
       LGraphJSON := LRoot.GetValue('graph') as TJSONObject;
       if Assigned(LGraphJSON) then
       begin
-        Self.Description := LGraphJSON.GetValue<string>('description', '');
-        Self.MaxConcurrentTasks := LGraphJSON.GetValue<Integer>('maxConcurrentTasks', 4);
-        Self.TimeoutMs := LGraphJSON.GetValue<Cardinal>('timeoutMs', 60000);
-        var
-        LStartNodeName := LGraphJSON.GetValue<string>('startNode', '');
+        Self.Description := LGraphJSON.GetValueAsString('description', '');
+        Self.MaxConcurrentTasks := LGraphJSON.GetValueAsInteger('maxConcurrentTasks', 4);
+        Self.TimeoutMs := Cardinal(LGraphJSON.GetValueAsInteger('timeoutMs', 60000));
+        LStartNodeName := LGraphJSON.GetValueAsString('startNode', '');
         if (LStartNodeName <> '') and LNodeMap.TryGetValue(LStartNodeName, LNode) then
           Self.StartNode := LNode;
-        var
-        LEndNodeName := LGraphJSON.GetValue<string>('endNode', '');
+        LEndNodeName := LGraphJSON.GetValueAsString('endNode', '');
         if (LEndNodeName <> '') and LNodeMap.TryGetValue(LEndNodeName, LNode) then
           Self.EndNode := LNode;
       end;
@@ -1224,13 +1216,16 @@ var
   LLink: TAIAgentsLink;
   LPair: TJSONPair;
   LLinkMap: TDictionary<string, TAIAgentsLink>; // Mapa temporal para buscar links por nombre
+  LJoinPair: TJSONPair;
+  LLinkStateObj: TJSONObject;
+  i: Integer;
 begin
   if ComponentCount = 0 then
     raise Exception.Create('Cannot load state into an empty graph. Load the graph structure first.');
 
-  // Crear mapa de links para una b˙squeda r·pida
+  // Crear mapa de links para una b√∫squeda r√°pida
   LLinkMap := TDictionary<string, TAIAgentsLink>.Create;
-  for var i := 0 to ComponentCount - 1 do
+  for i := 0 to ComponentCount - 1 do
     if Components[i] is TAIAgentsLink then
       LLinkMap.Add(Components[i].Name, TAIAgentsLink(Components[i]));
 
@@ -1254,22 +1249,22 @@ begin
       begin
         for LPair in LNodeStatesObj do
         begin
-          LNode := FindNode(LPair.JsonString.Value);
+          LNode := FindNode(GetJSONStringValue(LPair.JsonString));
           if Assigned(LNode) then
           begin
             LNodeStateObj := LPair.JsonValue as TJSONObject;
-            LNode.Input := LNodeStateObj.GetValue<string>('input', '');
-            LNode.Output := LNodeStateObj.GetValue<string>('output', '');
+            LNode.Input := LNodeStateObj.GetValueAsString('input', '');
+            LNode.Output := LNodeStateObj.GetValueAsString('output', '');
 
             // Restaurar entradas de Join
             LNode.FJoinInputs.Clear;
             LJoinInputsObj := LNodeStateObj.GetValue('joinInputs') as TJSONObject;
             if Assigned(LJoinInputsObj) then
             begin
-              for var LJoinPair in LJoinInputsObj do
+              for LJoinPair in LJoinInputsObj do
               begin
-                if LLinkMap.TryGetValue(LJoinPair.JsonString.Value, LLink) then
-                  LNode.FJoinInputs.Add(LLink, LJoinPair.JsonValue.Value);
+                if LLinkMap.TryGetValue(GetJSONStringValue(LJoinPair.JsonString), LLink) then
+                  LNode.FJoinInputs.Add(LLink, GetJSONStringValue(LJoinPair.JsonValue));
               end;
             end;
           end;
@@ -1282,11 +1277,10 @@ begin
       begin
         for LPair in LLinkStatesObj do
         begin
-          if LLinkMap.TryGetValue(LPair.JsonString.Value, LLink) then
+          if LLinkMap.TryGetValue(GetJSONStringValue(LPair.JsonString), LLink) then
           begin
-            var
             LLinkStateObj := LPair.JsonValue as TJSONObject;
-            LLink.FNoCycles := LLinkStateObj.GetValue<Integer>('noCycles', 0);
+            LLink.FNoCycles := LLinkStateObj.GetValueAsInteger('noCycles', 0);
           end;
         end;
       end;
@@ -1352,28 +1346,28 @@ begin
   if FBusy then
     raise Exception.Create('The Agent Manager is currently busy.');
 
-  // 2. GESTI”N DE MENSAJES
-  // Si no se proveyÛ un mensaje previo, creamos uno nuevo b·sico
+  // 2. GESTI√ìN DE MENSAJES
+  // Si no se provey√≥ un mensaje previo, creamos uno nuevo b√°sico
   if Not Assigned(Blackboard.AskMsg) then
     Blackboard.AskMsg := NewMessage(APrompt, 'user', []);
 
-  // Siempre reiniciamos el mensaje de respuesta para esta ejecuciÛn
+  // Siempre reiniciamos el mensaje de respuesta para esta ejecuci√≥n
   Blackboard.ResMsg := TAiChatMessage.Create('', 'assistant');
 
-  // 3. EJECUCI”N
-  // Llama a la versiÛn corregida de InternalRun que usa el bucle din·mico
+  // 3. EJECUCI√ìN
+  // Llama a la versi√≥n corregida de InternalRun que usa el bucle din√°mico
   LTask := InternalRun(APrompt);
 
-  // 4. L”GICA SÕNCRONA / ASÕNCRONA
+  // 4. L√ìGICA S√çNCRONA / AS√çNCRONA
   if FAsynchronous then
   begin
-    // MODO ASÕNCRONO (Default): Retornamos vacÌo inmediatamente.
-    // El resultado llegar· vÌa eventos (OnFinish).
+    // MODO AS√çNCRONO (Default): Retornamos vac√≠o inmediatamente.
+    // El resultado llegar√° v√≠a eventos (OnFinish).
     Result := '';
   end
   else
   begin
-    // MODO SÕNCRONO (Servicios REST): Esperamos.
+    // MODO S√çNCRONO (Servicios REST): Esperamos.
     if Assigned(LTask) then
     begin
       try
@@ -1383,7 +1377,7 @@ begin
           raise Exception.Create('Error waiting for agent execution: ' + E.Message);
       end;
 
-      // --- CAMBIO PRINCIPAL AQUÕ ---
+      // --- CAMBIO PRINCIPAL AQU√ç ---
       // Recuperamos el estado como Enum en lugar de String.
       // Esto asume que implementaste el helper GetStatus en TAIBlackboard.
       LStatus := Blackboard.GetStatus;
@@ -1394,7 +1388,7 @@ begin
       if LStatus = esTimeout then
         raise Exception.Create('Execution Timed Out');
 
-      // Opcional: Manejar esAborted explÌcitamente si lo deseas
+      // Opcional: Manejar esAborted expl√≠citamente si lo deseas
       if LStatus = esAborted then
         raise Exception.Create('Execution Aborted');
 
@@ -1413,11 +1407,11 @@ function TAIAgentManager.InternalRun(Msg: String): ITask;
 var
   InitialInput: String;
 begin
-  // 1. VerificaciÛn de estado ocupado
-  if TInterlocked.Exchange(FBusy, True) then
+  // 1. Verificaci√≥n de estado ocupado
+  if AtomicExchangeBool(FBusy, True) then
     raise Exception.Create('Agent is busy (InternalRun check).');
 
-  Compile; // Asegura que el grafo estÈ listo
+  Compile; // Asegura que el grafo est√© listo
 
   FBusy := True;
   FAbort := False;
@@ -1463,16 +1457,16 @@ begin
             Exit;
           end;
 
-          // EJECUCI”N DEL NODO INICIAL
+          // EJECUCI√ìN DEL NODO INICIAL
           if Assigned(FStartNode) then
           begin
             FStartNode.Input := InitialInput;
             FStartNode.DoExecute(nil, nil);
           end;
 
-          // --- INICIO DEL BUCLE DE ESPERA DIN¡MICA ---
+          // --- INICIO DEL BUCLE DE ESPERA DIN√ÅMICA ---
           repeat
-            // A. Obtener instant·nea de las tareas actuales
+            // A. Obtener instant√°nea de las tareas actuales
             FActiveTasksLock.Enter;
             try
               TasksToWaitOn := FActiveTasks.ToArray;
@@ -1484,7 +1478,8 @@ begin
             HasPendingTasks := False;
             for CurrentTask in TasksToWaitOn do
             begin
-              if (CurrentTask.Status <> TTaskStatus.Completed) and (CurrentTask.Status <> TTaskStatus.Canceled) and (CurrentTask.Status <> TTaskStatus.Exception) then
+              // FPC: TTaskStatus.Exception renombrado a Faulted para evitar conflicto
+              if (CurrentTask.Status <> TTaskStatus.Completed) and (CurrentTask.Status <> TTaskStatus.Canceled) and (CurrentTask.Status <> TaskStatusFaulted) then              
               begin
                 HasPendingTasks := True;
                 Break;
@@ -1502,9 +1497,9 @@ begin
               raise Exception.CreateFmt('Graph execution timed out after %d ms.', [FTimeoutMs]);
 
           until FAbort;
-          // --- FIN DEL BUCLE DE ESPERA DIN¡MICA ---
+          // --- FIN DEL BUCLE DE ESPERA DIN√ÅMICA ---
 
-          // Definir estado final exitoso si no se abortÛ
+          // Definir estado final exitoso si no se abort√≥
           if not FAbort then
             FinalStatus := esCompleted
           else
@@ -1513,24 +1508,35 @@ begin
         except
           on E: Exception do
           begin
-            Abort; // Detener cualquier nueva ejecuciÛn
-            FinalException := E;
+            Abort; // Detener cualquier nueva ejecuci√≥n
+            FinalException := Exception.Create(E.Message);
 
             if E.Message.Contains('timed out') then
               FinalStatus := esTimeout
             else
               FinalStatus := esError;
 
-            // Llamada directa a DoError (sin SafeSync)
-            DoError(nil, nil, E);
           end;
         end;
+
+        if Assigned(FinalException) then
+        begin
+          TThread.Queue(nil,
+            procedure
+            begin
+              try
+                DoError(nil, nil, FinalException);
+              finally
+                FinalException.Free;
+              end;
+            end);
+        end;
       finally
-        // Asegurar que tenemos un estado v·lido antes de salir
+        // Asegurar que tenemos un estado v√°lido antes de salir
         if FinalStatus = esUnknown then
           FinalStatus := esAborted;
 
-        // Guardar el estado en el Blackboard usando el mÈtodo Helper del Enum
+        // Guardar el estado en el Blackboard usando el m√©todo Helper del Enum
         Blackboard.SetStatus(FinalStatus);
 
         // OBTENER RESULTADO FINAL
@@ -1544,7 +1550,7 @@ begin
           FOnFinish(Self, InitialInput, FinalOutput, FinalStatus, FinalException);
 
         // Liberar el flag de ocupado
-        TInterlocked.Exchange(FBusy, False);
+        AtomicExchangeBool(FBusy, False);
       end;
     end);
 end;
@@ -1563,7 +1569,9 @@ begin
     FMaxConcurrentTasks := LNewValue;
     // --- CORREGIDO: TThreadPool ---
     // En lugar de recrear, simplemente ajustamos el pool existente.
-    // Esto es m·s seguro si hay tareas en ejecuciÛn.
+    // Esto es m√°s seguro si hay tareas en ejecuci√≥n.
+    // TThreadPool: Delphi usa System.Threading.TThreadPool
+    // FPC: uThreadingHelper provee TThreadPool = TThreadPoolManager con API compatible
     if Assigned(FThreadPool) then
       FThreadPool.SetMaxWorkerThreads(FMaxConcurrentTasks);
   end;
@@ -1574,8 +1582,8 @@ var
   LRoot, LStateObj, LBlackboardObj, LNodeStatesObj, LLinkStatesObj, LNodeStateObj, LJoinInputsObj: TJSONObject;
   LNode: TAIAgentsNode;
   LLink: TAIAgentsLink;
-  LWriter: TStreamWriter;
   LPair: TPair<TAIAgentsLink, string>;
+  LLinkStateObj: TJSONObject;
 begin
   LRoot := TJSONObject.Create;
   try
@@ -1614,7 +1622,6 @@ begin
     LLinkStatesObj := TJSONObject.Create;
     for LLink in FLinks do
     begin
-      var
       LLinkStateObj := TJSONObject.Create;
       LLinkStateObj.AddPair('noCycles', LLink.NoCycles);
       LLinkStatesObj.AddPair(LLink.Name, LLinkStateObj);
@@ -1622,12 +1629,7 @@ begin
     LStateObj.AddPair('linkStates', LLinkStatesObj);
 
     // Escribir al Stream
-    LWriter := TStreamWriter.Create(AStream, TEncoding.UTF8);
-    try
-      LWriter.Write(LRoot.ToString);
-    finally
-      LWriter.Free;
-    end;
+    WriteStringToStream(AStream, LRoot.ToString);
 
   finally
     LRoot.Free;
@@ -1640,12 +1642,12 @@ var
   LNodesArray, LLinksArray: TJSONArray;
   LNode: TAIAgentsNode;
   LLink: TAIAgentsLink;
-  LWriter: TStreamWriter;
   LPair: TPair<string, TAIAgentsNode>;
+  LToolDataObj: TJSONObject;
 begin
   LRoot := TJSONObject.Create;
   try
-    // 1. SecciÛn "graph"
+    // 1. Secci√≥n "graph"
     LGraphObj := TJSONObject.Create;
     LGraphObj.AddPair('description', Self.Description);
     if Assigned(FStartNode) then
@@ -1658,11 +1660,11 @@ begin
     else
       LGraphObj.AddPair('endNode', TJSONNull.Create);
 
-    LGraphObj.AddPair('maxConcurrentTasks', TJSONNumber.Create(FMaxConcurrentTasks));
-    LGraphObj.AddPair('timeoutMs', TJSONNumber.Create(FTimeoutMs));
+    LGraphObj.AddPair('maxConcurrentTasks', CreateJSONNumber(FMaxConcurrentTasks));
+    LGraphObj.AddPair('timeoutMs', CreateJSONNumber(FTimeoutMs));
     LRoot.AddPair('graph', LGraphObj);
 
-    // 2. SecciÛn "nodes"
+    // 2. Secci√≥n "nodes"
     LNodesArray := TJSONArray.Create;
     for LNode in FNodes do
     begin
@@ -1674,21 +1676,20 @@ begin
 
       if Assigned(LNode.Tool) then
       begin
-        // --- SECCI”N MODIFICADA ---
-        var
+        // --- SECCI√ìN MODIFICADA ---
         LToolDataObj := TJSONObject.Create;
         LToolDataObj.AddPair('className', LNode.Tool.ClassName);
         LToolDataObj.AddPair('properties', SerializeToolProperties(LNode.Tool));
         LNodeObj.AddPair('tool', LToolDataObj);
-        // --- FIN DE LA MODIFICACI”N ---
+        // --- FIN DE LA MODIFICACI√ìN ---
       end
       else
       begin
         LNodeObj.AddPair('tool', TJSONNull.Create);
       end;
 
-      // --- MANEJO DE EVENTOS (requiere lÛgica adicional) ---
-      // AquÌ guardarÌas un identificador del evento. Por ahora, un placeholder.
+      // --- MANEJO DE EVENTOS (requiere l√≥gica adicional) ---
+      // Aqu√≠ guardar√≠as un identificador del evento. Por ahora, un placeholder.
       if Assigned(LNode.OnExecute) then
         LNodeObj.AddPair('onExecuteHandler', 'HandlerFor_' + LNode.Name) // Placeholder
       else
@@ -1703,7 +1704,7 @@ begin
     end;
     LRoot.AddPair('nodes', LNodesArray);
 
-    // 3. SecciÛn "links"
+    // 3. Secci√≥n "links"
     LLinksArray := TJSONArray.Create;
     for LLink in FLinks do
     begin
@@ -1779,12 +1780,7 @@ begin
     LRoot.AddPair('links', LLinksArray);
 
     // 4. Escribir el JSON al Stream
-    LWriter := TStreamWriter.Create(AStream, TEncoding.UTF8);
-    try
-      LWriter.Write(LRoot.ToString); // O LRoot.ToJSON para una versiÛn m·s compacta
-    finally
-      LWriter.Free;
-    end;
+    WriteStringToStream(AStream, LRoot.ToString);
 
   finally
     LRoot.Free;
@@ -1941,12 +1937,13 @@ begin
 end;
 
 procedure TAIAgentsLink.CreateAndQueueTask(ANodeToExecute, ASourceNode: TAIAgentsNode; ACurrentLink: TAIAgentsLink);
+var
+  LTask: ITask;
 begin
-  var
   LTask := TTask.Run(
     procedure
     begin
-      // Esta clausura ahora captura los par·metros del mÈtodo, que son estables y ˙nicos.
+      // Esta clausura ahora captura los par√°metros del m√©todo, que son estables y √∫nicos.
       if (ACurrentLink.FGraph <> nil) and ACurrentLink.FGraph.FAbort then
         Exit;
       ANodeToExecute.DoExecute(ASourceNode, ACurrentLink);
@@ -1976,12 +1973,18 @@ procedure TAIAgentsLink.DoExecute(Sender: TAIAgentsNode);
 var
   IsOk, Handled: Boolean;
   NodesToRun: TList<TAIAgentsNode>;
+  Node: TAIAgentsNode;
   Decision: string;
+  E: Exception;
+  LTask: ITask;
+  TargetNode: TAIAgentsNode;
+  ManualNodes: TList<TAIAgentsNode>;
+  LBlackboardData: TDictionary<string, TValue>;
 begin
   if (FGraph = nil) or FGraph.FAbort then
     Exit;
 
-  // PASO 1: Ejecutar evento OnExecute para intervenciÛn manual
+  // PASO 1: Ejecutar evento OnExecute para intervenci√≥n manual
   Handled := False;
   IsOk := Not Sender.FError;
   if Assigned(FOnExecute) then
@@ -2006,7 +2009,6 @@ begin
     Inc(FNoCycles);
     if FNoCycles >= FMaxCycles then
     begin
-      var
       E := Exception.CreateFmt('Maximum retry cycles (%d) reached on link "%s" from node "%s". Aborting this path.', [FMaxCycles, Self.Name, Sender.Name]);
       FGraph.DoError(Sender, Self, E);
       Exit;
@@ -2015,7 +2017,6 @@ begin
     begin
       if Assigned(FNextNo) then
       begin
-        var
         LTask := TTask.Run(
           procedure
           begin
@@ -2034,7 +2035,7 @@ begin
     end;
   end;
 
-  // PASO 3: IsOk es TRUE. Construir la lista de nodos de destino seg˙n el modo.
+  // PASO 3: IsOk es TRUE. Construir la lista de nodos de destino seg√∫n el modo.
   NodesToRun := nil;
   try
     NodesToRun := TList<TAIAgentsNode>.Create;
@@ -2053,8 +2054,6 @@ begin
       lmConditional:
         begin
           Decision := FGraph.Blackboard.GetString(IfThen(FConditionalKey <> '', FConditionalKey, 'next_route'));
-          var
-            TargetNode: TAIAgentsNode;
           if Assigned(FConditionalTargets) and FConditionalTargets.TryGetValue(Decision, TargetNode) and Assigned(TargetNode) then
             NodesToRun.Add(TargetNode)
           else if Assigned(FNextNo) then
@@ -2063,7 +2062,6 @@ begin
       lmManual:
         begin
           Decision := FGraph.Blackboard.GetString(IfThen(FManualTargetsKey <> '', FManualTargetsKey, 'next_targets'));
-          var
           ManualNodes := TList<TAIAgentsNode>.Create;
           try
             BuildManualTargets(Decision, ManualNodes);
@@ -2074,16 +2072,15 @@ begin
         end;
       lmExpression:
         begin
-          var
           LBlackboardData := FGraph.Blackboard.FData;
 
-          // --- Evaluaciones Independientes (LÛgica Paralela) ---
+          // --- Evaluaciones Independientes (L√≥gica Paralela) ---
 
           // 1. Evaluar A
           if Assigned(FNextA) and (FExpressionA <> '') and EvalCondition(FExpressionA, LBlackboardData) then
             NodesToRun.Add(FNextA);
 
-          // 2. Evaluar B (Se eval˙a SIEMPRE, sin importar si A fue verdadero)
+          // 2. Evaluar B (Se eval√∫a SIEMPRE, sin importar si A fue verdadero)
           if Assigned(FNextB) and (FExpressionB <> '') and EvalCondition(FExpressionB, LBlackboardData) then
             NodesToRun.Add(FNextB);
 
@@ -2096,7 +2093,7 @@ begin
             NodesToRun.Add(FNextD);
 
           // --- Fallback (Camino por defecto) ---
-          // Solo si NINGUNA de las anteriores se cumpliÛ (la lista est· vacÌa)
+          // Solo si NINGUNA de las anteriores se cumpli√≥ (la lista est√° vac√≠a)
           // ejecutamos el camino "NextNo".
           if (NodesToRun.Count = 0) and Assigned(FNextNo) then
             NodesToRun.Add(FNextNo);
@@ -2113,7 +2110,7 @@ begin
   end;
 
   // ---------------------------------------------------------------------------
-  // PASO 4: Despachar la ejecuciÛn a los nodos de destino.
+  // PASO 4: Despachar la ejecuci√≥n a los nodos de destino.
   // ---------------------------------------------------------------------------
   try
     if (NodesToRun = nil) or (NodesToRun.Count = 0) then
@@ -2125,7 +2122,7 @@ begin
     end
     else // Fork paralelo con scheduler
     begin
-      for var Node in NodesToRun do
+      for Node in NodesToRun do
       begin
         CreateAndQueueTask(Node, FSourceNode, Self);
       end;
@@ -2146,11 +2143,11 @@ end;
   LBlackboardData: TDictionary<string, TValue>;
   Node: TAIAgentsNode;
   begin
-  // ValidaciÛn de seguridad inicial
+  // Validaci√≥n de seguridad inicial
   if (FGraph = nil) or FGraph.FAbort then
   Exit;
 
-  // PASO 1: Ejecutar evento OnExecute para intervenciÛn manual (el programador decide en cÛdigo)
+  // PASO 1: Ejecutar evento OnExecute para intervenci√≥n manual (el programador decide en c√≥digo)
   Handled := False;
 
   IsOk := Sender.FError; //Toma el estado de error del nodo como valor inicial;
@@ -2169,8 +2166,8 @@ end;
   end;
   end;
 
-  // Si el programador marcÛ 'Handled' en el evento, se asume que la lÛgica
-  // de navegaciÛn ya fue gestionada externamente y salimos.
+  // Si el programador marc√≥ 'Handled' en el evento, se asume que la l√≥gica
+  // de navegaci√≥n ya fue gestionada externamente y salimos.
   if Handled then
   Exit;
 
@@ -2187,7 +2184,7 @@ end;
   end
   else
   begin
-  // Si el enlace fallÛ pero tiene una ruta de escape/error (NextNo), la seguimos.
+  // Si el enlace fall√≥ pero tiene una ruta de escape/error (NextNo), la seguimos.
   if Assigned(FNextNo) then
   begin
   var LTask := TTask.Run(
@@ -2208,7 +2205,7 @@ end;
   end;
   end;
 
-  // PASO 3: IsOk es TRUE. Construir la lista de nodos de destino seg˙n el modo de enlace.
+  // PASO 3: IsOk es TRUE. Construir la lista de nodos de destino seg√∫n el modo de enlace.
   NodesToRun := TList<TAIAgentsNode>.Create;
   try
   try
@@ -2246,7 +2243,7 @@ end;
   lmExpression:
   begin
   LBlackboardData := FGraph.Blackboard.FData;
-  // Evaluamos expresiones secuencialmente. Se aÒade el primer nodo cuya condiciÛn se cumpla.
+  // Evaluamos expresiones secuencialmente. Se a√±ade el primer nodo cuya condici√≥n se cumpla.
   if Assigned(FNextA) and (FExpressionA <> '') and EvalCondition(FExpressionA, LBlackboardData) then
   NodesToRun.Add(FNextA)
   else if Assigned(FNextB) and (FExpressionB <> '') and EvalCondition(FExpressionB, LBlackboardData) then
@@ -2268,19 +2265,19 @@ end;
   end;
 
   // ---------------------------------------------------------------------------
-  // PASO 4: Despachar la ejecuciÛn a los nodos de destino.
+  // PASO 4: Despachar la ejecuci√≥n a los nodos de destino.
   // ---------------------------------------------------------------------------
   if NodesToRun.Count = 0 then
   Exit;
 
   if NodesToRun.Count = 1 then
   begin
-  // Si solo hay un destino, continuamos la ejecuciÛn de forma secuencial en este hilo
+  // Si solo hay un destino, continuamos la ejecuci√≥n de forma secuencial en este hilo
   NodesToRun[0].DoExecute(FSourceNode, Self);
   end
   else
   begin
-  // Fork paralelo: Si hay m˙ltiples destinos, cada uno se convierte en una tarea del pool
+  // Fork paralelo: Si hay m√∫ltiples destinos, cada uno se convierte en una tarea del pool
   for Node in NodesToRun do
   begin
   CreateAndQueueTask(Node, FSourceNode, Self);
@@ -2303,7 +2300,7 @@ procedure TAIAgentsLink.SetGraph(const Value: TAIAgentManager);
 begin
   if Value <> FGraph then
   begin
-    // 1. Desvincular del grafo anterior si existÌa
+    // 1. Desvincular del grafo anterior si exist√≠a
     if Assigned(FGraph) then
       FGraph.RemoveComponentFromList(Self);
 
@@ -2395,10 +2392,13 @@ begin
   FMsgError := '';
 end;
 
-// --- MODIFICADO: MÈtodo DoExecute con lÛgica de JOIN corregida ---
+// --- MODIFICADO: M√©todo DoExecute con l√≥gica de JOIN corregida ---
 procedure TAIAgentsNode.DoExecute(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink);
 var
   CanExecute: Boolean;
+  Input: string;
+  sb: TStringBuilder;
+  Value: string;
 begin
   if (FGraph = nil) or FGraph.FAbort then
     Exit;
@@ -2416,7 +2416,7 @@ begin
     FJoinLock.Enter;
     try
       // Almacenar (o actualizar) la entrada del camino que llega.
-      // Esto es vital: si ya existÌa un valor de una vuelta anterior, se sobrescribe con el nuevo.
+      // Esto es vital: si ya exist√≠a un valor de una vuelta anterior, se sobrescribe con el nuevo.
       if (aBeforeNode <> nil) and (aLink <> nil) then
         FJoinInputs.AddOrSetValue(aLink, aBeforeNode.Output);
 
@@ -2434,11 +2434,10 @@ begin
             if FJoinInputs.Count >= FInEdges.Count then
             begin
               CanExecute := True;
-              // Consolidamos todas las entradas en un ˙nico string
-              var
+              // Consolidamos todas las entradas en un √∫nico string
               sb := TStringBuilder.Create;
               try
-                for var Value in FJoinInputs.Values do
+                for Value in FJoinInputs.Values do
                   sb.AppendLine(Value);
                 Input := sb.ToString;
               finally
@@ -2488,13 +2487,13 @@ begin
     begin
       FJoinLock.Enter;
       try
-        // Para jmAny: Limpiamos siempre para que el prÛximo evento dispare de nuevo limpiamente.
+        // Para jmAny: Limpiamos siempre para que el pr√≥ximo evento dispare de nuevo limpiamente.
         if FJoinMode = jmAny then
           FJoinInputs.Clear;
 
         // Para jmAll: NO LIMPIAMOS.
-        // Esto permite el patrÛn "CombineLatest". Si un flujo se repite (loop),
-        // el nodo recordar· los valores de los otros flujos que no cambiaron.
+        // Esto permite el patr√≥n "CombineLatest". Si un flujo se repite (loop),
+        // el nodo recordar√° los valores de los otros flujos que no cambiaron.
         // La limpieza total solo ocurre al iniciar el grafo (Reset).
 
         { CODIGO ELIMINADO:

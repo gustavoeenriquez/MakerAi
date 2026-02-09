@@ -1,18 +1,18 @@
-﻿// IT License
+﻿// MIT License
 //
-// Copyright (c) <year> <copyright holders>
+// Copyright (c) 2013 Gustavo Enríquez - CimaMaker
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -31,13 +31,20 @@
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
-unit uMakerAi.Embeddings.core;
+unit uMakerAi.Embeddings.Core;
+
+{$INCLUDE ../CompilerDirectives.inc}
 
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, Math, Generics.Collections, Generics.Defaults,
+  {$ELSE}
   System.SysUtils, System.Types, System.Classes, System.Generics.Collections,
-  System.Generics.Defaults, System.JSON, System.Math; // Added System.Math for SameValue
+  System.Generics.Defaults, System.JSON, System.Math,
+  {$ENDIF}
+  uJsonHelper, uRttiHelper;
 
 type
   // Defines the type for a single embedding vector.
@@ -398,7 +405,8 @@ Var
 begin
   SetLength(Result, Value.Count);
   for j := 0 to Value.Count - 1 do
-    Result[j] := Value.Items[j].GetValue<Double>;
+    // COMPAT: Usar getter explícito en vez de GetValue<T> genérico (KI master_portability_patterns)
+    Result[j] := Value.GetFloatValue(j);
 end;
 
 class function TAiEmbeddingsCore.ToJsonArray(Val: TAiEmbeddingData): TJsonArray;
@@ -615,5 +623,4 @@ end;
 
 
 end.
-
 

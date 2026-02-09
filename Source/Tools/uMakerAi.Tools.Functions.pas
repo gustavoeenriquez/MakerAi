@@ -1,18 +1,18 @@
-﻿// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -33,17 +33,22 @@
 
 unit uMakerAi.Tools.Functions;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  // FPC: Unidades estándar de FPC sin prefijo System
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye REST/JSON/Data nativos
   System.SysUtils, System.Classes, System.Generics.Collections,
   System.JSON, Rest.JSON, System.IOUtils,
   Data.Db,
-
-{$IF CompilerVersion < 35}
-  uJSONHelper,
-{$ENDIF}
-  uMakerAi.Core, uMakerAi.MCPClient.Core, uMakerAi.Chat.Messages;
+  {$ENDIF}
+  uMakerAi.Core, uMakerAi.MCPClient.Core, uMakerAi.Chat.Messages,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
 
@@ -447,38 +452,42 @@ Var
   aParam: TFunctionParamsItem;
   I: Integer;
 begin
-  aTipo := Value.GetValue<String>('type');
+  aTipo := Value.GetValueAsString('type');
   If aTipo = 'function' then
     ToolType := TToolstype.tt_function
   Else
     ToolType := TToolstype.ttNone;
 
-  If Value.TryGetValue<Boolean>('enabled', aEnabled) then
-    Enabled := aEnabled;
+  If Value.TryGetValue('enabled', aEnabled) then
+  begin
+    FEnabled := aEnabled;
+  end;
+  If Value.TryGetValue('default', aDefault) then
+  begin
+    FDefault := aDefault;
+  end;
+  If Value.TryGetValue('function', jFunc) then
+  begin
+    If jFunc.TryGetValue('description', ADescription) then
+    begin
+       Self.FDescription.Text := ADescription;
+    end;
+    If jFunc.TryGetValue('script', aScript) then
+    begin
+       Self.FScript.Text := aScript;
+    end;
+    jFunc.TryGetValue('enabled', FEnabled);
 
-  If Value.TryGetValue<Boolean>('default', aDefault) then
-    Default := aDefault;
-
-  If Value.TryGetValue<TJSonObject>('function', jFunc) then
-  Begin
-    If jFunc.TryGetValue<String>('description', ADescription) then
-      Description.Text := ADescription;
-
-    If jFunc.TryGetValue<String>('script', aScript) then
-      FScript.Text := aScript;
-
-    jFunc.TryGetValue<Boolean>('enabled', FEnabled);
-
-    If jFunc.TryGetValue<TJSonObject>('parameters', jParameters) then
-    Begin
-      If jParameters.GetValue<String>('type') = 'object' then
-      Begin
-        If jParameters.TryGetValue<TJSonObject>('properties', jProperties) then
+    If jFunc.TryGetValue('parameters', jParameters) then
+    begin
+        // Intentamos obtener "properties"
+        jProperties := nil;
+        If jParameters.TryGetValue('properties', jProperties) then
         Begin
           For I := 0 to jProperties.Count - 1 do
           Begin
 
-            aParamName := jProperties.Pairs[I].JsonString.Value;
+            aParamName := GetJSONStringValue(jProperties.Pairs[I].JsonString);
             jParam := TJSonObject(jProperties.Pairs[I].JsonValue);
 
             aParam := Parameters.Add;
@@ -487,17 +496,14 @@ begin
           End;
         End;
 
-        If jParameters.TryGetValue<TJSonArray>('required', jReq) then
-        Begin
+        If jParameters.TryGetValue('required', jReq) then
           For jVal in jReq do
           Begin
-            If Assigned(Parameters.GetParamByName(jVal.Value)) then
-              Parameters.GetParamByName(jVal.Value).Required := True;
+            If Assigned(Parameters.GetParamByName(GetJSONStringValue(jVal))) then
+              Parameters.GetParamByName(GetJSONStringValue(jVal)).Required := True;
           End;
-        End;
-      End;
-    End;
-  End;
+    end;
+  end;
 
 end;
 
@@ -593,6 +599,11 @@ begin
   inherited;
 end;
 
+function TFunctionActionItems.GetOwner: TPersistent;
+begin
+  Result := FOwner;
+end;
+
 function TFunctionActionItems.GetActionItem(Index: Integer): TFunctionActionItem;
 begin
   Result := TFunctionActionItem(inherited Items[Index]);
@@ -641,11 +652,6 @@ begin
 
 end;
 
-function TFunctionActionItems.GetOwner: TPersistent;
-begin
-  Result := FOwner;
-end;
-
 function TFunctionActionItems.IndexOf(Nombre: String): Integer;
 Var
   I: Integer;
@@ -685,9 +691,9 @@ begin
       For jVal in Funcs do
       Begin
         jFunc := TJSonObject(jVal);
-        If jFunc.GetValue<String>('type') = 'function' then
+        If jFunc.GetValueAsString('type') = 'function' then
         Begin
-          FuncName := jFunc.GetValue<TJSonObject>('function').GetValue<String>('name');
+          FuncName := jFunc.GetValueAsObject('function').GetValueAsString('name');
           Item := Self.Add;
           Item.FunctionName := FuncName;
           Item.SetJSon(jFunc);
@@ -843,7 +849,7 @@ Var
   jVal: TJSONValue;
   Lista: TStringList;
 begin
-  aType := Value.GetValue<String>('type');
+  aType := Value.GetValueAsString('type');
   If aType = 'string' then
     ParamType := TToolsParamType.ptString
   Else If aType = 'integer' then
@@ -861,11 +867,12 @@ begin
   Else
     ParamType := TToolsParamType.ptString;
 
-  If Value.TryGetValue<String>('description', ADescription) then
-    FDescription.Text := ADescription;
-
-  If Value.TryGetValue<TJSonArray>('enum', jEnum) then
-  Begin
+  If Value.TryGetValue('description', ADescription) then
+  begin
+    Self.Description.Text := ADescription;
+  end;
+  If Value.TryGetValue('enum', jEnum) then
+  begin
     Lista := TStringList.Create;
     Try
       For jVal in jEnum do
@@ -1326,7 +1333,7 @@ begin
           // Verificar que sea de tipo "function"
           if TJSonObject(ArrayItem).GetValue('type') <> nil then
           begin
-            if TJSonObject(ArrayItem).GetValue('type').Value = 'function' then
+            if GetJSONStringValue(TJSonObject(ArrayItem).GetValue('type')) = 'function' then
             begin
               // Obtener el objeto "function"
               FunctionObj := TJSonObject(ArrayItem).GetValue('function') as TJSonObject;
@@ -1336,7 +1343,7 @@ begin
                 NameValue := FunctionObj.GetValue('name');
                 if NameValue <> nil then
                 begin
-                  FunctionName := NameValue.Value;
+                  FunctionName := GetJSONStringValue(NameValue);
                   // Reemplazar _99_ por -->
                   FunctionName := StringReplace(FunctionName, '_99_', '-->', [rfReplaceAll]);
                   Result.Add(FunctionName);
@@ -1398,7 +1405,7 @@ end;
   // Obtener el valor del campo "name"
   NameValue := TJSonObject(ToolItem).GetValue('name');
   if NameValue <> nil then
-  Result.Add(NameValue.Value);
+  Result.Add(NameValue.AsString);
   end;
   end;
   End;
@@ -1491,7 +1498,7 @@ end;
   Var
   JArr: TJSonArray;
 
-  If MergedToolsObj.TryGetValue<TJSonArray>('tools', JArr) then
+  If MergedToolsObj.TryGetValue('tools', JArr) then
   jResToolArray := TJSonArray(JArr.Clone)
   Else
   jResToolArray := TJSonArray.Create;
@@ -1519,6 +1526,8 @@ var
   ClientToolsJson: TJSonObject;
   JsonValue: TJSONValue;
   I: Integer;
+  SourceJsonStr: string;
+  LResultArray: TJSonArray;
 begin
 
   LAllNormalizedTools := TList<TNormalizedTool>.Create;
@@ -1547,7 +1556,6 @@ begin
 
         if ClientItem.MCPClient.Available then
         begin
-          var
           SourceJsonStr := ClientItem.MCPClient.Tools.Text;
           if not SourceJsonStr.IsEmpty then
           begin
@@ -1570,9 +1578,8 @@ begin
     FinalToolsObj := TJsonToolUtils.FormatToolList(LAllNormalizedTools, aToolFormat);
 
     // Extraer el array 'tools' para el resultado final
-    Var
-      LResultArray: TJSonArray;
-    if FinalToolsObj.TryGetValue<TJSonArray>('tools', LResultArray) then
+    // Extraer el array 'tools' para el resultado final
+    if FinalToolsObj.TryGetValue('tools', LResultArray) then
       Result := LResultArray.ToJSon
     else
       Result := '[]';
@@ -1593,6 +1600,7 @@ var
   LFinalPath: string;
   LJsonContent: string;
   LRootObj: TJSonObject;
+  LJsonValue: TJSONValue;
 begin
   Result := 0;
   LFinalPath := AJsonFilePath;
@@ -1603,7 +1611,7 @@ begin
 {$IFDEF MSWINDOWS}
     // TPath.GetHomePath en Windows suele ir a 'Documents',
     // para Claude necesitamos 'AppData\Roaming'
-    LFinalPath := TPath.Combine(GetEnvironmentVariable('APPDATA'), 'Claude\claude_desktop_config.json');
+    LFinalPath := TPath.Combine(CompatGetEnvVar('APPDATA'), 'Claude\claude_desktop_config.json');
 {$ENDIF}
 {$IFDEF MACOS}
     // En macOS la ruta estándar es ~/Library/Application Support/...
@@ -1632,7 +1640,6 @@ begin
     end;
 
     // 4. Parseo y validación del objeto JSON
-    var
     LJsonValue := TJSonObject.ParseJSONValue(LJsonContent);
 
     if Assigned(LJsonValue) and (LJsonValue is TJSonObject) then
@@ -1700,11 +1707,11 @@ end;
 
   try
   // Buscar la clave raíz "mcpServers"
-  if AConfig.TryGetValue<TJSonObject>('mcpServers', McpServers) then
+  if AConfig.TryGetValue('mcpServers', McpServers) then
   begin
   for ServerPair in McpServers do
   begin
-  ServerName := ServerPair.JsonString.Value;
+  ServerName := ServerPair.JsonString.AsString;
 
   // 1. Evitar duplicados
   if Assigned(FMCPClients.GetClientByName(ServerName)) then
@@ -1724,15 +1731,15 @@ end;
 
   // --- COMMAND ---
   if ServerObj.TryGetValue('command', Val) then
-  NewClient.Params.Values['Command'] := Val.Value;
+  NewClient.Params.Values['Command'] := Val.AsString;
 
   // --- ARGS ---
   ArgsString := '';
-  if ServerObj.TryGetValue<TJSonArray>('args', ArgsArray) then
+  if ServerObj.TryGetValue('args', ArgsArray) then
   begin
   for I := 0 to ArgsArray.Count - 1 do
   begin
-  ArgValStr := ArgsArray.Items[I].Value;
+  ArgValStr := ArgsArray.Items[I].AsString;
   // Manejo de espacios en argumentos: Envolver en comillas si es necesario
   if (Pos(' ', ArgValStr) > 0) and (not ArgValStr.StartsWith('"')) then
   ArgValStr := '"' + ArgValStr + '"';
@@ -1746,11 +1753,11 @@ end;
   NewClient.Params.Values['Arguments'] := ArgsString;
 
   // --- ENV ---
-  if ServerObj.TryGetValue<TJSonObject>('env', EnvObj) then
+  if ServerObj.TryGetValue('env', EnvObj) then
   begin
   for EnvPair in EnvObj do
   begin
-  NewClient.EnvVars.Values[EnvPair.JsonString.Value] := EnvPair.JsonValue.Value;
+  NewClient.EnvVars.Values[EnvPair.JsonString.AsString] := EnvPair.JsonValue.AsString;
   end;
   end;
 
@@ -1798,7 +1805,7 @@ var
   LArgsArray: TJSonArray;
   LServerPair, LEnvPair: TJSONPair;
   LClientItem: TMCPClientItem;
-  LServerName, LCommand, LUrl, LArgsString: string;
+  LServerName, LCommand, LUrl, LArgsString, LArg: string;
   I: Integer;
 begin
   Result := 0;
@@ -1806,7 +1813,7 @@ begin
     Exit;
 
   // Intentamos encontrar el nodo raíz
-  if not AConfig.TryGetValue<TJSonObject>('mcpServers', LMcpServers) then
+  if not AConfig.TryGetValue('mcpServers', LMcpServers) then
   begin
     DoLog('ImportClaude: No se encontró el nodo "mcpServers".');
     Exit;
@@ -1814,7 +1821,7 @@ begin
 
   for LServerPair in LMcpServers do
   begin
-    LServerName := LServerPair.JsonString.Value;
+    LServerName := GetJSONStringValue(LServerPair.JsonString);
 
     // 1. Evitar duplicados
     if Assigned(FMCPClients.GetClientByName(LServerName)) then
@@ -1827,19 +1834,18 @@ begin
     LClientItem.Name := LServerName;
 
     // --- CASO A: Servidor Local (StdIo) ---
-    if LServerObj.TryGetValue<string>('command', LCommand) then
+    if LServerObj.TryGetValue('command', LCommand) then
     begin
       LClientItem.TransportType := tpStdIo;
       LClientItem.Params.Values['Command'] := LCommand;
 
       // Procesar Argumentos
-      if LServerObj.TryGetValue<TJSonArray>('args', LArgsArray) then
+      if LServerObj.TryGetValue('args', LArgsArray) then
       begin
         LArgsString := '';
         for I := 0 to LArgsArray.Count - 1 do
         begin
-          var
-          LArg := LArgsArray.Items[I].Value;
+          LArg := GetJSONStringValue(LArgsArray.Items[I]);
           // Si el argumento tiene espacios y no tiene comillas, lo envolvemos
           if (Pos(' ', LArg) > 0) and (not LArg.StartsWith('"')) then
             LArg := '"' + LArg + '"';
@@ -1853,18 +1859,18 @@ begin
       LClientItem.Params.Values['RootDir'] := TPath.GetHomePath;
     end
     // --- CASO B: Servidor Remoto (URL / SSE) ---
-    else if LServerObj.TryGetValue<string>('url', LUrl) then
+    else if LServerObj.TryGetValue('url', LUrl) then
     begin
       LClientItem.TransportType := tpSSE; // Estándar para MCP remoto
       LClientItem.Params.Values['URL'] := LUrl;
     end;
 
     // --- VARIABLES DE ENTORNO (Común a ambos) ---
-    if LServerObj.TryGetValue<TJSonObject>('env', LEnvObj) then
+    if LServerObj.TryGetValue('env', LEnvObj) then
     begin
       for LEnvPair in LEnvObj do
       begin
-        LClientItem.EnvVars.Values[LEnvPair.JsonString.Value] := LEnvPair.JsonValue.Value;
+        LClientItem.EnvVars.Values[GetJSONStringValue(LEnvPair.JsonString)] := GetJSONStringValue(LEnvPair.JsonValue);
       end;
     end;
 
@@ -2361,19 +2367,19 @@ begin
     Exit;
 
   // Gemini
-  if AJsonTool.FindValue('functionDeclarations') <> nil then
+  if AJsonTool.GetValue('functionDeclarations') <> nil then
     Exit(tfGemini);
 
   // OpenAI Family Detection
-  if AJsonTool.TryGetValue('type', LTypeValue) and (LTypeValue is TJSONString) and (LTypeValue.Value = 'function') then
+  if AJsonTool.TryGetValue('type', LTypeValue) and (LTypeValue is TJSONString) and (GetJSONStringValue(LTypeValue) = 'function') then
   begin
     // Diferenciación clave:
     // tfOpenAI (Legacy/Chat): Tiene una clave "function" que contiene los detalles.
     // tfOpenAIResponses (New): Tiene "name" directamente en la raíz y NO tiene clave "function".
 
-    if AJsonTool.FindValue('function') <> nil then
+    if AJsonTool.GetValue('function') <> nil then
       Exit(tfOpenAI)
-    else if AJsonTool.FindValue('name') <> nil then
+    else if AJsonTool.GetValue('name') <> nil then
       Exit(tfOpenAIResponses);
 
     // Por defecto si es ambiguo, asumimos el nuevo estándar si tiene nombre
@@ -2381,7 +2387,7 @@ begin
   end;
 
   // Anthropic
-  if AJsonTool.FindValue('input_schema') <> nil then
+  if AJsonTool.GetValue('input_schema') <> nil then
     Exit(tfClaude);
 
   // MCP
@@ -2394,7 +2400,7 @@ var
   JObj, JProps: TJSonObject;
   jReq: TJSonArray;
   PropName: string;
-  I: Integer;
+  I, J: Integer;
   ExistsInReq: Boolean;
 begin
   if not(ASchema is TJSonObject) then
@@ -2403,7 +2409,7 @@ begin
   JObj := TJSonObject(ASchema);
 
   // Verificamos si es un objeto (tiene propiedades o es type object explícito)
-  if (JObj.TryGetValue<TJSonObject>('properties', JProps)) or (JObj.GetValue<string>('type') = 'object') then
+  if (JObj.TryGetValue('properties', JProps)) or (JObj.GetValueAsString('type') = 'object') then
   begin
     // REGLA 1: additionalProperties: false es OBLIGATORIO
     if JObj.GetValue('additionalProperties') <> nil then
@@ -2414,7 +2420,7 @@ begin
     if Assigned(JProps) then
     begin
       // Obtener o crear el array required
-      if not JObj.TryGetValue<TJSonArray>('required', jReq) then
+      if not JObj.TryGetValue('required', jReq) then
       begin
         jReq := TJSonArray.Create;
         JObj.AddPair('required', jReq);
@@ -2422,13 +2428,13 @@ begin
 
       for I := 0 to JProps.Count - 1 do
       begin
-        PropName := JProps.Pairs[I].JsonString.Value;
+        PropName := GetJSONStringValue(JProps.Pairs[I].JsonString);
 
         // Verificar si ya existe en required para no duplicar
         ExistsInReq := False;
-        for var J := 0 to jReq.Count - 1 do
+        for J := 0 to jReq.Count - 1 do
         begin
-          if jReq.Items[J].Value = PropName then
+          if GetJSONStringValue(jReq.Items[J]) = PropName then
           begin
             ExistsInReq := True;
             Break;
@@ -2454,9 +2460,9 @@ var
   LInputSchema: TJSonObject;
   LSchemaValue: TJSONValue;
 begin
-  if not AJsonTool.TryGetValue<string>('name', LName) then
+  if not AJsonTool.TryGetValue('name', LName) then
     Exit;
-  AJsonTool.TryGetValue<string>('description', LDescription);
+  AJsonTool.TryGetValue('description', LDescription);
 
   if AJsonTool.TryGetValue('inputSchema', LSchemaValue) and (LSchemaValue is TJSonObject) then
   Begin
@@ -2475,9 +2481,9 @@ var
   LInputSchema: TJSonObject;
   LSchemaValue: TJSONValue;
 begin
-  if not AJsonTool.TryGetValue<string>('name', LName) then
+  if not AJsonTool.TryGetValue('name', LName) then
     Exit;
-  AJsonTool.TryGetValue<string>('description', LDescription);
+  AJsonTool.TryGetValue('description', LDescription);
 
   if AJsonTool.TryGetValue('input_schema', LSchemaValue) and (LSchemaValue is TJSonObject) then
   Begin
@@ -2496,9 +2502,9 @@ end;
   LInputSchema: TJSonObject;
   LSchemaValue: TJSonValue;
   begin
-  if not AJsonTool.TryGetValue<string>('name', LName) then
+  if not AJsonTool.TryGetValue('name', LName) then
   Exit;
-  AJsonTool.TryGetValue<string>('description', LDescription);
+  AJsonTool.TryGetValue('description', LDescription);
 
   if AJsonTool.TryGetValue('parameters', LSchemaValue) and (LSchemaValue is TJSonObject) then
   LInputSchema := TJSonObject(LSchemaValue.Clone)
@@ -2521,7 +2527,7 @@ var
 begin
   // Primero, determinamos de dónde leer los datos.
   // Intentamos encontrar el objeto anidado 'function'.
-  if AJsonTool.TryGetValue<TJSonObject>('function', LFunctionObject) then
+  if AJsonTool.TryGetValue('function', LFunctionObject) then
   begin
     // Formato anidado: {"type": "function", "function": {"name": ...}}
     LDataSource := LFunctionObject;
@@ -2533,10 +2539,10 @@ begin
   end;
 
   // Ahora extraemos los datos usando LDataSource, que apunta al lugar correcto.
-  if not LDataSource.TryGetValue<string>('name', LName) then
-    Exit; // Si no hay nombre, no es una herramienta válida.
+  if not LDataSource.TryGetValue('name', LName) then
+    Exit; // If no name, it's not a valid tool.
 
-  LDataSource.TryGetValue<string>('description', LDescription);
+  LDataSource.TryGetValue('description', LDescription);
 
   if LDataSource.TryGetValue('parameters', LSchemaValue) and (LSchemaValue is TJSonObject) then
   Begin
@@ -2552,11 +2558,11 @@ end;
 class procedure TJsonToolUtils.NormalizeToolsFromSource(const ASourceName: string; ASourceJson: TJSonObject; ANormalizedList: TList<TNormalizedTool>);
 var
   LSourceToolsArray: TJSonArray;
-  I: Integer;
+  I, J, LInitialCount: Integer;
   LSourceTool: TJSonObject;
   LDetectedFormat: TToolFormat;
 begin
-  if not Assigned(ASourceJson) or not ASourceJson.TryGetValue<TJSonArray>('tools', LSourceToolsArray) or (LSourceToolsArray.Count = 0) then
+  if not Assigned(ASourceJson) or not ASourceJson.TryGetValue('tools', LSourceToolsArray) or (LSourceToolsArray.Count = 0) then
     Exit; // No hay herramientas que procesar
 
   // Detectar formato a partir de la primera herramienta
@@ -2574,7 +2580,6 @@ begin
     LSourceTool := LSourceToolsArray.Items[I] as TJSonObject;
 
     // Guardar el recuento actual para saber qué herramientas se añadieron
-    var
     LInitialCount := ANormalizedList.Count;
 
     case LDetectedFormat of
@@ -2593,7 +2598,7 @@ begin
     // Aplicar el prefijo de fuente a las herramientas recién añadidas
     if not ASourceName.IsEmpty then
     begin
-      for var J := LInitialCount to ANormalizedList.Count - 1 do
+      for J := LInitialCount to ANormalizedList.Count - 1 do
         ANormalizedList[J].FName := Format('%s_99_%s', [ASourceName, ANormalizedList[J].Name]);
     end;
   end;
@@ -2608,7 +2613,7 @@ var
   LName, LDescription: string;
 begin
   // El formato Gemini tiene un array 'functionDeclarations' dentro de cada 'tool'
-  if not AJsonTool.TryGetValue<TJSonArray>('functionDeclarations', LFuncDeclarations) then
+  if not AJsonTool.TryGetValue('functionDeclarations', LFuncDeclarations) then
     Exit;
 
   for I := 0 to LFuncDeclarations.Count - 1 do
@@ -2617,9 +2622,9 @@ begin
       Continue;
     LFuncDecl := LFuncDeclarations.Items[I] as TJSonObject;
 
-    if not LFuncDecl.TryGetValue<string>('name', LName) then
+    if not LFuncDecl.TryGetValue('name', LName) then
       Continue;
-    LFuncDecl.TryGetValue<string>('description', LDescription);
+    LFuncDecl.TryGetValue('description', LDescription);
 
     if LFuncDecl.TryGetValue('parameters', LSchemaValue) and (LSchemaValue is TJSonObject) then
     Begin
@@ -2658,6 +2663,7 @@ end;
   LRequiredArray: TJSonArray;
   LPair: TJSONPair;
   LReqValue, LDesc, LType: TJSONValue; // Variables declaradas al principio
+  LPropObj: TJSonObject;
   IsRequired: Boolean;
   begin
   Result := TJSonObject.Create;
@@ -2665,7 +2671,7 @@ end;
   Result.AddPair('description', ANormalizedTool.Description);
 
   LInputSchema := ANormalizedTool.InputSchema;
-  if not Assigned(LInputSchema) or not LInputSchema.TryGetValue<TJSonObject>('properties', LProperties) then
+  if not Assigned(LInputSchema) or not LInputSchema.TryGetValue('properties', LProperties) then
   begin
   Exit;
   end;
@@ -2674,18 +2680,18 @@ end;
   Result.AddPair('parameter_definitions', LParamDefs);
 
   LRequiredArray := nil;
-  LInputSchema.TryGetValue<TJSonArray>('required', LRequiredArray);
+  LInputSchema.TryGetValue('required', LRequiredArray);
 
   for LPair in LProperties do
   begin
   if not (LPair.JsonValue is TJSonObject) then Continue;
 
   LParam := TJSonObject.Create;
-  var LPropObj := LPair.JsonValue as TJSonObject;
+  LPropObj := LPair.JsonValue as TJSonObject;
 
-  if LPropObj.TryGetValue<TJSONValue>('description', LDesc) then
+  if LPropObj.TryGetValue('description', LDesc) then
   LParam.AddPair('description', LDesc.Clone as TJSONString);
-  if LPropObj.TryGetValue<TJSONValue>('type', LType) then
+  if LPropObj.TryGetValue('type', LType) then
   LParam.AddPair('type', LType.Clone as TJSONString);
 
   IsRequired := False;
@@ -2693,16 +2699,16 @@ end;
   begin
   for LReqValue in LRequiredArray do
   begin
-  if SameText(LReqValue.Value, LPair.JsonString.Value) then
+  if SameText(LReqValue.AsString, LPair.JsonString.AsString) then
   begin
   IsRequired := True;
   Break;
   end;
   end;
   end;
-  LParam.AddPair('required', TJSONBool.Create(IsRequired));
+  LParam.AddPair('required', CreateJSONBool(IsRequired));
 
-  LParamDefs.AddPair(LPair.JsonString.Value, LParam);
+  LParamDefs.AddPair(LPair.JsonString.AsString, LParam);
   end;
   end;
 }
@@ -2789,9 +2795,10 @@ end;
 
 class function TJsonToolUtils.FormatToolList(ANormalizedList: TList<TNormalizedTool>; AOutputFormat: TToolFormat): TJSonObject;
 var
-  LFinalToolsArray: TJSonArray;
+  LFinalToolsArray, LDeclarationsArray: TJSonArray;
   LNormTool: TNormalizedTool;
-  LFormattedTool: TJSonObject;
+  LFormattedTool, LGeminiToolWrapper: TJSonObject;
+  LResultArray: TJSonArray;
 begin
   Result := TJSonObject.Create;
   LFinalToolsArray := TJSonArray.Create;
@@ -2803,14 +2810,12 @@ begin
   if AOutputFormat = tfGemini then
   begin
     // --- LÓGICA ESPECIAL PARA GEMINI: Agrupar todo en un solo bloque ---
-    var
     LDeclarationsArray := TJSonArray.Create;
     for LNormTool in ANormalizedList do
     begin
       LDeclarationsArray.Add(FormatAsGeminiFunctionDeclaration(LNormTool));
     end;
 
-    var
     LGeminiToolWrapper := TJSonObject.Create;
     LGeminiToolWrapper.AddPair('functionDeclarations', LDeclarationsArray);
     LFinalToolsArray.Add(LGeminiToolWrapper);
@@ -2884,7 +2889,7 @@ var
 begin
   // 1. Intentar detectar el formato a partir de la primera herramienta en el array
   LDetectedFormat := tfUnknown;
-  if Assigned(ASourceJson) and ASourceJson.TryGetValue<TJSonArray>('tools', LSourceToolsArray) and (LSourceToolsArray.Count > 0) and (LSourceToolsArray.Items[0] is TJSonObject) then
+  if Assigned(ASourceJson) and ASourceJson.TryGetValue('tools', LSourceToolsArray) and (LSourceToolsArray.Count > 0) and (LSourceToolsArray.Items[0] is TJSonObject) then
   begin
     LFirstTool := LSourceToolsArray.Items[0] as TJSonObject;
     LDetectedFormat := DetectInputFormat(LFirstTool);
@@ -2914,9 +2919,11 @@ var
   I: Integer;
   LSourceTool, LFormattedTool: TJSonObject;
   LNormTool: TNormalizedTool;
+  LDeclarationsArray: TJSonArray;
+  LGeminiToolWrapper: TJSonObject;
 begin
   // 1. Validar y preparar JSON de origen y destino
-  if not Assigned(ASourceJson) or not ASourceJson.TryGetValue<TJSonArray>('tools', LSourceToolsArray) then
+  if not Assigned(ASourceJson) or not ASourceJson.TryGetValue('tools', LSourceToolsArray) then
   begin
     Result := ATargetJson; // No hay nada que procesar
     Exit;
@@ -2928,7 +2935,7 @@ begin
     ATargetJson.AddPair('tools', TJSonArray.Create);
   end;
 
-  if not ATargetJson.TryGetValue<TJSonArray>('tools', LFinalToolsArray) then
+  if not ATargetJson.TryGetValue('tools', LFinalToolsArray) then
     raise Exception.Create('Target JSON object does not contain a "tools" array.');
 
   // 2. Normalizar las herramientas de la fuente a una lista interna
@@ -2975,7 +2982,6 @@ begin
     if AOutputFormat = tfGemini then
     begin
       // --- LÓGICA ESPECIAL PARA GEMINI: Agrupar todo en un solo bloque ---
-      var
       LDeclarationsArray := TJSonArray.Create;
       for LNormTool in LNormalizedTools do
       begin
@@ -2984,7 +2990,6 @@ begin
       end;
 
       // Crear el único objeto contenedor 'tool'
-      var
       LGeminiToolWrapper := TJSonObject.Create;
       LGeminiToolWrapper.AddPair('functionDeclarations', LDeclarationsArray);
 

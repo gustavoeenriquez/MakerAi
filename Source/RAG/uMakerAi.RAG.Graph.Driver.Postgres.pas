@@ -1,13 +1,36 @@
 ﻿unit uMakerAi.RAG.Graph.Driver.Postgres;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+    {$IFDEF USE_ZEOS}
+    ZConnection, ZDataset, DB, // Zeos para FPC
+    {$ELSE}
+    SQLDB, pqconnection, DB,   // SQLDB fallback
+    {$ENDIF}
+  {$ELSE}
   System.SysUtils, System.Classes, System.Generics.Collections, System.StrUtils,
   System.Variants, System.JSON, System.Math,
   Data.DB, FireDAC.Comp.Client, FireDAC.Stan.Param,
-  uMakerAi.RAG.Vectors, uMakerAi.Embeddings.core,
-  uMakerAi.RAG.Graph.core, uMakerAi.RAG.MetaData;
+  {$ENDIF}
+  uMakerAi.RAG.Vectors, uMakerAi.Embeddings.Core, uMakerAi.RAG.Graph.Core, uMakerAi.RAG.MetaData,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper;
+
+{$IFDEF FPC}
+type
+  // Alias de tipos para compatibilidad FPC
+  {$IFDEF USE_ZEOS}
+  TFDQuery = TZQuery;
+  TFDConnection = TZConnection;
+  {$ELSE}
+  TFDQuery = TSQLQuery;
+  TFDConnection = TPQConnection;
+  {$ENDIF}
+{$ENDIF}
 
 type
   TAiRagGraphPostgresDriver = class(TAiRagGraphDriverBase)
@@ -71,6 +94,20 @@ begin
   RegisterComponents('MakerAI.RAG.Drivers', [TAiRagGraphPostgresDriver]);
 end;
 
+// Helper local para abstraer diferencia API entre Zeos, SQLDB y FireDAC
+procedure SetQueryConnection(AQuery: TFDQuery; AConnection: TFDConnection);
+begin
+  {$IFDEF FPC}
+    {$IFDEF USE_ZEOS}
+    AQuery.Connection := AConnection;
+    {$ELSE}
+    AQuery.Database := AConnection;
+    {$ENDIF}
+  {$ELSE}
+  AQuery.Connection := AConnection;
+  {$ENDIF}
+end;
+
 { TAiRagGraphPostgresDriver }
 
 constructor TAiRagGraphPostgresDriver.Create(AOwner: TComponent);
@@ -94,7 +131,7 @@ begin
   if not Assigned(FConnection) then
     raise Exception.Create('La propiedad Connection del Driver no ha sido asignada.');
   Result := TFDQuery.Create(nil);
-  Result.Connection := FConnection;
+  SetQueryConnection(Result, FConnection);
 end;
 
 function TAiRagGraphPostgresDriver.GetPostgresLangConfig: string;
@@ -174,10 +211,21 @@ begin
     Query.ExecSQL;
 
     // 4. ÍNDICES NODOS Y CHUNKS
+    {$IFDEF FPC}
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_emb_hnsw ON public.%s USING hnsw (embedding vector_cosine_ops);', [NodesTableName, NodesTableName]);
+    Query.ExecSQL;
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_fts ON public.%s USING gin(search_vector);', [NodesTableName, NodesTableName]);
+    Query.ExecSQL;
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_props ON public.%s USING gin(properties);', [NodesTableName, NodesTableName]);
+    Query.ExecSQL;
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_emb_hnsw ON public.%s USING hnsw (embedding vector_cosine_ops);', [ChunksTableName, ChunksTableName]);
+    Query.ExecSQL;
+    {$ELSE}
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_emb_hnsw ON public.%s USING hnsw (embedding vector_cosine_ops);', [NodesTableName, NodesTableName]));
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_fts ON public.%s USING gin(search_vector);', [NodesTableName, NodesTableName]));
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_props ON public.%s USING gin(properties);', [NodesTableName, NodesTableName]));
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_emb_hnsw ON public.%s USING hnsw (embedding vector_cosine_ops);', [ChunksTableName, ChunksTableName]));
+    {$ENDIF}
 
     // 5. TABLA DE ARISTAS
     Query.SQL.Clear;
@@ -200,10 +248,21 @@ begin
     Query.ExecSQL;
 
     // 6. ÍNDICES DE ARISTAS
+    {$IFDEF FPC}
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_edge_label ON public.%s (entidad, edge_label);', [EdgesTableName, EdgesTableName]);
+    Query.ExecSQL;
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_source_id ON public.%s (source_node_id, entidad);', [EdgesTableName, EdgesTableName]);
+    Query.ExecSQL;
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_target_id ON public.%s (target_node_id, entidad);', [EdgesTableName, EdgesTableName]);
+    Query.ExecSQL;
+    Query.SQL.Text := Format('CREATE INDEX IF NOT EXISTS idx_%s_props ON public.%s USING gin(properties);', [EdgesTableName, EdgesTableName]);
+    Query.ExecSQL;
+    {$ELSE}
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_edge_label ON public.%s (entidad, edge_label);', [EdgesTableName, EdgesTableName]));
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_source_id ON public.%s (source_node_id, entidad);', [EdgesTableName, EdgesTableName]));
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_target_id ON public.%s (target_node_id, entidad);', [EdgesTableName, EdgesTableName]));
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_props ON public.%s USING gin(properties);', [EdgesTableName, EdgesTableName]));
+    {$ENDIF}
 
   finally
     Query.Free;

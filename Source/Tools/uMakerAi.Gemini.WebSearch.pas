@@ -1,15 +1,29 @@
-unit uMakerAi.Gemini.WebSearch;
+Ôªøunit uMakerAi.Gemini.WebSearch;
+
+{$INCLUDE ../CompilerDirectives.inc}
 
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Classes, System.JSON, System.Net.HttpClient,
   System.Net.HttpClientComponent, System.Net.URLClient, System.Threading,
-  System.Generics.Collections, uMakerAi.Core, uMakerAi.Chat.Tools, uMakerAi.Chat, uMakerAi.Chat.Messages;
+  System.Generics.Collections,
+  {$ENDIF}
+  uMakerAi.Core, uMakerAi.Chat.Tools, uMakerAi.Chat, uMakerAi.Chat.Messages,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
 
+  {$IFNDEF FPC}
+  {$IF CompilerVersion >= 33.0} // Delphi 10.3 Rio+
   [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32 or pidOSX64 or pidAndroidArm64)]
+  {$ELSE}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64)]
+  {$ENDIF}
+  {$ENDIF}
   TAiGeminiWebSearchTool = class(TAiWebSearchToolBase)
   private
     FApiKey: string;
@@ -23,7 +37,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
 
-    { Uso est·tico }
+    { Uso est√°tico }
     class function Search(const AApiKey, AQuery: string; const AModel: string = 'gemini-2.0-flash'; const ADynamicThreshold: Single = 0.7): TAiChatMessage;
   published
     property ApiKey: string read GetApiKey write FApiKey;
@@ -56,7 +70,7 @@ begin
   if (csDesigning in ComponentState) then
     Exit(FApiKey);
   if FApiKey.StartsWith('@') then
-    Result := GetEnvironmentVariable(Copy(FApiKey, 2, MaxInt))
+    Result := CompatGetEnvVar(Copy(FApiKey, 2, MaxInt))
   else
     Result := FApiKey;
 end;
@@ -64,16 +78,18 @@ end;
 procedure TAiGeminiWebSearchTool.ExecuteSearch(const AQuery: string; ResMsg, AskMsg: TAiChatMessage);
 begin
   if IsAsync then
+  begin
     TTask.Run(
       procedure
       begin
         InternalRunGeminiSearch(AQuery, ResMsg);
-      end)
+      end);
+  end
   else
     InternalRunGeminiSearch(AQuery, ResMsg);
 end;
 
-{ --- IMPLEMENTACI”N DE B⁄SQUEDA --- }
+{ --- IMPLEMENTACI√ìN DE B√öSQUEDA --- }
 
 function TAiGeminiWebSearchTool.InternalRunGeminiSearch(const AQuery: string; ResMsg: TAiChatMessage): string;
 var
@@ -97,6 +113,7 @@ begin
   LUrl := Format('%smodels/%s:generateContent?key=%s', [FUrl, FModel, GetApiKey]);
 
   HTTP := TNetHTTPClient.Create(nil);
+  HTTP.ConfigureForAsync;
   LRequestJson := TJSONObject.Create;
   try
     // 2. Preparar el Prompt (Contents)
@@ -104,13 +121,13 @@ begin
     LContents := TJSONObject.Create.AddPair('parts', TJSONArray.Create.Add(LPart));
     LRequestJson.AddPair('contents', TJSONArray.Create.Add(LContents));
 
-    // 3. ConfiguraciÛn de Herramientas (Grounding)
+    // 3. Configuraci√≥n de Herramientas (Grounding)
     if FDynamicThreshold > 0 then
     begin
-      // MODO DIN¡MICO: El modelo decide si buscar en Google o no
+      // MODO DIN√ÅMICO: El modelo decide si buscar en Google o no
       LDynamicConfig := TJSONObject.Create;
       LDynamicConfig.AddPair('mode', 'MODE_DYNAMIC');
-      LDynamicConfig.AddPair('dynamic_threshold', TJSONNumber.Create(FDynamicThreshold));
+      LDynamicConfig.AddPair('dynamic_threshold', CreateJSONNumber(FDynamicThreshold));
 
       LSearchTool := TJSONObject.Create;
       LSearchTool.AddPair('dynamic_retrieval_config', LDynamicConfig);
@@ -119,17 +136,17 @@ begin
     end
     else
     begin
-      // MODO FORZADO: Siempre realiza b˙squeda en Google
+      // MODO FORZADO: Siempre realiza b√∫squeda en Google
       LTool := TJSONObject.Create.AddPair('google_search', TJSONObject.Create);
     end;
 
     LRequestJson.AddPair('tools', TJSONArray.Create.Add(LTool));
 
-    // 4. EjecuciÛn del POST
+    // 4. Ejecuci√≥n del POST
     LBody := TStringStream.Create(LRequestJson.ToJSON, TEncoding.UTF8);
     try
       HTTP.ContentType := 'application/json';
-      ReportState(acsReasoning, 'Buscando informaciÛn actualizada en Google...');
+      ReportState(acsReasoning, 'Buscando informaci√≥n actualizada en Google...');
       LResponse := HTTP.Post(LUrl, LBody);
     finally
       LBody.Free;
@@ -141,21 +158,21 @@ begin
       LResponseJson := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       try
         // A. Extraer Texto Principal
-        Result := LResponseJson.GetValue<string>('candidates[0].content.parts[0].text', '');
+        Result := LResponseJson.GetValueAsString('candidates[0].content.parts[0].text', '');
         LMsg.Prompt := Result;
 
-        // B. Actualizar EstadÌsticas de Tokens
-        if LResponseJson.TryGetValue<TJSONObject>('usageMetadata', LUsage) then
+        // B. Actualizar Estad√≠sticas de Tokens
+        if LResponseJson.TryGetValue('usageMetadata', LUsage) then
         begin
-          LMsg.Prompt_tokens := LMsg.Prompt_tokens + LUsage.GetValue<Integer>('promptTokenCount', 0);
-          LMsg.Completion_tokens := LMsg.Completion_tokens + LUsage.GetValue<Integer>('candidatesTokenCount', 0);
-          LMsg.Total_tokens := LMsg.Total_tokens + LUsage.GetValue<Integer>('totalTokenCount', 0);
+          LMsg.Prompt_tokens := LMsg.Prompt_tokens + LUsage.GetValueAsInteger('promptTokenCount', 0);
+          LMsg.Completion_tokens := LMsg.Completion_tokens + LUsage.GetValueAsInteger('candidatesTokenCount', 0);
+          LMsg.Total_tokens := LMsg.Total_tokens + LUsage.GetValueAsInteger('totalTokenCount', 0);
         end;
 
         // C. Procesar Metadatos de Grounding (Citas e Inline Citations)
-        if LResponseJson.TryGetValue<TJSONObject>('candidates[0].groundingMetadata', LGrounding) then
+        if LResponseJson.TryGetValue('candidates[0].groundingMetadata', LGrounding) then
         begin
-          if LGrounding.TryGetValue<TJSONArray>('groundingChunks', LChunks) and LGrounding.TryGetValue<TJSONArray>('groundingSupports', LSupports) then
+          if LGrounding.TryGetValue('groundingChunks', LChunks) and LGrounding.TryGetValue('groundingSupports', LSupports) then
           begin
             for I := 0 to LSupports.Count - 1 do
             begin
@@ -163,12 +180,12 @@ begin
               LCitation := TAiMsgCitation.Create;
 
               // Segmentos de texto vinculados a fuentes
-              LCitation.StartIndex := LSupport.GetValue<TJSONObject>('segment').GetValue<Integer>('startIndex', 0);
-              LCitation.EndIndex := LSupport.GetValue<TJSONObject>('segment').GetValue<Integer>('endIndex', 0);
-              LCitation.Text := LSupport.GetValue<TJSONObject>('segment').GetValue<string>('text', '');
+              LCitation.StartIndex := LSupport.GetValueAsObject('segment').GetValueAsInteger('startIndex', 0);
+              LCitation.EndIndex := LSupport.GetValueAsObject('segment').GetValueAsInteger('endIndex', 0);
+              LCitation.Text := LSupport.GetValueAsObject('segment').GetValueAsString('text', '');
 
               // Vincular con las fuentes (web chunks)
-              if LSupport.TryGetValue<TJSONArray>('groundingChunkIndices', LIndices) then
+              if LSupport.TryGetValue('groundingChunkIndices', LIndices) then
               begin
                 for J := 0 to LIndices.Count - 1 do
                 begin
@@ -176,12 +193,12 @@ begin
                   if LIdx < LChunks.Count then
                   begin
                     LChunk := LChunks.Items[LIdx] as TJSONObject;
-                    if LChunk.TryGetValue<TJSONObject>('web', LSource) then
+                    if LChunk.TryGetValue('web', LSource) then
                     begin
                       LCitSource := TAiCitationSource.Create;
                       LCitSource.SourceType := cstWeb;
-                      LCitSource.DataSource.Title := LSource.GetValue<string>('title', '');
-                      LCitSource.DataSource.Url := LSource.GetValue<string>('uri', '');
+                      LCitSource.DataSource.Title := LSource.GetValueAsString('title', '');
+                      LCitSource.DataSource.Url := LSource.GetValueAsString('uri', '');
                       LCitation.Sources.Add(LCitSource);
                     end;
                   end;
@@ -201,7 +218,7 @@ begin
     else
     begin
       // Manejo de errores de la API
-      ReportError('Gemini Search Grounding Error: ' + LResponse.ContentAsString, nil);
+      ReportError('Gemini Search Grounding Error: ' + LResponse.ContentAsString);
     end;
 
   finally
@@ -210,13 +227,13 @@ begin
   end;
 end;
 
-{ --- CLASE FUNCI”N EST¡TICA --- }
+{ --- CLASE FUNCI√ìN EST√ÅTICA --- }
 
 class function TAiGeminiWebSearchTool.Search(const AApiKey, AQuery, AModel: string; const ADynamicThreshold: Single): TAiChatMessage;
 var
   LInstance: TAiGeminiWebSearchTool;
 begin
-  // Creamos el mensaje que retornar· con la respuesta y las citas
+  // Creamos el mensaje que retornar√° con la respuesta y las citas
   Result := TAiChatMessage.Create('', 'assistant');
 
   // Creamos una instancia temporal de la herramienta para realizar la labor
@@ -226,7 +243,7 @@ begin
     LInstance.Model := AModel;
     LInstance.DynamicThreshold := ADynamicThreshold;
 
-    // EjecuciÛn sÌncrona
+    // Ejecuci√≥n s√≠ncrona
     LInstance.InternalRunGeminiSearch(AQuery, Result);
   finally
     LInstance.Free;

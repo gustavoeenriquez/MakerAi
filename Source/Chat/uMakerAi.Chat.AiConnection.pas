@@ -1,18 +1,18 @@
-﻿// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -33,15 +33,23 @@
 
 unit uMakerAi.Chat.AiConnection;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  // FPC: Unidades estándar de FPC sin prefijo System
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math, TypInfo,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye Net/HTTP/JSON nativos
   System.SysUtils, System.Classes, System.Generics.Collections,
-  System.Threading, System.NetEncoding, System.Rtti, System.TypInfo, System.StrUtils,
+  System.Threading, System.NetEncoding, System.StrUtils,
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
-  System.JSON, Rest.JSON,
-  uMakerAi.ParamsRegistry, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Chat,
-  uMakerAi.Chat.Initializations, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Tools.ComputerUse, uMakerAi.Chat.Tools, uMakerAi.Chat.Messages;
+  System.JSON, Rest.JSON, System.Rtti, System.TypInfo,
+  {$ENDIF}
+  uMakerAi.ParamsRegistry, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Chat, uMakerAi.Chat.Initializations, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Tools.ComputerUse, uMakerAi.Chat.Tools, uMakerAi.Chat.Messages,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
   TOnChatModelChangeEvent = procedure(Sender: TObject; const OldChat, NewChat: TAiChat) of object;
@@ -219,8 +227,11 @@ procedure Register;
 
 implementation
 
-{$I uMakerAi.Version.inc}
+{$I ..\Core\uMakerAi.Version.inc}
+// Delphi: Archivo de recursos (íconos, cursores) no soportado por Lazarus resource compiler
+{$IFNDEF FPC}
 {$R ..\Resources\uMakerAiResources.res}
+{$ENDIF}
 
 procedure Register;
 begin
@@ -510,6 +521,7 @@ var
   ParamName, ParamValue: string;
   LIntVal: Int64;
   LFloatVal: Double;
+  LStringsProp: TStrings;
 begin
   if not Assigned(AChat) then
     Exit;
@@ -578,49 +590,14 @@ begin
 
             tkSet:
               begin
-                var
-                LSetType := LProp.PropertyType as TRttiSetType;
-                if LSetType.ElementType.TypeKind = tkEnumeration then
-                begin
-                  var
-                  LEnumType := LSetType.ElementType;
-                  var
-                    SetAsInt: NativeInt := 0;
-
-                  if (not ParamValue.IsEmpty) and (ParamValue <> '[]') then
-                  begin
-                    var
-                    CleanValue := ParamValue.Trim(['[', ']', ' ']);
-                    var
-                    EnumNames := CleanValue.Split([',']);
-                    for var EnumName in EnumNames do
-                    begin
-                      var
-                      TrimmedName := Trim(EnumName);
-                      if not TrimmedName.IsEmpty then
-                      begin
-                        // GetEnumValue es sensible a mayúsculas según el Enum definido en uMakerAi.Core
-                        var
-                        OrdinalValue := GetEnumValue(LEnumType.Handle, TrimmedName);
-                        if OrdinalValue >= 0 then
-                          SetAsInt := SetAsInt or (1 shl OrdinalValue);
-                      end;
-                    end;
-                  end;
-                  TValue.Make(@SetAsInt, LSetType.Handle, LValue);
-                  LProp.SetValue(AChat, LValue);
-                end;
+                // Delegamos al helper unificado que soporta ambos runtimes
+                SetRttiSetProperty(LProp, AChat, ParamValue);
               end;
 
             tkClass:
               begin
-                if LProp.PropertyType.QualifiedName.EndsWith('TStrings') then
-                begin
-                  var
-                  LStringsProp := LProp.GetValue(AChat).AsObject as TStrings;
-                  if Assigned(LStringsProp) then
-                    LStringsProp.Text := StringReplace(ParamValue, '|', sLineBreak, [rfReplaceAll]);
-                end;
+                // Delegamos al helper unificado
+                SetRttiStringsProperty(LProp, AChat, ParamValue);
               end;
           end;
         except

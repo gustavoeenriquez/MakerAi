@@ -1,18 +1,18 @@
-// IT License
+ï»¿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo EnrÃ­quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -34,15 +34,23 @@
 
 unit uMakerAi.OpenAI.Sora;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Classes, System.Generics.Collections, System.Threading,
   System.JSON, System.Net.HttpClient, System.Net.URLClient,
-  uMakerAi.Core, System.Net.HttpClientComponent;
+  System.Net.HttpClientComponent,
+  {$ENDIF}
+  uMakerAi.Core,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
-  // Enums para los parámetros de Sora
+  // Enums para los parÃ¡metros de Sora
   TSoraModel = (smSora2, smCustom);
   TSoraResolution = (srDefault, sr1280x720, sr720x1280, sr1920x1080, sr1080x1920);
 
@@ -67,7 +75,7 @@ type
     FOnSuccess: TGenerationSuccessEvent;
     FOnError: TGenerationErrorEvent;
 
-    // Métodos internos
+    // MÃ©todos internos
     function GetEffectiveModelName: string;
     function GetResolutionString: string;
     procedure DoError(const AMessage: string);
@@ -84,7 +92,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
 
-    // Métodos Públicos Asíncronos
+    // MÃ©todos PÃºblicos AsÃ­ncronos
     function GenerateFromText(const APrompt: string): ITask;
     function GenerateFromImage(const APrompt: string; AImage: TAiMediaFile): ITask;
     function RemixVideo(const APrompt: string; const AOriginalVideoId: string): ITask;
@@ -108,8 +116,11 @@ procedure Register;
 
 implementation
 
+// Delphi: Usa System.IOUtils, NetConsts, NetEncoding, REST.JSON y Net.Mime del RTL. FPC las importa en interface
+{$IFNDEF FPC}
 uses
   System.IOUtils, System.NetConsts, System.NetEncoding, REST.JSON, System.Net.Mime;
+{$ENDIF}
 
 const
   OPENAI_API_BASE_URL = 'https://api.openai.com/v1/';
@@ -182,7 +193,7 @@ begin
     end
     else
     begin
-      raise Exception.CreateFmt('Error downloading video content: %d %s', [LResponse.StatusCode, LResponse.ContentAsString(TEncoding.UTF8)]);
+      raise Exception.CreateFmt('Error downloading video content: %d %s', [LResponse.StatusCode, LResponse.ContentAsString]);
     end;
   finally
     if Result = nil then
@@ -232,7 +243,7 @@ Begin
   end;
 
   if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
-    Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
+    Result := CompatGetEnvVar(Copy(FApiKey, 2, Length(FApiKey)))
   else
     Result := FApiKey;
 end;
@@ -272,8 +283,10 @@ var
   LResponseObj: TJSONObject;
   LVideoJobId, LStatus: string;
   LHeaders: TNetHeaders;
+  LSizeStr: string;
 begin
   LHttpClient := TNetHTTPClient.Create(nil);
+  LHttpClient.ConfigureForAsync;
   LFormData := TMultipartFormData.Create;
   try
     try
@@ -285,7 +298,7 @@ begin
       LFormData.AddField('model', GetEffectiveModelName);
       if FSeconds > 0 then
         LFormData.AddField('seconds', FSeconds.ToString);
-      var LSizeStr := GetResolutionString;
+      LSizeStr := GetResolutionString;
       if not LSizeStr.IsEmpty then
         LFormData.AddField('size', LSizeStr);
 
@@ -302,9 +315,9 @@ begin
 
       LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       try
-        if not LResponseObj.TryGetValue<string>('id', LVideoJobId) then
+        if not LResponseObj.TryGetValue('id', LVideoJobId) then
           raise Exception.Create('Video Job ID not found in API response.');
-        LResponseObj.TryGetValue<string>('status', LStatus);
+        LResponseObj.TryGetValue('status', LStatus);
       finally
         LResponseObj.Free;
       end;
@@ -333,6 +346,7 @@ var
   LHeaders: TNetHeaders;
 begin
   LHttpClient := TNetHTTPClient.Create(nil);
+  LHttpClient.ConfigureForAsync;
   try
     try
       LUrl := TPath.Combine(OPENAI_API_BASE_URL, 'videos/' + AVideoIdToRemix + '/remix');
@@ -356,9 +370,9 @@ begin
 
       LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       try
-        if not LResponseObj.TryGetValue<string>('id', LVideoJobId) then
+        if not LResponseObj.TryGetValue('id', LVideoJobId) then
           raise Exception.Create('New Video Job ID not found in remix API response.');
-        LResponseObj.TryGetValue<string>('status', LStatus);
+        LResponseObj.TryGetValue('status', LStatus);
       finally
         LResponseObj.Free;
       end;
@@ -404,8 +418,8 @@ begin
 
       LPollingResponse := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       try
-        LPollingResponse.TryGetValue<string>('status', LStatus);
-        LPollingResponse.TryGetValue<Integer>('progress', LProgress);
+        LPollingResponse.TryGetValue('status', LStatus);
+        LPollingResponse.TryGetValue('progress', LProgress);
         DoProgress(Format('Checking status... [%d%%] %s', [LProgress, LStatus]));
 
         if LStatus.Equals('completed') then
@@ -415,9 +429,9 @@ begin
         else if LStatus.Equals('failed') then
         begin
           LErrorMessage := 'Video generation failed with status: "failed".';
-          if LPollingResponse.TryGetValue<TJSONObject>('error', LErrorObj) then
+          if LPollingResponse.TryGetValue('error', LErrorObj) then
           begin
-            LErrorMessage := 'API Error: ' + LErrorObj.GetValue<string>('message', LErrorObj.ToJSON);
+            LErrorMessage := 'API Error: ' + LErrorObj.GetValueAsString('message', LErrorObj.ToJSON);
           end;
           raise Exception.Create(LErrorMessage);
         end;
@@ -437,14 +451,20 @@ begin
 end;
 
 function TAiSoraGenerator.RemixVideo(const APrompt: string; const AOriginalVideoId: string): ITask;
+var
+  LPrompt, LVideoId: string;
 begin
   if APrompt.IsEmpty or AOriginalVideoId.IsEmpty then
     raise Exception.Create('A prompt and the original video ID are required for remixing.');
 
+  // COMPAT: Capture parameters to local variables for proper closure
+  LPrompt := APrompt;
+  LVideoId := AOriginalVideoId;
+
   Result := TTask.Run(
     procedure
     begin
-      InternalExecuteRemix(APrompt, AOriginalVideoId);
+      InternalExecuteRemix(LPrompt, LVideoId);
     end);
 end;
 

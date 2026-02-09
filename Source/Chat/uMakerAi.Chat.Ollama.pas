@@ -1,18 +1,18 @@
-﻿// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -33,9 +33,16 @@
 
 unit uMakerAi.Chat.Ollama;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  // FPC: Unidades estándar de FPC sin prefijo System
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye Net/HTTP/JSON/REST nativos
   System.SysUtils, System.Types, System.UITypes, System.Classes,
   System.Threading,
   System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections,
@@ -43,10 +50,9 @@ uses
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
-{$IF CompilerVersion < 35}
-  uJSONHelper,
-{$ENDIF}
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages;
+  {$ENDIF}
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
 
@@ -56,7 +62,7 @@ type
     FTmpToolCallsStr: string;
     procedure Setkeep_alive(const Value: String);
   Protected
-    Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
+    Procedure OnInternalReceiveData(const Sender: TObject; {$IFDEF FPC}const{$ENDIF} AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
     Function InitChatCompletions: String; Override;
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
     Procedure ParseChat(JObj: TJSonObject; ResMsg: TAiChatMessage); Override;
@@ -161,10 +167,10 @@ begin
 
   LResponseObj := jChoices.Items[0] as TJSonObject;
 
-  if not LResponseObj.TryGetValue<TJSonObject>('message', LMessageObj) then
+  if not LResponseObj.TryGetValue('message', LMessageObj) then
     Exit;
 
-  if not LMessageObj.TryGetValue<TJSonArray>('tool_calls', LToolCallsArray) then
+  if not LMessageObj.TryGetValue('tool_calls', LToolCallsArray) then
     Exit;
 
   for LItem in LToolCallsArray do
@@ -174,21 +180,21 @@ begin
 
     LToolCallObj := LItem as TJSonObject;
 
-    if LToolCallObj.TryGetValue<TJSonObject>('function', LFunctionObj) then
+    if LToolCallObj.TryGetValue('function', LFunctionObj) then
     begin
       LToolCall := TAiToolsFunction.Create;
       try
         // Ollama ahora sí incluye un 'id', pero lo generamos como fallback por si acaso.
-        LToolCall.Id := LToolCallObj.GetValue<string>('id', 'call_' + TGuid.NewGuid.ToString);
-        LToolCall.Name := LFunctionObj.GetValue<string>('name', '');
+        LToolCall.Id := LToolCallObj.GetValueAsString('id', 'call_' + TGuid.NewGuid.ToString);
+        LToolCall.Name := LFunctionObj.GetValueAsString('name');
         LToolCall.Tipo := 'function';
 
-        if LFunctionObj.TryGetValue<TJSonObject>('arguments', LArgumentsObj) then
+        if LFunctionObj.TryGetValue('arguments', LArgumentsObj) then
         begin
           LToolCall.Arguments := LArgumentsObj.Format;
           for LPair in LArgumentsObj do
           begin
-            LToolCall.Params.Values[LPair.JsonString.Value] := LPair.JsonValue.Value;
+            LToolCall.Params.Values[GetJSONStringValue(LPair.JsonString)] := GetJSONStringValue(LPair.JsonValue);
           end;
         end
         else
@@ -251,11 +257,7 @@ begin
 
     If Msg.Tool_calls <> '' then
 
-{$IF CompilerVersion < 35}
-      JObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.Tool_calls));
-{$ELSE}
-      JObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.Tool_calls)));
-{$ENDIF}
+      JObj.AddPair('tool_calls', TJSONObject.ParseJSONValue(Msg.Tool_calls) as TJSONArray);
     Result.Add(JObj);
   End;
 end;
@@ -282,9 +284,7 @@ begin
     EndPointUrl := GlAIUrl;
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
-  Client.SynchronizeEvents := False;
-{$ENDIF}
+  Client.ConfigureForAsync;
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := EndPointUrl + 'api/tags';
 
@@ -296,12 +296,12 @@ begin
 
     if Res.StatusCode = 200 then
     Begin
-      jRes := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      If jRes.TryGetValue<TJSonArray>('models', JArr) then
+      jRes := TJSonObject(TJSONObject.ParseJSONValue(Res.ContentAsString));
+      If jRes.TryGetValue('models', JArr) then
       Begin
         For JVal in JArr do
         Begin
-          sModel := JVal.GetValue<String>('name');
+          sModel := TJSONObject(JVal).GetValueAsString('name');
           If sModel <> '' then
             Result.Add(sModel);
         End;
@@ -312,13 +312,10 @@ begin
 
       for I := Low(CustomModels) to High(CustomModels) do
       begin
-{$IF CompilerVersion <= 35.0}
-        if Result.IndexOf(CustomModels[I]) = -1 then
-          Result.Add(CustomModels[I]);
-{$ELSE}
+        // TStringsHelper.Contains definido en uSysUtilsHelper para FPC
+        // Delphi moderno lo tiene nativo
         if not Result.Contains(CustomModels[I]) then
           Result.Add(CustomModels[I]);
-{$ENDIF}
       end;
 
     End
@@ -339,6 +336,9 @@ Var
   Lista: TStringList;
   I: Integer;
   LModel: String;
+  sShema: String;
+  JSchema: TJSONValue;
+
 begin
   // 1. Configuración básica y Modelo
   If User = '' then
@@ -365,7 +365,7 @@ begin
     AJSONObject.AddPair('messages', GetMessages); // Usa GetMessages (revisaremos este después)
 
     // Respetamos la configuración asíncrona (True/False)
-    AJSONObject.AddPair('stream', TJSONBool.Create(Self.Asynchronous));
+    AJSONObject.AddPair('stream', CreateJSONBool(Self.Asynchronous));
 
     if Fkeep_alive <> '' then
       AJSONObject.AddPair('keep_alive', Fkeep_alive);
@@ -378,9 +378,8 @@ begin
         try
           // Ollama espera el esquema DIRECTAMENTE en el parámetro "format".
           // No requiere wrappers como "json_schema" o "schema".
-          Var sShema := StringReplace(JsonSchema.Text,'\n',' ',[rfReplaceAll]);
-          var
-          JSchema := TJSonObject.ParseJSONValue(sShema);
+          sShema := StringReplace(JsonSchema.Text,'\n',' ',[rfReplaceAll]);
+          JSchema := TJSONObject.ParseJSONValue(sShema);
 
           if Assigned(JSchema) then
           begin
@@ -403,11 +402,8 @@ begin
     // --- MANEJO DE TOOLS ---
     If Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAi).Text) <> '') then
     Begin
-{$IF CompilerVersion < 35}
-      JArr := TJSONUtils.ParseAsArray(GetTools(TToolFormat.tfOpenAi).Text);
-{$ELSE}
-      JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
-{$ENDIF}
+      // Reusing JSchema as temp TJSONValue
+      JArr := TJSONObject.ParseAsArray(GetTools(TToolFormat.tfOpenAi).Text);
       If Assigned(JArr) then
         AJSONObject.AddPair('tools', JArr);
     End;
@@ -416,23 +412,23 @@ begin
     // Ollama requiere encapsular estos parámetros dentro de 'options'
 
     if Temperature > 0 then
-      jOptions.AddPair('temperature', TJSONNumber.Create(Temperature));
+      jOptions.AddPair('temperature', CreateJSONNumber(Temperature));
 
     // OJO: Ollama usa 'num_predict' en lugar de 'max_tokens'
     if Max_tokens > 0 then
-      jOptions.AddPair('num_predict', TJSONNumber.Create(Max_tokens));
+      jOptions.AddPair('num_predict', CreateJSONNumber(Max_tokens));
 
     If Top_p <> 0 then
-      jOptions.AddPair('top_p', TJSONNumber.Create(Top_p));
+      jOptions.AddPair('top_p', CreateJSONNumber(Top_p));
 
     If Frequency_penalty <> 0 then
-      jOptions.AddPair('frequency_penalty', TJSONNumber.Create(Frequency_penalty));
+      jOptions.AddPair('frequency_penalty', CreateJSONNumber(Frequency_penalty));
 
     If Presence_penalty <> 0 then
-      jOptions.AddPair('presence_penalty', TJSONNumber.Create(Presence_penalty));
+      jOptions.AddPair('presence_penalty', CreateJSONNumber(Presence_penalty));
 
     If Seed > 0 then
-      jOptions.AddPair('seed', TJSONNumber.Create(Seed));
+      jOptions.AddPair('seed', CreateJSONNumber(Seed));
 
     // Manejo de Stop Sequences
     Lista.CommaText := Stop;
@@ -451,7 +447,7 @@ begin
       jOptions.Free; // Si no se añadió al padre, hay que liberarlo
 
     // Generación del String final
-    Result := AJSONObject.ToJSON;
+    Result := AJSONObject.ToJSONString;
 
   Finally
     AJSONObject.Free;
@@ -468,6 +464,7 @@ Var
   St: TStringStream;
   FHeaders: TNetHeaders;
   JObj: TJSonObject;
+  S: String;
 begin
 
   FBusy := True; // Marca como ocupado al sistema
@@ -503,13 +500,12 @@ begin
     Begin
       if Res.StatusCode = 200 then
       Begin
-        Var
         S := Res.ContentAsString;
 
         LogDebug('-Resultado-');
         LogDebug(S);
 
-        JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
+        JObj := TJSonObject(TJSONObject.ParseJSONValue(Res.ContentAsString));
         Try
           FBusy := False;
           ParseChat(JObj, ResMsg);
@@ -569,7 +565,7 @@ begin
   Result := (Balance = 0) and (not InString);
 end;
 
-procedure TAiOllamaChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
+procedure TAiOllamaChat.OnInternalReceiveData(const Sender: TObject; {$IFDEF FPC}const{$ENDIF} AContentLength, AReadCount: Int64; var AAbort: Boolean);
 var
   LJsonObject, LMessageObj: TJSonObject;
   LToolCallsArray: TJSonArray;
@@ -589,7 +585,7 @@ var
     // los re-inyectamos para que ParseChat los procese.
     if not FTmpToolCallsStr.IsEmpty then
     begin
-      if not AJson.TryGetValue<TJSonObject>('message', LMsgObj) then
+      if not AJson.TryGetValue('message', LMsgObj) then
       begin
         LMsgObj := TJSonObject.Create;
         AJson.AddPair('message', LMsgObj);
@@ -597,7 +593,7 @@ var
 
       if LMsgObj.GetValue('tool_calls') = nil then
       begin
-        LMsgObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(FTmpToolCallsStr)));
+        LMsgObj.AddPair('tool_calls', TJSonArray(TJSONObject.ParseJSONValue(FTmpToolCallsStr)));
       end;
     end;
 
@@ -648,30 +644,30 @@ begin
       if LJsonLine.Trim.IsEmpty then
         Continue;
 
-      LJsonObject := TJSonObject.ParseJSONValue(LJsonLine.Trim) as TJSonObject;
+      LJsonObject := TJSONObject.ParseJSONValue(LJsonLine.Trim) as TJSonObject;
       if not Assigned(LJsonObject) then
         Continue;
 
       try
-        LDone := LJsonObject.GetValue<Boolean>('done', False);
+        LDone := LJsonObject.GetValueAsBoolean('done');
 
         if not LDone then // --- FRAGMENTO INTERMEDIO ---
         begin
-          if LJsonObject.TryGetValue<TJSonObject>('message', LMessageObj) then
+          if LJsonObject.TryGetValue('message', LMessageObj) then
           begin
-            LRole := LMessageObj.GetValue<string>('role', 'assistant');
+            LRole := LMessageObj.GetValueAsString('role', 'assistant');
 
             // 1. CAPTURAR TOOL CALLS (Fundamental para Ollama)
-            if LMessageObj.TryGetValue<TJSonArray>('tool_calls', LToolCallsArray) then
+            if LMessageObj.TryGetValue('tool_calls', LToolCallsArray) then
             begin
               // Guardamos el string de las herramientas. Ollama suele enviarlas
               // completas en un solo chunk, pero lo sobreescribimos por seguridad.
-              FTmpToolCallsStr := LToolCallsArray.ToJSON;
+              FTmpToolCallsStr := LToolCallsArray.Format;
               DoStateChange(acsToolCalling, 'Tool call detected in stream...');
             end;
 
             // 2. PROCESAR CONTENIDO
-            if LMessageObj.TryGetValue<string>('content', LContentPart) and (LContentPart <> '') then
+            if LMessageObj.TryGetValue('content', LContentPart) and (LContentPart <> '') then
             begin
               LContentPart := StringReplace(LContentPart, #$A, sLineBreak, [rfReplaceAll]);
               FLastContent := FLastContent + LContentPart;
@@ -680,7 +676,7 @@ begin
             end;
 
             // 3. PROCESAR RAZONAMIENTO (Thinking)
-            if LMessageObj.TryGetValue<string>('thinking', LThinkingPart) and (LThinkingPart <> '') then
+            if LMessageObj.TryGetValue('thinking', LThinkingPart) and (LThinkingPart <> '') then
             begin
               LThinkingPart := StringReplace(LThinkingPart, #$A, sLineBreak, [rfReplaceAll]);
               if Assigned(OnReceiveThinking) then
@@ -701,10 +697,10 @@ begin
     // --- MANEJO DE FRAGMENTO FINAL (sin salto de línea) ---
     if (not LStreamFinished) and (FTmpResponseText.Trim <> '') then
     begin
-      LJsonObject := TJSonObject.ParseJSONValue(FTmpResponseText.Trim) as TJSonObject;
+      LJsonObject := TJSONObject.ParseJSONValue(FTmpResponseText.Trim) as TJSonObject;
       if Assigned(LJsonObject) then
       try
-        if LJsonObject.GetValue<Boolean>('done', False) then
+        if LJsonObject.GetValueAsBoolean('done') then
           ProcessFinalJsonObject(LJsonObject);
       finally
         LJsonObject.Free;
@@ -715,7 +711,7 @@ begin
     on E: Exception do
     begin
       FBusy := False;
-      DoError('Error en OnInternalReceiveData (Ollama Stream): ' + E.Message, E);
+      DoError('Error en OnInternalReceiveData (Ollama Stream): ' + E.Message);
     end;
   end;
 end;
@@ -751,10 +747,10 @@ begin
     Exit;
 
   // 1. EXTRAER METADATOS Y ESTADÍSTICAS
-  LModel := JObj.GetValue<string>('model', '');
+  LModel := JObj.GetValueAsString('model');
   // Ollama usa nombres específicos para los tokens
-  LPromptTokens := JObj.GetValue<Integer>('prompt_eval_count', 0);
-  LEvalTokens := JObj.GetValue<Integer>('eval_count', 0);
+  LPromptTokens := JObj.GetValueAsInteger('prompt_eval_count');
+  LEvalTokens := JObj.GetValueAsInteger('eval_count');
 
   // Actualizar contadores globales del componente
   Self.Prompt_tokens := Self.Prompt_tokens + LPromptTokens;
@@ -762,10 +758,10 @@ begin
   Self.Total_tokens := Self.Total_tokens + LPromptTokens + LEvalTokens;
 
   // 2. VALIDAR LA EXISTENCIA DE "MESSAGE"
-  if not JObj.TryGetValue<TJSonObject>('message', LMessageObj) then
+  if not JObj.TryGetValue('message', LMessageObj) then
   begin
     // Si no hay mensaje pero el JSON indica que terminó, disparamos el evento de fin
-    if JObj.GetValue<Boolean>('done', False) then
+    if JObj.GetValueAsBoolean('done') then
     begin
       DoStateChange(acsFinished, 'Done');
       if Assigned(FOnReceiveDataEnd) then
@@ -775,9 +771,9 @@ begin
   end;
 
   // 3. EXTRAER CONTENIDO DEL MENSAJE
-  LRole := LMessageObj.GetValue<string>('role', 'assistant');
-  LReasoning := LMessageObj.GetValue<string>('thinking', '');
-  LContent := LMessageObj.GetValue<string>('content', '');
+  LRole := LMessageObj.GetValueAsString('role', 'assistant');
+  LReasoning := LMessageObj.GetValueAsString('thinking', '');
+  LContent := LMessageObj.GetValueAsString('content', '');
 
   // Sincronizar el contenido acumulado durante el streaming (FLastContent) con el ResMsg
   if (FLastContent <> '') then
@@ -801,7 +797,7 @@ begin
 
   // 4. LÓGICA DE LLAMADO A FUNCIONES (TOOLS)
   // Verificamos si Ollama nos ha devuelto tool_calls
-  if LMessageObj.TryGetValue<TJSonArray>('tool_calls', LToolCallsArray) and (LToolCallsArray.Count > 0) then
+  if LMessageObj.TryGetValue('tool_calls', LToolCallsArray) and (LToolCallsArray.Count > 0) then
   begin
     // --- CASO A: El modelo solicita ejecutar herramientas ---
 
@@ -835,22 +831,30 @@ begin
           LToolCall.AskMsg := LAskMsg;
 
           TaskList[I] := TTask.Create(
-            procedure
+            TProc(procedure
             var
               CapturaTool: TAiToolsFunction;
+              LErrorMsg: string;
             begin
               CapturaTool := LToolCall;
               try
                 DoCallFunction(CapturaTool);
               except
                 on E: Exception do
-                  TThread.Queue(nil,
-                    procedure
-                    begin
-                      DoError('Function Execution Error: ' + CapturaTool.Name, E);
-                    end);
+                begin
+                  // [DIFERENCIA FPC/DELPHI - Procedimientos anónimos anidados]
+                  // FPC 3.2/3.3 NO soportan procedimientos anónimos anidados.
+                  // Delphi: TThread.Queue ejecuta DoError en hilo principal (thread-safe para UI).
+                  // FPC: Ejecuta DoError directamente en hilo del TTask.
+                  // DoError de TAiChat solo guarda FLastError y dispara OnError,
+                  // lo cual es seguro si el handler no modifica UI directamente.
+                  // Unified Thread-Safety for FPC/Delphi
+                  LErrorMsg := 'Function Execution Error: ' + CapturaTool.Name + ' - ' + E.Message;
+                  // FPC Syntax Fix: Calling DoError directly to avoid anonymous method issues in Queue
+                  DoError(LErrorMsg);
+                end;
               end;
-            end);
+            end));
           TaskList[I].Start;
           Inc(I);
         end;
@@ -979,7 +983,7 @@ begin
   try
     LJsonObject.AddPair('name', aNewModelName);
     LJsonObject.AddPair('modelfile', aModelfileContent);
-    LJsonObject.AddPair('stream', TJSONBool.Create(True)); // Siempre en stream para progreso
+    LJsonObject.AddPair('stream', CreateJSONBool(True)); // Siempre en stream para progreso
     LBodyStream.WriteString(LJsonObject.ToJSON);
     LBodyStream.Position := 0;
 
@@ -991,20 +995,20 @@ begin
 
     // Procesar la respuesta en stream (linea por linea)
     LResponseStream.Position := 0;
-    LJsonLines := LResponseStream.DataString.Split([#10], TStringSplitOptions.ExcludeEmpty);
+    LJsonLines := CompatSplit(LResponseStream.DataString, [#10], TStringSplitOptions.ExcludeEmpty);
 
     for LLine in LJsonLines do
     begin
       if Assigned(OnProgressEvent) then
       begin
-        LStatusObj := TJSonObject.ParseJSONValue(LLine) as TJSonObject;
+        LStatusObj := TJSONObject.ParseJSONValue(LLine) as TJSonObject;
         if Assigned(LStatusObj) then
           try
-            LStatus := LStatusObj.GetValue<string>('status');
+            LStatus := LStatusObj.GetValueAsString('status');
             LCompleted := 0;
             LTotal := 0;
-            LStatusObj.TryGetValue<Int64>('completed', LCompleted);
-            LStatusObj.TryGetValue<Int64>('total', LTotal);
+            LStatusObj.TryGetValue('completed', LCompleted);
+            LStatusObj.TryGetValue('total', LTotal);
             OnProgressEvent(Self, LStatus, LCompleted, LTotal);
           finally
             LStatusObj.Free;
@@ -1065,7 +1069,7 @@ begin
   LResponseStream := TStringStream.Create('', TEncoding.UTF8);
   try
     LJsonObject.AddPair('name', aModelName);
-    LJsonObject.AddPair('stream', TJSONBool.Create(True)); // Siempre en stream para progreso
+    LJsonObject.AddPair('stream', CreateJSONBool(True)); // Siempre en stream para progreso
     LBodyStream.WriteString(LJsonObject.ToJSON);
     LBodyStream.Position := 0;
 
@@ -1078,22 +1082,22 @@ begin
 
     // Procesar la respuesta en stream (linea por linea)
     LResponseStream.Position := 0;
-    LJsonLines := LResponseStream.DataString.Split([#10], TStringSplitOptions.ExcludeEmpty);
+    LJsonLines := CompatSplit(LResponseStream.DataString, [#10], TStringSplitOptions.ExcludeEmpty);
 
     for LLine in LJsonLines do
     begin
       // Si el evento de progreso está asignado, lo disparamos
       if Assigned(OnProgressEvent) then
       begin
-        LStatusObj := TJSonObject.ParseJSONValue(LLine) as TJSonObject;
+        LStatusObj := TJSONObject.ParseJSONValue(LLine) as TJSonObject;
         if Assigned(LStatusObj) then
           try
-            LStatus := LStatusObj.GetValue<string>('status');
+            LStatus := LStatusObj.GetValueAsString('status');
             LCompleted := 0;
             LTotal := 0;
             // TryGetValue es más seguro si los campos no siempre están presentes
-            LStatusObj.TryGetValue<Int64>('completed', LCompleted);
-            LStatusObj.TryGetValue<Int64>('total', LTotal);
+            LStatusObj.TryGetValue('completed', LCompleted);
+            LStatusObj.TryGetValue('total', LTotal);
             OnProgressEvent(Self, LStatus, LCompleted, LTotal);
           finally
             LStatusObj.Free;
@@ -1130,7 +1134,7 @@ begin
     if LResponse.StatusCode = 200 then
     begin
       // El llamador es responsable de liberar el TJSONObject devuelto
-      Result := TJSonObject.ParseJSONValue(LResponse.ContentAsString) as TJSonObject;
+      Result := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSonObject;
     end
     else
     begin
@@ -1184,9 +1188,7 @@ begin
     aDimensions := FDimensions;
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
-  Client.SynchronizeEvents := False;
-{$ENDIF}
+  Client.ConfigureForAsync;
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TStringStream.Create('', TEncoding.UTF8);
   sUrl := Url + 'api/embeddings';
@@ -1209,7 +1211,7 @@ begin
 
     if Res.StatusCode = 200 then
     Begin
-      JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
+      JObj := TJSonObject(TJSONObject.ParseJSONValue(Res.ContentAsString));
       ParseEmbedding(JObj);
       Result := Self.Data;
     End
@@ -1240,7 +1242,7 @@ Var
 begin
   // A diferencia de openAi el embedding es uno solo y no un arreglo
 
-  JArr := JObj.GetValue<TJSonArray>('embedding');
+  JArr := JObj.GetValueAsArray('embedding');
   J := JArr.Count;
   SetLength(FData, J);
 
@@ -1248,7 +1250,7 @@ begin
 
   For J := 0 to JArr.Count - 1 do
   Begin
-    Valor := JArr.Items[J].GetValue<Double>;
+    Valor := (JArr.Items[J] as TJSONNumber).AsDouble;
     FData[J] := Valor;
   End;
 

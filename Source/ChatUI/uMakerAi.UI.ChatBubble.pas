@@ -1,18 +1,18 @@
-﻿// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -34,16 +34,22 @@
 
 unit uMakerAi.UI.ChatBubble;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Classes, System.Types, System.UITypes, System.Math.Vectors, System.Math,
   System.UIConsts, System.Generics.Collections, System.IOUtils, FMX.Styles.Objects, System.JSON,
 
-  uMakerAi.Core,
-
   FMX.Types, FMX.Controls, FMX.Graphics, FMX.Layouts, FMX.Memo, FMX.TextLayout, FMX.ImgList,
-  FMX.StdCtrls, FMX.Objects;
+  FMX.StdCtrls, FMX.Objects,
+  {$ENDIF}
+  uMakerAi.Core,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
   TChatBubbleTailPosition = (tpLeft, tpRight);
@@ -297,7 +303,11 @@ implementation
 {$IFNDEF UIRESOURCES_LOADED}
 {$DEFINE UIRESOURCES_LOADED}
 {$R UIResources.res}
+// Asegurada inclusión única de recursos (se eliminó duplicado que causaba advertencias).
+
 {$ENDIF}
+
+type TControlAccess = class(TControl);
 
 procedure Register;
 begin
@@ -390,6 +400,7 @@ var
   Icon: TImage;
   LblFileName, LblInfo: TLabel;
   IconKey: string;
+  BM: TBitMap;
 begin
   // Crear el layout contenedor para el documento
   Result := TLayout.Create(nil);
@@ -427,8 +438,6 @@ begin
     IconKey := 'unknown';
   end;
 
-  Var
-    BM: TBitMap;
   If FDocIcons.TryGetValue(IconKey, BM) then
     Icon.Bitmap.Assign(BM);
 
@@ -457,6 +466,8 @@ function TChatBubble.CreateImageView(AMediaFile: TAiMediaFile): TImage;
 const
   MAX_IMAGE_WIDTH = 250;
   MAX_IMAGE_HEIGHT = 300;
+var
+  LRatio: Single;
 begin
   Result := TImage.Create(nil); // Se añadirá al FContentLayout, sin owner
   try
@@ -466,7 +477,6 @@ begin
     AMediaFile.Content.Position := 0;
 
     // Calcular tamaño manteniendo el aspect ratio
-    var
     LRatio := Result.Bitmap.Width / Result.Bitmap.Height;
     Result.Width := MAX_IMAGE_WIDTH;
     Result.Height := Result.Width / LRatio;
@@ -597,20 +607,22 @@ var
   LOrdValue: Integer;
 begin
   // 1. Leer propiedades simples de la burbuja
-  AJsonObject.TryGetValue<string>('username', FUserName);
-  AJsonObject.TryGetValue<string>('title', FTitle);
-  AJsonObject.TryGetValue<string>('timestamp', FTimestamp);
-  if AJsonObject.TryGetValue<Integer>('tailPosition', LOrdValue) then
+  AJsonObject.TryGetValue('username', FUserName);
+  AJsonObject.TryGetValue('title', FTitle);
+  AJsonObject.TryGetValue('timestamp', FTimestamp);
+  if AJsonObject.TryGetValue('tailPosition', LOrdValue) then
     FTailPosition := TChatBubbleTailPosition(LOrdValue);
-  AJsonObject.TryGetValue<TAlphaColor>('bubbleColor', FBubbleColor);
-  AJsonObject.TryGetValue<Integer>('imageIndex', FImageIndex);
+  // COMPAT: Usar TryGetValue tipado en vez de TryGetValue<TAlphaColor> genérico
+  if AJsonObject.TryGetValue('bubbleColor', LOrdValue) then
+    FBubbleColor := TAlphaColor(LOrdValue);
+  AJsonObject.TryGetValue('imageIndex', FImageIndex);
 
   // 2. Deserializar texto y media files
-  AJsonObject.TryGetValue<string>('text', LText);
+  AJsonObject.TryGetValue('text', LText);
 
   LMediaFiles := TAiMediaFiles.Create;
   try
-    if AJsonObject.TryGetValue<TJSONArray>('mediaFiles', LMediaArray) then
+    if AJsonObject.TryGetValue('mediaFiles', LMediaArray) then
     begin
       for LMediaValue in LMediaArray do
       begin
@@ -718,6 +730,7 @@ var
   NewMediaFile: TAiMediaFile;
   LContentControl: TControl;
   LMemo: TMemo;
+  Bg: TFmxObject;
 begin
   // 1. Limpiar todo el contenido anterior (visual y de datos)
   ClearContentControls;
@@ -783,7 +796,6 @@ begin
 
     }
 
-    var
     Bg := LMemo.FindStyleResource('background');
 
     if Bg is TActiveStyleObject then
@@ -997,6 +1009,8 @@ begin
 end;
 
 class function TChatBubble.CalculateMemoSize(const AMemo: TMemo; AMaxWidth: Single): TSizeF;
+var
+  LHeight: Single;
 begin
   // YA NO NECESITAMOS TTextLayout. El TMemo puede hacerlo solo.
 
@@ -1008,7 +1022,6 @@ begin
   // 2. Dejar que el TMemo calcule su contenido. ContentBounds.Height nos dará la
   // altura exacta del texto con el WordWrap aplicado.
   // Le sumamos los paddings internos del TMemo para el tamaño total.
-  var
   LHeight := AMemo.ContentBounds.Height + AMemo.Padding.Top + AMemo.Padding.Bottom;
 
   // 3. Devolvemos el tamaño. Para el ancho, usamos AMaxWidth para consistencia.
@@ -1147,8 +1160,8 @@ var
   LControl: TControl;
   LMediaFile: TAiMediaFile;
   LScreenPos: TPointF;
-begin
-  if (Button = TMouseButton.mbRight) and Assigned(FOnAttachmentContextPopup) then
+ begin
+   if (Button = TMouseButton.mbRight) and Assigned(FOnAttachmentContextPopup) then
   begin
     LControl := Sender as TControl;
     if (LControl.TagObject is TAiMediaFile) then
@@ -1157,8 +1170,8 @@ begin
 
       // Convertimos las coordenadas a la pantalla
       // LScreenPos := LControl.LocalToAbsolute(PointF(X, Y));
-      // LScreenPos := LControl.LocalToScreen(LScreenPos);
-      LScreenPos := LControl.LocalToScreen(PointF(X, Y));
+       // LScreenPos := LControl.LocalToScreen(LScreenPos);
+       LScreenPos := TControlAccess(LControl).LocalToScreen(PointF(X, Y));
 
       // Disparamos el evento hacia el padre (TChatList)
       FOnAttachmentContextPopup(Self, LMediaFile, LScreenPos);
@@ -1725,12 +1738,12 @@ begin
   Result := TJSONObject.Create;
 
   // 1. Guardar propiedades simples de la burbuja
-  Result.AddPair('username', FUserName);
-  Result.AddPair('title', FTitle);
-  Result.AddPair('timestamp', FTimestamp);
-  Result.AddPair('tailPosition', Ord(FTailPosition));
-  Result.AddPair('bubbleColor', FBubbleColor);
-  Result.AddPair('imageIndex', FImageIndex);
+   Result.AddPair('username', FUserName);
+   Result.AddPair('title', FTitle);
+   Result.AddPair('timestamp', FTimestamp);
+   Result.AddPair('tailPosition', Integer(Ord(FTailPosition)));
+   Result.AddPair('bubbleColor', Integer(FBubbleColor));
+   Result.AddPair('imageIndex', FImageIndex);
 
   // 2. Guardar el texto (si existe)
   LMemo := FindFirstChild<TMemo>;

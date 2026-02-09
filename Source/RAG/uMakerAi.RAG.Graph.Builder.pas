@@ -1,18 +1,18 @@
-﻿// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -33,12 +33,19 @@
 
 unit uMakerAi.RAG.Graph.Builder;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Classes, System.Json, System.Generics.Collections,
-  System.Variants, uMakerAi.RAG.Vectors, uMakerAi.Embeddings.core, uMakerAi.Embeddings,
-  uMakerAi.RAG.Graph.core; // Incluimos la unidad del grafo
+  System.Variants, 
+  {$ENDIF}
+  uMakerAi.RAG.Vectors, uMakerAi.Embeddings.Core, uMakerAi.Embeddings, uMakerAi.RAG.Graph.Core,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper; // Incluimos la unidad del grafo
 
 type
   { TAiRagGraphBuilder }
@@ -110,7 +117,7 @@ begin
 
   for Pair in ANewProperties do
   begin
-    Key := Pair.JsonString.Value;
+    Key := GetJSONStringValue(Pair.JsonString);
     Value := JSONValueToVariant(Pair.JsonValue); // Helper para convertir TJSONValue a Variant
 
     case AStrategy of
@@ -137,7 +144,7 @@ begin
 
   for Pair in ANewProperties do
   begin
-    Key := Pair.JsonString.Value;
+    Key := GetJSONStringValue(Pair.JsonString);
     Value := JSONValueToVariant(Pair.JsonValue);
 
     case AStrategy of
@@ -176,12 +183,12 @@ begin
       begin
         // Intentamos obtener una representación textual limpia del valor
         if Pair.JsonValue is TJSONString then
-          PropertyValue := Pair.JsonValue.Value
+          PropertyValue := GetJSONStringValue(Pair.JsonValue)
         else
           PropertyValue := Pair.JsonValue.ToJSON;
 
         // Generamos lenguaje natural para mejor indexación semántica
-        ContextBuilder.AppendFormat(' La propiedad %s tiene el valor %s.', [Pair.JsonString.Value, PropertyValue]);
+        ContextBuilder.AppendFormat(' La propiedad %s tiene el valor %s.', [GetJSONStringValue(Pair.JsonString), PropertyValue]);
       end;
     end;
 
@@ -242,14 +249,14 @@ begin
   LEmbeddings := FGraph.Embeddings;
 
   // 1. Extraer datos básicos del objeto JSON de entrada
-  NodeName := ANodeObject.GetValue<string>('name', '');
-  NodeLabel := ANodeObject.GetValue<string>('nodeLabel', 'Undefined');
+  NodeName := ANodeObject.GetValueAsString('name', '');
+  NodeLabel := ANodeObject.GetValueAsString('nodeLabel', 'Undefined');
 
   if NodeName.Trim.IsEmpty then
     raise Exception.Create('Node name cannot be empty.');
 
-  NewProperties := ANodeObject.GetValue<TJSONObject>('properties', nil);
-  AdditionalText := ANodeObject.GetValue<string>('text', '');
+  NewProperties := ANodeObject.GetValueAsObject('properties');
+  AdditionalText := ANodeObject.GetValueAsString('text', '');
 
   // 2. Intentar buscar si el nodo ya existe en el grafo (por Nombre y Etiqueta)
   Result := FGraph.FindNodeByName(NodeName, NodeLabel);
@@ -382,9 +389,9 @@ begin
         TripletObject := TripletValue as TJSONObject;
 
         // Extraer componentes de la tripleta
-        SubjectObj := TripletObject.GetValue<TJSONObject>('subject', nil);
-        PredicateObj := TripletObject.GetValue<TJSONObject>('predicate', nil);
-        ObjectObj := TripletObject.GetValue<TJSONObject>('object', nil);
+        SubjectObj := TripletObject.GetValueAsObject('subject');
+        PredicateObj := TripletObject.GetValueAsObject('predicate');
+        ObjectObj := TripletObject.GetValueAsObject('object');
 
         // CASO A: Solo actualización de Nodo (Sujeto sin predicado)
         if (SubjectObj <> nil) and (PredicateObj = nil) and (ObjectObj = nil) then
@@ -404,9 +411,9 @@ begin
         if (SubjectNode <> nil) and (ObjectNode <> nil) then
         begin
           // Extraer datos del predicado
-          EdgeLabel := PredicateObj.GetValue<string>('edgeLabel', 'related_to');
-          EdgeName := PredicateObj.GetValue<string>('name', '');
-          PredicateProps := PredicateObj.GetValue<TJSONObject>('properties', nil);
+          EdgeLabel := PredicateObj.GetValueAsString('edgeLabel', 'related_to');
+          EdgeName := PredicateObj.GetValueAsString('name', '');
+          PredicateProps := PredicateObj.GetValueAsObject('properties');
 
           // 4. LÓGICA DE RECONCILIACIÓN DE ARISTAS
           ExistingEdge := FGraph.FindEdge(SubjectNode, ObjectNode, EdgeLabel);

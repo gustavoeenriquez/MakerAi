@@ -416,6 +416,7 @@ Detailed documentation is available in `Docs/Version 3/`:
 | Directory | Documentation |
 |-----------|---------------|
 | [Source/](Source/CLAUDE.md) | Top-level source overview |
+| [Source/Compatibility/](Source/Compatibility/CLAUDE.md) | Cross-platform compatibility layer (Delphi/FPC) |
 | [Source/Core/](Source/Core/CLAUDE.md) | Foundation classes, TAiChat, TAiMediaFile |
 | [Source/Chat/](Source/Chat/CLAUDE.md) | LLM provider drivers |
 | [Source/Agents/](Source/Agents/CLAUDE.md) | Agent orchestration framework |
@@ -428,9 +429,10 @@ Detailed documentation is available in `Docs/Version 3/`:
 | [Source/Design/](Source/Design/CLAUDE.md) | Design-time property editors |
 | [Source/Resources/](Source/Resources/CLAUDE.md) | Embedded resources |
 
-### Demos & Docs
+### Config & Docs
 
 | Directory | Documentation |
 |-----------|---------------|
+| [Config/](Config/CLAUDE.md) | Environment configuration (.env) |
 | [Demos/](Demos/CLAUDE.md) | Demo projects overview |
 | [Docs/](Docs/CLAUDE.md) | Documentation index |

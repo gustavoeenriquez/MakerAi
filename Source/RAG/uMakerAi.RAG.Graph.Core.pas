@@ -1,18 +1,18 @@
-﻿// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -36,21 +36,34 @@
 
 unit uMakerAi.RAG.Graph.Core;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  // FPC: Unidades estándar de FPC sin prefijo System
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Generics.Defaults, Types, Variants, SyncObjs, Math, Masks,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye JSON/RTTI/XML nativos
   System.SysUtils, System.Classes, System.Generics.Collections, System.Generics.Defaults,
   System.Json, System.Variants, System.Json.Writers, System.Json.Types, System.IOUtils,
   System.Rtti, System.StrUtils, System.DateUtils, System.Masks, System.VarUtils,
 
   Xml.XMLDoc, Xml.XMLIntf, Xml.XMLDom,
 
-  uMakerAi.Embeddings.Core, uMakerAi.Embeddings, uMakerAi.RAG.Vectors.Index,
-  // Incluimos tu unidad base de MakerAi
-  uMakerAi.RAG.Vectors, uMakerAi.RAG.MetaData;
+  {$ENDIF}
+  uMakerAi.Embeddings, uMakerAi.RAG.Vectors.Index,
+  uMakerAi.RAG.Vectors, uMakerAi.Embeddings.Core, uMakerAi.RAG.MetaData,
+  uJsonHelper, uRttiHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uGenericsHelper,
+  uXMLHelper;
 
 type
 
+  TGraphMatchQuery = class; // Forward declaration
+
+  TMatchState = TDictionary<string, TObject>;
+  TMatchStateList = TObjectList<TMatchState>; // Explicit Alias for FPC compatibility
 
   // --------- CLASES PARA EL PARSER --------------------------------
 
@@ -502,10 +515,8 @@ begin
     Result := Null
   else if AJsonValue is TJSONNull then
     Result := Null
-  else if AJsonValue is TJSONTrue then
-    Result := True
-  else if AJsonValue is TJSONFalse then
-    Result := False
+  else if AJsonValue is TJSONBool then
+    Result := TJSONBool(AJsonValue).AsBoolean
   else if AJsonValue is TJSONNumber then
   begin
     // Determinar si es entero o decimal
@@ -515,7 +526,7 @@ begin
       Result := TJSONNumber(AJsonValue).AsDouble;
   end
   else if AJsonValue is TJSONString then
-    Result := TJSONString(AJsonValue).Value
+    Result := GetJSONStringValue(AJsonValue)
   else if AJsonValue is TJSONArray then
   begin
     JSONArray := TJSONArray(AJsonValue);
@@ -552,15 +563,15 @@ begin
       Pair := JSONObject.Pairs[I];
       if I > 0 then
         ResultDict := ResultDict + ', ';
-      ResultDict := ResultDict + '"' + Pair.JsonString.Value + '": ';
+      ResultDict := ResultDict + '"' + GetJSONStringValue(Pair.JsonString) + '": ';
 
       // Recursivamente convertir el valor
       if Pair.JsonValue is TJSONString then
-        ResultDict := ResultDict + '"' + TJSONString(Pair.JsonValue).Value + '"'
+        ResultDict := ResultDict + '"' + GetJSONStringValue(Pair.JsonValue) + '"'
       else if Pair.JsonValue is TJSONNumber then
-        ResultDict := ResultDict + Pair.JsonValue.Value
-      else if (Pair.JsonValue is TJSONTrue) or (Pair.JsonValue is TJSONFalse) then
-        ResultDict := ResultDict + LowerCase(Pair.JsonValue.Value)
+        ResultDict := ResultDict + GetJSONStringValue(Pair.JsonValue)
+      else if Pair.JsonValue is TJSONBool then
+        ResultDict := ResultDict + LowerCase(BoolToStr(TJSONBool(Pair.JsonValue).AsBoolean, True))
       else if Pair.JsonValue is TJSONNull then
         ResultDict := ResultDict + 'null'
       else
@@ -583,11 +594,11 @@ begin
   if VarIsNull(AValue) or VarIsEmpty(AValue) then
     Result := TJSONNull.Create
   else if VarTypeResult = varBoolean then
-    Result := TJSONBool.Create(Boolean(AValue))
+    Result := CreateJSONBool(Boolean(AValue))
   else if VarIsFloat(AValue) then
-    Result := TJSONNumber.Create(Extended(AValue)) // Usar Extended para máxima precisión
+    Result := CreateJSONNumber(Extended(AValue)) // Usar Extended para máxima precisión
   else if VarIsNumeric(AValue) then
-    Result := TJSONNumber.Create(Integer(AValue))
+    Result := CreateJSONNumber(Integer(AValue))
   else if VarIsStr(AValue) then
     Result := TJSONString.Create(VarToStr(AValue))
   else
@@ -608,7 +619,7 @@ begin
     Exit;
 
   // 1. Limpiar el string, quitando los corchetes
-  CleanedString := AVectorString.Trim(['[', ']']);
+  CleanedString := TrimSet(AVectorString, ['[', ']']);
   if CleanedString.IsEmpty then
     Exit;
 
@@ -638,6 +649,8 @@ end;
 function JSONValueToVariantSafe(const AValue: TJSONValue; out AResult: Variant): Boolean;
 var
   Num: TJSONNumber;
+  I64: Int64;
+  Dbl: Double;
 begin
   Result := False;
   AResult := Null;
@@ -653,7 +666,7 @@ begin
     end
     else if AValue is TJSONString then
     begin
-      AResult := TJSONString(AValue).Value;
+      AResult := GetJSONStringValue(AValue);
       Result := True;
     end
     else if AValue is TJSONBool then
@@ -666,9 +679,7 @@ begin
       Num := TJSONNumber(AValue);
 
       // Intentamos entero
-      Var
-        I64: Int64;
-      if TryStrToInt64(Num.Value, I64) then
+      if TryStrToInt64(GetJSONStringValue(Num), I64) then
       begin
         AResult := I64;
         Result := True;
@@ -676,9 +687,7 @@ begin
       end;
 
       // Intentamos flotante (SIEMPRE válido para JSON number)
-      Var
-        Dbl: Double;
-      if TryStrToFloat(Num.Value, Dbl, TFormatSettings.Invariant) then
+      if TryStrToFloat(GetJSONStringValue(Num), Dbl, TFormatSettings.Invariant) then
       begin
         AResult := Dbl;
         Result := True;
@@ -713,7 +722,7 @@ begin
       for Pair in JsonObj do
       begin
         If JSONValueToVariantSafe(Pair.JsonValue, V) then
-          AProperties.Add(Pair.JsonString.Value, V);
+          AProperties.Add(GetJSONStringValue(Pair.JsonString), V);
       end;
     end;
   finally
@@ -898,6 +907,8 @@ var
   CurrentCommID: Integer;
   K_i_in: Double; // Peso de las aristas del nodo i hacia la comunidad candidata
   K_i: Double; // Grado del nodo i
+  TargetCommID: Integer;
+  C: TCommunity;
 begin
   Result := TDictionary<TAiRagGraphNode, Integer>.Create;
   CommInfo := TDictionary<Integer, TCommunity>.Create;
@@ -938,7 +949,6 @@ begin
       // Evaluar mover el nodo a la comunidad de cada uno de sus vecinos
       for Neighbor in GetNeighbors(Node, gdBoth) do
       begin
-        var
         TargetCommID := Result[Neighbor];
         if TargetCommID = CurrentCommID then
           Continue;
@@ -983,7 +993,7 @@ begin
   end;
 
   // Limpieza de CommInfo
-  for var C in CommInfo.Values do
+  for C in CommInfo.Values do
     C.Free;
   CommInfo.Free;
 end;
@@ -1010,6 +1020,7 @@ var
   Edge: TAiRagGraphEdge;
   Obj: TObject;
   B: TBinaryExpr;
+  P: TPropertyExpr;
 
   // ------------------------------------------------------------------
   // NULL / BOOLEAN SAFE
@@ -1095,11 +1106,10 @@ begin
     // ================================================================
     // PROPERTY ACCESS
     // ================================================================
-    ekProperty:
-      begin
-        Result := Null;
-        var
-        P := TPropertyExpr(AExpr);
+      ekProperty:
+        begin
+          Result := Null;
+          P := TPropertyExpr(AExpr);
 
         if ABoundElements.TryGetValue(P.Variable, Obj) then
         begin
@@ -1196,7 +1206,7 @@ begin
             if VarIsNull(Left) or VarIsNull(Right) then
               Result := False
             else
-              Result := System.StrUtils.ContainsText(VarToStr(Left), VarToStr(Right));
+              Result := ContainsText(VarToStr(Left), VarToStr(Right));
 
           opLike:
             Result := MatchLike(VarToStr(Left), VarToStr(Right), False);
@@ -1434,12 +1444,13 @@ end;
 function TAiRagGraph.ExecuteMakerGQL(const ACode: string): string;
 Var
   Data: TArray<TDictionary<string, TObject>>;
+  Dict: TDictionary<string, TObject>;
 begin
   Result := ExecuteMakerGQL(ACode, Data);
 
   // 3. ¡IMPORTANTE! Liberar la memoria de los diccionarios de salida
   If Assigned(Data) then
-    for var Dict in Data do
+    for Dict in Data do
       Dict.Free;
 end;
 
@@ -1447,6 +1458,7 @@ function TAiRagGraph.ExecuteMakerGQL(const ACode: string; out AResultObjects: TA
 var
   Parser: TGraphParser;
   QueryObj: TGraphMatchQuery;
+  Pair: TPair<string, TObject>;
 
   // Variables para resultados internos
   StringListResult: TArray<string>;
@@ -1649,7 +1661,7 @@ begin
           begin
             // Los resultados del Match pueden venir mezclados (nodos, aristas, valores)
             // Extraemos solo los nodos para pasárselos al generador de contexto.
-            for var Pair in ResDict do
+            for Pair in ResDict do
             begin
               // Caso A: El objeto directo es un Nodo (formato antiguo/simple)
               if Pair.Value is TAiRagGraphNode then
@@ -2081,13 +2093,15 @@ end;
 procedure TAiRagGraph.DeleteNode(AID: string);
 var
   Node: TAiRagGraphNode;
+  EdgesToDelete: TList<TAiRagGraphEdge>;
+  Edge: TAiRagGraphEdge;
 begin
   Node := FindNodeByID(AID);
   if Node = nil then
     Exit;
 
   // 1. Guardar una referencia a las aristas ANTES de borrarlas en memoria
-  var
+
   EdgesToDelete := TList<TAiRagGraphEdge>.Create;
   EdgesToDelete.AddRange(Node.OutgoingEdges.ToArray);
   EdgesToDelete.AddRange(Node.IncomingEdges.ToArray);
@@ -2096,7 +2110,7 @@ begin
     // 2. Realizar la operación en memoria PRIMERO
     UnregisterNode(Node); // Esto quita el nodo de FNodeRegistry y FNodes
     // También debes desregistrar las aristas conectadas
-    for var Edge in EdgesToDelete do
+    for Edge in EdgesToDelete do
       UnregisterEdge(Edge);
 
     // 3. Persistir el cambio en la BD DESPUÉS
@@ -2407,24 +2421,31 @@ begin
   end;
 end;
 
-function TAiRagGraph.GetAllShortestPaths(AStartNode, AEndNode: TAiRagGraphNode): TArray<TArray<TObject>>;
+type
+  TGraphPath = TArray<TObject>;
+
+function TAiRagGraph.GetAllShortestPaths(AStartNode, AEndNode: TAiRagGraphNode): TArray<TGraphPath>;
 var
   Queue: TQueue<TAiRagGraphNode>;
   // Almacena la distancia más corta desde el nodo de inicio a cualquier otro nodo
   Distances: TDictionary<TAiRagGraphNode, Integer>;
   // Almacena para cada nodo, una lista de sus "padres" en los caminos más cortos
   Parents: TDictionary<TAiRagGraphNode, TList<TAiRagGraphNode>>;
-  AllPaths: TList<TArray<TObject>>;
+  AllPaths: TList<TGraphPath>;
   CurrentPath: TList<TObject>;
   CurrentNode, NeighborNode: TAiRagGraphNode;
   Edge: TAiRagGraphEdge;
   ShortestDistance: Integer;
+  CurrentDist: Integer;
+  ParentList: TList<TAiRagGraphNode>;
+  List: TList<TAiRagGraphNode>;
 
   // Procedimiento recursivo para reconstruir los caminos hacia atrás
   procedure BuildPaths(ANode: TAiRagGraphNode);
   var
     ParentNode: TAiRagGraphNode;
     ConnectingEdge: TAiRagGraphEdge;
+    E: TAiRagGraphEdge;
   begin
     // 1. Añadir el nodo actual al frente del camino que estamos construyendo
     CurrentPath.Insert(0, ANode);
@@ -2448,7 +2469,7 @@ var
           if ConnectingEdge = nil then
           begin
             // Búsqueda más exhaustiva si FindEdge falla (por si hay varias aristas)
-            for var E in ParentNode.OutgoingEdges do
+            for E in ParentNode.OutgoingEdges do
             begin
               if E.ToNode = ANode then
               begin
@@ -2480,7 +2501,7 @@ begin
   // --- FASE 1: BFS HACIA ADELANTE PARA ENCONTRAR DISTANCIAS Y PADRES ---
   Queue := TQueue<TAiRagGraphNode>.Create;
   Distances := TDictionary<TAiRagGraphNode, Integer>.Create;
-  Parents := TDictionary < TAiRagGraphNode, TList < TAiRagGraphNode >>.Create;
+  Parents := TDictionary<TAiRagGraphNode, TList<TAiRagGraphNode>>.Create;
   ShortestDistance := -1;
 
   try
@@ -2491,7 +2512,6 @@ begin
     while Queue.Count > 0 do
     begin
       CurrentNode := Queue.Dequeue;
-      var
       CurrentDist := Distances[CurrentNode];
 
       // Si ya encontramos el destino, solo necesitamos terminar de procesar los nodos
@@ -2508,7 +2528,6 @@ begin
         begin
           Distances.Add(NeighborNode, CurrentDist + 1);
           Queue.Enqueue(NeighborNode);
-          var
           ParentList := TList<TAiRagGraphNode>.Create;
           Parents.Add(NeighborNode, ParentList);
           ParentList.Add(CurrentNode);
@@ -2530,7 +2549,7 @@ begin
     // Si ShortestDistance sigue en -1, significa que el nodo final nunca fue alcanzado.
     if ShortestDistance <> -1 then
     begin
-      AllPaths := TList < TArray < TObject >>.Create;
+      AllPaths := TList<TGraphPath>.Create;
       CurrentPath := TList<TObject>.Create;
       try
         BuildPaths(AEndNode); // Iniciar la recursión desde el nodo final
@@ -2544,7 +2563,7 @@ begin
   finally
     Queue.Free;
     Distances.Free;
-    for var List in Parents.Values do // Es crucial liberar las listas internas
+    for List in Parents.Values do // Es crucial liberar las listas internas
       List.Free;
     Parents.Free;
   end;
@@ -3437,7 +3456,7 @@ end;
 
 procedure TAiRagGraph.LoadFromStream(AStream: TStream);
 var
-  SR: TStreamReader;
+  SR: TStringStream;
   JsonValue: TJSONValue;
   Root, GraphObj, NodeObj, EdgeObj, PropObj, ChunkObj: TJSONObject;
   NodesArr, EdgesArr, EmbeddingArr, ChunksArr: TJSONArray;
@@ -3464,15 +3483,19 @@ begin
   // 1. Limpiar el estado actual antes de cargar (Identity Map y Vectores)
   Clear;
 
-  SR := TStreamReader.Create(AStream, TEncoding.UTF8);
+  SR := TStringStream.Create('');
   try
-    JsonValue := TJSONObject.ParseJSONValue(SR.ReadToEnd);
+    SR.CopyFrom(AStream, 0);
+    JsonValue := TJSONObject.ParseJSONValue(SR.DataString);
+  finally
+    SR.Free;
+  end;
     try
       if not(JsonValue is TJSONObject) then
         raise Exception.Create('Formato JSON inválido para el Grafo.');
 
       Root := JsonValue as TJSONObject;
-      GraphObj := Root.GetValue<TJSONObject>('graph');
+      GraphObj := Root.GetValueAsObject('graph');
       if GraphObj = nil then
         Exit;
 
@@ -3482,39 +3505,39 @@ begin
       try
 
         // --- 2. CARGAR NODOS ---
-        NodesArr := GraphObj.GetValue<TJSONArray>('nodes');
+        NodesArr := GraphObj.GetValueAsArray('nodes');
         if NodesArr <> nil then
         begin
           for NodeVal in NodesArr do
           begin
             NodeObj := NodeVal as TJSONObject;
 
-            NodeID := NodeObj.GetValue<string>('id');
-            NodeLabel := NodeObj.GetValue<string>('nodeLabel');
-            NodeName := NodeObj.GetValue<string>('name', '');
-            NodeText := NodeObj.GetValue<string>('node_text', '');
+            NodeID := NodeObj.GetValueAsString('id');
+            NodeLabel := NodeObj.GetValueAsString('nodeLabel');
+            NodeName := NodeObj.GetValueAsString('name', '');
+            NodeText := NodeObj.GetValueAsString('node_text', '');
 
             // 2.1 Crear e insertar nodo en el registro de memoria
             NewNode := Self.AddNode(NodeID, NodeLabel, NodeName);
             NewNode.Text := NodeText;
-            NewNode.Model := NodeObj.GetValue<string>('model', '');
+            NewNode.Model := NodeObj.GetValueAsString('model', '');
 
             // 2.2 Recuperar Metadatos Unificados (Uso de FromJSON)
             // Esto restaura tipos reales: Fechas, Booleanos y Números.
-            if NodeObj.TryGetValue<TJSONObject>('properties', PropObj) then
+            if NodeObj.TryGetValue('properties', PropObj) then
               NewNode.MetaData.FromJSON(PropObj);
 
             // 2.3 NUEVO: Recuperar Chunks (Fragmentos de texto detallados)
-            if NodeObj.TryGetValue<TJSONArray>('chunks', ChunksArr) then
+            if NodeObj.TryGetValue('chunks', ChunksArr) then
             begin
               for ChunkVal in ChunksArr do
               begin
                 ChunkObj := ChunkVal as TJSONObject;
-                ChunkText := ChunkObj.GetValue<string>('text');
+                ChunkText := ChunkObj.GetValueAsString('text');
 
                 // Cargar vector del chunk si existe
                 SetLength(ChunkData, 0);
-                if ChunkObj.TryGetValue<TJSONArray>('embedding', EmbeddingArr) then
+                if ChunkObj.TryGetValue('embedding', EmbeddingArr) then
                 begin
                   SetLength(ChunkData, EmbeddingArr.Count);
                   for K := 0 to EmbeddingArr.Count - 1 do
@@ -3526,7 +3549,7 @@ begin
             end;
 
             // 2.4 Recuperar Embedding Principal (Resumen del Nodo)
-            if NodeObj.TryGetValue<TJSONArray>('embedding', EmbeddingArr) then
+            if NodeObj.TryGetValue('embedding', EmbeddingArr) then
             begin
               NewNode.SetDataLength(EmbeddingArr.Count);
               for J := 0 to EmbeddingArr.Count - 1 do
@@ -3536,19 +3559,19 @@ begin
         end;
 
         // --- 3. CARGAR ARISTAS (RELACIONES) ---
-        EdgesArr := GraphObj.GetValue<TJSONArray>('edges');
+        EdgesArr := GraphObj.GetValueAsArray('edges');
         if EdgesArr <> nil then
         begin
           for EdgeVal in EdgesArr do
           begin
             EdgeObj := EdgeVal as TJSONObject;
 
-            EdgeID := EdgeObj.GetValue<string>('id');
-            EdgeLabel := EdgeObj.GetValue<string>('edgeLabel');
-            EdgeName := EdgeObj.GetValue<string>('name', '');
-            SourceID := EdgeObj.GetValue<string>('source');
-            TargetID := EdgeObj.GetValue<string>('target');
-            EdgeWeight := EdgeObj.GetValue<Double>('weight', 1.0);
+            EdgeID := EdgeObj.GetValueAsString('id');
+            EdgeLabel := EdgeObj.GetValueAsString('edgeLabel');
+            EdgeName := EdgeObj.GetValueAsString('name', '');
+            SourceID := EdgeObj.GetValueAsString('source');
+            TargetID := EdgeObj.GetValueAsString('target');
+            EdgeWeight := EdgeObj.GetValueAsDouble('weight', 1.0);
 
             // Buscar referencias a los nodos (ya cargados en el paso 2)
             FromNode := Self.FindNodeByID(SourceID);
@@ -3559,11 +3582,11 @@ begin
               NewEdge := Self.AddEdge(FromNode, ToNode, EdgeID, EdgeLabel, EdgeName, EdgeWeight);
 
               // Metadatos de la Arista
-              if EdgeObj.TryGetValue<TJSONObject>('properties', PropObj) then
+              if EdgeObj.TryGetValue('properties', PropObj) then
                 NewEdge.MetaData.FromJSON(PropObj);
 
               // Embedding de la Arista (si existe)
-              if EdgeObj.TryGetValue<TJSONArray>('embedding', EmbeddingArr) then
+              if EdgeObj.TryGetValue('embedding', EmbeddingArr) then
               begin
                 NewEdge.SetDataLength(EmbeddingArr.Count);
                 for J := 0 to EmbeddingArr.Count - 1 do
@@ -3583,14 +3606,11 @@ begin
     finally
       JsonValue.Free;
     end;
-  finally
-    SR.Free;
-  end;
+
 end;
 
 function TAiRagGraph.Match(AQuery: TGraphMatchQuery; ADepth: Integer = 0): TArray<TDictionary<string, TObject>>;
-type
-  TMatchState = TDictionary<string, TObject>;
+
 var
   Results: TObjectList<TDictionary<string, TObject>>;
   StartNodePattern: TMatchNodePattern;
@@ -3602,12 +3622,14 @@ var
   SeedNodesSet: TDictionary<TAiRagGraphNode, Boolean>;
   MatchDict: TDictionary<string, TObject>;
   Pair: TPair<string, TObject>;
+  NewState, ClonedState: TMatchState;
   ExpandedNodesArray: TArray<TAiRagGraphNode>;
   ExpandedResults: TObjectList<TDictionary<string, TObject>>;
   Node: TAiRagGraphNode;
   Edge: TAiRagGraphEdge;
   Dict: TDictionary<string, TObject>;
   EdgeSet: TDictionary<TAiRagGraphEdge, Boolean>;
+  NodeSet: TDictionary<TAiRagGraphNode, Boolean>;
 
   procedure FindMatchesRecursive(AClauseIndex: Integer; ACurrentState: TMatchState);
   var
@@ -3625,7 +3647,7 @@ var
       if (AQuery.WhereClause = nil) or Boolean(EvaluateGraphExpression(AQuery.WhereClause, ACurrentState)) then
       begin
         // Solo si no hay WHERE o si el WHERE devuelve TRUE, aceptamos el resultado
-        Results.Add(TMatchState.Create(ACurrentState));
+        Results.Add(TGenericsUtils.CloneDictionary<string, TObject>(ACurrentState));
       end;
       Exit;
     end;
@@ -3648,7 +3670,8 @@ var
           if (not CurrentClause.EdgePattern.Variable.IsEmpty) and ACurrentState.TryGetValue(CurrentClause.EdgePattern.Variable, BoundObject) and (BoundObject <> CurrentEdge) then
             Continue;
 
-          NewState := TMatchState.Create(ACurrentState);
+          // Manual Dictionary Clone via Helper
+          NewState := TGenericsUtils.CloneDictionary<string, TObject>(ACurrentState);
           try
             NewState.AddOrSetValue(CurrentClause.TargetNodeVar, NeighborNode);
             if not CurrentClause.EdgePattern.Variable.IsEmpty then
@@ -3673,7 +3696,8 @@ var
           if (not CurrentClause.EdgePattern.Variable.IsEmpty) and ACurrentState.TryGetValue(CurrentClause.EdgePattern.Variable, BoundObject) and (BoundObject <> CurrentEdge) then
             Continue;
 
-          NewState := TMatchState.Create(ACurrentState);
+          // Manual Dictionary Clone via Helper
+          NewState := TGenericsUtils.CloneDictionary<string, TObject>(ACurrentState);
           try
             NewState.AddOrSetValue(CurrentClause.TargetNodeVar, NeighborNode);
             if not CurrentClause.EdgePattern.Variable.IsEmpty then
@@ -3692,7 +3716,7 @@ begin
   if (AQuery = nil) then
     Exit;
 
-  Results := TObjectList < TDictionary < string, TObject >>.Create(True);
+  Results := TMatchStateList.Create(True);
   try
     // =========================================================================
     // CASO 1: SOLO NODOS (Sin relaciones/clauses) -> MATCH (n:Persona) ...
@@ -3723,7 +3747,7 @@ begin
               // Verificar WHERE para este nodo individual
               if (AQuery.WhereClause = nil) or Boolean(EvaluateGraphExpression(AQuery.WhereClause, InitialState)) then
               begin
-                Results.Add(TMatchState.Create(InitialState));
+                Results.Add(TGenericsUtils.CloneDictionary<string, TObject>(InitialState));
               end;
             finally
               InitialState.Free;
@@ -3784,7 +3808,7 @@ begin
           ExpandedNodesArray := Self.ExpandNodeList(TList<TAiRagGraphNode>.Create(SeedNodesSet.Keys), ADepth);
 
           // 3. Construir la salida del subgrafo
-          ExpandedResults := TObjectList < TDictionary < string, TObject >>.Create(True);
+          ExpandedResults := TMatchStateList.Create(True);
           EdgeSet := TDictionary<TAiRagGraphEdge, Boolean>.Create;
           try
             // Añadir Nodos
@@ -3797,7 +3821,6 @@ begin
             end;
 
             // Añadir Aristas Internas
-            var
             NodeSet := TDictionary<TAiRagGraphNode, Boolean>.Create;
             try
               for Node in ExpandedNodesArray do
@@ -3929,6 +3952,7 @@ var
   Edge: TAiRagGraphEdge;
   UniqueTargetNodes: TDictionary<TAiRagGraphNode, Boolean>;
   AnchorList: TList<TAiRagGraphNode>;
+  List: TList<TAiRagGraphNode>;
 begin
   // Inicializar el resultado como un array vacío.
   SetLength(Result, 0);
@@ -4022,7 +4046,7 @@ begin
 
   finally
     // Limpiar el diccionario y las listas que contiene
-    for var List in IntermediateResults.Values do
+    for List in IntermediateResults.Values do
       List.Free;
     IntermediateResults.Free;
   end;
@@ -4075,6 +4099,7 @@ procedure WriteVariant(const AWriter: TJsonWriter; const AValue: Variant);
 var
   V: Variant;
   VType: TVarType;
+  I, LBound, UBound: Integer;
 begin
   V := AValue; // ← RESUELVE varByRef automáticamente
   VType := VarType(V);
@@ -4106,8 +4131,6 @@ begin
       begin
         AWriter.WriteStartArray;
         try
-          var
-            I, LBound, UBound: Integer;
           LBound := VarArrayLowBound(V, 1);
           UBound := VarArrayHighBound(V, 1);
           for I := LBound to UBound do
@@ -4125,6 +4148,7 @@ end;
 procedure TAiRagGraph.SaveToDot(const AFileName: string);
 var
   SB: TStringBuilder;
+  SL: TStringList;
   Node: TAiRagGraphNode;
   Edge: TAiRagGraphEdge;
 
@@ -4172,8 +4196,14 @@ begin
     end;
 
     SB.AppendLine('}');
-
-    TFile.WriteAllText(AFileName, SB.ToString, TEncoding.UTF8);
+    
+    SL := TStringList.Create;
+    try
+      SL.Text := SB.ToString;
+      SL.SaveToFile(AFileName, TEncoding.UTF8);
+    finally
+      SL.Free;
+    end;
   finally
     SB.Free;
   end;
@@ -4183,7 +4213,7 @@ procedure TAiRagGraph.SaveToFile(const AFileName: string; aFull: Boolean);
 var
   FileExt: string;
 begin
-  FileExt := ExtractFileExt(AFileName).ToLower; // Obtenemos la extensión en minúsculas
+  FileExt := LowerCase(ExtractFileExt(AFileName)); // Obtenemos la extensión en minúsculas
 
   if FileExt = '.graphml' then
     SaveToGraphML(AFileName)
@@ -4201,6 +4231,8 @@ begin
 end;
 
 procedure TAiRagGraph.SaveToGraphML(const AFileName: string);
+// Delphi: IXMLDocument no disponible en FPC (requiere DOM/SAX alternativo)
+{$IFNDEF FPC}
 var
   XMLDoc: IXMLDocument;
   GraphMLNode, GraphNode, NodeElement, EdgeElement, DataElement, KeyElement, CommentNode: IXMLNode;
@@ -4350,6 +4382,202 @@ begin
     XMLDoc := nil;
   end;
 end;
+{$ELSE}
+// FPC: Implementación usando DOM/XMLWrite via uXMLHelper
+var
+  XMLHelper: TXMLDocumentHelper;
+  GraphMLNode, GraphNode, NodeElement, EdgeElement, DataElement, KeyElement: TXMLNodeHandle;
+  CommentNode: TXMLCommentHandle;
+  Node: TAiRagGraphNode;
+  Edge: TAiRagGraphEdge;
+  PropKey: string;
+  UniquePropKeys: TStringList;
+  Pair: TPair<string, Variant>;
+  NodeArray: TArray<TAiRagGraphNode>;
+  EdgeArray: TArray<TAiRagGraphEdge>;
+  PropKeys: TArray<string>;
+  I, J: Integer;
+begin
+  XMLHelper := TXMLDocumentHelper.Create;
+  try
+    // --- ELEMENTO RAÍZ ---
+    GraphMLNode := XMLHelper.CreateElement('graphml');
+    XMLHelper.AppendChild(GraphMLNode);
+    XMLHelper.SetAttribute(GraphMLNode, 'xmlns', 'http://graphml.graphdrawing.org/xmlns');
+    XMLHelper.SetAttribute(GraphMLNode, 'xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance');
+    XMLHelper.SetAttribute(GraphMLNode, 'xsi:schemaLocation', 'http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd');
+
+    // --- 1. DEFINICIÓN DE ATRIBUTOS (KEYS) ---
+    CommentNode := XMLHelper.CreateComment(' Atributos base del sistema MakerAi ');
+    XMLHelper.AppendCommentTo(GraphMLNode, CommentNode);
+
+    // Atributos fijos de Nodos
+    KeyElement := XMLHelper.CreateElement('key');
+    XMLHelper.AppendChildTo(GraphMLNode, KeyElement);
+    XMLHelper.SetAttribute(KeyElement, 'id', 'd_name');
+    XMLHelper.SetAttribute(KeyElement, 'for', 'node');
+    XMLHelper.SetAttribute(KeyElement, 'attr.name', 'name');
+    XMLHelper.SetAttribute(KeyElement, 'attr.type', 'string');
+
+    KeyElement := XMLHelper.CreateElement('key');
+    XMLHelper.AppendChildTo(GraphMLNode, KeyElement);
+    XMLHelper.SetAttribute(KeyElement, 'id', 'd_label');
+    XMLHelper.SetAttribute(KeyElement, 'for', 'node');
+    XMLHelper.SetAttribute(KeyElement, 'attr.name', 'label');
+    XMLHelper.SetAttribute(KeyElement, 'attr.type', 'string');
+
+    KeyElement := XMLHelper.CreateElement('key');
+    XMLHelper.AppendChildTo(GraphMLNode, KeyElement);
+    XMLHelper.SetAttribute(KeyElement, 'id', 'd_chunks');
+    XMLHelper.SetAttribute(KeyElement, 'for', 'node');
+    XMLHelper.SetAttribute(KeyElement, 'attr.name', 'chunks_count');
+    XMLHelper.SetAttribute(KeyElement, 'attr.type', 'int');
+
+    // Atributos fijos de Aristas
+    KeyElement := XMLHelper.CreateElement('key');
+    XMLHelper.AppendChildTo(GraphMLNode, KeyElement);
+    XMLHelper.SetAttribute(KeyElement, 'id', 'e_label');
+    XMLHelper.SetAttribute(KeyElement, 'for', 'edge');
+    XMLHelper.SetAttribute(KeyElement, 'attr.name', 'label');
+    XMLHelper.SetAttribute(KeyElement, 'attr.type', 'string');
+
+    KeyElement := XMLHelper.CreateElement('key');
+    XMLHelper.AppendChildTo(GraphMLNode, KeyElement);
+    XMLHelper.SetAttribute(KeyElement, 'id', 'e_weight');
+    XMLHelper.SetAttribute(KeyElement, 'for', 'edge');
+    XMLHelper.SetAttribute(KeyElement, 'attr.name', 'weight');
+    XMLHelper.SetAttribute(KeyElement, 'attr.type', 'double');
+
+    // Recolectar llaves de propiedades dinámicas (MetaData)
+    UniquePropKeys := TStringList.Create;
+    try
+      UniquePropKeys.Sorted := True;
+      UniquePropKeys.Duplicates := dupIgnore;
+
+      // FPC: Usar arrays para iterar (evita problemas con for-in en diccionarios)
+      NodeArray := FNodeRegistry.Values.ToArray;
+      for I := 0 to High(NodeArray) do
+      begin
+        Node := NodeArray[I];
+        if Node.MetaData <> nil then
+        begin
+          PropKeys := Node.MetaData.InternalDictionary.Keys.ToArray;
+          for J := 0 to High(PropKeys) do
+            UniquePropKeys.Add(PropKeys[J]);
+        end;
+      end;
+
+      EdgeArray := FEdgeRegistry.Values.ToArray;
+      for I := 0 to High(EdgeArray) do
+      begin
+        Edge := EdgeArray[I];
+        if Edge.MetaData <> nil then
+        begin
+          PropKeys := Edge.MetaData.InternalDictionary.Keys.ToArray;
+          for J := 0 to High(PropKeys) do
+            UniquePropKeys.Add(PropKeys[J]);
+        end;
+      end;
+
+      // Definir llaves para propiedades personalizadas
+      for I := 0 to UniquePropKeys.Count - 1 do
+      begin
+        PropKey := UniquePropKeys[I];
+        KeyElement := XMLHelper.CreateElement('key');
+        XMLHelper.AppendChildTo(GraphMLNode, KeyElement);
+        XMLHelper.SetAttribute(KeyElement, 'id', 'prop_' + PropKey);
+        XMLHelper.SetAttribute(KeyElement, 'for', 'all');
+        XMLHelper.SetAttribute(KeyElement, 'attr.name', PropKey);
+        XMLHelper.SetAttribute(KeyElement, 'attr.type', 'string');
+      end;
+    finally
+      UniquePropKeys.Free;
+    end;
+
+    // --- 2. CONTENIDO DEL GRAFO ---
+    GraphNode := XMLHelper.CreateElement('graph');
+    XMLHelper.AppendChildTo(GraphMLNode, GraphNode);
+    XMLHelper.SetAttribute(GraphNode, 'id', 'G');
+    XMLHelper.SetAttribute(GraphNode, 'edgedefault', 'directed');
+
+    // -- Escritura de Nodos --
+    for I := 0 to High(NodeArray) do
+    begin
+      Node := NodeArray[I];
+      NodeElement := XMLHelper.CreateElement('node');
+      XMLHelper.AppendChildTo(GraphNode, NodeElement);
+      XMLHelper.SetAttribute(NodeElement, 'id', Node.ID);
+
+      // Datos base
+      DataElement := XMLHelper.CreateElement('data');
+      XMLHelper.AppendChildTo(NodeElement, DataElement);
+      XMLHelper.SetAttribute(DataElement, 'key', 'd_name');
+      XMLHelper.SetText(DataElement, Node.Name);
+
+      DataElement := XMLHelper.CreateElement('data');
+      XMLHelper.AppendChildTo(NodeElement, DataElement);
+      XMLHelper.SetAttribute(DataElement, 'key', 'd_label');
+      XMLHelper.SetText(DataElement, Node.NodeLabel);
+
+      DataElement := XMLHelper.CreateElement('data');
+      XMLHelper.AppendChildTo(NodeElement, DataElement);
+      XMLHelper.SetAttribute(DataElement, 'key', 'd_chunks');
+      XMLHelper.SetText(DataElement, IntToStr(Node.Chunks.Count));
+
+      // Metadatos dinámicos
+      if Node.MetaData <> nil then
+      begin
+        for Pair in Node.MetaData.InternalDictionary do
+        begin
+          DataElement := XMLHelper.CreateElement('data');
+          XMLHelper.AppendChildTo(NodeElement, DataElement);
+          XMLHelper.SetAttribute(DataElement, 'key', 'prop_' + Pair.Key);
+          XMLHelper.SetText(DataElement, VarToStr(Pair.Value));
+        end;
+      end;
+    end;
+
+    // -- Escritura de Aristas --
+    for I := 0 to High(EdgeArray) do
+    begin
+      Edge := EdgeArray[I];
+      EdgeElement := XMLHelper.CreateElement('edge');
+      XMLHelper.AppendChildTo(GraphNode, EdgeElement);
+      XMLHelper.SetAttribute(EdgeElement, 'id', Edge.ID);
+      XMLHelper.SetAttribute(EdgeElement, 'source', Edge.FromNode.ID);
+      XMLHelper.SetAttribute(EdgeElement, 'target', Edge.ToNode.ID);
+
+      // Datos base
+      DataElement := XMLHelper.CreateElement('data');
+      XMLHelper.AppendChildTo(EdgeElement, DataElement);
+      XMLHelper.SetAttribute(DataElement, 'key', 'e_label');
+      XMLHelper.SetText(DataElement, Edge.EdgeLabel);
+
+      DataElement := XMLHelper.CreateElement('data');
+      XMLHelper.AppendChildTo(EdgeElement, DataElement);
+      XMLHelper.SetAttribute(DataElement, 'key', 'e_weight');
+      XMLHelper.SetText(DataElement, FloatToStr(Edge.Weight));
+
+      // Metadatos dinámicos
+      if Edge.MetaData <> nil then
+      begin
+        for Pair in Edge.MetaData.InternalDictionary do
+        begin
+          DataElement := XMLHelper.CreateElement('data');
+          XMLHelper.AppendChildTo(EdgeElement, DataElement);
+          XMLHelper.SetAttribute(DataElement, 'key', 'prop_' + Pair.Key);
+          XMLHelper.SetText(DataElement, VarToStr(Pair.Value));
+        end;
+      end;
+    end;
+
+    XMLHelper.SaveToFile(AFileName);
+  finally
+    XMLHelper.Free;
+  end;
+end;
+{$ENDIF}
+
 
 procedure TAiRagGraph.SaveToMakerAi(const AFileName: String; const aFull: Boolean);
 var
@@ -4383,7 +4611,10 @@ End;
 
 procedure TAiRagGraph.SaveToStream(AStream: TStream; aFull: Boolean);
 var
+  // Delphi: TStreamWriter para escritura UTF-8. FPC JsonTextWriter escribe directo al Stream
+  {$IFNDEF FPC}
   StreamWriter: TStreamWriter;
+  {$ENDIF}
   JsonWriter: TJsonTextWriter;
   Node: TAiRagGraphNode;
   Edge: TAiRagGraphEdge;
@@ -4394,10 +4625,16 @@ begin
   if AStream = nil then
     raise Exception.Create('Error: El Stream de destino es nil.');
 
+  {$IFDEF FPC}
+  // En FPC usamos el Shim que escribe directo al Stream (UTF8 por defecto en WriteString)
+  JsonWriter := TJsonTextWriter.Create(AStream);
+  try
+  {$ELSE}
   StreamWriter := TStreamWriter.Create(AStream, TEncoding.UTF8);
   try
     JsonWriter := TJsonTextWriter.Create(StreamWriter);
     try
+  {$ENDIF}
       JsonWriter.Formatting := TJsonFormatting.Indented;
 
       JsonWriter.WriteStartObject; // {
@@ -4522,12 +4759,18 @@ begin
 
       JsonWriter.WriteEndObject; // } fin graph
       JsonWriter.WriteEndObject; // } fin raiz
+  {$IFDEF FPC}
+  finally
+    JsonWriter.Free;
+  end;
+  {$ELSE}
     finally
       JsonWriter.Free;
     end;
   finally
     StreamWriter.Free;
   end;
+  {$ENDIF}
 end;
 
 procedure TAiRagGraph.SetDriver(const Value: TAiRagGraphDriverBase);

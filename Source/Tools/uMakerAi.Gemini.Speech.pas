@@ -1,14 +1,22 @@
-// Pendiente [TODO] //Estimar el costo de la generación ya que no retorna el consumo
+ï»¿// Pendiente [TODO] //Estimar el costo de la generaciÃ³n ya que no retorna el consumo
 // https://ai.google.dev/gemini-api/docs/pricing
 
 unit uMakerAi.Gemini.Speech;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Classes, System.JSON, System.Net.HttpClient,
   System.Net.HttpClientComponent, System.Net.URLClient, System.Threading,
-  System.StrUtils, uMakerAi.Core, uMakerAi.Chat.Tools, uMakerAi.Utils.PcmToWav, uMakerAi.Chat.Messages;
+  System.StrUtils,
+  {$ENDIF}
+  uMakerAi.Core, uMakerAi.Chat.Tools, uMakerAi.Utils.PcmToWav, uMakerAi.Chat.Messages,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
   // [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32 or pidOSX64 or {pidiOSArm64 or} pidAndroidArm64)]
@@ -154,7 +162,7 @@ begin
   end;
 end;
 
-{ --- LÓGICA DE EJECUCIÓN --- }
+{ --- LÃ“GICA DE EJECUCIÃ“N --- }
 
 function TAiGeminiSpeechTool.InternalRunGeminiTTS(const AText: string; ResMsg: TAiChatMessage): string;
 var
@@ -169,19 +177,21 @@ var
   LPCMStream, LWAVStream: TMemoryStream;
   LNewFile: TAiMediaFile;
   LMsg: TAiChatMessage;
+  LRes: string;
 begin
   Result := '';
   LMsg := TAiChatMessage(ResMsg);
   LUrl := Format('%smodels/%s:generateContent?key=%s', [FUrl, FModel, GetApiKey]);
 
   HTTP := TNetHTTPClient.Create(nil);
+  HTTP.ConfigureForAsync;
   LRequestJson := TJSONObject.Create;
   LPCMStream := TMemoryStream.Create;
   try
     // 1. Prompt de Director
     LRequestJson.AddPair('contents', TJSONArray.Create.Add(TJSONObject.Create.AddPair('parts', TJSONArray.Create.Add(TJSONObject.Create.AddPair('text', BuildFullPrompt(AText))))));
 
-    // 2. Configuración de Generación
+    // 2. ConfiguraciÃ³n de GeneraciÃ³n
     LGenConfig := TJSONObject.Create;
 
     LRespModalities := TJSONArray.Create;
@@ -204,21 +214,21 @@ begin
       LBody.Free;
     end;
 
-    // 4. Respuesta y Conversión
+    // 4. Respuesta y ConversiÃ³n
     if LResponse.StatusCode = 200 then
     begin
       LResponseJson := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       try
         // --- CAPTURA DE METADATOS DE USO (TOKENS) ---
-        if LResponseJson.TryGetValue<TJSONObject>('usageMetadata', JUsage) then
+        if LResponseJson.TryGetValue('usageMetadata', JUsage) then
         begin
-          LMsg.Prompt_tokens := LMsg.Prompt_tokens + JUsage.GetValue<Integer>('promptTokenCount', 0);
-          LMsg.Completion_tokens := LMsg.Completion_tokens + JUsage.GetValue<Integer>('candidatesTokenCount', 0);
-          LMsg.Total_tokens := LMsg.Total_tokens + JUsage.GetValue<Integer>('totalTokenCount', 0);
+          LMsg.Prompt_tokens := LMsg.Prompt_tokens + JUsage.GetValueAsInteger('promptTokenCount', 0);
+          LMsg.Completion_tokens := LMsg.Completion_tokens + JUsage.GetValueAsInteger('candidatesTokenCount', 0);
+          LMsg.Total_tokens := LMsg.Total_tokens + JUsage.GetValueAsInteger('totalTokenCount', 0);
         end;
 
-        // --- EXTRACCIÓN DEL AUDIO ---
-        LBase64 := LResponseJson.GetValue<string>('candidates[0].content.parts[0].inlineData.data', '');
+        // --- EXTRACCIÃ“N DEL AUDIO ---
+        LBase64 := LResponseJson.GetValueAsString('candidates[0].content.parts[0].inlineData.data', '');
         if not LBase64.IsEmpty then
         begin
           LPCMStream.Clear;
@@ -250,9 +260,8 @@ begin
     end
     else
     begin
-      var
       LRes := LResponse.ContentAsString;
-      ReportError('Gemini TTS Error: ' + LRes, nil);
+      ReportError('Gemini TTS Error: ' + LRes);
     end;
 
   finally
@@ -262,7 +271,7 @@ begin
   end;
 end;
 
-{ --- MÉTODOS DE APOYO --- }
+{ --- MÃ‰TODOS DE APOYO --- }
 
 function TAiGeminiSpeechTool.BuildFullPrompt(const AText: string): string;
 var
@@ -297,7 +306,7 @@ end;
 
 procedure TAiGeminiSpeechTool.ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
 begin
-  ReportError('Transscripción no soportada en este componente.', nil);
+  ReportError('TransscripciÃ³n no soportada en este componente.');
 end;
 
 function TAiGeminiSpeechTool.GetApiKey: string;
@@ -305,7 +314,7 @@ begin
   if (csDesigning in ComponentState) then
     Exit(FApiKey);
   if FApiKey.StartsWith('@') then
-    Result := GetEnvironmentVariable(Copy(FApiKey, 2, MaxInt))
+    Result := CompatGetEnvVar(Copy(FApiKey, 2, MaxInt))
   else
     Result := FApiKey;
 end;
@@ -342,7 +351,7 @@ class function TAiGeminiSpeechTool.GenerateSpeech(const AApiKey, AText, AVice: s
       LInstance.ApiKey := AApiKey;
       LInstance.Voice := AVice;
 
-      // Asignamos los parámetros de dirección si se proveen
+      // Asignamos los parÃ¡metros de direcciÃ³n si se proveen
       if Assigned(AAudioProfile) then
         LInstance.AudioProfile.Assign(AAudioProfile);
       if Assigned(AScene) then
@@ -350,8 +359,8 @@ class function TAiGeminiSpeechTool.GenerateSpeech(const AApiKey, AText, AVice: s
       if Assigned(ADirectorsNotes) then
         LInstance.DirectorsNotes.Assign(ADirectorsNotes);
 
-      // 4. Ejecutamos la lógica interna (Síncronamente)
-      // Llamamos a InternalRunGeminiTTS que es donde está la lógica de red y tokens
+      // 4. Ejecutamos la lÃ³gica interna (SÃ­ncronamente)
+      // Llamamos a InternalRunGeminiTTS que es donde estÃ¡ la lÃ³gica de red y tokens
       LInstance.InternalRunGeminiTTS(AText, LDummyMsg);
 
       // 5. Extraemos el archivo resultante

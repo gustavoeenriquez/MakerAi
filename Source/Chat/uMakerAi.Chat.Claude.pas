@@ -1,18 +1,18 @@
-// IT License
+Ôªø// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,11 +33,11 @@
 
 
 // -----------------------------------------------------------------------------
-// TODO: IMPLEMENTACI”N FUTURA - CITATIONS (RAG Nativo)
+// TODO: IMPLEMENTACI√ìN FUTURA - CITATIONS (RAG Nativo)
 // -----------------------------------------------------------------------------
 // Falta implementar la funcionalidad de citas ('citations') de la API de Claude.
 // Pasos requeridos:
-// 1. Core: AÒadir propiedades `EnableCitations`, `Title`, `Context` a TAiMediaFile.
+// 1. Core: A√±adir propiedades `EnableCitations`, `Title`, `Context` a TAiMediaFile.
 // 2. Core: Crear clase `TAiCitation` y lista `TAiCitations` en TAiChatMessage.
 // 3. Claude.GetMessages: Al serializar documentos (PDF/Text), inyectar bloque:
 // "citations": {"enabled": true}
@@ -45,7 +45,7 @@
 // 5. Claude.ParseChat: Extraer array `citations` de los bloques de contenido.
 // Ref: https://docs.anthropic.com/en/docs/build-with-claude/citations
 // -----------------------------------------------------------------------------
-// ------ Herramientas que no se implementar·n por ahora --------------------
+// ------ Herramientas que no se implementar√°n por ahora --------------------
 // 1. https://platform.claude.com/docs/es/agents-and-tools/tool-use/code-execution-tool
 // 2. https://platform.claude.com/docs/es/agents-and-tools/tool-use/fine-grained-tool-streaming
 // 3.
@@ -54,27 +54,33 @@
 
 
 // https://platform.claude.com/docs/en/intro
-// https://platform.claude.com/docs/en/api/beta/messages/create  //api de la ˙ltima implementaciÛn {/beta/}
+// https://platform.claude.com/docs/en/api/beta/messages/create  //api de la √∫ltima implementaci√≥n {/beta/}
 
 unit uMakerAi.Chat.Claude;
+
+{$INCLUDE ../CompilerDirectives.inc}
 
 interface
 
 uses
+  // FPC: Unidades est√°ndar de FPC sin prefijo System
+  {$IFDEF FPC}
+  SysUtils, Types, Classes, Variants, Generics.Collections, StrUtils, TypInfo,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye Net/HTTP/JSON/REST nativos
   System.SysUtils, System.Types, System.UITypes, System.Classes,
   System.Threading, System.Variants, System.Net.Mime, System.IOUtils,
   System.Generics.Collections, System.NetEncoding, System.JSON,
   System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent, REST.JSON, REST.Types, REST.Client,
-{$IF CompilerVersion < 35}
-  uJSONHelper,
-{$ENDIF}
+  {$ENDIF}
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper,
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core,
   uMakerAi.Utils.CodeExtractor, uMakerAi.Chat.Messages;
 
 type
 
-  // --- Clases para GestiÛn de Contexto (Context Editing) ---
+  // --- Clases para Gesti√≥n de Contexto (Context Editing) ---
 
   TClaudeContextTrigger = class
   public
@@ -142,7 +148,7 @@ type
     FServiceTier: String;
 
     function GetToolJson(aToolFormat: TToolFormat): TJSonArray;
-    function GetDynamicHeaders: TNetHeaders; // Construye headers Beta din·micamente
+    function GetDynamicHeaders: TNetHeaders; // Construye headers Beta din√°micamente
     function GetFileHeaders: TNetHeaders;
     procedure ClearStreamState;
     procedure ProcessStreamChunk(const AChunk: string);
@@ -152,7 +158,7 @@ type
     procedure SetThinkingBudget(const Value: Integer);
 
   Protected
-    Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
+    Procedure OnInternalReceiveData(const Sender: TObject; {$IFDEF FPC}const{$ENDIF} AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
     Function InternalAddMessage(aMsg: TAiChatMessage): TAiChatMessage; Overload; Override;
 
     Function InitChatCompletions: String; Override;
@@ -171,7 +177,7 @@ type
     Class Function GetModels(aApiKey: String; aUrl: String = ''): TStringList; Override;
     Function GetMessages: TJSonArray; Override;
 
-    // --- GestiÛn de Archivos (File API) ---
+    // --- Gesti√≥n de Archivos (File API) ---
     Function UploadFile(aMediaFile: TAiMediaFile): String; Override;
     Function DownLoadFile(aMediaFile: TAiMediaFile): String; Override;
     Function CheckFileState(aMediaFile: TAiMediaFile): String; Override;
@@ -185,12 +191,12 @@ type
     class procedure RegisterDefaultParams(Params: TStrings); Override;
     class function CreateInstance(Sender: TComponent): TAiChat; Override;
 
-    // MÈtodo f·cil para configurar la limpieza autom·tica de contexto
-    // TriggerTokens: A partir de cu·ntos tokens de entrada se activa la limpieza (ej. 20000)
-    // KeepLast: Cu·ntas interacciones de herramientas recientes conservar (ej. 3)
+    // M√©todo f√°cil para configurar la limpieza autom√°tica de contexto
+    // TriggerTokens: A partir de cu√°ntos tokens de entrada se activa la limpieza (ej. 20000)
+    // KeepLast: Cu√°ntas interacciones de herramientas recientes conservar (ej. 3)
     procedure ConfigureAutoContextClearing(TriggerTokens: Integer; KeepLast: Integer = 3);
 
-    // Acceso a la configuraciÛn de contexto
+    // Acceso a la configuraci√≥n de contexto
     property ContextConfig: TClaudeContextConfig read FContextConfig;
 
     // Permite cachear el System Prompt para ahorrar costos en instrucciones largas
@@ -216,17 +222,17 @@ Const
   BETA_HDR_TOOLS = 'tools-2024-05-16';
   // API de Archivos (se mantiene)
   BETA_HDR_FILES = 'files-api-2025-04-14';
-  // GestiÛn de Contexto / Memoria (se mantiene)
+  // Gesti√≥n de Contexto / Memoria (se mantiene)
   BETA_HDR_MEMORY = 'context-management-2025-06-27';
   // Thinking (se mantiene)
   BETA_HDR_THINKING = 'interleaved-thinking-2025-05-14';
-  // Code Execution (Actualizado seg˙n lista de headers de la doc)
+  // Code Execution (Actualizado seg√∫n lista de headers de la doc)
   BETA_HDR_CODE = 'code-execution-2025-05-22';
-  // Computer Use (Actualizado a la ˙ltima versiÛn disponible en doc)
+  // Computer Use (Actualizado a la √∫ltima versi√≥n disponible en doc)
   BETA_HDR_COMPUTER = 'computer-use-2025-01-24';
-  // PDFs (Nuevo: Para asegurar soporte nativo si se envÌa base64)
+  // PDFs (Nuevo: Para asegurar soporte nativo si se env√≠a base64)
   BETA_HDR_PDFS = 'pdfs-2024-09-25';
-  // Prompt Caching (⁄til para CacheSystemPrompt)
+  // Prompt Caching (√ötil para CacheSystemPrompt)
   BETA_HDR_PROMPT_CACHING = 'prompt-caching-2024-07-31';
   // Header para Structured Outputs (JSON Schema & Strict Tools)
   BETA_HDR_STRUCTURED_OUTPUTS = 'structured-outputs-2025-11-13';
@@ -262,34 +268,33 @@ begin
 end;
 
 function TClaudeContextEdit.ToJSONObject: TJSONObject;
+var
+  jTrigger, jKeep, jClear: TJSONObject;
 begin
   Result := TJSONObject.Create;
   Result.AddPair('type', EditType);
 
   if Assigned(Trigger) then
   begin
-    var
     jTrigger := TJSONObject.Create;
     jTrigger.AddPair('type', Trigger.TriggerType);
-    jTrigger.AddPair('value', TJSONNumber.Create(Trigger.Value));
+    jTrigger.AddPair('value', CreateJSONNumber(Trigger.Value));
     Result.AddPair('trigger', jTrigger);
   end;
 
   if Keep_ToolUses > 0 then
   begin
-    var
     jKeep := TJSONObject.Create;
     jKeep.AddPair('type', 'tool_uses');
-    jKeep.AddPair('value', TJSONNumber.Create(Keep_ToolUses));
+    jKeep.AddPair('value', CreateJSONNumber(Keep_ToolUses));
     Result.AddPair('keep', jKeep);
   end;
 
   if ClearAtLeast_InputTokens > 0 then
   begin
-    var
     jClear := TJSONObject.Create;
     jClear.AddPair('type', 'input_tokens');
-    jClear.AddPair('value', TJSONNumber.Create(ClearAtLeast_InputTokens));
+    jClear.AddPair('value', CreateJSONNumber(ClearAtLeast_InputTokens));
     Result.AddPair('clear_at_least', jClear);
   end;
 end;
@@ -403,8 +408,9 @@ begin
     raise Exception.Create('InputFileId es requerido');
 
   Client := TNetHTTPClient.Create(Nil);
+  Client.ConfigureForAsync;
   try
-    // Headers especÌficos para Batches
+    // Headers espec√≠ficos para Batches
     Headers := [TNetHeader.Create('x-api-key', ApiKey), TNetHeader.Create('anthropic-version', CLAUDE_API_VERSION), TNetHeader.Create('anthropic-beta', 'message-batches-2024-09-24'), // Header obligatorio para Batches
     TNetHeader.Create('content-type', 'application/json')];
 
@@ -426,7 +432,7 @@ begin
       begin
         jRes := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
         try
-          Result := jRes.GetValue<string>('id'); // Guardar este ID para consultar estado luego
+          Result := jRes.GetValueAsString('id', ''); // Guardar este ID para consultar estado luego
         finally
           jRes.Free;
         end;
@@ -500,13 +506,16 @@ end;
 function TAiClaudeChat.GetDynamicHeaders: TNetHeaders;
 var
   BetaFeatures: TList<string>;
+  Beta: string;
+  UniqueBetas: TStringList;
+  HeaderVal: string;
 begin
   // Headers base obligatorios
   Result := [TNetHeader.Create('x-api-key', ApiKey), TNetHeader.Create('anthropic-version', CLAUDE_API_VERSION), TNetHeader.Create('content-type', 'application/json')];
 
   BetaFeatures := TList<string>.Create;
   try
-    // 1. Tools (General) - Se aÒade si hay herramientas activas
+    // 1. Tools (General) - Se a√±ade si hay herramientas activas
     if Tool_Active then
       BetaFeatures.Add(BETA_HDR_TOOLS);
 
@@ -523,25 +532,25 @@ begin
       BetaFeatures.Add(BETA_HDR_COMPUTER);
 
     // 5. Thinking / Output Config
-    // Se activa si est· habilitado manualmente O si hay un nivel de pensamiento definido
+    // Se activa si est√° habilitado manualmente O si hay un nivel de pensamiento definido
     if FEnableThinking or (ThinkingLevel <> tlDefault) then
       BetaFeatures.Add(BETA_HDR_THINKING);
 
     // 6. Prompt Caching
-    // Siempre ˙til agregarlo si vamos a usar cache_control
+    // Siempre √∫til agregarlo si vamos a usar cache_control
     BetaFeatures.Add(BETA_HDR_PROMPT_CACHING);
 
     // 7. PDFs
-    // Agregamos soporte explÌcito para PDFs
+    // Agregamos soporte expl√≠cito para PDFs
     if (tcm_pdf in ChatMediaSupports) then
       BetaFeatures.Add(BETA_HDR_PDFS);
 
-    // 8. Files API (CRÕTICO)
+    // 8. Files API (CR√çTICO)
     // Siempre anunciamos soporte de Files para el Auto-Upload
     BetaFeatures.Add(BETA_HDR_FILES);
 
-    // Structured Outputs: Se activa si pedimos JSON Schema explÌcito
-    // Opcionalmente tambiÈn si Tool_Active es true para permitir "strict: true" en tools.
+    // Structured Outputs: Se activa si pedimos JSON Schema expl√≠cito
+    // Opcionalmente tambi√©n si Tool_Active es true para permitir "strict: true" en tools.
     if (Response_format = tiaChatRfJsonSchema) or Tool_Active then
       BetaFeatures.Add(BETA_HDR_STRUCTURED_OUTPUTS);
 
@@ -549,15 +558,13 @@ begin
     if BetaFeatures.Count > 0 then
     begin
       // Eliminar duplicados por si acaso
-      var
       UniqueBetas := TStringList.Create;
       try
         UniqueBetas.Duplicates := dupIgnore;
         UniqueBetas.Sorted := True;
-        for var Beta in BetaFeatures do
+        for Beta in BetaFeatures do
           UniqueBetas.Add(Beta);
 
-        var
         HeaderVal := string.Join(',', UniqueBetas.ToStringArray);
         Result := Result + [TNetHeader.Create('anthropic-beta', HeaderVal)];
       finally
@@ -589,7 +596,7 @@ Var
   Res, LModel: String;
   SystemPrompt: String;
 
-  // Variables para iteraciÛn de mensajes (Auto-Upload)
+  // Variables para iteraci√≥n de mensajes (Auto-Upload)
   LMsg: TAiChatMessage;
   LMedia: TAiMediaFile;
 
@@ -599,6 +606,12 @@ Var
 
   // Variables auxiliares para Thinking
   LActualThinkingBudget: Integer;
+  // Vars moved
+  jSysArr: TJSONArray;
+  jSysBlock, jCache, jThink, jContext, jRootSchema: TJSONObject;
+  sShema: string;
+  jUserTools: TJSonArray;
+  Val: TJSONValue;
 begin
   if User = '' then
     User := 'user';
@@ -629,30 +642,30 @@ begin
     LModel := 'claude-3-5-sonnet-20240620';
 
   // ---------------------------------------------------------------------------
-  // 2. C¡LCULO DE THINKING BUDGET (Nuevo enfoque sin output_config)
+  // 2. C√ÅLCULO DE THINKING BUDGET (Nuevo enfoque sin output_config)
   // ---------------------------------------------------------------------------
   if ThinkingLevel <> tlDefault then
     FEnableThinking := True;
 
   if FEnableThinking then
   begin
-    // Asignar presupuesto seg˙n el nivel elegido o usar el manual
+    // Asignar presupuesto seg√∫n el nivel elegido o usar el manual
     case ThinkingLevel of
       tlLow:
-        LActualThinkingBudget := 2048; // R·pido, poco profundo
+        LActualThinkingBudget := 2048; // R√°pido, poco profundo
       tlMedium:
-        LActualThinkingBudget := 8192; // Est·ndar razonable
+        LActualThinkingBudget := 8192; // Est√°ndar razonable
       tlHigh:
         LActualThinkingBudget := 16384; // Profundo (Cuidado con costos)
     else
       LActualThinkingBudget := FThinkingBudget; // Valor manual
     end;
 
-    // ValidaciÛn de mÌnimos API (1024)
+    // Validaci√≥n de m√≠nimos API (1024)
     if LActualThinkingBudget < 1024 then
       LActualThinkingBudget := 1024;
 
-    // ValidaciÛn de MaxTokens: Debe ser estrictamente mayor que el budget
+    // Validaci√≥n de MaxTokens: Debe ser estrictamente mayor que el budget
     // Le damos un margen para que pueda escribir la respuesta final
     if Max_tokens <= LActualThinkingBudget then
       Max_tokens := LActualThinkingBudget + 4096;
@@ -672,14 +685,11 @@ begin
     begin
       if FCacheSystemPrompt then
       begin
-        var
         jSysArr := TJSonArray.Create;
-        var
         jSysBlock := TJSONObject.Create;
         jSysBlock.AddPair('type', 'text');
         jSysBlock.AddPair('text', SystemPrompt);
 
-        var
         jCache := TJSONObject.Create;
         jCache.AddPair('type', 'ephemeral');
         jSysBlock.AddPair('cache_control', jCache);
@@ -691,7 +701,7 @@ begin
         AJSONObject.AddPair('system', SystemPrompt);
     end;
 
-    AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+    AJSONObject.AddPair('max_tokens', CreateJSONNumber(Max_tokens));
     AJSONObject.AddPair('messages', GetMessages);
 
     // 4. JSON OUTPUT (STRUCTURED OUTPUTS)
@@ -700,20 +710,18 @@ begin
       if (JsonSchema.Text <> '') then
       begin
         try
-          var
-          sShema := StringReplace(JsonSchema.Text, '\n', ' ', [rfReplaceAll]);
+          sShema := StringReplace(JsonSchema.Text,'\n',' ',[rfReplaceAll]);
           jSchemaParsed := TJSONObject.ParseJSONValue(sShema);
           if Assigned(jSchemaParsed) and (jSchemaParsed is TJSONObject) then
           begin
-            var
             jRootSchema := jSchemaParsed as TJSONObject;
 
-            // --- CORRECCI”N AUTOM¡TICA PARA CLAUDE ---
-            // Claude exige "additionalProperties": false en el nivel raÌz si es type object.
+            // --- CORRECCI√ìN AUTOM√ÅTICA PARA CLAUDE ---
+            // Claude exige "additionalProperties": false en el nivel ra√≠z si es type object.
             // Verificamos si es type object y si falta la propiedad, la agregamos.
-            if (jRootSchema.GetValue<string>('type') = 'object') and (jRootSchema.GetValue('additionalProperties') = nil) then
+            if (jRootSchema.GetValueAsString('type') = 'object') and (jRootSchema.FindValue('additionalProperties') = nil) then
             begin
-              jRootSchema.AddPair('additionalProperties', TJSONBool.Create(False));
+              jRootSchema.AddPair('additionalProperties', CreateJSONBool(False));
             end;
             // -----------------------------------------
 
@@ -734,25 +742,24 @@ begin
     // -------------------------------------------------------------------------
     if FEnableThinking then
     begin
-      var
       jThink := TJSONObject.Create;
       jThink.AddPair('type', 'enabled');
-      jThink.AddPair('budget_tokens', TJSONNumber.Create(LActualThinkingBudget));
+      jThink.AddPair('budget_tokens', CreateJSONNumber(LActualThinkingBudget));
       AJSONObject.AddPair('thinking', jThink);
 
       // Temperatura Forzada a 1.0 (Requisito API para thinking)
-      AJSONObject.AddPair('temperature', TJSONNumber.Create(1.0));
+      AJSONObject.AddPair('temperature', CreateJSONNumber(1.0));
     end
     else
     begin
-      // Modo Est·ndar
+      // Modo Est√°ndar
       if Self.Temperature > 0 then
-        AJSONObject.AddPair('temperature', TJSONNumber.Create(Self.Temperature))
+        AJSONObject.AddPair('temperature', CreateJSONNumber(Self.Temperature))
       Else if Top_p > 0 then
-        AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
+        AJSONObject.AddPair('top_p', CreateJSONNumber(Top_p));
 
       if K > 0 then
-        AJSONObject.AddPair('top_k', TJSONNumber.Create(K));
+        AJSONObject.AddPair('top_k', CreateJSONNumber(K));
     end;
 
     // 6. METADATA & SERVICE TIER
@@ -768,7 +775,6 @@ begin
 
     if not FContextConfig.IsEmpty then
     begin
-      var
       jContext := FContextConfig.ToJSONObject;
       if Assigned(jContext) then
         AJSONObject.AddPair('context_management', jContext);
@@ -779,11 +785,10 @@ begin
 
     if Tool_Active and (Trim(GetTools(TToolFormat.tfClaude).Text) <> '') then
     begin
-      var
       jUserTools := GetToolJson(TToolFormat.tfClaude);
       if Assigned(jUserTools) then
       begin
-        for var Val in jUserTools do
+        for Val in jUserTools do
           jArrTools.Add(Val.Clone as TJSONObject);
       end;
     end;
@@ -825,8 +830,8 @@ begin
       JTools := TJSONObject.Create;
       JTools.AddPair('type', 'computer_20250124');
       JTools.AddPair('name', 'computer');
-      JTools.AddPair('display_width_px', TJSONNumber.Create(1024));
-      JTools.AddPair('display_height_px', TJSONNumber.Create(768));
+      JTools.AddPair('display_width_px', CreateJSONNumber(1024));
+      JTools.AddPair('display_height_px', CreateJSONNumber(768));
       jArrTools.Add(JTools);
     end;
 
@@ -856,7 +861,7 @@ begin
     else
       jArrTools.Free;
 
-    // 8. FINALIZACI”N
+    // 8. FINALIZACI√ìN
     Lista.CommaText := Stop;
     if Lista.Count > 0 then
     begin
@@ -866,9 +871,9 @@ begin
       AJSONObject.AddPair('stop_sequences', jArrStop);
     end;
 
-    AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
+    AJSONObject.AddPair('stream', CreateJSONBool(LAsincronico));
 
-    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
+    Res := AJSONObject.ToJSONString;
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
 
@@ -992,23 +997,25 @@ End;
   ScanItem: TJSONValue;
   ScanObj, InputObj: TJSONObject;
   CmdParts: TArray<string>;
+  valInner: TJSONValue; // FPC
+  CodeFile: TCodeFile; // FPC
   begin
   AskMsg := GetLastMessage;
 
   // Parse Metadata
-  // Id := jObj.GetValue('id').Value;
-  LModel := jObj.GetValue('model').Value;
-  Role := jObj.GetValue('role').Value;
-  StopR := jObj.GetValue<string>('stop_reason', '');
+  // Id := jObj.GetValueAsString('id');
+  LModel := jObj.GetValueAsString('model');
+  Role := jObj.GetValueAsString('role');
+  StopR := jObj.GetValueAsString('stop_reason', '');
 
   ResMsg.StopReason := StopR;
   if StopR = 'refusal' then
   ResMsg.IsRefusal := True;
 
-  if jObj.TryGetValue<TJSONObject>('usage', uso) then
+  if jObj.TryGetValue('usage', uso) then
   begin
-  aPrompt_tokens := uso.GetValue<Integer>('input_tokens');
-  aCompletion_tokens := uso.GetValue<Integer>('output_tokens');
+  aPrompt_tokens := uso.GetValueAsInteger('input_tokens');
+  aCompletion_tokens := uso.GetValueAsInteger('output_tokens');
   aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
   end
   else
@@ -1019,24 +1026,24 @@ End;
   end;
 
   // Parse Content (Interleaved)
-  jObj.TryGetValue<TJSonArray>('content', choices);
+  jObj.TryGetValue('content', choices);
 
   for JVal in choices do
   begin
   jContentItem := TJSONObject(JVal);
-  cType := jContentItem.GetValue<string>('type');
+  cType := jContentItem.GetValueAsString('type');
 
   if cType = 'text' then
-  Respuesta := Respuesta + jContentItem.GetValue<string>('text') + sLineBreak;
+  Respuesta := Respuesta + jContentItem.GetValueAsString('text') + sLineBreak;
 
   if cType = 'thinking' then
   begin
-  ResMsg.ReasoningContent := ResMsg.ReasoningContent + jContentItem.GetValue<string>('thinking');
+  ResMsg.ReasoningContent := ResMsg.ReasoningContent + jContentItem.GetValueAsString('thinking');
 
-  ResMsg.ThinkingSignature := jContentItem.GetValue<string>('signature');
+  ResMsg.ThinkingSignature := jContentItem.GetValueAsString('signature');
   end;
 
-  if jContentItem.TryGetValue<TJSonArray>('citations', jCitationsArr) then
+  if jContentItem.TryGetValue('citations', jCitationsArr) then
   begin
   // Crear el contenedor principal si no existe
   if not Assigned(ResMsg.WebSearchResponse) then
@@ -1046,25 +1053,25 @@ End;
   begin
   jCitObj := jCitVal as TJSONObject;
 
-  // Filtramos solo resultados de b˙squeda web
-  if jCitObj.GetValue<string>('type') = 'web_search_result_location' then
+  // Filtramos solo resultados de b√∫squeda web
+  if jCitObj.GetValueAsString('type') = 'web_search_result_location' then
   begin
   SearchItem := TAiWebSearchItem.Create;
 
   // Mapeo de propiedades a tus clases del Core
   SearchItem.&type := 'web_search_result_location';
-  SearchItem.Title := jCitObj.GetValue<string>('title', '');
-  SearchItem.Url := jCitObj.GetValue<string>('url', '');
+  SearchItem.Title := jCitObj.GetValueAsString('title', '');
+  SearchItem.Url := jCitObj.GetValueAsString('url', '');
 
-  // Nota: Claude Beta actual devuelve 'cited_text' (snippet), pero no Ìndices.
+  // Nota: Claude Beta actual devuelve 'cited_text' (snippet), pero no √≠ndices.
   // Tus clases tienen start/end_index, los dejamos en 0 o -1 por ahora.
   SearchItem.start_index := 0;
   SearchItem.end_index := 0;
 
   // Opcional: Si quisieras guardar el 'cited_text' (resumen),
-  // podrÌas concatenarlo al tÌtulo o necesitarÌas un campo extra en TAiWebSearchItem.
-  // Por ahora nos ceÒimos a tu estructura:
-  // SearchItem.Snippet := jCitObj.GetValue<string>('cited_text');
+  // podr√≠as concatenarlo al t√≠tulo o necesitar√≠as un campo extra en TAiWebSearchItem.
+  // Por ahora nos ce√±imos a tu estructura:
+  // SearchItem.Snippet := jCitObj.GetValueAsString('cited_text');
 
   ResMsg.WebSearchResponse.annotations.Add(SearchItem);
   end;
@@ -1076,16 +1083,16 @@ End;
   // Navegar la estructura JSON profunda del sandbox
   // Estructura: content -> content (array) -> file_id
 
-  if jContentItem.TryGetValue<TJSONObject>('content', jInnerContent) then
+  if jContentItem.TryGetValue('content', jInnerContent) then
   begin
-  if jInnerContent.TryGetValue<TJSonArray>('content', jInnerArray) then
+  if jInnerContent.TryGetValue('content', jInnerArray) then
   begin
-  for var valInner in jInnerArray do
+  for valInner in jInnerArray do
   begin
   jInnerItem := valInner as TJSONObject;
 
   // Buscamos el ID del archivo
-  if jInnerItem.TryGetValue<string>('file_id', Clave) then // Reusamos var Clave o string temporal
+  if jInnerItem.TryGetValue('file_id', Clave) then // Reusamos var Clave o string temporal
   begin
   NewFile := TAiMediaFile.Create;
   NewFile.IdFile := Clave; // El ID del archivo (ej: file_011CVTV...)
@@ -1104,22 +1111,22 @@ End;
   if ContainsText(cType, 'tool_result') or ContainsText(cType, 'code_execution') then
   begin
   // Navegar la estructura profunda para encontrar el file_id
-  if jContentItem.TryGetValue<TJSONObject>('content', jInnerContent) then
+  if jContentItem.TryGetValue('content', jInnerContent) then
   begin
-  if jInnerContent.TryGetValue<TJSonArray>('content', jInnerArray) then
+  if jInnerContent.TryGetValue('content', jInnerArray) then
   begin
-  for var valInner in jInnerArray do
+  for valInner in jInnerArray do
   begin
   jInnerItem := valInner as TJSONObject;
 
-  // øEncontramos un file_id?
-  if jInnerItem.TryGetValue<string>('file_id', Clave) then
+  // ¬øEncontramos un file_id?
+  if jInnerItem.TryGetValue('file_id', Clave) then
   begin
-  // --- RECUPERACI”N INTELIGENTE DEL NOMBRE ---
+  // --- RECUPERACI√ìN INTELIGENTE DEL NOMBRE ---
   FoundFileName := 'generated_file_' + Copy(Clave, 1, 8); // Nombre temporal
 
-  // 1. Obtenemos el ID de la herramienta que generÛ este resultado
-  ToolUseID := jContentItem.GetValue<string>('tool_use_id', '');
+  // 1. Obtenemos el ID de la herramienta que gener√≥ este resultado
+  ToolUseID := jContentItem.GetValueAsString('tool_use_id', '');
 
   if ToolUseID <> '' then
   begin
@@ -1132,16 +1139,16 @@ End;
 
   Var
   sId: String;
-  If ScanObj.TryGetValue<string>('id', sId) and (sId = ToolUseID) then
+  If ScanObj.TryGetValue('id', sId) and (sId = ToolUseID) then
   Begin
   Var
   sIdType: String;
-  If ScanObj.TryGetValue<string>('type', sIdType) and (sIdType = 'server_tool_use') then
+  If ScanObj.TryGetValue('type', sIdType) and (sIdType = 'server_tool_use') then
   begin
-  if ScanObj.TryGetValue<TJSONObject>('input', InputObj) then
+  if ScanObj.TryGetValue('input', InputObj) then
   begin
-  Cmd := InputObj.GetValue<string>('command', '');
-  // El patrÛn est·ndar es: cp /ruta/nombre.ext $OUTPUT_DIR/
+  Cmd := InputObj.GetValueAsString('command', '');
+  // El patr√≥n est√°ndar es: cp /ruta/nombre.ext $OUTPUT_DIR/
   if Cmd.StartsWith('cp ') then
   begin
 
@@ -1149,7 +1156,7 @@ End;
   CmdParts := Cmd.Split([' ']);
   if Length(CmdParts) >= 2 then
   begin
-  // CmdParts[1] deberÌa ser "/tmp/frecuencia_333hz.wav"
+  // CmdParts[1] deber√≠a ser "/tmp/frecuencia_333hz.wav"
   // Usamos ExtractFileName (System.SysUtils)
 
   Var
@@ -1170,7 +1177,7 @@ End;
   NewFile := TAiMediaFile.Create;
   NewFile.IdFile := Clave; // file_011CV...
   // NewFile.FileCategory := Tfc_Document;
-  NewFile.FileName := FoundFileName; // °Nombre correcto asignado!
+  NewFile.FileName := FoundFileName; // ¬°Nombre correcto asignado!
 
   DownLoadFile(NewFile);
 
@@ -1257,7 +1264,7 @@ End;
   code := TMarkdownCodeExtractor.Create;
   try
   CodeFiles := code.ExtractCodeFiles(Respuesta);
-  for var CodeFile in CodeFiles do
+  for CodeFile in CodeFiles do
   begin
   St := TStringStream.Create(CodeFile.code);
   try
@@ -1312,7 +1319,7 @@ Var
   jCitObj: TJSONObject;
   SearchItem: TAiWebSearchItem;
 
-  // Variables para NavegaciÛn de Archivos (Code Execution)
+  // Variables para Navegaci√≥n de Archivos (Code Execution)
   jInnerContent, jResultContent: TJSONObject;
   jInnerArray, jResultArray: TJSonArray;
   NewFile: TAiMediaFile;
@@ -1320,13 +1327,20 @@ Var
   ScanItem: TJSONValue;
   ScanObj, InputObj: TJSONObject;
   CmdParts: TArray<string>;
+  // Vars moved from inline
+  sThinkingContent, sId, CodeStr, Candidate: string;
+  valRes: TJSONValue;
+  PosExt, StartPos, EndPos: Integer;
+  Msg: TAiChatMessage;
+  JToolCallArray: TJSonArray; // Compatibilidad FPC
+  CodeFile: TCodeFile; // Added for FPC
 begin
   AskMsg := GetLastMessage;
 
   // 1. Parse Metadata
-  LModel := jObj.GetValue<string>('model', '');
-  Role := jObj.GetValue<string>('role', 'assistant');
-  StopR := jObj.GetValue<string>('stop_reason', '');
+  LModel := jObj.GetValueAsString('model', '');
+  Role := jObj.GetValueAsString('role', 'assistant');
+  StopR := jObj.GetValueAsString('stop_reason', '');
 
   ResMsg.StopReason := StopR;
   if StopR = 'refusal' then
@@ -1338,21 +1352,21 @@ begin
   aTotal_tokens := 0;
   aCached_tokens := 0;
 
-  if jObj.TryGetValue<TJSONObject>('usage', uso) then
+  if jObj.TryGetValue('usage', uso) then
   begin
-    aPrompt_tokens := uso.GetValue<Integer>('input_tokens', 0);
-    aCompletion_tokens := uso.GetValue<Integer>('output_tokens', 0);
+    aPrompt_tokens := uso.GetValueAsInteger('input_tokens', 0);
+    aCompletion_tokens := uso.GetValueAsInteger('output_tokens', 0);
 
     // Captura de tokens cacheados (Beta Prompt Caching)
-    aCached_tokens := uso.GetValue<Integer>('cache_read_input_tokens', 0);
+    aCached_tokens := uso.GetValueAsInteger('cache_read_input_tokens', 0);
 
     // Nota: Total tokens en Claude suele ser input + output.
-    // Cache creation tokens ya est·n incluidos en input_tokens seg˙n la doc.
+    // Cache creation tokens ya est√°n incluidos en input_tokens seg√∫n la doc.
     aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
   end;
 
   // 3. Parse Content (Interleaved Blocks)
-  if jObj.TryGetValue<TJSonArray>('content', choices) then
+  if jObj.TryGetValue('content', choices) then
   begin
     for JVal in choices do
     begin
@@ -1360,20 +1374,19 @@ begin
         Continue;
 
       jContentItem := TJSONObject(JVal);
-      cType := jContentItem.GetValue<string>('type');
+      cType := jContentItem.GetValueAsString('type');
 
       // A. Texto Normal
       if cType = 'text' then
-        Respuesta := Respuesta + jContentItem.GetValue<string>('text') + sLineBreak;
+        Respuesta := Respuesta + jContentItem.GetValueAsString('text') + sLineBreak;
 
       // B. Thinking (Razonamiento Extendido)
       if cType = 'thinking' then
       begin
-        Var
-        sThinkingContent := jContentItem.GetValue<string>('thinking');
+        sThinkingContent := jContentItem.GetValueAsString('thinking');
 
-        ResMsg.ReasoningContent := ResMsg.ReasoningContent + jContentItem.GetValue<string>('thinking');
-        if jContentItem.TryGetValue<string>('signature', Clave) then
+        ResMsg.ReasoningContent := ResMsg.ReasoningContent + jContentItem.GetValueAsString('thinking');
+        if jContentItem.TryGetValue('signature', Clave) then
           ResMsg.ThinkingSignature := Clave;
 
         // Disparar evento para UI
@@ -1382,8 +1395,8 @@ begin
 
       end;
 
-      // C. Citations (B˙squeda Web / RAG)
-      if jContentItem.TryGetValue<TJSonArray>('citations', jCitationsArr) then
+      // C. Citations (B√∫squeda Web / RAG)
+      if jContentItem.TryGetValue('citations', jCitationsArr) then
       begin
         if not Assigned(ResMsg.WebSearchResponse) then
           ResMsg.WebSearchResponse := TAiWebSearch.Create;
@@ -1391,12 +1404,12 @@ begin
         for jCitVal in jCitationsArr do
         begin
           jCitObj := jCitVal as TJSONObject;
-          if jCitObj.GetValue<string>('type') = 'web_search_result_location' then
+          if jCitObj.GetValueAsString('type') = 'web_search_result_location' then
           begin
             SearchItem := TAiWebSearchItem.Create;
             SearchItem.&type := 'web_search_result_location';
-            SearchItem.Title := jCitObj.GetValue<string>('title', '');
-            SearchItem.Url := jCitObj.GetValue<string>('url', '');
+            SearchItem.Title := jCitObj.GetValueAsString('title', '');
+            SearchItem.Url := jCitObj.GetValueAsString('url', '');
             ResMsg.WebSearchResponse.annotations.Add(SearchItem);
           end;
         end;
@@ -1406,48 +1419,44 @@ begin
       if (cType = 'tool_result') or (cType = 'code_execution_tool_result') then
       begin
 
-        if jContentItem.TryGetValue<TJSONObject>('content', jInnerContent) then
+        if jContentItem.TryGetValue('content', jInnerContent) then
         begin
-          // Verificamos que sea un resultado de ejecuciÛn de cÛdigo
-          if jInnerContent.GetValue<string>('type') = 'code_execution_result' then
+          // Verificamos que sea un resultado de ejecuci√≥n de c√≥digo
+          if jInnerContent.GetValueAsString('type') = 'code_execution_result' then
           begin
             // 2. Buscamos el array interno 'content' que contiene los outputs (archivos)
-            if jInnerContent.TryGetValue<TJSonArray>('content', jResultArray) then
+            if jInnerContent.TryGetValue('content', jResultArray) then
             begin
-              for var valRes in jResultArray do
+              for valRes in jResultArray do
               begin
                 jResultContent := valRes as TJSONObject;
 
                 // 3. Verificamos si hay un file_id
-                if jResultContent.TryGetValue<string>('file_id', Clave) then
+                if jResultContent.TryGetValue('file_id', Clave) then
                 begin
-                  // --- L”GICA DE RECUPERACI”N DE NOMBRE ---
+                  // --- L√ìGICA DE RECUPERACI√ìN DE NOMBRE ---
                   FoundFileName := 'generated_file_' + Copy(Clave, 1, 8) + '.bin';
-                  ToolUseID := jContentItem.GetValue<string>('tool_use_id', '');
+                  ToolUseID := jContentItem.GetValueAsString('tool_use_id', '');
 
                   if ToolUseID <> '' then
                   begin
-                    // Escanear hacia atr·s para encontrar el input y deducir el nombre
+                    // Escanear hacia atr√°s para encontrar el input y deducir el nombre
                     for ScanItem in choices do
                     begin
                       if not(ScanItem is TJSONObject) then
                         Continue;
                       ScanObj := ScanItem as TJSONObject;
 
-                      var
-                        sId: String;
-                      if ScanObj.TryGetValue<string>('id', sId) and (sId = ToolUseID) then
+                      if ScanObj.TryGetValue('id', sId) and (sId = ToolUseID) then
                       begin
-                        if ScanObj.TryGetValue<TJSONObject>('input', InputObj) then
+                        if ScanObj.TryGetValue('input', InputObj) then
                         begin
-                          // Buscamos en el cÛdigo Python el nombre del archivo generado
-                          var
-                          CodeStr := InputObj.GetValue<string>('code', '');
+                          // Buscamos en el c√≥digo Python el nombre del archivo generado
+                          CodeStr := InputObj.GetValueAsString('code', '');
 
-                          // HeurÌstica simple: buscar 'output_path = ...' o strings con extensiones
-                          // Esto es m·s complejo en Python que en Bash, pero intentamos algo b·sico
-                          // Si el cÛdigo define output_path = ... 'archivo.wav'
-                          var
+                          // Heur√≠stica simple: buscar 'output_path = ...' o strings con extensiones
+                          // Esto es m√°s complejo en Python que en Bash, pero intentamos algo b√°sico
+                          // Si el c√≥digo define output_path = ... 'archivo.wav'
                           PosExt := Pos('.wav', CodeStr);
                           if PosExt = 0 then
                             PosExt := Pos('.csv', CodeStr);
@@ -1458,15 +1467,12 @@ begin
 
                           if PosExt > 0 then
                           begin
-                            // Intentar extraer el nombre buscando hacia atr·s desde la extensiÛn
-                            var
+                            // Intentar extraer el nombre buscando hacia atr√°s desde la extensi√≥n
                             StartPos := LastDelimiter('''"', Copy(CodeStr, 1, PosExt));
                             if StartPos > 0 then
                             begin
-                              var
                               EndPos := PosExt + 3; // Longitud tipica de ext
-                              // Ajuste b·sico, se podrÌa mejorar con RegEx
-                              var
+                              // Ajuste b√°sico, se podr√≠a mejorar con RegEx
                               Candidate := Copy(CodeStr, StartPos + 1, (PosExt - StartPos) + 3);
                               if (Length(Candidate) > 0) and (Length(Candidate) < 50) then
                                 FoundFileName := Candidate;
@@ -1502,15 +1508,15 @@ begin
   Respuesta := Trim(Respuesta);
 
   // 4. Parse Tools
-  var
   JToolCallArray := ExtractToolCallJson(choices);
+
   if JToolCallArray.Count > 0 then
     sToolCalls := JToolCallArray.Format;
   JToolCallArray.Free;
 
   LFunciones := ExtractToolCallFromJson(choices);
 
-  // 5. Update Component State & Response Message (AQUÕ EST¡ LA CORRECCI”N)
+  // 5. Update Component State & Response Message (AQU√ç EST√Å LA CORRECCI√ìN)
   Self.FLastContent := Respuesta;
 
   // Actualizar contadores globales del componente
@@ -1522,7 +1528,7 @@ begin
   ResMsg.Prompt_tokens := aPrompt_tokens;
   ResMsg.Completion_tokens := aCompletion_tokens;
   ResMsg.Total_tokens := aTotal_tokens;
-  ResMsg.Cached_tokens := aCached_tokens; // Nuevo: Soporte de cachÈ
+  ResMsg.Cached_tokens := aCached_tokens; // Nuevo: Soporte de cach√©
 
   if sToolCalls.IsEmpty then
   begin
@@ -1535,18 +1541,17 @@ begin
   end
   else
   begin
-    var
     Msg := TAiChatMessage.Create(Respuesta, Role);
     Msg.Tool_calls := sToolCalls;
     Msg.ReasoningContent := ResMsg.ReasoningContent;
     Msg.ThinkingSignature := ResMsg.ThinkingSignature;
-    // Asignar tokens tambiÈn al mensaje temporal si es necesario,
+    // Asignar tokens tambi√©n al mensaje temporal si es necesario,
     // aunque generalmente se quedan en el ResMsg principal
     Msg.Id := FMessages.Count + 1;
     FMessages.Add(Msg);
   end;
 
-  // 6. EjecuciÛn de Herramientas
+  // 6. Ejecuci√≥n de Herramientas
   try
     if LFunciones.Count > 0 then
     begin
@@ -1586,7 +1591,7 @@ begin
         code := TMarkdownCodeExtractor.Create;
         try
           CodeFiles := code.ExtractCodeFiles(Respuesta);
-          for var CodeFile in CodeFiles do
+          for CodeFile in CodeFiles do
           begin
             St := TStringStream.Create(CodeFile.code);
             try
@@ -1620,9 +1625,13 @@ end;
 
 // --- Streaming Parser (Async) ---
 
-procedure TAiClaudeChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
+procedure TAiClaudeChat.OnInternalReceiveData(const Sender: TObject; {$IFDEF FPC}const{$ENDIF} AContentLength, AReadCount: Int64; var AAbort: Boolean);
 var
   line: string;
+  // Vars moved from inline
+  bufferContent: string;
+  lastLF: Integer;
+  processableContent, line1: string;
 begin
 
   if not FClient.Asynchronous then
@@ -1644,20 +1653,16 @@ begin
   FStreamBuffer.Append(UTF8Encode(FResponse.DataString));
   FResponse.Clear;
 
-  var
   bufferContent := FStreamBuffer.ToString;
-  var
   lastLF := LastDelimiter(#10, bufferContent);
 
   if lastLF > 0 then
   begin
-    var
     processableContent := Copy(bufferContent, 1, lastLF);
     FStreamBuffer.Remove(0, lastLF);
 
     for line in processableContent.Split([#10]) do
     begin
-      var
       line1 := Trim(line);
       if not line1.IsEmpty then
         ProcessStreamChunk(line1);
@@ -1671,21 +1676,39 @@ var
   eventType, textDelta, jsonDelta, StopReason: string;
   blockIndex: Integer;
   streamBlock: TClaudeStreamContentBlock;
+  // Vars moved from inline
+  jsonDataStr: string;
+  Pair: TJSONPair;
+  deltaType: string;
+  jCitation: TJSONObject;
+  sig: string;
+  jInput: TJSONObject;
+  jUsage: TJSONObject;
+  MsgToProcess: TAiChatMessage;
+  jSyntheticResponse: TJSONObject;
+  jContentArr: TJSONArray;
+  SortedKeys: TList<Integer>;
+  Key: Integer;
+  jBlockObj: TJSONObject;
+  sArgs: string;
+  jInputObj: TJSONValue;
+  jCont: TJSONValue;
+  jError: TJSONObject;
+  ErrMsg: string;
 begin
-  // 1. Procesar lÌnea de evento (event: ...)
+  // 1. Procesar l√≠nea de evento (event: ...)
   if AChunk.StartsWith('event:') then
   begin
     FStreamLastEventType := Trim(Copy(AChunk, 7, Length(AChunk)));
     Exit;
   end;
 
-  // 2. Procesar lÌnea de datos (data: ...)
+  // 2. Procesar l√≠nea de datos (data: ...)
   if AChunk.StartsWith('data:') then
   begin
     if FStreamLastEventType = '' then
       Exit;
 
-    var
     jsonDataStr := Trim(Copy(AChunk, 6, Length(AChunk)));
     if jsonDataStr.IsEmpty then
       Exit;
@@ -1695,7 +1718,7 @@ begin
       Exit;
 
     try
-      eventType := jData.GetValue<string>('type');
+      eventType := jData.GetValueAsString('type');
 
       // =======================================================================
       // EVENTO: message_start
@@ -1705,12 +1728,12 @@ begin
       begin
         if Assigned(FStreamResponseMsg) then
         begin
-          jMessage := jData.GetValue<TJSONObject>('message');
-          FStreamResponseMsg.TollCallId := jMessage.GetValue<string>('id'); // ID del mensaje de Claude
-          FStreamResponseMsg.Model := jMessage.GetValue<string>('model');
-          FStreamResponseMsg.Role := jMessage.GetValue<string>('role');
+          jMessage := jData.GetValueAsObject('message');
+          FStreamResponseMsg.TollCallId := jMessage.GetValueAsString('id'); // ID del mensaje de Claude
+          FStreamResponseMsg.Model := jMessage.GetValueAsString('model');
+          FStreamResponseMsg.Role := jMessage.GetValueAsString('role');
 
-          // Notificar inicio de recepciÛn
+          // Notificar inicio de recepci√≥n
           if Assigned(OnReceiveData) then
             OnReceiveData(Self, FStreamResponseMsg, jData, 'assistant', '');
         end;
@@ -1722,25 +1745,25 @@ begin
       // =======================================================================
       Else If AnsiLowerCase(eventType) = 'content_block_start' then
       begin
-        blockIndex := jData.GetValue<Integer>('index');
-        jBlock := jData.GetValue<TJSONObject>('content_block');
+        blockIndex := jData.GetValueAsInteger('index', 0);
+        jBlock := jData.GetValueAsObject('content_block');
 
         streamBlock := TClaudeStreamContentBlock.Create;
-        streamBlock.BlockType := jBlock.GetValue<string>('type');
+        streamBlock.BlockType := jBlock.GetValueAsString('type', '');
 
-        for var Pair in jBlock do
+        for Pair in jBlock do
         begin
           // Evitamos duplicar 'type' que ya guardamos
-          if Pair.JsonString.Value <> 'type' then
-            streamBlock.ExtraData.AddPair(Pair.JsonString.Value, Pair.JsonValue.Clone as TJSONValue);
+          if GetJSONStringValue(Pair.JsonString) <> 'type' then
+            streamBlock.ExtraData.AddPair(GetJSONStringValue(Pair.JsonString), Pair.JsonValue.Clone as TJSONValue);
         end;
 
         // Si es una herramienta, inicializamos la estructura
         if streamBlock.BlockType = 'tool_use' then
         begin
           streamBlock.ToolFunction := TAiToolsFunction.Create;
-          streamBlock.ToolFunction.Id := jBlock.GetValue<string>('id');
-          streamBlock.ToolFunction.Name := jBlock.GetValue<string>('name');
+          streamBlock.ToolFunction.Id := jBlock.GetValueAsString('id', '');
+          streamBlock.ToolFunction.Name := jBlock.GetValueAsString('name', '');
           streamBlock.ToolFunction.Tipo := 'function';
         end;
 
@@ -1753,17 +1776,16 @@ begin
       // =======================================================================
       Else If AnsiLowerCase(eventType) = 'content_block_delta' then
       begin
-        blockIndex := jData.GetValue<Integer>('index');
+        blockIndex := jData.GetValueAsInteger('index', 0);
         if FStreamContentBlocks.TryGetValue(blockIndex, streamBlock) then
         begin
-          jDelta := jData.GetValue<TJSONObject>('delta');
-          var
-          deltaType := jDelta.GetValue<string>('type');
+          jDelta := jData.GetValueAsObject('delta');
+          deltaType := jDelta.GetValueAsString('type', '');
 
           // Delta de Texto
           if deltaType = 'text_delta' then
           begin
-            textDelta := jDelta.GetValue<string>('text');
+            textDelta := jDelta.GetValueAsString('text', '');
             streamBlock.TextContent.Append(textDelta);
 
             // Solo agregamos al contenido principal si es un bloque de texto visible
@@ -1777,8 +1799,7 @@ begin
 
           else if deltaType = 'citations_delta' then
           begin
-            var
-            jCitation := jDelta.GetValue<TJSONObject>('citation');
+            jCitation := jDelta.GetValueAsObject('citation');
             if Assigned(jCitation) then
             begin
               // Acumulamos el JSON en el buffer del bloque.
@@ -1790,13 +1811,13 @@ begin
           // Delta de JSON (Argumentos de Tool)
           else if deltaType = 'input_json_delta' then
           begin
-            jsonDelta := jDelta.GetValue<string>('partial_json');
+            jsonDelta := jDelta.GetValueAsString('partial_json', '');
             streamBlock.JsonContent.Append(jsonDelta);
           end
           // Delta de Thinking (Pensamiento Extendido)
           else if deltaType = 'thinking_delta' then
           begin
-            textDelta := jDelta.GetValue<string>('thinking');
+            textDelta := jDelta.GetValueAsString('thinking', '');
             streamBlock.TextContent.Append(textDelta);
 
             if Assigned(OnReceiveThinking) then
@@ -1805,8 +1826,7 @@ begin
           // Delta de Firma (Signature para Thinking)
           else if deltaType = 'signature_delta' then
           begin
-            var
-            sig := jDelta.GetValue<string>('signature');
+            sig := jDelta.GetValueAsString('signature', '');
             streamBlock.Signature.Append(sig);
           end;
         end;
@@ -1814,29 +1834,28 @@ begin
 
       // =======================================================================
       // EVENTO: content_block_stop
-      // Fin de un bloque especÌfico
+      // Fin de un bloque espec√≠fico
       // =======================================================================
       Else If AnsiLowerCase(eventType) = 'content_block_stop' then
       begin
-        blockIndex := jData.GetValue<Integer>('index');
+        blockIndex := jData.GetValueAsInteger('index', 0);
         if FStreamContentBlocks.TryGetValue(blockIndex, streamBlock) then
         begin
-          // Si terminÛ un bloque de herramienta, parseamos los argumentos JSON acumulados
+          // Si termin√≥ un bloque de herramienta, parseamos los argumentos JSON acumulados
           if streamBlock.BlockType = 'tool_use' then
           begin
             try
-              var
               jInput := TJSONObject.ParseJSONValue(streamBlock.JsonContent.ToString) as TJSONObject;
               if Assigned(jInput) then
               begin
                 streamBlock.ToolFunction.Arguments := jInput.Format;
                 // Llenar Params para compatibilidad con componentes visuales antiguos
-                for var Pair in jInput do
-                  streamBlock.ToolFunction.Params.AddPair(Pair.JsonString.Value, Pair.JsonValue.Value);
+                for Pair in jInput do
+                  streamBlock.ToolFunction.Params.Values[GetJSONStringValue(Pair.JsonString)] := Pair.JsonValue.ToString;
                 jInput.Free;
               end;
             except
-              // Ignorar error de parseo JSON en este punto, se manejar· globalmente si falla
+              // Ignorar error de parseo JSON en este punto, se manejar√° globalmente si falla
             end;
           end;
         end;
@@ -1848,39 +1867,36 @@ begin
       // =======================================================================
       Else If AnsiLowerCase(eventType) = 'message_delta' then
       begin
-        jDelta := jData.GetValue<TJSONObject>('delta');
+        jDelta := jData.GetValueAsObject('delta');
         if Assigned(jDelta) then
         begin
-          StopReason := jDelta.GetValue<string>('stop_reason', '');
+          StopReason := jDelta.GetValueAsString('stop_reason', '');
           if StopReason <> '' then
             FStreamResponseMsg.StopReason := StopReason;
         end;
 
-        var
-        jUsage := jData.GetValue<TJSONObject>('usage');
+        jUsage := jData.GetValueAsObject('usage');
         if Assigned(jUsage) then
-          FStreamResponseMsg.Completion_tokens := jUsage.GetValue<Integer>('output_tokens');
+          FStreamResponseMsg.Completion_tokens := jUsage.GetValueAsInteger('output_tokens');
       end
 
       // =======================================================================
       // EVENTO: message_stop
-      // Fin del mensaje completo. ReconstrucciÛn y ejecuciÛn.
+      // Fin del mensaje completo. Reconstrucci√≥n y ejecuci√≥n.
       // =======================================================================
       Else If AnsiLowerCase(eventType) = 'message_stop' then
       begin
         if Assigned(FStreamResponseMsg) then
         begin
           // 1. Guardamos referencia local para trabajar con seguridad.
-          var
-            MsgToProcess: TAiChatMessage := FStreamResponseMsg;
+            MsgToProcess := FStreamResponseMsg;
 
             // 2. IMPORTANTE: Desvinculamos la variable global ANTES de llamar a ParseChat.
             // Esto es vital porque ParseChat puede disparar recursividad (DoCallFunction -> Run)
-            // y 'Run' crear· un NUEVO FStreamResponseMsg. Si hacemos el nil despuÈs,
-            // borrarÌamos ese nuevo objeto creado por la recursividad.
+            // y 'Run' crear√° un NUEVO FStreamResponseMsg. Si hacemos el nil despu√©s,
+            // borrar√≠amos ese nuevo objeto creado por la recursividad.
           FStreamResponseMsg := nil;
 
-          var
           jSyntheticResponse := TJSONObject.Create;
           try
             // Usamos la variable local MsgToProcess en lugar de FStreamResponseMsg
@@ -1894,23 +1910,19 @@ begin
             else
               jSyntheticResponse.AddPair('stop_reason', TJSONNull.Create);
 
-            var
             jUsage := TJSONObject.Create;
-            jUsage.AddPair('input_tokens', TJSONNumber.Create(Prompt_tokens));
-            jUsage.AddPair('output_tokens', TJSONNumber.Create(MsgToProcess.Completion_tokens));
+            jUsage.AddPair('input_tokens', CreateJSONNumber(Prompt_tokens));
+            jUsage.AddPair('output_tokens', CreateJSONNumber(MsgToProcess.Completion_tokens));
             jSyntheticResponse.AddPair('usage', jUsage);
 
-            var
             jContentArr := TJSonArray.Create;
             // Ordenamos los bloques para mantener la secuencia correcta
-            var
             SortedKeys := TList<Integer>.Create(FStreamContentBlocks.Keys);
             try
               SortedKeys.Sort;
-              for var Key in SortedKeys do
+              for Key in SortedKeys do
               begin
                 streamBlock := FStreamContentBlocks[Key];
-                var
                 jBlockObj := TJSONObject.Create;
 
                 // --- CASO 1: TEXTO ( + Citations) ---
@@ -1933,13 +1945,11 @@ begin
                   jBlockObj.AddPair('id', streamBlock.ToolFunction.Id);
                   jBlockObj.AddPair('name', streamBlock.ToolFunction.Name);
 
-                  var
                   sArgs := streamBlock.JsonContent.ToString;
                   if sArgs.IsEmpty then
                     sArgs := '{}';
 
                   try
-                    var
                     jInputObj := TJSONObject.ParseJSONValue(sArgs);
                     if Assigned(jInputObj) then
                       jBlockObj.AddPair('input', jInputObj)
@@ -1961,7 +1971,7 @@ begin
                   jContentArr.Add(jBlockObj);
                 end
 
-                // --- CASO 4: BLOQUES GEN…RICOS (Code Execution Results, etc.) ---
+                // --- CASO 4: BLOQUES GEN√âRICOS (Code Execution Results, etc.) ---
                 // Captura 'bash_code_execution_tool_result' donde viene el file_id
                 else
                 begin
@@ -1970,20 +1980,19 @@ begin
                   // A. Restaurar metadatos (ej: tool_use_id) capturados en content_block_start
                   if Assigned(streamBlock.ExtraData) and (streamBlock.ExtraData.Count > 0) then
                   begin
-                    for var Pair in streamBlock.ExtraData do
-                      jBlockObj.AddPair(Pair.JsonString.Value, Pair.JsonValue.Clone as TJSONValue);
+                    for Pair in streamBlock.ExtraData do
+                      jBlockObj.AddPair(GetJSONStringValue(Pair.JsonString), Pair.JsonValue.Clone as TJSONValue);
                   end;
 
                   // B. Restaurar contenido acumulado (JSON del resultado)
                   if streamBlock.JsonContent.Length > 0 then
                   begin
                     try
-                      var
                       jCont := TJSONObject.ParseJSONValue(streamBlock.JsonContent.ToString);
                       if Assigned(jCont) then
                         jBlockObj.AddPair('content', jCont); // Generalmente es un objeto o array
                     except
-                      // Fallback si no es JSON v·lido
+                      // Fallback si no es JSON v√°lido
                     end;
                   end;
 
@@ -1996,7 +2005,7 @@ begin
             end;
 
             // 3. Llamamos a ParseChat con la referencia local.
-            // Si esto dispara un nuevo Run, FStreamResponseMsg (Global) ya estar· libre.
+            // Si esto dispara un nuevo Run, FStreamResponseMsg (Global) ya estar√° libre.
             ParseChat(jSyntheticResponse, MsgToProcess);
 
           finally
@@ -2016,14 +2025,12 @@ begin
       // =======================================================================
       Else If AnsiLowerCase(eventType) = 'error' then
       begin
-        var
-        jError := jData.GetValue<TJSONObject>('error');
-        var
+        jError := jData.GetValueAsObject('error');
         ErrMsg := 'Unknown Error';
         if Assigned(jError) then
-          ErrMsg := jError.GetValue<string>('message', 'Unknown');
+          ErrMsg := jError.GetValueAsString('message', 'Unknown');
 
-        DoError('Claude Stream Error: ' + ErrMsg, nil);
+        DoError('Claude Stream Error: ' + ErrMsg);
         ClearStreamState;
         FBusy := False;
       end;
@@ -2046,20 +2053,20 @@ end;
 procedure TAiClaudeChat.ConfigureAutoContextClearing(TriggerTokens: Integer; KeepLast: Integer);
 begin
   // Limpia configuraciones previas para evitar duplicados
-  // (Asumiendo que FEdits es accesible o exponemos un mÈtodo Clear en TClaudeContextConfig)
-  // En la implementaciÛn actual FEdits es privado, asÌ que usaremos una nueva instancia o agregamos Clear.
+  // (Asumiendo que FEdits es accesible o exponemos un m√©todo Clear en TClaudeContextConfig)
+  // En la implementaci√≥n actual FEdits es privado, as√≠ que usaremos una nueva instancia o agregamos Clear.
 
-  // OpciÛn A: Recrear la config (M·s seguro/simple)
+  // Opci√≥n A: Recrear la config (M√°s seguro/simple)
   FContextConfig.Free;
   FContextConfig := TClaudeContextConfig.Create;
 
-  // TambiÈn se puede utilizar en lugar de free y create anteriores
+  // Tambi√©n se puede utilizar en lugar de free y create anteriores
   // FContextConfig.Clear; // Limpia reglas anteriores
 
   // Agregar la regla de limpieza de herramientas
-  // TriggerTokens: Cuando el prompt supere este tamaÒo
-  // KeepLast: Mantener los ˙ltimos N usos de herramientas (para no perder contexto inmediato)
-  // ClearAtLeast: 0 (Default, deja que Claude decida cu·nto borrar)
+  // TriggerTokens: Cuando el prompt supere este tama√±o
+  // KeepLast: Mantener los √∫ltimos N usos de herramientas (para no perder contexto inmediato)
+  // ClearAtLeast: 0 (Default, deja que Claude decida cu√°nto borrar)
   FContextConfig.AddRule_ClearTools(TriggerTokens, KeepLast, 0);
 end;
 
@@ -2083,17 +2090,17 @@ begin
     End;
 
     // Procesamiento de archivos adjuntos (MediaFiles)
-    // Si hay archivos que requieren pre-procesamiento (ej: OCR local, conversiÛn), se hace aquÌ.
+    // Si hay archivos que requieren pre-procesamiento (ej: OCR local, conversi√≥n), se hace aqu√≠.
     For MF in aMsg.MediaFiles do
     Begin
       Procesado := False;
-      DoProcessMediaFile(aMsg.Prompt, MF, Respuesta, Procesado); // EnvÌa el archivo por si lo quiere procesar otra AI especializada
+      DoProcessMediaFile(aMsg.Prompt, MF, Respuesta, Procesado); // Env√≠a el archivo por si lo quiere procesar otra AI especializada
       MF.Procesado := Procesado;
       MF.Transcription := Respuesta;
       // Guarda las transcripciones en los MediaFile
     End;
 
-    FLastPrompt := aMsg.Prompt; // Actualiza el ˙ltimo prompt registrado
+    FLastPrompt := aMsg.Prompt; // Actualiza el √∫ltimo prompt registrado
 
     If Assigned(FOnBeforeSendMessage) then
       FOnBeforeSendMessage(Self, aMsg);
@@ -2116,13 +2123,18 @@ var
   bHasContent: Boolean;
   IsCodeExecutionEnabled: Boolean;
   TargetCategories: TAiFileCategories;
+  jCache: TJSONObject; // Added
+  LToolUseArray: TJSonArray; // Added
+  Val: TJSONValue; // Added
+  RealMime: string; // Added for FPC
+  B64Head: string;  // Added for FPC
 begin
   Result := TJSonArray.Create;
 
-  // Verificamos si el Code Interpreter est· activo
+  // Verificamos si el Code Interpreter est√° activo
   IsCodeExecutionEnabled := Tcm_CodeInterpreter in ChatMediaSupports;
 
-  // --- L”GICA DE FILTRADO DIN¡MICO ---
+  // --- L√ìGICA DE FILTRADO DIN√ÅMICO ---
   if IsCodeExecutionEnabled then
     // Si hay Code Execution, permitimos TODO (Excel, Zip, Code, etc.)
     // Construimos un set con todos los valores posibles del enum
@@ -2173,7 +2185,6 @@ begin
 
         if LMessage.CacheControl then
         begin
-          var
           jCache := TJSONObject.Create;
           jCache.AddPair('type', 'ephemeral');
           LPartObj.AddPair('cache_control', jCache);
@@ -2186,17 +2197,10 @@ begin
       if LMessage.Tool_calls <> '' then
       begin
         try
-
-{$IF CompilerVersion < 35}
-          var
-          LToolUseArray := TJSONUtils.ParseAsArray(LMessage.Tool_calls) as TJSonArray;
-{$ELSE}
-          var
-          LToolUseArray := TJSonArray.ParseJSONValue(LMessage.Tool_calls) as TJSonArray;
-{$ENDIF}
+          LToolUseArray := TJSONObject.ParseJSONValue(LMessage.Tool_calls) as TJSonArray;
           if Assigned(LToolUseArray) then
           begin
-            for var Val in LToolUseArray do
+            for Val in LToolUseArray do
               LContentArray.Add(Val.Clone as TJSONObject);
             LToolUseArray.Free;
           end;
@@ -2206,7 +2210,7 @@ begin
     end
 
     // -------------------------------------------------------------------------
-    // CASO 3: Mensaje Est·ndar de Usuario (Texto + Archivos)
+    // CASO 3: Mensaje Est√°ndar de Usuario (Texto + Archivos)
     // -------------------------------------------------------------------------
     else
     begin
@@ -2221,7 +2225,6 @@ begin
 
         if LMessage.CacheControl then
         begin
-          var
           jCache := TJSONObject.Create;
           jCache.AddPair('type', 'ephemeral');
           LPartObj.AddPair('cache_control', jCache);
@@ -2231,14 +2234,14 @@ begin
         bHasContent := True;
       end;
 
-      // B. Archivos (MediaFiles) - USANDO EL FILTRO DIN¡MICO
+      // B. Archivos (MediaFiles) - USANDO EL FILTRO DIN√ÅMICO
       MediaArr := LMessage.MediaFiles.GetMediaList(TargetCategories, False);
 
       for LMediaFile in MediaArr do
       begin
         LPartObj := TJSONObject.Create;
 
-        // --- SUB-CASO 3.1: IM¡GENES ---
+        // --- SUB-CASO 3.1: IM√ÅGENES ---
         if LMediaFile.FileCategory = Tfc_Image then
         begin
           LPartObj.AddPair('type', 'image');
@@ -2252,11 +2255,9 @@ begin
           else
           begin
             LSourceObj.AddPair('type', 'base64');
-            // DetecciÛn autom·tica de MimeType (Como corregimos antes)
-            var
-              RealMime: string := LMediaFile.MimeType;
-            var
-              B64Head: string := Copy(LMediaFile.Base64, 1, 15);
+            // Detecci√≥n autom√°tica de MimeType (Como corregimos antes)
+            RealMime := LMediaFile.MimeType;
+            B64Head := Copy(LMediaFile.Base64, 1, 15);
             if StartsStr('iVBORw', B64Head) then
               RealMime := 'image/png'
             else if StartsStr('/9j/', B64Head) then
@@ -2273,14 +2274,14 @@ begin
         end
 
         // --- SUB-CASO 3.2: CONTAINER UPLOAD (Code Interpreter + Data Files) ---
-        // AquÌ entrar· el Excel, CSV, etc.
+        // Aqu√≠ entrar√° el Excel, CSV, etc.
         else if IsCodeExecutionEnabled and (not LMediaFile.IdFile.IsEmpty) then
         begin
           LPartObj.AddPair('type', 'container_upload');
           LPartObj.AddPair('file_id', LMediaFile.IdFile);
         end
 
-        // --- SUB-CASO 3.3: DOCUMENTOS (PDFs para visiÛn) ---
+        // --- SUB-CASO 3.3: DOCUMENTOS (PDFs para visi√≥n) ---
         else
         begin
           LPartObj.AddPair('type', 'document');
@@ -2305,7 +2306,6 @@ begin
 
         if LMediaFile.CacheControl then
         begin
-          var
           jCache := TJSONObject.Create;
           jCache.AddPair('type', 'ephemeral');
           LPartObj.AddPair('cache_control', jCache);
@@ -2353,11 +2353,11 @@ begin
 
   Client := TNetHTTPClient.Create(Nil);
   try
-    // 2. Configurar Headers especÌficos de Claude
-    // Nota: Claude requiere 'x-api-key' en lugar de Bearer token, y la versiÛn de la API
+    // 2. Configurar Headers espec√≠ficos de Claude
+    // Nota: Claude requiere 'x-api-key' en lugar de Bearer token, y la versi√≥n de la API
     Headers := [TNetHeader.Create('x-api-key', aApiKey), TNetHeader.Create('anthropic-version', CLAUDE_API_VERSION), TNetHeader.Create('content-type', 'application/json')];
 
-    // 3. Ejecutar PeticiÛn GET
+    // 3. Ejecutar Petici√≥n GET
     Res := Client.Get(sUrl, nil, Headers);
 
     if Res.StatusCode = 200 then
@@ -2367,14 +2367,14 @@ begin
         try
           // 4. Parsear la respuesta JSON
           // La estructura es: { "data": [ {"id": "...", ...}, ... ] }
-          if jRes.TryGetValue<TJSonArray>('data', jArr) then
+          if jRes.TryGetValue('data', jArr) then
           begin
             for JVal in jArr do
             begin
               if JVal is TJSONObject then
               begin
                 // Extraer el ID del modelo (ej: "claude-3-5-sonnet-20240620")
-                sModel := (JVal as TJSONObject).GetValue<string>('id', '');
+                sModel := (JVal as TJSONObject).GetValueAsString('id', '');
                 if sModel <> '' then
                   Result.Add(sModel);
               end;
@@ -2385,7 +2385,7 @@ begin
         end;
 
       // 5. Agregar modelos personalizados registrados localmente (si existen)
-      // Esto es ˙til si la API no devuelve modelos finetuned o nuevos que a˙n no lista
+      // Esto es √∫til si la API no devuelve modelos finetuned o nuevos que a√∫n no lista
       CustomModels := TAiChatFactory.Instance.GetCustomModels(GetDriverName);
       for I := Low(CustomModels) to High(CustomModels) do
       begin
@@ -2397,7 +2397,7 @@ begin
     else
     begin
       // Manejo de errores HTTP
-      raise Exception.CreateFmt('Error al obtener modelos de Claude: %d - %s', [Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
+      raise Exception.CreateFmt('Error al obtener modelos de Claude: %d - %s', [Res.StatusCode, Res.ContentAsString]);
     end;
 
   finally
@@ -2406,13 +2406,14 @@ begin
 end;
 
 function TAiClaudeChat.GetToolJson(aToolFormat: TToolFormat): TJSonArray;
+var
+  JsonStr: string;
 begin
   Result := Nil;
-  var
   JsonStr := Trim(inherited GetTools(tfClaude).Text);
   if (JsonStr = '') or (not Tool_Active) then
     Exit;
-  Result := TJSONObject.ParseJSONValue(JsonStr) as TJSonArray;
+  Result := TJSONObject.ParseAsArray(JsonStr);
 end;
 
 function TAiClaudeChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
@@ -2425,17 +2426,17 @@ begin
   Result := TAiToolsFunctions.Create;
   For JVal1 in jChoices do
   Begin
-    if JVal1.GetValue<String>('type') = 'tool_use' then
+    if (JVal1 as TJSONObject).GetValueAsString('type') = 'tool_use' then
     begin
       Fun := TAiToolsFunction.Create;
-      Fun.Id := JVal1.GetValue<String>('id');
+      Fun.Id := (JVal1 as TJSONObject).GetValueAsString('id');
       Fun.Tipo := 'function';
-      Fun.Name := JVal1.GetValue<String>('name');
-      if JVal1.TryGetValue<TJSONObject>('input', Arg) then
+      Fun.Name := (JVal1 as TJSONObject).GetValueAsString('name');
+      if (JVal1 as TJSONObject).TryGetValue('input', Arg) then
       begin
         Fun.Arguments := Arg.Format;
         for I := 0 to Arg.Count - 1 do
-          Fun.Params.Values[Arg.Pairs[I].JsonString.Value] := Arg.Pairs[I].JsonValue.Value;
+          Fun.Params.Values[GetJSONStringValue(Arg.Pairs[I].JsonString)] := GetJSONStringValue(Arg.Pairs[I].JsonValue);
       end;
       Result.Add(Fun.Id, Fun);
     end;
@@ -2450,13 +2451,13 @@ begin
   Result := TJSonArray.Create;
   For JVal1 in jChoices do
   Begin
-    if JVal1.GetValue<String>('type') = 'tool_use' then
+    if (JVal1 as TJSONObject).GetValueAsString('type') = 'tool_use' then
     begin
       jObj := TJSONObject.Create;
       jObj.AddPair('type', 'tool_use');
-      jObj.AddPair('id', JVal1.GetValue<String>('id'));
-      jObj.AddPair('name', JVal1.GetValue<String>('name'));
-      if JVal1.TryGetValue<TJSONObject>('input', Arg) then
+      jObj.AddPair('id', (JVal1 as TJSONObject).GetValueAsString('id'));
+      jObj.AddPair('name', (JVal1 as TJSONObject).GetValueAsString('name'));
+      if (JVal1 as TJSONObject).TryGetValue('input', Arg) then
         jObj.AddPair('input', TJSONObject(Arg.Clone));
       Result.Add(jObj);
     end;
@@ -2489,11 +2490,8 @@ begin
     TempStream.LoadFromStream(aMediaFile.Content);
     TempStream.Position := 0;
 
-{$IF CompilerVersion >= 35}
-    Body.AddStream('file', TempStream, False, aMediaFile.FileName, aMediaFile.MimeType);
-{$ELSE}
-    Body.AddStream('file', TempStream, aMediaFile.FileName, aMediaFile.MimeType);
-{$ENDIF}
+    // Usar helper para compatibilidad entre versiones Delphi/FPC
+    AddStreamToMultipart(Body, 'file', TempStream, False, aMediaFile.FileName, aMediaFile.MimeType);
     Body.AddField('purpose', 'assistants'); // Claude usually infers, but good practice
 
     Res := Client.Post(Url + 'files', Body, ResponseStream, Headers);
@@ -2502,7 +2500,7 @@ begin
     begin
       jObj := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
       try
-        Result := jObj.GetValue<string>('id');
+        Result := jObj.GetValueAsString('id');
         aMediaFile.IdFile := Result;
       finally
         jObj.Free;
@@ -2534,8 +2532,8 @@ begin
       jObj := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
       try
         Result := TAiMediaFile.Create;
-        Result.IdFile := jObj.GetValue<string>('id');
-        Result.FileName := jObj.GetValue<string>('filename');
+        Result.IdFile := jObj.GetValueAsString('id');
+        Result.FileName := jObj.GetValueAsString('filename');
       finally
         jObj.Free;
       end;
@@ -2566,24 +2564,24 @@ begin
     if Assigned(FOnCallToolFunction) then
       FOnCallToolFunction(Self, ToolCall);
 
-    // B. EjecuciÛn Autom·tica (Componente TAiShell)
-    // Si el usuario no llenÛ la respuesta en el evento anterior y tenemos el componente:
+    // B. Ejecuci√≥n Autom√°tica (Componente TAiShell)
+    // Si el usuario no llen√≥ la respuesta en el evento anterior y tenemos el componente:
     if (ToolCall.Response = '') and Assigned(ShellTool) then
     begin
-      // Asegurar que estÈ activo
+      // Asegurar que est√© activo
       if not ShellTool.Active then
         ShellTool.Active := True;
 
-      // Ejecutar el comando en la sesiÛn persistente
+      // Ejecutar el comando en la sesi√≥n persistente
       ToolCall.Response := ShellTool.Execute(ToolCall.Id, ToolCall.Arguments);
     end;
 
-    // Si no hay componente ni evento, Claude recibir· una respuesta vacÌa o error,
-    // lo cual est· bien, pero idealmente FShellTool deberÌa estar asignado.
+    // Si no hay componente ni evento, Claude recibir√° una respuesta vac√≠a o error,
+    // lo cual est√° bien, pero idealmente FShellTool deber√≠a estar asignado.
     Exit;
   end;
 
-  // 2. Interceptar Herramienta de EdiciÛn Nativa
+  // 2. Interceptar Herramienta de Edici√≥n Nativa
   if (ToolCall.Name = 'str_replace_based_edit_tool') or (ToolCall.Name = 'str_replace_editor') and Assigned(TextEditorTool) then
   begin
 
@@ -2633,7 +2631,7 @@ begin
       aMediaFile.Content.CopyFrom(MemStream, 0);
       aMediaFile.Content.Position := 0;
 
-      // Intentar determinar la extensiÛn si no la tiene
+      // Intentar determinar la extensi√≥n si no la tiene
       if aMediaFile.FileName.IsEmpty then
         aMediaFile.FileName := aMediaFile.IdFile + '.bin'; // Default
 
@@ -2659,7 +2657,7 @@ begin
     if Res.StatusCode = 200 then
     begin
       jObj := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
-      Result := jObj.GetValue<string>('id');
+      Result := jObj.GetValueAsString('id');
       jObj.Free;
     end;
   finally

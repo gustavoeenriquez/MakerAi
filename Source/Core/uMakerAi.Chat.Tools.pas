@@ -1,20 +1,28 @@
-unit uMakerAi.Chat.Tools;
+ï»¿unit uMakerAi.Chat.Tools;
+
+{$INCLUDE ../CompilerDirectives.inc}
 
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Classes, System.JSON, System.Threading,
-  uMakerAi.Core,
-  uMakerAi.Chat.Messages; // Ahora usamos la unidad de mensajes directamente
+  {$ENDIF}
+  uMakerAi.Core, uMakerAi.Chat.Messages,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper; // Ahora usamos la unidad de mensajes directamente
 
 type
   { IAiToolContext: Interfaz para que la Tool reporte eventos al Chat principal.
-    Permite la comunicación bidireccional sin dependencia circular. }
+    Permite la comunicaciÃ³n bidireccional sin dependencia circular. }
   IAiToolContext = interface
     ['{E1D2C3B4-A5F6-4B7C-9D8E-F0A1B2C3D4E5}']
     procedure DoData(Msg: TAiChatMessage; const Role, Text: string; AResponse: TJSONObject = nil);
     procedure DoDataEnd(Msg: TAiChatMessage; const Role, Text: string; AResponse: TJSONObject = nil);
-    procedure DoError(const ErrorMsg: string; E: Exception);
+    // COMPAT: E:Exception eliminado â€” el objeto E se destruye al salir del
+    // except, si se captura en closure+TThread.Queue causa access violation.
+    procedure DoError(const ErrorMsg: string);
     procedure DoStateChange(State: TAiChatState; const Description: string = '');
     function GetAsynchronous: Boolean;
   end;
@@ -65,13 +73,13 @@ type
 
   { --- CLASES BASE --- }
 
-  { TAiCustomTool: Gestión básica de contexto y eventos reportados al hilo principal }
+  { TAiCustomTool: GestiÃ³n bÃ¡sica de contexto y eventos reportados al hilo principal }
   TAiCustomTool = class(TComponent)
   protected
     FContext: IAiToolContext;
     procedure ReportData(Msg: TAiChatMessage; const Role, Text: string; AResponse: TJSONObject = nil);
     procedure ReportDataEnd(Msg: TAiChatMessage; const Role, Text: string; AResponse: TJSONObject = nil);
-    procedure ReportError(const ErrorMsg: string; E: Exception);
+    procedure ReportError(const ErrorMsg: string);
     procedure ReportState(State: TAiChatState; const Description: string = '');
     function IsAsync: Boolean;
   public
@@ -155,13 +163,15 @@ begin
       end);
 end;
 
-procedure TAiCustomTool.ReportError(const ErrorMsg: string; E: Exception);
+procedure TAiCustomTool.ReportError(const ErrorMsg: string);
 begin
   if Assigned(FContext) then
     TThread.Queue(nil,
       procedure
       begin
-        FContext.DoError(ErrorMsg, E);
+        // COMPAT: Solo captura ErrorMsg (string managed, safe para Queue).
+        // E:Exception ya fue destruido al salir del except.
+        FContext.DoError(ErrorMsg);
       end);
 end;
 

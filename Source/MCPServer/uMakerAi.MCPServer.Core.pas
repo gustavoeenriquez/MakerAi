@@ -1,18 +1,18 @@
-// IT License
+Ôªø// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -36,9 +36,17 @@ unit uMakerAi.MCPServer.Core;
 interface
 
 uses
+  // FPC: Unidades est√°ndar de FPC sin prefijo System, incluye RTTI/TypInfo nativos
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math, TypInfo, Rtti,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye JSON/REST/Net/Encoding nativos
   System.SysUtils, System.Classes, System.JSON, Rest.JSON, System.Rtti, System.StrUtils,
   System.ConvUtils, System.IOUtils, System.NetEncoding, System.Net.Mime, IdGlobalProtocols,
-  System.Generics.Collections, System.TypInfo, uMakerAi.Tools.Functions;
+  System.Generics.Collections, System.TypInfo,
+  {$ENDIF}
+  uMakerAi.Core, uMakerAi.Tools.Functions,
+  uJsonHelper, uRttiHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper;
 
 type
 
@@ -57,16 +65,16 @@ type
     class function New: TAiMCPResponseBuilder;
     destructor Destroy; override;
 
-    // AÒade un bloque de texto simple a la respuesta
+    // A√±ade un bloque de texto simple a la respuesta
     function AddText(const AText: string): TAiMCPResponseBuilder;
 
-    // AÒade un archivo desde una ruta en disco
+    // A√±ade un archivo desde una ruta en disco
     function AddFile(const AFilePath: string; AFileName: string = ''): TAiMCPResponseBuilder;
 
-    // AÒade un archivo desde un TStream
+    // A√±ade un archivo desde un TStream
     function AddFileFromStream(AStream: TStream; const AFileName: string; const AMimeType: string): TAiMCPResponseBuilder;
 
-    // Construye el objeto JSON final que se devolver· como 'result' en la llamada al tool
+    // Construye el objeto JSON final que se devolver√° como 'result' en la llamada al tool
     function Build: TJSONObject;
   end;
 
@@ -262,7 +270,7 @@ type
     procedure SetServerName(const Value: String);
     procedure SetAiFunctions(const Value: TAiFunctions);
   protected
-    // Lo hacemos protected para que los descendientes puedan acceder a Èl directamente.
+    // Lo hacemos protected para que los descendientes puedan acceder a √©l directamente.
     FLogicServer: TAiMCPLogicServer;
     // Hacemos el setter protected para que solo los descendientes controlen el estado.
     procedure SetActive(const Value: Boolean);
@@ -301,7 +309,14 @@ type
 implementation
 
 uses
-  System.IniFiles, System.JSON.Writers, uMakerAi.MCPServer.Bridge;
+  // FPC: IniFiles sin prefijo de namespace
+  {$IFDEF FPC}
+  IniFiles,
+  {$ELSE}
+  // Delphi: IniFiles y JSON.Writers con namespace System
+  System.IniFiles, System.JSON.Writers,
+  {$ENDIF}
+  uMakerAi.MCPServer.Bridge;
 
 const
   // JSON-RPC 2.0 Error Codes
@@ -344,7 +359,7 @@ end;
 
 class procedure TAiMCPSerializerUtils.DeserializeObject(Instance: TObject; JSON: TJSONObject);
 begin
-  // Como este mÈtodo NO es genÈrico, sÌ puede llamar a un tipo local de la implementation.
+  // Como este m√©todo NO es gen√©rico, s√≠ puede llamar a un tipo local de la implementation.
   TInternalSerializer.DeserializeObject(Instance, JSON);
 end;
 // -----------------------------------------------------------
@@ -353,7 +368,7 @@ class function TAiMCPSerializerUtils.Deserialize<T>(JSON: TJSONObject): T;
 begin
   Result := T.Create;
   try
-    // Ahora llamamos al intermediario p˙blico, lo que es v·lido para el compilador.
+    // Ahora llamamos al intermediario p√∫blico, lo que es v√°lido para el compilador.
     DeserializeObject(Result, JSON);
   except
     Result.Free;
@@ -406,7 +421,7 @@ function TAiMCPToolBase<T>.Execute(const Arguments: TJSONObject; const AuthConte
 var
   ParamsInstance: T;
 begin
-  // El cÛdigo de deserializaciÛn es el mismo
+  // El c√≥digo de deserializaci√≥n es el mismo
   if not Assigned(Arguments) then
     raise Exception.Create('Arguments cannot be nil for tool execution.');
 
@@ -453,12 +468,20 @@ var
   RttiContext: TRttiContext;
   RttiType: TRttiType;
   Prop: TRttiProperty;
+  JObj: TJSONObject;
 begin
   ResourceData := GetResourceData;
   try
     if SameText(FMimeType, 'application/json') then
     begin
-      Result := TJson.ObjectToJsonString(ResourceData);
+      // Result := TJson.ObjectToJsonString(ResourceData); 
+      // FPC/Helper Workaround:
+      JObj := TJSon.ObjectToJsonObject(ResourceData);
+      try
+        Result := JObj.ToJSONString;
+      finally
+        JObj.Free;
+      end;
     end
     else // Assumes other text-based mime-types
     begin
@@ -551,15 +574,15 @@ begin
   FActiveTools.Clear;
   FActiveResources.Clear;
 
-  // 2. Ejecutamos las factorÌas de herramientas.
-  // Cada Pair.Value es una funciÛn que al ser llamada devuelve una instancia de IAiMCPTool.
+  // 2. Ejecutamos las factor√≠as de herramientas.
+  // Cada Pair.Value es una funci√≥n que al ser llamada devuelve una instancia de IAiMCPTool.
   for Pair in FToolFactories do
   begin
     // Importante: Pair.Key es el nombre registrado, Pair.Value() crea la instancia.
     FActiveTools.Add(Pair.Key, Pair.Value());
   end;
 
-  // 3. Ejecutamos las factorÌas de recursos.
+  // 3. Ejecutamos las factor√≠as de recursos.
   for ResourcePair in FResourceFactories do
   begin
     FActiveResources.Add(ResourcePair.Key, ResourcePair.Value());
@@ -636,6 +659,8 @@ var
   MethodName: string;
   IsNotification: Boolean;
   ExecuteResult: TValue;
+  ParamsValue: TJSONValue;
+  ErrorCode: Integer;
 begin
 
   if not FIsActive then
@@ -652,7 +677,7 @@ begin
     try
       JSONRequest := ParseJSONRequest(ARequestJson);
       RequestID := ExtractRequestID(JSONRequest);
-      MethodName := JSONRequest.GetValue<string>('method', '');
+      MethodName := JSONRequest.GetValueAsString('method', '');
       IsNotification := not Assigned(JSONRequest.GetValue('id'));
 
       if IsNotification then
@@ -662,7 +687,6 @@ begin
 
       JSONResponse := CreateJSONResponse(RequestID);
 
-      var
       ParamsValue := JSONRequest.GetValue('params');
       if Assigned(ParamsValue) and (ParamsValue is TJSONObject) then
         Params := ParamsValue as TJSONObject
@@ -674,7 +698,10 @@ begin
       if ExecuteResult.IsEmpty then
         JSONResponse.AddPair('result', TJSONNull.Create)
       else if ExecuteResult.IsType<TJSONObject> then
-        JSONResponse.AddPair('result', ExecuteResult.AsType<TJSONObject>.Clone as TJSONObject)
+      begin
+        // FPC Fix: Break down complex single-line syntax
+        JSONResponse.AddPair('result', (ExecuteResult.AsType<TJSONObject>.Clone) as TJSONObject);
+      end
       else
         JSONResponse.AddPair('result', TJSONString.Create(ExecuteResult.ToString));
 
@@ -683,8 +710,8 @@ begin
     except
       on E: Exception do
       begin
-        Result := CreateErrorResponse(RequestID, JSONRPC_PARSE_ERROR, 'Parse error: ' + E.Message);
-        var
+        // Result := CreateErrorResponse(RequestID, JSONRPC_PARSE_ERROR, 'Parse error: ' + E.Message);
+        
         ErrorCode := JSONRPC_INTERNAL_ERROR;
         if Pos('not found', E.Message) > 0 then
           ErrorCode := JSONRPC_METHOD_NOT_FOUND;
@@ -708,7 +735,7 @@ var
   ParsedValue: TJSONValue;
 begin
   try
-    ParsedValue := TJSONObject.ParseJSONValue(RequestBody, False);
+    ParsedValue := TJSONObject.ParseJSONValue(RequestBody);
     if not(ParsedValue is TJSONObject) then
     begin
       ParsedValue.Free;
@@ -734,7 +761,7 @@ begin
   if IdValue is TJSONNumber then
     Result := TValue.From<Int64>((IdValue as TJSONNumber).AsInt64)
   else if IdValue is TJSONString then
-    Result := TValue.From<string>((IdValue as TJSONString).Value)
+    Result := TValue.From<string>(GetJSONStringValue(IdValue))
   else
     Result := TValue.Empty;
 end;
@@ -753,7 +780,7 @@ begin
   else if RequestID.IsType<String> then
     Response.AddPair('id', RequestID.AsString)
   else if RequestID.IsOrdinal then
-    Response.AddPair('id', TJSONNumber.Create(RequestID.AsInt64))
+    Response.AddPair('id', CreateJSONNumber(RequestID.AsInt64))
   else
     Response.AddPair('id', TJSONNull.Create);
 end;
@@ -766,7 +793,7 @@ begin
   try
     JSONResponse.AddPair('jsonrpc', '2.0');
     ErrorObj := TJSONObject.Create;
-    ErrorObj.AddPair('code', TJSONNumber.Create(ErrorCode));
+    ErrorObj.AddPair('code', CreateJSONNumber(ErrorCode));
     ErrorObj.AddPair('message', ErrorMessage);
     JSONResponse.AddPair('error', ErrorObj);
     AddRequestIDToResponse(JSONResponse, RequestID);
@@ -839,12 +866,12 @@ begin
   ResultJSON.AddPair('serverInfo', ServerInfo);
   ServerInfo.AddPair('name', FServerName);
   ServerInfo.AddPair('version', FServerVersion);
-  Result := TValue.From<TJSONObject>(ResultJSON);
+  Result := TValueFromObject(TypeInfo(TJSONObject), ResultJSON);
 end;
 
 function TAiMCPLogicServer.Core_Ping: TValue;
 begin
-  Result := TValue.From<TJSONObject>(TJSONObject.Create);
+  Result := TValueFromObject(TypeInfo(TJSONObject), TJSONObject.Create);
 end;
 
 function TAiMCPLogicServer.Tools_ListTools: TValue;
@@ -864,7 +891,7 @@ begin
     ToolJSON.AddPair('inputSchema', Tool.GetInputSchema.Clone as TJSONObject);
     ToolsArray.AddElement(ToolJSON);
   end;
-  Result := TValue.From<TJSONObject>(ResultJSON);
+  Result := TValueFromObject(TypeInfo(TJSONObject), ResultJSON);
 end;
 
 function TAiMCPLogicServer.Tools_CallTool(const Params: TJSONObject): TValue;
@@ -873,15 +900,23 @@ var
   Arguments: TJSONObject;
   Tool: IAiMCPTool;
   // ResultText: string; // Ya no es un string
-  ResultJSON: TJSONObject; // La herramienta devolver· el JSON directamente
+  ResultJSON: TJSONObject; // La herramienta devolver√° el JSON directamente
   AuthContext: TAiAuthContext;
+  ArgsStr: string;
+  // MCP Protocol Compliance: Variables para auto-envoltura de content
+  LTempArr: TJSONArray;
+  AutoContentArr: TJSONArray;
+  AutoContentItem: TJSONObject;
 begin
   if not Assigned(Params) then
     raise Exception.CreateHelp('Invalid params for tools/call. Expected a JSON object.', JSONRPC_INVALID_PARAMS);
 
-  ToolName := Params.GetValue<string>('name', '');
-  Arguments := Params.GetValue<TJSONObject>('arguments', nil);
+  ToolName := Params.GetValueAsString('name');
+  Arguments := Params.GetValueAsObject('arguments');
+  if not Assigned(Arguments) then
+    Arguments := TJSONObject.Create;
 
+  ArgsStr := Arguments.ToJSONString;
   if ToolName = '' then
     raise Exception.CreateHelp('Invalid params: Tool "name" not provided in tools/call', JSONRPC_INVALID_PARAMS);
 
@@ -892,12 +927,32 @@ begin
   begin
     // La herramienta ahora devuelve el TJSONObject directamente
     ResultJSON := Tool.Execute(Arguments, AuthContext);
+    
+    // --- MCP Protocol Compliance (2024-11) ---
+    // Reference: https://spec.modelcontextprotocol.io/server/tools/#tool-result-content
+    // Clients like Antigravity and Claude Desktop require a "content" list in the response.
+    // If the tool didn't return a "content" array, wrap the result automatically.
+    
+    LTempArr := ResultJSON.GetValueAsArray('content');
+    if not Assigned(LTempArr) then
+    begin
+       // Auto-wrap: Create a text representation of the result
+       AutoContentArr := TJSONArray.Create;
+       AutoContentItem := TJSONObject.Create;
+       
+       AutoContentItem.AddPair('type', 'text');
+       AutoContentItem.AddPair('text', ResultJSON.ToJSONString);
+       
+       AutoContentArr.AddElement(AutoContentItem);
+       
+       ResultJSON.AddPair('content', AutoContentArr);
+    end;
   end
   else
     raise Exception.CreateFmt('Tool not found: %s', [ToolName]);
 
   // Pasamos el TJSONObject resultante al TValue
-  Result := TValue.From<TJSONObject>(ResultJSON);
+  Result := TValueFromObject(TypeInfo(TJSONObject), ResultJSON);
 end;
 
 function TAiMCPLogicServer.Resources_ListResources: TValue;
@@ -918,7 +973,7 @@ begin
     ResourceObj.AddPair('mimeType', Resource.MimeType);
     ResourcesArray.AddElement(ResourceObj);
   end;
-  Result := TValue.From<TJSONObject>(ResultJSON);
+  Result := TValueFromObject(TypeInfo(TJSONObject), ResultJSON);
 end;
 
 function TAiMCPLogicServer.Resources_ReadResource(const Params: TJSONObject): TValue;
@@ -931,7 +986,7 @@ begin
   if not Assigned(Params) then
     raise Exception.CreateHelp('Invalid params for resources/read. Expected a JSON object.', JSONRPC_INVALID_PARAMS);
 
-  URI := Params.GetValue<string>('uri', '');
+  URI := Params.GetValueAsString('uri', '');
   if URI = '' then
     raise Exception.CreateHelp('Invalid params: Resource "uri" not provided in resources/read', JSONRPC_INVALID_PARAMS);
 
@@ -957,7 +1012,7 @@ begin
   begin
     raise Exception.CreateFmt('Resource not found: %s', [URI]);
   end;
-  Result := TValue.From<TJSONObject>(ResultJSON);
+  Result := TValueFromObject(TypeInfo(TJSONObject), ResultJSON);
 end;
 
 function TAiMCPLogicServer.Resources_ListTemplates: TValue;
@@ -968,7 +1023,7 @@ begin
   ResultJSON := TJSONObject.Create;
   TemplatesArray := TJSONArray.Create;
   ResultJSON.AddPair('resourceTemplates', TemplatesArray);
-  Result := TValue.From<TJSONObject>(ResultJSON);
+  Result := TValueFromObject(TypeInfo(TJSONObject), ResultJSON);
 end;
 
 // -----------------------------------------------------------------------------
@@ -1040,6 +1095,8 @@ var
   // Variables nuevas para manejar arrays
   DynArrayType: TRttiDynamicArrayType;
   ElementType: TRttiType;
+  ItemsObj: TJSONObject;
+  Value: string;
 begin
   Result := TJSONObject.Create;
   Result.AddPair('type', 'object');
@@ -1063,7 +1120,7 @@ begin
         PropTypeStr := GetJsonTypeFromRttiType(RttiProp.PropertyType);
         PropSchema.AddPair('type', PropTypeStr);
 
-        // 2. LÛgica especÌfica para Arrays (NUEVO)
+        // 2. L√≥gica espec√≠fica para Arrays (NUEVO)
         if PropTypeStr = 'array' then
         begin
           if RttiProp.PropertyType is TRttiDynamicArrayType then
@@ -1071,23 +1128,21 @@ begin
             DynArrayType := TRttiDynamicArrayType(RttiProp.PropertyType);
             ElementType := DynArrayType.ElementType;
 
-            // Definimos quÈ hay dentro del array (items)
-            var
+            // Definimos qu√© hay dentro del array (items)
             ItemsObj := TJSONObject.Create;
             ItemsObj.AddPair('type', GetJsonTypeFromRttiType(ElementType));
             PropSchema.AddPair('items', ItemsObj);
           end
           else
           begin
-            // Fallback por si es un array est·tico u otro tipo complejo no soportado
-            var
+            // Fallback por si es un array est√°tico u otro tipo complejo no soportado
             ItemsObj := TJSONObject.Create;
             ItemsObj.AddPair('type', 'string');
             PropSchema.AddPair('items', ItemsObj);
           end;
         end;
 
-        // 3. Manejo de atributos (DescripciÛn y Enums) - (Igual que antes)
+        // 3. Manejo de atributos (Descripci√≥n y Enums) - (Igual que antes)
         for Attr in RttiProp.GetAttributes do
         begin
           if Attr is AiMCPSchemaDescriptionAttribute then
@@ -1095,7 +1150,7 @@ begin
           else if Attr is AiMCPSchemaEnumAttribute then
           begin
             EnumArray := TJSONArray.Create;
-            for var Value in (Attr as AiMCPSchemaEnumAttribute).Values do
+            for Value in (Attr as AiMCPSchemaEnumAttribute).Values do
               EnumArray.Add(Value);
             PropSchema.AddPair('enum', EnumArray);
           end;
@@ -1138,7 +1193,7 @@ end;
 
 class function TInternalSchemaGenerator.IsRequiredProperty(Prop: TRttiProperty): Boolean;
 begin
-  Result := not Prop.HasAttribute<AiMCPOptionalAttribute>;
+  Result := not HasRttiAttribute(Prop, AiMCPOptionalAttribute);
 end;
 
 // -----------------------------------------------------------------------------
@@ -1192,19 +1247,19 @@ begin
       if JsonValue is TJSONNumber then
         Result := (JsonValue as TJSONNumber).AsInt64
       else
-        raise EConversionError.CreateFmt('JSON value for an integer property is not a number: %s', [JsonValue.ToString]);
+        raise EConvertError.CreateFmt('JSON value for an integer property is not a number: %s', [JsonValue.ToString]);
 
     tkFloat:
       if JsonValue is TJSONNumber then
         Result := (JsonValue as TJSONNumber).AsDouble
       else
-        raise EConversionError.CreateFmt('JSON value for a float property is not a number: %s', [JsonValue.ToString]);
+        raise EConvertError.CreateFmt('JSON value for a float property is not a number: %s', [JsonValue.ToString]);
 
     tkString, tkUString, tkWString, tkLString:
       if JsonValue is TJSONString then
-        Result := (JsonValue as TJSONString).Value
+        Result := GetJSONStringValue(JsonValue)
       else
-        Result := JsonValue.Value;
+        Result := GetJSONStringValue(JsonValue);
 
     tkEnumeration:
       if RttiType.Handle = TypeInfo(Boolean) then
@@ -1212,14 +1267,14 @@ begin
         if JsonValue is TJSONBool then
           Result := (JsonValue as TJSONBool).AsBoolean
         else
-          raise EConversionError.CreateFmt('JSON value for a boolean property is not a boolean: %s', [JsonValue.ToString]);
+          raise EConvertError.CreateFmt('JSON value for a boolean property is not a boolean: %s', [JsonValue.ToString]);
       end
       else
       begin
         if JsonValue is TJSONString then
-          Result := TValue.FromOrdinal(RttiType.Handle, GetEnumValue(RttiType.Handle, (JsonValue as TJSONString).Value))
+          Result := TValue.FromOrdinal(RttiType.Handle, GetEnumValue(RttiType.Handle, GetJSONStringValue(JsonValue)))
         else
-          raise EConversionError.CreateFmt('JSON value for an enum property is not a string: %s', [JsonValue.ToString]);
+          raise EConvertError.CreateFmt('JSON value for an enum property is not a string: %s', [JsonValue.ToString]);
       end;
   end;
 end;
@@ -1266,9 +1321,9 @@ begin
   if not TFile.Exists(AFilePath) then
     raise Exception.CreateFmt('File not found: %s', [AFilePath]);
 
-  LMimeType := GetMimeTypeFromFile(AFilePath);
+  LMimeType := GetMimeTypeFromFileName(ExtractFileExt(AFilePath));
   if AFileName = '' then
-    AFileName := TPath.GetFileName(AFilePath);
+    AFileName := ExtractFileName(AFilePath);
 
   LFileStream := TFileStream.Create(AFilePath, fmOpenRead or fmShareDenyWrite);
   try
@@ -1304,12 +1359,12 @@ begin
   else if SameText(AMimeType, 'application/pdf') then
     LType := 'document'
   else
-    LType := 'binary'; // Un tipo genÈrico
+    LType := 'binary'; // Un tipo gen√©rico
 
   LFileItem.AddPair('type', LType);
   LFileItem.AddPair('mimeType', AMimeType);
   LFileItem.AddPair('data', LBase64);
-  LFileItem.AddPair('fileName', AFileName); // Opcional, pero buena pr·ctica
+  LFileItem.AddPair('fileName', AFileName); // Opcional, pero buena pr√°ctica
 
   FContentArray.AddElement(LFileItem);
 end;
@@ -1375,15 +1430,15 @@ begin
   if not Assigned(FAiFunctions) then
     Exit;
 
-  // Recorremos la colecciÛn de funciones del componente vinculado
+  // Recorremos la colecci√≥n de funciones del componente vinculado
   for I := 0 to FAiFunctions.Functions.Count - 1 do
   begin
     if FAiFunctions.Functions[I].Enabled then
     begin
       FuncName := FAiFunctions.Functions[I].FunctionName;
 
-      // Registramos la factorÌa usando el Bridge (Proxy)
-      // Nota: El Bridge debe ser accesible desde aquÌ
+      // Registramos la factor√≠a usando el Bridge (Proxy)
+      // Nota: El Bridge debe ser accesible desde aqu√≠
       Self.RegisterTool(FuncName,
         function: IAiMCPTool
         begin
@@ -1407,17 +1462,17 @@ procedure TAiMCPServer.Notification(AComponent: TComponent; Operation: TOperatio
 begin
   inherited Notification(AComponent, Operation);
 
-  // Si la operaciÛn es eliminar (opRemove) y el componente es el que tenemos guardado
+  // Si la operaci√≥n es eliminar (opRemove) y el componente es el que tenemos guardado
   if (Operation = opRemove) and (AComponent = FAiFunctions) then
   begin
     // Ponemos la referencia a NIL de forma segura
     FAiFunctions := nil;
 
-    // Opcional: Si el servidor estaba activo y dependÌa de estas funciones,
-    // podrÌas decidir detenerlo o simplemente logear un aviso.
+    // Opcional: Si el servidor estaba activo y depend√≠a de estas funciones,
+    // podr√≠as decidir detenerlo o simplemente logear un aviso.
     if FActive then
     begin
-      // PodrÌas llamar a Stop; si consideras que sin funciones el servidor no debe seguir.
+      // Podr√≠as llamar a Stop; si consideras que sin funciones el servidor no debe seguir.
     end;
   end;
 end;
@@ -1443,7 +1498,7 @@ begin
   begin
     FAiFunctions := Value;
 
-    // Si se asigna un componente, le pedimos que nos notifique su destrucciÛn
+    // Si se asigna un componente, le pedimos que nos notifique su destrucci√≥n
     if Assigned(FAiFunctions) then
       FAiFunctions.FreeNotification(Self);
   end;
@@ -1479,10 +1534,10 @@ begin
     Exit;
 
   // 1. PASO CLAVE: Antes de iniciar el LogicServer, registramos
-  // autom·ticamente las funciones del componente vinculado.
+  // autom√°ticamente las funciones del componente vinculado.
   InternalRegisterFromAiFunctions;
 
-  // 2. Iniciamos el motor lÛgico (que instanciar· los Proxies creados arriba)
+  // 2. Iniciamos el motor l√≥gico (que instanciar√° los Proxies creados arriba)
   FLogicServer.Start;
 
   FActive := True;
@@ -1497,3 +1552,4 @@ begin
 end;
 
 end.
+

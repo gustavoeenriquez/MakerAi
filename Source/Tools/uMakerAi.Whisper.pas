@@ -1,18 +1,18 @@
-// IT License
+Ôªø// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,15 +33,22 @@
 
 //--------------------------------------------------------------------------------
 
-// Whisper mantiene la compatibilidad con la versiÛn de Github de whisper opensource
+// Whisper mantiene la compatibilidad con la versi√≥n de Github de whisper opensource
 // el modelo estandar de OpenAi se mueva a uMakerAi.OpenAi.Audio con las nuevas
 // caracteristicas.
 
 unit uMakerAi.Whisper;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  // FPC: Unidades est√°ndar de FPC sin prefijo System, incluye Process para ejecuci√≥n de comandos
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math, Process,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye Net/HTTP/JSON/REST nativos
   System.SysUtils, System.Types, System.UITypes, System.Classes,
   System.Threading,
   System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections,
@@ -49,10 +56,10 @@ uses
   System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
-{$IF CompilerVersion < 35}
-  uJSONHelper,
-{$ENDIF}
-  uMakerAi.Core, uMakerAi.Chat.Tools, uMakerAi.Chat.Messages;
+
+  {$ENDIF}
+  uMakerAi.Core, uMakerAi.Chat.Tools, uMakerAi.Chat.Messages,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 Type
 
@@ -86,7 +93,7 @@ Type
     Function IsValidExtension(FileExtension: String): Boolean;
     procedure ConvertAudioIfNeeded(var aStream: TMemoryStream; var aFileName: String);
 
-    { ImplementaciÛn de IAiSpeechTool }
+    { Implementaci√≥n de IAiSpeechTool }
     procedure ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage); virtual;
     procedure ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage); virtual;
     function InternalTranscription(aStream: TMemoryStream; aFileName, aPrompt: String): String;
@@ -116,8 +123,16 @@ Procedure Register;
 implementation
 
 {$IFDEF MSWINDOWS}
-
-uses Winapi.ShellAPI, Winapi.Windows;
+uses
+  {$IFDEF FPC}
+  ShellApi, Windows;
+  {$ELSE}
+  Winapi.ShellAPI, Winapi.Windows;
+  {$ENDIF}
+{$ENDIF}
+{$IFDEF LINUX}
+uses
+  uMakerAi.Utils.System;
 {$ENDIF}
 { TAiAudio }
 
@@ -150,8 +165,8 @@ begin
   filename := LowerCase(filename);
   FDestino := ChangeFileExt(filename, '.mp3');
 
-  FOrigen := System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetTempPath, filename);
-  FDestino := System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetTempPath, FDestino);
+  FOrigen := TPath.Combine(TPath.GetTempPath, filename);
+  FDestino := TPath.Combine(TPath.GetTempPath, FDestino);
 
   Origen.Position := 0;
   Origen.SaveToFile(FOrigen);
@@ -208,7 +223,7 @@ end;
 
 procedure TAIWhisper.ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
 begin
-  // Si es asÌncrono, lo ejecutamos en un hilo
+  // Si es as√≠ncrono, lo ejecutamos en un hilo
   if IsAsync then
   begin
     TTask.Run(procedure
@@ -227,13 +242,13 @@ begin
         ReportDataEnd(ResMsg, 'assistant', LText);
       except
         on E: Exception do
-          ReportError('Error en transcripciÛn Whisper: ' + E.Message, E);
+          ReportError('Error en transcripci√≥n Whisper: ' + E.Message);
       end;
     end);
   end
   else
   begin
-    // Modo SÌncrono
+    // Modo S√≠ncrono
     aMediaFile.Transcription := InternalTranscription(aMediaFile.Content, aMediaFile.filename, '');
     aMediaFile.Procesado := True;
   end;
@@ -256,11 +271,11 @@ begin
           // Cargamos el stream generado en un nuevo MediaFile
           LNewFile.LoadFromStream('speech.' + FFormat, LStream);
 
-          // Lo aÒadimos al mensaje de respuesta (Casteo seguro a lo que espera tu core)
+          // Lo a√±adimos al mensaje de respuesta (Casteo seguro a lo que espera tu core)
           TThread.Synchronize(nil, procedure begin
-            // AquÌ dependemos de que el objeto pasado sea el mensaje
+            // Aqu√≠ dependemos de que el objeto pasado sea el mensaje
             // En uMakerAi.Chat se pasa el objeto TAiChatMessage
-            // Usamos RTTI o un mÈtodo bridge si fuera necesario, pero aquÌ lo aÒadimos directo
+            // Usamos RTTI o un m√©todo bridge si fuera necesario, pero aqu√≠ lo a√±adimos directo
             // asumiendo que el programador sabe que ResMsg tiene la propiedad MediaFiles
           end);
 
@@ -270,15 +285,15 @@ begin
         end;
       except
         on E: Exception do
-          ReportError('Error generando voz Whisper: ' + E.Message, E);
+          ReportError('Error generando voz Whisper: ' + E.Message);
       end;
     end);
   end
   else
-    Speech(AText); // SincrÛnico
+    Speech(AText); // Sincr√≥nico
 end;
 
-{ Encapsulamos la lÛgica original en un mÈtodo interno para reutilizar }
+{ Encapsulamos la l√≥gica original en un m√©todo interno para reutilizar }
 function TAIWhisper.InternalTranscription(aStream: TMemoryStream; aFileName, aPrompt: String): String;
 begin
   Result := Transcription(aStream, aFileName, aPrompt);
@@ -287,17 +302,17 @@ end;
 
 function TAIWhisper.GetApiKey: String;
 begin
-  // Si est· en modo de diseÒo, simplemente retorna el valor tal cual
+  // Si est√° en modo de dise√±o, simplemente retorna el valor tal cual
   if (csDesigning in ComponentState) or (csDestroying in ComponentState) then
   begin
     Result := FApiKey;
     Exit;
   end;
 
-  // En modo de ejecuciÛn
+  // En modo de ejecuci√≥n
   if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
     // Retorna el valor de la variable de entorno, quitando el '@'
-    Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
+    Result := CompatGetEnvVar(Copy(FApiKey, 2, Length(FApiKey)))
   else
     Result := FApiKey;
 end;
@@ -390,9 +405,7 @@ begin
   /// PCM: Similar to WAV but containing the raw samples in 24kHz (16-bit signed, low-endian), without the header.
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
-  Client.SynchronizeEvents := False;
-{$ENDIF}
+  Client.ConfigureForAsync;
   St := TStringStream.Create('', TEncoding.UTF8);
   Response := TMemoryStream.Create;
   sUrl := FUrl + 'audio/speech';
@@ -450,7 +463,7 @@ Var
 begin
 
 
-  // Valida que la extensiÛn del audio sea compatible, sino utiliza ffmpeg para convertirla
+  // Valida que la extensi√≥n del audio sea compatible, sino utiliza ffmpeg para convertirla
   {
     var Destino: TMemoryStream;
     var FileNameDestino: String;
@@ -470,9 +483,7 @@ begin
   sUrl := FUrl + 'audio/transcriptions';
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
-  Client.SynchronizeEvents := False;
-{$ENDIF}
+  Client.ConfigureForAsync;
   Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
   Client.ContentType := 'application/json';
   Body := TMultipartFormData.Create;
@@ -480,7 +491,7 @@ begin
   Try
     aStream.Position := 0;
 
-    Body.AddStream('file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    AddStreamToMultipart(Body, 'file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
     Body.AddField('model', FModel);
     Body.AddField('prompt', aPrompt);
     Body.AddField('response_format', FResponseFormat);
@@ -541,9 +552,7 @@ begin
   sUrl := FUrl + 'audio/translations';
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
-  Client.SynchronizeEvents := False;
-{$ENDIF}
+  Client.ConfigureForAsync;
   Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
   Client.ContentType := 'application/json';
   Body := TMultipartFormData.Create;
@@ -551,7 +560,7 @@ begin
   Try
     aStream.Position := 0;
 
-    Body.AddStream('file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    AddStreamToMultipart(Body, 'file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
     Body.AddField('model', FModel);
     Body.AddField('prompt', aPrompt);
     Body.AddField('response_format', FResponseFormat);

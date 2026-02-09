@@ -1,4 +1,4 @@
-package MakerAI;
+﻿package MakerAI;
 
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
@@ -58,7 +58,7 @@ contains
   uMakerAi.Prompts in '..\Core\uMakerAi.Prompts.pas',
   uMakerAi.Utils.CodeExtractor in '..\Core\uMakerAi.Utils.CodeExtractor.pas',
   uMakerAi.Utils.PcmToWav in '..\Core\uMakerAi.Utils.PcmToWav.pas',
-  uMakerAi.Utils.System in '..\Core\uMakerAi.Utils.System.pas',
+  uMakerAi.Utils.SysWrapper in '..\Core\uMakerAi.Utils.SysWrapper.pas',
   uMakerAi.OpenAi.Dalle in '..\Tools\uMakerAi.OpenAi.Dalle.pas',
   uMakerAi.Whisper in '..\Tools\uMakerAi.Whisper.pas',
   uMakerAi.Agents in '..\Agents\uMakerAi.Agents.pas',
@@ -95,9 +95,18 @@ contains
   uMakerAi.MCPServer.Bridge in '..\MCPServer\uMakerAi.MCPServer.Bridge.pas',
   uMakerAi.RAG.MetaData in '..\RAG\uMakerAi.RAG.MetaData.pas',
   uMakerAi.RAG.Vectors.VQL in '..\RAG\uMakerAi.RAG.Vectors.VQL.pas',
-  uMakerAi.RAG.Vectors.Index in '..\RAG\uMakerAi.RAG.Vectors.Index.pas';
+  uMakerAi.RAG.Vectors.Index in '..\RAG\uMakerAi.RAG.Vectors.Index.pas',
+  uThreadingHelper in '..\Compatibility\uThreadingHelper.pas',
+  uHttpHelper in '..\Compatibility\uHttpHelper.pas',
+  uJsonHelper in '..\Compatibility\uJsonHelper.pas',
+  uBase64Helper in '..\Compatibility\uBase64Helper.pas',
+  uRegularExpressionsHelper in '..\Compatibility\uRegularExpressionsHelper.pas',
+  uExpressionHelper in '..\Compatibility\uExpressionHelper.pas',
+  uXMLHelper in '..\Compatibility\uXMLHelper.pas',
+  uSSEHelper in '..\Compatibility\uSSEHelper.pas',
+  uSysUtilsHelper in '..\Compatibility\uSysUtilsHelper.pas',
+  uRttiHelper in '..\Compatibility\uRttiHelper.pas',
+  uGenericsHelper in '..\Compatibility\uGenericsHelper.pas',
+  uEnvHelper in '..\Compatibility\uEnvHelper.pas';
 
 end.
-
-
-

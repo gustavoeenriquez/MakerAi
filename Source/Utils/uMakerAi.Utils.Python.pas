@@ -1,21 +1,21 @@
-unit uMakerAi.Utils.Python;
+Ôªøunit uMakerAi.Utils.Python;
 
 
-// IT License
+// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -23,7 +23,7 @@ unit uMakerAi.Utils.Python;
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -40,32 +40,32 @@ unit uMakerAi.Utils.Python;
   uMakerAi.Utils.Python - Utilidad para ejecutar scripts Python desde Delphi
   ===============================================================================
 
-  Esta librerÌa proporciona una interfaz simple y eficiente para ejecutar
+  Esta librer√≠a proporciona una interfaz simple y eficiente para ejecutar
   scripts de Python desde aplicaciones Delphi, permitiendo aprovechar el
-  poder de Python para c·lculos complejos, an·lisis de datos, inteligencia
-  artificial y m·s.
+  poder de Python para c√°lculos complejos, an√°lisis de datos, inteligencia
+  artificial y m√°s.
 
-  CARACTERÕSTICAS PRINCIPALES:
-  ï EjecuciÛn de scripts Python con y sin par·metros
-  ï ConversiÛn autom·tica de tipos Delphi a Python
-  ï Manejo seguro de memoria y referencias
-  ï Soporte para m˙ltiples tipos de datos (String, Integer, Float, Boolean, DateTime)
-  ï Motor Python global reutilizable para mejor rendimiento
+  CARACTER√çSTICAS PRINCIPALES:
+  ¬ï Ejecuci√≥n de scripts Python con y sin par√°metros
+  ¬ï Conversi√≥n autom√°tica de tipos Delphi a Python
+  ¬ï Manejo seguro de memoria y referencias
+  ¬ï Soporte para m√∫ltiples tipos de datos (String, Integer, Float, Boolean, DateTime)
+  ¬ï Motor Python global reutilizable para mejor rendimiento
 
   REQUISITOS:
-  ï Python 3.10 o superior instalado en el sistema
-  ï Componente Python4Delphi (P4D)
-  ï DLL de Python accesible (python310.dll por defecto)
+  ¬ï Python 3.10 o superior instalado en el sistema
+  ¬ï Componente Python4Delphi (P4D)
+  ¬ï DLL de Python accesible (python310.dll por defecto)
 
-  USO B¡SICO:
+  USO B√ÅSICO:
 
-  1. Sin par·metros:
+  1. Sin par√°metros:
   Result := TUtilsPython.ExecuteScript('result = "Hello from Python!"');
 
-  2. Con par·metros:
+  2. Con par√°metros:
   Result := TUtilsPython.ExecuteScript('result = param1 + param2', [10, 20]);
 
-  EJEMPLO PR¡CTICO - C·lculo de N˙meros Primos:
+  EJEMPLO PR√ÅCTICO - C√°lculo de N√∫meros Primos:
 
   var
   ScriptPrimos: String;
@@ -87,23 +87,23 @@ unit uMakerAi.Utils.Python;
   '    return primos_list' + sLineBreak + sLineBreak +
   'result = primos(param1)';
 
-  // Calcular los primeros 10 n˙meros primos
+  // Calcular los primeros 10 n√∫meros primos
   Resultado := TUtilsPython.ExecuteScript(ScriptPrimos, [10]);
   ShowMessage(Resultado); // Resultado: [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
   end;
 
   OTROS EJEMPLOS:
 
-  ï Operaciones matem·ticas:
+  ¬ï Operaciones matem√°ticas:
   Result := TUtilsPython.ExecuteScript('result = param1 ** param2', [2, 8]); // 256
 
-  ï ManipulaciÛn de strings:
+  ¬ï Manipulaci√≥n de strings:
   Result := TUtilsPython.ExecuteScript(
   'result = param1.upper() + " " + param2.lower()',
   ['Hello', 'WORLD']
   ); // "HELLO world"
 
-  ï Trabajo con fechas:
+  ¬ï Trabajo con fechas:
   Result := TUtilsPython.ExecuteScript(
   'result = param1.strftime("%Y-%m-%d %H:%M:%S")',
   [Now]
@@ -111,25 +111,29 @@ unit uMakerAi.Utils.Python;
 
 
   NOTAS IMPORTANTES:
-  ï Todos los scripts deben asignar su resultado a la variable 'result'
-  ï Los par·metros se pasan como param1, param2, param3, etc.
-  ï El motor Python se inicializa autom·ticamente
-  ï Se recomienda manejar excepciones al ejecutar scripts complejos
+  ¬ï Todos los scripts deben asignar su resultado a la variable 'result'
+  ¬ï Los par√°metros se pasan como param1, param2, param3, etc.
+  ¬ï El motor Python se inicializa autom√°ticamente
+  ¬ï Se recomienda manejar excepciones al ejecutar scripts complejos
 
-  AUTOR: Gustavo EnrÌquez
-  VERSI”N: 1.1 - Soporte para par·metros din·micos
+  AUTOR: Gustavo Enr√≠quez
+  VERSI√ìN: 1.1 - Soporte para par√°metros din√°micos
   FECHA: 2024
 
   ===============================================================================
 
-  ADVERTENCI!  Asegurese que la aplicaciÛn estÈ en 64 bits si tiene instalado Python en architectura 64 bits.
+  ADVERTENCI!  Asegurese que la aplicaci√≥n est√© en 64 bits si tiene instalado Python en architectura 64 bits.
 
 }
 
 interface
 
 uses
-  PythonEngine, System.SysUtils, System.Variants;
+  {$IF DEFINED(FPC) AND NOT DEFINED(USE_PYTHON4DELPHI)}
+  SysUtils, Variants, Classes;
+  {$ELSE}
+  PythonEngine, System.SysUtils, System.Variants, System.Classes;
+  {$IFEND}
 
 Type
 
@@ -147,15 +151,97 @@ Type
     class function ExecuteScript(Script: String; const Params: array of Variant): String; overload;
   End;
 
+
+{$IF DEFINED(FPC) AND NOT DEFINED(USE_PYTHON4DELPHI)}
+type
+  PPyObject = Pointer;
+
+  TPythonEngine = class(TComponent)
+  public
+    DllName: string;
+    Initialized: Boolean;
+    procedure LoadDll;
+    procedure ExecString(const AString: AnsiString);
+    function EvalString(const AString: string): PPyObject;
+    function PyObjectAsString(Obj: PPyObject): string;
+    procedure Py_DecRef(Obj: PPyObject);
+    constructor Create(AOwner: TComponent); override;
+  end;
+
+  TPythonModule = class(TComponent)
+  public
+    Engine: TPythonEngine;
+    ModuleName: string;
+    constructor Create(AOwner: TComponent); override;
+  end;
+{$IFEND}
+
 var
   GlPythonEngine: TPythonEngine;
 
 procedure InitializePythonEngine;
-Function GetPythonEngine(DllName: String = 'python310.dll'): TPythonEngine;
+Function GetPythonEngine(DllName: String = ''): TPythonEngine;
 
 implementation
 
+{$IF DEFINED(FPC) AND NOT DEFINED(USE_PYTHON4DELPHI)}
+{ TPythonEngine }
+
+constructor TPythonEngine.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  Initialized := False;
+end;
+
+procedure TPythonEngine.LoadDll;
+begin
+  Initialized := True;
+end;
+
+procedure TPythonEngine.ExecString(const AString: AnsiString);
+begin
+  // Dummy
+end;
+
+function TPythonEngine.EvalString(const AString: string): PPyObject;
+begin
+  Result := nil;
+end;
+
+function TPythonEngine.PyObjectAsString(Obj: PPyObject): string;
+begin
+  Result := 'Python support disabled. Define USE_PYTHON4DELPHI in CompilerDirectives.inc to enable.';
+end;
+
+procedure TPythonEngine.Py_DecRef(Obj: PPyObject);
+begin
+  // Dummy
+end;
+
+{ TPythonModule }
+
+constructor TPythonModule.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+end;
+{$IFEND}
+
+
 Function GetPythonEngine(DllName: String): TPythonEngine;
+Const
+  {$IFDEF MSWINDOWS}
+  DefaultPythonLib = 'python310.dll';
+  {$ENDIF}
+  {$IFDEF LINUX}
+  DefaultPythonLib = 'libpython3.10.so';
+  {$ENDIF}
+  {$IFDEF DARWIN}
+  DefaultPythonLib = 'libpython3.10.dylib';
+  {$ENDIF}
+  // Fallback for other platforms or if not defined
+  {$IFNDEF MSWINDOWS}{$IFNDEF LINUX}{$IFNDEF DARWIN}
+  DefaultPythonLib = 'python310.dll';
+  {$ENDIF}{$ENDIF}{$ENDIF}
 Begin
   if not Assigned(GlPythonEngine) then
   begin
@@ -165,7 +251,10 @@ Begin
   // Verificar arquitectura antes de inicializar
   TUtilsPython.CheckArchitecture;
 
-  GlPythonEngine.DllName := DllName; // Aseg˙rate de usar la versiÛn correcta de Python
+  if DllName = '' then
+    DllName := DefaultPythonLib;
+
+  GlPythonEngine.DllName := DllName;
 
   If Not GlPythonEngine.Initialized then
     GlPythonEngine.LoadDll;
@@ -185,10 +274,18 @@ end;
 
 class function TUtilsPython.Is64BitApplication: Boolean;
 begin
-{$IFDEF WIN64}
-  Result := True;
+{$IFDEF FPC}
+  {$IFDEF CPU64}
+    Result := True;
+  {$ELSE}
+    Result := False;
+  {$ENDIF}
 {$ELSE}
-  Result := False;
+  {$IFDEF WIN64}
+    Result := True;
+  {$ELSE}
+    Result := False;
+  {$ENDIF}
 {$ENDIF}
 end;
 
@@ -204,14 +301,14 @@ class procedure TUtilsPython.CheckArchitecture;
 begin
   if not Is64BitApplication then
   begin
-    raise EPythonArchitectureError.CreateFmt('ERROR DE ARQUITECTURA: La aplicaciÛn est· compilada en %s pero Python generalmente se instala en 64 bits.' + sLineBreak + 'SOLUCIONES:' + sLineBreak +
-      '1. Recompile la aplicaciÛn para 64 bits (Recomendado)' + sLineBreak + '2. Instale Python 32 bits desde https://www.python.org/downloads/' + sLineBreak + '3. Use la DLL de Python 32 bits (python310-32.dll)' + sLineBreak + sLineBreak +
+    raise EPythonArchitectureError.CreateFmt('ERROR DE ARQUITECTURA: La aplicaci√≥n est√° compilada en %s pero Python generalmente se instala en 64 bits.' + sLineBreak + 'SOLUCIONES:' + sLineBreak +
+      '1. Recompile la aplicaci√≥n para 64 bits (Recomendado)' + sLineBreak + '2. Instale Python 32 bits desde https://www.python.org/downloads/' + sLineBreak + '3. Use la DLL de Python 32 bits (python310-32.dll)' + sLineBreak + sLineBreak +
       'Para compilar en 64 bits:' + sLineBreak + '- En Delphi: Project > Options > Building > Delphi Compiler > Target platforms > Win64' + sLineBreak + '- Seleccione "Win64" como plataforma de destino', [GetApplicationArchitecture]);
   end;
 end;
 
 class function TUtilsPython.ExecuteScript(Script: String): String;
-// En esta funciÛn el script debe retornar el resultado en una variable llamada result
+// En esta funci√≥n el script debe retornar el resultado en una variable llamada result
 var
   PyEngine: TPythonEngine;
   PyModule: TPythonModule;
@@ -226,7 +323,7 @@ begin
   PyEngine := GetPythonEngine; // Obtiene el engine global
 
   try
-    // Crear el mÛdulo de Python
+    // Crear el m√≥dulo de Python
     PyModule := TPythonModule.Create(nil);
     PyModule.Engine := PyEngine;
     PyModule.ModuleName := 'mymodule';
@@ -239,7 +336,7 @@ begin
     // Ejecutar el script completo de Python
     PyEngine.ExecString(AnsiString(UTF8Script));
 
-    // Obtener el resultado de la ejecuciÛn
+    // Obtener el resultado de la ejecuci√≥n
     PyResult := PyEngine.EvalString('result');
 
     // Convertir el resultado a una cadena
@@ -272,20 +369,20 @@ begin
 
   PyEngine := GetPythonEngine;
   try
-    // Crear el mÛdulo de Python
+    // Crear el m√≥dulo de Python
     PyModule := TPythonModule.Create(nil);
     try
       PyModule.Engine := PyEngine;
       PyModule.ModuleName := 'mymodule';
 
-      // Construir el script de par·metros
+      // Construir el script de par√°metros
       ParameterScript := '';
       for i := 0 to High(Params) do
       begin
         ParameterScript := ParameterScript + Format('param%d = %s', [i + 1, VariantToPythonValue(Params[i])]) + sLineBreak;
       end;
 
-      // Si hay par·metros de tipo fecha, agregar import de datetime
+      // Si hay par√°metros de tipo fecha, agregar import de datetime
       for i := 0 to High(Params) do
       begin
         if VarType(Params[i]) = varDate then
@@ -304,7 +401,7 @@ begin
       // Ejecutar el script completo de Python
       PyEngine.ExecString(AnsiString(UTF8Script));
 
-      // Obtener el resultado de la ejecuciÛn
+      // Obtener el resultado de la ejecuci√≥n
       PyResult := PyEngine.EvalString('result');
       try
         // Convertir el resultado a una cadena
@@ -357,21 +454,3 @@ finalization
 FreeAndNil(GlPythonEngine);
 
 end.
-
-
-
- def primos(n):
-     primos_list = []
-     num = 2
-     while len(primos_list) < n:
-         es_primo = True
-         for i in range(2, int(num ** 0.5) + 1):
-             if num % i == 0:
-                 es_primo = False
-                 break
-         if es_primo:
-             primos_list.append(num)
-         num += 1
-     return primos_list
- result = primos(param1)
-

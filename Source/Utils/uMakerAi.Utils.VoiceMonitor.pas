@@ -1,18 +1,18 @@
-﻿// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -85,18 +85,44 @@
 
 unit uMakerAi.Utils.VoiceMonitor;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  {$IFDEF FPC}
+  {$IFDEF MSWINDOWS} Windows, mmsystem, {$ENDIF}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Types, System.Classes, System.Variants,
-  System.IOUtils, System.SyncObjs, System.Math, System.Permissions,
+  System.IOUtils, System.SyncObjs, System.Math,
   System.Threading, System.Diagnostics,
+  {$IFDEF MSWINDOWS}
+  Winapi.Windows, Winapi.MMSystem,
+  {$ENDIF}
+  {$IFDEF ANDROID}
+  System.Permissions,
+  AndroidApi.JNI.Media, AndroidApi.JNIBridge, AndroidApi.Helpers, FMX.Helpers.Android, AndroidApi.JNI.JavaTypes,
+  {$ENDIF}
+  {$ENDIF}
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
-{$IFDEF MSWINDOWS}
-  Winapi.Windows, Winapi.MMSystem;
+
+
+{$IFNDEF FPC}
+type
+  // PtrUInt no existe en Delphi, usar NativeUInt
+  PtrUInt = NativeUInt;
 {$ENDIF}
-{$IFDEF ANDROID}
-AndroidApi.JNI.Media, AndroidApi.JNIBridge, AndroidApi.Helpers, FMX.Helpers.Android, AndroidApi.JNI.JavaTypes;
+
+{$IFNDEF MSWINDOWS}
+{$IFDEF FPC}
+type
+  // COMPAT: UINT is a Windows type; define for Linux FPC compilation
+  UINT = Cardinal;
+const
+  WAVE_MAPPER = UINT(-1);
+{$ENDIF}
 {$ENDIF}
 
 const
@@ -222,15 +248,17 @@ type
 {$IFDEF MSWINDOWS}
     FhWaveIn: HWAVEIN;
     FWaveHdr: TWaveHdr;
+{$ENDIF}
     FNoiseLevel: Integer;
     FDeviceID: UINT;
     FWakeWordActive: Boolean;
     FWakeWord: String;
     FOnSpeechEnd: TSpeechEndEvent;
-{$ENDIF}
+{$IFNDEF FPC}
 {$IFDEF ANDROID}
     FAudioRecord: JAudioRecord;
     FCaptureThread: TThread;
+{$ENDIF}
 {$ENDIF}
     procedure SetActive(const Value: Boolean);
     procedure SetSilenceDuration(const Value: Integer);
@@ -262,16 +290,20 @@ type
     procedure StartCaptureAudioWindows;
     procedure StopCaptureAudioWindows;
 {$ENDIF}
+{$IFNDEF FPC}
 {$IFDEF ANDROID}
     procedure StartCaptureAudioAndroid;
     procedure StopCaptureAudioAndroid;
     procedure AndroidCaptureLoop;
     procedure HandlePermissionRequest(Sender: TObject; const APermissions: TArray<string>; const AGrantResults: TArray<TPermissionStatus>);
 {$ENDIF}
+{$ENDIF}
   public
     constructor Create(aOwner: TComponent); Override;
     destructor Destroy; override;
+{$IFDEF MSWINDOWS}
     class function GetWaveInDevices: TArray<TWaveInDeviceInfo>;
+{$ENDIF}
     procedure ConfirmWakeWord(AIsValid: Boolean);
 
     // Functiones auxiliares para el español para detectar similitud entre palabras
@@ -332,13 +364,14 @@ var
 begin
   if uMsg = WIM_DATA then
   begin
-    Monitor := TAIVoiceMonitor(dwInstance);
-    WaveHdr := PWAVEHDR(dwParam1);
+    // PtrUInt cast necesario para compatibilidad 32/64 bits (DWORD_PTR a objeto)
+    Monitor := TAIVoiceMonitor(PtrUInt(dwInstance));
+    WaveHdr := PWAVEHDR(PtrUInt(dwParam1));
     if Assigned(Monitor) and Assigned(WaveHdr) then
     begin
       Monitor.ProcessAudioBuffer(Monitor.FBuffer, WaveHdr^.dwBytesRecorded);
       if Monitor.Active then
-        // waveInAddBuffer(HWAVEIN, @Monitor.FWaveHdr, SizeOf(TWaveHdr));
+        //waveInAddBuffer(HWAVEIN, @Monitor.FWaveHdr, SizeOf(TWaveHdr));
         waveInAddBuffer(HWAVEIN, WaveHdr, SizeOf(TWaveHdr));
     end;
   end;
@@ -686,9 +719,11 @@ begin
 {$IFDEF MSWINDOWS}
   StartCaptureAudioWindows;
 {$ENDIF}
+{$IFNDEF FPC}
 {$IFDEF ANDROID}
   FMonitorState := msRequestingPermission;
   PermissionsService.RequestPermissions([TPermission.RecordAudio], HandlePermissionRequest);
+{$ENDIF}
 {$ENDIF}
 end;
 
@@ -697,8 +732,10 @@ begin
 {$IFDEF MSWINDOWS}
   StopCaptureAudioWindows;
 {$ENDIF}
+{$IFNDEF FPC}
 {$IFDEF ANDROID}
   StopCaptureAudioAndroid;
+{$ENDIF}
 {$ENDIF}
   FCS.Enter;
   try
@@ -743,6 +780,12 @@ begin
   end;
 
   CurrentLevel := Sum div NumSamples;
+
+  // Diagnóstico: muestra en ventana de depuración cuando el nivel de audio supera el umbral
+  {$IFDEF DEBUG}
+  if (CurrentLevel > FSensitivity) then
+    OutputDebugString(PChar(Format('SUPERÓ UMBRAL: Lvl %d > Sens %d', [CurrentLevel, FSensitivity])));
+  {$ENDIF}
 
   FCS.Enter;
   try
@@ -863,58 +906,6 @@ begin
                 FWakeWordChecked := True;
 
                 // Ejecutar verificación en tarea asíncrona para no bloquear captura
-                {
-                  TTask.Run(
-                  procedure
-                  var
-                  WakeStreamPCM, WakeStreamWAV: TMemoryStream;
-                  FragmentSize: Int64;
-                  IsValid: Boolean;
-                  begin
-                  WakeStreamPCM := TMemoryStream.Create;
-                  try
-                  // Extraer el fragmento de wake word del inicio del audio
-                  FCS.Enter;
-                  try
-                  FFileStream.Position := 0;
-                  FragmentSize := (FWakeWordDurationMs * BytesPerSecond) div 1000;
-
-                  if FragmentSize > FFileStream.Size then
-                  FragmentSize := FFileStream.Size;
-
-                  WakeStreamPCM.CopyFrom(FFileStream, FragmentSize);
-                  FFileStream.Position := FFileStream.Size;
-                  finally
-                  FCS.Leave;
-                  end;
-
-                  // Convertir a WAV para enviar al verificador
-                  WakeStreamWAV := TMemoryStream.Create;
-                  try
-                  ConvertPCMToWAV(WakeStreamPCM, WakeStreamWAV);
-                  IsValid := False;
-
-                  // Solo llamar al evento si la wake word está activa
-                  if Assigned(FOnWakeWordCheck) and FWakeWordActive then
-                  FOnWakeWordCheck(Self, WakeStreamWAV, IsValid);
-                  finally
-                  WakeStreamWAV.Free;
-                  end;
-
-
-                  // Guardar el resultado de la validación
-                  FCS.Enter;
-                  try
-                  FIsWakeWordValid := IsValid;
-                  finally
-                  FCS.Leave;
-                  end;
-                  finally
-                  WakeStreamPCM.Free;
-                  end;
-                  end);
-                }
-
                 TTask.Run(
                   procedure
                   var
@@ -927,8 +918,10 @@ begin
                       try
                         FFileStream.Position := 0;
                         FragmentSize := (FWakeWordDurationMs * BytesPerSecond) div 1000;
+
                         if FragmentSize > FFileStream.Size then
                           FragmentSize := FFileStream.Size;
+
                         WakeStreamPCM.CopyFrom(FFileStream, FragmentSize);
                         FFileStream.Position := FFileStream.Size;
                       finally
@@ -948,9 +941,7 @@ begin
                       WakeStreamPCM.Free;
                     end;
                   end);
-
               end;
-
             end;
           end;
 
@@ -1382,7 +1373,7 @@ begin
   // FDeviceID debe contener el ID del dispositivo específico (0, 1, 2...)
   // O el valor WAVE_MAPPER ($FFFFFFFF) para el dispositivo por defecto.
 
-  // FDeviceID := WAVE_MAPPER;
+  //FDeviceID := WAVE_MAPPER;
 
   Res := waveInOpen(@FhWaveIn, FDeviceID, @WaveFormat, DWORD_PTR(@AudioCallback), DWORD_PTR(Self), CALLBACK_FUNCTION);
 
@@ -1447,6 +1438,7 @@ begin
   end;
 end;
 {$ENDIF}
+{$IFNDEF FPC}
 {$IFDEF ANDROID}
 
 procedure TAIVoiceMonitor.HandlePermissionRequest(Sender: TObject; const APermissions: TArray<string>; const AGrantResults: TArray<TPermissionStatus>);
@@ -1736,6 +1728,7 @@ begin
   end;
 end;
 
+{$ENDIF}
 {$ENDIF}
 
 end.

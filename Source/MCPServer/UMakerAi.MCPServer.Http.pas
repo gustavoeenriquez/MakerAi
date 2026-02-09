@@ -1,18 +1,18 @@
-// IT License
+ï»¿// MIT License
 //
-// Copyright (c) <year> <copyright holders>
+// Copyright (c) 2013 Gustavo EnrÃ­quez - CimaMaker
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo EnrÃ­quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -31,14 +31,20 @@
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
-unit UMakerAi.MCPServer.Http;
+unit uMakerAi.MCPServer.Http;
+
+{$INCLUDE ../CompilerDirectives.inc}
 
 interface
 
 uses
-  System.SysUtils, System.Classes,
+  {$IFDEF FPC}
+  Classes, SysUtils,
+  {$ELSE}
+  System.Classes, System.SysUtils,
+  {$ENDIF}
   IdContext, IdCustomHTTPServer, IdHTTPServer,
-  UMakerAi.MCPServer.Core;
+  uMakerAi.MCPServer.Core;
 
 type
 
@@ -69,7 +75,7 @@ type
     property CorsEnabled;
     property CorsAllowedOrigins;
 
-    // No se implementa aún, para una próxima versión para implementar apikey o login y password
+    // No se implementa aÃºn, para una prÃ³xima versiÃ³n para implementar apikey o login y password
     // property OnValidateRequest: TValidateRequestEvent read FOnValidateRequest write FOnValidateRequest;
   end;
 
@@ -77,12 +83,18 @@ procedure Register;
 
 implementation
 
-uses System.StrUtils, IdGlobal, System.JSON;
+uses
+  {$IFDEF FPC}
+  fpjson, jsonparser, StrUtils,
+  {$ELSE}
+  System.JSON, System.StrUtils,
+  {$ENDIF}
+  uJsonHelper, IdGlobal;
 
 const
   HTTP_OK = 200;
   HTTP_NO_CONTENT = 204;
-  HTTP_NOT_FOUND = 404; // <-- CAMBIO: Añadida constante para claridad
+  HTTP_NOT_FOUND = 404; // <-- CAMBIO: AÃ±adida constante para claridad
   HTTP_FORBIDDEN = 403;
   HTTP_METHOD_NOT_ALLOWED = 405;
   HTTP_INTERNAL_SERVER_ERROR = 500;
@@ -178,13 +190,13 @@ begin
   // --- PASO 1: Verificar y establecer cabeceras CORS ---
   if not VerifyAndSetCORSHeaders(ARequestInfo, AResponseInfo) then
   begin
-    // Si VerifyAndSetCORSHeaders devuelve false, la petición ha sido rechazada.
-    // Ya ha configurado la respuesta de error (403 Forbidden), así que salimos.
+    // Si VerifyAndSetCORSHeaders devuelve false, la peticiÃ³n ha sido rechazada.
+    // Ya ha configurado la respuesta de error (403 Forbidden), asÃ­ que salimos.
     Exit;
   end;
 
-  // --- PASO 2: Disparar el evento de validación de autenticación (si existe) ---
-  IsValidRequest := True; // Por defecto, es válido si no hay evento asignado
+  // --- PASO 2: Disparar el evento de validaciÃ³n de autenticaciÃ³n (si existe) ---
+  IsValidRequest := True; // Por defecto, es vÃ¡lido si no hay evento asignado
   FillChar(AuthContext, SizeOf(AuthContext), 0); // Inicializar contexto
 
   if Assigned(FOnValidateRequest) then
@@ -194,7 +206,7 @@ begin
 
   if not IsValidRequest then
   begin
-    // El evento del usuario determinó que la petición no es válida (ej. token incorrecto).
+    // El evento del usuario determinÃ³ que la peticiÃ³n no es vÃ¡lida (ej. token incorrecto).
     AResponseInfo.ResponseNo := 401; // Unauthorized
     AResponseInfo.ResponseText := 'Unauthorized';
     AResponseInfo.ContentText := '{"jsonrpc": "2.0", "error": {"code": -32001, "message": "Authentication failed"}, "id": null}';
@@ -202,7 +214,7 @@ begin
     Exit;
   end;
 
-  // --- PASO 3: Despachar la petición al manejador correcto según el método HTTP ---
+  // --- PASO 3: Despachar la peticiÃ³n al manejador correcto segÃºn el mÃ©todo HTTP ---
   if not SameText(ARequestInfo.URI, Endpoint) then
   begin
     // Si la URL no es nuestro endpoint /mcp, devolvemos un 404 Not Found.
@@ -212,22 +224,22 @@ begin
   end
   else if SameText(ARequestInfo.Command, 'OPTIONS') then
   begin
-    // El navegador envía una petición OPTIONS (preflight) para verificar CORS.
+    // El navegador envÃ­a una peticiÃ³n OPTIONS (preflight) para verificar CORS.
     HandleOptionsRequest(AResponseInfo);
   end
   else if SameText(ARequestInfo.Command, 'GET') then
   begin
-    // Una petición GET a /mcp devuelve información del servidor.
+    // Una peticiÃ³n GET a /mcp devuelve informaciÃ³n del servidor.
     HandleGetRequest(ARequestInfo, AResponseInfo);
   end
   else if SameText(ARequestInfo.Command, 'POST') then
   begin
-    // Una petición POST a /mcp contiene una llamada de procedimiento JSON-RPC.
+    // Una peticiÃ³n POST a /mcp contiene una llamada de procedimiento JSON-RPC.
     HandlePostRequest(ARequestInfo, AResponseInfo);
   end
   else
   begin
-    // Cualquier otro método (PUT, DELETE, etc.) no está permitido.
+    // Cualquier otro mÃ©todo (PUT, DELETE, etc.) no estÃ¡ permitido.
     AResponseInfo.ResponseNo := HTTP_METHOD_NOT_ALLOWED;
     AResponseInfo.ResponseText := 'Method Not Allowed';
     AResponseInfo.ContentText := 'Only GET, POST, and OPTIONS are supported.';
@@ -246,17 +258,17 @@ procedure TAiMCPHttpServer.HandleGetRequest(ARequestInfo: TIdHTTPRequestInfo; AR
 var
   InfoObj: TJSONObject;
 begin
-  // Respondemos con información básica del servidor en formato JSON
+  // Respondemos con informaciÃ³n bÃ¡sica del servidor en formato JSON
   InfoObj := TJSONObject.Create;
   try
-    InfoObj.AddPair('serverName', TJSONString.Create(FLogicServer.ServerName));
-    InfoObj.AddPair('protocolVersion', TJSONString.Create(FLogicServer.ProtocolVersion));
-    InfoObj.AddPair('status', TJSONString.Create('active'));
+    InfoObj.AddPair('serverName', FLogicServer.ServerName);
+    InfoObj.AddPair('protocolVersion', FLogicServer.ProtocolVersion);
+    InfoObj.AddPair('status', 'active');
 
     AResponseInfo.ResponseNo := HTTP_OK;
     AResponseInfo.ResponseText := 'OK';
     AResponseInfo.ContentType := 'application/json; charset=utf-8';
-    AResponseInfo.ContentText := InfoObj.ToJSON; // <- Aquí asignamos el JSON
+    AResponseInfo.ContentText := InfoObj.ToJSONString;// <- AquÃ­ asignamos el JSON
   finally
     InfoObj.Free;
   end;

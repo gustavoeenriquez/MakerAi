@@ -1,18 +1,18 @@
-// IT License
+Ôªø// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,11 +33,16 @@
 
 unit uMakerAi.VersionPropertyEditor;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
+// Delphi: DesignEditors para editores de propiedades IDE. FPC usa sistema Lazarus diferente
+{$IFNDEF FPC}
 uses
   System.SysUtils, System.Classes, DesignIntf, DesignEditors, VCL.Dialogs,
-  uMakerAi.Chat.AiConnection;
+  uMakerAi.Chat.AiConnection,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper;
 
 type
   // Property Editor personalizado para la propiedad Version
@@ -48,11 +53,14 @@ type
     //function GetValue: string; override;
     //procedure SetValue(const Value: string); override;
   end;
+{$ENDIF}
 
 procedure Register;
 
 implementation
 
+// Delphi: Implementaci√≥n completa del editor. FPC usa RegisterPropertyEditor de LCL
+{$IFNDEF FPC}
 uses
   uMakerAi.Dsg.AboutDialog;
 
@@ -67,12 +75,11 @@ begin
     'Version', // Nombre de la propiedad
     TVersionPropertyEditor // Clase del Property Editor
     );
-
 End;
 
 function TVersionPropertyEditor.GetAttributes: TPropertyAttributes;
 begin
-  // paDialog permite mostrar el botÛn de tres puntos
+  // paDialog permite mostrar el bot√≥n de tres puntos
   // paReadOnly hace que la propiedad no sea editable directamente
   Result := [paDialog, paReadOnly];
 end;
@@ -81,7 +88,7 @@ procedure TVersionPropertyEditor.Edit;
 var
   AboutForm: TAboutDialog;
 begin
-  // Crear y mostrar el di·logo About
+  // Crear y mostrar el di√°logo About
   AboutForm := TAboutDialog.Create(nil);
   try
     AboutForm.ShowModal;
@@ -90,19 +97,14 @@ begin
   end;
 end;
 
-{
-function TVersionPropertyEditor.GetValue: string;
-begin
-  // Mostrar la versiÛn actual en el Object Inspector
-   //$I uMakerAi.Version.inc
-  //Result := MAKERAI_VERSION_FULL;
-end;
+{$ENDIF}
 
-procedure TVersionPropertyEditor.SetValue(const Value: string);
+{$IFDEF FPC}
+procedure Register;
 begin
-  // No permitir cambio del valor (solo lectura)
-  // Opcionalmente podrÌas mostrar un mensaje explicativo
+  // COMPAT: FPC/Lazarus usa sistema diferente de property editors
+  // La implementaci√≥n del editor est√° en {$IFNDEF FPC} arriba
 end;
-}
+{$ENDIF}
 
 end.

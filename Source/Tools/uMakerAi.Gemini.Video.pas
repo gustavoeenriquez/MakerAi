@@ -1,18 +1,18 @@
-// IT License
+ï»¿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo EnrÃ­quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -34,12 +34,20 @@
 
 unit uMakerAi.Gemini.Video;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Classes, System.JSON, System.Net.HttpClient,
   System.Net.HttpClientComponent, System.Net.URLClient, System.Threading,
-  System.IOUtils, uMakerAi.Core, uMakerAi.Chat.Tools, uMakerAi.Chat, uMakerAi.Chat.Messages;
+  System.IOUtils,
+  {$ENDIF}
+  uMakerAi.Core, uMakerAi.Chat.Tools, uMakerAi.Chat, uMakerAi.Chat.Messages,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
   { Enums para una mejor experiencia en el Inspector de Objetos }
@@ -64,10 +72,10 @@ type
     function BuildParametersJson: TJSONObject;
     function DownloadVideo(const AVideoUri: string): TAiMediaFile;
   protected
-    { Implementación de IAiVideoTool }
+    { ImplementaciÃ³n de IAiVideoTool }
     procedure ExecuteVideoGeneration(ResMsg, AskMsg: TAiChatMessage); override;
 
-    { Lógica interna de ejecución y Polling }
+    { LÃ³gica interna de ejecuciÃ³n y Polling }
     procedure InternalRunVeo(AResMsg, AAskMsg: TAiChatMessage);
   public
     constructor Create(AOwner: TComponent); override;
@@ -76,7 +84,7 @@ type
     property Model: string read FModel write FModel;
     property Url: string read FUrl write FUrl;
 
-    { Propiedades de configuración de Veo }
+    { Propiedades de configuraciÃ³n de Veo }
     property AspectRatio: TVeoAspectRatio read FAspectRatio write FAspectRatio default ar16_9;
     property Resolution: TVeoResolution read FResolution write FResolution default vr720p;
     property DurationSeconds: Integer read FDurationSeconds write FDurationSeconds default 8;
@@ -116,7 +124,7 @@ begin
     Exit(FApiKey);
 
   if (FApiKey <> '') and (FApiKey.StartsWith('@')) then
-    Result := GetEnvironmentVariable(Copy(FApiKey, 2, MaxInt))
+    Result := CompatGetEnvVar(Copy(FApiKey, 2, MaxInt))
   else
     Result := FApiKey;
 end;
@@ -135,7 +143,7 @@ begin
   end;
 
   if FDurationSeconds > 0 then
-    Result.AddPair('durationSeconds', TJSONNumber.Create(FDurationSeconds));
+    Result.AddPair('durationSeconds', CreateJSONNumber(FDurationSeconds));
 
   case FPersonGeneration of
     pgAllowAll: Result.AddPair('personGeneration', 'allow_all');
@@ -147,18 +155,18 @@ begin
     Result.AddPair('negativePrompt', FNegativePrompt);
 
   if FSeed > 0 then
-    Result.AddPair('seed', TJSONNumber.Create(FSeed));
+    Result.AddPair('seed', CreateJSONNumber(FSeed));
 end;
 
 procedure TAiGeminiVideoTool.ExecuteVideoGeneration(ResMsg, AskMsg: TAiChatMessage);
 begin
-  // Veo SIEMPRE debe ser asíncrono debido a que tarda minutos
+  // Veo SIEMPRE debe ser asÃ­ncrono debido a que tarda minutos
   TTask.Run(procedure
   begin
     try
       InternalRunVeo(TAiChatMessage(ResMsg), TAiChatMessage(AskMsg));
     except
-      on E: Exception do ReportError('Error en Veo Tool: ' + E.Message, E);
+      on E: Exception do ReportError('Error en Veo Tool: ' + E.Message);
     end;
   end);
 end;
@@ -177,9 +185,11 @@ var
   LVideoFile: TAiMediaFile;
 begin
   HTTP := TNetHTTPClient.Create(nil);
+  HTTP.ConfigureForAsync;
+  LBody := nil; // FIX: W1036 Initialize to nil to ensure safe Free in finally block
   LRequest := TJSONObject.Create;
   try
-    // 1. Construir Petición Inicial
+    // 1. Construir PeticiÃ³n Inicial
     LInstances := TJSONArray.Create;
     LInstance := TJSONObject.Create;
     LInstance.AddPair('prompt', AAskMsg.Prompt);
@@ -202,23 +212,23 @@ begin
     LRequest.AddPair('instances', LInstances);
     LRequest.AddPair('parameters', BuildParametersJson);
 
-    // 2. Iniciar Operación (predictLongRunning)
+    // 2. Iniciar OperaciÃ³n (predictLongRunning)
     LUrl := Format('%smodels/%s:predictLongRunning?key=%s', [FUrl, FModel, GetApiKey]);
     LBody := TStringStream.Create(LRequest.ToJSON, TEncoding.UTF8);
     HTTP.ContentType := 'application/json';
 
-    ReportState(acsReasoning, 'Iniciando generación de video Veo...');
+    ReportState(acsReasoning, 'Iniciando generaciÃ³n de video Veo...');
     LResponse := HTTP.Post(LUrl, LBody);
 
     if LResponse.StatusCode <> 200 then
       raise Exception.Create('Error iniciando Veo: ' + LResponse.ContentAsString);
 
     LJSON := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
-    LOpName := LJSON.GetValue<string>('name', '');
+    LOpName := LJSON.GetValueAsString('name', '');
     LJSON.Free;
 
     if LOpName.IsEmpty then
-      raise Exception.Create('No se recibió el nombre de la operación.');
+      raise Exception.Create('No se recibiÃ³ el nombre de la operaciÃ³n.');
 
     // 3. Bucle de Polling
     LPollingUrl := FUrl + LOpName + '?key=' + GetApiKey;
@@ -234,13 +244,13 @@ begin
       begin
         LJSON := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
         try
-          LJSON.TryGetValue<Boolean>('done', LIsDone);
+          LJSON.TryGetValue('done', LIsDone);
           if LIsDone then
           begin
-            if LJSON.TryGetValue<TJSONObject>('error', LErrorObj) then
-              raise Exception.Create('Error en la operación: ' + LErrorObj.ToJSON);
+            if LJSON.TryGetValue('error', LErrorObj) then
+              raise Exception.Create('Error en la operaciÃ³n: ' + LErrorObj.ToJSON);
 
-            LVideoUri := LJSON.GetValue<string>('response.generateVideoResponse.generatedSamples[0].video.uri', '');
+            LVideoUri := LJSON.GetValueAsString('response.generateVideoResponse.generatedSamples[0].video.uri', '');
           end;
         finally
           LJSON.Free;
@@ -276,6 +286,7 @@ var
 begin
   Result := nil;
   HTTP := TNetHTTPClient.Create(nil);
+  HTTP.ConfigureForAsync;
   Stream := TMemoryStream.Create;
   try
     Headers := [TNetHeader.Create('x-goog-api-key', GetApiKey)];

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <Package Version="5">
+    <PathDelim Value="/"/>
+    <Name Value="MakerAiDsg"/>
+    <Type Value="DesignTime"/>
+    <Author Value="Gustavo - MakerAI Project"/>
+    <CompilerOptions>
+      <Version Value="11"/>
+      <PathDelim Value="/"/>
+      <SearchPaths>
+        <IncludeFiles Value="..;../Design"/>
+        <OtherUnitFiles Value="..;../Design"/>
+        <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
+      </SearchPaths>
+      <Parsing>
+        <SyntaxOptions>
+          <SyntaxMode Value="Delphi"/>
+        </SyntaxOptions>
+      </Parsing>
+    </CompilerOptions>
+    <Description Value="MakerAI - Design-time Package - Property Editors and IDE Integration"/>
+    <License Value="MIT"/>
+    <Version Major="1"/>
+    <Files>
+      <Item>
+        <Filename Value="../Design/uAiEditors.ChatConnectionEditor.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uAiEditors.ChatConnectionEditor"/>
+      </Item>
+      <Item>
+        <Filename Value="../Design/uMakerAi.Dsg.AboutDialog.pas"/>
+        <UnitName Value="uMakerAi.Dsg.AboutDialog"/>
+      </Item>
+      <Item>
+        <Filename Value="../Design/uMakerAi.VersionPropertyEditor.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMakerAi.VersionPropertyEditor"/>
+      </Item>
+      <Item>
+        <Filename Value="../Design/uMCP.ClientEditorProperties.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="uMCP.ClientEditorProperties"/>
+      </Item>
+      <Item>
+        <Filename Value="../Design/uMCPClientEditor.pas"/>
+        <UnitName Value="uMCPClientEditor"/>
+      </Item>
+    </Files>
+    <RequiredPkgs>
+      <Item>
+        <PackageName Value="MakerAI"/>
+        <MinVersion Major="1" Valid="True"/>
+      </Item>
+      <Item>
+        <PackageName Value="IDEIntf"/>
+      </Item>
+      <Item>
+        <PackageName Value="LCL"/>
+      </Item>
+    </RequiredPkgs>
+    <UsageOptions>
+      <UnitPath Value="$(PkgOutDir)"/>
+    </UsageOptions>
+    <PublishOptions>
+      <Version Value="2"/>
+      <UseFileFilters Value="True"/>
+    </PublishOptions>
+  </Package>
+</CONFIG>

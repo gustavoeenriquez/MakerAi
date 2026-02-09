@@ -1,18 +1,18 @@
-﻿// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -33,16 +33,24 @@
 
 unit uMakerAi.RAG.Vectors;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  // FPC: Unidades estándar de FPC sin prefijo System
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Generics.Defaults, Types, Variants, SyncObjs, Math,
+  {$ELSE}
+  // Delphi: Unidades con namespace System, incluye JSON/Hash/Encoding nativos
   System.SysUtils, System.Math, System.Generics.Collections, System.Variants, System.StrUtils,
   System.Generics.Defaults, System.Classes, System.JSon, Rest.JSon, System.SyncObjs,
   System.NetEncoding, System.Hash,
 
-   uMakerAi.RAG.Vectors.Index,  uMakerAi.RAG.Vectors.VQL,
-
-  uJSONHelper, uMakerAi.Embeddings.Core, uMakerAi.RAG.MetaData;
+  {$ENDIF}
+  uMakerAi.RAG.Vectors.Index, uMakerAi.RAG.Vectors.VQL,
+  uJsonHelper, uMakerAi.Embeddings.Core, uMakerAi.RAG.MetaData,
+  uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper;
 
 type
 
@@ -188,7 +196,7 @@ type
     function WeightedScoreFusion(VectorResults: TList<TAiSearchResult>; LexicalResults: TList<TPair<Double, TAiEmbeddingNode>>; aLimit: Integer): TAiRAGVector;
     procedure ApplyContextReordering(Vector: TAiRAGVector);
     procedure InternalNormalizeVector(aList: TList<TAiSearchResult>);
-    procedure InternalNormalizeLexical(aList: TList < TPair < Double, TAiEmbeddingNode >> );
+    procedure InternalNormalizeLexical(aList: TList<TPair<Double, TAiEmbeddingNode>>);
 
   Public
     Constructor Create(aOwner: TComponent; AOwnsObjects: Boolean); Reintroduce; Overload;
@@ -428,11 +436,11 @@ begin
 
     // Extraer texto limpio
     if JVal is TJSONString then
-      TextToEmbed := JVal.Value
+      TextToEmbed := GetJSONStringValue(JVal)
     else
       TextToEmbed := JVal.ToString;
 
-    if not TextToEmbed.IsEmpty then
+    if Trim(TextToEmbed) <> '' then
     begin
       Emb := AddItem(TextToEmbed, MetaData);
       if Assigned(Emb) then
@@ -519,8 +527,8 @@ begin
     raise Exception.Create('El porcentaje de Overlap debe estar entre 0 y 99.');
 
   // Normalizamos el texto (quitamos espacios extra al inicio/final)
-  aText := aText.Trim;
-  TotalLen := aText.Length; // Nota: Si usas versiones antiguas de Delphi usa Length(aText)
+  aText := Trim(aText);
+  TotalLen := Length(aText); // Nota: Si usas versiones antiguas de Delphi usa Length(aText)
 
   if TotalLen = 0 then
     Exit;
@@ -589,7 +597,7 @@ begin
 
     // Extraemos el texto
     // +1 en Length si cortamos en un caracter inclusivo, pero Copy maneja count
-    ChunkText := Copy(aText, StartPos, CutPos - StartPos + 1).Trim;
+    ChunkText := Trim(Copy(aText, StartPos, CutPos - StartPos + 1));
 
     if ChunkText <> '' then
     begin
@@ -792,6 +800,7 @@ begin
 
   // Result := FRagIndex.Connect(aHost, aPort, aLogin, aPassword);
   FActive := True;
+  Result := True; // Fix W1035
 end;
 
 function TAiRAGVector.Count: Integer;
@@ -910,13 +919,15 @@ end;
 
 
 procedure TAiRAGVector.InternalNormalizeVector(aList: TList<TAiSearchResult>);
+var
+  i: Integer;
+  S: Double;
 begin
   // Los embeddings ya están en escala 0..1 (Coseno).
   // No aplicamos Min-Max porque el 1.0 debe ser "perfección real", no "el mejor de la lista".
   // Simplemente aseguramos que no haya valores fuera de rango por error numérico.
-  for var i := 0 to aList.Count - 1 do
+  for i := 0 to aList.Count - 1 do
   begin
-    var
     S := aList[i].Score;
     if S < 0 then
       S := 0;
@@ -926,10 +937,11 @@ begin
   end;
 end;
 
-procedure TAiRAGVector.InternalNormalizeLexical(aList: TList < TPair < Double, TAiEmbeddingNode >> );
+procedure TAiRAGVector.InternalNormalizeLexical(aList: TList<TPair<Double, TAiEmbeddingNode>>);
 var
-  MaxS: Double;
+  MaxS, NewScore: Double;
   i: Integer;
+  Item: TPair<Double, TAiEmbeddingNode>;
 begin
   if aList.Count = 0 then
     Exit;
@@ -948,12 +960,13 @@ begin
   // o usar un valor de referencia para que el score 1.0 sea difícil de alcanzar.
   for i := 0 to aList.Count - 1 do
   begin
-    var
     NewScore := aList[i].Key;
     if MaxS > 0 then
       NewScore := NewScore / MaxS; // Ahora el mejor es 1.0, pero solo dentro de su canal
 
-    aList[i] := TPair<Double, TAiEmbeddingNode>.Create(NewScore, aList[i].Value);
+    // Reconstruir el par manteniendo el nodo original
+    Item := TPair<Double, TAiEmbeddingNode>.Create(NewScore, aList[i].Value);
+    aList[i] := Item;
   end;
 end;
 
@@ -1296,13 +1309,13 @@ begin
       Self.Clear;
 
       // 5. Cargar Propiedades del Vector
-      JObj.TryGetValue<String>('name', FNameVec);
-      JObj.TryGetValue<String>('description', FDescription);
-      JObj.TryGetValue<String>('model', FModel);
-      if JObj.TryGetValue<Integer>('dim', FDim) then;
+      JObj.TryGetValue('name', FNameVec);
+      JObj.TryGetValue('description', FDescription);
+      JObj.TryGetValue('model', FModel);
+      if JObj.TryGetValue('dim', FDim) then;
 
       // 6. Cargar Array de Datos
-      if JObj.TryGetValue<TJSonArray>('data', JArr) then
+      if JObj.TryGetValue('data', JArr) then
       Begin
         For JVal in JArr do
         Begin
@@ -1434,13 +1447,21 @@ var
   Scores: TDictionary<TAiEmbeddingNode, Double>;
   i: Integer;
   Node: TAiEmbeddingNode;
-  CombinedList: TList<TPair<Double, TAiEmbeddingNode>>;
+  CombinedList: TList<TL2Pair>; // Usamos TL2Pair localmente para facilitar el Sort en FPC if needed, or TPair.
+  // Actually, let's keep CombinedList as TList<TL2Pair> internally if we want to use the easy sort, OR
+  // convert it to TList<TPair...> and use a verbose comparer.
+  // User wants Delphi style. Delphi style is TList<TPair<...>> usually.
+  // combined list is local var.
   RankScore: Double;
   MaxRRF, MinRRF, RangeRRF: Double;
+  Pair: TPair<Double, TAiEmbeddingNode>; // Explicit loop var
 begin
   Result := TAiRAGVector.Create(nil, False);
   Scores := TDictionary<TAiEmbeddingNode, Double>.Create;
-  CombinedList := TList < TPair < Double, TAiEmbeddingNode >>.Create;
+  // Use TL2Pair for internal list to simplify Sort if that was the blocker, OR use TPair with defined Comparer
+  // To avoid changing too much, I will use TL2Pair internally where it helps compilation, 
+  // BUT the parameter signature LexicalResults MUST be TPair to match user request.
+  CombinedList := TList<TL2Pair>.Create;
   try
     // 1. Procesar Ranking Vectorial
     // Nota: Aunque VectorResults ya esté normalizado, RRF solo usa su posición (i)
@@ -1491,8 +1512,9 @@ begin
     RangeRRF := MaxRRF - MinRRF;
 
     // 4. Ordenar descendente por el score RRF
-    CombinedList.Sort(TComparer < TPair < Double, TAiEmbeddingNode >>.Construct(
-      function(const L, R: TPair<Double, TAiEmbeddingNode>): Integer
+    // 4. Ordenar descendente por el score RRF
+    CombinedList.Sort(TComparer<TL2Pair>.Construct(
+      function(const L, R: TL2Pair): Integer
       begin
         Result := CompareValue(R.Key, L.Key);
       end));
@@ -1616,7 +1638,7 @@ begin
     JObj.AddPair('name', FNameVec);
     JObj.AddPair('description', FDescription);
     JObj.AddPair('model', FModel);
-    JObj.AddPair('dim', TJSONNumber.Create(FDim)); // Explicito para asegurar tipo numérico
+    JObj.AddPair('dim', CreateJSONNumber(FDim)); // Explicito para asegurar tipo numérico
 
     // 4. Crear Array de Datos
     JArr := TJSonArray.Create;
@@ -1749,7 +1771,7 @@ begin
       // =======================================================================
       // SUBFASE B: BÚSQUEDA LÉXICA (BM25)
       // =======================================================================
-      if FSearchOptions.UseBM25 and (Target.Text.Trim <> '') then
+      if FSearchOptions.UseBM25 and (Trim(Target.Text) <> '') then
       begin
         LexicalRes := FBm25Index.Search(Target.Text, Max(50, aLimit * 5), aFilter);
 
@@ -2025,7 +2047,7 @@ begin
       end;
 
       // --- 2. Contenido del Texto ---
-      SB.Append(Emb.Text.Trim);
+      SB.Append(Trim(Emb.Text));
 
       // --- 3. Separador entre fragmentos ---
       SB.AppendLine;
@@ -2043,14 +2065,16 @@ var
   Scores: TDictionary<TAiEmbeddingNode, Double>;
   Node: TAiEmbeddingNode;
   i: Integer;
-  CombinedList: TList<TPair<Double, TAiEmbeddingNode>>;
-  W_Sem, W_Lex, TotalWeight: Double;
+  CombinedList: TList<TL2Pair>; // Internal using TL2Pair for cleaner sort implementation compatible with FPC
+  W_Sem, W_Lex, TotalWeight, LexScore: Double;
+  Pair: TPair<TAiEmbeddingNode, Double>; // For Scores loop
+  LexItem: TPair<Double, TAiEmbeddingNode>; // For LexicalResults loop
 begin
   // El resultado es un nuevo contenedor que no es dueño de los objetos
   Result := TAiRAGVector.Create(nil, False);
 
   Scores := TDictionary<TAiEmbeddingNode, Double>.Create;
-  CombinedList := TList < TPair < Double, TAiEmbeddingNode >>.Create;
+  CombinedList := TList<TL2Pair>.Create;
   try
     // -------------------------------------------------------------------------
     // 1. NORMALIZACIÓN INTERNA DE PESOS
@@ -2091,7 +2115,6 @@ begin
       begin
         Node := LexicalResults[i].Value;
         // El score léxico ya viene normalizado 0..1 desde InternalNormalizeLexical
-        var
         LexScore := LexicalResults[i].Key * W_Lex;
 
         if Scores.ContainsKey(Node) then
@@ -2106,12 +2129,11 @@ begin
     // -------------------------------------------------------------------------
 
     // Pasamos del diccionario a una lista para poder ordenar
-    for Node in Scores.Keys do
-      CombinedList.Add(TPair<Double, TAiEmbeddingNode>.Create(Scores[Node], Node));
+    for Pair in Scores do
+      CombinedList.Add(TL2Pair.Create(Pair.Value, Pair.Key));
 
-    // Ordenar de mayor a menor score combinado
-    CombinedList.Sort(TComparer < TPair < Double, TAiEmbeddingNode >>.Construct(
-      function(const L, R: TPair<Double, TAiEmbeddingNode>): Integer
+    CombinedList.Sort(TComparer<TL2Pair>.Construct(
+      function(const L, R: TL2Pair): Integer
       begin
         Result := CompareValue(R.Key, L.Key);
       end));
@@ -2176,11 +2198,11 @@ function TAiVectorStoreDriverBase.VariantToJSONValue(const V: Variant): TJSONVal
 begin
   case VarType(V) of
     varSmallint, varInteger, varByte, varShortInt, varWord, varLongWord, varInt64:
-      Result := TJSONNumber.Create(Int64(V));
+      Result := CreateJSONNumber(Int64(V));
     varSingle, varDouble, varCurrency:
-      Result := TJSONNumber.Create(Double(V));
+      Result := CreateJSONNumber(Double(V));
     varBoolean:
-      Result := TJSONBool.Create(Boolean(V));
+      Result := CreateJSONBool(Boolean(V));
     varNull, varEmpty:
       Result := TJSONNull.Create;
   else

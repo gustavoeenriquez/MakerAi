@@ -1,18 +1,18 @@
-﻿// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -33,18 +33,24 @@
 
 unit uMakerAi.Utils.ScreenCapture;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Types, System.Classes, System.Math, System.UITypes,
-  FMX.Graphics, FMX.Types, FMX.Platform, FMX.Forms, FMX.Objects, FMX.Surfaces
+  FMX.Graphics, FMX.Types, FMX.Platform, FMX.Forms, FMX.Objects, FMX.Surfaces,
   {$IFDEF MSWINDOWS}
-  , Winapi.Windows, Winapi.Messages, FMX.Platform.Win
+  Winapi.Windows, Winapi.Messages, FMX.Platform.Win,
   {$ENDIF}
   {$IFDEF MACOS}
-  , Macapi.CoreGraphics, Macapi.CoreFoundation, Macapi.Foundation
+  Macapi.CoreGraphics, Macapi.CoreFoundation, Macapi.Foundation,
   {$ENDIF}
-  ;
+  {$ENDIF}
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
   TScreenCapture = class

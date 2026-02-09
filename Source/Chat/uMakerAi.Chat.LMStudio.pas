@@ -1,18 +1,18 @@
-// IT License
+ï»¿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo EnrÃ­quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,21 +33,21 @@
 
 unit uMakerAi.Chat.LMStudio;
 
+{$INCLUDE ../CompilerDirectives.inc}
+
 interface
 
 uses
+  {$IFDEF FPC}
+  Classes, SysUtils, StrUtils, Generics.Collections, Types, Variants, SyncObjs, Math,
+  {$ELSE}
   System.SysUtils, System.Classes, System.JSON, System.StrUtils,
   System.Generics.Collections, System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent, REST.Types, REST.Client,
 
-{$IF CompilerVersion < 35}
-  uJSONHelper,
-{$ENDIF}
-
-  uMakerAi.ParamsRegistry,
-  uMakerAi.Chat,
-  uMakerAi.Core,
-  uMakerAi.Embeddings;
+  {$ENDIF}
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core, uMakerAi.Embeddings,
+  uJsonHelper, uHttpHelper, uSysUtilsHelper, uBase64Helper, uThreadingHelper, uRttiHelper;
 
 type
   TAiLMStudioChat = class(TAiChat)
@@ -106,7 +106,7 @@ end;
 constructor TAiLMStudioChat.Create(Sender: TComponent);
 begin
   inherited;
-  ApiKey := '1234'; // local, no se requiere autenticación
+  ApiKey := '1234'; // local, no se requiere autenticaciÃ³n
   Model := 'lmstudio-local';
   Url := GlLMStudioUrl;
 end;
@@ -132,4 +132,3 @@ initialization
   TAiChatFactory.Instance.RegisterDriver(TAiLMStudioChat);
 
 end.
-
