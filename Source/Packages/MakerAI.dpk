@@ -58,7 +58,6 @@ contains
   uMakerAi.Prompts in '..\Core\uMakerAi.Prompts.pas',
   uMakerAi.Utils.CodeExtractor in '..\Core\uMakerAi.Utils.CodeExtractor.pas',
   uMakerAi.Utils.PcmToWav in '..\Core\uMakerAi.Utils.PcmToWav.pas',
-  uMakerAi.Utils.SysWrapper in '..\Core\uMakerAi.Utils.SysWrapper.pas',
   uMakerAi.OpenAi.Dalle in '..\Tools\uMakerAi.OpenAi.Dalle.pas',
   uMakerAi.Whisper in '..\Tools\uMakerAi.Whisper.pas',
   uMakerAi.Agents in '..\Agents\uMakerAi.Agents.pas',

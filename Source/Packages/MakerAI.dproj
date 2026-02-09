@@ -171,7 +171,6 @@
         <DCCReference Include="..\Core\uMakerAi.Prompts.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Utils.CodeExtractor.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Utils.PcmToWav.pas"/>
-        <DCCReference Include="..\Core\uMakerAi.Utils.SysWrapper.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.OpenAi.Dalle.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Whisper.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.Agents.pas"/>

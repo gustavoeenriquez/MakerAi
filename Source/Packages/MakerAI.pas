@@ -17,7 +17,7 @@ uses
   uMakerAi.Agents.DmGenerator, uMakerAi.Chat, uMakerAi.Core, 
   uMakerAi.Embeddings, uMakerAi.Embeddings.Core, uMakerAi.Prompts, 
   uMakerAi.Utils.CodeExtractor, uMakerAi.Utils.PcmToWav, 
-  uMakerAi.Utils.SysWrapper, uThreadingHelper, uMakerAi.Whisper, 
+  uThreadingHelper, uMakerAi.Whisper, 
   uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Agents, 
   uMakerAi.Agents.Attributes, uMakerAi.Agents.EngineRegistry, 
   uMakerAi.MCPServer.Http, uMakerAi.MCPServer.Core, uMakerAi.MCPServer.Stdio, 

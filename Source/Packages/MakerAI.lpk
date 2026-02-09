@@ -138,10 +138,6 @@
         <UnitName Value="uMakerAi.Utils.PcmToWav"/>
       </Item>
       <Item>
-        <Filename Value="../Core/uMakerAi.Utils.SysWrapper.pas"/>
-        <UnitName Value="uMakerAi.Utils.SysWrapper"/>
-      </Item>
-      <Item>
         <Filename Value="../Compatibility/uThreadingHelper.pas"/>
         <UnitName Value="uThreadingHelper"/>
       </Item>
@@ -425,10 +421,6 @@
       <Item>
         <Filename Value="..\Core\uMakerAi.Utils.PcmToWav.pas"/>
         <UnitName Value="uMakerAi.Utils.PcmToWav"/>
-      </Item>
-      <Item>
-        <Filename Value="..\Core\uMakerAi.Utils.SysWrapper.pas"/>
-        <UnitName Value="uMakerAi.Utils.SysWrapper"/>
       </Item>
       <Item>
         <Filename Value="..\Compatibility\uThreadingHelper.pas"/>
