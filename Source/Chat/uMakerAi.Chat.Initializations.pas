@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -49,7 +49,7 @@ Begin
 
 
   // ===================================================================
-  // CONFIGURACIÓN GLOBAL DE OLLAMA (Defaults para todos sus modelos)
+  // CONFIGURACIï¿½N GLOBAL DE OLLAMA (Defaults para todos sus modelos)
   // ===================================================================
   // Por defecto, Ollama es texto puro y no tiene herramientas nativas
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Max_Tokens', '8000');
@@ -57,14 +57,14 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Asynchronous', 'True');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Tool_Active', 'False');
 
-  // Capa Física: Ollama por defecto no acepta binarios (solo texto)
+  // Capa Fï¿½sica: Ollama por defecto no acepta binarios (solo texto)
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeInputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'NativeOutputFiles', '[]');
 
-  // Capa Lógica: Habilidades nativas mínimas
+  // Capa Lï¿½gica: Habilidades nativas mï¿½nimas
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'ChatMediaSupports', '[Tcm_Text]');
 
-  // Intención: Por defecto queremos que todos tengan texto y razonamiento si lo exponen
+  // Intenciï¿½n: Por defecto queremos que todos tengan texto y razonamiento si lo exponen
   TAiChatFactory.Instance.RegisterUserParam('Ollama', 'EnabledFeatures', '[Tcm_Text]');
 
   // ===================================================================
@@ -72,27 +72,27 @@ Begin
   // ===================================================================
   // DeepSeek-R1 en Ollama expone el pensamiento entre etiquetas <think>
   Model := 'deepseek-r1:8b';
-  // (Aplica también para 14b, 32b, etc.)
+  // (Aplica tambiï¿½n para 14b, 32b, etc.)
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Text, Tcm_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'EnabledFeatures', '[Tcm_Text, Tcm_Reasoning]');
 
   // ===================================================================
-  // MODELOS MULTIMODALES / VISIÓN (Soportan Imagen Nativa)
+  // MODELOS MULTIMODALES / VISIï¿½N (Soportan Imagen Nativa)
   // ===================================================================
 
-  // --- Llama 3.2 Vision (El nuevo estándar de Meta) ---
+  // --- Llama 3.2 Vision (El nuevo estï¿½ndar de Meta) ---
   Model := 'llama3.2-vision:latest';
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Text, Tcm_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeInputFiles', '[Tfc_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'EnabledFeatures', '[Tcm_Text, Tcm_Image]');
 
-  // --- Qwen 2.5 VL (Estado del arte en visión de Alibaba) ---
+  // --- Qwen 2.5 VL (Estado del arte en visiï¿½n de Alibaba) ---
   Model := 'qwen2.5-vl:latest';
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Text, Tcm_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeInputFiles', '[Tfc_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'EnabledFeatures', '[Tcm_Text, Tcm_Image]');
 
-  // --- Llava / Bakllava (Clásicos) ---
+  // --- Llava / Bakllava (Clï¿½sicos) ---
   Model := 'llava:latest';
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Text, Tcm_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeInputFiles', '[Tfc_Image]');
@@ -108,37 +108,37 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Tool_Active', 'True');
 
   // ===================================================================
-  // ORQUESTACIÓN AVANZADA (Modelos con "Superpoderes" vía Bridge)
+  // ORQUESTACIï¿½N AVANZADA (Modelos con "Superpoderes" vï¿½a Bridge)
   // ===================================================================
 
   // Ejemplo: Queremos un Llama 3 que pueda navegar por la web
   // No lo marcamos en ChatMediaSupports porque Ollama no navega.
-  // Al marcarlo en EnabledFeatures, el Orquestador usará el Bridge.
+  // Al marcarlo en EnabledFeatures, el Orquestador usarï¿½ el Bridge.
   Model := 'llama3.2:latest';
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'EnabledFeatures', '[Tcm_Text, Tcm_WebSearch]');
 
   // ===================================================================
   // MODELOS PERSONALIZADOS (ALIAS)
   // ===================================================================
-  // Creamos un alias que use whisper para transcripción
-  TAiChatFactory.Instance.RegisterCustomModel('Ollama', 'Transcripción-Expert', 'whisper:latest');
-  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Transcripción-Expert', 'EnabledFeatures', '[Tcm_Audio]');
+  // Creamos un alias que use whisper para transcripciï¿½n
+  TAiChatFactory.Instance.RegisterCustomModel('Ollama', 'Transcripciï¿½n-Expert', 'whisper:latest');
+  TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Transcripciï¿½n-Expert', 'EnabledFeatures', '[Tcm_Audio]');
 
 
 
 // ------- OLLAMA Modelo DeepSeek-OCR (Especialista) ------------------
   Model := 'deepseek-ocr:latest';
 
-  // Capa Física: Ollama sabe enviarle imágenes a este modelo
+  // Capa Fï¿½sica: Ollama sabe enviarle imï¿½genes a este modelo
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'NativeInputFiles', '[Tfc_Image]');
 
-  // Capa Lógica: El modelo soporta texto e imagen (Visión)
+  // Capa Lï¿½gica: El modelo soporta texto e imagen (Visiï¿½n)
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports', '[Tcm_Text, Tcm_Image]');
 
-  // Intención: Queremos usar su visión
+  // Intenciï¿½n: Queremos usar su visiï¿½n
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'EnabledFeatures', '[Tcm_Text, Tcm_Image]');
 
-  // Prompt de Especialidad: Forzamos al modelo a comportarse como un motor OCR de alta precisión
+  // Prompt de Especialidad: Forzamos al modelo a comportarse como un motor OCR de alta precisiï¿½n
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'SystemPrompt',
     'You are a high-precision OCR assistant. ' +
     'To extract text use: Extract the text in the image. ' +
@@ -147,26 +147,26 @@ Begin
 
 
 // ===================================================================
-  // OLLAMA gpt-oss:20b / 120b (Modelos Agénticos Nativos)
+  // OLLAMA gpt-oss:20b / 120b (Modelos Agï¿½nticos Nativos)
   // ===================================================================
   // Estos modelos cambian la tabla de Ollama: Soportan TODO nativamente.
   Model := 'gpt-oss:20b';
 
-  // Capa Lógica: Soporte Nativo total (No requiere Bridges)
+  // Capa Lï¿½gica: Soporte Nativo total (No requiere Bridges)
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports',
     '[Tcm_Text, Tcm_Reasoning, Tcm_WebSearch, Tcm_CodeInterpreter]');
 
-  // Intención: Activamos todo para aprovechar su poder agéntico
+  // Intenciï¿½n: Activamos todo para aprovechar su poder agï¿½ntico
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'EnabledFeatures',
     '[Tcm_Text, Tcm_Reasoning, Tcm_WebSearch, Tcm_CodeInterpreter]');
 
-  // Activación de Herramientas
+  // Activaciï¿½n de Herramientas
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'Tool_Active', 'True');
 
-  // Configuración de Razonamiento (CoT)
+  // Configuraciï¿½n de Razonamiento (CoT)
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ThinkingLevel', 'tlMedium');
 
-  // Repetimos para la versión 120b
+  // Repetimos para la versiï¿½n 120b
   Model := 'gpt-oss:120b';
   TAiChatFactory.Instance.RegisterUserParam('Ollama', Model, 'ChatMediaSupports',
     '[Tcm_Text, Tcm_Reasoning, Tcm_WebSearch, Tcm_CodeInterpreter]');
@@ -213,7 +213,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active', 'False');
 
   // ------- OPENAI Modelo gpt-4o-audio-preview ------------------------------
-  // Recibe un .wav de entrada en lugar de texto e interpreta el audio como el comando directamente y salida también
+  // Recibe un .wav de entrada en lugar de texto e interpreta el audio como el comando directamente y salida tambiï¿½n
   Model := 'gpt-4o-audio-preview';
 
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ChatMediaSupports', '[tcm_audio]');
@@ -229,7 +229,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active', 'False');
 
   // ------- OPENAI Modelo gpt-4o-transcribe ------------------------------
-  // Recibe un .wav de entrada en lugar de texto e interpreta el audio como el comando directamente y salida también
+  // Recibe un .wav de entrada en lugar de texto e interpreta el audio como el comando directamente y salida tambiï¿½n
   Model := 'gpt-4o-transcribe';
 
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ChatMediaSupports', '[]');
@@ -281,12 +281,12 @@ Begin
   Model := 'gpt-5-nano';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlMedium');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5-high', 'gpt-5');
   Model := 'aa-gpt-5-high';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlHigh');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5-low', 'gpt-5');
   Model := 'aa-gpt-5-low';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tllow');
@@ -295,7 +295,7 @@ Begin
   Model := 'aa-gpt-5-chat-high';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlHigh');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5-chat-low', 'gpt-5-chat:latest');
   Model := 'aa-gpt-5-chat-low';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlLow');
@@ -304,7 +304,7 @@ Begin
   Model := 'aa-gpt-5-mini-high';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlHigh');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5-mini-low', 'gpt-5-mini');
   Model := 'aa-gpt-5-mini-low';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlLow');
@@ -313,7 +313,7 @@ Begin
   Model := 'aa-gpt-5-nano-high';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlHigh');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5-nano-low', 'gpt-5-nano');
   Model := 'aa-gpt-5-nano-low';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlLow');
@@ -339,7 +339,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active', 'False');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa_gpt-4.1-pdf', 'gpt-4.1');
 
   // ------- OPENAI Modelo aa_gpt-4o-pdf ------------------------------
@@ -350,7 +350,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active', 'False');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa_o4-mini-reasoning', '4o-mini');
 
   // ------- OPENAI Modelo aa_o4-mini-reasoning ------------------------------
@@ -362,7 +362,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ChatMediaSupports', '[tcm_code_interpreter, tcm_WebSearch]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ResponseTimeOut', '72000');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa_o4-mini-code-interpreter', 'gpt-4.1');
 
   // ------- OPENAI Modelo aa_o4-mini-code-interpreter ------------------------------
@@ -374,18 +374,18 @@ Begin
   // ------- OPENAI Modelo GPT-5 ------------------------------
 
   Model := 'gpt-5.1';
-  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ThinkingLevel', 'tlMedium');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlMedium');
 
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
-  TAiChatFactory.Instance.RegisterCustomModel('OpenAiRespnses', 'aa-gpt-5.1-high', 'gpt-5.1');
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5.1-high', 'gpt-5.1');
   Model := 'aa-gpt-5.1-high';
-  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ThinkingLevel', 'tlHigh');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlHigh');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
-  TAiChatFactory.Instance.RegisterCustomModel('OpenAiRespnses', 'aa-gpt-5.1-low', 'gpt-5.1');
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
+  TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa-gpt-5.1-low', 'gpt-5.1');
   Model := 'aa-gpt-5.1-low';
-  TAiChatFactory.Instance.RegisterUserParam('OpenAiRespnses', Model, 'ThinkingLevel', 'tlLow');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlLow');
 
 
   // ------------------------- GEMINI ----------------------------------
@@ -445,7 +445,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeOutputFiles', '[Tfc_image]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_image]');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_veo-2.0-generate-001', 'veo-2.0-generate-001');
 
   // ------- GEMINI Modelo veo-2.0-generate-001 ------------------------------
@@ -454,12 +454,12 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeOutputFiles', '[Tfc_video]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Asynchronous', 'False'); // Arreglar para que funcione en modo Asincrónico
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Asynchronous', 'False'); // Arreglar para que funcione en modo Asincrï¿½nico
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_veo-3.0-generate-preview', 'veo-3.0-generate-preview');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-2.5-pro-pdf', 'gemini-2.5-pro');
 
   // ------- GEMINI Modelo gemini-2.5-pro ------------------------------
@@ -467,7 +467,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_pdf]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_pdf]');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-2.5-flash-pdf', 'gemini-2.5-flash');
 
   // ------- GEMINI Modelo gemini-2.5-flash ------------------------------
@@ -475,14 +475,14 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_pdf]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_pdf]');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-2.5-flash-code-interpreter', 'gemini-2.5-flash');
 
   // ------- GEMINI Modelo aa_gemini-2.5-flash-code-interpreter ------------------------------
   Model := 'aa_gemini-2.5-flash-code-interpreter';
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[tcm_code_interpreter, tcm_WebSearch]');
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-2.5-flash-web-search', 'gemini-2.5-flash');
 
   // ------- GEMINI Modelo aa_gemini-2.5-flash-web-search ------------------------------
@@ -492,7 +492,7 @@ Begin
 
 
 // ===========================================================================
-  // CONFIGURACIÓN GEMINI 3 (SERIES 3.0)
+  // CONFIGURACIï¿½N GEMINI 3 (SERIES 3.0)
   // ===========================================================================
 
   // ------- GEMINI 3 Pro Preview (Texto y Multimodal General) -------------
@@ -504,40 +504,40 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeOutputFiles', '[Tfc_video]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Asynchronous', 'False'); // Arreglar para que funcione en modo Asincrónico
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Asynchronous', 'False'); // Arreglar para que funcione en modo Asincrï¿½nico
 
 
 
   Model := 'gemini-3-pro-preview';
 
-  // Capacidades completas de entrada (Audio, Video, PDF, Imágenes)
+  // Capacidades completas de entrada (Audio, Video, PDF, Imï¿½genes)
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_audio, tfc_image, Tfc_Video, Tfc_pdf, tfc_ExtracttextFile]');
 
-  // Salida estándar de texto (Thinking por defecto HIGH en API, aquí configurable)
+  // Salida estï¿½ndar de texto (Thinking por defecto HIGH en API, aquï¿½ configurable)
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ThinkingLevel', 'tlHigh'); // Default recomendado para v3
 
   // Soporte de herramientas avanzadas
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_audio, tcm_image, Tcm_Video, Tcm_pdf]');
 
-  // Control de resolución de medios (Tokens vs Calidad)
+  // Control de resoluciï¿½n de medios (Tokens vs Calidad)
   // Por defecto Medium para balancear costos en PDFs/Video
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'MediaResolution', 'mrMedium');
 
 
-  // ------- GEMINI 3 Pro Image Preview (Generación y Edición de Imágenes) ---
+  // ------- GEMINI 3 Pro Image Preview (Generaciï¿½n y Ediciï¿½n de Imï¿½genes) ---
   Model := 'gemini-3-pro-image-preview';
 
-  // Inputs: Texto (Prompt) e Imágenes (para edición/inpainting)
+  // Inputs: Texto (Prompt) e Imï¿½genes (para ediciï¿½n/inpainting)
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_image]');
-  // Output: Imágenes generadas
+  // Output: Imï¿½genes generadas
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeOutputFiles', '[Tfc_image]');
 
   // Soportes adicionales (Search para grounding visual)
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[Tcm_image, tcm_WebSearch]');
 
 
-  // ------- MODELO PERSONALIZADO: Gemini 3 Thinking Low (Rápido) --------
-  // Útil para tareas simples donde la latencia importa más que el razonamiento profundo
+  // ------- MODELO PERSONALIZADO: Gemini 3 Thinking Low (Rï¿½pido) --------
+  // ï¿½til para tareas simples donde la latencia importa mï¿½s que el razonamiento profundo
   TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-3-pro-fast', 'gemini-3-pro-preview');
   Model := 'aa_gemini-3-pro-fast';
 
@@ -545,8 +545,8 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'NativeInputFiles', '[Tfc_audio, tfc_image, Tfc_Video, Tfc_pdf]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ChatMediaSupports', '[tcm_WebSearch]');
 
-  // ------- MODELO PERSONALIZADO: Gemini 3 Thinking Low (Rápido) --------
-  // Útil para tareas simples donde la latencia importa más que el razonamiento profundo
+  // ------- MODELO PERSONALIZADO: Gemini 3 Thinking Low (Rï¿½pido) --------
+  // ï¿½til para tareas simples donde la latencia importa mï¿½s que el razonamiento profundo
   TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-3-pro-basic', 'gemini-3-pro-preview');
   Model := 'aa_gemini-3-pro-basic';
 
@@ -599,7 +599,7 @@ Begin
 
 
 
-// ------------------------- CLAUDE CONFIGURACIÓN GLOBAL -------------------
+// ------------------------- CLAUDE CONFIGURACIï¿½N GLOBAL -------------------
   // Valores por defecto para el driver "Claude"
   TAiChatFactory.Instance.RegisterUserParam('Claude', 'Max_Tokens', '8000');
   TAiChatFactory.Instance.RegisterUserParam('Claude', 'NativeInputFiles', '[]');
@@ -613,7 +613,7 @@ Begin
   // ===========================================================================
   Model := 'claude-3-5-haiku-20241022';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Asynchronous', 'False');
-  // Haiku es rápido y barato, ideal para tools simples
+  // Haiku es rï¿½pido y barato, ideal para tools simples
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'NativeInputFiles', '[Tfc_Text]');
 
   // ===========================================================================
@@ -622,7 +622,7 @@ Begin
   Model := 'claude-3-7-sonnet-20250219';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Asynchronous', 'False');
 
-  // Soporte nativo de Sonnet 3.7 para Imágenes y PDF por defecto
+  // Soporte nativo de Sonnet 3.7 para Imï¿½genes y PDF por defecto
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'NativeInputFiles', '[Tfc_Image, Tfc_pdf]');
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ChatMediaSupports', '[Tcm_Image, tcm_pdf]');
 
@@ -638,10 +638,10 @@ Begin
   TAiChatFactory.Instance.RegisterCustomModel('Claude', BaseName, Model);
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ChatMediaSupports', '[tcm_code_interpreter]');
 
-  // 3. Perfil Thinking (Razonamiento) - Configura parámetros automáticamente
+  // 3. Perfil Thinking (Razonamiento) - Configura parï¿½metros automï¿½ticamente
   BaseName := 'aa_claude-3-7-thinking-high';
   TAiChatFactory.Instance.RegisterCustomModel('Claude', BaseName, Model);
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ThinkingLevel', 'tlHigh'); // Activa lógica interna
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ThinkingLevel', 'tlHigh'); // Activa lï¿½gica interna
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'Max_Tokens', '20000');
 
   // ===========================================================================
@@ -687,7 +687,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'NativeInputFiles', '[Tfc_pdf]');
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ChatMediaSupports', '[tcm_WebSearch, tcm_pdf]');
 
- // 5. Perfil Editor de Archivos (String Replace)  //NOTA : Se debe implementar la función str_replace_based_edit_tool.  en Functions
+ // 5. Perfil Editor de Archivos (String Replace)  //NOTA : Se debe implementar la funciï¿½n str_replace_based_edit_tool.  en Functions
   BaseName := 'aa_claude-4-5-editor';
   TAiChatFactory.Instance.RegisterCustomModel('Claude', BaseName, 'claude-sonnet-4-5-20250929');
   // Habilitamos TextEditor y PDF (para poder leer documentos y editarlos)
@@ -702,13 +702,58 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Mistral', 'NativeInputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Mistral', 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Mistral', 'ChatMediaSupports', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Mistral', 'Tool_Active', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', 'Tool_Active', 'True');
   TAiChatFactory.Instance.RegisterUserParam('Mistral', 'Asynchronous', 'False');
 
-  // ------- Mistral ministral-8b-latest ------------------------------
+  // ------- Mistral Large (128k, vision, tools) ---
+  Model := 'mistral-large-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[Tfc_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[Tcm_Image]');
+
+  // ------- Mistral Medium (128k, vision, tools) ---
+  Model := 'mistral-medium-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[Tfc_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[Tcm_Image]');
+
+  // ------- Mistral Small (128k, vision, tools) ---
+  Model := 'mistral-small-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[Tfc_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[Tcm_Image]');
+
+  // ------- Ministral 14B (128k, vision, tools) ---
+  Model := 'ministral-14b-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[Tfc_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[Tcm_Image]');
+
+  // ------- Ministral 3B (128k, vision, tools) ---
+  Model := 'ministral-3b-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[Tfc_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[Tcm_Image]');
+
+  // ------- Ministral 8B (128k, vision, tools) ---
   Model := 'ministral-8b-latest';
-  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Asynchronous', 'False');
-  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'True');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[Tfc_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[Tcm_Image]');
+
+  // ------- Magistral Medium (40k, reasoning, tools, NO vision) ---
+  Model := 'magistral-medium-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ThinkingLevel', 'tlMedium');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[Tcm_Reasoning]');
+
+  // Variante high
+  TAiChatFactory.Instance.RegisterCustomModel('Mistral', 'aa-magistral-medium-high', 'magistral-medium-latest');
+  Model := 'aa-magistral-medium-high';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ThinkingLevel', 'tlHigh');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[Tcm_Reasoning]');
+
+  // ------- Magistral Small (40k, reasoning, tools, NO vision) ---
+  Model := 'magistral-small-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ThinkingLevel', 'tlMedium');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[Tcm_Reasoning]');
+
+  // ------- Codestral (256k, code, sin tools ni vision) ---
+  Model := 'codestral-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'False');
 
   // ------- pixtral-12b-latest ------------------------------
   Model := 'pixtral-12b-latest';
@@ -732,10 +777,10 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'NativeInputFiles', '[tfc_pdf]'); // Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_ExtracttextFile
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ChatMediaSupports', '[]'); // Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('Mistral', 'aa_mistral-ocr-latest-pdf', 'mistral-ocr-latest');
 
-  // ------- OPENAI Modelo aa_mistral-ocr-latest-pdf ------------------------------
+  // ------- Mistral Modelo aa_mistral-ocr-latest-pdf ------------------------------
   Model := 'aa_mistral-ocr-latest-pdf';
 
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Asynchronous', 'False');
@@ -767,7 +812,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeInputFiles', '[tfc_image]'); // Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_ExtracttextFile
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[tcm_image]'); // Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
 
-  // Se adiciona un modelo personalizado para permitir el control de los parámetros por defecto
+  // Se adiciona un modelo personalizado para permitir el control de los parï¿½metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('Grok', 'aa-grok-3-search', 'grok-3');
 
   // ------- GROK grok-3-search ------------------------------
