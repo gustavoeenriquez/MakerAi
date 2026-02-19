@@ -2,27 +2,27 @@
 // Version Information
 const
   MAKERAI_VERSION_MAJOR    = 3;
-  MAKERAI_VERSION_MINOR    = 0;
+  MAKERAI_VERSION_MINOR    = 2;
   MAKERAI_VERSION_RELEASE  = 0;
   MAKERAI_VERSION_BUILD    = 1;
 
 // Version String Formats
 const
-  MAKERAI_VERSION_SHORT    = '3.0';
-  MAKERAI_VERSION_FULL     = '3.0.0.1';
-  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.0.0.1';
-  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.0 - UI Components & Graph RAG';
+  MAKERAI_VERSION_SHORT    = '3.2';
+  MAKERAI_VERSION_FULL     = '3.2.0.1';
+  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.2.0.1';
+  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.2 - UI Components & Graph RAG and Chat Tools';
 
 // Product Information
 const
   MAKERAI_PRODUCT_NAME     = 'MakerAi Library';
   MAKERAI_COMPANY_NAME     = 'Gustavo Enríquez';
-  MAKERAI_COPYRIGHT        = 'Copyright © 2024-2025 Gustavo Enríquez - CimaMaker';
+  MAKERAI_COPYRIGHT        = 'Copyright © 2024-2026 Gustavo Enríquez - CimaMaker';
   MAKERAI_DESCRIPTION      = 'Advanced AI Integration Library for Delphi';
 
 // Build Information
 const
-  MAKERAI_BUILD_DATE       = '2025-10-14';
+  MAKERAI_BUILD_DATE       = '2026-01-06';
   MAKERAI_BUILD_TIME       = '12:00:00';
   MAKERAI_BUILD_PLATFORM   = {$IFDEF WIN32}'Win32'{$ENDIF}
                             {$IFDEF WIN64}'Win64'{$ENDIF}
@@ -96,6 +96,14 @@ const
   - Improved visual component integration
   - Enhanced RAG capabilities with graph relationships
   - Backward compatible with v2.x components
+
+  Version 3.1.0 (2025-11-4) -
+  - NEW: update for new models  Gemini 3, Claude 4.5 and GPT-5.2
+
+  Version 3.2.0 (2026-01-4) -
+  - NEW: ChatTools  plugin framework for chat models
+
+
 }
 {******************************************************************************}
 
@@ -117,7 +125,7 @@ const
 const
   MAKERAI_SUPPORT_WINDOWS  = True;
   MAKERAI_SUPPORT_LINUX    = True;
-  MAKERAI_SUPPORT_MACOS    = True;
+  MAKERAI_SUPPORT_MACOS    = False;
   MAKERAI_SUPPORT_MOBILE   = True;
 
 // License Information

@@ -45,18 +45,7 @@ uses
 
 type
   TForm70 = class(TForm)
-    Link2: TAIAgentsLink;
-    StartNode: TAIAgentsNode;
-    AIGraph1: TAIAgents;
-    AiNode: TAIAgentsNode;
-    ExcecuteNode: TAIAgentsNode;
-    EndNode: TAIAgentsNode;
-    EvalNode: TAIAgentsNode;
-    Link1: TAIAgentsLink;
-    Link3: TAIAgentsLink;
-    Link4: TAIAgentsLink;
     Memo1: TMemo;
-    Button1: TButton;
     AiPrompts1: TAiPrompts;
     MemoPrompt: TMemo;
     Memo2: TMemo;
@@ -68,11 +57,11 @@ type
     TareaA: TAIAgentsNode;
     NodoFinal: TAIAgentsNode;
     Button2: TButton;
-    AIAgents1: TAIAgents;
+    AIAgentsManager: TAIAgents;
     AIAgentsLink1: TAIAgentsLink;
     AIAgentsNode1: TAIAgentsNode;
+    AiOpenChat1: TAiOpenChat;
     procedure AIChain1Print(Sender: TObject; Value: string);
-    procedure Button1Click(Sender: TObject);
     procedure EndNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
     procedure AiNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
     procedure AIChain1End(Sender: TObject; Value: string);
@@ -88,8 +77,10 @@ type
     procedure AIAgentsLink1Execute(Node: TAIAgentsNode; Link: TAIAgentsLink; var IsOk, Handled: Boolean);
     procedure AIAgentsLink2Execute(Node: TAIAgentsNode; Link: TAIAgentsLink; var IsOk, Handled: Boolean);
     procedure AIAgentsLink3Execute(Node: TAIAgentsNode; Link: TAIAgentsLink; var IsOk, Handled: Boolean);
+    procedure AIAgentsManagerFinish(Sender: TObject; const Input, Output: string; Status: string; E: Exception);
+    procedure FormCreate(Sender: TObject);
   private
-    { Private declarations }
+    Procedure clickdellabel(Sender: TObject);
   public
     { Public declarations }
   end;
@@ -117,6 +108,12 @@ procedure TForm70.AIAgentsLink3Execute(Node: TAIAgentsNode; Link: TAIAgentsLink;
 begin
   Node.Print(Node.Name + '--> LinkB');
 
+end;
+
+procedure TForm70.AIAgentsManagerFinish(Sender: TObject; const Input, Output: string; Status: string; E: Exception);
+begin
+    //Memo1.Lines.Text := Input;
+    //Siempre se dispara incluso en caso de error, el status decide si es correcto
 end;
 
 procedure TForm70.AIChain1End(Sender: TObject; Value: string);
@@ -157,16 +154,16 @@ begin
   Output := 'Este es el codigo que retorn la IA';
 end;
 
-procedure TForm70.Button1Click(Sender: TObject);
-begin
-  // OJO OpenChat.Messages.Clear;
-  // OJO ChatEval.Messages.Clear;
-  AIGraph1.Run(MemoPrompt.Lines.Text);
-end;
-
 procedure TForm70.Button2Click(Sender: TObject);
 begin
-  AIAgents1.Run('Mensaje');
+  //Label4.Text := 'Este es el texto del label';
+
+  AIAgentsManager.Run(MemoPrompt.Lines.Text);
+end;
+
+procedure TForm70.clickdellabel(Sender: TObject);
+begin
+   Label4.Text := 'este es el evento del label';
 end;
 
 procedure TForm70.EndNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
@@ -278,12 +275,18 @@ begin
   End;
 end;
 
+procedure TForm70.FormCreate(Sender: TObject);
+begin
+  Label4.OnClick :=  clickdellabel;
+end;
+
 procedure TForm70.Link4Execute(Node: TAIAgentsNode; Link: TAIAgentsLink; var IsOk, Handled: Boolean);
 Var
   Prompt, Res: String;
   JObj: TJSonObject;
   FileName, Codigo, resultado_compilacion: String;
 begin
+
 
   JObj := TJSonObject(TJSonObject.ParseJSONValue(Node.Output));
   Try
@@ -317,11 +320,14 @@ procedure TForm70.NodoFinalExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAge
 begin
   Node.Print(Node.Name + '--> Finalizando proceso');
 
+  Node.Print(Node.Name + '--> Input '+Input);
+  Node.Print(Node.Name + '--> Output '+Output);
 end;
 
 procedure TForm70.NodoInicioExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
 begin
   Node.Print(Node.Name + '--> Inicicando proceso');
+  Output := Input;
 end;
 
 procedure TForm70.StartNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
@@ -331,8 +337,13 @@ end;
 
 procedure TForm70.TareaAExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
 begin
-  Node.Print(Node.Name + '--> TareaA');
-  Sleep(1500);
+  Node.Print(Node.Name + '--> TareaA - Buscando en Internet');
+  //Sleep(1500);
+
+  //Output := AiOpenChat1.AddMessageAndRun(Input,'user',[]);
+  Output := 'Valor encontrado en WEB';
+
+  Node.Print(Node.Name + '--> TareaA - Buscando en Internet '+ Output);
 
 end;
 
@@ -340,6 +351,8 @@ procedure TForm70.TareaBExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgents
 begin
   Node.Print(Node.Name + '--> TareaB');
   Sleep(500);
+    Output := Input+'  aquí realizó la tarea b';
+
 end;
 
 end.

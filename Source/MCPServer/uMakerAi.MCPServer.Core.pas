@@ -31,7 +31,6 @@
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
-
 unit uMakerAi.MCPServer.Core;
 
 interface
@@ -39,7 +38,7 @@ interface
 uses
   System.SysUtils, System.Classes, System.JSON, Rest.JSON, System.Rtti, System.StrUtils,
   System.ConvUtils, System.IOUtils, System.NetEncoding, System.Net.Mime, IdGlobalProtocols,
-  System.Generics.Collections, System.TypInfo;
+  System.Generics.Collections, System.TypInfo, uMakerAi.Tools.Functions;
 
 type
 
@@ -250,6 +249,8 @@ type
     FCorsEnabled: Boolean;
     FEndPoint: String;
     FCorsAllowedOrigins: string;
+    FServerName: String;
+    FAiFunctions: TAiFunctions;
     function GetEndpoint: string;
     function GetPort: Integer;
     procedure SetPort(const Value: Integer);
@@ -257,11 +258,16 @@ type
     procedure SetUser(const Value: String);
     function GetSettingsFile: String;
     procedure SetSettingsFile(const Value: String);
+    function GetServerName: String;
+    procedure SetServerName(const Value: String);
+    procedure SetAiFunctions(const Value: TAiFunctions);
   protected
     // Lo hacemos protected para que los descendientes puedan acceder a ï¿½l directamente.
     FLogicServer: TAiMCPLogicServer;
     // Hacemos el setter protected para que solo los descendientes controlen el estado.
     procedure SetActive(const Value: Boolean);
+    Procedure InternalRegisterFromAiFunctions;
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -287,12 +293,15 @@ type
     property IsActive: Boolean read FActive;
     property User: String read GetUser Write SetUser;
     property SettingsFile: String read GetSettingsFile write SetSettingsFile;
+  Published
+    Property ServerName: String read GetServerName write SetServerName;
+    property AiFunctions: TAiFunctions read FAiFunctions write SetAiFunctions;
   end;
 
 implementation
 
 uses
-  System.IniFiles, System.JSON.Writers;
+  System.IniFiles, System.JSON.Writers, uMakerAi.MCPServer.Bridge;
 
 const
   // JSON-RPC 2.0 Error Codes
@@ -538,18 +547,22 @@ begin
   if FIsActive then
     Exit;
 
+  // 1. Limpiamos cualquier instancia activa previa para evitar duplicados en reinicios
+  FActiveTools.Clear;
+  FActiveResources.Clear;
+
+  // 2. Ejecutamos las factorías de herramientas.
+  // Cada Pair.Value es una función que al ser llamada devuelve una instancia de IAiMCPTool.
   for Pair in FToolFactories do
   begin
-    var
-    Tool := Pair.Value();
-    FActiveTools.Add(Tool.Name, Tool);
+    // Importante: Pair.Key es el nombre registrado, Pair.Value() crea la instancia.
+    FActiveTools.Add(Pair.Key, Pair.Value());
   end;
 
+  // 3. Ejecutamos las factorías de recursos.
   for ResourcePair in FResourceFactories do
   begin
-    var
-    Resource := ResourcePair.Value();
-    FActiveResources.Add(Resource.URI, Resource);
+    FActiveResources.Add(ResourcePair.Key, ResourcePair.Value());
   end;
 
   FIsActive := True;
@@ -962,6 +975,58 @@ end;
 // --- TInternalSchemaGenerator Implementation ---
 // -----------------------------------------------------------------------------
 
+{ class function TInternalSchemaGenerator.GenerateSchema(Cls: TClass): TJSONObject;
+  var
+  RttiContext: TRttiContext;
+  RttiType: TRttiType;
+  Properties, PropSchema: TJSONObject;
+  RequiredArray, EnumArray: TJSONArray;
+  JsonName: string;
+  RttiProp: TRttiProperty;
+  Attr: TCustomAttribute;
+  begin
+  Result := TJSONObject.Create;
+  Result.AddPair('type', 'object');
+  Properties := TJSONObject.Create;
+  Result.AddPair('properties', Properties);
+  RequiredArray := TJSONArray.Create;
+  Result.AddPair('required', RequiredArray);
+
+  RttiContext := TRttiContext.Create;
+  try
+  RttiType := RttiContext.GetType(Cls);
+  for RttiProp in RttiType.GetProperties do
+  begin
+  if RttiProp.Visibility in [mvPublic, mvPublished] then
+  begin
+  JsonName := GetPropertyJsonName(RttiProp);
+  PropSchema := TJSONObject.Create;
+  Properties.AddPair(JsonName, PropSchema);
+  PropSchema.AddPair('type', GetJsonTypeFromRttiType(RttiProp.PropertyType));
+
+  for Attr in RttiProp.GetAttributes do
+  begin
+  if Attr is AiMCPSchemaDescriptionAttribute then
+  PropSchema.AddPair('description', (Attr as AiMCPSchemaDescriptionAttribute).Description)
+  else if Attr is AiMCPSchemaEnumAttribute then
+  begin
+  EnumArray := TJSONArray.Create;
+  for var Value in (Attr as AiMCPSchemaEnumAttribute).Values do
+  EnumArray.Add(Value);
+  PropSchema.AddPair('enum', EnumArray);
+  end;
+  end;
+
+  if IsRequiredProperty(RttiProp) then
+  RequiredArray.Add(JsonName);
+  end;
+  end;
+  finally
+  RttiContext.Free;
+  end;
+  end;
+}
+
 class function TInternalSchemaGenerator.GenerateSchema(Cls: TClass): TJSONObject;
 var
   RttiContext: TRttiContext;
@@ -971,6 +1036,10 @@ var
   JsonName: string;
   RttiProp: TRttiProperty;
   Attr: TCustomAttribute;
+  PropTypeStr: string;
+  // Variables nuevas para manejar arrays
+  DynArrayType: TRttiDynamicArrayType;
+  ElementType: TRttiType;
 begin
   Result := TJSONObject.Create;
   Result.AddPair('type', 'object');
@@ -989,8 +1058,36 @@ begin
         JsonName := GetPropertyJsonName(RttiProp);
         PropSchema := TJSONObject.Create;
         Properties.AddPair(JsonName, PropSchema);
-        PropSchema.AddPair('type', GetJsonTypeFromRttiType(RttiProp.PropertyType));
 
+        // 1. Obtenemos el tipo base
+        PropTypeStr := GetJsonTypeFromRttiType(RttiProp.PropertyType);
+        PropSchema.AddPair('type', PropTypeStr);
+
+        // 2. Lógica específica para Arrays (NUEVO)
+        if PropTypeStr = 'array' then
+        begin
+          if RttiProp.PropertyType is TRttiDynamicArrayType then
+          begin
+            DynArrayType := TRttiDynamicArrayType(RttiProp.PropertyType);
+            ElementType := DynArrayType.ElementType;
+
+            // Definimos qué hay dentro del array (items)
+            var
+            ItemsObj := TJSONObject.Create;
+            ItemsObj.AddPair('type', GetJsonTypeFromRttiType(ElementType));
+            PropSchema.AddPair('items', ItemsObj);
+          end
+          else
+          begin
+            // Fallback por si es un array estático u otro tipo complejo no soportado
+            var
+            ItemsObj := TJSONObject.Create;
+            ItemsObj.AddPair('type', 'string');
+            PropSchema.AddPair('items', ItemsObj);
+          end;
+        end;
+
+        // 3. Manejo de atributos (Descripción y Enums) - (Igual que antes)
         for Attr in RttiProp.GetAttributes do
         begin
           if Attr is AiMCPSchemaDescriptionAttribute then
@@ -1253,7 +1350,6 @@ begin
   inherited Destroy;
 end;
 
-
 function TAiMCPServer.GetEndpoint: string;
 begin
   Result := FEndPoint;
@@ -1262,6 +1358,11 @@ end;
 function TAiMCPServer.GetPort: Integer;
 begin
   Result := FLogicServer.Port;
+end;
+
+function TAiMCPServer.GetServerName: String;
+begin
+  Result := FServerName;
 end;
 
 function TAiMCPServer.GetSettingsFile: String;
@@ -1274,6 +1375,32 @@ begin
   Result := FLogicServer.User;
 end;
 
+procedure TAiMCPServer.InternalRegisterFromAiFunctions;
+var
+  I: Integer;
+  FuncName: string;
+begin
+  if not Assigned(FAiFunctions) then
+    Exit;
+
+  // Recorremos la colección de funciones del componente vinculado
+  for I := 0 to FAiFunctions.Functions.Count - 1 do
+  begin
+    if FAiFunctions.Functions[I].Enabled then
+    begin
+      FuncName := FAiFunctions.Functions[I].FunctionName;
+
+      // Registramos la factoría usando el Bridge (Proxy)
+      // Nota: El Bridge debe ser accesible desde aquí
+      Self.RegisterTool(FuncName,
+        function: IAiMCPTool
+        begin
+          Result := TTAiFunctionToolProxy.Create(FAiFunctions, FAiFunctions.Functions.GetFunction(FuncName));
+        end);
+    end;
+  end;
+end;
+
 procedure TAiMCPServer.LoadSettingsDefaults;
 begin
   FLogicServer.LoadSettingsDefaults;
@@ -1282,6 +1409,25 @@ end;
 procedure TAiMCPServer.LoadSettingsFromFile;
 begin
   FLogicServer.LoadSettingsFromFile;
+end;
+
+procedure TAiMCPServer.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited Notification(AComponent, Operation);
+
+  // Si la operación es eliminar (opRemove) y el componente es el que tenemos guardado
+  if (Operation = opRemove) and (AComponent = FAiFunctions) then
+  begin
+    // Ponemos la referencia a NIL de forma segura
+    FAiFunctions := nil;
+
+    // Opcional: Si el servidor estaba activo y dependía de estas funciones,
+    // podrías decidir detenerlo o simplemente logear un aviso.
+    if FActive then
+    begin
+      // Podrías llamar a Stop; si consideras que sin funciones el servidor no debe seguir.
+    end;
+  end;
 end;
 
 procedure TAiMCPServer.RegisterResource(const URI: string; Factory: TAiMCPResourceFactory);
@@ -1299,9 +1445,30 @@ begin
   FActive := Value;
 end;
 
+procedure TAiMCPServer.SetAiFunctions(const Value: TAiFunctions);
+begin
+  if FAiFunctions <> Value then
+  begin
+    FAiFunctions := Value;
+
+    // Si se asigna un componente, le pedimos que nos notifique su destrucción
+    if Assigned(FAiFunctions) then
+      FAiFunctions.FreeNotification(Self);
+  end;
+end;
+
 procedure TAiMCPServer.SetPort(const Value: Integer);
 begin
   FLogicServer.Port := Value;
+end;
+
+procedure TAiMCPServer.SetServerName(const Value: String);
+begin
+  If Value <> FServerName then
+  Begin
+    FServerName := Value;
+    FLogicServer.ServerName := Value;
+  End;
 end;
 
 procedure TAiMCPServer.SetSettingsFile(const Value: String);
@@ -1318,7 +1485,14 @@ procedure TAiMCPServer.Start;
 begin
   if FActive then
     Exit;
+
+  // 1. PASO CLAVE: Antes de iniciar el LogicServer, registramos
+  // automáticamente las funciones del componente vinculado.
+  InternalRegisterFromAiFunctions;
+
+  // 2. Iniciamos el motor lógico (que instanciará los Proxies creados arriba)
   FLogicServer.Start;
+
   FActive := True;
 end;
 

@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enrï¿½quez
+// Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -30,7 +30,6 @@
 // - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
-
 
 unit uMakerAi.UI.ChatInput;
 
@@ -64,7 +63,7 @@ type
 
   TImageData = Class
     FileName: String;
-    FullFileName : String;
+    FullFileName: String;
     Checked: TCheckBox;
     Item: TLayout;
     BitMap: TBitMap;
@@ -113,7 +112,7 @@ type
     procedure AIVoiceMonitorChangeState(Sender: TObject; aUserSpeak, aIsValidForIA: Boolean; aStream: TMemoryStream);
     procedure AIVoiceMonitorError(Sender: TObject; const ErrorMessage: string);
     procedure AIVoiceMonitorUpdate(Sender: TObject; const aSoundLevel: Int64);
-    procedure AIVoiceMonitorWakeWordCheck(Sender: TObject; aWakeWordStream: TMemoryStream; var IsValid: Boolean);
+    procedure AIVoiceMonitorWakeWordCheck(Sender: TObject; aWakeWordStream: TMemoryStream);
     procedure AIVoiceMonitorTranscriptionFragment(Sender: TObject; aFragmentStream: TMemoryStream);
     procedure AIVoiceMonitorSpeechEnd(Sender: TObject; aIsValidForIA: Boolean; aStream: TMemoryStream);
   private
@@ -143,7 +142,7 @@ type
 
     // Variables del SoundMonitor
     FCurrentSoundLevel: Integer;
-    FMaxLevelSeen: Integer; // Resetear el mï¿½ximo para que la barra se ajuste
+    FMaxLevelSeen: Integer; // Resetear el máximo para que la barra se ajuste
     // FProgressBarLevel: TSoundLevel;
     FUseSoundMonitor: Boolean;
     FOnTranscriptText: TChatTranscriptEvent;
@@ -156,7 +155,7 @@ type
     FMnuPaste: TMenuItem;
     FMnuClear: TMenuItem;
 
-    procedure LoadImageResources; // Nuevo procedimiento para cargar imï¿½genes
+    procedure LoadImageResources; // Nuevo procedimiento para cargar imágenes
     procedure CreateInternalControls; // Nuevo para crear la UI
     procedure Resize; Override;
     procedure Loaded; override;
@@ -226,7 +225,7 @@ var
 const
   IMAGE_WIDTH = 50;
   MAX_MEMO_HEIGHT = 200;
-  MIN_FRAME_HEIGHT = 60;
+  MIN_FRAME_HEIGHT = 80;
 
   IMG_INDEX_IMAGE = 4;
   IMG_INDEX_PDF = 5;
@@ -258,7 +257,7 @@ begin
   FValidExtensions := 'jpg,jpeg,png,bmp,pdf,mp3,wav,mp4,avi';
   FWakeWordDetectedInSession := False;
   Width := 400; // Un ancho por defecto razonable
-  Height := 100; //MIN_FRAME_HEIGHT;; // Una altura inicial mï¿½nima
+  Height := 100; // MIN_FRAME_HEIGHT;; // Una altura inicial mínima
 
   // --- 2. Crear y cargar los ImageLists desde recursos ---
   FImageList1 := TImageList.Create(Self);
@@ -266,7 +265,7 @@ begin
 
   CreateInternalControls;
 
-  LoadImageResources; // Llama al nuevo mï¿½todo para poblar los ImageLists
+  LoadImageResources; // Llama al nuevo método para poblar los ImageLists
 
   FSendBitmap := TBitMap.Create;
   FCancelBitmap := TBitMap.Create;
@@ -280,7 +279,7 @@ begin
 
   // --- 3. Crear toda la interfaz de usuario interna ---
 
-  // --- 4. Crear timers y objetos de lï¿½gica ---
+  // --- 4. Crear timers y objetos de lógica ---
   FTimer := TTimer.Create(Self);
   FTimer.Enabled := False;
   FTimer.Interval := 1;
@@ -291,8 +290,8 @@ begin
   FAnimationTimer.OnTimer := AnimationTimerTimer;
   FAnimationTimer.Enabled := True; // Inicia deshabilitado si no se usa
 
-  // --- 5. Lï¿½GICA CLAVE: Crear objetos que no deben ser "streameados" ---
-  // El PopupMenu y sus items se crean aquï¿½ solo si el componente no estï¿½
+  // --- 5. LÓGICA CLAVE: Crear objetos que no deben ser "streameados" ---
+  // El PopupMenu y sus items se crean aquí solo si el componente no está
   // siendo cargado desde un DFM. Esto evita conflictos con el streaming.
   FMenu := Nil;
   InitPopupMenu;
@@ -328,12 +327,12 @@ begin
   if TPlatformServices.Current.SupportsPlatformService(IFMXClipboardService, IInterface(ClipboardService)) then
   begin
     try
-      // Verificar si el servicio de clipboard estï¿½ disponible y asignado
+      // Verificar si el servicio de clipboard está disponible y asignado
       if Assigned(ClipboardService) then
       begin
         ClipboardValue := ClipboardService.GetClipboard;
 
-        // Verificar si hay contenido vï¿½lido en el clipboard
+        // Verificar si hay contenido válido en el clipboard
         if not ClipboardValue.IsEmpty then
         begin
           case ClipboardValue.Kind of
@@ -362,7 +361,7 @@ begin
     end;
   end;
 
-  // Habilitar o deshabilitar la acciï¿½n segï¿½n si hay contenido
+  // Habilitar o deshabilitar la acción según si hay contenido
   FMnuPaste.Enabled := HasContent;
 end;
 
@@ -407,7 +406,7 @@ begin
     DestinationItem.Layers[0].Name := FinalName;
     // DestinationItem.Name := FinalName + '_Dest';
 
-    // Retornar el ï¿½ndice del item agregado
+    // Retornar el índice del item agregado
     Result := ImageList.Source.Count - 1;
 
   except
@@ -427,9 +426,9 @@ Var
   Item: TLayout;
   ImageData: TImageData;
   btnDelete: TSpeedButton;
-  FileName : String;
+  FileName: String;
 begin
-  FileName :=ExtractFileName(FullFileName);
+  FileName := ExtractFileName(FullFileName);
 
   X := BitMap.Width;
   Y := BitMap.Height;
@@ -513,7 +512,7 @@ begin
   end
   else
   begin
-    // El monitor ha detectado silencio y ha terminado la grabaciï¿½n.
+    // El monitor ha detectado silencio y ha terminado la grabación.
     SetMicImageStatus(Integer(TImageStatus.isListening));
     // FBtnMic.ImageIndex := Integer(TImageStatus.isListening);
     AddStatus('Escuchando...');
@@ -524,7 +523,7 @@ procedure TChatInput.AIVoiceMonitorError(Sender: TObject; const ErrorMessage: st
 begin
   // MemoLog.Lines.Add('ERROR: ' + ErrorMessage);
   AddStatus('Error-' + ErrorMessage);
-  ShowMessage('Ocurriï¿½ un error en el monitor de audio: ' + sLineBreak + ErrorMessage);
+  ShowMessage('Ocurrió un error en el monitor de audio: ' + sLineBreak + ErrorMessage);
   StopMonitoring;
 end;
 
@@ -533,7 +532,7 @@ Var
   Res: String;
 begin
 
-  // Aquï¿½ estï¿½ la lï¿½gica clave: solo procesamos el audio completo si la palabra de activaciï¿½n fue validada.
+  // Aquí está la lógica clave: solo procesamos el audio completo si la palabra de activación fue validada.
   if aIsValidForIA then
   begin
 
@@ -601,7 +600,7 @@ begin
             TThread.Queue(nil,
               procedure
               begin
-                // Aquï¿½ puedes mostrar el error o manejarlo
+                // Aquí puedes mostrar el error o manejarlo
               end);
           end;
         end;
@@ -615,22 +614,87 @@ begin
   FCurrentSoundLevel := aSoundLevel;
 end;
 
-procedure TChatInput.AIVoiceMonitorWakeWordCheck(Sender: TObject; aWakeWordStream: TMemoryStream; var IsValid: Boolean);
-Var
+procedure TChatInput.AIVoiceMonitorWakeWordCheck(Sender: TObject; aWakeWordStream: TMemoryStream);
+{ Var
   Res: String;
-Begin
-  IsValid := False;
+  Begin
   DoTranscriptText(aWakeWordStream, Res);
   Res := Trim(LowerCase(Res));
 
   If Res <> '' then
   Begin
-    IsValid := Res.Contains(Trim(LowerCase(FVoiceMonitor.WakeWord)));
-    FWakeWordDetectedInSession := IsValid;
-    Res := 'Valido --- ' + Res;
+  IsValid := Res.Contains(Trim(LowerCase(FVoiceMonitor.WakeWord)));
+  FWakeWordDetectedInSession := IsValid;
+  Res := 'Valido --- ' + Res;
   End;
 
   OutputDebugString(PChar(Res));
+}
+
+var
+  StreamCopy: TMemoryStream;
+begin
+  // Creamos una copia del stream porque el original se liberará al salir de este evento
+  StreamCopy := TMemoryStream.Create;
+  StreamCopy.CopyFrom(aWakeWordStream, 0);
+  StreamCopy.Position := 0;
+
+  // Lanzamos la validación pesada en un hilo aparte
+  TTask.Run(
+    procedure
+    var
+      Res, TargetWakeWord, CleanTarget, CleanWord, DetectedWord: string;
+      Words: TArray<string>;
+      Word: string;
+      Distance: Integer;
+      IsValidResult: Boolean;
+    begin
+      try
+        try
+          DoTranscriptText(aWakeWordStream, Res);
+
+          // --- Lógica de limpieza y comparación ---
+          Res := Trim(Res);
+          TargetWakeWord := Trim(FVoiceMonitor.WakeWord);
+          if TargetWakeWord = '' then
+            TargetWakeWord := 'andrea';
+
+          // RemoveAccents es solo una estrategía en el idioma español, cambiar para otros idiomas
+          CleanTarget := LowerCase(TAIVoiceMonitor.RemoveAccents(TargetWakeWord));
+
+          IsValidResult := False;
+          DetectedWord := '';
+          Words := Res.Split([' ', ',', '.', '!', '?', ';', ':'], TStringSplitOptions.ExcludeEmpty);
+
+          for Word in Words do
+          begin
+            CleanWord := LowerCase(TAIVoiceMonitor.RemoveAccents(Word));
+            Distance := TAIVoiceMonitor.LevenshteinDistance(CleanWord, CleanTarget);
+
+            if (CleanWord = CleanTarget) or ((Length(CleanTarget) > 4) and (Distance <= 2)) or ((Length(CleanTarget) <= 4) and (Distance <= 1)) then
+            begin
+              IsValidResult := True;
+              DetectedWord := Word;
+              Break;
+            end;
+          end;
+
+          // --- NOTIFICAR AL COMPONENTE EL RESULTADO ---
+          FVoiceMonitor.ConfirmWakeWord(IsValidResult);
+          FWakeWordDetectedInSession := IsValidResult;
+
+        finally
+          StreamCopy.Free;
+        end;
+      except
+        on E: Exception do
+          TThread.Queue(nil,
+            procedure
+            begin
+              OutputDebugString(PChar(Res));
+            end);
+      end;
+    end);
 
 end;
 
@@ -700,13 +764,7 @@ begin
 
   if TControl(Sender).GetInterface(IControl, Obj) then
   begin
-    {$IF CompilerVersion >= 35}
     Pt := TControl(Sender).LocalToScreen(TPointF.Create(TControl(Sender).Width, 0));
-    {$ELSE}
-    Pt := TControl(Sender).LocalToAbsolute(TPointF.Create(TControl(Sender).Width, 0));
-    if (TControl(Sender).Root <> nil) and (TControl(Sender).Root.GetObject is TCommonCustomForm) then
-      Pt := TCommonCustomForm(TControl(Sender).Root.GetObject).ClientToScreen(Pt);
-    {$ENDIF}
     Obj.ShowContextMenu(Pt);
   end;
 
@@ -721,13 +779,13 @@ procedure TChatInput.BtnSendClick(Sender: TObject);
 begin
   if FBusy then
   begin
-    // Si ya estï¿½ ocupado, el clic significa "Cancelar"
+    // Si ya está ocupado, el clic significa "Cancelar"
     if Assigned(FOnCancel) then
       FOnCancel(Self);
   end
   else
   begin
-    // Si no estï¿½ ocupado, inicia el proceso de envï¿½o
+    // Si no está ocupado, inicia el proceso de envío
     DoSendEvent(nil);
   end;
 end;
@@ -785,7 +843,7 @@ begin
     Child := FImageLayout.Children[I];
     if (Child is TLayout) and (Child.TagObject is TImageData) then
     begin
-      Child.TagObject.Free; // ï¿½Muy importante!
+      Child.TagObject.Free; // ¡Muy importante!
     end;
   end;
 
@@ -809,14 +867,14 @@ begin
       Result.Assign(BitmapItem)
     else
     begin
-      // Si no se puede obtener del ImageList, crear un bitmap vacï¿½o
+      // Si no se puede obtener del ImageList, crear un bitmap vacío
       Result.SetSize(32, 32);
       Result.Clear($FFFFFFFF); // Blanco
     end;
   end
   else
   begin
-    // ImageList no disponible o ï¿½ndice invï¿½lido
+    // ImageList no disponible o índice inválido
     Result.SetSize(32, 32);
     Result.Clear($FFFFFFFF);
   end;
@@ -839,21 +897,21 @@ begin
       ResourceStream.Free;
     end;
   except
-    // Cualquier excepciï¿½n (incluyendo EResNotFound) se maneja silenciosamente
+    // Cualquier excepción (incluyendo EResNotFound) se maneja silenciosamente
     Result := False;
   end;
 
   // Si no se pudo cargar, crear bitmap en blanco
   if not Result then
   begin
-    ABitmap.SetSize(32, 32); // Tamaï¿½o por defecto, puedes ajustarlo
+    ABitmap.SetSize(32, 32); // Tamaño por defecto, puedes ajustarlo
     ABitmap.Clear(TAlphaColorRec.Null); // Transparente
   end;
 end;
 
 procedure TChatInput.CreateInternalControls;
 begin
-  // Este mï¿½todo replica la estructura de tu .fmx, pero en cï¿½digo.
+  // Este método replica la estructura de tu .fmx, pero en código.
   // Es muy importante que 'Self' sea el Parent de todos los controles de primer nivel.
 
   FChatLayout := TRectangle.Create(Self);
@@ -895,6 +953,8 @@ begin
   FMemoPrompt.OnDragOver := DocsDragOver;
   FMemoPrompt.OnDragDrop := DocsDragDrop;
   FMemoPrompt.StyleLookup := '';
+  FMemoPrompt.TextSettings.WordWrap := True;
+  FMemoPrompt.TextSettings.Font.Size := 16;
 
   // Layout inferior (contiene botones, etc.)
   FLayoutSend := TLayout.Create(Self);
@@ -939,7 +999,7 @@ begin
   FImageBtnSend.Align := TAlignLayout.Client;
   FBtnSend.Visible := True;
 
-  // ya no se utiliza aquï¿½ LoadImageFromResource(FImageBtnSend.BitMap, 'BTN_SEND_PNG');
+  // ya no se utiliza aquí LoadImageFromResource(FImageBtnSend.BitMap, 'BTN_SEND_PNG');
   FImageBtnSend.HitTest := False;
 
   FBtnSound := TCornerButton.Create(Self);
@@ -1060,16 +1120,16 @@ end;
 
 procedure TChatInput.Loaded;
 begin
-  inherited; // ï¿½Siempre llama al inherited primero!
+  inherited; // ¡Siempre llama al inherited primero!
 
-  // En este punto, el componente estï¿½ completamente cargado desde el FMX.
+  // En este punto, el componente está completamente cargado desde el FMX.
   // Es el momento perfecto y seguro para capturar las dimensiones iniciales.
 
-  // La bandera FInitialHeightsCaptured sigue siendo ï¿½til por si alguna lï¿½gica
+  // La bandera FInitialHeightsCaptured sigue siendo útil por si alguna lógica
   // futura pudiera volver a llamar a esto, aunque con Loaded no es estrictamente necesario.
   if not FInitialHeightsCaptured then
   begin
-    // Comprobamos que el componente no estï¿½ oculto o con tamaï¿½o cero
+    // Comprobamos que el componente no esté oculto o con tamaño cero
     if (Self.Height > 0) and Assigned(FMemoPrompt) then
     begin
       FInitialMemoHeight := FMemoPrompt.Height;
@@ -1079,7 +1139,7 @@ begin
   end;
 
   // --- APLICAR LA FUENTE INICIAL ---
-  // Aplica la configuraciï¿½n de FFont (ya sea la por defecto o la del diseï¿½ador)
+  // Aplica la configuración de FFont (ya sea la por defecto o la del diseñador)
   // al TMemo interno.
   FontChanged(Self); // <-- NUEVO
 end;
@@ -1095,7 +1155,7 @@ var
 begin
   OpenDialogImage := TOpenDialog.Create(Self);
   Try
-    // Configurar el filtro del diï¿½logo basado en las extensiones vï¿½lidas
+    // Configurar el filtro del diálogo basado en las extensiones válidas
     if FValidExtensions <> '' then
       OpenDialogImage.Filter := BuildFileDialogFilter;
 
@@ -1104,7 +1164,7 @@ begin
       FileName := OpenDialogImage.FileName;
       Ext := System.IOUtils.TPath.GetExtension(FileName).ToLower;
 
-      // Validar que la extensiï¿½n estï¿½ en la lista de extensiones vï¿½lidas
+      // Validar que la extensión esté en la lista de extensiones válidas
       if not IsValidFileExtension(Ext) then
       begin
         ShowMessage('Tipo de archivo no compatible: ' + Ext);
@@ -1125,7 +1185,7 @@ begin
       try
         if ContentType = ctImage then
         begin
-          // Para imï¿½genes, cargar la imagen real
+          // Para imágenes, cargar la imagen real
           BitMap := TBitMap.Create;
           try
             BitMap.LoadFromFile(FileName);
@@ -1222,7 +1282,7 @@ var
 begin
   if not TPlatformServices.Current.SupportsPlatformService(IFMXClipboardService, IInterface(ClipboardService)) then
   begin
-    ShowMessage('El servicio de portapapeles no estï¿½ disponible.');
+    ShowMessage('El servicio de portapapeles no está disponible.');
     FMemoPrompt.SetFocus;
     Exit;
   end;
@@ -1275,7 +1335,7 @@ begin
     // Verificar si hay datos binarios en el portapapeles
     else if ClipboardService.GetClipboard.Kind = tkRecord then
     begin
-      // Intentar obtener datos como bytes (esto puede variar segï¿½n la plataforma)
+      // Intentar obtener datos como bytes (esto puede variar según la plataforma)
       try
         ClipboardText := ClipboardService.GetClipboard.AsString;
         ClipboardData := TEncoding.Default.GetBytes(ClipboardText);
@@ -1320,7 +1380,7 @@ begin
       BitMap := CreateBitmapFromImageList(ImageIndex);
     end;
 
-    // Reiniciar posiciï¿½n del stream
+    // Reiniciar posición del stream
     St.Position := 0;
 
     // Agregar el elemento a la lista
@@ -1352,7 +1412,7 @@ begin
     Exit;
   end;
 
-  // Calcular la relaciï¿½n de aspecto
+  // Calcular la relación de aspecto
   AspectRatio := X / Y;
 
   if X > Y then
@@ -1406,7 +1466,7 @@ begin
           // --- ESTADO OCUPADO ---
           FImageBtnSend.BitMap.Assign(FCancelBitmap); // Cambia el icono a "Cancelar"
           FMemoPrompt.ReadOnly := True;
-          FBtnMenu.Enabled := False; // Buena idea deshabilitar el menï¿½ tambiï¿½n
+          FBtnMenu.Enabled := False; // Buena idea deshabilitar el menú también
         end
         else
         begin
@@ -1540,7 +1600,7 @@ begin
   AddStatus('Preparando el ambiente, por favor espere');
 
   FCurrentSoundLevel := 0;
-  FMaxLevelSeen := 100; // Resetear el mï¿½ximo para que la barra se ajuste
+  FMaxLevelSeen := 100; // Resetear el máximo para que la barra se ajuste
   FProgressBarLevel.Max := FMaxLevelSeen;
 
   FAnimationTimer.Enabled := True;
@@ -1592,7 +1652,7 @@ end;
 procedure TChatInput.UpdateChatLayoutHeight;
 var
   RequiredMemoHeight, NewMemoHeight, NewFrameHeight: Single;
-  Padding: Single; // <-- NUEVO: Variable para el colchï¿½n
+  Padding: Single; // <-- NUEVO: Variable para el colchón
 begin
   // Asegurarnos de que las alturas iniciales hayan sido capturadas
   if not FInitialHeightsCaptured then
@@ -1600,21 +1660,21 @@ begin
 
   // --- Paso 1: Calcular la altura necesaria para el Memo ---
 
-  // Definimos un pequeï¿½o colchï¿½n de pï¿½xeles para evitar la barra de scroll.
+  // Definimos un pequeño colchón de píxeles para evitar la barra de scroll.
   // Un valor entre 2 y 5 suele ser suficiente.
   Padding := 4; // <-- NUEVO
 
-  // Calculamos la altura del contenido y le sumamos los mï¿½rgenes Y el nuevo padding.
+  // Calculamos la altura del contenido y le sumamos los márgenes Y el nuevo padding.
   RequiredMemoHeight := FMemoPrompt.ContentBounds.Height + FMemoPrompt.Margins.Top + FMemoPrompt.Margins.Bottom + Padding; // <-- CAMBIO CLAVE
 
-  // El resto de la lï¿½gica permanece igual
+  // El resto de la lógica permanece igual
   RequiredMemoHeight := Max(FInitialMemoHeight, RequiredMemoHeight);
   NewMemoHeight := Min(MAX_MEMO_HEIGHT, RequiredMemoHeight);
 
   // --- Paso 2: Calcular la altura total que necesita el FRAME ---
   NewFrameHeight := 0;
 
-  // Sumar la altura del layout de imï¿½genes si es visible
+  // Sumar la altura del layout de imágenes si es visible
   if FImageLayout.Visible then
   begin
     NewFrameHeight := NewFrameHeight + FImageLayout.Height + FImageLayout.Margins.Top + FImageLayout.Margins.Bottom;
@@ -1626,10 +1686,10 @@ begin
   // Sumar la altura del layout inferior (botones, etc.)
   NewFrameHeight := NewFrameHeight + FLayout1.Height + FLayout1.Margins.Top + FLayout1.Margins.Bottom;
 
-  // Aï¿½adir paddings si los tuviera el ChatLayout
+  // Añadir paddings si los tuviera el ChatLayout
   NewFrameHeight := NewFrameHeight + FChatLayout.Padding.Top + FChatLayout.Padding.Bottom;
 
-  // --- PASO 3: Forzar la altura mï¿½nima ---
+  // --- PASO 3: Forzar la altura mínima ---
   NewFrameHeight := Max(MIN_FRAME_HEIGHT, NewFrameHeight);
 
   // --- Paso 4: Aplicar los cambios si son necesarios ---
@@ -1688,7 +1748,7 @@ begin
       for I := 0 to High(Data.Files) do
       begin
         FileName := Data.Files[I];
-        // Usamos TPath.GetExtension para obtener la extensiï¿½n de forma segura
+        // Usamos TPath.GetExtension para obtener la extensión de forma segura
         Ext := System.IOUtils.TPath.GetExtension(FileName).ToLower;
 
         // Validar con la lista de extensiones configurada
@@ -1704,7 +1764,7 @@ begin
             try
               if ContentType = ctImage then
               begin
-                // Para imï¿½genes, cargar la imagen real
+                // Para imágenes, cargar la imagen real
                 BitMap := TBitMap.Create;
                 BitMap.LoadFromFile(FileName);
                 BitMap.SaveToStream(St);
@@ -1725,7 +1785,7 @@ begin
               if Assigned(BitMap) then
                 BitMap.Free;
               St.Free;
-              raise; // Re-lanzamos la excepciï¿½n
+              raise; // Re-lanzamos la excepción
             end;
           end;
         end;
@@ -1737,13 +1797,13 @@ begin
       FileName := Data.Data.AsString;
       if FileName.StartsWith('http://', True) or FileName.StartsWith('https://', True) then
       begin
-        // Usamos TURI para analizar la URL y TPath para obtener la extensiï¿½n de forma robusta.
+        // Usamos TURI para analizar la URL y TPath para obtener la extensión de forma robusta.
         Uri := TURI.Create(FileName);
         try
           CleanPath := Uri.Path;
           Ext := System.IOUtils.TPath.GetExtension(CleanPath).ToLower;
         finally
-          // Uri se libera automï¿½ticamente (es un record)
+          // Uri se libera automáticamente (es un record)
         end;
 
         // Validar con la lista de extensiones configurada
@@ -1756,10 +1816,10 @@ begin
           try
             if ContentType = ctImage then
             begin
-              // Para imï¿½genes, descargar y cargar la imagen
+              // Para imágenes, descargar y cargar la imagen
               St := DownLoadFromUrl(FileName);
               if (St = nil) or (St.Size = 0) then
-                raise Exception.Create('La descarga resultï¿½ en un stream vacï¿½o.');
+                raise Exception.Create('La descarga resultó en un stream vacío.');
               St.Position := 0;
               BitMap := TBitMap.Create;
               BitMap.LoadFromStream(St);
@@ -1769,7 +1829,7 @@ begin
               // Para otros tipos, descargar como stream y usar icono
               St := DownLoadFromUrl(FileName);
               if (St = nil) or (St.Size = 0) then
-                raise Exception.Create('La descarga resultï¿½ en un stream vacï¿½o.');
+                raise Exception.Create('La descarga resultó en un stream vacío.');
               St.Position := 0;
               ImageIndex := GetImageIndexFromContentType(ContentType);
               BitMap := CreateBitmapFromImageList(ImageIndex);
@@ -1782,12 +1842,12 @@ begin
               BitMap.Free;
             if Assigned(St) then
               St.Free;
-            raise; // Re-lanzamos la excepciï¿½n
+            raise; // Re-lanzamos la excepción
           end;
         end
         else
         begin
-          // Si no tiene extensiï¿½n reconocible, intentar detectar por contenido
+          // Si no tiene extensión reconocible, intentar detectar por contenido
           St := DownLoadFromUrl(FileName);
           if (St <> nil) and (St.Size > 0) then
           begin
@@ -1832,7 +1892,7 @@ begin
   except
     on E: Exception do
     begin
-      // Mensaje de error genï¿½rico para el usuario
+      // Mensaje de error genérico para el usuario
       ShowMessage('Error al procesar el archivo: ' + E.Message);
     end;
   end;
@@ -1875,7 +1935,7 @@ begin
   begin
     // Usamos TextSettings.Font para componentes FMX
     FMemoPrompt.TextSettings.Font.Assign(FFont);
-    // Forzamos una actualizaciï¿½n de la altura en caso de que el tamaï¿½o de la fuente cambie el contenido.
+    // Forzamos una actualización de la altura en caso de que el tamaño de la fuente cambie el contenido.
     UpdateChatLayoutHeight;
   end;
 end;
@@ -1912,7 +1972,7 @@ begin
   // Inicializamos el array resultado con una longitud de 0
   SetLength(Result, 0);
 
-  // Verificaciï¿½n de seguridad por si el layout no estuviera creado
+  // Verificación de seguridad por si el layout no estuviera creado
   if not Assigned(FImageLayout) then
     Exit;
 
@@ -1927,10 +1987,10 @@ begin
       // Hacemos un typecast seguro del TagObject para obtener nuestra data
       ImageData := TImageData(Child.TagObject);
 
-      // Aumentamos el tamaï¿½o del array resultado en 1
+      // Aumentamos el tamaño del array resultado en 1
       SetLength(Result, Length(Result) + 1);
 
-      // Asignamos el objeto TImageData encontrado a la ï¿½ltima posiciï¿½n del array
+      // Asignamos el objeto TImageData encontrado a la última posición del array
       Result[High(Result)] := ImageData;
     end;
   end;
@@ -2035,7 +2095,7 @@ begin
     FMenu := TPopupMenu.Create(Self);
     FMenu.Images := FImageList1;
 
-    // Crear items del menï¿½
+    // Crear items del menú
     FMnuPaste := TMenuItem.Create(FMenu);
     FMnuPaste.Name := 'MnuPaste';
     FMnuPaste.Text := 'Paste';
@@ -2077,7 +2137,7 @@ begin
   if (Extension = '') or (ValidExtensions = '') then
     Exit;
 
-  // Limpiar la extensiï¿½n (quitar el punto si lo tiene)
+  // Limpiar la extensión (quitar el punto si lo tiene)
   CleanExt := Extension;
   if (Length(CleanExt) > 0) and (CleanExt[1] = '.') then
     CleanExt := Copy(CleanExt, 2, Length(CleanExt));
@@ -2123,12 +2183,12 @@ begin
     // Verificar si es una URL
     if (Copy(S, 1, 7) = 'http://') or (Copy(S, 1, 8) = 'https://') then
     begin
-      // Buscar la extensiï¿½n en la URL de manera mï¿½s robusta
+      // Buscar la extensión en la URL de manera más robusta
       I := LastDelimiter('/', S);
       if I > 0 then
       begin
         UrlExt := ExtractFileExt(LowerCase(Copy(S, I + 1, Length(S))));
-        // Tambiï¿½n verificar parï¿½metros de consulta
+        // También verificar parámetros de consulta
         I := Pos('?', UrlExt);
         if I > 0 then
           UrlExt := Copy(UrlExt, 1, I - 1);
@@ -2138,14 +2198,14 @@ begin
       end
       else
       begin
-        // Si no hay extensiï¿½n visible, permitir el drop para URLs genï¿½ricas
-        // Se detectarï¿½ el tipo en el evento Drop
+        // Si no hay extensión visible, permitir el drop para URLs genéricas
+        // Se detectará el tipo en el evento Drop
         Operation := TDragOperation.Move;
       end;
     end
     else
     begin
-      // Verificar si el texto contiene una ruta de archivo vï¿½lida
+      // Verificar si el texto contiene una ruta de archivo válida
       if Pos('\', S) > 0 then // Ruta Windows
       begin
         Ext := ExtractFileExt(LowerCase(S));
@@ -2174,7 +2234,7 @@ end;
   Try
   If Assigned(FOnSendEvent) then
   Begin
-  // Aquï¿½ crea la lista de MediaFiles
+  // Aquí crea la lista de MediaFiles
   If FImageLayout.ChildrenCount > 0 then
   Begin
   For I := 0 to FImageLayout.ChildrenCount - 1 do
@@ -2238,9 +2298,9 @@ begin
 
   MediaFiles := TAiMediaFiles.Create;
   try
-    // 2. Preparar la lista de MediaFiles de forma sï¿½ncrona.
+    // 2. Preparar la lista de MediaFiles de forma síncrona.
     // Esta parte puede causar un breve bloqueo si los archivos son grandes,
-    // pero es la responsabilidad que el componente asume segï¿½n tu diseï¿½o.
+    // pero es la responsabilidad que el componente asume según tu diseño.
     if FImageLayout.ChildrenCount > 0 then
     begin
       for I := 0 to FImageLayout.ChildrenCount - 1 do
@@ -2256,30 +2316,30 @@ begin
 
             MF := TAiMediaFile.Create;
             // OJO: Asumimos que LoadFromStream hace una copia de los datos del stream
-            // y no toma posesiï¿½n del stream `St`.
+            // y no toma posesión del stream `St`.
             MF.LoadFromStream(Data.FileName, St);
-            MF.FullFileName := Data.FullFileName;  //Asegura que si es un archivo contiene la ruta completa.
+            MF.FullFileName := Data.FullFileName; // Asegura que si es un archivo contiene la ruta completa.
             MediaFiles.Add(MF);
           finally
-            St.Free; // `St` es temporal y se libera aquï¿½.
+            St.Free; // `St` es temporal y se libera aquí.
           end;
         end;
       end;
     end;
 
     // 3. Capturar el prompt y disparar el evento.
-    // El control se pasa al cï¿½digo del formulario.
+    // El control se pasa al código del formulario.
     APrompt := Trim(FMemoPrompt.Lines.Text);
     FOnSendEvent(Self, APrompt, MediaFiles, aAudioFile);
 
     // 4. Limpiar la UI para el siguiente mensaje.
-    // Esto se ejecuta DESPUï¿½S de que el manejador OnSendEvent del usuario retorne.
+    // Esto se ejecuta DESPUÉS de que el manejador OnSendEvent del usuario retorne.
     FMemoPrompt.Lines.Clear;
     ClearSlides;
     UpdateChatLayoutHeight;
 
-    // NOTA: NO hacemos "Busy := False" aquï¿½.
-    // Esa es la responsabilidad del cï¿½digo del formulario.
+    // NOTA: NO hacemos "Busy := False" aquí.
+    // Esa es la responsabilidad del código del formulario.
 
   finally
     // 5. Liberar la lista de MediaFiles. El consumidor ya los ha procesado.
@@ -2297,15 +2357,15 @@ function TChatInput.GetContentTypeFromValidExtensions(const Extension: string): 
 var
   CleanExt: string;
 begin
-  // Limpiar la extensiï¿½n (quitar el punto si lo tiene)
+  // Limpiar la extensión (quitar el punto si lo tiene)
   CleanExt := Extension;
   if (Length(CleanExt) > 0) and (CleanExt[1] = '.') then
     CleanExt := Copy(CleanExt, 2, Length(CleanExt));
 
   CleanExt := LowerCase(CleanExt);
 
-  // Detectar tipo por extensiï¿½n (puedes personalizar esta lï¿½gica)
-  // Imï¿½genes
+  // Detectar tipo por extensión (puedes personalizar esta lógica)
+  // Imágenes
   if (CleanExt = 'jpg') or (CleanExt = 'jpeg') or (CleanExt = 'png') or (CleanExt = 'bmp') or (CleanExt = 'gif') or (CleanExt = 'tiff') or (CleanExt = 'webp') then
     Result := ctImage
     // PDF

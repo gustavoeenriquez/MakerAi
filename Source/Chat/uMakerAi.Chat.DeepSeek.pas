@@ -161,7 +161,7 @@ begin
 {$IF CompilerVersion < 35}
         jToolChoice := TJSONUtils.ParseAsObject(Tool_choice);
 {$ELSE}
-        jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
+        jToolChoice := TJSonObject(TJSONObject.ParseJSONValue(Tool_choice));
 {$ENDIF}
         If Assigned(jToolChoice) then
           AJSONObject.AddPair('tools_choice', jToolChoice);

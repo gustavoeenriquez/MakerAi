@@ -46,13 +46,14 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings.Core;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages;
 
 type
 
   TAiOllamaChat = Class(TAiChat)
   Private
     Fkeep_alive: String;
+    FTmpToolCallsStr: string;
     procedure Setkeep_alive(const Value: String);
   Protected
     Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
@@ -568,149 +569,77 @@ begin
   Result := (Balance = 0) and (not InString);
 end;
 
-{ procedure TAiOllamaChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
-  var
-  JObj, Delta: TJSonObject;
-  sJson: String;
-  Done: Boolean;
-  Msg: TAiChatMessage;
-  aPrompt_tokens, aCompletion_tokens, aTotal_tokens: Integer;
-  Role, Respuesta, Thinking: String;
-  LModel: String;
-  begin
-  //  if not FClient.Asynchronous then
-  //    Exit;
-
-  AAbort := FAbort;
-
-  if FAbort then
-  begin
-  FBusy := False;
-  if Assigned(FOnReceiveDataEnd) then
-  FOnReceiveDataEnd(Self, Nil, Nil, 'system', 'abort');
-  Exit;
-  end;
-
-  try
-  // Recuperar chunk recibido
-  sJson := FResponse.DataString;
-
-  FResponse.Clear;
-
-  // Acumular
-  FTmpResponseText := FTmpResponseText + sJson;
-
-  // Solo procesar si el JSON está completo
-  if (sJson <> '') and IsCompleteJson(FTmpResponseText) then
-  begin
-  JObj := TJSonObject(TJSonObject.ParseJSONValue(FTmpResponseText));
-  try
-  if Assigned(JObj) then
-  begin
-  if JObj.TryGetValue<Boolean>('done', Done) then
-  begin
-  if Done then
-  begin
-  // ✅ Cuando termina de recibir
-  LModel := JObj.GetValue('model').Value;
-  aPrompt_tokens := JObj.GetValue<Integer>('prompt_eval_count');
-  aCompletion_tokens := JObj.GetValue<Integer>('eval_count');
-  aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
-
-  // Actualiza contadores
-  Prompt_tokens := Prompt_tokens + aPrompt_tokens;
-  Completion_tokens := Completion_tokens + aCompletion_tokens;
-  Total_tokens := Total_tokens + aTotal_tokens;
-
-  if JObj.TryGetValue<TJSonObject>('message', Delta) then
-  begin
-  Respuesta := Delta.GetValue<String>('content');
-  Role := Delta.GetValue<String>('role');
-  FLastContent := FLastContent + Respuesta;
-
-  Msg := TAiChatMessage.Create(FLastContent, Role);
-  Msg.Prompt := FLastContent;
-  Msg.Prompt_tokens := aPrompt_tokens;
-  Msg.Completion_tokens := aCompletion_tokens;
-  Msg.Total_tokens := aTotal_tokens;
-  Msg.Id := FMessages.Count + 1;
-  FMessages.Add(Msg);
-  FBusy := False;
-
-  if Assigned(FOnReceiveDataEnd) then
-  FOnReceiveDataEnd(Self, Msg, Nil, Role, FLastContent);
-  end;
-  end
-  else
-  begin
-  // ✅ Todavía no termina el mensaje
-  if JObj.TryGetValue<TJSonObject>('message', Delta) then
-  begin
-  Respuesta := Delta.GetValue<String>('content');
-
-  Delta.TryGetValue<String>('thinking', Thinking);
-
-  Role := Delta.GetValue<String>('role');
-  FLastContent := FLastContent + Respuesta;
-
-  Respuesta := StringReplace(Respuesta, #$A, sLineBreak, [rfReplaceAll]);
-  Thinking := StringReplace(Thinking, #$A, sLineBreak, [rfReplaceAll]);
-
-  If (Respuesta <> '') and Assigned(FOnReceiveDataEvent) then
-  FOnReceiveDataEvent(Self, Nil, JObj, Role, Respuesta);
-
-  If (Thinking <> '') and Assigned(OnReceiveThinking) then
-  OnReceiveThinking(Self, Nil, JObj, Role, Thinking);
-
-
-  end;
-  end;
-  end;
-  end;
-  finally
-  JObj.Free;
-  FTmpResponseText := ''; // 🔹 Limpiamos buffer ya procesado
-  end;
-  end;
-  except
-  on E: Exception do
-  LastError := 'El json "' + FTmpResponseText + '" no es válido. ' + E.Message;
-  end;
-  end;
-}
-
 procedure TAiOllamaChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
 var
   LJsonObject, LMessageObj: TJSonObject;
+  LToolCallsArray: TJSonArray;
   LChunkStr, LJsonLine, LRole, LContentPart, LThinkingPart: string;
   LDone: Boolean;
   LFinalMsg: TAiChatMessage;
   LStreamFinished: Boolean;
-begin
 
-  if Self.Asynchronous = False then
+  procedure ProcessFinalJsonObject(AJson: TJSonObject);
+  var
+    LMsgObj: TJSonObject;
+  begin
+    LStreamFinished := True;
+    FBusy := False;
+
+    // Si capturamos tool_calls en fragmentos anteriores pero el JSON final no los tiene,
+    // los re-inyectamos para que ParseChat los procese.
+    if not FTmpToolCallsStr.IsEmpty then
+    begin
+      if not AJson.TryGetValue<TJSonObject>('message', LMsgObj) then
+      begin
+        LMsgObj := TJSonObject.Create;
+        AJson.AddPair('message', LMsgObj);
+      end;
+
+      if LMsgObj.GetValue('tool_calls') = nil then
+      begin
+        LMsgObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(FTmpToolCallsStr)));
+      end;
+    end;
+
+    LFinalMsg := TAiChatMessage.Create('', 'assistant');
+    try
+      ParseChat(AJson, LFinalMsg);
+    except
+      on E: Exception do
+      begin
+        LFinalMsg.Free;
+        raise;
+      end;
+    end;
+
+    // Limpieza de buffers para la siguiente petición
+    FLastContent := '';
+    FTmpResponseText := '';
+    FTmpToolCallsStr := '';
+  end;
+
+begin
+  if not Self.Asynchronous then
     Exit;
 
   AAbort := FAbort;
   if FAbort then
   begin
     FBusy := False;
+    FTmpToolCallsStr := '';
     if Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, nil, nil, 'system', 'abort');
     Exit;
   end;
 
   try
-    // 1. Acumular el nuevo chunk de datos recibido del stream
+    // 1. Acumular el nuevo chunk de datos
     LChunkStr := FResponse.DataString;
     FResponse.Clear;
     FTmpResponseText := FTmpResponseText + LChunkStr;
     LStreamFinished := False;
 
-    LogDebug('-Response Stream-');
-    LogDebug(LChunkStr);
-
-    // --- Bucle principal para procesar líneas completas (delimitadas por #10) ---
+    // --- Bucle principal para procesar líneas (Ollama envía un JSON por línea) ---
     while Pos(#10, FTmpResponseText) > 0 do
     begin
       LJsonLine := Copy(FTmpResponseText, 1, Pos(#10, FTmpResponseText) - 1);
@@ -719,248 +648,78 @@ begin
       if LJsonLine.Trim.IsEmpty then
         Continue;
 
+      LJsonObject := TJSonObject.ParseJSONValue(LJsonLine.Trim) as TJSonObject;
+      if not Assigned(LJsonObject) then
+        Continue;
+
       try
-        LJsonObject := TJSonObject.ParseJSONValue(LJsonLine.Trim) as TJSonObject;
-        if not Assigned(LJsonObject) then
-          Continue;
-        try
-          LDone := LJsonObject.GetValue<Boolean>('done', False);
-          if not LDone then // --- Es un fragmento INTERMEDIO ---
+        LDone := LJsonObject.GetValue<Boolean>('done', False);
+
+        if not LDone then // --- FRAGMENTO INTERMEDIO ---
+        begin
+          if LJsonObject.TryGetValue<TJSonObject>('message', LMessageObj) then
           begin
-            if LJsonObject.TryGetValue<TJSonObject>('message', LMessageObj) then
+            LRole := LMessageObj.GetValue<string>('role', 'assistant');
+
+            // 1. CAPTURAR TOOL CALLS (Fundamental para Ollama)
+            if LMessageObj.TryGetValue<TJSonArray>('tool_calls', LToolCallsArray) then
             begin
-              LRole := LMessageObj.GetValue<string>('role', 'assistant');
-
-              if LMessageObj.TryGetValue<string>('content', LContentPart) and (LContentPart <> '') then
-              begin
-                // --- CORRECCIÓN: Normalizar saltos de línea (\n -> \r\n en Windows) ---
-                LContentPart := StringReplace(LContentPart, #$A, sLineBreak, [rfReplaceAll]);
-
-                FLastContent := FLastContent + LContentPart;
-                if Assigned(FOnReceiveDataEvent) then
-                  FOnReceiveDataEvent(Self, nil, LJsonObject, LRole, LContentPart);
-              end;
-
-              if LMessageObj.TryGetValue<string>('thinking', LThinkingPart) and (LThinkingPart <> '') then
-              begin
-                // --- CORRECCIÓN: Normalizar saltos de línea en Thinking también ---
-                LThinkingPart := StringReplace(LThinkingPart, #$A, sLineBreak, [rfReplaceAll]);
-
-                if Assigned(OnReceiveThinking) then
-                  OnReceiveThinking(Self, nil, LJsonObject, LRole, LThinkingPart);
-              end;
-
+              // Guardamos el string de las herramientas. Ollama suele enviarlas
+              // completas en un solo chunk, pero lo sobreescribimos por seguridad.
+              FTmpToolCallsStr := LToolCallsArray.ToJSON;
+              DoStateChange(acsToolCalling, 'Tool call detected in stream...');
             end;
-          end
-          else // --- Es un fragmento FINAL dentro del bucle ---
-          begin
-            LStreamFinished := True;
-            FBusy := False;
-            LFinalMsg := TAiChatMessage.Create('', 'assistant');
-            try
-              ParseChat(LJsonObject, LFinalMsg);
-            except
-              LFinalMsg.Free;
-              raise;
+
+            // 2. PROCESAR CONTENIDO
+            if LMessageObj.TryGetValue<string>('content', LContentPart) and (LContentPart <> '') then
+            begin
+              LContentPart := StringReplace(LContentPart, #$A, sLineBreak, [rfReplaceAll]);
+              FLastContent := FLastContent + LContentPart;
+              if Assigned(FOnReceiveDataEvent) then
+                FOnReceiveDataEvent(Self, nil, LJsonObject, LRole, LContentPart);
             end;
-            FLastContent := '';
-            FTmpResponseText := ''; // Limpiamos todo el buffer
-            Break; // Salimos del bucle, ya hemos terminado
+
+            // 3. PROCESAR RAZONAMIENTO (Thinking)
+            if LMessageObj.TryGetValue<string>('thinking', LThinkingPart) and (LThinkingPart <> '') then
+            begin
+              LThinkingPart := StringReplace(LThinkingPart, #$A, sLineBreak, [rfReplaceAll]);
+              if Assigned(OnReceiveThinking) then
+                OnReceiveThinking(Self, nil, LJsonObject, LRole, LThinkingPart);
+            end;
           end;
-        finally
-          // LJsonObject.Free;  //OJO Revisar porque marca error al intentar liberar
+        end
+        else // --- FRAGMENTO FINAL ---
+        begin
+          ProcessFinalJsonObject(LJsonObject);
+          Break;
         end;
-      except
-        // Ignorar JSON incompleto, el bucle continuará
-      end;
-    end; // Fin del while
-
-    // --- MANEJO DEL FRAGMENTO FINAL: Si el bucle terminó y aún queda texto, ---
-    // --- podría ser el último JSON que no terminó en #10. ---
-    if (not LStreamFinished) and (FTmpResponseText.Trim <> '') then
-    begin
-      try
-        // Intentamos parsear lo que queda en el buffer. Si falla, es un fragmento incompleto y salta al except.
-        LJsonObject := TJSonObject.ParseJSONValue(FTmpResponseText.Trim) as TJSonObject;
-        if not Assigned(LJsonObject) then
-          Exit; // No debería pasar si el parseo fue exitoso
-        try
-          LDone := LJsonObject.GetValue<Boolean>('done', False);
-          if LDone then // ¡Éxito! Es el JSON final.
-          begin
-            LStreamFinished := True;
-            FBusy := False;
-            LFinalMsg := TAiChatMessage.Create('', 'assistant');
-            try
-              ParseChat(LJsonObject, LFinalMsg);
-            except
-              LFinalMsg.Free;
-              raise;
-            end;
-            FLastContent := '';
-            FTmpResponseText := ''; // Limpiamos el buffer porque ya lo procesamos por completo.
-          end;
-          // Si no es "done: true", simplemente dejamos el texto en el buffer y esperamos más datos.
-        finally
-          LJsonObject.Free;
-        end;
-      except
-        // No es un JSON completo. No hacemos nada, esperamos el siguiente chunk de datos.
+      finally
+        LJsonObject.Free;
       end;
     end;
+
+    // --- MANEJO DE FRAGMENTO FINAL (sin salto de línea) ---
+    if (not LStreamFinished) and (FTmpResponseText.Trim <> '') then
+    begin
+      LJsonObject := TJSonObject.ParseJSONValue(FTmpResponseText.Trim) as TJSonObject;
+      if Assigned(LJsonObject) then
+      try
+        if LJsonObject.GetValue<Boolean>('done', False) then
+          ProcessFinalJsonObject(LJsonObject);
+      finally
+        LJsonObject.Free;
+      end;
+    end;
+
   except
     on E: Exception do
-      DoError('Error en OnInternalReceiveData: ' + E.Message, E);
+    begin
+      FBusy := False;
+      DoError('Error en OnInternalReceiveData (Ollama Stream): ' + E.Message, E);
+    end;
   end;
 end;
 
-{ procedure TAiOllamaChat.ParseChat(JObj: TJSonObject; ResMsg: TAiChatMessage);
-  Var
-  choices, JToolCalls: TJSonArray;
-  jMessage: TJSonObject;
-  aPrompt_tokens, aCompletion_tokens, aTotal_tokens: Integer;
-  Role, Respuesta: String;
-  ToolMsg, AskMsg: TAiChatMessage;
-  // Msg: TAiChatMessage;
-  LFunciones: TAiToolsFunctions;
-  ToolCall: TAiToolsFunction;
-
-  TaskList: array of ITask;
-  I, NumTasks: Integer;
-  Clave, sToolCalls: String;
-  LModel: String;
-
-  Code: TMarkdownCodeExtractor;
-  CodeFile: TCodeFile;
-  CodeFiles: TCodeFileList;
-  MF: TAiMediaFile;
-  St: TStringStream;
-
-  begin
-
-  If Not Assigned(JObj) then
-  Exit;
-
-
-  aPrompt_tokens := 0;
-  aCompletion_tokens := 0;
-  // aTotal_tokens := 0;
-
-  AskMsg := GetLastMessage; // Obtiene el mensaje de la solicitud
-
-  LModel := JObj.GetValue('model').Value;
-
-  JObj.TryGetValue<Integer>('prompt_eval_count', aPrompt_tokens);
-  JObj.GetValue<Integer>('eval_count', aCompletion_tokens);
-  aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
-
-  If JObj.TryGetValue<TJSonObject>('message', jMessage) then
-  Begin
-  Respuesta := jMessage.GetValue<String>('content').Trim + sLineBreak;
-  Role := jMessage.GetValue<String>('role');
-
-  If jMessage.TryGetValue<TJSonArray>('tool_calls', JToolCalls) then
-  sToolCalls := JToolCalls.Format;
-  End;
-
-  DoProcessResponse(GetLastMessage, ResMsg, Respuesta);
-
-  Self.FLastContent := Respuesta;
-  Prompt_tokens := Prompt_tokens + aPrompt_tokens;
-  Completion_tokens := Completion_tokens + aCompletion_tokens;
-  Total_tokens := Total_tokens + aTotal_tokens;
-
-  ResMsg.Prompt := Trim(ResMsg.Prompt + sLineBreak + Respuesta);
-  ResMsg.Tool_calls := sToolCalls;
-  ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aPrompt_tokens;
-  ResMsg.Completion_tokens := ResMsg.Completion_tokens + aCompletion_tokens;
-  ResMsg.Total_tokens := ResMsg.Total_tokens + aTotal_tokens;
-  ResMsg.Model := LModel;
-
-  choices := TJSonArray.Create;
-  choices.Add(JObj);
-  LFunciones := ExtractToolCallFromJson(choices);
-  choices.Remove(0);
-  choices.Free;
-
-  Try
-  If LFunciones.Count > 0 then
-  Begin
-
-  NumTasks := LFunciones.Count;
-  SetLength(TaskList, NumTasks);
-  // Ajusta el tamaño del array para el número de tareas
-
-  I := 0;
-  For Clave in LFunciones.Keys do
-  Begin
-  ToolCall := LFunciones[Clave];
-  ToolCall.ResMsg := ResMsg;
-  ToolCall.AskMsg := AskMsg;
-
-  TaskList[I] := TTask.Create(
-  procedure
-  begin
-  DoCallFunction(ToolCall);
-  end);
-  TaskList[I].Start;
-  Inc(I);
-
-  End;
-  TTask.WaitForAll(TaskList);
-
-  For Clave in LFunciones.Keys do
-  Begin
-  ToolCall := LFunciones[Clave];
-  ToolMsg := TAiChatMessage.Create(ToolCall.Response, 'tool', ToolCall.Id, ToolCall.Name);
-  ToolMsg.Id := FMessages.Count + 1;
-  FMessages.Add(ToolMsg);
-  End;
-
-  Self.Run(Nil, ResMsg);
-
-  End
-  Else
-  Begin
-
-  If (tfc_ExtracttextFile in NativeOutputFiles) then
-  Begin
-  Code := TMarkdownCodeExtractor.Create;
-  Try
-
-  CodeFiles := Code.ExtractCodeFiles(Respuesta);
-  For CodeFile in CodeFiles do
-  Begin
-  St := TStringStream.Create(CodeFile.Code);
-  Try
-  St.Position := 0;
-
-  MF := TAiMediaFile.Create;
-  MF.LoadFromStream('file.' + CodeFile.FileType, St);
-  ResMsg.MediaFiles.Add(MF);
-  Finally
-  St.Free;
-  End;
-
-  End;
-  Finally
-  Code.Free;
-  End;
-  End;
-
-  DoProcessResponse(AskMsg, ResMsg, Respuesta);
-
-  ResMsg.Prompt := Respuesta;
-
-  FBusy := False;
-  If Assigned(FOnReceiveDataEnd) then
-  FOnReceiveDataEnd(Self, ResMsg, JObj, Role, Respuesta);
-  End;
-  Finally
-  LFunciones.Free;
-  End;
-  end;
-}
 
 procedure TAiOllamaChat.ParseChat(JObj: TJSonObject; ResMsg: TAiChatMessage);
 var
@@ -991,18 +750,21 @@ begin
   if not Assigned(JObj) then
     Exit;
 
-  // 1. Extraer Datos
+  // 1. EXTRAER METADATOS Y ESTADÍSTICAS
   LModel := JObj.GetValue<string>('model', '');
+  // Ollama usa nombres específicos para los tokens
   LPromptTokens := JObj.GetValue<Integer>('prompt_eval_count', 0);
   LEvalTokens := JObj.GetValue<Integer>('eval_count', 0);
 
+  // Actualizar contadores globales del componente
   Self.Prompt_tokens := Self.Prompt_tokens + LPromptTokens;
   Self.Completion_tokens := Self.Completion_tokens + LEvalTokens;
   Self.Total_tokens := Self.Total_tokens + LPromptTokens + LEvalTokens;
 
-  // 2. Validar Message
+  // 2. VALIDAR LA EXISTENCIA DE "MESSAGE"
   if not JObj.TryGetValue<TJSonObject>('message', LMessageObj) then
   begin
+    // Si no hay mensaje pero el JSON indica que terminó, disparamos el evento de fin
     if JObj.GetValue<Boolean>('done', False) then
     begin
       DoStateChange(acsFinished, 'Done');
@@ -1012,18 +774,21 @@ begin
     Exit;
   end;
 
+  // 3. EXTRAER CONTENIDO DEL MENSAJE
   LRole := LMessageObj.GetValue<string>('role', 'assistant');
   LReasoning := LMessageObj.GetValue<string>('thinking', '');
   LContent := LMessageObj.GetValue<string>('content', '');
 
-  if FLastContent <> '' then
+  // Sincronizar el contenido acumulado durante el streaming (FLastContent) con el ResMsg
+  if (FLastContent <> '') then
     ResMsg.Content := FLastContent
   else
-  Begin
+  begin
     ResMsg.Content := LContent;
-    FLastContent := LContent; // <-- Importante esta asignació se requiere en el resto del proceso
-  End;
+    FLastContent := LContent;
+  end;
 
+  // Configurar propiedades del mensaje de respuesta
   ResMsg.Prompt := ResMsg.Content;
   ResMsg.Role := LRole;
   ResMsg.Model := LModel;
@@ -1034,28 +799,31 @@ begin
 
   LAskMsg := GetLastMessage;
 
-  // 3. Lógica de Tools
+  // 4. LÓGICA DE LLAMADO A FUNCIONES (TOOLS)
+  // Verificamos si Ollama nos ha devuelto tool_calls
   if LMessageObj.TryGetValue<TJSonArray>('tool_calls', LToolCallsArray) and (LToolCallsArray.Count > 0) then
   begin
-    // CASO A: Tool Calls
+    // --- CASO A: El modelo solicita ejecutar herramientas ---
 
-    // Creamos mensaje histórico para la petición de tool (Assistant)
-    LHistoryToolMsg := TAiChatMessage.Create(LContent, 'assistant');
+    // A.1 Guardamos el mensaje del asistente (la petición de tool) en el historial
+    LHistoryToolMsg := TAiChatMessage.Create(ResMsg.Content, LRole);
     LHistoryToolMsg.Tool_calls := LToolCallsArray.ToJSON;
     LHistoryToolMsg.Id := FMessages.Count + 1;
     FMessages.Add(LHistoryToolMsg);
 
-    DoStateChange(acsToolExecuting, 'Executing tools...');
+    DoStateChange(acsToolExecuting, 'Executing local tools...');
 
+    // A.2 Extraer las definiciones de las funciones
     LChoicesSimulado := TJSonArray.Create;
     LFunciones := nil;
     try
+      // Simulamos una estructura compatible con ExtractToolCallFromJson
       LChoicesSimulado.Add(JObj.Clone as TJSonObject);
       LFunciones := ExtractToolCallFromJson(LChoicesSimulado);
 
       if (LFunciones <> nil) and (LFunciones.Count > 0) then
       begin
-        // Paralelismo con TTask
+        // A.3 Ejecución en paralelo de las funciones encontradas
         NumTasks := LFunciones.Count;
         SetLength(TaskList, NumTasks);
         I := 0;
@@ -1079,7 +847,7 @@ begin
                   TThread.Queue(nil,
                     procedure
                     begin
-                      DoError('Tool Error', E);
+                      DoError('Function Execution Error: ' + CapturaTool.Name, E);
                     end);
               end;
             end);
@@ -1087,9 +855,10 @@ begin
           Inc(I);
         end;
 
+        // Esperar a que todas las funciones terminen (bloqueo controlado)
         TTask.WaitForAll(TaskList);
 
-        // Agregar resultados (Tool Role)
+        // A.4 Añadir los resultados de las funciones (role: tool) al historial
         for LToolCall in LFunciones.Values do
         begin
           LToolMsg := TAiChatMessage.Create(LToolCall.Response, 'tool', LToolCall.Id, LToolCall.Name);
@@ -1097,9 +866,11 @@ begin
           FMessages.Add(LToolMsg);
         end;
 
-        // Limpiar ResMsg y re-ejecutar
+        // A.5 Re-ejecutar el Run para que el modelo analice los resultados de las herramientas
+        // Limpiamos el ResMsg para recibir la respuesta final
         ResMsg.Content := '';
         ResMsg.Tool_calls := '';
+        FLastContent := '';
         Self.Run(nil, ResMsg);
       end;
     finally
@@ -1110,8 +881,9 @@ begin
   end
   else
   begin
-    // CASO B: Texto Normal
+    // --- CASO B: Respuesta de texto normal o final de cadena ---
 
+    // B.1 Extracción automática de bloques de código si se solicita
     if (tfc_ExtracttextFile in NativeOutputFiles) and (ResMsg.Content <> '') then
     begin
       Code := TMarkdownCodeExtractor.Create;
@@ -1119,11 +891,12 @@ begin
         CodeFiles := Code.ExtractCodeFiles(ResMsg.Content);
         for CodeFile in CodeFiles do
         begin
-          St := TStringStream.Create(CodeFile.Code);
+          St := TStringStream.Create(CodeFile.Code, TEncoding.UTF8);
           try
             St.Position := 0;
             MF := TAiMediaFile.Create;
-            MF.LoadFromStream('file.' + CodeFile.FileType, St);
+            // Cargamos el código extraído como un archivo adjunto al mensaje
+            MF.LoadFromStream('file.' + CodeFile.FileType, St as TMemoryStream);
             ResMsg.MediaFiles.Add(MF);
           finally
             St.Free;
@@ -1134,26 +907,27 @@ begin
       end;
     end;
 
+    // B.2 Notificar el procesamiento de la respuesta (Hooks externos)
     DoProcessResponse(LAskMsg, ResMsg, FLastContent);
 
-    // --- CORRECCIÓN CRÍTICA: Evitar Doble Add ---
-    // Solo añadimos si NO está en la lista.
-    // En modo Síncrono, TAiChat.Run lo intentará añadir después, así que esto protege.
-    // En modo Asíncrono, TAiChat.Run salió, así que esto lo añade.
+    // B.3 Gestión del historial (Evitar Doble Add en Asíncrono)
+    // En síncrono, TAiChat.Run añade el mensaje al finalizar.
+    // En asíncrono, como el Run ya salió, debemos añadirlo aquí.
     if Self.Asynchronous and (FMessages.IndexOf(ResMsg) = -1) then
     begin
       ResMsg.Id := FMessages.Count + 1;
       FMessages.Add(ResMsg);
     end;
 
+    // B.4 Finalización y notificación a la UI
     DoStateChange(acsFinished, 'Done');
+
     if Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, ResMsg, JObj, LRole, FLastContent);
 
     FBusy := False;
   end;
 end;
-
 
 // ----- FUNCIONES DE GESTIÓN DE MODELOS  -----------
 
@@ -1341,7 +1115,7 @@ var
   LResponse: IHTTPResponse;
   LUrl: string;
 begin
-  Result := nil;
+  //Result := nil;
   LUrl := TPath.Combine(Self.Url, 'api/show');
   LJsonObject := TJSonObject.Create;
   LBodyStream := TStringStream.Create('', TEncoding.UTF8);

@@ -61,7 +61,7 @@ unit uMakerAi.Tools.TextEditor;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.JSON, System.IOUtils, System.StrUtils, uMakerAi.Utils.DiffUpdater;
+  System.SysUtils, System.Classes, System.JSON, System.IOUtils, System.StrUtils, uMakerAi.Utils.DiffUpdater, System.Generics.Collections;
 
 type
 

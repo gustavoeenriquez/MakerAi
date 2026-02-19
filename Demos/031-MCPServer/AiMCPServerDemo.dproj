@@ -198,6 +198,7 @@
         <DCCReference Include="..\..\Source\MCPServer\UMakerAi.MCPServer.SSE.pas"/>
         <DCCReference Include="uTool.FileAccess.pas"/>
         <DCCReference Include="uTool.SysInfo.pas"/>
+        <DCCReference Include="uTool.WorldTime.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -244,6 +245,18 @@
                 <DeployFile LocalName="Win32\Debug\AiMCPServerDemo.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>AiMCPServerDemo.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="Win64\Debug\AiMCPServerDemo.exe" Configuration="Debug" Class="ProjectOutput">
+                    <Platform Name="Win64">
+                        <RemoteName>AiMCPServerDemo.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="Win64\Debug\AiMCPServerDemo.rsm" Configuration="Debug" Class="DebugSymbols">
+                    <Platform Name="Win64">
+                        <RemoteName>AiMCPServerDemo.rsm</RemoteName>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>

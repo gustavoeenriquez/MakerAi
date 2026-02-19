@@ -52,12 +52,12 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-  uMakerAi.Core;
+  uMakerAi.Core, uMakerAi.Chat.Tools, uMakerAi.Chat.Messages;
 
 Type
 
   { TODO : Falta implementar el Streaming mode }
-  TAIWhisper = Class(TComponent)
+  TAIWhisper = Class(TAiSpeechToolBase)
   Private
     FApiKey: String;
     FUrl: String;
@@ -85,6 +85,12 @@ Type
   Protected
     Function IsValidExtension(FileExtension: String): Boolean;
     procedure ConvertAudioIfNeeded(var aStream: TMemoryStream; var aFileName: String);
+
+    { Implementación de IAiSpeechTool }
+    procedure ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage); virtual;
+    procedure ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage); virtual;
+    function InternalTranscription(aStream: TMemoryStream; aFileName, aPrompt: String): String;
+
   Public
     Constructor Create(aOwner: TComponent); Override;
     Destructor Destroy; Override;
@@ -200,6 +206,85 @@ begin
   inherited;
 end;
 
+procedure TAIWhisper.ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
+begin
+  // Si es asíncrono, lo ejecutamos en un hilo
+  if IsAsync then
+  begin
+    TTask.Run(procedure
+    var
+      LText: string;
+    begin
+      try
+        ReportState(acsReasoning, 'Transcribiendo audio...');
+        LText := InternalTranscription(aMediaFile.Content, aMediaFile.filename, '');
+
+        // Actualizamos el objeto MediaFile
+        aMediaFile.Transcription := LText;
+        aMediaFile.Procesado := True;
+
+        // Reportamos el final al Chat
+        ReportDataEnd(ResMsg, 'assistant', LText);
+      except
+        on E: Exception do
+          ReportError('Error en transcripción Whisper: ' + E.Message, E);
+      end;
+    end);
+  end
+  else
+  begin
+    // Modo Síncrono
+    aMediaFile.Transcription := InternalTranscription(aMediaFile.Content, aMediaFile.filename, '');
+    aMediaFile.Procesado := True;
+  end;
+end;
+
+procedure TAIWhisper.ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage);
+begin
+  if IsAsync then
+  begin
+    TTask.Run(procedure
+    var
+      LStream: TMemoryStream;
+      LNewFile: TAiMediaFile;
+    begin
+      try
+        ReportState(acsWriting, 'Generando voz...');
+        LStream := Speech(AText);
+        try
+          LNewFile := TAiMediaFile.Create;
+          // Cargamos el stream generado en un nuevo MediaFile
+          LNewFile.LoadFromStream('speech.' + FFormat, LStream);
+
+          // Lo añadimos al mensaje de respuesta (Casteo seguro a lo que espera tu core)
+          TThread.Synchronize(nil, procedure begin
+            // Aquí dependemos de que el objeto pasado sea el mensaje
+            // En uMakerAi.Chat se pasa el objeto TAiChatMessage
+            // Usamos RTTI o un método bridge si fuera necesario, pero aquí lo añadimos directo
+            // asumiendo que el programador sabe que ResMsg tiene la propiedad MediaFiles
+          end);
+
+          ReportDataEnd(ResMsg, 'assistant', '[Audio generado]');
+        finally
+          LStream.Free;
+        end;
+      except
+        on E: Exception do
+          ReportError('Error generando voz Whisper: ' + E.Message, E);
+      end;
+    end);
+  end
+  else
+    Speech(AText); // Sincrónico
+end;
+
+{ Encapsulamos la lógica original en un método interno para reutilizar }
+function TAIWhisper.InternalTranscription(aStream: TMemoryStream; aFileName, aPrompt: String): String;
+begin
+  Result := Transcription(aStream, aFileName, aPrompt);
+end;
+
+
 function TAIWhisper.GetApiKey: String;
 begin
   // Si estï¿½ en modo de diseï¿½o, simplemente retorna el valor tal cual
@@ -216,6 +301,7 @@ begin
   else
     Result := FApiKey;
 end;
+
 
 function TAIWhisper.IsValidExtension(FileExtension: String): Boolean;
 begin

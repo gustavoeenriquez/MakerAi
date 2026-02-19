@@ -47,14 +47,14 @@ uses
   FireDAC.Phys, FireDAC.Phys.PG, FireDAC.Phys.PGDef, FireDAC.FMXUI.Wait,
   Data.DB, FireDAC.Comp.Client,
   uMakerAi.RAG.Vectors, uMakerAi.Embeddings, uMakerAi.Chat.Ollama, uMakerAi.Core, uMakerAi.Chat,
-  uMakerAi.Chat.OpenAi,
+  uMakerAi.Chat.OpenAi, uMakerAi.Chat.Messages,
 
   FMX.Controls.Presentation, FMX.StdCtrls, FMX.Memo.Types, FMX.ScrollBox, FMX.Memo, FireDAC.Stan.Param, FireDAC.DatS, FireDAC.DApt.Intf,
   FireDAC.DApt, FireDAC.Comp.DataSet,
   FireDAC.Comp.UI, System.Rtti, FMX.Grid.Style, Data.Bind.EngExt, FMX.Bind.DBEngExt, FMX.Bind.Grid, System.Bindings.Outputs,
   FMX.Bind.Editors, Data.Bind.Components, FMX.Edit,
   Data.Bind.Grid, Data.Bind.DBScope, FMX.Grid, uMakerAi.Chat.AiConnection, uMakerAi.Prompts,
-  uMakerAi.Embeddings.core;
+  uMakerAi.Embeddings.core, uMakerAi.Chat.Tools, uMakerAi.Whisper;
 
 type
   TForm8 = class(TForm)
@@ -85,6 +85,8 @@ type
     AiChatConnection1: TAiChatConnection;
     AiOllamaEmbeddings1: TAiOllamaEmbeddings;
     BusQuerydistancia: TFloatField;
+    AIWhisper1: TAIWhisper;
+    AiOllamaChat1: TAiOllamaChat;
     procedure BtnAddTextClick(Sender: TObject);
     procedure RAGVectorAdicionDataVecAddItem(Sender: TObject; aItem: TAiEmbeddingNode; MetaData: TAiEmbeddingMetaData;
       var Handled: Boolean);
@@ -393,6 +395,53 @@ begin
     End;
 
     //4. Se indica que se maneja el procedimiento aquí, es importante para que el sistema no intente almacenarlo en memoria.
+    Handled := True;
+  Finally
+    Query.Free;
+  End;
+end;
+
+
+
+
+procedure TForm8.RAGVectorConsultaDataVecSearch(Sender: TObject; Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double;
+  var aDataVec: TAiRAGVector; var Handled: Boolean);
+Var
+  Query: TFDQuery;
+  sEmbedding, Texto: String;
+  JArr: TJSonArray;
+  Emb: TAiEmbeddingNode;
+begin
+
+  aDataVec := TAiRAGVector.Create(Nil); // Crea un vector de respuesta temporal
+
+  Query := NewQuery;
+  Try
+    JArr := Target.ToJsonArray;
+    Try
+      sEmbedding := JArr.ToString;
+    Finally
+      JArr.Free;
+    End;
+
+
+    Query.Sql.Clear;
+    Query.Sql.Add('SELECT id, resumen, embedding <-> ''' + sEmbedding + ''' as distancia');
+    Query.Sql.Add('FROM anexos');
+    Query.Sql.Add('ORDER BY embedding <-> ''' + sEmbedding + '''');
+    Query.Sql.Add('LIMIT ' + aLimit.ToString);
+    Query.Open;
+
+    GlLista.Clear;
+
+    While not Query.Eof do
+    Begin
+      Emb := TAiEmbeddingNode.Create(Target.Dim);
+      Emb.Text := Query.FieldByName('resumen').AsString;
+      aDataVec.AddItem(Emb, Nil);
+      Query.Next;
+    End;
+
     Handled := True;
   Finally
     Query.Free;

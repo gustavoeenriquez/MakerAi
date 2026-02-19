@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enrï¿½quez
+// Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,13 +33,13 @@
 
 
 // --- Modificaciones ----
-// 30/08/2024 -- Mejora en la funciï¿½n Edit
+// 30/08/2024 -- Mejora en la función Edit
 
 // --------- CAMBIOS --------------------
-// 4/11/2025 - Refactorizaciï¿½n completa para soportar dall-e-2, dall-e-3, y gpt-image-1.
-// 4/11/2025 - Aï¿½adido soporte para streaming con eventos (OnPartialImageReceived, OnStreamCompleted).
-// 4/11/2025 - Integraciï¿½n con uMakerAi.Core: Edit y Variation ahora usan TAiMediaFile.
-// 4/11/2025 - Modernizaciï¿½n de enums y nombres de propiedades para mayor claridad.
+// 4/11/2025 - Refactorización completa para soportar dall-e-2, dall-e-3, y gpt-image-1.
+// 4/11/2025 - Añadido soporte para streaming con eventos (OnPartialImageReceived, OnStreamCompleted).
+// 4/11/2025 - Integración con uMakerAi.Core: Edit y Variation ahora usan TAiMediaFile.
+// 4/11/2025 - Modernización de enums y nombres de propiedades para mayor claridad.
 
 unit uMakerAi.OpenAi.Dalle;
 
@@ -52,8 +52,8 @@ uses
   System.Math,
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
-  // Dependencia clave de la libreria central
-  uMakerAi.Core, uJSONHelper;
+  // Dependencia clave de la librería central
+  uMakerAi.Core;
 
 const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
@@ -97,22 +97,18 @@ type
   TOnStreamCompleted = procedure(Sender: TObject; const AFinalImage: TAiDalleImage) of object;
   TOnStreamError = procedure(Sender: TObject; const AErrorMessage: string) of object;
 
-  // Enums para los parï¿½metros de la API
-  TAiImageModel = (imDallE2, imDallE3, imGptImage1);
+  // Enums para los parámetros de la API
+  TAiImageModel = (imDallE2, imDallE3, imGptImage1, imSDXL);
+
   TAiImageQuality = (iqAuto, iqStandard, iqHD, iqHigh, iqMedium, iqLow);
   TAiImageBackground = (ibAuto, ibTransparent, ibOpaque);
   TAiImageOutputFormat = (ifPng, ifJpeg, ifWebp);
   TAiImageStyle = (isVivid, isNatural);
   TAiImageResponseFormat = (irfUrl, irfBase64Json);
 
-  TAiImageSize = (is256x256, // Solo para DALL-E 2
-    is512x512, // Solo para DALL-E 2
-    is1024x1024, // Soportado por TODOS los modelos
-    is1792x1024, // Solo para DALL-E 3 (Formato panorï¿½mico/horizontal)
-    is1024x1792, // Solo para DALL-E 3 (Formato retrato/vertical)
-    is1536x1024, // Solo para gpt-image-1 (Formato panorï¿½mico/horizontal)
-    is1024x1536 // Solo para gpt-image-1 (Formato retrato/vertical)
-    );
+  TAiImageSize = (is256x256, is512x512, is1024x1024, is1792x1024, is1024x1792, is1536x1024, is1024x1536,
+    // SDXL-friendly
+    is768x768, is1216x832, is832x1216);
 
   TAiDalle = class(TComponent)
   private
@@ -134,6 +130,12 @@ type
     FStreamBuffer: TStringBuilder;
     FBytesProcessed: Int64;
     FActiveResponseStream: TMemoryStream;
+    FNegativePrompt: TStrings;
+    FSeed: Int64;
+    FSteps: Integer;
+    FGuidanceScale: Single;
+    FUseRefiner: Boolean;
+    FSampler: string; // opcional
 
     function GetApiKey: string;
     procedure SetApiKey(const Value: string);
@@ -144,18 +146,21 @@ type
     procedure SetStream(const Value: Boolean);
     procedure SetBackground(const Value: TAiImageBackground);
     procedure SetOutputFormat(const Value: TAiImageOutputFormat);
+    procedure SetNegativePrompt(const Value: TStrings);
   protected
     procedure ClearImages;
     procedure ParseResponse(JObj: TJSONObject);
     procedure HandleStreamData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
     procedure ProcessStreamBuffer;
+    function SizeToString(ASize: TAiImageSize): string;
   public
     constructor Create(aOwner: TComponent); override;
     destructor Destroy; override;
 
-    function Generate(const aPrompt: string; aSize: TAiImageSize; N: Integer = 1): TAiDalleImage;
-    function Edit(aMediaFiles: TAiMediaFiles; aMaskFile: TAiMediaFile; const aPrompt: string; aSize: TAiImageSize; N: Integer = 1): TAiDalleImage;
-    function Variation(aImageFile: TAiMediaFile; aSize: TAiImageSize; N: Integer = 1): TAiDalleImage;
+    function Generate(const aPrompt, aNegativePrompt: string; ASize: TAiImageSize; N: Integer = 1; aImage: TMemoryStream = Nil): TAiDalleImage;
+    function Edit(aMediaFiles: TAiMediaFiles; aMaskFile: TAiMediaFile; const aPrompt: string; ASize: TAiImageSize; N: Integer = 1): TAiDalleImage;
+    function Variation(aImageFile: TAiMediaFile; ASize: TAiImageSize; N: Integer = 1): TAiDalleImage;
+    function Upscale(aImage: TAiMediaFile; AScale: Integer = 2; AFaceEnhance: Boolean = False): TAiMediaFile;
 
   published
     property Url: string read FUrl write FUrl;
@@ -169,12 +174,22 @@ type
     property Stream: Boolean read FStream write SetStream default False;
     property Background: TAiImageBackground read FBackground write SetBackground default TAiImageBackground.ibAuto;
     property OutputFormat: TAiImageOutputFormat read FOutputFormat write SetOutputFormat default TAiImageOutputFormat.ifPng;
+    property NegativePrompt: TStrings read FNegativePrompt write SetNegativePrompt;
+
+    // SDXL propierties
+
+    property Steps: Integer read FSteps write FSteps default 30;
+    property GuidanceScale: Single read FGuidanceScale write FGuidanceScale;
+    property Seed: Int64 read FSeed write FSeed Default -1;
+    property UseRefiner: Boolean read FUseRefiner write FUseRefiner default False;
 
     // Eventos
     property OnPartialImageReceived: TOnPartialImageReceived read FOnPartialImageReceived write FOnPartialImageReceived;
     property OnStreamCompleted: TOnStreamCompleted read FOnStreamCompleted write FOnStreamCompleted;
     property OnStreamError: TOnStreamError read FOnStreamError write FOnStreamError;
   end;
+
+procedure Register;
 
 implementation
 
@@ -271,12 +286,20 @@ begin
   FBackground := ibAuto;
   FOutputFormat := ifPng;
   FStreamBuffer := TStringBuilder.Create;
+  FNegativePrompt := TStringList.Create;
+
+  FSteps := 30;
+  FGuidanceScale := 7.0;
+  FSeed := -1; // -1 = random
+  FUseRefiner := False;
+
 end;
 
 destructor TAiDalle.Destroy;
 begin
   ClearImages;
   FStreamBuffer.Free;
+  FNegativePrompt.Free;
   inherited;
 end;
 
@@ -289,7 +312,7 @@ begin
   SetLength(FImages, 0);
 end;
 
-function TAiDalle.Edit(aMediaFiles: TAiMediaFiles; aMaskFile: TAiMediaFile; const aPrompt: string; aSize: TAiImageSize; N: Integer): TAiDalleImage;
+function TAiDalle.Edit(aMediaFiles: TAiMediaFiles; aMaskFile: TAiMediaFile; const aPrompt: string; ASize: TAiImageSize; N: Integer): TAiDalleImage;
 var
   Body: TMultipartFormData;
   Client: TNetHTTPClient;
@@ -316,27 +339,15 @@ begin
     begin
       MediaFile.Content.Position := 0;
       if FModel = imGptImage1 then
-        {$IF CompilerVersion >= 35}
         Body.AddStream('image[]', MediaFile.Content, False, MediaFile.Filename)
-        {$ELSE}
-        Body.AddStream('image[]', MediaFile.Content, MediaFile.Filename)
-        {$ENDIF}
       else
-        {$IF CompilerVersion >= 35}
         Body.AddStream('image', MediaFile.Content, False, MediaFile.Filename);
-        {$ELSE}
-        Body.AddStream('image', MediaFile.Content, MediaFile.Filename);
-        {$ENDIF}
     end;
 
     if Assigned(aMaskFile) then
     begin
       aMaskFile.Content.Position := 0;
-      {$IF CompilerVersion >= 35}
       Body.AddStream('mask', aMaskFile.Content, False, aMaskFile.Filename);
-      {$ELSE}
-      Body.AddStream('mask', aMaskFile.Content, aMaskFile.Filename);
-      {$ENDIF}
     end;
 
     Body.AddField('prompt', aPrompt);
@@ -347,7 +358,7 @@ begin
       imDallE2:
         begin
           Body.AddField('model', 'dall-e-2');
-          case aSize of
+          case ASize of
             is256x256:
               Body.AddField('size', '256x256');
             is512x512:
@@ -359,7 +370,7 @@ begin
       imGptImage1:
         begin
           Body.AddField('model', 'gpt-image-1');
-          case aSize of
+          case ASize of
             is1024x1536:
               Body.AddField('size', '1024x1536');
             is1536x1024:
@@ -392,7 +403,7 @@ begin
   end;
 end;
 
-function TAiDalle.Generate(const aPrompt: string; aSize: TAiImageSize; N: Integer): TAiDalleImage;
+function TAiDalle.Generate(const aPrompt, aNegativePrompt: string; ASize: TAiImageSize; N: Integer; aImage: TMemoryStream): TAiDalleImage;
 var
   Client: TNetHTTPClient;
   JObj: TJSONObject;
@@ -400,7 +411,7 @@ var
   ContentStream: TStringStream;
   ResponseStream: TMemoryStream; // Usado solo para llamadas no-streaming
   sUrl: string;
-  AbortFlag: Boolean; // Variable para el parï¿½metro 'var'
+  AbortFlag: Boolean; // Variable para el parámetro 'var'
   StreamReader: TStreamReader; // Para leer la respuesta de forma robusta
 begin
   Result := nil;
@@ -417,26 +428,13 @@ begin
       imDallE2:
         begin
           JObj.AddPair('model', 'dall-e-2').AddPair('n', Min(10, Max(1, N)));
-          case aSize of
-            is256x256:
-              JObj.AddPair('size', '256x256');
-            is512x512:
-              JObj.AddPair('size', '512x512');
-          else
-            JObj.AddPair('size', '1024x1024');
-          end;
+          JObj.AddPair('size', SizeToString(ASize));
         end;
+
       imDallE3:
         begin
           JObj.AddPair('model', 'dall-e-3').AddPair('n', 1);
-          case aSize of
-            is1792x1024:
-              JObj.AddPair('size', '1792x1024');
-            is1024x1792:
-              JObj.AddPair('size', '1024x1792');
-          else
-            JObj.AddPair('size', '1024x1024');
-          end;
+          JObj.AddPair('size', SizeToString(ASize));
           if FQuality in [iqHD, iqHigh] then
             JObj.AddPair('quality', 'hd')
           else
@@ -446,17 +444,12 @@ begin
           else
             JObj.AddPair('style', 'natural');
         end;
+
       imGptImage1:
         begin
           JObj.AddPair('model', 'gpt-image-1').AddPair('n', Min(10, Max(1, N)));
-          case aSize of
-            is1536x1024:
-              JObj.AddPair('size', '1536x1024');
-            is1024x1536:
-              JObj.AddPair('size', '1024x1536');
-          else
-            JObj.AddPair('size', '1024x1024');
-          end;
+          JObj.AddPair('size', SizeToString(ASize));
+
           case FQuality of
             iqHigh:
               JObj.AddPair('quality', 'high');
@@ -479,6 +472,29 @@ begin
           end;
           if FStream then
             JObj.AddPair('stream', TJSONBool.Create(True));
+        end;
+
+      imSDXL:
+        begin
+          JObj.AddPair('model', 'sdxl');
+          JObj.AddPair('prompt', Trim(StringReplace(aPrompt, #$D#$A, ' \n', [rfReplaceAll])));
+
+          if aNegativePrompt <> '' then
+            JObj.AddPair('negative_prompt', Trim(StringReplace(aNegativePrompt, #$D#$A, ' \n', [rfReplaceAll])));
+
+          If Assigned(aImage) and (aImage.Size > 2000) then
+            JObj.AddPair('image', TNetEncoding.Base64.EncodeBytesToString(aImage.Memory, aImage.Size));
+
+          JObj.AddPair('steps', TJSONNumber.Create(FSteps));
+          JObj.AddPair('guidance_scale', TJSONNumber.Create(FGuidanceScale));
+
+          if FSeed >= 0 then
+            JObj.AddPair('seed', TJSONNumber.Create(FSeed));
+
+          if FUseRefiner then
+            JObj.AddPair('use_refiner', TJSONBool.Create(True));
+
+          JObj.AddPair('size', SizeToString(ASize));
         end;
     end;
 
@@ -563,10 +579,10 @@ begin
       FActiveResponseStream := nil;
     end;
 
-    // El JObj de la peticiï¿½n se libera aquï¿½ solo si no es streaming,
-    // porque en streaming ya se habrï¿½a liberado antes del bloque finally.
-    if not(FStream and (FModel = imGptImage1)) then
-      JObj.Free;
+    // El JObj de la petición se libera aquí solo si no es streaming,
+    // porque en streaming ya se habría liberado antes del bloque finally.
+    // if not(FStream and (FModel = imGptImage1)) then
+    // JObj.Free;
   end;
 end;
 
@@ -585,7 +601,7 @@ var
   NewBytes: TBytes;
   NewDataSize: Int64;
 begin
-  // Verificaciï¿½n de seguridad: solo proceder si tenemos un stream activo
+  // Verificación de seguridad: solo proceder si tenemos un stream activo
   if not Assigned(FActiveResponseStream) then
     Exit;
 
@@ -715,6 +731,11 @@ begin
   FModel := Value;
 end;
 
+procedure TAiDalle.SetNegativePrompt(const Value: TStrings);
+begin
+  FNegativePrompt.Assign(Value);
+end;
+
 procedure TAiDalle.SetOutputFormat(const Value: TAiImageOutputFormat);
 begin
   FOutputFormat := Value;
@@ -740,7 +761,102 @@ begin
   FStyle := Value;
 end;
 
-function TAiDalle.Variation(aImageFile: TAiMediaFile; aSize: TAiImageSize; N: Integer): TAiDalleImage;
+function TAiDalle.SizeToString(ASize: TAiImageSize): string;
+begin
+  case ASize of
+    is256x256:
+      Result := '256x256';
+    is512x512:
+      Result := '512x512';
+    is768x768:
+      Result := '768x768';
+
+    is1024x1024:
+      Result := '1024x1024';
+
+    is1216x832:
+      Result := '1216x832';
+    is832x1216:
+      Result := '832x1216';
+
+    is1536x1024:
+      Result := '1536x1024';
+    is1024x1536:
+      Result := '1024x1536';
+
+    is1792x1024:
+      Result := '1792x1024';
+    is1024x1792:
+      Result := '1024x1792';
+  else
+    Result := '1024x1024'; // fallback seguro
+  end;
+end;
+
+function TAiDalle.Upscale(
+  aImage: TAiMediaFile;
+  AScale: Integer;
+  AFaceEnhance: Boolean
+): TAiMediaFile;
+var
+  Client: TNetHTTPClient;
+  Req, ImageObj, RespImage: TJSONObject;
+  Res: IHTTPResponse;
+  sUrl, B64: string;
+begin
+  Result := nil;
+
+  if not Assigned(aImage) or (aImage.Content.Size = 0) then
+    raise Exception.Create('Image is required for upscale.');
+
+  Client := TNetHTTPClient.Create(nil);
+  Req := TJSONObject.Create;
+  try
+    // URL
+    sUrl := FUrl + 'images/upscale';
+
+    // Modelo
+    Req.AddPair('model', 'real-esrgan');
+    Req.AddPair('scale', TJSONNumber.Create(AScale));
+    Req.AddPair('face_enhance', TJSONBool.Create(AFaceEnhance));
+
+    // Imagen
+    ImageObj := TJSONObject.Create;
+    ImageObj.AddPair('b64', aImage.Base64);
+    ImageObj.AddPair('mime', aImage.MimeType);
+    ImageObj.AddPair('filename', aImage.Filename);
+    Req.AddPair('image', ImageObj);
+
+    // Headers
+    Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
+    Client.CustomHeaders['Content-Type'] := 'application/json';
+
+    // POST
+    Res := Client.Post(sUrl, TStringStream.Create(Req.ToString, TEncoding.UTF8));
+
+    if Res.StatusCode <> 200 then
+      raise Exception.CreateFmt('Upscale error %d: %s',
+        [Res.StatusCode, Res.ContentAsString]);
+
+    // Parse response
+    Req.Free;
+    Req := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
+
+    RespImage := Req.GetValue<TJSONObject>('image');
+
+    Result := TAiMediaFile.Create;
+    Result.LoadFromBase64(
+      RespImage.GetValue<string>('filename'),
+      RespImage.GetValue<string>('b64')
+    );
+
+  finally
+    Req.Free;
+    Client.Free;
+  end;
+end;
+
+function TAiDalle.Variation(aImageFile: TAiMediaFile; ASize: TAiImageSize; N: Integer): TAiDalleImage;
 var
   Body: TMultipartFormData;
   Client: TNetHTTPClient;
@@ -761,15 +877,11 @@ begin
   Body := TMultipartFormData.Create;
   try
     aImageFile.Content.Position := 0;
-    {$IF CompilerVersion >= 35}
     Body.AddStream('image', aImageFile.Content, False, aImageFile.Filename);
-    {$ELSE}
-    Body.AddStream('image', aImageFile.Content, aImageFile.Filename);
-    {$ENDIF}
     Body.AddField('user', FUser);
     Body.AddField('n', N.ToString);
 
-    case aSize of
+    case ASize of
       is256x256:
         Body.AddField('size', '256x256');
       is512x512:

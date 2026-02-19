@@ -37,7 +37,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON, System.Generics.Collections, System.SyncObjs,
-  IdContext, IdCustomHTTPServer, IdHTTPServer, IdGlobal,
+  IdContext, IdCustomHTTPServer, IdHTTPServer, IdGlobal, IdSocketHandle,
   UMakerAi.MCPServer.Core;
 
 type
@@ -45,6 +45,7 @@ type
   TMCPSSESession = class
   public
     SessionID: string;
+    // Cola de mensajes. Usamos String porque el JSON ya es texto.
     Outbox: TThreadedQueue<string>;
     LastActivity: TDateTime;
     constructor Create(const AID: string);
@@ -58,10 +59,12 @@ type
     FSessionsLock: TCriticalSection;
 
     // Configuración de endpoints
-    FSseEndpoint: string;      // por defecto '/sse'
+    FSseEndpoint: string; // por defecto '/sse'
     FMessagesEndpoint: string; // por defecto '/messages'
 
+    // Eventos de Indy
     procedure OnCommandGet(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+    procedure OnCommandOther(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
 
     // Manejadores específicos
     procedure HandleSSEConnection(AContext: TIdContext; AResponseInfo: TIdHTTPResponseInfo);
@@ -70,8 +73,7 @@ type
     // Helpers
     function GetOrCreateSession(const AID: string): TMCPSSESession;
     function GenerateSessionID: string;
-    procedure CleanUpExpiredSessions;
-    function VerifyAndSetCORSHeaders(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo): Boolean;
+    procedure VerifyAndSetCORSHeaders(AResponseInfo: TIdHTTPResponseInfo);
 
   public
     constructor Create(AOwner: TComponent); override;
@@ -80,8 +82,7 @@ type
     procedure Start; override;
     procedure Stop; override;
 
-    // Método para enviar notificaciones asíncronas desde la lógica de negocio hacia un cliente específico
-    procedure PushNotification(const ASessionID: string; const ANotificationJson: string);
+    // Propiedades de configuración
   published
     property SseEndpoint: string read FSseEndpoint write FSseEndpoint;
     property MessagesEndpoint: string read FMessagesEndpoint write FMessagesEndpoint;
@@ -105,17 +106,16 @@ constructor TMCPSSESession.Create(const AID: string);
 begin
   inherited Create;
   SessionID := AID;
-  // Cola con capacidad para 1000 mensajes, timeout de push infinito, pop 100ms
-  Outbox := TThreadedQueue<string>.Create(1000, INFINITE, 100);
+  // Capacidad: 1000 mensajes.
+  // PushTimeout: INFINITE (El productor espera si está lleno)
+  // PopTimeout: 1000ms (IMPORTANTE: No usar INFINITE aquí para permitir el heartbeat)
+  Outbox := TThreadedQueue<string>.Create(1000, INFINITE, 1000);
   LastActivity := Now;
 end;
 
 destructor TMCPSSESession.Destroy;
-var
-  Item: string;
 begin
-  Outbox.DoShutDown;
-  while Outbox.PopItem(Item) = wrSignaled do ;
+  Outbox.DoShutDown; // Desbloquear cualquier hilo esperando
   Outbox.Free;
   inherited;
 end;
@@ -125,13 +125,20 @@ end;
 constructor TAiMCPSSEHttpServer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  FHttpServer := TIdHTTPServer.Create(Self);
-  FHttpServer.OnCommandGet := OnCommandGet;
-  FHttpServer.OnCommandOther := OnCommandGet; // Para manejar POST y OPTIONS
 
   FSessions := TObjectDictionary<string, TMCPSSESession>.Create([doOwnsValues]);
   FSessionsLock := TCriticalSection.Create;
 
+  FHttpServer := TIdHTTPServer.Create(Self);
+  // Asignamos manejadores
+  FHttpServer.OnCommandGet := OnCommandGet;
+  FHttpServer.OnCommandOther := OnCommandOther;
+
+  // Configuración vital para SSE
+  FHttpServer.KeepAlive := True;
+  FHttpServer.AutoStartSession := False;
+
+  // Endpoints por defecto
   FSseEndpoint := '/sse';
   FMessagesEndpoint := '/messages';
 end;
@@ -139,6 +146,7 @@ end;
 destructor TAiMCPSSEHttpServer.Destroy;
 begin
   Stop;
+  FHttpServer.Free; // El server debe morir antes que las sesiones
   FSessions.Free;
   FSessionsLock.Free;
   inherited;
@@ -147,8 +155,11 @@ end;
 procedure TAiMCPSSEHttpServer.Start;
 begin
   inherited Start;
-  FHttpServer.DefaultPort := FLogicServer.Port;
-  FHttpServer.Active := True;
+  if not FHttpServer.Active then
+  begin
+    FHttpServer.DefaultPort := FLogicServer.Port;
+    FHttpServer.Active := True;
+  end;
 end;
 
 procedure TAiMCPSSEHttpServer.Stop;
@@ -156,7 +167,7 @@ begin
   if FHttpServer.Active then
     FHttpServer.Active := False;
 
-  // Limpiar sesiones
+  // Limpiar todas las sesiones activas
   FSessionsLock.Enter;
   try
     FSessions.Clear;
@@ -187,167 +198,151 @@ begin
   end;
 end;
 
-procedure TAiMCPSSEHttpServer.CleanUpExpiredSessions;
-var
-  KeysToRemove: TList<string>;
-  Pair: TPair<string, TMCPSSESession>;
+procedure TAiMCPSSEHttpServer.VerifyAndSetCORSHeaders(AResponseInfo: TIdHTTPResponseInfo);
 begin
-  // Lógica simple de limpieza (ej. sesiones inactivas por > 1 hora)
-  // Se podría llamar desde un Timer o un hilo de mantenimiento.
-  // Aquí se deja implementada pero no se llama automáticamente para simplificar.
-  KeysToRemove := TList<string>.Create;
-  try
-    FSessionsLock.Enter;
-    try
-      for Pair in FSessions do
-      begin
-        if MinutesBetween(Now, Pair.Value.LastActivity) > 60 then
-          KeysToRemove.Add(Pair.Key);
-      end;
+  if not FLogicServer.CorsEnabled then
+    Exit;
 
-      for var Key in KeysToRemove do
-        FSessions.Remove(Key);
-    finally
-      FSessionsLock.Leave;
-    end;
-  finally
-    KeysToRemove.Free;
-  end;
+  // Para desarrollo y Claude Desktop, '*' suele funcionar,
+  // pero algunas herramientas estrictas requieren el origen exacto.
+  AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Origin'] := '*';
+  AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Methods'] := 'GET, POST, OPTIONS';
+  AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Headers'] := 'Content-Type, Cache-Control, X-Session-ID';
+  AResponseInfo.CustomHeaders.Values['Access-Control-Expose-Headers'] := 'Content-Type';
 end;
 
-function TAiMCPSSEHttpServer.VerifyAndSetCORSHeaders(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo): Boolean;
-begin
-  // Copia de la lógica de tu servidor HTTP base, es necesaria aquí también.
-  Result := True;
-  if not FLogicServer.CorsEnabled then Exit;
-
-  AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Origin'] := '*'; // Simplificado para SSE
-  AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Methods'] := 'POST, GET, OPTIONS';
-  AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Headers'] := 'Content-Type';
-
-  // Para SSE es crucial exponer el header si usamos autenticación
-  // AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Credentials'] := 'true';
-end;
-
+// Manejador principal para GET
 procedure TAiMCPSSEHttpServer.OnCommandGet(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
 begin
-  VerifyAndSetCORSHeaders(ARequestInfo, AResponseInfo);
-
-  if ARequestInfo.Command = 'OPTIONS' then
-  begin
-    AResponseInfo.ResponseNo := 204;
-    Exit;
-  end;
+  // Siempre poner CORS
+  VerifyAndSetCORSHeaders(AResponseInfo);
 
   if ARequestInfo.URI = FSseEndpoint then
   begin
-    if ARequestInfo.Command = 'GET' then
-      HandleSSEConnection(AContext, AResponseInfo)
-    else
-      AResponseInfo.ResponseNo := 405;
-  end
-  else if ARequestInfo.URI = FMessagesEndpoint then
-  begin
-    if ARequestInfo.Command = 'POST' then
-      HandlePostMessage(AContext, ARequestInfo, AResponseInfo)
-    else
-      AResponseInfo.ResponseNo := 405;
+    HandleSSEConnection(AContext, AResponseInfo);
   end
   else
   begin
     AResponseInfo.ResponseNo := 404;
-    AResponseInfo.ContentText := 'MCP SSE Server Active. Use ' + FSseEndpoint;
+    AResponseInfo.ContentText := 'Not Found. Use ' + FSseEndpoint + ' for SSE.';
+  end;
+end;
+
+// Manejador para POST y OPTIONS
+procedure TAiMCPSSEHttpServer.OnCommandOther(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+begin
+  VerifyAndSetCORSHeaders(AResponseInfo);
+
+  if ARequestInfo.Command = 'OPTIONS' then
+  begin
+    AResponseInfo.ResponseNo := 204;
+    AResponseInfo.ContentLength := 0;
+    Exit;
+  end;
+
+  if (ARequestInfo.Command = 'POST') and (ARequestInfo.URI = FMessagesEndpoint) then
+  begin
+    HandlePostMessage(AContext, ARequestInfo, AResponseInfo);
+  end
+  else
+  begin
+    AResponseInfo.ResponseNo := 404;
+    AResponseInfo.ContentText := 'Endpoint not found or method not allowed.';
   end;
 end;
 
 // =============================================================================
-// Lógica SSE (Streaming)
+// LÓGICA CRÍTICA SSE
 // =============================================================================
-// Asegúrate de tener IdGlobal en el uses
-// uses ..., IdGlobal;
-
-
 
 procedure TAiMCPSSEHttpServer.HandleSSEConnection(AContext: TIdContext; AResponseInfo: TIdHTTPResponseInfo);
 var
   SessionID: string;
   Session: TMCPSSESession;
   Msg: string;
-  PopRes: TWaitResult;
-  Handshake: string;
-  Buffer: TIdBytes; // Usaremos bytes directos
+  PopResult: TWaitResult;
+  HandshakeStr: string;
+  BytesToSend: TIdBytes;
 begin
-  WriteLn('SERVER: === New SSE Request Started ===');
-
+  // 1. Configurar Sesión
   SessionID := GenerateSessionID;
   Session := GetOrCreateSession(SessionID);
 
-  // 1. Cabeceras
-  AResponseInfo.ResponseNo := 200;
-  AResponseInfo.ContentType := 'text/event-stream; charset=utf-8';
-  AResponseInfo.CacheControl := 'no-cache';
-  AResponseInfo.Connection := 'keep-alive';
-  AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Origin'] := '*';
-  AResponseInfo.CustomHeaders.Values['X-Accel-Buffering'] := 'no';
-
-  AResponseInfo.WriteHeader;
-
-  // 2. Handshake
-  var EndpointUrl := Format('%s?session_id=%s', [FMessagesEndpoint, SessionID]);
-
-  Handshake := 'event: endpoint' + #13#10 +
-               'data: ' + EndpointUrl + #13#10 +
-               #13#10;
+  WriteLn(Format('SSE: Client Connected (Session: %s)', [SessionID]));
 
   try
-    WriteLn('SERVER: Converting Handshake to Bytes...');
-    // CONVERSIÓN EXPLÍCITA A BYTES (Más seguro que Write(String))
-    Buffer := ToBytes(Handshake, IndyTextEncoding_UTF8);
+    // 2. Configurar Headers HTTP para Streaming
+    AResponseInfo.ResponseNo := 200;
+    AResponseInfo.ContentType := 'text/event-stream; charset=utf-8';
+    AResponseInfo.CacheControl := 'no-cache';
+    AResponseInfo.Connection := 'keep-alive';
 
-    WriteLn('SERVER: Writing Handshake Bytes...');
-    AContext.Connection.IOHandler.Write(Buffer);
+    // IMPORTANTE: Forzar que Indy envíe las cabeceras AHORA MISMO
+    // Esto impide que Indy bufferice la respuesta esperando que termine el método.
+    AResponseInfo.WriteHeader;
 
-    // Pequeña pausa para asegurar que el socket flushea antes de entrar al loop
-    Sleep(10);
+    // 3. Enviar Handshake MCP (Protocolo)
+    // Indica al cliente dónde mandar los comandos POST
+    var
+    FullMsgUrl := Format('%s?session_id=%s', [FMessagesEndpoint, SessionID]);
 
-    WriteLn('SERVER: Entered Keep-Alive Loop. Waiting for messages...');
+    HandshakeStr := 'event: endpoint' + #10 + 'data: ' + FullMsgUrl + #10#10;
 
-    // 3. Bucle
-    repeat
-      PopRes := Session.Outbox.PopItem(Msg);
+    AContext.Connection.IOHandler.Write(ToBytes(HandshakeStr, IndyTextEncoding_UTF8));
 
-      if PopRes = wrSignaled then
+    // 4. Bucle Principal de Streaming (Keep-Alive Loop)
+    while AContext.Connection.Connected do
+    begin
+      // Intentar sacar mensaje de la cola.
+      // Timeout de 1000ms (1 seg) definido en el constructor de TMCPSSESession.
+      PopResult := Session.Outbox.PopItem(Msg);
+
+      if PopResult = wrSignaled then
       begin
-        WriteLn('SERVER: Sending Message...');
-        var Payload := 'data: ' + Msg + #13#10#13#10;
+        // --- CASO A: Hay mensaje para enviar ---
+        // Formato SSE: "data: <contenido>\n\n"
+        var
+        Payload := 'data: ' + Msg + #10#10;
 
-        // Conversión y envío de bytes
-        Buffer := ToBytes(Payload, IndyTextEncoding_UTF8);
-        AContext.Connection.IOHandler.Write(Buffer);
+        // Escribimos Bytes directamente para evitar corrupción de caracteres
+        BytesToSend := ToBytes(Payload, IndyTextEncoding_UTF8);
+        AContext.Connection.IOHandler.Write(BytesToSend);
 
         Session.LastActivity := Now;
       end
-      else if PopRes = wrAbandoned then
+      else if PopResult = wrTimeout then
       begin
-        WriteLn('SERVER: Queue Abandoned. Exiting.');
+        // --- CASO B: No hay mensajes (Idle) ---
+        // Enviamos un comentario "ping" para mantener la conexión viva
+        // y evitar timeouts de antivirus/proxies.
+        var
+        Ping := ': keep-alive' + #10#10;
+        AContext.Connection.IOHandler.Write(ToBytes(Ping, IndyTextEncoding_ASCII));
+      end
+      else if PopResult = wrAbandoned then
+      begin
+        // La cola se destruyó (Servidor deteniéndose)
         Break;
       end;
 
-      // Chequeo de seguridad: Si el socket se desconecta, Write lanzará excepción
-      // en la siguiente vuelta, o podemos chequear aquí si queremos ser proactivos,
-      // pero dejaremos que el try-except maneje la desconexión.
+      // Verificación proactiva de desconexión
+      // Si el cliente cerró el socket, esto lanzará una excepción segura.
+      // AContext.Connection.CheckForDisconnect(True, True);
 
-    until False;
+      if AContext.Connection.IOHandler <> nil then
+        AContext.Connection.IOHandler.CheckForDisconnect(True, True);
+
+    end;
 
   except
     on E: Exception do
     begin
-      // Este Log es vital para saber por qué se cierra
-      WriteLn('SERVER ERROR/DISCONNECT: ' + E.ClassName + ' - ' + E.Message);
+      // Es normal ver "Connection Closed Gracefully" o "Socket Error" cuando el cliente cierra.
+      // No lo tratamos como error crítico.
     end;
   end;
 
-  // Limpieza
+  // 5. Limpieza al salir del bucle
   FSessionsLock.Enter;
   try
     if FSessions.ContainsKey(SessionID) then
@@ -356,29 +351,31 @@ begin
     FSessionsLock.Leave;
   end;
 
-  WriteLn('SERVER: === Request Ended ===');
+  WriteLn(Format('SSE: Client Disconnected (Session: %s)', [SessionID]));
 end;
 
+// =============================================================================
+// LÓGICA POST (MESSAGES)
+// =============================================================================
 
-// =============================================================================
-// Lógica POST (Comandos)
-// =============================================================================
 procedure TAiMCPSSEHttpServer.HandlePostMessage(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
 var
   SessionID: string;
   Session: TMCPSSESession;
   JsonBody: string;
   ResponseJson: string;
+  Stream: TStringStream;
 begin
-  // 1. Validar sesión
+  // 1. Validar Session ID
   SessionID := ARequestInfo.Params.Values['session_id'];
   if SessionID = '' then
   begin
     AResponseInfo.ResponseNo := 400;
-    AResponseInfo.ContentText := 'Missing session_id';
+    AResponseInfo.ContentText := 'Missing session_id parameter';
     Exit;
   end;
 
+  // 2. Buscar Sesión Activa
   FSessionsLock.Enter;
   try
     if not FSessions.TryGetValue(SessionID, Session) then
@@ -394,51 +391,43 @@ begin
     Exit;
   end;
 
-  // 2. Leer JSON del cuerpo
-  if ARequestInfo.PostStream <> nil then
+  // 3. Leer Body
+  if ARequestInfo.PostStream = nil then
   begin
-    var Stream := TStringStream.Create;
-    try
-      Stream.CopyFrom(ARequestInfo.PostStream, 0);
-      JsonBody := Stream.DataString;
-    finally
-      Stream.Free;
-    end;
+    AResponseInfo.ResponseNo := 400;
+    Exit;
   end;
 
-  // 3. Ejecutar Lógica MCP (usando tu Core Logic Server)
-  // Nota: ExecuteRequest es síncrono.
+  // Leer string UTF8 seguro
+  Stream := TStringStream.Create('', TEncoding.UTF8);
   try
+    Stream.CopyFrom(ARequestInfo.PostStream, 0);
+    JsonBody := Stream.DataString;
+  finally
+    Stream.Free;
+  end;
+
+  // 4. Ejecutar Lógica (Core)
+  try
+    // ExecuteRequest devuelve el JSON de respuesta
     ResponseJson := FLogicServer.ExecuteRequest(JsonBody, SessionID);
 
-    // 4. Enviar la respuesta por el canal SSE (Outbox)
-    // No respondemos por HTTP Response, sino por el stream abierto.
+    // 5. Enviar Respuesta por el CANAL SSE (No por HTTP response)
     if ResponseJson <> '' then
       Session.Outbox.PushItem(ResponseJson);
 
-    // 5. Responder al POST con 202 Accepted
+    // 6. Responder al POST con "202 Accepted"
+    // Esto le dice al cliente: "Recibí tu orden, espera la respuesta por el stream".
     AResponseInfo.ResponseNo := 202;
     AResponseInfo.ContentText := 'Accepted';
+    AResponseInfo.ContentType := 'text/plain';
 
   except
     on E: Exception do
     begin
       AResponseInfo.ResponseNo := 500;
-      AResponseInfo.ContentText := E.Message;
+      AResponseInfo.ContentText := 'Internal Error: ' + E.Message;
     end;
-  end;
-end;
-
-procedure TAiMCPSSEHttpServer.PushNotification(const ASessionID: string; const ANotificationJson: string);
-var
-  Session: TMCPSSESession;
-begin
-  FSessionsLock.Enter;
-  try
-    if FSessions.TryGetValue(ASessionID, Session) then
-      Session.Outbox.PushItem(ANotificationJson);
-  finally
-    FSessionsLock.Leave;
   end;
 end;
 

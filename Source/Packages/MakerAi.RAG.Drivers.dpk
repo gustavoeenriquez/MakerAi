@@ -41,6 +41,7 @@ requires
   MakerAI;
 
 contains
-  uMakerAi.RAG.Graph.Driver.Postgres in '..\RAG\uMakerAi.RAG.Graph.Driver.Postgres.pas';
+  uMakerAi.RAG.Graph.Driver.Postgres in '..\RAG\uMakerAi.RAG.Graph.Driver.Postgres.pas',
+  uMakerAi.RAG.Vector.Driver.Postgres in '..\RAG\uMakerAi.RAG.Vector.Driver.Postgres.pas';
 
 end.

@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -41,70 +41,70 @@
   Referencia API: https://docs.mistral.ai/api/#operation/ocr_api_routes_ocr_post
 
   CONTEXTO:
-  La API de OCR de Mistral, además de extraer texto plano (Markdown), permite
+  La API de OCR de Mistral, ademï¿½s de extraer texto plano (Markdown), permite
   realizar "anotaciones". Esto significa que puede analizar el documento y
 
-  extraer información estructurada en un formato JSON definido por el usuario.
+  extraer informaciï¿½n estructurada en un formato JSON definido por el usuario.
   Es una funcionalidad de "Inteligencia Documental".
 
   Existen dos tipos de anotaciones que pueden usarse por separado o en conjunto:
 
   1. DOCUMENT ANNOTATION (`document_annotation_format`):
-  - PROPOSITO: Extraer información global del documento completo (o de un
-  subconjunto de páginas).
+  - PROPOSITO: Extraer informaciï¿½n global del documento completo (o de un
+  subconjunto de pï¿½ginas).
   - EJEMPLOS: "Clasifica el documento (factura, contrato)", "Extrae el
-  nombre de la empresa y el año del informe", "Lista los títulos de los
-  capítulos".
-  - LIMITACIÓN: Funciona solo en las primeras 8 páginas del documento.
+  nombre de la empresa y el aï¿½o del informe", "Lista los tï¿½tulos de los
+  capï¿½tulos".
+  - LIMITACIï¿½N: Funciona solo en las primeras 8 pï¿½ginas del documento.
 
   2. BBOX ANNOTATION (`bbox_annotation_format`):
-  - PROPOSITO: Analizar individualmente cada elemento visual (imágenes,
-  gráficos, tablas visuales) que el OCR detecta en "cajas delimitadoras"
+  - PROPOSITO: Analizar individualmente cada elemento visual (imï¿½genes,
+  grï¿½ficos, tablas visuales) que el OCR detecta en "cajas delimitadoras"
   (Bounding Boxes o BBoxes).
-  - EJEMPLOS: "Para cada gráfico, descríbelo", "Convierte cada tabla visual
+  - EJEMPLOS: "Para cada grï¿½fico, descrï¿½belo", "Convierte cada tabla visual
   a formato de datos", "Identifica si la imagen es un logo o una foto".
-  - LIMITACIÓN: Sin límite de páginas (aplica a todo el documento).
+  - LIMITACIï¿½N: Sin lï¿½mite de pï¿½ginas (aplica a todo el documento).
 
   ---------------------------------
-  PLAN DE IMPLEMENTACIÓN:
+  PLAN DE IMPLEMENTACIï¿½N:
   ---------------------------------
 
-  1. AÑADIR NUEVAS PROPIEDADES EN `TAiMistralChat`:
+  1. Aï¿½ADIR NUEVAS PROPIEDADES EN `TAiMistralChat`:
   - Se necesitan propiedades para que el usuario pueda definir los esquemas JSON
-  y los parámetros de la anotación.
+  y los parï¿½metros de la anotaciï¿½n.
 
-  property OcrDocumentAnnotationSchema: TStrings; // Almacena el schema JSON para la anotación del documento.
-  property OcrBboxAnnotationSchema: TStrings;   // Almacena el schema JSON para la anotación de BBoxes.
-  property OcrAnnotationPages: string;          // String con números de página separados por coma (ej: "0,1,2")
-  // para `document_annotation`. Si está vacío, se aplica a todo
-  // (respetando el límite de 8 páginas de la API).
+  property OcrDocumentAnnotationSchema: TStrings; // Almacena el schema JSON para la anotaciï¿½n del documento.
+  property OcrBboxAnnotationSchema: TStrings;   // Almacena el schema JSON para la anotaciï¿½n de BBoxes.
+  property OcrAnnotationPages: string;          // String con nï¿½meros de pï¿½gina separados por coma (ej: "0,1,2")
+  // para `document_annotation`. Si estï¿½ vacï¿½o, se aplica a todo
+  // (respetando el lï¿½mite de 8 pï¿½ginas de la API).
 
   2. MODIFICAR `InternalRunOcr`:
-  - Dentro de esta función, antes de construir el TJSONObject de la petición:
-  a. Comprobar si `OcrDocumentAnnotationSchema` tiene contenido. Si es así,
+  - Dentro de esta funciï¿½n, antes de construir el TJSONObject de la peticiï¿½n:
+  a. Comprobar si `OcrDocumentAnnotationSchema` tiene contenido. Si es asï¿½,
   construir el objeto `document_annotation_format` completo (incluyendo
-  "type": "json_schema" y el "json_schema" anidado) y añadirlo al
+  "type": "json_schema" y el "json_schema" anidado) y aï¿½adirlo al
   JSON principal.
   b. Hacer lo mismo para `OcrBboxAnnotationSchema`.
-  c. Si `OcrAnnotationPages` no está vacío, parsear el string y crear un
-  TJSONArray de enteros para el parámetro `pages` de la petición.
+  c. Si `OcrAnnotationPages` no estï¿½ vacï¿½o, parsear el string y crear un
+  TJSONArray de enteros para el parï¿½metro `pages` de la peticiï¿½n.
 
   3. MODIFICAR `ParseOcrResponse`:
-  - La respuesta de la API contendrá, además del array `pages` con el
+  - La respuesta de la API contendrï¿½, ademï¿½s del array `pages` con el
   contenido Markdown, nuevos campos con las anotaciones.
   - Se debe buscar y parsear:
-  * Un objeto `document_annotation` (si se solicitó).
+  * Un objeto `document_annotation` (si se solicitï¿½).
   * Un array `bbox_annotations` dentro de cada elemento del array `pages`
-  (si se solicitó).
-  - La información extraída debe guardarse en nuevas propiedades del
-  objeto `TAiMediaFile` que se pasa a la función.
+  (si se solicitï¿½).
+  - La informaciï¿½n extraï¿½da debe guardarse en nuevas propiedades del
+  objeto `TAiMediaFile` que se pasa a la funciï¿½n.
 
-  4. AÑADIR NUEVAS PROPIEDADES EN `TAiMediaFile`:
+  4. Aï¿½ADIR NUEVAS PROPIEDADES EN `TAiMediaFile`:
   - Para almacenar los resultados estructurados de las anotaciones.
 
-  property DocumentAnnotation: string;     // Guarda el JSON resultante de la anotación del documento.
-  property BboxAnnotations: TStrings;    // Guarda una lista de JSONs, uno por cada anotación de BBox.
-  // O podría ser un TJSONArray directamente.
+  property DocumentAnnotation: string;     // Guarda el JSON resultante de la anotaciï¿½n del documento.
+  property BboxAnnotations: TStrings;    // Guarda una lista de JSONs, uno por cada anotaciï¿½n de BBox.
+  // O podrï¿½a ser un TJSONArray directamente.
 
   -----------------------------------------------------------------------------
 }
@@ -124,7 +124,7 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Embeddings.Core;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages;
 
 { TODO : Falta crear las siguientes funciones de Mistral }
 /// -----------------------------------------------------------------------------
@@ -166,8 +166,9 @@ type
     procedure SetOcrPagesNumbers(const Value: string);
   Protected
     Function InitChatCompletions: String; Override;
-    Function InitChatCompletionsFim(aPrompt, aSuffix: String): String; Virtual; // Se introduce solo acá
+    Function InitChatCompletionsFim(aPrompt, aSuffix: String): String; Virtual; // Se introduce solo acï¿½
     Function ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions; Override;
+    Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Override;
 
     function InternalRunPDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
 
@@ -205,7 +206,7 @@ type
 
   TAiMistralEmbeddings = Class(TAiEmbeddings)
   Public
-    // groq actualmente no maneja modelos de embeddings
+    // Mistral embeddings
     Constructor Create(aOwner: TComponent); Override;
     Function CreateEmbedding(aInput, aUser: String; aDimensions: integer = 1536; aModel: String = 'mistral-embed'; aEncodingFormat: String = 'float'): TAiEmbeddingData; Override;
 
@@ -236,17 +237,17 @@ var
   LUrl: string;
   LResponseObj: TJSONObject;
   LSignedUrl: string;
-  LHeaders: TNetHeaders; // Añadido
+  LHeaders: TNetHeaders; // Aï¿½adido
 begin
   Result := '';
   // MODIFICADO: Comprobar el campo correcto.
   if not Assigned(aMediaFile) or aMediaFile.IDFile.IsEmpty then
-    raise Exception.Create('El TAiMediaFile debe tener un ID de archivo válido (en IDFile) para obtener una URL firmada.');
+    raise Exception.Create('El TAiMediaFile debe tener un ID de archivo vï¿½lido (en IDFile) para obtener una URL firmada.');
 
   // MODIFICADO: Usar el campo correcto para construir la URL.
   LUrl := Url + 'files/' + aMediaFile.IDFile + '/url';
-  LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)]; // Añadir el Header de autorización
-  LResponse := FClient.Get(LUrl, nil, LHeaders); // Añadir el header a la petición
+  LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)]; // Aï¿½adir el Header de autorizaciï¿½n
+  LResponse := FClient.Get(LUrl, nil, LHeaders); // Aï¿½adir el header a la peticiï¿½n
 
   if LResponse.StatusCode = 200 then
   begin
@@ -289,7 +290,7 @@ class procedure TAiMistralChat.RegisterDefaultParams(Params: TStrings);
 Begin
   Params.Clear;
   Params.Add('ApiKey=@MISTRAL_API_KEY');
-  Params.Add('Model=open-mistral-7b');
+  Params.Add('Model=mistral-small-latest');
   Params.Add('MaxTokens=4096');
   Params.Add('URL=https://api.mistral.ai/v1/');
 End;
@@ -330,7 +331,7 @@ begin
       try
         Result.LoadFromStream(LMetadata.Filename, LContentStream);
         // Guardamos el ID de Mistral para futuras referencias.
-        // Reutilizamos IdAudio como en otras partes del código.
+        // Reutilizamos IdAudio como en otras partes del cï¿½digo.
         Result.IDFile := aFileId;
       except
         // Si hay un error al crear o cargar, liberamos y devolvemos nil.
@@ -438,7 +439,7 @@ var
   LResponse: IHTTPResponse;
   LUrl: string;
   LResponseObj: TJSONObject;
-  LHeaders: TNetHeaders; // Añadido
+  LHeaders: TNetHeaders; // Aï¿½adido
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
@@ -452,7 +453,7 @@ begin
     LTempStream.LoadFromStream(aMediaFile.Content);
     LTempStream.Position := 0;
 
-    // Se debe especificar el propósito, para OCR es 'ocr'
+    // Se debe especificar el propï¿½sito, para OCR es 'ocr'
     LBody.AddField('purpose', 'ocr');
 
 {$IF CompilerVersion >= 35}
@@ -460,7 +461,7 @@ begin
 {$ELSE}
     LBody.AddStream('file', LTempStream, aMediaFile.Filename, aMediaFile.MimeType);
 {$ENDIF}
-    LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)]; // Añadir el Header de autorización
+    LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)]; // Aï¿½adir el Header de autorizaciï¿½n
 
     Var
     LResponseStream := TMemoryStream.Create;
@@ -493,12 +494,12 @@ var
   FileId: string;
 begin
   Result := '';
-  // Llama a la función de subida que ya implementamos
+  // Llama a la funciï¿½n de subida que ya implementamos
   FileId := Self.UploadFile(aMediaFile);
 
   if not FileId.IsEmpty then
   begin
-    // Éxito. El ID ya está en aMediaFile.IDFile gracias a UploadFile.
+    // ï¿½xito. El ID ya estï¿½ en aMediaFile.IDFile gracias a UploadFile.
     // Usamos CacheName como una bandera para indicar que este archivo
     // debe ser usado como contexto persistente.
     aMediaFile.CacheName := FileId; // El valor puede ser el propio FileId para referencia.
@@ -520,7 +521,7 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) or aMediaFile.IDFile.IsEmpty then
-    raise Exception.Create('El TAiMediaFile debe tener un ID de archivo válido para ser borrado.');
+    raise Exception.Create('El TAiMediaFile debe tener un ID de archivo vï¿½lido para ser borrado.');
 
   LUrl := Url + 'files/' + aMediaFile.IDFile;
   LResponse := FClient.Delete(LUrl, nil);
@@ -550,7 +551,7 @@ begin
   inherited;
 
   ApiKey := '@MISTRAL_API_KEY';
-  Model := 'open-mistral-7b';
+  Model := 'mistral-small-latest';
   FOcrIncludeImages := True;
   Url := GlAIUrl;
 end;
@@ -575,11 +576,11 @@ begin
       For JVal in JToolCalls do
       Begin
         jObj := TJSONObject(JVal);
-        // If jObj.GetValue<String>('type') = 'function' then //Mistral no maneja este parámetro
+        If jObj.GetValue<String>('type') = 'function' then
         Begin
           Fun := TAiToolsFunction.Create;
           Fun.Id := jObj.GetValue<String>('id');
-          // Fun.Tipo := jObj.GetValue<String>('type'); //Mistral no maneja este parámetro
+          Fun.Tipo := jObj.GetValue<String>('type');
 
           If jObj.TryGetValue<TJSONObject>('function', jFunc) then
           Begin
@@ -604,7 +605,7 @@ begin
             End;
 
           Except
-            // Si no hay parámetros no marca error
+            // Si no hay parï¿½metros no marca error
           End;
 
           Result.Add(Fun.Id, Fun);
@@ -621,7 +622,7 @@ var
   Lista: TStringList;
   I: integer;
   Res: String;
-  // --- Variables para la lógica de Document QnA ---
+  // --- Variables para la lï¿½gica de Document QnA ---
   ActiveFileId: string;
   SignedUrl: string;
   MessagesJson: TJSonArray;
@@ -633,7 +634,7 @@ var
   JTextObj, JDocObj: TJSONObject;
   LModel: String;
 begin
-  // 1. --- Inicialización de variables ---
+  // 1. --- Inicializaciï¿½n de variables ---
   AJSONObject := TJSONObject.Create;
   Lista := TStringList.Create;
   ActiveFileId := '';
@@ -641,9 +642,9 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   try
-    // 2. --- Detección de "Caché Activa" para Document QnA ---
-    // Recorremos el historial de mensajes desde el más reciente al más antiguo.
-    // El primer archivo que encontremos con un 'CacheName' se usará como contexto.
+    // 2. --- Detecciï¿½n de "Cachï¿½ Activa" para Document QnA ---
+    // Recorremos el historial de mensajes desde el mï¿½s reciente al mï¿½s antiguo.
+    // El primer archivo que encontremos con un 'CacheName' se usarï¿½ como contexto.
     for I := FMessages.Count - 1 downto 0 do
     begin
       Msg := FMessages[I];
@@ -660,14 +661,14 @@ begin
         end;
       end;
       if not ActiveFileId.IsEmpty then
-        Break; // Encontramos la caché, salimos del bucle de Mensajes.
+        Break; // Encontramos la cachï¿½, salimos del bucle de Mensajes.
     end;
 
-    // 3. --- Construcción del Array de Mensajes ---
-    // Obtenemos el JSON de mensajes estándar generado por la clase base.
+    // 3. --- Construcciï¿½n del Array de Mensajes ---
+    // Obtenemos el JSON de mensajes estï¿½ndar generado por la clase base.
     MessagesJson := GetMessages;
 
-    // Si encontramos un archivo en caché y hay mensajes, modificamos el último mensaje
+    // Si encontramos un archivo en cachï¿½ y hay mensajes, modificamos el ï¿½ltimo mensaje
     // para inyectarle la referencia al documento.
     if (not ActiveFileId.IsEmpty) and (MessagesJson.Count > 0) then
     begin
@@ -675,7 +676,7 @@ begin
       SignedUrl := Self.GetSignedUrlById(ActiveFileId);
       if not SignedUrl.IsEmpty then
       begin
-        // a. Obtenemos el último objeto de mensaje del array JSON.
+        // a. Obtenemos el ï¿½ltimo objeto de mensaje del array JSON.
         LastMessageObj := MessagesJson.Items[MessagesJson.Count - 1] as TJSONObject;
 
         // b. Extraemos el texto original (el prompt del usuario).
@@ -709,7 +710,7 @@ begin
     end;
     AJSONObject.AddPair('messages', MessagesJson);
 
-    // 4. --- Añadir Parámetros Estándar a la Petición ---
+    // 4. --- Aï¿½adir Parï¿½metros Estï¿½ndar a la Peticiï¿½n ---
     AJSONObject.AddPair('model', LModel);
 
     if Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAi).Text) <> '') then
@@ -720,7 +721,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
 {$ENDIF}
       if Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
+        Raise Exception.Create('La propiedad Tools estï¿½n mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
       if (Trim(Tool_choice) <> '') then
@@ -744,10 +745,14 @@ begin
       AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
     if Top_p > 0 then
       AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
+    if Frequency_penalty <> 0 then
+      AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
+    if Presence_penalty <> 0 then
+      AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
     if Seed > 0 then
       AJSONObject.AddPair('random_seed', TJSONNumber.Create(Seed));
 
-    // 5. --- Añadir Parámetros Específicos de Mistral ---
+    // 5. --- Aï¿½adir Parï¿½metros Especï¿½ficos de Mistral ---
     if not ActiveFileId.IsEmpty then
     begin
       if DocumentImageLimit > 0 then
@@ -756,7 +761,27 @@ begin
         AJSONObject.AddPair('document_page_limit', TJSONNumber.Create(DocumentPageLimit));
     end;
 
-    if FResponse_format = tiaChatRfJson then
+    if FResponse_format = tiaChatRfJsonSchema then
+    begin
+      var JFormatConfig := TJSONObject.Create;
+      JFormatConfig.AddPair('type', 'json_schema');
+      var sSchema := Trim(JsonSchema.Text);
+      if sSchema <> '' then
+      begin
+        var JSchemaObj := TJSONObject.Create;
+        var JInnerSchema := TJSONObject.ParseJSONValue(sSchema) as TJSONObject;
+        if Assigned(JInnerSchema) then
+        begin
+          JSchemaObj.AddPair('schema', JInnerSchema);
+          JSchemaObj.AddPair('strict', TJSONBool.Create(True));
+          JFormatConfig.AddPair('json_schema', JSchemaObj);
+        end
+        else
+          JSchemaObj.Free;
+      end;
+      AJSONObject.AddPair('response_format', JFormatConfig);
+    end
+    else if FResponse_format = tiaChatRfJson then
       AJSONObject.AddPair('response_format', TJSONObject.Create.AddPair('type', 'json_object'))
     else
       AJSONObject.AddPair('response_format', TJSONObject.Create.AddPair('type', 'text'));
@@ -770,11 +795,15 @@ begin
       AJSONObject.AddPair('stop', JStop);
     end;
 
-    // 6. --- Configuración de Streaming ---
-    FClient.Asynchronous := Self.Asynchronous and (not Self.Tool_Active);
+    // 6. --- Configuraciï¿½n de Streaming ---
+    FClient.Asynchronous := Self.Asynchronous;
     AJSONObject.AddPair('stream', TJSONBool.Create(FClient.Asynchronous));
 
-    // 7. --- Finalización y Devolución del JSON ---
+    // Si el ThinkingLevel esta activo, usar prompt_mode reasoning para Magistral
+    if ThinkingLevel <> tlDefault then
+      AJSONObject.AddPair('prompt_mode', 'reasoning');
+
+    // 7. --- Finalizaciï¿½n y Devoluciï¿½n del JSON ---
 
     Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
@@ -799,7 +828,7 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   If LModel = '' then
-    LModel := 'open-mistral-7b';
+    LModel := 'mistral-small-latest';
 
   AJSONObject := TJSONObject.Create;
   Lista := TStringList.Create;
@@ -842,6 +871,86 @@ begin
   End;
 end;
 
+procedure TAiMistralChat.ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage);
+var
+  choices: TJSonArray;
+  JItem, jMessage: TJSonObject;
+  JVal, JContentVal: TJSonValue;
+  JContentArr: TJSonArray;
+  JChunk: TJSonObject;
+  JThinkingArr: TJSonArray;
+  sType, sText, sThinking: String;
+begin
+  // Detectar si content es array (Magistral reasoning) vs string (modelos estandar)
+  if jObj.TryGetValue<TJSonArray>('choices', choices) and (choices.Count > 0) then
+  begin
+    JItem := choices.Items[0] as TJSonObject;
+    if JItem.TryGetValue<TJSonObject>('message', jMessage) then
+    begin
+      if jMessage.TryGetValue<TJSonValue>('content', JContentVal) and (JContentVal is TJSonArray) then
+      begin
+        // MAGISTRAL: content es array de chunks tipados
+        JContentArr := TJSonArray(JContentVal);
+        sText := '';
+        sThinking := '';
+
+        for JVal in JContentArr do
+        begin
+          if not (JVal is TJSonObject) then
+            Continue;
+          JChunk := TJSonObject(JVal);
+
+          if not JChunk.TryGetValue<String>('type', sType) then
+            Continue;
+
+          if sType = 'text' then
+          begin
+            var sPartText := '';
+            if JChunk.TryGetValue<String>('text', sPartText) then
+              sText := sText + sPartText;
+          end
+          else if sType = 'thinking' then
+          begin
+            // thinking contiene un array: [{"type":"text","text":"..."}]
+            if JChunk.TryGetValue<TJSonArray>('thinking', JThinkingArr) then
+            begin
+              for var JThinkVal in JThinkingArr do
+              begin
+                if (JThinkVal is TJSonObject) then
+                begin
+                  var JThinkingItem := TJSonObject(JThinkVal);
+                  var sThinkText := '';
+                  if JThinkingItem.TryGetValue<String>('text', sThinkText) then
+                    sThinking := sThinking + sThinkText;
+                end;
+              end;
+            end;
+          end;
+          // 'reference' chunks se ignoran por ahora (citations futuro)
+        end;
+
+        // Reemplazar content del message con el texto extraido para que inherited funcione
+        jMessage.RemovePair('content');
+        jMessage.AddPair('content', sText);
+
+        // Guardar reasoning content para que el base class lo procese
+        if sThinking <> '' then
+        begin
+          jMessage.RemovePair('reasoning_content');
+          jMessage.AddPair('reasoning_content', sThinking);
+        end;
+
+        // Delegar al ParseChat heredado que ya maneja content=string + reasoning_content
+        inherited ParseChat(jObj, ResMsg);
+        Exit;
+      end;
+    end;
+  end;
+
+  // MODELOS ESTANDAR: content es string, delegar directamente
+  inherited ParseChat(jObj, ResMsg);
+end;
+
 function TAiMistralChat.InternalRunPDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
 var
   LBodyStream: TStringStream;
@@ -877,7 +986,7 @@ begin
   LDocumentAnnotationFormatObj := nil;
 
   try
-    // 1. Construir el cuerpo de la petición JSON
+    // 1. Construir el cuerpo de la peticiï¿½n JSON
     if LModel.IsEmpty then
     begin
       // Si el modelo base esta vacio, utilizar el modelo por defecto.
@@ -892,7 +1001,7 @@ begin
     // 2. Determinar el tipo y origen del documento
     aMediaFile.CloudState := 'ocr-processing'; // Actualizar estado
 
-    // **NUEVA LÓGICA DE SUBIDA AUTOMÁTICA**
+    // **NUEVA Lï¿½GICA DE SUBIDA AUTOMï¿½TICA**
     if aMediaFile.IDFile.IsEmpty then // Si no tiene un ID es porque no se ha subido.
     begin
       // Subir el archivo.
@@ -906,19 +1015,19 @@ begin
       aMediaFile.IDFile := FileId; // Asignar el ID al objeto MediaFile.
     end;
 
-    // A partir de aquí el archivo está subido, sea que venía así o se acaba de subir.
+    // A partir de aquï¿½ el archivo estï¿½ subido, sea que venï¿½a asï¿½ o se acaba de subir.
     LJsonObject.AddPair('id', TJSONString.Create(aMediaFile.IDFile)); // Se adiciona luego de subir el archivo al API
 
     // if not aMediaFile.IDFile.IsEmpty then
     begin
       // Escenario A: El archivo ya fue subido a Mistral.
-      // Necesitamos una URL firmada para que el servicio de OCR pueda acceder a él.
+      // Necesitamos una URL firmada para que el servicio de OCR pueda acceder a ï¿½l.
       aMediaFile.CloudState := 'ocr-getting-signed-url';
-      LDataUri := GetSignedUrl(aMediaFile); // Esta función actualiza aMediaFile.CloudUri
+      LDataUri := GetSignedUrl(aMediaFile); // Esta funciï¿½n actualiza aMediaFile.CloudUri
 
       if LDataUri.IsEmpty then
       begin
-        // GetSignedUrl ya habrá reportado el error.
+        // GetSignedUrl ya habrï¿½ reportado el error.
         DoError('No se pudo obtener la URL firmada para el archivo con ID: ' + aMediaFile.IDFile, nil);
         aMediaFile.CloudState := 'ocr-failed: signed-url';
         Exit;
@@ -933,39 +1042,39 @@ begin
 
     LJsonObject.AddPair('document', LDocumentObj);
 
-    // Parámetros Opcionales
+    // Parï¿½metros Opcionales
     LJsonObject.AddPair('include_image_base64', TJSONBool.Create(FOcrIncludeImages));
 
     // Pages
     LPagesArray := TJSonArray.Create;
     try
-      // Verifica si OcrAnnotationPages está vacío
+      // Verifica si OcrAnnotationPages estï¿½ vacï¿½o
       if not OcrAnnotationPages.IsEmpty then
       begin
-        // Divide el string OcrAnnotationPages por comas para obtener los números de página
+        // Divide el string OcrAnnotationPages por comas para obtener los nï¿½meros de pï¿½gina
         PageNumbers := SplitString(OcrAnnotationPages, ',');
 
-        // Itera sobre los números de página y añádelos al array JSON
+        // Itera sobre los nï¿½meros de pï¿½gina y aï¿½ï¿½delos al array JSON
         for PageNumber in PageNumbers do
         begin
-          // Elimina espacios en blanco al principio y al final del número de página
+          // Elimina espacios en blanco al principio y al final del nï¿½mero de pï¿½gina
 
-          // Verifica si el número de página es un entero válido
+          // Verifica si el nï¿½mero de pï¿½gina es un entero vï¿½lido
           if TryStrToInt(Trim(PageNumber), PageIndex) then
           begin
-            // Añade el número de página al array JSON
+            // Aï¿½ade el nï¿½mero de pï¿½gina al array JSON
             LPagesArray.Add(PageIndex);
           end
           else
           begin
-            // Manejar el caso en que el número de página no es válido (opcional)
-            DoError('Número de página no válido: ' + PageNumber, nil);
+            // Manejar el caso en que el nï¿½mero de pï¿½gina no es vï¿½lido (opcional)
+            DoError('Nï¿½mero de pï¿½gina no vï¿½lido: ' + PageNumber, nil);
           end;
         end;
       end
       else
       begin
-        // Si no se especifican las páginas, añade la primera página (página 0)
+        // Si no se especifican las pï¿½ginas, aï¿½ade la primera pï¿½gina (pï¿½gina 0)
         LPagesArray.Add(0);
       end;
       LJsonObject.AddPair('pages', LPagesArray);
@@ -990,8 +1099,8 @@ begin
     // document_annotation_format
     // Solo soportan jSon_schema
 
-    // 3. Realizar la petición POST a la API
-    ResMsg.Prompt := LJsonObject.ToString; // Guardamos la petición
+    // 3. Realizar la peticiï¿½n POST a la API
+    ResMsg.Prompt := LJsonObject.ToString; // Guardamos la peticiï¿½n
     LBodyStream.WriteString(LJsonObject.ToString);
     LBodyStream.Position := 0;
 
@@ -1062,7 +1171,7 @@ begin
   // El objeto aMediaFile ya existe, vamos a limpiarlo por si tiene datos previos.
   // aMediaFile.Transcription := '';
   // aMediaFile.Detail := '';
-  // Limpiamos los MediaFiles anidados (imágenes extraídas del OCR)
+  // Limpiamos los MediaFiles anidados (imï¿½genes extraï¿½das del OCR)
   // aMediaFile.MediaFiles.Clear;
 
   sb := TStringBuilder.Create;
@@ -1076,7 +1185,7 @@ begin
       Exit;
     end;
 
-    // Iteramos por cada página del documento.
+    // Iteramos por cada pï¿½gina del documento.
 
     for pageValue in jPages do
     begin
@@ -1085,16 +1194,16 @@ begin
         continue;
       jPage := pageValue as TJSONObject;
 
-      // Cada página tiene un campo "markdown" con el Markdown ya formateado.
-      // Esta es la forma más rápida y sencilla de obtener el texto.
+      // Cada pï¿½gina tiene un campo "markdown" con el Markdown ya formateado.
+      // Esta es la forma mï¿½s rï¿½pida y sencilla de obtener el texto.
       if jPage.TryGetValue('markdown', blockValue) then // MODIFICADO de content a markdown
       begin
         sb.AppendLine(blockValue.Value);
-        sb.AppendLine('--- Page Break ---'); // Añadir un separador de página.
+        sb.AppendLine('--- Page Break ---'); // Aï¿½adir un separador de pï¿½gina.
       end;
 
-      // Además, podemos procesar los datos estructurados si es necesario,
-      // como las imágenes incrustadas en el documento.
+      // Ademï¿½s, podemos procesar los datos estructurados si es necesario,
+      // como las imï¿½genes incrustadas en el documento.
       jImagesArray := TJSonArray.Create; // Se crea el objeto
 
       if jPage.TryGetValue<TJSonArray>('images', jImagesArray) then
@@ -1105,7 +1214,7 @@ begin
             continue;
           jImage := jImagesArray.Items[I] as TJSONObject;
 
-          // Extraer información de la imagen
+          // Extraer informaciï¿½n de la imagen
           if jImage.TryGetValue<string>('id', imageId) then;
           if jImage.TryGetValue<integer>('top_left_x', topLeftX) then;
           if jImage.TryGetValue<integer>('top_left_y', topLeftY) then;
@@ -1125,17 +1234,17 @@ begin
               Base64Data := Copy(imageB64, PosBase64 + Length(';base64,'), Length(imageB64))
             else
               Base64Data := imageB64; // Si no se encuentra el prefijo, usar el string
-            // Creamos un nuevo TAiMediaFile para la imagen extraída.
+            // Creamos un nuevo TAiMediaFile para la imagen extraï¿½da.
             embeddedImage := TAiMediaFile.Create;
             try
               // Le damos un nombre descriptivo.
               embeddedImage.LoadFromBase64(imageId, Base64Data); // Se usa el id de la imagen como nombre
               // embeddedImage.MimeType := imageMimeType;
 
-              // Añadir información adicional a la descripción de la imagen
+              // Aï¿½adir informaciï¿½n adicional a la descripciï¿½n de la imagen
               embeddedImage.Detail := Format('top_left_x: %d, top_left_y: %d, bottom_right_x: %d, bottom_right_y: %d', [topLeftX, topLeftY, bottomRightX, bottomRightY]);
 
-              // Añadimos la imagen extraída a la lista de media files del documento principal.
+              // Aï¿½adimos la imagen extraï¿½da a la lista de media files del documento principal.
               ResMsg.MediaFiles.Add(embeddedImage);
             except
               embeddedImage.Free;
@@ -1146,7 +1255,7 @@ begin
       end;
     end;
 
-    // El resultado principal es el contenido Markdown concatenado de todas las páginas.
+    // El resultado principal es el contenido Markdown concatenado de todas las pï¿½ginas.
     Result := sb.ToString;
 
     // Guardamos el texto en las propiedades correspondientes de TAiMediaFile.
@@ -1209,7 +1318,6 @@ begin
     St.Position := 0;
 
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
-    Headers := Headers + [TNetHeader.Create('OpenAI-Beta', 'assistants=v2')];
     Client.ContentType := 'application/json';
 
     Res := Client.Post(sUrl, St, Response, Headers);

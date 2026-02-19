@@ -1,6 +1,4 @@
-﻿unit uMakerAi.Chat.AiConnection;
-
-// IT License
+﻿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -33,6 +31,7 @@
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
+unit uMakerAi.Chat.AiConnection;
 
 interface
 
@@ -42,7 +41,7 @@ uses
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
   System.JSON, Rest.JSON,
   uMakerAi.ParamsRegistry, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Chat,
-  uMakerAi.Chat.Initializations, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor;
+  uMakerAi.Chat.Initializations, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Tools.ComputerUse, uMakerAi.Chat.Tools, uMakerAi.Chat.Messages;
 
 type
   TOnChatModelChangeEvent = procedure(Sender: TObject; const OldChat, NewChat: TAiChat) of object;
@@ -54,8 +53,8 @@ type
     FModel: String;
     FParams: TStrings;
     FMessages: TAiChatMessages;
-    FMessagesOwn: TAiChatMessages; //Instancia de mensajes que poseemos
-    //FInitialInstructions: TStrings;
+    FMessagesOwn: TAiChatMessages; // Instancia de mensajes que poseemos
+    // FInitialInstructions: TStrings;
     FMemory: TStrings;
     FAiFunctions: TAiFunctions;
     FPrompt_tokens: integer;
@@ -79,6 +78,14 @@ type
     FShellTool: TAiShell;
     FTextEditorTool: TAiTextEditorTool;
     FSystemPrompt: TStrings;
+    FComputerUseTool: TAiComputerUseTool;
+    FSpeechTool: TAiSpeechToolBase;
+    FOnStateChange: TAiStateChangeEvent;
+    FVideoTool: TAiVideoToolBase;
+    FVisionTool: TAiVisionToolBase;
+    FWebSearchTool: TAiWebSearchToolBase;
+    FChatMode: TAiChatMode;
+    FImageTool: TAiImageToolBase;
 
     // Setters y Getters
     procedure SetDriverName(const Value: String);
@@ -89,7 +96,6 @@ type
     function GetBusy: Boolean;
     procedure ParamsChanged(Sender: TObject);
 
-    procedure SetAiFunctions(const Value: TAiFunctions);
     procedure SetCompletion_tokens(const Value: integer);
     procedure SetMemory(const Value: TStrings);
     procedure SetOnAddMessage(const Value: TAiChatOnDataEvent);
@@ -104,11 +110,22 @@ type
     procedure SetPrompt_tokens(const Value: integer);
     procedure SetTotal_tokens(const Value: integer);
     procedure SetOnReceiveThinking(const Value: TAiChatOnDataEvent);
-    procedure SetShellTool(const Value: TAiShell);
-    procedure SetTextEditorTool(const Value: TAiTextEditorTool);
 
     procedure SetSystemPrompt(const Value: TStrings);
+    procedure SetChatMode(const Value: TAiChatMode);
+
+    procedure SetAiFunctions(const Value: TAiFunctions);
+    procedure SetShellTool(const Value: TAiShell);
+    procedure SetTextEditorTool(const Value: TAiTextEditorTool);
+    procedure SetComputerUseTool(const Value: TAiComputerUseTool);
+    procedure SetImageTool(const Value: TAiImageToolBase);
+    procedure SetSpeechTool(const Value: TAiSpeechToolBase);
+    procedure SetVideoTool(const Value: TAiVideoToolBase);
+    procedure SetVisionTool(const Value: TAiVisionToolBase);
+    procedure SetWebSearchTool(const Value: TAiWebSearchToolBase);
+
   protected
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     procedure ValideChat;
     procedure UpdateAndApplyParams;
     procedure SetupChatFromDriver;
@@ -145,6 +162,9 @@ type
     procedure RegisterUserParam(const DriverName, ModelName, ParamName, ParamValue: string); overload;
     procedure RegisterUserParam(const DriverName, ParamName, ParamValue: string); overload;
     procedure ClearRegisterParams(const DriverName: String; ModelName: string = '');
+    procedure RegisterCustomModel(const DriverName, CustomModelName, ModelBaseName: string);
+    procedure ClearCustomModels(const DriverName: string);
+    function GetBaseModel(const DriverName, CustomModel: string): string;
 
     function CreateChatForDriver(const aDriverName, aModel: string): TAiChatConnection;
 
@@ -162,8 +182,8 @@ type
     property DriverName: String read FDriverName write SetDriverName;
     property Model: String read FModel write SetModel;
     property Params: TStrings read FParams write SetParams;
-    //property InitialInstructions: TStrings read FInitialInstructions write SetInitialInstructions;
-    property SystemPrompt : TStrings read FSystemPrompt write SetSystemPrompt;
+    // property InitialInstructions: TStrings read FInitialInstructions write SetInitialInstructions;
+    property SystemPrompt: TStrings read FSystemPrompt write SetSystemPrompt;
     property Memory: TStrings read FMemory write SetMemory;
     property AiFunctions: TAiFunctions read FAiFunctions write SetAiFunctions;
     property Prompt_tokens: integer read FPrompt_tokens write SetPrompt_tokens;
@@ -183,7 +203,15 @@ type
     property OnProcessResponse: TAiChatOnProcessResponseEvent read FOnProcessResponse write SetOnProcessResponse;
     Property Version: String Read FVersion;
     property ShellTool: TAiShell read FShellTool write SetShellTool;
-    Property TextEditorTool : TAiTextEditorTool read FTextEditorTool write SetTextEditorTool;
+    Property TextEditorTool: TAiTextEditorTool read FTextEditorTool write SetTextEditorTool;
+    Property ComputerUseTool: TAiComputerUseTool read FComputerUseTool write SetComputerUseTool;
+    property ChatMode: TAiChatMode read FChatMode write SetChatMode default cmConversation;
+    property SpeechTool: TAiSpeechToolBase read FSpeechTool write SetSpeechTool;
+    property ImageTool: TAiImageToolBase read FImageTool write SetImageTool;
+    property VideoTool: TAiVideoToolBase read FVideoTool write SetVideoTool;
+    property WebSearchTool: TAiWebSearchToolBase read FWebSearchTool write SetWebSearchTool;
+    property VisionTool: TAiVisionToolBase read FVisionTool write SetVisionTool;
+    property OnStateChange: TAiStateChangeEvent read FOnStateChange write FOnStateChange;
 
   end;
 
@@ -208,7 +236,7 @@ begin
   FSystemPrompt := TStringList.Create;
   FMemory := TStringList.Create;
   FMessagesOwn := TAiChatMessages.Create;
-  FMessages := FMessagesOwn;  // Por defecto, FMessages apunta a nuestra instancia
+  FMessages := FMessagesOwn; // Por defecto, FMessages apunta a nuestra instancia
   FParams := TStringList.Create;
   TStringList(FParams).OnChange := ParamsChanged;
   TStringList(FSystemPrompt).OnChange := ParamsChanged;
@@ -230,20 +258,20 @@ begin
   inherited;
 end;
 
-{procedure TAiChatConnection.SetDriverName(const Value: String);
-begin
+{ procedure TAiChatConnection.SetDriverName(const Value: String);
+  begin
   if FDriverName <> Value then
   begin
-    FDriverName := Value;
-    FModel := ''; // Al cambiar de driver, reseteamos el modelo.
-    UpdateAndApplyParams;
+  FDriverName := Value;
+  FModel := ''; // Al cambiar de driver, reseteamos el modelo.
+  UpdateAndApplyParams;
 
-    if not(csDesigning in ComponentState) then
-    begin
-      SetupChatFromDriver;
-    end;
+  if not(csDesigning in ComponentState) then
+  begin
+  SetupChatFromDriver;
   end;
-end;
+  end;
+  end;
 }
 
 procedure TAiChatConnection.SetDriverName(const Value: String);
@@ -260,22 +288,20 @@ begin
     // UpdateAndApplyParams;
 
     // Opción B (Optimización): Cargar params pero no aplicar al chat viejo.
-    if not (csDesigning in ComponentState) then
+    if not(csDesigning in ComponentState) then
     begin
-        // Cargamos los defaults en FParams sin aplicarlos al FChat actual
-        // (Puedes refactorizar UpdateAndApplyParams para aceptar un booleano 'ApplyToChat')
-        UpdateAndApplyParams;
-        SetupChatFromDriver; // Esto creará el nuevo chat y le aplicará los params
+      // Cargamos los defaults en FParams sin aplicarlos al FChat actual
+      // (Puedes refactorizar UpdateAndApplyParams para aceptar un booleano 'ApplyToChat')
+      UpdateAndApplyParams;
+      SetupChatFromDriver; // Esto creará el nuevo chat y le aplicará los params
     end
     else
     begin
-       // En diseño solo actualizamos params visualmente
-       UpdateAndApplyParams;
+      // En diseño solo actualizamos params visualmente
+      UpdateAndApplyParams;
     end;
   end;
 end;
-
-
 
 procedure TAiChatConnection.SetModel(const Value: String);
 begin
@@ -303,19 +329,19 @@ begin
   end;
 end;
 
-{procedure TAiChatConnection.SetupChatFromDriver;
-var
+{ procedure TAiChatConnection.SetupChatFromDriver;
+  var
   OldChat, NewChat: TAiChat;
-begin
+  begin
 
   if csLoading in ComponentState then
-    Exit;
+  Exit;
 
   if FDriverName = '' then
   begin
-    if Assigned(FChat) then
-      FreeAndNil(FChat);
-    Exit;
+  if Assigned(FChat) then
+  FreeAndNil(FChat);
+  Exit;
   end;
 
   OldChat := FChat;
@@ -323,10 +349,10 @@ begin
 
   NewChat := TAiChatFactory.Instance.CreateDriver(FDriverName);
   if not Assigned(NewChat) then
-    raise Exception.CreateFmt('Failed to create driver instance for "%s"', [FDriverName]);
+  raise Exception.CreateFmt('Failed to create driver instance for "%s"', [FDriverName]);
 
   if Assigned(FOnChatModelChange) then
-    FOnChatModelChange(Self, OldChat, NewChat);
+  FOnChatModelChange(Self, OldChat, NewChat);
 
   ApplyParamsToChat(NewChat, FParams);
   ApplyEventsToChat(NewChat);
@@ -334,8 +360,8 @@ begin
   SetChat(NewChat);
 
   if Assigned(OldChat) then
-    OldChat.Free;
-end;
+  OldChat.Free;
+  end;
 }
 
 procedure TAiChatConnection.SetupChatFromDriver;
@@ -369,16 +395,47 @@ begin
     OldChat.Free;
 end;
 
+{ procedure TAiChatConnection.UpdateAndApplyParams;
+  Var
+  LParams: TStringList;
+  begin
 
+  if csLoading in ComponentState then
+  Exit;
 
+  if FDriverName = '' then
+  begin
+  FParams.Clear;
+  Exit;
+  end;
 
+  if TAiChatFactory.Instance.HasDriver(FDriverName) then
+  begin
+  Var
+  ShouldExpand := not(csDesigning in ComponentState);
+  LParams := TStringList.Create;
+  Try
+  TAiChatFactory.Instance.GetDriverParams(FDriverName, FModel, LParams, ShouldExpand);
+  MergeParams(LParams, FParams).Text; // Adiciona o actualiza FParams a LParams
+  Finally
+  LParams.Free;
+  End;
+  end
+  else
+  FParams.Clear;
 
+  if Assigned(FChat) then
+  begin
+  ApplyParamsToChat(FChat, FParams);
+  end;
+  end;
+}
 
 procedure TAiChatConnection.UpdateAndApplyParams;
-Var
-  LParams: TStringList;
+var
+  LRegistryParams: TStringList;
+  ShouldExpand: Boolean;
 begin
-
   if csLoading in ComponentState then
     Exit;
 
@@ -390,19 +447,37 @@ begin
 
   if TAiChatFactory.Instance.HasDriver(FDriverName) then
   begin
-    Var
+    // Seguridad: No expandir claves API en tiempo de diseño
     ShouldExpand := not(csDesigning in ComponentState);
-    LParams := TStringList.Create;
-    Try
-      TAiChatFactory.Instance.GetDriverParams(FDriverName, FModel, LParams, ShouldExpand);
-      MergeParams(LParams, FParams).Text; // Adiciona o actualiza FParams a LParams
-    Finally
-      LParams.Free;
-    End;
+    LRegistryParams := TStringList.Create;
+    try
+      // 1. Obtener los parámetros oficiales del registro (Nivel 1, 2 y 3)
+      TAiChatFactory.Instance.GetDriverParams(FDriverName, FModel, LRegistryParams, ShouldExpand);
+
+      // 2. Sincronización inteligente:
+      // En lugar de un Merge simple, vamos a asegurarnos de que FParams refleje
+      // la estructura del nuevo modelo.
+
+      FParams.BeginUpdate;
+      try
+        // Si quieres que el Registro sea la fuente de verdad absoluta al cambiar de modelo:
+        // FParams.Assign(LRegistryParams);
+
+        // Si prefieres mantener lo que el usuario escribió en el Object Inspector
+        // pero inyectar lo nuevo del registro:
+        MergeParams(LRegistryParams, FParams);
+      finally
+        FParams.EndUpdate;
+      end;
+
+    finally
+      LRegistryParams.Free;
+    end;
   end
   else
     FParams.Clear;
 
+  // 3. Inyectar los parámetros finales en el motor de Chat
   if Assigned(FChat) then
   begin
     ApplyParamsToChat(FChat, FParams);
@@ -433,19 +508,33 @@ var
   LValue: TValue;
   I: integer;
   ParamName, ParamValue: string;
+  LIntVal: Int64;
+  LFloatVal: Double;
 begin
   if not Assigned(AChat) then
     Exit;
 
-  // Asignaciones directas primero
+  // 1. ASIGNACIONES DIRECTAS DE ESTRUCTURA (Prioridad v1.5)
   AChat.AiFunctions := Self.AiFunctions;
   AChat.ShellTool := Self.ShellTool;
   AChat.TextEditorTool := Self.TextEditorTool;
+  AChat.ComputerUseTool := Self.ComputerUseTool;
 
+  // Inyectar el estado del orquestador
+  AChat.ChatMode := Self.ChatMode;
 
+  // Inyectar los Bridges (Herramientas externas)
+  AChat.SpeechTool := Self.SpeechTool;
+  AChat.ImageTool := Self.ImageTool;
+  AChat.VideoTool := Self.VideoTool;
+  AChat.WebSearchTool := Self.WebSearchTool;
+  AChat.VisionTool := Self.VisionTool;
+
+  // Contexto base
   AChat.Memory.Text := Self.Memory.Text;
   AChat.SystemPrompt.Text := Self.SystemPrompt.Text;
 
+  // 2. INYECCIÓN DINÁMICA VÍA PARAMS (RTTI)
   if not Assigned(AParams) or (AParams.Count <= 0) then
     Exit;
 
@@ -456,43 +545,39 @@ begin
     for I := 0 to AParams.Count - 1 do
     begin
       ParamName := AParams.Names[I];
-      ParamValue := AParams.Values[ParamName];
+      ParamValue := AParams.Values[ParamName].Trim;
+
+      if ParamName.IsEmpty then
+        Continue;
 
       LProp := LRttiType.GetProperty(ParamName);
 
       if Assigned(LProp) and LProp.IsWritable then
       begin
         try
-          // --- ESTRUCTURA REFACTORIZADA ---
-          // Cada rama ahora es completamente responsable de su lógica,
-          // incluyendo la llamada a SetValue.
           case LProp.PropertyType.TypeKind of
             tkInteger, tkInt64:
-              begin
-                LValue := StrToInt64(ParamValue);
-                LProp.SetValue(AChat, LValue);
-              end;
+              if TryStrToInt64(ParamValue, LIntVal) then
+                LProp.SetValue(AChat, LIntVal);
+
             tkFloat:
-              begin
-                LValue := TValue.From<Double>(StrToFloat(ParamValue));
-                LProp.SetValue(AChat, LValue);
-              end;
+              if TryStrToFloat(ParamValue, LFloatVal) then
+                LProp.SetValue(AChat, LFloatVal);
+
             tkString, tkUString, tkWideString:
-              begin
-                LValue := ParamValue;
-                LProp.SetValue(AChat, LValue);
-              end;
+              LProp.SetValue(AChat, ParamValue);
+
             tkEnumeration:
               begin
                 if LProp.PropertyType.Handle = TypeInfo(Boolean) then
-                  LValue := AnsiSameText(ParamValue, 'true') or (ParamValue = '1')
+                  LValue := MatchStr(LowerCase(ParamValue), ['true', '1', 'yes', 't'])
                 else
                   LValue := TValue.FromOrdinal(LProp.PropertyType.Handle, GetEnumValue(LProp.PropertyType.Handle, ParamValue));
                 LProp.SetValue(AChat, LValue);
               end;
+
             tkSet:
               begin
-                // La lógica para 'tkSet' ya era auto-contenida y no necesita SetValue.
                 var
                 LSetType := LProp.PropertyType as TRttiSetType;
                 if LSetType.ElementType.TypeKind = tkEnumeration then
@@ -501,6 +586,7 @@ begin
                   LEnumType := LSetType.ElementType;
                   var
                     SetAsInt: NativeInt := 0;
+
                   if (not ParamValue.IsEmpty) and (ParamValue <> '[]') then
                   begin
                     var
@@ -513,40 +599,32 @@ begin
                       TrimmedName := Trim(EnumName);
                       if not TrimmedName.IsEmpty then
                       begin
-                        try
-                          var
-                          OrdinalValue := GetEnumValue(LEnumType.Handle, TrimmedName);
-                          if OrdinalValue >= 0 then
-                            SetAsInt := SetAsInt or (1 shl OrdinalValue);
-                        except
-                          // Ignorar valores inválidos
-                        end;
+                        // GetEnumValue es sensible a mayúsculas según el Enum definido en uMakerAi.Core
+                        var
+                        OrdinalValue := GetEnumValue(LEnumType.Handle, TrimmedName);
+                        if OrdinalValue >= 0 then
+                          SetAsInt := SetAsInt or (1 shl OrdinalValue);
                       end;
                     end;
                   end;
                   TValue.Make(@SetAsInt, LSetType.Handle, LValue);
-                  // La llamada a SetValue se hace con el TValue recién creado.
                   LProp.SetValue(AChat, LValue);
                 end;
               end;
+
             tkClass:
               begin
-                // La lógica para 'tkClass' es especial. Modifica el objeto existente.
-                // Usamos EndsText para ser más flexibles (acepta TStrings, TStringList, etc.)
                 if LProp.PropertyType.QualifiedName.EndsWith('TStrings') then
                 begin
                   var
                   LStringsProp := LProp.GetValue(AChat).AsObject as TStrings;
                   if Assigned(LStringsProp) then
-                  begin
-                    // Modificamos el contenido del objeto directamente. No se necesita SetValue.
                     LStringsProp.Text := StringReplace(ParamValue, '|', sLineBreak, [rfReplaceAll]);
-                  end;
                 end;
               end;
-          end; // Fin del case
+          end;
         except
-          // on E: Exception do // Log error si es necesario
+          // Fallo silencioso por propiedad individual para no detener el resto de la inyección
         end;
       end;
     end;
@@ -572,6 +650,7 @@ begin
     AChat.OnProcessMediaFile := nil;
     AChat.OnProcessResponse := nil;
     AChat.OnError := nil;
+    AChat.OnStateChange := nil;
 
   end
   else
@@ -586,6 +665,7 @@ begin
     AChat.OnProcessMediaFile := Self.OnProcessMediaFile;
     AChat.OnProcessResponse := Self.OnProcessResponse;
     AChat.OnError := Self.OnError;
+    AChat.OnStateChange := Self.FOnStateChange;
   end;
 end;
 
@@ -613,6 +693,26 @@ begin
   TAiChatFactory.Instance.ClearRegisterParams(DriverName, ModelName);
   if (DriverName = FDriverName) then
     UpdateAndApplyParams;
+end;
+
+procedure TAiChatConnection.RegisterCustomModel(const DriverName, CustomModelName, ModelBaseName: string);
+begin
+  TAiChatFactory.Instance.RegisterCustomModel(DriverName, CustomModelName, ModelBaseName);
+  // Si estamos usando este driver, refrescamos la lista de modelos disponible
+  if DriverName = FDriverName then
+    UpdateAndApplyParams;
+end;
+
+procedure TAiChatConnection.ClearCustomModels(const DriverName: string);
+begin
+  TAiChatFactory.Instance.ClearCustomModels(DriverName);
+  if DriverName = FDriverName then
+    UpdateAndApplyParams;
+end;
+
+function TAiChatConnection.GetBaseModel(const DriverName, CustomModel: string): string;
+begin
+  Result := TAiChatFactory.Instance.GetBaseModel(DriverName, CustomModel);
 end;
 
 function TAiChatConnection.CreateChatForDriver(const aDriverName, aModel: string): TAiChatConnection;
@@ -749,19 +849,15 @@ begin
 end;
 
 function TAiChatConnection.MergeParams(Origin, Destination: TStrings): TStrings;
-Var
-  Name, Value: String;
+var
   I: integer;
 begin
   Result := Destination;
-
-  For I := 0 to Origin.Count - 1 do
-  Begin
-    Name := Origin.Names[I];
-    Value := Origin.Values[Name];
-    Result.Values[Name] := Value;
-  End;
-
+  for I := 0 to Origin.Count - 1 do
+  begin
+    // Esto actualiza si existe o añade si no existe, sin duplicar la clave
+    Destination.Values[Origin.Names[I]] := Origin.ValueFromIndex[I];
+  end;
 end;
 
 procedure TAiChatConnection.NewChat;
@@ -774,6 +870,58 @@ function TAiChatConnection.NewMessage(aPrompt, aRole: String): TAiChatMessage;
 begin
   ValideChat;
   Result := FChat.NewMessage(aPrompt, aRole);
+end;
+
+procedure TAiChatConnection.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited Notification(AComponent, Operation);
+
+  if Operation = opRemove then
+  begin
+    // 1. Limpiamos las referencias de las herramientas en la Conexión
+    if AComponent = FSpeechTool then
+      FSpeechTool := nil;
+    if AComponent = FImageTool then
+      FImageTool := nil;
+    if AComponent = FVideoTool then
+      FVideoTool := nil;
+    if AComponent = FWebSearchTool then
+      FWebSearchTool := nil;
+    if AComponent = FVisionTool then
+      FVisionTool := nil;
+    if AComponent = FShellTool then
+      FShellTool := nil;
+    if AComponent = FTextEditorTool then
+      FTextEditorTool := nil;
+    if AComponent = FComputerUseTool then
+      FComputerUseTool := nil;
+    if AComponent = FAiFunctions then
+      FAiFunctions := nil;
+
+    // 2. IMPORTANTE: Si hay un chat activo, sincronizamos el 'nil'
+    // para evitar que el Chat principal intente usar un objeto destruido.
+    if Assigned(FChat) then
+    begin
+      if AComponent = FSpeechTool then
+        FChat.SpeechTool := nil;
+      if AComponent = FImageTool then
+        FChat.ImageTool := nil;
+      if AComponent = FVideoTool then
+        FChat.VideoTool := nil;
+      if AComponent = FWebSearchTool then
+        FChat.WebSearchTool := nil;
+      if AComponent = FVisionTool then
+        FChat.VisionTool := nil;
+      if AComponent = FShellTool then
+        FChat.ShellTool := nil;
+      if AComponent = FTextEditorTool then
+        FChat.TextEditorTool := nil;
+      if AComponent = FComputerUseTool then
+        FChat.ComputerUseTool := nil;
+      if AComponent = FAiFunctions then
+        FChat.AiFunctions := nil;
+    end;
+  end;
 end;
 
 procedure TAiChatConnection.OnInternalReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject; aRole, aText: String);
@@ -827,13 +975,6 @@ end;
 
 // --- Setters de Propiedades y Eventos ---
 
-procedure TAiChatConnection.SetAiFunctions(const Value: TAiFunctions);
-begin
-  FAiFunctions := Value;
-  if Assigned(FChat) then
-    FChat.AiFunctions := Value;
-end;
-
 procedure TAiChatConnection.SetChat(const Value: TAiChat);
 begin
   if FChat <> Value then
@@ -871,7 +1012,6 @@ procedure TAiChatConnection.SetCompletion_tokens(const Value: integer);
 begin
   FCompletion_tokens := Value;
 end;
-
 
 procedure TAiChatConnection.SetMemory(const Value: TStrings);
 begin
@@ -953,11 +1093,6 @@ begin
   FPrompt_tokens := Value;
 end;
 
-procedure TAiChatConnection.SetShellTool(const Value: TAiShell);
-begin
-  FShellTool := Value;
-end;
-
 procedure TAiChatConnection.SetSystemPrompt(const Value: TStrings);
 begin
   FSystemPrompt.Assign(Value);
@@ -965,14 +1100,129 @@ begin
     FChat.SystemPrompt.Assign(Value);
 end;
 
-procedure TAiChatConnection.SetTextEditorTool(const Value: TAiTextEditorTool);
-begin
-  FTextEditorTool := Value;
-end;
-
 procedure TAiChatConnection.SetTotal_tokens(const Value: integer);
 begin
   FTotal_tokens := Value;
+end;
+
+// -------------------------
+
+procedure TAiChatConnection.SetChatMode(const Value: TAiChatMode);
+begin
+  if FChatMode <> Value then
+  begin
+    FChatMode := Value;
+    if Assigned(FChat) then
+      FChat.ChatMode := Value;
+  end;
+end;
+
+procedure TAiChatConnection.SetAiFunctions(const Value: TAiFunctions);
+begin
+  if FAiFunctions <> Value then
+  begin
+    FAiFunctions := Value;
+    if FAiFunctions <> nil then
+      FAiFunctions.FreeNotification(Self);
+    if Assigned(FChat) then
+      FChat.AiFunctions := Value;
+  end;
+end;
+
+procedure TAiChatConnection.SetShellTool(const Value: TAiShell);
+begin
+  if FShellTool <> Value then
+  begin
+    FShellTool := Value;
+    if FShellTool <> nil then
+      FShellTool.FreeNotification(Self);
+    if Assigned(FChat) then
+      FChat.ShellTool := Value;
+  end;
+end;
+
+procedure TAiChatConnection.SetSpeechTool(const Value: TAiSpeechToolBase);
+begin
+  if FSpeechTool <> Value then
+  begin
+    FSpeechTool := Value;
+    if FSpeechTool <> nil then
+      FSpeechTool.FreeNotification(Self);
+    if Assigned(FChat) then
+      FChat.SpeechTool := Value;
+  end;
+end;
+
+procedure TAiChatConnection.SetTextEditorTool(const Value: TAiTextEditorTool);
+begin
+  if FTextEditorTool <> Value then
+  begin
+    FTextEditorTool := Value;
+    if FTextEditorTool <> nil then
+      FTextEditorTool.FreeNotification(Self);
+    if Assigned(FChat) then
+      FChat.TextEditorTool := Value;
+  end;
+end;
+
+procedure TAiChatConnection.SetComputerUseTool(const Value: TAiComputerUseTool);
+begin
+  if FComputerUseTool <> Value then
+  begin
+    FComputerUseTool := Value;
+    if FComputerUseTool <> nil then
+      FComputerUseTool.FreeNotification(Self);
+    if Assigned(FChat) then
+      FChat.ComputerUseTool := Value;
+  end;
+end;
+
+procedure TAiChatConnection.SetImageTool(const Value: TAiImageToolBase);
+begin
+  if FImageTool <> Value then
+  begin
+    FImageTool := Value;
+    if FImageTool <> nil then
+      FImageTool.FreeNotification(Self);
+    if Assigned(FChat) then
+      FChat.ImageTool := Value;
+  end;
+end;
+
+procedure TAiChatConnection.SetVideoTool(const Value: TAiVideoToolBase);
+begin
+  if FVideoTool <> Value then
+  begin
+    FVideoTool := Value;
+    if FVideoTool <> nil then
+      FVideoTool.FreeNotification(Self);
+    if Assigned(FChat) then
+      FChat.VideoTool := Value;
+  end;
+end;
+
+procedure TAiChatConnection.SetVisionTool(const Value: TAiVisionToolBase);
+begin
+  if FVisionTool <> Value then
+  begin
+    FVisionTool := Value;
+    if FVisionTool <> nil then
+      FVisionTool.FreeNotification(Self);
+    if Assigned(FChat) then
+      FChat.VisionTool := Value;
+  end;
+end;
+
+procedure TAiChatConnection.SetWebSearchTool(const Value: TAiWebSearchToolBase);
+begin
+  if FWebSearchTool <> Value then
+  begin
+    FWebSearchTool := Value;
+    if FWebSearchTool <> nil then
+      FWebSearchTool.FreeNotification(Self);
+    if Assigned(FChat) then
+      FChat.WebSearchTool := Value;
+  end;
 end;
 
 end.

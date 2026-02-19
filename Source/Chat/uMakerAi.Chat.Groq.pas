@@ -60,7 +60,7 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core, uMakerAi.Embeddings.Core;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages;
 
 Type
   // Este modelo de reasoning por ahora solo se ha detectado en Groq, así que se implementa solo aquí

@@ -38,15 +38,13 @@ program AiMCPSseServerDemo;
 uses
   System.SysUtils,
   System.Classes,
-  // Unidades Core
   uMakerAi.MCPServer.Core in '..\..\Source\MCPServer\uMakerAi.MCPServer.Core.pas',
-  uMakerAi.MCPServer.Http in '..\..\Source\MCPServer\UMakerAi.MCPServer.Http.pas',
-  uMakerAi.MCPServer.Stdio in '..\..\Source\MCPServer\UMakerAi.MCPServer.Stdio.pas',
-  uMakerAi.MCPServer.SSE in '..\..\Source\MCPServer\UMakerAi.MCPServer.SSE.pas', // <--- NUEVA UNIDAD
-
-  // Unidades de Herramientas (Reutilizamos las que ya tienes)
+  UMakerAi.MCPServer.Http in '..\..\Source\MCPServer\UMakerAi.MCPServer.Http.pas',
+  UMakerAi.MCPServer.Stdio in '..\..\Source\MCPServer\UMakerAi.MCPServer.Stdio.pas',
+  UMakerAi.MCPServer.SSE in '..\..\Source\MCPServer\UMakerAi.MCPServer.SSE.pas',
   uTool.FileAccess in 'uTool.FileAccess.pas',
-  uTool.SysInfo in 'uTool.SysInfo.pas';
+  uTool.SysInfo in 'uTool.SysInfo.pas',
+  uTool.WorldTime in 'uTool.WorldTime.pas';
 
 var
   MCPServer: TAiMCPServer;
@@ -121,6 +119,7 @@ begin
   // Reutilizamos tus herramientas existentes sin modificar una sola línea de código
   uTool.FileAccess.RegisterTools(ALogicServer);
   uTool.SysInfo.RegisterTools(ALogicServer);
+  uTool.WorldTime.RegisterWorldTimeTool(ALogicServer);
 
   WriteLn('Registration complete.');
 end;

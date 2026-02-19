@@ -80,14 +80,16 @@ type
     IsDragging: Boolean;
     StartPoint, EndPoint: TPointF;
     VirtualScreenLeft, VirtualScreenTop: Integer;
+    HasSelection : Boolean;
     procedure FormMouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Single);
     procedure FormMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Single);
     procedure FormMouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Single);
     procedure FormKeyDown(Sender: TObject; var Key: Word; var KeyChar: Char; Shift: TShiftState);
     procedure FormPaint(Sender: TObject; Canvas: TCanvas; const ARect: TRectF);
+  protected
   public
      constructor Create(AOwner: TComponent); override;
-    function Execute(out ASelectedRect: TRect): Boolean;
+    function Execute(var ASelectedRect: TRect): Boolean;
   end;
 
 
@@ -95,117 +97,6 @@ type
 implementation
 
 {$IFDEF MSWINDOWS}
-{
-class function TScreenCapture.CaptureScreenWindows(const ARect: TRect): FMX.Graphics.TBitmap;
-var
-  ScreenDC, MemDC: HDC;
-  ScreenBmp: HBITMAP;
-  OldBmp: HBITMAP;
-  BmpInfo: TBitmapInfo;
-  BmpData: Pointer;
-  CaptureRect: TRect;
-  ScreenWidth, ScreenHeight: Integer;
-  FMXBmpData: TBitmapData;
-  BytesPerPixel: Integer;
-  SrcPtr, DstPtr: PByte;
-  x, y: Integer;
-begin
-  Result := nil;
-
-  // Obtener dimensiones de la pantalla
-  ScreenWidth := GetSystemMetrics(SM_CXSCREEN);
-  ScreenHeight := GetSystemMetrics(SM_CYSCREEN);
-
-  // Determinar el área a capturar
-  if ARect.IsEmpty then
-    CaptureRect := TRect.Create(0, 0, ScreenWidth, ScreenHeight)
-  else
-    CaptureRect := ARect;
-
-  // Validar que el rectángulo esté dentro de los límites
-  CaptureRect.Left := Max(0, CaptureRect.Left);
-  CaptureRect.Top := Max(0, CaptureRect.Top);
-  CaptureRect.Right := Min(ScreenWidth, CaptureRect.Right);
-  CaptureRect.Bottom := Min(ScreenHeight, CaptureRect.Bottom);
-
-  if (CaptureRect.Width <= 0) or (CaptureRect.Height <= 0) then
-    Exit;
-
-  ScreenDC := GetDC(0);
-  try
-    MemDC := CreateCompatibleDC(ScreenDC);
-    try
-      ScreenBmp := CreateCompatibleBitmap(ScreenDC, CaptureRect.Width, CaptureRect.Height);
-      try
-        OldBmp := SelectObject(MemDC, ScreenBmp);
-        try
-          // Copiar la pantalla al bitmap
-          BitBlt(MemDC, 0, 0, CaptureRect.Width, CaptureRect.Height,
-                 ScreenDC, CaptureRect.Left, CaptureRect.Top, SRCCOPY);
-
-          // Preparar la estructura BitmapInfo
-          FillChar(BmpInfo, SizeOf(BmpInfo), 0);
-          BmpInfo.bmiHeader.biSize := SizeOf(TBitmapInfoHeader);
-          BmpInfo.bmiHeader.biWidth := CaptureRect.Width;
-          BmpInfo.bmiHeader.biHeight := -CaptureRect.Height; // Negativo para top-down
-          BmpInfo.bmiHeader.biPlanes := 1;
-          BmpInfo.bmiHeader.biBitCount := 32;
-          BmpInfo.bmiHeader.biCompression := BI_RGB;
-
-          // Crear el bitmap FMX
-          Result := FMX.Graphics.TBitmap.Create(CaptureRect.Width, CaptureRect.Height);
-
-          // Obtener los datos del bitmap de Windows
-          BytesPerPixel := 4;
-          GetMem(BmpData, CaptureRect.Width * CaptureRect.Height * BytesPerPixel);
-          try
-            GetDIBits(MemDC, ScreenBmp, 0, CaptureRect.Height, BmpData, BmpInfo, DIB_RGB_COLORS);
-
-            // Mapear el bitmap FMX para escritura
-            if Result.Map(TMapAccess.Write, FMXBmpData) then
-            try
-              SrcPtr := PByte(BmpData);
-              DstPtr := PByte(FMXBmpData.Data);
-
-              // Convertir de BGR a RGBA (FMX usa RGBA)
-              for y := 0 to CaptureRect.Height - 1 do
-              begin
-                for x := 0 to CaptureRect.Width - 1 do
-                begin
-                  // Windows DIB es BGRA, FMX necesita RGBA
-                  DstPtr[0] := SrcPtr[2]; // R
-                  DstPtr[1] := SrcPtr[1]; // G
-                  DstPtr[2] := SrcPtr[0]; // B
-                  DstPtr[3] := 255;       // A (opaco)
-
-                  Inc(SrcPtr, 4);
-                  Inc(DstPtr, 4);
-                end;
-              end;
-            finally
-              Result.Unmap(FMXBmpData);
-            end;
-
-          finally
-            FreeMem(BmpData);
-          end;
-
-        finally
-          SelectObject(MemDC, OldBmp);
-        end;
-      finally
-        DeleteObject(ScreenBmp);
-      end;
-    finally
-      DeleteDC(MemDC);
-    end;
-  finally
-    ReleaseDC(0, ScreenDC);
-  end;
-end;
-}
-
-
 
 class function TScreenCapture.CaptureScreenWindows(const ARect: TRect): FMX.Graphics.TBitmap;
 var
@@ -488,8 +379,15 @@ begin
   if Button = TMouseButton.mbLeft then
   begin
     IsDragging := True;
+    // HasSelection sigue True para permitir pintar, pero IsDragging tiene prioridad en el IF del Paint
+    HasSelection := True;
+
     StartPoint := TPointF.Create(X, Y);
     EndPoint := StartPoint;
+
+    // Forzamos repintado inmediato para borrar el recuadro verde viejo
+    // y empezar a dibujar el nuevo translúcido
+    Invalidate;
   end
   else
   begin
@@ -497,6 +395,7 @@ begin
     Close;
   end;
 end;
+
 
 procedure TSelectionForm.FormMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Single);
 begin
@@ -532,7 +431,7 @@ procedure TSelectionForm.FormPaint(Sender: TObject; Canvas: TCanvas; const ARect
 var
   PaintRect: TRectF;
 begin
-  if IsDragging then
+  if IsDragging or HasSelection then
   begin
     PaintRect := TRectF.Create(
       Min(StartPoint.X, EndPoint.X),
@@ -541,12 +440,32 @@ begin
       Max(StartPoint.Y, EndPoint.Y)
     );
 
-    Canvas.Fill.Color := TAlphaColors.Null;
-    Canvas.FillRect(PaintRect, 0, 0, [], 1);
+    // --- CASO 1: ARRASTRANDO (Selección Nueva) ---
+    if IsDragging then
+    begin
+      // 1. Configuramos el color base como Blanco
+      Canvas.Fill.Color := TAlphaColors.White;
 
-    Canvas.Stroke.Color := TAlphaColors.White;
-    Canvas.Stroke.Thickness := 1;
-    Canvas.DrawRect(PaintRect, 0, 0, [], 1);
+      // 2. IMPORTANTE: Usamos el parámetro AOpacity en 0.25 (25% visible)
+      // Esto hace que el blanco sea translúcido ("lechoso")
+      Canvas.FillRect(PaintRect, 0, 0, [], 0.25, TCornerType.Round);
+
+      // 3. Borde Blanco
+      Canvas.Stroke.Color := TAlphaColors.White;
+      Canvas.Stroke.Thickness := 1;
+      Canvas.DrawRect(PaintRect, 0, 0, [], 1.0); // Borde totalmente opaco
+    end
+
+    // --- CASO 2: SELECCIÓN PREVIA (Estática) ---
+    else if HasSelection then
+    begin
+      // No rellenamos nada (FillRect) para que sea transparente.
+
+      // Solo dibujamos el borde Verde
+      Canvas.Stroke.Color := TAlphaColors.Lime;
+      Canvas.Stroke.Thickness := 3;
+      Canvas.DrawRect(PaintRect, 0, 0, [], 1.0);
+    end;
   end;
 end;
 
@@ -580,13 +499,16 @@ begin
   OnPaint     := FormPaint;
 end;
 
-function TSelectionForm.Execute(out ASelectedRect: TRect): Boolean;
+function TSelectionForm.Execute(var ASelectedRect: TRect): Boolean;
 begin
   IsDragging := False;
+  HasSelection := False;
 
+  // 1. Obtener métricas de pantalla
   VirtualScreenLeft := GetSystemMetrics(SM_XVIRTUALSCREEN);
   VirtualScreenTop  := GetSystemMetrics(SM_YVIRTUALSCREEN);
 
+  // 2. Posicionar el formulario cubriendo todo el espacio virtual
   SetBounds(
     VirtualScreenLeft,
     VirtualScreenTop,
@@ -594,9 +516,28 @@ begin
     GetSystemMetrics(SM_CYVIRTUALSCREEN)
   );
 
+  // 3. Procesar el rectángulo de entrada (Si existe)
+  if not ASelectedRect.IsEmpty then
+  begin
+    HasSelection := True;
 
+    // Convertir Coordenadas Globales -> Locales del Formulario
+    // Restamos el inicio de la pantalla virtual para obtener la posición relativa dentro del form
+    StartPoint := TPointF.Create(
+      ASelectedRect.Left - VirtualScreenLeft,
+      ASelectedRect.Top - VirtualScreenTop
+    );
+
+    EndPoint := TPointF.Create(
+      ASelectedRect.Right - VirtualScreenLeft,
+      ASelectedRect.Bottom - VirtualScreenTop
+    );
+  end;
+
+  // 4. Mostrar
   if ShowModal = mrOk then
   begin
+    // Convertir Coordenadas Locales -> Globales al salir
     ASelectedRect := TRect.Create(
       VirtualScreenLeft + Round(Min(StartPoint.X, EndPoint.X)),
       VirtualScreenTop  + Round(Min(StartPoint.Y, EndPoint.Y)),

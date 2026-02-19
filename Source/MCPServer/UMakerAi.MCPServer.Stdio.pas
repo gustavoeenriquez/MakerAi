@@ -31,14 +31,13 @@
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
-
 unit UMakerAi.MCPServer.Stdio;
 
 interface
 
 uses
-  System.SysUtils, System.Classes, System.SyncObjs, System.Threading, System.AnsiStrings, system.IOUtils,
-  uMakerAi.MCPServer.Core;
+  System.SysUtils, System.Classes, System.SyncObjs, System.Threading, System.AnsiStrings, System.IOUtils,
+  UMakerAi.MCPServer.Core;
 
 type
   // Declaración adelantada para el hilo
@@ -64,6 +63,7 @@ type
 
     procedure ProcessRequest(const ARequestJson: string);
     procedure SendResponse(const AResponseJson: string);
+    procedure SetConsoleIOToUTF8;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -76,7 +76,7 @@ procedure Register;
 
 implementation
 
-uses System.Character;
+uses System.Character {$IFDEF MSWINDOWS}, Winapi.Windows{$ENDIF};
 
 procedure Register;
 begin
@@ -87,11 +87,12 @@ end;
 
 constructor TStdioWorkerThread.Create(AServer: TAiMCPStdioServer);
 begin
-  inherited Create(False); // El hilo se crea suspendido
+  inherited Create(True); // El hilo se crea suspendido
   FServer := AServer;
   FreeOnTerminate := True; // El hilo se liberará automáticamente al terminar
 end;
 
+{
 procedure TStdioWorkerThread.Execute;
 var
   JsonRequestLine: string;
@@ -131,6 +132,51 @@ begin
   end;
 end;
 
+}
+
+procedure TStdioWorkerThread.Execute;
+var
+  JsonRequestLine: string;
+begin
+  while not Terminated do
+  begin
+    try
+      // 1. Detección de fin de stream (Pipe cerrado por el cliente)
+      if Eof(Input) then
+      begin
+        Terminate;
+        Break;
+      end;
+
+      // 2. Lectura bloqueante
+      System.ReadLn(Input, JsonRequestLine);
+
+      if Terminated then Break;
+      if JsonRequestLine = '' then Continue;
+
+      // 3. CAMBIO CRÍTICO: Llamada directa (Síncrona)
+      // Eliminamos TThread.Queue porque en aplicaciones de consola
+      // no hay bucle de mensajes principal que procese la cola.
+      if Assigned(FServer) and FServer.IsActive then
+      begin
+        try
+          FServer.ProcessRequest(JsonRequestLine);
+        except
+          // Capturamos excepciones para que un error de lógica no mate al hilo de lectura
+        end;
+      end;
+
+    except
+      on E: Exception do
+      begin
+        // Si ocurre error de I/O, salimos
+        if not Terminated then Terminate;
+      end;
+    end;
+  end;
+end;
+
+
 { TAiMCPStdioServer }
 
 constructor TAiMCPStdioServer.Create(AOwner: TComponent);
@@ -147,6 +193,12 @@ end;
 
 procedure TAiMCPStdioServer.Start;
 begin
+
+  if IsActive then
+    Exit;
+
+  SetConsoleIOToUTF8;
+
   Inherited Start;
   FWorkerThread := TStdioWorkerThread.Create(Self);
   FWorkerThread.Start;
@@ -154,7 +206,8 @@ end;
 
 procedure TAiMCPStdioServer.Stop;
 begin
-  if not IsActive then Exit;
+  if not IsActive then
+    Exit;
 
   if Assigned(FWorkerThread) then
     FWorkerThread.Terminate;
@@ -166,7 +219,8 @@ procedure TAiMCPStdioServer.ProcessRequest(const ARequestJson: string);
 var
   ResponseBody: string;
 begin
-  if not IsActive then Exit;
+  if not IsActive then
+    Exit;
 
   // Delegamos el trabajo pesado al servidor lógico
   ResponseBody := FLogicServer.ExecuteRequest(ARequestJson, ''); // La sesión no aplica en Stdio
@@ -196,6 +250,13 @@ begin
   end;
 end;
 
-
+procedure TAiMCPStdioServer.SetConsoleIOToUTF8;
+begin
+{$IFDEF MSWINDOWS}
+  // Forzar UTF-8 (Codepage 65001) para que los JSON no se rompan
+  SetConsoleOutputCP(CP_UTF8);
+  SetConsoleCP(CP_UTF8);
+{$ENDIF}
+end;
 
 end.

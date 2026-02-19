@@ -33,16 +33,13 @@
 
 
 // -----------------------------------------------------------------------------
-// TODO: IMPLEMENTACI�N FUTURA - CITATIONS (RAG Nativo)
+// CITATIONS (RAG Nativo) - Estado de implementaci�n
 // -----------------------------------------------------------------------------
-// Falta implementar la funcionalidad de citas ('citations') de la API de Claude.
-// Pasos requeridos:
-// 1. Core: A�adir propiedades `EnableCitations`, `Title`, `Context` a TAiMediaFile.
-// 2. Core: Crear clase `TAiCitation` y lista `TAiCitations` en TAiChatMessage.
-// 3. Claude.GetMessages: Al serializar documentos (PDF/Text), inyectar bloque:
-// "citations": {"enabled": true}
-// 4. Claude.ProcessStreamChunk: Capturar evento `citations_delta` y parsear JSON.
-// 5. Claude.ParseChat: Extraer array `citations` de los bloques de contenido.
+// 1. Core: TAiMediaFile.EnableCitations, Title, Context  [COMPLETADO]
+// 2. Core: TAiMsgCitation, TAiMsgCitations en TAiChatMessage  [COMPLETADO]
+// 3. Claude.GetMessages: Inyectar "citations": {"enabled": true}  [COMPLETADO]
+// 4. Claude.ProcessStreamChunk: Captura citations_delta  [YA FUNCIONABA]
+// 5. Claude.ParseChat: Parsear char_location, page_location, etc.  [COMPLETADO]
 // Ref: https://docs.anthropic.com/en/docs/build-with-claude/citations
 // -----------------------------------------------------------------------------
 // ------ Herramientas que no se implementar�n por ahora --------------------
@@ -70,7 +67,7 @@ uses
   uJSONHelper,
 {$ENDIF}
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core,
-  uMakerAi.Utils.CodeExtractor;
+  uMakerAi.Utils.CodeExtractor, uMakerAi.Chat.Messages;
 
 type
 
@@ -381,7 +378,7 @@ class procedure TAiClaudeChat.RegisterDefaultParams(Params: TStrings);
 Begin
   Params.Clear;
   Params.Add('ApiKey=@CLAUDE_API_KEY');
-  Params.Add('Model=claude-3-5-sonnet-20240620');
+  Params.Add('Model=claude-sonnet-4-5-20250514');
   Params.Add('MaxTokens=4096');
   Params.Add('URL=https://api.anthropic.com/v1/');
 End;
@@ -454,7 +451,7 @@ begin
   FContextConfig := TClaudeContextConfig.Create;
 
   // Valores por defecto
-  Model := 'claude-3-5-sonnet-20240620';
+  Model := 'claude-sonnet-4-5-20250514';
   Max_tokens := 4096;
   Url := GlAIUrl;
   FEnableMemory := False;
@@ -515,7 +512,7 @@ begin
       BetaFeatures.Add(BETA_HDR_MEMORY);
 
     // 3. Code Interpreter (Code Execution)
-    if tcm_code_interpreter in ChatMediaSupports then
+    if Tcm_CodeInterpreter in ChatMediaSupports then
       BetaFeatures.Add(BETA_HDR_CODE);
 
     // 4. Computer Use (NUEVO)
@@ -612,11 +609,12 @@ begin
       begin
         if LMedia.IdFile.IsEmpty then
         begin
-          if (tcm_code_interpreter in ChatMediaSupports) or (not(LMedia.FileCategory in [Tfc_Image, Tfc_pdf])) then
+          if (Tcm_CodeInterpreter in ChatMediaSupports) or (not(LMedia.FileCategory in [Tfc_Image, Tfc_pdf])) then
           begin
             try
               UploadFile(LMedia);
             except
+              on E: Exception do LogDebug('Auto-Upload error: ' + E.Message);
             end;
           end;
         end;
@@ -626,7 +624,7 @@ begin
 
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
   if LModel = '' then
-    LModel := 'claude-3-5-sonnet-20240620';
+    LModel := 'claude-sonnet-4-5-20250514';
 
   // ---------------------------------------------------------------------------
   // 2. C�LCULO DE THINKING BUDGET (Nuevo enfoque sin output_config)
@@ -700,7 +698,8 @@ begin
       if (JsonSchema.Text <> '') then
       begin
         try
-          var sShema := StringReplace(JsonSchema.Text,'\n',' ',[rfReplaceAll]);
+          var
+          sShema := StringReplace(JsonSchema.Text, '\n', ' ', [rfReplaceAll]);
           jSchemaParsed := TJSONObject.ParseJSONValue(sShema);
           if Assigned(jSchemaParsed) and (jSchemaParsed is TJSONObject) then
           begin
@@ -724,6 +723,7 @@ begin
           else if Assigned(jSchemaParsed) then
             jSchemaParsed.Free;
         except
+          on E: Exception do LogDebug('JSON Schema parse error: ' + E.Message);
         end;
       end;
     end;
@@ -795,7 +795,7 @@ begin
       jArrTools.Add(JTools);
     end;
 
-    if tcm_code_interpreter in ChatMediaSupports then
+    if Tcm_CodeInterpreter in ChatMediaSupports then
     begin
       JTools := TJSONObject.Create;
       JTools.AddPair('type', 'code_execution_20250522');
@@ -959,333 +959,6 @@ End;
 
 // --- Synchronous Response Parsing ---
 
-{ procedure TAiClaudeChat.ParseChat(jObj: TJSONObject; ResMsg: TAiChatMessage);
-  Var
-  choices: TJSonArray;
-  jContentItem: TJSONObject;
-  JVal: TJSONValue;
-  uso: TJSONObject;
-  aPrompt_tokens, aCompletion_tokens, aTotal_tokens: Integer;
-  Role, Respuesta, StopR: String;
-  LFunciones: TAiToolsFunctions;
-  ToolCall: TAiToolsFunction;
-  ToolMsg, AskMsg: TAiChatMessage;
-  TaskList: array of ITask;
-  I, NumTasks: Integer;
-  Clave, sToolCalls, LModel, cType: String;
-  code: TMarkdownCodeExtractor;
-  CodeFiles: TCodeFileList;
-  MF: TAiMediaFile;
-  St: TStringStream;
-
-  jCitationsArr: TJSonArray;
-  jCitVal: TJSONValue;
-  jCitObj: TJSONObject;
-  SearchItem: TAiWebSearchItem;
-
-  jInnerContent, jInnerItem: TJSONObject;
-  jInnerArray: TJSonArray;
-  NewFile: TAiMediaFile;
-
-  ToolUseID, Cmd, FoundFileName: string;
-  ScanItem: TJSONValue;
-  ScanObj, InputObj: TJSONObject;
-  CmdParts: TArray<string>;
-  begin
-  AskMsg := GetLastMessage;
-
-  // Parse Metadata
-  // Id := jObj.GetValue('id').Value;
-  LModel := jObj.GetValue('model').Value;
-  Role := jObj.GetValue('role').Value;
-  StopR := jObj.GetValue<string>('stop_reason', '');
-
-  ResMsg.StopReason := StopR;
-  if StopR = 'refusal' then
-  ResMsg.IsRefusal := True;
-
-  if jObj.TryGetValue<TJSONObject>('usage', uso) then
-  begin
-  aPrompt_tokens := uso.GetValue<Integer>('input_tokens');
-  aCompletion_tokens := uso.GetValue<Integer>('output_tokens');
-  aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
-  end
-  else
-  begin
-  aPrompt_tokens := 0;
-  aCompletion_tokens := 0;
-  aTotal_tokens := 0;
-  end;
-
-  // Parse Content (Interleaved)
-  jObj.TryGetValue<TJSonArray>('content', choices);
-
-  for JVal in choices do
-  begin
-  jContentItem := TJSONObject(JVal);
-  cType := jContentItem.GetValue<string>('type');
-
-  if cType = 'text' then
-  Respuesta := Respuesta + jContentItem.GetValue<string>('text') + sLineBreak;
-
-  if cType = 'thinking' then
-  begin
-  ResMsg.ReasoningContent := ResMsg.ReasoningContent + jContentItem.GetValue<string>('thinking');
-
-  ResMsg.ThinkingSignature := jContentItem.GetValue<string>('signature');
-  end;
-
-  if jContentItem.TryGetValue<TJSonArray>('citations', jCitationsArr) then
-  begin
-  // Crear el contenedor principal si no existe
-  if not Assigned(ResMsg.WebSearchResponse) then
-  ResMsg.WebSearchResponse := TAiWebSearch.Create;
-
-  for jCitVal in jCitationsArr do
-  begin
-  jCitObj := jCitVal as TJSONObject;
-
-  // Filtramos solo resultados de b�squeda web
-  if jCitObj.GetValue<string>('type') = 'web_search_result_location' then
-  begin
-  SearchItem := TAiWebSearchItem.Create;
-
-  // Mapeo de propiedades a tus clases del Core
-  SearchItem.&type := 'web_search_result_location';
-  SearchItem.Title := jCitObj.GetValue<string>('title', '');
-  SearchItem.Url := jCitObj.GetValue<string>('url', '');
-
-  // Nota: Claude Beta actual devuelve 'cited_text' (snippet), pero no �ndices.
-  // Tus clases tienen start/end_index, los dejamos en 0 o -1 por ahora.
-  SearchItem.start_index := 0;
-  SearchItem.end_index := 0;
-
-  // Opcional: Si quisieras guardar el 'cited_text' (resumen),
-  // podr�as concatenarlo al t�tulo o necesitar�as un campo extra en TAiWebSearchItem.
-  // Por ahora nos ce�imos a tu estructura:
-  // SearchItem.Snippet := jCitObj.GetValue<string>('cited_text');
-
-  ResMsg.WebSearchResponse.annotations.Add(SearchItem);
-  end;
-  end;
-  end;
-
-  if ContainsText(cType, 'tool_result') or ContainsText(cType, 'code_execution') then
-  begin
-  // Navegar la estructura JSON profunda del sandbox
-  // Estructura: content -> content (array) -> file_id
-
-  if jContentItem.TryGetValue<TJSONObject>('content', jInnerContent) then
-  begin
-  if jInnerContent.TryGetValue<TJSonArray>('content', jInnerArray) then
-  begin
-  for var valInner in jInnerArray do
-  begin
-  jInnerItem := valInner as TJSONObject;
-
-  // Buscamos el ID del archivo
-  if jInnerItem.TryGetValue<string>('file_id', Clave) then // Reusamos var Clave o string temporal
-  begin
-  NewFile := TAiMediaFile.Create;
-  NewFile.IdFile := Clave; // El ID del archivo (ej: file_011CVTV...)
-  //NewFile.FileCategory := Tfc_Document; // O generico
-  NewFile.FileName := 'generated_file_' + Copy(Clave, 1, 8); // Nombre temporal
-  DownLoadFile(NewFile);
-
-  // Agregamos al mensaje para que el usuario sepa que hay un archivo
-  ResMsg.MediaFiles.Add(NewFile);
-  end;
-  end;
-  end;
-  end;
-  end;
-
-  if ContainsText(cType, 'tool_result') or ContainsText(cType, 'code_execution') then
-  begin
-  // Navegar la estructura profunda para encontrar el file_id
-  if jContentItem.TryGetValue<TJSONObject>('content', jInnerContent) then
-  begin
-  if jInnerContent.TryGetValue<TJSonArray>('content', jInnerArray) then
-  begin
-  for var valInner in jInnerArray do
-  begin
-  jInnerItem := valInner as TJSONObject;
-
-  // �Encontramos un file_id?
-  if jInnerItem.TryGetValue<string>('file_id', Clave) then
-  begin
-  // --- RECUPERACI�N INTELIGENTE DEL NOMBRE ---
-  FoundFileName := 'generated_file_' + Copy(Clave, 1, 8); // Nombre temporal
-
-  // 1. Obtenemos el ID de la herramienta que gener� este resultado
-  ToolUseID := jContentItem.GetValue<string>('tool_use_id', '');
-
-  if ToolUseID <> '' then
-  begin
-  // 2. Buscamos en todo el array de contenidos el comando original
-  // Nota: 'choices' es el TJSONArray que estamos recorriendo
-  for ScanItem in choices do
-  begin
-  ScanObj := ScanItem as TJSONObject;
-  // Coincidencia de ID y que sea un tool_use
-
-  Var
-  sId: String;
-  If ScanObj.TryGetValue<string>('id', sId) and (sId = ToolUseID) then
-  Begin
-  Var
-  sIdType: String;
-  If ScanObj.TryGetValue<string>('type', sIdType) and (sIdType = 'server_tool_use') then
-  begin
-  if ScanObj.TryGetValue<TJSONObject>('input', InputObj) then
-  begin
-  Cmd := InputObj.GetValue<string>('command', '');
-  // El patr�n est�ndar es: cp /ruta/nombre.ext $OUTPUT_DIR/
-  if Cmd.StartsWith('cp ') then
-  begin
-
-  // Simple parsing por espacios
-  CmdParts := Cmd.Split([' ']);
-  if Length(CmdParts) >= 2 then
-  begin
-  // CmdParts[1] deber�a ser "/tmp/frecuencia_333hz.wav"
-  // Usamos ExtractFileName (System.SysUtils)
-
-  Var
-  sPath := CmdParts[1];
-  FoundFileName := ExtractFileName(sPath);
-  end;
-
-  end;
-  end;
-  Break; // Encontramos el padre, salimos del scan
-  end;
-  End;
-
-  end;
-  end;
-  // -------------------------------------------
-
-  NewFile := TAiMediaFile.Create;
-  NewFile.IdFile := Clave; // file_011CV...
-  // NewFile.FileCategory := Tfc_Document;
-  NewFile.FileName := FoundFileName; // �Nombre correcto asignado!
-
-  DownLoadFile(NewFile);
-
-  ResMsg.MediaFiles.Add(NewFile);
-  end;
-  end;
-  end;
-  end;
-  end;
-
-  end;
-
-  Respuesta := Trim(Respuesta);
-
-  // Parse Tools
-  Var
-  JToolCallArray := ExtractToolCallJson(choices);
-  if JToolCallArray.Count > 0 then
-  sToolCalls := JToolCallArray.Format;
-  JToolCallArray.Free;
-
-  LFunciones := ExtractToolCallFromJson(choices);
-
-  // Update ResMsg
-  Self.FLastContent := Respuesta;
-  Prompt_tokens := Prompt_tokens + aPrompt_tokens;
-  Completion_tokens := Completion_tokens + aCompletion_tokens;
-  Total_tokens := Total_tokens + aTotal_tokens;
-
-  if sToolCalls.IsEmpty then
-  begin
-  ResMsg.Role := Role;
-  ResMsg.Model := LModel;
-  ResMsg.Tool_calls := sToolCalls;
-  ResMsg.Prompt := ResMsg.Prompt + Respuesta;
-  // (Metrics updates)
-  DoProcessResponse(AskMsg, ResMsg, Respuesta);
-  end
-  else
-  begin
-  Var
-  Msg := TAiChatMessage.Create(Respuesta, Role);
-  Msg.Tool_calls := sToolCalls;
-  Msg.ReasoningContent := ResMsg.ReasoningContent; // Preserve thinking
-  Msg.ThinkingSignature := ResMsg.ThinkingSignature;
-  Msg.Id := FMessages.Count + 1;
-  FMessages.Add(Msg);
-  end;
-
-  try
-  if LFunciones.Count > 0 then
-  begin
-  NumTasks := LFunciones.Count;
-  SetLength(TaskList, NumTasks);
-  I := 0;
-  for Clave in LFunciones.Keys do
-  begin
-  ToolCall := LFunciones[Clave];
-  ToolCall.ResMsg := ResMsg;
-  ToolCall.AskMsg := AskMsg;
-  TaskList[I] := TTask.Create(
-  procedure
-  begin
-  DoCallFunction(ToolCall);
-  end);
-  TaskList[I].Start;
-  Inc(I);
-  end;
-  TTask.WaitForAll(TaskList);
-
-  for Clave in LFunciones.Keys do
-  begin
-  ToolCall := LFunciones[Clave];
-  ToolMsg := TAiChatMessage.Create(ToolCall.Response, 'user', ToolCall.Id, ToolCall.Name);
-  ToolMsg.Id := FMessages.Count + 1;
-  FMessages.Add(ToolMsg);
-  end;
-  Self.Run(Nil, ResMsg);
-  end
-  else
-  begin
-  if tfc_ExtracttextFile in NativeOutputFiles then
-  begin
-  code := TMarkdownCodeExtractor.Create;
-  try
-  CodeFiles := code.ExtractCodeFiles(Respuesta);
-  for var CodeFile in CodeFiles do
-  begin
-  St := TStringStream.Create(CodeFile.code);
-  try
-  St.Position := 0;
-  MF := TAiMediaFile.Create;
-  MF.LoadFromStream('file.' + CodeFile.FileType, St);
-  ResMsg.MediaFiles.Add(MF);
-  finally
-  St.Free;
-  end;
-  end;
-  finally
-  code.Free;
-  end;
-  end;
-
-  DoProcessResponse(AskMsg, ResMsg, Respuesta);
-  ResMsg.Prompt := Respuesta;
-  FBusy := False;
-  DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
-  if Assigned(FOnReceiveDataEnd) then
-  FOnReceiveDataEnd(Self, ResMsg, jObj, Role, Respuesta);
-  end;
-  finally
-  LFunciones.Free;
-  end;
-  end;
-}
-
 procedure TAiClaudeChat.ParseChat(jObj: TJSONObject; ResMsg: TAiChatMessage);
 Var
   choices: TJSonArray;
@@ -1381,22 +1054,67 @@ begin
 
       end;
 
-      // C. Citations (B�squeda Web / RAG)
+      // C. Citations (B�squeda Web / RAG / Documentos)
       if jContentItem.TryGetValue<TJSonArray>('citations', jCitationsArr) then
       begin
-        if not Assigned(ResMsg.WebSearchResponse) then
-          ResMsg.WebSearchResponse := TAiWebSearch.Create;
-
         for jCitVal in jCitationsArr do
         begin
           jCitObj := jCitVal as TJSONObject;
-          if jCitObj.GetValue<string>('type') = 'web_search_result_location' then
+          var citType := jCitObj.GetValue<string>('type', '');
+
+          // --- Citations de documentos -> TAiMsgCitation ---
+          if (citType = 'char_location') or (citType = 'page_location')
+             or (citType = 'content_block_location') then
           begin
+            var LCitation := TAiMsgCitation.Create;
+            LCitation.Text := jCitObj.GetValue<string>('cited_text', '');
+
+            var LSource := TAiCitationSource.Create;
+            LSource.SourceType := cstDocument;
+            LSource.DataSource.Title := jCitObj.GetValue<string>('document_title', '');
+            LSource.DataSource.Id := jCitObj.GetValue<Integer>('document_index', 0).ToString;
+
+            if citType = 'char_location' then
+            begin
+              LCitation.StartIndex := jCitObj.GetValue<Integer>('start_char_index', 0);
+              LCitation.EndIndex := jCitObj.GetValue<Integer>('end_char_index', 0);
+            end
+            else if citType = 'page_location' then
+            begin
+              LCitation.StartIndex := jCitObj.GetValue<Integer>('start_page_number', 0);
+              LCitation.EndIndex := jCitObj.GetValue<Integer>('end_page_number', 0);
+            end
+            else if citType = 'content_block_location' then
+            begin
+              LCitation.StartIndex := jCitObj.GetValue<Integer>('start_block_index', 0);
+              LCitation.EndIndex := jCitObj.GetValue<Integer>('end_block_index', 0);
+            end;
+
+            LCitation.Sources.Add(LSource);
+            ResMsg.Citations.Add(LCitation);
+          end
+
+          // --- Citations web (compatibilidad existente) ---
+          else if citType = 'web_search_result_location' then
+          begin
+            if not Assigned(ResMsg.WebSearchResponse) then
+              ResMsg.WebSearchResponse := TAiWebSearch.Create;
+
             SearchItem := TAiWebSearchItem.Create;
             SearchItem.&type := 'web_search_result_location';
             SearchItem.Title := jCitObj.GetValue<string>('title', '');
             SearchItem.Url := jCitObj.GetValue<string>('url', '');
             ResMsg.WebSearchResponse.annotations.Add(SearchItem);
+
+            // Tambi�n agregar a Citations para unificaci�n
+            var LCitation := TAiMsgCitation.Create;
+            LCitation.Text := jCitObj.GetValue<string>('cited_text', '');
+            var LSource := TAiCitationSource.Create;
+            LSource.SourceType := cstWeb;
+            LSource.DataSource.Title := jCitObj.GetValue<string>('title', '');
+            LSource.DataSource.Url := jCitObj.GetValue<string>('url', '');
+            LCitation.Sources.Add(LSource);
+            ResMsg.Citations.Add(LCitation);
           end;
         end;
       end;
@@ -1454,6 +1172,34 @@ begin
                             PosExt := Pos('.png', CodeStr);
                           if PosExt = 0 then
                             PosExt := Pos('.pdf', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.mp3', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.json', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.xlsx', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.xls', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.zip', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.txt', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.html', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.xml', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.jpg', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.jpeg', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.gif', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.mp4', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.py', CodeStr);
+                          if PosExt = 0 then
+                            PosExt := Pos('.js', CodeStr);
 
                           if PosExt > 0 then
                           begin
@@ -1462,11 +1208,15 @@ begin
                             StartPos := LastDelimiter('''"', Copy(CodeStr, 1, PosExt));
                             if StartPos > 0 then
                             begin
+                              // Calcular longitud real de la extensi�n (avanzar desde el punto)
                               var
-                              EndPos := PosExt + 3; // Longitud tipica de ext
-                              // Ajuste b�sico, se podr�a mejorar con RegEx
+                              EndPos := PosExt + 1;
+                              while (EndPos <= Length(CodeStr)) and CharInSet(CodeStr[EndPos], ['a'..'z','A'..'Z','0'..'9']) do
+                                Inc(EndPos);
                               var
-                              Candidate := Copy(CodeStr, StartPos + 1, (PosExt - StartPos) + 3);
+                              ExtLen := EndPos - PosExt;
+                              var
+                              Candidate := Copy(CodeStr, StartPos + 1, (PosExt - StartPos) + ExtLen - 1);
                               if (Length(Candidate) > 0) and (Length(Candidate) < 50) then
                                 FoundFileName := Candidate;
                             end;
@@ -1705,7 +1455,7 @@ begin
         if Assigned(FStreamResponseMsg) then
         begin
           jMessage := jData.GetValue<TJSONObject>('message');
-          FStreamResponseMsg.TollCallId := jMessage.GetValue<string>('id'); // ID del mensaje de Claude
+          FStreamResponseMsg.ToolCallId := jMessage.GetValue<string>('id'); // ID del mensaje de Claude
           FStreamResponseMsg.Model := jMessage.GetValue<string>('model');
           FStreamResponseMsg.Role := jMessage.GetValue<string>('role');
 
@@ -1883,7 +1633,7 @@ begin
           jSyntheticResponse := TJSONObject.Create;
           try
             // Usamos la variable local MsgToProcess en lugar de FStreamResponseMsg
-            jSyntheticResponse.AddPair('id', MsgToProcess.TollCallId);
+            jSyntheticResponse.AddPair('id', MsgToProcess.ToolCallId);
             jSyntheticResponse.AddPair('type', 'message');
             jSyntheticResponse.AddPair('role', 'assistant');
             jSyntheticResponse.AddPair('model', MsgToProcess.Model);
@@ -2045,15 +1795,7 @@ end;
 procedure TAiClaudeChat.ConfigureAutoContextClearing(TriggerTokens: Integer; KeepLast: Integer);
 begin
   // Limpia configuraciones previas para evitar duplicados
-  // (Asumiendo que FEdits es accesible o exponemos un m�todo Clear en TClaudeContextConfig)
-  // En la implementaci�n actual FEdits es privado, as� que usaremos una nueva instancia o agregamos Clear.
-
-  // Opci�n A: Recrear la config (M�s seguro/simple)
-  FContextConfig.Free;
-  FContextConfig := TClaudeContextConfig.Create;
-
-  // Tambi�n se puede utilizar en lugar de free y create anteriores
-  // FContextConfig.Clear; // Limpia reglas anteriores
+  FContextConfig.Clear;
 
   // Agregar la regla de limpieza de herramientas
   // TriggerTokens: Cuando el prompt supere este tama�o
@@ -2119,7 +1861,7 @@ begin
   Result := TJSonArray.Create;
 
   // Verificamos si el Code Interpreter est� activo
-  IsCodeExecutionEnabled := tcm_code_interpreter in ChatMediaSupports;
+  IsCodeExecutionEnabled := Tcm_CodeInterpreter in ChatMediaSupports;
 
   // --- L�GICA DE FILTRADO DIN�MICO ---
   if IsCodeExecutionEnabled then
@@ -2139,11 +1881,11 @@ begin
     // -------------------------------------------------------------------------
     // CASO 1: Resultado de Herramienta (Role: User)
     // -------------------------------------------------------------------------
-    if (LMessage.Role = 'user') and (not LMessage.TollCallId.IsEmpty) then
+    if (LMessage.Role = 'user') and (not LMessage.ToolCallId.IsEmpty) then
     begin
       LPartObj := TJSONObject.Create;
       LPartObj.AddPair('type', 'tool_result');
-      LPartObj.AddPair('tool_use_id', LMessage.TollCallId);
+      LPartObj.AddPair('tool_use_id', LMessage.ToolCallId);
       LPartObj.AddPair('content', LMessage.Prompt);
       LContentArray.Add(LPartObj);
     end
@@ -2185,16 +1927,22 @@ begin
       if LMessage.Tool_calls <> '' then
       begin
         try
-          var LToolUseArray: TJSonArray;
-          var I: Integer;
-          LToolUseArray := TJSONUtils.ParseAsArray(LMessage.Tool_calls);
+
+{$IF CompilerVersion < 35}
+          var
+          LToolUseArray := TJSONUtils.ParseAsArray(LMessage.Tool_calls) as TJSonArray;
+{$ELSE}
+          var
+          LToolUseArray := TJSonArray.ParseJSONValue(LMessage.Tool_calls) as TJSonArray;
+{$ENDIF}
           if Assigned(LToolUseArray) then
           begin
-            for I := 0 to LToolUseArray.Count - 1 do
-              LContentArray.Add(TJSONObject.ParseJSONValue(LToolUseArray.Items[I].ToString) as TJSONObject);
+            for var Val in LToolUseArray do
+              LContentArray.Add(Val.Clone as TJSONObject);
             LToolUseArray.Free;
           end;
         except
+          on E: Exception do LogDebug('Tool calls parse error: ' + E.Message);
         end;
       end;
     end
@@ -2293,8 +2041,24 @@ begin
           end;
 
           LPartObj.AddPair('source', LSourceObj);
-          if not LMediaFile.FileName.IsEmpty then
+
+          // Title: priorizar LMediaFile.Title, fallback a FileName
+          if not LMediaFile.Title.IsEmpty then
+            LPartObj.AddPair('title', LMediaFile.Title)
+          else if not LMediaFile.FileName.IsEmpty then
             LPartObj.AddPair('title', LMediaFile.FileName);
+
+          // Context
+          if not LMediaFile.Context.IsEmpty then
+            LPartObj.AddPair('context', LMediaFile.Context);
+
+          // Citations (RAG Nativo)
+          if LMediaFile.EnableCitations then
+          begin
+            var jCit := TJSONObject.Create;
+            jCit.AddPair('enabled', TJSONBool.Create(True));
+            LPartObj.AddPair('citations', jCit);
+          end;
         end;
 
         if LMediaFile.CacheControl then
@@ -2367,7 +2131,7 @@ begin
             begin
               if JVal is TJSONObject then
               begin
-                // Extraer el ID del modelo (ej: "claude-3-5-sonnet-20240620")
+                // Extraer el ID del modelo (ej: "claude-sonnet-4-5-20250514")
                 sModel := (JVal as TJSONObject).GetValue<string>('id', '');
                 if sModel <> '' then
                   Result.Add(sModel);
@@ -2542,9 +2306,42 @@ begin
 end;
 
 function TAiClaudeChat.RetrieveFileList: TAiMediaFiles;
+var
+  Client: TNetHTTPClient;
+  Res: IHTTPResponse;
+  jRes: TJSONObject;
+  jArr: TJSonArray;
+  JVal: TJSONValue;
+  MF: TAiMediaFile;
 begin
   Result := TAiMediaFiles.Create;
-  // Implementation simplified for brevity, follows RetrieveFile pattern looping 'data' array
+  Client := TNetHTTPClient.Create(Nil);
+  try
+    Res := Client.Get(Url + 'files', nil, GetFileHeaders);
+    if Res.StatusCode = 200 then
+    begin
+      jRes := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
+      if Assigned(jRes) then
+      try
+        if jRes.TryGetValue<TJSonArray>('data', jArr) then
+          for JVal in jArr do
+            if JVal is TJSONObject then
+            begin
+              MF := TAiMediaFile.Create;
+              MF.IdFile := (JVal as TJSONObject).GetValue<string>('id', '');
+              MF.FileName := (JVal as TJSONObject).GetValue<string>('filename', '');
+              Result.Add(MF);
+            end;
+      finally
+        jRes.Free;
+      end;
+    end
+    else
+      raise Exception.CreateFmt('RetrieveFileList Error: %d - %s',
+        [Res.StatusCode, Res.ContentAsString]);
+  finally
+    Client.Free;
+  end;
 end;
 
 procedure TAiClaudeChat.DoCallFunction(ToolCall: TAiToolsFunction);
@@ -2578,24 +2375,19 @@ begin
   end;
 
   // 2. Interceptar Herramienta de Edici�n Nativa
-  if (ToolCall.Name = 'str_replace_based_edit_tool') or (ToolCall.Name = 'str_replace_editor') and Assigned(TextEditorTool) then
+  if ((ToolCall.Name = 'str_replace_based_edit_tool') or (ToolCall.Name = 'str_replace_editor')) and Assigned(TextEditorTool) then
   begin
-
-    try
-      ToolCall.Response := TextEditorTool.Execute(ToolCall.Arguments);
-    finally
-    end;
-
+    ToolCall.Response := TextEditorTool.Execute(ToolCall.Arguments);
     Exit;
   end;
 
-  // 2. Verificar Componente Externo (AiFunctions)
+  // 3. Verificar Componente Externo (AiFunctions)
   if Assigned(AiFunctions) and AiFunctions.DoCallFunction(ToolCall) then
   begin
     Exit;
   end;
 
-  // 3. Evento de Usuario
+  // 4. Evento de Usuario
   if Assigned(FOnCallToolFunction) then
     FOnCallToolFunction(Self, ToolCall);
 end;

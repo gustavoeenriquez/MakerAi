@@ -31,7 +31,6 @@
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
-
 unit UMakerAi.MCPServer.Http;
 
 interface
@@ -43,8 +42,7 @@ uses
 
 type
 
-  TValidateRequestEvent = procedure(Sender: TObject; const ARequestInfo: TIdHTTPRequestInfo; out AAuthContext: TAiAuthContext;
-    out AIsValid: Boolean) of object;
+  TValidateRequestEvent = procedure(Sender: TObject; const ARequestInfo: TIdHTTPRequestInfo; out AAuthContext: TAiAuthContext; out AIsValid: Boolean) of object;
 
   TAiMCPHttpServer = class(TAiMCPServer)
   private
@@ -64,6 +62,12 @@ type
 
     procedure Start; Override;
     procedure Stop; Override;
+
+  Published
+    property Port;
+    property Endpoint;
+    property CorsEnabled;
+    property CorsAllowedOrigins;
 
     // No se implementa aún, para una próxima versión para implementar apikey o login y password
     // property OnValidateRequest: TValidateRequestEvent read FOnValidateRequest write FOnValidateRequest;
@@ -289,8 +293,7 @@ begin
     begin
       AResponseInfo.ResponseNo := HTTP_INTERNAL_SERVER_ERROR;
       AResponseInfo.ResponseText := 'Internal Server Error';
-      AResponseInfo.ContentText :=
-        '{"jsonrpc": "2.0", "error": {"code": -32000, "message": "Server error during POST request processing"}, "id": null}';
+      AResponseInfo.ContentText := '{"jsonrpc": "2.0", "error": {"code": -32000, "message": "Server error during POST request processing"}, "id": null}';
       AResponseInfo.ContentType := 'application/json';
     end;
   end;

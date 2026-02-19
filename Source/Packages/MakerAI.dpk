@@ -52,7 +52,7 @@ contains
   uMakerAi.Chat.Ollama in '..\Chat\uMakerAi.Chat.Ollama.pas',
   uMakerAi.Chat.OpenAi in '..\Chat\uMakerAi.Chat.OpenAi.pas',
   uMakerAi.Tools.Functions in '..\Tools\uMakerAi.Tools.Functions.pas',
-  uMakerAi.Chat in '..\Core\uMakerAi.Chat.pas',
+  UMakerAi.Chat in '..\Core\UMakerAi.Chat.pas',
   uMakerAi.Core in '..\Core\uMakerAi.Core.pas',
   uMakerAi.Embeddings in '..\Core\uMakerAi.Embeddings.pas',
   uMakerAi.Prompts in '..\Core\uMakerAi.Prompts.pas',
@@ -76,14 +76,26 @@ contains
   UMakerAi.ParamsRegistry in '..\Design\UMakerAi.ParamsRegistry.pas',
   uMakerAi.Chat.Kimi in '..\Chat\uMakerAi.Chat.Kimi.pas',
   uMakerAi.Chat.LMStudio in '..\Chat\uMakerAi.Chat.LMStudio.pas',
-  uMakerAi.Gemini.Veo in '..\Tools\uMakerAi.Gemini.Veo.pas',
+  uMakerAi.Gemini.Video in '..\Tools\uMakerAi.Gemini.Video.pas',
   uMakerAi.OpenAI.Sora in '..\Tools\uMakerAi.OpenAI.Sora.pas',
   uMakerAi.OpenAI.Audio in '..\Tools\uMakerAi.OpenAI.Audio.pas',
   uMakerAi.Utils.DiffUpdater in '..\Utils\uMakerAi.Utils.DiffUpdater.pas',
   uMakerAi.Tools.Shell in '..\Tools\uMakerAi.Tools.Shell.pas',
   uMakerAi.Chat.GenericLLM in '..\Chat\uMakerAi.Chat.GenericLLM.pas',
   UMakerAi.MCPServer.SSE in '..\MCPServer\UMakerAi.MCPServer.SSE.pas',
-  uMakerAi.Tools.TextEditor in '..\Tools\uMakerAi.Tools.TextEditor.pas';
+  uMakerAi.Tools.TextEditor in '..\Tools\uMakerAi.Tools.TextEditor.pas',
+  uMakerAi.Tools.ComputerUse in '..\Tools\uMakerAi.Tools.ComputerUse.pas',
+  uMakerAi.Chat.Tools in '..\Core\uMakerAi.Chat.Tools.pas',
+  uMakerAi.Gemini.Speech in '..\Tools\uMakerAi.Gemini.Speech.pas',
+  uMakerAi.Chat.Bridge in '..\Core\uMakerAi.Chat.Bridge.pas',
+  uMakerAi.Gemini.WebSearch in '..\Tools\uMakerAi.Gemini.WebSearch.pas',
+  uMakerAi.Ollama.Ocr in '..\Tools\uMakerAi.Ollama.Ocr.pas',
+  uMakerAi.Chat.Messages in '..\Core\uMakerAi.Chat.Messages.pas',
+  uMakerAi.RAG.Graph.GQL in '..\RAG\uMakerAi.RAG.Graph.GQL.pas',
+  uMakerAi.MCPServer.Bridge in '..\MCPServer\uMakerAi.MCPServer.Bridge.pas',
+  uMakerAi.RAG.MetaData in '..\RAG\uMakerAi.RAG.MetaData.pas',
+  uMakerAi.RAG.Vectors.VQL in '..\RAG\uMakerAi.RAG.Vectors.VQL.pas',
+  uMakerAi.RAG.Vectors.Index in '..\RAG\uMakerAi.RAG.Vectors.Index.pas';
 
 end.
 

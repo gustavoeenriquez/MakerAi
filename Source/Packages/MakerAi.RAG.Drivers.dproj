@@ -138,6 +138,7 @@
         <DCCReference Include="FireDACCommon.dcp"/>
         <DCCReference Include="MakerAI.dcp"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Graph.Driver.Postgres.pas"/>
+        <DCCReference Include="..\RAG\uMakerAi.RAG.Vector.Driver.Postgres.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

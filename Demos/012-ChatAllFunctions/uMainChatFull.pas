@@ -1,6 +1,6 @@
-// MIT License
+Ôªø// MIT License
 //
-// Copyright (c) 2013 Gustavo EnrÌquez - CimaMaker
+// Copyright (c) 2013 Gustavo Enr√≠quez - CimaMaker
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÌquez
+// Nombre: Gustavo Enr√≠quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -43,7 +43,7 @@ uses
 
   uMakerAi.UI.ChatBubble, uMakerAi.UI.ChatInput, uMakerAi.Core, uMakerAi.Chat,
   uMakerAi.Utils.System, uMakerAi.UI.ChatList, uMakerAi.Chat.AiConnection,
-  uMakerAi.Chat.OpenAi, uMakerAi.Chat.Initializations,
+  uMakerAi.Chat.OpenAi, uMakerAi.Chat.Initializations, uMakerAi.Chat.Messages,
   uMakerAi.Chat.DeepSeek, uMakerAi.Chat.Claude, uMakerAi.Chat.Gemini,
   uMakerAi.Chat.Kimi, uMakerAi.Chat.LMStudio, uMakerAi.OpenAi.Sora,
   uMakerAi.Chat.GenericLLM, uMakerAi.Utils.ScreenCapture,
@@ -56,9 +56,13 @@ uses
   uMakerAi.Utils.VoiceMonitor, System.Actions, FMX.ActnList, uMakerAi.RAG.Vectors, uMakerAi.Tools.Functions,
   uMakerAi.Embeddings.Core, uMakerAi.Embeddings, uMakerAi.MCPServer.Core, uMakerAi.MCPServer.Http,
 
-  System.ImageList, FMX.ImgList, FMX.TabControl, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Utils.DiffUpdater;
+  System.ImageList, FMX.ImgList, FMX.TabControl, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor,
+  uMakerAi.Utils.DiffUpdater, uMakerAi.Prompts, uMakerAi.Tools.ComputerUse, uMakerAi.Tools.ComputerUse.WindowsFMX, uMakerAi.Chat.Tools;
 
 type
+
+  TSafetyState = (stWaiting, stAllow, stDeny); // estados del proceso safety de computer use
+
   TForm2 = class(TForm)
     PopupMenu1: TPopupMenu;
     MnuCopy: TMenuItem;
@@ -266,6 +270,16 @@ type
     EditCaption: TEdit;
     Edit1: TEdit;
     BtnJSonShema: TSpeedButton;
+    AiPrompts1: TAiPrompts;
+    AiGeminiChat1: TAiGeminiChat;
+    AiComputerUseTool1: TAiComputerUseTool;
+    ListBoxItem28: TListBoxItem;
+    chComputerUse: TCheckBox;
+    BtnSelectArea: TSpeedButton;
+    AiOllamaChat1: TAiOllamaChat;
+    ListBoxItem29: TListBoxItem;
+    Label18: TLabel;
+    EditEnabledFeatures: TEdit;
 
     procedure ChatInput1SendEvent(Sender: TObject; APrompt: string; aMediaFiles: TAiMediaFiles; aAudioStream: TMemoryStream);
     procedure ChatList1MediaFileDblClick(Sender: TObject; const ABubble: TChatBubble; const AMediaFile: TAiMediaFile);
@@ -311,7 +325,6 @@ type
     procedure AiFunctions1Functions2SearchInRagAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
     procedure ac_LoadMCPConfigExecute(Sender: TObject);
     procedure BtnLoadMcpServerConfigClick(Sender: TObject);
-    procedure AiConnCallToolFunction(Sender: TObject; AiToolCall: TAiToolsFunction);
     procedure BtnShowBillingClick(Sender: TObject);
     procedure AiConnReceiveThinking(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
     procedure ChShellToolChange(Sender: TObject);
@@ -324,6 +337,13 @@ type
     procedure AiTextEditorTool1SaveFile(Sender: TObject; const Path, Content: string; var Handled: Boolean);
     procedure Button2Click(Sender: TObject);
     procedure BtnJSonShemaClick(Sender: TObject);
+    procedure AiComputerUseTool1ExecuteAction(Sender: TObject; const ActionData: TAiActionData; var Result: TAiActionResult);
+    procedure AiComputerUseTool1RequestScreenshot(Sender: TObject; var MediaFile: TAiMediaFile);
+    procedure AiComputerUseTool1SafetyConfirmation(Sender: TObject; const Explanation: string; var Allow: Boolean);
+    procedure BtnSelectAreaClick(Sender: TObject);
+    procedure AiFunctions1Functions3AdicionaFacturaAlERPAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure EditEnabledFeaturesEnter(Sender: TObject);
+    procedure EditEnabledFeaturesExit(Sender: TObject);
   private
     FLastBubble: TChatBubble;
     FPrompt_tokens: Integer;
@@ -334,6 +354,7 @@ type
     FLastNewText: String;
     FJSonShema: String; // Almacena temporalmente el jsonshemma
     FNoImage: Integer; // Temporal para la captura de la imagen;
+    FSafetyState: TSafetyState; // Estado del safety de computer use
 
     Function CopyToClipBoard(AMediaFile: TAiMediaFile): Boolean;
     Procedure AssignModel(Const DriverName, ModelName: String);
@@ -348,10 +369,11 @@ type
     procedure SaveRAGToStream(AContainerStream: TStream; ASourceDataStream: TStream);
     function LoadRAGFromStream(AContainerStream: TStream): TMemoryStream;
     Procedure AddLog(Value: String);
-    procedure LoadMCPClientsFromJSON(AJsonString: string; AFunctions: TAiFunctions);
-    function WebSearchToString(AWebSearch: TAiWebSearch): String; // Recupera los detalles de la b˙squeda web
+    //procedure LoadMCPClientsFromJSON(AJsonString: string; AFunctions: TAiFunctions);
+    function WebSearchToString(AWebSearch: TAiWebSearch): String; // Recupera los detalles de la b√∫squeda web
   public
     Procedure ShowArtefacts(Visible: Boolean);
+    Procedure InitChats;  //Parametriza por defecto los modelos
   end;
 
 var
@@ -377,7 +399,7 @@ var
   RutaLog: string;
 begin
   // ---------------------------------------------------------------------------------
-  // -------- OPCI”N DESHABILITADA ES SOLO UN LOG DE PRUEBAS--------------------------
+  // -------- OPCI√ìN DESHABILITADA ES SOLO UN LOG DE PRUEBAS--------------------------
   // ---------------------------------------------------------------------------------
 
   { RutaLog := 'd:\videos\logPruebas.txt';
@@ -391,7 +413,7 @@ begin
     else
     Rewrite(Archivo);
 
-    // Escribe la lÌnea con fecha/hora
+    // Escribe la l√≠nea con fecha/hora
     // WriteLn(Archivo, FormatDateTime('yyyy-mm-dd hh:nn:ss', Now) + ' - ' + Mensaje);
     WriteLn(Archivo, Mensaje);
 
@@ -407,17 +429,17 @@ Var
   FileName: String;
 begin
   // ---------------------------------------------------------------------------------
-  // -------- OPCI”N DESHABILITADA ES SOLO UN LOG DE PRUEBAS--------------------------
+  // -------- OPCI√ìN DESHABILITADA ES SOLO UN LOG DE PRUEBAS--------------------------
   // ---------------------------------------------------------------------------------
 
-  {  Inc(FNoImage);
-  Bm := TScreenCapture.CaptureFullScreen;
-  FileName := Edit1.Text + ':' + '_' + FNoImage.ToString + '_' + EditCaption.Text;
-  FileName := StringReplace(FileName, ' ', '_', [rfReplaceAll]);
-  FileName := StringReplace(FileName, ':', '_', [rfReplaceAll]);
-  FileName := 'D:\Videos\' + FileName + '.png';
-  TScreenCapture.SaveToFile(Bm, FileName)
-}
+  { Inc(FNoImage);
+    Bm := TScreenCapture.CaptureFullScreen;
+    FileName := Edit1.Text + ':' + '_' + FNoImage.ToString + '_' + EditCaption.Text;
+    FileName := StringReplace(FileName, ' ', '_', [rfReplaceAll]);
+    FileName := StringReplace(FileName, ':', '_', [rfReplaceAll]);
+    FileName := 'D:\Videos\' + FileName + '.png';
+    TScreenCapture.SaveToFile(Bm, FileName)
+  }
 end;
 
 procedure TForm2.ac_AddItemToDatabaseExecute(Sender: TObject);
@@ -463,7 +485,7 @@ begin
       if Assigned(LHistoryStream) then
       begin
         LHistoryStream.Position := 0;
-        // Asumiendo que AiConn.Messages tiene un mÈtodo LoadFromStream
+        // Asumiendo que AiConn.Messages tiene un m√©todo LoadFromStream
         AiConn.Messages.LoadFromStream(LHistoryStream);
       end;
 
@@ -490,7 +512,7 @@ begin
     LDataStream := nil;
     LFileStream := TFileStream.Create(OpenDialog1.FileName, fmOpenRead);
     try
-      // 1. Usar nuestra funciÛn de ayuda para leer y descomprimir
+      // 1. Usar nuestra funci√≥n de ayuda para leer y descomprimir
       LDataStream := LoadRAGFromStream(LFileStream);
 
       // 2. Si todo fue bien, LDataStream contiene los datos listos para usar
@@ -509,36 +531,44 @@ end;
 
 procedure TForm2.ac_LoadMCPConfigExecute(Sender: TObject);
 var
-  LJsonContent: string;
+  LImportedCount: Integer;
 begin
-  // 1. Configurar el di·logo para buscar archivos de configuraciÛn MCP
-  OpenDialog1.DefaultExt := '.mcpconf';
-  OpenDialog1.Filter := 'MCP Config Files (*.mcpconf)|*.mcpconf|JSON Files (*.json)|*.json|All Files (*.*)|*.*';
-  OpenDialog1.Title := 'Load MCP Server Configuration';
+  // 1. Configurar el di√°logo
+  OpenDialog1.DefaultExt := '.json';
+  OpenDialog1.Filter := 'JSON Files (*.json)|*.json|MCP Config (*.mcpconf)|*.mcpconf|All Files (*.*)|*.*';
+  OpenDialog1.Title := 'Seleccionar archivo de configuraci√≥n MCP';
+  OpenDialog1.InitialDir := '%APPDATA%\Claude\';
+  OpenDialog1.FileName := 'claude_desktop_config.json';
 
-  // 2. Mostrar el di·logo y verificar si el usuario seleccionÛ un archivo
   if OpenDialog1.Execute then
   begin
     try
-      // 3. Leer todo el contenido del archivo a una cadena de texto.
-      // TFile.ReadAllText es la forma m·s simple y segura de hacerlo.
-      // Se encarga de abrir, leer y cerrar el archivo autom·ticamente.
-      LJsonContent := TFile.ReadAllText(OpenDialog1.FileName);
+      // 2. DELEGACI√ìN TOTAL:
+      // Llamamos al m√©todo del componente pasando la ruta del archivo.
+      // El componente se encarga de leer el archivo, parsearlo, crear los clientes
+      // y sincronizar los motores internos.
+      LImportedCount := AiFunctions1.ImportClaudeMCPConfiguration(OpenDialog1.FileName);
 
-      // 4. Llamar a nuestra funciÛn de procesamiento con el contenido del archivo
-      // Asumimos que tu componente TAiFunctions se llama 'AiFunctions1'
-      LoadMCPClientsFromJSON(LJsonContent, AiFunctions1);
+      // 3. Feedback basado en el resultado
+      if LImportedCount > 0 then
+      begin
+        AddLog(Format('√âxito: Se importaron %d servidores MCP desde %s',
+               [LImportedCount, ExtractFileName(OpenDialog1.FileName)]));
 
-      // 5. Notificar al usuario (opcional, pero recomendado)
-      AddLog('ConfiguraciÛn MCP cargada exitosamente desde: ' + OpenDialog1.FileName);
-      ShowMessage('MCP configuration loaded successfully!');
+        ShowMessage(Format('Configuraci√≥n cargada correctamente.'#13#10 +
+                           'Servidores importados: %d', [LImportedCount]));
+      end
+      else
+      begin
+        AddLog('Aviso: El archivo se ley√≥ pero no se encontraron servidores MCP v√°lidos.');
+        ShowMessage('No se encontraron configuraciones de servidores MCP en el archivo seleccionado.');
+      end;
 
     except
       on E: Exception do
       begin
-        // En caso de un error (archivo no encontrado, JSON mal formado, etc.)
-        AddLog('ERROR: FallÛ la carga del archivo de configuraciÛn MCP. ' + E.Message);
-        ShowMessage('Failed to load MCP configuration file.' + sLineBreak + E.ClassName + ': ' + E.Message);
+        AddLog('ERROR al importar MCP: ' + E.Message);
+        ShowMessage('Error al procesar el archivo de configuraci√≥n:' + sLineBreak + E.Message);
       end;
     end;
   end;
@@ -607,7 +637,7 @@ begin
 
       LFileStream := TFileStream.Create(SaveDialog1.FileName, fmCreate);
       try
-        // 2. Usar nuestra funciÛn de ayuda para guardar en el formato correcto
+        // 2. Usar nuestra funci√≥n de ayuda para guardar en el formato correcto
         SaveRAGToStream(LFileStream, LSourceStream);
       finally
         LFileStream.Free;
@@ -628,13 +658,62 @@ begin
 
 end;
 
-procedure TForm2.AiConnCallToolFunction(Sender: TObject; AiToolCall: TAiToolsFunction);
-Var
-  FunctionName: String;
+procedure TForm2.AiComputerUseTool1ExecuteAction(Sender: TObject; const ActionData: TAiActionData; var Result: TAiActionResult);
 begin
-  FunctionName := AiToolCall.name;
-  // LLamado por defecto a la funciÛn siempre se ejectua para cualquier funciÛn
+  // Una sola l√≠nea para delegar todo el trabajo sucio
+  Result := TAiWindowsFMXExecutor.Execute(ActionData);
 
+  // Opcional: Loguear en un Memo
+  MemoEditTool.Lines.Add(Format('Acci√≥n Windows ejecutada: %s (Success: %s)', [ActionData.FunctionName, BoolToStr(Result.Success, True)]));
+end;
+
+procedure TForm2.AiComputerUseTool1RequestScreenshot(Sender: TObject; var MediaFile: TAiMediaFile);
+var
+  R: TRect;
+begin
+  // Define el rect√°ngulo basado en la configuraci√≥n del componente
+  R := Rect(AiComputerUseTool1.AreaLeft, AiComputerUseTool1.AreaTop, AiComputerUseTool1.AreaLeft + AiComputerUseTool1.AreaWidth, AiComputerUseTool1.AreaTop + AiComputerUseTool1.AreaHeight);
+
+  // Llama a la nueva unidad FMX Windows Executor
+  TAiWindowsFMXExecutor.CaptureScreen(MediaFile, R, 70);
+end;
+
+procedure TForm2.AiComputerUseTool1SafetyConfirmation(Sender: TObject; const Explanation: string; var Allow: Boolean);
+begin
+  // 1. Inicializamos la variable de estado "bandera"
+  FSafetyState := stWaiting;
+
+  // 2. Disparamos la UI en el hilo principal de forma as√≠ncrona (Queue)
+  // Usamos Queue en lugar de Synchronize para lanzar y soltar.
+  TThread.Queue(nil,
+    procedure
+    begin
+      // Este c√≥digo se ejecuta en el Hilo Principal (UI)
+      MessageDlg('‚ö†Ô∏è Gemini solicita confirmaci√≥n de seguridad.' + sLineBreak + 'Raz√≥n: ' + Explanation, TMsgDlgType.mtConfirmation, [TMsgDlgBtn.mbYes, TMsgDlgBtn.mbNo], 0,
+        // Callback an√≥nimo que se ejecuta al cerrar el di√°logo
+        procedure(const AResult: TModalResult)
+        begin
+          if AResult = mrYes then
+            FSafetyState := stAllow
+          else
+            FSafetyState := stDeny;
+        end);
+    end);
+
+  // 3. Loop de espera en el hilo secundario (Background Thread)
+  // Esperamos hasta que la variable cambie de estado.
+  while FSafetyState = stWaiting do
+  begin
+    // Importante: Sleep para no consumir 100% de CPU en el bucle vac√≠o
+    Sleep(100);
+
+    // Opcional: Verificar si el hilo fue terminado para evitar hang
+    if TThread.CurrentThread.CheckTerminated then
+      Exit;
+  end;
+
+  // 4. Asignamos el resultado final
+  Allow := (FSafetyState = stAllow);
 end;
 
 procedure TForm2.AiConnError(Sender: TObject; const ErrorMsg: string; Exception: Exception; const aResponse: IHTTPResponse);
@@ -673,6 +752,11 @@ end;
 
 procedure TForm2.AiConnReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
 begin
+
+  For Var MF in aMsg.MediaFiles do
+  Begin
+    MF.SaveToFile('miarchivo');
+  End;
 
   TThread.Queue(nil,
     procedure
@@ -714,7 +798,7 @@ begin
         End;
       End;
 
-      // Adiciona el detalle de la b˙squeda web, info adicional de fuentes
+      // Adiciona el detalle de la b√∫squeda web, info adicional de fuentes
       If Assigned(aMsg.WebSearchResponse) and (aMsg.WebSearchResponse.annotations.Count > 0) then
       Begin
         Var
@@ -723,7 +807,7 @@ begin
           FLastBubble.AppendText(WebRes);
       End;
 
-      // Adiciona la transcripciÛn en (traanscripciones o generaciÛn de imagenes)
+      // Adiciona la transcripci√≥n en (traanscripciones o generaci√≥n de imagenes)
 
       For Var MF in aMsg.MediaFiles do
       Begin
@@ -778,6 +862,7 @@ end;
 procedure TForm2.AiFunctions1Functions0GetSystemDateTimeAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
 begin
   ToolCall.Response := FormatDateTime('YYYY-MM-DD  hh:nn:ss', Now);
+  Handled := True;
 end;
 
 procedure TForm2.AiFunctions1Functions1AddInfoToRAGAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
@@ -791,6 +876,7 @@ begin
     Begin
       Try
         AiRAGVector1.AddItem(InfoToSave);
+
         ToolCall.Response := 'Ok';
 
         AddLog('');
@@ -805,10 +891,13 @@ begin
       End;
     End
     Else
-      ToolCall.Response := 'El par·metro InfoToSave no puede estar vacÌo';
+      ToolCall.Response := 'El par√°metro InfoToSave no puede estar vac√≠o';
   Finally
     AddLog('');
   End;
+
+  Handled := True;
+
 end;
 
 procedure TForm2.AiFunctions1Functions2SearchInRagAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
@@ -823,6 +912,7 @@ begin
     Begin
       Try
         ToolCall.Response := AiRAGVector1.SearchText(SearchText, 10, 0.3); // 03 es mas permisivo para el indice que maneja RAG
+
       Except
         ON E: Exception do
         Begin
@@ -831,16 +921,26 @@ begin
       End;
     End
     Else
-      ToolCall.Response := 'El par·metro SearchText no puede estar vacÌo';
+      ToolCall.Response := 'El par√°metro SearchText no puede estar vac√≠o';
   Finally
     AddLog('');
   End;
+
+  Handled := True;
+
+end;
+
+procedure TForm2.AiFunctions1Functions3AdicionaFacturaAlERPAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+Var
+  sJson: String;
+begin
+
 end;
 
 procedure TForm2.AiShell1ConsoleLog(Sender: TObject; const Command, StdOut, StdErr: string; ExitCode: Integer);
 begin
   // Capturamos los datos necesarios para el hilo principal
-  // TThread.Queue toma un mÈtodo anÛnimo
+  // TThread.Queue toma un m√©todo an√≥nimo
   TThread.Queue(nil,
     procedure
     begin
@@ -860,14 +960,14 @@ begin
       if StdErr <> '' then
         MemoShellTool.Lines.Add('ERROR: ' + StdErr);
 
-      // 3. Scroll al final (VersiÛn VCL)
+      // 3. Scroll al final (Versi√≥n VCL)
       MemoShellTool.GoToTextEnd;
     end);
 end;
 
 procedure TForm2.AssignAiConnParams;
 
-// FunciÛn auxiliar para agregar elementos a la cadena del SET limpiamente
+// Auxiliar para construir los conjuntos []
   procedure AddToSet(var ASetString: String; const AValue: String);
   begin
     if ASetString = '' then
@@ -876,220 +976,209 @@ procedure TForm2.AssignAiConnParams;
       ASetString := ASetString + ',' + AValue;
   end;
 
-Var
-  InputMediaFiles, OutputMediaFiles, ChatMediaSuports, Opt, sUrl: String;
+var
+  InputMediaFiles, OutputMediaFiles, ChatMediaSupports, EnabledFeatures: String;
+  Opt, sUrl: String;
 begin
-  AiConn.Params.BeginUpdate; // Importante para rendimiento si hay muchos cambios
+  AiConn.Params.BeginUpdate;
   try
     AiConn.Params.Clear;
 
+    // --- 1. CONFIGURACI√ìN B√ÅSICA ---
     sUrl := Trim(EditURL.Text);
-
-    If sUrl <> '' then
+    if sUrl <> '' then
       AiConn.Params.Values['Url'] := sUrl;
 
-    // 1. BOOLEANOS:
-    // BoolToStr(Valor, True) devuelve los strings 'True' o 'False'.
-    // Esto es correcto. Al hacer Clear, si aquÌ pasas 'False', la RTTI leer· 'False' y actualizar· el objeto.
     AiConn.Params.Values['Tool_Active'] := BoolToStr(ChUseTools.IsChecked, True);
     AiConn.Params.Values['Asynchronous'] := BoolToStr(ChAsincrono.IsChecked, True);
-
-    // Otros valores simples
     AiConn.Params.Values['Max_Tokens'] := StrToIntDef(EditMaxTokens.Text, 8000).ToString;
-    AiConn.Params.Values['Temperature'] := FloatToStr(TrackTemperature.Value / 10); // FloatToStr maneja mejor el punto decimal seg˙n locale
-    AiConn.Params.Values['ResponseTimeOut'] := '600000';
+    AiConn.Params.Values['Temperature'] := FloatToStr(TrackTemperature.Value / 10);
     AiConn.Params.Values['Voice'] := EditVoices.Text;
     AiConn.Params.Values['Voice_Format'] := EditVoiceFormat.Text;
 
-    // 2. ENUMERADOS (El error grave estaba aquÌ):
-    // Si no est· chequeado, DEBES enviar el valor por defecto explÌcitamente.
-    // Si lo omites, el objeto mantiene el valor anterior.
-    If ChJSonFormat.IsChecked then
-    Begin
-      If FJSonShema <> '' then
-        AiConn.Params.Values['Response_format'] := 'tiaChatRfJsonSchema'
-      Else
-        AiConn.Params.Values['Response_format'] := 'tiaChatRfJson';
-    End
-    Else
+    // --- 2. ENUMERADOS ---
+    if ChJSonFormat.IsChecked then
+      AiConn.Params.Values['Response_format'] := IfThen(FJSonShema <> '', 'tiaChatRfJsonSchema', 'tiaChatRfJson')
+    else
       AiConn.Params.Values['Response_format'] := 'tiaChatRfText';
 
-    If (FJSonShema <> '') and ChJSonFormat.IsChecked then
+    if (FJSonShema <> '') and ChJSonFormat.IsChecked then
       AiConn.Params.Values['JsonSchema'] := FJSonShema;
 
-    // Para ThinkingLevel, no envÌes cadena vacÌa '', envÌa el Default.
-    // Si la RTTI intenta convertir '' a un Enum, fallar· o no har· nada.
-    If EditThinkingLevel.ItemIndex >= 0 then
-      AiConn.Params.Values['ThinkingLevel'] := GetEnumName(TypeInfo(TAiThinkingLevel), Ord(EditThinkingLevel.ItemIndex))
-    Else
-      AiConn.Params.Values['ThinkingLevel'] := 'tlDefault'; // <--- CORRECCI”N: Asigna el valor base del Enum
+    AiConn.Params.Values['ThinkingLevel'] := GetEnumName(TypeInfo(TAiThinkingLevel), Max(0, EditThinkingLevel.ItemIndex));
 
-    // 3. SETS (Conjuntos):
+    // --- 3. PROCESAMIENTO DE SETS (ORQUESTACI√ìN v1.5) ---
     InputMediaFiles := '';
     OutputMediaFiles := '';
-    ChatMediaSuports := '';
+    ChatMediaSupports := '';
+    EnabledFeatures := '';
 
-    // LÛgica ChatMediaSuports
+    // A. CAPA DE INTENCI√ìN (EnabledFeatures)
+    // Primero: Checkboxes de herramientas l√≥gicas
+    if ChWebSearch.IsChecked then
+      AddToSet(EnabledFeatures, 'Tcm_WebSearch');
+    if ChCodeInterpreter.IsChecked then
+      AddToSet(EnabledFeatures, 'Tcm_CodeInterpreter');
+    if chComputerUse.IsChecked then
+      AddToSet(EnabledFeatures, 'Tcm_ComputerUse');
+    if ChShellTool.IsChecked then
+      AddToSet(EnabledFeatures, 'Tcm_Shell');
+    if ChEditTool.IsChecked then
+      AddToSet(EnabledFeatures, 'Tcm_TextEditor');
 
-    If ChExtractFiles.IsChecked then
-      AddToSet(OutputMediaFiles, 'tfc_ExtracttextFile');
+    // Segundo: Capacidades de medios que queremos habilitar (Desde el nuevo EditEnabledFeatures)
+    Opt := LowerCase(EditEnabledFeatures.Text);
+    AddToSet(EnabledFeatures, 'Tcm_Text'); // Siempre habilitamos texto
+    if Opt.Contains('image') then
+      AddToSet(EnabledFeatures, 'Tcm_Image');
+    if Opt.Contains('audio') then
+      AddToSet(EnabledFeatures, 'Tcm_Audio');
+    if Opt.Contains('video') then
+      AddToSet(EnabledFeatures, 'Tcm_Video');
+    if Opt.Contains('pdf') then
+      AddToSet(EnabledFeatures, 'Tcm_Pdf');
+    if Opt.Contains('any') then
+      AddToSet(EnabledFeatures, 'Tcm_Any');
 
-    If ChWebSearch.IsChecked then
-      AddToSet(ChatMediaSuports, 'Tcm_WebSearch');
-    If ChCodeInterpreter.IsChecked then
-      AddToSet(ChatMediaSuports, 'Tcm_code_interpreter');
-
+    // B. CAPA NATIVA (ChatMediaSupports)
+    // Define lo que el modelo ya sabe hacer (sacado de EditChatMediaSupports)
     Opt := LowerCase(EditChatMediaSupports.Text);
+    AddToSet(ChatMediaSupports, 'Tcm_Text');
+    if Opt.Contains('image') then
+      AddToSet(ChatMediaSupports, 'Tcm_Image');
+    if Opt.Contains('audio') then
+      AddToSet(ChatMediaSupports, 'Tcm_Audio');
+    if Opt.Contains('video') then
+      AddToSet(ChatMediaSupports, 'Tcm_Video');
+    if Opt.Contains('pdf') then
+      AddToSet(ChatMediaSupports, 'Tcm_Pdf');
+    if Opt.Contains('any') then
+      AddToSet(ChatMediaSupports, 'Tcm_Any');
 
-    If Opt.Contains('image') then
-      AddToSet(ChatMediaSuports, 'Tcm_Image');
-    If Opt.Contains('audio') then
-      AddToSet(ChatMediaSuports, 'Tcm_Audio');
-    If Opt.Contains('video') then
-      AddToSet(ChatMediaSuports, 'Tcm_Video');
-    If Opt.Contains('pdf') then
-      AddToSet(ChatMediaSuports, 'tcm_pdf');
-    If Opt.Contains('any') then
-      AddToSet(ChatMediaSuports, 'Tcm_Any');
-
-    // LÛgica NativeInputFiles
+    // C. CAPA F√çSICA DE ENTRADA (NativeInputFiles)
     Opt := LowerCase(EditNativeInputFiles.Text);
-    If Opt.Contains('image') then
+    if Opt.Contains('image') then
       AddToSet(InputMediaFiles, 'Tfc_Image');
-    If Opt.Contains('audio') then
+    if Opt.Contains('audio') then
       AddToSet(InputMediaFiles, 'Tfc_Audio');
-    If Opt.Contains('video') then
+    if Opt.Contains('video') then
       AddToSet(InputMediaFiles, 'Tfc_Video');
-    If Opt.Contains('pdf') then
-      AddToSet(InputMediaFiles, 'Tfc_pdf');
-    If Opt.Contains('any') then
+    if Opt.Contains('pdf') then
+      AddToSet(InputMediaFiles, 'Tfc_Pdf');
+    if Opt.Contains('any') then
       AddToSet(InputMediaFiles, 'Tfc_Any');
 
-    // LÛgica NativeOutputFiles
+    // D. CAPA F√çSICA DE SALIDA (NativeOutputFiles)
     Opt := LowerCase(EditNativeOutputFiles.Text);
-    If Opt.Contains('image') then
+    if Opt.Contains('image') then
       AddToSet(OutputMediaFiles, 'Tfc_Image');
-    If Opt.Contains('audio') then
+    if Opt.Contains('audio') then
       AddToSet(OutputMediaFiles, 'Tfc_Audio');
-    If Opt.Contains('video') then
+    if Opt.Contains('video') then
       AddToSet(OutputMediaFiles, 'Tfc_Video');
-    If Opt.Contains('pdf') then
-      AddToSet(OutputMediaFiles, 'Tfc_pdf');
+    if Opt.Contains('pdf') then
+      AddToSet(OutputMediaFiles, 'Tfc_Pdf');
+    if ChExtractFiles.IsChecked then
+      AddToSet(OutputMediaFiles, 'Tfc_ExtractTextFile');
 
-    If ChShellTool.IsChecked then
-      AddToSet(ChatMediaSuports, 'tcm_Shell');
-
-    If ChEditTool.IsChecked then
-      AddToSet(ChatMediaSuports, 'tcm_TextEditor');
-
-    // AsignaciÛn final con formato de Set [a,b,c]
+    // --- 4. ASIGNACI√ìN FINAL ---
+    AiConn.Params.Values['EnabledFeatures'] := '[' + EnabledFeatures + ']';
+    AiConn.Params.Values['ChatMediaSupports'] := '[' + ChatMediaSupports + ']';
     AiConn.Params.Values['NativeInputFiles'] := '[' + InputMediaFiles + ']';
     AiConn.Params.Values['NativeOutputFiles'] := '[' + OutputMediaFiles + ']';
-    AiConn.Params.Values['ChatMediaSupports'] := '[' + ChatMediaSuports + ']';
 
-    // Estos son los par·metros con los que se ejecuta la peticiÛn actual
+    // Actualizaci√≥n del log visual
     MemoUsedChatParams.Lines.Assign(AiConn.Params);
-    MemoUsedChatParams.Lines.Add('');
-    MemoUsedChatParams.Lines.Add('------------------------------------------------------------');
-    MemoUsedChatParams.Lines.Add('-- These are properties on TAIChatConnection, not params. --');
-    MemoUsedChatParams.Lines.Add('------------------------------------------------------------');
-    MemoUsedChatParams.Lines.Add('');
-    MemoUsedChatParams.Lines.Add('drivename=' + AiConn.DriverName);
-    MemoUsedChatParams.Lines.Add('model=' + AiConn.Model);
-    MemoUsedChatParams.Lines.Values['ApiKey'] := '';
-
-    MemoUsedChatParams.Lines.Insert(0, 'ApiKey=@' + UpperCase(ComboDriver.Text) + '_API_KEY');
+    MemoUsedChatParams.Lines.Insert(0, 'Model: ' + AiConn.Model);
+    MemoUsedChatParams.Lines.Insert(0, 'Driver: ' + AiConn.DriverName);
 
   finally
     AiConn.Params.EndUpdate;
   end;
-
 end;
 
 procedure TForm2.AssignModel(const DriverName, ModelName: String);
 
-// FunciÛn auxiliar para reconstruir el texto de la interfaz (Image, Audio, Video...)
-// basado en el contenido del par·metro raw (tcm_Image, tfc_Audio, etc.)
+// Funci√≥n auxiliar para convertir el Set crudo [Tcm_Image, Tcm_WebSearch]
+// en un texto amigable para los TEdit (Image, Audio...)
   function BuildMediaString(const AParamValue: String): String;
   var
     LConf: String;
+    Parts: TStringList;
   begin
     Result := '';
     LConf := LowerCase(AParamValue);
+    Parts := TStringList.Create;
+    try
+      if LConf.Contains('image') then
+        Parts.Add('Image');
+      if LConf.Contains('audio') then
+        Parts.Add('Audio');
+      if LConf.Contains('video') then
+        Parts.Add('Video');
+      if LConf.Contains('pdf') then
+        Parts.Add('Pdf');
+      if LConf.Contains('any') then
+        Parts.Add('Any');
 
-    // Usamos Contains para detectar la presencia.
-    // Nota: Esto asume que no hay conflictos de nombres (ej: 'image' vs 'imagery')
-    if LConf.Contains('image') then
-      Result := Result + ',Image';
-    if LConf.Contains('audio') then
-      Result := Result + ',Audio';
-    if LConf.Contains('video') then
-      Result := Result + ',Video';
-    if LConf.Contains('pdf') then
-      Result := Result + ',Pdf';
-    if LConf.Contains('any') then
-      Result := Result + ',Any'; // Agregado 'Any' que usabas en el guardado
-
-    // Quitar la primera coma si existe
-    if (Result.Length > 0) and (Result[1] = ',') then
-      Delete(Result, 1, 1);
+      Result := Parts.CommaText;
+    finally
+      Parts.Free;
+    end;
   end;
 
-Var
-  Max_Tokens: Integer;
-  Tool_Active, Asynchronous, JSonFormat: Boolean;
-  Temperature: Double;
-  LEnumIndex: Integer;
+var
+  LParams: TStrings;
+  LEnabled: String;
 begin
-  // 1. °CRÕTICO! NO hacer AiConn.Params.Clear aquÌ.
-  // Primero asignamos el driver y modelo para que el componente cargue sus DEFAULTS internos a Params.
+  // 1. ASIGNACI√ìN DEL DRIVER (Esto carga los DefaultParams del Factory al AiConn.Params)
   AiConn.DriverName := DriverName;
   AiConn.Model := ModelName;
 
-  // Ahora leemos de Params (que ya tiene los defaults del modelo cargado)
+  // Acceso directo para abreviar
+  LParams := AiConn.Params;
 
-  // 2. Valores Simples
-  Max_Tokens := StrToIntDef(AiConn.Params.Values['Max_Tokens'], 8000);
+  // 2. RECUPERACI√ìN DE VALORES ESCALARES (UI)
+  EditURL.Text := LParams.Values['Url'];
+  EditMaxTokens.Text := LParams.Values['Max_Tokens'];
 
-  EditURL.Text := AiConn.Params.Values['Url'];
+  // Temperatura: de 0.7 (float) a 7 (trackbar)
+  TrackTemperature.Value := StrToFloatDef(LParams.Values['Temperature'], 0.7) * 10;
 
-  // Ojo con la temperatura: Guardamos Float, recuperamos para TrackBar (Integer)
-  // Usamos StrToFloatDef para manejar '0.7' o '1' correctamente segun locale.
-  Temperature := StrToFloatDef(AiConn.Params.Values['Temperature'], 0.7);
+  ChAsincrono.IsChecked := StrToBoolDef(LParams.Values['Asynchronous'], False);
+  ChUseTools.IsChecked := StrToBoolDef(LParams.Values['Tool_Active'], False);
 
-  Tool_Active := StrToBoolDef(AiConn.Params.Values['Tool_Active'], False);
-  Asynchronous := StrToBoolDef(AiConn.Params.Values['Asynchronous'], False);
+  // Formato JSON
+  ChJSonFormat.IsChecked := SameText(LParams.Values['Response_format'], 'tiaChatRfJson') or SameText(LParams.Values['Response_format'], 'tiaChatRfJsonSchema');
+  FJSonShema := LParams.Values['JsonSchema'];
 
-  // Comparamos sin importar may˙sculas/min˙sculas
-  JSonFormat := SameText(AiConn.Params.Values['Response_format'], 'tiaChatRfJson') or SameText(AiConn.Params.Values['Response_format'], 'tiaChatRfJsonSchema');
-  FJSonShema := AiConn.Params.Values['JsonSchema'];
+  // Voz
+  EditVoices.Text := LParams.Values['Voice'];
+  EditVoiceFormat.Text := LParams.Values['Voice_Format'];
 
-  // 3. Asignar a la Interfaz (UI)
-  EditMaxTokens.Text := Max_Tokens.ToString;
-  TrackTemperature.Value := Temperature * 10; // Si es 0.7 -> 7
-  ChAsincrono.IsChecked := Asynchronous;
-  ChUseTools.IsChecked := Tool_Active;
-  ChJSonFormat.IsChecked := JSonFormat;
+  // Thinking Level (Enum)
+  EditThinkingLevel.ItemIndex := Max(0, GetEnumValue(TypeInfo(TAiThinkingLevel), LParams.Values['ThinkingLevel']));
 
-  EditVoices.Text := AiConn.Params.Values['Voice'];
-  EditVoiceFormat.Text := AiConn.Params.Values['Voice_Format'];
+  // 3. RECUPERACI√ìN DE CAPACIDADES L√ìGICAS (Checkboxes de Intenci√≥n)
+  // Leemos el set 'EnabledFeatures' para marcar los checks de la UI
+  LEnabled := LowerCase(LParams.Values['EnabledFeatures']);
 
-  // 4. Thinking Level
-  // GetEnumValue retorna -1 si no encuentra el texto.
-  LEnumIndex := GetEnumValue(TypeInfo(TAiThinkingLevel), AiConn.Params.Values['ThinkingLevel']);
-  if LEnumIndex = -1 then
-    EditThinkingLevel.ItemIndex := 0 // Default (tlDefault) si no existe el param
-  else
-    EditThinkingLevel.ItemIndex := LEnumIndex;
+  ChWebSearch.IsChecked := LEnabled.Contains('tcm_websearch');
+  ChCodeInterpreter.IsChecked := LEnabled.Contains('tcm_code_interpreter');
+  chComputerUse.IsChecked := LEnabled.Contains('tcm_computeruse');
+  ChShellTool.IsChecked := LEnabled.Contains('tcm_shell');
+  ChEditTool.IsChecked := LEnabled.Contains('tcm_texteditor');
+  ChExtractFiles.IsChecked := LowerCase(LParams.Values['NativeOutputFiles']).Contains('tfc_extracttextfile');
 
-  // 5. Native Input Files (Reutilizando lÛgica con la funciÛn auxiliar)
-  EditNativeInputFiles.Text := BuildMediaString(AiConn.Params.Values['NativeInputFiles']);
+  // 4. RECUPERACI√ìN DE CAPACIDADES DE MEDIOS (Edits)
+  // Usamos la funci√≥n auxiliar para limpiar los sets crudos
+  EditEnabledFeatures.Text := BuildMediaString(LParams.Values['EnabledFeatures']);
+  EditChatMediaSupports.Text := BuildMediaString(LParams.Values['ChatMediaSupports']);
+  EditNativeInputFiles.Text := BuildMediaString(LParams.Values['NativeInputFiles']);
+  EditNativeOutputFiles.Text := BuildMediaString(LParams.Values['NativeOutputFiles']);
 
-  // 6. Native Output Files
-  EditNativeOutputFiles.Text := BuildMediaString(AiConn.Params.Values['NativeOutputFiles']);
-
-  // Para el texto de capacidades multimedia, leemos del param string
-  EditChatMediaSupports.Text := BuildMediaString(AiConn.Params.Values['ChatMediaSupports']);
+  // Log de confirmaci√≥n en la UI
+  AddLog(Format('Modelo cargado: %s (%s)', [ModelName, DriverName]));
 end;
 
 procedure TForm2.BtnNewChatClick(Sender: TObject);
@@ -1171,16 +1260,16 @@ Var
   MF: TAiMediaFile;
 begin
 
-  // Estos son los par·metros con los que se ejecuta la peticiÛn actual
+  // Estos son los par√°metros con los que se ejecuta la petici√≥n actual
   AssignAiConnParams;
 
   // ---------------------------------------------------------------------------------
-  // -------- OPCI”N DESHABILITADA ES SOLO UN LOG DE PRUEBAS--------------------------
+  // -------- OPCI√ìN DESHABILITADA ES SOLO UN LOG DE PRUEBAS--------------------------
   // ---------------------------------------------------------------------------------
   LogPruebas('');
   LogPruebas('Prueba: ' + EditCaption.Text);
   LogPruebas('');
-  LogPruebas('Par·metros:');
+  LogPruebas('Par√°metros:');
 
   For Var I := 0 to MemoUsedChatParams.Lines.Count - 1 do
   Begin
@@ -1203,7 +1292,7 @@ begin
 
   If ChSendAudioToIA.IsChecked then
   Begin
-    // Si hay un audio grabado por el control se adiciona, solo si la comunicaciÛn es solo audio ya que el texto se transcribiÛ en APrompt
+    // Si hay un audio grabado por el control se adiciona, solo si la comunicaci√≥n es solo audio ya que el texto se transcribi√≥ en APrompt
     If Assigned(aAudioStream) and (aAudioStream.size > 100) then
     Begin
       MF := TAiMediaFile.Create;
@@ -1360,11 +1449,11 @@ begin
   if not TPlatformServices.Current.SupportsPlatformService(IFMXClipboardService, IInterface(ClipboardSvc)) then
     Exit; // No hay servicio de portapapeles disponible
 
-  // Antes de cualquier operaciÛn, asegurarnos de que el stream estÈ al principio.
+  // Antes de cualquier operaci√≥n, asegurarnos de que el stream est√© al principio.
   if Assigned(AMediaFile.Content) then
     AMediaFile.Content.Position := 0;
 
-  // La lÛgica de copiado depende de la categorÌa del archivo
+  // La l√≥gica de copiado depende de la categor√≠a del archivo
   case AMediaFile.FileCategory of
     Tfc_Image:
       begin
@@ -1373,7 +1462,7 @@ begin
         LBitmap := FMX.Graphics.TBitMap.Create;
         try
           LBitmap.LoadFromStream(AMediaFile.Content);
-          ClipboardSvc.SetClipboard(LBitmap); // FMX sabe cÛmo poner un TBitmap en el portapapeles
+          ClipboardSvc.SetClipboard(LBitmap); // FMX sabe c√≥mo poner un TBitmap en el portapapeles
           Result := True;
         finally
           LBitmap.Free;
@@ -1385,7 +1474,7 @@ begin
         if (AMediaFile.Content = nil) or (AMediaFile.Content.size = 0) then
           Exit;
 
-        // Leemos el contenido del stream como texto UTF-8 (el m·s com˙n)
+        // Leemos el contenido del stream como texto UTF-8 (el m√°s com√∫n)
         var
         LReader := TStreamReader.Create(AMediaFile.Content, TEncoding.UTF8);
         try
@@ -1398,17 +1487,17 @@ begin
         end;
       end;
 
-    // Para otros tipos de archivo (PDF, DOC, Audio, etc.), el portapapeles est·ndar
-    // no tiene un formato "nativo" para ellos. La mejor opciÛn es copiar
+    // Para otros tipos de archivo (PDF, DOC, Audio, etc.), el portapapeles est√°ndar
+    // no tiene un formato "nativo" para ellos. La mejor opci√≥n es copiar
     // la RUTA del archivo si existe, o no hacer nada.
-    // En este caso, como el contenido est· en un TMemoryStream, no hay una ruta
-    // que podamos copiar que otra aplicaciÛn pueda entender.
-    // Por lo tanto, para estos tipos, no hacemos nada y el mÈtodo devuelve False.
+    // En este caso, como el contenido est√° en un TMemoryStream, no hay una ruta
+    // que podamos copiar que otra aplicaci√≥n pueda entender.
+    // Por lo tanto, para estos tipos, no hacemos nada y el m√©todo devuelve False.
   else
     Result := False;
   end;
 
-  // Volvemos a rebobinar el stream por si se necesita reutilizar despuÈs.
+  // Volvemos a rebobinar el stream por si se necesita reutilizar despu√©s.
   if Assigned(AMediaFile.Content) then
     AMediaFile.Content.Position := 0;
 end;
@@ -1420,10 +1509,11 @@ end;
 
 procedure TForm2.EditChatMediaSupportsEnter(Sender: TObject);
 begin
-  If Sender is TEdit then
+  if Sender is TEdit then
     InitModelCapabilitiesCombo(Sender as TEdit);
 
-  ChModelAny.Visible := (Sender = EditNativeInputFiles) or (Sender = EditChatMediaSupports);
+  // Ahora incluimos el nuevo campo en la validaci√≥n de la opci√≥n "Any"
+  ChModelAny.Visible := (Sender = EditNativeInputFiles) or (Sender = EditChatMediaSupports) or (Sender = EditEnabledFeatures);
 end;
 
 procedure TForm2.EditChatMediaSupportsExit(Sender: TObject);
@@ -1431,10 +1521,29 @@ begin
   ModelCapabilitiesCombo.Visible := False;
 end;
 
+procedure TForm2.EditEnabledFeaturesEnter(Sender: TObject);
+begin
+  // Inicializamos el combo de selecci√≥n de capacidades para este Edit
+  if Sender is TEdit then
+    InitModelCapabilitiesCombo(TEdit(Sender));
+
+  // Al igual que con ChatMediaSupports, permitimos la opci√≥n "Any"
+  // para habilitar todas las funciones l√≥gicas de un golpe.
+  ChModelAny.Visible := True;
+end;
+
+procedure TForm2.EditEnabledFeaturesExit(Sender: TObject);
+begin
+  // Ocultamos el panel de selecci√≥n al salir del foco
+  ModelCapabilitiesCombo.Visible := False;
+end;
+
 procedure TForm2.FormCreate(Sender: TObject);
 Var
   List: TStringList;
 begin
+
+  InitChats;
 
   FNoImage := 0;
   ShowArtefacts(False);
@@ -1446,7 +1555,7 @@ begin
 
   ModelCapabilitiesCombo.Visible := False;
 
-  // BtnJSonShema.Visible := False;  //Funcionalidad no implementada todavÌa
+  // BtnJSonShema.Visible := False;  //Funcionalidad no implementada todav√≠a
 
   Try
     List := AiConn.GetDriversNames;
@@ -1461,6 +1570,30 @@ begin
   Except
 
   End;
+end;
+
+procedure TForm2.InitChats;
+begin
+  // ===================================================================
+  // CONFIGURACI√ìN GLOBAL DE OLLAMA (Defaults para todos sus modelos)
+  // ===================================================================
+  // Por defecto, Ollama es texto puro y no tiene herramientas nativas
+  AiConn.RegisterUserParam('Ollama', 'Max_Tokens', '8000');
+  AiConn.RegisterUserParam('Ollama', 'Url', 'http://192.168.10.121:11434/');
+  AiConn.RegisterUserParam('Ollama', 'Temperature', '0.7');
+  AiConn.RegisterUserParam('Ollama', 'Asynchronous', 'True');
+  AiConn.RegisterUserParam('Ollama', 'Tool_Active', 'False');
+
+  // Capa F√≠sica: Ollama por defecto no acepta binarios (solo texto)
+  AiConn.RegisterUserParam('Ollama', 'NativeInputFiles', '[]');
+  AiConn.RegisterUserParam('Ollama', 'NativeOutputFiles', '[]');
+
+  // Capa L√≥gica: Habilidades nativas m√≠nimas
+  AiConn.RegisterUserParam('Ollama', 'ChatMediaSupports', '[Tcm_Text]');
+
+  // Intenci√≥n: Por defecto queremos que todos tengan texto y razonamiento si lo exponen
+  AiConn.RegisterUserParam('Ollama', 'EnabledFeatures', '[Tcm_Text]');
+
 end;
 
 procedure TForm2.InitModelCapabilitiesCombo(Edit: TEdit);
@@ -1497,8 +1630,8 @@ begin
   AHistoryStream := nil;
   AContainerStream.Position := 0;
 
-  // 1. Validar cabecera y versiÛn
-  if (AContainerStream.Read(LHeader, SizeOf(LHeader)) <> SizeOf(LHeader)) or (not CompareMem(@LHeader, @MKCHAT_MAGIC_HEADER, SizeOf(LHeader))) then // *** LÕNEA CORREGIDA ***
+  // 1. Validar cabecera y versi√≥n
+  if (AContainerStream.Read(LHeader, SizeOf(LHeader)) <> SizeOf(LHeader)) or (not CompareMem(@LHeader, @MKCHAT_MAGIC_HEADER, SizeOf(LHeader))) then // *** L√çNEA CORREGIDA ***
     raise Exception.Create('Invalid .mkchat file format.');
 
   if (AContainerStream.Read(LVersion, SizeOf(LVersion)) <> SizeOf(LVersion)) or (LVersion <> MKCHAT_FORMAT_VERSION) then
@@ -1529,12 +1662,13 @@ begin
   end;
 end;
 
-procedure TForm2.LoadMCPClientsFromJSON(AJsonString: string; AFunctions: TAiFunctions);
+
+{procedure TForm2.LoadMCPClientsFromJSON(AJsonString: string; AFunctions: TAiFunctions);
 var
   LJson, LMcpServers, LServerConfig, LEnvObject: TJSONObject;
   LPair, LEnvPair: TJSONPair;
   LClientItem: TMCPClientItem;
-  LServerName, LCommand, LUrl, LTimeoutStr: string;
+  LServerName, LCommand: string;
   LArgsArray: TJSONArray;
   LArgsBuilder: TStringBuilder;
   I: Integer;
@@ -1542,119 +1676,105 @@ begin
   if not Assigned(AFunctions) then
     Exit;
 
-  // Limpiamos la configuraciÛn existente antes de cargar la nueva
+  // 1. Limpiamos la configuraci√≥n anterior para evitar conflictos
   AFunctions.MCPClients.Clear;
-  AddLog('ConfiguraciÛn de clientes MCP anterior eliminada.');
+  AddLog('Iniciando carga de servidores MCP desde JSON...');
 
   LJson := nil;
   try
-    // 1. Parsear el JSON completo
-    // (Usando tu implementaciÛn original para mantener la consistencia)
-    LJson := TJSONObject.ParseJSONValue(AJsonString) as TJSONObject;
-    if not Assigned(LJson) then
-    begin
-      AddLog('Error: El JSON proporcionado no es un objeto v·lido.');
-      Exit;
-    end;
-
-    // 2. Navegar hasta el objeto "mcpServers"
-    if not LJson.TryGetValue<TJSONObject>('mcpServers', LMcpServers) or not Assigned(LMcpServers) then
-    begin
-      AddLog('Error: No se encontrÛ la clave "mcpServers" en el JSON.');
-      Exit;
-    end;
-
-    // 3. Iterar sobre cada servidor definido en "mcpServers"
-    AddLog('Comenzando a procesar servidores MCP...');
-    for LPair in LMcpServers do
-    begin
-      LServerName := LPair.JsonString.Value;
-      LServerConfig := LPair.JsonValue as TJSONObject;
-
-      AddLog('------------------------------------');
-      AddLog(Format('Procesando servidor: "%s"', [LServerName]));
-
-      // 4. Crear un nuevo TMCPClientItem en la colecciÛn y configurar propiedades b·sicas
-      LClientItem := AFunctions.MCPClients.Add;
-      LClientItem.name := LServerName;
-      LClientItem.Enabled := True; // Habilitado por defecto
-
-      // 5. Determinar el tipo de transporte y construir los par·metros
-      if LServerConfig.TryGetValue<string>('command', LCommand) then
+    Try
+      // 2. Parsear el JSON
+      LJson := TJSONObject.ParseJSONValue(AJsonString) as TJSONObject;
+      if not Assigned(LJson) then
       begin
-        LClientItem.TransportType := tpStdIo;
-        AddLog('  Tipo de transporte detectado: StdIo');
+        AddLog('Error: El JSON proporcionado no es un objeto v√°lido.');
+        Exit;
+      end;
 
-        LClientItem.Params.Add('Command=' + LCommand);
-        AddLog(Format('  - Param[Command]=%s', [LCommand]));
+      // 3. Acceder al nodo ra√≠z "mcpServers"
+      if not LJson.TryGetValue<TJSONObject>('mcpServers', LMcpServers) then
+      begin
+        AddLog('Error: No se encontr√≥ la clave "mcpServers" en el JSON.');
+        Exit;
+      end;
 
-        // --- SECCI”N CORREGIDA PARA 'args' ---
-        if LServerConfig.TryGetValue<TJSONArray>('args', LArgsArray) then
+      // 4. Iterar sobre los servidores definidos
+      for LPair in LMcpServers do
+      begin
+        LServerName := LPair.JsonString.Value;
+        LServerConfig := LPair.JsonValue as TJSONObject;
+
+        // 5. Detectar si es un servidor StdIo (basado en la presencia de "command")
+        if LServerConfig.TryGetValue<string>('command', LCommand) then
         begin
-          LArgsBuilder := TStringBuilder.Create;
-          try
-            for I := 0 to LArgsArray.Count - 1 do
-            begin
-              // Simplemente toma el valor del JSON y lo aÒade, seguido de un espacio.
-              // NO se aÒade ninguna comilla extra.
-              LArgsBuilder.Append(LArgsArray.Items[I].Value);
-              LArgsBuilder.Append(' ');
+          AddLog(Format('Procesando servidor StdIo: "%s"', [LServerName]));
+
+          // Crear el item en la colecci√≥n
+          LClientItem := AFunctions.MCPClients.Add;
+          LClientItem.Name := LServerName;
+
+          // Establecer el tipo de transporte PRIMERO
+          LClientItem.TransportType := tpStdIo;
+
+          // 6. Configurar PARAMS (Esto es lo que lee el motor interno)
+          // Usamos .Values['Key'] para asegurar que sobreescribimos o creamos el par correctamente
+          LClientItem.Params.Values['Command'] := LCommand;
+
+          // Procesar argumentos si existen
+          if LServerConfig.TryGetValue<TJSONArray>('args', LArgsArray) then
+          begin
+            LArgsBuilder := TStringBuilder.Create;
+            try
+              for I := 0 to LArgsArray.Count - 1 do
+              begin
+                // Concatenamos argumentos con espacio
+                LArgsBuilder.Append(LArgsArray.Items[I].Value).Append(' ');
+              end;
+              LClientItem.Params.Values['Arguments'] := LArgsBuilder.ToString.Trim;
+            finally
+              LArgsBuilder.Free;
             end;
-
-            // AÒade la cadena de argumentos resultante (limpiando espacios al final)
-            // a la lista de par·metros.
-            LClientItem.Params.Add('Arguments=' + LArgsBuilder.ToString.Trim);
-            AddLog(Format('  - Param[Arguments]=%s', [LArgsBuilder.ToString.Trim]));
-          finally
-            LArgsBuilder.Free;
           end;
-        end;
-        // --- FIN DE LA SECCI”N CORREGIDA ---
-        LClientItem.UpdateClientProperties;
-        // LClientItem.Connected := True;
 
-      end
-      else if LServerConfig.TryGetValue<string>('url', LUrl) then
-      begin
-        LClientItem.TransportType := tpHttp;
-        AddLog('  Tipo de transporte detectado: Http');
+          // Importante: Asegurar que RootDir no sea nulo (usar el home por defecto como hace el IDE)
+          if LClientItem.Params.Values['RootDir'] = '' then
+            LClientItem.Params.Values['RootDir'] := System.IOUtils.TPath.GetHomePath;
 
-        // Guardamos la URL en la colecciÛn 'Params'
-        LClientItem.Params.Add('URL=' + LUrl);
-        AddLog(Format('  - Param[URL]=%s', [LUrl]));
+          // 7. Procesar Variables de Entorno (env)
+          // Estas son cr√≠ticas para que servidores como SQLite o Postgres encuentren sus rutas/claves
+          if LServerConfig.TryGetValue<TJSONObject>('env', LEnvObject) then
+          begin
+            for LEnvPair in LEnvObject do
+            begin
+              LClientItem.EnvVars.Values[LEnvPair.JsonString.Value] := LEnvPair.JsonValue.Value;
+            end;
+          end;
 
-        // Otros par·metros como 'timeout' tambiÈn van a 'Params'
-        if LServerConfig.TryGetValue<string>('timeout', LTimeoutStr) then
-        begin
-          LClientItem.Params.Add('Timeout=' + LTimeoutStr);
-          AddLog(Format('  - Param[Timeout]=%s', [LTimeoutStr]));
-        end;
-      end
-      else
-      begin
-        AddLog('  ADVERTENCIA: No se pudo determinar el tipo de transporte (ni "command" ni "url" encontrados).');
-        LClientItem.Enabled := False;
+          // 8. SINCRONIZACI√ìN FINAL
+          // Habilitamos el cliente
+          LClientItem.Enabled := True;
 
-      end;
+          // Llamamos a UpdateClientProperties para que el TMCPClientItem
+          // cree e inicialice el TMCPClientStdIo interno con los Params y EnvVars que acabamos de llenar.
+          LClientItem.UpdateClientProperties;
 
-      // 6. Procesar las variables de entorno ("env")
-      if LServerConfig.TryGetValue<TJSONObject>('env', LEnvObject) then
-      begin
-        AddLog('  Procesando variables de entorno...');
-        for LEnvPair in LEnvObject do
-        begin
-          LClientItem.EnvVars.Add(Format('%s=%s', [LEnvPair.JsonString.Value, LEnvPair.JsonValue.Value]));
-          AddLog(Format('    - EnvVar: %s=%s', [LEnvPair.JsonString.Value, LEnvPair.JsonValue.Value]));
+          AddLog(Format('  - Servidor "%s" cargado y listo.', [LServerName]));
         end;
       end;
-    end;
 
-    AddLog('Carga de configuraciÛn MCP completada.');
+      AddLog('Carga de configuraci√≥n MCP StdIo completada.');
+
+    except
+      on E: Exception do
+        AddLog('Error cr√≠tico durante la carga JSON: ' + E.Message);
+    End;
 
   finally
-    LJson.Free;
+    if Assigned(LJson) then
+      LJson.Free;
   end;
 end;
+}
 
 function TForm2.LoadRAGFromStream(AContainerStream: TStream): TMemoryStream;
 var
@@ -1672,7 +1792,7 @@ begin
 
   // El resto del stream son los datos comprimidos. Los descomprimimos.
   Result := TMemoryStream.Create;
-  // AContainerStream ya est· posicionado justo despuÈs de la cabecera.
+  // AContainerStream ya est√° posicionado justo despu√©s de la cabecera.
   ZStream := TZDecompressionStream.Create(AContainerStream);
   try
     Result.CopyFrom(ZStream, 0);
@@ -1690,7 +1810,7 @@ begin
 
   if (LMediaFile <> nil) then
   begin
-    // Simplemente llamamos al mÈtodo. °Toda la lÛgica compleja est· encapsulada!
+    // Simplemente llamamos al m√©todo. ¬°Toda la l√≥gica compleja est√° encapsulada!
     if CopyToClipBoard(LMediaFile) then
     begin
       // Opcional: Notificar al usuario que la copia fue exitosa
@@ -1716,14 +1836,14 @@ begin
 
   if LMediaFile = nil then
   begin
-    ShowMessage('Error: No se ha seleccionado ning˙n archivo.');
+    ShowMessage('Error: No se ha seleccionado ning√∫n archivo.');
     Exit;
   end;
 
   // 2. Verificar que el archivo tenga contenido para guardar
   if (LMediaFile.Content = nil) or (LMediaFile.Content.size = 0) then
   begin
-    ShowMessage('El archivo seleccionado est· vacÌo.');
+    ShowMessage('El archivo seleccionado est√° vac√≠o.');
     Exit;
   end;
 
@@ -1746,19 +1866,19 @@ begin
     begin
       if not TUtilsSystem.ShellOpenFile(LTempPath) then
       begin
-        ShowMessage('No se pudo abrir el archivo. Verifique si tiene una aplicaciÛn instalada para este tipo de archivo (' + System.IOUtils.TPath.GetExtension(LMediaFile.FileName) + ').');
+        ShowMessage('No se pudo abrir el archivo. Verifique si tiene una aplicaci√≥n instalada para este tipo de archivo (' + System.IOUtils.TPath.GetExtension(LMediaFile.FileName) + ').');
       end;
     end
     else
     begin
-      ShowMessage('El servicio para abrir archivos no est· disponible en esta plataforma.');
+      ShowMessage('El servicio para abrir archivos no est√° disponible en esta plataforma.');
     end;
 
   except
     on E: Exception do
     begin
-      // Capturar cualquier error durante la creaciÛn del archivo
-      ShowMessage('OcurriÛ un error al intentar abrir el archivo: ' + E.Message);
+      // Capturar cualquier error durante la creaci√≥n del archivo
+      ShowMessage('Ocurri√≥ un error al intentar abrir el archivo: ' + E.Message);
     end;
   end;
 end;
@@ -1854,7 +1974,7 @@ begin
     begin
       Item := AWebSearch.annotations[I];
 
-      // Formato: [1] TÌtulo del sitio
+      // Formato: [1] T√≠tulo del sitio
       // URL: https://...
 
       Sb.Append('[').Append(I + 1).Append('] ');
@@ -1862,12 +1982,12 @@ begin
       if Item.Title <> '' then
         Sb.AppendLine(Item.Title)
       else
-        Sb.AppendLine('Sin tÌtulo');
+        Sb.AppendLine('Sin t√≠tulo');
 
       if Item.Url <> '' then
         Sb.Append('    Enlace: ').AppendLine(Item.Url);
 
-      // Opcional: Mostrar Ìndices si est·s depurando donde encajan en el texto
+      // Opcional: Mostrar √≠ndices si est√°s depurando donde encajan en el texto
       // Sb.AppendFormat('    (Index: %d - %d)', [Item.start_index, Item.end_index]);
 
       Sb.AppendLine;
@@ -1938,19 +2058,19 @@ begin
   try
     LCompressedHistory := PackStream(AHistoryStream);
     try
-      // 2. Escribir la cabecera y versiÛn
+      // 2. Escribir la cabecera y versi√≥n
       AContainerStream.Write(MKCHAT_MAGIC_HEADER, SizeOf(MKCHAT_MAGIC_HEADER));
       AContainerStream.Write(MKCHAT_FORMAT_VERSION, SizeOf(MKCHAT_FORMAT_VERSION));
 
       // 3. Escribir el bloque de la UI
       LSize := LCompressedUI.size;
-      AContainerStream.Write(LSize, SizeOf(LSize)); // Escribir tamaÒo
+      AContainerStream.Write(LSize, SizeOf(LSize)); // Escribir tama√±o
       LCompressedUI.Position := 0;
       AContainerStream.CopyFrom(LCompressedUI, 0); // Escribir datos
 
       // 4. Escribir el bloque del Historial
       LSize := LCompressedHistory.size;
-      AContainerStream.Write(LSize, SizeOf(LSize)); // Escribir tamaÒo
+      AContainerStream.Write(LSize, SizeOf(LSize)); // Escribir tama√±o
       LCompressedHistory.Position := 0;
       AContainerStream.CopyFrom(LCompressedHistory, 0); // Escribir datos
 
@@ -2000,6 +2120,35 @@ begin
 
 end;
 
+procedure TForm2.BtnSelectAreaClick(Sender: TObject);
+var
+  SelRect: TSelectionForm;
+  lRect: TRect;
+begin
+  // 1. Inicializar lRect con los valores actuales del componente
+  // Si nunca se ha seleccionado (todo 0), IsEmpty ser√° True y no mostrar√° nada, lo cual es correcto.
+  if (AiComputerUseTool1.AreaWidth > 0) and (AiComputerUseTool1.AreaHeight > 0) then
+  begin
+    lRect := TRect.Create(AiComputerUseTool1.AreaLeft, AiComputerUseTool1.AreaTop, AiComputerUseTool1.AreaLeft + AiComputerUseTool1.AreaWidth, AiComputerUseTool1.AreaTop + AiComputerUseTool1.AreaHeight);
+  end
+  else
+    lRect := TRect.Empty;
+
+  SelRect := TSelectionForm.Create(nil);
+  try
+    // 2. Pasamos lRect por referencia (var)
+    if SelRect.Execute(lRect) then
+    begin
+      AiComputerUseTool1.AreaLeft := lRect.Left;
+      AiComputerUseTool1.AreaTop := lRect.Top;
+      AiComputerUseTool1.AreaWidth := lRect.Width;
+      AiComputerUseTool1.AreaHeight := lRect.Height;
+    end;
+  finally
+    SelRect.Free;
+  end;
+end;
+
 procedure TForm2.BtnJSonShemaClick(Sender: TObject);
 begin
   FMemoPropertiesEdit := TFMemoPropertiesEdit.Create(Self);
@@ -2011,26 +2160,26 @@ end;
 
 {
   -------------------------------------------------------------------------------
-  TAiTextEditorTool - Componente de EdiciÛn de Texto para IA
+  TAiTextEditorTool - Componente de Edici√≥n de Texto para IA
   -------------------------------------------------------------------------------
 
-  ADVERTENCIA SOBRE EL MODO DE OPERACI”N:
+  ADVERTENCIA SOBRE EL MODO DE OPERACI√ìN:
 
-  Este componente est· diseÒado con un sistema de eventos para virtualizar la
+  Este componente est√° dise√±ado con un sistema de eventos para virtualizar la
   entrada y salida (I/O).
 
   1. MODO POR DEFECTO (Acceso a Disco):
-  Si NO se asignan los eventos (OnLoadFile, OnSaveFile, etc.) o si el par·metro
-  "Handled" se deja en False, el componente ejecutar· las operaciones directamente
-  sobre el SISTEMA DE ARCHIVOS FÕSICO del sistema operativo.
+  Si NO se asignan los eventos (OnLoadFile, OnSaveFile, etc.) o si el par√°metro
+  "Handled" se deja en False, el componente ejecutar√° las operaciones directamente
+  sobre el SISTEMA DE ARCHIVOS F√çSICO del sistema operativo.
 
   2. MODO INTERCEPTADO (Memoria/UI/DB):
   Para evitar el acceso al disco (ej. para editar un TMemo o un registro de BD),
-  el programador debe asignar los eventos correspondientes, realizar la lÛgica
-  personalizada y establecer explÌcitamente:
+  el programador debe asignar los eventos correspondientes, realizar la l√≥gica
+  personalizada y establecer expl√≠citamente:
   Handled := True;
 
-  Esto detiene la ejecuciÛn de la lÛgica predeterminada de archivos.
+  Esto detiene la ejecuci√≥n de la l√≥gica predeterminada de archivos.
   -------------------------------------------------------------------------------
 }
 
@@ -2040,7 +2189,7 @@ begin
   // Asignamos el texto actual del Memo a la variable Content que espera el componente
   Content := MemoEditTool.Lines.Text;
 
-  // Indicamos que ya lo manejamos nosotros, asÌ no busca en disco
+  // Indicamos que ya lo manejamos nosotros, as√≠ no busca en disco
   Handled := True;
 end;
 
@@ -2055,8 +2204,8 @@ begin
     var
       SelPos: Integer;
     begin
-      // 1. ActualizaciÛn AtÛmica en FMX
-      // FMX suele ser m·s eficiente asignando directamente a .Text
+      // 1. Actualizaci√≥n At√≥mica en FMX
+      // FMX suele ser m√°s eficiente asignando directamente a .Text
       MemoEditTool.Model.Lines.BeginUpdate; // Congela el repintado
       try
         MemoEditTool.Text := Content;
@@ -2064,10 +2213,10 @@ begin
         MemoEditTool.Model.Lines.EndUpdate;
       end;
 
-      // 2. LÛgica visual: Buscar y resaltar
+      // 2. L√≥gica visual: Buscar y resaltar
       if FLastNewText <> '' then
       begin
-        // Buscamos la posiciÛn (Base 1)
+        // Buscamos la posici√≥n (Base 1)
         SelPos := Pos(FLastNewText, Content);
 
         if SelPos > 0 then
@@ -2079,12 +2228,12 @@ begin
           MemoEditTool.SelLength := Length(FLastNewText);
 
           // FMX SCROLL HACK:
-          // FMX no tiene un "ScrollToCaret" nativo p˙blico simple en todas las versiones.
-          // Sin embargo, al dar foco y poner la selecciÛn, la mayorÌa de plataformas (Android/iOS/Win)
+          // FMX no tiene un "ScrollToCaret" nativo p√∫blico simple en todas las versiones.
+          // Sin embargo, al dar foco y poner la selecci√≥n, la mayor√≠a de plataformas (Android/iOS/Win)
           // intentan mostrar el cursor.
 
-          // Si notas que no hace scroll en tu versiÛn de Delphi, este cÛdigo
-          // fuerza al Memo a reconocer la posiciÛn del cursor:
+          // Si notas que no hace scroll en tu versi√≥n de Delphi, este c√≥digo
+          // fuerza al Memo a reconocer la posici√≥n del cursor:
           MemoEditTool.Repaint;
         end;
       end;
@@ -2100,18 +2249,18 @@ end;
 // 3. Verificar Existencia: Simulamos si el archivo existe o no.
 procedure TForm2.AiTextEditorTool1FileExists(Sender: TObject; const Path: string; var Exists, Handled: Boolean);
 begin
-  // L”GICA:
+  // L√ìGICA:
   // Si vamos a ejecutar el comando 'create', el componente espera que el archivo NO exista.
-  // Si vamos a ejecutar 'str_replace' o 'view', espera que SÕ exista.
+  // Si vamos a ejecutar 'str_replace' o 'view', espera que S√ç exista.
 
   // Para este demo, asumimos que el archivo "existe" si el Memo tiene algo escrito.
-  // Si el Memo est· vacÌo, decimos que no existe (permitiendo usar el comando 'create').
+  // Si el Memo est√° vac√≠o, decimos que no existe (permitiendo usar el comando 'create').
   Exists := (MemoEditTool.Lines.Count > 0) or (Trim(MemoEditTool.Text) <> '');
 
   Handled := True;
 end;
 
-// 4. Directorios: Como es en memoria, siempre "tenemos Èxito" con los directorios.
+// 4. Directorios: Como es en memoria, siempre "tenemos √©xito" con los directorios.
 procedure TForm2.AiTextEditorTool1EnsureDirectory(Sender: TObject; const Path: string; var Handled: Boolean);
 begin
   // No necesitamos crear carpetas reales.
@@ -2119,14 +2268,14 @@ begin
   Handled := True;
 end;
 
-// 5. Antes del Comando: ⁄til para depuraciÛn o validaciÛn previa.
+// 5. Antes del Comando: √ötil para depuraci√≥n o validaci√≥n previa.
 procedure TForm2.AiTextEditorTool1BeforeCommand(Sender: TObject; const Command, Path: string; Args: TJSONObject; var Result: string; var Handled: Boolean);
 var
   sArgs: string;
   OldStr, NewStr, FileContent: string;
   Occurrences: Integer;
 
-  // FunciÛn local para normalizar TODO a #10 (Est·ndar Unix/AI)
+  // Funci√≥n local para normalizar TODO a #10 (Est√°ndar Unix/AI)
   function NormalizeToLF(const S: string): string;
   begin
     // Paso 1: Convertir Windows CRLF a LF
@@ -2187,7 +2336,7 @@ begin
     // Guardamos para efectos visuales (scroll)
     FLastNewText := NewStr;
 
-    // 2. NORMALIZACI”N (La clave del Èxito)
+    // 2. NORMALIZACI√ìN (La clave del √©xito)
     // Convertimos lo que hay en el Memo a formato LF
     FileContent := NormalizeToLF(MemoEditTool.Text);
 
@@ -2195,7 +2344,7 @@ begin
     OldStr := NormalizeToLF(OldStr);
     NewStr := NormalizeToLF(NewStr);
 
-    // 3. VALIDACI”N (Usando las variables normalizadas)
+    // 3. VALIDACI√ìN (Usando las variables normalizadas)
     Occurrences := CountOccurrencesLocal(FileContent, OldStr);
 
     if Occurrences = 0 then
@@ -2212,15 +2361,15 @@ begin
       Exit;
     end;
 
-    // 4. EJECUCI”N (Sobre texto normalizado)
+    // 4. EJECUCI√ìN (Sobre texto normalizado)
     // rfReplaceAll no es necesario porque validamos count=1, pero mal no hace.
     FileContent := StringReplace(FileContent, OldStr, NewStr, []);
 
-    // 5. ACTUALIZACI”N VISUAL
+    // 5. ACTUALIZACI√ìN VISUAL
     MemoEditTool.Model.Lines.BeginUpdate;
     try
       // TMemo en FMX/VCL acepta #10 y lo renderiza bien.
-      // Al asignarlo, el Memo internamente podrÌa reconvertirlo a OS native,
+      // Al asignarlo, el Memo internamente podr√≠a reconvertirlo a OS native,
       // pero el reemplazo ya fue exitoso.
       MemoEditTool.Text := FileContent;
     finally
@@ -2232,14 +2381,14 @@ begin
   end
   else if Command = 'str_replace' then
   begin
-    // ... tu lÛgica existente ...
+    // ... tu l√≥gica existente ...
   end
-  // --- NUEVO: INTERCEPTAR APPLY_DIFF (Opcional, para normalizaciÛn) ---
+  // --- NUEVO: INTERCEPTAR APPLY_DIFF (Opcional, para normalizaci√≥n) ---
   else if Command = 'apply_diff' then
   begin
-    // GPT-5 a veces manda diffs con saltos de lÌnea LF (#10),
-    // mientras que tu Memo en Windows podrÌa tener CRLF (#13#10).
-    // Para asegurar que el parcheo no falle por culpa de los saltos de lÌnea invisibles:
+    // GPT-5 a veces manda diffs con saltos de l√≠nea LF (#10),
+    // mientras que tu Memo en Windows podr√≠a tener CRLF (#13#10).
+    // Para asegurar que el parcheo no falle por culpa de los saltos de l√≠nea invisibles:
 
     // 1. Obtener argumentos
     var
@@ -2251,7 +2400,7 @@ begin
     // 3. Normalizar el Diff a LF (solo por seguridad)
     DiffText := NormalizeToLF(DiffText);
 
-    // 4. Instanciar el aplicador manualmente aquÌ para usar los textos normalizados
+    // 4. Instanciar el aplicador manualmente aqu√≠ para usar los textos normalizados
     var
     Applier := TDiffApplier.Create;
     var
@@ -2259,7 +2408,7 @@ begin
     try
       if Applier.Apply(FileContent, DiffText, NewContent, ErrorMsg) then
       begin
-        // …XITO: Actualizar Memo
+        // √âXITO: Actualizar Memo
         TThread.Queue(nil,
           procedure
           begin
