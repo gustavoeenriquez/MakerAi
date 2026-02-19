@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 // - Telegram: +57 3128441700
@@ -30,19 +30,16 @@
 
 
 // -----------------------------------------------------------------------------
-// TODO: IMPLEMENTACIÓN FUTURA - CITATIONS (RAG Nativo)
+// CITATIONS (RAG Nativo) - Estado de implementaciï¿½n
 // -----------------------------------------------------------------------------
-// Falta implementar la funcionalidad de citas ('citations') de la API de Claude.
-// Pasos requeridos:
-// 1. Core: Añadir propiedades `EnableCitations`, `Title`, `Context` a TAiMediaFile.
-// 2. Core: Crear clase `TAiCitation` y lista `TAiCitations` en TAiChatMessage.
-// 3. Claude.GetMessages: Al serializar documentos (PDF/Text), inyectar bloque:
-// "citations": {"enabled": true}
-// 4. Claude.ProcessStreamChunk: Capturar evento `citations_delta` y parsear JSON.
-// 5. Claude.ParseChat: Extraer array `citations` de los bloques de contenido.
+// 1. Core: TAiMediaFile.EnableCitations, Title, Context  [COMPLETADO]
+// 2. Core: TAiMsgCitation, TAiMsgCitations en TAiChatMessage  [COMPLETADO]
+// 3. Claude.GetMessages: Inyectar "citations": {"enabled": true}  [COMPLETADO]
+// 4. Claude.ProcessStreamChunk: Captura citations_delta  [YA FUNCIONABA]
+// 5. Claude.ParseChat: Parsear char_location, page_location, etc.  [COMPLETADO]
 // Ref: https://docs.anthropic.com/en/docs/build-with-claude/citations
 // -----------------------------------------------------------------------------
-// ------ Herramientas que no se implementarán por ahora --------------------
+// ------ Herramientas que no se implementarï¿½n por ahora --------------------
 // 1. https://platform.claude.com/docs/es/agents-and-tools/tool-use/code-execution-tool
 // 2. https://platform.claude.com/docs/es/agents-and-tools/tool-use/fine-grained-tool-streaming
 // 3.
@@ -51,7 +48,7 @@
 
 
 // https://platform.claude.com/docs/en/intro
-//https://platform.claude.com/docs/en/api/beta/messages/create  //api de la última implementación {/beta/}
+//https://platform.claude.com/docs/en/api/beta/messages/create  //api de la ï¿½ltima implementaciï¿½n {/beta/}
 
 unit uMakerAi.Chat.Claude;
 
@@ -67,11 +64,11 @@ uses
   uJSONHelper,
 {$ENDIF}
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core,
-  uMakerAi.Utils.CodeExtractor;
+  uMakerAi.Utils.CodeExtractor, uMakerAi.Chat.Messages;
 
 type
 
-  // --- Clases para Gestión de Contexto (Context Editing) ---
+  // --- Clases para Gestiï¿½n de Contexto (Context Editing) ---
 
   TClaudeContextTrigger = class
   public
@@ -139,7 +136,7 @@ type
     FServiceTier: String;
 
     function GetToolJson(aToolFormat: TToolFormat): TJSonArray;
-    function GetDynamicHeaders: TNetHeaders; // Construye headers Beta dinámicamente
+    function GetDynamicHeaders: TNetHeaders; // Construye headers Beta dinï¿½micamente
     function GetFileHeaders: TNetHeaders;
     procedure ClearStreamState;
     procedure ProcessStreamChunk(const AChunk: string);
@@ -168,7 +165,7 @@ type
     Class Function GetModels(aApiKey: String; aUrl: String = ''): TStringList; Override;
     Function GetMessages: TJSonArray; Override;
 
-    // --- Gestión de Archivos (File API) ---
+    // --- Gestiï¿½n de Archivos (File API) ---
     Function UploadFile(aMediaFile: TAiMediaFile): String; Override;
     Function DownLoadFile(aMediaFile: TAiMediaFile): String; Override;
     Function CheckFileState(aMediaFile: TAiMediaFile): String; Override;
@@ -182,12 +179,12 @@ type
     class procedure RegisterDefaultParams(Params: TStrings); Override;
     class function CreateInstance(Sender: TComponent): TAiChat; Override;
 
-    // Método fácil para configurar la limpieza automática de contexto
-    // TriggerTokens: A partir de cuántos tokens de entrada se activa la limpieza (ej. 20000)
-    // KeepLast: Cuántas interacciones de herramientas recientes conservar (ej. 3)
+    // Mï¿½todo fï¿½cil para configurar la limpieza automï¿½tica de contexto
+    // TriggerTokens: A partir de cuï¿½ntos tokens de entrada se activa la limpieza (ej. 20000)
+    // KeepLast: Cuï¿½ntas interacciones de herramientas recientes conservar (ej. 3)
     procedure ConfigureAutoContextClearing(TriggerTokens: Integer; KeepLast: Integer = 3);
 
-    // Acceso a la configuración de contexto
+    // Acceso a la configuraciï¿½n de contexto
     property ContextConfig: TClaudeContextConfig read FContextConfig;
 
     // Permite cachear el System Prompt para ahorrar costos en instrucciones largas
@@ -365,7 +362,7 @@ class procedure TAiClaudeChat.RegisterDefaultParams(Params: TStrings);
 Begin
   Params.Clear;
   Params.Add('ApiKey=@CLAUDE_API_KEY');
-  Params.Add('Model=claude-3-5-sonnet-20240620');
+  Params.Add('Model=claude-sonnet-4-5-20250514');
   Params.Add('MaxTokens=4096');
   Params.Add('URL=https://api.anthropic.com/v1/');
 End;
@@ -388,7 +385,7 @@ begin
 
   Client := TNetHTTPClient.Create(Nil);
   try
-    // Headers específicos para Batches
+    // Headers especï¿½ficos para Batches
     Headers := [TNetHeader.Create('x-api-key', ApiKey), TNetHeader.Create('anthropic-version', CLAUDE_API_VERSION), TNetHeader.Create('anthropic-beta', 'message-batches-2024-09-24'), // Header obligatorio para Batches
     TNetHeader.Create('content-type', 'application/json')];
 
@@ -438,7 +435,7 @@ begin
   FContextConfig := TClaudeContextConfig.Create;
 
   // Valores por defecto
-  Model := 'claude-3-5-sonnet-20240620';
+  Model := 'claude-sonnet-4-5-20250514';
   Max_tokens := 4096;
   Url := GlAIUrl;
   FEnableMemory := False;
@@ -486,7 +483,7 @@ var
   BetaFeatures: TList<string>;
   HeaderVal: string;
 begin
-  // 1. Headers Base (IMPORTANTE: La versión debe ser 2023-06-01 para que las betas funcionen encima)
+  // 1. Headers Base (IMPORTANTE: La versiï¿½n debe ser 2023-06-01 para que las betas funcionen encima)
   Result := [
     TNetHeader.Create('x-api-key', ApiKey),
     TNetHeader.Create('anthropic-version', '2023-06-01'),
@@ -496,11 +493,11 @@ begin
   BetaFeatures := TList<string>.Create;
   try
     // -------------------------------------------------------------------------
-    // ACTIVACIÓN DE BETAS (HEADERS) - CRÍTICO PARA EVITAR ERROR "EXTRA INPUTS"
+    // ACTIVACIï¿½N DE BETAS (HEADERS) - CRï¿½TICO PARA EVITAR ERROR "EXTRA INPUTS"
     // -------------------------------------------------------------------------
 
     // 1. OBLIGATORIO: Activar herramientas modernas (base de structured output)
-    // Según tu doc, esta es la versión más reciente para herramientas
+    // Segï¿½n tu doc, esta es la versiï¿½n mï¿½s reciente para herramientas
     BetaFeatures.Add('token-efficient-tools-2025-02-19');
 
     // 2. OBLIGATORIO: Activar capacidades de Output extendidas
@@ -511,15 +508,15 @@ begin
     // Lo activamos siempre para evitar errores si se sube un archivo
     BetaFeatures.Add('files-api-2025-04-14');
 
-    // 4. Memory & Context Management (Solo si se usa, pero no hace daño tenerlo)
+    // 4. Memory & Context Management (Solo si se usa, pero no hace daï¿½o tenerlo)
     if FEnableMemory or (not FContextConfig.IsEmpty) then
       BetaFeatures.Add('context-management-2025-06-27');
 
-    // 5. Code Execution (Si está habilitado en ChatMediaSupports)
+    // 5. Code Execution (Si estï¿½ habilitado en ChatMediaSupports)
     if tcm_code_interpreter in ChatMediaSupports then
       BetaFeatures.Add('code-execution-2025-08-25');
 
-    // 6. Thinking / Razonamiento (Si está habilitado)
+    // 6. Thinking / Razonamiento (Si estï¿½ habilitado)
     if FEnableThinking or (ThinkingLevel <> tlDefault) then
       BetaFeatures.Add('interleaved-thinking-2025-05-14');
 
@@ -565,7 +562,7 @@ Var
   Res, LModel: String;
   SystemPrompt: String;
 
-  // Variables para iteración de mensajes (Auto-Upload)
+  // Variables para iteraciï¿½n de mensajes (Auto-Upload)
   LMsg: TAiChatMessage;
   LMedia: TAiMediaFile;
 
@@ -573,33 +570,33 @@ Var
   jOutputConfig, jOutputFormat, jMetaData: TJSONObject;
   jSchemaParsed: TJSONValue;
 begin
-  // Heredamos el User del padre si no está definido
+  // Heredamos el User del padre si no estï¿½ definido
   if User = '' then
     User := 'user';
 
   // ---------------------------------------------------------------------------
-  // AUTO-UPLOAD: Subida automática de archivos a Files API
+  // AUTO-UPLOAD: Subida automï¿½tica de archivos a Files API
   // ---------------------------------------------------------------------------
   for LMsg in Self.Messages do
   begin
-    // Solo nos interesan los archivos que envía el usuario y que no estén procesados
+    // Solo nos interesan los archivos que envï¿½a el usuario y que no estï¿½n procesados
     if (LMsg.Role = 'user') and (LMsg.MediaFiles.Count > 0) then
     begin
       for LMedia in LMsg.MediaFiles do
       begin
-        // Si el archivo aún no tiene ID (no ha sido subido)
+        // Si el archivo aï¿½n no tiene ID (no ha sido subido)
         if LMedia.IdFile.IsEmpty then
         begin
-          // Condición de subida automática:
-          // 1. Si Code Interpreter está activo (necesita file_id).
+          // Condiciï¿½n de subida automï¿½tica:
+          // 1. Si Code Interpreter estï¿½ activo (necesita file_id).
           // 2. O SI el archivo NO es PDF ni Imagen (Excel, CSV, etc obligan a usar Files API).
           if (tcm_code_interpreter in ChatMediaSupports) or (not(LMedia.FileCategory in [Tfc_Image, Tfc_pdf])) then
           begin
             try
-              // UploadFile llena automáticamente LMedia.IdFile
+              // UploadFile llena automï¿½ticamente LMedia.IdFile
               UploadFile(LMedia);
             except
-              // Permitimos continuar; si falla la subida, quizás falle el prompt, pero no bloqueamos todo.
+              // Permitimos continuar; si falla la subida, quizï¿½s falle el prompt, pero no bloqueamos todo.
               on E: Exception do
                 DoError('Auto-upload warning for ' + LMedia.FileName + ': ' + E.Message, E);
             end;
@@ -616,7 +613,7 @@ begin
 
   // ---------------------------------------------------------------------------
   // LOGIC: Thinking (Razonamiento)
-  // Sincronizamos la propiedad genérica ThinkingLevel con el flag interno de Claude
+  // Sincronizamos la propiedad genï¿½rica ThinkingLevel con el flag interno de Claude
   // ---------------------------------------------------------------------------
   if ThinkingLevel <> tlDefault then
   begin
@@ -642,7 +639,7 @@ begin
     SystemPrompt := Self.PrepareSystemMsg;
     if SystemPrompt <> '' then
     begin
-      // Si el caché de sistema está activo
+      // Si el cachï¿½ de sistema estï¿½ activo
       if FCacheSystemPrompt then
       begin
         var jSysArr := TJSonArray.Create;
@@ -660,7 +657,7 @@ begin
       end
       else
       begin
-        // Formato estándar
+        // Formato estï¿½ndar
         AJSONObject.AddPair('system', SystemPrompt);
       end;
     end;
@@ -674,7 +671,7 @@ begin
 
     // 1. JSON OUTPUT FORMAT / STRUCTURED OUTPUTS
     // Verifica si la propiedad heredada Response_format indica JSON o Schema
-    //La api no lo soporta todavía, se habilitará cuando esté diponible en la api
+    //La api no lo soporta todavï¿½a, se habilitarï¿½ cuando estï¿½ diponible en la api
     {
     if (Response_format in [tiaChatRfJson, tiaChatRfJsonSchema]) then
     begin
@@ -705,7 +702,7 @@ begin
       end
       else
       begin
-        // Si se pide JSON pero no hay esquema definido, enviamos Object genérico
+        // Si se pide JSON pero no hay esquema definido, enviamos Object genï¿½rico
         var jGen := TJSONObject.Create;
         jGen.AddPair('type', 'object');
         jOutputFormat.AddPair('schema', jGen);
@@ -716,7 +713,7 @@ begin
     }
 
     // 2. OUTPUT CONFIG (Reasoning Effort)
-    // Mapea la propiedad heredada ThinkingLevel al nuevo estándar de Claude
+    // Mapea la propiedad heredada ThinkingLevel al nuevo estï¿½ndar de Claude
     if (ThinkingLevel <> tlDefault) then
     begin
       jOutputConfig := TJSONObject.Create;
@@ -742,11 +739,11 @@ begin
     end;
 
     // =========================================================================
-    // CONFIGURACIONES ESPECÍFICAS Y LEGACY
+    // CONFIGURACIONES ESPECï¿½FICAS Y LEGACY
     // =========================================================================
 
     // Thinking (Modo Manual Budget)
-    // Solo lo añadimos si NO se usó OutputConfig (ThinkingLevel), para evitar conflicto.
+    // Solo lo aï¿½adimos si NO se usï¿½ OutputConfig (ThinkingLevel), para evitar conflicto.
     if (FEnableThinking) and (ThinkingLevel = tlDefault) then
     begin
       var jThink := TJSONObject.Create;
@@ -851,8 +848,8 @@ begin
             AJSONObject.AddPair('tool_choice', TJSONObject(jToolChoice.Clone));
         except
           // Si es un string simple como 'auto' o 'any'
-          // Claude requiere un objeto para 'any' o 'tool', pero 'auto' es default implícito.
-          // Aquí tratamos de adaptarlo, pero idealmente Tool_choice ya debería ser un JSON string válido para Claude.
+          // Claude requiere un objeto para 'any' o 'tool', pero 'auto' es default implï¿½cito.
+          // Aquï¿½ tratamos de adaptarlo, pero idealmente Tool_choice ya deberï¿½a ser un JSON string vï¿½lido para Claude.
           if (Tool_choice = 'auto') or (Tool_choice = 'any') then
           begin
              var jSimpleChoice := TJSONObject.Create;
@@ -900,7 +897,7 @@ begin
     AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
 
     // -------------------------------------------------------------------------
-    // SERIALIZACIÓN FINAL
+    // SERIALIZACIï¿½N FINAL
     // -------------------------------------------------------------------------
     Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]); // Limpieza de escapes
@@ -1049,7 +1046,7 @@ begin
     if not uso.TryGetValue<Integer>('output_tokens', aCompletion_tokens) then
       aCompletion_tokens := 0;
 
-    // Claude NO envía 'total_tokens', debemos sumarlo manualmente
+    // Claude NO envï¿½a 'total_tokens', debemos sumarlo manualmente
     aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
   end
   else
@@ -1059,7 +1056,7 @@ begin
     aTotal_tokens := 0;
   end;
 
-  // 3. Acumular en las propiedades GLOBALES del componente (Estadísticas de la sesión)
+  // 3. Acumular en las propiedades GLOBALES del componente (Estadï¿½sticas de la sesiï¿½n)
   Self.Prompt_tokens := Self.Prompt_tokens + aPrompt_tokens;
   Self.Completion_tokens := Self.Completion_tokens + aCompletion_tokens;
   Self.Total_tokens := Self.Total_tokens + aTotal_tokens;
@@ -1088,72 +1085,70 @@ begin
       ResMsg.ThinkingSignature := jContentItem.GetValue<string>('signature');
     end;
 
+    // C. Citations (Bï¿½squeda Web / RAG / Documentos)
     if jContentItem.TryGetValue<TJSonArray>('citations', jCitationsArr) then
     begin
-      // Crear el contenedor principal si no existe
-      if not Assigned(ResMsg.WebSearchResponse) then
-        ResMsg.WebSearchResponse := TAiWebSearch.Create;
-
       for jCitVal in jCitationsArr do
       begin
         jCitObj := jCitVal as TJSONObject;
+        var citType := jCitObj.GetValue<string>('type', '');
 
-        // Filtramos solo resultados de búsqueda web
-        if jCitObj.GetValue<string>('type') = 'web_search_result_location' then
+        // --- Citations de documentos -> TAiMsgCitation ---
+        if (citType = 'char_location') or (citType = 'page_location')
+           or (citType = 'content_block_location') then
         begin
-          SearchItem := TAiWebSearchItem.Create;
+          var LCitation := TAiMsgCitation.Create;
+          LCitation.Text := jCitObj.GetValue<string>('cited_text', '');
 
-          // Mapeo de propiedades a tus clases del Core
+          var LSource := TAiCitationSource.Create;
+          LSource.SourceType := cstDocument;
+          LSource.DataSource.Title := jCitObj.GetValue<string>('document_title', '');
+          LSource.DataSource.Id := jCitObj.GetValue<Integer>('document_index', 0).ToString;
+
+          if citType = 'char_location' then
+          begin
+            LCitation.StartIndex := jCitObj.GetValue<Integer>('start_char_index', 0);
+            LCitation.EndIndex := jCitObj.GetValue<Integer>('end_char_index', 0);
+          end
+          else if citType = 'page_location' then
+          begin
+            LCitation.StartIndex := jCitObj.GetValue<Integer>('start_page_number', 0);
+            LCitation.EndIndex := jCitObj.GetValue<Integer>('end_page_number', 0);
+          end
+          else if citType = 'content_block_location' then
+          begin
+            LCitation.StartIndex := jCitObj.GetValue<Integer>('start_block_index', 0);
+            LCitation.EndIndex := jCitObj.GetValue<Integer>('end_block_index', 0);
+          end;
+
+          LCitation.Sources.Add(LSource);
+          ResMsg.Citations.Add(LCitation);
+        end
+
+        // --- Citations web (compatibilidad existente) ---
+        else if citType = 'web_search_result_location' then
+        begin
+          if not Assigned(ResMsg.WebSearchResponse) then
+            ResMsg.WebSearchResponse := TAiWebSearch.Create;
+
+          SearchItem := TAiWebSearchItem.Create;
           SearchItem.&type := 'web_search_result_location';
           SearchItem.Title := jCitObj.GetValue<string>('title', '');
           SearchItem.Url := jCitObj.GetValue<string>('url', '');
-
-          // Nota: Claude Beta actual devuelve 'cited_text' (snippet), pero no índices.
-          // Tus clases tienen start/end_index, los dejamos en 0 o -1 por ahora.
-          SearchItem.start_index := 0;
-          SearchItem.end_index := 0;
-
-          // Opcional: Si quisieras guardar el 'cited_text' (resumen),
-          // podrías concatenarlo al título o necesitarías un campo extra en TAiWebSearchItem.
-          // Por ahora nos ceñimos a tu estructura:
-          // SearchItem.Snippet := jCitObj.GetValue<string>('cited_text');
-
           ResMsg.WebSearchResponse.annotations.Add(SearchItem);
+
+          // Tambiï¿½n agregar a Citations para unificaciï¿½n
+          var LCitation := TAiMsgCitation.Create;
+          LCitation.Text := jCitObj.GetValue<string>('cited_text', '');
+          var LSource := TAiCitationSource.Create;
+          LSource.SourceType := cstWeb;
+          LSource.DataSource.Title := jCitObj.GetValue<string>('title', '');
+          LSource.DataSource.Url := jCitObj.GetValue<string>('url', '');
+          LCitation.Sources.Add(LSource);
+          ResMsg.Citations.Add(LCitation);
         end;
       end;
     end;
-
-    {
-      if ContainsText(cType, 'tool_result') or ContainsText(cType, 'code_execution') then
-      begin
-      // Navegar la estructura JSON profunda del sandbox
-      // Estructura: content -> content (array) -> file_id
-
-      if jContentItem.TryGetValue<TJSONObject>('content', jInnerContent) then
-      begin
-      if jInnerContent.TryGetValue<TJSonArray>('content', jInnerArray) then
-      begin
-      for var valInner in jInnerArray do
-      begin
-      jInnerItem := valInner as TJSONObject;
-
-      // Buscamos el ID del archivo
-      if jInnerItem.TryGetValue<string>('file_id', Clave) then // Reusamos var Clave o string temporal
-      begin
-      NewFile := TAiMediaFile.Create;
-      NewFile.IdFile := Clave; // El ID del archivo (ej: file_011CVTV...)
-      //NewFile.FileCategory := Tfc_Document; // O generico
-      NewFile.FileName := 'generated_file_' + Copy(Clave, 1, 8); // Nombre temporal
-      DownLoadFile(NewFile);
-
-      // Agregamos al mensaje para que el usuario sepa que hay un archivo
-      ResMsg.MediaFiles.Add(NewFile);
-      end;
-      end;
-      end;
-      end;
-      end;
-    }
 
     if ContainsText(cType, 'tool_result') or ContainsText(cType, 'code_execution') then
     begin
@@ -1166,13 +1161,13 @@ begin
           begin
             jInnerItem := valInner as TJSONObject;
 
-            // ¿Encontramos un file_id?
+            // ï¿½Encontramos un file_id?
             if jInnerItem.TryGetValue<string>('file_id', Clave) then
             begin
-              // --- RECUPERACIÓN INTELIGENTE DEL NOMBRE ---
+              // --- RECUPERACIï¿½N INTELIGENTE DEL NOMBRE ---
               FoundFileName := 'generated_file_' + Copy(Clave, 1, 8); // Nombre temporal
 
-              // 1. Obtenemos el ID de la herramienta que generó este resultado
+              // 1. Obtenemos el ID de la herramienta que generï¿½ este resultado
               ToolUseID := jContentItem.GetValue<string>('tool_use_id', '');
 
               if ToolUseID <> '' then
@@ -1195,7 +1190,7 @@ begin
                       if ScanObj.TryGetValue<TJSONObject>('input', InputObj) then
                       begin
                         Cmd := InputObj.GetValue<string>('command', '');
-                        // El patrón estándar es: cp /ruta/nombre.ext $OUTPUT_DIR/
+                        // El patrï¿½n estï¿½ndar es: cp /ruta/nombre.ext $OUTPUT_DIR/
                         if Cmd.StartsWith('cp ') then
                         begin
 
@@ -1203,7 +1198,7 @@ begin
                           CmdParts := Cmd.Split([' ']);
                           if Length(CmdParts) >= 2 then
                           begin
-                            // CmdParts[1] debería ser "/tmp/frecuencia_333hz.wav"
+                            // CmdParts[1] deberï¿½a ser "/tmp/frecuencia_333hz.wav"
                             // Usamos ExtractFileName (System.SysUtils)
 
                             Var
@@ -1227,7 +1222,7 @@ begin
               NewFile := TAiMediaFile.Create;
               NewFile.IdFile := Clave; // file_011CV...
               // NewFile.FileCategory := Tfc_Document;
-              NewFile.FileName := FoundFileName; // ¡Nombre correcto asignado!
+              NewFile.FileName := FoundFileName; // ï¿½Nombre correcto asignado!
 
               DownLoadFile(NewFile);
 
@@ -1398,14 +1393,14 @@ var
   blockIndex: Integer;
   streamBlock: TClaudeStreamContentBlock;
 begin
-  // 1. Procesar línea de evento (event: ...)
+  // 1. Procesar lï¿½nea de evento (event: ...)
   if AChunk.StartsWith('event:') then
   begin
     FStreamLastEventType := Trim(Copy(AChunk, 7, Length(AChunk)));
     Exit;
   end;
 
-  // 2. Procesar línea de datos (data: ...)
+  // 2. Procesar lï¿½nea de datos (data: ...)
   if AChunk.StartsWith('data:') then
   begin
     if FStreamLastEventType = '' then
@@ -1432,11 +1427,11 @@ begin
         if Assigned(FStreamResponseMsg) then
         begin
           jMessage := jData.GetValue<TJSONObject>('message');
-          FStreamResponseMsg.TollCallId := jMessage.GetValue<string>('id'); // ID del mensaje de Claude
+          FStreamResponseMsg.ToolCallId := jMessage.GetValue<string>('id'); // ID del mensaje de Claude
           FStreamResponseMsg.Model := jMessage.GetValue<string>('model');
           FStreamResponseMsg.Role := jMessage.GetValue<string>('role');
 
-          // Notificar inicio de recepción
+          // Notificar inicio de recepciï¿½n
           if Assigned(OnReceiveData) then
             OnReceiveData(Self, FStreamResponseMsg, jData, 'assistant', '');
         end;
@@ -1540,14 +1535,14 @@ begin
 
       // =======================================================================
       // EVENTO: content_block_stop
-      // Fin de un bloque específico
+      // Fin de un bloque especï¿½fico
       // =======================================================================
       Else If AnsiLowerCase(eventType) = 'content_block_stop' then
       begin
         blockIndex := jData.GetValue<Integer>('index');
         if FStreamContentBlocks.TryGetValue(blockIndex, streamBlock) then
         begin
-          // Si terminó un bloque de herramienta, parseamos los argumentos JSON acumulados
+          // Si terminï¿½ un bloque de herramienta, parseamos los argumentos JSON acumulados
           if streamBlock.BlockType = 'tool_use' then
           begin
             try
@@ -1562,7 +1557,7 @@ begin
                 jInput.Free;
               end;
             except
-              // Ignorar error de parseo JSON en este punto, se manejará globalmente si falla
+              // Ignorar error de parseo JSON en este punto, se manejarï¿½ globalmente si falla
             end;
           end;
         end;
@@ -1590,7 +1585,7 @@ begin
 
       // =======================================================================
       // EVENTO: message_stop
-      // Fin del mensaje completo. Reconstrucción y ejecución.
+      // Fin del mensaje completo. Reconstrucciï¿½n y ejecuciï¿½n.
       // =======================================================================
       Else If AnsiLowerCase(eventType) = 'message_stop' then
       begin
@@ -1602,15 +1597,15 @@ begin
 
             // 2. IMPORTANTE: Desvinculamos la variable global ANTES de llamar a ParseChat.
             // Esto es vital porque ParseChat puede disparar recursividad (DoCallFunction -> Run)
-            // y 'Run' creará un NUEVO FStreamResponseMsg. Si hacemos el nil después,
-            // borraríamos ese nuevo objeto creado por la recursividad.
+            // y 'Run' crearï¿½ un NUEVO FStreamResponseMsg. Si hacemos el nil despuï¿½s,
+            // borrarï¿½amos ese nuevo objeto creado por la recursividad.
           FStreamResponseMsg := nil;
 
           var
           jSyntheticResponse := TJSONObject.Create;
           try
             // Usamos la variable local MsgToProcess en lugar de FStreamResponseMsg
-            jSyntheticResponse.AddPair('id', MsgToProcess.TollCallId);
+            jSyntheticResponse.AddPair('id', MsgToProcess.ToolCallId);
             jSyntheticResponse.AddPair('type', 'message');
             jSyntheticResponse.AddPair('role', 'assistant');
             jSyntheticResponse.AddPair('model', MsgToProcess.Model);
@@ -1687,7 +1682,7 @@ begin
                   jContentArr.Add(jBlockObj);
                 end
 
-                // --- CASO 4: BLOQUES GENÉRICOS (Code Execution Results, etc.) ---
+                // --- CASO 4: BLOQUES GENï¿½RICOS (Code Execution Results, etc.) ---
                 // Captura 'bash_code_execution_tool_result' donde viene el file_id
                 else
                 begin
@@ -1709,7 +1704,7 @@ begin
                       if Assigned(jCont) then
                         jBlockObj.AddPair('content', jCont); // Generalmente es un objeto o array
                     except
-                      // Fallback si no es JSON válido
+                      // Fallback si no es JSON vï¿½lido
                     end;
                   end;
 
@@ -1722,7 +1717,7 @@ begin
             end;
 
             // 3. Llamamos a ParseChat con la referencia local.
-            // Si esto dispara un nuevo Run, FStreamResponseMsg (Global) ya estará libre.
+            // Si esto dispara un nuevo Run, FStreamResponseMsg (Global) ya estarï¿½ libre.
             ParseChat(jSyntheticResponse, MsgToProcess);
 
           finally
@@ -1772,20 +1767,13 @@ end;
 procedure TAiClaudeChat.ConfigureAutoContextClearing(TriggerTokens: Integer; KeepLast: Integer);
 begin
   // Limpia configuraciones previas para evitar duplicados
-  // (Asumiendo que FEdits es accesible o exponemos un método Clear en TClaudeContextConfig)
-  // En la implementación actual FEdits es privado, así que usaremos una nueva instancia o agregamos Clear.
-
-  // Opción A: Recrear la config (Más seguro/simple)
-  FContextConfig.Free;
-  FContextConfig := TClaudeContextConfig.Create;
-
-  // También se puede utilizar en lugar de free y create anteriores
-  // FContextConfig.Clear; // Limpia reglas anteriores
+  // Limpia configuraciones previas para evitar duplicados
+  FContextConfig.Clear;
 
   // Agregar la regla de limpieza de herramientas
-  // TriggerTokens: Cuando el prompt supere este tamaño
-  // KeepLast: Mantener los últimos N usos de herramientas (para no perder contexto inmediato)
-  // ClearAtLeast: 0 (Default, deja que Claude decida cuánto borrar)
+  // TriggerTokens: Cuando el prompt supere este tamaï¿½o
+  // KeepLast: Mantener los ï¿½ltimos N usos de herramientas (para no perder contexto inmediato)
+  // ClearAtLeast: 0 (Default, deja que Claude decida cuï¿½nto borrar)
   FContextConfig.AddRule_ClearTools(TriggerTokens, KeepLast, 0);
 end;
 
@@ -1809,17 +1797,17 @@ begin
     End;
 
     // Procesamiento de archivos adjuntos (MediaFiles)
-    // Si hay archivos que requieren pre-procesamiento (ej: OCR local, conversión), se hace aquí.
+    // Si hay archivos que requieren pre-procesamiento (ej: OCR local, conversiï¿½n), se hace aquï¿½.
     For MF in aMsg.MediaFiles do
     Begin
       Procesado := False;
-      DoProcessMediaFile(aMsg.Prompt, MF, Respuesta, Procesado); // Envía el archivo por si lo quiere procesar otra AI especializada
+      DoProcessMediaFile(aMsg.Prompt, MF, Respuesta, Procesado); // Envï¿½a el archivo por si lo quiere procesar otra AI especializada
       MF.Procesado := Procesado;
       MF.Transcription := Respuesta;
       // Guarda las transcripciones en los MediaFile
     End;
 
-    FLastPrompt := aMsg.Prompt; // Actualiza el último prompt registrado
+    FLastPrompt := aMsg.Prompt; // Actualiza el ï¿½ltimo prompt registrado
 
     If Assigned(FOnBeforeSendMessage) then
       FOnBeforeSendMessage(Self, aMsg);
@@ -1855,11 +1843,11 @@ end;
   // -------------------------------------------------------------------------
   // CASO 1: Resultado de Herramienta (Role: User)
   // -------------------------------------------------------------------------
-  if (LMessage.Role = 'user') and (not LMessage.TollCallId.IsEmpty) then
+  if (LMessage.Role = 'user') and (not LMessage.ToolCallId.IsEmpty) then
   begin
   LPartObj := TJSONObject.Create;
   LPartObj.AddPair('type', 'tool_result');
-  LPartObj.AddPair('tool_use_id', LMessage.TollCallId);
+  LPartObj.AddPair('tool_use_id', LMessage.ToolCallId);
   LPartObj.AddPair('content', LMessage.Prompt);
   LContentArray.Add(LPartObj);
   end
@@ -1883,7 +1871,7 @@ end;
 
   // A. Texto visible
   // Agregamos texto si existe, PERO si es un mensaje solo de tools,
-  // LMessage.Prompt podría estar vacío o contener el texto previo.
+  // LMessage.Prompt podrï¿½a estar vacï¿½o o contener el texto previo.
   if not LMessage.Prompt.IsEmpty then
   begin
   LPartObj := TJSONObject.Create;
@@ -1922,7 +1910,7 @@ end;
   end
 
   // -------------------------------------------------------------------------
-  // CASO 3: Mensaje Estándar de Usuario (Texto + Multimedia)
+  // CASO 3: Mensaje Estï¿½ndar de Usuario (Texto + Multimedia)
   // -------------------------------------------------------------------------
   else
   begin
@@ -1960,13 +1948,13 @@ end;
   // B. Decidir si enviamos REFERENCIA (File API) o VALOR (Base64)
   if not LMediaFile.IdFile.IsEmpty then
   begin
-  // --- NUEVO: Usar referencia de Files API (Más eficiente / Code Interpreter) ---
+  // --- NUEVO: Usar referencia de Files API (Mï¿½s eficiente / Code Interpreter) ---
   LSourceObj.AddPair('type', 'file');
   LSourceObj.AddPair('file_id', LMediaFile.IdFile);
   end
   else
   begin
-  // --- LEGACY: Enviar contenido en Base64 (Solo imágenes pequeñas o si no se subió) ---
+  // --- LEGACY: Enviar contenido en Base64 (Solo imï¿½genes pequeï¿½as o si no se subiï¿½) ---
   LSourceObj.AddPair('type', 'base64');
   LSourceObj.AddPair('media_type', LMediaFile.MimeType);
   LSourceObj.AddPair('data', LMediaFile.Base64);
@@ -1977,12 +1965,12 @@ end;
   // C. Metadatos extra para Documentos (Citations, Cache, Context)
   if LPartObj.GetValue<string>('type') = 'document' then
   begin
-  // Nombre del archivo (ayuda a Claude a identificarlo en el código Python)
+  // Nombre del archivo (ayuda a Claude a identificarlo en el cï¿½digo Python)
   if not LMediaFile.FileName.IsEmpty then
   LPartObj.AddPair('title', LMediaFile.FileName);
   end;
 
-  // Cache Control (Genérico)
+  // Cache Control (Genï¿½rico)
   if LMediaFile.CacheControl then
   begin
   var
@@ -1995,12 +1983,12 @@ end;
   bHasContent := True;
   end;
 
-  // Protección contra contenido vacío
+  // Protecciï¿½n contra contenido vacï¿½o
   if not bHasContent then
   begin
   LPartObj := TJSONObject.Create;
   LPartObj.AddPair('type', 'text');
-  LPartObj.AddPair('text', ' '); // Espacio vacío para evitar error de API
+  LPartObj.AddPair('text', ' '); // Espacio vacï¿½o para evitar error de API
   LContentArray.Add(LPartObj);
   end;
   end;
@@ -2023,7 +2011,7 @@ var
 begin
   Result := TJSonArray.Create;
 
-  // Verificamos si el Code Interpreter está activo
+  // Verificamos si el Code Interpreter estï¿½ activo
   IsCodeExecutionEnabled := tcm_code_interpreter in ChatMediaSupports;
 
   for LMessage in Self.Messages do
@@ -2035,11 +2023,11 @@ begin
     // -------------------------------------------------------------------------
     // CASO 1: Resultado de Herramienta (Role: User)
     // -------------------------------------------------------------------------
-    if (LMessage.Role = 'user') and (not LMessage.TollCallId.IsEmpty) then
+    if (LMessage.Role = 'user') and (not LMessage.ToolCallId.IsEmpty) then
     begin
       LPartObj := TJSONObject.Create;
       LPartObj.AddPair('type', 'tool_result');
-      LPartObj.AddPair('tool_use_id', LMessage.TollCallId);
+      LPartObj.AddPair('tool_use_id', LMessage.ToolCallId);
       LPartObj.AddPair('content', LMessage.Prompt);
       LContentArray.Add(LPartObj);
     end
@@ -2091,13 +2079,13 @@ begin
             LToolUseArray.Free;
           end;
         except
-          // Ignorar errores de parseo
+          on E: Exception do LogDebug('Tool calls parse error: ' + E.Message);
         end;
       end;
     end
 
     // -------------------------------------------------------------------------
-    // CASO 3: Mensaje Estándar de Usuario (Texto + Archivos)
+    // CASO 3: Mensaje Estï¿½ndar de Usuario (Texto + Archivos)
     // -------------------------------------------------------------------------
     else
     begin
@@ -2130,8 +2118,8 @@ begin
       begin
         LPartObj := TJSONObject.Create;
 
-        // --- SUB-CASO 3.1: IMÁGENES ---
-        // Las imágenes siempre van como bloque 'image', ya sea por FileID o Base64
+        // --- SUB-CASO 3.1: IMï¿½GENES ---
+        // Las imï¿½genes siempre van como bloque 'image', ya sea por FileID o Base64
         if LMediaFile.FileCategory = Tfc_Image then
         begin
           LPartObj.AddPair('type', 'image');
@@ -2152,7 +2140,7 @@ begin
         end
 
         // --- SUB-CASO 3.2: CONTAINER UPLOAD (Code Interpreter + Data Files) ---
-        // Si es Code Interpreter Y el archivo está subido (IdFile) Y NO es imagen.
+        // Si es Code Interpreter Y el archivo estï¿½ subido (IdFile) Y NO es imagen.
         // Esto es obligatorio para Excel, CSV, JSON, etc.
         else if IsCodeExecutionEnabled and (not LMediaFile.IdFile.IsEmpty) then
         begin
@@ -2185,19 +2173,23 @@ begin
 
           LPartObj.AddPair('source', LSourceObj);
 
-          // Metadatos exclusivos de Document Block
-          if not LMediaFile.FileName.IsEmpty then
+          // Title: priorizar LMediaFile.Title, fallback a FileName
+          if not LMediaFile.Title.IsEmpty then
+            LPartObj.AddPair('title', LMediaFile.Title)
+          else if not LMediaFile.FileName.IsEmpty then
             LPartObj.AddPair('title', LMediaFile.FileName);
 
-          // Activar Citations (RAG) solo en bloques de documento
-          // Todavía no se ha implementado
-          { if Self.EnableCitations then
-            begin
+          // Context
+          if not LMediaFile.Context.IsEmpty then
+            LPartObj.AddPair('context', LMediaFile.Context);
+
+          // Citations (RAG Nativo)
+          if LMediaFile.EnableCitations then
+          begin
             var jCit := TJSONObject.Create;
             jCit.AddPair('enabled', TJSONBool.Create(True));
             LPartObj.AddPair('citations', jCit);
-            end;
-          }
+          end;
         end;
 
         // Cache Control (Aplica a todos los bloques de medios)
@@ -2213,7 +2205,7 @@ begin
         bHasContent := True;
       end;
 
-      // Protección contra contenido vacío
+      // Protecciï¿½n contra contenido vacï¿½o
       if not bHasContent then
       begin
         LPartObj := TJSONObject.Create;
@@ -2252,11 +2244,11 @@ begin
 
   Client := TNetHTTPClient.Create(Nil);
   try
-    // 2. Configurar Headers específicos de Claude
-    // Nota: Claude requiere 'x-api-key' en lugar de Bearer token, y la versión de la API
+    // 2. Configurar Headers especï¿½ficos de Claude
+    // Nota: Claude requiere 'x-api-key' en lugar de Bearer token, y la versiï¿½n de la API
     Headers := [TNetHeader.Create('x-api-key', aApiKey), TNetHeader.Create('anthropic-version', CLAUDE_API_VERSION), TNetHeader.Create('content-type', 'application/json')];
 
-    // 3. Ejecutar Petición GET
+    // 3. Ejecutar Peticiï¿½n GET
     Res := Client.Get(sUrl, nil, Headers);
 
     if Res.StatusCode = 200 then
@@ -2272,7 +2264,7 @@ begin
             begin
               if JVal is TJSONObject then
               begin
-                // Extraer el ID del modelo (ej: "claude-3-5-sonnet-20240620")
+                // Extraer el ID del modelo (ej: "claude-sonnet-4-5-20250514")
                 sModel := (JVal as TJSONObject).GetValue<string>('id', '');
                 if sModel <> '' then
                   Result.Add(sModel);
@@ -2284,7 +2276,7 @@ begin
         end;
 
       // 5. Agregar modelos personalizados registrados localmente (si existen)
-      // Esto es útil si la API no devuelve modelos finetuned o nuevos que aún no lista
+      // Esto es ï¿½til si la API no devuelve modelos finetuned o nuevos que aï¿½n no lista
       CustomModels := TAiChatFactory.Instance.GetCustomModels(GetDriverName);
       for I := Low(CustomModels) to High(CustomModels) do
       begin
@@ -2447,9 +2439,42 @@ begin
 end;
 
 function TAiClaudeChat.RetrieveFileList: TAiMediaFiles;
+var
+  Client: TNetHTTPClient;
+  Res: IHTTPResponse;
+  jRes: TJSONObject;
+  jArr: TJSonArray;
+  JVal: TJSONValue;
+  MF: TAiMediaFile;
 begin
   Result := TAiMediaFiles.Create;
-  // Implementation simplified for brevity, follows RetrieveFile pattern looping 'data' array
+  Client := TNetHTTPClient.Create(Nil);
+  try
+    Res := Client.Get(Url + 'files', nil, GetFileHeaders);
+    if Res.StatusCode = 200 then
+    begin
+      jRes := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
+      if Assigned(jRes) then
+      try
+        if jRes.TryGetValue<TJSonArray>('data', jArr) then
+          for JVal in jArr do
+            if JVal is TJSONObject then
+            begin
+              MF := TAiMediaFile.Create;
+              MF.IdFile := (JVal as TJSONObject).GetValue<string>('id', '');
+              MF.FileName := (JVal as TJSONObject).GetValue<string>('filename', '');
+              Result.Add(MF);
+            end;
+      finally
+        jRes.Free;
+      end;
+    end
+    else
+      raise Exception.CreateFmt('RetrieveFileList Error: %d - %s',
+        [Res.StatusCode, Res.ContentAsString]);
+  finally
+    Client.Free;
+  end;
 end;
 
 procedure TAiClaudeChat.DoCallFunction(ToolCall: TAiToolsFunction);
@@ -2465,42 +2490,37 @@ begin
     if Assigned(FOnCallToolFunction) then
       FOnCallToolFunction(Self, ToolCall);
 
-    // B. Ejecución Automática (Componente TAiShell)
-    // Si el usuario no llenó la respuesta en el evento anterior y tenemos el componente:
+    // B. Ejecuciï¿½n Automï¿½tica (Componente TAiShell)
+    // Si el usuario no llenï¿½ la respuesta en el evento anterior y tenemos el componente:
     if (ToolCall.Response = '') and Assigned(ShellTool) then
     begin
-      // Asegurar que esté activo
+      // Asegurar que estï¿½ activo
       if not ShellTool.Active then
         ShellTool.Active := True;
 
-      // Ejecutar el comando en la sesión persistente
+      // Ejecutar el comando en la sesiï¿½n persistente
       ToolCall.Response := ShellTool.Execute(ToolCall.Id, ToolCall.Arguments);
     end;
 
-    // Si no hay componente ni evento, Claude recibirá una respuesta vacía o error,
-    // lo cual está bien, pero idealmente FShellTool debería estar asignado.
+    // Si no hay componente ni evento, Claude recibirï¿½ una respuesta vacï¿½a o error,
+    // lo cual estï¿½ bien, pero idealmente FShellTool deberï¿½a estar asignado.
     Exit;
   end;
 
-  // 2. Interceptar Herramienta de Edición Nativa
-  if (ToolCall.Name = 'str_replace_based_edit_tool') or (ToolCall.Name = 'str_replace_editor') and Assigned(TextEditorTool) then
+  // 2. Interceptar Herramienta de Ediciï¿½n Nativa
+  if ((ToolCall.Name = 'str_replace_based_edit_tool') or (ToolCall.Name = 'str_replace_editor')) and Assigned(TextEditorTool) then
   begin
-
-    try
-      ToolCall.Response := TextEditorTool.Execute(ToolCall.Arguments);
-    finally
-    end;
-
+    ToolCall.Response := TextEditorTool.Execute(ToolCall.Arguments);
     Exit;
   end;
 
-  // 2. Verificar Componente Externo (AiFunctions)
+  // 3. Verificar Componente Externo (AiFunctions)
   if Assigned(AiFunctions) and AiFunctions.DoCallFunction(ToolCall) then
   begin
     Exit;
   end;
 
-  // 3. Evento de Usuario
+  // 4. Evento de Usuario
   if Assigned(FOnCallToolFunction) then
     FOnCallToolFunction(Self, ToolCall);
 end;
@@ -2532,7 +2552,7 @@ begin
       aMediaFile.Content.CopyFrom(MemStream, 0);
       aMediaFile.Content.Position := 0;
 
-      // Intentar determinar la extensión si no la tiene
+      // Intentar determinar la extensiï¿½n si no la tiene
       if aMediaFile.FileName.IsEmpty then
         aMediaFile.FileName := aMediaFile.IdFile + '.bin'; // Default
 
