@@ -171,8 +171,8 @@ class procedure TAiGeminiChat.RegisterDefaultParams(Params: TStrings);
 Begin
   Params.Clear;
   Params.Add('ApiKey=@GEMINI_API_KEY');
-  // [V3 UPDATE] Modelo recomendado por defecto actualizado
-  Params.Add('Model=gemini-2.0-flash');
+  // [V3 UPDATE] Modelo recomendado por defecto actualizado (gemini-2.0-flash deprecado 31 Mar 2026)
+  Params.Add('Model=gemini-2.5-flash');
   Params.Add('MaxTokens=8192');
   Params.Add('URL=' + GlAIUrl);
 End;
@@ -257,7 +257,7 @@ constructor TAiGeminiChat.Create(Sender: TComponent);
 begin
   inherited;
   ApiKey := '@GEMINI_API_KEY';
-  Model := 'gemini-3-pro';
+  Model := 'gemini-2.5-flash';
   Url := GlAIUrl;
 
   // [V3 UPDATE] Gemini 3 recomienda Temperature 1.0 por defecto para razonamiento
@@ -265,15 +265,7 @@ begin
   Temperature := 1.0;
 
   NativeOutputFiles := [];
-  NativeOutputFiles := [];
   ChatMediaSupports := [];
-
-  {
-    VideoParams.AddPair('aspectRatio', '16:9');
-    VideoParams.AddPair('personGeneration', 'allow_all');
-
-    ImageParams.AddPair('aspectRatio', '1:1');
-  }
 
   FThinkingBudget := 0;
   ThinkingLevel := tlDefault;
@@ -630,70 +622,6 @@ begin
       SigIndex := 0;
       if IsModelRole then
         FThoughtSignatures.TryGetValue(Msg, SignaturesList);
-
-      // -----------------------------------------------------------------------
-      // 2. TOOL RESPONSE (User -> Model)
-      // -----------------------------------------------------------------------
-      { if Msg.Role = 'tool' then
-        begin
-        jFuncResponse := TJSONObject.Create;
-        jFuncResponse.AddPair('name', Msg.FunctionName);
-        jResponseContent := TJSONObject.Create;
-
-        var
-        JValArgs: TJSONValue := TJSONObject.ParseJSONValue(Msg.Prompt);
-        try
-        if Assigned(JValArgs) and (JValArgs is TJSONObject) then
-        jResponseContent.AddPair('content', JValArgs.Clone as TJSONObject)
-        else
-        begin
-        var
-        SimpleContent := TJSONObject.Create;
-        SimpleContent.AddPair('result', Msg.Prompt);
-        jResponseContent.AddPair('content', SimpleContent);
-        end;
-        finally
-        if Assigned(JValArgs) then
-        JValArgs.Free;
-        end;
-
-        jFuncResponse.AddPair('response', jResponseContent);
-        jPartItem := TJSONObject.Create.AddPair('functionResponse', jFuncResponse);
-        jParts.Add(jPartItem);
-
-        // [COMPUTER USE]
-        // Si la herramienta devuelve una captura de pantalla (u otra imagen),
-        // debemos adjuntarla en el mismo array de partes.
-        MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
-
-        if Length(MediaArr) > 0 then
-        begin
-        for MediaFile in MediaArr do
-        begin
-        jPartItem := TJSONObject.Create;
-
-        if (MediaFile.UrlMedia <> '') and (MediaFile.UrlMedia.StartsWith('https://generativelanguage.googleapis.com')) then
-        begin
-        var
-        jFileData := TJSONObject.Create;
-        jFileData.AddPair('mimeType', MediaFile.MimeType);
-        jFileData.AddPair('fileUri', MediaFile.UrlMedia);
-        jPartItem.AddPair('fileData', jFileData);
-        end
-        else
-        begin
-        jInlineData := TJSONObject.Create;
-        jInlineData.AddPair('mime_type', MediaFile.MimeType);
-        jInlineData.AddPair('data', MediaFile.Base64);
-        jPartItem.AddPair('inline_data', jInlineData);
-        end;
-
-        jParts.Add(jPartItem);
-        end;
-        end;
-
-        end
-      }
 
       // -----------------------------------------------------------------------
       // 2. TOOL RESPONSE (User -> Model)
@@ -1235,9 +1163,11 @@ begin
         var
         JSchema := TJSONObject.ParseJSONValue(sShema) as TJSONObject;
         if Assigned(JSchema) then
-          // CORRECCIÓN: La documentación exige 'responseJsonSchema', no 'responseSchema'
+          // v1beta usa 'responseJsonSchema'; v1 estable usa 'responseSchema'. Mantener para v1beta.
           JConfig.AddPair('responseJsonSchema', JSchema);
       except
+        on E: Exception do
+          LogDebug('JSON Schema parse error: ' + E.Message);
       end;
     end
     else if (Response_format = tiaChatRfJson) then
@@ -1249,32 +1179,48 @@ begin
     begin
       var
       JThinking := TJSONObject.Create;
-
-      // 1. Calcular Budget
       var
-        LBudget: Integer := 0;
+        LModelName := Model.ToLower;
 
-      if FThinkingBudget > 0 then
-        LBudget := FThinkingBudget // Prioridad al valor manual
-      else if Max_tokens > 0 then
+      // Gemini 3: usar thinkingLevel string nativo (LOW/MEDIUM/HIGH)
+      if LModelName.Contains('gemini-3') then
       begin
-        // Mapeo proporcional si no se define presupuesto fijo
         case ThinkingLevel of
-          tlLow:
-            LBudget := Trunc(Max_tokens * 0.25); // 25% del total
-          tlMedium:
-            LBudget := Trunc(Max_tokens * 0.50); // 50% del total
-          tlHigh:
-            LBudget := Trunc(Max_tokens * 0.80); // 80% del total
+          tlLow:    JThinking.AddPair('thinkingLevel', 'LOW');
+          tlMedium: JThinking.AddPair('thinkingLevel', 'MEDIUM');
+          tlHigh:   JThinking.AddPair('thinkingLevel', 'HIGH');
+        else
+          JThinking.AddPair('thinkingLevel', 'HIGH'); // Default para Gemini 3
         end;
-        // Safety: Gemini suele requerir un mínimo (ej. 1024) para pensar efectivamente
-        if LBudget < 1024 then
-          LBudget := 1024;
-      end;
+      end
+      else
+      begin
+        // Gemini 2.5 y anteriores: usar thinkingBudget numérico
+        var
+          LBudget: Integer := 0;
 
-      // Solo añadimos budget si es mayor a 0 (0 deshabilita thinking en Flash 2.5)
-      if LBudget > 0 then
-        JThinking.AddPair('thinkingBudget', TJSONNumber.Create(LBudget));
+        if FThinkingBudget > 0 then
+          LBudget := FThinkingBudget // Prioridad al valor manual
+        else if Max_tokens > 0 then
+        begin
+          // Mapeo proporcional si no se define presupuesto fijo
+          case ThinkingLevel of
+            tlLow:
+              LBudget := Trunc(Max_tokens * 0.25); // 25% del total
+            tlMedium:
+              LBudget := Trunc(Max_tokens * 0.50); // 50% del total
+            tlHigh:
+              LBudget := Trunc(Max_tokens * 0.80); // 80% del total
+          end;
+          // Safety: Gemini suele requerir un mínimo (ej. 1024) para pensar efectivamente
+          if LBudget < 1024 then
+            LBudget := 1024;
+        end;
+
+        // Solo añadimos budget si es mayor a 0 (0 deshabilita thinking en Flash 2.5)
+        if LBudget > 0 then
+          JThinking.AddPair('thinkingBudget', TJSONNumber.Create(LBudget));
+      end;
 
       JThinking.AddPair('includeThoughts', TJSONBool.Create(FIncludeThoughts));
       JConfig.AddPair('thinkingConfig', JThinking);
@@ -1761,6 +1707,48 @@ begin
         ChunkItem.&type := 'web_page';
         ResMsg.WebSearchResponse.annotations.Add(ChunkItem);
       end;
+    end;
+  end;
+
+  // Parsear groundingSupports (vínculos texto→fuente)
+  var jSupportsArr: TJSonArray;
+  if jGroundingMeta.TryGetValue<TJSonArray>('groundingSupports', jSupportsArr) then
+  begin
+    for var jSupportVal in jSupportsArr do
+    begin
+      var jSupport := jSupportVal as TJSONObject;
+      var LCitation := TAiMsgCitation.Create;
+
+      // Extraer segmento de texto citado
+      var jSegment: TJSONObject;
+      if jSupport.TryGetValue<TJSONObject>('segment', jSegment) then
+      begin
+        LCitation.StartIndex := jSegment.GetValue<Integer>('startIndex', 0);
+        LCitation.EndIndex := jSegment.GetValue<Integer>('endIndex', 0);
+        LCitation.Text := jSegment.GetValue<string>('text', '');
+      end;
+
+      // Vincular con las fuentes (groundingChunks ya parseados arriba)
+      var jChunkIndices: TJSonArray;
+      if jSupport.TryGetValue<TJSonArray>('groundingChunkIndices', jChunkIndices) then
+      begin
+        for var jIdxVal in jChunkIndices do
+        begin
+          var ChunkIdx := jIdxVal.GetValue<Integer>;
+          var LSource := TAiCitationSource.Create;
+          LSource.SourceType := cstWeb;
+
+          // Buscar el chunk correspondiente en las annotations ya creadas
+          if (ChunkIdx >= 0) and (ChunkIdx < ResMsg.WebSearchResponse.annotations.Count) then
+          begin
+            LSource.DataSource.Title := ResMsg.WebSearchResponse.annotations[ChunkIdx].Title;
+            LSource.DataSource.Url := ResMsg.WebSearchResponse.annotations[ChunkIdx].Url;
+          end;
+          LCitation.Sources.Add(LSource);
+        end;
+      end;
+
+      ResMsg.Citations.Add(LCitation);
     end;
   end;
 end;
@@ -3325,7 +3313,7 @@ begin
   ApiKey := '@GEMINI_API_KEY';
   Url := GlAIUrl;
   FDimensions := 768;
-  FModel := 'text-embedding-004';
+  FModel := 'gemini-embedding-001';
 end;
 
 function TAiGeminiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
