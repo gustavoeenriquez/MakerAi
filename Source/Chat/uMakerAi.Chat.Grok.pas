@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -79,7 +79,7 @@ begin
   RegisterComponents('MakerAI', [TAiGrokChat]);
 end;
 
-{ TAiOllamaChat }
+{ TAiGrokChat }
 
 class function TAiGrokChat.GetDriverName: string;
 Begin
@@ -90,7 +90,7 @@ class procedure TAiGrokChat.RegisterDefaultParams(Params: TStrings);
 Begin
   Params.Clear;
   Params.Add('ApiKey=@GROK_API_KEY');
-  Params.Add('Model=grok-2-1212');
+  Params.Add('Model=grok-3');
   Params.Add('MaxTokens=4096');
   Params.Add('URL=https://api.x.ai/v1/');
 End;
@@ -104,7 +104,7 @@ constructor TAiGrokChat.Create(Sender: TComponent);
 begin
   inherited;
   ApiKey := '@GROK_API_KEY';
-  Model := 'grok-2-1212';
+  Model := 'grok-3';
   Url := GlAIUrl;
 end;
 
@@ -131,12 +131,9 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   If LModel = '' then
-    LModel := 'grok-2-1212';
+    LModel := 'grok-3';
 
-  // Las funciones no trabajan en modo ascincrono
-  LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
-
-  // En groq hay una restricción sobre las imágenes
+  LAsincronico := Self.Asynchronous;
 
   FClient.Asynchronous := LAsincronico;
 
@@ -156,7 +153,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAI).Text));
 {$ENDIF}
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
+        Raise Exception.Create('La propiedad Tools estï¿½n mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then
@@ -168,7 +165,7 @@ begin
         jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
 {$ENDIF}
         If Assigned(jToolChoice) then
-          AJSONObject.AddPair('tools_choice', jToolChoice);
+          AJSONObject.AddPair('tool_choice', jToolChoice);
       End;
     End;
 
@@ -182,8 +179,10 @@ begin
     If Top_p <> 0 then
       AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
 
-    // AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
-    // AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
+    if Frequency_penalty <> 0 then
+      AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
+    if Presence_penalty <> 0 then
+      AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
 
     if ReasoningFormat <> '' then
       AJSONObject.AddPair('reasoning_format', ReasoningFormat); // 'parsed, raw, hidden';
@@ -211,6 +210,29 @@ begin
       // jWebSearchOptions.AddPair('return_citations', 'true');
       AJSONObject.AddPair('search_parameters', jWebSearchOptions);
     end;
+
+    if FResponse_format = tiaChatRfJsonSchema then
+    begin
+      var JFormatConfig := TJSONObject.Create;
+      JFormatConfig.AddPair('type', 'json_schema');
+      var sSchema := Trim(JsonSchema.Text);
+      if sSchema <> '' then
+      begin
+        var JSchemaObj := TJSONObject.Create;
+        var JInnerSchema := TJSONObject.ParseJSONValue(sSchema) as TJSONObject;
+        if Assigned(JInnerSchema) then
+        begin
+          JSchemaObj.AddPair('schema', JInnerSchema);
+          JSchemaObj.AddPair('strict', TJSONBool.Create(True));
+          JFormatConfig.AddPair('json_schema', JSchemaObj);
+        end
+        else
+          JSchemaObj.Free;
+      end;
+      AJSONObject.AddPair('response_format', JFormatConfig);
+    end
+    else if FResponse_format = tiaChatRfJson then
+      AJSONObject.AddPair('response_format', TJSONObject.Create.AddPair('type', 'json_object'));
 
     Lista.CommaText := Stop;
     If Lista.Count > 0 then
@@ -264,7 +286,7 @@ begin
   FLastContent := '';
   FLastPrompt := AskMsg.Prompt;
 
-  // 1. Validaciones y configuración
+  // 1. Validaciones y configuraciï¿½n
   if AskMsg.Prompt.IsEmpty then
     raise Exception.Create('Se requiere un prompt para generar una imagen.');
 
@@ -275,7 +297,7 @@ begin
 
   LUrl := Url + 'images/generations'; // Url base + endpoint
 
-  // 2. Construir el cuerpo de la petición JSON
+  // 2. Construir el cuerpo de la peticiï¿½n JSON
   LBodyJson := TJSonObject.Create;
   LBodyStream := TStringStream.Create('', TEncoding.UTF8);
   try
@@ -295,7 +317,7 @@ begin
     LBodyStream.SaveToFile('c:\temp\grok_image_request.json');
     LBodyStream.Position := 0;
 {$ENDIF}
-    // Grok usa Bearer token para la autorización
+    // Grok usa Bearer token para la autorizaciï¿½n
     LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
     FClient.ContentType := 'application/json';
     FResponse.Clear;
@@ -322,7 +344,7 @@ begin
             LImageObject := LJsonValue as TJSonObject;
             LNewMediaFile := TAiMediaFile.Create;
             try
-              // Extraer el prompt revisado y guardarlo (es información útil)
+              // Extraer el prompt revisado y guardarlo (es informaciï¿½n ï¿½til)
               LImageObject.TryGetValue<string>('revised_prompt', LRevisedPrompt);
               LNewMediaFile.Transcription := LRevisedPrompt;
               FLastContent := LRevisedPrompt;
@@ -332,8 +354,8 @@ begin
               if LImageObject.TryGetValue<string>('url', LImageUrl) then
               begin
                 // Descargamos la imagen desde la URL y la cargamos en el MediaFile
-                // Necesitarás una función para descargar, por ejemplo:
-                LNewMediaFile.LoadFromUrl(LImageUrl); // Asumiendo que tienes esta función
+                // Necesitarï¿½s una funciï¿½n para descargar, por ejemplo:
+                LNewMediaFile.LoadFromUrl(LImageUrl); // Asumiendo que tienes esta funciï¿½n
               end
               // CASO B: La respuesta es Base64
               else if LImageObject.TryGetValue<string>('b64_json', LBase64Data) then
@@ -341,7 +363,7 @@ begin
                 LNewMediaFile.LoadFromBase64('generated_image.png', LBase64Data);
               end;
 
-              // Añadir el MediaFile al mensaje de respuesta
+              // Aï¿½adir el MediaFile al mensaje de respuesta
               ResMsg.MediaFiles.Add(LNewMediaFile);
             except
               LNewMediaFile.Free;
@@ -350,7 +372,7 @@ begin
           end;
         end;
 
-        // Disparamos el evento de finalización
+        // Disparamos el evento de finalizaciï¿½n
         if Assigned(FOnReceiveDataEnd) then
           FOnReceiveDataEnd(Self, ResMsg, LResponseJson, 'model', '');
 

@@ -795,32 +795,73 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Grok', 'NativeInputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', 'NativeOutputFiles', '[]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', 'ChatMediaSupports', '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', 'Tool_Active', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', 'Tool_Active', 'True');
   TAiChatFactory.Instance.RegisterUserParam('Grok', 'Asynchronous', 'False');
+
+  // ------- grok-3 (131K, text-only, tools) ---
+  // Hereda defaults globales, no necesita config especial
+
+  // ------- grok-3-mini (131K, text-only, tools, reasoning) ---
+  Model := 'grok-3-mini';
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ThinkingLevel', 'tlLow');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[Tcm_Reasoning]');
+
+  // ------- grok-4-0709 (256K, vision, tools, reasoning) ---
+  Model := 'grok-4-0709';
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeInputFiles', '[Tfc_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[Tcm_Image, Tcm_Reasoning]');
+
+  // ------- grok-4-fast-reasoning (2M, vision, tools, reasoning) ---
+  Model := 'grok-4-fast-reasoning';
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeInputFiles', '[Tfc_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[Tcm_Image, Tcm_Reasoning]');
+
+  // ------- grok-4-fast-non-reasoning (2M, vision, tools) ---
+  Model := 'grok-4-fast-non-reasoning';
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeInputFiles', '[Tfc_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[Tcm_Image]');
+
+  // ------- grok-4-1-fast-reasoning (2M, vision, tools, reasoning) ---
+  Model := 'grok-4-1-fast-reasoning';
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeInputFiles', '[Tfc_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[Tcm_Image, Tcm_Reasoning]');
+
+  // ------- grok-4-1-fast-non-reasoning (2M, vision, tools) ---
+  Model := 'grok-4-1-fast-non-reasoning';
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeInputFiles', '[Tfc_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[Tcm_Image]');
+
+  // ------- grok-code-fast-1 (256K, text-only, tools, reasoning) ---
+  Model := 'grok-code-fast-1';
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[Tcm_Reasoning]');
 
   // ------- GROK grok-2-image-1212 ------------------------------
   Model := 'grok-2-image-1212';
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Asynchronous', 'False');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Tool_Active', 'False');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeOutputFiles', '[tfc_image]'); // Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_ExtracttextFile
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[]'); // Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeOutputFiles', '[tfc_image]');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[]');
 
-  // ------- GROK grok-2-vision-1212 ------------------------------
+  // ------- GROK grok-2-vision-1212 (vision, tools) ---
   Model := 'grok-2-vision-1212';
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Asynchronous', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeInputFiles', '[tfc_image]');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[tcm_image]');
+
+  // ------- grok-imagine-image (text+image -> image) ---
+  Model := 'grok-imagine-image';
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Tool_Active', 'False');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeInputFiles', '[tfc_image]'); // Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_ExtracttextFile
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[tcm_image]'); // Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeOutputFiles', '[tfc_image]');
+
+  // ------- grok-imagine-image-pro (text+image -> image, alta calidad) ---
+  Model := 'grok-imagine-image-pro';
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Tool_Active', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeOutputFiles', '[tfc_image]');
 
   // Se adiciona un modelo personalizado para permitir el control de los par�metros por defecto
   TAiChatFactory.Instance.RegisterCustomModel('Grok', 'aa-grok-3-search', 'grok-3');
 
-  // ------- GROK grok-3-search ------------------------------
+  // ------- GROK grok-3-search (custom, web search) ---
   Model := 'aa-grok-3-search';
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Asynchronous', 'False');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Tool_Active', 'False');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'NativeInputFiles', '[]'); // Tfc_audio, tfc_image, Tfc_Video, Tfc_Document, tfc_ExtracttextFile
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[tcm_WebSearch]'); // Tcm_audio, tcm_image, Tcm_Video, Tcm_Document, tcm_textFile
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ChatMediaSupports', '[tcm_WebSearch]');
 
 
   // ------------------------- DEEPSEEK ----------------------------------
