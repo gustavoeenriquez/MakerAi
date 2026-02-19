@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -38,7 +38,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON,
-  UMakerAi.MCPServer.Core;
+  UMakerAi.MCPServer.Core, uJSONHelper;
 
 type
   TAiMCPDirectConnection = class(TAiMCPServer)
@@ -107,8 +107,8 @@ begin
   if not IsActive then
     raise Exception.Create('Direct Connection is not active. Call Start first.');
 
-  // El dueño de AParams es este método, se libera aquí.
-  // Si AParams es nil, creamos uno vacío.
+  // El dueï¿½o de AParams es este mï¿½todo, se libera aquï¿½.
+  // Si AParams es nil, creamos uno vacï¿½o.
   if not Assigned(AParams) then
     AParams := TJSONObject.Create
   else
@@ -127,12 +127,12 @@ begin
     RequestObj.Free; // Libera RequestObj y AParams
   end;
 
-  // Ejecutar la petición
+  // Ejecutar la peticiï¿½n
   ResponseStr := FLogicServer.ExecuteRequest(RequestStr, 'direct_connection');
 
   // Parsear la respuesta
   if ResponseStr = '' then
-    Exit; // Notificación, sin resultado
+    Exit; // Notificaciï¿½n, sin resultado
 
   JsonValue := TJSONObject.ParseJSONValue(ResponseStr);
   if not(JsonValue is TJSONObject) then
@@ -153,7 +153,7 @@ begin
     // Extraer el resultado
     if ResponseJSON.TryGetValue('result', ResultValue) then
     begin
-      // Clonamos el resultado para que el llamador sea el dueño
+      // Clonamos el resultado para que el llamador sea el dueï¿½o
       Result := ResultValue.Clone as TJSONObject;
     end;
   finally
@@ -184,7 +184,7 @@ function TAiMCPDirectConnection.CallTool(const AToolName: string; AArguments: TJ
 var
   Params: TJSONObject;
 begin
-  // AArguments es pasado al método ExecuteDirectRequest, que tomará posesión de él.
+  // AArguments es pasado al mï¿½todo ExecuteDirectRequest, que tomarï¿½ posesiï¿½n de ï¿½l.
   // El llamador no debe liberar AArguments.
   if not Assigned(AArguments) then
     AArguments := TJSONObject.Create;
@@ -209,7 +209,7 @@ begin
       ArgsObject.AddPair(AArguments.Names[i], AArguments.ValueFromIndex[i]);
     end;
   end;
-  // Llamamos a la versión principal. A partir de aquí, no debemos liberar ArgsObject.
+  // Llamamos a la versiï¿½n principal. A partir de aquï¿½, no debemos liberar ArgsObject.
   Result := CallTool(AToolName, ArgsObject);
 end;
 

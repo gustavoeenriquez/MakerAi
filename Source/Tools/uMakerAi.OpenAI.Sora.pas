@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -42,7 +42,7 @@ uses
   uMakerAi.Core, System.Net.HttpClientComponent;
 
 type
-  // Enums para los parámetros de Sora
+  // Enums para los parï¿½metros de Sora
   TSoraModel = (smSora2, smCustom);
   TSoraResolution = (srDefault, sr1280x720, sr720x1280, sr1920x1080, sr1080x1920);
 
@@ -67,7 +67,7 @@ type
     FOnSuccess: TGenerationSuccessEvent;
     FOnError: TGenerationErrorEvent;
 
-    // Métodos internos
+    // Mï¿½todos internos
     function GetEffectiveModelName: string;
     function GetResolutionString: string;
     procedure DoError(const AMessage: string);
@@ -84,7 +84,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
 
-    // Métodos Públicos Asíncronos
+    // Mï¿½todos Pï¿½blicos Asï¿½ncronos
     function GenerateFromText(const APrompt: string): ITask;
     function GenerateFromImage(const APrompt: string; AImage: TAiMediaFile): ITask;
     function RemixVideo(const APrompt: string; const AOriginalVideoId: string): ITask;
@@ -272,6 +272,7 @@ var
   LResponseObj: TJSONObject;
   LVideoJobId, LStatus: string;
   LHeaders: TNetHeaders;
+  LSizeStr: string;
 begin
   LHttpClient := TNetHTTPClient.Create(nil);
   LFormData := TMultipartFormData.Create;
@@ -285,14 +286,18 @@ begin
       LFormData.AddField('model', GetEffectiveModelName);
       if FSeconds > 0 then
         LFormData.AddField('seconds', FSeconds.ToString);
-      var LSizeStr := GetResolutionString;
+      LSizeStr := GetResolutionString;
       if not LSizeStr.IsEmpty then
         LFormData.AddField('size', LSizeStr);
 
       if Assigned(AInputImage) then
       begin
         AInputImage.Content.Position := 0;
+        {$IF CompilerVersion >= 35}
         LFormData.AddStream('input_reference', AInputImage.Content, False, AInputImage.Filename, AInputImage.MimeType);
+        {$ELSE}
+        LFormData.AddStream('input_reference', AInputImage.Content, AInputImage.Filename, AInputImage.MimeType);
+        {$ENDIF}
       end;
 
       LResponse := LHttpClient.Post(LUrl, LFormData, nil, LHeaders);

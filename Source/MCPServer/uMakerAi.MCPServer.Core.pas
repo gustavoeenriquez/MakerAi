@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -57,16 +57,16 @@ type
     class function New: TAiMCPResponseBuilder;
     destructor Destroy; override;
 
-    // Añade un bloque de texto simple a la respuesta
+    // Aï¿½ade un bloque de texto simple a la respuesta
     function AddText(const AText: string): TAiMCPResponseBuilder;
 
-    // Añade un archivo desde una ruta en disco
+    // Aï¿½ade un archivo desde una ruta en disco
     function AddFile(const AFilePath: string; AFileName: string = ''): TAiMCPResponseBuilder;
 
-    // Añade un archivo desde un TStream
+    // Aï¿½ade un archivo desde un TStream
     function AddFileFromStream(AStream: TStream; const AFileName: string; const AMimeType: string): TAiMCPResponseBuilder;
 
-    // Construye el objeto JSON final que se devolverá como 'result' en la llamada al tool
+    // Construye el objeto JSON final que se devolverï¿½ como 'result' en la llamada al tool
     function Build: TJSONObject;
   end;
 
@@ -262,7 +262,7 @@ type
     procedure SetServerName(const Value: String);
     procedure SetAiFunctions(const Value: TAiFunctions);
   protected
-    // Lo hacemos protected para que los descendientes puedan acceder a él directamente.
+    // Lo hacemos protected para que los descendientes puedan acceder a ï¿½l directamente.
     FLogicServer: TAiMCPLogicServer;
     // Hacemos el setter protected para que solo los descendientes controlen el estado.
     procedure SetActive(const Value: Boolean);
@@ -344,7 +344,7 @@ end;
 
 class procedure TAiMCPSerializerUtils.DeserializeObject(Instance: TObject; JSON: TJSONObject);
 begin
-  // Como este método NO es genérico, sí puede llamar a un tipo local de la implementation.
+  // Como este mï¿½todo NO es genï¿½rico, sï¿½ puede llamar a un tipo local de la implementation.
   TInternalSerializer.DeserializeObject(Instance, JSON);
 end;
 // -----------------------------------------------------------
@@ -353,7 +353,7 @@ class function TAiMCPSerializerUtils.Deserialize<T>(JSON: TJSONObject): T;
 begin
   Result := T.Create;
   try
-    // Ahora llamamos al intermediario público, lo que es válido para el compilador.
+    // Ahora llamamos al intermediario pï¿½blico, lo que es vï¿½lido para el compilador.
     DeserializeObject(Result, JSON);
   except
     Result.Free;
@@ -406,7 +406,7 @@ function TAiMCPToolBase<T>.Execute(const Arguments: TJSONObject; const AuthConte
 var
   ParamsInstance: T;
 begin
-  // El código de deserialización es el mismo
+  // El cï¿½digo de deserializaciï¿½n es el mismo
   if not Assigned(Arguments) then
     raise Exception.Create('Arguments cannot be nil for tool execution.');
 
@@ -873,7 +873,7 @@ var
   Arguments: TJSONObject;
   Tool: IAiMCPTool;
   // ResultText: string; // Ya no es un string
-  ResultJSON: TJSONObject; // La herramienta devolverá el JSON directamente
+  ResultJSON: TJSONObject; // La herramienta devolverï¿½ el JSON directamente
   AuthContext: TAiAuthContext;
 begin
   if not Assigned(Params) then
@@ -1137,8 +1137,16 @@ begin
 end;
 
 class function TInternalSchemaGenerator.IsRequiredProperty(Prop: TRttiProperty): Boolean;
+var
+  Attr: TCustomAttribute;
 begin
-  Result := not Prop.HasAttribute<AiMCPOptionalAttribute>;
+  Result := True;
+  for Attr in Prop.GetAttributes do
+    if Attr is AiMCPOptionalAttribute then
+    begin
+      Result := False;
+      Exit;
+    end;
 end;
 
 // -----------------------------------------------------------------------------
@@ -1304,12 +1312,12 @@ begin
   else if SameText(AMimeType, 'application/pdf') then
     LType := 'document'
   else
-    LType := 'binary'; // Un tipo genérico
+    LType := 'binary'; // Un tipo genï¿½rico
 
   LFileItem.AddPair('type', LType);
   LFileItem.AddPair('mimeType', AMimeType);
   LFileItem.AddPair('data', LBase64);
-  LFileItem.AddPair('fileName', AFileName); // Opcional, pero buena práctica
+  LFileItem.AddPair('fileName', AFileName); // Opcional, pero buena prï¿½ctica
 
   FContentArray.AddElement(LFileItem);
 end;

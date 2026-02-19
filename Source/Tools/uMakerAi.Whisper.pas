@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,7 +33,7 @@
 
 //--------------------------------------------------------------------------------
 
-// Whisper mantiene la compatibilidad con la versión de Github de whisper opensource
+// Whisper mantiene la compatibilidad con la versiï¿½n de Github de whisper opensource
 // el modelo estandar de OpenAi se mueva a uMakerAi.OpenAi.Audio con las nuevas
 // caracteristicas.
 
@@ -287,14 +287,14 @@ end;
 
 function TAIWhisper.GetApiKey: String;
 begin
-  // Si está en modo de diseño, simplemente retorna el valor tal cual
+  // Si estï¿½ en modo de diseï¿½o, simplemente retorna el valor tal cual
   if (csDesigning in ComponentState) or (csDestroying in ComponentState) then
   begin
     Result := FApiKey;
     Exit;
   end;
 
-  // En modo de ejecución
+  // En modo de ejecuciï¿½n
   if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
     // Retorna el valor de la variable de entorno, quitando el '@'
     Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
@@ -450,7 +450,7 @@ Var
 begin
 
 
-  // Valida que la extensión del audio sea compatible, sino utiliza ffmpeg para convertirla
+  // Valida que la extensiï¿½n del audio sea compatible, sino utiliza ffmpeg para convertirla
   {
     var Destino: TMemoryStream;
     var FileNameDestino: String;
@@ -480,7 +480,11 @@ begin
   Try
     aStream.Position := 0;
 
+    {$IF CompilerVersion >= 35}
     Body.AddStream('file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    {$ELSE}
+    Body.AddStream('file', aStream, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    {$ENDIF}
     Body.AddField('model', FModel);
     Body.AddField('prompt', aPrompt);
     Body.AddField('response_format', FResponseFormat);
@@ -551,7 +555,11 @@ begin
   Try
     aStream.Position := 0;
 
+    {$IF CompilerVersion >= 35}
     Body.AddStream('file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    {$ELSE}
+    Body.AddStream('file', aStream, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    {$ENDIF}
     Body.AddField('model', FModel);
     Body.AddField('prompt', aPrompt);
     Body.AddField('response_format', FResponseFormat);
