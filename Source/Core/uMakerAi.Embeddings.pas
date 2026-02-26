@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -61,14 +61,18 @@ type
   protected
     FApiKey: String;
     FUrl: String;
-    // Este método es ahora 'override' para proporcionar la implementación específica.
+    // Este m?todo es ahora 'override' para proporcionar la implementaci?n espec?fica.
   public
     constructor Create(aOwner: TComponent); override;
-    // Este método es específico de la implementación de OpenAI
+    // Este m?todo es espec?fico de la implementaci?n de OpenAI
     procedure ParseEmbedding(JObj: TJsonObject); Virtual;
     function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float'): TAiEmbeddingData; override;
+    // Class methods para el patr?n Factory (TAiEmbeddingFactory)
+    class function GetDriverName: string; virtual;
+    class function CreateInstance(aOwner: TComponent): TAiEmbeddings; virtual;
+    class procedure RegisterDefaultParams(Params: TStrings); virtual;
   published
-    // Propiedades específicas de esta implementación
+    // Propiedades espec?ficas de esta implementaci?n
     property ApiKey: String read GetApiKey write SetApiKey;
     property Url: String read FUrl write SetUrl;
   end;
@@ -95,7 +99,7 @@ var
   Usage: TJSONObject;
   i: Integer;
 begin
-  // Validación inicial
+  // Validaci?n inicial
   if not Assigned(JObj) then
     Exit;
 
@@ -109,36 +113,36 @@ begin
     Usage.TryGetValue<Integer>('total_tokens', Ftotal_tokens);
   end;
 
-  // 3. Obtener el array 'data' con validación
+  // 3. Obtener el array 'data' con validaci?n
   if not JObj.TryGetValue<TJSONArray>('data', JArrData) then
     raise Exception.Create('La respuesta de la API no contiene el array de datos esperado ("data").');
 
   if JArrData.Count = 0 then
-    raise Exception.Create('El array de datos ("data") está vacío.');
+    raise Exception.Create('El array de datos ("data") est? vac?o.');
 
-  // Preparar array para múltiples embeddings (aunque solo usemos el primero)
+  // Preparar array para m?ltiples embeddings (aunque solo usemos el primero)
   SetLength(FData, JArrData.Count);
 
-  // 4. Procesar el primer embedding (compatibilidad con versión original)
+  // 4. Procesar el primer embedding (compatibilidad con versi?n original)
   for JVal in JArrData do
   begin
     // Validar que sea un objeto
     if not (JVal is TJSONObject) then
-      raise Exception.Create('Formato de ítem de datos inválido en la respuesta JSON.');
+      raise Exception.Create('Formato de ?tem de datos inv?lido en la respuesta JSON.');
 
     // 5. Obtener el vector de embedding
     if not TJSONObject(JVal).TryGetValue<TJSONArray>('embedding', JArrVector) then
-      raise Exception.Create('No se encontró el campo "embedding" en los datos de respuesta.');
+      raise Exception.Create('No se encontr? el campo "embedding" en los datos de respuesta.');
 
     if JArrVector.Count = 0 then
-      raise Exception.Create('El vector de embedding está vacío.');
+      raise Exception.Create('El vector de embedding est? vac?o.');
 
-    // 6. Dimensionar y llenar el vector con validación de tipo
+    // 6. Dimensionar y llenar el vector con validaci?n de tipo
     SetLength(Emb, JArrVector.Count);
     for i := 0 to JArrVector.Count - 1 do
     begin
       if not JArrVector.Items[i].TryGetValue<Double>(Emb[i]) then
-        Emb[i] := 0.0; // Valor por defecto si falla la conversión
+        Emb[i] := 0.0; // Valor por defecto si falla la conversi?n
     end;
 
     // 7. Asignar el embedding procesado
@@ -159,7 +163,7 @@ var
   RequestStream: TStringStream;
   sUrl: String;
 begin
-  // Delegación a evento si está asignado
+  // Delegaci?n a evento si est? asignado
   if Assigned(OnGetEmbedding) then
   begin
     Result := inherited CreateEmbedding(aInput, aUser, aDimensions, aModel, aEncodingFormat);
@@ -184,7 +188,7 @@ begin
     if aDimensions <= 0 then
       aDimensions := FDimensions;
 
-    // Construcción del JSON de petición
+    // Construcci?n del JSON de petici?n
     RequestBody.AddPair('input', aInput);     // OpenAI
     RequestBody.AddPair('prompt', aInput);    // Compatibilidad con Ollama
     RequestBody.AddPair('model', aModel);
@@ -202,7 +206,7 @@ begin
 
     Client.ContentType := 'application/json';
 
-    // Realizar la petición
+    // Realizar la petici?n
     Res := Client.Post(sUrl, RequestStream, ResponseStream, Headers);
     ResponseStream.Position := 0;
 
@@ -216,7 +220,7 @@ begin
       ResponseJSON := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
       try
         if not Assigned(ResponseJSON) then
-          raise Exception.Create('La respuesta de la API no es un JSON válido.');
+          raise Exception.Create('La respuesta de la API no es un JSON v?lido.');
 
         ParseEmbedding(ResponseJSON);
         Result := Self.FData;
@@ -260,6 +264,24 @@ begin
     FUrl := Value
   else
     FUrl := GlOpenAIUrl;
+end;
+
+class function TAiEmbeddings.GetDriverName: string;
+begin
+  Result := '';
+end;
+
+class function TAiEmbeddings.CreateInstance(aOwner: TComponent): TAiEmbeddings;
+begin
+  Result := TAiEmbeddings.Create(aOwner);
+end;
+
+class procedure TAiEmbeddings.RegisterDefaultParams(Params: TStrings);
+begin
+  Params.Values['ApiKey'] := '@OPENAI_API_KEY';
+  Params.Values['Url'] := GlOpenAIUrl;
+  Params.Values['Model'] := 'text-embedding-3-small';
+  Params.Values['Dimensions'] := '1536';
 end;
 
 end.

@@ -19,8 +19,8 @@ object Form70: TForm70
     Size.Height = 457.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 12
-    Viewport.Width = 505.000000000000000000
-    Viewport.Height = 457.000000000000000000
+    Viewport.Width = 501.000000000000000000
+    Viewport.Height = 453.000000000000000000
   end
   object MemoPrompt: TMemo
     Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
@@ -34,8 +34,8 @@ object Form70: TForm70
     Size.Height = 81.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 26
-    Viewport.Width = 1033.000000000000000000
-    Viewport.Height = 81.000000000000000000
+    Viewport.Width = 1029.000000000000000000
+    Viewport.Height = 77.000000000000000000
   end
   object Memo2: TMemo
     Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
@@ -47,8 +47,8 @@ object Form70: TForm70
     Size.Height = 457.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 11
-    Viewport.Width = 513.000000000000000000
-    Viewport.Height = 457.000000000000000000
+    Viewport.Width = 509.000000000000000000
+    Viewport.Height = 453.000000000000000000
   end
   object Label1: TLabel
     Position.X = 64.000000000000000000
@@ -86,6 +86,15 @@ object Form70: TForm70
     Text = 'Button2'
     TextSettings.Trimming = None
     OnClick = Button2Click
+  end
+  object Label4: TLabel
+    Position.X = 64.000000000000000000
+    Position.Y = 8.000000000000000000
+    Size.Width = 1018.000000000000000000
+    Size.Height = 17.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'Label4'
+    TabOrder = 76
   end
   object AiPrompts1: TAiPrompts
     Items = <

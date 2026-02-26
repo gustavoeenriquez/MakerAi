@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enrï¿½quez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,7 +33,7 @@
 
 //--------------------------------------------------------------------------------
 
-// Whisper mantiene la compatibilidad con la versiï¿½n de Github de whisper opensource
+// Whisper mantiene la compatibilidad con la versi?n de Github de whisper opensource
 // el modelo estandar de OpenAi se mueva a uMakerAi.OpenAi.Audio con las nuevas
 // caracteristicas.
 
@@ -86,7 +86,7 @@ Type
     Function IsValidExtension(FileExtension: String): Boolean;
     procedure ConvertAudioIfNeeded(var aStream: TMemoryStream; var aFileName: String);
 
-    { Implementación de IAiSpeechTool }
+    { Implementaci?n de IAiSpeechTool }
     procedure ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage); virtual;
     procedure ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage); virtual;
     function InternalTranscription(aStream: TMemoryStream; aFileName, aPrompt: String): String;
@@ -207,78 +207,98 @@ begin
 end;
 
 procedure TAIWhisper.ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
-begin
-  // Si es asíncrono, lo ejecutamos en un hilo
-  if IsAsync then
-  begin
-    TTask.Run(procedure
-    var
-      LText: string;
-    begin
-      try
-        ReportState(acsReasoning, 'Transcribiendo audio...');
-        LText := InternalTranscription(aMediaFile.Content, aMediaFile.filename, '');
 
-        // Actualizamos el objeto MediaFile
-        aMediaFile.Transcription := LText;
-        aMediaFile.Procesado := True;
-
-        // Reportamos el final al Chat
-        ReportDataEnd(ResMsg, 'assistant', LText);
-      except
-        on E: Exception do
-          ReportError('Error en transcripción Whisper: ' + E.Message, E);
-      end;
-    end);
-  end
-  else
+  procedure DoTranscription;
+  var
+    LText: string;
   begin
-    // Modo Síncrono
-    aMediaFile.Transcription := InternalTranscription(aMediaFile.Content, aMediaFile.filename, '');
-    aMediaFile.Procesado := True;
+    try
+      ReportState(acsReasoning, 'Transcribiendo audio...');
+      LText := InternalTranscription(aMediaFile.Content, aMediaFile.filename, '');
+      aMediaFile.Transcription := LText;
+      aMediaFile.Procesado := True;
+      ReportDataEnd(ResMsg, 'assistant', LText);
+    except
+      on E: Exception do
+        ReportError('Error en transcripción Whisper: ' + E.Message, E);
+    end;
   end;
+
+begin
+  if IsAsync then
+    DoTranscription
+  else
+    TTask.Run(
+      procedure
+      var
+        LText: string;
+      begin
+        try
+          ReportState(acsReasoning, 'Transcribiendo audio...');
+          LText := InternalTranscription(aMediaFile.Content, aMediaFile.filename, '');
+          aMediaFile.Transcription := LText;
+          aMediaFile.Procesado := True;
+          ReportDataEnd(ResMsg, 'assistant', LText);
+        except
+          on E: Exception do
+            ReportError('Error en transcripción Whisper: ' + E.Message, E);
+        end;
+      end
+    );
 end;
 
 procedure TAIWhisper.ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage);
+
+  procedure DoSpeechGeneration;
+  var
+    LStream: TMemoryStream;
+    LNewFile: TAiMediaFile;
+  begin
+    try
+      ReportState(acsWriting, 'Generando voz...');
+      LStream := Speech(AText);
+      try
+        LNewFile := TAiMediaFile.Create;
+        LNewFile.LoadFromStream('speech.' + FFormat, LStream);
+        ReportDataEnd(ResMsg, 'assistant', '[Audio generado]');
+      finally
+        LStream.Free;
+      end;
+    except
+      on E: Exception do
+        ReportError('Error generando voz Whisper: ' + E.Message, E);
+    end;
+  end;
+
 begin
   if IsAsync then
-  begin
-    TTask.Run(procedure
-    var
-      LStream: TMemoryStream;
-      LNewFile: TAiMediaFile;
-    begin
-      try
-        ReportState(acsWriting, 'Generando voz...');
-        LStream := Speech(AText);
-        try
-          LNewFile := TAiMediaFile.Create;
-          // Cargamos el stream generado en un nuevo MediaFile
-          LNewFile.LoadFromStream('speech.' + FFormat, LStream);
-
-          // Lo añadimos al mensaje de respuesta (Casteo seguro a lo que espera tu core)
-          TThread.Synchronize(nil, procedure begin
-            // Aquí dependemos de que el objeto pasado sea el mensaje
-            // En uMakerAi.Chat se pasa el objeto TAiChatMessage
-            // Usamos RTTI o un método bridge si fuera necesario, pero aquí lo añadimos directo
-            // asumiendo que el programador sabe que ResMsg tiene la propiedad MediaFiles
-          end);
-
-          ReportDataEnd(ResMsg, 'assistant', '[Audio generado]');
-        finally
-          LStream.Free;
-        end;
-      except
-        on E: Exception do
-          ReportError('Error generando voz Whisper: ' + E.Message, E);
-      end;
-    end);
-  end
+    DoSpeechGeneration
   else
-    Speech(AText); // Sincrónico
+    TTask.Run(
+      procedure
+      var
+        LStream: TMemoryStream;
+        LNewFile: TAiMediaFile;
+      begin
+        try
+          ReportState(acsWriting, 'Generando voz...');
+          LStream := Speech(AText);
+          try
+            LNewFile := TAiMediaFile.Create;
+            LNewFile.LoadFromStream('speech.' + FFormat, LStream);
+            ReportDataEnd(ResMsg, 'assistant', '[Audio generado]');
+          finally
+            LStream.Free;
+          end;
+        except
+          on E: Exception do
+            ReportError('Error generando voz Whisper: ' + E.Message, E);
+        end;
+      end
+    );
 end;
 
-{ Encapsulamos la lógica original en un método interno para reutilizar }
+{ Encapsulamos la l?gica original en un m?todo interno para reutilizar }
 function TAIWhisper.InternalTranscription(aStream: TMemoryStream; aFileName, aPrompt: String): String;
 begin
   Result := Transcription(aStream, aFileName, aPrompt);
@@ -287,14 +307,14 @@ end;
 
 function TAIWhisper.GetApiKey: String;
 begin
-  // Si estï¿½ en modo de diseï¿½o, simplemente retorna el valor tal cual
+  // Si est? en modo de dise?o, simplemente retorna el valor tal cual
   if (csDesigning in ComponentState) or (csDestroying in ComponentState) then
   begin
     Result := FApiKey;
     Exit;
   end;
 
-  // En modo de ejecuciï¿½n
+  // En modo de ejecuci?n
   if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
     // Retorna el valor de la variable de entorno, quitando el '@'
     Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
@@ -450,7 +470,7 @@ Var
 begin
 
 
-  // Valida que la extensiï¿½n del audio sea compatible, sino utiliza ffmpeg para convertirla
+  // Valida que la extensi?n del audio sea compatible, sino utiliza ffmpeg para convertirla
   {
     var Destino: TMemoryStream;
     var FileNameDestino: String;

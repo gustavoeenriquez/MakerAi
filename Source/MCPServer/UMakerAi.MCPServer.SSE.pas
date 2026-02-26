@@ -1,18 +1,18 @@
-// IT License
+// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -41,7 +41,7 @@ uses
   UMakerAi.MCPServer.Core;
 
 type
-  // Representa una sesión SSE activa
+  // Representa una sesi?n SSE activa
   TMCPSSESession = class
   public
     SessionID: string;
@@ -58,7 +58,7 @@ type
     FSessions: TObjectDictionary<string, TMCPSSESession>;
     FSessionsLock: TCriticalSection;
 
-    // Configuración de endpoints
+    // Configuraci?n de endpoints
     FSseEndpoint: string; // por defecto '/sse'
     FMessagesEndpoint: string; // por defecto '/messages'
 
@@ -68,7 +68,7 @@ type
 
     // Manejadores específicos
     procedure HandleSSEConnection(AContext: TIdContext; AResponseInfo: TIdHTTPResponseInfo);
-    procedure HandlePostMessage(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+    procedure HandlePostMessage(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo; const AAuthContext: TAiAuthContext);
 
     // Helpers
     function GetOrCreateSession(const AID: string): TMCPSSESession;
@@ -82,10 +82,12 @@ type
     procedure Start; override;
     procedure Stop; override;
 
-    // Propiedades de configuración
+    // Propiedades de configuraci?n
   published
     property SseEndpoint: string read FSseEndpoint write FSseEndpoint;
     property MessagesEndpoint: string read FMessagesEndpoint write FMessagesEndpoint;
+    property ApiKey;
+    property OnValidateRequest;
   end;
 
 procedure Register;
@@ -107,8 +109,8 @@ begin
   inherited Create;
   SessionID := AID;
   // Capacidad: 1000 mensajes.
-  // PushTimeout: INFINITE (El productor espera si está lleno)
-  // PopTimeout: 1000ms (IMPORTANTE: No usar INFINITE aquí para permitir el heartbeat)
+  // PushTimeout: INFINITE (El productor espera si est? lleno)
+  // PopTimeout: 1000ms (IMPORTANTE: No usar INFINITE aqu? para permitir el heartbeat)
   Outbox := TThreadedQueue<string>.Create(1000, INFINITE, 1000);
   LastActivity := Now;
 end;
@@ -134,7 +136,7 @@ begin
   FHttpServer.OnCommandGet := OnCommandGet;
   FHttpServer.OnCommandOther := OnCommandOther;
 
-  // Configuración vital para SSE
+  // Configuraci?n vital para SSE
   FHttpServer.KeepAlive := True;
   FHttpServer.AutoStartSession := False;
 
@@ -213,9 +215,24 @@ end;
 
 // Manejador principal para GET
 procedure TAiMCPSSEHttpServer.OnCommandGet(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+var
+  AuthContext: TAiAuthContext;
+  AuthHeader: string;
 begin
-  // Siempre poner CORS
   VerifyAndSetCORSHeaders(AResponseInfo);
+
+  // Autenticación en la conexión SSE
+  AuthHeader := ARequestInfo.RawHeaders.Values['Authorization'];
+  if AuthHeader = '' then
+    AuthHeader := ARequestInfo.RawHeaders.Values['X-API-Key'];
+
+  if not ValidateRequest(AuthHeader, AContext.Binding.PeerIP, AuthContext) then
+  begin
+    AResponseInfo.ResponseNo := 401;
+    AResponseInfo.ContentText := '{"error": "Authentication failed"}';
+    AResponseInfo.ContentType := 'application/json';
+    Exit;
+  end;
 
   if ARequestInfo.URI = FSseEndpoint then
   begin
@@ -230,6 +247,9 @@ end;
 
 // Manejador para POST y OPTIONS
 procedure TAiMCPSSEHttpServer.OnCommandOther(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+var
+  AuthContext: TAiAuthContext;
+  AuthHeader: string;
 begin
   VerifyAndSetCORSHeaders(AResponseInfo);
 
@@ -240,9 +260,22 @@ begin
     Exit;
   end;
 
+  // Autenticación en cada POST
+  AuthHeader := ARequestInfo.RawHeaders.Values['Authorization'];
+  if AuthHeader = '' then
+    AuthHeader := ARequestInfo.RawHeaders.Values['X-API-Key'];
+
+  if not ValidateRequest(AuthHeader, AContext.Binding.PeerIP, AuthContext) then
+  begin
+    AResponseInfo.ResponseNo := 401;
+    AResponseInfo.ContentText := '{"error": "Authentication failed"}';
+    AResponseInfo.ContentType := 'application/json';
+    Exit;
+  end;
+
   if (ARequestInfo.Command = 'POST') and (ARequestInfo.URI = FMessagesEndpoint) then
   begin
-    HandlePostMessage(AContext, ARequestInfo, AResponseInfo);
+    HandlePostMessage(AContext, ARequestInfo, AResponseInfo, AuthContext);
   end
   else
   begin
@@ -252,7 +285,7 @@ begin
 end;
 
 // =============================================================================
-// LÓGICA CRÍTICA SSE
+// L?GICA CR?TICA SSE
 // =============================================================================
 
 procedure TAiMCPSSEHttpServer.HandleSSEConnection(AContext: TIdContext; AResponseInfo: TIdHTTPResponseInfo);
@@ -264,7 +297,7 @@ var
   HandshakeStr: string;
   BytesToSend: TIdBytes;
 begin
-  // 1. Configurar Sesión
+  // 1. Configurar Sesi?n
   SessionID := GenerateSessionID;
   Session := GetOrCreateSession(SessionID);
 
@@ -277,12 +310,12 @@ begin
     AResponseInfo.CacheControl := 'no-cache';
     AResponseInfo.Connection := 'keep-alive';
 
-    // IMPORTANTE: Forzar que Indy envíe las cabeceras AHORA MISMO
-    // Esto impide que Indy bufferice la respuesta esperando que termine el método.
+    // IMPORTANTE: Forzar que Indy env?e las cabeceras AHORA MISMO
+    // Esto impide que Indy bufferice la respuesta esperando que termine el m?todo.
     AResponseInfo.WriteHeader;
 
     // 3. Enviar Handshake MCP (Protocolo)
-    // Indica al cliente dónde mandar los comandos POST
+    // Indica al cliente d?nde mandar los comandos POST
     var
     FullMsgUrl := Format('%s?session_id=%s', [FMessagesEndpoint, SessionID]);
 
@@ -304,7 +337,7 @@ begin
         var
         Payload := 'data: ' + Msg + #10#10;
 
-        // Escribimos Bytes directamente para evitar corrupción de caracteres
+        // Escribimos Bytes directamente para evitar corrupci?n de caracteres
         BytesToSend := ToBytes(Payload, IndyTextEncoding_UTF8);
         AContext.Connection.IOHandler.Write(BytesToSend);
 
@@ -313,7 +346,7 @@ begin
       else if PopResult = wrTimeout then
       begin
         // --- CASO B: No hay mensajes (Idle) ---
-        // Enviamos un comentario "ping" para mantener la conexión viva
+        // Enviamos un comentario "ping" para mantener la conexi?n viva
         // y evitar timeouts de antivirus/proxies.
         var
         Ping := ': keep-alive' + #10#10;
@@ -321,12 +354,12 @@ begin
       end
       else if PopResult = wrAbandoned then
       begin
-        // La cola se destruyó (Servidor deteniéndose)
+        // La cola se destruy? (Servidor deteni?ndose)
         Break;
       end;
 
-      // Verificación proactiva de desconexión
-      // Si el cliente cerró el socket, esto lanzará una excepción segura.
+      // Verificaci?n proactiva de desconexi?n
+      // Si el cliente cerr? el socket, esto lanzar? una excepci?n segura.
       // AContext.Connection.CheckForDisconnect(True, True);
 
       if AContext.Connection.IOHandler <> nil then
@@ -338,7 +371,7 @@ begin
     on E: Exception do
     begin
       // Es normal ver "Connection Closed Gracefully" o "Socket Error" cuando el cliente cierra.
-      // No lo tratamos como error crítico.
+      // No lo tratamos como error cr?tico.
     end;
   end;
 
@@ -355,10 +388,10 @@ begin
 end;
 
 // =============================================================================
-// LÓGICA POST (MESSAGES)
+// L?GICA POST (MESSAGES)
 // =============================================================================
 
-procedure TAiMCPSSEHttpServer.HandlePostMessage(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+procedure TAiMCPSSEHttpServer.HandlePostMessage(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo; const AAuthContext: TAiAuthContext);
 var
   SessionID: string;
   Session: TMCPSSESession;
@@ -375,7 +408,7 @@ begin
     Exit;
   end;
 
-  // 2. Buscar Sesión Activa
+  // 2. Buscar Sesi?n Activa
   FSessionsLock.Enter;
   try
     if not FSessions.TryGetValue(SessionID, Session) then
@@ -407,17 +440,17 @@ begin
     Stream.Free;
   end;
 
-  // 4. Ejecutar Lógica (Core)
+  // 4. Ejecutar L?gica (Core)
   try
-    // ExecuteRequest devuelve el JSON de respuesta
-    ResponseJson := FLogicServer.ExecuteRequest(JsonBody, SessionID);
+    // ExecuteRequest devuelve el JSON de respuesta (con contexto de autenticación)
+    ResponseJson := FLogicServer.ExecuteRequest(JsonBody, SessionID, AAuthContext);
 
     // 5. Enviar Respuesta por el CANAL SSE (No por HTTP response)
     if ResponseJson <> '' then
       Session.Outbox.PushItem(ResponseJson);
 
     // 6. Responder al POST con "202 Accepted"
-    // Esto le dice al cliente: "Recibí tu orden, espera la respuesta por el stream".
+    // Esto le dice al cliente: "Recib? tu orden, espera la respuesta por el stream".
     AResponseInfo.ResponseNo := 202;
     AResponseInfo.ContentText := 'Accepted';
     AResponseInfo.ContentType := 'text/plain';

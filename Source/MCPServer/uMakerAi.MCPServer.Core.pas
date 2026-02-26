@@ -1,18 +1,18 @@
-// IT License
+// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enrï¿½quez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -49,6 +49,14 @@ type
     Roles: TArray<string>;
   end;
 
+  // Evento de validación custom (Layer 2).
+  // AAuthHeader: valor del header Authorization o X-API-Key.
+  // ARemoteIP: IP del cliente.
+  // AAuthContext: contexto de autenticación a poblar.
+  // AIsValid: True si la petición es válida.
+  TAiMCPValidateEvent = procedure(Sender: TObject; const AAuthHeader, ARemoteIP: string;
+    out AAuthContext: TAiAuthContext; out AIsValid: Boolean) of object;
+
   TAiMCPResponseBuilder = class
   private
     FContentArray: TJSONArray;
@@ -57,16 +65,16 @@ type
     class function New: TAiMCPResponseBuilder;
     destructor Destroy; override;
 
-    // Aï¿½ade un bloque de texto simple a la respuesta
+    // A?ade un bloque de texto simple a la respuesta
     function AddText(const AText: string): TAiMCPResponseBuilder;
 
-    // Aï¿½ade un archivo desde una ruta en disco
+    // A?ade un archivo desde una ruta en disco
     function AddFile(const AFilePath: string; AFileName: string = ''): TAiMCPResponseBuilder;
 
-    // Aï¿½ade un archivo desde un TStream
+    // A?ade un archivo desde un TStream
     function AddFileFromStream(AStream: TStream; const AFileName: string; const AMimeType: string): TAiMCPResponseBuilder;
 
-    // Construye el objeto JSON final que se devolverï¿½ como 'result' en la llamada al tool
+    // Construye el objeto JSON final que se devolver? como 'result' en la llamada al tool
     function Build: TJSONObject;
   end;
 
@@ -200,14 +208,14 @@ type
     function CreateJSONResponse(const RequestID: TValue): TJSONObject;
     procedure AddRequestIDToResponse(Response: TJSONObject; const RequestID: TValue);
     function CreateErrorResponse(const RequestID: TValue; ErrorCode: Integer; const ErrorMessage: string): string;
-    function ExecuteMethodCall(const MethodName: string; Params: TJSONObject; const SessionID: string): TValue;
+    function ExecuteMethodCall(const MethodName: string; Params: TJSONObject; const SessionID: string; const AAuthContext: TAiAuthContext): TValue;
     function HandleCoreMethod(const Method: string; const Params: TJSONObject): TValue;
-    function HandleToolsMethod(const Method: string; const Params: TJSONObject): TValue;
+    function HandleToolsMethod(const Method: string; const Params: TJSONObject; const AAuthContext: TAiAuthContext): TValue;
     function HandleResourcesMethod(const Method: string; const Params: TJSONObject): TValue;
     function Core_Initialize(const Params: TJSONObject): TValue;
     function Core_Ping: TValue;
     function Tools_ListTools: TValue;
-    function Tools_CallTool(const Params: TJSONObject): TValue;
+    function Tools_CallTool(const Params: TJSONObject; const AAuthContext: TAiAuthContext): TValue;
     function Resources_ListResources: TValue;
     function Resources_ReadResource(const Params: TJSONObject): TValue;
     function Resources_ListTemplates: TValue;
@@ -229,7 +237,8 @@ type
     procedure Start;
     procedure Stop;
 
-    function ExecuteRequest(const ARequestJson: string; const ASessionID: string): string;
+    function ExecuteRequest(const ARequestJson: string; const ASessionID: string): string; overload;
+    function ExecuteRequest(const ARequestJson: string; const ASessionID: string; const AAuthContext: TAiAuthContext): string; overload;
     property SettingsFile: String read FSettingsFile write SetSettingsFile;
     property IsActive: Boolean read FIsActive;
     // Public properties for settings for convenience
@@ -251,6 +260,8 @@ type
     FCorsAllowedOrigins: string;
     FServerName: String;
     FAiFunctions: TAiFunctions;
+    FApiKey: string;
+    FOnValidateRequest: TAiMCPValidateEvent;
     function GetEndpoint: string;
     function GetPort: Integer;
     procedure SetPort(const Value: Integer);
@@ -262,12 +273,14 @@ type
     procedure SetServerName(const Value: String);
     procedure SetAiFunctions(const Value: TAiFunctions);
   protected
-    // Lo hacemos protected para que los descendientes puedan acceder a ï¿½l directamente.
+    // Lo hacemos protected para que los descendientes puedan acceder a él directamente.
     FLogicServer: TAiMCPLogicServer;
     // Hacemos el setter protected para que solo los descendientes controlen el estado.
     procedure SetActive(const Value: Boolean);
     Procedure InternalRegisterFromAiFunctions;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
+    // Validación de requests: Layer 1 (API Key) + Layer 2 (evento custom)
+    function ValidateRequest(const AAuthHeader, ARemoteIP: string; out AAuthContext: TAiAuthContext): Boolean;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -296,6 +309,10 @@ type
   Published
     Property ServerName: String read GetServerName write SetServerName;
     property AiFunctions: TAiFunctions read FAiFunctions write SetAiFunctions;
+    // Autenticación: Si ApiKey está configurado, valida "Authorization: Bearer <key>" o "X-API-Key: <key>"
+    property ApiKey: string read FApiKey write FApiKey;
+    // Evento custom para validación avanzada (JWT, OAuth, DB lookup, etc.)
+    property OnValidateRequest: TAiMCPValidateEvent read FOnValidateRequest write FOnValidateRequest;
   end;
 
 implementation
@@ -344,7 +361,7 @@ end;
 
 class procedure TAiMCPSerializerUtils.DeserializeObject(Instance: TObject; JSON: TJSONObject);
 begin
-  // Como este mï¿½todo NO es genï¿½rico, sï¿½ puede llamar a un tipo local de la implementation.
+  // Como este m?todo NO es gen?rico, s? puede llamar a un tipo local de la implementation.
   TInternalSerializer.DeserializeObject(Instance, JSON);
 end;
 // -----------------------------------------------------------
@@ -353,7 +370,7 @@ class function TAiMCPSerializerUtils.Deserialize<T>(JSON: TJSONObject): T;
 begin
   Result := T.Create;
   try
-    // Ahora llamamos al intermediario pï¿½blico, lo que es vï¿½lido para el compilador.
+    // Ahora llamamos al intermediario p?blico, lo que es v?lido para el compilador.
     DeserializeObject(Result, JSON);
   except
     Result.Free;
@@ -406,7 +423,7 @@ function TAiMCPToolBase<T>.Execute(const Arguments: TJSONObject; const AuthConte
 var
   ParamsInstance: T;
 begin
-  // El cï¿½digo de deserializaciï¿½n es el mismo
+  // El c?digo de deserializaci?n es el mismo
   if not Assigned(Arguments) then
     raise Exception.Create('Arguments cannot be nil for tool execution.');
 
@@ -551,15 +568,15 @@ begin
   FActiveTools.Clear;
   FActiveResources.Clear;
 
-  // 2. Ejecutamos las factorías de herramientas.
-  // Cada Pair.Value es una función que al ser llamada devuelve una instancia de IAiMCPTool.
+  // 2. Ejecutamos las factor?as de herramientas.
+  // Cada Pair.Value es una funci?n que al ser llamada devuelve una instancia de IAiMCPTool.
   for Pair in FToolFactories do
   begin
     // Importante: Pair.Key es el nombre registrado, Pair.Value() crea la instancia.
     FActiveTools.Add(Pair.Key, Pair.Value());
   end;
 
-  // 3. Ejecutamos las factorías de recursos.
+  // 3. Ejecutamos las factor?as de recursos.
   for ResourcePair in FResourceFactories do
   begin
     FActiveResources.Add(ResourcePair.Key, ResourcePair.Value());
@@ -629,7 +646,19 @@ begin
   end;
 end;
 
+// Overload sin AuthContext: backward compatible (Stdio, Direct)
 function TAiMCPLogicServer.ExecuteRequest(const ARequestJson: string; const ASessionID: string): string;
+var
+  LAuthContext: TAiAuthContext;
+begin
+  LAuthContext := Default(TAiAuthContext);
+  LAuthContext.IsAuthenticated := (FUser <> '');
+  LAuthContext.UserID := FUser;
+  Result := ExecuteRequest(ARequestJson, ASessionID, LAuthContext);
+end;
+
+// Overload con AuthContext: usado por Http y SSE con autenticación
+function TAiMCPLogicServer.ExecuteRequest(const ARequestJson: string; const ASessionID: string; const AAuthContext: TAiAuthContext): string;
 var
   JSONRequest, JSONResponse, Params: TJSONObject;
   RequestID: TValue;
@@ -669,12 +698,12 @@ begin
       else
         Params := nil;
 
-      ExecuteResult := ExecuteMethodCall(MethodName, Params, ASessionID);
+      ExecuteResult := ExecuteMethodCall(MethodName, Params, ASessionID, AAuthContext);
 
       if ExecuteResult.IsEmpty then
         JSONResponse.AddPair('result', TJSONNull.Create)
       else if ExecuteResult.IsType<TJSONObject> then
-        JSONResponse.AddPair('result', ExecuteResult.AsType<TJSONObject>.Clone as TJSONObject)
+        JSONResponse.AddPair('result', ExecuteResult.AsType<TJSONObject>)
       else
         JSONResponse.AddPair('result', TJSONString.Create(ExecuteResult.ToString));
 
@@ -683,7 +712,6 @@ begin
     except
       on E: Exception do
       begin
-        Result := CreateErrorResponse(RequestID, JSONRPC_PARSE_ERROR, 'Parse error: ' + E.Message);
         var
         ErrorCode := JSONRPC_INTERNAL_ERROR;
         if Pos('not found', E.Message) > 0 then
@@ -707,20 +735,13 @@ function TAiMCPLogicServer.ParseJSONRequest(const RequestBody: string): TJSONObj
 var
   ParsedValue: TJSONValue;
 begin
-  try
-    ParsedValue := TJSONObject.ParseJSONValue(RequestBody, False);
-    if not(ParsedValue is TJSONObject) then
-    begin
-      ParsedValue.Free;
-      raise Exception.Create('Invalid JSON request: Not a JSON object.');
-    end;
-    Result := ParsedValue as TJSONObject;
-  except
-    on E: Exception do
-    begin
-      raise;
-    end;
+  ParsedValue := TJSONObject.ParseJSONValue(RequestBody, False);
+  if not(ParsedValue is TJSONObject) then
+  begin
+    ParsedValue.Free;
+    raise Exception.Create('Invalid JSON request: Not a JSON object.');
   end;
+  Result := TJSONObject(ParsedValue);
 end;
 
 function TAiMCPLogicServer.ExtractRequestID(JSONRequest: TJSONObject): TValue;
@@ -776,13 +797,13 @@ begin
   end;
 end;
 
-function TAiMCPLogicServer.ExecuteMethodCall(const MethodName: string; Params: TJSONObject; const SessionID: string): TValue;
+function TAiMCPLogicServer.ExecuteMethodCall(const MethodName: string; Params: TJSONObject; const SessionID: string; const AAuthContext: TAiAuthContext): TValue;
 begin
   if Trim(MethodName) = '' then
     raise Exception.CreateHelp('Method not specified.', JSONRPC_INVALID_REQUEST);
 
   if StartsText('tools/', MethodName) then
-    Result := HandleToolsMethod(MethodName, Params)
+    Result := HandleToolsMethod(MethodName, Params, AAuthContext)
   else if StartsText('resources/', MethodName) then
     Result := HandleResourcesMethod(MethodName, Params)
   else if (MethodName = 'initialize') or (MethodName = 'ping') then
@@ -801,12 +822,12 @@ begin
     Result := TValue.Empty;
 end;
 
-function TAiMCPLogicServer.HandleToolsMethod(const Method: string; const Params: TJSONObject): TValue;
+function TAiMCPLogicServer.HandleToolsMethod(const Method: string; const Params: TJSONObject; const AAuthContext: TAiAuthContext): TValue;
 begin
   if Method = 'tools/list' then
     Result := Tools_ListTools
   else if Method = 'tools/call' then
-    Result := Tools_CallTool(Params)
+    Result := Tools_CallTool(Params, AAuthContext)
   else
     raise Exception.CreateFmt('Method %s not handled by Tools capability', [Method]);
 end;
@@ -861,20 +882,18 @@ begin
     ToolJSON := TJSONObject.Create;
     ToolJSON.AddPair('name', Tool.Name);
     ToolJSON.AddPair('description', Tool.Description);
-    ToolJSON.AddPair('inputSchema', Tool.GetInputSchema.Clone as TJSONObject);
+    ToolJSON.AddPair('inputSchema', Tool.GetInputSchema);
     ToolsArray.AddElement(ToolJSON);
   end;
   Result := TValue.From<TJSONObject>(ResultJSON);
 end;
 
-function TAiMCPLogicServer.Tools_CallTool(const Params: TJSONObject): TValue;
+function TAiMCPLogicServer.Tools_CallTool(const Params: TJSONObject; const AAuthContext: TAiAuthContext): TValue;
 var
   ToolName: string;
   Arguments: TJSONObject;
   Tool: IAiMCPTool;
-  // ResultText: string; // Ya no es un string
-  ResultJSON: TJSONObject; // La herramienta devolverï¿½ el JSON directamente
-  AuthContext: TAiAuthContext;
+  ResultJSON: TJSONObject;
 begin
   if not Assigned(Params) then
     raise Exception.CreateHelp('Invalid params for tools/call. Expected a JSON object.', JSONRPC_INVALID_PARAMS);
@@ -885,13 +904,9 @@ begin
   if ToolName = '' then
     raise Exception.CreateHelp('Invalid params: Tool "name" not provided in tools/call', JSONRPC_INVALID_PARAMS);
 
-  AuthContext.IsAuthenticated := (FUser <> '');
-  AuthContext.UserID := FUser;
-
   if FActiveTools.TryGetValue(ToolName, Tool) then
   begin
-    // La herramienta ahora devuelve el TJSONObject directamente
-    ResultJSON := Tool.Execute(Arguments, AuthContext);
+    ResultJSON := Tool.Execute(Arguments, AAuthContext);
   end
   else
     raise Exception.CreateFmt('Tool not found: %s', [ToolName]);
@@ -1063,7 +1078,7 @@ begin
         PropTypeStr := GetJsonTypeFromRttiType(RttiProp.PropertyType);
         PropSchema.AddPair('type', PropTypeStr);
 
-        // 2. Lógica específica para Arrays (NUEVO)
+        // 2. L?gica espec?fica para Arrays (NUEVO)
         if PropTypeStr = 'array' then
         begin
           if RttiProp.PropertyType is TRttiDynamicArrayType then
@@ -1071,7 +1086,7 @@ begin
             DynArrayType := TRttiDynamicArrayType(RttiProp.PropertyType);
             ElementType := DynArrayType.ElementType;
 
-            // Definimos qué hay dentro del array (items)
+            // Definimos qu? hay dentro del array (items)
             var
             ItemsObj := TJSONObject.Create;
             ItemsObj.AddPair('type', GetJsonTypeFromRttiType(ElementType));
@@ -1079,7 +1094,7 @@ begin
           end
           else
           begin
-            // Fallback por si es un array estático u otro tipo complejo no soportado
+            // Fallback por si es un array est?tico u otro tipo complejo no soportado
             var
             ItemsObj := TJSONObject.Create;
             ItemsObj.AddPair('type', 'string');
@@ -1087,7 +1102,7 @@ begin
           end;
         end;
 
-        // 3. Manejo de atributos (Descripción y Enums) - (Igual que antes)
+        // 3. Manejo de atributos (Descripci?n y Enums) - (Igual que antes)
         for Attr in RttiProp.GetAttributes do
         begin
           if Attr is AiMCPSchemaDescriptionAttribute then
@@ -1124,8 +1139,10 @@ begin
         Result := 'boolean'
       else
         Result := 'string';
-    tkClass, tkDynArray, tkArray:
+    tkClass:
       Result := 'object';
+    tkDynArray, tkArray:
+      Result := 'array';
   else
     Result := 'string';
   end;
@@ -1137,16 +1154,8 @@ begin
 end;
 
 class function TInternalSchemaGenerator.IsRequiredProperty(Prop: TRttiProperty): Boolean;
-var
-  Attr: TCustomAttribute;
 begin
-  Result := True;
-  for Attr in Prop.GetAttributes do
-    if Attr is AiMCPOptionalAttribute then
-    begin
-      Result := False;
-      Exit;
-    end;
+  Result := not Prop.HasAttribute<AiMCPOptionalAttribute>;
 end;
 
 // -----------------------------------------------------------------------------
@@ -1312,12 +1321,12 @@ begin
   else if SameText(AMimeType, 'application/pdf') then
     LType := 'document'
   else
-    LType := 'binary'; // Un tipo genï¿½rico
+    LType := 'binary'; // Un tipo gen?rico
 
   LFileItem.AddPair('type', LType);
   LFileItem.AddPair('mimeType', AMimeType);
   LFileItem.AddPair('data', LBase64);
-  LFileItem.AddPair('fileName', AFileName); // Opcional, pero buena prï¿½ctica
+  LFileItem.AddPair('fileName', AFileName); // Opcional, pero buena pr?ctica
 
   FContentArray.AddElement(LFileItem);
 end;
@@ -1383,15 +1392,15 @@ begin
   if not Assigned(FAiFunctions) then
     Exit;
 
-  // Recorremos la colección de funciones del componente vinculado
+  // Recorremos la colecci?n de funciones del componente vinculado
   for I := 0 to FAiFunctions.Functions.Count - 1 do
   begin
     if FAiFunctions.Functions[I].Enabled then
     begin
       FuncName := FAiFunctions.Functions[I].FunctionName;
 
-      // Registramos la factoría usando el Bridge (Proxy)
-      // Nota: El Bridge debe ser accesible desde aquí
+      // Registramos la factor?a usando el Bridge (Proxy)
+      // Nota: El Bridge debe ser accesible desde aqu?
       Self.RegisterTool(FuncName,
         function: IAiMCPTool
         begin
@@ -1415,17 +1424,17 @@ procedure TAiMCPServer.Notification(AComponent: TComponent; Operation: TOperatio
 begin
   inherited Notification(AComponent, Operation);
 
-  // Si la operación es eliminar (opRemove) y el componente es el que tenemos guardado
+  // Si la operaci?n es eliminar (opRemove) y el componente es el que tenemos guardado
   if (Operation = opRemove) and (AComponent = FAiFunctions) then
   begin
     // Ponemos la referencia a NIL de forma segura
     FAiFunctions := nil;
 
-    // Opcional: Si el servidor estaba activo y dependía de estas funciones,
-    // podrías decidir detenerlo o simplemente logear un aviso.
+    // Opcional: Si el servidor estaba activo y depend?a de estas funciones,
+    // podr?as decidir detenerlo o simplemente logear un aviso.
     if FActive then
     begin
-      // Podrías llamar a Stop; si consideras que sin funciones el servidor no debe seguir.
+      // Podr?as llamar a Stop; si consideras que sin funciones el servidor no debe seguir.
     end;
   end;
 end;
@@ -1451,9 +1460,46 @@ begin
   begin
     FAiFunctions := Value;
 
-    // Si se asigna un componente, le pedimos que nos notifique su destrucción
+    // Si se asigna un componente, le pedimos que nos notifique su destrucci?n
     if Assigned(FAiFunctions) then
       FAiFunctions.FreeNotification(Self);
+  end;
+end;
+
+function TAiMCPServer.ValidateRequest(const AAuthHeader, ARemoteIP: string; out AAuthContext: TAiAuthContext): Boolean;
+var
+  ProvidedKey: string;
+begin
+  Result := True;
+  AAuthContext := Default(TAiAuthContext);
+
+  // Layer 1: Validación de API Key
+  if FApiKey <> '' then
+  begin
+    // Extraer key de "Bearer <key>" o valor directo
+    if AAuthHeader.StartsWith('Bearer ', True) then
+      ProvidedKey := Trim(Copy(AAuthHeader, 8, Length(AAuthHeader)))
+    else
+      ProvidedKey := Trim(AAuthHeader);
+
+    if not SameStr(ProvidedKey, FApiKey) then
+    begin
+      Result := False;
+      Exit;
+    end;
+
+    AAuthContext.IsAuthenticated := True;
+    AAuthContext.UserID := FLogicServer.User;
+  end;
+
+  // Layer 2: Evento de validación custom (JWT, OAuth, DB lookup, etc.)
+  if Assigned(FOnValidateRequest) then
+    FOnValidateRequest(Self, AAuthHeader, ARemoteIP, AAuthContext, Result)
+  else if FApiKey = '' then
+  begin
+    // Sin API Key ni evento -> backward compatible (permitir todo)
+    AAuthContext.IsAuthenticated := True;
+    AAuthContext.UserID := FLogicServer.User;
   end;
 end;
 
@@ -1487,10 +1533,10 @@ begin
     Exit;
 
   // 1. PASO CLAVE: Antes de iniciar el LogicServer, registramos
-  // automáticamente las funciones del componente vinculado.
+  // autom?ticamente las funciones del componente vinculado.
   InternalRegisterFromAiFunctions;
 
-  // 2. Iniciamos el motor lógico (que instanciará los Proxies creados arriba)
+  // 2. Iniciamos el motor l?gico (que instanciar? los Proxies creados arriba)
   FLogicServer.Start;
 
   FActive := True;

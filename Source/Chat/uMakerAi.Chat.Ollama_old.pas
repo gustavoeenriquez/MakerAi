@@ -1,4 +1,4 @@
-Ôªø// IT License
+// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr√≠quez
+// Nombre: Gustavo EnrÌquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -67,7 +67,7 @@ type
     Destructor Destroy; Override;
     Function GetMessages: TJSonArray; Override;
 
-    // ----- FUNCIONES DE GESTI√ìN DE MODELOS  -----------
+    // ----- FUNCIONES DE GESTI”N DE MODELOS  -----------
     procedure PullModel(const aModelName: string);
     procedure CreateModel(const aNewModelName, aModelfileContent: string);
     function ShowModelInfo(const aModelName: string): TJSonObject;
@@ -143,7 +143,7 @@ begin
   inherited;
 end;
 
-// Se simplifica la recepci√≥n debido a que en la versi√≥n 2025 se eliminan par√°metros
+// Se simplifica la recepciÛn debido a que en la versiÛn 2025 se eliminan par·metros
 { function TAiOllamaChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
   Var
   JObj, Msg, Arg: TJSonObject;
@@ -222,7 +222,7 @@ begin
     begin
       LToolCall := TAiToolsFunction.Create;
       try
-        // Ollama ahora s√≠ incluye un 'id', pero lo generamos como fallback por si acaso.
+        // Ollama ahora sÌ incluye un 'id', pero lo generamos como fallback por si acaso.
         LToolCall.Id := LToolCallObj.GetValue<string>('id', 'call_' + TGuid.NewGuid.ToString);
         LToolCall.Name := LFunctionObj.GetValue<string>('name', '');
         LToolCall.Tipo := 'function';
@@ -267,8 +267,8 @@ begin
     Msg := Messages.Items[I];
     JObj := TJSonObject.Create;
 
-    If Msg.TollCallId <> '' then
-      JObj.AddPair('tool_call_id', Msg.TollCallId);
+    If Msg.ToolCallId <> '' then
+      JObj.AddPair('tool_call_id', Msg.ToolCallId);
 
     If Msg.FunctionName <> '' then
       JObj.AddPair('name', Msg.FunctionName);
@@ -418,7 +418,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
 {$ENDIF}
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools est√°n mal definido, debe ser un JsonArray');
+        Raise Exception.Create('La propiedad Tools est·n mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then
@@ -562,7 +562,7 @@ begin
   Finally
     If FClient.Asynchronous = False then
       St.Free;
-    // Esto no funciona en multiarea, as√≠ que se libera cuando no lo es.
+    // Esto no funciona en multiarea, asÌ que se libera cuando no lo es.
   End;
 end;
 
@@ -636,7 +636,7 @@ end;
   // Acumular
   FTmpResponseText := FTmpResponseText + sJson;
 
-  // Solo procesar si el JSON est√° completo
+  // Solo procesar si el JSON est· completo
   if (sJson <> '') and IsCompleteJson(FTmpResponseText) then
   begin
   JObj := TJSonObject(TJSonObject.ParseJSONValue(FTmpResponseText));
@@ -647,7 +647,7 @@ end;
   begin
   if Done then
   begin
-  // ‚úÖ Cuando termina de recibir
+  // [OK] Cuando termina de recibir
   LModel := JObj.GetValue('model').Value;
   aPrompt_tokens := JObj.GetValue<Integer>('prompt_eval_count');
   aCompletion_tokens := JObj.GetValue<Integer>('eval_count');
@@ -679,7 +679,7 @@ end;
   end
   else
   begin
-  // ‚úÖ Todav√≠a no termina el mensaje
+  // [OK] TodavÌa no termina el mensaje
   if JObj.TryGetValue<TJSonObject>('message', Delta) then
   begin
   Respuesta := Delta.GetValue<String>('content');
@@ -705,12 +705,12 @@ end;
   end;
   finally
   JObj.Free;
-  FTmpResponseText := ''; // üîπ Limpiamos buffer ya procesado
+  FTmpResponseText := ''; //  Limpiamos buffer ya procesado
   end;
   end;
   except
   on E: Exception do
-  LastError := 'El json "' + FTmpResponseText + '" no es v√°lido. ' + E.Message;
+  LastError := 'El json "' + FTmpResponseText + '" no es v·lido. ' + E.Message;
   end;
   end;
 }
@@ -744,7 +744,7 @@ begin
     //LogDebug(LChunkStr);
 
 
-    // --- Bucle principal para procesar l√≠neas completas (delimitadas por #10) ---
+    // --- Bucle principal para procesar lÌneas completas (delimitadas por #10) ---
     while Pos(#10, FTmpResponseText) > 0 do
     begin
       LJsonLine := Copy(FTmpResponseText, 1, Pos(#10, FTmpResponseText) - 1);
@@ -795,21 +795,21 @@ begin
           //LJsonObject.Free;  //OJO Revisar porque marca error al intentar liberar
         end;
       except
-        // Ignorar JSON incompleto, el bucle continuar√°
+        // Ignorar JSON incompleto, el bucle continuar·
       end;
     end; // Fin del while
 
-    // --- MANEJO DEL FRAGMENTO FINAL: Si el bucle termin√≥ y a√∫n queda texto, ---
-    // --- podr√≠a ser el √∫ltimo JSON que no termin√≥ en #10. ---
+    // --- MANEJO DEL FRAGMENTO FINAL: Si el bucle terminÛ y a˙n queda texto, ---
+    // --- podrÌa ser el ˙ltimo JSON que no terminÛ en #10. ---
     if (not LStreamFinished) and (FTmpResponseText.Trim <> '') then
     begin
       try
         // Intentamos parsear lo que queda en el buffer. Si falla, es un fragmento incompleto y salta al except.
         LJsonObject := TJSonObject.ParseJSONValue(FTmpResponseText.Trim) as TJSonObject;
-        if not Assigned(LJsonObject) then Exit; // No deber√≠a pasar si el parseo fue exitoso
+        if not Assigned(LJsonObject) then Exit; // No deberÌa pasar si el parseo fue exitoso
         try
           LDone := LJsonObject.GetValue<Boolean>('done', False);
-          if LDone then // ¬°√âxito! Es el JSON final.
+          if LDone then // °…xito! Es el JSON final.
           begin
             LStreamFinished := True;
             FBusy := False;
@@ -823,7 +823,7 @@ begin
             FLastContent := '';
             FTmpResponseText := ''; // Limpiamos el buffer porque ya lo procesamos por completo.
           end;
-          // Si no es "done: true", simplemente dejamos el texto en el buffer y esperamos m√°s datos.
+          // Si no es "done: true", simplemente dejamos el texto en el buffer y esperamos m·s datos.
         finally
           LJsonObject.Free;
         end;
@@ -913,7 +913,7 @@ end;
 
   NumTasks := LFunciones.Count;
   SetLength(TaskList, NumTasks);
-  // Ajusta el tama√±o del array para el n√∫mero de tareas
+  // Ajusta el tamaÒo del array para el n˙mero de tareas
 
   I := 0;
   For Clave in LFunciones.Keys do
@@ -1002,7 +1002,7 @@ begin
   if not Assigned(JObj) then
     Exit;
 
-  // 1. Extraer datos comunes (estad√≠sticas, modelo, etc.)
+  // 1. Extraer datos comunes (estadÌsticas, modelo, etc.)
   LModel := JObj.GetValue<string>('model', '');
   LPromptTokens := JObj.GetValue<Integer>('prompt_eval_count', 0);
   LEvalTokens := JObj.GetValue<Integer>('eval_count', 0);
@@ -1016,7 +1016,7 @@ begin
   if not JObj.TryGetValue<TJSonObject>('message', LMessageObj) then
   begin
     if Assigned(ResMsg) then
-      ResMsg.Free; // Liberamos el mensaje temporal si la respuesta es inv√°lida
+      ResMsg.Free; // Liberamos el mensaje temporal si la respuesta es inv·lida
     DoError('La respuesta final de Ollama no contiene la clave "message".', nil);
     Exit;
   end;
@@ -1025,7 +1025,7 @@ begin
   LContent := LMessageObj.GetValue<string>('content', '');
   LReasoning := LMessageObj.GetValue<string>('thinking', '');
 
-  // 3. Asignar datos b√°sicos al mensaje de respuesta (ResMsg)
+  // 3. Asignar datos b·sicos al mensaje de respuesta (ResMsg)
   ResMsg.Role := LRole;
   ResMsg.Model := LModel;
   ResMsg.Content := LContent;
@@ -1037,15 +1037,15 @@ begin
 
   LAskMsg := GetLastMessage;
 
-  // 4. L√ìGICA CENTRAL: Decidir si es una llamada a funci√≥n o una respuesta de texto.
+  // 4. L”GICA CENTRAL: Decidir si es una llamada a funciÛn o una respuesta de texto.
   if LMessageObj.TryGetValue<TJSonArray>('tool_calls', LToolCallsArray) and (LToolCallsArray.Count > 0) then
   begin
-    // CASO A: S√ç HAY LLAMADAS A FUNCIONES
+    // CASO A: SÕ HAY LLAMADAS A FUNCIONES
 
-    // El mensaje del asistente que contiene los tool_calls tambi√©n debe ser a√±adido al historial
+    // El mensaje del asistente que contiene los tool_calls tambiÈn debe ser aÒadido al historial
     ResMsg.Tool_calls := LToolCallsArray.Format;
     ResMsg.Id := FMessages.Count + 1;
-    FMessages.Add(ResMsg); // A√±adimos el mensaje con la petici√≥n de tool_call
+    FMessages.Add(ResMsg); // AÒadimos el mensaje con la peticiÛn de tool_call
 
     // Usamos ExtractToolCallFromJson para parsear las funciones.
     LChoicesSimulado := TJSonArray.Create;
@@ -1057,15 +1057,15 @@ begin
 
       if LFunciones.Count > 0 then
       begin
-        // Aqu√≠ puedes re-implementar la l√≥gica de TTask si quieres ejecuci√≥n paralela
+        // AquÌ puedes re-implementar la lÛgica de TTask si quieres ejecuciÛn paralela
         for LToolCall in LFunciones.Values do
         begin
-          LToolCall.ResMsg := ResMsg; // Mensaje que pidi√≥ la funci√≥n
+          LToolCall.ResMsg := ResMsg; // Mensaje que pidiÛ la funciÛn
           LToolCall.AskMsg := LAskMsg; // Mensaje original del usuario
-          DoCallFunction(LToolCall); // Ejecuta la funci√≥n del usuario y llena LToolCall.Response
+          DoCallFunction(LToolCall); // Ejecuta la funciÛn del usuario y llena LToolCall.Response
         end;
 
-        // Despu√©s de ejecutar, a√±ade los resultados y vuelve a llamar a Run
+        // DespuÈs de ejecutar, aÒade los resultados y vuelve a llamar a Run
         for LToolCall in LFunciones.Values do
         begin
           LToolMsg := TAiChatMessage.Create(LToolCall.Response, 'tool', LToolCall.Id, LToolCall.Name);
@@ -1074,7 +1074,7 @@ begin
         end;
 
         // Llamada recursiva para obtener la respuesta final basada en los resultados de la herramienta.
-        // Pasamos un nuevo mensaje de respuesta vac√≠o que ser√° llenado por la nueva ejecuci√≥n.
+        // Pasamos un nuevo mensaje de respuesta vacÌo que ser· llenado por la nueva ejecuciÛn.
         Self.Run(nil, TAiChatMessage.Create('', 'assistant'));
       end;
     finally
@@ -1087,7 +1087,7 @@ begin
   begin
     // CASO B: NO HAY LLAMADAS A FUNCIONES, es una respuesta de texto normal.
 
-    // Si est√°bamos en modo stream, FLastContent ya contiene el texto completo.
+    // Si est·bamos en modo stream, FLastContent ya contiene el texto completo.
     // Si no, lo tomamos del campo 'content'.
     if FLastContent <> '' then
       LRespuestaFinalTexto := FLastContent
@@ -1097,11 +1097,11 @@ begin
     ResMsg.Prompt := LRespuestaFinalTexto;
     ResMsg.Content := LRespuestaFinalTexto;
 
-    // A√±adir el mensaje final a la conversaci√≥n
+    // AÒadir el mensaje final a la conversaciÛn
     ResMsg.Id := FMessages.Count + 1;
     FMessages.Add(ResMsg);
 
-    // Disparamos los eventos de finalizaci√≥n
+    // Disparamos los eventos de finalizaciÛn
     DoProcessResponse(LAskMsg, ResMsg, LRespuestaFinalTexto);
     DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
     if Assigned(FOnReceiveDataEnd) then
@@ -1112,7 +1112,7 @@ end;
 
 
 
-// ----- FUNCIONES DE GESTI√ìN DE MODELOS  -----------
+// ----- FUNCIONES DE GESTI”N DE MODELOS  -----------
 
 procedure TAiOllamaChat.CopyModel(const aSourceModel, aDestinationModel: string);
 var
@@ -1253,7 +1253,7 @@ begin
     LBodyStream.Position := 0;
 
     FClient.ContentType := 'application/json';
-    // Hacemos la llamada s√≠ncrona, pero Ollama devuelve el stream completo de una vez
+    // Hacemos la llamada sÌncrona, pero Ollama devuelve el stream completo de una vez
     LResponse := FClient.Post(LUrl, LBodyStream, LResponseStream);
 
     if LResponse.StatusCode <> 200 then
@@ -1265,7 +1265,7 @@ begin
 
     for LLine in LJsonLines do
     begin
-      // Si el evento de progreso est√° asignado, lo disparamos
+      // Si el evento de progreso est· asignado, lo disparamos
       if Assigned(OnProgressEvent) then
       begin
         LStatusObj := TJSonObject.ParseJSONValue(LLine) as TJSonObject;
@@ -1274,7 +1274,7 @@ begin
             LStatus := LStatusObj.GetValue<string>('status');
             LCompleted := 0;
             LTotal := 0;
-            // TryGetValue es m√°s seguro si los campos no siempre est√°n presentes
+            // TryGetValue es m·s seguro si los campos no siempre est·n presentes
             LStatusObj.TryGetValue<Int64>('completed', LCompleted);
             LStatusObj.TryGetValue<Int64>('total', LTotal);
             OnProgressEvent(Self, LStatus, LCompleted, LTotal);
@@ -1317,7 +1317,7 @@ begin
     end
     else
     begin
-      raise Exception.CreateFmt('Error al obtener informaci√≥n del modelo: %d - %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+      raise Exception.CreateFmt('Error al obtener informaciÛn del modelo: %d - %s', [LResponse.StatusCode, LResponse.ContentAsString]);
     end;
 
   finally
@@ -1344,7 +1344,7 @@ end;
   Model := 'mxbai-embed-large'; //Vector[1024]
   Model := 'nomic-embed-text'; // Vector[768]
   Model := 'all-minilm';      //Vector[384]
-  Model := 'snowflake-arctic-embed'; //Vector[1024]    //Esta es la mejor versi√≥n a mayo/2024
+  Model := 'snowflake-arctic-embed'; //Vector[1024]    //Esta es la mejor versiÛn a mayo/2024
 
   Url para llamado http://IPOLLAMASERVER:11434/
 }

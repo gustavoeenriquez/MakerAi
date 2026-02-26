@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,13 +33,13 @@
 
 
 // --- Modificaciones ----
-// 30/08/2024 -- Mejora en la función Edit
+// 30/08/2024 -- Mejora en la funci?n Edit
 
 // --------- CAMBIOS --------------------
-// 4/11/2025 - Refactorización completa para soportar dall-e-2, dall-e-3, y gpt-image-1.
-// 4/11/2025 - Añadido soporte para streaming con eventos (OnPartialImageReceived, OnStreamCompleted).
-// 4/11/2025 - Integración con uMakerAi.Core: Edit y Variation ahora usan TAiMediaFile.
-// 4/11/2025 - Modernización de enums y nombres de propiedades para mayor claridad.
+// 4/11/2025 - Refactorizaci?n completa para soportar dall-e-2, dall-e-3, y gpt-image-1.
+// 4/11/2025 - A?adido soporte para streaming con eventos (OnPartialImageReceived, OnStreamCompleted).
+// 4/11/2025 - Integraci?n con uMakerAi.Core: Edit y Variation ahora usan TAiMediaFile.
+// 4/11/2025 - Modernizaci?n de enums y nombres de propiedades para mayor claridad.
 
 unit uMakerAi.OpenAi.Dalle;
 
@@ -52,8 +52,8 @@ uses
   System.Math,
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
-  // Dependencia clave de la librería central
-  uMakerAi.Core;
+  // Dependencia clave de la librer?a central
+  uMakerAi.Core, uMakerAi.Chat.Messages, uMakerAi.Chat.Tools;
 
 const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
@@ -97,7 +97,7 @@ type
   TOnStreamCompleted = procedure(Sender: TObject; const AFinalImage: TAiDalleImage) of object;
   TOnStreamError = procedure(Sender: TObject; const AErrorMessage: string) of object;
 
-  // Enums para los parámetros de la API
+  // Enums para los par?metros de la API
   TAiImageModel = (imDallE2, imDallE3, imGptImage1, imSDXL);
 
   TAiImageQuality = (iqAuto, iqStandard, iqHD, iqHigh, iqMedium, iqLow);
@@ -135,7 +135,11 @@ type
     FSteps: Integer;
     FGuidanceScale: Single;
     FUseRefiner: Boolean;
-    FSampler: string; // opcional
+    FSampler: string;
+    FEnhanceFace: Boolean;
+    FAutoUpscale: Boolean;
+    FStrength: Single;
+    FLoraPath: String; // opcional
 
     function GetApiKey: string;
     procedure SetApiKey(const Value: string);
@@ -147,6 +151,10 @@ type
     procedure SetBackground(const Value: TAiImageBackground);
     procedure SetOutputFormat(const Value: TAiImageOutputFormat);
     procedure SetNegativePrompt(const Value: TStrings);
+    procedure SetAutoUpscale(const Value: Boolean);
+    procedure SetEnhanceFace(const Value: Boolean);
+    procedure SetLoraPath(const Value: String);
+    procedure SetStrength(const Value: Single);
   protected
     procedure ClearImages;
     procedure ParseResponse(JObj: TJSONObject);
@@ -182,11 +190,37 @@ type
     property GuidanceScale: Single read FGuidanceScale write FGuidanceScale;
     property Seed: Int64 read FSeed write FSeed Default -1;
     property UseRefiner: Boolean read FUseRefiner write FUseRefiner default False;
+    property AutoUpscale: Boolean read FAutoUpscale write SetAutoUpscale;
+    Property EnhanceFace: Boolean read FEnhanceFace write SetEnhanceFace;
+    Property Strength: Single read FStrength write SetStrength;
+    Property LoraPath: String read FLoraPath write SetLoraPath;
 
     // Eventos
     property OnPartialImageReceived: TOnPartialImageReceived read FOnPartialImageReceived write FOnPartialImageReceived;
     property OnStreamCompleted: TOnStreamCompleted read FOnStreamCompleted write FOnStreamCompleted;
     property OnStreamError: TOnStreamError read FOnStreamError write FOnStreamError;
+  end;
+
+  { TAiDalleImageTool: Adapter que permite usar TAiDalle como ImageTool del chat.
+    Heredar de TAiImageToolBase implementa IAiImageTool y permite asignarlo
+    a TAiChat.ImageTool / TAiChatConnection.ImageTool. }
+  TAiDalleImageTool = class(TAiImageToolBase)
+  private
+    FDalle: TAiDalle;
+    FImageSize: TAiImageSize;
+    procedure SetDalle(const Value: TAiDalle);
+  protected
+    procedure ExecuteImageGeneration(const APrompt: string; ResMsg, AskMsg: TAiChatMessage); override;
+    procedure InternalRunDalleGeneration(const APrompt: string; ResMsg: TAiChatMessage);
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
+  public
+    constructor Create(AOwner: TComponent); override;
+  published
+    { Referencia al componente TAiDalle configurado en el formulario.
+      Debe asignarse antes de usar el tool. }
+    property Dalle: TAiDalle read FDalle write SetDalle;
+    { Tama?o de imagen que se solicitar? a la API. Default: 1024x1024 }
+    property ImageSize: TAiImageSize read FImageSize write FImageSize default is1024x1024;
   end;
 
 procedure Register;
@@ -195,7 +229,7 @@ implementation
 
 procedure Register;
 begin
-  RegisterComponents('MakerAI', [TAiDalle]);
+  RegisterComponents('MakerAI', [TAiDalle, TAiDalleImageTool]);
 end;
 
 { TAiDalleImage }
@@ -292,7 +326,8 @@ begin
   FGuidanceScale := 7.0;
   FSeed := -1; // -1 = random
   FUseRefiner := False;
-
+  FAutoUpscale := False;
+  FEnhanceFace := False;
 end;
 
 destructor TAiDalle.Destroy;
@@ -411,7 +446,7 @@ var
   ContentStream: TStringStream;
   ResponseStream: TMemoryStream; // Usado solo para llamadas no-streaming
   sUrl: string;
-  AbortFlag: Boolean; // Variable para el parámetro 'var'
+  AbortFlag: Boolean; // Variable para el par?metro 'var'
   StreamReader: TStreamReader; // Para leer la respuesta de forma robusta
 begin
   Result := nil;
@@ -483,7 +518,7 @@ begin
             JObj.AddPair('negative_prompt', Trim(StringReplace(aNegativePrompt, #$D#$A, ' \n', [rfReplaceAll])));
 
           If Assigned(aImage) and (aImage.Size > 2000) then
-            JObj.AddPair('image', TNetEncoding.Base64.EncodeBytesToString(aImage.Memory, aImage.Size));
+            JObj.AddPair('image_b64', TNetEncoding.Base64.EncodeBytesToString(aImage.Memory, aImage.Size));
 
           JObj.AddPair('steps', TJSONNumber.Create(FSteps));
           JObj.AddPair('guidance_scale', TJSONNumber.Create(FGuidanceScale));
@@ -495,6 +530,18 @@ begin
             JObj.AddPair('use_refiner', TJSONBool.Create(True));
 
           JObj.AddPair('size', SizeToString(ASize));
+
+          if FAutoUpscale then
+            JObj.AddPair('auto_upscale', TJSONBool.Create(True));
+
+          if FEnhanceFace then
+            JObj.AddPair('enhance_face', TJSONBool.Create(True));
+
+          If FStrength <> 0 then
+            JObj.AddPair('strength', FStrength);
+
+          If FLoraPath <> '' then
+            JObj.AddPair('lora_path', FLoraPath);
         end;
     end;
 
@@ -579,8 +626,8 @@ begin
       FActiveResponseStream := nil;
     end;
 
-    // El JObj de la petición se libera aquí solo si no es streaming,
-    // porque en streaming ya se habría liberado antes del bloque finally.
+    // El JObj de la petici?n se libera aqu? solo si no es streaming,
+    // porque en streaming ya se habr?a liberado antes del bloque finally.
     // if not(FStream and (FModel = imGptImage1)) then
     // JObj.Free;
   end;
@@ -601,7 +648,7 @@ var
   NewBytes: TBytes;
   NewDataSize: Int64;
 begin
-  // Verificación de seguridad: solo proceder si tenemos un stream activo
+  // Verificaci?n de seguridad: solo proceder si tenemos un stream activo
   if not Assigned(FActiveResponseStream) then
     Exit;
 
@@ -721,9 +768,24 @@ begin
   FApiKey := Value;
 end;
 
+procedure TAiDalle.SetAutoUpscale(const Value: Boolean);
+begin
+  FAutoUpscale := Value;
+end;
+
 procedure TAiDalle.SetBackground(const Value: TAiImageBackground);
 begin
   FBackground := Value;
+end;
+
+procedure TAiDalle.SetEnhanceFace(const Value: Boolean);
+begin
+  FEnhanceFace := Value;
+end;
+
+procedure TAiDalle.SetLoraPath(const Value: String);
+begin
+  FLoraPath := Value;
 end;
 
 procedure TAiDalle.SetModel(const Value: TAiImageModel);
@@ -754,6 +816,11 @@ end;
 procedure TAiDalle.SetStream(const Value: Boolean);
 begin
   FStream := Value;
+end;
+
+procedure TAiDalle.SetStrength(const Value: Single);
+begin
+  FStrength := Value;
 end;
 
 procedure TAiDalle.SetStyle(const Value: TAiImageStyle);
@@ -793,11 +860,7 @@ begin
   end;
 end;
 
-function TAiDalle.Upscale(
-  aImage: TAiMediaFile;
-  AScale: Integer;
-  AFaceEnhance: Boolean
-): TAiMediaFile;
+function TAiDalle.Upscale(aImage: TAiMediaFile; AScale: Integer; AFaceEnhance: Boolean): TAiMediaFile;
 var
   Client: TNetHTTPClient;
   Req, ImageObj, RespImage: TJSONObject;
@@ -835,8 +898,7 @@ begin
     Res := Client.Post(sUrl, TStringStream.Create(Req.ToString, TEncoding.UTF8));
 
     if Res.StatusCode <> 200 then
-      raise Exception.CreateFmt('Upscale error %d: %s',
-        [Res.StatusCode, Res.ContentAsString]);
+      raise Exception.CreateFmt('Upscale error %d: %s', [Res.StatusCode, Res.ContentAsString]);
 
     // Parse response
     Req.Free;
@@ -845,10 +907,7 @@ begin
     RespImage := Req.GetValue<TJSONObject>('image');
 
     Result := TAiMediaFile.Create;
-    Result.LoadFromBase64(
-      RespImage.GetValue<string>('filename'),
-      RespImage.GetValue<string>('b64')
-    );
+    Result.LoadFromBase64(RespImage.GetValue<string>('filename'), RespImage.GetValue<string>('b64'));
 
   finally
     Req.Free;
@@ -915,6 +974,88 @@ begin
     Client.Free;
     Body.Free;
   end;
+end;
+
+{ TAiDalleImageTool }
+
+constructor TAiDalleImageTool.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  FDalle := nil;
+  FImageSize := is1024x1024;
+end;
+
+procedure TAiDalleImageTool.SetDalle(const Value: TAiDalle);
+begin
+  if FDalle <> Value then
+  begin
+    FDalle := Value;
+    if Value <> nil then
+      Value.FreeNotification(Self);
+  end;
+end;
+
+procedure TAiDalleImageTool.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited Notification(AComponent, Operation);
+  if (Operation = opRemove) and (AComponent = FDalle) then
+    FDalle := nil;
+end;
+
+procedure TAiDalleImageTool.ExecuteImageGeneration(const APrompt: string; ResMsg, AskMsg: TAiChatMessage);
+begin
+  // Si IsAsync=True ya estamos en el hilo background del chat: ejecutar directo
+  // para evitar un TTask anidado que causar?a dangling pointer sobre ResMsg.
+  // Si IsAsync=False estamos en el hilo principal: lanzar task para no bloquearlo.
+  if IsAsync then
+    InternalRunDalleGeneration(APrompt, ResMsg)
+  else
+    TTask.Run(procedure begin InternalRunDalleGeneration(APrompt, ResMsg); end);
+end;
+
+procedure TAiDalleImageTool.InternalRunDalleGeneration(const APrompt: string; ResMsg: TAiChatMessage);
+var
+  LDalleImage: TAiDalleImage;
+  LMediaFile: TAiMediaFile;
+  LExt: string;
+begin
+  if not Assigned(FDalle) then
+    raise Exception.Create('TAiDalleImageTool: debe asignarse la propiedad Dalle (TAiDalle).');
+
+  ReportState(acsToolExecuting, 'Generando imagen con DALL-E...');
+
+  LDalleImage := FDalle.Generate(APrompt, FDalle.NegativePrompt.Text, FImageSize);
+
+  if Assigned(LDalleImage) then
+  begin
+    // Determinar extensi?n seg?n el formato de salida configurado en TAiDalle
+    case FDalle.OutputFormat of
+      ifJpeg: LExt := '.jpg';
+      ifWebp: LExt := '.webp';
+    else
+      LExt := '.png';
+    end;
+
+    LMediaFile := TAiMediaFile.Create;
+    try
+      if LDalleImage.Image.Size > 0 then
+      begin
+        LDalleImage.Image.Position := 0;
+        LMediaFile.LoadFromStream('generated_image' + LExt, LDalleImage.Image);
+      end;
+      ResMsg.MediaFiles.Add(LMediaFile);
+      // Usar el prompt revisado por el modelo si est? disponible
+      if LDalleImage.RevisedPrompt <> '' then
+        ResMsg.Prompt := LDalleImage.RevisedPrompt
+      else
+        ResMsg.Prompt := APrompt;
+    except
+      LMediaFile.Free;
+      raise;
+    end;
+  end;
+
+  ReportDataEnd(ResMsg, 'assistant', ResMsg.Prompt);
 end;
 
 end.

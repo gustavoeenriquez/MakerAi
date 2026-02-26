@@ -134,7 +134,7 @@
         <DCCReference Include="RESTComponents.dcp"/>
         <DCCReference Include="bindcomp.dcp"/>
         <DCCReference Include="MakerAI.dcp"/>
-        <DCCReference Include="..\Design\uAiEditors.ChatConnectionEditor.pas"/>
+        <DCCReference Include="..\Design\uAiEditors.EmbeddingConnectionEditor.pas"/>
         <DCCReference Include="..\Design\uMakerAi.Dsg.AboutDialog.pas">
             <Form>AboutDialog</Form>
             <FormType>dfm</FormType>
@@ -145,6 +145,8 @@
             <Form>FMCPClientEditor</Form>
             <FormType>dfm</FormType>
         </DCCReference>
+        <DCCReference Include="..\Design\uAiEditors.ChatConnectionEditor.pas"/>
+        <DCCReference Include="..\Design\uAiEditors.RequiresUnits.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -52,6 +52,11 @@ type
     Image3: TImage;
     Label11: TLabel;
     OpenDialog1: TOpenDialog;
+    ListBoxItem5: TListBoxItem;
+    Label12: TLabel;
+    ChUserRefiner: TCheckBox;
+    ChEnhanceFace: TCheckBox;
+    ChAutoUpscale: TCheckBox;
     procedure SpeedButton1Click(Sender: TObject);
     procedure BtnSendClick(Sender: TObject);
     procedure BtnLoadImageClick(Sender: TObject);
@@ -111,6 +116,22 @@ begin
     4:
       AiSize := TAiImageSize.is1024x1536; // Solo para gpt-image-1 (Formato retrato/vertical)
   End;
+
+
+  AiDalle.EnhanceFace := ChEnhanceFace.IsChecked;
+  AiDalle.AutoUpscale := ChAutoUpscale.IsChecked;
+  AIDalle.UseRefiner := ChUserRefiner.IsChecked;
+
+  //Faltaría por implementar
+
+  {
+    property Steps: Integer read FSteps write FSteps default 30;
+    property GuidanceScale: Single read FGuidanceScale write FGuidanceScale;
+    property Seed: Int64 read FSeed write FSeed Default -1;
+    Property Strength: Single read FStrength write SetStrength;
+    Property LoraPath: String read FLoraPath write SetLoraPath;
+}
+
 
   Prompt := MemoPrompt.Lines.Text;
   NegativePrompt := MemoPromptNegativo.Lines.Text;

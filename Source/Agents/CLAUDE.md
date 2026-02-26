@@ -83,9 +83,47 @@ Port terminals: `out_a`, `out_b`, `out_c`, `out_d`, `out_failure` (maps to NextN
 
 ## Execution Status
 
-`TAgentExecutionStatus`: `esUnknown`, `esRunning`, `esCompleted`, `esError`, `esTimeout`, `esAborted`
+`TAgentExecutionStatus`: `esUnknown`, `esRunning`, `esCompleted`, `esError`, `esTimeout`, `esAborted`, `esSuspended`
 
 Access via `Blackboard.SetStatus()`/`GetStatus()`.
+
+`esSuspended` is set when one or more nodes called `Node.Suspend(...)` during execution. Use `TAIAgentManager.ResumeThread(ThreadID, NodeName, Input)` to resume.
+
+## Durable Execution (Checkpoint / Suspend-Resume)
+
+**Key types** (in `uMakerAi.Agents.Checkpoint`):
+- `IAiCheckpointer` — persistence contract; assign to `TAIAgentManager.Checkpointer`
+- `TAiNullCheckpointer` — no-op (default behavior, no disk writes)
+- `TAiFileCheckpointer` — JSON on disk (`<dir>/<GUID>.checkpoint.json`)
+- `TAiCheckpointSnapshot` — serialized state (blackboard + node/link states + pending steps)
+
+**Suspend a node from `OnExecute`:**
+```pascal
+procedure MyNodeExecute(Node, Before: TAIAgentsNode; Link: TAIAgentsLink;
+  Input: string; var Output: string);
+begin
+  Output := Input; // pass-through
+  Node.Suspend('Requiere aprobación', 'Contexto adicional');
+end;
+```
+
+Or use the built-in `TAiWaitApprovalTool` (from `uMakerAi.Agents.Tools.Approval`).
+
+**Resume after suspension:**
+```pascal
+// Detect suspended threads on app startup
+var Threads := AgentManager.GetActiveThreads;
+// Resume when user approves
+AgentManager.ResumeThread(ThreadID, 'NombreDelNodo', 'Aprobado');
+```
+
+**Event for human-in-the-loop UI:**
+```pascal
+AgentManager.OnSuspend := procedure(Sender: TObject; const ThreadID, NodeName,
+  Reason, Context: string) begin
+  ShowMessage('Aprobación requerida: ' + Reason);
+end;
+```
 
 ## Threading Model
 

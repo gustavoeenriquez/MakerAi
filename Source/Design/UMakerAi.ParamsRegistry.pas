@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -37,7 +37,7 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.Generics.Collections,
-  UMakerAi.Chat;
+  UMakerAi.Chat, uMakerAi.Embeddings;
 
 type
   TAiChatClass = class of TAiChat;
@@ -53,7 +53,7 @@ type
 
     FCustomModels: TDictionary<string, String>; // DriverName -> TStringList
 
-    // Función interna para crear la clave compuesta.
+    // Funci?n interna para crear la clave compuesta.
     class function GetCompositeKey(const DriverName, ModelName: string): string; static;
 
   public
@@ -61,23 +61,24 @@ type
     destructor Destroy; override;
     class function Instance: TAiChatFactory;
 
-    // Métodos existentes (algunos con nueva firma)
-    procedure RegisterDriver(AClass: TAiChatClass);
-    // Ahora acepta un ModelName opcional para obtener los parámetros jerárquicos.
+    // M?todos existentes (algunos con nueva firma)
+    procedure RegisterDriver(AClass: TAiChatClass); overload;
+    procedure RegisterDriver(AClass: TAiChatClass; const ADriverName: string); overload;
+    // Ahora acepta un ModelName opcional para obtener los par?metros jer?rquicos.
     procedure GetDriverParams(const DriverName, ModelName: string; Params: TStrings; ExpandVariables: Boolean = True);
     function CreateDriver(const DriverName: string): TAiChat;
     function GetRegisteredDrivers: TArray<string>;
     function HasDriver(const DriverName: string): Boolean;
 
-    // Versión principal para registrar un parámetro de un modelo específico.
+    // Versi?n principal para registrar un par?metro de un modelo espec?fico.
     procedure RegisterUserParam(const DriverName, ModelName, ParamName, ParamValue: string); Overload;
-    // Sobrecarga para registrar un parámetro a nivel de Driver (compatibilidad y conveniencia).
+    // Sobrecarga para registrar un par?metro a nivel de Driver (compatibilidad y conveniencia).
     procedure RegisterUserParam(const DriverName, ParamName, ParamValue: string); Overload;
 
-    // Limpia los parámetros (con sobrecarga para modelo).
+    // Limpia los par?metros (con sobrecarga para modelo).
     procedure ClearRegisterParams(const DriverName: String; ModelName: string = '');
 
-    // --- Nuevos métodos para manejar modelos personalizados ---
+    // --- Nuevos m?todos para manejar modelos personalizados ---
     procedure RegisterCustomModel(const DriverName, CustomModelName, ModelBaseName: string);
     function GetBaseModel(const DriverName, CustomModel: string): string;
     function GetCustomModels(const DriverName: string): TArray<string>;
@@ -86,11 +87,36 @@ type
 
   end;
 
+  TAiEmbeddingsClass = class of TAiEmbeddings;
+
+  TAiEmbeddingFactory = class
+  private
+  class var
+    FInstance: TAiEmbeddingFactory;
+    FRegisteredClasses: TDictionary<string, TAiEmbeddingsClass>;
+    FUserParams: TDictionary<string, TStringList>;
+    class function GetCompositeKey(const DriverName, ModelName: string): string; static;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    class function Instance: TAiEmbeddingFactory;
+
+    procedure RegisterDriver(AClass: TAiEmbeddingsClass);
+    function CreateDriver(const DriverName: string): TAiEmbeddings;
+    procedure GetDriverParams(const DriverName, ModelName: string; Params: TStrings; ExpandVariables: Boolean = True);
+    function GetRegisteredDrivers: TArray<string>;
+    function HasDriver(const DriverName: string): Boolean;
+
+    procedure RegisterUserParam(const DriverName, ModelName, ParamName, ParamValue: string); overload;
+    procedure RegisterUserParam(const DriverName, ParamName, ParamValue: string); overload;
+    procedure ClearRegisterParams(const DriverName: String; ModelName: string = '');
+  end;
+
 implementation
 
 { TAiChatFactory }
 
-// Función interna para crear la clave
+// Funci?n interna para crear la clave
 class function TAiChatFactory.GetCompositeKey(const DriverName, ModelName: string): string;
 begin
   if ModelName.IsEmpty then
@@ -129,6 +155,12 @@ begin
   FRegisteredClasses.AddOrSetValue(AClass.GetDriverName, AClass);
 end;
 
+procedure TAiChatFactory.RegisterDriver(AClass: TAiChatClass; const ADriverName: string);
+begin
+  if ADriverName <> '' then
+    FRegisteredClasses.AddOrSetValue(ADriverName, AClass);
+end;
+
 procedure TAiChatFactory.GetDriverParams(const DriverName, ModelName: string; Params: TStrings; ExpandVariables: Boolean);
 var
   DriverClass: TAiChatClass;
@@ -138,13 +170,13 @@ var
 begin
   Params.Clear;
 
-  // Nivel 1: Cargar parámetros por defecto desde la clase del driver
+  // Nivel 1: Cargar par?metros por defecto desde la clase del driver
   if FRegisteredClasses.TryGetValue(DriverName, DriverClass) then
     DriverClass.RegisterDefaultParams(Params);
 
-  Params.Text := Trim(Params.Text); // Elimina el último LineBreak
+  Params.Text := Trim(Params.Text); // Elimina el ?ltimo LineBreak
 
-  // Nivel 2: Fusionar con parámetros personalizados del DRIVER
+  // Nivel 2: Fusionar con par?metros personalizados del DRIVER
   Key := GetCompositeKey(DriverName, '');
   if FUserParams.TryGetValue(Key, UserParamList) then
   begin
@@ -152,7 +184,7 @@ begin
       Params.Values[UserParamList.Names[I]] := UserParamList.ValueFromIndex[I];
   end;
 
-  // Nivel 3: Fusionar con parámetros personalizados del MODELO (si se especifica)
+  // Nivel 3: Fusionar con par?metros personalizados del MODELO (si se especifica)
   if not ModelName.IsEmpty then
   begin
     Key := GetCompositeKey(DriverName, ModelName);
@@ -165,7 +197,7 @@ begin
 
   If ExpandVariables = True then // Debe expandir las variable con las de entorno
   Begin
-    // Expansión de Variables de Entorno
+    // Expansi?n de Variables de Entorno
     for I := Params.Count - 1 downto 0 do
     begin
 
@@ -213,7 +245,7 @@ begin
   end;
 end;
 
-// Versión principal para registrar un parámetro de un modelo específico.
+// Versi?n principal para registrar un par?metro de un modelo espec?fico.
 procedure TAiChatFactory.RegisterUserParam(const DriverName, ModelName, ParamName, ParamValue: string);
 var
   UserParamList: TStringList;
@@ -228,24 +260,24 @@ begin
   UserParamList.Values[ParamName] := ParamValue;
 end;
 
-// Sobrecarga para registrar un parámetro a nivel de Driver.
+// Sobrecarga para registrar un par?metro a nivel de Driver.
 procedure TAiChatFactory.RegisterUserParam(const DriverName, ParamName, ParamValue: string);
 begin
-  // Llama a la versión principal con un ModelName vacío.
+  // Llama a la versi?n principal con un ModelName vac?o.
   RegisterUserParam(DriverName, '', ParamName, ParamValue);
 end;
 
 
-// Implementación de los nuevos métodos para modelos personalizados
-// Implementación de los nuevos métodos para modelos personalizados
-// Implementación de los nuevos métodos para modelos personalizados
+// Implementaci?n de los nuevos m?todos para modelos personalizados
+// Implementaci?n de los nuevos m?todos para modelos personalizados
+// Implementaci?n de los nuevos m?todos para modelos personalizados
 
 
 procedure TAiChatFactory.RegisterCustomModel(const DriverName, CustomModelName, ModelBaseName: string);
 var
   Key : String;
 begin
-  // Verifica que ModelName no esté vacío
+  // Verifica que ModelName no est? vac?o
   if CustomModelName.IsEmpty then
     raise Exception.Create('CustomModelName cannot be empty when registering a custom model.');
 
@@ -322,7 +354,7 @@ begin
       // Verifica si el DriverName coincide con el inicio de la clave compuesta
       if CompositeKey.StartsWith(DriverName + '@') then
       begin
-        // Añade la clave a la lista de claves a eliminar
+        // A?ade la clave a la lista de claves a eliminar
         KeysToRemove.Add(CompositeKey);
       end;
     end;
@@ -338,6 +370,142 @@ begin
 end;
 
 
+{ TAiEmbeddingFactory }
+
+class function TAiEmbeddingFactory.GetCompositeKey(const DriverName, ModelName: string): string;
+begin
+  if ModelName.IsEmpty then
+    Result := DriverName
+  else
+    Result := DriverName + '@' + ModelName;
+end;
+
+constructor TAiEmbeddingFactory.Create;
+begin
+  inherited;
+  FRegisteredClasses := TDictionary<string, TAiEmbeddingsClass>.Create;
+  FUserParams := TDictionary<string, TStringList>.Create;
+end;
+
+destructor TAiEmbeddingFactory.Destroy;
+begin
+  for var SL in FUserParams.Values do
+    SL.Free;
+  FUserParams.Free;
+  FRegisteredClasses.Free;
+  inherited;
+end;
+
+class function TAiEmbeddingFactory.Instance: TAiEmbeddingFactory;
+begin
+  if not Assigned(FInstance) then
+    FInstance := TAiEmbeddingFactory.Create;
+  Result := FInstance;
+end;
+
+procedure TAiEmbeddingFactory.RegisterDriver(AClass: TAiEmbeddingsClass);
+begin
+  FRegisteredClasses.AddOrSetValue(AClass.GetDriverName, AClass);
+end;
+
+procedure TAiEmbeddingFactory.GetDriverParams(const DriverName, ModelName: string; Params: TStrings; ExpandVariables: Boolean);
+var
+  DriverClass: TAiEmbeddingsClass;
+  UserParamList: TStringList;
+  I: Integer;
+  EnvVarName, EnvVarValue, Key: String;
+begin
+  Params.Clear;
+
+  // Nivel 1: Par?metros por defecto desde la clase del driver
+  if FRegisteredClasses.TryGetValue(DriverName, DriverClass) then
+    DriverClass.RegisterDefaultParams(Params);
+
+  Params.Text := Trim(Params.Text);
+
+  // Nivel 2: Par?metros personalizados del DRIVER
+  Key := GetCompositeKey(DriverName, '');
+  if FUserParams.TryGetValue(Key, UserParamList) then
+  begin
+    for I := 0 to UserParamList.Count - 1 do
+      Params.Values[UserParamList.Names[I]] := UserParamList.ValueFromIndex[I];
+  end;
+
+  // Nivel 3: Par?metros personalizados del MODELO
+  if not ModelName.IsEmpty then
+  begin
+    Key := GetCompositeKey(DriverName, ModelName);
+    if FUserParams.TryGetValue(Key, UserParamList) then
+    begin
+      for I := 0 to UserParamList.Count - 1 do
+        Params.Values[UserParamList.Names[I]] := UserParamList.ValueFromIndex[I];
+    end;
+  end;
+
+  // Expansi?n de Variables de Entorno
+  if ExpandVariables then
+  begin
+    for I := Params.Count - 1 downto 0 do
+    begin
+      if (Trim(Params[I]) <> '') and (Params.ValueFromIndex[I] <> '') and (Params.ValueFromIndex[I].StartsWith('@')) then
+      begin
+        EnvVarName := Params.ValueFromIndex[I].Substring(1);
+        EnvVarValue := Trim(GetEnvironmentVariable(EnvVarName));
+        if EnvVarValue <> '' then
+          Params.ValueFromIndex[I] := EnvVarValue;
+      end;
+    end;
+  end;
+end;
+
+function TAiEmbeddingFactory.CreateDriver(const DriverName: string): TAiEmbeddings;
+var
+  DriverClass: TAiEmbeddingsClass;
+begin
+  Result := nil;
+  if FRegisteredClasses.TryGetValue(DriverName, DriverClass) then
+    Result := DriverClass.CreateInstance(nil);
+end;
+
+function TAiEmbeddingFactory.GetRegisteredDrivers: TArray<string>;
+begin
+  Result := FRegisteredClasses.Keys.ToArray;
+end;
+
+function TAiEmbeddingFactory.HasDriver(const DriverName: string): Boolean;
+begin
+  Result := FRegisteredClasses.ContainsKey(DriverName);
+end;
+
+procedure TAiEmbeddingFactory.RegisterUserParam(const DriverName, ModelName, ParamName, ParamValue: string);
+var
+  UserParamList: TStringList;
+  Key: string;
+begin
+  Key := GetCompositeKey(DriverName, ModelName);
+  if not FUserParams.TryGetValue(Key, UserParamList) then
+  begin
+    UserParamList := TStringList.Create;
+    FUserParams.Add(Key, UserParamList);
+  end;
+  UserParamList.Values[ParamName] := ParamValue;
+end;
+
+procedure TAiEmbeddingFactory.RegisterUserParam(const DriverName, ParamName, ParamValue: string);
+begin
+  RegisterUserParam(DriverName, '', ParamName, ParamValue);
+end;
+
+procedure TAiEmbeddingFactory.ClearRegisterParams(const DriverName: String; ModelName: string);
+var
+  UserParamList: TStringList;
+  Key: string;
+begin
+  Key := GetCompositeKey(DriverName, ModelName);
+  if FUserParams.TryGetValue(Key, UserParamList) then
+    UserParamList.Clear;
+end;
+
 initialization
 
 // La instancia se crea bajo demanda
@@ -347,6 +515,12 @@ if Assigned(TAiChatFactory.FInstance) then
 begin
   TAiChatFactory.FInstance.Free;
   TAiChatFactory.FInstance := nil;
+end;
+
+if Assigned(TAiEmbeddingFactory.FInstance) then
+begin
+  TAiEmbeddingFactory.FInstance.Free;
+  TAiEmbeddingFactory.FInstance := nil;
 end;
 
 end.

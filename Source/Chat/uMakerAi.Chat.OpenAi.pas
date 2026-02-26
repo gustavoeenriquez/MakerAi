@@ -2,7 +2,7 @@ unit uMakerAi.Chat.OpenAi;
 
 // MIT License
 //
-// Copyright (c) 2013 Gustavo Enríquez - CimaMaker
+// Copyright (c) 2013 Gustavo Enr?quez - CimaMaker
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,7 @@ unit uMakerAi.Chat.OpenAi;
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 // - Telegram: +57 3128441700
@@ -30,7 +30,7 @@ unit uMakerAi.Chat.OpenAi;
 // - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 
-// La documentación de esta librería se encuentra en
+// La documentaci?n de esta librer?a se encuentra en
 // https://platform.openai.com/docs/guides/migrate-to-responses
 
 // no se ha implemtnado FileSearch, Retrieval, Mcp Remote ni DeepResearch directamente de la plataforma de openai
@@ -39,7 +39,7 @@ unit uMakerAi.Chat.OpenAi;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Threading, System.Generics.Collections,
+  System.SysUtils, System.Classes, System.Threading, System.Generics.Collections, System.IOUtils,
   System.NetEncoding, System.Net.URLClient, System.Net.HttpClient, System.StrUtils,
   System.Net.Mime, System.Net.HttpClientComponent, System.JSON, Rest.JSON,
 {$IF CompilerVersion < 35}
@@ -52,18 +52,18 @@ uses
 type
 
   // Evento para manejar manualmente la herramienta apply_patch.
-  // Parámetros:
+  // Par?metros:
   // - OperationType: 'create_file', 'update_file', 'delete_file'.
   // - Path: Ruta del archivo objetivo.
   // - Diff: El contenido del parche (V4A diff).
-  // - CallId: ID único de la llamada.
+  // - CallId: ID ?nico de la llamada.
   // - aStatus: Variable de retorno. Debe ser 'completed' o 'failed'.
-  // - aOutput: Variable de retorno. Mensaje de éxito o descripción del error.
+  // - aOutput: Variable de retorno. Mensaje de ?xito o descripci?n del error.
   TAiApplyPatchEvent = procedure(Sender: TObject; const OperationType, Path, Diff: string; const CallId: string; var aStatus, aOutput: string) of object;
 
   // Evento para manejar comandos de shell.
-  // Si Handled es True, el componente asume que el usuario llenó StdOut/StdErr/ExitCode.
-  // Si Handled es False, el componente intentará ejecutarlo automáticamente (si está configurado).
+  // Si Handled es True, el componente asume que el usuario llen? StdOut/StdErr/ExitCode.
+  // Si Handled es False, el componente intentar? ejecutarlo autom?ticamente (si est? configurado).
   TAiShellCommandEvent = procedure(Sender: TObject; const Command: string; const CallId: string; var StdOut, StdErr: string; var ExitCode: Integer; var Handled: Boolean) of object;
 
   TAiReasoningSummary = (rsmDefault, rsmAuto, rsmConcise, rsmDetailed);
@@ -78,7 +78,6 @@ type
     // Estado interno del endpoint Responses
     FResponseId: String;
     FResponseStatus: String; // completed, failed, in_progress, incomplete
-    FLastApiResponse: TJSonObject;
     FOnApplyPatch: TAiApplyPatchEvent;
     FOnShellCommand: TAiShellCommandEvent;
     FAllowAutoShell: Boolean;
@@ -91,17 +90,17 @@ type
     procedure SetVerbosity(const Value: String);
 
   protected
-    // Sobrescritura de métodos del Core para adaptar al nuevo API
+    // Sobrescritura de m?todos del Core para adaptar al nuevo API
     procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Override;
     Function InitChatCompletions: String; Override;
     Function GetTools(Funcion: TAiFunctions): TJSonArray; Reintroduce;
 
-    // Métodos internos
+    // M?todos internos
     procedure UpdateResponseStatus(aStatus: String);
     procedure DoCallFunction(ToolCall: TAiToolsFunction); Override;
 
-    // Métodos heredados que se mantienen igual o se adaptan ligeramente
+    // M?todos heredados que se mantienen igual o se adaptan ligeramente
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
@@ -118,12 +117,12 @@ type
     Function UploadFileToCache(aMediaFile: TAiMediaFile; aTTL_Seconds: Integer = 3600): String; Override;
     Function DeleteFile(aMediaFile: TAiMediaFile): String; Override;
     function DownLoadFile(aMediaFile: TAiMediaFile): String; Override;
-    function DeleteAllUploadedFiles: Integer; // Borra todos los archivos subidos durante la conversación de lo contrario seguirán en el repositorio de OpenAi
+    function DeleteAllUploadedFiles: Integer; // Borra todos los archivos subidos durante la conversaci?n de lo contrario seguir?n en el repositorio de OpenAi
     Procedure NewChat; Override;
     function InternalRunImageVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
 
   published
-    // Propiedades específicas mapeadas
+    // Propiedades espec?ficas mapeadas
     property Store: Boolean read FStore write SetStore default True;
     property Truncation: String read FTruncation write SetTruncation;
     property Parallel_ToolCalls: Boolean read FParallel_ToolCalls write SetParallel_ToolCalls default True;
@@ -142,6 +141,9 @@ type
     Destructor Destroy; Override;
     Function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float'): TAiEmbeddingData; Override;
     Procedure ParseEmbedding(jObj: TJSonObject); Override;
+    class function GetDriverName: string; override;
+    class function CreateInstance(aOwner: TComponent): TAiEmbeddings; override;
+    class procedure RegisterDefaultParams(Params: TStrings); override;
   end;
 
 procedure Register;
@@ -164,15 +166,13 @@ end;
 constructor TAiOpenChat.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  // Configuración por defecto
+  // Configuraci?n por defecto
   FStore := True;
   FTruncation := 'disabled';
   FParallel_ToolCalls := True;
   FVerbosity := '';
   FResponseId := '';
   FResponseStatus := '';
-  FLastApiResponse := Nil;
-
   // URL por defecto
   if Url = '' then
     Url := GlOpenAIUrl;
@@ -181,10 +181,10 @@ begin
 
   // Configurar capacidades soportadas por este driver
   ChatMediaSupports := [Tcm_Text, Tcm_Image, Tcm_WebSearch, Tcm_CodeInterpreter, tcm_pdf];
-  // Audio NO se incluye aquí para evitar que TAiChat intente procesarlo en el flujo principal
-  // NativeInputFiles indica qué archivos se pueden enviar "crudos" en el input
+  // Audio NO se incluye aqu? para evitar que TAiChat intente procesarlo en el flujo principal
+  // NativeInputFiles indica qu? archivos se pueden enviar "crudos" en el input
   NativeInputFiles := [Tfc_Text, Tfc_Image, Tfc_pdf];
-  // NativeOutputFiles indica qué puede generar el modelo
+  // NativeOutputFiles indica qu? puede generar el modelo
   NativeOutputFiles := [Tfc_Text, Tfc_Image];
   FReasoningSummary := rsmDefault;
 end;
@@ -211,8 +211,8 @@ begin
       if Media.IdFile <> '' then
       begin
         try
-          // Llamamos a nuestra función DeleteFile
-          // Nota: DeleteFile ya se encarga de limpiar la propiedad IdFile del objeto si tiene éxito
+          // Llamamos a nuestra funci?n DeleteFile
+          // Nota: DeleteFile ya se encarga de limpiar la propiedad IdFile del objeto si tiene ?xito
           if DeleteFile(Media) = 'deleted' then
             Inc(Result);
         except
@@ -269,8 +269,6 @@ end;
 
 destructor TAiOpenChat.Destroy;
 begin
-  if Assigned(FLastApiResponse) then
-    FLastApiResponse.Free;
   inherited;
 end;
 
@@ -337,14 +335,14 @@ begin
 
   // 1. Validaciones previas
   if not Assigned(aMediaFile) then
-    raise Exception.Create('El objeto MediaFile no está asignado.');
+    raise Exception.Create('El objeto MediaFile no est? asignado.');
 
-  // Si ya tiene ID, asumimos que ya está en la nube y no lo subimos de nuevo
+  // Si ya tiene ID, asumimos que ya est? en la nube y no lo subimos de nuevo
   if aMediaFile.IdFile <> '' then
     Exit(aMediaFile.IdFile);
 
   if (aMediaFile.Content.Size = 0) and (aMediaFile.Base64 = '') then
-    raise Exception.Create('El archivo está vacío (sin Content ni Base64).');
+    raise Exception.Create('El archivo est? vac?o (sin Content ni Base64).');
 
   // 2. Preparar URL (asegurar endpoint /files)
   // Nota: Url suele ser 'https://api.openai.com/v1/'
@@ -356,9 +354,9 @@ begin
   // 3. Preparar el contenido si viene solo en Base64
   if (aMediaFile.Content.Size = 0) and (aMediaFile.Base64 <> '') then
   begin
-    // Asumimos que LoadFromBase64 llena el stream Content o decodificamos aquí.
-    // Si tu clase TAiMediaFile no lo hace automático, aquí deberías decodificar.
-    // Por seguridad, usaremos el método nativo si existe, o asumiremos que Content está listo.
+    // Asumimos que LoadFromBase64 llena el stream Content o decodificamos aqu?.
+    // Si tu clase TAiMediaFile no lo hace autom?tico, aqu? deber?as decodificar.
+    // Por seguridad, usaremos el m?todo nativo si existe, o asumiremos que Content est? listo.
   end;
 
   aMediaFile.Content.Position := 0;
@@ -368,18 +366,18 @@ begin
 
   LBody := TMultipartFormData.Create;
   try
-    // 4. Parámetros para GPT-5 / Responses
+    // 4. Par?metros para GPT-5 / Responses
     LBody.AddField('purpose', APurpose); // Por defecto 'user_data'
 
-    // stream, nombre, content-type (opcional, automático por extensión usualmente)
+    // stream, nombre, content-type (opcional, autom?tico por extensi?n usualmente)
     LBody.AddStream('file', aMediaFile.Content, False, LFileName);
 
     // 5. Ejecutar Request usando FClient (Hereda Proxies/Timeouts)
     LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
 
-    // Importante: No establecer ContentType, el cliente lo pone en multipart/form-data automáticamente
+    // Importante: No establecer ContentType, el cliente lo pone en multipart/form-data autom?ticamente
 
-    // Los llamados a esta función es sincrónico por ahora
+    // Los llamados a esta funci?n es sincr?nico por ahora
     OldAsync := FClient.Asynchronous;
     FClient.Asynchronous := False;
     Try
@@ -398,10 +396,10 @@ begin
           // Obtener ID
           if LJson.TryGetValue<string>('id', Result) then
           begin
-            // 7. Actualizar el objeto MediaFile (como en la función que encontraste)
+            // 7. Actualizar el objeto MediaFile (como en la funci?n que encontraste)
             aMediaFile.IdFile := Result;
 
-            // Guardamos metadatos útiles si existen
+            // Guardamos metadatos ?tiles si existen
             if LJson.TryGetValue<string>('filename', LFileName) then
               aMediaFile.CloudName := LFileName;
 
@@ -424,7 +422,7 @@ begin
 
   finally
     LBody.Free;
-    // No liberamos AMediaFile.Content aquí, el dueño es el objeto AMediaFile
+    // No liberamos AMediaFile.Content aqu?, el due?o es el objeto AMediaFile
   end;
 end;
 
@@ -449,7 +447,7 @@ begin
 
     JParsed := TJSonObject.ParseJSONValue(ToolsString);
 
-    // Verificamos que sea un array válido
+    // Verificamos que sea un array v?lido
     if JParsed is TJSonArray then
       Result := TJSonArray(JParsed)
     else
@@ -464,7 +462,7 @@ begin
 end;
 
 // -----------------------------------------------------------------------------
-// CONSTRUCCIÓN DEL REQUEST (Mapping TAiChat -> Responses API JSON)
+// CONSTRUCCI?N DEL REQUEST (Mapping TAiChat -> Responses API JSON)
 // -----------------------------------------------------------------------------
 function TAiOpenChat.InitChatCompletions: String;
 var
@@ -479,7 +477,7 @@ var
   LastMsg: TAiChatMessage;
   IsToolLoop: Boolean;
 
-  // Helper local (SIN CAMBIOS con respecto a la última corrección)
+  // Helper local (SIN CAMBIOS con respecto a la ?ltima correcci?n)
   procedure AddMessageToInput(Msg: TAiChatMessage; TargetArray: TJSonArray);
   var
     JUserObj, JTextObj, JImageObj, JDocObj, JToolOutObj: TJSonObject;
@@ -511,8 +509,8 @@ var
       begin
         JToolOutObj := TJSonObject.Create;
         JToolOutObj.AddPair('type', 'function_call_output');
-        if Msg.TollCallId <> '' then
-          JToolOutObj.AddPair('call_id', Msg.TollCallId)
+        if Msg.ToolCallId <> '' then
+          JToolOutObj.AddPair('call_id', Msg.ToolCallId)
         else
           JToolOutObj.AddPair('call_id', 'call_unknown_' + IntToStr(Msg.Id));
         JToolOutObj.AddPair('output', Msg.Prompt);
@@ -555,6 +553,8 @@ var
           try
             UploadFileToCache(MediaFile);
           except
+            on E: Exception do
+              LogDebug('Error uploading file to cache: ' + E.Message);
           end;
         end;
 
@@ -643,12 +643,12 @@ begin
       JResult.AddPair('instructions', JSystemMsg);
 
     // -------------------------------------------------------------------------
-    // 2. INPUT (GESTIÓN DE ESTADO OPTIMIZADA)
+    // 2. INPUT (GESTI?N DE ESTADO OPTIMIZADA)
     // -------------------------------------------------------------------------
     JInputArray := TJSonArray.Create;
     StartIndex := 0;
 
-    // Verificamos si tenemos un ID de respuesta del turno anterior válido.
+    // Verificamos si tenemos un ID de respuesta del turno anterior v?lido.
     // Esto permite usar el cache/contexto del servidor y evitar reenviar historial.
     if (FResponseId <> '') and (FMessages.Count > 0) then
     begin
@@ -656,7 +656,7 @@ begin
 
       LastMsg := FMessages[FMessages.Count - 1];
 
-      // Detectamos si estamos en un bucle de herramientas (el último mensaje es un output de tool)
+      // Detectamos si estamos en un bucle de herramientas (el ?ltimo mensaje es un output de tool)
       // Nota: Checkeamos 'tool' o mensajes especiales de assistant que contienen outputs (legacy)
       IsToolLoop := (LastMsg.Role = 'tool') or ((LastMsg.Role = 'assistant') and ContainsText(LastMsg.Prompt, '_output"'));
 
@@ -664,13 +664,13 @@ begin
       begin
         // ESTRATEGIA TOOL LOOP:
         // Si estamos enviando un resultado de herramienta, NO debemos enviar de nuevo el mensaje
-        // del Usuario que provocó la llamada, porque ese contexto ya vive en 'previous_response_id'.
-        // Buscamos hacia atrás hasta encontrar el mensaje de User o Assistant previo y cortamos ahí.
+        // del Usuario que provoc? la llamada, porque ese contexto ya vive en 'previous_response_id'.
+        // Buscamos hacia atr?s hasta encontrar el mensaje de User o Assistant previo y cortamos ah?.
         for I := FMessages.Count - 1 downto 0 do
         begin
           if (FMessages[I].Role = 'user') or ((FMessages[I].Role = 'assistant') and (not ContainsText(FMessages[I].Prompt, '_output"'))) then
           begin
-            StartIndex := I + 1; // Empezamos estrictamente DESPUÉS del usuario
+            StartIndex := I + 1; // Empezamos estrictamente DESPU?S del usuario
             Break;
           end;
         end;
@@ -678,7 +678,7 @@ begin
       else
       begin
         // ESTRATEGIA NORMAL (Turno de Usuario):
-        // El último mensaje es del usuario. Buscamos la última respuesta del asistente para enviar solo lo nuevo.
+        // El ?ltimo mensaje es del usuario. Buscamos la ?ltima respuesta del asistente para enviar solo lo nuevo.
         for I := FMessages.Count - 1 downto 0 do
         begin
           if (FMessages[I].Role = 'assistant') and (not ContainsText(FMessages[I].Prompt, '_output"')) then
@@ -690,7 +690,7 @@ begin
       end;
     end;
 
-    // Recorremos desde el punto calculado (0 si es nuevo, >0 si es continuación)
+    // Recorremos desde el punto calculado (0 si es nuevo, >0 si es continuaci?n)
     for I := StartIndex to FMessages.Count - 1 do
     begin
       ItemMsg := FMessages[I];
@@ -702,9 +702,9 @@ begin
     if JInputArray.Count > 0 then
       JResult.AddPair('input', JInputArray)
     else
-      JInputArray.Free; // Evitamos enviar input vacío si no hay mensajes nuevos
+      JInputArray.Free; // Evitamos enviar input vac?o si no hay mensajes nuevos
 
-    // 3. Parámetros de Configuración
+    // 3. Par?metros de Configuraci?n
     JResult.AddPair('store', FStore);
     if FTruncation <> 'disabled' then
       JResult.AddPair('truncation', FTruncation);
@@ -750,21 +750,21 @@ JFormatConfig := Nil;
 
       if JsonSchema.Text <> '' then
       begin
-        // Limpieza básica de saltos de línea para evitar errores de parseo
+        // Limpieza b?sica de saltos de l?nea para evitar errores de parseo
         var sShema := StringReplace(JsonSchema.Text, '\n', ' ', [rfReplaceAll]);
 
         var JInnerSchema := TJSonObject.ParseJSONValue(sShema) as TJSonObject;
 
         if Assigned(JInnerSchema) then
         begin
-          // A. VALIDACIÓN TIPO OBJECT
+          // A. VALIDACI?N TIPO OBJECT
           if JInnerSchema.GetValue<string>('type') = 'object' then
           begin
-             // 1. CORRECCIÓN: additionalProperties: false es obligatorio
+             // 1. CORRECCI?N: additionalProperties: false es obligatorio
              if JInnerSchema.GetValue('additionalProperties') = nil then
                JInnerSchema.AddPair('additionalProperties', TJSONBool.Create(False));
 
-             // 2. CORRECCIÓN: OpenAI Strict exige que TODAS las propiedades estén en 'required'
+             // 2. CORRECCI?N: OpenAI Strict exige que TODAS las propiedades est?n en 'required'
              var JProps: TJSONObject;
              if JInnerSchema.TryGetValue<TJSONObject>('properties', JProps) then
              begin
@@ -776,7 +776,7 @@ JFormatConfig := Nil;
                  JInnerSchema.AddPair('required', JReq);
                end;
 
-               // Recorrer todas las propiedades y asegurarse que están en 'required'
+               // Recorrer todas las propiedades y asegurarse que est?n en 'required'
                for var I1 := 0 to JProps.Count - 1 do
                begin
                  var PropName := JProps.Pairs[I1].JsonString.Value;
@@ -798,8 +798,8 @@ JFormatConfig := Nil;
              end;
           end;
 
-          // B. CONFIGURACIÓN FINAL (Flattened structure para Responses API)
-          // Estos parámetros van al mismo nivel que "type", NO dentro de un sub-objeto json_schema
+          // B. CONFIGURACI?N FINAL (Flattened structure para Responses API)
+          // Estos par?metros van al mismo nivel que "type", NO dentro de un sub-objeto json_schema
           JFormatConfig.AddPair('name', 'structured_response');
           JFormatConfig.AddPair('strict', TJSONBool.Create(True));
           JFormatConfig.AddPair('schema', JInnerSchema);
@@ -813,17 +813,17 @@ JFormatConfig := Nil;
       JFormatConfig.AddPair('type', 'json_object');
     end;
 
-    // 3. Conectar la configuración de formato al objeto de Texto
+    // 3. Conectar la configuraci?n de formato al objeto de Texto
     if Assigned(JFormatConfig) then
     begin
-      // Asegurarnos de que JTextConfig exista (por si no se creó con verbosity antes)
+      // Asegurarnos de que JTextConfig exista (por si no se cre? con verbosity antes)
       if not Assigned(JTextConfig) then
         JTextConfig := TJSonObject.Create;
 
       JTextConfig.AddPair('format', JFormatConfig);
     end;
 
-    // 4. Conectar el objeto de Texto a la Raíz del Request (JResult)
+    // 4. Conectar el objeto de Texto a la Ra?z del Request (JResult)
     // Esto es lo que hace que aparezca en el JSON final enviado a la API
     if Assigned(JTextConfig) and (JTextConfig.Count > 0) then
     begin
@@ -908,7 +908,7 @@ JFormatConfig := Nil;
       JWebTool := TJSonObject.Create;
       JWebTool.AddPair('type', 'web_search');
 
-      // Si el usuario configuró parámetros adicionales en WebSearchParams (ej: count=5)
+      // Si el usuario configur? par?metros adicionales en WebSearchParams (ej: count=5)
       if (WebSearchParams.Count > 0) then
       begin
         var
@@ -923,7 +923,7 @@ JFormatConfig := Nil;
 
           if Key <> '' then
           begin
-            // Intentamos detectar si es un número, booleano o string
+            // Intentamos detectar si es un n?mero, booleano o string
             var
               IntVal: Integer;
             var
@@ -938,7 +938,7 @@ JFormatConfig := Nil;
           end;
         end;
 
-        // Solo añadimos el objeto de opciones si realmente se agregó algo
+        // Solo a?adimos el objeto de opciones si realmente se agreg? algo
         if JWebOptions.Count > 0 then
           JWebTool.AddPair('web_search', JWebOptions)
         else
@@ -994,7 +994,7 @@ var
   NewMsg: TAiChatMessage;
   GeneratedFile: TAiMediaFile;
   WebItem: TAiWebSearchItem;
-  // Variables auxiliares para valores numéricos
+  // Variables auxiliares para valores num?ricos
   UnixDate: Int64;
   TokenCount: Int64;
 begin
@@ -1008,7 +1008,7 @@ begin
   // BLOQUE NUEVO: Captura de Metadatos (Model, CreatedAt, Usage, FinishReason)
   // ---------------------------------------------------------------------------
 
-  // A) FECHA DE CREACIÓN
+  // A) FECHA DE CREACI?N
   if jObj.TryGetValue<Int64>('created_at', UnixDate) then
   begin
     // Requiere System.DateUtils en el uses
@@ -1019,29 +1019,29 @@ begin
   if jObj.TryGetValue<String>('model', SVal) then
     ResMsg.Model := SVal;
 
-  // C) INFORMACIÓN DE FINALIZACIÓN (Finish Reason / Incomplete Details)
-  // Retorna null, lo mitimos por ahora
-  {
-    if jObj.TryGetValue<TJSonObject>('incomplete_details', JIncomplete) then
-    begin
-    if Assigned(JIncomplete) then
-    begin
-    if JIncomplete.TryGetValue<String>('reason', SVal) then
-    ResMsg.FinishReason := SVal; // ej: "max_tokens", "safety"
-    end;
-    end
-    else
-    begin
-    // Si incomplete_details es null y el status es completed, asumimos finalización normal
-    if FResponseStatus = 'completed' then
-    ResMsg.FinishReason := 'stop';
-    end;
-  }
 
-  // D) USO DE TOKENS (Costos, Caché y Razonamiento)
+  // C) INFORMACIón de finalización (Finish Reason / Incomplete Details)
+  // incomplete_details puede venir como null en el JSON; usar TJSONValue evita
+  // el fallo del typecast cuando el valor no es un objeto.
+  var JVal: TJSONValue;
+  JVal := jObj.GetValue('incomplete_details');
+  if Assigned(JVal) and (JVal is TJSONObject) then
+  begin
+    JIncomplete := TJSONObject(JVal);
+    if JIncomplete.TryGetValue<String>('reason', SVal) then
+      ResMsg.FinishReason := SVal; // ej: "max_tokens", "safety"
+  end
+  else
+  begin
+    // incomplete_details ausente o null: si el estado es completed, finalización normal
+    if FResponseStatus = 'completed' then
+      ResMsg.FinishReason := 'stop';
+  end;
+
+  // D) USO DE TOKENS (Costos, Cach? y Razonamiento)
   if jObj.TryGetValue<TJSonObject>('usage', JUsage) then
   begin
-    // Totales básicos
+    // Totales b?sicos
     if JUsage.TryGetValue<Int64>('input_tokens', TokenCount) then
       ResMsg.Prompt_tokens := TokenCount;
 
@@ -1051,7 +1051,7 @@ begin
     if JUsage.TryGetValue<Int64>('total_tokens', TokenCount) then
       ResMsg.Total_tokens := TokenCount;
 
-    // Detalles de Entrada: Tokens en Caché (Ahorro)
+    // Detalles de Entrada: Tokens en Cach? (Ahorro)
     if JUsage.TryGetValue<TJSonObject>('input_tokens_details', JInputDetails) then
     begin
       if JInputDetails.TryGetValue<Int64>('cached_tokens', TokenCount) then
@@ -1121,17 +1121,18 @@ begin
                         if JAnno.TryGetValue<string>('filename', SId) then
                           GeneratedFile.FileName := SId;
 
-                        // CRÍTICO: Capturamos el container_id y lo guardamos en CloudState
+                        // CR?TICO: Capturamos el container_id y lo guardamos en CloudState
                         if JAnno.TryGetValue<string>('container_id', SContainerId) then
                           GeneratedFile.CloudState := SContainerId;
 
                         try
                           DownLoadFile(GeneratedFile);
                         except
-                          // Manejo silencioso de errores de descarga para no romper el flujo
+                          on E: Exception do
+                            LogDebug('Error downloading container file: ' + E.Message);
                         end;
 
-                        // Añadir al mensaje de respuesta
+                        // A?adir al mensaje de respuesta
                         ResMsg.MediaFiles.Add(GeneratedFile);
                       end
 
@@ -1206,10 +1207,10 @@ begin
             // Guardamos el ID
             GeneratedFile.IdFile := ImgId;
 
-            // 4. Añadir al mensaje de respuesta actual
+            // 4. A?adir al mensaje de respuesta actual
             ResMsg.MediaFiles.Add(GeneratedFile);
 
-            // 5. Si el mensaje de texto viene vacío, ponemos un indicador en el Prompt
+            // 5. Si el mensaje de texto viene vac?o, ponemos un indicador en el Prompt
             if ResMsg.Prompt = '' then
               ResMsg.Prompt := '[Image Generated] ' + Copy(ImgPrompt, 1, 50) + '...';
           end;
@@ -1220,7 +1221,7 @@ begin
         begin
           ToolCall := TAiToolsFunction.Create;
 
-          // CRÍTICO: Obtener call_id para responder luego
+          // CR?TICO: Obtener call_id para responder luego
           if JItem.TryGetValue<String>('call_id', SCallId) then
             ToolCall.Id := SCallId
           else if JItem.TryGetValue<String>('id', SId) then
@@ -1240,13 +1241,13 @@ begin
           if JItem.TryGetValue<String>('call_id', SCallId) then
           begin
             // -----------------------------------------------------------------
-            // 1. GUARDAR LA PETICIÓN (CALL) EN EL HISTORIAL
+            // 1. GUARDAR LA PETICI?N (CALL) EN EL HISTORIAL
             // -----------------------------------------------------------------
             // Guardamos el JSON crudo del item 'shell_call' como un mensaje del asistente.
             // Esto es crucial para mantener la cadena: User -> ShellCall -> ShellOutput -> User
             var
             HistMsg := TAiChatMessage.Create(JItem.ToString, 'assistant');
-            HistMsg.TollCallId := SCallId;
+            HistMsg.ToolCallId := SCallId;
             HistMsg.PreviousResponseId := FResponseId;
             HistMsg.Id := Self.Messages.Count + 1;
             Self.Messages.Add(HistMsg);
@@ -1259,22 +1260,22 @@ begin
             if JItem.TryGetValue<TJSonObject>('action', JAction) then
             begin
 
-              // OPCIÓN A: Usar Componente ShellTool (Sesión Persistente)
+              // OPCI?N A: Usar Componente ShellTool (Sesi?n Persistente)
               if Assigned(ShellTool) then
               begin
-                // Delegamos la ejecución y el formateo del JSON de respuesta al componente
+                // Delegamos la ejecuci?n y el formateo del JSON de respuesta al componente
                 var
                 ShellJsonOutput := ShellTool.Execute(SCallId, JAction);
 
                 // Crear y guardar el mensaje de respuesta de la herramienta
                 NewMsg := TAiChatMessage.Create(ShellJsonOutput, 'tool');
-                NewMsg.TollCallId := SCallId;
+                NewMsg.ToolCallId := SCallId;
                 NewMsg.PreviousResponseId := FResponseId;
                 NewMsg.Id := Self.Messages.Count + 1;
                 Self.Messages.Add(NewMsg);
               end
 
-              // OPCIÓN B: Fallback Legacy (Ejecución aislada)
+              // OPCI?N B: Fallback Legacy (Ejecuci?n aislada)
               else
               begin
                 var
@@ -1307,7 +1308,7 @@ begin
                     if Assigned(FOnShellCommand) then
                       FOnShellCommand(Self, CmdStr, SCallId, OutStd, OutErr, ExitCode, Handled);
 
-                    // 2. Ejecución Automática
+                    // 2. Ejecuci?n Autom?tica
                     if (not Handled) and FAllowAutoShell then
                     begin
                       try
@@ -1356,9 +1357,9 @@ begin
                     OutputJson.AddPair('max_output_length', MaxLen);
                   OutputJson.AddPair('output', JOutputArr);
 
-                  // Añadir mensaje a la cola
+                  // A?adir mensaje a la cola
                   NewMsg := TAiChatMessage.Create(OutputJson.ToString, 'tool');
-                  NewMsg.TollCallId := SCallId;
+                  NewMsg.ToolCallId := SCallId;
                   NewMsg.PreviousResponseId := FResponseId;
                   NewMsg.Id := Self.Messages.Count + 1;
                   Self.Messages.Add(NewMsg);
@@ -1370,10 +1371,10 @@ begin
           end;
         end
 
-        // --- TIPO: APPLY PATCH (EDICIÓN DE ARCHIVOS) ---
+        // --- TIPO: APPLY PATCH (EDICI?N DE ARCHIVOS) ---
         else if SType = 'apply_patch_call' then
         begin
-          // 1. Extraer datos de la operación
+          // 1. Extraer datos de la operaci?n
           var
           OpType := '';
           var
@@ -1399,7 +1400,7 @@ begin
             var
             Handled := False;
 
-            // OPCIÓN A: Evento de Usuario
+            // OPCI?N A: Evento de Usuario
             if Assigned(FOnApplyPatch) then
             begin
               try
@@ -1415,7 +1416,7 @@ begin
               end;
             end;
 
-            // OPCIÓN B: Automático (TAiTextEditorTool)
+            // OPCI?N B: Autom?tico (TAiTextEditorTool)
             if (not Handled) and (Assigned(TextEditorTool)) then
             begin
               try
@@ -1465,7 +1466,7 @@ begin
                 OutputJson.AddPair('output', PatchOutput);
 
               NewMsg := TAiChatMessage.Create(OutputJson.ToString, 'tool');
-              NewMsg.TollCallId := SCallId;
+              NewMsg.ToolCallId := SCallId;
               NewMsg.PreviousResponseId := FResponseId;
               NewMsg.Id := Self.Messages.Count + 1;
               Self.Messages.Add(NewMsg);
@@ -1482,7 +1483,7 @@ begin
     ResMsg.Content := FLastContent;
     ResMsg.PreviousResponseId := FResponseId;
 
-    // 4. Ejecutar Tools estándar (Functions) si las hay
+    // 4. Ejecutar Tools est?ndar (Functions) si las hay
     if ToolCalls.Count > 0 then
     begin
       SetLength(TaskList, ToolCalls.Count);
@@ -1508,7 +1509,7 @@ begin
       begin
         ToolCall := ToolCalls[I];
         NewMsg := TAiChatMessage.Create(ToolCall.Response, 'tool');
-        NewMsg.TollCallId := ToolCall.Id;
+        NewMsg.ToolCallId := ToolCall.Id;
         NewMsg.FunctionName := ToolCall.Name;
         NewMsg.PreviousResponseId := FResponseId;
         NewMsg.Id := Self.Messages.Count + 1;
@@ -1521,11 +1522,11 @@ begin
     else
     begin
       // Si no hubo Function Calls, revisamos si hubo Shell Calls o Patch Calls que agregaron mensajes
-      // al historial. Si es así, debemos hacer recursión para que la IA vea el resultado.
-      // (Verificamos si el último mensaje es de tipo 'tool')
+      // al historial. Si es as?, debemos hacer recursi?n para que la IA vea el resultado.
+      // (Verificamos si el ?ltimo mensaje es de tipo 'tool')
       if (Self.Messages.Count > 0) and (Self.Messages.Last.Role = 'tool') and (FLastContent = '') then
       begin
-        // Recursión para que la IA responda al resultado del shell/patch
+        // Recursi?n para que la IA responda al resultado del shell/patch
         Self.Run(Nil, ResMsg);
       end
       else
@@ -1571,7 +1572,7 @@ end;
 
 
 // -----------------------------------------------------------------------------
-// MÉTODOS DE EJECUCIÓN (HTTP)
+// M?TODOS DE EJECUCI?N (HTTP)
 // -----------------------------------------------------------------------------
 
 function TAiOpenChat.InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String;
@@ -1587,7 +1588,7 @@ begin
   FLastError := '';
   FResponseStatus := '';
 
-  // 1. Asegurar que el mensaje del USUARIO está en el historial
+  // 1. Asegurar que el mensaje del USUARIO est? en el historial
   if FMessages.IndexOf(AskMsg) < 0 then
   begin
     AskMsg.Id := FMessages.Count + 1;
@@ -1620,7 +1621,7 @@ begin
 
     if FClient.Asynchronous = False then
     begin
-      // ... (Lógica síncrona se mantiene igual) ...
+      // ... (L?gica s?ncrona se mantiene igual) ...
       if Res.StatusCode = 200 then
       begin
 
@@ -1647,7 +1648,7 @@ end;
 
 function TAiOpenChat.InternalRunImageVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 var
-  // Variables locales para capturar en el thread anónimo
+  // Variables locales para capturar en el thread an?nimo
   CaptureApiKey: string;
   CaptureUrl: string;
   CapturePrompt: string;
@@ -1657,8 +1658,8 @@ var
   CaptureResMsg: TAiChatMessage;
   LTask: ITask;
 begin
-  // 1. Configuración Inicial (Hilo Principal)
-  Result := 'Iniciando generación de video...';
+  // 1. Configuraci?n Inicial (Hilo Principal)
+  Result := 'Iniciando generaci?n de video...';
 
   CaptureApiKey := ApiKey;
   CaptureUrl := Url;
@@ -1693,7 +1694,7 @@ begin
 
   CaptureResMsg := ResMsg;
 
-  // 2. Ejecución Asíncrona
+  // 2. Ejecuci?n As?ncrona
   LTask := TTask.Run(
     procedure
     var
@@ -1709,7 +1710,7 @@ begin
       FinalStatus: string;
       ErrMessage: string;
 
-      // CORRECCION: Declaración explícita como en tu unidad Sora
+      // CORRECCION: Declaraci?n expl?cita como en tu unidad Sora
       AuthHeader: TNetHeaders;
       EndpointUrl: string;
     begin
@@ -1720,7 +1721,7 @@ begin
           // --- A. INICIAR JOB ---
           EndpointUrl := CaptureUrl + 'videos';
 
-          // Construcción explícita del header
+          // Construcci?n expl?cita del header
           AuthHeader := [TNetHeader.Create('Authorization', 'Bearer ' + CaptureApiKey)];
 
           AsyncFormData.AddField('prompt', CapturePrompt);
@@ -1742,7 +1743,7 @@ begin
             AsyncFormData.AddStream('input_reference', CaptureImageFile.Content, False, CaptureImageFile.FileName, CaptureImageFile.MimeType);
           end;
 
-          // LLAMADA CORREGIDA (Idéntica a tu unidad Sora)
+          // LLAMADA CORREGIDA (Id?ntica a tu unidad Sora)
           AsyncResponse := AsyncClient.Post(EndpointUrl, AsyncFormData, nil, AuthHeader);
 
           if AsyncResponse.StatusCode <> 200 then
@@ -1750,7 +1751,7 @@ begin
 
           AsyncJson := TJSonObject.ParseJSONValue(AsyncResponse.ContentAsString) as TJSonObject;
           try
-            // Validación extra para evitar crash si id no existe
+            // Validaci?n extra para evitar crash si id no existe
             if (AsyncJson = nil) or (not AsyncJson.TryGetValue<String>('id', sPollCount { dummy var used for string id } )) then
             begin
               // Reintentamos leer como string
@@ -1763,7 +1764,7 @@ begin
             end
             else
             begin
-              // Si entró aquí es raro (PollCount es int), mejor usamos variable string directa
+              // Si entr? aqu? es raro (PollCount es int), mejor usamos variable string directa
               PollingUrl := EndpointUrl + '/' + AsyncJson.GetValue<string>('id');
             end;
 
@@ -1789,7 +1790,7 @@ begin
             Inc(PollCount);
             Sleep(5000);
 
-            // LLAMADA GET (También usa AuthHeader explícito)
+            // LLAMADA GET (Tambi?n usa AuthHeader expl?cito)
             AsyncResponse := AsyncClient.Get(PollingUrl, nil, AuthHeader);
 
             if AsyncResponse.StatusCode <> 200 then
@@ -1841,7 +1842,7 @@ begin
           var
           VideoStream := TMemoryStream.Create;
           try
-            // LLAMADA GET DOWNLOAD (Usa AuthHeader explícito)
+            // LLAMADA GET DOWNLOAD (Usa AuthHeader expl?cito)
             AsyncResponse := AsyncClient.Get(VideoUrl, VideoStream, AuthHeader);
 
             if AsyncResponse.StatusCode = 200 then
@@ -1903,10 +1904,10 @@ begin
   if not Assigned(AiFunctions) then
     Exit;
 
-  // Lógica delegada a AiFunctions (soporta MCP y locales)
+  // L?gica delegada a AiFunctions (soporta MCP y locales)
   if not AiFunctions.DoCallFunction(ToolCall) then
   begin
-    // Fallback para lógica antigua de eventos directos
+    // Fallback para l?gica antigua de eventos directos
     if Assigned(FOnCallToolFunction) then
       FOnCallToolFunction(Self, ToolCall);
   end;
@@ -1933,7 +1934,7 @@ begin
   TmpClient := TNetHTTPClient.Create(nil); // <--- Creamos instancia aislada
   try
     // Configuramos el cliente temporal igual que el principal
-    // (Si usas propiedades SSL específicas en FClient, cópialas aquí también)
+    // (Si usas propiedades SSL espec?ficas en FClient, c?pialas aqu? tambi?n)
     TmpClient.ResponseTimeout := 60000;
 
     Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
@@ -1950,7 +1951,7 @@ begin
         Result := aMediaFile.FileName;
       end
       else
-        raise Exception.Create('El servidor devolvió un stream vacío.');
+        raise Exception.Create('El servidor devolvi? un stream vac?o.');
     end
     else
       raise Exception.CreateFmt('Error downloading file (%d): %s', [LResponse.StatusCode, LResponse.StatusText]);
@@ -1961,7 +1962,7 @@ begin
 end;
 
 // -----------------------------------------------------------------------------
-// MÉTODOS LEGACY / ENDPOINTS SEPARADOS (Audio)
+// M?TODOS LEGACY / ENDPOINTS SEPARADOS (Audio)
 // -----------------------------------------------------------------------------
 function TAiOpenChat.InternalRunSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 var
@@ -1975,14 +1976,14 @@ var
   LNewAudioFile: TAiMediaFile;
   OldAsc: Boolean;
 begin
-  Result := ''; // La función Run devuelve el texto, que en este caso es vacío.
+  Result := ''; // La funci?n Run devuelve el texto, que en este caso es vac?o.
   FBusy := True;
   FLastError := '';
   FLastContent := '';
   FLastPrompt := AskMsg.Prompt;
 
-  // 1. Añadir el mensaje del usuario al historial para mantener la consistencia
-  if FMessages.IndexOf(AskMsg) < 0 then // Solo lo añadimos si no está ya en la lista
+  // 1. A?adir el mensaje del usuario al historial para mantener la consistencia
+  if FMessages.IndexOf(AskMsg) < 0 then // Solo lo a?adimos si no est? ya en la lista
   begin
     AskMsg.Id := FMessages.Count + 1;
     FMessages.Add(AskMsg);
@@ -1990,14 +1991,14 @@ begin
       FOnAddMessage(Self, AskMsg, Nil, AskMsg.Role, AskMsg.Prompt);
   end;
 
-  // 2. Preparar parámetros para la API de TTS
+  // 2. Preparar par?metros para la API de TTS
   LUrl := Url + 'audio/speech';
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
-  // 'tts-1'; // O podrías tener una propiedad específica para el modelo TTS
+  // 'tts-1'; // O podr?as tener una propiedad espec?fica para el modelo TTS
   LVoice := Self.Voice; // Usamos la propiedad del componente
   LResponseFormat := Self.voice_format; // Usamos la propiedad del componente
 
-  // 3. Construir y ejecutar la petición
+  // 3. Construir y ejecutar la petici?n
   LJsonObject := TJSonObject.Create;
   LBodyStream := nil;
   LResponseStream := TMemoryStream.Create;
@@ -2077,7 +2078,7 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
-    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripción.');
+    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripci?n.');
 
   sUrl := Url + 'audio/transcriptions';
 
@@ -2100,7 +2101,7 @@ begin
     LTempStream.LoadFromStream(aMediaFile.Content);
     LTempStream.Position := 0;
 
-    // --- 1. CONSTRUCCIÓN DEL BODY MULTIPART CON PARÁMETROS GENÉRICOS ---
+    // --- 1. CONSTRUCCI?N DEL BODY MULTIPART CON PAR?METROS GEN?RICOS ---
 {$IF CompilerVersion >= 35}
     Body.AddStream('file', LTempStream, False, aMediaFile.FileName, aMediaFile.MimeType);
 {$ELSE}
@@ -2111,13 +2112,13 @@ begin
     if not AskMsg.Prompt.IsEmpty then
       Body.AddField('prompt', AskMsg.Prompt);
 
-    // Formato de respuesta (genérico, como string)
+    // Formato de respuesta (gen?rico, como string)
     if not Self.Transcription_ResponseFormat.IsEmpty then
       Body.AddField('response_format', Self.Transcription_ResponseFormat)
     else
       Body.AddField('response_format', 'json'); // Default a JSON si no se especifica
 
-    // Parámetros opcionales
+    // Par?metros opcionales
     if not Self.Language.IsEmpty then
       Body.AddField('language', Self.Language);
 
@@ -2132,28 +2133,14 @@ begin
       Granularities.CommaText := Self.Transcription_TimestampGranularities;
       for I := 0 to Granularities.Count - 1 do
       begin
-        // Añadimos cada granularidad como un campo separado con '[]'
+        // A?adimos cada granularidad como un campo separado con '[]'
         Body.AddField('timestamp_granularities[]', Trim(Granularities[I]));
       end;
     end;
 
-    { TODO : TODAVÍA NO ESTÁ LISTO PARA UTILIZAR LA TRANSCRIPCIÓN EN MODO ASCINCRÓNICO, Falta implementar a futuro }
-    // Streaming
-    // if Self.Asynchronous then
-    // Body.AddField('stream', 'true');
+    // TODO: Async transcription no implementado. Solo modo sincrono.
 
     // --- 2. EJECUCIÓN DE LA PETICIÓN POST ---
-
-    // (La lógica de streaming/síncrono se mantiene igual)
-    { if Self.Asynchronous then
-      begin
-      FClient.Asynchronous := True;
-      // La lógica de OnReceiveData se encargará del resto
-      FClient.Post(sUrl, Body, FResponse, Headers);
-      Result := '';
-      end
-      else
-    }
     begin
 
       Res := Client.Post(sUrl, Body, LResponseStream, Headers);
@@ -2169,7 +2156,7 @@ begin
         End;
 
         try
-          // Aquí llamas al procedimiento de parseo de transcripciones
+          // Aqu? llamas al procedimiento de parseo de transcripciones
           ParseJsonTranscript(LResponseObj, ResMsg, aMediaFile);
         finally
           LResponseObj.Free;
@@ -2179,7 +2166,7 @@ begin
       end
       else
       begin
-        Raise Exception.CreateFmt('Error en la transcripción: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+        Raise Exception.CreateFmt('Error en la transcripci?n: %d, %s', [Res.StatusCode, Res.ContentAsString]);
       end;
     end;
 
@@ -2194,9 +2181,7 @@ end;
 
 procedure TAiOpenChat.NewChat;
 begin
-  // DeleteAllUploadedFiles; // Primero elimina los archivos de openai
-  // En la práctica no guarda los archivos en openai, al menos no los encuentro
-  // y el DeleteFile falla.
+  // TODO: DeleteAllUploadedFiles desactivado — OpenAI no persiste archivos entre sesiones
   FResponseId := ''; // Inicia una nueva conversación
   inherited;
 end;
@@ -2237,7 +2222,7 @@ begin
   end;
 
   // ---------------------------------------------------------------------------
-  // 1. Acumulación Robusta (UTF-8)
+  // 1. Acumulaci?n Robusta (UTF-8)
   // ---------------------------------------------------------------------------
   if FResponse is TStringStream then
   begin
@@ -2256,7 +2241,7 @@ begin
   FResponse.Clear;
 
   // ---------------------------------------------------------------------------
-  // 2. Procesar líneas completas (Protocolo SSE)
+  // 2. Procesar l?neas completas (Protocolo SSE)
   // ---------------------------------------------------------------------------
   while Pos(#10, FTmpResponseText) > 0 do
   begin
@@ -2289,7 +2274,7 @@ begin
           Continue;
 
         // ---------------------------------------------------------------------
-        // A) METADATOS INICIALES Y CREACIÓN DE MENSAJE
+        // A) METADATOS INICIALES Y CREACI?N DE MENSAJE
         // ---------------------------------------------------------------------
         if EventType = 'response.created' then
         begin
@@ -2297,9 +2282,9 @@ begin
             if JResp.TryGetValue<string>('id', ItemId) then
               FResponseId := ItemId;
 
-          // --- FIX IMPORTANTE: Creación automática del mensaje de respuesta ---
-          // Verificamos si el último mensaje es del usuario (con imagen) o ya está completo.
-          // Si es así, creamos uno nuevo para el Asistente para no sobrescribir el input.
+          // --- FIX IMPORTANTE: Creaci?n autom?tica del mensaje de respuesta ---
+          // Verificamos si el ?ltimo mensaje es del usuario (con imagen) o ya est? completo.
+          // Si es as?, creamos uno nuevo para el Asistente para no sobrescribir el input.
           var
           LastM := GetLastMessage;
 
@@ -2309,7 +2294,7 @@ begin
             NewStreamMsg.Id := FMessages.Count + 1;
             NewStreamMsg.PreviousResponseId := FResponseId;
             FMessages.Add(NewStreamMsg);
-            // Ahora GetLastMessage apuntará a este nuevo mensaje limpio
+            // Ahora GetLastMessage apuntar? a este nuevo mensaje limpio
           end;
           // ------------------------------------------------------------------
 
@@ -2324,7 +2309,7 @@ begin
         begin
           if JsonEvent.TryGetValue<string>('delta', DeltaVal) then
           begin
-            // Normalizar saltos de línea para UI (LF -> CRLF en Windows)
+            // Normalizar saltos de l?nea para UI (LF -> CRLF en Windows)
             DeltaVal := AdjustLineBreaks(DeltaVal, tlbsCRLF);
 
             FLastContent := FLastContent + DeltaVal;
@@ -2364,7 +2349,7 @@ begin
         end
 
         // ---------------------------------------------------------------------
-        // D) TOOL ARGUMENTS (ACUMULACIÓN)
+        // D) TOOL ARGUMENTS (ACUMULACI?N)
         // ---------------------------------------------------------------------
         else if EventType = 'response.function_call_arguments.delta' then
         begin
@@ -2381,7 +2366,7 @@ begin
         end
 
         // ---------------------------------------------------------------------
-        // E) ITEM DONE (EJECUCIÓN DE TOOLS / IMÁGENES / CITAS)
+        // E) ITEM DONE (EJECUCI?N DE TOOLS / IM?GENES / CITAS)
         // ---------------------------------------------------------------------
         else if EventType = 'response.output_item.done' then
         begin
@@ -2408,7 +2393,7 @@ begin
 
               var
               NewMsg := TAiChatMessage.Create(ToolCall.Response, 'tool');
-              NewMsg.TollCallId := ToolCall.Id;
+              NewMsg.ToolCallId := ToolCall.Id;
               NewMsg.FunctionName := ToolCall.Name;
               NewMsg.PreviousResponseId := FResponseId;
               NewMsg.Id := FMessages.Count + 1;
@@ -2435,7 +2420,7 @@ begin
                       HistoryItem.AddPair('action', TJSonObject.ParseJSONValue(JAction.ToString) as TJSONValue);
                       var
                       CallMsg := TAiChatMessage.Create(HistoryItem.ToString, 'assistant');
-                      CallMsg.TollCallId := CallId;
+                      CallMsg.ToolCallId := CallId;
                       CallMsg.PreviousResponseId := FResponseId;
                       CallMsg.Id := FMessages.Count + 1;
                       FMessages.Add(CallMsg);
@@ -2447,7 +2432,7 @@ begin
                     ShellOutput := ShellTool.Execute(CallId, JAction);
                     var
                     ResultMsg := TAiChatMessage.Create(ShellOutput, 'tool');
-                    ResultMsg.TollCallId := CallId;
+                    ResultMsg.ToolCallId := CallId;
                     ResultMsg.PreviousResponseId := FResponseId;
                     ResultMsg.Id := FMessages.Count + 1;
                     FMessages.Add(ResultMsg);
@@ -2538,6 +2523,8 @@ begin
                         try
                           DownLoadFile(GenFile);
                         except
+                          on E: Exception do
+                            LogDebug('Error downloading container file (stream): ' + E.Message);
                         end;
                         CurrentMsg.MediaFiles.Add(GenFile);
                       end;
@@ -2550,7 +2537,7 @@ begin
         end
 
         // ---------------------------------------------------------------------
-        // F) FINALIZACIÓN (METADATOS DE COSTOS, EXTRACTION Y RECURSIÓN)
+        // F) FINALIZACI?N (METADATOS DE COSTOS, EXTRACTION Y RECURSI?N)
         // ---------------------------------------------------------------------
         else if EventType = 'response.completed' then
         begin
@@ -2580,7 +2567,7 @@ begin
                 if JUsage.TryGetValue<Int64>('output_tokens', TokenCount) then
                   FinalMsg.Completion_tokens := TokenCount;
 
-                // Tokens Caché
+                // Tokens Cach?
                 if JUsage.TryGetValue<TJSonObject>('input_tokens_details', JInputDetails) then
                   if JInputDetails.TryGetValue<Int64>('cached_tokens', TokenCount) then
                     FinalMsg.cached_tokens := TokenCount;
@@ -2594,7 +2581,7 @@ begin
                 FinalMsg.Model := DeltaVal;
             end;
 
-            // --- Extracción de código a archivos (MarkdownCodeExtractor) ---
+            // --- Extracci?n de c?digo a archivos (MarkdownCodeExtractor) ---
             If tfc_ExtracttextFile in NativeOutputFiles then
             Begin
               Var
@@ -2763,8 +2750,29 @@ begin
   End;
 end;
 
+{ TAiOpenAiEmbeddings - Factory class methods }
+
+class function TAiOpenAiEmbeddings.GetDriverName: string;
+begin
+  Result := 'OpenAi';
+end;
+
+class function TAiOpenAiEmbeddings.CreateInstance(aOwner: TComponent): TAiEmbeddings;
+begin
+  Result := TAiOpenAiEmbeddings.Create(aOwner);
+end;
+
+class procedure TAiOpenAiEmbeddings.RegisterDefaultParams(Params: TStrings);
+begin
+  Params.Values['ApiKey'] := '@OPENAI_API_KEY';
+  Params.Values['Url'] := GlOpenAIUrl;
+  Params.Values['Model'] := 'text-embedding-3-small';
+  Params.Values['Dimensions'] := '1536';
+end;
+
 Initialization
 
 TAiChatFactory.Instance.RegisterDriver(TAiOpenChat);
+TAiEmbeddingFactory.Instance.RegisterDriver(TAiOpenAiEmbeddings);
 
 end.

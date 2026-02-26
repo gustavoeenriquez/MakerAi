@@ -118,6 +118,8 @@ object Form20: TForm20
   end
   object RAG: TAiRagGraph
     Embeddings = AiOllamaEmbeddings1
+    SearchOptions.BM25Weight = 0.700000000000000000
+    SearchOptions.EmbeddingWeight = 0.300000000000000000
     Left = 400
     Top = 40
   end

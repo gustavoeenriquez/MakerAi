@@ -1,4 +1,4 @@
-Ôªø// IT License
+// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr√≠quez
+// Nombre: Gustavo EnrÌquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -104,7 +104,7 @@ type
     FOnRequiredSizeCalculated: TRequiredSizeEvent;
     FUserName: String;
 
-    FContentLayout: TLayout; // Contenedor para todo el contenido din√°mico
+    FContentLayout: TLayout; // Contenedor para todo el contenido din·mico
     FDocIcons: TListImages;
     FContentFont: TFont;
     FMediaFiles: TAiMediaFiles;
@@ -361,7 +361,7 @@ begin
   FTimestampFont.Size := 10;
   FTimestampFont.OnChanged := FontChanged;
   FContentFont := TFont.Create;
-  FContentFont.Size := 12; // Un tama√±o por defecto razonable
+  FContentFont.Size := 12; // Un tamaÒo por defecto razonable
   FContentFont.OnChanged := FontChanged; // Reutilizamos el evento que ya tienes
 
   FLayoutCalculated := False;
@@ -376,11 +376,11 @@ begin
 
   FContentLayout := TLayout.Create(Self);
   FContentLayout.Parent := Self;
-  FContentLayout.Align := TAlignLayout.Client; // El layout llenar√° el √°rea de padding
+  FContentLayout.Align := TAlignLayout.Client; // El layout llenar· el ·rea de padding
   FMediaFiles := TAiMediaFiles.Create;
 
 
-  // Asignamos el calculador de tama√±o al evento que ya tienes
+  // Asignamos el calculador de tamaÒo al evento que ya tienes
   // OnCalculateContentSize := ContentSizeCalculator;
 
 end;
@@ -411,7 +411,7 @@ begin
   Icon.Margins.Rect := TRectF.Create(4, 4, 4, 4);
   Icon.HitTest := False;
 
-  // Seleccionar el icono correcto basado en la categor√≠a
+  // Seleccionar el icono correcto basado en la categorÌa
   case AMediaFile.FileCategory of
     Tfc_pdf:
       IconKey := 'pdf';
@@ -422,7 +422,7 @@ begin
     Tfc_Video:
       IconKey := 'video';
     Tfc_Image:
-      IconKey := 'image'; // Icono gen√©rico si no se puede mostrar
+      IconKey := 'image'; // Icono genÈrico si no se puede mostrar
   else
     IconKey := 'unknown';
   end;
@@ -441,7 +441,7 @@ begin
   LblFileName.VertTextAlign := TTextAlign.Leading;
   LblFileName.Margins.Top := 4;
 
-  // Crear etiqueta para informaci√≥n adicional (tama√±o, tipo, etc.)
+  // Crear etiqueta para informaciÛn adicional (tamaÒo, tipo, etc.)
   LblInfo := TLabel.Create(Result);
   LblInfo.Parent := Result;
   LblInfo.Align := TAlignLayout.Client;
@@ -458,14 +458,14 @@ const
   MAX_IMAGE_WIDTH = 250;
   MAX_IMAGE_HEIGHT = 300;
 begin
-  Result := TImage.Create(nil); // Se a√±adir√° al FContentLayout, sin owner
+  Result := TImage.Create(nil); // Se aÒadir· al FContentLayout, sin owner
   try
     // Cargar la imagen desde el stream del media file
     AMediaFile.Content.Position := 0;
     Result.Bitmap.LoadFromStream(AMediaFile.Content);
     AMediaFile.Content.Position := 0;
 
-    // Calcular tama√±o manteniendo el aspect ratio
+    // Calcular tamaÒo manteniendo el aspect ratio
     var
     LRatio := Result.Bitmap.Width / Result.Bitmap.Height;
     Result.Width := MAX_IMAGE_WIDTH;
@@ -618,7 +618,7 @@ begin
         begin
           LNewMediaFile := TAiMediaFile.Create; // Usa el constructor por defecto
           try
-            // Aqu√≠ est√° la otra parte de la magia: TAiMediaFile se carga desde el JSON
+            // AquÌ est· la otra parte de la magia: TAiMediaFile se carga desde el JSON
             LNewMediaFile.LoadFromJsonObject(LMediaValue as TJSONObject);
             LMediaFiles.Add(LNewMediaFile);
           except
@@ -630,12 +630,12 @@ begin
     end;
 
     // 3. Usamos AddContent para construir el contenido visual con los datos deserializados.
-    // Esto reutiliza toda tu l√≥gica de UI, ¬°es la forma correcta de hacerlo!
+    // Esto reutiliza toda tu lÛgica de UI, °es la forma correcta de hacerlo!
     AddContent(LText, LMediaFiles);
 
   finally
     // AddContent clona los media files gracias a nuestro robusto `Assign`,
-    // as√≠ que podemos liberar nuestra lista temporal sin problemas.
+    // asÌ que podemos liberar nuestra lista temporal sin problemas.
     LMediaFiles.Free;
   end;
 end;
@@ -671,7 +671,7 @@ begin
     DestinationItem.Layers[0].Name := FinalName;
     // DestinationItem.Name := FinalName + '_Dest';
 
-    // Retornar el √≠ndice del item agregado
+    // Retornar el Ìndice del item agregado
     Result := ImageList.Source.Count - 1;
 
   except
@@ -700,14 +700,14 @@ begin
       ResourceStream.Free;
     end;
   except
-    // Cualquier excepci√≥n (incluyendo EResNotFound) se maneja silenciosamente
+    // Cualquier excepciÛn (incluyendo EResNotFound) se maneja silenciosamente
     Result := False;
   end;
 
   // Si no se pudo cargar, crear bitmap en blanco
   if not Result then
   begin
-    ABitmap.SetSize(32, 32); // Tama√±o por defecto, puedes ajustarlo
+    ABitmap.SetSize(32, 32); // TamaÒo por defecto, puedes ajustarlo
     ABitmap.Clear(TAlphaColorRec.Null); // Transparente
   end;
 end;
@@ -723,12 +723,12 @@ begin
   ClearContentControls;
   FMediaFiles.Clear;
 
-  // 2. --- PRIMERO: PROCESAR Y A√ëADIR TODOS LOS ARCHIVOS DE MEDIOS ---
+  // 2. --- PRIMERO: PROCESAR Y A—ADIR TODOS LOS ARCHIVOS DE MEDIOS ---
   if Assigned(AMediaFiles) then
   begin
     for LMediaFile in AMediaFiles do
     begin
-      // Clonamos el media file para que la burbuja sea su due√±a
+      // Clonamos el media file para que la burbuja sea su dueÒa
       NewMediaFile := TAiMediaFile.Create;
       try
         NewMediaFile.Assign(LMediaFile);
@@ -744,7 +744,7 @@ begin
         if not Assigned(LContentControl) then
           LContentControl := CreateDocumentView(NewMediaFile);
 
-        // A√±adimos la vista del archivo al layout
+        // AÒadimos la vista del archivo al layout
         if Assigned(LContentControl) then
           LContentControl.Parent := FContentLayout;
 
@@ -755,11 +755,11 @@ begin
     end;
   end;
 
-  // 3. --- SEGUNDO: A√ëADIR EL TEXTO AL FINAL DE TODO ---
+  // 3. --- SEGUNDO: A—ADIR EL TEXTO AL FINAL DE TODO ---
   if not AText.IsEmpty then
   begin
     LMemo := TMemo.Create(nil);
-    LMemo.Parent := FContentLayout; // Se a√±ade como el √∫ltimo hijo
+    LMemo.Parent := FContentLayout; // Se aÒade como el ˙ltimo hijo
     LMemo.Align := TAlignLayout.Client;
     LMemo.WordWrap := True;
     LMemo.ReadOnly := True;
@@ -768,7 +768,7 @@ begin
     LMemo.TextSettings.Font.Assign(FContentFont);
     LMemo.TextSettings.HorzAlign := TTextAlign.Leading;
     LMemo.Text := AText;
-    LMemo.Height := 50; // La altura se recalcular√° despu√©s
+    LMemo.Height := 50; // La altura se recalcular· despuÈs
     LMemo.Margins.Top := 4;
 
     LMemo.StyleLookup := 'memostyle';
@@ -788,20 +788,20 @@ begin
 
     if Bg is TActiveStyleObject then
     begin
-      // CASO 1: √âxito inmediato (flujo normal). Aplicamos la transparencia ahora.
+      // CASO 1: …xito inmediato (flujo normal). Aplicamos la transparencia ahora.
       TActiveStyleObject(Bg).Opacity := 0;
     end
     else
     begin
       // CASO 2: Falla (flujo de carga desde stream).
-      // Programamos la modificaci√≥n para que se ejecute en el siguiente ciclo de la UI.
+      // Programamos la modificaciÛn para que se ejecute en el siguiente ciclo de la UI.
       TThread.Queue(nil,
         procedure
         var
           DelayedBg: TFmxObject;
         begin
-          // Para cuando este c√≥digo se ejecute, el memo ya estar√° "vivo" en el formulario.
-          // Comprobamos que el control no haya sido destruido en el inter√≠n (buena pr√°ctica).
+          // Para cuando este cÛdigo se ejecute, el memo ya estar· "vivo" en el formulario.
+          // Comprobamos que el control no haya sido destruido en el interÌn (buena pr·ctica).
           LMemo.StyleLookup := 'memostyle';
           LMemo.ApplyStyleLookup;
 
@@ -824,27 +824,27 @@ begin
   // 1. Buscamos el control TMemo dentro de la burbuja.
   LMemo := FindFirstChild<TMemo>;
 
-  // 2. Si no hay un TMemo, no podemos a√±adir texto.
+  // 2. Si no hay un TMemo, no podemos aÒadir texto.
   if not Assigned(LMemo) then
     Exit;
 
   // Opcional: Para una mejor experiencia, si el memo tiene scroll,
-  // y el usuario lo ha movido, podr√≠amos no hacer scroll al final.
+  // y el usuario lo ha movido, podrÌamos no hacer scroll al final.
   // Por ahora, asumimos que siempre queremos ver el final.
   // LShouldScrollToEnd := (LMemo.ViewportPosition.Y >= LMemo.ContentBounds.Height - LMemo.Height - 5);
 
-  // 3. A√±adimos el nuevo fragmento de texto.
-  // LMemo.Lines.Add() a√±adir√≠a una nueva l√≠nea. Para concatenar, usamos Lines.Text.
+  // 3. AÒadimos el nuevo fragmento de texto.
+  // LMemo.Lines.Add() aÒadirÌa una nueva lÌnea. Para concatenar, usamos Lines.Text.
   LMemo.Lines.Text := LMemo.Lines.Text + ATextFragment;
 
-  // Si usas una versi√≥n de Delphi que lo soporte, podr√≠as usar LMemo.Text en lugar de LMemo.Lines.Text
+  // Si usas una versiÛn de Delphi que lo soporte, podrÌas usar LMemo.Text en lugar de LMemo.Lines.Text
   // LMemo.Text := LMemo.Text + ATextFragment;
 
   // 4. Hacemos scroll dentro del memo para mostrar el texto nuevo si es necesario
   LMemo.GoToTextEnd;
 
-  // 5. ¬°CRUCIAL! Notificamos al padre (TChatList) que nuestro contenido ha cambiado
-  // y que un rec√°lculo de nuestro tama√±o es necesario.
+  // 5. °CRUCIAL! Notificamos al padre (TChatList) que nuestro contenido ha cambiado
+  // y que un rec·lculo de nuestro tamaÒo es necesario.
   // if Assigned(FOnRecalculateRequired) then
   // FOnRecalculateRequired(Self);
 end;
@@ -860,7 +860,7 @@ begin
   // 1. Buscamos el control TMemo dentro de la burbuja.
   LMemo := FindFirstChild<TMemo>;
 
-  // 2. Si no hay un TMemo (ej. solo hab√≠a una imagen), LO CREAMOS AHORA.
+  // 2. Si no hay un TMemo (ej. solo habÌa una imagen), LO CREAMOS AHORA.
   if not Assigned(LMemo) then
   begin
     LMemo := TMemo.Create(nil);
@@ -874,7 +874,7 @@ begin
     LMemo.TextSettings.HorzAlign := TTextAlign.Leading;
     LMemo.Margins.Top := 4;
 
-    // Configuraci√≥n de estilo (mismo c√≥digo que en AddContent)
+    // ConfiguraciÛn de estilo (mismo cÛdigo que en AddContent)
     LMemo.StyleLookup := 'memostyle';
     LMemo.ApplyStyleLookup;
 
@@ -898,7 +898,7 @@ begin
     end;
   end;
 
-  // 3. A√±adimos el nuevo fragmento de texto.
+  // 3. AÒadimos el nuevo fragmento de texto.
   LMemo.Lines.Text := LMemo.Lines.Text + ATextFragment;
 
   // 4. Hacemos scroll al final y notificamos cambios
@@ -915,24 +915,24 @@ function TChatBubble.CalculateBubbleSizeForContent(const AContentSize: TSizeF): 
 var
   RequiredWidth, RequiredHeight: Single;
 begin
-  // --- C√ÅLCULO DE ALTURA ---
+  // --- C¡LCULO DE ALTURA ---
   RequiredHeight := 0;
 
-  // 1. A√±adir altura del Header si es visible
+  // 1. AÒadir altura del Header si es visible
   if Self.HeaderVisible then
     RequiredHeight := RequiredHeight + HEADER_HEIGHT;
 
-  // 2. A√±adir paddings verticales + la altura del contenido que nos pasaron
+  // 2. AÒadir paddings verticales + la altura del contenido que nos pasaron
   // RequiredHeight := RequiredHeight + Padding.Top + AContentSize.Height + Padding.Bottom;
   RequiredHeight := RequiredHeight + AContentSize.Height;
 
-  // 3. A√±adir altura del √°rea de iconos si es visible
+  // 3. AÒadir altura del ·rea de iconos si es visible
   if Self.MoreOptionsVisible then
     RequiredHeight := RequiredHeight + ICON_AREA_HEIGHT
   Else
     RequiredHeight := RequiredHeight + Padding.Bottom;
 
-  // --- C√ÅLCULO DE ANCHO (Ya lo ten√≠as, se mantiene) ---
+  // --- C¡LCULO DE ANCHO (Ya lo tenÌas, se mantiene) ---
   RequiredWidth := Self.TailWidth + Padding.Left + AContentSize.Width + Padding.Right;
 
   Result := TSizeF.Create(RequiredWidth, RequiredHeight);
@@ -1005,13 +1005,13 @@ begin
   if Abs(AMemo.Width - AMaxWidth) > 1 then
     AMemo.Width := AMaxWidth;
 
-  // 2. Dejar que el TMemo calcule su contenido. ContentBounds.Height nos dar√° la
+  // 2. Dejar que el TMemo calcule su contenido. ContentBounds.Height nos dar· la
   // altura exacta del texto con el WordWrap aplicado.
-  // Le sumamos los paddings internos del TMemo para el tama√±o total.
+  // Le sumamos los paddings internos del TMemo para el tamaÒo total.
   var
   LHeight := AMemo.ContentBounds.Height + AMemo.Padding.Top + AMemo.Padding.Bottom;
 
-  // 3. Devolvemos el tama√±o. Para el ancho, usamos AMaxWidth para consistencia.
+  // 3. Devolvemos el tamaÒo. Para el ancho, usamos AMaxWidth para consistencia.
   Result := TSizeF.Create(AMaxWidth, LHeight);
 end;
 
@@ -1114,7 +1114,7 @@ begin
   Result := nil;
 
   // Primero, comprobamos si el propio FContentLayout es del tipo buscado.
-  // Es poco probable para TMemo/TImage, pero es una comprobaci√≥n completa.
+  // Es poco probable para TMemo/TImage, pero es una comprobaciÛn completa.
   if FContentLayout is T then
   begin
     Result := T(FContentLayout);
@@ -1122,7 +1122,7 @@ begin
   end;
 
   // Si no, buscamos dentro de los hijos de FContentLayout.
-  // Esta es la parte clave de la correcci√≥n.
+  // Esta es la parte clave de la correcciÛn.
   if Assigned(FContentLayout) then
   begin
     for i := 0 to FContentLayout.ChildrenCount - 1 do
@@ -1417,15 +1417,15 @@ begin
     FContentLayout.EndUpdate;
   end;
 
-  // 3. --- ¬°AQU√ç EST√Å EL OTRO CAMBIO CLAVE! ---
-  // Llamamos a la nueva versi√≥n de ContentSizeCalculator, pas√°ndole
+  // 3. --- °AQUÕ EST¡ EL OTRO CAMBIO CLAVE! ---
+  // Llamamos a la nueva versiÛn de ContentSizeCalculator, pas·ndole
   // el valor de MaxContentWidth que sabemos que es el correcto.
   ContentSizeCalculator(MaxContentWidth, LContentSize);
 
-  // 4. Calculamos el tama√±o final de la burbuja.
+  // 4. Calculamos el tamaÒo final de la burbuja.
   LRequiredSize := CalculateBubbleSizeForContent(LContentSize);
 
-  // 5. Aplicamos el tama√±o.
+  // 5. Aplicamos el tamaÒo.
   Self.Width := AMaxWidth;
   Self.Height := LRequiredSize.Height;
 end;
@@ -1582,14 +1582,14 @@ procedure TChatBubble.SetSizeByContent(const AContentSize: TSizeF);
 var
   LRequiredSize: TSizeF;
 begin
-  // 1. Calcular el tama√±o total requerido para el bubble usando la funci√≥n de ayuda existente.
-  // Esta funci√≥n ya considera si el header est√° visible, los iconos de opciones,
-  // los m√°rgenes y el ancho de la cola (TailWidth).
+  // 1. Calcular el tamaÒo total requerido para el bubble usando la funciÛn de ayuda existente.
+  // Esta funciÛn ya considera si el header est· visible, los iconos de opciones,
+  // los m·rgenes y el ancho de la cola (TailWidth).
   LRequiredSize := CalculateBubbleSizeForContent(AContentSize);
 
-  // 2. Asignar el nuevo tama√±o (ancho y alto) al componente.
-  // Al cambiar el tama√±o, se disparar√° el evento OnResize, que a su vez
-  // llama a InvalidateLayout, forzando al componente a recalcular sus √°reas internas
+  // 2. Asignar el nuevo tamaÒo (ancho y alto) al componente.
+  // Al cambiar el tamaÒo, se disparar· el evento OnResize, que a su vez
+  // llama a InvalidateLayout, forzando al componente a recalcular sus ·reas internas
   // y a redibujarse correctamente.
   Self.Height := LRequiredSize.Height;
   Self.Width := LRequiredSize.Width - 30;
@@ -1750,7 +1750,7 @@ begin
   try
     for LMediaFile in FMediaFiles do
     begin
-      // Aqu√≠ est√° la magia: TAiMediaFile sabe c√≥mo convertirse a JSON
+      // AquÌ est· la magia: TAiMediaFile sabe cÛmo convertirse a JSON
       LMediaArray.AddElement(LMediaFile.ToJsonObject);
     end;
     Result.AddPair('mediaFiles', LMediaArray);
@@ -2051,8 +2051,8 @@ begin
     FScaledAvatar.SetSize(Round(FAvatarRect.Width), Round(FAvatarRect.Height));
     FScaledAvatar.Canvas.BeginScene;
     try
-      // *** CAMBIO: Se limpia el lienzo con blanco para dar un fondo s√≥lido al avatar. ***
-      // Esto soluciona problemas con im√°genes que tienen transparencias.
+      // *** CAMBIO: Se limpia el lienzo con blanco para dar un fondo sÛlido al avatar. ***
+      // Esto soluciona problemas con im·genes que tienen transparencias.
       FScaledAvatar.Canvas.Clear(TAlphaColors.White);
       FScaledAvatar.Canvas.DrawBitmap(FAvatar, FAvatar.BoundsF, FScaledAvatar.BoundsF, 1.0, True);
     finally

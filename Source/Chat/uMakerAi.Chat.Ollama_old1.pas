@@ -1,4 +1,4 @@
-Ôªø// IT License
+// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr√≠quez
+// Nombre: Gustavo EnrÌquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -66,7 +66,7 @@ type
     Destructor Destroy; Override;
     Function GetMessages: TJSonArray; Override;
 
-    // ----- FUNCIONES DE GESTI√ìN DE MODELOS  -----------
+    // ----- FUNCIONES DE GESTI”N DE MODELOS  -----------
     procedure PullModel(const aModelName: string);
     procedure CreateModel(const aNewModelName, aModelfileContent: string);
     function ShowModelInfo(const aModelName: string): TJSonObject;
@@ -79,7 +79,7 @@ type
     class function CreateInstance(Sender: TComponent): TAiChat; Override;
 
   Published
-    // Controla cu√°nto tiempo se mantiene el modelo en memoria (ej: "5m", "1h", "-1" para infinito)
+    // Controla cu·nto tiempo se mantiene el modelo en memoria (ej: "5m", "1h", "-1" para infinito)
     property keep_alive: String read Fkeep_alive write Setkeep_alive;
   End;
 
@@ -181,15 +181,15 @@ begin
 
         LArgsObj := nil;
 
-        // --- SOLUCI√ìN H√çBRIDA ---
-        // CASO 1: Ollama env√≠a un Objeto JSON real
+        // --- SOLUCI”N HÕBRIDA ---
+        // CASO 1: Ollama envÌa un Objeto JSON real
         if LFunctionObj.TryGetValue<TJSonObject>('arguments', LArgsObj) then
         begin
           LToolCall.Arguments := LArgsObj.ToJSON;
           for LPair in LArgsObj do
             LToolCall.Params.Values[LPair.JsonString.Value] := LPair.JsonValue.Value;
         end
-        // CASO 2: Env√≠a un String (OpenAI Standard)
+        // CASO 2: EnvÌa un String (OpenAI Standard)
         else if LFunctionObj.TryGetValue<string>('arguments', LArgsStr) then
         begin
           LToolCall.Arguments := LArgsStr;
@@ -236,7 +236,7 @@ begin
     JObj.AddPair('role', Msg.Role);
     JObj.AddPair('content', Msg.Prompt);
 
-    // Manejo de im√°genes (Multimodal)
+    // Manejo de im·genes (Multimodal)
     // Ollama espera "images": ["base64string", ...] dentro del objeto message
     if Msg.MediaFiles.Count > 0 then
     begin
@@ -332,7 +332,7 @@ begin
     End
     else
     begin
-      // No lanzamos excepci√≥n cr√≠tica, solo devolvemos lista vac√≠a o log
+      // No lanzamos excepciÛn crÌtica, solo devolvemos lista vacÌa o log
       // Raise Exception.CreateFmt('Error Getting Models: %d', [Res.StatusCode]);
     end;
   Finally
@@ -349,7 +349,7 @@ Var
   LAsincronico: Boolean;
   LModel: String;
 begin
-  // Documentaci√≥n: https://github.com/ollama/ollama/blob/main/docs/api.md#generate-a-chat-completion
+  // DocumentaciÛn: https://github.com/ollama/ollama/blob/main/docs/api.md#generate-a-chat-completion
 
   if User = '' then
     User := 'user';
@@ -364,7 +364,7 @@ begin
   Lista := TStringList.Create;
 
   Try
-    // Par√°metros ra√≠z
+    // Par·metros raÌz
     AJSONObject.AddPair('model', LModel);
     AJSONObject.AddPair('messages', GetMessages);
     AJSONObject.AddPair('stream', LAsincronico);
@@ -416,17 +416,17 @@ begin
       JOptions.AddPair('stop', JStop);
     end;
 
-    // A√±adir objeto options al root
+    // AÒadir objeto options al root
     if JOptions.Count > 0 then
       AJSONObject.AddPair('options', JOptions)
     else
-      JOptions.Free; // Si est√° vac√≠o lo liberamos, si se a√±adi√≥, AJSONObject es due√±o.
+      JOptions.Free; // Si est· vacÌo lo liberamos, si se aÒadiÛ, AJSONObject es dueÒo.
 
     Result := AJSONObject.ToJSON;
 
   Finally
-    // Si JOptions fue a√±adido a AJSONObject, no liberarlo aqu√≠.
-    // Si no fue a√±adido, lo liberamos arriba.
+    // Si JOptions fue aÒadido a AJSONObject, no liberarlo aquÌ.
+    // Si no fue aÒadido, lo liberamos arriba.
     // AJSONObject libera sus hijos.
     AJSONObject.Free;
     Lista.Free;
@@ -518,7 +518,7 @@ begin
   Finally
     If FClient.Asynchronous = False then
       St.Free;
-    // Esto no funciona en multiarea, as√≠ que se libera cuando no lo es.
+    // Esto no funciona en multiarea, asÌ que se libera cuando no lo es.
   End;
 end;
 
@@ -579,10 +579,10 @@ var
               end;
             end;
 
-            // 3. ACUMULACI√ìN DE TOOL CALLS (Streaming)
+            // 3. ACUMULACI”N DE TOOL CALLS (Streaming)
             if LMessageObj.TryGetValue<TJSonArray>('tool_calls', LToolCallsArray) then
             begin
-              // Nota: Ollama suele mandar el tool call completo, pero preparamos l√≥gica de buffer
+              // Nota: Ollama suele mandar el tool call completo, pero preparamos lÛgica de buffer
               // por si acaso fragmenta argumentos en el futuro o con ciertos modelos.
               for var LToolCallVal in LToolCallsArray do
               begin
@@ -610,7 +610,7 @@ var
                     if LBufferObj.GetValue('type') = nil then
                       LBufferObj.AddPair('type', LStrValue);
 
-                  // Acumular Funci√≥n (Nombre y Argumentos)
+                  // Acumular FunciÛn (Nombre y Argumentos)
                   if LCurrentTool.TryGetValue<TJSonObject>('function', LFuncObj) then
                   begin
                     if not LBufferObj.TryGetValue<TJSonObject>('function', LBufferFunc) then
@@ -639,7 +639,7 @@ var
 
                       // Clonamos el objeto de argumentos actual
                       LBufferFunc.AddPair('arguments', TJSonObject(TJSonObject.ParseJSONValue(LStrValue).Clone));
-                      // OJO: Si Ollama manda argumentos parciales como string, la l√≥gica cambia.
+                      // OJO: Si Ollama manda argumentos parciales como string, la lÛgica cambia.
                       // Actualmente Ollama manda argumentos completos.
                     end;
                   end;
@@ -697,7 +697,7 @@ var
         LJsonObject.Free;
       end;
     except
-      // Ignorar errores de parseo en l√≠neas corruptas
+      // Ignorar errores de parseo en lÌneas corruptas
     end;
   end;
 
@@ -720,7 +720,7 @@ begin
     FResponse.Clear;
     FTmpResponseText := FTmpResponseText + LChunkStr;
 
-    // Procesar l√≠neas completas
+    // Procesar lÌneas completas
     while Pos(#10, FTmpResponseText) > 0 do
     begin
       P := Pos(#10, FTmpResponseText);
@@ -742,12 +742,12 @@ var
   LRole, LContent, LReasoning, sToolCallsJSON: string;
   LPromptTokens, LEvalTokens: Integer;
 
-  // Variables para simulaci√≥n y ejecuci√≥n
+  // Variables para simulaciÛn y ejecuciÛn
   LChoicesSimulado: TJSonArray;
   LFunciones: TAiToolsFunctions;
   LToolCall: TAiToolsFunction;
 
-  // Variables para extracci√≥n de archivos
+  // Variables para extracciÛn de archivos
   Code: TMarkdownCodeExtractor;
   CodeFiles: TCodeFileList;
   CodeFile: TCodeFile;
@@ -797,7 +797,7 @@ begin
   if Assigned(LMessageObj) and LMessageObj.TryGetValue<TJSonArray>('tool_calls', LToolCallsArray) then
   begin
     if LToolCallsArray.Count > 0 then
-      sToolCallsJSON := LToolCallsArray.ToJSON; // Usar ToJSON para evitar saltos de l√≠nea extras
+      sToolCallsJSON := LToolCallsArray.ToJSON; // Usar ToJSON para evitar saltos de lÌnea extras
   end;
 
   ResMsg.Role := LRole;
@@ -814,7 +814,7 @@ begin
   // ===========================================================================
   if sToolCallsJSON <> '' then
   begin
-    // 1. A√±adimos el mensaje que PIDE la herramienta
+    // 1. AÒadimos el mensaje que PIDE la herramienta
     if FMessages.IndexOf(ResMsg) = -1 then
     begin
        ResMsg.Id := FMessages.Count + 1;
@@ -843,7 +843,7 @@ begin
           end;
         end;
 
-        // 3. A√±adir Respuestas (Role: Tool)
+        // 3. AÒadir Respuestas (Role: Tool)
         for var Key in LFunciones.Keys do
         begin
           LToolCall := LFunciones[Key];
@@ -876,7 +876,7 @@ begin
 
     Self.FLastContent := LContent;
 
-    // Extracci√≥n de Archivos
+    // ExtracciÛn de Archivos
     if (tfc_ExtracttextFile in NativeOutputFiles) and (LContent <> '') then
     begin
       Code := TMarkdownCodeExtractor.Create;
@@ -900,9 +900,9 @@ begin
     end;
 
     // =======================================================================
-    // CORRECCI√ìN CR√çTICA:
-    // La clase padre TAiChat.Run NO a√±ade el mensaje si AskMsg.Role = 'tool'.
-    // Como venimos de una recursi√≥n de tools, debemos forzar la adici√≥n aqu√≠.
+    // CORRECCI”N CRÕTICA:
+    // La clase padre TAiChat.Run NO aÒade el mensaje si AskMsg.Role = 'tool'.
+    // Como venimos de una recursiÛn de tools, debemos forzar la adiciÛn aquÌ.
     // =======================================================================
     if FMessages.IndexOf(ResMsg) = -1 then
     begin
@@ -920,7 +920,7 @@ begin
 end;
 
 
-// ======================= GESTI√ìN DE MODELOS =======================
+// ======================= GESTI”N DE MODELOS =======================
 
 procedure TAiOllamaChat.CopyModel(const aSourceModel, aDestinationModel: string);
 var
@@ -975,7 +975,7 @@ begin
         LStatusObj := TJSonObject.ParseJSONValue(LLine) as TJSonObject;
         if Assigned(LStatusObj) then
           try
-            // Aqu√≠ se podr√≠a extraer 'status', 'total', 'completed'
+            // AquÌ se podrÌa extraer 'status', 'total', 'completed'
             OnProgressEvent(Self, LStatusObj.GetValue<string>('status', ''), 0, 0);
           finally
             LStatusObj.Free;
@@ -1003,8 +1003,8 @@ begin
     LBodyStream.WriteString(LJsonObject.ToJSON);
     LBodyStream.Position := 0;
 
-    // TNetHTTPClient.Delete con body requiere versi√≥n reciente o usar Execute('DELETE'...)
-    // Asumimos que tu versi√≥n soporta Delete con Stream o usamos Execute
+    // TNetHTTPClient.Delete con body requiere versiÛn reciente o usar Execute('DELETE'...)
+    // Asumimos que tu versiÛn soporta Delete con Stream o usamos Execute
     FClient.Execute('DELETE', LUrl, LBodyStream);
   finally
     LJsonObject.Free;
@@ -1110,7 +1110,7 @@ begin
   if aModel = '' then
     aModel := FModel;
 
-  // Endpoint actualizado seg√∫n documentaci√≥n
+  // Endpoint actualizado seg˙n documentaciÛn
   sUrl := Url + 'api/embed';
 
   Client := TNetHTTPClient.Create(Nil);
@@ -1124,7 +1124,7 @@ begin
     // API /api/embed espera "input" que puede ser string o array de strings
     JObj.AddPair('input', aInput);
 
-    // Par√°metros opcionales si se soportan en options
+    // Par·metros opcionales si se soportan en options
     // JObj.AddPair('options', ...);
 
     St.WriteString(JObj.ToJSON);
@@ -1135,7 +1135,7 @@ begin
 
     if Res.StatusCode = 200 then
     Begin
-      JObj.Free; // Liberar el de la petici√≥n
+      JObj.Free; // Liberar el de la peticiÛn
       JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
       ParseEmbedding(JObj);
       Result := Self.Data;

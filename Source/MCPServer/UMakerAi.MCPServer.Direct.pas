@@ -1,18 +1,18 @@
-// IT License
+// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enrï¿½quez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -38,7 +38,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON,
-  UMakerAi.MCPServer.Core, uJSONHelper;
+  UMakerAi.MCPServer.Core;
 
 type
   TAiMCPDirectConnection = class(TAiMCPServer)
@@ -107,8 +107,8 @@ begin
   if not IsActive then
     raise Exception.Create('Direct Connection is not active. Call Start first.');
 
-  // El dueï¿½o de AParams es este mï¿½todo, se libera aquï¿½.
-  // Si AParams es nil, creamos uno vacï¿½o.
+  // El due?o de AParams es este m?todo, se libera aqu?.
+  // Si AParams es nil, creamos uno vac?o.
   if not Assigned(AParams) then
     AParams := TJSONObject.Create
   else
@@ -127,12 +127,12 @@ begin
     RequestObj.Free; // Libera RequestObj y AParams
   end;
 
-  // Ejecutar la peticiï¿½n
+  // Ejecutar la petici?n
   ResponseStr := FLogicServer.ExecuteRequest(RequestStr, 'direct_connection');
 
   // Parsear la respuesta
   if ResponseStr = '' then
-    Exit; // Notificaciï¿½n, sin resultado
+    Exit; // Notificaci?n, sin resultado
 
   JsonValue := TJSONObject.ParseJSONValue(ResponseStr);
   if not(JsonValue is TJSONObject) then
@@ -153,8 +153,11 @@ begin
     // Extraer el resultado
     if ResponseJSON.TryGetValue('result', ResultValue) then
     begin
-      // Clonamos el resultado para que el llamador sea el dueï¿½o
-      Result := ResultValue.Clone as TJSONObject;
+      // Clonamos el resultado para que el llamador sea el dueño
+      if ResultValue is TJSONObject then
+        Result := TJSONObject(ResultValue.Clone)
+      else
+        raise Exception.Create('Unexpected result type in JSON-RPC response.');
     end;
   finally
     ResponseJSON.Free;
@@ -184,7 +187,7 @@ function TAiMCPDirectConnection.CallTool(const AToolName: string; AArguments: TJ
 var
   Params: TJSONObject;
 begin
-  // AArguments es pasado al mï¿½todo ExecuteDirectRequest, que tomarï¿½ posesiï¿½n de ï¿½l.
+  // AArguments es pasado al m?todo ExecuteDirectRequest, que tomar? posesi?n de ?l.
   // El llamador no debe liberar AArguments.
   if not Assigned(AArguments) then
     AArguments := TJSONObject.Create;
@@ -209,7 +212,7 @@ begin
       ArgsObject.AddPair(AArguments.Names[i], AArguments.ValueFromIndex[i]);
     end;
   end;
-  // Llamamos a la versiï¿½n principal. A partir de aquï¿½, no debemos liberar ArgsObject.
+  // Llamamos a la versi?n principal. A partir de aqu?, no debemos liberar ArgsObject.
   Result := CallTool(AToolName, ArgsObject);
 end;
 

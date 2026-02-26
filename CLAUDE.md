@@ -4,9 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MakerAI is an AI orchestration framework for Delphi developers (v3.2). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, Grok, Mistral, Cohere, LM Studio), RAG systems (vector and graph-based), MCP servers, autonomous agents, and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (full support: 11 Alexandria+).
+MakerAI is an AI orchestration framework for Delphi developers (v3.3). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers, autonomous agents, and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (full support: 11 Alexandria+).
+
+**v3.3 highlights:** nuevo sistema de orquestación `TAiCapabilities` (`ModelCaps`/`SessionCaps`) que unifica y simplifica la configuración de capacidades por modelo; soporte de modelos actualizado para todos los providers (Feb 2026).
 
 **Official Website:** https://makerai.cimamaker.com
+
+**Language note:** Code comments, variable names, and some documentation are in **Spanish**. When writing new code or comments, follow the existing style of the file being edited (Spanish if the file uses Spanish, English otherwise).
+
+**Git workflow:** `master` is the main/release branch. `dev` is the active development branch. PRs target `master`.
+
+**Testing:** There is no formal test suite or CI/CD pipeline. Testing is done manually via the 18+ demo projects in `Demos/`. When modifying core functionality, verify changes by running relevant demos in the Delphi IDE.
 
 ## Building and Installation
 
@@ -59,7 +67,7 @@ curl -X POST http://localhost:8080/mcp \
 - **Async transcription**: OpenAI async transcription mode pending
 - **OpenAI Audio streaming events**: `speech.audio.delta` and `transcript.text.delta` parsing not implemented
 - **Mistral OCR annotations**: Feature stub present but unimplemented
-- **Claude Citations (RAG nativo)**: Future implementation planned for native citation support
+- **Claude Citations (RAG nativo)**: Implementación parcial disponible; soporte completo pendiente
 - **Gemini Speech cost estimation**: Token/cost tracking not yet implemented
 
 ## Architecture
@@ -98,14 +106,14 @@ curl -X POST http://localhost:8080/mcp \
 ### Core Layers
 
 **Core (`Source/Core/`)**: Foundation classes
-- `uMakerAi.Core.pas` - Base types: `TAiMediaFile`, `TAiFileCategory`, `TAiChatMediaSupport`, chat states
-- `uMakerAi.Chat.pas` - Abstract `TAiChat` base class for all LLM drivers
+- `uMakerAi.Core.pas` - Base types: `TAiMediaFile`, `TAiFileCategory`, `TAiChatMediaSupport`, `TAiCapability`, `TAiCapabilities`, chat states
+- `uMakerAi.Chat.pas` - Abstract `TAiChat` base class; incluye `ModelCaps`, `SessionCaps`, `RunNew`, `RunLegacy`, `EnsureNewSystemConfig`
 - `uMakerAi.Chat.Messages.pas` - Message handling (`TAiChatMessage`, `TAiChatMessages`)
 - `uMakerAi.Embeddings.pas` - Embedding generation
 
 **Chat Drivers (`Source/Chat/`)**: LLM-specific implementations
 - `uMakerAi.Chat.AiConnection.pas` - `TAiChatConnection` universal connector (switch providers via `DriverName` property)
-- Provider-specific drivers: `TAiOpenChat`, `TAiClaudeChat`, `TAiGeminiChat`, `TAiOllamaChat`, `TAiGroqChat`, `TAiDeepSeekChat`, `TAiKimiChat`, `TAiGrokChat`, `TAiMistralChat`, `TCohereChat`, `TAiLMStudioChat`
+- Provider-specific drivers: `TAiOpenChat`, `TAiClaudeChat`, `TAiGeminiChat`, `TAiOllamaChat`, `TAiGroqChat`, `TAiDeepSeekChat`, `TAiKimiChat`, `TAiGrokChat`, `TAiMistralChat`, `TCohereChat`, `TAiLMStudioChat`, `TAiGenericChat`
 - `uMakerAi.Chat.Initializations.pas` - Driver registration and default model parameters via `TAiChatFactory`
 
 **Agents (`Source/Agents/`)**: Autonomous agent framework
@@ -143,10 +151,15 @@ curl -X POST http://localhost:8080/mcp \
 
 **Driver Registration**: Chat drivers register via `uMakerAi.Chat.Initializations.pas` using `TAiChatFactory.Instance.RegisterUserParam()`. Custom drivers inherit from `TAiChat`.
 
-**Model Capabilities Configuration**: Model capabilities (vision, tools, reasoning) are configured per-provider and per-model in `uMakerAi.Chat.Initializations.pas` using:
-- `NativeInputFiles` - File types the model accepts natively (e.g., `[Tfc_Image]`)
-- `ChatMediaSupports` - Logical capabilities (e.g., `[Tcm_Text, Tcm_Image, Tcm_Reasoning]`)
-- `EnabledFeatures` - Features to enable for the model
+**Model Capabilities Configuration (v3.3)**: Model capabilities are configured per-provider and per-model in `uMakerAi.Chat.Initializations.pas` usando el nuevo sistema unificado:
+- `ModelCaps` (`TAiCapabilities`) — capacidades nativas del modelo vía completions (e.g., `[cap_Image, cap_Reasoning]`)
+- `SessionCaps` (`TAiCapabilities`) — capacidades deseadas en la sesión; **Gap = SessionCaps − ModelCaps** activa bridges automáticamente
+- `ThinkingLevel` — nivel de razonamiento (`tlLow`, `tlMedium`, `tlHigh`)
+- `Tool_Active` — habilita function calling
+
+Sistema legacy aún soportado (traducción automática vía `EnsureNewSystemConfig`):
+- `NativeInputFiles` / `NativeOutputFiles` — tipos de archivo físico
+- `ChatMediaSupports` / `EnabledFeatures` — capacidades lógicas legacy
 
 ### Agent Graph Execution Model
 
@@ -161,6 +174,9 @@ Agents use a directed graph with nodes (`TAIAgentsNode`) and links (`TAIAgentsLi
 | Task | Primary File |
 |------|-------------|
 | Add new LLM provider | `Source/Chat/uMakerAi.Chat.*.pas` (inherit from `TAiChat`) |
+| Configure model capabilities | `Source/Chat/uMakerAi.Chat.Initializations.pas` |
+| Modify capability orchestration | `Source/Core/uMakerAi.Chat.pas` (`RunNew`, `EnsureNewSystemConfig`) |
+| Add TAiCapability value | `Source/Core/uMakerAi.Core.pas` (`TAiCapability` enum) |
 | Modify function calling | `Source/Tools/uMakerAi.Tools.Functions.pas` |
 | RAG vector operations | `Source/RAG/uMakerAi.RAG.Vectors.pas` |
 | RAG graph operations | `Source/RAG/uMakerAi.RAG.Graph.Core.pas` |
@@ -205,23 +221,7 @@ uses uJSONHelper;  // JSON helper for older Delphi versions
 
 ### Feature Flags (uMakerAi.Version.inc)
 
-| Flag | Value | Description |
-|------|-------|-------------|
-| `MAKERAI_HAS_OPENAI` | True | OpenAI provider support |
-| `MAKERAI_HAS_WHISPER` | True | Speech-to-text |
-| `MAKERAI_HAS_EMBEDDINGS` | True | Embedding generation |
-| `MAKERAI_HAS_TOOL_CALLING` | True | Function calling framework |
-| `MAKERAI_HAS_RAG_VECTOR` | True | Vector-based RAG |
-| `MAKERAI_HAS_RAG_GRAPH` | True | Graph-based RAG |
-| `MAKERAI_HAS_MCP` | True | Model Context Protocol |
-| `MAKERAI_HAS_CHAT_CONNECTION` | True | TAiChatConnection universal connector |
-| `MAKERAI_HAS_UI_COMPONENTS` | True | FMX visual chat components |
-| `MAKERAI_HAS_AGENTS` | True | Agent orchestration |
-| `MAKERAI_SUPPORT_WINDOWS` | True | Windows platform |
-| `MAKERAI_SUPPORT_LINUX` | True | Linux platform |
-| `MAKERAI_SUPPORT_MACOS` | **False** | macOS (incomplete) |
-| `MAKERAI_SUPPORT_MOBILE` | True | Mobile (Android/iOS) |
-| `MAKERAI_API_LEVEL` | 30 | Internal API compatibility level |
+All `MAKERAI_HAS_*` feature flags are `True` by default (OpenAI, Whisper, Embeddings, Tool Calling, RAG Vector/Graph, MCP, Chat Connection, UI Components, Agents). Platform flags: Windows, Linux, Mobile are `True`; **macOS is `False`** (incomplete). `MAKERAI_API_LEVEL = 30`.
 
 ## Thread Safety Notes
 
@@ -259,29 +259,23 @@ uses uJSONHelper;  // JSON helper for older Delphi versions
 2. Implement required abstract methods for API communication
 3. Register the driver in `uMakerAi.Chat.Initializations.pas`:
    ```pascal
-   TAiChatFactory.Instance.RegisterUserParam('ProviderName', 'Max_Tokens', '8000');
-   TAiChatFactory.Instance.RegisterUserParam('ProviderName', 'NativeInputFiles', '[Tfc_Image]');
-   TAiChatFactory.Instance.RegisterUserParam('ProviderName', 'ChatMediaSupports', '[Tcm_Text, Tcm_Image]');
+   TAiChatFactory.Instance.RegisterUserParam('ProviderName', 'Max_Tokens',  '16000');
+   TAiChatFactory.Instance.RegisterUserParam('ProviderName', 'Tool_Active', 'True');
+   TAiChatFactory.Instance.RegisterUserParam('ProviderName', 'ModelCaps',   '[cap_Image]');
+   TAiChatFactory.Instance.RegisterUserParam('ProviderName', 'SessionCaps', '[cap_Image]');
+   // Modelo con reasoning:
+   TAiChatFactory.Instance.RegisterUserParam('ProviderName', 'my-model', 'ModelCaps',    '[cap_Image, cap_Reasoning]');
+   TAiChatFactory.Instance.RegisterUserParam('ProviderName', 'my-model', 'ThinkingLevel', 'tlMedium');
    ```
 4. Add the unit to `MakerAI.dpk` package
 
 ## Dependencies
 
-### External Delphi Packages Required
+All packages require standard Delphi RTL, RESTComponents, LiveBindings, and Indy. Additional notable dependencies:
 
-| Dependency | Used By | Purpose |
-|------------|---------|---------|
-| `rtl` | All packages | Delphi runtime library |
-| `RESTComponents` | All packages | HTTP REST client (TRESTClient, TRESTRequest) |
-| `bindengine`, `bindcomp` | All packages | LiveBindings engine |
-| `IndySystem`, `IndyCore`, `IndyProtocols` | MakerAI.dpk | Indy HTTP/TCP for MCP StdIO and streaming |
-| `inet` | MakerAI.dpk | Internet utilities |
-| `xmlrtl` | MakerAI.dpk, RAG.Drivers | XML parsing |
-| `fmx` | MakerAi.UI.dpk | FireMonkey framework (UI components) |
-| `FireDAC`, `FireDACCommon`, `FireDACCommonDriver` | MakerAi.RAG.Drivers.dpk | Database access for PostgreSQL RAG |
-| `dbrtl` | RAG.Drivers, UI, Dsg | Database runtime |
-| `vcl` | MakerAiDsg.dpk | VCL framework (design-time editors only) |
-| `designide` | MakerAiDsg.dpk | Delphi IDE design-time integration |
+- **MakerAi.RAG.Drivers.dpk**: FireDAC (PostgreSQL database access)
+- **MakerAi.UI.dpk**: FMX (FireMonkey visual framework)
+- **MakerAiDsg.dpk**: VCL + `designide` (design-time IDE integration only)
 
 ### Package Dependency Chain
 
@@ -295,31 +289,13 @@ MakerAI.dpk (standalone - no internal deps)
 
 ## Environment Variables
 
-API keys use the `@VAR_NAME` convention. When an API key property starts with `@`, the framework resolves it via `GetEnvironmentVariable()` at runtime. This is handled automatically in `TAiChat.ApiKey` getter and in the design-time `TParamsRegistry`.
+API keys use the `@VAR_NAME` convention. When a key property starts with `@`, the framework resolves it via `GetEnvironmentVariable()` at runtime (handled in `TAiChat.ApiKey` getter and `TParamsRegistry`).
 
-### Required Variables by Provider
-
-| Variable | Provider | Notes |
-|----------|----------|-------|
-| `OPENAI_API_KEY` | OpenAI (GPT, Whisper, DALL-E, Sora, Audio) | Default for all OpenAI endpoints |
-| `CLAUDE_API_KEY` | Anthropic Claude | |
-| `GEMINI_API_KEY` | Google Gemini (Chat, Video/Veo, Speech, WebSearch) | |
-| `OLLAMA_API_KEY` | Ollama (local) | Usually empty for local setups |
-| `GROQ_API_KEY` | Groq | |
-| `DEEPSEEK_API_KEY` | DeepSeek | |
-| `KIMI_API_KEY` | Kimi/Moonshot | |
-| `GROK_API_KEY` | xAI Grok | |
-| `MISTRAL_API_KEY` | Mistral AI | |
-| `COHERE_API_KEY` | Cohere | |
-
-### Usage
+**Convention:** Each provider uses `[PROVIDER]_API_KEY` (e.g., `OPENAI_API_KEY`, `CLAUDE_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `KIMI_API_KEY`, `GROK_API_KEY`, `MISTRAL_API_KEY`, `COHERE_API_KEY`). `OLLAMA_API_KEY` is usually empty for local setups.
 
 ```pascal
-// Automatic: set @-prefixed key, resolved at runtime
-AiConnection.ApiKey := '@OPENAI_API_KEY';
-
-// Manual: pass literal key directly
-AiConnection.ApiKey := 'sk-...';
+AiConnection.ApiKey := '@OPENAI_API_KEY';  // Resolved via GetEnvironmentVariable
+AiConnection.ApiKey := 'sk-...';           // Literal key
 ```
 
 ## Error Handling
@@ -410,6 +386,8 @@ Detailed documentation is available in `Docs/Version 3/`:
 | `uMakerAi-RAG.ES.pdf` | RAG documentation (Spanish) |
 
 ## Navigation
+
+**This project uses a tiered CLAUDE.md system.** Each `Source/` subdirectory and each demo has its own `CLAUDE.md` with module-specific guidance. Read the relevant sub-CLAUDE.md before working on a specific module.
 
 ### Source Modules
 

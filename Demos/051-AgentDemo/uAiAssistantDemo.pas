@@ -41,7 +41,7 @@ uses
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs,
   FMX.Memo.Types, FMX.StdCtrls, FMX.Controls.Presentation, FMX.ScrollBox,
   FMX.Memo, uMakerAi.Chat, uMakerAi.Prompts, uMakerAi.Core, uMakerAi.Utils.System,
-  uMakerAi.Chat.OpenAi, uMakerAi.Agents;
+  uMakerAi.Chat.OpenAi, uMakerAi.Agents, uMakerAi.Chat.AiConnection, uMakerAi.Chat.Messages;
 
 type
   TForm70 = class(TForm)
@@ -61,6 +61,7 @@ type
     AIAgentsLink1: TAIAgentsLink;
     AIAgentsNode1: TAIAgentsNode;
     AiOpenChat1: TAiOpenChat;
+    Label4: TLabel;
     procedure AIChain1Print(Sender: TObject; Value: string);
     procedure EndNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
     procedure AiNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
@@ -156,14 +157,14 @@ end;
 
 procedure TForm70.Button2Click(Sender: TObject);
 begin
-  //Label4.Text := 'Este es el texto del label';
+  Label4.Text := 'Este es el texto del label';
 
   AIAgentsManager.Run(MemoPrompt.Lines.Text);
 end;
 
 procedure TForm70.clickdellabel(Sender: TObject);
 begin
-   Label4.Text := 'este es el evento del label';
+  Label4.Text := 'este es el evento del label';
 end;
 
 procedure TForm70.EndNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
