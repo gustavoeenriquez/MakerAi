@@ -255,7 +255,9 @@ type
     FBuffer: string;
 
     // Eventos del componente TNetHTTPClient
+{$IF CompilerVersion >= 36}  // D12+ - OnReceiveDataEx no disponible en D11 y anteriores
     procedure DoReceiveDataEx(const Sender: TObject; AContentLength, AReadCount: Int64; AChunk: Pointer; AChunkLength: Cardinal; var ABort: Boolean);
+{$IFEND}
     procedure DoRequestCompleted(const Sender: TObject; const AResponse: IHTTPResponse);
     procedure DoRequestError(const Sender: TObject; const AError: string); // Adaptado para simplificar Exception/Error
     procedure DoRequestException(const Sender: TObject; const AException: Exception);
@@ -2102,7 +2104,9 @@ begin
   FHttpClient.SynchronizeEvents := False;
 
   // --- ASIGNACI?N DE EVENTOS (Estilo Cl?sico) ---
+{$IF CompilerVersion >= 36}  // D12+ - OnReceiveDataEx no disponible en D11 y anteriores
   FHttpClient.OnReceiveDataEx := DoReceiveDataEx;
+{$IFEND}
   FHttpClient.OnRequestCompleted := DoRequestCompleted;
 
   // Aqu? asignamos directamente el m?todo de la clase.
@@ -2216,6 +2220,7 @@ begin
   end;
 end;
 
+{$IF CompilerVersion >= 36}  // D12+ - OnReceiveDataEx no disponible en D11 y anteriores
 procedure TMCPClientSSE.DoReceiveDataEx(const Sender: TObject; AContentLength, AReadCount: Int64; AChunk: Pointer; AChunkLength: Cardinal; var ABort: Boolean);
 var
   LBytes: TBytes;
@@ -2254,6 +2259,7 @@ begin
     end;
   end;
 end;
+{$IFEND}
 
 // -----------------------------------------------------------------------------
 // PROCESAMIENTO DE BUFFER (Id?ntico a la versi?n anterior)
