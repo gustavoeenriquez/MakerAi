@@ -2,27 +2,27 @@
 // Version Information
 const
   MAKERAI_VERSION_MAJOR    = 3;
-  MAKERAI_VERSION_MINOR    = 2;
+  MAKERAI_VERSION_MINOR    = 3;
   MAKERAI_VERSION_RELEASE  = 0;
-  MAKERAI_VERSION_BUILD    = 1;
+  MAKERAI_VERSION_BUILD    = 0;
 
 // Version String Formats
 const
-  MAKERAI_VERSION_SHORT    = '3.2';
-  MAKERAI_VERSION_FULL     = '3.2.0.1';
-  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.2.0.1';
-  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.2 - UI Components & Graph RAG and Chat Tools';
+  MAKERAI_VERSION_SHORT    = '3.3';
+  MAKERAI_VERSION_FULL     = '3.3.0.0';
+  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.3.0.0';
+  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.3 - TAiCapabilities, Agents Checkpoints & Updated Models (Feb 2026)';
 
 // Product Information
 const
   MAKERAI_PRODUCT_NAME     = 'MakerAi Library';
-  MAKERAI_COMPANY_NAME     = 'Gustavo Enríquez';
-  MAKERAI_COPYRIGHT        = 'Copyright © 2024-2026 Gustavo Enríquez - CimaMaker';
+  MAKERAI_COMPANY_NAME     = 'Gustavo Enrï¿½quez';
+  MAKERAI_COPYRIGHT        = 'Copyright ï¿½ 2024-2026 Gustavo Enrï¿½quez - CimaMaker';
   MAKERAI_DESCRIPTION      = 'Advanced AI Integration Library for Delphi';
 
 // Build Information
 const
-  MAKERAI_BUILD_DATE       = '2026-01-06';
+  MAKERAI_BUILD_DATE       = '2026-02-26';
   MAKERAI_BUILD_TIME       = '12:00:00';
   MAKERAI_BUILD_PLATFORM   = {$IFDEF WIN32}'Win32'{$ENDIF}
                             {$IFDEF WIN64}'Win64'{$ENDIF}
@@ -38,8 +38,8 @@ const
 
 // API Compatibility
 const
-  MAKERAI_API_LEVEL        = 30;        // Internal API level for compatibility
-  MAKERAI_BREAKING_CHANGE  = True;      // True if this version has breaking changes
+  MAKERAI_API_LEVEL        = 33;        // Internal API level for compatibility
+  MAKERAI_BREAKING_CHANGE  = False;     // True if this version has breaking changes
   MAKERAI_LEGACY_SUPPORT   = True;      // True = Support for v2.x components
 
 {******************************************************************************}
@@ -100,9 +100,24 @@ const
   Version 3.1.0 (2025-11-4) -
   - NEW: update for new models  Gemini 3, Claude 4.5 and GPT-5.2
 
-  Version 3.2.0 (2026-01-4) -
-  - NEW: ChatTools  plugin framework for chat models
+  Version 3.2.0 (2026-01-04)
+  - NEW: ChatTools plugin framework for chat models
+  - IAiPdfTool, IAiVisionTool, IAiSpeechTool, IAiWebSearchTool, IAiImageTool, IAiVideoTool
+  - Unified deterministic tool orchestration and capability bridges
 
+  Version 3.3.0 (2026-02-26)
+  - NEW: TAiCapabilities system (ModelCaps / SessionCaps / ThinkingLevel)
+  - UPDATED: All provider models - OpenAI gpt-5.2, Claude 4.6, Gemini 3.0, Grok 4,
+             Mistral Magistral, DeepSeek-reasoner, Kimi k2.5 (February 2026)
+  - NEW: Agents durable execution - TAiFileCheckpointer, TAiNullCheckpointer
+  - NEW: Human-in-the-loop - TAiWaitApprovalTool, OnSuspend event, ResumeThread
+  - NEW: RAG Graph Document management (uMakerAi.RAG.Graph.Documents)
+  - NEW: TAiEmbeddingsConnection - abstract connector for swappable embedding providers
+  - NEW: TAiAudioPushStream - push-based audio streaming
+  - FIX: reasoning_content preserved in multi-turn tool calls (DeepSeek, Kimi, Groq)
+  - FIX: ExtractToolCallFromJson - default type 'function' when field missing (Mistral)
+  - FIX: Double-add/double-free in RunNew+RunLegacy (Cohere tool calls)
+  - FIX: Mistral json_schema.name field required by API
 
 }
 {******************************************************************************}
@@ -116,10 +131,12 @@ const
   MAKERAI_HAS_RAG_VECTOR   = True;  // Traditional vector-based RAG
   MAKERAI_HAS_RAG_GRAPH    = True;  // NEW: Graph-based RAG
   MAKERAI_HAS_ASSISTANTS   = True;
-  MAKERAI_HAS_MCP          = True;
-  MAKERAI_HAS_CHAT_CONNECTION = True;
-  MAKERAI_HAS_UI_COMPONENTS = True; // NEW: Visual UI components
-  MAKERAI_HAS_AGENTS       = True;
+  MAKERAI_HAS_MCP              = True;
+  MAKERAI_HAS_CHAT_CONNECTION  = True;
+  MAKERAI_HAS_UI_COMPONENTS    = True;
+  MAKERAI_HAS_AGENTS           = True;
+  MAKERAI_HAS_CHECKPOINTS      = True;  // NEW v3.3: Durable agent execution
+  MAKERAI_HAS_CHAT_TOOLS       = True;  // NEW v3.2: ChatTools framework
 
 // Platform Support
 const
@@ -175,7 +192,7 @@ begin
   else if SameText(FeatureName, 'Agents') then Result := MAKERAI_HAS_AGENTS;
 end;
 
-//Mostrar en el versión about dialog
+//Mostrar en el versiï¿½n about dialog
 procedure TFormAbout.FormShow(Sender: TObject);
 begin
   lblVersion.Caption := MAKERAI_VERSION_STRING;
