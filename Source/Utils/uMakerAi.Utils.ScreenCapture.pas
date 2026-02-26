@@ -1,4 +1,4 @@
-Ôªø// IT License
+// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr√≠quez
+// Nombre: Gustavo EnrÌquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -62,7 +62,7 @@ type
     // Captura toda la pantalla
     class function CaptureFullScreen: FMX.Graphics.TBitmap;
 
-    // Captura un √°rea espec√≠fica de la pantalla
+    // Captura un ·rea especÌfica de la pantalla
     class function CaptureArea(const ARect: TRect): FMX.Graphics.TBitmap;
 
     // Obtiene las dimensiones de la pantalla
@@ -115,13 +115,13 @@ begin
   ScreenWidth := GetSystemMetrics(SM_CXSCREEN);
   ScreenHeight := GetSystemMetrics(SM_CYSCREEN);
 
-  // Determinar el √°rea a capturar
+  // Determinar el ·rea a capturar
   if ARect.IsEmpty then
     CaptureRect := TRect.Create(0, 0, ScreenWidth, ScreenHeight)
   else
     CaptureRect := ARect;
 
-  // Validar que el rect√°ngulo est√© dentro de los l√≠mites
+  // Validar que el rect·ngulo estÈ dentro de los lÌmites
   CaptureRect.Left := Max(0, CaptureRect.Left);
   CaptureRect.Top := Max(0, CaptureRect.Top);
   CaptureRect.Right := Min(ScreenWidth, CaptureRect.Right);
@@ -220,7 +220,7 @@ var
 begin
   Result := nil;
 
-  // M√©tricas de pantalla virtual (soporte multi-monitor)
+  // MÈtricas de pantalla virtual (soporte multi-monitor)
   VirtualLeft := GetSystemMetrics(SM_XVIRTUALSCREEN);
   VirtualTop := GetSystemMetrics(SM_YVIRTUALSCREEN);
   VirtualWidth := GetSystemMetrics(SM_CXVIRTUALSCREEN);
@@ -231,7 +231,7 @@ begin
   else
     CaptureRect := ARect;
 
-  // Recortar al √°rea virtual
+  // Recortar al ·rea virtual
   CaptureRect.Left := Max(VirtualLeft, CaptureRect.Left);
   CaptureRect.Top := Max(VirtualTop, CaptureRect.Top);
   CaptureRect.Right := Min(VirtualLeft + VirtualWidth, CaptureRect.Right);
@@ -268,7 +268,7 @@ begin
           GetMem(BmpData, DataSize);
           try
             if GetDIBits(MemDC, HBmp, 0, CaptureRect.Height, BmpData, BmpInfo, DIB_RGB_COLORS) = 0 then
-              Exit; // GetDIBits fall√≥
+              Exit; // GetDIBits fallÛ
 
             // Asegurar alfa opaco (GetDIBits suele dejar alfa = 0 o basura)
             pByte := System.PByte(BmpData);
@@ -285,7 +285,7 @@ begin
               // Copia en bloque (Surface.Bits apunta al buffer interno)
               Move(BmpData^, Surface.Bits^, DataSize);
 
-              // Convertir a TBitmap FMX (Assign hace la conversi√≥n nativa)
+              // Convertir a TBitmap FMX (Assign hace la conversiÛn nativa)
               Result := FMX.Graphics.TBitmap.Create;
               Result.Assign(Surface);
 
@@ -334,7 +334,7 @@ begin
   // Obtener las dimensiones de la pantalla principal
   ScreenBounds := CGDisplayBounds(CGMainDisplayID);
 
-  // Determinar el √°rea a capturar
+  // Determinar el ·rea a capturar
   if ARect.IsEmpty then
     CaptureRect := ScreenBounds
   else
@@ -398,9 +398,9 @@ end;
 class function TScreenCapture.CaptureScreenAndroid(const ARect: TRect): FMX.Graphics.TBitmap;
 begin
   // En Android, la captura de pantalla requiere permisos especiales
-  // y generalmente se hace a trav√©s de Media Projection API
-  // Esta es una implementaci√≥n b√°sica que requiere permisos de root
-  // o implementaci√≥n nativa m√°s compleja
+  // y generalmente se hace a travÈs de Media Projection API
+  // Esta es una implementaciÛn b·sica que requiere permisos de root
+  // o implementaciÛn nativa m·s compleja
   Result := nil;
   // TODO: Implementar captura para Android
   raise Exception.Create('Screen capture not implemented for Android platform');
@@ -452,7 +452,7 @@ begin
   Result.Y := Round(Bounds.size.height);
   {$ENDIF}
   {$IFDEF ANDROID}
-  // Implementaci√≥n para Android requerir√≠a JNI
+  // ImplementaciÛn para Android requerirÌa JNI
   Result := TPoint.Zero;
   {$ENDIF}
   {$IFDEF IOS}
@@ -553,9 +553,9 @@ constructor TSelectionForm.Create(AOwner: TComponent);
 Var
   R : TRectangle;
 begin
-  inherited CreateNew(AOwner); // üëà evita buscar .fmx/.dfm
+  inherited CreateNew(AOwner); //  evita buscar .fmx/.dfm
 
-  // configuraci√≥n b√°sica que antes hac√≠as en Execute
+  // configuraciÛn b·sica que antes hacÌas en Execute
   BorderStyle := TFmxFormBorderStyle.None;
   FormStyle := TFormStyle.StayOnTop;
   Fill.Color := TAlphaColorRec.Black;

@@ -54,7 +54,7 @@ uses
   FireDAC.Comp.UI, System.Rtti, FMX.Grid.Style, Data.Bind.EngExt, FMX.Bind.DBEngExt, FMX.Bind.Grid, System.Bindings.Outputs,
   FMX.Bind.Editors, Data.Bind.Components, FMX.Edit,
   Data.Bind.Grid, Data.Bind.DBScope, FMX.Grid, uMakerAi.Chat.AiConnection, uMakerAi.Prompts,
-  uMakerAi.Embeddings.core, uMakerAi.Chat.Tools, uMakerAi.Whisper;
+  uMakerAi.Embeddings.core, uMakerAi.Chat.Tools, uMakerAi.Whisper, uMakerAi.RAG.Vectors.Index, uMakerAi.RAG.MetaData;
 
 type
   TForm8 = class(TForm)
@@ -88,14 +88,12 @@ type
     AIWhisper1: TAIWhisper;
     AiOllamaChat1: TAiOllamaChat;
     procedure BtnAddTextClick(Sender: TObject);
-    procedure RAGVectorAdicionDataVecAddItem(Sender: TObject; aItem: TAiEmbeddingNode; MetaData: TAiEmbeddingMetaData;
-      var Handled: Boolean);
     procedure BtnBuscarClick(Sender: TObject);
-    procedure RAGVectorConsultaDataVecSearch(Sender: TObject; Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double;
-      var aDataVec: TAiRAGVector; var Handled: Boolean);
     procedure FormCreate(Sender: TObject);
     procedure AiChatConnection1ReceiveData(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
     procedure MemoTextToAddChange(Sender: TObject);
+    procedure RAGVectorAdicionDataVecAddItem(Sender: TObject; aItem: TAiEmbeddingNode; MetaData: TAiEmbeddingMetaData; var Handled: Boolean);
+    procedure RAGVectorConsultaDataVecSearch(Sender: TObject; Target: TAiEmbeddingNode; const aPrompt: string; aLimit: Integer; aPrecision: Double; aFilter: TAiFilterCriteria; var aDataVec: TAiRAGVector; var Handled: Boolean);
   private
     GlLista: TStringList;
     Function NewQuery: TFDQuery;
@@ -110,8 +108,7 @@ implementation
 
 {$R *.fmx}
 
-procedure TForm8.RAGVectorAdicionDataVecAddItem(Sender: TObject; aItem: TAiEmbeddingNode; MetaData: TAiEmbeddingMetaData;
-  var Handled: Boolean);
+procedure TForm8.RAGVectorAdicionDataVecAddItem(Sender: TObject; aItem: TAiEmbeddingNode; MetaData: TAiEmbeddingMetaData; var Handled: Boolean);
 Var
   Query: TFDQuery;
   sEmbedding, Texto: String;
@@ -160,10 +157,11 @@ begin
   Finally
     Query.Free;
   End;
+
 end;
 
-procedure TForm8.RAGVectorConsultaDataVecSearch(Sender: TObject; Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double;
-  var aDataVec: TAiRAGVector; var Handled: Boolean);
+
+procedure TForm8.RAGVectorConsultaDataVecSearch(Sender: TObject; Target: TAiEmbeddingNode; const aPrompt: string; aLimit: Integer; aPrecision: Double; aFilter: TAiFilterCriteria; var aDataVec: TAiRAGVector; var Handled: Boolean);
 Var
   Query: TFDQuery;
   sEmbedding, Texto: String;

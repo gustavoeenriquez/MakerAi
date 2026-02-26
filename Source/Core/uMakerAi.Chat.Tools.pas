@@ -9,7 +9,7 @@ uses
 
 type
   { IAiToolContext: Interfaz para que la Tool reporte eventos al Chat principal.
-    Permite la comunicación bidireccional sin dependencia circular. }
+    Permite la comunicaci?n bidireccional sin dependencia circular. }
   IAiToolContext = interface
     ['{E1D2C3B4-A5F6-4B7C-9D8E-F0A1B2C3D4E5}']
     procedure DoData(Msg: TAiChatMessage; const Role, Text: string; AResponse: TJSONObject = nil);
@@ -62,10 +62,15 @@ type
     procedure ExecutePdfAnalysis(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
   end;
 
+  IAiReportTool = interface
+    ['{B9C0D1E2-F3A4-4B5C-6D7E-8F9A0B1C2D3E}']
+    procedure ExecuteReport(ResMsg, AskMsg: TAiChatMessage);
+  end;
+
 
   { --- CLASES BASE --- }
 
-  { TAiCustomTool: Gestión básica de contexto y eventos reportados al hilo principal }
+  { TAiCustomTool: Gesti?n b?sica de contexto y eventos reportados al hilo principal }
   TAiCustomTool = class(TComponent)
   protected
     FContext: IAiToolContext;
@@ -121,6 +126,11 @@ type
     procedure ExecutePdfAnalysis(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage); virtual;
   end;
 
+  TAiReportToolBase = class(TAiCustomTool, IAiReportTool)
+  Protected
+    procedure ExecuteReport(ResMsg, AskMsg: TAiChatMessage); virtual;
+  end;
+
 implementation
 
 { TAiCustomTool }
@@ -161,7 +171,7 @@ begin
     TThread.Queue(nil,
       procedure
       begin
-        FContext.DoError(ErrorMsg, E);
+        FContext.DoError(ErrorMsg, nil);
       end);
 end;
 
@@ -224,6 +234,12 @@ end;
 { TAiPdfToolBase }
 
 procedure TAiPdfToolBase.ExecutePdfAnalysis(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
+begin
+end;
+
+{ TAiReportToolBase }
+
+procedure TAiReportToolBase.ExecuteReport(ResMsg, AskMsg: TAiChatMessage);
 begin
 end;
 

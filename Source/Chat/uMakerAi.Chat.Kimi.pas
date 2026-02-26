@@ -1,4 +1,4 @@
-﻿// IT License
+// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enr�quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -137,7 +137,7 @@ begin
     AJSONObject.AddPair('user', User);
     AJSONObject.AddPair('n', TJSONNumber.Create(N));
 
-    // 🔧 Tool Calling (compatibilidad futura o experimental)
+    //  Tool Calling (compatibilidad futura o experimental)
     if Tool_Active then
     begin
       JTools := GetTools; // ya definido en TAiChat base

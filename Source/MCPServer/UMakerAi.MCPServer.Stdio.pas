@@ -1,18 +1,18 @@
-// IT License
+// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -40,7 +40,7 @@ uses
   UMakerAi.MCPServer.Core;
 
 type
-  // Declaración adelantada para el hilo
+  // Declaraci?n adelantada para el hilo
   TAiMCPStdioServer = class;
 
   { TStdioWorkerThread
@@ -55,11 +55,11 @@ type
   end;
 
   { TAiMCPStdioServer
-    El componente principal que gestiona la comunicación Stdio }
+    El componente principal que gestiona la comunicaci?n Stdio }
   TAiMCPStdioServer = class(TAiMCPServer)
   private
     FWorkerThread: TStdioWorkerThread;
-    FOutputLock: TCriticalSection; // Para escrituras seguras a Stdout desde múltiples hilos
+    FOutputLock: TCriticalSection; // Para escrituras seguras a Stdout desde m?ltiples hilos
 
     procedure ProcessRequest(const ARequestJson: string);
     procedure SendResponse(const AResponseJson: string);
@@ -89,7 +89,7 @@ constructor TStdioWorkerThread.Create(AServer: TAiMCPStdioServer);
 begin
   inherited Create(True); // El hilo se crea suspendido
   FServer := AServer;
-  FreeOnTerminate := True; // El hilo se liberará automáticamente al terminar
+  FreeOnTerminate := False;
 end;
 
 {
@@ -100,15 +100,15 @@ begin
   while not Terminated do
   begin
     try
-      // Leemos una línea completa desde Standard Input.
-      // Esta llamada es bloqueante y esperará hasta recibir un LF (#10).
+      // Leemos una l?nea completa desde Standard Input.
+      // Esta llamada es bloqueante y esperar? hasta recibir un LF (#10).
       System.ReadLn(JsonRequestLine);
 
-      // Si el hilo fue terminado mientras esperaba o la línea está vacía, continuamos.
+      // Si el hilo fue terminado mientras esperaba o la l?nea est? vac?a, continuamos.
       if Terminated or (JsonRequestLine = '') then
         Continue;
 
-      // Cada línea es un request JSON completo. Lo procesamos.
+      // Cada l?nea es un request JSON completo. Lo procesamos.
       TThread.Queue(nil,
         procedure
         begin
@@ -141,7 +141,7 @@ begin
   while not Terminated do
   begin
     try
-      // 1. Detección de fin de stream (Pipe cerrado por el cliente)
+      // 1. Detecci?n de fin de stream (Pipe cerrado por el cliente)
       if Eof(Input) then
       begin
         Terminate;
@@ -154,7 +154,7 @@ begin
       if Terminated then Break;
       if JsonRequestLine = '' then Continue;
 
-      // 3. CAMBIO CRÍTICO: Llamada directa (Síncrona)
+      // 3. CAMBIO CR?TICO: Llamada directa (S?ncrona)
       // Eliminamos TThread.Queue porque en aplicaciones de consola
       // no hay bucle de mensajes principal que procese la cola.
       if Assigned(FServer) and FServer.IsActive then
@@ -162,7 +162,7 @@ begin
         try
           FServer.ProcessRequest(JsonRequestLine);
         except
-          // Capturamos excepciones para que un error de lógica no mate al hilo de lectura
+          // Capturamos excepciones para que un error de l?gica no mate al hilo de lectura
         end;
       end;
 
@@ -210,7 +210,12 @@ begin
     Exit;
 
   if Assigned(FWorkerThread) then
+  begin
     FWorkerThread.Terminate;
+    // No llamamos WaitFor: ReadLn(Input) es bloqueante e ininterrumpible.
+    // El thread saldrá naturalmente al detectar EOF en stdin.
+    FWorkerThread := nil;
+  end;
 
   inherited Stop;
 end;
@@ -222,10 +227,10 @@ begin
   if not IsActive then
     Exit;
 
-  // Delegamos el trabajo pesado al servidor lógico
-  ResponseBody := FLogicServer.ExecuteRequest(ARequestJson, ''); // La sesión no aplica en Stdio
+  // Delegamos el trabajo pesado al servidor l?gico
+  ResponseBody := FLogicServer.ExecuteRequest(ARequestJson, ''); // La sesi?n no aplica en Stdio
 
-  // Si hay una respuesta que enviar (no es una notificación)
+  // Si hay una respuesta que enviar (no es una notificaci?n)
   if ResponseBody <> '' then
   begin
     SendResponse(ResponseBody);
@@ -234,16 +239,16 @@ end;
 
 procedure TAiMCPStdioServer.SendResponse(const AResponseJson: string);
 begin
-  // El cliente espera el JSON seguido de un salto de línea (#10).
-  // WriteLn hace esto automáticamente.
+  // El cliente espera el JSON seguido de un salto de l?nea (#10).
+  // WriteLn hace esto autom?ticamente.
 
   FOutputLock.Enter;
   try
-    // System.WriteLn es la forma más simple y correcta aquí.
-    // Envía el string y el terminador de línea apropiado.
+    // System.WriteLn es la forma m?s simple y correcta aqu?.
+    // Env?a el string y el terminador de l?nea apropiado.
     System.WriteLn(AResponseJson);
 
-    // Usar TOutput.Flush para asegurar que se envíe inmediatamente.
+    // Usar TOutput.Flush para asegurar que se env?e inmediatamente.
     Flush(Output);
   finally
     FOutputLock.Leave;

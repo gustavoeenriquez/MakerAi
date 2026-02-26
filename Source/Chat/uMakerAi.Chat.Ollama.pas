@@ -1,4 +1,4 @@
-Ôªø// IT License
+// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr√≠quez
+// Nombre: Gustavo EnrÌquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -67,7 +67,7 @@ type
     Destructor Destroy; Override;
     Function GetMessages: TJSonArray; Override;
 
-    // ----- FUNCIONES DE GESTI√ìN DE MODELOS  -----------
+    // ----- FUNCIONES DE GESTI”N DE MODELOS  -----------
     procedure PullModel(const aModelName: string);
     procedure CreateModel(const aNewModelName, aModelfileContent: string);
     function ShowModelInfo(const aModelName: string): TJSonObject;
@@ -88,6 +88,9 @@ type
     Destructor Destroy; Override;
     Function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float'): TAiEmbeddingData; Override;
     Procedure ParseEmbedding(JObj: TJSonObject); Override;
+    class function GetDriverName: string; override;
+    class function CreateInstance(aOwner: TComponent): TAiEmbeddings; override;
+    class procedure RegisterDefaultParams(Params: TStrings); override;
   end;
 
 procedure Register;
@@ -178,7 +181,7 @@ begin
     begin
       LToolCall := TAiToolsFunction.Create;
       try
-        // Ollama ahora s√≠ incluye un 'id', pero lo generamos como fallback por si acaso.
+        // Ollama ahora sÌ incluye un 'id', pero lo generamos como fallback por si acaso.
         LToolCall.Id := LToolCallObj.GetValue<string>('id', 'call_' + TGuid.NewGuid.ToString);
         LToolCall.Name := LFunctionObj.GetValue<string>('name', '');
         LToolCall.Tipo := 'function';
@@ -223,8 +226,8 @@ begin
     Msg := Messages.Items[I];
     JObj := TJSonObject.Create;
 
-    If Msg.TollCallId <> '' then
-      JObj.AddPair('tool_call_id', Msg.TollCallId);
+    If Msg.ToolCallId <> '' then
+      JObj.AddPair('tool_call_id', Msg.ToolCallId);
 
     If Msg.FunctionName <> '' then
       JObj.AddPair('name', Msg.FunctionName);
@@ -340,7 +343,7 @@ Var
   I: Integer;
   LModel: String;
 begin
-  // 1. Configuraci√≥n b√°sica y Modelo
+  // 1. ConfiguraciÛn b·sica y Modelo
   If User = '' then
     User := 'user';
 
@@ -348,7 +351,7 @@ begin
   If LModel = '' then
     LModel := 'gpt-oss:20b'; // Fallback seguro
 
-  // Configuramos el cliente HTTP seg√∫n la propiedad del componente
+  // Configuramos el cliente HTTP seg˙n la propiedad del componente
   FClient.Asynchronous := Self.Asynchronous;
 
   // Aumentamos timeout por defecto ya que los modelos locales pueden tardar en cargar
@@ -356,15 +359,15 @@ begin
     FClient.ResponseTimeout := 1000 * 60 * 5; // 5 minutos por defecto
 
   AJSONObject := TJSonObject.Create;
-  jOptions := TJSonObject.Create; // Objeto para par√°metros avanzados
+  jOptions := TJSonObject.Create; // Objeto para par·metros avanzados
   Lista := TStringList.Create;
 
   Try
-    // --- PAR√ÅMETROS RA√çZ ---
+    // --- PAR¡METROS RAÕZ ---
     AJSONObject.AddPair('model', LModel);
-    AJSONObject.AddPair('messages', GetMessages); // Usa GetMessages (revisaremos este despu√©s)
+    AJSONObject.AddPair('messages', GetMessages); // Usa GetMessages (revisaremos este despuÈs)
 
-    // Respetamos la configuraci√≥n as√≠ncrona (True/False)
+    // Respetamos la configuraciÛn asÌncrona (True/False)
     AJSONObject.AddPair('stream', TJSONBool.Create(Self.Asynchronous));
 
     if Fkeep_alive <> '' then
@@ -376,7 +379,7 @@ begin
       if JsonSchema.Text <> '' then
       begin
         try
-          // Ollama espera el esquema DIRECTAMENTE en el par√°metro "format".
+          // Ollama espera el esquema DIRECTAMENTE en el par·metro "format".
           // No requiere wrappers como "json_schema" o "schema".
           Var sShema := StringReplace(JsonSchema.Text,'\n',' ',[rfReplaceAll]);
           var
@@ -387,10 +390,10 @@ begin
             if JSchema is TJSonObject then
               AJSONObject.AddPair('format', JSchema as TJSonObject)
             else
-              JSchema.Free; // Si no es un objeto v√°lido, limpiar
+              JSchema.Free; // Si no es un objeto v·lido, limpiar
           end;
         except
-          // Manejo silencioso de errores de parseo, se enviar√° sin formato o ignorado
+          // Manejo silencioso de errores de parseo, se enviar· sin formato o ignorado
         end;
       end;
     end
@@ -412,8 +415,8 @@ begin
         AJSONObject.AddPair('tools', JArr);
     End;
 
-    // --- PAR√ÅMETROS "OPTIONS" (Diferencia clave con OpenAI) ---
-    // Ollama requiere encapsular estos par√°metros dentro de 'options'
+    // --- PAR¡METROS "OPTIONS" (Diferencia clave con OpenAI) ---
+    // Ollama requiere encapsular estos par·metros dentro de 'options'
 
     if Temperature > 0 then
       jOptions.AddPair('temperature', TJSONNumber.Create(Temperature));
@@ -448,14 +451,14 @@ begin
     if jOptions.Count > 0 then
       AJSONObject.AddPair('options', jOptions)
     else
-      jOptions.Free; // Si no se a√±adi√≥ al padre, hay que liberarlo
+      jOptions.Free; // Si no se aÒadiÛ al padre, hay que liberarlo
 
-    // Generaci√≥n del String final
+    // GeneraciÛn del String final
     Result := AJSONObject.ToJSON;
 
   Finally
     AJSONObject.Free;
-    // jOptions se libera autom√°ticamente si fue a√±adido a AJSONObject
+    // jOptions se libera autom·ticamente si fue aÒadido a AJSONObject
     Lista.Free;
   End;
 end;
@@ -527,7 +530,7 @@ begin
   Finally
     If FClient.Asynchronous = False then
       St.Free;
-    // Esto no funciona en multiarea, as√≠ que se libera cuando no lo es.
+    // Esto no funciona en multiarea, asÌ que se libera cuando no lo es.
   End;
 end;
 
@@ -612,7 +615,7 @@ var
       end;
     end;
 
-    // Limpieza de buffers para la siguiente petici√≥n
+    // Limpieza de buffers para la siguiente peticiÛn
     FLastContent := '';
     FTmpResponseText := '';
     FTmpToolCallsStr := '';
@@ -639,7 +642,7 @@ begin
     FTmpResponseText := FTmpResponseText + LChunkStr;
     LStreamFinished := False;
 
-    // --- Bucle principal para procesar l√≠neas (Ollama env√≠a un JSON por l√≠nea) ---
+    // --- Bucle principal para procesar lÌneas (Ollama envÌa un JSON por lÌnea) ---
     while Pos(#10, FTmpResponseText) > 0 do
     begin
       LJsonLine := Copy(FTmpResponseText, 1, Pos(#10, FTmpResponseText) - 1);
@@ -698,7 +701,7 @@ begin
       end;
     end;
 
-    // --- MANEJO DE FRAGMENTO FINAL (sin salto de l√≠nea) ---
+    // --- MANEJO DE FRAGMENTO FINAL (sin salto de lÌnea) ---
     if (not LStreamFinished) and (FTmpResponseText.Trim <> '') then
     begin
       LJsonObject := TJSonObject.ParseJSONValue(FTmpResponseText.Trim) as TJSonObject;
@@ -750,9 +753,9 @@ begin
   if not Assigned(JObj) then
     Exit;
 
-  // 1. EXTRAER METADATOS Y ESTAD√çSTICAS
+  // 1. EXTRAER METADATOS Y ESTADÕSTICAS
   LModel := JObj.GetValue<string>('model', '');
-  // Ollama usa nombres espec√≠ficos para los tokens
+  // Ollama usa nombres especÌficos para los tokens
   LPromptTokens := JObj.GetValue<Integer>('prompt_eval_count', 0);
   LEvalTokens := JObj.GetValue<Integer>('eval_count', 0);
 
@@ -764,7 +767,7 @@ begin
   // 2. VALIDAR LA EXISTENCIA DE "MESSAGE"
   if not JObj.TryGetValue<TJSonObject>('message', LMessageObj) then
   begin
-    // Si no hay mensaje pero el JSON indica que termin√≥, disparamos el evento de fin
+    // Si no hay mensaje pero el JSON indica que terminÛ, disparamos el evento de fin
     if JObj.GetValue<Boolean>('done', False) then
     begin
       DoStateChange(acsFinished, 'Done');
@@ -799,13 +802,13 @@ begin
 
   LAskMsg := GetLastMessage;
 
-  // 4. L√ìGICA DE LLAMADO A FUNCIONES (TOOLS)
+  // 4. L”GICA DE LLAMADO A FUNCIONES (TOOLS)
   // Verificamos si Ollama nos ha devuelto tool_calls
   if LMessageObj.TryGetValue<TJSonArray>('tool_calls', LToolCallsArray) and (LToolCallsArray.Count > 0) then
   begin
     // --- CASO A: El modelo solicita ejecutar herramientas ---
 
-    // A.1 Guardamos el mensaje del asistente (la petici√≥n de tool) en el historial
+    // A.1 Guardamos el mensaje del asistente (la peticiÛn de tool) en el historial
     LHistoryToolMsg := TAiChatMessage.Create(ResMsg.Content, LRole);
     LHistoryToolMsg.Tool_calls := LToolCallsArray.ToJSON;
     LHistoryToolMsg.Id := FMessages.Count + 1;
@@ -823,7 +826,7 @@ begin
 
       if (LFunciones <> nil) and (LFunciones.Count > 0) then
       begin
-        // A.3 Ejecuci√≥n en paralelo de las funciones encontradas
+        // A.3 EjecuciÛn en paralelo de las funciones encontradas
         NumTasks := LFunciones.Count;
         SetLength(TaskList, NumTasks);
         I := 0;
@@ -858,7 +861,7 @@ begin
         // Esperar a que todas las funciones terminen (bloqueo controlado)
         TTask.WaitForAll(TaskList);
 
-        // A.4 A√±adir los resultados de las funciones (role: tool) al historial
+        // A.4 AÒadir los resultados de las funciones (role: tool) al historial
         for LToolCall in LFunciones.Values do
         begin
           LToolMsg := TAiChatMessage.Create(LToolCall.Response, 'tool', LToolCall.Id, LToolCall.Name);
@@ -883,7 +886,7 @@ begin
   begin
     // --- CASO B: Respuesta de texto normal o final de cadena ---
 
-    // B.1 Extracci√≥n autom√°tica de bloques de c√≥digo si se solicita
+    // B.1 ExtracciÛn autom·tica de bloques de cÛdigo si se solicita
     if (tfc_ExtracttextFile in NativeOutputFiles) and (ResMsg.Content <> '') then
     begin
       Code := TMarkdownCodeExtractor.Create;
@@ -895,7 +898,7 @@ begin
           try
             St.Position := 0;
             MF := TAiMediaFile.Create;
-            // Cargamos el c√≥digo extra√≠do como un archivo adjunto al mensaje
+            // Cargamos el cÛdigo extraÌdo como un archivo adjunto al mensaje
             MF.LoadFromStream('file.' + CodeFile.FileType, St as TMemoryStream);
             ResMsg.MediaFiles.Add(MF);
           finally
@@ -910,16 +913,16 @@ begin
     // B.2 Notificar el procesamiento de la respuesta (Hooks externos)
     DoProcessResponse(LAskMsg, ResMsg, FLastContent);
 
-    // B.3 Gesti√≥n del historial (Evitar Doble Add en As√≠ncrono)
-    // En s√≠ncrono, TAiChat.Run a√±ade el mensaje al finalizar.
-    // En as√≠ncrono, como el Run ya sali√≥, debemos a√±adirlo aqu√≠.
+    // B.3 GestiÛn del historial (Evitar Doble Add en AsÌncrono)
+    // En sÌncrono, TAiChat.Run aÒade el mensaje al finalizar.
+    // En asÌncrono, como el Run ya saliÛ, debemos aÒadirlo aquÌ.
     if Self.Asynchronous and (FMessages.IndexOf(ResMsg) = -1) then
     begin
       ResMsg.Id := FMessages.Count + 1;
       FMessages.Add(ResMsg);
     end;
 
-    // B.4 Finalizaci√≥n y notificaci√≥n a la UI
+    // B.4 FinalizaciÛn y notificaciÛn a la UI
     DoStateChange(acsFinished, 'Done');
 
     if Assigned(FOnReceiveDataEnd) then
@@ -929,7 +932,7 @@ begin
   end;
 end;
 
-// ----- FUNCIONES DE GESTI√ìN DE MODELOS  -----------
+// ----- FUNCIONES DE GESTI”N DE MODELOS  -----------
 
 procedure TAiOllamaChat.CopyModel(const aSourceModel, aDestinationModel: string);
 var
@@ -1070,7 +1073,7 @@ begin
     LBodyStream.Position := 0;
 
     FClient.ContentType := 'application/json';
-    // Hacemos la llamada s√≠ncrona, pero Ollama devuelve el stream completo de una vez
+    // Hacemos la llamada sÌncrona, pero Ollama devuelve el stream completo de una vez
     LResponse := FClient.Post(LUrl, LBodyStream, LResponseStream);
 
     if LResponse.StatusCode <> 200 then
@@ -1082,7 +1085,7 @@ begin
 
     for LLine in LJsonLines do
     begin
-      // Si el evento de progreso est√° asignado, lo disparamos
+      // Si el evento de progreso est· asignado, lo disparamos
       if Assigned(OnProgressEvent) then
       begin
         LStatusObj := TJSonObject.ParseJSONValue(LLine) as TJSonObject;
@@ -1091,7 +1094,7 @@ begin
             LStatus := LStatusObj.GetValue<string>('status');
             LCompleted := 0;
             LTotal := 0;
-            // TryGetValue es m√°s seguro si los campos no siempre est√°n presentes
+            // TryGetValue es m·s seguro si los campos no siempre est·n presentes
             LStatusObj.TryGetValue<Int64>('completed', LCompleted);
             LStatusObj.TryGetValue<Int64>('total', LTotal);
             OnProgressEvent(Self, LStatus, LCompleted, LTotal);
@@ -1134,7 +1137,7 @@ begin
     end
     else
     begin
-      raise Exception.CreateFmt('Error al obtener informaci√≥n del modelo: %d - %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+      raise Exception.CreateFmt('Error al obtener informaciÛn del modelo: %d - %s', [LResponse.StatusCode, LResponse.ContentAsString]);
     end;
 
   finally
@@ -1161,7 +1164,7 @@ end;
   Model := 'mxbai-embed-large'; //Vector[1024]
   Model := 'nomic-embed-text'; // Vector[768]
   Model := 'all-minilm';      //Vector[384]
-  Model := 'snowflake-arctic-embed'; //Vector[1024]    //Esta es la mejor versi√≥n a mayo/2024
+  Model := 'snowflake-arctic-embed'; //Vector[1024]    //Esta es la mejor versiÛn a mayo/2024
 
   Url para llamado http://IPOLLAMASERVER:11434/
 }
@@ -1255,8 +1258,29 @@ begin
   // FData := Emb;
 end;
 
+{ TAiOllamaEmbeddings - Factory class methods }
+
+class function TAiOllamaEmbeddings.GetDriverName: string;
+begin
+  Result := 'Ollama';
+end;
+
+class function TAiOllamaEmbeddings.CreateInstance(aOwner: TComponent): TAiEmbeddings;
+begin
+  Result := TAiOllamaEmbeddings.Create(aOwner);
+end;
+
+class procedure TAiOllamaEmbeddings.RegisterDefaultParams(Params: TStrings);
+begin
+  Params.Values['ApiKey'] := '@OLLAMA_API_KEY';
+  Params.Values['Url'] := GlAIUrl;
+  Params.Values['Model'] := 'snowflake-arctic-embed';
+  Params.Values['Dimensions'] := '1024';
+end;
+
 Initialization
 
 TAiChatFactory.Instance.RegisterDriver(TAiOllamaChat);
+TAiEmbeddingFactory.Instance.RegisterDriver(TAiOllamaEmbeddings);
 
 end.

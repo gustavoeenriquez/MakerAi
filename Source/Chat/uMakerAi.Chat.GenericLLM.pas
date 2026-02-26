@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -53,6 +53,8 @@ uses
 type
   TAiGenericChat = class(TAiChat)
   private
+    FCustomDriverName: string;
+    procedure SetCustomDriverName(const Value: string);
   protected
   public
     constructor Create(Sender: TComponent); override;
@@ -62,6 +64,9 @@ type
     class procedure RegisterDefaultParams(Params: TStrings); override;
     class function CreateInstance(Sender: TComponent): TAiChat; override;
   published
+    // Nombre personalizado con el que este componente se registra en el factory.
+    // Permite usar mÃºltiples instancias de TAiGenericChat apuntando a APIs distintas.
+    property CustomDriverName: string read FCustomDriverName write SetCustomDriverName;
   end;
 
 
@@ -79,6 +84,16 @@ begin
 end;
 
 { TAiGenericChat }
+
+procedure TAiGenericChat.SetCustomDriverName(const Value: string);
+begin
+  if FCustomDriverName = Value then Exit;
+  FCustomDriverName := Value;
+  // Registrar la clase en el factory bajo el nombre personalizado.
+  // 'GenericLLM' siempre queda registrado (via initialization).
+  if Value <> '' then
+    TAiChatFactory.Instance.RegisterDriver(TAiGenericChat, Value);
+end;
 
 class function TAiGenericChat.GetDriverName: string;
 begin
@@ -102,7 +117,7 @@ end;
 constructor TAiGenericChat.Create(Sender: TComponent);
 begin
   inherited;
-  ApiKey := '1234'; // local, no se requiere autenticación
+  ApiKey := '1234'; // local, no se requiere autenticaciï¿½n
   Model := 'generic-local';
   Url := GlGenericUrl;
 end;

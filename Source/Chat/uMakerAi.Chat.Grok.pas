@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr�quez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -56,6 +56,7 @@ Type
   Private
   Protected
     Function InitChatCompletions: String; Override;
+    function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
 
   Public
@@ -153,7 +154,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAI).Text));
 {$ENDIF}
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools est�n mal definido, debe ser un JsonArray');
+        Raise Exception.Create('La propiedad Tools est?n mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then
@@ -267,6 +268,147 @@ begin
   End;
 end;
 
+// Respuestas API de xAI para búsqueda web
+// search_parameters fue deprecado enero 2026 (devuelve 410 "Live search is deprecated").
+// Nueva API: POST /v1/responses  con tools=[{type:"web_search"}]
+// Formato respuesta: output[].type="message" → content[].type="output_text" → text
+function TAiGrokChat.InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String;
+var
+  ABody, sUrl, SType, SVal, sRole, sContent: String;
+  Res: IHTTPResponse;
+  FHeaders: TNetHeaders;
+  jReq, jRes, jItem, jContentItem: TJSonObject;
+  jInput, jMessages, jOutput, jContent, jTools: TJSonArray;
+  jTool: TJSonObject;
+  St: TStringStream;
+  LModel: String;
+  I, K: Integer;
+begin
+  // Sin web search activo → flujo normal de chat/completions
+  if not (tcm_WebSearch in ChatMediaSupports) then
+  begin
+    Result := inherited InternalRunCompletions(ResMsg, AskMsg);
+    Exit;
+  end;
+
+  // Web search activo → xAI Agent Tools API (POST /v1/responses)
+  FBusy        := True;
+  FAbort       := False;
+  FLastError   := '';
+  FLastContent := '';
+
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+  if LModel = '' then
+    LModel := 'grok-3';
+
+  sUrl := Url;
+  if not sUrl.EndsWith('/') then
+    sUrl := sUrl + '/';
+  sUrl := sUrl + 'responses';
+
+  jInput    := nil;
+  jMessages := nil;
+  jTools    := nil;
+  jTool     := nil;
+  jReq      := nil;
+  St        := nil;
+  try
+    // Construir input: mensajes del historial con "system" → "developer"
+    jInput    := TJSonArray.Create;
+    jMessages := GetMessages;
+    for I := 0 to jMessages.Count - 1 do
+    begin
+      var jOrig := jMessages.Items[I] as TJSonObject;
+      var jNew  := TJSonObject.Create;
+      jOrig.TryGetValue<String>('role', sRole);
+      if sRole = 'system' then
+        jNew.AddPair('role', 'developer')
+      else
+        jNew.AddPair('role', sRole);
+      if jOrig.TryGetValue<String>('content', sContent) then
+        jNew.AddPair('content', sContent)
+      else
+      begin
+        var jCont: TJSONValue;
+        if jOrig.TryGetValue<TJSONValue>('content', jCont) then
+          jNew.AddPair('content', TJSONObject.ParseJSONValue(jCont.ToJSON));
+      end;
+      jInput.Add(jNew);
+    end;
+    FreeAndNil(jMessages);
+
+    // Construir request body
+    jTools := TJSonArray.Create;
+    jTool  := TJSonObject.Create;
+    jTool.AddPair('type', 'web_search');
+    jTools.Add(jTool); jTool := nil;
+
+    jReq := TJSonObject.Create;
+    jReq.AddPair('model',  LModel);
+    jReq.AddPair('input',  jInput);  jInput := nil;
+    jReq.AddPair('tools',  jTools);  jTools := nil;
+    jReq.AddPair('stream', TJSONBool.Create(False));
+
+    ABody := jReq.ToJSON;
+    St    := TStringStream.Create(ABody, TEncoding.UTF8);
+
+    FHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
+    FClient.ContentType  := 'application/json';
+    FClient.Asynchronous := False;
+    FResponse.Clear;
+    DoStateChange(acsConnecting, 'Enviando búsqueda web...');
+
+    Res := FClient.Post(sUrl, St, FResponse, FHeaders);
+
+    if Res.StatusCode = 200 then
+    begin
+      var LParsed := TJSonObject.ParseJSONValue(Res.ContentAsString);
+      if not (LParsed is TJSonObject) then
+      begin
+        LParsed.Free;
+        raise Exception.CreateFmt('Respuesta JSON inválida: %s', [Res.ContentAsString]);
+      end;
+      jRes := TJSonObject(LParsed);
+      try
+        FLastContent := '';
+        if jRes.TryGetValue<TJSonArray>('output', jOutput) then
+          for I := 0 to jOutput.Count - 1 do
+          begin
+            if not (jOutput.Items[I] is TJSonObject) then Continue;
+            jItem := jOutput.Items[I] as TJSonObject;
+            if not jItem.TryGetValue<String>('type', SType) then Continue;
+            if SType = 'message' then
+              if jItem.TryGetValue<TJSonArray>('content', jContent) then
+                for K := 0 to jContent.Count - 1 do
+                begin
+                  if not (jContent.Items[K] is TJSonObject) then Continue;
+                  jContentItem := jContent.Items[K] as TJSonObject;
+                  if jContentItem.TryGetValue<String>('type', SVal) and (SVal = 'output_text') then
+                    if jContentItem.TryGetValue<String>('text', SVal) then
+                      FLastContent := FLastContent + SVal;
+                end;
+          end;
+        ResMsg.Prompt := FLastContent;
+        FBusy         := False;
+        Result        := FLastContent;
+        if Assigned(FOnReceiveDataEnd) then
+          FOnReceiveDataEnd(Self, ResMsg, jRes, 'assistant', FLastContent);
+      finally
+        FreeAndNil(jRes);
+      end;
+    end
+    else
+      raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+  finally
+    FreeAndNil(jMessages);
+    FreeAndNil(jInput);
+    FreeAndNil(jTools);
+    FreeAndNil(jTool);
+    FreeAndNil(jReq);
+    FreeAndNil(St);
+  end;
+end;
+
 function TAiGrokChat.InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 var
   LBodyJson, LResponseJson, LImageObject: TJSonObject;
@@ -286,7 +428,7 @@ begin
   FLastContent := '';
   FLastPrompt := AskMsg.Prompt;
 
-  // 1. Validaciones y configuraci�n
+  // 1. Validaciones y configuraci?n
   if AskMsg.Prompt.IsEmpty then
     raise Exception.Create('Se requiere un prompt para generar una imagen.');
 
@@ -297,7 +439,7 @@ begin
 
   LUrl := Url + 'images/generations'; // Url base + endpoint
 
-  // 2. Construir el cuerpo de la petici�n JSON
+  // 2. Construir el cuerpo de la petici?n JSON
   LBodyJson := TJSonObject.Create;
   LBodyStream := TStringStream.Create('', TEncoding.UTF8);
   try
@@ -317,7 +459,7 @@ begin
     LBodyStream.SaveToFile('c:\temp\grok_image_request.json');
     LBodyStream.Position := 0;
 {$ENDIF}
-    // Grok usa Bearer token para la autorizaci�n
+    // Grok usa Bearer token para la autorizaci?n
     LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
     FClient.ContentType := 'application/json';
     FResponse.Clear;
@@ -344,7 +486,7 @@ begin
             LImageObject := LJsonValue as TJSonObject;
             LNewMediaFile := TAiMediaFile.Create;
             try
-              // Extraer el prompt revisado y guardarlo (es informaci�n �til)
+              // Extraer el prompt revisado y guardarlo (es informaci?n ?til)
               LImageObject.TryGetValue<string>('revised_prompt', LRevisedPrompt);
               LNewMediaFile.Transcription := LRevisedPrompt;
               FLastContent := LRevisedPrompt;
@@ -354,8 +496,8 @@ begin
               if LImageObject.TryGetValue<string>('url', LImageUrl) then
               begin
                 // Descargamos la imagen desde la URL y la cargamos en el MediaFile
-                // Necesitar�s una funci�n para descargar, por ejemplo:
-                LNewMediaFile.LoadFromUrl(LImageUrl); // Asumiendo que tienes esta funci�n
+                // Necesitar?s una funci?n para descargar, por ejemplo:
+                LNewMediaFile.LoadFromUrl(LImageUrl); // Asumiendo que tienes esta funci?n
               end
               // CASO B: La respuesta es Base64
               else if LImageObject.TryGetValue<string>('b64_json', LBase64Data) then
@@ -363,7 +505,7 @@ begin
                 LNewMediaFile.LoadFromBase64('generated_image.png', LBase64Data);
               end;
 
-              // A�adir el MediaFile al mensaje de respuesta
+              // A?adir el MediaFile al mensaje de respuesta
               ResMsg.MediaFiles.Add(LNewMediaFile);
             except
               LNewMediaFile.Free;
@@ -372,7 +514,7 @@ begin
           end;
         end;
 
-        // Disparamos el evento de finalizaci�n
+        // Disparamos el evento de finalizaci?n
         if Assigned(FOnReceiveDataEnd) then
           FOnReceiveDataEnd(Self, ResMsg, LResponseJson, 'model', '');
 

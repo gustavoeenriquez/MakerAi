@@ -1,4 +1,4 @@
-ï»¿// IT License
+// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo EnrÃ­quez
+// Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -63,7 +63,7 @@ type
     // Captura toda la pantalla
     class function CaptureFullScreen: FMX.Graphics.TBitmap;
 
-    // Captura un Ã¡rea especÃ­fica de la pantalla
+    // Captura un área específica de la pantalla
     class function CaptureArea(const ARect: TRect): FMX.Graphics.TBitmap;
 
     // Obtiene las dimensiones de la pantalla
@@ -112,7 +112,7 @@ var
 begin
   Result := nil;
 
-  // MÃ©tricas de pantalla virtual (soporte multi-monitor)
+  // Métricas de pantalla virtual (soporte multi-monitor)
   VirtualLeft := GetSystemMetrics(SM_XVIRTUALSCREEN);
   VirtualTop := GetSystemMetrics(SM_YVIRTUALSCREEN);
   VirtualWidth := GetSystemMetrics(SM_CXVIRTUALSCREEN);
@@ -123,7 +123,7 @@ begin
   else
     CaptureRect := ARect;
 
-  // Recortar al Ã¡rea virtual
+  // Recortar al área virtual
   CaptureRect.Left := Max(VirtualLeft, CaptureRect.Left);
   CaptureRect.Top := Max(VirtualTop, CaptureRect.Top);
   CaptureRect.Right := Min(VirtualLeft + VirtualWidth, CaptureRect.Right);
@@ -160,7 +160,7 @@ begin
           GetMem(BmpData, DataSize);
           try
             if GetDIBits(MemDC, HBmp, 0, CaptureRect.Height, BmpData, BmpInfo, DIB_RGB_COLORS) = 0 then
-              Exit; // GetDIBits fallÃ³
+              Exit; // GetDIBits falló
 
             // Asegurar alfa opaco (GetDIBits suele dejar alfa = 0 o basura)
             pByte := System.PByte(BmpData);
@@ -177,7 +177,7 @@ begin
               // Copia en bloque (Surface.Bits apunta al buffer interno)
               Move(BmpData^, Surface.Bits^, DataSize);
 
-              // Convertir a TBitmap FMX (Assign hace la conversiÃ³n nativa)
+              // Convertir a TBitmap FMX (Assign hace la conversión nativa)
               Result := FMX.Graphics.TBitmap.Create;
               Result.Assign(Surface);
 
@@ -226,7 +226,7 @@ begin
   // Obtener las dimensiones de la pantalla principal
   ScreenBounds := CGDisplayBounds(CGMainDisplayID);
 
-  // Determinar el Ã¡rea a capturar
+  // Determinar el área a capturar
   if ARect.IsEmpty then
     CaptureRect := ScreenBounds
   else
@@ -290,9 +290,9 @@ end;
 class function TScreenCapture.CaptureScreenAndroid(const ARect: TRect): FMX.Graphics.TBitmap;
 begin
   // En Android, la captura de pantalla requiere permisos especiales
-  // y generalmente se hace a travÃ©s de Media Projection API
-  // Esta es una implementaciÃ³n bÃ¡sica que requiere permisos de root
-  // o implementaciÃ³n nativa mÃ¡s compleja
+  // y generalmente se hace a través de Media Projection API
+  // Esta es una implementación básica que requiere permisos de root
+  // o implementación nativa más compleja
   Result := nil;
   // TODO: Implementar captura para Android
   raise Exception.Create('Screen capture not implemented for Android platform');
@@ -344,7 +344,7 @@ begin
   Result.Y := Round(Bounds.size.height);
   {$ENDIF}
   {$IFDEF ANDROID}
-  // ImplementaciÃ³n para Android requerirÃ­a JNI
+  // Implementación para Android requeriría JNI
   Result := TPoint.Zero;
   {$ENDIF}
   {$IFDEF IOS}
@@ -386,7 +386,7 @@ begin
     EndPoint := StartPoint;
 
     // Forzamos repintado inmediato para borrar el recuadro verde viejo
-    // y empezar a dibujar el nuevo translÃºcido
+    // y empezar a dibujar el nuevo translúcido
     Invalidate;
   end
   else
@@ -440,14 +440,14 @@ begin
       Max(StartPoint.Y, EndPoint.Y)
     );
 
-    // --- CASO 1: ARRASTRANDO (SelecciÃ³n Nueva) ---
+    // --- CASO 1: ARRASTRANDO (Selección Nueva) ---
     if IsDragging then
     begin
       // 1. Configuramos el color base como Blanco
       Canvas.Fill.Color := TAlphaColors.White;
 
-      // 2. IMPORTANTE: Usamos el parÃ¡metro AOpacity en 0.25 (25% visible)
-      // Esto hace que el blanco sea translÃºcido ("lechoso")
+      // 2. IMPORTANTE: Usamos el parámetro AOpacity en 0.25 (25% visible)
+      // Esto hace que el blanco sea translúcido ("lechoso")
       Canvas.FillRect(PaintRect, 0, 0, [], 0.25, TCornerType.Round);
 
       // 3. Borde Blanco
@@ -456,7 +456,7 @@ begin
       Canvas.DrawRect(PaintRect, 0, 0, [], 1.0); // Borde totalmente opaco
     end
 
-    // --- CASO 2: SELECCIÃ“N PREVIA (EstÃ¡tica) ---
+    // --- CASO 2: SELECCIÓN PREVIA (Estática) ---
     else if HasSelection then
     begin
       // No rellenamos nada (FillRect) para que sea transparente.
@@ -473,9 +473,9 @@ constructor TSelectionForm.Create(AOwner: TComponent);
 Var
   R : TRectangle;
 begin
-  inherited CreateNew(AOwner); // ðŸ‘ˆ evita buscar .fmx/.dfm
+  inherited CreateNew(AOwner); //  evita buscar .fmx/.dfm
 
-  // configuraciÃ³n bÃ¡sica que antes hacÃ­as en Execute
+  // configuración básica que antes hacías en Execute
   BorderStyle := TFmxFormBorderStyle.None;
   FormStyle := TFormStyle.StayOnTop;
   Fill.Color := TAlphaColorRec.Black;
@@ -504,7 +504,7 @@ begin
   IsDragging := False;
   HasSelection := False;
 
-  // 1. Obtener mÃ©tricas de pantalla
+  // 1. Obtener métricas de pantalla
   VirtualScreenLeft := GetSystemMetrics(SM_XVIRTUALSCREEN);
   VirtualScreenTop  := GetSystemMetrics(SM_YVIRTUALSCREEN);
 
@@ -516,13 +516,13 @@ begin
     GetSystemMetrics(SM_CYVIRTUALSCREEN)
   );
 
-  // 3. Procesar el rectÃ¡ngulo de entrada (Si existe)
+  // 3. Procesar el rectángulo de entrada (Si existe)
   if not ASelectedRect.IsEmpty then
   begin
     HasSelection := True;
 
     // Convertir Coordenadas Globales -> Locales del Formulario
-    // Restamos el inicio de la pantalla virtual para obtener la posiciÃ³n relativa dentro del form
+    // Restamos el inicio de la pantalla virtual para obtener la posición relativa dentro del form
     StartPoint := TPointF.Create(
       ASelectedRect.Left - VirtualScreenLeft,
       ASelectedRect.Top - VirtualScreenTop

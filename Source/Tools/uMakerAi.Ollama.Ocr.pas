@@ -11,7 +11,7 @@ uses
   uMakerAi.Chat.Messages;
 
 type
-  { TAiOllamaOcrTool: Herramienta de OCR utilizando modelos de visión en Ollama }
+  { TAiOllamaOcrTool: Herramienta de OCR utilizando modelos de visi?n en Ollama }
 
   TAiOllamaOcrTool = class(TAiVisionToolBase)
   private
@@ -30,7 +30,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
 
-    { Métodos Estáticos }
+    { M?todos Est?ticos }
     class function ExtractText(AMediaFile: TAiMediaFile; const APrompt: string = ''; const AUrl: string = ''): string;
     class function ExtractTextFromFile(const AFilePath: string; const APrompt: string = ''; const AUrl: string = ''): string;
     class function ExtractTextFromStream(AStream: TStream; const AFileName: string; const APrompt: string = ''; const AUrl: string = ''): string;
@@ -59,7 +59,7 @@ end;
 constructor TAiOllamaOcrTool.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  // Importante: La URL base. El InternalRun se encargará de asegurar el endpoint /api/chat
+  // Importante: La URL base. El InternalRun se encargar? de asegurar el endpoint /api/chat
   FUrl := 'http://localhost:11434/';
   FModel := 'deepseek-ocr:latest';
   FPrompt := '<|grounding|>Convert the document to markdown';
@@ -78,11 +78,22 @@ begin
 end;
 
 procedure TAiOllamaOcrTool.ExecuteImageDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
+var
+  LPrompt: string;
 begin
+  // Capturar el prompt antes de cualquier operación async para evitar
+  // acceder a AskMsg cuando pueda estar liberado dentro del TTask.
+  LPrompt := '';
+  if Assigned(AskMsg) then
+    LPrompt := AskMsg.Prompt;
+
+  // Si IsAsync=True ya estamos en el hilo background del chat: ejecutar directo
+  // para evitar un TTask anidado que causaría dangling pointer sobre ResMsg/AskMsg.
+  // Si IsAsync=False estamos en el hilo principal: lanzar task para no bloquearlo.
   if IsAsync then
-    TTask.Run(procedure begin InternalRunOllamaOCR(aMediaFile, ResMsg, AskMsg.Prompt); end)
+    InternalRunOllamaOCR(aMediaFile, ResMsg, LPrompt)
   else
-    InternalRunOllamaOCR(aMediaFile, ResMsg, AskMsg.Prompt);
+    TTask.Run(procedure begin InternalRunOllamaOCR(aMediaFile, ResMsg, LPrompt); end);
 end;
 
 function TAiOllamaOcrTool.InternalRunOllamaOCR(aMediaFile: TAiMediaFile; ResMsg: TAiChatMessage; const AOverridePrompt: string): string;
@@ -105,13 +116,13 @@ begin
   if LFinalPrompt.IsEmpty then LFinalPrompt := '<|grounding|>Convert the document to markdown';
 
   //El prompt para DeepSeek OCR es muy estricto,  debe ir un #10 y luego el texto sin espacio
-  //El texto del prompt debe ser en chino o en inglés no acepta prompts en otro idioma
-  //El texto del pdf o imágen si puede estar en español o en otros idiomas
-  //se utiliza por defecto <|grounding|>  para que extraiga también los boundings de los textos
+  //El texto del prompt debe ser en chino o en ingl?s no acepta prompts en otro idioma
+  //El texto del pdf o im?gen si puede estar en espa?ol o en otros idiomas
+  //se utiliza por defecto <|grounding|>  para que extraiga tambi?n los boundings de los textos
   //Los boundings son proporcionales, no corresponden al valor real, es necesario escalarlos de acuerdo
-  //al tamaño de la imagen
+  //al tama?o de la imagen
   //LFinalPrompt := ' Free OCR';  //Ok algunos documentos
-  //LFinalPrompt := #10+'<|grounding|>Convert the document to markdown'; //el más preciso extrae los boundings y los textos con presición
+  //LFinalPrompt := #10+'<|grounding|>Convert the document to markdown'; //el m?s preciso extrae los boundings y los textos con presici?n
 
   LFinalPrompt := #10 + LFinalPrompt;
 
@@ -120,7 +131,7 @@ begin
   try
     LActualApiKey := GetApiKey;
 
-    // A. Payload Raíz
+    // A. Payload Ra?z
     LRequestJson.AddPair('model', FModel);
     LRequestJson.AddPair('stream', TJSONBool.Create(FStream));
     LRequestJson.AddPair('keep_alive', FKeepAlive);
@@ -203,7 +214,7 @@ begin
     FTimeout := Value;
 end;
 
-{ --- MÉTODOS ESTÁTICOS --- }
+{ --- M?TODOS EST?TICOS --- }
 
 class function TAiOllamaOcrTool.ExtractText(AMediaFile: TAiMediaFile; const APrompt, AUrl: string): string;
 var

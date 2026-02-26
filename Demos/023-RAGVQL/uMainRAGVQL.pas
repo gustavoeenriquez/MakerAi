@@ -1,53 +1,63 @@
-unit uMainRAGVQL;
+﻿unit uMainRAGVQL;
 
 interface
 
 uses
-  System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants, System.Threading,   System.Generics.Collections, System.StrUtils, system.Math,
+  System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
+  System.Threading, System.Generics.Collections, System.StrUtils, System.Math,
 
-   uMakerAi.Embeddings.core, uMakerAi.Embeddings, uMakerAi.Chat.Ollama, uMakerAi.rag.Vector.Driver.Postgres,
-  uMakerAi.rag.Vectors, uMakerAi.rag.Vectors.Index, uMakerAi.RAG.Vectors.VQL,  uMakerAi.RAG.MetaData,
+  uMakerAi.Embeddings.core, uMakerAi.Embeddings, uMakerAi.Chat.Ollama,
+  uMakerAi.rag.Vector.Driver.Postgres,
+  uMakerAi.rag.Vectors, uMakerAi.rag.Vectors.Index,
+  uMakerAi.RAG.Vectors.VQL, uMakerAi.RAG.MetaData,
 
-  FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Controls.Presentation, FMX.StdCtrls, FMX.Memo.Types, FMX.ScrollBox, FMX.Memo, FMX.Edit, FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Error, FireDAC.UI.Intf,
-  FireDAC.Phys.Intf, FireDAC.Stan.Def, FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Phys, FireDAC.Phys.PG, FireDAC.Phys.PGDef, FireDAC.FMXUI.Wait, Data.DB, FireDAC.Comp.Client, FMX.Layouts;
+  FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs,
+  FMX.Controls.Presentation, FMX.StdCtrls, FMX.Memo.Types, FMX.ScrollBox,
+  FMX.Memo, FMX.Edit, FMX.Layouts,
+  FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Error, FireDAC.UI.Intf,
+  FireDAC.Phys.Intf, FireDAC.Stan.Def, FireDAC.Stan.Pool, FireDAC.Stan.Async,
+  FireDAC.Phys, FireDAC.Phys.PG, FireDAC.Phys.PGDef, FireDAC.FMXUI.Wait,
+  Data.DB, FireDAC.Comp.Client;
 
 type
   TForm21 = class(TForm)
-    BtnUploadFile: TButton;
+    // ── Non-visual components ──────────────────────────────────────────────
     AiOllamaEmbeddings1: TAiOllamaEmbeddings;
-    rag: TAiRAGVector;
+    RAG: TAiRAGVector;
     OpenDialog1: TOpenDialog;
-    ProgressBar1: TProgressBar;
+    SaveDialog1: TSaveDialog;
+    DbConn: TFDConnection;
+    PgDriver: TAiRAGVectorPostgresDriver;
+    // ── Left panel ────────────────────────────────────────────────────────
+    BtnUploadFile: TButton;
+    BtnSaveToFile: TButton;
+    BtnLoadFromfile: TButton;
+    BtnCreateTable: TButton;
     BtnCancelar: TButton;
+    BtnMostrarTodos: TButton;
+    ProgressBar1: TProgressBar;
+    ChSemanticSearch: TCheckBox;
+    ChLexicalSearch: TCheckBox;
+    ChEnableRRF: TCheckBox;
+    ChReorderABC: TCheckBox;
     ChShowProperties: TCheckBox;
     EditPrecision: TEdit;
     EditLimit: TEdit;
     Label10: TLabel;
     Label2: TLabel;
-    SaveDialog1: TSaveDialog;
-    BtnSaveToFile: TButton;
-    BtnLoadFromfile: TButton;
-    ChLexicalSearch: TCheckBox;
-    ChEnableRRF: TCheckBox;
-    ChReorderABC: TCheckBox;
-    ChSemanticSearch: TCheckBox;
-    DbConn: TFDConnection;
-    PgDriver: TAiRAGVectorPostgresDriver;
-    BtnCreateTable: TButton;
-    Layout1: TLayout;
-    Layout2: TLayout;
-    Layout3: TLayout;
-    Layout4: TLayout;
-    Layout5: TLayout;
-    BtnConsultar: TButton;
-    BtnBuscarVGQL: TButton;
-    BtnVGqlToText: TButton;
-    Label1: TLabel;
+    LblStatus: TLabel;
+    // ── Right panel ───────────────────────────────────────────────────────
     Label3: TLabel;
     MemoResponse: TMemo;
-    MemoPrompt: TMemo;
     Splitter1: TSplitter;
+    Label1: TLabel;
+    MemoPrompt: TMemo;
+    BtnConsultar: TButton;
+    BtnBuscarVGQL: TButton;
     BtnConsultaToText: TButton;
+    BtnVGqlToText: TButton;
+    // ── Events ────────────────────────────────────────────────────────────
+    procedure FormCreate(Sender: TObject);
     procedure BtnUploadFileClick(Sender: TObject);
     procedure RAGImportProgress(Sender: TObject; aPosition, Total: Integer; var Cancel: Boolean);
     procedure BtnConsultarClick(Sender: TObject);
@@ -60,10 +70,13 @@ type
     procedure BtnCreateTableClick(Sender: TObject);
     procedure BtnVGqlToTextClick(Sender: TObject);
     procedure BtnConsultaToTextClick(Sender: TObject);
+    procedure BtnCancelarClick(Sender: TObject);
+    procedure BtnMostrarTodosClick(Sender: TObject);
   private
-    FUserCancelled: Boolean; // Variable para comunicar la cancelaci�n
+    FUserCancelled: Boolean;
+    procedure SetStatus(const AMsg: string);
   public
-    Procedure ShowAllRAG;
+    procedure ShowAllRAG;
   end;
 
 var
@@ -73,268 +86,154 @@ implementation
 
 {$R *.fmx}
 
-procedure TForm21.BtnConsultarClick(Sender: TObject);
-Var
-  // Variables locales para capturar el estado de la UI (Thread-Safety)
-  LPrompt: String;
-  LShowProperties: Boolean;
-  LLimit: Integer;
-  LPrecision: Double;
-  // Variables para las nuevas opciones de b�squeda
-  LUseBM25, LUseRRF, LUseABC: Boolean;
+// ---------------------------------------------------------------------------
+//  Helpers
+// ---------------------------------------------------------------------------
+
+procedure TForm21.SetStatus(const AMsg: string);
 begin
-  // =========================================================================
-  // 1. CAPTURA DE DATOS (HILO PRINCIPAL)
-  // =========================================================================
-  // Es vital leer todas las propiedades VCL/FMX aqu�, no dentro del Task.
+  LblStatus.Text := AMsg;
+end;
 
-  LPrompt := MemoPrompt.Lines.Text.Trim;
+// ---------------------------------------------------------------------------
+//  Inicializacion
+// ---------------------------------------------------------------------------
 
-  if LPrompt.IsEmpty then
-  begin
-    ShowMessage('Por favor ingrese una consulta.');
-    Exit;
-  end;
+procedure TForm21.FormCreate(Sender: TObject);
+begin
+  // Ejemplo de consulta VQL para orientar al usuario
+  MemoPrompt.Lines.Text :=
+    'MATCH documentos'                                     + sLineBreak +
+    'SEARCH ''inteligencia artificial'''                   + sLineBreak +
+    'USING HYBRID'                                         + sLineBreak +
+    '  WEIGHTS(semantic: 0.7, lexical: 0.3)'               + sLineBreak +
+    '  FUSION RRF'                                         + sLineBreak +
+    'WHERE autor = ''Gustavo'''                            + sLineBreak +
+    'THRESHOLD GLOBAL 0.5'                                 + sLineBreak +
+    'OPTIMIZE REORDER ABC'                                 + sLineBreak +
+    'RETURN TEXT, METADATA, SCORE'                         + sLineBreak +
+    'LIMIT 5';
 
-  // Configuraciones b�sicas
-  LShowProperties := ChShowProperties.IsChecked;
-  LLimit := StrToIntDef(EditLimit.Text, 5);
-  LPrecision := StrToFloatDef(EditPrecision.Text, 0.7);
+  SetStatus('Listo. Cargue un archivo de texto para comenzar.');
+end;
 
-  // Configuraciones del Motor RAG (Nuevos Checkboxes)
-  // Aseg�rate de que estos componentes existan en tu formulario con estos nombres
-  // o c�mbialos por los que est�s usando.
-  LUseBM25 := ChLexicalSearch.IsChecked;
-  LUseRRF  := ChEnableRRF.IsChecked;
-  LUseABC  := ChReorderABC.IsChecked;
+// ---------------------------------------------------------------------------
+//  Base de Conocimientos
+// ---------------------------------------------------------------------------
 
-  // =========================================================================
-  // 2. PREPARAR UI VISUAL
-  // =========================================================================
-  BtnConsultar.Enabled := False;
-  MemoResponse.Lines.Text := 'Pensando... (Generando embedding y buscando)';
-  Cursor := crHourGlass;
+procedure TForm21.BtnUploadFileClick(Sender: TObject);
+Var
+  FileName: String;
+begin
+  If not OpenDialog1.Execute then Exit;
 
-  // =========================================================================
-  // 3. EJECUTAR EN SEGUNDO PLANO (TTask)
-  // =========================================================================
+  FileName := OpenDialog1.FileName;
+
+  FUserCancelled    := False;
+  ProgressBar1.Value := 0;
+  BtnUploadFile.Enabled := False;
+  BtnCancelar.Enabled   := True;
+  rag.Clear;
+
+  SetStatus('Importando: ' + ExtractFileName(FileName));
+
   TTask.Run(
     procedure
     Var
-      LResponse: String;
+      St: TStringStream;
+      LocalText: String;
+      NodosCreados: Integer;
+      MetaData: TAiEmbeddingMetaData;
     begin
       try
-        // --- A. CONFIGURAR EL MOTOR ---
-        // Aplicamos las opciones capturadas al componente.
-        // Como el bot�n est� deshabilitado, no hay riesgo de concurrencia aqu�.
+        St := TStringStream.Create('', TEncoding.UTF8);
+        try
+          St.LoadFromFile(FileName);
+          LocalText := St.DataString;
+        finally
+          St.Free;
+        end;
 
-        rag.SearchOptions.UseEmbeddings := True; // Siempre activo para este demo
-        rag.SearchOptions.UseBM25       := LUseBM25;
-        rag.SearchOptions.UseRRF        := LUseRRF;
-        rag.SearchOptions.UseReorderABC := LUseABC;
+        if not FUserCancelled then
+        begin
+          MetaData := TAiEmbeddingMetaData.Create;
+          MetaData.Properties['tipo']     := 'cuento';
+          MetaData.Properties['fecha']    := EncodeDate(1990, 10, 1);
+          MetaData.Properties['autor']    := 'Gustavo';
+          MetaData.Properties['path']     := '10.102.36.2';
+          MetaData.Properties['Posicion'] := 0;
 
-        // Opcional: Si tuvieras edits para los pesos
-        // rag.SearchOptions.BM25Weight := 0.7;
+          NodosCreados := rag.AddItemsFromPlainText(LocalText, MetaData, 200, 15);
+        end;
 
-        // --- B. PROCESO PESADO (B�SQUEDA) ---
-        // SearchText internamente llamar� a Search(), que ahora usa SearchOptions
-        LResponse := rag.SearchText(
-          LPrompt,
-          LLimit,
-          LPrecision,
-          nil,            // Filtro (nil)
-          LShowProperties // Formato de salida
-        );
-
-        // --- C. ACTUALIZAR UI (HILO PRINCIPAL) ---
         TThread.Queue(nil,
           procedure
           begin
-            // Verificaci�n defensiva por si cerraron el form
-            if not Assigned(MemoResponse) then Exit;
+            BtnCancelar.Enabled   := False;
+            BtnUploadFile.Enabled := True;
+            ProgressBar1.Value    := ProgressBar1.Max;
+            RAG.BuildIndex;
+            ShowAllRAG;
 
-            MemoResponse.Lines.Text := LResponse;
-
-            if LResponse.IsEmpty then
-              MemoResponse.Lines.Add('(No se encontraron coincidencias con esa precisi�n)');
-
-            // Restaurar controles
-            BtnConsultar.Enabled := True;
-            Cursor := crDefault;
+            if FUserCancelled then
+              SetStatus('Importacion cancelada por el usuario.')
+            else
+              SetStatus('Importacion completada. Nodos: ' + NodosCreados.ToString);
           end);
 
       except
         on E: Exception do
         begin
-          // Manejo de errores seguro
           TThread.Queue(nil,
             procedure
             begin
-              MemoResponse.Lines.Text := 'Error en la b�squeda: ' + E.Message;
-              BtnConsultar.Enabled := True;
-              Cursor := crDefault;
+              BtnCancelar.Enabled   := False;
+              BtnUploadFile.Enabled := True;
+              SetStatus('Error al importar: ' + E.Message);
+              ShowMessage('Error al procesar: ' + E.Message);
             end);
         end;
       end;
     end);
 end;
 
-procedure TForm21.BtnConsultaToTextClick(Sender: TObject);
-var
-  SB: TStringBuilder;
-  LPrompt: string;
-  LUseEmbeddings, LUseBM25, LUseRRF: Boolean;
-  LWeightSem, LWeightLex: Double;
+procedure TForm21.BtnCancelarClick(Sender: TObject);
 begin
-  // 1. Capturar valores de la UI
-  LPrompt := MemoPrompt.Lines.Text.Trim;
-
-  // Basado en la l�gica de tu BtnConsultarClick:
-  LUseEmbeddings := True; // Tu c�digo fuerza esto a True
-  // Si tienes un Checkbox para esto, usa: LUseEmbeddings := ChSemanticSearch.IsChecked;
-
-  LUseBM25 := ChLexicalSearch.IsChecked;
-  LUseRRF  := ChEnableRRF.IsChecked;
-
-  // Pesos actuales (si no tienes Edits para esto, tomamos los del objeto RAG)
-  LWeightSem := rag.SearchOptions.EmbeddingWeight;
-  LWeightLex := rag.SearchOptions.BM25Weight;
-
-  SB := TStringBuilder.Create;
-  try
-    SB.AppendLine('=== MANUAL CONFIG DEBUG REPORT ===');
-    SB.AppendLine;
-
-    // --- MATCH ---
-    // En b�squeda manual directa no suele haber filtro de entidad a menos que se codifique
-    SB.AppendLine('ENTITY (Target): [Global / Default]');
-    SB.AppendLine;
-
-    // --- SEARCH ---
-    if LPrompt.IsEmpty then
-      SB.AppendLine('QUERY: (Empty)')
-    else
-      SB.AppendLine('QUERY: ' + LPrompt);
-    SB.AppendLine;
-
-    // --- USING (Mode & Weights) ---
-    SB.Append('MODE: ');
-    if LUseEmbeddings and LUseBM25 then
-      SB.Append('Hybrid (Sem�ntico + L�xico)')
-    else if LUseEmbeddings then
-      SB.Append('Embeddings Only (Sem�ntico)')
-    else if LUseBM25 then
-      SB.Append('BM25 Only (L�xico)')
-    else
-      SB.Append('NONE (Configuraci�n inv�lida)');
-    SB.AppendLine;
-
-    if LUseEmbeddings and LUseBM25 then
-    begin
-      SB.AppendFormat('  - Weight Semantic: %.2f', [LWeightSem]).AppendLine;
-      SB.AppendFormat('  - Weight Lexical:  %.2f', [LWeightLex]).AppendLine;
-      SB.Append('  - Fusion Strategy: ');
-      if LUseRRF then
-        SB.Append('RRF (Reciprocal Rank Fusion)')
-      else
-        SB.Append('Weighted Sum');
-      SB.AppendLine;
-    end;
-
-    // Idioma por defecto del componente
-    SB.AppendFormat('  - Language: %s (System Default)', ['Spanish']).AppendLine;
-    SB.AppendLine;
-
-    // --- WHERE (Filters) ---
-    SB.AppendLine('FILTERS (MetaData):');
-    SB.AppendLine('  (La interfaz manual actual no tiene controles de filtro)');
-    SB.AppendLine;
-
-    // --- THRESHOLD ---
-    SB.AppendLine('THRESHOLDS (Precision):');
-    SB.AppendFormat('  - Min Global:   %s', [EditPrecision.Text]).AppendLine;
-    // En modo manual simple, el MinSemantic suele ser igual al Global o ignorado seg�n la l�gica
-    SB.AppendFormat('  - Min Semantic: %s (Inherited)', [EditPrecision.Text]).AppendLine;
-    SB.AppendLine;
-
-    // --- RERANK ---
-    // Tu BtnConsultarClick llama a SearchText, no a ExecuteVGQL, por lo que
-    // la l�gica de Rerank (segunda pasada) no se ejecuta autom�ticamente ah�.
-    SB.AppendLine('RERANKING: Inactive');
-    SB.AppendLine('  (La b�squeda manual est�ndar es de una sola etapa)');
-    SB.AppendLine;
-
-    // --- OPTIMIZE ---
-    SB.AppendLine('OPTIMIZATIONS:');
-    SB.AppendFormat('  - Context Reordering (Lost-in-Middle): %s',
-      [BoolToStr(ChReorderABC.IsChecked, True)]).AppendLine;
-    SB.AppendLine;
-
-    // --- RETURN ---
-    SB.AppendLine('OUTPUT CONFIG:');
-    SB.AppendFormat('  - Limit: %s', [EditLimit.Text]).AppendLine;
-    SB.AppendFormat('  - Include Metadata: %s',
-      [BoolToStr(ChShowProperties.IsChecked, True)]).AppendLine;
-    SB.AppendFormat('  - Include Score:    %s',
-      [BoolToStr(ChShowProperties.IsChecked, True)]).AppendLine;
-
-    // 3. Mostrar resultado
-    MemoResponse.Lines.Text := SB.ToString;
-
-  finally
-    SB.Free;
-  end;
+  FUserCancelled      := True;
+  BtnCancelar.Enabled := False;
+  SetStatus('Cancelando...');
 end;
 
-procedure TForm21.BtnCreateTableClick(Sender: TObject);
+procedure TForm21.RAGImportProgress(Sender: TObject; aPosition, Total: Integer; var Cancel: Boolean);
 begin
-  PgDriver.CreateSchema(PgDriver.TableName, 1024);
-end;
-
-procedure TForm21.BtnLoadFromfileClick(Sender: TObject);
-var
-  ItemsCargados: Integer;
-begin
-  OpenDialog1.DefaultExt := 'mkVRag';
-  OpenDialog1.Filter := 'MakerAI Vector Files (*.mkVRag)|*.mkVRag|Todos los archivos (*.*)|*.*';
-
-  if OpenDialog1.Execute then
+  if FUserCancelled then
   begin
-    Cursor := crHourGlass;
-    try
-      // Capturamos el resultado
-      ItemsCargados := rag.LoadFromFile(OpenDialog1.FileName);
-      Rag.BuildIndex;
-
-      SaveDialog1.FileName := OpenDialog1.FileName;
-
-      ShowAllRAG;
-
-      ShowMessage('Archivo cargado correctamente.' + sLineBreak + 'Nodos recuperados: ' + IntToStr(ItemsCargados));
-    finally
-      Cursor := crDefault;
-    end;
+    Cancel := True;
+    Exit;
   end;
+
+  TThread.Queue(nil,
+    procedure
+    begin
+      if not Assigned(ProgressBar1) then Exit;
+      ProgressBar1.Max   := Total;
+      ProgressBar1.Value := aPosition;
+    end);
 end;
 
 procedure TForm21.BtnSaveToFileClick(Sender: TObject);
 begin
-  // 1. Configurar propiedades del Di�logo
   SaveDialog1.DefaultExt := 'mkVRag';
-  SaveDialog1.Filter := 'MakerAI Vector Files (*.mkVRag)|*.mkVRag|Todos los archivos (*.*)|*.*';
-  SaveDialog1.Title := 'Guardar Base de Vectores';
+  SaveDialog1.Filter     := 'MakerAI Vector Files (*.mkVRag)|*.mkVRag|Todos los archivos (*.*)|*.*';
+  SaveDialog1.Title      := 'Guardar Base de Vectores';
 
-  // 2. Ejecutar
   if SaveDialog1.Execute then
   begin
-    Cursor := crHourGlass; // Feedback visual de guardado
+    Cursor := crHourGlass;
     try
-      // 3. L�gica de Guardado
       rag.SaveToFile(SaveDialog1.FileName);
-
-      // 4. Sincronizaci�n
       OpenDialog1.FileName := SaveDialog1.FileName;
-
+      SetStatus('Base guardada: ' + ExtractFileName(SaveDialog1.FileName));
       ShowMessage('Base de conocimientos guardada exitosamente.');
     finally
       Cursor := crDefault;
@@ -342,105 +241,173 @@ begin
   end;
 end;
 
-procedure TForm21.BtnUploadFileClick(Sender: TObject);
-Var
-  FileName: String;
+procedure TForm21.BtnLoadFromfileClick(Sender: TObject);
+var
+  ItemsCargados: Integer;
 begin
-  // 1. Interacci�n UI (Hilo Principal)
-  // Abrimos el di�logo antes de iniciar la tarea
-  If not OpenDialog1.Execute then
+  OpenDialog1.DefaultExt := 'mkVRag';
+  OpenDialog1.Filter     := 'MakerAI Vector Files (*.mkVRag)|*.mkVRag|Todos los archivos (*.*)|*.*';
+
+  if OpenDialog1.Execute then
+  begin
+    Cursor := crHourGlass;
+    try
+      ItemsCargados := rag.LoadFromFile(OpenDialog1.FileName);
+      Rag.BuildIndex;
+      SaveDialog1.FileName := OpenDialog1.FileName;
+      ShowAllRAG;
+      SetStatus('Base cargada: ' + IntToStr(ItemsCargados) + ' nodos  [' + ExtractFileName(OpenDialog1.FileName) + ']');
+      ShowMessage('Archivo cargado correctamente.' + sLineBreak + 'Nodos recuperados: ' + IntToStr(ItemsCargados));
+    finally
+      Cursor := crDefault;
+    end;
+  end;
+end;
+
+procedure TForm21.BtnCreateTableClick(Sender: TObject);
+begin
+  PgDriver.CreateSchema(PgDriver.TableName, 1024);
+  SetStatus('Tabla PostgreSQL creada: ' + PgDriver.TableName);
+end;
+
+procedure TForm21.BtnMostrarTodosClick(Sender: TObject);
+begin
+  ShowAllRAG;
+end;
+
+// ---------------------------------------------------------------------------
+//  Busqueda simple
+// ---------------------------------------------------------------------------
+
+procedure TForm21.BtnConsultarClick(Sender: TObject);
+Var
+  LPrompt: String;
+  LShowProperties: Boolean;
+  LLimit: Integer;
+  LPrecision: Double;
+  LUseBM25, LUseRRF, LUseABC: Boolean;
+begin
+  LPrompt := MemoPrompt.Lines.Text.Trim;
+  if LPrompt.IsEmpty then
+  begin
+    ShowMessage('Por favor ingrese una consulta.');
     Exit;
+  end;
 
-  // Capturamos el nombre del archivo para pasarlo a la tarea
-  FileName := OpenDialog1.FileName;
+  LShowProperties := ChShowProperties.IsChecked;
+  LLimit          := StrToIntDef(EditLimit.Text, 5);
+  LPrecision      := StrToFloatDef(EditPrecision.Text, 0.7);
+  LUseBM25        := ChLexicalSearch.IsChecked;
+  LUseRRF         := ChEnableRRF.IsChecked;
+  LUseABC         := ChReorderABC.IsChecked;
 
-  // 2. Preparar UI
-  FUserCancelled := False; // Resetear bandera de cancelaci�n
-  ProgressBar1.Value := 0; // Resetear barra
-  BtnUploadFile.Enabled := False; // Evitar doble click
-  rag.Clear; // Limpiamos (thread-safe gracias a tu FLock)
+  BtnConsultar.Enabled := False;
+  MemoResponse.Lines.Text := 'Buscando...';
+  SetStatus('Buscando (modo simple)...');
 
-  // 3. Iniciar la Tarea en segundo plano
   TTask.Run(
     procedure
     Var
-      St: TStringStream;
-      LocalText: String;
-      NodosCreados: Integer;
-      MetaData : TAiEmbeddingMetaData;
+      LResponse: String;
     begin
       try
-        // --- INICIO PROCESO BACKGROUND ---
+        rag.SearchOptions.UseEmbeddings := True;
+        rag.SearchOptions.UseBM25       := LUseBM25;
+        rag.SearchOptions.UseRRF        := LUseRRF;
+        rag.SearchOptions.UseReorderABC := LUseABC;
 
-        // A. Carga del archivo (Pesado para disco)
-        St := TStringStream.Create('', TEncoding.UTF8);
-        Try
-          St.LoadFromFile(FileName);
-          LocalText := St.DataString;
-        Finally
-          St.Free;
-        End;
+        LResponse := rag.SearchText(
+          LPrompt,
+          LLimit,
+          LPrecision,
+          nil,
+          LShowProperties
+        );
 
-        // B. Procesamiento del RAG
-        // Como ya configuraste el evento OnImportProgress en el form,
-        // este m�todo llamar� autom�ticamente para actualizar la barra.
-        if not FUserCancelled then
-        begin
-          MetaData := TAiEmbeddingMetaData.Create;
-          MetaData.Properties['tipo'] := 'cuento';
-          MetaData.Properties['fecha'] := EncodeDate(1990,10,1);
-          MetaData.Properties['autor'] := 'Gustavo';
-          MetaData.Properties['path'] := '10.102.36.2';
-          Metadata.Properties['Posicion'] := 0;
-
-          NodosCreados := rag.AddItemsFromPlainText(LocalText, MetaData, 200, 15);
-        end;
-
-        // --- FIN PROCESO BACKGROUND ---
-
-        // 4. Actualizar UI al finalizar (Volver al Hilo Principal)
         TThread.Queue(nil,
           procedure
           begin
-            if FUserCancelled then
-              ShowMessage('Proceso cancelado por el usuario.')
-            else
-              ShowMessage('Termin� de procesar el archivo. Nodos: ' + NodosCreados.ToString);
+            if not Assigned(MemoResponse) then Exit;
 
-            BtnUploadFile.Enabled := True;
-            ProgressBar1.Value := ProgressBar1.Max;
+            MemoResponse.Lines.Text := LResponse;
 
-            //No olvidar recrear los indices cuando se cargan a memoria
-            RAG.BuildIndex;
+            if LResponse.IsEmpty then
+              MemoResponse.Lines.Add('(No se encontraron coincidencias con esa precision)');
 
-            ShowAllRAG;
+            BtnConsultar.Enabled := True;
+            Cursor := crDefault;
+            SetStatus('Busqueda completada.');
           end);
 
       except
         on E: Exception do
         begin
-          // Manejo de errores seguro para hilos
           TThread.Queue(nil,
             procedure
             begin
-              ShowMessage('Error al procesar: ' + E.Message);
-              BtnUploadFile.Enabled := True;
+              MemoResponse.Lines.Text := 'Error en la busqueda: ' + E.Message;
+              BtnConsultar.Enabled := True;
+              Cursor := crDefault;
+              SetStatus('Error: ' + E.Message);
             end);
         end;
       end;
     end);
 end;
 
+// ---------------------------------------------------------------------------
+//  Busqueda VQL
+// ---------------------------------------------------------------------------
+
+procedure TForm21.BtnBuscarVGQLClick(Sender: TObject);
+var
+  LPrompt, LRes: string;
+begin
+  LPrompt := MemoPrompt.Lines.Text.Trim;
+  if LPrompt.IsEmpty then
+  begin
+    ShowMessage('Por favor, escribe una consulta VQL.');
+    Exit;
+  end;
+
+  MemoResponse.Lines.Clear;
+  MemoResponse.Lines.Add('Ejecutando consulta VQL...');
+  SetStatus('Ejecutando VQL...');
+  Application.ProcessMessages;
+
+  try
+    LRes := Rag.ExecuteVGQL(LPrompt);
+
+    if LRes.IsEmpty then
+      MemoResponse.Lines.Text := 'No se encontraron resultados que coincidan con los criterios.'
+    else
+      MemoResponse.Lines.Text := LRes;
+
+    SetStatus('VQL ejecutado correctamente.');
+
+  except
+    on E: Exception do
+    begin
+      MemoResponse.Lines.Text := 'ERROR EN CONSULTA VQL:' + sLineBreak + E.Message;
+      SetStatus('Error VQL: ' + E.Message);
+      MemoPrompt.SetFocus;
+    end;
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+//  Debug / Config reports
+// ---------------------------------------------------------------------------
+
 procedure TForm21.BtnVGqlToTextClick(Sender: TObject);
 var
   sVGQL: string;
   Parser: TVGQLParser;
-  AST: TVGQLQuery;          // Nueva variable para el AST
-  Compiler: TVGQLCompiler;  // Nueva variable para el Compilador
+  AST: TVGQLQuery;
+  Compiler: TVGQLCompiler;
   Req: TVGQLRequest;
   SB: TStringBuilder;
 
-  // Procedimiento local para mostrar filtros de forma recursiva
   procedure RenderCriteria(ACriteria: TAiFilterCriteria; Indent: string);
   var
     j: Integer;
@@ -499,17 +466,15 @@ begin
   sVGQL := MemoPrompt.Lines.Text.Trim;
   if sVGQL.IsEmpty then Exit;
 
-  SB := TStringBuilder.Create;
-  Parser := TVGQLParser.Create(sVGQL);
-  AST := nil;
-  Req := nil;
+  SB       := TStringBuilder.Create;
+  Parser   := TVGQLParser.Create(sVGQL);
+  AST      := nil;
+  Req      := nil;
 
   try
     try
-      // 1. Interpretamos el texto -> Obtenemos el �rbol (AST)
       AST := Parser.Parse;
 
-      // 2. Compilamos el �rbol -> Obtenemos el Request de ejecuci�n
       Compiler := TVGQLCompiler.Create;
       try
         Req := Compiler.Translate(AST);
@@ -517,41 +482,34 @@ begin
         Compiler.Free;
       end;
 
-      // 3. Construimos el reporte debug
-      SB.AppendLine('=== VGQL DEBUG REPORT (Compiled) ===').AppendLine;
+      SB.AppendLine('=== VQL DEBUG REPORT (Compilado) ===').AppendLine;
 
-      // --- MATCH ---
       SB.AppendFormat('ENTITY: %s', [Req.Entity]);
       if Req.ALabel <> '' then SB.AppendFormat(' [Alias: %s]', [Req.ALabel]);
       SB.AppendLine.AppendLine;
 
-      // --- SEARCH ---
       SB.AppendLine('QUERY: ' + Req.Query).AppendLine;
 
-      // --- USING ---
       SB.Append('MODE: ');
-      // Calificaci�n completa para evitar error E2010
       case Req.Mode of
-        smEmbeddings: SB.Append('Sem�ntico (Embeddings)');
-        smBM25:       SB.Append('L�xico (BM25)');
-        smHybrid:     SB.Append('H�brido');
+        smEmbeddings: SB.Append('Semantico (Embeddings)');
+        smBM25:       SB.Append('Lexico (BM25)');
+        smHybrid:     SB.Append('Hibrido');
       end;
       SB.AppendLine;
 
       SB.AppendFormat('  - Pesos: Sem[%.2f] Lex[%.2f]', [Req.WeightSemantic, Req.WeightLexical]).AppendLine;
-      SB.Append('  - Fusi�n: ');
+      SB.Append('  - Fusion: ');
       if Req.Fusion = fmRRF then SB.Append('RRF') else SB.Append('Weighted');
       SB.AppendLine.AppendLine;
 
-      // --- WHERE (Recursivo) ---
-      SB.AppendLine('FILTERS (Tree):');
+      SB.AppendLine('FILTROS (arbol):');
       if (Req.Filter <> nil) and (Req.Filter.Count > 0) then
         RenderCriteria(Req.Filter, '')
       else
-        SB.AppendLine('  (No filters defined)');
+        SB.AppendLine('  (Sin filtros)');
       SB.AppendLine;
 
-      // --- RERANK & OTROS ---
       if Req.RerankQuery <> '' then
         SB.AppendFormat('RERANK: "%s"', [Req.RerankQuery]).AppendLine;
 
@@ -562,12 +520,13 @@ begin
     except
       on E: Exception do
       begin
-        SB.AppendLine.AppendLine('!!! ERROR !!!');
+        SB.AppendLine.AppendLine('!!! ERROR DE SINTAXIS !!!');
         SB.AppendLine(E.Message);
       end;
     end;
 
     MemoResponse.Lines.Text := SB.ToString;
+    SetStatus('Reporte VQL generado.');
 
   finally
     if Assigned(AST) then AST.Free;
@@ -577,45 +536,85 @@ begin
   end;
 end;
 
-procedure TForm21.BtnBuscarVGQLClick(Sender: TObject);
+procedure TForm21.BtnConsultaToTextClick(Sender: TObject);
 var
-  LPrompt, LRes: string;
+  SB: TStringBuilder;
+  LPrompt: string;
+  LUseEmbeddings, LUseBM25, LUseRRF: Boolean;
+  LWeightSem, LWeightLex: Double;
 begin
-  // 1. Capturamos la consulta VGQL del Memo
-  LPrompt := MemoPrompt.Lines.Text.Trim;
+  LPrompt        := MemoPrompt.Lines.Text.Trim;
+  LUseEmbeddings := True;
+  LUseBM25       := ChLexicalSearch.IsChecked;
+  LUseRRF        := ChEnableRRF.IsChecked;
+  LWeightSem     := rag.SearchOptions.EmbeddingWeight;
+  LWeightLex     := rag.SearchOptions.BM25Weight;
 
-  if LPrompt.IsEmpty then
-  begin
-    ShowMessage('Por favor, escribe una consulta MakerAIVGQL');
-    Exit;
-  end;
-
-  // 2. Limpiamos la respuesta anterior
-  MemoResponse.Lines.Clear;
-  MemoResponse.Lines.Add('Buscando...');
-  Application.ProcessMessages;
-
+  SB := TStringBuilder.Create;
   try
-    // 3. Ejecutamos la magia del lenguaje h�brido
-    // ExecuteVGQL har� el Lexer -> Parser -> Search -> Rerank -> Optimize
-    LRes := Rag.ExecuteVGQL(LPrompt);
+    SB.AppendLine('=== CONFIG DEBUG REPORT (Modo Simple) ===').AppendLine;
 
-    // 4. Mostramos el resultado (Contexto formateado para el LLM)
-    if LRes.IsEmpty then
-      MemoResponse.Lines.Text := 'No se encontraron resultados que coincidan con los criterios.'
+    SB.AppendLine('ENTITY (Target): [Global / Default]').AppendLine;
+
+    if LPrompt.IsEmpty then
+      SB.AppendLine('QUERY: (Vacio)')
     else
-      MemoResponse.Lines.Text := LRes;
+      SB.AppendLine('QUERY: ' + LPrompt);
+    SB.AppendLine;
 
-  except
-    on E: Exception do
+    SB.Append('MODE: ');
+    if LUseEmbeddings and LUseBM25 then
+      SB.Append('Hibrido (Semantico + Lexico)')
+    else if LUseEmbeddings then
+      SB.Append('Embeddings Only (Semantico)')
+    else if LUseBM25 then
+      SB.Append('BM25 Only (Lexico)')
+    else
+      SB.Append('NINGUNO (configuracion invalida)');
+    SB.AppendLine;
+
+    if LUseEmbeddings and LUseBM25 then
     begin
-      // En caso de error de sintaxis en el VGQL o error de conexi�n
-      MemoResponse.Lines.Text := 'ERROR EN CONSULTA VGQL: ' + sLineBreak + E.Message;
-      // Opcional: poner el foco en el memo para corregir
-      MemoPrompt.SetFocus;
+      SB.AppendFormat('  - Weight Semantic: %.2f', [LWeightSem]).AppendLine;
+      SB.AppendFormat('  - Weight Lexical:  %.2f', [LWeightLex]).AppendLine;
+      SB.Append('  - Fusion: ');
+      if LUseRRF then
+        SB.Append('RRF (Reciprocal Rank Fusion)')
+      else
+        SB.Append('Weighted Sum');
+      SB.AppendLine;
     end;
+    SB.AppendLine;
+
+    SB.AppendLine('FILTROS (MetaData):');
+    SB.AppendLine('  (La busqueda simple no soporta filtros de metadatos)').AppendLine;
+
+    SB.AppendLine('THRESHOLDS:');
+    SB.AppendFormat('  - Min Global: %s', [EditPrecision.Text]).AppendLine.AppendLine;
+
+    SB.AppendLine('RERANKING: Inactivo');
+    SB.AppendLine('  (Usar VQL para activar RERANK)').AppendLine;
+
+    SB.AppendLine('OPTIMIZACIONES:');
+    SB.AppendFormat('  - Reordenar Contexto (Lost-in-Middle): %s',
+      [BoolToStr(ChReorderABC.IsChecked, True)]).AppendLine.AppendLine;
+
+    SB.AppendLine('OUTPUT:');
+    SB.AppendFormat('  - Limit: %s', [EditLimit.Text]).AppendLine;
+    SB.AppendFormat('  - Include Metadata: %s',
+      [BoolToStr(ChShowProperties.IsChecked, True)]).AppendLine;
+
+    MemoResponse.Lines.Text := SB.ToString;
+    SetStatus('Reporte de configuracion generado.');
+
+  finally
+    SB.Free;
   end;
 end;
+
+// ---------------------------------------------------------------------------
+//  Cambios en checkboxes de modo de busqueda
+// ---------------------------------------------------------------------------
 
 procedure TForm21.ChEnableRRFChange(Sender: TObject);
 begin
@@ -626,39 +625,18 @@ procedure TForm21.ChLexicalSearchChange(Sender: TObject);
 begin
   RAG.SearchOptions.UseBM25 := ChLexicalSearch.IsChecked;
 
-  If ChLexicalSearch.IsChecked  and (RAG.Items.Count > 0) then
-     RAG.BuildLexicalIndex;
+  if ChLexicalSearch.IsChecked and (RAG.Items.Count > 0) then
+    RAG.BuildLexicalIndex;
 end;
 
 procedure TForm21.ChSemanticSearchChange(Sender: TObject);
 begin
-   RAG.SearchOptions.UseEmbeddings := ChSemanticSearch.IsChecked;
+  RAG.SearchOptions.UseEmbeddings := ChSemanticSearch.IsChecked;
 end;
 
-procedure TForm21.RAGImportProgress(Sender: TObject; aPosition, Total: Integer; var Cancel: Boolean);
-begin
-  // 1. Verificar si el usuario pidi� cancelar (desde el hilo principal)
-  if FUserCancelled then
-  begin
-    Cancel := True;
-    Exit;
-  end;
-
-  // 3. ENCOLAR la actualizaci�n visual al Hilo Principal
-  TThread.Queue(nil,
-    procedure
-    begin
-      // Este c�digo se ejecuta en el Hilo Principal de forma segura
-      if not Assigned(ProgressBar1) then
-        Exit; // Protecci�n al cerrar form
-
-      ProgressBar1.Max := Total;
-      ProgressBar1.Value := aPosition;
-
-      // Opcional: Mostrar porcentaje en un Label
-      // LabelPorcentaje.Caption := Format('%.1f %%', [(Position / Total) * 100]);
-    end);
-end;
+// ---------------------------------------------------------------------------
+//  Visualizacion de todos los nodos
+// ---------------------------------------------------------------------------
 
 procedure TForm21.ShowAllRAG;
 var
@@ -666,37 +644,35 @@ var
   Node: TAiEmbeddingNode;
   SB: TStringBuilder;
 begin
-  // Verificamos si hay datos
   if rag.Count = 0 then
   begin
-    ShowMessage('La base de conocimientos est� vac�a.');
+    ShowMessage('La base de conocimientos esta vacia.');
     Exit;
   end;
 
-  MemoResponse.Lines.BeginUpdate; // Congela el repintado para mayor velocidad
+  MemoResponse.Lines.BeginUpdate;
   try
     MemoResponse.Lines.Clear;
     SB := TStringBuilder.Create;
     try
       for i := 0 to rag.Count - 1 do
       begin
-        Node := rag.Items[i]; // Acceso directo al nodo
+        Node := rag.Items[i];
 
         SB.Append('--------------------------------------------------');
         SB.AppendLine;
         SB.AppendFormat('NODE #%d | ID: %s', [i, Node.Tag]);
         SB.AppendLine;
 
-        // Mostrar Metadatos si existen
         if (Node.MetaData <> nil) and (Node.MetaData.InternalDictionary.Count > 0) then
         begin
           SB.Append('METADATA: ');
-          SB.Append(Node.MetaData.ToJSON.ToString); // Serializaci�n r�pida
+          SB.Append(Node.MetaData.ToJSON.ToString);
           SB.AppendLine;
         end;
 
         SB.Append('TEXT: ');
-        SB.Append(Node.Text); // El contenido real
+        SB.Append(Node.Text);
         SB.AppendLine;
         SB.AppendLine;
       end;
@@ -708,6 +684,8 @@ begin
   finally
     MemoResponse.Lines.EndUpdate;
   end;
+
+  SetStatus('Mostrando ' + rag.Count.ToString + ' nodos en la base.');
 end;
 
 end.

@@ -1,18 +1,18 @@
-// IT License
+// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -49,13 +49,13 @@ Posix.String_, Posix.Unistd, Posix.Base, Posix.Errno, Posix.SysWait, Posix.Signa
 type
 {$IFDEF MSWINDOWS}
   TProcessHandle = THandle;
-  // TProcessHandle es ahora idéntico a THandle en Windows
-  TPipeHandle = THandle; // TPipeHandle es ahora idéntico a THandle en Windows
+  // TProcessHandle es ahora id?ntico a THandle en Windows
+  TPipeHandle = THandle; // TPipeHandle es ahora id?ntico a THandle en Windows
 {$ENDIF}
 {$IFDEF POSIX}
   TProcessHandle = pid_t;
-  // TProcessHandle es idéntico a pid_t (que es un Integer)
-  TPipeHandle = Integer; // TPipeHandle es idéntico a Integer (file descriptor)
+  // TProcessHandle es id?ntico a pid_t (que es un Integer)
+  TPipeHandle = Integer; // TPipeHandle es id?ntico a Integer (file descriptor)
 {$ENDIF}
 
   TPipeHandles = record
@@ -88,8 +88,8 @@ type
     function IsRunning: Boolean;
     // En POSIX, el timeout es ignorado y la espera es indefinida
     function WaitOnExit(ATimeoutMs: Cardinal = Cardinal(-1)): Boolean;
-    procedure Terminate; // Terminación suave (SIGTERM en POSIX)
-    procedure Kill; // Terminación forzada (SIGKILL en POSIX)
+    procedure Terminate; // Terminaci?n suave (SIGTERM en POSIX)
+    procedure Kill; // Terminaci?n forzada (SIGKILL en POSIX)
     function WriteInput(const Buffer; Count: Integer): Integer;
     function ReadOutput(var Buffer; Count: Integer): Integer;
     function ReadError(var Buffer; Count: Integer): Integer;
@@ -385,29 +385,8 @@ class function TUtilsSystem.ShellOpenFile(const AFileName: string): Boolean;
 var
   ErrorCode: Integer;
 begin
-
-{$IFDEF MSWINDOWS}
-  // Para Windows, usamos la API ShellExecuteW (la versión Unicode)
-  // El handle es 0 (escritorio), 'open' es la acción por defecto.
-  // PChar(AFileName) es la ruta al archivo.
-  // nil para parámetros, nil para directorio, SW_SHOWNORMAL para mostrar la app.
   ErrorCode := Integer(ShellExecuteW(0, 'open', PChar(AFileName), nil, nil, SW_SHOWNORMAL));
-
-  // ShellExecute devuelve un valor > 32 en caso de éxito.
   Result := ErrorCode > 32;
-{$ENDIF}
-{$IFDEF MACOS}
-  // En macOS, la lógica es diferente. Se usa NSWorkspace.
-  // Esto requeriría más código y uses de Macapi.*
-  // Por ahora, dejamos un placeholder.
-  ShowMessage('Abrir archivos no está implementado para macOS en este ejemplo.');
-  Result := False;
-{$ENDIF}
-{$IFDEF ANDROID}
-  // En Android, se usan Intents. Es aún más complejo por los permisos y File Providers.
-  ShowMessage('Abrir archivos no está implementado para Android en este ejemplo.');
-  Result := False;
-{$ENDIF}
 end;
 
 class function TUtilsSystem.StartInteractiveProcess(const ACommand: string; ACurrentDirectory: string; AEnvironment: TStrings): TInteractiveProcessInfo;
@@ -456,11 +435,26 @@ begin
     CreationFlags := CREATE_NO_WINDOW;
     if Assigned(AEnvironment) and (AEnvironment.Count > 0) then
     begin
-      for i := 0 to AEnvironment.Count - 1 do
-        EnvBlock := EnvBlock + AEnvironment[i] + #0;
-      EnvBlock := EnvBlock + #0;
-      EnvPtr := PChar(EnvBlock);
-      CreationFlags := CreationFlags or CREATE_UNICODE_ENVIRONMENT;
+      // Fusionar con el entorno del sistema (consistente con POSIX que usa setenv)
+      var SysEnv := GetSystemEnvironment;
+      try
+        for i := 0 to AEnvironment.Count - 1 do
+        begin
+          var EqPos := Pos('=', AEnvironment[i]);
+          if EqPos > 0 then
+            SysEnv.Values[Copy(AEnvironment[i], 1, EqPos - 1)] :=
+              Copy(AEnvironment[i], EqPos + 1, MaxInt)
+          else
+            SysEnv.Add(AEnvironment[i]);
+        end;
+        for i := 0 to SysEnv.Count - 1 do
+          EnvBlock := EnvBlock + SysEnv[i] + #0;
+        EnvBlock := EnvBlock + #0;
+        EnvPtr := PChar(EnvBlock);
+        CreationFlags := CreationFlags or CREATE_UNICODE_ENVIRONMENT;
+      finally
+        SysEnv.Free;
+      end;
     end;
 
     if Trim(ACurrentDirectory) = '' then
@@ -523,14 +517,13 @@ var
   ReadPipe, WritePipe: THandle;
   SI: TStartupInfo;
   PI: TProcessInformation;
-  Buffer: array [0 .. 2047] of AnsiChar;
+  Buffer: array [0 .. 2047] of Byte;
   BytesRead: DWORD;
   Cmd: string;
-  Output: TStringBuilder;
-  TempStr: AnsiString;
+  Output: TBytesStream;
 begin
   Result := '';
-  Output := TStringBuilder.Create;
+  Output := TBytesStream.Create;
   try
     FillChar(SA, SizeOf(SA), 0);
     SA.nLength := SizeOf(SA);
@@ -557,19 +550,14 @@ begin
             repeat
               BytesRead := 0;
               if ReadFile(ReadPipe, Buffer, SizeOf(Buffer), BytesRead, nil) and (BytesRead > 0) then
-              Begin
-
-                SetString(TempStr, Buffer, BytesRead);
-                Output.Append(string(TempStr));
-
-              End;
+                Output.WriteBuffer(Buffer, BytesRead);
             until not(BytesRead > 0);
             WaitForSingleObject(PI.hProcess, INFINITE);
           finally
             CloseHandle(PI.hProcess);
             CloseHandle(PI.hThread);
           end;
-        Result := Output.ToString;
+        Result := TEncoding.UTF8.GetString(Output.Bytes, 0, Output.Size);
       finally
         CloseHandle(ReadPipe);
         if WritePipe <> 0 then
@@ -613,9 +601,9 @@ end;
 {
   Mejora a futuro:
   No soporta comillas simples ('), ni escapar caracteres con barra invertida (\),
-  ni tuberías (|) o redirecciones (>) propias de bash,
+  ni tuber?as (|) o redirecciones (>) propias de bash,
   ya que usa execvp directamente y no una shell (/bin/sh).
-  Si intenta ejecutar ls -la | grep x fallará porque | y grep serán tratados como argumentos de ls.
+  Si intenta ejecutar ls -la | grep x fallar? porque | y grep ser?n tratados como argumentos de ls.
 
 }
 
@@ -680,20 +668,43 @@ var
   PID: pid_t;
   ProgramName: string;
   Args: TArray<string>;
+  AnsiArgs: TArray<AnsiString>;
   PArgs: TArray<PAnsiChar>;
   i: Integer;
+  EqPos: Integer;
+  EnvName, EnvValue: AnsiString;
 begin
   Result := TInteractiveProcessInfo.Create;
   try
-    if (Posix.Unistd.pipe(@PipeIn[0]) <> 0) or (Posix.Unistd.pipe(@PipeOut[0]) <> 0) or (Posix.Unistd.pipe(@PipeErr[0]) <> 0) then
+    if Posix.Unistd.pipe(@PipeIn[0]) <> 0 then
+      raise Exception.Create('Failed to create input pipe. Error: ' + strerror(Errno));
+
+    if Posix.Unistd.pipe(@PipeOut[0]) <> 0 then
     begin
-      raise Exception.Create('Failed to create pipes. Error: ' + strerror(Errno));
+      Posix.Unistd.__close(PipeIn[0]);
+      Posix.Unistd.__close(PipeIn[1]);
+      raise Exception.Create('Failed to create output pipe. Error: ' + strerror(Errno));
+    end;
+
+    if Posix.Unistd.pipe(@PipeErr[0]) <> 0 then
+    begin
+      Posix.Unistd.__close(PipeIn[0]);
+      Posix.Unistd.__close(PipeIn[1]);
+      Posix.Unistd.__close(PipeOut[0]);
+      Posix.Unistd.__close(PipeOut[1]);
+      raise Exception.Create('Failed to create error pipe. Error: ' + strerror(Errno));
     end;
 
     PID := Posix.Unistd.fork;
 
     if PID < 0 then
     begin
+      Posix.Unistd.__close(PipeIn[0]);
+      Posix.Unistd.__close(PipeIn[1]);
+      Posix.Unistd.__close(PipeOut[0]);
+      Posix.Unistd.__close(PipeOut[1]);
+      Posix.Unistd.__close(PipeErr[0]);
+      Posix.Unistd.__close(PipeErr[1]);
       raise Exception.Create('Failed to fork process. Error: ' + strerror(Errno));
     end;
 
@@ -714,14 +725,34 @@ begin
       if ACurrentDirectory <> '' then
         Posix.Unistd.__chdir(PAnsiChar(AnsiString(ACurrentDirectory)));
 
+      // Aplicar variables de entorno antes de execvp
+      if Assigned(AEnvironment) then
+      begin
+        for i := 0 to AEnvironment.Count - 1 do
+        begin
+          EqPos := Pos('=', AEnvironment[i]);
+          if EqPos > 0 then
+          begin
+            EnvName := AnsiString(Copy(AEnvironment[i], 1, EqPos - 1));
+            EnvValue := AnsiString(Copy(AEnvironment[i], EqPos + 1, MaxInt));
+            Posix.Stdlib.setenv(PAnsiChar(EnvName), PAnsiChar(EnvValue), 1);
+          end;
+        end;
+      end;
+
       ParseCommand(ACommand, ProgramName, Args);
       if ProgramName = '' then
         Posix.Unistd._exit(127);
 
-      SetLength(PArgs, Length(Args) + 1);
+      // Retener las AnsiStrings para evitar dangling pointers
+      SetLength(AnsiArgs, Length(Args));
       for i := 0 to High(Args) do
-        PArgs[i] := PAnsiChar(AnsiString(Args[i]));
-      PArgs[Length(Args)] := nil;
+        AnsiArgs[i] := AnsiString(Args[i]);
+
+      SetLength(PArgs, Length(AnsiArgs) + 1);
+      for i := 0 to High(AnsiArgs) do
+        PArgs[i] := PAnsiChar(AnsiArgs[i]);
+      PArgs[Length(AnsiArgs)] := nil;
 
       Posix.Unistd.execvp(PAnsiChar(AnsiString(ProgramName)), @PArgs[0]);
       Posix.Unistd._exit(127);
@@ -780,7 +811,7 @@ begin
   Result := '';
   Output := TStringBuilder.Create;
   try
-    // CORRECCIÓN: Usar .ToPointer para obtener el puntero crudo del wrapper.
+    // CORRECCI?N: Usar .ToPointer para obtener el puntero crudo del wrapper.
     Handle := popen(M.AsAnsi(ACommand).ToPointer, 'r');
     if Handle = nil then
       raise Exception.CreateFmt('Failed to popen command: %s', [ACommand]);
@@ -789,7 +820,7 @@ begin
       begin
         Output.Append(Buffer);
       end;
-      // La salida de popen/fgets ya está en la codificación de la consola (a menudo UTF-8 en Linux).
+      // La salida de popen/fgets ya est? en la codificaci?n de la consola (a menudo UTF-8 en Linux).
       // El paso UTF8ToString es correcto si el buffer es AnsiChar y contiene UTF-8.
       Result := Trim(UTF8ToString(Output.ToString));
     finally

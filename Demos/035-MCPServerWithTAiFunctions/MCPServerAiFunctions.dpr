@@ -16,8 +16,6 @@ begin
     Try
       MCPServerAiFunctionsDm.StartServer;
 
-      WriteLn(ErrOutput, 'Esperando peticiones JSON-RPC...');
-
       while True do
         Sleep(1000);
     Finally

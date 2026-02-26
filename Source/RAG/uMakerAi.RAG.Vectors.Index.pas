@@ -1,4 +1,4 @@
-Ôªø
+
 // IT License
 //
 // Copyright (c) <year> <copyright holders>
@@ -21,7 +21,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr√≠quez
+// Nombre: Gustavo EnrÌquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -62,7 +62,7 @@ Type
     FModel: String;
     FMetaData: TAiEmbeddingMetaData;
 
-    FTag: string; // GUID o ID de DB (m√°s vers√°til que Integer)
+    FTag: string; // GUID o ID de DB (m·s vers·til que Integer)
     FTagObject: TObject; // Referencia a objetos externos
     FOrden: Integer;
     FMagnitude: Double;
@@ -72,12 +72,12 @@ Type
     constructor Create(aDim: Integer);
     destructor Destroy; override;
 
-    // M√©todos de c√°lculo vectorial
+    // MÈtodos de c·lculo vectorial
     class function CosineSimilarity(const A, B: TAiEmbeddingNode): Double;
     class function DotProduct(const A, B: TAiEmbeddingNode): Double;
     class function Magnitude(const A: TAiEmbeddingNode): Double;
 
-    // Serializaci√≥n
+    // SerializaciÛn
     function ToJSON: TJSONObject;
     class function FromJSON(AJSONObject: TJSONObject): TAiEmbeddingNode;
     function ToJsonArray: TJSonArray; overload;
@@ -104,7 +104,7 @@ Type
   // RECORD AUXILIAR PARA RESULTADOS THREAD-SAFE
   // ============================================================================
   /// <summary>
-  /// Estructura inmutable para almacenar resultados de b√∫squeda sin modificar
+  /// Estructura inmutable para almacenar resultados de b˙squeda sin modificar
   /// los nodos originales. Esto elimina race conditions en escenarios multihilo.
   /// </summary>
   TAiSearchResult = record
@@ -122,9 +122,9 @@ Type
 
 
   /// ---------------------------------------------------------------------------
-  /// TAIEmbeddingIndex representa la clase base para la b√∫squeda con embeddings en memoria
+  /// TAIEmbeddingIndex representa la clase base para la b˙squeda con embeddings en memoria
   /// consiste en un vector de nodos y un indice de punteros a embeddings que permite la
-  /// b√∫squeda y seleccion de los candidatos que cumplen la condici√≥n
+  /// b˙squeda y seleccion de los candidatos que cumplen la condiciÛn
   /// -------------------------------------------------------------------------
   TAIEmbeddingIndex = class
   private
@@ -132,7 +132,7 @@ Type
     FActive: Boolean;
   protected
     /// <summary>
-    /// Limpia el √≠ndice interno pero mantiene la referencia al DataVec
+    /// Limpia el Ìndice interno pero mantiene la referencia al DataVec
     /// </summary>
     procedure InternalClear; virtual; abstract;
   public
@@ -144,7 +144,7 @@ Type
     function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems; virtual;
 
     /// <summary>
-    /// Limpia el √≠ndice y lo deja listo para reconstruir
+    /// Limpia el Ìndice y lo deja listo para reconstruir
     /// </summary>
     procedure Clear; virtual;
 
@@ -154,9 +154,9 @@ Type
 
 
   /// ---------------------------------------------------------------------------
-  /// TAIBasicEmbeddingIndex implementaci√≥n sencilla de un Indice de embeddings
-  /// el cual se asigna por defecto al vector para realizar b√∫squedas en memoria
-  /// sin embargo hay maneras m√°s eficientes de controlar esto en vectores de
+  /// TAIBasicEmbeddingIndex implementaciÛn sencilla de un Indice de embeddings
+  /// el cual se asigna por defecto al vector para realizar b˙squedas en memoria
+  /// sin embargo hay maneras m·s eficientes de controlar esto en vectores de
   /// embeddings.
   /// -------------------------------------------------------------------------
 
@@ -166,12 +166,12 @@ Type
     function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems;
   public
     /// <summary>
-    /// Versi√≥n thread-safe que NO modifica los nodos originales
+    /// VersiÛn thread-safe que NO modifica los nodos originales
     /// </summary>
     class function InternalSearchSafe(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; Source: TRagItems): TList<TAiSearchResult>; static;
 
     /// <summary>
-    /// Versi√≥n legacy para compatibilidad (DEPRECATED)
+    /// VersiÛn legacy para compatibilidad (DEPRECATED)
     /// </summary>
     class function InternalSearch(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; Source: TRagItems): TRagItems; static;
     constructor Create;
@@ -192,7 +192,7 @@ Type
 
   /// ---------------------------------------------------------------------------
   /// THNSWIndex implementa un Approximate Nearest Neighbors (ANN) usando el algoritmo
-  /// HNSW (Hierarchical Navigable Small World) que es mucho m√°s eficiente en la busqueda
+  /// HNSW (Hierarchical Navigable Small World) que es mucho m·s eficiente en la busqueda
   /// en vectores embeddings
   /// -------------------------------------------------------------------------
 
@@ -237,7 +237,7 @@ Type
     destructor Destroy; override;
 
     /// <summary>
-    /// Reconstruye el √≠ndice desde cero (thread-safe)
+    /// Reconstruye el Ìndice desde cero (thread-safe)
     /// </summary>
     procedure BuildIndex(Points: TRagItems); override;
 
@@ -251,7 +251,7 @@ Type
   end;
 
 
-  // Representa la frecuencia de una palabra en un nodo espec√≠fico
+  // Representa la frecuencia de una palabra en un nodo especÌfico
   TWordOccurrence = record
     Node: TAiEmbeddingNode;
     Count: Integer;
@@ -269,13 +269,13 @@ Type
   public
     constructor Create;
     destructor Destroy; override;
-    procedure AddNode(aNode: TAiEmbeddingNode); // Para indexar al a√±adir
+    procedure AddNode(aNode: TAiEmbeddingNode); // Para indexar al aÒadir
     function Search(const aQuery: string; aLimit: Integer; aFilter: TAiFilterCriteria = nil): TList<TPair<Double, TAiEmbeddingNode>>;
 
     procedure Clear;
 
     property Language: TAiLanguage read FLanguage write SetLanguage;
-    property StopWords: THashSet<string> read FStopWords; // Permite a√±adir palabras personalizadas
+    property StopWords: THashSet<string> read FStopWords; // Permite aÒadir palabras personalizadas
     procedure Tokenize(const aText: string; aList: TStrings);
 
   end;
@@ -293,7 +293,7 @@ begin
   FDim := aDim;
   SetLength(FData, FDim);
   FMetaData := TAiEmbeddingMetaData.Create;
-  FTag := TGuid.NewGuid.ToString; // ID √∫nico por defecto
+  FTag := TGuid.NewGuid.ToString; // ID ˙nico por defecto
   FOrden := 0;
   FTagObject := nil;
   FMagnitude := 0;
@@ -339,7 +339,7 @@ begin
       JSONArray.Add(Value);
     Result.AddPair('data', JSONArray);
 
-    // Campos b√°sicos
+    // Campos b·sicos
     Result.AddPair('text', FText);
     Result.AddPair('model', FModel);
     Result.AddPair('tag', FTag);
@@ -384,7 +384,7 @@ begin
     // <--- 4. Asignamos la magnitud final
     Result.FMagnitude := Sqrt(Sum);
 
-    // Campos b√°sicos
+    // Campos b·sicos
     AJSONObject.TryGetValue<String>('text', Result.FText);
     AJSONObject.TryGetValue<String>('model', Result.FModel);
     AJSONObject.TryGetValue<String>('tag', Result.FTag);
@@ -446,14 +446,14 @@ end;
 
 class function TAiEmbeddingNode.CosineSimilarity(const A, B: TAiEmbeddingNode): Double;
 begin
-  // VALIDACI√ìN CR√çTICA: Si alguno no tiene magnitud, no hay similitud posible (0.0)
+  // VALIDACI”N CRÕTICA: Si alguno no tiene magnitud, no hay similitud posible (0.0)
   if (A.FMagnitude <= 0) or (B.FMagnitude <= 0) then
     Exit(0.0);
 
   // Producto punto / (MagA * MagB)
   Result := TAiEmbeddingNode.DotProduct(A, B) / (A.FMagnitude * B.FMagnitude);
 
-  // Limpieza por precisi√≥n de punto flotante
+  // Limpieza por precisiÛn de punto flotante
   if Result > 1.0 then
     Result := 1.0
   else if Result < -1.0 then
@@ -499,14 +499,14 @@ end;
 
 destructor TAIEmbeddingIndex.Destroy;
 begin
-  // No liberamos FDataVec - no somos due√±os
+  // No liberamos FDataVec - no somos dueÒos
   inherited;
 end;
 
 function TAIEmbeddingIndex.Add(Point: TAiEmbeddingNode): Integer;
 begin
   Result := -1;
-  // Esta funci√≥n se debe implementar en cada modelo solo cuando sea necesario
+  // Esta funciÛn se debe implementar en cada modelo solo cuando sea necesario
 end;
 
 procedure TAIEmbeddingIndex.BuildIndex(Points: TRagItems);
@@ -532,7 +532,7 @@ end;
 procedure TAIBasicEmbeddingIndex.BuildIndex(Points: TRagItems);
 begin
   if not Assigned(Points) then
-    Exit; // ‚Üê Protecci√≥n
+    Exit; // <- ProtecciÛn
   inherited;
 end;
 
@@ -554,12 +554,12 @@ var
 begin
   Result := TRagItems.Create;
 
-  // Usar la versi√≥n thread-safe internamente
+  // Usar la versiÛn thread-safe internamente
   SafeResults := InternalSearchSafe(Target, aLimit, aPrecision, Source);
   try
     for SearchResult in SafeResults do
     begin
-      // AQU√ç es donde asignamos Idx (compatible con c√≥digo existente)
+      // AQUÕ es donde asignamos Idx (compatible con cÛdigo existente)
       SearchResult.Node.Idx := SearchResult.Score;
       Result.Add(SearchResult.Node);
     end;
@@ -590,7 +590,7 @@ begin
       Emb := Source.Items[i];
       Score := TAiEmbeddingNode.CosineSimilarity(Emb, Target);
 
-      // Filtrado previo por precisi√≥n (optimizaci√≥n)
+      // Filtrado previo por precisiÛn (optimizaciÛn)
       if (aPrecision > 0) and (Score < aPrecision) then
         Continue;
 
@@ -630,12 +630,12 @@ var
 begin
   Result := TRagItems.Create;
 
-  // Usamos la versi√≥n "Safe" que ya creaste y que usa registros temporales
+  // Usamos la versiÛn "Safe" que ya creaste y que usa registros temporales
   SafeList := InternalSearchSafe(Target, aLimit, aPrecision, DataVec);
   try
     for Res in SafeList do
       Result.Add(Res.Node);
-    // Nota: El score se recuperar√° en el motor principal.
+    // Nota: El score se recuperar· en el motor principal.
   finally
     SafeList.Free;
   end;
@@ -645,7 +645,7 @@ end;
 
 procedure TAIEuclideanDistanceIndex.BuildIndex(Points: TRagItems);
 begin
-  Inherited; // La implementaci√≥n base es suficiente
+  Inherited; // La implementaciÛn base es suficiente
 end;
 
 constructor TAIEuclideanDistanceIndex.Create;
@@ -674,12 +674,12 @@ begin
     for i := 0 to DataVec.Count - 1 do
     begin
       Emb := DataVec.Items[i];
-      // Aqu√≠ usamos la funci√≥n de la unidad Core, que ya tienes
+      // AquÌ usamos la funciÛn de la unidad Core, que ya tienes
       Distance := TAiEmbeddingsCore.EuclideanDistance(Emb.Data, Target.Data);
       Emb.Idx := Distance; // Guardamos la distancia para referencia/debugging
 
-      // aPrecision en este contexto significa "distancia m√°xima"
-      // Si aPrecision <= 0, ignoramos el filtro de precisi√≥n
+      // aPrecision en este contexto significa "distancia m·xima"
+      // Si aPrecision <= 0, ignoramos el filtro de precisiÛn
       if (aPrecision <= 0) or (Distance <= aPrecision) then
       begin
         Pair := TL2Pair.Create(Distance, Emb);
@@ -695,7 +695,7 @@ begin
         Result := CompareValue(Left.Key, Right.Key);
       end));
 
-    // 3. Recorre la lista ordenada y a√±ade los mejores 'aLimit' resultados
+    // 3. Recorre la lista ordenada y aÒade los mejores 'aLimit' resultados
     for i := 0 to Min(aLimit - 1, Results.Count - 1) do
     begin
       Result.Add(Results[i].Value);
@@ -718,19 +718,19 @@ begin
   FID := aID;
   FVector := aVector;
 
-  // Inicializaci√≥n segura del array de conexiones
+  // InicializaciÛn segura del array de conexiones
   SetLength(FConnections, aNumLevels);
   try
     for i := 0 to aNumLevels - 1 do
       FConnections[i] := TList<Integer>.Create;
   except
-    // Si falla la creaci√≥n de alguna lista, limpiamos lo ya creado
+    // Si falla la creaciÛn de alguna lista, limpiamos lo ya creado
     for i := 0 to High(FConnections) do
     begin
       if Assigned(FConnections[i]) then
         FConnections[i].Free;
     end;
-    raise; // Re-lanzamos la excepci√≥n
+    raise; // Re-lanzamos la excepciÛn
   end;
 end;
 
@@ -738,18 +738,18 @@ destructor THNSWNode.Destroy;
 var
   i: Integer;
 begin
-  // Liberaci√≥n defensiva - Protecci√≥n triple
+  // LiberaciÛn defensiva - ProtecciÛn triple
   if Length(FConnections) > 0 then
   begin
     for i := 0 to High(FConnections) do
     begin
-      // Free es seguro con nil, pero la doble validaci√≥n no hace da√±o
+      // Free es seguro con nil, pero la doble validaciÛn no hace daÒo
       if Assigned(FConnections[i]) then
         FreeAndNil(FConnections[i]);
     end;
   end;
 
-  // IMPORTANTE: NO liberamos FVector - no somos due√±os
+  // IMPORTANTE: NO liberamos FVector - no somos dueÒos
   // FVector es una referencia a un nodo del TAiRAGVector principal
 
   inherited;
@@ -788,7 +788,7 @@ constructor THNSWIndex.Create;
 begin
   inherited;
 
-  // Configuraci√≥n HNSW
+  // ConfiguraciÛn HNSW
   FNodes := TDictionary<Integer, THNSWNode>.Create;
   FMaxLevel := 16;
   FLevelMult := 1 / Ln(2);
@@ -823,7 +823,7 @@ begin
 
     FNodes.Clear;
   except
-    // Capturar cualquier error extra√±o durante la limpieza para no colgar el IDE
+    // Capturar cualquier error extraÒo durante la limpieza para no colgar el IDE
   end;
 end;
 
@@ -836,8 +836,8 @@ begin
   FEntryPoint := -1;
   FEntryLevel := -1;
 
-  // NOTA: Los par√°metros de configuraci√≥n (FMaxLevel, FEfConstruction, etc.)
-  // NO se resetean - son configuraci√≥n persistente
+  // NOTA: Los par·metros de configuraciÛn (FMaxLevel, FEfConstruction, etc.)
+  // NO se resetean - son configuraciÛn persistente
 
   // Marcar como inactivo
   FActive := False;
@@ -863,7 +863,7 @@ begin
     Exit;
   end;
 
-  // Pol√≠tica de selecci√≥n (mantener los vecinos m√°s cercanos)
+  // PolÌtica de selecciÛn (mantener los vecinos m·s cercanos)
   if not FNodes.TryGetValue(TargetID, TargetNode) then
     Exit;
 
@@ -978,7 +978,7 @@ var
   Node: THNSWNode;
   i: Integer;
 begin
-  // Asignar ID √∫nico basado en el conteo actual
+  // Asignar ID ˙nico basado en el conteo actual
   NodeID := FNodes.Count;
   Level := GetRandomLevel;
 
@@ -987,7 +987,7 @@ begin
   try
     FNodes.Add(NodeID, Node);
   except
-    Node.Free; // Si falla la inserci√≥n en el diccionario, limpiamos
+    Node.Free; // Si falla la inserciÛn en el diccionario, limpiamos
     raise;
   end;
 
@@ -1000,7 +1000,7 @@ begin
     Exit;
   end;
 
-  // Insertar en la estructura HNSW (c√≥digo original se mantiene)
+  // Insertar en la estructura HNSW (cÛdigo original se mantiene)
   EntryPointCopy := FEntryPoint;
   CurrentLevel := FMaxLevel - 1;
 
@@ -1035,7 +1035,7 @@ begin
     Dec(CurrentLevel);
   end;
 
-  // Actualizar punto de entrada si este nodo tiene m√°s niveles
+  // Actualizar punto de entrada si este nodo tiene m·s niveles
 
   if Level > FEntryLevel then
   begin
@@ -1055,9 +1055,9 @@ begin
     raise Exception.Create('THNSWIndex.BuildIndex: Points no puede ser nil');
 
   // ========================================================================
-  // PASO 1: Limpiar el √≠ndice anterior
+  // PASO 1: Limpiar el Ìndice anterior
   // ========================================================================
-  // CR√çTICO: Esto previene fugas de memoria si BuildIndex se llama 2+ veces
+  // CRÕTICO: Esto previene fugas de memoria si BuildIndex se llama 2+ veces
   Clear;
 
   // ========================================================================
@@ -1069,7 +1069,7 @@ begin
   // ========================================================================
   // PASO 3: Construir el grafo HNSW
   // ========================================================================
-  // Optimizaci√≥n: Pre-reservar capacidad si tu versi√≥n de Delphi lo soporta
+  // OptimizaciÛn: Pre-reservar capacidad si tu versiÛn de Delphi lo soporta
   // FNodes.Capacity := Points.Count; // No disponible en todas las versiones
 
   for i := 0 to Points.Count - 1 do
@@ -1078,7 +1078,7 @@ begin
     Add(Point);
   end;
 
-  // El √≠ndice ahora est√° activo (heredado ya lo marc√≥)
+  // El Ìndice ahora est· activo (heredado ya lo marcÛ)
 end;
 
 function THNSWIndex.Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems;
@@ -1177,7 +1177,7 @@ end;
 
 procedure TAIBm25Index.LoadDefaultStopWords(Lang: TAiLanguage);
 const
-  S_ES = 'el,la,lo,los,las,un,una,unos,unas,de,del,al,y,o,u,e,ni,que,en,a,ante,bajo,con,contra,desde,donde,durante,este,esta,estos,estas,ese,esa,esos,esas,aquel,aquella,aquellos,aquellas,mi,tu,su,nuestro,vuestro,me,te,se,nos,os,le,les,ser,estar,haber,tener,hacer,hay,he,ha,han,son,es,fue,sido,est√°,est√°n,estaba,como,m√°s,pero,por,para,sin,sobre,tambi√©n,muy,ya,s√≠,no,cuando,si,entre';
+  S_ES = 'el,la,lo,los,las,un,una,unos,unas,de,del,al,y,o,u,e,ni,que,en,a,ante,bajo,con,contra,desde,donde,durante,este,esta,estos,estas,ese,esa,esos,esas,aquel,aquella,aquellos,aquellas,mi,tu,su,nuestro,vuestro,me,te,se,nos,os,le,les,ser,estar,haber,tener,hacer,hay,he,ha,han,son,es,fue,sido,est·,est·n,estaba,como,m·s,pero,por,para,sin,sobre,tambiÈn,muy,ya,sÌ,no,cuando,si,entre';
   S_EN = 'the,a,an,and,or,but,if,then,else,when,at,from,by,for,with,about,against,between,into,through,during,before,after,above,below,to,of,in,is,are,was,were,be,been,being,have,has,had,do,does,did,will,would,should,could,may,might,can,this,that,these,those,i,you,he,she,it,we,they,me,him,her,us,them';
 var
   S: string;
@@ -1227,16 +1227,16 @@ begin
   if aText.IsEmpty then
     Exit;
 
-  // Split con separadores extendidos (incluyendo caracteres especiales de espa√±ol)
-  Words := aText.ToLower.Split([' ', '.', ',', ';', ':', '-', '_', '(', ')', '[', ']', '{', '}', '"', '¬ø', '?', '¬°', '!', '/', '\', '|', #13, #10, #9], // A√±ad√≠ TAB (#9)
+  // Split con separadores extendidos (incluyendo caracteres especiales de espaÒol)
+  Words := aText.ToLower.Split([' ', '.', ',', ';', ':', '-', '_', '(', ')', '[', ']', '{', '}', '"', 'ø', '?', '°', '!', '/', '\', '|', #13, #10, #9], // AÒadÌ TAB (#9)
   TStringSplitOptions.ExcludeEmpty);
 
   for W in Words do
   begin
-    // Filtro de longitud m√≠nima y stop words (usando el HashSet para O(1))
+    // Filtro de longitud mÌnima y stop words (usando el HashSet para O(1))
     if (W.Length > 2) and not FStopWords.Contains(W) then
     begin
-      // OPCIONAL: Lematizaci√≥n b√°sica para mejorar b√∫squedas
+      // OPCIONAL: LematizaciÛn b·sica para mejorar b˙squedas
       // if W.EndsWith('s') and (W.Length > 3) then
       // W := W.Substring(0, W.Length - 1);
 
@@ -1267,7 +1267,7 @@ begin
     // 1. Contar frecuencias de palabras en este documento
     for W in Tokens do
     begin
-      // TryGetValue es la forma m√°s eficiente:
+      // TryGetValue es la forma m·s eficiente:
       // Intenta obtener el valor en 'CurrentCount'. Devuelve True si existe.
       if WordCounts.TryGetValue(W, CurrentCount) then
       begin
@@ -1278,7 +1278,7 @@ begin
       else
       begin
         // CASO B: No existe.
-        // Lo ADICIONAMOS expl√≠citamente con valor 1.
+        // Lo ADICIONAMOS explÌcitamente con valor 1.
         WordCounts.Add(W, 1);
       end;
     end;
@@ -1286,7 +1286,7 @@ begin
     // 2. Registrar longitud del documento
     FDocLengths.Add(aNode, Tokens.Count);
 
-    // 3. Actualizar el √≠ndice invertido
+    // 3. Actualizar el Ìndice invertido
     for W in WordCounts.Keys do
     begin
       if not FInvertedIndex.TryGetValue(W, OccurList) then
@@ -1312,8 +1312,8 @@ end;
 
 function TAIBm25Index.Search(const aQuery: string; aLimit: Integer; aFilter: TAiFilterCriteria = nil): TList<TPair<Double, TAiEmbeddingNode>>;
 const
-  k1 = 1.2; // Saturaci√≥n de frecuencia
-  B = 0.75; // Penalizaci√≥n por longitud
+  k1 = 1.2; // SaturaciÛn de frecuencia
+  B = 0.75; // PenalizaciÛn por longitud
 var
   QueryTokens: TStringList;
   QW: string;
@@ -1338,18 +1338,18 @@ begin
     if QueryTokens.Count = 0 then
       Exit;
 
-    // N = n√∫mero total de documentos
+    // N = n˙mero total de documentos
     N := FDocLengths.Count;
 
-    // 3. Procesar cada token (OR l√©xico)
+    // 3. Procesar cada token (OR lÈxico)
     for QW in QueryTokens do
     begin
       if FInvertedIndex.TryGetValue(QW, OccurList) then
       begin
-        // n_q = documentos que contienen el t√©rmino
+        // n_q = documentos que contienen el tÈrmino
         n_q := OccurList.Count;
 
-        // IDF probabil√≠stico (RSJ)
+        // IDF probabilÌstico (RSJ)
         IDF := Ln((N - n_q + 0.5) / (n_q + 0.5) + 1.0);
 
         // Recorrer ocurrencias
@@ -1358,13 +1358,13 @@ begin
           // --- PRE-FILTERING CON CRITERIA ---
           if Assigned(aFilter) and (aFilter.Count > 0) then
           begin
-            // Nuevo m√©todo centralizado
+            // Nuevo mÈtodo centralizado
             if not Occur.Node.MetaData.Matches(aFilter) then
               Continue;
           end;
           // ---------------------------------
 
-          // Frecuencia del t√©rmino en el documento
+          // Frecuencia del tÈrmino en el documento
           f_q_d := Occur.Count;
 
           // Longitud del documento

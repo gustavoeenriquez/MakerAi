@@ -9,8 +9,8 @@ uses
 
 type
   { TTAiFunctionToolProxy:
-    Implementa IAiMCPTool para exponer cualquier función de TAiFunctions
-    (local o remota de otro MCP) a través de nuestro servidor. }
+    Implementa IAiMCPTool para exponer cualquier funci?n de TAiFunctions
+    (local o remota de otro MCP) a trav?s de nuestro servidor. }
 
   TTAiFunctionToolProxy = class(TInterfacedObject, IAiMCPTool)
   private
@@ -43,13 +43,13 @@ end;
 
 destructor TTAiFunctionToolProxy.Destroy;
 begin
-  // No liberamos FFunctionItem ni FAiFunctions porque no somos sus dueños
+  // No liberamos FFunctionItem ni FAiFunctions porque no somos sus due?os
   inherited;
 end;
 
 function TTAiFunctionToolProxy.GetName: string;
 begin
-  // Devolvemos el nombre completo (incluyendo el prefijo _99_ si es una función externa)
+  // Devolvemos el nombre completo (incluyendo el prefijo _99_ si es una funci?n externa)
   Result := FFunctionItem.FunctionName;
 end;
 
@@ -64,7 +64,7 @@ var
 begin
   Result := nil;
 
-  // 1. Obtenemos la definición completa que ya genera tu componente local.
+  // 1. Obtenemos la definici?n completa que ya genera tu componente local.
   // El formato es: {"type": "function", "function": {"name": "...", "parameters": {...}}}
   LFullOpenAiJson := FFunctionItem.ToJSon(False);
 
@@ -72,19 +72,19 @@ begin
     Exit(TJSONObject.Create);
 
   try
-    // 2. El servidor MCP solo necesita el esquema de parámetros (InputSchema),
+    // 2. El servidor MCP solo necesita el esquema de par?metros (InputSchema),
     // no toda la envoltura de OpenAI.
     if LFullOpenAiJson.TryGetValue<TJSONObject>('function', LFuncObj) then
     begin
       if LFuncObj.TryGetValue<TJSONObject>('parameters', LParams) then
       begin
-        // 3. Clonamos el objeto de parámetros.
-        // El servidor MCP se encargará de liberar este objeto después de usarlo.
+        // 3. Clonamos el objeto de par?metros.
+        // El servidor MCP se encargar? de liberar este objeto despu?s de usarlo.
         Result := LParams.Clone as TJSONObject;
       end;
     end;
 
-    // 4. Si el esquema no existe o está vacío, devolvemos un objeto de esquema válido pero vacío.
+    // 4. Si el esquema no existe o est? vac?o, devolvemos un objeto de esquema v?lido pero vac?o.
     if not Assigned(Result) then
     begin
       Result := TJSONObject.Create;
@@ -117,11 +117,11 @@ begin
     if Assigned(Arguments) then
       LToolCall.Arguments := Arguments.ToJSON;
 
-    // Asignamos el mensaje para que DoCallFunction pueda depositar mediafiles ahí
+    // Asignamos el mensaje para que DoCallFunction pueda depositar mediafiles ah?
     LToolCall.ResMsg := LResMsg;
 
     // 2. Ejecutar el motor central de TAiFunctions
-    // Esto disparará OnAction si es local, o llamará a otro servidor si es remoto.
+    // Esto disparar? OnAction si es local, o llamar? a otro servidor si es remoto.
     if FAiFunctions.DoCallFunction(LToolCall) then
     begin
       // 3. Procesar la respuesta de texto
@@ -130,17 +130,24 @@ begin
         // Si la respuesta ya es un JSON de contenido MCP (un objeto con 'content')
         if LToolCall.Response.Trim.StartsWith('{"content":') then
         begin
-          Result := TJSONObject.ParseJSONValue(LToolCall.Response) as TJSONObject;
+          var LParsed := TJSONObject.ParseJSONValue(LToolCall.Response);
+          if LParsed is TJSONObject then
+            Result := TJSONObject(LParsed)
+          else
+          begin
+            LParsed.Free;
+            LResponseBuilder.AddText(LToolCall.Response);
+          end;
         end
         else
         begin
-          // Si es texto plano (lo más común), lo añadimos al builder
+          // Si es texto plano (lo m?s com?n), lo a?adimos al builder
           LResponseBuilder.AddText(LToolCall.Response);
         end;
       end;
 
-      // 4. PROCESAR MEDIAFILES (Imágenes, Audio, etc.)
-      // Si la función generó archivos (ej. un gráfico o un PDF), los incluimos en la respuesta MCP
+      // 4. PROCESAR MEDIAFILES (Im?genes, Audio, etc.)
+      // Si la funci?n gener? archivos (ej. un gr?fico o un PDF), los incluimos en la respuesta MCP
       if Assigned(LResMsg.MediaFiles) and (LResMsg.MediaFiles.Count > 0) then
       begin
         for I := 0 to LResMsg.MediaFiles.Count - 1 do
@@ -153,7 +160,7 @@ begin
         end;
       end;
 
-      // Si aún no tenemos resultado (porque era texto plano + media), lo construimos
+      // Si a?n no tenemos resultado (porque era texto plano + media), lo construimos
       if not Assigned(Result) then
         Result := LResponseBuilder.Build;
     end
@@ -161,7 +168,7 @@ begin
     begin
       // Manejo de errores
       Result := TAiMCPResponseBuilder.New
-        .AddText('Error: La ejecución de la herramienta no devolvió un resultado exitoso.')
+        .AddText('Error: La ejecuci?n de la herramienta no devolvi? un resultado exitoso.')
         .Build;
     end;
 

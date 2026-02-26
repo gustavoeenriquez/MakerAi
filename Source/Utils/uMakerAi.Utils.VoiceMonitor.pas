@@ -1,4 +1,4 @@
-Ôªø// IT License
+// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr√≠quez
+// Nombre: Gustavo EnrÌquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -33,51 +33,51 @@
 
 {
 
-  ## üìä C√≥digos de error de AudioRecord:
+  ##  CÛdigos de error de AudioRecord:
 
-  | C√≥digo | Constante | Significado | Acci√≥n |
+  | CÛdigo | Constante | Significado | AcciÛn |
   |--------|-----------|-------------|--------|
-  | **-3** | `ERROR_INVALID_OPERATION` | AudioRecord en estado inv√°lido | ‚ùå Abortar |
-  | **-2** | `ERROR_BAD_VALUE` | Par√°metros inv√°lidos | ‚ùå Abortar |
-  | **-6** | `ERROR_DEAD_OBJECT` | El objeto muri√≥ | ‚ùå Abortar |
-  | **-1** | `ERROR` | Error gen√©rico | ‚ö†Ô∏è Reintentar |
-  | **0** | - | No se ley√≥ nada | ‚ö†Ô∏è Reintentar |
-  | **>0** | - | Bytes le√≠dos exitosamente | ‚úÖ Procesar |
+  | **-3** | `ERROR_INVALID_OPERATION` | AudioRecord en estado inv·lido | [ERR] Abortar |
+  | **-2** | `ERROR_BAD_VALUE` | Par·metros inv·lidos | [ERR] Abortar |
+  | **-6** | `ERROR_DEAD_OBJECT` | El objeto muriÛ | [ERR] Abortar |
+  | **-1** | `ERROR` | Error genÈrico | [!] Reintentar |
+  | **0** | - | No se leyÛ nada | [!] Reintentar |
+  | **>0** | - | Bytes leÌdos exitosamente | [OK] Procesar |
 
   ---
 
-  ## üîÑ Flujo de la funci√≥n:
+  ##  Flujo de la funciÛn:
   ```
   Inicio del loop
-  ‚Üì
-  ¬øAudioRecord v√°lido y grabando?
-  ‚îú‚îÄ NO ‚Üí Abortar con error
-  ‚îî‚îÄ S√ç ‚Üì
+  v
+  øAudioRecord v·lido y grabando?
+   NO -> Abortar con error
+   SÕ v
   Intentar leer buffer
-  ‚Üì
-  ¬øBytesRead > 0?
-  ‚îú‚îÄ S√ç ‚Üí Procesar audio, resetear errores, continuar
-  ‚îú‚îÄ = 0 ‚Üí Incrementar errores, ¬ø>20? ‚Üí Abortar : Reintentar
-  ‚îî‚îÄ < 0 ‚Üí Analizar c√≥digo de error
-  ‚îú‚îÄ Error grave (-3, -2, -6) ‚Üí Abortar
-  ‚îî‚îÄ Error transitorio (-1) ‚Üí ¬ø>10 consecutivos?
-  ‚îú‚îÄ S√ç ‚Üí Abortar
-  ‚îî‚îÄ NO ‚Üí Sleep(50), Reintentar
-  ‚Üì
-  ¬øTerminado o error fatal?
-  ‚îú‚îÄ S√ç ‚Üí Salir del loop
-  ‚îî‚îÄ NO ‚Üí Continuar loop
-  ‚Üì
+  v
+  øBytesRead > 0?
+   SÕ -> Procesar audio, resetear errores, continuar
+   = 0 -> Incrementar errores, ø>20? -> Abortar : Reintentar
+   < 0 -> Analizar cÛdigo de error
+   Error grave (-3, -2, -6) -> Abortar
+   Error transitorio (-1) -> ø>10 consecutivos?
+   SÕ -> Abortar
+   NO -> Sleep(50), Reintentar
+  v
+  øTerminado o error fatal?
+   SÕ -> Salir del loop
+   NO -> Continuar loop
+  v
   Finally: Liberar JBuffer
 
 
-  üéõÔ∏è Tabla de valores recomendados:
+   Tabla de valores recomendados:
 
   Entorno	SensitivityMultiplier	StopSensitivityMultiplier
   Silencioso (oficina)	3.0 - 4.0	2.0 - 2.5
   Normal (casa)	2.0 - 2.5	1.5 - 1.8
   Ruidoso (calle)	1.5 - 2.0	1.2 - 1.5
-  Micr√≥fono lejano	1.2 - 1.8	1.0 - 1.2
+  MicrÛfono lejano	1.2 - 1.8	1.0 - 1.2
 
 
 
@@ -145,26 +145,26 @@ type
 
   TAiMonitorState = (msIdle, msRequestingPermission, msCalibrating, msMonitoring, msError);
 
-  // IMPORTANTE: El stream (aStream) es v√°lido SOLO durante la ejecuci√≥n del evento.
+  // IMPORTANTE: El stream (aStream) es v·lido SOLO durante la ejecuciÛn del evento.
   // Si necesita retener los datos, debe copiar el stream a una instancia local.
-  // El stream ser√° liberado autom√°ticamente despu√©s de que retorne el evento.
+  // El stream ser· liberado autom·ticamente despuÈs de que retorne el evento.
   TAIVoiceMonitorOnChange = procedure(Sender: TObject; aUserSpeak: Boolean; aIsValidForIA: Boolean; aStream: TMemoryStream) of object;
 
-  // IMPORTANTE: El stream (aStream) es v√°lido SOLO durante la ejecuci√≥n del evento.
+  // IMPORTANTE: El stream (aStream) es v·lido SOLO durante la ejecuciÛn del evento.
   // Si necesita retener los datos, debe copiar el stream a una instancia local.
-  // El stream ser√° liberado autom√°ticamente despu√©s de que retorne el evento.
+  // El stream ser· liberado autom·ticamente despuÈs de que retorne el evento.
   TSpeechEndEvent = procedure(Sender: TObject; aIsValidForIA: Boolean; aStream: TMemoryStream) of object;
 
-  // IMPORTANTE: El stream (aFragmentStream) es v√°lido SOLO durante la ejecuci√≥n del evento.
+  // IMPORTANTE: El stream (aFragmentStream) es v·lido SOLO durante la ejecuciÛn del evento.
   // Si necesita retener los datos, debe copiar el stream a una instancia local.
-  // El stream ser√° liberado autom√°ticamente despu√©s de que retorne el evento.
+  // El stream ser· liberado autom·ticamente despuÈs de que retorne el evento.
   TTranscriptionFragmentEvent = procedure(Sender: TObject; aFragmentStream: TMemoryStream) of object;
 
-  // IMPORTANTE: El stream (aWakeWordStream) es v√°lido SOLO durante la ejecuci√≥n del evento.
+  // IMPORTANTE: El stream (aWakeWordStream) es v·lido SOLO durante la ejecuciÛn del evento.
   // Si necesita retener los datos, debe copiar el stream a una instancia local.
 
   // TWakeWordCheckEvent = procedure(Sender: TObject; aWakeWordStream: TMemoryStream; var IsValid: Boolean) of object;
-  // Se elimina el isvalid de aqu√≠ para pasar a un evento as√≠ncrono
+  // Se elimina el isvalid de aquÌ para pasar a un evento asÌncrono
   TWakeWordCheckEvent = procedure(Sender: TObject; aWakeWordStream: TMemoryStream) of object;
 
   TAIVoiceMonitorOnCalibrated = procedure(Sender: TObject; const aNoiseLevel, aSensitivity, aStopSensitivity: Integer) of object;
@@ -208,9 +208,9 @@ type
     FPeakLevelInFragment: Int64;
     FFragmentSplitRatio: Double;
 
-    FPreBuffer: TMemoryStream; // Buffer de pre-grabaci√≥n
-    FPreBufferDurationMs: Integer; // Duraci√≥n del pre-buffer (ej: 500ms)
-    FPreBufferMaxSize: Int64; // Tama√±o m√°ximo del pre-buffer
+    FPreBuffer: TMemoryStream; // Buffer de pre-grabaciÛn
+    FPreBufferDurationMs: Integer; // DuraciÛn del pre-buffer (ej: 500ms)
+    FPreBufferMaxSize: Int64; // TamaÒo m·ximo del pre-buffer
 
     FOnTranscriptionFragment: TTranscriptionFragmentEvent;
     FOnChangeState: TAIVoiceMonitorOnChange;
@@ -274,7 +274,7 @@ type
     class function GetWaveInDevices: TArray<TWaveInDeviceInfo>;
     procedure ConfirmWakeWord(AIsValid: Boolean);
 
-    // Functiones auxiliares para el espa√±ol para detectar similitud entre palabras
+    // Functiones auxiliares para el espaÒol para detectar similitud entre palabras
     class function LevenshteinDistance(const s, t: string): Integer;
     class function RemoveAccents(const Text: string): string;
 
@@ -348,26 +348,26 @@ class function TAIVoiceMonitor.GetWaveInDevices: TArray<TWaveInDeviceInfo>;
 var
   NumDevs, I: Integer;
   Caps: TWaveInCaps;
-  // No necesitamos declarar DeviceInfo aqu√≠, usaremos acceso directo al array
+  // No necesitamos declarar DeviceInfo aquÌ, usaremos acceso directo al array
 begin
   NumDevs := waveInGetNumDevs;
 
-  // Reservamos espacio para los dispositivos f√≠sicos + 1 (el Default/Mapper)
+  // Reservamos espacio para los dispositivos fÌsicos + 1 (el Default/Mapper)
   SetLength(Result, NumDevs + 1);
 
-  // 1. Agregamos el Dispositivo Predeterminado (WAVE_MAPPER) en la posici√≥n 0
+  // 1. Agregamos el Dispositivo Predeterminado (WAVE_MAPPER) en la posiciÛn 0
   Result[0].DeviceID := WAVE_MAPPER;
   Result[0].DeviceName := 'Predeterminado del Sistema (WAVE_MAPPER)';
 
-  // 2. Agregamos los dispositivos f√≠sicos
+  // 2. Agregamos los dispositivos fÌsicos
   if NumDevs > 0 then
   begin
     for I := 0 to NumDevs - 1 do
     begin
-      // Obtenemos capacidades. Nota: Los √≠ndices reales de dispositivo empiezan en 0
+      // Obtenemos capacidades. Nota: Los Ìndices reales de dispositivo empiezan en 0
       if waveInGetDevCaps(I, @Caps, SizeOf(Caps)) = MMSYSERR_NOERROR then
       begin
-        // Guardamos en la posici√≥n I + 1 del array resultante
+        // Guardamos en la posiciÛn I + 1 del array resultante
         Result[I + 1].DeviceID := I;
         Result[I + 1].DeviceName := Caps.szPname;
       end;
@@ -434,10 +434,10 @@ procedure TAIVoiceMonitor.UpdateAudioBuffers;
 var
   NewSilenceArraySize: Integer;
 begin
-  // Calcular tama√±o del buffer de audio
+  // Calcular tamaÒo del buffer de audio
   FBufferSize := (FSampleRate * FChannels * (FBitsPerSample div 8) * DEFAULT_BUFFER_DURATION_MS) div 1000;
 
-  // Validar que el buffer tenga un tama√±o razonable
+  // Validar que el buffer tenga un tamaÒo razonable
   if FBufferSize < 100 then
     raise EInvalidOperation.Create('Calculated buffer size is too small. Check audio parameters.');
 
@@ -446,10 +446,10 @@ begin
 
   SetLength(FBuffer, FBufferSize);
 
-  // Calcular tama√±o del array de detecci√≥n de silencio
+  // Calcular tamaÒo del array de detecciÛn de silencio
   NewSilenceArraySize := FSilenceDuration div DEFAULT_BUFFER_DURATION_MS;
 
-  // M√≠nimo 2 buffers para detecci√≥n
+  // MÌnimo 2 buffers para detecciÛn
   if NewSilenceArraySize < 2 then
     NewSilenceArraySize := 2;
 
@@ -460,7 +460,7 @@ procedure TAIVoiceMonitor.UpdatePreBufferSize;
 var
   BytesPerSecond: Int64;
 begin
-  // Calcular cu√°ntos bytes ocupan FPreBufferDurationMs milisegundos
+  // Calcular cu·ntos bytes ocupan FPreBufferDurationMs milisegundos
   BytesPerSecond := FSampleRate * FChannels * (FBitsPerSample div 8);
   FPreBufferMaxSize := (BytesPerSecond * FPreBufferDurationMs) div 1000;
 end;
@@ -558,13 +558,13 @@ begin
   if Active then
     raise EInvalidOperation.Create('Cannot change DeviceID while monitor is active. Set Active to False first.');
 
-  // Comprobaci√≥n robusta para WAVE_MAPPER
+  // ComprobaciÛn robusta para WAVE_MAPPER
   IsWaveMapper := (Value = WAVE_MAPPER);
 
   if not IsWaveMapper then
   begin
     NumDevs := waveInGetNumDevs;
-    // Validamos que el ID est√© dentro del rango de dispositivos f√≠sicos disponibles
+    // Validamos que el ID estÈ dentro del rango de dispositivos fÌsicos disponibles
     if Integer(Value) >= NumDevs then
       raise EArgumentOutOfRangeException.CreateFmt('Invalid DeviceID: %d. Valid range is 0 to %d, or WAVE_MAPPER.', [Value, NumDevs - 1]);
   end;
@@ -595,10 +595,10 @@ end;
 
 procedure TAIVoiceMonitor.SetSampleRate(const Value: Integer);
 const
-  // Tasas de muestreo est√°ndar soportadas
-  VALID_SAMPLE_RATES: array [0 .. 6] of Integer = (8000, // Telefon√≠a
+  // Tasas de muestreo est·ndar soportadas
+  VALID_SAMPLE_RATES: array [0 .. 6] of Integer = (8000, // TelefonÌa
     11025, // Baja calidad
-    16000, // Telefon√≠a wideband / Whisper √≥ptimo
+    16000, // TelefonÌa wideband / Whisper Ûptimo
     22050, // Media calidad
     32000, // Radio FM
     44100, // CD Audio
@@ -613,11 +613,11 @@ begin
   if FSampleRate = Value then
     Exit;
 
-  // No permitir cambios mientras el monitor est√° activo
+  // No permitir cambios mientras el monitor est· activo
   if Active then
     raise EInvalidOperation.Create('Cannot change SampleRate while monitor is active. ' + 'Set Active to False first.');
 
-  // Validar que sea una tasa de muestreo v√°lida
+  // Validar que sea una tasa de muestreo v·lida
   IsValid := False;
   for I := Low(VALID_SAMPLE_RATES) to High(VALID_SAMPLE_RATES) do
   begin
@@ -628,10 +628,10 @@ begin
     end;
   end;
 
-  // Si no es v√°lida, lanzar excepci√≥n con informaci√≥n √∫til
+  // Si no es v·lida, lanzar excepciÛn con informaciÛn ˙til
   if not IsValid then
   begin
-    // Construir string con tasas v√°lidas
+    // Construir string con tasas v·lidas
     ValidRatesStr := '';
     for I := Low(VALID_SAMPLE_RATES) to High(VALID_SAMPLE_RATES) do
     begin
@@ -787,22 +787,22 @@ begin
 
       msMonitoring:
         begin
-          // *** GESTI√ìN DEL PRE-BUFFER ***
+          // *** GESTI”N DEL PRE-BUFFER ***
           if not FIsSpeaking then
           begin
             // Mientras NO estamos hablando, acumular audio en el pre-buffer
             FPreBuffer.WriteBuffer(aBuffer, aSize);
 
-            // Si el pre-buffer excede el tama√±o m√°ximo, mantener solo los √∫ltimos datos
+            // Si el pre-buffer excede el tamaÒo m·ximo, mantener solo los ˙ltimos datos
             if FPreBuffer.Size > FPreBufferMaxSize then
             begin
-              // Crear buffer temporal para mantener solo los √∫ltimos FPreBufferMaxSize bytes
+              // Crear buffer temporal para mantener solo los ˙ltimos FPreBufferMaxSize bytes
               TempBuffer := TMemoryStream.Create;
               try
-                // Posicionarse en el punto donde comienzan los √∫ltimos N bytes
+                // Posicionarse en el punto donde comienzan los ˙ltimos N bytes
                 FPreBuffer.Position := FPreBuffer.Size - FPreBufferMaxSize;
 
-                // Copiar solo los √∫ltimos bytes al buffer temporal
+                // Copiar solo los ˙ltimos bytes al buffer temporal
                 TempBuffer.CopyFrom(FPreBuffer, FPreBufferMaxSize);
 
                 // Limpiar el pre-buffer y copiar de vuelta el contenido reducido
@@ -819,24 +819,24 @@ begin
             // Ya estamos hablando, guardar directamente en FFileStream
             FFileStream.WriteBuffer(aBuffer, aSize);
 
-            // --- FRAGMENTACI√ìN PARA TRANSCRIPCI√ìN EN STREAMING ---
+            // --- FRAGMENTACI”N PARA TRANSCRIPCI”N EN STREAMING ---
             if Assigned(FOnTranscriptionFragment) then
             begin
               // Actualizar el pico de nivel en el fragmento actual
               if CurrentLevel > FPeakLevelInFragment then
                 FPeakLevelInFragment := CurrentLevel;
 
-              // Verificar si ya pas√≥ el intervalo m√≠nimo para enviar fragmento
+              // Verificar si ya pasÛ el intervalo mÌnimo para enviar fragmento
               if not FWaitingForFragmentSplit and (FTranscriptionStopwatch.ElapsedMilliseconds >= FTranscriptionIntervalMs) then
                 FWaitingForFragmentSplit := True;
 
               // Si estamos esperando para dividir, buscar un momento apropiado
               if FWaitingForFragmentSplit then
               begin
-                // Momento silencioso relativo: el nivel actual baj√≥ significativamente respecto al pico
+                // Momento silencioso relativo: el nivel actual bajÛ significativamente respecto al pico
                 isSilentMoment := (FPeakLevelInFragment > FSensitivity) and (CurrentLevel < (FPeakLevelInFragment * FFragmentSplitRatio));
 
-                // Tiempo m√°ximo de espera excedido
+                // Tiempo m·ximo de espera excedido
                 isWaitTooLong := FTranscriptionStopwatch.ElapsedMilliseconds >= FTranscriptionMaxWaitMs;
 
                 // Enviar fragmento si encontramos un momento silencioso o esperamos demasiado
@@ -848,7 +848,7 @@ begin
               end;
             end;
 
-            // --- VERIFICACI√ìN DE WAKE WORD ---
+            // --- VERIFICACI”N DE WAKE WORD ---
             if not FWakeWordChecked and Assigned(FOnWakeWordCheck) then
             begin
               BytesPerSecond := FSampleRate * FChannels * (FBitsPerSample div 8);
@@ -862,7 +862,7 @@ begin
               begin
                 FWakeWordChecked := True;
 
-                // Ejecutar verificaci√≥n en tarea as√≠ncrona para no bloquear captura
+                // Ejecutar verificaciÛn en tarea asÌncrona para no bloquear captura
                 {
                   TTask.Run(
                   procedure
@@ -894,7 +894,7 @@ begin
                   ConvertPCMToWAV(WakeStreamPCM, WakeStreamWAV);
                   IsValid := False;
 
-                  // Solo llamar al evento si la wake word est√° activa
+                  // Solo llamar al evento si la wake word est· activa
                   if Assigned(FOnWakeWordCheck) and FWakeWordActive then
                   FOnWakeWordCheck(Self, WakeStreamWAV, IsValid);
                   finally
@@ -902,7 +902,7 @@ begin
                   end;
 
 
-                  // Guardar el resultado de la validaci√≥n
+                  // Guardar el resultado de la validaciÛn
                   FCS.Enter;
                   try
                   FIsWakeWordValid := IsValid;
@@ -938,7 +938,7 @@ begin
                       WakeStreamWAV := TMemoryStream.Create;
                       try
                         ConvertPCMToWAV(WakeStreamPCM, WakeStreamWAV);
-                        // DISPARAR EVENTO ASINCR√ìNICO (No esperamos resultado aqu√≠)
+                        // DISPARAR EVENTO ASINCR”NICO (No esperamos resultado aquÌ)
                         if Assigned(FOnWakeWordCheck) and FWakeWordActive then
                           FOnWakeWordCheck(Self, WakeStreamWAV);
                       finally
@@ -954,14 +954,14 @@ begin
             end;
           end;
 
-          // --- ACTUALIZACI√ìN DEL BUFFER DE DETECCI√ìN DE SILENCIO ---
+          // --- ACTUALIZACI”N DEL BUFFER DE DETECCI”N DE SILENCIO ---
           if Length(FArrBuf) > 0 then
           begin
-            // Desplazar array una posici√≥n a la izquierda
+            // Desplazar array una posiciÛn a la izquierda
             for I := 0 to High(FArrBuf) - 1 do
               FArrBuf[I] := FArrBuf[I + 1];
 
-            // Agregar nueva medici√≥n al final
+            // Agregar nueva mediciÛn al final
             if FIsSpeaking then
               FArrBuf[High(FArrBuf)] := (CurrentLevel > FStopSensitivity)
             else
@@ -981,14 +981,14 @@ begin
         FOnUpdate(Self, CurrentLevel);
     end);
 
-  // --- CALCULAR DETECCI√ìN DE SILENCIO ---
+  // --- CALCULAR DETECCI”N DE SILENCIO ---
   if FMonitorState = msMonitoring then
     CalcSilencio;
 end;
 
 class function TAIVoiceMonitor.RemoveAccents(const Text: string): string;
 const
-  Accented = '√°√©√≠√≥√∫√†√®√¨√≤√π√§√´√Ø√∂√º√¢√™√Æ√¥√ª√±√Å√â√ç√ì√ö√Ä√à√å√í√ô√Ñ√ã√è√ñ√ú√Ç√ä√é√î√õ√ë';
+  Accented = '·ÈÌÛ˙‡ËÏÚ˘‰ÎÔˆ¸‚ÍÓÙ˚Ò¡…Õ”⁄¿»Ã“ŸƒÀœ÷‹¬ Œ‘€—';
   Normal = 'aeiouaeiouaeiouaeiounAEIOUAEIOUAEIOUAEIOUN';
 var
   I, p: Integer;
@@ -1058,7 +1058,7 @@ begin
       begin
         FPreBuffer.Position := 0;
         FFileStream.CopyFrom(FPreBuffer, 0);
-        // *** LIMPIAR EL PRE-BUFFER DESPU√âS DE USARLO ***
+        // *** LIMPIAR EL PRE-BUFFER DESPU…S DE USARLO ***
         FPreBuffer.Clear;
       end;
 
@@ -1128,13 +1128,13 @@ begin
     FCS.Leave;
   end;
 
-  // --- VALIDACI√ìN DE FRAGMENTO ---
-  // Si el pico de sonido en este fragmento no super√≥ la sensibilidad,
+  // --- VALIDACI”N DE FRAGMENTO ---
+  // Si el pico de sonido en este fragmento no superÛ la sensibilidad,
   // lo consideramos silencio y no lo enviamos a la IA.
   if PeakLevel < FSensitivity then
   begin
     // El fragmento es silencio. Lo descartamos, pero debemos actualizar
-    // la posici√≥n y reiniciar los contadores para el siguiente fragmento.
+    // la posiciÛn y reiniciar los contadores para el siguiente fragmento.
     FCS.Enter;
     try
       // Marcamos el audio silencioso como 'procesado' para no revisarlo de nuevo
@@ -1143,47 +1143,47 @@ begin
       FCS.Leave;
     end;
 
-    // Reiniciamos todo para el siguiente ciclo de detecci√≥n.
+    // Reiniciamos todo para el siguiente ciclo de detecciÛn.
     FTranscriptionStopwatch.Reset;
     FTranscriptionStopwatch.Start;
     FPeakLevelInFragment := 0;
     Exit; // Salimos del procedimiento, no hay nada que enviar.
   end;
 
-  // --- EXTRACCI√ìN DEL FRAGMENTO ---
-  // Si llegamos aqu√≠, el fragmento contiene audio significativo.
+  // --- EXTRACCI”N DEL FRAGMENTO ---
+  // Si llegamos aquÌ, el fragmento contiene audio significativo.
   // Procedemos a extraerlo y enviarlo.
   FragmentPCM := TMemoryStream.Create;
   try
     FCS.Enter;
     try
-      // Comprobaci√≥n de seguridad: ¬øhay datos nuevos para procesar?
+      // ComprobaciÛn de seguridad: øhay datos nuevos para procesar?
       if FFileStream.Size <= FLastTranscriptionPosition then
         Exit;
 
-      // Calcular tama√±o del nuevo fragmento
+      // Calcular tamaÒo del nuevo fragmento
       FragmentSize := FFileStream.Size - FLastTranscriptionPosition;
 
-      // Copiar el fragmento desde la √∫ltima posici√≥n procesada
+      // Copiar el fragmento desde la ˙ltima posiciÛn procesada
       FFileStream.Position := FLastTranscriptionPosition;
       FragmentPCM.CopyFrom(FFileStream, FragmentSize);
 
-      // Actualizar la posici√≥n para el pr√≥ximo fragmento
+      // Actualizar la posiciÛn para el prÛximo fragmento
       FLastTranscriptionPosition := FFileStream.Size;
     finally
       FCS.Leave;
     end;
 
-    // Reiniciamos contadores para el *pr√≥ximo* fragmento.
+    // Reiniciamos contadores para el *prÛximo* fragmento.
     FTranscriptionStopwatch.Reset;
     FTranscriptionStopwatch.Start;
     FPeakLevelInFragment := 0;
 
-    // Si por alguna raz√≥n el fragmento est√° vac√≠o, no continuamos.
+    // Si por alguna razÛn el fragmento est· vacÌo, no continuamos.
     if FragmentPCM.Size = 0 then
       Exit;
 
-    // --- CONVERSI√ìN A WAV Y ENV√çO AL EVENTO ---
+    // --- CONVERSI”N A WAV Y ENVÕO AL EVENTO ---
     FragmentWAV := TMemoryStream.Create;
     try
       // Convertir PCM a formato WAV
@@ -1192,7 +1192,7 @@ begin
 
       // Enviar al hilo principal para que dispare el evento
       // IMPORTANTE: El manejador del evento DEBE copiar el stream si necesita
-      // retener los datos, ya que ser√° liberado inmediatamente despu√©s del evento
+      // retener los datos, ya que ser· liberado inmediatamente despuÈs del evento
       TThread.Queue(nil,
         procedure
         var
@@ -1200,16 +1200,16 @@ begin
         begin
           StreamToFree := FragmentWAV;
           try
-            // Solo disparar el evento si el componente no se est√° destruyendo
+            // Solo disparar el evento si el componente no se est· destruyendo
             if not(csDestroying in ComponentState) and Assigned(FOnTranscriptionFragment) then
               FOnTranscriptionFragment(Self, FragmentWAV);
           finally
-            // Siempre liberamos el stream despu√©s del evento
+            // Siempre liberamos el stream despuÈs del evento
             StreamToFree.Free;
           end;
         end);
     except
-      // Si hay error en la conversi√≥n, liberar el WAV stream
+      // Si hay error en la conversiÛn, liberar el WAV stream
       FragmentWAV.Free;
       raise;
     end;
@@ -1267,10 +1267,10 @@ begin
     FCS.Leave;
   end;
 
-  // Es posible que el habla haya terminado antes de la confirmaci√≥n as√≠ que
-  // a futuro se puede implementar una rutina para disparar un evento con el audio aqu√≠
-  // Opcional: Si el habla ya termin√≥ pero est√°bamos esperando confirmaci√≥n,
-  // podr√≠as disparar un evento extra aqu√≠ si lo necesitas.
+  // Es posible que el habla haya terminado antes de la confirmaciÛn asÌ que
+  // a futuro se puede implementar una rutina para disparar un evento con el audio aquÌ
+  // Opcional: Si el habla ya terminÛ pero est·bamos esperando confirmaciÛn,
+  // podrÌas disparar un evento extra aquÌ si lo necesitas.
 end;
 
 procedure TAIVoiceMonitor.ConvertPCMToWAV(PCMStream, WAVStream: TMemoryStream);
@@ -1279,7 +1279,7 @@ var
   FmtChunk: TFmtChunk;
   DataChunk: TDataChunk;
 begin
-  // Validaci√≥n de par√°metros
+  // ValidaciÛn de par·metros
   if not Assigned(PCMStream) then
     raise EArgumentNilException.Create('PCMStream cannot be nil');
   if not Assigned(WAVStream) then
@@ -1293,7 +1293,7 @@ begin
 
   // Construir el chunk FMT (24 bytes totales: 8 header + 16 datos)
   FmtChunk.Subchunk1ID := 'fmt ';
-  FmtChunk.Subchunk1Size := 16; // Tama√±o de los datos del fmt chunk (sin header)
+  FmtChunk.Subchunk1Size := 16; // TamaÒo de los datos del fmt chunk (sin header)
   FmtChunk.AudioFormat := 1; // PCM sin comprimir
   FmtChunk.NumChannels := FChannels;
   FmtChunk.SampleRate := FSampleRate;
@@ -1309,7 +1309,7 @@ begin
   RiffHeader.ChunkID := 'RIFF';
   RiffHeader.Format := 'WAVE';
 
-  // ChunkSize = tama√±o total del archivo - 8 bytes (ChunkID + ChunkSize)
+  // ChunkSize = tamaÒo total del archivo - 8 bytes (ChunkID + ChunkSize)
   // = 4 (WAVE) + 24 (fmt chunk completo) + 8 (data header) + datos PCM
   // = 36 + datos PCM
   RiffHeader.ChunkSize := 36 + PCMStream.Size;
@@ -1369,7 +1369,7 @@ begin
   if not FActive then
     Exit;
 
-  // 1. Configuraci√≥n del formato de Audio (PCM)
+  // 1. ConfiguraciÛn del formato de Audio (PCM)
   WaveFormat.wFormatTag := WAVE_FORMAT_PCM;
   WaveFormat.nChannels := FChannels;
   WaveFormat.nSamplesPerSec := FSampleRate;
@@ -1379,7 +1379,7 @@ begin
   WaveFormat.cbSize := 0;
 
   // 2. Abrir el dispositivo
-  // FDeviceID debe contener el ID del dispositivo espec√≠fico (0, 1, 2...)
+  // FDeviceID debe contener el ID del dispositivo especÌfico (0, 1, 2...)
   // O el valor WAVE_MAPPER ($FFFFFFFF) para el dispositivo por defecto.
 
   // FDeviceID := WAVE_MAPPER;
@@ -1396,7 +1396,7 @@ begin
   // 3. Preparar la estructura del Header
   FillChar(FWaveHdr, SizeOf(FWaveHdr), 0);
   FWaveHdr.lpData := @FBuffer[0]; // Puntero al array de bytes
-  FWaveHdr.dwBufferLength := FBufferSize; // Tama√±o del buffer
+  FWaveHdr.dwBufferLength := FBufferSize; // TamaÒo del buffer
   FWaveHdr.dwFlags := 0;
 
   // 4. Preparar el Header (PrepareHeader)
@@ -1410,7 +1410,7 @@ begin
     Exit;
   end;
 
-  // 5. A√±adir el Buffer a la cola de grabaci√≥n
+  // 5. AÒadir el Buffer a la cola de grabaciÛn
   Res := waveInAddBuffer(FhWaveIn, @FWaveHdr, SizeOf(TWaveHdr));
   if Res <> MMSYSERR_NOERROR then
   begin
@@ -1418,15 +1418,15 @@ begin
     waveInUnprepareHeader(FhWaveIn, @FWaveHdr, SizeOf(TWaveHdr));
     waveInClose(FhWaveIn);
     FhWaveIn := 0;
-    DoError('Error al a√±adir buffer de audio: ' + IntToStr(Res));
+    DoError('Error al aÒadir buffer de audio: ' + IntToStr(Res));
     Exit;
   end;
 
-  // 6. Iniciar la grabaci√≥n
+  // 6. Iniciar la grabaciÛn
   Res := waveInStart(FhWaveIn);
   if Res <> MMSYSERR_NOERROR then
   begin
-    // Limpieza completa en caso de error cr√≠tico al iniciar start
+    // Limpieza completa en caso de error crÌtico al iniciar start
     waveInReset(FhWaveIn);
     waveInUnprepareHeader(FhWaveIn, @FWaveHdr, SizeOf(TWaveHdr));
     waveInClose(FhWaveIn);
@@ -1489,7 +1489,7 @@ begin
     FCaptureThread.Start;
   except
     on E: Exception do
-      DoError('Excepci√≥n al iniciar captura en Android: ' + E.Message);
+      DoError('ExcepciÛn al iniciar captura en Android: ' + E.Message);
   end;
 end;
 
@@ -1530,7 +1530,7 @@ begin
   try
     while not TThread.CheckTerminated do
     begin
-      // Verificar que el AudioRecord siga v√°lido
+      // Verificar que el AudioRecord siga v·lido
       if not Assigned(FAudioRecord) then
       begin
         TThread.Queue(nil,
@@ -1541,7 +1541,7 @@ begin
         Break;
       end;
 
-      // Verificar que est√© en estado de grabaci√≥n
+      // Verificar que estÈ en estado de grabaciÛn
       if FAudioRecord.getRecordingState <> TJAudioRecord.JavaClass.RECORDSTATE_RECORDING then
       begin
         TThread.Queue(nil,
@@ -1577,11 +1577,11 @@ begin
           Inc(ConsecutiveErrors);
           LastErrorCode := BytesRead;
 
-          // Determinar el tipo de error seg√∫n el c√≥digo
+          // Determinar el tipo de error seg˙n el cÛdigo
           case BytesRead of
             TJAudioRecord.JavaClass.ERROR_INVALID_OPERATION:
               begin
-                // Error grave: AudioRecord en estado inv√°lido
+                // Error grave: AudioRecord en estado inv·lido
                 TThread.Queue(nil,
                   procedure
                   begin
@@ -1592,7 +1592,7 @@ begin
 
             TJAudioRecord.JavaClass.ERROR_BAD_VALUE:
               begin
-                // Par√°metros inv√°lidos
+                // Par·metros inv·lidos
                 TThread.Queue(nil,
                   procedure
                   begin
@@ -1603,7 +1603,7 @@ begin
 
             TJAudioRecord.JavaClass.ERROR_DEAD_OBJECT:
               begin
-                // El AudioRecord muri√≥
+                // El AudioRecord muriÛ
                 TThread.Queue(nil,
                   procedure
                   begin
@@ -1614,7 +1614,7 @@ begin
 
             TJAudioRecord.JavaClass.ERROR:
               begin
-                // Error gen√©rico - puede ser transitorio
+                // Error genÈrico - puede ser transitorio
                 if ConsecutiveErrors >= 10 then
                 begin
                   // Demasiados errores consecutivos
@@ -1633,7 +1633,7 @@ begin
               end;
 
           else
-            // C√≥digo de error desconocido
+            // CÛdigo de error desconocido
             if ConsecutiveErrors >= 10 then
             begin
               TThread.Queue(nil,
@@ -1650,7 +1650,7 @@ begin
             end;
           end;
 
-          // Log de diagn√≥stico cada 5 errores (opcional)
+          // Log de diagnÛstico cada 5 errores (opcional)
           if (ErrorCount mod 5 = 0) and (ErrorCount > 0) then
           begin
             TThread.Queue(nil,
@@ -1661,7 +1661,7 @@ begin
               end);
           end;
         end
-        // --- CASO 3: No se ley√≥ nada (BytesRead = 0) ---
+        // --- CASO 3: No se leyÛ nada (BytesRead = 0) ---
         else
         begin
           // BytesRead = 0 es raro pero no necesariamente un error
@@ -1677,14 +1677,14 @@ begin
             Break;
           end;
 
-          // Peque√±a pausa antes de reintentar
+          // PequeÒa pausa antes de reintentar
           Sleep(10);
         end;
 
       except
         on E: Exception do
         begin
-          // Excepci√≥n en el procesamiento
+          // ExcepciÛn en el procesamiento
           Inc(ErrorCount);
           Inc(ConsecutiveErrors);
 
@@ -1712,7 +1712,7 @@ begin
         end;
       end;
 
-      // Peque√±a pausa entre iteraciones para no saturar CPU
+      // PequeÒa pausa entre iteraciones para no saturar CPU
       // (solo si no hubo errores, ya que los errores ya tienen Sleep)
       if (BytesRead > 0) and (ConsecutiveErrors = 0) then
         Sleep(1);
@@ -1723,7 +1723,7 @@ begin
     // Liberar el buffer Java
     JBuffer := nil;
 
-    // Log de finalizaci√≥n
+    // Log de finalizaciÛn
     TThread.Queue(nil,
       procedure
       begin

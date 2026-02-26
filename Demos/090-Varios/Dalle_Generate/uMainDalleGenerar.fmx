@@ -2,7 +2,7 @@ object Form76: TForm76
   Left = 0
   Top = 0
   Caption = 'Form76'
-  ClientHeight = 794
+  ClientHeight = 911
   ClientWidth = 875
   Position = ScreenCenter
   FormFactor.Width = 320
@@ -13,12 +13,12 @@ object Form76: TForm76
   object MainLayout: TLayout
     Align = Client
     Size.Width = 875.000000000000000000
-    Size.Height = 794.000000000000000000
+    Size.Height = 911.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 0
     object Layout3: TLayout
       Align = Bottom
-      Position.Y = 438.000000000000000000
+      Position.Y = 555.000000000000000000
       Size.Width = 875.000000000000000000
       Size.Height = 356.000000000000000000
       Size.PlatformDefault = False
@@ -293,7 +293,7 @@ object Form76: TForm76
     object Layout2: TLayout
       Align = Client
       Size.Width = 875.000000000000000000
-      Size.Height = 388.000000000000000000
+      Size.Height = 505.000000000000000000
       Size.PlatformDefault = False
       TabOrder = 1
       object Image1: TImage
@@ -304,7 +304,7 @@ object Form76: TForm76
           end>
         Align = Client
         Size.Width = 650.000000000000000000
-        Size.Height = 365.000000000000000000
+        Size.Height = 482.000000000000000000
         Size.PlatformDefault = False
       end
       object Label2: TLabel
@@ -325,7 +325,7 @@ object Form76: TForm76
         Align = Left
         Position.Y = 23.000000000000000000
         Size.Width = 225.000000000000000000
-        Size.Height = 365.000000000000000000
+        Size.Height = 482.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 1
         object ListBox1: TListBox
@@ -335,21 +335,20 @@ object Form76: TForm76
           Margins.Right = 3.000000000000000000
           Margins.Bottom = 3.000000000000000000
           Size.Width = 219.000000000000000000
-          Size.Height = 359.000000000000000000
+          Size.Height = 476.000000000000000000
           Size.PlatformDefault = False
           TabOrder = 0
           DisableFocusEffect = True
-          ItemHeight = 45.000000000000000000
           DefaultItemStyles.ItemStyle = ''
           DefaultItemStyles.GroupHeaderStyle = ''
           DefaultItemStyles.GroupFooterStyle = ''
           Viewport.Width = 215.000000000000000000
-          Viewport.Height = 355.000000000000000000
+          Viewport.Height = 472.000000000000000000
           object ListBoxItem1: TListBoxItem
             Size.Width = 215.000000000000000000
             Size.Height = 45.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 4
+            TabOrder = 5
             object Label3: TLabel
               Align = Top
               Margins.Left = 3.000000000000000000
@@ -377,7 +376,7 @@ object Form76: TForm76
             Size.Width = 215.000000000000000000
             Size.Height = 45.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 3
+            TabOrder = 4
             object Label5: TLabel
               Align = Top
               Margins.Left = 3.000000000000000000
@@ -407,7 +406,7 @@ object Form76: TForm76
             Size.Width = 215.000000000000000000
             Size.Height = 45.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 2
+            TabOrder = 3
             object Label6: TLabel
               Align = Top
               Margins.Left = 3.000000000000000000
@@ -437,7 +436,7 @@ object Form76: TForm76
             Size.Width = 215.000000000000000000
             Size.Height = 45.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 1
+            TabOrder = 2
             object Label7: TLabel
               Align = Top
               Margins.Left = 3.000000000000000000
@@ -467,7 +466,7 @@ object Form76: TForm76
             Size.Width = 215.000000000000000000
             Size.Height = 45.000000000000000000
             Size.PlatformDefault = False
-            TabOrder = 0
+            TabOrder = 1
             object Label10: TLabel
               Align = Top
               Margins.Left = 3.000000000000000000
@@ -496,6 +495,42 @@ object Form76: TForm76
               TabOrder = 41
             end
           end
+          object ListBoxItem5: TListBoxItem
+            Position.Y = 225.000000000000000000
+            Size.Width = 215.000000000000000000
+            Size.Height = 96.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 0
+            object Label12: TLabel
+              Align = Top
+              Margins.Left = 3.000000000000000000
+              Margins.Right = 3.000000000000000000
+              Position.X = 3.000000000000000000
+              Size.Width = 209.000000000000000000
+              Size.Height = 17.000000000000000000
+              Size.PlatformDefault = False
+              Text = 'Stable Diffusion Params'
+              TabOrder = 40
+            end
+            object ChUserRefiner: TCheckBox
+              Position.X = 24.000000000000000000
+              Position.Y = 21.000000000000000000
+              TabOrder = 43
+              Text = 'User Refiner'
+            end
+            object ChEnhanceFace: TCheckBox
+              Position.X = 24.000000000000000000
+              Position.Y = 44.000000000000000000
+              TabOrder = 42
+              Text = 'Enhance Face'
+            end
+            object ChAutoUpscale: TCheckBox
+              Position.X = 24.000000000000000000
+              Position.Y = 66.000000000000000000
+              TabOrder = 41
+              Text = 'Auto Upscale'
+            end
+          end
         end
       end
     end
@@ -504,19 +539,22 @@ object Form76: TForm76
     Left = 432
     Top = 288
   end
-  object AiDalle: TAiDalle
-    Url = 'http://192.168.10.121:5200/v1/'
-    ApiKey = '@OPENAI_API_KEY'
-    User = 'user'
-    Model = imSDXL
-    ResponseFormat = irfUrl
-    GuidanceScale = 7.000000000000000000
-    UseRefiner = True
-    Left = 304
-    Top = 224
-  end
   object OpenDialog1: TOpenDialog
     Left = 640
     Top = 344
+  end
+  object AiDalle: TAiDalle
+    Url = 'http://192.168.3.121:5150/v1/'
+    User = 'user'
+    Model = imSDXL
+    ResponseFormat = irfBase64Json
+    Stream = True
+    GuidanceScale = 7.000000000000000000
+    UseRefiner = True
+    AutoUpscale = True
+    EnhanceFace = True
+    Strength = 0.699999988079071000
+    Left = 304
+    Top = 224
   end
 end

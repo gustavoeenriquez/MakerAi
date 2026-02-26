@@ -175,9 +175,9 @@ function TForm6.NewWhisper: TAIWhisper;
 begin
   Result := TAIWhisper.Create(Nil);
   Result.ApiKey := 'xxxyyy';
-  Result.url := 'http://192.168.10.121:5000/v1/';
+  Result.url := 'http://192.168.3.121:5150/v1/';
   Result.Languaje := 'es';
-  Result.Model := 'whisper-large-v3-turbo';
+  Result.Model := 'openai/whisper-large-v3-turbo';
 end;
 
 procedure TForm6.BtnRefreshDevicesClick(Sender: TObject);

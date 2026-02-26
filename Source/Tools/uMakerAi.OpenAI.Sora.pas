@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enrï¿½quez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -39,10 +39,11 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections, System.Threading,
   System.JSON, System.Net.HttpClient, System.Net.URLClient,
-  uMakerAi.Core, System.Net.HttpClientComponent;
+  uMakerAi.Core, uMakerAi.Chat.Messages, uMakerAi.Chat.Tools,
+  System.Net.HttpClientComponent;
 
 type
-  // Enums para los parï¿½metros de Sora
+  // Enums para los par?metros de Sora
   TSoraModel = (smSora2, smCustom);
   TSoraResolution = (srDefault, sr1280x720, sr720x1280, sr1920x1080, sr1080x1920);
 
@@ -67,7 +68,7 @@ type
     FOnSuccess: TGenerationSuccessEvent;
     FOnError: TGenerationErrorEvent;
 
-    // Mï¿½todos internos
+    // M?todos internos
     function GetEffectiveModelName: string;
     function GetResolutionString: string;
     procedure DoError(const AMessage: string);
@@ -84,7 +85,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
 
-    // Mï¿½todos Pï¿½blicos Asï¿½ncronos
+    // M?todos P?blicos As?ncronos
     function GenerateFromText(const APrompt: string): ITask;
     function GenerateFromImage(const APrompt: string; AImage: TAiMediaFile): ITask;
     function RemixVideo(const APrompt: string; const AOriginalVideoId: string): ITask;
@@ -104,6 +105,33 @@ type
     property OnError: TGenerationErrorEvent read FOnError write FOnError;
   end;
 
+  // --- Tool Bridge para SORA (integrado con TAiChat) ---
+  TAiSoraVideoTool = class(TAiVideoToolBase)
+  private
+    FApiKey: string;
+    FModel: TSoraModel;
+    FCustomModelName: string;
+    FResolution: TSoraResolution;
+    FSeconds: Integer;
+    FSeed: Int64;
+
+    function GetApiKey: string;
+    function GetEffectiveModelName: string;
+    function GetResolutionString: string;
+  protected
+    procedure ExecuteVideoGeneration(ResMsg, AskMsg: TAiChatMessage); override;
+    procedure InternalRunSora(AResMsg, AAskMsg: TAiChatMessage);
+  public
+    constructor Create(AOwner: TComponent); override;
+  published
+    property ApiKey: string read GetApiKey write FApiKey;
+    property Model: TSoraModel read FModel write FModel default TSoraModel.smSora2;
+    property CustomModelName: string read FCustomModelName write FCustomModelName;
+    property Resolution: TSoraResolution read FResolution write FResolution default TSoraResolution.sr720x1280;
+    property Seconds: Integer read FSeconds write FSeconds default 4;
+    property Seed: Int64 read FSeed write FSeed default 0;
+  end;
+
 procedure Register;
 
 implementation
@@ -116,7 +144,7 @@ const
 
 procedure Register;
 begin
-  RegisterComponents('MakerAI', [TAiSoraGenerator]);
+  RegisterComponents('MakerAI', [TAiSoraGenerator, TAiSoraVideoTool]);
 end;
 
 { TAiSoraGenerator }
@@ -451,6 +479,199 @@ begin
     begin
       InternalExecuteRemix(APrompt, AOriginalVideoId);
     end);
+end;
+
+{ TAiSoraVideoTool }
+
+constructor TAiSoraVideoTool.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  FApiKey := '@OPENAI_API_KEY';
+  FModel := TSoraModel.smSora2;
+  FResolution := TSoraResolution.sr720x1280;
+  FSeconds := 4;
+  FSeed := 0;
+end;
+
+function TAiSoraVideoTool.GetApiKey: string;
+begin
+  if (csDesigning in ComponentState) or (csDestroying in ComponentState) then
+  begin
+    Result := FApiKey;
+    Exit;
+  end;
+  if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
+    Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
+  else
+    Result := FApiKey;
+end;
+
+function TAiSoraVideoTool.GetEffectiveModelName: string;
+begin
+  if not FCustomModelName.IsEmpty then
+  begin
+    Result := FCustomModelName;
+    Exit;
+  end;
+  case FModel of
+    smSora2: Result := 'sora-2';
+  else
+    raise Exception.Create('El modelo Sora debe especificarse.');
+  end;
+end;
+
+function TAiSoraVideoTool.GetResolutionString: string;
+begin
+  Result := '';
+  case FResolution of
+    sr1280x720:  Result := '1280x720';
+    sr720x1280:  Result := '720x1280';
+    sr1920x1080: Result := '1920x1080';
+    sr1080x1920: Result := '1080x1920';
+  end;
+end;
+
+procedure TAiSoraVideoTool.ExecuteVideoGeneration(ResMsg, AskMsg: TAiChatMessage);
+var
+  LTaskMsg: TAiChatMessage;
+begin
+  // Sora SIEMPRE es asíncrono (tarda minutos). NO usamos ResMsg directamente
+  // porque TAiChat.Run puede liberarlo antes de que el polling termine.
+  // Creamos un mensaje propio y encolamos su liberación después de ReportDataEnd
+  // para respetar el orden FIFO de TThread.Queue.
+  LTaskMsg := TAiChatMessage.Create('', 'assistant');
+  TTask.Run(procedure
+  begin
+    try
+      InternalRunSora(LTaskMsg, TAiChatMessage(AskMsg));
+    except
+      on E: Exception do ReportError('Error en Sora Tool: ' + E.Message, E);
+    end;
+    // ReportDataEnd ya encoló DoDataEnd(LTaskMsg,...) al hilo principal.
+    // Encolamos el Free después para ejecutarse en orden FIFO.
+    TThread.Queue(nil, procedure begin LTaskMsg.Free; end);
+  end);
+end;
+
+procedure TAiSoraVideoTool.InternalRunSora(AResMsg, AAskMsg: TAiChatMessage);
+var
+  HTTP: TNetHTTPClient;
+  LFormData: TMultipartFormData;
+  LUrl, LVideoJobId, LStatus, LSizeStr, LErrorMessage: string;
+  LResponse: IHTTPResponse;
+  LHeaders: TNetHeaders;
+  LResponseObj, LPollingResponse, LErrorObj: TJSONObject;
+  LPollCount, LProgress: Integer;
+  LVideoStream: TMemoryStream;
+  LVideoFile: TAiMediaFile;
+  LMediaArr: TAiMediaFilesArray;
+begin
+  HTTP := TNetHTTPClient.Create(nil);
+  LFormData := TMultipartFormData.Create;
+  try
+    // 1. Cabeceras de autenticación
+    LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + GetApiKey)];
+
+    // 2. Construir cuerpo multipart
+    LFormData.AddField('prompt', AAskMsg.Prompt);
+    LFormData.AddField('model', GetEffectiveModelName);
+    if FSeconds > 0 then
+      LFormData.AddField('seconds', FSeconds.ToString);
+    LSizeStr := GetResolutionString;
+    if not LSizeStr.IsEmpty then
+      LFormData.AddField('size', LSizeStr);
+
+    // Soporte para Image-to-Video (si hay una imagen en el mensaje)
+    LMediaArr := AAskMsg.MediaFiles.GetMediaList([Tfc_Image], False);
+    if Length(LMediaArr) > 0 then
+    begin
+      LMediaArr[0].Content.Position := 0;
+      {$IF CompilerVersion >= 35}
+      LFormData.AddStream('input_reference', LMediaArr[0].Content, False, LMediaArr[0].Filename, LMediaArr[0].MimeType);
+      {$ELSE}
+      LFormData.AddStream('input_reference', LMediaArr[0].Content, LMediaArr[0].Filename, LMediaArr[0].MimeType);
+      {$ENDIF}
+    end;
+
+    // 3. Iniciar generación
+    LUrl := OPENAI_API_BASE_URL + 'videos';
+    ReportState(acsReasoning, 'Iniciando generación de video Sora...');
+    LResponse := HTTP.Post(LUrl, LFormData, nil, LHeaders);
+
+    if LResponse.StatusCode <> 200 then
+      raise Exception.CreateFmt('Error iniciando Sora: %d, %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+
+    LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
+    try
+      if not LResponseObj.TryGetValue<string>('id', LVideoJobId) then
+        raise Exception.Create('ID de job de video no encontrado en la respuesta de la API.');
+      LResponseObj.TryGetValue<string>('status', LStatus);
+    finally
+      LResponseObj.Free;
+    end;
+
+    // 4. Bucle de Polling
+    LPollCount := 0;
+    LProgress := 0;
+    ReportState(acsReasoning, Format('Job creado (ID: %s). Estado inicial: %s', [LVideoJobId, LStatus]));
+
+    while True do
+    begin
+      Inc(LPollCount);
+      if LPollCount > 1 then
+        Sleep(5000);
+
+      LUrl := OPENAI_API_BASE_URL + 'videos/' + LVideoJobId;
+      LResponse := HTTP.Get(LUrl, nil, LHeaders);
+      if LResponse.StatusCode <> 200 then
+        raise Exception.CreateFmt('Error en polling del job %s: %d, %s', [LVideoJobId, LResponse.StatusCode, LResponse.ContentAsString]);
+
+      LPollingResponse := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
+      try
+        LPollingResponse.TryGetValue<string>('status', LStatus);
+        LPollingResponse.TryGetValue<Integer>('progress', LProgress);
+        ReportState(acsReasoning, Format('Procesando video... [%d%%] %s', [LProgress, LStatus]));
+
+        if LStatus.Equals('completed') then
+          break
+        else if LStatus.Equals('failed') then
+        begin
+          LErrorMessage := 'La generación de video falló con estado: "failed".';
+          if LPollingResponse.TryGetValue<TJSONObject>('error', LErrorObj) then
+            LErrorMessage := 'API Error: ' + LErrorObj.GetValue<string>('message', LErrorObj.ToJSON);
+          raise Exception.Create(LErrorMessage);
+        end;
+      finally
+        LPollingResponse.Free;
+      end;
+    end;
+
+    // 5. Descargar Video Final
+    ReportState(acsWriting, 'Descargando video generado...');
+    LUrl := OPENAI_API_BASE_URL + 'videos/' + LVideoJobId + '/content';
+    LVideoStream := TMemoryStream.Create;
+    try
+      LResponse := HTTP.Get(LUrl, LVideoStream, LHeaders);
+      if LResponse.StatusCode = 200 then
+      begin
+        LVideoStream.Position := 0;
+        LVideoFile := TAiMediaFile.Create;
+        LVideoFile.CloudName := LVideoJobId;
+        LVideoFile.LoadFromStream(LVideoJobId + '.mp4', LVideoStream);
+        AResMsg.MediaFiles.Add(LVideoFile);
+        ReportDataEnd(AResMsg, 'assistant', '[Video generado exitosamente]');
+      end
+      else
+        raise Exception.CreateFmt('Error descargando video: %d, %s',
+          [LResponse.StatusCode, LResponse.ContentAsString(TEncoding.UTF8)]);
+    finally
+      LVideoStream.Free;
+    end;
+
+  finally
+    LFormData.Free;
+    HTTP.Free;
+  end;
 end;
 
 end.

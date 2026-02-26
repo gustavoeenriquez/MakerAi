@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr�quez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -34,11 +34,11 @@
 // --------- CAMBIOS --------------------
 // 04/11/2025 - Renombrado de TAIWhisper a TAiAudio y unidad a uMakerAi.OpenAI.Audio.pas.
 // 04/11/2025 - Uso de Enums para modelos, voces y formatos para mayor seguridad.
-// 04/11/2025 - Integraci�n con TAiMediaFile de uMakerAi.Core.
-// 04/11/2025 - A�adido soporte para modelos GPT-4o, diarizaci�n e 'instructions' en TTS.
-// 04/11/2025 - Implementaci�n completa de streaming para TTS y Transcripci�n con eventos.
-// 04/11/2025 - M�todos de Transcripci�n/Traducci�n devuelven un objeto TTranscriptionResult.
-// 04/11/2025 - Mantenida la l�gica de conversi�n de audio con ffmpeg.
+// 04/11/2025 - Integraci?n con TAiMediaFile de uMakerAi.Core.
+// 04/11/2025 - A?adido soporte para modelos GPT-4o, diarizaci?n e 'instructions' en TTS.
+// 04/11/2025 - Implementaci?n completa de streaming para TTS y Transcripci?n con eventos.
+// 04/11/2025 - M?todos de Transcripci?n/Traducci?n devuelven un objeto TTranscriptionResult.
+// 04/11/2025 - Mantenida la l?gica de conversi?n de audio con ffmpeg.
 
 unit uMakerAi.OpenAI.Audio;
 
@@ -123,7 +123,7 @@ type
     procedure HandleStreamEvent(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
     procedure ProcessSpeechStreamBuffer;
     procedure ProcessTranscriptionStreamBuffer;
-    // Helper para construir la petici�n de transcripci�n
+    // Helper para construir la petici?n de transcripci?n
     procedure BuildTranscriptionBody(const ABody: TMultipartFormData; const AAudioFile: TAiMediaFile; const APrompt: string = '');
 
   public
@@ -187,7 +187,7 @@ begin
 {$IFDEF MSWINDOWS}
   ShellExecute(0, nil, 'cmd.exe', PChar('/C ' + Command), nil, SW_HIDE);
 {$ELSE}
-  // Implementaci�n para otras plataformas si es necesario
+  // Implementaci?n para otras plataformas si es necesario
 {$ENDIF}
 end;
 
@@ -197,7 +197,7 @@ var
   Buffer: TBytes;
 begin
   ADestStream := nil;
-  // Aseguramos un nombre de archivo �nico para evitar conflictos
+  // Aseguramos un nombre de archivo ?nico para evitar conflictos
   ADestFilename := ChangeFileExt(TPath.GetRandomFileName + '_' + ASourceFilename, '.mp3');
   TempSourcePath := TPath.Combine(TPath.GetTempPath, ASourceFilename);
   TempDestPath := TPath.Combine(TPath.GetTempPath, ADestFilename);
@@ -337,7 +337,7 @@ var
   ModelStr: string;
   FormatStr: string;
 begin
-  // --- CORRECCI�N: Reemplazar TEnum con una sentencia 'case' ---
+  // --- CORRECCI?N: Reemplazar TEnum con una sentencia 'case' ---
   case FTranscriptionModel of
     tmWhisper1:
       ModelStr := 'whisper-1';
@@ -350,7 +350,7 @@ begin
   else
     ModelStr := 'whisper-1'; // Default seguro
   end;
-  // --- FIN DE LA CORRECCI�N ---
+  // --- FIN DE LA CORRECCI?N ---
 
   ABody.AddField('model', ModelStr);
   if APrompt <> '' then
@@ -361,7 +361,7 @@ begin
   if FTranscriptionTemperature <> 0.0 then
     ABody.AddField('temperature', Format('%f', [FTranscriptionTemperature]));
 
-  // --- CORRECCI�N: Reemplazar TEnum con una sentencia 'case' ---
+  // --- CORRECCI?N: Reemplazar TEnum con una sentencia 'case' ---
   case FTranscriptionResponseFormat of
     trfJson:
       FormatStr := 'json';
@@ -378,7 +378,7 @@ begin
   else
     FormatStr := 'json'; // Default seguro
   end;
-  // --- FIN DE LA CORRECCI�N ---
+  // --- FIN DE LA CORRECCI?N ---
 
   ABody.AddField('response_format', FormatStr);
 
@@ -413,7 +413,7 @@ begin
                 FOnAudioChunkReceived(Self, NewBytes);
               end);
         end;
-      soTranscription: // Estamos recibiendo un stream de texto SSE para Transcripci�n
+      soTranscription: // Estamos recibiendo un stream de texto SSE para Transcripci?n
         begin
           FStreamBuffer.Append(TEncoding.UTF8.GetString(NewBytes));
           ProcessTranscriptionStreamBuffer; // Llamamos al parser de texto
@@ -427,13 +427,13 @@ end;
 procedure TAiOpenAiAudio.ProcessSpeechStreamBuffer;
 // Procesa el buffer para eventos de TTS (sse)
 begin
-  // TODO: Implementar l�gica de parseo para speech.audio.delta y speech.audio.done
+  // TODO: Implementar l?gica de parseo para speech.audio.delta y speech.audio.done
 end;
 
 procedure TAiOpenAiAudio.ProcessTranscriptionStreamBuffer;
-// Procesa el buffer para eventos de Transcripci�n (sse)
+// Procesa el buffer para eventos de Transcripci?n (sse)
 begin
-  // TODO: Implementar l�gica de parseo para transcript.text.delta y transcript.text.done
+  // TODO: Implementar l?gica de parseo para transcript.text.delta y transcript.text.done
 end;
 
 function TAiOpenAiAudio.Speech(const AInput: string): TMemoryStream;
@@ -454,7 +454,7 @@ var
   ReqStream: TStringStream;
   Res: IHTTPResponse;
   ModelStr, VoiceStr, FormatStr: string;
-  sUrl: string; // Declarar sUrl aqu�
+  sUrl: string; // Declarar sUrl aqu?
 begin
   sUrl := FUrl + 'audio/speech';
   Client := TNetHTTPClient.Create(nil);
@@ -768,7 +768,7 @@ begin
     Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
     {$ENDIF}
 
-    // El modelo es fijo para traducciones seg�n la API
+    // El modelo es fijo para traducciones seg?n la API
     Body.AddField('model', 'whisper-1');
 
     if APrompt <> '' then Body.AddField('prompt', APrompt);

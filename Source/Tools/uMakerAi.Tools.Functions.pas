@@ -1,18 +1,18 @@
-Ôªø// IT License
+// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr√≠quez
+// Nombre: Gustavo EnrÌquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -186,7 +186,7 @@ type
     FParams: TStrings;
     FEnvVars: TStrings;
     FName: string;
-    // Propiedades "proxy" para facilitar la configuraci√≥n en el Inspector de Objetos
+    // Propiedades "proxy" para facilitar la configuraciÛn en el Inspector de Objetos
     function GetName: string;
     function GetTransportType: TToolTransportType;
     procedure SetName(const Value: string);
@@ -261,18 +261,18 @@ type
     procedure Loaded; override;
     function GetTools(aToolFormat: TToolFormat): String; Virtual;
     Function DoCallFunction(ToolCall: TAiToolsFunction): Boolean; Virtual;
-    // SetFunctionEnable  Retorna True si encuentra la funci√≥n y puede actualizar el estado
+    // SetFunctionEnable  Retorna True si encuentra la funciÛn y puede actualizar el estado
     Function SetFunctionEnable(FunctionName: String; Enabled: Boolean): Boolean;
     Function SetMCPClientEnable(Name: String; Enabled: Boolean): Boolean;
     function ExtractFunctionNames: TStringList;
 
-    // IMPORTANTE: el par√°metro aMCPClient debe ser creado con owner = Nil  aMCPClient:= TMCPClientCustom(NIL);
+    // IMPORTANTE: el par·metro aMCPClient debe ser creado con owner = Nil  aMCPClient:= TMCPClientCustom(NIL);
     procedure AddMCPClient(aMCPClient: TMCPClientCustom);
 
     // Sobrecarga 1: Recibe el objeto JSON ya parseado (ideal si el JSON viene de una API o stream)
     function ImportClaudeMCPConfiguration(AConfig: TJSonObject): Integer; overload;
 
-    // Sobrecarga 2: Recibe la ruta del archivo (o usa la por defecto si est√° vac√≠a)
+    // Sobrecarga 2: Recibe la ruta del archivo (o usa la por defecto si est· vacÌa)
     function ImportClaudeMCPConfiguration(const AJsonFilePath: string = ''): Integer; overload;
   Published
     Property Functions: TFunctionActionItems read FFunctions write FFunctions;
@@ -285,7 +285,7 @@ type
   End;
 
 
-  // Es necesario normalizar los formatos de llamado a las funciones seg√∫n el driver
+  // Es necesario normalizar los formatos de llamado a las funciones seg˙n el driver
   // ya que Antrhopic, Openai y Gemini tienen sutiles diferencias.
 
   // Clase interna para representar una herramienta de forma normalizada (neutral)
@@ -304,7 +304,7 @@ type
 
   TJsonToolUtils = class
   private
-    // --- M√âTODOS DE DETECCI√ìN, NORMALIZACI√ìN Y FORMATEO ---
+    // --- M…TODOS DE DETECCI”N, NORMALIZACI”N Y FORMATEO ---
     class function DetectInputFormat(AJsonTool: TJSonObject): TToolFormat;
 
     class procedure NormalizeFromMCP(AJsonTool: TJSonObject; AToolList: TList<TNormalizedTool>);
@@ -321,7 +321,7 @@ type
     class function FormatAsGeminiFunctionDeclaration(ANormalizedTool: TNormalizedTool): TJSonObject;
     // class function FormatAsCohere(ANormalizedTool: TNormalizedTool): TJSonObject;
 
-    // Versi√≥n original expl√≠cita (√∫til si la detecci√≥n falla o para casos espec√≠ficos)
+    // VersiÛn original explÌcita (˙til si la detecciÛn falla o para casos especÌficos)
     class function MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; AInputFormat: TToolFormat; ATargetJson: TJSonObject; AOutputFormat: TToolFormat): TJSonObject; overload;
 
     class procedure CleanInputSchema(ASchema: TJSonObject);
@@ -330,10 +330,10 @@ type
     class procedure EnforceStrictSchema(ASchema: TJSONValue);
   public
 
-    // Sobrecarga con detecci√≥n autom√°tica del formato de entrada
+    // Sobrecarga con detecciÛn autom·tica del formato de entrada
     class function MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; ATargetJson: TJSonObject; AOutputFormat: TToolFormat): TJSonObject; overload;
 
-    // Normaliza las herramientas de un objeto JSON fuente y las a√±ade a una lista.
+    // Normaliza las herramientas de un objeto JSON fuente y las aÒade a una lista.
     class procedure NormalizeToolsFromSource(const ASourceName: string; ASourceJson: TJSonObject; ANormalizedList: TList<TNormalizedTool>);
 
     // Formatea una lista de herramientas normalizadas al formato de salida deseado.
@@ -411,7 +411,7 @@ begin
       begin
         Action := TFunctionActionItem(FCollection.Items[I]);
         if (Action <> Self) and (Action is TFunctionActionItem) and (CompareText(Value, Action.FunctionName) = 0) then
-          raise Exception.Create('nombre de la acci√≥n duplicado');
+          raise Exception.Create('nombre de la acciÛn duplicado');
       end;
     FName := Value;
     Changed(False);
@@ -432,7 +432,7 @@ end;
 procedure TFunctionActionItem.SetFunctionDoc(const Value: TStrings);
 begin
   If Length(Value.Text) > 1024 then
-    Raise Exception.Create('Supera el l√≠mite m√°ximo de la descripci√≥n de 1024 caracteres');
+    Raise Exception.Create('Supera el lÌmite m·ximo de la descripciÛn de 1024 caracteres');
 
   FDescription.Text := Value.Text;
 end;
@@ -532,7 +532,7 @@ Var
   Fun, Params: TJSonObject;
 
 begin
-  // M√°s adelante pueden crear otro tipo de tools, por ahora solo hay funciones
+  // M·s adelante pueden crear otro tipo de tools, por ahora solo hay funciones
   Result := Nil;
 
   If (Self.Enabled) and (Self.ToolType = tt_function) then
@@ -625,7 +625,7 @@ begin
   begin
     CurItem := Items[I] as TFunctionActionItem;
 
-    If (CurItem.Default and CurItem.Enabled) then // Si hay alg√∫n item por defecto lo encuentra aqu√≠
+    If (CurItem.Default and CurItem.Enabled) then // Si hay alg˙n item por defecto lo encuentra aquÌ
       DefItem := CurItem;
 
     if (CompareText(CurItem.FunctionName, aTagName) = 0) and CurItem.Enabled then
@@ -636,7 +636,7 @@ begin
     Inc(I);
   end;
 
-  If Result = Nil then // Si no se encuentra una coincidencia se env√≠a al evento por defecto
+  If Result = Nil then // Si no se encuentra una coincidencia se envÌa al evento por defecto
     Result := DefItem;
 
 end;
@@ -678,7 +678,13 @@ begin
   Lista := TStringStream.Create('', TEncoding.UTF8);
   try
     Lista.LoadFromFile(FileName);
-    Funcs := TJSonObject.ParseJSONValue(Lista.DataString) as TJSonArray;
+    var LParsed := TJSonObject.ParseJSONValue(Lista.DataString);
+    if not (LParsed is TJSonArray) then
+    begin
+      LParsed.Free;
+      Raise Exception.Create('El archivo no contiene un array JSON v·lido');
+    end;
+    Funcs := TJSonArray(LParsed);
     try
       Self.Clear;
 
@@ -818,7 +824,7 @@ begin
       begin
         Param := TFunctionParamsItem(FCollection.Items[I]);
         if (Param <> Self) and (Param is TFunctionParamsItem) and (CompareText(Value, Param.FName) = 0) then
-          raise Exception.Create('El nombre del par√°metro est√° duplicado');
+          raise Exception.Create('El nombre del par·metro est· duplicado');
       end;
     FName := Value;
     Changed(False);
@@ -871,10 +877,11 @@ begin
       For jVal in jEnum do
       Begin
         If ParamType in [ptInteger, ptBoolean, ptFloat] then
-          Lista.Add(Value.ToString)
+          Lista.Add(jVal.Value)
         Else
-          Lista.Add('"' + Value.ToString + '"');
+          Lista.Add(jVal.Value);
       End;
+      FEnum := Lista.CommaText;
     Finally
       Lista.Free;
     End;
@@ -1083,10 +1090,10 @@ end;
   NewItem: TMCPClientItem;
   begin
   if not Assigned(aMCPClient) then
-  raise Exception.Create('Se intent√≥ a√±adir un objeto TMCPClient nulo.');
+  raise Exception.Create('Se intentÛ aÒadir un objeto TMCPClient nulo.');
 
   if aMCPClient.Name.Trim.IsEmpty then
-  raise Exception.Create('El TMCPClient debe tener una propiedad Name asignada antes de ser a√±adido.');
+  raise Exception.Create('El TMCPClient debe tener una propiedad Name asignada antes de ser aÒadido.');
 
   // 1. Verificar si ya existe un cliente con el mismo nombre para evitar duplicados.
   if Assigned(FMCPClients.GetClientByName(aMCPClient.Name)) then
@@ -1094,16 +1101,16 @@ end;
 
   aMCPClient.OnStreamMessage := FOnMCPStreamMessage;
 
-  // Y tambi√©n nos aseguramos de conectar OnLog y OnStatusUpdate
+  // Y tambiÈn nos aseguramos de conectar OnLog y OnStatusUpdate
   aMCPClient.OnLog := FOnLog;
   aMCPClient.OnStatusUpdate := FOnStatusUpdate;
 
-  // 2. Crear un nuevo item en la colecci√≥n.
+  // 2. Crear un nuevo item en la colecciÛn.
   // Este Add crea un TMCPClientItem que, a su vez, crea un TMCPClientStdIo por defecto.
   NewItem := FMCPClients.Add;
 
   // 3. Reemplazar el cliente por defecto con el que nos ha pasado el usuario.
-  // Primero, liberamos el que se cre√≥ autom√°ticamente.
+  // Primero, liberamos el que se creÛ autom·ticamente.
   FreeAndNil(NewItem.FMCPClient);
 
   // Ahora, asignamos el cliente del usuario. El NewItem se convierte en el propietario.
@@ -1113,10 +1120,10 @@ end;
   // Las propiedades como Name, Params, etc., ya funcionan como proxies,
   // pero Enabled es una propiedad directa del TMCPClientItem.
   NewItem.Enabled := aMCPClient.Enabled;
-  NewItem.Connected := False; // Siempre se a√±ade como no conectado. La conexi√≥n es una acci√≥n posterior.
+  NewItem.Connected := False; // Siempre se aÒade como no conectado. La conexiÛn es una acciÛn posterior.
 
   // Opcional: registrar el evento
-  DoLog(Format('Cliente MCP "%s" a√±adido program√°ticamente.', [aMCPClient.Name]));
+  DoLog(Format('Cliente MCP "%s" aÒadido program·ticamente.', [aMCPClient.Name]));
   end;
 }
 
@@ -1125,10 +1132,10 @@ var
   NewItem: TMCPClientItem;
 begin
   if not Assigned(aMCPClient) then
-    raise Exception.Create('Se intent√≥ a√±adir un objeto TMCPClient nulo.');
+    raise Exception.Create('Se intentÛ aÒadir un objeto TMCPClient nulo.');
 
   if aMCPClient.Name.Trim.IsEmpty then
-    raise Exception.Create('El TMCPClient debe tener una propiedad Name asignada antes de ser a√±adido.');
+    raise Exception.Create('El TMCPClient debe tener una propiedad Name asignada antes de ser aÒadido.');
 
   // 1. Verificar duplicados
   if Assigned(FMCPClients.GetClientByName(aMCPClient.Name)) then
@@ -1139,7 +1146,7 @@ begin
   aMCPClient.OnLog := FOnLog;
   aMCPClient.OnStatusUpdate := FOnStatusUpdate;
 
-  // 2. Crear nuevo item (este crea su propio FMCPClient nulo o por defecto y FParams VAC√çOS)
+  // 2. Crear nuevo item (este crea su propio FMCPClient nulo o por defecto y FParams VACÕOS)
   NewItem := FMCPClients.Add;
 
   // 3. Reemplazar cliente interno
@@ -1147,24 +1154,24 @@ begin
     FreeAndNil(NewItem.FMCPClient);
   NewItem.FMCPClient := aMCPClient;
 
-  // 4. --- [CORRECCI√ìN CR√çTICA] SINCRONIZACI√ìN INVERSA ---
-  // Debemos copiar la configuraci√≥n del cliente real HACIA el wrapper (Item)
-  // para que el wrapper tenga la "verdad" y no sobrescriba con vac√≠os despu√©s.
+  // 4. --- [CORRECCI”N CRÕTICA] SINCRONIZACI”N INVERSA ---
+  // Debemos copiar la configuraciÛn del cliente real HACIA el wrapper (Item)
+  // para que el wrapper tenga la "verdad" y no sobrescriba con vacÌos despuÈs.
 
   NewItem.FParams.Assign(aMCPClient.Params); // <--- ESTO FALTABA
   NewItem.FEnvVars.Assign(aMCPClient.EnvVars); // <--- ESTO FALTABA
   NewItem.Name := aMCPClient.Name; // Sincroniza nombre
   NewItem.Enabled := aMCPClient.Enabled; // Sincroniza enabled
 
-  // Importante: Sincronizar el TransportType en el wrapper sin disparar la recreaci√≥n del cliente
+  // Importante: Sincronizar el TransportType en el wrapper sin disparar la recreaciÛn del cliente
   // Accedemos a la variable privada o usamos un cast si es necesario,
-  // pero al usar la propiedad TransportType del Item, este verificar√° que el objeto interno
-  // ya tiene ese tipo y no lo destruir√°.
+  // pero al usar la propiedad TransportType del Item, este verificar· que el objeto interno
+  // ya tiene ese tipo y no lo destruir·.
   NewItem.TransportType := aMCPClient.TransportType;
 
   NewItem.Connected := False;
 
-  DoLog(Format('Cliente MCP "%s" a√±adido y sincronizado.', [aMCPClient.Name]));
+  DoLog(Format('Cliente MCP "%s" aÒadido y sincronizado.', [aMCPClient.Name]));
 end;
 
 constructor TAiFunctions.Create(AOwner: TComponent);
@@ -1202,7 +1209,7 @@ begin
 
     PosAt := Pos('_99_', ToolCall.Name);
 
-    if PosAt = 0 then // --- Es una funci√≥n local ---
+    if PosAt = 0 then // --- Es una funciÛn local ---
     begin
       Funcion := FFunctions.GetFunction(ToolCall.Name);
       if Assigned(Funcion) and Assigned(Funcion.OnAction) then
@@ -1224,7 +1231,14 @@ begin
 
           If (ToolCall.Arguments <> '') and (ToolCall.Arguments <> '{}') then
           Begin
-            ArgsObject := TJSonObject.ParseJSONValue(ToolCall.Arguments) as TJSonObject;
+            var LParsedArgs := TJSonObject.ParseJSONValue(ToolCall.Arguments);
+            if not (LParsedArgs is TJSonObject) then
+            begin
+              LParsedArgs.Free;
+              ArgsObject := TJSonObject.Create; // Fallback: objeto vacÌo
+            end
+            else
+              ArgsObject := TJSonObject(LParsedArgs);
             // Pasamos nuestra lista ya creada
             ResultObject := ClientItem.MCPClient.CallTool(ActualToolName, ArgsObject, AExtractedMedia);
           End
@@ -1248,7 +1262,7 @@ begin
                 For MF In AExtractedMedia do
                   ResMsg.MediaFiles.Add(MF);
 
-                // IMPORTANTE: Decimos que la lista temporal ya no es due√±a de los objetos,
+                // IMPORTANTE: Decimos que la lista temporal ya no es dueÒa de los objetos,
                 // porque ahora pertenecen a ResMsg.MediaFiles.
                 AExtractedMedia.OwnsObjects := False;
               End;
@@ -1263,7 +1277,9 @@ begin
         except
           on E: Exception do
           begin
-            FreeAndNil(ArgsObject);
+            // ArgsObject no se libera aquÌ: CallTool toma ownership del objeto.
+            // Si la excepciÛn ocurre ANTES de CallTool, ArgsObject se pierde,
+            // pero es preferible a un double-free si ocurre DESPU…S.
             FreeAndNil(ResultObject);
             Result := False;
           end;
@@ -1271,14 +1287,14 @@ begin
       end
       Else
       Begin
-        // L√≥gica si no encuentra cliente
+        // LÛgica si no encuentra cliente
       End;
     end;
 
   finally
     // Liberamos la lista temporal.
-    // Si transferimos los archivos, OwnsObjects estar√° en False y no los borrar√°.
-    // Si fall√≥ algo, OwnsObjects estar√° en True y borrar√° los temporales para no dejar fugas.
+    // Si transferimos los archivos, OwnsObjects estar· en False y no los borrar·.
+    // Si fallÛ algo, OwnsObjects estar· en True y borrar· los temporales para no dejar fugas.
     if Assigned(AExtractedMedia) then
       AExtractedMedia.Free;
   end;
@@ -1312,9 +1328,13 @@ begin
     JsonString := GetTools(TToolFormat.tfOpenAI);
 
     // Parsear el JSON como array
-    JsonArray := TJSonObject.ParseJSONValue(JsonString) as TJSonArray;
-    if JsonArray = nil then
-      raise Exception.Create('JSON inv√°lido o no es un array');
+    var LParsedVal := TJSonObject.ParseJSONValue(JsonString);
+    if not (LParsedVal is TJSonArray) then
+    begin
+      LParsedVal.Free;
+      raise Exception.Create('JSON inv·lido o no es un array');
+    end;
+    JsonArray := TJSonArray(LParsedVal);
 
     try
       // Iterar sobre cada elemento del array
@@ -1382,7 +1402,7 @@ end;
   JsonObj := TJSonObject.ParseJSONValue(JsonString) as TJSonObject;
 
   if JsonObj = nil then
-  raise Exception.Create('JSON inv√°lido');
+  raise Exception.Create('JSON inv·lido');
 
   try
   // Obtener el array "tools"
@@ -1435,10 +1455,10 @@ end;
   // 1. Obtener las funciones locales
   LocalToolsArray := FFunctions.ToJSon;
 
-  // 2. Crear el objeto JSON final que contendr√° todas las herramientas
+  // 2. Crear el objeto JSON final que contendr· todas las herramientas
   MergedToolsObj := TJSonObject.Create;
   // Agregamos las herramientas locales al nuevo array de herramientas.
-  // Usamos Clone para que MergedToolsObj sea el due√±o de los datos.
+  // Usamos Clone para que MergedToolsObj sea el dueÒo de los datos.
   MergedToolsObj.AddPair('tools', TJSonObject(LocalToolsArray.Clone));
 
   // 3. Iterar sobre los clientes MCP y fusionar sus herramientas
@@ -1456,7 +1476,7 @@ end;
   if not ClientItem.MCPClient.Initialized then
   ClientItem.MCPClient.Initialize;
 
-  // Si el cliente est√° disponible (la inicializaci√≥n fue exitosa)...
+  // Si el cliente est· disponible (la inicializaciÛn fue exitosa)...
   if ClientItem.MCPClient.Available then
   begin
   SourceJsonStr := ClientItem.MCPClient.Tools.Text;
@@ -1467,8 +1487,8 @@ end;
   begin
   SourceJson := TJSonObject(JsonValue);
   try
-  // Usar la funci√≥n de ayuda para fusionar las herramientas
-  // Asumimos el formato OpenAI como un est√°ndar com√∫n para la salida
+  // Usar la funciÛn de ayuda para fusionar las herramientas
+  // Asumimos el formato OpenAI como un est·ndar com˙n para la salida
 
   // TJsonToolUtils.MergeToolLists(ClientItem.Name, SourceJson, MergedToolsObj, TToolFormat.tfOpenAI);
   TJsonToolUtils.MergeToolLists(ClientItem.Name, SourceJson, MergedToolsObj, aToolFormat);
@@ -1521,8 +1541,7 @@ var
   I: Integer;
 begin
 
-  LAllNormalizedTools := TList<TNormalizedTool>.Create;
-  // LAllNormalizedTools.OwnsObjects := True; // ¬°Muy importante!
+  LAllNormalizedTools := TObjectList<TNormalizedTool>.Create(True);
   FinalToolsObj := nil;
   LocalToolsObj := nil;
 
@@ -1531,7 +1550,7 @@ begin
     // Convertimos el TJSonArray de funciones locales a un TJSonObject con la clave "tools"
     LocalToolsObj := TJSonObject.Create;
     LocalToolsObj.AddPair('tools', FFunctions.ToJSon);
-    TJsonToolUtils.NormalizeToolsFromSource('local', LocalToolsObj, LAllNormalizedTools); // Usamos 'local' o un nombre vac√≠o
+    TJsonToolUtils.NormalizeToolsFromSource('local', LocalToolsObj, LAllNormalizedTools); // Usamos 'local' o un nombre vacÌo
 
     // 2. NORMALIZAR FUNCIONES DE CLIENTES MCP
     if not(csDesigning in ComponentState) then
@@ -1597,7 +1616,7 @@ begin
   Result := 0;
   LFinalPath := AJsonFilePath;
 
-  // 1. Detecci√≥n de ruta por defecto m√°s robusta
+  // 1. DetecciÛn de ruta por defecto m·s robusta
   if LFinalPath.IsEmpty then
   begin
 {$IFDEF MSWINDOWS}
@@ -1606,7 +1625,7 @@ begin
     LFinalPath := TPath.Combine(GetEnvironmentVariable('APPDATA'), 'Claude\claude_desktop_config.json');
 {$ENDIF}
 {$IFDEF MACOS}
-    // En macOS la ruta est√°ndar es ~/Library/Application Support/...
+    // En macOS la ruta est·ndar es ~/Library/Application Support/...
     LFinalPath := TPath.Combine(TPath.GetHomePath, 'Library/Application Support/Claude/claude_desktop_config.json');
 {$ENDIF}
 {$IFDEF LINUX}
@@ -1614,7 +1633,7 @@ begin
 {$ENDIF}
   end;
 
-  // 2. Validaci√≥n de existencia
+  // 2. ValidaciÛn de existencia
   if not TFile.Exists(LFinalPath) then
   begin
     DoLog('ImportClaude: Archivo no encontrado en ' + LFinalPath);
@@ -1627,11 +1646,11 @@ begin
 
     if LJsonContent.Trim.IsEmpty then
     begin
-      DoLog('ImportClaude: El archivo est√° vac√≠o.');
+      DoLog('ImportClaude: El archivo est· vacÌo.');
       Exit;
     end;
 
-    // 4. Parseo y validaci√≥n del objeto JSON
+    // 4. Parseo y validaciÛn del objeto JSON
     var
     LJsonValue := TJSonObject.ParseJSONValue(LJsonContent);
 
@@ -1640,7 +1659,7 @@ begin
       LRootObj := LJsonValue as TJSonObject;
       try
         DoLog('Importando servidores MCP desde: ' + LFinalPath);
-        // LLAMADA A LA VERSI√ìN REFACTOREADA (La que maneja StdIo y SSE)
+        // LLAMADA A LA VERSI”N REFACTOREADA (La que maneja StdIo y SSE)
         Result := ImportClaudeMCPConfiguration(LRootObj);
       finally
         LRootObj.Free;
@@ -1650,7 +1669,7 @@ begin
     begin
       if Assigned(LJsonValue) then
         LJsonValue.Free;
-      DoLog('ImportClaude: El contenido no es un objeto JSON v√°lido.');
+      DoLog('ImportClaude: El contenido no es un objeto JSON v·lido.');
     end;
 
   except
@@ -1664,7 +1683,7 @@ var
   I: Integer;
 begin
   inherited;
-  // Forzamos una actualizaci√≥n final de propiedades una vez cargado todo el FMX.
+  // Forzamos una actualizaciÛn final de propiedades una vez cargado todo el FMX.
   // Esto corrige cualquier desajuste por el orden de carga.
   if Assigned(FMCPClients) then
   begin
@@ -1678,7 +1697,7 @@ begin
 end;
 
 // =============================================================================
-// SOBRECARGA 1: L√≥gica N√∫cleo (Recibe TJSONObject)
+// SOBRECARGA 1: LÛgica N˙cleo (Recibe TJSONObject)
 // =============================================================================
 { function TAiFunctions.ImportClaudeMCPConfiguration(AConfig: TJSonObject): Integer;
   var
@@ -1699,7 +1718,7 @@ end;
   end;
 
   try
-  // Buscar la clave ra√≠z "mcpServers"
+  // Buscar la clave raÌz "mcpServers"
   if AConfig.TryGetValue<TJSonObject>('mcpServers', McpServers) then
   begin
   for ServerPair in McpServers do
@@ -1754,10 +1773,10 @@ end;
   end;
   end;
 
-  // Directorio ra√≠z por defecto (opcional)
+  // Directorio raÌz por defecto (opcional)
   NewClient.Params.Values['RootDir'] := TPath.GetHomePath;
 
-  // 3. Agregar a la colecci√≥n central
+  // 3. Agregar a la colecciÛn central
   try
   AddMCPClient(NewClient);
   Inc(Result);
@@ -1805,10 +1824,10 @@ begin
   if not Assigned(AConfig) then
     Exit;
 
-  // Intentamos encontrar el nodo ra√≠z
+  // Intentamos encontrar el nodo raÌz
   if not AConfig.TryGetValue<TJSonObject>('mcpServers', LMcpServers) then
   begin
-    DoLog('ImportClaude: No se encontr√≥ el nodo "mcpServers".');
+    DoLog('ImportClaude: No se encontrÛ el nodo "mcpServers".');
     Exit;
   end;
 
@@ -1822,7 +1841,7 @@ begin
 
     LServerObj := LServerPair.JsonValue as TJSonObject;
 
-    // 2. Crear el Item en la colecci√≥n (el Wrapper)
+    // 2. Crear el Item en la colecciÛn (el Wrapper)
     LClientItem := FMCPClients.Add;
     LClientItem.Name := LServerName;
 
@@ -1855,11 +1874,11 @@ begin
     // --- CASO B: Servidor Remoto (URL / SSE) ---
     else if LServerObj.TryGetValue<string>('url', LUrl) then
     begin
-      LClientItem.TransportType := tpSSE; // Est√°ndar para MCP remoto
+      LClientItem.TransportType := tpSSE; // Est·ndar para MCP remoto
       LClientItem.Params.Values['URL'] := LUrl;
     end;
 
-    // --- VARIABLES DE ENTORNO (Com√∫n a ambos) ---
+    // --- VARIABLES DE ENTORNO (Com˙n a ambos) ---
     if LServerObj.TryGetValue<TJSonObject>('env', LEnvObj) then
     begin
       for LEnvPair in LEnvObj do
@@ -1868,7 +1887,7 @@ begin
       end;
     end;
 
-    // 3. FINALIZACI√ìN Y SINCRONIZACI√ìN (Crucial en tu librer√≠a)
+    // 3. FINALIZACI”N Y SINCRONIZACI”N (Crucial en tu librerÌa)
     LClientItem.Enabled := True;
 
     // Esto transfiere Params y EnvVars del Item al FMCPClient interno
@@ -1933,7 +1952,7 @@ begin
   FName := 'MCPClient';
   // FMCPClient.Name := 'NewMCPClient';
 
-  // CORRECCI√ìN: Crear siempre el cliente por defecto (StdIo).
+  // CORRECCI”N: Crear siempre el cliente por defecto (StdIo).
   // Esto asegura que si SetParams se llama antes que SetTransportType,
   // haya un objeto donde guardar los datos.
   FMCPClient := TMCPClientStdIo.Create(nil);
@@ -2026,7 +2045,7 @@ end;
 
 procedure TMCPClientItem.SetConfiguration(const Value: string);
 begin
-  // No se necesita hacer nada aqu√≠. solo debe existir.
+  // No se necesita hacer nada aquÌ. solo debe existir.
 end;
 
 procedure TMCPClientItem.SetConnected(const Value: Boolean);
@@ -2041,7 +2060,7 @@ begin
   if FConnected = Value then
     Exit;
 
-  // --- L√ìGICA DE VALIDACI√ìN EN TIEMPO DE DISE√ëO ---
+  // --- L”GICA DE VALIDACI”N EN TIEMPO DE DISE—O ---
 
   // 1. Solo validar cuando se activa (se pone en True)
   if not Value then
@@ -2058,11 +2077,12 @@ begin
 
       if Not Assigned(ClientTools) then
       begin
-        // Si ListTools devuelve nil, es un error de conexi√≥n o protocolo.
-        Raise Exception.Create(Format('‚ùå Fallo de conexi√≥n para "%s".'#13#10#13#10'Revise la configuraci√≥n (Command, URL, etc.) y los logs del servidor.', [Self.Name]));
+        // Si ListTools devuelve nil, es un error de conexiÛn o protocolo.
+        Raise Exception.Create(Format('[ERR] Fallo de conexiÛn para "%s".'#13#10#13#10'Revise la configuraciÛn (Command, URL, etc.) y los logs del servidor.', [Self.Name]));
       end
       Else
       Begin
+        ClientTools.Free;
         FConnected := Value;
         Changed(False);
       End;
@@ -2070,8 +2090,8 @@ begin
     except
       on E: Exception do
       begin
-        // Capturamos cualquier otra excepci√≥n
-        Raise Exception.Create(Format('‚ùå Ocurri√≥ una excepci√≥n al validar "%s".'#13#10#13#10'%s: %s', [Self.Name, E.ClassName, E.Message]));
+        // Capturamos cualquier otra excepciÛn
+        Raise Exception.Create(Format('[ERR] OcurriÛ una excepciÛn al validar "%s".'#13#10#13#10'%s: %s', [Self.Name, E.ClassName, E.Message]));
       end;
     end;
   finally
@@ -2116,7 +2136,7 @@ begin
   begin
     FName := Value;
 
-    // Sincronizamos con el m√©todo est√°ndar de colecciones para que se vea en el TreeView
+    // Sincronizamos con el mÈtodo est·ndar de colecciones para que se vea en el TreeView
     inherited SetDisplayName(Value);
 
     // Si el cliente interno existe, le pasamos el nombre
@@ -2153,13 +2173,13 @@ end;
 
 procedure TMCPClientItem.SetTransportType(const Value: TToolTransportType);
 begin
-  // Verificamos si realmente cambi√≥ o si el objeto no existe
+  // Verificamos si realmente cambiÛ o si el objeto no existe
   if not Assigned(FMCPClient) or (FMCPClient.TransportType <> Value) then
   begin
     // Liberamos el cliente anterior
     FreeAndNil(FMCPClient);
 
-    // Creamos el nuevo seg√∫n el tipo seleccionado
+    // Creamos el nuevo seg˙n el tipo seleccionado
     case Value of
       tpStdIo:
         FMCPClient := TMCPClientStdIo.Create(nil);
@@ -2174,12 +2194,12 @@ begin
     end;
 
     // =========================================================================
-    // CORRECCI√ìN: Asignar el tipo expl√≠citamente AL NUEVO OBJETO
+    // CORRECCI”N: Asignar el tipo explÌcitamente AL NUEVO OBJETO
     // antes de sincronizar el resto de propiedades.
     // =========================================================================
     FMCPClient.TransportType := Value;
 
-    // Ahora s√≠, transferimos nombre, params, envVars, etc.
+    // Ahora sÌ, transferimos nombre, params, envVars, etc.
     UpdateClientProperties;
 
     Changed(False);
@@ -2201,7 +2221,7 @@ begin
   // 3. Transferir el estado de 'Enabled'
   FMCPClient.Enabled := Self.FEnabled;
 
-  // 4. Transferir los par√°metros (copiar el contenido de nuestra lista local)
+  // 4. Transferir los par·metros (copiar el contenido de nuestra lista local)
   FMCPClient.Params.Assign(Self.FParams);
 
   // 5. Transferir las variables de entorno
@@ -2303,11 +2323,11 @@ end;
 
 class procedure TJsonToolUtils.CleanInputSchema(ASchema: TJSonObject);
 begin
-  // Llama a la funci√≥n de trabajo recursiva para limpiar el √°rbol completo.
+  // Llama a la funciÛn de trabajo recursiva para limpiar el ·rbol completo.
   CleanJsonTree(ASchema);
 end;
 
-// El verdadero motor: una funci√≥n recursiva que recorre CUALQUIER √°rbol JSON.
+// El verdadero motor: una funciÛn recursiva que recorre CUALQUIER ·rbol JSON.
 class procedure TJsonToolUtils.CleanJsonTree(AValue: TJSONValue);
 var
   LObject: TJSonObject;
@@ -2322,11 +2342,11 @@ begin
   if AValue is TJSonObject then
   begin
     LObject := AValue as TJSonObject;
-    // 1. Acci√≥n: Limpiar las claves no deseadas en el nivel actual.
+    // 1. AcciÛn: Limpiar las claves no deseadas en el nivel actual.
     LObject.RemovePair('additionalProperties');
     LObject.RemovePair('$schema');
 
-    // 2. Traves√≠a: Llamarse a s√≠ misma para cada valor hijo del objeto.
+    // 2. TravesÌa: Llamarse a sÌ misma para cada valor hijo del objeto.
     // Es importante iterar sobre una copia de los pares si se va a modificar,
     // pero como RemovePair maneja esto internamente, un bucle for-in es seguro.
     for LPair in LObject do
@@ -2338,19 +2358,19 @@ begin
   else if AValue is TJSonArray then
   begin
     LArray := AValue as TJSonArray;
-    // Traves√≠a: Llamarse a s√≠ misma para cada elemento del array.
+    // TravesÌa: Llamarse a sÌ misma para cada elemento del array.
     for LItem in LArray do
     begin
       CleanJsonTree(LItem);
     end;
   end;
-  // Caso 3: Es un valor simple (string, n√∫mero, etc.). No se hace nada.
+  // Caso 3: Es un valor simple (string, n˙mero, etc.). No se hace nada.
 end;
 
 { TJsonToolUtils }
 
 // ==============================================================================
-// NUEVA FUNCI√ìN DE DETECCI√ìN
+// NUEVA FUNCI”N DE DETECCI”N
 // ==============================================================================
 class function TJsonToolUtils.DetectInputFormat(AJsonTool: TJSonObject): TToolFormat;
 var
@@ -2367,16 +2387,16 @@ begin
   // OpenAI Family Detection
   if AJsonTool.TryGetValue('type', LTypeValue) and (LTypeValue is TJSONString) and (LTypeValue.Value = 'function') then
   begin
-    // Diferenciaci√≥n clave:
+    // DiferenciaciÛn clave:
     // tfOpenAI (Legacy/Chat): Tiene una clave "function" que contiene los detalles.
-    // tfOpenAIResponses (New): Tiene "name" directamente en la ra√≠z y NO tiene clave "function".
+    // tfOpenAIResponses (New): Tiene "name" directamente en la raÌz y NO tiene clave "function".
 
     if AJsonTool.FindValue('function') <> nil then
       Exit(tfOpenAI)
     else if AJsonTool.FindValue('name') <> nil then
       Exit(tfOpenAIResponses);
 
-    // Por defecto si es ambiguo, asumimos el nuevo est√°ndar si tiene nombre
+    // Por defecto si es ambiguo, asumimos el nuevo est·ndar si tiene nombre
     Exit(tfOpenAIResponses);
   end;
 
@@ -2402,7 +2422,7 @@ begin
 
   JObj := TJSonObject(ASchema);
 
-  // Verificamos si es un objeto (tiene propiedades o es type object expl√≠cito)
+  // Verificamos si es un objeto (tiene propiedades o es type object explÌcito)
   if (JObj.TryGetValue<TJSonObject>('properties', JProps)) or (JObj.GetValue<string>('type') = 'object') then
   begin
     // REGLA 1: additionalProperties: false es OBLIGATORIO
@@ -2446,7 +2466,7 @@ begin
 end;
 
 // ==============================================================================
-// M√âTODOS DE NORMALIZACI√ìN (sin cambios)
+// M…TODOS DE NORMALIZACI”N (sin cambios)
 // ==============================================================================
 class procedure TJsonToolUtils.NormalizeFromMCP(AJsonTool: TJSonObject; AToolList: TList<TNormalizedTool>);
 var
@@ -2464,7 +2484,7 @@ begin
     CleanInputSchema(LInputSchema);
   End
   else
-    LInputSchema := TJSonObject.Create; // Crear schema vac√≠o si no existe
+    LInputSchema := TJSonObject.Create; // Crear schema vacÌo si no existe
 
   AToolList.Add(TNormalizedTool.Create(LName, LDescription, LInputSchema));
 end;
@@ -2510,16 +2530,16 @@ end;
 }
 
 // ==============================================================================
-// FUNCI√ìN DE NORMALIZACI√ìN DE OPENAI CORREGIDA
+// FUNCI”N DE NORMALIZACI”N DE OPENAI CORREGIDA
 // ==============================================================================
 class procedure TJsonToolUtils.NormalizeFromOpenAI(AJsonTool: TJSonObject; AToolList: TList<TNormalizedTool>);
 var
   LName, LDescription: string;
   LInputSchema: TJSonObject;
   LSchemaValue: TJSONValue;
-  LFunctionObject, LDataSource: TJSonObject; // LDataSource apuntar√° al objeto correcto
+  LFunctionObject, LDataSource: TJSonObject; // LDataSource apuntar· al objeto correcto
 begin
-  // Primero, determinamos de d√≥nde leer los datos.
+  // Primero, determinamos de dÛnde leer los datos.
   // Intentamos encontrar el objeto anidado 'function'.
   if AJsonTool.TryGetValue<TJSonObject>('function', LFunctionObject) then
   begin
@@ -2534,7 +2554,7 @@ begin
 
   // Ahora extraemos los datos usando LDataSource, que apunta al lugar correcto.
   if not LDataSource.TryGetValue<string>('name', LName) then
-    Exit; // Si no hay nombre, no es una herramienta v√°lida.
+    Exit; // Si no hay nombre, no es una herramienta v·lida.
 
   LDataSource.TryGetValue<string>('description', LDescription);
 
@@ -2544,7 +2564,7 @@ begin
     CleanInputSchema(LInputSchema);
   End
   else
-    LInputSchema := TJSonObject.Create; // Crear schema vac√≠o si no hay par√°metros
+    LInputSchema := TJSonObject.Create; // Crear schema vacÌo si no hay par·metros
 
   AToolList.Add(TNormalizedTool.Create(LName, LDescription, LInputSchema));
 end;
@@ -2573,7 +2593,7 @@ begin
       Continue;
     LSourceTool := LSourceToolsArray.Items[I] as TJSonObject;
 
-    // Guardar el recuento actual para saber qu√© herramientas se a√±adieron
+    // Guardar el recuento actual para saber quÈ herramientas se aÒadieron
     var
     LInitialCount := ANormalizedList.Count;
 
@@ -2590,7 +2610,7 @@ begin
         NormalizeFromGemini(LSourceTool, ANormalizedList);
     end;
 
-    // Aplicar el prefijo de fuente a las herramientas reci√©n a√±adidas
+    // Aplicar el prefijo de fuente a las herramientas reciÈn aÒadidas
     if not ASourceName.IsEmpty then
     begin
       for var J := LInitialCount to ANormalizedList.Count - 1 do
@@ -2634,7 +2654,7 @@ begin
 end;
 
 // ==============================================================================
-// M√âTODOS DE FORMATEO (sin cambios)
+// M…TODOS DE FORMATEO (sin cambios)
 // ==============================================================================
 class function TJsonToolUtils.FormatAsMCP(ANormalizedTool: TNormalizedTool): TJSonObject;
 begin
@@ -2719,25 +2739,25 @@ end;
 }
 
 // ==============================================================================
-// FUNCI√ìN DE FORMATEO PARA OPENAI (VERSI√ìN CORREGIDA Y DEFINITIVA)
+// FUNCI”N DE FORMATEO PARA OPENAI (VERSI”N CORREGIDA Y DEFINITIVA)
 // ==============================================================================
 class function TJsonToolUtils.FormatAsOpenAI(ANormalizedTool: TNormalizedTool): TJSonObject;
 var
   LFunctionObject: TJSonObject;
 begin
-  // 1. Crear el objeto interno "function" que contendr√° los detalles.
+  // 1. Crear el objeto interno "function" que contendr· los detalles.
   LFunctionObject := TJSonObject.Create;
   LFunctionObject.AddPair('name', ANormalizedTool.Name);
   LFunctionObject.AddPair('description', ANormalizedTool.Description);
 
-  // 2. Solo a√±adir 'parameters' si el schema tiene contenido.
+  // 2. Solo aÒadir 'parameters' si el schema tiene contenido.
   if Assigned(ANormalizedTool.InputSchema) and (ANormalizedTool.InputSchema.Count > 0) then
     LFunctionObject.AddPair('parameters', TJSonObject(ANormalizedTool.InputSchema.Clone));
 
   // 3. Crear el objeto externo principal.
   Result := TJSonObject.Create;
   Result.AddPair('type', 'function');
-  Result.AddPair('function', LFunctionObject); // <-- A√±adir el objeto interno
+  Result.AddPair('function', LFunctionObject); // <-- AÒadir el objeto interno
 end;
 
 class function TJsonToolUtils.FormatAsOpenAIResponses(ANormalizedTool: TNormalizedTool): TJSonObject;
@@ -2760,7 +2780,7 @@ begin
   if not ANormalizedTool.Description.IsEmpty then
     Result.AddPair('description', ANormalizedTool.Description);
 
-  // Solo a√±adir par√°metros si existen
+  // Solo aÒadir par·metros si existen
   if Assigned(ANormalizedTool.InputSchema) and (ANormalizedTool.InputSchema.Count > 0) then
   begin
     // Clonamos el esquema original para no modificar la referencia base
@@ -2773,7 +2793,7 @@ begin
   end
   else
   begin
-    // OpenAI Strict requiere un esquema de par√°metros incluso si es vac√≠o
+    // OpenAI Strict requiere un esquema de par·metros incluso si es vacÌo
     // Debe ser: "parameters": {"type": "object", "properties": {}, "additionalProperties": false, "required": []}
     LParams := TJSonObject.Create;
     LParams.AddPair('type', 'object');
@@ -2802,7 +2822,7 @@ begin
 
   if AOutputFormat = tfGemini then
   begin
-    // --- L√ìGICA ESPECIAL PARA GEMINI: Agrupar todo en un solo bloque ---
+    // --- L”GICA ESPECIAL PARA GEMINI: Agrupar todo en un solo bloque ---
     var
     LDeclarationsArray := TJSonArray.Create;
     for LNormTool in ANormalizedList do
@@ -2817,7 +2837,7 @@ begin
   end
   else
   begin
-    // --- L√ìGICA EST√ÅNDAR PARA OTROS FORMATOS: Una herramienta por objeto ---
+    // --- L”GICA EST¡NDAR PARA OTROS FORMATOS: Una herramienta por objeto ---
     for LNormTool in ANormalizedList do
     begin
       LFormattedTool := nil;
@@ -2861,21 +2881,21 @@ end;
 
 class function TJsonToolUtils.FormatAsGeminiFunctionDeclaration(ANormalizedTool: TNormalizedTool): TJSonObject;
 begin
-  // Crea solo el objeto de la declaraci√≥n de la funci√≥n, no la envoltura.
+  // Crea solo el objeto de la declaraciÛn de la funciÛn, no la envoltura.
   Result := TJSonObject.Create;
   Result.AddPair('name', ANormalizedTool.Name);
   Result.AddPair('description', ANormalizedTool.Description);
 
-  // Solo a√±adir 'parameters' si el schema tiene contenido.
+  // Solo aÒadir 'parameters' si el schema tiene contenido.
   if Assigned(ANormalizedTool.InputSchema) and (ANormalizedTool.InputSchema.Count > 0) then
     Result.AddPair('parameters', TJSonObject(ANormalizedTool.InputSchema.Clone));
 end;
 
 // ==============================================================================
-// FUNCIONES P√öBLICAS
+// FUNCIONES P⁄BLICAS
 // ==============================================================================
 
-// SOBRECARGA con detecci√≥n autom√°tica
+// SOBRECARGA con detecciÛn autom·tica
 class function TJsonToolUtils.MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; ATargetJson: TJSonObject; AOutputFormat: TToolFormat): TJSonObject;
 var
   LSourceToolsArray: TJSonArray;
@@ -2890,22 +2910,22 @@ begin
     LDetectedFormat := DetectInputFormat(LFirstTool);
   end;
 
-  // 2. Si la detecci√≥n falla, no podemos continuar.
+  // 2. Si la detecciÛn falla, no podemos continuar.
   if LDetectedFormat = tfUnknown then
   begin
-    // Podr√≠amos lanzar una excepci√≥n o simplemente devolver el target sin cambios.
-    // Devolver el target es m√°s seguro.
+    // PodrÌamos lanzar una excepciÛn o simplemente devolver el target sin cambios.
+    // Devolver el target es m·s seguro.
     // raise EJSON.CreateFmt('Could not detect tool format for source "%s".', [ASourceName]);
     Result := ATargetJson;
     Exit;
   end;
 
-  // 3. Llamar a la funci√≥n principal con el formato detectado.
+  // 3. Llamar a la funciÛn principal con el formato detectado.
   Result := MergeToolLists(ASourceName, ASourceJson, LDetectedFormat, ATargetJson, AOutputFormat);
 end;
 
 
-// VERSI√ìN EXPL√çCITA (l√≥gica principal corregida y final)
+// VERSI”N EXPLÕCITA (lÛgica principal corregida y final)
 
 class function TJsonToolUtils.MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; AInputFormat: TToolFormat; ATargetJson: TJSonObject; AOutputFormat: TToolFormat): TJSonObject;
 var
@@ -2932,7 +2952,7 @@ begin
     raise Exception.Create('Target JSON object does not contain a "tools" array.');
 
   // 2. Normalizar las herramientas de la fuente a una lista interna
-  LNormalizedTools := TList<TNormalizedTool>.Create;
+  LNormalizedTools := TObjectList<TNormalizedTool>.Create(True);
   try
     for I := 0 to LSourceToolsArray.Count - 1 do
     begin
@@ -2946,7 +2966,7 @@ begin
         tfClaude:
           NormalizeFromAnthropic(LSourceTool, LNormalizedTools);
 
-        // Soportar ambos formatos de OpenAI en la entrada (la funci√≥n NormalizeFromOpenAI detecta la estructura interna)
+        // Soportar ambos formatos de OpenAI en la entrada (la funciÛn NormalizeFromOpenAI detecta la estructura interna)
         tfOpenAI, tfOpenAIResponses:
           NormalizeFromOpenAI(LSourceTool, LNormalizedTools);
 
@@ -2957,7 +2977,7 @@ begin
       end;
     end;
 
-    // Si no se normaliz√≥ ninguna herramienta, no hay nada m√°s que hacer.
+    // Si no se normalizÛ ninguna herramienta, no hay nada m·s que hacer.
     if LNormalizedTools.Count = 0 then
     begin
       Result := ATargetJson;
@@ -2971,29 +2991,29 @@ begin
         LNormTool.FName := Format('%s_99_%s', [ASourceName, LNormTool.Name]);
     end;
 
-    // 4. Formatear y a√±adir al destino
+    // 4. Formatear y aÒadir al destino
     if AOutputFormat = tfGemini then
     begin
-      // --- L√ìGICA ESPECIAL PARA GEMINI: Agrupar todo en un solo bloque ---
+      // --- L”GICA ESPECIAL PARA GEMINI: Agrupar todo en un solo bloque ---
       var
       LDeclarationsArray := TJSonArray.Create;
       for LNormTool in LNormalizedTools do
       begin
-        // Usar la funci√≥n de ayuda que formatea una declaraci√≥n individual
+        // Usar la funciÛn de ayuda que formatea una declaraciÛn individual
         LDeclarationsArray.Add(FormatAsGeminiFunctionDeclaration(LNormTool));
       end;
 
-      // Crear el √∫nico objeto contenedor 'tool'
+      // Crear el ˙nico objeto contenedor 'tool'
       var
       LGeminiToolWrapper := TJSonObject.Create;
       LGeminiToolWrapper.AddPair('functionDeclarations', LDeclarationsArray);
 
-      // A√±adir este √∫nico objeto al array final de herramientas
+      // AÒadir este ˙nico objeto al array final de herramientas
       LFinalToolsArray.Add(LGeminiToolWrapper);
     end
     else
     begin
-      // --- L√ìGICA EST√ÅNDAR PARA OTROS FORMATOS: Una herramienta por objeto ---
+      // --- L”GICA EST¡NDAR PARA OTROS FORMATOS: Una herramienta por objeto ---
       for LNormTool in LNormalizedTools do
       begin
         LFormattedTool := nil;

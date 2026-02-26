@@ -38,10 +38,12 @@ requires
   MakerAI;
 
 contains
-  uAiEditors.ChatConnectionEditor in '..\Design\uAiEditors.ChatConnectionEditor.pas',
+  uAiEditors.EmbeddingConnectionEditor in '..\Design\uAiEditors.EmbeddingConnectionEditor.pas',
   uMakerAi.Dsg.AboutDialog in '..\Design\uMakerAi.Dsg.AboutDialog.pas' {AboutDialog},
   uMakerAi.VersionPropertyEditor in '..\Design\uMakerAi.VersionPropertyEditor.pas',
   uMCP.ClientEditorProperties in '..\Design\uMCP.ClientEditorProperties.pas',
-  uMCPClientEditor in '..\Design\uMCPClientEditor.pas' {FMCPClientEditor};
+  uMCPClientEditor in '..\Design\uMCPClientEditor.pas' {FMCPClientEditor},
+  uAiEditors.ChatConnectionEditor in '..\Design\uAiEditors.ChatConnectionEditor.pas',
+  uAiEditors.RequiresUnits in '..\Design\uAiEditors.RequiresUnits.pas';
 
 end.

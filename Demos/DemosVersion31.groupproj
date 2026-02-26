@@ -42,9 +42,6 @@
         <Projects Include="025-RAGGraph\RagGraphDemo.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="..\..\..\..\Proyectos\Avance\RagDemo\RagDemoAvance.dproj">
-            <Dependencies/>
-        </Projects>
         <Projects Include="041-GeminiVeo\VeoDemo.dproj">
             <Dependencies/>
         </Projects>
@@ -67,6 +64,15 @@
             <Dependencies/>
         </Projects>
         <Projects Include="090-Varios\Dalle_Generate\Dalle_Generar.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\..\..\..\Proyectos\Avance\RagDemo\RagDemoAvance.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="027-DocumentManager\DocumentManagerDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="012-ChatAllFunctions\ChatWebList.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -194,15 +200,6 @@
     <Target Name="RagGraphDemo:Make">
         <MSBuild Projects="025-RAGGraph\RagGraphDemo.dproj" Targets="Make"/>
     </Target>
-    <Target Name="RagDemoAvance">
-        <MSBuild Projects="..\..\..\..\Proyectos\Avance\RagDemo\RagDemoAvance.dproj"/>
-    </Target>
-    <Target Name="RagDemoAvance:Clean">
-        <MSBuild Projects="..\..\..\..\Proyectos\Avance\RagDemo\RagDemoAvance.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="RagDemoAvance:Make">
-        <MSBuild Projects="..\..\..\..\Proyectos\Avance\RagDemo\RagDemoAvance.dproj" Targets="Make"/>
-    </Target>
     <Target Name="VeoDemo">
         <MSBuild Projects="041-GeminiVeo\VeoDemo.dproj"/>
     </Target>
@@ -275,14 +272,41 @@
     <Target Name="Dalle_Generar:Make">
         <MSBuild Projects="090-Varios\Dalle_Generate\Dalle_Generar.dproj" Targets="Make"/>
     </Target>
+    <Target Name="RagDemoAvance">
+        <MSBuild Projects="..\..\..\..\Proyectos\Avance\RagDemo\RagDemoAvance.dproj"/>
+    </Target>
+    <Target Name="RagDemoAvance:Clean">
+        <MSBuild Projects="..\..\..\..\Proyectos\Avance\RagDemo\RagDemoAvance.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="RagDemoAvance:Make">
+        <MSBuild Projects="..\..\..\..\Proyectos\Avance\RagDemo\RagDemoAvance.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="DocumentManagerDemo">
+        <MSBuild Projects="027-DocumentManager\DocumentManagerDemo.dproj"/>
+    </Target>
+    <Target Name="DocumentManagerDemo:Clean">
+        <MSBuild Projects="027-DocumentManager\DocumentManagerDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DocumentManagerDemo:Make">
+        <MSBuild Projects="027-DocumentManager\DocumentManagerDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ChatWebList">
+        <MSBuild Projects="012-ChatAllFunctions\ChatWebList.dproj"/>
+    </Target>
+    <Target Name="ChatWebList:Clean">
+        <MSBuild Projects="012-ChatAllFunctions\ChatWebList.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ChatWebList:Make">
+        <MSBuild Projects="012-ChatAllFunctions\ChatWebList.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="MinimalChat;ChatFull;RagUpdateDb;RagVectorQL;Sqlite_RAG;AiMCPServerDemo;McpFileServerStIO;McpFileServerHttp;MCPServerAiFunctions;McpFileServerSSE;MCPDataSnapServer;BasicRAGGraph;RagGraphDemo;RagDemoAvance;VeoDemo;ListAllModels;CompareEmbeddings;ClaudeChatTest;AiAgentDemo;DemoRagDataBase;VoiceMonitorAndWhisperDemo;Dalle_Generar"/>
+        <CallTarget Targets="MinimalChat;ChatFull;RagUpdateDb;RagVectorQL;Sqlite_RAG;AiMCPServerDemo;McpFileServerStIO;McpFileServerHttp;MCPServerAiFunctions;McpFileServerSSE;MCPDataSnapServer;BasicRAGGraph;RagGraphDemo;VeoDemo;ListAllModels;CompareEmbeddings;ClaudeChatTest;AiAgentDemo;DemoRagDataBase;VoiceMonitorAndWhisperDemo;Dalle_Generar;RagDemoAvance;DocumentManagerDemo;ChatWebList"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MinimalChat:Clean;ChatFull:Clean;RagUpdateDb:Clean;RagVectorQL:Clean;Sqlite_RAG:Clean;AiMCPServerDemo:Clean;McpFileServerStIO:Clean;McpFileServerHttp:Clean;MCPServerAiFunctions:Clean;McpFileServerSSE:Clean;MCPDataSnapServer:Clean;BasicRAGGraph:Clean;RagGraphDemo:Clean;RagDemoAvance:Clean;VeoDemo:Clean;ListAllModels:Clean;CompareEmbeddings:Clean;ClaudeChatTest:Clean;AiAgentDemo:Clean;DemoRagDataBase:Clean;VoiceMonitorAndWhisperDemo:Clean;Dalle_Generar:Clean"/>
+        <CallTarget Targets="MinimalChat:Clean;ChatFull:Clean;RagUpdateDb:Clean;RagVectorQL:Clean;Sqlite_RAG:Clean;AiMCPServerDemo:Clean;McpFileServerStIO:Clean;McpFileServerHttp:Clean;MCPServerAiFunctions:Clean;McpFileServerSSE:Clean;MCPDataSnapServer:Clean;BasicRAGGraph:Clean;RagGraphDemo:Clean;VeoDemo:Clean;ListAllModels:Clean;CompareEmbeddings:Clean;ClaudeChatTest:Clean;AiAgentDemo:Clean;DemoRagDataBase:Clean;VoiceMonitorAndWhisperDemo:Clean;Dalle_Generar:Clean;RagDemoAvance:Clean;DocumentManagerDemo:Clean;ChatWebList:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MinimalChat:Make;ChatFull:Make;RagUpdateDb:Make;RagVectorQL:Make;Sqlite_RAG:Make;AiMCPServerDemo:Make;McpFileServerStIO:Make;McpFileServerHttp:Make;MCPServerAiFunctions:Make;McpFileServerSSE:Make;MCPDataSnapServer:Make;BasicRAGGraph:Make;RagGraphDemo:Make;RagDemoAvance:Make;VeoDemo:Make;ListAllModels:Make;CompareEmbeddings:Make;ClaudeChatTest:Make;AiAgentDemo:Make;DemoRagDataBase:Make;VoiceMonitorAndWhisperDemo:Make;Dalle_Generar:Make"/>
+        <CallTarget Targets="MinimalChat:Make;ChatFull:Make;RagUpdateDb:Make;RagVectorQL:Make;Sqlite_RAG:Make;AiMCPServerDemo:Make;McpFileServerStIO:Make;McpFileServerHttp:Make;MCPServerAiFunctions:Make;McpFileServerSSE:Make;MCPDataSnapServer:Make;BasicRAGGraph:Make;RagGraphDemo:Make;VeoDemo:Make;ListAllModels:Make;CompareEmbeddings:Make;ClaudeChatTest:Make;AiAgentDemo:Make;DemoRagDataBase:Make;VoiceMonitorAndWhisperDemo:Make;Dalle_Generar:Make;RagDemoAvance:Make;DocumentManagerDemo:Make;ChatWebList:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

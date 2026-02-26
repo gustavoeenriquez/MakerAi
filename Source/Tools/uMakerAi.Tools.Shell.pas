@@ -1,18 +1,18 @@
-// IT License
+// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -52,7 +52,7 @@ type
   TAiShellCommandEvent = procedure(Sender: TObject; const Command: string; const CallId: string; var Result: TShellExecutionResult; var Handled: Boolean) of object;
   TAiShellLogEvent = procedure(Sender: TObject; const Command: string; const StdOut, StdErr: string; ExitCode: Integer) of object;
 
-  // Modos soportados (para generar la definición del Tool correcta)
+  // Modos soportados (para generar la definici?n del Tool correcta)
 
   TAiShell = class(TComponent)
   private
@@ -71,21 +71,22 @@ type
     procedure StartSession;
     procedure StopSession;
 
-    // Ejecución de bajo nivel (Atómica)
+    // Ejecuci?n de bajo nivel (At?mica)
     function InternalExecuteCommand(const ACommand: string; TimeOutMs: Cardinal): TShellExecutionResult;
 
-    // Métodos específicos por proveedor
+    // M?todos espec?ficos por proveedor
     function ExecuteClaudeAction(const CallId: string; JArgs: TJSONObject): string;
     function ExecuteOpenAIAction(const CallId: string; JArgs: TJSONObject): string;
     function ExecuteGenericAction(const CallId: string; JArgs: TJSONObject): string;
     procedure SetShellPath(const Value: string);
+    procedure SetEnvironment(const Value: TStringList);
 
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
-    // --- PUNTO DE ENTRADA ÚNICO ---
-    // Detecta automáticamente el formato del JSON y delega.
+    // --- PUNTO DE ENTRADA ?NICO ---
+    // Detecta autom?ticamente el formato del JSON y delega.
     function Execute(const CallId: string; const JsonArguments: string): string; overload;
     function Execute(const CallId: string; JArgs: TJSONObject): string; overload;
     function ExecuteManual(const Command: string): string;
@@ -99,6 +100,7 @@ type
     property ShellPath: string read FShellPath write SetShellPath;
     property MaxOutputSize: Integer read FMaxOutputSize write FMaxOutputSize default 20000;
 
+    property Environment: TStringList read FEnvironment write SetEnvironment;
     property OnCommand: TAiShellCommandEvent read FOnCommand write FOnCommand;
     property OnConsoleLog: TAiShellLogEvent read FOnConsoleLog write FOnConsoleLog;
   end;
@@ -110,31 +112,6 @@ implementation
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiShell]);
-end;
-
-procedure LogDebug(const Mensaje: string);
-var
-  Archivo: TextFile;
-  RutaLog: string;
-begin
-  RutaLog := 'c:\temp\ialog.txt';
-
-  try
-    AssignFile(Archivo, RutaLog);
-
-    // Si el archivo existe, lo abre para agregar; si no, lo crea
-    if FileExists(RutaLog) then
-      Append(Archivo)
-    else
-      Rewrite(Archivo);
-
-    // Escribe la línea con fecha/hora
-    // WriteLn(Archivo, FormatDateTime('yyyy-mm-dd hh:nn:ss', Now) + ' - ' + Mensaje);
-    WriteLn(Archivo, Mensaje);
-
-  finally
-    CloseFile(Archivo);
-  end;
 end;
 
 { TAiShell }
@@ -185,7 +162,7 @@ begin
   // Guardamos si estaba corriendo para restaurar el estado
   WasRunning := Assigned(FSession);
 
-  // 1. Matar la sesión actual (porque tiene el ejecutable incorrecto)
+  // 1. Matar la sesi?n actual (porque tiene el ejecutable incorrecto)
   StopSession;
 
   // 2. Actualizar la ruta
@@ -198,10 +175,20 @@ begin
   end;
 end;
 
+procedure TAiShell.SetEnvironment(const Value: TStringList);
+begin
+  FEnvironment.Assign(Value);
+end;
+
 procedure TAiShell.StartSession;
 begin
   if Assigned(FSession) then
-    Exit;
+  begin
+    if FSession.IsRunning then
+      Exit;
+    // Sesi?n muerta: limpiar antes de recrear
+    StopSession;
+  end;
   if Trim(FShellPath) = '' then
     raise Exception.Create('ShellPath cannot be empty.');
   FSession := TUtilsSystem.StartInteractiveProcess(FShellPath, '', FEnvironment);
@@ -235,7 +222,7 @@ begin
 end;
 
 // =============================================================================
-// NUCLEO DE EJECUCIÓN (Bajo Nivel)
+// NUCLEO DE EJECUCI?N (Bajo Nivel)
 // =============================================================================
 function TAiShell.InternalExecuteCommand(const ACommand: string; TimeOutMs: Cardinal): TShellExecutionResult;
 var
@@ -266,7 +253,7 @@ begin
 
   try
     // -------------------------------------------------------------------------
-    // 1. DETERMINAR SINTAXIS SEGÚN EL SHELL (NO SEGÚN EL SO)
+    // 1. DETERMINAR SINTAXIS SEG?N EL SHELL (NO SEG?N EL SO)
     // -------------------------------------------------------------------------
     // Si el ejecutable contiene 'wsl', 'bash', 'sh' o estamos en POSIX, usamos sintaxis Linux.
     // Si es 'cmd.exe' o 'powershell', usamos sintaxis Windows.
@@ -284,16 +271,16 @@ begin
       // Sintaxis Linux: ; para secuencial (o &&), echo $? para exit code
       // Importante: En WSL, el comando debe terminar con salto de linea Linux si es posible,
       // pero el StreamWriter de Delphi se encarga.
-      FullCommand := ACommand + '; echo "EC:$? ' + Sentinel + '"' + sLineBreak;
+      FullCommand := ACommand + '; echo "EC:$? ' + Sentinel + '"' + #10;
     end
     else
     begin
       // Sintaxis Windows CMD: & para secuencial
-      FullCommand := ACommand + ' & echo ' + Sentinel + sLineBreak;
+      FullCommand := ACommand + sLineBreak + '@echo EC:%ERRORLEVEL% ' + Sentinel + sLineBreak;
     end;
 
     // -------------------------------------------------------------------------
-    // 2. CORRECCIÓN DE CODIFICACIÓN (INPUT)
+    // 2. CORRECCI?N DE CODIFICACI?N (INPUT)
     // -------------------------------------------------------------------------
     RawUtf8 := UTF8String(FullCommand);
     SetLength(InputBytes, Length(RawUtf8));
@@ -313,10 +300,7 @@ begin
       BytesRead := FSession.ReadOutput(Buffer[0], Length(Buffer));
       if BytesRead > 0 then
       begin
-        // IMPORTANTE: WSL y las herramientas modernas usan UTF-8.
-        // 'Default' (ANSI) romperá acentos y bordes. Usamos UTF8.
-        // RawStr := TEncoding.UTF8.GetString(Buffer, 0, BytesRead);
-        RawStr := TEncoding.Default.GetString(Buffer, 0, BytesRead);
+        RawStr := TEncoding.UTF8.GetString(Buffer, 0, BytesRead);
 
         OutputBuilder.Append(RawStr);
 
@@ -341,7 +325,7 @@ begin
     if StopWatch.ElapsedMilliseconds >= TimeOutMs then
     begin
       Result.TimedOut := True;
-      // Restart; // Descomentar si se desea matar sesión colgada
+      // Restart; // Descomentar si se desea matar sesi?n colgada
     end;
 
     // -------------------------------------------------------------------------
@@ -350,8 +334,7 @@ begin
     Result.StdOut := CleanOutput(OutputBuilder.ToString, Sentinel);
     Result.StdErr := ErrorBuilder.ToString;
 
-    // Intentar capturar Exit Code (Funciona en WSL y Linux nativo)
-    if IsLinuxStyle then
+    // Capturar Exit Code (Windows CMD y Linux/WSL)
     begin
       var
       OutStr := OutputBuilder.ToString;
@@ -391,22 +374,24 @@ end;
 
 function TAiShell.Execute(const CallId: string; const JsonArguments: string): string;
 var
+  JVal: TJSONValue;
   JArgs: TJSONObject;
 begin
-  JArgs := TJSONObject.ParseJSONValue(JsonArguments) as TJSONObject;
+  JVal := TJSONObject.ParseJSONValue(JsonArguments);
   try
-    if not Assigned(JArgs) then
+    if not (JVal is TJSONObject) then
       Exit('Error: Invalid JSON arguments.');
 
+    JArgs := TJSONObject(JVal);
     Result := Execute(CallId, JArgs);
   finally
-    JArgs.Free;
+    JVal.Free;
   end;
 end;
 
 function TAiShell.Execute(const CallId: string; JArgs: TJSONObject): string;
 begin
-  // Detección de formato basada en la presencia de campos clave
+  // Detecci?n de formato basada en la presencia de campos clave
 
   // CASO 1: OPENAI (Tiene array 'commands')
   if JArgs.GetValue('commands') is TJSonArray then
@@ -426,7 +411,7 @@ begin
 end;
 
 // =============================================================================
-// IMPLEMENTACIONES ESPECÍFICAS
+// IMPLEMENTACIONES ESPEC?FICAS
 // =============================================================================
 
 // --- CLAUDE ---
@@ -483,10 +468,6 @@ var
 begin
   // Construir el objeto de salida complejo
   OutputObj := TJSONObject.Create;
-
-  // LogDebug('--- Shell Params ---');
-  // LogDebug(JArgs.format);
-
   try
     OutputObj.AddPair('type', 'shell_call_output');
     OutputObj.AddPair('call_id', CallId);
@@ -499,9 +480,9 @@ begin
     Begin
       if Assigned(jVal) and not(jVal is TJSONNull) then
       begin
-        // Intentar convertir solo si es un valor válido
+        // Intentar convertir solo si es un valor v?lido
         if not jVal.TryGetValue<Cardinal>(LocalTimeOut) then
-          LocalTimeOut := FTimeOut; // Fallback si la conversión falla
+          LocalTimeOut := FTimeOut; // Fallback si la conversi?n falla
       end;
     End;
 
@@ -525,7 +506,7 @@ begin
         if not Handled then
           ExecRes := InternalExecuteCommand(Cmd, LocalTimeOut);
 
-        // Estructura específica OpenAI
+        // Estructura espec?fica OpenAI
         ItemOut.AddPair('stdout', ExecRes.StdOut);
         ItemOut.AddPair('stderr', ExecRes.StdErr);
 
@@ -543,7 +524,7 @@ begin
       end;
     end;
 
-    // Retornamos JSON Stringificado (OpenAI Chat Component lo parseará si necesita, o enviará raw)
+    // Retornamos JSON Stringificado (OpenAI Chat Component lo parsear? si necesita, o enviar? raw)
     Result := OutputObj.ToJSON;
   finally
     OutputObj.Free;
@@ -580,16 +561,16 @@ function TAiShell.ExecuteManual(const Command: string): string;
 var
   ExecRes: TShellExecutionResult;
 begin
-  // 1. Asegurar que la sesión esté viva
+  // 1. Asegurar que la sesi?n est? viva
   if not Active then
     Active := True;
 
-  // 2. Ejecutar directamente (saltando la intercepción de seguridad OnCommand)
+  // 2. Ejecutar directamente (saltando la intercepci?n de seguridad OnCommand)
   // Usamos el mismo TimeOut configurado en el componente
   ExecRes := InternalExecuteCommand(Command, FTimeOut);
 
   // 3. Formatear el resultado para devolverlo como string
-  // (Aunque la UI se actualizará sola vía OnConsoleLog)
+  // (Aunque la UI se actualizar? sola v?a OnConsoleLog)
   if ExecRes.TimedOut then
     Result := 'Error: Command timed out.' + sLineBreak + ExecRes.StdOut
   else if ExecRes.StdErr <> '' then

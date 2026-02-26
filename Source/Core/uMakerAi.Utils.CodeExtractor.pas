@@ -1,18 +1,18 @@
-// IT License
+// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -37,37 +37,38 @@ unit uMakerAi.Utils.CodeExtractor;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections, System.RegularExpressions;
+  System.SysUtils, System.Classes, System.Generics.Collections;
 
 type
-  // Registro para almacenar información del archivo extraído
+  // Registro para almacenar informaci?n del archivo extra?do
   TCodeFile = record
     FileName : String;
     FileType: string;
     Code: string;
-    LineNumber: Integer; // Línea donde se encontró el bloque
+    LineNumber: Integer; // L?nea donde se encontr? el bloque
   end;
 
-  // Lista de archivos de código
+  // Lista de archivos de c?digo
   TCodeFileList = TList<TCodeFile>;
 
-  // Clase principal para extraer archivos de código
+  // Clase principal para extraer archivos de c?digo
   TMarkdownCodeExtractor = class
   private
     FCodeFiles: TCodeFileList;
-    //function GetLanguageFromExtension(const AExtension: string): string;
     function NormalizeLanguage(const ALanguage: string): string;
+    function TryParseFenceOpen(const ALine: string; out ALanguage, AFileName: string): Boolean;
+    function IsFenceClose(const ALine: string): Boolean;
   public
     constructor Create;
     destructor Destroy; override;
 
-    // Método principal para extraer archivos de código del texto markdown
+    // M?todo principal para extraer archivos de c?digo del texto markdown
     function ExtractCodeFiles(const AMarkdownText: string): TCodeFileList;
 
-    // Método para limpiar la lista de archivos
+    // M?todo para limpiar la lista de archivos
     procedure Clear;
 
-    // Propiedad para acceder a los archivos extraídos
+    // Propiedad para acceder a los archivos extra?dos
     property CodeFiles: TCodeFileList read FCodeFiles;
   end;
 
@@ -92,49 +93,6 @@ begin
   FCodeFiles.Clear;
 end;
 
-{function TMarkdownCodeExtractor.GetLanguageFromExtension(const AExtension: string): string;
-begin
-  // Mapeo de extensiones a lenguajes
-  if SameText(AExtension, '.pas') or SameText(AExtension, '.dpr') or SameText(AExtension, '.dpk') then
-    Result := 'delphi'
-  else if SameText(AExtension, '.py') then
-    Result := 'python'
-  else if SameText(AExtension, '.js') then
-    Result := 'javascript'
-  else if SameText(AExtension, '.cs') then
-    Result := 'csharp'
-  else if SameText(AExtension, '.cpp') or SameText(AExtension, '.cc') or SameText(AExtension, '.cxx') then
-    Result := 'cpp'
-  else if SameText(AExtension, '.c') then
-    Result := 'c'
-  else if SameText(AExtension, '.h') then
-    Result := 'c'
-  else if SameText(AExtension, '.java') then
-    Result := 'java'
-  else if SameText(AExtension, '.php') then
-    Result := 'php'
-  else if SameText(AExtension, '.rb') then
-    Result := 'ruby'
-  else if SameText(AExtension, '.go') then
-    Result := 'go'
-  else if SameText(AExtension, '.rs') then
-    Result := 'rust'
-  else if SameText(AExtension, '.sql') then
-    Result := 'sql'
-  else if SameText(AExtension, '.html') or SameText(AExtension, '.htm') then
-    Result := 'html'
-  else if SameText(AExtension, '.css') then
-    Result := 'css'
-  else if SameText(AExtension, '.xml') then
-    Result := 'xml'
-  else if SameText(AExtension, '.json') then
-    Result := 'json'
-  else
-    Result := 'text'; // Tipo por defecto
-end;
-}
-
-
 function TMarkdownCodeExtractor.NormalizeLanguage(const ALanguage: string): string;
 var
   LowerLang: string;
@@ -158,6 +116,96 @@ begin
     Result := LowerLang;
 end;
 
+function TMarkdownCodeExtractor.IsFenceClose(const ALine: string): Boolean;
+var
+  Trimmed: string;
+begin
+  Trimmed := Trim(ALine);
+  Result := (Trimmed = '```');
+end;
+
+function TMarkdownCodeExtractor.TryParseFenceOpen(const ALine: string;
+  out ALanguage, AFileName: string): Boolean;
+var
+  Trimmed, Rest, Token: string;
+  ColonPos, SpacePos, QuoteStart, QuoteEnd: Integer;
+
+  function IsWordChars(const S: string): Boolean;
+  var
+    j: Integer;
+  begin
+    Result := S <> '';
+    for j := 1 to Length(S) do
+      if not CharInSet(S[j], ['a'..'z', 'A'..'Z', '0'..'9', '_', '+', '#']) then
+        Exit(False);
+  end;
+
+begin
+  Result := False;
+  ALanguage := '';
+  AFileName := '';
+  Trimmed := Trim(ALine);
+
+  if not Trimmed.StartsWith('```') then
+    Exit;
+
+  Rest := Copy(Trimmed, 4, MaxInt);
+
+  // Caso 1: Solo ``` (sin lenguaje ni archivo)
+  if Trim(Rest) = '' then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  // Caso 2: ```language:filename.ext (separador dos puntos)
+  ColonPos := Pos(':', Rest);
+  if ColonPos > 1 then
+  begin
+    Token := Trim(Copy(Rest, 1, ColonPos - 1));
+    if IsWordChars(Token) then
+    begin
+      ALanguage := Token;
+      AFileName := Trim(Copy(Rest, ColonPos + 1, MaxInt));
+      Result := True;
+      Exit;
+    end;
+  end;
+
+  // Caso 3: ```language title="filename.ext" (atributo title)
+  SpacePos := Pos(' ', Rest);
+  if SpacePos > 1 then
+  begin
+    Token := Copy(Rest, 1, SpacePos - 1);
+    if IsWordChars(Token) then
+    begin
+      ALanguage := Token;
+      // Buscar title="..."
+      Rest := Trim(Copy(Rest, SpacePos + 1, MaxInt));
+      if Rest.StartsWith('title="') then
+      begin
+        QuoteStart := 8; // despu?s de title="
+        QuoteEnd := Pos('"', Copy(Rest, QuoteStart, MaxInt));
+        if QuoteEnd > 0 then
+          AFileName := Copy(Rest, QuoteStart, QuoteEnd - 1);
+      end;
+      Result := True;
+      Exit;
+    end;
+  end;
+
+  // Caso 4: ```language (solo lenguaje, sin extras)
+  Token := Trim(Rest);
+  if IsWordChars(Token) then
+  begin
+    ALanguage := Token;
+    Result := True;
+    Exit;
+  end;
+
+  // No matchea ning?n patr?n conocido
+end;
+
 function TMarkdownCodeExtractor.ExtractCodeFiles(const AMarkdownText: string): TCodeFileList;
 var
   Lines: TStringList;
@@ -166,10 +214,10 @@ var
   InCodeBlock: Boolean;
   CodeContent: TStringBuilder;
   CurrentLanguage: string;
+  CurrentFileName: string;
   CodeFile: TCodeFile;
   StartLineNumber: Integer;
-  RegexPattern: string;
-  Match: TMatch;
+  ParsedLang, ParsedFileName: string;
 begin
   Clear;
   Result := FCodeFiles;
@@ -183,37 +231,32 @@ begin
     Lines.Text := AMarkdownText;
     InCodeBlock := False;
     CurrentLanguage := '';
+    CurrentFileName := '';
     StartLineNumber := 0;
-
-    // Patrón para detectar bloques de código con ```
-    RegexPattern := '^\s*```\s*(\w+)?\s*$';
 
     for i := 0 to Lines.Count - 1 do
     begin
       CurrentLine := Lines[i];
-      Match := TRegEx.Match(CurrentLine, RegexPattern);
 
-      if Match.Success then
+      if not InCodeBlock then
       begin
-        if not InCodeBlock then
+        if TryParseFenceOpen(CurrentLine, ParsedLang, ParsedFileName) then
         begin
-          // Inicio de bloque de código
           InCodeBlock := True;
-          StartLineNumber := i + 1; // +1 porque las líneas se cuentan desde 1
+          StartLineNumber := i + 1; // +1 porque las l?neas se cuentan desde 1
           CodeContent.Clear;
-
-          // Extraer el lenguaje si está especificado
-          if Match.Groups.Count > 1 then
-            CurrentLanguage := NormalizeLanguage(Match.Groups[1].Value)
-          else
-            CurrentLanguage := 'text';
-        end
-        else
+          CurrentLanguage := NormalizeLanguage(ParsedLang);
+          CurrentFileName := ParsedFileName;
+        end;
+      end
+      else
+      begin
+        if IsFenceClose(CurrentLine) then
         begin
-          // Fin de bloque de código
           InCodeBlock := False;
 
-          // Crear el registro del archivo de código
+          // Crear el registro del archivo de c?digo
+          CodeFile.FileName := CurrentFileName;
           CodeFile.FileType := CurrentLanguage;
           CodeFile.Code := CodeContent.ToString;
           CodeFile.LineNumber := StartLineNumber;
@@ -224,21 +267,23 @@ begin
 
           // Resetear variables
           CurrentLanguage := '';
+          CurrentFileName := '';
           CodeContent.Clear;
+        end
+        else
+        begin
+          // L?nea dentro del bloque de c?digo
+          if CodeContent.Length > 0 then
+            CodeContent.AppendLine;
+          CodeContent.Append(CurrentLine);
         end;
-      end
-      else if InCodeBlock then
-      begin
-        // Línea dentro del bloque de código
-        if CodeContent.Length > 0 then
-          CodeContent.AppendLine;
-        CodeContent.Append(CurrentLine);
       end;
     end;
 
-    // Si quedó un bloque abierto al final del texto
+    // Si qued? un bloque abierto al final del texto
     if InCodeBlock and (CodeContent.Length > 0) then
     begin
+      CodeFile.FileName := CurrentFileName;
       CodeFile.FileType := CurrentLanguage;
       CodeFile.Code := CodeContent.ToString;
       CodeFile.LineNumber := StartLineNumber;
@@ -252,5 +297,3 @@ begin
 end;
 
 end.
-
-

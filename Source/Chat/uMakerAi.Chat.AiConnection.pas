@@ -1,4 +1,4 @@
-Ôªø// IT License
+// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr√≠quez
+// Nombre: Gustavo EnrÌquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -86,6 +86,8 @@ type
     FWebSearchTool: TAiWebSearchToolBase;
     FChatMode: TAiChatMode;
     FImageTool: TAiImageToolBase;
+    FPdfTool: TAiPdfToolBase;
+    FReportTool: TAiReportToolBase;
 
     // Setters y Getters
     procedure SetDriverName(const Value: String);
@@ -123,6 +125,8 @@ type
     procedure SetVideoTool(const Value: TAiVideoToolBase);
     procedure SetVisionTool(const Value: TAiVisionToolBase);
     procedure SetWebSearchTool(const Value: TAiWebSearchToolBase);
+    procedure SetPdfTool(const Value: TAiPdfToolBase);
+    procedure SetReportTool(const Value: TAiReportToolBase);
 
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
@@ -211,6 +215,8 @@ type
     property VideoTool: TAiVideoToolBase read FVideoTool write SetVideoTool;
     property WebSearchTool: TAiWebSearchToolBase read FWebSearchTool write SetWebSearchTool;
     property VisionTool: TAiVisionToolBase read FVisionTool write SetVisionTool;
+    property PdfTool: TAiPdfToolBase read FPdfTool write SetPdfTool;
+    property ReportTool: TAiReportToolBase read FReportTool write SetReportTool;
     property OnStateChange: TAiStateChangeEvent read FOnStateChange write FOnStateChange;
 
   end;
@@ -284,20 +290,20 @@ begin
     // Solo actualizamos la lista FParams con los defaults del nuevo driver,
     // pero NO los aplicamos al chat viejo si vamos a cambiarlo inmediatamente.
 
-    // Opci√≥n A (Simple): Dejarlo como est√° (funciona, pero aplica params al chat viejo).
+    // OpciÛn A (Simple): Dejarlo como est· (funciona, pero aplica params al chat viejo).
     // UpdateAndApplyParams;
 
-    // Opci√≥n B (Optimizaci√≥n): Cargar params pero no aplicar al chat viejo.
+    // OpciÛn B (OptimizaciÛn): Cargar params pero no aplicar al chat viejo.
     if not(csDesigning in ComponentState) then
     begin
       // Cargamos los defaults en FParams sin aplicarlos al FChat actual
       // (Puedes refactorizar UpdateAndApplyParams para aceptar un booleano 'ApplyToChat')
       UpdateAndApplyParams;
-      SetupChatFromDriver; // Esto crear√° el nuevo chat y le aplicar√° los params
+      SetupChatFromDriver; // Esto crear· el nuevo chat y le aplicar· los params
     end
     else
     begin
-      // En dise√±o solo actualizamos params visualmente
+      // En diseÒo solo actualizamos params visualmente
       UpdateAndApplyParams;
     end;
   end;
@@ -388,7 +394,7 @@ begin
   if Assigned(FOnChatModelChange) then
     FOnChatModelChange(Self, OldChat, NewChat);
 
-  // Al llamar a SetChat, este se encargar√° de aplicar Params y Eventos
+  // Al llamar a SetChat, este se encargar· de aplicar Params y Eventos
   SetChat(NewChat);
 
   if Assigned(OldChat) then
@@ -447,14 +453,14 @@ begin
 
   if TAiChatFactory.Instance.HasDriver(FDriverName) then
   begin
-    // Seguridad: No expandir claves API en tiempo de dise√±o
+    // Seguridad: No expandir claves API en tiempo de diseÒo
     ShouldExpand := not(csDesigning in ComponentState);
     LRegistryParams := TStringList.Create;
     try
-      // 1. Obtener los par√°metros oficiales del registro (Nivel 1, 2 y 3)
+      // 1. Obtener los par·metros oficiales del registro (Nivel 1, 2 y 3)
       TAiChatFactory.Instance.GetDriverParams(FDriverName, FModel, LRegistryParams, ShouldExpand);
 
-      // 2. Sincronizaci√≥n inteligente:
+      // 2. SincronizaciÛn inteligente:
       // En lugar de un Merge simple, vamos a asegurarnos de que FParams refleje
       // la estructura del nuevo modelo.
 
@@ -463,7 +469,7 @@ begin
         // Si quieres que el Registro sea la fuente de verdad absoluta al cambiar de modelo:
         // FParams.Assign(LRegistryParams);
 
-        // Si prefieres mantener lo que el usuario escribi√≥ en el Object Inspector
+        // Si prefieres mantener lo que el usuario escribiÛ en el Object Inspector
         // pero inyectar lo nuevo del registro:
         MergeParams(LRegistryParams, FParams);
       finally
@@ -477,7 +483,7 @@ begin
   else
     FParams.Clear;
 
-  // 3. Inyectar los par√°metros finales en el motor de Chat
+  // 3. Inyectar los par·metros finales en el motor de Chat
   if Assigned(FChat) then
   begin
     ApplyParamsToChat(FChat, FParams);
@@ -529,12 +535,14 @@ begin
   AChat.VideoTool := Self.VideoTool;
   AChat.WebSearchTool := Self.WebSearchTool;
   AChat.VisionTool := Self.VisionTool;
+  AChat.PdfTool := Self.PdfTool;
+  AChat.ReportTool := Self.ReportTool;
 
   // Contexto base
   AChat.Memory.Text := Self.Memory.Text;
   AChat.SystemPrompt.Text := Self.SystemPrompt.Text;
 
-  // 2. INYECCI√ìN DIN√ÅMICA V√çA PARAMS (RTTI)
+  // 2. INYECCI”N DIN¡MICA VÕA PARAMS (RTTI)
   if not Assigned(AParams) or (AParams.Count <= 0) then
     Exit;
 
@@ -599,7 +607,7 @@ begin
                       TrimmedName := Trim(EnumName);
                       if not TrimmedName.IsEmpty then
                       begin
-                        // GetEnumValue es sensible a may√∫sculas seg√∫n el Enum definido en uMakerAi.Core
+                        // GetEnumValue es sensible a may˙sculas seg˙n el Enum definido en uMakerAi.Core
                         var
                         OrdinalValue := GetEnumValue(LEnumType.Handle, TrimmedName);
                         if OrdinalValue >= 0 then
@@ -624,7 +632,7 @@ begin
               end;
           end;
         except
-          // Fallo silencioso por propiedad individual para no detener el resto de la inyecci√≥n
+          // Fallo silencioso por propiedad individual para no detener el resto de la inyecciÛn
         end;
       end;
     end;
@@ -748,7 +756,7 @@ begin
   Result.Model := aModel;
 end;
 
-// --- M√©todos de acci√≥n y fachada ---
+// --- MÈtodos de acciÛn y fachada ---
 
 procedure TAiChatConnection.Abort;
 begin
@@ -855,7 +863,7 @@ begin
   Result := Destination;
   for I := 0 to Origin.Count - 1 do
   begin
-    // Esto actualiza si existe o a√±ade si no existe, sin duplicar la clave
+    // Esto actualiza si existe o aÒade si no existe, sin duplicar la clave
     Destination.Values[Origin.Names[I]] := Origin.ValueFromIndex[I];
   end;
 end;
@@ -878,7 +886,7 @@ begin
 
   if Operation = opRemove then
   begin
-    // 1. Limpiamos las referencias de las herramientas en la Conexi√≥n
+    // 1. Limpiamos las referencias de las herramientas en la ConexiÛn
     if AComponent = FSpeechTool then
       FSpeechTool := nil;
     if AComponent = FImageTool then
@@ -897,6 +905,10 @@ begin
       FComputerUseTool := nil;
     if AComponent = FAiFunctions then
       FAiFunctions := nil;
+    if AComponent = FPdfTool then
+      FPdfTool := nil;
+    if AComponent = FReportTool then
+      FReportTool := nil;
 
     // 2. IMPORTANTE: Si hay un chat activo, sincronizamos el 'nil'
     // para evitar que el Chat principal intente usar un objeto destruido.
@@ -920,6 +932,10 @@ begin
         FChat.ComputerUseTool := nil;
       if AComponent = FAiFunctions then
         FChat.AiFunctions := nil;
+      if AComponent = FPdfTool then
+        FChat.PdfTool := nil;
+      if AComponent = FReportTool then
+        FChat.ReportTool := nil;
     end;
   end;
 end;
@@ -979,7 +995,7 @@ procedure TAiChatConnection.SetChat(const Value: TAiChat);
 begin
   if FChat <> Value then
   begin
-    // Si hab√≠a un chat anterior, aplicar configuraci√≥n
+    // Si habÌa un chat anterior, aplicar configuraciÛn
     if Assigned(FChat) then
     Begin
       ApplyEventsToChat(FChat);
@@ -991,17 +1007,17 @@ begin
 
     if Assigned(FChat) then
     begin
-      // Aplicar eventos y par√°metros al nuevo chat
+      // Aplicar eventos y par·metros al nuevo chat
       ApplyEventsToChat(FChat);
       ApplyParamsToChat(FChat, FParams);
 
-      // ‚≠ê CORRECCI√ìN: Apuntar FMessages a los mensajes del chat
+      // * CORRECCI”N: Apuntar FMessages a los mensajes del chat
       // (NO creamos ni liberamos nada, solo cambiamos la referencia)
       FMessages := FChat.Messages;
     end
     else
     begin
-      // ‚≠ê CORRECCI√ìN: Si no hay chat, volver a usar nuestra instancia propia
+      // * CORRECCI”N: Si no hay chat, volver a usar nuestra instancia propia
       // (NO creamos una nueva, usamos FMessagesOwn que ya existe)
       FMessages := FMessagesOwn;
     end;
@@ -1222,6 +1238,30 @@ begin
       FWebSearchTool.FreeNotification(Self);
     if Assigned(FChat) then
       FChat.WebSearchTool := Value;
+  end;
+end;
+
+procedure TAiChatConnection.SetPdfTool(const Value: TAiPdfToolBase);
+begin
+  if FPdfTool <> Value then
+  begin
+    FPdfTool := Value;
+    if FPdfTool <> nil then
+      FPdfTool.FreeNotification(Self);
+    if Assigned(FChat) then
+      FChat.PdfTool := Value;
+  end;
+end;
+
+procedure TAiChatConnection.SetReportTool(const Value: TAiReportToolBase);
+begin
+  if FReportTool <> Value then
+  begin
+    FReportTool := Value;
+    if FReportTool <> nil then
+      FReportTool.FreeNotification(Self);
+    if Assigned(FChat) then
+      FChat.ReportTool := Value;
   end;
 end;
 

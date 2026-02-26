@@ -1,4 +1,4 @@
-Ôªøunit uMakerAi.RAG.Graph.Driver.Postgres;
+unit uMakerAi.RAG.Graph.Driver.Postgres;
 
 interface
 
@@ -28,7 +28,7 @@ type
     function FindNodeDataByID(const ANodeID: string; out ANodeData: TNodeDataRecord): Boolean; override;
     function FindEdgeDataByID(const AEdgeID: string; out AEdgeData: TEdgeDataRecord): Boolean; override;
 
-    // --- Navegaci√≥n y Carga ---
+    // --- NavegaciÛn y Carga ---
     procedure GetNodeEdges(ANode: TAiRagGraphNode); override;
 
     // --- Escritura (CRUD) ---
@@ -41,13 +41,13 @@ type
     function GetUniqueNodeLabels: TArray<string>; override;
     function GetUniqueEdgeLabels: TArray<string>; override;
 
-    // --- B√∫squedas Espec√≠ficas ---
+    // --- B˙squedas EspecÌficas ---
     function FindNodeByName(const AName, ANodeLabel: string): TAiRagGraphNode; override;
     function FindNodesByLabel(const ALabel: string): TArray<TAiRagGraphNode>; override;
     function FindNodesByProperty(const AKey: string; const AValue: Variant): TArray<TAiRagGraphNode>; override;
     function FindNodeNamesByLabel(const ANodeLabel, ASearchText: string; ALimit: Integer): TArray<string>; override;
 
-    // --- Motores de B√∫squeda Avanzada (RAG y Grafos) ---
+    // --- Motores de B˙squeda Avanzada (RAG y Grafos) ---
     // NOTA: AFilter actualizado a TAiFilterCriteria
     function SearchNodes(const APrompt: string; ADepth, ALimit: Integer; APrecision: Double; AFilter: TAiFilterCriteria = nil): TArray<TAiRagGraphNode>; override;
     function Query(const APlan: TQueryPlan; ADepth, ALimit: Integer; APrecision: Double): TArray<TAiRagGraphNode>; override;
@@ -86,7 +86,7 @@ begin
   FTableName := Value;
   FNodesTableName := FTableName + 'nodes';
   FEdgesTableName := FTableName + 'edges';
-  FChunksTableName := FNodesTableName + '_chunks'; // Convenci√≥n: nombre_tabla_nodes_chunks
+  FChunksTableName := FNodesTableName + '_chunks'; // ConvenciÛn: nombre_tabla_nodes_chunks
 end;
 
 function TAiRagGraphPostgresDriver.NewQuery: TFDQuery;
@@ -119,7 +119,7 @@ var
   LangCfg: string;
 begin
   if not Assigned(FConnection) or not FConnection.Connected then
-    raise Exception.Create('La conexi√≥n a la base de datos no est√° activa.');
+    raise Exception.Create('La conexiÛn a la base de datos no est· activa.');
 
   Self.TableName := ABaseTableName; // Actualiza las variables internas de nombres
   NodesTableName := FNodesTableName;
@@ -131,7 +131,7 @@ begin
 
   Query := NewQuery;
   try
-    // 1. EXTENSI√ìN PGVECTOR
+    // 1. EXTENSI”N PGVECTOR
     try
       Query.SQL.Text := 'CREATE EXTENSION IF NOT EXISTS vector;';
       Query.ExecSQL;
@@ -150,7 +150,7 @@ begin
     Query.SQL.Add('    properties jsonb,');
     Query.SQL.Add(Format('    embedding %s,', [VectorType]));
 
-    // Columna generada para b√∫squeda h√≠brida (FTS)
+    // Columna generada para b˙squeda hÌbrida (FTS)
     Query.SQL.Add('    search_vector tsvector GENERATED ALWAYS AS (');
     Query.SQL.Add(Format('       setweight(to_tsvector(''%s'', coalesce(name, '''')), ''A'') || ', [LangCfg]));
     Query.SQL.Add(Format('       setweight(to_tsvector(''%s'', coalesce(node_label, '''')), ''B'') || ', [LangCfg]));
@@ -173,7 +173,7 @@ begin
     Query.SQL.Add(');');
     Query.ExecSQL;
 
-    // 4. √çNDICES NODOS Y CHUNKS
+    // 4. ÕNDICES NODOS Y CHUNKS
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_emb_hnsw ON public.%s USING hnsw (embedding vector_cosine_ops);', [NodesTableName, NodesTableName]));
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_fts ON public.%s USING gin(search_vector);', [NodesTableName, NodesTableName]));
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_props ON public.%s USING gin(properties);', [NodesTableName, NodesTableName]));
@@ -199,7 +199,7 @@ begin
     Query.SQL.Add(');');
     Query.ExecSQL;
 
-    // 6. √çNDICES DE ARISTAS
+    // 6. ÕNDICES DE ARISTAS
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_edge_label ON public.%s (entidad, edge_label);', [EdgesTableName, EdgesTableName]));
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_source_id ON public.%s (source_node_id, entidad);', [EdgesTableName, EdgesTableName]));
     Query.ExecSQL(Format('CREATE INDEX IF NOT EXISTS idx_%s_target_id ON public.%s (target_node_id, entidad);', [EdgesTableName, EdgesTableName]));
@@ -239,7 +239,7 @@ begin
     Query.ParamByName('name').AsString := ANode.Name;
     Query.ParamByName('node_text').AsString := ANode.Text;
 
-    // Usamos la serializaci√≥n JSON del MetaData
+    // Usamos la serializaciÛn JSON del MetaData
     if Assigned(ANode.MetaData) then
     begin
       JProp := ANode.MetaData.ToJSON;
@@ -254,7 +254,7 @@ begin
 
     Query.ExecSQL;
 
-    // Gesti√≥n de Chunks
+    // GestiÛn de Chunks
     if (ANode.Chunks <> nil) and (ANode.Chunks.Count > 0) then
     begin
       // Borrar chunks viejos
@@ -493,7 +493,7 @@ begin
 end;
 
 // =============================================================================
-// CORE DE B√öSQUEDA H√çBRIDA GRAFO (VECTOR + L√âXICA + RRF + CHUNKS)
+// CORE DE B⁄SQUEDA HÕBRIDA GRAFO (VECTOR + L…XICA + RRF + CHUNKS)
 // =============================================================================
 function TAiRagGraphPostgresDriver.SearchNodes(const APrompt: string; ADepth, ALimit: Integer; APrecision: Double; AFilter: TAiFilterCriteria = nil): TArray<TAiRagGraphNode>;
 var
@@ -583,7 +583,7 @@ var
                 Criteria.Append(KeyJSON + ' NOT IN (')
               else
                 Criteria.Append(KeyJSON + ' IN (');
-              // Simplificaci√≥n: Asume valor escalar o string CSV. Para arrays reales se requiere iterar Variant array.
+              // SimplificaciÛn: Asume valor escalar o string CSV. Para arrays reales se requiere iterar Variant array.
               Criteria.Append(FormatVal(Item.Value) + ')');
             end;
         else
@@ -829,7 +829,7 @@ begin
   NodeIDs := TStringList.Create;
   try
     if not Assigned(Graph.Embeddings) then
-      raise Exception.Create('El motor de Embeddings no est√° asignado al grafo.');
+      raise Exception.Create('El motor de Embeddings no est· asignado al grafo.');
 
     QueryEmbedding := Graph.Embeddings.CreateEmbedding(APlan.AnchorPrompt, 'user');
     EmbeddingStr := EmbeddingToString(QueryEmbedding);

@@ -1,18 +1,18 @@
-// IT License
+// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -109,13 +109,13 @@ begin
   Hunk := nil;
 
   // Formato esperado: @@ -start,count +start,count @@
-  // Pero GPT-5 a veces envía solo "@@" o "@@ context @@"
+  // Pero GPT-5 a veces env?a solo "@@" o "@@ context @@"
   if not Line.StartsWith('@@') then Exit;
 
   try
     Hunk := TDiffHunk.Create;
 
-    // VALORES POR DEFECTO (Si el parsing falla, asumimos inicio de archivo o búsqueda difusa)
+    // VALORES POR DEFECTO (Si el parsing falla, asumimos inicio de archivo o b?squeda difusa)
     Hunk.OriginalStart := 1;
     Hunk.OriginalCount := 0;
     Hunk.NewStart := 1;
@@ -168,9 +168,9 @@ begin
       end;
     end;
 
-    // IMPORTANTE: Incluso si el parsing de números falló (ej. la línea era solo "@@"),
-    // devolvemos True porque hemos creado un Hunk válido con valores por defecto (0,0).
-    // El TDiffApplier usará el contenido (contexto) para encontrar dónde aplicarlo.
+    // IMPORTANTE: Incluso si el parsing de n?meros fall? (ej. la l?nea era solo "@@"),
+    // devolvemos True porque hemos creado un Hunk v?lido con valores por defecto (0,0).
+    // El TDiffApplier usar? el contenido (contexto) para encontrar d?nde aplicarlo.
     Result := True;
 
   except
@@ -195,7 +195,7 @@ begin
     CurrentHunk := nil;
     HasHeaders := False;
 
-    // 1. Detección rápida de cabeceras
+    // 1. Detecci?n r?pida de cabeceras
     for I := 0 to Lines.Count - 1 do
       if Lines[I].StartsWith('@@') then
       begin
@@ -207,8 +207,9 @@ begin
     begin
       Line := Lines[I];
 
-      // Ignorar cabeceras de metadatos git
-      if Line.StartsWith('+++') or Line.StartsWith('---') or Line.StartsWith('\') then
+      // Ignorar cabeceras de metadatos git (solo fuera de hunks)
+      if (CurrentHunk = nil) and
+         (Line.StartsWith('+++') or Line.StartsWith('---') or Line.StartsWith('\')) then
         Continue;
 
       if Line.StartsWith('@@') then
@@ -220,15 +221,15 @@ begin
       end
       else
       begin
-        // LÓGICA DE RECUPERACIÓN (FALLBACK):
-        // Si encontramos líneas de contenido (+/-) pero NO tenemos un Hunk activo
+        // L?GICA DE RECUPERACI?N (FALLBACK):
+        // Si encontramos l?neas de contenido (+/-) pero NO tenemos un Hunk activo
         // (y especialmente si no se detectaron cabeceras en todo el archivo),
-        // creamos un "Hunk Virtual" que asume inicio en línea 0.
+        // creamos un "Hunk Virtual" que asume inicio en l?nea 0.
         if (CurrentHunk = nil) and not HasHeaders and
            (Line.StartsWith('+') or Line.StartsWith('-') or Line.StartsWith(' ')) then
         begin
           CurrentHunk := TDiffHunk.Create;
-          CurrentHunk.OriginalStart := 0; // Asumimos creación o inicio de archivo
+          CurrentHunk.OriginalStart := 0; // Asumimos creaci?n o inicio de archivo
           CurrentHunk.OriginalCount := 0;
           CurrentHunk.NewStart := 1;
           CurrentHunk.NewCount := 0;
@@ -257,7 +258,7 @@ begin
           end
           else if Line = '' then
           begin
-             // Línea vacía suele interpretarse como contexto vacío
+             // L?nea vac?a suele interpretarse como contexto vac?o
              DiffLine.Operation := doContext;
              DiffLine.Content := '';
              CurrentHunk.Lines.Add(DiffLine);
@@ -314,7 +315,7 @@ begin
     Exit(True);
   end;
 
-  // 2. Búsqueda difusa (+/- 20 líneas)
+  // 2. B?squeda difusa (+/- 20 l?neas)
   SearchRadius := 20;
   for Offset := 1 to SearchRadius do
   begin
@@ -356,7 +357,7 @@ begin
     try
       if Hunks.Count = 0 then
       begin
-        ErrorMsg := 'No se encontraron bloques de cambios (hunks) válidos.';
+        ErrorMsg := 'No se encontraron bloques de cambios (hunks) v?lidos.';
         Exit;
       end;
 
@@ -369,7 +370,7 @@ begin
 
         if not FindHunkPosition(FileLines, Hunk, ActualStart) then
         begin
-          ErrorMsg := Format('Fallo al aplicar Hunk #%d: No se encontró el contexto (Original Start: %d).', [I + 1, Hunk.OriginalStart]);
+          ErrorMsg := Format('Fallo al aplicar Hunk #%d: No se encontr? el contexto (Original Start: %d).', [I + 1, Hunk.OriginalStart]);
           Exit;
         end;
 
@@ -393,7 +394,7 @@ begin
           case DiffLine.Operation of
             doContext:
             begin
-              NewLines.Add(DiffLine.Content);
+              NewLines.Add(FileLines[CurrentPos]);
               Inc(CurrentPos);
             end;
             doDelete: Inc(CurrentPos);

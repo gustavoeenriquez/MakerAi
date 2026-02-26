@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -67,6 +67,9 @@ type
   TAiLMStudioEmbeddings = Class(TAiEmbeddings)
   Public
     constructor Create(aOwner: TComponent); override;
+    class function GetDriverName: string; override;
+    class function CreateInstance(aOwner: TComponent): TAiEmbeddings; override;
+    class procedure RegisterDefaultParams(Params: TStrings); override;
   End;
 
 
@@ -106,7 +109,7 @@ end;
 constructor TAiLMStudioChat.Create(Sender: TComponent);
 begin
   inherited;
-  ApiKey := '1234'; // local, no se requiere autenticación
+  ApiKey := '1234'; // local, no se requiere autenticaci?n
   Model := 'lmstudio-local';
   Url := GlLMStudioUrl;
 end;
@@ -128,8 +131,29 @@ begin
   FModel := 'snowflake-arctic-embed-m-v1.5';
 end;
 
+{ TAiLMStudioEmbeddings - Factory class methods }
+
+class function TAiLMStudioEmbeddings.GetDriverName: string;
+begin
+  Result := 'LMStudio';
+end;
+
+class function TAiLMStudioEmbeddings.CreateInstance(aOwner: TComponent): TAiEmbeddings;
+begin
+  Result := TAiLMStudioEmbeddings.Create(aOwner);
+end;
+
+class procedure TAiLMStudioEmbeddings.RegisterDefaultParams(Params: TStrings);
+begin
+  Params.Values['ApiKey'] := '1234';
+  Params.Values['Url'] := GlLMStudioUrl;
+  Params.Values['Model'] := 'snowflake-arctic-embed-m-v1.5';
+  Params.Values['Dimensions'] := '1024';
+end;
+
 initialization
   TAiChatFactory.Instance.RegisterDriver(TAiLMStudioChat);
+  TAiEmbeddingFactory.Instance.RegisterDriver(TAiLMStudioEmbeddings);
 
 end.
 

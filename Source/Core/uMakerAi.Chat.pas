@@ -1,6 +1,6 @@
-// MIT License
+﻿// MIT License
 //
-// Copyright (c) 2013 Gustavo Enr�quez - CimaMaker
+// Copyright (c) 2013 Gustavo Enr?quez - CimaMaker
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr�quez
+// Nombre: Gustavo Enr?quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -58,15 +58,15 @@ uses
 
 type
 
-
   TAiChatResponseFormat = (tiaChatRfText, tiaChatRfJson, tiaChatRfJsonSchema);
 
-  TAiChatMode = (cmConversation, // Modo di�logo (Orquestaci�n Inteligente)
-    cmImageGeneration, // Forzar Generaci�n de Imagen
-    cmVideoGeneration, // Forzar Generaci�n de Video
+  TAiChatMode = (cmConversation, // Modo di?logo (Orquestaci?n Inteligente)
+    cmImageGeneration, // Forzar Generaci?n de Imagen
+    cmVideoGeneration, // Forzar Generaci?n de Video
     cmSpeechGeneration, // Forzar Texto a Voz (TTS)
-    cmTranscription, // Forzar Transcripci�n
-    cmWebSearch // Forzar B�squeda Web
+    cmTranscription, // Forzar Transcripci?n
+    cmWebSearch, // Forzar B?squeda Web
+    cmReportGeneration // Forzar Generaci?n de Reporte (PDF, HTML, XLSX, etc.)
     );
 
   TAiChatOnDataEvent = procedure(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject; aRole, aText: String) of object;
@@ -78,7 +78,6 @@ type
 
   // Evento callback cuando se utiliza la herramienta tools del chat
   TOnCallToolFunction = Procedure(Sender: TObject; AiToolCall: TAiToolsFunction) of object;
-
 
   TAiChat = class(TComponent, IAiToolContext)
   Private
@@ -142,6 +141,11 @@ type
     FChatMode: TAiChatMode;
     FEnabledFeatures: TAiChatMediaSupports;
     FPdfTool: TAiPdfToolBase;
+    FReportTool: TAiReportToolBase;
+    // Nuevo sistema de orquestaci�n (v3.3)
+    FModelCaps: TAiCapabilities; // capacidades nativas del modelo
+    FSessionCaps: TAiCapabilities; // capacidades deseadas en la sesi�n
+    FNewSystemConfigured: Boolean; // True si ModelCaps/SessionCaps fueron asignados expl�citamente
 
     procedure SetApiKey(const Value: String);
     procedure SetFrequency_penalty(const Value: Double);
@@ -211,6 +215,18 @@ type
     procedure SetVisionTool(const Value: TAiVisionToolBase);
     procedure SetEnabledFeatures(const Value: TAiChatMediaSupports);
     procedure SetPdfTool(const Value: TAiPdfToolBase);
+    procedure SetReportTool(const Value: TAiReportToolBase);
+    // Nuevo sistema de orquestaci�n (v3.3)
+    procedure SetModelCaps(const Value: TAiCapabilities);
+    procedure SetSessionCaps(const Value: TAiCapabilities);
+    procedure EnsureNewSystemConfig;
+    function LegacyToModelCaps: TAiCapabilities;
+    function LegacyToSessionCaps: TAiCapabilities;
+    function RunLegacy(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
+    function RunNew(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
+    function FileTypeInModelCaps(ACategory: TAiFileCategory): Boolean;
+    procedure SyncLegacyFromModelCaps;
+    procedure SyncLegacyFromSessionCaps;
 
   Protected
     FClient: TNetHTTPClient;
@@ -221,6 +237,7 @@ type
     FBusy: Boolean;
     FTools: TStrings;
     FLastContent: String;
+    FLastReasoning: String;  // Acumula reasoning_content durante streaming SSE
     FLastPrompt: String;
     FLastError: String;
     FMessages: TAiChatMessages;
@@ -238,6 +255,10 @@ type
 
     Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Virtual;
 
+    // Extensión para drivers con delta.content como array tipado (ej: Mistral magistral).
+    // La base no hace nada; los drivers con formato no-estándar lo sobreescriben.
+    procedure ParseDeltaContentArray(AContentArr: TJSonArray; jObj: TJSonObject); Virtual;
+
     Procedure OnRequestErrorEvent(const Sender: TObject; const AError: string); Virtual;
     Procedure OnRequestExceptionEvent(const Sender: TObject; const AError: Exception); Virtual;
     Procedure OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse); Virtual;
@@ -250,6 +271,7 @@ type
     function InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
     function InternalRunImageVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
     function InternalRunWebSearch(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
+    function InternalRunReport(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
 
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
     function InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Virtual;
@@ -268,7 +290,7 @@ type
     Function PrepareSystemMsg: String; Virtual; // Crea el primer mensaje del chat para system, para configurar el asistente
     Procedure DoProcessMediaFile(aPrompt: String; aAiMediaFile: TAiMediaFile; Var Respuesta: String; Var Procesado: Boolean);
     Function AddMessageAndRun(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String; Overload;
-    // Implementaci�n de IAiToolContext
+    // Implementaci?n de IAiToolContext
     procedure DoData(Msg: TAiChatMessage; const Role, Text: string; aResponse: TJSonObject = nil);
     procedure DoDataEnd(Msg: TAiChatMessage; const Role, Text: string; aResponse: TJSonObject = nil);
     function GetAsynchronous: Boolean;
@@ -278,15 +300,14 @@ type
     procedure DoStateChange(State: TAiChatState; const Description: string = '');
 
     procedure Notification(AComponent: TComponent; Operation: TOperation); Override;
-    // property InitialInstructions : TStrings read FSystemPrompt write SetSystemPrompt; //deprecated 'use SystemPrompt property instead';
   Public
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
     Function AddMessageAndRun(aPrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): String; Overload;
     Function AddMessageAndRunMsg(aPrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): TAiChatMessage; Overload;
 
-    Function AddMessage(aPrompt, aRole: String): TAiChatMessage; // Crea un mensaje y lo adiciona a la conversaci�n
-    Function NewMessage(aPrompt, aRole: String): TAiChatMessage; // Crea un mensaje pero no lo adiciona a la conversaci�n
+    Function AddMessage(aPrompt, aRole: String): TAiChatMessage; // Crea un mensaje y lo adiciona a la conversaci?n
+    Function NewMessage(aPrompt, aRole: String): TAiChatMessage; // Crea un mensaje pero no lo adiciona a la conversaci?n
     Function Run(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage = Nil): String; Virtual;
     Function GetLastMessage: TAiChatMessage;
     Function RemoveMesage(Msg: TAiChatMessage): Boolean; Overload;
@@ -324,18 +345,18 @@ type
     Property Model: String read FModel write SetModel;
     Property Frequency_penalty: Double read FFrequency_penalty write SetFrequency_penalty; // -2 to 2
     Property Logit_bias: String read FLogit_bias write SetLogit_bias;
-    // Vac�o o entre -100 y 100
+    // Vac?o o entre -100 y 100
     Property Logprobs: Boolean read FLogprobs write SetLogprobs;
     Property Top_logprobs: String read FTop_logprobs write SetTop_logprobs;
     // vacio o between 0 and 5
     Property Max_tokens: Integer read FMax_tokens write SetMax_tokens;
-    // 0 = null o el m�ximo
+    // 0 = null o el m?ximo
     Property N: Integer read FN write SetN;
     // Defaults to 1 How many Chat completion choices to generate for each input message.Note that you will be charged based on the number of generated tokens across all of the choices.Keep n as 1 to minimize costs.
     Property Presence_penalty: Double read FPresence_penalty write SetPresence_penalty; // Defaults to 0 number between - 2.0 and 2.0
     Property Response_format: TAiChatResponseFormat read FResponse_format write SetResponse_format;
     // object Optional an object specifying the format that the model must output.Compatible with gpt - 4 - 1106 - preview and gpt - 3.5 - turbo - 1106.
-    Property Seed: Integer read FSeed write SetSeed; // 0 no se env�a
+    Property Seed: Integer read FSeed write SetSeed; // 0 no se env?a
     Property Stop: string read FStop write SetStop;
     // Array de palabras separado por comas
     Property Asynchronous: Boolean read FAsynchronous write SetAsynchronous;
@@ -343,7 +364,7 @@ type
     // Defaults to 1  between 0 and 2.
     Property Top_p: Double read FTop_p write SetTop_p;
     Property K: Integer read FK write SetK;
-    // Defaults to 0 si es 0 no se env�a,  entre 0 y 1
+    // Defaults to 0 si es 0 no se env?a,  entre 0 y 1
     // Property Tools: TStrings read GetTools;
     Property Tool_choice: string read FTool_choice write SetTool_choice;
     Property Tool_Active: Boolean read FTool_Active write SetTool_Active;
@@ -378,6 +399,7 @@ type
     property WebSearchTool: TAiWebSearchToolBase read FWebSearchTool write SetWebSearchTool;
     property VisionTool: TAiVisionToolBase read FVisionTool write SetVisionTool;
     property PdfTool: TAiPdfToolBase read FPdfTool write SetPdfTool;
+    property ReportTool: TAiReportToolBase read FReportTool write SetReportTool;
 
     Property JsonSchema: TStrings read FJsonSchema write SetJsonSchema;
     Property Stream_Usage: Boolean read FStream_Usage write SetStream_Usage;
@@ -404,9 +426,12 @@ type
     property ShellTool: TAiShell read FShellTool write SetShellTool;
     Property TextEditorTool: TAiTextEditorTool read FTextEditorTool write SetTextEditorTool;
     property ComputerUseTool: TAiComputerUseTool read FComputerUseTool write SetComputerUseTool;
+    // Nuevo sistema de orquestaci�n (v3.3)
+    property ModelCaps: TAiCapabilities read FModelCaps write SetModelCaps; // capacidades nativas del modelo
+    property SessionCaps: TAiCapabilities read FSessionCaps write SetSessionCaps; // capacidades deseadas en la sesi�n
   end;
 
-// procedure Register;
+  // procedure Register;
 
 procedure LogDebug(const Mensaje: string);
 
@@ -425,27 +450,27 @@ var
   RutaLog: string;
 begin
   // ---------------------------------------------------------------------------------
-  // -------- OPCI�N DESHABILITADA ES SOLO UN LOG DE PRUEBAS--------------------------
+  // -------- OPCI?N DESHABILITADA ES SOLO UN LOG DE PRUEBAS--------------------------
   // ---------------------------------------------------------------------------------
-{    RutaLog := 'c:\temp\ialog.txt';
+  RutaLog := 'c:\temp\ialog.txt';
 
-    try
+  try
     AssignFile(Archivo, RutaLog);
 
     // Si el archivo existe, lo abre para agregar; si no, lo crea
     if FileExists(RutaLog) then
-    Append(Archivo)
+      Append(Archivo)
     else
-    Rewrite(Archivo);
+      Rewrite(Archivo);
 
-    // Escribe la l�nea con fecha/hora
+    // Escribe la l?nea con fecha/hora
     // WriteLn(Archivo, FormatDateTime('yyyy-mm-dd hh:nn:ss', Now) + ' - ' + Mensaje);
     WriteLn(Archivo, Mensaje);
 
-    finally
+  finally
     CloseFile(Archivo);
-    end;
-}
+  end;
+
 end;
 
 procedure TAiChat.Abort;
@@ -453,7 +478,7 @@ begin
   FAbort := True;
 end;
 
-// --- Este mensaje se env�a cuando es una funci�n toll, es indepensiente a los otros dos
+// --- Este mensaje se env?a cuando es una funci?n toll, es indepensiente a los otros dos
 function TAiChat.InternalAddMessage(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): TAiChatMessage;
 Var
   Msg: TAiChatMessage;
@@ -507,7 +532,7 @@ Var
 begin
 
   If Not Assigned(aMsg) then
-    Raise Exception.Create('El par�metro aMsg debe estar instanciado');
+    Raise Exception.Create('El par?metro aMsg debe estar instanciado');
 
   Try
 
@@ -542,14 +567,14 @@ begin
       If Assigned(MF) then
       Begin
         Procesado := False;
-        DoProcessMediaFile(aMsg.Prompt, MF, Respuesta, Procesado); // Env�a el archivo por si lo quiere procesar otra AI especializada, Ej.
+        DoProcessMediaFile(aMsg.Prompt, MF, Respuesta, Procesado); // Env?a el archivo por si lo quiere procesar otra AI especializada, Ej.
         MF.Procesado := Procesado;
         MF.Transcription := Respuesta;
         // Guarda las transcripciones en los MediaFile,  luego construye la respuesta definitiva con todos los mediafiles
       End;
     End;
 
-    FLastPrompt := aMsg.Prompt; // aqui lleva el Prompt Inicial + la conversi�n de los MediaFiles a texto si el usuario lo permite
+    FLastPrompt := aMsg.Prompt; // aqui lleva el Prompt Inicial + la conversi?n de los MediaFiles a texto si el usuario lo permite
 
     if Assigned(FOnAddMessage) then
       FOnAddMessage(Self, aMsg, Nil, aMsg.Role, aMsg.Prompt);
@@ -577,6 +602,7 @@ begin
   FAbort := False; // Inicia como no en abort
   FLastError := '';
   FLastContent := '';
+  FLastReasoning := '';
   FLastPrompt := '';
 
   // Variable del componente para mantener vivo el stream en llamados asincronos
@@ -606,17 +632,19 @@ begin
     FResponse.Position := 0;
 
     FLastContent := '';
+    FLastReasoning := '';
 
     If FClient.Asynchronous = False then
     Begin
       if Res.StatusCode = 200 then
       Begin
 
-        var LParsed := TJSonObject.ParseJSONValue(Res.ContentAsString);
-        if not (LParsed is TJSonObject) then
+        var
+        LParsed := TJSonObject.ParseJSONValue(Res.ContentAsString);
+        if not(LParsed is TJSonObject) then
         begin
           LParsed.Free;
-          raise Exception.CreateFmt('Error: Respuesta JSON inv�lida: %s', [Res.ContentAsString]);
+          raise Exception.CreateFmt('Error: Respuesta JSON inv?lida: %s', [Res.ContentAsString]);
         end;
         jObj := TJSonObject(LParsed);
         Try
@@ -636,7 +664,7 @@ begin
     End;
   Finally
     If FClient.Asynchronous = False then
-      FreeAndNil(St); // Esto no funciona en multiarea, as� que se libera cuando no lo es.
+      FreeAndNil(St); // Esto no funciona en multiarea, as? que se libera cuando no lo es.
   End;
 end;
 
@@ -646,27 +674,27 @@ var
 begin
   Result := '';
 
-  // 1. Intentamos usar la herramienta externa de visi�n
+  // 1. Intentamos usar la herramienta externa de visi?n
   if Assigned(FVisionTool) and Supports(FVisionTool, IAiVisionTool, LTool) then
   begin
     if FVisionTool is TAiCustomTool then
       TAiCustomTool(FVisionTool).SetContext(Self);
 
-    DoStateChange(acsToolExecuting, 'Analizando imagen con herramienta de visi�n...');
+    DoStateChange(acsToolExecuting, 'Analizando imagen con herramienta de visi?n...');
 
-    // 2. Ejecutamos el an�lisis (la Tool se encarga de llamar a ReportDataEnd con el texto)
+    // 2. Ejecutamos el an?lisis (la Tool se encarga de llamar a ReportDataEnd con el texto)
     LTool.ExecuteImageDescription(aMediaFile, ResMsg, AskMsg);
 
     if Asynchronous then
       Exit;
 
-    // Si es s�ncrono, la Tool debe haber actualizado el ResMsg.Prompt
+    // Si es s?ncrono, la Tool debe haber actualizado el ResMsg.Prompt
     Result := ResMsg.Prompt;
   end
   else
   begin
-    // 3. Si no hay herramienta, lanzamos el error que ten�as originalmente
-    raise Exception.Create('El modelo principal no soporta visi�n nativa y no se ha asignado un VisionTool externo.');
+    // 3. Si no hay herramienta, lanzamos el error que ten?as originalmente
+    raise Exception.Create('El modelo principal no soporta visi?n nativa y no se ha asignado un VisionTool externo.');
   end;
 end;
 
@@ -725,17 +753,16 @@ begin
     if FPdfTool is TAiCustomTool then
       TAiCustomTool(FPdfTool).SetContext(Self);
 
-    DoStateChange(acsToolExecuting, 'Analizando documento PDF (Rasterizaci�n/OCR)...');
+    DoStateChange(acsToolExecuting, 'Analizando documento PDF (Rasterizaci?n/OCR)...');
 
-    // Ejecutamos la l�gica de la herramienta
+    // Ejecutamos la l?gica de la herramienta
     LTool.ExecutePdfAnalysis(aMediaFile, ResMsg, AskMsg);
 
     if Asynchronous then
       Exit;
 
-    // Si es s�ncrono, la herramienta deber�a haber llenado la transcripci�n
+    // Si es s?ncrono, la herramienta deber?a haber llenado la transcripci?n
     Result := aMediaFile.Transcription;
-
 
   end
   else
@@ -776,13 +803,13 @@ begin
     FLastContent := '';
     FLastPrompt := AskMsg.Prompt;
 
-    // 2. Preparar par�metros para la API de TTS
+    // 2. Preparar par?metros para la API de TTS
     LUrl := Url + 'audio/speech';
     LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
     LVoice := Self.Voice; // Usamos la propiedad del componente
     LResponseFormat := Self.voice_format; // Usamos la propiedad del componente
 
-    // 3. Construir y ejecutar la petici�n
+    // 3. Construir y ejecutar la petici?n
     LJsonObject := TJSonObject.Create;
     LBodyStream := nil;
     LResponseStream := TMemoryStream.Create;
@@ -815,7 +842,7 @@ begin
       // 4. Procesar la respuesta
       if LResponse.StatusCode = 200 then
       begin
-        // ... (el resto del c�digo de procesamiento de la respuesta es correcto)
+        // ... (el resto del c?digo de procesamiento de la respuesta es correcto)
         LNewAudioFile := TAiMediaFile.Create;
         try
           LResponseStream.Position := 0;
@@ -842,7 +869,8 @@ begin
       else
       begin
         LResponseStream.Position := 0;
-        var LReader := TStreamReader.Create(LResponseStream);
+        var
+        LReader := TStreamReader.Create(LResponseStream);
         try
           LErrorResponse := LReader.ReadToEnd;
         finally
@@ -879,22 +907,22 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
-    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripci�n.');
+    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripci?n.');
 
   // Si hay una Tool asignada que soporte Audio
   if Assigned(FSpeechTool) and Supports(FSpeechTool, IAiSpeechTool, LTool) then
   begin
-    // Le pasamos el contexto (Self) para que sepa a qui�n reportar eventos
+    // Le pasamos el contexto (Self) para que sepa a qui?n reportar eventos
     if FSpeechTool is TAiCustomTool then
       TAiCustomTool(FSpeechTool).SetContext(Self);
 
     LTool.ExecuteTranscription(aMediaFile, ResMsg, AskMsg);
 
-    // Si es as�ncrono, no devolvemos nada ahora; esperamos el evento de la Tool
+    // Si es as?ncrono, no devolvemos nada ahora; esperamos el evento de la Tool
     if Asynchronous then
       Exit;
 
-    // Si es s�ncrono, la Tool deber�a haber llenado ResMsg.Prompt
+    // Si es s?ncrono, la Tool deber?a haber llenado ResMsg.Prompt
     Result := ResMsg.Prompt;
   end
   else
@@ -920,26 +948,26 @@ begin
       LTempStream.LoadFromStream(aMediaFile.Content);
       LTempStream.Position := 0;
 
-      // --- 1. CONSTRUCCI�N DEL BODY MULTIPART CON PAR�METROS GEN�RICOS ---
+      // --- 1. CONSTRUCCI?N DEL BODY MULTIPART CON PAR?METROS GEN?RICOS ---
 
 {$IF CompilerVersion >= 35}
       Body.AddStream('file', LTempStream, False, aMediaFile.FileName, aMediaFile.MimeType);
 {$ELSE}
       Body.AddStream('file', LTempStream, aMediaFile.FileName, aMediaFile.MimeType);
 {$ENDIF}
-      // Modelo: usa el modelo principal si es de transcripci�n, si no, usa un default.
+      // Modelo: usa el modelo principal si es de transcripci?n, si no, usa un default.
       Body.AddField('model', LModel); // Default seguro
 
       if not AskMsg.Prompt.IsEmpty then
         Body.AddField('prompt', AskMsg.Prompt);
 
-      // Formato de respuesta (gen�rico, como string)
+      // Formato de respuesta (gen?rico, como string)
       if not Self.Transcription_ResponseFormat.IsEmpty then
         Body.AddField('response_format', Self.Transcription_ResponseFormat)
       else
         Body.AddField('response_format', 'json'); // Default a JSON si no se especifica
 
-      // Par�metros opcionales
+      // Par?metros opcionales
       if not Self.Language.IsEmpty then
         Body.AddField('language', Self.Language);
 
@@ -954,27 +982,28 @@ begin
         Granularities.CommaText := Self.Transcription_TimestampGranularities;
         for I := 0 to Granularities.Count - 1 do
         begin
-          // A�adimos cada granularidad como un campo separado con '[]'
+          // A?adimos cada granularidad como un campo separado con '[]'
           Body.AddField('timestamp_granularities[]', Trim(Granularities[I]));
         end;
       end;
 
-      // TODO : TODAV�A NO EST� LISTO PARA UTILIZAR LA TRANSCRIPCI�N EN MODO ASCINCR�NICO, Falta implementar a futuro
+      // TODO : TODAV?A NO EST? LISTO PARA UTILIZAR LA TRANSCRIPCI?N EN MODO ASCINCR?NICO, Falta implementar a futuro
       // Streaming
       // if Self.Asynchronous then
       // Body.AddField('stream', 'true');
 
-      // --- 2. EJECUCI�N DE LA PETICI�N POST ---
+      // --- 2. EJECUCI?N DE LA PETICI?N POST ---
 
-      // (La l�gica de streaming/s�ncrono se mantiene igual)
+      // (La l?gica de streaming/s?ncrono se mantiene igual)
       begin
         Res := Client.Post(sUrl, Body, LResponseStream, Headers);
 
         if Res.StatusCode = 200 then
         begin
 
-          var LParsedTranscript := TJSonObject.ParseJSONValue(Res.ContentAsString);
-          if not (LParsedTranscript is TJSonObject) then
+          var
+          LParsedTranscript := TJSonObject.ParseJSONValue(Res.ContentAsString);
+          if not(LParsedTranscript is TJSonObject) then
           begin
             LParsedTranscript.Free;
             LResponseObj := TJSonObject.Create(TJSonPair.Create('text', Res.ContentAsString));
@@ -983,7 +1012,7 @@ begin
             LResponseObj := TJSonObject(LParsedTranscript);
 
           try
-            // Aqu� llamas al procedimiento de parseo de transcripciones
+            // Aqu? llamas al procedimiento de parseo de transcripciones
             ParseJsonTranscript(LResponseObj, ResMsg, aMediaFile);
           finally
             LResponseObj.Free;
@@ -994,7 +1023,7 @@ begin
         else
         begin
           DoStateChange(acsError, Res.ContentAsString);
-          Raise Exception.CreateFmt('Error en la transcripci�n: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+          Raise Exception.CreateFmt('Error en la transcripci?n: %d, %s', [Res.StatusCode, Res.ContentAsString]);
         end;
       end;
 
@@ -1025,7 +1054,29 @@ begin
     Result := ResMsg.Prompt;
   end
   else
-    raise Exception.Create('No se ha asignado una herramienta de b�squeda web (WebSearchTool).');
+    raise Exception.Create('No se ha asignado una herramienta de b?squeda web (WebSearchTool).');
+end;
+
+function TAiChat.InternalRunReport(ResMsg, AskMsg: TAiChatMessage): String;
+var
+  LTool: IAiReportTool;
+begin
+  Result := '';
+  if Assigned(FReportTool) and Supports(FReportTool, IAiReportTool, LTool) then
+  begin
+    if FReportTool is TAiCustomTool then
+      TAiCustomTool(FReportTool).SetContext(Self);
+
+    DoStateChange(acsToolExecuting, 'Generando reporte...');
+    LTool.ExecuteReport(ResMsg, AskMsg);
+
+    if Asynchronous then
+      Exit;
+    Result := ResMsg.Prompt;
+  end
+  else
+    // Sin herramienta asignada: genera el reporte v?a LLM (ej. code_interpreter de Gemini)
+    InternalRunCompletions(ResMsg, AskMsg);
 end;
 
 function TAiChat.AddMessage(aPrompt, aRole: String): TAiChatMessage;
@@ -1047,7 +1098,7 @@ begin
     Result := Self.GetLastMessage; // Retorna el mensaje
   End
   Else
-    Raise Exception.Create('Esta funci�n no es compatible con el modo asincr�nico')
+    Raise Exception.Create('Esta funci?n no es compatible con el modo asincr?nico')
 end;
 
 function TAiChat.AddMessageAndRun(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String;
@@ -1093,13 +1144,16 @@ begin
 
   FNativeInputFiles := [];
   FNativeOutputFiles := [];
+  FModelCaps := [];
+  FSessionCaps := [];
+  FNewSystemConfigured := False;
 
   FModel := 'gpt-5';
   FN := 1;
   FResponse_format := TAiChatResponseFormat.tiaChatRfText;
   FTemperature := 1;
   FUser := 'user';
-  FSystemPrompt.Text := 'Eres un asistente muy �til y servicial';
+  FSystemPrompt.Text := 'Eres un asistente muy ?til y servicial';
   FMax_tokens := 3000;
   FUrl := GlOpenAIUrl;
   FTop_p := 1;
@@ -1139,10 +1193,10 @@ begin
 
   If Assigned(AiFunctions) and AiFunctions.DoCallFunction(ToolCall) then
   Begin
-    // Si ejecut� la funci�n
+    // Si ejecut? la funci?n
   End
   Else
-  Begin // Ejecuta la funci�n por defecto en el componente TAiChat
+  Begin // Ejecuta la funci?n por defecto en el componente TAiChat
     If Assigned(FOnCallToolFunction) then
       FOnCallToolFunction(Self, ToolCall)
   End;
@@ -1205,7 +1259,7 @@ Var
   JVal, JVal1, jValToolCall: TJSonValue;
   Fun: TAiToolsFunction;
   JToolCalls: TJSonArray;
-  Nom, Valor: String;
+  Nom, Valor, sType: String;
   I: Integer;
 begin
   Result := TAiToolsFunctions.Create;
@@ -1219,12 +1273,15 @@ begin
       For JVal in JToolCalls do
       Begin
         jObj := TJSonObject(JVal);
-        If jObj.GetValue<String>('type') = 'function' then
+        // Algunos providers (Mistral) omiten 'type'; en ese caso se asume 'function'
+        if not jObj.TryGetValue<String>('type', sType) then
+          sType := 'function';
+        If sType = 'function' then
         Begin
           jObj := TJSonObject(JVal);
           Fun := TAiToolsFunction.Create;
           Fun.Id := jObj.GetValue<String>('id');
-          Fun.Tipo := jObj.GetValue<String>('type');
+          Fun.Tipo := sType;
 
           If jObj.TryGetValue<TJSonObject>('function', jFunc) then
           Begin
@@ -1254,7 +1311,7 @@ begin
               End;
             End;
           Except
-            // Si no hay par�metros no marca error
+            // Si no hay par?metros no marca error
           End;
           Result.Add(Fun.Id, Fun);
         End;
@@ -1265,14 +1322,14 @@ end;
 
 function TAiChat.GetApiKey: String;
 begin
-  // Si est� en modo de dise�o, simplemente retorna el valor tal cual
+  // Si est? en modo de dise?o, simplemente retorna el valor tal cual
   if (csDesigning in ComponentState) or (csDestroying in ComponentState) then
   begin
     Result := FApiKey;
     Exit;
   end;
 
-  // En modo de ejecuci�n
+  // En modo de ejecuci?n
   if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
     // Retorna el valor de la variable de entorno, quitando el '@'
     Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
@@ -1335,11 +1392,12 @@ begin
 
     if Res.StatusCode = 200 then
     Begin
-      var LParsedModels := TJSonObject.ParseJSONValue(Res.ContentAsString);
-      if not (LParsedModels is TJSonObject) then
+      var
+      LParsedModels := TJSonObject.ParseJSONValue(Res.ContentAsString);
+      if not(LParsedModels is TJSonObject) then
       begin
         LParsedModels.Free;
-        raise Exception.CreateFmt('Error: Respuesta JSON inv�lida: %s', [Res.ContentAsString]);
+        raise Exception.CreateFmt('Error: Respuesta JSON inv?lida: %s', [Res.ContentAsString]);
       end;
       jRes := TJSonObject(LParsedModels);
       Try
@@ -1383,7 +1441,7 @@ end;
 
 function TAiChat.GetTools(aToolFormat: TToolFormat): TStrings;
 begin
-  If Assigned(FAiFunctions) and FTool_Active then // Si est� asignado el componente lo obtiene del componente
+  If Assigned(FAiFunctions) and FTool_Active then // Si est? asignado el componente lo obtiene del componente
   Begin
     FTools.Text := FAiFunctions.GetTools(aToolFormat);
     Result := FTools;
@@ -1434,7 +1492,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
 {$ENDIF}
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools est�n mal definido, debe ser un JsonArray');
+        Raise Exception.Create('La propiedad Tools est?n mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(FTool_choice) <> '') then
@@ -1513,7 +1571,7 @@ begin
 
     if tcm_WebSearch in FChatMediaSupports then
     begin
-      // La API de OpenAI espera un objeto para las opciones, incluso si est� vac�o.
+      // La API de OpenAI espera un objeto para las opciones, incluso si est? vac?o.
       Var
       jWebSearchOptions := TJSonObject.Create;
       AJSONObject.AddPair('web_search_options', jWebSearchOptions);
@@ -1576,6 +1634,8 @@ begin
       FVisionTool := nil;
     if AComponent = FPdfTool then
       FPdfTool := nil;
+    if AComponent = FReportTool then
+      FReportTool := nil;
     if AComponent = FShellTool then
       FShellTool := nil;
     if AComponent = FTextEditorTool then
@@ -1597,7 +1657,7 @@ Var
   ToolIndex: Integer;
   BufferObj, BufferFunc: TJSonObject;
 
-  // Variables para reconstrucci�n y Fin de Stream
+  // Variables para reconstrucci?n y Fin de Stream
   CombinedTools: TJSonArray;
   sToolCallsStr: String;
   SortedKeys: TList<Integer>;
@@ -1613,8 +1673,8 @@ Var
   // Variables para compatibilidad y parsing
   jArrChoices: TJSonArray;
 
-  // Procedimiento local para procesar una l�nea de JSON o Comando
-  // Esto evita duplicar c�digo para el caso del buffer remanente
+  // Procedimiento local para procesar una l?nea de JSON o Comando
+  // Esto evita duplicar c?digo para el caso del buffer remanente
   Procedure ProcessLine(ALine: String);
   Begin
     if ALine = '' then
@@ -1632,7 +1692,7 @@ Var
     // -----------------------------------------------------------------------
     if ALine = '[DONE]' then
     Begin
-      // L�gica de Finalizaci�n y Reconstrucci�n de Tools
+      // L?gica de Finalizaci?n y Reconstrucci?n de Tools
       sToolCallsStr := '';
 
       if FTmpToolCallBuffer.Count > 0 then
@@ -1661,7 +1721,7 @@ Var
         end;
       end;
 
-      // Fake JSON para enga�ar a ParseChat
+      // Fake JSON para enga?ar a ParseChat
       FakeResponseObj := TJSonObject.Create;
       try
         FakeResponseObj.AddPair('id', 'stream-' + IntToStr(TThread.GetTickCount));
@@ -1680,6 +1740,8 @@ Var
         FakeMsg.AddPair('role', FTmpRole);
         if FLastContent <> '' then
           FakeMsg.AddPair('content', FLastContent);
+        if FLastReasoning <> '' then
+          FakeMsg.AddPair('reasoning_content', FLastReasoning); // Requerido por APIs con thinking (DeepSeek, Kimi, etc.)
         if sToolCallsStr <> '' then
           FakeMsg.AddPair('tool_calls', TJSonArray(TJSonObject.ParseJSONValue(sToolCallsStr)));
 
@@ -1717,6 +1779,7 @@ Var
         FakeResponseObj.Free;
       end;
 
+      FLastReasoning := ''; // Limpiar para el próximo round o próxima petición
       FBusy := False;
       Exit;
     End;
@@ -1724,11 +1787,12 @@ Var
     // -----------------------------------------------------------------------
     // CASO 2: JSON STANDARD
     // -----------------------------------------------------------------------
-    var LParsedLine := TJSonObject.ParseJSONValue(ALine);
-    if not (LParsedLine is TJSonObject) then
+    var
+    LParsedLine := TJSonObject.ParseJSONValue(ALine);
+    if not(LParsedLine is TJSonObject) then
     begin
       LParsedLine.Free;
-      Exit; // JSON inv�lido o incompleto
+      Exit; // JSON inv?lido o incompleto
     end;
     jObj := TJSonObject(LParsedLine);
 
@@ -1746,6 +1810,7 @@ Var
           Value := '';
           if Delta.TryGetValue<String>('reasoning', Value) or Delta.TryGetValue<String>('reasoning_content', Value) then
           begin
+            FLastReasoning := FLastReasoning + Value; // Acumular para incluir en historial
             if (Value <> '') and Assigned(FOnReceiveThinking) then
             begin
               Value := StringReplace(Value, #$A, sLineBreak, [rfReplaceAll]);
@@ -1754,7 +1819,7 @@ Var
           end;
 
           // Content
-          if (Delta.GetValue('content') <> nil) and not(Delta.GetValue('content') is TJSONNull) then
+          {if (Delta.GetValue('content') <> nil) and not(Delta.GetValue('content') is TJSONNull) then
           begin
             Value := Delta.GetValue<String>('content');
             FLastContent := FLastContent + Value;
@@ -1764,6 +1829,23 @@ Var
               FOnReceiveDataEvent(Self, Nil, jObj, FTmpRole, Value);
             end;
           end;
+          }
+
+          var
+            JVal: TJSonValue;
+          JVal := Delta.GetValue('content');
+          if Assigned(JVal) and (JVal is TJSONString) then
+          begin
+            Value := JVal.Value;
+            FLastContent := FLastContent + Value;
+            if Assigned(FOnReceiveDataEvent) then
+            begin
+              Value := StringReplace(Value, #$A, sLineBreak, [rfReplaceAll]);
+              FOnReceiveDataEvent(Self, Nil, jObj, FTmpRole, Value);
+            end;
+          end
+          else if Assigned(JVal) and (JVal is TJSonArray) then
+            ParseDeltaContentArray(TJSonArray(JVal), jObj);
 
           // Tools
           if Delta.TryGetValue<TJSonArray>('tool_calls', JToolCalls) then
@@ -1831,8 +1913,11 @@ Var
   End;
 
 begin
-  // LogDebug('--OnInternalReceiveData--');
-  // LogDebug(FResponse.DataString);
+  LogDebug('--OnInternalReceiveData--');
+  if Length(FResponse.DataString) > 500 then
+    LogDebug(Copy(FResponse.DataString, 1, 500) + '...[truncado]')
+  else
+    LogDebug(FResponse.DataString);
 
   If FClient.Asynchronous = False then
     Exit;
@@ -1842,6 +1927,7 @@ begin
   Begin
     FBusy := False;
     FTmpToolCallBuffer.Clear;
+    FLastReasoning := '';
     If Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, Nil, Nil, 'system', 'abort');
     Exit;
@@ -1851,17 +1937,17 @@ begin
     FTmpResponseText := FTmpResponseText + FResponse.DataString;
     FResponse.Clear;
 
-    // 1. Bucle principal: Procesa todo lo que tenga salto de l�nea seguro
+    // 1. Bucle principal: Procesa todo lo que tenga salto de l?nea seguro
     while Pos(#10, FTmpResponseText) > 0 do
     begin
       P := Pos(#10, FTmpResponseText);
       sJson := Trim(Copy(FTmpResponseText, 1, P - 1)); // Trim elimina espacios iniciales como en tu error
       Delete(FTmpResponseText, 1, P);
 
-      ProcessLine(sJson); // Procesamos la l�nea limpia
+      ProcessLine(sJson); // Procesamos la l?nea limpia
     end;
 
-    // 2. Borde de Seguridad: �ltima l�nea sin salto
+    // 2. Borde de Seguridad: ?ltima l?nea sin salto
     // Si lo que queda en el buffer es EXACTAMENTE '[DONE]' (o con data:), lo procesamos.
     // Si es JSON incompleto (ej: '{"id":'), NO lo tocamos, esperamos el siguiente paquete.
     sJson := Trim(FTmpResponseText);
@@ -1874,6 +1960,13 @@ begin
   Except
     // Manejo de errores silencioso para stream
   End;
+end;
+
+procedure TAiChat.ParseDeltaContentArray(AContentArr: TJSonArray; jObj: TJSonObject);
+begin
+  // Implementación base vacía.
+  // Drivers que reciben delta.content como array tipado (ej: Mistral magistral)
+  // sobreescriben este método para procesar los bloques {"type":"text"/"thinking",...}.
 end;
 
 procedure TAiChat.OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse);
@@ -1933,11 +2026,18 @@ Var
 
 begin
 
-  ModelVersion := jObj.GetValue('model').Value;
+  aPrompt_tokens := 0;
+  aCompletion_tokens := 0;
+  aTotal_tokens := 0;
+  if Assigned(jObj.GetValue('model')) then
+    ModelVersion := jObj.GetValue('model').Value;
   uso := jObj.GetValue('usage') as TJSonObject;
-  aPrompt_tokens := uso.GetValue<Integer>('prompt_tokens');
-  aCompletion_tokens := uso.GetValue<Integer>('completion_tokens');
-  aTotal_tokens := uso.GetValue<Integer>('total_tokens');
+  if Assigned(uso) then
+  begin
+    aPrompt_tokens := uso.GetValue<Integer>('prompt_tokens');
+    aCompletion_tokens := uso.GetValue<Integer>('completion_tokens');
+    aTotal_tokens := uso.GetValue<Integer>('total_tokens');
+  end;
 
   AskMsg := GetLastMessage; // Obtiene la pregunta, ya que ResMsg se adiciona a la lista si no hay errores.
 
@@ -1996,6 +2096,8 @@ begin
     Var
     Msg := TAiChatMessage.Create(Respuesta, Role);
     Msg.Tool_calls := sToolCalls;
+    if sReasoning <> '' then
+      Msg.ReasoningContent := sReasoning;  // Requerido por deepseek-reasoner y otros modelos con reasoning
     Msg.Id := FMessages.Count + 1;
     FMessages.Add(Msg);
   End;
@@ -2008,7 +2110,7 @@ begin
 
       NumTasks := LFunciones.Count;
       SetLength(TaskList, NumTasks);
-      // Ajusta el tama�o del array para el n�mero de tareas
+      // Ajusta el tama?o del array para el n?mero de tareas
 
       I := 0;
       For Clave in LFunciones.Keys do
@@ -2025,7 +2127,8 @@ begin
             Except
               On E: Exception do
               Begin
-                var LErrorMsg := 'Error in "' + ToolCall.Name + '": ' + E.Message;
+                var
+                LErrorMsg := 'Error in "' + ToolCall.Name + '": ' + E.Message;
                 TThread.Queue(nil,
                   procedure
                   begin
@@ -2057,7 +2160,7 @@ begin
     Begin
       FBusy := False;
 
-      // Si est� marcado que genere archivos tomar� el resultado y extraer� los archivos y los adicona como mediafiles a ResMsg
+      // Si est? marcado que genere archivos tomar? el resultado y extraer? los archivos y los adicona como mediafiles a ResMsg
 
       If tfc_ExtracttextFile in NativeOutputFiles then
       Begin
@@ -2105,7 +2208,7 @@ end;
   jUsage, jInputTokenDetails: TJSonObject;
   jArrWords, jArrSegments: TJSonArray;
 
-  // Datos extra�dos
+  // Datos extra?dos
   sTextoTranscrito, sTextoWords, sTextoSegments: String;
   aTotal_tokens, aInput_tokens, aOutput_tokens: integer;
   aText_tokens, aAudio_tokens: integer; // Tokens detallados del input
@@ -2120,7 +2223,7 @@ end;
 
   if not jObj.TryGetValue<string>('text', sTextoTranscrito) then
   begin
-  FLastError := 'La respuesta de la API no contiene el campo "text" con la transcripci�n.';
+  FLastError := 'La respuesta de la API no contiene el campo "text" con la transcripci?n.';
   DoError(FLastError, nil);
   FBusy := False;
   Exit;
@@ -2132,8 +2235,8 @@ end;
   If jObj.TryGetValue<TJSonArray>('segments', jArrSegments) then
   sTextoSegments := jArrSegments.Format;
 
-  // --- 3. EXTRACCI�N DE DATOS DE USO (TOKENS) ---
-  // El objeto 'usage' podr�a no venir, as� que lo manejamos de forma segura.
+  // --- 3. EXTRACCI?N DE DATOS DE USO (TOKENS) ---
+  // El objeto 'usage' podr?a no venir, as? que lo manejamos de forma segura.
   if jObj.TryGetValue<TJSonObject>('usage', jUsage) then
   begin
   // Extraemos los tokens principales
@@ -2142,7 +2245,7 @@ end;
   jUsage.TryGetValue<integer>('output_tokens', aOutput_tokens); // Costo del texto generado
 
   // Extraemos los detalles de los tokens de entrada (sub-objeto)
-  // Esto nos dice cu�ntos tokens correspondieron al audio y cu�ntos a un posible prompt de texto.
+  // Esto nos dice cu?ntos tokens correspondieron al audio y cu?ntos a un posible prompt de texto.
   if jUsage.TryGetValue<TJSonObject>('input_token_details', jInputTokenDetails) then
   begin
   jInputTokenDetails.TryGetValue<integer>('text_tokens', aText_tokens);
@@ -2150,7 +2253,7 @@ end;
   end;
   end;
 
-  // --- 4. ACTUALIZACI�N DEL ESTADO DEL COMPONENTE ---
+  // --- 4. ACTUALIZACI?N DEL ESTADO DEL COMPONENTE ---
   // Actualizamos los contadores de tokens globales, sumando los de esta llamada.
   Self.Total_tokens := Self.Total_tokens + aTotal_tokens;
   Self.Prompt_tokens := Self.Prompt_tokens + aInput_tokens; // 'input' equivale a 'prompt'
@@ -2182,7 +2285,7 @@ var
   jUsage, jInputTokenDetails: TJSonObject;
   jArrWords, jArrSegments: TJSonArray;
 
-  // Datos extra�dos
+  // Datos extra?dos
   sTextoTranscrito, sTextoWords, sTextoSegments: String;
   aTotal_tokens, aInput_tokens, aOutput_tokens: Integer;
   aText_tokens, aAudio_tokens: Integer; // Tokens detallados del input
@@ -2201,7 +2304,7 @@ begin
   // 1. Validar texto principal
   if not jObj.TryGetValue<string>('text', sTextoTranscrito) then
   begin
-    FLastError := 'La respuesta de la API no contiene el campo "text" con la transcripci�n.';
+    FLastError := 'La respuesta de la API no contiene el campo "text" con la transcripci?n.';
     DoError(FLastError, nil);
     FBusy := False;
     Exit;
@@ -2214,7 +2317,7 @@ begin
   If jObj.TryGetValue<TJSonArray>('segments', jArrSegments) then
     sTextoSegments := jArrSegments.Format;
 
-  // 3. EXTRACCI�N DE DATOS DE USO (TOKENS)
+  // 3. EXTRACCI?N DE DATOS DE USO (TOKENS)
   if jObj.TryGetValue<TJSonObject>('usage', jUsage) then
   begin
     jUsage.TryGetValue<Integer>('total_tokens', aTotal_tokens);
@@ -2228,7 +2331,7 @@ begin
     end;
   end;
 
-  // 4. ACTUALIZACI�N DEL ESTADO DEL COMPONENTE Y MENSAJES
+  // 4. ACTUALIZACI?N DEL ESTADO DEL COMPONENTE Y MENSAJES
   Self.Total_tokens := Self.Total_tokens + aTotal_tokens;
   Self.Prompt_tokens := Self.Prompt_tokens + aInput_tokens;
   Self.Completion_tokens := Self.Completion_tokens + aOutput_tokens;
@@ -2244,7 +2347,7 @@ begin
     aMediaFile.Transcription := sTextoTranscrito;
   end;
 
-  // Marcar como procesado para que no se reenv�e infinitamente en un loop
+  // Marcar como procesado para que no se reenv?e infinitamente en un loop
   aMediaFile.Procesado := True;
 
   // Actualizar el mensaje de respuesta (ResMsg)
@@ -2268,7 +2371,7 @@ begin
   // A) Obtener el mensaje original (Usuario) para pasar como contexto
   AskMsg := GetLastMessage;
 
-  // B) Notificar procesamiento interno (�til para logs o hooks)
+  // B) Notificar procesamiento interno (?til para logs o hooks)
   DoProcessResponse(AskMsg, ResMsg, sTextoTranscrito);
 
   // C) Notificar cambio de estado a la UI
@@ -2291,7 +2394,7 @@ Var
   I: Integer;
   JMemory: TJSonObject;
 begin
-  // Si el formato de respuesta es Json, siempre debe llevar en la instrucci�n que el formato sea json
+  // Si el formato de respuesta es Json, siempre debe llevar en la instrucci?n que el formato sea json
   If Self.Response_format = TAiChatResponseFormat.tiaChatRfJson then
     S := 'Responde en formato json'
   Else
@@ -2311,7 +2414,7 @@ begin
     Except
       ON E: Exception do
       Begin
-        Raise Exception.Create('El formato de memoria debe ser Key=Value, no est� bien configurado');
+        Raise Exception.Create('El formato de memoria debe ser Key=Value, no est? bien configurado');
       End;
     End;
 
@@ -2375,7 +2478,7 @@ end;
   LOwnsResMsg := False;
 
   // Si no se pasa un objeto ResMsg, creamos uno localmente.
-  // En este caso, Run es el "due�o" y responsable de su ciclo de vida si no se a�ade a la lista.
+  // En este caso, Run es el "due?o" y responsable de su ciclo de vida si no se a?ade a la lista.
   If Not Assigned(ResMsg) then
   begin
   ResMsg := TAiChatMessage.Create('', 'assistant');
@@ -2388,18 +2491,18 @@ end;
   InternalAddMessage(AskMsg);
 
   Try
-  // Obtiene el �ltimo mensaje que corresponde a la solicitud
+  // Obtiene el ?ltimo mensaje que corresponde a la solicitud
   if not Assigned(AskMsg) then
   AskMsg := GetLastMessage;
 
-  // Si existen mensajes sin procesar intentar� procesarlos antes de pasarlo al chat
+  // Si existen mensajes sin procesar intentar? procesarlos antes de pasarlo al chat
   if Assigned(AskMsg) and (AskMsg.HasUnprocessedItems) then
   begin
   for MF in AskMsg.MediaFiles do
   begin
   If MF.FileCategory in NativeInputFiles then
   Begin
-  // L�gica de procesamiento de archivos existentes...
+  // L?gica de procesamiento de archivos existentes...
   if (not(Tcm_Audio in ChatMediaSupports)) and (MF.FileCategory = Tfc_Audio) and (not MF.Procesado) then
   InternalRunTranscription(MF, ResMsg, AskMsg)
   else if (not(Tcm_pdf in ChatMediaSupports)) and (MF.FileCategory = Tfc_pdf) and (not MF.Procesado) then
@@ -2412,7 +2515,7 @@ end;
   Begin
   InternalRunCompletions(ResMsg, AskMsg);
 
-  // --- CORRECCI�N 1: Manejo Async dentro del bucle de archivos ---
+  // --- CORRECCI?N 1: Manejo Async dentro del bucle de archivos ---
   If FClient.Asynchronous = True then
   Begin
   if LOwnsResMsg then // Solo liberar si nosotros lo creamos
@@ -2420,7 +2523,7 @@ end;
   ResMsg.Free;
   ResMsg := Nil;
   end;
-  Exit; // Salir para evitar a�adir a la lista abajo
+  Exit; // Salir para evitar a?adir a la lista abajo
   End;
   End;
   end
@@ -2428,7 +2531,7 @@ end;
   Begin
   InternalRunCompletions(ResMsg, AskMsg);
 
-  // --- CORRECCI�N 2: Manejo Async else nativo ---
+  // --- CORRECCI?N 2: Manejo Async else nativo ---
   If FClient.Asynchronous = True then
   Begin
   if LOwnsResMsg then
@@ -2443,7 +2546,7 @@ end;
   end
   Else
   Begin
-  // L�gica principal sin archivos pendientes de procesar
+  // L?gica principal sin archivos pendientes de procesar
   if (Not(Tcm_Image in ChatMediaSupports)) and (Tfc_Image in NativeOutputFiles) then
   InternalRunImageGeneration(ResMsg, AskMsg)
   Else if (Not(Tcm_Audio in ChatMediaSupports)) and (Tfc_Audio in NativeOutputFiles) then
@@ -2456,11 +2559,11 @@ end;
   Begin
   InternalRunCompletions(ResMsg, AskMsg);
 
-  // --- CORRECCI�N 3: Manejo Async Principal (Donde te daba el error) ---
+  // --- CORRECCI?N 3: Manejo Async Principal (Donde te daba el error) ---
   If FClient.Asynchronous = True then
   Begin
-  // CORREGIDO: Solo liberamos si Run cre� el objeto.
-  // Si viene de ParseChat (Tool Call), LOwnsResMsg es False, no se libera aqu�,
+  // CORREGIDO: Solo liberamos si Run cre? el objeto.
+  // Si viene de ParseChat (Tool Call), LOwnsResMsg es False, no se libera aqu?,
   // evitando el Double Free en OnInternalReceiveData.
   if LOwnsResMsg then
   begin
@@ -2473,7 +2576,7 @@ end;
   End;
   End;
 
-  // Solo si llega hasta aqu� (Modo S�ncrono)
+  // Solo si llega hasta aqu? (Modo S?ncrono)
   If Assigned(ResMsg) then
   Result := ResMsg.Prompt;
 
@@ -2492,7 +2595,7 @@ end;
   // Limpieza segura en caso de error
   If LOwnsResMsg and Assigned(ResMsg) then
   begin
-  // Verificamos que no est� en la lista antes de liberar
+  // Verificamos que no est? en la lista antes de liberar
   if FMessages.IndexOf(ResMsg) = -1 then
   ResMsg.Free;
   end;
@@ -2505,7 +2608,7 @@ end;
   end;
 }
 
-function TAiChat.Run(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
+function TAiChat.RunLegacy(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
 var
   MF: TAiMediaFile;
   LOwnsResMsg: Boolean;
@@ -2515,8 +2618,8 @@ begin
   Result := '';
   LOwnsResMsg := False;
 
-  // --- PREPARACI�N ---
-  // 1. Gesti�n de mensaje de respuesta: Si no se provee uno, se crea localmente
+  // --- PREPARACI?N ---
+  // 1. Gesti?n de mensaje de respuesta: Si no se provee uno, se crea localmente
   if not Assigned(ResMsg) then
   begin
     ResMsg := TAiChatMessage.Create('', 'assistant');
@@ -2528,24 +2631,24 @@ begin
     if Assigned(AskMsg) then
       InternalAddMessage(AskMsg);
 
-    // 3. Referencia al mensaje que dispar� la acci�n
+    // 3. Referencia al mensaje que dispar? la acci?n
     if not Assigned(AskMsg) then
       AskMsg := GetLastMessage;
 
     if not Assigned(AskMsg) then
-      raise Exception.Create('No hay un mensaje v�lido para procesar en TAiChat.Run');
+      raise Exception.Create('No hay un mensaje v?lido para procesar en TAiChat.Run');
 
-    // --- FASE 1: BRIDGE DE ENTRADA (Interpretaci�n / Transcripci�n) ---
-    // Solo se ejecuta en modo Conversaci�n para preparar el contexto del LLM
+    // --- FASE 1: BRIDGE DE ENTRADA (Interpretaci?n / Transcripci?n) ---
+    // Solo se ejecuta en modo Conversaci?n para preparar el contexto del LLM
     if (FChatMode = cmConversation) then
     begin
       for MF in AskMsg.MediaFiles do
       begin
-        // Regla: Si la categor�a del archivo NO es aceptada nativamente por el driver
-        // y el archivo a�n no ha sido marcado como procesado.
+        // Regla: Si la categor?a del archivo NO es aceptada nativamente por el driver
+        // y el archivo a?n no ha sido marcado como procesado.
         if not(MF.FileCategory in NativeInputFiles) and not MF.Procesado then
         begin
-          // A. Intercepci�n manual por evento (Prioridad 1)
+          // A. Intercepci?n manual por evento (Prioridad 1)
           if Assigned(FOnProcessMediaFile) then
           begin
             LRes := '';
@@ -2555,17 +2658,17 @@ begin
             MF.Transcription := LRes;
           end;
 
-          // B. Delegaci�n a Bridges Autom�ticos (Prioridad 2)
+          // B. Delegaci?n a Bridges Autom?ticos (Prioridad 2)
           if not MF.Procesado then
           begin
             case MF.FileCategory of
               Tfc_Audio:
-                // Si el modelo no tiene "o�do" nativo (Tcm_Audio), transcribimos
+                // Si el modelo no tiene "o?do" nativo (Tcm_Audio), transcribimos
                 if not(Tcm_Audio in ChatMediaSupports) then
                   InternalRunTranscription(MF, ResMsg, AskMsg);
 
               Tfc_Image:
-                // Si el modelo no tiene "visi�n" nativa (Tcm_Image), describimos
+                // Si el modelo no tiene "visi?n" nativa (Tcm_Image), describimos
                 if not(Tcm_Image in ChatMediaSupports) then
                   InternalRunImageDescription(MF, ResMsg, AskMsg);
 
@@ -2579,40 +2682,44 @@ begin
       end;
     end;
 
-    // --- FASE 2: GROUNDING (Conexi�n a Datos Externos) ---
-    // Si la b�squeda web est� habilitada por el usuario (EnabledFeatures)
+    // --- FASE 2: GROUNDING (Conexi?n a Datos Externos) ---
+    // Si la b?squeda web est? habilitada por el usuario (EnabledFeatures)
     // PERO el modelo actual no sabe navegar nativamente (ChatMediaSupports).
     if (tcm_WebSearch in EnabledFeatures) and not(tcm_WebSearch in ChatMediaSupports) then
     begin
-      DoStateChange(acsReasoning, 'Ejecutando Bridge de B�squeda Web...');
+      DoStateChange(acsReasoning, 'Ejecutando Bridge de B?squeda Web...');
       InternalRunWebSearch(ResMsg, AskMsg);
       // El bridge inyecta el conocimiento en el prompt o en el objeto ResMsg
     end;
 
-    // --- FASE 3: ORQUESTACI�N DE SALIDA (Generaci�n seg�n Capacidad) ---
+    // --- FASE 3: ORQUESTACI?N DE SALIDA (Generaci?n seg?n Capacidad) ---
     case FChatMode of
       cmConversation:
         begin
-          // El orquestador decide bas�ndose en los Gaps de capacidad:
+          // El orquestador decide bas?ndose en los Gaps de capacidad:
 
-          // �El usuario quiere video y el modelo no puede? -> Delegar a Tool
+          // ?El usuario quiere video y el modelo no puede? -> Delegar a Tool
           if (Tfc_Video in NativeOutputFiles) and not(Tcm_Video in ChatMediaSupports) then
             InternalRunImageVideoGeneration(ResMsg, AskMsg)
 
-            // �El usuario quiere imagen y el modelo no puede? -> Delegar a Tool
+            // ?El usuario quiere imagen y el modelo no puede? -> Delegar a Tool
           else if (Tfc_Image in NativeOutputFiles) and not(Tcm_Image in ChatMediaSupports) then
             InternalRunImageGeneration(ResMsg, AskMsg)
 
-            // �El usuario quiere voz (speech) y el modelo no puede? -> Delegar a Tool
+            // ?El usuario quiere voz (speech) y el modelo no puede? -> Delegar a Tool
           else if (Tfc_Audio in NativeOutputFiles) and not(Tcm_Audio in ChatMediaSupports) then
             InternalRunSpeechGeneration(ResMsg, AskMsg)
+
+            // ?El usuario quiere reporte y el modelo no lo genera nativamente? -> Delegar a Tool
+          else if (Tfc_Report in NativeOutputFiles) and not(Tcm_ReportGeneration in ChatMediaSupports) then
+            InternalRunReport(ResMsg, AskMsg)
 
             // Si no hay gaps o no se requieren medios especiales, usamos el LLM nativo
           else
             InternalRunCompletions(ResMsg, AskMsg);
         end;
 
-      // MODOS ESPEC�FICOS (Forzados): Saltan la l�gica de gaps y ejecutan la herramienta directamente
+      // MODOS ESPEC?FICOS (Forzados): Saltan la l?gica de gaps y ejecutan la herramienta directamente
       cmImageGeneration:
         InternalRunImageGeneration(ResMsg, AskMsg);
       cmVideoGeneration:
@@ -2621,6 +2728,8 @@ begin
         InternalRunSpeechGeneration(ResMsg, AskMsg);
       cmWebSearch:
         InternalRunWebSearch(ResMsg, AskMsg);
+      cmReportGeneration:
+        InternalRunReport(ResMsg, AskMsg);
       cmTranscription:
         begin
           for MF in AskMsg.MediaFiles do
@@ -2632,11 +2741,11 @@ begin
         end;
     end;
 
-    // --- GESTI�N DE RESULTADO Y ASINCRON�A ---
+    // --- GESTI?N DE RESULTADO Y ASINCRON?A ---
     if FClient.Asynchronous then
     begin
-      // Si es as�ncrono, el resultado vendr� por eventos.
-      // Liberamos el mensaje temporal si el Run lo cre�.
+      // Si es as?ncrono, el resultado vendr? por eventos.
+      // Liberamos el mensaje temporal si el Run lo cre?.
       if LOwnsResMsg then
       begin
         ResMsg.Free;
@@ -2645,15 +2754,18 @@ begin
       Exit;
     end;
 
-    // Modo S�ncrono: Finalizaci�n
+    // Modo S?ncrono: Finalizaci?n
     if Assigned(ResMsg) then
     begin
       Result := ResMsg.Prompt;
       // Solo guardamos en el historial si no es un mensaje intermedio de herramienta (Tool)
       if (AskMsg.Role <> 'tool') and (AskMsg.ToolCallId = '') then
       begin
-        ResMsg.Id := FMessages.Count + 1;
-        FMessages.Add(ResMsg);
+        if FMessages.IndexOf(ResMsg) = -1 then // guard: evitar doble-add (ej: Cohere ParseChat ya lo agregó)
+        begin
+          ResMsg.Id := FMessages.Count + 1;
+          FMessages.Add(ResMsg);
+        end;
       end;
     end;
 
@@ -2671,9 +2783,370 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------------
+// Nuevo sistema de orquestacion v3.3 - TAiCapabilities
+// ---------------------------------------------------------------------------
+
+procedure TAiChat.EnsureNewSystemConfig;
+begin
+  if FNewSystemConfigured then
+    Exit; // ya usa el nuevo sistema, no sobreescribir
+  FModelCaps := LegacyToModelCaps;
+  FSessionCaps := LegacyToSessionCaps;
+end;
+
+function TAiChat.LegacyToModelCaps: TAiCapabilities;
+begin
+  Result := [];
+  // Capacidades de comprension (lo que completions maneja nativamente)
+  if Tcm_Image in FChatMediaSupports then
+    Include(Result, cap_Image);
+  if Tcm_Audio in FChatMediaSupports then
+    Include(Result, cap_Audio);
+  if Tcm_Video in FChatMediaSupports then
+    Include(Result, cap_Video);
+  if Tcm_Pdf in FChatMediaSupports then
+    Include(Result, cap_Pdf);
+  if tcm_WebSearch in FChatMediaSupports then
+    Include(Result, cap_WebSearch);
+  if Tcm_Reasoning in FChatMediaSupports then
+    Include(Result, cap_Reasoning);
+  if Tcm_CodeInterpreter in FChatMediaSupports then
+    Include(Result, cap_CodeInterpreter);
+  if Tcm_Memory in FChatMediaSupports then
+    Include(Result, cap_Memory);
+  if Tcm_TextEditor in FChatMediaSupports then
+    Include(Result, cap_TextEditor);
+  if Tcm_ComputerUse in FChatMediaSupports then
+    Include(Result, cap_ComputerUse);
+  if Tcm_Shell in FChatMediaSupports then
+    Include(Result, cap_Shell);
+  if Tcm_ReportGeneration in FChatMediaSupports then
+    Include(Result, cap_GenReport);
+  // Generacion nativa via completions (NativeOutputFiles + ChatMediaSupports confirman el output)
+  if (Tfc_Audio in FNativeOutputFiles) and (Tcm_Audio in FChatMediaSupports) then
+    Include(Result, cap_GenAudio);
+  if (Tfc_Image in FNativeOutputFiles) and (Tcm_Image in FChatMediaSupports) then
+    Include(Result, cap_GenImage);
+  if (Tfc_Video in FNativeOutputFiles) and (Tcm_Video in FChatMediaSupports) then
+    Include(Result, cap_GenVideo);
+  // Post-procesamiento: siempre es "nativo" (hecho por InternalRunCompletions)
+  if tfc_ExtracttextFile in FNativeOutputFiles then
+    Include(Result, cap_ExtractCode);
+end;
+
+function TAiChat.LegacyToSessionCaps: TAiCapabilities;
+begin
+  Result := LegacyToModelCaps; // parte de la base nativa
+  // Agregar desde EnabledFeatures (lo que el usuario quiere, puede crear gaps)
+  if Tcm_Image in FEnabledFeatures then
+    Include(Result, cap_Image);
+  if Tcm_Audio in FEnabledFeatures then
+    Include(Result, cap_Audio);
+  if Tcm_Video in FEnabledFeatures then
+    Include(Result, cap_Video);
+  if Tcm_Pdf in FEnabledFeatures then
+    Include(Result, cap_Pdf);
+  if tcm_WebSearch in FEnabledFeatures then
+    Include(Result, cap_WebSearch);
+  if Tcm_Reasoning in FEnabledFeatures then
+    Include(Result, cap_Reasoning);
+  if Tcm_CodeInterpreter in FEnabledFeatures then
+    Include(Result, cap_CodeInterpreter);
+  if Tcm_Memory in FEnabledFeatures then
+    Include(Result, cap_Memory);
+  if Tcm_TextEditor in FEnabledFeatures then
+    Include(Result, cap_TextEditor);
+  if Tcm_ComputerUse in FEnabledFeatures then
+    Include(Result, cap_ComputerUse);
+  if Tcm_Shell in FEnabledFeatures then
+    Include(Result, cap_Shell);
+  // Agregar desde NativeOutputFiles (formato de salida deseado)
+  if Tfc_Audio in FNativeOutputFiles then
+    Include(Result, cap_GenAudio);
+  if Tfc_Image in FNativeOutputFiles then
+    Include(Result, cap_GenImage);
+  if Tfc_Video in FNativeOutputFiles then
+    Include(Result, cap_GenVideo);
+  if Tfc_Report in FNativeOutputFiles then
+    Include(Result, cap_GenReport);
+  if tfc_ExtracttextFile in FNativeOutputFiles then
+    Include(Result, cap_ExtractCode);
+end;
+
+procedure TAiChat.SetModelCaps(const Value: TAiCapabilities);
+begin
+  FModelCaps := Value;
+  FNewSystemConfigured := True;
+  SyncLegacyFromModelCaps;
+end;
+
+procedure TAiChat.SyncLegacyFromModelCaps;
+var
+  LNewInputFiles: TAiFileCategories;
+  LNewSupports: TAiChatMediaSupports;
+begin
+  LNewInputFiles := [];
+  if cap_Image in FModelCaps then
+    Include(LNewInputFiles, Tfc_Image);
+  if cap_Audio in FModelCaps then
+    Include(LNewInputFiles, Tfc_Audio);
+  if cap_Video in FModelCaps then
+    Include(LNewInputFiles, Tfc_Video);
+  if cap_Pdf in FModelCaps then
+    Include(LNewInputFiles, Tfc_Pdf);
+  SetNativeInputFiles(LNewInputFiles); // usa el setter existente (tambien actualiza FMessages)
+
+  LNewSupports := [];
+  if cap_Image in FModelCaps then
+    Include(LNewSupports, Tcm_Image);
+  if cap_Audio in FModelCaps then
+    Include(LNewSupports, Tcm_Audio);
+  if cap_Video in FModelCaps then
+    Include(LNewSupports, Tcm_Video);
+  if cap_Pdf in FModelCaps then
+    Include(LNewSupports, Tcm_Pdf);
+  if cap_WebSearch in FModelCaps then
+    Include(LNewSupports, tcm_WebSearch);
+  if cap_Reasoning in FModelCaps then
+    Include(LNewSupports, Tcm_Reasoning);
+  if cap_CodeInterpreter in FModelCaps then
+    Include(LNewSupports, Tcm_CodeInterpreter);
+  if cap_Memory in FModelCaps then
+    Include(LNewSupports, Tcm_Memory);
+  if cap_TextEditor in FModelCaps then
+    Include(LNewSupports, Tcm_TextEditor);
+  if cap_ComputerUse in FModelCaps then
+    Include(LNewSupports, Tcm_ComputerUse);
+  if cap_Shell in FModelCaps then
+    Include(LNewSupports, Tcm_Shell);
+  if cap_GenReport in FModelCaps then
+    Include(LNewSupports, Tcm_ReportGeneration);
+  FChatMediaSupports := LNewSupports;
+end;
+
+procedure TAiChat.SetSessionCaps(const Value: TAiCapabilities);
+begin
+  FSessionCaps := Value;
+  FNewSystemConfigured := True;
+  SyncLegacyFromSessionCaps;
+end;
+
+procedure TAiChat.SyncLegacyFromSessionCaps;
+var
+  LNewOutput: TAiFileCategories;
+  LNewEnabled: TAiChatMediaSupports;
+begin
+  LNewOutput := [];
+  if cap_GenAudio in FSessionCaps then
+    Include(LNewOutput, Tfc_Audio);
+  if cap_GenImage in FSessionCaps then
+    Include(LNewOutput, Tfc_Image);
+  if cap_GenVideo in FSessionCaps then
+    Include(LNewOutput, Tfc_Video);
+  if cap_GenReport in FSessionCaps then
+    Include(LNewOutput, Tfc_Report);
+  if cap_ExtractCode in FSessionCaps then
+    Include(LNewOutput, tfc_ExtracttextFile);
+  FNativeOutputFiles := LNewOutput;
+
+  LNewEnabled := [];
+  if cap_Image in FSessionCaps then
+    Include(LNewEnabled, Tcm_Image);
+  if cap_Audio in FSessionCaps then
+    Include(LNewEnabled, Tcm_Audio);
+  if cap_Video in FSessionCaps then
+    Include(LNewEnabled, Tcm_Video);
+  if cap_Pdf in FSessionCaps then
+    Include(LNewEnabled, Tcm_Pdf);
+  if cap_WebSearch in FSessionCaps then
+    Include(LNewEnabled, tcm_WebSearch);
+  if cap_Reasoning in FSessionCaps then
+    Include(LNewEnabled, Tcm_Reasoning);
+  if cap_CodeInterpreter in FSessionCaps then
+    Include(LNewEnabled, Tcm_CodeInterpreter);
+  if cap_Memory in FSessionCaps then
+    Include(LNewEnabled, Tcm_Memory);
+  if cap_TextEditor in FSessionCaps then
+    Include(LNewEnabled, Tcm_TextEditor);
+  if cap_ComputerUse in FSessionCaps then
+    Include(LNewEnabled, Tcm_ComputerUse);
+  if cap_Shell in FSessionCaps then
+    Include(LNewEnabled, Tcm_Shell);
+  FEnabledFeatures := LNewEnabled;
+end;
+
+function TAiChat.FileTypeInModelCaps(ACategory: TAiFileCategory): Boolean;
+begin
+  case ACategory of
+    Tfc_Image:
+      Result := cap_Image in FModelCaps;
+    Tfc_Audio:
+      Result := cap_Audio in FModelCaps;
+    Tfc_Video:
+      Result := cap_Video in FModelCaps;
+    Tfc_Pdf:
+      Result := cap_Pdf in FModelCaps;
+  else
+    Result := False; // tipos desconocidos siempre necesitan bridge (OnProcessMediaFile)
+  end;
+end;
+
+function TAiChat.RunNew(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
+var
+  MF: TAiMediaFile;
+  LOwnsResMsg: Boolean;
+  LRes: String;
+  LProc: Boolean;
+  Gap: TAiCapabilities;
+begin
+  Result := '';
+  LOwnsResMsg := False;
+  Gap := FSessionCaps - FModelCaps; // Calculo central del gap
+
+  // --- PREPARACION ---
+  if not Assigned(ResMsg) then
+  begin
+    ResMsg := TAiChatMessage.Create('', 'assistant');
+    LOwnsResMsg := True;
+  end;
+
+  try
+    if Assigned(AskMsg) then
+      InternalAddMessage(AskMsg);
+
+    if not Assigned(AskMsg) then
+      AskMsg := GetLastMessage;
+
+    if not Assigned(AskMsg) then
+      raise Exception.Create('No hay un mensaje valido para procesar en TAiChat.Run');
+
+    // --- FASE 1: BRIDGE DE ENTRADA (solo cmConversation) ---
+    if FChatMode = cmConversation then
+    begin
+      for MF in AskMsg.MediaFiles do
+      begin
+        if not FileTypeInModelCaps(MF.FileCategory) and not MF.Procesado then
+        begin
+          // Prioridad 1: evento manual
+          if Assigned(FOnProcessMediaFile) then
+          begin
+            LRes := '';
+            LProc := False;
+            FOnProcessMediaFile(Self, AskMsg.Prompt, MF, FNativeInputFiles, LRes, LProc);
+            MF.Procesado := LProc;
+            MF.Transcription := LRes;
+          end;
+          // Prioridad 2: bridge automatico segun gap
+          if not MF.Procesado then
+          begin
+            case MF.FileCategory of
+              Tfc_Audio:
+                if cap_Audio in Gap then
+                  InternalRunTranscription(MF, ResMsg, AskMsg);
+              Tfc_Image:
+                if cap_Image in Gap then
+                  InternalRunImageDescription(MF, ResMsg, AskMsg);
+              Tfc_Pdf:
+                if cap_Pdf in Gap then
+                  InternalRunPDFDescription(MF, ResMsg, AskMsg);
+            end;
+          end;
+        end;
+      end;
+    end;
+
+    // --- FASE 2: GROUNDING (sin guarda de modo -- siempre se ejecuta) ---
+    if cap_WebSearch in Gap then
+    begin
+      DoStateChange(acsReasoning, 'Ejecutando Bridge de Busqueda Web...');
+      InternalRunWebSearch(ResMsg, AskMsg);
+    end;
+
+    // --- FASE 3: ORQUESTACION DE SALIDA ---
+    case FChatMode of
+      cmConversation:
+        begin
+          // Gap analysis unificado
+          if cap_GenVideo in Gap then
+            InternalRunImageVideoGeneration(ResMsg, AskMsg)
+          else if cap_GenImage in Gap then
+            InternalRunImageGeneration(ResMsg, AskMsg)
+          else if cap_GenAudio in Gap then
+            InternalRunSpeechGeneration(ResMsg, AskMsg)
+          else if cap_GenReport in Gap then
+            InternalRunReport(ResMsg, AskMsg)
+          else
+            InternalRunCompletions(ResMsg, AskMsg);
+          // cap_ExtractCode lo maneja InternalRunCompletions internamente
+          // via Tfc_ExtractTextFile in NativeOutputFiles (sincronizado por SyncLegacyFromSessionCaps)
+        end;
+      // Modos forzados: saltan gap analysis, llamada directa
+      cmImageGeneration:
+        InternalRunImageGeneration(ResMsg, AskMsg);
+      cmVideoGeneration:
+        InternalRunImageVideoGeneration(ResMsg, AskMsg);
+      cmSpeechGeneration:
+        InternalRunSpeechGeneration(ResMsg, AskMsg);
+      cmWebSearch:
+        InternalRunWebSearch(ResMsg, AskMsg);
+      cmReportGeneration:
+        InternalRunReport(ResMsg, AskMsg);
+      cmTranscription:
+        begin
+          for MF in AskMsg.MediaFiles do
+            if (MF.FileCategory = Tfc_Audio) and not MF.Procesado then
+            begin
+              InternalRunTranscription(MF, ResMsg, AskMsg);
+              Break;
+            end;
+        end;
+    end;
+
+    // --- GESTION ASYNC/SYNC ---
+    if FClient.Asynchronous then
+    begin
+      if LOwnsResMsg then
+      begin
+        ResMsg.Free;
+        ResMsg := Nil;
+      end;
+      Exit;
+    end;
+
+    if Assigned(ResMsg) then
+    begin
+      Result := ResMsg.Prompt;
+      if (AskMsg.Role <> 'tool') and (AskMsg.ToolCallId = '') then
+      begin
+        if FMessages.IndexOf(ResMsg) = -1 then // guard: evitar doble-add (ej: Cohere ParseChat ya lo agregó)
+        begin
+          ResMsg.Id := FMessages.Count + 1;
+          FMessages.Add(ResMsg);
+        end;
+      end;
+    end;
+
+  except
+    on E: Exception do
+    begin
+      if LOwnsResMsg and Assigned(ResMsg) then
+        if FMessages.IndexOf(ResMsg) = -1 then
+          ResMsg.Free;
+      DoError(E.Message, E);
+    end;
+  end;
+end;
+
+function TAiChat.Run(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
+begin
+  EnsureNewSystemConfig; // traduce legacy -> nuevo si aun no se configuro
+  Result := RunNew(AskMsg, ResMsg);
+end;
+
 function TAiChat.RemoveMesage(Msg: TAiChatMessage): Boolean;
 begin
-  // Remove devuelve el �ndice del elemento eliminado. Si es >= 0, fue exitoso.
+  // Remove devuelve el?ndice del elemento eliminado. Si es >= 0, fue exitoso.
   Result := FMessages.Remove(Msg) >= 0;
 end;
 
@@ -2879,6 +3352,16 @@ begin
   If FPdfTool <> Value then
   Begin
     FPdfTool := Value;
+    If Value <> Nil then
+      Value.FreeNotification(Self);
+  End;
+end;
+
+procedure TAiChat.SetReportTool(const Value: TAiReportToolBase);
+begin
+  If FReportTool <> Value then
+  Begin
+    FReportTool := Value;
     If Value <> Nil then
       Value.FreeNotification(Self);
   End;
@@ -3093,7 +3576,7 @@ var
   CategoryName: string;
   EnumValue: Integer;
 begin
-  Result := []; // Empezamos con un set vac�o
+  Result := []; // Empezamos con un set vac?o
   if AValue.IsEmpty then
     Exit;
 
@@ -3106,8 +3589,8 @@ begin
       // Incluimos el valor en el set resultante
       Include(Result, TAiFileCategory(EnumValue));
     except
-      // Opcional: Ignorar nombres de categor�a no v�lidos o lanzar una excepci�n
-      // Aqu� simplemente los ignoramos.
+      // Opcional: Ignorar nombres de categor?a no v?lidos o lanzar una excepci?n
+      // Aqu? simplemente los ignoramos.
     end;
   end;
 End;
@@ -3119,11 +3602,7 @@ end;
 
 function TAiChat.UploadFileToCache(aMediaFile: TAiMediaFile; aTTL_Seconds: Integer = 3600): String;
 begin
-  // Permite subir archivos en cach�,  este se puede trasladar entre diferentes peticiones del mismo chat
+  // Permite subir archivos en cach?,  este se puede trasladar entre diferentes peticiones del mismo chat
 end;
 
-
-
 end.
-
-
