@@ -2767,7 +2767,9 @@ begin
           ResMsg.Id := FMessages.Count + 1;
           FMessages.Add(ResMsg);
         end;
-      end;
+      end
+      else if LOwnsResMsg then
+        FreeAndNil(ResMsg); // respuesta de tool no se agrega al historial: liberar si somos dueños
     end;
 
   except
@@ -3125,7 +3127,9 @@ begin
           ResMsg.Id := FMessages.Count + 1;
           FMessages.Add(ResMsg);
         end;
-      end;
+      end
+      else if LOwnsResMsg then
+        FreeAndNil(ResMsg); // respuesta de tool no se agrega al historial: liberar si somos dueños
     end;
 
   except
