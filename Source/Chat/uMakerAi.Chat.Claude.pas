@@ -1311,8 +1311,11 @@ begin
 
         TaskList[I] := TTask.Create(
           procedure
+          var
+            LCaptura: TAiToolsFunction;
           begin
-            DoCallFunction(ToolCall);
+            LCaptura := ToolCall;
+            DoCallFunction(LCaptura);
           end);
         TaskList[I].Start;
         Inc(I);

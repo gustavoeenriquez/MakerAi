@@ -1639,15 +1639,18 @@ begin
 
         TaskList[I] := TTask.Create(
           procedure
+          var
+            LCaptura: TAiToolsFunction;
           begin
+            LCaptura := ToolCall;
             Try
-              DoCallFunction(ToolCall);
+              DoCallFunction(LCaptura);
             Except
               On E: Exception do
                 TThread.Queue(nil,
                   procedure
                   begin
-                    DoError('Error in "' + ToolCall.Name + '"', E);
+                    DoError('Error in "' + LCaptura.Name + '"', E);
                   end);
             End;
           end);
@@ -3389,15 +3392,18 @@ begin
 
                   LocalTasks[TaskIdx] := TTask.Create(
                     procedure
+                    var
+                      LCaptura: TAiToolsFunction;
                     begin
+                      LCaptura := LocalFn;
                       try
-                        DoCallFunction(LocalFn);
+                        DoCallFunction(LCaptura);
                       except
                         on E: Exception do
                           TThread.Queue(nil,
                             procedure
                             begin
-                              DoError('Error Tool: ' + LocalFn.Name, E);
+                              DoError('Error Tool: ' + LCaptura.Name, E);
                             end);
                       end;
                     end);
