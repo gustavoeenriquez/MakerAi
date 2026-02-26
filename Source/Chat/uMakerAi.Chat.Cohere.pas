@@ -321,15 +321,18 @@ begin
 
       TaskList[I] := TTask.Create(
         procedure
+        var
+          LCaptura: TAiToolsFunction;
         begin
+          LCaptura := ToolCall;
           try
             if Assigned(Self.AiFunctions) then
-              Self.AiFunctions.DoCallFunction(ToolCall)
+              Self.AiFunctions.DoCallFunction(LCaptura)
             else
-              ToolCall.Response := '{"error":"AiFunctions component not assigned."}';
+              LCaptura.Response := '{"error":"AiFunctions component not assigned."}';
           except
             on E: Exception do
-              ToolCall.Response := '{"error":"' + E.Message + '"}';
+              LCaptura.Response := '{"error":"' + E.Message + '"}';
           end;
         end);
       TaskList[I].Start;
