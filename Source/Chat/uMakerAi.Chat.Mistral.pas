@@ -600,19 +600,23 @@ begin
             If (Fun.Arguments <> '') and (Fun.Arguments <> '{}') then
             Begin
               Arg := TJSONObject(TJSONObject.ParseJSONValue(Fun.Arguments));
-              If Assigned(Arg) then
-              Begin
-                For I := 0 to Arg.Count - 1 do
+              Try
+                If Assigned(Arg) then
                 Begin
-                  Nom := Arg.Pairs[I].JsonString.Value;
-                  Valor := Arg.Pairs[I].JsonValue.Value;
-                  Fun.Params.Values[Nom] := Valor;
+                  For I := 0 to Arg.Count - 1 do
+                  Begin
+                    Nom := Arg.Pairs[I].JsonString.Value;
+                    Valor := Arg.Pairs[I].JsonValue.Value;
+                    Fun.Params.Values[Nom] := Valor;
+                  End;
                 End;
+              Finally
+                Arg.Free;
               End;
             End;
 
           Except
-            // Si no hay par?metros no marca error
+            // Si no hay parámetros no marca error
           End;
 
           Result.Add(Fun.Id, Fun);

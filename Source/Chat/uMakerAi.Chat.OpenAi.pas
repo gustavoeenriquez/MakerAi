@@ -829,8 +829,12 @@ JFormatConfig := Nil;
     begin
       // Verificamos si ya existe 'text' (raro, pero por seguridad)
       if JResult.GetValue('text') = nil then
-        JResult.AddPair('text', JTextConfig);
-    end;
+        JResult.AddPair('text', JTextConfig)
+      else
+        JTextConfig.Free;  // ya existe 'text', no se puede agregar
+    end
+    else
+      FreeAndNil(JTextConfig);  // vacÃ­o, no se usa
 
 
 
@@ -1020,7 +1024,7 @@ begin
     ResMsg.Model := SVal;
 
 
-  // C) INFORMACIón de finalización (Finish Reason / Incomplete Details)
+  // C) INFORMACIï¿½n de finalizaciï¿½n (Finish Reason / Incomplete Details)
   // incomplete_details puede venir como null en el JSON; usar TJSONValue evita
   // el fallo del typecast cuando el valor no es un objeto.
   var JVal: TJSONValue;
@@ -1033,7 +1037,7 @@ begin
   end
   else
   begin
-    // incomplete_details ausente o null: si el estado es completed, finalización normal
+    // incomplete_details ausente o null: si el estado es completed, finalizaciï¿½n normal
     if FResponseStatus = 'completed' then
       ResMsg.FinishReason := 'stop';
   end;
@@ -2140,7 +2144,7 @@ begin
 
     // TODO: Async transcription no implementado. Solo modo sincrono.
 
-    // --- 2. EJECUCIÓN DE LA PETICIÓN POST ---
+    // --- 2. EJECUCIï¿½N DE LA PETICIï¿½N POST ---
     begin
 
       Res := Client.Post(sUrl, Body, LResponseStream, Headers);
@@ -2181,8 +2185,8 @@ end;
 
 procedure TAiOpenChat.NewChat;
 begin
-  // TODO: DeleteAllUploadedFiles desactivado — OpenAI no persiste archivos entre sesiones
-  FResponseId := ''; // Inicia una nueva conversación
+  // TODO: DeleteAllUploadedFiles desactivado ï¿½ OpenAI no persiste archivos entre sesiones
+  FResponseId := ''; // Inicia una nueva conversaciï¿½n
   inherited;
 end;
 

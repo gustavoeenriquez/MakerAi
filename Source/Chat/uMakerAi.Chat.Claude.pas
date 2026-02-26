@@ -784,6 +784,7 @@ begin
       begin
         for var Val in jUserTools do
           jArrTools.Add(Val.Clone as TJSONObject);
+        jUserTools.Free;
       end;
     end;
 

@@ -658,6 +658,7 @@ begin
       End
       else
       begin
+        FBusy := False;
         DoStateChange(acsError, Res.ContentAsString);
         Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
       end;
