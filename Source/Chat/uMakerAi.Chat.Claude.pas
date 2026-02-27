@@ -993,6 +993,18 @@ Var
   ScanItem: TJSONValue;
   ScanObj, InputObj: TJSONObject;
   CmdParts: TArray<string>;
+
+  // Subrutina local: garantiza captura independiente por valor en Delphi 10.4+
+  procedure _CreateTask(TC: TAiToolsFunction; AIdx: Integer);
+  begin
+    TaskList[AIdx] := TTask.Create(
+      procedure
+      begin
+        DoCallFunction(TC);
+      end);
+    TaskList[AIdx].Start;
+  end;
+
 begin
   AskMsg := GetLastMessage;
 
@@ -1309,15 +1321,7 @@ begin
         ToolCall.ResMsg := ResMsg;
         ToolCall.AskMsg := AskMsg;
 
-        TaskList[I] := TTask.Create(
-          procedure
-          var
-            LCaptura: TAiToolsFunction;
-          begin
-            LCaptura := ToolCall;
-            DoCallFunction(LCaptura);
-          end);
-        TaskList[I].Start;
+        _CreateTask(ToolCall, I); // subrutina local garantiza captura por valor
         Inc(I);
       end;
       TTask.WaitForAll(TaskList);

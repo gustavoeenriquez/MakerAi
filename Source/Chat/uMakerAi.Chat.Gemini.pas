@@ -1375,6 +1375,27 @@ Var
   LPartObj, LExecCodeObj, LCodeResultObj, LInlineData: TJSONObject;
   LCode, LLang, LCodeOutput, LMimeType, LBase64Data: String;
   LExt: String;
+
+  // Subrutina local: garantiza captura independiente por valor en Delphi 10.4+
+  procedure _CreateTask(TC: TAiToolsFunction; AIdx: Integer);
+  begin
+    TaskList[AIdx] := TTask.Create(
+      procedure
+      begin
+        try
+          DoCallFunction(TC);
+        except
+          on E: Exception do
+            TThread.Queue(nil,
+              procedure
+              begin
+                DoError('Error in "' + TC.Name + '"', E);
+              end);
+        end;
+      end);
+    TaskList[AIdx].Start;
+  end;
+
 begin
   LRespuesta := '';
   LRole := 'model';
@@ -1637,24 +1658,7 @@ begin
         ToolCall.ResMsg := ResMsg; // Pasamos referencias para que la tool pueda escribir si quiere
         ToolCall.AskMsg := AskMsg;
 
-        TaskList[I] := TTask.Create(
-          procedure
-          var
-            LCaptura: TAiToolsFunction;
-          begin
-            LCaptura := ToolCall;
-            Try
-              DoCallFunction(LCaptura);
-            Except
-              On E: Exception do
-                TThread.Queue(nil,
-                  procedure
-                  begin
-                    DoError('Error in "' + LCaptura.Name + '"', E);
-                  end);
-            End;
-          end);
-        TaskList[I].Start;
+        _CreateTask(ToolCall, I); // subrutina local garantiza captura por valor
         Inc(I);
       End;
       TTask.WaitForAll(TaskList);
@@ -3379,6 +3383,25 @@ begin
               LocalTasks: array of ITask;
               LocalFn: TAiToolsFunction;
               TaskIdx: Integer;
+            // Subrutina local: garantiza captura independiente por valor en Delphi 10.4+
+            procedure _CreateLocalTask(TC: TAiToolsFunction; AIdx: Integer);
+            begin
+              LocalTasks[AIdx] := TTask.Create(
+                procedure
+                begin
+                  try
+                    DoCallFunction(TC);
+                  except
+                    on E: Exception do
+                      TThread.Queue(nil,
+                        procedure
+                        begin
+                          DoError('Error Tool: ' + TC.Name, E);
+                        end);
+                  end;
+                end);
+              LocalTasks[AIdx].Start;
+            end;
             begin
               LocalFuncs := LFunciones;
               try
@@ -3390,24 +3413,7 @@ begin
                   LocalFn.ResMsg := ResMsg;
                   LocalFn.AskMsg := AskMsg;
 
-                  LocalTasks[TaskIdx] := TTask.Create(
-                    procedure
-                    var
-                      LCaptura: TAiToolsFunction;
-                    begin
-                      LCaptura := LocalFn;
-                      try
-                        DoCallFunction(LCaptura);
-                      except
-                        on E: Exception do
-                          TThread.Queue(nil,
-                            procedure
-                            begin
-                              DoError('Error Tool: ' + LCaptura.Name, E);
-                            end);
-                      end;
-                    end);
-                  LocalTasks[TaskIdx].Start;
+                  _CreateLocalTask(LocalFn, TaskIdx); // subrutina local garantiza captura por valor
                   Inc(TaskIdx);
                 end;
 

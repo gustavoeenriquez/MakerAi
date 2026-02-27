@@ -1005,6 +1005,18 @@ var
   // Variables auxiliares para valores num?ricos
   UnixDate: Int64;
   TokenCount: Int64;
+
+  // Subrutina local: garantiza captura independiente por valor en Delphi 10.4+
+  procedure _CreateTask(TC: TAiToolsFunction; AIdx: Integer);
+  begin
+    TaskList[AIdx] := TTask.Create(
+      procedure
+      begin
+        DoCallFunction(TC);
+      end);
+    TaskList[AIdx].Start;
+  end;
+
 begin
   // 1. Actualizar estado global de la respuesta
   if jObj.TryGetValue<String>('id', SVal) then
@@ -1238,7 +1250,19 @@ begin
           if JItem.TryGetValue<String>('name', SVal) then
             ToolCall.Name := SVal;
           if JItem.TryGetValue<String>('arguments', SVal) then
+          begin
             ToolCall.Arguments := SVal;
+            // Poblar Params con pares nombre-valor (consistente con Claude y Mistral)
+            var LArgObj := TJSONObject.ParseJSONValue(SVal) as TJSONObject;
+            if Assigned(LArgObj) then
+            try
+              for var LArgIdx := 0 to LArgObj.Count - 1 do
+                ToolCall.Params.Values[LArgObj.Pairs[LArgIdx].JsonString.Value] :=
+                  LArgObj.Pairs[LArgIdx].JsonValue.Value;
+            finally
+              LArgObj.Free;
+            end;
+          end;
 
           ToolCalls.Add(ToolCall);
         end
@@ -1502,15 +1526,7 @@ begin
         ToolCall.ResMsg := ResMsg;
         ToolCall.AskMsg := GetLastMessage; // Contexto
 
-        TaskList[I] := TTask.Create(
-          procedure
-          var
-            LCaptura: TAiToolsFunction;
-          begin
-            LCaptura := ToolCall;
-            DoCallFunction(LCaptura);
-          end);
-        TaskList[I].Start;
+        _CreateTask(ToolCall, I); // subrutina local garantiza captura por valor
       end;
 
       TTask.WaitForAll(TaskList);

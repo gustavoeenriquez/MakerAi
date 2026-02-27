@@ -309,6 +309,26 @@ var
   TaskList: array of ITask;
   I: Integer;
   ToolCallList: TList<TAiToolsFunction>;
+
+  // Subrutina local: garantiza captura independiente por valor en Delphi 10.4+
+  procedure _CreateTask(TC: TAiToolsFunction; AIdx: Integer);
+  begin
+    TaskList[AIdx] := TTask.Create(
+      procedure
+      begin
+        try
+          if Assigned(Self.AiFunctions) then
+            Self.AiFunctions.DoCallFunction(TC)
+          else
+            TC.Response := '{"error":"AiFunctions component not assigned."}';
+        except
+          on E: Exception do
+            TC.Response := '{"error":"' + E.Message + '"}';
+        end;
+      end);
+    TaskList[AIdx].Start;
+  end;
+
 begin
   AskMsg := GetLastMessage;
 
@@ -322,23 +342,7 @@ begin
       ToolCall.ResMsg := ResMsg;
       ToolCall.AskMsg := AskMsg;
 
-      TaskList[I] := TTask.Create(
-        procedure
-        var
-          LCaptura: TAiToolsFunction;
-        begin
-          LCaptura := ToolCall;
-          try
-            if Assigned(Self.AiFunctions) then
-              Self.AiFunctions.DoCallFunction(LCaptura)
-            else
-              LCaptura.Response := '{"error":"AiFunctions component not assigned."}';
-          except
-            on E: Exception do
-              LCaptura.Response := '{"error":"' + E.Message + '"}';
-          end;
-        end);
-      TaskList[I].Start;
+      _CreateTask(ToolCall, I); // subrutina local garantiza captura por valor
     end;
     TTask.WaitForAll(TaskList);
 

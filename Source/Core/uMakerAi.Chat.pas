@@ -2025,6 +2025,31 @@ Var
   St: TStringStream;
   ModelVersion: String;
 
+  // Subrutina local: garantiza captura independiente por valor en Delphi 10.4+
+  // (la asignaci?n LCaptura:=ToolCall dentro del anon-proc corre cuando el task
+  // ejecuta, no cuando se crea, por lo que ToolCall pudo haber cambiado)
+  procedure _CreateTask(TC: TAiToolsFunction; AIdx: Integer);
+  begin
+    TaskList[AIdx] := TTask.Create(
+      procedure
+      begin
+        try
+          DoCallFunction(TC);
+        except
+          on E: Exception do
+          begin
+            var LErrorMsg := 'Error in "' + TC.Name + '": ' + E.Message;
+            TThread.Queue(nil,
+              procedure
+              begin
+                DoError(LErrorMsg, nil);
+              end);
+          end;
+        end;
+      end);
+    TaskList[AIdx].Start;
+  end;
+
 begin
 
   aPrompt_tokens := 0;
@@ -2120,26 +2145,7 @@ begin
         ToolCall.ResMsg := ResMsg; // Se pasan los mensajes por si desean procesarlos
         ToolCall.AskMsg := AskMsg;
 
-        TaskList[I] := TTask.Create(
-          procedure
-          begin
-            Try
-              DoCallFunction(ToolCall);
-            Except
-              On E: Exception do
-              Begin
-                var
-                LErrorMsg := 'Error in "' + ToolCall.Name + '": ' + E.Message;
-                TThread.Queue(nil,
-                  procedure
-                  begin
-                    DoError(LErrorMsg, nil);
-                  end);
-
-              End;
-            End;
-          end);
-        TaskList[I].Start;
+        _CreateTask(ToolCall, I); // subrutina local garantiza captura por valor
         Inc(I);
 
       End;
