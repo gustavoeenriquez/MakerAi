@@ -476,13 +476,13 @@ begin
     case FModel of
       imDallE2:
         begin
-          JObj.AddPair('model', 'dall-e-2').AddPair('n', Min(10, Max(1, N)));
+          JObj.AddPair('model', 'dall-e-2').AddPair('n', IntToStr(Min(10, Max(1, N))));
           JObj.AddPair('size', SizeToString(ASize));
         end;
 
       imDallE3:
         begin
-          JObj.AddPair('model', 'dall-e-3').AddPair('n', 1);
+          JObj.AddPair('model', 'dall-e-3').AddPair('n', '1');
           JObj.AddPair('size', SizeToString(ASize));
           if FQuality in [iqHD, iqHigh] then
             JObj.AddPair('quality', 'hd')
@@ -496,7 +496,7 @@ begin
 
       imGptImage1:
         begin
-          JObj.AddPair('model', 'gpt-image-1').AddPair('n', Min(10, Max(1, N)));
+          JObj.AddPair('model', 'gpt-image-1').AddPair('n', IntToStr(Min(10, Max(1, N))));
           JObj.AddPair('size', SizeToString(ASize));
 
           case FQuality of

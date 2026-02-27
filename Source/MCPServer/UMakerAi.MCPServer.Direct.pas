@@ -121,7 +121,7 @@ begin
   try
     Inc(FRequestIDCounter);
     RequestObj.AddPair('jsonrpc', '2.0');
-    RequestObj.AddPair('id', FRequestIDCounter);
+    RequestObj.AddPair('id', FRequestIDCounter.ToString);
     RequestObj.AddPair('method', AMethod);
     RequestObj.AddPair('params', AParams); // AParams es ahora propiedad de RequestObj
 
