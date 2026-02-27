@@ -49,11 +49,11 @@ type
     Roles: TArray<string>;
   end;
 
-  // Evento de validación custom (Layer 2).
+  // Evento de validaciï¿½n custom (Layer 2).
   // AAuthHeader: valor del header Authorization o X-API-Key.
   // ARemoteIP: IP del cliente.
-  // AAuthContext: contexto de autenticación a poblar.
-  // AIsValid: True si la petición es válida.
+  // AAuthContext: contexto de autenticaciï¿½n a poblar.
+  // AIsValid: True si la peticiï¿½n es vï¿½lida.
   TAiMCPValidateEvent = procedure(Sender: TObject; const AAuthHeader, ARemoteIP: string;
     out AAuthContext: TAiAuthContext; out AIsValid: Boolean) of object;
 
@@ -273,13 +273,13 @@ type
     procedure SetServerName(const Value: String);
     procedure SetAiFunctions(const Value: TAiFunctions);
   protected
-    // Lo hacemos protected para que los descendientes puedan acceder a él directamente.
+    // Lo hacemos protected para que los descendientes puedan acceder a ï¿½l directamente.
     FLogicServer: TAiMCPLogicServer;
     // Hacemos el setter protected para que solo los descendientes controlen el estado.
     procedure SetActive(const Value: Boolean);
     Procedure InternalRegisterFromAiFunctions;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
-    // Validación de requests: Layer 1 (API Key) + Layer 2 (evento custom)
+    // Validaciï¿½n de requests: Layer 1 (API Key) + Layer 2 (evento custom)
     function ValidateRequest(const AAuthHeader, ARemoteIP: string; out AAuthContext: TAiAuthContext): Boolean;
   public
     constructor Create(AOwner: TComponent); override;
@@ -309,9 +309,9 @@ type
   Published
     Property ServerName: String read GetServerName write SetServerName;
     property AiFunctions: TAiFunctions read FAiFunctions write SetAiFunctions;
-    // Autenticación: Si ApiKey está configurado, valida "Authorization: Bearer <key>" o "X-API-Key: <key>"
+    // Autenticaciï¿½n: Si ApiKey estï¿½ configurado, valida "Authorization: Bearer <key>" o "X-API-Key: <key>"
     property ApiKey: string read FApiKey write FApiKey;
-    // Evento custom para validación avanzada (JWT, OAuth, DB lookup, etc.)
+    // Evento custom para validaciï¿½n avanzada (JWT, OAuth, DB lookup, etc.)
     property OnValidateRequest: TAiMCPValidateEvent read FOnValidateRequest write FOnValidateRequest;
   end;
 
@@ -657,7 +657,7 @@ begin
   Result := ExecuteRequest(ARequestJson, ASessionID, LAuthContext);
 end;
 
-// Overload con AuthContext: usado por Http y SSE con autenticación
+// Overload con AuthContext: usado por Http y SSE con autenticaciï¿½n
 function TAiMCPLogicServer.ExecuteRequest(const ARequestJson: string; const ASessionID: string; const AAuthContext: TAiAuthContext): string;
 var
   JSONRequest, JSONResponse, Params: TJSONObject;
@@ -1154,9 +1154,22 @@ begin
 end;
 
 class function TInternalSchemaGenerator.IsRequiredProperty(Prop: TRttiProperty): Boolean;
+{$IF CompilerVersion < 35}
+var
+  Arr: TArray<TCustomAttribute>;
+  I: Integer;
+begin
+  Arr := Prop.GetAttributes;
+  Result := False;
+  for I := Low(Arr) to High(Arr) do
+    Result := Result or (Arr[I] is AiMCPOptionalAttribute);
+  Result := not Result;
+end;
+{$ELSE}
 begin
   Result := not Prop.HasAttribute<AiMCPOptionalAttribute>;
 end;
+{$ENDIF}
 
 // -----------------------------------------------------------------------------
 // --- TInternalSerializer Implementation ---
@@ -1473,7 +1486,7 @@ begin
   Result := True;
   AAuthContext := Default(TAiAuthContext);
 
-  // Layer 1: Validación de API Key
+  // Layer 1: Validaciï¿½n de API Key
   if FApiKey <> '' then
   begin
     // Extraer key de "Bearer <key>" o valor directo
@@ -1492,7 +1505,7 @@ begin
     AAuthContext.UserID := FLogicServer.User;
   end;
 
-  // Layer 2: Evento de validación custom (JWT, OAuth, DB lookup, etc.)
+  // Layer 2: Evento de validaciï¿½n custom (JWT, OAuth, DB lookup, etc.)
   if Assigned(FOnValidateRequest) then
     FOnValidateRequest(Self, AAuthHeader, ARemoteIP, AAuthContext, Result)
   else if FApiKey = '' then

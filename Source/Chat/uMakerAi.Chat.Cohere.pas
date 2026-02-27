@@ -44,6 +44,9 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections, System.JSON,
   System.Net.HttpClientComponent, System.Threading,
   System.Net.HttpClient, System.Net.URLClient, // Necesario para IHTTPResponse en TAiErrorEvent
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
   uMakerAi.Core, uMakerAi.Chat, uMakerAi.ParamsRegistry,
   uMakerAi.Embeddings, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages;
 
@@ -487,7 +490,7 @@ begin
       if (LRoleStr = 'assistant') and (not LMessage.Tool_calls.IsEmpty) then
       begin
         // Mensaje del asistente que CONTIENE la petici?n de tool_calls.
-        LToolCallsValue := TJSONValue.ParseJSONValue(LMessage.Tool_calls, True);
+        LToolCallsValue := TJSONObject.ParseJSONValue(LMessage.Tool_calls, True);
         if Assigned(LToolCallsValue) and (LToolCallsValue is TJSONArray) then
           LMsgObj.AddPair('tool_calls', LToolCallsValue)
         else
@@ -549,7 +552,7 @@ begin
       LToolsJsonString := AiFunctions.GetTools(tfOpenAI);
       if not LToolsJsonString.IsEmpty then
       begin
-        LJsonValue := TJSONValue.ParseJSONValue(LToolsJsonString, True);
+        LJsonValue := TJSONObject.ParseJSONValue(LToolsJsonString, True);
         if Assigned(LJsonValue) and (LJsonValue is TJSONArray) then
         begin
           LToolsJsonArray := LJsonValue as TJSONArray;

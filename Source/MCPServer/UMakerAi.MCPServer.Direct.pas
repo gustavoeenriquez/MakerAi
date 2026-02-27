@@ -38,6 +38,9 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON,
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
   UMakerAi.MCPServer.Core;
 
 type
@@ -153,7 +156,7 @@ begin
     // Extraer el resultado
     if ResponseJSON.TryGetValue('result', ResultValue) then
     begin
-      // Clonamos el resultado para que el llamador sea el dueño
+      // Clonamos el resultado para que el llamador sea el dueï¿½o
       if ResultValue is TJSONObject then
         Result := TJSONObject(ResultValue.Clone)
       else

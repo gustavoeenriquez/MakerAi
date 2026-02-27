@@ -41,9 +41,18 @@ uses
   System.JSON, System.Math,
   System.Bindings.EvalSys, System.Bindings.Factories, System.Bindings.EvalProtocol, System.Bindings.ObjEval,
   System.Threading, System.Rtti, System.SyncObjs, System.Types, System.StrUtils,
-
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
   uMakerAi.Chat, uMakerAi.Core, uMakerAi.Chat.Messages,
   uMakerAi.Agents.Checkpoint;  // IAiCheckpointer, TAiCheckpointSnapshot, TAiPendingStep
+
+{$IF CompilerVersion < 35}
+type
+  TInterlockedHelper = class helper for TInterlocked
+    class function Exchange(var Target: Boolean; Value: Boolean): Boolean; overload; static; inline;
+  end;
+{$ENDIF}
 
 type
 
@@ -401,6 +410,13 @@ procedure Register;
 implementation
 
 uses uMakerAi.Agents.EngineRegistry;
+
+{$IF CompilerVersion < 35}
+class function TInterlockedHelper.Exchange(var Target: Boolean; Value: Boolean): Boolean;
+begin
+  Integer((@Result)^) := AtomicExchange(Integer((@Target)^), Integer((@Value)^));
+end;
+{$ENDIF}
 
 procedure Register;
 begin

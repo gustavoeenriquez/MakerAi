@@ -52,6 +52,9 @@ uses
   System.Math,
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
   REST.JSON, REST.Types, REST.Client,
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
   // Dependencia clave de la librer?a central
   uMakerAi.Core, uMakerAi.Chat.Messages, uMakerAi.Chat.Tools;
 
@@ -373,16 +376,27 @@ begin
     for MediaFile in aMediaFiles do
     begin
       MediaFile.Content.Position := 0;
+{$IF CompilerVersion < 35}
+      if FModel = imGptImage1 then
+        Body.AddStream('image[]', MediaFile.Content, MediaFile.Filename)
+      else
+        Body.AddStream('image', MediaFile.Content, MediaFile.Filename);
+{$ELSE}
       if FModel = imGptImage1 then
         Body.AddStream('image[]', MediaFile.Content, False, MediaFile.Filename)
       else
         Body.AddStream('image', MediaFile.Content, False, MediaFile.Filename);
+{$ENDIF}
     end;
 
     if Assigned(aMaskFile) then
     begin
       aMaskFile.Content.Position := 0;
+{$IF CompilerVersion < 35}
+      Body.AddStream('mask', aMaskFile.Content, aMaskFile.Filename);
+{$ELSE}
       Body.AddStream('mask', aMaskFile.Content, False, aMaskFile.Filename);
+{$ENDIF}
     end;
 
     Body.AddField('prompt', aPrompt);
@@ -936,7 +950,11 @@ begin
   Body := TMultipartFormData.Create;
   try
     aImageFile.Content.Position := 0;
+{$IF CompilerVersion < 35}
+    Body.AddStream('image', aImageFile.Content, aImageFile.Filename);
+{$ELSE}
     Body.AddStream('image', aImageFile.Content, False, aImageFile.Filename);
+{$ENDIF}
     Body.AddField('user', FUser);
     Body.AddField('n', N.ToString);
 
