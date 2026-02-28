@@ -1016,6 +1016,13 @@ begin
           FStreamResponseMsg.ToolCallId := JGetStr(jMessage, 'id');
           FStreamResponseMsg.Model      := JGetStr(jMessage, 'model');
           FStreamResponseMsg.Role       := JGetStr(jMessage, 'role');
+          // Capturar input_tokens del message_start (disponible en streaming)
+          jUsage := JGetObj(jMessage, 'usage');
+          if Assigned(jUsage) then
+          begin
+            FStreamResponseMsg.Prompt_tokens := JGetInt(jUsage, 'input_tokens');
+            FStreamResponseMsg.Cached_tokens := JGetInt(jUsage, 'cache_read_input_tokens');
+          end;
         end;
         // Notificar inicio de recepcion (sin datos de texto aun)
         DoData(FStreamResponseMsg, 'assistant', '', nil);
@@ -1168,7 +1175,7 @@ begin
             jSynth.Add('stop_reason', TJSONNull.Create);
 
           jSynthUsage := TJSONObject.Create;
-          jSynthUsage.Add('input_tokens',  TJSONIntegerNumber.Create(Prompt_tokens));
+          jSynthUsage.Add('input_tokens',  TJSONIntegerNumber.Create(MsgToProcess.Prompt_tokens));
           jSynthUsage.Add('output_tokens', TJSONIntegerNumber.Create(MsgToProcess.Completion_tokens));
           jSynth.Add('usage', jSynthUsage);
 
