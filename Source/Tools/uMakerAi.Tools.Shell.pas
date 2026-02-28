@@ -358,14 +358,15 @@ var
   Handled: Boolean;
   D      : TJSONData;
 begin
-  // Verificar restart
+  // Verificar restart — if anidados para evitar evaluación Variant del 'and'
   D := JArgs.Find('restart');
-  if (D is TJSONBoolean) and TJSONBoolean(D).Value then
-  begin
-    Restart;
-    Result := 'Shell session restarted.';
-    Exit;
-  end;
+  if D is TJSONBoolean then
+    if TJSONBoolean(D).Value then
+    begin
+      Restart;
+      Result := 'Shell session restarted.';
+      Exit;
+    end;
 
   D := JArgs.Find('command');
   if D = nil then
