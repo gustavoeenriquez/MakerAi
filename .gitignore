@@ -1,0 +1,35 @@
+# Compiled FPC output
+*.o
+*.ppu
+*.exe
+*.dll
+*.so
+*.a
+*.rst
+*.rsj
+
+# FPC unit cache directories
+units/
+lib/
+
+# Lazarus project files (keep .lpr, .lpi if added later; ignore IDE state)
+*.bak
+*.lps
+*.compiled
+
+# Delphi artifacts (if any cross-contamination)
+*.dcu
+*.dcp
+*.dcpil
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Claude internal
+.claude/
+
+# Temporary
+*.tmp
+*.log
