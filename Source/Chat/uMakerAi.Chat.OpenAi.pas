@@ -220,6 +220,8 @@ begin
   FAllowAutoShell     := False;
   FReasoningSummary   := rsmDefault;
 
+  if ApiKey = '' then
+    ApiKey := '@OPENAI_API_KEY';
   if Url = '' then
     Url := GlOpenAIUrl;
   if Model = '' then
@@ -1501,10 +1503,13 @@ begin
       end;
     end;
 
-    // 3. Texto final
+    // 3. Texto final + acumulacion de tokens al nivel de clase
     ResMsg.Prompt  := FLastContent;
     ResMsg.Content := FLastContent;
     ResMsg.PreviousResponseId := FResponseId;
+    Prompt_tokens     := Prompt_tokens     + ResMsg.Prompt_tokens;
+    Completion_tokens := Completion_tokens + ResMsg.Completion_tokens;
+    Total_tokens      := Total_tokens      + ResMsg.Total_tokens;
 
     // 4. Function calls estandar
     if JFunctionCalls.Count > 0 then
@@ -2016,6 +2021,14 @@ begin
           finally
             Code.Free;
           end;
+        end;
+
+        // Acumular tokens al nivel de clase (leidos por Chat.Prompt_tokens etc.)
+        if Assigned(FinalMsg) then
+        begin
+          Prompt_tokens     := Prompt_tokens     + FinalMsg.Prompt_tokens;
+          Completion_tokens := Completion_tokens + FinalMsg.Completion_tokens;
+          Total_tokens      := Total_tokens      + FinalMsg.Total_tokens;
         end;
 
         DoStateChange(acsFinished, 'Completed');
