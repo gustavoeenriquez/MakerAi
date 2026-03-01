@@ -322,6 +322,10 @@ type
     FTotal_tokens     : Integer;
     FPrompt_tokens    : Integer;
     FThinking_tokens  : Integer;
+    // Tokens capturados del chunk usage final en SSE (stream_options.include_usage)
+    FStreamUsagePrompt    : Integer;
+    FStreamUsageCompletion: Integer;
+    FStreamUsageTotal     : Integer;
 
     // Manejo de mensajes
     function  InternalAddMessage(aPrompt, aRole: string; aToolCallId: string;
@@ -1022,7 +1026,7 @@ end;
 
 function TAiChat.InitChatCompletions: string;
 var
-  AJSONObject, jToolChoice, jeffort: TJSONObject;
+  AJSONObject, jToolChoice, jeffort, JStreamOpts: TJSONObject;
   JArr  : TJSONArray;
   JStop : TJSONArray;
   Lista : TStringList;
@@ -1042,6 +1046,13 @@ begin
   Lista       := TStringList.Create;
   try
     AJSONObject.Add('stream', TJSONBoolean.Create(FAsynchronous));
+    // Solicitar usage en el ultimo chunk SSE (OpenAI-compatible)
+    if FAsynchronous then
+    begin
+      JStreamOpts := TJSONObject.Create;
+      JStreamOpts.Add('include_usage', TJSONBoolean.Create(True));
+      AJSONObject.Add('stream_options', JStreamOpts);
+    end;
 
     // Tools
     if FTool_Active then
@@ -1169,6 +1180,9 @@ begin
   FLastContent := '';
   FLastReasoning := '';
   FLastPrompt := '';
+  FStreamUsagePrompt     := 0;
+  FStreamUsageCompletion := 0;
+  FStreamUsageTotal      := 0;
 
   if Assigned(FTmpToolCallBuffer) then
     FTmpToolCallBuffer.Clear;
@@ -1557,7 +1571,7 @@ var
   Delta        : TJSONObject;
   JToolCalls   : TJSONArray;
   JTC, BufferObj, BufFunc, FakeResponseObj, FakeChoice, FakeMsg,
-  FakeUsage, NewFunc, BufFuncObj : TJSONObject;
+  FakeUsage, NewFunc, BufFuncObj, jUsage : TJSONObject;
   FakeChoicesArr, CombinedTools: TJSONArray;
   JVal         : TJSONData;
   ToolIndex    : Integer;
@@ -1619,9 +1633,9 @@ begin
       FakeResponseObj.Add('model', FModel);
 
       FakeUsage := TJSONObject.Create;
-      FakeUsage.Add('prompt_tokens',     TJSONIntegerNumber.Create(0));
-      FakeUsage.Add('completion_tokens', TJSONIntegerNumber.Create(0));
-      FakeUsage.Add('total_tokens',      TJSONIntegerNumber.Create(0));
+      FakeUsage.Add('prompt_tokens',     TJSONIntegerNumber.Create(FStreamUsagePrompt));
+      FakeUsage.Add('completion_tokens', TJSONIntegerNumber.Create(FStreamUsageCompletion));
+      FakeUsage.Add('total_tokens',      TJSONIntegerNumber.Create(FStreamUsageTotal));
       FakeResponseObj.Add('usage', FakeUsage);
 
       FakeChoicesArr := TJSONArray.Create;
@@ -1687,6 +1701,16 @@ begin
   end;
   jObj := TJSONObject(jData);
   try
+    // Capturar usage de cualquier chunk que lo traiga no-null
+    // (DeepSeek: viene en el chunk con finish_reason; OpenAI-compat: chunk aparte con choices=[])
+    jUsage := JGetObj(jObj, 'usage');
+    if Assigned(jUsage) then
+    begin
+      FStreamUsagePrompt     := JGetInt(jUsage, 'prompt_tokens');
+      FStreamUsageCompletion := JGetInt(jUsage, 'completion_tokens');
+      FStreamUsageTotal      := JGetInt(jUsage, 'total_tokens');
+    end;
+
     if not JTryGetArr(jObj, 'choices', jArrChoices) then
       Exit;
     if (jArrChoices = nil) or (jArrChoices.Count = 0) then
