@@ -137,7 +137,7 @@ end;
 
 function TAiGrokChat.InitChatCompletions: string;
 var
-  AJSONObject, jToolChoice: TJSONObject;
+  AJSONObject, jToolChoice, JStreamOpts: TJSONObject;
   JArr, JStop             : TJSONArray;
   JFormatConfig, JSchemaObj, JInnerSchema: TJSONObject;
   Lista   : TStringList;
@@ -156,6 +156,12 @@ begin
   try
     // 1. Streaming
     AJSONObject.Add('stream', TJSONBoolean.Create(Asynchronous));
+    if Asynchronous then
+    begin
+      JStreamOpts := TJSONObject.Create;
+      JStreamOpts.Add('include_usage', TJSONBoolean.Create(True));
+      AJSONObject.Add('stream_options', JStreamOpts);
+    end;
 
     // 2. Herramientas
     if Tool_Active then
