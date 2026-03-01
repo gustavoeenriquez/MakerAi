@@ -29,10 +29,10 @@ begin
   Chat := TAiLMStudioChat.Create(nil);
   try
     // LM Studio local — no requiere ApiKey real, acepta cualquier valor
-    // El modelo 'lmstudio-local' es el placeholder; LM Studio usa el modelo activo
+    // Usar el ID exacto del modelo cargado en LM Studio
     Chat.ApiKey      := '1234';
     Chat.Url         := 'http://127.0.0.1:1234/v1/';
-    Chat.Model       := 'lmstudio-local';
+    Chat.Model       := 'phi-3.1-mini-4k-instruct';
     Chat.Max_tokens  := 256;
     Chat.Temperature := 0.7;
     Chat.Asynchronous := False;

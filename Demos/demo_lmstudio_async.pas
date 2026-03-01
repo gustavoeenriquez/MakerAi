@@ -81,7 +81,7 @@ begin
   try
     Chat.ApiKey       := '1234';
     Chat.Url          := 'http://127.0.0.1:1234/v1/';
-    Chat.Model        := 'lmstudio-local';
+    Chat.Model        := 'phi-3.1-mini-4k-instruct';
     Chat.Max_tokens   := 256;
     Chat.Temperature  := 0.7;
     Chat.Asynchronous := True;
