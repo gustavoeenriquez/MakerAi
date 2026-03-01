@@ -14,8 +14,7 @@ program demo_cohere;
 //
 // Modelos:
 //   command-a-03-2025   — modelo principal (multiples idiomas)
-//   command-r-plus      — version anterior, ampliamente disponible
-//   command-r           — rapido y eficiente
+//   command-r7b-12-2024 — rapido y eficiente (reemplaza command-r)
 //
 // Requisito: variable de entorno COHERE_API_KEY configurada
 //   Windows:  set COHERE_API_KEY=...
@@ -48,7 +47,7 @@ begin
   Chat := TCohereChat.Create(nil);
   try
     // ApiKey se lee automaticamente desde @COHERE_API_KEY en el constructor
-    Chat.Model        := 'command-r';
+    Chat.Model        := 'command-a-03-2025';
     Chat.Max_tokens   := 256;
     Chat.Temperature  := 0.3;
     Chat.Asynchronous := False;

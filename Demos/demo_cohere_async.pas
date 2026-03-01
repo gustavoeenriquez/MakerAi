@@ -97,7 +97,7 @@ begin
   Events := TDemoEvents.Create;
   Chat   := TCohereChat.Create(nil);
   try
-    Chat.Model        := 'command-r';
+    Chat.Model        := 'command-a-03-2025';
     Chat.Max_tokens   := 256;
     Chat.Temperature  := 0.3;
     Chat.Asynchronous := True;

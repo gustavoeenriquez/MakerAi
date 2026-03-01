@@ -861,7 +861,11 @@ begin
   if Copy(Line, 1, 6) = 'event:' then
     FStreamEventName := Trim(Copy(Line, 7, MaxInt))
   else if Copy(Line, 1, 5) = 'data:' then
-    FStreamEventData := Trim(Copy(Line, 6, MaxInt))
+  begin
+    FStreamEventData := Trim(Copy(Line, 6, MaxInt));
+    if FStreamEventData = '[DONE]' then
+      FStreamEventData := '';  // Ignorar marcador SSE estandar
+  end
   else if Line = '' then
   begin
     // Linea vacia = fin del bloque SSE → procesar si hay datos
