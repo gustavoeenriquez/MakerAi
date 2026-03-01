@@ -88,7 +88,10 @@ begin
   Chat   := TAiGeminiChat.Create(nil);
   try
     Chat.Model        := 'gemini-2.5-flash';
-    Chat.Max_tokens   := 256;
+    // NOTA: gemini-2.5-flash tiene thinking activado por defecto.
+    // Los thinking tokens comparten el mismo presupuesto que maxOutputTokens,
+    // por lo que se necesita un valor suficientemente alto (>=4096).
+    Chat.Max_tokens   := 4096;
     Chat.Temperature  := 1.0;
     Chat.Asynchronous := True;
 
