@@ -33,7 +33,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections, System.JSON,
-  Rest.JSON, System.Net.Mime, System.NetEncoding, System.TypInfo, System.Types, System.SyncObjs,
+  Rest.JSON, REST.Json.Types, System.Net.Mime, System.NetEncoding, System.TypInfo, System.Types, System.SyncObjs,
   uMakerAi.Core; // Asumiendo que TAiMediaFiles, TAiWebSearch y TAiMetadata est?n aqu?
 
 Type
@@ -84,10 +84,12 @@ Type
   TAiChatMessage = Class(TObject)
   Private
     FPreviousResponseId: String;
+    [JSONMarshalled(False)]
     FWebSearchResponse: TAiWebSearch;
     FReasoningContent: String;
     FIsToolCallResponse: Boolean;
     FModel: String;
+    [JSONMarshalled(False)]
     FCitations: TAiMsgCitations;
     FStopReason: String;
     FIsRefusal: Boolean;
@@ -96,6 +98,7 @@ Type
     FThinking_tokens: Integer;
     FFinishReason: String;
     FCached_tokens: Integer;
+    [JSONMarshalled(False)]
     FLock: TCriticalSection;
     procedure SetContent(const Value: String);
     procedure SetRole(const Value: String);
@@ -129,9 +132,11 @@ Type
     FToolCallId: String;
     FFunctionName: String;
     FTool_calls: String;
+    [JSONMarshalled(False)]
     FMediaFiles: TAiMediaFiles;
   Public
-    Constructor Create(aPrompt, aRole: String; aToolCallId: String = ''; aFunctionName: String = '');
+    Constructor Create; overload;
+    Constructor Create(aPrompt, aRole: String; aToolCallId: String = ''; aFunctionName: String = ''); overload;
     Destructor Destroy; Override;
 
     Procedure AddMediaFile(aMediaFile: TAiMediaFile);
@@ -246,6 +251,11 @@ begin
   Finally
     FLock.Leave;
   End;
+end;
+
+constructor TAiChatMessage.Create;
+begin
+  Create('', '');
 end;
 
 constructor TAiChatMessage.Create(aPrompt, aRole: String; aToolCallId: String = ''; aFunctionName: String = '');
@@ -788,7 +798,7 @@ begin
 
     If Assigned(JObj) and (JObj.TryGetValue<String>('model', Model)) then
     Begin
-      If Model = 'AiOpenChat' then
+      If (Model = 'AiOpenChat') or (Model = 'MakerAiChat') then
       Begin
         JArr := TJSonArray(JObj.GetValue<TJSonArray>('data'));
 
