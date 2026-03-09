@@ -34,6 +34,9 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections, System.JSON,
   Rest.JSON, REST.Json.Types, System.Net.Mime, System.NetEncoding, System.TypInfo, System.Types, System.SyncObjs,
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
   uMakerAi.Core; // Asumiendo que TAiMediaFiles, TAiWebSearch y TAiMetadata est?n aqu?
 
 Type
@@ -187,6 +190,7 @@ Type
   Public
     Function ToJSon: TJSonArray;
     Function ExportChatHistory: TJSONObject;
+    Function ToJsonChatArchive: TJSONObject;
     Procedure SaveToStream(Stream: TStream);
     Procedure SaveToFile(FileName: String);
     Procedure LoadFromStream(Stream: TStream);
@@ -839,31 +843,38 @@ begin
   End;
 end;
 
-procedure TAiChatMessages.SaveToStream(Stream: TStream);
+function TAiChatMessages.ToJsonChatArchive: TJSONObject;
 Var
-  JObj, JItem: TJSONObject;
   JArr: TJSonArray;
-  St: TStringStream;
+  JItem: TJSONObject;
   I: Integer;
   Item: TAiChatMessage;
 begin
-  St := TStringStream.Create('', TEncoding.UTF8);
-  JObj := TJSONObject.Create;
+  Result := TJSONObject.Create;
   JArr := TJSonArray.Create;
 
+  Result.AddPair('model', 'MakerAiChat');
+  Result.AddPair('type', 'Messages');
+  Result.AddPair('ver', '1.0');
+
+  For I := 0 to Self.Count - 1 do
+  Begin
+    Item := Self.Items[I];
+    JItem := TJSon.ObjectToJsonObject(Item);
+    JArr.Add(JItem);
+  End;
+
+  Result.AddPair('data', JArr);
+end;
+
+procedure TAiChatMessages.SaveToStream(Stream: TStream);
+Var
+  JObj: TJSONObject;
+  St: TStringStream;
+begin
+  St := TStringStream.Create('', TEncoding.UTF8);
+  JObj := ToJsonChatArchive;
   Try
-    JObj.AddPair('model', 'MakerAiChat');
-    JObj.AddPair('type', 'Messages');
-    JObj.AddPair('ver', '1.0');
-
-    For I := 0 to Self.Count - 1 do
-    Begin
-      Item := Self.Items[I];
-      JItem := TJSon.ObjectToJsonObject(Item);
-      JArr.Add(JItem);
-    End;
-
-    JObj.AddPair('data', JArr);
     St.WriteString(JObj.Format);
     St.SaveToStream(Stream);
   Finally
