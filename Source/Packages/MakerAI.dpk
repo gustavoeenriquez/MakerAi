@@ -97,9 +97,11 @@ contains
   uMakerAi.Tools.Shell in '..\Tools\uMakerAi.Tools.Shell.pas',
   uMakerAi.Tools.TextEditor in '..\Tools\uMakerAi.Tools.TextEditor.pas',
   uMakerAi.OpenAI.Audio in '..\Tools\uMakerAi.OpenAI.Audio.pas',
+  uMakerAi.OpenAI.Audio.Tool in '..\Tools\uMakerAi.OpenAI.Audio.Tool.pas',
   uMakerAi.Whisper in '..\Tools\uMakerAi.Whisper.pas',
   uMakerAi.Tools.ComputerUse in '..\Tools\uMakerAi.Tools.ComputerUse.pas',
   uMakerAi.Ollama.Ocr in '..\Tools\uMakerAi.Ollama.Ocr.pas',
+  uMakerAi.Ollama.Vision in '..\Tools\uMakerAi.Ollama.Vision.pas',
   uMakerAi.Gemini.Speech in '..\Tools\uMakerAi.Gemini.Speech.pas';
 
 end.

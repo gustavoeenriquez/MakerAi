@@ -24,6 +24,8 @@ type
     FPrompt_tokens: Integer;
     FCompletion_tokens: Integer;
     FTotal_tokens: Integer;
+    FTranscriptionModel: string;
+    FTranscriptionPrompt: string;
 
     procedure SetAudioProfile(const Value: TStrings);
     procedure SetScene(const Value: TStrings);
@@ -38,6 +40,7 @@ type
     procedure ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage); override;
 
     function InternalRunGeminiTTS(const AText: string; ResMsg: TAiChatMessage): string;
+    function InternalRunGeminiTranscription(aMediaFile: TAiMediaFile): string;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -57,6 +60,11 @@ type
     property Prompt_tokens: Integer read FPrompt_tokens write FPrompt_tokens;
     property Completion_tokens: Integer read FCompletion_tokens write FCompletion_tokens;
     property Total_tokens: Integer read FTotal_tokens write FTotal_tokens;
+
+    { Speech-to-Text: modelo multimodal que acepta audio (ej: gemini-2.0-flash) }
+    property TranscriptionModel: string read FTranscriptionModel write FTranscriptionModel;
+    { Instruccion enviada junto al audio para guiar la transcripcion }
+    property TranscriptionPrompt: string read FTranscriptionPrompt write FTranscriptionPrompt;
   end;
 
 Procedure Register;
@@ -80,6 +88,8 @@ begin
   FAudioProfile := TStringList.Create;
   FScene := TStringList.Create;
   FDirectorsNotes := TStringList.Create;
+  FTranscriptionModel := 'gemini-2.0-flash';
+  FTranscriptionPrompt := 'Transcribe this audio accurately.';
 end;
 
 destructor TAiGeminiSpeechTool.Destroy;
@@ -303,10 +313,117 @@ begin
   end;
 end;
 
+function TAiGeminiSpeechTool.InternalRunGeminiTranscription(aMediaFile: TAiMediaFile): string;
+var
+  HTTP: TNetHTTPClient;
+  LUrl: string;
+  LRequestJson, LPartText, LPartAudio, LInlineData: TJSONObject;
+  LContents, LParts: TJSONArray;
+  LBody: TStringStream;
+  LResponse: IHTTPResponse;
+  LResponseJson: TJSONObject;
+  LBase64, LMimeType: string;
+begin
+  Result := '';
+  LUrl := Format('%smodels/%s:generateContent?key=%s', [FUrl, FTranscriptionModel, GetApiKey]);
+
+  aMediaFile.Content.Position := 0;
+  LBase64 := StreamToBase64(aMediaFile.Content);
+  LMimeType := GetMimeTypeFromFileName(ExtractFileExt(aMediaFile.FileName));
+  if LMimeType = '' then
+    LMimeType := 'audio/wav';
+
+  HTTP := TNetHTTPClient.Create(nil);
+  LRequestJson := TJSONObject.Create;
+  try
+    LPartText := TJSONObject.Create;
+    LPartText.AddPair('text', FTranscriptionPrompt);
+
+    LInlineData := TJSONObject.Create;
+    LInlineData.AddPair('mimeType', LMimeType);
+    LInlineData.AddPair('data', LBase64);
+    LPartAudio := TJSONObject.Create;
+    LPartAudio.AddPair('inlineData', LInlineData);
+
+    LParts := TJSONArray.Create;
+    LParts.Add(LPartText);
+    LParts.Add(LPartAudio);
+
+    LContents := TJSONArray.Create;
+    LContents.Add(TJSONObject.Create.AddPair('parts', LParts));
+    LRequestJson.AddPair('contents', LContents);
+
+    LBody := TStringStream.Create(LRequestJson.ToJSON, TEncoding.UTF8);
+    try
+      HTTP.ContentType := 'application/json';
+      LResponse := HTTP.Post(LUrl, LBody);
+    finally
+      LBody.Free;
+    end;
+
+    if LResponse.StatusCode = 200 then
+    begin
+      LResponseJson := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
+      if Assigned(LResponseJson) then
+      try
+        Result := LResponseJson.GetValue<string>('candidates[0].content.parts[0].text', '');
+      finally
+        LResponseJson.Free;
+      end;
+    end
+    else
+      raise Exception.CreateFmt('Gemini Transcription Error %d: %s',
+        [LResponse.StatusCode, LResponse.ContentAsString]);
+  finally
+    LRequestJson.Free;
+    HTTP.Free;
+  end;
+end;
+
+procedure TAiGeminiSpeechTool.ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
+
+  procedure DoTranscription;
+  var
+    LText: string;
+  begin
+    try
+      ReportState(acsReasoning, 'Transcribiendo audio con Gemini...');
+      LText := InternalRunGeminiTranscription(aMediaFile);
+      aMediaFile.Transcription := LText;
+      aMediaFile.Procesado := True;
+      ReportDataEnd(ResMsg, 'assistant', LText);
+    except
+      on E: Exception do
+        ReportError('Error en transcripcion Gemini: ' + E.Message, E);
+    end;
+  end;
+
+begin
+  if IsAsync then
+    DoTranscription
+  else
+    TTask.Run(
+      procedure
+      var
+        LText: string;
+      begin
+        try
+          ReportState(acsReasoning, 'Transcribiendo audio con Gemini...');
+          LText := InternalRunGeminiTranscription(aMediaFile);
+          aMediaFile.Transcription := LText;
+          aMediaFile.Procesado := True;
+          ReportDataEnd(ResMsg, 'assistant', LText);
+        except
+          on E: Exception do
+            ReportError('Error en transcripcion Gemini: ' + E.Message, E);
+        end;
+      end);
+end;
+
 procedure TAiGeminiSpeechTool.ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage);
 begin
   // Si IsAsync=True ya estamos en un hilo background del chat: llamar directo
-  // para evitar un TTask anidado que causaría dangling pointer sobre ResMsg.
+  // para evitar un TTask anidado que causarï¿½a dangling pointer sobre ResMsg.
   // Si IsAsync=False estamos en el hilo principal: lanzar task para no bloquearlo.
   if IsAsync then
     InternalRunGeminiTTS(AText, ResMsg)
@@ -316,11 +433,6 @@ begin
       begin
         InternalRunGeminiTTS(AText, ResMsg);
       end);
-end;
-
-procedure TAiGeminiSpeechTool.ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
-begin
-  ReportError('Transscripci?n no soportada en este componente.', nil);
 end;
 
 function TAiGeminiSpeechTool.GetApiKey: string;
