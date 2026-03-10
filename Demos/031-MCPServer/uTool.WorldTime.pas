@@ -92,7 +92,7 @@ begin
       ResultObject.AddPair('date', FormatDateTime('yyyy-mm-dd', CityDateTime));
       ResultObject.AddPair('time', FormatDateTime('hh:nn:ss', CityDateTime));
       ResultObject.AddPair('timezone', 'UTC' + IfThen(TimeZoneOffset >= 0, '+', '') + IntToStr(TimeZoneOffset));
-      ResultObject.AddPair('utc_offset', TimeZoneOffset);
+      ResultObject.AddPair('utc_offset', TJSONNumber.Create(Int64(TimeZoneOffset)));
       ResultObject.AddPair('message', Format('Hora actual en %s, %s', [AParams.City, AParams.Country]));
 
       Result := TAiMCPResponseBuilder.New

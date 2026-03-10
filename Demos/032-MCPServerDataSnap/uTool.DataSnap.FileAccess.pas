@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -47,7 +47,7 @@ uses
 
 type
   // =============================================================================
-  // CLASE BASE CON LÓGICA DE SEGURIDAD (Permisos por Instancia)
+  // CLASE BASE CON Lï¿½GICA DE SEGURIDAD (Permisos por Instancia)
   // =============================================================================
   TFileAccessConfig = class
   private
@@ -67,7 +67,7 @@ type
     function NormalizePath(const APath: string): string;
   end;
 
-  // Clase base genérica para herramientas de archivo que comparten configuración
+  // Clase base genï¿½rica para herramientas de archivo que comparten configuraciï¿½n
   TAiFileToolBase<T: class, constructor> = class(TAiMCPToolBase<T>)
   protected
     FConfig: TFileAccessConfig;
@@ -92,13 +92,13 @@ type
     [AiMCPSchemaDescription('Ruta de la carpeta a listar')]
     property Path: string read FPath write FPath;
     [AiMCPOptional]
-    [AiMCPSchemaDescription('Patrón de búsqueda (ej: "*.pas", "*.txt") - default: "*.*"')]
+    [AiMCPSchemaDescription('Patrï¿½n de bï¿½squeda (ej: "*.pas", "*.txt") - default: "*.*"')]
     property Pattern: string read FPattern write FPattern;
     [AiMCPOptional]
     [AiMCPSchemaDescription('Incluir subdirectorios (default: false)')]
     property IncludeSubdirs: Boolean read FIncludeSubdirs write FIncludeSubdirs;
     [AiMCPOptional]
-    [AiMCPSchemaDescription('Mostrar detalles (tamaño, fecha) - default: false)')]
+    [AiMCPSchemaDescription('Mostrar detalles (tamaï¿½o, fecha) - default: false)')]
     property ShowDetails: Boolean read FShowDetails write FShowDetails;
   end;
 
@@ -158,7 +158,7 @@ type
     constructor Create(AConfig: TFileAccessConfig = nil);
   end;
 
-// Helper para registrar con configuración compartida o por defecto
+// Helper para registrar con configuraciï¿½n compartida o por defecto
 procedure RegisterTools(ALogicServer: TAiMCPServer; AConfig: TFileAccessConfig = nil);
 
 implementation
@@ -177,17 +177,17 @@ begin
   if not Assigned(ALogicServer) then
     raise Exception.Create('LogicServer no puede ser nulo.');
 
-  // Nota: Si AConfig es nil, cada herramienta creará su propia config por defecto internamente.
+  // Nota: Si AConfig es nil, cada herramienta crearï¿½ su propia config por defecto internamente.
   // Pero para consistencia, es mejor que compartan la misma si se van a registrar juntas.
 
-  // Opción 1: Si el usuario pasa una config, la usamos. EL USUARIO ES RESPONSABLE DE LIBERARLA (o el último tool).
+  // Opciï¿½n 1: Si el usuario pasa una config, la usamos. EL USUARIO ES RESPONSABLE DE LIBERARLA (o el ï¿½ltimo tool).
   // Para simplificar en DataSnap, haremos que cada tool tenga su referencia.
 
   ALogicServer.RegisterTool('list_files',
     function: IAiMCPTool
     begin
-      // Si AConfig es nil, el tool crea una nueva y se hace dueño.
-      // Si AConfig NO es nil, el tool la usa pero NO se hace dueño (referencia compartida).
+      // Si AConfig es nil, el tool crea una nueva y se hace dueï¿½o.
+      // Si AConfig NO es nil, el tool la usa pero NO se hace dueï¿½o (referencia compartida).
       Result := TListFilesTool.Create(AConfig);
     end);
 
@@ -205,7 +205,7 @@ begin
 end;
 
 // =============================================================================
-// TFileAccessConfig (Lógica de Seguridad)
+// TFileAccessConfig (Lï¿½gica de Seguridad)
 // =============================================================================
 
 constructor TFileAccessConfig.Create;
@@ -300,12 +300,12 @@ begin
   if Assigned(AConfig) then
   begin
     FConfig := AConfig;
-    FOwnsConfig := False; // Usamos configuración compartida externa
+    FOwnsConfig := False; // Usamos configuraciï¿½n compartida externa
   end
   else
   begin
     FConfig := TFileAccessConfig.Create;
-    FOwnsConfig := True; // Creamos nuestra propia configuración
+    FOwnsConfig := True; // Creamos nuestra propia configuraciï¿½n
   end;
 end;
 
@@ -368,8 +368,8 @@ begin
         begin
           if FindFirst(FilePath, faAnyFile, FileInfo) = 0 then
           try
-            FileObject.AddPair('size', FileInfo.Size);
-            FileObject.AddPair('modified', TJSONString.Create(FormatDateTime('c', FileDateToDateTime(FileInfo.Time))));
+            FileObject.AddPair('size', TJSONNumber.Create(FileInfo.Size));
+            FileObject.AddPair('modified', TJSONString.Create(FormatDateTime('c', FileInfo.TimeStamp)));
           finally
             FindClose(FileInfo);
           end;
@@ -378,7 +378,7 @@ begin
       end;
     end;
 
-    ResultObject.AddPair('count', FilesArray.Count);
+    ResultObject.AddPair('count', TJSONNumber.Create(Int64(FilesArray.Count)));
 
     Result := TAiMCPResponseBuilder.New.AddText(ResultObject.ToJSON).Build;
     ResultObject.Free;
@@ -409,10 +409,15 @@ begin
       raise Exception.Create('Acceso denegado a la ruta.');
 
     if not FConfig.IsExtensionAllowed(AParams.FilePath) then
-      raise Exception.Create('Extensión no permitida.');
+      raise Exception.Create('Extensiï¿½n no permitida.');
 
-    if TFile.GetSize(AParams.FilePath) > MAX_FILE_SIZE then
-      raise Exception.Create('Archivo demasiado grande (>10MB).');
+    var FS := TFileStream.Create(AParams.FilePath, fmOpenRead or fmShareDenyNone);
+    try
+      if FS.Size > MAX_FILE_SIZE then
+        raise Exception.Create('Archivo demasiado grande (>10MB).');
+    finally
+      FS.Free;
+    end;
 
     Result := TAiMCPResponseBuilder.New
       .AddFile(AParams.FilePath)
@@ -445,7 +450,7 @@ begin
       raise Exception.Create('Acceso denegado a la ruta de escritura.');
 
     if not FConfig.IsExtensionAllowed(AParams.FilePath) then
-      raise Exception.Create('Extensión no permitida para escritura.');
+      raise Exception.Create('Extensiï¿½n no permitida para escritura.');
 
     if AParams.CreateDirs and not TDirectory.Exists(FileDir) then
       TDirectory.CreateDirectory(FileDir);

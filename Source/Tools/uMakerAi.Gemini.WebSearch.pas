@@ -9,7 +9,11 @@ uses
 
 type
 
+{$IF CompilerVersion >= 35}
   [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32 or pidOSX64 or pidAndroidArm64)]
+{$ELSE}
+  [ComponentPlatformsAttribute(pidWin32 or pidWin64 or pidOSX32 or pidOSX64)]
+{$ENDIF}
   TAiGeminiWebSearchTool = class(TAiWebSearchToolBase)
   private
     FApiKey: string;

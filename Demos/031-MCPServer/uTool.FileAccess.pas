@@ -310,8 +310,8 @@ begin
         begin
           if FindFirst(FilePath, faAnyFile, FileInfo) = 0 then
           try
-            FileObject.AddPair('size', FileInfo.Size);
-            FileObject.AddPair('modified', TJSONString.Create(FormatDateTime('c', FileDateToDateTime(FileInfo.Time))));
+            FileObject.AddPair('size', TJSONNumber.Create(FileInfo.Size));
+            FileObject.AddPair('modified', TJSONString.Create(FormatDateTime('c', FileInfo.TimeStamp)));
           finally
             FindClose(FileInfo);
           end;
@@ -320,7 +320,7 @@ begin
       end;
     end;
 
-    ResultObject.AddPair('count', FilesArray.Count);
+    ResultObject.AddPair('count', TJSONNumber.Create(Int64(FilesArray.Count)));
     ResultObject.AddPair('message', Format('%d archivos encontrados en "%s".', [FilesArray.Count, AParams.Path]));
 
     // Devolvemos el JSON de la lista de archivos dentro del formato de respuesta "content"
@@ -346,6 +346,7 @@ end;
 function TReadFileTool.ExecuteWithParams(const AParams: TReadFileParams; const AuthContext: TAiAuthContext): TJSONObject;
 var
   FileSize: Int64;
+  FS: TFileStream;
 begin
   try
     if not TFile.Exists(AParams.FilePath) then
@@ -357,7 +358,12 @@ begin
     if not TListFilesTool.IsExtensionAllowed(AParams.FilePath) then
       raise Exception.Create('Tipo de archivo no permitido para lectura: ' + TPath.GetExtension(AParams.FilePath));
 
-    FileSize := TFile.GetSize(AParams.FilePath);
+    FS := TFileStream.Create(AParams.FilePath, fmOpenRead or fmShareDenyNone);
+    try
+      FileSize := FS.Size;
+    finally
+      FS.Free;
+    end;
     if FileSize > MAX_FILE_SIZE then
       raise Exception.CreateFmt('Archivo demasiado grande: %d bytes (máximo permitido: %d bytes)', [FileSize, MAX_FILE_SIZE]);
 

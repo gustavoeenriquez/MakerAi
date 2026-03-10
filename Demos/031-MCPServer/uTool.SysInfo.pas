@@ -201,9 +201,9 @@ begin
 
   var
   LWinVer := TJSONObject.Create;
-  LWinVer.AddPair('major', TOSVersion.Major);
-  LWinVer.AddPair('minor', TOSVersion.Minor);
-  LWinVer.AddPair('build', TOSVersion.Build);
+  LWinVer.AddPair('major', TJSONNumber.Create(Int64(TOSVersion.Major)));
+  LWinVer.AddPair('minor', TJSONNumber.Create(Int64(TOSVersion.Minor)));
+  LWinVer.AddPair('build', TJSONNumber.Create(Int64(TOSVersion.Build)));
   Result.AddPair('windowsVersion', LWinVer);
 
 {$IFDEF WIN64}
@@ -222,9 +222,9 @@ begin
   MemStatus.dwLength := SizeOf(TMemoryStatusEx);
   if GlobalMemoryStatusEx(MemStatus) then
   begin
-    Result.AddPair('totalPhysical_gb', MemStatus.ullTotalPhys / (1024 * 1024 * 1024));
-    Result.AddPair('availablePhysical_gb', MemStatus.ullAvailPhys / (1024 * 1024 * 1024));
-    Result.AddPair('memoryLoad_percent', MemStatus.dwMemoryLoad);
+    Result.AddPair('totalPhysical_gb', TJSONNumber.Create(MemStatus.ullTotalPhys / (1024 * 1024 * 1024)));
+    Result.AddPair('availablePhysical_gb', TJSONNumber.Create(MemStatus.ullAvailPhys / (1024 * 1024 * 1024)));
+    Result.AddPair('memoryLoad_percent', TJSONNumber.Create(Int64(MemStatus.dwMemoryLoad)));
   end;
 end;
 
@@ -245,8 +245,8 @@ begin
       begin
         LDisk := TJSONObject.Create;
         LDisk.AddPair('drive', RootPath);
-        LDisk.AddPair('total_gb', TotalBytes / (1024 * 1024 * 1024));
-        LDisk.AddPair('free_gb', TotalFreeBytes / (1024 * 1024 * 1024));
+        LDisk.AddPair('total_gb', TJSONNumber.Create(TotalBytes / (1024 * 1024 * 1024)));
+        LDisk.AddPair('free_gb', TJSONNumber.Create(TotalFreeBytes / (1024 * 1024 * 1024)));
         Result.AddElement(LDisk);
       end;
     end;
