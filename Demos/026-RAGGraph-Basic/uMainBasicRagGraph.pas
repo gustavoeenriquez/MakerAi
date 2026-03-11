@@ -5,7 +5,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, System.JSON,
 
-  uMakerAi.RAG.Graph.Core, uMakerAi.Embeddings.Core, uMakerAi.Embeddings, uMakerAi.Chat.Ollama, uMakerAi.RAG.Vectors,
+  uMakerAi.RAG.Graph.Core, uMakerAi.Embeddings.Core, uMakerAi.Embeddings, uMakerAi.Chat.Ollama, uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
 
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, uMakerAi.RAG.Graph.Builder;
 
@@ -45,15 +45,15 @@ procedure TForm20.BtnAddNodoFromJsonClick(Sender: TObject);
 var
   JsonString: string;
 begin
-  // Asumimos que el JSON de arriba está en esta variable
+  // Asumimos que el JSON de arriba estï¿½ en esta variable
   JsonString := MemoJson.Lines.text;
 
-  // La magia ocurre aquí:
+  // La magia ocurre aquï¿½:
   // 1. Parsea el JSON.
   // 2. Busca si los nodos "Steve Jobs" o "Apple" ya existen (Identity Map).
   // 3. Si no existen, los crea.
-  // 4. Si tienen el campo "text", genera sus vectores automáticamente (usando Embeddings).
-  // 5. Crea la relación "FUNDÓ" entre ellos.
+  // 4. Si tienen el campo "text", genera sus vectores automï¿½ticamente (usando Embeddings).
+  // 5. Crea la relaciï¿½n "FUNDï¿½" entre ellos.
 
   GraphBuilder.Process(JsonString, msAddNewOnly);
   RAG.RebuildIndexes;
@@ -70,17 +70,17 @@ begin
   // Sintaxis: AddNode(ID_Unico, Etiqueta_Tipo, Nombre_Legible)
   Steve := RAG.AddNode('id_001', 'PERSONA', 'Steve Jobs');
 
-  // Opcional: Añadir propiedades de negocio (Metadatos)
-  Steve.Properties.Add('nacimiento', 1955);
-  Steve.Properties.Add('text', 'Steve Jobs, visionario tecnológico y cofundador de Apple.');
-  Steve.text := 'Steve Jobs, visionario tecnológico y cofundador de Apple.'; // Información para el RAG
+  // Opcional: Aï¿½adir propiedades de negocio (Metadatos)
+  Steve.Properties['nacimiento'] := 1955;
+  Steve.Properties['text'] := 'Steve Jobs, visionario tecnolï¿½gico y cofundador de Apple.';
+  Steve.text := 'Steve Jobs, visionario tecnolï¿½gico y cofundador de Apple.'; // Informaciï¿½n para el RAG
 
 
   Apple := RAG.AddNode('id_002', 'EMPRESA', 'Apple Inc.');
-  Apple.Properties.Add('industria', 'Tecnología');
-  Apple.text := 'Apple Empresa de tecnología innovadora y creadora del IPhone';
+  Apple.Properties['industria'] := 'Tecnologï¿½a';
+  Apple.text := 'Apple Empresa de tecnologï¿½a innovadora y creadora del IPhone';
 
-  // 2. Crear la SEMÁNTICA  - el vector para búsquedas RAG
+  // 2. Crear la SEMï¿½NTICA  - el vector para bï¿½squedas RAG
   // Opcional solo si se requiere buscar por RAG
   if Assigned(RAG.Embeddings) then
   Begin
@@ -88,12 +88,12 @@ begin
     Apple.Data := RAG.Embeddings.CreateEmbedding(Apple.text, 'user');
   End;
 
-  // 3. Crear la Arista (Relación)
+  // 3. Crear la Arista (Relaciï¿½n)
   // Sintaxis: AddEdge(Origen, Destino, ID_Unico, Etiqueta_Verbo, Descripcion)
-  Relacion := RAG.AddEdge(Steve, Apple, 'edge_001', 'FUNDÓ', 'fue el fundador de');
+  Relacion := RAG.AddEdge(Steve, Apple, 'edge_001', 'FUNDï¿½', 'fue el fundador de');
 
-  // Opcional: Cualificar la relación
-  Relacion.Properties.Add('año', 1976);
+  // Opcional: Cualificar la relaciï¿½n
+  Relacion.MetaData['aï¿½o'] := 1976;
 
   Relacion.Weight := 0.9; // Alta relevancia
 
@@ -105,7 +105,7 @@ end;
 procedure TForm20.BtnBusquedaEstructuralClick(Sender: TObject);
 var
   Query: TGraphMatchQuery;
-  // Patrones para: (Persona) -[FUNDÓ]-> (Empresa)
+  // Patrones para: (Persona) -[FUNDï¿½]-> (Empresa)
   P_Persona, P_Empresa: TMatchNodePattern;
   P_Relacion: TMatchEdgePattern;
 begin
@@ -118,14 +118,14 @@ begin
 
   // ...que haya FUNDADO...
   P_Relacion := TMatchEdgePattern.Create;
-  P_Relacion.EdgeLabel := 'FUNDÓ';
+  P_Relacion.EdgeLabel := 'FUNDï¿½';
 
   // ...cualquier EMPRESA.
   P_Empresa := TMatchNodePattern.Create;
   P_Empresa.Variable := 'c';
   P_Empresa.NodeLabel := 'EMPRESA';
 
-  // Ejecutamos el patrón (p)-[r]->(c)
+  // Ejecutamos el patrï¿½n (p)-[r]->(c)
   Query.AddMatchClause(TMatchClause.Create('p', P_Relacion, 'c'));
   var
   Res := RAG.Match(Query);
@@ -133,21 +133,21 @@ end;
 
 procedure TForm20.BtnBusquedaHibridaClick(Sender: TObject);
 var
-  Plan: TQueryPlan; // Este plan suele generarlo el LLM automáticamente
+  Plan: TQueryPlan; // Este plan suele generarlo el LLM automï¿½ticamente
 begin
   // 1. ANCLA (Vector): "Busca a alguien parecido a 'El genio de Apple'"
   Plan.AnchorPrompt := 'El genio de Apple';
   Plan.AnchorVariable := 'fundador';
 
-  // 2. NAVEGACIÓN (Grafo): "Desde ahí, busca qué empresas fundó"
+  // 2. NAVEGACIï¿½N (Grafo): "Desde ahï¿½, busca quï¿½ empresas fundï¿½"
   SetLength(Plan.Steps, 1);
   Plan.Steps[0].SourceVariable := 'fundador';
-  Plan.Steps[0].EdgeLabel := 'FUNDÓ';
+  Plan.Steps[0].EdgeLabel := 'FUNDï¿½';
   Plan.Steps[0].TargetVariable := 'empresa';
 
   Plan.ResultVariable := 'empresa';
 
-  // Ejecución: Vector encuentra a Steve -> Grafo encuentra a Pixar y Next.
+  // Ejecuciï¿½n: Vector encuentra a Steve -> Grafo encuentra a Pixar y Next.
   var
   Resultados := RAG.Query(Plan);
 
@@ -163,7 +163,7 @@ var
 begin
   // El usuario busca un concepto, NO un nombre exacto.
   // En la BD no existe un nodo llamado "Creador del iPhone",
-  // pero el vector encontrará a "Steve Jobs" por su descripción.
+  // pero el vector encontrarï¿½ a "Steve Jobs" por su descripciï¿½n.
 
   Prompt := 'Fundador';
 
@@ -199,11 +199,11 @@ var
   TripletList: TStringList;
   Subject, Predicate, Obj: string;
 begin
-  // 1. Asegurarse de que el grafo está asignado
+  // 1. Asegurarse de que el grafo estï¿½ asignado
   Graph := RAG;
   if not Assigned(Graph) then
   begin
-    ShowMessage('El componente del grafo (RAG) no está asignado.');
+    ShowMessage('El componente del grafo (RAG) no estï¿½ asignado.');
     Exit;
   end;
 
@@ -224,12 +224,12 @@ begin
         Predicate := Edge.EdgeLabel;
         Obj := Format('%s (%s)', [Edge.ToNode.Name, Edge.ToNode.NodeLabel]);
 
-        // Añadir la tripleta formateada a la lista
+        // Aï¿½adir la tripleta formateada a la lista
         TripletList.Add(Format('%-35s --[%s]--> %s', [Subject, Predicate, Obj]));
       end;
     end;
 
-    // 5. Ordenar la lista para que sea más fácil de leer
+    // 5. Ordenar la lista para que sea mï¿½s fï¿½cil de leer
     TripletList.Sort;
 
     // 6. Mostrar los resultados en el TMemo

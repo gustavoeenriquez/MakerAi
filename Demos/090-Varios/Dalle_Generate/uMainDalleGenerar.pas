@@ -94,7 +94,7 @@ Var
 begin
   AiDalle.ApiKey := EditApiKey.Text;
 
-  If EditResponseFormat.Text = 'tiaRUrl' then
+  If EditResponseFormat.Selected.Text = 'tiaRUrl' then
     AiDalle.ResponseFormat := irfUrl
   Else
     AiDalle.ResponseFormat := irfBase64Json;
@@ -108,11 +108,11 @@ begin
     0:
       AiSize := TAiImageSize.is1024x1024; // Soportado por TODOS los modelos
     1:
-      AiSize := TAiImageSize.is1792x1024; // Solo para DALL-E 3 (Formato panorámico/horizontal)
+      AiSize := TAiImageSize.is1792x1024; // Solo para DALL-E 3 (Formato panorï¿½mico/horizontal)
     2:
       AiSize := TAiImageSize.is1024x1792; // Solo para DALL-E 3 (Formato retrato/vertical)
     3:
-      AiSize := TAiImageSize.is1536x1024; // Solo para gpt-image-1 (Formato panorámico/horizontal)
+      AiSize := TAiImageSize.is1536x1024; // Solo para gpt-image-1 (Formato panorï¿½mico/horizontal)
     4:
       AiSize := TAiImageSize.is1024x1536; // Solo para gpt-image-1 (Formato retrato/vertical)
   End;
@@ -122,7 +122,7 @@ begin
   AiDalle.AutoUpscale := ChAutoUpscale.IsChecked;
   AIDalle.UseRefiner := ChUserRefiner.IsChecked;
 
-  //Faltaría por implementar
+  //Faltarï¿½a por implementar
 
   {
     property Steps: Integer read FSteps write FSteps default 30;
