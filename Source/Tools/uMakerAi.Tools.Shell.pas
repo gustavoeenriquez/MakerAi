@@ -37,7 +37,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON, System.StrUtils, System.Diagnostics,
-  System.Generics.Collections, uMakerAi.Utils.System;
+  System.Generics.Collections, uMakerAi.Utils.System, uMakerAi.Tools.Functions, uMakerAi.Chat.Messages;
 
 type
   // Estructura interna del resultado de un comando
@@ -52,6 +52,16 @@ type
   TAiShellCommandEvent = procedure(Sender: TObject; const Command: string; const CallId: string; var Result: TShellExecutionResult; var Handled: Boolean) of object;
   TAiShellLogEvent = procedure(Sender: TObject; const Command: string; const StdOut, StdErr: string; ExitCode: Integer) of object;
 
+  // Modo de seguridad para filtrado de comandos
+  // ssmNone      : sin filtro (comportamiento por defecto)
+  // ssmBlockList : bloquea los comandos de la lista; el resto se permite
+  // ssmAllowList : solo permite los comandos de la lista; el resto se bloquea
+  TShellSecurityMode = (ssmNone, ssmBlockList, ssmAllowList);
+
+  // Evento disparado cuando un comando es bloqueado por la política de seguridad.
+  // AErrorMessage puede modificarse para personalizar el mensaje devuelto al LLM.
+  TAiShellSecurityEvent = procedure(Sender: TObject; const Command: string; const CallId: string; var AErrorMessage: string) of object;
+
   // Modos soportados (para generar la definici?n del Tool correcta)
 
   TAiShell = class(TComponent)
@@ -64,6 +74,9 @@ type
     FEnvironment: TStringList;
     FMaxOutputSize: Integer;
     FOnConsoleLog: TAiShellLogEvent;
+    FSecurityMode: TShellSecurityMode;
+    FSecurityList: TStringList;
+    FOnSecurityViolation: TAiShellSecurityEvent;
 
     procedure SetActive(const Value: Boolean);
     function GenerateSentinel: string;
@@ -80,6 +93,14 @@ type
     function ExecuteGenericAction(const CallId: string; JArgs: TJSONObject): string;
     procedure SetShellPath(const Value: string);
     procedure SetEnvironment(const Value: TStringList);
+    procedure SetSecurityList(const Value: TStringList);
+
+    // Devuelve '' si el comando está permitido, o un mensaje de error si está bloqueado.
+    // Compara el primer token del comando (nombre del ejecutable/comando) contra FSecurityList.
+    function CheckSecurity(const ACommand, ACallId: string): string;
+
+    // Handler interno usado por RegisterInFunctions
+    procedure OnFunctionAction(Sender: TObject; FunctionAction: TFunctionActionItem;    FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
 
   public
     constructor Create(AOwner: TComponent); override;
@@ -92,7 +113,12 @@ type
     function ExecuteManual(const Command: string): string;
 
     procedure Restart;
-    // function GetToolDefinition: string;
+
+    { Registra la funcion 'bash' en un TAiFunctions para su uso con Ollama
+      (y cualquier provider que requiera definicion explicita de herramientas).
+      AFunctionName permite personalizar el nombre si el modelo lo requiere. }
+    procedure RegisterInFunctions(AFunctions: TAiFunctions;
+      const AFunctionName: string = 'bash');
 
   published
     property Active: Boolean read FActive write SetActive default False;
@@ -101,8 +127,20 @@ type
     property MaxOutputSize: Integer read FMaxOutputSize write FMaxOutputSize default 20000;
 
     property Environment: TStringList read FEnvironment write SetEnvironment;
+
+    // --- Seguridad ---
+    // Modo de filtrado de comandos (ssmNone por defecto = sin restricciones).
+    property SecurityMode: TShellSecurityMode read FSecurityMode write FSecurityMode default ssmNone;
+    // Lista de comandos para el modo activo.
+    //   ssmBlockList: nombres de comandos bloqueados (ej: 'rm', 'del', 'format')
+    //   ssmAllowList: nombres de comandos permitidos (ej: 'dir', 'ls', 'echo')
+    // Se compara contra el primer token del comando, sin distinguir mayúsculas.
+    property SecurityList: TStringList read FSecurityList write SetSecurityList;
+
     property OnCommand: TAiShellCommandEvent read FOnCommand write FOnCommand;
     property OnConsoleLog: TAiShellLogEvent read FOnConsoleLog write FOnConsoleLog;
+    // Evento disparado cuando un comando es rechazado por la política de seguridad.
+    property OnSecurityViolation: TAiShellSecurityEvent read FOnSecurityViolation write FOnSecurityViolation;
   end;
 
 procedure Register;
@@ -123,6 +161,9 @@ begin
   FMaxOutputSize := 20000;
   FActive := False;
   FEnvironment := TStringList.Create;
+  FSecurityMode := ssmNone;
+  FSecurityList := TStringList.Create;
+  FSecurityList.CaseSensitive := False;
 
 {$IFDEF MSWINDOWS}
   FShellPath := 'cmd.exe';
@@ -136,6 +177,7 @@ destructor TAiShell.Destroy;
 begin
   StopSession;
   FEnvironment.Free;
+  FSecurityList.Free;
   inherited;
 end;
 
@@ -178,6 +220,52 @@ end;
 procedure TAiShell.SetEnvironment(const Value: TStringList);
 begin
   FEnvironment.Assign(Value);
+end;
+
+procedure TAiShell.SetSecurityList(const Value: TStringList);
+begin
+  FSecurityList.Assign(Value);
+end;
+
+function TAiShell.CheckSecurity(const ACommand, ACallId: string): string;
+var
+  FirstWord: string;
+  SpacePos: Integer;
+  IsInList: Boolean;
+  I: Integer;
+begin
+  Result := '';
+  if FSecurityMode = ssmNone then
+    Exit;
+
+  // Extraer el primer token del comando (nombre del ejecutable)
+  FirstWord := Trim(LowerCase(ACommand));
+  SpacePos := Pos(' ', FirstWord);
+  if SpacePos > 0 then
+    FirstWord := Copy(FirstWord, 1, SpacePos - 1);
+
+  // Verificar si el primer token está en la lista
+  IsInList := False;
+  for I := 0 to FSecurityList.Count - 1 do
+  begin
+    if SameText(FirstWord, Trim(FSecurityList[I])) then
+    begin
+      IsInList := True;
+      Break;
+    end;
+  end;
+
+  case FSecurityMode of
+    ssmBlockList:
+      if IsInList then
+        Result := Format('Security violation: command "%s" is blocked.', [FirstWord]);
+    ssmAllowList:
+      if not IsInList then
+        Result := Format('Security violation: command "%s" is not in the allowed list.', [FirstWord]);
+  end;
+
+  if (Result <> '') and Assigned(FOnSecurityViolation) then
+    FOnSecurityViolation(Self, ACommand, ACallId, Result);
 end;
 
 procedure TAiShell.StartSession;
@@ -431,6 +519,10 @@ begin
   if not JArgs.TryGetValue<string>('command', Cmd) then
     Exit('Error: No command provided.');
 
+  Result := CheckSecurity(Cmd, CallId);
+  if Result <> '' then
+    Exit;
+
   Handled := False;
   if Assigned(FOnCommand) then
     FOnCommand(Self, Cmd, CallId, ExecRes, Handled);
@@ -498,13 +590,23 @@ begin
       begin
         Cmd := CmdVal.Value;
         ItemOut := TJSONObject.Create;
-        Handled := False;
 
-        if Assigned(FOnCommand) then
-          FOnCommand(Self, Cmd, CallId, ExecRes, Handled);
-
-        if not Handled then
-          ExecRes := InternalExecuteCommand(Cmd, LocalTimeOut);
+        var LSecurityError := CheckSecurity(Cmd, CallId);
+        if LSecurityError <> '' then
+        begin
+          ExecRes.StdOut := '';
+          ExecRes.StdErr := LSecurityError;
+          ExecRes.ExitCode := 1;
+          ExecRes.TimedOut := False;
+        end
+        else
+        begin
+          Handled := False;
+          if Assigned(FOnCommand) then
+            FOnCommand(Self, Cmd, CallId, ExecRes, Handled);
+          if not Handled then
+            ExecRes := InternalExecuteCommand(Cmd, LocalTimeOut);
+        end;
 
         // Estructura espec?fica OpenAI
         ItemOut.AddPair('stdout', ExecRes.StdOut);
@@ -542,6 +644,10 @@ begin
   if not JArgs.TryGetValue<string>('command', Cmd) then
     if not JArgs.TryGetValue<string>('cmd', Cmd) then
       Exit('Error: Unknown command format.');
+
+  Result := CheckSecurity(Cmd, CallId);
+  if Result <> '' then
+    Exit;
 
   Handled := False;
   if Assigned(FOnCommand) then
@@ -591,5 +697,45 @@ end;
 // Result := '{ "type": "function", "function": { "name": "bash", "description": "Execute shell commands", "parameters": { "type": "object", "properties": { "command": { "type": "string" } }, "required": ["command"] } } }';
 // end;
 // end;
+
+// =============================================================================
+// REGISTRO EN TAiFunctions
+// =============================================================================
+
+procedure TAiShell.OnFunctionAction(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+begin
+  // Activar la sesion si no estaba activa
+  if not Active then
+    Active := True;
+  ToolCall.Response := Execute(ToolCall.Id, ToolCall.Arguments);
+  Handled := True;
+end;
+
+procedure TAiShell.RegisterInFunctions(AFunctions: TAiFunctions;
+  const AFunctionName: string = 'bash');
+var
+  LFunc: TFunctionActionItem;
+  LParam: TFunctionParamsItem;
+begin
+  if not Assigned(AFunctions) then
+    Exit;
+
+  // Evitar duplicados
+  if AFunctions.Functions.IndexOf(AFunctionName) >= 0 then
+    Exit;
+
+  LFunc := AFunctions.Functions.AddFunction(AFunctionName, True, OnFunctionAction);
+  LFunc.Description.Text :=
+    'Execute a shell command in a persistent session and return its output. ' +
+    'The session preserves state between calls (working directory, environment variables). ' +
+    'Use this to run system commands, scripts, file operations, or any shell instruction.';
+
+  LParam := LFunc.Parameters.Add;
+  LParam.Name := 'command';
+  LParam.ParamType := ptString;
+  LParam.Required := True;
+  LParam.Description.Text := 'The shell command to execute';
+end;
 
 end.
