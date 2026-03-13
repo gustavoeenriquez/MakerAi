@@ -44,6 +44,16 @@ uses
   SysUtils, Classes, SyncObjs,
   uMakerAi.MCPServer.Core;
 
+{$IFDEF MSWINDOWS}
+// Declaramos solo las funciones necesarias de kernel32 para evitar
+// importar la unit Windows completa (que define TCriticalSection como
+// record y colisiona con SyncObjs.TCriticalSection clase).
+function SetConsoleOutputCP(wCodePageID: LongWord): LongBool; stdcall;
+    external 'kernel32.dll' name 'SetConsoleOutputCP';
+function SetConsoleCP(wCodePageID: LongWord): LongBool; stdcall;
+    external 'kernel32.dll' name 'SetConsoleCP';
+{$ENDIF}
+
 type
   // Forward
   TAiMCPStdioServer = class;
@@ -89,11 +99,6 @@ type
   end;
 
 implementation
-
-{$IFDEF MSWINDOWS}
-uses
-  Windows;
-{$ENDIF}
 
 // ---------------------------------------------------------------------------
 // TStdioWorkerThread

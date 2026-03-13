@@ -106,15 +106,7 @@ type
   private
     FIsRunning : Boolean;
   public
-    {$IFDEF MSWINDOWS}
-    // Handles para comunicacion en Windows
-    StdinWrite  : THandle;
-    StdoutRead  : THandle;
-    ProcessHandle: THandle;
-    {$ELSE}
-    // En Unix, usamos TProcess de FPC
-    FProcess: TObject; // TProcess — type forward para evitar dep. circular
-    {$ENDIF}
+    FProcess   : TObject; // TProcess (todas las plataformas)
     InputPipe  : TStream; // stream de escritura al stdin del proceso
     OutputPipe : TStream; // stream de lectura del stdout del proceso
 
@@ -394,29 +386,21 @@ end;
 constructor TInteractiveProcessInfo.Create;
 begin
   inherited Create;
-  FIsRunning  := False;
-  InputPipe   := nil;
-  OutputPipe  := nil;
-{$IFDEF MSWINDOWS}
-  StdinWrite    := 0;
-  StdoutRead    := 0;
-  ProcessHandle := 0;
-{$ELSE}
-  FProcess := nil;
-{$ENDIF}
+  FIsRunning := False;
+  FProcess   := nil;
+  InputPipe  := nil;
+  OutputPipe := nil;
 end;
 
 destructor TInteractiveProcessInfo.Destroy;
 begin
   FIsRunning := False;
-  // InputPipe y OutputPipe son gestionados por TProcess — no liberar aqui
-{$IFNDEF MSWINDOWS}
+  // InputPipe y OutputPipe son streams del TProcess — se liberan con el
   if Assigned(FProcess) then
   begin
     TProcess(FProcess).Free;
     FProcess := nil;
   end;
-{$ENDIF}
   inherited;
 end;
 
@@ -1078,9 +1062,7 @@ begin
     Proc.Execute;
 
     FProcess := TInteractiveProcessInfo.Create;
-{$IFNDEF MSWINDOWS}
-    FProcess.FProcess   := Proc;
-{$ENDIF}
+    FProcess.FProcess   := Proc;   // todas las plataformas
     FProcess.InputPipe  := Proc.Input;
     FProcess.OutputPipe := Proc.Output;
     FProcess.IsRunning  := True;
@@ -1119,12 +1101,8 @@ begin
 
   if Assigned(FProcess) then
   begin
-{$IFNDEF MSWINDOWS}
     if Assigned(FProcess.FProcess) then
-    begin
       TProcess(FProcess.FProcess).Terminate(0);
-    end;
-{$ENDIF}
     FreeAndNil(FProcess);
   end;
 end;
