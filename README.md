@@ -11,58 +11,132 @@ MakerAI Suite es una librería de orquestación de IA que permite integrar múlt
 
 ---
 
-## Características implementadas
+## Estado del port
 
-### Capa Core
-| Unit | Descripción |
-|------|-------------|
-| `uMakerAi.Core` | `TAiMediaFile`, `TAiCapability`, `TAiChatState`, `IAiHttpResponse`, tipos MIME, Base64 |
-| `uMakerAi.Chat.Messages` | `TAiChatMessage`, `TAiChatMessages`, `TAiToolsFunction`, citations, tokens |
-| `uMakerAi.Chat.Tools` | Interfaces de herramientas (`IAiToolContext`, `TAiSpeechToolBase`, etc.) |
-| `uMakerAi.Chat` | `TAiChat` — clase base de todos los drivers LLM, HTTP async/sync, SSE streaming, orquestación de capacidades |
-| `UMakerAi.ParamsRegistry` | `TAiChatFactory` (singleton), `TAiEmbeddingFactory`, registro de drivers y parámetros |
-| `uMakerAi.Utils.CodeExtractor` | Extrae bloques de código de respuestas Markdown |
-| `Source/Core/EncdDecd` | Shim de compatibilidad Base64 para FPC |
-
-### Drivers LLM — Chat
-| Driver | Clase | Estado | Características |
-|--------|-------|--------|-----------------|
-| **GenericLLM** | `TAiGenericChat` | ✅ Probado | OpenAI-compatible genérico para cualquier endpoint |
-| **Ollama** | `TAiOllamaChat` | ✅ Probado sync + async | API nativa `/api/chat`, streaming, gestión de modelos locales |
-| **Groq** | `TAiGroqChat` | ✅ Probado sync + async | reasoning_format, reasoning_effort |
-| **LM Studio** | `TAiLMStudioChat` | ✅ Compilado | OpenAI-compat local, `127.0.0.1:1234` |
-| **Kimi** | `TAiKimiChat` | ✅ Compilado | Moonshot AI, OpenAI-compat |
-| **DeepSeek** | `TAiDeepSeekChat` | ✅ Compilado | reasoning_content para deepseek-reasoner |
-| **OpenAI** | `TAiOpenChat` | ✅ Compilado | Responses API `/v1/responses`, SSE tipado, shell/patch/image |
-| **Claude** | `TAiClaudeChat` | ✅ Compilado | Anthropic API, `x-api-key`, thinking, citations |
-| **Gemini** | `TAiGeminiChat` | ✅ Compilado | Google `generateContent`, thinking budget, imagen/video |
-| **Mistral** | `TAiMistralChat` | ✅ Compilado | OCR, Document QnA, Magistral reasoning, `content-array` |
-| **Grok** | `TAiGrokChat` | ✅ Compilado | xAI, web search, image gen, reasoning |
-| **Cohere** | `TCohereChat` | ✅ Compilado | v2 API, SSE bloques `event:+data:`, citations, rerank, tool calls |
-
-### Conector Universal
-| Unit | Descripción |
-|------|-------------|
-| `uMakerAi.Chat.AiConnection` | `TAiChatConnection` — router runtime entre todos los drivers. Cambia de proveedor asignando `DriverName` sin modificar el código consumidor. Inyección de parámetros via RTTI (`TypInfo`). |
-
-### API Keys
-Las API keys se resuelven desde variables de entorno en runtime usando el prefijo `@`:
-
-```pascal
-AiConnection.ApiKey := '@OPENAI_API_KEY';   // lee OPENAI_API_KEY del entorno
-AiConnection.ApiKey := '@CLAUDE_API_KEY';
-AiConnection.ApiKey := '@GEMINI_API_KEY';
-// etc.
+```
+████████████████████████████████████████████████████████████  100%
 ```
 
-Variables estándar: `OPENAI_API_KEY`, `CLAUDE_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`,
-`DEEPSEEK_API_KEY`, `KIMI_API_KEY`, `GROK_API_KEY`, `MISTRAL_API_KEY`, `COHERE_API_KEY`.
+| Módulo | Estado |
+|--------|--------|
+| Core (Chat base, Messages, Tools, Factory) | ✅ Completo |
+| 12 Drivers LLM (todos sync + async) | ✅ Completo |
+| TAiChatConnection (conector universal) | ✅ Completo |
+| Tools (Functions, Shell, TextEditor, ComputerUse) | ✅ Completo |
+| Multimedia (Whisper, OpenAI Audio, Gemini Speech, DALL-E) | ✅ Completo |
+| Embeddings (TAiEmbeddingsCore + TAiEmbeddings OpenAI) | ✅ Completo |
+| RAG Vector (HNSW + BM25 + RRF + VQL) | ✅ Completo |
+| RAG Graph (grafo de conocimiento + GQL) | ✅ Completo |
+| Agentes (multi-agente + Blackboard + Checkpoint) | ✅ Completo |
+| MCP Server (HTTP, SSE, StdIO, Direct, Bridge) | ✅ Completo |
+| MCP Client (HTTP, SSE, StdIO) | ✅ Completo |
+| Demos (40+ programas de demostración) | ✅ Completo |
+
+---
+
+## Características
+
+### Drivers LLM
+
+| Driver | Clase | API |
+|--------|-------|-----|
+| **OpenAI** | `TAiOpenChat` | Responses API `/v1/responses`, SSE tipado, shell/patch/image gen |
+| **Claude** | `TAiClaudeChat` | Anthropic API, thinking, citations, context management |
+| **Gemini** | `TAiGeminiChat` | Google `generateContent`, thinking budget, brace-counting SSE |
+| **Groq** | `TAiGroqChat` | reasoning_format, reasoning_effort |
+| **Mistral** | `TAiMistralChat` | OCR, Document QnA, Magistral reasoning, content-array |
+| **Grok** | `TAiGrokChat` | xAI, web search (`/v1/responses`), image gen |
+| **Cohere** | `TCohereChat` | v2 API, SSE bloques event/data, citations, rerank |
+| **DeepSeek** | `TAiDeepSeekChat` | reasoning_content (deepseek-reasoner) |
+| **Kimi** | `TAiKimiChat` | Moonshot AI (`moonshot-v1-8k`, `kimi-k2`) |
+| **Ollama** | `TAiOllamaChat` | API nativa `/api/chat`, gestión de modelos, thinking |
+| **LM Studio** | `TAiLMStudioChat` | OpenAI-compat local `127.0.0.1:1234` |
+| **GenericLLM** | `TAiGenericChat` | Cualquier endpoint OpenAI-compatible (vLLM, etc.) |
+
+### Conector Universal
+
+`TAiChatConnection` — cambia de proveedor asignando `DriverName` sin modificar el código consumidor. Inyección de parámetros via `TypInfo` (FPC).
+
+### Tools
+
+| Unit | Clase | Descripción |
+|------|-------|-------------|
+| `uMakerAi.Tools.Functions` | `TAiFunctions` | Function calling completo — esquema JSON, parámetros tipados, ejecución automática desde LLM |
+| `uMakerAi.Tools.Shell` | `TAiShell` | Shell interactivo con sesión persistente, timeout, audit log |
+| `uMakerAi.Tools.TextEditor` | `TAiTextEditorTool` | view/create/str_replace/insert/undo con I/O virtualizado |
+| `uMakerAi.Tools.ComputerUse` | `TAiComputerUseTool` | Adaptador universal Computer Use (Claude/Gemini/OpenAI) |
+
+### Multimedia
+
+| Unit | Clase | Descripción |
+|------|-------|-------------|
+| `uMakerAi.Whisper` | `TAIWhisper` | OpenAI TTS + STT/Whisper, conversión de formatos via ffmpeg |
+| `uMakerAi.OpenAI.Audio` | `TAiOpenAiAudio` | TTS (tts-1/tts-1-hd/gpt-4o-mini-tts), streaming, transcripción verbose_json, traducción |
+| `uMakerAi.Gemini.Speech` | `TAiGeminiSpeechTool` | Gemini TTS multi-hablante (PCM→WAV), transcripción multimodal |
+| `uMakerAi.OpenAi.Dalle` | `TAiDalle` | DALL-E 2/3 — URL + b64_json, generación y descarga automática |
+
+### Embeddings
+
+| Unit | Clase | Descripción |
+|------|-------|-------------|
+| `uMakerAi.Embeddings.Core` | `TAiEmbeddingsCore` | Clase base vectorial — CosineSimilarity, DotProduct, EuclideanDistance, FindNearest, FindTopK, AverageEmbedding, operadores sobrecargados |
+| `uMakerAi.Embeddings` | `TAiEmbeddings` | Driver OpenAI (`text-embedding-3-small/large`) |
+
+### RAG Vector
+
+`TAiRAGVector` — base de conocimiento vectorial en memoria con búsqueda híbrida:
+
+- Índice **HNSW** (búsqueda por similitud coseno)
+- Índice léxico **BM25** (búsqueda por palabras clave)
+- Fusión híbrida **RRF** o ponderada
+- Filtros de metadatos (`TAiFilterCriteria`)
+- Lenguaje de consulta **VQL** (DSL tipo SQL)
+- `AddItem(text, metadata)`, `SearchText(query, limit, precision, filter)`, `ExecuteVGQL(query)`
+
+### RAG Graph
+
+`TAiRagGraph` — grafo de conocimiento (Knowledge Graph) con búsqueda semántica + estructural:
+
+- Nodos (`TAiRagGraphNode`) y aristas (`TAiRagGraphEdge`) con embeddings propios
+- Búsqueda semántica por vector en el grafo con expansión por profundidad
+- **GQL** (Cypher-like): `MATCH`, `WHERE`, `RETURN`, `GET SHORTEST PATH`, `GET DEGREES TOP N`, `SHOW LABELS/EDGES`
+- Patrón match programático (`TGraphMatchQuery`)
+- Algoritmos de grafo: `GetShortestPath`, `GetAllShortestPaths`, `GetNodesByDegree`, `DetectCommunities`, `GetClosenessCentrality`
+- Exportación: `.mkai` (MakerAI), DOT, GraphML
+
+### Agentes
+
+Framework de orquestación multi-agente basado en grafos con human-in-the-loop:
+
+| Clase | Descripción |
+|-------|-------------|
+| `TAIAgentManager` | Orquestador principal del grafo de agentes |
+| `TAIAgentsNode` | Unidad de ejecución (conecta con un driver LLM) |
+| `TAIAgentsLink` | Arista con modos: `lmFanout`, `lmConditional`, `lmManual` |
+| `TAIBlackboard` | Estado compartido thread-safe entre nodos |
+| `TAiFileCheckpointer` | Ejecución durable — pausa y reanuda agentes |
+| `TAiWaitApprovalTool` | Human-in-the-loop — suspende y espera aprobación humana |
+
+### MCP (Model Context Protocol)
+
+**Servidor:** expone funciones Pascal como herramientas MCP consumibles por cualquier cliente (Claude Desktop, etc.):
+
+| Transporte | Clase | Descripción |
+|-----------|-------|-------------|
+| HTTP | `TAiMCPHttpServer` | `TFPHTTPServer` en thread, CORS, autenticación `@ApiKey` |
+| SSE | `TAiMCPSSEHttpServer` | SSE sobre ssockets (experimental) |
+| StdIO | `TAiMCPStdioServer` | stdin/stdout — recomendado para CLI |
+| Direct | `TAiMCPDirectConnection` | In-process sin red |
+| Bridge | `TTAiFunctionToolProxy` | Adapta `TAiFunctions` → `IAiMCPTool` automáticamente |
+
+**Cliente:** `TMCPClientCustom` — consume servidores MCP externos (StdIO, HTTP, SSE).
 
 ---
 
 ## Uso rápido
 
-### Sincrónico (cualquier driver)
+### Chat sincrónico (cualquier driver)
+
 ```pascal
 uses
   uMakerAi.Chat.AiConnection,
@@ -74,7 +148,7 @@ var
 begin
   Conn := TAiChatConnection.Create(nil);
   try
-    Conn.DriverName := 'Ollama';           // o 'OpenAi', 'Claude', 'Groq', etc.
+    Conn.DriverName := 'Ollama';
     Conn.Params.Values['Model']        := 'gemma3:1b';
     Conn.Params.Values['Asynchronous'] := 'False';
 
@@ -87,7 +161,8 @@ begin
 end.
 ```
 
-### Streaming / Asincrónico
+### Chat streaming / asincrónico
+
 ```pascal
 type
   TEvents = class
@@ -96,12 +171,7 @@ type
         aResponse: TJSONObject; aRole, aText: string);
     procedure OnDataEnd(const Sender: TObject; aMsg: TAiChatMessage;
         aResponse: TJSONObject; aRole, aText: string);
-    procedure OnError(Sender: TObject; const ErrorMsg: string;
-        E: Exception; const Response: IAiHttpResponse);
   end;
-
-// En OnData → Write(aText)   (chunk a chunk)
-// En OnDataEnd → tokens acumulados en TAiChatConnection(Sender)
 
 var
   Conn: TAiChatConnection;
@@ -110,69 +180,270 @@ begin
   Ev   := TEvents.Create;
   Conn := TAiChatConnection.Create(nil);
   try
-    Conn.DriverName := 'Ollama';
-    Conn.Params.Values['Model']        := 'gemma3:1b';
+    Conn.DriverName := 'Claude';
+    Conn.Params.Values['Model']        := 'claude-haiku-4-5-20251001';
     Conn.Params.Values['Asynchronous'] := 'True';
-
     Conn.OnReceiveData    := @Ev.OnData;
     Conn.OnReceiveDataEnd := @Ev.OnDataEnd;
-    Conn.OnError          := @Ev.OnError;
 
     Conn.AddMessageAndRun('Cuéntame un chiste', 'user');
-
-    while not Ev.Done do Sleep(50);   // esperar respuesta
+    while not Ev.Done do Sleep(50);
   finally
-    Conn.Free;
-    Ev.Free;
+    Conn.Free; Ev.Free;
   end;
 end.
 ```
 
-### Cambiar de driver en runtime
+### Embeddings + similitud coseno
+
 ```pascal
-// El mismo Conn, otro driver — el codigo consumidor no cambia
-Conn.NewChat;
-Conn.DriverName := 'Claude';
-Conn.Params.Values['Model'] := 'claude-opus-4-5';
-Resp := Conn.AddMessageAndRun('¿Cómo te llamas?', 'user');
+uses uMakerAi.Embeddings, uMakerAi.Embeddings.Core;
+
+var
+  Emb: TAiEmbeddings;
+  V1, V2: TAiEmbeddingData;
+begin
+  Emb := TAiEmbeddings.Create(nil);
+  try
+    Emb.ApiKey := '@OPENAI_API_KEY';
+    V1 := Emb.CreateEmbedding('machine learning', '');
+    V2 := Emb.CreateEmbedding('deep neural networks', '');
+    WriteLn(TAiEmbeddingsCore.CosineSimilarity(V1, V2):0:4);
+  finally
+    Emb.Free;
+  end;
+end.
+```
+
+### RAG Vector — base de conocimiento
+
+```pascal
+uses uMakerAi.RAG.Vectors, uMakerAi.RAG.MetaData, uMakerAi.Embeddings;
+
+var
+  Emb : TAiEmbeddings;
+  RAG : TAiRAGVector;
+  Meta: TAiEmbeddingMetaData;
+begin
+  Emb := TAiEmbeddings.Create(nil);
+  RAG := TAiRAGVector.Create(nil);
+  try
+    Emb.ApiKey := '@OPENAI_API_KEY';
+    RAG.Embeddings := Emb;
+
+    Meta := TAiEmbeddingMetaData.Create;
+    try
+      Meta['category'] := 'science';
+      RAG.AddItem('Machine learning requires large datasets.', Meta);
+    finally Meta.Free; end;
+
+    RAG.BuildIndex;
+    RAG.BuildLexicalIndex;
+
+    WriteLn(RAG.SearchText('AI and data', 3, 0.3, nil));
+  finally
+    RAG.Free; Emb.Free;
+  end;
+end.
+```
+
+### RAG Graph — grafo de conocimiento
+
+```pascal
+uses uMakerAi.RAG.Graph.Core, uMakerAi.Embeddings;
+
+var
+  Emb  : TAiEmbeddings;
+  Graph: TAiRagGraph;
+  N1, N2: TAiRagGraphNode;
+begin
+  Emb   := TAiEmbeddings.Create(nil);
+  Graph := TAiRagGraph.Create(nil);
+  try
+    Emb.ApiKey     := '@OPENAI_API_KEY';
+    Graph.Embeddings := Emb;
+
+    N1 := Graph.AddNode('openai', 'COMPANY', 'OpenAI');
+    N1.Text := 'OpenAI is an AI company that created GPT-4.';
+    N1.Data := Emb.CreateEmbedding(N1.Text, 'user');
+
+    N2 := Graph.AddNode('gpt4', 'MODEL', 'GPT-4');
+    N2.Text := 'GPT-4 is a large multimodal language model.';
+    N2.Data := Emb.CreateEmbedding(N2.Text, 'user');
+
+    Graph.AddEdge(N1, N2, 'e1', 'CREATED', 'created');
+    Graph.RebuildIndexes;
+    Graph.Nodes.BuildIndex;
+
+    // Búsqueda semántica
+    WriteLn(Graph.SearchText('language model for chat', 0, True, 3, 0.3));
+
+    // GQL
+    WriteLn(Graph.ExecuteMakerGQL(
+      'MATCH (c:COMPANY) -[r:CREATED]-> (m:MODEL) RETURN c, r, m'));
+  finally
+    Graph.Free; Emb.Free;
+  end;
+end.
+```
+
+### MCP Server (HTTP)
+
+```pascal
+uses uMakerAi.MCPServer.Core, uMakerAi.MCPServer.Http;
+
+var
+  Logic : TAiMCPLogicServer;
+  Server: TAiMCPHttpServer;
+begin
+  Logic := TAiMCPLogicServer.Create(nil);
+  Logic.ServerName := 'MiServidor';
+  Logic.RegisterTool(TMiHerramienta.Create);   // IAiMCPTool
+
+  Server := TAiMCPHttpServer.Create(nil);
+  Server.LogicServer := Logic;
+  Server.Port        := 8088;
+  Server.Active      := True;        // abre el server en thread
+  ReadLn;                            // mantener vivo
+end.
+```
+
+### Function Calling
+
+```pascal
+uses uMakerAi.Tools.Functions;
+
+var
+  Funcs: TAiFunctions;
+  Fn   : TFunctionActionItem;
+begin
+  Funcs := TAiFunctions.Create(nil);
+  Fn    := Funcs.Functions.Add;
+  Fn.FunctionName := 'get_weather';
+  Fn.Description.Add('Returns current weather for a city.');
+  with Fn.Params.Add do begin
+    Name := 'city'; ParamType := ptString; Required := True;
+    Description.Add('Name of the city');
+  end;
+  Fn.OnExecute := @MiHandlerDelTiempo;
+
+  // Asignar al chat driver
+  AiConn.AiFunctions := Funcs;
+end.
 ```
 
 ---
 
 ## Compilar
 
-Esta es una **librería de fuentes** — no tiene sistema de build propio. Se incluye directamente en los proyectos consumidores via rutas de búsqueda:
+Esta es una **librería de fuentes** — se incluye directamente en los proyectos vía rutas de búsqueda:
 
 ```bash
-fpc \
-  -FuPath/MakerAI/Source/Core  \
-  -FuPath/MakerAI/Source/Chat  \
-  -FuPath/MakerAI/Source/Design \
-  -FuPath/MakerAI/Source/Tools \
-  -FuPath/MakerAI/Source/Utils \
-  -FiPath/MakerAI/Source/Core  \
-  mi_programa.pas
+fpc mi_programa.pas \
+  -Fu/ruta/MakerAI/Source/Core    \
+  -Fu/ruta/MakerAI/Source/Chat    \
+  -Fu/ruta/MakerAI/Source/Design  \
+  -Fu/ruta/MakerAI/Source/Tools   \
+  -Fu/ruta/MakerAI/Source/Utils   \
+  -Fu/ruta/MakerAI/Source/Agents  \
+  -Fu/ruta/MakerAI/Source/RAG     \
+  -Fu/ruta/MakerAI/Source/MCPClient \
+  -Fu/ruta/MakerAI/Source/MCPServer \
+  -Fi/ruta/MakerAI/Source/Core
 ```
 
-> La flag `-Fi` es necesaria para que FPC encuentre `uMakerAi.Version.inc`.
+> `-Fi` es necesario para que FPC encuentre `uMakerAi.Version.inc`.
 
 **Requisitos:**
 - Free Pascal 3.2.2+
-- Paquetes FPC: `fcl-base`, `fcl-json`, `rtl`, `fphttpclient` (incluidos en FPC estándar)
-- OpenSSL en el sistema para conexiones HTTPS
+- Paquetes incluidos en FPC estándar: `fcl-base`, `fcl-json`, `fphttpclient`, `fgl`, `generics.collections`
+- OpenSSL en el sistema para conexiones HTTPS (`opensslsockets`)
 
-### Ejecutar los demos
+### Ejecutar demos
 
 ```bash
-# Compilar y ejecutar un demo (requiere Ollama corriendo localmente)
-fpc -Fu... demo_ollama.pas && ./demo_ollama
+cd Demos
 
-# Demo del conector universal (cambia de driver en runtime)
+# Chat con Ollama (requiere Ollama corriendo)
+fpc -Fu../Source/Core -Fu../Source/Chat -Fu../Source/Design \
+    demo_ollama.pas && ./demo_ollama
+
+# Conector universal (cambia de driver en runtime)
 fpc -Fu... demo_aiconnection.pas && ./demo_aiconnection
 
-# Demo streaming/async
-fpc -Fu... demo_aiconnection_async.pas && ./demo_aiconnection_async
+# Embeddings + similitud
+fpc -Fu../Source/Core -Fu../Source/Utils demo_embeddings.pas && ./demo_embeddings
+
+# RAG Vector (requiere OPENAI_API_KEY)
+fpc -Fu../Source/Core -Fu../Source/RAG -Fu../Source/Utils \
+    demo_rag_vector.pas && ./demo_rag_vector
+
+# RAG Graph (requiere OPENAI_API_KEY)
+fpc -Fu../Source/Core -Fu../Source/RAG -Fu../Source/Utils \
+    demo_rag_graph.pas && ./demo_rag_graph
+
+# MCP Server HTTP (puerto 8088)
+fpc -Fu../Source/Core -Fu../Source/Chat -Fu../Source/MCPServer \
+    demo_mcp_server.pas && ./demo_mcp_server
 ```
+
+---
+
+## Demos incluidos
+
+### Chat — drivers LLM
+| Demo | Driver | Modo |
+|------|--------|------|
+| `demo_ollama` / `demo_ollama_async` | Ollama (OpenAI-compat) | Sync / Async |
+| `demo_ollama_native` / `demo_ollama_native_async` | Ollama (API nativa) | Sync / Async |
+| `demo_generic` / `demo_generic_async` | GenericLLM (OpenAI-compat) | Sync / Async |
+| `demo_lmstudio` / `demo_lmstudio_async` | LM Studio local | Sync / Async |
+| `demo_groq` / `demo_groq_async` | Groq | Sync / Async |
+| `demo_kimi` / `demo_kimi_async` | Kimi Moonshot | Sync / Async |
+| `demo_deepseek` / `demo_deepseek_async` | DeepSeek | Sync / Async |
+| `demo_openai` / `demo_openai_async` | OpenAI Responses API | Sync / Async |
+| `demo_claude` / `demo_claude_async` | Anthropic Claude | Sync / Async |
+| `demo_gemini` / `demo_gemini_async` | Google Gemini | Sync / Async |
+| `demo_mistral` / `demo_mistral_async` | Mistral AI | Sync / Async |
+| `demo_grok` / `demo_grok_async` | xAI Grok | Sync / Async |
+| `demo_cohere` / `demo_cohere_async` | Cohere v2 | Sync / Async |
+| `demo_aiconnection` / `demo_aiconnection_async` | Universal (multi-driver) | Sync / Async |
+
+### Tools
+| Demo | Módulo |
+|------|--------|
+| `demo_functions` | TAiFunctions — function calling, parámetros, ejecución |
+| `demo_shell` | TAiShell — sesión interactiva, timeout, audit |
+| `demo_text_editor` | TAiTextEditorTool — view/create/edit/undo |
+
+### Multimedia
+| Demo | Módulo |
+|------|--------|
+| `demo_whisper` | TAIWhisper — TTS+STT ciclo completo (MP3) |
+| `demo_openai_audio` | TAiOpenAiAudio — TTS enums, SpeechStreamed, verbose_json STT, translate |
+| `demo_gemini_speech` | TAiGeminiSpeechTool — multi-hablante TTS, AudioProfile, TTS→STT |
+| `demo_dalle` | TAiDalle — DALL-E 3 (URL + HD), DALL-E 2 (b64_json) |
+
+### Embeddings y RAG
+| Demo | Módulo |
+|------|--------|
+| `demo_embeddings` | TAiEmbeddings — generar vectores, CosineSimilarity, FindNearest, FindTopK |
+| `demo_rag_vector` | TAiRAGVector — AddItem, BuildIndex+BM25, SearchText, filtros, RRF |
+| `demo_rag_graph` | TAiRagGraph — grafo AI (13 nodos, 14 aristas), GQL, Match, GetShortestPath |
+
+### Agentes
+| Demo | Módulo |
+|------|--------|
+| `demo_agents` | TAIAgentManager — grafo de agentes, Blackboard, links condicionales |
+
+### MCP
+| Demo | Descripción |
+|------|-------------|
+| `demo_mcp_direct` | Direct in-process — 2 herramientas (echo + time) |
+| `demo_mcp_server` | HTTP server en puerto 8088 |
+| `demo_mcp_client` | Cliente HTTP — invocación de herramientas, error handling |
+| `demo_mcp_server_stdio` | StdIO server |
+| `demo_mcp_client_stdio` | Cliente StdIO — lanza proceso externo |
 
 ---
 
@@ -180,209 +451,69 @@ fpc -Fu... demo_aiconnection_async.pas && ./demo_aiconnection_async
 
 ```
 Aplicación
-    ↓
-TAiChatConnection          ← Conector universal (cambia driver en runtime)
-    ↓
-Drivers LLM                ← TAiOllamaChat, TAiOpenChat, TAiClaudeChat, ...
-    ↓ (heredan de TAiChat)
-TAiChatMessages            ← Historial, tool calls, citations, tokens
-    ↓
-Tool System                ← IAiToolContext, TAiSpeechToolBase, TAiImageToolBase, ...
-    ↓
-Core / HTTP                ← TAiChat (SSE streaming, threading, orquestación)
-    ↓
-RAG / Agents / MCP         ← Capas de alto nivel (pendiente de portar)
+    │
+    ├─ TAiChatConnection ──────────── Conector universal (switch por DriverName)
+    │       │
+    │       └─ Drivers LLM ────────── TAiOpenChat, TAiClaudeChat, TAiGeminiChat, ...
+    │               │                 (heredan de TAiChat)
+    │               └─ TAiChat ─────── HTTP async/sync, SSE streaming, tool calls,
+    │                                  orquestación de capacidades (ModelCaps/SessionCaps)
+    │
+    ├─ Tool System ─────────────────── TAiFunctions, TAiShell, TAiTextEditorTool,
+    │                                  TAiComputerUseTool, TAIWhisper, TAiDalle, ...
+    │
+    ├─ Embeddings ──────────────────── TAiEmbeddingsCore → TAiEmbeddings (OpenAI)
+    │
+    ├─ RAG ─────────────────────────── TAiRAGVector (HNSW + BM25 + RRF + VQL)
+    │                                  TAiRagGraph (Knowledge Graph + GQL)
+    │
+    ├─ Agents ──────────────────────── TAIAgentManager → TAIAgentsNode → TAIAgentsLink
+    │                                  TAIBlackboard (estado compartido thread-safe)
+    │                                  TAiFileCheckpointer (ejecución durable)
+    │
+    └─ MCP ─────────────────────────── TAiMCPLogicServer (motor JSON-RPC)
+                                       ├─ TAiMCPHttpServer (HTTP)
+                                       ├─ TAiMCPSSEHttpServer (SSE, experimental)
+                                       ├─ TAiMCPStdioServer (stdin/stdout)
+                                       └─ TAiMCPDirectConnection (in-process)
 ```
 
-### Patrón de capacidades (v3.3)
+---
 
-`ModelCaps` = lo que el modelo soporta nativamente.
-`SessionCaps` = lo que la sesión necesita.
-El gap (`SessionCaps − ModelCaps`) activa automáticamente herramientas bridge
-(p.ej. si el modelo no genera imágenes, `TAiChatConnection` puede delegar a DALL-E).
+## API Keys
 
-### Patrón Factory + Registry
+Resueltas desde variables de entorno en runtime con el prefijo `@`:
 
 ```pascal
-// Registro de drivers y parámetros por defecto
-TAiChatFactory.Instance.RegisterUserParam('Ollama', 'Max_Tokens', '4096');
-
-// Creación dinámica por nombre
-Chat := TAiChatFactory.Instance.CreateDriver('Ollama');
+Conn.ApiKey := '@OPENAI_API_KEY';    // lee la variable OPENAI_API_KEY
+Conn.ApiKey := '@CLAUDE_API_KEY';
+Conn.ApiKey := '@GEMINI_API_KEY';
 ```
 
----
-
-## Demos incluidos
-
-| Demo | Driver | Modo |
-|------|--------|------|
-| `demo_ollama.pas` | Ollama (OpenAI-compat) | Sync |
-| `demo_ollama_async.pas` | Ollama (OpenAI-compat) | Async/Streaming |
-| `demo_ollama_native.pas` | Ollama (API nativa) | Sync |
-| `demo_ollama_native_async.pas` | Ollama (API nativa) | Async/Streaming |
-| `demo_groq.pas` | Groq | Sync |
-| `demo_groq_async.pas` | Groq | Async/Streaming |
-| `demo_openai.pas` | OpenAI Responses API | Sync |
-| `demo_openai_async.pas` | OpenAI Responses API | Async/Streaming |
-| `demo_claude.pas` | Claude Anthropic | Sync |
-| `demo_claude_async.pas` | Claude Anthropic | Async/Streaming |
-| `demo_gemini.pas` | Google Gemini | Sync |
-| `demo_gemini_async.pas` | Google Gemini | Async/Streaming |
-| `demo_mistral.pas` | Mistral AI | Sync |
-| `demo_mistral_async.pas` | Mistral AI | Async/Streaming |
-| `demo_grok.pas` | xAI Grok | Sync |
-| `demo_grok_async.pas` | xAI Grok | Async/Streaming |
-| `demo_cohere.pas` | Cohere v2 | Sync |
-| `demo_cohere_async.pas` | Cohere v2 | Async/Streaming |
-| `demo_deepseek.pas` | DeepSeek | Sync |
-| `demo_deepseek_async.pas` | DeepSeek | Async/Streaming |
-| `demo_kimi.pas` | Kimi Moonshot | Sync |
-| `demo_kimi_async.pas` | Kimi Moonshot | Async/Streaming |
-| `demo_lmstudio.pas` | LM Studio local | Sync |
-| `demo_lmstudio_async.pas` | LM Studio local | Async/Streaming |
-| `demo_aiconnection.pas` | Universal (Ollama→GenericLLM) | Sync |
-| `demo_aiconnection_async.pas` | Universal (Ollama→GenericLLM) | Async/Streaming |
-
----
-
-## Roadmap — Hacia la paridad con Delphi v3.3
-
-### Fase 2 — Herramientas (Tools)
-
-Las herramientas permiten que los LLM ejecuten acciones reales: llamar funciones Pascal,
-ejecutar comandos shell, editar archivos, capturar la pantalla, etc.
-
-| Unit a portar | Descripción | Complejidad |
-|---------------|-------------|-------------|
-| `uMakerAi.Tools.Functions` | **Function calling completo** — esquema JSON de funciones, parámetros tipados, invocación automática desde el LLM | Alta |
-| `uMakerAi.Tools.Shell` | Herramienta Shell — ejecuta comandos del sistema, lee stdout/stderr | Media |
-| `uMakerAi.Tools.TextEditor` | Text Editor Tool (Claude) — view/create/str_replace/insert/undo | Media |
-| `uMakerAi.Tools.ComputerUse` | Computer Use (Claude) — captura de pantalla, click, teclado | Alta |
-| `uMakerAi.OpenAI.Audio` | OpenAI Audio — TTS y transcripción (Whisper) | Media |
-| `uMakerAi.Whisper` | Whisper local/API — transcripción de audio | Media |
-| `uMakerAi.OpenAi.Dalle` | DALL-E — generación de imágenes | Baja |
-| `uMakerAi.OpenAI.Sora` | Sora — generación de video | Media |
-| `uMakerAi.Gemini.Speech` | Gemini TTS | Baja |
-| `uMakerAi.Gemini.Video` | Gemini Veo — generación de video | Media |
-| `uMakerAi.Gemini.WebSearch` | Gemini Search Tool | Baja |
-| `uMakerAi.Ollama.Ocr` | Ollama OCR | Baja |
-
-### Fase 3 — Embeddings
-
-| Unit a portar | Descripción | Complejidad |
-|---------------|-------------|-------------|
-| `uMakerAi.Embeddings.core` | Clase base de embeddings, vectorización de texto | Media |
-| `uMakerAi.Embeddings.Connection` | Conector universal de embeddings (igual patrón que AiConnection) | Media |
-
-### Fase 4 — RAG (Retrieval-Augmented Generation)
-
-Motor de búsqueda semántica y base de conocimiento para los agentes.
-
-| Unit a portar | Descripción | Complejidad |
-|---------------|-------------|-------------|
-| `uMakerAi.RAG.MetaData` | Metadatos de documentos | Baja |
-| `uMakerAi.RAG.Vectors` | **Vector RAG** — índice HNSW + BM25, fusión RRF, reranking, VQL (DSL tipo SQL) | Muy Alta |
-| `uMakerAi.RAG.Vectors.Index` | Gestión del índice vectorial | Alta |
-| `uMakerAi.RAG.Vectors.VQL` | VQL — lenguaje de consulta vectorial | Alta |
-| `uMakerAi.RAG.Vector.Driver.Postgres` | Backend PostgreSQL + pgvector | Alta |
-| `uMakerAi.RAG.Graph.Core` | **Graph RAG** — grafo de entidades y relaciones, GQL (tipo Cypher) | Muy Alta |
-| `uMakerAi.RAG.Graph.Documents` | Documentos del grafo | Media |
-| `uMakerAi.RAG.Graph.Builder` | Constructor de grafos desde texto | Alta |
-| `uMakerAi.RAG.Graph.GQL` | GQL — lenguaje de consulta de grafos | Alta |
-| `uMakerAi.RAG.Graph.Driver.Postgres` | Backend PostgreSQL del grafo | Alta |
-
-### Fase 5 — Agentes
-
-Orquestación multi-agente basada en grafos con soporte de human-in-the-loop.
-
-| Unit a portar | Descripción | Complejidad |
-|---------------|-------------|-------------|
-| `uMakerAi.Agents` | **Core del framework de agentes** — `TAIAgentManager`, `TAIAgentsNode`, `TAIAgentsLink`, `TAIBlackboard` | Muy Alta |
-| `uMakerAi.Agents.Attributes` | Atributos de configuración declarativa de agentes | Media |
-| `uMakerAi.Agents.Checkpoint` | Checkpoints durables — `TAiFileCheckpointer` para pausar/reanudar agentes | Alta |
-| `uMakerAi.Agents.EngineRegistry` | Registro de motores de agentes | Media |
-| `uMakerAi.Agents.GraphBuilder` | Constructor visual de grafos de agentes | Alta |
-| `uMakerAi.Agents.Tools.Approval` | `TAiWaitApprovalTool` — human-in-the-loop | Media |
-| `uMakerAi.Agents.DmGenerator` | Generador de data modules de agentes | Alta |
-
-### Fase 6 — MCP (Model Context Protocol)
-
-| Unit a portar | Descripción | Complejidad |
-|---------------|-------------|-------------|
-| `uMakerAi.MCPServer.Core` | **Servidor MCP core** — exposición de herramientas como recursos MCP | Muy Alta |
-| `uMakerAi.MCPServer.Bridge` | Bridge TAiFunctions → herramientas MCP | Alta |
-| `UMakerAi.MCPServer.Stdio` | Transporte StdIO (recomendado para CLI) | Media |
-| `UMakerAi.MCPServer.Http` | Transporte HTTP | Media |
-| `UMakerAi.MCPServer.SSE` | Transporte SSE (experimental) | Alta |
-| `UMakerAi.MCPServer.Direct` | Transporte directo en memoria | Baja |
-| MCP Client | Consumo de servidores MCP externos | Alta |
-
-### Fase 7 — Utilidades adicionales
-
-| Unit a portar | Descripción |
-|---------------|-------------|
-| `uMakerAi.Prompts` | Templates de prompts reutilizables |
-| `uMakerAi.Utils.System` | Utilidades del sistema |
-| `uMakerAi.Utils.PcmToWav` | Conversión PCM → WAV para audio |
-| `uJSONHelper` | Helpers JSON adicionales |
-| `uMakerAi.Chat.Bridge` | Bridge para integración con UI |
-
----
-
-## Estado general del port
-
-```
-████████████████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░  ~38%
-```
-
-| Módulo | Estado | Notas |
-|--------|--------|-------|
-| Core (Chat base + Messages + Tools) | ✅ Completo | |
-| Factory + Registry | ✅ Completo | |
-| 12 Drivers LLM | ✅ Completo | Todos compilan; Ollama + Groq probados en producción |
-| TAiChatConnection | ✅ Completo | Router runtime con RTTI FPC (TypInfo) |
-| Tools (Functions, Shell, etc.) | 🔲 Stubs | Interfaces declaradas, lógica pendiente |
-| Embeddings | 🔲 Parcial | Clase base stub, Connection pendiente |
-| RAG Vector + Graph | 🔲 Pendiente | Fase 4 |
-| Agentes | 🔲 Pendiente | Fase 5 |
-| MCP Server/Client | 🔲 Pendiente | Fase 6 |
-| Utilidades adicionales | 🔲 Pendiente | Fase 7 |
+Variables estándar: `OPENAI_API_KEY`, `CLAUDE_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`,
+`DEEPSEEK_API_KEY`, `KIMI_API_KEY`, `GROK_API_KEY`, `MISTRAL_API_KEY`, `COHERE_API_KEY`.
 
 ---
 
 ## Diferencias FPC vs Delphi
 
-Las principales adaptaciones realizadas al portar de Delphi a FPC:
-
 | Delphi | FPC |
 |--------|-----|
 | `System.JSON` | `fpjson` + `jsonparser` |
 | `System.Net.HttpClient` | `fphttpclient` + `opensslsockets` |
-| `FClient.Asynchronous := True` | `TAiHttpThread` — thread manual |
-| `OnInternalReceiveData(len, count, abort)` | `OnSSELine(ALine: string)` via `TAiSSEStream` |
-| `TThread.Queue(nil, proc begin...end)` | Llamada directa desde thread (mismo comportamiento) |
-| `TRttiContext` / `TRttiType` / `TValue` | `TypInfo.GetPropInfo` + `SetOrdProp/SetFloatProp/SetStrProp` |
-| `Boolean` = `tkEnumeration` | `Boolean` = `tkBool` (FPC tiene tipo separado) |
-| `TJSonObject.GetValue<T>('key')` | `JGetStr/JGetInt/...` (helpers locales en `uMakerAi.Chat`) |
+| `TThread.Queue(nil, proc begin...end)` | `TAiQueueHelper` (method pointer) |
+| `TRttiContext` / `TValue` | `TypInfo.GetPropInfo` + `SetOrdProp/SetFloatProp/SetStrProp` |
+| `Boolean` = `tkEnumeration` | `Boolean` = `tkBool` (FPC tipo separado) |
+| `TJSONObject.GetValue<T>('a.b')` | Navegación manual con `.Find()` + cast |
 | `JObj.AddPair('k', v)` | `JObj.Add('k', v)` |
-| `System.NetEncoding` (Base64) | Shim `Source/Core/EncdDecd.pas` |
-| `TArray<string>` | `TAiStringArray = array of string` |
+| `System.NetEncoding` Base64 | Shim `Source/Core/EncdDecd.pas` |
+| `ITask` / `TTask.Run` | `TAiNodeTask + TAiOrchestratorThread` (TThread) |
+| `TDictionary<K,V>` | `specialize TDictionary<K,V>` (generics.collections) |
 | `specialize TObjectList<T>` | Requiere `specialize` explícito |
 | `for var I := ...` (inline var) | Declarar en sección `var` |
 | `String.IsEmpty`, `.Trim()` | `Length(s) = 0`, `Trim(s)` |
+| `TStringBuilder` | Concatenación de strings con `+` |
 
 ---
 
-## Contribuir
-
-Este es un port en progreso. Si quieres contribuir:
-
-1. Revisa el [proyecto original Delphi](https://github.com/gustavoeenriquez/MakerAi) para entender la API de referencia.
-2. Cada unit en `E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\` es la implementación autoritativa.
-3. La tabla de traducciones FPC↔Delphi de arriba aplica a todos los módulos.
-4. Consulta los `CLAUDE.md` de cada subdirectorio del original para patrones específicos.
-
----
-
-*FPC Port iniciado: Feb 2026 — MakerAI Suite v3.3.0.0*
+*FPC Port completado: Mar 2026 — MakerAI Suite v3.3.0.0*
