@@ -423,7 +423,7 @@ end;
 procedure TAiGeminiSpeechTool.ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage);
 begin
   // Si IsAsync=True ya estamos en un hilo background del chat: llamar directo
-  // para evitar un TTask anidado que causar�a dangling pointer sobre ResMsg.
+  // para evitar un TTask anidado que causaría dangling pointer sobre ResMsg.
   // Si IsAsync=False estamos en el hilo principal: lanzar task para no bloquearlo.
   if IsAsync then
     InternalRunGeminiTTS(AText, ResMsg)

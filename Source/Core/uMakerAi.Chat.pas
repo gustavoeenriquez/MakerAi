@@ -142,10 +142,10 @@ type
     FEnabledFeatures: TAiChatMediaSupports;
     FPdfTool: TAiPdfToolBase;
     FReportTool: TAiReportToolBase;
-    // Nuevo sistema de orquestaci�n (v3.3)
+    // Nuevo sistema de orquestación (v3.3)
     FModelCaps: TAiCapabilities; // capacidades nativas del modelo
-    FSessionCaps: TAiCapabilities; // capacidades deseadas en la sesi�n
-    FNewSystemConfigured: Boolean; // True si ModelCaps/SessionCaps fueron asignados expl�citamente
+    FSessionCaps: TAiCapabilities; // capacidades deseadas en la sesión
+    FNewSystemConfigured: Boolean; // True si ModelCaps/SessionCaps fueron asignados explícitamente
 
     procedure SetApiKey(const Value: String);
     procedure SetFrequency_penalty(const Value: Double);
@@ -216,7 +216,7 @@ type
     procedure SetEnabledFeatures(const Value: TAiChatMediaSupports);
     procedure SetPdfTool(const Value: TAiPdfToolBase);
     procedure SetReportTool(const Value: TAiReportToolBase);
-    // Nuevo sistema de orquestaci�n (v3.3)
+    // Nuevo sistema de orquestación (v3.3)
     procedure SetModelCaps(const Value: TAiCapabilities);
     procedure SetSessionCaps(const Value: TAiCapabilities);
     procedure EnsureNewSystemConfig;
@@ -426,9 +426,9 @@ type
     property ShellTool: TAiShell read FShellTool write SetShellTool;
     Property TextEditorTool: TAiTextEditorTool read FTextEditorTool write SetTextEditorTool;
     property ComputerUseTool: TAiComputerUseTool read FComputerUseTool write SetComputerUseTool;
-    // Nuevo sistema de orquestaci�n (v3.3)
+    // Nuevo sistema de orquestación (v3.3)
     property ModelCaps: TAiCapabilities read FModelCaps write SetModelCaps; // capacidades nativas del modelo
-    property SessionCaps: TAiCapabilities read FSessionCaps write SetSessionCaps; // capacidades deseadas en la sesi�n
+    property SessionCaps: TAiCapabilities read FSessionCaps write SetSessionCaps; // capacidades deseadas en la sesión
   end;
 
   // procedure Register;

@@ -1040,7 +1040,7 @@ begin
     ResMsg.Model := SVal;
 
 
-  // C) INFORMACI�n de finalizaci�n (Finish Reason / Incomplete Details)
+  // C) INFORMACIÓN de finalización (Finish Reason / Incomplete Details)
   // incomplete_details puede venir como null en el JSON; usar TJSONValue evita
   // el fallo del typecast cuando el valor no es un objeto.
   var JVal: TJSONValue;
@@ -1053,7 +1053,7 @@ begin
   end
   else
   begin
-    // incomplete_details ausente o null: si el estado es completed, finalizaci�n normal
+    // incomplete_details ausente o null: si el estado es completed, finalización normal
     if FResponseStatus = 'completed' then
       ResMsg.FinishReason := 'stop';
   end;
@@ -2171,7 +2171,7 @@ begin
 
     // TODO: Async transcription no implementado. Solo modo sincrono.
 
-    // --- 2. EJECUCI�N DE LA PETICI�N POST ---
+    // --- 2. EJECUCIÓN DE LA PETICIÓN POST ---
     begin
 
       Res := Client.Post(sUrl, Body, LResponseStream, Headers);
@@ -2212,8 +2212,8 @@ end;
 
 procedure TAiOpenChat.NewChat;
 begin
-  // TODO: DeleteAllUploadedFiles desactivado � OpenAI no persiste archivos entre sesiones
-  FResponseId := ''; // Inicia una nueva conversaci�n
+  // TODO: DeleteAllUploadedFiles desactivado — OpenAI no persiste archivos entre sesiones
+  FResponseId := ''; // Inicia una nueva conversación
   inherited;
 end;
 
