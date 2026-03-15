@@ -809,7 +809,7 @@ begin
       AEnvironment.Free;
     end;
 
-    if not Assigned(FInteractiveProcess) or (FInteractiveProcess.ProcessID = 0) then
+    if not Assigned(FInteractiveProcess) or ({$IFDEF MSWINDOWS}FInteractiveProcess.ProcessID{$ELSE}FInteractiveProcess.ProcessHandle{$ENDIF} = 0) then
     begin
       FIsRunning := False;
       DoLog('ERROR: Failed to start process.');
@@ -817,7 +817,7 @@ begin
     else
     begin
       FIsRunning := True;
-      DoLog(Format('Server process started successfully (PID: %d).', [FInteractiveProcess.ProcessID]));
+      DoLog(Format('Server process started successfully (PID: %d).', [{$IFDEF MSWINDOWS}FInteractiveProcess.ProcessID{$ELSE}FInteractiveProcess.ProcessHandle{$ENDIF}]));
 
       // --- CORRECCI?N 2: ARRANCAR EL HILO DE LECTURA ---
       // Sin esto, el cliente es sordo.

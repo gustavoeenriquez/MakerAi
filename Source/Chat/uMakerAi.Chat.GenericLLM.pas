@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr�quez
+// Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -117,7 +117,7 @@ end;
 constructor TAiGenericChat.Create(Sender: TComponent);
 begin
   inherited;
-  ApiKey := '1234'; // local, no se requiere autenticaci�n
+  ApiKey := '1234'; // local, no se requiere autenticación
   Model := 'generic-local';
   Url := GlGenericUrl;
 end;

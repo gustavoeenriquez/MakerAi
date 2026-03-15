@@ -207,9 +207,11 @@
         <DCCReference Include="..\Tools\uMakerAi.Tools.Shell.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Tools.TextEditor.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.OpenAI.Audio.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.OpenAI.Audio.Tool.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Whisper.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Tools.ComputerUse.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Ollama.Ocr.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Ollama.Vision.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Gemini.Speech.pas"/>
         <None Include="..\RAG\RagGraph_Prompt_Example.md"/>
         <BuildConfiguration Include="Base">

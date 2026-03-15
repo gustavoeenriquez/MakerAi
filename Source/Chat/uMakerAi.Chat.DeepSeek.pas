@@ -22,7 +22,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr�quez
+// Nombre: Gustavo Enríquez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -154,7 +154,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
 {$ENDIF}
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools est�n mal definido, debe ser un JsonArray');
+        Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then

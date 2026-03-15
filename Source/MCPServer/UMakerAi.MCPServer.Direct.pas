@@ -156,7 +156,7 @@ begin
     // Extraer el resultado
     if ResponseJSON.TryGetValue('result', ResultValue) then
     begin
-      // Clonamos el resultado para que el llamador sea el due�o
+      // Clonamos el resultado para que el llamador sea el dueño
       if ResultValue is TJSONObject then
         Result := TJSONObject(ResultValue.Clone)
       else
