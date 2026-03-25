@@ -1000,7 +1000,30 @@ Var
     TaskList[AIdx] := TTask.Create(
       procedure
       begin
-        DoCallFunction(TC);
+        TFile.AppendAllText('makerai_tools.log',
+          FormatDateTime('hh:nn:ss.zzz', Now) +
+          Format(' [Tool] Ejecutando: "%s" (id=%s)'#13#10, [TC.Name, TC.Id]));
+        try
+          DoCallFunction(TC);
+          TFile.AppendAllText('makerai_tools.log',
+            FormatDateTime('hh:nn:ss.zzz', Now) +
+            Format(' [Tool] Completado: "%s" -> %s'#13#10,
+              [TC.Name, IfThen(TC.Response = '', '(vacío)', Copy(TC.Response, 1, 120))]));
+        except
+          on E: Exception do
+          begin
+            var LErrorMsg := 'Error en herramienta "' + TC.Name + '": ' + E.Message;
+            TFile.AppendAllText('makerai_tools.log',
+              FormatDateTime('hh:nn:ss.zzz', Now) +
+              ' [Tool] ERROR: ' + LErrorMsg + #13#10);
+            TC.Response := '{"error": "' + E.Message.Replace('"', '''') + '"}';
+            TThread.Queue(nil,
+              procedure
+              begin
+                DoError(LErrorMsg, nil);
+              end);
+          end;
+        end;
       end);
     TaskList[AIdx].Start;
   end;

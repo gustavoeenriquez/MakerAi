@@ -39,7 +39,7 @@ uses
   System.SysUtils, System.Classes, System.JSON, System.Generics.Collections,
   System.IOUtils, System.Net.URLClient, System.NetEncoding,
   System.Net.HttpClient, System.Net.Mime, System.Net.HttpClientComponent,
-  System.Threading, System.Diagnostics, System.Types,
+  System.Threading, System.Diagnostics, System.Types, System.SyncObjs,
 
 {$IFDEF MSWINDOWS}
   Winapi.Windows,
@@ -74,6 +74,7 @@ type
     FServerProcess: TInteractiveProcessInfo;
     FOwnsServerProcess: Boolean;
     FOnStreamMessage: TMCPStreamMessageEvent;
+    FCallLock: TCriticalSection;  // Serializa llamadas concurrentes al mismo servidor
     procedure SetTransportType(const Value: TToolTransportType);
     procedure SetAvailable(const Value: Boolean);
     procedure SetEnabled(const Value: Boolean);
@@ -305,6 +306,7 @@ Var
   List: TStringList;
 begin
   inherited Create(AOwner);
+  FCallLock := TCriticalSection.Create;
   FName := 'MCPClient'; // Valor por defecto
   FTools := TStringList.Create;
   FParams := TStringList.Create;
@@ -330,6 +332,7 @@ begin
   FParams.Free;
   FDisabledFunctions.Free;
   FEnvVars.Free;
+  FCallLock.Free;
   inherited;
 end;
 
@@ -713,35 +716,45 @@ var
   InitResponse: TJSONObject;
 begin
   Result := nil;
-  DoLog(Format('Executing full cycle for CallTool: %s', [AToolName]));
-  InternalStartServerProcess;
+  // Serializar llamadas concurrentes al mismo servidor (race condition cuando
+  // ParseChat lanza múltiples TTask con herramientas del mismo servidor MCP).
+  // Nota: TCriticalSection en Delphi es reentrante (mismo hilo puede entrar
+  // varias veces sin deadlock), por lo que el overload TStrings que llama
+  // a este método no genera interbloqueo.
+  FCallLock.Enter;
   try
-    if not IsServerRunning then
-    begin
-      DoLog('Failed to start server. Aborting CallTool.');
-      FreeAndNil(AArguments); // Liberar los argumentos si no se van a usar
-      Exit;
+    DoLog(Format('Executing full cycle for CallTool: %s', [AToolName]));
+    InternalStartServerProcess;
+    try
+      if not IsServerRunning then
+      begin
+        DoLog('Failed to start server. Aborting CallTool.');
+        FreeAndNil(AArguments); // Liberar los argumentos si no se van a usar
+        Exit;
+      end;
+
+      // Handshake
+      InitResponse := InternalInitialize;
+      if not Assigned(InitResponse) then
+      begin
+        DoLog('Initialization failed. Aborting CallTool.');
+        FreeAndNil(AArguments); // Liberar los argumentos si no se van a usar
+        Exit;
+      end;
+      InitResponse.Free;
+      InternalSendInitializedNotification;
+
+      Sleep(200);
+
+      // Realizar la llamada real
+      Result := InternalCallTool(AToolName, AArguments, AExtractedMedia);
+
+    finally
+      InternalStopServerProcess;
+      DoLog(Format('Full cycle for CallTool: %s finished.', [AToolName]));
     end;
-
-    // Handshake
-    InitResponse := InternalInitialize;
-    if not Assigned(InitResponse) then
-    begin
-      DoLog('Initialization failed. Aborting CallTool.');
-      FreeAndNil(AArguments); // Liberar los argumentos si no se van a usar
-      Exit;
-    end;
-    InitResponse.Free;
-    InternalSendInitializedNotification;
-
-    Sleep(200);
-
-    // Realizar la llamada real
-    Result := InternalCallTool(AToolName, AArguments, AExtractedMedia);
-
   finally
-    InternalStopServerProcess;
-    DoLog(Format('Full cycle for CallTool: %s finished.', [AToolName]));
+    FCallLock.Leave;
   end;
 end;
 
@@ -774,6 +787,11 @@ begin
     DoLog('Server is already running.');
     Exit;
   end;
+
+  // Limpiar estado zombie: el proceso pudo haber muerto inesperadamente dejando
+  // FIsRunning=True y FReadThread/FInteractiveProcess asignados pero inválidos.
+  // Invocar Stop garantiza liberación antes de crear objetos nuevos.
+  InternalStopServerProcess;
 
   DoLog('Starting MCP server process...');
   DoStatusUpdate('Starting server...');
@@ -838,7 +856,11 @@ end;
 
 procedure TMCPClientStdIo.InternalStopServerProcess;
 begin
-  if not IsServerRunning then
+  // Salida rápida solo si ya estamos completamente detenidos (todos los campos limpios).
+  // NO usar IsServerRunning aquí: si el proceso murió de forma inesperada,
+  // IsServerRunning=False pero FReadThread y FInteractiveProcess siguen asignados
+  // (estado zombie). En ese caso debemos limpiarlos igualmente.
+  if not FIsRunning and not Assigned(FReadThread) and not Assigned(FInteractiveProcess) then
     Exit;
 
   DoLog('Stopping MCP server process...');
