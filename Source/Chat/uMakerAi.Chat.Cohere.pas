@@ -1038,8 +1038,10 @@ begin
               LArgChunk := '';
               if JTryGetStr(jFuncObj, 'arguments', LArgChunk) and
                  (LId <> '') and FStreamingToolCalls.ContainsKey(LId) then
-                FStreamingToolCalls[LId].Arguments :=
-                    FStreamingToolCalls[LId].Arguments + LArgChunk;
+              begin
+                CurrentToolCall := FStreamingToolCalls[LId];
+                CurrentToolCall.Arguments := CurrentToolCall.Arguments + LArgChunk;
+              end;
             end;
           end;
         end;

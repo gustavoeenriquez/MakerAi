@@ -8,24 +8,31 @@ uses
   uMakerAi.Chat.Initializations;
 
 var
-  Chat : TAiGenericChat;
-  Resp : string;
+  Chat    : TAiGenericChat;
+  Resp    : string;
+  OllamaUrl: string;
 
 begin
   WriteLn('=== MakerAI FPC — Demo Ollama (GenericLLM) ===');
   WriteLn;
 
+  // URL configurable: demo_ollama [url]  (default: localhost)
+  if ParamCount > 0 then
+    OllamaUrl := ParamStr(1)
+  else
+    OllamaUrl := 'http://127.0.0.1:11434/v1/';
+
   Chat := TAiGenericChat.Create(nil);
   try
     // Configuracion para Ollama local
     Chat.ApiKey      := '1234';                          // Ollama no requiere clave
-    Chat.Url         := 'http://127.0.0.1:11434/v1/';
+    Chat.Url         := OllamaUrl;
     Chat.Model       := 'gemma3:1b';
     Chat.Max_tokens  := 512;
     Chat.Temperature := 0.7;
     Chat.Asynchronous:= False;
 
-    WriteLn('URL   : ', Chat.Url);
+    WriteLn('URL   : ', OllamaUrl);
     WriteLn('Modelo: ', Chat.Model);
     WriteLn;
 
@@ -42,12 +49,17 @@ begin
       end;
     end;
 
-    WriteLn('<<< Respuesta:');
-    WriteLn(Resp);
-    WriteLn;
-    WriteLn('Tokens usados — Prompt: ', Chat.Prompt_tokens,
-            '  Completion: ', Chat.Completion_tokens,
-            '  Total: ', Chat.Total_tokens);
+    if Chat.LastError <> '' then
+      WriteLn('[ERROR HTTP] ', Chat.LastError)
+    else
+    begin
+      WriteLn('<<< Respuesta:');
+      WriteLn(Resp);
+      WriteLn;
+      WriteLn('Tokens usados — Prompt: ', Chat.Prompt_tokens,
+              '  Completion: ', Chat.Completion_tokens,
+              '  Total: ', Chat.Total_tokens);
+    end;
   finally
     Chat.Free;
   end;

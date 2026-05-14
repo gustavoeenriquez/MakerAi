@@ -33,6 +33,16 @@ MakerAI Suite es una librería de orquestación de IA que permite integrar múlt
 | MCP Client (HTTP, SSE, StdIO) | ✅ Completo |
 | Demos (40+ programas de demostración) | ✅ Completo |
 
+### Plataformas verificadas
+
+Compilado y verificado con FPC 3.2.2 en:
+
+| Plataforma | Arq | Tests |
+|------------|-----|-------|
+| Windows (win32) | x86 | `test_compile` + `demo_shell` + `demo_ollama` |
+| Ubuntu Linux | x86_64 | `test_compile` + `demo_shell` + `demo_ollama` |
+| Linux (ARM64) | aarch64 | `test_compile` + `demo_shell` + `demo_ollama` |
+
 ---
 
 ## Características
@@ -513,6 +523,16 @@ Variables estándar: `OPENAI_API_KEY`, `CLAUDE_API_KEY`, `GEMINI_API_KEY`, `GROQ
 | `for var I := ...` (inline var) | Declarar en sección `var` |
 | `String.IsEmpty`, `.Trim()` | `Length(s) = 0`, `Trim(s)` |
 | `TStringBuilder` | Concatenación de strings con `+` |
+
+---
+
+## Changelog
+
+### Mayo 2026
+- **fix:** `uMakerAi.Utils.System.pas` — Linux: `FpPipe` ahora pasa el array `TFilDes` completo (FPC 3.2.2 en Debian 13+); agregadas constantes `STDIN/STDOUT/STDERR_FILENO` ausentes en los units estándar de FPC (resuelve [#82](https://github.com/gustavoeenriquez/MakerAi/issues/82))
+- **fix:** `uMakerAi.Chat.Cohere.pas` — eliminado error interno 200510032 del compilador FPC causado por double-lookup en diccionario genérico en una sola expresión (limitación de `TDictionary` en FPC 3.2.2)
+- **demo:** `demo_ollama` — acepta URL como argumento opcional para servidores Ollama remotos (`./demo_ollama http://host:11434/v1/`)
+- **demo:** `demo_ollama`, `demo_groq` — ahora muestran errores HTTP via `Chat.LastError` en vez de respuesta vacía silenciosa
 
 ---
 

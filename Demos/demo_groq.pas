@@ -56,11 +56,16 @@ begin
 
     try
       Resp := Chat.AddMessageAndRun('Hola! En una sola frase, quien eres?', 'user');
-      WriteLn('<<< Respuesta: ', Resp);
-      WriteLn;
-      WriteLn('Tokens — Prompt: ', Chat.Prompt_tokens,
-              '  Completion: ',    Chat.Completion_tokens,
-              '  Total: ',         Chat.Total_tokens);
+      if Chat.LastError <> '' then
+        WriteLn('[ERROR HTTP] ', Chat.LastError)
+      else
+      begin
+        WriteLn('<<< Respuesta: ', Resp);
+        WriteLn;
+        WriteLn('Tokens — Prompt: ', Chat.Prompt_tokens,
+                '  Completion: ',    Chat.Completion_tokens,
+                '  Total: ',         Chat.Total_tokens);
+      end;
     except
       on E: Exception do
         WriteLn('[ERROR] ', E.Message);
@@ -74,11 +79,16 @@ begin
 
     try
       Resp := Chat.AddMessageAndRun('Dame un dato curioso sobre IA', 'user');
-      WriteLn('<<< Respuesta: ', Resp);
-      WriteLn;
-      WriteLn('Tokens — Prompt: ', Chat.Prompt_tokens,
-              '  Completion: ',    Chat.Completion_tokens,
-              '  Total: ',         Chat.Total_tokens);
+      if Chat.LastError <> '' then
+        WriteLn('[ERROR HTTP] ', Chat.LastError)
+      else
+      begin
+        WriteLn('<<< Respuesta: ', Resp);
+        WriteLn;
+        WriteLn('Tokens — Prompt: ', Chat.Prompt_tokens,
+                '  Completion: ',    Chat.Completion_tokens,
+                '  Total: ',         Chat.Total_tokens);
+      end;
     except
       on E: Exception do
         WriteLn('[ERROR] ', E.Message);

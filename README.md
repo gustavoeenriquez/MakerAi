@@ -33,6 +33,16 @@ MakerAI Suite is an AI orchestration library that lets you integrate multiple LL
 | MCP Client (HTTP, SSE, StdIO) | ✅ Complete |
 | Demos (40+ demo programs) | ✅ Complete |
 
+### Tested platforms
+
+Compiled and verified with FPC 3.2.2 on:
+
+| Platform | Arch | Test |
+|----------|------|------|
+| Windows (win32) | x86 | `test_compile` + `demo_shell` + `demo_ollama` |
+| Ubuntu Linux | x86_64 | `test_compile` + `demo_shell` + `demo_ollama` |
+| Linux (ARM64) | aarch64 | `test_compile` + `demo_shell` + `demo_ollama` |
+
 ---
 
 ## Features
@@ -360,9 +370,10 @@ fpc my_program.pas \
 ```bash
 cd Demos
 
-# Chat with Ollama (requires Ollama running locally)
+# Chat with Ollama — local or remote
+# Optional argument: Ollama URL (default: http://127.0.0.1:11434/v1/)
 fpc -Fu../Source/Core -Fu../Source/Chat -Fu../Source/Design \
-    demo_ollama.pas && ./demo_ollama
+    demo_ollama.pas && ./demo_ollama [http://host:11434/v1/]
 
 # Universal connector (switches driver at runtime)
 fpc -Fu... demo_aiconnection.pas && ./demo_aiconnection
@@ -510,6 +521,16 @@ Standard variable names: `OPENAI_API_KEY`, `CLAUDE_API_KEY`, `GEMINI_API_KEY`, `
 | `for var I := ...` (inline var) | Declare in `var` section |
 | `String.IsEmpty`, `.Trim()` | `Length(s) = 0`, `Trim(s)` |
 | `TStringBuilder` | String concatenation with `+` |
+
+---
+
+## Changelog
+
+### May 2026
+- **fix:** `uMakerAi.Utils.System.pas` — Linux: `FpPipe` now passes the full `TFilDes` array (FPC 3.2.2 on Debian 13+); added `STDIN/STDOUT/STDERR_FILENO` constants missing from FPC standard units (fixes [#82](https://github.com/gustavoeenriquez/MakerAi/issues/82))
+- **fix:** `uMakerAi.Chat.Cohere.pas` — eliminated FPC internal error 200510032 caused by double dictionary lookup in a single expression (generic `TDictionary` limitation in FPC 3.2.2)
+- **demo:** `demo_ollama` — accepts optional URL argument for remote Ollama servers (`./demo_ollama http://host:11434/v1/`)
+- **demo:** `demo_ollama`, `demo_groq` — now report HTTP errors via `Chat.LastError` instead of silently showing empty responses
 
 ---
 
