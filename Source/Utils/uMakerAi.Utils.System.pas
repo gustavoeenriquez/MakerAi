@@ -100,6 +100,11 @@ function  c_system(const command: PAnsiChar): cint;
     cdecl; external 'c' name 'system';
 var
   environ: PPAnsiChar; external name 'environ';
+
+const
+  STDIN_FILENO  = 0;
+  STDOUT_FILENO = 1;
+  STDERR_FILENO = 2;
 {$ENDIF}
 
 // =============================================================================
@@ -679,18 +684,18 @@ var
 begin
   Result := TInteractiveProcessInfo.Create;
   try
-    if FpPipe(PipeIn[0], PipeIn[1]) <> 0 then
+    if FpPipe(PipeIn) <> 0 then
       raise Exception.Create('Failed to create input pipe. Error: ' +
           String(strerror(fpGetErrno)));
 
-    if FpPipe(PipeOut[0], PipeOut[1]) <> 0 then
+    if FpPipe(PipeOut) <> 0 then
     begin
       FpClose(PipeIn[0]); FpClose(PipeIn[1]);
       raise Exception.Create('Failed to create output pipe. Error: ' +
           String(strerror(fpGetErrno)));
     end;
 
-    if FpPipe(PipeErr[0], PipeErr[1]) <> 0 then
+    if FpPipe(PipeErr) <> 0 then
     begin
       FpClose(PipeIn[0]);  FpClose(PipeIn[1]);
       FpClose(PipeOut[0]); FpClose(PipeOut[1]);
