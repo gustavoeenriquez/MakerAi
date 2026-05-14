@@ -183,6 +183,11 @@ begin
   inherited Start; // TAiMCPServer.Start → LogicServer.Start, FActive := True
 
   FHttpServer.Port := Port;
+  // Workaround para FPC issue #41758: StopServerSocket llama StopAccepting(False)
+  // que no cierra el socket, dejando WaitFor bloqueado para siempre.
+  // Con AcceptIdleTimeout > 0 el bucle accept se desbloquea periodicamente
+  // y comprueba el flag de parada.
+  FHttpServer.AcceptIdleTimeout := 500;
 
   FServerThread := TAiMCPHttpServerThread.Create(FHttpServer);
   FServerThread.Start;
