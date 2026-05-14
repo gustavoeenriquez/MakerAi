@@ -528,6 +528,7 @@ Variables estándar: `OPENAI_API_KEY`, `CLAUDE_API_KEY`, `GEMINI_API_KEY`, `GROQ
 ## Changelog
 
 ### Mayo 2026
+- **fix:** `uMakerAi.MCPServer.Http.pas` — `TAiMCPHttpServer.Stop` quedaba bloqueado en `WaitFor` por el [bug #41758 de FPC](https://gitlab.com/freepascal.org/fpc/source/-/work_items/41758) (`StopServerSocket` llama `StopAccepting(False)` que no cierra el socket). Workaround: `AcceptIdleTimeout := 500 ms` para que el bucle accept se desbloquee periódicamente y compruebe el flag de parada. **Nota:** el bug de FPC sigue abierto — cuando se corrija upstream el workaround puede eliminarse.
 - **fix:** `uMakerAi.Chat.Messages.pas` — `constref`→`const` en `TAiToolsFunctions.ValueNotify`; FPC 3.2.3 x86_64 rechaza `constref` en override de método virtual
 - **fix:** `uMakerAi.Agents.pas` — reemplazadas 6 llamadas a `GetValueEnumerator`/`GetPairEnumerator` (API exclusiva de Delphi) por bucles `for-in` nativos de FPC; agregado `uMakerAi.Utils.System` al uses
 - **fix:** `uMakerAi.RAG.Graph.Core.pas` — `DetectCommunities`: renombradas variables locales que ocultaban propiedades de clase; eliminada sintaxis `for-in` con array-constructor ilegal y asignación `CommIdx := 0` dentro de bucle `for`; agregada variable `J` faltante en `ExecuteMakerGQL`
