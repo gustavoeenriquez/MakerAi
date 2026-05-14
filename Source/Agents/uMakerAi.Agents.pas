@@ -31,7 +31,7 @@ uses
   generics.collections,
   fpjson, jsonparser,
   uMakerAi.Chat, uMakerAi.Core, uMakerAi.Chat.Messages,
-  uMakerAi.Agents.Checkpoint;
+  uMakerAi.Agents.Checkpoint, uMakerAi.Utils.System;
 
 type
 
@@ -1118,7 +1118,6 @@ procedure TAIAgentsNode.DoExecute(ABeforeNode: TAIAgentsNode; ALink: TAIAgentsLi
 var
   CanExecute:  Boolean;
   CombinedIn:  string;
-  LEnum:       TAIAgentsJoinInputs.TValueEnumerator;
   V:           string;
 begin
   if (FGraph = nil) or FGraph.IsAborted then
@@ -1154,16 +1153,10 @@ begin
             begin
               CanExecute  := True;
               CombinedIn  := '';
-              LEnum := FJoinInputs.GetValueEnumerator;
-              try
-                while LEnum.MoveNext do
-                begin
-                  V := LEnum.Current;
-                  if CombinedIn <> '' then CombinedIn := CombinedIn + #10;
-                  CombinedIn := CombinedIn + V;
-                end;
-              finally
-                LEnum.Free;
+              for V in FJoinInputs.Values do
+              begin
+                if CombinedIn <> '' then CombinedIn := CombinedIn + #10;
+                CombinedIn := CombinedIn + V;
               end;
               FInput := CombinedIn;
             end;
@@ -1611,7 +1604,7 @@ var
   LNodeObj:  TJSONObject;
   LJoinObj:  TJSONObject;
   LNodeStates, LLinkStates, LBBObj: TJSONObject;
-  LEnum:     TAIAgentsJoinInputs.TPairEnumerator;
+  LJoinLink: TAIAgentsLink;
   LLinkObj:  TJSONObject;
   I:         Integer;
 begin
@@ -1639,13 +1632,8 @@ begin
     LJoinObj := TJSONObject.Create;
     LNode.FJoinLock.Enter;
     try
-      LEnum := LNode.FJoinInputs.GetPairEnumerator;
-      try
-        while LEnum.MoveNext do
-          LJoinObj.Add(LEnum.Current.Key.Name, LEnum.Current.Value);
-      finally
-        LEnum.Free;
-      end;
+      for LJoinLink in LNode.FJoinInputs.Keys do
+        LJoinObj.Add(LJoinLink.Name, LNode.FJoinInputs[LJoinLink]);
     finally
       LNode.FJoinLock.Leave;
     end;
@@ -1789,7 +1777,6 @@ var
   LLink:       TAIAgentsLink;
   LTargetNode: TAIAgentsNode;
   StartCount, EndCount, I: Integer;
-  LEnum:       TAIAgentsLinkNodeMap.TValueEnumerator;
 begin
   if FCompiled then Exit;
   try
@@ -1831,16 +1818,8 @@ begin
 
       if Assigned(LLink.FConditionalTargets) then
       begin
-        LEnum := LLink.FConditionalTargets.GetValueEnumerator;
-        try
-          while LEnum.MoveNext do
-          begin
-            LTargetNode := LEnum.Current;
-            LTargetNode.FInEdges.Add(LLink);
-          end;
-        finally
-          LEnum.Free;
-        end;
+        for LTargetNode in LLink.FConditionalTargets.Values do
+          LTargetNode.FInEdges.Add(LLink);
       end;
     end;
     FCompiled := True;
@@ -1895,7 +1874,7 @@ function TAIAgentManager.AddConditionalEdge(const AStartNodeName: string;
 var
   LStart, LTarget: TAIAgentsNode;
   LLink:           TAIAgentsLink;
-  LEnum:           specialize TDictionary<string, string>.TPairEnumerator;
+  LCondKey:        string;
 begin
   FCompiled := False;
   LStart := FindNode(AStartNodeName);
@@ -1907,18 +1886,13 @@ begin
   LLink.Graph := Self;
   LLink.Mode := lmConditional;
 
-  LEnum := AConditionalTargets.GetPairEnumerator;
-  try
-    while LEnum.MoveNext do
-    begin
-      LTarget := FindNode(LEnum.Current.Value);
-      if not Assigned(LTarget) then
-        raise Exception.CreateFmt('AddConditionalEdge: target node "%s" not found.',
-          [LEnum.Current.Value]);
-      LLink.AddConditionalTarget(LEnum.Current.Key, LTarget);
-    end;
-  finally
-    LEnum.Free;
+  for LCondKey in AConditionalTargets.Keys do
+  begin
+    LTarget := FindNode(AConditionalTargets[LCondKey]);
+    if not Assigned(LTarget) then
+      raise Exception.CreateFmt('AddConditionalEdge: target node "%s" not found.',
+        [AConditionalTargets[LCondKey]]);
+    LLink.AddConditionalTarget(LCondKey, LTarget);
   end;
 
   LStart.Next := LLink;
@@ -2151,9 +2125,9 @@ var
   LNode:   TAIAgentsNode;
   LLink:   TAIAgentsLink;
   LWriter: TStringStream;
-  LEnumC:  TAIAgentsLinkNodeMap.TPairEnumerator;
-  LPropsJ: TJSONObject;
-  I:       Integer;
+  LCondKey: string;
+  LPropsJ:  TJSONObject;
+  I:        Integer;
 begin
   LRoot := TJSONObject.Create;
   try
@@ -2237,13 +2211,8 @@ begin
         if Assigned(LLink.FConditionalTargets) then
         begin
           LCondTargetsObj := TJSONObject.Create;
-          LEnumC := LLink.FConditionalTargets.GetPairEnumerator;
-          try
-            while LEnumC.MoveNext do
-              LCondTargetsObj.Add(LEnumC.Current.Key, LEnumC.Current.Value.Name);
-          finally
-            LEnumC.Free;
-          end;
+          for LCondKey in LLink.FConditionalTargets.Keys do
+            LCondTargetsObj.Add(LCondKey, LLink.FConditionalTargets[LCondKey].Name);
           LLinkObj.Add('conditionalTargets', LCondTargetsObj);
         end;
       end;
@@ -2427,8 +2396,8 @@ var
   LWriter: TStringStream;
   LNode:   TAIAgentsNode;
   LLink:   TAIAgentsLink;
-  LEnum:   TAIAgentsJoinInputs.TPairEnumerator;
-  I:       Integer;
+  LJoinLink: TAIAgentsLink;
+  I:         Integer;
 begin
   LRoot := TJSONObject.Create;
   try
@@ -2450,13 +2419,8 @@ begin
       LJoinInputsObj := TJSONObject.Create;
       LNode.FJoinLock.Enter;
       try
-        LEnum := LNode.FJoinInputs.GetPairEnumerator;
-        try
-          while LEnum.MoveNext do
-            LJoinInputsObj.Add(LEnum.Current.Key.Name, LEnum.Current.Value);
-        finally
-          LEnum.Free;
-        end;
+        for LJoinLink in LNode.FJoinInputs.Keys do
+        LJoinInputsObj.Add(LJoinLink.Name, LNode.FJoinInputs[LJoinLink]);
       finally
         LNode.FJoinLock.Leave;
       end;

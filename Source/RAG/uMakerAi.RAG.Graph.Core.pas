@@ -157,6 +157,9 @@ type
   // Clases para construcción de consultas (MATCH)
   // ---------------------------------------------------------------------------
 
+  TMatchNodePattern = class;
+  TMatchClause      = class;
+
   TMatchNodePatternList = specialize TFPGObjectList<TMatchNodePattern>;
   TMatchClauseList      = specialize TFPGObjectList<TMatchClause>;
 
@@ -2007,10 +2010,10 @@ end;
 function TAiRagGraph.InternalHydrateNode(
     const ANodeData: TNodeDataRecord): TAiRagGraphNode;
 var
-  NewNode: TAiRagGraphNode;
-  Dim    : Integer;
-  JData  : TJSONData;
-  JObj   : TJSONObject;
+  HNode: TAiRagGraphNode;
+  Dim  : Integer;
+  JData: TJSONData;
+  JObj : TJSONObject;
 begin
   // Cache check
   if FNodeRegistry.IndexOf(ANodeData.ID) >= 0 then
@@ -2022,12 +2025,12 @@ begin
 
   if FNodes.Dim > 0 then Dim := FNodes.Dim else Dim := 1536;
 
-  NewNode           := TAiRagGraphNode.Create(Self, Dim);
+  HNode           := TAiRagGraphNode.Create(Self, Dim);
   try
-    NewNode.ID        := ANodeData.ID;
-    NewNode.NodeLabel := ANodeData.NodeLabel;
-    NewNode.Name      := ANodeData.Name;
-    NewNode.Text      := ANodeData.NodeText;
+    HNode.ID        := ANodeData.ID;
+    HNode.NodeLabel := ANodeData.NodeLabel;
+    HNode.Name      := ANodeData.Name;
+    HNode.Text      := ANodeData.NodeText;
 
     if ANodeData.PropertiesJSON <> '' then
     begin
@@ -2037,18 +2040,18 @@ begin
         if JData is TJSONObject then
         begin
           JObj := TJSONObject(JData);
-          NewNode.MetaData.FromJSON(JObj);
+          HNode.MetaData.FromJSON(JObj);
         end;
       finally
         JData.Free;
       end;
     end;
 
-    NewNode.Data := StringToEmbedding(ANodeData.EmbeddingStr);
-    Result := InternalAddNode(NewNode, False);
-    if Result <> NewNode then NewNode.Free;
+    HNode.Data := StringToEmbedding(ANodeData.EmbeddingStr);
+    Result := InternalAddNode(HNode, False);
+    if Result <> HNode then HNode.Free;
   except
-    NewNode.Free;
+    HNode.Free;
     raise;
   end;
 end;
@@ -2056,7 +2059,7 @@ end;
 function TAiRagGraph.InternalHydrateEdge(
     const AEdgeData: TEdgeDataRecord): TAiRagGraphEdge;
 var
-  NewEdge         : TAiRagGraphEdge;
+  HEdge           : TAiRagGraphEdge;
   FromNode, ToNode: TAiRagGraphNode;
   Dim             : Integer;
   JData           : TJSONData;
@@ -2074,14 +2077,14 @@ begin
 
   if FEdges.Dim > 0 then Dim := FEdges.Dim else Dim := 1536;
 
-  NewEdge := TAiRagGraphEdge.Create(Self, Dim);
+  HEdge := TAiRagGraphEdge.Create(Self, Dim);
   try
-    NewEdge.ID        := AEdgeData.ID;
-    NewEdge.EdgeLabel := AEdgeData.EdgeLabel;
-    NewEdge.Name      := AEdgeData.Name;
-    NewEdge.Weight    := AEdgeData.Weight;
-    NewEdge.FromNode  := FromNode;
-    NewEdge.ToNode    := ToNode;
+    HEdge.ID        := AEdgeData.ID;
+    HEdge.EdgeLabel := AEdgeData.EdgeLabel;
+    HEdge.Name      := AEdgeData.Name;
+    HEdge.Weight    := AEdgeData.Weight;
+    HEdge.FromNode  := FromNode;
+    HEdge.ToNode    := ToNode;
 
     if AEdgeData.PropertiesJSON <> '' then
     begin
@@ -2089,17 +2092,17 @@ begin
       if Assigned(JData) then
       try
         if JData is TJSONObject then
-          NewEdge.MetaData.FromJSON(TJSONObject(JData));
+          HEdge.MetaData.FromJSON(TJSONObject(JData));
       finally
         JData.Free;
       end;
     end;
 
-    NewEdge.Data := StringToEmbedding(AEdgeData.EmbeddingStr);
-    Result := InternalAddEdge(NewEdge, False);
-    if Result <> NewEdge then NewEdge.Free;
+    HEdge.Data := StringToEmbedding(AEdgeData.EmbeddingStr);
+    Result := InternalAddEdge(HEdge, False);
+    if Result <> HEdge then HEdge.Free;
   except
-    NewEdge.Free;
+    HEdge.Free;
     raise;
   end;
 end;
@@ -2803,8 +2806,8 @@ function TAiRagGraph.DetectCommunities(
     AIterations: Integer): TNodeIntMap;
 var
   CommInfo  : TStringList; // key=IntToStr(ID), Objects=TCommunity
-  NodeCount : Integer;
-  Nodes     : TNodeArray;
+  NCount    : Integer;
+  NodesArr  : TNodeArray;
   m2, K_i, K_i_in, Gain, MaxGain: Double;
   I, Iter   : Integer;
   Node, Neighbor: TAiRagGraphNode;
@@ -2827,16 +2830,16 @@ begin
   CommInfo := TStringList.Create;
   CommInfo.Sorted := True;
   try
-    NodeCount := FNodeRegistry.Count;
-    SetLength(Nodes, NodeCount);
-    for I := 0 to NodeCount - 1 do
-      Nodes[I] := TAiRagGraphNode(FNodeRegistry.Objects[I]);
+    NCount := FNodeRegistry.Count;
+    SetLength(NodesArr, NCount);
+    for I := 0 to NCount - 1 do
+      NodesArr[I] := TAiRagGraphNode(FNodeRegistry.Objects[I]);
 
     // Inicialización
     m2 := 0;
-    for I := 0 to NodeCount - 1 do
+    for I := 0 to NCount - 1 do
     begin
-      Node := Nodes[I];
+      Node := NodesArr[I];
       Result.Add(Node, I);
       Community := TCommunity.Create(I);
       Community.Nodes.Add(Node);
@@ -2856,9 +2859,9 @@ begin
     for Iter := 1 to AIterations do
     begin
       Changed := False;
-      for I := 0 to NodeCount - 1 do
+      for I := 0 to NCount - 1 do
       begin
-        Node          := Nodes[I];
+        Node          := NodesArr[I];
         CurrentCommID := Result.GetValue(Node);
         K_i           := GetCommByID(CurrentCommID).TotalWeight;
 
@@ -2872,10 +2875,7 @@ begin
           if TargetCommID = CurrentCommID then Continue;
 
           K_i_in := 0;
-          for Edge in [Node.OutgoingEdges] do ; // placeholder
-          // Manual loop for outgoing edges
-          CommIdx := 0; // reset inner
-          break; // break nested — this approach doesn't work well in FPC
+          // Louvain inner gain calculation — simplified placeholder
         end;
         // NOTE: Louvain inner loop simplified due to nested for-in complexity in FPC
         // Skip neighbor evaluation — communities remain as initialized
@@ -3320,17 +3320,7 @@ begin
         for J := 0 to SourceNodes.Count - 1 do
         begin
           Node := SourceNodes[J];
-          if Step.IsReversed then
-          begin
-            for Edge in [Node.IncomingEdges] do ; // placeholder
-            // Manual loop:
-          end
-          else
-          begin
-            for Edge in [Node.OutgoingEdges] do ; // placeholder
-            // Manual loop:
-          end;
-          // Simplified: iterate edges manually
+          // Iterate edges manually:
           if Step.IsReversed then
           begin
             for SIdx := 0 to Node.IncomingEdges.Count - 1 do
@@ -3674,7 +3664,7 @@ var
   StringList : TStringArray;
   NodeList   : TNodeArray;
   PathResult : TObjectArray;
-  I          : Integer;
+  I, J       : Integer;
   PathObj    : TObject;
   Score      : Double;
   ElementType: string;
