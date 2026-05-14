@@ -611,12 +611,12 @@ end;
 // TUtilsSystem — UNIX
 // =============================================================================
 
-{$IFDEF UNIX}
-
 type
   TStringDynArray  = array of string;
   TAnsiStrDynArray = array of AnsiString;
   TPCharDynArray   = array of PAnsiChar;
+
+{$IFDEF UNIX}
 
 procedure ParseCommand(const ACommand: string; out AProgram: string;
     out AArgs: TStringDynArray);

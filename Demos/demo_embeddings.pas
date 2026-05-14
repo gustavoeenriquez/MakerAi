@@ -17,7 +17,7 @@ program demo_embeddings;
 //     -Fu../Source/Core -Fu../Source/Chat -Fu../Source/Utils
 
 uses
-  SysUtils, Classes,
+  SysUtils, Classes, Math,
   uMakerAi.Embeddings.Core,
   uMakerAi.Embeddings;
 

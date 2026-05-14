@@ -67,6 +67,8 @@ var
   Speech:  TGeminiSpeechAccess;
   Transcript: string;
   AudioIn: TAiMediaFile;
+  Profile: TStringList;
+  Notes:   TStringList;
 
 const
   API_KEY = '@GEMINI_API_KEY';
@@ -158,9 +160,6 @@ begin
   // Escenario 5: TTS con AudioProfile + DirectorsNotes (prompt de direccion)
   // -------------------------------------------------------------------------
   WriteLn('--- Esc 5: TTS con AudioProfile y DirectorsNotes ---');
-  var
-    Profile: TStringList;
-    Notes:   TStringList;
   Profile := TStringList.Create;
   Notes   := TStringList.Create;
   try
