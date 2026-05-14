@@ -35,13 +35,12 @@ MakerAI Suite es una librería de orquestación de IA que permite integrar múlt
 
 ### Plataformas verificadas
 
-Compilado y verificado con FPC 3.2.2 en:
-
-| Plataforma | Arq | Tests |
-|------------|-----|-------|
-| Windows (win32) | x86 | `test_compile` + `demo_shell` + `demo_ollama` |
-| Ubuntu Linux | x86_64 | `test_compile` + `demo_shell` + `demo_ollama` |
-| Linux (ARM64) | aarch64 | `test_compile` + `demo_shell` + `demo_ollama` |
+| Plataforma | Arq | FPC | Tests |
+|------------|-----|-----|-------|
+| Windows (win64) | x86_64 | 3.2.3 | `test_compile` + `demo_shell` + `demo_ollama` |
+| Windows (win32) | x86 | 3.2.2 | `test_compile` + `demo_shell` + `demo_ollama` |
+| Ubuntu Linux | x86_64 | 3.2.2 | `test_compile` + `demo_shell` + `demo_ollama` |
+| Linux (ARM64) | aarch64 | 3.2.2 | `test_compile` + `demo_shell` + `demo_ollama` |
 
 ---
 
@@ -529,8 +528,13 @@ Variables estándar: `OPENAI_API_KEY`, `CLAUDE_API_KEY`, `GEMINI_API_KEY`, `GROQ
 ## Changelog
 
 ### Mayo 2026
-- **fix:** `uMakerAi.Utils.System.pas` — Linux: `FpPipe` ahora pasa el array `TFilDes` completo (FPC 3.2.2 en Debian 13+); agregadas constantes `STDIN/STDOUT/STDERR_FILENO` ausentes en los units estándar de FPC (resuelve [#82](https://github.com/gustavoeenriquez/MakerAi/issues/82))
-- **fix:** `uMakerAi.Chat.Cohere.pas` — eliminado error interno 200510032 del compilador FPC causado por double-lookup en diccionario genérico en una sola expresión (limitación de `TDictionary` en FPC 3.2.2)
+- **fix:** `uMakerAi.Chat.Messages.pas` — `constref`→`const` en `TAiToolsFunctions.ValueNotify`; FPC 3.2.3 x86_64 rechaza `constref` en override de método virtual
+- **fix:** `uMakerAi.Agents.pas` — reemplazadas 6 llamadas a `GetValueEnumerator`/`GetPairEnumerator` (API exclusiva de Delphi) por bucles `for-in` nativos de FPC; agregado `uMakerAi.Utils.System` al uses
+- **fix:** `uMakerAi.RAG.Graph.Core.pas` — `DetectCommunities`: renombradas variables locales que ocultaban propiedades de clase; eliminada sintaxis `for-in` con array-constructor ilegal y asignación `CommIdx := 0` dentro de bucle `for`; agregada variable `J` faltante en `ExecuteMakerGQL`
+- **fix:** `uMakerAi.Utils.System.pas` — movidos `TStringDynArray`/`TAnsiStrDynArray`/`TPCharDynArray` fuera del bloque `{$IFDEF UNIX}` (disponibles en todas las plataformas); Linux: `FpPipe` ahora pasa el array `TFilDes` completo (FPC 3.2.2 en Debian 13+); agregadas constantes `STDIN/STDOUT/STDERR_FILENO` (resuelve [#82](https://github.com/gustavoeenriquez/MakerAi/issues/82))
+- **fix:** `uMakerAi.Chat.Cohere.pas` — eliminado error interno 200510032 causado por double-lookup en `TDictionary` genérico en una sola expresión (limitación de FPC 3.2.2)
+- **fix:** `demo_gemini_speech.pas` — declaraciones `var` inline movidas a la sección var del programa (sintaxis exclusiva de Delphi, no válida en FPC)
+- **fix:** `demo_embeddings.pas` — agregado `Math` al uses (requerido por `Min()`)
 - **demo:** `demo_ollama` — acepta URL como argumento opcional para servidores Ollama remotos (`./demo_ollama http://host:11434/v1/`)
 - **demo:** `demo_ollama`, `demo_groq` — ahora muestran errores HTTP via `Chat.LastError` en vez de respuesta vacía silenciosa
 

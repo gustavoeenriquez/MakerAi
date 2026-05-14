@@ -35,13 +35,12 @@ MakerAI Suite is an AI orchestration library that lets you integrate multiple LL
 
 ### Tested platforms
 
-Compiled and verified with FPC 3.2.2 on:
-
-| Platform | Arch | Test |
-|----------|------|------|
-| Windows (win32) | x86 | `test_compile` + `demo_shell` + `demo_ollama` |
-| Ubuntu Linux | x86_64 | `test_compile` + `demo_shell` + `demo_ollama` |
-| Linux (ARM64) | aarch64 | `test_compile` + `demo_shell` + `demo_ollama` |
+| Platform | Arch | FPC | Test |
+|----------|------|-----|------|
+| Windows (win64) | x86_64 | 3.2.3 | `test_compile` + `demo_shell` + `demo_ollama` |
+| Windows (win32) | x86 | 3.2.2 | `test_compile` + `demo_shell` + `demo_ollama` |
+| Ubuntu Linux | x86_64 | 3.2.2 | `test_compile` + `demo_shell` + `demo_ollama` |
+| Linux (ARM64) | aarch64 | 3.2.2 | `test_compile` + `demo_shell` + `demo_ollama` |
 
 ---
 
@@ -527,8 +526,13 @@ Standard variable names: `OPENAI_API_KEY`, `CLAUDE_API_KEY`, `GEMINI_API_KEY`, `
 ## Changelog
 
 ### May 2026
-- **fix:** `uMakerAi.Utils.System.pas` — Linux: `FpPipe` now passes the full `TFilDes` array (FPC 3.2.2 on Debian 13+); added `STDIN/STDOUT/STDERR_FILENO` constants missing from FPC standard units (fixes [#82](https://github.com/gustavoeenriquez/MakerAi/issues/82))
+- **fix:** `uMakerAi.Chat.Messages.pas` — `constref`→`const` in `TAiToolsFunctions.ValueNotify`; FPC 3.2.3 x86_64 rejects `constref` in virtual method overrides
+- **fix:** `uMakerAi.Agents.pas` — replaced 6 `GetValueEnumerator`/`GetPairEnumerator` calls (Delphi-only API) with FPC-native `for-in` loops; added `uMakerAi.Utils.System` to uses clause
+- **fix:** `uMakerAi.RAG.Graph.Core.pas` — `DetectCommunities`: renamed local vars that shadowed class properties; removed illegal `for-in` with array-constructor syntax and `CommIdx := 0` assignment inside a `for` loop; added missing variable `J` in `ExecuteMakerGQL`
+- **fix:** `uMakerAi.Utils.System.pas` — moved `TStringDynArray`/`TAnsiStrDynArray`/`TPCharDynArray` out of `{$IFDEF UNIX}` scope (now available on all platforms); Linux: `FpPipe` now passes the full `TFilDes` array (FPC 3.2.2 on Debian 13+); added `STDIN/STDOUT/STDERR_FILENO` constants (fixes [#82](https://github.com/gustavoeenriquez/MakerAi/issues/82))
 - **fix:** `uMakerAi.Chat.Cohere.pas` — eliminated FPC internal error 200510032 caused by double dictionary lookup in a single expression (generic `TDictionary` limitation in FPC 3.2.2)
+- **fix:** `demo_gemini_speech.pas` — moved inline `var` declarations to program-level var section (Delphi-only syntax not valid in FPC)
+- **fix:** `demo_embeddings.pas` — added `Math` to uses clause (required for `Min()`)
 - **demo:** `demo_ollama` — accepts optional URL argument for remote Ollama servers (`./demo_ollama http://host:11434/v1/`)
 - **demo:** `demo_ollama`, `demo_groq` — now report HTTP errors via `Chat.LastError` instead of silently showing empty responses
 
