@@ -33,6 +33,7 @@ All subdirectories (Agents, Chat, ChatUI, Core, Design, MCPClient, MCPServer, RA
 | MCPClient | `uMakerAi.MCPClient.Core.pas` | `TMCPClientItem`, transport classes |
 | Tools | `uMakerAi.Tools.Functions.pas` | `TAiFunctions`, `TFunctionActionItem` |
 | ChatUI | `uMakerAi.UI.ChatList.pas` | `TChatList`, `TChatBubble`, `TChatInput` |
+| Realtime | `uMakerAi.Realtime.AiConnection.pas` | `TAiRealtimeConnection`, `TAiRealtimeBase`, `TAiOpenAiRealtimeSTT` |
 
 ## Architecture Patterns
 
@@ -92,6 +93,7 @@ Environment variables: Use `@VAR_NAME` syntax (e.g., `@OPENAI_API_KEY`).
 | [MCPClient/](MCPClient/CLAUDE.md) | MCP client connector |
 | [Tools/](Tools/CLAUDE.md) | Function calling, Shell, ComputerUse |
 | [ChatUI/](ChatUI/CLAUDE.md) | FMX visual components |
+| [Realtime/](Realtime/CLAUDE.md) | Real-time STT drivers (OpenAI WebSocket, Gemini stub) |
 | [Utils/](Utils/CLAUDE.md) | Voice monitor, diff updater |
 | [Design/](Design/CLAUDE.md) | Design-time property editors |
 | [Resources/](Resources/CLAUDE.md) | Embedded resources |

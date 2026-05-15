@@ -37,6 +37,16 @@ uses
 {$ENDIF}
   uMakerAi.ErrorCodes;
 
+{$IFDEF MSWINDOWS}
+// En Windows el DLL acepta wchar_t* (Delphi PChar = PWideChar) — sin conversión.
+type TNativeStr = PChar;
+{$DEFINE GEN_NATIVE_WCHAR}
+{$ELSE}
+// En POSIX (Linux, macOS, Android) los .so esperan const char* (UTF-8).
+// Usamos MarshaledAString y convertimos en los call sites.
+type TNativeStr = MarshaledAString;
+{$ENDIF}
+
 {$IFNDEF MSWINDOWS}
 // ---------------------------------------------------------------------------
 // POSIX shim — expose the Win32 module-loading API surface on Linux / macOS
@@ -97,21 +107,21 @@ type
     FDLLPath:  string;
 
     FCreate:            function: Pointer; stdcall;
-    FLoad:              function(Inst: Pointer; ModelPath: PChar;
+    FLoad:              function(Inst: Pointer; ModelPath: TNativeStr;
                           NGPULayers, NCtx: Integer): LongBool; stdcall;
-    FGenerate:          function(Inst: Pointer; Prompt: PChar; MaxTokens: Integer;
+    FGenerate:          function(Inst: Pointer; Prompt: TNativeStr; MaxTokens: Integer;
                           Temp, TopP: Single;
                           Callback: TRawCallback; UserData: Pointer): LongBool; stdcall;
-    FGenerateEx:        function(Inst: Pointer; Prompt: PChar; MaxTokens: Integer;
+    FGenerateEx:        function(Inst: Pointer; Prompt: TNativeStr; MaxTokens: Integer;
                           Temp, TopP: Single; SamplerMode: Integer;
                           Param1, Param2: Single;
                           Callback: TRawCallback; UserData: Pointer): LongBool; stdcall;
     FReset:             procedure(Inst: Pointer); stdcall;
     FFree:              procedure(Inst: Pointer); stdcall;
     FIsGPUEnabled:      function(Inst: Pointer): LongBool; stdcall;
-    FGetLastError:      function: PChar; stdcall;
+    FGetLastError:      function: PAnsiChar; stdcall;  // siempre narrow (UTF-8)
     FGetLastErrorCode:  function: Integer; stdcall;
-    FValidate:          function(Path: PChar): Integer; stdcall;
+    FValidate:          function(Path: TNativeStr): Integer; stdcall;
 
     procedure LoadDLL(const DLLPath: string);
     function  Bind(const Name: string): Pointer;
@@ -120,7 +130,9 @@ type
     procedure CheckOK(OK: Boolean);
   public
     constructor Create(const DLLPath: string =
-      {$IFDEF MSWINDOWS}'makerai.gen.dll'{$ELSE}'makerai.gen.so'{$ENDIF});
+      {$IFDEF MSWINDOWS}'makerai.gen.dll'
+      {$ELSEIF DEFINED(ANDROID) or DEFINED(ANDROID64)}'libmakerai_gen.so'
+      {$ELSE}'makerai.gen.so'{$ENDIF});
     destructor  Destroy; override;
 
     { Validates the model file before loading. Returns llamaErrNone on success. }
@@ -283,7 +295,7 @@ procedure TLlamaGenerator.RaiseLastError;
 var
   Msg: string;
 begin
-  if Assigned(FGetLastError) then Msg := string(FGetLastError())
+  if Assigned(FGetLastError) then Msg := UTF8ToString(FGetLastError())
   else Msg := '(unknown error)';
   raise EGenError.Create(LastErrorCode, Msg);
 end;
@@ -295,13 +307,21 @@ end;
 
 function TLlamaGenerator.ValidateModelFile(const Path: string): TLlamaErrorCode;
 begin
+{$IFDEF GEN_NATIVE_WCHAR}
   Result := TLlamaErrorCode(FValidate(PChar(Path)));
+{$ELSE}
+  Result := TLlamaErrorCode(FValidate(MarshaledAString(UTF8String(Path))));
+{$ENDIF}
 end;
 
 procedure TLlamaGenerator.Load(const GGUFPath: string; NGPULayers: Integer;
   NCtx: Integer);
 begin
+{$IFDEF GEN_NATIVE_WCHAR}
   CheckOK(FLoad(FInst, PChar(GGUFPath), NGPULayers, NCtx));
+{$ELSE}
+  CheckOK(FLoad(FInst, MarshaledAString(UTF8String(GGUFPath)), NGPULayers, NCtx));
+{$ENDIF}
 end;
 
 procedure TLlamaGenerator.Reset;
@@ -322,8 +342,13 @@ begin
   FillChar(Ctx, SizeOf(Ctx), 0);
   Ctx.Builder := TStringBuilder.Create;
   try
+{$IFDEF GEN_NATIVE_WCHAR}
     CheckOK(FGenerate(FInst, PChar(Prompt), MaxTokens, Temp, TopP,
       @RawTokenCallback, @Ctx));
+{$ELSE}
+    CheckOK(FGenerate(FInst, MarshaledAString(UTF8String(Prompt)), MaxTokens, Temp, TopP,
+      @RawTokenCallback, @Ctx));
+{$ENDIF}
     Result := Ctx.Builder.ToString;
   finally
     Ctx.Builder.Free;
@@ -338,8 +363,13 @@ begin
   FillChar(Ctx, SizeOf(Ctx), 0);
   Ctx.Builder := TStringBuilder.Create;
   try
+{$IFDEF GEN_NATIVE_WCHAR}
     CheckOK(FGenerateEx(FInst, PChar(Prompt), MaxTokens, Temp, TopP,
       Ord(Mode), Param1, Param2, @RawTokenCallback, @Ctx));
+{$ELSE}
+    CheckOK(FGenerateEx(FInst, MarshaledAString(UTF8String(Prompt)), MaxTokens, Temp, TopP,
+      Ord(Mode), Param1, Param2, @RawTokenCallback, @Ctx));
+{$ENDIF}
     Result := Ctx.Builder.ToString;
   finally
     Ctx.Builder.Free;
@@ -353,8 +383,13 @@ var
 begin
   FillChar(Ctx, SizeOf(Ctx), 0);
   Ctx.OnToken := OnToken;
+{$IFDEF GEN_NATIVE_WCHAR}
   CheckOK(FGenerate(FInst, PChar(Prompt), MaxTokens, Temp, TopP,
     @RawTokenCallback, @Ctx));
+{$ELSE}
+  CheckOK(FGenerate(FInst, MarshaledAString(UTF8String(Prompt)), MaxTokens, Temp, TopP,
+    @RawTokenCallback, @Ctx));
+{$ENDIF}
 end;
 
 procedure TLlamaGenerator.GenerateStream(const Prompt: string;
@@ -365,8 +400,13 @@ var
 begin
   FillChar(Ctx, SizeOf(Ctx), 0);
   Ctx.OnToken := OnToken;
+{$IFDEF GEN_NATIVE_WCHAR}
   CheckOK(FGenerateEx(FInst, PChar(Prompt), MaxTokens, Temp, TopP,
     Ord(Mode), Param1, Param2, @RawTokenCallback, @Ctx));
+{$ELSE}
+  CheckOK(FGenerateEx(FInst, MarshaledAString(UTF8String(Prompt)), MaxTokens, Temp, TopP,
+    Ord(Mode), Param1, Param2, @RawTokenCallback, @Ctx));
+{$ENDIF}
 end;
 
 end.

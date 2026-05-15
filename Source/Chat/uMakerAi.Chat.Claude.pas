@@ -136,6 +136,7 @@ type
     FThinkingBudget: Integer;
     FContextConfig: TClaudeContextConfig;
     FCacheSystemPrompt: Boolean;
+    FCacheTTL: String;
     FServiceTier: String;
 
     function GetToolJson(aToolFormat: TToolFormat): TJSonArray;
@@ -192,6 +193,7 @@ type
 
     // Permite cachear el System Prompt para ahorrar costos en instrucciones largas
     property CacheSystemPrompt: Boolean read FCacheSystemPrompt write FCacheSystemPrompt;
+    property CacheTTL: String read FCacheTTL write FCacheTTL;
 
   Published
     property EnableMemory: Boolean read FEnableMemory write SetEnableMemory default False;
@@ -203,6 +205,7 @@ type
 procedure Register;
 
 implementation
+
 
 Const
   GlAIUrl = 'https://api.anthropic.com/v1/';
@@ -680,6 +683,8 @@ begin
         var
         jCache := TJSONObject.Create;
         jCache.AddPair('type', 'ephemeral');
+        if FCacheTTL <> '' then
+          jCache.AddPair('ttl', FCacheTTL);
         jSysBlock.AddPair('cache_control', jCache);
 
         jSysArr.Add(jSysBlock);
@@ -1004,33 +1009,11 @@ Var
         // escape al TTask system y cause EAggregateException en WaitForAll.
         try
           try
-            TFile.AppendAllText('makerai_tools.log',
-              FormatDateTime('hh:nn:ss.zzz', Now) +
-              Format(' [Tool] Ejecutando: "%s" (id=%s)'#13#10, [TC.Name, TC.Id]),
-              TEncoding.UTF8);
-          except
-            // Ignorar fallos de log (path inaccesible, OneDrive lock, etc.)
-          end;
-          try
             DoCallFunction(TC);
-            try
-              TFile.AppendAllText('makerai_tools.log',
-                FormatDateTime('hh:nn:ss.zzz', Now) +
-                Format(' [Tool] Completado: "%s" -> %s'#13#10,
-                  [TC.Name, IfThen(TC.Response = '', '(vacío)', Copy(TC.Response, 1, 120))]),
-                TEncoding.UTF8);
-            except
-            end;
           except
             on E: Exception do
             begin
               var LErrorMsg := 'Error en herramienta "' + TC.Name + '": ' + E.Message;
-              try
-                TFile.AppendAllText('makerai_tools.log',
-                  FormatDateTime('hh:nn:ss.zzz', Now) +
-                  ' [Tool] ERROR: ' + LErrorMsg + #13#10, TEncoding.UTF8);
-              except
-              end;
               TC.Response := '{"error": "' + E.Message.Replace('"', '''') + '"}';
               TThread.Queue(nil,
                 procedure
@@ -1075,6 +1058,7 @@ begin
 
     // Captura de tokens cacheados (Beta Prompt Caching)
     aCached_tokens := uso.GetValue<Integer>('cache_read_input_tokens', 0);
+    ResMsg.Cache_write_tokens := uso.GetValue<Integer>('cache_creation_input_tokens', 0);
 
     // Nota: Total tokens en Claude suele ser input + output.
     // Cache creation tokens ya est?n incluidos en input_tokens seg?n la doc.
@@ -1582,14 +1566,9 @@ begin
 
           else if deltaType = 'citations_delta' then
           begin
-            var
-            jCitation := jDelta.GetValue<TJSONObject>('citation');
-            if Assigned(jCitation) then
-            begin
-              // Acumulamos el JSON en el buffer del bloque.
-              // TClaudeStreamContentBlock debe tener: CitationsBuffer: TJSonArray;
+            var jCitation: TJSONObject;
+            if jDelta.TryGetValue<TJSONObject>('citation', jCitation) then
               streamBlock.CitationsBuffer.Add(jCitation.Clone as TJSONObject);
-            end;
           end
 
           // Delta de JSON (Argumentos de Tool)
@@ -2012,6 +1991,8 @@ begin
           var
           jCache := TJSONObject.Create;
           jCache.AddPair('type', 'ephemeral');
+          if FCacheTTL <> '' then
+            jCache.AddPair('ttl', FCacheTTL);
           LPartObj.AddPair('cache_control', jCache);
         end;
 
@@ -2061,6 +2042,8 @@ begin
           var
           jCache := TJSONObject.Create;
           jCache.AddPair('type', 'ephemeral');
+          if FCacheTTL <> '' then
+            jCache.AddPair('ttl', FCacheTTL);
           LPartObj.AddPair('cache_control', jCache);
         end;
 
@@ -2128,6 +2111,19 @@ begin
             LSourceObj.AddPair('type', 'file');
             LSourceObj.AddPair('file_id', LMediaFile.IdFile);
           end
+          else if not LMediaFile.UrlMedia.IsEmpty then
+          begin
+            // URL directa — Claude descarga el documento sin necesidad de subida previa
+            LSourceObj.AddPair('type', 'url');
+            LSourceObj.AddPair('url', LMediaFile.UrlMedia);
+          end
+          else if LMediaFile.FileCategory = Tfc_Text then
+          begin
+            // Texto plano — enviar decodificado, no como base64
+            var LBytes := TNetEncoding.Base64.DecodeStringToBytes(LMediaFile.Base64);
+            LSourceObj.AddPair('type', 'text');
+            LSourceObj.AddPair('data', TEncoding.UTF8.GetString(LBytes));
+          end
           else
           begin
             LSourceObj.AddPair('type', 'base64');
@@ -2161,6 +2157,8 @@ begin
           var
           jCache := TJSONObject.Create;
           jCache.AddPair('type', 'ephemeral');
+          if FCacheTTL <> '' then
+            jCache.AddPair('ttl', FCacheTTL);
           LPartObj.AddPair('cache_control', jCache);
         end;
 

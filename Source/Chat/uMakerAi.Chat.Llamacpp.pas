@@ -175,7 +175,10 @@ begin
   inherited;
   FNGPULayers  := 99;
   FNCtx        := 4096;
-  FDLLPath     := {$IFDEF MSWINDOWS}'makerai.gen.dll'{$ELSE}'makerai.gen.so'{$ENDIF};
+  FDLLPath     :=
+    {$IFDEF MSWINDOWS}'makerai.gen.dll'
+    {$ELSEIF DEFINED(ANDROID) or DEFINED(ANDROID64)}'libmakerai_gen.so'
+    {$ELSE}'makerai.gen.so'{$ENDIF};
   FSamplerMode := smTempTopP;
   FParam1      := 0;
   FParam2      := 0;
@@ -437,7 +440,10 @@ begin
   Params.Values['ModelPath']    := '';
   Params.Values['NGPULayers']   := '99';
   Params.Values['NCtx']         := '4096';
-  Params.Values['DLLPath']      := 'makerai.gen.dll';
+  Params.Values['DLLPath']      :=
+    {$IFDEF MSWINDOWS}'makerai.gen.dll'
+    {$ELSEIF DEFINED(ANDROID) or DEFINED(ANDROID64)}'libmakerai_gen.so'
+    {$ELSE}'makerai.gen.so'{$ENDIF};
   Params.Values['Temperature']  := '0.8';
   Params.Values['Top_p']        := '0.95';
   Params.Values['Max_tokens']   := '512';

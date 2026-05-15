@@ -6,7 +6,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/gustavoeenriquez/MakerAi)](https://github.com/gustavoeenriquez/MakerAi/issues)
 [![License](https://img.shields.io/github/license/gustavoeenriquez/MakerAi)](LICENSE.txt)
 [![Telegram](https://img.shields.io/badge/Join-Telegram%20Chat-blue.svg)](https://t.me/+7LaihFwqgsk1ZjQx)
-[![Delphi Supported Versions](https://img.shields.io/badge/Delphi%20Support-11%20Alexandria%20to%2013%20Florence-blue.svg)](https://www.embarcadero.com/products/delphi)
+[![Delphi Supported Versions](https://img.shields.io/badge/Delphi%20Support-10.4%20Sydney%20to%2013%20Florence-blue.svg)](https://www.embarcadero.com/products/delphi)
 [![Free Pascal](https://img.shields.io/badge/Free%20Pascal-3.2%2B-orange.svg)](https://github.com/gustavoeenriquez/MakerAi/tree/fpc)
 
 > **Free Pascal / Lazarus port available** — Full port of MakerAI Suite for FPC 3.2+ (12 LLM drivers, RAG, Agents, MCP, Embeddings). See the [`fpc` branch](https://github.com/gustavoeenriquez/MakerAi/tree/fpc).
@@ -133,7 +133,7 @@ Full, provider-specific access to every API feature. Use when you need complete 
 
 | Component | Provider | Latest Models |
 |-----------|----------|---------------|
-| `TAiOpenChat` | OpenAI | gpt-5.2, o3, o3-mini |
+| `TAiOpenChat` | OpenAI | gpt-5.5, gpt-5.5-pro, gpt-image-2, o3, o4-mini |
 | `TAiClaudeChat` | Anthropic | claude-opus-4-6, claude-sonnet-4-6 |
 | `TAiGeminiChat` | Google | gemini-3.0, gemini-2.5-flash |
 | `TAiGrokChat` | xAI | grok-4, grok-3 |
@@ -209,8 +209,8 @@ Two complementary retrieval engines with their own query languages:
 
 **Graph RAG** — knowledge graph with semantic search over entities and relationships:
 - Nodes and edges with embeddings and metadata
-- **GQL** (Graph Query Language) — Cypher-like DSL:
-  ```cypher
+- **MakerGQL** — Graph Query Language based on ISO/IEC 39075:2024 (GQL standard):
+  ```gql
   MATCH (p:Person)-[r:WORKS_AT]->(c:Company)
   WHERE c.city = 'Madrid' DEPTH 2
   RETURN p, r, c
@@ -292,7 +292,28 @@ Full Delphi IDE support via the `MakerAiDsg.dpk` design-time package:
 git clone https://github.com/gustavoeenriquez/MakerAi.git
 ```
 
-### Package Compilation Order
+### Step 1 — Add Library Paths
+
+**Before compiling any package**, add all of these to **Tools > Options > Language > Delphi > Library**:
+
+```
+Source/Agents
+Source/Chat
+Source/ChatUI
+Source/Core
+Source/Design
+Source/Embeddings
+Source/MCPClient
+Source/MCPServer
+Source/Packages
+Source/RAG
+Source/Realtime
+Source/Resources
+Source/Tools
+Source/Utils
+```
+
+### Step 2 — Compile and Install Packages
 
 Compile and install in this exact order:
 
@@ -302,25 +323,6 @@ Compile and install in this exact order:
 4. `Source/Packages/MakerAiDsg.dpk` — Design-time editors (requires VCL + DesignIDE)
 
 Open `Source/Packages/MakerAiGrp.groupproj` to compile all packages at once.
-
-### Required Library Paths
-
-Add all of these to **Tools > Options > Language > Delphi > Library**:
-
-```
-Source/Agents
-Source/Chat
-Source/ChatUI
-Source/Core
-Source/Design
-Source/MCPClient
-Source/MCPServer
-Source/Packages
-Source/RAG
-Source/Resources
-Source/Tools
-Source/Utils
-```
 
 ### API Keys
 
@@ -337,10 +339,10 @@ AiConn.ApiKey := 'sk-...';             // or set a literal key directly
 
 | Delphi Version | Support |
 |----------------|---------|
-| 10.4 Sydney | Minimum (core framework) |
-| 11 Alexandria | Full support |
-| 12 Athens | Full support |
-| 13 Florence | Full support (latest tested) |
+| 10.4 Sydney | Limited (minimum supported) |
+| 11 Alexandria | **Full support** |
+| 12 Athens | **Full support** |
+| 13 Florence | **Full support** (latest tested) |
 
 ---
 
@@ -397,7 +399,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 - Major architecture redesign
 - Visual FMX chat components
 - Graph-based vector database
-- Full Delphi 10.4–13 compatibility
+- Delphi 10.4–13 compatible (limited: 10.4 Sydney; full support: 11 Alexandria+)
 
 ### v2.5 (August 2025)
 - MCP Client/Server (Model Context Protocol)

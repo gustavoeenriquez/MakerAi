@@ -76,12 +76,14 @@ contains
   uMakerAi.Agents.IAiTool in '..\Agents\uMakerAi.Agents.IAiTool.pas',
   uMakerAi.Agents.Tools.MCP in '..\Agents\uMakerAi.Agents.Tools.MCP.pas',
   uMakerAi.Agents.ToolRegistry in '..\Agents\uMakerAi.Agents.ToolRegistry.pas',
+  uMakerAi.Agents.Skill in '..\Agents\uMakerAi.Agents.Skill.pas',
   uMakerAi.Agents.Node.LLM in '..\Agents\uMakerAi.Agents.Node.LLM.pas',
   UMakerAi.ParamsRegistry in '..\Design\UMakerAi.ParamsRegistry.pas',
   uMakerAi.Chat.Kimi in '..\Chat\uMakerAi.Chat.Kimi.pas',
   uMakerAi.Chat.LMStudio in '..\Chat\uMakerAi.Chat.LMStudio.pas',
   uMakerAi.Utils.DiffUpdater in '..\Utils\uMakerAi.Utils.DiffUpdater.pas',
   uMakerAi.Chat.GenericLLM in '..\Chat\uMakerAi.Chat.GenericLLM.pas',
+  uMakerAi.Chat.MakerAi in '..\Chat\uMakerAi.Chat.MakerAi.pas',
   UMakerAi.MCPServer.SSE in '..\MCPServer\UMakerAi.MCPServer.SSE.pas',
   uMakerAi.Chat.Tools in '..\Core\uMakerAi.Chat.Tools.pas',
   uMakerAi.Chat.Sanitizer in '..\Core\uMakerAi.Chat.Sanitizer.pas',
@@ -101,7 +103,6 @@ contains
   uMakerAi.Embeddings.Cohere in '..\Embeddings\uMakerAi.Embeddings.Cohere.pas',
   uMakerAi.Embeddings.LMStudio in '..\Embeddings\uMakerAi.Embeddings.LMStudio.pas',
   uMakerAi.Embeddings.Generic in '..\Embeddings\uMakerAi.Embeddings.Generic.pas',
-  uMakerAi.OpenAI.Sora in '..\Tools\uMakerAi.OpenAI.Sora.pas',
   uMakerAi.Gemini.Video in '..\Tools\uMakerAi.Gemini.Video.pas',
   uMakerAi.Gemini.Veo in '..\Tools\uMakerAi.Gemini.Veo.pas',
   uMakerAi.OpenAi.Dalle in '..\Tools\uMakerAi.OpenAi.Dalle.pas',
@@ -115,9 +116,15 @@ contains
   uMakerAi.Tools.ComputerUse in '..\Tools\uMakerAi.Tools.ComputerUse.pas',
   uMakerAi.Ollama.Ocr in '..\Tools\uMakerAi.Ollama.Ocr.pas',
   uMakerAi.Ollama.Vision in '..\Tools\uMakerAi.Ollama.Vision.pas',
-  uMakerAi.Gemini.Speech in '..\Tools\uMakerAi.Gemini.Speech.pas';
+  uMakerAi.Gemini.Speech in '..\Tools\uMakerAi.Gemini.Speech.pas',
+  uMakerAi.Realtime.WebSocket in '..\Realtime\uMakerAi.Realtime.WebSocket.pas',
+  uMakerAi.Realtime in '..\Realtime\uMakerAi.Realtime.pas',
+  uMakerAi.Realtime.OpenAI in '..\Realtime\uMakerAi.Realtime.OpenAI.pas',
+  uMakerAi.Realtime.Gemini in '..\Realtime\uMakerAi.Realtime.Gemini.pas',
+  uMakerAi.Realtime.AiConnection in '..\Realtime\uMakerAi.Realtime.AiConnection.pas';
 
 end.
+
 
 
 

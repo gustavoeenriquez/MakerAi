@@ -3102,7 +3102,7 @@ begin
       SB.AppendLine('### RELATIONSHIPS (FACTS) ###');
       for Edge in RelevantEdges.Values do
       begin
-        // Formato Cypher-like simplificado para el LLM: (A)-[REL]->(B)
+        // Formato GQL (ISO/IEC 39075) simplificado para el LLM: (A)-[REL]->(B)
         SB.AppendFormat('(%s)-[%s]->(%s)', [Edge.FromNode.Name, Edge.EdgeLabel.ToUpper, Edge.ToNode.Name]);
 
         // Incluir detalles de la relaci�n (ej: since: 2020, weight: 0.9)

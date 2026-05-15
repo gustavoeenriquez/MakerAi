@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MakerAI is an AI orchestration framework for Delphi developers (v3.3). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers, autonomous agents, and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (full support: 11 Alexandria+).
+MakerAI is an AI orchestration framework for Delphi developers (v3.4). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers, autonomous agents, and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+
+**v3.4 highlights:** registro selectivo de drivers restaurado — `TAiChatConnection` ya no fuerza la carga de todos los providers. Cada driver se auto-registra solo cuando se importa explícitamente. Para cargar todos los drivers de una vez, agregar `uMakerAi.Chat.Initializations` al `uses`.
 
 **v3.3 highlights:** nuevo sistema de orquestación `TAiCapabilities` (`ModelCaps`/`SessionCaps`) que unifica y simplifica la configuración de capacidades por modelo; soporte de modelos actualizado para todos los providers (Feb 2026).
 
@@ -34,10 +36,12 @@ Add these folders to Delphi Library Path (Tools > Options > Language > Delphi > 
 - `Source/ChatUI`
 - `Source/Core`
 - `Source/Design`
+- `Source/Embeddings`
 - `Source/MCPClient`
 - `Source/MCPServer`
 - `Source/Packages`
 - `Source/RAG`
+- `Source/Realtime`
 - `Source/Resources`
 - `Source/Tools`
 - `Source/Utils`
@@ -69,6 +73,7 @@ curl -X POST http://localhost:8080/mcp \
 - **Mistral OCR annotations**: Feature stub present but unimplemented
 - **Claude Citations (RAG nativo)**: Implementación parcial disponible; soporte completo pendiente
 - **Gemini Speech cost estimation**: Token/cost tracking not yet implemented
+- **Gemini Realtime STT**: `uMakerAi.Realtime.Gemini.pas` — stub implementado, conexión y envío de audio pendientes
 
 ## Architecture
 
@@ -137,6 +142,13 @@ curl -X POST http://localhost:8080/mcp \
 - Agent tools: `TAiShell`, `TAiTextEditorTool`, `TAiComputerUseTool`
 - Tool interfaces: `IAiPdfTool`, `IAiVisionTool`, `IAiSpeechTool`, `IAiWebSearchTool`
 
+**Realtime (`Source/Realtime/`)**: Real-time audio streaming (STT via WebSocket)
+- `uMakerAi.Realtime.pas` - Abstract base `TAiRealtimeBase` + `TAiRealtimeFactory`; resampler PCM16, VAD modes, thread-safe events
+- `uMakerAi.Realtime.AiConnection.pas` - `TAiRealtimeConnection` universal connector (same pattern as `TAiChatConnection`)
+- `uMakerAi.Realtime.OpenAI.pas` - `TAiOpenAiRealtimeSTT` — WebSocket to `wss://api.openai.com/v1/realtime`, 24 kHz PCM16; full implementation
+- `uMakerAi.Realtime.Gemini.pas` - `TAiGeminiRealtimeSTT` — 16 kHz PCM16; **stub, pendiente implementación**
+- `uMakerAi.Realtime.WebSocket.pas` - `TAiRealtimeWSClient` — cliente WebSocket nativo vía WinHTTP/Schannel (sin dependencia de Indy/OpenSSL)
+
 **ChatUI (`Source/ChatUI/`)**: FMX visual components
 - `TChatList` - Chat container with markdown rendering
 - `TChatInput` - Text/voice/attachment input bar
@@ -180,6 +192,8 @@ Agents use a directed graph with nodes (`TAIAgentsNode`) and links (`TAIAgentsLi
 | RAG graph operations | `Source/RAG/uMakerAi.RAG.Graph.Core.pas` |
 | Agent orchestration | `Source/Agents/uMakerAi.Agents.pas` |
 | MCP server creation | `Source/MCPServer/uMakerAi.MCPServer.Core.pas` |
+| Add Realtime STT provider | `Source/Realtime/uMakerAi.Realtime.pas` (inherit `TAiRealtimeBase`) |
+| Realtime universal connector | `Source/Realtime/uMakerAi.Realtime.AiConnection.pas` |
 | Version/feature flags | `Source/Core/uMakerAi.Version.inc` |
 
 ## Naming Conventions
@@ -195,17 +209,20 @@ Agents use a directed graph with nodes (`TAIAgentsNode`) and links (`TAIAgentsLi
 
 | CompilerVersion | Delphi Version | Support Level |
 |-----------------|----------------|---------------|
-| 34.0 | Delphi 10.4 Sydney | Minimum supported |
-| 35.0 | Delphi 11 Alexandria | **Full support** (primary split point) |
-| 36.0 | Delphi 12 Athens | Full support |
-| 37.0 | Delphi 13 Florence | Latest tested |
+| 34.0 | Delphi 10.4 Sydney | Limited (minimum supported) |
+| 35.0 | Delphi 11 Alexandria | **Full support** |
+| 36.0 | Delphi 12 Athens | **Full support** (primary conditional split) |
+| 37.0 | Delphi 13 Florence | Full support (latest tested) |
 
-### Key Conditional Split: CompilerVersion 35
+### Key Conditional Split: CompilerVersion 36
 
-The codebase has 79 conditional compilation directives. The primary split is at CompilerVersion 35 (Delphi 11):
+The codebase has 79 conditional compilation directives. The primary split is at CompilerVersion 36 (Delphi 12):
 
 - **< 35**: Uses `uJSONHelper.pas` for missing TJSONObject helper methods
 - **>= 35**: Uses native `System.JSON` helpers, `TRESTClient.SynchronizeEvents := False`
+- **< 35**: `TMultipartFormData.AddStream` without `AShareOwnership` parameter (Delphi 10.4 only)
+- **>= 35**: `TMultipartFormData.AddStream` with `AShareOwnership: Boolean` parameter (Delphi 11+)
+- **>= 36**: `TThread.ForceQueue` available (Delphi 12+); use `TThread.Queue` as fallback for D11
 
 ```pascal
 {$IF CompilerVersion >= 34}  // Delphi 10.4 Sydney+
@@ -400,6 +417,7 @@ Detailed documentation is available in `Docs/Version 3/`:
 | [Source/MCPClient/](Source/MCPClient/CLAUDE.md) | MCP client connector |
 | [Source/Tools/](Source/Tools/CLAUDE.md) | Function calling, Shell, ComputerUse |
 | [Source/ChatUI/](Source/ChatUI/CLAUDE.md) | FMX visual components |
+| [Source/Realtime/](Source/Realtime/CLAUDE.md) | Real-time STT drivers (OpenAI WebSocket, Gemini stub) |
 | [Source/Utils/](Source/Utils/CLAUDE.md) | Voice monitor, diff updater |
 | [Source/Design/](Source/Design/CLAUDE.md) | Design-time property editors |
 | [Source/Resources/](Source/Resources/CLAUDE.md) | Embedded resources |

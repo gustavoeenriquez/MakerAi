@@ -109,6 +109,7 @@ Type
     FThinking_tokens: Integer;
     FFinishReason: String;
     FCached_tokens: Integer;
+    FCacheWrite_tokens: Integer;
     [JSONMarshalled(False)]
     FLock: TCriticalSection;
     procedure SetContent(const Value: String);
@@ -132,6 +133,7 @@ Type
     procedure SetThinking_tokens(const Value: Integer);
     procedure SetFinishReason(const Value: String);
     procedure SetCached_tokens(const Value: Integer);
+    procedure SetCache_write_tokens(const Value: Integer);
   Protected
     FRole: String;
     FContent: String;
@@ -170,6 +172,7 @@ Type
     Property Total_tokens: Integer read FTotal_tokens Write SetTotal_tokens;
     Property Thinking_tokens: Integer read FThinking_tokens write SetThinking_tokens;
     Property Cached_tokens: Integer read FCached_tokens write SetCached_tokens;
+    Property Cache_write_tokens: Integer read FCacheWrite_tokens write SetCache_write_tokens;
 
     Property Model: String read FModel write SetModel;
     Property ToolCallId: String read FToolCallId write SetToolCallId;
@@ -402,7 +405,16 @@ begin
     FCached_tokens := Value;
   Finally
     FLock.Leave;
+  End;
+end;
 
+procedure TAiChatMessage.SetCache_write_tokens(const Value: Integer);
+begin
+  FLock.Enter;
+  Try
+    FCacheWrite_tokens := Value;
+  Finally
+    FLock.Leave;
   End;
 end;
 

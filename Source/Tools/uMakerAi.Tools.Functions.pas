@@ -195,6 +195,7 @@ type
   private
     FEnabled: Boolean;
     FMCPClient: TMCPClientCustom;
+    FOwned: Boolean;   // False = client is externally managed; destructor will not free it
     FConnected: Boolean;
     FParams: TStrings;
     FEnvVars: TStrings;
@@ -265,6 +266,7 @@ type
   private
     FActive: Boolean;
     FRegistryUrl: String;
+    FWorkingDir: String;
     FAllowed: TStringList;
     FBlocked: TStringList;
     FConfigFile: String;
@@ -289,6 +291,9 @@ type
     property Allowed: TStrings read GetAllowed write SetAllowed;
     // Blocked: blacklist de paquetes bloqueados. Si Allowed está vacío, se permite todo excepto estos.
     property Blocked: TStrings read GetBlocked write SetBlocked;
+    // WorkingDir: directorio base donde se instalan los paquetes PPM.
+    // Vacío = ~/.ppm/mcp/<nombre_paquete>/ (valor por defecto del sistema).
+    property WorkingDir: String read FWorkingDir write FWorkingDir;
     // ConfigFile: ruta al archivo JSON con servidores MCP (formato Claude Desktop).
     // Vacío = detecta automáticamente la ruta por defecto de Claude Desktop según el SO.
     property ConfigFile: String read FConfigFile write FConfigFile;
@@ -346,6 +351,8 @@ type
 
     // IMPORTANTE: el par�metro aMCPClient debe ser creado con owner = Nil  aMCPClient:= TMCPClientCustom(NIL);
     procedure AddMCPClient(aMCPClient: TMCPClientCustom);
+    // Like AddMCPClient but does NOT take ownership — client is managed by an external pool.
+    procedure AddBorrowedMCPClient(aMCPClient: TMCPClientCustom);
 
     // Sobrecarga 1: Recibe el objeto JSON ya parseado (ideal si el JSON viene de una API o stream)
     function ImportClaudeMCPConfiguration(AConfig: TJSonObject): Integer; overload;
@@ -1299,6 +1306,36 @@ begin
   NewItem.Connected := False;
 
   DoLog(Format('Cliente MCP "%s" a�adido y sincronizado.', [aMCPClient.Name]));
+end;
+
+procedure TAiFunctions.AddBorrowedMCPClient(aMCPClient: TMCPClientCustom);
+var
+  NewItem: TMCPClientItem;
+begin
+  if not Assigned(aMCPClient) then
+    raise Exception.Create('Se intent� a�adir un objeto TMCPClient nulo.');
+  if aMCPClient.Name.Trim.IsEmpty then
+    raise Exception.Create('El TMCPClient debe tener Name asignado.');
+  if Assigned(FMCPClients.GetClientByName(aMCPClient.Name)) then
+    raise Exception.CreateFmt('Ya existe un cliente MCP con el nombre "%s".', [aMCPClient.Name]);
+
+  // Do NOT overwrite the client's existing event handlers — the pooled client
+  // already has its log bridge wired from initialization.
+
+  NewItem := FMCPClients.Add;
+  if Assigned(NewItem.FMCPClient) then
+    FreeAndNil(NewItem.FMCPClient);
+  NewItem.FMCPClient := aMCPClient;
+  NewItem.FOwned     := False;   // pool owns the client; this item is just a reference
+
+  NewItem.FParams.Assign(aMCPClient.Params);
+  NewItem.FEnvVars.Assign(aMCPClient.EnvVars);
+  NewItem.Name          := aMCPClient.Name;
+  NewItem.Enabled       := aMCPClient.Enabled;
+  NewItem.TransportType := aMCPClient.TransportType;
+  NewItem.Connected     := False;
+
+  DoLog(Format('Cliente MCP "%s" a�adido (borrowed, no ownership).', [aMCPClient.Name]));
 end;
 
 constructor TAiFunctions.Create(AOwner: TComponent);
@@ -2579,7 +2616,7 @@ begin
       DoLog('[AutoMCP] "' + LToolName + '" force reinstall — deteniendo proceso previo.');
       LItem.MCPClient.Disconnect;
     end;
-    LItem := InstallMCPFromPPM(LToolName, '', '', FAutoMCPConfig.RegistryUrl);
+    LItem := InstallMCPFromPPM(LToolName, '', FAutoMCPConfig.WorkingDir, FAutoMCPConfig.RegistryUrl);
   end;
 
   if not Assigned(LItem) then
@@ -2986,6 +3023,7 @@ begin
     Src := TAutoMCPConfig(Source);
     FActive      := Src.FActive;
     FRegistryUrl := Src.FRegistryUrl;
+    FWorkingDir  := Src.FWorkingDir;
     FAllowed.Assign(Src.FAllowed);
     FBlocked.Assign(Src.FBlocked);
     FConfigFile  := Src.FConfigFile;
@@ -3309,6 +3347,7 @@ constructor TMCPClientItem.Create(Collection: TCollection);
 begin
   inherited Create(Collection);
   FEnabled := True;
+  FOwned := True;
   FConnected := False;
   FParams := TStringList.Create;
   FEnvVars := TStringList.Create;
@@ -3335,10 +3374,9 @@ end;
 
 destructor TMCPClientItem.Destroy;
 begin
-  FParams.Free;;
+  FParams.Free;
   FEnvVars.Free;
-
-  If Assigned(FMCPClient) then
+  if FOwned and Assigned(FMCPClient) then
     FreeAndNil(FMCPClient);
   inherited;
 end;

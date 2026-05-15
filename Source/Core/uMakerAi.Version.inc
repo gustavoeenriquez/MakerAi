@@ -2,16 +2,16 @@
 // Version Information
 const
   MAKERAI_VERSION_MAJOR    = 3;
-  MAKERAI_VERSION_MINOR    = 3;
+  MAKERAI_VERSION_MINOR    = 4;
   MAKERAI_VERSION_RELEASE  = 0;
   MAKERAI_VERSION_BUILD    = 0;
 
 // Version String Formats
 const
-  MAKERAI_VERSION_SHORT    = '3.3';
-  MAKERAI_VERSION_FULL     = '3.3.0.0';
-  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.3.0.0';
-  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.3 - TAiCapabilities, Agents Checkpoints & Updated Models (Feb 2026)';
+  MAKERAI_VERSION_SHORT    = '3.4';
+  MAKERAI_VERSION_FULL     = '3.4.0.0';
+  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.4.0.0';
+  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.4 - Selective Driver Registration (Apr 2026)';
 
 // Product Information
 const
@@ -22,7 +22,7 @@ const
 
 // Build Information
 const
-  MAKERAI_BUILD_DATE       = '2026-02-26';
+  MAKERAI_BUILD_DATE       = '2026-04-26';
   MAKERAI_BUILD_TIME       = '12:00:00';
   MAKERAI_BUILD_PLATFORM   = {$IFDEF WIN32}'Win32'{$ENDIF}
                             {$IFDEF WIN64}'Win64'{$ENDIF}
@@ -38,7 +38,7 @@ const
 
 // API Compatibility
 const
-  MAKERAI_API_LEVEL        = 33;        // Internal API level for compatibility
+  MAKERAI_API_LEVEL        = 34;        // Internal API level for compatibility
   MAKERAI_BREAKING_CHANGE  = False;     // True if this version has breaking changes
   MAKERAI_LEGACY_SUPPORT   = True;      // True = Support for v2.x components
 
@@ -118,6 +118,22 @@ const
   - FIX: ExtractToolCallFromJson - default type 'function' when field missing (Mistral)
   - FIX: Double-add/double-free in RunNew+RunLegacy (Cohere tool calls)
   - FIX: Mistral json_schema.name field required by API
+
+  Version 3.4.0 (2026-04-26)
+  - FIX: Selective driver registration restored — TAiChatConnection no longer force-loads
+         all drivers via uMakerAi.Chat.Initializations. Each driver self-registers only
+         when explicitly imported. To load all drivers at once, add
+         uMakerAi.Chat.Initializations to your uses clause explicitly.
+  - FIX: Agent jmAll join node — FJoinInputs now cleared after each execution, restoring
+         correct barrier semantics. Previous behavior (not clearing) caused premature
+         firing on retries/loops because stale inputs from prior execution satisfied
+         the Count >= InEdges.Count condition immediately.
+  - FIX: TAiAgentManager.Run declared virtual to allow proper subclassing
+  - FIX: TChatBubble — TMemo ShowScrollBars := False eliminates spurious vertical bars
+  - FIX: TChatInput — StyledSettings removes Size so Font.Size property is respected
+  - NEW: TChatInput.EnterAsSend property (default False) — Enter sends prompt,
+         Shift+Enter / Ctrl+Enter inserts line break
+  - NEW: Demo 08-DriverRegistration illustrating driver registration behavior
 
 }
 {******************************************************************************}

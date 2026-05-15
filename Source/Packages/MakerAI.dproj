@@ -61,7 +61,7 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_UnitSearchPath>$(MSBuildProjectDirectory)\..\Agents;$(MSBuildProjectDirectory)\..\Chat;$(MSBuildProjectDirectory)\..\ChatUI;$(MSBuildProjectDirectory)\..\Core;$(MSBuildProjectDirectory)\..\Design;$(MSBuildProjectDirectory)\..\Embeddings;$(MSBuildProjectDirectory)\..\MCPClient;$(MSBuildProjectDirectory)\..\MCPServer;$(MSBuildProjectDirectory)\..\Packages;$(MSBuildProjectDirectory)\..\RAG;$(MSBuildProjectDirectory)\..\Resources;$(MSBuildProjectDirectory)\..\Tools;$(MSBuildProjectDirectory)\..\Utils;$(MSBuildProjectDirectory)\..\LiveChat;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(MSBuildProjectDirectory)\..\Agents;$(MSBuildProjectDirectory)\..\Chat;$(MSBuildProjectDirectory)\..\ChatUI;$(MSBuildProjectDirectory)\..\Core;$(MSBuildProjectDirectory)\..\Design;$(MSBuildProjectDirectory)\..\Embeddings;$(MSBuildProjectDirectory)\..\MCPClient;$(MSBuildProjectDirectory)\..\MCPServer;$(MSBuildProjectDirectory)\..\Packages;$(MSBuildProjectDirectory)\..\RAG;$(MSBuildProjectDirectory)\..\Resources;$(MSBuildProjectDirectory)\..\Tools;$(MSBuildProjectDirectory)\..\Utils;$(MSBuildProjectDirectory)\..\LiveChat;$(MSBuildProjectDirectory)\..\Realtime;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_E>false</DCC_E>
@@ -187,12 +187,14 @@
         <DCCReference Include="..\Agents\uMakerAi.Agents.IAiTool.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.Agents.Tools.MCP.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.Agents.ToolRegistry.pas"/>
+        <DCCReference Include="..\Agents\uMakerAi.Agents.Skill.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.Agents.Node.LLM.pas"/>
         <DCCReference Include="..\Design\UMakerAi.ParamsRegistry.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.Kimi.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.LMStudio.pas"/>
         <DCCReference Include="..\Utils\uMakerAi.Utils.DiffUpdater.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.GenericLLM.pas"/>
+        <DCCReference Include="..\Chat\uMakerAi.Chat.MakerAi.pas"/>
         <DCCReference Include="..\MCPServer\UMakerAi.MCPServer.SSE.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Chat.Tools.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Chat.Sanitizer.pas"/>
@@ -212,7 +214,6 @@
         <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Cohere.pas"/>
         <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.LMStudio.pas"/>
         <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Generic.pas"/>
-        <DCCReference Include="..\Tools\uMakerAi.OpenAI.Sora.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Gemini.Video.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Gemini.Veo.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.OpenAi.Dalle.pas"/>
@@ -227,6 +228,11 @@
         <DCCReference Include="..\Tools\uMakerAi.Ollama.Ocr.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Ollama.Vision.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Gemini.Speech.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.WebSocket.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.OpenAI.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.Gemini.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.AiConnection.pas"/>
         <None Include="..\RAG\RagGraph_Prompt_Example.md"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

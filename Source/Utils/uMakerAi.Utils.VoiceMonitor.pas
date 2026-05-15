@@ -91,6 +91,7 @@ uses
   System.SysUtils, System.Types, System.Classes, System.Variants,
   System.IOUtils, System.SyncObjs, System.Math, System.Permissions,
   System.Threading, System.Diagnostics,
+  uMakerAi.Realtime,
 
 {$IFDEF MSWINDOWS}
   Winapi.Windows, Winapi.MMSystem;
@@ -212,6 +213,7 @@ type
     FPreBufferDurationMs: Integer; // Duraci�n del pre-buffer (ej: 500ms)
     FPreBufferMaxSize: Int64; // Tama�o m�ximo del pre-buffer
 
+    FRealtimeSTT: TAiRealtimeBase; // Destino de audio para Realtime STT (opcional)
     FOnTranscriptionFragment: TTranscriptionFragmentEvent;
     FOnChangeState: TAIVoiceMonitorOnChange;
     FOnCalibrated: TAIVoiceMonitorOnCalibrated;
@@ -234,6 +236,7 @@ type
 {$ENDIF}
     procedure SetActive(const Value: Boolean);
     procedure SetSilenceDuration(const Value: Integer);
+    procedure SetRealtimeSTT(const Value: TAiRealtimeBase);
     procedure DoError(const aMessage: string);
 
     procedure StartCapture;
@@ -309,6 +312,9 @@ type
     property PreBufferDurationMs: Integer read FPreBufferDurationMs write SetPreBufferDurationMs default 500;
     property DeviceID: UINT read FDeviceID write SetDeviceID default WAVE_MAPPER;
     property CurrentDeviceName: string read GetCurrentDeviceName;
+    // Cuando asignado, cada buffer PCM capturado se reenvía al componente Realtime STT.
+    // El componente Realtime gestiona su propio VAD (server_vad) y transcripción en streaming.
+    property RealtimeSTT: TAiRealtimeBase read FRealtimeSTT write SetRealtimeSTT;
   end;
 
 {$IFDEF MSWINDOWS}
@@ -593,6 +599,14 @@ begin
   UpdatePreBufferSize;
 end;
 
+procedure TAIVoiceMonitor.SetRealtimeSTT(const Value: TAiRealtimeBase);
+begin
+  FRealtimeSTT := Value;
+  // Sincronizar el sample rate para que el resampler interno sepa el formato de entrada
+  if Assigned(FRealtimeSTT) then
+    FRealtimeSTT.InputSampleRate := FSampleRate;
+end;
+
 procedure TAIVoiceMonitor.SetSampleRate(const Value: Integer);
 const
   // Tasas de muestreo est�ndar soportadas
@@ -734,6 +748,12 @@ begin
 
   if NumSamples = 0 then
     Exit;
+
+  // Reenviar audio crudo al componente Realtime STT si esta conectado.
+  // Se envia antes de cualquier procesamiento: el VAD del servidor se encarga
+  // de detectar habla/silencio en el lado del proveedor.
+  if Assigned(FRealtimeSTT) and FRealtimeSTT.IsConnected then
+    FRealtimeSTT.SendAudioChunk(Copy(aBuffer, 0, aSize));
 
   // Calcular el nivel de audio actual
   for I := 0 to NumSamples - 1 do

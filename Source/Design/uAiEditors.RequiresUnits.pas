@@ -87,7 +87,6 @@ uses
   uMakerAi.Tools.ComputerUse,
   uMakerAi.Whisper,
   uMakerAi.OpenAi.Dalle,
-  uMakerAi.OpenAI.Sora,
   uMakerAi.OpenAI.Audio,
   uMakerAi.Gemini.Video,
   uMakerAi.Gemini.Speech,
@@ -363,7 +362,6 @@ begin
   RegisterSelectionEditor(TAiComputerUseTool, TAiToolSelEditor);
   RegisterSelectionEditor(TAIWhisper, TAiToolSelEditor);
   RegisterSelectionEditor(TAiDalle, TAiToolSelEditor);
-  RegisterSelectionEditor(TAiSoraGenerator, TAiToolSelEditor);
   RegisterSelectionEditor(TAiOpenAiAudio, TAiToolSelEditor);
   RegisterSelectionEditor(TAiGeminiVideoTool, TAiToolSelEditor);
   RegisterSelectionEditor(TAiGeminiSpeechTool, TAiToolSelEditor);

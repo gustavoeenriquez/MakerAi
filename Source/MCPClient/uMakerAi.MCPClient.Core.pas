@@ -40,6 +40,7 @@ uses
   System.IOUtils, System.Net.URLClient, System.NetEncoding,
   System.Net.HttpClient, System.Net.Mime, System.Net.HttpClientComponent,
   System.Threading, System.Diagnostics, System.Types, System.SyncObjs,
+  IdTCPClient,
 
 {$IFDEF MSWINDOWS}
   Winapi.Windows,
@@ -253,22 +254,15 @@ type
 
   TMCPClientSSE = class(TMCPClientCustom)
   private
-    FHttpClient: TNetHTTPClient;
+    FSSEThread: TThread;         // Raw TCP SSE reader thread (replaces TNetHTTPClient async GET)
     FIncomingMessages: TThreadedQueue<TJSONObject>;
     FPostEndpoint: string;
     FRequestIDCounter: Integer;
     FIsConnected: Boolean;
-    FStopRequested: Boolean; // Nueva bandera para solicitar parada
+    FStopRequested: Boolean;
+    FAsyncOpDone: Boolean;       // Set when the SSE thread exits; destructor waits on this
 
     FBuffer: string;
-
-    // Eventos del componente TNetHTTPClient
-{$IF CompilerVersion >= 36}  // D12+ - OnReceiveDataEx no disponible en D11 y anteriores
-    procedure DoReceiveDataEx(const Sender: TObject; AContentLength, AReadCount: Int64; AChunk: Pointer; AChunkLength: Cardinal; var ABort: Boolean);
-{$IFEND}
-    procedure DoRequestCompleted(const Sender: TObject; const AResponse: IHTTPResponse);
-    procedure DoRequestError(const Sender: TObject; const AError: string); // Adaptado para simplificar Exception/Error
-    procedure DoRequestException(const Sender: TObject; const AException: Exception);
 
     // M?todos internos de procesamiento
     procedure ProcessBuffer;
@@ -2243,40 +2237,26 @@ end;
 constructor TMCPClientSSE.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  FHttpClient := TNetHTTPClient.Create(Self);
-
-  // Configuraci?n As?ncrona
-  FHttpClient.Asynchronous := True;
-  FHttpClient.SynchronizeEvents := False;
-
-  // --- ASIGNACI?N DE EVENTOS (Estilo Cl?sico) ---
-{$IF CompilerVersion >= 36}  // D12+ - OnReceiveDataEx no disponible en D11 y anteriores
-  FHttpClient.OnReceiveDataEx := DoReceiveDataEx;
-{$IFEND}
-  FHttpClient.OnRequestCompleted := DoRequestCompleted;
-
-  // Aqu? asignamos directamente el m?todo de la clase.
-  // Ya no usamos "procedure ... begin end" (an?nimo).
-  FHttpClient.OnRequestError := DoRequestError;
-  FHttpClient.OnRequestException := DoRequestException;
-
-  // Timeouts
-  FHttpClient.ConnectionTimeout := 30000;
-  FHttpClient.ResponseTimeout := 30000;
-
+  FSSEThread := nil;
   FIncomingMessages := TThreadedQueue<TJSONObject>.Create(1000, INFINITE, 100);
   FRequestIDCounter := 0;
   FIsConnected := False;
+  FAsyncOpDone := True; // no async op in progress yet
 end;
 
 destructor TMCPClientSSE.Destroy;
 var
   LJson: TJSONObject;
+  Sw: TStopwatch;
 begin
-  StopEventStream;
+  StopEventStream; // sets FStopRequested=True → next DoReceiveDataEx sets ABort=True → DoRequestCompleted fires
 
-  // Dar un momento para que el abort surta efecto
-  Sleep(100);
+  // Wait for the async GET thread to finish (it signals FAsyncOpDone via completion callbacks).
+  // Cap at 3 s to avoid hanging forever if the SSE server never sends data.
+  Sw := TStopwatch.StartNew;
+  while (not FAsyncOpDone) and (Sw.ElapsedMilliseconds < 3000) do
+    Sleep(50);
+  Sleep(50); // extra buffer: give the callback time to fully return before we free FHttpClient
 
   if Assigned(FIncomingMessages) then
   begin
@@ -2308,24 +2288,91 @@ begin
   FBuffer := '';
   FPostEndpoint := '';
   FStopRequested := False;
+  FAsyncOpDone := False;
 
-  DoLog('SSE: Starting Async GET stream to ' + LURL);
+  DoLog('SSE: Starting raw TCP SSE stream to ' + LURL);
+  FIsConnected := True;
 
-  try
-    FIsConnected := True;
-
-    // En tu versi?n, al ser Asynchronous := True, Get retorna inmediatamente
-    // y el trabajo se hace en segundo plano. No necesitamos BeginGet.
-    FHttpClient.Get(LURL);
-
-  except
-    on E: Exception do
+  // Use a raw Indy TCP connection so we read ALL bytes regardless of
+  // Content-Length (some MCP server binaries incorrectly set Content-Length
+  // to the size of just the SSE handshake, truncating the session_id).
+  FSSEThread := TThread.CreateAnonymousThread(
+    procedure
+    var
+      Uri: TURI;
+      Host, Path, Line, Request: string;
+      Port: Integer;
+      Sock: TIdTCPClient;
     begin
+      try
+        Uri := TURI.Create(LURL);
+        Host := Uri.Host;
+        Port := Uri.Port;
+        if Port <= 0 then
+          Port := 80;
+        Path := Uri.Path;
+        if Path = '' then Path := '/';
+        if Uri.Query <> '' then
+          Path := Path + '?' + Uri.Query;
+
+        Sock := TIdTCPClient.Create(nil);
+        try
+          Sock.Host := Host;
+          Sock.Port := Port;
+          Sock.ConnectTimeout := 10000;
+          Sock.Connect;
+          Sock.IOHandler.ReadTimeout := 500;
+
+          // Send GET — do NOT send Connection: close so the server keeps the
+          // TCP link open after the 81-byte handshake for future SSE events.
+          Request :=
+            'GET ' + Path + ' HTTP/1.1' + #13#10 +
+            'Host: ' + Host + ':' + IntToStr(Port) + #13#10 +
+            'Accept: text/event-stream' + #13#10 +
+            'Cache-Control: no-cache' + #13#10 +
+            'Connection: keep-alive' + #13#10 + #13#10;
+          Sock.IOHandler.Write(Request);
+
+          // Skip HTTP response headers — intentionally ignore Content-Length
+          repeat
+            Line := Sock.IOHandler.ReadLn(#10, 5000);
+            Line := Line.TrimRight([' ', #13]);
+          until (Line = '') or FStopRequested;
+
+          // Stream SSE body lines until stopped or connection lost.
+          // Use CheckForDataOnSource to poll without blocking so FStopRequested
+          // is checked every 100ms — no timeout exceptions needed.
+          Sock.IOHandler.ReadTimeout := 5000;
+          while not FStopRequested do
+          begin
+            try
+              if Sock.IOHandler.CheckForDataOnSource(100) then
+              begin
+                Line := Sock.IOHandler.ReadLn(#10);
+                Line := Line.TrimRight([' ', #13]);
+                ProcessSSELine(Line);
+              end;
+            except
+              on E: Exception do Break;  // connection closed or read error
+            end;
+          end;
+
+          DoLog('SSE: Stream ended (raw TCP)');
+        finally
+          try Sock.Disconnect; except end;
+          Sock.Free;
+        end;
+      except
+        on E: Exception do
+          DoLog('SSE: TCP connection error: ' + E.Message);
+      end;
+
       FIsConnected := False;
-      DoLog('SSE: Failed to start stream: ' + E.Message);
-      raise;
-    end;
-  end;
+      FAsyncOpDone := True;
+    end
+  );
+  FSSEThread.FreeOnTerminate := True;
+  FSSEThread.Start;
 end;
 
 procedure TMCPClientSSE.StopEventStream;
@@ -2334,78 +2381,8 @@ begin
   FIsConnected := False;
 end;
 
-// -----------------------------------------------------------------------------
-// EVENTOS DEL COMPONENTE TNetHTTPClient
-// -----------------------------------------------------------------------------
-
-procedure TMCPClientSSE.DoRequestCompleted(const Sender: TObject; const AResponse: IHTTPResponse);
-begin
-  if FIsConnected then
-  begin
-    FIsConnected := False;
-    DoLog(Format('SSE: Stream connection closed by server (Status: %d)', [AResponse.StatusCode]));
-  end;
-end;
-
-// Adaptador para el evento OnRequestError que en tu versi?n usa (Sender, ErrorString)
-procedure TMCPClientSSE.DoRequestError(const Sender: TObject; const AError: string);
-begin
-  if not FStopRequested then // Solo loguear si no fue una parada intencional
-  begin
-    DoLog('SSE Request Error: ' + AError);
-    FIsConnected := False;
-  end;
-end;
-
-procedure TMCPClientSSE.DoRequestException(const Sender: TObject; const AException: Exception);
-begin
-  if not FStopRequested then
-  begin
-    DoLog('SSE Request Exception: ' + AException.Message);
-    FIsConnected := False;
-  end;
-end;
-
-{$IF CompilerVersion >= 36}  // D12+ - OnReceiveDataEx no disponible en D11 y anteriores
-procedure TMCPClientSSE.DoReceiveDataEx(const Sender: TObject; AContentLength, AReadCount: Int64; AChunk: Pointer; AChunkLength: Cardinal; var ABort: Boolean);
-var
-  LBytes: TBytes;
-  LChunkStr: string;
-begin
-  // 1. Mecanismo de cancelaci?n
-  if FStopRequested then
-  begin
-    ABort := True;
-    FIsConnected := False;
-    Exit;
-  end;
-
-  if (AChunk = nil) or (AChunkLength = 0) then
-    Exit;
-
-  try
-    // 2. Copiar los datos del puntero raw a un array de bytes
-    SetLength(LBytes, AChunkLength);
-    Move(AChunk^, LBytes[0], AChunkLength);
-
-    // 3. Convertir a String y acumular en el buffer
-    // TEncoding.UTF8.GetString es est?ndar en todas las versiones modernas.
-    LChunkStr := TEncoding.UTF8.GetString(LBytes);
-
-    FBuffer := FBuffer + LChunkStr;
-
-    // 4. Procesar l?neas completas
-    ProcessBuffer;
-
-  except
-    on E: Exception do
-    begin
-      // Capturamos error de conversi?n silenciosamente para no romper el stream
-      // DoLog('SSE Stream Parse Error: ' + E.Message);
-    end;
-  end;
-end;
-{$IFEND}
+// (TNetHTTPClient callbacks removed — SSE stream is now read by FSSEThread via
+//  raw Indy TCP, which ignores Content-Length and reads until connection close.)
 
 // -----------------------------------------------------------------------------
 // PROCESAMIENTO DE BUFFER (Id?ntico a la versi?n anterior)
@@ -2515,8 +2492,7 @@ begin
     if FPostEndpoint <> '' then
       Exit(True);
 
-    CheckSynchronize(10); // Espera hasta 10ms si hay eventos, o retorna si no.
-    Sleep(50);
+    Sleep(10); // CheckSynchronize is main-thread-only; on Indy worker threads it blocks forever
   end;
 end;
 
@@ -2525,6 +2501,7 @@ var
   InitParams, InitResult, Notif, ToolsParams, ToolsResult: TJSONObject;
 begin
   Result := False;
+  DoLog(Format('MCP Init START: name=%s url=%s', [Name, GetParamByName('URL')]));
   DoStatusUpdate('Connecting to MCP via SSE...');
 
   StartEventStream;
@@ -2537,6 +2514,8 @@ begin
     Exit;
   end;
 
+  DoLog('SSE: Post endpoint confirmed: ' + FPostEndpoint);
+
   try
     InitParams := TJSONObject.Create;
     InitParams.AddPair('protocolVersion', '2025-06-18');
@@ -2548,15 +2527,18 @@ begin
     ClientInfo.AddPair('version', '1.0');
     InitParams.AddPair('clientInfo', ClientInfo);
 
+    DoLog('SSE: Sending initialize request...');
     InitResult := InternalSendRequest('initialize', InitParams);
 
     if Assigned(InitResult) then
     begin
+      DoLog('SSE: initialize OK, sending initialized notification...');
       InitResult.Free;
 
       Notif := TJSONObject.Create;
       InternalSendRequest('notifications/initialized', Notif);
 
+      DoLog('SSE: Requesting tools/list...');
       ToolsParams := TJSONObject.Create;
       ToolsResult := InternalSendRequest('tools/list', ToolsParams);
 
@@ -2564,10 +2546,13 @@ begin
       begin
         try
           FTools.Text := ToolsResult.ToJSON;
+          DoLog(Format('SSE: tools/list OK, %d tools loaded', [ToolsResult.Count]));
         finally
           ToolsResult.Free;
         end;
-      end;
+      end
+      else
+        DoLog('SSE: tools/list returned nil (timeout or disconnected)');
 
       Initialized := True;
       Available := True;
@@ -2632,6 +2617,7 @@ begin
       try
         LocalClient.ContentType := 'application/json';
         LocalClient.ConnectionTimeout := 10000;
+        LocalClient.ResponseTimeout := 15000;
 
         var
         Token := GetParamByName('ApiBearerToken');
@@ -2688,9 +2674,14 @@ begin
     end;
 
     if not FIsConnected then
+    begin
+      DoLog(Format('SSE: Connection lost while waiting for response id=%d', [AExpectedID]));
       Break;
+    end;
     Sleep(10);
   end;
+  if Result = nil then
+    DoLog(Format('SSE: Timeout/nil for response id=%d (waited %dms)', [AExpectedID, Sw.ElapsedMilliseconds]));
 end;
 
 // ListTools y CallTool son id?nticos a las versiones anteriores que ya ten?as
@@ -2711,13 +2702,20 @@ begin
   if Assigned(AArguments) then
     Params.AddPair('arguments', AArguments);
 
+  if Assigned(AArguments) then
+    DoLog(Format('SSE CallTool: %s args=%s', [AToolName, AArguments.ToJSON]))
+  else
+    DoLog(Format('SSE CallTool: %s (no args)', [AToolName]));
   try
     ResultRaw := InternalSendRequest('tools/call', Params);
     if Assigned(ResultRaw) then
     begin
+      DoLog('SSE CallTool result: ' + ResultRaw.ToJSON);
       Result := ProcessAndExtractMedia(ResultRaw, AExtractedMedia);
       ResultRaw.Free;
-    end;
+    end
+    else
+      DoLog('SSE CallTool: nil result (timeout or disconnected)');
   except
     on E: Exception do
       DoLog('SSE CallTool Error: ' + E.Message);

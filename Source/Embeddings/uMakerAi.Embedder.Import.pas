@@ -33,6 +33,15 @@ uses
 {$ENDIF}
   uMakerAi.ErrorCodes;
 
+{$IFDEF MSWINDOWS}
+// Windows: DLL acepta wchar_t* — Delphi PChar = PWideChar, sin conversión.
+type TNativeStr = PChar;
+{$DEFINE EMB_NATIVE_WCHAR}
+{$ELSE}
+// POSIX/Android: .so espera const char* (UTF-8).
+type TNativeStr = MarshaledAString;
+{$ENDIF}
+
 {$IFNDEF MSWINDOWS}
 // ---------------------------------------------------------------------------
 // POSIX shim — expose the Win32 module-loading API surface on Linux / macOS
@@ -76,18 +85,18 @@ type
     FDimensions: Integer;
 
     FnCreate:           function: Pointer; stdcall;
-    FnLoad:             function(Inst: Pointer; Path: PChar): LongBool; stdcall;
-    FnLoadEx:           function(Inst: Pointer; Path: PChar; NGPULayers: Integer): LongBool; stdcall;
+    FnLoad:             function(Inst: Pointer; Path: TNativeStr): LongBool; stdcall;
+    FnLoadEx:           function(Inst: Pointer; Path: TNativeStr; NGPULayers: Integer): LongBool; stdcall;
     FnGetDims:          function(Inst: Pointer): Integer; stdcall;
-    FnEmbed:            function(Inst: Pointer; Text: PChar; Vec: PSingle; Size: Integer): Integer; stdcall;
-    FnEmbedBatch:       function(Inst: Pointer; Texts: PPChar; Count: Integer;
+    FnEmbed:            function(Inst: Pointer; Text: TNativeStr; Vec: PSingle; Size: Integer): Integer; stdcall;
+    FnEmbedBatch:       function(Inst: Pointer; Texts: Pointer; Count: Integer;
                           OutVecs: PSingle; VecSize: Integer): LongBool; stdcall;
     FnIsGPU:            function(Inst: Pointer): LongBool; stdcall;
-    FnGetCUDAInfo:      function: PChar; stdcall;
+    FnGetCUDAInfo:      function: PAnsiChar; stdcall;  // siempre UTF-8 narrow
     FnFree:             procedure(Inst: Pointer); stdcall;
-    FnGetLastError:     function: PChar; stdcall;
+    FnGetLastError:     function: PAnsiChar; stdcall;  // siempre UTF-8 narrow
     FnGetLastErrorCode: function: Integer; stdcall;
-    FnValidate:         function(Path: PChar): Integer; stdcall;
+    FnValidate:         function(Path: TNativeStr): Integer; stdcall;
 
     procedure BindDLL(const DLLPath: string);
     function  LastError: string;
@@ -96,7 +105,9 @@ type
     procedure CheckHandle;
   public
     constructor Create(const DLLPath: string =
-      {$IFDEF MSWINDOWS}'makerai.embedder.dll'{$ELSE}'makerai.embedder.so'{$ENDIF});
+      {$IFDEF MSWINDOWS}'makerai.embedder.dll'
+      {$ELSEIF DEFINED(ANDROID) or DEFINED(ANDROID64)}'libmakerai_embedder.so'
+      {$ELSE}'makerai.embedder.so'{$ENDIF});
     destructor  Destroy; override;
 
     { Validates the model file before loading. Returns llamaErrNone on success. }
@@ -175,7 +186,7 @@ end;
 
 function TEmbedder.LastError: string;
 begin
-  if Assigned(FnGetLastError) then Result := string(FnGetLastError())
+  if Assigned(FnGetLastError) then Result := UTF8ToString(FnGetLastError())
   else Result := '(unknown)';
 end;
 
@@ -217,14 +228,21 @@ end;
 
 function TEmbedder.ValidateModelFile(const Path: string): TLlamaErrorCode;
 begin
+{$IFDEF EMB_NATIVE_WCHAR}
   Result := TLlamaErrorCode(FnValidate(PChar(Path)));
+{$ELSE}
+  Result := TLlamaErrorCode(FnValidate(MarshaledAString(UTF8String(Path))));
+{$ENDIF}
 end;
 
 procedure TEmbedder.Load(const GGUFPath: string; NGPULayers: Integer = 99);
 begin
   CheckHandle;
-  if not FnLoadEx(FHandle, PChar(GGUFPath), NGPULayers) then
-    RaiseLastError;
+{$IFDEF EMB_NATIVE_WCHAR}
+  if not FnLoadEx(FHandle, PChar(GGUFPath), NGPULayers) then RaiseLastError;
+{$ELSE}
+  if not FnLoadEx(FHandle, MarshaledAString(UTF8String(GGUFPath)), NGPULayers) then RaiseLastError;
+{$ENDIF}
   FDimensions := FnGetDims(FHandle);
   if FDimensions <= 0 then
     RaiseLastError;
@@ -239,7 +257,11 @@ begin
     raise EEmbedderError.Create(llamaErrInvalidArg,
       'Model not loaded. Call Load() first.');
   SetLength(Result, FDimensions);
+{$IFDEF EMB_NATIVE_WCHAR}
   Written := FnEmbed(FHandle, PChar(Text), @Result[0], FDimensions);
+{$ELSE}
+  Written := FnEmbed(FHandle, MarshaledAString(UTF8String(Text)), @Result[0], FDimensions);
+{$ENDIF}
   if Written < 0 then
     RaiseLastError;
   if Written <> FDimensions then
@@ -249,9 +271,15 @@ end;
 function TEmbedder.EmbedBatch(const Texts: TArray<string>): TArray<TArray<Single>>;
 var
   Count:   Integer;
-  Ptrs:    TArray<PChar>;
   FlatBuf: TArray<Single>;
   i:       Integer;
+{$IFDEF EMB_NATIVE_WCHAR}
+  Ptrs: TArray<PChar>;
+{$ELSE}
+  // En POSIX necesitamos UTF8String intermedios para mantener los punteros vivos
+  U8:   TArray<UTF8String>;
+  Ptrs: TArray<MarshaledAString>;
+{$ENDIF}
 begin
   CheckHandle;
   Count := Length(Texts);
@@ -260,13 +288,27 @@ begin
     raise EEmbedderError.Create(llamaErrInvalidArg,
       'Model not loaded. Call Load() first.');
 
+{$IFDEF EMB_NATIVE_WCHAR}
   SetLength(Ptrs, Count);
   for i := 0 to Count - 1 do
     Ptrs[i] := PChar(Texts[i]);
-
   SetLength(FlatBuf, Count * FDimensions);
-  if not FnEmbedBatch(FHandle, PPChar(@Ptrs[0]), Count, @FlatBuf[0], FDimensions) then
+  if not FnEmbedBatch(FHandle, @Ptrs[0], Count, @FlatBuf[0], FDimensions) then
     RaiseLastError;
+{$ELSE}
+  // Convertir todos los strings a UTF-8 antes de construir el array de punteros;
+  // U8 mantiene las cadenas vivas mientras FnEmbedBatch ejecuta.
+  SetLength(U8, Count);
+  SetLength(Ptrs, Count);
+  for i := 0 to Count - 1 do
+  begin
+    U8[i]   := UTF8String(Texts[i]);
+    Ptrs[i] := MarshaledAString(U8[i]);
+  end;
+  SetLength(FlatBuf, Count * FDimensions);
+  if not FnEmbedBatch(FHandle, @Ptrs[0], Count, @FlatBuf[0], FDimensions) then
+    RaiseLastError;
+{$ENDIF}
 
   SetLength(Result, Count);
   for i := 0 to Count - 1 do
@@ -284,7 +326,7 @@ end;
 
 function TEmbedder.GetCUDAInfo: string;
 begin
-  Result := string(FnGetCUDAInfo());
+  Result := UTF8ToString(FnGetCUDAInfo());
 end;
 
 class function TEmbedder.CosineSimilarity(const A, B: TArray<Single>): Single;

@@ -764,6 +764,7 @@ begin
     LMemo.WordWrap := True;
     LMemo.ReadOnly := True;
     LMemo.HitTest := True; // Cambiado para que los clics pasen a la burbuja
+    LMemo.ShowScrollBars := False;
     LMemo.StyledSettings := [];
     LMemo.TextSettings.Font.Assign(FContentFont);
     LMemo.TextSettings.HorzAlign := TTextAlign.Leading;
@@ -869,6 +870,7 @@ begin
     LMemo.WordWrap := True;
     LMemo.ReadOnly := True;
     LMemo.HitTest := True;
+    LMemo.ShowScrollBars := False;
     LMemo.StyledSettings := [];
     LMemo.TextSettings.Font.Assign(FContentFont);
     LMemo.TextSettings.HorzAlign := TTextAlign.Leading;

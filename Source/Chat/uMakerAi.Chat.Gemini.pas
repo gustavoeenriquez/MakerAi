@@ -1341,7 +1341,7 @@ Var
   LCandidates: TJSonArray;
   LContent, LUso: TJSONObject;
   LRespuesta, LRole, sText, LPartSig: String;
-  aPrompt_tokens, aCompletion_tokens, atotal_tokens, aThoughts_tokens: Integer;
+  aPrompt_tokens, aCompletion_tokens, atotal_tokens, aThoughts_tokens, aCached_tokens: Integer;
   AskMsg: TAiChatMessage;
   LFunciones: TAiToolsFunctions;
   ToolCall: TAiToolsFunction;
@@ -1407,6 +1407,7 @@ begin
   aCompletion_tokens := 0;
   atotal_tokens := 0;
   aThoughts_tokens := 0;
+  aCached_tokens := 0;
 
   if jObj.TryGetValue<TJSONObject>('usageMetadata', LUso) then
   begin
@@ -1415,6 +1416,7 @@ begin
     LUso.TryGetValue<Integer>('totalTokenCount', atotal_tokens);
     // [V3] Token count específico para pensamientos
     LUso.TryGetValue<Integer>('thoughtsTokenCount', aThoughts_tokens);
+    LUso.TryGetValue<Integer>('cachedContentTokenCount', aCached_tokens);
   end;
 
   var
@@ -1542,6 +1544,7 @@ begin
     ResMsg.Completion_tokens := aCompletion_tokens;
     ResMsg.Total_tokens := atotal_tokens;
     ResMsg.Thinking_tokens := aThoughts_tokens;
+    ResMsg.Cached_tokens := aCached_tokens;
 
     // Procesar audio, links, etc.
     DoProcessResponse(AskMsg, ResMsg, LRespuesta);
@@ -1696,7 +1699,7 @@ end;
 
 procedure TAiGeminiChat.ParseGroundingMetadata(jCandidate: TJSONObject; ResMsg: TAiChatMessage);
 var
-  jGroundingMeta, jChunk, jWeb: TJSONObject;
+  jGroundingMeta, jChunk, jWeb, jRetrievedCtx: TJSONObject;
   jChunksArray: TJSonArray;
   ChunkItem: TAiWebSearchItem;
   I: Integer;
@@ -1720,6 +1723,16 @@ begin
         ChunkItem.title := WebTitle;
         ChunkItem.Url := WebUri;
         ChunkItem.&type := 'web_page';
+        ResMsg.WebSearchResponse.annotations.Add(ChunkItem);
+      end
+      else if jChunk.TryGetValue<TJSONObject>('retrievedContext', jRetrievedCtx) then
+      begin
+        ChunkItem := TAiWebSearchItem.Create;
+        jRetrievedCtx.TryGetValue<string>('title', WebTitle);
+        jRetrievedCtx.TryGetValue<string>('uri', WebUri);
+        ChunkItem.title := WebTitle;
+        ChunkItem.Url := WebUri;
+        ChunkItem.&type := 'document';
         ResMsg.WebSearchResponse.annotations.Add(ChunkItem);
       end;
     end;
@@ -1751,14 +1764,20 @@ begin
         begin
           var ChunkIdx := jIdxVal.GetValue<Integer>;
           var LSource := TAiCitationSource.Create;
-          LSource.SourceType := cstWeb;
 
-          // Buscar el chunk correspondiente en las annotations ya creadas
           if (ChunkIdx >= 0) and (ChunkIdx < ResMsg.WebSearchResponse.annotations.Count) then
           begin
-            LSource.DataSource.Title := ResMsg.WebSearchResponse.annotations[ChunkIdx].Title;
-            LSource.DataSource.Url := ResMsg.WebSearchResponse.annotations[ChunkIdx].Url;
-          end;
+            var LAnnotation := ResMsg.WebSearchResponse.annotations[ChunkIdx];
+            if LAnnotation.&type = 'document' then
+              LSource.SourceType := cstDocument
+            else
+              LSource.SourceType := cstWeb;
+            LSource.DataSource.Title := LAnnotation.Title;
+            LSource.DataSource.Url := LAnnotation.Url;
+          end
+          else
+            LSource.SourceType := cstUnknown;
+
           LCitation.Sources.Add(LSource);
         end;
       end;
@@ -2991,9 +3010,154 @@ end;
 // pero aquí añadimos soporte básico si el modelo es gemini-3-pro-image-preview.
 
 function TAiGeminiChat.InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+var
+  LModelName, LUrl, LAspect, LSize, LPerson, LMimeType, LExt, LBase64: string;
+  LRequest, LParams, LInstance, LPrediction: TJSonObject;
+  LInstances, LPredictions: TJSonArray;
+  LBodyStream, LResponseStream: TStringStream;
+  LResponse: IHTTPResponse;
+  LResponseJson: TJSonObject;
+  LNewFile: TAiMediaFile;
+  LSampleCount: Integer;
+  OldAsync: Boolean;
 begin
-  // Gemini 3 usa generateContent, igual que texto.
-  Result := InternalRunCompletions(ResMsg, AskMsg);
+  LModelName := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+  // Gemini image models (gemini-*-image-*) usan generateContent → delegar
+  if not LModelName.StartsWith('imagen-', True) then
+  begin
+    Result := InternalRunCompletions(ResMsg, AskMsg);
+    Exit;
+  end;
+
+  // --- Imagen via :predict endpoint ---
+  Result := '';
+  FBusy := True;
+  FLastError := '';
+  FLastContent := '';
+  FLastPrompt := AskMsg.Prompt;
+
+  if FMessages.IndexOf(AskMsg) < 0 then
+  begin
+    AskMsg.Id := FMessages.Count + 1;
+    FMessages.Add(AskMsg);
+    if Assigned(FOnAddMessage) then
+      FOnAddMessage(Self, AskMsg, nil, AskMsg.Role, AskMsg.Prompt);
+  end;
+
+  LUrl := Format('%smodels/%s:predict?key=%s', [Url, LModelName, ApiKey]);
+
+  LRequest := TJSonObject.Create;
+  LBodyStream := nil;
+  LResponseStream := nil;
+  LResponseJson := nil;
+  OldAsync := FClient.Asynchronous;
+
+  try
+    FClient.Asynchronous := False;
+
+    // instances[0].prompt
+    LInstances := TJSonArray.Create;
+    LRequest.AddPair('instances', LInstances);
+    LInstance := TJSonObject.Create;
+    LInstances.Add(LInstance);
+    LInstance.AddPair('prompt', AskMsg.Prompt);
+
+    // parameters
+    LParams := TJSonObject.Create;
+    LRequest.AddPair('parameters', LParams);
+
+    // sampleCount (1-4)
+    LSampleCount := N;
+    if LSampleCount < 1 then LSampleCount := 1;
+    if LSampleCount > 4 then LSampleCount := 4;
+    LParams.AddPair('sampleCount', TJSONNumber.Create(LSampleCount));
+
+    // aspectRatio desde ImageParams o default
+    LAspect := ImageParams.Params.Values['aspectRatio'];
+    if LAspect = '' then LAspect := '1:1';
+    LParams.AddPair('aspectRatio', LAspect);
+
+    // imageSize opcional (Standard/Ultra: '1K','2K')
+    LSize := ImageParams.Params.Values['imageSize'];
+    if LSize <> '' then
+      LParams.AddPair('imageSize', LSize);
+
+    // personGeneration
+    LPerson := ImageParams.Params.Values['personGeneration'];
+    if LPerson = '' then LPerson := 'allow_adult';
+    LParams.AddPair('personGeneration', LPerson);
+
+    FClient.ContentType := 'application/json';
+    LBodyStream := TStringStream.Create(LRequest.ToJSON, TEncoding.UTF8);
+    LResponseStream := TStringStream.Create('', TEncoding.UTF8);
+
+{$IFDEF APIDEBUG}
+    LBodyStream.SaveToFile('c:\temp\imagen_request.json');
+    LBodyStream.Position := 0;
+{$ENDIF}
+
+    LResponse := FClient.Post(LUrl, LBodyStream, LResponseStream, []);
+
+    if LResponse.StatusCode = 200 then
+    begin
+      LResponseJson := TJSonObject.ParseJSONValue(LResponseStream.DataString) as TJSonObject;
+      if LResponseJson = nil then
+        raise Exception.Create('Error parseando respuesta de Imagen.');
+
+      if LResponseJson.TryGetValue<TJSonArray>('predictions', LPredictions) and (LPredictions.Count > 0) then
+      begin
+        for var LItem in LPredictions do
+        begin
+          if not (LItem is TJSonObject) then Continue;
+          LPrediction := LItem as TJSonObject;
+
+          LBase64 := '';
+          LMimeType := 'image/png';
+          LPrediction.TryGetValue<string>('bytesBase64Encoded', LBase64);
+          LPrediction.TryGetValue<string>('mimeType', LMimeType);
+
+          if LBase64 = '' then Continue;
+
+          LExt := 'png';
+          if LMimeType.Contains('jpeg') or LMimeType.Contains('jpg') then
+            LExt := 'jpg';
+
+          LNewFile := TAiMediaFile.Create;
+          try
+            LNewFile.LoadFromBase64('imagen_generated.' + LExt, LBase64);
+            ResMsg.MediaFiles.Add(LNewFile);
+          except
+            LNewFile.Free;
+            raise;
+          end;
+        end;
+
+        FLastContent := AskMsg.Prompt;
+        ResMsg.Prompt := FLastContent;
+        DoStateChange(acsFinished, 'Done');
+        if Assigned(FOnReceiveDataEnd) then
+          FOnReceiveDataEnd(Self, ResMsg, nil, 'model', '');
+      end
+      else
+      begin
+        FLastError := LModelName + ': respuesta OK pero sin imágenes en predictions.';
+        DoError(FLastError, nil);
+      end;
+    end
+    else
+    begin
+      FLastError := Format('Error %d en Imagen: %s', [LResponse.StatusCode, LResponseStream.DataString]);
+      DoError(FLastError, nil);
+    end;
+  finally
+    FClient.Asynchronous := OldAsync;
+    LRequest.Free;
+    LBodyStream.Free;
+    LResponseStream.Free;
+    LResponseJson.Free;
+    FBusy := False;
+  end;
 end;
 
 function TAiGeminiChat.InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
@@ -3220,7 +3384,7 @@ begin
       if jObj.TryGetValue<TJSONObject>('usageMetadata', LUso) then
       begin
         var
-          tmpPrompt, tmpCand, tmpTotal, tmpThought: Integer;
+          tmpPrompt, tmpCand, tmpTotal, tmpThought, tmpCached: Integer;
         if LUso.TryGetValue<Integer>('promptTokenCount', tmpPrompt) then
           Self.Prompt_tokens := tmpPrompt;
         if LUso.TryGetValue<Integer>('candidatesTokenCount', tmpCand) then
@@ -3229,6 +3393,8 @@ begin
           Self.Total_tokens := tmpTotal;
         if LUso.TryGetValue<Integer>('thoughtsTokenCount', tmpThought) then
           Self.Thinking_tokens := tmpThought;
+        if LUso.TryGetValue<Integer>('cachedContentTokenCount', tmpCached) then
+          Self.Cached_tokens := tmpCached;
       end;
 
       // -----------------------------------------------------------------------

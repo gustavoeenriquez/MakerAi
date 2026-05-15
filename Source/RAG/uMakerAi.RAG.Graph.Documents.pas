@@ -2035,7 +2035,7 @@ begin
 
   ChunkVec := BuildChunkVector;
   try
-    Result := ChunkVec.ExecuteVGQL(AVgqlQuery, AResultVector);
+    Result := ChunkVec.ExecuteVQL(AVgqlQuery, AResultVector);
   finally
     ChunkVec.Free;
   end;
@@ -2064,7 +2064,7 @@ begin
 
   ChunkVec := BuildChunkVectorForDocument(ADocNode);
   try
-    Result := ChunkVec.ExecuteVGQL(AVgqlQuery, AResultVector);
+    Result := ChunkVec.ExecuteVQL(AVgqlQuery, AResultVector);
   finally
     ChunkVec.Free;
   end;
@@ -2083,7 +2083,7 @@ begin
 
   ChunkVec := BuildChunkVector;
   try
-    ChunkVec.ExecuteVGQL(AVgqlQuery, ResultVec);
+    ChunkVec.ExecuteVQL(AVgqlQuery, ResultVec);
     try
       Result := ChunkResultsToDocumentResults(ResultVec, ALimit);
     finally

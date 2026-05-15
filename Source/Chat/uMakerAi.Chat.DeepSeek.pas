@@ -166,7 +166,7 @@ begin
         jToolChoice := TJSonObject(TJSONObject.ParseJSONValue(Tool_choice));
 {$ENDIF}
         If Assigned(jToolChoice) then
-          AJSONObject.AddPair('tools_choice', jToolChoice);
+          AJSONObject.AddPair('tool_choice', jToolChoice);
       End;
     End;
 

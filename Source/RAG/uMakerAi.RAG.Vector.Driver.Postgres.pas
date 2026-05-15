@@ -214,103 +214,50 @@ begin
 end;
 
 function TJSONBFilterCondition.ToSQL(AParamIndex: Integer; AParams: TList<TQueryParamValue>): string;
+// All values are inlined into the SQL literal — no FireDAC parameters, avoids PQexecParams null-byte bug on Linux.
 var
-  ParamName, CastType, ValStr: string;
+  CastType, ValStr, SQLOp: string;
   I: Integer;
   ParamList: TStringList;
-  SQLOp: string;
-
-  // Sub-rutina para a�adir par�metros a la lista diferida
-  procedure AddParam(const AName: string; const AValue: Variant);
-  var
-    P: TQueryParamValue;
-  begin
-    P.Name := AName;
-    P.Value := AValue;
-    AParams.Add(P);
-  end;
-
+  KeyName, JsonValue: string;
 begin
-  ParamName := 'p_flt_' + IntToStr(AParamIndex);
-
-  // 1. Mapear tipo para CAST Postgres
   case FDataType of
-    jdtString:
-      CastType := 'text';
-    jdtInteger:
-      CastType := 'integer';
-    jdtFloat:
-      CastType := 'numeric';
-    jdtBoolean:
-      CastType := 'boolean';
-    jdtDate:
-      CastType := 'date';
-    jdtDateTime:
-      CastType := 'timestamp';
+    jdtString:   CastType := 'text';
+    jdtInteger:  CastType := 'integer';
+    jdtFloat:    CastType := 'numeric';
+    jdtBoolean:  CastType := 'boolean';
+    jdtDate:     CastType := 'date';
+    jdtDateTime: CastType := 'timestamp';
   else
     CastType := 'text';
   end;
 
-  // 2. Generar SQL y coleccionar par�metros
   case FOperator of
-    // Comparaciones simples (=, <>, >, etc.)
     foEqual, foNotEqual, foGreater, foGreaterOrEqual, foLess, foLessOrEqual:
-      begin
-        Result := Format('((%s)::%s %s :%s)', [FPath, CastType, GetSQLOperator, ParamName]);
-        AddParam(ParamName, FValue);
-      end;
+      Result := Format('((%s)::%s %s %s)', [FPath, CastType, GetSQLOperator, FormatValue(FValue)]);
 
-    // LIKE y derivados (ILIKE, STARTS_WITH, ENDS_WITH)
     foLike, foILike, foStartsWith, foEndsWith:
       begin
         SQLOp := IfThen(FOperator = foILike, 'ILIKE', 'LIKE');
-        Result := Format('((%s)::text %s :%s)', [FPath, SQLOp, ParamName]);
-
         ValStr := VarToStr(FValue);
-        if FOperator = foStartsWith then
-          ValStr := ValStr + '%'
-        else if FOperator = foEndsWith then
-          ValStr := '%' + ValStr;
-
-        AddParam(ParamName, ValStr);
+        if FOperator = foStartsWith then ValStr := ValStr + '%'
+        else if FOperator = foEndsWith then ValStr := '%' + ValStr;
+        Result := Format('((%s)::text %s %s)', [FPath, SQLOp, QuotedStr(ValStr)]);
       end;
 
-    // Contiene JSON (Uso del operador @>)
     foContains:
       begin
-        Result := Format('(properties @> :%s::jsonb)', [ParamName]);
-
-        // 1. Extraer el nombre de la llave de forma limpia
-        var
         KeyName := FPath.Replace('properties->>''', '').Replace('properties #>> ''{', '').Replace('}''', '').Replace('''', '');
-
-        // 2. Formatear el valor seg�n su tipo para que el JSON sea v�lido
-        var
-          JsonValue: string;
-
-          // Verificaci�n de tipo usando VarType
-        if VarIsNumeric(FValue) then
-          JsonValue := VarToStr(FValue).Replace(',', '.')
-        else if (VarType(FValue) and varTypeMask) = varBoolean then
-          JsonValue := IfThen(Boolean(FValue), 'true', 'false')
-        else if VarIsNull(FValue) then
-          JsonValue := 'null'
-        else
-          // Los strings DEBEN llevar comillas dobles para ser JSON v�lido
-          JsonValue := '"' + VarToStr(FValue).Replace('"', '\"') + '"';
-
-        AddParam(ParamName, '{"' + KeyName + '": ' + JsonValue + '}');
+        if VarIsNumeric(FValue) then JsonValue := VarToStr(FValue).Replace(',', '.')
+        else if (VarType(FValue) and varTypeMask) = varBoolean then JsonValue := IfThen(Boolean(FValue), 'true', 'false')
+        else if VarIsNull(FValue) then JsonValue := 'null'
+        else JsonValue := '"' + VarToStr(FValue).Replace('"', '\"') + '"';
+        Result := Format('(properties @> CAST(%s AS jsonb))', [QuotedStr('{"' + KeyName + '": ' + JsonValue + '}')]);
       end;
 
-    // Existencia de clave (Uso del operador ?)
     foExists:
-      begin
-        Result := Format('(properties ? :%s)', [ParamName]);
-        // Aqu� el valor del par�metro es el nombre de la llave
-        AddParam(ParamName, FPath.Replace('properties->>''', '').Replace('''', ''));
-      end;
+      Result := Format('(properties ? %s)', [QuotedStr(FPath.Replace('properties->>''', '').Replace('''', ''))]);
 
-    // Existencia de cualquiera (?|) o todos (?&) los elementos
     foExistsAny, foExistsAll:
       begin
         SQLOp := IfThen(FOperator = foExistsAny, '?|', '?&');
@@ -319,12 +266,7 @@ begin
           ParamList := TStringList.Create;
           try
             for I := VarArrayLowBound(FValue, 1) to VarArrayHighBound(FValue, 1) do
-            begin
-              var
-              SubParam := ParamName + '_ex_' + IntToStr(I);
-              ParamList.Add(':' + SubParam);
-              AddParam(SubParam, VarArrayGet(FValue, [I]));
-            end;
+              ParamList.Add(QuotedStr(VarToStr(VarArrayGet(FValue, [I]))));
             Result := Format('(properties %s ARRAY[%s]::text[])', [SQLOp, String.Join(',', ParamList.ToStringArray)]);
           finally
             ParamList.Free;
@@ -334,7 +276,6 @@ begin
           raise Exception.Create('foExistsAny / foExistsAll requiere un array de valores.');
       end;
 
-    // IN / NOT IN corregido
     foIn, foNotIn:
       begin
         if VarIsArray(FValue) then
@@ -342,44 +283,27 @@ begin
           ParamList := TStringList.Create;
           try
             for I := VarArrayLowBound(FValue, 1) to VarArrayHighBound(FValue, 1) do
-            begin
-              var
-              SubParam := ParamName + '_in_' + IntToStr(I);
-              ParamList.Add(':' + SubParam);
-              AddParam(SubParam, VarArrayGet(FValue, [I]));
-            end;
-            // USAR CastType AQU�
+              ParamList.Add(FormatValue(VarArrayGet(FValue, [I])));
             Result := Format('((%s)::%s %s (%s))', [FPath, CastType, GetSQLOperator, String.Join(',', ParamList.ToStringArray)]);
           finally
             ParamList.Free;
           end;
         end
         else
-        begin
-          Result := Format('((%s)::%s %s (:%s))', [FPath, CastType, GetSQLOperator, ParamName]);
-          AddParam(ParamName, FValue);
-        end;
+          Result := Format('((%s)::%s %s (%s))', [FPath, CastType, GetSQLOperator, FormatValue(FValue)]);
       end;
 
-    // BETWEEN con dos par�metros
     foBetween:
-      begin
-        Result := Format('((%s)::%s BETWEEN :%s_1 AND :%s_2)', [FPath, CastType, ParamName, ParamName]);
-        AddParam(ParamName + '_1', FValue);
-        AddParam(ParamName + '_2', FSecondValue);
-      end;
+      Result := Format('((%s)::%s BETWEEN %s AND %s)', [FPath, CastType, FormatValue(FValue), FormatValue(FSecondValue)]);
 
-    // IS NULL / IS NOT NULL (No requieren par�metros)
     foIsNull:
       Result := Format('((%s) IS NULL)', [FPath]);
     foIsNotNull:
       Result := Format('((%s) IS NOT NULL)', [FPath]);
-
   else
     Result := '(1=1)';
   end;
 
-  // 3. Negaci�n si aplica
   if FIsNegated then
     Result := 'NOT (' + Result + ')';
 end;
@@ -708,27 +632,32 @@ end;
 procedure TAiRAGVectorPostgresDriver.Add(const ANode: TAiEmbeddingNode; const AEntidad: string);
 var
   Q: TFDQuery;
-  LEnt, LEmbedding: string;
+  LEnt, LEmbLiteral, LContent, LProp: string;
+
+  function SQLS(const S: string): string;
+  begin
+    Result := '''' + S.Replace(#0, '').Replace('''', '''''') + '''';
+  end;
+
 begin
   Q := NewQuery;
   try
-    LEnt := IfThen(AEntidad = '', FCurrentEntidad, AEntidad);
+    LEnt     := IfThen(AEntidad = '', FCurrentEntidad, AEntidad);
+    LContent := ANode.Text.Replace(#0, '');
+    LProp    := PropertiesToJSON(ANode.MetaData);
+
     if Length(ANode.Data) > 0 then
-      LEmbedding := '''' + EmbeddingToString(ANode.Data) + ''''
+      LEmbLiteral := 'CAST(' + SQLS(EmbeddingToString(ANode.Data)) + ' AS vector)'
     else
-      LEmbedding := 'NULL';
+      LEmbLiteral := 'NULL';
 
-    Q.SQL.Clear;
-    Q.SQL.Add('INSERT INTO ' + FTableName + ' (entidad, id, model, content, properties, embedding)');
-    Q.SQL.Add('VALUES (:ent, :id, :model, :content, :prop::jsonb, ' + LEmbedding + '::vector)');
-    Q.SQL.Add('ON CONFLICT (entidad, id) DO UPDATE SET');
-    Q.SQL.Add('  model = EXCLUDED.model, content = EXCLUDED.content, properties = EXCLUDED.properties, embedding = EXCLUDED.embedding');
-
-    Q.ParamByName('ent').AsString := LEnt;
-    Q.ParamByName('id').AsString := ANode.Tag;
-    Q.ParamByName('model').AsString := ANode.Model;
-    Q.ParamByName('content').AsString := ANode.Text;
-    Q.ParamByName('prop').AsString := PropertiesToJSON(ANode.MetaData);
+    Q.SQL.Text :=
+      'INSERT INTO ' + FTableName + ' (entidad, id, model, content, properties, embedding) VALUES (' +
+      SQLS(LEnt) + ',' + SQLS(ANode.Tag) + ',' + SQLS(ANode.Model) + ',' +
+      SQLS(LContent) + ',' + SQLS(LProp) + '::jsonb,' +
+      LEmbLiteral + ') ON CONFLICT (entidad, id) DO UPDATE SET ' +
+      'model=EXCLUDED.model,content=EXCLUDED.content,' +
+      'properties=EXCLUDED.properties,embedding=EXCLUDED.embedding';
     Q.ExecSQL;
   finally
     Q.Free;
@@ -772,14 +701,20 @@ var
   Node: TAiEmbeddingNode;
   JObj: TJSONObject;
   LOptions: TAiSearchOptions;
-  LTargetEmbedding: string;
+  LTargetEmbedding, LQueryLiteral: string;
   FS: TFormatSettings;
   DoVector, DoLexical, HasValidEmbedding: Boolean;
   MinVectorScore, MinLexicalScore: Double;
   LangConfig, FilterSQL: string;
   HasFilter: Boolean;
-  FilterBuilder: TJSONBFilterBuilder; // Builder para filtros din�micos
+  FilterBuilder: TJSONBFilterBuilder;
   VWeight, LWeight: Double;
+
+  function SQLS(const S: string): string;
+  begin
+    Result := '''' + S.Replace(#0, '').Replace('''', '''''') + '''';
+  end;
+
 begin
   Result := TAiRAGVector.Create(nil, True);
   LEnt := IfThen(AEntidad = '', FCurrentEntidad, AEntidad);
@@ -810,12 +745,13 @@ begin
 
   if DoVector then
     LTargetEmbedding := QuotedStr(EmbeddingToString(ATarget.Data));
+  if DoLexical then
+    LQueryLiteral := SQLS(ATarget.Text);
 
   Q := NewQuery;
   SQL := TStringBuilder.Create;
-  FilterBuilder := TJSONBFilterBuilder.Create(Q); // Pasamos Q para inicializar contexto, pero no asignamos par�metros a�n
+  FilterBuilder := TJSONBFilterBuilder.Create(Q);
   try
-    // 1. GENERAR SQL DIN�MICO Y COLECCIONAR PAR�METROS
     FilterSQL := '';
     HasFilter := False;
     if Assigned(AFilter) and (AFilter.Count > 0) then
@@ -824,70 +760,72 @@ begin
       HasFilter := FilterSQL <> '';
     end;
 
-    // 2. CONSTRUIR EL CUERPO DEL SQL
+    // Build SQL with all values inlined — avoids PQexecParams null-byte bug on Linux
     SQL.AppendLine('WITH ');
 
     // --- BLOQUE VECTOR ---
     SQL.AppendLine('vector_res AS (');
     if DoVector then
     begin
-      SQL.AppendLine('  SELECT id, content, model, properties, embedding,');
+      SQL.AppendLine('  SELECT id, entidad, content, model, properties, embedding,');
       SQL.AppendLine('    (1 - (embedding <=> ' + LTargetEmbedding + '::vector)) as v_score,');
       SQL.AppendLine('    ROW_NUMBER() OVER (ORDER BY embedding <=> ' + LTargetEmbedding + '::vector ASC) as v_rank');
       SQL.AppendLine('  FROM ' + FTableName);
-      SQL.AppendLine('  WHERE entidad = :ent');
+      if LEnt <> '' then
+        SQL.AppendLine('  WHERE entidad = ' + SQLS(LEnt))
+      else
+        SQL.AppendLine('  WHERE 1=1');
       if Trim(ATarget.Model) <> '' then
-        SQL.AppendLine('    AND (model = :model OR model IS NULL OR model = '''')');
+        SQL.AppendLine('    AND (model = ' + SQLS(ATarget.Model) + ' OR model IS NULL OR model = '''')');
       if MinVectorScore > 0 then
-        SQL.AppendLine('    AND (1 - (embedding <=> ' + LTargetEmbedding + '::vector)) >= :min_v');
+        SQL.AppendLine('    AND (1 - (embedding <=> ' + LTargetEmbedding + '::vector)) >= ' + FloatToStr(MinVectorScore, FS));
       if HasFilter then
         SQL.AppendLine('    AND ' + FilterSQL);
       SQL.AppendLine('  ORDER BY embedding <=> ' + LTargetEmbedding + '::vector');
-      SQL.AppendLine('  LIMIT :prelim_limit');
+      SQL.AppendLine('  LIMIT ' + IntToStr(ALimit * 3));
     end
     else
-      SQL.AppendLine('  SELECT NULL::text as id, NULL::text as content, NULL::text as model, NULL::jsonb as properties, NULL::vector as embedding, 0::float as v_score, 0::bigint as v_rank WHERE FALSE');
+      SQL.AppendLine('  SELECT NULL::text as id, NULL::text as entidad, NULL::text as content, NULL::text as model, NULL::jsonb as properties, NULL::vector as embedding, 0::float as v_score, 0::bigint as v_rank WHERE FALSE');
     SQL.AppendLine('),');
 
     // --- BLOQUE LEXICAL ---
     SQL.AppendLine('lexical_res AS (');
     if DoLexical then
     begin
-      SQL.AppendLine('  SELECT id, content, model, properties, embedding,');
-      SQL.AppendLine('    ts_rank_cd(search_vector, websearch_to_tsquery(''' + LangConfig + ''', :query), 32) as l_score,');
-      SQL.AppendLine('    ROW_NUMBER() OVER (ORDER BY ts_rank_cd(search_vector, websearch_to_tsquery(''' + LangConfig + ''', :query), 32) DESC) as l_rank');
+      SQL.AppendLine('  SELECT id, entidad, content, model, properties, embedding,');
+      SQL.AppendLine('    ts_rank_cd(search_vector, websearch_to_tsquery(''' + LangConfig + ''', ' + LQueryLiteral + '), 32) as l_score,');
+      SQL.AppendLine('    ROW_NUMBER() OVER (ORDER BY ts_rank_cd(search_vector, websearch_to_tsquery(''' + LangConfig + ''', ' + LQueryLiteral + '), 32) DESC) as l_rank');
       SQL.AppendLine('  FROM ' + FTableName);
-      SQL.AppendLine('  WHERE entidad = :ent');
-      SQL.AppendLine('    AND search_vector @@ websearch_to_tsquery(''' + LangConfig + ''', :query)');
+      if LEnt <> '' then
+        SQL.AppendLine('  WHERE entidad = ' + SQLS(LEnt) + ' AND search_vector @@ websearch_to_tsquery(''' + LangConfig + ''', ' + LQueryLiteral + ')')
+      else
+        SQL.AppendLine('  WHERE search_vector @@ websearch_to_tsquery(''' + LangConfig + ''', ' + LQueryLiteral + ')');
       if MinLexicalScore > 0 then
-        SQL.AppendLine('    AND ts_rank_cd(search_vector, websearch_to_tsquery(''' + LangConfig + ''', :query), 32) >= :min_l');
+        SQL.AppendLine('    AND ts_rank_cd(search_vector, websearch_to_tsquery(''' + LangConfig + ''', ' + LQueryLiteral + '), 32) >= ' + FloatToStr(MinLexicalScore, FS));
       if HasFilter then
         SQL.AppendLine('    AND ' + FilterSQL);
-      SQL.AppendLine('  LIMIT :prelim_limit');
+      SQL.AppendLine('  LIMIT ' + IntToStr(ALimit * 3));
     end
     else
-      SQL.AppendLine('  SELECT NULL::text as id, NULL::text as content, NULL::text as model, NULL::jsonb as properties, NULL::vector as embedding, 0::float as l_score, 0::bigint as l_rank WHERE FALSE');
+      SQL.AppendLine('  SELECT NULL::text as id, NULL::text as entidad, NULL::text as content, NULL::text as model, NULL::jsonb as properties, NULL::vector as embedding, 0::float as l_score, 0::bigint as l_rank WHERE FALSE');
     SQL.AppendLine('),');
 
     // --- BLOQUE COMBINE / RRF / SCORE ---
     SQL.AppendLine('combined AS (');
-    SQL.AppendLine('  SELECT COALESCE(v.id, l.id) as id, COALESCE(v.content, l.content) as content, COALESCE(v.model, l.model) as model, COALESCE(v.properties, l.properties) as properties, COALESCE(v.embedding, l.embedding) as embedding,');
+    SQL.AppendLine('  SELECT COALESCE(v.id, l.id) as id, COALESCE(v.entidad, l.entidad) as entidad, COALESCE(v.content, l.content) as content, COALESCE(v.model, l.model) as model, COALESCE(v.properties, l.properties) as properties, COALESCE(v.embedding, l.embedding) as embedding,');
     SQL.AppendLine('    COALESCE(v.v_score, 0) as v_score, COALESCE(l.l_score, 0) as l_score, COALESCE(v.v_rank, 999999) as v_rank, COALESCE(l.l_rank, 999999) as l_rank');
     SQL.AppendLine('  FROM vector_res v FULL OUTER JOIN lexical_res l ON v.id = l.id');
     SQL.AppendLine('),');
 
     SQL.AppendLine('scored AS (');
-    SQL.AppendLine('  SELECT id, content, model, properties, embedding, v_score, l_score,');
+    SQL.AppendLine('  SELECT id, entidad, content, model, properties, embedding, v_score, l_score,');
 
     if DoVector and DoLexical then
     begin
       if Assigned(LOptions) and LOptions.UseRRF then
-      begin
-        SQL.AppendLine('    (1.0 / (60 + v_rank)) + (1.0 / (60 + l_rank)) as raw_score');
-      end
+        SQL.AppendLine('    (1.0 / (60 + v_rank)) + (1.0 / (60 + l_rank)) as raw_score')
       else
       begin
-        // C�lculo de pesos con IF normales
         if Assigned(LOptions) then
         begin
           VWeight := LOptions.EmbeddingWeight;
@@ -895,65 +833,37 @@ begin
         end
         else
         begin
-          // Valores por defecto si no hay opciones
           VWeight := 0.7;
           LWeight := 0.3;
         end;
-
-        SQL.AppendFormat('    (v_score * %f) + (l_score * %f) as raw_score'#13#10, [VWeight, LWeight]);
+        SQL.AppendLine('    (v_score * ' + FloatToStr(VWeight, FS) + ') + (l_score * ' + FloatToStr(LWeight, FS) + ') as raw_score');
       end;
     end
-
     else if DoVector then
       SQL.AppendLine('    v_score as raw_score')
     else
       SQL.AppendLine('    l_score as raw_score');
     SQL.AppendLine('  FROM combined');
-    SQL.AppendLine(')');
+    SQL.AppendLine('),');
 
-    // --- SELECCI�N FINAL ---
-    SQL.AppendLine('SELECT id, content, model, properties, embedding,');
+    SQL.AppendLine('final_scored AS (');
+    SQL.AppendLine('  SELECT id, entidad, content, model, properties, embedding,');
     if Assigned(LOptions) and LOptions.UseRRF and DoVector and DoLexical then
-      SQL.AppendLine('  (raw_score / ((1.0/61) + (1.0/61))) as final_score')
+      SQL.AppendLine('    (raw_score / ((1.0/61) + (1.0/61))) as final_score')
     else
-      SQL.AppendLine('  raw_score as final_score');
-    SQL.AppendLine('FROM scored');
+      SQL.AppendLine('    raw_score as final_score');
+    SQL.AppendLine('  FROM scored');
+    SQL.AppendLine(')');
+    SQL.AppendLine('SELECT id, entidad, content, model, properties, embedding, final_score');
+    SQL.AppendLine('FROM final_scored');
     if APrecision > 0 then
-      SQL.AppendLine('WHERE raw_score >= :prec');
-    SQL.AppendLine('ORDER BY raw_score DESC LIMIT :lim');
+      SQL.AppendLine('WHERE final_score >= ' + FloatToStr(APrecision, FS));
+    SQL.AppendLine('ORDER BY final_score DESC LIMIT ' + IntToStr(ALimit));
 
-    // 3. ASIGNAR SQL A LA QUERY (Crucial: Primero el texto)
     Q.SQL.Text := SQL.ToString;
     FLastSQL := Q.SQL.Text;
 
-    // 4. AHORA APLICAMOS LOS PAR�METROS DIN�MICOS DEL FILTRO
-    if HasFilter then
-      FilterBuilder.ApplyParams(Q);
-
-    // 5. ASIGNAR PAR�METROS EST�NDAR
-    Q.ParamByName('ent').AsString := LEnt;
-    Q.ParamByName('lim').AsInteger := ALimit;
-    Q.ParamByName('prelim_limit').AsInteger := ALimit * 3;
-
-    if APrecision > 0 then
-      Q.ParamByName('prec').AsFloat := APrecision;
-
-    if DoVector then
-    begin
-      if Trim(ATarget.Model) <> '' then
-        Q.ParamByName('model').AsString := ATarget.Model;
-      if MinVectorScore > 0 then
-        Q.ParamByName('min_v').AsFloat := MinVectorScore;
-    end;
-
-    if DoLexical then
-    begin
-      Q.ParamByName('query').AsString := ATarget.Text;
-      if MinLexicalScore > 0 then
-        Q.ParamByName('min_l').AsFloat := MinLexicalScore;
-    end;
-
-    // 6. EJECUCI�N
+    // No parameters — FireDAC uses PQexec (not PQexecParams), avoiding null-byte injection on Linux
     try
       Q.Open;
     except
@@ -988,6 +898,8 @@ begin
               JObj.Free;
             end;
         end;
+        // Set after FromJSON — FromJSON.Clear would erase anything set earlier
+        Node.MetaData['entidad'] := Q.FieldByName('entidad').AsString;
         Result.Items.Add(Node);
       except
         Node.Free;

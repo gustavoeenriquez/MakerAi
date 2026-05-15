@@ -84,6 +84,8 @@ type
     procedure SetTranscriptionTemperature(const Value: Double);
     function GetTranscriptionTimestampGranularities: TAiTimestampGranularities;
     procedure SetTranscriptionTimestampGranularities(const Value: TAiTimestampGranularities);
+    function GetTranscriptionLogprobs: Boolean;
+    procedure SetTranscriptionLogprobs(const Value: Boolean);
 
     function TTSFormatExtension: string;
   protected
@@ -111,6 +113,7 @@ type
     property TranscriptionLanguage: string read GetTranscriptionLanguage write SetTranscriptionLanguage;
     property TranscriptionTemperature: Double read GetTranscriptionTemperature write SetTranscriptionTemperature;
     property TranscriptionTimestampGranularities: TAiTimestampGranularities read GetTranscriptionTimestampGranularities write SetTranscriptionTimestampGranularities;
+    property TranscriptionLogprobs: Boolean read GetTranscriptionLogprobs write SetTranscriptionLogprobs default False;
   end;
 
 procedure Register;
@@ -258,6 +261,16 @@ begin
   FAudio.TranscriptionTimestampGranularities := Value;
 end;
 
+function TAiOpenAiSpeechTool.GetTranscriptionLogprobs: Boolean;
+begin
+  Result := FAudio.TranscriptionLogprobs;
+end;
+
+procedure TAiOpenAiSpeechTool.SetTranscriptionLogprobs(const Value: Boolean);
+begin
+  FAudio.TranscriptionLogprobs := Value;
+end;
+
 { --- Implementacion IAiSpeechTool --- }
 
 procedure TAiOpenAiSpeechTool.ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
@@ -285,31 +298,7 @@ procedure TAiOpenAiSpeechTool.ExecuteTranscription(aMediaFile: TAiMediaFile; Res
   end;
 
 begin
-  if IsAsync then
-    DoTranscription
-  else
-    TTask.Run(
-      procedure
-      var
-        LResult: TTranscriptionResult;
-        LText: string;
-      begin
-        try
-          ReportState(acsReasoning, 'Transcribiendo audio...');
-          LResult := FAudio.Transcribe(aMediaFile);
-          try
-            LText := LResult.Text;
-          finally
-            LResult.Free;
-          end;
-          aMediaFile.Transcription := LText;
-          aMediaFile.Procesado := True;
-          ReportDataEnd(ResMsg, 'assistant', LText);
-        except
-          on E: Exception do
-            ReportError('Error en transcripcion OpenAI: ' + E.Message, E);
-        end;
-      end);
+  DoTranscription;
 end;
 
 procedure TAiOpenAiSpeechTool.ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage);
@@ -336,30 +325,7 @@ procedure TAiOpenAiSpeechTool.ExecuteSpeechGeneration(const AText: string; ResMs
   end;
 
 begin
-  if IsAsync then
-    DoSpeechGeneration
-  else
-    TTask.Run(
-      procedure
-      var
-        LStream: TMemoryStream;
-        LNewFile: TAiMediaFile;
-      begin
-        try
-          ReportState(acsWriting, 'Generando voz...');
-          LStream := FAudio.Speech(AText);
-          try
-            LNewFile := TAiMediaFile.Create;
-            LNewFile.LoadFromStream('speech.' + TTSFormatExtension, LStream);
-            ReportDataEnd(ResMsg, 'assistant', '[Audio generado]');
-          finally
-            LStream.Free;
-          end;
-        except
-          on E: Exception do
-            ReportError('Error generando voz OpenAI: ' + E.Message, E);
-        end;
-      end);
+  DoSpeechGeneration;
 end;
 
 end.

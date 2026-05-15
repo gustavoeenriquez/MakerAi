@@ -89,7 +89,7 @@ type
     procedure SetVerbosity(const Value: String);
 
   protected
-    // Sobrescritura de m?todos del Core para adaptar al nuevo API
+    // Sobrescritura de métodos del Core para adaptar al nuevo API
     procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Override;
     Function InitChatCompletions: String; Override;
@@ -99,9 +99,10 @@ type
     procedure UpdateResponseStatus(aStatus: String);
     procedure DoCallFunction(ToolCall: TAiToolsFunction); Override;
 
-    // M?todos heredados que se mantienen igual o se adaptan ligeramente
+    // Métodos heredados que se mantienen igual o se adaptan ligeramente
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunNativeSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
+    function InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
 
   public
@@ -121,7 +122,7 @@ type
     function InternalRunImageVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
 
   published
-    // Propiedades espec?ficas mapeadas
+    // Propiedades específicas mapeadas
     property Store: Boolean read FStore write SetStore default True;
     property Truncation: String read FTruncation write SetTruncation;
     property Parallel_ToolCalls: Boolean read FParallel_ToolCalls write SetParallel_ToolCalls default True;
@@ -161,7 +162,9 @@ begin
   FVerbosity := '';
   FResponseId := '';
   FResponseStatus := '';
-  // URL por defecto
+  // URL y ApiKey por defecto
+  if ApiKey = '' then
+    ApiKey := '@OPENAI_API_KEY';
   if Url = '' then
     Url := GlOpenAIUrl;
   if Model = '' then
@@ -2101,6 +2104,169 @@ begin
 
 end;
 
+function TAiOpenChat.InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+var
+  LUrl, LModel, LQuality, LSize, LStyle: string;
+  LBodyJson: TJSonObject;
+  LBodyStream: TStringStream;
+  LResponseStream: TStringStream;
+  LHeaders: TNetHeaders;
+  LResponse: IHTTPResponse;
+  LResponseJson, LImageObject: TJSonObject;
+  LDataArray: TJSonArray;
+  LBase64Data, LRevisedPrompt, LErrorMsg: string;
+  LNewImageFile: TAiMediaFile;
+  OldAsync: Boolean;
+begin
+  Result := '';
+  FBusy := True;
+  FLastError := '';
+  FLastContent := '';
+  FLastPrompt := AskMsg.Prompt;
+
+  if FMessages.IndexOf(AskMsg) < 0 then
+  begin
+    AskMsg.Id := FMessages.Count + 1;
+    FMessages.Add(AskMsg);
+    if Assigned(FOnAddMessage) then
+      FOnAddMessage(Self, AskMsg, nil, AskMsg.Role, AskMsg.Prompt);
+  end;
+
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+  if LModel = '' then
+    LModel := 'gpt-image-1';
+
+  LUrl := Url + 'images/generations';
+
+  // quality desde ImageParams.Params o por defecto según modelo
+  LQuality := ImageParams.Params.Values['quality'];
+  if LQuality = '' then
+  begin
+    case ImageParams.Resolution of
+      mrLow:  LQuality := 'low';
+      mrHigh: LQuality := 'high';
+    else
+      // mrDefault / mrMedium
+      if LModel = 'dall-e-3' then LQuality := 'standard'
+      else                        LQuality := 'medium';
+    end;
+  end;
+
+  // size desde ImageParams.Params o por defecto según modelo
+  LSize := ImageParams.Params.Values['size'];
+  if LSize = '' then
+  begin
+    if LModel = 'dall-e-2' then LSize := '1024x1024'
+    else                        LSize := '1024x1024';
+  end;
+
+  LBodyJson := TJSonObject.Create;
+  LBodyStream := nil;
+  LResponseStream := nil;
+  LResponseJson := nil;
+  OldAsync := FClient.Asynchronous;
+
+  try
+    FClient.Asynchronous := False;
+
+    LBodyJson.AddPair('model', LModel);
+    LBodyJson.AddPair('prompt', AskMsg.Prompt);
+    LBodyJson.AddPair('n', TJSONNumber.Create(N));
+
+    // gpt-image-1 y gpt-image-2 no aceptan response_format (siempre devuelven b64_json)
+    if (LModel = 'dall-e-2') or (LModel = 'dall-e-3') then
+      LBodyJson.AddPair('response_format', 'b64_json');
+
+    LBodyJson.AddPair('size', LSize);
+
+    // dall-e-2 no acepta quality ni style
+    if (LModel <> 'dall-e-2') then
+      LBodyJson.AddPair('quality', LQuality);
+
+    // dall-e-3 acepta style
+    if LModel = 'dall-e-3' then
+    begin
+      LStyle := ImageParams.Params.Values['style'];
+      if LStyle = '' then LStyle := 'vivid';
+      LBodyJson.AddPair('style', LStyle);
+    end;
+
+    if not User.IsEmpty then
+      LBodyJson.AddPair('user', User);
+
+    LBodyStream := TStringStream.Create(LBodyJson.ToJSON, TEncoding.UTF8);
+    LResponseStream := TStringStream.Create('', TEncoding.UTF8);
+
+    LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
+    FClient.ContentType := 'application/json';
+
+{$IFDEF APIDEBUG}
+    LBodyStream.SaveToFile('c:\temp\openai_image_request.json');
+    LBodyStream.Position := 0;
+{$ENDIF}
+
+    LResponse := FClient.Post(LUrl, LBodyStream, LResponseStream, LHeaders);
+
+    if LResponse.StatusCode = 200 then
+    begin
+      LResponseJson := TJSonObject.ParseJSONValue(LResponseStream.DataString) as TJSonObject;
+      if LResponseJson = nil then
+        raise Exception.Create('Error parseando respuesta de generación de imagen.');
+
+      if LResponseJson.TryGetValue<TJSonArray>('data', LDataArray) and (LDataArray.Count > 0) then
+      begin
+        for var LItem in LDataArray do
+        begin
+          if not (LItem is TJSonObject) then Continue;
+          LImageObject := LItem as TJSonObject;
+
+          LRevisedPrompt := '';
+          LImageObject.TryGetValue<string>('revised_prompt', LRevisedPrompt);
+          FLastContent := IfThen(LRevisedPrompt <> '', LRevisedPrompt, AskMsg.Prompt);
+
+          LBase64Data := '';
+          LImageObject.TryGetValue<string>('b64_json', LBase64Data);
+          if LBase64Data <> '' then
+          begin
+            LNewImageFile := TAiMediaFile.Create;
+            try
+              LNewImageFile.LoadFromBase64('generated_image.png', LBase64Data);
+              LNewImageFile.Transcription := LRevisedPrompt;
+              ResMsg.MediaFiles.Add(LNewImageFile);
+            except
+              LNewImageFile.Free;
+              raise;
+            end;
+          end;
+        end;
+
+        ResMsg.Prompt := FLastContent;
+        DoStateChange(acsFinished, 'Done');
+        if Assigned(FOnReceiveDataEnd) then
+          FOnReceiveDataEnd(Self, ResMsg, nil, 'model', '');
+      end
+      else
+      begin
+        FLastError := LModel + ': respuesta OK pero sin datos de imagen.';
+        DoError(FLastError, nil);
+      end;
+    end
+    else
+    begin
+      LErrorMsg := LResponseStream.DataString;
+      FLastError := Format('Error %d en generación de imagen: %s', [LResponse.StatusCode, LErrorMsg]);
+      DoError(FLastError, nil);
+    end;
+  finally
+    FClient.Asynchronous := OldAsync;
+    LBodyJson.Free;
+    LBodyStream.Free;
+    LResponseStream.Free;
+    LResponseJson.Free;
+    FBusy := False;
+  end;
+end;
+
 function TAiOpenChat.InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
 var
   Body: TMultipartFormData;
@@ -2586,11 +2752,19 @@ begin
           if FRecursionNeeded then
           begin
             DoStateChange(acsConnecting, 'Sending tool results...');
+{$IF CompilerVersion >= 36}
             TThread.ForceQueue(nil,
               procedure
               begin
                 Self.Run(nil, nil);
               end);
+{$ELSE}
+            TThread.Queue(nil,
+              procedure
+              begin
+                Self.Run(nil, nil);
+              end);
+{$ENDIF}
           end
           else
           begin

@@ -234,7 +234,17 @@ begin
     Exit;
   end;
 
-  if ARequestInfo.URI = FSseEndpoint then
+  if ARequestInfo.Command = 'OPTIONS' then
+  begin
+    AResponseInfo.ResponseNo := 204;
+    AResponseInfo.ContentLength := 0;
+  end
+  else if (ARequestInfo.Command = 'POST') and
+          ((ARequestInfo.URI = FMessagesEndpoint) or (ARequestInfo.Document = FMessagesEndpoint)) then
+  begin
+    HandlePostMessage(AContext, ARequestInfo, AResponseInfo, AuthContext);
+  end
+  else if ARequestInfo.URI = FSseEndpoint then
   begin
     HandleSSEConnection(AContext, AResponseInfo);
   end
@@ -273,7 +283,7 @@ begin
     Exit;
   end;
 
-  if (ARequestInfo.Command = 'POST') and (ARequestInfo.URI = FMessagesEndpoint) then
+  if (ARequestInfo.Command = 'POST') and ((ARequestInfo.URI = FMessagesEndpoint) or (ARequestInfo.Document = FMessagesEndpoint)) then
   begin
     HandlePostMessage(AContext, ARequestInfo, AResponseInfo, AuthContext);
   end

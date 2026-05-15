@@ -214,9 +214,9 @@ type
     Function SearchText(aPrompt: String; aLimit: Integer = 10; aPrecision: Double = 0.5; aFilter: TAiFilterCriteria = nil; IncludeMetadata: Boolean = True; IncludeScore: Boolean = True): String; Overload; Virtual;
     Function SearchText(aPrompt: TAiEmbeddingNode; aLimit: Integer = 10; aPresicion: Double = 0.5; aFilter: TAiFilterCriteria = nil; IncludeMetadata: Boolean = True; IncludeScore: Boolean = True): String; Overload; Virtual;
 
-    function ExecuteVGQL(const AVgqlQuery: string): string; overload;
+    function ExecuteVQL(const AVqlQuery: string): string; overload;
 
-    function ExecuteVGQL(const AVgqlQuery: string; out AResultVector: TAiRAGVector): string; overload;
+    function ExecuteVQL(const AVqlQuery: string; out AResultVector: TAiRAGVector): string; overload;
 
     Function VectorToContextText(DataVec: TAiRAGVector; IncludeMetadata: Boolean; IncludeScore: Boolean): String;
 
@@ -1034,7 +1034,7 @@ begin
 
 end;
 
-function TAiRAGVector.ExecuteVGQL(const AVgqlQuery: string; out AResultVector: TAiRAGVector): string;
+function TAiRAGVector.ExecuteVQL(const AVqlQuery: string; out AResultVector: TAiRAGVector): string;
 var
   Parser: TVGQLParser;
   AST: TVGQLQuery;
@@ -1052,7 +1052,7 @@ begin
   // ---------------------------------------------------------------------------
   // 1. FRONT-END: PARSEO DE LA SINTAXIS (Texto -> AST)
   // ---------------------------------------------------------------------------
-  Parser := TVGQLParser.Create(AVgqlQuery);
+  Parser := TVGQLParser.Create(AVqlQuery);
   try
     AST := Parser.Parse;
   finally
@@ -1548,12 +1548,11 @@ begin
   end;
 end;
 
-function TAiRAGVector.ExecuteVGQL(const AVgqlQuery: string): string;
+function TAiRAGVector.ExecuteVQL(const AVqlQuery: string): string;
 var
   TempVec: TAiRAGVector;
 begin
-  // Versi�n simplificada que libera el vector autom�ticamente
-  Result := ExecuteVGQL(AVgqlQuery, TempVec);
+  Result := ExecuteVQL(AVqlQuery, TempVec);
   if Assigned(TempVec) then
     TempVec.Free;
 end;

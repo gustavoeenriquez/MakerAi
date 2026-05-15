@@ -147,12 +147,7 @@ begin
   if Assigned(AskMsg) then
     LPrompt := AskMsg.Prompt;
 
-  // Si IsAsync=True ya estamos en el hilo background del chat: ejecutar directo.
-  // Si IsAsync=False estamos en el hilo principal: lanzar task para no bloquearlo.
-  if IsAsync then
-    InternalRunVision(aMediaFile, ResMsg, LPrompt)
-  else
-    TTask.Run(procedure begin InternalRunVision(aMediaFile, ResMsg, LPrompt); end);
+  InternalRunVision(aMediaFile, ResMsg, LPrompt);
 end;
 
 function TAiOllamaVisionTool.InternalRunVision(aMediaFile: TAiMediaFile; ResMsg: TAiChatMessage; const AOverridePrompt: string): string;

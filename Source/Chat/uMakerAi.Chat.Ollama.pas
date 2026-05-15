@@ -1,6 +1,6 @@
-﻿// IT License
+﻿// MIT License
 //
-// Copyright (c) <year> <copyright holders>
+// Copyright (c) 2024 Gustavo Enríquez - CimaMaker
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -384,6 +384,12 @@ begin
     begin
       AJSONObject.AddPair('format', 'json');
     end;
+
+    // --- THINKING (Ollama v0.7.0+) ---
+    // Modelos con reasoning nativo (gemma4, qwen3, deepseek-r1, etc.) requieren
+    // "think":true a nivel raíz para activar el modo de razonamiento.
+    if (cap_Reasoning in ModelConfig.ModelCaps) and (ModelConfig.ThinkingLevel <> tlDefault) then
+      AJSONObject.AddPair('think', TJSONBool.Create(True));
 
     // --- MANEJO DE TOOLS ---
     If Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAi).Text) <> '') then
@@ -802,6 +808,10 @@ begin
   ResMsg.Prompt_tokens := LPromptTokens;
   ResMsg.Completion_tokens := LEvalTokens;
   ResMsg.Total_tokens := LPromptTokens + LEvalTokens;
+
+  // Disparar evento thinking si el modelo retornó razonamiento
+  if (LReasoning <> '') and Assigned(OnReceiveThinking) then
+    OnReceiveThinking(Self, ResMsg, JObj, LRole, LReasoning);
 
   LAskMsg := GetLastMessage;
 

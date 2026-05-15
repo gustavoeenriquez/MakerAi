@@ -41,7 +41,7 @@ uses
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
   System.JSON, Rest.JSON,
   uMakerAi.ParamsRegistry, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Chat,
-  uMakerAi.Chat.Initializations, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Tools.ComputerUse, uMakerAi.Chat.Tools, uMakerAi.Chat.Messages;
+  uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Tools.ComputerUse, uMakerAi.Chat.Tools, uMakerAi.Chat.Messages;
 
 type
   TOnChatModelChangeEvent = procedure(Sender: TObject; const OldChat, NewChat: TAiChat) of object;
@@ -230,7 +230,6 @@ type
     property OnProcessResponse: TAiChatOnProcessResponseEvent read FOnProcessResponse write SetOnProcessResponse;
     Property Version: String Read FVersion;
     property ChatMode: TAiChatMode read FChatMode write SetChatMode default cmConversation;
-    property ChatTools: TAiChatTools read FChatTools;
     property OnStateChange: TAiStateChangeEvent read FOnStateChange write FOnStateChange;
     property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive default False;
     property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
@@ -296,8 +295,7 @@ end;
 
 destructor TAiChatConnection.Destroy;
 begin
-  if Assigned(FChat) then
-    FChat.Free;
+  FreeAndNil(FChat);  // nil before freeing FSystemPrompt/FMemory/FParams (OnChange=ParamsChanged checks FChat)
 
   FChatTools.Free;
   FSystemPrompt.Free;

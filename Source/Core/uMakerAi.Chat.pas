@@ -66,7 +66,8 @@ type
     cmSpeechGeneration, // Forzar Texto a Voz (TTS)
     cmTranscription, // Forzar Transcripci?n
     cmWebSearch, // Forzar B?squeda Web
-    cmReportGeneration // Forzar Generaci?n de Reporte (PDF, HTML, XLSX, etc.)
+    cmReportGeneration, // Forzar Generaci?n de Reporte (PDF, HTML, XLSX, etc.)
+    cmSmartDispatch    // Despacho inteligente para modelos sin function calling
     );
 
   TAiChatOnDataEvent = procedure(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject; aRole, aText: String) of object;
@@ -252,6 +253,8 @@ type
     FCompletion_tokens: Integer;
     FTotal_tokens: Integer;
     FPrompt_tokens: Integer;
+    FStreamPromptTokens: Integer;     // Tokens captured from streaming usage chunks (reset after each [DONE])
+    FStreamCompletionTokens: Integer;
     FUrl: String;
     FResponseTimeOut: Integer;
     FOnInitChat: TAiChatOnInitChatEvent;
@@ -323,6 +326,7 @@ type
     procedure SetOnProgressEvent(const Value: TAiModelProgressEvent);
     procedure SetOnReceiveThinking(const Value: TAiChatOnDataEvent);
     procedure SetThinking_tokens(const Value: Integer);
+    procedure SetCached_tokens(const Value: Integer);
     procedure SetSanitizerActive(const Value: Boolean);
     procedure SetOnSanitize(const Value: TAiSanitizeEvent);
     function RunNew(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
@@ -350,6 +354,7 @@ type
     FOnBeforeSendMessage: TAiChatOnBeforeSendEvent;
     FTmpToolCallBuffer: TObjectDictionary<Integer, TJSonObject>;
     FThinking_tokens: Integer;
+    FCached_tokens: Integer;
 
     // Devuelve los tipos de archivo que el modelo acepta nativamente (derivado de ModelConfig.ModelCaps)
     function GetModelInputFileTypes: TAiFileCategories;
@@ -373,6 +378,11 @@ type
     function InternalRunImageVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
     function InternalRunWebSearch(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
     function InternalRunReport(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
+
+    // SmartDispatch helpers (cmSmartDispatch)
+    procedure InternalRunSmartDispatch(ResMsg, AskMsg: TAiChatMessage);
+    function BuildSmartDispatchPrompt: String;
+    procedure ParseSmartDispatchResponse(const AResponse: String; out ATag, AContent: String);
 
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
     function InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Virtual;
@@ -466,6 +476,7 @@ type
     Property Stop: string read FStop write SetStop;
     Property Temperature: Double read FTemperature write SetTemperature;
     Property Thinking_tokens: Integer read FThinking_tokens write SetThinking_tokens;
+    Property Cached_tokens: Integer read FCached_tokens write SetCached_tokens;
     Property Top_p: Double read FTop_p write SetTop_p;
     Property Total_tokens: Integer read FTotal_tokens write SetTotal_tokens;
 
@@ -524,7 +535,7 @@ procedure LogDebug(const Mensaje: string);
 
 implementation
 
-uses uMakerAi.ParamsRegistry;
+uses uMakerAi.ParamsRegistry, System.IOUtils;
 
 { TAiChat }
 
@@ -539,7 +550,7 @@ begin
   // ---------------------------------------------------------------------------------
   // -------- OPCI?N DESHABILITADA ES SOLO UN LOG DE PRUEBAS--------------------------
   // ---------------------------------------------------------------------------------
-  RutaLog := 'c:\temp\ialog.txt';
+  RutaLog := TPath.Combine(TPath.GetTempPath, 'ialog.txt');
 
   try
     AssignFile(Archivo, RutaLog);
@@ -1341,6 +1352,7 @@ end;
 
 destructor TAiChat.Destroy;
 begin
+  FClient.Free;
   FResponse.Free;
   FTools.Free;
   FChatTools.Free;
@@ -1350,14 +1362,12 @@ begin
   FVideoGenParams.Free;
   FWebSearchParams.Free;
   FModelConfig.Free;
-  FClient.Free;
   FMemory.Free;
   FJsonSchema.Free;
   FTmpToolCallBuffer.Free;
   FSystemPrompt.Free;
   NewChat;
   FMessages.Free;
-
   inherited;
 end;
 
@@ -1739,7 +1749,7 @@ begin
 
     End;
 
-    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSon));
+    Res := TEncoding.UTF8.GetString(TEncoding.UTF8.GetBytes(AJSONObject.ToJSon));
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
   Finally
@@ -1856,10 +1866,12 @@ Var
         FakeResponseObj.AddPair('model', FModel);
 
         FakeUsage := TJSonObject.Create;
-        FakeUsage.AddPair('prompt_tokens', TJSONNumber.Create(0));
-        FakeUsage.AddPair('completion_tokens', TJSONNumber.Create(0));
-        FakeUsage.AddPair('total_tokens', TJSONNumber.Create(0));
+        FakeUsage.AddPair('prompt_tokens', TJSONNumber.Create(FStreamPromptTokens));
+        FakeUsage.AddPair('completion_tokens', TJSONNumber.Create(FStreamCompletionTokens));
+        FakeUsage.AddPair('total_tokens', TJSONNumber.Create(FStreamPromptTokens + FStreamCompletionTokens));
         FakeResponseObj.AddPair('usage', FakeUsage);
+        FStreamPromptTokens := 0;
+        FStreamCompletionTokens := 0;
 
         FakeChoicesArr := TJSonArray.Create;
         FakeChoice := TJSonObject.Create;
@@ -2053,6 +2065,18 @@ Var
           end;
         end;
       end;
+
+      // Capture token usage from streaming chunks that include a root-level "usage" field.
+      // Groq sends a chunk with choices:[] but real token counts before [DONE].
+      // These are stored and injected into FakeUsage when [DONE] arrives.
+      var JStreamUsage: TJSonObject;
+      if jObj.TryGetValue<TJSonObject>('usage', JStreamUsage) then
+      begin
+        var aIn  := JStreamUsage.GetValue<Integer>('prompt_tokens', 0);
+        var aOut := JStreamUsage.GetValue<Integer>('completion_tokens', 0);
+        if aIn  > 0 then FStreamPromptTokens     := aIn;
+        if aOut > 0 then FStreamCompletionTokens := aOut;
+      end;
     Finally
       jObj.Free;
     End;
@@ -2159,7 +2183,7 @@ Var
   JToolCallsValue: TJSonValue;
   jMessage: TJSonObject;
   uso: TJSonObject;
-  aPrompt_tokens, aCompletion_tokens, aTotal_tokens: Integer;
+  aPrompt_tokens, aCompletion_tokens, aTotal_tokens, aCached_tokens: Integer;
   Role, Respuesta, sReasoning: String;
   ToolMsg, AskMsg: TAiChatMessage;
   // Msg: TAiChatMessage;
@@ -2215,6 +2239,7 @@ begin
     aPrompt_tokens := uso.GetValue<Integer>('prompt_tokens');
     aCompletion_tokens := uso.GetValue<Integer>('completion_tokens');
     aTotal_tokens := uso.GetValue<Integer>('total_tokens');
+    uso.TryGetValue<Integer>('prompt_cache_hit_tokens', aCached_tokens);
   end;
 
   AskMsg := GetLastMessage; // Obtiene la pregunta, ya que ResMsg se adiciona a la lista si no hay errores.
@@ -2267,6 +2292,7 @@ begin
     ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aPrompt_tokens;
     ResMsg.Completion_tokens := ResMsg.Completion_tokens + aCompletion_tokens;
     ResMsg.Total_tokens := ResMsg.Total_tokens + aTotal_tokens;
+    ResMsg.Cached_tokens := ResMsg.Cached_tokens + aCached_tokens;
     DoProcessResponse(AskMsg, ResMsg, Respuesta);
   End
   Else // Si tiene toolcall lo adiciona y ejecuta nuevamente el run para obtener la respuesta
@@ -2827,7 +2853,7 @@ begin
   end;
 
   try
-    if Assigned(AskMsg) then
+    if Assigned(AskMsg) and (FMessages.IndexOf(AskMsg) = -1) then
       InternalAddMessage(AskMsg);
 
     if not Assigned(AskMsg) then
@@ -2882,8 +2908,8 @@ begin
         AskMsg.Prompt := LTranscriptions;
     end;
 
-    // --- FASE 2: GROUNDING (sin guarda de modo -- siempre se ejecuta) ---
-    if cap_WebSearch in Gap then
+    // --- FASE 2: GROUNDING (excluye SmartDispatch: el routing lo hace el LLM en Fase 3) ---
+    if (FChatMode <> cmSmartDispatch) and (cap_WebSearch in Gap) then
     begin
       DoStateChange(acsReasoning, 'Ejecutando Bridge de Busqueda Web...');
       InternalRunWebSearch(ResMsg, AskMsg);
@@ -2925,6 +2951,12 @@ begin
               InternalRunTranscription(MF, ResMsg, AskMsg);
               Break;
             end;
+        end;
+      cmSmartDispatch:
+        begin
+          if FClient.Asynchronous then
+            raise Exception.Create('cmSmartDispatch no soporta modo asincrono. Usa Asynchronous = False.');
+          InternalRunSmartDispatch(ResMsg, AskMsg);
         end;
     end;
 
@@ -3183,6 +3215,11 @@ begin
   FThinking_tokens := Value;
 end;
 
+procedure TAiChat.SetCached_tokens(const Value: Integer);
+begin
+  FCached_tokens := Value;
+end;
+
 function TAiChat.GetTool_Active: Boolean;
 begin
   Result := FModelConfig.FTool_Active;
@@ -3334,6 +3371,161 @@ function TAiChat.InternalRunNativeReport(ResMsg, AskMsg: TAiChatMessage): String
 begin
   // Default: cualquier driver puede generar un reporte de texto v?a completions
   Result := InternalRunCompletions(ResMsg, AskMsg);
+end;
+
+{ --- SmartDispatch helpers --- }
+
+procedure TAiChat.InternalRunSmartDispatch(ResMsg, AskMsg: TAiChatMessage);
+var
+  LSavedSystemPrompt : String;
+  LOnData            : TAiChatOnDataEvent;
+  LOnDataEnd         : TAiChatOnDataEvent;
+  LSavedMessages     : TAiChatMessages;
+  LTempSys           : TAiChatMessage;
+  LTempUsr           : TAiChatMessage;
+  LTag               : String;
+  LContent           : String;
+  LDispatchMsg       : TAiChatMessage;
+  LToolAsk           : TAiChatMessage;
+  LDispatchPrompt    : String;
+begin
+  LSavedSystemPrompt := FSystemPrompt.Text;
+  LOnData            := FOnReceiveDataEvent;
+  LOnDataEnd         := FOnReceiveDataEnd;
+  LDispatchPrompt    := BuildSmartDispatchPrompt;
+
+  // --- Pase 1: contexto aislado — solo [system dispatch, user request] sin historial ---
+  // Swap FMessages to a 2-message list so GetMessages sends only dispatch context
+  LSavedMessages := FMessages;
+  FMessages := TAiChatMessages.Create;
+  FMessages.ModelCaps := LSavedMessages.ModelCaps;
+  LTempSys := TAiChatMessage.Create(LDispatchPrompt, 'system');
+  LTempSys.Id := 1;
+  FMessages.Add(LTempSys);
+  LTempUsr := TAiChatMessage.Create(AskMsg.Prompt, 'user');
+  LTempUsr.Id := 2;
+  FMessages.Add(LTempUsr);
+
+  FOnReceiveDataEvent := nil;
+  FOnReceiveDataEnd   := nil;
+  FSystemPrompt.Text  := LDispatchPrompt;
+
+  LDispatchMsg := TAiChatMessage.Create;
+  try
+    try
+      DoStateChange(acsReasoning, 'Analizando solicitud...');
+      InternalRunCompletions(LDispatchMsg, nil);
+    except
+      on E: Exception do
+      begin
+        DoError('SmartDispatch Pase1: ' + E.Message, E);
+        raise;
+      end;
+    end;
+  finally
+    LTempSys.Free;             // TAiChatMessages is TList<T> — items are NOT auto-freed
+    LTempUsr.Free;
+    FMessages.Free;
+    FMessages := LSavedMessages;
+    FSystemPrompt.Text  := LSavedSystemPrompt;
+    FOnReceiveDataEvent := LOnData;
+    FOnReceiveDataEnd   := LOnDataEnd;
+  end;
+
+  ParseSmartDispatchResponse(LDispatchMsg.Prompt, LTag, LContent);
+  LDispatchMsg.Free;
+
+  // --- Pase 2: ejecutar herramienta o devolver respuesta directa ---
+  if LTag = 'CHAT' then
+  begin
+    ResMsg.Prompt := LContent;
+    ResMsg.Role   := 'assistant';
+    DoData(ResMsg, 'assistant', LContent);
+    DoDataEnd(ResMsg, 'assistant', LContent);
+  end
+  else
+  begin
+    LToolAsk := TAiChatMessage.Create;
+    try
+      LToolAsk.Prompt := LContent;
+      LToolAsk.Role   := 'user';
+      DoStateChange(acsToolExecuting, 'Ejecutando: ' + LTag);
+      if LTag = 'IMAGEGEN' then
+        InternalRunImageGeneration(ResMsg, LToolAsk)
+      else if LTag = 'VIDEOGEN' then
+        InternalRunImageVideoGeneration(ResMsg, LToolAsk)
+      else if LTag = 'TTS' then
+        InternalRunSpeechGeneration(ResMsg, LToolAsk)
+      else if LTag = 'WEBSEARCH' then
+        InternalRunWebSearch(ResMsg, LToolAsk)
+      else
+        InternalRunCompletions(ResMsg, AskMsg);
+    finally
+      LToolAsk.Free;
+    end;
+  end;
+end;
+
+function TAiChat.BuildSmartDispatchPrompt: String;
+var
+  Lines: TStringList;
+begin
+  Lines := TStringList.Create;
+  try
+    Lines.Add('You are a task dispatcher. Your ONLY job is to classify the user request and output exactly one line.');
+    Lines.Add('Output format: [TAG] rewritten_request');
+    Lines.Add('');
+    Lines.Add('Available tags:');
+    if Assigned(FChatTools.FImageTool) then
+      Lines.Add('  [IMAGEGEN] <image description> — use when user asks to create, draw, or generate an image');
+    if Assigned(FChatTools.FVideoTool) then
+      Lines.Add('  [VIDEOGEN] <video description> — use when user asks to create or generate a video');
+    if Assigned(FChatTools.FSpeechTool) then
+      Lines.Add('  [TTS] <text to speak> — use when user asks to read aloud or generate audio/speech');
+    if Assigned(FChatTools.FWebSearchTool) then
+      Lines.Add('  [WEBSEARCH] <optimized search query> — use when user asks for recent news, current info, or web search');
+    Lines.Add('  [CHAT] <your answer> — use for general conversation, questions, calculations, or anything else');
+    Lines.Add('');
+    Lines.Add('STRICT RULES:');
+    Lines.Add('  - Output ONLY the single line [TAG] content. No other text, no explanations, no apologies.');
+    Lines.Add('  - Do NOT say you cannot generate images/video — just use the appropriate tag.');
+    Lines.Add('  - Always pick exactly ONE tag. [CHAT] is the fallback for anything not matched above.');
+    Lines.Add('');
+    Lines.Add('Examples:');
+    Lines.Add('  User: draw a red cat => [IMAGEGEN] a red cat');
+    Lines.Add('  User: latest AI news => [WEBSEARCH] latest artificial intelligence news 2025');
+    Lines.Add('  User: what is 2+2 => [CHAT] 4');
+    Result := Lines.Text;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TAiChat.ParseSmartDispatchResponse(const AResponse: String; out ATag, AContent: String);
+var
+  S: String;
+  P: Integer;
+begin
+  ATag    := 'CHAT';
+  AContent := AResponse;
+  S := Trim(AResponse);
+  if (S <> '') and (S[1] = '[') then
+  begin
+    P := Pos(']', S);
+    if P > 1 then
+    begin
+      ATag     := UpperCase(Trim(Copy(S, 2, P - 2)));
+      AContent := Trim(Copy(S, P + 1, MaxInt));
+      // Si el tag no es reconocido, devolver respuesta original como CHAT
+      if (ATag <> 'IMAGEGEN') and (ATag <> 'VIDEOGEN') and
+         (ATag <> 'TTS') and (ATag <> 'WEBSEARCH') and
+         (ATag <> 'CHAT') then
+      begin
+        ATag     := 'CHAT';
+        AContent := AResponse;
+      end;
+    end;
+  end;
 end;
 
 end.

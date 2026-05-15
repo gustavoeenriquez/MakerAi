@@ -35,9 +35,9 @@
 // Modelos con vision actualmente en Groq (Abr 2026):
 //   meta-llama/llama-4-scout-17b-16e-instruct  (131K ctx, 8K output, vision + tools)
 //   openai/gpt-oss-120b                        (131K ctx, 65K output, vision + reasoning)
-// Limitaciones generales de vision en Groq:
-//   - Imagen maxima: 20MB por request
-//   - El driver envia solo el ultimo mensaje cuando hay MediaFiles (limitacion conocida)
+// Limites de vision en Groq:
+//   - Imagen maxima por URL: 20MB | por base64: 4MB
+//   - Maximo 5 imagenes por request (llama-4-scout)
 
 unit uMakerAi.Chat.Groq;
 
@@ -141,7 +141,6 @@ Var
   Lista: TStringList;
   I: Integer;
   LAsincronico: Boolean;
-  LastMsg: TAiChatMessage;
   Res, LModel: String;
 begin
 
@@ -156,8 +155,6 @@ begin
   // Las funciones no trabajan en modo ascincrono
   // LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
   LAsincronico := Self.Asynchronous;
-
-  // En groq hay una restricci�n sobre las im�genes
 
   FClient.Asynchronous := LAsincronico;
 
@@ -192,22 +189,11 @@ begin
         jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
 {$ENDIF}
         If Assigned(jToolChoice) then
-          AJSONObject.AddPair('tools_choice', jToolChoice);
+          AJSONObject.AddPair('tool_choice', jToolChoice);
       End;
     End;
 
-    LastMsg := Messages.Last;
-    If Assigned(LastMsg) then
-    Begin
-      If LastMsg.MediaFiles.Count > 0 then
-      Begin
-        AJSONObject.AddPair('messages', LastMsg.ToJSon); // Si tiene im�genes solo envia una entrada
-      End
-      Else
-      Begin
-        AJSONObject.AddPair('messages', GetMessages); // Si no tiene im�genes env�a todos los mensajes
-      End;
-    End;
+    AJSONObject.AddPair('messages', GetMessages);
 
     AJSONObject.AddPair('model', LModel);
 
@@ -247,7 +233,12 @@ begin
     // Otros modelos (llama, mistral, kimi, etc.): sin params de reasoning
 
     AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
-    AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+
+    // Groq docs: reasoning models usan max_completion_tokens (incluye reasoning tokens en el budget)
+    if LModel.StartsWith('openai/gpt-oss') or LModel.StartsWith('qwen/') then
+      AJSONObject.AddPair('max_completion_tokens', TJSONNumber.Create(Max_tokens))
+    else
+      AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
 
     If Top_p <> 0 then
       AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
@@ -319,16 +310,7 @@ begin
       AJSONObject.AddPair('stop', JStop);
     End;
 
-    If Logprobs = True then
-    Begin
-      If Logit_bias <> '' then
-        AJSONObject.AddPair('logit_bias', TJSONNumber.Create(Logit_bias));
-
-      AJSONObject.AddPair('logprobs', TJSONBool.Create(Logprobs));
-
-      If Top_logprobs <> '' then
-        AJSONObject.AddPair('top_logprobs', TJSONNumber.Create(Top_logprobs));
-    End;
+    // NOTA: Groq no soporta logprobs, logit_bias ni top_logprobs en chat completions (error 400)
 
     If Seed > 0 then
       AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));

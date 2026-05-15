@@ -87,13 +87,7 @@ begin
   if Assigned(AskMsg) then
     LPrompt := AskMsg.Prompt;
 
-  // Si IsAsync=True ya estamos en el hilo background del chat: ejecutar directo
-  // para evitar un TTask anidado que causar�a dangling pointer sobre ResMsg/AskMsg.
-  // Si IsAsync=False estamos en el hilo principal: lanzar task para no bloquearlo.
-  if IsAsync then
-    InternalRunOllamaOCR(aMediaFile, ResMsg, LPrompt)
-  else
-    TTask.Run(procedure begin InternalRunOllamaOCR(aMediaFile, ResMsg, LPrompt); end);
+  InternalRunOllamaOCR(aMediaFile, ResMsg, LPrompt);
 end;
 
 function TAiOllamaOcrTool.InternalRunOllamaOCR(aMediaFile: TAiMediaFile; ResMsg: TAiChatMessage; const AOverridePrompt: string): string;

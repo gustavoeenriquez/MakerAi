@@ -32,6 +32,7 @@ uses
   uMakerAi.Agents,
   uMakerAi.Agents.IAiTool,
   uMakerAi.Agents.ToolRegistry,
+  uMakerAi.Agents.Skill,     // TAiSkill
   uMakerAi.Chat.Messages,    // TAiToolsFunction
   uMakerAi.Tools.Functions;  // TAiFunctions, TFunctionActionItem, TFunctionEvent
 
@@ -61,13 +62,17 @@ type
     FMaxTokens     : Integer;
     FUseAllTools   : Boolean;
     FRegistry      : TAiToolRegistry;
+    FSkill         : TAiSkill;
 
     // Estado temporal válido sólo durante DoExecute (un hilo a la vez por nodo)
     FActiveRegistry: TAiToolRegistry;
     // Captura el último error del LLM para re-lanzarlo como excepción
     FLastError     : String;
 
+    procedure SetSkill(const Value: TAiSkill);
     procedure LoadRegistryTools(AFunctions: TAiFunctions);
+    // Carga en AFunctions sólo las herramientas de AToolNames presentes en el registry
+    procedure LoadSkillTools(AFunctions: TAiFunctions; AToolNames: TStrings);
     procedure HandleToolCall(Sender: TObject;
                              FunctionAction: TFunctionActionItem;
                              FunctionName: String;
@@ -80,21 +85,35 @@ type
                         aLink: TAIAgentsLink); override;
   public
     constructor Create(aOwner: TComponent); override;
+    destructor Destroy; override;
 
     // Referencia al registry a usar. nil = TAiToolRegistry.Instance.
     property Registry: TAiToolRegistry read FRegistry write FRegistry;
+
+    // Skill de configuración reutilizable.
+    // El nodo toma ownership: libera el skill anterior al asignar uno nuevo,
+    // y libera el skill activo en el destructor.
+    // Si se asigna un skill:
+    //   - Sus campos se aplican como BASE antes de las props del nodo.
+    //   - Las props explícitas del nodo (no vacías) sobrescriben las del skill.
+    //   - ExtraTools se carga si UseAllTools=False y el skill tiene herramientas.
+    property Skill: TAiSkill read FSkill write SetSkill;
   published
     // Nombre del driver LLM: 'OpenAI', 'Claude', 'Gemini', 'Ollama', etc.
+    // Vacío = usa el DriverName del skill (si está asignado).
     property DriverName   : String  read FDriverName   write FDriverName;
-    // Modelo específico del proveedor (vacío = usa el default del driver)
+    // Modelo específico del proveedor (vacío = usa el del skill o el default del driver)
     property Model        : String  read FModel        write FModel;
     // API key. Soporta sintaxis @ENV_VAR_NAME para resolución en runtime.
+    // Vacío = usa el ApiKey del skill (si está asignado).
     property ApiKey       : String  read FApiKey       write FApiKey;
-    // Instrucción de sistema para el LLM
+    // Instrucción de sistema para el LLM.
+    // Vacío = usa el SystemPrompt del skill (si está asignado).
     property SystemPrompt : String  read FSystemPrompt write FSystemPrompt;
     // Máximo de tokens en la respuesta (0 = usa el default del driver)
     property MaxTokens    : Integer read FMaxTokens    write FMaxTokens default 0;
-    // Si True, inyecta automáticamente todas las herramientas disponibles del registry
+    // Si True, inyecta automáticamente todas las herramientas disponibles del registry.
+    // Si False y hay un skill con ExtraTools, carga sólo esas herramientas.
     property UseAllTools  : Boolean read FUseAllTools  write FUseAllTools default True;
   end;
 
@@ -118,14 +137,31 @@ end;
 constructor TLLMNode.Create(aOwner: TComponent);
 begin
   inherited Create(aOwner);
-  FDriverName    := 'Claude';
-  FModel         := '';
-  FApiKey        := '';
-  FSystemPrompt  := '';
-  FMaxTokens     := 0;
-  FUseAllTools   := True;
-  FRegistry      := nil;
+  FDriverName     := 'Claude';
+  FModel          := '';
+  FApiKey         := '';
+  FSystemPrompt   := '';
+  FMaxTokens      := 0;
+  FUseAllTools    := True;
+  FRegistry       := nil;
   FActiveRegistry := nil;
+  FSkill          := nil;
+end;
+
+destructor TLLMNode.Destroy;
+begin
+  FSkill.Free;
+  inherited;
+end;
+
+// ---------------------------------------------------------------------------
+// Setter de Skill: el nodo toma ownership — libera el skill anterior si existe.
+// ---------------------------------------------------------------------------
+procedure TLLMNode.SetSkill(const Value: TAiSkill);
+begin
+  if FSkill = Value then Exit;
+  FSkill.Free;
+  FSkill := Value;
 end;
 
 // ---------------------------------------------------------------------------
@@ -154,6 +190,35 @@ begin
     // Esto garantiza que schemas complejos (anyOf, nested objects, arrays, etc.)
     // lleguen intactos a GetTools() → NormalizeToolsFromSource → FormatToolList.
     Schema := T.GetSchema;  // NO liberar — propiedad de la herramienta
+    if Assigned(Schema) then
+      Item.RawSchemaJson := Schema.ToJSON
+    else
+      Item.RawSchemaJson := '{"type":"object","properties":{}}';
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// Carga en AFunctions sólo las herramientas de AToolNames presentes en el
+// registry activo. Usado cuando UseAllTools=False y el skill define ExtraTools.
+// ---------------------------------------------------------------------------
+procedure TLLMNode.LoadSkillTools(AFunctions: TAiFunctions; AToolNames: TStrings);
+var
+  ToolName: String;
+  Tool    : IAiTool;
+  Item    : TFunctionActionItem;
+  Schema  : TJSONObject;
+begin
+  if not Assigned(AFunctions) then Exit;
+  if not Assigned(FActiveRegistry) then Exit;
+
+  for ToolName in AToolNames do
+  begin
+    if not FActiveRegistry.TryFind(ToolName, Tool) then
+      Continue;
+
+    Item := AFunctions.Functions.AddFunction(Tool.Name, True, HandleToolCall);
+    Item.Description.Text := Tool.Description;
+    Schema := Tool.GetSchema;  // NO liberar — propiedad de la herramienta
     if Assigned(Schema) then
       Item.RawSchemaJson := Schema.ToJSON
     else
@@ -258,8 +323,25 @@ begin
   Chat      := TAiChatConnection.Create(nil);
   Functions := TAiFunctions.Create(nil);
   try
-    // Configurar el chat
-    Chat.DriverName := FDriverName;
+    // 1. Aplicar el skill como BASE (si está asignado).
+    //    Sus valores se establecen primero; las props del nodo los sobrescriben
+    //    a continuación si son no-vacías.
+    if Assigned(FSkill) then
+    begin
+      if FSkill.DriverName <> '' then
+        Chat.DriverName := FSkill.DriverName;
+      if FSkill.Model <> '' then
+        Chat.Model := FSkill.Model;
+      if FSkill.ApiKey <> '' then
+        Chat.Params.Values['ApiKey'] := FSkill.ApiKey;
+      if FSkill.SystemPrompt <> '' then
+        Chat.SystemPrompt.Text := FSkill.SystemPrompt;
+    end;
+
+    // 2. Aplicar props explícitas del nodo (tienen prioridad sobre el skill).
+    //    DriverName: override si el nodo tiene valor; si no, conserva el del skill.
+    if FDriverName <> '' then
+      Chat.DriverName := FDriverName;
     if FModel <> '' then
       Chat.Model := FModel;
 
@@ -275,7 +357,9 @@ begin
     if FSystemPrompt <> '' then
       Chat.SystemPrompt.Text := FSystemPrompt;
 
-    // Cargar herramientas del registry en TAiFunctions
+    // 3. Cargar herramientas.
+    //    - UseAllTools=True  → carga todo el registry (comportamiento original).
+    //    - UseAllTools=False + Skill.ExtraTools → carga sólo las tools del skill.
     if FUseAllTools and (FActiveRegistry.Count > 0) then
     begin
       LoadRegistryTools(Functions);
@@ -290,6 +374,18 @@ begin
       // Tool_Active debe ser True para que el driver envíe las tools al LLM.
       // Algunos drivers (Claude, Gemini) lo tienen en False por defecto.
       Chat.Params.Values['Tool_Active'] := 'True';
+    end
+    else if Assigned(FSkill) and (FSkill.ExtraTools.Count > 0) then
+    begin
+      // UseAllTools=False pero el skill declara herramientas específicas
+      LoadSkillTools(Functions, FSkill.ExtraTools);
+      if Functions.Functions.Count > 0 then
+      begin
+        Chat.AiFunctions := Functions;
+        Chat.Params.Values['ModelCaps']   := '[]';
+        Chat.Params.Values['SessionCaps'] := '[]';
+        Chat.Params.Values['Tool_Active'] := 'True';
+      end;
     end;
 
     // Ejecutar el input del nodo (el loop de tools es automático)

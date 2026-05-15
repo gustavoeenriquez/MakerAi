@@ -50,9 +50,11 @@ end;
 constructor TAiGeminiWebSearchTool.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  FApiKey := '@GEMINI_API_KEY';
-  FUrl := 'https://generativelanguage.googleapis.com/v1beta/';
-  FModel := 'gemini-2.0-flash'; // O gemini-1.5-pro
+  FApiKey           := '@GEMINI_API_KEY';
+  FUrl              := 'https://generativelanguage.googleapis.com/v1beta/';
+  FModel            := 'gemini-2.0-flash';
+  FDynamicThreshold := 0;  // 0 = google_search (todos los modelos)
+                            // >0 = google_search_retrieval (solo gemini-1.5-*)
 end;
 
 function TAiGeminiWebSearchTool.GetApiKey: string;
@@ -67,151 +69,154 @@ end;
 
 procedure TAiGeminiWebSearchTool.ExecuteSearch(const AQuery: string; ResMsg, AskMsg: TAiChatMessage);
 begin
-  // Si IsAsync=True ya estamos en el hilo background del chat: ejecutar directo
-  // para evitar un TTask anidado que causar?a dangling pointer sobre ResMsg.
-  // Si IsAsync=False estamos en el hilo principal: lanzar task para no bloquearlo.
-  if IsAsync then
-    InternalRunGeminiSearch(AQuery, ResMsg)
-  else
-    TTask.Run(procedure begin InternalRunGeminiSearch(AQuery, ResMsg); end);
+  // Siempre síncrono: en async mode ya corremos en un hilo background;
+  // en sync mode (SmartDispatch, llamada directa) necesitamos el resultado
+  // antes de retornar. TTask.Run aquí rompería ambos flujos.
+  InternalRunGeminiSearch(AQuery, ResMsg);
 end;
-
-{ --- IMPLEMENTACI?N DE B?SQUEDA --- }
 
 function TAiGeminiWebSearchTool.InternalRunGeminiSearch(const AQuery: string; ResMsg: TAiChatMessage): string;
 var
-  HTTP: TNetHTTPClient;
-  LUrl: string;
-  LRequestJson, LContents, LPart, LTool, LUsage, LSearchTool, LDynamicConfig: TJSONObject;
-  LBody: TStringStream;
-  LResponse: IHTTPResponse;
-  LResponseJson, LGrounding, LChunk, LSupport, LSource: TJSONObject;
-  LChunks, LSupports, LIndices: TJSONArray;
-  LMsg: TAiChatMessage;
-  I, J: Integer;
-  LCitation: TAiMsgCitation;
-  LCitSource: TAiCitationSource;
-  LIdx: Integer;
+  HTTP          : TNetHTTPClient;
+  LUrl          : string;
+  LRequestJson  : TJSONObject;
+  LTool         : TJSONObject;
+  LBody         : TStringStream;
+  LResponse     : IHTTPResponse;
+  LResponseJson : TJSONObject;
+  LCandidates   : TJSONArray;
+  LCandidate    : TJSONObject;
+  LContent      : TJSONObject;
+  LParts        : TJSONArray;
+  LUsage        : TJSONObject;
+  LGrounding    : TJSONObject;
+  LChunks       : TJSONArray;
+  LSupports     : TJSONArray;
+  LSupport      : TJSONObject;
+  LSegment      : TJSONObject;
+  LIndices      : TJSONArray;
+  LChunk        : TJSONObject;
+  LSource       : TJSONObject;
+  LCitation     : TAiMsgCitation;
+  LCitSource    : TAiCitationSource;
+  I, J, LIdx    : Integer;
 begin
   Result := '';
-  LMsg := TAiChatMessage(ResMsg);
 
-  // 1. Construir URL del Endpoint
   LUrl := Format('%smodels/%s:generateContent?key=%s', [FUrl, FModel, GetApiKey]);
 
-  HTTP := TNetHTTPClient.Create(nil);
+  HTTP         := TNetHTTPClient.Create(nil);
   LRequestJson := TJSONObject.Create;
   try
-    // 2. Preparar el Prompt (Contents)
-    LPart := TJSONObject.Create.AddPair('text', AQuery);
-    LContents := TJSONObject.Create.AddPair('parts', TJSONArray.Create.Add(LPart));
-    LRequestJson.AddPair('contents', TJSONArray.Create.Add(LContents));
+    // Contents
+    LRequestJson.AddPair('contents',
+      TJSONArray.Create.Add(
+        TJSONObject.Create.AddPair('parts',
+          TJSONArray.Create.Add(
+            TJSONObject.Create.AddPair('text', AQuery)))));
 
-    // 3. Configuraci?n de Herramientas (Grounding)
-    if FDynamicThreshold > 0 then
+    // Tool: google_search (gemini-2.0+) o google_search_retrieval (gemini-1.5-*)
+    if (FDynamicThreshold > 0) and FModel.Contains('1.5') then
     begin
-      // MODO DIN?MICO: El modelo decide si buscar en Google o no
-      LDynamicConfig := TJSONObject.Create;
-      LDynamicConfig.AddPair('mode', 'MODE_DYNAMIC');
-      LDynamicConfig.AddPair('dynamic_threshold', TJSONNumber.Create(FDynamicThreshold));
-
-      LSearchTool := TJSONObject.Create;
-      LSearchTool.AddPair('dynamic_retrieval_config', LDynamicConfig);
-
-      LTool := TJSONObject.Create.AddPair('google_search_retrieval', LSearchTool);
+      var LDynCfg := TJSONObject.Create;
+      LDynCfg.AddPair('mode', 'MODE_DYNAMIC');
+      LDynCfg.AddPair('dynamic_threshold', TJSONNumber.Create(FDynamicThreshold));
+      var LRetrieval := TJSONObject.Create;
+      LRetrieval.AddPair('dynamic_retrieval_config', LDynCfg);
+      LTool := TJSONObject.Create.AddPair('google_search_retrieval', LRetrieval);
     end
     else
-    begin
-      // MODO FORZADO: Siempre realiza b?squeda en Google
       LTool := TJSONObject.Create.AddPair('google_search', TJSONObject.Create);
-    end;
 
     LRequestJson.AddPair('tools', TJSONArray.Create.Add(LTool));
 
-    // 4. Ejecuci?n del POST
+    // POST
     LBody := TStringStream.Create(LRequestJson.ToJSON, TEncoding.UTF8);
     try
       HTTP.ContentType := 'application/json';
-      ReportState(acsReasoning, 'Buscando informaci?n actualizada en Google...');
+      ReportState(acsReasoning, 'Buscando información actualizada en Google...');
       LResponse := HTTP.Post(LUrl, LBody);
     finally
       LBody.Free;
     end;
 
-    // 5. Procesar Respuesta Exitosa
     if LResponse.StatusCode = 200 then
     begin
       LResponseJson := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       try
-        // A. Extraer Texto Principal
-        Result := LResponseJson.GetValue<string>('candidates[0].content.parts[0].text', '');
-        LMsg.Prompt := Result;
-
-        // B. Actualizar Estad?sticas de Tokens
+        // Tokens
         if LResponseJson.TryGetValue<TJSONObject>('usageMetadata', LUsage) then
         begin
-          var LPt: Integer := 0;
-          var LCt: Integer := 0;
-          var LTt: Integer := 0;
-          LUsage.TryGetValue<Integer>('promptTokenCount', LPt);
-          LUsage.TryGetValue<Integer>('candidatesTokenCount', LCt);
-          LUsage.TryGetValue<Integer>('totalTokenCount', LTt);
-          LMsg.Prompt_tokens := LMsg.Prompt_tokens + LPt;
-          LMsg.Completion_tokens := LMsg.Completion_tokens + LCt;
-          LMsg.Total_tokens := LMsg.Total_tokens + LTt;
+          var LPt, LCt, LTt: Integer;
+          LPt := 0; LCt := 0; LTt := 0;
+          LUsage.TryGetValue<Integer>('promptTokenCount',      LPt);
+          LUsage.TryGetValue<Integer>('candidatesTokenCount',  LCt);
+          LUsage.TryGetValue<Integer>('totalTokenCount',       LTt);
+          ResMsg.Prompt_tokens     := ResMsg.Prompt_tokens     + LPt;
+          ResMsg.Completion_tokens := ResMsg.Completion_tokens + LCt;
+          ResMsg.Total_tokens      := ResMsg.Total_tokens      + LTt;
         end;
 
-        // C. Procesar Metadatos de Grounding (Citas e Inline Citations)
-        if LResponseJson.TryGetValue<TJSONObject>('candidates[0].groundingMetadata', LGrounding) then
+        // candidates[0] — traversal manual (path notation no funciona en Delphi)
+        if LResponseJson.TryGetValue<TJSONArray>('candidates', LCandidates) and
+           (LCandidates.Count > 0) then
         begin
-          if LGrounding.TryGetValue<TJSONArray>('groundingChunks', LChunks) and LGrounding.TryGetValue<TJSONArray>('groundingSupports', LSupports) then
-          begin
-            for I := 0 to LSupports.Count - 1 do
+          LCandidate := LCandidates.Items[0] as TJSONObject;
+
+          // candidates[0].content.parts[0].text
+          if LCandidate.TryGetValue<TJSONObject>('content', LContent) then
+            if LContent.TryGetValue<TJSONArray>('parts', LParts) and (LParts.Count > 0) then
+              (LParts.Items[0] as TJSONObject).TryGetValue<string>('text', Result);
+
+          ResMsg.Prompt := Result;
+
+          // candidates[0].groundingMetadata
+          if LCandidate.TryGetValue<TJSONObject>('groundingMetadata', LGrounding) then
+            if LGrounding.TryGetValue<TJSONArray>('groundingChunks',   LChunks) and
+               LGrounding.TryGetValue<TJSONArray>('groundingSupports', LSupports) then
             begin
-              LSupport := LSupports.Items[I] as TJSONObject;
-              LCitation := TAiMsgCitation.Create;
-
-              // Segmentos de texto vinculados a fuentes
-              LCitation.StartIndex := LSupport.GetValue<TJSONObject>('segment').GetValue<Integer>('startIndex', 0);
-              LCitation.EndIndex := LSupport.GetValue<TJSONObject>('segment').GetValue<Integer>('endIndex', 0);
-              LCitation.Text := LSupport.GetValue<TJSONObject>('segment').GetValue<string>('text', '');
-
-              // Vincular con las fuentes (web chunks)
-              if LSupport.TryGetValue<TJSONArray>('groundingChunkIndices', LIndices) then
+              for I := 0 to LSupports.Count - 1 do
               begin
-                for J := 0 to LIndices.Count - 1 do
+                LSupport  := LSupports.Items[I] as TJSONObject;
+                LCitation := TAiMsgCitation.Create;
+
+                if LSupport.TryGetValue<TJSONObject>('segment', LSegment) then
                 begin
-                  LIdx := (LIndices.Items[J] as TJSONNumber).AsInt;
-                  if LIdx < LChunks.Count then
+                  LSegment.TryGetValue<Integer>('startIndex', LCitation.StartIndex);
+                  LSegment.TryGetValue<Integer>('endIndex',   LCitation.EndIndex);
+                  LSegment.TryGetValue<string>('text',        LCitation.Text);
+                end;
+
+                if LSupport.TryGetValue<TJSONArray>('groundingChunkIndices', LIndices) then
+                  for J := 0 to LIndices.Count - 1 do
                   begin
-                    LChunk := LChunks.Items[LIdx] as TJSONObject;
-                    if LChunk.TryGetValue<TJSONObject>('web', LSource) then
+                    LIdx := (LIndices.Items[J] as TJSONNumber).AsInt;
+                    if (LIdx >= 0) and (LIdx < LChunks.Count) then
                     begin
-                      LCitSource := TAiCitationSource.Create;
-                      LCitSource.SourceType := cstWeb;
-                      LCitSource.DataSource.Title := LSource.GetValue<string>('title', '');
-                      LCitSource.DataSource.Url := LSource.GetValue<string>('uri', '');
-                      LCitation.Sources.Add(LCitSource);
+                      LChunk := LChunks.Items[LIdx] as TJSONObject;
+                      if LChunk.TryGetValue<TJSONObject>('web', LSource) then
+                      begin
+                        LCitSource            := TAiCitationSource.Create;
+                        LCitSource.SourceType := cstWeb;
+                        LSource.TryGetValue<string>('title', LCitSource.DataSource.Title);
+                        LSource.TryGetValue<string>('uri',   LCitSource.DataSource.Url);
+                        LCitation.Sources.Add(LCitSource);
+                      end;
                     end;
                   end;
-                end;
+
+                ResMsg.Citations.Add(LCitation);
               end;
-              LMsg.Citations.Add(LCitation);
             end;
-          end;
         end;
 
-        // Notificar el fin de los datos
         ReportDataEnd(ResMsg, 'assistant', Result);
       finally
         LResponseJson.Free;
       end;
     end
     else
-    begin
-      // Manejo de errores de la API
-      ReportError('Gemini Search Grounding Error: ' + LResponse.ContentAsString, nil);
-    end;
+      ReportError('Gemini Search Error ' + LResponse.StatusCode.ToString + ': ' + LResponse.ContentAsString, nil);
 
   finally
     LRequestJson.Free;
