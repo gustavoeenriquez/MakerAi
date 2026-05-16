@@ -38,7 +38,7 @@
 //   - JArr.Format / JObj.Format → FormatJSON
 //   - TObjectList<T> / TList<T> → specialize TObjectList<T> / TList<T>
 //   - TDictionary<K,V> → specialize TDictionary<K,V>
-//   - ValueNotify usa 'const' (constref eliminado — incompatible con override en FPC moderno)
+//   - ValueNotify usa 'constref' (requerido por TDictionary en FPC 3.2.2+)
 
 unit uMakerAi.Chat.Messages;
 
@@ -92,7 +92,7 @@ type
   // ---------------------------------------------------------------------------
   TAiToolsFunctions = class(specialize TDictionary<string, TAiToolsFunction>)
   protected
-    procedure ValueNotify(const Value: TAiToolsFunction;
+    procedure ValueNotify(constref Value: TAiToolsFunction;
                           Action: TCollectionNotification); override;
   public
     function  ToOutputJson: TJSONArray;
@@ -1152,7 +1152,7 @@ end;
 //  TAiToolsFunctions
 // ===========================================================================
 
-procedure TAiToolsFunctions.ValueNotify(const Value: TAiToolsFunction;
+procedure TAiToolsFunctions.ValueNotify(constref Value: TAiToolsFunction;
                                         Action: TCollectionNotification);
 begin
   case Action of
