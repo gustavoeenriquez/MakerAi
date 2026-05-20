@@ -132,3 +132,10 @@ node_modules/
 # .git/
  
 Source/Packages/hpp/
+
+# -------------------------------------------
+# Scripts de build y archivos de diseño
+# -------------------------------------------
+*.bat
+*.ps1
+*.cdr
