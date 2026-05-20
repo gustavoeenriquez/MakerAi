@@ -15,6 +15,7 @@ program demo_mcp_client_stdio;
 //   fpc demo_mcp_client_stdio.pas -Fu../Source/Core -Fu../Source/MCPClient
 
 uses
+  uDemoHelper,
   SysUtils, Classes, Contnrs,
   fpjson, jsonparser,
   uMakerAi.Core,

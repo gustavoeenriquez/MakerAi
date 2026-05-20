@@ -16,6 +16,7 @@ program demo_mcp_server_stdio;
 //   fpc demo_mcp_server_stdio.pas -Fu../Source/Core -Fu../Source/MCPServer
 
 uses
+  uDemoHelper,
   SysUtils, Classes,
   fpjson,
   uMakerAi.MCPServer.Core,

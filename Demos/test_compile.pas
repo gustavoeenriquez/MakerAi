@@ -1,6 +1,7 @@
 program test_compile;
 {$mode objfpc}{$H+}
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat.Messages,

@@ -11,6 +11,7 @@ program demo_openai_async;
 //   Linux:    export OPENAI_API_KEY=sk-xxxx
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,

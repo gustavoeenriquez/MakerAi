@@ -10,6 +10,7 @@ program demo_aiconnection_async;
 //   - El patron Facade es transparente al codigo consumidor en modo async
 
 uses
+  uDemoHelper,
   SysUtils, Classes,
   uMakerAi.Core,
   uMakerAi.Chat,

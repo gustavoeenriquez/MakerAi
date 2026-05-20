@@ -15,6 +15,7 @@ program demo_dalle;
 //   fpc demo_dalle.pas -Fu../Source/Core -Fu../Source/Chat -Fu../Source/Tools
 
 uses
+  uDemoHelper,
   SysUtils, Classes,
   uMakerAi.Core,
   uMakerAi.OpenAi.Dalle;

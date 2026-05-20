@@ -2,6 +2,7 @@ program demo_ollama_async;
 {$mode objfpc}{$H+}
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,

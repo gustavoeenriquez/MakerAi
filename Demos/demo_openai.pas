@@ -15,6 +15,7 @@ program demo_openai;
 //                      o1, o3, o4-mini, gpt-4.1, gpt-4.1-mini
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,
@@ -56,7 +57,10 @@ begin
 
     try
       Resp := Chat.AddMessageAndRun('Hola! En una sola frase, quien eres?', 'user');
-      WriteLn('<<< Respuesta: ', Resp);
+      if Resp = '' then
+        WriteLn('[ERROR] Respuesta vacia - posible problema de conexion, API key, o SSL')
+      else
+        WriteLn('<<< Respuesta: ', Resp);
       WriteLn;
       WriteLn('Tokens — Prompt: ', Chat.Prompt_tokens,
               '  Completion: ',    Chat.Completion_tokens,

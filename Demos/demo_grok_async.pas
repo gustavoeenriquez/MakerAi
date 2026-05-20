@@ -11,6 +11,7 @@ program demo_grok_async;
 //   Linux:    export GROK_API_KEY=xai-xxxx
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,

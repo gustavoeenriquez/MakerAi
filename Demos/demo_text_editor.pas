@@ -6,6 +6,7 @@ program demo_text_editor;
 {$mode objfpc}{$H+}
 
 uses
+  uDemoHelper,
   SysUtils, Classes,
   uMakerAi.Tools.TextEditor;
 

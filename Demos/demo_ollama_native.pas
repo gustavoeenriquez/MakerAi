@@ -8,6 +8,7 @@ program demo_ollama_native;
 // Ejemplo: ollama run gemma3:1b
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,
@@ -43,7 +44,10 @@ begin
 
     Resp := Chat.AddMessageAndRun('Hola! En una sola frase, quien eres?', 'user');
 
-    WriteLn('<<< Respuesta: ', Resp);
+    if Resp = '' then
+      WriteLn('[ERROR] Respuesta vacia - posible problema de conexion, API key, o SSL')
+    else
+      WriteLn('<<< Respuesta: ', Resp);
     WriteLn;
     WriteLn('Tokens — Prompt: ', Chat.Prompt_tokens,
             '  Completion: ',    Chat.Completion_tokens,
