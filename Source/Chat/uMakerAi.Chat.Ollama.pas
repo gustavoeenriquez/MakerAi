@@ -758,6 +758,7 @@ var
   CustomModels: TAiStringArray;
 begin
   Result := TStringList.Create;
+  try
 
   if aUrl <> '' then
     sUrl := aUrl
@@ -806,6 +807,10 @@ begin
   finally
     Client.Free;
     RespStream.Free;
+  end;
+  except
+    Result.Free;
+    raise;
   end;
 end;
 

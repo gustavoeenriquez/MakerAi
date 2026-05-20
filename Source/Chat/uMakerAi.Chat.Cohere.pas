@@ -293,6 +293,7 @@ var
   LUrl, LName: string;
 begin
   Result := TStringList.Create;
+  try
   LUrl   := 'https://api.cohere.com/v1/models?endpoint=chat';
 
   Client     := TFPHTTPClient.Create(nil);
@@ -327,6 +328,10 @@ begin
   finally
     Client.Free;
     RespStream.Free;
+  end;
+  except
+    Result.Free;
+    raise;
   end;
 end;
 

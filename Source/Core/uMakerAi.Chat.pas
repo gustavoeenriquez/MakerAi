@@ -534,6 +534,13 @@ type
     property OnStateChange  : TAiStateChangeEvent    read FOnStateChange       write FOnStateChange;
   end;
 
+// Variables del log de debug. Visibles en interface solo para que
+// TAiChatConnection pueda configurarlas via EnableDebugLog/DisableDebugLog.
+// NO usar directamente desde codigo cliente. Default OFF (opt-in).
+var
+  MakerAiDebugLogEnabled : Boolean = False;
+  MakerAiDebugLogPath    : string  = '';
+
 procedure LogDebug(const Mensaje: string);
 
 // ---------------------------------------------------------------------------
@@ -678,8 +685,31 @@ end;
 // ===========================================================================
 
 procedure LogDebug(const Mensaje: string);
+var
+  FS   : TFileStream;
+  S    : string;
+  Path : string;
 begin
-  // Solo activar para depuracion
+  if not MakerAiDebugLogEnabled then Exit;
+  try
+    if MakerAiDebugLogPath <> '' then
+      Path := MakerAiDebugLogPath
+    else
+      Path := GetTempDir + 'makerai_debug.log';
+    if FileExists(Path) then
+      FS := TFileStream.Create(Path, fmOpenWrite or fmShareDenyNone)
+    else
+      FS := TFileStream.Create(Path, fmCreate or fmShareDenyNone);
+    try
+      FS.Seek(0, soEnd);
+      S := Mensaje + LineEnding;
+      FS.WriteBuffer(Pointer(S)^, Length(S));
+    finally
+      FS.Free;
+    end;
+  except
+    // Silencioso — el log nunca debe interrumpir la request
+  end;
 end;
 
 // ===========================================================================
@@ -2347,6 +2377,7 @@ var
   I            : Integer;
 begin
   Result := TStringList.Create;
+  try
 
   if aUrl <> '' then
     sUrl := aUrl
@@ -2410,6 +2441,10 @@ begin
   for I := Low(CustomModels) to High(CustomModels) do
     if Result.IndexOf(CustomModels[I]) = -1 then
       Result.Add(CustomModels[I]);
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 function TAiChat.GetModels: TStringList;

@@ -195,6 +195,10 @@ type
     function  UploadFileToCache(aMediaFile: TAiMediaFile;
         aTTL_Seconds: Integer = 3600): string;
 
+    class procedure EnableDebugLog(const APath: string = '');
+    class procedure DisableDebugLog;
+    class function  IsDebugLogEnabled: Boolean;
+
     property Messages  : TAiChatMessages read FMessages;
     property LastError : string          read GetLastError;
     property Busy      : Boolean         read GetBusy;
@@ -1262,6 +1266,27 @@ begin
   FOnError := Value;
   if Assigned(FChat) then
     FChat.OnError := Value;
+end;
+
+// ===========================================================================
+//  Debug log — API publica opt-in
+// ===========================================================================
+
+class procedure TAiChatConnection.EnableDebugLog(const APath: string);
+begin
+  if APath <> '' then
+    uMakerAi.Chat.MakerAiDebugLogPath := APath;
+  uMakerAi.Chat.MakerAiDebugLogEnabled := True;
+end;
+
+class procedure TAiChatConnection.DisableDebugLog;
+begin
+  uMakerAi.Chat.MakerAiDebugLogEnabled := False;
+end;
+
+class function TAiChatConnection.IsDebugLogEnabled: Boolean;
+begin
+  Result := uMakerAi.Chat.MakerAiDebugLogEnabled;
 end;
 
 end.
