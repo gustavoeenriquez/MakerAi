@@ -85,7 +85,7 @@ type
 
     function InternalRunNativeSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
-    function InternalRunNativeVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
+    function InternalRunImageVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
 
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
 
@@ -781,7 +781,7 @@ begin
           if (cap_CodeInterpreter in ModelConfig.ModelCaps) then
             TargetCategories := [Low(TAiFileCategory) .. High(TAiFileCategory)] // Permitir todo
           else
-            TargetCategories := NativeInputFiles; // Filtro estricto estándar
+            TargetCategories := GetModelInputFileTypes; // Filtro estricto estándar
 
           MediaArr := Msg.MediaFiles.GetMediaList(TargetCategories, False);
 
@@ -1133,7 +1133,7 @@ begin
     end;
 
     // B. Configuración de Imagen (Gemini 3 Image / Imagen 3)
-    if ImageParams.Count > 0 then
+    if ImageParams.Params.Count > 0 then
     begin
       var
       JImageConfig := TJSONObject.Create;
@@ -1527,7 +1527,7 @@ begin
   Self.Thinking_tokens := Self.Thinking_tokens + aThoughts_tokens;
 
   // Si se solicitó extracción de archivos de texto (native output)
-  If tfc_ExtracttextFile in NativeOutputFiles then
+  if cap_ExtractCode in ModelConfig.SessionCaps then
     InternalExtractCodeFiles(LRespuesta, ResMsg);
 
   // --- FUNCTION CALLING / TOOLS ---
@@ -2071,7 +2071,7 @@ var
   FileName: string;
 begin
   // Solo procesar si el usuario lo configuró en NativeOutputFiles
-  if not(tfc_ExtracttextFile in NativeOutputFiles) then
+  if not(cap_ExtractCode in ModelConfig.SessionCaps) then
     Exit;
 
   if AText.Trim.IsEmpty then
@@ -2466,7 +2466,7 @@ begin
       LParams.AddPair('aspectRatio', '16:9'); // Default seguro
 
     // Iterar parámetros definidos por el usuario en el componente
-    for I := 0 to VideoParams.Count - 1 do
+    for I := 0 to VideoParams.Params.Count - 1 do
     begin
       LKey := VideoParams.Params.Names[I];
       LValueStr := VideoParams.Params.ValueFromIndex[I];

@@ -290,6 +290,9 @@ type
 
 implementation
 
+uses
+  IdTCPClient, IdIOHandler;
+
 // ---------------------------------------------------------------------------
 // Log a disco para debug de shutdown — solo activo en builds DEBUG
 // ---------------------------------------------------------------------------

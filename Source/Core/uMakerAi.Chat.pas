@@ -285,6 +285,8 @@ type
     FModelCaps: TAiCapabilities; // capacidades nativas del modelo
     FSessionCaps: TAiCapabilities; // capacidades deseadas en la sesión
     FNewSystemConfigured: Boolean; // True si ModelCaps/SessionCaps fueron asignados explícitamente
+    FSanitizerActive: Boolean;
+    FOnSanitize: TAiSanitizeEvent;
 
     procedure SetApiKey(const Value: String);
     procedure SetFrequency_penalty(const Value: Double);
@@ -331,8 +333,15 @@ type
     procedure SetOnProgressEvent(const Value: TAiModelProgressEvent);
     procedure SetOnReceiveThinking(const Value: TAiChatOnDataEvent);
     procedure SetThinking_tokens(const Value: Integer);
+    procedure SetCached_tokens(const Value: Integer);
+    procedure SetShellTool(const Value: TAiShell);
+    function  GetShellTool: TAiShell;
     procedure SetTextEditorTool(const Value: TAiTextEditorTool);
+    function  GetTextEditorTool: TAiTextEditorTool;
     procedure SetComputerUseTool(const Value: TAiComputerUseTool);
+    function  GetComputerUseTool: TAiComputerUseTool;
+    procedure SetSanitizerActive(const Value: Boolean);
+    procedure SetOnSanitize(const Value: TAiSanitizeEvent);
     procedure SetSpeechTool(const Value: TAiSpeechToolBase);
     procedure SetImageTool(const Value: TAiImageToolBase);
     procedure SetVideoTool(const Value: TAiVideoToolBase);
@@ -545,12 +554,14 @@ type
     property WebSearchParams: TAiWebSearchParams read FWebSearchParams;
     property ModelConfig: TAiModelConfig read FModelConfig; // configuración unificada del modelo (v3.3)
     property OnStateChange: TAiStateChangeEvent read FOnStateChange write FOnStateChange;
-    property ShellTool: TAiShell read FShellTool write SetShellTool;
-    Property TextEditorTool: TAiTextEditorTool read FTextEditorTool write SetTextEditorTool;
-    property ComputerUseTool: TAiComputerUseTool read FComputerUseTool write SetComputerUseTool;
+    property ShellTool: TAiShell read GetShellTool write SetShellTool;
+    Property TextEditorTool: TAiTextEditorTool read GetTextEditorTool write SetTextEditorTool;
+    property ComputerUseTool: TAiComputerUseTool read GetComputerUseTool write SetComputerUseTool;
     // Nuevo sistema de orquestación (v3.3)
     property ModelCaps: TAiCapabilities read FModelCaps write SetModelCaps; // capacidades nativas del modelo
     property SessionCaps: TAiCapabilities read FSessionCaps write SetSessionCaps; // capacidades deseadas en la sesión
+    property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive;
+    property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
   end;
 
   // procedure Register;
@@ -3290,6 +3301,110 @@ end;
 procedure TAiChat.SetCached_tokens(const Value: Integer);
 begin
   FCached_tokens := Value;
+end;
+
+function TAiChat.GetShellTool: TAiShell;
+begin
+  Result := FChatTools.FShellTool;
+end;
+
+procedure TAiChat.SetShellTool(const Value: TAiShell);
+begin
+  FChatTools.ShellTool := Value;
+end;
+
+function TAiChat.GetTextEditorTool: TAiTextEditorTool;
+begin
+  Result := FChatTools.FTextEditorTool;
+end;
+
+procedure TAiChat.SetTextEditorTool(const Value: TAiTextEditorTool);
+begin
+  FChatTools.TextEditorTool := Value;
+end;
+
+function TAiChat.GetComputerUseTool: TAiComputerUseTool;
+begin
+  Result := FChatTools.FComputerUseTool;
+end;
+
+procedure TAiChat.SetComputerUseTool(const Value: TAiComputerUseTool);
+begin
+  FChatTools.ComputerUseTool := Value;
+end;
+
+procedure TAiChat.SetSpeechTool(const Value: TAiSpeechToolBase);
+begin
+  FChatTools.SpeechTool := Value;
+end;
+
+procedure TAiChat.SetImageTool(const Value: TAiImageToolBase);
+begin
+  FChatTools.ImageTool := Value;
+end;
+
+procedure TAiChat.SetVideoTool(const Value: TAiVideoToolBase);
+begin
+  FChatTools.VideoTool := Value;
+end;
+
+procedure TAiChat.SetWebSearchTool(const Value: TAiWebSearchToolBase);
+begin
+  FChatTools.WebSearchTool := Value;
+end;
+
+procedure TAiChat.SetVisionTool(const Value: TAiVisionToolBase);
+begin
+  FChatTools.VisionTool := Value;
+end;
+
+procedure TAiChat.SetEnabledFeatures(const Value: TAiChatMediaSupports);
+begin
+  FEnabledFeatures := Value;
+end;
+
+procedure TAiChat.SetPdfTool(const Value: TAiPdfToolBase);
+begin
+  FChatTools.PdfTool := Value;
+end;
+
+procedure TAiChat.SetReportTool(const Value: TAiReportToolBase);
+begin
+  FChatTools.ReportTool := Value;
+end;
+
+procedure TAiChat.SetModelCaps(const Value: TAiCapabilities);
+begin
+  FModelCaps := Value;
+  FModelConfig.ModelCaps := Value;
+  FNewSystemConfigured := True;
+end;
+
+procedure TAiChat.SetSessionCaps(const Value: TAiCapabilities);
+begin
+  FSessionCaps := Value;
+  FModelConfig.SessionCaps := Value;
+  FNewSystemConfigured := True;
+end;
+
+procedure TAiChat.EnsureNewSystemConfig;
+begin
+  // stub — new system config is applied via SetModelCaps/SetSessionCaps
+end;
+
+function TAiChat.LegacyToModelCaps: TAiCapabilities;
+begin
+  Result := [];
+end;
+
+function TAiChat.LegacyToSessionCaps: TAiCapabilities;
+begin
+  Result := [];
+end;
+
+function TAiChat.RunLegacy(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
+begin
+  Result := RunNew(AskMsg, ResMsg);
 end;
 
 function TAiChat.GetTool_Active: Boolean;
