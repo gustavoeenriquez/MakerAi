@@ -1,0 +1,139 @@
+﻿object FrmTelegramBot: TFrmTelegramBot
+  Left = 0
+  Top = 0
+  Caption = 'MakerAI - Telegram Bot'
+  ClientHeight = 660
+  ClientWidth = 860
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  OnCloseQuery = FormCloseQuery
+  DesignerMasterStyle = 0
+  object LayoutTop: TLayout
+    Align = Top
+    Size.Width = 860.000000000000000000
+    Size.Height = 56.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object LblToken: TLabel
+      Position.X = 8.000000000000000000
+      Position.Y = 18.000000000000000000
+      Size.Width = 70.000000000000000000
+      Size.Height = 20.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Bot Token:'
+      TabOrder = 0
+    end
+    object EdToken: TEdit
+      Position.X = 84.000000000000000000
+      Position.Y = 12.000000000000000000
+      Size.Width = 560.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Text = '@TELEGRAM_BOT_TOKEN'
+    end
+    object BtnConfig: TButton
+      Position.X = 652.000000000000000000
+      Position.Y = 12.000000000000000000
+      Size.Width = 96.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      Text = 'Config'
+      OnClick = BtnConfigClick
+    end
+    object BtnStart: TButton
+      Position.X = 754.000000000000000000
+      Position.Y = 12.000000000000000000
+      Size.Width = 50.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+      Text = 'Start'
+      OnClick = BtnStartClick
+    end
+    object BtnStop: TButton
+      Position.X = 808.000000000000000000
+      Position.Y = 12.000000000000000000
+      Size.Width = 48.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 4
+      Text = 'Stop'
+      OnClick = BtnStopClick
+    end
+  end
+  object LayoutInfo: TLayout
+    Align = Top
+    Position.Y = 56.000000000000000000
+    Size.Width = 860.000000000000000000
+    Size.Height = 40.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    object LblStatus: TLabel
+      Align = Top
+      Margins.Left = 8.000000000000000000
+      Margins.Right = 8.000000000000000000
+      Position.X = 8.000000000000000000
+      Size.Width = 844.000000000000000000
+      Size.Height = 20.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Listo.'
+      TabOrder = 0
+    end
+    object LblUsers: TLabel
+      Align = Top
+      Margins.Left = 8.000000000000000000
+      Margins.Right = 8.000000000000000000
+      Position.X = 8.000000000000000000
+      Position.Y = 20.000000000000000000
+      Size.Width = 844.000000000000000000
+      Size.Height = 20.000000000000000000
+      Size.PlatformDefault = False
+      Font.Style = [fsItalic]
+      StyledSettings = [Family, Size, FontColor]
+      Text = 'Skills: shell_exec | file_read | file_write | file_list'
+      TabOrder = 1
+    end
+  end
+  object LayoutLog: TLayout
+    Align = Client
+    Position.Y = 96.000000000000000000
+    Size.Width = 860.000000000000000000
+    Size.Height = 564.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 2
+    object LblLog: TLabel
+      Align = Top
+      Margins.Left = 4.000000000000000000
+      Margins.Top = 4.000000000000000000
+      Margins.Right = 4.000000000000000000
+      Position.X = 4.000000000000000000
+      Position.Y = 4.000000000000000000
+      Size.Width = 852.000000000000000000
+      Size.Height = 20.000000000000000000
+      Size.PlatformDefault = False
+      Font.Style = [fsBold]
+      StyledSettings = [Family, Size, FontColor]
+      Text = 'CHAT LOG   >>> entrada Telegram     <<< respuesta Claude     [T] tool call     *** sistema'
+      TabOrder = 0
+    end
+    object MemoLog: TMemo
+      Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+      DataDetectorTypes = []
+      Align = Client
+      Position.Y = 28.000000000000000000
+      ReadOnly = True
+      Size.Width = 860.000000000000000000
+      Size.Height = 536.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Viewport.Width = 856.000000000000000000
+      Viewport.Height = 532.000000000000000000
+    end
+  end
+end

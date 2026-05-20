@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -62,10 +62,10 @@ type
   end;
 
   // ---------------------------------------------------------------------------
-  // 2. ATRIBUTO PARA LOS PARÁMETROS (PROPIEDADES) DE LA HERRAMIENTA ([ToolParameter])
-  // Define cómo se muestra un parámetro en el diálogo de configuración.
+  // 2. ATRIBUTO PARA LOS PARï¿½METROS (PROPIEDADES) DE LA HERRAMIENTA ([ToolParameter])
+  // Define cï¿½mo se muestra un parï¿½metro en el diï¿½logo de configuraciï¿½n.
   // ---------------------------------------------------------------------------
-  // Nota de estilo: Renombrado a TToolParameterAttribute por convención de Delphi.
+  // Nota de estilo: Renombrado a TToolParameterAttribute por convenciï¿½n de Delphi.
   //[AttributeUsage(PropertyServices, AllowMultiple = false, Inherited = true)]
   TToolParameterAttribute = class(TCustomAttribute)
   private

@@ -1,4 +1,4 @@
-// IT License
+﻿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -37,6 +37,7 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.Generics.Collections,
+  System.Generics.Defaults,
   UMakerAi.Chat, uMakerAi.Embeddings;
 
 type
@@ -101,7 +102,8 @@ type
     destructor Destroy; override;
     class function Instance: TAiEmbeddingFactory;
 
-    procedure RegisterDriver(AClass: TAiEmbeddingsClass);
+    procedure RegisterDriver(AClass: TAiEmbeddingsClass); overload;
+    procedure RegisterDriver(AClass: TAiEmbeddingsClass; const ADriverName: string); overload;
     function CreateDriver(const DriverName: string): TAiEmbeddings;
     procedure GetDriverParams(const DriverName, ModelName: string; Params: TStrings; ExpandVariables: Boolean = True);
     function GetRegisteredDrivers: TArray<string>;
@@ -128,9 +130,9 @@ end;
 constructor TAiChatFactory.Create;
 begin
   inherited;
-  FRegisteredClasses := TDictionary<string, TAiChatClass>.Create;
-  FUserParams := TDictionary<string, TStringList>.Create;
-  FCustomModels := TDictionary<string, String>.Create;
+  FRegisteredClasses := TDictionary<string, TAiChatClass>.Create(TIStringComparer.Ordinal);
+  FUserParams := TDictionary<string, TStringList>.Create(TIStringComparer.Ordinal);
+  FCustomModels := TDictionary<string, String>.Create(TIStringComparer.Ordinal);
 end;
 
 destructor TAiChatFactory.Destroy;
@@ -383,8 +385,8 @@ end;
 constructor TAiEmbeddingFactory.Create;
 begin
   inherited;
-  FRegisteredClasses := TDictionary<string, TAiEmbeddingsClass>.Create;
-  FUserParams := TDictionary<string, TStringList>.Create;
+  FRegisteredClasses := TDictionary<string, TAiEmbeddingsClass>.Create(TIStringComparer.Ordinal);
+  FUserParams := TDictionary<string, TStringList>.Create(TIStringComparer.Ordinal);
 end;
 
 destructor TAiEmbeddingFactory.Destroy;
@@ -406,6 +408,12 @@ end;
 procedure TAiEmbeddingFactory.RegisterDriver(AClass: TAiEmbeddingsClass);
 begin
   FRegisteredClasses.AddOrSetValue(AClass.GetDriverName, AClass);
+end;
+
+procedure TAiEmbeddingFactory.RegisterDriver(AClass: TAiEmbeddingsClass; const ADriverName: string);
+begin
+  if ADriverName <> '' then
+    FRegisteredClasses.AddOrSetValue(ADriverName, AClass);
 end;
 
 procedure TAiEmbeddingFactory.GetDriverParams(const DriverName, ModelName: string; Params: TStrings; ExpandVariables: Boolean);

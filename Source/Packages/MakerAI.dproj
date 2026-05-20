@@ -2,7 +2,7 @@
     <PropertyGroup>
         <ProjectGuid>{0D79C922-AD0C-4397-92FD-365510A65EEB}</ProjectGuid>
         <MainSource>MakerAI.dpk</MainSource>
-        <ProjectVersion>20.3</ProjectVersion>
+        <ProjectVersion>20.4</ProjectVersion>
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Debug</Config>
@@ -61,6 +61,7 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
+        <DCC_UnitSearchPath>$(MSBuildProjectDirectory)\..\Agents;$(MSBuildProjectDirectory)\..\Chat;$(MSBuildProjectDirectory)\..\ChatUI;$(MSBuildProjectDirectory)\..\Core;$(MSBuildProjectDirectory)\..\Design;$(MSBuildProjectDirectory)\..\Embeddings;$(MSBuildProjectDirectory)\..\MCPClient;$(MSBuildProjectDirectory)\..\MCPServer;$(MSBuildProjectDirectory)\..\Packages;$(MSBuildProjectDirectory)\..\RAG;$(MSBuildProjectDirectory)\..\Resources;$(MSBuildProjectDirectory)\..\Tools;$(MSBuildProjectDirectory)\..\Utils;$(MSBuildProjectDirectory)\..\LiveChat;$(MSBuildProjectDirectory)\..\Realtime;$(MSBuildProjectDirectory)\..\WebSocket;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_E>false</DCC_E>
@@ -163,7 +164,7 @@
         <DCCReference Include="..\Chat\uMakerAi.Chat.OpenAi.pas"/>
         <DCCReference Include="..\Core\UMakerAi.Chat.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Core.pas"/>
-        <DCCReference Include="..\Core\uMakerAi.Embeddings.pas"/>
+        <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Prompts.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Utils.CodeExtractor.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Utils.PcmToWav.pas"/>
@@ -174,7 +175,7 @@
         <DCCReference Include="..\MCPServer\UMakerAi.MCPServer.Stdio.pas"/>
         <DCCReference Include="..\MCPServer\UMakerAi.MCPServer.Direct.pas"/>
         <DCCReference Include="..\Utils\uMakerAi.Utils.VoiceMonitor.pas"/>
-        <DCCReference Include="..\Core\uMakerAi.Embeddings.core.pas"/>
+        <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.core.pas"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Graph.Builder.pas"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Graph.Core.pas"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Graph.Documents.pas"/>
@@ -183,13 +184,20 @@
         <DCCReference Include="..\Agents\uMakerAi.Agents.EngineRegistry.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.Agents.Checkpoint.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.Agents.Tools.Approval.pas"/>
+        <DCCReference Include="..\Agents\uMakerAi.Agents.IAiTool.pas"/>
+        <DCCReference Include="..\Agents\uMakerAi.Agents.Tools.MCP.pas"/>
+        <DCCReference Include="..\Agents\uMakerAi.Agents.ToolRegistry.pas"/>
+        <DCCReference Include="..\Agents\uMakerAi.Agents.Skill.pas"/>
+        <DCCReference Include="..\Agents\uMakerAi.Agents.Node.LLM.pas"/>
         <DCCReference Include="..\Design\UMakerAi.ParamsRegistry.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.Kimi.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.LMStudio.pas"/>
         <DCCReference Include="..\Utils\uMakerAi.Utils.DiffUpdater.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.GenericLLM.pas"/>
+        <DCCReference Include="..\Chat\uMakerAi.Chat.MakerAi.pas"/>
         <DCCReference Include="..\MCPServer\UMakerAi.MCPServer.SSE.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Chat.Tools.pas"/>
+        <DCCReference Include="..\Core\uMakerAi.Chat.Sanitizer.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Chat.Bridge.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Chat.Messages.pas"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Graph.GQL.pas"/>
@@ -198,11 +206,19 @@
         <DCCReference Include="..\RAG\uMakerAi.RAG.Vectors.VQL.pas"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Vectors.Index.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.Cohere.pas"/>
-        <DCCReference Include="..\Core\uMakerAi.Embeddings.Connection.pas"/>
-        <DCCReference Include="..\Tools\uMakerAi.OpenAI.Sora.pas"/>
+        <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Connection.pas"/>
+        <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.OpenAi.pas"/>
+        <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Gemini.pas"/>
+        <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Ollama.pas"/>
+        <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Mistral.pas"/>
+        <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Cohere.pas"/>
+        <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.LMStudio.pas"/>
+        <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Generic.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Gemini.Video.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Gemini.Veo.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.OpenAi.Dalle.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Gemini.WebSearch.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.OpenAI.WebSearch.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Tools.Functions.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Tools.Shell.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Tools.TextEditor.pas"/>
@@ -213,6 +229,15 @@
         <DCCReference Include="..\Tools\uMakerAi.Ollama.Ocr.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Ollama.Vision.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Gemini.Speech.pas"/>
+        <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.Client.pas"/>
+        <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.SChannel.pas"/>
+        <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.OpenSSL.pas"/>
+        <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.Android.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.WebSocket.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.OpenAI.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.Gemini.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.AiConnection.pas"/>
         <None Include="..\RAG\RagGraph_Prompt_Example.md"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
@@ -849,6 +874,9 @@
                     <Platform Name="Win64x">
                         <Operation>1</Operation>
                     </Platform>
+                    <Platform Name="WinARM64EC">
+                        <Operation>1</Operation>
+                    </Platform>
                 </DeployClass>
                 <DeployClass Name="ProjectiOSDeviceDebug">
                     <Platform Name="iOSDevice32">
@@ -887,6 +915,10 @@
                         <RemoteDir>Assets</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
+                    <Platform Name="WinARM64EC">
+                        <RemoteDir>Assets</RemoteDir>
+                        <Operation>1</Operation>
+                    </Platform>
                 </DeployClass>
                 <DeployClass Name="UWP_DelphiLogo44">
                     <Platform Name="Win32">
@@ -894,6 +926,10 @@
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="Win64">
+                        <RemoteDir>Assets</RemoteDir>
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="WinARM64EC">
                         <RemoteDir>Assets</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
@@ -1111,6 +1147,7 @@
                 <ProjectRoot Platform="Win32" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="Win64x" Name="$(PROJECTNAME)"/>
+                <ProjectRoot Platform="WinARM64EC" Name="$(PROJECTNAME)"/>
             </Deployment>
             <Platforms>
                 <Platform value="Android">False</Platform>

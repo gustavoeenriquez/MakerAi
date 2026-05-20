@@ -1,4 +1,4 @@
-# MakerAI Suite v3.3 — The AI Ecosystem for Delphi
+# MakerAI Suite v3.4 — The AI Ecosystem for Delphi
 
 🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
 
@@ -32,50 +32,66 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 ---
 
-## 🚀 What's New in v3.3
+## 🚀 What's New in v3.4
 
-### TAiCapabilities — Unified Model Configuration System
+### Delphi 13.1 Florence Support
 
-The biggest architectural change in v3.3 is the **`TAiCapabilities`** system, which replaces scattered per-provider flags with a unified, declarative model of what each model can do and what a session needs:
+v3.4 is fully tested and compatible with **Delphi 13.1 Florence** (CompilerVersion 37.1), in addition to the existing range from Delphi 10.4 Sydney through Delphi 13 Florence.
 
-- **`ModelCaps`** — what the model natively supports (e.g. `[cap_Image, cap_Reasoning]`)
-- **`SessionCaps`** — what capabilities the current session requires
-- **Gap analysis** — when `SessionCaps` exceeds `ModelCaps`, MakerAI automatically activates bridges (tool-assisted OCR, vision bridges, etc.) without changing your code
-- **`ThinkingLevel`** — unified reasoning depth control (`tlLow`, `tlMedium`, `tlHigh`) across all providers that support extended thinking
+### Selective Driver Registration
 
-### Models Updated (February 2026)
+The biggest infrastructure change in v3.4: **`TAiChatConnection` no longer force-loads all providers at startup**. Each driver now self-registers only when explicitly imported, eliminating unnecessary initialization overhead:
+
+```pascal
+// Load only what you need
+uses uMakerAi.Chat.AiConnection, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Claude;
+
+// Load all drivers at once (legacy behavior)
+uses uMakerAi.Chat.Initializations;
+```
+
+### Real-Time STT — TAiRealtimeConnection
+
+New universal connector for real-time speech-to-text via WebSocket:
+
+- **`TAiRealtimeConnection`** — provider-agnostic STT connector; switch providers via `DriverName`
+- **`TAiOpenAiRealtimeSTT`** — full OpenAI Realtime API implementation (24 kHz PCM16, VAD modes, streaming transcription)
+- Pure-Pascal WebSocket client with native TLS via Windows SChannel — no extra DLLs required
+- Thread-safe PCM16 resampler; supports push-based audio streaming from any source
+
+### cmSmartDispatch — Intelligent Chat Routing
+
+New `ChatMode` value for automatic two-pass routing:
+
+- **Pass 1** — classifies the user intent and rewrites the prompt for the target capability (image generation, speech synthesis, web search, etc.)
+- **Pass 2** — dispatches to the appropriate bridge or tool based on classification
+- Works with all existing ChatTools (`IAiImageTool`, `IAiSpeechTool`, `IAiWebSearchTool`, etc.)
+
+### Models Updated (May 2026)
 
 | Provider | New / Updated Models |
 |----------|----------------------|
-| OpenAI | **gpt-5.2**, gpt-image-1, o3, o3-mini |
-| Claude | **claude-opus-4-6**, **claude-sonnet-4-6**, claude-3-7-sonnet |
-| Gemini | **gemini-3.0**, gemini-2.5-flash, gemini-2.5-flash-image |
-| Grok | **grok-4**, grok-3, grok-imagine-image |
-| Mistral | Magistral (reasoning), mistral-ocr-latest |
-| DeepSeek | deepseek-reasoner (extended thinking) |
-| Kimi | kimi-k2.5 (extended thinking) |
+| OpenAI | **gpt-5.4**, **gpt-5.4-mini**, **gpt-5.5**, gpt-image-1 |
+| Claude | **claude-opus-4-7** (Adaptive Thinking), claude-sonnet-4-6, claude-haiku-4-5 |
+| Gemini | **gemini-3.1-pro**, **gemini-3-flash**, gemini-3.1-flash-lite, gemini-3.1-flash-image |
+| Grok | **grok-4-fast**, grok-3, grok-code-fast-1 |
+| Mistral | magistral-medium/small, devstral, voxtral |
+| Groq | llama-4-scout/maverick, kimi-k2, qwen3, compound-beta |
+| Kimi | **kimi-k2**, kimi-k2.5, kimi-k2-thinking |
+| Cohere | command-a-03-2025, command-a-reasoning, command-a-vision |
 
-### Agents — Durable Execution & Human-in-the-Loop
+### Agent Improvements
 
-- **`TAiFileCheckpointer`** — persists agent graph state to disk; resume workflows after crashes or restarts
-- **`TAiWaitApprovalTool`** — suspends a node and waits for human approval before continuing
-- `TAIAgentManager.OnSuspend` event for building approval UIs
-- `ResumeThread(ThreadID, NodeName, Input)` to continue suspended workflows
+- **`TAiAgentManager.Run`** declared `virtual` — proper subclassing now supported
+- **jmAll join node fix** — `FJoinInputs` cleared after each execution; eliminates premature firing on retries and loops
+- **`TChatInput.EnterAsSend`** — new property (default `False`): Enter sends the prompt, Shift+Enter / Ctrl+Enter inserts a line break
+- **`TChatBubble`** — eliminated spurious vertical scrollbar (`ShowScrollBars := False`)
 
-### RAG — Graph Document Management
+### Bug Fixes
 
-- New **`uMakerAi.RAG.Graph.Documents.pas`** — full document lifecycle management (ingest, chunk, embed, link) directly into the knowledge graph
-
-### Cross-Provider Reasoning Fixes
-
-- `reasoning_content` is now correctly preserved and re-sent in multi-turn tool call conversations for all providers that require it (DeepSeek-reasoner, Kimi k2.5, Groq reasoning models)
-
-### Other Additions
-
-- **`TAiEmbeddingsConnection`** — abstract connector for swappable embedding providers
-- **`TAiAudioPushStream`** — push-based audio streaming utility
-- **Demo 027** — Document Manager
-- **Demo 012** — ChatWebList (chat with web-based content)
+- **Claude Opus 4.7 Adaptive Thinking** — temperature, top_p, top_k and the `thinking` block are now correctly omitted for `claude-opus-4-7` models. Anthropic manages sampling internally for these models; sending these parameters caused HTTP 400 errors.
+- **`RegisterDefaultParams` — Max_Tokens key** — corrected in 10 drivers (Claude, Gemini, Mistral, Groq, DeepSeek, Grok, Kimi, LMStudio, GenericLLM, Ollama). The wrong key `MaxTokens` was never resolved by RTTI to the `Max_tokens` property, causing `Max_Tokens` to be silently ignored when set via `RegisterDefaultParams`.
+- **`ApplyParamsToChat` — locale-independent float parsing** — `TryStrToFloat` now tries invariant format (dot decimal) first, then falls back to the system locale. Both `Temperature=0.7` and `Temperature=0,7` are valid regardless of regional settings.
 
 ### Bug Fixes (March 2026)
 
@@ -133,15 +149,15 @@ Full, provider-specific access to every API feature. Use when you need complete 
 
 | Component | Provider | Latest Models |
 |-----------|----------|---------------|
-| `TAiOpenChat` | OpenAI | gpt-5.2, o3, o3-mini |
-| `TAiClaudeChat` | Anthropic | claude-opus-4-6, claude-sonnet-4-6 |
-| `TAiGeminiChat` | Google | gemini-3.0, gemini-2.5-flash |
-| `TAiGrokChat` | xAI | grok-4, grok-3 |
-| `TAiMistralChat` | Mistral AI | Magistral, mistral-large |
+| `TAiOpenChat` | OpenAI | gpt-5.4, gpt-5.4-mini, gpt-5.5, gpt-image-1 |
+| `TAiClaudeChat` | Anthropic | claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5 |
+| `TAiGeminiChat` | Google | gemini-3.1-pro, gemini-3-flash, gemini-3.1-flash-lite |
+| `TAiGrokChat` | xAI | grok-4-fast, grok-3, grok-code-fast-1 |
+| `TAiMistralChat` | Mistral AI | magistral-medium, devstral, voxtral |
 | `TAiDeepSeekChat` | DeepSeek | deepseek-reasoner, deepseek-chat |
-| `TAiKimiChat` | Moonshot | kimi-k2.5 |
-| `TAiGroqChat` | Groq | llama-3.3, deepseek-r1 |
-| `TCohereChat` | Cohere | command-r-plus |
+| `TAiKimiChat` | Moonshot | kimi-k2, kimi-k2.5, kimi-k2-thinking |
+| `TAiGroqChat` | Groq | llama-4-scout, llama-4-maverick, kimi-k2, qwen3 |
+| `TCohereChat` | Cohere | command-a-03-2025, command-a-reasoning, command-a-vision |
 | `TAiOllamaChat` | Ollama | Any local model |
 | `TAiLMStudioChat` | LM Studio | Any local model |
 | `TAiGenericChat` | OpenAI-compatible | Any OpenAI-API endpoint |
@@ -209,8 +225,8 @@ Two complementary retrieval engines with their own query languages:
 
 **Graph RAG** — knowledge graph with semantic search over entities and relationships:
 - Nodes and edges with embeddings and metadata
-- **GQL** (Graph Query Language) — Cypher-like DSL:
-  ```cypher
+- **MakerGQL** — Graph Query Language based on ISO/IEC 39075:2024 (GQL standard):
+  ```gql
   MATCH (p:Person)-[r:WORKS_AT]->(c:Company)
   WHERE c.city = 'Madrid' DEPTH 2
   RETURN p, r, c
@@ -265,15 +281,44 @@ ChatTools bridge the gap between AI reasoning and real-world operations. They ac
 
 Tools follow a common pattern: `SetContext(AiChat)` + `Execute*()`. They can run standalone, as function-call bridges, or as automatic capability bridges.
 
+### ⚙️ Model Capabilities — TAiCapabilities
+
+Introduced in v3.3 and refined in v3.4, the `TAiCapabilities` system replaces all manual feature flags with two declarative sets:
+
+- **`ModelCaps`** — what the model natively supports (e.g., `[cap_Image, cap_Reasoning]`)
+- **`SessionCaps`** — what the session needs
+- **Gap = SessionCaps − ModelCaps** — any missing capability activates an automatic ChatTool bridge; for example, a text-only model with `cap_GenImage` in `SessionCaps` automatically routes image generation requests through a DALL-E or Gemini bridge
+
+```pascal
+// Default capabilities for all models of a provider
+TAiChatFactory.Instance.RegisterUserParam('MyProvider', 'ModelCaps',   '[cap_Image, cap_Pdf]');
+TAiChatFactory.Instance.RegisterUserParam('MyProvider', 'SessionCaps', '[cap_Image, cap_Pdf, cap_GenImage]');
+
+// Per-model override (e.g., a reasoning model)
+TAiChatFactory.Instance.RegisterUserParam('MyProvider', 'my-model', 'ModelCaps',    '[cap_Image, cap_Reasoning]');
+TAiChatFactory.Instance.RegisterUserParam('MyProvider', 'my-model', 'ThinkingLevel', 'tlMedium');
+```
+
+Available capabilities: `cap_Image`, `cap_Audio`, `cap_Video`, `cap_Pdf`, `cap_Reasoning`, `cap_WebSearch`, `cap_GenImage`, `cap_GenVideo`, `cap_TTS`, `cap_STT`, `cap_ComputerUse`
+
+`ThinkingLevel` controls reasoning depth: `tlLow`, `tlMedium`, `tlHigh`.
+
 ### 🎨 FMX Visual Components
 
-Drop-in FireMonkey components for building multimodal chat UIs:
+Two generations of FireMonkey components for building multimodal chat UIs:
+
+**Next-generation (v3.4) — Skia-native, virtualized, zero FMX child controls:**
+
+- **`TAIChatView`** — single-canvas virtualized conversation renderer; only visible messages are painted; supports multi-message text selection, dark/light theme, context menu, long-press (mobile), copy-button feedback with timer, and a scrollbar that doesn't interfere with content
+- **`TAIChatInput`** — fully Skia-painted input bar with custom dropdown overlay (no `TPopupMenu` required), voice-mode indicator, file attachment chips, and `TAIVoiceMonitor` integration; layout adapts from 1 to N attachment chips automatically
+
+**Classic components — FMX-layout-based, simpler to subclass:**
 
 - **`TChatList`** — scrollable message container with Markdown rendering, code blocks, copy buttons
 - **`TChatBubble`** — individual message bubble (user / assistant / tool)
 - **`TChatInput`** — text input bar with voice recording, file attachment, and send button
 
-Compatible with all providers. Works with streaming responses.
+Both sets are compatible with all providers and work with streaming responses.
 
 ### 📐 Design-Time Integration
 
@@ -292,7 +337,29 @@ Full Delphi IDE support via the `MakerAiDsg.dpk` design-time package:
 git clone https://github.com/gustavoeenriquez/MakerAi.git
 ```
 
-### Package Compilation Order
+### Step 1 — Add Library Paths
+
+**Before compiling any package**, add all of these to **Tools > Options > Language > Delphi > Library**:
+
+```
+Source/Agents
+Source/Chat
+Source/ChatUI
+Source/Core
+Source/Design
+Source/Embeddings
+Source/MCPClient
+Source/MCPServer
+Source/Packages
+Source/RAG
+Source/Realtime
+Source/Resources
+Source/Tools
+Source/Utils
+Source/WebSocket
+```
+
+### Step 2 — Compile and Install Packages
 
 Compile and install in this exact order:
 
@@ -302,25 +369,6 @@ Compile and install in this exact order:
 4. `Source/Packages/MakerAiDsg.dpk` — Design-time editors (requires VCL + DesignIDE)
 
 Open `Source/Packages/MakerAiGrp.groupproj` to compile all packages at once.
-
-### Required Library Paths
-
-Add all of these to **Tools > Options > Language > Delphi > Library**:
-
-```
-Source/Agents
-Source/Chat
-Source/ChatUI
-Source/Core
-Source/Design
-Source/MCPClient
-Source/MCPServer
-Source/Packages
-Source/RAG
-Source/Resources
-Source/Tools
-Source/Utils
-```
 
 ### API Keys
 
@@ -337,10 +385,11 @@ AiConn.ApiKey := 'sk-...';             // or set a literal key directly
 
 | Delphi Version | Support |
 |----------------|---------|
-| 10.4 Sydney | Minimum (core framework) |
-| 11 Alexandria | Full support |
-| 12 Athens | Full support |
-| 13 Florence | Full support (latest tested) |
+| 10.4 Sydney | Limited (minimum supported) |
+| 11 Alexandria | **Full support** |
+| 12 Athens | **Full support** |
+| 13 Florence | **Full support** |
+| 13.1 Florence | **Full support** (latest tested) |
 
 ---
 
@@ -369,10 +418,28 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 | `051-AgentDemo` | Visual agent graph builder and runner |
 | `052-AgentConsole` | Console-based agent execution |
 | `053-DemoAgentesTools` | Agents with integrated tool use |
+| `060-AIChatUI` | Next-generation `TAIChatView` + `TAIChatInput` components — full multimodal demo |
 
 ---
 
 ## 🔄 Changelog
+
+### v3.4 (May 2026)
+- Tested with Delphi 13.1 Florence
+- Selective driver registration — each driver self-registers only when imported
+- New: **`TAIChatView`** — next-generation Skia-native virtualized chat renderer (single canvas, no FMX child controls, multi-message text selection, dark/light theme, mobile long-press)
+- New: **`TAIChatInput`** — fully Skia-painted input bar with custom dropdown overlay, attachment chips, voice indicator (no `TPopupMenu` / no FMX buttons)
+- New: `TAiRealtimeConnection` + `TAiOpenAiRealtimeSTT` — real-time STT via WebSocket (24 kHz PCM16, VAD, streaming transcription; pure-Pascal TLS via Windows SChannel)
+- New: `cmSmartDispatch` chat mode — two-pass intelligent routing
+- Models: claude-opus-4-7, gpt-5.4/5.5, gemini-3.1-pro, grok-4-fast, kimi-k2, groq llama-4
+- Fix: Claude Opus 4.7 Adaptive Thinking — HTTP 400 eliminated (temperature/top_p/top_k + thinking block now omitted for claude-opus-4-7)
+- Fix: AV on async abort — nil guard in `TAiChatConnection.OnInternalReceiveDataEnd`
+- Fix: `TStringStream` leak in async HTTP requests — `FCurrentPostStream` lifetime now correctly tied to request completion
+- Fix: `RegisterDefaultParams` `Max_Tokens` key corrected in 10 drivers
+- Fix: `ApplyParamsToChat` `TryStrToFloat` now locale-independent
+- Fix: Agent jmAll join node premature firing on retries
+- Fix: `TChatBubble` spurious vertical scrollbar eliminated
+- New: `TChatInput.EnterAsSend` property
 
 ### v3.3 (February 2026)
 - New `TAiCapabilities` system (`ModelCaps` / `SessionCaps` / `ThinkingLevel`)
@@ -397,7 +464,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 - Major architecture redesign
 - Visual FMX chat components
 - Graph-based vector database
-- Full Delphi 10.4–13 compatibility
+- Delphi 10.4–13 compatible (limited: 10.4 Sydney; full support: 11 Alexandria+)
 
 ### v2.5 (August 2025)
 - MCP Client/Server (Model Context Protocol)

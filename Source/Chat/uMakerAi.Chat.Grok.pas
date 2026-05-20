@@ -1,4 +1,4 @@
-// IT License
+﻿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -57,7 +57,7 @@ Type
   Protected
     Function InitChatCompletions: String; Override;
     function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
-    function InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
+    function InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
 
   Public
     Constructor Create(Sender: TComponent); Override;
@@ -92,7 +92,7 @@ Begin
   Params.Clear;
   Params.Add('ApiKey=@GROK_API_KEY');
   Params.Add('Model=grok-3');
-  Params.Add('MaxTokens=4096');
+  Params.Add('Max_Tokens=4096');
   Params.Add('URL=https://api.x.ai/v1/');
 End;
 
@@ -124,6 +124,7 @@ Var
   I: Integer;
   LAsincronico: Boolean;
   Res, LModel: String;
+  LIsRestrictedModel, LSupportsReasoningEffort: Boolean;
 begin
 
   If User = '' then
@@ -133,6 +134,11 @@ begin
 
   If LModel = '' then
     LModel := 'grok-3';
+
+  // grok-4 series, grok-3-mini y grok-code-fast-1 prohiben frequency/presence/stop
+  LIsRestrictedModel       := LModel.StartsWith('grok-4') or LModel.StartsWith('grok-3-mini') or (LModel = 'grok-code-fast-1');
+  // reasoning_effort solo es valido en grok-3-mini / grok-3-mini-fast (valores: low, high)
+  LSupportsReasoningEffort := LModel.StartsWith('grok-3-mini');
 
   LAsincronico := Self.Asynchronous;
 
@@ -180,30 +186,30 @@ begin
     If Top_p <> 0 then
       AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
 
-    if Frequency_penalty <> 0 then
+    // frequency_penalty y presence_penalty prohibidos en grok-4 series, grok-3-mini y grok-code-fast-1
+    if (not LIsRestrictedModel) and (Frequency_penalty <> 0) then
       AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
-    if Presence_penalty <> 0 then
+    if (not LIsRestrictedModel) and (Presence_penalty <> 0) then
       AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
 
-    if ReasoningFormat <> '' then
-      AJSONObject.AddPair('reasoning_format', ReasoningFormat); // 'parsed, raw, hidden';
+    if ModelConfig.Format <> '' then
+      AJSONObject.AddPair('reasoning_format', ModelConfig.Format); // 'parsed, raw, hidden';
 
-    if ThinkingLevel <> tlDefault then
+    // reasoning_effort: solo valido en grok-3-mini / grok-3-mini-fast (valores: 'low', 'high')
+    // grok-4 series tiene reasoning siempre activo y NO acepta este parametro
+    if LSupportsReasoningEffort and (ModelConfig.ThinkingLevel <> tlDefault) then
     begin
-      case ThinkingLevel of
-        tlLow:
-          AJSONObject.AddPair('reasoning_effort', 'low');
-        tlMedium:
-          AJSONObject.AddPair('reasoning_effort', 'medium');
-        tlHigh:
-          AJSONObject.AddPair('reasoning_effort', 'high');
+      case ModelConfig.ThinkingLevel of
+        tlLow:  AJSONObject.AddPair('reasoning_effort', 'low');
+        tlHigh: AJSONObject.AddPair('reasoning_effort', 'high');
+        // tlMedium no tiene mapeo en xAI: no enviar, la API usa su default
       end;
     end;
 
     AJSONObject.AddPair('user', User);
     AJSONObject.AddPair('n', TJSONNumber.Create(N));
 
-    if tcm_WebSearch in ChatMediaSupports then
+    if cap_WebSearch in ModelConfig.ModelCaps then
     begin
       Var
       jWebSearchOptions := TJSonObject.Create;
@@ -235,14 +241,18 @@ begin
     else if FResponse_format = tiaChatRfJson then
       AJSONObject.AddPair('response_format', TJSONObject.Create.AddPair('type', 'json_object'));
 
-    Lista.CommaText := Stop;
-    If Lista.Count > 0 then
-    Begin
-      JStop := TJSonArray.Create;
-      For I := 0 to Lista.Count - 1 do
-        JStop.Add(Lista[I]);
-      AJSONObject.AddPair('stop', JStop);
-    End;
+    // stop prohibido en grok-4 series, grok-3-mini y grok-code-fast-1
+    if not LIsRestrictedModel then
+    begin
+      Lista.CommaText := Stop;
+      If Lista.Count > 0 then
+      Begin
+        JStop := TJSonArray.Create;
+        For I := 0 to Lista.Count - 1 do
+          JStop.Add(Lista[I]);
+        AJSONObject.AddPair('stop', JStop);
+      End;
+    end;
 
     If Logprobs = True then
     Begin
@@ -285,7 +295,7 @@ var
   I, K: Integer;
 begin
   // Sin web search activo → flujo normal de chat/completions
-  if not (tcm_WebSearch in ChatMediaSupports) then
+  if not (cap_WebSearch in ModelConfig.ModelCaps) then
   begin
     Result := inherited InternalRunCompletions(ResMsg, AskMsg);
     Exit;
@@ -409,7 +419,7 @@ begin
   end;
 end;
 
-function TAiGrokChat.InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+function TAiGrokChat.InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 var
   LBodyJson, LResponseJson, LImageObject: TJSonObject;
   LDataArray: TJSonArray;

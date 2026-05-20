@@ -1,4 +1,4 @@
-// MIT License
+ï»¿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -174,8 +174,8 @@ begin
   if not VerifyAndSetCORSHeaders(ARequestInfo, AResponseInfo) then
     Exit;
 
-  // --- PASO 2: Autenticación (Layer 1: API Key + Layer 2: Evento custom) ---
-  // Extraer header de autenticación: primero Authorization, luego X-API-Key
+  // --- PASO 2: Autenticaciï¿½n (Layer 1: API Key + Layer 2: Evento custom) ---
+  // Extraer header de autenticaciï¿½n: primero Authorization, luego X-API-Key
   AuthHeader := ARequestInfo.RawHeaders.Values['Authorization'];
   if AuthHeader = '' then
     AuthHeader := ARequestInfo.RawHeaders.Values['X-API-Key'];
@@ -189,7 +189,7 @@ begin
     Exit;
   end;
 
-  // --- PASO 3: Despachar la petición al manejador correcto según el método HTTP ---
+  // --- PASO 3: Despachar la peticiï¿½n al manejador correcto segï¿½n el mï¿½todo HTTP ---
   if not SameText(ARequestInfo.URI, Endpoint) then
   begin
     // Si la URL no es nuestro endpoint /mcp, devolvemos un 404 Not Found.
@@ -209,7 +209,7 @@ begin
   end
   else if SameText(ARequestInfo.Command, 'POST') then
   begin
-    // Una petición POST a /mcp contiene una llamada de procedimiento JSON-RPC.
+    // Una peticiï¿½n POST a /mcp contiene una llamada de procedimiento JSON-RPC.
     HandlePostRequest(ARequestInfo, AResponseInfo, AuthContext);
   end
   else

@@ -1,4 +1,4 @@
-// MIT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -272,6 +272,10 @@ type
     function GetServerName: String;
     procedure SetServerName(const Value: String);
     procedure SetAiFunctions(const Value: TAiFunctions);
+    // Helper: registra una sola funci?n. Al estar en un m?todo separado,
+    // cada llamada tiene su propio frame de captura — garantiza que el
+    // closure de la factory no comparte AItem con otras iteraciones del loop.
+    procedure InternalRegisterOneFunction(AItem: TFunctionActionItem);
   protected
     // Lo hacemos protected para que los descendientes puedan acceder a él directamente.
     FLogicServer: TAiMCPLogicServer;
@@ -1397,30 +1401,28 @@ begin
   Result := FLogicServer.User;
 end;
 
+procedure TAiMCPServer.InternalRegisterOneFunction(AItem: TFunctionActionItem);
+begin
+  // Cada llamada a este m?todo crea un frame propio en el heap de captura.
+  // El closure captura AItem de este frame, no del loop padre.
+  // As? cada factory tiene su propio TFunctionActionItem independiente.
+  RegisterTool(AItem.FunctionName,
+    function: IAiMCPTool
+    begin
+      Result := TTAiFunctionToolProxy.Create(FAiFunctions, AItem);
+    end);
+end;
+
 procedure TAiMCPServer.InternalRegisterFromAiFunctions;
 var
   I: Integer;
-  FuncName: string;
 begin
   if not Assigned(FAiFunctions) then
     Exit;
 
-  // Recorremos la colecci?n de funciones del componente vinculado
   for I := 0 to FAiFunctions.Functions.Count - 1 do
-  begin
     if FAiFunctions.Functions[I].Enabled then
-    begin
-      FuncName := FAiFunctions.Functions[I].FunctionName;
-
-      // Registramos la factor?a usando el Bridge (Proxy)
-      // Nota: El Bridge debe ser accesible desde aqu?
-      Self.RegisterTool(FuncName,
-        function: IAiMCPTool
-        begin
-          Result := TTAiFunctionToolProxy.Create(FAiFunctions, FAiFunctions.Functions.GetFunction(FuncName));
-        end);
-    end;
-  end;
+      InternalRegisterOneFunction(FAiFunctions.Functions[I]);
 end;
 
 procedure TAiMCPServer.LoadSettingsDefaults;

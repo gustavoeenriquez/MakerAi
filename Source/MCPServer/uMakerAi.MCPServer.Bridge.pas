@@ -1,4 +1,4 @@
-unit uMakerAi.MCPServer.Bridge;
+﻿unit uMakerAi.MCPServer.Bridge;
 
 interface
 

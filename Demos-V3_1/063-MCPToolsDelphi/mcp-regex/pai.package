@@ -1,0 +1,21 @@
+[package]
+name = mcp-regex
+version = 1.0.1
+description = Regular expression MCP server. Pattern matching and replacement with full .NET regex support.
+author = MakerAI
+license = MIT
+tags = mcp,regex,regexp,delphi
+homepage = https://makerai.cimamaker.com
+min_pai_version = 1.0.0
+
+[mcp]
+entrypoint = mcp-regex.exe
+protocol = stdio
+
+[tools]
+names = regex_match,regex_replace
+
+[platform]
+windows = true
+linux = false
+macos = false

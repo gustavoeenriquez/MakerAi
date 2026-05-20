@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -79,7 +79,7 @@ begin
   Params.Clear;
   Params.Add('ApiKey=@KIMI_API_KEY');
   Params.Add('Model=kimi-k2');
-  Params.Add('MaxTokens=4096');
+  Params.Add('Max_Tokens=4096');
   Params.Add('URL=' + GlAIUrl);
 end;
 

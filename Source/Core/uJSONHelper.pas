@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -52,7 +52,7 @@ type
     function AddPair(const AKey: string; const AValue: string): TJSONObject; overload;
     {$IFEND}
 
-    // Métodos de navegación segura (estos no existen nativamente en ninguna versión con esta firma)
+    // Mï¿½todos de navegaciï¿½n segura (estos no existen nativamente en ninguna versiï¿½n con esta firma)
     function GetValueSafe(const Name: string): TJSONValue;
     function GetValueAsString(const Name: string; const DefaultValue: string = ''): string;
     function GetValueAsInteger(const Name: string; const DefaultValue: Integer = 0): Integer;
@@ -173,7 +173,7 @@ begin
   if Assigned(LValue) then
   begin
     // En todas las versiones de Delphi, .Value devuelve 'true' o 'false' para tipos booleanos.
-    // Usamos SameText para una comparación segura que no dependa de tipos nativos.
+    // Usamos SameText para una comparaciï¿½n segura que no dependa de tipos nativos.
     Result := SameText(LValue.Value, 'true');
   end
   else

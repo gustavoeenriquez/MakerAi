@@ -1,4 +1,4 @@
-// IT License
+﻿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -253,6 +253,14 @@ type
     procedure SetMsgError(const Value: String);
   protected
     procedure DoExecute(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink); virtual;
+    // Realiza el enrutamiento al siguiente link tras la ejecucion del nodo.
+    // Subclases que sobreescriben DoExecute deben llamar a este metodo al final.
+    procedure DoTraverseLinks(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink);
+    // Evalua la logica de join (jmAny / jmAll) y actualiza Self.Input.
+    // Retorna True si el nodo debe ejecutarse ahora, False si debe esperar.
+    // Subclases que sobreescriben DoExecute completamente DEBEN llamar esto
+    // al inicio y salir si retorna False.
+    function CheckJoinAndPrepareInput(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink): Boolean;
     procedure Reset;
   public
     constructor Create(aOwner: TComponent); override;
@@ -366,7 +374,7 @@ type
     procedure SaveStateToStream(AStream: TStream);
     procedure LoadStateFromStream(AStream: TStream);
 
-    function Run(APrompt: String): String; overload; // Reemplaza al anterior
+    function Run(APrompt: String): String; overload; virtual;
 
     function AddMessageAndRun(APrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): String;
     function AddMessageAndRunMsg(APrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): TAiChatMessage;
@@ -420,7 +428,9 @@ end;
 
 procedure Register;
 begin
+  {$WARN SYMBOL_DEPRECATED OFF}
   RegisterComponents('MakerAI', [TAIAgentManager, TAIAgentsNode, TAIAgentsLink, TAiAgentsToolSample, TAIAgents]);
+  {$WARN SYMBOL_DEPRECATED ON}
 end;
 
 function EvalCondition(const Expr: string; Vars: TDictionary<string, TValue>): Boolean;
@@ -560,29 +570,61 @@ begin
   end;
 end;
 
+// Formato tipado: cada entrada es {"t":"<tipo>","v":<valor>}
+// Tipos: "s"=string, "i"=integer, "i64"=int64, "f"=float, "b"=boolean, "e"=enum (ordinal como integer)
 procedure SerializeBlackboard(ABlackboard: TAIBlackboard; AJSONObject: TJSONObject);
 var
   LPair: TPair<string, TValue>;
+  LWrapper: TJSONObject;
 begin
-  // ADVERTENCIA: Esto solo funcionar? para tipos de TValue simples.
-  // No se pueden serializar objetos complejos, punteros o records.
   ABlackboard.FLock.Enter;
   try
     for LPair in ABlackboard.FData do
     begin
-      var
-      LValue := LPair.Value;
+      var LValue := LPair.Value;
+      LWrapper := nil;
       case LValue.Kind of
-        tkInteger, tkInt64:
-          AJSONObject.AddPair(LPair.Key, TJSONNumber.Create(LValue.AsInt64));
+        tkInteger:
+          begin
+            LWrapper := TJSONObject.Create;
+            LWrapper.AddPair('t', 'i');
+            LWrapper.AddPair('v', TJSONNumber.Create(LValue.AsInteger));
+          end;
+        tkInt64:
+          begin
+            LWrapper := TJSONObject.Create;
+            LWrapper.AddPair('t', 'i64');
+            LWrapper.AddPair('v', TJSONNumber.Create(LValue.AsInt64));
+          end;
         tkFloat:
-          AJSONObject.AddPair(LPair.Key, TJSONNumber.Create(LValue.AsExtended));
+          begin
+            LWrapper := TJSONObject.Create;
+            LWrapper.AddPair('t', 'f');
+            LWrapper.AddPair('v', TJSONNumber.Create(LValue.AsExtended));
+          end;
         tkString, tkUString:
-          AJSONObject.AddPair(LPair.Key, TJSONString.Create(LValue.AsString));
+          begin
+            LWrapper := TJSONObject.Create;
+            LWrapper.AddPair('t', 's');
+            LWrapper.AddPair('v', TJSONString.Create(LValue.AsString));
+          end;
         tkEnumeration:
-          if LValue.TypeInfo = System.TypeInfo(Boolean) then
-            AJSONObject.AddPair(LPair.Key, TJSONBool.Create(LValue.AsBoolean));
+          begin
+            LWrapper := TJSONObject.Create;
+            if LValue.TypeInfo = System.TypeInfo(Boolean) then
+            begin
+              LWrapper.AddPair('t', 'b');
+              LWrapper.AddPair('v', TJSONBool.Create(LValue.AsBoolean));
+            end
+            else
+            begin
+              LWrapper.AddPair('t', 'e');
+              LWrapper.AddPair('v', TJSONNumber.Create(LValue.AsOrdinal));
+            end;
+          end;
       end;
+      if Assigned(LWrapper) then
+        AJSONObject.AddPair(LPair.Key, LWrapper);
     end;
   finally
     ABlackboard.FLock.Leave;
@@ -592,19 +634,34 @@ end;
 procedure DeserializeBlackboard(AJSONObject: TJSONObject; ABlackboard: TAIBlackboard);
 var
   LPair: TJSONPair;
+  LWrapper: TJSONObject;
+  LType, LKey: string;
+  LVal: TJSONValue;
 begin
   ABlackboard.Clear;
   for LPair in AJSONObject do
   begin
-    var
-    LJsonValue := LPair.JsonValue;
-    if LJsonValue is TJSONString then
-      ABlackboard.SetString(LPair.JsonString.Value, LJsonValue.Value)
-    else if LJsonValue is TJSONNumber then
-      // Simplificaci?n: lo guardamos como float, se puede refinar
-      ABlackboard.SetValue(LPair.JsonString.Value, StrToFloat(LJsonValue.Value))
-    else if LJsonValue is TJSONBool then
-      ABlackboard.SetBoolean(LPair.JsonString.Value, (LJsonValue as TJSONBool).AsBoolean);
+    LKey := LPair.JsonString.Value;
+    if not (LPair.JsonValue is TJSONObject) then
+      Continue;
+    LWrapper := LPair.JsonValue as TJSONObject;
+    if not LWrapper.TryGetValue<string>('t', LType) then
+      Continue;
+    LVal := LWrapper.GetValue('v');
+    if not Assigned(LVal) then
+      Continue;
+    if LType = 's' then
+      ABlackboard.SetString(LKey, LVal.Value)
+    else if LType = 'i' then
+      ABlackboard.SetInteger(LKey, (LVal as TJSONNumber).AsInt)
+    else if LType = 'i64' then
+      ABlackboard.SetValue(LKey, TValue.From<Int64>((LVal as TJSONNumber).AsInt64))
+    else if LType = 'f' then
+      ABlackboard.SetValue(LKey, TValue.From<Double>((LVal as TJSONNumber).AsDouble))
+    else if LType = 'b' then
+      ABlackboard.SetBoolean(LKey, (LVal as TJSONBool).AsBoolean)
+    else if LType = 'e' then
+      ABlackboard.SetInteger(LKey, (LVal as TJSONNumber).AsInt);
   end;
 end;
 
@@ -1005,16 +1062,36 @@ end;
 procedure TAIAgentManager.DoError(Node: TAIAgentsNode; Link: TAIAgentsLink; E: Exception);
 var
   LAbort: Boolean;
+  ErrorMsg: String;
+  AggE: EAggregateException;
+  I: Integer;
 begin
-  // CAMBIO: Usar SetStatus con Enum
+  // Extraer el mensaje real: si es EAggregateException (rama paralela fallida),
+  // exponer los mensajes de los errores internos en lugar de "One or more occurred".
+  if (E is EAggregateException) then
+  begin
+    AggE := EAggregateException(E);
+    if AggE.Count > 0 then
+    begin
+      ErrorMsg := '';
+      for I := 0 to AggE.Count - 1 do
+      begin
+        if I > 0 then ErrorMsg := ErrorMsg + ' | ';
+        ErrorMsg := ErrorMsg + AggE.InnerExceptions[I].Message;
+      end;
+    end
+    else
+      ErrorMsg := E.Message;
+  end
+  else
+    ErrorMsg := E.Message;
+
   Blackboard.SetStatus(esError);
-  Blackboard.SetString('Execution.ErrorMessage', E.Message);
+  Blackboard.SetString('Execution.ErrorMessage', ErrorMsg);
 
   LAbort := True;
   if Assigned(FOnError) then
-  begin
     FOnError(Self, Node, Link, E, LAbort);
-  end;
 
   if LAbort then
     Abort;
@@ -2997,10 +3074,11 @@ begin
     Exit;
 
   try
-    // Limpiar estado de suspensi?n al inicio de cada ejecuci?n
+    // Limpiar estado al inicio de cada ejecuci?n
     FSuspended      := False;
     FSuspendReason  := '';
     FSuspendContext := '';
+    FOutput         := '';   // reset para soportar ejecuciones m?ltiples del mismo nodo
 
     if Assigned(FOnExecute) then
       FOnExecute(Self, aBeforeNode, aLink, Self.Input, FOutput)
@@ -3010,54 +3088,107 @@ begin
     if FOutput = '' then
       FOutput := Input;
 
-    // Verificar suspensi?n antes de enrutar al siguiente link
-    if FSuspended then
-    begin
-      if Assigned(FGraph) then
-        FGraph.DoNodeSuspended(Self, aBeforeNode, aLink);
-      Exit; // No llamar OnExitNode, no enrutar al siguiente Link
-    end;
-
-    if Assigned(FGraph.OnExitNode) then
-      TThread.Synchronize(nil,
-        procedure
-        begin
-          FGraph.OnExitNode(FGraph, Self);
-        end);
-
-    if Assigned(Next) then
-    begin
-      Next.FSourceNode := Self;
-      Next.DoExecute(Self);
-    end;
-
-    // Checkpoint tras nodo exitoso
-    if Assigned(FGraph) then
-      FGraph.DoNodeCompleted(Self);
+    DoTraverseLinks(aBeforeNode, aLink);
   finally
     // --- LIMPIEZA DE ESTADO ---
     if CanExecute and (FInEdges.Count > 1) then
     begin
       FJoinLock.Enter;
       try
-        // Para jmAny: Limpiamos siempre para que el pr?ximo evento dispare de nuevo limpiamente.
-        if FJoinMode = jmAny then
-          FJoinInputs.Clear;
-
-        // Para jmAll: NO LIMPIAMOS.
-        // Esto permite el patr?n "CombineLatest". Si un flujo se repite (loop),
-        // el nodo recordar? los valores de los otros flujos que no cambiaron.
-        // La limpieza total solo ocurre al iniciar el grafo (Reset).
-
-        { CODIGO ELIMINADO:
-          if (FJoinMode = jmAll) and (FJoinInputs.Count >= FInEdges.Count) then
-          FJoinInputs.Clear;
-        }
+        // Limpiar siempre después de ejecutar, tanto jmAny como jmAll.
+        // Para jmAll: la limpieza garantiza que el próximo ciclo (retry/loop)
+        // espere correctamente todas las entradas antes de disparar de nuevo.
+        FJoinInputs.Clear;
       finally
         FJoinLock.Leave;
       end;
     end;
   end;
+end;
+
+function TAIAgentsNode.CheckJoinAndPrepareInput(aBeforeNode: TAIAgentsNode;
+  aLink: TAIAgentsLink): Boolean;
+var
+  sb: TStringBuilder;
+begin
+  Result := False;
+
+  // Caso especial: reanudacion desde ResumeThread (aBeforeNode=nil, aLink=nil)
+  // con nodo join (FInEdges.Count > 1). Saltamos la puerta de join.
+  if (aBeforeNode = nil) and (aLink = nil) and (FInEdges.Count > 1) then
+  begin
+    Result := True;
+    Exit; // FInput ya fue seteado por ResumeThread
+  end;
+
+  if FInEdges.Count > 1 then
+  begin
+    FJoinLock.Enter;
+    try
+      if (aBeforeNode <> nil) and (aLink <> nil) then
+        FJoinInputs.AddOrSetValue(aLink, aBeforeNode.Output);
+
+      case FJoinMode of
+        jmAny:
+          begin
+            Result := True;
+            if aBeforeNode <> nil then
+              Input := aBeforeNode.Output;
+          end;
+        jmAll:
+          begin
+            if FJoinInputs.Count >= FInEdges.Count then
+            begin
+              Result := True;
+              sb := TStringBuilder.Create;
+              try
+                for var Value in FJoinInputs.Values do
+                  sb.AppendLine(Value);
+                Input := sb.ToString;
+              finally
+                sb.Free;
+              end;
+            end;
+          end;
+      end;
+    finally
+      FJoinLock.Leave;
+    end;
+  end
+  else
+  begin
+    Result := True;
+    if aBeforeNode <> nil then
+      Input := aBeforeNode.Output;
+  end;
+end;
+
+procedure TAIAgentsNode.DoTraverseLinks(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink);
+begin
+  // Verificar suspension antes de enrutar al siguiente link
+  if FSuspended then
+  begin
+    if Assigned(FGraph) then
+      FGraph.DoNodeSuspended(Self, aBeforeNode, aLink);
+    Exit; // No llamar OnExitNode, no enrutar al siguiente Link
+  end;
+
+  if Assigned(FGraph) and Assigned(FGraph.OnExitNode) then
+    TThread.Synchronize(nil,
+      procedure
+      begin
+        FGraph.OnExitNode(FGraph, Self);
+      end);
+
+  if Assigned(Next) then
+  begin
+    Next.FSourceNode := Self;
+    Next.DoExecute(Self);
+  end;
+
+  // Checkpoint tras nodo exitoso
+  if Assigned(FGraph) then
+    FGraph.DoNodeCompleted(Self);
 end;
 
 procedure TAIAgentsNode.ForceFinalExecute;

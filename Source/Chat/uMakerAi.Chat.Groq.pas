@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -32,17 +32,12 @@
 // - GitHub: https://github.com/gustavoeenriquez/
 
 
-// A Octubre del 2024 estas son las limitaciones de visión de groq
-{
-  Model ID: llama-3.2-11b-vision-preview
-  Description: Llama 3.2 11B Vision is a powerful multimodal model capable of processing both text and image inputs. It supports multilingual, multi-turn conversations, tool use, and JSON mode.
-  Context Window: 8,192 tokens
-  Limitations:
-  Preview Model: Currently in preview and should be used for experimentation.
-  Image Size Limit: The maximum allowed size for a request containing an image URL as input is 20MB. Requests larger than this limit will return a 400 error.
-  Single Image per Request: Only one image can be processed per request in the preview release. Requests with multiple images will return a 400 error.
-  System Prompt: The model does not support system prompts and images in the same request.
-}
+// Modelos con vision actualmente en Groq (Abr 2026):
+//   meta-llama/llama-4-scout-17b-16e-instruct  (131K ctx, 8K output, vision + tools)
+//   openai/gpt-oss-120b                        (131K ctx, 65K output, vision + reasoning)
+// Limites de vision en Groq:
+//   - Imagen maxima por URL: 20MB | por base64: 4MB
+//   - Maximo 5 imagenes por request (llama-4-scout)
 
 unit uMakerAi.Chat.Groq;
 
@@ -63,7 +58,7 @@ uses
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages;
 
 Type
-  // Este modelo de reasoning por ahora solo se ha detectado en Groq, así que se implementa solo aquí
+  // Este modelo de reasoning por ahora solo se ha detectado en Groq, asï¿½ que se implementa solo aquï¿½
 
   TAiReasoningFormat = (rfAuto, rfParsed, rfRaw, rfHidden);
   TAiReasoningEffort = (reAuto, reNone, reDefault);
@@ -74,6 +69,7 @@ Type
     FReasoningEffort: TAiReasoningEffort;
   Protected
     Function InitChatCompletions: String; Override;
+    Function InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
   Public
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
@@ -113,7 +109,7 @@ Begin
   Params.Clear;
   Params.Add('ApiKey=@GROQ_API_KEY');
   Params.Add('Model=llama-3.1-8b-instant');
-  Params.Add('MaxTokens=4096');
+  Params.Add('Max_Tokens=4096');
   Params.Add('URL=https://api.groq.com/openai/v1/');
 End;
 
@@ -146,7 +142,6 @@ Var
   Lista: TStringList;
   I: Integer;
   LAsincronico: Boolean;
-  LastMsg: TAiChatMessage;
   Res, LModel: String;
 begin
 
@@ -162,8 +157,6 @@ begin
   // LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
   LAsincronico := Self.Asynchronous;
 
-  // En groq hay una restricción sobre las imágenes
-
   FClient.Asynchronous := LAsincronico;
 
   AJSONObject := TJSonObject.Create;
@@ -171,7 +164,7 @@ begin
 
   Try
 
-    if (ReasoningFormat = 'Raw') and (Tool_Active or (Response_format = tiaChatRfJson) or (Response_format = tiaChatRfJsonSchema)) then
+    if (ModelConfig.Format = 'Raw') and (Tool_Active or (Response_format = tiaChatRfJson) or (Response_format = tiaChatRfJsonSchema)) then
     begin
       Raise Exception.Create('Groq Error: ReasoningFormat no puede ser "raw" cuando se usan Tools o JSON mode. Use "parsed" o "hidden".');
     end;
@@ -186,7 +179,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
 {$ENDIF}
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
+        Raise Exception.Create('La propiedad Tools estï¿½n mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then
@@ -197,42 +190,56 @@ begin
         jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
 {$ENDIF}
         If Assigned(jToolChoice) then
-          AJSONObject.AddPair('tools_choice', jToolChoice);
+          AJSONObject.AddPair('tool_choice', jToolChoice);
       End;
     End;
 
-    LastMsg := Messages.Last;
-    If Assigned(LastMsg) then
-    Begin
-      If LastMsg.MediaFiles.Count > 0 then
-      Begin
-        AJSONObject.AddPair('messages', LastMsg.ToJSon); // Si tiene imágenes solo envia una entrada
-      End
-      Else
-      Begin
-        AJSONObject.AddPair('messages', GetMessages); // Si no tiene imágenes envía todos los mensajes
-      End;
-    End;
+    AJSONObject.AddPair('messages', GetMessages);
 
     AJSONObject.AddPair('model', LModel);
 
-    if ReasoningFormat <> '' then
-      AJSONObject.AddPair('reasoning_format', ReasoningFormat); // 'parsed, raw, hidden';
-
-    if ThinkingLevel <> tlDefault then
+    // Reasoning: guardado estrictamente por familia de modelos para evitar param leak al cambiar modelo
+    // - openai/gpt-oss-*: include_reasoning:true + reasoning_effort (low/medium/high)
+    // - qwen/*:           reasoning_format (parsed/raw/hidden) + reasoning_effort (default/none)
+    // - otros modelos:    ninguno de estos parametros (causarian error 422)
+    if LModel.StartsWith('openai/gpt-oss') then
     begin
-      case ThinkingLevel of
-        tlLow:
-          AJSONObject.AddPair('reasoning_effort', 'low');
-        tlMedium:
-          AJSONObject.AddPair('reasoning_effort', 'medium');
-        tlHigh:
-          AJSONObject.AddPair('reasoning_effort', 'high');
+      if ModelConfig.ThinkingLevel <> tlDefault then
+      begin
+        AJSONObject.AddPair('include_reasoning', TJSONBool.Create(True));
+        case ModelConfig.ThinkingLevel of
+          tlLow:    AJSONObject.AddPair('reasoning_effort', 'low');
+          tlMedium: AJSONObject.AddPair('reasoning_effort', 'medium');
+          tlHigh:   AJSONObject.AddPair('reasoning_effort', 'high');
+        end;
+      end;
+    end
+    else if LModel.StartsWith('qwen/') then
+    begin
+      if ModelConfig.ThinkingLevel <> tlDefault then
+      begin
+        // Thinking activo: reasoning_format parsed + reasoning_effort=default
+        var LFormat: String := ModelConfig.Format;
+        if LFormat = '' then
+          LFormat := 'parsed'; // default: reasoning en campo separado message.reasoning
+        AJSONObject.AddPair('reasoning_format', LFormat);
+        AJSONObject.AddPair('reasoning_effort', 'default');
+      end
+      else if ModelConfig.Format <> '' then
+      begin
+        // Format explicitamente seteado sin ThinkingLevel (ej: 'hidden' para non-thinking)
+        AJSONObject.AddPair('reasoning_format', ModelConfig.Format);
       end;
     end;
+    // Otros modelos (llama, mistral, kimi, etc.): sin params de reasoning
 
     AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
-    AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+
+    // Groq docs: reasoning models usan max_completion_tokens (incluye reasoning tokens en el budget)
+    if LModel.StartsWith('openai/gpt-oss') or LModel.StartsWith('qwen/') then
+      AJSONObject.AddPair('max_completion_tokens', TJSONNumber.Create(Max_tokens))
+    else
+      AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
 
     If Top_p <> 0 then
       AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
@@ -268,7 +275,7 @@ begin
           JSchemaWrapper.AddPair('schema', JInnerSchema);
 
           // NOTA: No enviamos "strict": true por defecto para maximizar compatibilidad
-          // con modelos Groq que no soportan constrained decoding completo aún.
+          // con modelos Groq que no soportan constrained decoding completo aï¿½n.
 
           JResponseFormat.AddPair('json_schema', JSchemaWrapper);
         end;
@@ -286,7 +293,7 @@ begin
       AJSONObject.AddPair('response_format', JResponseFormat);
     end
 
-    // 3. Text Mode (Solo si se especifica explícitamente, o dejar por defecto)
+    // 3. Text Mode (Solo si se especifica explï¿½citamente, o dejar por defecto)
     else if (FResponse_format = tiaChatRfText) then
     begin
       var
@@ -304,16 +311,7 @@ begin
       AJSONObject.AddPair('stop', JStop);
     End;
 
-    If Logprobs = True then
-    Begin
-      If Logit_bias <> '' then
-        AJSONObject.AddPair('logit_bias', TJSONNumber.Create(Logit_bias));
-
-      AJSONObject.AddPair('logprobs', TJSONBool.Create(Logprobs));
-
-      If Top_logprobs <> '' then
-        AJSONObject.AddPair('top_logprobs', TJSONNumber.Create(Top_logprobs));
-    End;
+    // NOTA: Groq no soporta logprobs, logit_bias ni top_logprobs en chat completions (error 400)
 
     If Seed > 0 then
       AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
@@ -388,6 +386,96 @@ begin
     Response.Free;
     jObj.Free;
   End;
+end;
+
+function TAiGroqChat.InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
+var
+  Body: TMultipartFormData;
+  Client: TNetHTTPClient;
+  Headers: TNetHeaders;
+  sUrl: String;
+  Res: IHTTPResponse;
+  LResponseStream: TMemoryStream;
+  LTempStream: TMemoryStream;
+  LResponseObj: TJSonObject;
+  Granularities: TStringList;
+  I: Integer;
+  LModel: String;
+begin
+  Result := '';
+  if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
+    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripci?n.');
+
+  sUrl := Url + 'audio/transcriptions';
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+  Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
+  Client.SynchronizeEvents := False;
+{$ENDIF}
+  LResponseStream := TMemoryStream.Create;
+  Body := TMultipartFormData.Create;
+  Granularities := TStringList.Create;
+  LTempStream := TMemoryStream.Create;
+  try
+    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
+
+    aMediaFile.Content.Position := 0;
+    LTempStream.LoadFromStream(aMediaFile.Content);
+    LTempStream.Position := 0;
+
+{$IF CompilerVersion >= 35}
+    Body.AddStream('file', LTempStream, False, aMediaFile.FileName, aMediaFile.MimeType);
+{$ELSE}
+    Body.AddStream('file', LTempStream, aMediaFile.FileName, aMediaFile.MimeType);
+{$ENDIF}
+    Body.AddField('model', LModel);
+
+    if not AskMsg.Prompt.IsEmpty then
+      Body.AddField('prompt', AskMsg.Prompt);
+
+    if not TranscriptionParams.ResponseFormat.IsEmpty then
+      Body.AddField('response_format', TranscriptionParams.ResponseFormat)
+    else
+      Body.AddField('response_format', 'json');
+
+    if not TranscriptionParams.Language.IsEmpty then
+      Body.AddField('language', TranscriptionParams.Language);
+
+    if Self.Temperature > 0 then
+      Body.AddField('temperature', FormatFloat('0.0', Self.Temperature));
+
+    if not TranscriptionParams.TimestampGranularities.IsEmpty then
+    begin
+      Granularities.CommaText := TranscriptionParams.TimestampGranularities;
+      for I := 0 to Granularities.Count - 1 do
+        Body.AddField('timestamp_granularities[]', Trim(Granularities[I]));
+    end;
+
+    Res := Client.Post(sUrl, Body, LResponseStream, Headers);
+
+    if Res.StatusCode = 200 then
+    begin
+      LResponseObj := TJSonObject.ParseJSONValue(Res.ContentAsString) as TJSonObject;
+      if not Assigned(LResponseObj) then
+        LResponseObj := TJSonObject.Create(TJSonPair.Create('text', Res.ContentAsString));
+      try
+        ParseJsonTranscript(LResponseObj, ResMsg, aMediaFile);
+      finally
+        LResponseObj.Free;
+      end;
+      Result := ResMsg.Prompt;
+    end
+    else
+      raise Exception.CreateFmt('Error en la transcripci?n: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+
+  finally
+    Body.Free;
+    Client.Free;
+    LResponseStream.Free;
+    LTempStream.Free;
+    Granularities.Free;
+  end;
 end;
 
 Initialization

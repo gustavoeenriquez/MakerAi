@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -54,14 +54,14 @@ type
 
   // --------- CLASES PARA EL PARSER --------------------------------
 
-  { Enumeraciones para el Árbol de Expresiones }
+  { Enumeraciones para el ï¿½rbol de Expresiones }
   TExpressionKind = (ekLiteral, ekProperty, ekBinary);
 
   TBinaryOp = (
-    // Lógicos
+    // Lï¿½gicos
     opAnd, opOr,
 
-    // Comparación Estándar
+    // Comparaciï¿½n Estï¿½ndar
     opEqual, opNotEqual, opGreater, opGreaterEqual, opLess, opLessEqual,
 
     // Texto
@@ -82,14 +82,14 @@ type
     destructor Destroy; override;
   end;
 
-  { Expresión para valores constantes (18, 'Madrid', true, null) }
+  { Expresiï¿½n para valores constantes (18, 'Madrid', true, null) }
   TLiteralExpr = class(TGraphExpression)
   public
     Value: Variant;
     constructor Create(AValue: Variant);
   end;
 
-  { Expresión para acceso a propiedades (p.nombre, e.peso) }
+  { Expresiï¿½n para acceso a propiedades (p.nombre, e.peso) }
   TPropertyExpr = class(TGraphExpression)
   public
     Variable: string; // Ejemplo: 'p'
@@ -97,7 +97,7 @@ type
     constructor Create(const AVar, AKey: string);
   end;
 
-  { Expresión para operaciones binarias (A > B, C AND D) }
+  { Expresiï¿½n para operaciones binarias (A > B, C AND D) }
   TBinaryExpr = class(TGraphExpression)
   public
     Left: TGraphExpression;
@@ -111,9 +111,9 @@ type
   TGraphExportFormat = (gefDOT, gefGraphML, gefGraphMkai);
 
   { TMergeStrategy }
-  TMergeStrategy = (msAddNewOnly, // (Default) Solo añade propiedades que no existen.
+  TMergeStrategy = (msAddNewOnly, // (Default) Solo aï¿½ade propiedades que no existen.
     msOverwrite, // Sobrescribe las propiedades existentes con las nuevas.
-    msKeepExisting // No realiza ningún cambio en las propiedades del elemento existente.
+    msKeepExisting // No realiza ningï¿½n cambio en las propiedades del elemento existente.
     );
 
 
@@ -123,16 +123,16 @@ type
 
   // Representa un paso en el plan de consulta.
   TQueryStep = record
-    SourceVariable: string; // Variable del paso anterior (vacío para el primer paso)
+    SourceVariable: string; // Variable del paso anterior (vacï¿½o para el primer paso)
     EdgeLabel: string; // Etiqueta de la arista a seguir
     TargetVariable: string; // Nombre para guardar los resultados de este paso
     TargetNodeLabel: string; // Filtro opcional para el tipo de nodo de destino
-    IsReversed: Boolean; // Si la búsqueda debe ser hacia atrás (incoming)
+    IsReversed: Boolean; // Si la bï¿½squeda debe ser hacia atrï¿½s (incoming)
   end;
 
   // Representa el plan de consulta completo.
   TQueryPlan = record
-    AnchorPrompt: string; // El texto para la búsqueda semántica inicial
+    AnchorPrompt: string; // El texto para la bï¿½squeda semï¿½ntica inicial
     AnchorVariable: string; // El nombre de la variable para los nodos de anclaje
     Steps: TArray<TQueryStep>; // Los pasos estructurales a seguir
     ResultVariable: string; // La variable cuyos nodos se deben devolver
@@ -146,14 +146,14 @@ type
 
 
   // ----- MATCH --------------------
-  // --Match es una función que permite recorrer el grafo sin necesidad de embeddings para encontrar patrones y relaciones
+  // --Match es una funciï¿½n que permite recorrer el grafo sin necesidad de embeddings para encontrar patrones y relaciones
 
-  // Dirección para la búsqueda de patrones en aristas
+  // Direcciï¿½n para la bï¿½squeda de patrones en aristas
   TGraphDirection = (gdOutgoing, gdIncoming, gdBoth);
 
-  // --- Clases auxiliares para la construcción de la consulta MATCH ---
+  // --- Clases auxiliares para la construcciï¿½n de la consulta MATCH ---
 
-  // Representa un patrón para un nodo en la consulta.
+  // Representa un patrï¿½n para un nodo en la consulta.
   // Ej: (p:Persona {ciudad: 'New York'})
   TMatchNodePattern = class
   public
@@ -165,38 +165,38 @@ type
     function Matches(ANode: TAiRagGraphNode): Boolean;
   end;
 
-  // Representa un patrón para una arista en la consulta.
+  // Representa un patrï¿½n para una arista en la consulta.
   // Ej: -[r:KNOWS {since: 2018}]->
   TMatchEdgePattern = class
   public
     Variable: string; // El alias de la arista, ej: 'r'
     EdgeLabel: string; // La etiqueta a buscar, ej: 'KNOWS'
-    Direction: TGraphDirection; // La dirección de la relación
+    Direction: TGraphDirection; // La direcciï¿½n de la relaciï¿½n
     Properties: TDictionary<string, Variant>; // Filtros de propiedades, ej: {'since': 2018}
     constructor Create;
     destructor Destroy; override;
-    // Comprueba si una arista coincide con el patrón, considerando la dirección del recorrido actual
+    // Comprueba si una arista coincide con el patrï¿½n, considerando la direcciï¿½n del recorrido actual
     function Matches(AEdge: TAiRagGraphEdge; AActualDirection: TGraphDirection): Boolean;
   end;
 
-  // Representa una cláusula de patrón completa.
+  // Representa una clï¿½usula de patrï¿½n completa.
   // Ej: (p)-[r]->(m)
   TMatchClause = class
   public
     SourceNodeVar: string; // Variable del nodo de origen, ej: 'p'
-    EdgePattern: TMatchEdgePattern; // El patrón de la arista (la cláusula es dueña de este objeto)
+    EdgePattern: TMatchEdgePattern; // El patrï¿½n de la arista (la clï¿½usula es dueï¿½a de este objeto)
     TargetNodeVar: string; // Variable del nodo de destino, ej: 'm'
     constructor Create(ASourceNodeVar: string; AEdgePattern: TMatchEdgePattern; ATargetNodeVar: string);
     destructor Destroy; override;
   end;
 
-  // La consulta completa que contiene todos los patrones de nodos y cláusulas.
+  // La consulta completa que contiene todos los patrones de nodos y clï¿½usulas.
   TGraphMatchQuery = class
   private
-    FNodePatterns: TObjectList<TMatchNodePattern>; // Es dueño de los patrones de nodo
+    FNodePatterns: TObjectList<TMatchNodePattern>; // Es dueï¿½o de los patrones de nodo
     FMatchClauses: TObjectList<TMatchClause>;
     FWhereClause: TGraphExpression;
-    FDepth: Integer; // Es dueño de las cláusulas
+    FDepth: Integer; // Es dueï¿½o de las clï¿½usulas
     function GetNodePatternByVariable(const AVar: string): TMatchNodePattern;
   public
     constructor Create;
@@ -243,7 +243,7 @@ type
   private
     FGraph: TAiRagGraph;
   protected
-    // Métodos que los drivers DEBEN implementar
+    // Mï¿½todos que los drivers DEBEN implementar
     function FindNodeDataByID(const ANodeID: string; out ANodeData: TNodeDataRecord): Boolean; virtual; abstract;
     function FindEdgeDataByID(const AEdgeID: string; out AEdgeData: TEdgeDataRecord): Boolean; virtual; abstract;
     procedure GetNodeEdges(ANode: TAiRagGraphNode); virtual; abstract;
@@ -295,7 +295,7 @@ type
     function PropertiesToJSON: TJSONObject;
     procedure EnsureEdgesAreLoaded;
 
-    // --- NUEVOS MÉTODOS Y PROPIEDADES ---
+    // --- NUEVOS Mï¿½TODOS Y PROPIEDADES ---
     function AddChunk(const AText: string; const AData: TAiEmbeddingData): TAiEmbeddingNode;
     property Chunks: TObjectList<TAiEmbeddingNode> read FChunks;
 
@@ -413,8 +413,8 @@ type
     function FindEdge(AFromNode, AToNode: TAiRagGraphNode; AEdgeLabel: string): TAiRagGraphEdge;
     function FindNodeByName(AName, ANodeLabel: string): TAiRagGraphNode;
 
-    procedure SaveToStream(AStream: TStream); overload; // La versión original
-    procedure SaveToStream(AStream: TStream; aFull: Boolean); overload; // La nueva versión
+    procedure SaveToStream(AStream: TStream); overload; // La versiï¿½n original
+    procedure SaveToStream(AStream: TStream; aFull: Boolean); overload; // La nueva versiï¿½n
 
     procedure SaveToDot(const AFileName: string);
 
@@ -443,7 +443,7 @@ type
     function ExecuteMakerGQL(const ACode: string): string; Overload;
 
 
-    // todo Implementar Detección de Comunidades (Community Detection) Algoritmo de Louvain
+    // todo Implementar Detecciï¿½n de Comunidades (Community Detection) Algoritmo de Louvain
 
     function GetAllShortestPaths(AStartNode, AEndNode: TAiRagGraphNode): TArray<TArray<TObject>>; // Falta por implementar
     function Match(AQuery: TGraphMatchQuery; ADepth: Integer = 0): TArray<TDictionary<string, TObject>>;
@@ -471,7 +471,7 @@ type
     property SearchOptions: TAiSearchOptions read GetSearchOptions write SetSearchOptions;
   end;
 
-  // Función Helper para convertir TJSONValue a Variant
+  // Funciï¿½n Helper para convertir TJSONValue a Variant
 function JSONValueToVariant(AJsonValue: TJSONValue): Variant;
 function VariantToJSONValue(const AValue: Variant): TJSONValue;
 function StringToEmbedding(const AVectorString: string): TAiEmbeddingData;
@@ -520,7 +520,7 @@ begin
   begin
     JSONArray := TJSONArray(AJsonValue);
 
-    // Si el array está vacío
+    // Si el array estï¿½ vacï¿½o
     if JSONArray.Count = 0 then
     begin
       Result := '[]';
@@ -538,14 +538,14 @@ begin
   begin
     JSONObject := TJSONObject(AJsonValue);
 
-    // Si el objeto está vacío
+    // Si el objeto estï¿½ vacï¿½o
     if JSONObject.Count = 0 then
     begin
       Result := '{}';
       Exit;
     end;
 
-    // Convertir objeto a string formateado (o podrías usar otra estructura)
+    // Convertir objeto a string formateado (o podrï¿½as usar otra estructura)
     ResultDict := '{';
     for I := 0 to JSONObject.Count - 1 do
     begin
@@ -585,14 +585,14 @@ begin
   else if VarTypeResult = varBoolean then
     Result := TJSONBool.Create(Boolean(AValue))
   else if VarIsFloat(AValue) then
-    Result := TJSONNumber.Create(Extended(AValue)) // Usar Extended para máxima precisión
+    Result := TJSONNumber.Create(Extended(AValue)) // Usar Extended para mï¿½xima precisiï¿½n
   else if VarIsNumeric(AValue) then
     Result := TJSONNumber.Create(Integer(AValue))
   else if VarIsStr(AValue) then
     Result := TJSONString.Create(VarToStr(AValue))
   else
     // Fallback: si no es un tipo primitivo, lo convertimos a string.
-    // Una implementación más avanzada podría manejar arrays o TDateTime de forma especial.
+    // Una implementaciï¿½n mï¿½s avanzada podrï¿½a manejar arrays o TDateTime de forma especial.
     Result := TJSONString.Create(VarToStr(AValue));
 end;
 
@@ -603,7 +603,7 @@ var
   I: Integer;
   FormatSettings: TFormatSettings;
 begin
-  Result := []; // Devuelve un array vacío por defecto
+  Result := []; // Devuelve un array vacï¿½o por defecto
   if AVectorString.IsEmpty or (AVectorString = '[]') then
     Exit;
 
@@ -615,18 +615,18 @@ begin
   // 2. Separar los valores por la coma
   ValueStrings := CleanedString.Split([',']);
 
-  // 3. Preparar para la conversión de float insensible a la localización
+  // 3. Preparar para la conversiï¿½n de float insensible a la localizaciï¿½n
   // Esto asegura que el '.' siempre se interprete como el separador decimal.
   FormatSettings := TFormatSettings.Invariant;
 
-  // 4. Convertir cada valor y añadirlo al resultado
+  // 4. Convertir cada valor y aï¿½adirlo al resultado
   SetLength(Result, Length(ValueStrings));
   for I := 0 to High(ValueStrings) do
   begin
-    // Usamos TryStrToFloat para más seguridad contra datos mal formados
+    // Usamos TryStrToFloat para mï¿½s seguridad contra datos mal formados
     if TryStrToFloat(ValueStrings[I], Result[I], FormatSettings) then
     begin
-      // La conversión fue exitosa, continuar.
+      // La conversiï¿½n fue exitosa, continuar.
     end
     else
     begin
@@ -675,7 +675,7 @@ begin
         Exit;
       end;
 
-      // Intentamos flotante (SIEMPRE válido para JSON number)
+      // Intentamos flotante (SIEMPRE vï¿½lido para JSON number)
       Var
         Dbl: Double;
       if TryStrToFloat(Num.Value, Dbl, TFormatSettings.Invariant) then
@@ -704,7 +704,7 @@ begin
   AProperties.Clear; // Limpiamos el diccionario antes de poblarlo.
   JsonValue := TJSONObject.ParseJSONValue(AJSONString);
   if JsonValue = nil then
-    Exit; // JSON inválido
+    Exit; // JSON invï¿½lido
 
   try
     if JsonValue is TJSONObject then
@@ -727,8 +727,8 @@ constructor TAiRagGraphNode.Create(AOwnerGraph: TAiRagGraph; ADim: Integer);
 begin
   inherited Create(ADim);
   FOwnerGraph := AOwnerGraph;
-  FInternalOutgoingEdges := TObjectList<TAiRagGraphEdge>.Create(False); // No es dueño de los objetos
-  FInternalIncomingEdges := TObjectList<TAiRagGraphEdge>.Create(False); // No es dueño de los objetos
+  FInternalOutgoingEdges := TObjectList<TAiRagGraphEdge>.Create(False); // No es dueï¿½o de los objetos
+  FInternalIncomingEdges := TObjectList<TAiRagGraphEdge>.Create(False); // No es dueï¿½o de los objetos
   // FProperties := TDictionary<string, Variant>.Create;
 
   // System.Generics.Defaults.TStringComparer.Ordinal
@@ -749,7 +749,7 @@ end;
 
 procedure TAiRagGraphNode.EnsureEdgesAreLoaded;
 begin
-  // Si las aristas ya están cargadas o no hay un OwnerGraph/evento asignado, no hacemos nada.
+  // Si las aristas ya estï¿½n cargadas o no hay un OwnerGraph/evento asignado, no hacemos nada.
   if FEdgesLoaded or (FOwnerGraph = nil) or not Assigned(FOwnerGraph.Driver) then
     Exit;
 
@@ -782,8 +782,8 @@ end;
 
 function TAiRagGraphNode.AddChunk(const AText: string; const AData: TAiEmbeddingData): TAiEmbeddingNode;
 begin
-  // Creamos un nodo de embedding básico para el fragmento.
-  // Usamos el constructor que define la dimensión basada en los datos recibidos.
+  // Creamos un nodo de embedding bï¿½sico para el fragmento.
+  // Usamos el constructor que define la dimensiï¿½n basada en los datos recibidos.
   Result := TAiEmbeddingNode.Create(Length(AData));
   Result.Text := AText;
   Result.Data := Copy(AData); // Copiamos el vector
@@ -814,8 +814,8 @@ end;
 
 function TAiRagGraphNode.PropertiesToJSON: TJSONObject;
 begin
-  // Delegamos la serialización al nuevo objeto MetaData unificado.
-  // Este ya maneja correctamente la conversión de Variant a JSON (Fechas, Booleano, etc.)
+  // Delegamos la serializaciï¿½n al nuevo objeto MetaData unificado.
+  // Este ya maneja correctamente la conversiï¿½n de Variant a JSON (Fechas, Booleano, etc.)
   if Assigned(MetaData) then
     Result := MetaData.ToJSON
   else
@@ -836,13 +836,13 @@ end;
 destructor TAiRagGraphEdge.Destroy;
 begin
   // FProperties.Free; <--- ELIMINADO (Ya no existe)
-  // El MetaData se libera automáticamente en el destructor de la clase base (inherited)
+  // El MetaData se libera automï¿½ticamente en el destructor de la clase base (inherited)
   inherited;
 end;
 
 function TAiRagGraphEdge.PropertiesToJSON: TJSONObject;
 begin
-  // Delegamos la serialización al nuevo objeto MetaData unificado.
+  // Delegamos la serializaciï¿½n al nuevo objeto MetaData unificado.
   if Assigned(MetaData) then
     Result := MetaData.ToJSON
   else
@@ -884,7 +884,6 @@ end;
 
 function TAiRagGraph.DetectCommunities(AIterations: Integer = 10): TDictionary<TAiRagGraphNode, Integer>;
 var
-  NodeToCommunity: TDictionary<TAiRagGraphNode, Integer>;
   CommInfo: TDictionary<Integer, TCommunity>;
   m2: Double; // 2 * suma de todos los pesos del grafo
   Nodes: TArray<TAiRagGraphNode>;
@@ -903,7 +902,7 @@ begin
   CommInfo := TDictionary<Integer, TCommunity>.Create;
   Nodes := FNodeRegistry.Values.ToArray;
 
-  // --- Inicialización: Cada nodo en su propia comunidad ---
+  // --- Inicializaciï¿½n: Cada nodo en su propia comunidad ---
   m2 := 0;
   for I := 0 to Length(Nodes) - 1 do
   begin
@@ -923,7 +922,7 @@ begin
     m2 := m2 + K_i;
   end;
 
-  // --- Bucle principal de optimización ---
+  // --- Bucle principal de optimizaciï¿½n ---
   for Iter := 1 to AIterations do
   begin
     Changed := False;
@@ -943,7 +942,7 @@ begin
         if TargetCommID = CurrentCommID then
           Continue;
 
-        // Calcular K_i_in (conexión del nodo con la comunidad destino)
+        // Calcular K_i_in (conexiï¿½n del nodo con la comunidad destino)
         K_i_in := 0;
         for Edge in Node.OutgoingEdges do
           if Result[Edge.ToNode] = TargetCommID then
@@ -952,7 +951,7 @@ begin
           if Result[Edge.FromNode] = TargetCommID then
             K_i_in := K_i_in + Edge.Weight;
 
-        // Fórmula simplificada de Ganancia de Modularidad (delta Q)
+        // Fï¿½rmula simplificada de Ganancia de Modularidad (delta Q)
         Gain := (K_i_in - (CommInfo[TargetCommID].TotalWeight * K_i) / m2);
 
         if Gain > MaxGain then
@@ -1245,12 +1244,12 @@ end;
   PathObj: TObject;
   Score: Double;
 
-  // Variables para resolución de algoritmos
+  // Variables para resoluciï¿½n de algoritmos
   StartNode, EndNode: TAiRagGraphNode;
   FinalDepth: Integer;
 
   // -----------------------------------------------------------------------
-  // Función auxiliar anidada:
+  // Funciï¿½n auxiliar anidada:
   // -----------------------------------------------------------------------
   function FindNodeByPattern(APattern: TMatchNodePattern): TAiRagGraphNode;
   var
@@ -1261,13 +1260,13 @@ end;
   if APattern = nil then
   Exit;
 
-  // 1. Optimización: Si hay etiqueta, buscamos solo en ese índice
+  // 1. Optimizaciï¿½n: Si hay etiqueta, buscamos solo en ese ï¿½ndice
   if not APattern.NodeLabel.IsEmpty then
   Candidates := Self.FindNodesByLabel(APattern.NodeLabel)
   else
   Candidates := FNodeRegistry.Values.ToArray;
 
-  // 2. Búsqueda lineal sobre los candidatos para coincidir propiedades
+  // 2. Bï¿½squeda lineal sobre los candidatos para coincidir propiedades
   for Cand in Candidates do
   begin
   if APattern.Matches(Cand) then
@@ -1286,21 +1285,21 @@ end;
 
   Parser := TGraphParser.Create(ACode);
   try
-  // Parseamos el código.
-  // Si es un comando especial, QueryObj será nil y CommandType tendrá valor.
-  // Si es una consulta normal, QueryObj tendrá el objeto y CommandType será cmdNone.
+  // Parseamos el cï¿½digo.
+  // Si es un comando especial, QueryObj serï¿½ nil y CommandType tendrï¿½ valor.
+  // Si es una consulta normal, QueryObj tendrï¿½ el objeto y CommandType serï¿½ cmdNone.
   QueryObj := Parser.Parse;
   try
 
   if Parser.CommandType <> cmdNone then
   begin
   // =========================================================
-  // EJECUCIÓN DE COMANDOS
+  // EJECUCIï¿½N DE COMANDOS
   // =========================================================
   case Parser.CommandType of
 
   // -------------------------------------------------------
-  // 1. INTROSPECCIÓN (SHOW ...)
+  // 1. INTROSPECCIï¿½N (SHOW ...)
   // -------------------------------------------------------
   cmdShowLabels:
   begin
@@ -1329,11 +1328,11 @@ end;
   end;
 
   // -------------------------------------------------------
-  // 2. ALGORITMOS: CAMINO MÁS CORTO
+  // 2. ALGORITMOS: CAMINO Mï¿½S CORTO
   // -------------------------------------------------------
   cmdShortestPath:
   begin
-  // Resolvemos los patrones a nodos reales usando la función anidada
+  // Resolvemos los patrones a nodos reales usando la funciï¿½n anidada
   StartNode := FindNodeByPattern(Parser.CommandSourcePattern);
   EndNode := FindNodeByPattern(Parser.CommandTargetPattern);
 
@@ -1362,7 +1361,7 @@ end;
   Result[I] := ResDict;
   end;
   end;
-  // Si StartNode o EndNode son nil, devuelve array vacío (no encontrado)
+  // Si StartNode o EndNode son nil, devuelve array vacï¿½o (no encontrado)
   end;
 
   // -------------------------------------------------------
@@ -1392,7 +1391,7 @@ end;
   // -------------------------------------------------------
   cmdDegrees:
   begin
-  // Obtenemos los N nodos con más conexiones
+  // Obtenemos los N nodos con mï¿½s conexiones
   NodeListResult := Self.GetNodesByDegree(Parser.CommandLimit, dtTotal);
 
   SetLength(Result, Length(NodeListResult));
@@ -1407,11 +1406,11 @@ end;
   end;
   end
   // =========================================================
-  // CONSULTA MATCH ESTÁNDAR
+  // CONSULTA MATCH ESTï¿½NDAR
   // =========================================================
   else if Assigned(QueryObj) then
   begin
-  // Ejecutamos la lógica clásica de Matching (Nodos y Relaciones)
+  // Ejecutamos la lï¿½gica clï¿½sica de Matching (Nodos y Relaciones)
 
   if QueryObj.Depth > 0 then
   FinalDepth := QueryObj.Depth
@@ -1437,7 +1436,7 @@ Var
 begin
   Result := ExecuteMakerGQL(ACode, Data);
 
-  // 3. ¡IMPORTANTE! Liberar la memoria de los diccionarios de salida
+  // 3. ï¿½IMPORTANTE! Liberar la memoria de los diccionarios de salida
   If Assigned(Data) then
     for var Dict in Data do
       Dict.Free;
@@ -1458,18 +1457,17 @@ var
   I: Integer;
   PathObj: TObject;
   Score: Double;
-  Obj: TObject;
   ElementType: string;
 
-  // Variables para resolución de algoritmos
+  // Variables para resoluciï¿½n de algoritmos
   StartNode, EndNode: TAiRagGraphNode;
   FinalDepth: Integer;
 
-  // Variables para la construcción del contexto de texto
+  // Variables para la construcciï¿½n del contexto de texto
   ContextNodes: TList<TAiRagGraphNode>;
   ContextBuilder: TStringBuilder;
 
-  // --- Función auxiliar FindNodeByPattern (se mantiene igual) ---
+  // --- Funciï¿½n auxiliar FindNodeByPattern (se mantiene igual) ---
   function FindNodeByPattern(APattern: TMatchNodePattern): TAiRagGraphNode;
   var
     Candidates: TArray<TAiRagGraphNode>;
@@ -1502,7 +1500,7 @@ begin
       if Parser.CommandType <> cmdNone then
       begin
         // =========================================================
-        // EJECUCIÓN DE COMANDOS (Algoritmos / Introspección)
+        // EJECUCIï¿½N DE COMANDOS (Algoritmos / Introspecciï¿½n)
         // =========================================================
         ContextBuilder := TStringBuilder.Create;
         try
@@ -1630,7 +1628,7 @@ begin
         end;
       end
       // =========================================================
-      // CONSULTA MATCH ESTÁNDAR (La más común)
+      // CONSULTA MATCH ESTï¿½NDAR (La mï¿½s comï¿½n)
       // =========================================================
       else if Assigned(QueryObj) then
       begin
@@ -1642,13 +1640,13 @@ begin
         // 1. Ejecutar Match
         AResultObjects := Self.Match(QueryObj, FinalDepth);
 
-        // 2. Extraer Nodos únicos para generar el contexto
+        // 2. Extraer Nodos ï¿½nicos para generar el contexto
         ContextNodes := TList<TAiRagGraphNode>.Create;
         try
           for ResDict in AResultObjects do
           begin
             // Los resultados del Match pueden venir mezclados (nodos, aristas, valores)
-            // Extraemos solo los nodos para pasárselos al generador de contexto.
+            // Extraemos solo los nodos para pasï¿½rselos al generador de contexto.
             for var Pair in ResDict do
             begin
               // Caso A: El objeto directo es un Nodo (formato antiguo/simple)
@@ -1689,7 +1687,7 @@ end;
 
 function TAiRagGraph.ExpandNodeList(AInitialNodes: TList<TAiRagGraphNode>; ADepth: Integer): TArray<TAiRagGraphNode>;
 var
-  // Usamos un diccionario para registrar los nodos ya procesados o añadidos.
+  // Usamos un diccionario para registrar los nodos ya procesados o aï¿½adidos.
   FoundNodes: TDictionary<string, TAiRagGraphNode>;
   NodeQueue: TQueue<TAiRagGraphNode>;
   CurrentNode, NeighborNode: TAiRagGraphNode;
@@ -1709,7 +1707,7 @@ begin
       end;
     end;
 
-    // Expansión BFS limitada por profundidad
+    // Expansiï¿½n BFS limitada por profundidad
     CurrentDepth := 0;
     while (NodeQueue.Count > 0) and (CurrentDepth < ADepth) do
     begin
@@ -1729,7 +1727,7 @@ begin
           end;
         end;
 
-        // Expandir hacia atrás (incoming)
+        // Expandir hacia atrï¿½s (incoming)
         for Edge in CurrentNode.IncomingEdges do
         begin
           NeighborNode := Edge.FromNode;
@@ -1761,18 +1759,18 @@ var
   Chunk: TAiEmbeddingNode;
   NewSource, NewTarget: TAiRagGraphNode;
 begin
-  // 1. Crear el nuevo grafo con la misma configuración de embeddings
+  // 1. Crear el nuevo grafo con la misma configuraciï¿½n de embeddings
   Result := TAiRagGraph.Create(nil);
   Result.Embeddings := Self.Embeddings;
 
   if Length(ANodes) = 0 then
     Exit;
 
-  // Diccionario para rastrear qué nodos se incluyeron en el subgrafo
+  // Diccionario para rastrear quï¿½ nodos se incluyeron en el subgrafo
   NodeSet := TDictionary<string, Boolean>.Create;
   try
     // BLOQUEAR ACTUALIZACIONES: Crucial para el rendimiento.
-    // Evita que los índices (BM25/HNSW) se reconstruyan nodo por nodo.
+    // Evita que los ï¿½ndices (BM25/HNSW) se reconstruyan nodo por nodo.
     Result.BeginUpdate;
     try
       // --- FASE 1: Clonar todos los Nodos seleccionados ---
@@ -1784,21 +1782,21 @@ begin
         NewNode := Result.AddNode(Node.ID, Node.NodeLabel, Node.Name);
         NewNode.Model := Node.Model;
 
-        // COPIA DE TEXTO: Importante para que el subgrafo funcione con búsquedas léxicas
+        // COPIA DE TEXTO: Importante para que el subgrafo funcione con bï¿½squedas lï¿½xicas
         NewNode.Text := Node.Text;
 
         // COPIA DE METADATOS: Reemplaza el bucle manual de FProperties.
-        // Copia tipos reales (fechas, números, booleanos) sin pérdida.
+        // Copia tipos reales (fechas, nï¿½meros, booleanos) sin pï¿½rdida.
         NewNode.MetaData.Assign(Node.MetaData);
 
         // COPIA DE VECTOR (Resumen): Copia el embedding principal del nodo
         if Length(Node.Data) > 0 then
         begin
           NewNode.SetDataLength(Length(Node.Data));
-          NewNode.Data := Copy(Node.Data); // Copy es más seguro que Move para arrays dinámicos
+          NewNode.Data := Copy(Node.Data); // Copy es mï¿½s seguro que Move para arrays dinï¿½micos
         end;
 
-        // COPIA DE CHUNKS: Nueva funcionalidad (Opción 1)
+        // COPIA DE CHUNKS: Nueva funcionalidad (Opciï¿½n 1)
         // Garantiza que la entidad mantenga todos sus fragmentos de texto
         for Chunk in Node.Chunks do
         begin
@@ -1807,12 +1805,12 @@ begin
       end;
 
       // --- FASE 2: Clonar Aristas Internas ---
-      // Solo aquellas cuyas entidades origen y destino estén presentes en la selección
+      // Solo aquellas cuyas entidades origen y destino estï¿½n presentes en la selecciï¿½n
       for Node in ANodes do
       begin
         for Edge in Node.OutgoingEdges do
         begin
-          // Verificar si el nodo destino también fue seleccionado
+          // Verificar si el nodo destino tambiï¿½n fue seleccionado
           if NodeSet.ContainsKey(Edge.ToNode.ID) then
           begin
             // IMPORTANTE: Obtener las referencias de los nodos EN EL NUEVO GRAFO
@@ -1821,7 +1819,7 @@ begin
 
             if (NewSource <> nil) and (NewTarget <> nil) then
             begin
-              // Recreamos la arista con todos los parámetros originales (ID, Label, Name, Weight)
+              // Recreamos la arista con todos los parï¿½metros originales (ID, Label, Name, Weight)
               NewEdge := Result.AddEdge(NewSource, NewTarget, Edge.ID, Edge.EdgeLabel, Edge.Name, Edge.Weight);
 
               // Copiar metadatos de la arista
@@ -1838,7 +1836,7 @@ begin
         end;
       end;
     finally
-      // Dispara la reconstrucción de índices una sola vez para todo el subgrafo
+      // Dispara la reconstrucciï¿½n de ï¿½ndices una sola vez para todo el subgrafo
       Result.EndUpdate;
     end;
   finally
@@ -1850,11 +1848,11 @@ procedure TAiRagGraph.Clear;
 var
   NodeList: TList<TAiRagGraphNode>;
 begin
-  // Código original
+  // Cï¿½digo original
   FNodeRegistry.Clear;
   FEdgeRegistry.Clear;
 
-  // Liberar las listas de nodos dentro del índice de etiquetas antes de limpiarlo
+  // Liberar las listas de nodos dentro del ï¿½ndice de etiquetas antes de limpiarlo
   for NodeList in FNodeLabelIndex.Values do
   begin
     NodeList.Free;
@@ -1871,7 +1869,7 @@ function TAiRagGraph.CountNodesByLabel(const ALabel: string): Integer;
 var
   NodeList: TList<TAiRagGraphNode>;
 begin
-  // Usamos el índice para máxima eficiencia
+  // Usamos el ï¿½ndice para mï¿½xima eficiencia
   if FNodeLabelIndex.TryGetValue(ALabel, NodeList) then
     Result := NodeList.Count
   else
@@ -1894,7 +1892,7 @@ function TAiRagGraph.NewNode(const AID, ALabel, AName: string): TAiRagGraphNode;
 var
   Dim: Integer;
 begin
-  // Determinamos la dimensión para el objeto
+  // Determinamos la dimensiï¿½n para el objeto
   if FNodes.Dim > 0 then
     Dim := FNodes.Dim
   else if Assigned(FEmbeddings) then
@@ -1907,21 +1905,21 @@ begin
   Result.ID := AID;
   Result.NodeLabel := ALabel;
   Result.Name := AName;
-  // Nota: No se añade a FNodeRegistry ni a FNodes todavía.
+  // Nota: No se aï¿½ade a FNodeRegistry ni a FNodes todavï¿½a.
 end;
 
 procedure TAiRagGraph.Notification(AComponent: TComponent; Operation: TOperation);
 begin
   inherited Notification(AComponent, Operation);
 
-  // Si un componente se está eliminando (opRemove)
+  // Si un componente se estï¿½ eliminando (opRemove)
   if Operation = opRemove then
   begin
-    // ¿Es nuestro motor de embeddings?
+    // ï¿½Es nuestro motor de embeddings?
     if AComponent = FEmbeddings then
       FEmbeddings := nil;
 
-    // ¿Es nuestro driver?
+    // ï¿½Es nuestro driver?
     if AComponent = FDriver then
       FDriver := nil;
   end;
@@ -1952,7 +1950,7 @@ begin
 
   if ExistingNode <> ANode then
   begin
-    // Si ya existía un nodo con ese ID, liberamos el que intentamos añadir
+    // Si ya existï¿½a un nodo con ese ID, liberamos el que intentamos aï¿½adir
     // y devolvemos el que ya estaba en el grafo.
     ANode.Free;
     Result := ExistingNode;
@@ -1970,7 +1968,7 @@ function TAiRagGraph.NewEdge(AFromNode, AToNode: TAiRagGraphNode; const AID, ALa
 var
   Dim: Integer;
 begin
-  // Centralizamos la detección de dimensiones
+  // Centralizamos la detecciï¿½n de dimensiones
   if FEdges.Dim > 0 then
     Dim := FEdges.Dim
   else if Assigned(FEmbeddings) then
@@ -1996,7 +1994,7 @@ end;
 // El overload que crea desde datos simples + peso
 function TAiRagGraph.AddEdge(AFromNode, AToNode: TAiRagGraphNode; AID, ALabel, AName: string; AWeight: Double): TAiRagGraphEdge;
 begin
-  // 1. Usamos la fábrica para crear el objeto completo en memoria
+  // 1. Usamos la fï¿½brica para crear el objeto completo en memoria
   Result := NewEdge(AFromNode, AToNode, AID, ALabel, AName, AWeight);
 
   try
@@ -2004,7 +2002,7 @@ begin
     Result := AddEdge(Result);
   except
     // Si falla el registro o la persistencia, NewEdge no fue adoptado,
-    // así que debemos liberarlo.
+    // asï¿½ que debemos liberarlo.
     if (Result <> nil) then
       Result.Free;
     raise;
@@ -2024,7 +2022,7 @@ begin
 
   if ExistingEdge <> AEdge then
   begin
-    // Si ya existía una arista con ese ID, liberamos la nueva
+    // Si ya existï¿½a una arista con ese ID, liberamos la nueva
     AEdge.Free;
     Result := ExistingEdge;
   end
@@ -2093,24 +2091,24 @@ begin
   EdgesToDelete.AddRange(Node.IncomingEdges.ToArray);
 
   try
-    // 2. Realizar la operación en memoria PRIMERO
+    // 2. Realizar la operaciï¿½n en memoria PRIMERO
     UnregisterNode(Node); // Esto quita el nodo de FNodeRegistry y FNodes
-    // También debes desregistrar las aristas conectadas
+    // Tambiï¿½n debes desregistrar las aristas conectadas
     for var Edge in EdgesToDelete do
       UnregisterEdge(Edge);
 
-    // 3. Persistir el cambio en la BD DESPUÉS
+    // 3. Persistir el cambio en la BD DESPUï¿½S
     if Assigned(FDriver) then
     begin
       try
         FDriver.DeleteNode(AID);
-        // También necesitarías un OnGraphDeleteEdge para las aristas
+        // Tambiï¿½n necesitarï¿½as un OnGraphDeleteEdge para las aristas
         // o que OnGraphDeleteNode se encargue de borrar en cascada.
       except
-        // Si la BD falla, ¡tenemos que restaurar el estado en memoria!
-        // Esto es complejo: requeriría volver a añadir el nodo y las aristas.
-        // Por simplicidad, por ahora solo relanzamos. Una solución completa
-        // requeriría un patrón "Unit of Work".
+        // Si la BD falla, ï¿½tenemos que restaurar el estado en memoria!
+        // Esto es complejo: requerirï¿½a volver a aï¿½adir el nodo y las aristas.
+        // Por simplicidad, por ahora solo relanzamos. Una soluciï¿½n completa
+        // requerirï¿½a un patrï¿½n "Unit of Work".
         raise;
       end;
     end;
@@ -2135,10 +2133,10 @@ begin
     Exit;
 
   // --> INICIO DE CAMBIOS
-  // Solo actualizamos los índices en tiempo real si no estamos en modo batch
+  // Solo actualizamos los ï¿½ndices en tiempo real si no estamos en modo batch
   if FUpdateCount = 0 then
   begin
-    // 1. Eliminar del índice de etiquetas
+    // 1. Eliminar del ï¿½ndice de etiquetas
     if FNodeLabelIndex.TryGetValue(ANode.NodeLabel, NodeList) then
     begin
       NodeList.Remove(ANode);
@@ -2149,7 +2147,7 @@ begin
       end;
     end;
 
-    // 2. Eliminar del índice de nombres
+    // 2. Eliminar del ï¿½ndice de nombres
     if not ANode.Name.IsEmpty then
     begin
       CombinedNameKey := ANode.NodeLabel + '#' + ANode.Name;
@@ -2158,7 +2156,7 @@ begin
   end;
   // --> FIN DE CAMBIOS
 
-  // Código original (esto siempre se ejecuta)
+  // Cï¿½digo original (esto siempre se ejecuta)
   if FNodeRegistry.ContainsKey(ANode.ID) then
     FNodeRegistry.Remove(ANode.ID);
   FNodes.Items.Remove(ANode);
@@ -2169,7 +2167,7 @@ var
   Communities: TDictionary<TAiRagGraphNode, Integer>;
   Node: TAiRagGraphNode;
 begin
-  // 1. Ejecutar el algoritmo de detección de comunidades (ej: Louvain)
+  // 1. Ejecutar el algoritmo de detecciï¿½n de comunidades (ej: Louvain)
   Communities := DetectCommunities;
   try
     // 2. Recorrer los resultados (Nodo -> ID de Comunidad)
@@ -2177,7 +2175,7 @@ begin
     begin
       // 3. Guardar el ID en el MetaData unificado.
       // Al ser un Integer, se guarda como Variant correctamente, permitiendo
-      // que luego se exporte a JSON o Postgres como un número real.
+      // que luego se exporte a JSON o Postgres como un nï¿½mero real.
       Node.Properties['community_id'] := Communities[Node];
     end;
   finally
@@ -2190,8 +2188,8 @@ var
   Edge: TAiRagGraphEdge;
 begin
   Result := nil;
-  // Es más eficiente iterar sobre las aristas salientes del nodo de origen,
-  // ya que es una lista mucho más pequeña que todas las aristas del grafo.
+  // Es mï¿½s eficiente iterar sobre las aristas salientes del nodo de origen,
+  // ya que es una lista mucho mï¿½s pequeï¿½a que todas las aristas del grafo.
   for Edge in AFromNode.OutgoingEdges do
   begin
     if (Edge.ToNode = AToNode) and (SameText(Edge.EdgeLabel, AEdgeLabel)) then
@@ -2207,7 +2205,7 @@ var
   FoundInDB: Boolean;
   EdgeData: TEdgeDataRecord;
 begin
-  // 1. Buscar en caché.
+  // 1. Buscar en cachï¿½.
   if FEdgeRegistry.TryGetValue(AID, Result) then
     Exit;
 
@@ -2218,14 +2216,14 @@ begin
   if Assigned(FDriver) then
   begin
     // Limpiamos el record antes de pasarlo al driver.
-    // Aunque el driver debe ser defensivo, es buena práctica inicializar.
+    // Aunque el driver debe ser defensivo, es buena prï¿½ctica inicializar.
     FillChar(EdgeData, SizeOf(TEdgeDataRecord), 0);
 
-    // CORRECCIÓN CLAVE: Llamar al método FindEdgeDataByID del driver.
+    // CORRECCIï¿½N CLAVE: Llamar al mï¿½todo FindEdgeDataByID del driver.
     FoundInDB := FDriver.FindEdgeDataByID(AID, EdgeData);
   end;
 
-  // Si no se encontró en el driver o el driver no estaba asignado, FoundInDB es False.
+  // Si no se encontrï¿½ en el driver o el driver no estaba asignado, FoundInDB es False.
 
   // 3. Usar el nuevo helper para hidratar.
   if FoundInDB then
@@ -2237,7 +2235,7 @@ var
   FoundInDB: Boolean;
   NodeData: TNodeDataRecord;
 begin
-  // 1. Buscar en caché.
+  // 1. Buscar en cachï¿½.
   if FNodeRegistry.TryGetValue(AID, Result) then
     Exit;
 
@@ -2257,26 +2255,26 @@ end;
 
 function TAiRagGraph.FindNodeByName(AName, ANodeLabel: string): TAiRagGraphNode;
 var
-  CombinedNameKey: string; // Para la lógica en memoria
+  CombinedNameKey: string; // Para la lï¿½gica en memoria
 begin
   Result := nil;
 
-  // 1. Intentar delegar a la base de datos a través del Driver.
+  // 1. Intentar delegar a la base de datos a travï¿½s del Driver.
   if Assigned(FDriver) then
   begin
-    // El driver realiza la búsqueda en la BD y devuelve el objeto hidratado
+    // El driver realiza la bï¿½squeda en la BD y devuelve el objeto hidratado
     // (o nil si no lo encuentra).
     Result := FDriver.FindNodeByName(AName, ANodeLabel);
-    // Si el driver encontró algo, salimos inmediatamente.
+    // Si el driver encontrï¿½ algo, salimos inmediatamente.
     if Result <> nil then
       Exit;
   end;
 
-  // 2. Fallback a la lógica en memoria (si el Driver no fue usado o no encontró nada)
+  // 2. Fallback a la lï¿½gica en memoria (si el Driver no fue usado o no encontrï¿½ nada)
   if AName.IsEmpty or ANodeLabel.IsEmpty then
     Exit;
 
-  // Intentar encontrar en el índice en memoria (solo para nodos ya cargados)
+  // Intentar encontrar en el ï¿½ndice en memoria (solo para nodos ya cargados)
   CombinedNameKey := ANodeLabel + '#' + AName;
   FNodeNameIndex.TryGetValue(CombinedNameKey, Result);
 end;
@@ -2292,20 +2290,20 @@ begin
   // 1. Intentar delegar al Driver (BD)
   if Assigned(FDriver) then
   begin
-    // El driver realiza la búsqueda eficiente en la BD y devuelve el array de nombres.
+    // El driver realiza la bï¿½squeda eficiente en la BD y devuelve el array de nombres.
     Result := FDriver.FindNodeNamesByLabel(ANodeLabel, ASearchText, ALimit);
 
-    // Si la BD devolvió resultados, salimos.
+    // Si la BD devolviï¿½ resultados, salimos.
     if Length(Result) > 0 then
       Exit;
 
-    // NOTA: Si la BD devuelve un array vacío, pasamos al fallback en memoria (Paso 2).
+    // NOTA: Si la BD devuelve un array vacï¿½o, pasamos al fallback en memoria (Paso 2).
   end;
 
-  // 2. Fallback a la lógica en memoria si no hay resultados o si no hay driver.
+  // 2. Fallback a la lï¿½gica en memoria si no hay resultados o si no hay driver.
   Results := TStringList.Create;
   try
-    // Usamos el índice de etiquetas para ser eficientes
+    // Usamos el ï¿½ndice de etiquetas para ser eficientes
     if FNodeLabelIndex.TryGetValue(ANodeLabel, NodeList) then
     begin
       for Node in NodeList do
@@ -2314,7 +2312,7 @@ begin
         begin
           Results.Add(Node.Name);
           if Results.Count >= ALimit then
-            Break; // Detenerse cuando alcanzamos el límite
+            Break; // Detenerse cuando alcanzamos el lï¿½mite
         end;
       end;
     end;
@@ -2326,25 +2324,25 @@ end;
 
 function TAiRagGraph.FindNodesByLabel(ALabel: string): TArray<TAiRagGraphNode>;
 var
-  NodeList: TList<TAiRagGraphNode>; // Para la lógica en memoria
+  NodeList: TList<TAiRagGraphNode>; // Para la lï¿½gica en memoria
 begin
   Result := [];
 
   // 1. Intentar delegar al Driver (BD)
   if Assigned(FDriver) then
   begin
-    // El driver realiza la búsqueda en la BD, se encarga de la hidratación
+    // El driver realiza la bï¿½squeda en la BD, se encarga de la hidrataciï¿½n
     // (usando FindNodeByID) y devuelve el array de nodos.
     Result := FDriver.FindNodesByLabel(ALabel);
 
-    // Si el driver devolvió algún resultado, salimos.
+    // Si el driver devolviï¿½ algï¿½n resultado, salimos.
     if Length(Result) > 0 then
       Exit;
 
-    // Si el driver devolvió un array vacío, pasamos al fallback en memoria (Paso 2).
+    // Si el driver devolviï¿½ un array vacï¿½o, pasamos al fallback en memoria (Paso 2).
   end;
 
-  // 2. Fallback a la lógica en memoria (si no hay resultados o si no hay driver)
+  // 2. Fallback a la lï¿½gica en memoria (si no hay resultados o si no hay driver)
   if FNodeLabelIndex.TryGetValue(ALabel, NodeList) then
     Result := NodeList.ToArray
   else
@@ -2361,14 +2359,14 @@ begin
   // 1. Intentar delegar al Driver (Base de Datos)
   if Assigned(FDriver) then
   begin
-    // El driver realiza la búsqueda eficiente indexada en la BD
+    // El driver realiza la bï¿½squeda eficiente indexada en la BD
     Result := FDriver.FindNodesByProperty(AKey, AValue);
 
     if Length(Result) > 0 then
       Exit;
   end;
 
-  // 2. Fallback a la lógica en memoria
+  // 2. Fallback a la lï¿½gica en memoria
   Results := TList<TAiRagGraphNode>.Create;
   try
     for Node in FNodeRegistry.Values do
@@ -2376,7 +2374,7 @@ begin
       // --- A. Manejo de atributos nativos (Identidad) ---
       if SameText(AKey, 'name') then
       begin
-        // Usamos SameText para nombres (insensible a mayúsculas)
+        // Usamos SameText para nombres (insensible a mayï¿½sculas)
         if SameText(Node.Name, VarToStr(AValue)) then
           Results.Add(Node);
       end
@@ -2390,12 +2388,12 @@ begin
         if SameText(Node.ID, VarToStr(AValue)) then
           Results.Add(Node);
       end
-      // --- B. Manejo de propiedades dinámicas (MetaData) ---
+      // --- B. Manejo de propiedades dinï¿½micas (MetaData) ---
       else
       begin
-        // Utilizamos el nuevo método Evaluate del MetaData.
+        // Utilizamos el nuevo mï¿½todo Evaluate del MetaData.
         // Esto permite que si buscas precio = 100, no falle si el 100 es un Integer
-        // pero tú pasaste un Double, gracias a la gestión de Variants.
+        // pero tï¿½ pasaste un Double, gracias a la gestiï¿½n de Variants.
         if Node.Properties.Evaluate(AKey, foEqual, AValue) then
           Results.Add(Node);
       end;
@@ -2410,9 +2408,9 @@ end;
 function TAiRagGraph.GetAllShortestPaths(AStartNode, AEndNode: TAiRagGraphNode): TArray<TArray<TObject>>;
 var
   Queue: TQueue<TAiRagGraphNode>;
-  // Almacena la distancia más corta desde el nodo de inicio a cualquier otro nodo
+  // Almacena la distancia mï¿½s corta desde el nodo de inicio a cualquier otro nodo
   Distances: TDictionary<TAiRagGraphNode, Integer>;
-  // Almacena para cada nodo, una lista de sus "padres" en los caminos más cortos
+  // Almacena para cada nodo, una lista de sus "padres" en los caminos mï¿½s cortos
   Parents: TDictionary<TAiRagGraphNode, TList<TAiRagGraphNode>>;
   AllPaths: TList<TArray<TObject>>;
   CurrentPath: TList<TObject>;
@@ -2420,19 +2418,19 @@ var
   Edge: TAiRagGraphEdge;
   ShortestDistance: Integer;
 
-  // Procedimiento recursivo para reconstruir los caminos hacia atrás
+  // Procedimiento recursivo para reconstruir los caminos hacia atrï¿½s
   procedure BuildPaths(ANode: TAiRagGraphNode);
   var
     ParentNode: TAiRagGraphNode;
     ConnectingEdge: TAiRagGraphEdge;
   begin
-    // 1. Añadir el nodo actual al frente del camino que estamos construyendo
+    // 1. Aï¿½adir el nodo actual al frente del camino que estamos construyendo
     CurrentPath.Insert(0, ANode);
 
     // 2. Caso Base: Si hemos llegado al nodo de inicio, hemos completado un camino
     if ANode = AStartNode then
     begin
-      // Añadimos una copia del camino encontrado a nuestra lista de resultados
+      // Aï¿½adimos una copia del camino encontrado a nuestra lista de resultados
       AllPaths.Add(CurrentPath.ToArray);
     end
     else
@@ -2444,10 +2442,10 @@ var
         begin
           // Encontrar la arista que conecta el padre con el nodo actual
           ConnectingEdge := FindEdge(ParentNode, ANode, ''); // Pasamos '' para que busque cualquier etiqueta
-          // Una versión más robusta podría iterar sobre ParentNode.OutgoingEdges
+          // Una versiï¿½n mï¿½s robusta podrï¿½a iterar sobre ParentNode.OutgoingEdges
           if ConnectingEdge = nil then
           begin
-            // Búsqueda más exhaustiva si FindEdge falla (por si hay varias aristas)
+            // Bï¿½squeda mï¿½s exhaustiva si FindEdge falla (por si hay varias aristas)
             for var E in ParentNode.OutgoingEdges do
             begin
               if E.ToNode = ANode then
@@ -2458,17 +2456,17 @@ var
             end;
           end;
 
-          // Añadir la arista al camino
+          // Aï¿½adir la arista al camino
           CurrentPath.Insert(0, ConnectingEdge);
           // Llamar recursivamente para el padre
           BuildPaths(ParentNode);
-          // Backtrack: quitar la arista para la siguiente iteración del bucle de padres
+          // Backtrack: quitar la arista para la siguiente iteraciï¿½n del bucle de padres
           CurrentPath.Remove(ConnectingEdge);
         end;
       end;
     end;
 
-    // 4. Backtrack: quitar el nodo actual del camino para no afectar a otras ramas de la recursión
+    // 4. Backtrack: quitar el nodo actual del camino para no afectar a otras ramas de la recursiï¿½n
     CurrentPath.Remove(ANode);
   end;
 
@@ -2495,7 +2493,7 @@ begin
       CurrentDist := Distances[CurrentNode];
 
       // Si ya encontramos el destino, solo necesitamos terminar de procesar los nodos
-      // que están a la misma distancia. No exploramos más allá.
+      // que estï¿½n a la misma distancia. No exploramos mï¿½s allï¿½.
       if (ShortestDistance <> -1) and (CurrentDist >= ShortestDistance) then
         Continue;
 
@@ -2513,12 +2511,12 @@ begin
           Parents.Add(NeighborNode, ParentList);
           ParentList.Add(CurrentNode);
 
-          // Si este vecino es nuestro destino, registramos la distancia más corta
+          // Si este vecino es nuestro destino, registramos la distancia mï¿½s corta
           if NeighborNode = AEndNode then
             ShortestDistance := CurrentDist + 1;
         end
         // Caso 2: Ya hemos visitado este vecino, pero hemos encontrado otro camino
-        // de la misma longitud mínima para llegar a él.
+        // de la misma longitud mï¿½nima para llegar a ï¿½l.
         else if Distances[NeighborNode] = CurrentDist + 1 then
         begin
           Parents[NeighborNode].Add(CurrentNode);
@@ -2526,14 +2524,14 @@ begin
       end;
     end;
 
-    // --- FASE 2: RECONSTRUCCIÓN RECURSIVA HACIA ATRÁS ---
+    // --- FASE 2: RECONSTRUCCIï¿½N RECURSIVA HACIA ATRï¿½S ---
     // Si ShortestDistance sigue en -1, significa que el nodo final nunca fue alcanzado.
     if ShortestDistance <> -1 then
     begin
       AllPaths := TList < TArray < TObject >>.Create;
       CurrentPath := TList<TObject>.Create;
       try
-        BuildPaths(AEndNode); // Iniciar la recursión desde el nodo final
+        BuildPaths(AEndNode); // Iniciar la recursiï¿½n desde el nodo final
         Result := AllPaths.ToArray;
       finally
         CurrentPath.Free;
@@ -2570,8 +2568,8 @@ begin
   ReachableNodesCount := 0;
 
   try
-    // --- Etapa 1: Inicialización del BFS ---
-    // El nodo de inicio está a una distancia de 0 de sí mismo.
+    // --- Etapa 1: Inicializaciï¿½n del BFS ---
+    // El nodo de inicio estï¿½ a una distancia de 0 de sï¿½ mismo.
     Distances.Add(ANode, 0);
     Queue.Enqueue(ANode);
 
@@ -2581,8 +2579,8 @@ begin
       CurrentNode := Queue.Dequeue;
       CurrentDistance := Distances[CurrentNode];
 
-      // Expandir a los vecinos (solo hacia adelante, como es típico en centralidad)
-      // Si quisieras un grafo no dirigido, también recorrerías las IncomingEdges.
+      // Expandir a los vecinos (solo hacia adelante, como es tï¿½pico en centralidad)
+      // Si quisieras un grafo no dirigido, tambiï¿½n recorrerï¿½as las IncomingEdges.
       for Edge in CurrentNode.OutgoingEdges do
       begin
         NeighborNode := Edge.ToNode;
@@ -2592,7 +2590,7 @@ begin
         begin
           // Marcamos su distancia
           Distances.Add(NeighborNode, CurrentDistance + 1);
-          // Lo añadimos a la cola para visitar a sus vecinos más tarde
+          // Lo aï¿½adimos a la cola para visitar a sus vecinos mï¿½s tarde
           Queue.Enqueue(NeighborNode);
 
           // --- Etapa 3: Acumular los resultados ---
@@ -2602,11 +2600,11 @@ begin
       end;
     end;
 
-    // --- Etapa 4: Calcular la Centralidad de Cercanía ---
+    // --- Etapa 4: Calcular la Centralidad de Cercanï¿½a ---
     if TotalDistance > 0 then
     begin
-      // Fórmula estándar de Closeness Centrality:
-      // (Número de nodos alcanzables) / (Suma de las distancias a ellos)
+      // Fï¿½rmula estï¿½ndar de Closeness Centrality:
+      // (Nï¿½mero de nodos alcanzables) / (Suma de las distancias a ellos)
       Result := ReachableNodesCount / TotalDistance;
     end;
 
@@ -2619,7 +2617,7 @@ end;
 {
   function TAiRagGraph.GetContextualizedText(ASubgraphNodes: TArray<TAiRagGraphNode>): string;
   var
-  // Usamos un diccionario como un Set para búsquedas rápidas de nodos
+  // Usamos un diccionario como un Set para bï¿½squedas rï¿½pidas de nodos
   NodeSet: TDictionary<TAiRagGraphNode, Boolean>;
   RelevantEdges: TDictionary<string, TAiRagGraphEdge>;
   ContextBuilder: TStringBuilder;
@@ -2633,7 +2631,7 @@ end;
   RelevantEdges := TDictionary<string, TAiRagGraphEdge>.Create;
   ContextBuilder := TStringBuilder.Create;
   try
-  // 1. Poblar el NodeSet para búsquedas eficientes
+  // 1. Poblar el NodeSet para bï¿½squedas eficientes
   for Node in ASubgraphNodes do
   begin
   NodeSet.Add(Node, True);
@@ -2644,8 +2642,8 @@ end;
   begin
   for Edge in Node.OutgoingEdges do
   begin
-  // >> LÍNEA CORREGIDA Y OPTIMIZADA <<
-  // Ahora usamos ContainsKey en el diccionario, que es mucho más rápido.
+  // >> Lï¿½NEA CORREGIDA Y OPTIMIZADA <<
+  // Ahora usamos ContainsKey en el diccionario, que es mucho mï¿½s rï¿½pido.
   if NodeSet.ContainsKey(Edge.ToNode) and (not RelevantEdges.ContainsKey(Edge.ID)) then
   begin
   RelevantEdges.Add(Edge.ID, Edge);
@@ -2654,7 +2652,7 @@ end;
   end;
 
   // 3. Construir el texto a partir de las aristas recopiladas
-  ContextBuilder.AppendLine('Contexto extraído del grafo de conocimiento:');
+  ContextBuilder.AppendLine('Contexto extraï¿½do del grafo de conocimiento:');
   ContextBuilder.AppendLine('Se han identificado los siguientes hechos relevantes:');
 
   if RelevantEdges.Count > 0 then
@@ -2709,7 +2707,7 @@ var
   IsFirstProp: Boolean;
 begin
   if Length(ASubgraphNodes) = 0 then
-    Exit('No se encontró información relevante.');
+    Exit('No se encontrï¿½ informaciï¿½n relevante.');
 
   ContextBuilder := TStringBuilder.Create;
   NodeSet := TDictionary<TAiRagGraphNode, Boolean>.Create;
@@ -2719,7 +2717,7 @@ begin
     for Node in ASubgraphNodes do
       NodeSet.Add(Node, True);
 
-    // === SECCIÓN 1: ENTIDADES Y SUS FRAGMENTOS (CHUNKS) ===
+    // === SECCIï¿½N 1: ENTIDADES Y SUS FRAGMENTOS (CHUNKS) ===
     ContextBuilder.AppendLine('### CONTEXTO DE ENTIDADES ###');
     for Node in ASubgraphNodes do
     begin
@@ -2747,7 +2745,7 @@ begin
       end;
     end;
 
-    // === SECCIÓN 2: RELACIONES Y HECHOS ===
+    // === SECCIï¿½N 2: RELACIONES Y HECHOS ===
     if RelevantEdges.Count > 0 then
     begin
       ContextBuilder.AppendLine;
@@ -2816,7 +2814,7 @@ begin
     if (ADirection = gdIncoming) or (ADirection = gdBoth) then
     begin
       for Edge in ANode.IncomingEdges do
-        // Evitar duplicados si ADirection es gdBoth y hay aristas recíprocas
+        // Evitar duplicados si ADirection es gdBoth y hay aristas recï¿½procas
         if Results.IndexOf(Edge.FromNode) = -1 then
           Results.Add(Edge.FromNode);
     end;
@@ -2839,7 +2837,7 @@ begin
   try
     NodeList.AddRange(FNodeRegistry.Values.ToArray); // Copiar todos los nodos a una lista
 
-    // Ordenar la lista usando TList.Sort con un comparador anónimo
+    // Ordenar la lista usando TList.Sort con un comparador anï¿½nimo
     NodeList.Sort(TComparer<TAiRagGraphNode>.Construct(
       function(const Left, Right: TAiRagGraphNode): Integer
       var
@@ -2895,7 +2893,7 @@ var
   PathList: TList<TObject>;
   PathLink: TPathLink;
 begin
-  Result := []; // Por defecto, devuelve un array vacío si no hay camino
+  Result := []; // Por defecto, devuelve un array vacï¿½o si no hay camino
   if (AStartNode = nil) or (AEndNode = nil) or (AStartNode = AEndNode) then
     Exit;
 
@@ -2903,7 +2901,7 @@ begin
   CameFrom := TDictionary<TAiRagGraphNode, TPathLink>.Create;
   PathList := TList<TObject>.Create;
   try
-    // 1. Inicialización
+    // 1. Inicializaciï¿½n
     Queue.Enqueue(AStartNode);
     CameFrom.Add(AStartNode, TPathLink.Create(nil, nil)); // El nodo de inicio no viene de ninguna parte
 
@@ -2913,7 +2911,7 @@ begin
       CurrentNode := Queue.Dequeue;
 
       if CurrentNode = AEndNode then
-        Break; // ¡Camino encontrado!
+        Break; // ï¿½Camino encontrado!
 
       for CurrentEdge in CurrentNode.OutgoingEdges do
       begin
@@ -2926,7 +2924,7 @@ begin
       end;
     end;
 
-    // 3. Reconstrucción del Camino (si se encontró)
+    // 3. Reconstrucciï¿½n del Camino (si se encontrï¿½)
     if CameFrom.ContainsKey(AEndNode) then
     begin
       CurrentNode := AEndNode;
@@ -2936,7 +2934,7 @@ begin
         if CameFrom.TryGetValue(CurrentNode, PathLink) and (PathLink.Key <> nil) then
         begin
           if PathLink.Value <> nil then
-            PathList.Add(PathLink.Value); // Añadir la arista
+            PathList.Add(PathLink.Value); // Aï¿½adir la arista
           CurrentNode := PathLink.Key as TAiRagGraphNode;
         end
         else
@@ -2964,18 +2962,18 @@ begin
   // Inicializar
   Result := [];
 
-  // 1. Intentar delegar la operación al Driver (BD)
+  // 1. Intentar delegar la operaciï¿½n al Driver (BD)
   if Assigned(FDriver) then
   begin
     // El driver devuelve el array de etiquetas de la BD
     Result := FDriver.GetUniqueEdgeLabels;
 
-    // Si la BD devolvió resultados, salimos.
+    // Si la BD devolviï¿½ resultados, salimos.
     if Length(Result) > 0 then
       Exit;
   end;
 
-  // 2. Fallback a la lógica por defecto en memoria.
+  // 2. Fallback a la lï¿½gica por defecto en memoria.
   UniqueLabels := TDictionary<string, Boolean>.Create;
   try
     for Edge in FEdgeRegistry.Values do
@@ -2993,25 +2991,25 @@ begin
   // Inicializar
   Result := [];
 
-  // 1. Intentar delegar la operación al Driver (BD)
+  // 1. Intentar delegar la operaciï¿½n al Driver (BD)
   if Assigned(FDriver) then
   begin
     // El driver devuelve el array de etiquetas de la BD
     Result := FDriver.GetUniqueNodeLabels;
 
-    // Si la BD devolvió resultados, salimos.
+    // Si la BD devolviï¿½ resultados, salimos.
     if Length(Result) > 0 then
       Exit;
   end;
 
-  // 2. Fallback a la lógica por defecto en memoria.
+  // 2. Fallback a la lï¿½gica por defecto en memoria.
   Result := FNodeLabelIndex.Keys.ToArray;
 end;
 
 function TAiRagGraph.GraphToContextText(const ANodes: TArray<TAiRagGraphNode>): string;
 var
   SB: TStringBuilder;
-  NodeSet: TDictionary<string, TAiRagGraphNode>; // Usamos ID para búsqueda rápida
+  NodeSet: TDictionary<string, TAiRagGraphNode>; // Usamos ID para bï¿½squeda rï¿½pida
   RelevantEdges: TDictionary<string, TAiRagGraphEdge>; // Para evitar duplicados
   Node: TAiRagGraphNode;
   Edge: TAiRagGraphEdge;
@@ -3026,7 +3024,7 @@ begin
   NodeSet := TDictionary<string, TAiRagGraphNode>.Create;
   RelevantEdges := TDictionary<string, TAiRagGraphEdge>.Create;
   try
-    // 1. Indexar los nodos encontrados para búsqueda rápida O(1)
+    // 1. Indexar los nodos encontrados para bï¿½squeda rï¿½pida O(1)
     // Esto nos sirve para filtrar solo las aristas que conectan nodos de este conjunto.
     for Node in ANodes do
     begin
@@ -3035,7 +3033,7 @@ begin
     end;
 
     // =========================================================================
-    // SECCIÓN 1: ENTIDADES Y CONTENIDO (Conocimiento Semántico)
+    // SECCIï¿½N 1: ENTIDADES Y CONTENIDO (Conocimiento Semï¿½ntico)
     // =========================================================================
     SB.AppendLine('### ENTITIES & CONTENT ###');
 
@@ -3069,7 +3067,7 @@ begin
       begin
         for Chunk in Node.Chunks do
         begin
-          // Identamos para mostrar jerarquía
+          // Identamos para mostrar jerarquï¿½a
           SB.AppendFormat('  + Detail: %s', [Chunk.Text]).AppendLine;
         end;
       end;
@@ -3079,16 +3077,16 @@ begin
     end;
 
     // =========================================================================
-    // SECCIÓN 2: RELACIONES / HECHOS (Conocimiento Estructural)
+    // SECCIï¿½N 2: RELACIONES / HECHOS (Conocimiento Estructural)
     // =========================================================================
-    // Aquí ocurre la magia del grafo: reconstruimos la historia conectando los puntos.
+    // Aquï¿½ ocurre la magia del grafo: reconstruimos la historia conectando los puntos.
 
-    // Recolectar aristas INTERNAS (donde Origen Y Destino están en nuestro resultado)
+    // Recolectar aristas INTERNAS (donde Origen Y Destino estï¿½n en nuestro resultado)
     for Node in ANodes do
     begin
       for Edge in Node.OutgoingEdges do
       begin
-        // ¿El nodo destino también fue encontrado en la búsqueda?
+        // ï¿½El nodo destino tambiï¿½n fue encontrado en la bï¿½squeda?
         if NodeSet.ContainsKey(Edge.ToNode.ID) then
         begin
           if not RelevantEdges.ContainsKey(Edge.ID) then
@@ -3102,10 +3100,10 @@ begin
       SB.AppendLine('### RELATIONSHIPS (FACTS) ###');
       for Edge in RelevantEdges.Values do
       begin
-        // Formato Cypher-like simplificado para el LLM: (A)-[REL]->(B)
+        // Formato GQL (ISO/IEC 39075) simplificado para el LLM: (A)-[REL]->(B)
         SB.AppendFormat('(%s)-[%s]->(%s)', [Edge.FromNode.Name, Edge.EdgeLabel.ToUpper, Edge.ToNode.Name]);
 
-        // Incluir detalles de la relación (ej: since: 2020, weight: 0.9)
+        // Incluir detalles de la relaciï¿½n (ej: since: 2020, weight: 0.9)
         if Edge.MetaData.InternalDictionary.Count > 0 then
         begin
           SB.Append(' properties: {');
@@ -3142,13 +3140,13 @@ begin
   if (AEdge = nil) or (AEdge.OwnerGraph <> Self) or (AEdge.FromNode = nil) or (AEdge.ToNode = nil) then
     raise Exception.Create('Invalid edge provided to InternalAddEdge.');
 
-  // 1. VERIFICACIÓN DE IDENTIDAD (Identity Map)
+  // 1. VERIFICACIï¿½N DE IDENTIDAD (Identity Map)
   if FEdgeRegistry.TryGetValue(AEdge.ID, Result) then
   begin
     Exit; // La arista ya existe, devolvemos la instancia en memoria.
   end;
 
-  // 2. LÓGICA DE AÑADIR A ESTRUCTURAS EN MEMORIA
+  // 2. Lï¿½GICA DE Aï¿½ADIR A ESTRUCTURAS EN MEMORIA
   FEdgeRegistry.Add(AEdge.ID, AEdge);
   FEdges.Items.Add(AEdge);
   // Conectar la arista a los nodos
@@ -3161,7 +3159,7 @@ begin
     try
       FDriver.AddEdge(AEdge);
     except
-      // Lógica de reversión simplificada si falla la persistencia.
+      // Lï¿½gica de reversiï¿½n simplificada si falla la persistencia.
       AEdge.FromNode.RemoveOutgoingEdge(AEdge);
       AEdge.ToNode.RemoveIncomingEdge(AEdge);
       FEdgeRegistry.Remove(AEdge.ID);
@@ -3182,8 +3180,8 @@ begin
   if (ANode = nil) or (ANode.OwnerGraph <> Self) then
     raise Exception.Create('Invalid node provided to InternalAddNode.');
 
-  // 1. VERIFICACIÓN DE IDENTIDAD (Identity Map)
-  // Comprobamos si un nodo con este ID ya está registrado en memoria.
+  // 1. VERIFICACIï¿½N DE IDENTIDAD (Identity Map)
+  // Comprobamos si un nodo con este ID ya estï¿½ registrado en memoria.
   if FNodeRegistry.TryGetValue(ANode.ID, Result) then
   begin
     // El nodo ya existe. Devolvemos el nodo existente para mantener la
@@ -3191,8 +3189,8 @@ begin
     Exit;
   end;
 
-  // 2. LÓGICA DE AÑADIR A ESTRUCTURAS EN MEMORIA
-  // Si no existe, procedemos a añadirlo a todas nuestras estructuras.
+  // 2. Lï¿½GICA DE Aï¿½ADIR A ESTRUCTURAS EN MEMORIA
+  // Si no existe, procedemos a aï¿½adirlo a todas nuestras estructuras.
   FNodeRegistry.Add(ANode.ID, ANode);
   FNodes.Items.Add(ANode);
 
@@ -3227,7 +3225,7 @@ begin
   end;
 
   // 4. DEVOLVER EL NODO
-  // El nodo (ANode) ahora es propiedad del grafo y está registrado.
+  // El nodo (ANode) ahora es propiedad del grafo y estï¿½ registrado.
   Result := ANode;
 end;
 
@@ -3238,7 +3236,7 @@ var
   Dim: Integer;
   JObj: TJSONObject;
 begin
-  // 1. Verificación de Identidad (Cache en memoria)
+  // 1. Verificaciï¿½n de Identidad (Cache en memoria)
   if FEdgeRegistry.TryGetValue(AEdgeData.ID, Result) then
     Exit;
 
@@ -3297,7 +3295,7 @@ var
   Dim: Integer;
   JObj: TJSONObject;
 begin
-  // 1. Verificación de Identidad (Cache en memoria)
+  // 1. Verificaciï¿½n de Identidad (Cache en memoria)
   if FNodeRegistry.TryGetValue(ANodeData.ID, Result) then
     Exit;
 
@@ -3320,7 +3318,7 @@ begin
     begin
       JObj := TJSONObject.ParseJSONValue(ANodeData.PropertiesJSON) as TJSONObject;
       try
-        if (JObj <> nil) and (JObj is TJSONObject) then // Validación de tipo
+        if (JObj <> nil) and (JObj is TJSONObject) then // Validaciï¿½n de tipo
           NewNode.MetaData.FromJSON(JObj as TJSONObject);
       finally
         JObj.Free;
@@ -3349,7 +3347,7 @@ var
 begin
   SetLength(Result, 0);
 
-  // 1. Delegación al Driver (Base de Datos Externa)
+  // 1. Delegaciï¿½n al Driver (Base de Datos Externa)
   if Assigned(FDriver) then
   begin
     // El driver ahora recibe el tipo correcto
@@ -3357,15 +3355,15 @@ begin
     Exit;
   end;
 
-  // 2. Lógica en memoria
+  // 2. Lï¿½gica en memoria
 
-  // --- Validación del Motor de Embeddings ---
+  // --- Validaciï¿½n del Motor de Embeddings ---
   if not Assigned(FEmbeddings) then
   begin
     if Assigned(FNodes) and Assigned(FNodes.Embeddings) then
       FEmbeddings := FNodes.Embeddings;
 
-    // Si la búsqueda es híbrida o vectorial, necesitamos embeddings
+    // Si la bï¿½squeda es hï¿½brida o vectorial, necesitamos embeddings
     if (not Assigned(FEmbeddings)) and (FNodes.SearchOptions.UseEmbeddings) then
       raise Exception.Create('Graph Search Error: Embeddings property is not assigned.');
   end;
@@ -3376,8 +3374,8 @@ begin
   // Sincronizamos
   FNodes.Embeddings := FEmbeddings;
 
-  // 3. Búsqueda en el Vector
-  // AQUI ESTÁ LA MEJORA: Ya no necesitamos casting, pasamos AFilter directamente
+  // 3. Bï¿½squeda en el Vector
+  // AQUI ESTï¿½ LA MEJORA: Ya no necesitamos casting, pasamos AFilter directamente
   // porque FNodes.Search ya espera un TAiFilterCriteria.
   VectorSearchResults := FNodes.Search(APrompt, ALimit, APrecision, AFilter);
 
@@ -3391,7 +3389,7 @@ begin
           InitialNodeList.Add(TAiRagGraphNode(FoundItem));
       end;
 
-      // 5. Expansión Contextual (BFS)
+      // 5. Expansiï¿½n Contextual (BFS)
       if (ADepth > 0) and (InitialNodeList.Count > 0) then
       begin
         Result := Self.ExpandNodeList(InitialNodeList, ADepth);
@@ -3411,24 +3409,20 @@ end;
 function TAiRagGraph.SearchText(const APrompt: string; ADepth: Integer; ShowProperties: Boolean; const ALimit: Integer; const APrecision: Double; const AFilter: TAiFilterCriteria): string;
 var
   FoundNodes: TArray<TAiRagGraphNode>;
-  Node: TAiRagGraphNode;
-  Edge: TAiRagGraphEdge;
-  Chunk: TAiEmbeddingNode;
   ContextBuilder: TStringBuilder;
-  PropPair: TPair<string, Variant>;
 begin
   // Llamamos a Search pasando el AFilter actualizado
   FoundNodes := Self.Search(APrompt, ADepth, ALimit, APrecision, AFilter);
 
   if Length(FoundNodes) = 0 then
-    Exit('No se encontró información relevante para: ' + APrompt);
+    Exit('No se encontrï¿½ informaciï¿½n relevante para: ' + APrompt);
 
-  // ... (El resto del código de generación de texto se mantiene igual) ...
+  // ... (El resto del cï¿½digo de generaciï¿½n de texto se mantiene igual) ...
   // Solo copio el inicio para brevedad
   ContextBuilder := TStringBuilder.Create;
   try
-    ContextBuilder.AppendLine('Contexto extraído del grafo de conocimiento:');
-    // ... lógica de construcción de string ...
+    ContextBuilder.AppendLine('Contexto extraï¿½do del grafo de conocimiento:');
+    // ... lï¿½gica de construcciï¿½n de string ...
     Result := ContextBuilder.ToString;
   finally
     ContextBuilder.Free;
@@ -3442,7 +3436,7 @@ var
   Root, GraphObj, NodeObj, EdgeObj, PropObj, ChunkObj: TJSONObject;
   NodesArr, EdgesArr, EmbeddingArr, ChunksArr: TJSONArray;
   NodeVal, EdgeVal, ChunkVal: TJSONValue;
-  I, J, K: Integer;
+  J, K: Integer;
 
   // Variables temporales para Nodos
   NewNode: TAiRagGraphNode;
@@ -3469,14 +3463,14 @@ begin
     JsonValue := TJSONObject.ParseJSONValue(SR.ReadToEnd);
     try
       if not(JsonValue is TJSONObject) then
-        raise Exception.Create('Formato JSON inválido para el Grafo.');
+        raise Exception.Create('Formato JSON invï¿½lido para el Grafo.');
 
       Root := JsonValue as TJSONObject;
       GraphObj := Root.GetValue<TJSONObject>('graph');
       if GraphObj = nil then
         Exit;
 
-      // --- PASO CRÍTICO: Bloquear actualizaciones de índices ---
+      // --- PASO CRï¿½TICO: Bloquear actualizaciones de ï¿½ndices ---
       // Esto evita reconstrucciones costosas de HNSW/BM25 durante la carga masiva.
       BeginUpdate;
       try
@@ -3500,7 +3494,7 @@ begin
             NewNode.Model := NodeObj.GetValue<string>('model', '');
 
             // 2.2 Recuperar Metadatos Unificados (Uso de FromJSON)
-            // Esto restaura tipos reales: Fechas, Booleanos y Números.
+            // Esto restaura tipos reales: Fechas, Booleanos y Nï¿½meros.
             if NodeObj.TryGetValue<TJSONObject>('properties', PropObj) then
               NewNode.MetaData.FromJSON(PropObj);
 
@@ -3574,9 +3568,9 @@ begin
         end;
 
       finally
-        // --- 4. RECONSTRUCCIÓN DE ÍNDICES ---
+        // --- 4. RECONSTRUCCIï¿½N DE ï¿½NDICES ---
         // EndUpdate invoca internamente a RebuildIndexes, activando BM25 y HNSW
-        // sobre todos los datos recién cargados.
+        // sobre todos los datos reciï¿½n cargados.
         EndUpdate;
       end;
 
@@ -3598,7 +3592,7 @@ var
   StartNode: TAiRagGraphNode;
   CandidateNodes: TArray<TAiRagGraphNode>;
 
-  // --- Variables para la Expansión (ADepth > 0) ---
+  // --- Variables para la Expansiï¿½n (ADepth > 0) ---
   SeedNodesSet: TDictionary<TAiRagGraphNode, Boolean>;
   MatchDict: TDictionary<string, TObject>;
   Pair: TPair<string, TObject>;
@@ -3621,7 +3615,7 @@ var
 
     if AClauseIndex >= AQuery.MatchClauses.Count then
     begin
-      // --- AQUÍ ENTRA EL WHERE ---
+      // --- AQUï¿½ ENTRA EL WHERE ---
       if (AQuery.WhereClause = nil) or Boolean(EvaluateGraphExpression(AQuery.WhereClause, ACurrentState)) then
       begin
         // Solo si no hay WHERE o si el WHERE devuelve TRUE, aceptamos el resultado
@@ -3701,9 +3695,9 @@ begin
     begin
       if AQuery.NodePatterns.Count > 0 then
       begin
-        // Tomamos el primer patrón (ej: 'p')
-        // Nota: Si hay múltiples nodos desconectados MATCH (a), (b) requeriría producto cartesiano.
-        // Aquí simplificamos para el caso común de un solo nodo desconectado.
+        // Tomamos el primer patrï¿½n (ej: 'p')
+        // Nota: Si hay mï¿½ltiples nodos desconectados MATCH (a), (b) requerirï¿½a producto cartesiano.
+        // Aquï¿½ simplificamos para el caso comï¿½n de un solo nodo desconectado.
         StartNodePattern := AQuery.NodePatterns[0];
 
         // 1. Filtrar candidatos iniciales
@@ -3737,7 +3731,7 @@ begin
     // =========================================================================
     else
     begin
-      // --- PASO 1: BÚSQUEDA DEL NODO ANCLA ---
+      // --- PASO 1: Bï¿½SQUEDA DEL NODO ANCLA ---
       StartNodePattern := AQuery.NodePatternByVariable[AQuery.MatchClauses[0].SourceNodeVar];
       if StartNodePattern = nil then
         raise Exception.Create('Start node pattern for the first clause is missing.');
@@ -3762,11 +3756,11 @@ begin
       end;
     end;
 
-    // --- PASO COMÚN: EXPANSIÓN DEL SUBGRAFO (si ADepth > 0 y hay resultados) ---
-    // (Este código es idéntico al anterior, pero se aplica a los resultados de ambos casos)
+    // --- PASO COMï¿½N: EXPANSIï¿½N DEL SUBGRAFO (si ADepth > 0 y hay resultados) ---
+    // (Este cï¿½digo es idï¿½ntico al anterior, pero se aplica a los resultados de ambos casos)
     if (ADepth > 0) and (Results.Count > 0) then
     begin
-      // 1. Recolectar nodos semilla únicos
+      // 1. Recolectar nodos semilla ï¿½nicos
       SeedNodesSet := TDictionary<TAiRagGraphNode, Boolean>.Create;
       try
         for MatchDict in Results do
@@ -3787,7 +3781,7 @@ begin
           ExpandedResults := TObjectList < TDictionary < string, TObject >>.Create(True);
           EdgeSet := TDictionary<TAiRagGraphEdge, Boolean>.Create;
           try
-            // Añadir Nodos
+            // Aï¿½adir Nodos
             for Node in ExpandedNodesArray do
             begin
               Dict := TDictionary<string, TObject>.Create;
@@ -3796,7 +3790,7 @@ begin
               ExpandedResults.Add(Dict);
             end;
 
-            // Añadir Aristas Internas
+            // Aï¿½adir Aristas Internas
             var
             NodeSet := TDictionary<TAiRagGraphNode, Boolean>.Create;
             try
@@ -3855,7 +3849,7 @@ begin
   if (ASurvivingNode = nil) or (ASubsumedNode = nil) or (ASurvivingNode = ASubsumedNode) then
     Exit;
 
-  // Bloqueamos actualizaciones para reconstruir índices solo al final
+  // Bloqueamos actualizaciones para reconstruir ï¿½ndices solo al final
   BeginUpdate;
   try
     // --- 1. RECONECTAR ARISTAS ENTRANTES ---
@@ -3876,14 +3870,14 @@ begin
       ASurvivingNode.AddOutgoingEdge(Edge);
     end;
 
-    // --- 3. TRASLADAR CHUNKS (Opción 1) ---
+    // --- 3. TRASLADAR CHUNKS (Opciï¿½n 1) ---
     // Movemos los fragmentos de texto detallados para no perder contexto RAG
     while ASubsumedNode.Chunks.Count > 0 do
     begin
       Chunk := ASubsumedNode.Chunks[0];
       // Quitamos la propiedad del objeto del nodo viejo sin liberarlo
       ASubsumedNode.Chunks.Extract(Chunk);
-      // Lo añadimos al nuevo nodo
+      // Lo aï¿½adimos al nuevo nodo
       ASurvivingNode.Chunks.Add(Chunk);
     end;
 
@@ -3894,14 +3888,14 @@ begin
       case APropertyMergeStrategy of
         msAddNewOnly:
           begin
-            // Usamos el método .Has() del nuevo MetaData
+            // Usamos el mï¿½todo .Has() del nuevo MetaData
             if not ASurvivingNode.Properties.Has(Pair.Key) then
               ASurvivingNode.Properties[Pair.Key] := Pair.Value;
           end;
 
         msOverwrite:
           begin
-            // La asignación directa indexada realiza el "AddOrSetValue" automáticamente
+            // La asignaciï¿½n directa indexada realiza el "AddOrSetValue" automï¿½ticamente
             ASurvivingNode.Properties[Pair.Key] := Pair.Value;
           end;
 
@@ -3920,7 +3914,7 @@ end;
 
 function TAiRagGraph.Query(const APlan: TQueryPlan; ADepth: Integer; const ALimit: Integer; const APrecision: Double): TArray<TAiRagGraphNode>;
 var
-  // --- Variables para la implementación en memoria ---
+  // --- Variables para la implementaciï¿½n en memoria ---
   IntermediateResults: TDictionary<string, TList<TAiRagGraphNode>>;
   InitialNodes: TArray<TAiRagGraphNode>;
   Step: TQueryStep;
@@ -3930,41 +3924,41 @@ var
   UniqueTargetNodes: TDictionary<TAiRagGraphNode, Boolean>;
   AnchorList: TList<TAiRagGraphNode>;
 begin
-  // Inicializar el resultado como un array vacío.
+  // Inicializar el resultado como un array vacï¿½o.
   SetLength(Result, 0);
 
-  // Paso 1: Intentar delegar la ejecución del plan de consulta completo al Driver.
+  // Paso 1: Intentar delegar la ejecuciï¿½n del plan de consulta completo al Driver.
   if Assigned(FDriver) then
   begin
-    // El driver realiza la búsqueda híbrida en la BD y devuelve el array de nodos.
+    // El driver realiza la bï¿½squeda hï¿½brida en la BD y devuelve el array de nodos.
     Result := FDriver.Query(APlan, ADepth, ALimit, APrecision);
 
-    // Si la BD encontró resultados (o si el driver se ejecutó), salimos.
+    // Si la BD encontrï¿½ resultados (o si el driver se ejecutï¿½), salimos.
     if Length(Result) > 0 then
       Exit;
   end;
 
-  // Paso 2: Si la consulta no fue manejada por un delegado o no encontró resultados,
-  // ejecutar la lógica en memoria.
+  // Paso 2: Si la consulta no fue manejada por un delegado o no encontrï¿½ resultados,
+  // ejecutar la lï¿½gica en memoria.
 
-  // --- Lógica original y optimizada de la consulta en memoria ---
+  // --- Lï¿½gica original y optimizada de la consulta en memoria ---
   IntermediateResults := TDictionary < string, TList < TAiRagGraphNode >>.Create;
   try
-    // --- Etapa 1: Búsqueda Semántica de Anclaje (en memoria) ---
+    // --- Etapa 1: Bï¿½squeda Semï¿½ntica de Anclaje (en memoria) ---
     // Se utiliza el 'Search' del propio componente.
     InitialNodes := Self.Search(APlan.AnchorPrompt, ADepth, ALimit, APrecision);
     if Length(InitialNodes) = 0 then
-      Exit; // Sale con un array 'Result' vacío si no hay anclas.
+      Exit; // Sale con un array 'Result' vacï¿½o si no hay anclas.
 
     AnchorList := TList<TAiRagGraphNode>.Create;
     AnchorList.AddRange(InitialNodes);
     IntermediateResults.Add(APlan.AnchorVariable, AnchorList);
 
-    // --- Etapa 2: Ejecución de Pasos Estructurales (en memoria) ---
+    // --- Etapa 2: Ejecuciï¿½n de Pasos Estructurales (en memoria) ---
     for Step in APlan.Steps do
     begin
       if not IntermediateResults.TryGetValue(Step.SourceVariable, SourceNodes) then
-        Continue; // No se puede continuar si el paso anterior no arrojó resultados
+        Continue; // No se puede continuar si el paso anterior no arrojï¿½ resultados
 
       if not IntermediateResults.TryGetValue(Step.TargetVariable, TargetNodes) then
       begin
@@ -3974,13 +3968,13 @@ begin
 
       UniqueTargetNodes := TDictionary<TAiRagGraphNode, Boolean>.Create;
       try
-        // Esto es una optimización para manejar resultados acumulativos
+        // Esto es una optimizaciï¿½n para manejar resultados acumulativos
         for Node in TargetNodes do
           UniqueTargetNodes.Add(Node, True);
 
         for Node in SourceNodes do
         begin
-          if Step.IsReversed then // Búsqueda hacia atrás
+          if Step.IsReversed then // Bï¿½squeda hacia atrï¿½s
           begin
             for Edge in Node.IncomingEdges do
             begin
@@ -3994,7 +3988,7 @@ begin
               end;
             end;
           end
-          else // Búsqueda hacia adelante
+          else // Bï¿½squeda hacia adelante
           begin
             for Edge in Node.OutgoingEdges do
             begin
@@ -4034,13 +4028,13 @@ var
   NodeList: TList<TAiRagGraphNode>;
   CombinedNameKey: string;
 begin
-  // 1. Limpiar completamente los índices secundarios existentes
+  // 1. Limpiar completamente los ï¿½ndices secundarios existentes
   for NodeList in FNodeLabelIndex.Values do
     NodeList.Free;
   FNodeLabelIndex.Clear;
   FNodeNameIndex.Clear;
 
-  // 2. Reconstruir los índices secundarios desde cero iterando todos los nodos
+  // 2. Reconstruir los ï¿½ndices secundarios desde cero iterando todos los nodos
   for Node in FNodeRegistry.Values do
   begin
     // Re-indexar por etiqueta
@@ -4060,23 +4054,23 @@ begin
     end;
   end;
 
-  // 3. Reconstruir los índices vectoriales (la operación más costosa)
+  // 3. Reconstruir los ï¿½ndices vectoriales (la operaciï¿½n mï¿½s costosa)
 
-  If Assigned(FEmbeddings) then // Si tiene asignado un embeddings recrea los indices, aunque aquí no genera embeddings
+  If Assigned(FEmbeddings) then // Si tiene asignado un embeddings recrea los indices, aunque aquï¿½ no genera embeddings
   Begin
     FNodes.BuildIndex;
     FEdges.BuildIndex;
   End;
 end;
 
-// En uMakerAi.RAG.Graph.Core.pas, sección implementation
+// En uMakerAi.RAG.Graph.Core.pas, secciï¿½n implementation
 
 procedure WriteVariant(const AWriter: TJsonWriter; const AValue: Variant);
 var
   V: Variant;
   VType: TVarType;
 begin
-  V := AValue; // <- RESUELVE varByRef automáticamente
+  V := AValue; // <- RESUELVE varByRef automï¿½ticamente
   VType := VarType(V);
 
   case VType and varTypeMask of
@@ -4183,7 +4177,7 @@ procedure TAiRagGraph.SaveToFile(const AFileName: string; aFull: Boolean);
 var
   FileExt: string;
 begin
-  FileExt := ExtractFileExt(AFileName).ToLower; // Obtenemos la extensión en minúsculas
+  FileExt := ExtractFileExt(AFileName).ToLower; // Obtenemos la extensiï¿½n en minï¿½sculas
 
   if FileExt = '.graphml' then
     SaveToGraphML(AFileName)
@@ -4192,12 +4186,12 @@ begin
   else if (FileExt = '.mkai') or (FileExt = '.json') then // Permitimos ambas extensiones
     SaveToMakerAi(AFileName, aFull)
   else
-    // Si la extensión no es reconocida, asumimos el formato nativo por defecto (.mkai)
-    // o puedes lanzar una excepción si prefieres ser más estricto.
-    // Aquí optamos por guardar en el formato nativo, añadiendo la extensión si no la tiene.
+    // Si la extensiï¿½n no es reconocida, asumimos el formato nativo por defecto (.mkai)
+    // o puedes lanzar una excepciï¿½n si prefieres ser mï¿½s estricto.
+    // Aquï¿½ optamos por guardar en el formato nativo, aï¿½adiendo la extensiï¿½n si no la tiene.
     SaveToMakerAi(ChangeFileExt(AFileName, '.mkai'), aFull);
   // Alternativa estricta:
-  // raise Exception.CreateFmt('Formato de archivo no soportado para la extensión "%s".', [FileExt]);
+  // raise Exception.CreateFmt('Formato de archivo no soportado para la extensiï¿½n "%s".', [FileExt]);
 end;
 
 procedure TAiRagGraph.SaveToGraphML(const AFileName: string);
@@ -4217,13 +4211,13 @@ begin
     XMLDoc.Encoding := 'UTF-8';
     XMLDoc.Options := [doNodeAutoIndent];
 
-    // --- ELEMENTO RAÍZ ---
+    // --- ELEMENTO RAï¿½Z ---
     GraphMLNode := XMLDoc.AddChild('graphml');
     GraphMLNode.Attributes['xmlns'] := 'http://graphml.graphdrawing.org/xmlns';
     GraphMLNode.Attributes['xmlns:xsi'] := 'http://www.w3.org/2001/XMLSchema-instance';
     GraphMLNode.Attributes['xsi:schemaLocation'] := 'http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd';
 
-    // --- 1. DEFINICIÓN DE ATRIBUTOS (KEYS) ---
+    // --- 1. DEFINICIï¿½N DE ATRIBUTOS (KEYS) ---
     CommentNode := XMLDoc.CreateNode(' Atributos base del sistema MakerAi ', TNodeType.ntComment);
     GraphMLNode.ChildNodes.Add(CommentNode);
 
@@ -4259,7 +4253,7 @@ begin
     KeyElement.Attributes['attr.name'] := 'weight';
     KeyElement.Attributes['attr.type'] := 'double';
 
-    // Recolectar llaves de propiedades dinámicas (MetaData) de todos los elementos
+    // Recolectar llaves de propiedades dinï¿½micas (MetaData) de todos los elementos
     UniquePropKeys := TStringList.Create;
     try
       UniquePropKeys.Sorted := True;
@@ -4310,7 +4304,7 @@ begin
       DataElement.Attributes['key'] := 'd_chunks';
       DataElement.Text := IntToStr(Node.Chunks.Count);
 
-      // Metadatos dinámicos
+      // Metadatos dinï¿½micos
       for Pair in Node.MetaData.InternalDictionary do
       begin
         DataElement := NodeElement.AddChild('data');
@@ -4336,7 +4330,7 @@ begin
       DataElement.Attributes['key'] := 'e_weight';
       DataElement.Text := FloatToStr(Edge.Weight);
 
-      // Metadatos dinámicos
+      // Metadatos dinï¿½micos
       for Pair in Edge.MetaData.InternalDictionary do
       begin
         DataElement := EdgeElement.AddChild('data');
@@ -4357,7 +4351,7 @@ var
 begin
   Stream := TFileStream.Create(AFileName, fmCreate);
   try
-    // Llama a la nueva versión sobrecargada de SaveToStream
+    // Llama a la nueva versiï¿½n sobrecargada de SaveToStream
     Self.SaveToStream(Stream, aFull);
   finally
     Stream.Free;
@@ -4422,7 +4416,7 @@ begin
         JsonWriter.WritePropertyName('node_text');
         JsonWriter.WriteValue(Node.Text);
 
-        // Propiedades dinámicas (MetaData)
+        // Propiedades dinï¿½micas (MetaData)
         if Node.MetaData.InternalDictionary.Count > 0 then
         begin
           JsonWriter.WritePropertyName('properties');
@@ -4538,10 +4532,10 @@ begin
 
     if FDriver <> nil then
     begin
-      // Le decimos al Driver: "Avísame si te mueres"
+      // Le decimos al Driver: "Avï¿½same si te mueres"
       FDriver.FreeNotification(Self);
 
-      // Lógica existente de asignación
+      // Lï¿½gica existente de asignaciï¿½n
       FDriver.AssignToGraph(Self);
     end;
   end;
@@ -4553,7 +4547,7 @@ begin
   begin
     FEmbeddings := Value;
 
-    // Le decimos al componente de Embeddings: "Avísame (a mí, el Grafo) si te mueres"
+    // Le decimos al componente de Embeddings: "Avï¿½same (a mï¿½, el Grafo) si te mueres"
     if FEmbeddings <> nil then
       FEmbeddings.FreeNotification(Self);
   end;
@@ -4588,12 +4582,12 @@ begin
     Exit;
 
   // 1. Comprobar la etiqueta del nodo (Label)
-  // Ignorar si el patrón no especifica una etiqueta
+  // Ignorar si el patrï¿½n no especifica una etiqueta
   if (not NodeLabel.IsEmpty) and (not SameText(ANode.NodeLabel, NodeLabel)) then
     Exit;
 
-  // 2. Comprobar todas las propiedades requeridas del patrón
-  // 'Properties' aquí es el diccionario de filtros del PATRÓN (ej: {ciudad: 'Madrid'})
+  // 2. Comprobar todas las propiedades requeridas del patrï¿½n
+  // 'Properties' aquï¿½ es el diccionario de filtros del PATRï¿½N (ej: {ciudad: 'Madrid'})
   for Pair in Properties do
   begin
     // --- A. Atributos Natos del Nodo ---
@@ -4612,17 +4606,17 @@ begin
       if not SameText(ANode.ID, VarToStr(Pair.Value)) then
         Exit;
     end
-    // --- B. Metadatos Dinámicos ---
+    // --- B. Metadatos Dinï¿½micos ---
     else
     begin
-      // Utilizamos el nuevo motor de evaluación del MetaData
-      // foEqual realiza una comparación inteligente de Variants (tipada)
+      // Utilizamos el nuevo motor de evaluaciï¿½n del MetaData
+      // foEqual realiza una comparaciï¿½n inteligente de Variants (tipada)
       if not ANode.Properties.Evaluate(Pair.Key, foEqual, Pair.Value) then
         Exit;
     end;
   end;
 
-  // Si superó todos los filtros, es un match
+  // Si superï¿½ todos los filtros, es un match
   Result := True;
 end;
 
@@ -4631,7 +4625,7 @@ end;
 constructor TMatchEdgePattern.Create;
 begin
   inherited;
-  Direction := gdOutgoing; // Dirección por defecto
+  Direction := gdOutgoing; // Direcciï¿½n por defecto
   Properties := TDictionary<string, Variant>.Create(TStringComparer.Ordinal);
 end;
 
@@ -4649,8 +4643,8 @@ begin
   if AEdge = nil then
     Exit;
 
-  // 1. Comprobar la dirección del recorrido
-  // Si el patrón especifica una dirección (saliente/entrante), debe coincidir con el recorrido actual
+  // 1. Comprobar la direcciï¿½n del recorrido
+  // Si el patrï¿½n especifica una direcciï¿½n (saliente/entrante), debe coincidir con el recorrido actual
   if (Direction <> gdBoth) and (Direction <> AActualDirection) then
     Exit;
 
@@ -4658,8 +4652,8 @@ begin
   if (not EdgeLabel.IsEmpty) and (not SameText(AEdge.EdgeLabel, EdgeLabel)) then
     Exit;
 
-  // 3. Comprobar todas las propiedades requeridas del patrón de búsqueda
-  // 'Properties' es el diccionario de filtros del patrón (ej: {since: 2020})
+  // 3. Comprobar todas las propiedades requeridas del patrï¿½n de bï¿½squeda
+  // 'Properties' es el diccionario de filtros del patrï¿½n (ej: {since: 2020})
   for Pair in Properties do
   begin
     // --- A. Atributos Natos de la Arista ---
@@ -4675,7 +4669,7 @@ begin
     end
     else if SameText(Pair.Key, 'weight') then
     begin
-      // Comparación numérica segura para el peso (Weight)
+      // Comparaciï¿½n numï¿½rica segura para el peso (Weight)
       try
         if Abs(AEdge.Weight - Double(Pair.Value)) > 0.0001 then
           Exit;
@@ -4683,17 +4677,17 @@ begin
         Exit;
       end;
     end
-    // --- B. Metadatos Dinámicos (MetaData unificado) ---
+    // --- B. Metadatos Dinï¿½micos (MetaData unificado) ---
     else
     begin
-      // Utilizamos el nuevo motor de evaluación del MetaData de la arista.
-      // foEqual realiza una comparación inteligente de Variants (tipada).
+      // Utilizamos el nuevo motor de evaluaciï¿½n del MetaData de la arista.
+      // foEqual realiza una comparaciï¿½n inteligente de Variants (tipada).
       if not AEdge.MetaData.Evaluate(Pair.Key, foEqual, Pair.Value) then
         Exit;
     end;
   end;
 
-  // Si superó todos los filtros (dirección, etiqueta y propiedades), es un match
+  // Si superï¿½ todos los filtros (direcciï¿½n, etiqueta y propiedades), es un match
   Result := True;
 end;
 
@@ -4703,13 +4697,13 @@ constructor TMatchClause.Create(ASourceNodeVar: string; AEdgePattern: TMatchEdge
 begin
   inherited Create;
   SourceNodeVar := ASourceNodeVar;
-  EdgePattern := AEdgePattern; // La cláusula toma posesión del patrón de arista
+  EdgePattern := AEdgePattern; // La clï¿½usula toma posesiï¿½n del patrï¿½n de arista
   TargetNodeVar := ATargetNodeVar;
 end;
 
 destructor TMatchClause.Destroy;
 begin
-  EdgePattern.Free; // Libera el patrón de arista del que es dueño
+  EdgePattern.Free; // Libera el patrï¿½n de arista del que es dueï¿½o
   inherited;
 end;
 
@@ -4718,15 +4712,15 @@ end;
 constructor TGraphMatchQuery.Create;
 begin
   inherited;
-  FNodePatterns := TObjectList<TMatchNodePattern>.Create(True); // Es dueño
-  FMatchClauses := TObjectList<TMatchClause>.Create(True); // Es dueño
+  FNodePatterns := TObjectList<TMatchNodePattern>.Create(True); // Es dueï¿½o
+  FMatchClauses := TObjectList<TMatchClause>.Create(True); // Es dueï¿½o
   FDepth := 0;
 end;
 
 destructor TGraphMatchQuery.Destroy;
 begin
   if Assigned(FWhereClause) then
-    FWhereClause.Free; // Esto disparará la liberación en cadena de todo el árbol
+    FWhereClause.Free; // Esto dispararï¿½ la liberaciï¿½n en cadena de todo el ï¿½rbol
 
   FNodePatterns.Free;
   FMatchClauses.Free;
@@ -4756,8 +4750,8 @@ begin
       Exit;
     end;
   end;
-  // Si no se encuentra, podría ser un error en la construcción de la consulta.
-  // Podrías lanzar una excepción aquí si quieres ser más estricto.
+  // Si no se encuentra, podrï¿½a ser un error en la construcciï¿½n de la consulta.
+  // Podrï¿½as lanzar una excepciï¿½n aquï¿½ si quieres ser mï¿½s estricto.
   // raise Exception.CreateFmt('Node pattern with variable "%s" not found in query.', [AVar]);
 end;
 
@@ -4787,7 +4781,7 @@ var
   Key: string;
   Value: Variant;
 begin
-  Result := '{}'; // Valor por defecto para diccionario vacío
+  Result := '{}'; // Valor por defecto para diccionario vacï¿½o
 
   if (AProperties = nil) or (AProperties.Count = 0) then
     Exit;
@@ -4841,7 +4835,7 @@ end;
 
 destructor TBinaryExpr.Destroy;
 begin
-  Left.Free; // La liberación es recursiva
+  Left.Free; // La liberaciï¿½n es recursiva
   Right.Free;
   inherited;
 end;

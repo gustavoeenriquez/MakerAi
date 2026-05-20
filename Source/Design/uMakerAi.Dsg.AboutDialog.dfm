@@ -1,4 +1,4 @@
-object AboutDialog: TAboutDialog
+﻿object AboutDialog: TAboutDialog
   Left = 0
   Top = 0
   Caption = 'About MakerAi Suite'

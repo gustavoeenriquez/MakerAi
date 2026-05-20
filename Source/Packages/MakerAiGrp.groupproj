@@ -15,15 +15,6 @@
         <Projects Include="MakerAi.RAG.Drivers.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="..\..\..\AIMakerChatTools\Packages\OllamaPdfToolPkg.dproj">
-            <Dependencies/>
-        </Projects>
-        <Projects Include="..\..\..\AIMakerChatTools\OllamaPdfTool\Demo\OllamaPDFDemo.dproj">
-            <Dependencies/>
-        </Projects>
-        <Projects Include="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project22.dproj">
-            <Dependencies/>
-        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -68,41 +59,14 @@
     <Target Name="MakerAi_RAG_Drivers:Make">
         <MSBuild Projects="MakerAi.RAG.Drivers.dproj" Targets="Make"/>
     </Target>
-    <Target Name="OllamaPdfToolPkg">
-        <MSBuild Projects="..\..\..\AIMakerChatTools\Packages\OllamaPdfToolPkg.dproj"/>
-    </Target>
-    <Target Name="OllamaPdfToolPkg:Clean">
-        <MSBuild Projects="..\..\..\AIMakerChatTools\Packages\OllamaPdfToolPkg.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="OllamaPdfToolPkg:Make">
-        <MSBuild Projects="..\..\..\AIMakerChatTools\Packages\OllamaPdfToolPkg.dproj" Targets="Make"/>
-    </Target>
-    <Target Name="OllamaPDFDemo">
-        <MSBuild Projects="..\..\..\AIMakerChatTools\OllamaPdfTool\Demo\OllamaPDFDemo.dproj"/>
-    </Target>
-    <Target Name="OllamaPDFDemo:Clean">
-        <MSBuild Projects="..\..\..\AIMakerChatTools\OllamaPdfTool\Demo\OllamaPDFDemo.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="OllamaPDFDemo:Make">
-        <MSBuild Projects="..\..\..\AIMakerChatTools\OllamaPdfTool\Demo\OllamaPDFDemo.dproj" Targets="Make"/>
-    </Target>
-    <Target Name="Project22">
-        <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project22.dproj"/>
-    </Target>
-    <Target Name="Project22:Clean">
-        <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project22.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="Project22:Make">
-        <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project22.dproj" Targets="Make"/>
-    </Target>
     <Target Name="Build">
-        <CallTarget Targets="MakerAI;MakerAiDsg;MakerAi_UI;MakerAi_RAG_Drivers;OllamaPdfToolPkg;OllamaPDFDemo;Project22"/>
+        <CallTarget Targets="MakerAI;MakerAiDsg;MakerAi_UI;MakerAi_RAG_Drivers"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MakerAI:Clean;MakerAiDsg:Clean;MakerAi_UI:Clean;MakerAi_RAG_Drivers:Clean;OllamaPdfToolPkg:Clean;OllamaPDFDemo:Clean;Project22:Clean"/>
+        <CallTarget Targets="MakerAI:Clean;MakerAiDsg:Clean;MakerAi_UI:Clean;MakerAi_RAG_Drivers:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MakerAI:Make;MakerAiDsg:Make;MakerAi_UI:Make;MakerAi_RAG_Drivers:Make;OllamaPdfToolPkg:Make;OllamaPDFDemo:Make;Project22:Make"/>
+        <CallTarget Targets="MakerAI:Make;MakerAiDsg:Make;MakerAi_UI:Make;MakerAi_RAG_Drivers:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

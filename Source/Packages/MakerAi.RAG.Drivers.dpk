@@ -42,6 +42,8 @@ requires
 
 contains
   uMakerAi.RAG.Graph.Driver.Postgres in '..\RAG\uMakerAi.RAG.Graph.Driver.Postgres.pas',
-  uMakerAi.RAG.Vector.Driver.Postgres in '..\RAG\uMakerAi.RAG.Vector.Driver.Postgres.pas';
+  uMakerAi.RAG.Vector.Driver.Postgres in '..\RAG\uMakerAi.RAG.Vector.Driver.Postgres.pas',
+  uMakerAi.RAG.Vector.Driver.SQLite in '..\RAG\uMakerAi.RAG.Vector.Driver.SQLite.pas',
+  uMakerAi.RAG.Vector.Driver.BinFile in '..\RAG\uMakerAi.RAG.Vector.Driver.BinFile.pas';
 
 end.

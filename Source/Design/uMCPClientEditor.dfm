@@ -1,4 +1,4 @@
-object FMCPClientEditor: TFMCPClientEditor
+﻿object FMCPClientEditor: TFMCPClientEditor
   Left = 0
   Top = 0
   ActiveControl = EditName

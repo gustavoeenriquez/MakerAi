@@ -1,4 +1,4 @@
-// IT License
+﻿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -72,6 +72,14 @@ uses
   uMakerAi.Embeddings,
   uMakerAi.Embeddings.core,
 
+  // --- Embedding drivers ---
+  uMakerAi.Embeddings.OpenAi,
+  uMakerAi.Embeddings.Gemini,
+  uMakerAi.Embeddings.Ollama,
+  uMakerAi.Embeddings.Mistral,
+  uMakerAi.Embeddings.Cohere,
+  uMakerAi.Embeddings.LMStudio,
+
   // --- Tools ---
   uMakerAi.Tools.Functions,
   uMakerAi.Tools.Shell,
@@ -79,7 +87,6 @@ uses
   uMakerAi.Tools.ComputerUse,
   uMakerAi.Whisper,
   uMakerAi.OpenAi.Dalle,
-  uMakerAi.OpenAI.Sora,
   uMakerAi.OpenAI.Audio,
   uMakerAi.Gemini.Video,
   uMakerAi.Gemini.Speech,
@@ -341,7 +348,9 @@ begin
   RegisterSelectionEditor(TAIAgentsNode, TAiAgentsSelEditor);
   RegisterSelectionEditor(TAIAgentsLink, TAiAgentsSelEditor);
   RegisterSelectionEditor(TAiAgentsToolSample, TAiAgentsSelEditor);
+  {$WARN SYMBOL_DEPRECATED OFF}
   RegisterSelectionEditor(TAIAgents, TAiAgentsSelEditor);
+  {$WARN SYMBOL_DEPRECATED ON}
 
   // --- MCP Servers ---
   RegisterSelectionEditor(TAiMCPHttpServer, TAiMCPServerSelEditor);
@@ -355,7 +364,6 @@ begin
   RegisterSelectionEditor(TAiComputerUseTool, TAiToolSelEditor);
   RegisterSelectionEditor(TAIWhisper, TAiToolSelEditor);
   RegisterSelectionEditor(TAiDalle, TAiToolSelEditor);
-  RegisterSelectionEditor(TAiSoraGenerator, TAiToolSelEditor);
   RegisterSelectionEditor(TAiOpenAiAudio, TAiToolSelEditor);
   RegisterSelectionEditor(TAiGeminiVideoTool, TAiToolSelEditor);
   RegisterSelectionEditor(TAiGeminiSpeechTool, TAiToolSelEditor);

@@ -82,8 +82,8 @@ Execution flow: `TVGQLLexer` → `TVGQLParser` → `TVGQLQuery` (AST) → `TVGQL
 
 ### MakerGQL Query Language (Graph)
 
-Cypher-like DSL for graph traversal:
-```cypher
+MakerGQL — Graph Query Language based on ISO/IEC 39075:2024 (GQL standard):
+```gql
 MATCH (p:Persona)-[r:TRABAJA_EN]->(e:Empresa)
 WHERE p.ciudad = 'Madrid' AND e.empleados > 100
 RETURN p, r, e

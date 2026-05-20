@@ -1,0 +1,296 @@
+object FrmMain: TFrmMain
+  Left = 0
+  Top = 0
+  Caption = 'MakerAI Chat'
+  ClientHeight = 700
+  ClientWidth = 960
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  DesignerMasterStyle = 0
+  object ToolBar1: TToolBar
+    Size.Width = 960.000000000000000000
+    Size.Height = 44.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object BtnSidebar: TButton
+      Align = Left
+      Size.Width = 44.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      StyleLookup = 'toolbutton'
+      Text = '='
+      TextSettings.Trimming = None
+      OnClick = BtnSidebar_Click
+    end
+    object BtnNewChat: TButton
+      Align = Left
+      Position.X = 44.000000000000000000
+      Size.Width = 44.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      StyleLookup = 'toolbutton'
+      Text = '+'
+      TextSettings.Trimming = None
+      OnClick = BtnNewChat_Click
+    end
+    object LblProvider: TLabel
+      Align = Left
+      Margins.Left = 8.000000000000000000
+      Position.X = 96.000000000000000000
+      Size.Width = 60.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      TextSettings.HorzAlign = Trailing
+      Text = 'Provider:'
+    end
+    object CmbProvider: TComboBox
+      Align = Left
+      Margins.Left = 4.000000000000000000
+      Margins.Top = 6.000000000000000000
+      Margins.Bottom = 6.000000000000000000
+      Position.X = 160.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 140.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      OnChange = CmbProvider_Change
+    end
+    object CmbModel: TComboBox
+      Align = Left
+      Margins.Left = 6.000000000000000000
+      Margins.Top = 6.000000000000000000
+      Margins.Bottom = 6.000000000000000000
+      Position.X = 306.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 200.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      OnChange = CmbModel_Change
+    end
+    object BtnSettings: TButton
+      Align = Right
+      Position.X = 856.000000000000000000
+      Size.Width = 44.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      StyleLookup = 'toolbutton'
+      Text = 'S'
+      TextSettings.Trimming = None
+      OnClick = BtnSettings_Click
+    end
+    object BtnTheme: TButton
+      Align = Right
+      Position.X = 900.000000000000000000
+      Size.Width = 60.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Dark'
+      TextSettings.Trimming = None
+      OnClick = BtnTheme_Click
+    end
+  end
+  object LayoutMain: TLayout
+    Align = Client
+    Size.Width = 960.000000000000000000
+    Size.Height = 656.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    object RectSidebar: TRectangle
+      Align = Left
+      Fill.Color = claWhitesmoke
+      Size.Width = 280.000000000000000000
+      Size.Height = 656.000000000000000000
+      Size.PlatformDefault = False
+      Stroke.Color = xFFDDDDDD
+      object TabSidebar: TTabControl
+        Align = Client
+        Size.Width = 280.000000000000000000
+        Size.Height = 656.000000000000000000
+        Size.PlatformDefault = False
+        TabIndex = 1
+        TabPosition = Top
+        Sizes = (
+          280s
+          630s
+          280s
+          630s)
+        object TabChats: TTabItem
+          CustomIcon = <
+            item
+            end>
+          TextSettings.Trimming = None
+          IsSelected = False
+          Size.Width = 50.000000000000000000
+          Size.Height = 26.000000000000000000
+          Size.PlatformDefault = False
+          StyleLookup = ''
+          TabOrder = 0
+          Text = 'Chats'
+          ExplicitSize.cx = 50.000000000000000000
+          ExplicitSize.cy = 50.000000000000000000
+          object LayoutSidebarInner: TLayout
+            Align = Client
+            Size.Width = 280.000000000000000000
+            Size.Height = 630.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 0
+            object LblConversations: TLabel
+              Align = Top
+              Margins.Left = 12.000000000000000000
+              Margins.Top = 8.000000000000000000
+              Margins.Bottom = 4.000000000000000000
+              Position.X = 12.000000000000000000
+              Position.Y = 8.000000000000000000
+              Size.Width = 268.000000000000000000
+              Size.Height = 28.000000000000000000
+              Size.PlatformDefault = False
+              TextSettings.Font.Size = 13.000000000000000000
+              TextSettings.Font.StyleExt = {00070000000000000004000000}
+              Text = 'Conversations'
+            end
+            object BtnNewConv: TButton
+              Align = Top
+              Margins.Left = 8.000000000000000000
+              Margins.Right = 8.000000000000000000
+              Margins.Bottom = 6.000000000000000000
+              Position.X = 8.000000000000000000
+              Position.Y = 40.000000000000000000
+              Size.Width = 264.000000000000000000
+              Size.Height = 36.000000000000000000
+              Size.PlatformDefault = False
+              Text = '+ New Conversation'
+              TextSettings.Trimming = None
+              OnClick = BtnNewConv_Click
+            end
+            object BtnDeleteConv: TButton
+              Align = Bottom
+              Margins.Left = 8.000000000000000000
+              Margins.Top = 6.000000000000000000
+              Margins.Right = 8.000000000000000000
+              Margins.Bottom = 8.000000000000000000
+              Position.X = 8.000000000000000000
+              Position.Y = 590.000000000000000000
+              Size.Width = 264.000000000000000000
+              Size.Height = 32.000000000000000000
+              Size.PlatformDefault = False
+              Text = 'Delete Conversation'
+              TextSettings.Trimming = None
+              OnClick = BtnDeleteConv_Click
+            end
+            object LstConversations: TListBox
+              Align = Client
+              Size.Width = 280.000000000000000000
+              Size.Height = 502.000000000000000000
+              Size.PlatformDefault = False
+              DisableFocusEffect = True
+              DefaultItemStyles.ItemStyle = ''
+              DefaultItemStyles.GroupHeaderStyle = ''
+              DefaultItemStyles.GroupFooterStyle = ''
+              OnItemClick = LstConversations_ItemClick
+              Viewport.Width = 276.000000000000000000
+              Viewport.Height = 498.000000000000000000
+            end
+          end
+        end
+        object TabParams: TTabItem
+          CustomIcon = <
+            item
+            end>
+          TextSettings.Trimming = None
+          IsSelected = True
+          Size.Width = 59.000000000000000000
+          Size.Height = 26.000000000000000000
+          Size.PlatformDefault = False
+          StyleLookup = ''
+          TabOrder = 0
+          Text = 'Params'
+          ExplicitSize.cx = 50.000000000000000000
+          ExplicitSize.cy = 50.000000000000000000
+          object ScrParams: TVertScrollBox
+            Align = Client
+            Padding.Left = 8.000000000000000000
+            Padding.Top = 4.000000000000000000
+            Padding.Right = 8.000000000000000000
+            Padding.Bottom = 4.000000000000000000
+            Size.Width = 280.000000000000000000
+            Size.Height = 630.000000000000000000
+            Size.PlatformDefault = False
+            TabOrder = 0
+            Viewport.Width = 280.000000000000000000
+            Viewport.Height = 630.000000000000000000
+          end
+        end
+      end
+    end
+    object SplitterSidebar: TSplitter
+      Align = Left
+      Cursor = crHSplit
+      MinSize = 120.000000000000000000
+      Position.X = 280.000000000000000000
+      Size.Width = 5.000000000000000000
+      Size.Height = 656.000000000000000000
+      Size.PlatformDefault = False
+    end
+    object LayoutChat: TLayout
+      Align = Client
+      Size.Width = 675.000000000000000000
+      Size.Height = 656.000000000000000000
+      Size.PlatformDefault = False
+      object ChatView: TAIChatView
+        Align = Client
+        HitTest = True
+        Margins.Left = 8.000000000000000000
+        Margins.Top = 8.000000000000000000
+        Margins.Right = 8.000000000000000000
+        Margins.Bottom = 4.000000000000000000
+        Size.Width = 659.000000000000000000
+        Size.Height = 532.000000000000000000
+        Size.PlatformDefault = False
+        PersistAttachments = True
+        OnLinkClick = ChatView_LinkClick
+        OnAttachmentOpen = ChatView_AttachOpen
+      end
+      object ChatInput: TAIChatInput
+        Align = Bottom
+        HitTest = True
+        Margins.Left = 8.000000000000000000
+        Margins.Top = 4.000000000000000000
+        Margins.Right = 8.000000000000000000
+        Margins.Bottom = 8.000000000000000000
+        Position.X = 8.000000000000000000
+        Position.Y = 548.000000000000000000
+        Size.Width = 659.000000000000000000
+        Size.Height = 100.000000000000000000
+        Size.PlatformDefault = False
+        EnterAsSend = True
+        MicVisible = True
+        OnSend = ChatInput_Send
+        OnCancel = ChatInput_Cancel
+        OnMicToggle = ChatInput_MicToggle
+      end
+      object MemoThinking: TMemo
+        Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+        DataDetectorTypes = []
+        ReadOnly = True
+        StyledSettings = [Family, FontColor]
+        TextSettings.Font.Size = 11.000000000000000000
+        TextSettings.Font.StyleExt = {00040000000200000004000000}
+        TextSettings.WordWrap = True
+        Align = Bottom
+        Margins.Left = 8.000000000000000000
+        Margins.Top = 4.000000000000000000
+        Margins.Right = 8.000000000000000000
+        Size.Width = 664.000000000000000000
+        Size.Height = 90.000000000000000000
+        Size.PlatformDefault = False
+        Visible = False
+        Viewport.Width = 660.000000000000000000
+        Viewport.Height = 86.000000000000000000
+      end
+    end
+  end
+end

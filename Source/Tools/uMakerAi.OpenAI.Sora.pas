@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -535,9 +535,9 @@ procedure TAiSoraVideoTool.ExecuteVideoGeneration(ResMsg, AskMsg: TAiChatMessage
 var
   LTaskMsg: TAiChatMessage;
 begin
-  // Sora SIEMPRE es asíncrono (tarda minutos). NO usamos ResMsg directamente
+  // Sora SIEMPRE es asï¿½ncrono (tarda minutos). NO usamos ResMsg directamente
   // porque TAiChat.Run puede liberarlo antes de que el polling termine.
-  // Creamos un mensaje propio y encolamos su liberación después de ReportDataEnd
+  // Creamos un mensaje propio y encolamos su liberaciï¿½n despuï¿½s de ReportDataEnd
   // para respetar el orden FIFO de TThread.Queue.
   LTaskMsg := TAiChatMessage.Create('', 'assistant');
   TTask.Run(procedure
@@ -547,8 +547,8 @@ begin
     except
       on E: Exception do ReportError('Error en Sora Tool: ' + E.Message, E);
     end;
-    // ReportDataEnd ya encoló DoDataEnd(LTaskMsg,...) al hilo principal.
-    // Encolamos el Free después para ejecutarse en orden FIFO.
+    // ReportDataEnd ya encolï¿½ DoDataEnd(LTaskMsg,...) al hilo principal.
+    // Encolamos el Free despuï¿½s para ejecutarse en orden FIFO.
     TThread.Queue(nil, procedure begin LTaskMsg.Free; end);
   end);
 end;
@@ -569,7 +569,7 @@ begin
   HTTP := TNetHTTPClient.Create(nil);
   LFormData := TMultipartFormData.Create;
   try
-    // 1. Cabeceras de autenticación
+    // 1. Cabeceras de autenticaciï¿½n
     LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + GetApiKey)];
 
     // 2. Construir cuerpo multipart
@@ -593,9 +593,9 @@ begin
       {$ENDIF}
     end;
 
-    // 3. Iniciar generación
+    // 3. Iniciar generaciï¿½n
     LUrl := OPENAI_API_BASE_URL + 'videos';
-    ReportState(acsReasoning, 'Iniciando generación de video Sora...');
+    ReportState(acsReasoning, 'Iniciando generaciï¿½n de video Sora...');
     LResponse := HTTP.Post(LUrl, LFormData, nil, LHeaders);
 
     if LResponse.StatusCode <> 200 then
@@ -636,7 +636,7 @@ begin
           break
         else if LStatus.Equals('failed') then
         begin
-          LErrorMessage := 'La generación de video falló con estado: "failed".';
+          LErrorMessage := 'La generaciï¿½n de video fallï¿½ con estado: "failed".';
           if LPollingResponse.TryGetValue<TJSONObject>('error', LErrorObj) then
             LErrorMessage := 'API Error: ' + LErrorObj.GetValue<string>('message', LErrorObj.ToJSON);
           raise Exception.Create(LErrorMessage);

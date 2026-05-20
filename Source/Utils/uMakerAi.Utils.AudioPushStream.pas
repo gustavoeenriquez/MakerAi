@@ -1,4 +1,4 @@
-unit uMakerAi.Utils.AudioPushStream;
+ï»¿unit uMakerAi.Utils.AudioPushStream;
 
 {******************************************************************************
   UAudioPushStream - Push-Stream Audio Player for Delphi FMX (Cross-Platform)
@@ -201,7 +201,7 @@ type
 implementation
 
 { ============================================================================
-  macOS: tipos auxiliares — deben estar antes de InitAudioQueue
+  macOS: tipos auxiliares ï¿½ deben estar antes de InitAudioQueue
   ============================================================================ }
 {$IFDEF MACOS}
 type
@@ -292,9 +292,16 @@ begin
     else if Chunk.ID = 'data' then
     begin
       PCMOffset := Offset;
-      PCMSize   := Chunk.Size;
-      if PCMOffset + PCMSize > DataSize then
-        PCMSize := DataSize - PCMOffset;
+      // WAV streaming (OpenAI TTS): chunk size = 0xFFFFFFFF â†’ checar ANTES de asignar a Integer
+      // para evitar Range check error (UInt32 $FFFFFFFF no cabe en Integer con range check ON)
+      if Chunk.Size = $FFFFFFFF then
+        PCMSize := DataSize - PCMOffset
+      else
+      begin
+        PCMSize := Integer(Chunk.Size);
+        if PCMOffset + PCMSize > DataSize then
+          PCMSize := DataSize - PCMOffset;
+      end;
       Result := True;
       Exit;
     end;
@@ -1066,7 +1073,7 @@ const
   kMAI_AudioDevicePropertyStreams   = UInt32($73746D23); // 'stm#'
   kMAI_CFStringEncodingUTF8         = UInt32($08000100);
 
-{ CoreAudio hardware API — no esta en Macapi.AudioToolbox }
+{ CoreAudio hardware API ï¿½ no esta en Macapi.AudioToolbox }
 function _AO_GetPropertyDataSize(inObjectID: UInt32; inAddress: Pointer;
   inQualifierDataSize: UInt32; inQualifierData: Pointer;
   out outDataSize: UInt32): Integer; cdecl;
@@ -1159,7 +1166,7 @@ end;
 {$ENDIF MACOS}
 
 { ============================================================================
-  EnumerateDevices — lista de dispositivos de salida por plataforma
+  EnumerateDevices ï¿½ lista de dispositivos de salida por plataforma
   ============================================================================ }
 class function TAudioPushStream.EnumerateDevices: TArray<string>;
 var

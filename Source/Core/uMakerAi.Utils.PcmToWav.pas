@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -42,9 +42,9 @@
   try
   // Convertir archivo PCM mono de 24kHz y 16 bits
   if ConvertPCMToWAV('c:\temp\imagen.pcm', 'c:\temp\imagen.wav', 24000, 1, 16) then
-  ShowMessage('Conversión exitosa')
+  ShowMessage('Conversiï¿½n exitosa')
   else
-  ShowMessage('Error en la conversión');
+  ShowMessage('Error en la conversiï¿½n');
   except
   on E: Exception do
   ShowMessage('Error: ' + E.Message);
@@ -52,13 +52,13 @@
   end;
 
   // Otros ejemplos:
-  // Estéreo 44.1kHz, 16 bits (valores por defecto)
+  // Estï¿½reo 44.1kHz, 16 bits (valores por defecto)
   // ConvertPCMToWAV('audio.pcm', 'audio.wav');
 
-  // Mono 8kHz, 16 bits (calidad telefónica)
+  // Mono 8kHz, 16 bits (calidad telefï¿½nica)
   // ConvertPCMToWAV('voice.pcm', 'voice.wav', 8000, 1, 16);
 
-  // Estéreo 48kHz, 16 bits (calidad CD+)
+  // Estï¿½reo 48kHz, 16 bits (calidad CD+)
   // ConvertPCMToWAV('music.pcm', 'music.wav', 48000, 2, 16);
 }
 
@@ -74,14 +74,14 @@ type
   TWAVHeader = packed record
     // Chunk RIFF
     ChunkID: array [0 .. 3] of AnsiChar; // "RIFF"
-    ChunkSize: Cardinal; // Tamaño del archivo - 8 bytes
+    ChunkSize: Cardinal; // Tamaï¿½o del archivo - 8 bytes
     Format: array [0 .. 3] of AnsiChar; // "WAVE"
 
     // Subchunk fmt
     Subchunk1ID: array [0 .. 3] of AnsiChar; // "fmt "
     Subchunk1Size: Cardinal; // 16 para PCM
     AudioFormat: Word; // 1 para PCM
-    NumChannels: Word; // Número de canales
+    NumChannels: Word; // Nï¿½mero de canales
     SampleRate: Cardinal; // Frecuencia de muestreo
     ByteRate: Cardinal; // SampleRate * NumChannels * BitsPerSample/8
     BlockAlign: Word; // NumChannels * BitsPerSample/8
@@ -89,14 +89,14 @@ type
 
     // Subchunk data
     Subchunk2ID: array [0 .. 3] of AnsiChar; // "data"
-    Subchunk2Size: Cardinal; // Tamaño de los datos PCM
+    Subchunk2Size: Cardinal; // Tamaï¿½o de los datos PCM
   end;
 
-  // Función principal para convertir PCM a WAV
+  // Funciï¿½n principal para convertir PCM a WAV
 function ConvertPCMToWAV(const PCMFilePath, WAVFilePath: string; SampleRate: Cardinal = 44100; Channels: Word = 2;
   BitsPerSample: Word = 16): Boolean;
 
-// Función para convertir PCM a WAV desde TMemoryStream
+// Funciï¿½n para convertir PCM a WAV desde TMemoryStream
 function ConvertPCMStreamToWAVStream(const PCMStream: TMemoryStream; out WAVStream: TMemoryStream; SampleRate: Cardinal = 44100;
   Channels: Word = 2; BitsPerSample: Word = 16): Boolean;
 
@@ -122,7 +122,7 @@ begin
     // Abrir archivo PCM
     PCMFile := TFileStream.Create(PCMFilePath, fmOpenRead);
     try
-      // Obtener tamaño del archivo PCM
+      // Obtener tamaï¿½o del archivo PCM
       PCMSize := PCMFile.Size;
 
       // Crear archivo WAV
@@ -175,7 +175,7 @@ begin
   except
     on E: Exception do
     begin
-      // Si hay error y el archivo WAV se creó parcialmente, eliminarlo
+      // Si hay error y el archivo WAV se creï¿½ parcialmente, eliminarlo
       if FileExists(WAVFilePath) then
         DeleteFile(WAVFilePath);
       raise;
@@ -183,7 +183,7 @@ begin
   end;
 end;
 
-// Función para convertir PCM a WAV desde TMemoryStream
+// Funciï¿½n para convertir PCM a WAV desde TMemoryStream
 function ConvertPCMStreamToWAVStream(const PCMStream: TMemoryStream; out WAVStream: TMemoryStream; SampleRate: Cardinal = 44100;
   Channels: Word = 2; BitsPerSample: Word = 16): Boolean;
 var
@@ -199,7 +199,7 @@ begin
     // Crear el stream de salida WAV
     WAVStream := TMemoryStream.Create;
     try
-      // Obtener el tamaño del stream PCM
+      // Obtener el tamaï¿½o del stream PCM
       PCMSize := PCMStream.Size;
 
       // Configurar el header WAV
@@ -236,7 +236,7 @@ begin
           WAVStream.WriteBuffer(Buffer, BytesRead);
       end;
 
-      // Resetear la posición del stream WAV a 0 para su posterior lectura
+      // Resetear la posiciï¿½n del stream WAV a 0 para su posterior lectura
       WAVStream.Position := 0;
 
       Result := True;
@@ -244,7 +244,7 @@ begin
     except
       on E: Exception do
       begin
-        // Si hay un error, liberar el stream WAV y propagar la excepción
+        // Si hay un error, liberar el stream WAV y propagar la excepciï¿½n
         WAVStream.Free;
         WAVStream := nil;
         raise;

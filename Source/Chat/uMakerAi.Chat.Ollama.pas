@@ -1,6 +1,6 @@
-// IT License
+﻿// MIT License
 //
-// Copyright (c) <year> <copyright holders>
+// Copyright (c) 2024 Gustavo Enríquez - CimaMaker
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -46,7 +46,7 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Utils.CodeExtractor, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core, uMakerAi.Utils.CodeExtractor, uMakerAi.Chat.Messages;
 
 type
 
@@ -54,6 +54,7 @@ type
   Private
     Fkeep_alive: String;
     FTmpToolCallsStr: string;
+    FAsyncResMsg: TAiChatMessage; // ResMsg pendiente entre rounds async de tool calls
     procedure Setkeep_alive(const Value: String);
   Protected
     Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
@@ -82,17 +83,6 @@ type
     property keep_alive: String read Fkeep_alive write Setkeep_alive;
   End;
 
-  TAiOllamaEmbeddings = class(TAiEmbeddings)
-  Public
-    Constructor Create(aOwner: TComponent); Override;
-    Destructor Destroy; Override;
-    Function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float'): TAiEmbeddingData; Override;
-    Procedure ParseEmbedding(JObj: TJSonObject); Override;
-    class function GetDriverName: string; override;
-    class function CreateInstance(aOwner: TComponent): TAiEmbeddings; override;
-    class procedure RegisterDefaultParams(Params: TStrings); override;
-  end;
-
 procedure Register;
 
 implementation
@@ -102,7 +92,7 @@ Const
 
 procedure Register;
 begin
-  RegisterComponents('MakerAI', [TAiOllamaChat, TAiOllamaEmbeddings]);
+  RegisterComponents('MakerAI', [TAiOllamaChat]);
 end;
 
 class function TAiOllamaChat.GetDriverName: string;
@@ -115,7 +105,7 @@ Begin
   Params.Clear;
   Params.Add('ApiKey=@OLLAMA_API_KEY');
   Params.Add('Model=llama3');
-  Params.Add('MaxTokens=4096');
+  Params.Add('Max_Tokens=4096');
   Params.Add('URL=http://localhost:11434/');
 End;
 
@@ -152,7 +142,6 @@ var
   LToolCallsArray: TJSonArray;
   LToolCall: TAiToolsFunction;
   LItem: TJSONValue;
-  LPair: TJSONPair;
 begin
   Result := TAiToolsFunctions.Create;
 
@@ -184,20 +173,12 @@ begin
         // Ollama ahora sé incluye un 'id', pero lo generamos como fallback por si acaso.
         LToolCall.Id := LToolCallObj.GetValue<string>('id', 'call_' + TGuid.NewGuid.ToString);
         LToolCall.Name := LFunctionObj.GetValue<string>('name', '');
-        LToolCall.Tipo := 'function';
+        LToolCall.&Type := 'function';
 
         if LFunctionObj.TryGetValue<TJSonObject>('arguments', LArgumentsObj) then
-        begin
-          LToolCall.Arguments := LArgumentsObj.Format;
-          for LPair in LArgumentsObj do
-          begin
-            LToolCall.Params.Values[LPair.JsonString.Value] := LPair.JsonValue.Value;
-          end;
-        end
+          LToolCall.Arguments := LArgumentsObj.Format
         else
-        begin
           LToolCall.Arguments := '{}';
-        end;
 
         Result.Add(LToolCall.Id, LToolCall);
       except
@@ -214,10 +195,6 @@ Var
   Msg: TAiChatMessage;
   JObj: TJSonObject;
   jImages: TJSonArray;
-
-  Base64: String;
-  MediaArr: TAiMediaFilesArray;
-  Mime: String;
 begin
   Result := TJSonArray.Create;
 
@@ -233,27 +210,27 @@ begin
       JObj.AddPair('name', Msg.FunctionName);
 
     JObj.AddPair('role', Msg.Role);
+
+    // La API de Ollama SOLO acepta content:string + images:[base64...].
+    // No soporta content como array de partes (formato OpenAI multipart).
+    // Imágenes y audio se envían ambos en el campo 'images' en base64.
     JObj.AddPair('content', Msg.Prompt);
 
-    MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
-
-    If (Length(MediaArr) > 0) then
+    jImages := nil;
+    For J := 0 to Msg.MediaFiles.Count - 1 do
     Begin
-
-      jImages := TJSonArray.Create;
-      JObj.AddPair('images', jImages);
-
-      For J := 0 to Msg.MediaFiles.Count - 1 do // Open Ai permite subir el Base64 o el Url, siempre se sube el Base64, por estandar
-      Begin
-        Base64 := Msg.MediaFiles[J].Base64;
-        Mime := Msg.MediaFiles[J].MimeType;
-
+      if Msg.MediaFiles[J].FileCategory in [Tfc_Image, Tfc_Audio] then
+      begin
+        if not Assigned(jImages) then
+        begin
+          jImages := TJSonArray.Create;
+          JObj.AddPair('images', jImages);
+        end;
         jImages.Add(Msg.MediaFiles[J].Base64);
-      End;
+      end;
     End;
 
     If Msg.Tool_calls <> '' then
-
 {$IF CompilerVersion < 35}
       JObj.AddPair('tool_calls', TJSONUtils.ParseAsArray(Msg.Tool_calls));
 {$ELSE}
@@ -300,15 +277,19 @@ begin
     if Res.StatusCode = 200 then
     Begin
       jRes := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      If jRes.TryGetValue<TJSonArray>('models', JArr) then
-      Begin
-        For JVal in JArr do
+      try
+        If jRes.TryGetValue<TJSonArray>('models', JArr) then
         Begin
-          sModel := JVal.GetValue<String>('name');
-          If sModel <> '' then
-            Result.Add(sModel);
+          For JVal in JArr do
+          Begin
+            sModel := JVal.GetValue<String>('name');
+            If sModel <> '' then
+              Result.Add(sModel);
+          End;
         End;
-      End;
+      finally
+        jRes.Free;
+      end;
 
       // Agregar modelos personalizados
       CustomModels := TAiChatFactory.Instance.GetCustomModels(Self.GetDriverName);
@@ -402,6 +383,12 @@ begin
     begin
       AJSONObject.AddPair('format', 'json');
     end;
+
+    // --- THINKING (Ollama v0.7.0+) ---
+    // Modelos con reasoning nativo (gemma4, qwen3, deepseek-r1, etc.) requieren
+    // "think":true a nivel raíz para activar el modo de razonamiento.
+    if (cap_Reasoning in ModelConfig.ModelCaps) and (ModelConfig.ThinkingLevel <> tlDefault) then
+      AJSONObject.AddPair('think', TJSONBool.Create(True));
 
     // --- MANEJO DE TOOLS ---
     If Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAi).Text) <> '') then
@@ -504,7 +491,9 @@ begin
 
     If FClient.Asynchronous = False then
     Begin
-      if Res.StatusCode = 200 then
+      if not Assigned(Res) then
+        Raise Exception.Create('Error de conexion: no se recibio respuesta del servidor Ollama')
+      else if Res.StatusCode = 200 then
       Begin
         Var
         S := Res.ContentAsString;
@@ -517,9 +506,8 @@ begin
           FBusy := False;
           ParseChat(JObj, ResMsg);
           Result := FLastContent;
-
         Finally
-          // FreeAndNil(JObj);  //se comenta porque marca error porque ya ha sido eliminado previamente en alguna parte
+          JObj.Free;
         End;
       End
       else
@@ -608,13 +596,28 @@ var
       end;
     end;
 
-    LFinalMsg := TAiChatMessage.Create('', 'assistant');
+    // Reutilizar el ResMsg del round anterior si existe (preserva MediaFiles
+    // agregados durante tool calls). Si no, crear uno nuevo.
+    var LOwnsMsg: Boolean;
+    if Assigned(FAsyncResMsg) then
+    begin
+      LFinalMsg  := FAsyncResMsg;
+      FAsyncResMsg := nil; // consumido
+      LOwnsMsg   := False;
+    end
+    else
+    begin
+      LFinalMsg := TAiChatMessage.Create('', 'assistant');
+      LOwnsMsg  := True;
+    end;
+
     try
       ParseChat(AJson, LFinalMsg);
     except
       on E: Exception do
       begin
-        LFinalMsg.Free;
+        if LOwnsMsg then
+          LFinalMsg.Free;
         raise;
       end;
     end;
@@ -634,6 +637,7 @@ begin
   begin
     FBusy := False;
     FTmpToolCallsStr := '';
+    FAsyncResMsg := nil; // descartar ResMsg pendiente al abortar
     if Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, nil, nil, 'system', 'abort');
     Exit;
@@ -804,6 +808,10 @@ begin
   ResMsg.Completion_tokens := LEvalTokens;
   ResMsg.Total_tokens := LPromptTokens + LEvalTokens;
 
+  // Disparar evento thinking si el modelo retornó razonamiento
+  if (LReasoning <> '') and Assigned(OnReceiveThinking) then
+    OnReceiveThinking(Self, ResMsg, JObj, LRole, LReasoning);
+
   LAskMsg := GetLastMessage;
 
   // 4. LÓGICA DE LLAMADO A FUNCIONES (TOOLS)
@@ -851,11 +859,14 @@ begin
                 DoCallFunction(CapturaTool);
               except
                 on E: Exception do
+                begin
+                  CapturaTool.Response := '{"error": "' + StringReplace(E.Message, '"', '''', [rfReplaceAll]) + '"}';
                   TThread.Queue(nil,
                     procedure
                     begin
                       DoError('Function Execution Error: ' + CapturaTool.Name, E);
                     end);
+                end;
               end;
             end);
           TaskList[I].Start;
@@ -869,6 +880,9 @@ begin
         for LToolCall in LFunciones.Values do
         begin
           LToolMsg := TAiChatMessage.Create(LToolCall.Response, 'tool', LToolCall.Id, LToolCall.Name);
+          for var LMF in LToolCall.MediaFiles do
+            LToolMsg.AddMediaFile(LMF);
+          LToolCall.MediaFiles.OwnsObjects := False;
           LToolMsg.Id := FMessages.Count + 1;
           FMessages.Add(LToolMsg);
         end;
@@ -878,6 +892,10 @@ begin
         ResMsg.Content := '';
         ResMsg.Tool_calls := '';
         FLastContent := '';
+        // En modo async, preservar ResMsg entre rounds para que ProcessFinalJsonObject
+        // lo reutilice y conserve los MediaFiles agregados durante tool calls.
+        if Self.Asynchronous then
+          FAsyncResMsg := ResMsg;
         Self.Run(nil, ResMsg);
       end;
     finally
@@ -1285,6 +1303,5 @@ end;
 Initialization
 
 TAiChatFactory.Instance.RegisterDriver(TAiOllamaChat);
-TAiEmbeddingFactory.Instance.RegisterDriver(TAiOllamaEmbeddings);
 
 end.

@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -66,8 +66,8 @@ uses
 function TAiChatDriverNamePropertyEditor.GetAttributes: TPropertyAttributes;
 begin
   // paValueList: Muestra lista desplegable
-  // paSortList: Ordena la lista alfabéticamente
-  // paMultiSelect: Permite selección múltiple (opcional)
+  // paSortList: Ordena la lista alfabï¿½ticamente
+  // paMultiSelect: Permite selecciï¿½n mï¿½ltiple (opcional)
   Result := [paValueList, paSortList];
 end;
 
@@ -83,7 +83,7 @@ begin
     Exit;
 
   try
-    // Agregar opción vacía
+    // Agregar opciï¿½n vacï¿½a
     Proc('');
 
     // Obtener drivers disponibles
@@ -93,7 +93,7 @@ begin
     for Driver in Drivers do
       Proc(Driver);
   except
-    // Si hay error, al menos mostrar opción vacía
+    // Si hay error, al menos mostrar opciï¿½n vacï¿½a
     Proc('');
   end;
 end;
@@ -102,7 +102,7 @@ end;
 
 function TAiChatConnectionComponentEditor.GetVerbCount: Integer;
 begin
-  Result := 1; // Una acción en el menú contextual
+  Result := 1; // Una acciï¿½n en el menï¿½ contextual
 end;
 
 function TAiChatConnectionComponentEditor.GetVerb(Index: Integer): string;

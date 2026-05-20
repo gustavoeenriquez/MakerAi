@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -42,7 +42,10 @@ uses
 
    uMakerAi.RAG.Vectors.Index,  uMakerAi.RAG.Vectors.VQL,
 
-  uJSONHelper, uMakerAi.Embeddings.Core, uMakerAi.RAG.MetaData;
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+  uMakerAi.Embeddings.Core, uMakerAi.RAG.MetaData;
 
 type
 
@@ -51,7 +54,7 @@ type
   /// el modelo y los datos, permite adicionalmente comparar dos embeddings
   /// para conocer su similitud por coseno,  convierte de json a vector y de
   /// vector a json
-  /// almacena también el dato de texto original del embedding
+  /// almacena tambiï¿½n el dato de texto original del embedding
   /// -------------------------------------------------------------------------
 
 
@@ -64,9 +67,9 @@ type
 
 
   /// ---------------------------------------------------------------------------
-  /// TAIBasicEmbeddingIndex implementación sencilla de un Indice de embeddings
-  /// el cual se asigna por defecto al vector para realizar búsquedas en memoria
-  /// sin embargo hay maneras más eficientes de controlar esto en vectores de
+  /// TAIBasicEmbeddingIndex implementaciï¿½n sencilla de un Indice de embeddings
+  /// el cual se asigna por defecto al vector para realizar bï¿½squedas en memoria
+  /// sin embargo hay maneras mï¿½s eficientes de controlar esto en vectores de
   /// embeddings.
   /// -------------------------------------------------------------------------
 
@@ -75,7 +78,7 @@ type
 
   /// ---------------------------------------------------------------------------
   /// THNSWIndex implementa un Approximate Nearest Neighbors (ANN) usando el algoritmo
-  /// HNSW (Hierarchical Navigable Small World) que es mucho más eficiente en la busqueda
+  /// HNSW (Hierarchical Navigable Small World) que es mucho mï¿½s eficiente en la busqueda
   /// en vectores embeddings
   /// -------------------------------------------------------------------------
 
@@ -117,13 +120,12 @@ type
   end;
 
   TAiVectorStoreDriverBase = class(TComponent)
-  protected
-    // Métodos abstractos que cada DB implementará
+  public
+    // Contrato del driver â€” cada implementacion sobreescribe estos metodos
     procedure Add(const aNode: TAiEmbeddingNode; const AEntidad: string); virtual; abstract;
     function Search(const ATarget: TAiEmbeddingNode; const AEntidad: string; aLimit: Integer; aPrecision: Double; aFilter: TAiFilterCriteria; Options: TAiSearchOptions): TAiRAGVector; virtual; abstract;
     procedure Delete(const aID, AEntidad: string); virtual; abstract;
     procedure Clear(const AEntidad: string); virtual; abstract;
-  public
     // Helpers comunes
     function EmbeddingToString(const AData: TAiEmbeddingData): string;
     function VariantToJSONValue(const V: Variant): TJSONValue;
@@ -132,10 +134,10 @@ type
   /// ---------------------------------------------------------------------------
   /// TAiDataVec es la clase base que permite almacenar conjuntos de embeddings
   /// se utiliza tanto para representar bases de datos de embeddings en memoria
-  /// como para la conexión con bases de datos de embeddings.
-  /// Por si solo no indexa ni búsca, solo es el contenedor, para buscar
+  /// como para la conexiï¿½n con bases de datos de embeddings.
+  /// Por si solo no indexa ni bï¿½sca, solo es el contenedor, para buscar
   /// es necesario adicionar un TAIEmbeddingIndex, aunque por defecto tiene
-  /// un indice básico de búsqueda, pero hay modelos mejores.
+  /// un indice bï¿½sico de bï¿½squeda, pero hay modelos mejores.
   /// -------------------------------------------------------------------------
   TAiRAGVector = Class(TComponent)
   Private
@@ -152,7 +154,7 @@ type
     FInMemoryIndexType: TAiRagIndexType;
     FOnGetEmbedding: TOnGetEmbedding;
     FOnFilterItem: TOnFilterItem;
-    FBm25Index: TAIBm25Index; // El índice léxico en memoria
+    FBm25Index: TAIBm25Index; // El ï¿½ndice lï¿½xico en memoria
     FLock: TMultiReadExclusiveWriteSynchronizer;
     FDriver: TAiVectorStoreDriverBase;
     FEntidad: string;
@@ -174,7 +176,12 @@ type
     procedure SetLexicalLanguage(const Value: TAiLanguage);
     procedure SetDriver(const Value: TAiVectorStoreDriverBase);
     procedure SetSearchOptions(const Value: TAiSearchOptions);
-    procedure NormalizeResults(aList: TList<TAiSearchResult>);
+    // VQL advanced post-processing
+    function  ApplyMMR(ASource: TAiRAGVector; ALambda: Double; ALimit: Integer): TAiRAGVector;
+    procedure ApplyDistinct(AVector: TAiRAGVector; const AField: string);
+    procedure ApplyOrderBy(AVector: TAiRAGVector; AFields: TList<TOrderByField>);
+    function  BuildExplainOutput(AReq: TVGQLRequest): string;
+    function  BuildExtendedContextText(DataVec: TAiRAGVector; AReq: TVGQLRequest): string;
   Protected
 
     function DoOnGetEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float'): TAiEmbeddingData;
@@ -209,9 +216,9 @@ type
     Function SearchText(aPrompt: String; aLimit: Integer = 10; aPrecision: Double = 0.5; aFilter: TAiFilterCriteria = nil; IncludeMetadata: Boolean = True; IncludeScore: Boolean = True): String; Overload; Virtual;
     Function SearchText(aPrompt: TAiEmbeddingNode; aLimit: Integer = 10; aPresicion: Double = 0.5; aFilter: TAiFilterCriteria = nil; IncludeMetadata: Boolean = True; IncludeScore: Boolean = True): String; Overload; Virtual;
 
-    function ExecuteVGQL(const AVgqlQuery: string): string; overload;
+    function ExecuteVQL(const AVqlQuery: string): string; overload;
 
-    function ExecuteVGQL(const AVgqlQuery: string; out AResultVector: TAiRAGVector): string; overload;
+    function ExecuteVQL(const AVqlQuery: string; out AResultVector: TAiRAGVector): string; overload;
 
     Function VectorToContextText(DataVec: TAiRAGVector; IncludeMetadata: Boolean; IncludeScore: Boolean): String;
 
@@ -272,8 +279,8 @@ end;
 
 function TAiRAGVector.AddItem(aItem: TAiEmbeddingNode): string;
 begin
-  // Delegamos a la sobrecarga principal para evitar duplicar lógica
-  // y asegurar que se ejecuten todos los pasos de indexación.
+  // Delegamos a la sobrecarga principal para evitar duplicar lï¿½gica
+  // y asegurar que se ejecuten todos los pasos de indexaciï¿½n.
   AddItem(aItem, nil);
 
   // Retornamos el Tag (GUID) como se espera
@@ -284,7 +291,6 @@ function TAiRAGVector.AddItem(aItem: TAiEmbeddingNode; MetaData: TAiEmbeddingMet
 var
   Handled: Boolean;
 begin
-  Result := -1;
   Handled := False;
 
   FLock.BeginWrite;
@@ -297,37 +303,37 @@ begin
     if Assigned(FOnDataVecAddItem) then
       FOnDataVecAddItem(Self, aItem, aItem.MetaData, Handled);
 
-    // 3. Lógica de Inserción
+    // 3. Lï¿½gica de Inserciï¿½n
     if Handled then
     begin
-      // CORRECCIÓN CRÍTICA:
-      // Si el usuario marcó 'Handled', asumimos que ÉL tomó posesión del nodo.
-      // NO lo liberamos aquí. Retornamos -1 indicando que este vector no lo indexó.
+      // CORRECCIï¿½N CRï¿½TICA:
+      // Si el usuario marcï¿½ 'Handled', asumimos que ï¿½L tomï¿½ posesiï¿½n del nodo.
+      // NO lo liberamos aquï¿½. Retornamos -1 indicando que este vector no lo indexï¿½.
       Exit(-1);
     end;
 
     // A. Persistencia en Driver (Opcional)
     // Agregamos al driver PERO seguimos agregando a memoria para que
-    // funcionen las búsquedas híbridas locales.
+    // funcionen las bï¿½squedas hï¿½bridas locales.
     if Assigned(FDriver) then
     begin
       FDriver.Add(aItem, FEntidad);
-      // No salimos aquí, continuamos para poblar la memoria caché/índice
+      // No salimos aquï¿½, continuamos para poblar la memoria cachï¿½/ï¿½ndice
     end;
 
     // B. Almacenamiento en Lista Principal (Memoria)
     Result := FItems.Add(aItem);
 
-    // C. Indexación Léxica (BM25)
+    // C. Indexaciï¿½n Lï¿½xica (BM25)
     if FSearchOptions.FUseBM25 then
       FBm25Index.AddNode(aItem);
 
-    // D. Indexación Vectorial (HNSW / Basic)
-    // CORRECCIÓN: Antes esto faltaba en la primera sobrecarga
+    // D. Indexaciï¿½n Vectorial (HNSW / Basic)
+    // CORRECCIï¿½N: Antes esto faltaba en la primera sobrecarga
     if Assigned(FRagIndex) then
       FRagIndex.Add(aItem);
 
-    // E. Actualizar metadatos del contenedor (Modelo/Dimensión)
+    // E. Actualizar metadatos del contenedor (Modelo/Dimensiï¿½n)
     // Solo si es el primer item o para mantener consistencia
     if FItems.Count = 1 then
     begin
@@ -346,7 +352,7 @@ var
   AddedIndex: NativeInt;
 begin
   if Trim(aText) = '' then
-    raise Exception.Create('El texto no puede estar vacío');
+    raise Exception.Create('El texto no puede estar vacï¿½o');
 
   // 1. Generar el Embedding
   if Assigned(FEmbeddings) then
@@ -358,7 +364,7 @@ begin
   Result := TAiEmbeddingNode.Create(Length(vData));
   try
     Result.Text := aText;
-    Result.Data := vData; // Esto calcula automáticamente la Magnitud si aplicaste la optimización anterior
+    Result.Data := vData; // Esto calcula automï¿½ticamente la Magnitud si aplicaste la optimizaciï¿½n anterior
 
     if Assigned(FEmbeddings) then
       Result.Model := FEmbeddings.Model
@@ -369,28 +375,28 @@ begin
     if Assigned(MetaData) then
       Result.MetaData.Assign(MetaData);
 
-    // 4. Registrar en el sistema llamando a la Lógica Maestra
+    // 4. Registrar en el sistema llamando a la Lï¿½gica Maestra
     AddedIndex := Self.AddItem(Result, Result.MetaData);
 
-    // 5. Gestión de Memoria post-intento
+    // 5. Gestiï¿½n de Memoria post-intento
     if AddedIndex = -1 then
     begin
       // CASO ESPECIAL:
-      // Creamos el nodo, pero AddItem devolvió -1 (Handled).
-      // Significa que TAiRAGVector NO tomó posesión del objeto en su lista FItems.
-      // Pero como acabamos de crear el objeto aquí (Result := ...Create),
-      // si lo devolvemos, el usuario debe saber que él es responsable de liberarlo.
+      // Creamos el nodo, pero AddItem devolviï¿½ -1 (Handled).
+      // Significa que TAiRAGVector NO tomï¿½ posesiï¿½n del objeto en su lista FItems.
+      // Pero como acabamos de crear el objeto aquï¿½ (Result := ...Create),
+      // si lo devolvemos, el usuario debe saber que ï¿½l es responsable de liberarlo.
 
-      // Opción A (Segura): Si fue Handled, asumimos que el evento se lo llevó.
+      // Opciï¿½n A (Segura): Si fue Handled, asumimos que el evento se lo llevï¿½.
       // Devolvemos el Result tal cual.
 
-      // Opción B (Estricta): Si no se agregó, liberamos para evitar leaks si el usuario ignora el result.
+      // Opciï¿½n B (Estricta): Si no se agregï¿½, liberamos para evitar leaks si el usuario ignora el result.
       // Dado que es un "Factory+Add", lo normal es devolver el objeto creado aunque no se haya indexado localmente.
       // Mantenemos Result.
     end;
 
   except
-    // Si algo falla durante la creación o generación de embeddings, liberar el nodo parcial
+    // Si algo falla durante la creaciï¿½n o generaciï¿½n de embeddings, liberar el nodo parcial
     Result.Free;
     raise;
   end;
@@ -419,7 +425,7 @@ begin
     // ---> INICIO LOGICA DE PROGRESO <---
     if Assigned(FOnImportProgress) then
     begin
-      // Reportamos el índice actual 'i' sobre el total
+      // Reportamos el ï¿½ndice actual 'i' sobre el total
       FOnImportProgress(Self, i, TotalCount, Cancel);
       if Cancel then
         Break;
@@ -453,7 +459,7 @@ function TAiRAGVector.AddItemsFromPlainText(aText: String; MetaData: TAiEmbeddin
 const
   TOLERANCE_PCT = 0.15; // 15% de tolerancia para buscar cortes limpios
 var
-  TotalLen, StartPos, EndPos, NextStartPos: Integer;
+  TotalLen, StartPos, NextStartPos: Integer;
   IdealEnd, MaxEnd, MinEnd: Integer;
   CutPos: Integer;
   OverlapChars: Integer;
@@ -462,19 +468,18 @@ var
   i: Integer;
   Cancel: Boolean; // <--- NUEVA VARIABLE
 
-  // Función local para encontrar el mejor punto de corte con prioridades
+  // Funciï¿½n local para encontrar el mejor punto de corte con prioridades
   function FindSmartCut(LimitStart, LimitEnd: Integer): Integer;
   var
     k: Integer;
-    LastPeriod, LastSpace, LastNewLine: Integer;
+    LastPeriod, LastSpace: Integer;
     C: Char;
   begin
     LastPeriod := -1;
     LastSpace := -1;
-    LastNewLine := -1;
 
-    // Recorremos hacia atrás desde el límite máximo permitido
-    // Buscamos el corte "más lejano" posible que sea semánticamente correcto
+    // Recorremos hacia atrï¿½s desde el lï¿½mite mï¿½ximo permitido
+    // Buscamos el corte "mï¿½s lejano" posible que sea semï¿½nticamente correcto
     for k := LimitEnd downto LimitStart do
     begin
       if k > TotalLen then
@@ -482,15 +487,15 @@ var
 
       C := aText[k];
 
-      // Prioridad 1: Salto de línea (Párrafo)
+      // Prioridad 1: Salto de lï¿½nea (Pï¿½rrafo)
       if (C = #10) or (C = #13) then
       begin
         Result := k;
         Exit; // Encontramos el mejor corte posible, salimos.
       end;
 
-      // Prioridad 2: Puntuación de fin de frase
-      if (C in ['.', '?', '!', ';']) and (LastPeriod = -1) then
+      // Prioridad 2: Puntuaciï¿½n de fin de frase
+      if CharInSet(C, ['.', '?', '!', ';']) and (LastPeriod = -1) then
         LastPeriod := k;
 
       // Prioridad 3: Espacio
@@ -498,7 +503,7 @@ var
         LastSpace := k;
     end;
 
-    // Decisión basada en prioridades si no hubo salto de línea
+    // Decisiï¿½n basada en prioridades si no hubo salto de lï¿½nea
     if LastPeriod <> -1 then
       Result := LastPeriod
     else if LastSpace <> -1 then
@@ -513,7 +518,7 @@ begin
 
   // --- 1. Validaciones ---
   if aLenChunk <= 10 then
-    raise Exception.Create('El tamaño del Chunk es demasiado pequeño.');
+    raise Exception.Create('El tamaï¿½o del Chunk es demasiado pequeï¿½o.');
 
   if (aOverlapPct < 0) or (aOverlapPct >= 100) then
     raise Exception.Create('El porcentaje de Overlap debe estar entre 0 y 99.');
@@ -535,7 +540,7 @@ begin
   StartPos := 1; // Delphi Strings son base-1
   i := 0;
 
-  // --- 2. Bucle de fragmentación ---
+  // --- 2. Bucle de fragmentaciï¿½n ---
   while StartPos <= TotalLen do
   begin
     // ---> INICIO LOGICA DE PROGRESO <---
@@ -547,7 +552,7 @@ begin
     end;
     // ---> FIN LOGICA DE PROGRESO <---
 
-    // Definimos la ventana de búsqueda ideal
+    // Definimos la ventana de bï¿½squeda ideal
     IdealEnd := StartPos + aLenChunk;
 
     // Si lo que queda es menor que el chunk, tomamos todo
@@ -557,7 +562,8 @@ begin
 
       if ChunkText <> '' then
       begin
-        Metadata.Properties['Posicion'] := I;
+        if Assigned(Metadata) then
+          Metadata.Properties['Posicion'] := I;
         Emb := AddItem(ChunkText, MetaData);
         if Assigned(Emb) then
         begin
@@ -569,7 +575,7 @@ begin
     end;
 
     // Definimos rango de tolerancia:
-    // Buscaremos desde un poco antes hasta un poco después del IdealEnd
+    // Buscaremos desde un poco antes hasta un poco despuï¿½s del IdealEnd
     MinEnd := IdealEnd - Round(aLenChunk * TOLERANCE_PCT);
     MaxEnd := IdealEnd + Round(aLenChunk * TOLERANCE_PCT);
 
@@ -593,8 +599,11 @@ begin
 
     if ChunkText <> '' then
     begin
-      Metadata.Properties['Posicion'] := I;
-      Metadata.Properties['FechaDoc'] := EncodeDate(Random(20)+2000,Random(11)+1,01);
+      if Assigned(Metadata) then
+      begin
+        Metadata.Properties['Posicion'] := I;
+        Metadata.Properties['FechaDoc'] := EncodeDate(Random(20)+2000,Random(11)+1,01);
+      end;
 
       Emb := AddItem(ChunkText, MetaData);
       if Assigned(Emb) then
@@ -605,7 +614,7 @@ begin
       Inc(i);
     end;
 
-    // --- 3. Cálculo del siguiente paso ---
+    // --- 3. Cï¿½lculo del siguiente paso ---
     // El nuevo inicio es: Donde cortamos MENOS el solapamiento
     NextStartPos := (CutPos + 1) - OverlapChars;
 
@@ -618,8 +627,8 @@ begin
     begin
       // Mientras el caracter ANTERIOR no sea un separador (espacio, punto, salto),
       // significa que estamos dentro de una palabra. Retrocedemos.
-      while (NextStartPos > StartPos + 1) and // No retroceder más allá del inicio anterior
-        (not(aText[NextStartPos - 1] in [' ', #13, #10, '.', ',', ';', ':', '!', '?'])) do
+      while (NextStartPos > StartPos + 1) and // No retroceder mï¿½s allï¿½ del inicio anterior
+        (not CharInSet(aText[NextStartPos - 1], [' ', #13, #10, '.', ',', ';', ':', '!', '?'])) do
       begin
         Dec(NextStartPos);
       end;
@@ -629,7 +638,7 @@ begin
     StartPos := NextStartPos;
   end; // Fin del While
 
-  // Opcional: Reportar 100% al finalizar si no se canceló
+  // Opcional: Reportar 100% al finalizar si no se cancelï¿½
   if Assigned(FOnImportProgress) and (not Cancel) then
     FOnImportProgress(Self, TotalLen, TotalLen, Cancel);
 end;
@@ -639,25 +648,25 @@ var
   ReorderedArr: array of TAiEmbeddingNode;
   i, LeftIdx, RightIdx: Integer;
 begin
-  // 1. Validaciones básicas
+  // 1. Validaciones bï¿½sicas
   // Si es nil o tiene muy pocos elementos, no vale la pena reordenar
   if (Vector = nil) or (Vector.Count <= 2) then
     Exit;
 
   // 2. Inicializar estructura temporal
-  // Usamos un array dinámico para acceso rápido por índice
+  // Usamos un array dinï¿½mico para acceso rï¿½pido por ï¿½ndice
   SetLength(ReorderedArr, Vector.Count);
 
   LeftIdx := 0; // Puntero al inicio
   RightIdx := Vector.Count - 1; // Puntero al final
 
-  // 3. Algoritmo de distribución (Two-Pointers)
+  // 3. Algoritmo de distribuciï¿½n (Two-Pointers)
   // Input esperado: [1.Mejor, 2.Bueno, 3.Regular, 4.Malo, 5.Peor]
   for i := 0 to Vector.Count - 1 do
   begin
     if (i mod 2 = 0) then
     begin
-      // Los índices PARES (0, 2, 4...) van al LADO IZQUIERDO.
+      // Los ï¿½ndices PARES (0, 2, 4...) van al LADO IZQUIERDO.
       // i=0 (Mejor) -> Pos 0
       // i=2 (Regular) -> Pos 1
       ReorderedArr[LeftIdx] := Vector.Items[i];
@@ -665,7 +674,7 @@ begin
     end
     else
     begin
-      // Los índices IMPARES (1, 3, 5...) van al LADO DERECHO.
+      // Los ï¿½ndices IMPARES (1, 3, 5...) van al LADO DERECHO.
       // i=1 (Bueno) -> Pos Final
       // i=3 (Malo) -> Pos Final - 1
       ReorderedArr[RightIdx] := Vector.Items[i];
@@ -673,7 +682,7 @@ begin
     end;
   end;
   // Resultado visual: [Mejor, Regular, Peor, Malo, Bueno]
-  // Atención del LLM: [ALTA,  Media,   Baja, Media, ALTA]
+  // Atenciï¿½n del LLM: [ALTA,  Media,   Baja, Media, ALTA]
 
   // 4. Volcar resultado al vector original
   // Limpiamos la lista de referencias interna.
@@ -684,16 +693,16 @@ begin
   for i := 0 to High(ReorderedArr) do
     Vector.Items.Add(ReorderedArr[i]);
 
-  // Limpieza automática del array dinámico al salir del scope
+  // Limpieza automï¿½tica del array dinï¿½mico al salir del scope
 end;
 
 procedure TAiRAGVector.BuildIndex;
 begin
-  // 1. Validación del índice Vectorial
+  // 1. Validaciï¿½n del ï¿½ndice Vectorial
   if not Assigned(FRagIndex) then
     raise Exception.Create('No existe un indice asignado');
 
-  // 2. Construir el índice Vectorial (HNSW o Basic)
+  // 2. Construir el ï¿½ndice Vectorial (HNSW o Basic)
   FRagIndex.BuildIndex(Self.FItems);
 
   BuildLexicalIndex;
@@ -739,8 +748,8 @@ begin
       FRagIndex := THNSWIndex.Create; // Fallback seguro
     end;
 
-    // Vinculamos el índice a los datos actuales
-    // IMPORTANTE: Pasar 'Self' explícitamente
+    // Vinculamos el ï¿½ndice a los datos actuales
+    // IMPORTANTE: Pasar 'Self' explï¿½citamente
     if Assigned(FRagIndex) then
       FRagIndex.BuildIndex(Self.FItems);
   end;
@@ -753,9 +762,9 @@ procedure TAiRAGVector.Clear;
 var
   i: Integer;
 begin
-  FLock.BeginWrite; // Protección multihilo
+  FLock.BeginWrite; // Protecciï¿½n multihilo
   try
-    // 1. Liberar memoria de los nodos si somos dueños
+    // 1. Liberar memoria de los nodos si somos dueï¿½os
     if FOwnsObjects then
     begin
       for i := 0 to FItems.Count - 1 do
@@ -765,17 +774,17 @@ begin
     // 2. Vaciar la lista principal
     FItems.Clear;
 
-    // 3. Limpiar el índice Léxico (BM25)
+    // 3. Limpiar el ï¿½ndice Lï¿½xico (BM25)
     if Assigned(FBm25Index) then
       FBm25Index.Clear;
 
-    // 4. Reiniciar el índice Vectorial (HNSW / Basic)
-    // Como HNSW y otros índices suelen acumular datos y no tienen un método Clear estándar
-    // en tu implementación actual, lo más seguro y limpio es destruirlo y recrearlo.
+    // 4. Reiniciar el ï¿½ndice Vectorial (HNSW / Basic)
+    // Como HNSW y otros ï¿½ndices suelen acumular datos y no tienen un mï¿½todo Clear estï¿½ndar
+    // en tu implementaciï¿½n actual, lo mï¿½s seguro y limpio es destruirlo y recrearlo.
     if Assigned(FRagIndex) then
     begin
       FreeAndNil(FRagIndex);
-      // CheckIndexes volverá a crear el índice vacío del tipo correcto (HNSW/Basic)
+      // CheckIndexes volverï¿½ a crear el ï¿½ndice vacï¿½o del tipo correcto (HNSW/Basic)
       CheckIndexes;
     end;
 
@@ -786,12 +795,13 @@ end;
 
 function TAiRAGVector.Connect(aHost, aPort, aLogin, aPassword: String): Boolean;
 begin
-  // esta función no va, está deprecade
+  // esta funciï¿½n no va, estï¿½ deprecade
   If not Assigned(FRagIndex) then
     Raise Exception.Create('No existe un indice asignado');
 
   // Result := FRagIndex.Connect(aHost, aPort, aLogin, aPassword);
   FActive := True;
+  Result := True;
 end;
 
 function TAiRAGVector.Count: Integer;
@@ -841,13 +851,13 @@ begin
   // 1. Marcar como inactivo inmediatamente
   FActive := False;
 
-  // 2. IMPORTANTE: No usar FLock.BeginWrite aquí.
-  // El objeto se está destruyendo, no debe haber otros hilos accediendo a él.
-  // Si los hay, es un error de diseño externo. Usar el lock aquí suele causar excepciones.
+  // 2. IMPORTANTE: No usar FLock.BeginWrite aquï¿½.
+  // El objeto se estï¿½ destruyendo, no debe haber otros hilos accediendo a ï¿½l.
+  // Si los hay, es un error de diseï¿½o externo. Usar el lock aquï¿½ suele causar excepciones.
 
-  // 3. Liberar índices PRIMERO
-  // Los índices contienen punteros a los Items. Debemos destruir los índices
-  // mientras los Items aún existen en memoria para evitar punteros huérfanos.
+  // 3. Liberar ï¿½ndices PRIMERO
+  // Los ï¿½ndices contienen punteros a los Items. Debemos destruir los ï¿½ndices
+  // mientras los Items aï¿½n existen en memoria para evitar punteros huï¿½rfanos.
   FreeAndNil(FBm25Index);
   FreeAndNil(FRagIndex);
 
@@ -862,7 +872,7 @@ begin
     FreeAndNil(FItems); // Liberar la lista
   end;
 
-  // 5. Liberar el objeto de sincronización al final
+  // 5. Liberar el objeto de sincronizaciï¿½n al final
   FreeAndNil(FLock);
 
   FSearchOptions.Free;
@@ -902,8 +912,8 @@ begin
 
   FInMemoryIndexType := TAIHNSWIndex; // Asegura que coincida con el 'default' de la propiedad
 
-  // 3. Crear el índice inicial
-  // No llamamos a CheckIndexes aquí para evitar doble chequeo, lo hacemos explícito
+  // 3. Crear el ï¿½ndice inicial
+  // No llamamos a CheckIndexes aquï¿½ para evitar doble chequeo, lo hacemos explï¿½cito
   FRagIndex := THNSWIndex.Create;
   FRagIndex.BuildIndex(Self.FItems);
 end;
@@ -911,9 +921,9 @@ end;
 
 procedure TAiRAGVector.InternalNormalizeVector(aList: TList<TAiSearchResult>);
 begin
-  // Los embeddings ya están en escala 0..1 (Coseno).
-  // No aplicamos Min-Max porque el 1.0 debe ser "perfección real", no "el mejor de la lista".
-  // Simplemente aseguramos que no haya valores fuera de rango por error numérico.
+  // Los embeddings ya estï¿½n en escala 0..1 (Coseno).
+  // No aplicamos Min-Max porque el 1.0 debe ser "perfecciï¿½n real", no "el mejor de la lista".
+  // Simplemente aseguramos que no haya valores fuera de rango por error numï¿½rico.
   for var i := 0 to aList.Count - 1 do
   begin
     var
@@ -934,18 +944,18 @@ begin
   if aList.Count = 0 then
     Exit;
 
-  // 1. Buscamos el máximo score BM25 de esta búsqueda
+  // 1. Buscamos el mï¿½ximo score BM25 de esta bï¿½squeda
   MaxS := 0;
   for i := 0 to aList.Count - 1 do
     if aList[i].Key > MaxS then
       MaxS := aList[i].Key;
 
-  // 2. Normalizamos respecto a un "Máximo Teórico" o un valor de confianza.
-  // Si MaxS es muy pequeño (ej: 0.5), no lo subimos a 1.0.
+  // 2. Normalizamos respecto a un "Mï¿½ximo Teï¿½rico" o un valor de confianza.
+  // Si MaxS es muy pequeï¿½o (ej: 0.5), no lo subimos a 1.0.
   // Solo dividimos por MaxS si MaxS es un score robusto.
 
-  // Una técnica estándar es dividir por el MaxS actual solo si es mayor a 1,
-  // o usar un valor de referencia para que el score 1.0 sea difícil de alcanzar.
+  // Una tï¿½cnica estï¿½ndar es dividir por el MaxS actual solo si es mayor a 1,
+  // o usar un valor de referencia para que el score 1.0 sea difï¿½cil de alcanzar.
   for i := 0 to aList.Count - 1 do
   begin
     var
@@ -969,7 +979,7 @@ begin
   // Lista resultado (el llamador debe liberarla)
   Result := TList<TAiSearchResult>.Create;
   try
-    // Búsqueda lineal / fuerza bruta
+    // Bï¿½squeda lineal / fuerza bruta
     for i := 0 to FItems.Count - 1 do
     begin
       Emb := FItems[i];
@@ -991,10 +1001,10 @@ begin
           Continue;
       end;
 
-      // 3. CÁLCULO DE SIMILITUD (thread-safe)
+      // 3. Cï¿½LCULO DE SIMILITUD (thread-safe)
       Score := TAiEmbeddingNode.CosineSimilarity(Emb, Target);
 
-      // 4. FILTRADO POR PRECISIÓN
+      // 4. FILTRADO POR PRECISIï¿½N
       if (aPrecision > 0) and (Score < aPrecision) then
         Continue;
 
@@ -1029,25 +1039,25 @@ begin
 
 end;
 
-function TAiRAGVector.ExecuteVGQL(const AVgqlQuery: string; out AResultVector: TAiRAGVector): string;
+function TAiRAGVector.ExecuteVQL(const AVqlQuery: string; out AResultVector: TAiRAGVector): string;
 var
   Parser: TVGQLParser;
   AST: TVGQLQuery;
   Compiler: TVGQLCompiler;
   Req: TVGQLRequest;
   TempOptions: TAiSearchOptions;
+  i: Integer;
+  MMRVector: TAiRAGVector;
 begin
   Result := '';
   AResultVector := nil;
-  AST := nil;
   Req := nil;
 
   // ---------------------------------------------------------------------------
   // 1. FRONT-END: PARSEO DE LA SINTAXIS (Texto -> AST)
   // ---------------------------------------------------------------------------
-  Parser := TVGQLParser.Create(AVgqlQuery);
+  Parser := TVGQLParser.Create(AVqlQuery);
   try
-    // Generamos el Árbol de Sintaxis Abstracta (AST)
     AST := Parser.Parse;
   finally
     Parser.Free;
@@ -1055,15 +1065,13 @@ begin
 
   try
     // -------------------------------------------------------------------------
-    // 2. MIDDLE-END: COMPILACIÓN (AST -> Request Object)
+    // 2. MIDDLE-END: COMPILACION (AST -> Request Object)
     // -------------------------------------------------------------------------
     Compiler := TVGQLCompiler.Create;
     try
-      // El compilador traduce el AST de clases al Request de ejecución con sus filtros
       Req := Compiler.Translate(AST);
     finally
       Compiler.Free;
-      // Una vez compilado, el AST ya no es necesario y se libera
       if Assigned(AST) then
         AST.Free;
     end;
@@ -1072,91 +1080,483 @@ begin
       Exit;
 
     // -------------------------------------------------------------------------
-    // 3. BACK-END: CONFIGURACIÓN DINÁMICA DEL MOTOR
+    // EXPLAIN: retorna el plan de ejecucion sin ejecutar la busqueda
+    // -------------------------------------------------------------------------
+    if Req.Explain then
+    begin
+      Result := BuildExplainOutput(Req);
+      Exit;
+    end;
+
+    // -------------------------------------------------------------------------
+    // 3. BACK-END: CONFIGURACION DINAMICA DEL MOTOR
     // -------------------------------------------------------------------------
     TempOptions := TAiSearchOptions.Create;
     try
-      // Mapeo de tipos calificado para evitar conflictos de enumerados (Error E2010)
-      // Determinamos si la búsqueda requiere Embeddings (Semántica) o BM25 (Léxica)
       TempOptions.UseEmbeddings := (Req.Mode = TSearchMode.smEmbeddings) or (Req.Mode = TSearchMode.smHybrid);
-
-      TempOptions.UseBM25 := (Req.Mode = TSearchMode.smBM25) or (Req.Mode = TSearchMode.smHybrid);
-
-      // Configuración de pesos para la fusión de resultados (Hybrid Search)
+      TempOptions.UseBM25       := (Req.Mode = TSearchMode.smBM25) or (Req.Mode = TSearchMode.smHybrid);
       TempOptions.EmbeddingWeight := Req.WeightSemantic;
-      TempOptions.BM25Weight := Req.WeightLexical;
-
-      // Selección del algoritmo de fusión (RRF vs Weighted)
-      TempOptions.UseRRF := (Req.Fusion = TFusionMode.fmRRF);
-
-      // Umbrales mínimos de relevancia (Thresholds)
+      TempOptions.BM25Weight      := Req.WeightLexical;
+      TempOptions.UseRRF          := (Req.Fusion = TFusionMode.fmRRF);
       TempOptions.MinAbsoluteScoreEmbedding := Req.MinSemantic;
-      TempOptions.MinAbsoluteScoreBM25 := Req.MinLexical;
-      TempOptions.UseReorderABC := Req.UseReorderABC;
-
+      TempOptions.MinAbsoluteScoreBM25      := Req.MinLexical;
+      // ABC solo si no se usa MMR (son estrategias alternativas de post-procesado)
+      TempOptions.UseReorderABC := Req.UseReorderABC and not Req.UseMMR;
       Self.SearchOptions.Assign(TempOptions);
 
-      // Sincronización del idioma para el motor léxico (BM25)
+      // Sincronizacion de idioma para BM25 -- ahora funcional via LANGUAGE clause
       if not Req.Language.IsEmpty then
       begin
-        if SameText(Req.Language, 'spanish') then
-          Self.LexicalLanguage := alSpanish
-        else if SameText(Req.Language, 'english') then
-          Self.LexicalLanguage := alEnglish
-        else if SameText(Req.Language, 'portuguese') then
-          Self.LexicalLanguage := alPortuguese;
+        if SameText(Req.Language, 'spanish')    then Self.LexicalLanguage := alSpanish
+        else if SameText(Req.Language, 'english')    then Self.LexicalLanguage := alEnglish
+        else if SameText(Req.Language, 'portuguese') then Self.LexicalLanguage := alPortuguese;
       end;
 
       // -----------------------------------------------------------------------
-      // 4. EJECUCIÓN DE LA BÚSQUEDA VECTORIAL PRINCIPAL
-      // Req.Filter contiene el TAiFilterCriteria compilado (el motor lo evalúa)
+      // 4. EJECUCION DE LA BUSQUEDA VECTORIAL PRINCIPAL
       // -----------------------------------------------------------------------
       AResultVector := Self.Search(Req.Query, Req.Limit, Req.MinGlobal, Req.Filter);
 
       // -----------------------------------------------------------------------
-      // 5. RERANK (SEGUNDA ETAPA: Refinamiento semántico profundo)
+      // 5. RERANK (segunda etapa: refinamiento semantico profundo)
       // -----------------------------------------------------------------------
       if Assigned(AResultVector) and (Req.RerankQuery <> '') and (AResultVector.Count > 0) then
       begin
-        // Vinculamos el motor de embeddings del padre al vector de resultados
         AResultVector.Embeddings := Self.Embeddings;
-
-        // Preparamos el sub-vector para una nueva indexación interna y reranking
         AResultVector.RegenerateAll;
         AResultVector.BuildIndex;
-
-        // Ejecutamos la reclasificación basada en la nueva query de rerank
         AResultVector.Rerank(Req.RerankQuery, Req.RerankRegenerate);
+
+        // Re-aplicar THRESHOLD GLOBAL tras el rerank: los nuevos scores
+        // (cosine similarity vs. la query de rerank) pueden ser menores al umbral.
+        if Req.MinGlobal > 0 then
+          for i := AResultVector.Count - 1 downto 0 do
+            if AResultVector.Items[i].Idx < Req.MinGlobal then
+              AResultVector.Items.Delete(i);
       end;
 
       // -----------------------------------------------------------------------
-      // 6. POST-PROCESADO: OPTIMIZACIÓN DE CONTEXTO
+      // 6a. OPTIMIZE MMR -- diversificacion de resultados
       // -----------------------------------------------------------------------
-      if Assigned(AResultVector) and Req.UseReorderABC then
+      if Req.UseMMR and Assigned(AResultVector) and (AResultVector.Count > 1) then
+      begin
+        MMRVector := ApplyMMR(AResultVector, Req.MmrLambda, AResultVector.Count);
+        AResultVector.Free;  // safe: non-owning list
+        AResultVector := MMRVector;
+      end
+      // -----------------------------------------------------------------------
+      // 6b. OPTIMIZE REORDER ABC -- optimizacion ventana de contexto LLM
+      // -----------------------------------------------------------------------
+      else if Assigned(AResultVector) and Req.UseReorderABC then
         ApplyContextReordering(AResultVector);
 
       // -----------------------------------------------------------------------
-      // 7. GENERACIÓN DEL OUTPUT FINAL PARA EL LLM
+      // 7. DISTINCT ON campo -- deduplicacion por campo de metadato
+      // -----------------------------------------------------------------------
+      if Assigned(AResultVector) and (Req.DistinctField <> '') then
+        ApplyDistinct(AResultVector, Req.DistinctField);
+
+      // -----------------------------------------------------------------------
+      // 8. ORDER BY -- ordenamiento personalizado
+      // -----------------------------------------------------------------------
+      if Assigned(AResultVector) and (Req.OrderByFields.Count > 0) then
+        ApplyOrderBy(AResultVector, Req.OrderByFields);
+
+      // -----------------------------------------------------------------------
+      // 9. OFFSET -- paginacion: saltar los primeros N resultados
+      // -----------------------------------------------------------------------
+      if Assigned(AResultVector) and (Req.Offset > 0) then
+        for i := 1 to Min(Req.Offset, AResultVector.Count) do
+          AResultVector.Items.Delete(0);
+
+      // -----------------------------------------------------------------------
+      // 10. GENERACION DEL OUTPUT FINAL PARA EL LLM
       // -----------------------------------------------------------------------
       if Assigned(AResultVector) then
-        Result := VectorToContextText(AResultVector, Req.IncludeMetadata, Req.IncludeScore);
+      begin
+        if Req.IncludeId or Req.IncludeRank or Req.IncludeModel then
+          Result := BuildExtendedContextText(AResultVector, Req)
+        else
+          Result := VectorToContextText(AResultVector, Req.IncludeMetadata, Req.IncludeScore);
+      end;
 
     finally
       TempOptions.Free;
     end;
   finally
-    // El Request posee la propiedad del Filter (Criteria), al liberarlo limpiamos todo
     if Assigned(Req) then
       Req.Free;
   end;
 end;
 
-function TAiRAGVector.ExecuteVGQL(const AVgqlQuery: string): string;
+function TAiRAGVector.ApplyMMR(ASource: TAiRAGVector; ALambda: Double; ALimit: Integer): TAiRAGVector;
+// Maximal Marginal Relevance: balances relevance vs. diversity in results.
+// Formula: argmax_{d not in S} [ lambda * Rel(d) - (1-lambda) * max_{d' in S} Sim(d,d') ]
+var
+  Selected, Remaining: TList<TAiEmbeddingNode>;
+  BestIdx: Integer;
+  BestScore, Score, MaxSim, InterSim: Double;
+  i, j: Integer;
+  Item, SelItem: TAiEmbeddingNode;
+begin
+  Result := TAiRAGVector.Create(nil, False);
+  if ASource.Count = 0 then Exit;
+
+  // Clamp lambda to [0, 1]
+  if ALambda < 0 then ALambda := 0;
+  if ALambda > 1 then ALambda := 1;
+
+  Selected  := TList<TAiEmbeddingNode>.Create;
+  Remaining := TList<TAiEmbeddingNode>.Create;
+  try
+    for i := 0 to ASource.Count - 1 do
+      Remaining.Add(ASource.Items[i]);
+
+    while (Selected.Count < ALimit) and (Remaining.Count > 0) do
+    begin
+      BestIdx   := 0;
+      BestScore := -MaxDouble;
+
+      for i := 0 to Remaining.Count - 1 do
+      begin
+        Item := Remaining[i];
+
+        // Diversity term: max cosine similarity to already-selected items
+        if Selected.Count = 0 then
+          MaxSim := 0
+        else
+        begin
+          MaxSim := 0;
+          for j := 0 to Selected.Count - 1 do
+          begin
+            SelItem  := Selected[j];
+            InterSim := TAiEmbeddingNode.CosineSimilarity(Item, SelItem);
+            if InterSim > MaxSim then
+              MaxSim := InterSim;
+          end;
+        end;
+
+        // MMR score: lambda * relevance - (1-lambda) * max_inter_similarity
+        Score := ALambda * Item.Idx - (1.0 - ALambda) * MaxSim;
+        if Score > BestScore then
+        begin
+          BestScore := Score;
+          BestIdx   := i;
+        end;
+      end;
+
+      Item := Remaining[BestIdx];
+      Item.Idx := BestScore;  // update score to reflect MMR value
+      Selected.Add(Item);
+      Remaining.Delete(BestIdx);
+    end;
+
+    for i := 0 to Selected.Count - 1 do
+      Result.Items.Add(Selected[i]);
+
+    Result.FModel := ASource.FModel;
+    Result.FDim   := ASource.FDim;
+  finally
+    Selected.Free;
+    Remaining.Free;
+  end;
+end;
+
+procedure TAiRAGVector.ApplyDistinct(AVector: TAiRAGVector; const AField: string);
+// Keeps only the first occurrence of each unique value of AField.
+// Items missing the field are all kept (treated as distinct).
+var
+  i: Integer;
+  Seen: TDictionary<string, Boolean>;
+  Item: TAiEmbeddingNode;
+  FieldValue: Variant;
+  StrVal: string;
+  MissingCount: Integer;
+begin
+  Seen := TDictionary<string, Boolean>.Create;
+  MissingCount := 0;
+  try
+    i := 0;
+    while i < AVector.Count do
+    begin
+      Item := AVector.Items[i];
+
+      if SameText(AField, 'id') or SameText(AField, 'tag') then
+        StrVal := Item.Tag
+      else if Assigned(Item.MetaData) and Item.MetaData.Has(AField) then
+      begin
+        FieldValue := Item.MetaData.Get(AField, Null);
+        StrVal := VarToStr(FieldValue);
+      end
+      else
+      begin
+        // Items without the field each get a unique key so they are all kept
+        StrVal := '__missing_' + IntToStr(MissingCount);
+        Inc(MissingCount);
+      end;
+
+      if Seen.ContainsKey(StrVal) then
+        AVector.Items.Delete(i)  // duplicate: remove, do not advance i
+      else
+      begin
+        Seen.Add(StrVal, True);
+        Inc(i);
+      end;
+    end;
+  finally
+    Seen.Free;
+  end;
+end;
+
+procedure TAiRAGVector.ApplyOrderBy(AVector: TAiRAGVector; AFields: TList<TOrderByField>);
+// Sorts AVector.Items according to the list of ORDER BY fields.
+// Supports: 'score' (Idx), 'rank'/'orden' (Orden), 'model' (Model), 'id'/'tag' (Tag),
+// and any metadata property name.
+var
+  LocalFields: TList<TOrderByField>;
+  F: TOrderByField;
+begin
+  if (AVector = nil) or (AVector.Count <= 1) or (AFields.Count = 0) then
+    Exit;
+
+  // Copy fields into a local list so the anonymous method can safely capture it
+  LocalFields := TList<TOrderByField>.Create;
+  try
+    for F in AFields do
+      LocalFields.Add(F);
+
+    AVector.Items.Sort(TComparer<TAiEmbeddingNode>.Construct(
+      function(const Left, Right: TAiEmbeddingNode): Integer
+      var
+        k: Integer;
+        LF: TOrderByField;
+        LV, RV: Variant;
+        Cmp: Integer;
+      begin
+        Result := 0;
+        for k := 0 to LocalFields.Count - 1 do
+        begin
+          LF := LocalFields[k];
+
+          // Resolve field value for Left and Right
+          if SameText(LF.FieldName, 'score') then
+          begin
+            LV := Left.Idx;
+            RV := Right.Idx;
+          end
+          else if SameText(LF.FieldName, 'rank') or SameText(LF.FieldName, 'orden') then
+          begin
+            LV := Left.Orden;
+            RV := Right.Orden;
+          end
+          else if SameText(LF.FieldName, 'model') then
+          begin
+            LV := Left.Model;
+            RV := Right.Model;
+          end
+          else if SameText(LF.FieldName, 'id') or SameText(LF.FieldName, 'tag') then
+          begin
+            LV := Left.Tag;
+            RV := Right.Tag;
+          end
+          else
+          begin
+            LV := '';
+            RV := '';
+            if Assigned(Left.MetaData)  and Left.MetaData.Has(LF.FieldName)  then LV := Left.MetaData.Get(LF.FieldName, Null);
+            if Assigned(Right.MetaData) and Right.MetaData.Has(LF.FieldName) then RV := Right.MetaData.Get(LF.FieldName, Null);
+          end;
+
+          // Compare values
+          try
+            if VarIsNumeric(LV) and VarIsNumeric(RV) then
+            begin
+              if Double(LV) < Double(RV) then Cmp := -1
+              else if Double(LV) > Double(RV) then Cmp := 1
+              else Cmp := 0;
+            end
+            else
+              Cmp := AnsiCompareStr(VarToStr(LV), VarToStr(RV));
+          except
+            Cmp := 0;
+          end;
+
+          // Apply direction
+          if LF.Direction = odDesc then
+            Cmp := -Cmp;
+
+          if Cmp <> 0 then
+          begin
+            Result := Cmp;
+            Exit;
+          end;
+        end;
+      end));
+  finally
+    LocalFields.Free;
+  end;
+end;
+
+function TAiRAGVector.BuildExplainOutput(AReq: TVGQLRequest): string;
+// Returns a human-readable description of the compiled VQL request
+// without executing any search. Useful for debugging queries.
+var
+  SB: TStringBuilder;
+  ModeStr, FusionStr, OptimStr, OrderStr: string;
+  F: TOrderByField;
+  First: Boolean;
+begin
+  SB := TStringBuilder.Create;
+  try
+    case AReq.Mode of
+      smHybrid:
+        ModeStr := Format('HYBRID (Semantic: %.0f%% | Lexical: %.0f%%)',
+          [AReq.WeightSemantic * 100, AReq.WeightLexical * 100]);
+      smEmbeddings: ModeStr := 'EMBEDDINGS only';
+      smBM25:       ModeStr := 'BM25 (lexical) only';
+    else             ModeStr := 'HYBRID';
+    end;
+
+    if AReq.Fusion = fmRRF then FusionStr := 'RRF' else FusionStr := 'Weighted Score Fusion';
+
+    if AReq.UseMMR then
+      OptimStr := Format('MMR (lambda=%.2f)', [AReq.MmrLambda])
+    else if AReq.UseReorderABC then
+      OptimStr := 'REORDER ABC'
+    else
+      OptimStr := '(none)';
+
+    if AReq.OrderByFields.Count = 0 then
+      OrderStr := '(default: score DESC)'
+    else
+    begin
+      OrderStr := '';
+      First := True;
+      for F in AReq.OrderByFields do
+      begin
+        if not First then OrderStr := OrderStr + ', ';
+        if F.Direction = odDesc then
+          OrderStr := OrderStr + F.FieldName + ' DESC'
+        else
+          OrderStr := OrderStr + F.FieldName + ' ASC';
+        First := False;
+      end;
+    end;
+
+    SB.AppendLine('## VGQL Query Plan');
+    SB.AppendLine('');
+    SB.AppendLine('Entity    : ' + IfThen(AReq.Entity <> '', AReq.Entity, '(default)'));
+    SB.AppendLine('Query     : ' + AReq.Query);
+    SB.AppendLine('Mode      : ' + ModeStr);
+    SB.AppendLine('Fusion    : ' + FusionStr);
+    SB.AppendLine('Language  : ' + AReq.Language);
+    SB.AppendLine('Rerank    : ' + IfThen(AReq.RerankQuery <> '', AReq.RerankQuery, '(none)'));
+    if AReq.MinGlobal > 0 then
+      SB.AppendLine(Format('Threshold : GLOBAL %.4f', [AReq.MinGlobal]));
+    if AReq.MinSemantic > 0 then
+      SB.AppendLine(Format('Threshold : SEMANTIC %.4f', [AReq.MinSemantic]));
+    if AReq.MinLexical > 0 then
+      SB.AppendLine(Format('Threshold : LEXICAL %.4f', [AReq.MinLexical]));
+    SB.AppendLine(Format('Limit     : %d / Offset: %d', [AReq.Limit, AReq.Offset]));
+    SB.AppendLine('Distinct  : ' + IfThen(AReq.DistinctField <> '', AReq.DistinctField, '(none)'));
+    SB.AppendLine('Order By  : ' + OrderStr);
+    SB.AppendLine('Optimize  : ' + OptimStr);
+    Result := SB.ToString.TrimRight;
+  finally
+    SB.Free;
+  end;
+end;
+
+function TAiRAGVector.BuildExtendedContextText(DataVec: TAiRAGVector; AReq: TVGQLRequest): string;
+// Like VectorToContextText but also emits ID, RANK, MODEL fields when requested.
+var
+  i: Integer;
+  Emb: TAiEmbeddingNode;
+  SB: TStringBuilder;
+  Pair: TPair<string, Variant>;
+  HasContent: Boolean;
+begin
+  if (DataVec = nil) or (DataVec.Count = 0) then
+    Exit('');
+
+  SB := TStringBuilder.Create;
+  try
+    for i := 0 to DataVec.Count - 1 do
+    begin
+      Emb := DataVec.Items[i];
+      HasContent := False;
+
+      if AReq.IncludeMetadata or AReq.IncludeScore or
+         AReq.IncludeId or AReq.IncludeRank or AReq.IncludeModel then
+      begin
+        SB.Append('[');
+
+        if AReq.IncludeRank then
+        begin
+          SB.AppendFormat('Rank: %d', [i + 1]);
+          HasContent := True;
+        end;
+
+        if AReq.IncludeScore then
+        begin
+          if HasContent then SB.Append(' | ');
+          SB.AppendFormat('Score: %.4f', [Emb.Idx]);
+          HasContent := True;
+        end;
+
+        if AReq.IncludeId then
+        begin
+          if HasContent then SB.Append(' | ');
+          SB.Append('ID: ' + IfThen(Emb.Tag <> '', Emb.Tag, IntToStr(i)));
+          HasContent := True;
+        end;
+
+        if AReq.IncludeModel then
+        begin
+          if HasContent then SB.Append(' | ');
+          SB.Append('Model: ' + Emb.Model);
+          HasContent := True;
+        end;
+
+        if AReq.IncludeMetadata then
+        begin
+          // Show Tag as ID only if not already shown by IncludeId
+          if (Emb.Tag <> '') and not AReq.IncludeId then
+          begin
+            if HasContent then SB.Append(' | ');
+            SB.Append('ID: ' + Emb.Tag);
+            HasContent := True;
+          end;
+          if Assigned(Emb.MetaData) then
+          begin
+            for Pair in Emb.MetaData.InternalDictionary do
+            begin
+              if HasContent then SB.Append(' | ');
+              SB.Append(Pair.Key + ': ' + VarToStr(Pair.Value));
+              HasContent := True;
+            end;
+          end;
+        end;
+
+        SB.AppendLine(']');
+      end;
+
+      if Emb.Text <> '' then
+        SB.AppendLine(Emb.Text);
+
+      SB.AppendLine('');
+    end;
+    Result := SB.ToString.TrimRight;
+  finally
+    SB.Free;
+  end;
+end;
+
+function TAiRAGVector.ExecuteVQL(const AVqlQuery: string): string;
 var
   TempVec: TAiRAGVector;
 begin
-  // Versión simplificada que libera el vector automáticamente
-  Result := ExecuteVGQL(AVgqlQuery, TempVec);
+  Result := ExecuteVQL(AVqlQuery, TempVec);
   if Assigned(TempVec) then
     TempVec.Free;
 end;
@@ -1194,7 +1594,7 @@ begin
   end;
 end;
 
-// Este método devuelve un TAiRAGVector que no es dueño de los nodos (solo tiene las referencias).
+// Este mï¿½todo devuelve un TAiRAGVector que no es dueï¿½o de los nodos (solo tiene las referencias).
 function TAiRAGVector.FilterByMetaData(const aCriteria: TAiEmbeddingMetaData): TAiRAGVector;
 var
   i: Integer;
@@ -1202,7 +1602,7 @@ var
   Include: Boolean;
   Pair: TPair<string, Variant>;
 begin
-  // El resultado es un nuevo contenedor que no es dueño de los nodos (solo referencias)
+  // El resultado es un nuevo contenedor que no es dueï¿½o de los nodos (solo referencias)
   Result := TAiRAGVector.Create(nil, False);
 
   FLock.BeginRead;
@@ -1212,7 +1612,7 @@ begin
       Node := FItems[i];
       Include := True;
 
-      // A. Filtro por Evento (Prioridad máxima)
+      // A. Filtro por Evento (Prioridad mï¿½xima)
       if Assigned(FOnFilterItem) then
         FOnFilterItem(Self, Node, Include);
 
@@ -1221,7 +1621,7 @@ begin
       begin
         for Pair in aCriteria.InternalDictionary do
         begin
-          // Usamos la nueva lógica de evaluación de la clase MetaData
+          // Usamos la nueva lï¿½gica de evaluaciï¿½n de la clase MetaData
           // Comprobamos si el nodo actual cumple con el criterio (igualdad por defecto)
           if not Node.MetaData.Evaluate(Pair.Key, foEqual, Pair.Value) then
           begin
@@ -1269,7 +1669,7 @@ begin
   if not Assigned(Stream) then
     Exit;
 
-  // 1. Lectura segura con codificación UTF-8
+  // 1. Lectura segura con codificaciï¿½n UTF-8
   ST := TStringStream.Create('', TEncoding.UTF8);
   Try
     Stream.Position := 0;
@@ -1284,7 +1684,7 @@ begin
   if not(JVal is TJSONObject) then
   begin
     JVal.Free;
-    Raise Exception.Create('El formato del archivo no es un objeto JSON válido.');
+    Raise Exception.Create('El formato del archivo no es un objeto JSON vï¿½lido.');
   end;
 
   JObj := TJSONObject(JVal);
@@ -1323,7 +1723,7 @@ begin
         End;
       End;
 
-      // 7. Reconstruir el índice vectorial
+      // 7. Reconstruir el ï¿½ndice vectorial
       if Assigned(FRagIndex) then
         FRagIndex.BuildIndex(Self.FItems);
 
@@ -1338,44 +1738,11 @@ begin
   End;
 end;
 
-procedure TAiRAGVector.NormalizeResults(aList: TList<TAiSearchResult>);
-var
-  MaxS, MinS, Range: Double;
-  i: Integer;
-  Rg: TAiSearchResult;
-begin
-  if aList.Count = 0 then
-    Exit;
-
-  // 1. Encontrar Min y Max
-  MaxS := -1;
-  MinS := 999999;
-  for i := 0 to aList.Count - 1 do
-  begin
-    if aList[i].Score > MaxS then
-      MaxS := aList[i].Score;
-    if aList[i].Score < MinS then
-      MinS := aList[i].Score;
-  end;
-
-  // 2. Aplicar Min-Max
-  Range := MaxS - MinS;
-  for i := 0 to aList.Count - 1 do
-  begin
-    Rg := aList[i];
-
-    if Range > 0 then
-      Rg.Score := (aList[i].Score - MinS) / Range
-    else
-      Rg.Score := 1.0; // Caso un solo resultado o todos iguales
-  end;
-end;
-
 procedure TAiRAGVector.Notification(AComponent: TComponent; Operation: TOperation);
 begin
   inherited Notification(AComponent, Operation);
 
-  // Si se está eliminando un componente
+  // Si se estï¿½ eliminando un componente
   if Operation = opRemove then
   begin
     // Verificar si es el motor de Embeddings asignado
@@ -1396,13 +1763,13 @@ begin
   if FItems.Count = 0 then
     Exit;
 
-  // 1. Verificación de modelos
+  // 1. Verificaciï¿½n de modelos
   if (FModel <> '') and (FModel <> Target.Model) then
   begin
     if aAutoRegenerate then
       RegenerateAll(Target.Model) // Migramos toda la lista al modelo del Target
     else
-      raise Exception.Create('Rerank Error: El modelo del query no coincide y AutoRegenerate está desactivado.');
+      raise Exception.Create('Rerank Error: El modelo del query no coincide y AutoRegenerate estï¿½ desactivado.');
   end;
 
   // 2. Recalcular puntuaciones (Idx) con el mismo modelo ya garantizado
@@ -1412,7 +1779,7 @@ begin
     Emb.Idx := TAiEmbeddingNode.CosineSimilarity(Emb, Target);
   end;
 
-  // 3. Reordenar la lista (El código de sorting se mantiene igual)
+  // 3. Reordenar la lista (El cï¿½digo de sorting se mantiene igual)
   FItems.Sort(TComparer<TAiEmbeddingNode>.Construct(
     function(const Left, Right: TAiEmbeddingNode): Integer
     const
@@ -1429,7 +1796,7 @@ end;
 
 function TAiRAGVector.ReciprocalRankFusion(VectorResults: TList<TAiSearchResult>; LexicalResults: TList<TPair<Double, TAiEmbeddingNode>>; aLimit: Integer): TAiRAGVector;
 const
-  k = 60; // Constante de suavizado estándar
+  k = 60; // Constante de suavizado estï¿½ndar
 var
   Scores: TDictionary<TAiEmbeddingNode, Double>;
   i: Integer;
@@ -1443,7 +1810,7 @@ begin
   CombinedList := TList < TPair < Double, TAiEmbeddingNode >>.Create;
   try
     // 1. Procesar Ranking Vectorial
-    // Nota: Aunque VectorResults ya esté normalizado, RRF solo usa su posición (i)
+    // Nota: Aunque VectorResults ya estï¿½ normalizado, RRF solo usa su posiciï¿½n (i)
     if Assigned(VectorResults) then
     begin
       for i := 0 to VectorResults.Count - 1 do
@@ -1454,7 +1821,7 @@ begin
       end;
     end;
 
-    // 2. Procesar Ranking Léxico (BM25)
+    // 2. Procesar Ranking Lï¿½xico (BM25)
     if Assigned(LexicalResults) then
     begin
       for i := 0 to LexicalResults.Count - 1 do
@@ -1476,7 +1843,7 @@ begin
     if CombinedList.Count = 0 then
       Exit;
 
-    // --- PUNTO CRÍTICO: NORMALIZACIÓN DEL SCORE RRF ---
+    // --- PUNTO CRï¿½TICO: NORMALIZACIï¿½N DEL SCORE RRF ---
     // Encontramos el Min y Max de los scores RRF calculados
     MaxRRF := -1;
     MinRRF := 999999;
@@ -1497,7 +1864,7 @@ begin
         Result := CompareValue(R.Key, L.Key);
       end));
 
-    // 5. Volcar al resultado aplicando la normalización Min-Max final
+    // 5. Volcar al resultado aplicando la normalizaciï¿½n Min-Max final
     // Esto hace que el mejor ranking RRF tenga Idx = 1.0
     for i := 0 to Min(aLimit * 2, CombinedList.Count - 1) do
     begin
@@ -1526,7 +1893,7 @@ begin
   if FItems.Count = 0 then
     Exit;
 
-  // Determinar qué modelo usar
+  // Determinar quï¿½ modelo usar
   if aNewModel <> '' then
     NewModelName := aNewModel
   else if Assigned(FEmbeddings) then
@@ -1544,7 +1911,7 @@ begin
     // Generar el nuevo vector
     if Assigned(FEmbeddings) then
     begin
-      // Si el programador pasó un modelo específico, lo seteamos temporalmente
+      // Si el programador pasï¿½ un modelo especï¿½fico, lo seteamos temporalmente
       if aNewModel <> '' then
         FEmbeddings.Model := aNewModel;
       Emb.Data := FEmbeddings.CreateEmbedding(Emb.Text, 'user');
@@ -1563,7 +1930,7 @@ begin
   if FItems.Count > 0 then
     FDim := FItems[0].Dim;
 
-  // ¡CRÍTICO! El índice espacial anterior ya no sirve.
+  // ï¿½CRï¿½TICO! El ï¿½ndice espacial anterior ya no sirve.
   BuildIndex;
 end;
 
@@ -1577,7 +1944,7 @@ begin
   // Creamos el nodo temporal para el nuevo prompt
   Target := CreateEmbeddingNode(NewPrompt);
   try
-    // Pasamos el flag a la implementación principal
+    // Pasamos el flag a la implementaciï¿½n principal
     Rerank(Target, aAutoRegenerate);
   finally
     Target.Free;
@@ -1605,32 +1972,32 @@ Var
   JArr: TJSonArray;
   JItem, JObj: TJSONObject;
 begin
-  // 1. Validación de entrada
+  // 1. Validaciï¿½n de entrada
   If Not Assigned(Stream) then
     Raise Exception.Create('El Stream de destino no puede ser nil en SaveToStream.');
 
-  // 2. Crear objeto raíz
+  // 2. Crear objeto raï¿½z
   JObj := TJSONObject.Create;
   try
     // 3. Guardar propiedades del Vector
     JObj.AddPair('name', FNameVec);
     JObj.AddPair('description', FDescription);
     JObj.AddPair('model', FModel);
-    JObj.AddPair('dim', TJSONNumber.Create(FDim)); // Explicito para asegurar tipo numérico
+    JObj.AddPair('dim', TJSONNumber.Create(FDim)); // Explicito para asegurar tipo numï¿½rico
 
     // 4. Crear Array de Datos
     JArr := TJSonArray.Create;
-    // IMPORTANTE: Al añadir el par, JObj se convierte en el DUEÑO de JArr.
+    // IMPORTANTE: Al aï¿½adir el par, JObj se convierte en el DUEï¿½O de JArr.
     // No necesitamos (y no debemos) liberar JArr manualmente.
     JObj.AddPair('data', JArr);
 
-    // 5. Llenar items con protección de hilo
+    // 5. Llenar items con protecciï¿½n de hilo
     FLock.BeginRead;
     try
       For i := 0 to FItems.Count - 1 do
       Begin
         Emb := FItems[i];
-        // Delegamos la serialización al nodo (que ya incluye Metadata, Texto, Vector)
+        // Delegamos la serializaciï¿½n al nodo (que ya incluye Metadata, Texto, Vector)
         JItem := Emb.ToJSON;
         JArr.Add(JItem);
       End;
@@ -1650,7 +2017,7 @@ begin
     end;
 
   finally
-    // Al liberar JObj, se liberan automáticamente JArr y todos los JItems hijos.
+    // Al liberar JObj, se liberan automï¿½ticamente JArr y todos los JItems hijos.
     JObj.Free;
   end;
 end;
@@ -1658,7 +2025,6 @@ end;
 function TAiRAGVector.Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; aFilter: TAiFilterCriteria): TAiRAGVector;
 var
   Handled: Boolean;
-  FilteredSource: TAiRAGVector;
   VectorResults: TList<TAiSearchResult>;
   LexicalRes: TList<TPair<Double, TAiEmbeddingNode>>;
   SearchResult: TAiSearchResult;
@@ -1673,10 +2039,10 @@ begin
 
   if FSearchOptions.UseEmbeddings and (Target.MagnitudeValue <= 0) then
   begin
-    // Si no hay vector en la pregunta, la búsqueda semántica es imposible.
-    // Podríamos lanzar excepción o degradar automáticamente a BM25.
+    // Si no hay vector en la pregunta, la bï¿½squeda semï¿½ntica es imposible.
+    // Podrï¿½amos lanzar excepciï¿½n o degradar automï¿½ticamente a BM25.
     if not FSearchOptions.UseBM25 then
-      raise Exception.Create('Error: La consulta no generó un vector válido. Verifique su motor de embeddings.');
+      raise Exception.Create('Error: La consulta no generï¿½ un vector vï¿½lido. Verifique su motor de embeddings.');
   end;
 
   // ---------------------------------------------------------------------------
@@ -1699,7 +2065,7 @@ begin
   end;
 
   // ---------------------------------------------------------------------------
-  // FASE 3: BÚSQUEDA EN MEMORIA
+  // FASE 3: Bï¿½SQUEDA EN MEMORIA
   // ---------------------------------------------------------------------------
   FLock.BeginRead;
   try
@@ -1707,27 +2073,27 @@ begin
     LexicalRes := nil;
     try
       // =======================================================================
-      // SUBFASE A: BÚSQUEDA VECTORIAL
+      // SUBFASE A: Bï¿½SQUEDA VECTORIAL
       // =======================================================================
       if FSearchOptions.UseEmbeddings then
       begin
         if not Assigned(FRagIndex) then
-          raise Exception.Create('No existe un índice asignado');
+          raise Exception.Create('No existe un ï¿½ndice asignado');
 
         if (FModel <> '') and (Target.Model <> '') and (FModel <> Target.Model) then
           raise Exception.CreateFmt('Error de Modelo: El vector usa "%s" pero el Query usa "%s"', [FModel, Target.Model]);
 
-        // Si hay filtro o evento, usamos búsqueda lineal segura
+        // Si hay filtro o evento, usamos bï¿½squeda lineal segura
         if ((Assigned(aFilter) and (aFilter.Count > 0)) or Assigned(FOnFilterItem)) then
         begin
           VectorResults := InternalSearchSafe(Target, Max(50, aLimit * 5), FSearchOptions.MinAbsoluteScoreEmbedding, aFilter);
         end
         else
         begin
-          // Vía rápida: índice vectorial (HNSW / Basic)
+          // Vï¿½a rï¿½pida: ï¿½ndice vectorial (HNSW / Basic)
           VectorResults := TList<TAiSearchResult>.Create;
           //TempResultVec
-          RawIndexResults  := FRagIndex.Search(Target, Max(50, aLimit * 5), FSearchOptions.MinAbsoluteScoreEmbedding);  //<<---- Error aquí
+          RawIndexResults  := FRagIndex.Search(Target, Max(50, aLimit * 5), FSearchOptions.MinAbsoluteScoreEmbedding);  //<<---- Error aquï¿½
           try
             if Assigned(RawIndexResults ) then
             begin
@@ -1742,12 +2108,12 @@ begin
           end;
         end;
 
-        // Normalización vectorial [0..1]
+        // Normalizaciï¿½n vectorial [0..1]
         // InternalNormalizeVector(VectorResults);   //Eliminamos esto para dar los resultados reales y no los normalizados.
       end;
 
       // =======================================================================
-      // SUBFASE B: BÚSQUEDA LÉXICA (BM25)
+      // SUBFASE B: Bï¿½SQUEDA Lï¿½XICA (BM25)
       // =======================================================================
       if FSearchOptions.UseBM25 and (Target.Text.Trim <> '') then
       begin
@@ -1758,12 +2124,12 @@ begin
           if LexicalRes[i].Key < FSearchOptions.MinAbsoluteScoreBM25 then
             LexicalRes.Delete(i);
 
-        // Normalización léxica [0..1]
+        // Normalizaciï¿½n lï¿½xica [0..1]
         InternalNormalizeLexical(LexicalRes);
       end;
 
       // =======================================================================
-      // SUBFASE C: FUSIÓN
+      // SUBFASE C: FUSIï¿½N
       // =======================================================================
       if Assigned(VectorResults) and not Assigned(LexicalRes) then
       begin
@@ -1777,7 +2143,7 @@ begin
       end
       else if not Assigned(VectorResults) and Assigned(LexicalRes) then
       begin
-        // SOLO LÉXICO
+        // SOLO Lï¿½XICO
         Result := TAiRAGVector.Create(nil, False);
         for Pair in LexicalRes do
         begin
@@ -1787,7 +2153,7 @@ begin
       end
       else if Assigned(VectorResults) and Assigned(LexicalRes) then
       begin
-        // HÍBRIDO
+        // Hï¿½BRIDO
         if FSearchOptions.UseRRF then
           Result := ReciprocalRankFusion(VectorResults, LexicalRes, aLimit)
         else
@@ -1801,7 +2167,7 @@ begin
       // =======================================================================
       if Assigned(Result) then
       begin
-        // Precisión final sobre score unificado
+        // Precisiï¿½n final sobre score unificado
         if aPrecision > 0 then
         begin
           for i := Result.Count - 1 downto 0 do
@@ -1835,16 +2201,16 @@ function TAiRAGVector.Search(Prompt: String; aLimit: Integer; aPrecision: Double
 var
   Target: TAiEmbeddingNode;
 begin
-  // 1. Verificación de Motor de Embeddings
-  // Sin esto, no podemos convertir el texto 'Prompt' en números.
+  // 1. Verificaciï¿½n de Motor de Embeddings
+  // Sin esto, no podemos convertir el texto 'Prompt' en nï¿½meros.
   if Not Assigned(FEmbeddings) and Not Assigned(FOnGetEmbedding) then
     Raise Exception.Create('Error: No hay motor de embeddings configurado. Asigne la propiedad Embeddings o el evento OnGetEmbedding.');
 
-  // 2. Vectorización
+  // 2. Vectorizaciï¿½n
   // CreateEmbeddingNode se encarga de llamar al API de embeddings o al evento
   Target := CreateEmbeddingNode(Prompt);
   try
-    // 3. Delegación
+    // 3. Delegaciï¿½n
     // Llamamos a la sobrecarga principal que busca por Nodo + Filtro Criteria
     Result := Search(Target, aLimit, aPrecision, aFilter);
   finally
@@ -1856,7 +2222,7 @@ function TAiRAGVector.SearchText(aPrompt: TAiEmbeddingNode; aLimit: Integer; aPr
 Var
   TmpVec: TAiRAGVector;
 Begin
-  // Ahora la llamada es directa y explícita, pasando el criterio recibido (o nil)
+  // Ahora la llamada es directa y explï¿½cita, pasando el criterio recibido (o nil)
   TmpVec := Search(aPrompt, aLimit, aPresicion, aFilter);
 
   Try
@@ -1896,7 +2262,7 @@ begin
     if Assigned(FEmbeddings) then
       FEmbeddings.FreeNotification(Self);
 
-    // Tu lógica existente para runtime/design-time
+    // Tu lï¿½gica existente para runtime/design-time
     if (csDesigning in ComponentState) then
       Exit;
 
@@ -1916,18 +2282,18 @@ begin
 
   FInMemoryIndexType := Value;
 
-  // Protección: No reconstruir índices si estamos cargando el componente (lectura de DFM)
-  // o si estamos en proceso de destrucción.
+  // Protecciï¿½n: No reconstruir ï¿½ndices si estamos cargando el componente (lectura de DFM)
+  // o si estamos en proceso de destrucciï¿½n.
   if (csLoading in ComponentState) or (csDestroying in ComponentState) then
     Exit;
 
-  // Reconstrucción del índice
+  // Reconstrucciï¿½n del ï¿½ndice
   FLock.BeginWrite;
   try
     if Assigned(FRagIndex) then
       FreeAndNil(FRagIndex);
 
-    CheckIndexes; // Esto creará el nuevo índice según FInMemoryIndexType
+    CheckIndexes; // Esto crearï¿½ el nuevo ï¿½ndice segï¿½n FInMemoryIndexType
   finally
     FLock.EndWrite;
   end;
@@ -1987,14 +2353,14 @@ begin
       begin
         SB.Append('[');
 
-        // A. Mostrar Score si se solicitó
+        // A. Mostrar Score si se solicitï¿½
         if IncludeScore then
         begin
           SB.AppendFormat('Score: %.4f', [Emb.Idx]);
           HasContentBefore := True;
         end;
 
-        // B. Mostrar Metadatos si se solicitó
+        // B. Mostrar Metadatos si se solicitï¿½
         if IncludeMetadata then
         begin
           // Separador si ya escribimos el score
@@ -2046,14 +2412,14 @@ var
   CombinedList: TList<TPair<Double, TAiEmbeddingNode>>;
   W_Sem, W_Lex, TotalWeight: Double;
 begin
-  // El resultado es un nuevo contenedor que no es dueño de los objetos
+  // El resultado es un nuevo contenedor que no es dueï¿½o de los objetos
   Result := TAiRAGVector.Create(nil, False);
 
   Scores := TDictionary<TAiEmbeddingNode, Double>.Create;
   CombinedList := TList < TPair < Double, TAiEmbeddingNode >>.Create;
   try
     // -------------------------------------------------------------------------
-    // 1. NORMALIZACIÓN INTERNA DE PESOS
+    // 1. NORMALIZACIï¿½N INTERNA DE PESOS
     // Aseguramos que la suma de pesos sea exactamente 1.0 para no diluir el score
     // -------------------------------------------------------------------------
     TotalWeight := FSearchOptions.EmbeddingWeight + FSearchOptions.BM25Weight;
@@ -2071,10 +2437,10 @@ begin
     end;
 
     // -------------------------------------------------------------------------
-    // 2. PROCESO DE FUSIÓN PONDERADA
+    // 2. PROCESO DE FUSIï¿½N PONDERADA
     // -------------------------------------------------------------------------
 
-    // A. Sumar aportación del canal Vectorial (Semántico)
+    // A. Sumar aportaciï¿½n del canal Vectorial (Semï¿½ntico)
     if Assigned(VectorResults) then
     begin
       for i := 0 to VectorResults.Count - 1 do
@@ -2084,13 +2450,13 @@ begin
       end;
     end;
 
-    // B. Sumar aportación del canal Léxico (BM25)
+    // B. Sumar aportaciï¿½n del canal Lï¿½xico (BM25)
     if Assigned(LexicalResults) then
     begin
       for i := 0 to LexicalResults.Count - 1 do
       begin
         Node := LexicalResults[i].Value;
-        // El score léxico ya viene normalizado 0..1 desde InternalNormalizeLexical
+        // El score lï¿½xico ya viene normalizado 0..1 desde InternalNormalizeLexical
         var
         LexScore := LexicalResults[i].Key * W_Lex;
 
@@ -2102,7 +2468,7 @@ begin
     end;
 
     // -------------------------------------------------------------------------
-    // 3. ORDENAMIENTO Y SELECCIÓN DEL TOP-K
+    // 3. ORDENAMIENTO Y SELECCIï¿½N DEL TOP-K
     // -------------------------------------------------------------------------
 
     // Pasamos del diccionario a una lista para poder ordenar
@@ -2116,7 +2482,7 @@ begin
         Result := CompareValue(R.Key, L.Key);
       end));
 
-    // Llenar el vector de resultados respetando el límite
+    // Llenar el vector de resultados respetando el lï¿½mite
     // El score final combinado se guarda en Idx
     for i := 0 to Min(aLimit - 1, CombinedList.Count - 1) do
     begin

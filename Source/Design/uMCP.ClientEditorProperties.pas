@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -38,7 +38,7 @@ interface
 uses
   System.SysUtils, DesignIntf, DesignEditors, System.UITypes,
   uMakerAi.Tools.Functions, // Para TMCPClientItem
-  uMCPClientEditor; // Para TFMCPClientEditor, asumiendo que está en esta unidad
+  uMCPClientEditor; // Para TFMCPClientEditor, asumiendo que estï¿½ en esta unidad
 
 type
   TMCPClientItemEditor = class(TClassProperty) // Usamos TClassProperty porque editamos un objeto
@@ -73,7 +73,7 @@ var
   EditorForm: TFMCPClientEditor;
   Props, VarEnv: TStringList;
 begin
-  // GetComponent(0) devuelve la instancia de TMCPClientItem que se está editando.
+  // GetComponent(0) devuelve la instancia de TMCPClientItem que se estï¿½ editando.
   ClientItem := GetComponent(0) as TMCPClientItem;
 
   // Creamos el formulario editor
@@ -86,7 +86,7 @@ begin
     Props := TStringList.Create;
     VarEnv := TStringList.Create;
     try
-      // Puedes añadir también los TStrings de Params y DisabledFunctions si quieres
+      // Puedes aï¿½adir tambiï¿½n los TStrings de Params y DisabledFunctions si quieres
       Props.AddStrings(ClientItem.Params);
       VarEnv.AddStrings(ClientItem.EnvVars);
 
@@ -122,7 +122,7 @@ end;
 
 function TMCPClientItemEditor.GetAttributes: TPropertyAttributes;
 begin
-  // paDialog: Muestra el botón [...]
+  // paDialog: Muestra el botï¿½n [...]
   // paReadOnly: Hace que el valor no se pueda editar directamente en la rejilla.
   Result := [paDialog, paReadOnly];
 end;

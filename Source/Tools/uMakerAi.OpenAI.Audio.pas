@@ -1,4 +1,4 @@
-// IT License
+﻿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -58,7 +58,7 @@ type
   TAiTTSVoice = (tvAlloy, tvAsh, tvBallad, tvCoral, tvEcho, tvFable, tvOnyx, tvNova, tvSage, tvShimmer, tvVerse);
   TAiTTSResponseFormat = (trfMp3, trfOpus, trfAac, trfFlac, trfWav, trfPcm);
 
-  TAiTranscriptionModel = (tmWhisper1, tmGpt4o, tmGpt4oMini, tmGpt4oDiarize);
+  TAiTranscriptionModel = (tmWhisper1, tmGpt4oTranscribe, tmGpt4oMiniTranscribe, tmGpt4oDiarize);
   TAiTranscriptionResponseFormat = (trfJson, trfText, trfSrt, trfVerboseJson, trfVtt, trfDiarizedJson);
   TStreamOperation = (soNone, soSpeech, soTranscription);
 
@@ -69,6 +69,7 @@ type
     FJsonObject: TJSONObject;
     FDuration: Double;
     FLanguage: string;
+    FLogprobs: TJSONArray;
   public
     constructor Create(const AResponse: string; AFormat: TAiTranscriptionResponseFormat);
     destructor Destroy; override;
@@ -76,6 +77,9 @@ type
     property Duration: Double read FDuration;
     property Language: string read FLanguage;
     property RawJson: TJSONObject read FJsonObject;
+    { Token-level confidence scores. Populated only when TranscriptionLogprobs=True
+      and model is gpt-4o-transcribe or gpt-4o-mini-transcribe. }
+    property Logprobs: TJSONArray read FLogprobs;
   end;
 
   // --- Events for Streaming ---
@@ -101,6 +105,7 @@ type
     FTranscriptionLanguage: string;
     FTranscriptionTemperature: Double;
     FTranscriptionTimestampGranularities: TAiTimestampGranularities;
+    FTranscriptionLogprobs: Boolean;
     // Streaming Events
     FOnAudioChunkReceived: TOnAudioChunkReceived;
     FOnSpeechCompleted: TOnSpeechCompleted;
@@ -159,6 +164,10 @@ type
     property TranscriptionLanguage: string read FTranscriptionLanguage write FTranscriptionLanguage;
     property TranscriptionTemperature: Double read FTranscriptionTemperature write FTranscriptionTemperature;
     property TranscriptionTimestampGranularities: TAiTimestampGranularities read FTranscriptionTimestampGranularities write FTranscriptionTimestampGranularities;
+    { Requests token-level confidence scores (logprobs) in the response.
+      Only valid for tmGpt4oTranscribe and tmGpt4oMiniTranscribe.
+      Access the result via TTranscriptionResult.Logprobs. }
+    property TranscriptionLogprobs: Boolean read FTranscriptionLogprobs write FTranscriptionLogprobs default False;
 
     // --- Streaming Events ---
     property OnAudioChunkReceived: TOnAudioChunkReceived read FOnAudioChunkReceived write FOnAudioChunkReceived;
@@ -240,9 +249,13 @@ begin
   if AFormat in [trfJson, trfVerboseJson, trfDiarizedJson] then
   begin
     FJsonObject := TJSONObject.ParseJSONValue(AResponse) as TJSONObject;
-    FJsonObject.TryGetValue<string>('text', FText);
-    FJsonObject.TryGetValue<Double>('duration', FDuration);
-    FJsonObject.TryGetValue<string>('language', FLanguage);
+    if Assigned(FJsonObject) then
+    begin
+      FJsonObject.TryGetValue<string>('text', FText);
+      FJsonObject.TryGetValue<Double>('duration', FDuration);
+      FJsonObject.TryGetValue<string>('language', FLanguage);
+      FJsonObject.TryGetValue<TJSONArray>('logprobs', FLogprobs);
+    end;
   end
   else
   begin
@@ -334,58 +347,56 @@ end;
 
 procedure TAiOpenAiAudio.BuildTranscriptionBody(const ABody: TMultipartFormData; const AAudioFile: TAiMediaFile; const APrompt: string = '');
 var
-  ModelStr: string;
+  ModelStr : string;
   FormatStr: string;
+  IsWhisper1: Boolean;
+  IsGpt4oModel: Boolean;
 begin
-  // --- CORRECCI?N: Reemplazar TEnum con una sentencia 'case' ---
   case FTranscriptionModel of
-    tmWhisper1:
-      ModelStr := 'whisper-1';
-    tmGpt4o:
-      ModelStr := 'gpt-4o-transcribe';
-    tmGpt4oMini:
-      ModelStr := 'gpt-4o-mini-transcribe';
-    tmGpt4oDiarize:
-      ModelStr := 'gpt-4o-transcribe-diarize';
+    tmWhisper1:             ModelStr := 'whisper-1';
+    tmGpt4oTranscribe:      ModelStr := 'gpt-4o-transcribe';
+    tmGpt4oMiniTranscribe:  ModelStr := 'gpt-4o-mini-transcribe';
+    tmGpt4oDiarize:         ModelStr := 'gpt-4o-transcribe-diarize';
   else
-    ModelStr := 'whisper-1'; // Default seguro
+    ModelStr := 'whisper-1';
   end;
-  // --- FIN DE LA CORRECCI?N ---
+
+  IsWhisper1   := FTranscriptionModel = tmWhisper1;
+  IsGpt4oModel := FTranscriptionModel in [tmGpt4oTranscribe, tmGpt4oMiniTranscribe, tmGpt4oDiarize];
 
   ABody.AddField('model', ModelStr);
   if APrompt <> '' then
     ABody.AddField('prompt', APrompt);
   if FTranscriptionLanguage <> '' then
     ABody.AddField('language', FTranscriptionLanguage);
-  // Usamos Format en lugar de ToString para mejor control sobre el separador decimal
   if FTranscriptionTemperature <> 0.0 then
     ABody.AddField('temperature', Format('%f', [FTranscriptionTemperature]));
 
-  // --- CORRECCI?N: Reemplazar TEnum con una sentencia 'case' ---
+  // gpt-4o models only support json/text — silently downgrade unsupported formats
   case FTranscriptionResponseFormat of
-    trfJson:
-      FormatStr := 'json';
-    trfText:
-      FormatStr := 'text';
-    trfSrt:
-      FormatStr := 'srt';
-    trfVerboseJson:
-      FormatStr := 'verbose_json';
-    trfVtt:
-      FormatStr := 'vtt';
-    trfDiarizedJson:
-      FormatStr := 'diarized_json';
+    trfJson:        FormatStr := 'json';
+    trfText:        FormatStr := 'text';
+    trfSrt:         FormatStr := IfThen(IsWhisper1, 'srt',          'json');
+    trfVerboseJson: FormatStr := IfThen(IsWhisper1, 'verbose_json', 'json');
+    trfVtt:         FormatStr := IfThen(IsWhisper1, 'vtt',          'json');
+    trfDiarizedJson: FormatStr := 'json';  // the diarize variant handles this via the model name
   else
-    FormatStr := 'json'; // Default seguro
+    FormatStr := 'json';
   end;
-  // --- FIN DE LA CORRECCI?N ---
-
   ABody.AddField('response_format', FormatStr);
 
-  if tsgWord in FTranscriptionTimestampGranularities then
-    ABody.AddField('timestamp_granularities[]', 'word');
-  if tsgSegment in FTranscriptionTimestampGranularities then
-    ABody.AddField('timestamp_granularities[]', 'segment');
+  // timestamp_granularities: whisper-1 only, requires verbose_json
+  if IsWhisper1 then
+  begin
+    if tsgWord in FTranscriptionTimestampGranularities then
+      ABody.AddField('timestamp_granularities[]', 'word');
+    if tsgSegment in FTranscriptionTimestampGranularities then
+      ABody.AddField('timestamp_granularities[]', 'segment');
+  end;
+
+  // logprobs: gpt-4o models only — usar include[]=logprobs (no logprobs=true)
+  if IsGpt4oModel and FTranscriptionLogprobs then
+    ABody.AddField('include[]', 'logprobs');
 end;
 
 procedure TAiOpenAiAudio.HandleStreamEvent(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);

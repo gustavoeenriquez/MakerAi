@@ -1,4 +1,4 @@
-unit uMakerAi.Chat.Tools;
+﻿unit uMakerAi.Chat.Tools;
 
 interface
 
@@ -80,6 +80,7 @@ type
     procedure ReportState(State: TAiChatState; const Description: string = '');
     function IsAsync: Boolean;
   public
+    destructor Destroy; override;
     procedure SetContext(AContext: IAiToolContext); virtual;
   end;
 
@@ -135,6 +136,16 @@ implementation
 
 { TAiCustomTool }
 
+destructor TAiCustomTool.Destroy;
+begin
+  // FContext es una referencia d?bil (TAiChat es TComponent, sin ref-counting).
+  // Si el chat que lo asign? ya fue liberado, FContext apunta a memoria liberada.
+  // Delphi's CleanupInstance llamar?a _Release a trav?s de esa vtable corrupta → AV.
+  // Soluc?n: zerear el campo directamente, sin pasar por la gesti?n de interfaz.
+  PPointer(@FContext)^ := nil;
+  inherited;
+end;
+
 procedure TAiCustomTool.SetContext(AContext: IAiToolContext);
 begin
   FContext := AContext;
@@ -148,41 +159,61 @@ end;
 procedure TAiCustomTool.ReportData(Msg: TAiChatMessage; const Role, Text: string; AResponse: TJSONObject);
 begin
   if Assigned(FContext) then
-    TThread.Queue(nil,
-      procedure
-      begin
-        FContext.DoData(Msg, Role, Text, AResponse);
-      end);
+  begin
+    if IsAsync then
+      TThread.Queue(nil,
+        procedure
+        begin
+          FContext.DoData(Msg, Role, Text, AResponse);
+        end)
+    else
+      FContext.DoData(Msg, Role, Text, AResponse);
+  end;
 end;
 
 procedure TAiCustomTool.ReportDataEnd(Msg: TAiChatMessage; const Role, Text: string; AResponse: TJSONObject);
 begin
   if Assigned(FContext) then
-    TThread.Queue(nil,
-      procedure
-      begin
-        FContext.DoDataEnd(Msg, Role, Text, AResponse);
-      end);
+  begin
+    if IsAsync then
+      TThread.Queue(nil,
+        procedure
+        begin
+          FContext.DoDataEnd(Msg, Role, Text, AResponse);
+        end)
+    else
+      FContext.DoDataEnd(Msg, Role, Text, AResponse);
+  end;
 end;
 
 procedure TAiCustomTool.ReportError(const ErrorMsg: string; E: Exception);
 begin
   if Assigned(FContext) then
-    TThread.Queue(nil,
-      procedure
-      begin
-        FContext.DoError(ErrorMsg, nil);
-      end);
+  begin
+    if IsAsync then
+      TThread.Queue(nil,
+        procedure
+        begin
+          FContext.DoError(ErrorMsg, nil);
+        end)
+    else
+      FContext.DoError(ErrorMsg, nil);
+  end;
 end;
 
 procedure TAiCustomTool.ReportState(State: TAiChatState; const Description: string);
 begin
   if Assigned(FContext) then
-    TThread.Queue(nil,
-      procedure
-      begin
-        FContext.DoStateChange(State, Description);
-      end);
+  begin
+    if IsAsync then
+      TThread.Queue(nil,
+        procedure
+        begin
+          FContext.DoStateChange(State, Description);
+        end)
+    else
+      FContext.DoStateChange(State, Description);
+  end;
 end;
 
 { TAiSpeechToolBase }

@@ -1,4 +1,4 @@
-// IT License
+﻿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -187,6 +187,7 @@ var
 begin
   HTTP := TNetHTTPClient.Create(nil);
   LRequest := TJSONObject.Create;
+  LBody := nil;
   try
     // 1. Construir Petici?n Inicial
     LInstances := TJSONArray.Create;

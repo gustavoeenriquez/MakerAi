@@ -1,4 +1,4 @@
-// IT License
+﻿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -46,8 +46,7 @@ uses
 
   uMakerAi.ParamsRegistry,
   uMakerAi.Chat,
-  uMakerAi.Core,
-  uMakerAi.Embeddings;
+  uMakerAi.Core;
 
 type
   TAiLMStudioChat = class(TAiChat)
@@ -64,15 +63,6 @@ type
   end;
 
 
-  TAiLMStudioEmbeddings = Class(TAiEmbeddings)
-  Public
-    constructor Create(aOwner: TComponent); override;
-    class function GetDriverName: string; override;
-    class function CreateInstance(aOwner: TComponent): TAiEmbeddings; override;
-    class procedure RegisterDefaultParams(Params: TStrings); override;
-  End;
-
-
 procedure Register;
 
 implementation
@@ -82,7 +72,7 @@ const
 
 procedure Register;
 begin
-  RegisterComponents('MakerAI', [TAiLMStudioChat, TAiLMStudioEmbeddings]);
+  RegisterComponents('MakerAI', [TAiLMStudioChat]);
 end;
 
 { TAiLMStudioChat }
@@ -97,7 +87,7 @@ begin
   Params.Clear;
   Params.Add('ApiKey=1234'); // LMStudio normalmente no requiere API key
   Params.Add('Model=lmstudio-local');
-  Params.Add('MaxTokens=4096');
+  Params.Add('Max_Tokens=4096');
   Params.Add('URL='+GlLMStudioUrl);
 end;
 
@@ -120,40 +110,8 @@ begin
 end;
 
 
-{ TAiLMStudioEmbeddings }
-
-constructor TAiLMStudioEmbeddings.Create(aOwner: TComponent);
-begin
-  inherited;
-  ApiKey := '1234';
-  Url := GlLMStudioUrl;
-  FDimensions := 1024;
-  FModel := 'snowflake-arctic-embed-m-v1.5';
-end;
-
-{ TAiLMStudioEmbeddings - Factory class methods }
-
-class function TAiLMStudioEmbeddings.GetDriverName: string;
-begin
-  Result := 'LMStudio';
-end;
-
-class function TAiLMStudioEmbeddings.CreateInstance(aOwner: TComponent): TAiEmbeddings;
-begin
-  Result := TAiLMStudioEmbeddings.Create(aOwner);
-end;
-
-class procedure TAiLMStudioEmbeddings.RegisterDefaultParams(Params: TStrings);
-begin
-  Params.Values['ApiKey'] := '1234';
-  Params.Values['Url'] := GlLMStudioUrl;
-  Params.Values['Model'] := 'snowflake-arctic-embed-m-v1.5';
-  Params.Values['Dimensions'] := '1024';
-end;
-
 initialization
   TAiChatFactory.Instance.RegisterDriver(TAiLMStudioChat);
-  TAiEmbeddingFactory.Instance.RegisterDriver(TAiLMStudioEmbeddings);
 
 end.
 

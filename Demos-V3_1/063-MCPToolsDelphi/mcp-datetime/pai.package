@@ -1,0 +1,21 @@
+[package]
+name = mcp-datetime
+version = 1.0.1
+description = Date and time operations MCP server. Supports now, add, diff, format with multiple output formats.
+author = MakerAI
+license = MIT
+tags = mcp,datetime,date,time,delphi
+homepage = https://makerai.cimamaker.com
+min_pai_version = 1.0.0
+
+[mcp]
+entrypoint = mcp-datetime.exe
+protocol = stdio
+
+[tools]
+names = datetime_now,datetime_add,datetime_diff,datetime_format
+
+[platform]
+windows = true
+linux = false
+macos = false

@@ -16,9 +16,9 @@ Each inherits from `TAiChat` (defined in Core):
 
 | File | Class | Provider |
 |------|-------|----------|
-| `uMakerAi.Chat.OpenAi.pas` | `TAiOpenChat` | OpenAI (GPT-4.1, o3, o4-mini, Sora) |
-| `uMakerAi.Chat.Claude.pas` | `TAiClaudeChat` | Anthropic Claude (claude-opus/sonnet/haiku-4-x) |
-| `uMakerAi.Chat.Gemini.pas` | `TAiGeminiChat` | Google Gemini (2.5-flash/pro, 3-pro, Veo) |
+| `uMakerAi.Chat.OpenAi.pas` | `TAiOpenChat` | OpenAI (GPT-5.5, GPT-5.4, GPT-5.4-mini — familia GPT-5.x) |
+| `uMakerAi.Chat.Claude.pas` | `TAiClaudeChat` | Anthropic Claude (claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5) |
+| `uMakerAi.Chat.Gemini.pas` | `TAiGeminiChat` | Google Gemini (gemini-3.1-pro, gemini-3-flash, gemini-3.1-flash-lite — familia 3.x) |
 | `uMakerAi.Chat.Ollama.pas` | `TAiOllamaChat` | Ollama (local models) |
 | `uMakerAi.Chat.LMStudio.pas` | `TAiLMStudioChat` | LM Studio (local OpenAI-compatible) |
 | `uMakerAi.Chat.Groq.pas` | `TAiGroqChat` | Groq inference (llama, qwen, deepseek, voxtral) |
@@ -30,7 +30,7 @@ Each inherits from `TAiChat` (defined in Core):
 | `uMakerAi.Chat.GenericLLM.pas` | `TAiGenericChat` | Any OpenAI-compatible API |
 
 ### Configuration
-- `uMakerAi.Chat.Initializations.pas` - Driver registration and model capabilities. Uses `TAiChatFactory` to configure `ModelCaps`, `SessionCaps`, `Tool_Active`, `ThinkingLevel` per model. **Última actualización: Feb 2026.**
+- `uMakerAi.Chat.Initializations.pas` - Driver registration and model capabilities. Uses `TAiChatFactory` to configure `ModelCaps`, `SessionCaps`, `Tool_Active`, `ThinkingLevel` per model. **Última actualización: May 2026.**
 
 ### Legacy (Deprecated)
 - `uMakerAi.Chat.OpenAi_Deprecated.pas`
@@ -49,7 +49,7 @@ Dos propiedades de tipo `TAiCapabilities` (set de `TAiCapability`) reemplazan lo
 | `ModelCaps` | Capacidades nativas del modelo vía completions | `NativeInputFiles` + `ChatMediaSupports` |
 | `SessionCaps` | Capacidades deseadas en la sesión | `NativeOutputFiles` + `EnabledFeatures` |
 
-**Gap = SessionCaps − ModelCaps** → determina qué bridge/tool activa `RunNew` automáticamente.
+**Gap = SessionCaps − ModelCaps** → determina qué bridge/tool activa el orquestador interno automáticamente.
 
 ### TAiCapability enum
 ```delphi
@@ -99,7 +99,7 @@ RegisterUserParam('Driver', Model, 'Tool_Active', 'False');
 
 ### Driver Implementation
 All drivers implement these core methods:
-- `Run()` - Execute chat completion (sync or async based on `Asynchronous` property). Calls `EnsureNewSystemConfig` then `RunNew`.
+- `Run()` - Execute chat completion (sync or async). Calls `EnsureNewSystemConfig`, aplica el sanitizador de prompts, luego delega al orquestador privado `RunNew()`. Cadena completa: `AddMessageAndRun → Run → RunNew`.
 - `GetMessages()` - Serialize message history to provider-specific JSON format
 - `ParseChat()` - Parse provider response into `TAiChatMessage`
 - `GetModels()` - Retrieve available models from API
@@ -148,7 +148,7 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 ## Dependencies
 
 - `uMakerAi.Core.pas` - Base types (`TAiMediaFile`, `TAiFileCategory`, `TAiChatState`, `TAiCapability`)
-- `uMakerAi.Chat.pas` - Abstract `TAiChat` base class (`ModelCaps`, `SessionCaps`, `RunNew`, `RunLegacy`)
+- `uMakerAi.Chat.pas` - Abstract `TAiChat` base class (`ModelCaps`, `SessionCaps`). API pública: `AddMessageAndRun`, `Run`. `RunNew` es privado (orquestador interno de las 3 fases).
 - `uMakerAi.Chat.Messages.pas` - `TAiChatMessage`, `TAiChatMessages`
 - `uMakerAi.Tools.Functions.pas` - `TAiFunctions`, `TAiToolsFunction`
 - `uMakerAi.ParamsRegistry.pas` - `TAiChatFactory` for model configuration
@@ -177,22 +177,51 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - `x-anthropic-version` header + beta features via dynamic headers
 - Thinking/reasoning via `EnableThinking` + `ThinkingBudget`; `ThinkingLevel` mapea a presupuesto automático
 - Citations (RAG nativo): soporte parcial implementado
-- Modelos actuales: `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5`
+
+**Modelos activos (mayo 2026):**
+- `claude-opus-4-7` — nuevo flagship (lanzado 16 abr 2026), 1M contexto, 128K output, Adaptive Thinking, visión + tools + computer use. `ModelCaps=[cap_Image]`
+- `claude-sonnet-4-6` — mejor relación precio/calidad, 1M contexto, 64K output, Extended Thinking. `ModelCaps=[cap_Image]`
+- `claude-haiku-4-5-20251001` — velocidad/costo, 200K contexto, 64K output. `ModelCaps=[cap_Image]`
+
+**Legacy (sin fecha de retiro anunciada):**
+- `claude-opus-4-6` — generación anterior, sigue disponible
+
+**Deprecados — retiro 15 jun 2026:**
+- `claude-sonnet-4-20250514`, `claude-opus-4-20250514` — reemplazar por `claude-sonnet-4-6` / `claude-opus-4-7`
 
 ### OpenAI
-- GPT-4.1 (32K output, vision), o3/o4-mini (reasoning + vision), GPT-4o (audio multimodal)
-- Generación de imagen: `gpt-image-1` (calidad HD), `dall-e-3/2` → `SessionCaps=[cap_GenImage]`
+**Familia GPT-5.x (mayo 2026 — producción actual):**
+- `gpt-5.4` — Producción estándar, visión + tools, 1M contexto. `ModelCaps=[cap_Image]`
+- `gpt-5.4-mini` — Rápido y económico, visión + tools. `ModelCaps=[cap_Image]`
+- `gpt-5.5` — Flagship, visión + reasoning. `ModelCaps=[cap_Image, cap_Reasoning]`, `ThinkingLevel=tlMedium`
+- `gpt-5.5-pro` — Reasoning intensivo. `ModelCaps=[cap_Image, cap_Reasoning]`, `ThinkingLevel=tlHigh`
+
+**Capacidades multimedia (sin cambios en nombres de modelos):**
+- Generación de imagen: `gpt-image-1` (y `gpt-image-1.5` / `gpt-image-2`) → `SessionCaps=[cap_GenImage]`
 - TTS: `gpt-4o-mini-tts` → `SessionCaps=[cap_GenAudio]`
+- Transcripción: `gpt-4o-transcribe`, `gpt-4o-mini-transcribe`, `whisper-1` → `ModelCaps=[cap_Audio]`
 - Video: Sora → `SessionCaps=[cap_GenVideo]`
 - Web search: `gpt-4o-search-preview` → `ModelCaps=[cap_WebSearch]`, `Tool_Active=False`
-- Modelos de reasoning usan `ThinkingLevel` para controlar esfuerzo
+
+**Deprecated (feb 2026):** GPT-4.1, GPT-4o (chat), o3, o4-mini — mantenidos en el código por backward compatibility pero no recomendados para proyectos nuevos.
 
 ### Gemini (Google)
-- Gemini 2.5-flash/pro: vision + audio + video + PDF + web search + code interpreter + reasoning
-- Gemini 3-pro-preview / 3.1-pro-preview: capacidades completas + `ThinkingLevel=tlHigh`
-- Generación de imagen nativa vía completions: `gemini-2.5-flash-image-preview` → `ModelCaps=[cap_Image, cap_GenImage]`
-- TTS: `gemini-2.5-flash-tts` / `gemini-2.5-pro-tts` → `SessionCaps=[cap_GenAudio]`
-- Video: Veo 2.0/3.0/3.1 → `SessionCaps=[cap_GenVideo]`
+
+**Familia 3.x — modelos activos (mayo 2026):**
+- `gemini-3.1-pro-preview` (GA) — flagship, 2M contexto, visión + audio + video + reasoning (5 niveles thinking) + computer use + tools. `ModelCaps=[cap_Image, cap_Audio, cap_Video, cap_Reasoning]`, `ThinkingLevel=tlHigh`
+- `gemini-3-flash-preview` — balance velocidad/calidad, 1M contexto, reasoning + tools. `ModelCaps=[cap_Image, cap_Audio, cap_Video, cap_Reasoning]`, `ThinkingLevel=tlMedium`
+- `gemini-3.1-flash-lite` (Stable) — económico, 1M contexto, 4 niveles thinking + tools. `ModelCaps=[cap_Image, cap_Audio, cap_Video, cap_Reasoning]`, `ThinkingLevel=tlLow`
+
+**Modelos especializados:**
+- `gemini-3.1-flash-image-preview` — generación de imagen nativa vía completions. `ModelCaps=[cap_Image, cap_GenImage]`
+- `gemini-3.1-flash-tts-preview` — TTS dedicado. `SessionCaps=[cap_GenAudio]`
+- `veo-3.1-generate-preview` — generación de video. `SessionCaps=[cap_GenVideo]`
+
+**Deprecados — cierre 17 jun 2026:**
+- `gemini-2.5-flash`, `gemini-2.5-pro` — reemplazar por modelos de la familia 3.x
+
+**Otros:**
+- Imagen 4.0 (imagen-4.0): deprecado, cierre 24 jun 2026
 - Grounding nativo: el driver gestiona `groundingSupports` automáticamente
 
 ### Groq (inferencia rápida)
@@ -240,7 +269,8 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - Modelos con tools: llama3.3, qwen2.5, qwen3, qwen2.5vl
 - Modelos con reasoning: qwen3 (`ThinkingLevel=tlMedium`), deepseek-r1 (via `<think>` tags)
 - Modelos con visión: llama3.2-vision, qwen2.5vl, gemma3 (todos los tamaños: 1b/4b/12b/27b)
-- Gemma 3: visión + tools en todos los tamaños
+- Gemma 3: visión en todos los tamaños; **sin function calling** vía Ollama (`Tool_Active=False`)
+- Gemma 4 (e2b/e4b): visión + audio nativo + reasoning + **function calling** (`Tool_Active=True`)
 
 ### LM Studio
 - Default global conservador: texto puro, sin tools, `Max_Tokens=4096`
@@ -254,6 +284,42 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - El usuario activa caps según las capacidades reales de su endpoint
 
 ---
+
+## Cadena de llamada pública
+
+```
+AddMessageAndRun(prompt, role, files)  ← punto de entrada recomendado (public)
+  └── Run(AskMsg, ResMsg)              ← sanitizador de prompts (public, virtual)
+        └── RunNew(AskMsg, ResMsg)     ← orquestador interno: 3 fases + ChatMode (PRIVATE)
+```
+
+- **`AddMessageAndRun`** — crea el mensaje, lo agrega al historial y llama a `Run`.
+- **`Run`** — aplica el sanitizador de prompts; si pasa, delega a `RunNew`.
+- **`RunNew`** — hace el trabajo real: gap analysis, Fase 1 (bridges entrada), Fase 2 (web), Fase 3 (despacho por `ChatMode`). Es `private` — nunca llamar directamente.
+
+## Eventos — tipo `of object`
+
+Todos los eventos de `TAiChat` / `TAiChatConnection` son del tipo `of object`:
+
+```delphi
+TAiChatOnDataEvent = procedure(const Sender: TObject; aMsg: TAiChatMessage;
+  aResponse: TJSonObject; aRole, aText: String) of object;
+```
+
+**No aceptan métodos anónimos.** Asignar siempre un método de clase:
+
+```delphi
+// Correcto — método del formulario o clase
+Conn.OnReceiveDataEnd := Self.HandleDataEnd;
+
+// NO compila — of object no acepta lambdas
+Conn.OnReceiveDataEnd := procedure(...) begin ... end;
+```
+
+Para código sin clase (consola), usar el valor de retorno síncrono de `AddMessageAndRun`:
+```delphi
+Resp := Conn.AddMessageAndRun(prompt, 'user', []);
+```
 
 ## Navigation
 

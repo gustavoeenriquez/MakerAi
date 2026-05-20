@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -168,7 +168,7 @@ var
   Properties, VarEnv: TStringList;
 begin
   MemoLog.Lines.Clear;
-  MemoLog.Lines.Add('--- Iniciando Test de Conexión ---');
+  MemoLog.Lines.Add('--- Iniciando Test de Conexiï¿½n ---');
 
   // 1. Factory: Crear la instancia correcta
   case EditProtocol.ItemIndex of
@@ -188,27 +188,27 @@ begin
       MCPClient.OnLog := MCPLogEvent;
       MCPClient.OnStatusUpdate := MCPStatusEvent;
 
-      // 3. Obtener Configuración de la UI
+      // 3. Obtener Configuraciï¿½n de la UI
       GetProperties(Properties, VarEnv);
 
-      // Validación rápida para SSE
+      // Validaciï¿½n rï¿½pida para SSE
       if (MCPClient is TMCPClientSSE) and (Pos('http', Properties.Values['URL']) = 0) then
       begin
-        ShowMessage('Error: Para SSE el parámetro "URL" es obligatorio (ej: http://localhost:3000/sse)');
+        ShowMessage('Error: Para SSE el parï¿½metro "URL" es obligatorio (ej: http://localhost:3000/sse)');
         Exit;
       end;
 
-      // 4. Inyectar Parámetros
+      // 4. Inyectar Parï¿½metros
       MCPClient.Params.Assign(Properties);
       MCPClient.EnvVars.Assign(VarEnv);
 
       MemoLog.Lines.Add(Format('Protocolo: %s', [GetEnumName(TypeInfo(TToolTransportType), Ord(MCPClient.TransportType))]));
 
       // 5. Inicializar (Conecta, hace Handshake y verifica capacidades)
-      // Nota: Si usaste el fix de "CheckSynchronize" en WaitForInitialization, esto no bloqueará la UI.
+      // Nota: Si usaste el fix de "CheckSynchronize" en WaitForInitialization, esto no bloquearï¿½ la UI.
       if MCPClient.Initialize then
       begin
-        MemoLog.Lines.Add('>> Inicialización Exitosa. Solicitando herramientas...');
+        MemoLog.Lines.Add('>> Inicializaciï¿½n Exitosa. Solicitando herramientas...');
 
         // 6. Probar una llamada real (ListTools)
         jTools := MCPClient.ListTools;
@@ -219,13 +219,13 @@ begin
             MemoLog.Lines.Add(jTools.Format(2)); // Formatear bonito
 
             PageControl1.ActivePage := TabLog;
-            ShowMessage('[OK] ¡Conexión Exitosa!' + sLineBreak +
+            ShowMessage('[OK] ï¿½Conexiï¿½n Exitosa!' + sLineBreak +
                         'Se detectaron ' + IntToStr(jTools.GetValue<TJSONArray>('tools').Count) + ' herramientas.');
           end
           else
           begin
             PageControl1.ActivePage := TabLog;
-            ShowMessage('[!] Conectado, pero ListTools devolvió vacío o nulo.');
+            ShowMessage('[!] Conectado, pero ListTools devolviï¿½ vacï¿½o o nulo.');
           end;
         finally
           jTools.Free;
@@ -234,7 +234,7 @@ begin
       else
       begin
         PageControl1.ActivePage := TabLog;
-        ShowMessage('[ERR] Error al inicializar el cliente.' + sLineBreak + 'Revisa el Log para más detalles.');
+        ShowMessage('[ERR] Error al inicializar el cliente.' + sLineBreak + 'Revisa el Log para mï¿½s detalles.');
       end;
 
     except
@@ -242,7 +242,7 @@ begin
       begin
         PageControl1.ActivePage := TabLog;
         MemoLog.Lines.Add('EXCEPTION: ' + E.Message);
-        ShowMessage('Excepción Crítica: ' + E.Message);
+        ShowMessage('Excepciï¿½n Crï¿½tica: ' + E.Message);
       end;
     end;
   finally

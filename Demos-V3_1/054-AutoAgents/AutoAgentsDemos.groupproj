@@ -1,0 +1,144 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{D1EE22D1-6612-4D25-8050-9ED0BCFBE91A}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="01-HelloLLM\D01_HelloLLM.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="02-SingleTool\D02_SingleTool.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="03-MultiTools\D03_MultiTools.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="04-SequentialPipeline\D04_SequentialPipeline.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="05-ParallelResearch\D05_ParallelResearch.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="06-ConditionalRouter\D06_ConditionalRouter.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="07-ResearchAgent\D07_ResearchAgent.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="08-ValidateAndRetry\D08_ValidateAndRetry.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="09-MultiAgentDebate\D09_MultiAgentDebate.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="10-HumanInTheLoop\D10_HumanInTheLoop.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="D01_HelloLLM">
+        <MSBuild Projects="01-HelloLLM\D01_HelloLLM.dproj"/>
+    </Target>
+    <Target Name="D01_HelloLLM:Clean">
+        <MSBuild Projects="01-HelloLLM\D01_HelloLLM.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="D01_HelloLLM:Make">
+        <MSBuild Projects="01-HelloLLM\D01_HelloLLM.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="D02_SingleTool">
+        <MSBuild Projects="02-SingleTool\D02_SingleTool.dproj"/>
+    </Target>
+    <Target Name="D02_SingleTool:Clean">
+        <MSBuild Projects="02-SingleTool\D02_SingleTool.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="D02_SingleTool:Make">
+        <MSBuild Projects="02-SingleTool\D02_SingleTool.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="D03_MultiTools">
+        <MSBuild Projects="03-MultiTools\D03_MultiTools.dproj"/>
+    </Target>
+    <Target Name="D03_MultiTools:Clean">
+        <MSBuild Projects="03-MultiTools\D03_MultiTools.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="D03_MultiTools:Make">
+        <MSBuild Projects="03-MultiTools\D03_MultiTools.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="D04_SequentialPipeline">
+        <MSBuild Projects="04-SequentialPipeline\D04_SequentialPipeline.dproj"/>
+    </Target>
+    <Target Name="D04_SequentialPipeline:Clean">
+        <MSBuild Projects="04-SequentialPipeline\D04_SequentialPipeline.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="D04_SequentialPipeline:Make">
+        <MSBuild Projects="04-SequentialPipeline\D04_SequentialPipeline.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="D05_ParallelResearch">
+        <MSBuild Projects="05-ParallelResearch\D05_ParallelResearch.dproj"/>
+    </Target>
+    <Target Name="D05_ParallelResearch:Clean">
+        <MSBuild Projects="05-ParallelResearch\D05_ParallelResearch.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="D05_ParallelResearch:Make">
+        <MSBuild Projects="05-ParallelResearch\D05_ParallelResearch.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="D06_ConditionalRouter">
+        <MSBuild Projects="06-ConditionalRouter\D06_ConditionalRouter.dproj"/>
+    </Target>
+    <Target Name="D06_ConditionalRouter:Clean">
+        <MSBuild Projects="06-ConditionalRouter\D06_ConditionalRouter.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="D06_ConditionalRouter:Make">
+        <MSBuild Projects="06-ConditionalRouter\D06_ConditionalRouter.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="D07_ResearchAgent">
+        <MSBuild Projects="07-ResearchAgent\D07_ResearchAgent.dproj"/>
+    </Target>
+    <Target Name="D07_ResearchAgent:Clean">
+        <MSBuild Projects="07-ResearchAgent\D07_ResearchAgent.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="D07_ResearchAgent:Make">
+        <MSBuild Projects="07-ResearchAgent\D07_ResearchAgent.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="D08_ValidateAndRetry">
+        <MSBuild Projects="08-ValidateAndRetry\D08_ValidateAndRetry.dproj"/>
+    </Target>
+    <Target Name="D08_ValidateAndRetry:Clean">
+        <MSBuild Projects="08-ValidateAndRetry\D08_ValidateAndRetry.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="D08_ValidateAndRetry:Make">
+        <MSBuild Projects="08-ValidateAndRetry\D08_ValidateAndRetry.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="D09_MultiAgentDebate">
+        <MSBuild Projects="09-MultiAgentDebate\D09_MultiAgentDebate.dproj"/>
+    </Target>
+    <Target Name="D09_MultiAgentDebate:Clean">
+        <MSBuild Projects="09-MultiAgentDebate\D09_MultiAgentDebate.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="D09_MultiAgentDebate:Make">
+        <MSBuild Projects="09-MultiAgentDebate\D09_MultiAgentDebate.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="D10_HumanInTheLoop">
+        <MSBuild Projects="10-HumanInTheLoop\D10_HumanInTheLoop.dproj"/>
+    </Target>
+    <Target Name="D10_HumanInTheLoop:Clean">
+        <MSBuild Projects="10-HumanInTheLoop\D10_HumanInTheLoop.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="D10_HumanInTheLoop:Make">
+        <MSBuild Projects="10-HumanInTheLoop\D10_HumanInTheLoop.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="D01_HelloLLM;D02_SingleTool;D03_MultiTools;D04_SequentialPipeline;D05_ParallelResearch;D06_ConditionalRouter;D07_ResearchAgent;D08_ValidateAndRetry;D09_MultiAgentDebate;D10_HumanInTheLoop"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="D01_HelloLLM:Clean;D02_SingleTool:Clean;D03_MultiTools:Clean;D04_SequentialPipeline:Clean;D05_ParallelResearch:Clean;D06_ConditionalRouter:Clean;D07_ResearchAgent:Clean;D08_ValidateAndRetry:Clean;D09_MultiAgentDebate:Clean;D10_HumanInTheLoop:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="D01_HelloLLM:Make;D02_SingleTool:Make;D03_MultiTools:Make;D04_SequentialPipeline:Make;D05_ParallelResearch:Make;D06_ConditionalRouter:Make;D07_ResearchAgent:Make;D08_ValidateAndRetry:Make;D09_MultiAgentDebate:Make;D10_HumanInTheLoop:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

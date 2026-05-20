@@ -1,6 +1,6 @@
-// MIT License
+ï»¿// MIT License
 //
-// Copyright (c) <year> <copyright holders>
+// Copyright (c) 2024 Gustavo EnrÃ­quez - CimaMaker
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -56,31 +56,31 @@ Type
 
   { B. Capas de Habilidades (L?gica) - Define capacidades intelectuales o herramientas }
   TAiChatMediaSupport = (Tcm_Text, Tcm_Image, Tcm_Audio, Tcm_Video, Tcm_Pdf, Tcm_WebSearch, Tcm_CodeInterpreter, Tcm_Memory, Tcm_TextEditor, Tcm_ComputerUse, Tcm_Shell, Tcm_Reasoning, // Capacidad de CoT (Chain of Thought)
-    Tcm_ReportGeneration, // Generación de reportes (nativo vía code_interpreter o herramienta externa)
+    Tcm_ReportGeneration, // Generaciï¿½n de reportes (nativo vï¿½a code_interpreter o herramienta externa)
     Tcm_Any, Tcm_Unknown);
 
   TAiChatMediaSupports = set of TAiChatMediaSupport;
 
   { C. Capa Unificada de Capacidades (nuevo sistema v3.3) }
   TAiCapability = (
-    // Entrada / Comprensión (cubierto por completions nativo)
-    cap_Image,            // modelo entiende imágenes entrantes
+    // Entrada / Comprensiï¿½n (cubierto por completions nativo)
+    cap_Image,            // modelo entiende imï¿½genes entrantes
     cap_Audio,            // modelo entiende/transcribe audio entrante
     cap_Video,            // modelo entiende video entrante
     cap_Pdf,              // modelo entiende PDFs entrantes
     cap_WebSearch,        // modelo puede buscar en la web
     cap_Reasoning,        // modelo tiene razonamiento extendido (CoT)
-    cap_CodeInterpreter,  // modelo puede ejecutar código
+    cap_CodeInterpreter,  // modelo puede ejecutar cï¿½digo
     cap_Memory,           // modelo tiene memoria persistente
     cap_TextEditor,       // modelo puede editar archivos
     cap_ComputerUse,      // modelo puede controlar el ordenador
     cap_Shell,            // modelo puede ejecutar comandos shell
-    // Salida / Generación (gap -> activa ChatTool o endpoint dedicado)
+    // Salida / Generaciï¿½n (gap -> activa ChatTool o endpoint dedicado)
     cap_GenImage,         // producir imagen como output
     cap_GenAudio,         // producir audio como output (TTS)
     cap_GenVideo,         // producir video como output
     cap_GenReport,        // producir reporte (PDF, HTML, XLSX)
-    cap_ExtractCode       // post-procesar: extraer bloques de código de la respuesta
+    cap_ExtractCode       // post-procesar: extraer bloques de cï¿½digo de la respuesta
   );
   TAiCapabilities = set of TAiCapability;
 
@@ -103,6 +103,10 @@ Type
 
   // Evento para notificar cambios de estado del servidor (iniciado, detenido, etc.)
   TMCPStatusEvent = procedure(Sender: TObject; const StatusMsg: string) of object;
+
+  // Evento para que el desarrollador apruebe o deniegue la instalaciÃ³n de un paquete MCP vÃ­a AutoMCP.
+  // AAllow = True (default) para permitir, False para bloquear.
+  TAutoMCPRequestEvent = procedure(Sender: TObject; const APkgName: string; var AAllow: Boolean) of object;
 
   TToolFormat = (tfUnknown, tfOpenAI, tfOpenAIResponses, tfClaude, tfGemini, tfMCP);
   TToolTransportType = (tpStdIo, tpHttp, tpSSE, tpMakerAi);
@@ -309,6 +313,10 @@ function StreamToBase64(Stream: TMemoryStream): String;
 begin
   Stream.Position := 0;
   Result := TNetEncoding.Base64.EncodeBytesToString(Stream.Memory, Stream.Size);
+  // TBase64Encoding inserta CRLF cada 76 chars. Todos los endpoints REST
+  // (Gemini, OpenAI, Claude, Ollama) requieren base64 sin saltos de lÃ­nea.
+  Result := StringReplace(Result, #13#10, '', [rfReplaceAll]);
+  Result := StringReplace(Result, #10,   '', [rfReplaceAll]);
 end;
 
 function GetMimeTypeFromFileName(FileExtension: string): string;
@@ -976,16 +984,13 @@ end;
 
 function TAiMediaFile.GetContent: TMemoryStream;
 begin
-  Result := FContent;
-  if FContentLoaded then
-    Exit;
-  // Si tiene asignada una url la carga de la url y la deja en memoria
-  if FUrlMedia <> '' then
+  if not FContentLoaded and (FUrlMedia <> '') then
   begin
     DownloadFileFromUrl(FUrlMedia);
     FContentLoaded := True;
-    Result := FContent;
   end;
+  FContent.Position := 0; // siempre al inicio para que los lectores lean correctamente
+  Result := FContent;
 end;
 
 function TAiMediaFile.GetFileCategory: TAiFileCategory;
@@ -1011,6 +1016,7 @@ begin
     Begin
       FContent.Clear;
       FContent.LoadFromStream(St);
+      FContent.Position := 0; // resetear para que los lectores lean desde el inicio
       FContentLoaded := True;
       FFullFileName := aFileName;
       Ffilename := ExtractFileName(aFileName);

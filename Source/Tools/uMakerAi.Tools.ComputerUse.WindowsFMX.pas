@@ -1,4 +1,4 @@
-unit uMakerAi.Tools.ComputerUse.WindowsFMX;
+ï»¿unit uMakerAi.Tools.ComputerUse.WindowsFMX;
 
 interface
 
@@ -11,7 +11,7 @@ uses
 type
   TAiWindowsFMXExecutor = class
   private
-    // Métodos de Input (API Win32 pura)
+    // Mï¿½todos de Input (API Win32 pura)
     class procedure SendMouseInput(Flags: DWORD; Data: DWORD = 0);
     class procedure SendKeyboardInput(VK: Word; Up: Boolean);
     class procedure SendUnicodeChar(C: Char);
@@ -23,7 +23,7 @@ type
     // (Ya que la captura por BitBlt pura no incluye el cursor flotante)
     class procedure DrawCursorOnBitmap(Bmp: FMX.Graphics.TBitmap; AreaLeft, AreaTop: Integer);
   public
-    // Ejecuta la acción física
+    // Ejecuta la acciï¿½n fï¿½sica
     class function Execute(const Action: TAiActionData): TAiActionResult;
 
     // Captura pantalla delegando en uMakerAi.Utils.ScreenCapture
@@ -35,7 +35,7 @@ implementation
 { TAiWindowsFMXExecutor }
 
 // =============================================================================
-// SECCIÓN DE INPUTS (Idéntica a la anterior - Interactúa con Kernel)
+// SECCIï¿½N DE INPUTS (Idï¿½ntica a la anterior - Interactï¿½a con Kernel)
 // =============================================================================
 
 class procedure TAiWindowsFMXExecutor.SendMouseInput(Flags: DWORD; Data: DWORD);
@@ -77,7 +77,7 @@ end;
 
 class procedure TAiWindowsFMXExecutor.SmoothMouseMove(DestX, DestY: Integer);
 begin
-  // SetCursorPos maneja coordenadas virtuales automáticamente en Windows modernos
+  // SetCursorPos maneja coordenadas virtuales automï¿½ticamente en Windows modernos
   SetCursorPos(DestX, DestY);
 end;
 
@@ -223,7 +223,7 @@ begin
 end;
 
 // =============================================================================
-// SECCIÓN DE CAPTURA (Integración con uMakerAi.Utils.ScreenCapture)
+// SECCIï¿½N DE CAPTURA (Integraciï¿½n con uMakerAi.Utils.ScreenCapture)
 // =============================================================================
 
 class procedure TAiWindowsFMXExecutor.DrawCursorOnBitmap(Bmp: FMX.Graphics.TBitmap; AreaLeft, AreaTop: Integer);
@@ -232,19 +232,19 @@ var
   RelX, RelY: Single;
   R: TRectF;
 begin
-  // Obtener posición global del mouse
+  // Obtener posiciï¿½n global del mouse
   if not GetCursorPos(CursorPos) then Exit;
 
-  // Calcular posición relativa al área capturada
+  // Calcular posiciï¿½n relativa al ï¿½rea capturada
   RelX := CursorPos.X - AreaLeft;
   RelY := CursorPos.Y - AreaTop;
 
-  // Si el cursor está fuera de la imagen, no dibujamos nada
+  // Si el cursor estï¿½ fuera de la imagen, no dibujamos nada
   if (RelX < 0) or (RelY < 0) or (RelX >= Bmp.Width) or (RelY >= Bmp.Height) then
     Exit;
 
-  // Dibujamos un indicador visual (Círculo rojo con borde blanco)
-  // Esto es más fácil en FMX que convertir HICONs y suficiente para la IA.
+  // Dibujamos un indicador visual (Cï¿½rculo rojo con borde blanco)
+  // Esto es mï¿½s fï¿½cil en FMX que convertir HICONs y suficiente para la IA.
   if Bmp.Canvas.BeginScene then
   try
     R := TRectF.Create(RelX - 10, RelY - 10, RelX + 10, RelY + 10);
@@ -253,7 +253,7 @@ begin
     Bmp.Canvas.Fill.Color := $80FF0000; // Alpha=128, Red
     Bmp.Canvas.FillEllipse(R, 1);
 
-    // Borde Blanco sólido para contraste
+    // Borde Blanco sï¿½lido para contraste
     Bmp.Canvas.Stroke.Color := TAlphaColors.White;
     Bmp.Canvas.Stroke.Thickness := 2;
     Bmp.Canvas.DrawEllipse(R, 1);
@@ -273,13 +273,13 @@ begin
   if not Assigned(MediaFile) then
     MediaFile := TAiMediaFile.Create;
 
-  // 1. Validar el área
+  // 1. Validar el ï¿½rea
   if TargetArea.IsEmpty then
   begin
     VirtualLeft := GetSystemMetrics(SM_XVIRTUALSCREEN);
     VirtualTop := GetSystemMetrics(SM_YVIRTUALSCREEN);
-    // Si viene vacío, capturamos todo el virtual screen
-    // (Aun así se recomienda que el componente TAiComputerUseTool pase un área explícita)
+    // Si viene vacï¿½o, capturamos todo el virtual screen
+    // (Aun asï¿½ se recomienda que el componente TAiComputerUseTool pase un ï¿½rea explï¿½cita)
     TargetArea := Rect(
       VirtualLeft,
       VirtualTop,
@@ -288,13 +288,13 @@ begin
     );
   end;
 
-  // 2. Usar tu librería existente para la captura de píxeles
+  // 2. Usar tu librerï¿½a existente para la captura de pï¿½xeles
   Bmp := TScreenCapture.CaptureArea(TargetArea);
   if not Assigned(Bmp) then Exit;
 
   try
     // 3. Dibujar el cursor sobre el Bitmap capturado
-    // Es vital para que Gemini sepa dónde está el mouse
+    // Es vital para que Gemini sepa dï¿½nde estï¿½ el mouse
     DrawCursorOnBitmap(Bmp, TargetArea.Left, TargetArea.Top);
 
     // 4. Guardar como JPG comprimido

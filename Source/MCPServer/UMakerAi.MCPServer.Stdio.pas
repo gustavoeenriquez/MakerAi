@@ -1,4 +1,4 @@
-// MIT License
+ï»¿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -137,40 +137,66 @@ end;
 procedure TStdioWorkerThread.Execute;
 var
   JsonRequestLine: string;
+{$IFDEF MSWINDOWS}
+  StdinHandle: THandle;
+  RawLine: TBytes;
+  B: Byte;
+  BytesRead: DWORD;
+{$ENDIF}
 begin
+{$IFDEF MSWINDOWS}
+  // Read raw bytes from stdin pipe and decode as UTF-8.
+  // System.ReadLn converts using the ANSI code page (CP1252 on most Windows
+  // systems), which corrupts multi-byte UTF-8 sequences. ReadFile + UTF-8
+  // decoding is the correct approach when stdin is a pipe.
+  StdinHandle := GetStdHandle(STD_INPUT_HANDLE);
+  SetLength(RawLine, 0);
+{$ENDIF}
   while not Terminated do
   begin
     try
-      // 1. Detecci?n de fin de stream (Pipe cerrado por el cliente)
-      if Eof(Input) then
-      begin
-        Terminate;
-        Break;
-      end;
+{$IFDEF MSWINDOWS}
+      // Accumulate bytes until LF, then decode the complete line as UTF-8.
+      repeat
+        if not ReadFile(StdinHandle, B, 1, BytesRead, nil) or (BytesRead = 0) then
+        begin
+          // Pipe closed (EOF)
+          if Length(RawLine) > 0 then
+            Break; // process the last partial line
+          Exit;
+        end;
+        if B = 10 then Break; // LF = end of line
+        if B <> 13 then // skip CR
+        begin
+          SetLength(RawLine, Length(RawLine) + 1);
+          RawLine[High(RawLine)] := B;
+        end;
+      until False;
+      JsonRequestLine := TEncoding.UTF8.GetString(RawLine);
+      SetLength(RawLine, 0);
+{$ELSE}
+      System.ReadLn(JsonRequestLine);
+{$ENDIF}
 
-      // 2. Lectura bloqueante
-      System.ReadLn(Input, JsonRequestLine);
+      if Terminated or (JsonRequestLine = '') then
+        Continue;
 
-      if Terminated then Break;
-      if JsonRequestLine = '' then Continue;
-
-      // 3. CAMBIO CR?TICO: Llamada directa (S?ncrona)
-      // Eliminamos TThread.Queue porque en aplicaciones de consola
-      // no hay bucle de mensajes principal que procese la cola.
       if Assigned(FServer) and FServer.IsActive then
       begin
         try
           FServer.ProcessRequest(JsonRequestLine);
         except
-          // Capturamos excepciones para que un error de l?gica no mate al hilo de lectura
+          // Capturamos excepciones para que un error de logica no mate al hilo de lectura
         end;
       end;
-
     except
+      on E: EInOutError do
+      begin
+        if not Terminated then Break;
+      end;
       on E: Exception do
       begin
-        // Si ocurre error de I/O, salimos
-        if not Terminated then Terminate;
+        if not Terminated then Break;
       end;
     end;
   end;
@@ -213,7 +239,7 @@ begin
   begin
     FWorkerThread.Terminate;
     // No llamamos WaitFor: ReadLn(Input) es bloqueante e ininterrumpible.
-    // El thread saldrá naturalmente al detectar EOF en stdin.
+    // El thread saldrï¿½ naturalmente al detectar EOF en stdin.
     FWorkerThread := nil;
   end;
 
@@ -238,18 +264,27 @@ begin
 end;
 
 procedure TAiMCPStdioServer.SendResponse(const AResponseJson: string);
+{$IFDEF MSWINDOWS}
+var
+  StdoutHandle: THandle;
+  Bytes: TBytes;
+  Written: DWORD;
+{$ENDIF}
 begin
-  // El cliente espera el JSON seguido de un salto de l?nea (#10).
-  // WriteLn hace esto autom?ticamente.
-
+  // Write directly to the Windows stdout handle so the response reaches
+  // the MCP client even when the process is started without a console window
+  // (e.g., spawned headless by Claude Code). System.WriteLn + Flush(Output)
+  // does not flush the pipe in that scenario.
   FOutputLock.Enter;
   try
-    // System.WriteLn es la forma m?s simple y correcta aqu?.
-    // Env?a el string y el terminador de l?nea apropiado.
+{$IFDEF MSWINDOWS}
+    StdoutHandle := GetStdHandle(STD_OUTPUT_HANDLE);
+    Bytes := TEncoding.UTF8.GetBytes(AResponseJson + #10);
+    WriteFile(StdoutHandle, Bytes[0], Length(Bytes), Written, nil);
+{$ELSE}
     System.WriteLn(AResponseJson);
-
-    // Usar TOutput.Flush para asegurar que se env?e inmediatamente.
     Flush(Output);
+{$ENDIF}
   finally
     FOutputLock.Leave;
   end;

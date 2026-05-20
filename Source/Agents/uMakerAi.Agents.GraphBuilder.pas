@@ -1,4 +1,4 @@
-unit uMakerAi.Agents.GraphBuilder;
+ï»¿unit uMakerAi.Agents.GraphBuilder;
 
 interface
 
@@ -115,15 +115,15 @@ begin
 
   finally
     FJsonGraph.Free;
-    FJsonGraph := nil; // Buena práctica para evitar punteros colgantes
+    FJsonGraph := nil; // Buena prï¿½ctica para evitar punteros colgantes
   end;
 end;
 
-// MEJORA: Se mantiene la función original, pero se añade un comentario sobre su naturaleza.
-// Esta función realiza una búsqueda recursiva profunda para encontrar un objeto con la clave 'engine'.
-// Es robusta si la ubicación del objeto 'engine' no es fija.
+// MEJORA: Se mantiene la funciï¿½n original, pero se aï¿½ade un comentario sobre su naturaleza.
+// Esta funciï¿½n realiza una bï¿½squeda recursiva profunda para encontrar un objeto con la clave 'engine'.
+// Es robusta si la ubicaciï¿½n del objeto 'engine' no es fija.
 // Si la estructura del JSON fuera constante (ej: 'properties.engine'),
-// una búsqueda directa sería más eficiente.
+// una bï¿½squeda directa serï¿½a mï¿½s eficiente.
 function TGraphBuilder.FindEngineObject(JsonObj: TJSONObject): TJSONObject;
 var
   Pair: TJSONPair;
@@ -192,12 +192,12 @@ begin
     LNode.Name := LLabel;
     LNode.Graph := FAgents;
     LNode.JoinMode := jmAny;
-    LTool := nil; // Buena práctica inicializar la referencia
+    LTool := nil; // Buena prï¿½ctica inicializar la referencia
 
     // 3. Procesar las propiedades del JSON
     if LNodeJson.TryGetValue<TJSONObject>(cJsonProperties, LPropertiesJson) then
     begin
-      // 3.1. Leer la descripción (de forma anidada y segura)
+      // 3.1. Leer la descripciï¿½n (de forma anidada y segura)
       if LPropertiesJson.TryGetValue<TJSONObject>(cJsonMetadata, LMetadataJson) then
         LDescription := LMetadataJson.GetValue<string>(cJsonDescription, '')
       else
@@ -223,9 +223,9 @@ begin
         begin
           LTool := TAiToolBase(TComponentClass(LToolClass).Create(LNode));
           LNode.Tool := LTool;
-          LTool.Description := LDescription; // Asignar la descripción también a la herramienta
+          LTool.Description := LDescription; // Asignar la descripciï¿½n tambiï¿½n a la herramienta
 
-          // Asignar parámetros a la herramienta usando RTTI
+          // Asignar parï¿½metros a la herramienta usando RTTI
           if LPropertiesJson.TryGetValue<TJSONObject>(cJsonParameters, LParametersJson) then
             SetToolParameters(LTool, LParametersJson);
         end
@@ -282,8 +282,8 @@ begin
     if SameText(LSourcePortCategory, cJsonPortCategoryAccessory) then
       Continue;
 
-    // MEJORA: La lógica de creación del Link es más explícita.
-    // Se crea un único Link por nodo de origen la primera vez que se encuentra una arista saliente.
+    // MEJORA: La lï¿½gica de creaciï¿½n del Link es mï¿½s explï¿½cita.
+    // Se crea un ï¿½nico Link por nodo de origen la primera vez que se encuentra una arista saliente.
     LLink := LSourceNode.Next;
     if not Assigned(LLink) then
     begin
@@ -330,7 +330,7 @@ begin
       end
       else
       begin
-        // MEJORA: Lógica de asignación a NextA/B/C/D simplificada y menos repetitiva.
+        // MEJORA: Lï¿½gica de asignaciï¿½n a NextA/B/C/D simplificada y menos repetitiva.
         var
           LNextSlots: array [0 .. 3] of PPointer;
         LNextSlots[0] := @LLink.NextA;

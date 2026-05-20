@@ -1,4 +1,4 @@
-// IT License
+﻿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -461,9 +461,9 @@ procedure TAiClaudeChat.SetEnableMemory(const Value: Boolean);
 begin
   FEnableMemory := Value;
   if Value then
-    ChatMediaSupports := ChatMediaSupports + [tcm_Memory]
+    ModelConfig.ModelCaps := ModelConfig.ModelCaps + [cap_Memory]
   else
-    ChatMediaSupports := ChatMediaSupports - [tcm_Memory];
+    ModelConfig.ModelCaps := ModelConfig.ModelCaps - [cap_Memory];
 end;
 
 procedure TAiClaudeChat.SetEnableThinking(const Value: Boolean);
@@ -513,11 +513,11 @@ begin
       BetaFeatures.Add('context-management-2025-06-27');
 
     // 5. Code Execution (Si est? habilitado en ChatMediaSupports)
-    if tcm_code_interpreter in ChatMediaSupports then
+    if cap_CodeInterpreter in ModelConfig.ModelCaps then
       BetaFeatures.Add('code-execution-2025-08-25');
 
     // 6. Thinking / Razonamiento (Si est? habilitado)
-    if FEnableThinking or (ThinkingLevel <> tlDefault) then
+    if FEnableThinking or (ModelConfig.ThinkingLevel <> tlDefault) then
       BetaFeatures.Add('interleaved-thinking-2025-05-14');
 
     // 7. Prompt Caching
@@ -525,7 +525,7 @@ begin
       BetaFeatures.Add('prompt-caching-2024-07-31');
 
     // 8. Computer Use
-    if tcm_ComputerUse in ChatMediaSupports then
+    if cap_ComputerUse in ModelConfig.ModelCaps then
       BetaFeatures.Add('computer-use-2025-01-24');
 
     // -------------------------------------------------------------------------
@@ -590,7 +590,7 @@ begin
           // Condici?n de subida autom?tica:
           // 1. Si Code Interpreter est? activo (necesita file_id).
           // 2. O SI el archivo NO es PDF ni Imagen (Excel, CSV, etc obligan a usar Files API).
-          if (tcm_code_interpreter in ChatMediaSupports) or (not(LMedia.FileCategory in [Tfc_Image, Tfc_pdf])) then
+          if (cap_CodeInterpreter in ModelConfig.ModelCaps) or (not(LMedia.FileCategory in [Tfc_Image, Tfc_pdf])) then
           begin
             try
               // UploadFile llena autom?ticamente LMedia.IdFile
@@ -615,7 +615,7 @@ begin
   // LOGIC: Thinking (Razonamiento)
   // Sincronizamos la propiedad gen?rica ThinkingLevel con el flag interno de Claude
   // ---------------------------------------------------------------------------
-  if ThinkingLevel <> tlDefault then
+  if ModelConfig.ThinkingLevel <> tlDefault then
   begin
     FEnableThinking := True;
     // Si usamos thinking, aseguramos un max_tokens suficiente
@@ -714,10 +714,10 @@ begin
 
     // 2. OUTPUT CONFIG (Reasoning Effort)
     // Mapea la propiedad heredada ThinkingLevel al nuevo est?ndar de Claude
-    if (ThinkingLevel <> tlDefault) then
+    if (ModelConfig.ThinkingLevel <> tlDefault) then
     begin
       jOutputConfig := TJSONObject.Create;
-      case ThinkingLevel of
+      case ModelConfig.ThinkingLevel of
         tlLow:    jOutputConfig.AddPair('effort', 'low');
         tlMedium: jOutputConfig.AddPair('effort', 'medium');
         tlHigh:   jOutputConfig.AddPair('effort', 'high');
@@ -744,7 +744,7 @@ begin
 
     // Thinking (Modo Manual Budget)
     // Solo lo a?adimos si NO se us? OutputConfig (ThinkingLevel), para evitar conflicto.
-    if (FEnableThinking) and (ThinkingLevel = tlDefault) then
+    if (FEnableThinking) and (ModelConfig.ThinkingLevel = tlDefault) then
     begin
       var jThink := TJSONObject.Create;
       jThink.AddPair('type', 'enabled');
@@ -777,7 +777,7 @@ begin
     end;
 
     // 2. Native: Web Search
-    if tcm_WebSearch in ChatMediaSupports then
+    if cap_WebSearch in ModelConfig.ModelCaps then
     begin
       JTools := TJSONObject.Create;
       JTools.AddPair('type', 'web_search_20250305');
@@ -787,7 +787,7 @@ begin
     end;
 
     // 3. Native: Code Execution
-    if tcm_code_interpreter in ChatMediaSupports then
+    if cap_CodeInterpreter in ModelConfig.ModelCaps then
     begin
       JTools := TJSONObject.Create;
       JTools.AddPair('type', 'code_execution_20250825');
@@ -805,7 +805,7 @@ begin
     end;
 
     // 5. Native: Text Editor
-    if tcm_TextEditor in ChatMediaSupports then
+    if cap_TextEditor in ModelConfig.ModelCaps then
     begin
       JTools := TJSONObject.Create;
       JTools.AddPair('type', 'text_editor_20250728');
@@ -814,7 +814,7 @@ begin
     end;
 
     // 6. Native: Computer Use
-    if tcm_ComputerUse in ChatMediaSupports then
+    if cap_ComputerUse in ModelConfig.ModelCaps then
     begin
       JTools := TJSONObject.Create;
       JTools.AddPair('type', 'computer_20241022');
@@ -826,7 +826,7 @@ begin
     end;
 
     // 7. Native: Bash / Shell
-    if tcm_Shell in ChatMediaSupports then
+    if cap_Shell in ModelConfig.ModelCaps then
     begin
       JTools := TJSONObject.Create;
       JTools.AddPair('type', 'bash_20250124');
@@ -1304,7 +1304,7 @@ begin
     end
     else
     begin
-      if tfc_ExtracttextFile in NativeOutputFiles then
+      if cap_ExtractCode in ModelConfig.SessionCaps then
       begin
         code := TMarkdownCodeExtractor.Create;
         try
@@ -1462,7 +1462,7 @@ begin
           streamBlock.ToolFunction := TAiToolsFunction.Create;
           streamBlock.ToolFunction.Id := jBlock.GetValue<string>('id');
           streamBlock.ToolFunction.Name := jBlock.GetValue<string>('name');
-          streamBlock.ToolFunction.Tipo := 'function';
+          streamBlock.ToolFunction.&Type := 'function';
         end;
 
         FStreamContentBlocks.Add(blockIndex, streamBlock);
@@ -1551,9 +1551,6 @@ begin
               if Assigned(jInput) then
               begin
                 streamBlock.ToolFunction.Arguments := jInput.Format;
-                // Llenar Params para compatibilidad con componentes visuales antiguos
-                for var Pair in jInput do
-                  streamBlock.ToolFunction.Params.AddPair(Pair.JsonString.Value, Pair.JsonValue.Value);
                 jInput.Free;
               end;
             except
@@ -1832,7 +1829,7 @@ end;
 
   begin
   Result := TJSonArray.Create;
-  IsCodeExecutionEnabled := tcm_code_interpreter in ChatMediaSupports;
+  IsCodeExecutionEnabled := cap_CodeInterpreter in ModelConfig.ModelCaps;
 
   for LMessage in Self.Messages do
   begin
@@ -1927,7 +1924,7 @@ end;
   end;
 
   // Archivos adjuntos
-  MediaArr := LMessage.MediaFiles.GetMediaList(Self.NativeInputFiles, False);
+  MediaArr := LMessage.MediaFiles.GetMediaList(Self.GetModelInputFileTypes, False);
 
 
   for LMediaFile in MediaArr do
@@ -2012,7 +2009,7 @@ begin
   Result := TJSonArray.Create;
 
   // Verificamos si el Code Interpreter est? activo
-  IsCodeExecutionEnabled := tcm_code_interpreter in ChatMediaSupports;
+  IsCodeExecutionEnabled := cap_CodeInterpreter in ModelConfig.ModelCaps;
 
   for LMessage in Self.Messages do
   begin
@@ -2112,7 +2109,7 @@ begin
       end;
 
       // B. Archivos (MediaFiles)
-      MediaArr := LMessage.MediaFiles.GetMediaList(Self.NativeInputFiles, False);
+      MediaArr := LMessage.MediaFiles.GetMediaList(Self.GetModelInputFileTypes, False);
 
       for LMediaFile in MediaArr do
       begin
@@ -2320,13 +2317,11 @@ begin
     begin
       Fun := TAiToolsFunction.Create;
       Fun.Id := JVal1.GetValue<String>('id');
-      Fun.Tipo := 'function';
+      Fun.&Type := 'function';
       Fun.Name := JVal1.GetValue<String>('name');
       if JVal1.TryGetValue<TJSONObject>('input', Arg) then
       begin
         Fun.Arguments := Arg.Format;
-        for I := 0 to Arg.Count - 1 do
-          Fun.Params.Values[Arg.Pairs[I].JsonString.Value] := Arg.Pairs[I].JsonValue.Value;
       end;
       Result.Add(Fun.Id, Fun);
     end;
@@ -2492,25 +2487,25 @@ begin
 
     // B. Ejecuci?n Autom?tica (Componente TAiShell)
     // Si el usuario no llen? la respuesta en el evento anterior y tenemos el componente:
-    if (ToolCall.Response = '') and Assigned(ShellTool) then
+    if (ToolCall.Response = '') and Assigned(ChatTools.ShellTool) then
     begin
       // Asegurar que est? activo
-      if not ShellTool.Active then
-        ShellTool.Active := True;
+      if not ChatTools.ShellTool.Active then
+        ChatTools.ShellTool.Active := True;
 
       // Ejecutar el comando en la sesi?n persistente
-      ToolCall.Response := ShellTool.Execute(ToolCall.Id, ToolCall.Arguments);
+      ToolCall.Response := ChatTools.ShellTool.Execute(ToolCall.Id, ToolCall.Arguments);
     end;
 
     // Si no hay componente ni evento, Claude recibir? una respuesta vac?a o error,
-    // lo cual est? bien, pero idealmente FShellTool deber?a estar asignado.
+    // lo cual est? bien, pero idealmente ChatTools.ShellTool deber?a estar asignado.
     Exit;
   end;
 
   // 2. Interceptar Herramienta de Edici?n Nativa
-  if ((ToolCall.Name = 'str_replace_based_edit_tool') or (ToolCall.Name = 'str_replace_editor')) and Assigned(TextEditorTool) then
+  if ((ToolCall.Name = 'str_replace_based_edit_tool') or (ToolCall.Name = 'str_replace_editor')) and Assigned(ChatTools.TextEditorTool) then
   begin
-    ToolCall.Response := TextEditorTool.Execute(ToolCall.Arguments);
+    ToolCall.Response := ChatTools.TextEditorTool.Execute(ToolCall.Arguments);
     Exit;
   end;
 

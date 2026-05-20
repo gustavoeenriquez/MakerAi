@@ -57,9 +57,9 @@ Type
   Protected
     Function InitChatCompletions: String; Override;
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
-    Function GetMessages: TJSonArray; Override;
     procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
   Public
+    Function GetMessages: TJSonArray; Override;
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
     class function GetDriverName: string; Override;
@@ -92,7 +92,7 @@ Begin
   Params.Clear;
   Params.Add('ApiKey=@DEEPSEEK_API_KEY');
   Params.Add('Model=deepseek-chat');
-  Params.Add('MaxTokens=4096');
+  Params.Add('Max_Tokens=4096');
   Params.Add('URL=https://api.deepseek.com/v1/');
 End;
 
@@ -166,7 +166,7 @@ begin
         jToolChoice := TJSonObject(TJSONObject.ParseJSONValue(Tool_choice));
 {$ENDIF}
         If Assigned(jToolChoice) then
-          AJSONObject.AddPair('tools_choice', jToolChoice);
+          AJSONObject.AddPair('tool_choice', jToolChoice);
       End;
     End;
 
@@ -509,7 +509,7 @@ begin
           var LChoices: TJSonArray;
           var LChoice: TJSonObject;
           var LMessage: TJSonObject;
-          LChoices := nil; LChoice := nil; LMessage := nil;
+          LChoices := nil; LMessage := nil;
           if LJObj.TryGetValue<TJSonArray>('choices', LChoices) and
              Assigned(LChoices) and (LChoices.Count > 0) and
              (LChoices.Items[0] is TJSonObject) then

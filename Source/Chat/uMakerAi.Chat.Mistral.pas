@@ -1,4 +1,4 @@
-// IT License
+﻿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -124,7 +124,7 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Embeddings, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages;
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Chat.Messages;
 
 { TODO : Falta crear las siguientes funciones de Mistral }
 /// -----------------------------------------------------------------------------
@@ -172,7 +172,8 @@ type
     // Formato magistral: delta.content como array tipado (type: "text" | "thinking")
     procedure ParseDeltaContentArray(AContentArr: TJSonArray; jObj: TJSonObject); Override;
 
-    function InternalRunPDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
+    function InternalRunNativePDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
+    function InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
 
     // function InternalRunOcr(aMediaFile: TAiMediaFile): String;
@@ -207,16 +208,6 @@ type
 
   End;
 
-  TAiMistralEmbeddings = Class(TAiEmbeddings)
-  Public
-    // Mistral embeddings
-    Constructor Create(aOwner: TComponent); Override;
-    Function CreateEmbedding(aInput, aUser: String; aDimensions: integer = 1536; aModel: String = 'mistral-embed'; aEncodingFormat: String = 'float'): TAiEmbeddingData; Override;
-    class function GetDriverName: string; override;
-    class function CreateInstance(aOwner: TComponent): TAiEmbeddings; override;
-    class procedure RegisterDefaultParams(Params: TStrings); override;
-  End;
-
 procedure Register;
 
 implementation
@@ -226,7 +217,7 @@ Const
 
 procedure Register;
 begin
-  RegisterComponents('MakerAI', [TAiMistralChat, TAiMistralEmbeddings]);
+  RegisterComponents('MakerAI', [TAiMistralChat]);
 end;
 
 { TAiMistralChat }
@@ -296,7 +287,7 @@ Begin
   Params.Clear;
   Params.Add('ApiKey=@MISTRAL_API_KEY');
   Params.Add('Model=mistral-small-latest');
-  Params.Add('MaxTokens=4096');
+  Params.Add('Max_Tokens=4096');
   Params.Add('URL=https://api.mistral.ai/v1/');
 End;
 
@@ -563,12 +554,10 @@ end;
 
 function TAiMistralChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
 Var
-  jObj, Msg, jFunc, Arg: TJSONObject;
+  jObj, Msg, jFunc: TJSONObject;
   JVal, JVal1, jValToolCall: TJSonValue;
   Fun: TAiToolsFunction;
   JToolCalls: TJSonArray;
-  Nom, Valor: String;
-  I: integer;
 begin
   Result := TAiToolsFunctions.Create;
 
@@ -587,7 +576,7 @@ begin
         Begin
           Fun := TAiToolsFunction.Create;
           Fun.Id := jObj.GetValue<String>('id');
-          Fun.Tipo := sType;
+          Fun.&Type := sType;
 
           If jObj.TryGetValue<TJSONObject>('function', jFunc) then
           Begin
@@ -597,23 +586,7 @@ begin
           End;
 
           Try
-            If (Fun.Arguments <> '') and (Fun.Arguments <> '{}') then
-            Begin
-              Arg := TJSONObject(TJSONObject.ParseJSONValue(Fun.Arguments));
-              Try
-                If Assigned(Arg) then
-                Begin
-                  For I := 0 to Arg.Count - 1 do
-                  Begin
-                    Nom := Arg.Pairs[I].JsonString.Value;
-                    Valor := Arg.Pairs[I].JsonValue.Value;
-                    Fun.Params.Values[Nom] := Valor;
-                  End;
-                End;
-              Finally
-                Arg.Free;
-              End;
-            End;
+            // Arguments contiene el JSON canónico de parámetros
 
           Except
             // Si no hay parámetros no marca error
@@ -866,7 +839,7 @@ begin
     AJSONObject.AddPair('stream', TJSONBool.Create(FClient.Asynchronous));
 
     // Si el ThinkingLevel esta activo, usar prompt_mode reasoning para Magistral
-    if ThinkingLevel <> tlDefault then
+    if ModelConfig.ThinkingLevel <> tlDefault then
       AJSONObject.AddPair('prompt_mode', 'reasoning');
 
     // 7. --- Finalizaci?n y Devoluci?n del JSON ---
@@ -1017,7 +990,7 @@ begin
   inherited ParseChat(jObj, ResMsg);
 end;
 
-function TAiMistralChat.InternalRunPDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
+function TAiMistralChat.InternalRunNativePDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
 var
   LBodyStream: TStringStream;
   LResponseStream: TMemoryStream;
@@ -1355,108 +1328,98 @@ begin
   end;
 end;
 
-{ TAiMistralEmbeddings }
-
-constructor TAiMistralEmbeddings.Create(aOwner: TComponent);
-begin
-  inherited;
-  ApiKey := '@MISTRAL_API_KEY';
-  Url := GlAIUrl;
-  FDimensions := -1;
-  FModel := 'mistral-embed';
-end;
-
-function TAiMistralEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
-Var
+function TAiMistralChat.InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
+var
+  Body: TMultipartFormData;
   Client: TNetHTTPClient;
   Headers: TNetHeaders;
-  jObj: TJSONObject;
-  Res: IHTTPResponse;
-  Response: TStringStream;
-  St: TStringStream;
   sUrl: String;
-  jInput: TJSonArray;
+  Res: IHTTPResponse;
+  LResponseStream: TMemoryStream;
+  LTempStream: TMemoryStream;
+  LResponseObj: TJSonObject;
+  Granularities: TStringList;
+  I: Integer;
+  LModel: String;
 begin
+  Result := '';
+  if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
+    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripci?n.');
+
+  sUrl := Url + 'audio/transcriptions';
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   Client := TNetHTTPClient.Create(Nil);
 {$IF CompilerVersion >= 35}
   Client.SynchronizeEvents := False;
 {$ENDIF}
-  St := TStringStream.Create('', TEncoding.UTF8);
-  Response := TStringStream.Create('', TEncoding.UTF8);
-  sUrl := FUrl + 'embeddings';
-  jObj := TJSONObject.Create;
+  LResponseStream := TMemoryStream.Create;
+  Body := TMultipartFormData.Create;
+  Granularities := TStringList.Create;
+  LTempStream := TMemoryStream.Create;
+  try
+    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
 
-  If aModel = '' then
-    aModel := FModel;
+    aMediaFile.Content.Position := 0;
+    LTempStream.LoadFromStream(aMediaFile.Content);
+    LTempStream.Position := 0;
 
-  Try
-    jObj.AddPair('model', aModel);
-
-    jInput := TJSonArray.Create;
-    jInput.Add(aInput);
-
-    jObj.AddPair('input', jInput); // Este se adiciona por compatibilidad con ollama
-    // JObj.AddPair('prompt', aInput);
-    // JObj.AddPair('user', aUser);
-    // JObj.AddPair('dimensions', aDimensions);
-    jObj.AddPair('encoding_format', aEncodingFormat);
-
-    St.WriteString(jObj.Format);
-    St.Position := 0;
-
-    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
-    Client.ContentType := 'application/json';
-
-    Res := Client.Post(sUrl, St, Response, Headers);
-    Response.Position := 0;
-
-{$IFDEF APIDEBUG}
-    Response.SaveToFile('c:\temp\response.txt');
+{$IF CompilerVersion >= 35}
+    Body.AddStream('file', LTempStream, False, aMediaFile.FileName, aMediaFile.MimeType);
+{$ELSE}
+    Body.AddStream('file', LTempStream, aMediaFile.FileName, aMediaFile.MimeType);
 {$ENDIF}
-    if Res.StatusCode = 200 then
-    Begin
-      jObj := TJSONObject(TJSONObject.ParseJSONValue(Res.ContentAsString));
-      ParseEmbedding(jObj);
-      Result := Self.FData;
+    Body.AddField('model', LModel);
 
-    End
+    if not AskMsg.Prompt.IsEmpty then
+      Body.AddField('prompt', AskMsg.Prompt);
+
+    if not TranscriptionParams.ResponseFormat.IsEmpty then
+      Body.AddField('response_format', TranscriptionParams.ResponseFormat)
     else
+      Body.AddField('response_format', 'json');
+
+    if not TranscriptionParams.Language.IsEmpty then
+      Body.AddField('language', TranscriptionParams.Language);
+
+    if Self.Temperature > 0 then
+      Body.AddField('temperature', FormatFloat('0.0', Self.Temperature));
+
+    if not TranscriptionParams.TimestampGranularities.IsEmpty then
     begin
-      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      Granularities.CommaText := TranscriptionParams.TimestampGranularities;
+      for I := 0 to Granularities.Count - 1 do
+        Body.AddField('timestamp_granularities[]', Trim(Granularities[I]));
     end;
 
-  Finally
+    Res := Client.Post(sUrl, Body, LResponseStream, Headers);
+
+    if Res.StatusCode = 200 then
+    begin
+      LResponseObj := TJSonObject.ParseJSONValue(Res.ContentAsString) as TJSonObject;
+      if not Assigned(LResponseObj) then
+        LResponseObj := TJSonObject.Create(TJSonPair.Create('text', Res.ContentAsString));
+      try
+        ParseJsonTranscript(LResponseObj, ResMsg, aMediaFile);
+      finally
+        LResponseObj.Free;
+      end;
+      Result := ResMsg.Prompt;
+    end
+    else
+      raise Exception.CreateFmt('Error en la transcripci?n: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+
+  finally
+    Body.Free;
     Client.Free;
-    St.Free;
-    Response.Free;
-    jObj.Free;
-  End;
-end;
-
-{ TAiMistralEmbeddings - Factory class methods }
-
-class function TAiMistralEmbeddings.GetDriverName: string;
-begin
-  Result := 'Mistral';
-end;
-
-class function TAiMistralEmbeddings.CreateInstance(aOwner: TComponent): TAiEmbeddings;
-begin
-  Result := TAiMistralEmbeddings.Create(aOwner);
-end;
-
-class procedure TAiMistralEmbeddings.RegisterDefaultParams(Params: TStrings);
-begin
-  Params.Values['ApiKey'] := '@MISTRAL_API_KEY';
-  Params.Values['Url'] := GlAIUrl;
-  Params.Values['Model'] := 'mistral-embed';
-  Params.Values['Dimensions'] := '-1';
+    LResponseStream.Free;
+    LTempStream.Free;
+    Granularities.Free;
+  end;
 end;
 
 Initialization
 
 TAiChatFactory.Instance.RegisterDriver(TAiMistralChat);
-TAiEmbeddingFactory.Instance.RegisterDriver(TAiMistralEmbeddings);
 
 end.

@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -60,7 +60,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    Function Process(AJsonTripletArray: string; AMergeStrategy: TMergeStrategy = msAddNewOnly): Integer; // Retorna el número de items insertados
+    Function Process(AJsonTripletArray: string; AMergeStrategy: TMergeStrategy = msAddNewOnly): Integer; // Retorna el nï¿½mero de items insertados
     function FindExistingNode(AName, ALabel: string): TAiRagGraphNode;
 
   published
@@ -115,11 +115,11 @@ begin
 
     case AStrategy of
       msOverwrite:
-        // La propiedad indexada por defecto realiza el AddOrSetValue automáticamente
+        // La propiedad indexada por defecto realiza el AddOrSetValue automï¿½ticamente
         AEdge.MetaData[Key] := Value;
 
       msAddNewOnly:
-        // Utilizamos el método .Has() de la nueva unidad MetaData
+        // Utilizamos el mï¿½todo .Has() de la nueva unidad MetaData
         if not AEdge.MetaData.Has(Key) then
           AEdge.MetaData[Key] := Value;
     end;
@@ -166,7 +166,7 @@ var
 begin
   ContextBuilder := TStringBuilder.Create;
   try
-    // 1. IDENTIFICACIÓN: Formato estructurado para el modelo de embedding
+    // 1. IDENTIFICACIï¿½N: Formato estructurado para el modelo de embedding
     ContextBuilder.AppendFormat('Entidad: %s. Categoria: %s.', [AName, ANodeLabel]);
 
     // 2. PROPIEDADES: Convertimos el JSON en oraciones descriptivas
@@ -174,18 +174,18 @@ begin
     begin
       for Pair in AProperties do
       begin
-        // Intentamos obtener una representación textual limpia del valor
+        // Intentamos obtener una representaciï¿½n textual limpia del valor
         if Pair.JsonValue is TJSONString then
           PropertyValue := Pair.JsonValue.Value
         else
           PropertyValue := Pair.JsonValue.ToJSON;
 
-        // Generamos lenguaje natural para mejor indexación semántica
+        // Generamos lenguaje natural para mejor indexaciï¿½n semï¿½ntica
         ContextBuilder.AppendFormat(' La propiedad %s tiene el valor %s.', [Pair.JsonString.Value, PropertyValue]);
       end;
     end;
 
-    // 3. CONTENIDO ADICIONAL: Limpieza y normalización de puntuación
+    // 3. CONTENIDO ADICIONAL: Limpieza y normalizaciï¿½n de puntuaciï¿½n
     if not AAdditionalText.Trim.IsEmpty then
     begin
       ContextBuilder.Append(' ');
@@ -241,7 +241,7 @@ begin
 
   LEmbeddings := FGraph.Embeddings;
 
-  // 1. Extraer datos básicos del objeto JSON de entrada
+  // 1. Extraer datos bï¿½sicos del objeto JSON de entrada
   NodeName := ANodeObject.GetValue<string>('name', '');
   NodeLabel := ANodeObject.GetValue<string>('nodeLabel', 'Undefined');
 
@@ -292,22 +292,22 @@ begin
       end;
 
       // NOTA: El Driver de persistencia (si existe) debe ser notificado
-      // de este cambio por el Core o mediante un guardado explícito.
+      // de este cambio por el Core o mediante un guardado explï¿½cito.
     end;
   end
   else
   begin
     // =========================================================
-    // CASO B: NODO NUEVO (Fábrica optimizada)
+    // CASO B: NODO NUEVO (Fï¿½brica optimizada)
     // =========================================================
-    // 1. Creamos el objeto en memoria (Hereda MetaData automáticamente)
+    // 1. Creamos el objeto en memoria (Hereda MetaData automï¿½ticamente)
     Result := FGraph.NewNode(TGuid.NewGuid.ToString, NodeLabel, NodeName);
 
-    // 2. Rellenar propiedades dinámicas
+    // 2. Rellenar propiedades dinï¿½micas
     if Assigned(NewProperties) then
       MergeNodeProperties(Result, NewProperties, msOverwrite);
 
-    // 3. Generar texto representativo para el motor semántico
+    // 3. Generar texto representativo para el motor semï¿½ntico
     CurrentPropsJson := Result.Properties.ToJSON;
     try
       NodeText := GenerateTextForEmbedding(Result.Name, Result.NodeLabel, CurrentPropsJson, AdditionalText);
@@ -323,7 +323,7 @@ begin
       Result.Data := LEmbeddings.CreateEmbedding(Result.Text, 'user');
     end;
 
-    // 5. Registrar y Persistir en el Grafo (Un solo paso atómico)
+    // 5. Registrar y Persistir en el Grafo (Un solo paso atï¿½mico)
     FGraph.AddNode(Result);
   end;
 end;
@@ -373,7 +373,7 @@ begin
 
         if Assigned(FOnImportProgress) then
         begin
-          // Reportamos el índice actual 'i' sobre el total
+          // Reportamos el ï¿½ndice actual 'i' sobre el total
           FOnImportProgress(Self, I, TotCount, Cancel);
           if Cancel then
             Break;
@@ -386,7 +386,7 @@ begin
         PredicateObj := TripletObject.GetValue<TJSONObject>('predicate', nil);
         ObjectObj := TripletObject.GetValue<TJSONObject>('object', nil);
 
-        // CASO A: Solo actualización de Nodo (Sujeto sin predicado)
+        // CASO A: Solo actualizaciï¿½n de Nodo (Sujeto sin predicado)
         if (SubjectObj <> nil) and (PredicateObj = nil) and (ObjectObj = nil) then
         begin
           GetOrCreateNode(SubjectObj, AMergeStrategy);
@@ -408,7 +408,7 @@ begin
           EdgeName := PredicateObj.GetValue<string>('name', '');
           PredicateProps := PredicateObj.GetValue<TJSONObject>('properties', nil);
 
-          // 4. LÓGICA DE RECONCILIACIÓN DE ARISTAS
+          // 4. Lï¿½GICA DE RECONCILIACIï¿½N DE ARISTAS
           ExistingEdge := FGraph.FindEdge(SubjectNode, ObjectNode, EdgeLabel);
 
           if ExistingEdge <> nil then
@@ -430,7 +430,7 @@ begin
               NeedEmbeddingUpdate := True;
             end;
 
-            // REPARACIÓN: Si hay motor y la arista NO tiene vector, regenerarlo
+            // REPARACIï¿½N: Si hay motor y la arista NO tiene vector, regenerarlo
             if (LEmbeddings <> nil) and (Length(ExistingEdge.Data) = 0) then
               NeedEmbeddingUpdate := True;
 
@@ -441,7 +441,7 @@ begin
               ExistingEdge.Data := LEmbeddings.CreateEmbedding(TextToEmbed, '');
             end;
 
-            // CRÍTICO: Si tu Core no sincroniza automáticamente, forzar UPDATE
+            // CRï¿½TICO: Si tu Core no sincroniza automï¿½ticamente, forzar UPDATE
             // Descomenta si es necesario:
             // if NeedEmbeddingUpdate then
             // FGraph.UpdateEdge(ExistingEdge);

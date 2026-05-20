@@ -1,4 +1,4 @@
-unit uMakerAi.Agents.DmGenerator;
+ï»¿unit uMakerAi.Agents.DmGenerator;
 
 interface
 
@@ -6,7 +6,7 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections, System.JSON, System.AnsiStrings, System.RegularExpressions, System.Math;
 
 type
-  // Estructura interna para mantener la información de cada componente a generar.
+  // Estructura interna para mantener la informaciï¿½n de cada componente a generar.
   TComponentInfo = record
   private
     FProperties: TStringList;
@@ -32,7 +32,7 @@ type
     FCalculatedWidth: Integer;
     FCalculatedHeight: Integer;
 
-    // Métodos de parseo y construcción del modelo interno
+    // Mï¿½todos de parseo y construcciï¿½n del modelo interno
     procedure ParseNodes;
     procedure ParseEdges;
     procedure GenerateToolProperties(const AToolClassName: string; AParamsJson: TJSONObject; var AToolInfo: TComponentInfo);
@@ -40,7 +40,7 @@ type
     procedure Clear;
     procedure CalculateOptimalSize;
 
-    // Métodos de utilidad (adaptados de tu TGraphBuilder)
+    // Mï¿½todos de utilidad (adaptados de tu TGraphBuilder)
     function SanitizeName(const ALabel: string): string;
     function FindPortJsonByTerminalId(ANodeJson: TJSONObject; const APortTerminalId: string): TJSONObject;
     function FindEngineObject(JsonObj: TJSONObject): TJSONObject;
@@ -91,11 +91,11 @@ end;
 
 procedure TDataModuleGenerator.CalculateOptimalSize;
 const
-  // Asumimos un tamaño máximo para cualquier componente (nodo, link, tool)
-  // para el cálculo. Es mejor que sobre un poco de espacio.
+  // Asumimos un tamaï¿½o mï¿½ximo para cualquier componente (nodo, link, tool)
+  // para el cï¿½lculo. Es mejor que sobre un poco de espacio.
   ComponentMaxWidth = 100;
-  ComponentMaxHeight = 150; // Las tools pueden ser más altas
-  Margin = 50; // Espacio extra alrededor del último componente
+  ComponentMaxHeight = 150; // Las tools pueden ser mï¿½s altas
+  Margin = 50; // Espacio extra alrededor del ï¿½ltimo componente
 
 var
   maxX, maxY: Integer;
@@ -109,12 +109,12 @@ begin
 
   for var CompInfo in FComponentList do
   begin
-    // Leemos las propiedades Left y Top, convirtiéndolas a Integer
+    // Leemos las propiedades Left y Top, convirtiï¿½ndolas a Integer
     // Usamos StrToIntDef para evitar errores si la propiedad no existe (devuelve 0)
     LLeft := StrToIntDef(CompInfo.Properties.Values['Left'], 0);
     LTop := StrToIntDef(CompInfo.Properties.Values['Top'], 0);
 
-    // Actualizamos las coordenadas máximas encontradas hasta ahora
+    // Actualizamos las coordenadas mï¿½ximas encontradas hasta ahora
     if LLeft > maxX then
       maxX := LLeft;
 
@@ -122,11 +122,11 @@ begin
       maxY := LTop;
   end;
 
-  // Calculamos el tamaño final añadiendo el tamaño del componente y un margen
+  // Calculamos el tamaï¿½o final aï¿½adiendo el tamaï¿½o del componente y un margen
   FCalculatedWidth := maxX + ComponentMaxWidth + Margin;
   FCalculatedHeight := maxY + ComponentMaxHeight + Margin;
 
-  // Asegurarnos de que el tamaño no sea menor que un mínimo razonable
+  // Asegurarnos de que el tamaï¿½o no sea menor que un mï¿½nimo razonable
   FCalculatedWidth := Max(FCalculatedWidth, 640);
   FCalculatedHeight := Max(FCalculatedHeight, 480);
 end;
@@ -174,7 +174,7 @@ procedure TDataModuleGenerator.AddComponent(const AName, AType: string; out ACom
 begin
   AComponentInfo := TComponentInfo.New(AName, AType);
   FComponentList.Add(AComponentInfo);
-  // Añadir la unidad del tipo de componente a la lista de 'uses'
+  // Aï¿½adir la unidad del tipo de componente a la lista de 'uses'
   var
   LUnitName := FindUnitName(AType);
   if not LUnitName.IsEmpty then
@@ -183,8 +183,8 @@ end;
 
 procedure TDataModuleGenerator.ParseNodes;
 var
-  LNodesArray, LPortsArray: TJSONArray; // Añadido LPortsArray
-  LNodeJson, LPropertiesJson, LParametersJson, LEngineJson, LPositionJson, LPortJson, LPortEngineJson: TJSONObject; // Añadido LPortJson y LPortEngineJson
+  LNodesArray, LPortsArray: TJSONArray; // Aï¿½adido LPortsArray
+  LNodeJson, LPropertiesJson, LParametersJson, LEngineJson, LPositionJson, LPortJson, LPortEngineJson: TJSONObject; // Aï¿½adido LPortJson y LPortEngineJson
   LNodeInfo, LLinkInfo, LToolInfo, LAgentsInfo: TComponentInfo;
   LToolClassName, LJoinModeStr, LDescription, LNodeGuid, LLabel, LNodeName, LLinkName: string;
   LJoinModeOrdinal, i: Integer;
@@ -197,7 +197,7 @@ begin
   if not Assigned(LNodesArray) then
     raise Exception.Create('JSON graph must contain a "nodes" array.');
 
-  // --- PASO 1: Encontrar las coordenadas mínimas para la normalización ---
+  // --- PASO 1: Encontrar las coordenadas mï¿½nimas para la normalizaciï¿½n ---
   minX := MaxSingle;
   minY := MaxSingle;
   for var LJsonValue in LNodesArray do
@@ -266,7 +266,7 @@ begin
       if not LDescription.IsEmpty then
         LNodeInfo.Properties.Values['Description'] := QuotedStr(LDescription);
 
-      // Búsqueda original de JoinMode (se mantiene por retrocompatibilidad)
+      // Bï¿½squeda original de JoinMode (se mantiene por retrocompatibilidad)
       LEngineJson := FindEngineObject(LPropertiesJson);
       if Assigned(LEngineJson) then
       begin
@@ -276,9 +276,9 @@ begin
           LNodeInfo.Properties.Values['JoinMode'] := LJoinModeStr;
       end;
 
-      // --- INICIO DE LA MODIFICACIÓN ---
-      // Nueva búsqueda de JoinMode anidado dentro del array 'ports'.
-      // Esto sobreescribirá el valor anterior si se encuentra una definición más específica.
+      // --- INICIO DE LA MODIFICACIï¿½N ---
+      // Nueva bï¿½squeda de JoinMode anidado dentro del array 'ports'.
+      // Esto sobreescribirï¿½ el valor anterior si se encuentra una definiciï¿½n mï¿½s especï¿½fica.
       if LNodeJson.TryGetValue<TJSONArray>('ports', LPortsArray) then
       begin
         for var LPortValue in LPortsArray do
@@ -287,7 +287,7 @@ begin
           // Nos interesa solo si el puerto es de entrada y tiene un objeto 'engine'
           if (LPortJson.GetValue<string>('direction') = 'input') and LPortJson.TryGetValue<TJSONObject>('engine', LPortEngineJson) then
           begin
-            // Si encontramos un 'joinMode' aquí, lo usamos y salimos del bucle
+            // Si encontramos un 'joinMode' aquï¿½, lo usamos y salimos del bucle
             if LPortEngineJson.TryGetValue<string>('joinMode', LJoinModeStr) then
             begin
               LJoinModeOrdinal := GetEnumValue(TypeInfo(TJoinMode), LJoinModeStr);
@@ -345,7 +345,7 @@ begin
 
   LEdgeGroup := TDictionary < string, TList < TJSONObject >>.Create;
   try
-    // --- PASO 1: FASE DE AGRUPACIÓN ---
+    // --- PASO 1: FASE DE AGRUPACIï¿½N ---
     // Recorremos todas las aristas del JSON y las agrupamos en un diccionario
     // usando el ID del nodo de origen como clave.
     for var LJsonValue in LEdgesArray do
@@ -363,7 +363,7 @@ begin
     end;
 
     // --- PASO 2: FASE DE PROCESAMIENTO POR GRUPO ---
-    // Iteramos sobre cada grupo de aristas. Cada grupo corresponde a un único TAIAgentsLink.
+    // Iteramos sobre cada grupo de aristas. Cada grupo corresponde a un ï¿½nico TAIAgentsLink.
     for var LPair in LEdgeGroup do
     begin
       var
@@ -374,7 +374,7 @@ begin
 
       // Encontrar el Link que ya creamos en ParseNodes
       if not FLinkIdToNameMap.TryGetValue(LSourceNodeId, LLinkName) then
-        Continue; // No se encontró el link para este nodo, algo raro pasó.
+        Continue; // No se encontrï¿½ el link para este nodo, algo raro pasï¿½.
 
       var
       LLinkInfoIndex := -1;
@@ -387,7 +387,7 @@ begin
         end;
       end;
       if LLinkInfoIndex = -1 then
-        Continue; // No se encontró el registro del Link en la lista.
+        Continue; // No se encontrï¿½ el registro del Link en la lista.
 
       var
       SharedPropertiesSet := False;
@@ -441,13 +441,13 @@ begin
             var
             LMaxCycles := LEngineJson.GetValue<Integer>('linkMaxCycles', -1);
             if LMaxCycles <> -1 then // Usar -1 para detectar si la propiedad existe
-              if LMaxCycles <> 1 then // Solo añadir si no es el valor por defecto
+              if LMaxCycles <> 1 then // Solo aï¿½adir si no es el valor por defecto
                 FComponentList[LLinkInfoIndex].Properties.Values['MaxCycles'] := LMaxCycles.ToString;
 
             SharedPropertiesSet := True;
           end;
 
-          // B) Procesar Propiedades Específicas del Puerto (siempre se procesan)
+          // B) Procesar Propiedades Especï¿½ficas del Puerto (siempre se procesan)
           if LEngineJson.TryGetValue<string>('linkExpressionA', LExpr) then
             FComponentList[LLinkInfoIndex].Properties.Values['ExpressionA'] := LExpr;
           if LEngineJson.TryGetValue<string>('linkExpressionB', LExpr) then
@@ -527,8 +527,8 @@ end;
 
 function TDataModuleGenerator.FindEngineObject(JsonObj: TJSONObject): TJSONObject;
 begin
-  // Esta función es idéntica a la de tu TGraphBuilder, se puede copiar y pegar aquí.
-  // ... implementación completa ...
+  // Esta funciï¿½n es idï¿½ntica a la de tu TGraphBuilder, se puede copiar y pegar aquï¿½.
+  // ... implementaciï¿½n completa ...
   Result := nil;
   if JsonObj = nil then
     Exit;
@@ -542,8 +542,8 @@ end;
 
 function TDataModuleGenerator.FindPortJsonByTerminalId(ANodeJson: TJSONObject; const APortTerminalId: string): TJSONObject;
 begin
-  // Esta función es idéntica a la de tu TGraphBuilder, se puede copiar y pegar aquí.
-  // ... implementación completa ...
+  // Esta funciï¿½n es idï¿½ntica a la de tu TGraphBuilder, se puede copiar y pegar aquï¿½.
+  // ... implementaciï¿½n completa ...
   Result := nil;
   var
     LPortsArray: TJSONArray;
@@ -580,10 +580,10 @@ begin
 
     if Assigned(LType) then
     begin
-    // 2. Itera a través de todos los paquetes cargados en tiempo de diseño
+    // 2. Itera a travï¿½s de todos los paquetes cargados en tiempo de diseï¿½o
     for LPackage in TPackage.Packages do
     begin
-    // 3. Verifica si el tipo está contenido en el paquete actual
+    // 3. Verifica si el tipo estï¿½ contenido en el paquete actual
     if LPackage.ContainsType(LType) then
     begin
     // 4. Si lo encuentra, itera sobre las unidades de ese paquete
@@ -602,7 +602,7 @@ begin
     LContext.Free;
     end;
 
-    // Fallback: Si no se encontró en ningún paquete (ej. clases de System o SysUtils),
+    // Fallback: Si no se encontrï¿½ en ningï¿½n paquete (ej. clases de System o SysUtils),
     // puede que el nombre de la unidad sea parte del nombre completo del tipo.
     if Result.IsEmpty and Assigned(LType) and (LType.QualifiedName.Contains('.')) then
     begin
@@ -657,7 +657,7 @@ begin
     FUsedUnits.Add('System.SysUtils');
     FUsedUnits.Add('System.Classes');
     FUsedUnits.Add('uMakerAi.Agents');
-    // FUsedUnits.Add('uMakerAi.Agents.Tools'); // Asegúrate que esta unidad exista o adáptala
+    // FUsedUnits.Add('uMakerAi.Agents.Tools'); // Asegï¿½rate que esta unidad exista o adï¿½ptala
 
     SB.AppendLine('uses');
     SB.Append('  ').Append(FUsedUnits.CommaText);
@@ -690,7 +690,7 @@ begin
     SB.AppendLine('{%CLASSGROUP FMX.Controls.TControl}'); // o Vcl.Controls.TControl
     SB.AppendLine;
     // CORREGIDO:
-    SB.Append(Format('{$R *.dfm}', [])); // No necesita formato, pero lo dejo así por consistencia
+    SB.Append(Format('{$R *.dfm}', [])); // No necesita formato, pero lo dejo asï¿½ por consistencia
     SB.AppendLine;
     SB.AppendLine;
 
@@ -713,7 +713,7 @@ begin
     Result := 'NextNo'
   else
   begin
-    // Busca el primer 'NextX' que no esté usado en este Link.
+    // Busca el primer 'NextX' que no estï¿½ usado en este Link.
     for i := Low(NextProps) to High(NextProps) do
     begin
 
@@ -723,7 +723,7 @@ begin
         Exit;
       end;
     end;
-    // Si todos están usados, devuelve el primero como fallback (puede causar sobreescritura)
+    // Si todos estï¿½n usados, devuelve el primero como fallback (puede causar sobreescritura)
     Result := 'NextA';
   end;
 end;
@@ -747,12 +747,12 @@ end;
 function TDataModuleGenerator.SanitizeName(const ALabel: string): string;
 begin
   Result := ALabel;
-  // Elimina espacios y caracteres no válidos.
+  // Elimina espacios y caracteres no vï¿½lidos.
   Result := TRegEx.Replace(Result, '[^a-zA-Z0-9_]', '');
-  // Si está vacío después de limpiar, genera un nombre por defecto.
+  // Si estï¿½ vacï¿½o despuï¿½s de limpiar, genera un nombre por defecto.
   if Result.IsEmpty then
     Result := 'Component' + TGuid.NewGuid.ToString.Substring(1, 8);
-  // Asegurarse de que no empiece con un número.
+  // Asegurarse de que no empiece con un nï¿½mero.
   if (Result[1] >= '0') and (Result[1] <= '9') then
     Result := '_' + Result;
 end;

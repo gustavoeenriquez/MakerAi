@@ -1,4 +1,4 @@
-// IT License
+ï»¿// IT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enríquez
+// Nombre: Gustavo Enrï¿½quez
 // Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
 
@@ -72,7 +72,7 @@ End;
 
 function TVersionPropertyEditor.GetAttributes: TPropertyAttributes;
 begin
-  // paDialog permite mostrar el botón de tres puntos
+  // paDialog permite mostrar el botï¿½n de tres puntos
   // paReadOnly hace que la propiedad no sea editable directamente
   Result := [paDialog, paReadOnly];
 end;
@@ -81,7 +81,7 @@ procedure TVersionPropertyEditor.Edit;
 var
   AboutForm: TAboutDialog;
 begin
-  // Crear y mostrar el diálogo About
+  // Crear y mostrar el diï¿½logo About
   AboutForm := TAboutDialog.Create(nil);
   try
     AboutForm.ShowModal;
@@ -93,7 +93,7 @@ end;
 {
 function TVersionPropertyEditor.GetValue: string;
 begin
-  // Mostrar la versión actual en el Object Inspector
+  // Mostrar la versiï¿½n actual en el Object Inspector
    //$I uMakerAi.Version.inc
   //Result := MAKERAI_VERSION_FULL;
 end;
@@ -101,7 +101,7 @@ end;
 procedure TVersionPropertyEditor.SetValue(const Value: string);
 begin
   // No permitir cambio del valor (solo lectura)
-  // Opcionalmente podrías mostrar un mensaje explicativo
+  // Opcionalmente podrï¿½as mostrar un mensaje explicativo
 end;
 }
 

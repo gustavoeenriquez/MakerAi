@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MakerAI is an AI orchestration framework for Delphi developers (v3.3). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers, autonomous agents, and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (full support: 11 Alexandria+).
+MakerAI is an AI orchestration framework for Delphi developers (v3.4). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers, autonomous agents, and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+
+**v3.4 highlights:** registro selectivo de drivers restaurado — `TAiChatConnection` ya no fuerza la carga de todos los providers. Cada driver se auto-registra solo cuando se importa explícitamente. Para cargar todos los drivers de una vez, agregar `uMakerAi.Chat.Initializations` al `uses`.
 
 **v3.3 highlights:** nuevo sistema de orquestación `TAiCapabilities` (`ModelCaps`/`SessionCaps`) que unifica y simplifica la configuración de capacidades por modelo; soporte de modelos actualizado para todos los providers (Feb 2026).
 
@@ -34,13 +36,16 @@ Add these folders to Delphi Library Path (Tools > Options > Language > Delphi > 
 - `Source/ChatUI`
 - `Source/Core`
 - `Source/Design`
+- `Source/Embeddings`
 - `Source/MCPClient`
 - `Source/MCPServer`
 - `Source/Packages`
 - `Source/RAG`
+- `Source/Realtime`
 - `Source/Resources`
 - `Source/Tools`
 - `Source/Utils`
+- `Source/WebSocket`
 
 ### Running Demos
 Open `Demos/DemosVersion31.groupproj` in Delphi IDE to access all demo projects.
@@ -69,6 +74,7 @@ curl -X POST http://localhost:8080/mcp \
 - **Mistral OCR annotations**: Feature stub present but unimplemented
 - **Claude Citations (RAG nativo)**: Implementación parcial disponible; soporte completo pendiente
 - **Gemini Speech cost estimation**: Token/cost tracking not yet implemented
+- **Gemini Realtime STT**: `uMakerAi.Realtime.Gemini.pas` — stub implementado, conexión y envío de audio pendientes
 
 ## Architecture
 
@@ -107,7 +113,7 @@ curl -X POST http://localhost:8080/mcp \
 
 **Core (`Source/Core/`)**: Foundation classes
 - `uMakerAi.Core.pas` - Base types: `TAiMediaFile`, `TAiFileCategory`, `TAiChatMediaSupport`, `TAiCapability`, `TAiCapabilities`, chat states
-- `uMakerAi.Chat.pas` - Abstract `TAiChat` base class; incluye `ModelCaps`, `SessionCaps`, `RunNew`, `RunLegacy`, `EnsureNewSystemConfig`
+- `uMakerAi.Chat.pas` - Abstract `TAiChat` base class; incluye `ModelCaps`, `SessionCaps`, `EnsureNewSystemConfig`; orquestador interno `RunNew` (privado — no llamar directamente; usar `AddMessageAndRun` o `Run`)
 - `uMakerAi.Chat.Messages.pas` - Message handling (`TAiChatMessage`, `TAiChatMessages`)
 - `uMakerAi.Embeddings.pas` - Embedding generation
 
@@ -137,6 +143,19 @@ curl -X POST http://localhost:8080/mcp \
 - Agent tools: `TAiShell`, `TAiTextEditorTool`, `TAiComputerUseTool`
 - Tool interfaces: `IAiPdfTool`, `IAiVisionTool`, `IAiSpeechTool`, `IAiWebSearchTool`
 
+**WebSocket (`Source/WebSocket/`)**: Standalone RFC 6455 WebSocket client (used by Realtime module)
+- `uMakerAi.WebSocket.Client.pas` - `TAiWSClient` — pure-Pascal RFC 6455 + HTTP Upgrade + reader thread; uses `ITlsTransport` interface
+- `uMakerAi.WebSocket.SChannel.pas` - `TSChannelTransport` — TLS via `secur32.dll` (Windows native, zero extra DLLs; tested ✅)
+- `uMakerAi.WebSocket.OpenSSL.pas` - `TOpenSSLTransport` — TLS via `dlopen(libssl.so)` (Linux/macOS; compiles, not yet tested on real hardware)
+- `uMakerAi.WebSocket.Android.pas` - `TAndroidSSLTransport` — TLS via `javax.net.ssl.SSLSocketFactory` (JNI; compiles, not yet tested on real hardware)
+
+**Realtime (`Source/Realtime/`)**: Real-time audio streaming (STT via WebSocket)
+- `uMakerAi.Realtime.pas` - Abstract base `TAiRealtimeBase` + `TAiRealtimeFactory`; resampler PCM16, VAD modes, thread-safe events
+- `uMakerAi.Realtime.AiConnection.pas` - `TAiRealtimeConnection` universal connector (same pattern as `TAiChatConnection`)
+- `uMakerAi.Realtime.OpenAI.pas` - `TAiOpenAiRealtimeSTT` — WebSocket to `wss://api.openai.com/v1/realtime`, 24 kHz PCM16; full implementation
+- `uMakerAi.Realtime.Gemini.pas` - `TAiGeminiRealtimeSTT` — 16 kHz PCM16; **stub, pendiente implementación**
+- `uMakerAi.Realtime.WebSocket.pas` - compatibility shim; re-exports `TAiRealtimeWSClient` → `TAiWSClient` (Source/WebSocket/)
+
 **ChatUI (`Source/ChatUI/`)**: FMX visual components
 - `TChatList` - Chat container with markdown rendering
 - `TChatInput` - Text/voice/attachment input bar
@@ -157,9 +176,7 @@ curl -X POST http://localhost:8080/mcp \
 - `ThinkingLevel` — nivel de razonamiento (`tlLow`, `tlMedium`, `tlHigh`)
 - `Tool_Active` — habilita function calling
 
-Sistema legacy aún soportado (traducción automática vía `EnsureNewSystemConfig`):
-- `NativeInputFiles` / `NativeOutputFiles` — tipos de archivo físico
-- `ChatMediaSupports` / `EnabledFeatures` — capacidades lógicas legacy
+**API eliminada (no usar en `RegisterUserParam`):** `NativeInputFiles`, `NativeOutputFiles`, `ChatMediaSupports`, `EnabledFeatures` fueron eliminados de la API pública. Existen internamente en el engine (calculados automáticamente desde `ModelCaps`/`SessionCaps` vía `SetModelCaps`/`EnsureNewSystemConfig`), pero NO deben usarse directamente.
 
 ### Agent Graph Execution Model
 
@@ -175,13 +192,15 @@ Agents use a directed graph with nodes (`TAIAgentsNode`) and links (`TAIAgentsLi
 |------|-------------|
 | Add new LLM provider | `Source/Chat/uMakerAi.Chat.*.pas` (inherit from `TAiChat`) |
 | Configure model capabilities | `Source/Chat/uMakerAi.Chat.Initializations.pas` |
-| Modify capability orchestration | `Source/Core/uMakerAi.Chat.pas` (`RunNew`, `EnsureNewSystemConfig`) |
+| Modify capability orchestration | `Source/Core/uMakerAi.Chat.pas` (`RunNew` privado, `EnsureNewSystemConfig`) |
 | Add TAiCapability value | `Source/Core/uMakerAi.Core.pas` (`TAiCapability` enum) |
 | Modify function calling | `Source/Tools/uMakerAi.Tools.Functions.pas` |
 | RAG vector operations | `Source/RAG/uMakerAi.RAG.Vectors.pas` |
 | RAG graph operations | `Source/RAG/uMakerAi.RAG.Graph.Core.pas` |
 | Agent orchestration | `Source/Agents/uMakerAi.Agents.pas` |
 | MCP server creation | `Source/MCPServer/uMakerAi.MCPServer.Core.pas` |
+| Add Realtime STT provider | `Source/Realtime/uMakerAi.Realtime.pas` (inherit `TAiRealtimeBase`) |
+| Realtime universal connector | `Source/Realtime/uMakerAi.Realtime.AiConnection.pas` |
 | Version/feature flags | `Source/Core/uMakerAi.Version.inc` |
 
 ## Naming Conventions
@@ -197,17 +216,20 @@ Agents use a directed graph with nodes (`TAIAgentsNode`) and links (`TAIAgentsLi
 
 | CompilerVersion | Delphi Version | Support Level |
 |-----------------|----------------|---------------|
-| 34.0 | Delphi 10.4 Sydney | Minimum supported |
-| 35.0 | Delphi 11 Alexandria | **Full support** (primary split point) |
-| 36.0 | Delphi 12 Athens | Full support |
-| 37.0 | Delphi 13 Florence | Latest tested |
+| 34.0 | Delphi 10.4 Sydney | Limited (minimum supported) |
+| 35.0 | Delphi 11 Alexandria | **Full support** |
+| 36.0 | Delphi 12 Athens | **Full support** (primary conditional split) |
+| 37.0 | Delphi 13 Florence | Full support (latest tested) |
 
-### Key Conditional Split: CompilerVersion 35
+### Key Conditional Split: CompilerVersion 36
 
-The codebase has 79 conditional compilation directives. The primary split is at CompilerVersion 35 (Delphi 11):
+The codebase has 79 conditional compilation directives. The primary split is at CompilerVersion 36 (Delphi 12):
 
 - **< 35**: Uses `uJSONHelper.pas` for missing TJSONObject helper methods
 - **>= 35**: Uses native `System.JSON` helpers, `TRESTClient.SynchronizeEvents := False`
+- **< 35**: `TMultipartFormData.AddStream` without `AShareOwnership` parameter (Delphi 10.4 only)
+- **>= 35**: `TMultipartFormData.AddStream` with `AShareOwnership: Boolean` parameter (Delphi 11+)
+- **>= 36**: `TThread.ForceQueue` available (Delphi 12+); use `TThread.Queue` as fallback for D11
 
 ```pascal
 {$IF CompilerVersion >= 34}  // Delphi 10.4 Sydney+
@@ -402,6 +424,8 @@ Detailed documentation is available in `Docs/Version 3/`:
 | [Source/MCPClient/](Source/MCPClient/CLAUDE.md) | MCP client connector |
 | [Source/Tools/](Source/Tools/CLAUDE.md) | Function calling, Shell, ComputerUse |
 | [Source/ChatUI/](Source/ChatUI/CLAUDE.md) | FMX visual components |
+| [Source/Realtime/](Source/Realtime/CLAUDE.md) | Real-time STT drivers (OpenAI WebSocket, Gemini stub) |
+| [Source/WebSocket/](Source/WebSocket/CLAUDE.md) | RFC 6455 WebSocket client + TLS transports (SChannel/OpenSSL) |
 | [Source/Utils/](Source/Utils/CLAUDE.md) | Voice monitor, diff updater |
 | [Source/Design/](Source/Design/CLAUDE.md) | Design-time property editors |
 | [Source/Resources/](Source/Resources/CLAUDE.md) | Embedded resources |
