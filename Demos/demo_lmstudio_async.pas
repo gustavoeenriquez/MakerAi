@@ -8,6 +8,7 @@ program demo_lmstudio_async;
 // En LM Studio: abrir un modelo -> boton "Start Server" (puerto 1234 por defecto)
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,

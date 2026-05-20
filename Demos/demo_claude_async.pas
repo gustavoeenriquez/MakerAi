@@ -11,6 +11,7 @@ program demo_claude_async;
 //   Linux:    export CLAUDE_API_KEY=sk-ant-xxxx
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,

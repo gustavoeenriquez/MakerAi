@@ -6,6 +6,7 @@ program demo_shell;
 {$mode objfpc}{$H+}
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Tools.Shell;
 

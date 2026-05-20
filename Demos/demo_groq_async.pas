@@ -9,6 +9,7 @@ program demo_groq_async;
 //   Linux/Mac: export GROQ_API_KEY=gsk_xxxx
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,

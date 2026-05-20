@@ -22,6 +22,7 @@ program demo_gemini_speech;
 //     -Fu../Source/Core -Fu../Source/Chat -Fu../Source/Tools -Fu../Source/Utils
 
 uses
+  uDemoHelper,
   SysUtils, Classes,
   uMakerAi.Core,
   uMakerAi.Chat.Messages,

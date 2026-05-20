@@ -22,6 +22,7 @@ program demo_openai_audio;
 //   fpc demo_openai_audio.pas -Fu../Source/Core -Fu../Source/Chat -Fu../Source/Tools
 
 uses
+  uDemoHelper,
   SysUtils, Classes,
   uMakerAi.Core,
   uMakerAi.OpenAI.Audio;
@@ -50,27 +51,33 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Handlers de streaming
+// Handlers de streaming (class para compatibilidad con eventos 'of object')
 // ---------------------------------------------------------------------------
-var
-  GChunksReceived: Integer = 0;
-  GTotalBytes:     Int64   = 0;
+type
+  TDemoAudioHandlers = class
+    ChunksReceived: Integer;
+    TotalBytes: Int64;
+    procedure OnChunk(Sender: TObject; const AChunk: TBytes);
+    procedure OnSpeechDone(Sender: TObject);
+    procedure OnTranscriptionDone(Sender: TObject;
+      const AResult: TTranscriptionResult);
+  end;
 
-procedure OnChunk(Sender: TObject; const AChunk: TBytes);
+procedure TDemoAudioHandlers.OnChunk(Sender: TObject; const AChunk: TBytes);
 begin
-  Inc(GChunksReceived);
-  Inc(GTotalBytes, Length(AChunk));
+  Inc(ChunksReceived);
+  Inc(TotalBytes, Length(AChunk));
   Write('.');
 end;
 
-procedure OnSpeechDone(Sender: TObject);
+procedure TDemoAudioHandlers.OnSpeechDone(Sender: TObject);
 begin
   WriteLn;
-  WriteLn('  Streaming completado — chunks=', GChunksReceived,
-          '  bytes totales=', GTotalBytes);
+  WriteLn('  Streaming completado — chunks=', ChunksReceived,
+          '  bytes totales=', TotalBytes);
 end;
 
-procedure OnTranscriptionDone(Sender: TObject;
+procedure TDemoAudioHandlers.OnTranscriptionDone(Sender: TObject;
   const AResult: TTranscriptionResult);
 begin
   WriteLn('  [Evento] OnTranscriptionCompleted: "',
@@ -83,6 +90,7 @@ var
   Snd:   TMemoryStream;
   Res:   TTranscriptionResult;
   MF:    TAiMediaFile;
+  Handlers: TDemoAudioHandlers;
 
 const
   EN_TEXT = 'The future of artificial intelligence is both exciting and challenging.';
@@ -96,6 +104,7 @@ begin
   WriteLn('=== MakerAI FPC — Demo OpenAI Audio (TAiOpenAiAudio) ===');
   WriteLn;
 
+  Handlers := TDemoAudioHandlers.Create;
   Audio := TAiOpenAiAudio.Create(nil);
   try
     Audio.ApiKey := '@OPENAI_API_KEY';
@@ -159,11 +168,11 @@ begin
     Audio.TTSModel            := tts_1;
     Audio.TTSVoice            := tvShimmer;
     Audio.TTSInstructions     := '';
-    Audio.OnAudioChunkReceived := @OnChunk;
-    Audio.OnSpeechCompleted   := @OnSpeechDone;
+    Audio.OnAudioChunkReceived  := @Handlers.OnChunk;
+    Audio.OnSpeechCompleted    := @Handlers.OnSpeechDone;
 
-    GChunksReceived := 0;
-    GTotalBytes     := 0;
+    Handlers.ChunksReceived := 0;
+    Handlers.TotalBytes     := 0;
 
     WriteLn('  Texto: "', EN_TEXT, '"');
     Write('  Recibiendo chunks: ');
@@ -253,6 +262,7 @@ begin
 
   finally
     Audio.Free;
+    Handlers.Free;
   end;
 
   WriteLn;

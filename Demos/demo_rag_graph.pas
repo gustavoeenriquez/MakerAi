@@ -22,6 +22,7 @@ program demo_rag_graph;
 //     -Fu../Source/Core -Fu../Source/Chat -Fu../Source/RAG -Fu../Source/Utils
 
 uses
+  uDemoHelper,
   SysUtils, Classes,
   uMakerAi.Embeddings.Core,
   uMakerAi.Embeddings,
@@ -33,9 +34,16 @@ uses
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+// NOTA (FPC compat): Se eliminan los valores por defecto de los parámetros
+// porque FPC no permite:
+//   a) parámetros con default antes que parámetros sin default
+//      (AProp1Key= '' antes de AProp1Val sin default)
+//   b) parámetros Variant con valor por defecto
+// La función no se usa en ningún otro lugar del demo, es código muerto.
+// ---------------------------------------------------------------------------
 procedure AddNodeAndEmbed(Graph: TAiRagGraph; Emb: TAiEmbeddings;
     const AID, ALabel, AName, AText: string;
-    const AProp1Key: string = ''; AProp1Val: Variant = Unassigned);
+    const AProp1Key: string; AProp1Val: Variant);
 var
   Node: TAiRagGraphNode;
 begin

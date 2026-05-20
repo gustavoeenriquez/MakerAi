@@ -18,6 +18,7 @@ program demo_aiconnection;
 //   - O cambiar DriverName a otro driver disponible
 
 uses
+  uDemoHelper,
   SysUtils, Classes,
   uMakerAi.Core,
   uMakerAi.Chat,
@@ -67,7 +68,10 @@ begin
     WriteLn('>>> Pregunta: En una frase, que es Ollama?');
     try
       Resp := Conn.AddMessageAndRun('En una frase, que es Ollama?', 'user');
-      WriteLn('<<< Respuesta: ', Resp);
+      if Resp = '' then
+        WriteLn('[ERROR] Respuesta vacia - posible problema de conexion, API key, o SSL')
+      else
+        WriteLn('<<< Respuesta: ', Resp);
       WriteLn('Tokens — Prompt: ', Conn.Prompt_tokens,
               '  Completion: ',    Conn.Completion_tokens,
               '  Total: ',         Conn.Total_tokens);
@@ -95,7 +99,10 @@ begin
     try
       Resp := Conn.AddMessageAndRun(
           'Di "Hola desde GenericLLM" en una sola linea.', 'user');
-      WriteLn('<<< Respuesta: ', Resp);
+      if Resp = '' then
+        WriteLn('[ERROR] Respuesta vacia - posible problema de conexion, API key, o SSL')
+      else
+        WriteLn('<<< Respuesta: ', Resp);
     except
       on E: Exception do
         WriteLn('[ERROR GenericLLM] ', E.Message);

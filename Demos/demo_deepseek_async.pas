@@ -11,6 +11,7 @@ program demo_deepseek_async;
 //   Linux:    export DEEPSEEK_API_KEY=sk-xxxx
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,

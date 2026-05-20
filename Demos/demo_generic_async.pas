@@ -14,6 +14,7 @@ program demo_generic_async;
 //   ollama pull gemma3:1b
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,

@@ -2620,10 +2620,11 @@ function TAiRagGraph.ExtractSubgraph(ANodes: TNodeArray): TAiRagGraph;
 var
   NodeSet             : TStringList; // sorted, Objects not used (just as set)
   I                   : Integer;
-  Node, NewNode       : TAiRagGraphNode;
-  Edge, NewEdge       : TAiRagGraphEdge;
-  Chunk               : TAiEmbeddingNode;
+  Node, SubNode       : TAiRagGraphNode; // SubNode/SubEdge: NO NewNode/NewEdge
+  Edge, SubEdge       : TAiRagGraphEdge; // porque FPC rechaza vars locales
+  Chunk               : TAiEmbeddingNode; // con mismo nombre que metodos de clase
   NewSource, NewTarget: TAiRagGraphNode;
+  J                   : Integer; // FPC requiere declarar J (no inline var como Delphi)
 begin
   Result := TAiRagGraph.Create(nil);
   Result.Embeddings := Self.Embeddings;
@@ -2641,21 +2642,21 @@ begin
         Node := ANodes[I];
         NodeSet.Add(Node.ID);
 
-        NewNode := Result.AddNode(Node.ID, Node.NodeLabel, Node.Name);
-        NewNode.Model := Node.Model;
-        NewNode.Text  := Node.Text;
-        NewNode.MetaData.Assign(Node.MetaData);
+        SubNode := Result.AddNode(Node.ID, Node.NodeLabel, Node.Name);
+        SubNode.Model := Node.Model;
+        SubNode.Text  := Node.Text;
+        SubNode.MetaData.Assign(Node.MetaData);
 
         if Length(Node.Data) > 0 then
         begin
-          NewNode.SetDataLength(Length(Node.Data));
-          NewNode.Data := Copy(Node.Data);
+          SubNode.SetDataLength(Length(Node.Data));
+          SubNode.Data := Copy(Node.Data);
         end;
 
         for J := 0 to Node.Chunks.Count - 1 do
         begin
           Chunk := Node.Chunks[J];
-          NewNode.AddChunk(Chunk.Text, Chunk.Data);
+          SubNode.AddChunk(Chunk.Text, Chunk.Data);
         end;
       end;
 
@@ -2672,13 +2673,13 @@ begin
             NewTarget := Result.FindNodeByID(Edge.ToNode.ID);
             if (NewSource <> nil) and (NewTarget <> nil) then
             begin
-              NewEdge := Result.AddEdge(NewSource, NewTarget,
+              SubEdge := Result.AddEdge(NewSource, NewTarget,
                   Edge.ID, Edge.EdgeLabel, Edge.Name, Edge.Weight);
-              NewEdge.MetaData.Assign(Edge.MetaData);
+              SubEdge.MetaData.Assign(Edge.MetaData);
               if Length(Edge.Data) > 0 then
               begin
-                NewEdge.SetDataLength(Length(Edge.Data));
-                NewEdge.Data := Copy(Edge.Data);
+                SubEdge.SetDataLength(Length(Edge.Data));
+                SubEdge.Data := Copy(Edge.Data);
               end;
             end;
           end;
@@ -3143,6 +3144,7 @@ var
 
   procedure BuildPaths(ANode: TAiRagGraphNode);
   var
+    I       : Integer; // FPC: for-loop var en proc anidada debe ser local
     PIdx    : Integer;
     PList   : TGraphNodeList;
     Parent  : TAiRagGraphNode;
@@ -3889,8 +3891,8 @@ var
   ChunkObj  : TJSONObject;
   ChunkVal  : TJSONData;
   PropObj   : TJSONObject;
-  NewNode   : TAiRagGraphNode;
-  NewEdge   : TAiRagGraphEdge;
+  SubNode   : TAiRagGraphNode; // SubNode/SubEdge (no NewNode/NewEdge):
+  SubEdge   : TAiRagGraphEdge; // FPC rechaza vars con mismo nombre que metodos
   I, J, K   : Integer;
   NodeID, NodeLabel, NodeName, NodeText: string;
   EdgeID, EdgeLabel, EdgeName, SourceID, TargetID: string;
@@ -3956,13 +3958,13 @@ begin
           NodeName  := JGetStr(NodeObj, 'name');
           NodeText  := JGetStr(NodeObj, 'node_text');
 
-          NewNode := Self.AddNode(NodeID, NodeLabel, NodeName);
-          NewNode.Text  := NodeText;
-          NewNode.Model := JGetStr(NodeObj, 'model');
+          SubNode := Self.AddNode(NodeID, NodeLabel, NodeName);
+          SubNode.Text  := NodeText;
+          SubNode.Model := JGetStr(NodeObj, 'model');
 
           TmpJData := NodeObj.Find('properties');
           if Assigned(TmpJData) and (TmpJData is TJSONObject) then
-            NewNode.MetaData.FromJSON(TJSONObject(TmpJData));
+            SubNode.MetaData.FromJSON(TJSONObject(TmpJData));
 
           // Chunks
           TmpJData := NodeObj.Find('chunks');
@@ -3983,7 +3985,7 @@ begin
                 for J := 0 to TJSONArray(EmbArr).Count - 1 do
                   ChunkData[J] := TJSONArray(EmbArr).Items[J].AsFloat;
               end;
-              NewNode.AddChunk(ChunkText, ChunkData);
+              SubNode.AddChunk(ChunkText, ChunkData);
             end;
           end;
 
@@ -3992,9 +3994,9 @@ begin
           if Assigned(TmpJData) and (TmpJData is TJSONArray) then
           begin
             EmbArr := TmpJData;
-            NewNode.SetDataLength(TJSONArray(EmbArr).Count);
+            SubNode.SetDataLength(TJSONArray(EmbArr).Count);
             for J := 0 to TJSONArray(EmbArr).Count - 1 do
-              NewNode.Data[J] := TJSONArray(EmbArr).Items[J].AsFloat;
+              SubNode.Data[J] := TJSONArray(EmbArr).Items[J].AsFloat;
           end;
         end;
       end;
@@ -4019,20 +4021,20 @@ begin
 
           if (FromNode <> nil) and (ToNode <> nil) then
           begin
-            NewEdge := Self.AddEdge(FromNode, ToNode,
+            SubEdge := Self.AddEdge(FromNode, ToNode,
                 EdgeID, EdgeLabel, EdgeName, EdgeWeight);
 
             TmpJData := EdgeObj.Find('properties');
             if Assigned(TmpJData) and (TmpJData is TJSONObject) then
-              NewEdge.MetaData.FromJSON(TJSONObject(TmpJData));
+              SubEdge.MetaData.FromJSON(TJSONObject(TmpJData));
 
             TmpJData := EdgeObj.Find('embedding');
             if Assigned(TmpJData) and (TmpJData is TJSONArray) then
             begin
               EmbArr := TmpJData;
-              NewEdge.SetDataLength(TJSONArray(EmbArr).Count);
+              SubEdge.SetDataLength(TJSONArray(EmbArr).Count);
               for J := 0 to TJSONArray(EmbArr).Count - 1 do
-                NewEdge.Data[J] := TJSONArray(EmbArr).Items[J].AsFloat;
+                SubEdge.Data[J] := TJSONArray(EmbArr).Items[J].AsFloat;
             end;
           end;
         end;
@@ -4061,7 +4063,7 @@ var
   Node  : TAiRagGraphNode;
   Edge  : TAiRagGraphEdge;
   Chunk : TAiEmbeddingNode;
-  I, J  : Integer;
+  I, J, K  : Integer; // K agregado para FPC (no inline var como Delphi)
   JsonStr: string;
   SS    : TStringStream;
   PropKey: string;

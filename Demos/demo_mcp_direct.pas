@@ -13,6 +13,7 @@ program demo_mcp_direct;
 //   fpc demo_mcp_direct.pas -Fu../Source/Core -Fu../Source/MCPServer -Fu../Source/Tools
 
 uses
+  uDemoHelper,
   SysUtils, Classes,
   fpjson, jsonparser,
   uMakerAi.MCPServer.Core,

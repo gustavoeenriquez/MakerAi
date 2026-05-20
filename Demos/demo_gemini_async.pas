@@ -10,6 +10,7 @@ program demo_gemini_async;
 //   Linux:    export GEMINI_API_KEY=AIzaSy-xxxx
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,

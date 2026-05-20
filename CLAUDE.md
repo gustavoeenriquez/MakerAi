@@ -44,7 +44,42 @@ This is a **source library** — no standalone build system. Units are included 
 
 **Feature flags** are in `Source/Core/uMakerAi.Version.inc` — include with `{$I uMakerAi.Version.inc}`, never hard-code constants.
 
-**No formal test suite.** Verify changes by running relevant demo applications.
+## Demos — Compilación y Estructura
+
+Los 45 demos están en `Demos/`. Cada uno es un `.pas` standalone que se compila directamente con FPC.
+
+```
+Demos/
+├── *.pas            ← fuente (45 archivos)
+├── bin/             ← ejecutables compilados
+├── lib/             ← objetos temporales (.o, .ppu, .a)
+└── build_demos.sh   ← script de compilación
+```
+
+**Compilar todo:**
+```bash
+cd Demos
+./build_demos.sh              # FPC del PATH
+FPC=/ruta/fpc ./build_demos.sh  # FPC específico
+```
+
+**Limpiar y recompilar:**
+```bash
+./build_demos.sh clean   # borra bin/ y lib/
+./build_demos.sh         # recompila desde cero
+```
+
+El script **no para en errores** — compila los 45 pase lo que pase y al final muestra un reporte OK / FAIL. Útil cuando un demo depende de API keys o drivers que no están disponibles.
+
+### uDemoHelper — Inicialización silenciosa (obligatorio en todo demo)
+
+`Demos/uDemoHelper.pas` es una unidad de solo `implementation` que debe incluirse en el `uses` de **todo demo**. Su bloque `initialization` ejecuta 3 arreglos críticos antes de que corra cualquier código del programa:
+
+1. **UTF-8 en consola Windows** — `SetConsoleOutputCP(CP_UTF8)`. Sin esto, acentos y caracteres como `ñ`, `¿`, `¡` se ven corruptos.
+2. **Separador decimal consistente** — fuerza `'.'` como separador decimal. En Windows con locale español, `Temperature := 0.7` se serializa como `"0,7"` (con coma) y el servidor lo rechaza, causando respuestas vacías intermitentes (detectado con Cohere).
+3. **Inicializar OpenSSL en FPC** — `InitSSLInterface`. FPC no lo hace automáticamente. Sin esto, las conexiones HTTPS fallan silenciosamente. Si falla, muestra instrucciones de instalación.
+
+**Siempre incluir `uDemoHelper` en el `uses` de cualquier nuevo demo.**
 
 ## Architecture
 

@@ -8,6 +8,7 @@ program demo_ollama_native_async;
 // Ejemplo: ollama run gemma3:1b
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,

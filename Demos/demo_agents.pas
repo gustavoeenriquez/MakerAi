@@ -14,6 +14,7 @@ program demo_agents;
 //   fpc demo_agents.pas -Fu../Source/Core -Fu../Source/Chat -Fu../Source/Agents
 
 uses
+  uDemoHelper,
   SysUtils, Classes, SyncObjs,
   generics.collections,
   uMakerAi.Core,

@@ -27,6 +27,12 @@ uses
   fpjson, jsonparser;
 
 type
+  // TStringDynArray no existe en SysUtils de FPC 3.2.2 en modo objfpc.
+  // En Delphi viene de serie en SysUtils, en FPC está en la unit Types
+  // (como array of AnsiString). Para no añadir otra dependencia global
+  // lo definimos localmente — es un simple array of string.
+  TStringDynArray = array of string;
+
   // -------------------------------------------------------------------------
   // TAiPendingStep -- paso suspendido esperando aprobacion humana
   // -------------------------------------------------------------------------

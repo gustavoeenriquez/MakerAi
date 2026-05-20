@@ -17,6 +17,7 @@ program demo_rag_vector;
 //     -Fu../Source/Core -Fu../Source/Chat -Fu../Source/RAG -Fu../Source/Utils
 
 uses
+  uDemoHelper,
   SysUtils, Classes,
   uMakerAi.Embeddings.Core,
   uMakerAi.Embeddings,

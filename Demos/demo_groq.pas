@@ -13,6 +13,7 @@ program demo_groq;
 //                          deepseek-r1-distill-llama-70b (con reasoning)
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,
@@ -60,7 +61,10 @@ begin
         WriteLn('[ERROR HTTP] ', Chat.LastError)
       else
       begin
-        WriteLn('<<< Respuesta: ', Resp);
+        if Resp = '' then
+          WriteLn('[ERROR] Respuesta vacia - posible problema de conexion, API key, o SSL')
+        else
+          WriteLn('<<< Respuesta: ', Resp);
         WriteLn;
         WriteLn('Tokens — Prompt: ', Chat.Prompt_tokens,
                 '  Completion: ',    Chat.Completion_tokens,
@@ -83,7 +87,10 @@ begin
         WriteLn('[ERROR HTTP] ', Chat.LastError)
       else
       begin
-        WriteLn('<<< Respuesta: ', Resp);
+        if Resp = '' then
+          WriteLn('[ERROR] Respuesta vacia - posible problema de conexion, API key, o SSL')
+        else
+          WriteLn('<<< Respuesta: ', Resp);
         WriteLn;
         WriteLn('Tokens — Prompt: ', Chat.Prompt_tokens,
                 '  Completion: ',    Chat.Completion_tokens,

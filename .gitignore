@@ -33,3 +33,9 @@ desktop.ini
 # Temporary
 *.tmp
 *.log
+*.ref_bak
+*.orig
+
+# Build output directories (demos)
+Demos/bin/
+Demos/bin_win/

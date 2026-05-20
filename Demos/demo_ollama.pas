@@ -2,6 +2,7 @@ program demo_ollama;
 {$mode objfpc}{$H+}
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Chat,
   uMakerAi.Chat.GenericLLM,

@@ -6,6 +6,7 @@ program demo_functions;
 {$mode objfpc}{$H+}
 
 uses
+  uDemoHelper,
   SysUtils, Classes,
   fpjson, jsonparser,
   uMakerAi.Core,

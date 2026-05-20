@@ -20,6 +20,7 @@ program demo_cohere_async;
 //   Linux:    export COHERE_API_KEY=...
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,

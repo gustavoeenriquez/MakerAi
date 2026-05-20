@@ -38,7 +38,7 @@
 //   - JArr.Format / JObj.Format → FormatJSON
 //   - TObjectList<T> / TList<T> → specialize TObjectList<T> / TList<T>
 //   - TDictionary<K,V> → specialize TDictionary<K,V>
-//   - ValueNotify usa 'constref' (requerido por TDictionary en FPC 3.2.2+)
+//   - ValueNotify usa 'const' (compatible con FPC 3.2.3 — ver inline comment)
 
 unit uMakerAi.Chat.Messages;
 
@@ -92,8 +92,18 @@ type
   // ---------------------------------------------------------------------------
   TAiToolsFunctions = class(specialize TDictionary<string, TAiToolsFunction>)
   protected
+    // ATENCIÓN: La firma de ValueNotify cambió entre versiones de FPC.
+    //   FPC 3.2.2: ValueNotify(constref AValue: TValue; ...)
+    //   FPC 3.2.3+: ValueNotify(const AValue: TValue; ...)
+    // El override DEBE coincidir exactamente con la firma del ancestro.
+    // Usamos {$IF FPC_FULLVERSION} para mantener compatibilidad con ambas.
+{$IF FPC_FULLVERSION >= 030203}
+    procedure ValueNotify(const Value: TAiToolsFunction;
+                          Action: TCollectionNotification); override;
+{$ELSE}
     procedure ValueNotify(constref Value: TAiToolsFunction;
                           Action: TCollectionNotification); override;
+{$ENDIF}
   public
     function  ToOutputJson: TJSONArray;
     function  ToFunctionsJson: TJSONArray;
@@ -1152,8 +1162,13 @@ end;
 //  TAiToolsFunctions
 // ===========================================================================
 
+{$IF FPC_FULLVERSION >= 030203}
+procedure TAiToolsFunctions.ValueNotify(const Value: TAiToolsFunction;
+                                        Action: TCollectionNotification);
+{$ELSE}
 procedure TAiToolsFunctions.ValueNotify(constref Value: TAiToolsFunction;
                                         Action: TCollectionNotification);
+{$ENDIF}
 begin
   case Action of
     cnRemoved:

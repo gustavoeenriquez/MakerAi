@@ -10,6 +10,7 @@ program demo_kimi_async;
 //   Linux/Mac: export KIMI_API_KEY=sk-xxxx
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,

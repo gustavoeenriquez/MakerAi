@@ -13,6 +13,7 @@ program demo_mistral_async;
 //   Linux:    export MISTRAL_API_KEY=sk-xxxx
 
 uses
+  uDemoHelper,
   SysUtils,
   uMakerAi.Core,
   uMakerAi.Chat,
