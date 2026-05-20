@@ -44,7 +44,32 @@ This is a **source library** — no standalone build system. Units are included 
 
 **Feature flags** are in `Source/Core/uMakerAi.Version.inc` — include with `{$I uMakerAi.Version.inc}`, never hard-code constants.
 
-**No formal test suite.** Verify changes by running relevant demo applications.
+## Demos — Compilación y Estructura
+
+Los 45 demos están en `Demos/`. Cada uno es un `.pas` standalone que se compila directamente con FPC.
+
+```
+Demos/
+├── *.pas            ← fuente (45 archivos)
+├── bin/             ← ejecutables compilados
+├── lib/             ← objetos temporales (.o, .ppu, .a)
+└── build_demos.sh   ← script de compilación
+```
+
+**Compilar todo:**
+```bash
+cd Demos
+./build_demos.sh              # FPC del PATH
+FPC=/ruta/fpc ./build_demos.sh  # FPC específico
+```
+
+**Limpiar y recompilar:**
+```bash
+./build_demos.sh clean   # borra bin/ y lib/
+./build_demos.sh         # recompila desde cero
+```
+
+El script **no para en errores** — compila los 45 pase lo que pase y al final muestra un reporte OK / FAIL. Útil cuando un demo depende de API keys o drivers que no están disponibles.
 
 ## Architecture
 
