@@ -62,6 +62,9 @@ type
   // -------------------------------------------------------------------------
   // TAiMCPHttpServerThread - hilo que corre TFPHTTPServer.Active := True
   // (bloquea hasta que Active := False)
+  // Nota: bug FPC #41758 (https://gitlab.com/.../work_items/41758) —
+  //   StopServerSocket llama StopAccepting(False), accept() nunca retorna.
+  //   Workaround en Start() con AcceptIdleTimeout.
   // -------------------------------------------------------------------------
   TAiMCPHttpServerThread = class(TThread)
   private
@@ -183,10 +186,9 @@ begin
   inherited Start; // TAiMCPServer.Start → LogicServer.Start, FActive := True
 
   FHttpServer.Port := Port;
-  // Workaround para FPC issue #41758: StopServerSocket llama StopAccepting(False)
-  // que no cierra el socket, dejando WaitFor bloqueado para siempre.
-  // Con AcceptIdleTimeout > 0 el bucle accept se desbloquea periodicamente
-  // y comprueba el flag de parada.
+  // FPC bug #41758: StopServerSocket llama StopAccepting(False) — no cierra el
+  // socket, accept() queda bloqueado. AcceptIdleTimeout desbloquea periodicamente
+  // el loop para comprobar FAccepting. Bug: gitlab.com/.../work_items/41758
   FHttpServer.AcceptIdleTimeout := 500;
 
   FServerThread := TAiMCPHttpServerThread.Create(FHttpServer);
@@ -197,6 +199,7 @@ procedure TAiMCPHttpServer.Stop;
 begin
   if Assigned(FHttpServer) and FHttpServer.Active then
   begin
+    // Ver Start() — el AcceptIdleTimeout evita que accept() bloquee forever
     FHttpServer.Active := False;
   end;
 
