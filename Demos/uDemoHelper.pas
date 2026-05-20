@@ -12,11 +12,10 @@ uses
   {$IFDEF MSWINDOWS}
   Windows,
   {$ENDIF}
-  openssl,
+  openssl
   {$ELSE}
-  Winapi.Windows,
-  {$ENDIF}
-  typinfo;
+  Winapi.Windows
+  {$ENDIF};
 
 initialization
   // ──────────────────────────────────────────────────────────────────────────
