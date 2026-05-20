@@ -68,7 +68,7 @@
         <DCC_K>false</DCC_K>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
         <SanitizedProjectName>MakerAIChat</SanitizedProjectName>
-        <DCC_UnitSearchPath>..\..\Source\ChatUI;E:\Copilot\delphi-libraries\audio\src;E:\Copilot\delphi-libraries\audio\wav-codec\src;E:\Copilot\delphi-libraries\audio\flac-codec\src;E:\Copilot\delphi-libraries\audio\opus-decoder\src;E:\Copilot\delphi-libraries\audio\ogg-container\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\..\Source\ChatUI;..\..\Source\Realtime;E:\Copilot\delphi-libraries\audio\src;E:\Copilot\delphi-libraries\audio\wav-codec\src;E:\Copilot\delphi-libraries\audio\flac-codec\src;E:\Copilot\delphi-libraries\audio\opus-decoder\src;E:\Copilot\delphi-libraries\audio\ogg-container\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_Define>SKIA;$(DCC_Define)</DCC_Define>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">

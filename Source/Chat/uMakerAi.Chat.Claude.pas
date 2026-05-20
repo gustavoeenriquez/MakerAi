@@ -1027,22 +1027,12 @@ Var
     TaskList[AIdx] := TTask.Create(
       procedure
       begin
-        TFile.AppendAllText('makerai_tools.log',
-          FormatDateTime('hh:nn:ss.zzz', Now) +
-          Format(' [Tool] Ejecutando: "%s" (id=%s)'#13#10, [TC.Name, TC.Id]));
         try
           DoCallFunction(TC);
-          TFile.AppendAllText('makerai_tools.log',
-            FormatDateTime('hh:nn:ss.zzz', Now) +
-            Format(' [Tool] Completado: "%s" -> %s'#13#10,
-              [TC.Name, IfThen(TC.Response = '', '(vacío)', Copy(TC.Response, 1, 120))]));
         except
           on E: Exception do
           begin
             var LErrorMsg := 'Error en herramienta "' + TC.Name + '": ' + E.Message;
-            TFile.AppendAllText('makerai_tools.log',
-              FormatDateTime('hh:nn:ss.zzz', Now) +
-              ' [Tool] ERROR: ' + LErrorMsg + #13#10);
             TC.Response := '{"error": "' + E.Message.Replace('"', '''') + '"}';
             TThread.Queue(nil,
               procedure
@@ -1808,11 +1798,18 @@ begin
             if Assigned(MsgToProcess) and (FMessages.IndexOf(MsgToProcess) = -1) then
               MsgToProcess.Free;
 
-            // Limpieza de buffers locales
-            FStreamBuffer.Clear;
-            FStreamContentBlocks.Clear;
-            FStreamLastEventType := '';
-            FBusy := False;
+            // Si ParseChat disparó un Run recursivo por tool calls, FBusy quedó True
+            // (puesto por el InternalRunCompletions del nuevo round) y ya llamó
+            // ClearStreamState antes de iniciar la nueva petición HTTP.
+            // Limpiar aquí en ese caso crea una race con los callbacks del nuevo round.
+            // Solo limpiamos cuando NO hay un run recursivo en curso (FBusy=False,
+            // que es lo que hace el path sin tools en ParseChat antes de retornar).
+            if not FBusy then
+            begin
+              FStreamBuffer.Clear;
+              FStreamContentBlocks.Clear;
+              FStreamLastEventType := '';
+            end;
           end;
         end;
       end

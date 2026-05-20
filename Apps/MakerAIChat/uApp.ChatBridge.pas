@@ -10,6 +10,7 @@ uses
   AIChat.Control.FMX,
   AIChat.Input,
   AIChat.Types,
+  uMakerAi.Core,
   uMakerAi.Chat.AiConnection,
   uMakerAi.Chat.Messages,
   uMakerAi.Tools.Functions,
@@ -55,7 +56,7 @@ type
 
     procedure ApplySettings;
     procedure SendMessage(const AText: string;
-      AAttachments: TAIChatAttachments; AAudio: TMemoryStream);
+      AMediaFiles: TAiMediaFiles; AAudio: TMemoryStream);
     procedure AbortGeneration;
     procedure NewChat;
 
@@ -147,23 +148,18 @@ begin
 end;
 
 procedure TChatBridge.SendMessage(const AText: string;
-  AAttachments: TAIChatAttachments; AAudio: TMemoryStream);
+  AMediaFiles: TAiMediaFiles; AAudio: TMemoryStream);
+var
+  LHasFiles: Boolean;
 begin
   if FConn.Busy then Exit;
 
-  // Pre-load Data bytes from LocalPath before AddUserMessage so ChatView
-  // can persist and later restore them even after the temp file is deleted.
-  if Assigned(AAttachments) then
-    for var I := 0 to AAttachments.Count - 1 do
-      if (Length(AAttachments[I].Data) = 0) and
-         (AAttachments[I].LocalPath <> '') and
-         TFile.Exists(AAttachments[I].LocalPath) then
-        AAttachments[I].Data := TFile.ReadAllBytes(AAttachments[I].LocalPath);
+  LHasFiles := Assigned(AMediaFiles) and (AMediaFiles.Count > 0);
 
   if AText <> '' then
   begin
-    if Assigned(AAttachments) and (AAttachments.Count > 0) then
-      FChatView.AddUserMessage(AText, AAttachments)
+    if LHasFiles then
+      FChatView.AddUserMessage(AText, AMediaFiles)
     else
       FChatView.AddUserMessage(AText);
   end
@@ -179,24 +175,21 @@ begin
   try
     var LMsg := FConn.AddMessage(AText, 'user');
 
-    // Add file attachments to the AI message
-    if Assigned(AAttachments) then
-      for var I := 0 to AAttachments.Count - 1 do
+    if LHasFiles then
+      for var I := 0 to AMediaFiles.Count - 1 do
       begin
-        var LAttach := AAttachments[I];
-        if Length(LAttach.Data) > 0 then
+        var MF := AMediaFiles[I];
+        if MF.FullFileName <> '' then
+          LMsg.LoadMediaFromFile(MF.FullFileName)
+        else
         begin
-          var LStream := TMemoryStream.Create;
-          try
-            LStream.WriteBuffer(LAttach.Data[0], Length(LAttach.Data));
+          var LStream := MF.Content;
+          if Assigned(LStream) and (LStream.Size > 0) then
+          begin
             LStream.Position := 0;
-            LMsg.LoadMediaFromStream(LAttach.FileName, LStream);
-          finally
-            LStream.Free;
+            LMsg.LoadMediaFromStream(MF.filename, LStream);
           end;
-        end
-        else if LAttach.LocalPath <> '' then
-          LMsg.LoadMediaFromFile(LAttach.LocalPath);
+        end;
       end;
 
     FConn.Run;

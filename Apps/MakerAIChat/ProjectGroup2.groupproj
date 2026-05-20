@@ -1,0 +1,60 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{D7BD8600-1EF7-4E8A-880F-A680B3F2B5A6}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="MakerAIChat.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="..\..\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project29.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="MakerAIChat">
+        <MSBuild Projects="MakerAIChat.dproj"/>
+    </Target>
+    <Target Name="MakerAIChat:Clean">
+        <MSBuild Projects="MakerAIChat.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MakerAIChat:Make">
+        <MSBuild Projects="MakerAIChat.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ChatFull">
+        <MSBuild Projects="..\..\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj"/>
+    </Target>
+    <Target Name="ChatFull:Clean">
+        <MSBuild Projects="..\..\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ChatFull:Make">
+        <MSBuild Projects="..\..\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Project29">
+        <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project29.dproj"/>
+    </Target>
+    <Target Name="Project29:Clean">
+        <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project29.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Project29:Make">
+        <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project29.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="MakerAIChat;ChatFull;Project29"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="MakerAIChat:Clean;ChatFull:Clean;Project29:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="MakerAIChat:Make;ChatFull:Make;Project29:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

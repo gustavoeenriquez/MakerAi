@@ -93,7 +93,6 @@ Const
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiOllamaChat]);
-  TAiChatFactory.Instance.RegisterDriver(TAiOllamaChat);
 end;
 
 class function TAiOllamaChat.GetDriverName: string;
@@ -1168,5 +1167,8 @@ begin
     LBodyStream.Free;
   end;
 end;
+
+initialization
+  TAiChatFactory.Instance.RegisterDriver(TAiOllamaChat);
 
 end.

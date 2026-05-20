@@ -27,7 +27,8 @@ uses
   AIChat.Types,
   AIChat.Control.FMX,
   AIChat.Input, System.Skia, FMX.Skia,
-  uAudio.Player, FMX.Memo.Types, FMX.ScrollBox;
+  uAudio.Player, FMX.Memo.Types, FMX.ScrollBox,
+  uMakerAi.Core;
 
 type
   TFrmMain = class(TForm)
@@ -66,14 +67,13 @@ type
     procedure LstConversations_ItemClick(const Sender: TCustomListBox;
       const Item: TListBoxItem);
     procedure BtnDeleteConv_Click(Sender: TObject);
-    procedure ChatInput_Send(Sender: TObject; const APrompt: string;
-      AAttachments: TAIChatAttachments; AAudio: TMemoryStream);
     procedure ChatInput_Cancel(Sender: TObject);
     procedure ChatInput_MicToggle(Sender: TObject; AActivate: Boolean);
     procedure ChatView_LinkClick(Sender: TObject; AMsg: TAIChatMessage;
       const AURL: string);
     procedure ChatView_AttachOpen(Sender: TObject; AMsg: TAIChatMessage;
       AAttach: TAIChatAttachment);
+    procedure ChatInputSendEvent(Sender: TObject; APrompt: string; aMediaFiles: TAiMediaFiles; aAudioStream: TMemoryStream);
   private
     FCurrentConvIndex : Integer;
     FSidebarVisible   : Boolean;
@@ -137,7 +137,6 @@ uses
   uFrm.Settings,
   uMakerAi.Chat.Initializations,
   uMakerAi.Chat.AiConnection,
-  uMakerAi.Core,
   UMakerAi.Chat;
 
 var
@@ -477,12 +476,11 @@ end;
 
 { ── Chat events ─────────────────────────────────────────────────────────────── }
 
-procedure TFrmMain.ChatInput_Send(Sender: TObject; const APrompt: string;
-  AAttachments: TAIChatAttachments; AAudio: TMemoryStream);
+procedure TFrmMain.ChatInputSendEvent(Sender: TObject; APrompt: string; aMediaFiles: TAiMediaFiles; aAudioStream: TMemoryStream);
 begin
   MemoThinking.Text    := '';
   MemoThinking.Visible := False;
-  ChatBridge.SendMessage(APrompt, AAttachments, AAudio);
+  ChatBridge.SendMessage(APrompt, aMediaFiles, aAudioStream);
 end;
 
 procedure TFrmMain.ChatInput_Cancel(Sender: TObject);

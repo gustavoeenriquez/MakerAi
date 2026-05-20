@@ -16,7 +16,8 @@ uses
   FMX.Dialogs, FMX.Graphics, FMX.Surfaces,
   FMX.Platform, FMX.Forms,
   Skia, FMX.Skia,
-  AIChat.Types, AIChat.TempStore, AIChat.ScreenCapture;
+  AIChat.Types, AIChat.TempStore, AIChat.ScreenCapture,
+  uMakerAi.Core, uMakerAi.Utils.VoiceMonitor;
 
 procedure Register;
 
@@ -70,9 +71,16 @@ type
 
   // AAudio = nil for text sends; WAV TMemoryStream for voice sends.
   // Receiver must copy AAudio if it needs it after the handler returns.
-  TAIChatInputSendEvent = procedure(Sender: TObject; const APrompt: string;
-                                    AAttachments: TAIChatAttachments;
-                                    AAudio: TMemoryStream) of object;
+  TAIChatInputSendEvent = procedure(Sender: TObject; APrompt: string;
+                                    aMediaFiles: TAiMediaFiles;
+                                    aAudioStream: TMemoryStream) of object;
+
+  // Compatibility alias — same signature as old TChatSendEvent
+  TChatSendEvent = TAIChatInputSendEvent;
+
+  // Fired with the raw audio stream; handler must transcribe it and return the text.
+  TChatTranscriptEvent = procedure(Sender: TObject; aFragmentStream: TMemoryStream;
+                                   out aTranscriptText: string) of object;
 
   // Fired when the user toggles the mic button.
   // Wire AActivate to TAIVoiceMonitor.Active in the host form.
@@ -146,14 +154,27 @@ type
     FMaxSoundSeen    : Int64;
 
     // ── Properties backing ─────────────────────────────────────────────────
-    FBusy            : Boolean;
-    FEnterAsSend     : Boolean;
-    FValidExtensions : string;
-    FThemeDark       : Boolean;
-    FPalette         : TACIPalette;
-    FOnSend          : TAIChatInputSendEvent;
-    FOnCancel        : TNotifyEvent;
-    FOnMicToggle     : TAIChatMicToggleEvent;
+    FBusy             : Boolean;
+    FEnterAsSend      : Boolean;
+    FValidExtensions  : string;
+    FThemeDark        : Boolean;
+    FPalette          : TACIPalette;
+    FOnSend           : TAIChatInputSendEvent;
+    FOnCancel         : TNotifyEvent;
+    FOnMicToggle      : TAIChatMicToggleEvent;
+    FVoiceMonitor     : TAIVoiceMonitor;
+    FOnTranscriptText : TChatTranscriptEvent;
+    FImagesVisible    : Boolean;
+    FSoundVisible     : Boolean;
+
+    // ── VoiceMonitor wiring ────────────────────────────────────────────────
+    procedure SetVoiceMonitor(const AValue: TAIVoiceMonitor);
+    procedure OnVoiceCalibrated(Sender: TObject;
+                const aNoiseLevel, aSensitivity, aStopSensitivity: Integer);
+    procedure OnVoiceChangeState(Sender: TObject; aUserSpeak, aIsValidForIA: Boolean;
+                aStream: TMemoryStream);
+    procedure OnVoiceUpdate(Sender: TObject; const aSoundLevel: Int64);
+    procedure OnVoiceError(Sender: TObject; const ErrorMessage: string);
 
     // ── Setup ──────────────────────────────────────────────────────────────
     procedure CreateMemo;
@@ -243,16 +264,20 @@ type
     property MicState : TAIChatVoiceState read FMicState;
 
   published
-    property Busy            : Boolean read FBusy       write SetBusy       default False;
-    property EnterAsSend     : Boolean read FEnterAsSend write FEnterAsSend  default False;
-    property ThemeDark       : Boolean read FThemeDark  write SetThemeDark  default False;
+    property Busy            : Boolean read FBusy            write SetBusy            default False;
+    property EnterAsSend     : Boolean read FEnterAsSend     write FEnterAsSend       default False;
+    property ThemeDark       : Boolean read FThemeDark       write SetThemeDark       default False;
     property ValidExtensions : string  read FValidExtensions write FValidExtensions;
-    property PromptText      : string  read GetPromptText write SetPromptText;
-    property MicVisible      : Boolean read FMicVisible write SetMicVisible default False;
+    property PromptText      : string  read GetPromptText    write SetPromptText;
+    property MicVisible      : Boolean read FMicVisible      write SetMicVisible      default False;
     property UseSoundMonitor : Boolean read FUseSoundMonitor write SetUseSoundMonitor default False;
-    property OnSend          : TAIChatInputSendEvent read FOnSend   write FOnSend;
+    property ImagesVisible   : Boolean read FImagesVisible   write FImagesVisible     default True;
+    property SoundVisible    : Boolean read FSoundVisible    write FSoundVisible      default True;
+    property VoiceMonitor    : TAIVoiceMonitor      read FVoiceMonitor     write SetVoiceMonitor;
+    property OnSendEvent     : TAIChatInputSendEvent read FOnSend  write FOnSend;
     property OnCancel        : TNotifyEvent          read FOnCancel write FOnCancel;
     property OnMicToggle     : TAIChatMicToggleEvent read FOnMicToggle write FOnMicToggle;
+    property OnTranscriptText: TChatTranscriptEvent  read FOnTranscriptText write FOnTranscriptText;
   end;
 
 implementation
@@ -1133,10 +1158,20 @@ end;
 procedure TAIChatInput.MemoKeyDown(Sender: TObject; var Key: Word;
   var KeyChar: Char; Shift: TShiftState);
 begin
-  if FEnterAsSend and (Key = vkReturn) and (Shift = []) then
+  if Key = vkReturn then
   begin
-    Key := 0;
-    DoSend;
+    // Ctrl+Enter siempre envía
+    if ssCtrl in Shift then
+    begin
+      Key := 0;
+      DoSend;
+    end
+    // Enter sin modificadores envía solo cuando EnterAsSend = True
+    else if FEnterAsSend and (Shift = []) then
+    begin
+      Key := 0;
+      DoSend;
+    end;
   end;
 end;
 
@@ -1191,21 +1226,26 @@ end;
 procedure TAIChatInput.DoSendWithAudio(AAudio: TMemoryStream);
 var
   Prompt : string;
-  Atts   : TAIChatAttachments;
+  Files  : TAiMediaFiles;
+  MF     : TAiMediaFile;
   I      : Integer;
 begin
   Prompt := Trim(FMemo.Text);
   if (Prompt = '') and (Length(FChips) = 0) and (AAudio = nil) then Exit;
 
-  Atts := TAIChatAttachments.Create(False);
+  Files := TAiMediaFiles.Create;
   try
     for I := 0 to High(FChips) do
-      Atts.Add(FChips[I].Attachment);
+    begin
+      MF := TAiMediaFile.Create;
+      MF.LoadFromFile(FChips[I].Attachment.LocalPath);
+      Files.Add(MF);
+    end;
     SetBusy(True);
     if Assigned(FOnSend) then
-      FOnSend(Self, Prompt, Atts, AAudio);
+      FOnSend(Self, Prompt, Files, AAudio);
   finally
-    Atts.Free;
+    Files.Free;
     AAudio.Free;  // safe when nil; receiver must copy if doing async work
   end;
 
@@ -1574,6 +1614,71 @@ end;
 procedure Register;
 begin
   RegisterComponents('MakerAI Chat', [TAIChatInput]);
+end;
+
+// ── VoiceMonitor compatibility wiring ──────────────────────────────────────────
+
+procedure TAIChatInput.SetVoiceMonitor(const AValue: TAIVoiceMonitor);
+begin
+  if FVoiceMonitor = AValue then Exit;
+
+  // Unwire previous monitor
+  if Assigned(FVoiceMonitor) then
+  begin
+    FVoiceMonitor.OnCalibrated  := nil;
+    FVoiceMonitor.OnChangeState := nil;
+    FVoiceMonitor.OnUpdate      := nil;
+    FVoiceMonitor.OnError       := nil;
+  end;
+
+  FVoiceMonitor := AValue;
+
+  // Wire new monitor
+  if Assigned(FVoiceMonitor) then
+  begin
+    FVoiceMonitor.OnCalibrated  := OnVoiceCalibrated;
+    FVoiceMonitor.OnChangeState := OnVoiceChangeState;
+    FVoiceMonitor.OnUpdate      := OnVoiceUpdate;
+    FVoiceMonitor.OnError       := OnVoiceError;
+    MicVisible := True;
+  end;
+end;
+
+procedure TAIChatInput.OnVoiceCalibrated(Sender: TObject;
+  const aNoiseLevel, aSensitivity, aStopSensitivity: Integer);
+begin
+  NotifyVoiceCalibrated;
+end;
+
+procedure TAIChatInput.OnVoiceChangeState(Sender: TObject;
+  aUserSpeak, aIsValidForIA: Boolean; aStream: TMemoryStream);
+var
+  TranscriptText: string;
+begin
+  if aIsValidForIA and Assigned(aStream) then
+  begin
+    if Assigned(FOnTranscriptText) then
+    begin
+      TranscriptText := '';
+      FOnTranscriptText(Self, aStream, TranscriptText);
+      if TranscriptText <> '' then
+        FMemo.Text := TranscriptText;
+    end
+    else
+      NotifyVoiceSpeechEnd(True, aStream);
+  end
+  else
+    NotifyVoiceChangeState(aUserSpeak);
+end;
+
+procedure TAIChatInput.OnVoiceUpdate(Sender: TObject; const aSoundLevel: Int64);
+begin
+  NotifyVoiceUpdate(aSoundLevel);
+end;
+
+procedure TAIChatInput.OnVoiceError(Sender: TObject; const ErrorMessage: string);
+begin
+  NotifyVoiceError;
 end;
 
 initialization

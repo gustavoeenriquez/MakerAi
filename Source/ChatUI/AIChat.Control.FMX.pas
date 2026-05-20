@@ -12,10 +12,11 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Types, System.UITypes, System.Math,
-  System.JSON,
+  System.JSON, System.Generics.Collections,
   FMX.Types, FMX.Controls, FMX.Platform, FMX.Menus,
   System.Skia, FMX.Skia,
   uMakerAi.MD.Types,
+  uMakerAi.Core,
   AIChat.Types,
   AIChat.Bubble,
   AIChat.VirtualList;
@@ -28,6 +29,27 @@ type
   TAIChatAttachEvent = procedure(Sender: TObject; AMsg: TAIChatMessage;
                          AAttach: TAIChatAttachment) of object;
   TAIChatMsgEvent    = procedure(Sender: TObject; AMsg: TAIChatMessage) of object;
+
+  // Forward
+  TAIChatView = class;
+
+  // Lightweight proxy returned by AddBubble — provides AppendText / AddContent
+  // compatible with the old TChatBubble streaming pattern.
+  TAIChatBubble = class
+  private
+    FOwner   : TAIChatView;
+    FMsgIndex: Integer;
+  public
+    constructor Create(AOwner: TAIChatView; AMsgIndex: Integer);
+    procedure AppendText(const AFragment: string);
+    procedure AddContent(const AText: string; AMediaFiles: TAiMediaFiles = nil);
+    property MsgIndex: Integer read FMsgIndex;
+  end;
+
+  // Backward-compatible event types (parameter names match old TChatList events)
+  TAIChatBubbleEvent    = procedure(Sender: TObject; ABubble: TAIChatBubble) of object;
+  TAIChatMediaFileEvent = procedure(Sender: TObject; ABubble: TAIChatBubble;
+                            AAttach: TAIChatAttachment) of object;
 
   TAIChatView = class(TSkCustomControl)
   private
@@ -79,6 +101,19 @@ type
     FOnMessageCopy      : TAIChatMsgEvent;
     FOnConversationCopy : TNotifyEvent;
 
+    // Backward-compat events
+    FOnBubbleAvatarClick     : TAIChatBubbleEvent;
+    FOnBubbleMoreOptionsClick: TAIChatBubbleEvent;
+    FOnMediaFileDblClick     : TAIChatMediaFileEvent;
+
+    // Backward-compat appearance
+    FInboundColor       : TAlphaColor;
+    FOutboundColor      : TAlphaColor;
+    FAttachmentPopupMenu: TPopupMenu;
+
+    // Proxy lifetime management
+    FBubbleProxies: TObjectList<TAIChatBubble>;
+
     // Internal helpers
     procedure ClampScroll;
     function  DocYFromMouseY(AMouseY: Single): Single; inline;
@@ -103,6 +138,8 @@ type
     procedure SetPersistAttachments(AValue: Boolean);
     function  GetMessageCount: Integer;
     function  GetPersistAttachments: Boolean;
+    procedure SetInboundColor(AValue: TAlphaColor);
+    procedure SetOutboundColor(AValue: TAlphaColor);
 
     procedure DoCopyMessage(AMsg: TAIChatMessage);
     procedure DoCopyConversation;
@@ -130,7 +167,7 @@ type
     function  AddMessage(ARole: TChatRole; const AText: string): TAIChatMessage;
     function  AddUserMessage(const AText: string): TAIChatMessage; overload;
     function  AddUserMessage(const AText: string;
-                AAttachments: TAIChatAttachments): TAIChatMessage; overload;
+                AMediaFiles: TAiMediaFiles): TAIChatMessage; overload;
     function  BeginAssistantMessage: TAIChatMessage;  // status = msStreaming
     procedure AppendToken(AMsgIndex: Integer; const AToken: string);
     procedure FinishMessage(AMsgIndex: Integer);
@@ -149,19 +186,37 @@ type
     // ── Serialization ────────────────────────────────────────────────────────
     function  SaveToJSON: TJSONArray;
     procedure LoadFromJSON(AArr: TJSONArray);
+    // Backward-compatible stream serialization (wraps JSON internally)
+    procedure SaveToStream(AStream: TStream);
+    procedure LoadFromStream(AStream: TStream);
+
+    // ── Backward-compatible message API ──────────────────────────────────────
+    // Returns a TAIChatBubble proxy — use AppendText on it for streaming.
+    // For streaming assistant turns, call FinishMessage(Bubble.MsgIndex) when done.
+    function  AddBubble(const AText: string; const AUserName: string;
+                AMediaFiles: TAiMediaFiles; AInbound: Boolean = True): TAIChatBubble;
+    procedure Clear;  // alias for ClearMessages
 
     property VirtualList  : TAIChatVirtualList read FList;
     property MessageCount : Integer            read GetMessageCount;
     property ScrollOffset : Single             read FScrollOffset;
 
   published
-    property ThemeDark          : Boolean read FThemeDark           write SetThemeDark          default False;
-    property PersistAttachments : Boolean read GetPersistAttachments write SetPersistAttachments default False;
+    property ThemeDark          : Boolean      read FThemeDark           write SetThemeDark          default False;
+    property PersistAttachments : Boolean      read GetPersistAttachments write SetPersistAttachments default False;
+    property AutoScroll         : Boolean      read FAutoScroll           write FAutoScroll           default True;
+    property InboundColor       : TAlphaColor  read FInboundColor         write SetInboundColor       default TAlphaColors.LightGray;
+    property OutboundColor      : TAlphaColor  read FOutboundColor        write SetOutboundColor      default TAlphaColors.LightGreen;
+    property AttachmentPopupMenu: TPopupMenu   read FAttachmentPopupMenu  write FAttachmentPopupMenu;
 
-    property OnLinkClick        : TAIChatLinkEvent   read FOnLinkClick        write FOnLinkClick;
-    property OnAttachmentOpen   : TAIChatAttachEvent read FOnAttachOpen       write FOnAttachOpen;
-    property OnMessageCopy      : TAIChatMsgEvent    read FOnMessageCopy      write FOnMessageCopy;
-    property OnConversationCopy : TNotifyEvent       read FOnConversationCopy write FOnConversationCopy;
+    property OnLinkClick             : TAIChatLinkEvent     read FOnLinkClick             write FOnLinkClick;
+    property OnAttachmentOpen        : TAIChatAttachEvent   read FOnAttachOpen            write FOnAttachOpen;
+    property OnMessageCopy           : TAIChatMsgEvent      read FOnMessageCopy           write FOnMessageCopy;
+    property OnConversationCopy      : TNotifyEvent         read FOnConversationCopy      write FOnConversationCopy;
+    // Backward-compat events
+    property OnMediaFileDblClick     : TAIChatMediaFileEvent read FOnMediaFileDblClick     write FOnMediaFileDblClick;
+    property OnBubbleAvatarClick     : TAIChatBubbleEvent   read FOnBubbleAvatarClick     write FOnBubbleAvatarClick;
+    property OnBubbleMoreOptionsClick: TAIChatBubbleEvent   read FOnBubbleMoreOptionsClick write FOnBubbleMoreOptionsClick;
 
     property Align;
     property Anchors;
@@ -264,10 +319,15 @@ begin
   FCtxCopySelection.Text    := 'Copy Selection';
   FCtxCopySelection.OnClick := ContextMenuClick;
   FContextMenu.AddObject(FCtxCopySelection);
+
+  FBubbleProxies := TObjectList<TAIChatBubble>.Create(True);
+  FInboundColor  := TAlphaColors.LightGray;
+  FOutboundColor := TAlphaColors.LightGreen;
 end;
 
 destructor TAIChatView.Destroy;
 begin
+  FBubbleProxies.Free;
   FLongPressTimer.Free;
   FList.Free;
   inherited;
@@ -1048,17 +1108,20 @@ begin
 end;
 
 function TAIChatView.AddUserMessage(const AText: string;
-  AAttachments: TAIChatAttachments): TAIChatMessage;
+  AMediaFiles: TAiMediaFiles): TAIChatMessage;
 var
   I  : Integer;
+  F  : TAiMediaFile;
   Att: TAIChatAttachment;
 begin
   Result := FList.AddMessage(TChatRole.crUser, AText);
-  if Assigned(AAttachments) and (AAttachments.Count > 0) then
+  if Assigned(AMediaFiles) and (AMediaFiles.Count > 0) then
   begin
-    for I := 0 to AAttachments.Count - 1 do
+    for I := 0 to AMediaFiles.Count - 1 do
     begin
-      Att := AAttachments[I].Clone;
+      F   := AMediaFiles[I];
+      Att := TAIChatAttachment.Create(F.FullFileName);
+      Att.MimeType := F.MimeType;
       Result.Attachments.Add(Att);
       // Preload into painter's image cache NOW while the temp file still exists.
       // Also read raw bytes so the attachment can be serialized inline (base64)
@@ -1171,6 +1234,124 @@ begin
   FAutoScroll   := True;
   ClampScroll;
   Redraw;
+end;
+
+// ── TAIChatBubble — streaming proxy ───────────────────────────────────────────
+
+constructor TAIChatBubble.Create(AOwner: TAIChatView; AMsgIndex: Integer);
+begin
+  inherited Create;
+  FOwner    := AOwner;
+  FMsgIndex := AMsgIndex;
+end;
+
+procedure TAIChatBubble.AppendText(const AFragment: string);
+begin
+  FOwner.AppendToken(FMsgIndex, AFragment);
+end;
+
+procedure TAIChatBubble.AddContent(const AText: string; AMediaFiles: TAiMediaFiles);
+begin
+  // Replace full text of the message (non-streaming use)
+  FOwner.FList.AppendToken(FMsgIndex, AText);
+  FOwner.FinishMessage(FMsgIndex);
+end;
+
+// ── Backward-compat color setters ─────────────────────────────────────────────
+
+procedure TAIChatView.SetInboundColor(AValue: TAlphaColor);
+var
+  Theme: TAIChatTheme;
+begin
+  if FInboundColor = AValue then Exit;
+  FInboundColor := AValue;
+  Theme := FList.Theme;
+  Theme.UserBubbleBg := AValue;
+  FList.SetTheme(Theme);
+  Redraw;
+end;
+
+procedure TAIChatView.SetOutboundColor(AValue: TAlphaColor);
+var
+  Theme: TAIChatTheme;
+begin
+  if FOutboundColor = AValue then Exit;
+  FOutboundColor := AValue;
+  Theme := FList.Theme;
+  Theme.AssistantBubbleBg := AValue;
+  FList.SetTheme(Theme);
+  Redraw;
+end;
+
+// ── Backward-compat message API ───────────────────────────────────────────────
+
+function TAIChatView.AddBubble(const AText: string; const AUserName: string;
+  AMediaFiles: TAiMediaFiles; AInbound: Boolean): TAIChatBubble;
+var
+  MsgIdx: Integer;
+  Proxy : TAIChatBubble;
+begin
+  if AInbound then
+    AddUserMessage(AText, AMediaFiles)
+  else
+  begin
+    // Empty text → streaming assistant message
+    if AText = '' then
+      BeginAssistantMessage
+    else
+      AddMessage(TChatRole.crAssistant, AText);
+  end;
+
+  MsgIdx := MessageCount - 1;
+  Proxy  := TAIChatBubble.Create(Self, MsgIdx);
+  FBubbleProxies.Add(Proxy);
+  Result := Proxy;
+end;
+
+procedure TAIChatView.Clear;
+begin
+  FBubbleProxies.Clear;
+  ClearMessages;
+end;
+
+// ── Stream serialization (wraps JSON) ─────────────────────────────────────────
+
+procedure TAIChatView.SaveToStream(AStream: TStream);
+var
+  Arr: TJSONArray;
+  S  : TBytes;
+begin
+  Arr := SaveToJSON;
+  try
+    S := TEncoding.UTF8.GetBytes(Arr.ToString);
+    if Length(S) > 0 then
+      AStream.WriteBuffer(S[0], Length(S));
+  finally
+    Arr.Free;
+  end;
+end;
+
+procedure TAIChatView.LoadFromStream(AStream: TStream);
+var
+  S  : TBytes;
+  V  : TJSONValue;
+  Arr: TJSONArray;
+begin
+  SetLength(S, AStream.Size - AStream.Position);
+  if Length(S) = 0 then Exit;
+  AStream.ReadBuffer(S[0], Length(S));
+  V := TJSONObject.ParseJSONValue(TEncoding.UTF8.GetString(S));
+  if V is TJSONArray then
+  begin
+    Arr := TJSONArray(V);
+    try
+      LoadFromJSON(Arr);
+    finally
+      Arr.Free;
+    end;
+  end
+  else
+    V.Free;
 end;
 
 initialization

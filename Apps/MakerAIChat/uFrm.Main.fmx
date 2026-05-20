@@ -268,7 +268,9 @@ object FrmMain: TFrmMain
         Size.PlatformDefault = False
         EnterAsSend = True
         MicVisible = True
-        OnSend = ChatInput_Send
+        ImagesVisible = False
+        SoundVisible = False
+        OnSendEvent = ChatInputSendEvent
         OnCancel = ChatInput_Cancel
         OnMicToggle = ChatInput_MicToggle
       end
