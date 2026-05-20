@@ -708,7 +708,12 @@ begin
   // Activar la sesion si no estaba activa
   if not Active then
     Active := True;
-  ToolCall.Response := Execute(ToolCall.Id, ToolCall.Arguments);
+  try
+    ToolCall.Response := Execute(ToolCall.Id, ToolCall.Arguments);
+  except
+    on E: Exception do
+      ToolCall.Response := 'Shell error: ' + E.ClassName + ': ' + E.Message;
+  end;
   Handled := True;
 end;
 

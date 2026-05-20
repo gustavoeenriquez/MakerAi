@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="mcp-calculator\mcp-calculator.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-datetime\mcp-datetime.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-text-transform\mcp-text-transform.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-regex\mcp-regex.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-fetch\mcp-fetch.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-http-request\mcp-http-request.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-file-reader\mcp-file-reader.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-tokenizer\mcp-tokenizer.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-git\mcp-git.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-firedac\mcp-firedac.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-json\mcp-json.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-csv\mcp-csv.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-base64\mcp-base64.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-uuid\mcp-uuid.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-ini\mcp-ini.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="mcp-zip\mcp-zip.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+    </ProjectExtensions>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

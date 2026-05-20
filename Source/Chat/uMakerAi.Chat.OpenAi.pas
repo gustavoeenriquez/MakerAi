@@ -1032,7 +1032,19 @@ var
     TaskList[AIdx] := TTask.Create(
       procedure
       begin
-        DoCallFunction(TC);
+        try
+          DoCallFunction(TC);
+        except
+          on E: Exception do
+          begin
+            TC.Response := '{"error": "' + StringReplace(E.Message, '"', '''', [rfReplaceAll]) + '"}';
+            TThread.Queue(nil,
+              procedure
+              begin
+                DoError('Function Execution Error: ' + TC.Name, E);
+              end);
+          end;
+        end;
       end);
     TaskList[AIdx].Start;
   end;
@@ -1680,7 +1692,13 @@ begin
     end;
   finally
     if FClient.Asynchronous = False then
-      St.Free;
+      St.Free
+    else
+    begin
+      if Assigned(FCurrentPostStream) then
+        FreeAndNil(FCurrentPostStream);
+      FCurrentPostStream := St;
+    end;
   end;
 end;
 
@@ -2397,7 +2415,7 @@ end;
 procedure TAiOpenChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
 var
   Line, DataStr, EventType: string;
-  JsonEvent, JItem, JResp, JPart, JUsage, JInputDetails, JUsageDetails, JIncomplete: TJSonObject;
+  JsonEvent, JItem, JResp, JUsage, JInputDetails, JUsageDetails: TJSonObject;
   P, OutputIndex: Integer;
   DeltaVal, ItemId, CallId, FuncName: string;
   BufferTool: TJSonObject;
@@ -2405,7 +2423,7 @@ var
   JContentPart, JAnno: TJSonObject;
   WebItem: TAiWebSearchItem;
   CurrentMsg, NewStreamMsg: TAiChatMessage;
-  TokenCount, UnixDate: Int64;
+  TokenCount: Int64;
   BytesBuffer: TBytes;
   SS: TStringStream;
 begin

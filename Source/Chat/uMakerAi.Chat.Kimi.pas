@@ -79,7 +79,7 @@ begin
   Params.Clear;
   Params.Add('ApiKey=@KIMI_API_KEY');
   Params.Add('Model=kimi-k2');
-  Params.Add('MaxTokens=4096');
+  Params.Add('Max_Tokens=4096');
   Params.Add('URL=' + GlAIUrl);
 end;
 

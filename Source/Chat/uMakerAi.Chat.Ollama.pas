@@ -105,7 +105,7 @@ Begin
   Params.Clear;
   Params.Add('ApiKey=@OLLAMA_API_KEY');
   Params.Add('Model=llama3');
-  Params.Add('MaxTokens=4096');
+  Params.Add('Max_Tokens=4096');
   Params.Add('URL=http://localhost:11434/');
 End;
 
@@ -142,7 +142,6 @@ var
   LToolCallsArray: TJSonArray;
   LToolCall: TAiToolsFunction;
   LItem: TJSONValue;
-  LPair: TJSONPair;
 begin
   Result := TAiToolsFunctions.Create;
 
@@ -518,8 +517,13 @@ begin
     End;
   Finally
     If FClient.Asynchronous = False then
-      St.Free;
-    // Esto no funciona en multiarea, así que se libera cuando no lo es.
+      St.Free
+    Else
+    Begin
+      If Assigned(FCurrentPostStream) then
+        FreeAndNil(FCurrentPostStream);
+      FCurrentPostStream := St;
+    End;
   End;
 end;
 
@@ -860,11 +864,14 @@ begin
                 DoCallFunction(CapturaTool);
               except
                 on E: Exception do
+                begin
+                  CapturaTool.Response := '{"error": "' + StringReplace(E.Message, '"', '''', [rfReplaceAll]) + '"}';
                   TThread.Queue(nil,
                     procedure
                     begin
                       DoError('Function Execution Error: ' + CapturaTool.Name, E);
                     end);
+                end;
               end;
             end);
           TaskList[I].Start;

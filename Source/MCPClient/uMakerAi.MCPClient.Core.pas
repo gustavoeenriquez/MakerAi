@@ -47,7 +47,9 @@ uses
 {$ENDIF}
 {$IFDEF POSIX}
 {$ENDIF}
+{$IF CompilerVersion < 35}
   uJSONHelper,
+{$ENDIF}
   uMakerAi.Utils.System, uMakerAi.Core;
 
 // --- Clase Base Abstracta ---
@@ -265,7 +267,6 @@ type
     FBuffer: string;
 
     // M?todos internos de procesamiento
-    procedure ProcessBuffer;
     procedure ProcessSSELine(const ALine: string);
 
     // M?todos de comunicaci?n interna
@@ -2384,38 +2385,6 @@ end;
 // (TNetHTTPClient callbacks removed — SSE stream is now read by FSSEThread via
 //  raw Indy TCP, which ignores Content-Length and reads until connection close.)
 
-// -----------------------------------------------------------------------------
-// PROCESAMIENTO DE BUFFER (Id?ntico a la versi?n anterior)
-// -----------------------------------------------------------------------------
-
-procedure TMCPClientSSE.ProcessBuffer;
-var
-  P: Integer;
-  Line: string;
-begin
-  // Bucle para procesar TODAS las l?neas completas que tengamos en el buffer
-  while True do
-  begin
-    P := Pos(#10, FBuffer); // Buscar salto de l?nea (LF)
-    if P = 0 then
-      Break; // No hay l?nea completa, salimos y esperamos el siguiente chunk
-
-    // Extraer la l?nea (incluyendo el LF para borrarlo despu?s)
-    Line := Copy(FBuffer, 1, P - 1);
-
-    // Eliminar la l?nea del buffer acumulador
-    Delete(FBuffer, 1, P);
-
-    // Limpiar retorno de carro (CR) si existe al final
-    if (Line <> '') and (Line[Length(Line)] = #13) then
-      Delete(Line, Length(Line), 1);
-
-    // Procesar la l?nea limpia
-    if Line <> '' then
-      ProcessSSELine(Line);
-  end;
-end;
-
 procedure TMCPClientSSE.ProcessSSELine(const ALine: string);
 var
   P: Integer;
@@ -2587,8 +2556,6 @@ var
   LHeaders: TNetHeaders;
   LocalClient: TNetHTTPClient;
 begin
-  Result := nil;
-
   if FPostEndpoint = '' then
     raise EMCPClientException.Create('Cannot send request: Post Endpoint not initialized.');
 

@@ -161,10 +161,12 @@ Type
   /// -------------------------------------------------------------------------
 
   TAIBasicEmbeddingIndex = class(TAIEmbeddingIndex)
-  private
-    procedure BuildIndex(Points: TRagItems);
-    function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems;
+  protected
+    procedure InternalClear; override;
   public
+    procedure BuildIndex(Points: TRagItems); override;
+    function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems; override;
+
     /// <summary>
     /// Versi�n thread-safe que NO modifica los nodos originales
     /// </summary>
@@ -174,7 +176,7 @@ Type
     /// Versi�n legacy para compatibilidad (DEPRECATED)
     /// </summary>
     class function InternalSearch(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; Source: TRagItems): TRagItems; static;
-    constructor Create;
+    constructor Create; override;
     destructor Destroy; override;
   end;
 
@@ -182,6 +184,8 @@ Type
 
 
   TAIEuclideanDistanceIndex = class(TAIEmbeddingIndex)
+  protected
+    procedure InternalClear; override;
   public
     constructor Create; override;
     destructor Destroy; override;
@@ -548,6 +552,11 @@ begin
   inherited;
 end;
 
+procedure TAIBasicEmbeddingIndex.InternalClear;
+begin
+  // Sin estructura interna propia — la base de datos de nodos la gestiona TAiRAGVector
+end;
+
 constructor TAIBasicEmbeddingIndex.Create;
 begin
   Inherited;
@@ -555,7 +564,6 @@ end;
 
 destructor TAIBasicEmbeddingIndex.Destroy;
 begin
-
   inherited;
 end;
 
@@ -654,6 +662,11 @@ begin
 end;
 
 { TAIEuclideanDistanceIndex }
+
+procedure TAIEuclideanDistanceIndex.InternalClear;
+begin
+  // Sin estructura interna propia — la base de datos de nodos la gestiona TAiRAGVector
+end;
 
 procedure TAIEuclideanDistanceIndex.BuildIndex(Points: TRagItems);
 begin

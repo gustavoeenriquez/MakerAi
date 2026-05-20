@@ -183,6 +183,8 @@ type
     function GetDriversNames: TStringList; virtual;
     function GetAvailableDrivers: TArray<string>;
     function GetModels: TStringList; overload; virtual;
+    class function AvailableDrivers: TArray<string>; static;
+    class function DriverNames: TStringList; static;
     function IsDriverAvailable(const DriverName: string): Boolean;
     procedure ResetParamsToDefaults;
 
@@ -645,7 +647,8 @@ begin
                 LProp.SetValue(LTarget, LIntVal);
 
             tkFloat:
-              if TryStrToFloat(ParamValue, LFloatVal) then
+              if TryStrToFloat(ParamValue, LFloatVal, TFormatSettings.Invariant) or
+                 TryStrToFloat(ParamValue, LFloatVal) then
                 LProp.SetValue(LTarget, LFloatVal);
 
             tkString, tkUString, tkWideString:
@@ -878,6 +881,20 @@ begin
   Result := TAiChatFactory.Instance.GetRegisteredDrivers;
 end;
 
+class function TAiChatConnection.AvailableDrivers: TArray<string>;
+begin
+  Result := TAiChatFactory.Instance.GetRegisteredDrivers;
+end;
+
+class function TAiChatConnection.DriverNames: TStringList;
+var
+  D: string;
+begin
+  Result := TStringList.Create;
+  for D in TAiChatFactory.Instance.GetRegisteredDrivers do
+    Result.Add(D);
+end;
+
 function TAiChatConnection.GetBusy: Boolean;
 begin
   if Assigned(FChat) then
@@ -982,14 +999,15 @@ end;
 
 procedure TAiChatConnection.OnInternalReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject; aRole, aText: String);
 begin
-
-  Prompt_tokens := Prompt_tokens + aMsg.Prompt_tokens;
-  Completion_tokens := Completion_tokens + aMsg.Completion_tokens;
-  Total_tokens := Total_tokens + aMsg.Total_tokens;
+  if Assigned(aMsg) then
+  begin
+    Prompt_tokens := Prompt_tokens + aMsg.Prompt_tokens;
+    Completion_tokens := Completion_tokens + aMsg.Completion_tokens;
+    Total_tokens := Total_tokens + aMsg.Total_tokens;
+  end;
 
   If Assigned(FOnReceiveDataEnd) then
     FOnReceiveDataEnd(Sender, aMsg, aResponse, aRole, aText);
-
 end;
 
 procedure TAiChatConnection.RemoveFromMemory(Key: String);

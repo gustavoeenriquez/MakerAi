@@ -49,7 +49,7 @@ Dos propiedades de tipo `TAiCapabilities` (set de `TAiCapability`) reemplazan lo
 | `ModelCaps` | Capacidades nativas del modelo vía completions | `NativeInputFiles` + `ChatMediaSupports` |
 | `SessionCaps` | Capacidades deseadas en la sesión | `NativeOutputFiles` + `EnabledFeatures` |
 
-**Gap = SessionCaps − ModelCaps** → determina qué bridge/tool activa `RunNew` automáticamente.
+**Gap = SessionCaps − ModelCaps** → determina qué bridge/tool activa el orquestador interno automáticamente.
 
 ### TAiCapability enum
 ```delphi
@@ -99,7 +99,7 @@ RegisterUserParam('Driver', Model, 'Tool_Active', 'False');
 
 ### Driver Implementation
 All drivers implement these core methods:
-- `Run()` - Execute chat completion (sync or async based on `Asynchronous` property). Calls `EnsureNewSystemConfig` then `RunNew`.
+- `Run()` - Execute chat completion (sync or async). Calls `EnsureNewSystemConfig`, aplica el sanitizador de prompts, luego delega al orquestador privado `RunNew()`. Cadena completa: `AddMessageAndRun → Run → RunNew`.
 - `GetMessages()` - Serialize message history to provider-specific JSON format
 - `ParseChat()` - Parse provider response into `TAiChatMessage`
 - `GetModels()` - Retrieve available models from API
@@ -148,7 +148,7 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 ## Dependencies
 
 - `uMakerAi.Core.pas` - Base types (`TAiMediaFile`, `TAiFileCategory`, `TAiChatState`, `TAiCapability`)
-- `uMakerAi.Chat.pas` - Abstract `TAiChat` base class (`ModelCaps`, `SessionCaps`, `RunNew`, `RunLegacy`)
+- `uMakerAi.Chat.pas` - Abstract `TAiChat` base class (`ModelCaps`, `SessionCaps`). API pública: `AddMessageAndRun`, `Run`. `RunNew` es privado (orquestador interno de las 3 fases).
 - `uMakerAi.Chat.Messages.pas` - `TAiChatMessage`, `TAiChatMessages`
 - `uMakerAi.Tools.Functions.pas` - `TAiFunctions`, `TAiToolsFunction`
 - `uMakerAi.ParamsRegistry.pas` - `TAiChatFactory` for model configuration
@@ -284,6 +284,42 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - El usuario activa caps según las capacidades reales de su endpoint
 
 ---
+
+## Cadena de llamada pública
+
+```
+AddMessageAndRun(prompt, role, files)  ← punto de entrada recomendado (public)
+  └── Run(AskMsg, ResMsg)              ← sanitizador de prompts (public, virtual)
+        └── RunNew(AskMsg, ResMsg)     ← orquestador interno: 3 fases + ChatMode (PRIVATE)
+```
+
+- **`AddMessageAndRun`** — crea el mensaje, lo agrega al historial y llama a `Run`.
+- **`Run`** — aplica el sanitizador de prompts; si pasa, delega a `RunNew`.
+- **`RunNew`** — hace el trabajo real: gap analysis, Fase 1 (bridges entrada), Fase 2 (web), Fase 3 (despacho por `ChatMode`). Es `private` — nunca llamar directamente.
+
+## Eventos — tipo `of object`
+
+Todos los eventos de `TAiChat` / `TAiChatConnection` son del tipo `of object`:
+
+```delphi
+TAiChatOnDataEvent = procedure(const Sender: TObject; aMsg: TAiChatMessage;
+  aResponse: TJSonObject; aRole, aText: String) of object;
+```
+
+**No aceptan métodos anónimos.** Asignar siempre un método de clase:
+
+```delphi
+// Correcto — método del formulario o clase
+Conn.OnReceiveDataEnd := Self.HandleDataEnd;
+
+// NO compila — of object no acepta lambdas
+Conn.OnReceiveDataEnd := procedure(...) begin ... end;
+```
+
+Para código sin clase (consola), usar el valor de retorno síncrono de `AddMessageAndRun`:
+```delphi
+Resp := Conn.AddMessageAndRun(prompt, 'user', []);
+```
 
 ## Navigation
 

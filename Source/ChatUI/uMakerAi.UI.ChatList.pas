@@ -42,6 +42,7 @@ uses
   FMX.Memo, FMX.Objects, FMX.Ani, FMX.Styles.Objects, FMX.Menus,
   uMakerAi.UI.ChatBubble, uMakerAi.Core; // Aseg�rate de que esta unidad est� en el path de tu proyecto
 
+{$WARN SYMBOL_DEPRECATED OFF}
 type
   // Tipos de eventos definidos en la especificaci�n (req. 11)
   TChatListBubbleEvent = procedure(Sender: TObject; ABubble: TChatBubble) of object;
@@ -160,11 +161,13 @@ type
     property Enabled;
     property OnClick;
     property OnDblClick;
-  end;
+  end deprecated 'Use TAIChatView (AIChat.Control.FMX)';
 
 procedure Register;
 
 implementation
+
+{$WARN SYMBOL_DEPRECATED OFF}
 
 procedure Register;
 begin

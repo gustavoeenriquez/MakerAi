@@ -46,9 +46,11 @@ const
 type
   TAiPromptItem = Class(TCollectionItem)
   Private
-    fNombre: String;
-    FString: TStrings;
-    fDescripcion: String;
+    fNombre          : String;
+    FString          : TStrings;
+    fDescripcion     : String;
+    FSkillModel      : String;
+    FSkillAllowedTools: String;
     function GetString: TStrings;
   Protected
     Procedure SetStrings(aValue: TStrings);
@@ -57,18 +59,28 @@ type
     constructor Create(Collection: TCollection); Override;
     destructor Destroy; Override;
   Published
-    Property Nombre: String read fNombre Write fNombre;
-    Property Descripcion: String read fDescripcion Write fDescripcion;
-    Property Strings: TStrings Read GetString Write SetStrings;
+    Property Nombre     : String  read fNombre      Write fNombre;
+    Property Descripcion: String  read fDescripcion Write fDescripcion;
+    Property Strings    : TStrings Read GetString   Write SetStrings;
+    // Metadatos del skill (vacíos si el item es un prompt, no un skill)
+    // Modelo recomendado por el skill (frontmatter YAML: model: claude-opus-4-6)
+    Property SkillModel      : String read FSkillModel       write FSkillModel;
+    // Herramientas permitidas, separadas por coma (frontmatter: allowed-tools)
+    Property SkillAllowedTools: String read FSkillAllowedTools write FSkillAllowedTools;
   End;
 
   TAiPrompts = class(TComponent)
   private
-    FItems: TCollection;
+    FItems         : TCollection;
     FPPMRegistryUrl: String;
     function PPMHttpGet(const AUrl: String): String;
     function ConvertPPMTemplate(const AText: String): String;
     function ResolvePPMVersion(const AName, AVersion: String): String;
+    // Parsea el frontmatter YAML de un skill.
+    // Devuelve True si encontró los delimitadores ---.
+    // ABody recibe el cuerpo Markdown sin el bloque de frontmatter.
+    function ParseSkillFrontmatter(const AContent: String;
+      out AModel, AAllowedTools, ABody: String): Boolean;
   protected
   public
     Constructor Create(aOwner: TComponent); Override;
@@ -82,13 +94,22 @@ type
     Function GetTemplate(Nombre: String; Params: TStringList): String; Overload;
     Function GetTemplate(Nombre: String; Params: TJSonObject): String; Overload;
 
-    // Integración con PPM (registry público de prompts)
-    // SearchPPM: busca prompts en el registry. El llamador es responsable de liberar el TJSONObject.
+    // Integración con PPM (registry público de prompts y skills)
+    // SearchPPM: busca en el registry. El llamador es responsable de liberar el TJSONObject.
+    // AType puede ser 'prompt', 'skill', 'pai', etc.
     function SearchPPM(const AQuery: String; const AType: String = 'prompt';
       APage: Integer = 1; APerPage: Integer = 20): TJSONObject;
-    // LoadFromPPM: descarga el prompt y lo agrega a Items. Si ya existe, lo actualiza.
+
+    // LoadFromPPM: descarga un prompt (/raw) y lo agrega a Items.
+    // Convierte placeholders {{var}} → <#var>. Si ya existe, lo actualiza.
     // AVersion vacío = resuelve la última versión disponible.
     function LoadFromPPM(const AName: String; const AVersion: String = ''): TAiPromptItem;
+
+    // LoadSkillFromPPM: descarga un skill (/skill), parsea el frontmatter YAML
+    // y almacena el cuerpo Markdown en Strings.Text (sin frontmatter).
+    // SkillModel y SkillAllowedTools quedan disponibles en el item resultante.
+    // AVersion vacío = resuelve la última versión disponible.
+    function LoadSkillFromPPM(const AName: String; const AVersion: String = ''): TAiPromptItem;
 
   published
     Property Items: TCollection Read FItems Write FItems;
@@ -369,6 +390,141 @@ begin
   end;
   Result.Descripcion := 'PPM: ' + AName + ' v' + LVersion;
   Result.Strings.Text := ConvertPPMTemplate(LBody);
+end;
+
+// ---------------------------------------------------------------------------
+// ParseSkillFrontmatter
+// Extrae model y allowed-tools del bloque YAML entre los delimitadores ---.
+// Soporta allowed-tools en formato lista (- Read) e inline (Read,Glob).
+// Retorna True si se encontró el bloque frontmatter.
+// ---------------------------------------------------------------------------
+function TAiPrompts.ParseSkillFrontmatter(const AContent: String;
+  out AModel, AAllowedTools, ABody: String): Boolean;
+var
+  Lines    : TArray<String>;
+  I, FmEnd : Integer;
+  Line, Key: String;
+  Val      : String;
+  ColonPos : Integer;
+  InTools  : Boolean;
+  Tools    : TStringList;
+  LBuf     : TStringBuilder;
+begin
+  AModel        := '';
+  AAllowedTools := '';
+  ABody         := AContent;
+  Result        := False;
+
+  Lines := AContent.Split([#13#10, #10]);
+  if (Length(Lines) < 2) or (Trim(Lines[0]) <> '---') then
+    Exit;
+
+  FmEnd   := -1;
+  InTools := False;
+  Tools   := TStringList.Create;
+  try
+    for I := 1 to High(Lines) do
+    begin
+      Line := Lines[I];
+
+      if Trim(Line) = '---' then
+      begin
+        FmEnd := I;
+        Break;
+      end;
+
+      // Elemento de lista bajo allowed-tools: "  - Read"
+      if InTools and Trim(Line).StartsWith('- ') then
+      begin
+        Tools.Add(Trim(Trim(Line).Substring(2)));
+        Continue;
+      end;
+      InTools := False;
+
+      ColonPos := Line.IndexOf(':');
+      if ColonPos > 0 then
+      begin
+        Key := Trim(Line.Substring(0, ColonPos)).ToLower;
+        Val := Trim(Line.Substring(ColonPos + 1));
+
+        if Key = 'model' then
+          AModel := Val
+        else if Key = 'allowed-tools' then
+        begin
+          if Val = '' then
+            InTools := True       // formato lista en las líneas siguientes
+          else
+            AAllowedTools := Val; // formato inline: "Read, Glob, Grep"
+        end;
+      end;
+    end;
+
+    // Construir string de tools desde la lista
+    if Tools.Count > 0 then
+    begin
+      AAllowedTools := Tools[0];
+      for I := 1 to Tools.Count - 1 do
+        AAllowedTools := AAllowedTools + ',' + Tools[I];
+    end;
+
+    // Cuerpo = todo lo que viene después del --- de cierre
+    if FmEnd >= 0 then
+    begin
+      LBuf := TStringBuilder.Create;
+      try
+        for I := FmEnd + 1 to High(Lines) do
+        begin
+          if I > FmEnd + 1 then LBuf.Append(#10);
+          LBuf.Append(Lines[I]);
+        end;
+        ABody := LBuf.ToString.TrimLeft([#13, #10]);
+      finally
+        LBuf.Free;
+      end;
+    end;
+
+    Result := FmEnd >= 0;
+  finally
+    Tools.Free;
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// LoadSkillFromPPM
+// ---------------------------------------------------------------------------
+function TAiPrompts.LoadSkillFromPPM(const AName: String;
+  const AVersion: String): TAiPromptItem;
+var
+  LVersion, LUrl, LBody       : String;
+  LModel, LAllowedTools, LBody2: String;
+  LIdx                        : Integer;
+begin
+  Result := nil;
+  LVersion := ResolvePPMVersion(AName, AVersion);
+  if LVersion = '' then
+    Exit;
+
+  LUrl  := Format('%s/v1/packages/%s/%s/skill', [FPPMRegistryUrl, AName, LVersion]);
+  LBody := PPMHttpGet(LUrl);
+  if LBody = '' then
+    Exit;
+
+  // Parsear frontmatter: extrae model, allowed-tools y el cuerpo Markdown
+  ParseSkillFrontmatter(LBody, LModel, LAllowedTools, LBody2);
+
+  // Reusar item existente o crear uno nuevo
+  LIdx := IndexOf(AName);
+  if LIdx >= 0 then
+    Result := TAiPromptItem(FItems.Items[LIdx])
+  else
+  begin
+    Result := TAiPromptItem(FItems.Add);
+    Result.Nombre := AName;
+  end;
+  Result.Descripcion       := 'PPM skill: ' + AName + ' v' + LVersion;
+  Result.Strings.Text      := LBody2;
+  Result.SkillModel        := LModel;
+  Result.SkillAllowedTools := LAllowedTools;
 end;
 
 end.

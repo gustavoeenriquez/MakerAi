@@ -1,0 +1,52 @@
+[
+  {
+    "categoria": "Electrodomésticos",
+    "nombre": "Licuadora Compacta",
+    "descripcion": "Licuadora de 3 velocidades con vaso de vidrio resistente y cuchillas de acero inoxidable."
+  },
+  {
+    "categoria": "Hogar",
+    "nombre": "Juego de Sábanas Queen",
+    "descripcion": "Juego de sábanas 100% algodón, suaves al tacto, incluye 2 fundas de almohada."
+  },
+  {
+    "categoria": "Tecnología",
+    "nombre": "Audífonos Bluetooth",
+    "descripcion": "Audífonos inalámbricos con cancelación de ruido y estuche de carga rápida."
+  },
+  {
+    "categoria": "Cocina",
+    "nombre": "Set de Ollas Antiadherentes",
+    "descripcion": "Juego de 5 ollas con revestimiento antiadherente y tapas de vidrio templado."
+  },
+  {
+    "categoria": "Papelería",
+    "nombre": "Cuaderno Universitario",
+    "descripcion": "Cuaderno de 100 hojas cuadriculadas, tapa dura con diseño colorido."
+  },
+  {
+    "categoria": "Juguetería",
+    "nombre": "Bloques de Construcción",
+    "descripcion": "Caja de 200 bloques de plástico encajables para estimular la creatividad infantil."
+  },
+  {
+    "categoria": "Belleza",
+    "nombre": "Crema Hidratante Facial",
+    "descripcion": "Crema hidratante con vitamina E y aloe vera, adecuada para todo tipo de piel."
+  },
+  {
+    "categoria": "Deportes",
+    "nombre": "Balón de Fútbol",
+    "descripcion": "Balón oficial tamaño 5, fabricado en material sintético resistente al desgaste."
+  },
+  {
+    "categoria": "Mascotas",
+    "nombre": "Collar Ajustable para Perro",
+    "descripcion": "Collar de nylon ajustable con hebilla metálica y diseño reflectante."
+  },
+  {
+    "categoria": "Limpieza",
+    "nombre": "Detergente Líquido",
+    "descripcion": "Detergente líquido concentrado para ropa, aroma fresco, apto para lavadora."
+  }
+]

@@ -505,7 +505,7 @@ var
   DoVector, DoLexical: Boolean;
   MinVectorScore, MinLexicalScore: Double;
   EmbeddingStr, EmbeddingLiteral: string;
-  LangConfig, FilterSQL: string;
+  LangConfig: string;
   HasFilter: Boolean;
   FS: TFormatSettings;
 

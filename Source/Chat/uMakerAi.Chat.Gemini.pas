@@ -164,7 +164,7 @@ Begin
   Params.Add('ApiKey=@GEMINI_API_KEY');
   // [V3 UPDATE] Modelo recomendado por defecto actualizado (gemini-2.0-flash deprecado 31 Mar 2026)
   Params.Add('Model=gemini-2.5-flash');
-  Params.Add('MaxTokens=8192');
+  Params.Add('Max_Tokens=8192');
   Params.Add('URL=' + GlAIUrl);
 End;
 
@@ -1083,10 +1083,7 @@ begin
       JCompSettings := TJSONObject.Create;
 
       // La documentación especifica el entorno.
-      // Valores posibles suelen ser 'BROWSER' o 'ENVIRONMENT_BROWSER'.
-      // Usaremos 'only_name' si la API lo infiere, pero mejor ser explícitos.
-      // Si falla con 400, probaremos quitando el par 'environment'.
-      // JCompSettings.AddPair('environment', 'BROWSER');
+      JCompSettings.AddPair('environment', 'ENVIRONMENT_BROWSER');
 
       // Nota: Si quieres excluir acciones (como drag_and_drop), se configuran aquí.
       // Por ahora enviamos el objeto vacío o con configuración mínima si es necesario.
@@ -1331,7 +1328,13 @@ begin
 
   finally
     if FClient.Asynchronous = False then
-      St.Free;
+      St.Free
+    else
+    begin
+      if Assigned(FCurrentPostStream) then
+        FreeAndNil(FCurrentPostStream);
+      FCurrentPostStream := St;
+    end;
   end;
 end;
 
@@ -1357,7 +1360,6 @@ Var
   jValPart: TJSONValue;
   LPartObj, LExecCodeObj, LCodeResultObj, LInlineData: TJSONObject;
   LCode, LLang, LCodeOutput, LMimeType, LBase64Data: String;
-  LExt: String;
 
   // Subrutina local: garantiza captura independiente por valor en Delphi 10.4+
   procedure _CreateTask(TC: TAiToolsFunction; AIdx: Integer);
@@ -1369,11 +1371,14 @@ Var
           DoCallFunction(TC);
         except
           on E: Exception do
+          begin
+            TC.Response := '{"error": "' + StringReplace(E.Message, '"', '''', [rfReplaceAll]) + '"}';
             TThread.Queue(nil,
               procedure
               begin
                 DoError('Error in "' + TC.Name + '"', E);
               end);
+          end;
         end;
       end);
     TaskList[AIdx].Start;
@@ -1793,8 +1798,6 @@ var
   jContent, jFunctionCall, LArgsObject: TJSONObject;
   jParts: TJSonArray;
   LFunction: TAiToolsFunction;
-  I: Integer;
-  Nom, Valor: String;
 begin
   Result := nil;
   if not Assigned(jChoices) or (jChoices.Count = 0) then
@@ -3535,11 +3538,14 @@ begin
                     DoCallFunction(TC);
                   except
                     on E: Exception do
+                    begin
+                      TC.Response := '{"error": "' + StringReplace(E.Message, '"', '''', [rfReplaceAll]) + '"}';
                       TThread.Queue(nil,
                         procedure
                         begin
                           DoError('Error Tool: ' + TC.Name, E);
                         end);
+                    end;
                   end;
                 end);
               LocalTasks[AIdx].Start;

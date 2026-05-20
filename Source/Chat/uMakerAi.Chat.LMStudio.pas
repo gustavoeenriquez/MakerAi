@@ -87,7 +87,7 @@ begin
   Params.Clear;
   Params.Add('ApiKey=1234'); // LMStudio normalmente no requiere API key
   Params.Add('Model=lmstudio-local');
-  Params.Add('MaxTokens=4096');
+  Params.Add('Max_Tokens=4096');
   Params.Add('URL='+GlLMStudioUrl);
 end;
 

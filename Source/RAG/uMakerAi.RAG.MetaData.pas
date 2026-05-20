@@ -526,8 +526,7 @@ var
   Exists: Boolean;
   DTProp, DTVal1, DTVal2: TDateTime;
   IsDateComparison: Boolean;
-  i, j: Integer;
-  Found: Boolean;
+  i: Integer;
 begin
   // 1. Inyecci�n de campo virtual 'text' (Contenido del nodo)
   if SameText(Name, 'text') then

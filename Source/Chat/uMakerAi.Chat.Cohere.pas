@@ -42,7 +42,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections, System.JSON,
-  System.Net.HttpClientComponent, System.Threading,
+  System.Net.HttpClientComponent, System.Threading, System.Net.Mime,
   System.Net.HttpClient, System.Net.URLClient, // Necesario para IHTTPResponse en TAiErrorEvent
 {$IF CompilerVersion < 35}
   uJSONHelper,
@@ -109,6 +109,7 @@ type
     function InitChatCompletions: String; override;
     procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); override;
     function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; override;
+    function InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; override;
     procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); override;
 
   public
@@ -401,7 +402,7 @@ var
   I: Integer;
   LStopList: TStringList;
   LToolsJsonString: string;
-  LJsonValue, LToolOutputsValue, LToolCallsValue: TJSONValue;
+  LJsonValue, LToolCallsValue: TJSONValue;
   LMsgObj: TJSonObject;
   LRoleStr: string;
   LMediaFile: TAiMediaFile;
@@ -629,6 +630,12 @@ begin
     begin
       St.Free;
       FBusy := False;
+    end
+    else
+    begin
+      if Assigned(FCurrentPostStream) then
+        FreeAndNil(FCurrentPostStream);
+      FCurrentPostStream := St;
     end;
   end;
 end;
@@ -1223,6 +1230,81 @@ end;
 procedure TCohereChat.SetStop_sequences(const Value: TStrings);
 begin
   FStop_sequences.Assign(Value);
+end;
+
+function TCohereChat.InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
+var
+  Body: TMultipartFormData;
+  Client: TNetHTTPClient;
+  Headers: TNetHeaders;
+  sUrl: String;
+  Res: IHTTPResponse;
+  LResponseStream: TMemoryStream;
+  LTempStream: TMemoryStream;
+  LResponseObj: TJSonObject;
+  LModel, LLanguage: String;
+begin
+  Result := '';
+  if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
+    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripci?n.');
+
+  sUrl := Url + 'audio/transcriptions';
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+  Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
+  Client.SynchronizeEvents := False;
+{$ENDIF}
+  LResponseStream := TMemoryStream.Create;
+  Body := TMultipartFormData.Create;
+  LTempStream := TMemoryStream.Create;
+  try
+    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
+
+    // Cohere requiere que los campos de texto aparezcan ANTES del file en el multipart body
+    Body.AddField('model', LModel);
+
+    if not TranscriptionParams.Language.IsEmpty then
+      LLanguage := TranscriptionParams.Language
+    else
+      LLanguage := 'en';
+    Body.AddField('language', LLanguage);
+
+    aMediaFile.Content.Position := 0;
+    LTempStream.LoadFromStream(aMediaFile.Content);
+    LTempStream.Position := 0;
+
+{$IF CompilerVersion >= 35}
+    Body.AddStream('file', LTempStream, False, aMediaFile.FileName, aMediaFile.MimeType);
+{$ELSE}
+    Body.AddStream('file', LTempStream, aMediaFile.FileName, aMediaFile.MimeType);
+{$ENDIF}
+
+    // Cohere NO soporta: response_format, timestamp_granularities, prompt
+
+    Res := Client.Post(sUrl, Body, LResponseStream, Headers);
+
+    if Res.StatusCode = 200 then
+    begin
+      LResponseObj := TJSonObject.ParseJSONValue(Res.ContentAsString) as TJSonObject;
+      if not Assigned(LResponseObj) then
+        LResponseObj := TJSonObject.Create(TJSonPair.Create('text', Res.ContentAsString));
+      try
+        ParseJsonTranscript(LResponseObj, ResMsg, aMediaFile);
+      finally
+        LResponseObj.Free;
+      end;
+      Result := ResMsg.Prompt;
+    end
+    else
+      raise Exception.CreateFmt('Error en la transcripci?n: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+
+  finally
+    Body.Free;
+    Client.Free;
+    LResponseStream.Free;
+    LTempStream.Free;
+  end;
 end;
 
 initialization

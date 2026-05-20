@@ -201,7 +201,7 @@ begin
     RequestStream.Position := 0;
 
     // Configurar headers
-    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
+    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
     Headers := Headers + [TNetHeader.Create('OpenAI-Beta', 'assistants=v2')];
 
     Client.ContentType := 'application/json';

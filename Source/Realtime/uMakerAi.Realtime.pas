@@ -1,4 +1,4 @@
-// MakerAI Suite — Clase base abstracta para componentes Realtime STT
+﻿// MakerAI Suite — Clase base abstracta para componentes Realtime STT
 // Provee: resampler PCM16, event dispatchers thread-safe, factory de drivers
 //
 // Autor: Gustavo Enriquez

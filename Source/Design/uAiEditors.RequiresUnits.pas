@@ -348,7 +348,9 @@ begin
   RegisterSelectionEditor(TAIAgentsNode, TAiAgentsSelEditor);
   RegisterSelectionEditor(TAIAgentsLink, TAiAgentsSelEditor);
   RegisterSelectionEditor(TAiAgentsToolSample, TAiAgentsSelEditor);
+  {$WARN SYMBOL_DEPRECATED OFF}
   RegisterSelectionEditor(TAIAgents, TAiAgentsSelEditor);
+  {$WARN SYMBOL_DEPRECATED ON}
 
   // --- MCP Servers ---
   RegisterSelectionEditor(TAiMCPHttpServer, TAiMCPServerSelEditor);

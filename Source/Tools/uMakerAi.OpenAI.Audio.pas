@@ -254,7 +254,7 @@ begin
       FJsonObject.TryGetValue<string>('text', FText);
       FJsonObject.TryGetValue<Double>('duration', FDuration);
       FJsonObject.TryGetValue<string>('language', FLanguage);
-      FLogprobs := FJsonObject.GetValue<TJSONArray>('logprobs');  // nil when absent
+      FJsonObject.TryGetValue<TJSONArray>('logprobs', FLogprobs);
     end;
   end
   else
@@ -394,9 +394,9 @@ begin
       ABody.AddField('timestamp_granularities[]', 'segment');
   end;
 
-  // logprobs: gpt-4o models only, requires response_format=json
+  // logprobs: gpt-4o models only — usar include[]=logprobs (no logprobs=true)
   if IsGpt4oModel and FTranscriptionLogprobs then
-    ABody.AddField('logprobs', 'true');
+    ABody.AddField('include[]', 'logprobs');
 end;
 
 procedure TAiOpenAiAudio.HandleStreamEvent(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);

@@ -35,13 +35,26 @@ requires
   bindengine,
   RESTComponents,
   bindcomp,
+  Skia.Package.RTL,
+  Skia.Package.FMX,
   MakerAI;
 
 contains
   uMakerAi.UI.ChatBubble in '..\ChatUI\uMakerAi.UI.ChatBubble.pas',
   uMakerAi.UI.ChatInput in '..\ChatUI\uMakerAi.UI.ChatInput.pas',
   uMakerAi.UI.ChatList in '..\ChatUI\uMakerAi.UI.ChatList.pas',
-  uMakerAi.Utils.ScreenCapture in '..\ChatUI\uMakerAi.Utils.ScreenCapture.pas';
+  uMakerAi.Utils.ScreenCapture in '..\ChatUI\uMakerAi.Utils.ScreenCapture.pas',
+  uMakerAi.MD.Types in '..\ChatUI\uMakerAi.MD.Types.pas',
+  uMakerAi.MD.Parser in '..\ChatUI\uMakerAi.MD.Parser.pas',
+  uMakerAi.MD.Highlighter in '..\ChatUI\uMakerAi.MD.Highlighter.pas',
+  uMakerAi.MD.Renderer.Skia in '..\ChatUI\uMakerAi.MD.Renderer.Skia.pas',
+  AIChat.Types in '..\ChatUI\AIChat.Types.pas',
+  AIChat.TempStore in '..\ChatUI\AIChat.TempStore.pas',
+  AIChat.Bubble in '..\ChatUI\AIChat.Bubble.pas',
+  AIChat.VirtualList in '..\ChatUI\AIChat.VirtualList.pas',
+  AIChat.Control.FMX in '..\ChatUI\AIChat.Control.FMX.pas',
+  AIChat.ScreenCapture in '..\ChatUI\AIChat.ScreenCapture.pas',
+  AIChat.Input in '..\ChatUI\AIChat.Input.pas';
 
 end.
 

@@ -19,7 +19,7 @@ This is the main source code directory for MakerAI 3.2, an AI orchestration fram
 Open `Packages/MakerAiGrp.groupproj` to compile all packages.
 
 ### Required Library Paths
-All subdirectories (Agents, Chat, ChatUI, Core, Design, MCPClient, MCPServer, RAG, Resources, Tools, Utils) must be in Delphi Library Path.
+All subdirectories (Agents, Chat, ChatUI, Core, Design, MCPClient, MCPServer, RAG, Realtime, Resources, Tools, Utils, WebSocket) must be in Delphi Library Path.
 
 ## Module Quick Reference
 
@@ -34,6 +34,7 @@ All subdirectories (Agents, Chat, ChatUI, Core, Design, MCPClient, MCPServer, RA
 | Tools | `uMakerAi.Tools.Functions.pas` | `TAiFunctions`, `TFunctionActionItem` |
 | ChatUI | `uMakerAi.UI.ChatList.pas` | `TChatList`, `TChatBubble`, `TChatInput` |
 | Realtime | `uMakerAi.Realtime.AiConnection.pas` | `TAiRealtimeConnection`, `TAiRealtimeBase`, `TAiOpenAiRealtimeSTT` |
+| WebSocket | `uMakerAi.WebSocket.Client.pas` | `TAiWSClient`, `ITlsTransport`, `TSChannelTransport`, `TAndroidSSLTransport`, `TOpenSSLTransport` |
 
 ## Architecture Patterns
 
@@ -94,6 +95,7 @@ Environment variables: Use `@VAR_NAME` syntax (e.g., `@OPENAI_API_KEY`).
 | [Tools/](Tools/CLAUDE.md) | Function calling, Shell, ComputerUse |
 | [ChatUI/](ChatUI/CLAUDE.md) | FMX visual components |
 | [Realtime/](Realtime/CLAUDE.md) | Real-time STT drivers (OpenAI WebSocket, Gemini stub) |
+| [WebSocket/](WebSocket/CLAUDE.md) | RFC 6455 WebSocket client + TLS (SChannel/OpenSSL) |
 | [Utils/](Utils/CLAUDE.md) | Voice monitor, diff updater |
 | [Design/](Design/CLAUDE.md) | Design-time property editors |
 | [Resources/](Resources/CLAUDE.md) | Embedded resources |

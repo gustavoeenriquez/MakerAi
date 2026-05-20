@@ -1084,7 +1084,6 @@ var
   Status: Byte;
   EntLen, IDLen, ModelLen: Word;
   TextLen, PropsLen: Cardinal;
-  RecBytes: TBytes;
   ActiveCount: Int64;
   EntB, IDB, ModB, TxtB, PropB, EmbB: TBytes;
 

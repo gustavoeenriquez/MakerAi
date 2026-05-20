@@ -92,7 +92,7 @@ Begin
   Params.Clear;
   Params.Add('ApiKey=@GROK_API_KEY');
   Params.Add('Model=grok-3');
-  Params.Add('MaxTokens=4096');
+  Params.Add('Max_Tokens=4096');
   Params.Add('URL=https://api.x.ai/v1/');
 End;
 

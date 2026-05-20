@@ -1,4 +1,4 @@
-// MakerAI Suite — Driver Gemini Realtime STT (stub)
+﻿// MakerAI Suite — Driver Gemini Realtime STT (stub)
 // Protocolo: Gemini Live API via WebSocket (pendiente implementacion completa)
 // Sample rate: 16kHz PCM16 mono
 //

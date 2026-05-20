@@ -92,7 +92,7 @@ begin
   try
     if aModel.IsEmpty then
       aModel := FModel;
-    sUrl := FUrl + 'models/' + aModel + ':embedContent?key=' + FApiKey;
+    sUrl := FUrl + 'models/' + aModel + ':embedContent?key=' + ApiKey;
     jPart := TJSONObject.Create;
     jPart.AddPair('text', TJSONString.Create(aInput));
     jParts := TJSonArray.Create;

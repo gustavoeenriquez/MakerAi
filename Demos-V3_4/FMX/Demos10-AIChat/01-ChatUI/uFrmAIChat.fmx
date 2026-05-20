@@ -1,0 +1,81 @@
+object FrmAIChat: TFrmAIChat
+  Left = 0
+  Top = 0
+  Caption = 'MakerAI - Chat Demo'
+  ClientHeight = 640
+  ClientWidth = 760
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  DesignerMasterStyle = 0
+  object ToolBar1: TToolBar
+    Align = Top
+    Size.Width = 760.000000000000000000
+    Size.Height = 44.000000000000000000
+    Size.PlatformDefault = False
+    object BtnLight: TButton
+      Align = Left
+      Size.Width = 80.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Light'
+      OnClick = BtnLight_Click
+    end
+    object BtnDark: TButton
+      Align = Left
+      Size.Width = 80.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Dark'
+      OnClick = BtnDark_Click
+    end
+    object BtnClear: TButton
+      Align = Left
+      Size.Width = 80.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Clear'
+      OnClick = BtnClear_Click
+    end
+    object BtnLoad: TButton
+      Align = Left
+      Size.Width = 100.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Load'
+      OnClick = BtnLoad_Click
+    end
+    object BtnStream: TButton
+      Align = Left
+      Size.Width = 110.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Stream AI'
+      OnClick = BtnStream_Click
+    end
+  end
+  object ChatInput: TAIChatInput
+    Align = Bottom
+    Margins.Left = 8.000000000000000000
+    Margins.Right = 8.000000000000000000
+    Margins.Bottom = 8.000000000000000000
+    Size.Width = 744.000000000000000000
+    Size.Height = 100.000000000000000000
+    Size.PlatformDefault = False
+    EnterAsSend = True
+    MicVisible = True
+    OnSend = ChatInput_Send
+    OnCancel = ChatInput_Cancel
+    OnMicToggle = ChatInput_MicToggle
+  end
+  object ChatView: TAIChatView
+    Align = Client
+    Size.Width = 760.000000000000000000
+    Size.Height = 488.000000000000000000
+    Size.PlatformDefault = False
+    OnLinkClick = ChatView_LinkClick
+    OnAttachmentOpen = ChatView_AttachOpen
+  end
+end

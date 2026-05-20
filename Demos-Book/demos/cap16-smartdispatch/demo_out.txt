@@ -1,0 +1,86 @@
+=== MakerAI -- Capitulo 16: SmartDispatch ===
+Demos: routing inteligente para modelos sin function calling
+
+  Driver local : Ollama -- http://localhost:11434/
+  Modelo       : gemma3:4b
+  IMPORTANTE   : cmSmartDispatch requiere Asynchronous=False
+
+  Estado del entorno:
+  Ollama -- si esta corriendo en http://localhost:11434/ los demos 1 y 2 funcionan
+  [OK] OPENAI_API_KEY detectado -- Demo 3 activo
+
+--------------------------------------------------------------
+  Demo 1 -- Routing basico con herramientas simuladas
+--------------------------------------------------------------
+  Driver: Ollama / gemma3:4b
+  Tools : ImageTool [IMAGEGEN] + WebSearchTool [WEBSEARCH]
+  Los mock tools muestran el prompt reescrito por el dispatcher
+
+  [CHAT esperado    ] "Cual es la capital de Francia?"    >> [WEBSEARCH] consulta optimizada: "capital of France"
+
+    Respuesta: [resultado de busqueda] capital of France
+  [IMAGEGEN esperado] "Genera una imagen de un gato con sombrero de cow"    >> [IMAGEGEN] prompt reescrito: "a cat wearing a cowboy hat"
+
+    Respuesta: [imagen generada] a cat wearing a cowboy hat
+  [WEBSEARCH esperado] "Busca noticias recientes sobre inteligencia arti"    >> [WEBSEARCH] consulta optimizada: "recent artificial intelligence news 2025"
+
+    Respuesta: [resultado de busqueda] recent artificial intelligence news 2025
+  [CHAT esperado    ] "Cuanto es 15 multiplicado por 7?"
+    Respuesta: 105
+  [AMBIGUO          ] "Muestrame como se ve un arcoiris"    >> [IMAGEGEN] prompt reescrito: "how a rainbow looks"
+
+    Respuesta: [imagen generada] how a rainbow looks
+
+-> El dispatcher reescribe las solicitudes en ingles para mayor precision.
+   [CHAT] devuelve directamente la respuesta del Pase 1 (sin Pase 2).
+   Las herramientas reciben el prompt ya optimizado por el Pase 1.
+
+--------------------------------------------------------------
+  Demo 2 -- Cuatro herramientas: prompt de despacho dinamico
+--------------------------------------------------------------
+  Driver: Ollama / gemma3:4b
+  Tools : IMAGE + VIDEO + TTS + WEBSEARCH (5 etiquetas disponibles)
+
+  [IMAGEGEN  ] "Dibuja un paisaje montanoso al atardecer"    >> [IMAGEGEN] prompt reescrito: "a mountainous landscape at sunset"
+
+    Respuesta: [imagen generada] a mountainous landscape at sunset
+  [VIDEOGEN  ] "Crea un video corto de olas en la playa"    >> [VIDEOGEN] solicitud original: "short video of ocean waves crashing on a beach"
+
+    Respuesta: [video generado] short video of ocean waves crashing on a beach
+  [TTS       ] "Lee en voz alta: Bienvenido a MakerAI"    >> [TTS] texto a leer: "Bienvenido a MakerAI"
+
+    Respuesta: [audio generado] Bienvenido a MakerAI
+  [WEBSEARCH ] "Que noticias importantes hay hoy?"    >> [WEBSEARCH] consulta optimizada: "current world news today"
+
+    Respuesta: [resultado de busqueda] current world news today
+  [CHAT      ] "Explica en una frase que es la inteligencia arti"
+    Respuesta: La inteligencia artificial es la capacidad de las máquinas para imitar funciones
+
+-> Con 4 tools asignadas, el dispatcher conoce las 5 etiquetas.
+   Si se desasigna una herramienta, su etiqueta desaparece del prompt.
+   ExecuteVideoGeneration NO tiene APrompt: usa AskMsg.Prompt directamente.
+
+--------------------------------------------------------------
+  Demo 3 -- Hibrido: Ollama (clasificador) + gpt-image-1 (generador)
+--------------------------------------------------------------
+  Clasificador: Ollama / gemma3:4b  (sin costo de API)
+  Generador   : gpt-image-1  (OpenAI, llamada directa)
+
+  Solicitud: "Genera una imagen de un robot leyendo un libro de Delphi"
+
+  Paso 1 -- Ollama clasifica... OK
+  Prompt reescrito: "a robot reading a book of Delphi"
+
+  Paso 2 -- gpt-image-1 genera la imagen... OK
+  Imagen guardada: C:\Users\genri\AppData\Local\Temp\cap16_demo3_robot.png  (2231 KB)
+
+-> El modelo local solo produce ~10-30 tokens (clasificacion + reescritura).
+   gpt-image-1 recibe el prompt ya optimizado en ingles por el dispatcher.
+   Este patron separa la clasificacion barata de la generacion costosa.
+
+==============================================================
+  Demos completados.
+  Ver cap16-smartdispatch.md para la documentacion completa.
+==============================================================
+
+Presiona Enter para salir...

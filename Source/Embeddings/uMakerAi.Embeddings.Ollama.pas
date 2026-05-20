@@ -36,6 +36,7 @@ interface
 uses
   System.SysUtils, System.Classes, System.JSON,
   System.Net.URLClient, System.Net.HttpClient,
+  System.Generics.Collections,
   System.Net.Mime, System.Net.HttpClientComponent,
 {$IF CompilerVersion < 35}
   uJSONHelper,

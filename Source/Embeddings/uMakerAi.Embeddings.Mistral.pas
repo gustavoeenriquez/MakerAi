@@ -116,7 +116,7 @@ begin
     St.WriteString(jObj.Format);
     St.Position := 0;
 
-    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
+    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
     Client.ContentType := 'application/json';
 
     Res := Client.Post(sUrl, St, Response, Headers);

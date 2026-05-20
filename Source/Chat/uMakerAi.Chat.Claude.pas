@@ -126,7 +126,7 @@ type
   TAiClaudeChat = Class(TAiChat)
   Private
     FStreamResponseMsg: TAiChatMessage;
-    FStreamContentBlocks: TDictionary<Integer, TClaudeStreamContentBlock>;
+    FStreamContentBlocks: TObjectDictionary<Integer, TClaudeStreamContentBlock>;
     FStreamBuffer: TStringBuilder;
     FStreamLastEventType: string;
 
@@ -148,6 +148,7 @@ type
     procedure SetEnableMemory(const Value: Boolean);
     procedure SetEnableThinking(const Value: Boolean);
     procedure SetThinkingBudget(const Value: Integer);
+    procedure TranslateClaudeComputerArgs(ToolCall: TAiToolsFunction);
 
   Protected
     Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
@@ -382,7 +383,7 @@ Begin
   Params.Clear;
   Params.Add('ApiKey=@CLAUDE_API_KEY');
   Params.Add('Model=claude-haiku-4-5-20251001');
-  Params.Add('MaxTokens=4096');
+  Params.Add('Max_Tokens=4096');
   Params.Add('URL=https://api.anthropic.com/v1/');
 End;
 
@@ -448,7 +449,7 @@ begin
   FClient.OnReceiveData := Self.OnInternalReceiveData;
   FClient.ResponseTimeOut := 60000;
 
-  FStreamContentBlocks := TDictionary<Integer, TClaudeStreamContentBlock>.Create;
+  FStreamContentBlocks := TObjectDictionary<Integer, TClaudeStreamContentBlock>.Create([doOwnsValues]);
   FStreamBuffer := TStringBuilder.Create;
   FStreamResponseMsg := nil;
   FContextConfig := TClaudeContextConfig.Create;
@@ -587,6 +588,7 @@ Var
   I: Integer;
   LAsincronico: Boolean;
   Res, LModel: String;
+  LIsAdaptiveThinking: Boolean;
   SystemPrompt: String;
 
   // Variables para iteraci?n de mensajes (Auto-Upload)
@@ -600,6 +602,7 @@ Var
   // Variables auxiliares para Thinking
   LActualThinkingBudget: Integer;
 begin
+  LActualThinkingBudget := 0;
   if User = '' then
     User := 'user';
 
@@ -628,6 +631,11 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
   if LModel = '' then
     LModel := 'claude-haiku-4-5-20251001';
+
+  // Adaptive Thinking: Anthropic controla internamente el sampling y el razonamiento.
+  // Enviar temperature/top_p/top_k o el bloque thinking causa error 400.
+  // Agregar aquí futuros modelos con Adaptive Thinking cuando Anthropic los anuncie.
+  LIsAdaptiveThinking := LModel.StartsWith('claude-opus-4-7');
 
   // ---------------------------------------------------------------------------
   // 2. C?LCULO DE THINKING BUDGET (Nuevo enfoque sin output_config)
@@ -736,7 +744,7 @@ begin
     // -------------------------------------------------------------------------
     // 5. THINKING PARAMETERS (Solo budget, sin output_config)
     // -------------------------------------------------------------------------
-    if FEnableThinking then
+    if FEnableThinking and not LIsAdaptiveThinking then
     begin
       var
       jThink := TJSONObject.Create;
@@ -747,7 +755,7 @@ begin
       // Temperatura Forzada a 1.0 (Requisito API para thinking)
       AJSONObject.AddPair('temperature', TJSONNumber.Create(1.0));
     end
-    else
+    else if not LIsAdaptiveThinking then
     begin
       // Modo Est?ndar
       if Self.Temperature > 0 then
@@ -758,6 +766,7 @@ begin
       if K > 0 then
         AJSONObject.AddPair('top_k', TJSONNumber.Create(K));
     end;
+    // else LIsAdaptiveThinking: Anthropic gestiona sampling y reasoning internamente.
 
     // 6. METADATA & SERVICE TIER
     if (Self.User <> '') and (Self.User <> 'user') then
@@ -830,8 +839,16 @@ begin
       JTools := TJSONObject.Create;
       JTools.AddPair('type', 'computer_20250124');
       JTools.AddPair('name', 'computer');
-      JTools.AddPair('display_width_px', TJSONNumber.Create(1024));
-      JTools.AddPair('display_height_px', TJSONNumber.Create(768));
+      if Assigned(ChatTools.ComputerUseTool) then
+      begin
+        JTools.AddPair('display_width_px',  TJSONNumber.Create(ChatTools.ComputerUseTool.ScreenWidth));
+        JTools.AddPair('display_height_px', TJSONNumber.Create(ChatTools.ComputerUseTool.ScreenHeight));
+      end
+      else
+      begin
+        JTools.AddPair('display_width_px',  TJSONNumber.Create(1920));
+        JTools.AddPair('display_height_px', TJSONNumber.Create(1080));
+      end;
       jArrTools.Add(JTools);
     end;
 
@@ -955,7 +972,13 @@ begin
       end;
     finally
       if not FClient.Asynchronous then
-        St.Free;
+        St.Free
+      else
+      begin
+        if Assigned(FCurrentPostStream) then
+          FreeAndNil(FCurrentPostStream);
+        FCurrentPostStream := St;
+      end;
     end;
   finally
     if not FClient.Asynchronous then
@@ -992,12 +1015,11 @@ Var
 
   // Variables para Navegaci?n de Archivos (Code Execution)
   jInnerContent, jResultContent: TJSONObject;
-  jInnerArray, jResultArray: TJSonArray;
+  jResultArray: TJSonArray;
   NewFile: TAiMediaFile;
-  ToolUseID, Cmd, FoundFileName: string;
+  ToolUseID, FoundFileName: string;
   ScanItem: TJSONValue;
   ScanObj, InputObj: TJSONObject;
-  CmdParts: TArray<string>;
 
   // Subrutina local: garantiza captura independiente por valor en Delphi 10.4+
   procedure _CreateTask(TC: TAiToolsFunction; AIdx: Integer);
@@ -1783,6 +1805,9 @@ begin
           finally
             jSyntheticResponse.Free;
 
+            if Assigned(MsgToProcess) and (FMessages.IndexOf(MsgToProcess) = -1) then
+              MsgToProcess.Free;
+
             // Limpieza de buffers locales
             FStreamBuffer.Clear;
             FStreamContentBlocks.Clear;
@@ -2271,7 +2296,6 @@ Var
   Arg: TJSONObject;
   JVal1: TJSONValue;
   Fun: TAiToolsFunction;
-  I: Integer;
 begin
   Result := TAiToolsFunctions.Create;
   For JVal1 in jChoices do
@@ -2435,8 +2459,137 @@ begin
   end;
 end;
 
-procedure TAiClaudeChat.DoCallFunction(ToolCall: TAiToolsFunction);
+procedure TAiClaudeChat.TranslateClaudeComputerArgs(ToolCall: TAiToolsFunction);
+// Convierte el formato nativo de Claude Computer Use al formato TAiComputerUseTool.
+// Claude envía: {"action":"left_click","coordinate":[x_px, y_px], ...}
+// TAiComputerUseTool espera: {"x":norm, "y":norm, "text":"...", ...} + ToolCall.Name = acción mapeada
+var
+  JArgs, JNew: TJSONObject;
+  JCoord, JStartCoord: TJSONArray;
+  Action, MappedName, SText, SDir: string;
+  ScrW, ScrH, PxX, PxY, NormX, NormY, Amount: Integer;
 begin
+  JArgs := TJSONObject.ParseJSONValue(ToolCall.Arguments) as TJSONObject;
+  if not Assigned(JArgs) then
+    Exit;
+  try
+    if not JArgs.TryGetValue<string>('action', Action) then
+      Exit;
+
+    ScrW := ChatTools.ComputerUseTool.ScreenWidth;
+    ScrH := ChatTools.ComputerUseTool.ScreenHeight;
+    if ScrW <= 0 then ScrW := 1920;
+    if ScrH <= 0 then ScrH := 1080;
+
+    // Mapeo de nombres de acción Claude → TAiComputerUseTool
+    if      Action = 'left_click'       then MappedName := 'click_at'
+    else if Action = 'right_click'      then MappedName := 'right_click'
+    else if Action = 'middle_click'     then MappedName := 'middle_click'
+    else if Action = 'double_click'     then MappedName := 'double_click'
+    else if Action = 'left_click_drag'  then MappedName := 'drag_and_drop'
+    else if Action = 'mouse_move'       then MappedName := 'hover_at'
+    else if Action = 'type'             then MappedName := 'type_text_at'
+    else if Action = 'key'              then MappedName := 'key_combination'
+    else if Action = 'scroll'           then MappedName := 'scroll_at'
+    else if Action = 'wait'             then MappedName := 'wait_5_seconds'
+    else MappedName := Action; // screenshot, go_back, go_forward pass through
+
+    ToolCall.Name := MappedName;
+
+    JNew := TJSONObject.Create;
+    try
+      // Drag: start_coordinate = origen (→ x,y); coordinate = destino (→ destination_x,y)
+      if (Action = 'left_click_drag') and
+         JArgs.TryGetValue<TJSONArray>('start_coordinate', JStartCoord) and
+         (JStartCoord.Count >= 2) then
+      begin
+        PxX  := (JStartCoord.Items[0] as TJSONNumber).AsInt;
+        PxY  := (JStartCoord.Items[1] as TJSONNumber).AsInt;
+        NormX := Round(PxX / ScrW * 1000); if NormX > 999 then NormX := 999;
+        NormY := Round(PxY / ScrH * 1000); if NormY > 999 then NormY := 999;
+        JNew.AddPair('x', TJSONNumber.Create(NormX));
+        JNew.AddPair('y', TJSONNumber.Create(NormY));
+
+        if JArgs.TryGetValue<TJSONArray>('coordinate', JCoord) and (JCoord.Count >= 2) then
+        begin
+          NormX := Round((JCoord.Items[0] as TJSONNumber).AsInt / ScrW * 1000);
+          NormY := Round((JCoord.Items[1] as TJSONNumber).AsInt / ScrH * 1000);
+          if NormX > 999 then NormX := 999;
+          if NormY > 999 then NormY := 999;
+          JNew.AddPair('destination_x', TJSONNumber.Create(NormX));
+          JNew.AddPair('destination_y', TJSONNumber.Create(NormY));
+        end;
+      end
+      else if JArgs.TryGetValue<TJSONArray>('coordinate', JCoord) and (JCoord.Count >= 2) then
+      begin
+        PxX  := (JCoord.Items[0] as TJSONNumber).AsInt;
+        PxY  := (JCoord.Items[1] as TJSONNumber).AsInt;
+        NormX := Round(PxX / ScrW * 1000); if NormX > 999 then NormX := 999;
+        NormY := Round(PxY / ScrH * 1000); if NormY > 999 then NormY := 999;
+        JNew.AddPair('x', TJSONNumber.Create(NormX));
+        JNew.AddPair('y', TJSONNumber.Create(NormY));
+      end;
+
+      // Texto o combinación de teclas
+      if JArgs.TryGetValue<string>('text', SText) then
+      begin
+        if Action = 'key' then
+          JNew.AddPair('keys', SText)
+        else
+          JNew.AddPair('text', SText);
+      end;
+
+      // Scroll
+      if JArgs.TryGetValue<string>('direction', SDir) then
+        JNew.AddPair('direction', SDir);
+      if JArgs.TryGetValue<Integer>('amount', Amount) then
+        JNew.AddPair('magnitude', TJSONNumber.Create(Amount * 120))
+      else if Action = 'scroll' then
+        JNew.AddPair('magnitude', TJSONNumber.Create(800));
+
+      ToolCall.Arguments := JNew.ToJSON;
+    finally
+      JNew.Free;
+    end;
+  finally
+    JArgs.Free;
+  end;
+end;
+
+procedure TAiClaudeChat.DoCallFunction(ToolCall: TAiToolsFunction);
+var
+  LScreenshot: TAiMediaFile;
+begin
+  // 0. Computer Use nativo de Claude (tool name = 'computer')
+  if (ToolCall.Name = 'computer') and Assigned(ChatTools.ComputerUseTool) then
+  begin
+    if Assigned(FOnCallToolFunction) then
+      FOnCallToolFunction(Self, ToolCall);
+
+    if ToolCall.Response = '' then
+    begin
+      LScreenshot := nil;
+      try
+        TranslateClaudeComputerArgs(ToolCall);
+        ToolCall.Response := ChatTools.ComputerUseTool.ProcessToolCall(ToolCall, LScreenshot);
+        if Assigned(LScreenshot) then
+        begin
+          if Assigned(ToolCall.ResMsg) then
+            ToolCall.ResMsg.MediaFiles.Add(LScreenshot)
+          else
+            LScreenshot.Free;
+        end;
+      except
+        on E: Exception do
+        begin
+          FreeAndNil(LScreenshot);
+          ToolCall.Response := Format('{"output":"error: %s","url":"%s"}',
+            [E.Message, ChatTools.ComputerUseTool.CurrentUrl]);
+        end;
+      end;
+    end;
+    Exit;
+  end;
 
   // ---------------------------------------------------------------------------
   // 1. Interceptar Herramienta BASH / SHELL

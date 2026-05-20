@@ -20,7 +20,7 @@ Demos:
 | `uMakerAi.Realtime.AiConnection.pas` | `TAiRealtimeConnection` | Universal connector (same pattern as `TAiChatConnection`) |
 | `uMakerAi.Realtime.OpenAI.pas` | `TAiOpenAiRealtimeSTT` | OpenAI driver — **complete** |
 | `uMakerAi.Realtime.Gemini.pas` | `TAiGeminiRealtimeSTT` | Gemini driver — **stub, pending** |
-| `uMakerAi.Realtime.WebSocket.pas` | `TAiRealtimeWSClient` | Native WebSocket via WinHTTP/Schannel |
+| `uMakerAi.Realtime.WebSocket.pas` | `TAiRealtimeWSClient` (shim → `TAiWSClient`) | Compatibility alias; implementation in `Source/WebSocket/` |
 
 ### Class Hierarchy
 
@@ -145,21 +145,48 @@ When implementing:
 
 ---
 
-## TAiRealtimeWSClient — WebSocket client
+## TAiRealtimeWSClient — WebSocket client (shim)
 
-**Technology:** WinHTTP API (Windows native, no Indy/OpenSSL dependency).  
-**TLS:** Schannel (built into Windows), compatible with Cloudflare CDN.
+`uMakerAi.Realtime.WebSocket.pas` is now a **compatibility shim** that re-exports `TAiRealtimeWSClient` as an alias for `TAiWSClient` from `Source/WebSocket/`. The actual implementation lives in:
 
-### Why not Indy?
+| Unit | Class | Role |
+|------|-------|------|
+| `uMakerAi.WebSocket.Client.pas` | `TAiWSClient` | RFC 6455 + HTTP Upgrade + reader thread |
+| `uMakerAi.WebSocket.SChannel.pas` | `TSChannelTransport` | TLS — Windows (`secur32.dll`, zero extra DLLs) |
+| `uMakerAi.WebSocket.Android.pas` | `TAndroidSSLTransport` | TLS — Android (`javax.net.ssl` via JNI) |
+| `uMakerAi.WebSocket.OpenSSL.pas` | `TOpenSSLTransport` | TLS — Linux/macOS (`dlopen(libssl.so)`) |
 
-The Realtime API uses Cloudflare's CDN which rejects Indy's TLS handshake in some environments. WinHTTP uses the system's Schannel TLS stack, which works reliably with Cloudflare.
+### Platform support
 
-### Key details
+| Platform | TLS backend | Status |
+|----------|-------------|--------|
+| Windows Win64 | `TSChannelTransport` (`secur32.dll`) | ✅ Tested |
+| Android ARM/ARM64 | `TAndroidSSLTransport` (`javax.net.ssl` via JNI) | ⚠️ Compiles, not yet tested on real hardware |
+| Linux64 | `TOpenSSLTransport` (`libssl.so.3` or `libssl.so.1.1`) | ⚠️ Compiles, not yet tested on real hardware |
+| macOS | `TOpenSSLTransport` (`libssl.dylib`) | ⚠️ Compiles, not yet tested |
+| iOS | — | ❌ Not implemented |
 
-- Reader thread (`TAiRealtimeWSReaderThread`) polls `WinHttpWebSocketReceive` in a loop
-- Buffer: 128 KB per read; multi-frame messages are reassembled automatically
-- Diagnostic log: `C:\Temp\ws_diag.txt` (useful for debugging connection issues)
-- Thread safety: `TCriticalSection` on send path; events dispatched on calling thread
+### Why SChannel instead of WinHTTP?
+
+The previous implementation used WinHTTP. The rewrite uses a pure-Pascal RFC 6455 client (`TAiWSClient`) with a pluggable `ITlsTransport` interface. On Windows, `TSChannelTransport` delegates TLS to `secur32.dll` (Schannel — the Windows system TLS stack), which requires no external DLLs and handles Cloudflare's CDN reliably.
+
+### Why OpenSSL via dlopen on POSIX?
+
+`secur32.dll` is Windows-only. On Linux/macOS, `TOpenSSLTransport` loads `libssl` at runtime via `dlopen` — it searches for `libssl.so.3` → `libssl.so.1.1` → `libssl.dylib` in order. This avoids a hard link-time dependency.
+
+**Linux prerequisite:** `libssl3` (Ubuntu 22.04+) or `libssl1.1` (Ubuntu 20.04/Debian 11):
+```bash
+apt install libssl3     # Ubuntu 22.04+ / Debian 12
+apt install libssl1.1   # Ubuntu 20.04 / Debian 11
+```
+
+### Key implementation details — TAiWSClient
+
+- Pure-Pascal RFC 6455: HTTP Upgrade handshake, frame encode/decode, masking, fragmentation, control frames (Ping/Pong/Close)
+- Reader thread polls receive loop; multi-frame messages are reassembled automatically
+- Client masking: MASK=1 with 4-byte random key (required by RFC 6455 §5.3)
+- Thread safety: `TCriticalSection` on send path; events dispatched via `TThread.Queue`
+- Ping/Pong: reader thread responds to server Ping automatically
 
 ---
 
@@ -240,9 +267,10 @@ STT.Connect;
 ## Known issues / limitations
 
 - **Gemini driver is a stub** — raises `ENotImplemented` on `Connect`
-- **Windows only** — `TAiRealtimeWSClient` uses WinHTTP (Windows API)
-- **No macOS/Linux support** — the WebSocket client would need a different backend
-- **Diagnostic file** — `C:\Temp\ws_diag.txt` is always written; remove in production if not needed
+- **POSIX not yet tested** — `TOpenSSLTransport` + `TAiWSClient` compile on Linux/macOS but have not been validated on real hardware
+- **POSIX prerequisite** — Linux requires `libssl3` or `libssl1.1`; macOS requires LibreSSL (system) or OpenSSL (Homebrew)
+- **Android** — `TAndroidSSLTransport` compiles but has not been validated on real hardware
+- **iOS** — `ITlsTransport` not yet implemented
 
 ---
 

@@ -1421,7 +1421,6 @@ begin
       ClientItem := FMCPClients.GetClientByName(ServerName);
       if Assigned(ClientItem) and ClientItem.Enabled and ClientItem.MCPClient.Available then
       begin
-        ArgsObject := nil;
         ResultObject := nil;
         try
           ClientItem.MCPClient.OnLog := FOnLog;
@@ -3120,7 +3119,7 @@ var
   LArgsArray: TJSONArray;
   LItem: TMCPClientItem;
   LArgs: TArray<string>;
-  LArg, LCmd, LUrl, LArgsStr, LDir: string;
+  LCmd, LUrl, LArgsStr, LDir: string;
   I, J: Integer;
 begin
   Result := False;

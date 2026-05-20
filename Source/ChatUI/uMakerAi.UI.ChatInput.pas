@@ -220,8 +220,9 @@ type
     Property OnSlideChange: TChatSlideImageEvent read FOnSlideChange write SetOnSlideChange;
     Property Busy: Boolean read FBusy write SetBusy;
     Property EnterAsSend: Boolean read FEnterAsSend write FEnterAsSend default False;
-  end;
+  end deprecated 'Use TAIChatInput (AIChat.Input)';
 
+{$WARN SYMBOL_DEPRECATED OFF}
 var
   ChatInputFrame: TChatInput;
 
@@ -241,6 +242,8 @@ const
 procedure Register;
 
 implementation
+
+{$WARN SYMBOL_DEPRECATED OFF}
 
 uses uMakerAi.Utils.ScreenCapture;
 

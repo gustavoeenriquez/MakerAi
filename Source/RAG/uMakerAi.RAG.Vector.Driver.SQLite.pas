@@ -1037,7 +1037,6 @@ var
   DoVector, DoLexical: Boolean;
   MinVec, MinLex: Double;
   VecRes, LexRes: TAiRAGVector;
-  I: Integer;
   Fused: TAiRAGVector;
 
   procedure TransferFiltered(Src: TAiRAGVector);

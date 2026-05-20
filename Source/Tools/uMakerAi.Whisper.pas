@@ -88,8 +88,8 @@ Type
     procedure ConvertAudioIfNeeded(var aStream: TMemoryStream; var aFileName: String);
 
     { Implementaci?n de IAiSpeechTool }
-    procedure ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage); virtual;
-    procedure ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage); virtual;
+    procedure ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage); override;
+    procedure ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage); override;
     function InternalTranscription(aStream: TMemoryStream; aFileName, aPrompt: String): String;
 
   Public
@@ -218,10 +218,13 @@ procedure TAIWhisper.ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskM
       LText := InternalTranscription(aMediaFile.Content, aMediaFile.filename, '');
       aMediaFile.Transcription := LText;
       aMediaFile.Procesado := True;
+      ResMsg.Prompt := LText;  // asignación directa para modo sync (igual que Gemini)
       ReportDataEnd(ResMsg, 'assistant', LText);
     except
       on E: Exception do
+      begin
         ReportError('Error en transcripci�n Whisper: ' + E.Message, E);
+      end;
     end;
   end;
 

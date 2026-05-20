@@ -72,7 +72,7 @@ type
     // Guarda el bitmap en un archivo
     class procedure SaveToFile(ABitmap: FMX.Graphics.TBitmap; const AFileName: string);
     class function SelectArea(out ASelectedRect: TRect): Boolean;
-  end;
+  end deprecated 'Use TScreenCapture (AIChat.ScreenCapture)';
 
 
  TSelectionForm = class(TForm)

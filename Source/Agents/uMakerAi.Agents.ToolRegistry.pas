@@ -666,7 +666,6 @@ begin
 
   // Descargar el .paipkg (ZIP) — la URL puede redirigir (302)
   PkgPath := TPath.Combine(DestDir, APkg.Name + '.paipkg');
-  Ok      := False;
   Http    := TNetHTTPClient.Create(nil);
   try
     Http.HandleRedirects := True;
@@ -826,7 +825,6 @@ begin
   if not TFile.Exists(ManifestPath) then
   begin
     PkgPath := TPath.Combine(DestDir, FullPkg.Name + '.paipkg');
-    Ok      := False;
     Http    := TNetHTTPClient.Create(nil);
     try
       Http.HandleRedirects := True;

@@ -176,7 +176,6 @@ type
     FSteps: Integer;
     FGuidanceScale: Single;
     FUseRefiner: Boolean;
-    FSampler: string;
     FEnhanceFace: Boolean;
     FAutoUpscale: Boolean;
     FStrength: Single;
@@ -623,7 +622,7 @@ begin
 
     end; // case FModel
 
-    // response_format solo para modelos NO-GPT (dall-e-2, dall-e-3, sdxl)
+    // response_format solo para modelos NO-GPT (dall-e-2, dall-e-3)
     if not IsGptImageModel then
     begin
       if FResponseFormat = irfUrl then
@@ -1111,8 +1110,6 @@ var
   Req, ImageObj, RespImage: TJSONObject;
   Res: IHTTPResponse;
 begin
-  Result := nil;
-
   if not Assigned(aImage) or (aImage.Content.Size = 0) then
     raise Exception.Create('Image is required for upscale.');
 

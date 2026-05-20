@@ -50,14 +50,11 @@ type
   TJSONBFilterBuilder = class
   private
     // FConditions: TObjectList<TJSONBFilterCondition>;
-    FLogicalOperator: string; // 'AND' o 'OR'
     FParamCounter: Integer;
-    FQuery: TFDQuery;
     FParams: TList<TQueryParamValue>;
     function BuildPath(const AKey: string; AOperator: TFilterOperator): string;
     function InferDataType(const AValue: Variant): TJSONBDataType;
     function Process(ACriteria: TAiFilterCriteria): string;
-    procedure ApplyParams(AQuery: TFDQuery);
   public
     constructor Create(AQuery: TFDQuery);
     destructor Destroy; override;
@@ -66,6 +63,7 @@ type
     function BuildSQL(ACriteria: TAiFilterCriteria): string;
 
     // Generaci�n SQL
+    procedure ApplyParams(AQuery: TFDQuery);
     property Params: TList<TQueryParamValue> read FParams;
   end;
 
@@ -84,8 +82,6 @@ type
     function GetPostgresLangConfig: string;
     procedure SetConnection(const Value: TFDConnection);
 
-    // Helper actualizado para usar Criteria
-    function BuildJSONBFilter(AFilter: TAiFilterCriteria; AQuery: TFDQuery; out HasFilter: Boolean): string;
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
@@ -527,7 +523,6 @@ function TAiRAGVectorPostgresDriver.EmbeddingToString(const AData: TAiEmbeddingD
 var
   I: Integer;
   FS: TFormatSettings;
-  S: string;
   Parts: TArray<string>;
 begin
   if Length(AData) = 0 then
@@ -572,25 +567,6 @@ begin
     Result := j.ToJSON;
   finally
     j.Free;
-  end;
-end;
-
-// HELPER PRINCIPAL DE FILTRADO
-function TAiRAGVectorPostgresDriver.BuildJSONBFilter(AFilter: TAiFilterCriteria; AQuery: TFDQuery; out HasFilter: Boolean): string;
-var
-  Builder: TJSONBFilterBuilder;
-begin
-  Result := '';
-  HasFilter := False;
-  if not Assigned(AFilter) or (AFilter.Count = 0) then
-    Exit;
-
-  Builder := TJSONBFilterBuilder.Create(AQuery);
-  try
-    Result := Builder.BuildSQL(AFilter);
-    HasFilter := Result <> '';
-  finally
-    Builder.Free;
   end;
 end;
 

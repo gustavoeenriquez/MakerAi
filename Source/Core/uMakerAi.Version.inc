@@ -11,7 +11,7 @@ const
   MAKERAI_VERSION_SHORT    = '3.4';
   MAKERAI_VERSION_FULL     = '3.4.0.0';
   MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.4.0.0';
-  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.4 - Selective Driver Registration (Apr 2026)';
+  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.4 - Realtime STT, SmartDispatch, Delphi 13.1 (May 2026)';
 
 // Product Information
 const
@@ -22,7 +22,7 @@ const
 
 // Build Information
 const
-  MAKERAI_BUILD_DATE       = '2026-04-26';
+  MAKERAI_BUILD_DATE       = '2026-05-18';
   MAKERAI_BUILD_TIME       = '12:00:00';
   MAKERAI_BUILD_PLATFORM   = {$IFDEF WIN32}'Win32'{$ENDIF}
                             {$IFDEF WIN64}'Win64'{$ENDIF}
@@ -34,7 +34,7 @@ const
 // Compatibility Information
 const
   MAKERAI_MIN_DELPHI_VERSION = '10.4';  // Minimum Delphi version required (10.4 Sydney)
-  MAKERAI_TESTED_DELPHI      = '13.0';  // Latest tested Delphi version (Delphi 13 Athens)
+  MAKERAI_TESTED_DELPHI      = '13.1';  // Latest tested Delphi version (Delphi 13.1 Florence)
 
 // API Compatibility
 const
@@ -119,7 +119,8 @@ const
   - FIX: Double-add/double-free in RunNew+RunLegacy (Cohere tool calls)
   - FIX: Mistral json_schema.name field required by API
 
-  Version 3.4.0 (2026-04-26)
+  Version 3.4.0 (2026-05-18)
+  - Tested with Delphi 13.1 Florence (CompilerVersion 37.1)
   - FIX: Selective driver registration restored — TAiChatConnection no longer force-loads
          all drivers via uMakerAi.Chat.Initializations. Each driver self-registers only
          when explicitly imported. To load all drivers at once, add
@@ -131,8 +132,19 @@ const
   - FIX: TAiAgentManager.Run declared virtual to allow proper subclassing
   - FIX: TChatBubble — TMemo ShowScrollBars := False eliminates spurious vertical bars
   - FIX: TChatInput — StyledSettings removes Size so Font.Size property is respected
+  - FIX: Claude Opus 4.7 Adaptive Thinking — temperature, top_p, top_k and thinking block
+         now correctly omitted for claude-opus-4-7 models; Anthropic manages sampling
+         internally. Sending these parameters caused HTTP 400 errors.
+  - FIX: RegisterDefaultParams Max_Tokens key — corrected in 10 drivers (Claude, Gemini,
+         Mistral, Groq, DeepSeek, Grok, Kimi, LMStudio, GenericLLM, Ollama). The wrong
+         key "MaxTokens" was never resolved by RTTI to the Max_tokens property.
+  - FIX: ApplyParamsToChat TryStrToFloat — now locale-independent: tries invariant format
+         (dot decimal) first, then system locale fallback. Both "0.7" and "0,7" are valid
+         regardless of regional settings.
   - NEW: TChatInput.EnterAsSend property (default False) — Enter sends prompt,
          Shift+Enter / Ctrl+Enter inserts line break
+  - NEW: TAiRealtimeConnection — universal connector for real-time STT (OpenAI WebSocket)
+  - NEW: cmSmartDispatch chat mode — two-pass routing with automatic capability bridging
   - NEW: Demo 08-DriverRegistration illustrating driver registration behavior
 
 }

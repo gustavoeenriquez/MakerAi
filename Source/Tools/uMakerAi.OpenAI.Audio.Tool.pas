@@ -290,6 +290,7 @@ procedure TAiOpenAiSpeechTool.ExecuteTranscription(aMediaFile: TAiMediaFile; Res
       end;
       aMediaFile.Transcription := LText;
       aMediaFile.Procesado := True;
+      ResMsg.Prompt := LText;
       ReportDataEnd(ResMsg, 'assistant', LText);
     except
       on E: Exception do
@@ -314,6 +315,8 @@ procedure TAiOpenAiSpeechTool.ExecuteSpeechGeneration(const AText: string; ResMs
       try
         LNewFile := TAiMediaFile.Create;
         LNewFile.LoadFromStream('speech.' + TTSFormatExtension, LStream);
+        ResMsg.AddMediaFile(LNewFile);
+        ResMsg.Prompt := '[Audio generado]';
         ReportDataEnd(ResMsg, 'assistant', '[Audio generado]');
       finally
         LStream.Free;

@@ -35,6 +35,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON,
+  System.Generics.Collections,
   System.Net.URLClient, System.Net.HttpClient,
   System.Net.Mime, System.Net.HttpClientComponent,
 {$IF CompilerVersion < 35}

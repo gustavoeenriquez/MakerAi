@@ -1,4 +1,4 @@
-// MakerAI Suite — Driver OpenAI Realtime STT
+﻿// MakerAI Suite — Driver OpenAI Realtime STT
 // wss://api.openai.com/v1/realtime  (RFC 6455 + protocolo OpenAI Realtime v1)
 //
 // Modelos soportados: gpt-4o-realtime-preview, gpt-4o-mini-realtime-preview
@@ -15,7 +15,7 @@ interface
 uses
   System.SysUtils, System.Classes, System.JSON, System.NetEncoding,
   System.IOUtils,
-  uMakerAi.Realtime, uMakerAi.Realtime.WebSocket;
+  uMakerAi.Realtime, uMakerAi.Realtime.WebSocket, uMakerAi.WebSocket.Client;
 
 type
   TAiOpenAiTranscriptionModel = (
@@ -37,10 +37,10 @@ type
     procedure OnWSError(Sender: TObject; const ErrorMsg: string);
     procedure ProcessServerEvent(const JObj: TJSONObject);
     procedure SendSessionUpdate;
+    function  VADObject: TJSONObject;
     function  TranscriptionModelStr: string;
     function  BuildWssUrl: string;
-    function  VADObject: TJSONObject;
-  protected
+    protected
     function  GetTargetSampleRate: Integer; override;
     procedure InternalSendAudio(const ResampledPCM16: TBytes); override;
     procedure InternalConnect;    override;
@@ -126,10 +126,9 @@ end;
 
 function TAiOpenAiRealtimeSTT.VADObject: TJSONObject;
 begin
-  // Crea el objeto turn_detection segun el modo configurado
   if VADMode = rvmManual then
   begin
-    Result := nil; // se usara TJSONNull en SendSessionUpdate
+    Result := nil;
     Exit;
   end;
   Result := TJSONObject.Create;
@@ -138,45 +137,48 @@ begin
   else
   begin
     Result.AddPair('type', 'server_vad');
-    Result.AddPair('threshold',          TJSONNumber.Create(VADThreshold));
-    Result.AddPair('prefix_padding_ms',  TJSONNumber.Create(PrefixPaddingMs));
+    Result.AddPair('threshold',           TJSONNumber.Create(VADThreshold));
+    Result.AddPair('prefix_padding_ms',   TJSONNumber.Create(PrefixPaddingMs));
     Result.AddPair('silence_duration_ms', TJSONNumber.Create(SilenceDurationMs));
   end;
-  // Transcripcion pura — no queremos que el servidor genere respuesta LLM
+  // Transcripcion pura — no generar respuesta LLM tras el turno
   Result.AddPair('create_response', TJSONFalse.Create);
 end;
 
 procedure TAiOpenAiRealtimeSTT.SendSessionUpdate;
+// Esquema actualizado 2026: los campos van anidados bajo session.audio.input.
+// session.type = 'realtime' para gpt-4o-realtime-preview.
+// modalities sigue al nivel de session (fuera de audio).
 var
-  JMsg, JSession, JTranscription, JVAD, JNoise: TJSONObject;
-  JMods: TJSONArray;
+  JMsg, JSession, JAudio, JInput, JTranscription, JVAD, JFormat, JNoise: TJSONObject;
 begin
   JMsg     := TJSONObject.Create;
   JSession := TJSONObject.Create;
+  JAudio   := TJSONObject.Create;
+  JInput   := TJSONObject.Create;
 
   JMsg.AddPair('type', 'session.update');
+  JSession.AddPair('type', 'realtime');
 
-  // Formato de audio de entrada
-  JSession.AddPair('input_audio_format', 'pcm16');
+  // Formato de audio de entrada: PCM16 a 24 kHz
+  JFormat := TJSONObject.Create;
+  JFormat.AddPair('type', 'audio/pcm');
+  JFormat.AddPair('rate', TJSONNumber.Create(24000));
+  JInput.AddPair('format', JFormat);
 
-  // Solo texto como modalidad de salida (sin audio generado por el modelo)
-  JMods := TJSONArray.Create;
-  JMods.Add('text');
-  JSession.AddPair('modalities', JMods);
-
-  // Configuracion del modelo de transcripcion
+  // Modelo de transcripcion e idioma
   JTranscription := TJSONObject.Create;
   JTranscription.AddPair('model', TranscriptionModelStr);
   if Language <> '' then
     JTranscription.AddPair('language', Language);
-  JSession.AddPair('input_audio_transcription', JTranscription);
+  JInput.AddPair('transcription', JTranscription);
 
-  // VAD
+  // VAD / turn detection
   JVAD := VADObject;
   if Assigned(JVAD) then
-    JSession.AddPair('turn_detection', JVAD)
+    JInput.AddPair('turn_detection', JVAD)
   else
-    JSession.AddPair('turn_detection', TJSONNull.Create);
+    JInput.AddPair('turn_detection', TJSONNull.Create);
 
   // Reduccion de ruido (opcional)
   if NoiseReduction <> rnrNone then
@@ -186,14 +188,16 @@ begin
       JNoise.AddPair('type', 'near_field')
     else
       JNoise.AddPair('type', 'far_field');
-    JSession.AddPair('input_audio_noise_reduction', JNoise);
+    JInput.AddPair('noise_reduction', JNoise);
   end;
 
-  JMsg.AddPair('session', JSession); // JMsg toma ownership de JSession
+  JAudio.AddPair('input', JInput);
+  JSession.AddPair('audio', JAudio);
+  JMsg.AddPair('session', JSession);
   try
     FWebSocket.SendText(JMsg.ToJSON);
   finally
-    JMsg.Free; // libera el arbol completo
+    JMsg.Free;
   end;
 end;
 
@@ -311,10 +315,11 @@ var
   JsonStr: string;
   JObj:    TJSONObject;
 begin
-  try TFile.AppendAllText(WS_DIAG_LOG,
-    'FRAME opcode=' + IntToStr(Ord(Opcode)) + ' len=' + IntToStr(Length(Data)) +
-    ' json=' + Copy(TEncoding.UTF8.GetString(Data), 1, 120) + sLineBreak);
-  except end;
+  if WS_DIAG_LOG <> '' then
+    try TFile.AppendAllText(WS_DIAG_LOG,
+      'FRAME opcode=' + IntToStr(Ord(Opcode)) + ' len=' + IntToStr(Length(Data)) +
+      ' json=' + Copy(TEncoding.UTF8.GetString(Data), 1, 120) + sLineBreak);
+    except end;
   if Opcode <> rwsoText then Exit;
   JsonStr := TEncoding.UTF8.GetString(Data);
   JObj    := TJSONObject.ParseJSONValue(JsonStr) as TJSONObject;
@@ -333,7 +338,6 @@ var
   URL: string;
 begin
   FWebSocket.ExtraHeaders.Values['Authorization']          := 'Bearer ' + ResolvedApiKey;
-  FWebSocket.ExtraHeaders.Values['OpenAI-Beta']            := 'realtime=v1';
   FWebSocket.ExtraHeaders.Values['Sec-WebSocket-Protocol'] := 'realtime';
   URL := BuildWssUrl;
   // Conectar en background con TThread controlado (no fire-and-forget)
@@ -348,7 +352,7 @@ end;
 
 procedure TAiOpenAiRealtimeSTT.InternalDisconnect;
 begin
-  FWebSocket.SendClose;
+  FWebSocket.SendClose(1000, '');
   // Abortar la conexion en curso cerrando los handles WinHTTP —
   // las llamadas WinHTTP en FConnectThread fallaran y el hilo terminara
   FWebSocket.Disconnect;

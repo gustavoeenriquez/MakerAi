@@ -1,0 +1,21 @@
+[package]
+name = mcp-calculator
+version = 1.0.1
+description = Mathematical expression evaluator MCP server. Supports +,-,*,/,^,sqrt,sin,cos,tan,log and more.
+author = MakerAI
+license = MIT
+tags = mcp,calculator,math,delphi
+homepage = https://makerai.cimamaker.com
+min_pai_version = 1.0.0
+
+[mcp]
+entrypoint = mcp-calculator.exe
+protocol = stdio
+
+[tools]
+names = calculate
+
+[platform]
+windows = true
+linux = false
+macos = false

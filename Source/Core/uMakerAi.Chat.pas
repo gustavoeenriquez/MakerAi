@@ -353,6 +353,7 @@ type
     FOnCallToolFunction: TOnCallToolFunction;
     FOnBeforeSendMessage: TAiChatOnBeforeSendEvent;
     FTmpToolCallBuffer: TObjectDictionary<Integer, TJSonObject>;
+    FCurrentPostStream: TStringStream;
     FThinking_tokens: Integer;
     FCached_tokens: Integer;
 
@@ -763,7 +764,12 @@ begin
     End;
   Finally
     If FClient.Asynchronous = False then
-      FreeAndNil(St); // Esto no funciona en multiarea, as? que se libera cuando no lo es.
+      FreeAndNil(St)
+    Else
+    Begin
+      FreeAndNil(FCurrentPostStream);
+      FCurrentPostStream := St;
+    End;
   End;
 end;
 
@@ -870,7 +876,11 @@ begin
       TAiCustomTool(FChatTools.FSpeechTool).SetContext(Self);
     LTool.ExecuteTranscription(aMediaFile, ResMsg, AskMsg);
     if not Asynchronous then
+    begin
+      if (ResMsg.Prompt = '') and (aMediaFile.Transcription <> '') then
+        ResMsg.Prompt := aMediaFile.Transcription;
       Result := ResMsg.Prompt;
+    end;
   end
   else
     Result := InternalRunNativeTranscription(aMediaFile, ResMsg, AskMsg);
@@ -1352,6 +1362,7 @@ end;
 
 destructor TAiChat.Destroy;
 begin
+  FCurrentPostStream.Free;
   FClient.Free;
   FResponse.Free;
   FTools.Free;
@@ -1372,7 +1383,46 @@ begin
 end;
 
 procedure TAiChat.DoCallFunction(ToolCall: TAiToolsFunction);
+var
+  LScreenshot: TAiMediaFile;
 begin
+  // Generic Computer Use bridge — activates for non-native models (cap_ComputerUse NOT in ModelCaps)
+  // Works with any model that has Tool_Active=True; requires function definitions injected via
+  // TAiComputerUseTool.GetFunctionDefinitions into the model's AiFunctions or system prompt.
+  if Assigned(ChatTools.ComputerUseTool) and
+     not (cap_ComputerUse in ModelConfig.ModelCaps) and
+     MatchStr(LowerCase(ToolCall.Name),
+       ['click_at', 'left_click', 'right_click', 'middle_click', 'double_click',
+        'type_text_at', 'key_combination', 'scroll_at', 'scroll_document',
+        'drag_and_drop', 'hover_at', 'navigate', 'search', 'open_web_browser',
+        'screenshot', 'wait_5_seconds', 'go_back', 'go_forward',
+        'image_edit_at', 'draw_box_at']) then
+  begin
+    if Assigned(FOnCallToolFunction) then
+      FOnCallToolFunction(Self, ToolCall);
+
+    if ToolCall.Response = '' then
+    begin
+      LScreenshot := nil;
+      try
+        ToolCall.Response := ChatTools.ComputerUseTool.ProcessToolCall(ToolCall, LScreenshot);
+        if Assigned(LScreenshot) then
+        begin
+          if Assigned(ToolCall.ResMsg) then
+            ToolCall.ResMsg.MediaFiles.Add(LScreenshot)
+          else
+            LScreenshot.Free;
+        end;
+      except
+        on E: Exception do
+        begin
+          FreeAndNil(LScreenshot);
+          ToolCall.Response := Format('{"error": "%s"}', [E.Message]);
+        end;
+      end;
+    end;
+    Exit;
+  end;
 
   If Assigned(AiFunctions) and AiFunctions.DoCallFunction(ToolCall) then
   Begin
@@ -1438,12 +1488,11 @@ end;
 
 function TAiChat.ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions;
 Var
-  jObj, Msg, jFunc, Arg: TJSonObject;
+  jObj, Msg, jFunc: TJSonObject;
   JVal, JVal1, jValToolCall: TJSonValue;
   Fun: TAiToolsFunction;
   JToolCalls: TJSonArray;
-  Nom, Valor, sType: String;
-  I: Integer;
+  sType: String;
 begin
   Result := TAiToolsFunctions.Create;
 
@@ -2141,9 +2190,7 @@ end;
 
 procedure TAiChat.OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse);
 begin
-  // OJO Activar
-  // if FAsynchronous and Assigned(FCurrentPostStream) then
-  // FreeAndNil(FCurrentPostStream);
+  FreeAndNil(FCurrentPostStream);
 
   If Assigned(aResponse) and ((aResponse.StatusCode < 200) or (aResponse.StatusCode > 299)) then
   Begin
@@ -2159,6 +2206,7 @@ end;
 
 procedure TAiChat.OnRequestErrorEvent(const Sender: TObject; const AError: string);
 begin
+  FreeAndNil(FCurrentPostStream);
   FBusy := False;
   FTmpToolCallBuffer.Clear;
   DoStateChange(acsError, AError);
@@ -2168,6 +2216,7 @@ end;
 
 procedure TAiChat.OnRequestExceptionEvent(const Sender: TObject; const AError: Exception);
 begin
+  FreeAndNil(FCurrentPostStream);
   FBusy := False;
   FTmpToolCallBuffer.Clear;
   DoStateChange(acsError, AError.Message);

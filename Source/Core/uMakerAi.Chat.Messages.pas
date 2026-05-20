@@ -1073,10 +1073,9 @@ begin
       JObj.AddPair('tool_calls', TJSonArray(TJSonArray.ParseJSONValue(Msg.FTool_calls)));
 {$ENDIF}
 
-    // reasoning_content requerido por APIs como DeepSeek y Kimi cuando thinking está habilitado.
-    // Solo se serializa cuando está presente (no afecta a providers que no lo usan).
-    if Msg.FReasoningContent <> '' then
-      JObj.AddPair('reasoning_content', Msg.FReasoningContent);
+    // reasoning_content se guarda en TAiChatMessage.ReasoningContent para display en UI
+    // (via OnReceiveThinking), pero NO se reenvía a la API en el historial.
+    // Los drivers que lo requieren (DeepSeek) lo agregan en su propio GetMessages override.
 
     Result.Add(JObj);
   end;

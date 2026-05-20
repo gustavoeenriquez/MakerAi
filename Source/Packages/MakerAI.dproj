@@ -2,7 +2,7 @@
     <PropertyGroup>
         <ProjectGuid>{0D79C922-AD0C-4397-92FD-365510A65EEB}</ProjectGuid>
         <MainSource>MakerAI.dpk</MainSource>
-        <ProjectVersion>20.3</ProjectVersion>
+        <ProjectVersion>20.4</ProjectVersion>
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Debug</Config>
@@ -61,7 +61,7 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_UnitSearchPath>$(MSBuildProjectDirectory)\..\Agents;$(MSBuildProjectDirectory)\..\Chat;$(MSBuildProjectDirectory)\..\ChatUI;$(MSBuildProjectDirectory)\..\Core;$(MSBuildProjectDirectory)\..\Design;$(MSBuildProjectDirectory)\..\Embeddings;$(MSBuildProjectDirectory)\..\MCPClient;$(MSBuildProjectDirectory)\..\MCPServer;$(MSBuildProjectDirectory)\..\Packages;$(MSBuildProjectDirectory)\..\RAG;$(MSBuildProjectDirectory)\..\Resources;$(MSBuildProjectDirectory)\..\Tools;$(MSBuildProjectDirectory)\..\Utils;$(MSBuildProjectDirectory)\..\LiveChat;$(MSBuildProjectDirectory)\..\Realtime;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(MSBuildProjectDirectory)\..\Agents;$(MSBuildProjectDirectory)\..\Chat;$(MSBuildProjectDirectory)\..\ChatUI;$(MSBuildProjectDirectory)\..\Core;$(MSBuildProjectDirectory)\..\Design;$(MSBuildProjectDirectory)\..\Embeddings;$(MSBuildProjectDirectory)\..\MCPClient;$(MSBuildProjectDirectory)\..\MCPServer;$(MSBuildProjectDirectory)\..\Packages;$(MSBuildProjectDirectory)\..\RAG;$(MSBuildProjectDirectory)\..\Resources;$(MSBuildProjectDirectory)\..\Tools;$(MSBuildProjectDirectory)\..\Utils;$(MSBuildProjectDirectory)\..\LiveChat;$(MSBuildProjectDirectory)\..\Realtime;$(MSBuildProjectDirectory)\..\WebSocket;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_E>false</DCC_E>
@@ -218,6 +218,7 @@
         <DCCReference Include="..\Tools\uMakerAi.Gemini.Veo.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.OpenAi.Dalle.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Gemini.WebSearch.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.OpenAI.WebSearch.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Tools.Functions.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Tools.Shell.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Tools.TextEditor.pas"/>
@@ -228,6 +229,10 @@
         <DCCReference Include="..\Tools\uMakerAi.Ollama.Ocr.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Ollama.Vision.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Gemini.Speech.pas"/>
+        <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.Client.pas"/>
+        <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.SChannel.pas"/>
+        <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.OpenSSL.pas"/>
+        <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.Android.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.WebSocket.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.OpenAI.pas"/>
@@ -869,6 +874,9 @@
                     <Platform Name="Win64x">
                         <Operation>1</Operation>
                     </Platform>
+                    <Platform Name="WinARM64EC">
+                        <Operation>1</Operation>
+                    </Platform>
                 </DeployClass>
                 <DeployClass Name="ProjectiOSDeviceDebug">
                     <Platform Name="iOSDevice32">
@@ -907,6 +915,10 @@
                         <RemoteDir>Assets</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
+                    <Platform Name="WinARM64EC">
+                        <RemoteDir>Assets</RemoteDir>
+                        <Operation>1</Operation>
+                    </Platform>
                 </DeployClass>
                 <DeployClass Name="UWP_DelphiLogo44">
                     <Platform Name="Win32">
@@ -914,6 +926,10 @@
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="Win64">
+                        <RemoteDir>Assets</RemoteDir>
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="WinARM64EC">
                         <RemoteDir>Assets</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
@@ -1131,6 +1147,7 @@
                 <ProjectRoot Platform="Win32" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="Win64" Name="$(PROJECTNAME)"/>
                 <ProjectRoot Platform="Win64x" Name="$(PROJECTNAME)"/>
+                <ProjectRoot Platform="WinARM64EC" Name="$(PROJECTNAME)"/>
             </Deployment>
             <Platforms>
                 <Platform value="Android">False</Platform>

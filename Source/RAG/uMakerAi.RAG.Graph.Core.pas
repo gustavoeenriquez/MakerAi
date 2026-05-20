@@ -884,7 +884,6 @@ end;
 
 function TAiRagGraph.DetectCommunities(AIterations: Integer = 10): TDictionary<TAiRagGraphNode, Integer>;
 var
-  NodeToCommunity: TDictionary<TAiRagGraphNode, Integer>;
   CommInfo: TDictionary<Integer, TCommunity>;
   m2: Double; // 2 * suma de todos los pesos del grafo
   Nodes: TArray<TAiRagGraphNode>;
@@ -1458,7 +1457,6 @@ var
   I: Integer;
   PathObj: TObject;
   Score: Double;
-  Obj: TObject;
   ElementType: string;
 
   // Variables para resoluci�n de algoritmos
@@ -3411,11 +3409,7 @@ end;
 function TAiRagGraph.SearchText(const APrompt: string; ADepth: Integer; ShowProperties: Boolean; const ALimit: Integer; const APrecision: Double; const AFilter: TAiFilterCriteria): string;
 var
   FoundNodes: TArray<TAiRagGraphNode>;
-  Node: TAiRagGraphNode;
-  Edge: TAiRagGraphEdge;
-  Chunk: TAiEmbeddingNode;
   ContextBuilder: TStringBuilder;
-  PropPair: TPair<string, Variant>;
 begin
   // Llamamos a Search pasando el AFilter actualizado
   FoundNodes := Self.Search(APrompt, ADepth, ALimit, APrecision, AFilter);
@@ -3442,7 +3436,7 @@ var
   Root, GraphObj, NodeObj, EdgeObj, PropObj, ChunkObj: TJSONObject;
   NodesArr, EdgesArr, EmbeddingArr, ChunksArr: TJSONArray;
   NodeVal, EdgeVal, ChunkVal: TJSONValue;
-  I, J, K: Integer;
+  J, K: Integer;
 
   // Variables temporales para Nodos
   NewNode: TAiRagGraphNode;

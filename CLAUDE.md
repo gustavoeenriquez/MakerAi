@@ -45,6 +45,7 @@ Add these folders to Delphi Library Path (Tools > Options > Language > Delphi > 
 - `Source/Resources`
 - `Source/Tools`
 - `Source/Utils`
+- `Source/WebSocket`
 
 ### Running Demos
 Open `Demos/DemosVersion31.groupproj` in Delphi IDE to access all demo projects.
@@ -112,7 +113,7 @@ curl -X POST http://localhost:8080/mcp \
 
 **Core (`Source/Core/`)**: Foundation classes
 - `uMakerAi.Core.pas` - Base types: `TAiMediaFile`, `TAiFileCategory`, `TAiChatMediaSupport`, `TAiCapability`, `TAiCapabilities`, chat states
-- `uMakerAi.Chat.pas` - Abstract `TAiChat` base class; incluye `ModelCaps`, `SessionCaps`, `RunNew`, `RunLegacy`, `EnsureNewSystemConfig`
+- `uMakerAi.Chat.pas` - Abstract `TAiChat` base class; incluye `ModelCaps`, `SessionCaps`, `EnsureNewSystemConfig`; orquestador interno `RunNew` (privado — no llamar directamente; usar `AddMessageAndRun` o `Run`)
 - `uMakerAi.Chat.Messages.pas` - Message handling (`TAiChatMessage`, `TAiChatMessages`)
 - `uMakerAi.Embeddings.pas` - Embedding generation
 
@@ -142,12 +143,18 @@ curl -X POST http://localhost:8080/mcp \
 - Agent tools: `TAiShell`, `TAiTextEditorTool`, `TAiComputerUseTool`
 - Tool interfaces: `IAiPdfTool`, `IAiVisionTool`, `IAiSpeechTool`, `IAiWebSearchTool`
 
+**WebSocket (`Source/WebSocket/`)**: Standalone RFC 6455 WebSocket client (used by Realtime module)
+- `uMakerAi.WebSocket.Client.pas` - `TAiWSClient` — pure-Pascal RFC 6455 + HTTP Upgrade + reader thread; uses `ITlsTransport` interface
+- `uMakerAi.WebSocket.SChannel.pas` - `TSChannelTransport` — TLS via `secur32.dll` (Windows native, zero extra DLLs; tested ✅)
+- `uMakerAi.WebSocket.OpenSSL.pas` - `TOpenSSLTransport` — TLS via `dlopen(libssl.so)` (Linux/macOS; compiles, not yet tested on real hardware)
+- `uMakerAi.WebSocket.Android.pas` - `TAndroidSSLTransport` — TLS via `javax.net.ssl.SSLSocketFactory` (JNI; compiles, not yet tested on real hardware)
+
 **Realtime (`Source/Realtime/`)**: Real-time audio streaming (STT via WebSocket)
 - `uMakerAi.Realtime.pas` - Abstract base `TAiRealtimeBase` + `TAiRealtimeFactory`; resampler PCM16, VAD modes, thread-safe events
 - `uMakerAi.Realtime.AiConnection.pas` - `TAiRealtimeConnection` universal connector (same pattern as `TAiChatConnection`)
 - `uMakerAi.Realtime.OpenAI.pas` - `TAiOpenAiRealtimeSTT` — WebSocket to `wss://api.openai.com/v1/realtime`, 24 kHz PCM16; full implementation
 - `uMakerAi.Realtime.Gemini.pas` - `TAiGeminiRealtimeSTT` — 16 kHz PCM16; **stub, pendiente implementación**
-- `uMakerAi.Realtime.WebSocket.pas` - `TAiRealtimeWSClient` — cliente WebSocket nativo vía WinHTTP/Schannel (sin dependencia de Indy/OpenSSL)
+- `uMakerAi.Realtime.WebSocket.pas` - compatibility shim; re-exports `TAiRealtimeWSClient` → `TAiWSClient` (Source/WebSocket/)
 
 **ChatUI (`Source/ChatUI/`)**: FMX visual components
 - `TChatList` - Chat container with markdown rendering
@@ -185,7 +192,7 @@ Agents use a directed graph with nodes (`TAIAgentsNode`) and links (`TAIAgentsLi
 |------|-------------|
 | Add new LLM provider | `Source/Chat/uMakerAi.Chat.*.pas` (inherit from `TAiChat`) |
 | Configure model capabilities | `Source/Chat/uMakerAi.Chat.Initializations.pas` |
-| Modify capability orchestration | `Source/Core/uMakerAi.Chat.pas` (`RunNew`, `EnsureNewSystemConfig`) |
+| Modify capability orchestration | `Source/Core/uMakerAi.Chat.pas` (`RunNew` privado, `EnsureNewSystemConfig`) |
 | Add TAiCapability value | `Source/Core/uMakerAi.Core.pas` (`TAiCapability` enum) |
 | Modify function calling | `Source/Tools/uMakerAi.Tools.Functions.pas` |
 | RAG vector operations | `Source/RAG/uMakerAi.RAG.Vectors.pas` |
@@ -418,6 +425,7 @@ Detailed documentation is available in `Docs/Version 3/`:
 | [Source/Tools/](Source/Tools/CLAUDE.md) | Function calling, Shell, ComputerUse |
 | [Source/ChatUI/](Source/ChatUI/CLAUDE.md) | FMX visual components |
 | [Source/Realtime/](Source/Realtime/CLAUDE.md) | Real-time STT drivers (OpenAI WebSocket, Gemini stub) |
+| [Source/WebSocket/](Source/WebSocket/CLAUDE.md) | RFC 6455 WebSocket client + TLS transports (SChannel/OpenSSL) |
 | [Source/Utils/](Source/Utils/CLAUDE.md) | Voice monitor, diff updater |
 | [Source/Design/](Source/Design/CLAUDE.md) | Design-time property editors |
 | [Source/Resources/](Source/Resources/CLAUDE.md) | Embedded resources |

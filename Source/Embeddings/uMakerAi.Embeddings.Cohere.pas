@@ -37,6 +37,7 @@ uses
   System.SysUtils, System.Classes, System.JSON,
   System.Net.URLClient, System.Net.HttpClient,
   System.Net.Mime, System.Net.HttpClientComponent,
+  System.Generics.Collections,
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}

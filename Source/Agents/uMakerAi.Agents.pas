@@ -428,7 +428,9 @@ end;
 
 procedure Register;
 begin
+  {$WARN SYMBOL_DEPRECATED OFF}
   RegisterComponents('MakerAI', [TAIAgentManager, TAIAgentsNode, TAIAgentsLink, TAiAgentsToolSample, TAIAgents]);
+  {$WARN SYMBOL_DEPRECATED ON}
 end;
 
 function EvalCondition(const Expr: string; Vars: TDictionary<string, TValue>): Boolean;

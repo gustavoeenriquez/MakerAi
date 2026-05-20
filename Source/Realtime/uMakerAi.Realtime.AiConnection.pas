@@ -1,4 +1,4 @@
-// MakerAI Suite — Conector universal Realtime STT
+﻿// MakerAI Suite — Conector universal Realtime STT
 // Permite cambiar de provider en tiempo de diseno sin modificar el codigo.
 // Equivalente a TAiChatConnection pero para el modulo Realtime.
 //
