@@ -62,7 +62,7 @@ type
   // -------------------------------------------------------------------------
   // TAiMCPHttpServerThread - hilo que corre TFPHTTPServer.Active := True
   // (bloquea hasta que Active := False)
-  // Nota: bug FPC #41758 (https://gitlab.com/.../work_items/41758) —
+  // Nota: bug FPC #41758 (https://gitlab.com/freepascal.org/fpc/source/-/issues/41758) —
   //   StopServerSocket llama StopAccepting(False), accept() nunca retorna.
   //   Workaround en Start() con AcceptIdleTimeout.
   // -------------------------------------------------------------------------

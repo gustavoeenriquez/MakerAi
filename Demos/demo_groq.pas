@@ -62,9 +62,9 @@ begin
       else
       begin
         if Resp = '' then
-        WriteLn('[ERROR] Respuesta vacia - posible problema de conexion, API key, o SSL')
-      else
-        WriteLn('<<< Respuesta: ', Resp);
+          WriteLn('[ERROR] Respuesta vacia - posible problema de conexion, API key, o SSL')
+        else
+          WriteLn('<<< Respuesta: ', Resp);
         WriteLn;
         WriteLn('Tokens — Prompt: ', Chat.Prompt_tokens,
                 '  Completion: ',    Chat.Completion_tokens,
@@ -88,9 +88,9 @@ begin
       else
       begin
         if Resp = '' then
-        WriteLn('[ERROR] Respuesta vacia - posible problema de conexion, API key, o SSL')
-      else
-        WriteLn('<<< Respuesta: ', Resp);
+          WriteLn('[ERROR] Respuesta vacia - posible problema de conexion, API key, o SSL')
+        else
+          WriteLn('<<< Respuesta: ', Resp);
         WriteLn;
         WriteLn('Tokens — Prompt: ', Chat.Prompt_tokens,
                 '  Completion: ',    Chat.Completion_tokens,
