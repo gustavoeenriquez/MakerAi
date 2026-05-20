@@ -1,6 +1,7 @@
 # MakerAI Suite v3.4 — The AI Ecosystem for Delphi
 
 🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
+📖 **Manual:** [https://www.gustavoenriquez.com/book-makerai](https://www.gustavoenriquez.com/book-makerai) — available in English and Spanish
 
 [![GitHub Stars](https://img.shields.io/github/stars/gustavoeenriquez/MakerAi?style=social)](https://github.com/gustavoeenriquez/MakerAi)
 [![GitHub Issues](https://img.shields.io/github/issues/gustavoeenriquez/MakerAi)](https://github.com/gustavoeenriquez/MakerAi/issues)
@@ -470,6 +471,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 ## 💬 Community & Support
 
 - **Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
+- **Manual (EN/ES):** [https://www.gustavoenriquez.com/book-makerai](https://www.gustavoenriquez.com/book-makerai)
 - **Telegram (Spanish):** [https://t.me/MakerAi_Suite_Delphi](https://t.me/MakerAi_Suite_Delphi)
 - **Telegram (English):** [https://t.me/MakerAi_Delphi_Suite_English](https://t.me/MakerAi_Delphi_Suite_English)
 - **Email:** gustavoeenriquez@gmail.com
