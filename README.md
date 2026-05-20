@@ -7,7 +7,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/gustavoeenriquez/MakerAi)](https://github.com/gustavoeenriquez/MakerAi/issues)
 [![License](https://img.shields.io/github/license/gustavoeenriquez/MakerAi)](LICENSE.txt)
 [![Telegram](https://img.shields.io/badge/Join-Telegram%20Chat-blue.svg)](https://t.me/+7LaihFwqgsk1ZjQx)
-[![Delphi Supported Versions](https://img.shields.io/badge/Delphi%20Support-10.4%20Sydney%20to%2013.1%20Florence-blue.svg)](https://www.embarcadero.com/products/delphi)
+[![Delphi Supported Versions](https://img.shields.io/badge/Delphi%20Support-11%20Alexandria%20to%2013%20Florence-blue.svg)](https://www.embarcadero.com/products/delphi)
 [![Free Pascal](https://img.shields.io/badge/Free%20Pascal-3.2%2B-orange.svg)](https://github.com/gustavoeenriquez/MakerAi/tree/fpc)
 
 > **Free Pascal / Lazarus port available** — Full port of MakerAI Suite for FPC 3.2+ (12 LLM drivers, RAG, Agents, MCP, Embeddings). See the [`fpc` branch](https://github.com/gustavoeenriquez/MakerAi/tree/fpc).
@@ -93,6 +93,12 @@ New `ChatMode` value for automatic two-pass routing:
 - **Claude Opus 4.7 Adaptive Thinking** — temperature, top_p, top_k and the `thinking` block are now correctly omitted for `claude-opus-4-7` models. Anthropic manages sampling internally for these models; sending these parameters caused HTTP 400 errors.
 - **`RegisterDefaultParams` — Max_Tokens key** — corrected in 10 drivers (Claude, Gemini, Mistral, Groq, DeepSeek, Grok, Kimi, LMStudio, GenericLLM, Ollama). The wrong key `MaxTokens` was never resolved by RTTI to the `Max_tokens` property, causing `Max_Tokens` to be silently ignored when set via `RegisterDefaultParams`.
 - **`ApplyParamsToChat` — locale-independent float parsing** — `TryStrToFloat` now tries invariant format (dot decimal) first, then falls back to the system locale. Both `Temperature=0.7` and `Temperature=0,7` are valid regardless of regional settings.
+
+### Bug Fixes (March 2026)
+
+- **MCP concurrent tool calls — race condition** (`uMakerAi.MCPClient.Core.pas`): When a model responded with two or more tools from the same MCP server in a single turn, `ParseChat` launched all tool calls as parallel `TTask`s. Since `TMCPClientStdIo` shares a single process/pipe per instance (no synchronization), concurrent calls corrupted the JSON-RPC communication, causing intermittent failures. Fixed by adding `FCallLock: TCriticalSection` to `TMCPClientCustom` — calls to the same server are now serialized while calls to different servers still run in parallel.
+
+- **`EAggregateException` on tool errors — Claude driver** (`uMakerAi.Chat.Claude.pas`): The local `_CreateTask` procedure in `TAiClaudeChat.ParseChat` lacked the `try/except` present in the base class. Any exception raised inside a tool task (MCP timeout, network error, etc.) escaped unhandled, causing `TTask.WaitForAll` to wrap it in an `EAggregateException` and crash the application. Fixed to match base class behavior: exceptions are caught, reported via `OnError`, and the tool receives an error response so the conversation can continue.
 
 ---
 

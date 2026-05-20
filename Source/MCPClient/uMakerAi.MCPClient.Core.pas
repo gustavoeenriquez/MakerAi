@@ -40,7 +40,6 @@ uses
   System.IOUtils, System.Net.URLClient, System.NetEncoding,
   System.Net.HttpClient, System.Net.Mime, System.Net.HttpClientComponent,
   System.Threading, System.Diagnostics, System.Types, System.SyncObjs,
-  IdTCPClient,
 
 {$IFDEF MSWINDOWS}
   Winapi.Windows,
@@ -371,9 +370,7 @@ begin
   FDisabledFunctions.Free;
   {$IFDEF DEBUG} MCPLog('  FEnvVars.Free...'); {$ENDIF}
   FEnvVars.Free;
-  {$IFDEF DEBUG} MCPLog('  FCallLock.Free...'); {$ENDIF}
   FCallLock.Free;
-  {$IFDEF DEBUG} MCPLog('TMCPClientCustom.Destroy END name=' + FName); {$ENDIF}
   inherited;
 end;
 
@@ -792,43 +789,41 @@ begin
   Result := nil;
   // Serializar llamadas concurrentes al mismo servidor (race condition cuando
   // ParseChat lanza múltiples TTask con herramientas del mismo servidor MCP).
-  // TCriticalSection en Delphi es reentrante: el overload TStrings que llama
-  // a este m?todo no genera deadlock.
+  // Nota: TCriticalSection en Delphi es reentrante (mismo hilo puede entrar
+  // varias veces sin deadlock), por lo que el overload TStrings que llama
+  // a este método no genera interbloqueo.
   FCallLock.Enter;
   try
-    // Si el servidor ya está corriendo reutilizamos la conexión
-    if IsServerRunning then
-    begin
-      DoLog(Format('CallTool: servidor activo, llamando %s.', [AToolName]));
-      Result := InternalCallTool(AToolName, AArguments, AExtractedMedia);
-      Exit;
-    end;
-
-    DoLog(Format('CallTool: iniciando servidor para %s...', [AToolName]));
+    DoLog(Format('Executing full cycle for CallTool: %s', [AToolName]));
     InternalStartServerProcess;
-    if not IsServerRunning then
-    begin
-      DoLog('CallTool: fallo al iniciar servidor.');
-      Available := False;
-      Exit;
-    end;
+    try
+      if not IsServerRunning then
+      begin
+        DoLog('Failed to start server. Aborting CallTool.');
+        FreeAndNil(AArguments); // Liberar los argumentos si no se van a usar
+        Exit;
+      end;
 
-    // Handshake inicial
-    InitResponse := InternalInitialize;
-    if not Assigned(InitResponse) then
-    begin
-      DoLog('CallTool: fallo en initialize. Deteniendo servidor.');
+      // Handshake
+      InitResponse := InternalInitialize;
+      if not Assigned(InitResponse) then
+      begin
+        DoLog('Initialization failed. Aborting CallTool.');
+        FreeAndNil(AArguments); // Liberar los argumentos si no se van a usar
+        Exit;
+      end;
+      InitResponse.Free;
+      InternalSendInitializedNotification;
+
+      Sleep(200);
+
+      // Realizar la llamada real
+      Result := InternalCallTool(AToolName, AArguments, AExtractedMedia);
+
+    finally
       InternalStopServerProcess;
-      Available := False;
-      Exit;
+      DoLog(Format('Full cycle for CallTool: %s finished.', [AToolName]));
     end;
-    InitResponse.Free;
-    InternalSendInitializedNotification;
-    Sleep(200); // Pausa para que el servidor procese la notificación
-
-    // El servidor queda activo para futuras llamadas
-    DoLog(Format('CallTool: conexión persistente establecida, llamando %s.', [AToolName]));
-    Result := InternalCallTool(AToolName, AArguments, AExtractedMedia);
   finally
     FCallLock.Leave;
   end;

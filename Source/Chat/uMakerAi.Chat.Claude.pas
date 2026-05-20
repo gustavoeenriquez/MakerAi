@@ -1027,28 +1027,28 @@ Var
     TaskList[AIdx] := TTask.Create(
       procedure
       begin
-        // Outer try: garantiza que ninguna excepción (ni siquiera del log)
-        // escape al TTask system y cause EAggregateException en WaitForAll.
+        TFile.AppendAllText('makerai_tools.log',
+          FormatDateTime('hh:nn:ss.zzz', Now) +
+          Format(' [Tool] Ejecutando: "%s" (id=%s)'#13#10, [TC.Name, TC.Id]));
         try
-          try
-            DoCallFunction(TC);
-          except
-            on E: Exception do
-            begin
-              var LErrorMsg := 'Error en herramienta "' + TC.Name + '": ' + E.Message;
-              TC.Response := '{"error": "' + E.Message.Replace('"', '''') + '"}';
-              TThread.Queue(nil,
-                procedure
-                begin
-                  DoError(LErrorMsg, nil);
-                end);
-            end;
-          end;
+          DoCallFunction(TC);
+          TFile.AppendAllText('makerai_tools.log',
+            FormatDateTime('hh:nn:ss.zzz', Now) +
+            Format(' [Tool] Completado: "%s" -> %s'#13#10,
+              [TC.Name, IfThen(TC.Response = '', '(vacío)', Copy(TC.Response, 1, 120))]));
         except
           on E: Exception do
           begin
-            // Fallback: captura cualquier excepción no prevista (nunca debe llegar aquí)
-            TC.Response := '{"error": "unexpected: ' + E.Message.Replace('"', '''') + '"}';
+            var LErrorMsg := 'Error en herramienta "' + TC.Name + '": ' + E.Message;
+            TFile.AppendAllText('makerai_tools.log',
+              FormatDateTime('hh:nn:ss.zzz', Now) +
+              ' [Tool] ERROR: ' + LErrorMsg + #13#10);
+            TC.Response := '{"error": "' + E.Message.Replace('"', '''') + '"}';
+            TThread.Queue(nil,
+              procedure
+              begin
+                DoError(LErrorMsg, nil);
+              end);
           end;
         end;
       end);

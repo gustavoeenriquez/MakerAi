@@ -863,21 +863,7 @@ Begin
 
   // ------- Claude Opus 4.7 (Abr 2026) — nuevo flagship ------
   // ===========================================================================
-  // CLAUDE OPUS 4.7  |  Alias: claude-opus-4-7  [MODELO ACTUAL — MAS INTELIGENTE]
-  // Nuevo flagship de Anthropic — reemplaza a claude-opus-4-6
-  // Contexto:     200K tokens (1M tokens beta disponible)
-  // Max output:   128K tokens
-  // Thinking:     Extended thinking + Adaptive thinking
-  // ===========================================================================
-  Model := 'claude-opus-4-7';
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_WebSearch, cap_ComputerUse]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_WebSearch, cap_ComputerUse]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Tool_Active', 'True');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens',  '32000');
-
-  // legacy — reemplazado por claude-opus-4-7
-  // ===========================================================================
-  // CLAUDE OPUS 4.6  |  Alias: claude-opus-4-6  [LEGACY]
+  // CLAUDE OPUS 4.6  |  Alias: claude-opus-4-6  [MODELO ACTUAL — MAS INTELIGENTE]
   // El modelo mas inteligente de Anthropic para agentes complejos y codigo
   // Contexto:     200K tokens (1M tokens beta disponible)
   // Max output:   128K tokens  <- unico modelo con salida de 128K
@@ -927,17 +913,7 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch, cap_TextEditor, cap_Shell]');
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch, cap_TextEditor, cap_Shell]');
 
-  // 4. Opus 4.7 — Thinking profundo con Adaptive Thinking (nuevo flagship)
-  //    cap_ComputerUse + ThinkingLevel=tlHigh para tareas de agente complejas
-  BaseName := 'aa_claude-opus-4-7-thinking';
-  TAiChatFactory.Instance.RegisterCustomModel('Claude', BaseName, 'claude-opus-4-7');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ThinkingLevel', 'tlHigh');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'Max_Tokens', '64000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_WebSearch, cap_ComputerUse]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_WebSearch, cap_ComputerUse]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'Tool_Active', 'True');
-
-  // 5. Haiku 4.5 — Rapido para clasificacion y tools sencillas (bajo coste)
+  // 4. Haiku 4.5 — Rapido para clasificacion y tools sencillas (bajo coste)
   //    Gap = [] -> InternalRunCompletions con Tool_Active=True
   BaseName := 'aa_claude-haiku-4-5-tools';
   TAiChatFactory.Instance.RegisterCustomModel('Claude', BaseName, 'claude-haiku-4-5-20251001');

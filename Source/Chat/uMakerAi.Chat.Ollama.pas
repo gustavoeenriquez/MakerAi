@@ -517,13 +517,8 @@ begin
     End;
   Finally
     If FClient.Asynchronous = False then
-      St.Free
-    Else
-    Begin
-      If Assigned(FCurrentPostStream) then
-        FreeAndNil(FCurrentPostStream);
-      FCurrentPostStream := St;
-    End;
+      St.Free;
+    // Esto no funciona en multiarea, así que se libera cuando no lo es.
   End;
 end;
 
@@ -914,7 +909,7 @@ begin
     // --- CASO B: Respuesta de texto normal o final de cadena ---
 
     // B.1 Extracción automática de bloques de código si se solicita
-    if (cap_ExtractCode in ModelConfig.SessionCaps) and (ResMsg.Content <> '') then
+    if (tfc_ExtracttextFile in NativeOutputFiles) and (ResMsg.Content <> '') then
     begin
       Code := TMarkdownCodeExtractor.Create;
       try
@@ -1171,6 +1166,138 @@ begin
     LJsonObject.Free;
     LBodyStream.Free;
   end;
+end;
+
+{ TAiOlamalEmbeddings }
+
+constructor TAiOllamaEmbeddings.Create(aOwner: TComponent);
+begin
+  inherited;
+  ApiKey := '@OLLAMA_API_KEY';
+  Url := GlAIUrl;
+  FDimensions := 1024;
+  FModel := 'snowflake-arctic-embed';
+
+end;
+
+{ TOllEmbeddings }
+
+{ modelos disponibles en Ollama a mayo 2024 Library https://ollama.com/library
+  Model := 'mxbai-embed-large'; //Vector[1024]
+  Model := 'nomic-embed-text'; // Vector[768]
+  Model := 'all-minilm';      //Vector[384]
+  Model := 'snowflake-arctic-embed'; //Vector[1024]    //Esta es la mejor versión a mayo/2024
+
+  Url para llamado http://IPOLLAMASERVER:11434/
+}
+
+function TAiOllamaEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
+Var
+  Client: TNetHTTPClient;
+  Headers: TNetHeaders;
+  JObj: TJSonObject;
+  Res: IHTTPResponse;
+  Response: TStringStream;
+  St: TStringStream;
+  sUrl: String;
+begin
+
+  If aModel = '' then
+    aModel := FModel;
+
+  If aDimensions <= 0 then
+    aDimensions := FDimensions;
+
+  Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
+  Client.SynchronizeEvents := False;
+{$ENDIF}
+  St := TStringStream.Create('', TEncoding.UTF8);
+  Response := TStringStream.Create('', TEncoding.UTF8);
+  sUrl := Url + 'api/embeddings';
+  JObj := TJSonObject.Create;
+
+  Try
+    JObj.AddPair('prompt', aInput);
+    JObj.AddPair('model', aModel);
+    JObj.AddPair('user', aUser);
+    JObj.AddPair('dimensions', aDimensions);
+    JObj.AddPair('encoding_format', aEncodingFormat);
+
+    St.WriteString(JObj.ToJSON);
+    St.Position := 0;
+
+    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
+    Client.ContentType := 'application/json';
+
+    Res := Client.Post(sUrl, St, Response, Headers);
+
+    if Res.StatusCode = 200 then
+    Begin
+      JObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
+      ParseEmbedding(JObj);
+      Result := Self.Data;
+    End
+    else
+    begin
+      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+    end;
+
+  Finally
+    Client.Free;
+    St.Free;
+    Response.Free;
+    JObj.Free;
+  End;
+end;
+
+destructor TAiOllamaEmbeddings.Destroy;
+begin
+
+  inherited;
+end;
+
+procedure TAiOllamaEmbeddings.ParseEmbedding(JObj: TJSonObject);
+Var
+  JArr: TJSonArray;
+  J: Integer;
+  Valor: Double;
+begin
+  // A diferencia de openAi el embedding es uno solo y no un arreglo
+
+  JArr := JObj.GetValue<TJSonArray>('embedding');
+  J := JArr.Count;
+  SetLength(FData, J);
+
+  // FillChar(FData, Length(FData) * SizeOf(Double), 0);
+
+  For J := 0 to JArr.Count - 1 do
+  Begin
+    Valor := JArr.Items[J].GetValue<Double>;
+    FData[J] := Valor;
+  End;
+
+  // FData := Emb;
+end;
+
+{ TAiOllamaEmbeddings - Factory class methods }
+
+class function TAiOllamaEmbeddings.GetDriverName: string;
+begin
+  Result := 'Ollama';
+end;
+
+class function TAiOllamaEmbeddings.CreateInstance(aOwner: TComponent): TAiEmbeddings;
+begin
+  Result := TAiOllamaEmbeddings.Create(aOwner);
+end;
+
+class procedure TAiOllamaEmbeddings.RegisterDefaultParams(Params: TStrings);
+begin
+  Params.Values['ApiKey'] := '@OLLAMA_API_KEY';
+  Params.Values['Url'] := GlAIUrl;
+  Params.Values['Model'] := 'snowflake-arctic-embed';
+  Params.Values['Dimensions'] := '1024';
 end;
 
 Initialization

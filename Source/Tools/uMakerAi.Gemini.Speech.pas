@@ -404,10 +404,17 @@ end;
 
 procedure TAiGeminiSpeechTool.ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage);
 begin
-  // Llamada directa siempre — mismo razonamiento que ExecuteTranscription:
-  // InternalRunGeminiTTS asigna ResMsg.Prompt y ResMsg.MediaFiles directamente,
-  // por lo que el caller debe esperar a que termine para leer el resultado.
-  InternalRunGeminiTTS(AText, ResMsg);
+  // Si IsAsync=True ya estamos en un hilo background del chat: llamar directo
+  // para evitar un TTask anidado que causaría dangling pointer sobre ResMsg.
+  // Si IsAsync=False estamos en el hilo principal: lanzar task para no bloquearlo.
+  if IsAsync then
+    InternalRunGeminiTTS(AText, ResMsg)
+  else
+    TTask.Run(
+      procedure
+      begin
+        InternalRunGeminiTTS(AText, ResMsg);
+      end);
 end;
 
 function TAiGeminiSpeechTool.GetApiKey: string;

@@ -278,8 +278,13 @@ type
     FOnStateChange: TAiStateChangeEvent;
     FChatTools: TAiChatTools;
     FChatMode: TAiChatMode;
-    FSanitizerActive: Boolean;
-    FOnSanitize: TAiSanitizeEvent;
+    FEnabledFeatures: TAiChatMediaSupports;
+    FPdfTool: TAiPdfToolBase;
+    FReportTool: TAiReportToolBase;
+    // Nuevo sistema de orquestación (v3.3)
+    FModelCaps: TAiCapabilities; // capacidades nativas del modelo
+    FSessionCaps: TAiCapabilities; // capacidades deseadas en la sesión
+    FNewSystemConfigured: Boolean; // True si ModelCaps/SessionCaps fueron asignados explícitamente
 
     procedure SetApiKey(const Value: String);
     procedure SetFrequency_penalty(const Value: Double);
@@ -326,9 +331,23 @@ type
     procedure SetOnProgressEvent(const Value: TAiModelProgressEvent);
     procedure SetOnReceiveThinking(const Value: TAiChatOnDataEvent);
     procedure SetThinking_tokens(const Value: Integer);
-    procedure SetCached_tokens(const Value: Integer);
-    procedure SetSanitizerActive(const Value: Boolean);
-    procedure SetOnSanitize(const Value: TAiSanitizeEvent);
+    procedure SetTextEditorTool(const Value: TAiTextEditorTool);
+    procedure SetComputerUseTool(const Value: TAiComputerUseTool);
+    procedure SetSpeechTool(const Value: TAiSpeechToolBase);
+    procedure SetImageTool(const Value: TAiImageToolBase);
+    procedure SetVideoTool(const Value: TAiVideoToolBase);
+    procedure SetWebSearchTool(const Value: TAiWebSearchToolBase);
+    procedure SetVisionTool(const Value: TAiVisionToolBase);
+    procedure SetEnabledFeatures(const Value: TAiChatMediaSupports);
+    procedure SetPdfTool(const Value: TAiPdfToolBase);
+    procedure SetReportTool(const Value: TAiReportToolBase);
+    // Nuevo sistema de orquestación (v3.3)
+    procedure SetModelCaps(const Value: TAiCapabilities);
+    procedure SetSessionCaps(const Value: TAiCapabilities);
+    procedure EnsureNewSystemConfig;
+    function LegacyToModelCaps: TAiCapabilities;
+    function LegacyToSessionCaps: TAiCapabilities;
+    function RunLegacy(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
     function RunNew(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
     function FileTypeInModelCaps(ACategory: TAiFileCategory): Boolean;
 
@@ -526,8 +545,12 @@ type
     property WebSearchParams: TAiWebSearchParams read FWebSearchParams;
     property ModelConfig: TAiModelConfig read FModelConfig; // configuración unificada del modelo (v3.3)
     property OnStateChange: TAiStateChangeEvent read FOnStateChange write FOnStateChange;
-    property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive default False;
-    property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
+    property ShellTool: TAiShell read FShellTool write SetShellTool;
+    Property TextEditorTool: TAiTextEditorTool read FTextEditorTool write SetTextEditorTool;
+    property ComputerUseTool: TAiComputerUseTool read FComputerUseTool write SetComputerUseTool;
+    // Nuevo sistema de orquestación (v3.3)
+    property ModelCaps: TAiCapabilities read FModelCaps write SetModelCaps; // capacidades nativas del modelo
+    property SessionCaps: TAiCapabilities read FSessionCaps write SetSessionCaps; // capacidades deseadas en la sesión
   end;
 
   // procedure Register;

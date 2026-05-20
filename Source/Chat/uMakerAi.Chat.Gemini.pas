@@ -652,8 +652,9 @@ begin
         jPartItem := TJSONObject.Create.AddPair('functionResponse', jFuncResponse);
         jParts.Add(jPartItem);
 
-        // Archivos adjuntos al tool result (ComputerUse screenshots + archivos MCP)
-        MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image, Tfc_pdf], False);
+        // [COMPUTER USE - IMÁGENES]
+        // (Tu código de adjuntar imágenes que hicimos antes va aquí, justo después)
+        MediaArr := Msg.MediaFiles.GetMediaList([Tfc_Image], False);
         if Length(MediaArr) > 0 then
           begin
             for MediaFile in MediaArr do
@@ -780,7 +781,7 @@ begin
           if (cap_CodeInterpreter in ModelConfig.ModelCaps) then
             TargetCategories := [Low(TAiFileCategory) .. High(TAiFileCategory)] // Permitir todo
           else
-            TargetCategories := GetModelInputFileTypes; // Filtro basado en ModelCaps
+            TargetCategories := NativeInputFiles; // Filtro estricto estándar
 
           MediaArr := Msg.MediaFiles.GetMediaList(TargetCategories, False);
 
@@ -1083,7 +1084,10 @@ begin
       JCompSettings := TJSONObject.Create;
 
       // La documentación especifica el entorno.
-      JCompSettings.AddPair('environment', 'ENVIRONMENT_BROWSER');
+      // Valores posibles suelen ser 'BROWSER' o 'ENVIRONMENT_BROWSER'.
+      // Usaremos 'only_name' si la API lo infiere, pero mejor ser explícitos.
+      // Si falla con 400, probaremos quitando el par 'environment'.
+      // JCompSettings.AddPair('environment', 'BROWSER');
 
       // Nota: Si quieres excluir acciones (como drag_and_drop), se configuran aquí.
       // Por ahora enviamos el objeto vacío o con configuración mínima si es necesario.
@@ -1129,7 +1133,7 @@ begin
     end;
 
     // B. Configuración de Imagen (Gemini 3 Image / Imagen 3)
-    if ImageParams.Params.Count > 0 then
+    if ImageParams.Count > 0 then
     begin
       var
       JImageConfig := TJSONObject.Create;
@@ -1523,7 +1527,7 @@ begin
   Self.Thinking_tokens := Self.Thinking_tokens + aThoughts_tokens;
 
   // Si se solicitó extracción de archivos de texto (native output)
-  If cap_ExtractCode in ModelConfig.SessionCaps then
+  If tfc_ExtracttextFile in NativeOutputFiles then
     InternalExtractCodeFiles(LRespuesta, ResMsg);
 
   // --- FUNCTION CALLING / TOOLS ---
@@ -2067,7 +2071,7 @@ var
   FileName: string;
 begin
   // Solo procesar si el usuario lo configuró en NativeOutputFiles
-  if not(cap_ExtractCode in ModelConfig.SessionCaps) then
+  if not(tfc_ExtracttextFile in NativeOutputFiles) then
     Exit;
 
   if AText.Trim.IsEmpty then
@@ -2283,7 +2287,8 @@ begin
   else
   begin
     // 4. Si no es acción de computadora, usar el comportamiento estándar (AiFunctions o Evento)
-    inherited DoCallFunction(ToolCall);
+    ToolCall.Response := 'Command '+ToolCall.name+' not found';
+    //inherited DoCallFunction(ToolCall);
   end;
 end;
 
@@ -2385,7 +2390,7 @@ end;
 
 // --- VIDEO GENERATION (VEO) ---
 // Implementación basada en predictLongRunning y Polling
-function TAiGeminiChat.InternalRunNativeVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+function TAiGeminiChat.InternalRunImageVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 var
   LUrl, LModelName, LOpName, PollingUrl: string;
   LResponse: IHTTPResponse;
@@ -2461,7 +2466,7 @@ begin
       LParams.AddPair('aspectRatio', '16:9'); // Default seguro
 
     // Iterar parámetros definidos por el usuario en el componente
-    for I := 0 to VideoParams.Params.Count - 1 do
+    for I := 0 to VideoParams.Count - 1 do
     begin
       LKey := VideoParams.Params.Names[I];
       LValueStr := VideoParams.Params.ValueFromIndex[I];
