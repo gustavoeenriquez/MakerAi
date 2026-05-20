@@ -22,6 +22,7 @@ program demo_rag_graph;
 //     -Fu../Source/Core -Fu../Source/Chat -Fu../Source/RAG -Fu../Source/Utils
 
 uses
+  uDemoHelper,
   SysUtils, Classes,
   uMakerAi.Embeddings.Core,
   uMakerAi.Embeddings,
@@ -35,7 +36,7 @@ uses
 // ---------------------------------------------------------------------------
 procedure AddNodeAndEmbed(Graph: TAiRagGraph; Emb: TAiEmbeddings;
     const AID, ALabel, AName, AText: string;
-    const AProp1Key: string = ''; AProp1Val: Variant = Unassigned);
+    const AProp1Key: string; AProp1Val: Variant);
 var
   Node: TAiRagGraphNode;
 begin

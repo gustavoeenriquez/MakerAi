@@ -18,10 +18,26 @@ program demo_whisper;
 //   fpc demo_whisper.pas -Fu../Source/Core -Fu../Source/Chat -Fu../Source/Tools
 
 uses
+  uDemoHelper,
   SysUtils, Classes,
   uMakerAi.Core,
   uMakerAi.Chat.Messages,
   uMakerAi.Whisper;
+
+// ---------------------------------------------------------------------------
+// Obtiene el tamaño de un archivo en bytes
+// FileSize(string) no existe en FPC 3.2.2 a diferencia de Delphi.
+// ---------------------------------------------------------------------------
+function FileSizeByName(const AFile: string): Int64;
+var F: TFileStream;
+begin
+  F := TFileStream.Create(AFile, fmOpenRead);
+  try
+    Result := F.Size;
+  finally
+    F.Free;
+  end;
+end;
 
 // ---------------------------------------------------------------------------
 // Guarda TMemoryStream en disco
@@ -166,9 +182,9 @@ begin
     // -----------------------------------------------------------------------
     WriteLn('Archivos generados:');
     if FileExists(TTS_FILE_1) then
-      WriteLn('  ', TTS_FILE_1, ' — ', FileSize(TTS_FILE_1), ' bytes');
+      WriteLn('  ', TTS_FILE_1, ' — ', FileSizeByName(TTS_FILE_1), ' bytes');
     if FileExists(TTS_FILE_2) then
-      WriteLn('  ', TTS_FILE_2, ' — ', FileSize(TTS_FILE_2), ' bytes');
+      WriteLn('  ', TTS_FILE_2, ' — ', FileSizeByName(TTS_FILE_2), ' bytes');
 
   finally
     Whisper.Free;
