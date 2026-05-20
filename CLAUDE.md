@@ -71,6 +71,16 @@ FPC=/ruta/fpc ./build_demos.sh  # FPC específico
 
 El script **no para en errores** — compila los 45 pase lo que pase y al final muestra un reporte OK / FAIL. Útil cuando un demo depende de API keys o drivers que no están disponibles.
 
+### uDemoHelper — Inicialización silenciosa (obligatorio en todo demo)
+
+`Demos/uDemoHelper.pas` es una unidad de solo `implementation` que debe incluirse en el `uses` de **todo demo**. Su bloque `initialization` ejecuta 3 arreglos críticos antes de que corra cualquier código del programa:
+
+1. **UTF-8 en consola Windows** — `SetConsoleOutputCP(CP_UTF8)`. Sin esto, acentos y caracteres como `ñ`, `¿`, `¡` se ven corruptos.
+2. **Separador decimal consistente** — fuerza `'.'` como separador decimal. En Windows con locale español, `Temperature := 0.7` se serializa como `"0,7"` (con coma) y el servidor lo rechaza, causando respuestas vacías intermitentes (detectado con Cohere).
+3. **Inicializar OpenSSL en FPC** — `InitSSLInterface`. FPC no lo hace automáticamente. Sin esto, las conexiones HTTPS fallan silenciosamente. Si falla, muestra instrucciones de instalación.
+
+**Siempre incluir `uDemoHelper` en el `uses` de cualquier nuevo demo.**
+
 ## Architecture
 
 ### Layers (mirrors the Delphi original)
