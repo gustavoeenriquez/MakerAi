@@ -890,6 +890,7 @@ begin
 
     AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
 
+    ApplyExtraBodyParams(AJSONObject);
     Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);

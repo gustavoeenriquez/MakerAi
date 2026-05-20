@@ -214,11 +214,13 @@ type
     FThinkingLevel: TAiThinkingLevel;
     FFormat: String;
     FTool_Active: Boolean;
+    FModelExtraBodyParams: String;
     procedure SetModelCaps(const Value: TAiCapabilities);
     procedure SetSessionCaps(const Value: TAiCapabilities);
     procedure SetThinkingLevel(const Value: TAiThinkingLevel);
     procedure SetFormat(const Value: String);
     procedure SetTool_Active(const Value: Boolean);
+    procedure SetModelExtraBodyParams(const Value: String);
   public
     constructor Create;
     procedure Assign(Source: TPersistent); override;
@@ -228,6 +230,13 @@ type
     property ThinkingLevel: TAiThinkingLevel read FThinkingLevel write SetThinkingLevel default tlDefault;
     property Tool_Active: Boolean read FTool_Active write SetTool_Active default True;
     property Format: String read FFormat write SetFormat;
+    // JSON literal (objeto) mezclado shallow al body del request antes de serializar.
+    // Util para params vendor-specific fuera del estandar OpenAI:
+    //   Qwen3/llama.cpp -> {"chat_template_kwargs":{"enable_thinking":false}}
+    //   llama.cpp       -> {"cache_prompt":true}
+    //   Ollama          -> {"think":false}
+    // Vacio o JSON invalido = sin efecto. Cliente gana en colision de claves.
+    property ModelExtraBodyParams: String read FModelExtraBodyParams write SetModelExtraBodyParams;
   end;
 
   TAiChat = class(TComponent, IAiToolContext)
@@ -430,6 +439,11 @@ type
 
     // Inicializa el json de completions, se saca apaarte porque es complejo
     Function InitChatCompletions: String; Virtual;
+
+    // Mezcla shallow ModelConfig.ModelExtraBodyParams sobre AJSONObject justo antes
+    // de serializar. Silencioso si vacio o JSON invalido. Los drivers con
+    // InitChatCompletions propio deben invocarlo antes del ToJSON final.
+    Procedure ApplyExtraBodyParams(AJSONObject: TJSonObject);
 
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Virtual;
     procedure ParseJsonTranscript(jObj: TJSonObject; ResMsg: TAiChatMessage; aMediaFile: TAiMediaFile);
@@ -1292,6 +1306,7 @@ begin
   inherited Create;
   FTool_Active := True;
   FThinkingLevel := tlDefault;
+  FModelExtraBodyParams := '';
 end;
 
 procedure TAiModelConfig.SetModelCaps(const Value: TAiCapabilities);
@@ -1319,6 +1334,11 @@ begin
   FTool_Active := Value;
 end;
 
+procedure TAiModelConfig.SetModelExtraBodyParams(const Value: String);
+begin
+  FModelExtraBodyParams := Value;
+end;
+
 procedure TAiModelConfig.Assign(Source: TPersistent);
 var
   Src: TAiModelConfig;
@@ -1331,6 +1351,7 @@ begin
     FThinkingLevel := Src.FThinkingLevel;
     FFormat := Src.FFormat;
     FTool_Active := Src.FTool_Active;
+    FModelExtraBodyParams := Src.FModelExtraBodyParams;
   end
   else
     inherited;
@@ -1697,6 +1718,39 @@ begin
   End;
 end;
 
+procedure TAiChat.ApplyExtraBodyParams(AJSONObject: TJSonObject);
+var
+  jExtra: TJSonValue;
+  jObj: TJSonObject;
+  I: Integer;
+  LKey: String;
+  LVal: TJSonValue;
+  LOld: TJSONPair;
+begin
+  if (FModelConfig = nil) or (Trim(FModelConfig.FModelExtraBodyParams) = '') or
+     (AJSONObject = nil) then
+    Exit;
+  jExtra := TJSonObject.ParseJSONValue(FModelConfig.FModelExtraBodyParams);
+  if not Assigned(jExtra) then
+    Exit;
+  try
+    if not (jExtra is TJSonObject) then
+      Exit;
+    jObj := TJSonObject(jExtra);
+    for I := jObj.Count - 1 downto 0 do
+    begin
+      LKey := jObj.Pairs[I].JsonString.Value;
+      LVal := jObj.Pairs[I].JsonValue.Clone as TJSonValue;
+      LOld := AJSONObject.RemovePair(LKey);
+      if Assigned(LOld) then
+        LOld.Free;
+      AJSONObject.AddPair(LKey, LVal);
+    end;
+  finally
+    jExtra.Free;
+  end;
+end;
+
 function TAiChat.InitChatCompletions: String;
 Var
   AJSONObject, jToolChoice: TJSonObject;
@@ -1832,6 +1886,7 @@ begin
 
     End;
 
+    ApplyExtraBodyParams(AJSONObject);
     Res := TEncoding.UTF8.GetString(TEncoding.UTF8.GetBytes(AJSONObject.ToJSon));
     Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);

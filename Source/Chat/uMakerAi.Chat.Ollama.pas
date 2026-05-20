@@ -441,6 +441,7 @@ begin
       jOptions.Free; // Si no se añadió al padre, hay que liberarlo
 
     // Generación del String final
+    ApplyExtraBodyParams(AJSONObject);
     Result := AJSONObject.ToJSON;
 
   Finally

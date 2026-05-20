@@ -549,6 +549,7 @@ begin
       LJsonObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_object'));
 
     // --- 7. GENERACI?N DEL STRING FINAL ---
+    ApplyExtraBodyParams(LJsonObject);
     Result := LJsonObject.ToJSon;
 
   finally

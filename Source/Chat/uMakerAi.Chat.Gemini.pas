@@ -1223,6 +1223,7 @@ begin
       JConfig.AddPair('thinkingConfig', JThinking);
     end;
 
+    ApplyExtraBodyParams(LRequest);
     Result := LRequest.Format;
 
   finally

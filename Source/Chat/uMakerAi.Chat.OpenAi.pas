@@ -995,6 +995,7 @@ JFormatConfig := Nil;
         JToolsArray.Free;
     end;
 
+    ApplyExtraBodyParams(JResult);
     Result := JResult.ToString;
   finally
     JResult.Free;
