@@ -29,7 +29,7 @@ interface
 uses
   SysUtils, Classes, Math,
   fphttpclient, opensslsockets,
-  EncdDecd,
+  EncdDecd, base64, // base64 para DecodeStringBase64 (FPC fcl-base)
   fpjson, jsonparser,
   uMakerAi.Core, uMakerAi.Chat.Messages, uMakerAi.Chat.Tools;
 
