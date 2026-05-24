@@ -27,7 +27,15 @@ type
     class function GetDefaultModel: string; override;
   end;
 
+procedure Register;
+
 implementation
+
+
+procedure Register;
+begin
+  RegisterComponents('MakerAI', [TAiGeminiRealtimeSTT]);
+end;
 
 class function TAiGeminiRealtimeSTT.GetDriverName: string;
 begin

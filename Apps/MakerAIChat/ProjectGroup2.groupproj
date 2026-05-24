@@ -9,7 +9,7 @@
         <Projects Include="..\..\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project29.dproj">
+        <Projects Include="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\DemoReAct\DemoReact.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -38,23 +38,23 @@
     <Target Name="ChatFull:Make">
         <MSBuild Projects="..\..\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj" Targets="Make"/>
     </Target>
-    <Target Name="Project29">
-        <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project29.dproj"/>
+    <Target Name="DemoReact">
+        <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\DemoReAct\DemoReact.dproj"/>
     </Target>
-    <Target Name="Project29:Clean">
-        <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project29.dproj" Targets="Clean"/>
+    <Target Name="DemoReact:Clean">
+        <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\DemoReAct\DemoReact.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="Project29:Make">
-        <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\Project29.dproj" Targets="Make"/>
+    <Target Name="DemoReact:Make">
+        <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\DemoReAct\DemoReact.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="MakerAIChat;ChatFull;Project29"/>
+        <CallTarget Targets="MakerAIChat;ChatFull;DemoReact"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MakerAIChat:Clean;ChatFull:Clean;Project29:Clean"/>
+        <CallTarget Targets="MakerAIChat:Clean;ChatFull:Clean;DemoReact:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MakerAIChat:Make;ChatFull:Make;Project29:Make"/>
+        <CallTarget Targets="MakerAIChat:Make;ChatFull:Make;DemoReact:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

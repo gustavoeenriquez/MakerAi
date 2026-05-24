@@ -1397,17 +1397,70 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('GenericLLM', 'SessionCaps', '[]');
 
   // ------------------------- MAKERAI -------------------------------------
-  // Driver para MakerAI API (compatible con OpenAI Chat Completions API).
-  // URL: https://api.cimamaker.com/v1/
+  // Driver para MakerAI API (https://api.cimamaker.com/v1/).
+  // Fase 1: compatible con OpenAI Chat Completions API.
+  // Fase 2: endpoints propios via overrides de InternalRunCompletions/ParseChat.
   // API Key: variable de entorno MAKERAI_API_KEY
-  // Ultima actualizacion: Abr 2026
+  // Ultima actualizacion: May 2026
   // ------------------------- MAKERAI -------------------------------------
 
   // --- Valores globales por defecto ---
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'Max_Tokens',  '16000');
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'Tool_Active', 'True');
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'ModelCaps',   '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'SessionCaps', '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'Max_Tokens',   '16000');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'Temperature',  '1');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'Tool_Active',  'True');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'Asynchronous', 'True');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'ModelCaps',    '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'SessionCaps',  '[cap_Image]');
+
+  // --- Modelos de Chat ---
+  // mk-gpt-oss-20b: modelo principal de chat
+  Model := 'mk-gpt-oss-20b';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'True');
+
+  // mk-basic-8b: modelo ligero (sin visión por defecto, sin tools)
+  Model := 'mk-basic-8b';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'False');
+
+  // mk-scout, mk-local-fast, mk-local-smart, mk-local-coder
+  for Model in ['mk-scout', 'mk-local-fast', 'mk-local-coder'] do
+  begin
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'True');
+  end;
+
+  Model := 'mk-local-smart';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'True');
+
+  // mk-nanobanana family
+  for Model in ['mk-nanobanana', 'mk-nanobanana-2', 'mk-nanobanana-pro'] do
+  begin
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Image]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Image]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'False');
+  end;
+
+  // --- Generacion de imagenes ---
+  for Model in ['mk-gpt-image-1', 'mk-gpt-image-1.5', 'mk-gpt-image-1-mini', 'mk-gpt-image-2'] do
+  begin
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_GenImage]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'False');
+  end;
+
+  // --- STT (Transcripcion) ---
+  for Model in ['mk-whisper-large', 'mk-whisper-medium', 'mk-whisper-turbo'] do
+  begin
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Audio]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Audio]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'False');
+  end;
 
 End;
 

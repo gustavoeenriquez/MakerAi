@@ -59,7 +59,15 @@ type
       default otmGpt4oTranscribe;
   end;
 
+  Procedure Register;
+
 implementation
+
+
+procedure Register;
+begin
+  RegisterComponents('MakerAI', [TAiOpenAiRealtimeSTT]);
+end;
 
 { TAiOpenAiRealtimeSTT }
 

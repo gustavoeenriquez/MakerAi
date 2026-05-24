@@ -91,7 +91,8 @@ uses
   System.SysUtils, System.Types, System.Classes, System.Variants,
   System.IOUtils, System.SyncObjs, System.Math, System.Permissions,
   System.Threading, System.Diagnostics,
-  uMakerAi.Realtime,
+
+uMakerAi.Realtime,  uMakerAi.Realtime.OpenAI,
 
 {$IFDEF MSWINDOWS}
   Winapi.Windows, Winapi.MMSystem;
