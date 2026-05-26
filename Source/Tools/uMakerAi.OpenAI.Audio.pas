@@ -687,7 +687,7 @@ begin
     ConvertAudioIfNeeded(AAudioFile);
 
     AAudioFile.Content.Position := 0;
-    {$IF CompilerVersion >= 35}
+    {$IF CompilerVersion >= 36}
     Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
     {$ELSE}
     Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
@@ -725,7 +725,7 @@ begin
 
     ConvertAudioIfNeeded(AAudioFile);
     AAudioFile.Content.Position := 0;
-    {$IF CompilerVersion >= 35}
+    {$IF CompilerVersion >= 36}
     Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
     {$ELSE}
     Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
@@ -773,7 +773,7 @@ begin
   try
     ConvertAudioIfNeeded(AAudioFile);
     AAudioFile.Content.Position := 0;
-    {$IF CompilerVersion >= 35}
+    {$IF CompilerVersion >= 36}
     Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
     {$ELSE}
     Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);

@@ -301,7 +301,7 @@ type
     FOnEnd: TAIAgentsOnEnd;
     FOnError: TAIAgentsOnError;
     FOnConfirm: TAIAgentsOnConfirm;
-    FBusy: Boolean;
+    FBusy: Integer;
     FAbort: Boolean;
     FBlackboard: TAIBlackboard;
     FCompiled: Boolean;
@@ -322,6 +322,7 @@ type
     FSuspendedSteps:     TObjectList<TAiPendingStep>; // owned
     FSuspendedStepsLock: TCriticalSection;
     FOnSuspend:          TAIAgentsOnSuspend;
+    function GetBusy: Boolean;
     procedure SetCheckpointer(const Value: IAiCheckpointer);
     procedure SetOnSuspend(const Value: TAIAgentsOnSuspend);
     procedure SetMaxConcurrentTasks(const Value: Integer);
@@ -381,7 +382,7 @@ type
 
     function NewMessage(APrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): TAiChatMessage;
 
-    property Busy: Boolean read FBusy;
+    property Busy: Boolean read GetBusy;
     property Blackboard: TAIBlackboard read FBlackboard;
     property CurrentThreadID: string read FCurrentThreadID;
     // Reanuda un hilo suspendido. AInput es la respuesta/aprobaci?n del humano.
@@ -838,6 +839,11 @@ begin
   FAbort := True;
 end;
 
+function TAIAgentManager.GetBusy: Boolean;
+begin
+  Result := FBusy <> 0;
+end;
+
 function TAIAgentManager.AddEdge(const AStartNodeName, AEndNodeName: string): TAIAgentManager;
 var
   StartNode, EndNode: TAIAgentsNode;
@@ -1030,7 +1036,7 @@ begin
   FActiveTasksLock := TCriticalSection.Create;
   FCompiled := False;
   FAsynchronous := True; // Default VCL behavior
-  FBusy := False;
+  FBusy := 0;
 
   // --- NUEVO: Inicializaci?n del Scheduler ---
   FMaxConcurrentTasks := 4;
@@ -1494,7 +1500,7 @@ begin
   Result := '';
 
   // 1. CHEQUEO DE BUSY (Thread safe check simple)
-  if FBusy then
+  if FBusy <> 0 then
     raise Exception.Create('The Agent Manager is currently busy.');
 
   // 2. GESTI?N DE MENSAJES
@@ -1559,12 +1565,11 @@ var
   InitialInput: String;
 begin
   // 1. Verificaci?n de estado ocupado
-  if TInterlocked.Exchange(FBusy, True) then
+  if TInterlocked.Exchange(FBusy, 1) <> 0 then
     raise Exception.Create('Agent is busy (InternalRun check).');
 
   Compile; // Asegura que el grafo est? listo
 
-  FBusy := True;
   FAbort := False;
 
   // --- Generar ThreadID ?nico para esta ejecuci?n ---
@@ -1715,7 +1720,7 @@ begin
           FOnFinish(Self, InitialInput, FinalOutput, FinalStatus, FinalException);
 
         // Liberar el flag de ocupado
-        TInterlocked.Exchange(FBusy, False);
+        TInterlocked.Exchange(FBusy, 0);
       end;
     end);
 end;
@@ -2320,7 +2325,7 @@ var
 begin
   Result := False;
 
-  if TInterlocked.Exchange(FBusy, True) then
+  if TInterlocked.Exchange(FBusy, 1) <> 0 then
     raise Exception.Create('Agent is busy');
 
   try
@@ -2337,7 +2342,7 @@ begin
       end
       else if FCurrentThreadID <> AThreadID then
       begin
-        TInterlocked.Exchange(FBusy, False);
+        TInterlocked.Exchange(FBusy, 0);
         Exit; // Thread no encontrado ni en disco ni en memoria
       end;
     finally
@@ -2348,7 +2353,7 @@ begin
     LNode := FindNode(ANodeName);
     if not Assigned(LNode) then
     begin
-      TInterlocked.Exchange(FBusy, False);
+      TInterlocked.Exchange(FBusy, 0);
       raise Exception.CreateFmt('Nodo "%s" no encontrado en el grafo', [ANodeName]);
     end;
 
@@ -2465,7 +2470,7 @@ begin
           if Assigned(FOnFinish) then
             FOnFinish(Self, LResumeInput, FinalOutput, FinalStatus, FinalException);
 
-          TInterlocked.Exchange(FBusy, False);
+          TInterlocked.Exchange(FBusy, 0);
         end;
       end, FThreadPool);
 
@@ -2474,7 +2479,7 @@ begin
 
     Result := True;
   except
-    TInterlocked.Exchange(FBusy, False);
+    TInterlocked.Exchange(FBusy, 0);
     raise;
   end;
 end;

@@ -267,7 +267,7 @@ Type
     FDocLengths: TDictionary<TAiEmbeddingNode, Integer>;
     FAvgDocLength: Double;
     FLanguage: TAiLanguage;
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 36}
     FStopWords: THashSet<string>;
 {$ELSE}
     FStopWords: TDictionary<string, Boolean>;
@@ -283,7 +283,7 @@ Type
     procedure Clear;
 
     property Language: TAiLanguage read FLanguage write SetLanguage;
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 36}
     property StopWords: THashSet<string> read FStopWords; // Permite a�adir palabras personalizadas
 {$ELSE}
     property StopWords: TDictionary<string, Boolean> read FStopWords;
@@ -1184,7 +1184,7 @@ begin
   inherited Create;
   FInvertedIndex := TDictionary < string, TList < TWordOccurrence >>.Create;
   FDocLengths := TDictionary<TAiEmbeddingNode, Integer>.Create;
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 36}
   FStopWords := THashSet<string>.Create;
 {$ELSE}
   FStopWords := TDictionary<string, Boolean>.Create;
@@ -1236,7 +1236,7 @@ begin
     begin
       CleanWord := W.Trim.ToLower;
       if CleanWord <> '' then
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 36}
         FStopWords.Add(CleanWord);
 {$ELSE}
         FStopWords.AddOrSetValue(CleanWord, True);
@@ -1272,7 +1272,7 @@ begin
   for W in Words do
   begin
     // Filtro de longitud m�nima y stop words (usando el HashSet para O(1))
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 36}
     if (W.Length > 2) and not FStopWords.Contains(W) then
 {$ELSE}
     if (W.Length > 2) and not FStopWords.ContainsKey(W) then

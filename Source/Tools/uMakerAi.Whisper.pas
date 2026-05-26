@@ -461,7 +461,7 @@ begin
   Try
     aStream.Position := 0;
 
-    {$IF CompilerVersion >= 35}
+    {$IF CompilerVersion >= 36}
     Body.AddStream('file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
     {$ELSE}
     Body.AddStream('file', aStream, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
@@ -536,7 +536,7 @@ begin
   Try
     aStream.Position := 0;
 
-    {$IF CompilerVersion >= 35}
+    {$IF CompilerVersion >= 36}
     Body.AddStream('file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
     {$ELSE}
     Body.AddStream('file', aStream, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));

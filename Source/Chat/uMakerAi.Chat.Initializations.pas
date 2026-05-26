@@ -1413,20 +1413,41 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'SessionCaps',  '[cap_Image]');
 
   // --- Modelos de Chat ---
-  // mk-gpt-oss-20b: modelo principal de chat
-  Model := 'mk-gpt-oss-20b';
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Image]');
+  // mk-pro: modelo avanzado, vision + file_reader (PDF, DOCX, XLSX, TXT, CSV, HTML)
+  Model := 'mk-pro';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Image, cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Image, cap_Pdf]');
   TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'True');
 
-  // mk-basic-8b: modelo ligero (sin visión por defecto, sin tools)
+  // mk-gpt-oss-20b: modelo principal de chat, reasoning + vision + file_reader
+  Model := 'mk-gpt-oss-20b';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',    '[cap_Reasoning, cap_Image, cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps',  '[cap_Reasoning, cap_Image, cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ThinkingLevel', 'tlMedium');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active',  'True');
+
+  // mk-think: reasoning especializado + vision (confirmado May 2026)
+  Model := 'mk-think';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',    '[cap_Reasoning, cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps',  '[cap_Reasoning, cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ThinkingLevel', 'tlMedium');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active',  'True');
+
+  // mk-basic-8b: modelo ligero, sin visión, sin tools, con file_reader
   Model := 'mk-basic-8b';
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[]');
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Pdf]');
   TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'False');
 
-  // mk-scout, mk-local-fast, mk-local-smart, mk-local-coder
-  for Model in ['mk-scout', 'mk-local-fast', 'mk-local-coder'] do
+  // mk-scout: routing multi-provider server-side (Llama-4-scout vía Groq / Gemini / Mistral fallback).
+  // Las rutas 1 y 2 tienen visión; todas tienen file_reader.
+  Model := 'mk-scout';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Image, cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Image, cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'True');
+
+  // mk-local-fast, mk-local-coder: modelos locales sin vision (Mistral-small-latest)
+  for Model in ['mk-local-fast', 'mk-local-coder'] do
   begin
     TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[]');
     TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[]');

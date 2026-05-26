@@ -32,6 +32,13 @@
 // Driver para MakerAI API (https://api.cimamaker.com/v1/).
 // El servidor devuelve JSON completo (no SSE) aunque stream=true esté en el request.
 // OnRequestCompletedEvent intercepta el buffer sin procesar y llama ParseChat.
+//
+// PDFs/documentos: ToJSon base deja vacío el caso Tfc_Pdf. Este driver inyecta
+// el content part {type:"file", file:{filename, file_data}} en InitChatCompletions.
+// Requiere cap_Pdf en ModelCaps y SessionCaps para los modelos que lo soportan.
+//
+// session_id: campo extra en el root del payload, igual en todos los turnos de
+// la conversación. Se renueva automáticamente en cada NewChat.
 
 unit uMakerAi.Chat.MakerAi;
 
@@ -53,14 +60,17 @@ uses
 
 type
   TAiMakerAiChat = class(TAiChat)
+  private
+    FSessionId: string;
+    procedure ResetSessionId;
   protected
     Function InitChatCompletions: String; Override;
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Override;
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
-    // El servidor envía JSON completo sin SSE; aquí se parsea el buffer remanente.
     Procedure OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse); Override;
   public
     constructor Create(Sender: TComponent); override;
+    Procedure NewChat; Override;
     class function GetDriverName: string; override;
     class procedure RegisterDefaultParams(Params: TStrings); override;
     class function CreateInstance(Sender: TComponent): TAiChat; override;
@@ -110,9 +120,24 @@ begin
   Result := TAiMakerAiChat.Create(Sender);
 end;
 
+procedure TAiMakerAiChat.ResetSessionId;
+var
+  LGuid: TGUID;
+begin
+  CreateGUID(LGuid);
+  FSessionId := GUIDToString(LGuid);
+end;
+
 constructor TAiMakerAiChat.Create(Sender: TComponent);
 begin
   inherited;
+  ResetSessionId;
+end;
+
+Procedure TAiMakerAiChat.NewChat;
+begin
+  inherited NewChat;
+  ResetSessionId;
 end;
 
 Function TAiMakerAiChat.InitChatCompletions: String;
@@ -125,46 +150,113 @@ var
 begin
   Result := inherited InitChatCompletions;
 
-  // Normalize tool_choice for mk-gpt-oss-20b and other MakerAI-compatible servers.
-  // The base class serializes it as 'tools_choice' (typo) and only handles JSON objects,
-  // not string values like "auto"/"required"/"none". We rebuild it correctly here
-  // using the actual Tool_choice value set by the router (or 'auto' as default).
-  if Tool_Active then
-  begin
-    LJson := TJSonObject.ParseJSONValue(Result) as TJSonObject;
-    if Assigned(LJson) then
-    try
-      if LJson.TryGetValue<TJSonArray>('tools', LTools) and
-         Assigned(LTools) and (LTools.Count > 0) then
-      begin
-        // Clean up both the correct key and the base-class typo
-        LPair := LJson.RemovePair('tool_choice');
-        if Assigned(LPair) then LPair.Free;
-        LPair := LJson.RemovePair('tools_choice');
-        if Assigned(LPair) then LPair.Free;
-
-        // Effective value: from router (may be JSON-quoted string or object), default 'auto'
-        LEffective := Tool_choice;
-        if LEffective = '' then LEffective := 'auto';
-
-        // If it parses as a JSON object → pass as object ({"type":"function",...})
-        // Otherwise treat as plain string, stripping surrounding JSON quotes if present
-        LChoiceVal := TJSonValue.ParseJSONValue(LEffective);
-        if Assigned(LChoiceVal) and (LChoiceVal is TJSonObject) then
-          LJson.AddPair('tool_choice', LChoiceVal)
-        else
-        begin
-          FreeAndNil(LChoiceVal);
-          if (Length(LEffective) >= 2) and
-             (LEffective[1] = '"') and (LEffective[Length(LEffective)] = '"') then
-            LEffective := Copy(LEffective, 2, Length(LEffective) - 2);
-          LJson.AddPair('tool_choice', LEffective);
-        end;
-        Result := LJson.ToJSON;
-      end;
-    finally
-      LJson.Free;
+  // Siempre parsear: se inyecta session_id en cada request; también mk_tools,
+  // tool_choice y PDF file parts según las caps activas.
+  LJson := TJSonObject.ParseJSONValue(Result) as TJSonObject;
+  if Assigned(LJson) then
+  try
+    // Inject mk_tools so the MakerAI server activates Tavily web search.
+    // Triggered by SessionCaps including cap_WebSearch; ModelCaps must NOT include
+    // cap_WebSearch (to avoid the base class adding web_search_options for OpenAI).
+    if cap_WebSearch in SessionCaps then
+    begin
+      LPair := LJson.RemovePair('mk_tools');
+      if Assigned(LPair) then LPair.Free;
+      var LMkTools := TJSONObject.Create;
+      LMkTools.AddPair('web_search', TJSONBool.Create(True));
+      LJson.AddPair('mk_tools', LMkTools);
     end;
+
+    // Normalize tool_choice: base class serializes it as 'tools_choice' (typo) and
+    // only handles JSON objects, not plain strings like "auto"/"required"/"none".
+    if Tool_Active and
+       LJson.TryGetValue<TJSonArray>('tools', LTools) and
+       Assigned(LTools) and (LTools.Count > 0) then
+    begin
+      LPair := LJson.RemovePair('tool_choice');
+      if Assigned(LPair) then LPair.Free;
+      LPair := LJson.RemovePair('tools_choice');
+      if Assigned(LPair) then LPair.Free;
+
+      LEffective := Tool_choice;
+      if LEffective = '' then LEffective := 'auto';
+
+      LChoiceVal := TJSonValue.ParseJSONValue(LEffective);
+      if Assigned(LChoiceVal) and (LChoiceVal is TJSonObject) then
+        LJson.AddPair('tool_choice', LChoiceVal)
+      else
+      begin
+        FreeAndNil(LChoiceVal);
+        if (Length(LEffective) >= 2) and
+           (LEffective[1] = '"') and (LEffective[Length(LEffective)] = '"') then
+          LEffective := Copy(LEffective, 2, Length(LEffective) - 2);
+        LJson.AddPair('tool_choice', LEffective);
+      end;
+    end;
+
+    // Inject PDF file parts as {type:"file"} content parts.
+    // ToJSon base deja el caso Tfc_Pdf vacío; lo completamos aquí.
+    // FMessages[I] es 1:1 con messages[I] en el JSON (el system prompt vive en FMessages).
+    if cap_Pdf in ModelCaps then
+    begin
+      var LMessages: TJSONArray;
+      if LJson.TryGetValue<TJSONArray>('messages', LMessages) then
+      begin
+        for var LFIdx := 0 to FMessages.Count - 1 do
+        begin
+          if LFIdx >= LMessages.Count then Break;
+          var LMsg      := FMessages[LFIdx];
+          var LPdfFiles := LMsg.MediaFiles.GetMediaList([Tfc_Pdf], False);
+          if Length(LPdfFiles) = 0 then Continue;
+
+          var LJsonMsg := LMessages.Items[LFIdx] as TJSONObject;
+
+          // content debería ser array (cap_Pdf en ModelCaps hace que ToJSon cree JContent
+          // aunque el caso Tfc_Pdf no añada nada al array). Manejar string como fallback.
+          var LContent: TJSONArray;
+          var LContentVal := LJsonMsg.GetValue('content');
+          if LContentVal is TJSONArray then
+            LContent := TJSONArray(LContentVal)
+          else
+          begin
+            LContent := TJSONArray.Create;
+            var LTextPart := TJSONObject.Create;
+            LTextPart.AddPair('type', 'text');
+            LTextPart.AddPair('text', LMsg.Prompt);
+            LContent.Add(LTextPart);
+            LPair := LJsonMsg.RemovePair('content');
+            if Assigned(LPair) then LPair.Free;
+            LJsonMsg.AddPair('content', LContent);
+          end;
+
+          for var LK := 0 to High(LPdfFiles) do
+          begin
+            var LMedia    := LPdfFiles[LK];
+            var LFileName := ExtractFileName(LMedia.Filename);
+            if LFileName = '' then LFileName := 'document.pdf';
+
+            var LFileInner := TJSONObject.Create;
+            LFileInner.AddPair('filename',  LFileName);
+            LFileInner.AddPair('file_data',
+              'data:' + LMedia.MimeType + ';base64,' + LMedia.Base64);
+            var LFilePart := TJSONObject.Create;
+            LFilePart.AddPair('type', 'file');
+            LFilePart.AddPair('file', LFileInner);
+            LContent.Add(LFilePart);
+          end;
+        end;
+      end;
+    end;
+
+    // session_id: identifica la sesión; el servidor recupera el contexto entre turnos.
+    // Se renueva en NewChat para separar conversaciones distintas.
+    LPair := LJson.RemovePair('session_id');
+    if Assigned(LPair) then LPair.Free;
+    LJson.AddPair('session_id', FSessionId);
+
+    Result := LJson.ToJSON;
+  finally
+    LJson.Free;
   end;
 
   MKLog('REQUEST', Copy(Result, 1, 3000));

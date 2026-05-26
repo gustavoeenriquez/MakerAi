@@ -974,7 +974,8 @@ begin
   FContent.Position := 0;
   Result := TNetEncoding.Base64.EncodeBytesToString(FContent.Memory, FContent.Size);
   Result := StringReplace(Result, sLineBreak, '', [rfReplaceAll]);
-  Result := StringReplace(Result, #10, '', [rfReplaceAll]); // #10 es LF (\n)
+  Result := StringReplace(Result, #13, '', [rfReplaceAll]); // CR que queda en Linux (CRLF → sLineBreak sólo elimina LF ahí)
+  Result := StringReplace(Result, #10, '', [rfReplaceAll]); // LF
 end;
 
 function TAiMediaFile.GetBytes: Integer;
