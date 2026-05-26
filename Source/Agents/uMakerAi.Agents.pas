@@ -37,9 +37,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections, System.Generics.Defaults, System.TypInfo,
-  System.Bindings.Evaluator, System.Bindings.Helper, System.Bindings.Expression, System.Bindings.Consts,
   System.JSON, System.Math,
-  System.Bindings.EvalSys, System.Bindings.Factories, System.Bindings.EvalProtocol, System.Bindings.ObjEval,
   System.Threading, System.Rtti, System.SyncObjs, System.Types, System.StrUtils,
 {$IF CompilerVersion < 35}
   uJSONHelper,
@@ -434,43 +432,104 @@ begin
   {$WARN SYMBOL_DEPRECATED ON}
 end;
 
+// Simple expression evaluator for lmExpression link mode.
+// Supports: bare key (truthy), key=val, key<>val, key!=val, key>val,
+//           key<val, key>=val, key<=val.  Values are compared as strings
+// unless both sides parse as numbers.
 function EvalCondition(const Expr: string; Vars: TDictionary<string, TValue>): Boolean;
 var
-  LScope: IScope; // Mantiene la referencia viva (Interface)
-  LDictScope: TDictionaryScope; // Referencia de clase para acceder a .Map
-  BindingExpression: TBindingExpression;
-  Pair: TPair<string, TValue>;
-  Value: TValue;
-  ValueWrapper: IValue;
+  LExpr, LKey, LOp, LRhs: string;
+  LVal: TValue;
+  LLhs, LRhsNum: Double;
+  LFound: Boolean;
+  I, P: Integer;
+  Ops: array[0..5] of string;
+  Op: string;
 begin
-  // 1. Crear la instancia de clase
-  LDictScope := TDictionaryScope.Create;
+  Result := False;
+  LExpr := Trim(Expr);
+  if LExpr = '' then Exit;
 
-  // 2. VITAL: Asignar a una variable de Interfaz inmediatamente.
-  // Esto sube el RefCount a 1 y evita que se destruya prematuramente.
-  LScope := LDictScope;
+  Ops[0] := '<>';
+  Ops[1] := '!=';
+  Ops[2] := '>=';
+  Ops[3] := '<=';
+  Ops[4] := '>';
+  Ops[5] := '<';
 
-  // No necesitamos try..finally para el Scope, las interfaces se limpian solas.
-
-  // 3. Llenar las variables usando la referencia de clase (LDictScope)
-  for Pair in Vars do
+  LOp := '';
+  P   := 0;
+  // Check two-char ops first, then single-char =
+  for I := 0 to 5 do
   begin
-    ValueWrapper := TValueWrapper.Create(Pair.Value);
-    LDictScope.Map.Add(Pair.Key, ValueWrapper);
+    P := Pos(Ops[I], LExpr);
+    if P > 0 then begin LOp := Ops[I]; Break; end;
+  end;
+  if LOp = '' then
+  begin
+    P := Pos('=', LExpr);
+    if P > 0 then LOp := '=';
   end;
 
-  // 4. Crear la expresi?n pasando la INTERFAZ (LScope)
-  BindingExpression := TBindings.CreateExpression([LScope], Expr);
-  try
-    ValueWrapper := BindingExpression.Evaluate;
-    Value := ValueWrapper.GetValue;
-
-    if Value.IsType<Boolean> then
-      Result := Value.AsBoolean
+  if LOp = '' then
+  begin
+    // Bare key: truthy check
+    LKey := LExpr;
+    if not Vars.TryGetValue(LKey, LVal) then Exit;
+    if LVal.Kind = tkEnumeration then
+      Result := LVal.AsBoolean
+    else if LVal.Kind in [tkInteger, tkInt64, tkFloat] then
+      Result := LVal.AsExtended <> 0
+    else if LVal.Kind in [tkString, tkUString, tkLString, tkWString] then
+      Result := LVal.AsString <> ''
     else
-      raise Exception.CreateFmt('La expresi?n "%s" no devolvi? un Boolean', [Expr]);
-  finally
-    BindingExpression.Free;
+      Result := not LVal.IsEmpty;
+    Exit;
+  end;
+
+  LKey := Trim(Copy(LExpr, 1, P - 1));
+  LRhs := Trim(Copy(LExpr, P + Length(LOp), MaxInt));
+
+  LFound := Vars.TryGetValue(LKey, LVal);
+  if not LFound then
+  begin
+    Result := (LOp = '<>') or (LOp = '!=');
+    Exit;
+  end;
+
+  // Get LHS as string and number (if parseable)
+  var LLhsStr: string;
+  if LVal.Kind in [tkString, tkUString, tkLString, tkWString] then
+    LLhsStr := LVal.AsString
+  else if LVal.Kind = tkEnumeration then
+    LLhsStr := BoolToStr(LVal.AsBoolean, True)
+  else
+    LLhsStr := LVal.ToString;
+
+  var LLhsIsNum: Boolean := TryStrToFloat(LLhsStr, LLhs);
+  var LRhsIsNum: Boolean := TryStrToFloat(LRhs, LRhsNum);
+
+  if LLhsIsNum and LRhsIsNum then
+  begin
+    case IndexStr(LOp, ['=', '<>', '!=', '>', '<', '>=', '<=']) of
+      0:    Result := LLhs = LRhsNum;
+      1, 2: Result := LLhs <> LRhsNum;
+      3:    Result := LLhs > LRhsNum;
+      4:    Result := LLhs < LRhsNum;
+      5:    Result := LLhs >= LRhsNum;
+      6:    Result := LLhs <= LRhsNum;
+    end;
+  end
+  else
+  begin
+    case IndexStr(LOp, ['=', '<>', '!=', '>', '<', '>=', '<=']) of
+      0:    Result := SameText(LLhsStr, LRhs);
+      1, 2: Result := not SameText(LLhsStr, LRhs);
+      3:    Result := CompareText(LLhsStr, LRhs) > 0;
+      4:    Result := CompareText(LLhsStr, LRhs) < 0;
+      5:    Result := CompareText(LLhsStr, LRhs) >= 0;
+      6:    Result := CompareText(LLhsStr, LRhs) <= 0;
+    end;
   end;
 end;
 

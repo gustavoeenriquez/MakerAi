@@ -131,6 +131,7 @@ end;
 constructor TAiMakerAiChat.Create(Sender: TComponent);
 begin
   inherited;
+  Url := GlMakerAiUrl;  // sobreescribe el GlOpenAIUrl que pone el base en Create
   ResetSessionId;
 end;
 
