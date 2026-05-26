@@ -756,7 +756,7 @@ begin
     for MediaFile in aMediaFiles do
     begin
       MediaFile.Content.Position := 0;
-{$IF CompilerVersion < 35}
+{$IF CompilerVersion < 36}
       if IsGptImageModel then
         Body.AddStream('image[]', MediaFile.Content, MediaFile.Filename)
       else
@@ -773,7 +773,7 @@ begin
     if Assigned(aMaskFile) then
     begin
       aMaskFile.Content.Position := 0;
-{$IF CompilerVersion < 35}
+{$IF CompilerVersion < 36}
       Body.AddStream('mask', aMaskFile.Content, aMaskFile.Filename);
 {$ELSE}
       Body.AddStream('mask', aMaskFile.Content, False, aMaskFile.Filename);
@@ -1168,7 +1168,7 @@ begin
   Body := TMultipartFormData.Create;
   try
     aImageFile.Content.Position := 0;
-{$IF CompilerVersion < 35}
+{$IF CompilerVersion < 36}
     Body.AddStream('image', aImageFile.Content, aImageFile.Filename);
 {$ELSE}
     Body.AddStream('image', aImageFile.Content, False, aImageFile.Filename);

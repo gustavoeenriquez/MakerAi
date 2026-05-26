@@ -355,7 +355,7 @@ begin
     LBody.AddField('purpose', APurpose); // Por defecto 'user_data'
 
     // stream, nombre, content-type (opcional, autom?tico por extensi?n usualmente)
-{$IF CompilerVersion < 35}
+{$IF CompilerVersion < 36}
     LBody.AddStream('file', aMediaFile.Content, LFileName);
 {$ELSE}
     LBody.AddStream('file', aMediaFile.Content, False, LFileName);
@@ -1797,7 +1797,7 @@ begin
           if Assigned(CaptureImageFile) then
           begin
             CaptureImageFile.Content.Position := 0;
-{$IF CompilerVersion < 35}
+{$IF CompilerVersion < 36}
             AsyncFormData.AddStream('input_reference', CaptureImageFile.Content, CaptureImageFile.FileName, CaptureImageFile.MimeType);
 {$ELSE}
             AsyncFormData.AddStream('input_reference', CaptureImageFile.Content, False, CaptureImageFile.FileName, CaptureImageFile.MimeType);
@@ -2326,7 +2326,7 @@ begin
     LTempStream.Position := 0;
 
     // --- 1. CONSTRUCCI?N DEL BODY MULTIPART CON PAR?METROS GEN?RICOS ---
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 36}
     Body.AddStream('file', LTempStream, False, aMediaFile.FileName, aMediaFile.MimeType);
 {$ELSE}
     Body.AddStream('file', LTempStream, aMediaFile.FileName, aMediaFile.MimeType);

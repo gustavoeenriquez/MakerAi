@@ -595,29 +595,23 @@ procedure LogDebug(const Mensaje: string);
 var
   Archivo: TextFile;
   RutaLog: string;
+  LOpened: Boolean;
 begin
-  // ---------------------------------------------------------------------------------
-  // -------- OPCI?N DESHABILITADA ES SOLO UN LOG DE PRUEBAS--------------------------
-  // ---------------------------------------------------------------------------------
-  RutaLog := TPath.Combine(TPath.GetTempPath, 'ialog.txt');
-
+  LOpened := False;
   try
+    RutaLog := TPath.Combine(TPath.GetTempPath, 'ialog.txt');
     AssignFile(Archivo, RutaLog);
-
-    // Si el archivo existe, lo abre para agregar; si no, lo crea
     if FileExists(RutaLog) then
       Append(Archivo)
     else
       Rewrite(Archivo);
-
-    // Escribe la l?nea con fecha/hora
-    // WriteLn(Archivo, FormatDateTime('yyyy-mm-dd hh:nn:ss', Now) + ' - ' + Mensaje);
+    LOpened := True;
     WriteLn(Archivo, Mensaje);
-
-  finally
-    CloseFile(Archivo);
+  except
+    // Función de depuración — nunca propaga errores al caller
   end;
-
+  if LOpened then
+    CloseFile(Archivo);
 end;
 
 procedure TAiChat.Abort;

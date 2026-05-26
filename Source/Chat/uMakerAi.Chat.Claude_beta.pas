@@ -2375,7 +2375,7 @@ begin
     TempStream.LoadFromStream(aMediaFile.Content);
     TempStream.Position := 0;
 
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 36}
     Body.AddStream('file', TempStream, False, aMediaFile.FileName, aMediaFile.MimeType);
 {$ELSE}
     Body.AddStream('file', TempStream, aMediaFile.FileName, aMediaFile.MimeType);

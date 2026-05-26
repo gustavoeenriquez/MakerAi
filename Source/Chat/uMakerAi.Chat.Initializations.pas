@@ -1397,17 +1397,91 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('GenericLLM', 'SessionCaps', '[]');
 
   // ------------------------- MAKERAI -------------------------------------
-  // Driver para MakerAI API (compatible con OpenAI Chat Completions API).
-  // URL: https://api.cimamaker.com/v1/
+  // Driver para MakerAI API (https://api.cimamaker.com/v1/).
+  // Fase 1: compatible con OpenAI Chat Completions API.
+  // Fase 2: endpoints propios via overrides de InternalRunCompletions/ParseChat.
   // API Key: variable de entorno MAKERAI_API_KEY
-  // Ultima actualizacion: Abr 2026
+  // Ultima actualizacion: May 2026
   // ------------------------- MAKERAI -------------------------------------
 
   // --- Valores globales por defecto ---
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'Max_Tokens',  '16000');
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'Tool_Active', 'True');
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'ModelCaps',   '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'SessionCaps', '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'Max_Tokens',   '16000');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'Temperature',  '1');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'Tool_Active',  'True');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'Asynchronous', 'True');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'ModelCaps',    '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'SessionCaps',  '[cap_Image]');
+
+  // --- Modelos de Chat ---
+  // mk-pro: modelo avanzado, vision + file_reader (PDF, DOCX, XLSX, TXT, CSV, HTML)
+  Model := 'mk-pro';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Image, cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Image, cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'True');
+
+  // mk-gpt-oss-20b: modelo principal de chat, reasoning + vision + file_reader
+  Model := 'mk-gpt-oss-20b';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',    '[cap_Reasoning, cap_Image, cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps',  '[cap_Reasoning, cap_Image, cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ThinkingLevel', 'tlMedium');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active',  'True');
+
+  // mk-think: reasoning especializado + vision (confirmado May 2026)
+  Model := 'mk-think';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',    '[cap_Reasoning, cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps',  '[cap_Reasoning, cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ThinkingLevel', 'tlMedium');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active',  'True');
+
+  // mk-basic-8b: modelo ligero, sin visión, sin tools, con file_reader
+  Model := 'mk-basic-8b';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'False');
+
+  // mk-scout: routing multi-provider server-side (Llama-4-scout vía Groq / Gemini / Mistral fallback).
+  // Las rutas 1 y 2 tienen visión; todas tienen file_reader.
+  Model := 'mk-scout';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Image, cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Image, cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'True');
+
+  // mk-local-fast, mk-local-coder: modelos locales sin vision (Mistral-small-latest)
+  for Model in ['mk-local-fast', 'mk-local-coder'] do
+  begin
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'True');
+  end;
+
+  Model := 'mk-local-smart';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'True');
+
+  // mk-nanobanana family
+  for Model in ['mk-nanobanana', 'mk-nanobanana-2', 'mk-nanobanana-pro'] do
+  begin
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Image]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Image]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'False');
+  end;
+
+  // --- Generacion de imagenes ---
+  for Model in ['mk-gpt-image-1', 'mk-gpt-image-1.5', 'mk-gpt-image-1-mini', 'mk-gpt-image-2'] do
+  begin
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_GenImage]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'False');
+  end;
+
+  // --- STT (Transcripcion) ---
+  for Model in ['mk-whisper-large', 'mk-whisper-medium', 'mk-whisper-turbo'] do
+  begin
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Audio]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Audio]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'False');
+  end;
 
 End;
 
