@@ -245,8 +245,8 @@ Graph-based multi-agent workflows with full thread safety:
 - **`TAIBlackboard`** — thread-safe shared state dictionary between all nodes
 - **Link modes:** `lmFanout` (parallel broadcast), `lmConditional` (routing), `lmExpression` (binding), `lmManual`
 - **Join modes:** `jmAny` (first arrival wins), `jmAll` (wait for all inputs)
-- **Durable execution:** `TAiFileCheckpointer` persists state; resume after crashes
-- **Human-in-the-loop:** `TAiWaitApprovalTool` suspends execution for human approval
+- **Durable execution:** `IAiCheckpointer` persists full agent state between process restarts; built-in implementations: `TAiFileCheckpointer` (JSON files) and `TAiDatabaseCheckpointer` (FireDAC — SQLite, PostgreSQL, Firebird, etc.)
+- **Human-in-the-loop:** `Node.Suspend(Reason, Context)` pauses a node and saves the checkpoint; `TAiWaitApprovalTool` provides a drop-in approval tool; resume with `ResumeThread(ThreadID, NextNode, HumanInput)`
 - Supports any LLM provider via `TAiChatConnection`
 
 ### 🔗 MCP — Model Context Protocol
@@ -417,8 +417,9 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 | `036-MCPServerStdIO_AiFunction` | StdIO MCP server with AI functions |
 | `041-GeminiVeo` | Video generation with Google Veo |
 | `051-AgentDemo` | Visual agent graph builder and runner |
-| `052-AgentConsole` | Console-based agent execution |
+| `052-AgentConsole` | Console-based agent execution (conditional and parallel flows) |
 | `053-DemoAgentesTools` | Agents with integrated tool use |
+| `054-AgentCheckpointDB` | Durable agent execution: suspend/resume with `TAiDatabaseCheckpointer` (SQLite via FireDAC) |
 | `060-AIChatUI` | Next-generation `TAIChatView` + `TAIChatInput` components — full multimodal demo |
 
 ---
@@ -441,6 +442,8 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 - Fix: Agent jmAll join node premature firing on retries
 - Fix: `TChatBubble` spurious vertical scrollbar eliminated
 - New: `TChatInput.EnterAsSend` property
+- New: **`TAiDatabaseCheckpointer`** — FireDAC-based checkpoint persistence; works with SQLite, PostgreSQL, Firebird, MySQL, SQL Server, and any other FireDAC driver
+- Fix: **D11 Alexandria compatibility** — `TInterlocked.Exchange(Boolean)` (D12-only) replaced with Integer-based atomic; `AddStream(AShareOwnership)` boundary corrected to `CompilerVersion >= 36`; `THashSet<T>` boundary corrected to `CompilerVersion >= 36`
 
 ### v3.3 (February 2026)
 - New `TAiCapabilities` system (`ModelCaps` / `SessionCaps` / `ThinkingLevel`)
