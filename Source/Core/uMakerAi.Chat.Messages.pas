@@ -1007,13 +1007,10 @@ begin
                 jAudio.AddPair('data', MediaFile.Base64);
                 jAudio.AddPair('format', StringReplace(MediaFile.MimeType, 'audio/', '', [rfReplaceAll]));
 
-                JContent := TJSonArray.Create;
                 JMsg := TJSONObject.Create;
                 JMsg.AddPair('type', 'input_audio');
                 JMsg.AddPair('input_audio', jAudio);
                 JContent.Add(JMsg);
-
-                JObj.AddPair('content', JContent);
               End;
             End;
 
@@ -1028,6 +1025,18 @@ begin
             end;
           TAiFileCategory.Tfc_Text:
             Begin
+              if MediaFile.Content.Size > 0 then
+              begin
+                MediaFile.Content.Position := 0;
+                var LTextBytes: TBytes;
+                SetLength(LTextBytes, MediaFile.Content.Size);
+                MediaFile.Content.ReadBuffer(LTextBytes[0], MediaFile.Content.Size);
+                var LFileText := TEncoding.UTF8.GetString(LTextBytes);
+                JMsg := TJSONObject.Create;
+                JMsg.AddPair('type', 'text');
+                JMsg.AddPair('text', '[Archivo: ' + MediaFile.Filename + ']' + sLineBreak + LFileText);
+                JContent.Add(JMsg);
+              end;
             end;
           TAiFileCategory.Tfc_CalcSheet:
             Begin
@@ -1055,8 +1064,6 @@ begin
         End;
       End;
 
-      // TODO: Si hay im?genes + audio de usuario en el mismo mensaje, el JContent de im?genes
-      // se pierde porque el caso audio crea un nuevo JContent. Requiere redise?ar la l?gica de media mixta.
       JObj.AddPair('content', JContent);
 
     End

@@ -432,24 +432,25 @@ function TAiMistralChat.UploadFile(aMediaFile: TAiMediaFile): String;
 var
   LBody: TMultipartFormData;
   LTempStream: TMemoryStream;
+  LResponseStream: TMemoryStream;
   LResponse: IHTTPResponse;
   LUrl: string;
   LResponseObj: TJSONObject;
-  LHeaders: TNetHeaders; // A?adido
+  LHeaders: TNetHeaders;
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
     raise Exception.Create('Se necesita un TAiMediaFile con contenido para subir.');
 
-  LUrl := Url + 'files'; // URL correcta
+  LUrl := Url + 'files';
   LBody := TMultipartFormData.Create;
   LTempStream := TMemoryStream.Create;
+  LResponseStream := TMemoryStream.Create;
   try
     aMediaFile.Content.Position := 0;
     LTempStream.LoadFromStream(aMediaFile.Content);
     LTempStream.Position := 0;
 
-    // Se debe especificar el prop?sito, para OCR es 'ocr'
     LBody.AddField('purpose', 'ocr');
 
 {$IF CompilerVersion >= 35}
@@ -457,10 +458,8 @@ begin
 {$ELSE}
     LBody.AddStream('file', LTempStream, aMediaFile.Filename, aMediaFile.MimeType);
 {$ENDIF}
-    LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)]; // A?adir el Header de autorizaci?n
+    LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
 
-    Var
-    LResponseStream := TMemoryStream.Create;
     LResponse := FClient.Post(LUrl, LBody, LResponseStream, LHeaders);
 
     if LResponse.StatusCode = 200 then
@@ -468,7 +467,6 @@ begin
       LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       try
         Result := LResponseObj.GetValue<string>('id');
-        // Guardamos el ID en el objeto MediaFile para uso futuro
         aMediaFile.IDFile := Result;
       finally
         LResponseObj.Free;
@@ -482,6 +480,7 @@ begin
   finally
     LBody.Free;
     LTempStream.Free;
+    LResponseStream.Free;
   end;
 end;
 
