@@ -39,3 +39,6 @@ desktop.ini
 # Build output directories (demos)
 Demos/bin/
 Demos/bin_win/
+
+# Graphify knowledge graph (build artifact)
+graphify-out/
