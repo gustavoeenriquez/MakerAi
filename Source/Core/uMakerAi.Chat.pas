@@ -390,6 +390,7 @@ type
     FOnCallToolFunction: TOnCallToolFunction;
     FOnBeforeSendMessage: TAiChatOnBeforeSendEvent;
     FTmpToolCallBuffer: TObjectDictionary<Integer, TJSonObject>;
+    FLastExecutedToolsJSON: string; // Groq code_interpreter: executed_tools top-level field
     FCurrentPostStream: TStringStream;
     FThinking_tokens: Integer;
     FCached_tokens: Integer;
@@ -538,6 +539,7 @@ type
     Property User: String read FUser write SetUser;
     Property SystemPrompt: TStrings read FSystemPrompt write SetSystemPrompt;
     Property Completion_tokens: Integer read FCompletion_tokens write SetCompletion_tokens;
+    Property LastExecutedToolsJSON: string read FLastExecutedToolsJSON;
     Property OnReceiveThinking: TAiChatOnDataEvent read FOnReceiveThinking write SetOnReceiveThinking;
     Property OnReceiveData: TAiChatOnDataEvent read FOnReceiveDataEvent write SetOnReceiveDataEvent;
     Property OnReceiveDataEnd: TAiChatOnDataEvent read FOnReceiveDataEnd write SetOnReceiveDataEnd;
@@ -2209,6 +2211,11 @@ Var
         if aIn  > 0 then FStreamPromptTokens     := aIn;
         if aOut > 0 then FStreamCompletionTokens := aOut;
       end;
+
+      // Groq code_interpreter: executed_tools appears at top level before [DONE]
+      var JExecToolsVal: TJSonValue;
+      if jObj.TryGetValue('executed_tools', JExecToolsVal) then
+        FLastExecutedToolsJSON := JExecToolsVal.ToJSON;
     Finally
       jObj.Free;
     End;

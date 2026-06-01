@@ -1,340 +1,350 @@
-﻿program ClaudeChatTest;
+program ClaudeChatTest;
 
 {$APPTYPE CONSOLE}
 {$R *.res}
 
 uses
   System.SysUtils,
+  System.Classes,
+  System.SyncObjs,
+  System.JSON,
+  System.Net.HttpClient,
   uMakerAi.Core,
   uMakerAi.Chat,
+  uMakerAi.Chat.Messages,
   uMakerAi.Chat.AiConnection,
-  uMakerAi.Chat.Claude;
+  uMakerAi.Chat.Claude,
+  uMakerAi.Chat.MakerAi,
+  uMakerAi.Chat.Initializations;
+
+const
+  CPdfAgentes = 'medios\agentes.pdf';
+  CPdfRag     = 'medios\rag.pdf';
+
+// ─── Helper async ────────────────────────────────────────────────────────────
 
 type
-  TTestConfig = record
-    Name: string;
-    ResponseFormat: string;
-    ChatMedia: string;
-    NativeOutput: string;
-    JsonSchema: string;
-    Thinking: string;
+  TAsyncHelper = class
+  public
+    FDone:  TEvent;
+    FResult: string;
+    FError:  string;
+    constructor Create;
+    destructor  Destroy; override;
+    procedure Reset;
+    procedure OnData(const Sender: TObject; aMsg: TAiChatMessage;
+      aResponse: TJSonObject; aRole, aText: string);
+    procedure OnDataEnd(const Sender: TObject; aMsg: TAiChatMessage;
+      aResponse: TJSonObject; aRole, aText: string);
+    procedure OnError(Sender: TObject; const ErrorMsg: string;
+      AException: Exception; const AResponse: IHTTPResponse);
+    function WaitAsync: string;
   end;
 
-var
-  CCfg: TTestConfig;
-
-procedure ConfigureBase(A: TAiChatConnection);
+constructor TAsyncHelper.Create;
 begin
-  A.DriverName := 'Claude';
-  A.Model := 'claude-sonnet-4-5-20250929';
-
-  A.Params.Values['ApiKey'] := '@CLAUDE_API_KEY';
-  A.Params.Values['Url'] := 'https://api.anthropic.com/v1/';
-  A.Params.Values['Max_Tokens'] := '16000';
-  A.Params.Values['Temperature'] := '0.7';
-  A.Params.Values['ResponseTimeOut'] := '600000';
-  A.Params.Values['ThinkingLevel'] := 'tlDefault';
-
-  A.Params.Values['NativeInputFiles'] := '[Tfc_Image, Tfc_Pdf]';
-  A.Params.Values['NativeOutputFiles'] := '[]';
-  A.Params.Values['ChatMediaSupports'] := '[Tcm_Image, Tcm_Pdf]';
-  A.Params.Values['Asynchronous'] := 'False';
-  A.Params.Values['Tool_Active'] := 'False';
+  inherited;
+  FDone := TEvent.Create(nil, True, False, '');
 end;
 
-function RunSyncTest(const Cfg: TTestConfig; const Prompt: string;
-                     Attachments: array of string): string;
-var
-  Ai: TAiChatConnection;
-  MF: TAiMediaFile;
-  Res: string;
-  I: Integer;
-  MediaList: TAiMediaFilesArray;
-  FileName: string;
+destructor TAsyncHelper.Destroy;
 begin
-  Writeln;
-  Writeln('==============================');
-  Writeln('PRUEBA: ', Cfg.Name);
-  Writeln('PROMPT: ', Prompt);
-  Writeln('==============================');
+  FDone.Free;
+  inherited;
+end;
 
-  // --------------------------------------------------------------
-  // VALIDAR ARCHIVOS ANTES DE EJECUTAR LA PRUEBA
-  // --------------------------------------------------------------
-  for I := 0 to High(Attachments) do
-  begin
-    FileName := Attachments[I];
+procedure TAsyncHelper.Reset;
+begin
+  FResult := '';
+  FError  := '';
+  FDone.ResetEvent;
+end;
 
-    if not FileExists(FileName) then
-    begin
-      Writeln('⚠ ADVERTENCIA: El archivo requerido para esta prueba NO existe.');
-      Writeln('  Ruta: ', FileName);
-      Writeln('  ==> Esta prueba se omitirá.');
-      Exit('Archivo no encontrado: ' + FileName);
-    end;
-  end;
+procedure TAsyncHelper.OnData(const Sender: TObject; aMsg: TAiChatMessage;
+  aResponse: TJSonObject; aRole, aText: string);
+begin
+  Write(aText);
+end;
 
-  // --------------------------------------------------------------
-  // SI LOS ARCHIVOS EXISTEN → EJECUTAMOS LA PRUEBA NORMALMENTE
-  // --------------------------------------------------------------
+procedure TAsyncHelper.OnDataEnd(const Sender: TObject; aMsg: TAiChatMessage;
+  aResponse: TJSonObject; aRole, aText: string);
+begin
+  FResult := aText;
+  FDone.SetEvent;
+end;
+
+procedure TAsyncHelper.OnError(Sender: TObject; const ErrorMsg: string;
+  AException: Exception; const AResponse: IHTTPResponse);
+begin
+  if Assigned(AResponse) and (AResponse.StatusCode > 0) then
+    FError := 'HTTP=' + IntToStr(AResponse.StatusCode) + ' | ' + ErrorMsg
+  else
+    FError := ErrorMsg;
+  if Assigned(AException) then FError := FError + ' | ' + AException.Message;
+  FDone.SetEvent;
+end;
+
+function TAsyncHelper.WaitAsync: string;
+begin
+  while FDone.WaitFor(0) <> wrSignaled do
+    CheckSynchronize(100);
+  if FError <> '' then Result := 'ERROR: ' + FError
+  else Result := FResult;
+end;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function MakePdf(const APath: string): TAiMediaFilesArray;
+var M: TAiMediaFile;
+begin
+  M := TAiMediaFile.Create;
+  M.LoadFromFile(APath);
+  SetLength(Result, 1);
+  Result[0] := M;
+end;
+
+procedure PrintHeader(const ALabel: string);
+begin
+  WriteLn;
+  WriteLn('==============================');
+  WriteLn(ALabel);
+  WriteLn('==============================');
+end;
+
+// ─── SECCION 1: Claude PDF (sync) ────────────────────────────────────────────
+
+procedure ConfigureClaude(A: TAiChatConnection);
+begin
+  A.DriverName := 'Claude';
+  A.Model      := 'claude-sonnet-4-6';
+  A.Params.Values['ApiKey']          := '@CLAUDE_API_KEY';
+  A.Params.Values['Max_Tokens']      := '8000';
+  A.Params.Values['Temperature']     := '0.7';
+  A.Params.Values['Asynchronous']    := 'False';
+  A.Params.Values['Tool_Active']     := 'False';
+  A.Params.Values['ModelCaps']       := '[cap_Image, cap_Pdf]';
+  A.Params.Values['SessionCaps']     := '[cap_Image, cap_Pdf]';
+end;
+
+procedure Test_ClaudePdf_Agentes;
+var
+  Ai:  TAiChatConnection;
+  Res: string;
+begin
+  PrintHeader('CLAUDE — PDF Agentes (sync)');
+  if not FileExists(CPdfAgentes) then begin WriteLn('Archivo no encontrado: ' + CPdfAgentes); Exit; end;
 
   Ai := TAiChatConnection.Create(nil);
   try
-    // Configuración base estándar
-    ConfigureBase(Ai);
-
-    Ai.Params.Values['Response_format'] := Cfg.ResponseFormat;
-
-    if Cfg.ChatMedia <> '' then
-      Ai.Params.Values['ChatMediaSupports'] := Cfg.ChatMedia;
-
-    if Cfg.NativeOutput <> '' then
-      Ai.Params.Values['NativeOutputFiles'] := Cfg.NativeOutput;
-
-    if Cfg.JsonSchema <> '' then
-      Ai.Params.Values['JsonSchema'] := Cfg.JsonSchema;
-
-    if Cfg.Thinking <> '' then
-      Ai.Params.Values['ThinkingLevel'] := Cfg.Thinking;
-
-    // ------------------------------
-    // Manejo de archivos adjuntos
-    // ------------------------------
-    if Length(Attachments) > 0 then
-    begin
-      SetLength(MediaList, Length(Attachments));
-
-      for I := 0 to High(Attachments) do
-      begin
-        MF := TAiMediaFile.Create;
-        MF.LoadFromFile(Attachments[I]);
-        MediaList[I] := MF;
-      end;
-
-      Res := Ai.AddMessageAndRun(Prompt, 'user', MediaList);
-    end
-    else
-      Res := Ai.AddMessageAndRun(Prompt, 'user', []);
-
+    ConfigureClaude(Ai);
+    Res := Ai.AddMessageAndRun(
+      'Qué es TAIAgentManager y cuál es su función principal? Responde en 2 oraciones.',
+      'user', MakePdf(CPdfAgentes));
+    WriteLn(Res);
   finally
     Ai.Free;
   end;
-
-  Writeln('RESPUESTA:');
-  Writeln(Res);
-
-  Result := Res;
 end;
 
-
-//
-// =======================================
-// PRUEBAS DEL LOG (SIN SHELL/EDIT/FUNC)
-// =======================================
-//
-
-/// ///////////////////////
-// CHAT BÁSICO
-/// ///////////////////////
-
-procedure Test_Chat1;
+procedure Test_ClaudePdf_Rag;
 var
-  Cfg: TTestConfig;
+  Ai:  TAiChatConnection;
+  Res: string;
 begin
-  Cfg.Name := 'CHAT BASICO 1';
-  Cfg.ResponseFormat := 'tiaChatRfText';
-  RunSyncTest(Cfg, 'hola, cómo estas hoy?', []);
+  PrintHeader('CLAUDE — PDF RAG (sync)');
+  if not FileExists(CPdfRag) then begin WriteLn('Archivo no encontrado: ' + CPdfRag); Exit; end;
+
+  Ai := TAiChatConnection.Create(nil);
+  try
+    ConfigureClaude(Ai);
+    Res := Ai.AddMessageAndRun(
+      'Lista los tipos de RAG que soporta MakerAI según el documento.',
+      'user', MakePdf(CPdfRag));
+    WriteLn(Res);
+  finally
+    Ai.Free;
+  end;
 end;
 
-
-/// ///////////////////////
-// JSON
-/// ///////////////////////
-
-procedure Test_JSON1;
+procedure Test_ClaudePdf_MultiTurn;
 var
-  Cfg: TTestConfig;
+  Ai:  TAiChatConnection;
+  Res: string;
 begin
-  Cfg.Name := 'JSON FORMAT 1';
-  Cfg.ResponseFormat := 'tiaChatRfJson';
-  RunSyncTest(Cfg, 'genera un json de prueba de 3 lineas', []);
+  PrintHeader('CLAUDE — PDF multi-turno (sync)');
+  if not FileExists(CPdfAgentes) then begin WriteLn('Archivo no encontrado: ' + CPdfAgentes); Exit; end;
+
+  Ai := TAiChatConnection.Create(nil);
+  try
+    ConfigureClaude(Ai);
+    WriteLn('--- Turno 1 ---');
+    Res := Ai.AddMessageAndRun('Qué es TAIBlackboard?', 'user', MakePdf(CPdfAgentes));
+    WriteLn(Res);
+    WriteLn('--- Turno 2 ---');
+    Res := Ai.AddMessageAndRun('Dame un ejemplo corto de uso de TAIBlackboard.', 'user', []);
+    WriteLn(Res);
+  finally
+    Ai.Free;
+  end;
 end;
 
+// ─── SECCION 2: MakerAI PDF ───────────────────────────────────────────────────
 
-/// ///////////////////////
-// JSON SCHEMA
-/// ///////////////////////
+procedure SetMakerAiCaps(Chat: TAiMakerAiChat; const AModel: string);
+begin
+  Chat.ApiKey    := '@MAKERAI_API_KEY';
+  Chat.Model     := AModel;
+  Chat.Tool_Active := False;
 
-procedure Test_JSONSchema1;
+  if SameText(AModel, 'mk-gpt-oss-20b') then
+  begin
+    Chat.ModelCaps   := [cap_Reasoning, cap_Image, cap_Pdf];
+    Chat.SessionCaps := [cap_Reasoning, cap_Image, cap_Pdf];
+  end
+  else if SameText(AModel, 'mk-basic-8b') then
+  begin
+    Chat.ModelCaps   := [cap_Pdf];
+    Chat.SessionCaps := [cap_Pdf];
+  end
+  else // mk-scout, mk-pro, etc.
+  begin
+    Chat.ModelCaps   := [cap_Image, cap_Pdf];
+    Chat.SessionCaps := [cap_Image, cap_Pdf];
+  end;
+end;
+
+procedure OnMakerAiProgress(AStep, AFile: string; APct: Integer);
+begin
+  WriteLn(Format('  [progreso] %-10s  %s  %d%%', [AStep, AFile, APct]));
+end;
+
+procedure Test_MakerAiPdf_Sync;
 var
-  Cfg: TTestConfig;
+  Chat: TAiMakerAiChat;
+  Res:  string;
+  H:    TAsyncHelper;
 begin
-  Cfg.Name := 'JSON SCHEMA 1';
-  Cfg.ResponseFormat := 'tiaChatRfJsonSchema';
-  Cfg.JsonSchema := '{ "type":"object","properties":{"nombre":{"type":"string"},"edad":{"type":"integer"},"email":{"type":"string","format":"email"}},"required":["nombre","email"] }';
+  PrintHeader('MAKERAI mk-scout — PDF Agentes (sync)');
+  if not FileExists(CPdfAgentes) then begin WriteLn('Archivo no encontrado: ' + CPdfAgentes); Exit; end;
 
-  RunSyncTest(Cfg, 'genera un json de prueba', []);
+  H := TAsyncHelper.Create;
+  Chat := TAiMakerAiChat.Create(nil);
+  try
+    SetMakerAiCaps(Chat, 'mk-scout');
+    Chat.Asynchronous := False;
+    Chat.OnError      := H.OnError;
+    Chat.OnProgress   := OnMakerAiProgress;
+    H.Reset;
+    Res := Chat.AddMessageAndRun(
+      'Qué es TAIAgentManager y cuál es su función principal? Responde en 2 oraciones.',
+      'user', MakePdf(CPdfAgentes));
+    if H.FError <> '' then WriteLn('ERROR: ' + H.FError)
+    else WriteLn(Res);
+  finally
+    Chat.Free;
+    H.Free;
+  end;
 end;
 
-
-/// ///////////////////////
-// WEB SEARCH
-/// ///////////////////////
-
-procedure Test_WebSearch1;
+procedure Test_MakerAiPdf_Async;
 var
-  Cfg: TTestConfig;
+  Chat: TAiMakerAiChat;
+  Res:  string;
+  H:    TAsyncHelper;
 begin
-  CCfg.Name := 'WEB SEARCH 1';
-  Cfg.ResponseFormat := 'tiaChatRfText';
-  Cfg.ChatMedia := '[Tcm_WebSearch, Tcm_Image, Tcm_Pdf]';
+  PrintHeader('MAKERAI mk-scout — PDF RAG (async)');
+  if not FileExists(CPdfRag) then begin WriteLn('Archivo no encontrado: ' + CPdfRag); Exit; end;
 
-  RunSyncTest(Cfg, 'busca en internet sobre MakerAi Delphi Suite', []);
+  H := TAsyncHelper.Create;
+  Chat := TAiMakerAiChat.Create(nil);
+  try
+    SetMakerAiCaps(Chat, 'mk-scout');
+    Chat.Asynchronous     := True;
+    Chat.OnReceiveData    := H.OnData;
+    Chat.OnReceiveDataEnd := H.OnDataEnd;
+    Chat.OnError          := H.OnError;
+    Chat.OnProgress       := OnMakerAiProgress;
+    H.Reset;
+    Chat.AddMessageAndRun(
+      'Lista los tipos de RAG que soporta MakerAI según el documento.',
+      'user', MakePdf(CPdfRag));
+    Res := H.WaitAsync;
+    WriteLn;
+    if Res.StartsWith('ERROR:') then WriteLn(Res);
+  finally
+    Chat.Free;
+    H.Free;
+  end;
 end;
 
-
-/// ///////////////////////
-// CODE INTERPRETER
-/// ///////////////////////
-
-procedure Test_CodeInterpreter1;
+procedure Test_MakerAiPdf_MultiTurn;
 var
-  Cfg: TTestConfig;
+  Chat: TAiMakerAiChat;
+  Res:  string;
+  H:    TAsyncHelper;
 begin
-  Cfg.Name := 'CODE INTERPRETER 1';
-  Cfg.ResponseFormat := 'tiaChatRfText';
-  Cfg.ChatMedia := '[Tcm_code_interpreter, Tcm_Image, Tcm_Pdf]';
+  PrintHeader('MAKERAI mk-gpt-oss-20b — PDF multi-turno (async)');
+  if not FileExists(CPdfAgentes) then begin WriteLn('Archivo no encontrado: ' + CPdfAgentes); Exit; end;
 
-  RunSyncTest(Cfg, 'Genera un archivo .wav con un tono de 1500 hz', []);
+  H := TAsyncHelper.Create;
+  Chat := TAiMakerAiChat.Create(nil);
+  try
+    SetMakerAiCaps(Chat, 'mk-gpt-oss-20b');
+    Chat.Asynchronous     := True;
+    Chat.OnReceiveData    := H.OnData;
+    Chat.OnReceiveDataEnd := H.OnDataEnd;
+    Chat.OnError          := H.OnError;
+    Chat.OnProgress       := OnMakerAiProgress;
+
+    // Turno 1: con PDF
+    WriteLn('--- Turno 1 (con PDF) ---');
+    H.Reset;
+    Chat.AddMessageAndRun('Qué es TAIBlackboard y para qué se usa?',
+      'user', MakePdf(CPdfAgentes));
+    Res := H.WaitAsync;
+    WriteLn;
+    if Res.StartsWith('ERROR:') then begin WriteLn(Res); Exit; end;
+
+    // Turno 2: sin PDF (misma sesión → session_id preservado)
+    WriteLn;
+    WriteLn('--- Turno 2 (sin PDF, follow-up) ---');
+    H.Reset;
+    Chat.AddMessageAndRun('Dame un ejemplo corto de uso de TAIBlackboard.', 'user', []);
+    Res := H.WaitAsync;
+    WriteLn;
+    if Res.StartsWith('ERROR:') then WriteLn(Res)
+    else if Res.IsEmpty then WriteLn('[RESPUESTA VACIA]');
+  finally
+    Chat.Free;
+    H.Free;
+  end;
 end;
 
-
-/// ///////////////////////
-// EXTRACT TEXT
-/// ///////////////////////
-
-procedure Test_ExtractText1;
-var
-  Cfg: TTestConfig;
-begin
-  Cfg.Name := 'EXTRACT TEXT FILE 1';
-  Cfg.ResponseFormat := 'tiaChatRfText';
-  Cfg.NativeOutput := '[tfc_ExtracttextFile]';
-
-  RunSyncTest(Cfg, 'genera un html básico, un hola mundo', []);
-end;
-
-procedure Test_ExtractText2;
-var
-  Cfg: TTestConfig;
-begin
-  Cfg.Name := 'EXTRACT TEXT FILE 2';
-  Cfg.ResponseFormat := 'tiaChatRfText';
-  Cfg.NativeOutput := '[tfc_ExtracttextFile]';
-
-  RunSyncTest(Cfg, 'genera un código en pascal, un hola mundo en modo consola', []);
-end;
-
-/// ///////////////////////
-// VISION
-/// ///////////////////////
-
-procedure Test_VisionImage;
-var
-  Cfg: TTestConfig;
-begin
-  Cfg.Name := 'VISION IMAGEN';
-  Cfg.ResponseFormat := 'tiaChatRfText';
-  RunSyncTest(Cfg, 'describe esta imagen', ['medios/patito.png']);
-end;
-
-procedure Test_VisionPDF;
-var
-  Cfg: TTestConfig;
-begin
-  Cfg.Name := 'VISION PDF';
-  Cfg.ResponseFormat := 'tiaChatRfText';
-  RunSyncTest(Cfg, 'extrae el contenido de esta factura', ['medios/factura.pdf']);
-end;
-
-procedure Test_VisionPDFJson;
-var
-  Cfg: TTestConfig;
-begin
-  Cfg.Name := 'VISION PDF JSON';
-  Cfg.ResponseFormat := 'tiaChatRfJson';
-  Cfg.NativeOutput := '[tfc_ExtracttextFile]';
-
-  RunSyncTest(Cfg, 'extrae el contenido de esta factura en un json', ['medios/factura.pdf']);
-end;
-
-/// ///////////////////////
-// THINKING
-/// ///////////////////////
-
-procedure Test_Thinking;
-var
-  Cfg: TTestConfig;
-begin
-  Cfg.Name := 'THINKING HIGH';
-  Cfg.ResponseFormat := 'tiaChatRfText';
-  Cfg.Thinking := 'tlHigh';
-
-  RunSyncTest(Cfg, 'si tengo 10 velas y las enciendo todas...', []);
-end;
-
-/// ///////////////////////
-// AGRADECIMIENTOS
-/// ///////////////////////
-
-procedure Test_Agradecimientos;
-var
-  Cfg: TTestConfig;
-begin
-  Cfg.Name := 'AGRADECIMIENTOS';
-  Cfg.ResponseFormat := 'tiaChatRfText';
-
-  RunSyncTest(Cfg, 'agradece a los que están viendo este video por vernos y llegar hasta el final', []);
-end;
-
-
-//
-// ======================
-// EJECUCIÓN GENERAL
-// ======================
-//
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 begin
   try
-    Writeln('=== EJECUTANDO PRUEBAS ===');
+    WriteLn('=== PRUEBAS PDF — Claude + MakerAI ===');
 
-    Test_Chat1;
+    // ── Claude ──
+    WriteLn;
+    WriteLn('████ SECCION 1: Claude PDF ████');
+    Test_ClaudePdf_Agentes;
+    Test_ClaudePdf_Rag;
+    Test_ClaudePdf_MultiTurn;
 
-    Test_JSON1;
+    // ── MakerAI ──
+    WriteLn;
+    WriteLn('████ SECCION 2: MakerAI PDF ████');
+    Test_MakerAiPdf_Sync;
+    Test_MakerAiPdf_Async;
+    Test_MakerAiPdf_MultiTurn;
 
-    Test_JSONSchema1;
-
-    Test_WebSearch1;
-
-    Test_CodeInterpreter1;
-
-    Test_ExtractText1;
-    Test_ExtractText2;
-
-    Test_VisionImage;
-    Test_VisionPDF;
-    Test_VisionPDFJson;
-
-    Test_Thinking;
-    Test_Agradecimientos;
-
-    Writeln('');
-    Writeln('=== FIN DE PRUEBAS ===');
-    Readln;
+    WriteLn;
+    WriteLn('=== FIN DE PRUEBAS ===');
 
   except
     on E: Exception do
-      Writeln('ERROR: ', E.Message);
+      WriteLn('FATAL: ' + E.ClassName + ': ' + E.Message);
   end;
-
 end.

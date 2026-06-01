@@ -194,6 +194,26 @@ begin
       End;
     End;
 
+    // Groq native code_interpreter — inject {"type":"code_interpreter"} into tools array
+    if cap_CodeInterpreter in ModelConfig.ModelCaps then
+    begin
+      var JExistingTools := AJSONObject.GetValue('tools') as TJSonArray;
+      if Assigned(JExistingTools) then
+      begin
+        var JCodeTool := TJSonObject.Create;
+        JCodeTool.AddPair('type', 'code_interpreter');
+        JExistingTools.Add(JCodeTool);
+      end
+      else
+      begin
+        var JToolsArr := TJSonArray.Create;
+        var JCodeTool := TJSonObject.Create;
+        JCodeTool.AddPair('type', 'code_interpreter');
+        JToolsArr.Add(JCodeTool);
+        AJSONObject.AddPair('tools', JToolsArr);
+      end;
+    end;
+
     AJSONObject.AddPair('messages', GetMessages);
 
     AJSONObject.AddPair('model', LModel);
