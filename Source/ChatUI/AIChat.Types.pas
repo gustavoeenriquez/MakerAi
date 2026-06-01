@@ -319,9 +319,15 @@ begin
   Result.AddPair('fileName',   FFileName);
   Result.AddPair('localPath',  FLocalPath);
   Result.AddPair('mimeType',   FMimeType);
+{$IF CompilerVersion < 35}
+  Result.AddPair('fileKind',   TJSONNumber.Create(Integer(FFileKind)));
+  Result.AddPair('fileSize',   TJSONNumber.Create(FFileSize));
+  Result.AddPair('durationMs', TJSONNumber.Create(FDurationMs));
+{$ELSE}
   Result.AddPair('fileKind',   Integer(FFileKind));
   Result.AddPair('fileSize',   FFileSize);
   Result.AddPair('durationMs', FDurationMs);
+{$IFEND}
   Result.AddPair('thumbPath',  FThumbnailPath);
   if AIncludeData and (Length(FData) > 0) then
     Result.AddPair('data', TNetEncoding.Base64.EncodeBytesToString(FData));

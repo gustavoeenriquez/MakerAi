@@ -1086,6 +1086,10 @@ var
   TextLen, PropsLen: Cardinal;
   ActiveCount: Int64;
   EntB, IDB, ModB, TxtB, PropB, EmbB: TBytes;
+{$IF CompilerVersion < 36}
+  // Delphi 10.4/11: las variables inline no admiten tipos array anónimos
+  Hdr: array[0..MKVEC_HEADER_SIZE-1] of Byte;
+{$IFEND}
 
   procedure ReadBytes(var Dest: TBytes; ALen: Integer);
   begin
@@ -1103,7 +1107,9 @@ begin
     TempStream := TFileStream.Create(TempPath, fmCreate);
     try
       // Header provisional
+{$IF CompilerVersion >= 36}
       var Hdr: array[0..MKVEC_HEADER_SIZE-1] of Byte;
+{$IFEND}
       FillChar(Hdr, MKVEC_HEADER_SIZE, 0);
       Hdr[0] := MKVEC_MAGIC_0; Hdr[1] := MKVEC_MAGIC_1;
       Hdr[2] := MKVEC_MAGIC_2; Hdr[3] := MKVEC_MAGIC_3;

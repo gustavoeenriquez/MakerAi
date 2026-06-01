@@ -182,7 +182,7 @@ begin
       LEffective := Tool_choice;
       if LEffective = '' then LEffective := 'auto';
 
-      LChoiceVal := TJSonValue.ParseJSONValue(LEffective);
+      LChoiceVal := TJSONObject.ParseJSONValue(LEffective);
       if Assigned(LChoiceVal) and (LChoiceVal is TJSonObject) then
         LJson.AddPair('tool_choice', LChoiceVal)
       else

@@ -297,6 +297,21 @@ const
   CLR_MIC_TALK  = $FFFF3B30;
   CLR_MIC_AI    = $FF007AFF;
 
+{$IF CompilerVersion < 36}
+// Delphi 10.4/11: TFile.GetSize no existe; helper compatible vía TFileStream
+function GetFileSizeCompat(const AFileName: string): Int64;
+var
+  FS: TFileStream;
+begin
+  FS := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
+  try
+    Result := FS.Size;
+  finally
+    FS.Free;
+  end;
+end;
+{$IFEND}
+
 // ── Palette factory functions ─────────────────────────────────────────────────
 
 function LightPalette: TACIPalette;
@@ -1403,7 +1418,11 @@ begin
   Att.FileKind := TChatFileKind.fkImage;
   Att.MimeType := 'image/png';
   if TFile.Exists(StorePath) then
+{$IF CompilerVersion < 36}
+    Att.FileSize := GetFileSizeCompat(StorePath);
+{$ELSE}
     Att.FileSize := TFile.GetSize(StorePath);
+{$IFEND}
   AddChip(Att);
 end;
 
@@ -1474,6 +1493,9 @@ procedure TAIChatInput.NotifyVoiceSpeechEnd(AIsValid: Boolean;
   AAudioStream: TMemoryStream);
 var
   AudioCopy: TMemoryStream;
+{$IF CompilerVersion < 35}
+  SelfRef: TAIChatInput;
+{$IFEND}
 begin
   if AIsValid and (AAudioStream <> nil) and (AAudioStream.Size > 0) then
   begin
@@ -1482,7 +1504,14 @@ begin
     AAudioStream.Position := 0;
     AudioCopy.CopyFrom(AAudioStream, AAudioStream.Size);
     AudioCopy.Position := 0;
+{$IF CompilerVersion < 35}
+    // Delphi 10.4: capturar Self en una local evita E2250 al usar ForceQueue
+    // con una closure que captura Self implícitamente
+    SelfRef := Self;
+    TThread.ForceQueue(nil, procedure begin SelfRef.DoSendWithAudio(AudioCopy); end);
+{$ELSE}
     TThread.ForceQueue(nil, procedure begin DoSendWithAudio(AudioCopy); end);
+{$IFEND}
   end;
   FMicState := TAIChatVoiceState.vsListening;
   Redraw;
@@ -1529,7 +1558,11 @@ begin
   Att.FileName := System.IOUtils.TPath.GetFileName(APath);
   Att.FileKind := ExtToFileKind(Ext);
   Att.MimeType := ExtToMime(Ext);
+{$IF CompilerVersion < 36}
+  Att.FileSize := GetFileSizeCompat(APath);
+{$ELSE}
   Att.FileSize := TFile.GetSize(APath);
+{$IFEND}
   AddChip(Att);
 end;
 

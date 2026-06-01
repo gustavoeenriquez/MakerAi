@@ -34,9 +34,9 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections, System.JSON,
   Rest.JSON, REST.Json.Types, System.Net.Mime, System.NetEncoding, System.TypInfo, System.Types, System.SyncObjs,
-{$IF CompilerVersion < 35}
-  uJSONHelper,
-{$ENDIF}
+//{$IF CompilerVersion < 35}
+//  uJSONHelper,
+//{$ENDIF}
   uMakerAi.Core; // Asumiendo que TAiMediaFiles, TAiWebSearch y TAiMetadata est?n aqu?
 
 Type
