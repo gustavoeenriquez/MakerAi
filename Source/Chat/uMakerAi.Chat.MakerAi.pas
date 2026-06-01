@@ -30,8 +30,8 @@
 // - GitHub: https://github.com/gustavoeenriquez/
 
 // Driver para MakerAI API (https://api.cimamaker.com/v1/).
-// El servidor devuelve JSON completo (no SSE) aunque stream=true esté en el request.
-// OnRequestCompletedEvent intercepta el buffer sin procesar y llama ParseChat.
+// El servidor envía SSE real cuando stream=true (default en Asynchronous=True).
+// OnInternalReceiveData filtra mk_progress chunks antes de que la base los procese.
 //
 // PDFs/documentos: ToJSon base deja vacío el caso Tfc_Pdf. Este driver inyecta
 // el content part {type:"file", file:{filename, file_data}} en InitChatCompletions.
@@ -39,6 +39,10 @@
 //
 // session_id: campo extra en el root del payload, igual en todos los turnos de
 // la conversación. Se renueva automáticamente en cada NewChat.
+//
+// mk_progress: chunks SSE de progreso (extracting/embedding/querying) que el
+// servidor emite mientras procesa PDFs. Tienen delta:{} — se filtran aquí y se
+// notifican vía OnProgress sin pasarlos al acumulador de tokens de la base.
 
 unit uMakerAi.Chat.MakerAi;
 
@@ -61,12 +65,15 @@ uses
 type
   TAiMakerAiChat = class(TAiChat)
   private
-    FSessionId: string;
+    FSessionId:   string;
+    FOnProgress:  TProc<string, string, Integer>;
     procedure ResetSessionId;
+    procedure HandleStreamDone;
   protected
     Function InitChatCompletions: String; Override;
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Override;
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
+    Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
     Procedure OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse); Override;
   public
     constructor Create(Sender: TComponent); override;
@@ -74,6 +81,11 @@ type
     class function GetDriverName: string; override;
     class procedure RegisterDefaultParams(Params: TStrings); override;
     class function CreateInstance(Sender: TComponent): TAiChat; override;
+    // Notifica el progreso mientras el servidor procesa un PDF:
+    //   step  = 'extracting' | 'embedding' | 'querying'
+    //   aFile = nombre del archivo
+    //   pct   = porcentaje de avance del paso (0-100)
+    property OnProgress: TProc<string, string, Integer> read FOnProgress write FOnProgress;
   published
   end;
 
@@ -318,83 +330,167 @@ begin
   MKLog('SEND-END', 'sync result len=' + IntToStr(Length(Result)));
 end;
 
-Procedure TAiMakerAiChat.OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse);
+procedure TAiMakerAiChat.HandleStreamDone;
+// Called when [DONE] is received from the server.
+// Builds a fake OpenAI-style response JSON from the accumulated FLastContent and calls
+// ParseChat, which fires DoStateChange(acsFinished) + FOnReceiveDataEnd exactly once.
+//
+// IMPORTANT: TempMsg is added to FMessages BEFORE ParseChat fires FOnReceiveDataEnd.
+// ParseChat calls events directly (no TThread.Queue), so the main thread could wake up
+// immediately and start Turn 2. Without the pre-add, InitChatCompletions would miss
+// the assistant reply (race condition in multi-turn async).
 var
-  LJson: String;
-  LParsed: TJSonValue;
-  jObj: TJSonObject;
+  LFakeJson, LFakeChoice, LFakeMsg, LFakeUsage: TJSONObject;
+  LFakeChoices: TJSONArray;
+  LRole: string;
   TempMsg: TAiChatMessage;
-  LChoices: TJSonArray;
-  LFirstChoice, LMessage: TJSonObject;
-  LContent: String;
 begin
-  // La base maneja errores HTTP (non-200) y libera el stream.
-  inherited OnRequestCompletedEvent(Sender, aResponse);
+  LRole := FTmpRole;
+  if LRole = '' then LRole := 'assistant';
 
-  // Si hubo error, la base ya lo gestionó.
-  if Assigned(aResponse) and ((aResponse.StatusCode < 200) or (aResponse.StatusCode > 299)) then
-    Exit;
+  LFakeJson := TJSONObject.Create;
+  try
+    LFakeJson.AddPair('id', 'stream-' + IntToStr(TThread.GetTickCount));
+    LFakeJson.AddPair('model', Model);
 
-  // En modo síncrono el base class lee el body directamente vía Post() bloqueante.
-  // Procesar FTmpResponseText aquí causaría double-fire de eventos (DoDataEnd vacío
-  // antes de que el segundo Run() de function calling complete).
+    LFakeUsage := TJSONObject.Create;
+    LFakeUsage.AddPair('prompt_tokens',     TJSONNumber.Create(0));
+    LFakeUsage.AddPair('completion_tokens', TJSONNumber.Create(0));
+    LFakeUsage.AddPair('total_tokens',      TJSONNumber.Create(0));
+    LFakeJson.AddPair('usage', LFakeUsage);
+
+    LFakeMsg := TJSONObject.Create;
+    LFakeMsg.AddPair('role', LRole);
+    if FLastContent <> '' then
+      LFakeMsg.AddPair('content', FLastContent);
+
+    LFakeChoice := TJSONObject.Create;
+    LFakeChoice.AddPair('message',       LFakeMsg);
+    LFakeChoice.AddPair('finish_reason', 'stop');
+
+    LFakeChoices := TJSONArray.Create;
+    LFakeChoices.Add(LFakeChoice);
+    LFakeJson.AddPair('choices', LFakeChoices);
+
+    TempMsg := TAiChatMessage.Create('', LRole);
+    try
+      TempMsg.Id := FMessages.Count + 1;
+      FMessages.Add(TempMsg);
+      var LHistMsg := TempMsg;
+      TempMsg := nil;  // FMessages es owner
+
+      ParseChat(LFakeJson, LHistMsg);
+
+      if LHistMsg.Prompt = '' then
+        FMessages.Delete(FMessages.Count - 1);
+    finally
+      if Assigned(TempMsg) then TempMsg.Free;
+    end;
+
+    FLastReasoning := '';
+    FBusy := False;
+  finally
+    LFakeJson.Free;
+  end;
+end;
+
+Procedure TAiMakerAiChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
+var
+  LBuffer, LFullLine, LJsonStr: string;
+  LChunk, LProgress: TJSONObject;
+  LStep, LFile: string;
+  LPct: Integer;
+  P: Integer;
+  LDoneReceived: Boolean;
+begin
+  // In sync mode there's nothing to intercept; let the base class exit early.
   if not Asynchronous then
   begin
-    FTmpResponseText := '';
+    inherited;
     Exit;
   end;
 
-  // Detectar buffer sin procesar: el servidor envió JSON completo sin SSE (\n).
-  LJson := Trim(FTmpResponseText);
-  if (LJson = '') or (LJson[1] <> '{') then
-    Exit;
+  LBuffer := FResponse.DataString;
+  FResponse.Clear;
+  LDoneReceived := False;
 
-  MKLog('COMPLETE-JSON', 'Procesando JSON no-SSE, len=' + IntToStr(Length(LJson)));
-  FTmpResponseText := '';  // consumido
-
-  LParsed := TJSonObject.ParseJSONValue(LJson);
-  if not (LParsed is TJSonObject) then
+  while Pos(#10, LBuffer) > 0 do
   begin
-    FreeAndNil(LParsed);
-    MKLog('COMPLETE-JSON', 'ERROR: JSON inválido');
-    Exit;
-  end;
+    P := Pos(#10, LBuffer);
+    LFullLine := Copy(LBuffer, 1, P - 1);
+    Delete(LBuffer, 1, P);
 
-  jObj := TJSonObject(LParsed);
-  try
-    // Extraer texto para disparar OnReceiveData → AppendToken en la UI.
-    LContent := '';
-    if jObj.TryGetValue<TJSonArray>('choices', LChoices) and
-       Assigned(LChoices) and (LChoices.Count > 0) then
+    LJsonStr := Trim(LFullLine);
+    if LJsonStr.StartsWith('data:') then
+      LJsonStr := Trim(Copy(LJsonStr, 6, Length(LJsonStr)));
+
+    // [DONE]: intercept here — we fire events ourselves in HandleStreamDone to avoid
+    // double-firing (ParseChat inside the base [DONE] handler fires them too) and to
+    // fix the race condition (we add to FMessages before ParseChat fires FOnReceiveDataEnd).
+    if LJsonStr = '[DONE]' then
     begin
-      LFirstChoice := LChoices.Items[0] as TJSonObject;
-      if Assigned(LFirstChoice) and LFirstChoice.TryGetValue<TJSonObject>('message', LMessage) then
-        LMessage.TryGetValue<String>('content', LContent);
+      LDoneReceived := True;
+      Continue;
     end;
 
-    TempMsg := TAiChatMessage.Create('', 'assistant');
-    try
-      // Primero OnReceiveData con el texto completo (AppendToken en la UI).
-      if LContent <> '' then
-        DoData(TempMsg, 'assistant', LContent, jObj);
-
-      // ParseChat rellena TempMsg y dispara DoStateChange(acsFinished) + FOnReceiveDataEnd.
-      ParseChat(jObj, TempMsg);
-
-      // Agregar a historial solo si fue respuesta normal (Prompt relleno por ParseChat).
-      if TempMsg.Prompt <> '' then
-      begin
-        TempMsg.Id := FMessages.Count + 1;
-        FMessages.Add(TempMsg);
-        TempMsg := nil;
+    // mk_progress: server progress notification during PDF processing — fire OnProgress
+    // and skip; do not pass empty delta:{} to the token accumulator.
+    if (Length(LJsonStr) >= 2) and (LJsonStr[1] = '{') then
+    begin
+      LChunk := TJSONObject.ParseJSONValue(LJsonStr) as TJSONObject;
+      if Assigned(LChunk) then
+      try
+        if LChunk.TryGetValue<TJSONObject>('mk_progress', LProgress) then
+        begin
+          LStep := ''; LFile := ''; LPct := 0;
+          LProgress.TryGetValue<string>('step', LStep);
+          LProgress.TryGetValue<string>('file', LFile);
+          LProgress.TryGetValue<Integer>('pct', LPct);
+          MKLog('PROGRESS', 'step=' + LStep + ' file=' + LFile + ' pct=' + IntToStr(LPct));
+          if Assigned(FOnProgress) then
+          begin
+            var CStep := LStep;
+            var CFile := LFile;
+            var CPct  := LPct;
+            var CHandler := FOnProgress;
+            TThread.Queue(nil, procedure
+            begin
+              CHandler(CStep, CFile, CPct);
+            end);
+          end;
+          Continue;
+        end;
+      finally
+        LChunk.Free;
       end;
-    finally
-      if Assigned(TempMsg) then
-        TempMsg.Free;
     end;
-  finally
-    jObj.Free;
+
+    FTmpResponseText := FTmpResponseText + LFullLine + #10;
   end;
+
+  // Partial last line without #10 — keep in buffer (may complete in next chunk).
+  if LBuffer <> '' then
+    FTmpResponseText := FTmpResponseText + LBuffer;
+
+  // FResponse is empty; inherited reads '' (no change to FTmpResponseText), then
+  // processes our pre-filtered lines — fires DoData for each delta token.
+  inherited OnInternalReceiveData(Sender, AContentLength, AReadCount, AAbort);
+
+  // Handle [DONE] after inherited so FLastContent is fully updated from this chunk.
+  if LDoneReceived and not AAbort then
+    HandleStreamDone;
+end;
+
+Procedure TAiMakerAiChat.OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse);
+begin
+  // Delegate HTTP-error handling and stream cleanup to the base class.
+  inherited OnRequestCompletedEvent(Sender, aResponse);
+
+  // Async (stream=true): OnInternalReceiveData processed all SSE chunks;
+  // the [DONE] sentinel already triggered ParseChat via the base class.
+  // Sync (stream=false): InternalRunCompletions called ParseChat directly.
+  // Either way there is nothing left to do — just ensure the buffer is clear.
+  FTmpResponseText := '';
 end;
 
 initialization

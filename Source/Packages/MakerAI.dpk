@@ -118,6 +118,7 @@ contains
   uMakerAi.Ollama.Ocr in '..\Tools\uMakerAi.Ollama.Ocr.pas',
   uMakerAi.Ollama.Vision in '..\Tools\uMakerAi.Ollama.Vision.pas',
   uMakerAi.Gemini.Speech in '..\Tools\uMakerAi.Gemini.Speech.pas',
+  uMakerAi.ElevenLabs.Speech in '..\Tools\uMakerAi.ElevenLabs.Speech.pas',
   uMakerAi.WebSocket.Client in '..\WebSocket\uMakerAi.WebSocket.Client.pas',
   uMakerAi.WebSocket.SChannel in '..\WebSocket\uMakerAi.WebSocket.SChannel.pas',
   uMakerAi.WebSocket.OpenSSL in '..\WebSocket\uMakerAi.WebSocket.OpenSSL.pas',
