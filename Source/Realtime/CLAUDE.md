@@ -4,7 +4,11 @@ This file provides guidance to Claude Code when working with the Realtime module
 
 ## Overview
 
-The `Source/Realtime/` module provides real-time Speech-to-Text (STT) streaming via WebSocket. It is a **parallel hierarchy** to `TAiChat` — it does not inherit from it. The design mirrors the Chat module: a base class, provider-specific drivers, and a universal connector.
+The `Source/Realtime/` module provides real-time audio streaming via WebSocket. It is a **parallel hierarchy** to `TAiChat` — it does not inherit from it. The design mirrors the Chat module: a base class, provider-specific drivers, and a universal connector.
+
+Two types of drivers exist:
+- **STT-only** (OpenAI, Gemini): transcribe user audio → fire `OnTranscriptDelta` / `OnTranscriptCompleted`
+- **Full voice conversation** (MakerAI): STT + LLM + TTS in one WebSocket — also fires `OnAssistantText`, `OnAudioChunk`, `OnAudioDone`
 
 Demos:
 - Console: `Demos/Console/Demos09-Realtime/01-RealtimeSTT/`
@@ -20,14 +24,16 @@ Demos:
 | `uMakerAi.Realtime.AiConnection.pas` | `TAiRealtimeConnection` | Universal connector (same pattern as `TAiChatConnection`) |
 | `uMakerAi.Realtime.OpenAI.pas` | `TAiOpenAiRealtimeSTT` | OpenAI driver — **complete** |
 | `uMakerAi.Realtime.Gemini.pas` | `TAiGeminiRealtimeSTT` | Gemini driver — **stub, pending** |
+| `uMakerAi.Realtime.MakerAi.pas` | `TAiMakerAiRealtimeChat` | MakerAI driver — **complete** (STT+LLM+TTS) |
 | `uMakerAi.Realtime.WebSocket.pas` | `TAiRealtimeWSClient` (shim → `TAiWSClient`) | Compatibility alias; implementation in `Source/WebSocket/` |
 
 ### Class Hierarchy
 
 ```
 TAiRealtimeBase (abstract)
-  ├── TAiOpenAiRealtimeSTT   — wss://api.openai.com/v1/realtime, 24 kHz
-  ├── TAiGeminiRealtimeSTT   — 16 kHz [STUB]
+  ├── TAiOpenAiRealtimeSTT    — wss://api.openai.com/v1/realtime, 24 kHz  (STT only)
+  ├── TAiGeminiRealtimeSTT    — 16 kHz [STUB]
+  ├── TAiMakerAiRealtimeChat  — wss://api.cimamaker.com/v1/audio/realtime, 24 kHz  (STT+LLM+TTS)
   └── TAiRealtimeConnection  — universal connector (wraps concrete driver)
 ```
 

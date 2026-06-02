@@ -238,6 +238,7 @@
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.OpenAI.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.Gemini.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.AiConnection.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.MakerAi.pas"/>
         <None Include="..\RAG\RagGraph_Prompt_Example.md"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
