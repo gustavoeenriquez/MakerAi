@@ -231,11 +231,19 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - compound-beta/mini: web search + code interpreter nativos, `Tool_Active=False`
 
 ### Mistral
-- Vision: todos los modelos hereden el global `ModelCaps=[cap_Image]` (Mistral Large/Medium/Small 3.x)
-- Reasoning: magistral-medium/small → `ModelCaps=[cap_Reasoning]`, `ThinkingLevel=tlMedium`
-- Código: devstral-latest / devstral-small-latest → `ModelCaps=[]` (sin visión)
-- TTS: voxtral-mini/small-latest → `ModelCaps=[cap_Audio]`, `Tool_Active=False`
-- OCR: mistral-ocr-latest → `ModelCaps=[cap_Pdf]`, `Tool_Active=False`
+**Modelos activos (jun 2026):**
+- `mistral-large-latest` → Large 3 (v25.12), 256K ctx, vision + tools. Hereda defaults `[cap_Image]`
+- `mistral-medium-latest` → **Medium 3.5** (v26.04), 256K ctx, vision + reasoning_effort + tools. `ModelCaps=[cap_Image,cap_Reasoning]`, `ThinkingLevel=tlMedium`
+- `mistral-small-latest` → **Small 4** (v26.03), 256K ctx, vision + reasoning_effort + tools. `ModelCaps=[cap_Image,cap_Reasoning]`, `ThinkingLevel=tlMedium`
+- Ministral: `ministral-14b/8b/3b-latest` → 262K ctx, vision + tools. Hereda defaults
+- Reasoning dedicado: `magistral-medium/small-latest` → `ModelCaps=[cap_Reasoning]`, `ThinkingLevel=tlMedium` (usa `prompt_mode: 'reasoning'`)
+- Código: `devstral-latest` / `devstral-small-latest` → `ModelCaps=[]` (sin visión)
+- STT: `voxtral-mini/small-latest` → `ModelCaps=[cap_Audio]`, `Tool_Active=False`
+- OCR: `mistral-ocr-latest` → endpoint `/v1/ocr`, `SessionCaps=[cap_Pdf]`, `Tool_Active=False`
+
+**Reasoning en el driver:**
+- Magistral → `prompt_mode: 'reasoning'` (chain-of-thought visible en respuesta)
+- Small 4 / Medium 3.5 → `reasoning_effort: 'low'|'medium'|'high'` según `ThinkingLevel`
 
 ### xAI Grok
 - grok-3: texto + tools (default)
