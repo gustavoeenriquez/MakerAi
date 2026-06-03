@@ -925,7 +925,7 @@ Begin
 
   // ------------------------- MISTRAL ----------------------------------
   // https://docs.mistral.ai/getting-started/models
-  // Ultima actualizacion: May 2026
+  // Ultima actualizacion: Jun 2026
   // ------------------------- MISTRAL ----------------------------------
 
   // --- Valores globales por defecto para todos los modelos Mistral ---
@@ -935,21 +935,29 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Mistral', 'ModelCaps',   '[cap_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Mistral', 'SessionCaps', '[cap_Image]');
 
-  // ------- Modelos frontier/generalistas (vision + tools) ------
+  // ------- Modelos frontier/generalistas (vision + reasoning_effort) ------
   // https://docs.mistral.ai/getting-started/models/overview
-  // mistral-large-latest -> Mistral Large 3 (v25.12), 256K ctx
+  // mistral-large-latest -> Mistral Large 3 (v25.12), 256K ctx, vision + tools
   // Hereda defaults: ModelCaps=[cap_Image], Tool_Active=True
 
-  // mistral-medium-latest -> Mistral Medium 3.1 (v25.08), 128K ctx
-  // Hereda defaults
+  // mistral-medium-latest -> Mistral Medium 3.5 (v26.04), 256K ctx, vision + reasoning_effort + tools
+  // Razonamiento configurable via reasoning_effort (low/medium/high); ver driver
+  Model := 'mistral-medium-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ModelCaps',    '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'SessionCaps',  '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ThinkingLevel', 'tlMedium');
 
-  // mistral-small-latest -> Mistral Small 3.2 (v25.06), 128K ctx
-  // Hereda defaults
+  // mistral-small-latest -> Mistral Small 4 (v26.03), 256K ctx, vision + reasoning_effort + tools
+  // Razonamiento configurable via reasoning_effort (low/medium/high); ver driver
+  Model := 'mistral-small-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ModelCaps',    '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'SessionCaps',  '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ThinkingLevel', 'tlMedium');
 
   // ------- Ministral (edge models) (vision + tools) ------
-  // ministral-14b-latest -> 256K ctx
-  // ministral-8b-latest  -> 128K ctx
-  // ministral-3b-latest  -> 128K ctx
+  // ministral-14b-latest -> 262K ctx, vision + tools
+  // ministral-8b-latest  -> 262K ctx, vision + tools
+  // ministral-3b-latest  -> 262K ctx, vision + tools
   // Todos heredan defaults: ModelCaps=[cap_Image], Tool_Active=True
 
   // ------- Razonamiento: Magistral (NO vision) ------
@@ -1002,8 +1010,11 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'SessionCaps', '[cap_Audio]');
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'False');
 
-  // voxtral-small-latest: anunciado pero aún no disponible via API (may 2026)
-  // Registrar cuando Mistral lo habilite en producción
+  // voxtral-small-latest -> disponible jun 2026, mismas caps que voxtral-mini
+  Model := 'voxtral-small-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ModelCaps',   '[cap_Audio]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'SessionCaps', '[cap_Audio]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'False');
 
   // ------- OCR: mistral-ocr ------
   // ModelCaps=[] intencionalmente: crea Gap=[cap_Pdf] para que RunNew active la Fase 1

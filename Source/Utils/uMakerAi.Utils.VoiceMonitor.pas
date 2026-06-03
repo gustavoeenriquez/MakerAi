@@ -201,6 +201,8 @@ type
     FBufferSize: Integer;
     FSensitivityMultiplier: Double;
     FStopSensitivityMultiplier: Double;
+    FMinSensitivity: Integer;
+    FMinStopSensitivity: Integer;
 
     FTranscriptionStopwatch: TStopwatch;
     FTranscriptionIntervalMs: Integer;
@@ -294,6 +296,8 @@ type
     property SilenceDuration: Integer read FSilenceDuration write SetSilenceDuration default DEFAULT_SILENCE_DURATION_MS;
     property SensitivityMultiplier: Double read FSensitivityMultiplier write FSensitivityMultiplier;
     property StopSensitivityMultiplier: Double read FStopSensitivityMultiplier write FStopSensitivityMultiplier;
+    property MinSensitivity: Integer read FMinSensitivity write FMinSensitivity default 500;
+    property MinStopSensitivity: Integer read FMinStopSensitivity write FMinStopSensitivity default 250;
     property WakeWordDurationMs: Integer read FWakeWordDurationMs write FWakeWordDurationMs default DEFAULT_WAKE_WORD_DURATION_MS;
     property TranscriptionIntervalMs: Integer read FTranscriptionIntervalMs write FTranscriptionIntervalMs default DEFAULT_TRANSCRIPTION_INTERVAL_MS;
     property TranscriptionMaxWaitMs: Integer read FTranscriptionMaxWaitMs write FTranscriptionMaxWaitMs default DEFAULT_TRANSCRIPTION_MAX_WAIT_MS;
@@ -400,6 +404,8 @@ begin
   FBitsPerSample := DEFAULT_BITS_PER_SAMPLE;
   FSensitivityMultiplier := 2.0;
   FStopSensitivityMultiplier := 1.5;
+  FMinSensitivity := 500;
+  FMinStopSensitivity := 250;
   FWakeWordDurationMs := DEFAULT_WAKE_WORD_DURATION_MS;
   FCalibrationDurationSec := DEFAULT_CALIBRATION_DURATION_SEC;
   FSilenceDuration := DEFAULT_SILENCE_DURATION_MS;
@@ -782,8 +788,8 @@ begin
             begin
               NoiseLevel := FCalibrationAccumulator div FCalibrationSamples;
               FNoiseLevel := NoiseLevel;
-              FSensitivity := Max(500, Round(NoiseLevel * FSensitivityMultiplier));
-              FStopSensitivity := Max(250, Round(NoiseLevel * FStopSensitivityMultiplier));
+              FSensitivity := Max(FMinSensitivity, Round(NoiseLevel * FSensitivityMultiplier));
+              FStopSensitivity := Max(FMinStopSensitivity, Round(NoiseLevel * FStopSensitivityMultiplier));
 
               if FStopSensitivity >= FSensitivity then
                 FStopSensitivity := FSensitivity - 1;

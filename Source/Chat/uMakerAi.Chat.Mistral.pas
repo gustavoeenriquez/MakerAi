@@ -837,9 +837,21 @@ begin
     FClient.Asynchronous := Self.Asynchronous;
     AJSONObject.AddPair('stream', TJSONBool.Create(FClient.Asynchronous));
 
-    // Si el ThinkingLevel esta activo, usar prompt_mode reasoning para Magistral
+    // Razonamiento: Magistral usa prompt_mode=reasoning; Small4/Medium3.5 usan reasoning_effort
     if ModelConfig.ThinkingLevel <> tlDefault then
-      AJSONObject.AddPair('prompt_mode', 'reasoning');
+    begin
+      if LModel.StartsWith('magistral') then
+        AJSONObject.AddPair('prompt_mode', 'reasoning')
+      else
+      begin
+        // mistral-small-2603 (Small 4) y mistral-medium-2604 (Medium 3.5)
+        case ModelConfig.ThinkingLevel of
+          tlLow:    AJSONObject.AddPair('reasoning_effort', 'low');
+          tlMedium: AJSONObject.AddPair('reasoning_effort', 'medium');
+          tlHigh:   AJSONObject.AddPair('reasoning_effort', 'high');
+        end;
+      end;
+    end;
 
     // 7. --- Finalizaci?n y Devoluci?n del JSON ---
 
