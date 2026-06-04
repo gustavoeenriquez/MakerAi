@@ -897,6 +897,7 @@ var
   CurrentCommID: Integer;
   K_i_in: Double; // Peso de las aristas del nodo i hacia la comunidad candidata
   K_i: Double; // Grado del nodo i
+  CommunityItem: TCommunity;
 begin
   Result := TDictionary<TAiRagGraphNode, Integer>.Create;
   CommInfo := TDictionary<Integer, TCommunity>.Create;
@@ -982,8 +983,8 @@ begin
   end;
 
   // Limpieza de CommInfo
-  for var C in CommInfo.Values do
-    C.Free;
+  for CommunityItem in CommInfo.Values do
+    CommunityItem.Free;
   CommInfo.Free;
 end;
 
@@ -1433,12 +1434,13 @@ end;
 function TAiRagGraph.ExecuteMakerGQL(const ACode: string): string;
 Var
   Data: TArray<TDictionary<string, TObject>>;
+  Dict: TDictionary<string, TObject>;
 begin
   Result := ExecuteMakerGQL(ACode, Data);
 
   // 3. �IMPORTANTE! Liberar la memoria de los diccionarios de salida
   If Assigned(Data) then
-    for var Dict in Data do
+    for Dict in Data do
       Dict.Free;
 end;
 
@@ -1454,6 +1456,7 @@ var
 
   // Variables de trabajo
   ResDict: TDictionary<string, TObject>;
+  ResultPair: TPair<string, TObject>;
   I: Integer;
   PathObj: TObject;
   Score: Double;
@@ -1647,20 +1650,20 @@ begin
           begin
             // Los resultados del Match pueden venir mezclados (nodos, aristas, valores)
             // Extraemos solo los nodos para pas�rselos al generador de contexto.
-            for var Pair in ResDict do
+            for ResultPair in ResDict do
             begin
               // Caso A: El objeto directo es un Nodo (formato antiguo/simple)
-              if Pair.Value is TAiRagGraphNode then
+              if ResultPair.Value is TAiRagGraphNode then
               begin
-                if ContextNodes.IndexOf(TAiRagGraphNode(Pair.Value)) = -1 then
-                  ContextNodes.Add(TAiRagGraphNode(Pair.Value));
+                if ContextNodes.IndexOf(TAiRagGraphNode(ResultPair.Value)) = -1 then
+                  ContextNodes.Add(TAiRagGraphNode(ResultPair.Value));
               end
               // Caso B: El objeto viene envuelto en un diccionario de tipo (formato nuevo estandarizado)
               // ej: { 'type': 'node', 'element': <TAiRagGraphNode> }
-              else if SameText(Pair.Key, 'element') and (Pair.Value is TAiRagGraphNode) then
+              else if SameText(ResultPair.Key, 'element') and (ResultPair.Value is TAiRagGraphNode) then
               begin
-                if ContextNodes.IndexOf(TAiRagGraphNode(Pair.Value)) = -1 then
-                  ContextNodes.Add(TAiRagGraphNode(Pair.Value));
+                if ContextNodes.IndexOf(TAiRagGraphNode(ResultPair.Value)) = -1 then
+                  ContextNodes.Add(TAiRagGraphNode(ResultPair.Value));
               end;
             end;
           end;
@@ -1754,8 +1757,8 @@ end;
 function TAiRagGraph.ExtractSubgraph(ANodes: TArray<TAiRagGraphNode>): TAiRagGraph;
 var
   NodeSet: TDictionary<string, Boolean>;
-  Node, NewNode: TAiRagGraphNode;
-  Edge, NewEdge: TAiRagGraphEdge;
+  Node, SubNode: TAiRagGraphNode;
+  Edge, SubEdge: TAiRagGraphEdge;
   Chunk: TAiEmbeddingNode;
   NewSource, NewTarget: TAiRagGraphNode;
 begin
@@ -1779,28 +1782,28 @@ begin
         NodeSet.Add(Node.ID, True);
 
         // Creamos el nodo en el nuevo grafo manteniendo ID, Label y Name
-        NewNode := Result.AddNode(Node.ID, Node.NodeLabel, Node.Name);
-        NewNode.Model := Node.Model;
+        SubNode := Result.AddNode(Node.ID, Node.NodeLabel, Node.Name);
+        SubNode.Model := Node.Model;
 
         // COPIA DE TEXTO: Importante para que el subgrafo funcione con b�squedas l�xicas
-        NewNode.Text := Node.Text;
+        SubNode.Text := Node.Text;
 
         // COPIA DE METADATOS: Reemplaza el bucle manual de FProperties.
         // Copia tipos reales (fechas, n�meros, booleanos) sin p�rdida.
-        NewNode.MetaData.Assign(Node.MetaData);
+        SubNode.MetaData.Assign(Node.MetaData);
 
         // COPIA DE VECTOR (Resumen): Copia el embedding principal del nodo
         if Length(Node.Data) > 0 then
         begin
-          NewNode.SetDataLength(Length(Node.Data));
-          NewNode.Data := Copy(Node.Data); // Copy es m�s seguro que Move para arrays din�micos
+          SubNode.SetDataLength(Length(Node.Data));
+          SubNode.Data := Copy(Node.Data); // Copy es m�s seguro que Move para arrays din�micos
         end;
 
         // COPIA DE CHUNKS: Nueva funcionalidad (Opci�n 1)
         // Garantiza que la entidad mantenga todos sus fragmentos de texto
         for Chunk in Node.Chunks do
         begin
-          NewNode.AddChunk(Chunk.Text, Chunk.Data);
+          SubNode.AddChunk(Chunk.Text, Chunk.Data);
         end;
       end;
 
@@ -1820,16 +1823,16 @@ begin
             if (NewSource <> nil) and (NewTarget <> nil) then
             begin
               // Recreamos la arista con todos los par�metros originales (ID, Label, Name, Weight)
-              NewEdge := Result.AddEdge(NewSource, NewTarget, Edge.ID, Edge.EdgeLabel, Edge.Name, Edge.Weight);
+              SubEdge := Result.AddEdge(NewSource, NewTarget, Edge.ID, Edge.EdgeLabel, Edge.Name, Edge.Weight);
 
               // Copiar metadatos de la arista
-              NewEdge.MetaData.Assign(Edge.MetaData);
+              SubEdge.MetaData.Assign(Edge.MetaData);
 
               // Copiar vector de la arista (si existe)
               if Length(Edge.Data) > 0 then
               begin
-                NewEdge.SetDataLength(Length(Edge.Data));
-                NewEdge.Data := Copy(Edge.Data);
+                SubEdge.SetDataLength(Length(Edge.Data));
+                SubEdge.Data := Copy(Edge.Data);
               end;
             end;
           end;
@@ -2079,13 +2082,14 @@ end;
 procedure TAiRagGraph.DeleteNode(AID: string);
 var
   Node: TAiRagGraphNode;
+  Edge: TAiRagGraphEdge;
+  EdgesToDelete: TList<TAiRagGraphEdge>;
 begin
   Node := FindNodeByID(AID);
   if Node = nil then
     Exit;
 
   // 1. Guardar una referencia a las aristas ANTES de borrarlas en memoria
-  var
   EdgesToDelete := TList<TAiRagGraphEdge>.Create;
   EdgesToDelete.AddRange(Node.OutgoingEdges.ToArray);
   EdgesToDelete.AddRange(Node.IncomingEdges.ToArray);
@@ -2094,7 +2098,7 @@ begin
     // 2. Realizar la operaci�n en memoria PRIMERO
     UnregisterNode(Node); // Esto quita el nodo de FNodeRegistry y FNodes
     // Tambi�n debes desregistrar las aristas conectadas
-    for var Edge in EdgesToDelete do
+    for Edge in EdgesToDelete do
       UnregisterEdge(Edge);
 
     // 3. Persistir el cambio en la BD DESPU�S
@@ -2416,6 +2420,7 @@ var
   CurrentPath: TList<TObject>;
   CurrentNode, NeighborNode: TAiRagGraphNode;
   Edge: TAiRagGraphEdge;
+  ParentList: TList<TAiRagGraphNode>;
   ShortestDistance: Integer;
 
   // Procedimiento recursivo para reconstruir los caminos hacia atr�s
@@ -2423,6 +2428,7 @@ var
   var
     ParentNode: TAiRagGraphNode;
     ConnectingEdge: TAiRagGraphEdge;
+    E: TAiRagGraphEdge;
   begin
     // 1. A�adir el nodo actual al frente del camino que estamos construyendo
     CurrentPath.Insert(0, ANode);
@@ -2446,7 +2452,7 @@ var
           if ConnectingEdge = nil then
           begin
             // B�squeda m�s exhaustiva si FindEdge falla (por si hay varias aristas)
-            for var E in ParentNode.OutgoingEdges do
+            for E in ParentNode.OutgoingEdges do
             begin
               if E.ToNode = ANode then
               begin
@@ -2542,8 +2548,8 @@ begin
   finally
     Queue.Free;
     Distances.Free;
-    for var List in Parents.Values do // Es crucial liberar las listas internas
-      List.Free;
+    for ParentList in Parents.Values do // Es crucial liberar las listas internas
+      ParentList.Free;
     Parents.Free;
   end;
 end;
@@ -3231,7 +3237,7 @@ end;
 
 function TAiRagGraph.InternalHydrateEdge(const AEdgeData: TEdgeDataRecord): TAiRagGraphEdge;
 var
-  NewEdge: TAiRagGraphEdge;
+  SubEdge: TAiRagGraphEdge;
   FromNode, ToNode: TAiRagGraphNode;
   Dim: Integer;
   JObj: TJSONObject;
@@ -3254,14 +3260,14 @@ begin
     Dim := 1536;
 
   // 4. Crear e hidratar la instancia
-  NewEdge := TAiRagGraphEdge.Create(Self, Dim);
+  SubEdge := TAiRagGraphEdge.Create(Self, Dim);
   try
-    NewEdge.ID := AEdgeData.ID;
-    NewEdge.EdgeLabel := AEdgeData.EdgeLabel;
-    NewEdge.Name := AEdgeData.Name;
-    NewEdge.Weight := AEdgeData.Weight;
-    NewEdge.FromNode := FromNode;
-    NewEdge.ToNode := ToNode;
+    SubEdge.ID := AEdgeData.ID;
+    SubEdge.EdgeLabel := AEdgeData.EdgeLabel;
+    SubEdge.Name := AEdgeData.Name;
+    SubEdge.Weight := AEdgeData.Weight;
+    SubEdge.FromNode := FromNode;
+    SubEdge.ToNode := ToNode;
 
     // --- CAMBIO CLAVE: Uso del nuevo MetaData unificado ---
     if not AEdgeData.PropertiesJSON.IsEmpty then
@@ -3269,29 +3275,29 @@ begin
       JObj := TJSONObject.ParseJSONValue(AEdgeData.PropertiesJSON) as TJSONObject;
       if Assigned(JObj) then
         try
-          NewEdge.MetaData.FromJSON(JObj);
+          SubEdge.MetaData.FromJSON(JObj);
         finally
           JObj.Free;
         end;
     end;
 
     // Hidratar el vector (Data)
-    NewEdge.Data := StringToEmbedding(AEdgeData.EmbeddingStr);
+    SubEdge.Data := StringToEmbedding(AEdgeData.EmbeddingStr);
 
     // 5. Registro en estructuras de memoria (Identity Map)
-    Result := InternalAddEdge(NewEdge, False);
+    Result := InternalAddEdge(SubEdge, False);
 
-    if Result <> NewEdge then
-      NewEdge.Free;
+    if Result <> SubEdge then
+      SubEdge.Free;
   except
-    NewEdge.Free;
+    SubEdge.Free;
     raise;
   end;
 end;
 
 function TAiRagGraph.InternalHydrateNode(const ANodeData: TNodeDataRecord): TAiRagGraphNode;
 var
-  NewNode: TAiRagGraphNode;
+  SubNode: TAiRagGraphNode;
   Dim: Integer;
   JObj: TJSONObject;
 begin
@@ -3306,12 +3312,12 @@ begin
     Dim := 1536;
 
   // 3. Crear e hidratar la instancia
-  NewNode := TAiRagGraphNode.Create(Self, Dim);
+  SubNode := TAiRagGraphNode.Create(Self, Dim);
   try
-    NewNode.ID := ANodeData.ID;
-    NewNode.NodeLabel := ANodeData.NodeLabel;
-    NewNode.Name := ANodeData.Name;
-    NewNode.Text := ANodeData.NodeText;
+    SubNode.ID := ANodeData.ID;
+    SubNode.NodeLabel := ANodeData.NodeLabel;
+    SubNode.Name := ANodeData.Name;
+    SubNode.Text := ANodeData.NodeText;
 
     // --- CAMBIO CLAVE: Uso del nuevo MetaData unificado ---
     if not ANodeData.PropertiesJSON.IsEmpty then
@@ -3319,22 +3325,22 @@ begin
       JObj := TJSONObject.ParseJSONValue(ANodeData.PropertiesJSON) as TJSONObject;
       try
         if (JObj <> nil) and (JObj is TJSONObject) then // Validaci�n de tipo
-          NewNode.MetaData.FromJSON(JObj as TJSONObject);
+          SubNode.MetaData.FromJSON(JObj as TJSONObject);
       finally
         JObj.Free;
       end;
     end;
 
     // Hidratar el vector de resumen (Data)
-    NewNode.Data := StringToEmbedding(ANodeData.EmbeddingStr);
+    SubNode.Data := StringToEmbedding(ANodeData.EmbeddingStr);
 
     // 4. Registro en estructuras de memoria (Identity Map)
-    Result := InternalAddNode(NewNode, False);
+    Result := InternalAddNode(SubNode, False);
 
-    if Result <> NewNode then
-      NewNode.Free;
+    if Result <> SubNode then
+      SubNode.Free;
   except
-    NewNode.Free;
+    SubNode.Free;
     raise;
   end;
 end;
@@ -3439,11 +3445,11 @@ var
   J, K: Integer;
 
   // Variables temporales para Nodos
-  NewNode: TAiRagGraphNode;
+  SubNode: TAiRagGraphNode;
   NodeID, NodeLabel, NodeName, NodeText: string;
 
   // Variables temporales para Aristas
-  NewEdge: TAiRagGraphEdge;
+  SubEdge: TAiRagGraphEdge;
   EdgeID, EdgeLabel, EdgeName, SourceID, TargetID: string;
   EdgeWeight: Double;
   FromNode, ToNode: TAiRagGraphNode;
@@ -3489,14 +3495,14 @@ begin
             NodeText := NodeObj.GetValue<string>('node_text', '');
 
             // 2.1 Crear e insertar nodo en el registro de memoria
-            NewNode := Self.AddNode(NodeID, NodeLabel, NodeName);
-            NewNode.Text := NodeText;
-            NewNode.Model := NodeObj.GetValue<string>('model', '');
+            SubNode := Self.AddNode(NodeID, NodeLabel, NodeName);
+            SubNode.Text := NodeText;
+            SubNode.Model := NodeObj.GetValue<string>('model', '');
 
             // 2.2 Recuperar Metadatos Unificados (Uso de FromJSON)
             // Esto restaura tipos reales: Fechas, Booleanos y N�meros.
             if NodeObj.TryGetValue<TJSONObject>('properties', PropObj) then
-              NewNode.MetaData.FromJSON(PropObj);
+              SubNode.MetaData.FromJSON(PropObj);
 
             // 2.3 NUEVO: Recuperar Chunks (Fragmentos de texto detallados)
             if NodeObj.TryGetValue<TJSONArray>('chunks', ChunksArr) then
@@ -3515,16 +3521,16 @@ begin
                     ChunkData[K] := (EmbeddingArr.Items[K] as TJSONNumber).AsDouble;
                 end;
 
-                NewNode.AddChunk(ChunkText, ChunkData);
+                SubNode.AddChunk(ChunkText, ChunkData);
               end;
             end;
 
             // 2.4 Recuperar Embedding Principal (Resumen del Nodo)
             if NodeObj.TryGetValue<TJSONArray>('embedding', EmbeddingArr) then
             begin
-              NewNode.SetDataLength(EmbeddingArr.Count);
+              SubNode.SetDataLength(EmbeddingArr.Count);
               for J := 0 to EmbeddingArr.Count - 1 do
-                NewNode.Data[J] := (EmbeddingArr.Items[J] as TJSONNumber).AsDouble;
+                SubNode.Data[J] := (EmbeddingArr.Items[J] as TJSONNumber).AsDouble;
             end;
           end;
         end;
@@ -3550,18 +3556,18 @@ begin
 
             if (FromNode <> nil) and (ToNode <> nil) then
             begin
-              NewEdge := Self.AddEdge(FromNode, ToNode, EdgeID, EdgeLabel, EdgeName, EdgeWeight);
+              SubEdge := Self.AddEdge(FromNode, ToNode, EdgeID, EdgeLabel, EdgeName, EdgeWeight);
 
               // Metadatos de la Arista
               if EdgeObj.TryGetValue<TJSONObject>('properties', PropObj) then
-                NewEdge.MetaData.FromJSON(PropObj);
+                SubEdge.MetaData.FromJSON(PropObj);
 
               // Embedding de la Arista (si existe)
               if EdgeObj.TryGetValue<TJSONArray>('embedding', EmbeddingArr) then
               begin
-                NewEdge.SetDataLength(EmbeddingArr.Count);
+                SubEdge.SetDataLength(EmbeddingArr.Count);
                 for J := 0 to EmbeddingArr.Count - 1 do
-                  NewEdge.Data[J] := (EmbeddingArr.Items[J] as TJSONNumber).AsDouble;
+                  SubEdge.Data[J] := (EmbeddingArr.Items[J] as TJSONNumber).AsDouble;
               end;
             end;
           end;
@@ -3923,6 +3929,7 @@ var
   Edge: TAiRagGraphEdge;
   UniqueTargetNodes: TDictionary<TAiRagGraphNode, Boolean>;
   AnchorList: TList<TAiRagGraphNode>;
+  IntermediateList: TList<TAiRagGraphNode>;
 begin
   // Inicializar el resultado como un array vac�o.
   SetLength(Result, 0);
@@ -4016,8 +4023,8 @@ begin
 
   finally
     // Limpiar el diccionario y las listas que contiene
-    for var List in IntermediateResults.Values do
-      List.Free;
+    for IntermediateList in IntermediateResults.Values do
+      IntermediateList.Free;
     IntermediateResults.Free;
   end;
 end;

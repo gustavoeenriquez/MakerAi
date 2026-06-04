@@ -84,7 +84,15 @@ Type
   TAiToolsFunctions = Class(TDictionary<String, TAiToolsFunction>)
   Private
   Protected
+{$IFDEF FPC}
+{$IF FPC_FULLVERSION >= 030203}
     procedure ValueNotify(const Value: TAiToolsFunction; Action: TCollectionNotification); override;
+{$ELSE}
+    procedure ValueNotify(constref Value: TAiToolsFunction; Action: TCollectionNotification); override;
+{$ENDIF}
+{$ELSE}
+    procedure ValueNotify(const Value: TAiToolsFunction; Action: TCollectionNotification); override;
+{$ENDIF}
   Public
     Function ToOutputJSon: TJSonArray;
     Function ToFunctionsJSon: TJSonArray;
@@ -1329,7 +1337,15 @@ begin
   End;
 end;
 
+{$IFDEF FPC}
+{$IF FPC_FULLVERSION >= 030203}
 procedure TAiToolsFunctions.ValueNotify(const Value: TAiToolsFunction; Action: TCollectionNotification);
+{$ELSE}
+procedure TAiToolsFunctions.ValueNotify(constref Value: TAiToolsFunction; Action: TCollectionNotification);
+{$ENDIF}
+{$ELSE}
+procedure TAiToolsFunctions.ValueNotify(const Value: TAiToolsFunction; Action: TCollectionNotification);
+{$ENDIF}
 begin
   case Action of
     cnDeleting, cnRemoved:
