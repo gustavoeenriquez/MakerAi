@@ -202,6 +202,10 @@ type
     function DeleteFile(aMediaFile: TAiMediaFile): String;
     function UploadFileToCache(aMediaFile: TAiMediaFile; aTTL_Seconds: integer = 3600): String;
 
+    class procedure EnableDebugLog(const APath: string = '');
+    class procedure DisableDebugLog;
+    class function IsDebugLogEnabled: Boolean;
+
     property Messages: TAiChatMessages read FMessages;
     property LastError: String read GetLastError;
     property Busy: Boolean read GetBusy;
@@ -563,6 +567,20 @@ var
   LContext: TRttiContext;
   LRttiType: TRttiType;
   LProp: TRttiProperty;
+  LTarget: TObject;
+  LSubPropDef: TRttiProperty;
+  LSubObj: TObject;
+  LSubType: TRttiType;
+  LSubProp: TRttiProperty;
+  LSetType: TRttiSetType;
+  LEnumType: TRttiType;
+  SetAsInt: NativeInt;
+  CleanValue: string;
+  EnumNames: TArray<string>;
+  EnumName: string;
+  TrimmedName: string;
+  OrdinalValue: Integer;
+  LStringsProp: TStrings;
   LValue: TValue;
   I: integer;
   ParamName, ParamValue: string;
@@ -613,20 +631,20 @@ begin
         Continue;
 
       // Buscar primero en el objeto principal, luego en sub-objetos TPersistent (2-level RTTI)
-      var LTarget: TObject := AChat;
+      LTarget := AChat;
       LProp := LRttiType.GetProperty(ParamName);
 
       if not Assigned(LProp) then
       begin
-        for var LSubPropDef in LRttiType.GetProperties do
+        for LSubPropDef in LRttiType.GetProperties do
         begin
           if LSubPropDef.PropertyType.IsInstance then
           begin
-            var LSubObj := LSubPropDef.GetValue(AChat).AsObject;
+            LSubObj := LSubPropDef.GetValue(AChat).AsObject;
             if LSubObj is TPersistent then
             begin
-              var LSubType := LContext.GetType(LSubObj.ClassType);
-              var LSubProp := LSubType.GetProperty(ParamName);
+              LSubType := LContext.GetType(LSubObj.ClassType);
+              LSubProp := LSubType.GetProperty(ParamName);
               if Assigned(LSubProp) and LSubProp.IsWritable then
               begin
                 LProp := LSubProp;
@@ -665,29 +683,22 @@ begin
 
             tkSet:
               begin
-                var
                 LSetType := LProp.PropertyType as TRttiSetType;
                 if LSetType.ElementType.TypeKind = tkEnumeration then
                 begin
-                  var
                   LEnumType := LSetType.ElementType;
-                  var
-                    SetAsInt: NativeInt := 0;
+                  SetAsInt := 0;
 
                   if (not ParamValue.IsEmpty) and (ParamValue <> '[]') then
                   begin
-                    var
                     CleanValue := ParamValue.Trim(['[', ']', ' ']);
-                    var
                     EnumNames := CleanValue.Split([',']);
-                    for var EnumName in EnumNames do
+                    for EnumName in EnumNames do
                     begin
-                      var
                       TrimmedName := Trim(EnumName);
                       if not TrimmedName.IsEmpty then
                       begin
                         // GetEnumValue es sensible a mayúsculas según el Enum definido en uMakerAi.Core
-                        var
                         OrdinalValue := GetEnumValue(LEnumType.Handle, TrimmedName);
                         if OrdinalValue >= 0 then
                           SetAsInt := SetAsInt or (1 shl OrdinalValue);
@@ -703,7 +714,6 @@ begin
               begin
                 if LProp.PropertyType.QualifiedName.EndsWith('TStrings') then
                 begin
-                  var
                   LStringsProp := LProp.GetValue(LTarget).AsObject as TStrings;
                   if Assigned(LStringsProp) then
                     LStringsProp.Text := StringReplace(ParamValue, '|', sLineBreak, [rfReplaceAll]);
@@ -1355,6 +1365,23 @@ procedure TAiChatConnection.SetComputerUseTool(const Value: TAiComputerUseTool);
 begin
   FChatTools.ComputerUseTool := Value;
   if Assigned(FChat) then FChat.ChatTools.ComputerUseTool := Value;
+end;
+
+class procedure TAiChatConnection.EnableDebugLog(const APath: string);
+begin
+  if APath <> '' then
+    uMakerAi.Chat.MakerAiDebugLogPath := APath;
+  uMakerAi.Chat.MakerAiDebugLogEnabled := True;
+end;
+
+class procedure TAiChatConnection.DisableDebugLog;
+begin
+  uMakerAi.Chat.MakerAiDebugLogEnabled := False;
+end;
+
+class function TAiChatConnection.IsDebugLogEnabled: Boolean;
+begin
+  Result := uMakerAi.Chat.MakerAiDebugLogEnabled;
 end;
 
 end.

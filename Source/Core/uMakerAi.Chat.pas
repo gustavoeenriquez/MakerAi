@@ -580,6 +580,10 @@ type
     property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
   end;
 
+var
+  MakerAiDebugLogEnabled: Boolean = False;
+  MakerAiDebugLogPath: string = '';
+
   // procedure Register;
 
 procedure LogDebug(const Mensaje: string);
@@ -595,25 +599,35 @@ Const
 
 procedure LogDebug(const Mensaje: string);
 var
-  Archivo: TextFile;
+  FS: TFileStream;
   RutaLog: string;
-  LOpened: Boolean;
+  S: string;
+  Bytes: TBytes;
 begin
-  LOpened := False;
+  if not MakerAiDebugLogEnabled then
+    Exit;
   try
-    RutaLog := TPath.Combine(TPath.GetTempPath, 'ialog.txt');
-    AssignFile(Archivo, RutaLog);
-    if FileExists(RutaLog) then
-      Append(Archivo)
+    if MakerAiDebugLogPath <> '' then
+      RutaLog := MakerAiDebugLogPath
     else
-      Rewrite(Archivo);
-    LOpened := True;
-    WriteLn(Archivo, Mensaje);
+      RutaLog := TPath.Combine(TPath.GetTempPath, 'makerai_debug.log');
+
+    if FileExists(RutaLog) then
+      FS := TFileStream.Create(RutaLog, fmOpenWrite or fmShareDenyNone)
+    else
+      FS := TFileStream.Create(RutaLog, fmCreate or fmShareDenyNone);
+    try
+      FS.Seek(0, soEnd);
+      S := Mensaje + sLineBreak;
+      Bytes := TEncoding.UTF8.GetBytes(S);
+      if Length(Bytes) > 0 then
+        FS.WriteBuffer(Bytes[0], Length(Bytes));
+    finally
+      FS.Free;
+    end;
   except
     // Función de depuración — nunca propaga errores al caller
   end;
-  if LOpened then
-    CloseFile(Archivo);
 end;
 
 procedure TAiChat.Abort;
@@ -1635,6 +1649,7 @@ Var
   I: Integer;
 begin
   Result := TStringList.Create;
+  try
 
   If aUrl <> '' then
     EndPointUrl := aUrl
@@ -1698,6 +1713,10 @@ begin
     Client.Free;
     Response.Free;
   End;
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 function TAiChat.GetTools(aToolFormat: TToolFormat): TStrings;
@@ -2472,8 +2491,8 @@ begin
       Begin
         ToolCall := LFunciones[Clave];
         ToolMsg := TAiChatMessage.Create(ToolCall.Response, 'tool', ToolCall.Id, ToolCall.Name);
-        for var LMF in ToolCall.MediaFiles do
-          ToolMsg.AddMediaFile(LMF);
+        for MF in ToolCall.MediaFiles do
+          ToolMsg.AddMediaFile(MF);
         ToolCall.MediaFiles.OwnsObjects := False;
         ToolMsg.Id := FMessages.Count + 1;
         FMessages.Add(ToolMsg);
