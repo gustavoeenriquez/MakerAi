@@ -1,6 +1,6 @@
-﻿// MIT License
+// MIT License
 //
-// Copyright (c) <year> <copyright holders>
+// Copyright (c) 2024-2026 Gustavo Enriquez
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,62 +20,89 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr?quez
-// Redes Sociales:
+// Nombre: Gustavo Enriquez
 // - Email: gustavoeenriquez@gmail.com
-
-// - Telegram: https://t.me/MakerAi_Suite_Delphi
-// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
-
-// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
-// - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
+//
+// --------- FPC PORT --------------------
+// Conexion directa in-process al servidor MCP (sin red, sin pipes).
+// Ideal para pruebas unitarias y para exponer tools al mismo proceso host.
+//
+// Adaptaciones respecto a la version Delphi:
+//   - TJSONObject.ParseJSONValue → GetJSON (de jsonparser)
+//   - TJSONObject.TryGetValue    → Find + cast
+//   - AddPair                    → Add
+//   - IntToStr para ID (FPC no tiene Integer.ToString)
 
+unit uMakerAi.MCPServer.Direct;
 
-unit UMakerAi.MCPServer.Direct;
+{$mode objfpc}{$H+}
 
 interface
 
 uses
-  System.SysUtils, System.Classes, System.JSON,
-{$IF CompilerVersion < 35}
-  uJSONHelper,
-{$ENDIF}
-  UMakerAi.MCPServer.Core;
+  SysUtils, Classes,
+  fpjson, jsonparser,
+  uMakerAi.MCPServer.Core;
 
 type
+  // -------------------------------------------------------------------------
+  // TAiMCPDirectConnection - conexion en proceso al LogicServer
+  //
+  // No requiere red ni procesos externos.
+  // Perfecto para demos, tests y aplicaciones monoliticas.
+  // -------------------------------------------------------------------------
   TAiMCPDirectConnection = class(TAiMCPServer)
   private
     FRequestIDCounter: Integer;
 
-    function ExecuteDirectRequest(const AMethod: string; AParams: TJSONObject): TJSONObject;
+    // Construye y ejecuta un JSON-RPC request en el LogicServer
+    // Retorna el 'result' parseado (el llamador es responsable de liberar).
+    // Lanza excepcion si la respuesta contiene 'error'.
+    function ExecuteDirectRequest(const AMethod: string;
+        AParams: TJSONObject): TJSONObject;
+
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
-    procedure Start; Override;
-    procedure Stop; Override;
+    procedure Start; override;
+    procedure Stop;  override;
 
-    // --- API de Alto Nivel ---
+    // ----- API de alto nivel -----
+
+    // Lista herramientas: retorna {"tools":[...]}
+    // El llamador es responsable de liberar el TJSONObject retornado.
     function ListTools: TJSONObject;
-    function ListResources: TJSONObject;
-    function ReadResource(const AURI: string): TJSONObject;
-    function CallTool(const AToolName: string; AArguments: TJSONObject): TJSONObject; overload;
-    function CallTool(const AToolName: string; AArguments: TStrings): TJSONObject; overload;
-  end;
 
-procedure Register;
+    // Lista recursos: retorna {"resources":[...]}
+    function ListResources: TJSONObject;
+
+    // Lee un recurso por URI: retorna {"contents":[...]}
+    function ReadResource(const AURI: string): TJSONObject;
+
+    // Llama una herramienta con argumentos como TJSONObject.
+    // AArguments: puede ser nil (sin argumentos).
+    // NOTA: AArguments es consumido (no liberar despues de llamar).
+    function CallTool(const AToolName: string;
+        AArguments: TJSONObject): TJSONObject; overload;
+
+    // Sobrecarga conveniente: argumentos como TStrings ("key=value")
+    function CallTool(const AToolName: string;
+        AArguments: TStrings): TJSONObject; overload;
+
+  published
+    property Port;
+    property ServerName;
+    property ApiKey;
+    property OnValidateRequest;
+  end;
 
 implementation
 
-uses System.Generics.Collections;
-
-procedure Register;
-begin
-  RegisterComponents('MakerAI', [TAiMCPDirectConnection]);
-end;
-
-{ TAiMCPDirectConnection }
+// ---------------------------------------------------------------------------
+// TAiMCPDirectConnection
+// ---------------------------------------------------------------------------
 
 constructor TAiMCPDirectConnection.Create(AOwner: TComponent);
 begin
@@ -85,7 +112,7 @@ end;
 
 destructor TAiMCPDirectConnection.Destroy;
 begin
-  inherited Destroy;
+  inherited;
 end;
 
 procedure TAiMCPDirectConnection.Start;
@@ -98,72 +125,91 @@ begin
   inherited Stop;
 end;
 
-function TAiMCPDirectConnection.ExecuteDirectRequest(const AMethod: string; AParams: TJSONObject): TJSONObject;
+function TAiMCPDirectConnection.ExecuteDirectRequest(const AMethod: string;
+    AParams: TJSONObject): TJSONObject;
 var
-  RequestObj, ResponseJSON: TJSONObject;
-  RequestStr, ResponseStr: string;
-  JsonValue: TJSONValue;
-  ResultValue: TJSONValue;
-  ErrorObj: TJSONObject;
+  RequestObj    : TJSONObject;
+  RequestStr    : string;
+  ResponseStr   : string;
+  ResponseJSON  : TJSONData;
+  RespObj       : TJSONObject;
+  ErrorNode     : TJSONData;
+  ResultNode    : TJSONData;
+  ErrMsg        : string;
+  ErrCode       : Integer;
+  AuthCtx       : TAiAuthContext;
 begin
   Result := nil;
-  if not IsActive then
-    raise Exception.Create('Direct Connection is not active. Call Start first.');
 
-  // El due?o de AParams es este m?todo, se libera aqu?.
-  // Si AParams es nil, creamos uno vac?o.
-  if not Assigned(AParams) then
-    AParams := TJSONObject.Create
-  else
-    AParams.Owned := False; // Aseguramos que no se libere con su padre
+  if not IsActive then
+    raise Exception.Create(
+        'DirectConnection nao esta activa. Llamar Start primero.');
+
+  // Construir JSON-RPC request
+  Inc(FRequestIDCounter);
 
   RequestObj := TJSONObject.Create;
   try
-    Inc(FRequestIDCounter);
-    RequestObj.AddPair('jsonrpc', '2.0');
-    RequestObj.AddPair('id', FRequestIDCounter.ToString);
-    RequestObj.AddPair('method', AMethod);
-    RequestObj.AddPair('params', AParams); // AParams es ahora propiedad de RequestObj
+    RequestObj.Add('jsonrpc', TJSONString.Create('2.0'));
+    RequestObj.Add('id', TJSONIntegerNumber.Create(FRequestIDCounter));
+    RequestObj.Add('method', TJSONString.Create(AMethod));
 
-    RequestStr := RequestObj.ToJSON;
+    if Assigned(AParams) then
+      RequestObj.Add('params', AParams)
+    else
+      RequestObj.Add('params', TJSONObject.Create);
+
+    RequestStr := RequestObj.AsJSON;
   finally
-    RequestObj.Free; // Libera RequestObj y AParams
+    RequestObj.Free;
+    // NOTA: AParams fue transferido a RequestObj y liberado con el.
+    // No acceder a AParams despues de Free del RequestObj.
   end;
 
-  // Ejecutar la petici?n
-  ResponseStr := FLogicServer.ExecuteRequest(RequestStr, 'direct_connection');
+  // Contexto de autenticacion (direct = confianza total)
+  AuthCtx.IsAuthenticated := True;
+  AuthCtx.UserID          := 'direct';
+  AuthCtx.UserName        := 'direct_connection';
+  AuthCtx.Roles           := 'admin';
 
-  // Parsear la respuesta
+  // Ejecutar en el LogicServer
+  ResponseStr := FLogicServer.ExecuteRequest(RequestStr, 'direct', AuthCtx);
+
   if ResponseStr = '' then
-    Exit; // Notificaci?n, sin resultado
+    Exit; // Notificacion sin respuesta
 
-  JsonValue := TJSONObject.ParseJSONValue(ResponseStr);
-  if not(JsonValue is TJSONObject) then
+  // Parsear respuesta
+  ResponseJSON := GetJSON(ResponseStr);
+  if not (ResponseJSON is TJSONObject) then
   begin
-    JsonValue.Free;
-    raise Exception.Create('Invalid JSON-RPC response from server logic.');
+    ResponseJSON.Free;
+    raise Exception.Create('Respuesta JSON-RPC invalida del LogicServer.');
   end;
 
-  ResponseJSON := TJSONObject(JsonValue);
+  RespObj := TJSONObject(ResponseJSON);
   try
-    // Comprobar si hay un error en la respuesta JSON-RPC
-    if ResponseJSON.TryGetValue<TJSONObject>('error', ErrorObj) then
+    // Verificar campo 'error'
+    ErrorNode := RespObj.Find('error');
+    if Assigned(ErrorNode) and (ErrorNode is TJSONObject) then
     begin
-      raise Exception.CreateFmt('JSON-RPC Error: %s (Code: %d)', [ErrorObj.GetValue<string>('message', 'Unknown'),
-        ErrorObj.GetValue<Integer>('code', 0)]);
+      ErrMsg  := TJSONObject(ErrorNode).Get('message', 'Error desconocido');
+      ErrCode := TJSONObject(ErrorNode).Get('code', 0);
+      raise Exception.CreateFmt('JSON-RPC Error %d: %s', [ErrCode, ErrMsg]);
     end;
 
-    // Extraer el resultado
-    if ResponseJSON.TryGetValue('result', ResultValue) then
+    // Extraer 'result'
+    ResultNode := RespObj.Find('result');
+    if Assigned(ResultNode) then
     begin
-      // Clonamos el resultado para que el llamador sea el dueño
-      if ResultValue is TJSONObject then
-        Result := TJSONObject(ResultValue.Clone)
+      if ResultNode is TJSONObject then
+        Result := TJSONObject(ResultNode.Clone)
       else
-        raise Exception.Create('Unexpected result type in JSON-RPC response.');
+        raise Exception.Create(
+            'Tipo de resultado inesperado en respuesta JSON-RPC.');
     end;
+
   finally
-    ResponseJSON.Free;
+    RespObj.Free;
   end;
 end;
 
@@ -182,41 +228,40 @@ var
   Params: TJSONObject;
 begin
   Params := TJSONObject.Create;
-  Params.AddPair('uri', AURI);
+  Params.Add('uri', TJSONString.Create(AURI));
   Result := ExecuteDirectRequest('resources/read', Params);
 end;
 
-function TAiMCPDirectConnection.CallTool(const AToolName: string; AArguments: TJSONObject): TJSONObject;
+function TAiMCPDirectConnection.CallTool(const AToolName: string;
+    AArguments: TJSONObject): TJSONObject;
 var
   Params: TJSONObject;
 begin
-  // AArguments es pasado al m?todo ExecuteDirectRequest, que tomar? posesi?n de ?l.
-  // El llamador no debe liberar AArguments.
-  if not Assigned(AArguments) then
-    AArguments := TJSONObject.Create;
-
   Params := TJSONObject.Create;
-  Params.AddPair('name', AToolName);
-  Params.AddPair('arguments', AArguments);
+  Params.Add('name', TJSONString.Create(AToolName));
+
+  if Assigned(AArguments) then
+    Params.Add('arguments', AArguments)
+  else
+    Params.Add('arguments', TJSONObject.Create);
 
   Result := ExecuteDirectRequest('tools/call', Params);
 end;
 
-function TAiMCPDirectConnection.CallTool(const AToolName: string; AArguments: TStrings): TJSONObject;
+function TAiMCPDirectConnection.CallTool(const AToolName: string;
+    AArguments: TStrings): TJSONObject;
 var
-  ArgsObject: TJSONObject;
-  i: Integer;
+  ArgsObj: TJSONObject;
+  I: Integer;
 begin
-  ArgsObject := TJSONObject.Create;
+  ArgsObj := TJSONObject.Create;
   if Assigned(AArguments) then
   begin
-    for i := 0 to AArguments.Count - 1 do
-    begin
-      ArgsObject.AddPair(AArguments.Names[i], AArguments.ValueFromIndex[i]);
-    end;
+    for I := 0 to AArguments.Count - 1 do
+      ArgsObj.Add(AArguments.Names[I],
+          TJSONString.Create(AArguments.ValueFromIndex[I]));
   end;
-  // Llamamos a la versi?n principal. A partir de aqu?, no debemos liberar ArgsObject.
-  Result := CallTool(AToolName, ArgsObject);
+  Result := CallTool(AToolName, ArgsObj);
 end;
 
 end.

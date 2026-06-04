@@ -1,6 +1,6 @@
-﻿// MIT License
+// MIT License
 //
-// Copyright (c) <year> <copyright holders>
+// Copyright (c) 2024-2026 Gustavo Enriquez
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,283 +20,197 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr?quez
-// Redes Sociales:
+// Nombre: Gustavo Enriquez
 // - Email: gustavoeenriquez@gmail.com
-
-// - Telegram: https://t.me/MakerAi_Suite_Delphi
-// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
-
-// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
-// - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
+//
+// --------- FPC PORT --------------------
+// Transporte StdIO para el servidor MCP.
+// Lee peticiones JSON-RPC de stdin, linea por linea, y escribe respuestas
+// en stdout. Ideal para integracion con Claude Desktop y otros hosts MCP.
+//
+// Adaptaciones respecto a la version Delphi:
+//   - TThread anonimo → TStdioWorkerThread con metodo Execute
+//   - SetConsoleOutputCP(CP_UTF8) en Windows → {$IFDEF MSWINDOWS}
+//   - TThread.Queue(nil, proc) → llamada directa (aplicacion de consola)
 
-unit UMakerAi.MCPServer.Stdio;
+unit uMakerAi.MCPServer.Stdio;
+
+{$mode objfpc}{$H+}
 
 interface
 
 uses
-  System.SysUtils, System.Classes, System.SyncObjs, System.Threading, System.AnsiStrings, System.IOUtils,
-  UMakerAi.MCPServer.Core;
+  SysUtils, Classes, SyncObjs,
+  uMakerAi.MCPServer.Core;
+
+{$IFDEF MSWINDOWS}
+// Declaramos solo las funciones necesarias de kernel32 para evitar
+// importar la unit Windows completa (que define TCriticalSection como
+// record y colisiona con SyncObjs.TCriticalSection clase).
+function SetConsoleOutputCP(wCodePageID: LongWord): LongBool; stdcall;
+    external 'kernel32.dll' name 'SetConsoleOutputCP';
+function SetConsoleCP(wCodePageID: LongWord): LongBool; stdcall;
+    external 'kernel32.dll' name 'SetConsoleCP';
+{$ENDIF}
 
 type
-  // Declaraci?n adelantada para el hilo
+  // Forward
   TAiMCPStdioServer = class;
 
-  { TStdioWorkerThread
-    Este hilo se encarga de la tarea bloqueante de leer desde Standard Input }
+  // -------------------------------------------------------------------------
+  // TStdioWorkerThread - lee stdin linea a linea y despacha al servidor
+  // -------------------------------------------------------------------------
   TStdioWorkerThread = class(TThread)
   private
     FServer: TAiMCPStdioServer;
-  protected
-    procedure Execute; override;
   public
     constructor Create(AServer: TAiMCPStdioServer);
+    procedure Execute; override;
   end;
 
-  { TAiMCPStdioServer
-    El componente principal que gestiona la comunicaci?n Stdio }
+  // -------------------------------------------------------------------------
+  // TAiMCPStdioServer - servidor MCP sobre stdin/stdout
+  // -------------------------------------------------------------------------
   TAiMCPStdioServer = class(TAiMCPServer)
   private
-    FWorkerThread: TStdioWorkerThread;
-    FOutputLock: TCriticalSection; // Para escrituras seguras a Stdout desde m?ltiples hilos
+    FWorkerThread : TStdioWorkerThread;
+    FOutputLock   : TCriticalSection;
 
-    procedure ProcessRequest(const ARequestJson: string);
-    procedure SendResponse(const AResponseJson: string);
     procedure SetConsoleIOToUTF8;
+
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
-    procedure Start; Override;
-    procedure Stop; Override;
-  end;
+    procedure Start; override;
+    procedure Stop;  override;
 
-procedure Register;
+    // Procesa una linea JSON recibida de stdin
+    procedure ProcessRequest(const ALine: string);
+
+    // Envia una respuesta JSON a stdout (thread-safe)
+    procedure SendResponse(const AJsonStr: string);
+
+  published
+    property ApiKey;
+    property ServerName;
+    property OnValidateRequest;
+  end;
 
 implementation
 
-uses System.Character {$IFDEF MSWINDOWS}, Winapi.Windows{$ENDIF};
-
-procedure Register;
-begin
-  RegisterComponents('MakerAI', [TAiMCPStdioServer]);
-end;
-
-{ TStdioWorkerThread }
+// ---------------------------------------------------------------------------
+// TStdioWorkerThread
+// ---------------------------------------------------------------------------
 
 constructor TStdioWorkerThread.Create(AServer: TAiMCPStdioServer);
 begin
-  inherited Create(True); // El hilo se crea suspendido
+  inherited Create(True); // suspendido
   FServer := AServer;
   FreeOnTerminate := False;
 end;
 
-{
 procedure TStdioWorkerThread.Execute;
 var
-  JsonRequestLine: string;
+  Line: string;
 begin
+  // Leer stdin linea a linea de forma bloqueante
   while not Terminated do
   begin
     try
-      // Leemos una l?nea completa desde Standard Input.
-      // Esta llamada es bloqueante y esperar? hasta recibir un LF (#10).
-      System.ReadLn(JsonRequestLine);
-
-      // Si el hilo fue terminado mientras esperaba o la l?nea est? vac?a, continuamos.
-      if Terminated or (JsonRequestLine = '') then
-        Continue;
-
-      // Cada l?nea es un request JSON completo. Lo procesamos.
-      TThread.Queue(nil,
-        procedure
-        begin
-          if Assigned(FServer) and FServer.IsActive then
-            FServer.ProcessRequest(JsonRequestLine);
-        end);
+      ReadLn(Input, Line);
+      if Terminated then
+        Break;
+      Line := Trim(Line);
+      if Line <> '' then
+        FServer.ProcessRequest(Line);
     except
-      on E: EInOutError do
-      begin
-        // Esto ocurre si el pipe de Stdin se cierra. Es la forma normal de terminar.
-        if not Terminated then
-          Break;
-      end;
       on E: Exception do
       begin
-        // Otro tipo de error, terminamos el bucle.
-        if not Terminated then
-          Break;
+        // EOF o error de lectura — terminar el hilo
+        Break;
       end;
     end;
   end;
 end;
 
-}
-
-procedure TStdioWorkerThread.Execute;
-var
-  JsonRequestLine: string;
-{$IFDEF MSWINDOWS}
-  StdinHandle: THandle;
-  RawLine: TBytes;
-  B: Byte;
-  BytesRead: DWORD;
-{$ENDIF}
-begin
-{$IFDEF MSWINDOWS}
-  // Read raw bytes from stdin pipe and decode as UTF-8.
-  // System.ReadLn converts using the ANSI code page (CP1252 on most Windows
-  // systems), which corrupts multi-byte UTF-8 sequences. ReadFile + UTF-8
-  // decoding is the correct approach when stdin is a pipe.
-  StdinHandle := GetStdHandle(STD_INPUT_HANDLE);
-  SetLength(RawLine, 0);
-{$ENDIF}
-  while not Terminated do
-  begin
-    try
-{$IFDEF MSWINDOWS}
-      // Accumulate bytes until LF, then decode the complete line as UTF-8.
-      repeat
-        if not ReadFile(StdinHandle, B, 1, BytesRead, nil) or (BytesRead = 0) then
-        begin
-          // Pipe closed (EOF)
-          if Length(RawLine) > 0 then
-            Break; // process the last partial line
-          Exit;
-        end;
-        if B = 10 then Break; // LF = end of line
-        if B <> 13 then // skip CR
-        begin
-          SetLength(RawLine, Length(RawLine) + 1);
-          RawLine[High(RawLine)] := B;
-        end;
-      until False;
-      JsonRequestLine := TEncoding.UTF8.GetString(RawLine);
-      SetLength(RawLine, 0);
-{$ELSE}
-      System.ReadLn(JsonRequestLine);
-{$ENDIF}
-
-      if Terminated or (JsonRequestLine = '') then
-        Continue;
-
-      if Assigned(FServer) and FServer.IsActive then
-      begin
-        try
-          FServer.ProcessRequest(JsonRequestLine);
-        except
-          // Capturamos excepciones para que un error de logica no mate al hilo de lectura
-        end;
-      end;
-    except
-      on E: EInOutError do
-      begin
-        if not Terminated then Break;
-      end;
-      on E: Exception do
-      begin
-        if not Terminated then Break;
-      end;
-    end;
-  end;
-end;
-
-
-{ TAiMCPStdioServer }
+// ---------------------------------------------------------------------------
+// TAiMCPStdioServer
+// ---------------------------------------------------------------------------
 
 constructor TAiMCPStdioServer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  FOutputLock := TCriticalSection.Create; // Para proteger Stdout
+  FWorkerThread := nil;
+  FOutputLock   := TCriticalSection.Create;
 end;
 
 destructor TAiMCPStdioServer.Destroy;
 begin
+  Stop;
   FOutputLock.Free;
-  inherited Destroy;
+  inherited;
+end;
+
+procedure TAiMCPStdioServer.SetConsoleIOToUTF8;
+begin
+{$IFDEF MSWINDOWS}
+  SetConsoleOutputCP(CP_UTF8);
+  SetConsoleCP(CP_UTF8);
+{$ENDIF}
+  // En Linux/macOS, UTF-8 es el encoding nativo de consola
 end;
 
 procedure TAiMCPStdioServer.Start;
 begin
-
-  if IsActive then
-    Exit;
+  inherited Start; // LogicServer.Start, FActive := True
 
   SetConsoleIOToUTF8;
 
-  Inherited Start;
   FWorkerThread := TStdioWorkerThread.Create(Self);
   FWorkerThread.Start;
 end;
 
 procedure TAiMCPStdioServer.Stop;
 begin
-  if not IsActive then
-    Exit;
-
   if Assigned(FWorkerThread) then
   begin
     FWorkerThread.Terminate;
-    // No llamamos WaitFor: ReadLn(Input) es bloqueante e ininterrumpible.
-    // El thread saldr� naturalmente al detectar EOF en stdin.
-    FWorkerThread := nil;
+    // No podemos desbloquear ReadLn facilmente — simplemente esperamos con timeout
+    // En produccion, el proceso termina junto con el host MCP
+    FWorkerThread.WaitFor;
+    FreeAndNil(FWorkerThread);
   end;
-
   inherited Stop;
 end;
 
-procedure TAiMCPStdioServer.ProcessRequest(const ARequestJson: string);
+procedure TAiMCPStdioServer.ProcessRequest(const ALine: string);
 var
-  ResponseBody: string;
+  AuthCtx: TAiAuthContext;
+  Response: string;
 begin
-  if not IsActive then
-    Exit;
+  // Para StdIO, la autenticacion no aplica (proceso local de confianza)
+  AuthCtx.IsAuthenticated := True;
+  AuthCtx.UserID          := 'stdio';
+  AuthCtx.UserName        := 'stdio';
+  AuthCtx.Roles           := 'admin';
 
-  // Delegamos el trabajo pesado al servidor l?gico
-  ResponseBody := FLogicServer.ExecuteRequest(ARequestJson, ''); // La sesi?n no aplica en Stdio
+  Response := FLogicServer.ExecuteRequest(ALine, 'stdio', AuthCtx);
 
-  // Si hay una respuesta que enviar (no es una notificaci?n)
-  if ResponseBody <> '' then
-  begin
-    SendResponse(ResponseBody);
-  end;
+  if Response <> '' then
+    SendResponse(Response);
 end;
 
-procedure TAiMCPStdioServer.SendResponse(const AResponseJson: string);
-{$IFDEF MSWINDOWS}
-var
-  StdoutHandle: THandle;
-  Bytes: TBytes;
-  Written: DWORD;
-{$ENDIF}
+procedure TAiMCPStdioServer.SendResponse(const AJsonStr: string);
 begin
-  // Write directly to the Windows stdout handle so the response reaches
-  // the MCP client even when the process is started without a console window
-  // (e.g., spawned headless by Claude Code). System.WriteLn + Flush(Output)
-  // does not flush the pipe in that scenario.
   FOutputLock.Enter;
   try
-{$IFDEF MSWINDOWS}
-    StdoutHandle := GetStdHandle(STD_OUTPUT_HANDLE);
-    Bytes := TEncoding.UTF8.GetBytes(AResponseJson + #10);
-    WriteFile(StdoutHandle, Bytes[0], Length(Bytes), Written, nil);
-{$ELSE}
-    System.WriteLn(AResponseJson);
+    WriteLn(AJsonStr);
     Flush(Output);
-{$ENDIF}
   finally
     FOutputLock.Leave;
   end;
-end;
-
-procedure TAiMCPStdioServer.SetConsoleIOToUTF8;
-begin
-{$IFDEF MSWINDOWS}
-  // Forzar UTF-8 (Codepage 65001) para que los JSON no se rompan
-  SetConsoleOutputCP(CP_UTF8);
-  SetConsoleCP(CP_UTF8);
-{$ENDIF}
 end;
 
 end.

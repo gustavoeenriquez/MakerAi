@@ -1,6 +1,6 @@
-﻿// MIT License
+// MIT License
 //
-// Copyright (c) <year> <copyright holders>
+// Copyright (c) 2024-2026 Gustavo Enriquez
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,269 +20,383 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enr?quez
-// Redes Sociales:
+// Nombre: Gustavo Enriquez
 // - Email: gustavoeenriquez@gmail.com
-
-// - Telegram: https://t.me/MakerAi_Suite_Delphi
-// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
-
-// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
-// - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
+//
+// --------- FPC PORT --------------------
+// Transporte HTTP para el servidor MCP usando TFPHTTPServer de fphttpserver.
+// Adaptaciones respecto a la version Delphi (que usa TIdHTTPServer de Indy):
+//   - TIdHTTPServer → TFPHTTPServer (fphttpserver)
+//   - TIdContext     → sin equivalente directo; IP en ARequest.RemoteAddr
+//   - ReadStringFromStream → ARequest.Content (string)
+//   - CustomHeaders  → AResponse.SetCustomHeader
+//   - El servidor corre en un thread dedicado (TAiMCPHttpServerThread)
 
-unit UMakerAi.MCPServer.Http;
+unit uMakerAi.MCPServer.Http;
+
+{$mode objfpc}{$H+}
 
 interface
 
 uses
-  System.SysUtils, System.Classes,
-  IdContext, IdCustomHTTPServer, IdHTTPServer,
-  UMakerAi.MCPServer.Core;
+  SysUtils, Classes, SyncObjs,
+  fphttpserver,
+  uMakerAi.MCPServer.Core;
 
 type
+  // Forward declarations
+  TAiMCPHttpServer = class;
 
+  // -------------------------------------------------------------------------
+  // TAiMCPCustomHTTPServer - TFPHTTPServer con referencia al servidor MCP
+  // -------------------------------------------------------------------------
+  TAiMCPCustomHTTPServer = class(TFPHTTPServer)
+  private
+    FOwner: TAiMCPHttpServer;
+  protected
+    procedure HandleRequest(var ARequest: TFPHTTPConnectionRequest;
+        var AResponse: TFPHTTPConnectionResponse); override;
+  end;
+
+  // -------------------------------------------------------------------------
+  // TAiMCPHttpServerThread - hilo que corre TFPHTTPServer.Active := True
+  // (bloquea hasta que Active := False)
+  // Nota: bug FPC #41758 (https://gitlab.com/freepascal.org/fpc/source/-/issues/41758) —
+  //   StopServerSocket llama StopAccepting(False), accept() nunca retorna.
+  //   Workaround en Start() con AcceptIdleTimeout.
+  // -------------------------------------------------------------------------
+  TAiMCPHttpServerThread = class(TThread)
+  private
+    FServer: TAiMCPCustomHTTPServer;
+  public
+    constructor Create(AServer: TAiMCPCustomHTTPServer);
+    procedure Execute; override;
+  end;
+
+  // -------------------------------------------------------------------------
+  // TAiMCPHttpServer - servidor MCP sobre HTTP
+  // -------------------------------------------------------------------------
   TAiMCPHttpServer = class(TAiMCPServer)
   private
-    FHttpServer: TIdHTTPServer;
+    FHttpServer  : TAiMCPCustomHTTPServer;
+    FServerThread: TAiMCPHttpServerThread;
 
-    procedure HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
-    procedure HandleOptionsRequest(AResponseInfo: TIdHTTPResponseInfo);
-    procedure HandleGetRequest(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
-    procedure HandlePostRequest(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo; const AAuthContext: TAiAuthContext);
-    function VerifyAndSetCORSHeaders(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo): Boolean;
+    procedure HandleOptionsRequest(var AResponse: TFPHTTPConnectionResponse);
+    procedure HandleGetRequest(var ARequest: TFPHTTPConnectionRequest;
+        var AResponse: TFPHTTPConnectionResponse);
+    procedure HandlePostRequest(var ARequest: TFPHTTPConnectionRequest;
+        var AResponse: TFPHTTPConnectionResponse;
+        const AAuthCtx: TAiAuthContext);
+    procedure SetCORSHeaders(var AResponse: TFPHTTPConnectionResponse;
+        const AOrigin: string);
+    function  CheckCORSAndGetOrigin(var ARequest: TFPHTTPConnectionRequest;
+        var AResponse: TFPHTTPConnectionResponse;
+        out AAllowedOrigin: string): Boolean;
 
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
-    procedure Start; Override;
-    procedure Stop; Override;
+    procedure Start; override;
+    procedure Stop; override;
 
-  Published
+    // Llamado por TAiMCPCustomHTTPServer.HandleRequest
+    procedure ProcessHTTPRequest(var ARequest: TFPHTTPConnectionRequest;
+        var AResponse: TFPHTTPConnectionResponse);
+
+  published
     property Port;
     property Endpoint;
     property CorsEnabled;
     property CorsAllowedOrigins;
     property ApiKey;
+    property ServerName;
     property OnValidateRequest;
   end;
 
-procedure Register;
-
 implementation
 
-uses System.StrUtils, IdGlobal, System.JSON;
+uses
+  StrUtils, fpjson;
 
 const
-  HTTP_OK = 200;
-  HTTP_NO_CONTENT = 204;
-  HTTP_NOT_FOUND = 404; // <-- CAMBIO: A?adida constante para claridad
-  HTTP_FORBIDDEN = 403;
-  HTTP_METHOD_NOT_ALLOWED = 405;
+  HTTP_OK                    = 200;
+  HTTP_NO_CONTENT            = 204;
+  HTTP_NOT_FOUND             = 404;
+  HTTP_METHOD_NOT_ALLOWED    = 405;
+  HTTP_FORBIDDEN             = 403;
+  HTTP_UNAUTHORIZED          = 401;
   HTTP_INTERNAL_SERVER_ERROR = 500;
-  CORS_MAX_AGE_SECONDS = 86400;
+  CORS_MAX_AGE_SECONDS       = 86400;
 
-procedure Register;
+// ---------------------------------------------------------------------------
+// TAiMCPCustomHTTPServer
+// ---------------------------------------------------------------------------
+
+procedure TAiMCPCustomHTTPServer.HandleRequest(
+    var ARequest: TFPHTTPConnectionRequest;
+    var AResponse: TFPHTTPConnectionResponse);
 begin
-  RegisterComponents('MakerAI', [TAiMCPHttpServer]);
+  if Assigned(FOwner) then
+    FOwner.ProcessHTTPRequest(ARequest, AResponse);
 end;
 
-{ TAiMCPHttpServer }
+// ---------------------------------------------------------------------------
+// TAiMCPHttpServerThread
+// ---------------------------------------------------------------------------
+
+constructor TAiMCPHttpServerThread.Create(AServer: TAiMCPCustomHTTPServer);
+begin
+  inherited Create(True); // suspendido
+  FServer    := AServer;
+  FreeOnTerminate := False;
+end;
+
+procedure TAiMCPHttpServerThread.Execute;
+begin
+  try
+    FServer.Active := True; // bloquea hasta Active := False
+  except
+    // Ignorar excepcion al detener
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// TAiMCPHttpServer
+// ---------------------------------------------------------------------------
 
 constructor TAiMCPHttpServer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-
-  FHttpServer := TIdHTTPServer.Create(Self);
-  FHttpServer.OnCommandGet := HttpCommand;
-  FHttpServer.OnCommandOther := HttpCommand;
+  FHttpServer        := TAiMCPCustomHTTPServer.Create(nil);
+  FHttpServer.FOwner := Self;
+  FServerThread      := nil;
 end;
 
 destructor TAiMCPHttpServer.Destroy;
 begin
+  Stop;
   FHttpServer.Free;
-  inherited Destroy;
+  inherited;
 end;
 
 procedure TAiMCPHttpServer.Start;
 begin
-  inherited Start;
-  FHttpServer.DefaultPort := FLogicServer.Port;
-  FHttpServer.Active := True;
+  inherited Start; // TAiMCPServer.Start → LogicServer.Start, FActive := True
+
+  FHttpServer.Port := Port;
+  // FPC bug #41758: StopServerSocket llama StopAccepting(False) — no cierra el
+  // socket, accept() queda bloqueado. AcceptIdleTimeout desbloquea periodicamente
+  // el loop para comprobar FAccepting. Bug: gitlab.com/.../work_items/41758
+  FHttpServer.AcceptIdleTimeout := 500;
+
+  FServerThread := TAiMCPHttpServerThread.Create(FHttpServer);
+  FServerThread.Start;
 end;
 
 procedure TAiMCPHttpServer.Stop;
 begin
-  if FHttpServer.Active then
+  if Assigned(FHttpServer) and FHttpServer.Active then
+  begin
+    // Ver Start() — el AcceptIdleTimeout evita que accept() bloquee forever
     FHttpServer.Active := False;
+  end;
+
+  if Assigned(FServerThread) then
+  begin
+    FServerThread.WaitFor;
+    FreeAndNil(FServerThread);
+  end;
+
   inherited Stop;
 end;
 
-function TAiMCPHttpServer.VerifyAndSetCORSHeaders(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo): Boolean;
+// --- CORS -------------------------------------------------------------------
+
+function TAiMCPHttpServer.CheckCORSAndGetOrigin(
+    var ARequest: TFPHTTPConnectionRequest;
+    var AResponse: TFPHTTPConnectionResponse;
+    out AAllowedOrigin: string): Boolean;
 var
   Origin: string;
-  AllowedOriginsList: TStringList;
-  AllowedOrigin: string;
-  IsAllowed: Boolean;
+  SL: TStringList;
+  I: Integer;
 begin
   Result := True;
-  if not FLogicServer.CorsEnabled then
+  AAllowedOrigin := '*';
+
+  if not CorsEnabled then
     Exit;
-  Origin := ARequestInfo.RawHeaders.Values['Origin'];
-  AllowedOrigin := '*';
-  IsAllowed := False;
-  if (Origin = '') or (FLogicServer.CorsAllowedOrigins = '*') then
+
+  Origin := ARequest.GetCustomHeader('Origin');
+
+  if (Origin = '') or (CorsAllowedOrigins = '*') then
   begin
-    IsAllowed := True;
-  end
-  else
-  begin
-    AllowedOriginsList := TStringList.Create;
-    try
-      AllowedOriginsList.DelimitedText := StringReplace(FLogicServer.CorsAllowedOrigins, ';', ',', [rfReplaceAll]);
-      if AllowedOriginsList.IndexOf(Origin) > -1 then
+    if Origin = '' then
+      AAllowedOrigin := '*'
+    else
+      AAllowedOrigin := Origin;
+    Exit;
+  end;
+
+  SL := TStringList.Create;
+  try
+    SL.DelimitedText := StringReplace(CorsAllowedOrigins, ';', ',', [rfReplaceAll]);
+    for I := 0 to SL.Count - 1 do
+    begin
+      if SameText(Trim(SL[I]), Origin) then
       begin
-        AllowedOrigin := Origin;
-        IsAllowed := True;
+        AAllowedOrigin := Origin;
+        Exit;
       end;
-    finally
-      AllowedOriginsList.Free;
     end;
+  finally
+    SL.Free;
   end;
 
-  if not IsAllowed then
-  begin
-    AResponseInfo.ResponseNo := HTTP_FORBIDDEN;
-    AResponseInfo.ResponseText := 'CORS: Origin Not Allowed';
-    Result := False;
-    Exit;
-  end;
-
-  AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Origin'] := AllowedOrigin;
-  AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Methods'] := 'POST, GET, OPTIONS';
-  AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Headers'] := 'Content-Type, X-Session-ID';
-  AResponseInfo.CustomHeaders.Values['Access-Control-Max-Age'] := IntToStr(CORS_MAX_AGE_SECONDS);
+  // Origen no permitido
+  AResponse.Code    := HTTP_FORBIDDEN;
+  AResponse.SetCustomHeader('Content-Type', 'application/json');
+  AResponse.Content := '{"error":"CORS origin not allowed"}';
+  Result := False;
 end;
 
-procedure TAiMCPHttpServer.HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
-var
-  AuthContext: TAiAuthContext;
-  AuthHeader: string;
+procedure TAiMCPHttpServer.SetCORSHeaders(
+    var AResponse: TFPHTTPConnectionResponse;
+    const AOrigin: string);
 begin
-  // --- PASO 1: Verificar y establecer cabeceras CORS ---
-  if not VerifyAndSetCORSHeaders(ARequestInfo, AResponseInfo) then
-    Exit;
-
-  // --- PASO 2: Autenticaci�n (Layer 1: API Key + Layer 2: Evento custom) ---
-  // Extraer header de autenticaci�n: primero Authorization, luego X-API-Key
-  AuthHeader := ARequestInfo.RawHeaders.Values['Authorization'];
-  if AuthHeader = '' then
-    AuthHeader := ARequestInfo.RawHeaders.Values['X-API-Key'];
-
-  if not ValidateRequest(AuthHeader, AContext.Binding.PeerIP, AuthContext) then
-  begin
-    AResponseInfo.ResponseNo := 401;
-    AResponseInfo.ResponseText := 'Unauthorized';
-    AResponseInfo.ContentText := '{"jsonrpc": "2.0", "error": {"code": -32001, "message": "Authentication failed"}, "id": null}';
-    AResponseInfo.ContentType := 'application/json';
-    Exit;
-  end;
-
-  // --- PASO 3: Despachar la petici�n al manejador correcto seg�n el m�todo HTTP ---
-  if not SameText(ARequestInfo.URI, Endpoint) then
-  begin
-    // Si la URL no es nuestro endpoint /mcp, devolvemos un 404 Not Found.
-    AResponseInfo.ResponseNo := HTTP_NOT_FOUND;
-    AResponseInfo.ResponseText := 'Not Found';
-    AResponseInfo.ContentText := 'Endpoint not found. Please use ' + Endpoint;
-  end
-  else if SameText(ARequestInfo.Command, 'OPTIONS') then
-  begin
-    // El navegador env?a una petici?n OPTIONS (preflight) para verificar CORS.
-    HandleOptionsRequest(AResponseInfo);
-  end
-  else if SameText(ARequestInfo.Command, 'GET') then
-  begin
-    // Una petici?n GET a /mcp devuelve informaci?n del servidor.
-    HandleGetRequest(ARequestInfo, AResponseInfo);
-  end
-  else if SameText(ARequestInfo.Command, 'POST') then
-  begin
-    // Una petici�n POST a /mcp contiene una llamada de procedimiento JSON-RPC.
-    HandlePostRequest(ARequestInfo, AResponseInfo, AuthContext);
-  end
-  else
-  begin
-    // Cualquier otro m?todo (PUT, DELETE, etc.) no est? permitido.
-    AResponseInfo.ResponseNo := HTTP_METHOD_NOT_ALLOWED;
-    AResponseInfo.ResponseText := 'Method Not Allowed';
-    AResponseInfo.ContentText := 'Only GET, POST, and OPTIONS are supported.';
-  end;
+  AResponse.SetCustomHeader('Access-Control-Allow-Origin',
+      AOrigin);
+  AResponse.SetCustomHeader('Access-Control-Allow-Methods',
+      'POST, GET, OPTIONS');
+  AResponse.SetCustomHeader('Access-Control-Allow-Headers',
+      'Content-Type, Authorization, X-API-Key, X-Session-ID');
+  AResponse.SetCustomHeader('Access-Control-Max-Age',
+      IntToStr(CORS_MAX_AGE_SECONDS));
 end;
 
-procedure TAiMCPHttpServer.HandleOptionsRequest(AResponseInfo: TIdHTTPResponseInfo);
+// --- Handlers HTTP ----------------------------------------------------------
+
+procedure TAiMCPHttpServer.HandleOptionsRequest(
+    var AResponse: TFPHTTPConnectionResponse);
 begin
-  AResponseInfo.ResponseNo := HTTP_NO_CONTENT;
-  AResponseInfo.ResponseText := 'No Content';
-  // Indy > 10.6 puede requerir esto para evitar el HTML por defecto
-  AResponseInfo.ContentLength := 0;
+  AResponse.Code    := HTTP_NO_CONTENT;
+  AResponse.Content := '';
 end;
 
-procedure TAiMCPHttpServer.HandleGetRequest(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+procedure TAiMCPHttpServer.HandleGetRequest(
+    var ARequest: TFPHTTPConnectionRequest;
+    var AResponse: TFPHTTPConnectionResponse);
 var
   InfoObj: TJSONObject;
 begin
-  // Respondemos con informaci?n b?sica del servidor en formato JSON
   InfoObj := TJSONObject.Create;
   try
-    InfoObj.AddPair('serverName', TJSONString.Create(FLogicServer.ServerName));
-    InfoObj.AddPair('protocolVersion', TJSONString.Create(FLogicServer.ProtocolVersion));
-    InfoObj.AddPair('status', TJSONString.Create('active'));
+    InfoObj.Add('serverName', TJSONString.Create(FLogicServer.ServerName));
+    InfoObj.Add('protocolVersion', TJSONString.Create(FLogicServer.ProtocolVersion));
+    InfoObj.Add('status', TJSONString.Create('active'));
+    InfoObj.Add('endpoint', TJSONString.Create(Endpoint));
 
-    AResponseInfo.ResponseNo := HTTP_OK;
-    AResponseInfo.ResponseText := 'OK';
-    AResponseInfo.ContentType := 'application/json; charset=utf-8';
-    AResponseInfo.ContentText := InfoObj.ToJSON; // <- Aqu? asignamos el JSON
+    AResponse.Code := HTTP_OK;
+    AResponse.ContentType := 'application/json; charset=utf-8';
+    AResponse.Content := InfoObj.AsJSON;
   finally
     InfoObj.Free;
   end;
 end;
 
-procedure TAiMCPHttpServer.HandlePostRequest(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo; const AAuthContext: TAiAuthContext);
+procedure TAiMCPHttpServer.HandlePostRequest(
+    var ARequest: TFPHTTPConnectionRequest;
+    var AResponse: TFPHTTPConnectionResponse;
+    const AAuthCtx: TAiAuthContext);
 var
   RequestBody, ResponseBody, SessionID: string;
 begin
   try
-    RequestBody := ReadStringFromStream(ARequestInfo.PostStream, -1, IndyTextEncoding_UTF8);
-    SessionID := ARequestInfo.RawHeaders.Values['X-Session-ID'];
+    // Leer body del POST — en fphttpserver, ARequest.Content es el body como string
+    RequestBody := ARequest.Content;
 
-    ResponseBody := FLogicServer.ExecuteRequest(RequestBody, SessionID, AAuthContext);
+    SessionID := ARequest.GetCustomHeader('X-Session-ID');
 
-    AResponseInfo.ContentType := 'application/json; charset=utf-8';
-    AResponseInfo.CharSet := 'utf-8';
+    ResponseBody := FLogicServer.ExecuteRequest(RequestBody, SessionID, AAuthCtx);
+
+    AResponse.ContentType := 'application/json; charset=utf-8';
 
     if ResponseBody = '' then
     begin
-      AResponseInfo.ResponseNo := HTTP_NO_CONTENT;
-      AResponseInfo.ResponseText := 'No Content';
-      AResponseInfo.ContentLength := 0;
+      AResponse.Code    := HTTP_NO_CONTENT;
+      AResponse.Content := '';
     end
     else
     begin
-      AResponseInfo.ResponseNo := HTTP_OK;
-      AResponseInfo.ResponseText := 'OK';
-      AResponseInfo.ContentText := ResponseBody; // <- Asignamos el JSON
+      AResponse.Code    := HTTP_OK;
+      AResponse.Content := ResponseBody;
     end;
 
   except
     on E: Exception do
     begin
-      AResponseInfo.ResponseNo := HTTP_INTERNAL_SERVER_ERROR;
-      AResponseInfo.ResponseText := 'Internal Server Error';
-      AResponseInfo.ContentText := '{"jsonrpc": "2.0", "error": {"code": -32000, "message": "Server error during POST request processing"}, "id": null}';
-      AResponseInfo.ContentType := 'application/json';
+      AResponse.Code := HTTP_INTERNAL_SERVER_ERROR;
+      AResponse.ContentType := 'application/json';
+      AResponse.Content :=
+          '{"jsonrpc":"2.0","error":{"code":-32000,"message":"Server error: '
+          + StringReplace(E.Message, '"', '\"', [rfReplaceAll])
+          + '"},"id":null}';
     end;
+  end;
+end;
+
+// --- Punto de entrada del servidor HTTP -------------------------------------
+
+procedure TAiMCPHttpServer.ProcessHTTPRequest(
+    var ARequest: TFPHTTPConnectionRequest;
+    var AResponse: TFPHTTPConnectionResponse);
+var
+  AuthCtx: TAiAuthContext;
+  AuthHeader, AllowedOrigin: string;
+begin
+  // 1. CORS
+  if CorsEnabled then
+  begin
+    if not CheckCORSAndGetOrigin(ARequest, AResponse, AllowedOrigin) then
+      Exit; // 403 ya escrito
+    SetCORSHeaders(AResponse, AllowedOrigin);
+  end;
+
+  // 2. Autenticacion
+  AuthHeader := ARequest.GetCustomHeader('Authorization');
+  if AuthHeader = '' then
+    AuthHeader := ARequest.GetCustomHeader('X-API-Key');
+
+  if not ValidateRequest(AuthHeader, ARequest.RemoteAddr, AuthCtx) then
+  begin
+    AResponse.Code := HTTP_UNAUTHORIZED;
+    AResponse.ContentType := 'application/json';
+    AResponse.Content :=
+        '{"jsonrpc":"2.0","error":{"code":-32001,"message":"Authentication failed"},"id":null}';
+    Exit;
+  end;
+
+  // 3. Verificar endpoint
+  if not SameText(ARequest.PathInfo, Endpoint) then
+  begin
+    AResponse.Code    := HTTP_NOT_FOUND;
+    AResponse.Content := 'Endpoint not found. Use ' + Endpoint;
+    Exit;
+  end;
+
+  // 4. Despachar por metodo HTTP
+  if SameText(ARequest.Method, 'OPTIONS') then
+    HandleOptionsRequest(AResponse)
+  else if SameText(ARequest.Method, 'GET') then
+    HandleGetRequest(ARequest, AResponse)
+  else if SameText(ARequest.Method, 'POST') then
+    HandlePostRequest(ARequest, AResponse, AuthCtx)
+  else
+  begin
+    AResponse.Code    := HTTP_METHOD_NOT_ALLOWED;
+    AResponse.Content := 'Only GET, POST and OPTIONS are supported.';
   end;
 end;
 
