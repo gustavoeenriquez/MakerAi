@@ -44,6 +44,30 @@ MakerAI Suite es una librería de orquestación de IA que permite integrar múlt
 
 ---
 
+## Compilar con Free Pascal desde Windows / WSL
+
+La compilación FPC de los demos se ejecuta en Linux. En un equipo Windows usa WSL:
+
+```powershell
+.\Demos\build_demos_wsl.ps1
+```
+
+Los argumentos se pasan a `Demos/build_demos.sh`, por ejemplo:
+
+```powershell
+.\Demos\build_demos_wsl.ps1 clean
+.\Demos\build_demos_wsl.ps1 --win64
+.\Demos\build_demos_wsl.ps1 -Distro Ubuntu clean
+```
+
+En WSL debe estar instalado Free Pascal (`fpc -iV`, versión 3.2.2 o superior):
+
+```bash
+sudo apt-get update && sudo apt-get install -y fpc
+```
+
+---
+
 ## Características
 
 ### Drivers LLM

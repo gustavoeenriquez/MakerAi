@@ -14,6 +14,30 @@
 
 ---
 
+## Free Pascal build from Windows / WSL
+
+The FPC demo build runs under Linux. On a Windows development machine, use WSL:
+
+```powershell
+.\Demos\build_demos_wsl.ps1
+```
+
+Arguments are forwarded to `Demos/build_demos.sh`, for example:
+
+```powershell
+.\Demos\build_demos_wsl.ps1 clean
+.\Demos\build_demos_wsl.ps1 --win64
+.\Demos\build_demos_wsl.ps1 -Distro Ubuntu clean
+```
+
+WSL needs Free Pascal installed (`fpc -iV`, version 3.2.2 or newer):
+
+```bash
+sudo apt-get update && sudo apt-get install -y fpc
+```
+
+---
+
 ## MakerAI is more than an API wrapper
 
 Most AI libraries for Delphi stop at wrapping REST calls. **MakerAI is different.**

@@ -36,6 +36,7 @@
 *.old
 *.tmp
 *.temp
+.build_demos_wsl_*.sh
 *~*
 *.~*
 
@@ -138,4 +139,5 @@ Source/Packages/hpp/
 # -------------------------------------------
 *.bat
 *.ps1
+!Demos/build_demos_wsl.ps1
 *.cdr

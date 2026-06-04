@@ -8,6 +8,8 @@
 *.inc text
 *.txt text
 *.md text
+*.sh text eol=lf
+*.ps1 text eol=crlf
 
 # Archivos de proyecto Delphi (NO convertir - mantener CRLF)
 *.dpk -text

@@ -13,7 +13,13 @@ set -euo pipefail
 
 FPC="${FPC:-fpc}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$SCRIPT_DIR"
+
+COMMON_FLAGS=(-MDelphi -Sci -Fi"$REPO_ROOT/Source/Core")
+while IFS= read -r dir; do
+    COMMON_FLAGS+=("-Fu$dir")
+done < <(find "$REPO_ROOT/Source" -type d | sort)
 
 # --- clean ---
 if [ "${1:-}" = "clean" ]; then
@@ -71,7 +77,7 @@ for f in *.pas; do
 
     OUT=$(mktemp /tmp/makerai_build_XXXXXX)
     # shellcheck disable=SC2086
-    if $FPC -FE"$BIN_DIR" -FUlib "${EXTRA_FLAGS[@]}" "$f" >"$OUT" 2>&1; then
+    if $FPC "${COMMON_FLAGS[@]}" -FE"$BIN_DIR" -FUlib "${EXTRA_FLAGS[@]}" "$f" >"$OUT" 2>&1; then
         echo "✅"
         OK=$((OK + 1))
     else
