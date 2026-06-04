@@ -1,0 +1,228 @@
+﻿object frmPPMAutoTools: TfrmPPMAutoTools
+  Left = 0
+  Top = 0
+  Caption = 'MakerAI 064 — PPM Auto Tools'
+  ClientHeight = 720
+  ClientWidth = 1060
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  DesignerMasterStyle = 0
+  object AiConn: TAiChatConnection
+    OnReceiveData = AiConnReceiveData
+    OnReceiveDataEnd = AiConnReceiveDataEnd
+    OnError = AiConnError
+    Left = 24
+    Top = 16
+  end
+  object AiFunctions1: TAiFunctions
+    Left = 88
+    Top = 16
+  end
+  object MainLayout: TLayout
+    Align = Client
+    Size.Width = 1060.000000000000000
+    Size.Height = 720.000000000000000
+    Size.PlatformDefault = False
+    object LeftPanel: TLayout
+      Align = Left
+      Size.Width = 240.000000000000000
+      Size.Height = 720.000000000000000
+      Size.PlatformDefault = False
+      object RectLeft: TRectangle
+        Align = Client
+        Fill.Color = xFF1E1E2E
+        Stroke.Kind = None
+        Size.Width = 240.000000000000000
+        Size.Height = 720.000000000000000
+        Size.PlatformDefault = False
+        object LblTitulo: TLabel
+          Position.X = 12
+          Position.Y = 12
+          Size.Width = 216.000000000000000
+          Size.Height = 24.000000000000000
+          Size.PlatformDefault = False
+          StyledSettings = [Family, Size, Style]
+          Text = 'PPM Auto Tools'
+          TextSettings.Font.Size = 14
+          TextSettings.Font.Style = [fsBold]
+          TextSettings.FontColor = xFF89DCEB
+        end
+        object LblDriver: TLabel
+          Position.X = 12
+          Position.Y = 48
+          Size.Width = 60.000000000000000
+          Size.Height = 18.000000000000000
+          Size.PlatformDefault = False
+          StyledSettings = [Family, Size, Style]
+          Text = 'Driver:'
+          TextSettings.FontColor = xFFCDD6F4
+        end
+        object ComboDriver: TComboBox
+          Position.X = 12
+          Position.Y = 68
+          Size.Width = 216.000000000000000
+          Size.Height = 28.000000000000000
+          Size.PlatformDefault = False
+          OnChange = ComboDriverChange
+        end
+        object LblModel: TLabel
+          Position.X = 12
+          Position.Y = 104
+          Size.Width = 60.000000000000000
+          Size.Height = 18.000000000000000
+          Size.PlatformDefault = False
+          StyledSettings = [Family, Size, Style]
+          Text = 'Modelo:'
+          TextSettings.FontColor = xFFCDD6F4
+        end
+        object ComboModel: TComboBox
+          Position.X = 12
+          Position.Y = 124
+          Size.Width = 216.000000000000000
+          Size.Height = 28.000000000000000
+          Size.PlatformDefault = False
+          OnChange = ComboModelChange
+        end
+        object LblApiKey: TLabel
+          Position.X = 12
+          Position.Y = 160
+          Size.Width = 60.000000000000000
+          Size.Height = 18.000000000000000
+          Size.PlatformDefault = False
+          StyledSettings = [Family, Size, Style]
+          Text = 'API Key:'
+          TextSettings.FontColor = xFFCDD6F4
+        end
+        object EditApiKey: TEdit
+          Position.X = 12
+          Position.Y = 180
+          Size.Width = 216.000000000000000
+          Size.Height = 28.000000000000000
+          Size.PlatformDefault = False
+          Password = True
+          OnChange = EditApiKeyChange
+        end
+        object ChAsync: TCheckBox
+          Position.X = 12
+          Position.Y = 216
+          Size.Width = 160.000000000000000
+          Size.Height = 22.000000000000000
+          Size.PlatformDefault = False
+          IsChecked = True
+          StyledSettings = [Family, Size, Style]
+          Text = 'Asíncrono'
+          TextSettings.FontColor = xFFCDD6F4
+        end
+        object LineSep1: TLine
+          Position.X = 12
+          Position.Y = 246
+          Size.Width = 216.000000000000000
+          Size.Height = 2.000000000000000
+          Size.PlatformDefault = False
+          Stroke.Color = xFF45475A
+        end
+        object LblInstalados: TLabel
+          Position.X = 12
+          Position.Y = 254
+          Size.Width = 216.000000000000000
+          Size.Height = 18.000000000000000
+          Size.PlatformDefault = False
+          StyledSettings = [Family, Size, Style]
+          Text = 'Herramientas instaladas:'
+          TextSettings.Font.Style = [fsBold]
+          TextSettings.FontColor = xFFA6E3A1
+        end
+        object MemoInstalados: TMemo
+          Position.X = 12
+          Position.Y = 276
+          Size.Width = 216.000000000000000
+          Size.Height = 100.000000000000000
+          Size.PlatformDefault = False
+          ReadOnly = True
+          TextSettings.FontColor = xFF1C1C1C
+          StyledSettings = [Family, Style]
+        end
+        object LineSep2: TLine
+          Position.X = 12
+          Position.Y = 384
+          Size.Width = 216.000000000000000
+          Size.Height = 2.000000000000000
+          Size.PlatformDefault = False
+          Stroke.Color = xFF45475A
+        end
+        object LblLog: TLabel
+          Position.X = 12
+          Position.Y = 392
+          Size.Width = 216.000000000000000
+          Size.Height = 18.000000000000000
+          Size.PlatformDefault = False
+          StyledSettings = [Family, Size, Style]
+          Text = 'Log PPM:'
+          TextSettings.Font.Style = [fsBold]
+          TextSettings.FontColor = xFFF9E2AF
+        end
+        object MemoLog: TMemo
+          Position.X = 12
+          Position.Y = 414
+          Size.Width = 216.000000000000000
+          Size.Height = 300.000000000000000
+          Size.PlatformDefault = False
+          ReadOnly = True
+          TextSettings.FontColor = xFF1C1C1C
+          StyledSettings = [Family, Style]
+        end
+      end
+    end
+    object ChatPanel: TLayout
+      Align = Client
+      Size.Width = 820.000000000000000
+      Size.Height = 720.000000000000000
+      Size.PlatformDefault = False
+      object ChatList1: TChatList
+        Align = Client
+        Size.Width = 820.000000000000000
+        Size.Height = 612.000000000000000
+        Size.PlatformDefault = False
+      end
+      object AniIndicator1: TAniIndicator
+        Align = None
+        Position.X = 380
+        Position.Y = 310
+        Enabled = False
+        Visible = False
+      end
+      object RectStatus: TRectangle
+        Align = Bottom
+        Size.Width = 820.000000000000000
+        Size.Height = 28.000000000000000
+        Size.PlatformDefault = False
+        Fill.Color = xFF181825
+        Stroke.Kind = None
+        object LblStatus: TLabel
+          Align = Client
+          Size.Width = 820.000000000000000
+          Size.Height = 28.000000000000000
+          Size.PlatformDefault = False
+          Margins.Left = 12.000000000000000
+          Margins.Right = 8.000000000000000
+          StyledSettings = [Family, Size, Style]
+          Text = ''
+          TextSettings.FontColor = xFF6C7086
+          TextSettings.HorzAlign = Leading
+          TextSettings.VertAlign = Center
+        end
+      end
+      object ChatInput1: TChatInput
+        Align = Bottom
+        Size.Width = 820.000000000000000
+        Size.Height = 80.000000000000000
+        Size.PlatformDefault = False
+        OnSendEvent = ChatInput1SendEvent
+        OnCancel = ChatInput1Cancel
+      end
+    end
+  end
+end

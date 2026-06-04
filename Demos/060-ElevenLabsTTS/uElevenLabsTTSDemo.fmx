@@ -1,0 +1,192 @@
+﻿object FrmElevenLabs: TFrmElevenLabs
+  Left = 0
+  Top = 0
+  Caption = 'ElevenLabs TTS / STT Demo — MakerAI'
+  ClientHeight = 476
+  ClientWidth = 660
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+  object LblTexto: TLabel
+    Position.X = 8.000000000000000000
+    Position.Y = 8.000000000000000000
+    Size.Width = 640.000000000000000000
+    Size.Height = 18.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'Texto a sintetizar:'
+  end
+  object MemoTexto: TMemo
+    Position.X = 8.000000000000000000
+    Position.Y = 28.000000000000000000
+    Size.Width = 640.000000000000000000
+    Size.Height = 80.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+  end
+  object LblVoiceId: TLabel
+    Position.X = 8.000000000000000000
+    Position.Y = 118.000000000000000000
+    Size.Width = 58.000000000000000000
+    Size.Height = 17.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'Voice ID:'
+  end
+  object EdVoiceId: TEdit
+    Position.X = 70.000000000000000000
+    Position.Y = 116.000000000000000000
+    Size.Width = 200.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    Text = '21m00Tcm4TlvDq8ikWAM'
+  end
+  object LblModelo: TLabel
+    Position.X = 280.000000000000000000
+    Position.Y = 118.000000000000000000
+    Size.Width = 52.000000000000000000
+    Size.Height = 17.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'Modelo:'
+  end
+  object CbModelo: TComboBox
+    Position.X = 336.000000000000000000
+    Position.Y = 116.000000000000000000
+    Size.Width = 200.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 2
+  end
+  object LblFormato: TLabel
+    Position.X = 8.000000000000000000
+    Position.Y = 150.000000000000000000
+    Size.Width = 58.000000000000000000
+    Size.Height = 17.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'Formato:'
+  end
+  object CbFormato: TComboBox
+    Position.X = 70.000000000000000000
+    Position.Y = 148.000000000000000000
+    Size.Width = 200.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 3
+  end
+  object BtnGenerar: TButton
+    Position.X = 8.000000000000000000
+    Position.Y = 182.000000000000000000
+    Size.Width = 140.000000000000000000
+    Size.Height = 28.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 4
+    Text = 'Generar Voz'
+    OnClick = BtnGenerarClick
+  end
+  object BtnReproducir: TButton
+    Position.X = 156.000000000000000000
+    Position.Y = 182.000000000000000000
+    Size.Width = 130.000000000000000000
+    Size.Height = 28.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 5
+    Text = 'Reproducir'
+    Enabled = False
+    OnClick = BtnReproducirClick
+  end
+  object BtnGuardar: TButton
+    Position.X = 294.000000000000000000
+    Position.Y = 182.000000000000000000
+    Size.Width = 130.000000000000000000
+    Size.Height = 28.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 6
+    Text = 'Guardar audio'
+    Enabled = False
+    OnClick = BtnGuardarClick
+  end
+  object LblTTSStatus: TLabel
+    Position.X = 8.000000000000000000
+    Position.Y = 220.000000000000000000
+    Size.Width = 640.000000000000000000
+    Size.Height = 17.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'Listo para generar voz.'
+    FontColor = claGray
+  end
+  object LblSeparador: TLabel
+    Position.X = 8.000000000000000000
+    Position.Y = 246.000000000000000000
+    Size.Width = 640.000000000000000000
+    Size.Height = 2.000000000000000000
+    Size.PlatformDefault = False
+    Text = ''
+    AutoSize = False
+  end
+  object LblSTT: TLabel
+    Position.X = 8.000000000000000000
+    Position.Y = 256.000000000000000000
+    Size.Width = 300.000000000000000000
+    Size.Height = 18.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'Speech-to-Text (STT):'
+    Font.Style = [fsBold]
+    StyledSettings = [Family, Size, FontColor]
+  end
+  object BtnCargar: TButton
+    Position.X = 316.000000000000000000
+    Position.Y = 252.000000000000000000
+    Size.Width = 150.000000000000000000
+    Size.Height = 26.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 7
+    Text = 'Cargar audio...'
+    OnClick = BtnCargarClick
+  end
+  object LblAudio: TLabel
+    Position.X = 8.000000000000000000
+    Position.Y = 284.000000000000000000
+    Size.Width = 640.000000000000000000
+    Size.Height = 17.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'Sin archivo cargado'
+    FontColor = claGray
+  end
+  object BtnTranscribir: TButton
+    Position.X = 8.000000000000000000
+    Position.Y = 306.000000000000000000
+    Size.Width = 150.000000000000000000
+    Size.Height = 26.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 8
+    Text = 'Transcribir'
+    Enabled = False
+    OnClick = BtnTranscribirClick
+  end
+  object MemoSTT: TMemo
+    Position.X = 8.000000000000000000
+    Position.Y = 338.000000000000000000
+    Size.Width = 640.000000000000000000
+    Size.Height = 100.000000000000000000
+    Size.PlatformDefault = False
+    ReadOnly = True
+    TabOrder = 9
+  end
+  object LblStatus: TLabel
+    Position.X = 8.000000000000000000
+    Position.Y = 448.000000000000000000
+    Size.Width = 640.000000000000000000
+    Size.Height = 17.000000000000000000
+    Size.PlatformDefault = False
+    Text = 'Listo.'
+    FontColor = claGray
+  end
+  object MediaPlayer: TMediaPlayer
+    Volume = 1.000000000000000000
+  end
+  object OpenDlg: TOpenDialog
+  end
+  object SaveDlg: TSaveDialog
+  end
+end

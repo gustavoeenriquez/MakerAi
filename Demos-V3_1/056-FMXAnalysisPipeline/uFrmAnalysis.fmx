@@ -1,0 +1,81 @@
+﻿object FrmAnalysis: TFrmAnalysis
+  Left = 0
+  Top = 0
+  Caption = 'MakerAI - Analysis Pipeline'
+  ClientHeight = 700
+  ClientWidth = 860
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  DesignerMasterStyle = 0
+  object LayoutTop: TLayout
+    Align = Top
+    Height = 110
+    Width = 860
+    object LblTopic: TLabel
+      Position.X = 16
+      Position.Y = 12
+      Width = 60
+      Height = 20
+      Text = 'Topic:'
+    end
+    object EdTopic: TEdit
+      Position.X = 80
+      Position.Y = 8
+      Width = 680
+      Height = 30
+      TabOrder = 0
+    end
+    object BtnStart: TButton
+      Position.X = 770
+      Position.Y = 8
+      Width = 80
+      Height = 30
+      Text = 'Analyze'
+      OnClick = BtnStartClick
+      TabOrder = 1
+    end
+    object LblStatus: TLabel
+      Position.X = 16
+      Position.Y = 52
+      Width = 820
+      Height = 20
+      Text = 'Ready.'
+    end
+  end
+  object LayoutLog: TLayout
+    Align = Client
+    object LblLog: TLabel
+      Align = Top
+      Height = 20
+      Text = 'Pipeline Transcript:'
+      Margins.Left = 8
+      Margins.Top = 4
+    end
+    object MemoLog: TMemo
+      Align = Client
+      ReadOnly = True
+      ScrollIndicators = []
+      TabOrder = 2
+    end
+  end
+  object LayoutResult: TLayout
+    Align = Bottom
+    Height = 180
+    object LblResult: TLabel
+      Align = Top
+      Height = 20
+      Text = 'Executive Summary:'
+      Margins.Left = 8
+      Margins.Top = 4
+    end
+    object MemoResult: TMemo
+      Align = Client
+      ReadOnly = True
+      ScrollIndicators = []
+      TabOrder = 3
+    end
+  end
+end

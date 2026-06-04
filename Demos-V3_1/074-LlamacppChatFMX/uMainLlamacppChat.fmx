@@ -1,0 +1,282 @@
+object frmLlamacppChat: TfrmLlamacppChat
+  Left = 0
+  Top = 0
+  Caption = 'LlamaCpp Chat - MakerAI Demo 074'
+  ClientHeight = 640
+  ClientWidth = 820
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  DesignerMasterStyle = 0
+  object PnlTop: TPanel
+    Align = Top
+    Size.Width = 820.000000000000000000
+    Size.Height = 122.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object LblDLL: TLabel
+      Position.X = 4.000000000000000000
+      Position.Y = 8.000000000000000000
+      Size.Width = 48.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'DLL:'
+      TabOrder = 0
+    end
+    object EdtDLL: TEdit
+      Touch.InteractiveGestures = [LongTap, DoubleTap]
+      TabOrder = 1
+      Position.X = 56.000000000000000000
+      Position.Y = 3.000000000000000000
+      Size.Width = 722.000000000000000000
+      Size.Height = 30.000000000000000000
+      Size.PlatformDefault = False
+    end
+    object BtnDLL: TButton
+      Position.X = 784.000000000000000000
+      Position.Y = 3.000000000000000000
+      Size.Width = 30.000000000000000000
+      Size.Height = 30.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      Text = '...'
+      TextSettings.Trimming = None
+      OnClick = BtnDLLClick
+    end
+    object LblModelo: TLabel
+      Position.X = 4.000000000000000000
+      Position.Y = 41.000000000000000000
+      Size.Width = 48.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Modelo:'
+      TabOrder = 3
+    end
+    object EdtModelo: TEdit
+      Touch.InteractiveGestures = [LongTap, DoubleTap]
+      TabOrder = 4
+      Position.X = 56.000000000000000000
+      Position.Y = 36.000000000000000000
+      Size.Width = 722.000000000000000000
+      Size.Height = 30.000000000000000000
+      Size.PlatformDefault = False
+    end
+    object BtnModelo: TButton
+      Position.X = 784.000000000000000000
+      Position.Y = 36.000000000000000000
+      Size.Width = 30.000000000000000000
+      Size.Height = 30.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 5
+      Text = '...'
+      TextSettings.Trimming = None
+      OnClick = BtnModeloClick
+    end
+    object LblSistema: TLabel
+      Position.X = 4.000000000000000000
+      Position.Y = 74.000000000000000000
+      Size.Width = 48.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Sistema:'
+      TabOrder = 6
+    end
+    object EdtSistema: TEdit
+      Touch.InteractiveGestures = [LongTap, DoubleTap]
+      TabOrder = 7
+      Text = 'Eres un asistente util y conciso.'
+      Position.X = 56.000000000000000000
+      Position.Y = 69.000000000000000000
+      Size.Width = 758.000000000000000000
+      Size.Height = 30.000000000000000000
+      Size.PlatformDefault = False
+    end
+    object LblStyle: TLabel
+      Position.X = 4.000000000000000000
+      Position.Y = 102.000000000000000000
+      Size.Width = 44.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Estilo:'
+      TabOrder = 8
+    end
+    object CbxStyle: TComboBox
+      Position.X = 52.000000000000000000
+      Position.Y = 99.000000000000000000
+      Size.Width = 100.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 9
+      OnChange = CbxStyleChange
+    end
+    object LblGPU: TLabel
+      Position.X = 158.000000000000000000
+      Position.Y = 102.000000000000000000
+      Size.Width = 30.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'GPU:'
+      TabOrder = 10
+    end
+    object EdtGPU: TEdit
+      Touch.InteractiveGestures = [LongTap, DoubleTap]
+      TabOrder = 11
+      Text = '99'
+      Position.X = 192.000000000000000000
+      Position.Y = 99.000000000000000000
+      Size.Width = 44.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+    end
+    object LblCtx: TLabel
+      Position.X = 242.000000000000000000
+      Position.Y = 102.000000000000000000
+      Size.Width = 24.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Ctx:'
+      TabOrder = 12
+    end
+    object EdtCtx: TEdit
+      Touch.InteractiveGestures = [LongTap, DoubleTap]
+      TabOrder = 13
+      Text = '4096'
+      Position.X = 270.000000000000000000
+      Position.Y = 99.000000000000000000
+      Size.Width = 56.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+    end
+    object LblTok: TLabel
+      Position.X = 332.000000000000000000
+      Position.Y = 102.000000000000000000
+      Size.Width = 52.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Tokens:'
+      TabOrder = 14
+    end
+    object EdtTok: TEdit
+      Touch.InteractiveGestures = [LongTap, DoubleTap]
+      TabOrder = 15
+      Text = '512'
+      Position.X = 388.000000000000000000
+      Position.Y = 99.000000000000000000
+      Size.Width = 56.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+    end
+    object LblTemp: TLabel
+      Position.X = 450.000000000000000000
+      Position.Y = 102.000000000000000000
+      Size.Width = 40.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Temp:'
+      TabOrder = 16
+    end
+    object EdtTemp: TEdit
+      Touch.InteractiveGestures = [LongTap, DoubleTap]
+      TabOrder = 17
+      Text = '0.8'
+      Position.X = 494.000000000000000000
+      Position.Y = 99.000000000000000000
+      Size.Width = 56.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+    end
+    object BtnNuevo: TButton
+      Position.X = 630.000000000000000000
+      Position.Y = 97.000000000000000000
+      Size.Width = 184.000000000000000000
+      Size.Height = 24.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 18
+      Text = 'Nuevo chat'
+      TextSettings.Trimming = None
+      OnClick = BtnNuevoClick
+    end
+  end
+  object PnlBottom: TPanel
+    Align = Bottom
+    Position.Y = 596.000000000000000000
+    Size.Width = 820.000000000000000000
+    Size.Height = 44.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    object LblStatus: TLabel
+      Position.X = 4.000000000000000000
+      Position.Y = 12.000000000000000000
+      Size.Width = 200.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Listo'
+      TabOrder = 0
+    end
+    object EdtInput: TEdit
+      Touch.InteractiveGestures = [LongTap, DoubleTap]
+      TabOrder = 1
+      Position.X = 210.000000000000000000
+      Position.Y = 8.000000000000000000
+      Size.Width = 502.000000000000000000
+      Size.Height = 30.000000000000000000
+      Size.PlatformDefault = False
+      OnKeyDown = EdtInputKeyDown
+    end
+    object BtnEnviar: TButton
+      Position.X = 718.000000000000000000
+      Position.Y = 8.000000000000000000
+      Size.Width = 98.000000000000000000
+      Size.Height = 30.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      Text = 'Enviar'
+      TextSettings.Trimming = None
+      OnClick = BtnEnviarClick
+    end
+  end
+  object MemoChat: TMemo
+    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+    DataDetectorTypes = []
+    Lines.Strings = (
+      '')
+    ReadOnly = True
+    Align = Client
+    Size.Width = 820.000000000000000000
+    Size.Height = 474.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 2
+    Viewport.Width = 816.000000000000000000
+    Viewport.Height = 470.000000000000000000
+  end
+  object AiLlamacpp: TAiLlamacppChat
+    Model = 'gpt-5'
+    Max_tokens = 512
+    Response_format = tiaChatRfText
+    Asynchronous = False
+    K = 0
+    Tool_choice = 'auto'
+    User = 'user'
+    SystemPrompt.Strings = (
+      'Eres un asistente muy ?til y servicial')
+    Completion_tokens = 0
+    Url = 'https://api.openai.com/v1/'
+    ResponseTimeOut = 120000
+    Stream_Usage = False
+    ModelPath = 
+      'E:\IAs\Ollama\models\blobs\sha256-dde5aa3fc5ffc17176b5e8bdc82f58' +
+      '7b24b2678c6c66101bf7da77af9f7ccdff'
+    DLLPath = 'E:\copilot\LlamaKit\Win64\Release\makerai.gen.dll'
+    SysPrefix = '<|start_header_id|>system<|end_header_id|>'#10#10
+    SysSuffix = '<|eot_id|>'#10
+    UserPrefix = '<|start_header_id|>user<|end_header_id|>'#10#10
+    UserSuffix = '<|eot_id|>'#10
+    AsstPrefix = '<|start_header_id|>assistant<|end_header_id|>'#10#10
+    AsstSuffix = '<|eot_id|>'#10
+    AsstOpening = '<|start_header_id|>assistant<|end_header_id|>'#10#10
+    Left = 112
+    Top = 264
+  end
+end

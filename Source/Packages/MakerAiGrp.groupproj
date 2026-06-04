@@ -1,0 +1,72 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{F90F66AF-8991-40FF-B374-5F2D609D4372}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="MakerAI.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="MakerAiDsg.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="MakerAi.UI.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="MakerAi.RAG.Drivers.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="MakerAI">
+        <MSBuild Projects="MakerAI.dproj"/>
+    </Target>
+    <Target Name="MakerAI:Clean">
+        <MSBuild Projects="MakerAI.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MakerAI:Make">
+        <MSBuild Projects="MakerAI.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MakerAiDsg">
+        <MSBuild Projects="MakerAiDsg.dproj"/>
+    </Target>
+    <Target Name="MakerAiDsg:Clean">
+        <MSBuild Projects="MakerAiDsg.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MakerAiDsg:Make">
+        <MSBuild Projects="MakerAiDsg.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MakerAi_UI">
+        <MSBuild Projects="MakerAi.UI.dproj"/>
+    </Target>
+    <Target Name="MakerAi_UI:Clean">
+        <MSBuild Projects="MakerAi.UI.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MakerAi_UI:Make">
+        <MSBuild Projects="MakerAi.UI.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MakerAi_RAG_Drivers">
+        <MSBuild Projects="MakerAi.RAG.Drivers.dproj"/>
+    </Target>
+    <Target Name="MakerAi_RAG_Drivers:Clean">
+        <MSBuild Projects="MakerAi.RAG.Drivers.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MakerAi_RAG_Drivers:Make">
+        <MSBuild Projects="MakerAi.RAG.Drivers.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="MakerAI;MakerAiDsg;MakerAi_UI;MakerAi_RAG_Drivers"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="MakerAI:Clean;MakerAiDsg:Clean;MakerAi_UI:Clean;MakerAi_RAG_Drivers:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="MakerAI:Make;MakerAiDsg:Make;MakerAi_UI:Make;MakerAi_RAG_Drivers:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

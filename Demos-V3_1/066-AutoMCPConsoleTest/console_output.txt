@@ -1,0 +1,151 @@
+╔══════════════════════════════════════════════════════════════════╗
+║   MakerAI — Demo 066: AutoMCP + PostgreSQL Console Test          ║
+╚══════════════════════════════════════════════════════════════════╝
+
+Driver : Ollama
+Model  : gpt-oss:20b
+URL    : http://192.168.3.121:11434/
+PG     : postgresql://postgres:masterkey@localhost:5432/postgres
+----------------------------------------------------------------------
+
+  [MCP]  [AutoMCP] Activado. Funciones: ppm_search, ppm_install, call_mcp_tool.
+
+>>> TEST 1 — Instalar mcp-postgres desde PPM
+----------------------------------------------------------------------
+  [..]  Descargando e instalando mcp-postgres...
+  [MCP]  InstallPPM: Descargando "mcp-postgres" v1.3.2...
+  [MCP]  InstallPPM: Extrayendo en "C:\Users\genri\AppData\Roaming\.ppm\mcp\mcp-postgres"...
+  [MCP]  InstallPPM: "mcp-postgres" v1.3.2 instalado en "C:\Users\genri\AppData\Roaming\.ppm\mcp\mcp-postgres\bin/win64/mcp-postgres.exe".
+  [MCP]  SaveMCPConfig: 1 servidor(es) guardados en E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\066-AutoMCPConsoleTest\Win64\Debug\mcp_servers.json
+  [OK]  Instalado en: C:\Users\genri\AppData\Roaming\.ppm\mcp\mcp-postgres\bin/win64/mcp-postgres.exe
+  [..]  Inicializando proceso MCP...
+  [OK]  Proceso MCP activo y disponible.
+
+>>> TEST 2 — Listar herramientas de mcp-postgres
+----------------------------------------------------------------------
+  [..]  JSON tools raw (primeros 400 chars):
+  {
+    "tools": [
+        {
+            "name": "mcp-postgres",
+            "description": "PostgreSQL via FireDAC. Credentials via params (host, port, database, user, password) or env vars PG_HOST\/PG_PORT\/PG_DATABASE\/PG_USER\/PG_PASSWORD. query: run SELECT and return rows (sql, limit). execute: run INSERT\/UPDATE\/DELETE\/DDL (sql). databases: list all databases on the server (connects to '
+
+  [..]  1 herramienta(s) disponibles:
+  [0] mcp-postgres — PostgreSQL via FireDAC. Credentials via params (host, port, database, user, pass
+
+>>> TEST 3 — Llamada directa: mcp-postgres → query "SELECT version()"
+----------------------------------------------------------------------
+  [..]  Llamando mcp-postgres (op=query) con: {"operation":"query","host":"localhost","port":5432,"database":"postgres","user":"postgres","password":"masterkey","sql":"SELECT version()"}
+  [OK]  Respuesta: {"content":[{"type":"text","text":"{\"columns\":[\"version\"],\"rows\":[[\"PostgreSQL 17.3 on x86_64-windows, compiled by msvc-19.42.34436, 64-bit\"]],\"count\":1,\"truncated\":false,\"sql\":\"SELECT version()\"}"}]}
+
+>>> TEST 4 — Chat LLM + AutoMCP: verificar postgres local
+----------------------------------------------------------------------
+  [..]  System prompt:
+Tienes acceso al registry PPM (PascalAI Package Manager) con m�s de 150 herramientas MCP que cubren GitHub, PostgreSQL, Slack, Jira, Stripe, DuckDB, Kubernetes, AWS S3, Azure, Kafka, GraphQL y muchas m�s.
+
+Cuando el usuario te pida algo que requiere acceso a servicios externos, act�a de forma AUT�NOMA siguiendo este flujo sin pedir permiso:
+  1. Llama a ppm_search con palabras clave para encontrar la herramienta adecuada.
+  2. Llama a ppm_install con el nombre exacto del paquete para instalarlo.
+  3. Llama a call_mcp_tool con el nombre del tool, la funci�n y los argumentos JSON.
+
+Conven
+
+  [..]  Enviando prompt...
+  [..]  Ejecutando tool...
+  [MCP]  [AutoMCP] call_mcp_tool: mcp-postgres ? mcp_postgres
+  [STS]  Ejecutando mcp-postgres.mcp_postgres...
+
+  [OK]  Respuesta del LLM:
+�Listo! La consulta **`SELECT 1`** se ejecut� correctamente y la base de datos PostgreSQL local est� activa.  
+
+Resultado:
+
+```json
+{
+  "columns": ["?column?"],
+  "rows": [[1]],
+  "count": 1,
+  "truncated": false,
+  "sql": "SELECT 1"
+}
+```
+
+Si necesitas ejecutar alguna otra consulta o revisar tablas, dime qu� deseas hacer.
+
+
+>>> TEST 5 — Instalar mcp-tts-gemini v1.1.0 desde PPM
+----------------------------------------------------------------------
+  [..]  Descargando mcp-tts-gemini desde PPM...
+  [MCP]  InstallPPM: Descargando "mcp-tts-gemini" v1.1.0...
+  [MCP]  InstallPPM: Extrayendo en "C:\Users\genri\AppData\Roaming\.ppm\mcp\mcp-tts-gemini"...
+  [MCP]  InstallPPM: "mcp-tts-gemini" v1.1.0 instalado en "C:\Users\genri\AppData\Roaming\.ppm\mcp\mcp-tts-gemini\bin/win64/mcp-tts-gemini.exe".
+  [MCP]  SaveMCPConfig: 2 servidor(es) guardados en E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Demos\066-AutoMCPConsoleTest\Win64\Debug\mcp_servers.json
+  [OK]  Instalado en: C:\Users\genri\AppData\Roaming\.ppm\mcp\mcp-tts-gemini\bin/win64/mcp-tts-gemini.exe
+  [..]  Inicializando proceso MCP...
+  [OK]  Proceso activo.
+  [..]  1 herramienta(s):
+  [0] tts — Text-to-speech via Google Gemini TTS (gemini-2.5-flash-preview-tts). High-quality natural voices: Puck (default), Aoede,
+
+>>> TEST 6 — Llamada directa a tts-gemini: "hola"
+----------------------------------------------------------------------
+  [..]  Llamando tool: "tts" con texto "hola"
+
+  JSON raw completo:
+  {"content":[{"type":"audio","mimeType":"audio\/wav","fileName":"speech.wav","dataExtracted":true,"mediaIdentifier":"mcp-media-1..wav","originalSize":50700}]}
+
+  [..]  1 elemento(s) en "content":
+  [0] type=audio  mimeType=audio/wav  data_len=0
+  [..]  1 archivo(s) media extraído(s):
+  • mcp-media-1..wav  cat=2  stream.Size=37050  stream.Position=0
+  [OK]  Audio guardado en: C:\Users\genri\AppData\Local\Temp\mcp-media-1..wav
+
+>>> TEST 7 — Chat LLM + AutoMCP: usa tts-gemini para decir "hola"
+----------------------------------------------------------------------
+  [..]  System prompt (primeros 400):
+Tienes acceso al registry PPM (PascalAI Package Manager) con m�s de 150 herramientas MCP que cubren GitHub, PostgreSQL, Slack, Jira, Stripe, DuckDB, Kubernetes, AWS S3, Azure, Kafka, GraphQL y muchas m�s.
+
+Cuando el usuario te pida algo que requiere acceso a servicios externos, act�a de forma AUT�NOMA siguiendo este flujo sin pedir permiso:
+  1. Llama a ppm_search con palabras clave para encont
+
+  [..]  Prompt: usar tts-gemini para decir hola...
+  [..]  Ejecutando tool...
+  [MCP]  [AutoMCP] call_mcp_tool: mcp-tts-gemini ? tts
+  [STS]  Ejecutando mcp-tts-gemini.tts...
+
+  [OK]  Respuesta del LLM:
+```json
+{
+  "content": [
+    {
+      "type": "audio",
+      "mimeType": "audio/wav",
+      "fileName": "speech.wav",
+      "dataExtracted": true,
+      "mediaIdentifier": "mcp-media-1..wav",
+      "originalSize": 58582
+    }
+  ]
+}
+```
+----------------------------------------------------------------------
+¿Iniciar modo interactivo? (s/n): 
+Presiona Enter para salir...Unexpected Memory Leak
+An unexpected memory leak has occurred. The unexpected small block leaks are:
+
+9 - 24 bytes: UnicodeString x 4
+25 - 40 bytes: TJSONFalse x 1, TJSONNumber x 2, TJSONArray x 4, TJSONObject x 31, TJSONPair x 90, TJSONString x 150, UnicodeString x 120
+41 - 56 bytes: UnicodeString x 3, Unknown x 32
+57 - 72 bytes: UnicodeString x 1
+73 - 88 bytes: TList<System.JSON.TJSONValue> x 4, TList<System.JSON.TJSONPair> x 31, UnicodeString x 4
+89 - 104 bytes: UnicodeString x 3
+105 - 120 bytes: UnicodeString x 3
+121 - 136 bytes: UnicodeString x 4
+137 - 152 bytes: UnicodeString x 2, Unknown x 3
+153 - 168 bytes: UnicodeString x 1
+169 - 184 bytes: UnicodeString x 1
+185 - 200 bytes: UnicodeString x 1
+233 - 248 bytes: UnicodeString x 1
+729 - 792 bytes: UnicodeString x 1
+1257 - 1368 bytes: UnicodeString x 1
+
+The sizes of unexpected leaked medium and large blocks are: 117288, 101672

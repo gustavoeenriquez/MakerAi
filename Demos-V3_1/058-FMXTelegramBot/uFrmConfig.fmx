@@ -1,0 +1,11 @@
+﻿object FrmConfig: TFrmConfig
+  Left = 0
+  Top = 0
+  Caption = 'Configuracion de Proveedores'
+  ClientHeight = 520
+  ClientWidth = 720
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+end

@@ -1,0 +1,324 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{8F13F82C-7161-45E9-B34B-0ADE3CE00088}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="cap03-primer-chat\PrimerChat.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap04-anatomia-conversacion\AnatomiaConversacion.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap05-prompt-engineering\PromptEngineering.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap06-multiples-providers\MultiplesProviders.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap07-chattools\ChatTools.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap08-mediafile\MediaFile.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap09-vision\Vision.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap10-documentos-pdf\QandAPDF.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap11-voz\AsistenteVoz.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap12-whisper\WhisperDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap13-chatmodes\ChatModesDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap14-imagen-video\GeneradorVisual.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap15-functions\ConsultasEmpresariales.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap16-smartdispatch\SmartDispatchDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap18-herramientas-sistema\HerramientasSistema.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap19-busqueda-web\BusquedaWeb.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap20-chattools-comunitarios\ChatToolsDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap21-embeddings\EmbeddingsDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap22-rag-vectorial\ChatbotDocumentacion.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap23-rag-grafos\CadenaSupministro.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap26-agentes\AgentesDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap29-providers-avanzado\ProvidersCachingDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap30-produccion\PatronesProd.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap31-ppm-gestor\PPMDemo.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="cap33-ppm-skills\SkillsDemo.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="PrimerChat">
+        <MSBuild Projects="cap03-primer-chat\PrimerChat.dproj"/>
+    </Target>
+    <Target Name="PrimerChat:Clean">
+        <MSBuild Projects="cap03-primer-chat\PrimerChat.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="PrimerChat:Make">
+        <MSBuild Projects="cap03-primer-chat\PrimerChat.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="AnatomiaConversacion">
+        <MSBuild Projects="cap04-anatomia-conversacion\AnatomiaConversacion.dproj"/>
+    </Target>
+    <Target Name="AnatomiaConversacion:Clean">
+        <MSBuild Projects="cap04-anatomia-conversacion\AnatomiaConversacion.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="AnatomiaConversacion:Make">
+        <MSBuild Projects="cap04-anatomia-conversacion\AnatomiaConversacion.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="PromptEngineering">
+        <MSBuild Projects="cap05-prompt-engineering\PromptEngineering.dproj"/>
+    </Target>
+    <Target Name="PromptEngineering:Clean">
+        <MSBuild Projects="cap05-prompt-engineering\PromptEngineering.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="PromptEngineering:Make">
+        <MSBuild Projects="cap05-prompt-engineering\PromptEngineering.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MultiplesProviders">
+        <MSBuild Projects="cap06-multiples-providers\MultiplesProviders.dproj"/>
+    </Target>
+    <Target Name="MultiplesProviders:Clean">
+        <MSBuild Projects="cap06-multiples-providers\MultiplesProviders.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MultiplesProviders:Make">
+        <MSBuild Projects="cap06-multiples-providers\MultiplesProviders.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ChatTools">
+        <MSBuild Projects="cap07-chattools\ChatTools.dproj"/>
+    </Target>
+    <Target Name="ChatTools:Clean">
+        <MSBuild Projects="cap07-chattools\ChatTools.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ChatTools:Make">
+        <MSBuild Projects="cap07-chattools\ChatTools.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MediaFile">
+        <MSBuild Projects="cap08-mediafile\MediaFile.dproj"/>
+    </Target>
+    <Target Name="MediaFile:Clean">
+        <MSBuild Projects="cap08-mediafile\MediaFile.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MediaFile:Make">
+        <MSBuild Projects="cap08-mediafile\MediaFile.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Vision">
+        <MSBuild Projects="cap09-vision\Vision.dproj"/>
+    </Target>
+    <Target Name="Vision:Clean">
+        <MSBuild Projects="cap09-vision\Vision.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Vision:Make">
+        <MSBuild Projects="cap09-vision\Vision.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="QandAPDF">
+        <MSBuild Projects="cap10-documentos-pdf\QandAPDF.dproj"/>
+    </Target>
+    <Target Name="QandAPDF:Clean">
+        <MSBuild Projects="cap10-documentos-pdf\QandAPDF.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="QandAPDF:Make">
+        <MSBuild Projects="cap10-documentos-pdf\QandAPDF.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="AsistenteVoz">
+        <MSBuild Projects="cap11-voz\AsistenteVoz.dproj"/>
+    </Target>
+    <Target Name="AsistenteVoz:Clean">
+        <MSBuild Projects="cap11-voz\AsistenteVoz.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="AsistenteVoz:Make">
+        <MSBuild Projects="cap11-voz\AsistenteVoz.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="WhisperDemo">
+        <MSBuild Projects="cap12-whisper\WhisperDemo.dproj"/>
+    </Target>
+    <Target Name="WhisperDemo:Clean">
+        <MSBuild Projects="cap12-whisper\WhisperDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="WhisperDemo:Make">
+        <MSBuild Projects="cap12-whisper\WhisperDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ChatModesDemo">
+        <MSBuild Projects="cap13-chatmodes\ChatModesDemo.dproj"/>
+    </Target>
+    <Target Name="ChatModesDemo:Clean">
+        <MSBuild Projects="cap13-chatmodes\ChatModesDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ChatModesDemo:Make">
+        <MSBuild Projects="cap13-chatmodes\ChatModesDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="GeneradorVisual">
+        <MSBuild Projects="cap14-imagen-video\GeneradorVisual.dproj"/>
+    </Target>
+    <Target Name="GeneradorVisual:Clean">
+        <MSBuild Projects="cap14-imagen-video\GeneradorVisual.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="GeneradorVisual:Make">
+        <MSBuild Projects="cap14-imagen-video\GeneradorVisual.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ConsultasEmpresariales">
+        <MSBuild Projects="cap15-functions\ConsultasEmpresariales.dproj"/>
+    </Target>
+    <Target Name="ConsultasEmpresariales:Clean">
+        <MSBuild Projects="cap15-functions\ConsultasEmpresariales.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ConsultasEmpresariales:Make">
+        <MSBuild Projects="cap15-functions\ConsultasEmpresariales.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="SmartDispatchDemo">
+        <MSBuild Projects="cap16-smartdispatch\SmartDispatchDemo.dproj"/>
+    </Target>
+    <Target Name="SmartDispatchDemo:Clean">
+        <MSBuild Projects="cap16-smartdispatch\SmartDispatchDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SmartDispatchDemo:Make">
+        <MSBuild Projects="cap16-smartdispatch\SmartDispatchDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="HerramientasSistema">
+        <MSBuild Projects="cap18-herramientas-sistema\HerramientasSistema.dproj"/>
+    </Target>
+    <Target Name="HerramientasSistema:Clean">
+        <MSBuild Projects="cap18-herramientas-sistema\HerramientasSistema.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="HerramientasSistema:Make">
+        <MSBuild Projects="cap18-herramientas-sistema\HerramientasSistema.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="BusquedaWeb">
+        <MSBuild Projects="cap19-busqueda-web\BusquedaWeb.dproj"/>
+    </Target>
+    <Target Name="BusquedaWeb:Clean">
+        <MSBuild Projects="cap19-busqueda-web\BusquedaWeb.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="BusquedaWeb:Make">
+        <MSBuild Projects="cap19-busqueda-web\BusquedaWeb.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ChatToolsDemo">
+        <MSBuild Projects="cap20-chattools-comunitarios\ChatToolsDemo.dproj"/>
+    </Target>
+    <Target Name="ChatToolsDemo:Clean">
+        <MSBuild Projects="cap20-chattools-comunitarios\ChatToolsDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ChatToolsDemo:Make">
+        <MSBuild Projects="cap20-chattools-comunitarios\ChatToolsDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="EmbeddingsDemo">
+        <MSBuild Projects="cap21-embeddings\EmbeddingsDemo.dproj"/>
+    </Target>
+    <Target Name="EmbeddingsDemo:Clean">
+        <MSBuild Projects="cap21-embeddings\EmbeddingsDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="EmbeddingsDemo:Make">
+        <MSBuild Projects="cap21-embeddings\EmbeddingsDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ChatbotDocumentacion">
+        <MSBuild Projects="cap22-rag-vectorial\ChatbotDocumentacion.dproj"/>
+    </Target>
+    <Target Name="ChatbotDocumentacion:Clean">
+        <MSBuild Projects="cap22-rag-vectorial\ChatbotDocumentacion.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ChatbotDocumentacion:Make">
+        <MSBuild Projects="cap22-rag-vectorial\ChatbotDocumentacion.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="CadenaSupministro">
+        <MSBuild Projects="cap23-rag-grafos\CadenaSupministro.dproj"/>
+    </Target>
+    <Target Name="CadenaSupministro:Clean">
+        <MSBuild Projects="cap23-rag-grafos\CadenaSupministro.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="CadenaSupministro:Make">
+        <MSBuild Projects="cap23-rag-grafos\CadenaSupministro.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="AgentesDemo">
+        <MSBuild Projects="cap26-agentes\AgentesDemo.dproj"/>
+    </Target>
+    <Target Name="AgentesDemo:Clean">
+        <MSBuild Projects="cap26-agentes\AgentesDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="AgentesDemo:Make">
+        <MSBuild Projects="cap26-agentes\AgentesDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ProvidersCachingDemo">
+        <MSBuild Projects="cap29-providers-avanzado\ProvidersCachingDemo.dproj"/>
+    </Target>
+    <Target Name="ProvidersCachingDemo:Clean">
+        <MSBuild Projects="cap29-providers-avanzado\ProvidersCachingDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ProvidersCachingDemo:Make">
+        <MSBuild Projects="cap29-providers-avanzado\ProvidersCachingDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="PatronesProd">
+        <MSBuild Projects="cap30-produccion\PatronesProd.dproj"/>
+    </Target>
+    <Target Name="PatronesProd:Clean">
+        <MSBuild Projects="cap30-produccion\PatronesProd.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="PatronesProd:Make">
+        <MSBuild Projects="cap30-produccion\PatronesProd.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="PPMDemo">
+        <MSBuild Projects="cap31-ppm-gestor\PPMDemo.dproj"/>
+    </Target>
+    <Target Name="PPMDemo:Clean">
+        <MSBuild Projects="cap31-ppm-gestor\PPMDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="PPMDemo:Make">
+        <MSBuild Projects="cap31-ppm-gestor\PPMDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="SkillsDemo">
+        <MSBuild Projects="cap33-ppm-skills\SkillsDemo.dproj"/>
+    </Target>
+    <Target Name="SkillsDemo:Clean">
+        <MSBuild Projects="cap33-ppm-skills\SkillsDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="SkillsDemo:Make">
+        <MSBuild Projects="cap33-ppm-skills\SkillsDemo.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="PrimerChat;AnatomiaConversacion;PromptEngineering;MultiplesProviders;ChatTools;MediaFile;Vision;QandAPDF;AsistenteVoz;WhisperDemo;ChatModesDemo;GeneradorVisual;ConsultasEmpresariales;SmartDispatchDemo;HerramientasSistema;BusquedaWeb;ChatToolsDemo;EmbeddingsDemo;ChatbotDocumentacion;CadenaSupministro;AgentesDemo;ProvidersCachingDemo;PatronesProd;PPMDemo;SkillsDemo"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="PrimerChat:Clean;AnatomiaConversacion:Clean;PromptEngineering:Clean;MultiplesProviders:Clean;ChatTools:Clean;MediaFile:Clean;Vision:Clean;QandAPDF:Clean;AsistenteVoz:Clean;WhisperDemo:Clean;ChatModesDemo:Clean;GeneradorVisual:Clean;ConsultasEmpresariales:Clean;SmartDispatchDemo:Clean;HerramientasSistema:Clean;BusquedaWeb:Clean;ChatToolsDemo:Clean;EmbeddingsDemo:Clean;ChatbotDocumentacion:Clean;CadenaSupministro:Clean;AgentesDemo:Clean;ProvidersCachingDemo:Clean;PatronesProd:Clean;PPMDemo:Clean;SkillsDemo:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="PrimerChat:Make;AnatomiaConversacion:Make;PromptEngineering:Make;MultiplesProviders:Make;ChatTools:Make;MediaFile:Make;Vision:Make;QandAPDF:Make;AsistenteVoz:Make;WhisperDemo:Make;ChatModesDemo:Make;GeneradorVisual:Make;ConsultasEmpresariales:Make;SmartDispatchDemo:Make;HerramientasSistema:Make;BusquedaWeb:Make;ChatToolsDemo:Make;EmbeddingsDemo:Make;ChatbotDocumentacion:Make;CadenaSupministro:Make;AgentesDemo:Make;ProvidersCachingDemo:Make;PatronesProd:Make;PPMDemo:Make;SkillsDemo:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

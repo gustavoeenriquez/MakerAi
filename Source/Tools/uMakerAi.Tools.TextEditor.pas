@@ -1,34 +1,80 @@
-// MIT License - Copyright (c) 2024-2026 Gustavo Enriquez
-// FPC PORT - uMakerAi.Tools.TextEditor
-// Editor de texto con I/O virtualizado mediante eventos (disco o memoria).
-unit uMakerAi.Tools.TextEditor;
+﻿// MIT License
+//
+// Copyright (c) 2013 Gustavo Enr?quez - CimaMaker
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enr?quez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
 
-{$mode objfpc}{$H+}
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
+{
+  -------------------------------------------------------------------------------
+  TAiTextEditorTool - Componente de Edici?n de Texto para IA
+  -------------------------------------------------------------------------------
+
+  ADVERTENCIA SOBRE EL MODO DE OPERACI?N:
+
+  Este componente est? dise?ado con un sistema de eventos para virtualizar la
+  entrada y salida (I/O).
+
+  1. MODO POR DEFECTO (Acceso a Disco):
+  Si NO se asignan los eventos (OnLoadFile, OnSaveFile, etc.) o si el par?metro
+  "Handled" se deja en False, el componente ejecutar? las operaciones directamente
+  sobre el SISTEMA DE ARCHIVOS F?SICO del sistema operativo.
+
+  2. MODO INTERCEPTADO (Memoria/UI/DB):
+  Para evitar el acceso al disco (ej. para editar un TMemo o un registro de BD),
+  el programador debe asignar los eventos correspondientes, realizar la l?gica
+  personalizada y establecer expl?citamente:
+  Handled := True;
+
+  Esto detiene la ejecuci?n de la l?gica predeterminada de archivos.
+  -------------------------------------------------------------------------------
+}
+
+unit uMakerAi.Tools.TextEditor;
 
 interface
 
 uses
-  SysUtils, Classes,
-  fpjson, jsonparser,
-  uMakerAi.Utils.DiffUpdater;
+  System.SysUtils, System.Classes, System.JSON, System.IOUtils, System.StrUtils, uMakerAi.Utils.DiffUpdater, System.Generics.Collections;
 
 type
 
   // Evento para leer contenido (ej: desde DB o Memoria)
-  TAiFileReadEvent = procedure(Sender: TObject; const Path: string;
-      var Content: string; var Handled: Boolean) of object;
+  TAiFileReadEvent = procedure(Sender: TObject; const Path: string; var Content: string; var Handled: Boolean) of object;
   // Evento para escribir contenido
-  TAiFileWriteEvent = procedure(Sender: TObject; const Path: string;
-      const Content: string; var Handled: Boolean) of object;
+  TAiFileWriteEvent = procedure(Sender: TObject; const Path: string; const Content: string; var Handled: Boolean) of object;
   // Evento para verificar existencia
-  TAiFileCheckEvent = procedure(Sender: TObject; const Path: string;
-      var Exists: Boolean; var Handled: Boolean) of object;
-  // Evento para gestión de directorios
-  TAiDirEvent = procedure(Sender: TObject; const Path: string;
-      var Handled: Boolean) of object;
-  // Evento genérico antes de ejecutar un comando
-  TAiCommandEvent = procedure(Sender: TObject; const Command, Path: string;
-      Args: TJSONObject; var Result: string; var Handled: Boolean) of object;
+  TAiFileCheckEvent = procedure(Sender: TObject; const Path: string; var Exists: Boolean; var Handled: Boolean) of object;
+  // Evento para gesti?n de directorios
+  TAiDirEvent = procedure(Sender: TObject; const Path: string; var Handled: Boolean) of object;
+  // Evento gen?rico antes de ejecutar un comando (permite override total de la l?gica)
+  TAiCommandEvent = procedure(Sender: TObject; const Command, Path: string; Args: TJSONObject; var Result: string; var Handled: Boolean) of object;
 
   TAiTextEditorTool = class(TComponent)
   private
@@ -40,12 +86,14 @@ type
 
     function CountOccurrences(const Text, SubText: string): Integer;
   protected
+    // --- M?todos Virtuales con soporte de Eventos ---
     function LoadFileContent(const Path: string): string; virtual;
     procedure SaveFileContent(const Path: string; const Content: string); virtual;
-    function DoFileExists(const Path: string): Boolean; virtual;
+    function FileExists(const Path: string): Boolean; virtual;
     function EnsureDirectory(const Path: string): Boolean; virtual;
     function ValidatePath(const APath: string): Boolean; virtual;
 
+    // --- Comandos Espec?ficos ---
     function Cmd_View(const Path: string; const jArgs: TJSONObject): string; virtual;
     function Cmd_Create(const Path: string; const jArgs: TJSONObject): string; virtual;
     function Cmd_StrReplace(const Path: string; const jArgs: TJSONObject): string; virtual;
@@ -53,17 +101,16 @@ type
     function Cmd_ApplyDiff(const Path: string; const jArgs: TJSONObject): string; virtual;
 
   public
+    // Ejecuta la herramienta recibiendo un JSON string
     function Execute(const JsonArguments: string): string; virtual;
 
   published
+    // --- Eventos Publicados ---
     property OnLoadFile: TAiFileReadEvent read FOnLoadFile write FOnLoadFile;
     property OnSaveFile: TAiFileWriteEvent read FOnSaveFile write FOnSaveFile;
-    property OnFileExists: TAiFileCheckEvent
-        read FOnFileExists write FOnFileExists;
-    property OnEnsureDirectory: TAiDirEvent
-        read FOnEnsureDirectory write FOnEnsureDirectory;
-    property OnBeforeCommand: TAiCommandEvent
-        read FOnBeforeCommand write FOnBeforeCommand;
+    property OnFileExists: TAiFileCheckEvent read FOnFileExists write FOnFileExists;
+    property OnEnsureDirectory: TAiDirEvent read FOnEnsureDirectory write FOnEnsureDirectory;
+    property OnBeforeCommand: TAiCommandEvent read FOnBeforeCommand write FOnBeforeCommand;
   end;
 
 procedure Register;
@@ -79,43 +126,41 @@ end;
 
 function TAiTextEditorTool.Execute(const JsonArguments: string): string;
 var
-  jVal: TJSONData;
+  jVal: TJSONValue;
   jArgs: TJSONObject;
   Cmd, Path: string;
   Handled: Boolean;
 begin
-  jVal := GetJSON(JsonArguments);
+  jVal := TJSONObject.ParseJSONValue(JsonArguments);
   if not (jVal is TJSONObject) then
   begin
     jVal.Free;
-    Result := 'Error: Argumentos inválidos (JSON mal formado).';
-    Exit;
+    Exit('Error: Argumentos inv?lidos (JSON mal formado).');
   end;
 
   jArgs := TJSONObject(jVal);
   try
     try
-      Cmd := jArgs.Get('command', '');
-      Path := jArgs.Get('path', '');
+      // 1. Extraer par?metros comunes
+      Cmd := jArgs.GetValue<string>('command');
+      Path := jArgs.GetValue<string>('path');
 
+      // Evento: Permitir al usuario interceptar el comando completamente
       Handled := False;
       if Assigned(FOnBeforeCommand) then
         FOnBeforeCommand(Self, Cmd, Path, jArgs, Result, Handled);
 
-      if Handled then Exit;
+      if Handled then
+        Exit; // El usuario ya gener? el Result
 
+      // 2. Validar ruta (Seguridad b?sica)
       if not ValidatePath(Path) then
-      begin
-        Result := 'Error: Ruta inválida o vacía.';
-        Exit;
-      end;
+        Exit('Error: Ruta inv?lida o vac?a.');
 
-      if (Cmd <> 'create') and (not DoFileExists(Path)) then
-      begin
-        Result := 'Error: El archivo no existe en la ruta: ' + Path;
-        Exit;
-      end;
+      if (Cmd <> 'create') and (not FileExists(Path)) then
+        Exit('Error: El archivo no existe en la ruta: ' + Path);
 
+      // 3. Despachar comando
       if Cmd = 'view' then
         Result := Cmd_View(Path, jArgs)
       else if Cmd = 'create' then
@@ -138,68 +183,55 @@ begin
   end;
 end;
 
+// --- Implementaci?n de I/O con Eventos ---
+
 function TAiTextEditorTool.LoadFileContent(const Path: string): string;
 var
   Handled: Boolean;
-  SS: TStringStream;
 begin
   Handled := False;
   Result := '';
-
+  // 1. Intentar evento
   if Assigned(FOnLoadFile) then
     FOnLoadFile(Self, Path, Result, Handled);
 
+  // 2. Si no fue manejado, usar disco
   if not Handled then
   begin
-    if SysUtils.FileExists(Path) then
-    begin
-      SS := TStringStream.Create('');
-      try
-        SS.LoadFromFile(Path);
-        Result := SS.DataString;
-      finally
-        SS.Free;
-      end;
-    end
+    if TFile.Exists(Path) then
+      Result := TFile.ReadAllText(Path, TEncoding.UTF8)
     else
       raise EFileNotFoundException.Create('Archivo no encontrado: ' + Path);
   end;
 end;
 
-procedure TAiTextEditorTool.SaveFileContent(const Path: string;
-    const Content: string);
+procedure TAiTextEditorTool.SaveFileContent(const Path: string; const Content: string);
 var
   Handled: Boolean;
-  SS: TStringStream;
 begin
   Handled := False;
-
+  // 1. Intentar evento
   if Assigned(FOnSaveFile) then
     FOnSaveFile(Self, Path, Content, Handled);
 
+  // 2. Si no fue manejado, escribir a disco
   if not Handled then
-  begin
-    SS := TStringStream.Create(Content);
-    try
-      SS.SaveToFile(Path);
-    finally
-      SS.Free;
-    end;
-  end;
+    TFile.WriteAllText(Path, Content, TEncoding.UTF8);
 end;
 
-function TAiTextEditorTool.DoFileExists(const Path: string): Boolean;
+function TAiTextEditorTool.FileExists(const Path: string): Boolean;
 var
   Handled: Boolean;
 begin
   Handled := False;
   Result := False;
-
+  // 1. Intentar evento
   if Assigned(FOnFileExists) then
     FOnFileExists(Self, Path, Result, Handled);
 
+  // 2. Si no fue manejado, verificar disco
   if not Handled then
-    Result := SysUtils.FileExists(Path);
+    Result := TFile.Exists(Path);
 end;
 
 function TAiTextEditorTool.EnsureDirectory(const Path: string): Boolean;
@@ -208,18 +240,20 @@ var
   Dir: string;
 begin
   Handled := False;
-  Result := True;
+  Result := True; // Asumimos ?xito por defecto
 
+  // 1. Intentar evento
   if Assigned(FOnEnsureDirectory) then
     FOnEnsureDirectory(Self, Path, Handled);
 
+  // 2. Si no fue manejado, crear en disco
   if not Handled then
   begin
-    Dir := ExtractFileDir(Path);
-    if (Dir <> '') and not DirectoryExists(Dir) then
+    Dir := TPath.GetDirectoryName(Path);
+    if (Dir <> '') and (not TDirectory.Exists(Dir)) then
     begin
       try
-        ForceDirectories(Dir);
+        TDirectory.CreateDirectory(Dir);
       except
         Result := False;
       end;
@@ -229,16 +263,17 @@ end;
 
 function TAiTextEditorTool.ValidatePath(const APath: string): Boolean;
 begin
+  // Validaci?n b?sica. Se puede sobrecargar para l?gica m?s compleja de seguridad.
   Result := Trim(APath) <> '';
 end;
 
-function TAiTextEditorTool.CountOccurrences(const Text,
-    SubText: string): Integer;
+function TAiTextEditorTool.CountOccurrences(const Text, SubText: string): Integer;
 var
   P, Offset: Integer;
 begin
   Result := 0;
-  if (Text = '') or (SubText = '') then Exit;
+  if (Text = '') or (SubText = '') then
+    Exit;
 
   Offset := 1;
   P := Pos(SubText, Text, Offset);
@@ -250,134 +285,123 @@ begin
   end;
 end;
 
-function TAiTextEditorTool.Cmd_View(const Path: string;
-    const jArgs: TJSONObject): string;
+// --- Comandos Espec?ficos ---
+
+function TAiTextEditorTool.Cmd_View(const Path: string; const jArgs: TJSONObject): string;
 var
   FullText: string;
   Lines: TStringList;
-  ViewRange: TJSONArray;
-  StartL, EndL, I: Integer;
-  Res: string;
-  D: TJSONData;
+  ViewRange: TJSonArray;
+  StartL, EndL, i: Integer;
+  ResBuilder: TStringBuilder;
 begin
   FullText := LoadFileContent(Path);
   Lines := TStringList.Create;
   try
-    Lines.Text := FullText;
+    Lines.Text := FullText; // TStringList maneja saltos de l?nea autom?ticamente
 
-    D := jArgs.Find('view_range');
-    if (D <> nil) and (D is TJSONArray) and (TJSONArray(D).Count = 2) then
+    // Verificar si piden un rango espec?fico [start_line, end_line]
+    if jArgs.TryGetValue<TJSonArray>('view_range', ViewRange) and (ViewRange.Count = 2) then
     begin
-      ViewRange := TJSONArray(D);
-      StartL := ViewRange.Items[0].AsInteger - 1;
-      EndL := ViewRange.Items[1].AsInteger - 1;
+      StartL := ViewRange.Items[0].GetValue<Integer> - 1; // Claude usa base 1 -> TStringList base 0
+      EndL := ViewRange.Items[1].GetValue<Integer> - 1;
 
-      if StartL < 0 then StartL := 0;
-      if EndL >= Lines.Count then EndL := Lines.Count - 1;
+      if StartL < 0 then
+        StartL := 0;
+      if EndL >= Lines.Count then
+        EndL := Lines.Count - 1;
 
       if StartL > EndL then
-      begin
-        Result := 'Error: Rango de vista inválido (Start > End) o fuera de límites.';
-        Exit;
-      end;
+        Exit('Error: Rango de vista inv?lido (Start > End) o fuera de l?mites.');
 
-      Res := '';
-      for I := StartL to EndL do
-        Res := Res + Lines[I] + LineEnding;
-      Result := Res;
+      ResBuilder := TStringBuilder.Create;
+      try
+        for i := StartL to EndL do
+          ResBuilder.AppendLine(Lines[i]);
+        Result := ResBuilder.ToString;
+      finally
+        ResBuilder.Free;
+      end;
     end
     else
+    begin
+      // Ver todo el archivo
       Result := FullText;
+    end;
   finally
     Lines.Free;
   end;
 end;
 
-function TAiTextEditorTool.Cmd_Create(const Path: string;
-    const jArgs: TJSONObject): string;
+function TAiTextEditorTool.Cmd_Create(const Path: string; const jArgs: TJSONObject): string;
 var
   Content: string;
 begin
-  if DoFileExists(Path) then
-  begin
-    Result := 'Error: El archivo ya existe. Usa "str_replace" o "insert" para modificarlo.';
-    Exit;
-  end;
+  if FileExists(Path) then
+    Exit('Error: El archivo ya existe. Usa "str_replace" o "insert" para modificarlo.');
 
-  Content := jArgs.Get('file_text', '');
+  Content := jArgs.GetValue<string>('file_text', '');
 
   if not EnsureDirectory(Path) then
-  begin
-    Result := 'Error: No se pudo crear el directorio para el archivo.';
-    Exit;
-  end;
+    Exit('Error: No se pudo crear el directorio para el archivo.');
 
   SaveFileContent(Path, Content);
   Result := 'Archivo creado exitosamente.';
 end;
 
-function TAiTextEditorTool.Cmd_StrReplace(const Path: string;
-    const jArgs: TJSONObject): string;
+function TAiTextEditorTool.Cmd_StrReplace(const Path: string; const jArgs: TJSONObject): string;
 var
   OldStr, NewStr, FileContent: string;
   Occurrences: Integer;
 begin
-  OldStr := jArgs.Get('old_str', '');
-  NewStr := jArgs.Get('new_str', '');
+  OldStr := jArgs.GetValue<string>('old_str');
+  NewStr := jArgs.GetValue<string>('new_str');
 
+  // Cargar contenido (Dispara OnLoadFile -> Lee del Memo)
   FileContent := LoadFileContent(Path);
+
+  // 1. VALIDACI?N SEG?N DOCS: Conteo exacto
   Occurrences := CountOccurrences(FileContent, OldStr);
 
   if Occurrences = 0 then
-    Result := 'Error: No match found for replacement. Please check your text and try again.'
+    // Mensaje oficial de la documentaci?n para "No matches"
+    Exit('Error: No match found for replacement. Please check your text and try again.')
   else if Occurrences > 1 then
-    Result := 'Error: Found ' + IntToStr(Occurrences) +
-        ' matches for replacement text. Please provide more context to make a unique match.'
-  else
-  begin
-    FileContent := StringReplace(FileContent, OldStr, NewStr, []);
-    SaveFileContent(Path, FileContent);
-    Result := 'Successfully replaced text at exactly one location.';
-  end;
+    // Mensaje oficial de la documentaci?n para "Multiple matches"
+    Exit('Error: Found ' + IntToStr(Occurrences) + ' matches for replacement text. Please provide more context to make a unique match.');
+
+  // 2. EJECUCI?N: Reemplazo en memoria
+  FileContent := StringReplace(FileContent, OldStr, NewStr, []);
+
+  // 3. PERSISTENCIA: Dispara OnSaveFile -> Actualiza el Memo
+  SaveFileContent(Path, FileContent);
+
+  // Respuesta de ?xito est?ndar
+  Result := 'Successfully replaced text at exactly one location.';
 end;
 
-function TAiTextEditorTool.Cmd_Insert(const Path: string;
-    const jArgs: TJSONObject): string;
+function TAiTextEditorTool.Cmd_Insert(const Path: string; const jArgs: TJSONObject): string;
 var
   NewStr, FileContent: string;
   InsertLine: Integer;
   Lines: TStringList;
-  D: TJSONData;
 begin
-  NewStr := '';
-  D := jArgs.Find('insert_text');
-  if D <> nil then
-    NewStr := D.AsString
-  else
-  begin
-    D := jArgs.Find('new_str');
-    if D <> nil then
-      NewStr := D.AsString
-    else
-    begin
-      Result := 'Error: No insert text provided.';
-      Exit;
-    end;
-  end;
+  // Intentar leer 'insert_text' primero, si no existe, probar 'new_str'
+  if not jArgs.TryGetValue<string>('insert_text', NewStr) then
+    if not jArgs.TryGetValue<string>('new_str', NewStr) then
+      Exit('Error: No insert text provided.');
 
-  InsertLine := jArgs.Get('insert_line', 0);
+  // Claude env?a la l?nea DESPU?S de la cual insertar (base 0 o 1 dependiendo del modelo, usualmente 0 es inicio)
+  InsertLine := jArgs.GetValue<Integer>('insert_line');
 
   FileContent := LoadFileContent(Path);
   Lines := TStringList.Create;
   try
     Lines.Text := FileContent;
 
+    // Validaci?n de seguridad para evitar crashes
     if (InsertLine < 0) or (InsertLine > Lines.Count) then
-    begin
-      Result := 'Error: Número de línea ' + IntToStr(InsertLine) +
-          ' fuera de rango.';
-      Exit;
-    end;
+      Exit('Error: N?mero de l?nea ' + IntToStr(InsertLine) + ' fuera de rango.');
 
     if InsertLine = 0 then
       Lines.Insert(0, NewStr)
@@ -393,18 +417,14 @@ begin
   end;
 end;
 
-function TAiTextEditorTool.Cmd_ApplyDiff(const Path: string;
-    const jArgs: TJSONObject): string;
+function TAiTextEditorTool.Cmd_ApplyDiff(const Path: string; const jArgs: TJSONObject): string;
 var
   DiffText, OriginalContent, NewContent, ErrorMsg: string;
   Applier: TDiffApplier;
 begin
-  DiffText := jArgs.Get('diff_text', '');
+  DiffText := jArgs.GetValue<string>('diff_text');
   if DiffText = '' then
-  begin
-    Result := 'Error: "diff_text" no puede estar vacío.';
-    Exit;
-  end;
+    Exit('Error: "diff_text" no puede estar vac?o.');
 
   OriginalContent := LoadFileContent(Path);
 

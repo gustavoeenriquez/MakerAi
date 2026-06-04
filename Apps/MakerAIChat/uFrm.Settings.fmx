@@ -1,0 +1,208 @@
+﻿object FrmSettings: TFrmSettings
+  Left = 0
+  Top = 0
+  Caption = 'Settings'
+  ClientHeight = 560
+  ClientWidth = 480
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  DesignerMasterStyle = 0
+  object ToolBar1: TToolBar
+    Align = Top
+    Size.Width = 480.000000000000000000
+    Size.Height = 44.000000000000000000
+    Size.PlatformDefault = False
+    object LblTitle: TLabel
+      Align = Client
+      Size.Width = 392.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Settings'
+      TextSettings.Font.Size = 16
+      TextSettings.Font.Style = [fsBold]
+      TextSettings.HorzAlign = Center
+    end
+    object BtnClose: TButton
+      Align = Right
+      Size.Width = 88.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Save & Close'
+      OnClick = BtnClose_Click
+    end
+  end
+  object TabControl1: TTabControl
+    Align = Client
+    Size.Width = 480.000000000000000000
+    Size.Height = 516.000000000000000000
+    Size.PlatformDefault = False
+    TabPosition = Top
+    object TabGeneral: TTabItem
+      Text = 'General'
+      object LayoutGeneral: TLayout
+        Align = Client
+        Padding.Left = 16.000000000000000000
+        Padding.Right = 16.000000000000000000
+        Padding.Top = 12.000000000000000000
+        Padding.Bottom = 12.000000000000000000
+        Size.Width = 480.000000000000000000
+        Size.Height = 480.000000000000000000
+        Size.PlatformDefault = False
+        object LblProvider: TLabel
+          Align = Top
+          Size.Width = 448.000000000000000000
+          Size.Height = 24.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 4.000000000000000000
+          Text = 'Default Provider'
+        end
+        object CmbProvider: TComboBox
+          Align = Top
+          Size.Width = 448.000000000000000000
+          Size.Height = 36.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 12.000000000000000000
+          OnChange = CmbProvider_Change
+        end
+        object LblModel: TLabel
+          Align = Top
+          Size.Width = 448.000000000000000000
+          Size.Height = 24.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 4.000000000000000000
+          Text = 'Default Model'
+        end
+        object CmbModel: TComboBox
+          Align = Top
+          Size.Width = 448.000000000000000000
+          Size.Height = 36.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 12.000000000000000000
+        end
+        object LblTheme: TLabel
+          Align = Top
+          Size.Width = 320.000000000000000000
+          Size.Height = 24.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 4.000000000000000000
+          Text = 'Dark theme'
+        end
+        object SwtDark: TSwitch
+          Align = Top
+          Size.Width = 80.000000000000000000
+          Size.Height = 32.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 12.000000000000000000
+        end
+        object LblPromptLabel: TLabel
+          Align = Top
+          Size.Width = 448.000000000000000000
+          Size.Height = 24.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 4.000000000000000000
+          Text = 'System Prompt'
+        end
+        object MemoPrompt: TMemo
+          Align = Client
+          Size.Width = 448.000000000000000000
+          Size.Height = 200.000000000000000000
+          Size.PlatformDefault = False
+        end
+      end
+    end
+    object TabApiKeys: TTabItem
+      Text = 'API Keys'
+      object ScrollApiKeys: TVertScrollBox
+        Align = Client
+        Size.Width = 480.000000000000000000
+        Size.Height = 480.000000000000000000
+        Size.PlatformDefault = False
+        object LayoutApiKeys: TLayout
+          Align = Top
+          Size.Width = 480.000000000000000000
+          Size.Height = 320.000000000000000000
+          Size.PlatformDefault = False
+          Padding.Left = 16.000000000000000000
+          Padding.Right = 16.000000000000000000
+          Padding.Top = 12.000000000000000000
+          object LblKeyHint: TLabel
+            Align = Top
+            Size.Width = 448.000000000000000000
+            Size.Height = 36.000000000000000000
+            Size.PlatformDefault = False
+            Margins.Bottom = 8.000000000000000000
+            Text = 'Enter your API keys. They are stored locally on your device.'
+            WordWrap = True
+          end
+          object LblKeyclaude: TLabel
+            Align = Top
+            Size.Width = 448.000000000000000000
+            Size.Height = 24.000000000000000000
+            Size.PlatformDefault = False
+            Margins.Bottom = 4.000000000000000000
+            Text = 'Claude (Anthropic)'
+          end
+          object EdtKeyClaude: TEdit
+            Align = Top
+            Size.Width = 448.000000000000000000
+            Size.Height = 36.000000000000000000
+            Size.PlatformDefault = False
+            Margins.Bottom = 12.000000000000000000
+            Password = True
+          end
+          object LblKeyOpenAI: TLabel
+            Align = Top
+            Size.Width = 448.000000000000000000
+            Size.Height = 24.000000000000000000
+            Size.PlatformDefault = False
+            Margins.Bottom = 4.000000000000000000
+            Text = 'OpenAI (GPT)'
+          end
+          object EdtKeyOpenAI: TEdit
+            Align = Top
+            Size.Width = 448.000000000000000000
+            Size.Height = 36.000000000000000000
+            Size.PlatformDefault = False
+            Margins.Bottom = 12.000000000000000000
+            Password = True
+          end
+          object LblKeyGemini: TLabel
+            Align = Top
+            Size.Width = 448.000000000000000000
+            Size.Height = 24.000000000000000000
+            Size.PlatformDefault = False
+            Margins.Bottom = 4.000000000000000000
+            Text = 'Google Gemini'
+          end
+          object EdtKeyGemini: TEdit
+            Align = Top
+            Size.Width = 448.000000000000000000
+            Size.Height = 36.000000000000000000
+            Size.PlatformDefault = False
+            Margins.Bottom = 12.000000000000000000
+            Password = True
+          end
+          object LblKeyGroq: TLabel
+            Align = Top
+            Size.Width = 448.000000000000000000
+            Size.Height = 24.000000000000000000
+            Size.PlatformDefault = False
+            Margins.Bottom = 4.000000000000000000
+            Text = 'Groq'
+          end
+          object EdtKeyGroq: TEdit
+            Align = Top
+            Size.Width = 448.000000000000000000
+            Size.Height = 36.000000000000000000
+            Size.PlatformDefault = False
+            Margins.Bottom = 12.000000000000000000
+            Password = True
+          end
+        end
+      end
+    end
+  end
+end

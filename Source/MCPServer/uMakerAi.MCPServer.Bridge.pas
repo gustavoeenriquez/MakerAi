@@ -1,233 +1,181 @@
-// MIT License
-//
-// Copyright (c) 2024-2026 Gustavo Enriquez
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-//
-// Nombre: Gustavo Enriquez
-// - Email: gustavoeenriquez@gmail.com
-// - GitHub: https://github.com/gustavoeenriquez/
-//
-// --------- FPC PORT --------------------
-// Bridge: adapta TAiFunctions/TFunctionActionItem → IAiMCPTool.
-// Permite exponer las funciones locales de TAiFunctions como herramientas MCP.
-//
-// Adaptaciones respecto a la version Delphi:
-//   - TJSONObject.TryGetValue<TJSONObject> → Find + is TJSONObject
-//   - LToolCall.Response.IsEmpty          → LToolCall.Response = ''
-//   - LToolCall.Response.Trim.StartsWith  → Copy(Trim(...),1,10)
-//   - var LParsed (inline)                → declaracion en var block
-//   - LResMsg.MediaFiles                  → compatibilidad con TAiChatMessages FPC
-
-unit uMakerAi.MCPServer.Bridge;
-
-{$mode objfpc}{$H+}
+﻿unit uMakerAi.MCPServer.Bridge;
 
 interface
 
 uses
-  SysUtils, Classes,
-  fpjson, jsonparser,
-  uMakerAi.Core,
-  uMakerAi.Tools.Functions,
-  uMakerAi.MCPServer.Core,
+  System.SysUtils, System.Classes, System.JSON, System.Generics.Collections,
+  uMakerAi.Core, uMakerAi.Tools.Functions, uMakerAi.MCPServer.Core,
   uMakerAi.Chat.Messages;
 
 type
-  // -------------------------------------------------------------------------
-  // TTAiFunctionToolProxy
-  //
-  // Implementa IAiMCPTool para exponer cualquier funcion de TAiFunctions
-  // (local o remota de otro MCP) a traves de nuestro servidor MCP.
-  // -------------------------------------------------------------------------
+  { TTAiFunctionToolProxy:
+    Implementa IAiMCPTool para exponer cualquier funci?n de TAiFunctions
+    (local o remota de otro MCP) a trav?s de nuestro servidor. }
+
   TTAiFunctionToolProxy = class(TInterfacedObject, IAiMCPTool)
   private
-    FFunctionItem : TFunctionActionItem;
-    FAiFunctions  : TAiFunctions;
-
+    FFunctionItem: TFunctionActionItem;
+    FAiFunctions: TAiFunctions;
     function GetName: string;
     function GetDescription: string;
     function GetInputSchema: TJSONObject;
-
   public
-    constructor Create(AAiFunctions: TAiFunctions;
-        AItem: TFunctionActionItem);
+    constructor Create(AAiFunctions: TAiFunctions; AItem: TFunctionActionItem);
     destructor Destroy; override;
 
-    function Execute(const Arguments: TJSONObject;
-        const AuthContext: TAiAuthContext): TJSONObject;
+    function Execute(const Arguments: TJSONObject; const AuthContext: TAiAuthContext): TJSONObject;
 
-    property Name        : string      read GetName;
-    property Description : string      read GetDescription;
-    property InputSchema : TJSONObject read GetInputSchema;
+    property Name: string read GetName;
+    property Description: string read GetDescription;
+    property InputSchema: TJSONObject read GetInputSchema; // El interface pide TJSONObject, el getter lo maneja
   end;
 
 implementation
 
-// ---------------------------------------------------------------------------
-// TTAiFunctionToolProxy
-// ---------------------------------------------------------------------------
+{ TTAiFunctionToolProxy }
 
-constructor TTAiFunctionToolProxy.Create(AAiFunctions: TAiFunctions;
-    AItem: TFunctionActionItem);
+constructor TTAiFunctionToolProxy.Create(AAiFunctions: TAiFunctions; AItem: TFunctionActionItem);
 begin
   inherited Create;
-  FAiFunctions  := AAiFunctions;
+  FAiFunctions := AAiFunctions;
   FFunctionItem := AItem;
 end;
 
 destructor TTAiFunctionToolProxy.Destroy;
 begin
-  // No liberamos FFunctionItem ni FAiFunctions — no somos sus duenos
+  // No liberamos FFunctionItem ni FAiFunctions porque no somos sus due?os
   inherited;
 end;
 
 function TTAiFunctionToolProxy.GetName: string;
 begin
+  // Devolvemos el nombre completo (incluyendo el prefijo _99_ si es una funci?n externa)
   Result := FFunctionItem.FunctionName;
 end;
 
 function TTAiFunctionToolProxy.GetDescription: string;
 begin
-  Result := Trim(FFunctionItem.Description.Text);
+  Result := FFunctionItem.Description.Text.Trim;
 end;
 
 function TTAiFunctionToolProxy.GetInputSchema: TJSONObject;
 var
-  LFullOpenAiJson : TJSONObject;
-  LFuncNode       : TJSONData;
-  LParamsNode     : TJSONData;
+  LFullOpenAiJson, LFuncObj, LParams: TJSONObject;
 begin
   Result := nil;
 
-  // Obtenemos la definicion completa que genera el componente local.
-  // Formato: {"type":"function","function":{"name":"...","parameters":{...}}}
+  // 1. Obtenemos la definici?n completa que ya genera tu componente local.
+  // El formato es: {"type": "function", "function": {"name": "...", "parameters": {...}}}
   LFullOpenAiJson := FFunctionItem.ToJSon(False);
 
   if not Assigned(LFullOpenAiJson) then
-  begin
-    Result := TJSONObject.Create;
-    Result.Add('type', TJSONString.Create('object'));
-    Result.Add('properties', TJSONObject.Create);
-    Exit;
-  end;
+    Exit(TJSONObject.Create);
 
   try
-    // Navegar hasta "function" → "parameters"
-    LFuncNode := LFullOpenAiJson.Find('function');
-    if Assigned(LFuncNode) and (LFuncNode is TJSONObject) then
+    // 2. El servidor MCP solo necesita el esquema de par?metros (InputSchema),
+    // no toda la envoltura de OpenAI.
+    if LFullOpenAiJson.TryGetValue<TJSONObject>('function', LFuncObj) then
     begin
-      LParamsNode := TJSONObject(LFuncNode).Find('parameters');
-      if Assigned(LParamsNode) and (LParamsNode is TJSONObject) then
-        Result := TJSONObject(LParamsNode.Clone);
+      if LFuncObj.TryGetValue<TJSONObject>('parameters', LParams) then
+      begin
+        // 3. Clonamos el objeto de par?metros.
+        // El servidor MCP se encargar? de liberar este objeto despu?s de usarlo.
+        Result := LParams.Clone as TJSONObject;
+      end;
     end;
 
-    // Si no tiene parametros, devolvemos un schema vacio valido
+    // 4. Si el esquema no existe o est? vac?o, devolvemos un objeto de esquema v?lido pero vac?o.
     if not Assigned(Result) then
     begin
       Result := TJSONObject.Create;
-      Result.Add('type', TJSONString.Create('object'));
-      Result.Add('properties', TJSONObject.Create);
+      Result.AddPair('type', 'object');
+      Result.AddPair('properties', TJSONObject.Create);
     end;
 
   finally
-    LFullOpenAiJson.Free;
+    LFullOpenAiJson.Free; // Liberamos el JSON temporal de OpenAI
   end;
 end;
 
-function TTAiFunctionToolProxy.Execute(const Arguments: TJSONObject;
-    const AuthContext: TAiAuthContext): TJSONObject;
+
+function TTAiFunctionToolProxy.Execute(const Arguments: TJSONObject; const AuthContext: TAiAuthContext): TJSONObject;
 var
-  LToolCall  : TAiToolsFunction;
-  LBuilder   : TAiMCPResponseBuilder;
-  LResMsg    : TAIChatMessage;
-  LParsed    : TJSONData;
-  I          : Integer;
-  TrimmedResp: string;
+  LToolCall: TAiToolsFunction;
+  LResponseBuilder: TAiMCPResponseBuilder;
+  LResMsg: TAIChatMessage;
+  I: Integer;
 begin
-  Result   := nil;
-  LBuilder := TAiMCPResponseBuilder.New;
+  Result := nil;
+  LResponseBuilder := TAiMCPResponseBuilder.New;
   LToolCall := TAiToolsFunction.Create;
-  LResMsg  := TAIChatMessage.Create('', '');
+
+  // Creamos un mensaje temporal para capturar posibles archivos multimedia
+  LResMsg := TAIChatMessage.Create('','');
   try
     // 1. Preparar la llamada
-    LToolCall.name := FFunctionItem.FunctionName;
+    LToolCall.Name := FFunctionItem.FunctionName;
     if Assigned(Arguments) then
-      LToolCall.Arguments := Arguments.AsJSON;
+      LToolCall.Arguments := Arguments.ToJSON;
 
-    // El mensaje temporal captura posibles mediafiles generados
+    // Asignamos el mensaje para que DoCallFunction pueda depositar mediafiles ah?
     LToolCall.ResMsg := LResMsg;
 
-    // 2. Ejecutar el motor de TAiFunctions
+    // 2. Ejecutar el motor central de TAiFunctions
+    // Esto disparar? OnAction si es local, o llamar? a otro servidor si es remoto.
     if FAiFunctions.DoCallFunction(LToolCall) then
     begin
-      // 3. Procesar respuesta de texto
-      TrimmedResp := Trim(LToolCall.Response);
-      if LToolCall.Response <> '' then
+      // 3. Procesar la respuesta de texto
+      if not LToolCall.Response.IsEmpty then
       begin
-        // Si la respuesta ya es un JSON MCP con 'content', lo usamos directamente
-        if Copy(TrimmedResp, 1, 10) = '{"content"' then
+        // Si la respuesta ya es un JSON de contenido MCP (un objeto con 'content')
+        if LToolCall.Response.Trim.StartsWith('{"content":') then
         begin
-          LParsed := GetJSON(LToolCall.Response);
-          if Assigned(LParsed) and (LParsed is TJSONObject) then
-          begin
-            Result := TJSONObject(LParsed);
-            // Result ya listo — no usar builder para el texto
-          end
+          var LParsed := TJSONObject.ParseJSONValue(LToolCall.Response);
+          if LParsed is TJSONObject then
+            Result := TJSONObject(LParsed)
           else
           begin
-            if Assigned(LParsed) then LParsed.Free;
-            LBuilder.AddText(LToolCall.Response);
+            LParsed.Free;
+            LResponseBuilder.AddText(LToolCall.Response);
           end;
         end
         else
-          LBuilder.AddText(LToolCall.Response);
+        begin
+          // Si es texto plano (lo m?s com?n), lo a?adimos al builder
+          LResponseBuilder.AddText(LToolCall.Response);
+        end;
       end;
 
-      // 4. Procesar MediaFiles (imagenes, audio, etc.)
+      // 4. PROCESAR MEDIAFILES (Im?genes, Audio, etc.)
+      // Si la funci?n gener? archivos (ej. un gr?fico o un PDF), los incluimos en la respuesta MCP
       if Assigned(LResMsg.MediaFiles) and (LResMsg.MediaFiles.Count > 0) then
       begin
         for I := 0 to LResMsg.MediaFiles.Count - 1 do
         begin
-          LBuilder.AddFileFromStream(
-              LResMsg.MediaFiles[I].Content,
-              LResMsg.MediaFiles[I].Filename,
-              LResMsg.MediaFiles[I].MimeType);
+          LResponseBuilder.AddFileFromStream(
+            LResMsg.MediaFiles[I].Content,
+            LResMsg.MediaFiles[I].filename,
+            LResMsg.MediaFiles[I].MimeType
+          );
         end;
       end;
 
-      // Construir resultado si aun no lo tenemos
+      // Si a?n no tenemos resultado (porque era texto plano + media), lo construimos
       if not Assigned(Result) then
-        Result := LBuilder.Build;
+        Result := LResponseBuilder.Build;
     end
     else
     begin
-      // La funcion devolvio False — error
+      // Manejo de errores
       Result := TAiMCPResponseBuilder.New
-          .SetError('La ejecucion de la herramienta no devolvio resultado exitoso.')
-          .Build;
+        .AddText('Error: La ejecuci?n de la herramienta no devolvi? un resultado exitoso.')
+        .Build;
     end;
 
   finally
     LToolCall.Free;
     LResMsg.Free;
-    LBuilder.Free;
+    LResponseBuilder.Free;
   end;
 end;
 

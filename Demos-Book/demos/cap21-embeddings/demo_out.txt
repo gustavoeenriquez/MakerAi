@@ -1,0 +1,95 @@
+﻿=== MakerAI -- Capitulo 21: Embeddings: El lenguaje de los vectores ===
+
+  Modelos locales (Ollama, sin internet, sin API key):
+    snowflake-arctic-embed   [1024 dims, BERT,   334M params]
+    mxbai-embed-large        [1024 dims, BERT,   334M params]
+    embeddinggemma           [ 768 dims, Gemma3, 308M params]
+
+  Nota: cada CreateEmbedding hace una llamada HTTP a localhost:11434.
+  En produccion los embeddings del corpus se precalculan y persisten.
+
+--------------------------------------------------------------
+  Demo 1 -- Similitud coseno: frases cercanas y lejanas
+--------------------------------------------------------------
+  Modelo : snowflake-arctic-embed  [1024 dims]
+  Query  : "Como se programa una aplicacion en Delphi"
+
+  Calculando embeddings... OK  (1024 dims x 6 frases)
+
+  Ranking de similitud  (1.0 = identico, 0.0 = sin relacion):
+  ============================================================
+  #1  0.914  [##################..]  Delphi es un lenguaje de programacion orie
+  #2  0.777  [################....]  El cafe es la bebida favorita de los progr
+  #3  0.773  [###############.....]  La inteligencia artificial transforma la f
+  #4  0.765  [###############.....]  RAD Studio permite compilar aplicaciones p
+  #5  0.764  [###############.....]  Los componentes FMX facilitan el diseno de
+  #6  0.657  [#############.......]  La temperatura media en la superficie de M
+  ============================================================
+
+-> Nota: la query no comparte palabras con la frase #3 (FMX),
+   pero el modelo detecta que ambas hablan de programar en Delphi.
+   Cafe y Marte obtienen scores bajos: temas sin relacion semantica.
+
+--------------------------------------------------------------
+  Demo 2 -- Busqueda semantica con FindTopK
+--------------------------------------------------------------
+  Modelo : snowflake-arctic-embed  [1024 dims]
+  Corpus : 15 frases  |  Top-K = 3
+
+  Indexando corpus... OK  (15 embeddings listos)
+
+  [Q1] "componentes visuales para interfaces de usuario"
+       #1  0.833  TChatList y TChatInput son componentes FMX de MakerAI
+       #2  0.833  Los embeddings convierten texto en vectores numericos
+       #3  0.818  Ollama ejecuta modelos de lenguaje de forma local sin c
+
+  [Q2] "modelos locales sin necesidad de internet ni API key"
+       #1  0.822  Ollama ejecuta modelos de lenguaje de forma local sin c
+       #2  0.815  Los embeddings convierten texto en vectores numericos
+       #3  0.797  El protocolo MCP conecta servidores de herramientas a m
+
+  [Q3] "busqueda y recuperacion de informacion semantica"
+       #1  0.870  RAG combina busqueda semantica con generacion de texto
+       #2  0.841  La base de datos vectorial almacena embeddings para bus
+       #3  0.835  Los embeddings convierten texto en vectores numericos
+
+-> Patron RAG: el corpus se indexa UNA vez, se consulta N veces.
+   En produccion los embeddings viven en una base de datos vectorial
+   (cap. 22-23). FindTopK es el motor de busqueda semantica.
+
+--------------------------------------------------------------
+  Demo 3 -- Los tres modelos cara a cara
+--------------------------------------------------------------
+  Query : "procesamiento de lenguaje natural con redes neuronales"
+  Corpus: 8 frases  |  Top-3 por modelo
+
+  snowflake-arctic-embed          (1024d)
+  -------------------------------------------------------
+  #1  0.912  El procesamiento de lenguaje natural analiza y compr
+  #2  0.866  Las redes neuronales aprenden patrones a partir de g
+  #3  0.795  GPT, Claude y Gemini son modelos de lenguaje de gran
+
+  mxbai-embed-large               (1024d)
+  -------------------------------------------------------
+  #1  0.856  Las redes neuronales aprenden patrones a partir de g
+  #2  0.838  El procesamiento de lenguaje natural analiza y compr
+  #3  0.615  GPT, Claude y Gemini son modelos de lenguaje de gran
+
+  embeddinggemma                  ( 768d)
+  -------------------------------------------------------
+  #1  0.707  El procesamiento de lenguaje natural analiza y compr
+  #2  0.507  Las redes neuronales aprenden patrones a partir de g
+  #3  0.418  Los transformers son la arquitectura base de los LLM
+
+-> Los tres modelos suelen coincidir en el ORDEN semantico,
+   pero sus scores absolutos difieren (BERT-1024 vs Gemma-768).
+   Para comparar entre modelos siempre usar ranking relativo,
+   nunca el valor de score como umbral absoluto.
+
+==============================================================
+  Demos completados.
+  Ver cap21-embeddings.md para la documentacion completa.
+==============================================================
+
+Presiona Enter para salir...
+

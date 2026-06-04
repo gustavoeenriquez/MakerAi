@@ -1,0 +1,21 @@
+[package]
+name = mcp-tokenizer
+version = 1.0.1
+description = Token counting MCP server. Estimates token count for LLM models (GPT, Claude, Gemini). Includes text splitter.
+author = MakerAI
+license = MIT
+tags = mcp,tokens,tokenizer,llm,delphi
+homepage = https://makerai.cimamaker.com
+min_pai_version = 1.0.0
+
+[mcp]
+entrypoint = mcp-tokenizer.exe
+protocol = stdio
+
+[tools]
+names = tokenize,split_text
+
+[platform]
+windows = true
+linux = false
+macos = false

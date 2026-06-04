@@ -1,0 +1,21 @@
+[package]
+name = mcp-file-reader
+version = 1.0.1
+description = File system MCP server. Read files with line ranges, list directories, get file metadata.
+author = MakerAI
+license = MIT
+tags = mcp,file,filesystem,delphi
+homepage = https://makerai.cimamaker.com
+min_pai_version = 1.0.0
+
+[mcp]
+entrypoint = mcp-file-reader.exe
+protocol = stdio
+
+[tools]
+names = file_read,file_list,file_info
+
+[platform]
+windows = true
+linux = false
+macos = false

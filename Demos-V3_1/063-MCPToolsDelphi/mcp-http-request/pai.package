@@ -1,0 +1,21 @@
+[package]
+name = mcp-http-request
+version = 1.0.1
+description = Full HTTP client MCP server. GET, POST, PUT, DELETE, PATCH with custom headers and body.
+author = MakerAI
+license = MIT
+tags = mcp,http,rest,api,delphi
+homepage = https://makerai.cimamaker.com
+min_pai_version = 1.0.0
+
+[mcp]
+entrypoint = mcp-http-request.exe
+protocol = stdio
+
+[tools]
+names = http_request
+
+[platform]
+windows = true
+linux = false
+macos = false

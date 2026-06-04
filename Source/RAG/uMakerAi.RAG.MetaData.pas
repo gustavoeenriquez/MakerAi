@@ -1,231 +1,232 @@
-// MIT License - Copyright (c) 2024-2026 Gustavo Enriquez
-// FPC PORT - uMakerAi.RAG.MetaData
-// Tipos de metadatos, criterios de filtro y operadores para RAG.
-unit uMakerAi.RAG.MetaData;
-
-{$mode objfpc}{$H+}
-{$modeswitch advancedrecords}
+﻿unit uMakerAi.RAG.MetaData;
 
 interface
 
 uses
-  SysUtils, Classes, Variants, Math, StrUtils, DateUtils, fpmasks,
-  fpjson;
+  System.SysUtils,
+  System.Classes,
+  System.Generics.Collections,
+  System.Generics.Defaults,
+  System.JSON,
+  System.Variants,
+  System.StrUtils,
+  System.DateUtils,
+  System.Math,
+  System.Masks, // Necesario para simular LIKE
+  System.VarUtils;
 
 type
   TAiLanguage = (alSpanish, alEnglish, alPortuguese, alCustom);
 
+  { Operador l�gico para determinar c�mo se eval�an los �tems de la lista }
   TLogicalOperator = (loAnd, loOr);
 
+  { Super-set de operadores unificados (Memoria + SQL) }
   TFilterOperator = (
-    foEqual,          // =
-    foNotEqual,       // <>
-    foGreater,        // >
+    // B�sicos
+    foEqual, // =
+    foNotEqual, // <>
+    foGreater, // >
     foGreaterOrEqual, // >=
-    foLess,           // <
-    foLessOrEqual,    // <=
-    // Texto avanzado
-    foContains,       // LIKE %val%
-    foStartsWith,     // LIKE val%
-    foEndsWith,       // LIKE %val
-    foLike,           // Patrón SQL estándar
-    foILike,          // Case-insensitive LIKE
-    // Listas y rangos
-    foIn,             // IN (lista)
-    foNotIn,          // NOT IN
-    foBetween,        // Rango
-    // Existencia
-    foIsNull,
-    foIsNotNull,
-    foExists,
-    // Conjuntos JSON
-    foExistsAny,      // ?| alguna clave existe
-    foExistsAll       // ?& todas las claves existen
-  );
+    foLess, // <
+    foLessOrEqual, // <=
+
+    // Texto Avanzado
+    foContains, // String contiene (LIKE %val%) / JSON @>
+    foStartsWith, // String empieza (LIKE val%)
+    foEndsWith, // String termina (LIKE %val)
+    foLike, // Patr�n SQL est�ndar (con % y _)
+    foILike, // Case insensitive Like
+
+    // Listas y Rangos
+    foIn, // IN (lista)
+    foNotIn, // NOT IN (lista)
+    foBetween, // Rango (requiere dos valores)
+
+    // Existencia y Estructura
+    foIsNull, // Valor es nulo o clave no existe
+    foIsNotNull, // Valor no es nulo y clave existe
+    foExists, // La clave existe (independiente del valor)
+
+    // --- AGREGADOS FALTANTES ---
+    foExistsAny, // ?| (Alguna de las claves existe en el JSON)
+    foExistsAll // ?& (Todas las claves existen en el JSON)
+    );
 
   TAiEmbeddingMetaData = class;
-  TAiFilterCriteria = class;
+  TAiFilterCriteria = class; // Forward declaration
 
+
+  { Estructura para almacenar una condici�n individual O un subgrupo }
   TFilterCriterion = record
-  public
-    Key        : string;
-    Op         : TFilterOperator;
-    Value      : Variant;
-    Value2     : Variant;
-    IsGroup    : Boolean;
+    Key: string;
+    Op: TFilterOperator;
+    Value: Variant;
+    Value2: Variant; // Usado solo para foBetween
+
+    // --- SOPORTE PARA �RBOL DE DECISI�N (VGQL) ---
+    IsGroup: Boolean;
     SubCriteria: TAiFilterCriteria;
+
     constructor Create(const AKey: string; AOp: TFilterOperator; const AVal: Variant); overload;
     constructor Create(const AKey: string; AOp: TFilterOperator; const AVal, AVal2: Variant); overload;
     constructor CreateGroup(ASub: TAiFilterCriteria);
   end;
 
-  // Clase contenedora de criterios (árbol recursivo)
+  { Clase contenedora de criterios de b�squeda complejos (Recursiva) }
   TAiFilterCriteria = class
   private
-    FCriteria  : array of TFilterCriterion;
-    FCount     : Integer;
-    FLogicalOp : TLogicalOperator;
+    FCriteria: TList<TFilterCriterion>;
+    FLogicalOp: TLogicalOperator;
     function GetCount: Integer;
     function GetItem(Index: Integer): TFilterCriterion;
-    procedure InternalAdd(const C: TFilterCriterion);
   public
+    { Constructor con opci�n de definir l�gica (Default = AND para compatibilidad) }
     constructor Create(ALogic: TLogicalOperator = loAnd);
     destructor Destroy; override;
+
     procedure Clear;
+
+    // M�todos Fluent para construir filtros f�cilmente
     function Add(const Key: string; Op: TFilterOperator; const Value: Variant): TAiFilterCriteria; overload;
     function Add(const Key: string; Op: TFilterOperator; const Value, Value2: Variant): TAiFilterCriteria; overload;
+
+    // M�todo para agregar subgrupos (Necesario para el VGQL Compiler)
     function AddGroup(ALogic: TLogicalOperator): TAiFilterCriteria;
+
     function AddEqual(const Key: string; const Value: Variant): TAiFilterCriteria;
     function AddGreater(const Key: string; const Value: Variant): TAiFilterCriteria;
     function AddLess(const Key: string; const Value: Variant): TAiFilterCriteria;
     function AddBetween(const Key: string; const Min, Max: Variant): TAiFilterCriteria;
-    function AddIn(const Key: string; const Values: Variant): TAiFilterCriteria;
+    function AddIn(const Key: string; const Values: Variant): TAiFilterCriteria; // Values puede ser Array Variant
     function AddLike(const Key, Pattern: string; CaseInsensitive: Boolean = True): TAiFilterCriteria;
+
+    // Carga de compatibilidad desde MetaData antiguo (Todo foEqual)
     procedure LoadFromMetaData(AMeta: TAiEmbeddingMetaData);
+
     property LogicalOp: TLogicalOperator read FLogicalOp write FLogicalOp;
     property Count: Integer read GetCount;
     property Items[Index: Integer]: TFilterCriterion read GetItem; default;
+    property List: TList<TFilterCriterion> read FCriteria;
   end;
 
-  // Wrapper para almacenar Variant en TStringList.Objects
-  TAiVariantItem = class
-    Value: Variant;
-    constructor Create(const V: Variant);
-  end;
-
-  // Almacén de atributos del nodo RAG
+  { TAiEmbeddingMetaData: Almac�n de atributos del Nodo }
   TAiEmbeddingMetaData = class
   private
-    FProperties: TStringList; // sorted, stores TAiVariantItem as Objects
-    FTagString : string;
-    FData      : TStrings;
-    FTagObject : TObject;
+    FProperties: TDictionary<string, Variant>;
+    FTagString: string;
+    FData: TStrings;
+    FTagObject: TObject;
 
     function GetProperty(const Name: string): Variant;
     procedure SetProperty(const Name: string; const Value: Variant);
     procedure SetData(const Value: TStrings);
-    function TryGetPropValue(const Name: string; out Val: Variant): Boolean;
-    procedure AddOrSetPropValue(const Name: string; const Val: Variant);
 
-    // Helpers de comparación internos
+    // Helpers de comparaci�n internos
     function CompareNumbers(const A, B: Variant; Op: TFilterOperator): Boolean;
     function CompareStrings(const A, B: string; Op: TFilterOperator): Boolean;
     function CheckInList(const Val: Variant; const List: Variant; Negate: Boolean): Boolean;
     function CheckLike(const Val, Pattern: string; CaseInsensitive: Boolean): Boolean;
+
   public
     constructor Create;
     destructor Destroy; override;
+
     procedure Clear;
     procedure Assign(Source: TAiEmbeddingMetaData);
     function Has(const Name: string): Boolean;
     function Get(const Name: string; Default: Variant): Variant;
     procedure Remove(const Name: string);
-    function Evaluate(const Name: string; Op: TFilterOperator; const Value: Variant): Boolean; overload;
-    function Evaluate(const Name: string; Op: TFilterOperator; const Value, Value2: Variant; const ANodeText: string = ''): Boolean; overload;
+
+    { Evalua si este MetaData cumple con un criterio espec�fico }
+    function Evaluate(const Name: string; Op: TFilterOperator; const Value: Variant): Boolean; Overload;
+    function Evaluate(const Name: string; Op: TFilterOperator; const Value, Value2: Variant; const ANodeText: string = ''): Boolean; Overload;
+
+    { Evalua si este MetaData cumple con el �rbol de criterios }
     function Matches(Criteria: TAiFilterCriteria; const ANodeText: string = ''): Boolean;
+
+    { Serializaci�n JSON }
     function ToJSON: TJSONObject;
     procedure FromJSON(aJSON: TJSONObject);
-    // Acceso indexado a propiedades (reemplaza InternalDictionary)
-    function GetPropCount: Integer;
-    function GetPropKey(I: Integer): string;
-    function GetPropValue(I: Integer): Variant;
+
     property Properties[const Name: string]: Variant read GetProperty write SetProperty; default;
-    property Data     : TStrings read FData      write SetData;
-    property TagString: string   read FTagString write FTagString;
-    property TagObject: TObject  read FTagObject write FTagObject;
+    property InternalDictionary: TDictionary<string, Variant> read FProperties;
+    property Data: TStrings read FData write SetData;
+    property TagString: string read FTagString write FTagString;
+    property TagObject: TObject read FTagObject write FTagObject;
   end;
 
 implementation
 
-// ---------------------------------------------------------------------------
-// TAiVariantItem
-// ---------------------------------------------------------------------------
+{ TFilterCriterion }
 
-constructor TAiVariantItem.Create(const V: Variant);
+constructor TFilterCriterion.Create(const AKey: string; AOp: TFilterOperator; const AVal: Variant);
 begin
-  inherited Create;
-  Value := V;
-end;
-
-// ---------------------------------------------------------------------------
-// TFilterCriterion (record con constructores)
-// ---------------------------------------------------------------------------
-
-constructor TFilterCriterion.Create(const AKey: string; AOp: TFilterOperator;
-    const AVal: Variant);
-begin
-  Key         := AKey;
-  Op          := AOp;
-  Value       := AVal;
-  Value2      := Unassigned;
-  IsGroup     := False;
+  Key := AKey;
+  Op := AOp;
+  Value := AVal;
+  Value2 := Unassigned;
+  IsGroup := False;
   SubCriteria := nil;
 end;
 
-constructor TFilterCriterion.Create(const AKey: string; AOp: TFilterOperator;
-    const AVal, AVal2: Variant);
+constructor TFilterCriterion.Create(const AKey: string; AOp: TFilterOperator; const AVal, AVal2: Variant);
 begin
-  Key         := AKey;
-  Op          := AOp;
-  Value       := AVal;
-  Value2      := AVal2;
-  IsGroup     := False;
+  Key := AKey;
+  Op := AOp;
+  Value := AVal;
+  Value2 := AVal2;
+  IsGroup := False;
   SubCriteria := nil;
 end;
 
 constructor TFilterCriterion.CreateGroup(ASub: TAiFilterCriteria);
 begin
-  IsGroup     := True;
+  IsGroup := True;
   SubCriteria := ASub;
-  Key         := '';
-  Op          := foEqual;
-  Value       := Unassigned;
-  Value2      := Unassigned;
+  Key := '';
+  Op := foEqual; // No relevante para grupos
+  Value := Unassigned;
+  Value2 := Unassigned;
 end;
 
-// ---------------------------------------------------------------------------
-// TAiFilterCriteria
-// ---------------------------------------------------------------------------
+{ TAiFilterCriteria }
 
 constructor TAiFilterCriteria.Create(ALogic: TLogicalOperator);
 begin
-  inherited Create;
+  FCriteria := TList<TFilterCriterion>.Create;
   FLogicalOp := ALogic;
-  FCount     := 0;
 end;
 
 destructor TAiFilterCriteria.Destroy;
 var
-  I: Integer;
+  C: TFilterCriterion;
 begin
-  for I := 0 to FCount - 1 do
-    if FCriteria[I].IsGroup and Assigned(FCriteria[I].SubCriteria) then
-      FCriteria[I].SubCriteria.Free;
+  // Liberaci�n recursiva de memoria para grupos anidados
+  for C in FCriteria do
+  begin
+    if C.IsGroup and Assigned(C.SubCriteria) then
+      C.SubCriteria.Free;
+  end;
+  FCriteria.Free;
   inherited;
-end;
-
-procedure TAiFilterCriteria.InternalAdd(const C: TFilterCriterion);
-begin
-  if FCount >= Length(FCriteria) then
-    SetLength(FCriteria, FCount + 16);
-  FCriteria[FCount] := C;
-  Inc(FCount);
 end;
 
 procedure TAiFilterCriteria.Clear;
 var
-  I: Integer;
+  C: TFilterCriterion;
 begin
-  for I := 0 to FCount - 1 do
-    if FCriteria[I].IsGroup and Assigned(FCriteria[I].SubCriteria) then
-      FCriteria[I].SubCriteria.Free;
-  FCount := 0;
-  SetLength(FCriteria, 0);
+  for C in FCriteria do
+  begin
+    if C.IsGroup and Assigned(C.SubCriteria) then
+      C.SubCriteria.Free;
+  end;
+  FCriteria.Clear;
 end;
 
 function TAiFilterCriteria.GetCount: Integer;
 begin
-  Result := FCount;
+  Result := FCriteria.Count;
 end;
 
 function TAiFilterCriteria.GetItem(Index: Integer): TFilterCriterion;
@@ -233,17 +234,15 @@ begin
   Result := FCriteria[Index];
 end;
 
-function TAiFilterCriteria.Add(const Key: string; Op: TFilterOperator;
-    const Value: Variant): TAiFilterCriteria;
+function TAiFilterCriteria.Add(const Key: string; Op: TFilterOperator; const Value: Variant): TAiFilterCriteria;
 begin
-  InternalAdd(TFilterCriterion.Create(Key, Op, Value));
+  FCriteria.Add(TFilterCriterion.Create(Key, Op, Value));
   Result := Self;
 end;
 
-function TAiFilterCriteria.Add(const Key: string; Op: TFilterOperator;
-    const Value, Value2: Variant): TAiFilterCriteria;
+function TAiFilterCriteria.Add(const Key: string; Op: TFilterOperator; const Value, Value2: Variant): TAiFilterCriteria;
 begin
-  InternalAdd(TFilterCriterion.Create(Key, Op, Value, Value2));
+  FCriteria.Add(TFilterCriterion.Create(Key, Op, Value, Value2));
   Result := Self;
 end;
 
@@ -252,7 +251,7 @@ var
   Sub: TAiFilterCriteria;
 begin
   Sub := TAiFilterCriteria.Create(ALogic);
-  InternalAdd(TFilterCriterion.CreateGroup(Sub));
+  FCriteria.Add(TFilterCriterion.CreateGroup(Sub));
   Result := Sub;
 end;
 
@@ -291,45 +290,36 @@ end;
 
 procedure TAiFilterCriteria.LoadFromMetaData(AMeta: TAiEmbeddingMetaData);
 var
-  I: Integer;
+  Pair: TPair<string, Variant>;
 begin
-  if not Assigned(AMeta) then Exit;
-  for I := 0 to AMeta.GetPropCount - 1 do
-    AddEqual(AMeta.GetPropKey(I), AMeta.GetPropValue(I));
+  if not Assigned(AMeta) then
+    Exit;
+
+  // Compatibilidad legacy
+  for Pair in AMeta.InternalDictionary do
+    AddEqual(Pair.Key, Pair.Value);
 end;
 
-// ---------------------------------------------------------------------------
-// TAiEmbeddingMetaData — gestión de propiedades con TStringList
-// ---------------------------------------------------------------------------
+{ TAiEmbeddingMetaData }
 
 constructor TAiEmbeddingMetaData.Create;
 begin
   inherited Create;
-  FProperties := TStringList.Create;
-  FProperties.Sorted   := True;
-  FProperties.Duplicates := dupIgnore;
-  FData      := TStringList.Create;
+  FProperties := TDictionary<string, Variant>.Create(TStringComparer.Ordinal);
+  FData := TStringList.Create;
   FTagString := '';
   FTagObject := nil;
 end;
 
 destructor TAiEmbeddingMetaData.Destroy;
-var
-  I: Integer;
 begin
-  for I := 0 to FProperties.Count - 1 do
-    FProperties.Objects[I].Free;
-  FProperties.Free;
   FData.Free;
+  FProperties.Free;
   inherited;
 end;
 
 procedure TAiEmbeddingMetaData.Clear;
-var
-  I: Integer;
 begin
-  for I := 0 to FProperties.Count - 1 do
-    FProperties.Objects[I].Free;
   FProperties.Clear;
   FData.Clear;
   FTagString := '';
@@ -338,126 +328,71 @@ end;
 
 procedure TAiEmbeddingMetaData.Assign(Source: TAiEmbeddingMetaData);
 var
-  I: Integer;
+  Pair: TPair<string, Variant>;
 begin
-  if not Assigned(Source) then Exit;
+  if not Assigned(Source) then
+    Exit;
   Clear;
-  FTagString := Source.FTagString;
-  FTagObject := Source.FTagObject;
-  FData.Assign(Source.FData);
-  for I := 0 to Source.GetPropCount - 1 do
-    AddOrSetPropValue(Source.GetPropKey(I), Source.GetPropValue(I));
+  FTagString := Source.TagString;
+  FTagObject := Source.TagObject;
+  FData.Assign(Source.Data);
+  for Pair in Source.InternalDictionary do
+    SetProperty(Pair.Key, Pair.Value);
 end;
 
 function TAiEmbeddingMetaData.Has(const Name: string): Boolean;
 begin
-  Result := FProperties.IndexOf(Name) >= 0;
+  Result := FProperties.ContainsKey(Name);
 end;
 
 function TAiEmbeddingMetaData.Get(const Name: string; Default: Variant): Variant;
-var
-  I: Integer;
 begin
-  I := FProperties.IndexOf(Name);
-  if I >= 0 then
-    Result := TAiVariantItem(FProperties.Objects[I]).Value
-  else
+  if not FProperties.TryGetValue(Name, Result) then
     Result := Default;
 end;
 
 procedure TAiEmbeddingMetaData.Remove(const Name: string);
-var
-  I: Integer;
 begin
-  I := FProperties.IndexOf(Name);
-  if I >= 0 then
-  begin
-    FProperties.Objects[I].Free;
-    FProperties.Delete(I);
-  end;
+  FProperties.Remove(Name);
 end;
 
 function TAiEmbeddingMetaData.GetProperty(const Name: string): Variant;
-var
-  I: Integer;
 begin
-  I := FProperties.IndexOf(Name);
-  if I >= 0 then
-    Result := TAiVariantItem(FProperties.Objects[I]).Value
-  else
+  if not FProperties.TryGetValue(Name, Result) then
     Result := Null;
 end;
 
 procedure TAiEmbeddingMetaData.SetProperty(const Name: string; const Value: Variant);
 begin
-  AddOrSetPropValue(Name, Value);
+  FProperties.AddOrSetValue(Name, Value);
 end;
 
 procedure TAiEmbeddingMetaData.SetData(const Value: TStrings);
 begin
-  if Assigned(Value) then FData.Assign(Value)
-  else FData.Clear;
-end;
-
-function TAiEmbeddingMetaData.TryGetPropValue(const Name: string; out Val: Variant): Boolean;
-var
-  I: Integer;
-begin
-  I := FProperties.IndexOf(Name);
-  Result := I >= 0;
-  if Result then
-    Val := TAiVariantItem(FProperties.Objects[I]).Value;
-end;
-
-procedure TAiEmbeddingMetaData.AddOrSetPropValue(const Name: string; const Val: Variant);
-var
-  I: Integer;
-begin
-  I := FProperties.IndexOf(Name);
-  if I >= 0 then
-    TAiVariantItem(FProperties.Objects[I]).Value := Val
+  if Assigned(Value) then
+    FData.Assign(Value)
   else
-    FProperties.AddObject(Name, TAiVariantItem.Create(Val));
+    FData.Clear;
 end;
 
-function TAiEmbeddingMetaData.GetPropCount: Integer;
-begin
-  Result := FProperties.Count;
-end;
+{ --- Helpers de Comparaci�n --- }
 
-function TAiEmbeddingMetaData.GetPropKey(I: Integer): string;
-begin
-  Result := FProperties[I];
-end;
-
-function TAiEmbeddingMetaData.GetPropValue(I: Integer): Variant;
-begin
-  Result := TAiVariantItem(FProperties.Objects[I]).Value;
-end;
-
-// ---------------------------------------------------------------------------
-// Helpers de comparación
-// ---------------------------------------------------------------------------
-
-function TAiEmbeddingMetaData.CompareNumbers(const A, B: Variant;
-    Op: TFilterOperator): Boolean;
+function TAiEmbeddingMetaData.CompareNumbers(const A, B: Variant; Op: TFilterOperator): Boolean;
 var
-  D1, D2  : Double;
-  I1, I2  : Int64;
-  TypeA   : Word;
-  TypeB   : Word;
-  IsIntA  : Boolean;
-  IsIntB  : Boolean;
+  D1, D2: Double;
+  I1, I2: Int64;
+  TypeA, TypeB: Word;
+  IsIntA, IsIntB: Boolean;
 begin
-  TypeA  := VarType(A) and varTypeMask;
-  TypeB  := VarType(B) and varTypeMask;
-  IsIntA := (TypeA = varInt64) or (TypeA = varInteger) or (TypeA = varSmallint) or
-            (TypeA = varByte)  or (TypeA = varShortInt) or (TypeA = varWord) or
-            (TypeA = varLongWord);
-  IsIntB := (TypeB = varInt64) or (TypeB = varInteger) or (TypeB = varSmallint) or
-            (TypeB = varByte)  or (TypeB = varShortInt) or (TypeB = varWord) or
-            (TypeB = varLongWord);
+  TypeA := VarType(A) and varTypeMask;
+  TypeB := VarType(B) and varTypeMask;
 
+  // Comprobamos si son tipos enteros nativos (Byte, Integer, Int64, etc.)
+  // Esto es crucial para IDs grandes que Double perder�a precisi�n.
+  IsIntA := (TypeA = varInt64) or (TypeA = varInteger) or (TypeA = varSmallint) or (TypeA = varByte) or (TypeA = varShortInt) or (TypeA = varWord) or (TypeA = varLongWord);
+  IsIntB := (TypeB = varInt64) or (TypeB = varInteger) or (TypeB = varSmallint) or (TypeB = varByte) or (TypeB = varShortInt) or (TypeB = varWord) or (TypeB = varLongWord);
+
+  // 1. Camino R�pido y Preciso: Comparaci�n de Enteros de 64 bits
   if IsIntA and IsIntB then
   begin
     try
@@ -475,341 +410,335 @@ begin
       end;
       Exit;
     except
-      // Caer a Double si falla la conversión entero
+      // Si falla la conversi�n directa (raro si VarType dice que es int), caemos al Double
     end;
   end;
 
+  // 2. Camino Est�ndar: Comparaci�n de Punto Flotante
   try
     D1 := Double(A);
     D2 := Double(B);
   except
-    Result := False;
-    Exit;
+    // Si no se puede convertir a n�mero, retornamos falso
+    Exit(False);
   end;
 
   case Op of
-    foEqual:          Result := SameValue(D1, D2, 0.00001);
-    foNotEqual:       Result := not SameValue(D1, D2, 0.00001);
-    foGreater:        Result := D1 > D2;
-    foGreaterOrEqual: Result := D1 >= D2;
-    foLess:           Result := D1 < D2;
-    foLessOrEqual:    Result := D1 <= D2;
+    foEqual:
+      Result := SameValue(D1, D2, 0.00001);
+    foNotEqual:
+      Result := not SameValue(D1, D2, 0.00001);
+    foGreater:
+      Result := D1 > D2;
+    foGreaterOrEqual:
+      Result := D1 >= D2;
+    foLess:
+      Result := D1 < D2;
+    foLessOrEqual:
+      Result := D1 <= D2;
   else
     Result := False;
   end;
 end;
 
-function TAiEmbeddingMetaData.CompareStrings(const A, B: string;
-    Op: TFilterOperator): Boolean;
+function TAiEmbeddingMetaData.CompareStrings(const A, B: string; Op: TFilterOperator): Boolean;
 begin
   case Op of
-    foEqual:      Result := SameText(A, B);
-    foNotEqual:   Result := not SameText(A, B);
-    foContains:   Result := ContainsText(A, B);
-    foStartsWith: Result := StartsText(B, A);
-    foEndsWith:   Result := EndsText(B, A);
-    foGreater:    Result := CompareText(A, B) > 0;
-    foLess:       Result := CompareText(A, B) < 0;
+    foEqual:
+      Result := SameText(A, B);
+    foNotEqual:
+      Result := not SameText(A, B);
+    foContains:
+      Result := ContainsText(A, B);
+    foStartsWith:
+      Result := StartsText(B, A);
+    foEndsWith:
+      Result := EndsText(B, A);
+    foGreater:
+      Result := CompareText(A, B) > 0;
+    foLess:
+      Result := CompareText(A, B) < 0;
   else
     Result := False;
   end;
 end;
 
-function TAiEmbeddingMetaData.CheckLike(const Val, Pattern: string;
-    CaseInsensitive: Boolean): Boolean;
+function TAiEmbeddingMetaData.CheckLike(const Val, Pattern: string; CaseInsensitive: Boolean): Boolean;
 var
   LVal, LPat: string;
 begin
-  LPat := StringReplace(StringReplace(Pattern, '%', '*', [rfReplaceAll]),
-                        '_', '?', [rfReplaceAll]);
+  LPat := Pattern.Replace('%', '*').Replace('_', '?');
   LVal := Val;
+
   if CaseInsensitive then
   begin
-    LPat := LowerCase(LPat);
-    LVal := LowerCase(LVal);
+    LPat := LPat.ToLower;
+    LVal := LVal.ToLower;
   end;
+
   Result := MatchesMask(LVal, LPat);
 end;
 
-function TAiEmbeddingMetaData.CheckInList(const Val: Variant;
-    const List: Variant; Negate: Boolean): Boolean;
+function TAiEmbeddingMetaData.CheckInList(const Val: Variant; const List: Variant; Negate: Boolean): Boolean;
 var
-  I      : Integer;
-  Item   : Variant;
-  ValStr : string;
+  i: Integer;
+  Item: Variant;
+  ValStr: string;
 begin
   Result := False;
   if not VarIsArray(List) then
   begin
     Result := (Val = List);
-    if Negate then Result := not Result;
+    if Negate then
+      Result := not Result;
     Exit;
   end;
 
-  ValStr := VarToStr(Val);
-  for I := VarArrayLowBound(List, 1) to VarArrayHighBound(List, 1) do
+  ValStr := VarToStrDef(Val, '');
+  for i := VarArrayLowBound(List, 1) to VarArrayHighBound(List, 1) do
   begin
-    Item := VarArrayGet(List, [I]);
-    if SameText(ValStr, VarToStr(Item)) then
+    Item := VarArrayGet(List, [i]);
+    if SameText(ValStr, VarToStrDef(Item, '')) then
     begin
       Result := True;
       Break;
     end;
   end;
 
-  if Negate then Result := not Result;
+  if Negate then
+    Result := not Result;
 end;
 
-// ---------------------------------------------------------------------------
-// Evaluate
-// ---------------------------------------------------------------------------
+{ --- Evalauci�n Principal --- }
 
-function TAiEmbeddingMetaData.Evaluate(const Name: string; Op: TFilterOperator;
-    const Value: Variant): Boolean;
+function TAiEmbeddingMetaData.Evaluate(const Name: string; Op: TFilterOperator; const Value: Variant): Boolean;
 begin
   Result := Evaluate(Name, Op, Value, Unassigned);
 end;
 
-function TAiEmbeddingMetaData.Evaluate(const Name: string; Op: TFilterOperator;
-    const Value, Value2: Variant; const ANodeText: string): Boolean;
+{ --- Implementaci�n de Evaluate --- }
+
+{ --- Implementaci�n de Evaluate --- }
+
+function TAiEmbeddingMetaData.Evaluate(const Name: string; Op: TFilterOperator; const Value, Value2: Variant; const ANodeText: string = ''): Boolean;
 var
-  PropValue        : Variant;
-  Exists           : Boolean;
+  PropValue: Variant;
+  Exists: Boolean;
   DTProp, DTVal1, DTVal2: TDateTime;
-  IsDateComparison : Boolean;
-  I, J             : Integer;
+  IsDateComparison: Boolean;
+  i: Integer;
 begin
-  // Campo virtual 'text'
+  // 1. Inyecci�n de campo virtual 'text' (Contenido del nodo)
   if SameText(Name, 'text') then
   begin
     PropValue := ANodeText;
-    Exists    := True;
+    Exists := True;
   end
   else
-    Exists := TryGetPropValue(Name, PropValue);
+    Exists := FProperties.TryGetValue(Name, PropValue);
 
-  // Existencia / nulidad
+  // 2. Evaluaci�n de existencia y nulidad
   case Op of
-    foExists:    begin Result := Exists; Exit; end;
-    foIsNull:    begin Result := not Exists or VarIsNull(PropValue); Exit; end;
-    foIsNotNull: begin Result := Exists and not VarIsNull(PropValue); Exit; end;
+    foExists:
+      Exit(Exists);
+    foIsNull:
+      Exit(not Exists or VarIsNull(PropValue));
+    foIsNotNull:
+      Exit(Exists and not VarIsNull(PropValue));
   end;
 
+  // Si la propiedad no existe o es nula, no puede cumplir criterios de comparaci�n
   if not Exists or VarIsNull(PropValue) then
-  begin
-    Result := False;
-    Exit;
-  end;
+    Exit(False);
 
-  // IN / NOT IN
+  // 3. Operadores de lista (IN / NOT IN)
   if Op in [foIn, foNotIn] then
-  begin
-    Result := CheckInList(PropValue, Value, Op = foNotIn);
-    Exit;
-  end;
+    Exit(CheckInList(PropValue, Value, Op = foNotIn));
 
-  // ExistsAny / ExistsAll
+  // 4. Operadores de Conjuntos (Arrays JSON) - ExistsAny / ExistsAll
   if Op in [foExistsAny, foExistsAll] then
   begin
+    // Solo soportamos si la propiedad es un Array (ej: Tags: ["A", "B"])
     if VarIsArray(PropValue) then
     begin
+      // Si el valor buscado es un array (�Alguna de estas etiquetas existe?)
       if VarIsArray(Value) then
       begin
         if Op = foExistsAny then
         begin
-          for I := VarArrayLowBound(Value, 1) to VarArrayHighBound(Value, 1) do
-            if CheckInList(VarArrayGet(Value, [I]), PropValue, False) then
-            begin
-              Result := True;
-              Exit;
-            end;
-          Result := False;
+          // ?| : �Alg�n elemento de Value est� en PropValue?
+          for i := VarArrayLowBound(Value, 1) to VarArrayHighBound(Value, 1) do
+            if CheckInList(VarArrayGet(Value, [i]), PropValue, False) then
+              Exit(True);
+          Exit(False);
         end
-        else
+        else // foExistsAll
         begin
-          Result := True;
-          for I := VarArrayLowBound(Value, 1) to VarArrayHighBound(Value, 1) do
-            if not CheckInList(VarArrayGet(Value, [I]), PropValue, False) then
-            begin
-              Result := False;
-              Exit;
-            end;
+          // ?& : �Todos los elementos de Value est�n en PropValue?
+          for i := VarArrayLowBound(Value, 1) to VarArrayHighBound(Value, 1) do
+            if not CheckInList(VarArrayGet(Value, [i]), PropValue, False) then
+              Exit(False);
+          Exit(True);
         end;
       end
       else
-        Result := CheckInList(Value, PropValue, False);
-    end
-    else
-      Result := False;
-    Exit;
+      begin
+        // Si Value es simple, se comporta como un CONTAINS en lista
+        Exit(CheckInList(Value, PropValue, False));
+      end;
+    end;
+    // Si la propiedad no es array, fallamos (o podr�as tratarlo como string contains)
+    Exit(False);
   end;
 
-  // LIKE / ILIKE
+  // 5. Operadores de patr�n de texto (LIKE / ILIKE)
   if Op in [foLike, foILike] then
-  begin
-    Result := CheckLike(VarToStr(PropValue), VarToStr(Value), Op = foILike);
-    Exit;
-  end;
+    Exit(CheckLike(VarToStr(PropValue), VarToStr(Value), Op = foILike));
 
-  // Comparación de fechas
+  // 6. DETECCI�N DE COMPARACI�N DE FECHAS
+  // Comprobamos si la propiedad es una fecha o un string con formato ISO8601
   IsDateComparison := (VarType(PropValue) = varDate) or
-      ((VarType(PropValue) = varString) and
-       TryISO8601ToDate(VarToStr(PropValue), DTProp));
+                      ((VarType(PropValue) = varString) and TryISO8601ToDate(VarToStr(PropValue), DTProp));
 
   if IsDateComparison then
   begin
+    // Asegurar que DTProp tenga el valor correcto
     if VarType(PropValue) = varDate then
-      DTProp := TDateTime(Double(PropValue));
+      DTProp := VarToDateTime(PropValue); // Ya lo tenemos, pero por seguridad en el flujo
 
     if Op = foBetween then
     begin
-      if TryISO8601ToDate(VarToStr(Value), DTVal1) and
-         TryISO8601ToDate(VarToStr(Value2), DTVal2) then
-      begin
-        Result := (DTProp >= DTVal1) and (DTProp <= DTVal2);
-        Exit;
-      end
+      // Para BETWEEN, ambos l�mites deben ser fechas v�lidas
+      if TryISO8601ToDate(VarToStr(Value), DTVal1) and TryISO8601ToDate(VarToStr(Value2), DTVal2) then
+        Exit((DTProp >= DTVal1) and (DTProp <= DTVal2))
       else
-      begin
-        Result := False;
-        Exit;
-      end;
+        Exit(False);
     end
     else if TryISO8601ToDate(VarToStr(Value), DTVal1) then
     begin
+      // Comparaciones est�ndar de fechas
       case Op of
-        foEqual:          begin Result := DTProp = DTVal1; Exit; end;
-        foNotEqual:       begin Result := DTProp <> DTVal1; Exit; end;
-        foGreater:        begin Result := DTProp > DTVal1; Exit; end;
-        foGreaterOrEqual: begin Result := DTProp >= DTVal1; Exit; end;
-        foLess:           begin Result := DTProp < DTVal1; Exit; end;
-        foLessOrEqual:    begin Result := DTProp <= DTVal1; Exit; end;
+        foEqual:          Exit(DTProp = DTVal1);
+        foNotEqual:       Exit(DTProp <> DTVal1);
+        foGreater:        Exit(DTProp > DTVal1);
+        foGreaterOrEqual: Exit(DTProp >= DTVal1);
+        foLess:           Exit(DTProp < DTVal1);
+        foLessOrEqual:    Exit(DTProp <= DTVal1);
       end;
     end;
   end;
 
-  // Comparación numérica
+  // 7. DETECCI�N DE COMPARACI�N NUM�RICA
+  // Usamos VarIsNumeric para evitar excepciones. CompareNumbers maneja la precisi�n.
   if VarIsNumeric(PropValue) and VarIsNumeric(Value) then
   begin
     if Op = foBetween then
     begin
       if VarIsNumeric(Value2) then
-        Result := (Double(PropValue) >= Double(Value)) and
-                  (Double(PropValue) <= Double(Value2))
+        Exit((Double(PropValue) >= Double(Value)) and (Double(PropValue) <= Double(Value2)))
       else
-        Result := False;
-      Exit;
+        Exit(False);
     end;
-    Result := CompareNumbers(PropValue, Value, Op);
-    Exit;
+
+    // Llamada al helper optimizado
+    Exit(CompareNumbers(PropValue, Value, Op));
   end;
 
-  // Fallback: strings
+  // 8. COMPARACI�N POR DEFECTO (STRINGS / TEXTO)
+  // Fallback final para strings
   if Op = foBetween then
   begin
-    Result := (VarToStr(PropValue) >= VarToStr(Value)) and
-              (VarToStr(PropValue) <= VarToStr(Value2));
-    Exit;
+    Exit((VarToStr(PropValue) >= VarToStr(Value)) and
+         (VarToStr(PropValue) <= VarToStr(Value2)));
   end;
 
+  // Delegamos en CompareStrings (que maneja Contains, StartsWith, EndsWith, etc.)
   Result := CompareStrings(VarToStr(PropValue), VarToStr(Value), Op);
 end;
 
-// ---------------------------------------------------------------------------
-// Matches (recursivo)
-// ---------------------------------------------------------------------------
+{ --- Nuevo Matches Recursivo (Composite Pattern) --- }
 
-function TAiEmbeddingMetaData.Matches(Criteria: TAiFilterCriteria;
-    const ANodeText: string): Boolean;
+function TAiEmbeddingMetaData.Matches(Criteria: TAiFilterCriteria; const ANodeText: string = ''): Boolean;
 var
-  I            : Integer;
-  Criterion    : TFilterCriterion;
-  CurrentMatch : Boolean;
+  Criterion: TFilterCriterion;
+  CurrentMatch: Boolean;
 begin
   if (Criteria = nil) or (Criteria.Count = 0) then
-  begin
-    Result := True;
-    Exit;
-  end;
+    Exit(True);
 
+  // L�gica AND: Asumimos True y salimos al primer False
   if Criteria.LogicalOp = loAnd then
   begin
     Result := True;
-    for I := 0 to Criteria.Count - 1 do
+    for Criterion in Criteria.List do
     begin
-      Criterion := Criteria.Items[I];
+      // Si es grupo, recursividad
       if Criterion.IsGroup then
         CurrentMatch := Matches(Criterion.SubCriteria, ANodeText)
       else
-        CurrentMatch := Evaluate(Criterion.Key, Criterion.Op,
-            Criterion.Value, Criterion.Value2, ANodeText);
+        CurrentMatch := Evaluate(Criterion.Key, Criterion.Op, Criterion.Value, Criterion.Value2, ANodeText);
+
       if not CurrentMatch then
       begin
         Result := False;
-        Exit;
+        Break;
       end;
     end;
   end
+  // L�gica OR: Asumimos False y salimos al primer True
   else
   begin
     Result := False;
-    for I := 0 to Criteria.Count - 1 do
+    for Criterion in Criteria.List do
     begin
-      Criterion := Criteria.Items[I];
       if Criterion.IsGroup then
         CurrentMatch := Matches(Criterion.SubCriteria, ANodeText)
       else
-        CurrentMatch := Evaluate(Criterion.Key, Criterion.Op,
-            Criterion.Value, Criterion.Value2, ANodeText);
+        CurrentMatch := Evaluate(Criterion.Key, Criterion.Op, Criterion.Value, Criterion.Value2, ANodeText);
+
       if CurrentMatch then
       begin
         Result := True;
-        Exit;
+        Break;
       end;
     end;
   end;
 end;
 
-// ---------------------------------------------------------------------------
-// JSON
-// ---------------------------------------------------------------------------
+{ --- JSON --- }
 
 function TAiEmbeddingMetaData.ToJSON: TJSONObject;
 var
-  I   : Integer;
-  K   : string;
-  V   : Variant;
-  JVal: TJSONData;
-  VT  : Word;
+  Pair: TPair<string, Variant>;
+  JVal: TJSONValue;
+  V: Variant;
 begin
   Result := TJSONObject.Create;
   try
-    if FTagString <> '' then
-      Result.Add('tagString', FTagString);
+    if not FTagString.IsEmpty then
+      Result.AddPair('tagString', FTagString);
 
     if FData.Count > 0 then
-      Result.Add('_data_text', FData.Text);
+      Result.AddPair('_data_text', FData.Text);
 
-    for I := 0 to FProperties.Count - 1 do
+    for Pair in FProperties do
     begin
-      K  := FProperties[I];
-      V  := TAiVariantItem(FProperties.Objects[I]).Value;
-      VT := VarType(V) and varTypeMask;
-      case VT of
+      V := Pair.Value;
+      case VarType(V) and varTypeMask of
         varSmallint, varInteger, varByte, varShortInt, varWord, varLongWord, varInt64:
-          JVal := TJSONInt64Number.Create(Int64(V));
+          JVal := TJSONNumber.Create(Int64(V));
         varSingle, varDouble, varCurrency:
-          JVal := TJSONFloatNumber.Create(Double(V));
+          JVal := TJSONNumber.Create(Double(V));
         varBoolean:
-          JVal := TJSONBoolean.Create(Boolean(V));
+          JVal := TJSONBool.Create(Boolean(V));
         varDate:
-          JVal := TJSONString.Create(FormatDateTime('yyyy-mm-dd"T"hh:nn:ss"Z"', TDateTime(Double(V))));
+          JVal := TJSONString.Create(DateToISO8601(TDateTime(V), True));
         varNull, varEmpty:
           JVal := TJSONNull.Create;
       else
         JVal := TJSONString.Create(VarToStr(V));
       end;
-      Result.Add(K, JVal);
+      Result.AddPair(Pair.Key, JVal);
     end;
   except
     Result.Free;
@@ -819,49 +748,42 @@ end;
 
 procedure TAiEmbeddingMetaData.FromJSON(aJSON: TJSONObject);
 var
-  I    : Integer;
-  K    : string;
-  JVal : TJSONData;
-  S    : string;
-  DT   : TDateTime;
+  i: Integer;
+  Pair: TJSONPair;
+  S: string;
+  DT: TDateTime;
 begin
-  if not Assigned(aJSON) then Exit;
+  if not Assigned(aJSON) then
+    Exit;
   Clear;
-  for I := 0 to aJSON.Count - 1 do
+  for i := 0 to aJSON.Count - 1 do
   begin
-    K    := aJSON.Names[I];
-    JVal := aJSON.Items[I];
+    Pair := aJSON.Pairs[i];
+    S := Pair.JsonString.Value;
 
-    if SameText(K, 'tagString') then
-      FTagString := JVal.AsString
-    else if SameText(K, '_data_text') then
-      FData.Text := JVal.AsString
+    if SameText(S, 'tagString') then
+      FTagString := Pair.JsonValue.Value
+    else if SameText(S, '_data_text') then
+      FData.Text := Pair.JsonValue.Value
     else
     begin
-      if JVal is TJSONIntegerNumber then
-        AddOrSetPropValue(K, Int64(JVal.AsInt64))
-      else if JVal is TJSONInt64Number then
-        AddOrSetPropValue(K, Int64(JVal.AsInt64))
-      else if JVal is TJSONFloatNumber then
+      if Pair.JsonValue is TJSONNumber then
       begin
-        S := JVal.AsJSON;
-        if Pos('.', S) > 0 then
-          AddOrSetPropValue(K, JVal.AsFloat)
+        if ContainsText(Pair.JsonValue.ToJSON, '.') then
+          SetProperty(S, TJSONNumber(Pair.JsonValue).AsDouble)
         else
-          AddOrSetPropValue(K, Int64(JVal.AsInt64));
+          SetProperty(S, TJSONNumber(Pair.JsonValue).AsInt64);
       end
-      else if JVal is TJSONBoolean then
-        AddOrSetPropValue(K, JVal.AsBoolean)
-      else if JVal is TJSONNull then
-        AddOrSetPropValue(K, Null)
+      else if Pair.JsonValue is TJSONBool then
+        SetProperty(S, TJSONBool(Pair.JsonValue).AsBoolean)
+      else if Pair.JsonValue is TJSONNull then
+        SetProperty(S, Null)
       else
       begin
-        // String: intentar parsear como fecha ISO8601
-        S := JVal.AsString;
-        if TryISO8601ToDate(S, DT) then
-          AddOrSetPropValue(K, DT)
+        if TryISO8601ToDate(Pair.JsonValue.Value, DT) then
+          SetProperty(S, DT)
         else
-          AddOrSetPropValue(K, S);
+          SetProperty(S, Pair.JsonValue.Value);
       end;
     end;
   end;

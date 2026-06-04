@@ -1,18 +1,18 @@
-// MIT License
+﻿// IT License
 //
-// Copyright (c) 2024-2026 Gustavo Enriquez
+// Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,67 +20,79 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enriquez
+// Nombre: Gustavo Enríquez
+// Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
-//
-// --------- FPC PORT --------------------
-// Driver GenericLLM: endpoint compatible con OpenAI /v1/chat/completions.
-// Hereda toda la implementacion de TAiChat sin sobrescribir ningun metodo.
-// Util para Ollama (OpenAI-compat), LMStudio, vLLM, etc.
+
 
 unit uMakerAi.Chat.GenericLLM;
-
-{$mode objfpc}{$H+}
 
 interface
 
 uses
-  SysUtils, Classes,
-  uMakerAi.Chat;
+  System.SysUtils, System.Classes, System.JSON, System.StrUtils,
+  System.Generics.Collections, System.Net.URLClient, System.Net.HttpClient,
+  System.Net.HttpClientComponent, REST.Types, REST.Client,
+
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+
+  uMakerAi.ParamsRegistry,
+  uMakerAi.Chat,
+  uMakerAi.Core,
+  uMakerAi.Embeddings;
 
 type
   TAiGenericChat = class(TAiChat)
   private
     FCustomDriverName: string;
     procedure SetCustomDriverName(const Value: string);
+  protected
   public
     constructor Create(Sender: TComponent); override;
-    destructor  Destroy; override;
+    destructor Destroy; override;
 
     class function GetDriverName: string; override;
     class procedure RegisterDefaultParams(Params: TStrings); override;
     class function CreateInstance(Sender: TComponent): TAiChat; override;
-
   published
-    // Permite registrar el mismo driver bajo un nombre alternativo en tiempo
-    // de ejecucion (por ejemplo: 'Ollama', 'LMStudio', 'vLLM').
-    // Cuando se asigna un valor, el driver se registra con ese nombre adicional.
-    property CustomDriverName: string
-        read FCustomDriverName write SetCustomDriverName;
+    // Nombre personalizado con el que este componente se registra en el factory.
+    // Permite usar múltiples instancias de TAiGenericChat apuntando a APIs distintas.
+    property CustomDriverName: string read FCustomDriverName write SetCustomDriverName;
   end;
+
+
+
+procedure Register;
 
 implementation
 
-uses
-  UMakerAi.ParamsRegistry;
+const
+  GlGenericUrl = 'http://127.0.0.1:1234/v1/';
 
-// ===========================================================================
-//  TAiGenericChat
-// ===========================================================================
-
-constructor TAiGenericChat.Create(Sender: TComponent);
+procedure Register;
 begin
-  inherited Create(Sender);
-  // Defaults para endpoint OpenAI-compatible generico (p.ej. Ollama local)
-  ApiKey  := '1234';
-  Model   := 'generic-local';
-  Url     := 'http://127.0.0.1:1234/v1/';
+  RegisterComponents('MakerAI', [TAiGenericChat]);
 end;
 
-destructor TAiGenericChat.Destroy;
+{ TAiGenericChat }
+
+procedure TAiGenericChat.SetCustomDriverName(const Value: string);
 begin
-  inherited Destroy;
+  if FCustomDriverName = Value then Exit;
+  FCustomDriverName := Value;
+  // Registrar la clase en el factory bajo el nombre personalizado.
+  // 'GenericLLM' siempre queda registrado (via initialization).
+  if Value <> '' then
+    TAiChatFactory.Instance.RegisterDriver(TAiGenericChat, Value);
 end;
 
 class function TAiGenericChat.GetDriverName: string;
@@ -90,13 +102,11 @@ end;
 
 class procedure TAiGenericChat.RegisterDefaultParams(Params: TStrings);
 begin
-  Params.Values['ApiKey']      := '1234';
-  Params.Values['Model']       := 'generic-local';
-  Params.Values['Max_Tokens']  := '4096';
-  Params.Values['Temperature'] := '1';
-  Params.Values['URL']         := 'http://127.0.0.1:1234/v1/';
-  Params.Values['Asynchronous']:= 'False';
-  Params.Values['Tool_Active'] := 'False';
+  Params.Clear;
+  Params.Add('ApiKey=1234'); // LMStudio normalmente no requiere API key
+  Params.Add('Model=generic-local');
+  Params.Add('Max_Tokens=4096');
+  Params.Add('URL='+GlGenericUrl);
 end;
 
 class function TAiGenericChat.CreateInstance(Sender: TComponent): TAiChat;
@@ -104,21 +114,23 @@ begin
   Result := TAiGenericChat.Create(Sender);
 end;
 
-procedure TAiGenericChat.SetCustomDriverName(const Value: string);
+constructor TAiGenericChat.Create(Sender: TComponent);
 begin
-  if FCustomDriverName = Value then
-    Exit;
-  FCustomDriverName := Value;
-  // Registrar el driver con el nombre personalizado tambien
-  if Value <> '' then
-    TAiChatFactory.Instance.RegisterDriver(TAiGenericChat, Value);
+  inherited;
+  ApiKey := '1234'; // local, no se requiere autenticación
+  Model := 'generic-local';
+  Url := GlGenericUrl;
 end;
 
-// ===========================================================================
-//  initialization — auto-registro en la factory
-// ===========================================================================
+destructor TAiGenericChat.Destroy;
+begin
+  inherited;
+end;
+
+
 
 initialization
   TAiChatFactory.Instance.RegisterDriver(TAiGenericChat);
 
 end.
+

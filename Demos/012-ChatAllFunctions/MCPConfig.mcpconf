@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "demo-server": {
+      "command": "c:\\mcp\\servers\\AiMCPServerDemo.exe",
+      "args": ["--protocol stdio"],
+      "env": {}
+    },
+    "mail-server": {
+      "command": "c:\\mcp\\servers\\MCPMailServer.exe",
+      "args": ["--protocol stdio"],
+      "env": {}
+    },
+    "hello-world-server": {
+      "command": "c:\\mcp\\servers\\MCPServerHolaMundo.exe",
+      "args": ["--protocol stdio"],
+      "env": {}
+    }
+  }
+}

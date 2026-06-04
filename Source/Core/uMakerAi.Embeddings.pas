@@ -1,39 +1,80 @@
-// MIT License - Copyright (c) 2024-2026 Gustavo Enriquez
-// FPC PORT - uMakerAi.Embeddings
-// Driver OpenAI para generación de embeddings. Hereda de TAiEmbeddingsCore.
-unit uMakerAi.Embeddings;
+// IT License
+//
+// Copyright (c) <year> <copyright holders>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enr?quez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
 
-{$mode objfpc}{$H+}
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
+
+unit uMakerAi.Embeddings;
 
 interface
 
 uses
-  SysUtils, Classes,
-  fpjson, jsonparser,
-  fphttpclient, opensslsockets,
-  uMakerAi.Embeddings.Core;
+  System.SysUtils, System.Types, System.UITypes, System.Classes,
+  System.Threading, System.NetConsts,
+  System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections,
+  System.NetEncoding,
+  System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
+  System.Net.HttpClientComponent,
+  REST.JSON, REST.Types, REST.Client,
+
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+
+  uMakerAi.Embeddings.core;
 
 type
+  // Por compatibilidad, mantenemos el nombre, pero ahora hereda de la clase base.
   TAiEmbeddings = class(TAiEmbeddingsCore)
   private
-    procedure SetApiKey(const Value: string);
-    function  GetApiKey: string;
-    procedure SetUrl(const Value: string);
+    procedure SetApiKey(const Value: String);
+    function GetApiKey: String;
+    procedure SetUrl(const Value: String);
   protected
-    FApiKey: string;
-    FUrl   : string;
+    FApiKey: String;
+    FUrl: String;
+    // Este m?todo es ahora 'override' para proporcionar la implementaci?n espec?fica.
   public
     constructor Create(aOwner: TComponent); override;
-    procedure ParseEmbedding(JObj: TJSONObject); virtual;
-    function CreateEmbedding(aInput, aUser: string; aDimensions: Integer = -1;
-        aModel: string = ''; aEncodingFormat: string = 'float'): TAiEmbeddingData; override;
-    // Factory pattern
+    // Este m?todo es espec?fico de la implementaci?n de OpenAI
+    procedure ParseEmbedding(JObj: TJsonObject); Virtual;
+    function CreateEmbedding(aInput, aUser: String; aDimensions: Integer = -1; aModel: String = ''; aEncodingFormat: String = 'float'): TAiEmbeddingData; override;
+    // Class methods para el patr?n Factory (TAiEmbeddingFactory)
     class function GetDriverName: string; virtual;
     class function CreateInstance(aOwner: TComponent): TAiEmbeddings; virtual;
     class procedure RegisterDefaultParams(Params: TStrings); virtual;
   published
-    property ApiKey: string read GetApiKey write SetApiKey;
-    property Url   : string read FUrl      write SetUrl;
+    // Propiedades espec?ficas de esta implementaci?n
+    property ApiKey: String read GetApiKey write SetApiKey;
+    property Url: String read FUrl write SetUrl;
   end;
 
 implementation
@@ -41,159 +82,188 @@ implementation
 const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
 
-// ---------------------------------------------------------------------------
-// TAiEmbeddings
-// ---------------------------------------------------------------------------
+  { TAiEmbeddings }
 
 constructor TAiEmbeddings.Create(aOwner: TComponent);
 begin
-  inherited;
-  FUrl   := GlOpenAIUrl;
+  inherited; // Llama al constructor de Core.TAiEmbeddings
+  Url := GlOpenAIUrl;
   FModel := 'text-embedding-3-small';
 end;
 
-procedure TAiEmbeddings.ParseEmbedding(JObj: TJSONObject);
+procedure TAiEmbeddings.ParseEmbedding(JObj: TJsonObject);
 var
-  JTmp      : TJSONData;
-  JUsage    : TJSONObject;
-  JArrData  : TJSONArray;
-  JItem     : TJSONObject;
-  JArrVector: TJSONArray;
-  Emb       : TAiEmbeddingData;
-  I         : Integer;
+  JArrData, JArrVector: TJSONArray;
+  Emb: TAiEmbeddingData;
+  JVal: TJSONValue;
+  Usage: TJSONObject;
+  i: Integer;
 begin
-  if not Assigned(JObj) then Exit;
+  // Validaci?n inicial
+  if not Assigned(JObj) then
+    Exit;
 
-  // Modelo
-  JTmp := JObj.Find('model');
-  if Assigned(JTmp) then FModel := JTmp.AsString;
+  // 1. Obtener el modelo
+  JObj.TryGetValue<String>('model', FModel);
 
-  // Tokens de uso (opcional)
-  JTmp := JObj.Find('usage');
-  if Assigned(JTmp) and (JTmp is TJSONObject) then
+  // 2. Uso de tokens (opcional)
+  if JObj.TryGetValue<TJSONObject>('usage', Usage) then
   begin
-    JUsage := TJSONObject(JTmp);
-    JTmp := JUsage.Find('prompt_tokens');
-    if Assigned(JTmp) then Fprompt_tokens := JTmp.AsInteger;
-    JTmp := JUsage.Find('total_tokens');
-    if Assigned(JTmp) then Ftotal_tokens := JTmp.AsInteger;
+    Usage.TryGetValue<Integer>('prompt_tokens', Fprompt_tokens);
+    Usage.TryGetValue<Integer>('total_tokens', Ftotal_tokens);
   end;
 
-  // Array "data"
-  JTmp := JObj.Find('data');
-  if (not Assigned(JTmp)) or not (JTmp is TJSONArray) then
-    raise Exception.Create(
-        'La respuesta de la API no contiene el array de datos esperado ("data").');
-  JArrData := TJSONArray(JTmp);
+  // 3. Obtener el array 'data' con validaci?n
+  if not JObj.TryGetValue<TJSONArray>('data', JArrData) then
+    raise Exception.Create('La respuesta de la API no contiene el array de datos esperado ("data").');
+
   if JArrData.Count = 0 then
-    raise Exception.Create('El array de datos ("data") está vacío.');
+    raise Exception.Create('El array de datos ("data") est? vac?o.');
 
-  // Solo procesamos el primer embedding
-  if not (JArrData.Items[0] is TJSONObject) then
-    raise Exception.Create(
-        'Formato de ítem de datos inválido en la respuesta JSON.');
-  JItem := TJSONObject(JArrData.Items[0]);
+  // Preparar array para m?ltiples embeddings (aunque solo usemos el primero)
+  SetLength(FData, JArrData.Count);
 
-  JTmp := JItem.Find('embedding');
-  if (not Assigned(JTmp)) or not (JTmp is TJSONArray) then
-    raise Exception.Create(
-        'No se encontró el campo "embedding" en los datos de respuesta.');
-  JArrVector := TJSONArray(JTmp);
-  if JArrVector.Count = 0 then
-    raise Exception.Create('El vector de embedding está vacío.');
-
-  SetLength(Emb, JArrVector.Count);
-  for I := 0 to JArrVector.Count - 1 do
+  // 4. Procesar el primer embedding (compatibilidad con versi?n original)
+  for JVal in JArrData do
   begin
-    try
-      Emb[I] := JArrVector.Items[I].AsFloat;
-    except
-      Emb[I] := 0.0;
+    // Validar que sea un objeto
+    if not (JVal is TJSONObject) then
+      raise Exception.Create('Formato de ?tem de datos inv?lido en la respuesta JSON.');
+
+    // 5. Obtener el vector de embedding
+    if not TJSONObject(JVal).TryGetValue<TJSONArray>('embedding', JArrVector) then
+      raise Exception.Create('No se encontr? el campo "embedding" en los datos de respuesta.');
+
+    if JArrVector.Count = 0 then
+      raise Exception.Create('El vector de embedding est? vac?o.');
+
+    // 6. Dimensionar y llenar el vector con validaci?n de tipo
+    SetLength(Emb, JArrVector.Count);
+    for i := 0 to JArrVector.Count - 1 do
+    begin
+      if not JArrVector.Items[i].TryGetValue<Double>(Emb[i]) then
+        Emb[i] := 0.0; // Valor por defecto si falla la conversi?n
     end;
+
+    // 7. Asignar el embedding procesado
+    FData := Emb;
+
+    // Solo procesamos el primer elemento (comportamiento original)
+    Break;
   end;
-  FData := Emb;
 end;
 
-function TAiEmbeddings.CreateEmbedding(aInput, aUser: string;
-    aDimensions: Integer; aModel, aEncodingFormat: string): TAiEmbeddingData;
+function TAiEmbeddings.CreateEmbedding(aInput, aUser: String; aDimensions: Integer; aModel, aEncodingFormat: String): TAiEmbeddingData;
 var
-  Client    : TFPHTTPClient;
-  ReqBody   : TJSONObject;
-  ReqStream : TStringStream;
-  RespStream: TStringStream;
-  RespJSON  : TJSONObject;
-  sUrl      : string;
-  sApiKey   : string;
+  Client: TNetHTTPClient;
+  Headers: TNetHeaders;
+  RequestBody, ResponseJSON: TJSONObject;
+  Res: IHTTPResponse;
+  ResponseStream: TStringStream;
+  RequestStream: TStringStream;
+  sUrl: String;
 begin
-  // Delegar a evento personalizado si está asignado
+  // Delegaci?n a evento si est? asignado
   if Assigned(OnGetEmbedding) then
   begin
     Result := inherited CreateEmbedding(aInput, aUser, aDimensions, aModel, aEncodingFormat);
     Exit;
   end;
 
-  if aModel = ''      then aModel      := FModel;
-  if aDimensions <= 0 then aDimensions := FDimensions;
-  sApiKey := GetApiKey;
+  Client := TNetHTTPClient.Create(nil);
+{$IF CompilerVersion >= 35}
+  Client.SynchronizeEvents := False;
+{$ENDIF}
+  RequestStream := TStringStream.Create('', TEncoding.UTF8);
+  ResponseStream := TStringStream.Create('', TEncoding.UTF8);
+  RequestBody := TJSONObject.Create;
 
-  // URL base sin barra final + /embeddings
-  sUrl := FUrl;
-  while (Length(sUrl) > 0) and (sUrl[Length(sUrl)] = '/') do
-    SetLength(sUrl, Length(sUrl) - 1);
-  sUrl := sUrl + '/embeddings';
-
-  ReqBody := TJSONObject.Create;
   try
-    ReqBody.Add('input',           aInput);
-    ReqBody.Add('prompt',          aInput);   // compatibilidad Ollama
-    ReqBody.Add('model',           aModel);
-    ReqBody.Add('user',            aUser);
-    ReqBody.Add('dimensions',      TJSONIntegerNumber.Create(aDimensions));
-    ReqBody.Add('encoding_format', aEncodingFormat);
+    // Construir URL limpiando barras finales
+    sUrl := FUrl.TrimRight(['/']) + '/embeddings';
 
-    ReqStream  := TStringStream.Create(ReqBody.AsJSON);
-    RespStream := TStringStream.Create('');
-    Client     := TFPHTTPClient.Create(nil);
-    try
-      Client.AddHeader('Authorization', 'Bearer ' + sApiKey);
-      Client.AddHeader('Content-Type',  'application/json');
-      Client.RequestBody := ReqStream;
-      Client.HTTPMethod('POST', sUrl, RespStream, [200]);
+    // Configurar valores por defecto
+    if aModel = '' then
+      aModel := FModel;
+    if aDimensions <= 0 then
+      aDimensions := FDimensions;
 
-      RespJSON := TJSONObject(GetJSON(RespStream.DataString));
+    // Construcci?n del JSON de petici?n
+    RequestBody.AddPair('input', aInput);     // OpenAI
+    RequestBody.AddPair('prompt', aInput);    // Compatibilidad con Ollama
+    RequestBody.AddPair('model', aModel);
+    RequestBody.AddPair('user', aUser);
+    RequestBody.AddPair('dimensions', TJSONNumber.Create(aDimensions));
+    RequestBody.AddPair('encoding_format', aEncodingFormat);
+
+    // Escribir el JSON al stream
+    RequestStream.WriteString(RequestBody.Format);
+    RequestStream.Position := 0;
+
+    // Configurar headers
+    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
+    Headers := Headers + [TNetHeader.Create('OpenAI-Beta', 'assistants=v2')];
+
+    Client.ContentType := 'application/json';
+
+    // Realizar la petici?n
+    Res := Client.Post(sUrl, RequestStream, ResponseStream, Headers);
+    ResponseStream.Position := 0;
+
+{$IFDEF APIDEBUG}
+    ResponseStream.SaveToFile('c:\temp\response.txt');
+{$ENDIF}
+
+    if Res.StatusCode = 200 then
+    begin
+      // Parsear la respuesta JSON
+      ResponseJSON := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
       try
-        ParseEmbedding(RespJSON);
-        Result := FData;
+        if not Assigned(ResponseJSON) then
+          raise Exception.Create('La respuesta de la API no es un JSON v?lido.');
+
+        ParseEmbedding(ResponseJSON);
+        Result := Self.FData;
       finally
-        RespJSON.Free;
+        ResponseJSON.Free;
       end;
-    finally
-      Client.Free;
-      ReqStream.Free;
-      RespStream.Free;
+    end
+    else
+    begin
+      raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
     end;
   finally
-    ReqBody.Free;
+    Client.Free;
+    RequestStream.Free;
+    ResponseStream.Free;
+    RequestBody.Free;
   end;
 end;
 
-function TAiEmbeddings.GetApiKey: string;
+function TAiEmbeddings.GetApiKey: String;
 begin
-  if (Length(FApiKey) > 1) and (FApiKey[1] = '@') then
-    Result := GetEnvironmentVariable(Copy(FApiKey, 2, MaxInt))
+  if (csDesigning in ComponentState) or (csDestroying in ComponentState) then
+  begin
+    Result := FApiKey;
+    Exit;
+  end;
+  if (FApiKey <> '') and (FApiKey.StartsWith('@')) then
+    Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
   else
     Result := FApiKey;
 end;
 
-procedure TAiEmbeddings.SetApiKey(const Value: string);
+procedure TAiEmbeddings.SetApiKey(const Value: String);
 begin
   FApiKey := Value;
 end;
 
-procedure TAiEmbeddings.SetUrl(const Value: string);
+procedure TAiEmbeddings.SetUrl(const Value: String);
 begin
-  if Value <> '' then FUrl := Value
-  else FUrl := GlOpenAIUrl;
+  if Value <> '' then
+    FUrl := Value
+  else
+    FUrl := GlOpenAIUrl;
 end;
 
 class function TAiEmbeddings.GetDriverName: string;
@@ -208,10 +278,11 @@ end;
 
 class procedure TAiEmbeddings.RegisterDefaultParams(Params: TStrings);
 begin
-  Params.Values['ApiKey']     := '@OPENAI_API_KEY';
-  Params.Values['Url']        := GlOpenAIUrl;
-  Params.Values['Model']      := 'text-embedding-3-small';
+  Params.Values['ApiKey'] := '@OPENAI_API_KEY';
+  Params.Values['Url'] := GlOpenAIUrl;
+  Params.Values['Model'] := 'text-embedding-3-small';
   Params.Values['Dimensions'] := '1536';
 end;
 
 end.
+

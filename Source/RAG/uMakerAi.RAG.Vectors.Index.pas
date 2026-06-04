@@ -1,696 +1,338 @@
-// MIT License - Copyright (c) 2024-2026 Gustavo Enriquez
-// FPC PORT - uMakerAi.RAG.Vectors.Index
-// Índices de embeddings: básico (coseno), euclidiano y HNSW. BM25 léxico.
+﻿
+// IT License
+//
+// Copyright (c) <year> <copyright holders>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enr�quez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
 unit uMakerAi.RAG.Vectors.Index;
 
-{$mode objfpc}{$H+}
-{$modeswitch advancedrecords}
 
 interface
 
 uses
-  SysUtils, Classes, Math,
-  fgl,
-  fpjson, jsonparser,
+  System.SysUtils, System.Math, System.Generics.Collections, System.Variants, System.StrUtils,
+  System.Generics.Defaults, System.Classes, System.JSon, Rest.JSon, System.SyncObjs,
+  System.NetEncoding, System.Hash,
+
   uMakerAi.Embeddings.Core, uMakerAi.RAG.MetaData;
 
-type
+Type
+
+  TAiEmbeddingNode = Class;
+
   TAiRagIndexType = (TAIBasicIndex, TAIHNSWIndex, TAIEuclideanIndex);
+  TOnFilterItem = procedure(Sender: TObject; const aNode: TAiEmbeddingNode; var aInclude: Boolean) of object;
 
-  // Forward para procedural type
-  TAiEmbeddingNode = class;
-  TOnFilterItem    = procedure(Sender: TObject; const aNode: TAiEmbeddingNode;
-                               var aInclude: Boolean) of object;
+  TRagItems = TList<TAiEmbeddingNode>;
 
-  // Listas genéricas (fgl — no owning)
-  TRagItems = specialize TFPGList<TAiEmbeddingNode>;
-  TIntList  = specialize TFPGList<Integer>;
-
-  // ---------------------------------------------------------------------------
-  // TAiEmbeddingNode
-  // ---------------------------------------------------------------------------
   TAiEmbeddingNode = class
   private
-    FData      : TAiEmbeddingData;
-    FDim       : Integer;
-    FText      : string;
-    FIdx       : Double;
-    FModel     : string;
-    FMetaData  : TAiEmbeddingMetaData;
-    FTag       : string;
-    FTagObject : TObject;
-    FOrden     : Integer;
-    FMagnitude : Double;
-    FDocLength : Integer; // usado por TAIBm25Index
-    procedure SetData(const Value: TAiEmbeddingData);
+    FData: TAiEmbeddingData;
+    FDim: Integer;
+    FText: String;
+    FIdx: Double;
+    FModel: String;
+    FMetaData: TAiEmbeddingMetaData;
+
+    FTag: string; // GUID o ID de DB (m�s vers�til que Integer)
+    FTagObject: TObject; // Referencia a objetos externos
+    FOrden: Integer;
+    FMagnitude: Double;
+    procedure SetData(const Value: TAiEmbeddingData); // Ordenamiento custom
+
   public
     constructor Create(aDim: Integer);
-    destructor  Destroy; override;
+    destructor Destroy; override;
 
+    // M�todos de c�lculo vectorial
     class function CosineSimilarity(const A, B: TAiEmbeddingNode): Double;
     class function DotProduct(const A, B: TAiEmbeddingNode): Double;
     class function Magnitude(const A: TAiEmbeddingNode): Double;
 
-    function  ToJSON: TJSONObject;
+    // Serializaci�n
+    function ToJSON: TJSONObject;
     class function FromJSON(AJSONObject: TJSONObject): TAiEmbeddingNode;
-    function  ToJsonArray: TJSONArray; overload;
-    class function ToJsonArray(Val: TAiEmbeddingNode): TJSONArray; overload;
+    function ToJsonArray: TJSonArray; overload;
+    class function ToJsonArray(Val: TAiEmbeddingNode): TJSonArray; overload;
 
+    // Utilidades
     procedure SetDataLength(aDim: Integer);
 
-    property Data          : TAiEmbeddingData     read FData      write SetData;
-    property Text          : string               read FText      write FText;
-    property Idx           : Double               read FIdx       write FIdx;
-    property Model         : string               read FModel     write FModel;
-    property MetaData      : TAiEmbeddingMetaData read FMetaData;
-    property Tag           : string               read FTag       write FTag;
-    property TagObject     : TObject              read FTagObject write FTagObject;
-    property Orden         : Integer              read FOrden     write FOrden;
-    property Dim           : Integer              read FDim;
-    property MagnitudeValue: Double               read FMagnitude;
-    property DocLength     : Integer              read FDocLength write FDocLength;
+    // Propiedades (sin setters triviales)
+    property Data: TAiEmbeddingData read FData write SetData;
+    property Text: String read FText write FText;
+    property Idx: Double read FIdx write FIdx;
+    property Model: String read FModel write FModel;
+    property MetaData: TAiEmbeddingMetaData read FMetaData;
+    property Tag: string read FTag write FTag;
+    property TagObject: TObject read FTagObject write FTagObject;
+    property Orden: Integer read FOrden write FOrden;
+    property Dim: Integer read FDim;
+    property MagnitudeValue: Double read FMagnitude;
   end;
 
-  // ---------------------------------------------------------------------------
-  // TAiSearchResult — resultado thread-safe (no modifica nodos originales)
-  // ---------------------------------------------------------------------------
+
+  // ============================================================================
+  // RECORD AUXILIAR PARA RESULTADOS THREAD-SAFE
+  // ============================================================================
+  /// <summary>
+  /// Estructura inmutable para almacenar resultados de b�squeda sin modificar
+  /// los nodos originales. Esto elimina race conditions en escenarios multihilo.
+  /// </summary>
   TAiSearchResult = record
-    Node  : TAiEmbeddingNode;
+    Node: TAiEmbeddingNode;
     FScore: Double;
-    class function Create(aNode: TAiEmbeddingNode;
-                          aScore: Double): TAiSearchResult; static;
-    class function CompareDescending(const Left,
-                                     Right: TAiSearchResult): Integer; static;
-    property Score: Double read FScore write FScore;
+
+    class function Create(aNode: TAiEmbeddingNode; aScore: Double): TAiSearchResult; static;
+
+    /// <summary>
+    /// Comparador para ordenamiento descendente por score
+    /// </summary>
+    class function CompareDescending(const Left, Right: TAiSearchResult): Integer; static;
+    Property Score: Double Read FScore Write FScore;
   end;
 
-  TSearchResultList = class
-  private
-    FItems: array of TAiSearchResult;
-    FCount: Integer;
-    function  GetItem(I: Integer): TAiSearchResult;
-    procedure SetItem(I: Integer; const V: TAiSearchResult);
-    procedure Grow;
-  public
-    constructor Create;
-    destructor  Destroy; override;
-    function  Add(const R: TAiSearchResult): Integer;
-    procedure Delete(I: Integer);
-    function  Last: TAiSearchResult;
-    procedure SortDescending;
-    procedure TrimToSize(MaxCount: Integer);
-    property Count: Integer read FCount;
-    property Items[I: Integer]: TAiSearchResult read GetItem write SetItem; default;
-  end;
 
-  // ---------------------------------------------------------------------------
-  // Índice base abstracto
-  // ---------------------------------------------------------------------------
+  /// ---------------------------------------------------------------------------
+  /// TAIEmbeddingIndex representa la clase base para la b�squeda con embeddings en memoria
+  /// consiste en un vector de nodos y un indice de punteros a embeddings que permite la
+  /// b�squeda y seleccion de los candidatos que cumplen la condici�n
+  /// -------------------------------------------------------------------------
   TAIEmbeddingIndex = class
   private
     FDataVec: TRagItems;
-    FActive : Boolean;
+    FActive: Boolean;
   protected
+    /// <summary>
+    /// Limpia el �ndice interno pero mantiene la referencia al DataVec
+    /// </summary>
     procedure InternalClear; virtual; abstract;
   public
     constructor Create; virtual;
-    destructor  Destroy; override;
+    destructor Destroy; override;
 
     procedure BuildIndex(Points: TRagItems); virtual;
-    function  Add(Point: TAiEmbeddingNode): Integer; virtual;
-    function  Search(Target: TAiEmbeddingNode; aLimit: Integer;
-                     aPrecision: Double): TRagItems; virtual;
+    function Add(Point: TAiEmbeddingNode): Integer; virtual;
+    function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems; virtual;
+
+    /// <summary>
+    /// Limpia el �ndice y lo deja listo para reconstruir
+    /// </summary>
     procedure Clear; virtual;
 
     property DataVec: TRagItems read FDataVec write FDataVec;
-    property Active : Boolean   read FActive;
+    property Active: Boolean read FActive;
   end;
 
-  // ---------------------------------------------------------------------------
-  // TAIBasicEmbeddingIndex — coseno O(n)
-  // ---------------------------------------------------------------------------
+
+  /// ---------------------------------------------------------------------------
+  /// TAIBasicEmbeddingIndex implementaci�n sencilla de un Indice de embeddings
+  /// el cual se asigna por defecto al vector para realizar b�squedas en memoria
+  /// sin embargo hay maneras m�s eficientes de controlar esto en vectores de
+  /// embeddings.
+  /// -------------------------------------------------------------------------
+
   TAIBasicEmbeddingIndex = class(TAIEmbeddingIndex)
   protected
     procedure InternalClear; override;
   public
-    constructor Create; override;
-    destructor  Destroy; override;
-
     procedure BuildIndex(Points: TRagItems); override;
-    function  Search(Target: TAiEmbeddingNode; aLimit: Integer;
-                     aPrecision: Double): TRagItems; override;
+    function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems; override;
 
-    class function InternalSearchSafe(Target: TAiEmbeddingNode; aLimit: Integer;
-        aPrecision: Double; Source: TRagItems): TSearchResultList; static;
-    class function InternalSearch(Target: TAiEmbeddingNode; aLimit: Integer;
-        aPrecision: Double; Source: TRagItems): TRagItems; static;
+    /// <summary>
+    /// Versi�n thread-safe que NO modifica los nodos originales
+    /// </summary>
+    class function InternalSearchSafe(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; Source: TRagItems): TList<TAiSearchResult>; static;
+
+    /// <summary>
+    /// Versi�n legacy para compatibilidad (DEPRECATED)
+    /// </summary>
+    class function InternalSearch(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; Source: TRagItems): TRagItems; static;
+    constructor Create; override;
+    destructor Destroy; override;
   end;
 
-  // ---------------------------------------------------------------------------
-  // TAIEuclideanDistanceIndex
-  // ---------------------------------------------------------------------------
-  TL2Pair = record
-    Key : Double;
-    Node: TAiEmbeddingNode;
-  end;
+  TL2Pair = TPair<Double, TAiEmbeddingNode>;
+
 
   TAIEuclideanDistanceIndex = class(TAIEmbeddingIndex)
   protected
     procedure InternalClear; override;
   public
     constructor Create; override;
-    destructor  Destroy; override;
-    procedure BuildIndex(Points: TRagItems); override;
-    function  Search(Target: TAiEmbeddingNode; aLimit: Integer;
-                     aPrecision: Double): TRagItems; override;
+    destructor Destroy; override;
+    procedure BuildIndex(Points: TRagItems); Override;
+    Function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems; Override;
   end;
 
-  // ---------------------------------------------------------------------------
-  // HNSW
-  // ---------------------------------------------------------------------------
+
+  /// ---------------------------------------------------------------------------
+  /// THNSWIndex implementa un Approximate Nearest Neighbors (ANN) usando el algoritmo
+  /// HNSW (Hierarchical Navigable Small World) que es mucho m�s eficiente en la busqueda
+  /// en vectores embeddings
+  /// -------------------------------------------------------------------------
+
+  TConnListArray = array of TList<Integer>;
+
   THNSWNode = class
   private
-    FID         : Integer;
-    FVector     : TAiEmbeddingNode;
-    FConnections: array of TIntList;
+    FID: Integer;
+    FVector: TAiEmbeddingNode;
+    FConnections: array of TList<Integer>;
   public
     constructor Create(aID: Integer; aVector: TAiEmbeddingNode; aNumLevels: Integer);
-    destructor  Destroy; override;
-    function GetConnections(Level: Integer): TIntList;
-    function LevelCount: Integer;
-    property ID    : Integer          read FID;
+    destructor Destroy; override;
+
+    property ID: Integer read FID;
     property Vector: TAiEmbeddingNode read FVector;
-  end;
-
-  TDoubleIntPair = record
-    Key  : Double;
-    Value: Integer;
-  end;
-
-  TDoubleIntPairList = class
-  private
-    FItems: array of TDoubleIntPair;
-    FCount: Integer;
-    function  GetItem(I: Integer): TDoubleIntPair;
-    procedure Grow;
-  public
-    constructor Create;
-    destructor  Destroy; override;
-    procedure Add(const P: TDoubleIntPair);
-    procedure Delete(I: Integer);
-    function  Last: TDoubleIntPair;
-    procedure SortDescending;
-    property Count: Integer read FCount;
-    property Items[I: Integer]: TDoubleIntPair read GetItem; default;
+    // property Connections: array of TList<Integer> read FConnections;
+    function GetConnections(Level: Integer): TList<Integer>;
+    function LevelCount: Integer;
   end;
 
   THNSWIndex = class(TAIEmbeddingIndex)
   private
-    FNodes         : array of THNSWNode; // indexado por NodeID (0..FNodeCount-1)
-    FNodeCount     : Integer;
-    FEntryPoint    : Integer;
-    FEntryLevel    : Integer;
-    FMaxLevel      : Integer;
-    FLevelMult     : Double;
+    FNodes: TDictionary<Integer, THNSWNode>;
+    FEntryPoint: Integer;
+    FEntryLevel: Integer;
+    FMaxLevel: Integer;
+    FLevelMult: Double;
     FEfConstruction: Integer;
     FMaxConnections: Integer;
 
     function GetRandomLevel: Integer;
-    procedure InsertConnection(Node: THNSWNode; Level, TargetID: Integer);
-    function SearchLayer(Query: TAiEmbeddingNode;
-                         EntryPoint, Level, Ef: Integer): TIntList;
+    procedure InsertConnection(Node: THNSWNode; Level: Integer; TargetID: Integer);
+    function SearchLayer(Query: TAiEmbeddingNode; EntryPoint: Integer; Level: Integer; Ef: Integer): TList<Integer>;
   protected
+    /// <summary>
+    /// Limpia el grafo HNSW sin destruir el diccionario
+    /// </summary>
     procedure InternalClear; override;
   public
     constructor Create; override;
-    destructor  Destroy; override;
+    destructor Destroy; override;
 
+    /// <summary>
+    /// Reconstruye el �ndice desde cero (thread-safe)
+    /// </summary>
     procedure BuildIndex(Points: TRagItems); override;
-    function  Add(Point: TAiEmbeddingNode): Integer; override;
-    function  Search(Target: TAiEmbeddingNode; aLimit: Integer;
-                     aPrecision: Double): TRagItems; override;
+
+    function Add(Point: TAiEmbeddingNode): Integer; override;
+    function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems; override;
+
+    /// <summary>
+    /// Limpia el grafo y reinicia al estado inicial
+    /// </summary>
     procedure Clear; override;
   end;
 
-  // ---------------------------------------------------------------------------
-  // BM25
-  // ---------------------------------------------------------------------------
+
+  // Representa la frecuencia de una palabra en un nodo espec�fico
   TWordOccurrence = record
-    Node : TAiEmbeddingNode;
+    Node: TAiEmbeddingNode;
     Count: Integer;
-  end;
-
-  TWordOccurrenceList = class
-  private
-    FItems: array of TWordOccurrence;
-    FCount: Integer;
-    function GetItem(I: Integer): TWordOccurrence;
-  public
-    constructor Create;
-    destructor  Destroy; override;
-    procedure Add(const Occ: TWordOccurrence);
-    property Count: Integer read FCount;
-    property Items[I: Integer]: TWordOccurrence read GetItem; default;
-  end;
-
-  TStringHashSet = class
-  private
-    FList: TStringList;
-  public
-    constructor Create;
-    destructor  Destroy; override;
-    procedure Add(const S: string);
-    function  Contains(const S: string): Boolean;
-    procedure Clear;
-    property  List: TStringList read FList;
-  end;
-
-  TNodeScorePair = record
-    Key  : Double;
-    Value: TAiEmbeddingNode;
-  end;
-
-  TBM25ResultList = class
-  private
-    FItems: array of TNodeScorePair;
-    FCount: Integer;
-    function GetItem(I: Integer): TNodeScorePair;
-  public
-    constructor Create;
-    destructor  Destroy; override;
-    procedure Add(const P: TNodeScorePair);
-    procedure SortDescending;
-    procedure TrimToSize(MaxCount: Integer);
-    property Count: Integer read FCount;
-    procedure SetKey(I: Integer; NewKey: Double);
-    property Items[I: Integer]: TNodeScorePair read GetItem; default;
   end;
 
   TAIBm25Index = class
   private
-    FInvertedIndex: TStringList;  // Sorted; Objects[i] = TWordOccurrenceList
-    FAvgDocLength : Double;
-    FDocCount     : Integer;
-    FLanguage     : TAiLanguage;
-    FStopWords    : TStringHashSet;
+    FInvertedIndex: TDictionary<string, TList<TWordOccurrence>>;
+    FDocLengths: TDictionary<TAiEmbeddingNode, Integer>;
+    FAvgDocLength: Double;
+    FLanguage: TAiLanguage;
+{$IF CompilerVersion >= 36}
+    FStopWords: THashSet<string>;
+{$ELSE}
+    FStopWords: TDictionary<string, Boolean>;
+{$ENDIF}
     procedure SetLanguage(const Value: TAiLanguage);
     procedure LoadDefaultStopWords(Lang: TAiLanguage);
   public
     constructor Create;
-    destructor  Destroy; override;
+    destructor Destroy; override;
+    procedure AddNode(aNode: TAiEmbeddingNode); // Para indexar al a�adir
+    function Search(const aQuery: string; aLimit: Integer; aFilter: TAiFilterCriteria = nil): TList<TPair<Double, TAiEmbeddingNode>>;
 
-    procedure AddNode(aNode: TAiEmbeddingNode);
-    function  Search(const aQuery: string; aLimit: Integer;
-                     aFilter: TAiFilterCriteria = nil): TBM25ResultList;
     procedure Clear;
+
+    property Language: TAiLanguage read FLanguage write SetLanguage;
+{$IF CompilerVersion >= 36}
+    property StopWords: THashSet<string> read FStopWords; // Permite a�adir palabras personalizadas
+{$ELSE}
+    property StopWords: TDictionary<string, Boolean> read FStopWords;
+{$ENDIF}
     procedure Tokenize(const aText: string; aList: TStrings);
 
-    property Language : TAiLanguage    read FLanguage  write SetLanguage;
-    property StopWords: TStringHashSet read FStopWords;
   end;
 
-function CompareEmbeddings(const Left, Right: TAiEmbeddingNode;
-                           Axis: Integer): Integer;
+
 
 implementation
 
-// ============================================================================
-// Tipos privados de implementación
-// ============================================================================
-type
-  TNodeAccum = record
-    Node : TAiEmbeddingNode;
-    Score: Double;
-  end;
+{$IF CompilerVersion < 35}
+uses
+  uJSONHelper;
+{$ENDIF}
 
-// ============================================================================
-// Helpers de ordenamiento (QuickSort sobre arrays dinámicos)
-// ============================================================================
-
-procedure QSortSearchResultsDesc(var A: array of TAiSearchResult; L, R: Integer);
-var
-  I, J: Integer;
-  P   : Double;
-  Tmp : TAiSearchResult;
-begin
-  if L >= R then Exit;
-  I := L; J := R;
-  P := A[(L + R) div 2].FScore;
-  repeat
-    while A[I].FScore > P do Inc(I);
-    while A[J].FScore < P do Dec(J);
-    if I <= J then begin
-      Tmp := A[I]; A[I] := A[J]; A[J] := Tmp;
-      Inc(I); Dec(J);
-    end;
-  until I > J;
-  if L < J then QSortSearchResultsDesc(A, L, J);
-  if I < R then QSortSearchResultsDesc(A, I, R);
-end;
-
-procedure QSortDoubleIntDesc(var A: array of TDoubleIntPair; L, R: Integer);
-var
-  I, J: Integer;
-  P   : Double;
-  Tmp : TDoubleIntPair;
-begin
-  if L >= R then Exit;
-  I := L; J := R;
-  P := A[(L + R) div 2].Key;
-  repeat
-    while A[I].Key > P do Inc(I);
-    while A[J].Key < P do Dec(J);
-    if I <= J then begin
-      Tmp := A[I]; A[I] := A[J]; A[J] := Tmp;
-      Inc(I); Dec(J);
-    end;
-  until I > J;
-  if L < J then QSortDoubleIntDesc(A, L, J);
-  if I < R then QSortDoubleIntDesc(A, I, R);
-end;
-
-procedure QSortL2PairsAsc(var A: array of TL2Pair; L, R: Integer);
-var
-  I, J: Integer;
-  P   : Double;
-  Tmp : TL2Pair;
-begin
-  if L >= R then Exit;
-  I := L; J := R;
-  P := A[(L + R) div 2].Key;
-  repeat
-    while A[I].Key < P do Inc(I);
-    while A[J].Key > P do Dec(J);
-    if I <= J then begin
-      Tmp := A[I]; A[I] := A[J]; A[J] := Tmp;
-      Inc(I); Dec(J);
-    end;
-  until I > J;
-  if L < J then QSortL2PairsAsc(A, L, J);
-  if I < R then QSortL2PairsAsc(A, I, R);
-end;
-
-procedure QSortNodeScoresDesc(var A: array of TNodeScorePair; L, R: Integer);
-var
-  I, J: Integer;
-  P   : Double;
-  Tmp : TNodeScorePair;
-begin
-  if L >= R then Exit;
-  I := L; J := R;
-  P := A[(L + R) div 2].Key;
-  repeat
-    while A[I].Key > P do Inc(I);
-    while A[J].Key < P do Dec(J);
-    if I <= J then begin
-      Tmp := A[I]; A[I] := A[J]; A[J] := Tmp;
-      Inc(I); Dec(J);
-    end;
-  until I > J;
-  if L < J then QSortNodeScoresDesc(A, L, J);
-  if I < R then QSortNodeScoresDesc(A, I, R);
-end;
-
-procedure SplitCSV(const S: string; AList: TStrings);
-var
-  I, Start: Integer;
-begin
-  AList.Clear;
-  if S = '' then Exit;
-  Start := 1;
-  for I := 1 to Length(S) do
-    if S[I] = ',' then begin
-      if I > Start then AList.Add(Copy(S, Start, I - Start));
-      Start := I + 1;
-    end;
-  if Start <= Length(S) then AList.Add(Copy(S, Start, MaxInt));
-end;
-
-// ============================================================================
-// TSearchResultList
-// ============================================================================
-
-constructor TSearchResultList.Create;
-begin
-  inherited;
-  FCount := 0;
-  SetLength(FItems, 16);
-end;
-
-destructor TSearchResultList.Destroy;
-begin
-  SetLength(FItems, 0);
-  inherited;
-end;
-
-function TSearchResultList.GetItem(I: Integer): TAiSearchResult;
-begin
-  Result := FItems[I];
-end;
-
-procedure TSearchResultList.SetItem(I: Integer; const V: TAiSearchResult);
-begin
-  FItems[I] := V;
-end;
-
-procedure TSearchResultList.Grow;
-begin
-  SetLength(FItems, Length(FItems) * 2 + 16);
-end;
-
-function TSearchResultList.Add(const R: TAiSearchResult): Integer;
-begin
-  if FCount >= Length(FItems) then Grow;
-  FItems[FCount] := R;
-  Inc(FCount);
-  Result := FCount - 1;
-end;
-
-procedure TSearchResultList.Delete(I: Integer);
-var
-  J: Integer;
-begin
-  for J := I to FCount - 2 do
-    FItems[J] := FItems[J + 1];
-  Dec(FCount);
-end;
-
-function TSearchResultList.Last: TAiSearchResult;
-begin
-  Result := FItems[FCount - 1];
-end;
-
-procedure TSearchResultList.SortDescending;
-begin
-  if FCount > 1 then
-    QSortSearchResultsDesc(FItems, 0, FCount - 1);
-end;
-
-procedure TSearchResultList.TrimToSize(MaxCount: Integer);
-begin
-  if FCount > MaxCount then FCount := MaxCount;
-end;
-
-// ============================================================================
-// TDoubleIntPairList
-// ============================================================================
-
-constructor TDoubleIntPairList.Create;
-begin
-  inherited;
-  FCount := 0;
-  SetLength(FItems, 8);
-end;
-
-destructor TDoubleIntPairList.Destroy;
-begin
-  SetLength(FItems, 0);
-  inherited;
-end;
-
-function TDoubleIntPairList.GetItem(I: Integer): TDoubleIntPair;
-begin
-  Result := FItems[I];
-end;
-
-procedure TDoubleIntPairList.Grow;
-begin
-  SetLength(FItems, Length(FItems) * 2 + 8);
-end;
-
-procedure TDoubleIntPairList.Add(const P: TDoubleIntPair);
-begin
-  if FCount >= Length(FItems) then Grow;
-  FItems[FCount] := P;
-  Inc(FCount);
-end;
-
-procedure TDoubleIntPairList.Delete(I: Integer);
-var
-  J: Integer;
-begin
-  for J := I to FCount - 2 do
-    FItems[J] := FItems[J + 1];
-  Dec(FCount);
-end;
-
-function TDoubleIntPairList.Last: TDoubleIntPair;
-begin
-  Result := FItems[FCount - 1];
-end;
-
-procedure TDoubleIntPairList.SortDescending;
-begin
-  if FCount > 1 then
-    QSortDoubleIntDesc(FItems, 0, FCount - 1);
-end;
-
-// ============================================================================
-// TWordOccurrenceList
-// ============================================================================
-
-constructor TWordOccurrenceList.Create;
-begin
-  inherited;
-  FCount := 0;
-  SetLength(FItems, 8);
-end;
-
-destructor TWordOccurrenceList.Destroy;
-begin
-  SetLength(FItems, 0);
-  inherited;
-end;
-
-function TWordOccurrenceList.GetItem(I: Integer): TWordOccurrence;
-begin
-  Result := FItems[I];
-end;
-
-procedure TWordOccurrenceList.Add(const Occ: TWordOccurrence);
-begin
-  if FCount >= Length(FItems) then
-    SetLength(FItems, Length(FItems) * 2 + 8);
-  FItems[FCount] := Occ;
-  Inc(FCount);
-end;
-
-// ============================================================================
-// TStringHashSet
-// ============================================================================
-
-constructor TStringHashSet.Create;
-begin
-  inherited;
-  FList            := TStringList.Create;
-  FList.Sorted     := True;
-  FList.Duplicates := dupIgnore;
-end;
-
-destructor TStringHashSet.Destroy;
-begin
-  FList.Free;
-  inherited;
-end;
-
-procedure TStringHashSet.Add(const S: string);
-begin
-  FList.Add(S);
-end;
-
-function TStringHashSet.Contains(const S: string): Boolean;
-begin
-  Result := FList.IndexOf(S) >= 0;
-end;
-
-procedure TStringHashSet.Clear;
-begin
-  FList.Clear;
-end;
-
-// ============================================================================
-// TBM25ResultList
-// ============================================================================
-
-constructor TBM25ResultList.Create;
-begin
-  inherited;
-  FCount := 0;
-  SetLength(FItems, 16);
-end;
-
-destructor TBM25ResultList.Destroy;
-begin
-  SetLength(FItems, 0);
-  inherited;
-end;
-
-function TBM25ResultList.GetItem(I: Integer): TNodeScorePair;
-begin
-  Result := FItems[I];
-end;
-
-procedure TBM25ResultList.Add(const P: TNodeScorePair);
-begin
-  if FCount >= Length(FItems) then
-    SetLength(FItems, Length(FItems) * 2 + 16);
-  FItems[FCount] := P;
-  Inc(FCount);
-end;
-
-procedure TBM25ResultList.SortDescending;
-begin
-  if FCount > 1 then
-    QSortNodeScoresDesc(FItems, 0, FCount - 1);
-end;
-
-procedure TBM25ResultList.TrimToSize(MaxCount: Integer);
-begin
-  if FCount > MaxCount then FCount := MaxCount;
-end;
-
-procedure TBM25ResultList.SetKey(I: Integer; NewKey: Double);
-begin
-  FItems[I].Key := NewKey;
-end;
-
-// ============================================================================
-// TAiEmbeddingNode
-// ============================================================================
+{ TAiEmbeddingNode }
 
 constructor TAiEmbeddingNode.Create(aDim: Integer);
-var
-  G: TGuid;
 begin
   inherited Create;
-  FDim       := aDim;
+  FDim := aDim;
   SetLength(FData, FDim);
-  FMetaData  := TAiEmbeddingMetaData.Create;
+  FMetaData := TAiEmbeddingMetaData.Create;
+  FTag := TGuid.NewGuid.ToString; // ID �nico por defecto
+  FOrden := 0;
   FTagObject := nil;
-  FOrden     := 0;
   FMagnitude := 0;
-  FDocLength := 0;
-  CreateGUID(G);
-  FTag := GUIDToString(G);
 end;
 
 destructor TAiEmbeddingNode.Destroy;
 begin
   FMetaData.Free;
-  // NOT freeing FTagObject — not owner
+  // Nota: NO liberamos FTagObject (no somos owner)
   inherited;
 end;
 
 procedure TAiEmbeddingNode.SetData(const Value: TAiEmbeddingData);
 var
-  I  : Integer;
+  i: Integer;
   Sum: Double;
 begin
   FData := Value;
-  FDim  := Length(Value);
-  Sum   := 0;
-  for I := 0 to High(FData) do
-    Sum := Sum + FData[I] * FData[I];
+  FDim := Length(Value);
+  Sum := 0;
+  // Calculamos la magnitud al vuelo para que MagnitudeValue no sea 0
+  for i := 0 to High(FData) do
+    Sum := Sum + (FData[i] * FData[i]);
   FMagnitude := Sqrt(Sum);
 end;
 
@@ -702,22 +344,27 @@ end;
 
 function TAiEmbeddingNode.ToJSON: TJSONObject;
 var
-  JArrData: TJSONArray;
-  I       : Integer;
+  JSONArray: TJSonArray;
+  Value: Double;
 begin
   Result := TJSONObject.Create;
   try
-    JArrData := TJSONArray.Create;
-    for I := 0 to High(FData) do
-      JArrData.Add(FData[I]);
-    Result.Add('data',     JArrData);
-    Result.Add('text',     FText);
-    Result.Add('model',    FModel);
-    Result.Add('tag',      FTag);
-    Result.Add('orden',    TJSONIntegerNumber.Create(FOrden));
-    Result.Add('idx',      TJSONFloatNumber.Create(FIdx));
+    // Array de embeddings
+    JSONArray := TJSonArray.Create;
+    for Value in FData do
+      JSONArray.Add(Value);
+    Result.AddPair('data', JSONArray);
+
+    // Campos b�sicos
+    Result.AddPair('text', FText);
+    Result.AddPair('model', FModel);
+    Result.AddPair('tag', FTag);
+    Result.AddPair('orden', FOrden);
+    Result.AddPair('idx', FIdx);
+
+    // Metadatos
     if Assigned(FMetaData) then
-      Result.Add('metadata', FMetaData.ToJSON);
+      Result.AddPair('metadata', FMetaData.ToJSON);
   except
     Result.Free;
     raise;
@@ -726,150 +373,167 @@ end;
 
 class function TAiEmbeddingNode.FromJSON(AJSONObject: TJSONObject): TAiEmbeddingNode;
 var
-  JArr : TJSONArray;
-  JTmp : TJSONData;
-  I    : Integer;
-  Sum  : Double;
+  JSONArray: TJSonArray;
+  i: Integer;
+  jMeta: TJSONObject;
+  Sum: Double; // <--- 1. Agregamos variable para acumular
 begin
   if not Assigned(AJSONObject) then
     raise Exception.Create('AJSONObject no puede ser nil');
-  JTmp := AJSONObject.Find('data');
-  if not Assigned(JTmp) or not (JTmp is TJSONArray) then
-    raise Exception.Create('Campo "data" inválido en JSON de nodo');
-  JArr   := TJSONArray(JTmp);
-  Result := TAiEmbeddingNode.Create(JArr.Count);
+
+  // Crear instancia
+  JSONArray := AJSONObject.GetValue<TJSonArray>('data');
+  Result := TAiEmbeddingNode.Create(JSONArray.Count);
+
   try
-    Sum := 0.0;
-    for I := 0 to JArr.Count - 1 do begin
-      Result.FData[I] := JArr.Items[I].AsFloat;
-      Sum             := Sum + Result.FData[I] * Result.FData[I];
+    Sum := 0.0; // <--- 2. Inicializamos suma
+
+    // Cargar datos del embedding
+    for i := 0 to JSONArray.Count - 1 do
+    begin
+      Result.FData[i] := JSONArray.Items[i].AsType<Double>;
+
+      // <--- 3. Calculamos la suma de cuadrados al vuelo (sin recorrer el array dos veces)
+      Sum := Sum + (Result.FData[i] * Result.FData[i]);
     end;
+
+    // <--- 4. Asignamos la magnitud final
     Result.FMagnitude := Sqrt(Sum);
 
-    JTmp := AJSONObject.Find('text');  if Assigned(JTmp) then Result.FText  := JTmp.AsString;
-    JTmp := AJSONObject.Find('model'); if Assigned(JTmp) then Result.FModel := JTmp.AsString;
-    JTmp := AJSONObject.Find('tag');   if Assigned(JTmp) then Result.FTag   := JTmp.AsString;
-    JTmp := AJSONObject.Find('orden'); if Assigned(JTmp) then Result.FOrden := JTmp.AsInteger;
-    JTmp := AJSONObject.Find('idx');   if Assigned(JTmp) then Result.FIdx   := JTmp.AsFloat;
+    // Campos b�sicos
+    AJSONObject.TryGetValue<String>('text', Result.FText);
+    AJSONObject.TryGetValue<String>('model', Result.FModel);
+    AJSONObject.TryGetValue<String>('tag', Result.FTag);
+    AJSONObject.TryGetValue<Integer>('orden', Result.FOrden);
+    AJSONObject.TryGetValue<Double>('idx', Result.FIdx);
 
-    JTmp := AJSONObject.Find('metadata');
-    if Assigned(JTmp) and (JTmp is TJSONObject) then
-      Result.FMetaData.FromJSON(TJSONObject(JTmp));
+    // Metadatos
+    if AJSONObject.TryGetValue<TJSONObject>('metadata', jMeta) then
+      Result.FMetaData.FromJSON(jMeta);
   except
     Result.Free;
     raise;
   end;
 end;
 
-function TAiEmbeddingNode.ToJsonArray: TJSONArray;
+function TAiEmbeddingNode.ToJsonArray: TJSonArray;
 var
-  I: Integer;
+  Value: Double;
 begin
-  Result := TJSONArray.Create;
-  for I := 0 to High(FData) do
-    Result.Add(FData[I]);
+  Result := TJSonArray.Create;
+  for Value in FData do
+    Result.Add(Value);
 end;
 
-class function TAiEmbeddingNode.ToJsonArray(Val: TAiEmbeddingNode): TJSONArray;
+class function TAiEmbeddingNode.ToJsonArray(Val: TAiEmbeddingNode): TJSonArray;
 var
-  I: Integer;
+  Value: Double;
 begin
   if not Assigned(Val) then
     raise Exception.Create('Val no puede ser nil');
-  Result := TJSONArray.Create;
-  for I := 0 to High(Val.FData) do
-    Result.Add(Val.FData[I]);
+
+  Result := TJSonArray.Create;
+  for Value in Val.FData do
+    Result.Add(Value);
 end;
 
 class function TAiEmbeddingNode.DotProduct(const A, B: TAiEmbeddingNode): Double;
 var
-  I: Integer;
+  i: Integer;
 begin
   if Length(A.FData) <> Length(B.FData) then
     raise Exception.Create('Los vectores deben ser de la misma longitud');
+
   Result := 0;
-  for I := Low(A.FData) to High(A.FData) do
-    Result := Result + A.FData[I] * B.FData[I];
+  for i := Low(A.FData) to High(A.FData) do
+    Result := Result + A.FData[i] * B.FData[i];
 end;
 
 class function TAiEmbeddingNode.Magnitude(const A: TAiEmbeddingNode): Double;
 var
   Sum: Double;
-  I  : Integer;
+  i: Integer;
 begin
   Sum := 0.0;
-  for I := Low(A.FData) to High(A.FData) do
-    Sum := Sum + A.FData[I] * A.FData[I];
+  for i := Low(A.FData) to High(A.FData) do
+    Sum := Sum + A.FData[i] * A.FData[i];
   Result := Sqrt(Sum);
 end;
 
 class function TAiEmbeddingNode.CosineSimilarity(const A, B: TAiEmbeddingNode): Double;
 begin
+  // VALIDACI�N CR�TICA: Si alguno no tiene magnitud, no hay similitud posible (0.0)
   if (A.FMagnitude <= 0) or (B.FMagnitude <= 0) then
     Exit(0.0);
+
+  // Producto punto / (MagA * MagB)
   Result := TAiEmbeddingNode.DotProduct(A, B) / (A.FMagnitude * B.FMagnitude);
-  if      Result >  1.0 then Result :=  1.0
-  else if Result < -1.0 then Result := -1.0;
+
+  // Limpieza por precisi�n de punto flotante
+  if Result > 1.0 then
+    Result := 1.0
+  else if Result < -1.0 then
+    Result := -1.0;
 end;
 
 function CompareEmbeddings(const Left, Right: TAiEmbeddingNode; Axis: Integer): Integer;
 const
   TOLERANCE = 1.0E-12;
 begin
-  if Abs(Left.Data[Axis] - Right.Data[Axis]) < TOLERANCE then Result :=  0
-  else if Left.Data[Axis] < Right.Data[Axis]              then Result := -1
-  else                                                          Result :=  1;
+  if Abs(Left.Data[Axis] - Right.Data[Axis]) < TOLERANCE then
+    Result := 0
+  else if Left.Data[Axis] < Right.Data[Axis] then
+    Result := -1
+  else
+    Result := 1;
 end;
 
-// ============================================================================
-// TAiSearchResult
-// ============================================================================
 
-class function TAiSearchResult.Create(aNode: TAiEmbeddingNode;
-    aScore: Double): TAiSearchResult;
+{ TAiSearchResult }
+
+class function TAiSearchResult.Create(aNode: TAiEmbeddingNode; aScore: Double): TAiSearchResult;
 begin
-  Result.Node   := aNode;
-  Result.FScore := aScore;
+  Result.Node := aNode;
+  Result.Score := aScore;
 end;
 
-class function TAiSearchResult.CompareDescending(const Left,
-    Right: TAiSearchResult): Integer;
+class function TAiSearchResult.CompareDescending(const Left, Right: TAiSearchResult): Integer;
 begin
-  Result := CompareValue(Right.FScore, Left.FScore);
+  // Orden descendente (Mayor score primero)
+  Result := CompareValue(Right.Score, Left.Score);
 end;
 
-// ============================================================================
-// TAIEmbeddingIndex
-// ============================================================================
+
+{ TAIEmbeddingIndex }
 
 constructor TAIEmbeddingIndex.Create;
 begin
   inherited;
   FDataVec := nil;
-  FActive  := False;
+  FActive := False;
 end;
 
 destructor TAIEmbeddingIndex.Destroy;
 begin
-  // NOT freeing FDataVec — not owner
+  // No liberamos FDataVec - no somos due�os
   inherited;
 end;
 
 function TAIEmbeddingIndex.Add(Point: TAiEmbeddingNode): Integer;
 begin
   Result := -1;
+  // Esta funci�n se debe implementar en cada modelo solo cuando sea necesario
 end;
 
 procedure TAIEmbeddingIndex.BuildIndex(Points: TRagItems);
 begin
   FDataVec := Points;
-  FActive  := True;
+  FActive := True;
 end;
 
-function TAIEmbeddingIndex.Search(Target: TAiEmbeddingNode; aLimit: Integer;
-    aPrecision: Double): TRagItems;
+function TAIEmbeddingIndex.Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems;
 begin
-  Result := nil;
+  Result := nil; // Debe ser implementado en clases derivadas
 end;
 
 procedure TAIEmbeddingIndex.Clear;
@@ -878,18 +542,24 @@ begin
   FActive := False;
 end;
 
-// ============================================================================
-// TAIBasicEmbeddingIndex
-// ============================================================================
+
+{ TAOIBasicIndex }
+
+procedure TAIBasicEmbeddingIndex.BuildIndex(Points: TRagItems);
+begin
+  if not Assigned(Points) then
+    Exit; // <- Protecci�n
+  inherited;
+end;
 
 procedure TAIBasicEmbeddingIndex.InternalClear;
 begin
-  // No internal structure
+  // Sin estructura interna propia — la base de datos de nodos la gestiona TAiRAGVector
 end;
 
 constructor TAIBasicEmbeddingIndex.Create;
 begin
-  inherited Create;
+  Inherited;
 end;
 
 destructor TAIBasicEmbeddingIndex.Destroy;
@@ -897,164 +567,224 @@ begin
   inherited;
 end;
 
-procedure TAIBasicEmbeddingIndex.BuildIndex(Points: TRagItems);
-begin
-  if not Assigned(Points) then Exit;
-  inherited;
-end;
-
-class function TAIBasicEmbeddingIndex.InternalSearchSafe(
-    Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double;
-    Source: TRagItems): TSearchResultList;
+class function TAIBasicEmbeddingIndex.InternalSearch(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; Source: TRagItems): TRagItems;
 var
-  I    : Integer;
-  Emb  : TAiEmbeddingNode;
-  Score: Double;
-  Tmp  : TSearchResultList;
+  SafeResults: TList<TAiSearchResult>;
+  SearchResult: TAiSearchResult;
 begin
-  Result := TSearchResultList.Create;
-  Tmp    := TSearchResultList.Create;
-  try
-    for I := 0 to Source.Count - 1 do begin
-      Emb   := Source[I];
-      Score := TAiEmbeddingNode.CosineSimilarity(Emb, Target);
-      if (aPrecision > 0) and (Score < aPrecision) then Continue;
-      Tmp.Add(TAiSearchResult.Create(Emb, Score));
-    end;
-    Tmp.SortDescending;
-    for I := 0 to Min(aLimit - 1, Tmp.Count - 1) do
-      Result.Add(Tmp[I]);
-  finally
-    Tmp.Free;
-  end;
-end;
+  Result := TRagItems.Create;
 
-class function TAIBasicEmbeddingIndex.InternalSearch(Target: TAiEmbeddingNode;
-    aLimit: Integer; aPrecision: Double; Source: TRagItems): TRagItems;
-var
-  SafeResults: TSearchResultList;
-  I          : Integer;
-begin
-  Result      := TRagItems.Create;
+  // Usar la versi�n thread-safe internamente
   SafeResults := InternalSearchSafe(Target, aLimit, aPrecision, Source);
   try
-    for I := 0 to SafeResults.Count - 1 do begin
-      SafeResults[I].Node.Idx := SafeResults[I].FScore;
-      Result.Add(SafeResults[I].Node);
+    for SearchResult in SafeResults do
+    begin
+      // AQU� es donde asignamos Idx (compatible con c�digo existente)
+      SearchResult.Node.Idx := SearchResult.Score;
+      Result.Add(SearchResult.Node);
     end;
   finally
     SafeResults.Free;
   end;
 end;
 
-function TAIBasicEmbeddingIndex.Search(Target: TAiEmbeddingNode; aLimit: Integer;
-    aPrecision: Double): TRagItems;
+class function TAIBasicEmbeddingIndex.InternalSearchSafe(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double; Source: TRagItems): TList<TAiSearchResult>;
 var
-  SafeList: TSearchResultList;
-  I       : Integer;
+  i: Integer;
+  Emb: TAiEmbeddingNode;
+  Score: Double;
+  TempList: TList<TAiSearchResult>;
 begin
-  Result   := TRagItems.Create;
+  Result := TList<TAiSearchResult>.Create;
+  TempList := TList<TAiSearchResult>.Create;
+
+  try
+    // ========================================================================
+    // FASE 1: Calcular similitudes (100% Thread-Safe)
+    // ========================================================================
+    // No modificamos los nodos originales en absoluto.
+    // Cada hilo trabaja con su propia lista local.
+
+    for i := 0 to Source.Count - 1 do
+    begin
+      Emb := Source.Items[i];
+      Score := TAiEmbeddingNode.CosineSimilarity(Emb, Target);
+
+      // Filtrado previo por precisi�n (optimizaci�n)
+      if (aPrecision > 0) and (Score < aPrecision) then
+        Continue;
+
+      TempList.Add(TAiSearchResult.Create(Emb, Score));
+    end;
+
+    // ========================================================================
+    // FASE 2: Ordenar (100% Thread-Safe)
+    // ========================================================================
+    // Cada hilo ordena su propia lista sin tocar datos compartidos
+
+    TempList.Sort(TComparer<TAiSearchResult>.Construct(
+      function(const Left, Right: TAiSearchResult): Integer
+      begin
+        Result := TAiSearchResult.CompareDescending(Left, Right);
+      end));
+
+    // ========================================================================
+    // FASE 3: Construir resultado (100% Thread-Safe)
+    // ========================================================================
+    // Simplemente copiamos las referencias - NO escribimos en los nodos
+
+    for i := 0 to Min(aLimit - 1, TempList.Count - 1) do
+    begin
+      Result.Add(TempList[i]); // Solo lectura de nodos compartidos
+    end;
+
+  finally
+    TempList.Free;
+  end;
+end;
+
+function TAIBasicEmbeddingIndex.Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems;
+var
+  SafeList: TList<TAiSearchResult>;
+  Res: TAiSearchResult;
+begin
+  Result := TRagItems.Create;
+
+  // Usamos la versi�n "Safe" que ya creaste y que usa registros temporales
   SafeList := InternalSearchSafe(Target, aLimit, aPrecision, DataVec);
   try
-    for I := 0 to SafeList.Count - 1 do
-      Result.Add(SafeList[I].Node);
+    for Res in SafeList do
+      Result.Add(Res.Node);
+    // Nota: El score se recuperar� en el motor principal.
   finally
     SafeList.Free;
   end;
 end;
 
-// ============================================================================
-// TAIEuclideanDistanceIndex
-// ============================================================================
+{ TAIEuclideanDistanceIndex }
 
 procedure TAIEuclideanDistanceIndex.InternalClear;
 begin
-  // No internal structure
-end;
-
-constructor TAIEuclideanDistanceIndex.Create;
-begin
-  inherited;
-end;
-
-destructor TAIEuclideanDistanceIndex.Destroy;
-begin
-  inherited;
+  // Sin estructura interna propia — la base de datos de nodos la gestiona TAiRAGVector
 end;
 
 procedure TAIEuclideanDistanceIndex.BuildIndex(Points: TRagItems);
 begin
-  inherited;
+  Inherited; // La implementaci�n base es suficiente
 end;
 
-function TAIEuclideanDistanceIndex.Search(Target: TAiEmbeddingNode; aLimit: Integer;
-    aPrecision: Double): TRagItems;
-var
-  I       : Integer;
-  Emb     : TAiEmbeddingNode;
-  Distance: Double;
-  Pairs   : array of TL2Pair;
-  PairCnt : Integer;
-  P       : TL2Pair;
+constructor TAIEuclideanDistanceIndex.Create;
 begin
-  Result  := TRagItems.Create;
-  PairCnt := 0;
-  SetLength(Pairs, DataVec.Count + 1);
-  for I := 0 to DataVec.Count - 1 do begin
-    Emb      := DataVec[I];
-    Distance := TAiEmbeddingsCore.EuclideanDistance(Emb.Data, Target.Data);
-    Emb.Idx  := Distance;
-    if (aPrecision <= 0) or (Distance <= aPrecision) then begin
-      P.Key  := Distance;
-      P.Node := Emb;
-      Pairs[PairCnt] := P;
-      Inc(PairCnt);
-    end;
-  end;
-  if PairCnt > 1 then
-    QSortL2PairsAsc(Pairs, 0, PairCnt - 1);
-  for I := 0 to Min(aLimit - 1, PairCnt - 1) do
-    Result.Add(Pairs[I].Node);
+  Inherited;
 end;
 
-// ============================================================================
-// THNSWNode
-// ============================================================================
+destructor TAIEuclideanDistanceIndex.Destroy;
+begin
+  Inherited;
+end;
 
-constructor THNSWNode.Create(aID: Integer; aVector: TAiEmbeddingNode;
-    aNumLevels: Integer);
+function TAIEuclideanDistanceIndex.Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems;
+Var
+  i: Integer;
+  Emb: TAiEmbeddingNode;
+  Distance: Double;
+  Pair: TL2Pair;
+  Results: TList<TL2Pair>; // Usamos una lista temporal para no modificar la original
+begin
+  Result := TRagItems.Create;
+  Results := TList < TPair < Double, TAiEmbeddingNode >>.Create;
+
+  try
+    // 1. Calcula la distancia Euclidiana para todos los elementos y los guarda en una lista temporal
+    for i := 0 to DataVec.Count - 1 do
+    begin
+      Emb := DataVec.Items[i];
+      // Aqu� usamos la funci�n de la unidad Core, que ya tienes
+      Distance := TAiEmbeddingsCore.EuclideanDistance(Emb.Data, Target.Data);
+      Emb.Idx := Distance; // Guardamos la distancia para referencia/debugging
+
+      // aPrecision en este contexto significa "distancia m�xima"
+      // Si aPrecision <= 0, ignoramos el filtro de precisi�n
+      if (aPrecision <= 0) or (Distance <= aPrecision) then
+      begin
+        Pair := TL2Pair.Create(Distance, Emb);
+        Results.Add(Pair);
+      end;
+    end;
+
+    // 2. Ordena la lista de resultados por distancia en orden ASCENDENTE (menor es mejor)
+    Results.Sort(TComparer < TPair < Double, TAiEmbeddingNode >>.Construct(
+      function(const Left, Right: TPair<Double, TAiEmbeddingNode>): Integer
+      begin
+        // Left.Key vs Right.Key para orden ascendente
+        Result := CompareValue(Left.Key, Right.Key);
+      end));
+
+    // 3. Recorre la lista ordenada y a�ade los mejores 'aLimit' resultados
+    for i := 0 to Min(aLimit - 1, Results.Count - 1) do
+    begin
+      Result.Add(Results[i].Value);
+    end;
+
+  finally
+    Results.Free;
+  end;
+end;
+
+
+
+{ THNSWNode }
+
+constructor THNSWNode.Create(aID: Integer; aVector: TAiEmbeddingNode; aNumLevels: Integer);
 var
-  I: Integer;
+  i: Integer;
 begin
   inherited Create;
-  FID     := aID;
+  FID := aID;
   FVector := aVector;
+
+  // Inicializaci�n segura del array de conexiones
   SetLength(FConnections, aNumLevels);
   try
-    for I := 0 to aNumLevels - 1 do
-      FConnections[I] := TIntList.Create;
+    for i := 0 to aNumLevels - 1 do
+      FConnections[i] := TList<Integer>.Create;
   except
-    for I := 0 to High(FConnections) do
-      if Assigned(FConnections[I]) then FConnections[I].Free;
-    raise;
+    // Si falla la creaci�n de alguna lista, limpiamos lo ya creado
+    for i := 0 to High(FConnections) do
+    begin
+      if Assigned(FConnections[i]) then
+        FConnections[i].Free;
+    end;
+    raise; // Re-lanzamos la excepci�n
   end;
 end;
 
 destructor THNSWNode.Destroy;
 var
-  I: Integer;
+  i: Integer;
 begin
-  for I := 0 to High(FConnections) do
-    if Assigned(FConnections[I]) then FreeAndNil(FConnections[I]);
-  // NOT freeing FVector — not owner
+  // Liberaci�n defensiva - Protecci�n triple
+  if Length(FConnections) > 0 then
+  begin
+    for i := 0 to High(FConnections) do
+    begin
+      // Free es seguro con nil, pero la doble validaci�n no hace da�o
+      if Assigned(FConnections[i]) then
+        FreeAndNil(FConnections[i]);
+    end;
+  end;
+
+  // IMPORTANTE: NO liberamos FVector - no somos due�os
+  // FVector es una referencia a un nodo del TAiRAGVector principal
+
   inherited;
 end;
 
-function THNSWNode.GetConnections(Level: Integer): TIntList;
+function THNSWNode.GetConnections(Level: Integer): TList<Integer>;
 begin
   if (Level < 0) or (Level >= Length(FConnections)) then
-    raise Exception.CreateFmt('Nivel %d fuera de rango [0..%d]',
-          [Level, Length(FConnections) - 1]);
+    raise EArgumentOutOfRangeException.CreateFmt('Nivel %d fuera de rango [0..%d]', [Level, Length(FConnections) - 1]);
+
   Result := FConnections[Level];
 end;
 
@@ -1063,218 +793,277 @@ begin
   Result := Length(FConnections);
 end;
 
-// ============================================================================
-// THNSWIndex
-// ============================================================================
-
-constructor THNSWIndex.Create;
-begin
-  inherited;
-  FNodeCount      := 0;
-  FMaxLevel       := 16;
-  FLevelMult      := 1 / Ln(2);
-  FEfConstruction := 40;
-  FMaxConnections := 16;
-  FEntryPoint     := -1;
-  FEntryLevel     := -1;
-end;
-
-destructor THNSWIndex.Destroy;
-begin
-  Clear;
-  inherited;
-end;
-
-procedure THNSWIndex.InternalClear;
-var
-  I: Integer;
-begin
-  for I := 0 to FNodeCount - 1 do
-    if Assigned(FNodes[I]) then FreeAndNil(FNodes[I]);
-  FNodeCount := 0;
-  SetLength(FNodes, 0);
-end;
-
-procedure THNSWIndex.Clear;
-begin
-  InternalClear;
-  FEntryPoint := -1;
-  FEntryLevel := -1;
-  FActive     := False;
-end;
-
 function THNSWIndex.GetRandomLevel: Integer;
 var
   R: Double;
 begin
   R := Random;
-  if R <= 0 then R := 1E-12;
+  if R <= 0 then
+    R := 1E-12; // evita ln(0)
+
   Result := Floor(-Ln(R) * FLevelMult);
-  if Result >= FMaxLevel then Result := FMaxLevel - 1;
+
+  if Result >= FMaxLevel then
+    Result := FMaxLevel - 1;
 end;
 
-procedure THNSWIndex.InsertConnection(Node: THNSWNode; Level, TargetID: Integer);
-var
-  ConnList    : TIntList;
-  TargetNode  : THNSWNode;
-  NeighborNode: THNSWNode;
-  TargetSim   : Double;
-  NeighborSim : Double;
-  MinSim      : Double;
-  WorstIndex  : Integer;
-  I           : Integer;
-begin
-  ConnList := Node.GetConnections(Level);
-  if ConnList.IndexOf(TargetID) >= 0 then Exit; // sin duplicados
+{ THNSWIndex }
 
-  if ConnList.Count < FMaxConnections then begin
-    ConnList.Add(TargetID);
+constructor THNSWIndex.Create;
+begin
+  inherited;
+
+  // Configuraci�n HNSW
+  FNodes := TDictionary<Integer, THNSWNode>.Create;
+  FMaxLevel := 16;
+  FLevelMult := 1 / Ln(2);
+  FEfConstruction := 40;
+  FMaxConnections := 16;
+  FEntryPoint := -1;
+  FEntryLevel := -1;
+end;
+
+destructor THNSWIndex.Destroy;
+begin
+  // Limpieza centralizada
+  Clear;
+
+  // Liberar el diccionario contenedor
+  FNodes.Free;
+
+  inherited;
+end;
+
+procedure THNSWIndex.InternalClear;
+var
+  Node: THNSWNode;
+begin
+  if (FNodes = nil) then
+    Exit;
+
+  try
+    for Node in FNodes.Values do
+      if Assigned(Node) then
+        Node.Free;
+
+    FNodes.Clear;
+  except
+    // Capturar cualquier error extra�o durante la limpieza para no colgar el IDE
+  end;
+end;
+
+procedure THNSWIndex.Clear;
+begin
+  // Llamar a la limpieza interna
+  InternalClear;
+
+  // Reiniciar estado del grafo
+  FEntryPoint := -1;
+  FEntryLevel := -1;
+
+  // NOTA: Los par�metros de configuraci�n (FMaxLevel, FEfConstruction, etc.)
+  // NO se resetean - son configuraci�n persistente
+
+  // Marcar como inactivo
+  FActive := False;
+end;
+
+procedure THNSWIndex.InsertConnection(Node: THNSWNode; Level: Integer; TargetID: Integer);
+var
+  CurrentList: TList<Integer>;
+  TargetNode, NeighborNode: THNSWNode;
+  TargetSim, NeighborSim, MinSim: Double;
+  WorstIndex, i: Integer;
+begin
+  CurrentList := Node.GetConnections(Level);
+
+  // Evitar duplicados
+  if CurrentList.Contains(TargetID) then
+    Exit;
+
+  // Si hay espacio, agregar directamente
+  if CurrentList.Count < FMaxConnections then
+  begin
+    CurrentList.Add(TargetID);
     Exit;
   end;
 
-  if (TargetID < 0) or (TargetID >= FNodeCount) or not Assigned(FNodes[TargetID]) then Exit;
+  // Pol�tica de selecci�n (mantener los vecinos m�s cercanos)
+  if not FNodes.TryGetValue(TargetID, TargetNode) then
+    Exit;
 
-  TargetNode := FNodes[TargetID];
-  TargetSim  := TAiEmbeddingNode.CosineSimilarity(Node.Vector, TargetNode.Vector);
-  MinSim     := 2.0;
+  TargetSim := TAiEmbeddingNode.CosineSimilarity(Node.Vector, TargetNode.Vector);
+
+  MinSim := 2.0;
   WorstIndex := -1;
 
-  for I := 0 to ConnList.Count - 1 do begin
-    if (ConnList[I] >= 0) and (ConnList[I] < FNodeCount) and
-       Assigned(FNodes[ConnList[I]]) then begin
-      NeighborNode := FNodes[ConnList[I]];
-      NeighborSim  := TAiEmbeddingNode.CosineSimilarity(Node.Vector, NeighborNode.Vector);
-      if NeighborSim < MinSim then begin
-        MinSim     := NeighborSim;
-        WorstIndex := I;
+  for i := 0 to CurrentList.Count - 1 do
+  begin
+    if FNodes.TryGetValue(CurrentList[i], NeighborNode) then
+    begin
+      NeighborSim := TAiEmbeddingNode.CosineSimilarity(Node.Vector, NeighborNode.Vector);
+      if NeighborSim < MinSim then
+      begin
+        MinSim := NeighborSim;
+        WorstIndex := i;
       end;
     end;
   end;
 
   if (WorstIndex > -1) and (TargetSim > MinSim) then
-    ConnList[WorstIndex] := TargetID;
+    CurrentList[WorstIndex] := TargetID;
 end;
 
-function THNSWIndex.SearchLayer(Query: TAiEmbeddingNode;
-    EntryPoint, Level, Ef: Integer): TIntList;
+function THNSWIndex.SearchLayer(Query: TAiEmbeddingNode; EntryPoint: Integer; Level: Integer; Ef: Integer): TList<Integer>;
 var
-  Visited       : array of Boolean;
-  Candidates    : TDoubleIntPairList;
-  BestCandidates: TDoubleIntPairList;
-  CurNode       : THNSWNode;
-  ConnList      : TIntList;
-  P             : TDoubleIntPair;
-  Distance      : Double;
-  I, NbrID      : Integer;
+  Visited: TDictionary<Integer, Boolean>;
+  Candidates: TList<TPair<Double, Integer>>;
+  BestCandidates: TList<TPair<Double, Integer>>;
+  CurrentNode: THNSWNode;
+  Distance: Double;
+  i: Integer;
 begin
-  Result := TIntList.Create;
-  SetLength(Visited, FNodeCount);
-  FillChar(Visited[0], FNodeCount * SizeOf(Boolean), 0);
+  Result := TList<Integer>.Create;
+  Visited := TDictionary<Integer, Boolean>.Create;
+  Candidates := TList < TPair < Double, Integer >>.Create;
+  BestCandidates := TList < TPair < Double, Integer >>.Create;
 
-  Candidates     := TDoubleIntPairList.Create;
-  BestCandidates := TDoubleIntPairList.Create;
   try
-    CurNode  := FNodes[EntryPoint];
-    Distance := TAiEmbeddingNode.CosineSimilarity(Query, CurNode.Vector);
-    P.Key := Distance; P.Value := EntryPoint;
-    Candidates.Add(P);
-    BestCandidates.Add(P);
-    Visited[EntryPoint] := True;
+    CurrentNode := FNodes[EntryPoint];
+    Distance := TAiEmbeddingNode.CosineSimilarity(Query, CurrentNode.Vector);
 
-    while Candidates.Count > 0 do begin
-      Candidates.SortDescending;
-      P       := Candidates[0];
+    Candidates.Add(TPair<Double, Integer>.Create(Distance, EntryPoint));
+    BestCandidates.Add(TPair<Double, Integer>.Create(Distance, EntryPoint));
+    Visited.Add(EntryPoint, True);
+
+    while Candidates.Count > 0 do
+    begin
+      Candidates.Sort(TComparer < TPair < Double, Integer >>.Construct(
+        function(const Left, Right: TPair<Double, Integer>): Integer
+        begin
+          if Left.Key > Right.Key then
+            Result := -1
+          else if Left.Key < Right.Key then
+            Result := 1
+          else
+            Result := 0;
+        end));
+
+      CurrentNode := FNodes[Candidates[0].Value];
       Candidates.Delete(0);
-      CurNode := FNodes[P.Value];
 
-      ConnList := CurNode.GetConnections(Level);
-      for I := 0 to ConnList.Count - 1 do begin
-        NbrID := ConnList[I];
-        if (NbrID < 0) or (NbrID >= FNodeCount) then Continue;
-        if Visited[NbrID] then Continue;
-        Visited[NbrID] := True;
-        Distance := TAiEmbeddingNode.CosineSimilarity(Query, FNodes[NbrID].Vector);
-        if (BestCandidates.Count < Ef) or (Distance > BestCandidates.Last.Key) then begin
-          P.Key := Distance; P.Value := NbrID;
-          Candidates.Add(P);
-          BestCandidates.Add(P);
-          if BestCandidates.Count > Ef then begin
-            BestCandidates.SortDescending;
-            BestCandidates.Delete(BestCandidates.Count - 1);
+      for i in CurrentNode.GetConnections(Level) do
+      begin
+        if not Visited.ContainsKey(i) then
+        begin
+          Visited.Add(i, True);
+          Distance := TAiEmbeddingNode.CosineSimilarity(Query, FNodes[i].Vector);
+
+          if (BestCandidates.Count < Ef) or (Distance > BestCandidates.Last.Key) then
+          begin
+            Candidates.Add(TPair<Double, Integer>.Create(Distance, i));
+            BestCandidates.Add(TPair<Double, Integer>.Create(Distance, i));
+
+            if BestCandidates.Count > Ef then
+            begin
+              BestCandidates.Sort(TComparer < TPair < Double, Integer >>.Construct(
+                function(const Left, Right: TPair<Double, Integer>): Integer
+                begin
+                  if Left.Key > Right.Key then
+                    Result := -1
+                  else if Left.Key < Right.Key then
+                    Result := 1
+                  else
+                    Result := 0;
+                end));
+              BestCandidates.Delete(BestCandidates.Count - 1);
+            end;
           end;
         end;
       end;
     end;
 
-    for I := 0 to BestCandidates.Count - 1 do
-      Result.Add(BestCandidates[I].Value);
+    for i := 0 to BestCandidates.Count - 1 do
+      Result.Add(BestCandidates[i].Value);
+
   finally
-    BestCandidates.Free;
+    Visited.Free;
     Candidates.Free;
+    BestCandidates.Free;
   end;
 end;
 
 function THNSWIndex.Add(Point: TAiEmbeddingNode): Integer;
 var
-  NodeID        : Integer;
-  Level         : Integer;
-  CurrentLevel  : Integer;
+  NodeID: Integer;
+  Level: Integer;
+  CurrentLevel: Integer;
   EntryPointCopy: Integer;
-  W             : TIntList;
-  Node          : THNSWNode;
-  I, NIdx       : Integer;
+  W: TList<Integer>;
+  Node: THNSWNode;
+  i: Integer;
 begin
-  NodeID := FNodeCount;
-  Level  := GetRandomLevel;
+  // Asignar ID �nico basado en el conteo actual
+  NodeID := FNodes.Count;
+  Level := GetRandomLevel;
 
-  if FNodeCount >= Length(FNodes) then
-    SetLength(FNodes, Length(FNodes) * 2 + 16);
-
+  // Crear nuevo nodo HNSW
   Node := THNSWNode.Create(NodeID, Point, FMaxLevel);
   try
-    FNodes[FNodeCount] := Node;
-    Inc(FNodeCount);
+    FNodes.Add(NodeID, Node);
   except
-    Node.Free;
+    Node.Free; // Si falla la inserci�n en el diccionario, limpiamos
     raise;
   end;
 
-  if FEntryPoint = -1 then begin
+  // Si es el primer nodo, se convierte en punto de entrada
+  if FEntryPoint = -1 then
+  begin
     FEntryPoint := NodeID;
     FEntryLevel := Level;
     Result := NodeID;
     Exit;
   end;
 
+  // Insertar en la estructura HNSW (c�digo original se mantiene)
   EntryPointCopy := FEntryPoint;
-  CurrentLevel   := FMaxLevel - 1;
+  CurrentLevel := FMaxLevel - 1;
 
-  while CurrentLevel > Level do begin
+  // Descender niveles superiores
+  while CurrentLevel > Level do
+  begin
     W := SearchLayer(Point, EntryPointCopy, CurrentLevel, 1);
     try
-      if W.Count > 0 then EntryPointCopy := W[0];
+      if W.Count > 0 then
+        EntryPointCopy := W[0];
     finally
       W.Free;
     end;
     Dec(CurrentLevel);
   end;
 
-  while CurrentLevel >= 0 do begin
+  // Insertar en niveles objetivo
+  while CurrentLevel >= 0 do
+  begin
     W := SearchLayer(Point, EntryPointCopy, CurrentLevel, FEfConstruction);
     try
-      for I := 0 to W.Count - 1 do begin
-        NIdx := W[I];
-        InsertConnection(Node, CurrentLevel, NIdx);
-        InsertConnection(FNodes[NIdx], CurrentLevel, NodeID);
+      for i in W do
+      begin
+        InsertConnection(Node, CurrentLevel, i);
+        InsertConnection(FNodes[i], CurrentLevel, NodeID);
       end;
-      if W.Count > 0 then EntryPointCopy := W[0];
+      if W.Count > 0 then
+        EntryPointCopy := W[0];
     finally
       W.Free;
     end;
     Dec(CurrentLevel);
   end;
 
-  if Level > FEntryLevel then begin
+  // Actualizar punto de entrada si este nodo tiene m�s niveles
+
+  if Level > FEntryLevel then
+  begin
     FEntryPoint := NodeID;
     FEntryLevel := Level;
   end;
@@ -1284,318 +1073,387 @@ end;
 
 procedure THNSWIndex.BuildIndex(Points: TRagItems);
 var
-  I: Integer;
+  i: Integer;
+  Point: TAiEmbeddingNode;
 begin
   if not Assigned(Points) then
     raise Exception.Create('THNSWIndex.BuildIndex: Points no puede ser nil');
+
+  // ========================================================================
+  // PASO 1: Limpiar el �ndice anterior
+  // ========================================================================
+  // CR�TICO: Esto previene fugas de memoria si BuildIndex se llama 2+ veces
   Clear;
-  inherited BuildIndex(Points);
-  for I := 0 to Points.Count - 1 do
-    Add(Points[I]);
+
+  // ========================================================================
+  // PASO 2: Asignar la referencia a los datos
+  // ========================================================================
+
+  inherited BuildIndex(Points); // Asigna FDataVec y FActive := True
+
+  // ========================================================================
+  // PASO 3: Construir el grafo HNSW
+  // ========================================================================
+  // Optimizaci�n: Pre-reservar capacidad si tu versi�n de Delphi lo soporta
+  // FNodes.Capacity := Points.Count; // No disponible en todas las versiones
+
+  for i := 0 to Points.Count - 1 do
+  begin
+    Point := Points.Items[i];
+    Add(Point);
+  end;
+
+  // El �ndice ahora est� activo (heredado ya lo marc�)
 end;
 
-function THNSWIndex.Search(Target: TAiEmbeddingNode; aLimit: Integer;
-    aPrecision: Double): TRagItems;
+function THNSWIndex.Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems;
 var
-  CurrentLevel  : Integer;
+  CurrentLevel: Integer;
   EntryPointCopy: Integer;
-  W             : TIntList;
-  ResultPairs   : TDoubleIntPairList;
-  I, NIdx       : Integer;
-  Distance      : Double;
-  Node          : THNSWNode;
-  P             : TDoubleIntPair;
+  W: TList<Integer>;
+  ResultList: TList<TPair<Double, Integer>>;
+  i: Integer;
+  Distance: Double;
+  Node: THNSWNode;
 begin
   Result := TRagItems.Create;
-  if FEntryPoint = -1 then Exit;
 
-  ResultPairs    := TDoubleIntPairList.Create;
-  EntryPointCopy := FEntryPoint;
-  CurrentLevel   := FMaxLevel - 1;
+  if FEntryPoint = -1 then
+    Exit;
+
+  ResultList := TList < TPair < Double, Integer >>.Create;
   try
-    while CurrentLevel >= 0 do begin
+    EntryPointCopy := FEntryPoint;
+    CurrentLevel := FMaxLevel - 1;
+
+    while CurrentLevel >= 0 do
+    begin
       W := SearchLayer(Target, EntryPointCopy, CurrentLevel, 1);
       try
-        if W.Count > 0 then EntryPointCopy := W[0];
+        if W.Count > 0 then
+          EntryPointCopy := W[0];
       finally
         W.Free;
       end;
       Dec(CurrentLevel);
     end;
 
+    // W := SearchLayer(Target, EntryPointCopy, 0, aLimit * 2);
+
     W := SearchLayer(Target, EntryPointCopy, 0, Max(100, aLimit * 2));
+
     try
-      for I := 0 to W.Count - 1 do begin
-        NIdx     := W[I];
-        Node     := FNodes[NIdx];
+      for i in W do
+      begin
+        Node := FNodes[i];
         Distance := TAiEmbeddingNode.CosineSimilarity(Target, Node.Vector);
-        if Distance >= aPrecision then begin
-          P.Key := Distance; P.Value := NIdx;
-          ResultPairs.Add(P);
-        end;
+        if Distance >= aPrecision then
+          ResultList.Add(TPair<Double, Integer>.Create(Distance, i));
+      end;
+
+      ResultList.Sort(TComparer < TPair < Double, Integer >>.Construct(
+        function(const Left, Right: TPair<Double, Integer>): Integer
+        begin
+          if Left.Key > Right.Key then
+            Result := -1
+          else if Left.Key < Right.Key then
+            Result := 1
+          else
+            Result := 0;
+        end));
+
+      for i := 0 to Min(aLimit - 1, ResultList.Count - 1) do
+      begin
+        Node := FNodes[ResultList[i].Value];
+        Node.Vector.Idx := ResultList[i].Key;
+        Result.Add(Node.Vector);
       end;
     finally
       W.Free;
     end;
-
-    ResultPairs.SortDescending;
-    for I := 0 to Min(aLimit - 1, ResultPairs.Count - 1) do begin
-      NIdx := ResultPairs[I].Value;
-      Node := FNodes[NIdx];
-      Node.Vector.Idx := ResultPairs[I].Key;
-      Result.Add(Node.Vector);
-    end;
   finally
-    ResultPairs.Free;
+    ResultList.Free;
   end;
 end;
 
-// ============================================================================
-// TAIBm25Index
-// ============================================================================
+
+{ TAIBm25Index }
 
 constructor TAIBm25Index.Create;
 begin
   inherited Create;
-  FInvertedIndex            := TStringList.Create;
-  FInvertedIndex.Sorted     := True;
-  FInvertedIndex.Duplicates := dupError;
-  FAvgDocLength             := 0;
-  FDocCount                 := 0;
-  FStopWords                := TStringHashSet.Create;
-  FLanguage                 := alCustom; // fuerza cambio de lenguaje
-  Language                  := alSpanish;
+  FInvertedIndex := TDictionary < string, TList < TWordOccurrence >>.Create;
+  FDocLengths := TDictionary<TAiEmbeddingNode, Integer>.Create;
+{$IF CompilerVersion >= 36}
+  FStopWords := THashSet<string>.Create;
+{$ELSE}
+  FStopWords := TDictionary<string, Boolean>.Create;
+{$ENDIF}
+  FAvgDocLength := 0;
+  Language := alSpanish; // Por defecto
 end;
 
 destructor TAIBm25Index.Destroy;
 var
-  I: Integer;
+  List: TList<TWordOccurrence>;
 begin
-  for I := 0 to FInvertedIndex.Count - 1 do
-    TWordOccurrenceList(FInvertedIndex.Objects[I]).Free;
+  for List in FInvertedIndex.Values do
+    List.Free;
   FInvertedIndex.Free;
-  FStopWords.Free;
+  FDocLengths.Free;
   inherited;
 end;
 
 procedure TAIBm25Index.LoadDefaultStopWords(Lang: TAiLanguage);
 const
-  S_ES = 'el,la,lo,los,las,un,una,unos,unas,de,del,al,y,o,u,e,ni,que,en,a,' +
-         'ante,bajo,con,contra,desde,donde,durante,este,esta,estos,estas,ese,' +
-         'esa,esos,esas,aquel,aquella,aquellos,aquellas,mi,tu,su,nuestro,' +
-         'vuestro,me,te,se,nos,os,le,les,ser,estar,haber,tener,hacer,hay,' +
-         'he,ha,han,son,es,fue,sido,como,mas,pero,por,para,sin,sobre,' +
-         'tambien,muy,ya,si,no,cuando,entre';
-  S_EN = 'the,a,an,and,or,but,if,then,else,when,at,from,by,for,with,about,' +
-         'against,between,into,through,during,before,after,above,below,to,' +
-         'of,in,is,are,was,were,be,been,being,have,has,had,do,does,did,' +
-         'will,would,should,could,may,might,can,this,that,these,those,' +
-         'i,you,he,she,it,we,they,me,him,her,us,them';
+  S_ES = 'el,la,lo,los,las,un,una,unos,unas,de,del,al,y,o,u,e,ni,que,en,a,ante,bajo,con,contra,desde,donde,durante,' +
+         'este,esta,estos,estas,ese,esa,esos,esas,aquel,aquella,aquellos,aquellas,mi,tu,su,nuestro,vuestro,' +
+         'me,te,se,nos,os,le,les,ser,estar,haber,tener,hacer,hay,he,ha,han,son,es,fue,sido,' +
+         'est�,est�n,estaba,como,m�s,pero,por,para,sin,sobre,tambi�n,muy,ya,s�,no,cuando,si,entre';
+  S_EN = 'the,a,an,and,or,but,if,then,else,when,at,from,by,for,with,about,against,between,into,through,' +
+         'during,before,after,above,below,to,of,in,is,are,was,were,be,been,being,have,has,had,' +
+         'do,does,did,will,would,should,could,may,might,can,this,that,these,those,i,you,he,she,it,we,they,me,him,her,us,them';
 var
-  Tmp: TStringList;
-  I  : Integer;
-  W, S: string;
+  S: string;
+  Words: TArray<string>;
+  W, CleanWord: string;
 begin
   FStopWords.Clear;
+
   case Lang of
-    alSpanish: S := S_ES;
-    alEnglish: S := S_EN;
-  else         S := '';
+    alSpanish:
+      S := S_ES;
+    alEnglish:
+      S := S_EN;
+  else
+    S := '';
   end;
-  if S = '' then Exit;
-  Tmp := TStringList.Create;
-  try
-    SplitCSV(S, Tmp);
-    for I := 0 to Tmp.Count - 1 do begin
-      W := Trim(LowerCase(Tmp[I]));
-      if W <> '' then FStopWords.Add(W);
+
+  if S <> '' then
+  begin
+    Words := S.Split([',']);
+    for W in Words do
+    begin
+      CleanWord := W.Trim.ToLower;
+      if CleanWord <> '' then
+{$IF CompilerVersion >= 36}
+        FStopWords.Add(CleanWord);
+{$ELSE}
+        FStopWords.AddOrSetValue(CleanWord, True);
+{$ENDIF}
     end;
+  end;
+end;
+
+procedure TAIBm25Index.Clear;
+var
+  List: TList<TWordOccurrence>;
+begin
+  for List in FInvertedIndex.Values do
+    List.Free;
+  FInvertedIndex.Clear;
+  FDocLengths.Clear;
+  FAvgDocLength := 0;
+end;
+
+procedure TAIBm25Index.Tokenize(const aText: string; aList: TStrings);
+var
+  Words: TArray<string>;
+  W: string;
+begin
+  aList.Clear;
+  if aText.IsEmpty then
+    Exit;
+
+  // Split con separadores extendidos (incluyendo caracteres especiales de espa�ol)
+  Words := aText.ToLower.Split([' ', '.', ',', ';', ':', '-', '_', '(', ')', '[', ']', '{', '}', '"', '�', '?', '�', '!', '/', '\', '|', #13, #10, #9], // A�ad� TAB (#9)
+  TStringSplitOptions.ExcludeEmpty);
+
+  for W in Words do
+  begin
+    // Filtro de longitud m�nima y stop words (usando el HashSet para O(1))
+{$IF CompilerVersion >= 36}
+    if (W.Length > 2) and not FStopWords.Contains(W) then
+{$ELSE}
+    if (W.Length > 2) and not FStopWords.ContainsKey(W) then
+{$ENDIF}
+    begin
+      // OPCIONAL: Lematizaci�n b�sica para mejorar b�squedas
+      // if W.EndsWith('s') and (W.Length > 3) then
+      // W := W.Substring(0, W.Length - 1);
+
+      aList.Add(W);
+    end;
+  end;
+end;
+
+procedure TAIBm25Index.AddNode(aNode: TAiEmbeddingNode);
+var
+  Tokens: TStringList;
+  WordCounts: TDictionary<string, Integer>;
+  W: string;
+  OccurList: TList<TWordOccurrence>;
+  Occur: TWordOccurrence;
+  TotalDocs, CurrentCount: Integer;
+begin
+  if aNode.Text.IsEmpty then
+    Exit;
+
+  Tokens := TStringList.Create;
+  WordCounts := TDictionary<string, Integer>.Create;
+  try
+    Tokenize(aNode.Text, Tokens);
+    if Tokens.Count = 0 then
+      Exit;
+
+    // 1. Contar frecuencias de palabras en este documento
+    for W in Tokens do
+    begin
+      // TryGetValue es la forma m�s eficiente:
+      // Intenta obtener el valor en 'CurrentCount'. Devuelve True si existe.
+      if WordCounts.TryGetValue(W, CurrentCount) then
+      begin
+        // CASO A: Ya existe.
+        // Incrementamos el valor que recuperamos y lo sobrescribimos.
+        WordCounts[W] := CurrentCount + 1;
+      end
+      else
+      begin
+        // CASO B: No existe.
+        // Lo ADICIONAMOS expl�citamente con valor 1.
+        WordCounts.Add(W, 1);
+      end;
+    end;
+
+    // 2. Registrar longitud del documento
+    FDocLengths.Add(aNode, Tokens.Count);
+
+    // 3. Actualizar el �ndice invertido
+    for W in WordCounts.Keys do
+    begin
+      if not FInvertedIndex.TryGetValue(W, OccurList) then
+      begin
+        OccurList := TList<TWordOccurrence>.Create;
+        FInvertedIndex.Add(W, OccurList);
+      end;
+
+      Occur.Node := aNode;
+      Occur.Count := WordCounts[W];
+      OccurList.Add(Occur);
+    end;
+
+    // 4. Recalcular el promedio de longitud de todos los documentos
+    TotalDocs := FDocLengths.Count;
+    FAvgDocLength := ((FAvgDocLength * (TotalDocs - 1)) + Tokens.Count) / TotalDocs;
+
   finally
-    Tmp.Free;
+    WordCounts.Free;
+    Tokens.Free;
+  end;
+end;
+
+function TAIBm25Index.Search(const aQuery: string; aLimit: Integer; aFilter: TAiFilterCriteria = nil): TList<TPair<Double, TAiEmbeddingNode>>;
+const
+  k1 = 1.2; // Saturaci�n de frecuencia
+  B = 0.75; // Penalizaci�n por longitud
+var
+  QueryTokens: TStringList;
+  QW: string;
+  OccurList: TList<TWordOccurrence>;
+  Occur: TWordOccurrence;
+  Scores: TDictionary<TAiEmbeddingNode, Double>;
+  N, n_q, f_q_d: Integer;
+  IDF, Score, D_len: Double;
+  Pair: TPair<TAiEmbeddingNode, Double>;
+begin
+  Result := TList < TPair < Double, TAiEmbeddingNode >>.Create;
+
+  // 1. Validaciones iniciales
+  if aQuery.IsEmpty or (FDocLengths.Count = 0) then
+    Exit;
+
+  QueryTokens := TStringList.Create;
+  Scores := TDictionary<TAiEmbeddingNode, Double>.Create;
+  try
+    // 2. Tokenizar la consulta
+    Tokenize(aQuery, QueryTokens);
+    if QueryTokens.Count = 0 then
+      Exit;
+
+    // N = n�mero total de documentos
+    N := FDocLengths.Count;
+
+    // 3. Procesar cada token (OR l�xico)
+    for QW in QueryTokens do
+    begin
+      if FInvertedIndex.TryGetValue(QW, OccurList) then
+      begin
+        // n_q = documentos que contienen el t�rmino
+        n_q := OccurList.Count;
+
+        // IDF probabil�stico (RSJ)
+        IDF := Ln((N - n_q + 0.5) / (n_q + 0.5) + 1.0);
+
+        // Recorrer ocurrencias
+        for Occur in OccurList do
+        begin
+          // --- PRE-FILTERING CON CRITERIA ---
+          if Assigned(aFilter) and (aFilter.Count > 0) then
+          begin
+            // Nuevo m�todo centralizado
+            if not Occur.Node.MetaData.Matches(aFilter) then
+              Continue;
+          end;
+          // ---------------------------------
+
+          // Frecuencia del t�rmino en el documento
+          f_q_d := Occur.Count;
+
+          // Longitud del documento
+          D_len := FDocLengths[Occur.Node];
+
+          // BM25
+          Score := IDF * (f_q_d * (k1 + 1)) / (f_q_d + k1 * (1 - B + B * (D_len / FAvgDocLength)));
+
+          // Acumular score
+          if Scores.ContainsKey(Occur.Node) then
+            Scores[Occur.Node] := Scores[Occur.Node] + Score
+          else
+            Scores.Add(Occur.Node, Score);
+        end;
+      end;
+    end;
+
+    // 4. Convertir a lista
+    for Pair in Scores do
+      Result.Add(TPair<Double, TAiEmbeddingNode>.Create(Pair.Value, Pair.Key));
+
+    // 5. Ordenar por score descendente
+    Result.Sort(TComparer < TPair < Double, TAiEmbeddingNode >>.Construct(
+      function(const L, R: TPair<Double, TAiEmbeddingNode>): Integer
+      begin
+        Result := CompareValue(R.Key, L.Key);
+      end));
+
+    // 6. Limitar resultados
+    if (aLimit > 0) and (Result.Count > aLimit) then
+      Result.Count := aLimit;
+
+  finally
+    Scores.Free;
+    QueryTokens.Free;
   end;
 end;
 
 procedure TAIBm25Index.SetLanguage(const Value: TAiLanguage);
 begin
-  if FLanguage <> Value then begin
+  if FLanguage <> Value then
+  begin
     FLanguage := Value;
     if FLanguage <> alCustom then
       LoadDefaultStopWords(FLanguage);
   end;
 end;
 
-procedure TAIBm25Index.Tokenize(const aText: string; aList: TStrings);
-const
-  Separators = [' ', '.', ',', ';', ':', '-', '_', '(', ')', '[', ']', '{',
-                '}', '"', '?', '!', '/', '\', '|', #9, #10, #13];
-var
-  I, Start: Integer;
-  W       : string;
-begin
-  aList.Clear;
-  if aText = '' then Exit;
-  Start := 1;
-  for I := 1 to Length(aText) do
-    if aText[I] in Separators then begin
-      if I > Start then begin
-        W := LowerCase(Copy(aText, Start, I - Start));
-        if (Length(W) > 2) and not FStopWords.Contains(W) then
-          aList.Add(W);
-      end;
-      Start := I + 1;
-    end;
-  if Start <= Length(aText) then begin
-    W := LowerCase(Copy(aText, Start, MaxInt));
-    if (Length(W) > 2) and not FStopWords.Contains(W) then
-      aList.Add(W);
-  end;
-end;
-
-procedure TAIBm25Index.AddNode(aNode: TAiEmbeddingNode);
-var
-  Tokens   : TStringList;
-  SortedTok: TStringList;
-  W        : string;
-  OccList  : TWordOccurrenceList;
-  Occ      : TWordOccurrence;
-  WordFreq : Integer;
-  I, J, Idx: Integer;
-begin
-  if aNode.Text = '' then Exit;
-  Tokens    := TStringList.Create;
-  SortedTok := TStringList.Create;
-  try
-    Tokenize(aNode.Text, Tokens);
-    if Tokens.Count = 0 then Exit;
-
-    aNode.DocLength := Tokens.Count;
-
-    SortedTok.Assign(Tokens);
-    SortedTok.Sort;
-
-    I := 0;
-    while I < SortedTok.Count do begin
-      W        := SortedTok[I];
-      WordFreq := 0;
-      J        := I;
-      while (J < SortedTok.Count) and (SortedTok[J] = W) do begin
-        Inc(WordFreq);
-        Inc(J);
-      end;
-
-      Idx := FInvertedIndex.IndexOf(W);
-      if Idx >= 0 then
-        OccList := TWordOccurrenceList(FInvertedIndex.Objects[Idx])
-      else begin
-        OccList := TWordOccurrenceList.Create;
-        FInvertedIndex.AddObject(W, OccList);
-      end;
-
-      Occ.Node  := aNode;
-      Occ.Count := WordFreq;
-      OccList.Add(Occ);
-
-      I := J;
-    end;
-
-    Inc(FDocCount);
-    FAvgDocLength := ((FAvgDocLength * (FDocCount - 1)) + Tokens.Count) / FDocCount;
-  finally
-    SortedTok.Free;
-    Tokens.Free;
-  end;
-end;
-
-procedure TAIBm25Index.Clear;
-var
-  I: Integer;
-begin
-  for I := 0 to FInvertedIndex.Count - 1 do
-    TWordOccurrenceList(FInvertedIndex.Objects[I]).Free;
-  FInvertedIndex.Clear;
-  FAvgDocLength := 0;
-  FDocCount     := 0;
-end;
-
-function TAIBm25Index.Search(const aQuery: string; aLimit: Integer;
-    aFilter: TAiFilterCriteria): TBM25ResultList;
-const
-  k1 = 1.2;
-  B  = 0.75;
-var
-  QueryTokens: TStringList;
-  QW         : string;
-  OccList    : TWordOccurrenceList;
-  Accum      : array of TNodeAccum;
-  AccumCount : Integer;
-  AccumIdx   : Integer;
-  I, J, K    : Integer;
-  Idx        : Integer;
-  N, n_q, f_q_d: Integer;
-  IDF, Score, D_len: Double;
-  P          : TNodeScorePair;
-begin
-  Result := TBM25ResultList.Create;
-  if (aQuery = '') or (FDocCount = 0) then Exit;
-
-  QueryTokens := TStringList.Create;
-  SetLength(Accum, 64);
-  AccumCount := 0;
-  try
-    Tokenize(aQuery, QueryTokens);
-    if QueryTokens.Count = 0 then Exit;
-
-    N := FDocCount;
-    for I := 0 to QueryTokens.Count - 1 do begin
-      QW  := QueryTokens[I];
-      Idx := FInvertedIndex.IndexOf(QW);
-      if Idx < 0 then Continue;
-
-      OccList := TWordOccurrenceList(FInvertedIndex.Objects[Idx]);
-      n_q     := OccList.Count;
-      IDF     := Ln((N - n_q + 0.5) / (n_q + 0.5) + 1.0);
-
-      for J := 0 to OccList.Count - 1 do begin
-        if Assigned(aFilter) and (aFilter.Count > 0) then
-          if not OccList[J].Node.MetaData.Matches(aFilter) then Continue;
-
-        f_q_d := OccList[J].Count;
-        D_len := OccList[J].Node.DocLength;
-        if (D_len <= 0) or (FAvgDocLength <= 0) then Continue;
-
-        Score := IDF * (f_q_d * (k1 + 1)) /
-                 (f_q_d + k1 * (1 - B + B * (D_len / FAvgDocLength)));
-
-        AccumIdx := -1;
-        for K := 0 to AccumCount - 1 do
-          if Accum[K].Node = OccList[J].Node then begin
-            AccumIdx := K;
-            Break;
-          end;
-
-        if AccumIdx >= 0 then
-          Accum[AccumIdx].Score := Accum[AccumIdx].Score + Score
-        else begin
-          if AccumCount >= Length(Accum) then
-            SetLength(Accum, AccumCount * 2 + 64);
-          Accum[AccumCount].Node  := OccList[J].Node;
-          Accum[AccumCount].Score := Score;
-          Inc(AccumCount);
-        end;
-      end;
-    end;
-
-    for I := 0 to AccumCount - 1 do begin
-      P.Key   := Accum[I].Score;
-      P.Value := Accum[I].Node;
-      Result.Add(P);
-    end;
-    Result.SortDescending;
-    if aLimit > 0 then Result.TrimToSize(aLimit);
-
-  finally
-    QueryTokens.Free;
-  end;
-end;
 
 end.

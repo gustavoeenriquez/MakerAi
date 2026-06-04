@@ -1,105 +1,94 @@
-// MIT License
+﻿// IT License
 //
-// Copyright (c) 2024-2026 Gustavo Enriquez
+// Copyright (c) <year> <copyright holders>
 //
-// github.com/gustavoeenriquez/
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// --------- FPC PORT --------------------
-// Registro singleton de herramientas de agentes y handlers de nodos/enlaces.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// Adaptaciones FPC:
-//   - System.Rtti (TRttiContext, TRttiType) → TypInfo (GetPropList, PPropInfo)
-//   - TDictionary<K,V> → specialize TDictionary<K,V>
-//   - TToolAttribute/TToolParameterAttribute: clases normales (no RTTI attrs)
-//     El nombre/descripcion/categoria se registran explicitamente.
-//   - TAgentHandlerRegistry: metodos-puntero en wrapper classes para
-//     evitar problemas de generics con procedure-of-object en FPC
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enr�quez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
 
 unit uMakerAi.Agents.EngineRegistry;
-
-{$mode objfpc}{$H+}
 
 interface
 
 uses
-  SysUtils, Classes, TypInfo,
-  generics.collections,
-  fpjson,
+  System.SysUtils, System.Classes, System.JSON, System.Generics.Collections, System.Variants, System.TypInfo,
+  // Dependencias del "Motor"
   uMakerAi.Agents, uMakerAi.Agents.Attributes;
 
 type
-  // -------------------------------------------------------------------------
-  // TToolBlueprint — descriptor de una herramienta registrada
-  // -------------------------------------------------------------------------
+  // Este es el "contrato" de datos que el Dise�ador recibir�.
+  // Es un simple registro, no contiene clases ni l�gica compleja.
   TToolBlueprint = record
     ToolClassName: string;
-    DisplayName:   string;
-    Description:   string;
-    Category:      string;
-    Schema:        TJSONObject; // caller frees
-  end;
-
-  TToolBlueprintArray = array of TToolBlueprint;
-
-  // -------------------------------------------------------------------------
-  // TToolInfo — clase + nombre de unidad almacenados en el registro
-  // -------------------------------------------------------------------------
-  TToolInfo = record
-    ToolClass:   TClass;
-    UnitName:    string;
     DisplayName: string;
     Description: string;
-    Category:    string;
+    Category: string;
+    Schema: TJSONObject;
   end;
 
-  TToolInfoDict = specialize TDictionary<string, TToolInfo>;
-
-  // -------------------------------------------------------------------------
-  // Wrappers para almacenar method-pointers en el diccionario de handlers
-  // -------------------------------------------------------------------------
-  TNodeHandlerWrapper = class
-    Handler: TAIAgentsNodeOnExecute;
+  // --- CAMBIO 1: Nueva estructura para almacenar la clase Y el nombre de su unidad. ---
+  // Esto enriquece el registro para que el generador de c�digo sepa qu� unidades incluir.
+  TToolInfo = record
+    ToolClass: TClass;
+    UnitName: string;
   end;
 
-  TLinkHandlerWrapper = class
-    Handler: TAIAgentsLinkOnExecute;
-  end;
-
-  TNodeHandlerDict = specialize TObjectDictionary<string, TNodeHandlerWrapper>;
-  TLinkHandlerDict = specialize TObjectDictionary<string, TLinkHandlerWrapper>;
-
-  // -------------------------------------------------------------------------
-  // TEngineRegistry — singleton central de herramientas
-  // -------------------------------------------------------------------------
+  // El Singleton que act�a como nuestra "caja negra".
   TEngineRegistry = class
   private
-    class var FInstance: TEngineRegistry;
-    FRegisteredTools: TToolInfoDict;
+    class var
+      FInstance: TEngineRegistry;
+    // --- CAMBIO 2: El diccionario ahora almacena el registro TToolInfo. ---
+    FRegisteredTools: TDictionary<string, TToolInfo>;
     constructor Create;
   public
     destructor Destroy; override;
     class property Instance: TEngineRegistry read FInstance;
 
-    // Registro con nombre/descripcion/categoria opcionales.
-    // Si no se proveen, se derivan del ClassName y TToolAttribute (no disponible en FPC via RTTI).
-    procedure RegisterTool(AToolClass: TClass; const AUnitName: string;
-                           const ADisplayName: string = '';
-                           const ADescription: string = '';
-                           const ACategory:    string = '');
+    // --- CAMBIO 3: El m�todo de registro ahora requiere el nombre de la unidad. ---
+    procedure RegisterTool(ToolClass: TClass; const AUnitName: string);
 
     function FindToolClass(const AToolClassName: string): TClass;
+
+    // --- CAMBIO 4: Nuevo m�todo para que el generador consulte el nombre de la unidad. ---
     function GetUnitForToolClass(const AToolClassName: string): string;
-    function GetToolBlueprints: TToolBlueprintArray;
+
+    function GetToolBlueprints: TArray<TToolBlueprint>;
   end;
 
-  // -------------------------------------------------------------------------
-  // TAgentHandlerRegistry — registro de handlers de nodos y enlaces
-  // -------------------------------------------------------------------------
+  // TAgentHandlerRegistry no requiere cambios.
   TAgentHandlerRegistry = class
   private
-    class var FInstance: TAgentHandlerRegistry;
-    FNodeHandlers: TNodeHandlerDict;
-    FLinkHandlers: TLinkHandlerDict;
+  class var
+    FInstance: TAgentHandlerRegistry;
+    FNodeHandlers: TDictionary<string, TAIAgentsNodeOnExecute>;
+    FLinkHandlers: TDictionary<string, TAIAgentsLinkOnExecute>;
     constructor Create;
   public
     destructor Destroy; override;
@@ -107,82 +96,32 @@ type
 
     procedure RegisterNodeHandler(const AName: string; AHandler: TAIAgentsNodeOnExecute);
     procedure RegisterLinkHandler(const AName: string; AHandler: TAIAgentsLinkOnExecute);
-    function  FindNodeHandler(const AName: string): TAIAgentsNodeOnExecute;
-    function  FindLinkHandler(const AName: string): TAIAgentsLinkOnExecute;
+    function FindNodeHandler(const AName: string): TAIAgentsNodeOnExecute;
+    function FindLinkHandler(const AName: string): TAIAgentsLinkOnExecute;
   end;
 
 implementation
 
-// ---------------------------------------------------------------------------
-// Generador de esquemas JSON usando TypInfo (sin TRttiContext de Delphi)
-// ---------------------------------------------------------------------------
+uses System.Rtti;
 
-function PropTypeToJsonType(APropInfo: PPropInfo): string;
-var
-  LKind: TTypeKind;
-begin
-  LKind := APropInfo^.PropType^.Kind;
-  case LKind of
-    tkInteger, tkInt64, tkQWord:
-      Result := 'integer';
-    tkFloat:
-      Result := 'number';
-    tkBool:
-      Result := 'boolean';
-    tkEnumeration:
-      Result := 'string';
-    tkAString, tkSString, tkUString, tkLString, tkWString:
-      Result := 'string';
-  else
-    Result := 'string';
+// Helper interno para generar los esquemas JSON de los par�metros.
+// No requiere cambios.
+type
+  TSchemaGen_Internal = class
+  private
+    class function DelphiTypeToJSONType(APropType: TRttiType): string;
+    class function DelphiTypeToJSONFormat(APropType: TRttiType): string;
+  public
+    class function GenerateSchemaFor(AClass: TClass): TJSONObject;
   end;
-end;
 
-function GenerateSchemaFor(AClass: TClass): TJSONObject;
-var
-  LProperties: TJSONObject;
-  LPropSchema: TJSONObject;
-  PropList:    PPropList;
-  PropCount:   Integer;
-  I:           Integer;
-  PropInfo:    PPropInfo;
-  JsonType:    string;
-begin
-  Result := TJSONObject.Create;
-  LProperties := TJSONObject.Create;
-  Result.Add('type', 'object');
-  Result.Add('title', Copy(AClass.ClassName, 2, MaxInt));
-  Result.Add('properties', LProperties);
-
-  if AClass.ClassInfo = nil then Exit;
-
-  PropCount := GetPropList(AClass.ClassInfo, tkAny, nil);
-  if PropCount <= 0 then Exit;
-
-  GetMem(PropList, PropCount * SizeOf(Pointer));
-  try
-    GetPropList(AClass.ClassInfo, tkAny, PropList);
-    for I := 0 to PropCount - 1 do
-    begin
-      PropInfo := PropList^[I];
-      JsonType := PropTypeToJsonType(PropInfo);
-      LPropSchema := TJSONObject.Create;
-      LPropSchema.Add('type', JsonType);
-      LProperties.Add(PropInfo^.Name, LPropSchema);
-    end;
-  finally
-    FreeMem(PropList);
-  end;
-end;
-
-// ---------------------------------------------------------------------------
-// TEngineRegistry
-// ---------------------------------------------------------------------------
+{ TEngineRegistry }
 
 constructor TEngineRegistry.Create;
 begin
-  inherited Create;
-  FRegisteredTools := TToolInfoDict.Create;
+  inherited;
+  // --- CAMBIO 5: Se crea el diccionario con el nuevo tipo de valor (TToolInfo). ---
+  FRegisteredTools := TDictionary<string, TToolInfo>.Create;
 end;
 
 destructor TEngineRegistry.Destroy;
@@ -191,85 +130,229 @@ begin
   inherited;
 end;
 
-procedure TEngineRegistry.RegisterTool(AToolClass: TClass; const AUnitName: string;
-  const ADisplayName, ADescription, ACategory: string);
-var
-  LInfo: TToolInfo;
-begin
-  if not AToolClass.InheritsFrom(TAiToolBase) then
-    raise Exception.CreateFmt(
-      'Cannot register class "%s": does not inherit from TAiToolBase.',
-      [AToolClass.ClassName]);
-
-  LInfo.ToolClass   := AToolClass;
-  LInfo.UnitName    := AUnitName;
-  LInfo.DisplayName := ADisplayName;
-  LInfo.Description := ADescription;
-  LInfo.Category    := ACategory;
-
-  // Defaults si no se proporcionaron
-  if LInfo.DisplayName = '' then
-    LInfo.DisplayName := Copy(AToolClass.ClassName, 2, MaxInt);
-  if LInfo.Category = '' then
-    LInfo.Category := 'General';
-
-  FRegisteredTools.AddOrSetValue(AToolClass.ClassName, LInfo);
-end;
-
 function TEngineRegistry.FindToolClass(const AToolClassName: string): TClass;
 var
-  LInfo: TToolInfo;
+  LToolInfo: TToolInfo;
 begin
-  if FRegisteredTools.TryGetValue(AToolClassName, LInfo) then
-    Result := LInfo.ToolClass
+  // --- CAMBIO 6: La b�squeda ahora extrae el TClass desde el registro TToolInfo. ---
+  if FRegisteredTools.TryGetValue(AToolClassName, LToolInfo) then
+    Result := LToolInfo.ToolClass
   else
     Result := nil;
 end;
 
+// --- CAMBIO 7: Implementaci�n del nuevo m�todo para obtener la unidad. ---
 function TEngineRegistry.GetUnitForToolClass(const AToolClassName: string): string;
 var
-  LInfo: TToolInfo;
+  LToolInfo: TToolInfo;
 begin
-  if FRegisteredTools.TryGetValue(AToolClassName, LInfo) then
-    Result := LInfo.UnitName
+  if FRegisteredTools.TryGetValue(AToolClassName, LToolInfo) then
+    Result := LToolInfo.UnitName
   else
     Result := '';
 end;
 
-function TEngineRegistry.GetToolBlueprints: TToolBlueprintArray;
+// --- CAMBIO 8: Implementaci�n del m�todo de registro modificado. ---
+procedure TEngineRegistry.RegisterTool(ToolClass: TClass; const AUnitName: string);
 var
-  LEnum:  TToolInfoDict.TPairEnumerator;
-  LInfo:  TToolInfo;
-  I:      Integer;
+  LToolInfo: TToolInfo;
+begin
+  if not ToolClass.InheritsFrom(TAiToolBase) then
+    raise Exception.CreateFmt('Cannot register class "%s" because it does not inherit from TAiToolBase.', [ToolClass.ClassName]);
+
+  // Se llena el registro con toda la informaci�n necesaria.
+  LToolInfo.ToolClass := ToolClass;
+  LToolInfo.UnitName := AUnitName;
+
+  FRegisteredTools.Add(ToolClass.ClassName, LToolInfo);
+end;
+
+function TEngineRegistry.GetToolBlueprints: TArray<TToolBlueprint>;
+var
+  LToolInfo: TToolInfo;   // La variable del bucle ahora es del tipo TToolInfo.
+  ToolClass: TClass;      // Variable local para mantener la claridad del c�digo existente.
+  LContext: TRttiContext;
+  LRttiType: TRttiType;
+  ClassToolAttr: TToolAttribute;
+  i: Integer;
 begin
   SetLength(Result, FRegisteredTools.Count);
-  I := 0;
-  LEnum := FRegisteredTools.GetEnumerator;
+  i := 0;
+  LContext := TRttiContext.Create;
   try
-    while LEnum.MoveNext do
+    // --- CAMBIO 9: El bucle itera sobre los valores TToolInfo del diccionario. ---
+    for LToolInfo in FRegisteredTools.Values do
     begin
-      LInfo := LEnum.Current.Value;
-      Result[I].ToolClassName := LInfo.ToolClass.ClassName;
-      Result[I].DisplayName   := LInfo.DisplayName;
-      Result[I].Description   := LInfo.Description;
-      Result[I].Category      := LInfo.Category;
-      Result[I].Schema        := GenerateSchemaFor(LInfo.ToolClass);
-      Inc(I);
+      // Se extrae la clase del registro para que el resto del c�digo funcione sin cambios.
+      ToolClass := LToolInfo.ToolClass;
+
+      LRttiType := LContext.GetType(ToolClass);
+      ClassToolAttr := nil;
+
+      for var Attr in LRttiType.GetAttributes do
+      begin
+        if Attr is TToolAttribute then
+        begin
+          ClassToolAttr := Attr as TToolAttribute;
+          Break;
+        end;
+      end;
+
+      Result[i].ToolClassName := ToolClass.ClassName;
+
+      if Assigned(ClassToolAttr) then
+      begin
+        Result[i].DisplayName := ClassToolAttr.Name;
+        Result[i].Description := ClassToolAttr.Description;
+        Result[i].Category := ClassToolAttr.Category;
+      end
+      else
+      begin
+        Result[i].DisplayName := ToolClass.ClassName.Substring(1);
+        Result[i].Description := 'No description provided.';
+        Result[i].Category := 'Uncategorized';
+      end;
+
+      Result[i].Schema := TSchemaGen_Internal.GenerateSchemaFor(ToolClass);
+
+      Inc(i);
     end;
   finally
-    LEnum.Free;
+    LContext.Free;
   end;
 end;
 
-// ---------------------------------------------------------------------------
-// TAgentHandlerRegistry
-// ---------------------------------------------------------------------------
+{ TSchemaGen_Internal }
 
+// Esta clase no necesita ninguna modificaci�n.
+class function TSchemaGen_Internal.GenerateSchemaFor(AClass: TClass): TJSONObject;
+var
+  LContext: TRttiContext;
+  LRttiType: TRttiType;
+  LProp: TRttiProperty;
+  ParamAttr: TToolParameterAttribute;
+  LProperties, LPropSchema: TJSONObject;
+  JsonType: string;
+begin
+  Result := TJSONObject.Create;
+  LProperties := TJSONObject.Create;
+  Result.AddPair('type', 'object');
+  Result.AddPair('title', AClass.ClassName.Substring(1));
+  Result.AddPair('properties', LProperties);
+
+  LContext := TRttiContext.Create;
+  try
+    LRttiType := LContext.GetType(AClass);
+    for LProp in LRttiType.GetProperties do
+    begin
+      ParamAttr := nil;
+      for var Attr in LProp.GetAttributes do
+        if Attr is TToolParameterAttribute then
+        begin
+          ParamAttr := Attr as TToolParameterAttribute;
+          Break;
+        end;
+
+      if Assigned(ParamAttr) then
+      begin
+        LPropSchema := TJSONObject.Create;
+        LPropSchema.AddPair('title', ParamAttr.DisplayName);
+        LPropSchema.AddPair('description', ParamAttr.Hint);
+        JsonType := DelphiTypeToJSONType(LProp.PropertyType);
+        LPropSchema.AddPair('type', JsonType);
+
+        var
+        LFormat := DelphiTypeToJSONFormat(LProp.PropertyType);
+        if not LFormat.IsEmpty then
+          LPropSchema.AddPair('format', LFormat);
+
+        if not ParamAttr.DefaultValue.IsEmpty then
+        begin
+          var
+          PropTypeKind := LProp.PropertyType.TypeKind;
+          if (PropTypeKind = tkInteger) or (PropTypeKind = tkInt64) then
+            LPropSchema.AddPair('default', TJSONNumber.Create(StrToIntDef(ParamAttr.DefaultValue, 0)))
+          else if PropTypeKind = tkFloat then
+            LPropSchema.AddPair('default', TJSONNumber.Create(StrToFloatDef(ParamAttr.DefaultValue, 0.0)))
+          else if PropTypeKind = tkEnumeration then
+            if LProp.PropertyType.Handle = TypeInfo(Boolean) then
+              LPropSchema.AddPair('default', TJSONBool.Create(SameText(ParamAttr.DefaultValue, 'True')))
+            else
+              LPropSchema.AddPair('default', TJSONString.Create(ParamAttr.DefaultValue))
+          else
+            LPropSchema.AddPair('default', TJSONString.Create(ParamAttr.DefaultValue));
+        end;
+
+        if (LProp.PropertyType.TypeKind = tkEnumeration) and (LProp.PropertyType.Handle <> TypeInfo(Boolean)) then
+        begin
+          var
+          LEnumArray := TJSONArray.Create;
+          var
+          RttiEnum := LProp.PropertyType as TRttiEnumerationType;
+          for var EnumName in RttiEnum.GetNames do
+            LEnumArray.Add(EnumName);
+          LPropSchema.AddPair('enum', LEnumArray);
+        end;
+
+        LProperties.AddPair(LProp.Name, LPropSchema);
+      end;
+    end;
+  finally
+    LContext.Free;
+  end;
+end;
+
+class function TSchemaGen_Internal.DelphiTypeToJSONType(APropType: TRttiType): string;
+begin
+  if not Assigned(APropType) then
+    Exit('string');
+  case APropType.TypeKind of
+    tkInteger, tkInt64:
+      Result := 'integer';
+    tkFloat:
+      Result := 'number';
+    tkEnumeration:
+      if APropType.Handle = TypeInfo(Boolean) then
+        Result := 'boolean'
+      else
+        Result := 'string';
+    tkString, tkUString, tkChar, tkWChar, tkLString, tkWString:
+      Result := 'string';
+    tkClass:
+      if APropType.Handle = TypeInfo(TDateTime) then
+        Result := 'string'
+      else if APropType.Handle = TypeInfo(TDate) then
+        Result := 'string'
+      else if APropType.Handle = TypeInfo(TTime) then
+        Result := 'string'
+      else
+        Result := 'string';
+  else
+    Result := 'string';
+  end;
+end;
+
+class function TSchemaGen_Internal.DelphiTypeToJSONFormat(APropType: TRttiType): string;
+begin
+  Result := '';
+  if not Assigned(APropType) then
+    Exit;
+  if APropType.Handle = TypeInfo(TDateTime) then
+    Result := 'date-time'
+  else if APropType.Handle = TypeInfo(TDate) then
+    Result := 'date'
+  else if APropType.Handle = TypeInfo(TTime) then
+    Result := 'time';
+end;
+
+{ TAgentHandlerRegistry }
+
+// Esta clase no necesita ninguna modificaci�n.
 constructor TAgentHandlerRegistry.Create;
 begin
-  inherited Create;
-  FNodeHandlers := TNodeHandlerDict.Create([doOwnsValues]);
-  FLinkHandlers := TLinkHandlerDict.Create([doOwnsValues]);
+  inherited;
+  FNodeHandlers := TDictionary<string, TAIAgentsNodeOnExecute>.Create;
+  FLinkHandlers := TDictionary<string, TAIAgentsLinkOnExecute>.Create;
 end;
 
 destructor TAgentHandlerRegistry.Destroy;
@@ -279,47 +362,29 @@ begin
   inherited;
 end;
 
-procedure TAgentHandlerRegistry.RegisterNodeHandler(const AName: string;
-  AHandler: TAIAgentsNodeOnExecute);
-var
-  W: TNodeHandlerWrapper;
-begin
-  W := TNodeHandlerWrapper.Create;
-  W.Handler := AHandler;
-  FNodeHandlers.AddOrSetValue(AName, W);
-end;
-
-procedure TAgentHandlerRegistry.RegisterLinkHandler(const AName: string;
-  AHandler: TAIAgentsLinkOnExecute);
-var
-  W: TLinkHandlerWrapper;
-begin
-  W := TLinkHandlerWrapper.Create;
-  W.Handler := AHandler;
-  FLinkHandlers.AddOrSetValue(AName, W);
-end;
-
 function TAgentHandlerRegistry.FindNodeHandler(const AName: string): TAIAgentsNodeOnExecute;
-var
-  W: TNodeHandlerWrapper;
 begin
-  Result := nil;
-  if FNodeHandlers.TryGetValue(AName, W) then
-    Result := W.Handler;
+  FNodeHandlers.TryGetValue(AName, Result);
 end;
 
 function TAgentHandlerRegistry.FindLinkHandler(const AName: string): TAIAgentsLinkOnExecute;
-var
-  W: TLinkHandlerWrapper;
 begin
-  Result := nil;
-  if FLinkHandlers.TryGetValue(AName, W) then
-    Result := W.Handler;
+  FLinkHandlers.TryGetValue(AName, Result);
+end;
+
+procedure TAgentHandlerRegistry.RegisterNodeHandler(const AName: string; AHandler: TAIAgentsNodeOnExecute);
+begin
+  FNodeHandlers.AddOrSetValue(AName, AHandler);
+end;
+
+procedure TAgentHandlerRegistry.RegisterLinkHandler(const AName: string; AHandler: TAIAgentsLinkOnExecute);
+begin
+  FLinkHandlers.AddOrSetValue(AName, AHandler);
 end;
 
 initialization
-  TEngineRegistry.FInstance        := TEngineRegistry.Create;
-  TAgentHandlerRegistry.FInstance  := TAgentHandlerRegistry.Create;
+  TEngineRegistry.FInstance := TEngineRegistry.Create;
+  TAgentHandlerRegistry.FInstance := TAgentHandlerRegistry.Create;
 
 finalization
   TEngineRegistry.FInstance.Free;

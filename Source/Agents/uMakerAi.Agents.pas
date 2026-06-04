@@ -1,186 +1,185 @@
-// MIT License
+﻿// IT License
 //
-// Copyright (c) 2024-2026 Gustavo Enriquez
+// Copyright (c) <year> <copyright holders>
 //
-// github.com/gustavoeenriquez/
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// --------- FPC PORT --------------------
-// Framework de orquestacion de agentes basado en grafo.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// Adaptaciones FPC:
-//   - ITask/TTask.Run/TThreadPool → TAiNodeTask + TAiOrchestratorThread
-//   - TDictionary<K,V>  → specialize TDictionary<K,V> (generics.collections)
-//   - TAIBlackboard usa Variant en lugar de TValue + campos FAskMsg/FResMsg
-//   - TThread.Synchronize(nil, proc) → llamada directa (sin GUI assumption)
-//   - TThread.Queue(nil, proc)       → llamada directa
-//   - TInterlocked.Exchange(FBusy)   → TCriticalSection
-//   - TInterlocked.Increment/Decrement → InterlockedIncrement/Decrement (System)
-//   - System.Bindings (lmExpression) → not implemented (raise exception)
-//   - TStringBuilder → string concatenation
-//   - TStreamReader/TStreamWriter → TStringStream
-//   - GetEnumName/GetEnumValue → TypInfo (same in FPC)
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enr?quez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
 
 unit uMakerAi.Agents;
-
-{$mode objfpc}{$H+}
 
 interface
 
 uses
-  SysUtils, Classes, SyncObjs, TypInfo, Variants,
-  generics.collections,
-  fpjson, jsonparser,
+  System.SysUtils, System.Classes, System.Generics.Collections, System.Generics.Defaults, System.TypInfo,
+  System.JSON, System.Math,
+  System.Threading, System.Rtti, System.SyncObjs, System.Types, System.StrUtils,
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
   uMakerAi.Chat, uMakerAi.Core, uMakerAi.Chat.Messages,
-  uMakerAi.Agents.Checkpoint, uMakerAi.Utils.System;
+  uMakerAi.Agents.Checkpoint;  // IAiCheckpointer, TAiCheckpointSnapshot, TAiPendingStep
+
+{$IF CompilerVersion < 35}
+type
+  TInterlockedHelper = class helper for TInterlocked
+    class function Exchange(var Target: Boolean; Value: Boolean): Boolean; overload; static; inline;
+  end;
+{$ENDIF}
 
 type
 
-  TMsgState = (msYes, msNo, msOK, msCancel, msAbort, msRetry, msIgnore,
-               msAll, msNoToAll, msYesToAll, msHelp, msClose);
+{$RTTI INHERIT}
+  TMsgState = (msYes, msNo, msOK, msCancel, msAbort, msRetry, msIgnore, msAll, msNoToAll, msYesToAll, msHelp, msClose);
   TMsgStates = set of TMsgState;
 
   TAgentExecutionStatus = (esUnknown, esRunning, esCompleted, esError,
                            esTimeout, esAborted, esSuspended);
 
+  // Modo de uni?n para los nodos
   TJoinMode = (jmAny, jmAll);
-  TLinkMode = (lmFanout, lmConditional, lmManual, lmExpression);
 
-  // Forward declarations
-  TAIAgentManager  = class;
-  TAIAgentsBase    = class;
-  TAIAgentsNode    = class;
-  TAIAgentsLink    = class;
-  TAIBlackboard    = class;
-  TAiToolBase      = class;
+  // Modo de ejecuci?n del enlace
+  TLinkMode = (lmFanout, lmConditional, lmManual, lmExpression); // --- NUEVO: Modo lmExpression ---
 
-  TAIAgentsOnPrint   = procedure(Sender: TObject; Value: string) of object;
-  TAIAgentsOnEnd     = procedure(Node: TAIAgentsNode; Value: string) of object;
-  TAIAgentsNodeOnExecute = procedure(Node, BeforeNode: TAIAgentsNode;
-                                     Link: TAIAgentsLink;
-                                     Input: string; var Output: string) of object;
-  TAIAgentsLinkOnExecute = procedure(Node: TAIAgentsNode; Link: TAIAgentsLink;
-                                     var IsOk: Boolean; var Handled: Boolean) of object;
-  TAIAgentsOnError   = procedure(Sender: TObject; Node: TAIAgentsNode;
-                                 Link: TAIAgentsLink; E: Exception;
-                                 var Abort: Boolean) of object;
-  TAIAgentsOnConfirm = procedure(Sender: TObject; Node: TAIAgentsNode;
-                                 const AQuestion: string; Buttons: TMsgStates;
-                                 var AResponse: string;
-                                 var AModalResult: TMsgState) of object;
+  // Forward Declarations
+  TAIAgentManager = class;
+  TAIAgentsBase = class;
+  TAIAgentsNode = class;
+  TAIAgentsLink = class;
+  TAIBlackboard = class;
+  TAiToolBase = Class;
+
+  TAIAgentsOnPrint = procedure(Sender: TObject; Value: String) of object;
+  TAgentPrintRef = reference to procedure(Sender: TObject; Value: String);
+
+  TAIAgentsOnEnd = procedure(Node: TAIAgentsNode; Value: string) of object;
+  TAIAgentsNodeOnExecute = procedure(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: String; var Output: String) of object;
+  TAIAgentsLinkOnExecute = procedure(Node: TAIAgentsNode; Link: TAIAgentsLink; var IsOk: Boolean; var Handled: Boolean) of object;
+  TAIAgentsOnError = procedure(Sender: TObject; Node: TAIAgentsNode; Link: TAIAgentsLink; E: Exception; var Abort: Boolean) of object;
+  TAIAgentsOnConfirm = procedure(Sender: TObject; Node: TAIAgentsNode; const AQuestion: string; Buttons: TMsgStates; var AResponse: string; var AModalResult: TMsgState) of object;
+
   TAIAgentsOnEnterNode = procedure(Sender: TObject; Node: TAIAgentsNode) of object;
-  TAIAgentsOnExitNode  = procedure(Sender: TObject; Node: TAIAgentsNode) of object;
-  TAIAgentsOnStart     = procedure(Sender: TObject; const Input: string) of object;
-  TAIAgentsOnFinish    = procedure(Sender: TObject; const Input, Output: string;
-                                   Status: TAgentExecutionStatus; E: Exception) of object;
-  TAIAgentsOnSuspend   = procedure(Sender: TObject;
-                                   const AThreadID: string;
-                                   const ANodeName:  string;
-                                   const AReason:    string;
-                                   const AContext:   string) of object;
+  TAIAgentsOnExitNode = procedure(Sender: TObject; Node: TAIAgentsNode) of object;
+  TAIAgentsOnStart = procedure(Sender: TObject; const Input: string) of object;
+  // TAIAgentsOnFinish = procedure(Sender: TObject; const Input, Output: string; Status: string; E: Exception) of object;
+  TAIAgentsOnFinish = procedure(Sender: TObject; const Input, Output: string; Status: TAgentExecutionStatus; E: Exception) of object;
 
-  // -------------------------------------------------------------------------
-  // TAIBlackboard — estado compartido del grafo, thread-safe
-  // FPC: usa Variant (en lugar de TValue) + campos separados para mensajes
-  // -------------------------------------------------------------------------
-  TAIBlackboard = class
+  // Disparado cuando un nodo se suspende esperando input humano
+  TAIAgentsOnSuspend = procedure(Sender: TObject;
+                                 const AThreadID:  string;
+                                 const ANodeName:  string;
+                                 const AReason:    string;
+                                 const AContext:   string) of object;
+
+  // --- Blackboard ---
+  TAIBlackboard = class(TObject)
   private
-    FLock:    TCriticalSection;
-    FData:    specialize TDictionary<string, Variant>;
-    FAskMsg:  TAiChatMessage;  // owned
-    FResMsg:  TAiChatMessage;  // owned
-    function  GetAskMsg: TAiChatMessage;
-    function  GetResMsg: TAiChatMessage;
+    FLock: TCriticalSection;
+    function GetAskMsg: TAiChatMessage;
+    function GetResMsg: TAiChatMessage;
     procedure SetAskMsg(const Value: TAiChatMessage);
     procedure SetResMsg(const Value: TAiChatMessage);
-  protected
-    // Acceso interno para serializacion (bajo FLock del caller)
-    function GetDataForSerialization: specialize TDictionary<string, Variant>;
+  protected // --- MODIFICADO: protected para acceso desde la misma unidad ---
+    FData: TDictionary<string, TValue>;
   public
     constructor Create;
-    destructor  Destroy; override;
-    procedure   Clear;
-    procedure   SetValue(const AKey: string; const AValue: Variant);
-    function    TryGetValue(const AKey: string; out AValue: Variant): Boolean;
-    procedure   SetString(const AKey, AValue: string);
-    function    GetString(const AKey: string; const ADefault: string = ''): string;
-    procedure   SetInteger(const AKey: string; AValue: Integer);
-    function    GetInteger(const AKey: string; const ADefault: Integer = 0): Integer;
-    procedure   SetBoolean(const AKey: string; AValue: Boolean);
-    function    GetBoolean(const AKey: string; const ADefault: Boolean = False): Boolean;
-    procedure   SetStatus(Value: TAgentExecutionStatus);
-    function    GetStatus: TAgentExecutionStatus;
-    property    AskMsg: TAiChatMessage read GetAskMsg write SetAskMsg;
-    property    ResMsg: TAiChatMessage read GetResMsg write SetResMsg;
-    // Acceso con lock para serializacion (FLock expuesto solo para SerializeBlackboard)
-    property    Lock:   TCriticalSection read FLock;
+    destructor Destroy; override;
+    procedure Clear;
+    procedure SetValue(const AKey: string; const AValue: TValue);
+    function TryGetValue(const AKey: string; out AValue: TValue): Boolean;
+    procedure SetString(const AKey, AValue: string);
+    function GetString(const AKey: string; const ADefault: string = ''): string;
+    procedure SetInteger(const AKey: string; AValue: Integer);
+    function GetInteger(const AKey: string; const ADefault: Integer = 0): Integer;
+    procedure SetBoolean(const AKey: string; AValue: Boolean);
+    procedure SetStatus(Value: TAgentExecutionStatus);
+    function GetStatus: TAgentExecutionStatus;
+    function GetBoolean(const AKey: string; const ADefault: Boolean = False): Boolean;
+    Property AskMsg: TAiChatMessage read GetAskMsg write SetAskMsg;
+    Property ResMsg: TAiChatMessage read GetResMsg write SetResMsg;
   end;
 
-  // -------------------------------------------------------------------------
-  // TAiToolBase — base para herramientas de nodo
-  // -------------------------------------------------------------------------
   TAiToolBase = class(TComponent)
   private
     FDescription: string;
-    FID:          string;
-    procedure SetDescription(const Value: string);
-    procedure SetID(const Value: string);
+    FID: String;
+    procedure SetDescription(const Value: String);
+    procedure SetID(const Value: String);
   protected
-    procedure Execute(ANode: TAIAgentsNode; const AInput: string;
-                      var AOutput: string); virtual; abstract;
+    procedure Execute(ANode: TAIAgentsNode; const AInput: string; var AOutput: string); virtual; abstract;
   public
     procedure Run(ANode: TAIAgentsNode; const AInput: string; var AOutput: string);
   published
     property Description: string read FDescription write SetDescription;
-    property ID:          string read FID          write SetID;
+    Property ID: String read FID write SetID; // GUID que identifica cada nodo
   end;
 
   TAiAgentsToolSample = class(TAiToolBase)
   protected
-    procedure Execute(ANode: TAIAgentsNode; const AInput: string;
-                      var AOutput: string); override;
+    procedure Execute(ANode: TAIAgentsNode; const AInput: string; var AOutput: string); override;
   end;
 
-  // -------------------------------------------------------------------------
-  // TAIAgentsBase — componente base para nodos y enlaces
-  // -------------------------------------------------------------------------
+  // --- Base Component ---
   TAIAgentsBase = class(TComponent)
   private
-    FDescription: string;
-    FID:          string;
-    procedure SetDescription(const Value: string);
-    procedure SetID(const Value: string);
-  published
-    property Description: string read FDescription write SetDescription;
-    property ID:          string read FID          write SetID;
+    FDescription: String;
+    FID: String;
+    procedure SetDescription(const Value: String);
+    procedure SetID(const Value: String);
+  Published
+    Property Description: String read FDescription write SetDescription;
+    Property ID: String read FID write SetID; // GUID que identifica cada nodo
   end;
 
-  // -------------------------------------------------------------------------
-  // TAIAgentsLink — arista del grafo
-  // -------------------------------------------------------------------------
-  TAIAgentsLinkNodeMap = specialize TDictionary<string, TAIAgentsNode>;
-  TAIAgentsNodeList    = specialize TList<TAIAgentsNode>;
-
+  // --- Link (Edge) ---
   TAIAgentsLink = class(TAIAgentsBase)
   private
-    FNextA:             TAIAgentsNode;
-    FNextB:             TAIAgentsNode;
-    FNextC:             TAIAgentsNode;
-    FNextD:             TAIAgentsNode;
-    FNextNo:            TAIAgentsNode;
-    FGraph:             TAIAgentManager;
-    FOnExecute:         TAIAgentsLinkOnExecute;
-    FNoCycles:          Integer;
-    FMaxCycles:         Integer;
-    FReady:             Boolean;
-    FSourceNode:        TAIAgentsNode;
-    FConditionalTargets: TAIAgentsLinkNodeMap;
-    FMode:              TLinkMode;
-    FConditionalKey:    string;
-    FManualTargetsKey:  string;
-    FExpressionA:       string;
-    FExpressionB:       string;
-    FExpressionC:       string;
-    FExpressionD:       string;
+    FNextNo: TAIAgentsNode;
+    FNextB: TAIAgentsNode;
+    FNextC: TAIAgentsNode;
+    FNextA: TAIAgentsNode;
+    FNextD: TAIAgentsNode;
+    FGraph: TAIAgentManager;
+    FOnExecute: TAIAgentsLinkOnExecute;
+    FNoCycles: Integer;
+    FMaxCycles: Integer;
+    FReady: Boolean;
+    FSourceNode: TAIAgentsNode;
+    FConditionalTargets: TDictionary<string, TAIAgentsNode>;
+    FMode: TLinkMode;
+    FConditionalKey: string;
+    FManualTargetsKey: string;
+    // --- NUEVO: Campos para el modo lmExpression ---
+    FExpressionA: string;
+    FExpressionB: string;
+    FExpressionC: string;
+    FExpressionD: string;
     procedure SetNextA(const Value: TAIAgentsNode);
     procedure SetNextB(const Value: TAIAgentsNode);
     procedure SetNextC(const Value: TAIAgentsNode);
@@ -192,177 +191,136 @@ type
     procedure SetMode(const Value: TLinkMode);
   protected
     property Ready: Boolean read FReady write FReady;
-    procedure BuildManualTargets(const TargetsCSV: string;
-                                  out Nodes: TAIAgentsNodeList);
-    procedure CreateAndQueueTask(ANodeToExecute, ASourceNode: TAIAgentsNode;
-                                  ACurrentLink: TAIAgentsLink);
+    procedure BuildManualTargets(const TargetsCSV: string; out Nodes: TList<TAIAgentsNode>);
+    procedure CreateAndQueueTask(ANodeToExecute, ASourceNode: TAIAgentsNode; ACurrentLink: TAIAgentsLink);
   public
-    constructor Create(AOwner: TComponent); override;
-    destructor  Destroy; override;
-    procedure   Print(Value: string);
-    procedure   DoExecute(Sender: TAIAgentsNode);
-    procedure   AddConditionalTarget(const AKey: string; ANode: TAIAgentsNode);
-    property    NoCycles: Integer read FNoCycles write FNoCycles;
+    constructor Create(aOwner: TComponent); override;
+    destructor Destroy; override;
+    procedure Print(Value: String);
+    procedure DoExecute(Sender: TAIAgentsNode); // --- MODIFICADO: Ahora es el ?nico m?todo de ejecuci?n
+    procedure AddConditionalTarget(const AKey: string; ANode: TAIAgentsNode);
+    property NoCycles: Integer read FNoCycles write FNoCycles;
   published
-    property NextA:           TAIAgentsNode      read FNextA           write SetNextA;
-    property NextB:           TAIAgentsNode      read FNextB           write SetNextB;
-    property NextC:           TAIAgentsNode      read FNextC           write SetNextC;
-    property NextD:           TAIAgentsNode      read FNextD           write SetNextD;
-    property NextNo:          TAIAgentsNode      read FNextNo          write SetNextNo;
-    property Graph:           TAIAgentManager    read FGraph           write SetGraph;
-    property OnExecute:       TAIAgentsLinkOnExecute read FOnExecute   write SetOnExecute;
-    property MaxCycles:       Integer            read FMaxCycles       write SetMaxCycles default 1;
-    property Mode:            TLinkMode          read FMode            write SetMode      default lmFanout;
-    property ConditionalKey:  string             read FConditionalKey  write FConditionalKey;
-    property ManualTargetsKey:string             read FManualTargetsKey write FManualTargetsKey;
-    property ExpressionA:     string             read FExpressionA     write FExpressionA;
-    property ExpressionB:     string             read FExpressionB     write FExpressionB;
-    property ExpressionC:     string             read FExpressionC     write FExpressionC;
-    property ExpressionD:     string             read FExpressionD     write FExpressionD;
+    property NextA: TAIAgentsNode read FNextA write SetNextA;
+    property NextB: TAIAgentsNode read FNextB write SetNextB;
+    property NextC: TAIAgentsNode read FNextC write SetNextC;
+    property NextD: TAIAgentsNode read FNextD write SetNextD;
+    property NextNo: TAIAgentsNode read FNextNo write SetNextNo;
+    property Graph: TAIAgentManager read FGraph write SetGraph;
+    property OnExecute: TAIAgentsLinkOnExecute read FOnExecute write SetOnExecute;
+    property MaxCycles: Integer read FMaxCycles write SetMaxCycles default 1;
+    property Mode: TLinkMode read FMode write SetMode default lmFanout;
+    property ConditionalKey: string read FConditionalKey write FConditionalKey;
+    property ManualTargetsKey: string read FManualTargetsKey write FManualTargetsKey;
+    // --- NUEVO: Propiedades para el modo lmExpression ---
+    property ExpressionA: string read FExpressionA write FExpressionA;
+    property ExpressionB: string read FExpressionB write FExpressionB;
+    property ExpressionC: string read FExpressionC write FExpressionC;
+    property ExpressionD: string read FExpressionD write FExpressionD;
   end;
 
-  // -------------------------------------------------------------------------
-  // TAIAgentsNode — vertice del grafo
-  // -------------------------------------------------------------------------
-  TAIAgentsLinkList    = specialize TList<TAIAgentsLink>;
-  TAIAgentsJoinInputs  = specialize TDictionary<TAIAgentsLink, string>;
-
+  // --- Node ---
   TAIAgentsNode = class(TAIAgentsBase)
   private
-    FOutput:         string;
-    FInput:          string;
-    FNext:           TAIAgentsLink;
-    FGraph:          TAIAgentManager;
-    FInEdges:        TAIAgentsLinkList;
-    FOnExecute:      TAIAgentsNodeOnExecute;
-    FPromptName:     string;
-    FMsgError:       string;
-    FError:          Boolean;
-    FJoinLock:       TCriticalSection;
-    FJoinMode:       TJoinMode;
-    FTool:           TAiToolBase;
-    FJoinInputs:     TAIAgentsJoinInputs;
+    FOutput: String;
+    FInput: String;
+    FNext: TAIAgentsLink;
+    FGraph: TAIAgentManager;
+    FInEdges: TList<TAIAgentsLink>;
+    FOnExecute: TAIAgentsNodeOnExecute;
+    FPromptName: String;
+    FMsgError: String;
+    FError: Boolean;
+    FJoinLock: TCriticalSection;
+    FJoinMode: TJoinMode;
+    FTool: TAiToolBase;
+    FJoinInputs: TDictionary<TAIAgentsLink, string>;
+    // --- Suspensi?n human-in-the-loop ---
     FSuspended:      Boolean;
     FSuspendReason:  string;
     FSuspendContext: string;
-    procedure SetInput(const Value: string);
+    procedure SetInput(const Value: String);
     procedure SetNext(const Value: TAIAgentsLink);
-    procedure SetOutput(const Value: string);
+    procedure SetOutput(const Value: String);
     procedure SetGraph(const Value: TAIAgentManager);
     procedure SetOnExecute(const Value: TAIAgentsNodeOnExecute);
-    procedure SetPromptName(const Value: string);
+    procedure SetPromptName(const Value: String);
     procedure SetJoinMode(const Value: TJoinMode);
     procedure SetTool(const Value: TAiToolBase);
     procedure SetError(const Value: Boolean);
-    procedure SetMsgError(const Value: string);
+    procedure SetMsgError(const Value: String);
   protected
-    procedure DoExecute(ABeforeNode: TAIAgentsNode; ALink: TAIAgentsLink); virtual;
+    procedure DoExecute(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink); virtual;
+    // Realiza el enrutamiento al siguiente link tras la ejecucion del nodo.
+    // Subclases que sobreescriben DoExecute deben llamar a este metodo al final.
+    procedure DoTraverseLinks(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink);
+    // Evalua la logica de join (jmAny / jmAll) y actualiza Self.Input.
+    // Retorna True si el nodo debe ejecutarse ahora, False si debe esperar.
+    // Subclases que sobreescriben DoExecute completamente DEBEN llamar esto
+    // al inicio y salir si retorna False.
+    function CheckJoinAndPrepareInput(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink): Boolean;
     procedure Reset;
   public
-    constructor Create(AOwner: TComponent); override;
-    destructor  Destroy; override;
-    procedure   Print(Value: string);
-    procedure   ForceFinalExecute;
-    function    RequestConfirmation(const AQuestion: string; Buttons: TMsgStates;
-                                    var AResponse: string): TMsgState;
-    function    RequestInput(const ACaption, APrompt: string;
-                             var AValue: string): Boolean;
-    procedure   Suspend(const AReason: string; const AContext: string = '');
-    property    Error:          Boolean read FError         write SetError;
-    property    MsgError:       string  read FMsgError      write SetMsgError;
-    property    Suspended:      Boolean read FSuspended;
-    property    SuspendReason:  string  read FSuspendReason;
-    property    SuspendContext: string  read FSuspendContext;
+    constructor Create(aOwner: TComponent); override;
+    destructor Destroy; override;
+    procedure Print(Value: String);
+    procedure ForceFinalExecute;
+    function RequestConfirmation(const AQuestion: string; Buttons: TMsgStates; var AResponse: string): TMsgState;
+    function RequestInput(const ACaption, APrompt: string; var AValue: string): Boolean;
+    // Suspende este nodo. Llamar desde OnExecute o desde Execute de una Tool.
+    // DoExecute verifica FSuspended al retornar y no enruta al siguiente Link.
+    procedure Suspend(const AReason: string; const AContext: string = '');
+    property Error:          Boolean read FError        Write SetError;
+    property MsgError:       String  read FMsgError     write SetMsgError;
+    property Suspended:      Boolean read FSuspended;
+    property SuspendReason:  string  read FSuspendReason;
+    property SuspendContext: string  read FSuspendContext;
   published
-    property Input:      string              read FInput      write SetInput;
-    property Output:     string              read FOutput     write SetOutput;
-    property Next:       TAIAgentsLink       read FNext       write SetNext;
-    property Graph:      TAIAgentManager     read FGraph      write SetGraph;
-    property OnExecute:  TAIAgentsNodeOnExecute read FOnExecute write SetOnExecute;
-    property PromptName: string              read FPromptName write SetPromptName;
-    property JoinMode:   TJoinMode           read FJoinMode   write SetJoinMode default jmAny;
-    property Tool:       TAiToolBase         read FTool       write SetTool;
+    property Input: String read FInput write SetInput;
+    property Output: String read FOutput write SetOutput;
+    property Next: TAIAgentsLink read FNext write SetNext;
+    property Graph: TAIAgentManager read FGraph write SetGraph;
+    property OnExecute: TAIAgentsNodeOnExecute read FOnExecute write SetOnExecute;
+    property PromptName: String read FPromptName write SetPromptName;
+    property JoinMode: TJoinMode read FJoinMode write SetJoinMode default jmAny;
+    property Tool: TAiToolBase read FTool write SetTool;
   end;
 
-  // -------------------------------------------------------------------------
-  // TAiNodeTask — hilo para ejecucion paralela de nodos
-  // -------------------------------------------------------------------------
-  TAiNodeTask = class(TThread)
-  private
-    FManager:    TAIAgentManager;
-    FNode:       TAIAgentsNode;
-    FSourceNode: TAIAgentsNode;
-    FLink:       TAIAgentsLink;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AManager: TAIAgentManager;
-                       ANode, ASource: TAIAgentsNode;
-                       ALink: TAIAgentsLink);
-  end;
-
-  // -------------------------------------------------------------------------
-  // TAiOrchestratorThread — hilo principal de orquestacion del grafo
-  // -------------------------------------------------------------------------
-  TAiOrchestratorThread = class(TThread)
-  private
-    FManager:      TAIAgentManager;
-    FInitialInput: string;
-    FStartNode:    TAIAgentsNode; // StartNode o nodo de reanudacion
-    FIsResume:     Boolean;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AManager: TAIAgentManager;
-                       const AInput: string;
-                       AStartNode: TAIAgentsNode;
-                       AIsResume: Boolean = False);
-  end;
-
-  // -------------------------------------------------------------------------
-  // TAIAgentManager — orquestador principal
-  // -------------------------------------------------------------------------
-  TAIAgentsNodeObjList = specialize TObjectList<TAIAgentsNode>; // helper alias
-  TAIAgentNodeList     = specialize TList<TAIAgentsNode>;
-  TAIAgentLinkList     = specialize TList<TAIAgentsLink>;
+  // --- Orchestrator ---
 
   TAIAgentManager = class(TComponent)
   private
-    FEndNode:            TAIAgentsNode;
-    FStartNode:          TAIAgentsNode;
-    FOnPrint:            TAIAgentsOnPrint;
-    FNodes:              TAIAgentNodeList;
-    FLinks:              TAIAgentLinkList;
-    FOnEnd:              TAIAgentsOnEnd;
-    FOnError:            TAIAgentsOnError;
-    FOnConfirm:          TAIAgentsOnConfirm;
-    FBusy:               Boolean;
-    FBusyLock:           TCriticalSection;
-    FAbort:              Boolean;
-    FBlackboard:         TAIBlackboard;
-    FCompiled:           Boolean;
-    FOnExitNode:         TAIAgentsOnExitNode;
-    FOnEnterNode:        TAIAgentsOnEnterNode;
+    FEndNode: TAIAgentsNode;
+    FStartNode: TAIAgentsNode;
+    FOnPrint: TAIAgentsOnPrint;
+    FOnPrintRef: TAgentPrintRef;
+    FNodes: TList<TAIAgentsNode>;
+    FLinks: TList<TAIAgentsLink>;
+    FOnEnd: TAIAgentsOnEnd;
+    FOnError: TAIAgentsOnError;
+    FOnConfirm: TAIAgentsOnConfirm;
+    FBusy: Integer;
+    FAbort: Boolean;
+    FBlackboard: TAIBlackboard;
+    FCompiled: Boolean;
+    FActiveTasks: TList<ITask>;
+    FActiveTasksLock: TCriticalSection;
+    FOnExitNode: TAIAgentsOnExitNode;
+    FOnEnterNode: TAIAgentsOnEnterNode;
     FMaxConcurrentTasks: Integer;
-    FTimeoutMs:          Cardinal;
-    FOnFinish:           TAIAgentsOnFinish;
-    FOnStart:            TAIAgentsOnStart;
-    FDescription:        string;
-    FAsynchronous:       Boolean;
-    // Contador atomico de tasks paralelas en vuelo
-    FActiveTaskCount:    Integer;
-    // Checkpoint / suspend-resume
+    FTimeoutMs: Cardinal;
+    FOnFinish: TAIAgentsOnFinish;
+    FOnStart: TAIAgentsOnStart;
+    FDescription: String;
+    FAsynchronous: Boolean;
+    // --- Ejecuci?n durable (checkpoint / suspend-resume) ---
     FCheckpointer:       IAiCheckpointer;
     FCurrentThreadID:    string;
-    FCheckpointSeq:      Integer;
-    FSuspendedSteps:     TAiPendingStepList;
+    FCheckpointSeq:      Integer;  // protegido por FActiveTasksLock
+    FSuspendedSteps:     TObjectList<TAiPendingStep>; // owned
     FSuspendedStepsLock: TCriticalSection;
     FOnSuspend:          TAIAgentsOnSuspend;
-    // Hilo orquestador (async mode)
-    FOrchestratorThread: TAiOrchestratorThread;
-
-    function  TrySetBusy: Boolean;
-    procedure ClearBusy;
+    function GetBusy: Boolean;
     procedure SetCheckpointer(const Value: IAiCheckpointer);
     procedure SetOnSuspend(const Value: TAIAgentsOnSuspend);
     procedure SetMaxConcurrentTasks(const Value: Integer);
@@ -376,10 +334,13 @@ type
     procedure SetOnExitNode(const Value: TAIAgentsOnExitNode);
     procedure SetOnFinish(const Value: TAIAgentsOnFinish);
     procedure SetOnStart(const Value: TAIAgentsOnStart);
-    procedure SetDescription(const Value: string);
+    procedure SetDescription(const Value: String);
     procedure SetAsynchronous(const Value: Boolean);
   protected
-    procedure DoPrint(Sender: TObject; Value: string);
+    // --- CORREGIDO: TThreadPool ---
+    FThreadPool: TThreadPool;
+    procedure DoPrint(Sender: TObject; Value: String);
+    procedure DoPrintFromRef(Sender: TObject; Value: String);
     procedure DoNodeCompleted(ANode: TAIAgentsNode);
     procedure DoNodeSuspended(ANode: TAIAgentsNode;
                               ABeforeNode: TAIAgentsNode;
@@ -390,214 +351,421 @@ type
     procedure AddComponentToList(AComponent: TAIAgentsBase);
     procedure RemoveComponentFromList(AComponent: TAIAgentsBase);
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
-    // Cuerpo del orquestador (usado desde TAiOrchestratorThread)
-    procedure RunOrchestratorBody(const AInitialInput: string;
-                                   AStartNode: TAIAgentsNode;
-                                   AIsResume: Boolean);
+    function InternalRun(Msg: String): ITask; Virtual;
   public
-    constructor Create(AOwner: TComponent); override;
-    destructor  Destroy; override;
-    procedure   Abort;
-    function    FindNode(const AName: string): TAIAgentsNode;
-    procedure   DoError(Node: TAIAgentsNode; Link: TAIAgentsLink; E: Exception);
-    function    DoConfirm(Node: TAIAgentsNode; const AQuestion: string;
-                          Buttons: TMsgStates; var AResponse: string): TMsgState;
-    procedure   ClearGraph;
-    function    AddNode(const AName: string;
-                        AExecuteProc: TAIAgentsNodeOnExecute): TAIAgentManager;
-    function    AddEdge(const AStartNodeName, AEndNodeName: string): TAIAgentManager;
-    function    AddConditionalEdge(const AStartNodeName: string;
-                                   const AConditionalLinkName: string;
-                                   AConditionalTargets: specialize TDictionary<string, string>): TAIAgentManager;
-    function    SetEntryPoint(const ANodeName: string): TAIAgentManager;
-    function    SetFinishPoint(const ANodeName: string): TAIAgentManager;
-    procedure   Compile;
-    procedure   SaveToStream(AStream: TStream);
-    procedure   LoadFromStream(AStream: TStream);
-    procedure   SaveStateToStream(AStream: TStream);
-    procedure   LoadStateFromStream(AStream: TStream);
-    function    Run(APrompt: string): string;
-    function    AddMessageAndRun(APrompt, ARole: string;
-                                 AMediaFiles: TAiMediaFilesArray): string;
-    function    AddMessageAndRunMsg(APrompt, ARole: string;
-                                    AMediaFiles: TAiMediaFilesArray): TAiChatMessage;
-    function    NewMessage(APrompt, ARole: string;
-                           AMediaFiles: TAiMediaFilesArray): TAiChatMessage;
-    function    ResumeThread(const AThreadID, ANodeName, AInput: string): Boolean;
-    function    GetActiveThreads: TStringDynArray;
-    property    Busy:            Boolean          read FBusy;
-    property    Blackboard:      TAIBlackboard    read FBlackboard;
-    property    CurrentThreadID: string           read FCurrentThreadID;
-    property    Checkpointer:    IAiCheckpointer  read FCheckpointer write SetCheckpointer;
-    // Acceso interno para TAiNodeTask y TAiOrchestratorThread
-    property    ActiveTaskCount: Integer          read FActiveTaskCount write FActiveTaskCount;
-    property    IsAborted:       Boolean          read FAbort;
+    constructor Create(aOwner: TComponent); override;
+    destructor Destroy; override;
+    procedure Abort;
+    function FindNode(const AName: string): TAIAgentsNode;
+    procedure DoError(Node: TAIAgentsNode; Link: TAIAgentsLink; E: Exception);
+    function DoConfirm(Node: TAIAgentsNode; const AQuestion: string; Buttons: TMsgStates; var AResponse: string): TMsgState;
+
+    procedure SetOnPrintEvent(const APrintProc: TAgentPrintRef);
+    procedure ClearGraph;
+    function AddNode(const AName: string; AExecuteProc: TAIAgentsNodeOnExecute): TAIAgentManager;
+    function AddEdge(const AStartNodeName, AEndNodeName: string): TAIAgentManager;
+    function AddConditionalEdge(const AStartNodeName: string; const AConditionalLinkName: string; AConditionalTargets: TDictionary<string, string>): TAIAgentManager;
+    function SetEntryPoint(const ANodeName: string): TAIAgentManager;
+    function SetFinishPoint(const ANodeName: string): TAIAgentManager;
+    procedure Compile;
+    procedure SaveToStream(AStream: TStream);
+    Procedure LoadFromStream(AStream: TStream);
+    procedure SaveStateToStream(AStream: TStream);
+    procedure LoadStateFromStream(AStream: TStream);
+
+    function Run(APrompt: String): String; overload; virtual;
+
+    function AddMessageAndRun(APrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): String;
+    function AddMessageAndRunMsg(APrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): TAiChatMessage;
+
+    function NewMessage(APrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): TAiChatMessage;
+
+    property Busy: Boolean read GetBusy;
+    property Blackboard: TAIBlackboard read FBlackboard;
+    property CurrentThreadID: string read FCurrentThreadID;
+    // Reanuda un hilo suspendido. AInput es la respuesta/aprobaci?n del humano.
+    // Devuelve True si el hilo fue encontrado y la reanudaci?n se inici?.
+    function ResumeThread(const AThreadID, ANodeName, AInput: string): Boolean;
+    // Lista thread IDs con checkpoints activos (suspendidos o en progreso)
+    function GetActiveThreads: TArray<string>;
+    property Checkpointer: IAiCheckpointer read FCheckpointer write SetCheckpointer;
   published
-    property StartNode:          TAIAgentsNode      read FStartNode          write SetStartNode;
-    property EndNode:            TAIAgentsNode      read FEndNode            write SetEndNode;
-    property OnPrint:            TAIAgentsOnPrint   read FOnPrint            write SetOnPrint;
-    property OnEnd:              TAIAgentsOnEnd     read FOnEnd              write SetOnEnd;
-    property OnError:            TAIAgentsOnError   read FOnError            write SetOnError;
-    property OnConfirm:          TAIAgentsOnConfirm read FOnConfirm          write SetOnConfirm;
-    property OnEnterNode:        TAIAgentsOnEnterNode read FOnEnterNode      write SetOnEnterNode;
-    property OnExitNode:         TAIAgentsOnExitNode  read FOnExitNode       write SetOnExitNode;
-    property MaxConcurrentTasks: Integer             read FMaxConcurrentTasks write SetMaxConcurrentTasks default 4;
-    property OnStart:            TAIAgentsOnStart    read FOnStart            write SetOnStart;
-    property OnFinish:           TAIAgentsOnFinish   read FOnFinish           write SetOnFinish;
-    property TimeoutMs:          Cardinal            read FTimeoutMs          write FTimeoutMs default 60000;
-    property Description:        string              read FDescription        write SetDescription;
-    property Asynchronous:       Boolean             read FAsynchronous       write SetAsynchronous default True;
-    property OnSuspend:          TAIAgentsOnSuspend  read FOnSuspend          write SetOnSuspend;
+    property StartNode: TAIAgentsNode read FStartNode write SetStartNode;
+    property EndNode: TAIAgentsNode read FEndNode write SetEndNode;
+    property OnPrint: TAIAgentsOnPrint read FOnPrint write SetOnPrint;
+    property OnEnd: TAIAgentsOnEnd read FOnEnd write SetOnEnd;
+    property OnError: TAIAgentsOnError read FOnError write SetOnError;
+    property OnConfirm: TAIAgentsOnConfirm read FOnConfirm write SetOnConfirm;
+    property OnEnterNode: TAIAgentsOnEnterNode read FOnEnterNode write SetOnEnterNode;
+    property OnExitNode: TAIAgentsOnExitNode read FOnExitNode write SetOnExitNode;
+    property MaxConcurrentTasks: Integer read FMaxConcurrentTasks write SetMaxConcurrentTasks default 4;
+    property OnStart: TAIAgentsOnStart read FOnStart write SetOnStart;
+    property OnFinish: TAIAgentsOnFinish read FOnFinish write SetOnFinish;
+    property TimeoutMs: Cardinal read FTimeoutMs write FTimeoutMs default 60000;
+    Property Description: String read FDescription write SetDescription;
+    property Asynchronous: Boolean read FAsynchronous write SetAsynchronous default True;
+    property OnSuspend: TAIAgentsOnSuspend read FOnSuspend write SetOnSuspend;
   end;
 
-  // Alias de compatibilidad
-  TAIAgents = class(TAIAgentManager)
-  end;
+  TAIAgents = Class(TAIAgentManager)
+  End deprecated 'Use TAIAgentManager instead';
+
+function EvalCondition(const Expr: string; Vars: TDictionary<string, TValue>): Boolean;
 
 procedure Register;
 
 implementation
 
-uses
-  uMakerAi.Agents.EngineRegistry;
+uses uMakerAi.Agents.EngineRegistry;
 
-// ---------------------------------------------------------------------------
-// Helpers de serializacion de Blackboard
-// ---------------------------------------------------------------------------
-
-procedure SerializeBlackboard(ABB: TAIBlackboard; AObj: TJSONObject);
-var
-  LData: specialize TDictionary<string, Variant>;
-  LEnum: specialize TDictionary<string, Variant>.TPairEnumerator;
-  VT:    TVarType;
-  V:     Variant;
-  LKey:  string;
-  I:     Integer;
+{$IF CompilerVersion < 35}
+class function TInterlockedHelper.Exchange(var Target: Boolean; Value: Boolean): Boolean;
 begin
-  LData := ABB.GetDataForSerialization;
-  ABB.Lock.Enter;
-  try
-    LEnum := LData.GetEnumerator;
-    try
-      while LEnum.MoveNext do
-      begin
-        LKey := LEnum.Current.Key;
-        V    := LEnum.Current.Value;
-        VT   := VarType(V) and varTypeMask;
-        case VT of
-          varByte, varWord, varLongWord, varInteger, varInt64,
-          varShortInt, varSmallint:
-            AObj.Add(LKey, Integer(V));
-          varSingle, varDouble, varCurrency:
-            AObj.Add(LKey, Double(V));
-          varString, varUString, varOleStr:
-            AObj.Add(LKey, string(V));
-          varBoolean:
-            AObj.Add(LKey, Boolean(V));
-        end;
-      end;
-    finally
-      LEnum.Free;
-    end;
-  finally
-    ABB.Lock.Leave;
-  end;
+  Integer((@Result)^) := AtomicExchange(Integer((@Target)^), Integer((@Value)^));
+end;
+{$ENDIF}
+
+procedure Register;
+begin
+  {$WARN SYMBOL_DEPRECATED OFF}
+  RegisterComponents('MakerAI', [TAIAgentManager, TAIAgentsNode, TAIAgentsLink, TAiAgentsToolSample, TAIAgents]);
+  {$WARN SYMBOL_DEPRECATED ON}
 end;
 
-procedure DeserializeBlackboard(AObj: TJSONObject; ABB: TAIBlackboard);
+// Simple expression evaluator for lmExpression link mode.
+// Supports: bare key (truthy), key=val, key<>val, key!=val, key>val,
+//           key<val, key>=val, key<=val.  Values are compared as strings
+// unless both sides parse as numbers.
+function EvalCondition(const Expr: string; Vars: TDictionary<string, TValue>): Boolean;
 var
-  I:  Integer;
-  LV: TJSONData;
+  LExpr, LKey, LOp, LRhs: string;
+  LVal: TValue;
+  LLhs, LRhsNum: Double;
+  LFound: Boolean;
+  I, P: Integer;
+  Ops: array[0..5] of string;
+  Op: string;
 begin
-  ABB.Clear;
-  for I := 0 to AObj.Count - 1 do
+  Result := False;
+  LExpr := Trim(Expr);
+  if LExpr = '' then Exit;
+
+  Ops[0] := '<>';
+  Ops[1] := '!=';
+  Ops[2] := '>=';
+  Ops[3] := '<=';
+  Ops[4] := '>';
+  Ops[5] := '<';
+
+  LOp := '';
+  P   := 0;
+  // Check two-char ops first, then single-char =
+  for I := 0 to 5 do
   begin
-    LV := AObj.Items[I];
-    if LV is TJSONString then
-      ABB.SetString(AObj.Names[I], TJSONString(LV).AsString)
-    else if LV is TJSONIntegerNumber then
-      ABB.SetInteger(AObj.Names[I], TJSONIntegerNumber(LV).AsInteger)
-    else if LV is TJSONBoolean then
-      ABB.SetBoolean(AObj.Names[I], TJSONBoolean(LV).AsBoolean)
-    else if LV is TJSONNumber then
-      ABB.SetValue(AObj.Names[I], TJSONNumber(LV).AsFloat);
+    P := Pos(Ops[I], LExpr);
+    if P > 0 then begin LOp := Ops[I]; Break; end;
+  end;
+  if LOp = '' then
+  begin
+    P := Pos('=', LExpr);
+    if P > 0 then LOp := '=';
+  end;
+
+  if LOp = '' then
+  begin
+    // Bare key: truthy check
+    LKey := LExpr;
+    if not Vars.TryGetValue(LKey, LVal) then Exit;
+    if LVal.Kind = tkEnumeration then
+      Result := LVal.AsBoolean
+    else if LVal.Kind in [tkInteger, tkInt64, tkFloat] then
+      Result := LVal.AsExtended <> 0
+    else if LVal.Kind in [tkString, tkUString, tkLString, tkWString] then
+      Result := LVal.AsString <> ''
+    else
+      Result := not LVal.IsEmpty;
+    Exit;
+  end;
+
+  LKey := Trim(Copy(LExpr, 1, P - 1));
+  LRhs := Trim(Copy(LExpr, P + Length(LOp), MaxInt));
+
+  LFound := Vars.TryGetValue(LKey, LVal);
+  if not LFound then
+  begin
+    Result := (LOp = '<>') or (LOp = '!=');
+    Exit;
+  end;
+
+  // Get LHS as string and number (if parseable)
+  var LLhsStr: string;
+  if LVal.Kind in [tkString, tkUString, tkLString, tkWString] then
+    LLhsStr := LVal.AsString
+  else if LVal.Kind = tkEnumeration then
+    LLhsStr := BoolToStr(LVal.AsBoolean, True)
+  else
+    LLhsStr := LVal.ToString;
+
+  var LLhsIsNum: Boolean := TryStrToFloat(LLhsStr, LLhs);
+  var LRhsIsNum: Boolean := TryStrToFloat(LRhs, LRhsNum);
+
+  if LLhsIsNum and LRhsIsNum then
+  begin
+    case IndexStr(LOp, ['=', '<>', '!=', '>', '<', '>=', '<=']) of
+      0:    Result := LLhs = LRhsNum;
+      1, 2: Result := LLhs <> LRhsNum;
+      3:    Result := LLhs > LRhsNum;
+      4:    Result := LLhs < LRhsNum;
+      5:    Result := LLhs >= LRhsNum;
+      6:    Result := LLhs <= LRhsNum;
+    end;
+  end
+  else
+  begin
+    case IndexStr(LOp, ['=', '<>', '!=', '>', '<', '>=', '<=']) of
+      0:    Result := SameText(LLhsStr, LRhs);
+      1, 2: Result := not SameText(LLhsStr, LRhs);
+      3:    Result := CompareText(LLhsStr, LRhs) > 0;
+      4:    Result := CompareText(LLhsStr, LRhs) < 0;
+      5:    Result := CompareText(LLhsStr, LRhs) >= 0;
+      6:    Result := CompareText(LLhsStr, LRhs) <= 0;
+    end;
   end;
 end;
 
-procedure SerializeToolProperties(ATool: TAiToolBase; AObj: TJSONObject);
+function SerializeToolProperties(ATool: TAiToolBase): TJSONObject;
 var
-  PropList: PPropList;
-  PropInfo: PPropInfo;
-  Count, I: Integer;
+  LContext: TRttiContext;
+  LRttiType: TRttiType;
+  LProp: TRttiProperty;
+  LValue: TValue;
 begin
-  if not Assigned(ATool) then Exit;
-  Count := GetPropList(ATool.ClassInfo, tkProperties, nil);
-  if Count <= 0 then Exit;
-  GetMem(PropList, Count * SizeOf(Pointer));
+  Result := TJSONObject.Create;
+  if not Assigned(ATool) then
+    Exit;
+
+  LContext := TRttiContext.Create;
   try
-    GetPropList(ATool.ClassInfo, tkProperties, PropList);
-    for I := 0 to Count - 1 do
+    LRttiType := LContext.GetType(ATool.ClassType);
+    for LProp in LRttiType.GetProperties do
     begin
-      PropInfo := PropList^[I];
-      if PropInfo^.PropProcs and 3 = 0 then Continue; // no readable
-      case PropInfo^.PropType^.Kind of
-        tkAString, tkSString, tkLString:
-          AObj.Add(PropInfo^.Name, GetStrProp(ATool, PropInfo));
-        tkInteger, tkBool:
-          AObj.Add(PropInfo^.Name, GetOrdProp(ATool, PropInfo));
+      // Solo nos interesan las propiedades que se pueden leer y escribir
+      if not(LProp.IsReadable and LProp.IsWritable and (LProp.Visibility = mvPublished)) then
+        Continue;
+
+      LValue := LProp.GetValue(ATool);
+      if LValue.IsEmpty then
+        Continue;
+
+      // Convertir el TValue a un tipo JSON compatible
+      case LValue.Kind of
+        tkInteger, tkInt64:
+          Result.AddPair(LProp.Name, TJSONNumber.Create(LValue.AsInt64));
         tkFloat:
-          AObj.Add(PropInfo^.Name, GetFloatProp(ATool, PropInfo));
+          Result.AddPair(LProp.Name, TJSONNumber.Create(LValue.AsExtended));
+        tkString, tkUString, tkLString, tkWString:
+          Result.AddPair(LProp.Name, TJSONString.Create(LValue.AsString));
         tkEnumeration:
-          AObj.Add(PropInfo^.Name,
-            GetEnumName(PropInfo^.PropType, GetOrdProp(ATool, PropInfo)));
+          if LProp.PropertyType.Handle = TypeInfo(Boolean) then
+            Result.AddPair(LProp.Name, TJSONBool.Create(LValue.AsBoolean))
+          else // Guardar otros enums por su nombre de texto
+            Result.AddPair(LProp.Name, TJSONString.Create(GetEnumName(LProp.PropertyType.Handle, LValue.AsOrdinal)));
       end;
     end;
   finally
-    FreeMem(PropList);
+    LContext.Free;
   end;
 end;
 
-procedure DeserializeToolProperties(ATool: TAiToolBase; APropsJSON: TJSONObject);
+procedure DeserializeToolProperties(ATool: TAiToolBase; APropertiesJSON: TJSONObject);
 var
-  I:        Integer;
-  PropInfo: PPropInfo;
-  LVal:     TJSONData;
-  OrdV:     Integer;
+  LContext: TRttiContext;
+  LRttiType: TRttiType;
+  LProp: TRttiProperty;
+  LValue: TValue;
+  LPair: TJSONPair;
+  LJsonValue: TJSONValue;
+  OrdValue: Integer;
 begin
-  if not Assigned(ATool) or not Assigned(APropsJSON) then Exit;
-  for I := 0 to APropsJSON.Count - 1 do
-  begin
-    PropInfo := GetPropInfo(ATool.ClassInfo, APropsJSON.Names[I]);
-    if not Assigned(PropInfo) then Continue;
-    LVal := APropsJSON.Items[I];
-    case PropInfo^.PropType^.Kind of
-      tkAString, tkSString, tkLString:
-        SetStrProp(ATool, PropInfo, LVal.AsString);
-      tkInteger:
-        SetOrdProp(ATool, PropInfo, LVal.AsInteger);
-      tkBool:
-        SetOrdProp(ATool, PropInfo, Ord(LVal.AsBoolean));
-      tkFloat:
-        SetFloatProp(ATool, PropInfo, LVal.AsFloat);
-      tkEnumeration:
-        begin
-          OrdV := GetEnumValue(PropInfo^.PropType, LVal.AsString);
-          if OrdV >= 0 then
-            SetOrdProp(ATool, PropInfo, OrdV);
+  if not Assigned(ATool) or not Assigned(APropertiesJSON) then
+    Exit;
+
+  LContext := TRttiContext.Create;
+  try
+    LRttiType := LContext.GetType(ATool.ClassType);
+    for LPair in APropertiesJSON do
+    begin
+      LProp := LRttiType.GetProperty(LPair.JsonString.Value);
+      if Assigned(LProp) and LProp.IsWritable then
+      begin
+        LJsonValue := LPair.JsonValue;
+        LValue := TValue.Empty; // Inicializar
+
+        case LProp.PropertyType.TypeKind of
+          tkInteger:
+            LValue := TValue.From<Integer>((LJsonValue as TJSONNumber).AsInt);
+          tkInt64:
+            LValue := TValue.From<Int64>((LJsonValue as TJSONNumber).AsInt64);
+          tkFloat:
+            LValue := TValue.From<Double>((LJsonValue as TJSONNumber).AsDouble);
+          tkString, tkUString, tkLString, tkWString:
+            LValue := TValue.From<string>((LJsonValue as TJSONString).Value);
+          tkEnumeration:
+            if LProp.PropertyType.Handle = TypeInfo(Boolean) then
+              LValue := TValue.From<Boolean>((LJsonValue as TJSONBool).AsBoolean)
+            else
+            begin
+              OrdValue := GetEnumValue(LProp.PropertyType.Handle, (LJsonValue as TJSONString).Value);
+              if OrdValue >= 0 then
+                LValue := TValue.FromOrdinal(LProp.PropertyType.Handle, OrdValue);
+            end;
         end;
+
+        if not LValue.IsEmpty then
+          LProp.SetValue(ATool, LValue);
+      end;
     end;
+  finally
+    LContext.Free;
   end;
 end;
 
-// ---------------------------------------------------------------------------
-// TAIBlackboard
-// ---------------------------------------------------------------------------
+// Formato tipado: cada entrada es {"t":"<tipo>","v":<valor>}
+// Tipos: "s"=string, "i"=integer, "i64"=int64, "f"=float, "b"=boolean, "e"=enum (ordinal como integer)
+procedure SerializeBlackboard(ABlackboard: TAIBlackboard; AJSONObject: TJSONObject);
+var
+  LPair: TPair<string, TValue>;
+  LWrapper: TJSONObject;
+begin
+  ABlackboard.FLock.Enter;
+  try
+    for LPair in ABlackboard.FData do
+    begin
+      var LValue := LPair.Value;
+      LWrapper := nil;
+      case LValue.Kind of
+        tkInteger:
+          begin
+            LWrapper := TJSONObject.Create;
+            LWrapper.AddPair('t', 'i');
+            LWrapper.AddPair('v', TJSONNumber.Create(LValue.AsInteger));
+          end;
+        tkInt64:
+          begin
+            LWrapper := TJSONObject.Create;
+            LWrapper.AddPair('t', 'i64');
+            LWrapper.AddPair('v', TJSONNumber.Create(LValue.AsInt64));
+          end;
+        tkFloat:
+          begin
+            LWrapper := TJSONObject.Create;
+            LWrapper.AddPair('t', 'f');
+            LWrapper.AddPair('v', TJSONNumber.Create(LValue.AsExtended));
+          end;
+        tkString, tkUString:
+          begin
+            LWrapper := TJSONObject.Create;
+            LWrapper.AddPair('t', 's');
+            LWrapper.AddPair('v', TJSONString.Create(LValue.AsString));
+          end;
+        tkEnumeration:
+          begin
+            LWrapper := TJSONObject.Create;
+            if LValue.TypeInfo = System.TypeInfo(Boolean) then
+            begin
+              LWrapper.AddPair('t', 'b');
+              LWrapper.AddPair('v', TJSONBool.Create(LValue.AsBoolean));
+            end
+            else
+            begin
+              LWrapper.AddPair('t', 'e');
+              LWrapper.AddPair('v', TJSONNumber.Create(LValue.AsOrdinal));
+            end;
+          end;
+      end;
+      if Assigned(LWrapper) then
+        AJSONObject.AddPair(LPair.Key, LWrapper);
+    end;
+  finally
+    ABlackboard.FLock.Leave;
+  end;
+end;
+
+procedure DeserializeBlackboard(AJSONObject: TJSONObject; ABlackboard: TAIBlackboard);
+var
+  LPair: TJSONPair;
+  LWrapper: TJSONObject;
+  LType, LKey: string;
+  LVal: TJSONValue;
+begin
+  ABlackboard.Clear;
+  for LPair in AJSONObject do
+  begin
+    LKey := LPair.JsonString.Value;
+    if not (LPair.JsonValue is TJSONObject) then
+      Continue;
+    LWrapper := LPair.JsonValue as TJSONObject;
+    if not LWrapper.TryGetValue<string>('t', LType) then
+      Continue;
+    LVal := LWrapper.GetValue('v');
+    if not Assigned(LVal) then
+      Continue;
+    if LType = 's' then
+      ABlackboard.SetString(LKey, LVal.Value)
+    else if LType = 'i' then
+      ABlackboard.SetInteger(LKey, (LVal as TJSONNumber).AsInt)
+    else if LType = 'i64' then
+      ABlackboard.SetValue(LKey, TValue.From<Int64>((LVal as TJSONNumber).AsInt64))
+    else if LType = 'f' then
+      ABlackboard.SetValue(LKey, TValue.From<Double>((LVal as TJSONNumber).AsDouble))
+    else if LType = 'b' then
+      ABlackboard.SetBoolean(LKey, (LVal as TJSONBool).AsBoolean)
+    else if LType = 'e' then
+      ABlackboard.SetInteger(LKey, (LVal as TJSONNumber).AsInt);
+  end;
+end;
+
+{ TAIBlackboard }
+
+procedure TAIBlackboard.Clear;
+var
+  LValue: TValue;
+  LMsg: TAiChatMessage;
+begin
+  FLock.Enter;
+  try
+    // 1. Buscar y Liberar AskMsg
+    // Usamos las claves internas que definimos en los Getters/Setters ('Sys.AskMsg')
+    if FData.TryGetValue('Sys.AskMsg', LValue) then
+    begin
+      LMsg := TAiChatMessage(LValue.AsObject);
+
+      // Verificamos si es un objeto v?lido antes de liberar
+      if LValue.IsObject and Assigned(LMsg) then
+        LMsg.Free;
+    end;
+
+    // 2. Buscar y Liberar ResMsg
+    if FData.TryGetValue('Sys.ResMsg', LValue) then
+    begin
+      LMsg := TAiChatMessage(LValue.AsObject);
+
+      if LValue.IsObject and Assigned(LMsg) then
+        LMsg.Free;
+    end;
+
+    // 3. Limpiar el diccionario (elimina las claves y punteros)
+    FData.Clear;
+  finally
+    FLock.Leave;
+  end;
+end;
 
 constructor TAIBlackboard.Create;
 begin
   inherited;
+  FData := TDictionary<string, TValue>.Create;
   FLock := TCriticalSection.Create;
-  FData := specialize TDictionary<string, Variant>.Create;
 end;
 
 destructor TAIBlackboard.Destroy;
@@ -608,68 +776,102 @@ begin
   inherited;
 end;
 
-procedure TAIBlackboard.Clear;
-begin
-  FLock.Enter;
-  try
-    FreeAndNil(FAskMsg);
-    FreeAndNil(FResMsg);
-    FData.Clear;
-  finally
-    FLock.Leave;
-  end;
-end;
-
-function TAIBlackboard.GetDataForSerialization: specialize TDictionary<string, Variant>;
-begin
-  Result := FData;
-end;
-
 function TAIBlackboard.GetAskMsg: TAiChatMessage;
+var
+  Val: TValue;
 begin
-  FLock.Enter;
-  try
-    Result := FAskMsg;
-  finally
-    FLock.Leave;
-  end;
+  // Usamos TryGetValue que ya es Thread-Safe (tiene su propio FLock)
+  // 'Sys.AskMsg' es la clave interna donde guardaremos el objeto
+  if TryGetValue('Sys.AskMsg', Val) and (not Val.IsEmpty) then
+    Result := Val.AsType<TAiChatMessage>
+  else
+    Result := nil;
+end;
+
+function TAIBlackboard.GetBoolean(const AKey: string; const ADefault: Boolean): Boolean;
+var
+  LValue: TValue;
+begin
+  if TryGetValue(AKey, LValue) and LValue.IsType<Boolean> then
+    Result := LValue.AsBoolean
+  else
+    Result := ADefault;
+end;
+
+function TAIBlackboard.GetInteger(const AKey: string; const ADefault: Integer): Integer;
+var
+  LValue: TValue;
+begin
+  if TryGetValue(AKey, LValue) and LValue.IsType<Integer> then
+    Result := LValue.AsInteger
+  else
+    Result := ADefault;
 end;
 
 function TAIBlackboard.GetResMsg: TAiChatMessage;
+var
+  Val: TValue;
 begin
-  FLock.Enter;
-  try
-    Result := FResMsg;
-  finally
-    FLock.Leave;
-  end;
+  if TryGetValue('Sys.ResMsg', Val) and (not Val.IsEmpty) then
+    Result := Val.AsType<TAiChatMessage>
+  else
+    Result := nil;
+end;
+
+function TAIBlackboard.GetStatus: TAgentExecutionStatus;
+var
+  Val: TValue;
+begin
+  // Recuperamos el Enum, o devolvemos esUnknown si no existe
+  if TryGetValue('Execution.Status', Val) then
+    Result := Val.AsType<TAgentExecutionStatus>
+  else
+    Result := esUnknown;
+end;
+
+function TAIBlackboard.GetString(const AKey, ADefault: string): string;
+var
+  LValue: TValue;
+begin
+  if TryGetValue(AKey, LValue) and LValue.IsType<string> then
+    Result := LValue.AsString
+  else
+    Result := ADefault;
 end;
 
 procedure TAIBlackboard.SetAskMsg(const Value: TAiChatMessage);
 begin
-  FLock.Enter;
-  try
-    if FAskMsg <> Value then
-      FreeAndNil(FAskMsg);
-    FAskMsg := Value;
-  finally
-    FLock.Leave;
-  end;
+  // SetValue tambi?n es Thread-Safe
+  SetValue('Sys.AskMsg', TValue.From(Value));
+end;
+
+procedure TAIBlackboard.SetBoolean(const AKey: string; AValue: Boolean);
+begin
+  SetValue(AKey, AValue);
+end;
+
+procedure TAIBlackboard.SetInteger(const AKey: string; AValue: Integer);
+begin
+  SetValue(AKey, AValue);
 end;
 
 procedure TAIBlackboard.SetResMsg(const Value: TAiChatMessage);
 begin
-  FLock.Enter;
-  try
-    if FResMsg <> Value then
-      FreeAndNil(FResMsg);
-    FResMsg := Value;
-  finally
-    FLock.Leave;
-  end;
+  SetValue('Sys.ResMsg', TValue.From(Value));
 end;
 
-procedure TAIBlackboard.SetValue(const AKey: string; const AValue: Variant);
+procedure TAIBlackboard.SetStatus(Value: TAgentExecutionStatus);
+begin
+  // Guardamos el Enum dentro del TValue
+  SetValue('Execution.Status', TValue.From(Value));
+end;
+
+procedure TAIBlackboard.SetString(const AKey, AValue: string);
+begin
+  SetValue(AKey, AValue);
+end;
+
+procedure TAIBlackboard.SetValue(const AKey: string; const AValue: TValue);
 begin
   FLock.Enter;
   try
@@ -679,7 +881,7 @@ begin
   end;
 end;
 
-function TAIBlackboard.TryGetValue(const AKey: string; out AValue: Variant): Boolean;
+function TAIBlackboard.TryGetValue(const AKey: string; out AValue: TValue): Boolean;
 begin
   FLock.Enter;
   try
@@ -689,353 +891,2424 @@ begin
   end;
 end;
 
-procedure TAIBlackboard.SetString(const AKey, AValue: string);
+{ TAIAgents }
+
+procedure TAIAgentManager.Abort;
 begin
-  SetValue(AKey, AValue);
+  FAbort := True;
 end;
 
-function TAIBlackboard.GetString(const AKey: string; const ADefault: string): string;
+function TAIAgentManager.GetBusy: Boolean;
+begin
+  Result := FBusy <> 0;
+end;
+
+function TAIAgentManager.AddEdge(const AStartNodeName, AEndNodeName: string): TAIAgentManager;
 var
-  V: Variant;
+  StartNode, EndNode: TAIAgentsNode;
+  Link: TAIAgentsLink;
 begin
-  if TryGetValue(AKey, V) and not VarIsNull(V) and not VarIsEmpty(V) then
-    Result := VarToStr(V)
-  else
-    Result := ADefault;
+  FCompiled := False;
+  StartNode := FindNode(AStartNodeName);
+  EndNode := FindNode(AEndNodeName);
+  if not Assigned(StartNode) then
+    raise Exception.CreateFmt('Edge creation failed: Start node "%s" not found.', [AStartNodeName]);
+  if not Assigned(EndNode) then
+    raise Exception.CreateFmt('Edge creation failed: End node "%s" not found.', [AEndNodeName]);
+
+  Link := TAIAgentsLink.Create(Self);
+  Link.Name := 'Link_' + AStartNodeName + '_to_' + AEndNodeName;
+  Link.Graph := Self;
+  Link.Mode := lmFanout;
+  StartNode.Next := Link;
+  Link.NextA := EndNode;
+  Result := Self;
 end;
 
-procedure TAIBlackboard.SetInteger(const AKey: string; AValue: Integer);
+function TAIAgentManager.AddMessageAndRun(APrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): String;
 begin
-  SetValue(AKey, AValue);
+  // Configuramos el mensaje en el Blackboard
+  Blackboard.AskMsg := NewMessage(APrompt, aRole, aMediaFiles);
+
+  // Llamamos a Run, que manejar? la l?gica Sync/Async
+  Result := Run(APrompt);
 end;
 
-function TAIBlackboard.GetInteger(const AKey: string; const ADefault: Integer): Integer;
+function TAIAgentManager.AddMessageAndRunMsg(APrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): TAiChatMessage;
+begin
+  if FAsynchronous then
+    raise Exception.Create('AddMessageAndRunMsg is only compatible with Asynchronous = False (Synchronous mode).');
+
+  // Ejecutamos (esto esperar? a terminar)
+  AddMessageAndRun(APrompt, aRole, aMediaFiles);
+
+  // Retornamos el objeto completo del Blackboard
+  Result := Blackboard.ResMsg;
+end;
+
+function TAIAgentManager.AddNode(const AName: string; AExecuteProc: TAIAgentsNodeOnExecute): TAIAgentManager;
 var
-  V: Variant;
+  Node: TAIAgentsNode;
 begin
-  if TryGetValue(AKey, V) and not VarIsNull(V) and not VarIsEmpty(V) then
-    Result := Integer(V)
-  else
-    Result := ADefault;
+  FCompiled := False;
+  if FindNode(AName) <> nil then
+    raise Exception.CreateFmt('A node with the name "%s" already exists.', [AName]);
+
+  Node := TAIAgentsNode.Create(Self);
+  Node.Name := AName;
+  Node.Graph := Self;
+  Node.OnExecute := AExecuteProc;
+  Result := Self;
 end;
 
-procedure TAIBlackboard.SetBoolean(const AKey: string; AValue: Boolean);
+procedure TAIAgentManager.AddComponentToList(AComponent: TAIAgentsBase);
 begin
-  SetValue(AKey, AValue);
+  if AComponent is TAIAgentsNode then
+  begin
+    if FNodes.IndexOf(TAIAgentsNode(AComponent)) = -1 then
+      FNodes.Add(TAIAgentsNode(AComponent));
+  end
+  else if AComponent is TAIAgentsLink then
+  begin
+    if FLinks.IndexOf(TAIAgentsLink(AComponent)) = -1 then
+      FLinks.Add(TAIAgentsLink(AComponent));
+  end;
 end;
 
-function TAIBlackboard.GetBoolean(const AKey: string; const ADefault: Boolean): Boolean;
+function TAIAgentManager.AddConditionalEdge(const AStartNodeName, AConditionalLinkName: string; AConditionalTargets: TDictionary<string, string>): TAIAgentManager;
 var
-  V: Variant;
+  StartNode, TargetNode: TAIAgentsNode;
+  Link: TAIAgentsLink;
+  DecisionKey, TargetNodeName: string;
 begin
-  if TryGetValue(AKey, V) and not VarIsNull(V) and not VarIsEmpty(V) then
-    Result := Boolean(V)
-  else
-    Result := ADefault;
+  FCompiled := False;
+  StartNode := FindNode(AStartNodeName);
+  if not Assigned(StartNode) then
+    raise Exception.CreateFmt('Conditional edge creation failed: Start node "%s" not found.', [AStartNodeName]);
+
+  Link := TAIAgentsLink.Create(Self);
+  Link.Name := AConditionalLinkName;
+  Link.Graph := Self;
+  Link.Mode := lmConditional;
+
+  for DecisionKey in AConditionalTargets.Keys do
+  begin
+    TargetNodeName := AConditionalTargets.Items[DecisionKey];
+    TargetNode := FindNode(TargetNodeName);
+    if not Assigned(TargetNode) then
+      raise Exception.CreateFmt('Conditional edge creation failed: Target node "%s" for decision "%s" not found.', [TargetNodeName, DecisionKey]);
+    Link.AddConditionalTarget(DecisionKey, TargetNode);
+  end;
+
+  StartNode.Next := Link;
+  Result := Self;
 end;
 
-procedure TAIBlackboard.SetStatus(Value: TAgentExecutionStatus);
+procedure TAIAgentManager.ClearGraph;
 begin
-  SetInteger('Execution.Status', Ord(Value));
+  FStartNode := nil;
+  FEndNode := nil;
+  FNodes.Clear;
+  FLinks.Clear;
+  for var i := ComponentCount - 1 downto 0 do
+  begin
+    if Components[i] is TAIAgentsBase then
+      Components[i].Free;
+  end;
+  FCompiled := False;
 end;
 
-function TAIBlackboard.GetStatus: TAgentExecutionStatus;
+procedure TAIAgentManager.Compile;
 var
+  Node: TAIAgentsNode;
+  Link: TAIAgentsLink;
+  TargetNode: TAIAgentsNode;
+  StartCount, EndCount: Integer;
+begin
+  if FCompiled then
+    Exit;
+  try
+    FAbort := False;
+    FBlackboard.Clear;
+
+    if not Assigned(FStartNode) then
+      raise Exception.Create('StartNode is not assigned.');
+    if not Assigned(FEndNode) then
+      raise Exception.Create('EndNode is not assigned.');
+
+    StartCount := 0;
+    EndCount := 0;
+    for Node in FNodes do
+    begin
+      if Node = FStartNode then
+        Inc(StartCount);
+      if Node = FEndNode then
+        Inc(EndCount);
+      Node.Reset;
+    end;
+    if StartCount <> 1 then
+      raise Exception.CreateFmt('Invalid number of StartNode references: %d (expected 1).', [StartCount]);
+    if EndCount <> 1 then
+      raise Exception.CreateFmt('Invalid number of EndNode references: %d (expected 1).', [EndCount]);
+
+    for Link in FLinks do
+    begin
+      Link.Ready := False;
+      Link.NoCycles := 0;
+      if not Assigned(Link.FSourceNode) then
+        raise Exception.CreateFmt('Link "%s" is not connected from any source node.', [Link.Name]);
+
+      if Assigned(Link.NextA) then
+        Link.NextA.FInEdges.Add(Link);
+      if Assigned(Link.NextB) then
+        Link.NextB.FInEdges.Add(Link);
+      if Assigned(Link.NextC) then
+        Link.NextC.FInEdges.Add(Link);
+      if Assigned(Link.NextD) then
+        Link.NextD.FInEdges.Add(Link);
+      if Assigned(Link.NextNo) then
+        Link.NextNo.FInEdges.Add(Link);
+
+      if Assigned(Link.FConditionalTargets) then
+      begin
+        for TargetNode in Link.FConditionalTargets.Values do
+          TargetNode.FInEdges.Add(Link);
+      end;
+    end;
+    FCompiled := True;
+  except
+    on E: Exception do
+    begin
+      DoError(nil, nil, E);
+      raise;
+    end;
+  end;
+end;
+
+constructor TAIAgentManager.Create(aOwner: TComponent);
+begin
+  inherited;
+  FBlackboard := TAIBlackboard.Create;
+  FNodes := TList<TAIAgentsNode>.Create;
+  FLinks := TList<TAIAgentsLink>.Create;
+  FActiveTasks := TList<ITask>.Create;
+  FActiveTasksLock := TCriticalSection.Create;
+  FCompiled := False;
+  FAsynchronous := True; // Default VCL behavior
+  FBusy := 0;
+
+  // --- NUEVO: Inicializaci?n del Scheduler ---
+  FMaxConcurrentTasks := 4;
+  FTimeoutMs := 60000;
+  FThreadPool := TThreadPool.Create;
+  FThreadPool.SetMaxWorkerThreads(FMaxConcurrentTasks);
+
+  // --- Ejecuci?n durable ---
+  FSuspendedSteps     := TObjectList<TAiPendingStep>.Create(True);
+  FSuspendedStepsLock := TCriticalSection.Create;
+  FCheckpointer       := nil;
+  FCurrentThreadID    := '';
+  FCheckpointSeq      := 0;
+end;
+
+destructor TAIAgentManager.Destroy;
+begin
+  FSuspendedSteps.Free;
+  FSuspendedStepsLock.Free;
+  FNodes.Free;
+  FLinks.Free;
+  FActiveTasks.Free;
+  FActiveTasksLock.Free;
+  FThreadPool.Free; // --- NUEVO: Liberaci?n del Scheduler ---
+  FBlackboard.Free;
+  inherited;
+end;
+
+procedure TAIAgentManager.DoError(Node: TAIAgentsNode; Link: TAIAgentsLink; E: Exception);
+var
+  LAbort: Boolean;
+  ErrorMsg: String;
+  AggE: EAggregateException;
   I: Integer;
 begin
-  I := GetInteger('Execution.Status', Ord(esUnknown));
-  if (I >= Ord(Low(TAgentExecutionStatus))) and
-     (I <= Ord(High(TAgentExecutionStatus))) then
-    Result := TAgentExecutionStatus(I)
+  // Extraer el mensaje real: si es EAggregateException (rama paralela fallida),
+  // exponer los mensajes de los errores internos en lugar de "One or more occurred".
+  if (E is EAggregateException) then
+  begin
+    AggE := EAggregateException(E);
+    if AggE.Count > 0 then
+    begin
+      ErrorMsg := '';
+      for I := 0 to AggE.Count - 1 do
+      begin
+        if I > 0 then ErrorMsg := ErrorMsg + ' | ';
+        ErrorMsg := ErrorMsg + AggE.InnerExceptions[I].Message;
+      end;
+    end
+    else
+      ErrorMsg := E.Message;
+  end
   else
-    Result := esUnknown;
+    ErrorMsg := E.Message;
+
+  Blackboard.SetStatus(esError);
+  Blackboard.SetString('Execution.ErrorMessage', ErrorMsg);
+
+  LAbort := True;
+  if Assigned(FOnError) then
+    FOnError(Self, Node, Link, E, LAbort);
+
+  if LAbort then
+    Abort;
 end;
 
-// ---------------------------------------------------------------------------
-// TAiToolBase
-// ---------------------------------------------------------------------------
-
-procedure TAiToolBase.Run(ANode: TAIAgentsNode; const AInput: string;
-  var AOutput: string);
+function TAIAgentManager.DoConfirm(Node: TAIAgentsNode; const AQuestion: string; Buttons: TMsgStates; var AResponse: string): TMsgState;
 begin
-  Execute(ANode, AInput, AOutput);
+  Result := msCancel;
+  if Assigned(FOnConfirm) then
+    FOnConfirm(Self, Node, AQuestion, Buttons, AResponse, Result)
+  else
+  begin
+    DoError(Node, nil, Exception.Create('User confirmation required, but OnConfirm event is not assigned.'));
+    Result := msAbort;
+  end;
 end;
 
-procedure TAiToolBase.SetDescription(const Value: string);
-begin FDescription := Value; end;
-
-procedure TAiToolBase.SetID(const Value: string);
-begin FID := Value; end;
-
-{ TAiAgentsToolSample }
-procedure TAiAgentsToolSample.Execute(ANode: TAIAgentsNode; const AInput: string;
-  var AOutput: string);
+procedure TAIAgentManager.DoPrint(Sender: TObject; Value: String);
 begin
-  if Assigned(ANode) then
-    ANode.Print(Format('TAiSampleTool: input="%s"', [AInput]));
-  AOutput := 'SampleTool: ' + AInput;
+  if Assigned(FOnPrint) then
+    FOnPrint(Sender, Value);
 end;
 
-// ---------------------------------------------------------------------------
-// TAIAgentsBase
-// ---------------------------------------------------------------------------
-
-procedure TAIAgentsBase.SetDescription(const Value: string);
-begin FDescription := Value; end;
-
-procedure TAIAgentsBase.SetID(const Value: string);
-begin FID := Value; end;
-
-// ---------------------------------------------------------------------------
-// TAiNodeTask
-// ---------------------------------------------------------------------------
-
-constructor TAiNodeTask.Create(AManager: TAIAgentManager;
-  ANode, ASource: TAIAgentsNode; ALink: TAIAgentsLink);
+procedure TAIAgentManager.DoPrintFromRef(Sender: TObject; Value: String);
 begin
-  inherited Create(True); // suspended
-  FManager    := AManager;
-  FNode       := ANode;
-  FSourceNode := ASource;
-  FLink       := ALink;
-  FreeOnTerminate := True;
+  if Assigned(FOnPrintRef) then
+    FOnPrintRef(Sender, Value);
 end;
 
-procedure TAiNodeTask.Execute;
+function TAIAgentManager.FindNode(const AName: string): TAIAgentsNode;
+var
+  i: Integer;
 begin
+  Result := nil;
+  for i := 0 to ComponentCount - 1 do
+    if (Components[i] is TAIAgentsNode) and SameText(Components[i].Name, AName) then
+    begin
+      Result := TAIAgentsNode(Components[i]);
+      Exit;
+    end;
+end;
+
+// Aseg?rate de tener estas unidades en la cl?usula 'uses' de la implementation:
+// System.JSON, System.JSON.Types, System.Rtti, System.TypInfo, uEngineRegistry
+
+// ... (El helper DeserializeToolProperties y la clase TAgentHandlerRegistry se mantienen como antes) ...
+
+// -----------------------------------------------------------------------------
+// IMPLEMENTACI?N FINAL DE TAIAgentManager.LoadFromStream
+// -----------------------------------------------------------------------------
+procedure TAIAgentManager.LoadFromStream(AStream: TStream);
+var
+  LRoot, LGraphJSON, LNodeJSON, LLinkJSON, LTargetsJSON: TJSONObject;
+  LNodesArray, LLinksArray: TJSONArray;
+  LReader: TStreamReader;
+  LJsonValue: TJSONValue;
+  LNode: TAIAgentsNode;
+  LLink: TAIAgentsLink;
+  LNodeMap: TDictionary<string, TAIAgentsNode>;
+  LLinkMap: TDictionary<string, TAIAgentsLink>;
+  LKey: string;
+  LToolClass: TClass; // Variable para almacenar el tipo de clase de la herramienta
+begin
+  if not Assigned(AStream) or (AStream.Size = 0) then
+    Exit;
+
+  ClearGraph;
+
+  LNodeMap := TDictionary<string, TAIAgentsNode>.Create;
+  LLinkMap := TDictionary<string, TAIAgentsLink>.Create;
+  LReader := TStreamReader.Create(AStream, TEncoding.UTF8);
   try
-    if not FManager.IsAborted then
-      FNode.DoExecute(FSourceNode, FLink);
+    LJsonValue := TJSONObject.ParseJSONValue(LReader.ReadToEnd);
+    if not Assigned(LJsonValue) or not(LJsonValue is TJSONObject) then
+      raise Exception.Create('Invalid JSON format: root is not an object.');
+    LRoot := LJsonValue as TJSONObject;
+    try
+      // =======================================================================
+      // PASADA 1: CREAR TODAS LAS INSTANCIAS DE NODOS Y ENLACES
+      // =======================================================================
+
+      // --- 1.A: Crear Nodos ---
+      LNodesArray := LRoot.GetValue('nodes') as TJSONArray;
+      if Assigned(LNodesArray) then
+      begin
+        for LJsonValue in LNodesArray do
+        begin
+          LNodeJSON := LJsonValue as TJSONObject;
+          LKey := LNodeJSON.GetValue<string>('name', '');
+          if LKey = '' then
+            raise Exception.Create('Node found without a name in JSON.');
+          if LNodeMap.ContainsKey(LKey) then
+            raise Exception.CreateFmt('Duplicate node name found in JSON: "%s"', [LKey]);
+
+          LNode := TAIAgentsNode.Create(Self);
+          LNode.Name := LKey;
+          LNode.Description := LNodeJSON.GetValue<string>('description', '');
+          LNode.PromptName := LNodeJSON.GetValue<string>('promptName', '');
+
+          var
+          LJoinModeStr := LNodeJSON.GetValue<string>('joinMode', 'jmAny');
+          LNode.JoinMode := TJoinMode(GetEnumValue(TypeInfo(TJoinMode), LJoinModeStr));
+
+          // --- SECCI?N CORREGIDA ---
+          var
+          LToolValue := LNodeJSON.GetValue('tool');
+          if Assigned(LToolValue) and (LToolValue is TJSONObject) then
+          begin
+            var
+            LToolDataObj := LToolValue as TJSONObject;
+            var
+            LToolClassName := LToolDataObj.GetValue<string>('className');
+            if LToolClassName <> '' then
+            begin
+              // 1. Buscar el TIPO de clase en TU registro
+              LToolClass := TEngineRegistry.Instance.FindToolClass(LToolClassName);
+
+              // 2. Si se encontr?, crear una instancia de esa clase
+              if Assigned(LToolClass) and LToolClass.InheritsFrom(TAiToolBase) then
+              begin
+                // Creamos la instancia usando el NODO como propietario
+                LNode.Tool := TAiToolBase(LToolClass).Create(LNode);
+
+                // 3. Deserializar las propiedades en la nueva instancia
+                var
+                LPropertiesJSON := LToolDataObj.GetValue('properties') as TJSONObject;
+                if Assigned(LPropertiesJSON) then
+                  DeserializeToolProperties(LNode.Tool, LPropertiesJSON);
+              end;
+            end;
+          end;
+          // --- FIN DE LA CORRECCI?N ---
+
+          LNodeMap.Add(LKey, LNode);
+        end;
+      end;
+
+      // --- 1.B: Crear Enlaces --- (Sin cambios)
+      LLinksArray := LRoot.GetValue('links') as TJSONArray;
+      if Assigned(LLinksArray) then
+      begin
+        for LJsonValue in LLinksArray do
+        begin
+          LLinkJSON := LJsonValue as TJSONObject;
+          LKey := LLinkJSON.GetValue<string>('name', '');
+          if LKey = '' then
+            raise Exception.Create('Link found without a name in JSON.');
+          if LLinkMap.ContainsKey(LKey) then
+            raise Exception.CreateFmt('Duplicate link name found in JSON: "%s"', [LKey]);
+
+          LLink := TAIAgentsLink.Create(Self);
+          LLink.Name := LKey;
+          LLink.Description := LLinkJSON.GetValue<string>('description', '');
+          LLink.MaxCycles := LLinkJSON.GetValue<Integer>('maxCycles', 1);
+
+          var
+          LLinkModeStr := LLinkJSON.GetValue<string>('mode', 'lmFanout');
+          LLink.Mode := TLinkMode(GetEnumValue(TypeInfo(TLinkMode), LLinkModeStr));
+
+          if LLink.Mode = lmConditional then
+            LLink.ConditionalKey := LLinkJSON.GetValue<string>('conditionalKey', 'next_route');
+
+          if LLink.Mode = lmExpression then
+          begin
+            var
+            LExpressionsJSON := LLinkJSON.GetValue('expressions') as TJSONObject;
+            if Assigned(LExpressionsJSON) then
+            begin
+              LLink.ExpressionA := LExpressionsJSON.GetValue<string>('expressionA', '');
+              LLink.ExpressionB := LExpressionsJSON.GetValue<string>('expressionB', '');
+              LLink.ExpressionC := LExpressionsJSON.GetValue<string>('expressionC', '');
+              LLink.ExpressionD := LExpressionsJSON.GetValue<string>('expressionD', '');
+            end;
+          end;
+
+          LLinkMap.Add(LKey, LLink);
+        end;
+      end;
+
+      // =======================================================================
+      // PASADA 2: CONECTAR TODO (Sin cambios)
+      // =======================================================================
+
+      if Assigned(LNodesArray) then
+      begin
+        for LJsonValue in LNodesArray do
+        begin
+          LNodeJSON := LJsonValue as TJSONObject;
+          LNode := LNodeMap[LNodeJSON.GetValue<string>('name')];
+          var
+          LNextLinkName := LNodeJSON.GetValue<string>('nextLink', '');
+          if (LNextLinkName <> '') and LLinkMap.TryGetValue(LNextLinkName, LLink) then
+            LNode.Next := LLink;
+          var
+          LHandlerName := LNodeJSON.GetValue<string>('onExecuteHandler', '');
+          if LHandlerName <> '' then
+            LNode.OnExecute := TAgentHandlerRegistry.Instance.FindNodeHandler(LHandlerName);
+        end;
+      end;
+
+      if Assigned(LLinksArray) then
+      begin
+        for LJsonValue in LLinksArray do
+        begin
+          LLinkJSON := LJsonValue as TJSONObject;
+          LLink := LLinkMap[LLinkJSON.GetValue<string>('name')];
+          var
+          LSourceNodeName := LLinkJSON.GetValue<string>('sourceNode', '');
+          if (LSourceNodeName <> '') and LNodeMap.TryGetValue(LSourceNodeName, LNode) then
+            LLink.FSourceNode := LNode;
+          LTargetsJSON := LLinkJSON.GetValue('targets') as TJSONObject;
+          if Assigned(LTargetsJSON) then
+          begin
+            if LNodeMap.TryGetValue(LTargetsJSON.GetValue<string>('nextA', ''), LNode) then
+              LLink.NextA := LNode;
+            if LNodeMap.TryGetValue(LTargetsJSON.GetValue<string>('nextB', ''), LNode) then
+              LLink.NextB := LNode;
+            if LNodeMap.TryGetValue(LTargetsJSON.GetValue<string>('nextC', ''), LNode) then
+              LLink.NextC := LNode;
+            if LNodeMap.TryGetValue(LTargetsJSON.GetValue<string>('nextD', ''), LNode) then
+              LLink.NextD := LNode;
+            if LNodeMap.TryGetValue(LTargetsJSON.GetValue<string>('nextNo', ''), LNode) then
+              LLink.NextNo := LNode;
+          end;
+          var
+          LCondTargetsJSON := LLinkJSON.GetValue('conditionalTargets') as TJSONObject;
+          if Assigned(LCondTargetsJSON) then
+          begin
+            for var LPair in LCondTargetsJSON do
+            begin
+              var
+              LTargetNodeName := LPair.JsonValue.Value;
+              if LNodeMap.TryGetValue(LTargetNodeName, LNode) then
+                LLink.AddConditionalTarget(LPair.JsonString.Value, LNode);
+            end;
+          end;
+        end;
+      end;
+
+      // =======================================================================
+      // PASO FINAL: CONFIGURAR GRAFO (Sin cambios)
+      // =======================================================================
+      LGraphJSON := LRoot.GetValue('graph') as TJSONObject;
+      if Assigned(LGraphJSON) then
+      begin
+        Self.Description := LGraphJSON.GetValue<string>('description', '');
+        Self.MaxConcurrentTasks := LGraphJSON.GetValue<Integer>('maxConcurrentTasks', 4);
+        Self.TimeoutMs := LGraphJSON.GetValue<Cardinal>('timeoutMs', 60000);
+        var
+        LStartNodeName := LGraphJSON.GetValue<string>('startNode', '');
+        if (LStartNodeName <> '') and LNodeMap.TryGetValue(LStartNodeName, LNode) then
+          Self.StartNode := LNode;
+        var
+        LEndNodeName := LGraphJSON.GetValue<string>('endNode', '');
+        if (LEndNodeName <> '') and LNodeMap.TryGetValue(LEndNodeName, LNode) then
+          Self.EndNode := LNode;
+      end;
+      FCompiled := False;
+    finally
+      LRoot.Free;
+    end;
   finally
-    InterlockedDecrement(FManager.FActiveTaskCount);
+    LReader.Free;
+    LLinkMap.Free;
+    LNodeMap.Free;
+  end;
+end;
+
+procedure TAIAgentManager.LoadStateFromStream(AStream: TStream);
+var
+  LRoot, LStateObj, LBlackboardObj, LNodeStatesObj, LLinkStatesObj, LNodeStateObj, LJoinInputsObj: TJSONObject;
+  LReader: TStreamReader;
+  LJsonValue: TJSONValue;
+  LNode: TAIAgentsNode;
+  LLink: TAIAgentsLink;
+  LPair: TJSONPair;
+  LLinkMap: TDictionary<string, TAIAgentsLink>; // Mapa temporal para buscar links por nombre
+begin
+  if ComponentCount = 0 then
+    raise Exception.Create('Cannot load state into an empty graph. Load the graph structure first.');
+
+  // Crear mapa de links para una b?squeda r?pida
+  LLinkMap := TDictionary<string, TAIAgentsLink>.Create;
+  for var i := 0 to ComponentCount - 1 do
+    if Components[i] is TAIAgentsLink then
+      LLinkMap.Add(Components[i].Name, TAIAgentsLink(Components[i]));
+
+  LReader := TStreamReader.Create(AStream, TEncoding.UTF8);
+  try
+    LJsonValue := TJSONObject.ParseJSONValue(LReader.ReadToEnd);
+    LRoot := LJsonValue as TJSONObject;
+    try
+      LStateObj := LRoot.GetValue('executionState') as TJSONObject;
+      if not Assigned(LStateObj) then
+        Exit;
+
+      // 1. Restaurar el Blackboard
+      LBlackboardObj := LStateObj.GetValue('blackboard') as TJSONObject;
+      if Assigned(LBlackboardObj) then
+        DeserializeBlackboard(LBlackboardObj, Self.Blackboard);
+
+      // 2. Restaurar el estado de los nodos
+      LNodeStatesObj := LStateObj.GetValue('nodeStates') as TJSONObject;
+      if Assigned(LNodeStatesObj) then
+      begin
+        for LPair in LNodeStatesObj do
+        begin
+          LNode := FindNode(LPair.JsonString.Value);
+          if Assigned(LNode) then
+          begin
+            LNodeStateObj := LPair.JsonValue as TJSONObject;
+            LNode.Input := LNodeStateObj.GetValue<string>('input', '');
+            LNode.Output := LNodeStateObj.GetValue<string>('output', '');
+
+            // Restaurar entradas de Join
+            LNode.FJoinInputs.Clear;
+            LJoinInputsObj := LNodeStateObj.GetValue('joinInputs') as TJSONObject;
+            if Assigned(LJoinInputsObj) then
+            begin
+              for var LJoinPair in LJoinInputsObj do
+              begin
+                if LLinkMap.TryGetValue(LJoinPair.JsonString.Value, LLink) then
+                  LNode.FJoinInputs.Add(LLink, LJoinPair.JsonValue.Value);
+              end;
+            end;
+          end;
+        end;
+      end;
+
+      // 3. Restaurar el estado de los enlaces
+      LLinkStatesObj := LStateObj.GetValue('linkStates') as TJSONObject;
+      if Assigned(LLinkStatesObj) then
+      begin
+        for LPair in LLinkStatesObj do
+        begin
+          if LLinkMap.TryGetValue(LPair.JsonString.Value, LLink) then
+          begin
+            var
+            LLinkStateObj := LPair.JsonValue as TJSONObject;
+            LLink.FNoCycles := LLinkStateObj.GetValue<Integer>('noCycles', 0);
+          end;
+        end;
+      end;
+
+    finally
+      LRoot.Free;
+    end;
+  finally
+    LReader.Free;
+    LLinkMap.Free;
+  end;
+end;
+
+function TAIAgentManager.NewMessage(APrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): TAiChatMessage;
+var
+  MF: TAiMediaFile;
+begin
+  // Crea el mensaje
+  Result := TAiChatMessage.Create(APrompt, aRole);
+  try
+    if Length(aMediaFiles) > 0 then
+    begin
+      for MF in aMediaFiles do
+      begin
+        if Assigned(MF) then
+          Result.AddMediaFile(MF);
+      end;
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+procedure TAIAgentManager.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if (AComponent is TAIAgentsBase) then
+  begin
+    if Operation = opInsert then
+      AddComponentToList(TAIAgentsBase(AComponent))
+    else if Operation = opRemove then
+      RemoveComponentFromList(TAIAgentsBase(AComponent));
+  end;
+end;
+
+procedure TAIAgentManager.RemoveComponentFromList(AComponent: TAIAgentsBase);
+begin
+  if AComponent is TAIAgentsNode then
+    FNodes.Remove(TAIAgentsNode(AComponent))
+  else if AComponent is TAIAgentsLink then
+    FLinks.Remove(TAIAgentsLink(AComponent));
+end;
+
+function TAIAgentManager.Run(APrompt: String): String;
+var
+  LTask: ITask;
+  LStatus: TAgentExecutionStatus; // Variable para el nuevo enum
+begin
+  Result := '';
+
+  // 1. CHEQUEO DE BUSY (Thread safe check simple)
+  if FBusy <> 0 then
+    raise Exception.Create('The Agent Manager is currently busy.');
+
+  // 2. GESTI?N DE MENSAJES
+  // Si no se provey? un mensaje previo, creamos uno nuevo b?sico
+  if Not Assigned(Blackboard.AskMsg) then
+    Blackboard.AskMsg := NewMessage(APrompt, 'user', []);
+
+  // Siempre reiniciamos el mensaje de respuesta para esta ejecuci?n
+  Blackboard.ResMsg := TAiChatMessage.Create('', 'assistant');
+
+  // 3. EJECUCI?N
+  // Llama a la versi?n corregida de InternalRun que usa el bucle din?mico
+  LTask := InternalRun(APrompt);
+
+  // 4. L?GICA S?NCRONA / AS?NCRONA
+  if FAsynchronous then
+  begin
+    // MODO AS?NCRONO (Default): Retornamos vac?o inmediatamente.
+    // El resultado llegar? v?a eventos (OnFinish).
+    Result := '';
+  end
+  else
+  begin
+    // MODO S?NCRONO (Servicios REST): Esperamos.
+    if Assigned(LTask) then
+    begin
+      try
+        LTask.Wait(INFINITE); // Esperamos a que InternalRun termine
+      except
+        on E: Exception do
+          raise Exception.Create('Error waiting for agent execution: ' + E.Message);
+      end;
+
+      // --- CAMBIO PRINCIPAL AQU? ---
+      // Recuperamos el estado como Enum en lugar de String.
+      // Esto asume que implementaste el helper GetStatus en TAIBlackboard.
+      LStatus := Blackboard.GetStatus;
+
+      if LStatus = esError then
+        raise Exception.Create('Execution Failed: ' + Blackboard.GetString('Execution.ErrorMessage'));
+
+      if LStatus = esTimeout then
+        raise Exception.Create('Execution Timed Out');
+
+      // Opcional: Manejar esAborted expl?citamente si lo deseas
+      if LStatus = esAborted then
+        raise Exception.Create('Execution Aborted');
+
+      // -----------------------------
+
+      // Retornamos el contenido generado
+      if Assigned(Blackboard.ResMsg) and (Blackboard.ResMsg.Content <> '') then
+        Result := Blackboard.ResMsg.Content
+      else if Assigned(FEndNode) then
+        Result := FEndNode.Output;
+    end;
+  end;
+end;
+
+function TAIAgentManager.InternalRun(Msg: String): ITask;
+var
+  InitialInput: String;
+begin
+  // 1. Verificaci?n de estado ocupado
+  if TInterlocked.Exchange(FBusy, 1) <> 0 then
+    raise Exception.Create('Agent is busy (InternalRun check).');
+
+  Compile; // Asegura que el grafo est? listo
+
+  FAbort := False;
+
+  // --- Generar ThreadID ?nico para esta ejecuci?n ---
+  var LNewGUID: TGUID;
+  CreateGUID(LNewGUID);
+  FCurrentThreadID := GUIDToString(LNewGUID);
+  FCheckpointSeq   := 0;
+  FSuspendedStepsLock.Enter;
+  try
+    FSuspendedSteps.Clear;
+  finally
+    FSuspendedStepsLock.Leave;
+  end;
+
+  // Establecemos estado inicial en el Blackboard
+  Blackboard.SetStatus(esRunning);
+
+  // 2. Limpieza de tareas previas
+  FActiveTasksLock.Enter;
+  try
+    FActiveTasks.Clear;
+  finally
+    FActiveTasksLock.Leave;
+  end;
+
+  InitialInput := Msg;
+
+  // 3. Crear la tarea principal del orquestador
+  Result := TTask.Run(
+    procedure
+    var
+      TasksToWaitOn: TArray<ITask>;
+      WaitResult: Boolean;
+      // CAMBIO: Variable de tipo Enum
+      FinalStatus: TAgentExecutionStatus;
+      FinalException: Exception;
+      FinalOutput: String;
+      HasPendingTasks: Boolean;
+      CurrentTask: ITask;
+    begin
+      FinalException := nil;
+      FinalStatus := esUnknown; // Valor inicial seguro
+
+      try
+        try
+          // EVENTO ONSTART (Llamada directa, sin SafeSync)
+          if Assigned(FOnStart) then
+            FOnStart(Self, InitialInput);
+
+          if FAbort then
+          begin
+            FinalStatus := esAborted;
+            Exit;
+          end;
+
+          // EJECUCI?N DEL NODO INICIAL
+          if Assigned(FStartNode) then
+          begin
+            FStartNode.Input := InitialInput;
+            FStartNode.DoExecute(nil, nil);
+          end;
+
+          // --- INICIO DEL BUCLE DE ESPERA DIN?MICA ---
+          repeat
+            // A. Obtener instant?nea de las tareas actuales
+            FActiveTasksLock.Enter;
+            try
+              TasksToWaitOn := FActiveTasks.ToArray;
+            finally
+              FActiveTasksLock.Leave;
+            end;
+
+            // B. Verificar si hay alguna tarea activa
+            HasPendingTasks := False;
+            for CurrentTask in TasksToWaitOn do
+            begin
+              if (CurrentTask.Status <> TTaskStatus.Completed) and (CurrentTask.Status <> TTaskStatus.Canceled) and (CurrentTask.Status <> TTaskStatus.Exception) then
+              begin
+                HasPendingTasks := True;
+                Break;
+              end;
+            end;
+
+            // C. Si no hay nada pendiente, salimos del bucle
+            if not HasPendingTasks then
+              Break;
+
+            // D. Esperar por el lote actual de tareas.
+            WaitResult := TTask.WaitForAll(TasksToWaitOn, FTimeoutMs);
+
+            if not WaitResult then
+              raise Exception.CreateFmt('Graph execution timed out after %d ms.', [FTimeoutMs]);
+
+          until FAbort;
+          // --- FIN DEL BUCLE DE ESPERA DIN?MICA ---
+
+          // Definir estado final exitoso si no se abort?
+          if not FAbort then
+          begin
+            FSuspendedStepsLock.Enter;
+            try
+              if FSuspendedSteps.Count > 0 then
+                FinalStatus := esSuspended
+              else
+                FinalStatus := esCompleted;
+            finally
+              FSuspendedStepsLock.Leave;
+            end;
+          end
+          else
+            FinalStatus := esAborted;
+
+        except
+          on E: Exception do
+          begin
+            Abort; // Detener cualquier nueva ejecuci?n
+            FinalException := E;
+
+            if E.Message.Contains('timed out') then
+              FinalStatus := esTimeout
+            else
+              FinalStatus := esError;
+
+            // Llamada directa a DoError (sin SafeSync)
+            DoError(nil, nil, E);
+          end;
+        end;
+      finally
+        // Asegurar que tenemos un estado v?lido antes de salir
+        if FinalStatus = esUnknown then
+          FinalStatus := esAborted;
+
+        // Guardar el estado en el Blackboard usando el m?todo Helper del Enum
+        Blackboard.SetStatus(FinalStatus);
+
+        // Eliminar checkpoint solo si complet? exitosamente
+        if (FinalStatus = esCompleted) and Assigned(FCheckpointer) then
+          FCheckpointer.DeleteCheckpoint(FCurrentThreadID);
+
+        // OBTENER RESULTADO FINAL
+        FinalOutput := '';
+        if Assigned(FEndNode) then
+          FinalOutput := FEndNode.Output;
+
+        // EVENTO ONFINISH
+        // Pasamos el Enum (FinalStatus) en lugar del string
+        if Assigned(FOnFinish) then
+          FOnFinish(Self, InitialInput, FinalOutput, FinalStatus, FinalException);
+
+        // Liberar el flag de ocupado
+        TInterlocked.Exchange(FBusy, 0);
+      end;
+    end);
+end;
+
+// --- NUEVO: Setter para MaxConcurrentTasks ---
+procedure TAIAgentManager.SetMaxConcurrentTasks(const Value: Integer);
+var
+  LNewValue: Integer;
+begin
+  LNewValue := Value;
+  if LNewValue < 1 then
+    LNewValue := 1;
+
+  if FMaxConcurrentTasks <> LNewValue then
+  begin
+    FMaxConcurrentTasks := LNewValue;
+    // --- CORREGIDO: TThreadPool ---
+    // En lugar de recrear, simplemente ajustamos el pool existente.
+    // Esto es m?s seguro si hay tareas en ejecuci?n.
+    if Assigned(FThreadPool) then
+      FThreadPool.SetMaxWorkerThreads(FMaxConcurrentTasks);
+  end;
+end;
+
+procedure TAIAgentManager.SaveStateToStream(AStream: TStream);
+var
+  LRoot, LStateObj, LBlackboardObj, LNodeStatesObj, LLinkStatesObj, LNodeStateObj, LJoinInputsObj: TJSONObject;
+  LNode: TAIAgentsNode;
+  LLink: TAIAgentsLink;
+  LWriter: TStreamWriter;
+  LPair: TPair<TAIAgentsLink, string>;
+begin
+  LRoot := TJSONObject.Create;
+  try
+    LStateObj := TJSONObject.Create;
+    LRoot.AddPair('executionState', LStateObj);
+
+    // 1. Guardar el Blackboard
+    LBlackboardObj := TJSONObject.Create;
+    SerializeBlackboard(Self.Blackboard, LBlackboardObj);
+    LStateObj.AddPair('blackboard', LBlackboardObj);
+
+    // 2. Guardar el estado de cada nodo
+    LNodeStatesObj := TJSONObject.Create;
+    for LNode in FNodes do
+    begin
+      LNodeStateObj := TJSONObject.Create;
+      LNodeStateObj.AddPair('input', LNode.Input);
+      LNodeStateObj.AddPair('output', LNode.Output);
+
+      // Guardar las entradas pendientes en nodos de tipo Join
+      LJoinInputsObj := TJSONObject.Create;
+      if LNode.FJoinInputs.Count > 0 then
+      begin
+        for LPair in LNode.FJoinInputs do
+        begin
+          LJoinInputsObj.AddPair(LPair.Key.Name, LPair.Value);
+        end;
+      end;
+      LNodeStateObj.AddPair('joinInputs', LJoinInputsObj);
+
+      LNodeStatesObj.AddPair(LNode.Name, LNodeStateObj);
+    end;
+    LStateObj.AddPair('nodeStates', LNodeStatesObj);
+
+    // 3. Guardar el estado de cada enlace
+    LLinkStatesObj := TJSONObject.Create;
+    for LLink in FLinks do
+    begin
+      var
+      LLinkStateObj := TJSONObject.Create;
+      LLinkStateObj.AddPair('noCycles', LLink.NoCycles.ToString);
+      LLinkStatesObj.AddPair(LLink.Name, LLinkStateObj);
+    end;
+    LStateObj.AddPair('linkStates', LLinkStatesObj);
+
+    // Escribir al Stream
+    LWriter := TStreamWriter.Create(AStream, TEncoding.UTF8);
+    try
+      LWriter.Write(LRoot.ToString);
+    finally
+      LWriter.Free;
+    end;
+
+  finally
+    LRoot.Free;
+  end;
+end;
+
+procedure TAIAgentManager.SaveToStream(AStream: TStream);
+var
+  LRoot, LGraphObj, LNodeObj, LLinkObj, LTargetsObj, LExpressionsObj, LCondTargetsObj: TJSONObject;
+  LNodesArray, LLinksArray: TJSONArray;
+  LNode: TAIAgentsNode;
+  LLink: TAIAgentsLink;
+  LWriter: TStreamWriter;
+  LPair: TPair<string, TAIAgentsNode>;
+begin
+  LRoot := TJSONObject.Create;
+  try
+    // 1. Secci?n "graph"
+    LGraphObj := TJSONObject.Create;
+    LGraphObj.AddPair('description', Self.Description);
+    if Assigned(FStartNode) then
+      LGraphObj.AddPair('startNode', FStartNode.Name)
+    else
+      LGraphObj.AddPair('startNode', TJSONNull.Create);
+
+    if Assigned(FEndNode) then
+      LGraphObj.AddPair('endNode', FEndNode.Name)
+    else
+      LGraphObj.AddPair('endNode', TJSONNull.Create);
+
+    LGraphObj.AddPair('maxConcurrentTasks', TJSONNumber.Create(FMaxConcurrentTasks));
+    LGraphObj.AddPair('timeoutMs', TJSONNumber.Create(FTimeoutMs));
+    LRoot.AddPair('graph', LGraphObj);
+
+    // 2. Secci?n "nodes"
+    LNodesArray := TJSONArray.Create;
+    for LNode in FNodes do
+    begin
+      LNodeObj := TJSONObject.Create;
+      LNodeObj.AddPair('name', LNode.Name);
+      LNodeObj.AddPair('description', LNode.Description);
+      LNodeObj.AddPair('joinMode', GetEnumName(TypeInfo(TJoinMode), Ord(LNode.JoinMode)));
+      LNodeObj.AddPair('promptName', LNode.PromptName);
+
+      if Assigned(LNode.Tool) then
+      begin
+        // --- SECCI?N MODIFICADA ---
+        var
+        LToolDataObj := TJSONObject.Create;
+        LToolDataObj.AddPair('className', LNode.Tool.ClassName);
+        LToolDataObj.AddPair('properties', SerializeToolProperties(LNode.Tool));
+        LNodeObj.AddPair('tool', LToolDataObj);
+        // --- FIN DE LA MODIFICACI?N ---
+      end
+      else
+      begin
+        LNodeObj.AddPair('tool', TJSONNull.Create);
+      end;
+
+      // --- MANEJO DE EVENTOS (requiere l?gica adicional) ---
+      // Aqu? guardar?as un identificador del evento. Por ahora, un placeholder.
+      if Assigned(LNode.OnExecute) then
+        LNodeObj.AddPair('onExecuteHandler', 'HandlerFor_' + LNode.Name) // Placeholder
+      else
+        LNodeObj.AddPair('onExecuteHandler', TJSONNull.Create);
+
+      if Assigned(LNode.Next) then
+        LNodeObj.AddPair('nextLink', LNode.Next.Name)
+      else
+        LNodeObj.AddPair('nextLink', TJSONNull.Create);
+
+      LNodesArray.Add(LNodeObj);
+    end;
+    LRoot.AddPair('nodes', LNodesArray);
+
+    // 3. Secci?n "links"
+    LLinksArray := TJSONArray.Create;
+    for LLink in FLinks do
+    begin
+      LLinkObj := TJSONObject.Create;
+      LLinkObj.AddPair('name', LLink.Name);
+      LLinkObj.AddPair('description', LLink.Description);
+      LLinkObj.AddPair('mode', GetEnumName(TypeInfo(TLinkMode), Ord(LLink.Mode)));
+      LLinkObj.AddPair('maxCycles', LLink.MaxCycles.ToString);
+
+      if Assigned(LLink.FSourceNode) then
+        LLinkObj.AddPair('sourceNode', LLink.FSourceNode.Name)
+      else
+        LLinkObj.AddPair('sourceNode', TJSONNull.Create);
+
+      // Guardar destinos en un sub-objeto "targets"
+      LTargetsObj := TJSONObject.Create;
+
+      if Assigned(LLink.NextA) then
+        LTargetsObj.AddPair('nextA', LLink.NextA.Name)
+      else
+        LTargetsObj.AddPair('nextA', TJSONNull.Create);
+
+      if Assigned(LLink.NextB) then
+        LTargetsObj.AddPair('nextB', LLink.NextB.Name)
+      else
+        LTargetsObj.AddPair('nextB', TJSONNull.Create);
+
+      if Assigned(LLink.NextC) then
+        LTargetsObj.AddPair('nextC', LLink.NextC.Name)
+      else
+        LTargetsObj.AddPair('nextC', TJSONNull.Create);
+
+      if Assigned(LLink.NextD) then
+        LTargetsObj.AddPair('nextD', LLink.NextD.Name)
+      else
+        LTargetsObj.AddPair('nextD', TJSONNull.Create);
+
+      if Assigned(LLink.NextNo) then
+        LTargetsObj.AddPair('nextNo', LLink.NextNo.Name)
+      else
+        LTargetsObj.AddPair('nextNo', TJSONNull.Create);
+
+      LLinkObj.AddPair('targets', LTargetsObj);
+
+      // Guardar expresiones para el modo lmExpression
+      if LLink.Mode = lmExpression then
+      begin
+        LExpressionsObj := TJSONObject.Create;
+        LExpressionsObj.AddPair('expressionA', LLink.ExpressionA);
+        LExpressionsObj.AddPair('expressionB', LLink.ExpressionB);
+        LExpressionsObj.AddPair('expressionC', LLink.ExpressionC);
+        LExpressionsObj.AddPair('expressionD', LLink.ExpressionD);
+        LLinkObj.AddPair('expressions', LExpressionsObj);
+      end;
+
+      // Guardar destinos condicionales
+      if LLink.Mode = lmConditional then
+      begin
+        LLinkObj.AddPair('conditionalKey', LLink.ConditionalKey);
+        if Assigned(LLink.FConditionalTargets) then
+        begin
+          LCondTargetsObj := TJSONObject.Create;
+          for LPair in LLink.FConditionalTargets do
+          begin
+            LCondTargetsObj.AddPair(LPair.Key, LPair.Value.Name);
+          end;
+          LLinkObj.AddPair('conditionalTargets', LCondTargetsObj);
+        end;
+      end;
+
+      LLinksArray.Add(LLinkObj);
+    end;
+    LRoot.AddPair('links', LLinksArray);
+
+    // 4. Escribir el JSON al Stream
+    LWriter := TStreamWriter.Create(AStream, TEncoding.UTF8);
+    try
+      LWriter.Write(LRoot.ToString); // O LRoot.ToJSON para una versi?n m?s compacta
+    finally
+      LWriter.Free;
+    end;
+
+  finally
+    LRoot.Free;
+  end;
+end;
+
+procedure TAIAgentManager.SetAsynchronous(const Value: Boolean);
+begin
+  FAsynchronous := Value;
+end;
+
+procedure TAIAgentManager.SetDescription(const Value: String);
+begin
+  FDescription := Value;
+end;
+
+// ... (Setters restantes sin cambios) ...
+procedure TAIAgentManager.SetEndNode(const Value: TAIAgentsNode);
+begin
+  if FEndNode <> Value then
+  begin
+    FEndNode := Value;
+    FCompiled := False;
+  end;
+end;
+
+function TAIAgentManager.SetEntryPoint(const ANodeName: string): TAIAgentManager;
+begin
+  Self.StartNode := FindNode(ANodeName);
+  if not Assigned(Self.StartNode) then
+    raise Exception.CreateFmt('Entry point node "%s" not found.', [ANodeName]);
+  Result := Self;
+end;
+
+function TAIAgentManager.SetFinishPoint(const ANodeName: string): TAIAgentManager;
+begin
+  Self.EndNode := FindNode(ANodeName);
+  if not Assigned(Self.EndNode) then
+    raise Exception.CreateFmt('Finish point node "%s" not found.', [ANodeName]);
+  Result := Self;
+end;
+
+procedure TAIAgentManager.SetOnConfirm(const Value: TAIAgentsOnConfirm);
+begin
+  FOnConfirm := Value;
+end;
+
+procedure TAIAgentManager.SetOnEnd(const Value: TAIAgentsOnEnd);
+begin
+  FOnEnd := Value;
+end;
+
+procedure TAIAgentManager.SetOnEnterNode(const Value: TAIAgentsOnEnterNode);
+begin
+  FOnEnterNode := Value;
+end;
+
+procedure TAIAgentManager.SetOnError(const Value: TAIAgentsOnError);
+begin
+  FOnError := Value;
+end;
+
+procedure TAIAgentManager.SetOnExitNode(const Value: TAIAgentsOnExitNode);
+begin
+  FOnExitNode := Value;
+end;
+
+procedure TAIAgentManager.SetOnFinish(const Value: TAIAgentsOnFinish);
+begin
+  FOnFinish := Value;
+end;
+
+procedure TAIAgentManager.SetOnPrint(const Value: TAIAgentsOnPrint);
+begin
+  if Assigned(Value) then
+    FOnPrintRef := nil;
+  FOnPrint := Value;
+end;
+
+procedure TAIAgentManager.SetOnPrintEvent(const APrintProc: TAgentPrintRef);
+begin
+  FOnPrintRef := APrintProc;
+  if Assigned(FOnPrintRef) then
+    FOnPrint := DoPrintFromRef
+  else
+    FOnPrint := nil;
+end;
+
+procedure TAIAgentManager.SetOnStart(const Value: TAIAgentsOnStart);
+begin
+  FOnStart := Value;
+end;
+
+procedure TAIAgentManager.SetStartNode(const Value: TAIAgentsNode);
+begin
+  if FStartNode <> Value then
+  begin
+    FStartNode := Value;
+    FCompiled := False;
+  end;
+end;
+
+procedure TAIAgentManager.SetCheckpointer(const Value: IAiCheckpointer);
+begin
+  FCheckpointer := Value;
+end;
+
+procedure TAIAgentManager.SetOnSuspend(const Value: TAIAgentsOnSuspend);
+begin
+  FOnSuspend := Value;
+end;
+
+// ---------------------------------------------------------------------------
+// DoNodeCompleted  -- checkpoint autom?tico tras nodo exitoso
+// ---------------------------------------------------------------------------
+procedure TAIAgentManager.DoNodeCompleted(ANode: TAIAgentsNode);
+var
+  LSnap: TAiCheckpointSnapshot;
+begin
+  if not Assigned(FCheckpointer) then Exit;
+  TInterlocked.Increment(FCheckpointSeq);
+  LSnap := BuildSnapshot;
+  try
+    LSnap.CheckpointID := FCheckpointSeq;
+    FCheckpointer.SaveCheckpoint(FCurrentThreadID, LSnap);
+  finally
+    LSnap.Free;
   end;
 end;
 
 // ---------------------------------------------------------------------------
-// TAiOrchestratorThread
+// DoNodeSuspended  -- gestiona la suspensi?n de un nodo
 // ---------------------------------------------------------------------------
-
-constructor TAiOrchestratorThread.Create(AManager: TAIAgentManager;
-  const AInput: string; AStartNode: TAIAgentsNode; AIsResume: Boolean);
+procedure TAIAgentManager.DoNodeSuspended(ANode: TAIAgentsNode;
+  ABeforeNode: TAIAgentsNode; ALink: TAIAgentsLink);
+var
+  LStep: TAiPendingStep;
+  LSnap: TAiCheckpointSnapshot;
 begin
-  inherited Create(True); // suspended
-  FManager      := AManager;
-  FInitialInput := AInput;
-  FStartNode    := AStartNode;
-  FIsResume     := AIsResume;
-  FreeOnTerminate := False; // managed by TAIAgentManager
-end;
+  LStep := TAiPendingStep.Create(
+    ANode.Name,
+    IfThen(Assigned(ABeforeNode), ABeforeNode.Name, ''),
+    IfThen(Assigned(ALink), ALink.Name, ''),
+    ANode.Input,
+    'Suspended',
+    ANode.SuspendReason,
+    ANode.SuspendContext);
 
-procedure TAiOrchestratorThread.Execute;
-begin
-  FManager.RunOrchestratorBody(FInitialInput, FStartNode, FIsResume);
+  FSuspendedStepsLock.Enter;
+  try
+    FSuspendedSteps.Add(LStep);
+  finally
+    FSuspendedStepsLock.Leave;
+  end;
+
+  Blackboard.SetStatus(esSuspended);
+
+  if Assigned(FCheckpointer) then
+  begin
+    TInterlocked.Increment(FCheckpointSeq);
+    LSnap := BuildSnapshot;
+    try
+      LSnap.CheckpointID := FCheckpointSeq;
+      FCheckpointer.SaveCheckpoint(FCurrentThreadID, LSnap);
+    finally
+      LSnap.Free;
+    end;
+  end;
+
+  // Disparar OnSuspend en el hilo principal (TThread.Queue = no bloqueante)
+  if Assigned(FOnSuspend) then
+  begin
+    var LThreadID   := FCurrentThreadID;
+    var LNodeName   := ANode.Name;
+    var LReason     := ANode.SuspendReason;
+    var LContext    := ANode.SuspendContext;
+    TThread.Queue(nil,
+      procedure
+      begin
+        FOnSuspend(Self, LThreadID, LNodeName, LReason, LContext);
+      end);
+  end;
 end;
 
 // ---------------------------------------------------------------------------
-// TAIAgentsLink
+// BuildSnapshot  -- captura el estado completo del grafo
 // ---------------------------------------------------------------------------
-
-constructor TAIAgentsLink.Create(AOwner: TComponent);
+function TAIAgentManager.BuildSnapshot: TAiCheckpointSnapshot;
+var
+  LNode:     TAIAgentsNode;
+  LLink:     TAIAgentsLink;
+  LNodeObj:  TJSONObject;
+  LJoinObj:  TJSONObject;
+  LNodeStates, LLinkStates, LBBObj: TJSONObject;
+  LPair:     TPair<TAIAgentsLink, string>;
 begin
-  inherited;
-  FMaxCycles        := 1;
-  FMode             := lmFanout;
-  FConditionalKey   := 'next_route';
-  FManualTargetsKey := 'next_targets';
+  Result := TAiCheckpointSnapshot.Create;
+  Result.ThreadID  := FCurrentThreadID;
+  Result.GraphID   := Self.Name;
+  Result.CreatedAt := Now;
+
+  // 1. Blackboard
+  LBBObj := TJSONObject.Create;
+  SerializeBlackboard(FBlackboard, LBBObj);
+  Result.Blackboard := LBBObj;
+
+  // 2. Estado de nodos
+  LNodeStates := TJSONObject.Create;
+  for LNode in FNodes do
+  begin
+    LNodeObj := TJSONObject.Create;
+    LNodeObj.AddPair('input',          LNode.Input);
+    LNodeObj.AddPair('output',         LNode.Output);
+    LNodeObj.AddPair('suspended',      TJSONBool.Create(LNode.FSuspended));
+    LNodeObj.AddPair('suspendReason',  LNode.FSuspendReason);
+    LNodeObj.AddPair('suspendContext', LNode.FSuspendContext);
+    LJoinObj := TJSONObject.Create;
+    LNode.FJoinLock.Enter;
+    try
+      for LPair in LNode.FJoinInputs do
+        LJoinObj.AddPair(LPair.Key.Name, LPair.Value);
+    finally
+      LNode.FJoinLock.Leave;
+    end;
+    LNodeObj.AddPair('joinInputs', LJoinObj);
+    LNodeStates.AddPair(LNode.Name, LNodeObj);
+  end;
+  Result.NodeStates := LNodeStates;
+
+  // 3. Estado de links
+  LLinkStates := TJSONObject.Create;
+  for LLink in FLinks do
+  begin
+    var LLinkObj := TJSONObject.Create;
+    LLinkObj.AddPair('noCycles', TJSONNumber.Create(LLink.FNoCycles));
+    LLinkStates.AddPair(LLink.Name, LLinkObj);
+  end;
+  Result.LinkStates := LLinkStates;
+
+  // 4. Copia de pasos suspendidos
+  FSuspendedStepsLock.Enter;
+  try
+    for var LStep in FSuspendedSteps do
+      Result.PendingSteps.Add(TAiPendingStep.Create(
+        LStep.NodeName, LStep.SourceNodeName, LStep.LinkName,
+        LStep.Input, LStep.Status, LStep.SuspendReason, LStep.SuspendContext));
+  finally
+    FSuspendedStepsLock.Leave;
+  end;
 end;
 
-destructor TAIAgentsLink.Destroy;
+// ---------------------------------------------------------------------------
+// RestoreFromSnapshot  -- restaura el estado desde un snapshot
+// ---------------------------------------------------------------------------
+procedure TAIAgentManager.RestoreFromSnapshot(ASnapshot: TAiCheckpointSnapshot);
+var
+  LNode:    TAIAgentsNode;
+  LLink:    TAIAgentsLink;
+  LNodeObj: TJSONObject;
+  LJoinObj: TJSONObject;
+  LPair:    TJSONPair;
+  LSrcLink: TAIAgentsLink;
 begin
-  FConditionalTargets.Free;
-  if Assigned(FGraph) then
-    FGraph.RemoveComponentFromList(Self);
-  inherited;
+  // 1. Blackboard
+  if Assigned(ASnapshot.Blackboard) then
+    DeserializeBlackboard(ASnapshot.Blackboard, FBlackboard);
+
+  // 2. Estado de nodos
+  if Assigned(ASnapshot.NodeStates) then
+    for LNode in FNodes do
+    begin
+      LNodeObj := ASnapshot.NodeStates.GetValue(LNode.Name) as TJSONObject;
+      if not Assigned(LNodeObj) then Continue;
+      LNode.FInput          := LNodeObj.GetValue<string>('input',          '');
+      LNode.FOutput         := LNodeObj.GetValue<string>('output',         '');
+      LNode.FSuspended      := LNodeObj.GetValue<Boolean>('suspended',     False);
+      LNode.FSuspendReason  := LNodeObj.GetValue<string>('suspendReason',  '');
+      LNode.FSuspendContext := LNodeObj.GetValue<string>('suspendContext', '');
+      LJoinObj := LNodeObj.GetValue('joinInputs') as TJSONObject;
+      if Assigned(LJoinObj) then
+      begin
+        LNode.FJoinLock.Enter;
+        try
+          LNode.FJoinInputs.Clear;
+          for LPair in LJoinObj do
+          begin
+            LSrcLink := FindLink(LPair.JsonString.Value);
+            if Assigned(LSrcLink) then
+              LNode.FJoinInputs.AddOrSetValue(LSrcLink, LPair.JsonValue.Value);
+          end;
+        finally
+          LNode.FJoinLock.Leave;
+        end;
+      end;
+    end;
+
+  // 3. Estado de links
+  if Assigned(ASnapshot.LinkStates) then
+    for LLink in FLinks do
+    begin
+      var LLinkObj := ASnapshot.LinkStates.GetValue(LLink.Name) as TJSONObject;
+      if Assigned(LLinkObj) then
+        LLink.FNoCycles := LLinkObj.GetValue<Integer>('noCycles', 0);
+    end;
+
+  // 4. Reconstruir lista de pasos suspendidos
+  FSuspendedStepsLock.Enter;
+  try
+    FSuspendedSteps.Clear;
+    for var LStep in ASnapshot.PendingSteps do
+      FSuspendedSteps.Add(TAiPendingStep.Create(
+        LStep.NodeName, LStep.SourceNodeName, LStep.LinkName,
+        LStep.Input, LStep.Status, LStep.SuspendReason, LStep.SuspendContext));
+  finally
+    FSuspendedStepsLock.Leave;
+  end;
 end;
 
-procedure TAIAgentsLink.AddConditionalTarget(const AKey: string;
-  ANode: TAIAgentsNode);
+// ---------------------------------------------------------------------------
+// FindLink  -- busca un link por nombre
+// ---------------------------------------------------------------------------
+function TAIAgentManager.FindLink(const AName: string): TAIAgentsLink;
+var
+  LLink: TAIAgentsLink;
+begin
+  Result := nil;
+  for LLink in FLinks do
+    if SameText(LLink.Name, AName) then
+      Exit(LLink);
+end;
+
+// ---------------------------------------------------------------------------
+// GetActiveThreads  -- lista de thread IDs activos
+// ---------------------------------------------------------------------------
+function TAIAgentManager.GetActiveThreads: TArray<string>;
+begin
+  if Assigned(FCheckpointer) then
+    Result := FCheckpointer.GetActiveThreadIDs
+  else
+  begin
+    if (FCurrentThreadID <> '') and (Blackboard.GetStatus = esSuspended) then
+    begin
+      SetLength(Result, 1);
+      Result[0] := FCurrentThreadID;
+    end
+    else
+      SetLength(Result, 0);
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// ResumeThread  -- reanuda un hilo suspendido
+// ---------------------------------------------------------------------------
+function TAIAgentManager.ResumeThread(const AThreadID, ANodeName,
+  AInput: string): Boolean;
+var
+  LSnap:        TAiCheckpointSnapshot;
+  LNode:        TAIAgentsNode;
+  LResumeInput: string;
+  LResumeNode:  TAIAgentsNode;
+  LOrchTask:    ITask;
+begin
+  Result := False;
+
+  if TInterlocked.Exchange(FBusy, 1) <> 0 then
+    raise Exception.Create('Agent is busy');
+
+  try
+    // 1. Cargar checkpoint del disco (si existe)
+    LSnap := nil;
+    if Assigned(FCheckpointer) then
+      LSnap := FCheckpointer.LoadCheckpoint(AThreadID);
+
+    try
+      if Assigned(LSnap) then
+      begin
+        RestoreFromSnapshot(LSnap);
+        FCurrentThreadID := AThreadID;
+      end
+      else if FCurrentThreadID <> AThreadID then
+      begin
+        TInterlocked.Exchange(FBusy, 0);
+        Exit; // Thread no encontrado ni en disco ni en memoria
+      end;
+    finally
+      LSnap.Free;
+    end;
+
+    // 2. Localizar el nodo
+    LNode := FindNode(ANodeName);
+    if not Assigned(LNode) then
+    begin
+      TInterlocked.Exchange(FBusy, 0);
+      raise Exception.CreateFmt('Nodo "%s" no encontrado en el grafo', [ANodeName]);
+    end;
+
+    // 3. Preparar el nodo para reanudaci?n
+    LNode.FInput          := AInput;
+    LNode.FSuspended      := False;
+    LNode.FSuspendReason  := '';
+    LNode.FSuspendContext := '';
+
+    FSuspendedStepsLock.Enter;
+    try
+      for var i := FSuspendedSteps.Count - 1 downto 0 do
+        if SameText(FSuspendedSteps[i].NodeName, ANodeName) then
+          FSuspendedSteps.Delete(i);
+    finally
+      FSuspendedStepsLock.Leave;
+    end;
+
+    // 4. Preparar el grafo
+    FAbort := False;
+    Blackboard.SetStatus(esRunning);
+    FActiveTasksLock.Enter;
+    try
+      FActiveTasks.Clear;
+    finally
+      FActiveTasksLock.Leave;
+    end;
+
+    // 5. Lanzar nuevo orquestador desde el nodo reanudado
+    LResumeInput := AInput;
+    LResumeNode  := LNode;
+
+    LOrchTask := TTask.Run(
+      procedure
+      var
+        TasksToWaitOn:   TArray<ITask>;
+        WaitResult:      Boolean;
+        FinalStatus:     TAgentExecutionStatus;
+        HasPendingTasks: Boolean;
+        CurrentTask:     ITask;
+        FinalOutput:     string;
+        FinalException:  Exception;
+      begin
+        FinalStatus    := esUnknown;
+        FinalException := nil;
+        try
+          try
+            // Ejecutar desde el nodo suspendido; aBeforeNode=nil,aLink=nil
+            // salta la puerta de join (manejado en DoExecute)
+            LResumeNode.DoExecute(nil, nil);
+
+            repeat
+              FActiveTasksLock.Enter;
+              try
+                TasksToWaitOn := FActiveTasks.ToArray;
+              finally
+                FActiveTasksLock.Leave;
+              end;
+              HasPendingTasks := False;
+              for CurrentTask in TasksToWaitOn do
+              begin
+                if (CurrentTask.Status <> TTaskStatus.Completed) and
+                   (CurrentTask.Status <> TTaskStatus.Canceled)  and
+                   (CurrentTask.Status <> TTaskStatus.Exception) then
+                begin
+                  HasPendingTasks := True;
+                  Break;
+                end;
+              end;
+              if not HasPendingTasks then Break;
+              WaitResult := TTask.WaitForAll(TasksToWaitOn, FTimeoutMs);
+              if not WaitResult then
+                raise Exception.CreateFmt('Graph execution timed out after %d ms.', [FTimeoutMs]);
+            until FAbort;
+
+            if not FAbort then
+            begin
+              FSuspendedStepsLock.Enter;
+              try
+                if FSuspendedSteps.Count > 0 then
+                  FinalStatus := esSuspended
+                else
+                  FinalStatus := esCompleted;
+              finally
+                FSuspendedStepsLock.Leave;
+              end;
+            end
+            else
+              FinalStatus := esAborted;
+
+          except
+            on E: Exception do
+            begin
+              Abort;
+              FinalException := E;
+              if E.Message.Contains('timed out') then
+                FinalStatus := esTimeout
+              else
+                FinalStatus := esError;
+              DoError(nil, nil, E);
+            end;
+          end;
+        finally
+          if FinalStatus = esUnknown then FinalStatus := esAborted;
+          Blackboard.SetStatus(FinalStatus);
+
+          if (FinalStatus = esCompleted) and Assigned(FCheckpointer) then
+            FCheckpointer.DeleteCheckpoint(FCurrentThreadID);
+
+          FinalOutput := '';
+          if Assigned(FEndNode) then
+            FinalOutput := FEndNode.Output;
+
+          if Assigned(FOnFinish) then
+            FOnFinish(Self, LResumeInput, FinalOutput, FinalStatus, FinalException);
+
+          TInterlocked.Exchange(FBusy, 0);
+        end;
+      end, FThreadPool);
+
+    if not FAsynchronous then
+      LOrchTask.Wait;
+
+    Result := True;
+  except
+    TInterlocked.Exchange(FBusy, 0);
+    raise;
+  end;
+end;
+
+{ TAIAgentsLink }
+
+procedure TAIAgentsLink.AddConditionalTarget(const AKey: string; ANode: TAIAgentsNode);
 begin
   if not Assigned(FConditionalTargets) then
-    FConditionalTargets := TAIAgentsLinkNodeMap.Create;
+    FConditionalTargets := TDictionary<string, TAIAgentsNode>.Create;
   FConditionalTargets.AddOrSetValue(AKey, ANode);
 end;
 
-procedure TAIAgentsLink.BuildManualTargets(const TargetsCSV: string;
-  out Nodes: TAIAgentsNodeList);
-
+procedure TAIAgentsLink.BuildManualTargets(const TargetsCSV: string; out Nodes: TList<TAIAgentsNode>);
+// ... (sin cambios) ...
   function ResolveToken(const S: string): TAIAgentsNode;
   begin
     Result := nil;
-    if SameText(S, 'A') then Exit(FNextA);
-    if SameText(S, 'B') then Exit(FNextB);
-    if SameText(S, 'C') then Exit(FNextC);
-    if SameText(S, 'D') then Exit(FNextD);
+    if SameText(S, 'A') then
+      Exit(FNextA);
+    if SameText(S, 'B') then
+      Exit(FNextB);
+    if SameText(S, 'C') then
+      Exit(FNextC);
+    if SameText(S, 'D') then
+      Exit(FNextD);
     if Assigned(FGraph) then
       Result := FGraph.FindNode(S);
   end;
 
 var
-  Parts:  TStringList;
-  I:      Integer;
-  LNode:  TAIAgentsNode;
+  Parts: TArray<string>;
+  T: string;
+  N: TAIAgentsNode;
 begin
-  Nodes := TAIAgentsNodeList.Create;
-  if Trim(TargetsCSV) = '' then Exit;
-  Parts := TStringList.Create;
-  try
-    Parts.Delimiter       := ',';
-    Parts.StrictDelimiter := True;
-    Parts.DelimitedText   := TargetsCSV;
-    for I := 0 to Parts.Count - 1 do
-    begin
-      LNode := ResolveToken(Trim(Parts[I]));
-      if Assigned(LNode) then
-        Nodes.Add(LNode);
-    end;
-  finally
-    Parts.Free;
+  Nodes := TList<TAIAgentsNode>.Create;
+  if TargetsCSV.Trim = '' then
+    Exit;
+  Parts := TargetsCSV.Split([',']);
+  for T in Parts do
+  begin
+    N := ResolveToken(Trim(T));
+    if Assigned(N) then
+      Nodes.Add(N);
   end;
 end;
 
-procedure TAIAgentsLink.CreateAndQueueTask(ANodeToExecute, ASourceNode: TAIAgentsNode;
-  ACurrentLink: TAIAgentsLink);
-var
-  LTask: TAiNodeTask;
+constructor TAIAgentsLink.Create(aOwner: TComponent);
 begin
-  InterlockedIncrement(FGraph.FActiveTaskCount);
-  LTask := TAiNodeTask.Create(FGraph, ANodeToExecute, ASourceNode, ACurrentLink);
-  LTask.Start;
+  inherited;
+  // --- MODIFICADO: Constructor limpiado de duplicados ---
+  FMaxCycles := 1;
+  FMode := lmFanout;
+  FConditionalKey := 'next_route';
+  FManualTargetsKey := 'next_targets';
+end;
+
+procedure TAIAgentsLink.CreateAndQueueTask(ANodeToExecute, ASourceNode: TAIAgentsNode; ACurrentLink: TAIAgentsLink);
+begin
+  var
+  LTask := TTask.Run(
+    procedure
+    begin
+      // Esta clausura ahora captura los par?metros del m?todo, que son estables y ?nicos.
+      if (ACurrentLink.FGraph <> nil) and ACurrentLink.FGraph.FAbort then
+        Exit;
+      ANodeToExecute.DoExecute(ASourceNode, ACurrentLink);
+    end, FGraph.FThreadPool);
+
+  FGraph.FActiveTasksLock.Enter;
+  try
+    FGraph.FActiveTasks.Add(LTask);
+  finally
+    FGraph.FActiveTasksLock.Leave;
+  end;
+end;
+
+destructor TAIAgentsLink.Destroy;
+begin
+  if Assigned(FConditionalTargets) then
+    FConditionalTargets.Free;
+
+  // Desvincular del grafo al destruir
+  if Assigned(FGraph) then
+    FGraph.RemoveComponentFromList(Self);
+
+  inherited;
 end;
 
 procedure TAIAgentsLink.DoExecute(Sender: TAIAgentsNode);
 var
   IsOk, Handled: Boolean;
-  NodesToRun:    TAIAgentsNodeList;
-  ManualNodes:   TAIAgentsNodeList;
-  Decision:      string;
-  TargetNode:    TAIAgentsNode;
-  LNode:         TAIAgentsNode;
-  I:             Integer;
+  NodesToRun: TList<TAIAgentsNode>;
+  Decision: string;
 begin
-  if (FGraph = nil) or FGraph.IsAborted then
+  if (FGraph = nil) or FGraph.FAbort then
     Exit;
 
-  // PASO 1: evento OnExecute para intervencion manual
+  // PASO 1: Ejecutar evento OnExecute para intervenci?n manual
   Handled := False;
-  IsOk    := not Sender.FError;
+  IsOk := Not Sender.FError;
   if Assigned(FOnExecute) then
-  try
-    FOnExecute(Sender, Self, IsOk, Handled);
-  except
-    on E: Exception do
-    begin
-      FGraph.DoError(Sender, Self, E);
-      Exit;
+  begin
+    try
+      FOnExecute(Sender, Self, IsOk, Handled);
+    except
+      on E: Exception do
+      begin
+        FGraph.DoError(Sender, Self, E);
+        Exit;
+      end;
     end;
   end;
 
-  if Handled then Exit;
+  if Handled then
+    Exit;
 
-  // PASO 2: manejar errores y reintentos
+  // PASO 2: Evaluar el resultado de IsOk y manejar fallos/reintentos
   if not IsOk then
   begin
     Inc(FNoCycles);
     if FNoCycles >= FMaxCycles then
     begin
-      FGraph.DoError(Sender, Self,
-        Exception.CreateFmt('Max retry cycles (%d) reached on link "%s" from "%s".',
-          [FMaxCycles, Name, Sender.Name]));
+      var
+      E := Exception.CreateFmt('Maximum retry cycles (%d) reached on link "%s" from node "%s". Aborting this path.', [FMaxCycles, Self.Name, Sender.Name]);
+      FGraph.DoError(Sender, Self, E);
       Exit;
     end
     else
     begin
       if Assigned(FNextNo) then
-        CreateAndQueueTask(FNextNo, FSourceNode, Self);
+      begin
+        var
+        LTask := TTask.Run(
+          procedure
+          begin
+            if (FGraph <> nil) and not FGraph.FAbort then
+              FNextNo.DoExecute(FSourceNode, Self);
+          end, FGraph.FThreadPool);
+
+        FGraph.FActiveTasksLock.Enter;
+        try
+          FGraph.FActiveTasks.Add(LTask);
+        finally
+          FGraph.FActiveTasksLock.Leave;
+        end;
+      end;
       Exit;
     end;
   end;
 
-  // PASO 3: construir lista de nodos destino
-  NodesToRun := TAIAgentsNodeList.Create;
+  // PASO 3: IsOk es TRUE. Construir la lista de nodos de destino seg?n el modo.
+  NodesToRun := nil;
   try
+    NodesToRun := TList<TAIAgentsNode>.Create;
     case FMode of
       lmFanout:
         begin
-          if Assigned(FNextA) then NodesToRun.Add(FNextA);
-          if Assigned(FNextB) then NodesToRun.Add(FNextB);
-          if Assigned(FNextC) then NodesToRun.Add(FNextC);
-          if Assigned(FNextD) then NodesToRun.Add(FNextD);
+          if Assigned(FNextA) then
+            NodesToRun.Add(FNextA);
+          if Assigned(FNextB) then
+            NodesToRun.Add(FNextB);
+          if Assigned(FNextC) then
+            NodesToRun.Add(FNextC);
+          if Assigned(FNextD) then
+            NodesToRun.Add(FNextD);
         end;
-
       lmConditional:
         begin
-          if FConditionalKey <> '' then
-            Decision := FGraph.Blackboard.GetString(FConditionalKey)
-          else
-            Decision := FGraph.Blackboard.GetString('next_route');
-          if Assigned(FConditionalTargets) and
-             FConditionalTargets.TryGetValue(Decision, TargetNode) and
-             Assigned(TargetNode) then
+          Decision := FGraph.Blackboard.GetString(IfThen(FConditionalKey <> '', FConditionalKey, 'next_route'));
+          var
+            TargetNode: TAIAgentsNode;
+          if Assigned(FConditionalTargets) and FConditionalTargets.TryGetValue(Decision, TargetNode) and Assigned(TargetNode) then
             NodesToRun.Add(TargetNode)
           else if Assigned(FNextNo) then
             NodesToRun.Add(FNextNo);
         end;
-
       lmManual:
         begin
-          if FManualTargetsKey <> '' then
-            Decision := FGraph.Blackboard.GetString(FManualTargetsKey)
-          else
-            Decision := FGraph.Blackboard.GetString('next_targets');
-          ManualNodes := nil;
-          BuildManualTargets(Decision, ManualNodes);
+          Decision := FGraph.Blackboard.GetString(IfThen(FManualTargetsKey <> '', FManualTargetsKey, 'next_targets'));
+          var
+          ManualNodes := TList<TAIAgentsNode>.Create;
           try
-            for I := 0 to ManualNodes.Count - 1 do
-              NodesToRun.Add(ManualNodes[I]);
+            BuildManualTargets(Decision, ManualNodes);
+            NodesToRun.AddRange(ManualNodes);
           finally
             ManualNodes.Free;
           end;
         end;
-
       lmExpression:
-        raise Exception.Create(
-          '[FPC] lmExpression mode not implemented: requires System.Bindings (Delphi only). ' +
-          'Use lmConditional or lmManual instead.');
-    end;
+        begin
+          var
+          LBlackboardData := FGraph.Blackboard.FData;
 
+          // --- Evaluaciones Independientes (L?gica Paralela) ---
+
+          // 1. Evaluar A
+          if Assigned(FNextA) and (FExpressionA <> '') and EvalCondition(FExpressionA, LBlackboardData) then
+            NodesToRun.Add(FNextA);
+
+          // 2. Evaluar B (Se eval?a SIEMPRE, sin importar si A fue verdadero)
+          if Assigned(FNextB) and (FExpressionB <> '') and EvalCondition(FExpressionB, LBlackboardData) then
+            NodesToRun.Add(FNextB);
+
+          // 3. Evaluar C
+          if Assigned(FNextC) and (FExpressionC <> '') and EvalCondition(FExpressionC, LBlackboardData) then
+            NodesToRun.Add(FNextC);
+
+          // 4. Evaluar D
+          if Assigned(FNextD) and (FExpressionD <> '') and EvalCondition(FExpressionD, LBlackboardData) then
+            NodesToRun.Add(FNextD);
+
+          // --- Fallback (Camino por defecto) ---
+          // Solo si NINGUNA de las anteriores se cumpli? (la lista est? vac?a)
+          // ejecutamos el camino "NextNo".
+          if (NodesToRun.Count = 0) and Assigned(FNextNo) then
+            NodesToRun.Add(FNextNo);
+        end;
+    end;
   except
     on E: Exception do
     begin
-      NodesToRun.Free;
+      if Assigned(NodesToRun) then
+        NodesToRun.Free;
       FGraph.DoError(Sender, Self, E);
       Exit;
     end;
   end;
 
-  // PASO 4: despachar ejecucion
+  // ---------------------------------------------------------------------------
+  // PASO 4: Despachar la ejecuci?n a los nodos de destino.
+  // ---------------------------------------------------------------------------
   try
-    if NodesToRun.Count = 0 then
+    if (NodesToRun = nil) or (NodesToRun.Count = 0) then
       Exit;
 
     if NodesToRun.Count = 1 then
-      NodesToRun[0].DoExecute(FSourceNode, Self)
-    else
     begin
-      for I := 0 to NodesToRun.Count - 1 do
-        CreateAndQueueTask(NodesToRun[I], FSourceNode, Self);
+      NodesToRun[0].DoExecute(FSourceNode, Self);
+    end
+    else // Fork paralelo con scheduler
+    begin
+      for var Node in NodesToRun do
+      begin
+        CreateAndQueueTask(Node, FSourceNode, Self);
+      end;
     end;
   finally
-    NodesToRun.Free;
+    if Assigned(NodesToRun) then
+      NodesToRun.Free;
   end;
 end;
 
-procedure TAIAgentsLink.Print(Value: string);
+{ procedure TAIAgentsLink.DoExecute(Sender: TAIAgentsNode);
+  var
+  IsOk, Handled: Boolean;
+  NodesToRun: TList<TAIAgentsNode>;
+  Decision: string;
+  TargetNode: TAIAgentsNode;
+  ManualNodes: TList<TAIAgentsNode>;
+  LBlackboardData: TDictionary<string, TValue>;
+  Node: TAIAgentsNode;
+  begin
+  // Validaci?n de seguridad inicial
+  if (FGraph = nil) or FGraph.FAbort then
+  Exit;
+
+  // PASO 1: Ejecutar evento OnExecute para intervenci?n manual (el programador decide en c?digo)
+  Handled := False;
+
+  IsOk := Sender.FError; //Toma el estado de error del nodo como valor inicial;
+
+
+  if Assigned(FOnExecute) then
+  begin
+  try
+  FOnExecute(Sender, Self, IsOk, Handled);
+  except
+  on E: Exception do
+  begin
+  FGraph.DoError(Sender, Self, E);
+  Exit;
+  end;
+  end;
+  end;
+
+  // Si el programador marc? 'Handled' en el evento, se asume que la l?gica
+  // de navegaci?n ya fue gestionada externamente y salimos.
+  if Handled then
+  Exit;
+
+  // PASO 2: Evaluar el resultado de IsOk y manejar fallos o reintentos
+  if not IsOk then
+  begin
+  Inc(FNoCycles);
+  if FNoCycles >= FMaxCycles then
+  begin
+  var E := Exception.CreateFmt('Maximum retry cycles (%d) reached on link "%s" from node "%s". Aborting this path.',
+  [FMaxCycles, Self.Name, Sender.Name]);
+  FGraph.DoError(Sender, Self, E);
+  Exit;
+  end
+  else
+  begin
+  // Si el enlace fall? pero tiene una ruta de escape/error (NextNo), la seguimos.
+  if Assigned(FNextNo) then
+  begin
+  var LTask := TTask.Run(
+  procedure
+  begin
+  if (FGraph <> nil) and not FGraph.FAbort then
+  FNextNo.DoExecute(FSourceNode, Self);
+  end, FGraph.FThreadPool);
+
+  FGraph.FActiveTasksLock.Enter;
+  try
+  FGraph.FActiveTasks.Add(LTask);
+  finally
+  FGraph.FActiveTasksLock.Leave;
+  end;
+  end;
+  Exit;
+  end;
+  end;
+
+  // PASO 3: IsOk es TRUE. Construir la lista de nodos de destino seg?n el modo de enlace.
+  NodesToRun := TList<TAIAgentsNode>.Create;
+  try
+  try
+  case FMode of
+  lmFanout:
+  begin
+  if Assigned(FNextA) then NodesToRun.Add(FNextA);
+  if Assigned(FNextB) then NodesToRun.Add(FNextB);
+  if Assigned(FNextC) then NodesToRun.Add(FNextC);
+  if Assigned(FNextD) then NodesToRun.Add(FNextD);
+  end;
+
+  lmConditional:
+  begin
+  Decision := FGraph.Blackboard.GetString(IfThen(FConditionalKey <> '', FConditionalKey, 'next_route'));
+  if Assigned(FConditionalTargets) and FConditionalTargets.TryGetValue(Decision, TargetNode) and Assigned(TargetNode) then
+  NodesToRun.Add(TargetNode)
+  else if Assigned(FNextNo) then
+  NodesToRun.Add(FNextNo);
+  end;
+
+  lmManual:
+  begin
+  Decision := FGraph.Blackboard.GetString(IfThen(FManualTargetsKey <> '', FManualTargetsKey, 'next_targets'));
+  ManualNodes := TList<TAIAgentsNode>.Create;
+  try
+  BuildManualTargets(Decision, ManualNodes);
+  for Node in ManualNodes do
+  NodesToRun.Add(Node);
+  finally
+  ManualNodes.Free;
+  end;
+  end;
+
+  lmExpression:
+  begin
+  LBlackboardData := FGraph.Blackboard.FData;
+  // Evaluamos expresiones secuencialmente. Se a?ade el primer nodo cuya condici?n se cumpla.
+  if Assigned(FNextA) and (FExpressionA <> '') and EvalCondition(FExpressionA, LBlackboardData) then
+  NodesToRun.Add(FNextA)
+  else if Assigned(FNextB) and (FExpressionB <> '') and EvalCondition(FExpressionB, LBlackboardData) then
+  NodesToRun.Add(FNextB)
+  else if Assigned(FNextC) and (FExpressionC <> '') and EvalCondition(FExpressionC, LBlackboardData) then
+  NodesToRun.Add(FNextC)
+  else if Assigned(FNextD) and (FExpressionD <> '') and EvalCondition(FExpressionD, LBlackboardData) then
+  NodesToRun.Add(FNextD)
+  else if Assigned(FNextNo) then
+  NodesToRun.Add(FNextNo);
+  end;
+  end;
+  except
+  on E: Exception do
+  begin
+  FGraph.DoError(Sender, Self, E);
+  Exit;
+  end;
+  end;
+
+  // ---------------------------------------------------------------------------
+  // PASO 4: Despachar la ejecuci?n a los nodos de destino.
+  // ---------------------------------------------------------------------------
+  if NodesToRun.Count = 0 then
+  Exit;
+
+  if NodesToRun.Count = 1 then
+  begin
+  // Si solo hay un destino, continuamos la ejecuci?n de forma secuencial en este hilo
+  NodesToRun[0].DoExecute(FSourceNode, Self);
+  end
+  else
+  begin
+  // Fork paralelo: Si hay m?ltiples destinos, cada uno se convierte en una tarea del pool
+  for Node in NodesToRun do
+  begin
+  CreateAndQueueTask(Node, FSourceNode, Self);
+  end;
+  end;
+
+  finally
+  NodesToRun.Free;
+  end;
+  end;
+}
+
+procedure TAIAgentsLink.Print(Value: String);
 begin
   if Assigned(FGraph) then
     FGraph.DoPrint(Self, Value);
 end;
 
 procedure TAIAgentsLink.SetGraph(const Value: TAIAgentManager);
+begin
+  if Value <> FGraph then
+  begin
+    // 1. Desvincular del grafo anterior si exist?a
+    if Assigned(FGraph) then
+      FGraph.RemoveComponentFromList(Self);
+
+    FGraph := Value;
+
+    // 2. Registrar en el nuevo grafo
+    if Assigned(FGraph) then
+    begin
+      FGraph.AddComponentToList(Self); // <--- ESTO FALTABA
+      FGraph.FCompiled := False;
+    end;
+  end;
+end;
+
+procedure TAIAgentsLink.SetMaxCycles(const Value: Integer);
+begin
+  FMaxCycles := Value;
+  if FMaxCycles < 1 then
+    FMaxCycles := 1;
+end;
+
+procedure TAIAgentsLink.SetMode(const Value: TLinkMode);
+begin
+  if FMode <> Value then
+  begin
+    FMode := Value;
+    if Assigned(FGraph) then
+      FGraph.FCompiled := False;
+  end;
+end;
+
+procedure TAIAgentsLink.SetNextA(const Value: TAIAgentsNode);
+begin
+  FNextA := Value;
+end;
+
+procedure TAIAgentsLink.SetNextB(const Value: TAIAgentsNode);
+begin
+  FNextB := Value;
+end;
+
+procedure TAIAgentsLink.SetNextC(const Value: TAIAgentsNode);
+begin
+  FNextC := Value;
+end;
+
+procedure TAIAgentsLink.SetNextD(const Value: TAIAgentsNode);
+begin
+  FNextD := Value;
+end;
+
+procedure TAIAgentsLink.SetNextNo(const Value: TAIAgentsNode);
+begin
+  FNextNo := Value;
+end;
+
+procedure TAIAgentsLink.SetOnExecute(const Value: TAIAgentsLinkOnExecute);
+begin
+  FOnExecute := Value;
+end;
+
+{ TAIAgentsNode }
+
+constructor TAIAgentsNode.Create(aOwner: TComponent);
+begin
+  inherited;
+  FInEdges := TList<TAIAgentsLink>.Create;
+  FJoinLock := TCriticalSection.Create;
+  // --- NUEVO: Inicializar diccionario de join ---
+  FJoinInputs := TDictionary<TAIAgentsLink, string>.Create;
+  FJoinMode := jmAny;
+end;
+
+destructor TAIAgentsNode.Destroy;
+begin
+  FInEdges.Free;
+  FJoinLock.Free;
+  FJoinInputs.Free; // --- NUEVO: Liberar diccionario de join ---
+  inherited;
+end;
+
+procedure TAIAgentsNode.Reset;
+begin
+  FInEdges.Clear;
+  FJoinInputs.Clear; // --- NUEVO: Limpiar diccionario de join ---
+  Input     := '';
+  Output    := '';
+  FError    := False;
+  FMsgError := '';
+  // --- Limpiar estado de suspensi?n ---
+  FSuspended      := False;
+  FSuspendReason  := '';
+  FSuspendContext := '';
+end;
+
+procedure TAIAgentsNode.Suspend(const AReason: string; const AContext: string);
+begin
+  // Llamado desde hilo de trabajo. Solo marca el estado.
+  // DoExecute verifica este flag antes de llamar a OnExitNode y enrutar.
+  FSuspended      := True;
+  FSuspendReason  := AReason;
+  FSuspendContext := AContext;
+end;
+
+// --- MODIFICADO: M?todo DoExecute con l?gica de JOIN corregida ---
+procedure TAIAgentsNode.DoExecute(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink);
+var
+  CanExecute: Boolean;
+begin
+  if (FGraph = nil) or FGraph.FAbort then
+    Exit;
+
+  if Assigned(FGraph.OnEnterNode) then
+    TThread.Synchronize(nil,
+      procedure
+      begin
+        FGraph.OnEnterNode(FGraph, Self);
+      end);
+
+  CanExecute := False;
+  // Caso especial: reanudaci?n desde ResumeThread (aBeforeNode=nil, aLink=nil)
+  // con nodo join (FInEdges.Count > 1). Saltamos la puerta de join.
+  if (aBeforeNode = nil) and (aLink = nil) and (FInEdges.Count > 1) then
+  begin
+    CanExecute := True;
+    // FInput ya fue seteado por ResumeThread antes de llamar a DoExecute
+  end
+  else if FInEdges.Count > 1 then
+  begin
+    FJoinLock.Enter;
+    try
+      // Almacenar (o actualizar) la entrada del camino que llega.
+      // Esto es vital: si ya exist?a un valor de una vuelta anterior, se sobrescribe con el nuevo.
+      if (aBeforeNode <> nil) and (aLink <> nil) then
+        FJoinInputs.AddOrSetValue(aLink, aBeforeNode.Output);
+
+      case FJoinMode of
+        jmAny:
+          begin
+            CanExecute := True;
+            // Para jmAny, tomamos la entrada del primero que llega
+            if aBeforeNode <> nil then
+              Input := aBeforeNode.Output;
+          end;
+        jmAll:
+          begin
+            // Se ejecuta si tenemos datos de TODAS las entradas requeridas.
+            if FJoinInputs.Count >= FInEdges.Count then
+            begin
+              CanExecute := True;
+              // Consolidamos todas las entradas en un ?nico string
+              var
+              sb := TStringBuilder.Create;
+              try
+                for var Value in FJoinInputs.Values do
+                  sb.AppendLine(Value);
+                Input := sb.ToString;
+              finally
+                sb.Free;
+              end;
+            end;
+          end;
+      end;
+    finally
+      FJoinLock.Leave;
+    end;
+  end
+  else
+  begin
+    CanExecute := True;
+    if aBeforeNode <> nil then
+      Input := aBeforeNode.Output; // Comportamiento normal para nodos sin join
+  end;
+
+  if not CanExecute then
+    Exit;
+
+  try
+    // Limpiar estado al inicio de cada ejecuci?n
+    FSuspended      := False;
+    FSuspendReason  := '';
+    FSuspendContext := '';
+    FOutput         := '';   // reset para soportar ejecuciones m?ltiples del mismo nodo
+
+    if Assigned(FOnExecute) then
+      FOnExecute(Self, aBeforeNode, aLink, Self.Input, FOutput)
+    else if Assigned(FTool) then
+      FTool.Run(Self, Self.Input, FOutput);
+
+    if FOutput = '' then
+      FOutput := Input;
+
+    DoTraverseLinks(aBeforeNode, aLink);
+  finally
+    // --- LIMPIEZA DE ESTADO ---
+    if CanExecute and (FInEdges.Count > 1) then
+    begin
+      FJoinLock.Enter;
+      try
+        // Limpiar siempre después de ejecutar, tanto jmAny como jmAll.
+        // Para jmAll: la limpieza garantiza que el próximo ciclo (retry/loop)
+        // espere correctamente todas las entradas antes de disparar de nuevo.
+        FJoinInputs.Clear;
+      finally
+        FJoinLock.Leave;
+      end;
+    end;
+  end;
+end;
+
+function TAIAgentsNode.CheckJoinAndPrepareInput(aBeforeNode: TAIAgentsNode;
+  aLink: TAIAgentsLink): Boolean;
+var
+  sb: TStringBuilder;
+begin
+  Result := False;
+
+  // Caso especial: reanudacion desde ResumeThread (aBeforeNode=nil, aLink=nil)
+  // con nodo join (FInEdges.Count > 1). Saltamos la puerta de join.
+  if (aBeforeNode = nil) and (aLink = nil) and (FInEdges.Count > 1) then
+  begin
+    Result := True;
+    Exit; // FInput ya fue seteado por ResumeThread
+  end;
+
+  if FInEdges.Count > 1 then
+  begin
+    FJoinLock.Enter;
+    try
+      if (aBeforeNode <> nil) and (aLink <> nil) then
+        FJoinInputs.AddOrSetValue(aLink, aBeforeNode.Output);
+
+      case FJoinMode of
+        jmAny:
+          begin
+            Result := True;
+            if aBeforeNode <> nil then
+              Input := aBeforeNode.Output;
+          end;
+        jmAll:
+          begin
+            if FJoinInputs.Count >= FInEdges.Count then
+            begin
+              Result := True;
+              sb := TStringBuilder.Create;
+              try
+                for var Value in FJoinInputs.Values do
+                  sb.AppendLine(Value);
+                Input := sb.ToString;
+              finally
+                sb.Free;
+              end;
+            end;
+          end;
+      end;
+    finally
+      FJoinLock.Leave;
+    end;
+  end
+  else
+  begin
+    Result := True;
+    if aBeforeNode <> nil then
+      Input := aBeforeNode.Output;
+  end;
+end;
+
+procedure TAIAgentsNode.DoTraverseLinks(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink);
+begin
+  // Verificar suspension antes de enrutar al siguiente link
+  if FSuspended then
+  begin
+    if Assigned(FGraph) then
+      FGraph.DoNodeSuspended(Self, aBeforeNode, aLink);
+    Exit; // No llamar OnExitNode, no enrutar al siguiente Link
+  end;
+
+  if Assigned(FGraph) and Assigned(FGraph.OnExitNode) then
+    TThread.Synchronize(nil,
+      procedure
+      begin
+        FGraph.OnExitNode(FGraph, Self);
+      end);
+
+  if Assigned(Next) then
+  begin
+    Next.FSourceNode := Self;
+    Next.DoExecute(Self);
+  end;
+
+  // Checkpoint tras nodo exitoso
+  if Assigned(FGraph) then
+    FGraph.DoNodeCompleted(Self);
+end;
+
+procedure TAIAgentsNode.ForceFinalExecute;
+begin
+  try
+    if Assigned(FOnExecute) then
+      FOnExecute(Self, nil, nil, Self.Input, FOutput);
+
+    if Assigned(FGraph.OnEnd) then
+      TThread.Synchronize(nil,
+        procedure
+        begin
+          FGraph.OnEnd(Self, Output);
+        end);
+  except
+    on E: Exception do
+      FGraph.DoError(Self, nil, E);
+  end;
+end;
+
+procedure TAIAgentsNode.Print(Value: String);
+begin
+  if Assigned(FGraph) then
+    FGraph.DoPrint(Self, Value);
+end;
+
+function TAIAgentsNode.RequestConfirmation(const AQuestion: string; Buttons: TMsgStates; var AResponse: string): TMsgState;
+begin
+  if Assigned(FGraph) then
+    Result := FGraph.DoConfirm(Self, AQuestion, Buttons, AResponse)
+  else
+    Result := msAbort;
+end;
+
+function TAIAgentsNode.RequestInput(const ACaption, APrompt: string; var AValue: string): Boolean;
+var
+  Response: string;
+  ModalResult: TMsgState;
+begin
+  Response := AValue;
+  ModalResult := RequestConfirmation(ACaption + '|' + APrompt, [msOK, msCancel], Response);
+  if ModalResult = msOK then
+  begin
+    AValue := Response;
+    Result := True;
+  end
+  else
+    Result := False;
+end;
+
+procedure TAIAgentsNode.SetError(const Value: Boolean);
+begin
+  FError := Value;
+end;
+
+procedure TAIAgentsNode.SetGraph(const Value: TAIAgentManager);
 begin
   if Value <> FGraph then
   begin
@@ -1050,1555 +3323,87 @@ begin
   end;
 end;
 
-procedure TAIAgentsLink.SetMaxCycles(const Value: Integer);
+procedure TAIAgentsNode.SetInput(const Value: String);
 begin
-  FMaxCycles := Value;
-  if FMaxCycles < 1 then FMaxCycles := 1;
+  FInput := Value;
 end;
 
-procedure TAIAgentsLink.SetMode(const Value: TLinkMode);
+procedure TAIAgentsNode.SetJoinMode(const Value: TJoinMode);
 begin
-  if FMode <> Value then
-  begin
-    FMode := Value;
-    if Assigned(FGraph) then FGraph.FCompiled := False;
-  end;
+  FJoinMode := Value;
 end;
 
-procedure TAIAgentsLink.SetNextA(const Value: TAIAgentsNode); begin FNextA := Value; end;
-procedure TAIAgentsLink.SetNextB(const Value: TAIAgentsNode); begin FNextB := Value; end;
-procedure TAIAgentsLink.SetNextC(const Value: TAIAgentsNode); begin FNextC := Value; end;
-procedure TAIAgentsLink.SetNextD(const Value: TAIAgentsNode); begin FNextD := Value; end;
-procedure TAIAgentsLink.SetNextNo(const Value: TAIAgentsNode); begin FNextNo := Value; end;
-procedure TAIAgentsLink.SetOnExecute(const Value: TAIAgentsLinkOnExecute);
-begin FOnExecute := Value; end;
-
-// ---------------------------------------------------------------------------
-// TAIAgentsNode
-// ---------------------------------------------------------------------------
-
-constructor TAIAgentsNode.Create(AOwner: TComponent);
+procedure TAIAgentsNode.SetMsgError(const Value: String);
 begin
-  inherited;
-  FInEdges   := TAIAgentsLinkList.Create;
-  FJoinLock  := TCriticalSection.Create;
-  FJoinInputs := TAIAgentsJoinInputs.Create;
-  FJoinMode   := jmAny;
+  FMsgError := Value;
 end;
 
-destructor TAIAgentsNode.Destroy;
-begin
-  FInEdges.Free;
-  FJoinLock.Free;
-  FJoinInputs.Free;
-  inherited;
-end;
-
-procedure TAIAgentsNode.Reset;
-begin
-  FInEdges.Clear;
-  FJoinInputs.Clear;
-  FInput          := '';
-  FOutput         := '';
-  FError          := False;
-  FMsgError       := '';
-  FSuspended      := False;
-  FSuspendReason  := '';
-  FSuspendContext := '';
-end;
-
-procedure TAIAgentsNode.Suspend(const AReason: string; const AContext: string);
-begin
-  FSuspended      := True;
-  FSuspendReason  := AReason;
-  FSuspendContext := AContext;
-end;
-
-procedure TAIAgentsNode.DoExecute(ABeforeNode: TAIAgentsNode; ALink: TAIAgentsLink);
-var
-  CanExecute:  Boolean;
-  CombinedIn:  string;
-  V:           string;
-begin
-  if (FGraph = nil) or FGraph.IsAborted then
-    Exit;
-
-  if Assigned(FGraph.OnEnterNode) then
-    FGraph.OnEnterNode(FGraph, Self);
-
-  CanExecute := False;
-
-  // Reanudacion desde ResumeThread (aBeforeNode=nil, aLink=nil, nodo join)
-  if (ABeforeNode = nil) and (ALink = nil) and (FInEdges.Count > 1) then
-  begin
-    CanExecute := True;
-  end
-  else if FInEdges.Count > 1 then
-  begin
-    FJoinLock.Enter;
-    try
-      if (ABeforeNode <> nil) and (ALink <> nil) then
-        FJoinInputs.AddOrSetValue(ALink, ABeforeNode.Output);
-
-      case FJoinMode of
-        jmAny:
-          begin
-            CanExecute := True;
-            if ABeforeNode <> nil then
-              FInput := ABeforeNode.Output;
-          end;
-        jmAll:
-          begin
-            if FJoinInputs.Count >= FInEdges.Count then
-            begin
-              CanExecute  := True;
-              CombinedIn  := '';
-              for V in FJoinInputs.Values do
-              begin
-                if CombinedIn <> '' then CombinedIn := CombinedIn + #10;
-                CombinedIn := CombinedIn + V;
-              end;
-              FInput := CombinedIn;
-            end;
-          end;
-      end;
-    finally
-      FJoinLock.Leave;
-    end;
-  end
-  else
-  begin
-    CanExecute := True;
-    if ABeforeNode <> nil then
-      FInput := ABeforeNode.Output;
-  end;
-
-  if not CanExecute then Exit;
-
-  try
-    FSuspended      := False;
-    FSuspendReason  := '';
-    FSuspendContext := '';
-
-    if Assigned(FOnExecute) then
-      FOnExecute(Self, ABeforeNode, ALink, FInput, FOutput)
-    else if Assigned(FTool) then
-      FTool.Run(Self, FInput, FOutput);
-
-    if FOutput = '' then
-      FOutput := FInput;
-
-    // Verificar suspension
-    if FSuspended then
-    begin
-      if Assigned(FGraph) then
-        FGraph.DoNodeSuspended(Self, ABeforeNode, ALink);
-      Exit;
-    end;
-
-    if Assigned(FGraph.OnExitNode) then
-      FGraph.OnExitNode(FGraph, Self);
-
-    if Assigned(FNext) then
-    begin
-      FNext.FSourceNode := Self;
-      FNext.DoExecute(Self);
-    end;
-
-    if Assigned(FGraph) then
-      FGraph.DoNodeCompleted(Self);
-  finally
-    if CanExecute and (FInEdges.Count > 1) then
-    begin
-      FJoinLock.Enter;
-      try
-        if FJoinMode = jmAny then
-          FJoinInputs.Clear;
-        // jmAll: no limpiar (CombineLatest pattern)
-      finally
-        FJoinLock.Leave;
-      end;
-    end;
-  end;
-end;
-
-procedure TAIAgentsNode.ForceFinalExecute;
-begin
-  try
-    if Assigned(FOnExecute) then
-      FOnExecute(Self, nil, nil, FInput, FOutput);
-    if Assigned(FGraph) and Assigned(FGraph.OnEnd) then
-      FGraph.OnEnd(Self, FOutput);
-  except
-    on E: Exception do
-      FGraph.DoError(Self, nil, E);
-  end;
-end;
-
-procedure TAIAgentsNode.Print(Value: string);
-begin
-  if Assigned(FGraph) then
-    FGraph.DoPrint(Self, Value);
-end;
-
-function TAIAgentsNode.RequestConfirmation(const AQuestion: string;
-  Buttons: TMsgStates; var AResponse: string): TMsgState;
-begin
-  if Assigned(FGraph) then
-    Result := FGraph.DoConfirm(Self, AQuestion, Buttons, AResponse)
-  else
-    Result := msAbort;
-end;
-
-function TAIAgentsNode.RequestInput(const ACaption, APrompt: string;
-  var AValue: string): Boolean;
-var
-  Response:    string;
-  ModalResult: TMsgState;
-begin
-  Response    := AValue;
-  ModalResult := RequestConfirmation(ACaption + '|' + APrompt, [msOK, msCancel], Response);
-  if ModalResult = msOK then
-  begin
-    AValue := Response;
-    Result := True;
-  end
-  else
-    Result := False;
-end;
-
-procedure TAIAgentsNode.SetError(const Value: Boolean);   begin FError    := Value; end;
-procedure TAIAgentsNode.SetGraph(const Value: TAIAgentManager);
-begin
-  if Value <> FGraph then
-  begin
-    if Assigned(FGraph) then FGraph.RemoveComponentFromList(Self);
-    FGraph := Value;
-    if Assigned(FGraph) then
-    begin
-      FGraph.AddComponentToList(Self);
-      FGraph.FCompiled := False;
-    end;
-  end;
-end;
-procedure TAIAgentsNode.SetInput(const Value: string);    begin FInput    := Value; end;
-procedure TAIAgentsNode.SetJoinMode(const Value: TJoinMode); begin FJoinMode := Value; end;
-procedure TAIAgentsNode.SetMsgError(const Value: string); begin FMsgError  := Value; end;
 procedure TAIAgentsNode.SetNext(const Value: TAIAgentsLink);
 begin
   if Value <> FNext then
   begin
-    if Assigned(FNext) then FNext.FSourceNode := nil;
+    if Assigned(FNext) then
+      FNext.FSourceNode := nil;
     FNext := Value;
-    if Assigned(FNext) then FNext.FSourceNode := Self;
-    if Assigned(FGraph) then FGraph.FCompiled := False;
+    if Assigned(FNext) then
+      FNext.FSourceNode := Self;
+    if Assigned(Graph) then
+      Graph.FCompiled := False;
   end;
 end;
+
 procedure TAIAgentsNode.SetOnExecute(const Value: TAIAgentsNodeOnExecute);
-begin FOnExecute := Value; end;
-procedure TAIAgentsNode.SetOutput(const Value: string);   begin FOutput   := Value; end;
-procedure TAIAgentsNode.SetPromptName(const Value: string); begin FPromptName := Value; end;
-procedure TAIAgentsNode.SetTool(const Value: TAiToolBase); begin FTool := Value; end;
-
-// ---------------------------------------------------------------------------
-// TAIAgentManager — helpers internos
-// ---------------------------------------------------------------------------
-
-function TAIAgentManager.TrySetBusy: Boolean;
 begin
-  FBusyLock.Enter;
-  try
-    Result := FBusy;
-    if not FBusy then FBusy := True;
-  finally
-    FBusyLock.Leave;
-  end;
+  FOnExecute := Value;
 end;
 
-procedure TAIAgentManager.ClearBusy;
+procedure TAIAgentsNode.SetOutput(const Value: String);
 begin
-  FBusyLock.Enter;
-  try
-    FBusy := False;
-  finally
-    FBusyLock.Leave;
-  end;
+  FOutput := Value;
 end;
 
-// ---------------------------------------------------------------------------
-// TAIAgentManager — RunOrchestratorBody (nucleo de ejecucion)
-// ---------------------------------------------------------------------------
-
-procedure TAIAgentManager.RunOrchestratorBody(const AInitialInput: string;
-  AStartNode: TAIAgentsNode; AIsResume: Boolean);
-var
-  FinalStatus:    TAgentExecutionStatus;
-  FinalException: Exception;
-  FinalOutput:    string;
-  StartTime:      QWord;
-  HasActive:      Boolean;
+procedure TAIAgentsNode.SetPromptName(const Value: String);
 begin
-  FinalStatus    := esUnknown;
-  FinalException := nil;
-  try
-    try
-      if Assigned(FOnStart) then
-        FOnStart(Self, AInitialInput);
-
-      if FAbort then
-      begin
-        FinalStatus := esAborted;
-        Exit;
-      end;
-
-      // Ejecutar nodo inicial
-      if Assigned(AStartNode) then
-      begin
-        AStartNode.Input := AInitialInput;
-        AStartNode.DoExecute(nil, nil);
-      end;
-
-      // Esperar a que todas las tasks paralelas terminen
-      StartTime := GetTickCount64;
-      repeat
-        if FAbort then Break;
-
-        HasActive := FActiveTaskCount > 0;
-        if not HasActive then Break;
-
-        if (FTimeoutMs > 0) and
-           (GetTickCount64 - StartTime > QWord(FTimeoutMs)) then
-          raise Exception.CreateFmt(
-            'Graph execution timed out after %d ms.', [FTimeoutMs]);
-
-        Sleep(10);
-      until False;
-
-      // Determinar estado final
-      if not FAbort then
-      begin
-        FSuspendedStepsLock.Enter;
-        try
-          if FSuspendedSteps.Count > 0 then
-            FinalStatus := esSuspended
-          else
-            FinalStatus := esCompleted;
-        finally
-          FSuspendedStepsLock.Leave;
-        end;
-      end
-      else
-        FinalStatus := esAborted;
-
-    except
-      on E: Exception do
-      begin
-        Abort;
-        FinalException := E;
-        if Pos('timed out', E.Message) > 0 then
-          FinalStatus := esTimeout
-        else
-          FinalStatus := esError;
-        DoError(nil, nil, E);
-      end;
-    end;
-  finally
-    if FinalStatus = esUnknown then
-      FinalStatus := esAborted;
-
-    Blackboard.SetStatus(FinalStatus);
-
-    if (FinalStatus = esCompleted) and Assigned(FCheckpointer) then
-      FCheckpointer.DeleteCheckpoint(FCurrentThreadID);
-
-    FinalOutput := '';
-    if Assigned(FEndNode) then
-      FinalOutput := FEndNode.Output;
-
-    if Assigned(FOnFinish) then
-      FOnFinish(Self, AInitialInput, FinalOutput, FinalStatus, FinalException);
-
-    ClearBusy;
-  end;
+  FPromptName := Value;
 end;
 
-// ---------------------------------------------------------------------------
-// TAIAgentManager
-// ---------------------------------------------------------------------------
-
-constructor TAIAgentManager.Create(AOwner: TComponent);
+procedure TAIAgentsNode.SetTool(const Value: TAiToolBase);
 begin
-  inherited;
-  FBlackboard         := TAIBlackboard.Create;
-  FNodes              := TAIAgentNodeList.Create;
-  FLinks              := TAIAgentLinkList.Create;
-  FBusyLock           := TCriticalSection.Create;
-  FCompiled           := False;
-  FAsynchronous       := True;
-  FBusy               := False;
-  FAbort              := False;
-  FActiveTaskCount    := 0;
-  FMaxConcurrentTasks := 4;
-  FTimeoutMs          := 60000;
-  FSuspendedSteps     := TAiPendingStepList.Create(True);
-  FSuspendedStepsLock := TCriticalSection.Create;
-  FCheckpointer       := nil;
-  FCurrentThreadID    := '';
-  FCheckpointSeq      := 0;
-  FOrchestratorThread := nil;
+  FTool := Value;
 end;
 
-destructor TAIAgentManager.Destroy;
+{ TAIAgentsBase }
+procedure TAIAgentsBase.SetDescription(const Value: String);
 begin
-  // Esperar al orquestador si sigue corriendo
-  if Assigned(FOrchestratorThread) then
-  begin
-    FAbort := True;
-    FOrchestratorThread.WaitFor;
-    FreeAndNil(FOrchestratorThread);
-  end;
-  FSuspendedSteps.Free;
-  FSuspendedStepsLock.Free;
-  FNodes.Free;
-  FLinks.Free;
-  FBusyLock.Free;
-  FBlackboard.Free;
-  inherited;
+  FDescription := Value;
 end;
 
-procedure TAIAgentManager.Abort;
+procedure TAIAgentsBase.SetID(const Value: String);
 begin
-  FAbort := True;
+  FID := Value;
 end;
 
-procedure TAIAgentManager.AddComponentToList(AComponent: TAIAgentsBase);
+{ TAiToolBase }
+procedure TAiToolBase.Run(ANode: TAIAgentsNode; const AInput: string; var AOutput: string);
 begin
-  if AComponent is TAIAgentsNode then
-  begin
-    if FNodes.IndexOf(TAIAgentsNode(AComponent)) < 0 then
-      FNodes.Add(TAIAgentsNode(AComponent));
-  end
-  else if AComponent is TAIAgentsLink then
-  begin
-    if FLinks.IndexOf(TAIAgentsLink(AComponent)) < 0 then
-      FLinks.Add(TAIAgentsLink(AComponent));
-  end;
+  Execute(ANode, AInput, AOutput);
 end;
 
-procedure TAIAgentManager.RemoveComponentFromList(AComponent: TAIAgentsBase);
+procedure TAiToolBase.SetDescription(const Value: String);
 begin
-  if AComponent is TAIAgentsNode then
-    FNodes.Remove(TAIAgentsNode(AComponent))
-  else if AComponent is TAIAgentsLink then
-    FLinks.Remove(TAIAgentsLink(AComponent));
+  FDescription := Value;
 end;
 
-procedure TAIAgentManager.Notification(AComponent: TComponent; Operation: TOperation);
+procedure TAiToolBase.SetID(const Value: String);
 begin
-  inherited;
-  if AComponent is TAIAgentsBase then
-  begin
-    if Operation = opInsert then
-      AddComponentToList(TAIAgentsBase(AComponent))
-    else if Operation = opRemove then
-      RemoveComponentFromList(TAIAgentsBase(AComponent));
-  end;
+  FID := Value;
 end;
 
-procedure TAIAgentManager.DoPrint(Sender: TObject; Value: string);
+{ TAiSampleTool }
+procedure TAiAgentsToolSample.Execute(ANode: TAIAgentsNode; const AInput: string; var AOutput: string);
 begin
-  if Assigned(FOnPrint) then
-    FOnPrint(Sender, Value);
-end;
-
-procedure TAIAgentManager.DoError(Node: TAIAgentsNode; Link: TAIAgentsLink;
-  E: Exception);
-var
-  LAbort: Boolean;
-begin
-  Blackboard.SetStatus(esError);
-  Blackboard.SetString('Execution.ErrorMessage', E.Message);
-  LAbort := True;
-  if Assigned(FOnError) then
-    FOnError(Self, Node, Link, E, LAbort);
-  if LAbort then
-    Abort;
-end;
-
-function TAIAgentManager.DoConfirm(Node: TAIAgentsNode; const AQuestion: string;
-  Buttons: TMsgStates; var AResponse: string): TMsgState;
-begin
-  Result := msCancel;
-  if Assigned(FOnConfirm) then
-    FOnConfirm(Self, Node, AQuestion, Buttons, AResponse, Result)
-  else
-  begin
-    DoError(Node, nil, Exception.Create(
-      'User confirmation required but OnConfirm event is not assigned.'));
-    Result := msAbort;
-  end;
-end;
-
-procedure TAIAgentManager.DoNodeCompleted(ANode: TAIAgentsNode);
-var
-  LSnap: TAiCheckpointSnapshot;
-begin
-  if not Assigned(FCheckpointer) then Exit;
-  InterlockedIncrement(FCheckpointSeq);
-  LSnap := BuildSnapshot;
-  try
-    LSnap.CheckpointID := FCheckpointSeq;
-    FCheckpointer.SaveCheckpoint(FCurrentThreadID, LSnap);
-  finally
-    LSnap.Free;
-  end;
-end;
-
-procedure TAIAgentManager.DoNodeSuspended(ANode: TAIAgentsNode;
-  ABeforeNode: TAIAgentsNode; ALink: TAIAgentsLink);
-var
-  LStep:    TAiPendingStep;
-  LSnap:    TAiCheckpointSnapshot;
-  SrcName:  string;
-  LnkName:  string;
-begin
-  if Assigned(ABeforeNode) then SrcName := ABeforeNode.Name else SrcName := '';
-  if Assigned(ALink)       then LnkName := ALink.Name       else LnkName := '';
-
-  LStep := TAiPendingStep.Create(
-    ANode.Name, SrcName, LnkName,
-    ANode.Input, 'Suspended',
-    ANode.SuspendReason, ANode.SuspendContext);
-
-  FSuspendedStepsLock.Enter;
-  try
-    FSuspendedSteps.Add(LStep);
-  finally
-    FSuspendedStepsLock.Leave;
-  end;
-
-  Blackboard.SetStatus(esSuspended);
-
-  if Assigned(FCheckpointer) then
-  begin
-    InterlockedIncrement(FCheckpointSeq);
-    LSnap := BuildSnapshot;
-    try
-      LSnap.CheckpointID := FCheckpointSeq;
-      FCheckpointer.SaveCheckpoint(FCurrentThreadID, LSnap);
-    finally
-      LSnap.Free;
-    end;
-  end;
-
-  // Disparar OnSuspend directamente (sin GUI/TThread.Queue)
-  if Assigned(FOnSuspend) then
-    FOnSuspend(Self, FCurrentThreadID, ANode.Name,
-               ANode.SuspendReason, ANode.SuspendContext);
-end;
-
-function TAIAgentManager.BuildSnapshot: TAiCheckpointSnapshot;
-var
-  LNode:     TAIAgentsNode;
-  LLink:     TAIAgentsLink;
-  LNodeObj:  TJSONObject;
-  LJoinObj:  TJSONObject;
-  LNodeStates, LLinkStates, LBBObj: TJSONObject;
-  LJoinLink: TAIAgentsLink;
-  LLinkObj:  TJSONObject;
-  I:         Integer;
-begin
-  Result          := TAiCheckpointSnapshot.Create;
-  Result.ThreadID := FCurrentThreadID;
-  Result.GraphID  := Name;
-  Result.CreatedAt := Now;
-
-  // Blackboard
-  LBBObj := TJSONObject.Create;
-  SerializeBlackboard(FBlackboard, LBBObj);
-  Result.Blackboard := LBBObj;
-
-  // Estado de nodos
-  LNodeStates := TJSONObject.Create;
-  for I := 0 to FNodes.Count - 1 do
-  begin
-    LNode    := FNodes[I];
-    LNodeObj := TJSONObject.Create;
-    LNodeObj.Add('input',          LNode.FInput);
-    LNodeObj.Add('output',         LNode.FOutput);
-    LNodeObj.Add('suspended',      LNode.FSuspended);
-    LNodeObj.Add('suspendReason',  LNode.FSuspendReason);
-    LNodeObj.Add('suspendContext', LNode.FSuspendContext);
-    LJoinObj := TJSONObject.Create;
-    LNode.FJoinLock.Enter;
-    try
-      for LJoinLink in LNode.FJoinInputs.Keys do
-        LJoinObj.Add(LJoinLink.Name, LNode.FJoinInputs[LJoinLink]);
-    finally
-      LNode.FJoinLock.Leave;
-    end;
-    LNodeObj.Add('joinInputs', LJoinObj);
-    LNodeStates.Add(LNode.Name, LNodeObj);
-  end;
-  Result.NodeStates := LNodeStates;
-
-  // Estado de enlaces
-  LLinkStates := TJSONObject.Create;
-  for I := 0 to FLinks.Count - 1 do
-  begin
-    LLink    := FLinks[I];
-    LLinkObj := TJSONObject.Create;
-    LLinkObj.Add('noCycles', LLink.FNoCycles);
-    LLinkStates.Add(LLink.Name, LLinkObj);
-  end;
-  Result.LinkStates := LLinkStates;
-
-  // Pasos suspendidos
-  FSuspendedStepsLock.Enter;
-  try
-    for I := 0 to FSuspendedSteps.Count - 1 do
-    begin
-      with FSuspendedSteps[I] do
-        Result.PendingSteps.Add(TAiPendingStep.Create(
-          NodeName, SourceNodeName, LinkName,
-          Input, Status, SuspendReason, SuspendContext));
-    end;
-  finally
-    FSuspendedStepsLock.Leave;
-  end;
-end;
-
-procedure TAIAgentManager.RestoreFromSnapshot(ASnapshot: TAiCheckpointSnapshot);
-var
-  LNode:    TAIAgentsNode;
-  LLink:    TAIAgentsLink;
-  LNodeObj: TJSONObject;
-  LJoinObj: TJSONObject;
-  LSrcLink: TAIAgentsLink;
-  LLinkObj: TJSONObject;
-  I, J:     Integer;
-begin
-  // Blackboard
-  if Assigned(ASnapshot.Blackboard) then
-    DeserializeBlackboard(ASnapshot.Blackboard, FBlackboard);
-
-  // Estado de nodos
-  if Assigned(ASnapshot.NodeStates) then
-    for I := 0 to FNodes.Count - 1 do
-    begin
-      LNode    := FNodes[I];
-      LNodeObj := ASnapshot.NodeStates.Find(LNode.Name) as TJSONObject;
-      if not Assigned(LNodeObj) then Continue;
-      LNode.FInput          := LNodeObj.Get('input',          '');
-      LNode.FOutput         := LNodeObj.Get('output',         '');
-      LNode.FSuspended      := LNodeObj.Get('suspended',      False);
-      LNode.FSuspendReason  := LNodeObj.Get('suspendReason',  '');
-      LNode.FSuspendContext := LNodeObj.Get('suspendContext',  '');
-      LJoinObj := LNodeObj.Find('joinInputs') as TJSONObject;
-      if Assigned(LJoinObj) then
-      begin
-        LNode.FJoinLock.Enter;
-        try
-          LNode.FJoinInputs.Clear;
-          for J := 0 to LJoinObj.Count - 1 do
-          begin
-            LSrcLink := FindLink(LJoinObj.Names[J]);
-            if Assigned(LSrcLink) then
-              LNode.FJoinInputs.AddOrSetValue(LSrcLink, LJoinObj.Items[J].AsString);
-          end;
-        finally
-          LNode.FJoinLock.Leave;
-        end;
-      end;
-    end;
-
-  // Estado de enlaces
-  if Assigned(ASnapshot.LinkStates) then
-    for I := 0 to FLinks.Count - 1 do
-    begin
-      LLink    := FLinks[I];
-      LLinkObj := ASnapshot.LinkStates.Find(LLink.Name) as TJSONObject;
-      if Assigned(LLinkObj) then
-        LLink.FNoCycles := LLinkObj.Get('noCycles', 0);
-    end;
-
-  // Pasos suspendidos
-  FSuspendedStepsLock.Enter;
-  try
-    FSuspendedSteps.Clear;
-    for I := 0 to ASnapshot.PendingSteps.Count - 1 do
-      with ASnapshot.PendingSteps[I] do
-        FSuspendedSteps.Add(TAiPendingStep.Create(
-          NodeName, SourceNodeName, LinkName,
-          Input, Status, SuspendReason, SuspendContext));
-  finally
-    FSuspendedStepsLock.Leave;
-  end;
-end;
-
-function TAIAgentManager.FindLink(const AName: string): TAIAgentsLink;
-var
-  I: Integer;
-begin
-  Result := nil;
-  for I := 0 to FLinks.Count - 1 do
-    if SameText(FLinks[I].Name, AName) then
-      Exit(FLinks[I]);
-end;
-
-function TAIAgentManager.FindNode(const AName: string): TAIAgentsNode;
-var
-  I: Integer;
-begin
-  Result := nil;
-  for I := 0 to ComponentCount - 1 do
-    if (Components[I] is TAIAgentsNode) and
-       SameText(Components[I].Name, AName) then
-      Exit(TAIAgentsNode(Components[I]));
-end;
-
-procedure TAIAgentManager.ClearGraph;
-var
-  I: Integer;
-begin
-  FStartNode := nil;
-  FEndNode   := nil;
-  FNodes.Clear;
-  FLinks.Clear;
-  for I := ComponentCount - 1 downto 0 do
-    if Components[I] is TAIAgentsBase then
-      Components[I].Free;
-  FCompiled := False;
-end;
-
-procedure TAIAgentManager.Compile;
-var
-  LNode:       TAIAgentsNode;
-  LLink:       TAIAgentsLink;
-  LTargetNode: TAIAgentsNode;
-  StartCount, EndCount, I: Integer;
-begin
-  if FCompiled then Exit;
-  try
-    FAbort := False;
-    FBlackboard.Clear;
-
-    if not Assigned(FStartNode) then
-      raise Exception.Create('StartNode is not assigned.');
-    if not Assigned(FEndNode) then
-      raise Exception.Create('EndNode is not assigned.');
-
-    StartCount := 0;
-    EndCount   := 0;
-    for I := 0 to FNodes.Count - 1 do
-    begin
-      LNode := FNodes[I];
-      if LNode = FStartNode then Inc(StartCount);
-      if LNode = FEndNode   then Inc(EndCount);
-      LNode.Reset;
-    end;
-    if StartCount <> 1 then
-      raise Exception.CreateFmt('Invalid StartNode count: %d (expected 1).', [StartCount]);
-    if EndCount <> 1 then
-      raise Exception.CreateFmt('Invalid EndNode count: %d (expected 1).', [EndCount]);
-
-    for I := 0 to FLinks.Count - 1 do
-    begin
-      LLink := FLinks[I];
-      LLink.Ready    := False;
-      LLink.NoCycles := 0;
-      if not Assigned(LLink.FSourceNode) then
-        raise Exception.CreateFmt('Link "%s" has no source node.', [LLink.Name]);
-
-      if Assigned(LLink.NextA)  then LLink.NextA.FInEdges.Add(LLink);
-      if Assigned(LLink.NextB)  then LLink.NextB.FInEdges.Add(LLink);
-      if Assigned(LLink.NextC)  then LLink.NextC.FInEdges.Add(LLink);
-      if Assigned(LLink.NextD)  then LLink.NextD.FInEdges.Add(LLink);
-      if Assigned(LLink.NextNo) then LLink.NextNo.FInEdges.Add(LLink);
-
-      if Assigned(LLink.FConditionalTargets) then
-      begin
-        for LTargetNode in LLink.FConditionalTargets.Values do
-          LTargetNode.FInEdges.Add(LLink);
-      end;
-    end;
-    FCompiled := True;
-  except
-    on E: Exception do
-    begin
-      DoError(nil, nil, E);
-      raise;
-    end;
-  end;
-end;
-
-function TAIAgentManager.AddNode(const AName: string;
-  AExecuteProc: TAIAgentsNodeOnExecute): TAIAgentManager;
-var
-  LNode: TAIAgentsNode;
-begin
-  FCompiled := False;
-  if FindNode(AName) <> nil then
-    raise Exception.CreateFmt('Node "%s" already exists.', [AName]);
-  LNode := TAIAgentsNode.Create(Self);
-  LNode.Name      := AName;
-  LNode.Graph     := Self;
-  LNode.OnExecute := AExecuteProc;
-  Result := Self;
-end;
-
-function TAIAgentManager.AddEdge(const AStartNodeName, AEndNodeName: string): TAIAgentManager;
-var
-  LStart, LEnd: TAIAgentsNode;
-  LLink:        TAIAgentsLink;
-begin
-  FCompiled := False;
-  LStart := FindNode(AStartNodeName);
-  LEnd   := FindNode(AEndNodeName);
-  if not Assigned(LStart) then
-    raise Exception.CreateFmt('AddEdge: start node "%s" not found.', [AStartNodeName]);
-  if not Assigned(LEnd) then
-    raise Exception.CreateFmt('AddEdge: end node "%s" not found.', [AEndNodeName]);
-  LLink := TAIAgentsLink.Create(Self);
-  LLink.Name   := 'Link_' + AStartNodeName + '_to_' + AEndNodeName;
-  LLink.Graph  := Self;
-  LLink.Mode   := lmFanout;
-  LStart.Next  := LLink;
-  LLink.NextA  := LEnd;
-  Result := Self;
-end;
-
-function TAIAgentManager.AddConditionalEdge(const AStartNodeName: string;
-  const AConditionalLinkName: string;
-  AConditionalTargets: specialize TDictionary<string, string>): TAIAgentManager;
-var
-  LStart, LTarget: TAIAgentsNode;
-  LLink:           TAIAgentsLink;
-  LCondKey:        string;
-begin
-  FCompiled := False;
-  LStart := FindNode(AStartNodeName);
-  if not Assigned(LStart) then
-    raise Exception.CreateFmt('AddConditionalEdge: node "%s" not found.', [AStartNodeName]);
-
-  LLink      := TAIAgentsLink.Create(Self);
-  LLink.Name := AConditionalLinkName;
-  LLink.Graph := Self;
-  LLink.Mode := lmConditional;
-
-  for LCondKey in AConditionalTargets.Keys do
-  begin
-    LTarget := FindNode(AConditionalTargets[LCondKey]);
-    if not Assigned(LTarget) then
-      raise Exception.CreateFmt('AddConditionalEdge: target node "%s" not found.',
-        [AConditionalTargets[LCondKey]]);
-    LLink.AddConditionalTarget(LCondKey, LTarget);
-  end;
-
-  LStart.Next := LLink;
-  Result := Self;
-end;
-
-function TAIAgentManager.SetEntryPoint(const ANodeName: string): TAIAgentManager;
-begin
-  StartNode := FindNode(ANodeName);
-  if not Assigned(StartNode) then
-    raise Exception.CreateFmt('Entry point "%s" not found.', [ANodeName]);
-  Result := Self;
-end;
-
-function TAIAgentManager.SetFinishPoint(const ANodeName: string): TAIAgentManager;
-begin
-  EndNode := FindNode(ANodeName);
-  if not Assigned(EndNode) then
-    raise Exception.CreateFmt('Finish point "%s" not found.', [ANodeName]);
-  Result := Self;
-end;
-
-function TAIAgentManager.NewMessage(APrompt, ARole: string;
-  AMediaFiles: TAiMediaFilesArray): TAiChatMessage;
-var
-  MF: TAiMediaFile;
-begin
-  Result := TAiChatMessage.Create(APrompt, ARole);
-  try
-    for MF in AMediaFiles do
-      if Assigned(MF) then
-        Result.AddMediaFile(MF);
-  except
-    Result.Free;
-    raise;
-  end;
-end;
-
-function TAIAgentManager.Run(APrompt: string): string;
-var
-  LNewGUID: TGUID;
-begin
-  Result := '';
-
-  if TrySetBusy then
-    raise Exception.Create('The Agent Manager is currently busy.');
-
-  // Si no hay mensaje previo, crear uno
-  if not Assigned(Blackboard.AskMsg) then
-    Blackboard.AskMsg := NewMessage(APrompt, 'user', []);
-  // Reiniciar respuesta
-  Blackboard.ResMsg := TAiChatMessage.Create('', 'assistant');
-
-  // Generar ThreadID unico
-  CreateGUID(LNewGUID);
-  FCurrentThreadID := GUIDToString(LNewGUID);
-  FCheckpointSeq   := 0;
-  FActiveTaskCount := 0;
-  FAbort           := False;
-
-  FSuspendedStepsLock.Enter;
-  try
-    FSuspendedSteps.Clear;
-  finally
-    FSuspendedStepsLock.Leave;
-  end;
-
-  Blackboard.SetStatus(esRunning);
-  Compile;
-
-  // Liberar orquestador previo si existe
-  FreeAndNil(FOrchestratorThread);
-
-  if FAsynchronous then
-  begin
-    FOrchestratorThread := TAiOrchestratorThread.Create(
-      Self, APrompt, FStartNode, False);
-    FOrchestratorThread.Start;
-    Result := '';
-  end
-  else
-  begin
-    // Modo sincrono: crear hilo, esperar, liberar
-    FOrchestratorThread := TAiOrchestratorThread.Create(
-      Self, APrompt, FStartNode, False);
-    FOrchestratorThread.Start;
-    FOrchestratorThread.WaitFor;
-    FreeAndNil(FOrchestratorThread);
-
-    // Verificar status
-    case Blackboard.GetStatus of
-      esError:
-        raise Exception.Create('Execution failed: ' +
-          Blackboard.GetString('Execution.ErrorMessage'));
-      esTimeout:
-        raise Exception.Create('Execution timed out.');
-      esAborted:
-        raise Exception.Create('Execution aborted.');
-    end;
-
-    if Assigned(Blackboard.ResMsg) and (Blackboard.ResMsg.Content <> '') then
-      Result := Blackboard.ResMsg.Content
-    else if Assigned(FEndNode) then
-      Result := FEndNode.Output;
-  end;
-end;
-
-function TAIAgentManager.AddMessageAndRun(APrompt, ARole: string;
-  AMediaFiles: TAiMediaFilesArray): string;
-begin
-  Blackboard.AskMsg := NewMessage(APrompt, ARole, AMediaFiles);
-  Result := Run(APrompt);
-end;
-
-function TAIAgentManager.AddMessageAndRunMsg(APrompt, ARole: string;
-  AMediaFiles: TAiMediaFilesArray): TAiChatMessage;
-begin
-  if FAsynchronous then
-    raise Exception.Create(
-      'AddMessageAndRunMsg only works in synchronous mode (Asynchronous = False).');
-  AddMessageAndRun(APrompt, ARole, AMediaFiles);
-  Result := Blackboard.ResMsg;
-end;
-
-function TAIAgentManager.ResumeThread(const AThreadID, ANodeName,
-  AInput: string): Boolean;
-var
-  LSnap: TAiCheckpointSnapshot;
-  LNode: TAIAgentsNode;
-  I:     Integer;
-begin
-  Result := False;
-
-  if TrySetBusy then
-    raise Exception.Create('Agent is busy.');
-
-  try
-    // Cargar checkpoint del disco
-    LSnap := nil;
-    if Assigned(FCheckpointer) then
-      LSnap := FCheckpointer.LoadCheckpoint(AThreadID);
-
-    try
-      if Assigned(LSnap) then
-      begin
-        RestoreFromSnapshot(LSnap);
-        FCurrentThreadID := AThreadID;
-      end
-      else if FCurrentThreadID <> AThreadID then
-      begin
-        ClearBusy;
-        Exit;
-      end;
-    finally
-      LSnap.Free;
-    end;
-
-    LNode := FindNode(ANodeName);
-    if not Assigned(LNode) then
-    begin
-      ClearBusy;
-      raise Exception.CreateFmt('Node "%s" not found.', [ANodeName]);
-    end;
-
-    // Preparar nodo para reanudacion
-    LNode.FInput          := AInput;
-    LNode.FSuspended      := False;
-    LNode.FSuspendReason  := '';
-    LNode.FSuspendContext := '';
-
-    FSuspendedStepsLock.Enter;
-    try
-      for I := FSuspendedSteps.Count - 1 downto 0 do
-        if SameText(FSuspendedSteps[I].NodeName, ANodeName) then
-          FSuspendedSteps.Delete(I);
-    finally
-      FSuspendedStepsLock.Leave;
-    end;
-
-    FAbort           := False;
-    FActiveTaskCount := 0;
-    Blackboard.SetStatus(esRunning);
-
-    // Liberar orquestador previo
-    FreeAndNil(FOrchestratorThread);
-
-    FOrchestratorThread := TAiOrchestratorThread.Create(Self, AInput, LNode, True);
-    FOrchestratorThread.Start;
-
-    if not FAsynchronous then
-    begin
-      FOrchestratorThread.WaitFor;
-      FreeAndNil(FOrchestratorThread);
-    end;
-
-    Result := True;
-  except
-    ClearBusy;
-    raise;
-  end;
-end;
-
-function TAIAgentManager.GetActiveThreads: TStringDynArray;
-begin
-  if Assigned(FCheckpointer) then
-    Result := FCheckpointer.GetActiveThreadIDs
-  else
-  begin
-    if (FCurrentThreadID <> '') and
-       (Blackboard.GetStatus = esSuspended) then
-    begin
-      SetLength(Result, 1);
-      Result[0] := FCurrentThreadID;
-    end
-    else
-      SetLength(Result, 0);
-  end;
-end;
-
-// ---------------------------------------------------------------------------
-// SaveToStream / LoadFromStream (JSON grafo completo)
-// ---------------------------------------------------------------------------
-
-procedure TAIAgentManager.SaveToStream(AStream: TStream);
-var
-  LRoot, LGraphObj, LNodeObj, LLinkObj,
-  LTargetsObj, LExpObj, LCondTargetsObj,
-  LToolDataObj: TJSONObject;
-  LNodesArr, LLinksArr: TJSONArray;
-  LNode:   TAIAgentsNode;
-  LLink:   TAIAgentsLink;
-  LWriter: TStringStream;
-  LCondKey: string;
-  LPropsJ:  TJSONObject;
-  I:        Integer;
-begin
-  LRoot := TJSONObject.Create;
-  try
-    // graph
-    LGraphObj := TJSONObject.Create;
-    LGraphObj.Add('description', FDescription);
-    if Assigned(FStartNode) then LGraphObj.Add('startNode', FStartNode.Name)
-    else                         LGraphObj.Add('startNode', TJSONNull.Create);
-    if Assigned(FEndNode)   then LGraphObj.Add('endNode',   FEndNode.Name)
-    else                         LGraphObj.Add('endNode',   TJSONNull.Create);
-    LGraphObj.Add('maxConcurrentTasks', FMaxConcurrentTasks);
-    LGraphObj.Add('timeoutMs',          Integer(FTimeoutMs));
-    LRoot.Add('graph', LGraphObj);
-
-    // nodes
-    LNodesArr := TJSONArray.Create;
-    for I := 0 to FNodes.Count - 1 do
-    begin
-      LNode    := FNodes[I];
-      LNodeObj := TJSONObject.Create;
-      LNodeObj.Add('name',        LNode.Name);
-      LNodeObj.Add('description', LNode.Description);
-      LNodeObj.Add('joinMode', GetEnumName(TypeInfo(TJoinMode), Ord(LNode.JoinMode)));
-      LNodeObj.Add('promptName',  LNode.PromptName);
-
-      if Assigned(LNode.Tool) then
-      begin
-        LToolDataObj := TJSONObject.Create;
-        LToolDataObj.Add('className', LNode.Tool.ClassName);
-        LPropsJ := TJSONObject.Create;
-        SerializeToolProperties(LNode.Tool, LPropsJ);
-        LToolDataObj.Add('properties', LPropsJ);
-        LNodeObj.Add('tool', LToolDataObj);
-      end
-      else
-        LNodeObj.Add('tool', TJSONNull.Create);
-
-      if Assigned(LNode.Next) then LNodeObj.Add('nextLink', LNode.Next.Name)
-      else                         LNodeObj.Add('nextLink', TJSONNull.Create);
-
-      LNodesArr.Add(LNodeObj);
-    end;
-    LRoot.Add('nodes', LNodesArr);
-
-    // links
-    LLinksArr := TJSONArray.Create;
-    for I := 0 to FLinks.Count - 1 do
-    begin
-      LLink    := FLinks[I];
-      LLinkObj := TJSONObject.Create;
-      LLinkObj.Add('name',        LLink.Name);
-      LLinkObj.Add('description', LLink.Description);
-      LLinkObj.Add('mode', GetEnumName(TypeInfo(TLinkMode), Ord(LLink.Mode)));
-      LLinkObj.Add('maxCycles', LLink.MaxCycles);
-      if Assigned(LLink.FSourceNode) then
-        LLinkObj.Add('sourceNode', LLink.FSourceNode.Name)
-      else
-        LLinkObj.Add('sourceNode', TJSONNull.Create);
-
-      LTargetsObj := TJSONObject.Create;
-      if Assigned(LLink.NextA)  then LTargetsObj.Add('nextA',  LLink.NextA.Name)  else LTargetsObj.Add('nextA',  TJSONNull.Create);
-      if Assigned(LLink.NextB)  then LTargetsObj.Add('nextB',  LLink.NextB.Name)  else LTargetsObj.Add('nextB',  TJSONNull.Create);
-      if Assigned(LLink.NextC)  then LTargetsObj.Add('nextC',  LLink.NextC.Name)  else LTargetsObj.Add('nextC',  TJSONNull.Create);
-      if Assigned(LLink.NextD)  then LTargetsObj.Add('nextD',  LLink.NextD.Name)  else LTargetsObj.Add('nextD',  TJSONNull.Create);
-      if Assigned(LLink.NextNo) then LTargetsObj.Add('nextNo', LLink.NextNo.Name) else LTargetsObj.Add('nextNo', TJSONNull.Create);
-      LLinkObj.Add('targets', LTargetsObj);
-
-      if LLink.Mode = lmExpression then
-      begin
-        LExpObj := TJSONObject.Create;
-        LExpObj.Add('expressionA', LLink.ExpressionA);
-        LExpObj.Add('expressionB', LLink.ExpressionB);
-        LExpObj.Add('expressionC', LLink.ExpressionC);
-        LExpObj.Add('expressionD', LLink.ExpressionD);
-        LLinkObj.Add('expressions', LExpObj);
-      end;
-
-      if LLink.Mode = lmConditional then
-      begin
-        LLinkObj.Add('conditionalKey', LLink.ConditionalKey);
-        if Assigned(LLink.FConditionalTargets) then
-        begin
-          LCondTargetsObj := TJSONObject.Create;
-          for LCondKey in LLink.FConditionalTargets.Keys do
-            LCondTargetsObj.Add(LCondKey, LLink.FConditionalTargets[LCondKey].Name);
-          LLinkObj.Add('conditionalTargets', LCondTargetsObj);
-        end;
-      end;
-
-      LLinksArr.Add(LLinkObj);
-    end;
-    LRoot.Add('links', LLinksArr);
-
-    LWriter := TStringStream.Create(LRoot.AsJSON);
-    try
-      AStream.CopyFrom(LWriter, 0);
-    finally
-      LWriter.Free;
-    end;
-  finally
-    LRoot.Free;
-  end;
-end;
-
-procedure TAIAgentManager.LoadFromStream(AStream: TStream);
-var
-  LRoot, LGraphJSON, LNodeJSON, LLinkJSON, LTargetsJSON,
-  LCondTargetsJSON, LToolDataObj, LPropsJSON: TJSONObject;
-  LNodesArr, LLinksArr: TJSONArray;
-  LContent: TStringStream;
-  LJsonData: TJSONData;
-  LNode: TAIAgentsNode;
-  LLink: TAIAgentsLink;
-  LNodeMap: specialize TDictionary<string, TAIAgentsNode>;
-  LLinkMap: specialize TDictionary<string, TAIAgentsLink>;
-  LKey, LToolClassName: string;
-  LToolClass: TClass;
-  LJoinModeOrd, LLinkModeOrd, I, J: Integer;
-begin
-  if not Assigned(AStream) or (AStream.Size = 0) then Exit;
-  ClearGraph;
-
-  LNodeMap := specialize TDictionary<string, TAIAgentsNode>.Create;
-  LLinkMap := specialize TDictionary<string, TAIAgentsLink>.Create;
-  LContent := TStringStream.Create('');
-  try
-    LContent.CopyFrom(AStream, 0);
-    LJsonData := GetJSON(LContent.DataString);
-    if not (LJsonData is TJSONObject) then
-      raise Exception.Create('Invalid JSON format.');
-    LRoot := TJSONObject(LJsonData);
-    try
-      // Pasada 1A: crear nodos
-      LNodesArr := LRoot.Find('nodes') as TJSONArray;
-      if Assigned(LNodesArr) then
-        for I := 0 to LNodesArr.Count - 1 do
-        begin
-          LNodeJSON := LNodesArr.Items[I] as TJSONObject;
-          LKey := LNodeJSON.Get('name', '');
-          if LKey = '' then raise Exception.Create('Node without name.');
-
-          LNode := TAIAgentsNode.Create(Self);
-          LNode.Name        := LKey;
-          LNode.Description := LNodeJSON.Get('description', '');
-          LNode.PromptName  := LNodeJSON.Get('promptName',  '');
-
-          LJoinModeOrd := GetEnumValue(TypeInfo(TJoinMode),
-                            LNodeJSON.Get('joinMode', 'jmAny'));
-          if LJoinModeOrd >= 0 then
-            LNode.JoinMode := TJoinMode(LJoinModeOrd);
-
-          // Tool
-          LToolDataObj := LNodeJSON.Find('tool') as TJSONObject;
-          if Assigned(LToolDataObj) then
-          begin
-            LToolClassName := LToolDataObj.Get('className', '');
-            if LToolClassName <> '' then
-            begin
-              LToolClass := TEngineRegistry.Instance.FindToolClass(LToolClassName);
-              if Assigned(LToolClass) and LToolClass.InheritsFrom(TAiToolBase) then
-              begin
-                LNode.Tool := TAiToolBase(TComponentClass(LToolClass).Create(LNode));
-                LPropsJSON := LToolDataObj.Find('properties') as TJSONObject;
-                if Assigned(LPropsJSON) then
-                  DeserializeToolProperties(LNode.Tool, LPropsJSON);
-              end;
-            end;
-          end;
-
-          LNodeMap.Add(LKey, LNode);
-        end;
-
-      // Pasada 1B: crear enlaces
-      LLinksArr := LRoot.Find('links') as TJSONArray;
-      if Assigned(LLinksArr) then
-        for I := 0 to LLinksArr.Count - 1 do
-        begin
-          LLinkJSON := LLinksArr.Items[I] as TJSONObject;
-          LKey := LLinkJSON.Get('name', '');
-          if LKey = '' then raise Exception.Create('Link without name.');
-
-          LLink := TAIAgentsLink.Create(Self);
-          LLink.Name        := LKey;
-          LLink.Description := LLinkJSON.Get('description', '');
-          LLink.MaxCycles   := LLinkJSON.Get('maxCycles',   1);
-
-          LLinkModeOrd := GetEnumValue(TypeInfo(TLinkMode),
-                            LLinkJSON.Get('mode', 'lmFanout'));
-          if LLinkModeOrd >= 0 then
-            LLink.Mode := TLinkMode(LLinkModeOrd);
-
-          if LLink.Mode = lmConditional then
-            LLink.ConditionalKey := LLinkJSON.Get('conditionalKey', 'next_route');
-
-          LLinkMap.Add(LKey, LLink);
-        end;
-
-      // Pasada 2: conectar
-      if Assigned(LNodesArr) then
-        for I := 0 to LNodesArr.Count - 1 do
-        begin
-          LNodeJSON := LNodesArr.Items[I] as TJSONObject;
-          LNode     := LNodeMap[LNodeJSON.Get('name', '')];
-          LKey      := LNodeJSON.Get('nextLink', '');
-          if (LKey <> '') and LLinkMap.TryGetValue(LKey, LLink) then
-            LNode.Next := LLink;
-        end;
-
-      if Assigned(LLinksArr) then
-        for I := 0 to LLinksArr.Count - 1 do
-        begin
-          LLinkJSON  := LLinksArr.Items[I] as TJSONObject;
-          LLink      := LLinkMap[LLinkJSON.Get('name', '')];
-          LKey := LLinkJSON.Get('sourceNode', '');
-          if (LKey <> '') and LNodeMap.TryGetValue(LKey, LNode) then
-            LLink.FSourceNode := LNode;
-
-          LTargetsJSON := LLinkJSON.Find('targets') as TJSONObject;
-          if Assigned(LTargetsJSON) then
-          begin
-            LKey := LTargetsJSON.Get('nextA', '');  if (LKey <> '') and LNodeMap.TryGetValue(LKey, LNode) then LLink.NextA := LNode;
-            LKey := LTargetsJSON.Get('nextB', '');  if (LKey <> '') and LNodeMap.TryGetValue(LKey, LNode) then LLink.NextB := LNode;
-            LKey := LTargetsJSON.Get('nextC', '');  if (LKey <> '') and LNodeMap.TryGetValue(LKey, LNode) then LLink.NextC := LNode;
-            LKey := LTargetsJSON.Get('nextD', '');  if (LKey <> '') and LNodeMap.TryGetValue(LKey, LNode) then LLink.NextD := LNode;
-            LKey := LTargetsJSON.Get('nextNo', ''); if (LKey <> '') and LNodeMap.TryGetValue(LKey, LNode) then LLink.NextNo := LNode;
-          end;
-
-          LCondTargetsJSON := LLinkJSON.Find('conditionalTargets') as TJSONObject;
-          if Assigned(LCondTargetsJSON) then
-            for J := 0 to LCondTargetsJSON.Count - 1 do
-            begin
-              LKey := LCondTargetsJSON.Items[J].AsString;
-              if LNodeMap.TryGetValue(LKey, LNode) then
-                LLink.AddConditionalTarget(LCondTargetsJSON.Names[J], LNode);
-            end;
-        end;
-
-      // Graph config
-      LGraphJSON := LRoot.Find('graph') as TJSONObject;
-      if Assigned(LGraphJSON) then
-      begin
-        FDescription        := LGraphJSON.Get('description',        '');
-        FMaxConcurrentTasks := LGraphJSON.Get('maxConcurrentTasks', 4);
-        FTimeoutMs          := Cardinal(LGraphJSON.Get('timeoutMs', 60000));
-        LKey := LGraphJSON.Get('startNode', '');
-        if (LKey <> '') and LNodeMap.TryGetValue(LKey, LNode) then StartNode := LNode;
-        LKey := LGraphJSON.Get('endNode', '');
-        if (LKey <> '') and LNodeMap.TryGetValue(LKey, LNode) then EndNode   := LNode;
-      end;
-
-      FCompiled := False;
-    finally
-      LRoot.Free;
-    end;
-  finally
-    LContent.Free;
-    LLinkMap.Free;
-    LNodeMap.Free;
-  end;
-end;
-
-procedure TAIAgentManager.SaveStateToStream(AStream: TStream);
-var
-  LRoot, LStateObj, LBBObj, LNodeStatesObj, LLinkStatesObj,
-  LNodeStateObj, LJoinInputsObj, LLinkStateObj: TJSONObject;
-  LWriter: TStringStream;
-  LNode:   TAIAgentsNode;
-  LLink:   TAIAgentsLink;
-  LJoinLink: TAIAgentsLink;
-  I:         Integer;
-begin
-  LRoot := TJSONObject.Create;
-  try
-    LStateObj := TJSONObject.Create;
-    LRoot.Add('executionState', LStateObj);
-
-    LBBObj := TJSONObject.Create;
-    SerializeBlackboard(FBlackboard, LBBObj);
-    LStateObj.Add('blackboard', LBBObj);
-
-    LNodeStatesObj := TJSONObject.Create;
-    for I := 0 to FNodes.Count - 1 do
-    begin
-      LNode        := FNodes[I];
-      LNodeStateObj := TJSONObject.Create;
-      LNodeStateObj.Add('input',  LNode.Input);
-      LNodeStateObj.Add('output', LNode.Output);
-
-      LJoinInputsObj := TJSONObject.Create;
-      LNode.FJoinLock.Enter;
-      try
-        for LJoinLink in LNode.FJoinInputs.Keys do
-        LJoinInputsObj.Add(LJoinLink.Name, LNode.FJoinInputs[LJoinLink]);
-      finally
-        LNode.FJoinLock.Leave;
-      end;
-      LNodeStateObj.Add('joinInputs', LJoinInputsObj);
-      LNodeStatesObj.Add(LNode.Name, LNodeStateObj);
-    end;
-    LStateObj.Add('nodeStates', LNodeStatesObj);
-
-    LLinkStatesObj := TJSONObject.Create;
-    for I := 0 to FLinks.Count - 1 do
-    begin
-      LLink        := FLinks[I];
-      LLinkStateObj := TJSONObject.Create;
-      LLinkStateObj.Add('noCycles', LLink.NoCycles);
-      LLinkStatesObj.Add(LLink.Name, LLinkStateObj);
-    end;
-    LStateObj.Add('linkStates', LLinkStatesObj);
-
-    LWriter := TStringStream.Create(LRoot.AsJSON);
-    try
-      AStream.CopyFrom(LWriter, 0);
-    finally
-      LWriter.Free;
-    end;
-  finally
-    LRoot.Free;
-  end;
-end;
-
-procedure TAIAgentManager.LoadStateFromStream(AStream: TStream);
-var
-  LRoot, LStateObj, LBBObj, LNodeStatesObj,
-  LLinkStatesObj, LNodeStateObj, LJoinInputsObj, LLinkStateObj: TJSONObject;
-  LContent: TStringStream;
-  LJsonData: TJSONData;
-  LNode:    TAIAgentsNode;
-  LLink, LSrcLink: TAIAgentsLink;
-  LLinkMap: specialize TDictionary<string, TAIAgentsLink>;
-  I, J:     Integer;
-  LKey:     string;
-begin
-  if ComponentCount = 0 then
-    raise Exception.Create('Cannot load state into empty graph.');
-
-  LLinkMap := specialize TDictionary<string, TAIAgentsLink>.Create;
-  for I := 0 to ComponentCount - 1 do
-    if Components[I] is TAIAgentsLink then
-      LLinkMap.Add(Components[I].Name, TAIAgentsLink(Components[I]));
-
-  LContent := TStringStream.Create('');
-  try
-    LContent.CopyFrom(AStream, 0);
-    LJsonData := GetJSON(LContent.DataString);
-    if not (LJsonData is TJSONObject) then
-      raise Exception.Create('Invalid state JSON.');
-    LRoot := TJSONObject(LJsonData);
-    try
-      LStateObj := LRoot.Find('executionState') as TJSONObject;
-      if not Assigned(LStateObj) then Exit;
-
-      LBBObj := LStateObj.Find('blackboard') as TJSONObject;
-      if Assigned(LBBObj) then
-        DeserializeBlackboard(LBBObj, FBlackboard);
-
-      LNodeStatesObj := LStateObj.Find('nodeStates') as TJSONObject;
-      if Assigned(LNodeStatesObj) then
-        for I := 0 to LNodeStatesObj.Count - 1 do
-        begin
-          LNode := FindNode(LNodeStatesObj.Names[I]);
-          if not Assigned(LNode) then Continue;
-          LNodeStateObj := LNodeStatesObj.Items[I] as TJSONObject;
-          LNode.Input  := LNodeStateObj.Get('input',  '');
-          LNode.Output := LNodeStateObj.Get('output', '');
-
-          LNode.FJoinInputs.Clear;
-          LJoinInputsObj := LNodeStateObj.Find('joinInputs') as TJSONObject;
-          if Assigned(LJoinInputsObj) then
-            for J := 0 to LJoinInputsObj.Count - 1 do
-            begin
-              LKey := LJoinInputsObj.Names[J];
-              if LLinkMap.TryGetValue(LKey, LSrcLink) then
-                LNode.FJoinInputs.AddOrSetValue(LSrcLink,
-                  LJoinInputsObj.Items[J].AsString);
-            end;
-        end;
-
-      LLinkStatesObj := LStateObj.Find('linkStates') as TJSONObject;
-      if Assigned(LLinkStatesObj) then
-        for I := 0 to LLinkStatesObj.Count - 1 do
-        begin
-          LKey := LLinkStatesObj.Names[I];
-          if LLinkMap.TryGetValue(LKey, LLink) then
-          begin
-            LLinkStateObj := LLinkStatesObj.Items[I] as TJSONObject;
-            LLink.FNoCycles := LLinkStateObj.Get('noCycles', 0);
-          end;
-        end;
-    finally
-      LRoot.Free;
-    end;
-  finally
-    LContent.Free;
-    LLinkMap.Free;
-  end;
-end;
-
-// ---------------------------------------------------------------------------
-// Setters TAIAgentManager
-// ---------------------------------------------------------------------------
-
-procedure TAIAgentManager.SetAsynchronous(const Value: Boolean);
-begin FAsynchronous := Value; end;
-
-procedure TAIAgentManager.SetCheckpointer(const Value: IAiCheckpointer);
-begin FCheckpointer := Value; end;
-
-procedure TAIAgentManager.SetDescription(const Value: string);
-begin FDescription := Value; end;
-
-procedure TAIAgentManager.SetEndNode(const Value: TAIAgentsNode);
-begin
-  if FEndNode <> Value then
-  begin
-    FEndNode  := Value;
-    FCompiled := False;
-  end;
-end;
-
-procedure TAIAgentManager.SetMaxConcurrentTasks(const Value: Integer);
-begin
-  if Value >= 1 then
-    FMaxConcurrentTasks := Value
-  else
-    FMaxConcurrentTasks := 1;
-end;
-
-procedure TAIAgentManager.SetOnConfirm(const Value: TAIAgentsOnConfirm);
-begin FOnConfirm := Value; end;
-
-procedure TAIAgentManager.SetOnEnd(const Value: TAIAgentsOnEnd);
-begin FOnEnd := Value; end;
-
-procedure TAIAgentManager.SetOnEnterNode(const Value: TAIAgentsOnEnterNode);
-begin FOnEnterNode := Value; end;
-
-procedure TAIAgentManager.SetOnError(const Value: TAIAgentsOnError);
-begin FOnError := Value; end;
-
-procedure TAIAgentManager.SetOnExitNode(const Value: TAIAgentsOnExitNode);
-begin FOnExitNode := Value; end;
-
-procedure TAIAgentManager.SetOnFinish(const Value: TAIAgentsOnFinish);
-begin FOnFinish := Value; end;
-
-procedure TAIAgentManager.SetOnPrint(const Value: TAIAgentsOnPrint);
-begin FOnPrint := Value; end;
-
-procedure TAIAgentManager.SetOnStart(const Value: TAIAgentsOnStart);
-begin FOnStart := Value; end;
-
-procedure TAIAgentManager.SetOnSuspend(const Value: TAIAgentsOnSuspend);
-begin FOnSuspend := Value; end;
-
-procedure TAIAgentManager.SetStartNode(const Value: TAIAgentsNode);
-begin
-  if FStartNode <> Value then
-  begin
-    FStartNode := Value;
-    FCompiled  := False;
-  end;
-end;
-
-// ---------------------------------------------------------------------------
-
-procedure Register;
-begin
-  RegisterComponents('MakerAI',
-    [TAIAgentManager, TAIAgentsNode, TAIAgentsLink, TAiAgentsToolSample, TAIAgents]);
+  ANode.Print(Format('TAiSampleTool: Executing with input "%s"', [AInput]));
+  AOutput := 'Output from TAiSampleTool: ' + AInput;
 end;
 
 end.

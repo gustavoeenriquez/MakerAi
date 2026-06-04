@@ -1,18 +1,18 @@
-// MIT License
+﻿// IT License
 //
-// Copyright (c) 2024-2026 Gustavo Enriquez
+// Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,250 +20,486 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enriquez
+// Nombre: Gustavo Enr�quez
+// Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
-//
-// --------- FPC PORT --------------------
-// Groq expone un endpoint OpenAI-compatible en https://api.groq.com/openai/v1/
-//
-// Solo sobrescribe InitChatCompletions para agregar:
-//   - reasoning_format / reasoning_effort
-//   - Validacion: Raw mode incompatible con Tools/JSON
-//   - Optimizacion imagen unica (single image per request)
-//   - JSON Schema wrapper {name: 'structured_response', schema: {...}}
-//   - max_tokens (no max_completion_tokens, aunque ThinkingLevel este activo)
-//
-// API key: variable de entorno GROQ_API_KEY (o '@GROQ_API_KEY')
-// Modelos vision: llama-3.2-11b-vision-preview (una sola imagen por request)
+
+
+// Modelos con vision actualmente en Groq (Abr 2026):
+//   meta-llama/llama-4-scout-17b-16e-instruct  (131K ctx, 8K output, vision + tools)
+//   openai/gpt-oss-120b                        (131K ctx, 65K output, vision + reasoning)
+// Limites de vision en Groq:
+//   - Imagen maxima por URL: 20MB | por base64: 4MB
+//   - Maximo 5 imagenes por request (llama-4-scout)
 
 unit uMakerAi.Chat.Groq;
-
-{$mode objfpc}{$H+}
 
 interface
 
 uses
-  SysUtils, Classes,
-  fpjson, jsonparser,
-  uMakerAi.Chat,
-  uMakerAi.Core,
-  uMakerAi.Chat.Messages,
-  UMakerAi.ParamsRegistry;
+  System.SysUtils, System.Types, System.UITypes, System.Classes,
+  System.Threading,
+  System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections,
+  System.NetEncoding,
+  System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
+  System.Net.HttpClientComponent,
+  REST.JSON, REST.Types, REST.Client,
 
-const
-  GlGroqUrl = 'https://api.groq.com/openai/v1/';
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core, uMakerAi.Embeddings.Core, uMakerAi.Chat.Messages;
 
-type
+Type
+  // Este modelo de reasoning por ahora solo se ha detectado en Groq, as� que se implementa solo aqu�
 
-  TAiGroqChat = class(TAiChat)
-  protected
-    function InitChatCompletions: string; override;
-  public
-    constructor Create(Sender: TComponent); override;
-    destructor  Destroy; override;
-    class function  GetDriverName: string; override;
-    class procedure RegisterDefaultParams(Params: TStrings); override;
-    class function  CreateInstance(Sender: TComponent): TAiChat; override;
-  published
-  end;
+  TAiReasoningFormat = (rfAuto, rfParsed, rfRaw, rfHidden);
+  TAiReasoningEffort = (reAuto, reNone, reDefault);
+
+  TAiGroqChat = Class(TAiChat)
+  Private
+    FReasoningFormat: TAiReasoningFormat;
+    FReasoningEffort: TAiReasoningEffort;
+  Protected
+    Function InitChatCompletions: String; Override;
+    Function InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
+  Public
+    Constructor Create(Sender: TComponent); Override;
+    Destructor Destroy; Override;
+    class function GetDriverName: string; Override;
+    class procedure RegisterDefaultParams(Params: TStrings); Override;
+    class function CreateInstance(Sender: TComponent): TAiChat; Override;
+  Published
+  End;
+
+  TAiGroqEmbeddings = Class(TAiEmbeddings)
+  Public
+    // groq actualmente no maneja modelos de embeddings
+    Function CreateEmbedding(Input, User: String; Dimensions: Integer = 1536; Model: String = 'Llama3-8b-8192'; EncodingFormat: String = 'float'): TAiEmbeddingData; Override;
+  End;
+
+procedure Register;
 
 implementation
 
-{ TAiGroqChat }
+Const
+  GlAIUrl = 'https://api.groq.com/openai/v1/';
 
-class function TAiGroqChat.GetDriverName: string;
+procedure Register;
 begin
-  Result := 'Groq';
+  RegisterComponents('MakerAI', [TAiGroqChat]);
 end;
 
+{ TAiOllamaChat }
+
+class function TAiGroqChat.GetDriverName: string;
+Begin
+  Result := 'Groq';
+End;
+
 class procedure TAiGroqChat.RegisterDefaultParams(Params: TStrings);
-begin
+Begin
   Params.Clear;
   Params.Add('ApiKey=@GROQ_API_KEY');
   Params.Add('Model=llama-3.1-8b-instant');
-  Params.Add('MaxTokens=4096');
-  Params.Add('URL=' + GlGroqUrl);
-end;
+  Params.Add('Max_Tokens=4096');
+  Params.Add('URL=https://api.groq.com/openai/v1/');
+End;
 
 class function TAiGroqChat.CreateInstance(Sender: TComponent): TAiChat;
-begin
+Begin
   Result := TAiGroqChat.Create(Sender);
-end;
+End;
 
 constructor TAiGroqChat.Create(Sender: TComponent);
 begin
   inherited;
   ApiKey := '@GROQ_API_KEY';
-  Model  := 'llama-3.1-8b-instant';
-  Url    := GlGroqUrl;
+  Model := 'llama-3.1-8b-instant';
+  Url := GlAIUrl;
+  FReasoningFormat := rfAuto;
+  FReasoningEffort := reAuto;
 end;
 
 destructor TAiGroqChat.Destroy;
 begin
+
   inherited;
 end;
 
-function TAiGroqChat.InitChatCompletions: string;
-var
-  AJSONObject, jToolChoice, JResponseFormat, JSchemaWrapper,
-  JInnerSchema: TJSONObject;
-  JArr       : TJSONArray;
-  JStop      : TJSONArray;
-  Lista      : TStringList;
-  I          : Integer;
-  LModel, sTools, sSchema, Res: string;
-  LastMsg    : TAiChatMessage;
+function TAiGroqChat.InitChatCompletions: String;
+Var
+  AJSONObject, jToolChoice: TJSonObject;
+  JArr: TJSonArray;
+  JStop: TJSonArray;
+  Lista: TStringList;
+  I: Integer;
+  LAsincronico: Boolean;
+  Res, LModel: String;
 begin
-  if User = '' then
+
+  If User = '' then
     User := 'user';
 
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
-  if LModel = '' then
+
+  If LModel = '' then
     LModel := 'llama-3.1-8b-instant';
 
-  // Validacion: ReasoningFormat='Raw' es incompatible con Tools o JSON mode
-  if (ReasoningFormat = 'Raw') and
-     (Tool_Active or (Response_format = tiaChatRfJson) or
-      (Response_format = tiaChatRfJsonSchema)) then
-    raise Exception.Create(
-      'Groq Error: ReasoningFormat no puede ser "raw" cuando se usan ' +
-      'Tools o JSON mode. Use "parsed" o "hidden".');
+  // Las funciones no trabajan en modo ascincrono
+  // LAsincronico := Self.Asynchronous and (not Self.Tool_Active);
+  LAsincronico := Self.Asynchronous;
 
-  AJSONObject := TJSONObject.Create;
-  Lista       := TStringList.Create;
-  try
-    AJSONObject.Add('stream', TJSONBoolean.Create(Asynchronous));
+  FClient.Asynchronous := LAsincronico;
 
-    // Tools
-    if Tool_Active then
+  AJSONObject := TJSonObject.Create;
+  Lista := TStringList.Create;
+
+  Try
+
+    if (ModelConfig.Format = 'Raw') and (Tool_Active or (Response_format = tiaChatRfJson) or (Response_format = tiaChatRfJsonSchema)) then
     begin
-      sTools := GetToolsStr(tfOpenAI);
-      if Trim(sTools) <> '' then
-      begin
-        JArr := TJSONArray(GetJSON(sTools));
-        if not Assigned(JArr) then
-          raise Exception.Create(
-            'La propiedad Tools esta mal definida, debe ser un JsonArray');
-        AJSONObject.Add('tools', JArr);
+      Raise Exception.Create('Groq Error: ReasoningFormat no puede ser "raw" cuando se usan Tools o JSON mode. Use "parsed" o "hidden".');
+    end;
 
-        if Trim(Tool_choice) <> '' then
-        begin
-          jToolChoice := TJSONObject(GetJSON(Tool_choice));
-          if Assigned(jToolChoice) then
-            AJSONObject.Add('tool_choice', jToolChoice);
-        end;
+    AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
+
+    If Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAi).Text) <> '') then
+    Begin
+{$IF CompilerVersion < 35}
+      JArr := TJSONUtils.ParseAsArray(GetTools(TToolFormat.tfOpenAi).Text);
+{$ELSE}
+      JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
+{$ENDIF}
+      If Not Assigned(JArr) then
+        Raise Exception.Create('La propiedad Tools est�n mal definido, debe ser un JsonArray');
+      AJSONObject.AddPair('tools', JArr);
+
+      If (Trim(Tool_choice) <> '') then
+      Begin
+{$IF CompilerVersion < 35}
+        jToolChoice := TJSONUtils.ParseAsObject(Tool_choice);
+{$ELSE}
+        jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
+{$ENDIF}
+        If Assigned(jToolChoice) then
+          AJSONObject.AddPair('tool_choice', jToolChoice);
+      End;
+    End;
+
+    // Groq native code_interpreter — inject {"type":"code_interpreter"} into tools array
+    if cap_CodeInterpreter in ModelConfig.ModelCaps then
+    begin
+      var JExistingTools := AJSONObject.GetValue('tools') as TJSonArray;
+      if Assigned(JExistingTools) then
+      begin
+        var JCodeTool := TJSonObject.Create;
+        JCodeTool.AddPair('type', 'code_interpreter');
+        JExistingTools.Add(JCodeTool);
+      end
+      else
+      begin
+        var JToolsArr := TJSonArray.Create;
+        var JCodeTool := TJSonObject.Create;
+        JCodeTool.AddPair('type', 'code_interpreter');
+        JToolsArr.Add(JCodeTool);
+        AJSONObject.AddPair('tools', JToolsArr);
       end;
     end;
 
-    // Mensajes — Groq: si el ultimo mensaje tiene imagenes, solo enviar ese
-    // (limitacion del modelo vision: una imagen por request)
-    LastMsg := Messages.Last;
-    if Assigned(LastMsg) and (LastMsg.MediaFiles.Count > 0) then
-      AJSONObject.Add('messages', LastMsg.ToJson)
-    else
-      AJSONObject.Add('messages', GetMessages);
+    AJSONObject.AddPair('messages', GetMessages);
 
-    AJSONObject.Add('model', LModel);
+    AJSONObject.AddPair('model', LModel);
 
-    // reasoning_format (string directo: 'parsed', 'raw', 'hidden')
-    if ReasoningFormat <> '' then
-      AJSONObject.Add('reasoning_format', ReasoningFormat);
-
-    // reasoning_effort (basado en ThinkingLevel, como campo raiz — no como objeto)
-    case ThinkingLevel of
-      tlLow:    AJSONObject.Add('reasoning_effort', 'low');
-      tlMedium: AJSONObject.Add('reasoning_effort', 'medium');
-      tlHigh:   AJSONObject.Add('reasoning_effort', 'high');
-    end;
-
-    // Temperatura con truncado a 2 decimales
-    AJSONObject.Add('temperature',
-        TJSONFloatNumber.Create(Trunc(Temperature * 100) / 100));
-
-    // max_tokens (Groq siempre usa max_tokens, no max_completion_tokens)
-    AJSONObject.Add('max_tokens', TJSONIntegerNumber.Create(Max_tokens));
-
-    if Top_p <> 0 then
-      AJSONObject.Add('top_p', TJSONFloatNumber.Create(Top_p));
-
-    AJSONObject.Add('frequency_penalty',
-        TJSONFloatNumber.Create(Trunc(Frequency_penalty * 100) / 100));
-    AJSONObject.Add('presence_penalty',
-        TJSONFloatNumber.Create(Trunc(Presence_penalty * 100) / 100));
-    AJSONObject.Add('user', User);
-    AJSONObject.Add('n', TJSONIntegerNumber.Create(N));
-
-    // response_format — Groq necesita wrapper especifico para json_schema
-    if Response_format = tiaChatRfJsonSchema then
+    // Reasoning: guardado estrictamente por familia de modelos para evitar param leak al cambiar modelo
+    // - openai/gpt-oss-*: include_reasoning:true + reasoning_effort (low/medium/high)
+    // - qwen/*:           reasoning_format (parsed/raw/hidden) + reasoning_effort (default/none)
+    // - otros modelos:    ninguno de estos parametros (causarian error 422)
+    if LModel.StartsWith('openai/gpt-oss') then
     begin
-      JResponseFormat := TJSONObject.Create;
-      JResponseFormat.Add('type', 'json_schema');
-
-      sSchema := JsonSchema.Text;
-      if sSchema <> '' then
+      if ModelConfig.ThinkingLevel <> tlDefault then
       begin
-        sSchema := StringReplace(sSchema, '\n', ' ', [rfReplaceAll]);
-        JInnerSchema := TJSONObject(GetJSON(sSchema));
+        AJSONObject.AddPair('include_reasoning', TJSONBool.Create(True));
+        case ModelConfig.ThinkingLevel of
+          tlLow:    AJSONObject.AddPair('reasoning_effort', 'low');
+          tlMedium: AJSONObject.AddPair('reasoning_effort', 'medium');
+          tlHigh:   AJSONObject.AddPair('reasoning_effort', 'high');
+        end;
+      end;
+    end
+    else if LModel.StartsWith('qwen/') then
+    begin
+      if ModelConfig.ThinkingLevel <> tlDefault then
+      begin
+        // Thinking activo: reasoning_format parsed + reasoning_effort=default
+        var LFormat: String := ModelConfig.Format;
+        if LFormat = '' then
+          LFormat := 'parsed'; // default: reasoning en campo separado message.reasoning
+        AJSONObject.AddPair('reasoning_format', LFormat);
+        AJSONObject.AddPair('reasoning_effort', 'default');
+      end
+      else if ModelConfig.Format <> '' then
+      begin
+        // Format explicitamente seteado sin ThinkingLevel (ej: 'hidden' para non-thinking)
+        AJSONObject.AddPair('reasoning_format', ModelConfig.Format);
+      end;
+    end;
+    // Otros modelos (llama, mistral, kimi, etc.): sin params de reasoning
+
+    AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
+
+    // Groq docs: reasoning models usan max_completion_tokens (incluye reasoning tokens en el budget)
+    if LModel.StartsWith('openai/gpt-oss') or LModel.StartsWith('qwen/') then
+      AJSONObject.AddPair('max_completion_tokens', TJSONNumber.Create(Max_tokens))
+    else
+      AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+
+    If Top_p <> 0 then
+      AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
+
+    AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
+    AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
+    AJSONObject.AddPair('user', User);
+    AJSONObject.AddPair('n', TJSONNumber.Create(N));
+
+    // 1. JSON Schema (Structured Outputs)
+    if (FResponse_format = tiaChatRfJsonSchema) then
+    begin
+      var
+      JResponseFormat := TJSonObject.Create;
+      JResponseFormat.AddPair('type', 'json_schema');
+
+      if JsonSchema.Text <> '' then
+      begin
+        Var sShema := StringReplace(JsonSchema.Text,'\n',' ',[rfReplaceAll]);
+
+        var
+        JInnerSchema := TJSonObject.ParseJSONValue(sShema) as TJSonObject;
         if Assigned(JInnerSchema) then
         begin
-          // Wrapper estilo OpenAI/Groq: {name, schema}
-          JSchemaWrapper := TJSONObject.Create;
-          JSchemaWrapper.Add('name', 'structured_response');
-          JSchemaWrapper.Add('schema', JInnerSchema);
-          JResponseFormat.Add('json_schema', JSchemaWrapper);
+          // Wrapper para Groq (Estilo OpenAI Classic)
+          var
+          JSchemaWrapper := TJSonObject.Create;
+
+          // 'name' es OBLIGATORIO en esta estructura
+          JSchemaWrapper.AddPair('name', 'structured_response');
+
+          // El esquema va dentro de 'schema'
+          JSchemaWrapper.AddPair('schema', JInnerSchema);
+
+          // NOTA: No enviamos "strict": true por defecto para maximizar compatibilidad
+          // con modelos Groq que no soportan constrained decoding completo a�n.
+
+          JResponseFormat.AddPair('json_schema', JSchemaWrapper);
         end;
       end;
 
-      AJSONObject.Add('response_format', JResponseFormat);
+      AJSONObject.AddPair('response_format', JResponseFormat);
     end
-    else if Response_format = tiaChatRfJson then
+
+    // 2. JSON Mode (Simple)
+    else if (FResponse_format = tiaChatRfJson) then
     begin
-      JResponseFormat := TJSONObject.Create;
-      JResponseFormat.Add('type', 'json_object');
-      AJSONObject.Add('response_format', JResponseFormat);
+      var
+      JResponseFormat := TJSonObject.Create;
+      JResponseFormat.AddPair('type', 'json_object');
+      AJSONObject.AddPair('response_format', JResponseFormat);
     end
-    else if Response_format = tiaChatRfText then
+
+    // 3. Text Mode (Solo si se especifica expl�citamente, o dejar por defecto)
+    else if (FResponse_format = tiaChatRfText) then
     begin
-      JResponseFormat := TJSONObject.Create;
-      JResponseFormat.Add('type', 'text');
-      AJSONObject.Add('response_format', JResponseFormat);
+      var
+      JResponseFormat := TJSonObject.Create;
+      JResponseFormat.AddPair('type', 'text');
+      AJSONObject.AddPair('response_format', JResponseFormat);
     end;
 
-    // Stop words
     Lista.CommaText := Stop;
-    if Lista.Count > 0 then
-    begin
-      JStop := TJSONArray.Create;
-      for I := 0 to Lista.Count - 1 do
+    If Lista.Count > 0 then
+    Begin
+      JStop := TJSonArray.Create;
+      For I := 0 to Lista.Count - 1 do
         JStop.Add(Lista[I]);
-      AJSONObject.Add('stop', JStop);
-    end;
+      AJSONObject.AddPair('stop', JStop);
+    End;
 
-    // Logprobs
-    if Logprobs then
-    begin
-      if Logit_bias <> '' then
-        AJSONObject.Add('logit_bias',
-            TJSONIntegerNumber.Create(StrToIntDef(Logit_bias, 0)));
-      AJSONObject.Add('logprobs', TJSONBoolean.Create(Logprobs));
-      if Top_logprobs <> '' then
-        AJSONObject.Add('top_logprobs',
-            TJSONIntegerNumber.Create(StrToIntDef(Top_logprobs, 0)));
-    end;
+    // NOTA: Groq no soporta logprobs, logit_bias ni top_logprobs en chat completions (error 400)
 
-    if Seed > 0 then
-      AJSONObject.Add('seed', TJSONIntegerNumber.Create(Seed));
+    If Seed > 0 then
+      AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
 
-    Res := AJSONObject.AsJSON;
+    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSon));
+    Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
     Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
-  finally
+  Finally
     AJSONObject.Free;
     Lista.Free;
+  End;
+end;
+
+{ TAiGroqEmbeddings }
+
+function TAiGroqEmbeddings.CreateEmbedding(Input, User: String; Dimensions: Integer; Model, EncodingFormat: String): TAiEmbeddingData;
+Var
+  Client: TNetHTTPClient;
+  Headers: TNetHeaders;
+  jObj: TJSonObject;
+  Res: IHTTPResponse;
+  Response: TStringStream;
+  St: TStringStream;
+  sUrl: String;
+begin
+  // OJO OJO OJO OJO
+  Raise Exception.Create('Actualmente Groq no maneja modelos de embeddings');
+
+  Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
+  Client.SynchronizeEvents := False;
+{$ENDIF}
+  St := TStringStream.Create('', TEncoding.UTF8);
+  Response := TStringStream.Create('', TEncoding.UTF8);
+  sUrl := FUrl + 'embeddings';
+  jObj := TJSonObject.Create;
+
+  Try
+    jObj.AddPair('input', Input);
+    jObj.AddPair('model', Model);
+    jObj.AddPair('user', User);
+    jObj.AddPair('encoding_format', EncodingFormat);
+
+    // St.WriteString(UTF8Encode(jObj.Format));
+    St.WriteString(jObj.Format);
+    St.Position := 0;
+
+    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
+    Client.ContentType := 'application/json';
+
+    Res := Client.Post(sUrl, St, Response, Headers);
+    Response.Position := 0;
+
+{$IFDEF APIDEBUG}
+    Response.SaveToFile('c:\temp\response.txt');
+{$ENDIF}
+    if Res.StatusCode = 200 then
+    Begin
+      jObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
+      ParseEmbedding(jObj);
+      Result := Self.FData;
+
+    End
+    else
+    begin
+      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+    end;
+
+  Finally
+    Client.Free;
+    St.Free;
+    Response.Free;
+    jObj.Free;
+  End;
+end;
+
+function TAiGroqChat.InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
+var
+  Body: TMultipartFormData;
+  Client: TNetHTTPClient;
+  Headers: TNetHeaders;
+  sUrl: String;
+  Res: IHTTPResponse;
+  LResponseStream: TMemoryStream;
+  LTempStream: TMemoryStream;
+  LResponseObj: TJSonObject;
+  Granularities: TStringList;
+  I: Integer;
+  LModel: String;
+begin
+  Result := '';
+  if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
+    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripci?n.');
+
+  sUrl := Url + 'audio/transcriptions';
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+  Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
+  Client.SynchronizeEvents := False;
+{$ENDIF}
+  LResponseStream := TMemoryStream.Create;
+  Body := TMultipartFormData.Create;
+  Granularities := TStringList.Create;
+  LTempStream := TMemoryStream.Create;
+  try
+    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
+
+    aMediaFile.Content.Position := 0;
+    LTempStream.LoadFromStream(aMediaFile.Content);
+    LTempStream.Position := 0;
+
+{$IF CompilerVersion >= 36}
+    Body.AddStream('file', LTempStream, False, aMediaFile.FileName, aMediaFile.MimeType);
+{$ELSE}
+    Body.AddStream('file', LTempStream, aMediaFile.FileName, aMediaFile.MimeType);
+{$ENDIF}
+    Body.AddField('model', LModel);
+
+    if not AskMsg.Prompt.IsEmpty then
+      Body.AddField('prompt', AskMsg.Prompt);
+
+    if not TranscriptionParams.ResponseFormat.IsEmpty then
+      Body.AddField('response_format', TranscriptionParams.ResponseFormat)
+    else
+      Body.AddField('response_format', 'json');
+
+    if not TranscriptionParams.Language.IsEmpty then
+      Body.AddField('language', TranscriptionParams.Language);
+
+    if Self.Temperature > 0 then
+      Body.AddField('temperature', FormatFloat('0.0', Self.Temperature));
+
+    if not TranscriptionParams.TimestampGranularities.IsEmpty then
+    begin
+      Granularities.CommaText := TranscriptionParams.TimestampGranularities;
+      for I := 0 to Granularities.Count - 1 do
+        Body.AddField('timestamp_granularities[]', Trim(Granularities[I]));
+    end;
+
+    Res := Client.Post(sUrl, Body, LResponseStream, Headers);
+
+    if Res.StatusCode = 200 then
+    begin
+      LResponseObj := TJSonObject.ParseJSONValue(Res.ContentAsString) as TJSonObject;
+      if not Assigned(LResponseObj) then
+        LResponseObj := TJSonObject.Create(TJSonPair.Create('text', Res.ContentAsString));
+      try
+        ParseJsonTranscript(LResponseObj, ResMsg, aMediaFile);
+      finally
+        LResponseObj.Free;
+      end;
+      Result := ResMsg.Prompt;
+    end
+    else
+      raise Exception.CreateFmt('Error en la transcripci?n: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+
+  finally
+    Body.Free;
+    Client.Free;
+    LResponseStream.Free;
+    LTempStream.Free;
+    Granularities.Free;
   end;
 end;
 
-initialization
-  TAiChatFactory.Instance.RegisterDriver(TAiGroqChat);
+Initialization
+
+TAiChatFactory.Instance.RegisterDriver(TAiGroqChat);
 
 end.

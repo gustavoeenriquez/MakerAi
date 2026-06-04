@@ -1,0 +1,191 @@
+﻿object FrmRealtimeSTT: TFrmRealtimeSTT
+  Left = 0
+  Top = 0
+  Caption = 'MakerAI - Realtime STT'
+  ClientHeight = 580
+  ClientWidth = 860
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  DesignerMasterStyle = 0
+  object LayoutTop: TLayout
+    Align = Top
+    Size.Width = 860.000000000000000000
+    Size.Height = 56.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object LblModelo: TLabel
+      Position.X = 8.000000000000000000
+      Position.Y = 20.000000000000000000
+      Size.Width = 56.000000000000000000
+      Size.Height = 17.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Modelo:'
+      TabOrder = 0
+    end
+    object CbxModel: TComboBox
+      Position.X = 70.000000000000000000
+      Position.Y = 14.000000000000000000
+      Size.Width = 210.000000000000000000
+      Size.Height = 28.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+    end
+    object LblIdioma: TLabel
+      Position.X = 290.000000000000000000
+      Position.Y = 20.000000000000000000
+      Size.Width = 48.000000000000000000
+      Size.Height = 17.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Idioma:'
+      TabOrder = 2
+    end
+    object EdLanguage: TEdit
+      Position.X = 344.000000000000000000
+      Position.Y = 14.000000000000000000
+      Size.Width = 52.000000000000000000
+      Size.Height = 28.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+      Text = 'es'
+    end
+    object BtnConnect: TButton
+      Position.X = 408.000000000000000000
+      Position.Y = 14.000000000000000000
+      Size.Width = 120.000000000000000000
+      Size.Height = 28.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 4
+      Text = 'Conectar'
+      OnClick = BtnConnectClick
+    end
+    object CircleState: TCircle
+      Position.X = 542.000000000000000000
+      Position.Y = 16.000000000000000000
+      Size.Width = 24.000000000000000000
+      Size.Height = 24.000000000000000000
+      Size.PlatformDefault = False
+    end
+  end
+  object LayoutStatus: TLayout
+    Align = Top
+    Position.Y = 56.000000000000000000
+    Size.Width = 860.000000000000000000
+    Size.Height = 28.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    object LblStatus: TLabel
+      Align = Client
+      Margins.Left = 8.000000000000000000
+      Margins.Right = 8.000000000000000000
+      Margins.Top = 4.000000000000000000
+      Position.X = 8.000000000000000000
+      Position.Y = 4.000000000000000000
+      Size.Width = 844.000000000000000000
+      Size.Height = 20.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Desconectado. Presione Conectar para iniciar.'
+      TabOrder = 0
+    end
+  end
+  object LayoutLive: TLayout
+    Align = Top
+    Position.Y = 84.000000000000000000
+    Size.Width = 860.000000000000000000
+    Size.Height = 120.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 2
+    object LblLive: TLabel
+      Align = Top
+      Margins.Left = 8.000000000000000000
+      Margins.Top = 4.000000000000000000
+      Margins.Right = 8.000000000000000000
+      Position.X = 8.000000000000000000
+      Position.Y = 4.000000000000000000
+      Size.Width = 844.000000000000000000
+      Size.Height = 20.000000000000000000
+      Size.PlatformDefault = False
+      Font.Style = [fsBold]
+      StyledSettings = [Family, Size, FontColor]
+      Text = 'Transcripcion en vivo:'
+      TabOrder = 0
+    end
+    object MemoLive: TMemo
+      Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+      DataDetectorTypes = []
+      Align = Client
+      Margins.Left = 8.000000000000000000
+      Margins.Right = 8.000000000000000000
+      Margins.Bottom = 6.000000000000000000
+      Position.X = 8.000000000000000000
+      Position.Y = 28.000000000000000000
+      ReadOnly = True
+      Size.Width = 844.000000000000000000
+      Size.Height = 86.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Viewport.Width = 840.000000000000000000
+      Viewport.Height = 82.000000000000000000
+    end
+  end
+  object LayoutHistory: TLayout
+    Align = Client
+    Position.Y = 204.000000000000000000
+    Size.Width = 860.000000000000000000
+    Size.Height = 376.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 3
+    object LblHistory: TLabel
+      Align = Top
+      Margins.Left = 8.000000000000000000
+      Margins.Top = 4.000000000000000000
+      Margins.Right = 8.000000000000000000
+      Position.X = 8.000000000000000000
+      Position.Y = 4.000000000000000000
+      Size.Width = 844.000000000000000000
+      Size.Height = 20.000000000000000000
+      Size.PlatformDefault = False
+      Font.Style = [fsBold]
+      StyledSettings = [Family, Size, FontColor]
+      Text = 'Historial de transcripciones:'
+      TabOrder = 0
+    end
+    object MemoHistory: TMemo
+      Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+      DataDetectorTypes = []
+      Align = Client
+      Margins.Left = 8.000000000000000000
+      Margins.Right = 8.000000000000000000
+      Position.X = 8.000000000000000000
+      Position.Y = 28.000000000000000000
+      ReadOnly = True
+      Size.Width = 844.000000000000000000
+      Size.Height = 308.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Viewport.Width = 840.000000000000000000
+      Viewport.Height = 304.000000000000000000
+    end
+    object LayoutClear: TLayout
+      Align = Bottom
+      Position.Y = 336.000000000000000000
+      Size.Width = 860.000000000000000000
+      Size.Height = 40.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      object BtnClear: TButton
+        Position.X = 764.000000000000000000
+        Position.Y = 6.000000000000000000
+        Size.Width = 88.000000000000000000
+        Size.Height = 28.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 0
+        Text = 'Limpiar'
+        OnClick = BtnClearClick
+      end
+    end
+  end
+end

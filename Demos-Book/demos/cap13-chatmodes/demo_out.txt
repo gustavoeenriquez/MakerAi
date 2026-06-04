@@ -1,0 +1,112 @@
+=== MakerAI -- Capitulo 13: Modos de Chat ===
+Demos: 5 modos de TAiChatConnection.ChatMode
+
+  Estado del entorno:
+  [OK] OPENAI_API_KEY detectado
+  [OK] Audio: sample.mp3
+
+--------------------------------------------------------------
+  Demo 1 -- cmConversation (modo inteligente por defecto)
+--------------------------------------------------------------
+  Prompt: Cual es la principal ventaja de Delphi frente a otras IDEs?
+
+  Esperando respuesta... OK
+
+  Respuesta:
+  La principal ventaja de Delphi es su compilador nativo y su framework VCL/FMXL que permiten desarrollar aplicaciones rápidas y eficientes para múltiples plataformas con un solo código base.
+
+-> cmConversation aplica gap analysis: ModelCaps vs SessionCaps.
+   Sin gaps configurados, siempre llama a InternalRunCompletions.
+   Agrega SessionCaps=[cap_GenImage] + ImageTool para activar imagenes.
+
+--------------------------------------------------------------
+  Demo 2 -- cmWebSearch (busqueda directa con citas)
+--------------------------------------------------------------
+  Consulta: "Delphi 13 Florence novedades 2026"
+  Modelo de busqueda: gpt-4o-mini-search-preview
+
+  Buscando... OK
+
+  Resultado (primeros 300 chars):
+  Delphi 13 Florence, lanzado en septiembre de 2025, introduce varias mejoras significativas para el desarrollo de aplicaciones. A continuación, se destacan las principales novedades:
+
+**1. Nuevo Operador Ternario y Extensiones del Lenguaje Delphi:**
+Se ha incorporado un operador ternario utilizando l
+
+  Fuentes encontradas:
+    [1] RAD Studio 13 Released - Press Releases - Embarcadero
+        https://www.embarcadero.com/press-releases/rad-studio-13-released?utm_source=ope
+    [2] RAD Studio 13 Released - Press Releases - Embarcadero
+        https://www.embarcadero.com/press-releases/rad-studio-13-released?utm_source=ope
+    [3] RAD Studio 13 Released - Press Releases - Embarcadero
+        https://www.embarcadero.com/press-releases/rad-studio-13-released?utm_source=ope
+    [4] RAD Studio 13 Released - Press Releases - Embarcadero
+        https://www.embarcadero.com/press-releases/rad-studio-13-released?utm_source=ope
+    [5] RAD Studio 13 Released - Press Releases - Embarcadero
+        https://www.embarcadero.com/press-releases/rad-studio-13-released?utm_source=ope
+    [6] RAD Studio 13 Released - Press Releases - Embarcadero
+        https://www.embarcadero.com/press-releases/rad-studio-13-released?utm_source=ope
+    [7] RAD Studio 13 Released - Press Releases - Embarcadero
+        https://www.embarcadero.com/press-releases/rad-studio-13-released?utm_source=ope
+
+-> TAiOpenAiWebSearchTool usa gpt-4o-mini-search-preview.
+   Las citas estan en Conn.Messages.Last.Citations.
+   Solo requiere OPENAI_API_KEY con acceso a modelos de busqueda.
+
+--------------------------------------------------------------
+  Demo 3 -- cmSpeechGeneration (texto a voz)
+--------------------------------------------------------------
+  Texto: "Bienvenido a MakerAI, la plataforma de IA para Delphi."
+  Voz: Alloy | Modelo: TTS-1
+
+  Generando audio... OK  [[Audio generado]]
+  Audio guardado: C:\Users\genri\AppData\Local\Temp\cap13_demo3_tts.mp3 (92 KB)
+
+-> cmSpeechGeneration: el texto del usuario se convierte directamente.
+   Sin LLM intermedio. El audio queda en Conn.Messages.Last.MediaFiles.
+
+--------------------------------------------------------------
+  Demo 4 -- cmTranscription (transcripcion de audio)
+--------------------------------------------------------------
+  Archivo : sample.mp3
+  Modelo  : whisper-1
+
+  Transcribiendo... OK
+
+  Transcripcion:
+  Hola, soy un asistente de voz creado con MakerAI y Delphi. Esta es una demostración de síntesis de voz usando la API de OpenAI. El texto que escuchas fue generado en tiempo real desde una aplicación Delphi.
+
+-> cmTranscription procesa el PRIMER archivo de audio de los adjuntos.
+   El texto transcrito llega como retorno de AddMessageAndRun (modo sync).
+   TAiOpenAiSpeechTool implementa TTS + STT en un solo componente.
+
+--------------------------------------------------------------
+  Demo 5 -- Cambio de ChatMode en runtime
+--------------------------------------------------------------
+  [1] ChatMode = cmConversation  (OpenAI)
+      Pregunta: "Explica en una frase que es TAiChatMode." ... OK
+      Resp: TAiChatMode en MakerAI para Delphi es un componente que permite gestionar y controlar los diferentes modos de conversaci
+
+  [2] ChatMode = cmWebSearch  (mismo objeto Conn, distinto modo)
+      Consulta: "RAD Studio Delphi novedades 2026" ... OK
+      Resp: Embarcadero ha lanzado RAD Studio 13.1 Florence, que incluye Delphi 13.1, con varias mejoras destacadas:
+
+- **Compilador
+      Citas: 6
+
+  [3] ChatMode = cmConversation  (de vuelta al modo inicial)
+      Pregunta: "Cual es la diferencia entre OOP y procedural?" ... OK
+      Resp: La principal diferencia es que la programación orientada a objetos organiza el código en objetos que encapsulan datos y 
+
+-> ChatMode es solo una propiedad: cambiarla entre llamadas cambia
+   el comportamiento sin recrear la conexion.
+   Regla: asignar/limpiar ChatTools por ronda segun el modo.
+   WebSearchTool solo debe estar asignado en la ronda cmWebSearch.
+   Messages.Clear evita que contexto de distintos modos se mezcle.
+
+==============================================================
+  Demos completados.
+  Ver cap13-chatmodes.md para la documentacion completa.
+==============================================================
+
+Presiona Enter para salir...

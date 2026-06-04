@@ -1,18 +1,18 @@
-// MIT License
+﻿// IT License
 //
-// Copyright (c) 2024-2026 Gustavo Enriquez
+// Copyright (c) <year> <copyright holders>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 // AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -20,308 +20,291 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enriquez
+// Nombre: Gustavo Enr?quez
+// Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
-//
-// --------- FPC PORT --------------------
-// Driver para xAI Grok (https://api.x.ai/v1/)
-//
-// Compatible con OpenAI /chat/completions, con las siguientes diferencias:
-//   - reasoning_format ('parsed', 'raw', 'hidden') como campo raiz
-//   - reasoning_effort ('low', 'medium', 'high') como campo raiz (no objeto anidado)
-//   - max_tokens siempre (no max_completion_tokens aunque ThinkingLevel este activo)
-//   - Web search: POST /v1/responses con tools=[{type:"web_search"}]
-//     (search_parameters fue deprecado en enero 2026 — devuelve 410)
-//   - Generacion de imagenes: POST /v1/images/generations (modelo grok-2-image)
-//
-// Modelos principales:
-//   grok-3               — modelo conversacional (chat/completions)
-//   grok-3-mini          — variante pequeña
-//   grok-2-image         — generacion de imagenes
-//
-// API key: variable de entorno GROK_API_KEY (o '@GROK_API_KEY')
+
 
 unit uMakerAi.Chat.Grok;
-
-{$mode objfpc}{$H+}
 
 interface
 
 uses
-  SysUtils, Classes,
-  fpjson, jsonparser,
-  fphttpclient, opensslsockets,
-  uMakerAi.Core,
-  uMakerAi.Chat,
-  uMakerAi.Chat.Messages,
-  uMakerAi.Chat.Tools,
-  uMakerAi.Tools.Functions,
-  UMakerAi.ParamsRegistry;
+  System.SysUtils, System.Types, System.UITypes, System.Classes,
+  System.Threading,
+  System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections,
+  System.NetEncoding,
+  System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
+  System.Net.HttpClientComponent,
+  REST.JSON, REST.Types, REST.Client,
 
-type
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+  uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Embeddings, uMakerAi.Core, uMakerAi.Chat.Messages;
 
-  // ---------------------------------------------------------------------------
-  //  TAiGrokChat — driver xAI Grok
-  // ---------------------------------------------------------------------------
-  TAiGrokChat = class(TAiChat)
-  protected
-    function  InitChatCompletions: string; override;
-    function  InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): string; override;
-    function  InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): string; override;
+Type
 
-  public
-    constructor Create(Sender: TComponent); override;
-    destructor  Destroy; override;
+  TAiGrokChat = Class(TAiChat)
+  Private
+  Protected
+    Function InitChatCompletions: String; Override;
+    function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
+    function InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
 
-    class function  GetDriverName: string; override;
-    class procedure RegisterDefaultParams(Params: TStrings); override;
-    class function  CreateInstance(Sender: TComponent): TAiChat; override;
-  end;
+  Public
+    Constructor Create(Sender: TComponent); Override;
+    Destructor Destroy; Override;
+    class function GetDriverName: string; Override;
+    class procedure RegisterDefaultParams(Params: TStrings); Override;
+    class function CreateInstance(Sender: TComponent): TAiChat; Override;
+  Published
+  End;
+
+procedure Register;
 
 implementation
 
-const
-  GlGrokUrl = 'https://api.x.ai/v1/';
+Const
+  GlAIUrl = 'https://api.x.ai/v1/';
 
-{ ---------------------------------------------------------------------------
-  Ciclo de vida
-  --------------------------------------------------------------------------- }
-
-constructor TAiGrokChat.Create(Sender: TComponent);
+procedure Register;
 begin
-  inherited Create(Sender);
-  ApiKey := '@GROK_API_KEY';
-  Model  := 'grok-3';
-  Url    := GlGrokUrl;
+  RegisterComponents('MakerAI', [TAiGrokChat]);
 end;
 
-destructor TAiGrokChat.Destroy;
-begin
-  inherited Destroy;
-end;
-
-{ ---------------------------------------------------------------------------
-  Metodos de clase
-  --------------------------------------------------------------------------- }
+{ TAiGrokChat }
 
 class function TAiGrokChat.GetDriverName: string;
-begin
+Begin
   Result := 'Grok';
-end;
+End;
 
 class procedure TAiGrokChat.RegisterDefaultParams(Params: TStrings);
-begin
+Begin
   Params.Clear;
   Params.Add('ApiKey=@GROK_API_KEY');
   Params.Add('Model=grok-3');
   Params.Add('Max_Tokens=4096');
-  Params.Add('URL=' + GlGrokUrl);
-end;
+  Params.Add('URL=https://api.x.ai/v1/');
+End;
 
 class function TAiGrokChat.CreateInstance(Sender: TComponent): TAiChat;
-begin
+Begin
   Result := TAiGrokChat.Create(Sender);
+End;
+
+constructor TAiGrokChat.Create(Sender: TComponent);
+begin
+  inherited;
+  ApiKey := '@GROK_API_KEY';
+  Model := 'grok-3';
+  Url := GlAIUrl;
 end;
 
-{ ---------------------------------------------------------------------------
-  InitChatCompletions — construye el JSON del request para Grok
-
-  Diferencias clave respecto a la clase base (TAiChat.InitChatCompletions):
-    * reasoning_format: campo raiz string ('parsed', 'raw', 'hidden')
-    * reasoning_effort: campo raiz ('low'/'medium'/'high'), NO objeto {reasoning: {effort}}
-    * max_tokens siempre (nunca max_completion_tokens)
-    * search_parameters legacy (deprecado en ene-2026, se omite — usar web search via
-      InternalRunCompletions con el endpoint /v1/responses)
-  --------------------------------------------------------------------------- }
-
-function TAiGrokChat.InitChatCompletions: string;
-var
-  AJSONObject, jToolChoice, JStreamOpts: TJSONObject;
-  JArr, JStop             : TJSONArray;
-  JFormatConfig, JSchemaObj, JInnerSchema: TJSONObject;
-  Lista   : TStringList;
-  I       : Integer;
-  LModel, sTools, sSchema: string;
+destructor TAiGrokChat.Destroy;
 begin
-  if User = '' then
+
+  inherited;
+end;
+
+function TAiGrokChat.InitChatCompletions: String;
+Var
+  AJSONObject, jToolChoice: TJSonObject;
+  JArr: TJSonArray;
+  JStop: TJSonArray;
+  Lista: TStringList;
+  I: Integer;
+  LAsincronico: Boolean;
+  Res, LModel: String;
+  LIsRestrictedModel, LSupportsReasoningEffort: Boolean;
+begin
+
+  If User = '' then
     User := 'user';
 
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
-  if LModel = '' then
+
+  If LModel = '' then
     LModel := 'grok-3';
 
-  AJSONObject := TJSONObject.Create;
-  Lista       := TStringList.Create;
-  try
-    // 1. Streaming
-    AJSONObject.Add('stream', TJSONBoolean.Create(Asynchronous));
-    if Asynchronous then
+  // grok-4 series, grok-3-mini y grok-code-fast-1 prohiben frequency/presence/stop
+  LIsRestrictedModel       := LModel.StartsWith('grok-4') or LModel.StartsWith('grok-3-mini') or (LModel = 'grok-code-fast-1');
+  // reasoning_effort solo es valido en grok-3-mini / grok-3-mini-fast (valores: low, high)
+  LSupportsReasoningEffort := LModel.StartsWith('grok-3-mini');
+
+  LAsincronico := Self.Asynchronous;
+
+  FClient.Asynchronous := LAsincronico;
+
+  AJSONObject := TJSonObject.Create;
+  Lista := TStringList.Create;
+
+  Try
+
+    AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
+
+    If Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAI).Text) <> '') then
+    Begin
+
+{$IF CompilerVersion < 35}
+      JArr := TJSONUtils.ParseAsArray(GetTools(TToolFormat.tfOpenAI).Text);
+{$ELSE}
+      JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAI).Text));
+{$ENDIF}
+      If Not Assigned(JArr) then
+        Raise Exception.Create('La propiedad Tools est?n mal definido, debe ser un JsonArray');
+      AJSONObject.AddPair('tools', JArr);
+
+      If (Trim(Tool_choice) <> '') then
+      Begin
+
+{$IF CompilerVersion < 35}
+        jToolChoice := TJSONUtils.ParseAsObject(Tool_choice);
+{$ELSE}
+        jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
+{$ENDIF}
+        If Assigned(jToolChoice) then
+          AJSONObject.AddPair('tool_choice', jToolChoice);
+      End;
+    End;
+
+    AJSONObject.AddPair('messages', GetMessages);
+
+    AJSONObject.AddPair('model', LModel);
+
+    AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
+    AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+
+    If Top_p <> 0 then
+      AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
+
+    // frequency_penalty y presence_penalty prohibidos en grok-4 series, grok-3-mini y grok-code-fast-1
+    if (not LIsRestrictedModel) and (Frequency_penalty <> 0) then
+      AJSONObject.AddPair('frequency_penalty', TJSONNumber.Create(Trunc(Frequency_penalty * 100) / 100));
+    if (not LIsRestrictedModel) and (Presence_penalty <> 0) then
+      AJSONObject.AddPair('presence_penalty', TJSONNumber.Create(Trunc(Presence_penalty * 100) / 100));
+
+    if ModelConfig.Format <> '' then
+      AJSONObject.AddPair('reasoning_format', ModelConfig.Format); // 'parsed, raw, hidden';
+
+    // reasoning_effort: solo valido en grok-3-mini / grok-3-mini-fast (valores: 'low', 'high')
+    // grok-4 series tiene reasoning siempre activo y NO acepta este parametro
+    if LSupportsReasoningEffort and (ModelConfig.ThinkingLevel <> tlDefault) then
     begin
-      JStreamOpts := TJSONObject.Create;
-      JStreamOpts.Add('include_usage', TJSONBoolean.Create(True));
-      AJSONObject.Add('stream_options', JStreamOpts);
+      case ModelConfig.ThinkingLevel of
+        tlLow:  AJSONObject.AddPair('reasoning_effort', 'low');
+        tlHigh: AJSONObject.AddPair('reasoning_effort', 'high');
+        // tlMedium no tiene mapeo en xAI: no enviar, la API usa su default
+      end;
     end;
 
-    // 2. Herramientas
-    if Tool_Active then
-    begin
-      sTools := GetToolsStr(tfOpenAI);
-      if Trim(sTools) <> '' then
-      begin
-        JArr := TJSONArray(GetJSON(sTools));
-        if not Assigned(JArr) then
-          raise Exception.Create(
-              'La propiedad Tools esta mal definida, debe ser un JsonArray');
-        AJSONObject.Add('tools', JArr);
+    AJSONObject.AddPair('user', User);
+    AJSONObject.AddPair('n', TJSONNumber.Create(N));
 
-        if Trim(Tool_choice) <> '' then
+    if cap_WebSearch in ModelConfig.ModelCaps then
+    begin
+      Var
+      jWebSearchOptions := TJSonObject.Create;
+      jWebSearchOptions.AddPair('mode', 'auto');
+      // jWebSearchOptions.AddPair('return_citations', 'true');
+      AJSONObject.AddPair('search_parameters', jWebSearchOptions);
+    end;
+
+    if FResponse_format = tiaChatRfJsonSchema then
+    begin
+      var JFormatConfig := TJSONObject.Create;
+      JFormatConfig.AddPair('type', 'json_schema');
+      var sSchema := Trim(JsonSchema.Text);
+      if sSchema <> '' then
+      begin
+        var JSchemaObj := TJSONObject.Create;
+        var JInnerSchema := TJSONObject.ParseJSONValue(sSchema) as TJSONObject;
+        if Assigned(JInnerSchema) then
         begin
-          jToolChoice := TJSONObject(GetJSON(Tool_choice));
-          if Assigned(jToolChoice) then
-            AJSONObject.Add('tool_choice', jToolChoice);
-        end;
+          JSchemaObj.AddPair('schema', JInnerSchema);
+          JSchemaObj.AddPair('strict', TJSONBool.Create(True));
+          JFormatConfig.AddPair('json_schema', JSchemaObj);
+        end
+        else
+          JSchemaObj.Free;
       end;
-    end;
+      AJSONObject.AddPair('response_format', JFormatConfig);
+    end
+    else if FResponse_format = tiaChatRfJson then
+      AJSONObject.AddPair('response_format', TJSONObject.Create.AddPair('type', 'json_object'));
 
-    // 3. Mensajes
-    AJSONObject.Add('messages', GetMessages);
-
-    // 4. Modelo
-    AJSONObject.Add('model', LModel);
-
-    // 5. Razonamiento Grok — campos raiz (NO objeto {reasoning: {effort: ...}})
-    if ReasoningFormat <> '' then
-      AJSONObject.Add('reasoning_format', ReasoningFormat);
-
-    case ThinkingLevel of
-      tlLow:    AJSONObject.Add('reasoning_effort', 'low');
-      tlMedium: AJSONObject.Add('reasoning_effort', 'medium');
-      tlHigh:   AJSONObject.Add('reasoning_effort', 'high');
-    end;
-
-    // 6. Parametros numericos — max_tokens siempre (Grok no usa max_completion_tokens)
-    AJSONObject.Add('temperature',
-        TJSONFloatNumber.Create(Trunc(Temperature * 100) / 100));
-    AJSONObject.Add('max_tokens', TJSONIntegerNumber.Create(Max_tokens));
-
-    if Top_p <> 0 then
-      AJSONObject.Add('top_p', TJSONFloatNumber.Create(Top_p));
-    AJSONObject.Add('frequency_penalty',
-        TJSONFloatNumber.Create(Trunc(Frequency_penalty * 100) / 100));
-    AJSONObject.Add('presence_penalty',
-        TJSONFloatNumber.Create(Trunc(Presence_penalty * 100) / 100));
-    AJSONObject.Add('user', User);
-    AJSONObject.Add('n', TJSONIntegerNumber.Create(N));
-
-    // 7. Logprobs
-    if Logprobs then
+    // stop prohibido en grok-4 series, grok-3-mini y grok-code-fast-1
+    if not LIsRestrictedModel then
     begin
-      if Logit_bias <> '' then
-        AJSONObject.Add('logit_bias',
-            TJSONIntegerNumber.Create(StrToIntDef(Logit_bias, 0)));
-      AJSONObject.Add('logprobs', TJSONBoolean.Create(True));
-      if Top_logprobs <> '' then
-        AJSONObject.Add('top_logprobs',
-            TJSONIntegerNumber.Create(StrToIntDef(Top_logprobs, 0)));
+      Lista.CommaText := Stop;
+      If Lista.Count > 0 then
+      Begin
+        JStop := TJSonArray.Create;
+        For I := 0 to Lista.Count - 1 do
+          JStop.Add(Lista[I]);
+        AJSONObject.AddPair('stop', JStop);
+      End;
     end;
 
-    // 8. Seed
-    if Seed > 0 then
-      AJSONObject.Add('seed', TJSONIntegerNumber.Create(Seed));
+    If Logprobs = True then
+    Begin
+      If Logit_bias <> '' then
+        AJSONObject.AddPair('logit_bias', TJSONNumber.Create(Logit_bias));
 
-    // 9. Response format
-    case Response_format of
-      tiaChatRfJsonSchema:
-      begin
-        JFormatConfig := TJSONObject.Create;
-        JFormatConfig.Add('type', 'json_schema');
-        sSchema := Trim(JsonSchema.Text);
-        if sSchema <> '' then
-        begin
-          JSchemaObj   := TJSONObject.Create;
-          JInnerSchema := TJSONObject(GetJSON(sSchema));
-          if Assigned(JInnerSchema) then
-          begin
-            JSchemaObj.Add('schema', JInnerSchema);
-            JSchemaObj.Add('strict', TJSONBoolean.Create(True));
-            JFormatConfig.Add('json_schema', JSchemaObj);
-          end
-          else
-            JSchemaObj.Free;
-        end;
-        AJSONObject.Add('response_format', JFormatConfig);
-      end;
-      tiaChatRfJson:
-      begin
-        JFormatConfig := TJSONObject.Create;
-        JFormatConfig.Add('type', 'json_object');
-        AJSONObject.Add('response_format', JFormatConfig);
-      end;
-    end;
+      AJSONObject.AddPair('logprobs', TJSONBool.Create(Logprobs));
 
-    // 10. Stop words
-    Lista.CommaText := Stop;
-    if Lista.Count > 0 then
-    begin
-      JStop := TJSONArray.Create;
-      for I := 0 to Lista.Count - 1 do
-        JStop.Add(Lista[I]);
-      AJSONObject.Add('stop', JStop);
-    end;
+      If Top_logprobs <> '' then
+        AJSONObject.AddPair('top_logprobs', TJSONNumber.Create(Top_logprobs));
+    End;
 
-    Result := AJSONObject.AsJSON;
-    Result := StringReplace(Result, '\/', '/', [rfReplaceAll]);
-    Result := StringReplace(Result, '\r\n', '', [rfReplaceAll]);
-  finally
+    If Seed > 0 then
+      AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
+
+    Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
+
+    Res := StringReplace(Res, '\/', '/', [rfReplaceAll]);
+    Result := StringReplace(Res, '\r\n', '', [rfReplaceAll]);
+  Finally
     AJSONObject.Free;
     Lista.Free;
-  end;
+  End;
 end;
 
-{ ---------------------------------------------------------------------------
-  InternalRunCompletions — flujo normal o web search con Responses API
-
-  Si tcm_WebSearch esta activo en ChatMediaSupports, usa la xAI Responses API
-  (POST /v1/responses con tools=[{type:"web_search"}]).
-  En modo normal delega al inherited (TAiChat.InternalRunCompletions).
-  --------------------------------------------------------------------------- }
-
-function TAiGrokChat.InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): string;
+// Respuestas API de xAI para búsqueda web
+// search_parameters fue deprecado enero 2026 (devuelve 410 "Live search is deprecated").
+// Nueva API: POST /v1/responses  con tools=[{type:"web_search"}]
+// Formato respuesta: output[].type="message" → content[].type="output_text" → text
+function TAiGrokChat.InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String;
 var
-  ABody     : string;
-  sUrl      : string;
-  LModel    : string;
-  BodyStream: TStringStream;
-  RespStream: TStringStream;
-  Client    : TFPHTTPClient;
-  jReq      : TJSONObject;
-  jRes      : TJSONObject;
-  jInput    : TJSONArray;
-  jMessages : TJSONArray;
-  jTools    : TJSONArray;
-  jTool     : TJSONObject;
-  jOutput   : TJSONArray;
-  jContent  : TJSONArray;
-  jItem     : TJSONObject;
-  jCntItem  : TJSONObject;
-  jOrig     : TJSONObject;
-  jNew      : TJSONObject;
-  JContentVal: TJSONData;
-  SType, SRole, SVal: string;
-  I, ContentIdx: Integer;
+  ABody, sUrl, SType, SVal, sRole, sContent: String;
+  Res: IHTTPResponse;
+  FHeaders: TNetHeaders;
+  jReq, jRes, jItem, jContentItem: TJSonObject;
+  jInput, jMessages, jOutput, jContent, jTools: TJSonArray;
+  jTool: TJSonObject;
+  St: TStringStream;
+  LModel: String;
+  I, K: Integer;
 begin
   // Sin web search activo → flujo normal de chat/completions
-  if not (tcm_WebSearch in ChatMediaSupports) then
+  if not (cap_WebSearch in ModelConfig.ModelCaps) then
   begin
     Result := inherited InternalRunCompletions(ResMsg, AskMsg);
     Exit;
   end;
 
-  // Web search activo → xAI Responses API (POST /v1/responses)
-  FBusy      := True;
-  FAbort     := False;
-  FLastError := '';
+  // Web search activo → xAI Agent Tools API (POST /v1/responses)
+  FBusy        := True;
+  FAbort       := False;
+  FLastError   := '';
   FLastContent := '';
 
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
@@ -329,248 +312,241 @@ begin
     LModel := 'grok-3';
 
   sUrl := Url;
-  if (Length(sUrl) > 0) and (sUrl[Length(sUrl)] <> '/') then
+  if not sUrl.EndsWith('/') then
     sUrl := sUrl + '/';
   sUrl := sUrl + 'responses';
 
-  BodyStream := TStringStream.Create('');
-  RespStream := TStringStream.Create('');
-  Client     := TFPHTTPClient.Create(nil);
-  jReq       := nil;
-  jInput     := nil;
-  jMessages  := nil;
-  jTools     := nil;
-  jTool      := nil;
+  jInput    := nil;
+  jMessages := nil;
+  jTools    := nil;
+  jTool     := nil;
+  jReq      := nil;
+  St        := nil;
   try
-    DoStateChange(acsConnecting, 'Enviando busqueda web Grok...');
-
     // Construir input: mensajes del historial con "system" → "developer"
-    jInput    := TJSONArray.Create;
+    jInput    := TJSonArray.Create;
     jMessages := GetMessages;
-    try
-      for I := 0 to jMessages.Count - 1 do
+    for I := 0 to jMessages.Count - 1 do
+    begin
+      var jOrig := jMessages.Items[I] as TJSonObject;
+      var jNew  := TJSonObject.Create;
+      jOrig.TryGetValue<String>('role', sRole);
+      if sRole = 'system' then
+        jNew.AddPair('role', 'developer')
+      else
+        jNew.AddPair('role', sRole);
+      if jOrig.TryGetValue<String>('content', sContent) then
+        jNew.AddPair('content', sContent)
+      else
       begin
-        jOrig := TJSONObject(jMessages.Items[I]);
-        jNew  := TJSONObject.Create;
-
-        SRole := JGetStr(jOrig, 'role', 'user');
-        if SRole = 'system' then
-          jNew.Add('role', 'developer')
-        else
-          jNew.Add('role', SRole);
-
-        // Content: string o array
-        JContentVal := jOrig.Find('content');
-        if Assigned(JContentVal) then
-        begin
-          if JContentVal is TJSONString then
-            jNew.Add('content', JContentVal.AsString)
-          else
-            jNew.Add('content', TJSONData(GetJSON(JContentVal.AsJSON)));
-        end;
-
-        jInput.Add(jNew);
+        var jCont: TJSONValue;
+        if jOrig.TryGetValue<TJSONValue>('content', jCont) then
+          jNew.AddPair('content', TJSONObject.ParseJSONValue(jCont.ToJSON));
       end;
-    finally
-      jMessages.Free;
-      jMessages := nil;
+      jInput.Add(jNew);
     end;
+    FreeAndNil(jMessages);
 
-    // Construir tools
-    jTools := TJSONArray.Create;
-    jTool  := TJSONObject.Create;
-    jTool.Add('type', 'web_search');
-    jTools.Add(jTool);
-    jTool := nil;
+    // Construir request body
+    jTools := TJSonArray.Create;
+    jTool  := TJSonObject.Create;
+    jTool.AddPair('type', 'web_search');
+    jTools.Add(jTool); jTool := nil;
 
-    // Request body
-    jReq := TJSONObject.Create;
-    jReq.Add('model',  LModel);
-    jReq.Add('input',  jInput);  jInput := nil;
-    jReq.Add('tools',  jTools);  jTools := nil;
-    jReq.Add('stream', TJSONBoolean.Create(False));
+    jReq := TJSonObject.Create;
+    jReq.AddPair('model',  LModel);
+    jReq.AddPair('input',  jInput);  jInput := nil;
+    jReq.AddPair('tools',  jTools);  jTools := nil;
+    jReq.AddPair('stream', TJSONBool.Create(False));
 
-    ABody := jReq.AsJSON;
-    BodyStream.WriteString(ABody);
-    BodyStream.Position := 0;
+    ABody := jReq.ToJSON;
+    St    := TStringStream.Create(ABody, TEncoding.UTF8);
 
-    Client.AddHeader('Authorization', 'Bearer ' + ApiKey);
-    Client.AddHeader('Content-Type', 'application/json');
-    Client.IOTimeout   := ResponseTimeOut;
-    Client.RequestBody := BodyStream;
-    try
-      Client.HTTPMethod('POST', sUrl, RespStream, [200]);
+    FHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
+    FClient.ContentType  := 'application/json';
+    FClient.Asynchronous := False;
+    FResponse.Clear;
+    DoStateChange(acsConnecting, 'Enviando búsqueda web...');
 
-      jRes := TJSONObject(GetJSON(RespStream.DataString));
-      if not Assigned(jRes) then
-        raise Exception.CreateFmt('Respuesta JSON invalida: %s',
-            [RespStream.DataString]);
+    Res := FClient.Post(sUrl, St, FResponse, FHeaders);
+
+    if Res.StatusCode = 200 then
+    begin
+      var LParsed := TJSonObject.ParseJSONValue(Res.ContentAsString);
+      if not (LParsed is TJSonObject) then
+      begin
+        LParsed.Free;
+        raise Exception.CreateFmt('Respuesta JSON inválida: %s', [Res.ContentAsString]);
+      end;
+      jRes := TJSonObject(LParsed);
       try
         FLastContent := '';
-        if JTryGetArr(jRes, 'output', jOutput) then
+        if jRes.TryGetValue<TJSonArray>('output', jOutput) then
           for I := 0 to jOutput.Count - 1 do
           begin
-            if not (jOutput.Items[I] is TJSONObject) then Continue;
-            jItem := TJSONObject(jOutput.Items[I]);
-            if not JTryGetStr(jItem, 'type', SType) then Continue;
+            if not (jOutput.Items[I] is TJSonObject) then Continue;
+            jItem := jOutput.Items[I] as TJSonObject;
+            if not jItem.TryGetValue<String>('type', SType) then Continue;
             if SType = 'message' then
-              if JTryGetArr(jItem, 'content', jContent) then
-                for ContentIdx := 0 to jContent.Count - 1 do
+              if jItem.TryGetValue<TJSonArray>('content', jContent) then
+                for K := 0 to jContent.Count - 1 do
                 begin
-                  if not (jContent.Items[ContentIdx] is TJSONObject) then Continue;
-                  jCntItem := TJSONObject(jContent.Items[ContentIdx]);
-                  if JTryGetStr(jCntItem, 'type', SVal) and (SVal = 'output_text') then
-                    if JTryGetStr(jCntItem, 'text', SVal) then
+                  if not (jContent.Items[K] is TJSonObject) then Continue;
+                  jContentItem := jContent.Items[K] as TJSonObject;
+                  if jContentItem.TryGetValue<String>('type', SVal) and (SVal = 'output_text') then
+                    if jContentItem.TryGetValue<String>('text', SVal) then
                       FLastContent := FLastContent + SVal;
                 end;
           end;
-
         ResMsg.Prompt := FLastContent;
+        FBusy         := False;
         Result        := FLastContent;
-        DoDataEnd(ResMsg, 'assistant', FLastContent, jRes);
+        if Assigned(FOnReceiveDataEnd) then
+          FOnReceiveDataEnd(Self, ResMsg, jRes, 'assistant', FLastContent);
       finally
-        jRes.Free;
+        FreeAndNil(jRes);
       end;
-    except
-      on E: Exception do
-      begin
-        FLastError := E.Message;
-        DoError('Error en busqueda web Grok: ' + E.Message, E);
-        Result := '';
-      end;
-    end;
+    end
+    else
+      raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
   finally
-    jReq.Free;
-    jInput.Free;
-    jMessages.Free;
-    jTools.Free;
-    jTool.Free;
-    BodyStream.Free;
-    RespStream.Free;
-    Client.Free;
-    FBusy := False;
+    FreeAndNil(jMessages);
+    FreeAndNil(jInput);
+    FreeAndNil(jTools);
+    FreeAndNil(jTool);
+    FreeAndNil(jReq);
+    FreeAndNil(St);
   end;
 end;
 
-{ ---------------------------------------------------------------------------
-  InternalRunImageGeneration — genera imagenes via /v1/images/generations
-  Responde con URL o base64 (b64_json) para cada imagen generada.
-  --------------------------------------------------------------------------- }
-
-function TAiGrokChat.InternalRunImageGeneration(ResMsg, AskMsg: TAiChatMessage): string;
+function TAiGrokChat.InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 var
-  sUrl      : string;
-  LModel    : string;
-  BodyStream: TStringStream;
-  RespStream: TStringStream;
-  Client    : TFPHTTPClient;
-  LBodyJson : TJSONObject;
-  LRespJson : TJSONObject;
-  LDataArr  : TJSONArray;
-  LImgObj   : TJSONObject;
-  LImgData  : TJSONData;
-  NewMedia  : TAiMediaFile;
-  LImageUrl, LBase64, LRevised: string;
-  I         : Integer;
+  LBodyJson, LResponseJson, LImageObject: TJSonObject;
+  LDataArray: TJSonArray;
+  LBodyStream: TStringStream;
+  LUrl: String;
+  LHeaders: TNetHeaders;
+  LResponse: IHTTPResponse;
+  LNewMediaFile: TAiMediaFile;
+  LImageUrl, LRevisedPrompt, LBase64Data: string;
+  LModel: String;
 begin
-  Result := '';
-  if AskMsg.Prompt = '' then
-    raise Exception.Create('Se requiere un prompt para generar una imagen con Grok.');
-
-  FBusy      := True;
-  FAbort     := False;
+  Result := ''; // La salida principal es el MediaFile en ResMsg
+  FBusy := True;
+  FAbort := False;
   FLastError := '';
   FLastContent := '';
+  FLastPrompt := AskMsg.Prompt;
+
+  // 1. Validaciones y configuraci?n
+  if AskMsg.Prompt.IsEmpty then
+    raise Exception.Create('Se requiere un prompt para generar una imagen.');
 
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
   if LModel = '' then
-    LModel := 'grok-2-image';
+    LModel := 'grok-2-image'; // Asignar un modelo de imagen por defecto
 
-  sUrl := Url;
-  if (Length(sUrl) > 0) and (sUrl[Length(sUrl)] <> '/') then
-    sUrl := sUrl + '/';
-  sUrl := sUrl + 'images/generations';
+  LUrl := Url + 'images/generations'; // Url base + endpoint
 
-  LBodyJson  := TJSONObject.Create;
-  BodyStream := TStringStream.Create('');
-  RespStream := TStringStream.Create('');
-  Client     := TFPHTTPClient.Create(nil);
+  // 2. Construir el cuerpo de la petici?n JSON
+  LBodyJson := TJSonObject.Create;
+  LBodyStream := TStringStream.Create('', TEncoding.UTF8);
   try
-    // Construir body
-    LBodyJson.Add('prompt', AskMsg.Prompt);
-    LBodyJson.Add('model', LModel);
-    if N > 0 then
-      LBodyJson.Add('n', TJSONIntegerNumber.Create(N));
+    LBodyJson.AddPair('prompt', AskMsg.Prompt);
+    LBodyJson.AddPair('model', LModel);
 
-    BodyStream.WriteString(LBodyJson.AsJSON);
-    BodyStream.Position := 0;
+    if Self.N > 0 then
+      LBodyJson.AddPair('n', TJSONNumber.Create(Self.N));
 
-    Client.AddHeader('Authorization', 'Bearer ' + ApiKey);
-    Client.AddHeader('Content-Type', 'application/json');
-    Client.IOTimeout   := ResponseTimeOut;
-    Client.RequestBody := BodyStream;
-    try
-      Client.HTTPMethod('POST', sUrl, RespStream, [200]);
+    // if not Self.ImageResponseFormat.IsEmpty then
+    // LBodyJson.AddPair('response_format', Self.ImageResponseFormat);
 
-      LRespJson := TJSONObject(GetJSON(RespStream.DataString));
-      if not Assigned(LRespJson) then
-        raise Exception.CreateFmt('Respuesta JSON invalida de /images/generations: %s',
-            [RespStream.DataString]);
+    // 3. Preparar y ejecutar la llamada HTTP
+    LBodyStream.WriteString(LBodyJson.ToJSON);
+    LBodyStream.Position := 0;
+{$IFDEF APIDEBUG}
+    LBodyStream.SaveToFile('c:\temp\grok_image_request.json');
+    LBodyStream.Position := 0;
+{$ENDIF}
+    // Grok usa Bearer token para la autorizaci?n
+    LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
+    FClient.ContentType := 'application/json';
+    FResponse.Clear;
+
+    LResponse := FClient.Post(LUrl, LBodyStream, FResponse, LHeaders);
+
+    // 4. Procesar la respuesta
+    FResponse.Position := 0;
+    FLastContent := LResponse.ContentAsString(TEncoding.UTF8);
+{$IFDEF APIDEBUG}
+    FResponse.SaveToFile('c:\temp\grok_image_response.json');
+{$ENDIF}
+    if LResponse.StatusCode = 200 then
+    begin
+      LResponseJson := TJSonObject.ParseJSONValue(FLastContent) as TJSonObject;
       try
-        if JTryGetArr(LRespJson, 'data', LDataArr) then
-          for I := 0 to LDataArr.Count - 1 do
+        if LResponseJson.TryGetValue<TJSonArray>('data', LDataArray) then
+        begin
+          for var LJsonValue in LDataArray do
           begin
-            LImgData := LDataArr.Items[I];
-            if not (LImgData is TJSONObject) then Continue;
-            LImgObj := TJSONObject(LImgData);
+            if not(LJsonValue is TJSonObject) then
+              continue;
 
-            NewMedia := TAiMediaFile.Create;
+            LImageObject := LJsonValue as TJSonObject;
+            LNewMediaFile := TAiMediaFile.Create;
             try
-              // Prompt revisado
-              LRevised := '';
-              if JTryGetStr(LImgObj, 'revised_prompt', LRevised) then
+              // Extraer el prompt revisado y guardarlo (es informaci?n ?til)
+              LImageObject.TryGetValue<string>('revised_prompt', LRevisedPrompt);
+              LNewMediaFile.Transcription := LRevisedPrompt;
+              FLastContent := LRevisedPrompt;
+              ResMsg.Prompt := FLastContent;
+
+              // CASO A: La respuesta es una URL
+              if LImageObject.TryGetValue<string>('url', LImageUrl) then
               begin
-                NewMedia.Transcription := LRevised;
-                FLastContent := LRevised;
-                ResMsg.Prompt := FLastContent;
+                // Descargamos la imagen desde la URL y la cargamos en el MediaFile
+                // Necesitar?s una funci?n para descargar, por ejemplo:
+                LNewMediaFile.LoadFromUrl(LImageUrl); // Asumiendo que tienes esta funci?n
+              end
+              // CASO B: La respuesta es Base64
+              else if LImageObject.TryGetValue<string>('b64_json', LBase64Data) then
+              begin
+                LNewMediaFile.LoadFromBase64('generated_image.png', LBase64Data);
               end;
 
-              // Caso A: URL de imagen
-              LImageUrl := '';
-              if JTryGetStr(LImgObj, 'url', LImageUrl) and (LImageUrl <> '') then
-                NewMedia.LoadFromUrl(LImageUrl)
-              // Caso B: base64
-              else if JTryGetStr(LImgObj, 'b64_json', LBase64) and (LBase64 <> '') then
-                NewMedia.LoadFromBase64('generated_image.png', LBase64);
-
-              ResMsg.MediaFiles.Add(NewMedia);
+              // A?adir el MediaFile al mensaje de respuesta
+              ResMsg.MediaFiles.Add(LNewMediaFile);
             except
-              NewMedia.Free;
+              LNewMediaFile.Free;
               raise;
             end;
           end;
+        end;
 
-        DoDataEnd(ResMsg, 'model', '', LRespJson);
+        // Disparamos el evento de finalizaci?n
+        if Assigned(FOnReceiveDataEnd) then
+          FOnReceiveDataEnd(Self, ResMsg, LResponseJson, 'model', '');
+
       finally
-        LRespJson.Free;
+        LResponseJson.Free;
       end;
-    except
-      on E: Exception do
-      begin
-        FLastError := 'Error generando imagen con Grok: ' + E.Message;
-        DoError(FLastError, E);
-      end;
+    end
+    else
+    begin
+      FLastError := Format('Error generando imagen con Grok: %d, %s', [LResponse.StatusCode, FLastContent]);
+      DoError(FLastError, nil);
     end;
+
   finally
     LBodyJson.Free;
-    BodyStream.Free;
-    RespStream.Free;
-    Client.Free;
+    LBodyStream.Free;
     FBusy := False;
   end;
 end;
 
-initialization
-  TAiChatFactory.Instance.RegisterDriver(TAiGrokChat);
+Initialization
+
+TAiChatFactory.Instance.RegisterDriver(TAiGrokChat);
 
 end.

@@ -1,0 +1,39 @@
+======================================================
+ MakerAI — Cap 14: Generacion de Imagenes y Video
+ Demo 1: gpt-image-2  | Demo 2: gpt-image-1 (bridge)
+ Demo 3: Gemini flash | Demo 4: Imagen 4 | Demo 5: Veo
+======================================================
+Salida: C:\Users\genri\AppData\Local\Temp\
+
+  Estado del entorno:
+  [OK] OPENAI_API_KEY
+  [OK] GEMINI_API_KEY
+
+
+=== Demo 1: TAiDalle.Generate() — gpt-image-2 ===
+  Generando... OK [31622 ms]
+    -> C:\Users\genri\AppData\Local\Temp\demo1-gato-delphi.png (1912 KB)
+
+=== Demo 2: Bridge TAiChatConnection + TAiDalleImageTool ===
+  gpt-image-1 | ModelCaps=[] / SessionCaps=[cap_GenImage]
+  Generando via bridge (~20 s)...    -> C:\Users\genri\AppData\Local\Temp\demo2-logo.png (1206 KB)
+ OK [32408 ms]
+
+=== Demo 3: Gemini nativo — gemini-2.5-flash-image ===
+  ModelCaps=[cap_Image,cap_GenImage] ? Gap=[] ? completions directo
+  Generando (Gemini nativo)...    [ERROR] API key not valid. Please pass a valid API key.
+ OK [826 ms]
+
+=== Demo 4: Google Imagen 4 — imagen-4.0-generate-001 ===
+  Bridge interno via endpoint :predict (aspect 16:9)
+  Generando Imagen 4 (~30 s)...    [ERROR] API key not valid. Please pass a valid API key.
+ OK [105 ms]
+
+=== Demo 5: TAiVeoGenerator — veo-3.1-generate-preview ===
+  Video 5 s, 720p, 16:9. Puede tardar hasta 2 minutos.
+  Iniciando generacion de video...
+    ERROR: API key not valid. Please pass a valid API key.
+  Finalizado con error (ver arriba).
+
+======================================================
+Demos finalizados. Presiona Enter para salir...

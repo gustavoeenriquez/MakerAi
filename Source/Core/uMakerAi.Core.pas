@@ -1,6 +1,6 @@
-// MIT License
+﻿// MIT License
 //
-// Copyright (c) 2024-2026 Gustavo Enriquez
+// Copyright (c) 2024 Gustavo Enríquez - CimaMaker
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,455 +20,542 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-// Nombre: Gustavo Enriquez
+// Nombre: Gustavo Enr?quez
+// Redes Sociales:
 // - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
 // - GitHub: https://github.com/gustavoeenriquez/
 //
-// --------- FPC PORT --------------------
-// Adaptaciones principales respecto a la version Delphi:
-//   - System.JSON       → fpjson + jsonparser
-//   - System.NetEncoding → EncdDecd (Base64) + funcion URL encode propia
-//   - System.Net.HttpClient → fphttpclient + opensslsockets
-//   - IHTTPResponse     → interfaz propia TAiHttpResponse
-//   - Directivas {$IF CompilerVersion} eliminadas, reemplazadas por {$IF FPC_FULLVERSION}
+// --------- CAMBIOS --------------------
+// 04/11/2024 - adiciona el manejo de TAiMediaFile.detail para identificar la calidad de analisis de una imagen
+// 04/11/2024 - Se corrige error de asignaci?n en TAiMediaFile.LoadFromBase64
+// 15/10/2025 - Code Cleanup
 
 unit uMakerAi.Core;
-
-{$mode objfpc}{$H+}
-{$modeswitch advancedrecords}
 
 interface
 
 uses
-  SysUtils, Classes, Generics.Collections,
-  StrUtils,
-  EncdDecd,       // Base64: EncodeBase64 / DecodeBase64
-  fpjson,         // TJSONObject, TJSONArray, TJSONString, TJSONBoolean, etc.
-  jsonparser,     // GetJSON()
-  fphttpclient,   // TFPHTTPClient
-  URIParser;      // TUri, para encoding de URLs
+  System.SysUtils, System.Classes,
+  System.Generics.Collections, System.NetEncoding, System.JSON,
+  System.StrUtils, System.Net.HttpClient;
 
-// ---------------------------------------------------------------------------
-// Interfaz minima para representar una respuesta HTTP (sustituye IHTTPResponse)
-// ---------------------------------------------------------------------------
-type
-  IAiHttpResponse = interface
-    ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
-    function GetStatusCode: Integer;
-    function GetContentAsString: string;
-    property StatusCode: Integer read GetStatusCode;
-    property ContentAsString: string read GetContentAsString;
-  end;
+Type
 
-// ---------------------------------------------------------------------------
-//  A. Capa de Archivos (Fisica) - tipos de datos binarios/fisicos
-// ---------------------------------------------------------------------------
-type
-  TAiFileCategory = (
-    Tfc_Text, Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_Pdf,
-    Tfc_Document, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile,
-    Tfc_Web, Tfc_GraphicDesign, Tfc_ExtractTextFile,
-    Tfc_Report,    // Reporte generado (PDF, HTML, XLSX) por herramienta externa
-    Tfc_Any, Tfc_Unknown
-  );
+  { A. Capas de Archivos (F?sica) - Define tipos de datos binarios/f?sicos }
+  TAiFileCategory = (Tfc_Text, Tfc_Image, Tfc_Audio, Tfc_Video, Tfc_Pdf, Tfc_Document, Tfc_CalcSheet, Tfc_Presentation, Tfc_CompressFile, Tfc_Web, Tfc_GraphicDesign, Tfc_ExtractTextFile,
+    Tfc_Report, // Reporte generado (PDF, HTML, XLSX) por herramienta externa o code_interpreter
+    Tfc_Any, Tfc_Unknown);
 
   TAiFileCategories = set of TAiFileCategory;
 
-// ---------------------------------------------------------------------------
-//  B. Capa de Habilidades (Logica) - capacidades intelectuales o herramientas
-// ---------------------------------------------------------------------------
-  TAiChatMediaSupport = (
-    Tcm_Text, Tcm_Image, Tcm_Audio, Tcm_Video, Tcm_Pdf,
-    Tcm_WebSearch, Tcm_CodeInterpreter, Tcm_Memory,
-    Tcm_TextEditor, Tcm_ComputerUse, Tcm_Shell,
-    Tcm_Reasoning,         // Capacidad de CoT (Chain of Thought)
-    Tcm_ReportGeneration,  // Generacion de reportes
-    Tcm_Any, Tcm_Unknown
-  );
+  { B. Capas de Habilidades (L?gica) - Define capacidades intelectuales o herramientas }
+  TAiChatMediaSupport = (Tcm_Text, Tcm_Image, Tcm_Audio, Tcm_Video, Tcm_Pdf, Tcm_WebSearch, Tcm_CodeInterpreter, Tcm_Memory, Tcm_TextEditor, Tcm_ComputerUse, Tcm_Shell, Tcm_Reasoning, // Capacidad de CoT (Chain of Thought)
+    Tcm_ReportGeneration, // Generaci�n de reportes (nativo v�a code_interpreter o herramienta externa)
+    Tcm_Any, Tcm_Unknown);
 
   TAiChatMediaSupports = set of TAiChatMediaSupport;
 
-// ---------------------------------------------------------------------------
-//  C. Capa Unificada de Capacidades (sistema v3.3)
-// ---------------------------------------------------------------------------
+  { C. Capa Unificada de Capacidades (nuevo sistema v3.3) }
   TAiCapability = (
-    // Entrada / Comprension (cubierto por completions nativo)
-    cap_Image,            // modelo entiende imagenes entrantes
+    // Entrada / Comprensi�n (cubierto por completions nativo)
+    cap_Image,            // modelo entiende im�genes entrantes
     cap_Audio,            // modelo entiende/transcribe audio entrante
     cap_Video,            // modelo entiende video entrante
     cap_Pdf,              // modelo entiende PDFs entrantes
     cap_WebSearch,        // modelo puede buscar en la web
     cap_Reasoning,        // modelo tiene razonamiento extendido (CoT)
-    cap_CodeInterpreter,  // modelo puede ejecutar codigo
+    cap_CodeInterpreter,  // modelo puede ejecutar c�digo
     cap_Memory,           // modelo tiene memoria persistente
     cap_TextEditor,       // modelo puede editar archivos
     cap_ComputerUse,      // modelo puede controlar el ordenador
     cap_Shell,            // modelo puede ejecutar comandos shell
-    // Salida / Generacion (gap -> activa ChatTool o endpoint dedicado)
+    // Salida / Generaci�n (gap -> activa ChatTool o endpoint dedicado)
     cap_GenImage,         // producir imagen como output
     cap_GenAudio,         // producir audio como output (TTS)
     cap_GenVideo,         // producir video como output
     cap_GenReport,        // producir reporte (PDF, HTML, XLSX)
-    cap_ExtractCode       // post-procesar: extraer bloques de codigo de la respuesta
+    cap_ExtractCode       // post-procesar: extraer bloques de c�digo de la respuesta
   );
-
   TAiCapabilities = set of TAiCapability;
 
-// ---------------------------------------------------------------------------
-//  Tipos de evento y enumeraciones generales
-// ---------------------------------------------------------------------------
+  // Tipo de evento para manejar errores
+  TAiErrorEvent = procedure(Sender: TObject; const ErrorMsg: string; Exception: Exception; const AResponse: IHTTPResponse) of object;
 
-  // Evento de error — usa IAiHttpResponse en lugar de IHTTPResponse de Delphi
-  TAiErrorEvent = procedure(Sender: TObject; const ErrorMsg: string;
-                            AException: Exception;
-                            const AResponse: IAiHttpResponse) of object;
-
-  TAiThinkingLevel = (tlDefault, tlLow, tlMedium, tlHigh);
+  TAiThinkingLevel = (tlDefault, tlLow, tlMedium, tlHigh); // Default es medium en la mayor?a de los casos
   TAiMediaResolution = (mrDefault, mrLow, mrMedium, mrHigh);
 
-  // Formatos de respuesta para transcripcion (Whisper)
+  // Se utiliza especialmente en OpenAi en la transcripci?n
+
   TAiTranscriptionResponseFormat = (trfText, trfJson, trfSrt, trfVtt, trfVerboseJson);
 
-  // Granularidad de timestamps
+  // Enum para la granularidad de los timestamps
   TAiTimestampGranularity = (tsgNone, tsgWord, tsgSegment);
   TAiTimestampGranularities = set of TAiTimestampGranularity;
 
-  // Eventos MCP y herramientas
-  TMCPLogEvent    = procedure(Sender: TObject; const Msg: string) of object;
+  // Tipos de datos necesarios para MCP y ToolFunctions
+  TMCPLogEvent = procedure(Sender: TObject; const Msg: string) of object;
+
+  // Evento para notificar cambios de estado del servidor (iniciado, detenido, etc.)
   TMCPStatusEvent = procedure(Sender: TObject; const StatusMsg: string) of object;
 
-  TToolFormat        = (tfUnknown, tfOpenAI, tfOpenAIResponses, tfClaude, tfGemini, tfMCP);
+  // Evento para que el desarrollador apruebe o deniegue la instalación de un paquete MCP vía AutoMCP.
+  // AAllow = True (default) para permitir, False para bloquear.
+  TAutoMCPRequestEvent = procedure(Sender: TObject; const APkgName: string; var AAllow: Boolean) of object;
+
+  TToolFormat = (tfUnknown, tfOpenAI, tfOpenAIResponses, tfClaude, tfGemini, tfMCP);
   TToolTransportType = (tpStdIo, tpHttp, tpSSE, tpMakerAi);
 
-  // Maquina de estados del chat
-  TAiChatState = (
-    acsIdle,          // Inactivo
-    acsConnecting,    // Conectando / Enviando Request
-    acsCreated,       // Servidor acepto (Recibido ID)
-    acsReasoning,     // Pensando / Razonando (Chain of Thought)
-    acsWriting,       // Escribiendo respuesta visible
-    acsToolCalling,   // El modelo pide usar una herramienta
+  TAiChatState = (acsIdle, // Inactivo
+    acsConnecting, // Conectando / Enviando Request
+    acsCreated, // Servidor acept? (Recibido ID)
+    acsReasoning, // Pensando / Razonando (Chain of Thought)
+    acsWriting, // Escribiendo respuesta visible
+    acsToolCalling, // El modelo pide usar una herramienta
     acsToolExecuting, // Ejecutando la herramienta (Local o Remota)
-    acsFinished,      // Completado con exito
-    acsAborted,       // Abortado por el usuario
+    acsFinished, // Completado con ?xito
+    acsAborted, // Abortado por el usuario
     acsLoading,
     acsProcessing,
-    acsError          // Error
-  );
+    acsError // Error
+    );
 
-  TAiStateChangeEvent = procedure(Sender: TObject; State: TAiChatState;
-                                  const Description: string) of object;
+  // Definici?n del evento
+  TAiStateChangeEvent = procedure(Sender: TObject; State: TAiChatState; const Description: string) of object;
 
-// ---------------------------------------------------------------------------
-//  Forward declarations
-// ---------------------------------------------------------------------------
-  TAiMediaFiles = class;
+  TAiMediaFiles = Class;
 
-// ---------------------------------------------------------------------------
-//  TAiMediaFile — manejo de archivos de medios (audio, imagen, pdf, texto, etc.)
-// ---------------------------------------------------------------------------
-  TAiMediaFile = class
-  private
-    Ffilename       : string;
-    FUrlMedia       : string;
-    FFileType       : string;
-    FContent        : TMemoryStream;
-    FFullFileName   : string;
-    FTranscription  : string;
-    FProcesado      : Boolean;
-    FDetail         : string;
-    FIdAudio        : string;
-    FCloudState     : string;
-    FCloudName      : string;
-    FCacheName      : string;
-    FIdFile         : string;
-    FMediaFiles     : TAiMediaFiles;
-    FCacheControl   : Boolean;
+  // Clase utilizada para el manejo de archivos de medios como audio, im?genes, pdf, text, etc.
+
+  TAiMediaFile = Class
+  Private
+    Ffilename: String;
+    FUrlMedia: String;
+    FFileType: String;
+    FContent: TMemoryStream;
+    FFullFileName: String;
+    FTranscription: String;
+    FProcesado: Boolean;
+    FDetail: String;
+    FIdAudio: String;
+    FCloudState: String;
+    FCloudName: String;
+    FCacheName: String;
+    FIdFile: String;
+    FMediaFiles: TAiMediaFiles;
+    FCacheControl: Boolean;
     FEnableCitations: Boolean;
-    FContext        : string;
-    FTitle          : string;
-    FContentLoaded  : Boolean;
-
-    function  GetBase64: string;
-    procedure SetBase64(const Value: string);
-    procedure SetFilename(const Value: string);
-    procedure SetUrlMedia(const Value: string);
-    function  GetBytes: Integer;
-    procedure SetFullFileName(const Value: string);
-    function  GetMimeType: string;
-    function  GetFileCategory: TAiFileCategory;
-    procedure SetTranscription(const Value: string);
+    FContext: string;
+    FTitle: string;
+    FContentLoaded: Boolean;
+    function GetBase64: String;
+    procedure SetBase64(const Value: String);
+    procedure Setfilename(const Value: String);
+    procedure SetUrlMedia(const Value: String);
+    function GetBytes: Integer;
+    procedure SetFullFileName(const Value: String);
+    function GetMimeType: String;
+    function GetFileCategory: TAiFileCategory;
+    procedure SetTranscription(const Value: String);
     procedure SetProcesado(const Value: Boolean);
-    procedure SetDetail(const Value: string);
-    procedure SetIdAudio(const Value: string);
-    procedure SetCacheName(const Value: string);
-    procedure SetIdFile(const Value: string);
+    procedure SetDetail(const Value: String);
+    procedure SetIdAudio(const Value: String);
+    procedure SetCacheName(const Value: String);
+    procedure SetIdFile(const Value: String);
     procedure SetMediaFiles(const Value: TAiMediaFiles);
-  protected
-    procedure DownloadFileFromUrl(Url: string); virtual;
-    function  GetContent: TMemoryStream; virtual;
-  public
-    constructor Create;
-    destructor  Destroy; override;
+  Protected
+    Procedure DownloadFileFromUrl(Url: String); Virtual;
+    function GetContent: TMemoryStream; Virtual;
+  Public
+    Constructor Create;
+    Destructor Destroy; Override;
+    Procedure LoadFromfile(aFileName: String); Virtual;
+    Procedure LoadFromUrl(aUrl: String); Virtual;
+    Procedure LoadFromBase64(aFileName, aBase64: String); Virtual;
+    Procedure LoadFromStream(aFileName: String; Stream: TMemoryStream); Virtual;
+    Procedure SaveToFile(aFileName: String); Virtual;
+    Function ToString: String; override;
+    Procedure Clear; Virtual;
 
-    procedure LoadFromFile(aFileName: string); virtual;
-    procedure LoadFromUrl(aUrl: string); virtual;
-    procedure LoadFromBase64(aFileName, aBase64: string); virtual;
-    procedure LoadFromStream(aFileName: string; Stream: TMemoryStream); virtual;
-    procedure SaveToFile(aFileName: string); virtual;
-    function  ToString: string; override;
-    procedure Clear; virtual;
-
-    function  ToJsonObject: TJSONObject;
+    function ToJsonObject: TJSONObject; // Exporta el objeto completo a un json
     procedure LoadFromJsonObject(AObject: TJSONObject);
+
     procedure Assign(Source: TAiMediaFile);
 
-    property Filename        : string        read Ffilename      write SetFilename;
-    property Bytes           : Integer       read GetBytes;
-    property Content         : TMemoryStream read GetContent;
-    property FileCategory    : TAiFileCategory read GetFileCategory;
-    property UrlMedia        : string        read FUrlMedia      write SetUrlMedia;
-    property CloudState      : string        read FCloudState    write FCloudState;
-    property CloudName       : string        read FCloudName     write FCloudName;
-    property CacheName       : string        read FCacheName     write SetCacheName;
-    property IdFile          : string        read FIdFile        write SetIdFile;
-    property IdAudio         : string        read FIdAudio       write SetIdAudio;
-    property Base64          : string        read GetBase64      write SetBase64;
-    property FullFileName    : string        read FFullFileName  write SetFullFileName;
-    property MimeType        : string        read GetMimeType;
-    property Detail          : string        read FDetail        write SetDetail;
-    property Transcription   : string        read FTranscription write SetTranscription;
-    property Procesado       : Boolean       read FProcesado     write SetProcesado;
-    property MediaFiles      : TAiMediaFiles read FMediaFiles    write SetMediaFiles;
-    property CacheControl    : Boolean       read FCacheControl  write FCacheControl;
-    property Title           : string        read FTitle         write FTitle;
-    property Context         : string        read FContext       write FContext;
-    property EnableCitations : Boolean       read FEnableCitations write FEnableCitations;
-  end;
+    Property filename: String read Ffilename write Setfilename;
+    Property bytes: Integer read GetBytes;
+    Property Content: TMemoryStream read GetContent;
+    Property FileCategory: TAiFileCategory read GetFileCategory;
+    // Uri de donde se encuentra el archivo para ser subido al modelo
+    Property UrlMedia: String read FUrlMedia write SetUrlMedia;
 
-// ---------------------------------------------------------------------------
-//  TAiMediaFiles — coleccion de TAiMediaFile
-// ---------------------------------------------------------------------------
-  TAiMediaFilesArray = array of TAiMediaFile;
+    Property CloudState: String read FCloudState write FCloudState;
+    // Nombre del archivo con que fue guardado dentro del modelo disponible para la API
+    Property CloudName: String read FCloudName write FCloudName;
+    // Nombre del archivo guardado como cach? dentro de la api, es posible preguntar entre varias iteracciones del chat
+    Property CacheName: String read FCacheName write SetCacheName;
 
-  TAiMediaFiles = class(specialize TObjectList<TAiMediaFile>)
-  public
-    function GetMediaList(aFilters: TAiFileCategories;
-                          aProcesado: Boolean = False): TAiMediaFilesArray;
-    function ToMediaFileArray: TAiMediaFilesArray;
-  end;
+    // El Id con el que se identifica el archivo en el servidor
+    Property IdFile: String read FIdFile write SetIdFile;
+    // Guarda la URI de archivo generado por la API para almacenar el audio que ya gener? el modelo
+    Property IdAudio: String read FIdAudio write SetIdAudio;
+    Property Base64: String read GetBase64 write SetBase64;
+    Property FullFileName: String read FFullFileName write SetFullFileName;
+    Property MimeType: String read GetMimeType;
+    // Propiedad que se pasa con el archivo de media, en la imagen con OpenAi  indica si se analiza en detalle o "high" o en baja resoluci?n "low"
+    // En la transcripci?n va el otro formato si lo hay,  ej.  el json que genera el formato VTS
+    Property Detail: String read FDetail write SetDetail;
+    // Transcription- Si el archivo adjunto se procesa por separado aqu? se guarda lo que retorna el modelo correspondiente
+    Property Transcription: String read FTranscription write SetTranscription;
+    Property Procesado: Boolean read FProcesado write SetProcesado;
+    Property MediaFiles: TAiMediaFiles read FMediaFiles write SetMediaFiles;
+    Property CacheControl: Boolean read FCacheControl write FCacheControl;
 
-// ---------------------------------------------------------------------------
-//  TAiMetadata — diccionario String→String de metadatos
-// ---------------------------------------------------------------------------
-  TAiMetadata = class(specialize TDictionary<string, string>)
-  private
-    function  GetAsText: string;
-    procedure SetAsText(const Value: string);
-    function  GetJsonText: string;
-    procedure SetJsonText(const Value: string);
-  public
-    function ToJson: TJSONObject;
-    property AsText  : string read GetAsText   write SetAsText;
-    property JsonText: string read GetJsonText write SetJsonText;
-  end;
+    Property Title: string read FTitle write FTitle; // Titulo del documento
+    Property Context: string read FContext write FContext; // Informaci?n adicional del documento es solo contexto
+    Property EnableCitations: Boolean read FEnableCitations write FEnableCitations; // Si este documento se incluye para ser citado por la IA
+  End;
 
-// ---------------------------------------------------------------------------
-//  TAiWebSearch — resultado de busqueda web (anotaciones)
-// ---------------------------------------------------------------------------
-  TAiWebSearchItem = class
-  public
-    &type       : string;
-    start_index : Integer;
-    end_index   : Integer;
-    Url         : string;
-    Title       : string;
-  end;
+  // Conjunto de archivos para su manejo en el chat
+  TAiMediaFilesArray = Array of TAiMediaFile;
 
-  TAiWebSearchArray = class(specialize TObjectList<TAiWebSearchItem>);
+  TAiMediaFiles = Class(TObjectList<TAiMediaFile>)
+  Private
+  Protected
+  Public
+    // Si el modelo no maneja este tipo de media files, se pueden preprocesar en el evento del chat
+    // y el texto del proceso se adiciona al prompt, y aqu? ya no se tendr?an en cuenta
+    Function GetMediaList(aFilters: TAiFileCategories; aProcesado: Boolean = False): TAiMediaFilesArray;
+    Function ToMediaFileArray: TAiMediaFilesArray; // Retrona una lista con clones de los objetos
+  End;
 
-  TAiWebSearch = class
-  public
-    &type      : string;
-    text       : string;
+  // Clase de manejo de los metadatos que se pasan al api del chat de los llm
+  TAiMetadata = Class(TDictionary<String, String>)
+  Private
+    function GetAsText: String;
+    procedure SetAsText(const Value: String);
+    function GetJSonText: String;
+    procedure SetJsonText(const Value: String);
+  Protected
+  Public
+    Function ToJSon: TJSONObject;
+    Property AsText: String Read GetAsText Write SetAsText;
+    Property JsonText: String Read GetJSonText Write SetJsonText;
+  End;
+
+
+  TAiWebSearchItem = Class
+    &type: String;
+    start_index: Integer;
+    end_index: Integer;
+    Url: String;
+    Title: String;
+  End;
+
+  TAiWebSearchArray = Class(TObjectList<TAiWebSearchItem>);
+
+  TAiWebSearch = Class
+    &type: String;
+    text: String;
     annotations: TAiWebSearchArray;
-    constructor Create;
-    destructor  Destroy; override;
-  end;
+    Constructor Create;
+    Destructor Destroy; override;
+  End;
 
-// ---------------------------------------------------------------------------
-//  Funciones utilitarias globales
-// ---------------------------------------------------------------------------
-
-// Devuelve la categoria TAiFileCategory segun la extension del archivo
+  // Partiendo de la extensi?n del archivo obtiene la categoria TAiFileCategori
 function GetContentCategory(FileExtension: string): TAiFileCategory;
 
-// Devuelve el MIME type segun la extension (.mp3 o mp3)
+// Obtiene el mime de un archivo basado en la extensi?n .mp3 o mp3
 function GetMimeTypeFromFileName(FileExtension: string): string;
 function GetFileExtensionFromMimeType(MimeType: string): string;
 
-// Convierte un TMemoryStream a string Base64
-function StreamToBase64(Stream: TMemoryStream): string;
+// Convierte un stream en Base64
+function StreamToBase64(Stream: TMemoryStream): String;
 
-// Convierte lista Key=Value en query string de URL (?k=v&k2=v2)
+// convierte una lista de valores Key1=Value1  en una lista de parametros de query de una URL
 function GetParametrosURL(Parametros: TStringList): string;
-
-// Codifica un string para uso en URL (reemplaza caracteres especiales)
-function UrlEncode(const S: string): string;
 
 implementation
 
+uses
+  System.Net.URLClient, System.Net.HttpClientComponent
+{$IFDEF LINUX}
+  , uMakerAi.Utils.System
+{$ENDIF}
+  ;
+{$REGION 'Utilidades varias' }
 {$I uMakerAi.Version.inc}
-
-// ===========================================================================
-//  Utilidades globales
-// ===========================================================================
-
-function UrlEncode(const S: string): string;
-// Implementacion propia — en FPC no hay TNetEncoding.URL
-// Codifica todos los caracteres que no sean letras, digitos o -_.~
-const
-  SafeChars = ['A'..'Z', 'a'..'z', '0'..'9', '-', '_', '.', '~'];
-var
-  i: Integer;
-  C: Char;
-begin
-  Result := '';
-  for i := 1 to Length(S) do
-  begin
-    C := S[i];
-    if C in SafeChars then
-      Result := Result + C
-    else
-      Result := Result + '%' + IntToHex(Ord(C), 2);
-  end;
-end;
 
 function GetParametrosURL(Parametros: TStringList): string;
 var
   i: Integer;
 begin
   Result := '';
-  if not Assigned(Parametros) or (Parametros.Count = 0) then
-    Exit;
-  Result := '?';
-  for i := 0 to Parametros.Count - 1 do
+  if Assigned(Parametros) and (Parametros.Count > 0) then
   begin
-    Result := Result + UrlEncode(Parametros.Names[i]) + '=' +
-              UrlEncode(Parametros.ValueFromIndex[i]);
-    if i < Parametros.Count - 1 then
-      Result := Result + '&';
+    Result := '?';
+    for i := 0 to Parametros.Count - 1 do
+    begin
+      Result := Result + TNetEncoding.URL.Encode(Parametros.Names[i]) + '=' +
+                TNetEncoding.URL.Encode(Parametros.ValueFromIndex[i]);
+      if i < Parametros.Count - 1 then
+        Result := Result + '&';
+    end;
   end;
 end;
 
-function StreamToBase64(Stream: TMemoryStream): string;
-// FPC: EncdDecd.EncodeBase64 — recibe puntero y tamanio
+function StreamToBase64(Stream: TMemoryStream): String;
 begin
   Stream.Position := 0;
-  Result := EncodeBase64(Stream.Memory, Stream.Size);
-  // Eliminar saltos de linea que puede introducir EncodeBase64
-  Result := StringReplace(Result, LineEnding, '', [rfReplaceAll]);
-  Result := StringReplace(Result, #10, '', [rfReplaceAll]);
+  Result := TNetEncoding.Base64.EncodeBytesToString(Stream.Memory, Stream.Size);
+  // TBase64Encoding inserta CRLF cada 76 chars. Todos los endpoints REST
+  // (Gemini, OpenAI, Claude, Ollama) requieren base64 sin saltos de línea.
+  Result := StringReplace(Result, #13#10, '', [rfReplaceAll]);
+  Result := StringReplace(Result, #10,   '', [rfReplaceAll]);
 end;
 
 function GetMimeTypeFromFileName(FileExtension: string): string;
 begin
   FileExtension := LowerCase(Trim(StringReplace(FileExtension, '.', '', [rfReplaceAll])));
 
-  // Audio
-  if      SameText(FileExtension, 'mp3')  then Result := 'audio/mpeg'
-  else if SameText(FileExtension, 'mpga') then Result := 'audio/mpeg'
-  else if SameText(FileExtension, 'm4a')  then Result := 'audio/mp4'
-  else if SameText(FileExtension, 'ogg')  then Result := 'audio/ogg'
-  else if SameText(FileExtension, 'wav')  then Result := 'audio/wav'
-  else if SameText(FileExtension, 'flac') then Result := 'audio/flac'
-  else if SameText(FileExtension, 'aac')  then Result := 'audio/aac'
-  else if SameText(FileExtension, 'wma')  then Result := 'audio/x-ms-wma'
-  else if SameText(FileExtension, 'opus') then Result := 'audio/opus'
-  // Video
-  else if SameText(FileExtension, 'mp4')  then Result := 'video/mp4'
-  else if SameText(FileExtension, 'mpeg') then Result := 'video/mpeg'
-  else if SameText(FileExtension, 'mpg')  then Result := 'video/mpeg'
-  else if SameText(FileExtension, 'webm') then Result := 'video/webm'
-  else if SameText(FileExtension, 'avi')  then Result := 'video/x-msvideo'
-  else if SameText(FileExtension, 'mov')  then Result := 'video/quicktime'
-  else if SameText(FileExtension, 'wmv')  then Result := 'video/x-ms-wmv'
-  else if SameText(FileExtension, 'flv')  then Result := 'video/x-flv'
-  else if SameText(FileExtension, '3gp')  then Result := 'video/3gpp'
-  else if SameText(FileExtension, 'mkv')  then Result := 'video/x-matroska'
-  else if SameText(FileExtension, 'm4v')  then Result := 'video/x-m4v'
-  // Imagen
-  else if SameText(FileExtension, 'gif')  then Result := 'image/gif'
-  else if SameText(FileExtension, 'jpeg') then Result := 'image/jpeg'
-  else if SameText(FileExtension, 'jpg')  then Result := 'image/jpeg'
-  else if SameText(FileExtension, 'png')  then Result := 'image/png'
-  else if SameText(FileExtension, 'bmp')  then Result := 'image/bmp'
-  else if SameText(FileExtension, 'svg')  then Result := 'image/svg+xml'
-  else if SameText(FileExtension, 'ico')  then Result := 'image/vnd.microsoft.icon'
-  else if SameText(FileExtension, 'tiff') then Result := 'image/tiff'
-  else if SameText(FileExtension, 'tif')  then Result := 'image/tiff'
-  else if SameText(FileExtension, 'webp') then Result := 'image/webp'
-  else if SameText(FileExtension, 'avif') then Result := 'image/avif'
-  else if SameText(FileExtension, 'heic') then Result := 'image/heic'
-  else if SameText(FileExtension, 'heif') then Result := 'image/heif'
-  // Texto
-  else if SameText(FileExtension, 'txt')  then Result := 'text/plain'
-  else if SameText(FileExtension, 'html') then Result := 'text/html'
-  else if SameText(FileExtension, 'htm')  then Result := 'text/html'
-  else if SameText(FileExtension, 'css')  then Result := 'text/css'
-  else if SameText(FileExtension, 'csv')  then Result := 'text/csv'
-  else if SameText(FileExtension, 'js')   then Result := 'text/javascript'
-  else if SameText(FileExtension, 'md')   then Result := 'text/markdown'
-  else if SameText(FileExtension, 'rtf')  then Result := 'application/rtf'
-  // Application
-  else if SameText(FileExtension, 'xml')  then Result := 'application/xml'
-  else if SameText(FileExtension, 'json') then Result := 'application/json'
-  else if SameText(FileExtension, 'pdf')  then Result := 'application/pdf'
-  // Office
-  else if SameText(FileExtension, 'doc')  then Result := 'application/msword'
-  else if SameText(FileExtension, 'docx') then Result := 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  else if SameText(FileExtension, 'xls')  then Result := 'application/vnd.ms-excel'
-  else if SameText(FileExtension, 'xlsx') then Result := 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  else if SameText(FileExtension, 'ppt')  then Result := 'application/vnd.ms-powerpoint'
-  else if SameText(FileExtension, 'pptx') then Result := 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-  // OpenDocument
-  else if SameText(FileExtension, 'odt')  then Result := 'application/vnd.oasis.opendocument.text'
-  else if SameText(FileExtension, 'ods')  then Result := 'application/vnd.oasis.opendocument.spreadsheet'
-  else if SameText(FileExtension, 'odp')  then Result := 'application/vnd.oasis.opendocument.presentation'
-  // Comprimidos
-  else if SameText(FileExtension, 'zip')  then Result := 'application/zip'
-  else if SameText(FileExtension, 'gz')   then Result := 'application/gzip'
-  else if SameText(FileExtension, 'tar')  then Result := 'application/x-tar'
-  else if SameText(FileExtension, 'rar')  then Result := 'application/vnd.rar'
-  else if SameText(FileExtension, '7z')   then Result := 'application/x-7z-compressed'
-  else if SameText(FileExtension, 'bz2')  then Result := 'application/x-bzip2'
-  // Programacion
-  else if SameText(FileExtension, 'py')   then Result := 'text/x-python'
-  else if SameText(FileExtension, 'java') then Result := 'text/x-java-source'
-  else if SameText(FileExtension, 'c')    then Result := 'text/x-c'
-  else if SameText(FileExtension, 'cpp')  then Result := 'text/x-c++'
-  else if SameText(FileExtension, 'cs')   then Result := 'text/x-csharp'
-  else if SameText(FileExtension, 'rb')   then Result := 'text/x-ruby'
-  else if SameText(FileExtension, 'go')   then Result := 'text/x-go'
-  else if SameText(FileExtension, 'rs')   then Result := 'text/x-rust'
-  else if SameText(FileExtension, 'sh')   then Result := 'application/x-sh'
-  else if SameText(FileExtension, 'bat')  then Result := 'application/x-msdos-program'
-  // Disenio grafico
-  else if SameText(FileExtension, 'psd')  then Result := 'application/vnd.adobe.photoshop'
-  else if SameText(FileExtension, 'ai')   then Result := 'application/postscript'
-  else if SameText(FileExtension, 'eps')  then Result := 'application/postscript'
-  else if SameText(FileExtension, 'ps')   then Result := 'application/postscript'
-  // Fuentes
-  else if SameText(FileExtension, 'ttf')  then Result := 'font/ttf'
-  else if SameText(FileExtension, 'otf')  then Result := 'font/otf'
-  else if SameText(FileExtension, 'woff') then Result := 'font/woff'
-  else if SameText(FileExtension, 'woff2')then Result := 'font/woff2'
-  // Bases de datos
-  else if SameText(FileExtension, 'sqlite')then Result := 'application/vnd.sqlite3'
-  else if SameText(FileExtension, 'db')   then Result := 'application/x-sqlite3'
-  // eBooks
-  else if SameText(FileExtension, 'epub') then Result := 'application/epub+zip'
-  else if SameText(FileExtension, 'mobi') then Result := 'application/x-mobipocket-ebook'
+  // Audio formats
+  if SameText(FileExtension, 'mp3') then
+    Result := 'audio/mpeg'
+  else if SameText(FileExtension, 'mpga') then
+    Result := 'audio/mpeg'
+  else if SameText(FileExtension, 'm4a') then
+    Result := 'audio/mp4'
+  else if SameText(FileExtension, 'ogg') then
+    Result := 'audio/ogg'
+  else if SameText(FileExtension, 'wav') then
+    Result := 'audio/wav'
+  else if SameText(FileExtension, 'flac') then
+    Result := 'audio/flac'
+  else if SameText(FileExtension, 'aac') then
+    Result := 'audio/aac'
+  else if SameText(FileExtension, 'wma') then
+    Result := 'audio/x-ms-wma'
+  else if SameText(FileExtension, 'opus') then
+    Result := 'audio/opus'
+
+    // Video formats
+  else if SameText(FileExtension, 'mp4') then
+    Result := 'video/mp4'
+  else if SameText(FileExtension, 'mpeg') then
+    Result := 'video/mpeg'
+  else if SameText(FileExtension, 'mpg') then
+    Result := 'video/mpeg'
+  else if SameText(FileExtension, 'webm') then
+    Result := 'video/webm'
+  else if SameText(FileExtension, 'avi') then
+    Result := 'video/x-msvideo'
+  else if SameText(FileExtension, 'mov') then
+    Result := 'video/quicktime'
+  else if SameText(FileExtension, 'wmv') then
+    Result := 'video/x-ms-wmv'
+  else if SameText(FileExtension, 'flv') then
+    Result := 'video/x-flv'
+  else if SameText(FileExtension, '3gp') then
+    Result := 'video/3gpp'
+  else if SameText(FileExtension, 'mkv') then
+    Result := 'video/x-matroska'
+  else if SameText(FileExtension, 'm4v') then
+    Result := 'video/x-m4v'
+
+    // Image formats (existentes + nuevos)
+  else if SameText(FileExtension, 'gif') then
+    Result := 'image/gif'
+  else if SameText(FileExtension, 'jpeg') then
+    Result := 'image/jpeg'
+  else if SameText(FileExtension, 'jpg') then
+    Result := 'image/jpeg'
+  else if SameText(FileExtension, 'png') then
+    Result := 'image/png'
+  else if SameText(FileExtension, 'bmp') then
+    Result := 'image/bmp'
+  else if SameText(FileExtension, 'svg') then
+    Result := 'image/svg+xml'
+  else if SameText(FileExtension, 'ico') then
+    Result := 'image/vnd.microsoft.icon'
+  else if SameText(FileExtension, 'tiff') then
+    Result := 'image/tiff'
+  else if SameText(FileExtension, 'tif') then
+    Result := 'image/tiff'
+  else if SameText(FileExtension, 'webp') then
+    Result := 'image/webp'
+  else if SameText(FileExtension, 'avif') then
+    Result := 'image/avif'
+  else if SameText(FileExtension, 'heic') then
+    Result := 'image/heic'
+  else if SameText(FileExtension, 'heif') then
+    Result := 'image/heif'
+
+    // Text formats (existentes + nuevos)
+  else if SameText(FileExtension, 'txt') then
+    Result := 'text/plain'
+  else if SameText(FileExtension, 'html') then
+    Result := 'text/html'
+  else if SameText(FileExtension, 'htm') then
+    Result := 'text/html'
+  else if SameText(FileExtension, 'css') then
+    Result := 'text/css'
+  else if SameText(FileExtension, 'csv') then
+    Result := 'text/csv'
+  else if SameText(FileExtension, 'js') then
+    Result := 'text/javascript'
+  else if SameText(FileExtension, 'md') then
+    Result := 'text/markdown'
+  else if SameText(FileExtension, 'rtf') then
+    Result := 'application/rtf'
+
+    // Application formats
+  else if SameText(FileExtension, 'xml') then
+    Result := 'application/xml'
+  else if SameText(FileExtension, 'json') then
+    Result := 'application/json'
+  else if SameText(FileExtension, 'pdf') then
+    Result := 'application/pdf'
+
+    // Microsoft Office formats
+  else if SameText(FileExtension, 'doc') then
+    Result := 'application/msword'
+  else if SameText(FileExtension, 'docx') then
+    Result := 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  else if SameText(FileExtension, 'xls') then
+    Result := 'application/vnd.ms-excel'
+  else if SameText(FileExtension, 'xlsx') then
+    Result := 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  else if SameText(FileExtension, 'ppt') then
+    Result := 'application/vnd.ms-powerpoint'
+  else if SameText(FileExtension, 'pptx') then
+    Result := 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+
+    // OpenDocument formats
+  else if SameText(FileExtension, 'odt') then
+    Result := 'application/vnd.oasis.opendocument.text'
+  else if SameText(FileExtension, 'ods') then
+    Result := 'application/vnd.oasis.opendocument.spreadsheet'
+  else if SameText(FileExtension, 'odp') then
+    Result := 'application/vnd.oasis.opendocument.presentation'
+
+    // Archive formats (existentes + nuevos)
+  else if SameText(FileExtension, 'zip') then
+    Result := 'application/zip'
+  else if SameText(FileExtension, 'gzip') then
+    Result := 'application/gzip'
+  else if SameText(FileExtension, 'gz') then
+    Result := 'application/gzip'
+  else if SameText(FileExtension, 'tar') then
+    Result := 'application/x-tar'
+  else if SameText(FileExtension, 'rar') then
+    Result := 'application/vnd.rar'
+  else if SameText(FileExtension, '7z') then
+    Result := 'application/x-7z-compressed'
+  else if SameText(FileExtension, 'bz2') then
+    Result := 'application/x-bzip2'
+
+    // Executable formats
+  else if SameText(FileExtension, 'exe') then
+    Result := 'application/vnd.microsoft.portable-executable'
+  else if SameText(FileExtension, 'msi') then
+    Result := 'application/x-msi'
+  else if SameText(FileExtension, 'dll') then
+    Result := 'application/x-msdownload'
+  else if SameText(FileExtension, 'deb') then
+    Result := 'application/vnd.debian.binary-package'
+  else if SameText(FileExtension, 'dmg') then
+    Result := 'application/x-apple-diskimage'
+  else if SameText(FileExtension, 'pkg') then
+    Result := 'application/vnd.apple.installer+xml'
+
+    // Font formats
+  else if SameText(FileExtension, 'ttf') then
+    Result := 'font/ttf'
+  else if SameText(FileExtension, 'otf') then
+    Result := 'font/otf'
+  else if SameText(FileExtension, 'woff') then
+    Result := 'font/woff'
+  else if SameText(FileExtension, 'woff2') then
+    Result := 'font/woff2'
+  else if SameText(FileExtension, 'eot') then
+    Result := 'application/vnd.ms-fontobject'
+
+    // 3D and CAD formats
+  else if SameText(FileExtension, 'glb') then
+    Result := 'model/gltf-binary'
+  else if SameText(FileExtension, 'gltf') then
+    Result := 'model/gltf+json'
+  else if SameText(FileExtension, 'stl') then
+    Result := 'model/stl'
+  else if SameText(FileExtension, 'obj') then
+    Result := 'model/obj'
+
+    // Database formats
+  else if SameText(FileExtension, 'sqlite') then
+    Result := 'application/vnd.sqlite3'
+  else if SameText(FileExtension, 'db') then
+    Result := 'application/x-sqlite3'
+  else if SameText(FileExtension, 'mdb') then
+    Result := 'application/vnd.ms-access'
+
+    // eBook formats
+  else if SameText(FileExtension, 'epub') then
+    Result := 'application/epub+zip'
+  else if SameText(FileExtension, 'mobi') then
+    Result := 'application/x-mobipocket-ebook'
+  else if SameText(FileExtension, 'azw') then
+    Result := 'application/vnd.amazon.ebook'
+
+    // Certificate formats
+  else if SameText(FileExtension, 'p12') then
+    Result := 'application/x-pkcs12'
+  else if SameText(FileExtension, 'crt') then
+    Result := 'application/x-x509-ca-cert'
+  else if SameText(FileExtension, 'cer') then
+    Result := 'application/x-x509-ca-cert'
+  else if SameText(FileExtension, 'pem') then
+    Result := 'application/x-pem-file'
+
+    // Programming and development files
+  else if SameText(FileExtension, 'py') then
+    Result := 'text/x-python'
+  else if SameText(FileExtension, 'java') then
+    Result := 'text/x-java-source'
+  else if SameText(FileExtension, 'c') then
+    Result := 'text/x-c'
+  else if SameText(FileExtension, 'cpp') then
+    Result := 'text/x-c++'
+  else if SameText(FileExtension, 'cs') then
+    Result := 'text/x-csharp'
+  else if SameText(FileExtension, 'php') then
+    Result := 'application/x-httpd-php'
+  else if SameText(FileExtension, 'rb') then
+    Result := 'text/x-ruby'
+  else if SameText(FileExtension, 'go') then
+    Result := 'text/x-go'
+  else if SameText(FileExtension, 'rs') then
+    Result := 'text/x-rust'
+  else if SameText(FileExtension, 'sh') then
+    Result := 'application/x-sh'
+  else if SameText(FileExtension, 'bat') then
+    Result := 'application/x-msdos-program'
+
+    // Specialized formats
+  else if SameText(FileExtension, 'psd') then
+    Result := 'application/vnd.adobe.photoshop'
+  else if SameText(FileExtension, 'ai') then
+    Result := 'application/postscript'
+  else if SameText(FileExtension, 'eps') then
+    Result := 'application/postscript'
+  else if SameText(FileExtension, 'ps') then
+    Result := 'application/postscript'
+
+    // Default case
   else
     Result := 'application/octet-stream';
 end;
@@ -477,123 +564,359 @@ function GetFileExtensionFromMimeType(MimeType: string): string;
 begin
   MimeType := LowerCase(Trim(MimeType));
 
-  if      SameText(MimeType, 'audio/mpeg')        then Result := 'mp3'
-  else if SameText(MimeType, 'audio/mp4')         then Result := 'm4a'
-  else if SameText(MimeType, 'audio/ogg')         then Result := 'ogg'
-  else if SameText(MimeType, 'audio/wav')         then Result := 'wav'
-  else if SameText(MimeType, 'audio/flac')        then Result := 'flac'
-  else if SameText(MimeType, 'audio/aac')         then Result := 'aac'
-  else if SameText(MimeType, 'video/mp4')         then Result := 'mp4'
-  else if SameText(MimeType, 'video/mpeg')        then Result := 'mpeg'
-  else if SameText(MimeType, 'video/webm')        then Result := 'webm'
-  else if SameText(MimeType, 'video/x-msvideo')   then Result := 'avi'
-  else if SameText(MimeType, 'video/quicktime')   then Result := 'mov'
-  else if SameText(MimeType, 'video/x-ms-wmv')    then Result := 'wmv'
-  else if SameText(MimeType, 'video/3gpp')        then Result := '3gp'
-  else if SameText(MimeType, 'video/x-matroska')  then Result := 'mkv'
-  else if SameText(MimeType, 'image/gif')         then Result := 'gif'
-  else if SameText(MimeType, 'image/jpeg')        then Result := 'jpg'
-  else if SameText(MimeType, 'image/png')         then Result := 'png'
-  else if SameText(MimeType, 'image/bmp')         then Result := 'bmp'
-  else if SameText(MimeType, 'image/svg+xml')     then Result := 'svg'
-  else if SameText(MimeType, 'image/tiff')        then Result := 'tiff'
-  else if SameText(MimeType, 'image/webp')        then Result := 'webp'
-  else if SameText(MimeType, 'image/avif')        then Result := 'avif'
-  else if SameText(MimeType, 'image/heic')        then Result := 'heic'
-  else if SameText(MimeType, 'image/heif')        then Result := 'heif'
-  else if SameText(MimeType, 'application/pdf')   then Result := 'pdf'
-  else if SameText(MimeType, 'application/msword')then Result := 'doc'
-  else if SameText(MimeType, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') then Result := 'docx'
-  else if SameText(MimeType, 'application/vnd.ms-excel') then Result := 'xls'
-  else if SameText(MimeType, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') then Result := 'xlsx'
-  else if SameText(MimeType, 'application/vnd.ms-powerpoint') then Result := 'ppt'
-  else if SameText(MimeType, 'application/vnd.openxmlformats-officedocument.presentationml.presentation') then Result := 'pptx'
-  else if SameText(MimeType, 'application/vnd.oasis.opendocument.text') then Result := 'odt'
-  else if SameText(MimeType, 'application/vnd.oasis.opendocument.spreadsheet') then Result := 'ods'
-  else if SameText(MimeType, 'application/rtf')   then Result := 'rtf'
-  else if SameText(MimeType, 'application/zip')   then Result := 'zip'
-  else if SameText(MimeType, 'application/gzip')  then Result := 'gz'
-  else if SameText(MimeType, 'application/x-tar') then Result := 'tar'
-  else if SameText(MimeType, 'application/vnd.rar')then Result := 'rar'
-  else if SameText(MimeType, 'application/x-7z-compressed') then Result := '7z'
-  else if SameText(MimeType, 'application/json')  then Result := 'json'
-  else if SameText(MimeType, 'application/xml')   then Result := 'xml'
-  else if SameText(MimeType, 'text/plain')        then Result := 'txt'
-  else if SameText(MimeType, 'text/csv')          then Result := 'csv'
-  else if SameText(MimeType, 'text/html')         then Result := 'html'
-  else if SameText(MimeType, 'text/css')          then Result := 'css'
-  else if SameText(MimeType, 'text/markdown')     then Result := 'md'
-  else if SameText(MimeType, 'text/javascript')   then Result := 'js'
-  else if SameText(MimeType, 'text/x-python')     then Result := 'py'
-  else if SameText(MimeType, 'font/ttf')          then Result := 'ttf'
-  else if SameText(MimeType, 'font/otf')          then Result := 'otf'
-  else if SameText(MimeType, 'font/woff')         then Result := 'woff'
-  else if SameText(MimeType, 'font/woff2')        then Result := 'woff2'
-  else if SameText(MimeType, 'application/vnd.sqlite3') then Result := 'sqlite'
-  else if SameText(MimeType, 'application/epub+zip') then Result := 'epub'
-  else if SameText(MimeType, 'application/octet-stream') then Result := 'bin'
+  // Audio formats (ya existentes)
+  if SameText(MimeType, 'audio/mpeg') then
+    Result := 'mp3'
+  else if SameText(MimeType, 'audio/mp4') then
+    Result := 'm4a'
+  else if SameText(MimeType, 'audio/ogg') then
+    Result := 'ogg'
+  else if SameText(MimeType, 'audio/wav') then
+    Result := 'wav'
+  else if SameText(MimeType, 'audio/flac') then
+    Result := 'flac'
+  else if SameText(MimeType, 'audio/aac') then
+    Result := 'aac'
+  else if SameText(MimeType, 'audio/wma') then
+    Result := 'wma'
+
+    // Video formats (ya existentes + nuevos)
+  else if SameText(MimeType, 'video/mp4') then
+    Result := 'mp4'
+  else if SameText(MimeType, 'video/mpeg') then
+    Result := 'mpeg'
+  else if SameText(MimeType, 'video/webm') then
+    Result := 'webm'
+  else if SameText(MimeType, 'video/x-msvideo') then
+    Result := 'avi'
+  else if SameText(MimeType, 'video/quicktime') then
+    Result := 'mov'
+  else if SameText(MimeType, 'video/x-ms-wmv') then
+    Result := 'wmv'
+  else if SameText(MimeType, 'video/x-flv') then
+    Result := 'flv'
+  else if SameText(MimeType, 'video/3gpp') then
+    Result := '3gp'
+  else if SameText(MimeType, 'video/x-matroska') then
+    Result := 'mkv'
+
+    // Image formats (ya existentes + nuevos)
+  else if SameText(MimeType, 'image/gif') then
+    Result := 'gif'
+  else if SameText(MimeType, 'image/jpeg') then
+    Result := 'jpg'
+  else if SameText(MimeType, 'image/png') then
+    Result := 'png'
+  else if SameText(MimeType, 'image/bmp') then
+    Result := 'bmp'
+  else if SameText(MimeType, 'image/svg+xml') then
+    Result := 'svg'
+  else if SameText(MimeType, 'image/vnd.microsoft.icon') then
+    Result := 'ico'
+  else if SameText(MimeType, 'image/tiff') then
+    Result := 'tiff'
+  else if SameText(MimeType, 'image/webp') then
+    Result := 'webp'
+  else if SameText(MimeType, 'image/avif') then
+    Result := 'avif'
+  else if SameText(MimeType, 'image/heic') then
+    Result := 'heic'
+  else if SameText(MimeType, 'image/heif') then
+    Result := 'heif'
+
+    // Document formats binarios
+  else if SameText(MimeType, 'application/pdf') then
+    Result := 'pdf'
+  else if SameText(MimeType, 'application/msword') then
+    Result := 'doc'
+  else if SameText(MimeType, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') then
+    Result := 'docx'
+  else if SameText(MimeType, 'application/vnd.ms-excel') then
+    Result := 'xls'
+  else if SameText(MimeType, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') then
+    Result := 'xlsx'
+  else if SameText(MimeType, 'application/vnd.ms-powerpoint') then
+    Result := 'ppt'
+  else if SameText(MimeType, 'application/vnd.openxmlformats-officedocument.presentationml.presentation') then
+    Result := 'pptx'
+  else if SameText(MimeType, 'application/vnd.oasis.opendocument.text') then
+    Result := 'odt'
+  else if SameText(MimeType, 'application/vnd.oasis.opendocument.spreadsheet') then
+    Result := 'ods'
+  else if SameText(MimeType, 'application/vnd.oasis.opendocument.presentation') then
+    Result := 'odp'
+  else if SameText(MimeType, 'application/rtf') then
+    Result := 'rtf'
+
+    // Formatos de archivo comprimido
+  else if SameText(MimeType, 'application/zip') then
+    Result := 'zip'
+  else if SameText(MimeType, 'application/gzip') then
+    Result := 'gz'
+  else if SameText(MimeType, 'application/x-tar') then
+    Result := 'tar'
+  else if SameText(MimeType, 'application/vnd.rar') then
+    Result := 'rar'
+  else if SameText(MimeType, 'application/x-7z-compressed') then
+    Result := '7z'
+  else if SameText(MimeType, 'application/x-bzip2') then
+    Result := 'bz2'
+
+    // Ejecutables y bibliotecas
+  else if SameText(MimeType, 'application/vnd.microsoft.portable-executable') then
+    Result := 'exe'
+  else if SameText(MimeType, 'application/x-msdownload') then
+    Result := 'dll'
+  else if SameText(MimeType, 'application/x-msi') then
+    Result := 'msi'
+  else if SameText(MimeType, 'application/vnd.apple.installer+xml') then
+    Result := 'pkg'
+  else if SameText(MimeType, 'application/vnd.debian.binary-package') then
+    Result := 'deb'
+
+    // Formatos 3D y CAD
+  else if SameText(MimeType, 'model/gltf-binary') then
+    Result := 'glb'
+  else if SameText(MimeType, 'model/gltf+json') then
+    Result := 'gltf'
+  else if SameText(MimeType, 'model/stl') then
+    Result := 'stl'
+  else if SameText(MimeType, 'model/obj') then
+    Result := 'obj'
+  else if SameText(MimeType, 'application/sla') then
+    Result := 'stl'
+
+    // Bases de datos
+  else if SameText(MimeType, 'application/vnd.sqlite3') then
+    Result := 'sqlite'
+  else if SameText(MimeType, 'application/x-sqlite3') then
+    Result := 'db'
+  else if SameText(MimeType, 'application/vnd.ms-access') then
+    Result := 'mdb'
+
+    // Fuentes
+  else if SameText(MimeType, 'font/ttf') then
+    Result := 'ttf'
+  else if SameText(MimeType, 'font/otf') then
+    Result := 'otf'
+  else if SameText(MimeType, 'font/woff') then
+    Result := 'woff'
+  else if SameText(MimeType, 'font/woff2') then
+    Result := 'woff2'
+  else if SameText(MimeType, 'application/vnd.ms-fontobject') then
+    Result := 'eot'
+
+    // Formatos de texto (text/*)
+  else if SameText(MimeType, 'text/plain') then
+    Result := 'txt'
+  else if SameText(MimeType, 'text/csv') then
+    Result := 'csv'
+  else if SameText(MimeType, 'text/html') then
+    Result := 'html'
+  else if SameText(MimeType, 'text/css') then
+    Result := 'css'
+  else if SameText(MimeType, 'text/markdown') then
+    Result := 'md'
+  else if SameText(MimeType, 'text/javascript') then
+    Result := 'js'
+  else if SameText(MimeType, 'text/xml') then
+    Result := 'xml'
+  else if SameText(MimeType, 'text/x-python') then
+    Result := 'py'
+  else if SameText(MimeType, 'text/x-java-source') then
+    Result := 'java'
+  else if SameText(MimeType, 'text/x-c') then
+    Result := 'c'
+  else if SameText(MimeType, 'text/x-c++') then
+    Result := 'cpp'
+
+    // Application formats (texto/datos)
+  else if SameText(MimeType, 'application/json') then
+    Result := 'json'
+  else if SameText(MimeType, 'application/xml') then
+    Result := 'xml'
+
+    // Formatos de datos cient?ficos/t?cnicos
+  else if SameText(MimeType, 'application/x-hdf') then
+    Result := 'hdf'
+  else if SameText(MimeType, 'application/x-netcdf') then
+    Result := 'nc'
+  else if SameText(MimeType, 'application/fits') then
+    Result := 'fits'
+
+    // Formatos de ebook
+  else if SameText(MimeType, 'application/epub+zip') then
+    Result := 'epub'
+  else if SameText(MimeType, 'application/x-mobipocket-ebook') then
+    Result := 'mobi'
+  else if SameText(MimeType, 'application/vnd.amazon.ebook') then
+    Result := 'azw'
+
+    // Certificados y claves
+  else if SameText(MimeType, 'application/x-pkcs12') then
+    Result := 'p12'
+  else if SameText(MimeType, 'application/x-x509-ca-cert') then
+    Result := 'crt'
+  else if SameText(MimeType, 'application/pkcs8') then
+    Result := 'p8'
+
+    // Formatos espec?ficos de aplicaciones
+  else if SameText(MimeType, 'application/vnd.adobe.photoshop') then
+    Result := 'psd'
+  else if SameText(MimeType, 'application/postscript') then
+    Result := 'ps'
+  else if SameText(MimeType, 'application/vnd.sketchup.skp') then
+    Result := 'skp'
+
+    // Binario gen?rico
+  else if SameText(MimeType, 'application/octet-stream') then
+    Result := 'bin'
+
+    // Default case
   else
     Result := 'bin';
 
-  Result := '.' + Result;
+  Result := '.' + Result; // adiciona el punto para mantener el estandar.
 end;
 
 function GetContentCategory(FileExtension: string): TAiFileCategory;
 begin
   FileExtension := LowerCase(Trim(StringReplace(FileExtension, '.', '', [rfReplaceAll])));
 
-  // Imagenes
-  if MatchStr(FileExtension, ['jpg','jpeg','png','gif','bmp','tiff','tif','svg','webp','avif','heic','heif','ico']) then
+  // Image formats
+  if MatchStr(FileExtension, ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'svg', 'webp', 'avif', 'heic', 'heif', 'ico']) then
     Result := Tfc_Image
-  // Audio
-  else if MatchStr(FileExtension, ['mp3','wav','flac','aac','ogg','wma','m4a','opus','mpga']) then
+  // Audio formats
+  else if MatchStr(FileExtension, ['mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a', 'opus', 'mpga']) then
     Result := Tfc_Audio
-  // Video
-  else if MatchStr(FileExtension, ['avi','mp4','mkv','mov','wmv','flv','webm','mpeg','mpg','3gp','m4v']) then
+  // Video formats
+  else if MatchStr(FileExtension, ['avi', 'mp4', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'mpeg', 'mpg', '3gp', 'm4v']) then
     Result := Tfc_Video
   // PDF
-  else if FileExtension = 'pdf' then
+  else if (FileExtension = 'pdf') then
     Result := Tfc_Pdf
-  // Documentos
-  else if MatchStr(FileExtension, ['doc','docx','odt','rtf','tex']) then
+  // Document formats
+  else if MatchStr(FileExtension, ['doc', 'docx', 'odt', 'rtf', 'tex']) then
     Result := Tfc_Document
-  // Hojas de calculo
-  else if MatchStr(FileExtension, ['xls','xlsx','ods','csv']) then
+  // Spreadsheets
+  else if MatchStr(FileExtension, ['xls', 'xlsx', 'ods', 'csv']) then
     Result := Tfc_CalcSheet
-  // Presentaciones
-  else if MatchStr(FileExtension, ['ppt','pptx','odp']) then
+  // Presentations
+  else if MatchStr(FileExtension, ['ppt', 'pptx', 'odp']) then
     Result := Tfc_Presentation
-  // Texto plano
-  else if MatchStr(FileExtension, ['txt','md','log','readme']) then
+  // Plain text
+  else if MatchStr(FileExtension, ['txt', 'md', 'log', 'readme']) then
     Result := Tfc_Text
-  // Web
-  else if MatchStr(FileExtension, ['html','htm','xml','json','css','js','jsx','ts','tsx','vue','php']) then
+  // Web (Archivos f?sicos HTML/JSON/JS)
+  else if MatchStr(FileExtension, ['html', 'htm', 'xml', 'json', 'css', 'js', 'jsx', 'ts', 'tsx', 'vue', 'php']) then
     Result := Tfc_Web
-  // Comprimidos
-  else if MatchStr(FileExtension, ['zip','rar','tar','gz','bz2','7z','xz','gzip']) then
+  // Compressed
+  else if MatchStr(FileExtension, ['zip', 'rar', 'tar', 'gz', 'bz2', '7z', 'xz', 'gzip']) then
     Result := Tfc_CompressFile
-  // Disenio grafico
-  else if MatchStr(FileExtension, ['psd','ai','eps','indd','sketch','fig','xd']) then
+  // Graphic Design
+  else if MatchStr(FileExtension, ['psd', 'ai', 'eps', 'indd', 'sketch', 'fig', 'xd']) then
     Result := Tfc_GraphicDesign
-  // Archivos de configuracion / extraibles
-  else if MatchStr(FileExtension, ['yaml','yml','toml','ini','cfg','conf']) then
+  // Config files
+  else if MatchStr(FileExtension, ['yaml', 'yml', 'toml', 'ini', 'cfg', 'conf']) then
     Result := Tfc_ExtractTextFile
   else
     Result := Tfc_Unknown;
 end;
 
-// ===========================================================================
-//  TAiMediaFile
-// ===========================================================================
+{ TAiMediaFiles }
+
+procedure TAiMediaFile.Assign(Source: TAiMediaFile);
+begin
+  // 1. Protecci?n contra auto-asignaci?n y fuentes nulas.
+  if (Source = nil) or (Source = Self) then
+    Exit;
+
+  // 2. Copiar todas las propiedades "planas" (campos de valor).
+  // Usamos los campos privados (F...) para evitar disparar l?gica
+  // innecesaria que podr?a estar en los setters.
+  Self.Ffilename := Source.Ffilename;
+  Self.FUrlMedia := Source.FUrlMedia;
+  Self.FFileType := Source.FFileType; // No tiene setter, as? que copiamos el campo.
+  Self.FFullFileName := Source.FFullFileName;
+  Self.FTranscription := Source.FTranscription;
+  Self.FProcesado := Source.FProcesado;
+  Self.FDetail := Source.FDetail;
+  Self.FIdAudio := Source.FIdAudio;
+  Self.FCloudState := Source.FCloudState;
+  Self.FCloudName := Source.FCloudName;
+  Self.FCacheName := Source.FCacheName;
+  Self.FIdFile := Source.FIdFile;
+  Self.FCacheControl := Source.FCacheControl;
+  Self.FEnableCitations := Source.FEnableCitations;
+  Self.FContext := Source.FContext;
+  Self.FTitle := Source.FTitle;
+
+  // 3. Copia profunda (Deep Copy) del contenido del TMemoryStream.
+  // Este es el paso m?s cr?tico para evitar que ambos objetos compartan
+  // el mismo stream de memoria.
+  if Assigned(Source.Content) and (Source.Content.Size > 0) then
+  begin
+    // Si nuestro propio stream no existe, lo creamos.
+    if not Assigned(Self.FContent) then
+      Self.FContent := TMemoryStream.Create;
+
+    // Preparamos los streams para la copia.
+    Self.FContent.Clear;
+    Source.Content.Position := 0; // Aseguramos que leemos el origen desde el principio.
+
+    // Copiamos el contenido.
+    Self.FContent.CopyFrom(Source.Content, 0);
+
+    // Buena pr?ctica: Dejar ambos streams en su posici?n inicial.
+    Self.FContent.Position := 0;
+    Source.Content.Position := 0;
+    Self.FContentLoaded := True;
+  end
+  else
+  begin
+    // Si el stream de origen est? vac?o o no existe, nos aseguramos
+    // de que nuestro propio stream tambi?n est? vac?o.
+    if Assigned(Self.FContent) then
+      Self.FContent.Clear;
+  end;
+
+  // 4. Propiedades que NO se copian.
+  // Self.FMediaFiles: Esta es una referencia al contenedor padre.
+  // El nuevo objeto clonado ser? a?adido a una nueva lista,
+  // y esa lista le asignar? su propia referencia. No la tocamos aqu?.
+
+end;
+
+procedure TAiMediaFile.Clear;
+begin
+  FContent.Clear;
+  FContentLoaded := False;
+  Ffilename := '';
+  FUrlMedia := '';
+  FFileType := '';
+  FFullFileName := '';
+  FTranscription := '';
+  FProcesado := False;
+  FDetail := '';
+  FIdAudio := '';
+  FCloudState := '';
+  FCloudName := '';
+  FCacheName := '';
+  FIdFile := '';
+  FCacheControl := False;
+  FEnableCitations := False;
+  FContext := '';
+  FTitle := '';
+end;
 
 constructor TAiMediaFile.Create;
 begin
-  inherited Create;
-  FContent      := TMemoryStream.Create;
-  FMediaFiles   := TAiMediaFiles.Create;
-  FProcesado    := False;
-  FContentLoaded:= False;
-  FDetail       := '';
+  Inherited;
+  FContent := TMemoryStream.Create;
+  FMediaFiles := TAiMediaFiles.Create;
+  FProcesado := False;
+  FContentLoaded := False;
+  FDetail := ''; // por defecto utiliza vac?o para no enviar nada y hacerlo compatible con otros modelos, detallado = "high" or "low"
 end;
 
 destructor TAiMediaFile.Destroy;
@@ -601,122 +924,58 @@ begin
   FContent.Free;
   FMediaFiles.Clear;
   FMediaFiles.Free;
-  inherited Destroy;
+  inherited;
 end;
 
-procedure TAiMediaFile.Clear;
-begin
-  FContent.Clear;
-  FContentLoaded  := False;
-  Ffilename       := '';
-  FUrlMedia       := '';
-  FFileType       := '';
-  FFullFileName   := '';
-  FTranscription  := '';
-  FProcesado      := False;
-  FDetail         := '';
-  FIdAudio        := '';
-  FCloudState     := '';
-  FCloudName      := '';
-  FCacheName      := '';
-  FIdFile         := '';
-  FCacheControl   := False;
-  FEnableCitations:= False;
-  FContext        := '';
-  FTitle          := '';
-end;
-
-procedure TAiMediaFile.Assign(Source: TAiMediaFile);
-begin
-  if (Source = nil) or (Source = Self) then
-    Exit;
-
-  Self.Ffilename        := Source.Ffilename;
-  Self.FUrlMedia        := Source.FUrlMedia;
-  Self.FFileType        := Source.FFileType;
-  Self.FFullFileName    := Source.FFullFileName;
-  Self.FTranscription   := Source.FTranscription;
-  Self.FProcesado       := Source.FProcesado;
-  Self.FDetail          := Source.FDetail;
-  Self.FIdAudio         := Source.FIdAudio;
-  Self.FCloudState      := Source.FCloudState;
-  Self.FCloudName       := Source.FCloudName;
-  Self.FCacheName       := Source.FCacheName;
-  Self.FIdFile          := Source.FIdFile;
-  Self.FCacheControl    := Source.FCacheControl;
-  Self.FEnableCitations := Source.FEnableCitations;
-  Self.FContext         := Source.FContext;
-  Self.FTitle           := Source.FTitle;
-
-  // Copia profunda del stream
-  if Assigned(Source.Content) and (Source.Content.Size > 0) then
-  begin
-    if not Assigned(Self.FContent) then
-      Self.FContent := TMemoryStream.Create;
-    Self.FContent.Clear;
-    Source.Content.Position := 0;
-    Self.FContent.CopyFrom(Source.Content, 0);
-    Self.FContent.Position := 0;
-    Source.Content.Position := 0;
-    Self.FContentLoaded := True;
-  end
-  else
-  begin
-    if Assigned(Self.FContent) then
-      Self.FContent.Clear;
-  end;
-  // FMediaFiles no se copia (referencia al contenedor padre)
-end;
-
-procedure TAiMediaFile.DownloadFileFromUrl(Url: string);
-var
-  Client  : TFPHTTPClient;
+procedure TAiMediaFile.DownloadFileFromUrl(Url: String);
+Var
+  Client: TNetHTTPClient;
+  Headers: TNetHeaders;
   Response: TMemoryStream;
+  Res: IHTTPResponse;
 begin
-  if Url = '' then
-    Exit;
 
-  Client   := TFPHTTPClient.Create(nil);
-  Response := TMemoryStream.Create;
-  try
-    // TODO: manejar redirects y HTTPS (requiere opensslsockets)
-    Client.Get(Url, Response);
+  If Url <> '' then
+  Begin
 
-    FContent.Clear;
-    Response.Position := 0;
-    FContent.CopyFrom(Response, 0);
-    FContent.Position  := 0;
-    FContentLoaded     := True;
-  finally
-    Client.Free;
-    Response.Free;
-  end;
+    Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 34} // Delphi 10.3 Rio y posteriores
+    Client.SynchronizeEvents := False;
+{$IFEND}
+    Response := TMemoryStream.Create;
+
+    Try
+
+      Res := Client.Get(Url, Response, Headers);
+
+      if Res.StatusCode = 200 then
+      Begin
+
+        FContent.Clear; // Limpia el contenido actual antes de adicionar el nuevo
+        FContent.Position := 0;
+
+        Response.Position := 0;
+        FContent.LoadFromStream(Response);
+        FContent.Position := 0;
+        FContentLoaded := True;
+      End
+      else
+        Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+
+    Finally
+      Client.Free;
+      Response.Free;
+    End;
+  End;
 end;
 
-function TAiMediaFile.GetContent: TMemoryStream;
-begin
-  Result := FContent;
-  if FContentLoaded then
-    Exit;
-  if FUrlMedia <> '' then
-  begin
-    DownloadFileFromUrl(FUrlMedia);
-    FContentLoaded := True;
-    Result := FContent;
-  end;
-end;
-
-function TAiMediaFile.GetBase64: string;
+function TAiMediaFile.GetBase64: String;
 begin
   FContent.Position := 0;
-  Result := EncodeBase64(FContent.Memory, FContent.Size);
-  Result := StringReplace(Result, LineEnding, '', [rfReplaceAll]);
-  Result := StringReplace(Result, #10, '', [rfReplaceAll]);
-end;
-
-procedure TAiMediaFile.SetBase64(const Value: string);
-begin
-  LoadFromBase64('', Value);
+  Result := TNetEncoding.Base64.EncodeBytesToString(FContent.Memory, FContent.Size);
+  Result := StringReplace(Result, sLineBreak, '', [rfReplaceAll]);
+  Result := StringReplace(Result, #13, '', [rfReplaceAll]); // CR que queda en Linux (CRLF → sLineBreak sólo elimina LF ahí)
+  Result := StringReplace(Result, #10, '', [rfReplaceAll]); // LF
 end;
 
 function TAiMediaFile.GetBytes: Integer;
@@ -724,41 +983,115 @@ begin
   Result := FContent.Size;
 end;
 
+function TAiMediaFile.GetContent: TMemoryStream;
+begin
+  if not FContentLoaded and (FUrlMedia <> '') then
+  begin
+    DownloadFileFromUrl(FUrlMedia);
+    FContentLoaded := True;
+  end;
+  FContent.Position := 0; // siempre al inicio para que los lectores lean correctamente
+  Result := FContent;
+end;
+
 function TAiMediaFile.GetFileCategory: TAiFileCategory;
 begin
-  if Trim(Ffilename) = '' then
+  If Trim(Ffilename) = '' then
     Result := Tfc_Unknown
-  else
+  Else
     Result := GetContentCategory(ExtractFileExt(LowerCase(Ffilename)));
 end;
 
-function TAiMediaFile.GetMimeType: string;
+function TAiMediaFile.GetMimeType: String;
 begin
   Result := GetMimeTypeFromFileName(LowerCase(ExtractFileExt(Ffilename)));
 end;
 
-procedure TAiMediaFile.LoadFromFile(aFileName: string);
+procedure TAiMediaFile.LoadFromBase64(aFileName, aBase64: String);
+Var
+  St: TMemoryStream;
 begin
-  if FileExists(aFileName) then
-  begin
+  St := TBytesStream.Create(TNetEncoding.Base64.DecodeStringToBytes(aBase64));
+  Try
+    If Assigned(St) then
+    Begin
+      FContent.Clear;
+      FContent.LoadFromStream(St);
+      FContent.Position := 0; // resetear para que los lectores lean desde el inicio
+      FContentLoaded := True;
+      FFullFileName := aFileName;
+      Ffilename := ExtractFileName(aFileName);
+      FFileType := ExtractFileExt(filename);
+    End;
+  Finally
+    St.Free;
+  End;
+end;
+
+procedure TAiMediaFile.LoadFromfile(aFileName: String);
+begin
+  If FileExists(aFileName) then
+  Begin
     FContent.Clear;
-    FContent.LoadFromFile(aFileName);
+    FContent.LoadFromfile(aFileName);
     FContentLoaded := True;
-    FFullFileName  := aFileName;
-    Ffilename      := ExtractFileName(aFileName);
-    FFileType      := LowerCase(ExtractFileExt(Ffilename));
+    FFullFileName := aFileName;
+    Ffilename := ExtractFileName(aFileName);
+    FFileType := LowerCase(ExtractFileExt(Ffilename));
+  End;
+end;
+
+procedure TAiMediaFile.LoadFromJsonObject(AObject: TJSONObject);
+var
+  LBase64: string;
+  LFilename: string;
+begin
+  // Limpiamos el estado actual antes de cargar
+  Clear;
+
+  AObject.TryGetValue<string>('filename', Self.Ffilename);
+  AObject.TryGetValue<string>('urlMedia', Self.FUrlMedia);
+  AObject.TryGetValue<string>('fullFileName', Self.FFullFileName);
+  AObject.TryGetValue<string>('transcription', Self.FTranscription);
+  AObject.TryGetValue<Boolean>('procesado', Self.FProcesado);
+  AObject.TryGetValue<string>('detail', Self.FDetail);
+  AObject.TryGetValue<string>('idAudio', Self.FIdAudio);
+  AObject.TryGetValue<string>('cloudState', Self.FCloudState);
+  AObject.TryGetValue<string>('cloudName', Self.FCloudName);
+  AObject.TryGetValue<string>('cacheName', Self.FCacheName);
+  AObject.TryGetValue<string>('idFile', Self.FIdFile);
+
+  // Cargamos el contenido usando el m?todo existente
+  if AObject.TryGetValue<string>('base64', LBase64) and (LBase64 <> '') then
+  begin
+    AObject.TryGetValue<string>('filename', LFilename);
+    Self.LoadFromBase64(LFilename, LBase64);
   end;
 end;
 
-procedure TAiMediaFile.LoadFromUrl(aUrl: string);
+procedure TAiMediaFile.LoadFromStream(aFileName: String; Stream: TMemoryStream);
+begin
+  If Assigned(Stream) then
+  Begin
+    FContent.Clear;
+    FContent.LoadFromStream(Stream);
+    FContentLoaded := True;
+    FFullFileName := aFileName;
+    Ffilename := ExtractFileName(aFileName);
+    FFileType := LowerCase(ExtractFileExt(Ffilename));
+  End;
+end;
+
+procedure TAiMediaFile.LoadFromUrl(aUrl: String);
 var
-  LUrl: string;
+  LUrl: String;
   LPos: Integer;
 begin
   FUrlMedia := aUrl;
   FContent.Clear;
   GetContent;
 
+  // Eliminar query parameters y fragmentos de la URL antes de extraer el nombre
   LUrl := aUrl;
   LPos := Pos('?', LUrl);
   if LPos > 0 then
@@ -768,142 +1101,117 @@ begin
     LUrl := Copy(LUrl, 1, LPos - 1);
 
   FFullFileName := aUrl;
-  Ffilename     := ExtractFileName(LUrl);
-  FFileType     := ExtractFileExt(Ffilename);
+  Ffilename := ExtractFileName(LUrl);
+  FFileType := ExtractFileExt(Ffilename);
 end;
 
-procedure TAiMediaFile.LoadFromBase64(aFileName, aBase64: string);
-var
-  Decoded: TBytes;
-  St     : TBytesStream;
-begin
-  // FPC: DecodeBase64 devuelve un string con bytes crudos
-  // Usamos TBytesStream para wrapearlo correctamente
-  Decoded := DecodeBase64(aBase64);
-  St := TBytesStream.Create(Decoded);
-  try
-    FContent.Clear;
-    St.Position := 0;
-    FContent.CopyFrom(St, 0);
-    FContentLoaded := True;
-    FFullFileName  := aFileName;
-    Ffilename      := ExtractFileName(aFileName);
-    FFileType      := ExtractFileExt(Ffilename);
-  finally
-    St.Free;
-  end;
-end;
-
-procedure TAiMediaFile.LoadFromStream(aFileName: string; Stream: TMemoryStream);
-begin
-  if Assigned(Stream) then
-  begin
-    FContent.Clear;
-    Stream.Position := 0;
-    FContent.CopyFrom(Stream, 0);
-    FContentLoaded := True;
-    FFullFileName  := aFileName;
-    Ffilename      := ExtractFileName(aFileName);
-    FFileType      := LowerCase(ExtractFileExt(Ffilename));
-  end;
-end;
-
-procedure TAiMediaFile.SaveToFile(aFileName: string);
+procedure TAiMediaFile.SaveToFile(aFileName: String);
 begin
   FContent.SaveToFile(aFileName);
 end;
 
-function TAiMediaFile.ToString: string;
-var
-  St: TStringStream;
+procedure TAiMediaFile.SetBase64(const Value: String);
 begin
-  St := TStringStream.Create('');
-  try
-    FContent.Position := 0;
-    St.CopyFrom(FContent, 0);
-    Result := St.DataString;
-  finally
-    St.Free;
-  end;
+  LoadFromBase64('', Value);
+end;
+
+procedure TAiMediaFile.SetCacheName(const Value: String);
+begin
+  FCacheName := Value;
+end;
+
+procedure TAiMediaFile.SetDetail(const Value: String);
+begin
+  FDetail := Value;
+end;
+
+procedure TAiMediaFile.Setfilename(const Value: String);
+begin
+  Ffilename := Value;
+end;
+
+procedure TAiMediaFile.SetFullFileName(const Value: String);
+begin
+  FFullFileName := Value;
+end;
+
+procedure TAiMediaFile.SetIdAudio(const Value: String);
+begin
+  FIdAudio := Value;
+end;
+
+procedure TAiMediaFile.SetIdFile(const Value: String);
+begin
+  FIdFile := Value;
+end;
+
+procedure TAiMediaFile.SetMediaFiles(const Value: TAiMediaFiles);
+begin
+  FMediaFiles := Value;
+end;
+
+procedure TAiMediaFile.SetProcesado(const Value: Boolean);
+begin
+  FProcesado := Value;
+end;
+
+procedure TAiMediaFile.SetTranscription(const Value: String);
+begin
+  FTranscription := Value;
+end;
+
+procedure TAiMediaFile.SetUrlMedia(const Value: String);
+begin
+  FUrlMedia := Value;
 end;
 
 function TAiMediaFile.ToJsonObject: TJSONObject;
 begin
   Result := TJSONObject.Create;
-  Result.Add('filename',      Ffilename);
-  Result.Add('urlMedia',      FUrlMedia);
-  Result.Add('fullFileName',  FFullFileName);
-  Result.Add('transcription', FTranscription);
-  Result.Add('procesado',     FProcesado);
-  Result.Add('detail',        FDetail);
-  Result.Add('idAudio',       FIdAudio);
-  Result.Add('cloudState',    FCloudState);
-  Result.Add('cloudName',     FCloudName);
-  Result.Add('cacheName',     FCacheName);
-  Result.Add('idFile',        FIdFile);
-  Result.Add('base64',        GetBase64);
+  Result.AddPair('filename', Self.filename);
+  Result.AddPair('urlMedia', Self.UrlMedia);
+  Result.AddPair('fullFileName', Self.FullFileName);
+  Result.AddPair('transcription', Self.Transcription);
+  Result.AddPair('procesado', TJSONBool.Create(Self.Procesado));
+  Result.AddPair('detail', Self.Detail);
+  Result.AddPair('idAudio', Self.IdAudio);
+  Result.AddPair('cloudState', Self.CloudState);
+  Result.AddPair('cloudName', Self.CloudName);
+  Result.AddPair('cacheName', Self.CacheName);
+  Result.AddPair('idFile', Self.IdFile);
+  Result.AddPair('base64', Self.Base64);
 end;
 
-procedure TAiMediaFile.LoadFromJsonObject(AObject: TJSONObject);
-var
-  LBase64  : string;
-  LFilename: string;
+function TAiMediaFile.ToString: String;
+Var
+  St: TStringStream;
 begin
-  Clear;
-
-  // fpjson: usar Get() con valor por defecto o TryGet cuando disponible
-  if AObject.IndexOfName('filename')     >= 0 then Ffilename      := AObject.Get('filename',     '');
-  if AObject.IndexOfName('urlMedia')     >= 0 then FUrlMedia      := AObject.Get('urlMedia',     '');
-  if AObject.IndexOfName('fullFileName') >= 0 then FFullFileName  := AObject.Get('fullFileName', '');
-  if AObject.IndexOfName('transcription')>= 0 then FTranscription := AObject.Get('transcription','');
-  if AObject.IndexOfName('procesado')    >= 0 then FProcesado     := AObject.Get('procesado',    False);
-  if AObject.IndexOfName('detail')       >= 0 then FDetail        := AObject.Get('detail',       '');
-  if AObject.IndexOfName('idAudio')      >= 0 then FIdAudio       := AObject.Get('idAudio',      '');
-  if AObject.IndexOfName('cloudState')   >= 0 then FCloudState    := AObject.Get('cloudState',   '');
-  if AObject.IndexOfName('cloudName')    >= 0 then FCloudName     := AObject.Get('cloudName',    '');
-  if AObject.IndexOfName('cacheName')    >= 0 then FCacheName     := AObject.Get('cacheName',    '');
-  if AObject.IndexOfName('idFile')       >= 0 then FIdFile        := AObject.Get('idFile',       '');
-
-  LBase64 := AObject.Get('base64', '');
-  if LBase64 <> '' then
-  begin
-    LFilename := AObject.Get('filename', '');
-    LoadFromBase64(LFilename, LBase64);
-  end;
+  St := TStringStream.Create;
+  Try
+    St.LoadFromStream(Self.Content);
+    Result := St.DataString;
+  Finally
+    St.Free;
+  End;
 end;
 
-// Setters triviales
-procedure TAiMediaFile.SetFilename(const Value: string);      begin Ffilename      := Value; end;
-procedure TAiMediaFile.SetUrlMedia(const Value: string);      begin FUrlMedia      := Value; end;
-procedure TAiMediaFile.SetFullFileName(const Value: string);  begin FFullFileName  := Value; end;
-procedure TAiMediaFile.SetTranscription(const Value: string); begin FTranscription := Value; end;
-procedure TAiMediaFile.SetProcesado(const Value: Boolean);    begin FProcesado     := Value; end;
-procedure TAiMediaFile.SetDetail(const Value: string);        begin FDetail        := Value; end;
-procedure TAiMediaFile.SetIdAudio(const Value: string);       begin FIdAudio       := Value; end;
-procedure TAiMediaFile.SetCacheName(const Value: string);     begin FCacheName     := Value; end;
-procedure TAiMediaFile.SetIdFile(const Value: string);        begin FIdFile        := Value; end;
-procedure TAiMediaFile.SetMediaFiles(const Value: TAiMediaFiles); begin FMediaFiles := Value; end;
+{ TAiMediaFiles }
 
-// ===========================================================================
-//  TAiMediaFiles
-// ===========================================================================
-
-function TAiMediaFiles.GetMediaList(aFilters: TAiFileCategories;
-                                    aProcesado: Boolean): TAiMediaFilesArray;
+function TAiMediaFiles.GetMediaList(aFilters: TAiFileCategories; aProcesado: Boolean = False): TAiMediaFilesArray;
 var
-  i         : Integer;
-  Item      : TAiMediaFile;
-  Len       : Integer;
+  i: Integer;
+  Item: TAiMediaFile;
+  Len: Integer;
   IncludeAll: Boolean;
 begin
   SetLength(Result, 0);
-  IncludeAll := Tfc_Any in aFilters;
+  IncludeAll := Tfc_Any in aFilters; // Verificar si debe incluir todos los tipos
 
-  for i := 0 to Count - 1 do
+  for i := 0 to Self.Count - 1 do
   begin
-    Item := Items[i];
-    if (IncludeAll or (Item.FileCategory in aFilters)) and
-       (Item.Procesado = aProcesado) then
+    Item := Self.Items[i];
+    // Si IncludeAll es True, solo verifica aProcesado; si no, aplica ambos filtros
+    if (IncludeAll or (Item.FileCategory in aFilters)) and (Item.Procesado = aProcesado) then
     begin
       Len := Length(Result);
       SetLength(Result, Len + 1);
@@ -912,125 +1220,131 @@ begin
   end;
 end;
 
+
 function TAiMediaFiles.ToMediaFileArray: TAiMediaFilesArray;
 var
-  i      : Integer;
-  Item   : TAiMediaFile;
-  NewItem: TAiMediaFile;
-  Len    : Integer;
+  i: Integer;
+  Item, NewItem: TAiMediaFile;
+  Len: Integer;
 begin
-  SetLength(Result, 0);
-  for i := 0 to Count - 1 do
+  SetLength(Result, 0); // Inicializamos el resultado para evitar basura
+  for i := 0 to Self.Count - 1 do
   begin
-    Item    := Items[i];
+    Item := Self.Items[i];
     NewItem := TAiMediaFile.Create;
     NewItem.Assign(Item);
+
     Len := Length(Result);
     SetLength(Result, Len + 1);
     Result[Len] := NewItem;
   end;
 end;
 
-// ===========================================================================
-//  TAiMetadata
-// ===========================================================================
+{ TAiMetadata }
 
-function TAiMetadata.GetAsText: string;
-var
+function TAiMetadata.GetAsText: String;
+Var
   Lista: TStringList;
-  Clave: string;
+  Clave: String;
 begin
+
   Lista := TStringList.Create;
-  try
-    for Clave in Keys do
-      Lista.Values[Clave] := Items[Clave];
-    Result := Lista.Text;
-  finally
+  Try
+    For Clave in Self.Keys do
+      Lista.Values[Clave] := Self.Items[Clave];
+
+    Result := Lista.text;
+
+  Finally
     Lista.Free;
-  end;
+  End;
 end;
 
-procedure TAiMetadata.SetAsText(const Value: string);
-var
-  Lista: TStringList;
-  i    : Integer;
-  Clave: string;
-begin
-  Lista := TStringList.Create;
-  try
-    Lista.Text := Value;
-    Clear;
-    for i := 0 to Lista.Count - 1 do
-    begin
-      Clave := Lista.Names[i];
-      Add(Clave, Lista.Values[Clave]);
-    end;
-  finally
-    Lista.Free;
-  end;
-end;
-
-function TAiMetadata.GetJsonText: string;
-var
-  JObj : TJSONObject;
-  Clave: string;
+function TAiMetadata.GetJSonText: String;
+Var
+  JObj: TJSONObject;
+  Clave: String;
 begin
   JObj := TJSONObject.Create;
-  try
-    for Clave in Keys do
-      JObj.Add(Clave, Items[Clave]);
-    Result := JObj.FormatJSON;
-  finally
+
+  Try
+    For Clave in Self.Keys do
+      JObj.AddPair(Clave, Self.Items[Clave]);
+
+    Result := JObj.Format;
+  Finally
     JObj.Free;
-  end;
+  End;
 end;
 
-procedure TAiMetadata.SetJsonText(const Value: string);
-var
-  JVal: TJSONData;
-  JObj: TJSONObject;
-  i   : Integer;
+procedure TAiMetadata.SetAsText(const Value: String);
+Var
+  Lista: TStringList;
+  Clave, Valor: String;
+  i: Integer;
 begin
-  Clear;
-  JVal := GetJSON(Value);
+
+  Lista := TStringList.Create;
+
+  Try
+    Lista.text := Value;
+    Self.Clear;
+    For i := 0 to Lista.Count - 1 do
+    Begin
+      Clave := Lista.Names[i];
+      Valor := Lista.Values[Clave];
+      Self.Add(Clave, Valor);
+    End;
+  Finally
+    Lista.Free;
+  End;
+
+end;
+
+procedure TAiMetadata.SetJsonText(const Value: String);
+var
+  JVal: TJSONValue;
+  JObj: TJSONObject;
+  Pair: TJSONPair;
+begin
+  Self.Clear;
+  JVal := TJSONObject.ParseJSONValue(Value);
   if not Assigned(JVal) then
     Exit;
   try
     if not (JVal is TJSONObject) then
       Exit;
     JObj := TJSONObject(JVal);
-    for i := 0 to JObj.Count - 1 do
-      Add(JObj.Names[i], JObj.Items[i].AsString);
+    for Pair in JObj do
+      Self.Add(Pair.JsonString.Value, Pair.JsonValue.Value);
   finally
     JVal.Free;
   end;
 end;
 
-function TAiMetadata.ToJson: TJSONObject;
-var
-  Clave: string;
+function TAiMetadata.ToJSon: TJSONObject;
+Var
+  Clave: String;
 begin
   Result := TJSONObject.Create;
-  for Clave in Keys do
-    Result.Add(Clave, Items[Clave]);
+  For Clave in Self.Keys do
+    Result.AddPair(Clave, Self.Items[Clave]);
 end;
 
-// ===========================================================================
-//  TAiWebSearch
-// ===========================================================================
+
+{ TAiWebSearch }
 
 constructor TAiWebSearch.Create;
 begin
-  inherited Create;
-  &type       := '';
-  text        := '';
+  &type := '';
+  text := '';
   annotations := TAiWebSearchArray.Create;
 end;
 
 destructor TAiWebSearch.Destroy;
 begin
   annotations.Free;
-  inherited Destroy;
+  inherited;
 end;
 
 end.

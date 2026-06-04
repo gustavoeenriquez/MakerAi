@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <!-- Attribute definitions -->
+  <key xmlns="" id="d_name" for="node" attr.name="name" attr.type="string"/>
+  <key xmlns="" id="d_label" for="node" attr.name="label" attr.type="string"/>
+  <key xmlns="" id="e_label" for="edge" attr.name="label" attr.type="string"/>
+  <key xmlns="" id="e_weight" for="edge" attr.name="weight" attr.type="double"/>
+  <key xmlns="" id="prop_antiguedad_años" for="all" attr.name="antiguedad_años" attr.type="string"/>
+  <key xmlns="" id="prop_años_servicio" for="all" attr.name="años_servicio" attr.type="string"/>
+  <key xmlns="" id="prop_condicion" for="all" attr.name="condicion" attr.type="string"/>
+  <key xmlns="" id="prop_especialidad" for="all" attr.name="especialidad" attr.type="string"/>
+  <key xmlns="" id="prop_ocupacion" for="all" attr.name="ocupacion" attr.type="string"/>
+  <key xmlns="" id="prop_periodo" for="all" attr.name="periodo" attr.type="string"/>
+  <key xmlns="" id="prop_rol" for="all" attr.name="rol" attr.type="string"/>
+  <key xmlns="" id="prop_titulo" for="all" attr.name="titulo" attr.type="string"/>
+  <graph xmlns="" id="G" edgedefault="directed">
+    <!-- Nodes -->
+    <node id="{AFB26902-4A80-4E84-B652-E7121A55A3CC}">
+      <data key="d_name">Diario</data>
+      <data key="d_label">Producto</data>
+    </node>
+    <node id="{E49C6DA0-36E0-4DC4-9DA8-EA7A4D0DD913}">
+      <data key="d_name">Elías</data>
+      <data key="d_label">Persona</data>
+    </node>
+    <node id="{2FD1B19C-70DF-4E18-8F9D-72B59281DBEE}">
+      <data key="d_name">Universidad Nacional</data>
+      <data key="d_label">Organización</data>
+    </node>
+    <node id="{E57EA10A-80A7-4965-A805-81B908AE5B00}">
+      <data key="d_name">Carmen Vega</data>
+      <data key="d_label">Persona</data>
+    </node>
+    <node id="{DCC8EDC6-8634-4877-95E3-B709585B71DE}">
+      <data key="d_name">Exposición virtual</data>
+      <data key="d_label">Producto</data>
+    </node>
+    <node id="{849895B5-4F34-47CA-B947-197A746C7654}">
+      <data key="d_name">Tomás Vega</data>
+      <data key="d_label">Persona</data>
+      <data key="prop_ocupacion">Historiador</data>
+    </node>
+    <node id="{F4270AAF-E767-4FAA-808E-D67FCF3CF2DD}">
+      <data key="d_name">Elena Morales</data>
+      <data key="d_label">Persona</data>
+      <data key="prop_ocupacion">Bibliotecaria</data>
+    </node>
+    <node id="{32C865E5-D445-490B-A23C-3A0F36830833}">
+      <data key="d_name">San Cristóbal</data>
+      <data key="d_label">Ciudad</data>
+    </node>
+    <node id="{DE2C050C-DB82-4213-AEB0-CB50AF7B9417}">
+      <data key="d_name">Ana Torres</data>
+      <data key="d_label">Persona</data>
+      <data key="prop_ocupacion">Diseñadora gráfica</data>
+    </node>
+    <node id="{C9E2BB61-EBA1-4451-B5E9-727685BCAAE4}">
+      <data key="d_name">Patrimonio histórico del pueblo</data>
+      <data key="d_label">Concepto</data>
+    </node>
+    <node id="{0FC75A60-C7D8-4C28-B622-6854053F0136}">
+      <data key="d_name">Manuscritos coloniales</data>
+      <data key="d_label">Concepto</data>
+    </node>
+    <node id="{39C85EBF-12B5-4E0B-97C1-1FB7ED6CD4FC}">
+      <data key="d_name">Capital</data>
+      <data key="d_label">Ciudad</data>
+    </node>
+    <node id="{E0A8A0F8-BF82-4749-8241-7DD3F920849A}">
+      <data key="d_name">Centro de investigación histórica</data>
+      <data key="d_label">Rol</data>
+    </node>
+    <node id="{DDE891EA-7EC3-4BDF-BA10-39C03101AB49}">
+      <data key="d_name">Fondos</data>
+      <data key="d_label">Concepto</data>
+    </node>
+    <node id="{43024F9C-6BB6-42F1-9155-D6914A137470}">
+      <data key="d_name">Dr. Fernando Ruiz</data>
+      <data key="d_label">Persona</data>
+      <data key="prop_especialidad">Arqueología</data>
+      <data key="prop_titulo">Dr.</data>
+    </node>
+    <node id="{F0006B4C-BCCA-48FE-8DCB-A9E0D9F2FD4B}">
+      <data key="d_name">Documento secreto</data>
+      <data key="d_label">Producto</data>
+    </node>
+    <node id="{F1E3942C-1E58-46A3-AE98-DFB33C3D9563}">
+      <data key="d_name">Pablo Morales</data>
+      <data key="d_label">Persona</data>
+      <data key="prop_ocupacion">Ingeniero en sistemas</data>
+    </node>
+    <node id="{7C6846CD-F0F0-4DE4-B97F-8D7D9CE85057}">
+      <data key="d_name">Don Ricardo Morales</data>
+      <data key="d_label">Persona</data>
+    </node>
+    <node id="{2EB8F142-B317-4CB0-83FE-9DFAC99842B8}">
+      <data key="d_name">Manuscrito</data>
+      <data key="d_label">Producto</data>
+    </node>
+    <node id="{8578C48A-E073-4697-A0B2-8B5DDF2A15A6}">
+      <data key="d_name">Roberto Jiménez</data>
+      <data key="d_label">Persona</data>
+      <data key="prop_rol">Alcalde</data>
+    </node>
+    <node id="{DAE95CFE-E004-4B33-BC3E-AE642EE5E963}">
+      <data key="d_name">Biblioteca Municipal</data>
+      <data key="d_label">Lugar</data>
+    </node>
+    <node id="{DC7E647A-54B8-45A4-83FF-D232D8C5F87B}">
+      <data key="d_name">Restaurar edificio</data>
+      <data key="d_label">Concepto</data>
+    </node>
+    <node id="{A593343A-66D5-497C-B35D-BE8B03AE008C}">
+      <data key="d_name">Lucía Mendoza</data>
+      <data key="d_label">Persona</data>
+    </node>
+    <node id="{DAC583FE-1B32-4F5E-988D-22C0D162AADA}">
+      <data key="d_name">Martín López</data>
+      <data key="d_label">Persona</data>
+      <data key="prop_rol">Conserje</data>
+      <data key="prop_años_servicio">30</data>
+    </node>
+    <node id="{BDAB4994-A853-44C6-AAC6-41C1AD5C3B94}">
+      <data key="d_name">Fray Antonio Domínguez</data>
+      <data key="d_label">Persona</data>
+      <data key="prop_rol">Misionero español</data>
+    </node>
+    <node id="{87FC9550-181B-406B-8AEA-ED0F4E8902A5}">
+      <data key="d_name">Traducción del documento</data>
+      <data key="d_label">Concepto</data>
+    </node>
+    <!-- Edges -->
+    <edge id="{34E806D4-E8CB-4BDD-B136-5AF330DE299E}" source="{F4270AAF-E767-4FAA-808E-D67FCF3CF2DD}" target="{32C865E5-D445-490B-A23C-3A0F36830833}">
+      <data key="e_label">RESIDE_EN</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{580C0A08-9D8D-405C-973A-718A131345B8}" source="{DAC583FE-1B32-4F5E-988D-22C0D162AADA}" target="{DAE95CFE-E004-4B33-BC3E-AE642EE5E963}">
+      <data key="e_label">TRABAJÓ_EN</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{C9B3682A-B372-4F0C-BDEF-3875E5F74D17}" source="{43024F9C-6BB6-42F1-9155-D6914A137470}" target="{87FC9550-181B-406B-8AEA-ED0F4E8902A5}">
+      <data key="e_label">OFRECIÓ_AYUDA_PARA</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{58B87DEC-573F-45EC-9959-643254DC47CD}" source="{8578C48A-E073-4697-A0B2-8B5DDF2A15A6}" target="{43024F9C-6BB6-42F1-9155-D6914A137470}">
+      <data key="e_label">ES_CUÑADO_DE</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{71E25336-2683-49F4-9E32-970E0E94BFD1}" source="{DAC583FE-1B32-4F5E-988D-22C0D162AADA}" target="{2EB8F142-B317-4CB0-83FE-9DFAC99842B8}">
+      <data key="e_label">CONOCE_UBICACIÓN_DE</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{299635FD-DD0F-4B74-A652-27848A16AE0D}" source="{849895B5-4F34-47CA-B947-197A746C7654}" target="{E57EA10A-80A7-4965-A805-81B908AE5B00}">
+      <data key="e_label">ES_HIJO_DE</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{BFB1A2B4-5462-454F-BBCF-FF75715C2286}" source="{BDAB4994-A853-44C6-AAC6-41C1AD5C3B94}" target="{7C6846CD-F0F0-4DE4-B97F-8D7D9CE85057}">
+      <data key="e_label">FUE_MENTOR_DE</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{56A3BFDF-F117-4BEB-AD04-655B501C56EA}" source="{7C6846CD-F0F0-4DE4-B97F-8D7D9CE85057}" target="{DAC583FE-1B32-4F5E-988D-22C0D162AADA}">
+      <data key="e_label">CONFIÓ_SECRETO_A</data>
+      <data key="e_weight">1</data>
+      <data key="prop_condicion">Revelar a la familia</data>
+    </edge>
+    <edge id="{3865228D-9AE0-4901-B1B6-F4458B3810F2}" source="{F4270AAF-E767-4FAA-808E-D67FCF3CF2DD}" target="{2EB8F142-B317-4CB0-83FE-9DFAC99842B8}">
+      <data key="e_label">DECIDIÓ_DIGITALIZAR</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{706657D5-6D1A-4310-92AA-9F06177F672E}" source="{DDE891EA-7EC3-4BDF-BA10-39C03101AB49}" target="{DC7E647A-54B8-45A4-83FF-D232D8C5F87B}">
+      <data key="e_label">DESTINADOS_A</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{B7BD0D7F-491F-4EA7-9BBF-6AA13472AEAB}" source="{F1E3942C-1E58-46A3-AE98-DFB33C3D9563}" target="{2EB8F142-B317-4CB0-83FE-9DFAC99842B8}">
+      <data key="e_label">AYUDÓ_A_DIGITALIZAR</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{F590C175-3E36-4090-BF3E-4E4F67EFF5BD}" source="{DE2C050C-DB82-4213-AEB0-CB50AF7B9417}" target="{DCC8EDC6-8634-4877-95E3-B709585B71DE}">
+      <data key="e_label">CREÓ</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{F8680738-D415-492C-916D-EE6556A5FE6F}" source="{F1E3942C-1E58-46A3-AE98-DFB33C3D9563}" target="{F4270AAF-E767-4FAA-808E-D67FCF3CF2DD}">
+      <data key="e_label">ES_HERMANO_DE</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{3ED1385C-9E4A-4C32-BC3D-81044D7D355F}" source="{E57EA10A-80A7-4965-A805-81B908AE5B00}" target="{F0006B4C-BCCA-48FE-8DCB-A9E0D9F2FD4B}">
+      <data key="e_label">CONTÓ_SOBRE</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{3361248B-372E-422D-B55B-DCBCAADFE61E}" source="{F4270AAF-E767-4FAA-808E-D67FCF3CF2DD}" target="{DAE95CFE-E004-4B33-BC3E-AE642EE5E963}">
+      <data key="e_label">TRABAJA_EN</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{4656A022-5C06-4CD2-8033-0B24AD721A0F}" source="{DAE95CFE-E004-4B33-BC3E-AE642EE5E963}" target="{7C6846CD-F0F0-4DE4-B97F-8D7D9CE85057}">
+      <data key="e_label">FUE_FUNDADA_POR</data>
+      <data key="e_weight">1</data>
+      <data key="prop_antiguedad_años">50</data>
+    </edge>
+    <edge id="{016345C2-71C0-456C-9309-4FFE112624C5}" source="{849895B5-4F34-47CA-B947-197A746C7654}" target="{39C85EBF-12B5-4E0B-97C1-1FB7ED6CD4FC}">
+      <data key="e_label">PROVIENE_DE</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{5C0B776E-A9E7-49BD-A731-638ABB9584DC}" source="{F0006B4C-BCCA-48FE-8DCB-A9E0D9F2FD4B}" target="{DAE95CFE-E004-4B33-BC3E-AE642EE5E963}">
+      <data key="e_label">ESTÁ_ESCONDIDO_EN</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{8CFBB4EB-D940-48B2-AE6D-0FC507C3A6A7}" source="{2EB8F142-B317-4CB0-83FE-9DFAC99842B8}" target="{AFB26902-4A80-4E84-B652-E7121A55A3CC}">
+      <data key="e_label">ES_UN</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{59F70E2C-299B-4924-946E-5235DB830894}" source="{F4270AAF-E767-4FAA-808E-D67FCF3CF2DD}" target="{849895B5-4F34-47CA-B947-197A746C7654}">
+      <data key="e_label">BUSCÓ_JUNTO_A</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{8C94D0C4-26BF-4847-A0F1-58EB2D177185}" source="{DAE95CFE-E004-4B33-BC3E-AE642EE5E963}" target="{E0A8A0F8-BF82-4749-8241-7DD3F920849A}">
+      <data key="e_label">SE_CONVIRTIÓ_EN</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{0F0AE37D-F24A-44A0-84D6-3612202308EF}" source="{849895B5-4F34-47CA-B947-197A746C7654}" target="{0FC75A60-C7D8-4C28-B622-6854053F0136}">
+      <data key="e_label">INVESTIGA</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{41DD5578-6778-4F8F-A462-C02D76345732}" source="{7C6846CD-F0F0-4DE4-B97F-8D7D9CE85057}" target="{F4270AAF-E767-4FAA-808E-D67FCF3CF2DD}">
+      <data key="e_label">ES_ABUELO_DE</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{21E0E5C3-6766-4925-8139-C98F993CB866}" source="{2EB8F142-B317-4CB0-83FE-9DFAC99842B8}" target="{C9E2BB61-EBA1-4451-B5E9-727685BCAAE4}">
+      <data key="e_label">CONTIENE_INFORMACIÓN_SOBRE</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{952CE9B6-87A4-42F3-8C39-12C9F72C1FAE}" source="{43024F9C-6BB6-42F1-9155-D6914A137470}" target="{2FD1B19C-70DF-4E18-8F9D-72B59281DBEE}">
+      <data key="e_label">ES_PROFESOR_EN</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{B405B9D5-F149-49F6-B471-0AF5E8ED0A66}" source="{F1E3942C-1E58-46A3-AE98-DFB33C3D9563}" target="{DE2C050C-DB82-4213-AEB0-CB50AF7B9417}">
+      <data key="e_label">ESTÁ_COMPROMETIDO_CON</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{632ADFB0-4BB2-4C17-9A93-334645284777}" source="{8578C48A-E073-4697-A0B2-8B5DDF2A15A6}" target="{DDE891EA-7EC3-4BDF-BA10-39C03101AB49}">
+      <data key="e_label">OTORGÓ</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{C231B78D-2F38-402C-A5A8-0C8E8B869D13}" source="{A593343A-66D5-497C-B35D-BE8B03AE008C}" target="{F4270AAF-E767-4FAA-808E-D67FCF3CF2DD}">
+      <data key="e_label">ES_PRIMA_DE</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{B7745609-D54E-4580-8ECD-389949CECECD}" source="{AFB26902-4A80-4E84-B652-E7121A55A3CC}" target="{BDAB4994-A853-44C6-AAC6-41C1AD5C3B94}">
+      <data key="e_label">FUE_ESCRITO_POR</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{2D937820-8794-4FDE-BC0A-99308A6D4BBE}" source="{43024F9C-6BB6-42F1-9155-D6914A137470}" target="{A593343A-66D5-497C-B35D-BE8B03AE008C}">
+      <data key="e_label">ESTÁ_CASADO_CON</data>
+      <data key="e_weight">1</data>
+    </edge>
+    <edge id="{3A74693A-556F-4C63-949E-CD834A6A65F2}" source="{E57EA10A-80A7-4965-A805-81B908AE5B00}" target="{7C6846CD-F0F0-4DE4-B97F-8D7D9CE85057}">
+      <data key="e_label">FUE_AMIGA_DE</data>
+      <data key="e_weight">1</data>
+      <data key="prop_periodo">Juventud</data>
+    </edge>
+  </graph>
+</graphml>

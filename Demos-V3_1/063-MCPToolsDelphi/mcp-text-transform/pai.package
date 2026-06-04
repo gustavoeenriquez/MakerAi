@@ -1,0 +1,21 @@
+[package]
+name = mcp-text-transform
+version = 1.0.1
+description = Text transformation MCP server. Base64, SHA hashes, URL encoding, string operations.
+author = MakerAI
+license = MIT
+tags = mcp,text,base64,hash,delphi
+homepage = https://makerai.cimamaker.com
+min_pai_version = 1.0.0
+
+[mcp]
+entrypoint = mcp-text-transform.exe
+protocol = stdio
+
+[tools]
+names = base64_encode,base64_decode,compute_hash,string_transform,url_encode,url_decode
+
+[platform]
+windows = true
+linux = false
+macos = false

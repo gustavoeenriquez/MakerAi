@@ -1,40 +1,55 @@
-// MIT License
+﻿// IT License
 //
-// Copyright (c) 2024-2026 Gustavo Enriquez
+// Copyright (c) <year> <copyright holders>
 //
-// github.com/gustavoeenriquez/
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// --------- FPC PORT --------------------
-// Checkpoint durable para TAIAgentManager.
-// Permite suspender la ejecucion (human-in-the-loop) y reanudar tras reinicio.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// Adaptaciones FPC:
-//   - System.JSON → fpjson + jsonparser
-//   - TObjectList<T> → specialize TObjectList<T> (generics.collections)
-//   - TFile.*/TPath.*/TDirectory.* → SysUtils + FileStream
-//   - TryISO8601ToDate → TryParseISO8601 local
-//   - TEncoding.UTF8 → no necesario (FPC strings son UTF-8 nativo)
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enr?quez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
 
 unit uMakerAi.Agents.Checkpoint;
 
-{$mode objfpc}{$H+}
+// Durable execution checkpoint for TAIAgentManager.
+// Allows suspending agent execution (human-in-the-loop) and resuming after
+// a restart, following the LangGraph checkpoint pattern.
+//
+// IAiCheckpointer contract:
+//   - All implementations MUST be thread-safe.
+//   - LoadCheckpoint returns a new object; CALLER must free it.
+//   - SaveCheckpoint does NOT take ownership of ASnapshot.
 
 interface
 
 uses
-  SysUtils, Classes, SyncObjs,
-  generics.collections,
-  fpjson, jsonparser;
+  System.SysUtils, System.Classes, System.JSON,
+  System.Generics.Collections, System.SyncObjs, System.IOUtils,
+  System.DateUtils;
 
 type
-  // TStringDynArray no existe en SysUtils de FPC 3.2.2 en modo objfpc.
-  // En Delphi viene de serie en SysUtils, en FPC está en la unit Types
-  // (como array of AnsiString). Para no añadir otra dependencia global
-  // lo definimos localmente — es un simple array of string.
-  TStringDynArray = array of string;
-
   // -------------------------------------------------------------------------
-  // TAiPendingStep -- paso suspendido esperando aprobacion humana
+  // TAiPendingStep  -- un paso suspendido esperando aprobaci?n humana
   // -------------------------------------------------------------------------
   TAiPendingStep = class
   private
@@ -63,10 +78,8 @@ type
   end;
 
   // -------------------------------------------------------------------------
-  // TAiCheckpointSnapshot -- estado completo de una ejecucion
+  // TAiCheckpointSnapshot  -- estado completo de una ejecuci?n en un instante
   // -------------------------------------------------------------------------
-  TAiPendingStepList = specialize TObjectList<TAiPendingStep>;
-
   TAiCheckpointSnapshot = class
   private
     FThreadID:     string;
@@ -76,7 +89,7 @@ type
     FBlackboard:   TJSONObject;  // owned
     FNodeStates:   TJSONObject;  // owned
     FLinkStates:   TJSONObject;  // owned
-    FPendingSteps: TAiPendingStepList; // owned
+    FPendingSteps: TObjectList<TAiPendingStep>; // owned
   public
     constructor Create;
     destructor Destroy; override;
@@ -90,33 +103,33 @@ type
     property Blackboard:   TJSONObject read FBlackboard  write FBlackboard;
     property NodeStates:   TJSONObject read FNodeStates  write FNodeStates;
     property LinkStates:   TJSONObject read FLinkStates  write FLinkStates;
-    property PendingSteps: TAiPendingStepList read FPendingSteps;
+    property PendingSteps: TObjectList<TAiPendingStep> read FPendingSteps;
   end;
 
   // -------------------------------------------------------------------------
-  // IAiCheckpointer -- contrato de persistencia; implementaciones thread-safe
+  // IAiCheckpointer  -- contrato de persistencia; implementaciones thread-safe
   // -------------------------------------------------------------------------
   IAiCheckpointer = interface
   ['{A3F2C1D4-8B5E-4F7A-9C3D-2E1B0F6A8D4C}']
     procedure SaveCheckpoint(const AThreadID: string; ASnapshot: TAiCheckpointSnapshot);
     function  LoadCheckpoint(const AThreadID: string): TAiCheckpointSnapshot; // caller frees
-    function  GetActiveThreadIDs: TStringDynArray;
+    function  GetActiveThreadIDs: TArray<string>;
     procedure DeleteCheckpoint(const AThreadID: string);
   end;
 
   // -------------------------------------------------------------------------
-  // TAiNullCheckpointer -- no-op: comportamiento sin persistencia
+  // TAiNullCheckpointer  -- no-op: mantiene comportamiento sin persistencia
   // -------------------------------------------------------------------------
   TAiNullCheckpointer = class(TInterfacedObject, IAiCheckpointer)
   public
     procedure SaveCheckpoint(const AThreadID: string; ASnapshot: TAiCheckpointSnapshot);
     function  LoadCheckpoint(const AThreadID: string): TAiCheckpointSnapshot;
-    function  GetActiveThreadIDs: TStringDynArray;
+    function  GetActiveThreadIDs: TArray<string>;
     procedure DeleteCheckpoint(const AThreadID: string);
   end;
 
   // -------------------------------------------------------------------------
-  // TAiFileCheckpointer -- JSON en disco: <dir>/<GUID>.checkpoint.json
+  // TAiFileCheckpointer  -- JSON en disco: <dir>/<GUID>.checkpoint.json
   // -------------------------------------------------------------------------
   TAiFileCheckpointer = class(TInterfacedObject, IAiCheckpointer)
   private
@@ -128,72 +141,14 @@ type
     destructor  Destroy; override;
     procedure SaveCheckpoint(const AThreadID: string; ASnapshot: TAiCheckpointSnapshot);
     function  LoadCheckpoint(const AThreadID: string): TAiCheckpointSnapshot;
-    function  GetActiveThreadIDs: TStringDynArray;
+    function  GetActiveThreadIDs: TArray<string>;
     procedure DeleteCheckpoint(const AThreadID: string);
     property Directory: string read FDirectory;
   end;
 
 implementation
 
-// ---------------------------------------------------------------------------
-// Helpers de archivo
-// ---------------------------------------------------------------------------
-
-function ReadTextFile(const APath: string): string;
-var
-  SS: TStringStream;
-  FS: TFileStream;
-begin
-  SS := TStringStream.Create('');
-  try
-    FS := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
-    try
-      SS.CopyFrom(FS, 0);
-    finally
-      FS.Free;
-    end;
-    Result := SS.DataString;
-  finally
-    SS.Free;
-  end;
-end;
-
-procedure WriteTextFile(const APath, AContent: string);
-var
-  SS: TStringStream;
-begin
-  SS := TStringStream.Create(AContent);
-  try
-    SS.SaveToFile(APath);
-  finally
-    SS.Free;
-  end;
-end;
-
-// Parsea 'yyyy-mm-ddThh:nn:ss' en TDateTime
-function TryParseISO8601(const S: string; out ADate: TDateTime): Boolean;
-var
-  Y, M, D, H, Mi, Se: Integer;
-begin
-  Result := False;
-  if Length(S) < 19 then Exit;
-  try
-    Y  := StrToInt(Copy(S,  1, 4));
-    M  := StrToInt(Copy(S,  6, 2));
-    D  := StrToInt(Copy(S,  9, 2));
-    H  := StrToInt(Copy(S, 12, 2));
-    Mi := StrToInt(Copy(S, 15, 2));
-    Se := StrToInt(Copy(S, 18, 2));
-    ADate  := EncodeDate(Y, M, D) + EncodeTime(H, Mi, Se, 0);
-    Result := True;
-  except
-    Result := False;
-  end;
-end;
-
-// ---------------------------------------------------------------------------
-// TAiPendingStep
-// ---------------------------------------------------------------------------
+{ TAiPendingStep }
 
 constructor TAiPendingStep.Create(const ANodeName, ASourceNodeName, ALinkName,
   AInput, AStatus, AReason, AContext: string);
@@ -212,14 +167,14 @@ end;
 function TAiPendingStep.ToJSON: TJSONObject;
 begin
   Result := TJSONObject.Create;
-  Result.Add('nodeName',       FNodeName);
-  Result.Add('sourceNodeName', FSourceNodeName);
-  Result.Add('linkName',       FLinkName);
-  Result.Add('input',          FInput);
-  Result.Add('status',         FStatus);
-  Result.Add('suspendReason',  FSuspendReason);
-  Result.Add('suspendContext', FSuspendContext);
-  Result.Add('createdAt',      FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FCreatedAt));
+  Result.AddPair('nodeName',       FNodeName);
+  Result.AddPair('sourceNodeName', FSourceNodeName);
+  Result.AddPair('linkName',       FLinkName);
+  Result.AddPair('input',          FInput);
+  Result.AddPair('status',         FStatus);
+  Result.AddPair('suspendReason',  FSuspendReason);
+  Result.AddPair('suspendContext', FSuspendContext);
+  Result.AddPair('createdAt',      FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FCreatedAt));
 end;
 
 class function TAiPendingStep.FromJSON(AJson: TJSONObject): TAiPendingStep;
@@ -228,27 +183,25 @@ var
   LDate:    TDateTime;
 begin
   Result := TAiPendingStep.Create(
-    AJson.Get('nodeName',       ''),
-    AJson.Get('sourceNodeName', ''),
-    AJson.Get('linkName',       ''),
-    AJson.Get('input',          ''),
-    AJson.Get('status',         ''),
-    AJson.Get('suspendReason',  ''),
-    AJson.Get('suspendContext', ''));
+    AJson.GetValue<string>('nodeName',       ''),
+    AJson.GetValue<string>('sourceNodeName', ''),
+    AJson.GetValue<string>('linkName',       ''),
+    AJson.GetValue<string>('input',          ''),
+    AJson.GetValue<string>('status',         ''),
+    AJson.GetValue<string>('suspendReason',  ''),
+    AJson.GetValue<string>('suspendContext', ''));
 
-  LDateStr := AJson.Get('createdAt', '');
-  if TryParseISO8601(LDateStr, LDate) then
+  LDateStr := AJson.GetValue<string>('createdAt', '');
+  if (LDateStr <> '') and TryISO8601ToDate(LDateStr, LDate, False) then
     Result.FCreatedAt := LDate;
 end;
 
-// ---------------------------------------------------------------------------
-// TAiCheckpointSnapshot
-// ---------------------------------------------------------------------------
+{ TAiCheckpointSnapshot }
 
 constructor TAiCheckpointSnapshot.Create;
 begin
   inherited;
-  FPendingSteps := TAiPendingStepList.Create(True);
+  FPendingSteps := TObjectList<TAiPendingStep>.Create(True);
   FCreatedAt    := Now;
 end;
 
@@ -265,88 +218,81 @@ function TAiCheckpointSnapshot.ToJSON: TJSONObject;
 var
   LSteps: TJSONArray;
   LStep:  TAiPendingStep;
-  I:      Integer;
 begin
   Result := TJSONObject.Create;
-  Result.Add('threadID',     FThreadID);
-  Result.Add('checkpointID', FCheckpointID);
-  Result.Add('graphID',      FGraphID);
-  Result.Add('createdAt',    FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FCreatedAt));
+  Result.AddPair('threadID',     FThreadID);
+  Result.AddPair('checkpointID', TJSONNumber.Create(FCheckpointID));
+  Result.AddPair('graphID',      FGraphID);
+  Result.AddPair('createdAt',    FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', FCreatedAt));
 
   if Assigned(FBlackboard) then
-    Result.Add('blackboard', FBlackboard.Clone as TJSONObject)
+    Result.AddPair('blackboard', FBlackboard.Clone as TJSONObject)
   else
-    Result.Add('blackboard', TJSONObject.Create);
+    Result.AddPair('blackboard', TJSONObject.Create);
 
   if Assigned(FNodeStates) then
-    Result.Add('nodeStates', FNodeStates.Clone as TJSONObject)
+    Result.AddPair('nodeStates', FNodeStates.Clone as TJSONObject)
   else
-    Result.Add('nodeStates', TJSONObject.Create);
+    Result.AddPair('nodeStates', TJSONObject.Create);
 
   if Assigned(FLinkStates) then
-    Result.Add('linkStates', FLinkStates.Clone as TJSONObject)
+    Result.AddPair('linkStates', FLinkStates.Clone as TJSONObject)
   else
-    Result.Add('linkStates', TJSONObject.Create);
+    Result.AddPair('linkStates', TJSONObject.Create);
 
   LSteps := TJSONArray.Create;
-  for I := 0 to FPendingSteps.Count - 1 do
-  begin
-    LStep := FPendingSteps[I];
+  for LStep in FPendingSteps do
     LSteps.Add(LStep.ToJSON);
-  end;
-  Result.Add('pendingSteps', LSteps);
+  Result.AddPair('pendingSteps', LSteps);
 end;
 
 class function TAiCheckpointSnapshot.FromJSON(AJson: TJSONObject): TAiCheckpointSnapshot;
 var
   LStepsArr: TJSONArray;
+  LStepVal:  TJSONValue;
   LBB, LNS, LLS: TJSONObject;
   LDateStr: string;
   LDate:    TDateTime;
-  I:        Integer;
 begin
   Result := TAiCheckpointSnapshot.Create;
   try
-    Result.FThreadID     := AJson.Get('threadID',     '');
-    Result.FCheckpointID := AJson.Get('checkpointID', 0);
-    Result.FGraphID      := AJson.Get('graphID',      '');
+    Result.FThreadID     := AJson.GetValue<string>('threadID',     '');
+    Result.FCheckpointID := AJson.GetValue<Integer>('checkpointID', 0);
+    Result.FGraphID      := AJson.GetValue<string>('graphID',      '');
 
-    LDateStr := AJson.Get('createdAt', '');
-    if TryParseISO8601(LDateStr, LDate) then
+    LDateStr := AJson.GetValue<string>('createdAt', '');
+    if (LDateStr <> '') and TryISO8601ToDate(LDateStr, LDate, False) then
       Result.FCreatedAt := LDate;
 
-    LBB := AJson.Find('blackboard') as TJSONObject;
+    LBB := AJson.GetValue('blackboard') as TJSONObject;
     if Assigned(LBB) then
       Result.FBlackboard := LBB.Clone as TJSONObject;
 
-    LNS := AJson.Find('nodeStates') as TJSONObject;
+    LNS := AJson.GetValue('nodeStates') as TJSONObject;
     if Assigned(LNS) then
       Result.FNodeStates := LNS.Clone as TJSONObject;
 
-    LLS := AJson.Find('linkStates') as TJSONObject;
+    LLS := AJson.GetValue('linkStates') as TJSONObject;
     if Assigned(LLS) then
       Result.FLinkStates := LLS.Clone as TJSONObject;
 
-    LStepsArr := AJson.Find('pendingSteps') as TJSONArray;
+    LStepsArr := AJson.GetValue('pendingSteps') as TJSONArray;
     if Assigned(LStepsArr) then
-      for I := 0 to LStepsArr.Count - 1 do
-        if LStepsArr.Items[I] is TJSONObject then
-          Result.FPendingSteps.Add(
-            TAiPendingStep.FromJSON(TJSONObject(LStepsArr.Items[I])));
+      for LStepVal in LStepsArr do
+        if LStepVal is TJSONObject then
+          Result.FPendingSteps.Add(TAiPendingStep.FromJSON(LStepVal as TJSONObject));
   except
     Result.Free;
     raise;
   end;
 end;
 
-// ---------------------------------------------------------------------------
-// TAiNullCheckpointer
-// ---------------------------------------------------------------------------
+{ TAiNullCheckpointer }
 
 procedure TAiNullCheckpointer.SaveCheckpoint(const AThreadID: string;
   ASnapshot: TAiCheckpointSnapshot);
 begin
-  // no-op
+  // No-op: no persistence
 end;
 
 function TAiNullCheckpointer.LoadCheckpoint(const AThreadID: string): TAiCheckpointSnapshot;
@@ -354,27 +300,25 @@ begin
   Result := nil;
 end;
 
-function TAiNullCheckpointer.GetActiveThreadIDs: TStringDynArray;
+function TAiNullCheckpointer.GetActiveThreadIDs: TArray<string>;
 begin
   SetLength(Result, 0);
 end;
 
 procedure TAiNullCheckpointer.DeleteCheckpoint(const AThreadID: string);
 begin
-  // no-op
+  // No-op
 end;
 
-// ---------------------------------------------------------------------------
-// TAiFileCheckpointer
-// ---------------------------------------------------------------------------
+{ TAiFileCheckpointer }
 
 constructor TAiFileCheckpointer.Create(const ADirectory: string);
 begin
   inherited Create;
   FDirectory := ADirectory;
   FLock      := TCriticalSection.Create;
-  if not DirectoryExists(FDirectory) then
-    ForceDirectories(FDirectory);
+  if not TDirectory.Exists(FDirectory) then
+    TDirectory.CreateDirectory(FDirectory);
 end;
 
 destructor TAiFileCheckpointer.Destroy;
@@ -385,7 +329,7 @@ end;
 
 function TAiFileCheckpointer.BuildFilePath(const AThreadID: string): string;
 begin
-  Result := IncludeTrailingPathDelimiter(FDirectory) + AThreadID + '.checkpoint.json';
+  Result := TPath.Combine(FDirectory, AThreadID + '.checkpoint.json');
 end;
 
 procedure TAiFileCheckpointer.SaveCheckpoint(const AThreadID: string;
@@ -395,9 +339,10 @@ var
   LContent: string;
   LPath:    string;
 begin
+  // Build JSON outside the lock (expensive serialization)
   LJson := ASnapshot.ToJSON;
   try
-    LContent := LJson.AsJSON;
+    LContent := LJson.ToString;
   finally
     LJson.Free;
   end;
@@ -405,7 +350,7 @@ begin
   LPath := BuildFilePath(AThreadID);
   FLock.Enter;
   try
-    WriteTextFile(LPath, LContent);
+    TFile.WriteAllText(LPath, LContent, TEncoding.UTF8);
   finally
     FLock.Leave;
   end;
@@ -415,64 +360,60 @@ function TAiFileCheckpointer.LoadCheckpoint(const AThreadID: string): TAiCheckpo
 var
   LPath:    string;
   LContent: string;
-  LJson:    TJSONData;
+  LJson:    TJSONValue;
 begin
   Result   := nil;
   LPath    := BuildFilePath(AThreadID);
 
+  // Short critical section: only the file read
   FLock.Enter;
   try
-    if not FileExists(LPath) then
+    if not TFile.Exists(LPath) then
       Exit;
-    LContent := ReadTextFile(LPath);
+    LContent := TFile.ReadAllText(LPath, TEncoding.UTF8);
   finally
     FLock.Leave;
   end;
 
-  LJson := GetJSON(LContent);
+  // Parse outside the lock
+  LJson := TJSONObject.ParseJSONValue(LContent);
   if Assigned(LJson) then
   try
     if LJson is TJSONObject then
-      Result := TAiCheckpointSnapshot.FromJSON(TJSONObject(LJson));
+      Result := TAiCheckpointSnapshot.FromJSON(LJson as TJSONObject);
   finally
     LJson.Free;
   end;
 end;
 
-function TAiFileCheckpointer.GetActiveThreadIDs: TStringDynArray;
+function TAiFileCheckpointer.GetActiveThreadIDs: TArray<string>;
 var
-  SR:   TSearchRec;
-  List: TStringList;
-  Base: string;
-  I:    Integer;
+  LFiles: TArray<string>;
+  LList:  TList<string>;
+  LFile:  string;
+  LBase:  string;
 begin
-  List := TStringList.Create;
+  LList := TList<string>.Create;
   try
     FLock.Enter;
     try
-      if FindFirst(IncludeTrailingPathDelimiter(FDirectory) + '*.checkpoint.json',
-                   faAnyFile and not faDirectory, SR) = 0 then
-      try
-        repeat
-          // SR.Name = 'guid.checkpoint.json' → strip extensions twice
-          Base := SR.Name;
-          Base := ChangeFileExt(Base, '');  // → 'guid.checkpoint'
-          Base := ChangeFileExt(Base, '');  // → 'guid'
-          if Base <> '' then
-            List.Add(Base);
-        until FindNext(SR) <> 0;
-      finally
-        FindClose(SR);
-      end;
+      LFiles := TDirectory.GetFiles(FDirectory, '*.checkpoint.json');
     finally
       FLock.Leave;
     end;
 
-    SetLength(Result, List.Count);
-    for I := 0 to List.Count - 1 do
-      Result[I] := List[I];
+    // Extract GUID from "<GUID>.checkpoint.json"
+    // GetFileNameWithoutExtension twice: .json -> .checkpoint -> GUID
+    for LFile in LFiles do
+    begin
+      LBase := TPath.GetFileNameWithoutExtension(LFile);    // "guid.checkpoint"
+      LBase := TPath.GetFileNameWithoutExtension(LBase);    // "guid"
+      if LBase <> '' then
+        LList.Add(LBase);
+    end;
+    Result := LList.ToArray;
   finally
-    List.Free;
+    LList.Free;
   end;
 end;
 
@@ -483,8 +424,8 @@ begin
   LPath := BuildFilePath(AThreadID);
   FLock.Enter;
   try
-    if FileExists(LPath) then
-      DeleteFile(LPath);
+    if TFile.Exists(LPath) then
+      TFile.Delete(LPath);
   finally
     FLock.Leave;
   end;

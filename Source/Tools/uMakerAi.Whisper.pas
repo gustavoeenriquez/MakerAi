@@ -1,271 +1,205 @@
-// MIT License
+﻿// IT License
 //
-// Copyright (c) 2024-2026 Gustavo Enriquez
+// Copyright (c) <year> <copyright holders>
 //
-// github.com/gustavoeenriquez/
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// --------- FPC PORT --------------------
-// Whisper: TTS y STT via endpoints de audio de OpenAI.
-// Mantiene compatibilidad con la version de Github de Whisper opensource.
-// El modelo estandar de OpenAi con nuevas caracteristicas esta en
-// uMakerAi.OpenAi.Audio.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+// Nombre: Gustavo Enr?quez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+
+//--------------------------------------------------------------------------------
+
+// Whisper mantiene la compatibilidad con la versi?n de Github de whisper opensource
+// el modelo estandar de OpenAi se mueva a uMakerAi.OpenAi.Audio con las nuevas
+// caracteristicas.
 
 unit uMakerAi.Whisper;
-
-{$mode objfpc}{$H+}
 
 interface
 
 uses
-  SysUtils, Classes, StrUtils,
-  fphttpclient,
-  fpjson, jsonparser,
-  uMakerAi.Core, uMakerAi.Chat.Tools, uMakerAi.Chat.Messages;
+  System.SysUtils, System.Types, System.UITypes, System.Classes,
+  System.Threading,
+  System.Variants, System.Net.Mime, System.IOUtils, System.Generics.Collections,
+  System.NetEncoding,
+  System.JSON, System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
+  System.Net.HttpClientComponent,
+  REST.JSON, REST.Types, REST.Client,
+{$IF CompilerVersion < 35}
+  uJSONHelper,
+{$ENDIF}
+  uMakerAi.Core, uMakerAi.Chat.Tools, uMakerAi.Chat.Messages,
+  uMakerAi.Utils.System;  // TUtilsSystem.RunCommandLine — usado en bloque LINUX
 
-type
-  TAIWhisper = class(TAiSpeechToolBase)
-  private
-    FApiKey:     string;
-    FUrl:        string;
-    FModel:      string;
-    FVoice:      string;
-    FFormat:     string;
-    FLanguaje:   string;
+Type
+
+  { TODO : Falta implementar el Streaming mode }
+  TAIWhisper = Class(TAiSpeechToolBase)
+  Private
+    FApiKey: String;
+    FUrl: String;
+    FModel: String;
+    FVoice: String;
+    FFormat: String;
+    FLanguaje: String;
     FTemperature: Single;
-    FSpeed:      Single;
-    FResponseFormat: string;
-    FQuality:    string;
-    Ftimestamp_granularities: string;
-    procedure SetApiKey(const Value: string);
-    procedure SetUrl(const Value: string);
-    procedure SetModel(const Value: string);
-    procedure SetVoice(const Value: string);
-    procedure SetFormat(const Value: string);
-    procedure SetLanguaje(const Value: string);
+    FSpeed: Single;
+    FResponseFormat: String;
+    FQuality: String;
+    Ftimestamp_granularities: String;
+    procedure SetApiKey(const Value: String);
+    procedure SetUrl(const Value: String);
+    procedure SetModel(const Value: String);
+    procedure SetVoice(const Value: String);
+    procedure SetFormat(const Value: String);
+    procedure SetLanguaje(const Value: String);
     procedure SetSpeed(const Value: Single);
     procedure SetTemperature(const Value: Single);
-    procedure SetResponseFormat(const Value: string);
-    procedure SetQuality(const Value: string);
-    procedure Settimestamp_granularities(const Value: string);
-    function  GetApiKey: string;
-  protected
-    function  IsValidExtension(const AFileExtension: string): Boolean;
-    procedure ConvertAudioIfNeeded(var aStream: TMemoryStream; var aFileName: string);
-    procedure ExecuteTranscription(aMediaFile: TAiMediaFile;
-      ResMsg, AskMsg: TAiChatMessage); override;
-    procedure ExecuteSpeechGeneration(const AText: string;
-      ResMsg, AskMsg: TAiChatMessage); override;
-    function  InternalTranscription(aStream: TMemoryStream;
-      const aFileName, aPrompt: string): string;
-  public
-    constructor Create(aOwner: TComponent); override;
-    destructor Destroy; override;
+    procedure SetResponseFormat(const Value: String);
+    procedure SetQuality(const Value: String);
+    procedure Settimestamp_granularities(const Value: String);
+    function GetApiKey: String;
+  Protected
+    Function IsValidExtension(FileExtension: String): Boolean;
+    procedure ConvertAudioIfNeeded(var aStream: TMemoryStream; var aFileName: String);
 
-    // Proxy publicos para que TAiWhisperThread acceda a los metodos protegidos
-    procedure PubReportState(AState: TAiChatState; const ADesc: string);
-    procedure PubReportDataEnd(AMsg: TAiChatMessage; const ARole, AText: string);
-    procedure PubReportError(const AMsg: string; E: Exception);
+    { Implementaci?n de IAiSpeechTool }
+    procedure ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage); override;
+    procedure ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage); override;
+    function InternalTranscription(aStream: TMemoryStream; aFileName, aPrompt: String): String;
 
-    function  Speech(const aText: string; const aVoice: string = ''): TMemoryStream;
-    function  Transcription(aStream: TMemoryStream;
-      aFileName, aPrompt: string): string;
-    function  Translation(aStream: TMemoryStream;
-      aFileName, aPrompt: string): string;
-  published
-    property ApiKey:    string read GetApiKey write SetApiKey;
-    property Url:       string read FUrl      write SetUrl;
-    property Model:     string read FModel    write SetModel;
-    property Voice:     string read FVoice    write SetVoice;
-    property Format:    string read FFormat   write SetFormat;
-    property Languaje:  string read FLanguaje write SetLanguaje;
-    property Speed:     Single read FSpeed    write SetSpeed;
-    property Temperature: Single read FTemperature write SetTemperature;
-    property ResponseFormat: string read FResponseFormat write SetResponseFormat;
-    property Quality:   string read FQuality  write SetQuality;
-    property timestamp_granularities: string
-      read Ftimestamp_granularities write Settimestamp_granularities;
-  end;
+  Public
+    Constructor Create(aOwner: TComponent); Override;
+    Destructor Destroy; Override;
+    Function Speech(aText: String; aVoice: String = ''): TMemoryStream;
+    Function Transcription(aStream: TMemoryStream; aFileName, aPrompt: String): String;
+    Function Translation(aStream: TMemoryStream; aFileName, aPrompt: String): String;
+  Published
+    Property ApiKey: String read GetApiKey write SetApiKey;
+    Property Url: String read FUrl write SetUrl;
+    Property Model: String read FModel write SetModel;
+    Property Voice: String read FVoice write SetVoice;
+    Property Format: String read FFormat write SetFormat;
+    Property Languaje: String read FLanguaje write SetLanguaje;
+    Property Speed: Single read FSpeed write SetSpeed;
+    Property Temperature: Single read FTemperature write SetTemperature;
+    Property ResponseFormat: String read FResponseFormat write SetResponseFormat;
+    Property Quality: String read FQuality write SetQuality;
+    Property timestamp_granularities: String read Ftimestamp_granularities write Settimestamp_granularities;
+  End;
 
-procedure Register;
+Procedure Register;
 
 implementation
 
-uses
-  process;
+{$IFDEF MSWINDOWS}
 
-const
+uses Winapi.ShellAPI, Winapi.Windows;
+{$ENDIF}
+{ TAiAudio }
+
+Const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
-
-// ---------------------------------------------------------------------------
-// Multipart helpers (standalone)
-// ---------------------------------------------------------------------------
-
-procedure WAppndField(AStream: TMemoryStream;
-  const ABoundary, AName, AValue: string);
-var
-  S: string;
-begin
-  S := '--' + ABoundary + #13#10 +
-       'Content-Disposition: form-data; name="' + AName + '"' + #13#10 +
-       #13#10 + AValue + #13#10;
-  AStream.WriteBuffer(PChar(S)^, Length(S));
-end;
-
-procedure WAppndFile(AStream: TMemoryStream;
-  const ABoundary, AName, AFileName, AMimeType: string; AContent: TStream);
-var
-  S, Crlf: string;
-begin
-  S := '--' + ABoundary + #13#10 +
-       'Content-Disposition: form-data; name="' + AName +
-       '"; filename="' + AFileName + '"' + #13#10 +
-       'Content-Type: ' + AMimeType + #13#10 + #13#10;
-  AStream.WriteBuffer(PChar(S)^, Length(S));
-  AContent.Position := 0;
-  AStream.CopyFrom(AContent, AContent.Size);
-  Crlf := #13#10;
-  AStream.WriteBuffer(PChar(Crlf)^, Length(Crlf));
-end;
-
-// ---------------------------------------------------------------------------
-// Conversion de audio via ffmpeg (TProcess — multiplataforma)
-// ---------------------------------------------------------------------------
-
-procedure ConvertAudioFileFormat(ASource: TMemoryStream; const AFileName: string;
-  out ADest: TMemoryStream; out ADestFileName: string);
-var
-  TmpDir, FSrc, FDst: string;
-  Proc: TProcess;
-begin
-  ADest := nil;
-  ADestFileName := '';
-  TmpDir  := IncludeTrailingPathDelimiter(GetTempDir(False));
-  FSrc    := TmpDir + ExtractFileName(AFileName);
-  ADestFileName := ChangeFileExt(ExtractFileName(AFileName), '.mp3');
-  FDst    := TmpDir + ADestFileName;
-
-  ASource.Position := 0;
-  ASource.SaveToFile(FSrc);
-
-  Proc := TProcess.Create(nil);
-  try
-    Proc.Executable := 'ffmpeg';
-    Proc.Parameters.Add('-i');
-    Proc.Parameters.Add(FSrc);
-    Proc.Parameters.Add('-y');
-    Proc.Parameters.Add(FDst);
-    Proc.Options    := [poWaitOnExit, poNoConsole];
-    Proc.ShowWindow := swoHide;
-    Proc.Execute;
-  finally
-    Proc.Free;
-  end;
-
-  if FileExists(FDst) then
-  begin
-    ADest := TMemoryStream.Create;
-    ADest.LoadFromFile(FDst);
-    ADest.Position := 0;
-  end;
-  SysUtils.DeleteFile(FSrc);
-  SysUtils.DeleteFile(FDst);
-end;
-
-// ---------------------------------------------------------------------------
-// Hilo background para el caso sincrono (IsAsync = False)
-// Nota: accede a TAIWhisper via los proxies Pub* publicos.
-// ---------------------------------------------------------------------------
-
-type
-  TAiWhisperMode = (whmTranscription, whmSpeech);
-
-  TAiWhisperThread = class(TThread)
-  private
-    FOwner:     TAIWhisper;
-    FMode:      TAiWhisperMode;
-    FMediaFile: TAiMediaFile;
-    FText:      string;
-    FResMsg:    TAiChatMessage;
-  public
-    constructor Create(AOwner: TAIWhisper; AMode: TAiWhisperMode;
-      AMediaFile: TAiMediaFile; const AText: string;
-      AResMsg: TAiChatMessage);
-    procedure Execute; override;
-  end;
-
-constructor TAiWhisperThread.Create(AOwner: TAIWhisper; AMode: TAiWhisperMode;
-  AMediaFile: TAiMediaFile; const AText: string;
-  AResMsg: TAiChatMessage);
-begin
-  inherited Create(False);
-  FreeOnTerminate := True;
-  FOwner     := AOwner;
-  FMode      := AMode;
-  FMediaFile := AMediaFile;
-  FText      := AText;
-  FResMsg    := AResMsg;
-end;
-
-procedure TAiWhisperThread.Execute;
-var
-  LText:    string;
-  LStream:  TMemoryStream;
-  LNewFile: TAiMediaFile;
-begin
-  case FMode of
-    whmTranscription:
-      try
-        FOwner.PubReportState(acsReasoning, 'Transcribiendo audio...');
-        LText := FOwner.InternalTranscription(
-          FMediaFile.Content, FMediaFile.FileName, '');
-        FMediaFile.Transcription := LText;
-        FMediaFile.Procesado := True;
-        FOwner.PubReportDataEnd(FResMsg, 'assistant', LText);
-      except
-        on E: Exception do
-          FOwner.PubReportError('Error en transcripcion Whisper: ' + E.Message, E);
-      end;
-    whmSpeech:
-      try
-        FOwner.PubReportState(acsWriting, 'Generando voz...');
-        LStream := FOwner.Speech(FText);
-        try
-          LNewFile := TAiMediaFile.Create;
-          LNewFile.LoadFromStream('speech.' + FOwner.Format, LStream);
-          FOwner.PubReportDataEnd(FResMsg, 'assistant', '[Audio generado]');
-        finally
-          LStream.Free;
-        end;
-      except
-        on E: Exception do
-          FOwner.PubReportError('Error generando voz Whisper: ' + E.Message, E);
-      end;
-  end;
-end;
-
-// ---------------------------------------------------------------------------
 
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAIWhisper]);
 end;
 
-{ TAIWhisper }
+procedure RunCommand(const Command: string);
+begin
+
+{$IFDEF LINUX}
+  TUtilsSystem.RunCommandLine(Command);
+{$ENDIF}
+{$IFDEF MSWINDOWS}
+  ShellExecute(0, nil, 'cmd.exe', PChar('/C ' + Command), nil, SW_HIDE);
+{$ENDIF}
+end;
+
+procedure ConvertAudioFileFormat(Origen: TMemoryStream; filename: String; out Destino: TMemoryStream; out DestinoFileName: String);
+Var
+  FOrigen, FDestino: String;
+  CommandLine: String;
+begin
+  Destino := Nil;
+  DestinoFileName := '';
+  filename := LowerCase(filename);
+  FDestino := ChangeFileExt(filename, '.mp3');
+
+  FOrigen := System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetTempPath, filename);
+  FDestino := System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetTempPath, FDestino);
+
+  Origen.Position := 0;
+  Origen.SaveToFile(FOrigen);
+
+  CommandLine := 'ffmpeg -i ' + FOrigen + ' ' + FDestino;
+
+  RunCommand(CommandLine);
+
+  Destino := TMemoryStream.Create;
+  Destino.LoadFromfile(FDestino);
+  Destino.Position := 0;
+  DestinoFileName := ExtractFileName(FDestino);
+
+  TFile.Delete(FOrigen);
+  TFile.Delete(FDestino);
+end;
+
+procedure TAIWhisper.ConvertAudioIfNeeded(var aStream: TMemoryStream; var aFileName: String);
+var
+  FileNameDestino: String;
+  Destino: TMemoryStream;
+begin
+  if not IsValidExtension(ExtractFileExt(aFileName)) then
+  begin
+    ConvertAudioFileFormat(aStream, aFileName, Destino, FileNameDestino);
+    aStream.Clear;
+    aStream.LoadFromStream(Destino);
+    aStream.Position := 0;
+    aFileName := FileNameDestino;
+    Destino.Free;
+  end;
+end;
 
 constructor TAIWhisper.Create(aOwner: TComponent);
 begin
-  inherited;
-  FUrl         := GlOpenAIUrl;
-  FApiKey      := '@OPENAI_API_KEY';
-  FModel       := 'whisper-1';
-  FVoice       := 'nova';
-  FFormat      := 'mp3';
-  FLanguaje    := 'es';
-  FSpeed       := 1;
-  FTemperature := 0;
-  FResponseFormat := 'text';
-  FQuality     := 'tts-1';
-  Ftimestamp_granularities := '';
+  Inherited;
+  FUrl := GlOpenAIUrl;
+  FApiKey := '@OPENAI_API_KEY';
+  FModel := 'whisper-1'; // whisper-1 por defecto y tts para spech nada mas tts-1, tts-1-hd
+  FVoice := 'nova'; // alloy, echo, fable, onyx, nova, shimmer
+  FFormat := 'mp3'; // "mp3", opus", "aac", "flac", and "pcm"
+  FLanguaje := 'es'; // ISO-639-1
+  FSpeed := 1; // entre 0.25 u 5
+  FTemperature := 0; // entre 0 y 1
+  FResponseFormat := 'text'; // json, text, srt, verbose_json, or vtt
+  FQuality := 'tts-1'; // tts-1, tts-1-hd
+  Ftimestamp_granularities := ''; // Empty, word, or segment obligatorio ResponseFormat = verbose_json
 end;
 
 destructor TAIWhisper.Destroy;
@@ -273,64 +207,7 @@ begin
   inherited;
 end;
 
-function TAIWhisper.GetApiKey: string;
-begin
-  if (csDesigning in ComponentState) or (csDestroying in ComponentState) then
-    Exit(FApiKey);
-  if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
-    Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
-  else
-    Result := FApiKey;
-end;
-
-procedure TAIWhisper.PubReportState(AState: TAiChatState; const ADesc: string);
-begin
-  ReportState(AState, ADesc);
-end;
-
-procedure TAIWhisper.PubReportDataEnd(AMsg: TAiChatMessage;
-  const ARole, AText: string);
-begin
-  ReportDataEnd(AMsg, ARole, AText);
-end;
-
-procedure TAIWhisper.PubReportError(const AMsg: string; E: Exception);
-begin
-  ReportError(AMsg, E);
-end;
-
-function TAIWhisper.IsValidExtension(const AFileExtension: string): Boolean;
-var
-  Ext: string;
-begin
-  Ext := LowerCase(Trim(StringReplace(AFileExtension, '.', '', [rfReplaceAll])));
-  Result := (Ext = 'mp3') or (Ext = 'mp4') or (Ext = 'mpeg') or
-            (Ext = 'mpga') or (Ext = 'm4a') or (Ext = 'ogg') or
-            (Ext = 'wav') or (Ext = 'webm');
-end;
-
-procedure TAIWhisper.ConvertAudioIfNeeded(var aStream: TMemoryStream;
-  var aFileName: string);
-var
-  NewStream: TMemoryStream;
-  NewName:   string;
-begin
-  if not IsValidExtension(ExtractFileExt(aFileName)) then
-  begin
-    ConvertAudioFileFormat(aStream, aFileName, NewStream, NewName);
-    if Assigned(NewStream) then
-    begin
-      aStream.Clear;
-      aStream.LoadFromStream(NewStream);
-      aStream.Position := 0;
-      aFileName := NewName;
-      NewStream.Free;
-    end;
-  end;
-end;
-
-procedure TAIWhisper.ExecuteTranscription(aMediaFile: TAiMediaFile;
-  ResMsg, AskMsg: TAiChatMessage);
+procedure TAIWhisper.ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
 
   procedure DoTranscription;
   var
@@ -338,30 +215,28 @@ procedure TAIWhisper.ExecuteTranscription(aMediaFile: TAiMediaFile;
   begin
     try
       ReportState(acsReasoning, 'Transcribiendo audio...');
-      LText := InternalTranscription(
-        aMediaFile.Content, aMediaFile.FileName, '');
+      LText := InternalTranscription(aMediaFile.Content, aMediaFile.filename, '');
       aMediaFile.Transcription := LText;
       aMediaFile.Procesado := True;
+      ResMsg.Prompt := LText;  // asignación directa para modo sync (igual que Gemini)
       ReportDataEnd(ResMsg, 'assistant', LText);
     except
       on E: Exception do
-        ReportError('Error en transcripcion Whisper: ' + E.Message, E);
+      begin
+        ReportError('Error en transcripci�n Whisper: ' + E.Message, E);
+      end;
     end;
   end;
 
 begin
-  if IsAsync then
-    DoTranscription
-  else
-    TAiWhisperThread.Create(Self, whmTranscription, aMediaFile, '', ResMsg);
+  DoTranscription;
 end;
 
-procedure TAIWhisper.ExecuteSpeechGeneration(const AText: string;
-  ResMsg, AskMsg: TAiChatMessage);
+procedure TAIWhisper.ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage);
 
   procedure DoSpeechGeneration;
   var
-    LStream:  TMemoryStream;
+    LStream: TMemoryStream;
     LNewFile: TAiMediaFile;
   begin
     try
@@ -381,193 +256,67 @@ procedure TAIWhisper.ExecuteSpeechGeneration(const AText: string;
   end;
 
 begin
-  if IsAsync then
-    DoSpeechGeneration
-  else
-    TAiWhisperThread.Create(Self, whmSpeech, nil, AText, ResMsg);
+  DoSpeechGeneration;
 end;
 
-function TAIWhisper.InternalTranscription(aStream: TMemoryStream;
-  const aFileName, aPrompt: string): string;
+{ Encapsulamos la l?gica original en un m?todo interno para reutilizar }
+function TAIWhisper.InternalTranscription(aStream: TMemoryStream; aFileName, aPrompt: String): String;
 begin
   Result := Transcription(aStream, aFileName, aPrompt);
 end;
 
-function TAIWhisper.Speech(const aText: string; const aVoice: string = ''): TMemoryStream;
-var
-  Client:      TFPHTTPClient;
-  JObj:        TJSONObject;
-  ReqStream:   TStringStream;
-  Response:    TMemoryStream;
-  sUrl:        string;
-  SelVoice:    string;
+
+function TAIWhisper.GetApiKey: String;
 begin
-  if aVoice = '' then
-    SelVoice := FVoice
+  // Si est? en modo de dise?o, simplemente retorna el valor tal cual
+  if (csDesigning in ComponentState) or (csDestroying in ComponentState) then
+  begin
+    Result := FApiKey;
+    Exit;
+  end;
+
+  // En modo de ejecuci?n
+  if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
+    // Retorna el valor de la variable de entorno, quitando el '@'
+    Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
   else
-    SelVoice := aVoice;
-
-  sUrl := FUrl + 'audio/speech';
-
-  JObj := TJSONObject.Create;
-  try
-    JObj.Add('model', FModel);
-    JObj.Add('input', aText);
-    JObj.Add('voice', SelVoice);
-    JObj.Add('response_format', FFormat);
-    JObj.Add('speed', Double(FSpeed));
-    ReqStream := TStringStream.Create(JObj.AsJSON);
-  finally
-    JObj.Free;
-  end;
-
-  Response := TMemoryStream.Create;
-  Client   := TFPHTTPClient.Create(nil);
-  try
-    Client.AddHeader('Authorization', 'Bearer ' + GetApiKey);
-    Client.AddHeader('Content-Type', 'application/json');
-    Client.RequestBody := ReqStream;
-    Client.HTTPMethod('POST', sUrl, Response, [200]);
-    Response.Position := 0;
-    Result   := Response;
-    Response := nil; // transfiere ownership al caller
-  finally
-    Client.Free;
-    ReqStream.Free;
-    Response.Free; // nil si se transfiere, o limpieza en excepcion
-  end;
+    Result := FApiKey;
 end;
 
-function TAIWhisper.Transcription(aStream: TMemoryStream;
-  aFileName, aPrompt: string): string;
-var
-  Client:    TFPHTTPClient;
-  MPStream:  TMemoryStream;
-  RespStream: TStringStream;
-  Boundary, CloseStr, MimeType, sUrl: string;
+
+function TAIWhisper.IsValidExtension(FileExtension: String): Boolean;
 begin
-  ConvertAudioIfNeeded(aStream, aFileName);
-  sUrl     := FUrl + 'audio/transcriptions';
-  Boundary := 'WHBound' + IntToStr(Random(999999));
-  MPStream := TMemoryStream.Create;
-  try
-    MimeType := GetMimeTypeFromFileName(ExtractFileExt(aFileName));
-    if MimeType = '' then
-      MimeType := 'audio/mpeg';
-
-    aStream.Position := 0;
-    WAppndFile(MPStream, Boundary, 'file', aFileName, MimeType, aStream);
-    WAppndField(MPStream, Boundary, 'model', FModel);
-    if aPrompt <> '' then
-      WAppndField(MPStream, Boundary, 'prompt', aPrompt);
-    WAppndField(MPStream, Boundary, 'response_format', FResponseFormat);
-    WAppndField(MPStream, Boundary, 'temperature',
-      FormatFloat('0.0', FTemperature));
-    if FLanguaje <> '' then
-      WAppndField(MPStream, Boundary, 'language', FLanguaje);
-    if Pos('word', Ftimestamp_granularities) > 0 then
-      WAppndField(MPStream, Boundary, 'timestamp_granularities[]', 'word');
-    if Pos('segment', Ftimestamp_granularities) > 0 then
-      WAppndField(MPStream, Boundary, 'timestamp_granularities[]', 'segment');
-
-    CloseStr := '--' + Boundary + '--' + #13#10;
-    MPStream.WriteBuffer(PChar(CloseStr)^, Length(CloseStr));
-    MPStream.Position := 0;
-
-    RespStream := TStringStream.Create('');
-    Client     := TFPHTTPClient.Create(nil);
-    try
-      Client.AddHeader('Authorization', 'Bearer ' + GetApiKey);
-      Client.AddHeader('Content-Type',
-        'multipart/form-data; boundary=' + Boundary);
-      Client.RequestBody := MPStream;
-      Client.HTTPMethod('POST', sUrl, RespStream, [200]);
-      Result := RespStream.DataString;
-    finally
-      Client.Free;
-      RespStream.Free;
-    end;
-  finally
-    MPStream.Free;
-  end;
+  FileExtension := LowerCase(Trim(StringReplace(FileExtension, '.', '', [rfReplaceAll])));
+  // Result := (FileExtension = 'mp3') or (FileExtension = 'mp4') or (FileExtension = 'mpeg') or (FileExtension = 'mpga') or (FileExtension = 'm4a') or (FileExtension = 'ogg') or (FileExtension = 'wav') or (FileExtension = 'webm');
+  Result := MatchText(LowerCase(Trim(FileExtension)), ['mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'ogg', 'wav', 'webm']);
 end;
 
-function TAIWhisper.Translation(aStream: TMemoryStream;
-  aFileName, aPrompt: string): string;
-var
-  Client:     TFPHTTPClient;
-  MPStream:   TMemoryStream;
-  RespStream: TStringStream;
-  Boundary, CloseStr, MimeType, sUrl: string;
-begin
-  ConvertAudioIfNeeded(aStream, aFileName);
-  sUrl     := FUrl + 'audio/translations';
-  Boundary := 'WHBound' + IntToStr(Random(999999));
-  MPStream := TMemoryStream.Create;
-  try
-    MimeType := GetMimeTypeFromFileName(ExtractFileExt(aFileName));
-    if MimeType = '' then
-      MimeType := 'audio/mpeg';
-
-    aStream.Position := 0;
-    WAppndFile(MPStream, Boundary, 'file', aFileName, MimeType, aStream);
-    WAppndField(MPStream, Boundary, 'model', FModel);
-    if aPrompt <> '' then
-      WAppndField(MPStream, Boundary, 'prompt', aPrompt);
-    WAppndField(MPStream, Boundary, 'response_format', FResponseFormat);
-    WAppndField(MPStream, Boundary, 'temperature',
-      FormatFloat('0.0', FTemperature));
-
-    CloseStr := '--' + Boundary + '--' + #13#10;
-    MPStream.WriteBuffer(PChar(CloseStr)^, Length(CloseStr));
-    MPStream.Position := 0;
-
-    RespStream := TStringStream.Create('');
-    Client     := TFPHTTPClient.Create(nil);
-    try
-      Client.AddHeader('Authorization', 'Bearer ' + GetApiKey);
-      Client.AddHeader('Content-Type',
-        'multipart/form-data; boundary=' + Boundary);
-      Client.RequestBody := MPStream;
-      Client.HTTPMethod('POST', sUrl, RespStream, [200]);
-      Result := RespStream.DataString;
-    finally
-      Client.Free;
-      RespStream.Free;
-    end;
-  finally
-    MPStream.Free;
-  end;
-end;
-
-// Property setters
-
-procedure TAIWhisper.SetApiKey(const Value: string);
+procedure TAIWhisper.SetApiKey(const Value: String);
 begin
   FApiKey := Value;
 end;
 
-procedure TAIWhisper.SetFormat(const Value: string);
+procedure TAIWhisper.SetFormat(const Value: String);
 begin
   FFormat := Value;
 end;
 
-procedure TAIWhisper.SetLanguaje(const Value: string);
+procedure TAIWhisper.SetLanguaje(const Value: String);
 begin
   FLanguaje := Value;
 end;
 
-procedure TAIWhisper.SetModel(const Value: string);
+procedure TAIWhisper.SetModel(const Value: String);
 begin
   FModel := Value;
 end;
 
-procedure TAIWhisper.SetQuality(const Value: string);
+procedure TAIWhisper.SetQuality(const Value: String);
 begin
   FQuality := Value;
 end;
 
-procedure TAIWhisper.SetResponseFormat(const Value: string);
+procedure TAIWhisper.SetResponseFormat(const Value: String);
 begin
   FResponseFormat := Value;
 end;
@@ -582,22 +331,239 @@ begin
   FTemperature := Trunc(Value * 10) / 10;
 end;
 
-procedure TAIWhisper.Settimestamp_granularities(const Value: string);
+procedure TAIWhisper.Settimestamp_granularities(const Value: String);
 begin
   Ftimestamp_granularities := Value;
 end;
 
-procedure TAIWhisper.SetUrl(const Value: string);
+procedure TAIWhisper.SetUrl(const Value: String);
 begin
-  if Value <> '' then
+  If Value <> '' then
     FUrl := Value
-  else
+  Else
     FUrl := GlOpenAIUrl;
 end;
 
-procedure TAIWhisper.SetVoice(const Value: string);
+procedure TAIWhisper.SetVoice(const Value: String);
 begin
   FVoice := Value;
+end;
+
+function TAIWhisper.Speech(aText: String; aVoice: String = ''): TMemoryStream;
+Var
+  Client: TNetHTTPClient;
+  Headers: TNetHeaders;
+  JObj: TJSonObject;
+  Res: IHTTPResponse;
+  Response: TMemoryStream;
+  St: TStringStream;
+  SelectedVoice, sUrl: String;
+begin
+
+  SelectedVoice := IfThen(aVoice = '', FVoice, aVoice);
+
+  /// Output Format Outputs
+  /// The default response format is "mp3", but other formats like "opus", "aac", "flac", and "pcm" are available.
+  /// Opus: For internet streaming and communication, low latency.
+  /// AAC: For digital audio compression, preferred by YouTube, Android, iOS.
+  /// FLAC: For lossless audio compression, favored by audio enthusiasts for archiving.
+  /// WAV: Uncompressed WAV audio, suitable for low-latency applications to avoid decoding overhead.
+  /// PCM: Similar to WAV but containing the raw samples in 24kHz (16-bit signed, low-endian), without the header.
+
+  Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
+  Client.SynchronizeEvents := False;
+{$ENDIF}
+  St := TStringStream.Create('', TEncoding.UTF8);
+  Response := TMemoryStream.Create;
+  sUrl := FUrl + 'audio/speech';
+  // https://api.openai.com/v1/audio/speech
+  JObj := TJSonObject.Create;
+
+  FSpeed := Trunc(FSpeed * 10) / 10;
+
+  Try
+    JObj.AddPair('model', FModel);
+
+    JObj.AddPair('input', aText);
+    JObj.AddPair('voice', SelectedVoice); // alloy, echo, fable, onyx, nova, and shimmer
+    JObj.AddPair('response_format', FFormat);
+    JObj.AddPair('speed', FSpeed);
+
+    St.WriteString(JObj.ToJSON);
+    St.Position := 0;
+
+    Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
+    Client.ContentType := 'application/json';
+
+{$IFDEF APIDEBUG}
+    St.SaveToFile('c:\temp\peticion.json.txt');
+    St.Position := 0;
+{$ENDIF}
+    Res := Client.Post(sUrl, St, Response, Headers);
+
+    if Res.StatusCode = 200 then
+    Begin
+      Response.Position := 0;
+      Result := Response;
+    End
+    else
+    begin
+      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+    end;
+
+  Finally
+    Client.Free;
+    St.Free;
+    // Response.Free;  //No se libera, se pasa al usuario
+    JObj.Free;
+  End;
+end;
+
+function TAIWhisper.Transcription(aStream: TMemoryStream; aFileName, aPrompt: String): String;
+Var
+
+  Body: TMultipartFormData;
+  Client: TNetHTTPClient;
+  Headers: TNetHeaders;
+  sUrl: String;
+  Res: IHTTPResponse;
+begin
+
+
+  // Valida que la extensi?n del audio sea compatible, sino utiliza ffmpeg para convertirla
+  {
+    var Destino: TMemoryStream;
+    var FileNameDestino: String;
+    If IsValidExtension(ExtractFileExt(aFileName)) = False then
+    Begin
+    ConvertAudioFileFormat(aStream, aFileName, Destino, FileNameDestino);
+    aStream.Clear;
+    aStream.LoadFromStream(Destino);
+    aStream.Position := 0;
+    aFileName := FileNameDestino;
+    Destino.Free;
+    End;
+  }
+
+  ConvertAudioIfNeeded(aStream, aFileName);
+
+  sUrl := FUrl + 'audio/transcriptions';
+
+  Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
+  Client.SynchronizeEvents := False;
+{$ENDIF}
+  Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
+  Client.ContentType := 'application/json';
+  Body := TMultipartFormData.Create;
+
+  Try
+    aStream.Position := 0;
+
+    {$IF CompilerVersion >= 36}
+    Body.AddStream('file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    {$ELSE}
+    Body.AddStream('file', aStream, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    {$ENDIF}
+    Body.AddField('model', FModel);
+    Body.AddField('prompt', aPrompt);
+    Body.AddField('response_format', FResponseFormat);
+    // json, text, srt, verbose_json, or vtt
+    Body.AddField('temperature', FormatFloat('0.0', FTemperature));
+    Body.AddField('language', FLanguaje);
+
+    If pos('word', Ftimestamp_granularities) > 0 then // response_format debe ser "verbose_json"
+      Body.AddField('timestamp_granularities[]', 'word');
+
+    If pos('segment', Ftimestamp_granularities) > 0 then // response_format debe ser "verbose_json"
+      Body.AddField('timestamp_granularities[]', 'segment');
+
+    Client.Accept := 'application/text';
+    Client.ContentType := 'multipart/form-data';
+
+    Res := Client.Post(sUrl, Body, Nil, Headers);
+
+    if Res.StatusCode = 200 then
+    Begin
+      Result := Res.ContentAsString
+    End
+    else
+    begin
+      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+    end;
+
+  Finally
+    Body.Free;
+    Client.Free;
+  End;
+end;
+
+function TAIWhisper.Translation(aStream: TMemoryStream; aFileName, aPrompt: String): String;
+Var
+  Body: TMultipartFormData;
+  Client: TNetHTTPClient;
+  Headers: TNetHeaders;
+  sUrl: String;
+  Res: IHTTPResponse;
+begin
+  {
+    var FileNameDestino: string;
+    var Destino: TMemoryStream;
+    If IsValidExtension(ExtractFileExt(aFileName)) = False then
+    Begin
+    ConvertAudioFileFormat(aStream, aFileName, Destino, FileNameDestino);
+    aStream.Clear;
+    aStream.LoadFromStream(Destino);
+    aStream.Position := 0;
+    aFileName := FileNameDestino;
+    Destino.Free;
+    End;
+  }
+
+  ConvertAudioIfNeeded(aStream, aFileName);
+
+  sUrl := FUrl + 'audio/translations';
+
+  Client := TNetHTTPClient.Create(Nil);
+{$IF CompilerVersion >= 35}
+  Client.SynchronizeEvents := False;
+{$ENDIF}
+  Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
+  Client.ContentType := 'application/json';
+  Body := TMultipartFormData.Create;
+
+  Try
+    aStream.Position := 0;
+
+    {$IF CompilerVersion >= 36}
+    Body.AddStream('file', aStream, False, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    {$ELSE}
+    Body.AddStream('file', aStream, aFileName, GetMimeTypeFromFileName(ExtractFileExt(aFileName)));
+    {$ENDIF}
+    Body.AddField('model', FModel);
+    Body.AddField('prompt', aPrompt);
+    Body.AddField('response_format', FResponseFormat);
+    // json, text, srt, verbose_json, or vtt
+    Body.AddField('temperature', FormatFloat('0.0', Temperature));
+
+    Client.Accept := 'application/text';
+    Client.ContentType := 'multipart/form-data';
+
+    Res := Client.Post(sUrl, Body, Nil, Headers);
+
+    if Res.StatusCode = 200 then
+    Begin
+      Result := Res.ContentAsString
+    End
+    else
+    begin
+      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+    end;
+  Finally
+    Body.Free;
+    Client.Free;
+  End;
 end;
 
 end.

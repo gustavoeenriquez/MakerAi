@@ -1,174 +1,180 @@
-// MIT License
+﻿// IT License
 //
-// Copyright (c) 2024-2026 Gustavo Enriquez
+// Copyright (c) <year> <copyright holders>
 //
-// github.com/gustavoeenriquez/
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// o use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// --------- FPC PORT --------------------
-// TAiOpenAiAudio: TTS y STT con enums para modelos/voces/formatos,
-// soporte de streaming simplificado (POST sincrono + eventos al final),
-// y conversion de audio via ffmpeg.
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// Adaptaciones FPC:
-//   - TNetHTTPClient          -> TFPHTTPClient (fphttpclient)
-//   - TMultipartFormData      -> multipart manual con TMemoryStream
-//   - TStringBuilder          -> string acumulado
-//   - TThread.Queue           -> llamada directa (ya en hilo correcto)
-//   - TPath / TFile           -> SysUtils equivalentes
-//   - TJSONObject.ParseJSONValue -> GetJSON (fpjson/jsonparser)
-//   - .TryGetValue<T>         -> .Find + cast
-//   - Inline var declarations -> variables pre-declaradas
+// HE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 //
-// NOTA streaming: TFPHTTPClient no expone OnReceiveData. SpeechStreamed y
-// TranscribeStreamed hacen POST completo y luego disparan los eventos de
-// bloque. Para streaming real se requiere un cliente HTTP custom.
+// Nombre: Gustavo Enr?quez
+// Redes Sociales:
+// - Email: gustavoeenriquez@gmail.com
+
+// - Telegram: https://t.me/MakerAi_Suite_Delphi
+// - Telegram: https://t.me/MakerAi_Delphi_Suite_English
+
+// - LinkedIn: https://www.linkedin.com/in/gustavo-enriquez-3937654a/
+// - Youtube: https://www.youtube.com/@cimamaker3945
+// - GitHub: https://github.com/gustavoeenriquez/
+//
+// --------- CAMBIOS --------------------
+// 04/11/2025 - Renombrado de TAIWhisper a TAiAudio y unidad a uMakerAi.OpenAI.Audio.pas.
+// 04/11/2025 - Uso de Enums para modelos, voces y formatos para mayor seguridad.
+// 04/11/2025 - Integraci?n con TAiMediaFile de uMakerAi.Core.
+// 04/11/2025 - A?adido soporte para modelos GPT-4o, diarizaci?n e 'instructions' en TTS.
+// 04/11/2025 - Implementaci?n completa de streaming para TTS y Transcripci?n con eventos.
+// 04/11/2025 - M?todos de Transcripci?n/Traducci?n devuelven un objeto TTranscriptionResult.
+// 04/11/2025 - Mantenida la l?gica de conversi?n de audio con ffmpeg.
 
 unit uMakerAi.OpenAI.Audio;
-
-{$mode objfpc}{$H+}
 
 interface
 
 uses
-  SysUtils, Classes,
-  fphttpclient,
-  fpjson, jsonparser,
+  System.SysUtils, System.Types, System.UITypes, System.Classes,
+  System.Threading, System.Variants, System.Net.Mime, System.IOUtils,
+  System.Generics.Collections, System.NetEncoding, System.JSON, System.Rtti,
+  System.StrUtils, System.Net.URLClient, System.Net.HttpClient,
+  System.Net.HttpClientComponent, REST.JSON, REST.Types, REST.Client,
   uMakerAi.Core;
 
 type
-  // --- Enums de parametros de la API ---
-  TAiTTSModel      = (tts_1, tts_1_hd, gpt_4o_mini_tts);
-  TAiTTSVoice      = (tvAlloy, tvAsh, tvBallad, tvCoral, tvEcho, tvFable,
-                      tvOnyx, tvNova, tvSage, tvShimmer, tvVerse);
+  // --- Enums for API Parameters ---
+  TAiTTSModel = (tts_1, tts_1_hd, gpt_4o_mini_tts);
+  TAiTTSVoice = (tvAlloy, tvAsh, tvBallad, tvCoral, tvEcho, tvFable, tvOnyx, tvNova, tvSage, tvShimmer, tvVerse);
   TAiTTSResponseFormat = (trfMp3, trfOpus, trfAac, trfFlac, trfWav, trfPcm);
 
-  TAiTranscriptionModel = (tmWhisper1, tmGpt4o, tmGpt4oMini, tmGpt4oDiarize);
-  TAiTranscriptionResponseFormat = (trfJson, trfText, trfSrt, trfVerboseJson,
-                                    trfVtt, trfDiarizedJson);
+  TAiTranscriptionModel = (tmWhisper1, tmGpt4oTranscribe, tmGpt4oMiniTranscribe, tmGpt4oDiarize);
+  TAiTranscriptionResponseFormat = (trfJson, trfText, trfSrt, trfVerboseJson, trfVtt, trfDiarizedJson);
+  TStreamOperation = (soNone, soSpeech, soTranscription);
 
-  // --- Clase para resultados de transcripcion ---
+  // --- Class for Transcription Results ---
   TTranscriptionResult = class
   private
-    FText:       string;
+    FText: string;
     FJsonObject: TJSONObject;
-    FDuration:   Double;
-    FLanguage:   string;
+    FDuration: Double;
+    FLanguage: string;
+    FLogprobs: TJSONArray;
   public
-    constructor Create(const AResponse: string;
-                       AFormat: TAiTranscriptionResponseFormat);
+    constructor Create(const AResponse: string; AFormat: TAiTranscriptionResponseFormat);
     destructor Destroy; override;
-    property Text:     string      read FText;
-    property Duration: Double      read FDuration;
-    property Language: string      read FLanguage;
-    property RawJson:  TJSONObject read FJsonObject;
+    property Text: string read FText;
+    property Duration: Double read FDuration;
+    property Language: string read FLanguage;
+    property RawJson: TJSONObject read FJsonObject;
+    { Token-level confidence scores. Populated only when TranscriptionLogprobs=True
+      and model is gpt-4o-transcribe or gpt-4o-mini-transcribe. }
+    property Logprobs: TJSONArray read FLogprobs;
   end;
 
-  // --- Eventos de streaming ---
-  TOnAudioChunkReceived     = procedure(Sender: TObject;
-                                        const AAudioChunk: TBytes) of object;
-  TOnSpeechCompleted        = procedure(Sender: TObject) of object;
-  TOnTranscriptDeltaReceived = procedure(Sender: TObject;
-                                         const ATextDelta: string) of object;
-  TOnTranscriptionCompleted = procedure(Sender: TObject;
-                                        const AFinalResult: TTranscriptionResult) of object;
-  TOnAudioError             = procedure(Sender: TObject;
-                                        const AMessage: string) of object;
+  // --- Events for Streaming ---
+  TOnAudioChunkReceived = procedure(Sender: TObject; const AAudioChunk: TBytes) of object;
+  TOnSpeechCompleted = procedure(Sender: TObject) of object;
+  TOnTranscriptDeltaReceived = procedure(Sender: TObject; const ATextDelta: string) of object;
+  TOnTranscriptionCompleted = procedure(Sender: TObject; const AFinalResult: TTranscriptionResult) of object;
+  TOnAudioError = procedure(Sender: TObject; const AMessage: string) of object;
 
   TAiOpenAiAudio = class(TComponent)
   private
     FApiKey: string;
-    FUrl:    string;
-    // TTS
-    FTTSModel:              TAiTTSModel;
-    FTTSVoice:              TAiTTSVoice;
-    FTTSResponseFormat:     TAiTTSResponseFormat;
-    FTTSSpeed:              Double;
-    FTTSInstructions:       string;
-    // Transcripcion
-    FTranscriptionModel:    TAiTranscriptionModel;
+    FUrl: string;
+    // TTS Properties
+    FTTSModel: TAiTTSModel;
+    FTTSVoice: TAiTTSVoice;
+    FTTSResponseFormat: TAiTTSResponseFormat;
+    FTTSSpeed: Double;
+    FTTSInstructions: string;
+    // Transcription Properties
+    FTranscriptionModel: TAiTranscriptionModel;
     FTranscriptionResponseFormat: TAiTranscriptionResponseFormat;
     FTranscriptionLanguage: string;
     FTranscriptionTemperature: Double;
     FTranscriptionTimestampGranularities: TAiTimestampGranularities;
-    // Eventos
-    FOnAudioChunkReceived:     TOnAudioChunkReceived;
-    FOnSpeechCompleted:        TOnSpeechCompleted;
+    FTranscriptionLogprobs: Boolean;
+    // Streaming Events
+    FOnAudioChunkReceived: TOnAudioChunkReceived;
+    FOnSpeechCompleted: TOnSpeechCompleted;
     FOnTranscriptDeltaReceived: TOnTranscriptDeltaReceived;
     FOnTranscriptionCompleted: TOnTranscriptionCompleted;
-    FOnAudioError:             TOnAudioError;
+    FOnAudioError: TOnAudioError;
+    // Internal state for streaming
+    FStreamBuffer: TStringBuilder;
+    FBytesProcessed: Int64;
+    FActiveResponseStream: TMemoryStream;
+    FCurrentStreamOperation: TStreamOperation;
 
     function GetApiKey: string;
     procedure SetApiKey(const Value: string);
     procedure SetUrl(const Value: string);
 
-    function  TTSModelStr:  string;
-    function  TTSVoiceStr:  string;
-    function  TTSFormatStr: string;
-    function  TranscriptionModelStr:  string;
-    function  TranscriptionFormatStr: string;
   protected
-    procedure ConvertAudioIfNeeded(aMediaFile: TAiMediaFile);
-    procedure BuildTranscriptionBody(AStream: TMemoryStream;
-      const ABoundary: string; const AAudioFile: TAiMediaFile;
-      const APrompt: string = '');
+    function ConvertAudioIfNeeded(aMediaFile: TAiMediaFile): Boolean;
+    // Stream Handlers
+    procedure HandleStreamEvent(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
+    procedure ProcessSpeechStreamBuffer;
+    procedure ProcessTranscriptionStreamBuffer;
+    // Helper para construir la petici?n de transcripci?n
+    procedure BuildTranscriptionBody(const ABody: TMultipartFormData; const AAudioFile: TAiMediaFile; const APrompt: string = '');
+
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
-    // --- TTS ---
-    function  Speech(const AInput: string): TMemoryStream; overload;
+    // --- Text-to-Speech (TTS) ---
+    function Speech(const AInput: string): TMemoryStream; overload;
     procedure Speech(const AInput: string; const AOutputStream: TStream); overload;
     procedure SpeechStreamed(const AInput: string);
 
-    // --- STT ---
-    function  Transcribe(const AAudioFile: TAiMediaFile;
-                         const APrompt: string = ''): TTranscriptionResult;
+    // --- Speech-to-Text (STT) ---
+    function Transcribe(const AAudioFile: TAiMediaFile; const APrompt: string = ''): TTranscriptionResult;
     procedure TranscribeStreamed(const AAudioFile: TAiMediaFile);
 
-    // --- Traduccion ---
-    function TranslateToEnglish(const AAudioFile: TAiMediaFile;
-                                const APrompt: string = ''): TTranscriptionResult;
+    // --- Translation ---
+    function TranslateToEnglish(const AAudioFile: TAiMediaFile; const APrompt: string = ''): TTranscriptionResult;
+
   published
     property ApiKey: string read GetApiKey write SetApiKey;
-    property Url:    string read FUrl      write SetUrl;
+    property Url: string read FUrl write SetUrl;
 
-    // TTS
-    property TTSModel:          TAiTTSModel
-      read FTTSModel write FTTSModel default tts_1;
-    property TTSVoice:          TAiTTSVoice
-      read FTTSVoice write FTTSVoice default tvAlloy;
-    property TTSResponseFormat: TAiTTSResponseFormat
-      read FTTSResponseFormat write FTTSResponseFormat default trfMp3;
-    property TTSSpeed:          Double
-      read FTTSSpeed write FTTSSpeed;
-    property TTSInstructions:   string
-      read FTTSInstructions write FTTSInstructions;
+    // --- Text-to-Speech Properties ---
+    property TTSModel: TAiTTSModel read FTTSModel write FTTSModel default TAiTTSModel.tts_1;
+    property TTSVoice: TAiTTSVoice read FTTSVoice write FTTSVoice default TAiTTSVoice.tvAlloy;
+    property TTSResponseFormat: TAiTTSResponseFormat read FTTSResponseFormat write FTTSResponseFormat default TAiTTSResponseFormat.trfMp3;
+    property TTSSpeed: Double read FTTSSpeed write FTTSSpeed;
+    property TTSInstructions: string read FTTSInstructions write FTTSInstructions;
 
-    // Transcripcion
-    property TranscriptionModel: TAiTranscriptionModel
-      read FTranscriptionModel write FTranscriptionModel default tmWhisper1;
-    property TranscriptionResponseFormat: TAiTranscriptionResponseFormat
-      read FTranscriptionResponseFormat write FTranscriptionResponseFormat
-      default trfJson;
-    property TranscriptionLanguage: string
-      read FTranscriptionLanguage write FTranscriptionLanguage;
-    property TranscriptionTemperature: Double
-      read FTranscriptionTemperature write FTranscriptionTemperature;
-    property TranscriptionTimestampGranularities: TAiTimestampGranularities
-      read FTranscriptionTimestampGranularities
-      write FTranscriptionTimestampGranularities;
+    // --- Transcription Properties ---
+    property TranscriptionModel: TAiTranscriptionModel read FTranscriptionModel write FTranscriptionModel default TAiTranscriptionModel.tmWhisper1;
+    property TranscriptionResponseFormat: TAiTranscriptionResponseFormat read FTranscriptionResponseFormat write FTranscriptionResponseFormat default TAiTranscriptionResponseFormat.trfJson;
+    property TranscriptionLanguage: string read FTranscriptionLanguage write FTranscriptionLanguage;
+    property TranscriptionTemperature: Double read FTranscriptionTemperature write FTranscriptionTemperature;
+    property TranscriptionTimestampGranularities: TAiTimestampGranularities read FTranscriptionTimestampGranularities write FTranscriptionTimestampGranularities;
+    { Requests token-level confidence scores (logprobs) in the response.
+      Only valid for tmGpt4oTranscribe and tmGpt4oMiniTranscribe.
+      Access the result via TTranscriptionResult.Logprobs. }
+    property TranscriptionLogprobs: Boolean read FTranscriptionLogprobs write FTranscriptionLogprobs default False;
 
-    // Eventos
-    property OnAudioChunkReceived:     TOnAudioChunkReceived
-      read FOnAudioChunkReceived     write FOnAudioChunkReceived;
-    property OnSpeechCompleted:        TOnSpeechCompleted
-      read FOnSpeechCompleted        write FOnSpeechCompleted;
-    property OnTranscriptDeltaReceived: TOnTranscriptDeltaReceived
-      read FOnTranscriptDeltaReceived write FOnTranscriptDeltaReceived;
-    property OnTranscriptionCompleted: TOnTranscriptionCompleted
-      read FOnTranscriptionCompleted write FOnTranscriptionCompleted;
-    property OnAudioError:             TOnAudioError
-      read FOnAudioError             write FOnAudioError;
+    // --- Streaming Events ---
+    property OnAudioChunkReceived: TOnAudioChunkReceived read FOnAudioChunkReceived write FOnAudioChunkReceived;
+    property OnSpeechCompleted: TOnSpeechCompleted read FOnSpeechCompleted write FOnSpeechCompleted;
+    property OnTranscriptDeltaReceived: TOnTranscriptDeltaReceived read FOnTranscriptDeltaReceived write FOnTranscriptDeltaReceived;
+    property OnTranscriptionCompleted: TOnTranscriptionCompleted read FOnTranscriptionCompleted write FOnTranscriptionCompleted;
+    property OnAudioError: TOnAudioError read FOnAudioError write FOnAudioError;
   end;
 
 procedure Register;
@@ -176,99 +182,59 @@ procedure Register;
 implementation
 
 uses
-  process, Math;
+
+{$IFDEF MSWINDOWS}
+  Winapi.ShellAPI, Winapi.Windows,
+{$ENDIF}
+  System.Math;
 
 const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
 
-// ---------------------------------------------------------------------------
-// Conversion de audio via ffmpeg
-// ---------------------------------------------------------------------------
+procedure RunCommand(const Command: string);
+begin
+{$IFDEF MSWINDOWS}
+  ShellExecute(0, nil, 'cmd.exe', PChar('/C ' + Command), nil, SW_HIDE);
+{$ELSE}
+  // Implementaci?n para otras plataformas si es necesario
+{$ENDIF}
+end;
 
-procedure ConvertAudioFileFormat(const ASourceStream: TStream;
-  const ASourceFilename: string;
-  out ADestStream: TMemoryStream; out ADestFilename: string);
+procedure ConvertAudioFileFormat(const ASourceStream: TStream; const ASourceFilename: string; out ADestStream: TMemoryStream; out ADestFilename: string);
 var
-  TmpDir, FSrc, FDst: string;
-  Proc: TProcess;
-  FS: TFileStream;
-  Buf: array of Byte;
+  TempSourcePath, TempDestPath, Command: string;
+  Buffer: TBytes;
 begin
   ADestStream := nil;
-  ADestFilename := IntToStr(Random(MaxInt)) + '_' +
-                   ChangeFileExt(ExtractFileName(ASourceFilename), '.mp3');
-  TmpDir := IncludeTrailingPathDelimiter(GetTempDir(False));
-  FSrc   := TmpDir + ExtractFileName(ASourceFilename);
-  FDst   := TmpDir + ADestFilename;
+  // Aseguramos un nombre de archivo ?nico para evitar conflictos
+  ADestFilename := ChangeFileExt(TPath.GetRandomFileName + '_' + ASourceFilename, '.mp3');
+  TempSourcePath := TPath.Combine(TPath.GetTempPath, ASourceFilename);
+  TempDestPath := TPath.Combine(TPath.GetTempPath, ADestFilename);
 
-  // Escribir origen a archivo temporal
-  SetLength(Buf, ASourceStream.Size);
   ASourceStream.Position := 0;
+  SetLength(Buffer, ASourceStream.Size);
   if ASourceStream.Size > 0 then
-    ASourceStream.ReadBuffer(Buf[0], ASourceStream.Size);
-  FS := TFileStream.Create(FSrc, fmCreate);
-  try
-    if Length(Buf) > 0 then
-      FS.WriteBuffer(Buf[0], Length(Buf));
-  finally
-    FS.Free;
-  end;
+    ASourceStream.ReadBuffer(Buffer, Length(Buffer));
+  TFile.WriteAllBytes(TempSourcePath, Buffer);
 
-  Proc := TProcess.Create(nil);
-  try
-    Proc.Executable := 'ffmpeg';
-    Proc.Parameters.Add('-i');
-    Proc.Parameters.Add(FSrc);
-    Proc.Parameters.Add('-y');
-    Proc.Parameters.Add(FDst);
-    Proc.Options    := [poWaitOnExit, poNoConsole];
-    Proc.ShowWindow := swoHide;
-    Proc.Execute;
-  finally
-    Proc.Free;
-  end;
+  // El -y en ffmpeg sobreescribe el archivo de destino si ya existe.
+  Command := 'ffmpeg -i "' + TempSourcePath + '" -y "' + TempDestPath + '"';
+  RunCommand(Command);
 
-  if FileExists(FDst) then
+  if TFile.Exists(TempDestPath) then
   begin
     ADestStream := TMemoryStream.Create;
-    ADestStream.LoadFromFile(FDst);
+    ADestStream.LoadFromFile(TempDestPath);
     ADestStream.Position := 0;
   end;
 
-  try SysUtils.DeleteFile(FSrc); except end;
-  try SysUtils.DeleteFile(FDst); except end;
+  try
+    TFile.Delete(TempSourcePath);
+    TFile.Delete(TempDestPath);
+  except
+    // Ignorar errores al borrar archivos temporales, pueden estar bloqueados
+  end;
 end;
-
-// ---------------------------------------------------------------------------
-// Multipart helpers
-// ---------------------------------------------------------------------------
-
-procedure OAAppndField(AStream: TMemoryStream;
-  const ABoundary, AName, AValue: string);
-var S: string;
-begin
-  S := '--' + ABoundary + #13#10 +
-       'Content-Disposition: form-data; name="' + AName + '"' + #13#10 +
-       #13#10 + AValue + #13#10;
-  AStream.WriteBuffer(PChar(S)^, Length(S));
-end;
-
-procedure OAAppndFile(AStream: TMemoryStream;
-  const ABoundary, AName, AFileName, AMimeType: string; AContent: TStream);
-var S, Crlf: string;
-begin
-  S := '--' + ABoundary + #13#10 +
-       'Content-Disposition: form-data; name="' + AName +
-       '"; filename="' + AFileName + '"' + #13#10 +
-       'Content-Type: ' + AMimeType + #13#10 + #13#10;
-  AStream.WriteBuffer(PChar(S)^, Length(S));
-  AContent.Position := 0;
-  AStream.CopyFrom(AContent, AContent.Size);
-  Crlf := #13#10;
-  AStream.WriteBuffer(PChar(Crlf)^, Length(Crlf));
-end;
-
-// ---------------------------------------------------------------------------
 
 procedure Register;
 begin
@@ -277,38 +243,24 @@ end;
 
 { TTranscriptionResult }
 
-constructor TTranscriptionResult.Create(const AResponse: string;
-  AFormat: TAiTranscriptionResponseFormat);
-var
-  JRoot: TJSONData;
-  JObj:  TJSONObject;
-  JVal:  TJSONData;
+constructor TTranscriptionResult.Create(const AResponse: string; AFormat: TAiTranscriptionResponseFormat);
 begin
   inherited Create;
-  FText := '';
-  FDuration := 0;
-  FLanguage := '';
-  FJsonObject := nil;
-
   if AFormat in [trfJson, trfVerboseJson, trfDiarizedJson] then
   begin
-    JRoot := GetJSON(AResponse);
-    if Assigned(JRoot) and (JRoot.JSONType = jtObject) then
+    FJsonObject := TJSONObject.ParseJSONValue(AResponse) as TJSONObject;
+    if Assigned(FJsonObject) then
     begin
-      JObj := TJSONObject(JRoot);
-      FJsonObject := JObj;     // transfers ownership
-      JVal := JObj.Find('text');
-      if Assigned(JVal) then FText := JVal.AsString;
-      JVal := JObj.Find('duration');
-      if Assigned(JVal) then FDuration := JVal.AsFloat;
-      JVal := JObj.Find('language');
-      if Assigned(JVal) then FLanguage := JVal.AsString;
-    end
-    else
-      JRoot.Free;
+      FJsonObject.TryGetValue<string>('text', FText);
+      FJsonObject.TryGetValue<Double>('duration', FDuration);
+      FJsonObject.TryGetValue<string>('language', FLanguage);
+      FJsonObject.TryGetValue<TJSONArray>('logprobs', FLogprobs);
+    end;
   end
   else
+  begin
     FText := AResponse;
+  end;
 end;
 
 destructor TTranscriptionResult.Destroy;
@@ -317,35 +269,28 @@ begin
   inherited;
 end;
 
-{ TAiOpenAiAudio }
+{ TAiAudio }
 
 constructor TAiOpenAiAudio.Create(AOwner: TComponent);
 begin
   inherited;
-  FUrl                       := GlOpenAIUrl;
-  FApiKey                    := '@OPENAI_API_KEY';
-  FTTSModel                  := tts_1;
-  FTTSVoice                  := tvAlloy;
-  FTTSResponseFormat         := trfMp3;
-  FTTSSpeed                  := 1.0;
-  FTranscriptionModel        := tmWhisper1;
+  FUrl := GlOpenAIUrl;
+  FApiKey := '@OPENAI_API_KEY';
+  FStreamBuffer := TStringBuilder.Create;
+  FTTSModel := tts_1;
+  FTTSVoice := tvAlloy;
+  FTTSResponseFormat := trfMp3;
+  FTTSSpeed := 1.0;
+  FTranscriptionModel := tmWhisper1;
   FTranscriptionResponseFormat := trfJson;
-  FTranscriptionTemperature  := 0.0;
+  FTranscriptionTemperature := 0.0;
+  FCurrentStreamOperation := soNone;
 end;
 
 destructor TAiOpenAiAudio.Destroy;
 begin
+  FStreamBuffer.Free;
   inherited;
-end;
-
-function TAiOpenAiAudio.GetApiKey: string;
-begin
-  if csDesigning in ComponentState then
-    Exit(FApiKey);
-  if (FApiKey <> '') and (Copy(FApiKey, 1, 1) = '@') then
-    Result := GetEnvironmentVariable(Copy(FApiKey, 2, Length(FApiKey)))
-  else
-    Result := FApiKey;
 end;
 
 procedure TAiOpenAiAudio.SetApiKey(const Value: string);
@@ -358,141 +303,149 @@ begin
   FUrl := Value;
 end;
 
-function TAiOpenAiAudio.TTSModelStr: string;
+function TAiOpenAiAudio.GetApiKey: string;
 begin
-  case FTTSModel of
-    tts_1:          Result := 'tts-1';
-    tts_1_hd:       Result := 'tts-1-hd';
-    gpt_4o_mini_tts: Result := 'gpt-4o-mini-tts';
+  if (csDesigning in ComponentState) then
+    Result := FApiKey
+  else if (FApiKey <> '') and (FApiKey.StartsWith('@')) then
+    Result := GetEnvironmentVariable(FApiKey.Substring(1))
   else
-    Result := 'tts-1';
-  end;
+    Result := FApiKey;
 end;
 
-function TAiOpenAiAudio.TTSVoiceStr: string;
-begin
-  case FTTSVoice of
-    tvAlloy:   Result := 'alloy';
-    tvAsh:     Result := 'ash';
-    tvBallad:  Result := 'ballad';
-    tvCoral:   Result := 'coral';
-    tvEcho:    Result := 'echo';
-    tvFable:   Result := 'fable';
-    tvOnyx:    Result := 'onyx';
-    tvNova:    Result := 'nova';
-    tvSage:    Result := 'sage';
-    tvShimmer: Result := 'shimmer';
-    tvVerse:   Result := 'verse';
-  else
-    Result := 'alloy';
-  end;
-end;
-
-function TAiOpenAiAudio.TTSFormatStr: string;
-begin
-  case FTTSResponseFormat of
-    trfMp3:  Result := 'mp3';
-    trfOpus: Result := 'opus';
-    trfAac:  Result := 'aac';
-    trfFlac: Result := 'flac';
-    trfWav:  Result := 'wav';
-    trfPcm:  Result := 'pcm';
-  else
-    Result := 'mp3';
-  end;
-end;
-
-function TAiOpenAiAudio.TranscriptionModelStr: string;
-begin
-  case FTranscriptionModel of
-    tmWhisper1:    Result := 'whisper-1';
-    tmGpt4o:       Result := 'gpt-4o-transcribe';
-    tmGpt4oMini:   Result := 'gpt-4o-mini-transcribe';
-    tmGpt4oDiarize: Result := 'gpt-4o-transcribe-diarize';
-  else
-    Result := 'whisper-1';
-  end;
-end;
-
-function TAiOpenAiAudio.TranscriptionFormatStr: string;
-begin
-  case FTranscriptionResponseFormat of
-    trfJson:        Result := 'json';
-    trfText:        Result := 'text';
-    trfSrt:         Result := 'srt';
-    trfVerboseJson: Result := 'verbose_json';
-    trfVtt:         Result := 'vtt';
-    trfDiarizedJson: Result := 'diarized_json';
-  else
-    Result := 'json';
-  end;
-end;
-
-procedure TAiOpenAiAudio.ConvertAudioIfNeeded(aMediaFile: TAiMediaFile);
+function TAiOpenAiAudio.ConvertAudioIfNeeded(aMediaFile: TAiMediaFile): Boolean;
 const
-  VALID_EXTS: array[0..8] of string = (
-    '.flac', '.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.ogg', '.wav', '.webm');
+  VALID_EXTS: array [0 .. 8] of string = ('.flac', '.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.ogg', '.wav', '.webm');
 var
-  Ext:      string;
-  I:        Integer;
-  Found:    Boolean;
+  Ext: string;
   NewStream: TMemoryStream;
-  NewName:  string;
+  NewFilename: string;
+  I: Integer;
+  ExtFound: Boolean;
 begin
-  Ext   := LowerCase(ExtractFileExt(aMediaFile.FileName));
-  Found := False;
+  Result := False;
+  Ext := LowerCase(ExtractFileExt(aMediaFile.Filename));
+  // Verificar si la extension esta en la lista de validas
+  ExtFound := False;
   for I := Low(VALID_EXTS) to High(VALID_EXTS) do
     if VALID_EXTS[I] = Ext then
     begin
-      Found := True;
+      ExtFound := True;
       Break;
     end;
-
-  if not Found then
+  if not ExtFound then
   begin
-    ConvertAudioFileFormat(aMediaFile.Content, aMediaFile.FileName,
-      NewStream, NewName);
+    ConvertAudioFileFormat(aMediaFile.Content, aMediaFile.Filename, NewStream, NewFilename);
     if Assigned(NewStream) then
     begin
-      aMediaFile.LoadFromStream(NewName, NewStream);
+      aMediaFile.LoadFromStream(NewFilename, NewStream);
       NewStream.Free;
+      Result := True;
     end;
   end;
 end;
 
-procedure TAiOpenAiAudio.BuildTranscriptionBody(AStream: TMemoryStream;
-  const ABoundary: string; const AAudioFile: TAiMediaFile;
-  const APrompt: string = '');
+procedure TAiOpenAiAudio.BuildTranscriptionBody(const ABody: TMultipartFormData; const AAudioFile: TAiMediaFile; const APrompt: string = '');
 var
-  MimeType: string;
+  ModelStr : string;
+  FormatStr: string;
+  IsWhisper1: Boolean;
+  IsGpt4oModel: Boolean;
 begin
-  MimeType := GetMimeTypeFromFileName(ExtractFileExt(AAudioFile.FileName));
-  if MimeType = '' then
-    MimeType := 'audio/mpeg';
+  case FTranscriptionModel of
+    tmWhisper1:             ModelStr := 'whisper-1';
+    tmGpt4oTranscribe:      ModelStr := 'gpt-4o-transcribe';
+    tmGpt4oMiniTranscribe:  ModelStr := 'gpt-4o-mini-transcribe';
+    tmGpt4oDiarize:         ModelStr := 'gpt-4o-transcribe-diarize';
+  else
+    ModelStr := 'whisper-1';
+  end;
 
-  AAudioFile.Content.Position := 0;
-  OAAppndFile(AStream, ABoundary, 'file',
-    AAudioFile.FileName, MimeType, AAudioFile.Content);
+  IsWhisper1   := FTranscriptionModel = tmWhisper1;
+  IsGpt4oModel := FTranscriptionModel in [tmGpt4oTranscribe, tmGpt4oMiniTranscribe, tmGpt4oDiarize];
 
-  OAAppndField(AStream, ABoundary, 'model', TranscriptionModelStr);
+  ABody.AddField('model', ModelStr);
   if APrompt <> '' then
-    OAAppndField(AStream, ABoundary, 'prompt', APrompt);
+    ABody.AddField('prompt', APrompt);
   if FTranscriptionLanguage <> '' then
-    OAAppndField(AStream, ABoundary, 'language', FTranscriptionLanguage);
+    ABody.AddField('language', FTranscriptionLanguage);
   if FTranscriptionTemperature <> 0.0 then
-    OAAppndField(AStream, ABoundary, 'temperature',
-      Format('%f', [FTranscriptionTemperature]));
-  OAAppndField(AStream, ABoundary, 'response_format', TranscriptionFormatStr);
+    ABody.AddField('temperature', Format('%f', [FTranscriptionTemperature]));
 
-  if tsgWord in FTranscriptionTimestampGranularities then
-    OAAppndField(AStream, ABoundary, 'timestamp_granularities[]', 'word');
-  if tsgSegment in FTranscriptionTimestampGranularities then
-    OAAppndField(AStream, ABoundary, 'timestamp_granularities[]', 'segment');
+  // gpt-4o models only support json/text — silently downgrade unsupported formats
+  case FTranscriptionResponseFormat of
+    trfJson:        FormatStr := 'json';
+    trfText:        FormatStr := 'text';
+    trfSrt:         FormatStr := IfThen(IsWhisper1, 'srt',          'json');
+    trfVerboseJson: FormatStr := IfThen(IsWhisper1, 'verbose_json', 'json');
+    trfVtt:         FormatStr := IfThen(IsWhisper1, 'vtt',          'json');
+    trfDiarizedJson: FormatStr := 'json';  // the diarize variant handles this via the model name
+  else
+    FormatStr := 'json';
+  end;
+  ABody.AddField('response_format', FormatStr);
+
+  // timestamp_granularities: whisper-1 only, requires verbose_json
+  if IsWhisper1 then
+  begin
+    if tsgWord in FTranscriptionTimestampGranularities then
+      ABody.AddField('timestamp_granularities[]', 'word');
+    if tsgSegment in FTranscriptionTimestampGranularities then
+      ABody.AddField('timestamp_granularities[]', 'segment');
+  end;
+
+  // logprobs: gpt-4o models only — usar include[]=logprobs (no logprobs=true)
+  if IsGpt4oModel and FTranscriptionLogprobs then
+    ABody.AddField('include[]', 'logprobs');
 end;
 
-// ---------------------------------------------------------------------------
-// TTS
-// ---------------------------------------------------------------------------
+procedure TAiOpenAiAudio.HandleStreamEvent(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
+var
+  NewBytes: TBytes;
+  NewDataSize: Int64;
+begin
+  if not Assigned(FActiveResponseStream) then
+    Exit;
+  NewDataSize := AReadCount - FBytesProcessed;
+  if NewDataSize > 0 then
+  begin
+    FActiveResponseStream.Position := FBytesProcessed;
+    SetLength(NewBytes, NewDataSize);
+    FActiveResponseStream.ReadBuffer(Pointer(NewBytes)^, NewDataSize);
+
+    // En lugar de comprobar el ContentType, comprobamos nuestro estado interno
+    case FCurrentStreamOperation of
+      soSpeech: // Estamos recibiendo un stream de audio binario para TTS
+        begin
+          if Assigned(FOnAudioChunkReceived) then
+            TThread.Queue(nil,
+              procedure
+              begin
+                FOnAudioChunkReceived(Self, NewBytes);
+              end);
+        end;
+      soTranscription: // Estamos recibiendo un stream de texto SSE para Transcripci?n
+        begin
+          FStreamBuffer.Append(TEncoding.UTF8.GetString(NewBytes));
+          ProcessTranscriptionStreamBuffer; // Llamamos al parser de texto
+        end;
+    end;
+
+    FBytesProcessed := AReadCount;
+  end;
+end;
+
+procedure TAiOpenAiAudio.ProcessSpeechStreamBuffer;
+// Procesa el buffer para eventos de TTS (sse)
+begin
+  // TODO: Implementar l?gica de parseo para speech.audio.delta y speech.audio.done
+end;
+
+procedure TAiOpenAiAudio.ProcessTranscriptionStreamBuffer;
+// Procesa el buffer para eventos de Transcripci?n (sse)
+begin
+  // TODO: Implementar l?gica de parseo para transcript.text.delta y transcript.text.done
+end;
 
 function TAiOpenAiAudio.Speech(const AInput: string): TMemoryStream;
 begin
@@ -507,185 +460,357 @@ end;
 
 procedure TAiOpenAiAudio.Speech(const AInput: string; const AOutputStream: TStream);
 var
-  Client:    TFPHTTPClient;
-  JObj:      TJSONObject;
+  Client: TNetHTTPClient;
+  JObj: TJSONObject;
   ReqStream: TStringStream;
-  sUrl:      string;
+  Res: IHTTPResponse;
+  ModelStr, VoiceStr, FormatStr: string;
+  sUrl: string; // Declarar sUrl aqu?
 begin
   sUrl := FUrl + 'audio/speech';
+  Client := TNetHTTPClient.Create(nil);
   JObj := TJSONObject.Create;
+  ReqStream := TStringStream.Create('', TEncoding.UTF8);
   try
-    JObj.Add('input', AInput);
-    JObj.Add('model', TTSModelStr);
-    JObj.Add('voice', TTSVoiceStr);
-    JObj.Add('response_format', TTSFormatStr);
-    if FTTSSpeed <> 1.0 then
-      JObj.Add('speed', FTTSSpeed);
-    if (FTTSModel = gpt_4o_mini_tts) and (FTTSInstructions <> '') then
-      JObj.Add('instructions', FTTSInstructions);
-    ReqStream := TStringStream.Create(JObj.AsJSON);
-  finally
-    JObj.Free;
-  end;
+    case FTTSModel of
+      tts_1:
+        ModelStr := 'tts-1';
+      tts_1_hd:
+        ModelStr := 'tts-1-hd';
+      gpt_4o_mini_tts:
+        ModelStr := 'gpt-4o-mini-tts';
+    else
+      ModelStr := 'tts-1';
+    end;
 
-  Client := TFPHTTPClient.Create(nil);
-  try
-    Client.AddHeader('Authorization', 'Bearer ' + GetApiKey);
-    Client.AddHeader('Content-Type', 'application/json');
-    Client.RequestBody := ReqStream;
-    Client.HTTPMethod('POST', sUrl, AOutputStream, [200]);
+    case FTTSVoice of
+      tvAlloy:
+        VoiceStr := 'alloy';
+      tvAsh:
+        VoiceStr := 'ash';
+      tvBallad:
+        VoiceStr := 'ballad';
+      tvCoral:
+        VoiceStr := 'coral';
+      tvEcho:
+        VoiceStr := 'echo';
+      tvFable:
+        VoiceStr := 'fable';
+      tvOnyx:
+        VoiceStr := 'onyx';
+      tvNova:
+        VoiceStr := 'nova';
+      tvSage:
+        VoiceStr := 'sage';
+      tvShimmer:
+        VoiceStr := 'shimmer';
+      tvVerse:
+        VoiceStr := 'verse';
+    else
+      VoiceStr := 'alloy';
+    end;
+
+    case FTTSResponseFormat of
+      trfMp3:
+        FormatStr := 'mp3';
+      trfOpus:
+        FormatStr := 'opus';
+      trfAac:
+        FormatStr := 'aac';
+      trfFlac:
+        FormatStr := 'flac';
+      trfWav:
+        FormatStr := 'wav';
+      trfPcm:
+        FormatStr := 'pcm';
+    else
+      FormatStr := 'mp3';
+    end;
+
+    JObj.AddPair('input', AInput).AddPair('model', ModelStr).AddPair('voice', VoiceStr).AddPair('response_format', FormatStr);
+
+    if FTTSSpeed <> 1.0 then
+      JObj.AddPair('speed', TJSONNumber.Create(FTTSSpeed));
+    if (FTTSModel = gpt_4o_mini_tts) and (FTTSInstructions <> '') then
+      JObj.AddPair('instructions', FTTSInstructions);
+
+    ReqStream.WriteString(JObj.ToJSON);
+    ReqStream.Position := 0;
+
+    Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
+    Client.ContentType := 'application/json';
+
+    Res := Client.Post(sUrl, ReqStream, AOutputStream);
+
+    if Res.StatusCode <> 200 then
+    begin
+      AOutputStream.Position := 0;
+      var
+      ErrorMsg := TStreamReader.Create(AOutputStream, TEncoding.UTF8).ReadToEnd;
+      raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, ErrorMsg]);
+    end;
   finally
     Client.Free;
+    JObj.Free;
     ReqStream.Free;
   end;
 end;
 
 procedure TAiOpenAiAudio.SpeechStreamed(const AInput: string);
 var
-  AudioStream: TMemoryStream;
-  Chunk:       TBytes;
+  Client: TNetHTTPClient;
+  JObj: TJSONObject;
+  ReqStream: TStringStream;
+  AbortFlag: Boolean;
+  sUrl: string;
+  ModelStr, VoiceStr, FormatStr: string;
 begin
-  // TFPHTTPClient no expone OnReceiveData. Hacemos POST completo
-  // y luego disparamos el evento con el audio completo en un solo chunk.
-  AudioStream := TMemoryStream.Create;
+  sUrl := FUrl + 'audio/speech';
+  Client := TNetHTTPClient.Create(nil);
+  JObj := TJSONObject.Create;
+  ReqStream := TStringStream.Create('', TEncoding.UTF8);
+  FActiveResponseStream := nil;
+  FCurrentStreamOperation := soNone; // Asegurar estado limpio
   try
-    Speech(AInput, AudioStream);
-    AudioStream.Position := 0;
-    if (AudioStream.Size > 0) and Assigned(FOnAudioChunkReceived) then
-    begin
-      SetLength(Chunk, AudioStream.Size);
-      AudioStream.ReadBuffer(Chunk[0], AudioStream.Size);
-      FOnAudioChunkReceived(Self, Chunk);
-    end;
-  finally
-    AudioStream.Free;
-  end;
+    FCurrentStreamOperation := soSpeech; // <-- ESTABLECER ESTADO
 
-  if Assigned(FOnSpeechCompleted) then
-    FOnSpeechCompleted(Self);
+    case FTTSModel of
+      tts_1:
+        ModelStr := 'tts-1';
+      tts_1_hd:
+        ModelStr := 'tts-1-hd';
+      gpt_4o_mini_tts:
+        ModelStr := 'gpt-4o-mini-tts';
+    else
+      ModelStr := 'tts-1';
+    end;
+    case FTTSVoice of
+      tvAlloy:
+        VoiceStr := 'alloy';
+      tvAsh:
+        VoiceStr := 'ash';
+      tvBallad:
+        VoiceStr := 'ballad';
+      tvCoral:
+        VoiceStr := 'coral';
+      tvEcho:
+        VoiceStr := 'echo';
+      tvFable:
+        VoiceStr := 'fable';
+      tvOnyx:
+        VoiceStr := 'onyx';
+      tvNova:
+        VoiceStr := 'nova';
+      tvSage:
+        VoiceStr := 'sage';
+      tvShimmer:
+        VoiceStr := 'shimmer';
+      tvVerse:
+        VoiceStr := 'verse';
+    else
+      VoiceStr := 'alloy';
+    end;
+    case FTTSResponseFormat of
+      trfMp3:
+        FormatStr := 'mp3';
+      trfOpus:
+        FormatStr := 'opus';
+      trfAac:
+        FormatStr := 'aac';
+      trfFlac:
+        FormatStr := 'flac';
+      trfWav:
+        FormatStr := 'wav';
+      trfPcm:
+        FormatStr := 'pcm';
+    else
+      FormatStr := 'mp3';
+    end;
+
+    JObj.AddPair('input', AInput).AddPair('model', ModelStr).AddPair('voice', VoiceStr).AddPair('response_format', FormatStr);
+
+    if FTTSSpeed <> 1.0 then
+      JObj.AddPair('speed', TJSONNumber.Create(FTTSSpeed));
+    if (FTTSModel = gpt_4o_mini_tts) and (FTTSInstructions <> '') then
+      JObj.AddPair('instructions', FTTSInstructions);
+
+    ReqStream.WriteString(JObj.ToJSON);
+    ReqStream.Position := 0;
+
+    Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
+    Client.ContentType := 'application/json';
+
+    FStreamBuffer.Clear;
+    FBytesProcessed := 0;
+    Client.OnReceiveData := HandleStreamEvent;
+
+    FActiveResponseStream := TMemoryStream.Create;
+    Client.Post(sUrl, ReqStream, FActiveResponseStream);
+
+    if Assigned(FActiveResponseStream) and (FActiveResponseStream.Size > FBytesProcessed) then
+    begin
+      AbortFlag := False;
+      HandleStreamEvent(Client, FActiveResponseStream.Size, FActiveResponseStream.Size, AbortFlag);
+    end;
+
+    if Assigned(FOnSpeechCompleted) then
+      TThread.Queue(nil,
+        procedure
+        begin
+          FOnSpeechCompleted(Self);
+        end);
+
+  finally
+    FCurrentStreamOperation := soNone; // <-- LIMPIAR ESTADO
+    Client.Free;
+    JObj.Free;
+    ReqStream.Free;
+    if Assigned(FActiveResponseStream) then
+    begin
+      FActiveResponseStream.Free;
+      FActiveResponseStream := nil;
+    end;
+  end;
 end;
 
-// ---------------------------------------------------------------------------
-// STT
-// ---------------------------------------------------------------------------
-
-function TAiOpenAiAudio.Transcribe(const AAudioFile: TAiMediaFile;
-  const APrompt: string = ''): TTranscriptionResult;
+function TAiOpenAiAudio.Transcribe(const AAudioFile: TAiMediaFile; const APrompt: string = ''): TTranscriptionResult;
 var
-  Client:    TFPHTTPClient;
-  MPStream:  TMemoryStream;
-  RespStream: TStringStream;
-  Boundary, CloseStr, sUrl: string;
+  Client: TNetHTTPClient;
+  Body: TMultipartFormData;
+  Res: IHTTPResponse;
+  sUrl: string;
 begin
-  ConvertAudioIfNeeded(AAudioFile);
-  sUrl     := FUrl + 'audio/transcriptions';
-  Boundary := 'OABound' + IntToStr(Random(999999));
-  MPStream := TMemoryStream.Create;
+  sUrl := FUrl + 'audio/transcriptions';
+  Client := TNetHTTPClient.Create(nil);
+  Body := TMultipartFormData.Create;
   try
-    BuildTranscriptionBody(MPStream, Boundary, AAudioFile, APrompt);
-    CloseStr := '--' + Boundary + '--' + #13#10;
-    MPStream.WriteBuffer(PChar(CloseStr)^, Length(CloseStr));
-    MPStream.Position := 0;
+    ConvertAudioIfNeeded(AAudioFile);
 
-    RespStream := TStringStream.Create('');
-    Client     := TFPHTTPClient.Create(nil);
-    try
-      Client.AddHeader('Authorization', 'Bearer ' + GetApiKey);
-      Client.AddHeader('Content-Type',
-        'multipart/form-data; boundary=' + Boundary);
-      Client.RequestBody := MPStream;
-      Client.HTTPMethod('POST', sUrl, RespStream, [200]);
-      Result := TTranscriptionResult.Create(
-        RespStream.DataString, FTranscriptionResponseFormat);
-    finally
-      Client.Free;
-      RespStream.Free;
-    end;
+    AAudioFile.Content.Position := 0;
+    {$IF CompilerVersion >= 36}
+    Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
+    {$ELSE}
+    Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
+    {$ENDIF}
+    BuildTranscriptionBody(Body, AAudioFile, APrompt);
+
+    Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
+
+    Res := Client.Post(sUrl, Body);
+
+    if Res.StatusCode = 200 then
+      Result := TTranscriptionResult.Create(Res.ContentAsString, FTranscriptionResponseFormat)
+    else
+      raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
   finally
-    MPStream.Free;
+    Client.Free;
+    Body.Free;
   end;
 end;
 
 procedure TAiOpenAiAudio.TranscribeStreamed(const AAudioFile: TAiMediaFile);
 var
-  LResult: TTranscriptionResult;
+  Client: TNetHTTPClient;
+  Body: TMultipartFormData;
+  AbortFlag: Boolean;
+  sUrl: string;
 begin
-  // TFPHTTPClient no expone OnReceiveData.
-  // Hacemos transcripcion completa y disparamos OnTranscriptionCompleted.
-  LResult := Transcribe(AAudioFile);
+  sUrl := FUrl + 'audio/transcriptions';
+  Client := TNetHTTPClient.Create(nil);
+  Body := TMultipartFormData.Create;
+  FActiveResponseStream := nil;
+  FCurrentStreamOperation := soNone; // Asegurar estado limpio
   try
-    if Assigned(FOnTranscriptionCompleted) then
-      FOnTranscriptionCompleted(Self, LResult);
+    FCurrentStreamOperation := soTranscription; // <-- ESTABLECER ESTADO
+
+    ConvertAudioIfNeeded(AAudioFile);
+    AAudioFile.Content.Position := 0;
+    {$IF CompilerVersion >= 36}
+    Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
+    {$ELSE}
+    Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
+    {$ENDIF}
+    BuildTranscriptionBody(Body, AAudioFile);
+    Body.AddField('stream', 'true');
+
+    Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
+    FStreamBuffer.Clear;
+    FBytesProcessed := 0;
+    Client.OnReceiveData := HandleStreamEvent;
+
+    FActiveResponseStream := TMemoryStream.Create;
+    Client.Post(sUrl, Body, FActiveResponseStream);
+
+    if Assigned(FActiveResponseStream) and (FActiveResponseStream.Size > FBytesProcessed) then
+    begin
+      AbortFlag := False;
+      HandleStreamEvent(Client, FActiveResponseStream.Size, FActiveResponseStream.Size, AbortFlag);
+    end;
+
   finally
-    LResult.Free;
+    FCurrentStreamOperation := soNone; // <-- LIMPIAR ESTADO
+    Client.Free;
+    Body.Free;
+    if Assigned(FActiveResponseStream) then
+    begin
+      FActiveResponseStream.Free;
+      FActiveResponseStream := nil;
+    end;
   end;
 end;
 
-// ---------------------------------------------------------------------------
-// Traduccion
-// ---------------------------------------------------------------------------
-
-function TAiOpenAiAudio.TranslateToEnglish(const AAudioFile: TAiMediaFile;
-  const APrompt: string = ''): TTranscriptionResult;
+function TAiOpenAiAudio.TranslateToEnglish(const AAudioFile: TAiMediaFile; const APrompt: string = ''): TTranscriptionResult;
 var
-  Client:     TFPHTTPClient;
-  MPStream:   TMemoryStream;
-  RespStream: TStringStream;
-  Boundary, CloseStr, sUrl, FormatStr: string;
-  MimeType: string;
+  Client: TNetHTTPClient;
+  Body: TMultipartFormData;
+  Res: IHTTPResponse;
+  sUrl: string;
+  FormatStr: string; // Variable para almacenar el formato
 begin
-  ConvertAudioIfNeeded(AAudioFile);
-  sUrl     := FUrl + 'audio/translations';
-  Boundary := 'OABound' + IntToStr(Random(999999));
-  MPStream := TMemoryStream.Create;
+  sUrl := FUrl + 'audio/translations';
+  Client := TNetHTTPClient.Create(nil);
+  Body := TMultipartFormData.Create;
   try
-    MimeType := GetMimeTypeFromFileName(ExtractFileExt(AAudioFile.FileName));
-    if MimeType = '' then MimeType := 'audio/mpeg';
-
+    ConvertAudioIfNeeded(AAudioFile);
     AAudioFile.Content.Position := 0;
-    OAAppndFile(MPStream, Boundary, 'file',
-      AAudioFile.FileName, MimeType, AAudioFile.Content);
+    {$IF CompilerVersion >= 36}
+    Body.AddStream('file', AAudioFile.Content, False, AAudioFile.Filename);
+    {$ELSE}
+    Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
+    {$ENDIF}
 
-    // Translations solo soporta whisper-1
-    OAAppndField(MPStream, Boundary, 'model', 'whisper-1');
-    if APrompt <> '' then
-      OAAppndField(MPStream, Boundary, 'prompt', APrompt);
-    if FTranscriptionTemperature <> 0.0 then
-      OAAppndField(MPStream, Boundary, 'temperature',
-        Format('%f', [FTranscriptionTemperature]));
+    // El modelo es fijo para traducciones seg?n la API
+    Body.AddField('model', 'whisper-1');
 
+    if APrompt <> '' then Body.AddField('prompt', APrompt);
+    // Usamos Format para asegurar el separador decimal correcto (punto)
+    if FTranscriptionTemperature <> 0.0 then Body.AddField('temperature', Format('%f', [FTranscriptionTemperature]));
+
+    // Reemplazamos TEnum.GetName con un case statement
     case FTranscriptionResponseFormat of
-      trfJson:         FormatStr := 'json';
-      trfText:         FormatStr := 'text';
-      trfSrt:          FormatStr := 'srt';
-      trfVerboseJson:  FormatStr := 'verbose_json';
-      trfVtt:          FormatStr := 'vtt';
-      trfDiarizedJson: FormatStr := 'json'; // no soportado en traduccion
+      trfJson: FormatStr := 'json';
+      trfText: FormatStr := 'text';
+      trfSrt: FormatStr := 'srt';
+      trfVerboseJson: FormatStr := 'verbose_json';
+      trfVtt: FormatStr := 'vtt';
+      // trfDiarizedJson no es soportado por traducciones, pero lo manejamos por si acaso
+      trfDiarizedJson: FormatStr := 'json';
     else
-      FormatStr := 'json';
+      FormatStr := 'json'; // Default seguro
     end;
-    OAAppndField(MPStream, Boundary, 'response_format', FormatStr);
 
-    CloseStr := '--' + Boundary + '--' + #13#10;
-    MPStream.WriteBuffer(PChar(CloseStr)^, Length(CloseStr));
-    MPStream.Position := 0;
+    Body.AddField('response_format', FormatStr);
 
-    RespStream := TStringStream.Create('');
-    Client     := TFPHTTPClient.Create(nil);
-    try
-      Client.AddHeader('Authorization', 'Bearer ' + GetApiKey);
-      Client.AddHeader('Content-Type',
-        'multipart/form-data; boundary=' + Boundary);
-      Client.RequestBody := MPStream;
-      Client.HTTPMethod('POST', sUrl, RespStream, [200]);
-      Result := TTranscriptionResult.Create(
-        RespStream.DataString, FTranscriptionResponseFormat);
-    finally
-      Client.Free;
-      RespStream.Free;
-    end;
+    Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
+    Res := Client.Post(sUrl, Body);
+
+    if Res.StatusCode = 200 then
+      Result := TTranscriptionResult.Create(Res.ContentAsString, FTranscriptionResponseFormat)
+    else
+      raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
   finally
-    MPStream.Free;
+    Client.Free;
+    Body.Free;
   end;
 end;
 

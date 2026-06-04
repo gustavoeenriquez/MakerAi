@@ -1,0 +1,304 @@
+-- ============================================================
+-- VQL Battery — "The Mystery of the Forgotten Library"
+-- Dataset: 12 nodes, fields: FechaDoc, tipo, autor, Posicion
+-- ============================================================
+
+-- ────────────────────────────────────────────────────────────
+-- TYPE 1: FACTUAL
+-- ────────────────────────────────────────────────────────────
+
+-- Q1. Who founded the Municipal Library?
+SEARCH "who founded the Municipal Library"
+USING HYBRID WITH WEIGHTS (0.4, 0.6)
+RERANK "founder of the library name"
+THRESHOLD GLOBAL 0.80
+RETURN TEXT, SCORE
+LIMIT 2
+
+-- Q2. What is Dr. Fernando Ruiz's profession?
+SEARCH "Dr. Fernando Ruiz profession job"
+USING HYBRID WITH WEIGHTS (0.3, 0.7)
+RERANK "Fernando Ruiz occupation"
+THRESHOLD LEXICAL 0.75
+RETURN TEXT, SCORE
+LIMIT 1
+
+-- Q3. Who is Elena Morales's cousin?
+SEARCH "Elena cousin family relation"
+USING HYBRID WITH WEIGHTS (0.4, 0.6)
+RERANK "Elena Morales cousin name"
+THRESHOLD GLOBAL 0.78
+RETURN TEXT, SCORE
+LIMIT 2
+
+-- Q4. Who was Pablo Morales engaged to?
+SEARCH "Pablo Morales engaged fiancée partner"
+USING HYBRID WITH WEIGHTS (0.3, 0.7)
+RERANK "Pablo Morales fiancée name"
+THRESHOLD LEXICAL 0.72
+RETURN TEXT, SCORE
+LIMIT 1
+
+-- Q5. What was the hidden manuscript that was found?
+SEARCH "what was the hidden manuscript document"
+USING HYBRID WITH WEIGHTS (0.5, 0.5)
+RERANK "manuscript identity description"
+THRESHOLD GLOBAL 0.75
+RETURN TEXT, SCORE
+LIMIT 2
+
+-- Q6. Who was Don Ricardo's mentor?
+SEARCH "Don Ricardo mentor teacher guide"
+USING HYBRID WITH WEIGHTS (0.4, 0.6)
+RERANK "mentor of Don Ricardo name"
+THRESHOLD GLOBAL 0.78
+RETURN TEXT, SCORE
+LIMIT 2
+
+-- Q7. How long had Martín López worked at the library?
+SEARCH "Martín López years working library caretaker"
+USING HYBRID WITH WEIGHTS (0.3, 0.7)
+RERANK "how long Martin Lopez worked"
+THRESHOLD LEXICAL 0.70
+RETURN TEXT, SCORE
+LIMIT 1
+
+-- ────────────────────────────────────────────────────────────
+-- TYPE 2: COMPARATIVE
+-- ────────────────────────────────────────────────────────────
+
+-- Q8a. Elena's role (compare with Q8b)
+SEARCH "Elena role in the investigation search"
+USING HYBRID WITH WEIGHTS (0.6, 0.4)
+RERANK "Elena Morales role contribution"
+THRESHOLD GLOBAL 0.65
+RETURN TEXT, SCORE
+LIMIT 4
+
+-- Q8b. Tomás's role (compare with Q8a)
+SEARCH "Tomás Vega role in the investigation research"
+USING HYBRID WITH WEIGHTS (0.6, 0.4)
+RERANK "Tomás Vega role contribution"
+THRESHOLD GLOBAL 0.65
+RETURN TEXT, SCORE
+LIMIT 4
+
+-- Q9a. Tomás Vega's contribution
+SEARCH "Tomás Vega contribution to the manuscript search"
+USING EMBEDDINGS
+THRESHOLD GLOBAL 0.65
+RETURN TEXT, SCORE
+LIMIT 3
+
+-- Q9b. Dr. Ruiz's contribution
+SEARCH "Dr. Fernando Ruiz contribution help offered"
+USING HYBRID WITH WEIGHTS (0.5, 0.5)
+RERANK "Ruiz help translation"
+THRESHOLD GLOBAL 0.65
+RETURN TEXT, SCORE
+LIMIT 3
+
+-- Q10a. Martín López's contribution
+SEARCH "Martín López secret location manuscript revelation"
+USING HYBRID WITH WEIGHTS (0.4, 0.6)
+RETURN TEXT, SCORE
+LIMIT 3
+
+-- Q10b. Pablo Morales's contribution
+SEARCH "Pablo Morales digitize help technology contribution"
+USING HYBRID WITH WEIGHTS (0.4, 0.6)
+RETURN TEXT, SCORE
+LIMIT 3
+
+-- ────────────────────────────────────────────────────────────
+-- TYPE 3: ANALYTICAL / EXPLANATORY
+-- ────────────────────────────────────────────────────────────
+
+-- Q11. Why did Martín López reveal the secret?
+SEARCH "why Martín López revealed the secret location manuscript"
+USING EMBEDDINGS
+RERANK "reason Martin Lopez revealed secret condition"
+THRESHOLD GLOBAL 0.68
+RETURN TEXT, HIGHLIGHTS
+LIMIT 4
+
+-- Q12. How did the library become a historical research center?
+SEARCH "how did the library become research center transformation"
+USING EMBEDDINGS
+RERANK "library transformation into research center causes"
+THRESHOLD GLOBAL 0.65
+RETURN TEXT, HIGHLIGHTS
+LIMIT 5
+
+-- Q13. What role did family connections play in solving the mystery?
+SEARCH "family relationships connections importance mystery solving"
+USING EMBEDDINGS
+RERANK "family ties that enabled the discovery"
+THRESHOLD GLOBAL 0.62
+RETURN TEXT, HIGHLIGHTS
+LIMIT 6
+
+-- ────────────────────────────────────────────────────────────
+-- TYPE 4: EXPLORATORY / BIG PICTURE
+-- ────────────────────────────────────────────────────────────
+
+-- Q14. Give me an overview of all the characters in the story
+SEARCH "characters people persons involved in the story"
+USING EMBEDDINGS
+THRESHOLD GLOBAL 0.55
+OPTIMIZE DEDUPLICATE SEMANTIC
+RETURN TEXT, METADATA
+LIMIT 12
+
+-- Q15. What are the main themes of this story?
+SEARCH "themes topics subjects of the story mystery library manuscript"
+USING EMBEDDINGS
+THRESHOLD GLOBAL 0.55
+OPTIMIZE DEDUPLICATE SEMANTIC
+RETURN TEXT, HIGHLIGHTS
+LIMIT 12
+
+-- Q16. What do we know about the history of the Municipal Library?
+SEARCH "Municipal Library history origin background"
+USING EMBEDDINGS
+THRESHOLD GLOBAL 0.58
+OPTIMIZE DEDUPLICATE SEMANTIC
+RETURN TEXT, METADATA
+LIMIT 10
+
+-- ────────────────────────────────────────────────────────────
+-- TYPE 5: AGGREGATION / SYNTHESIS
+-- ────────────────────────────────────────────────────────────
+
+-- Q17. List all the characters mentioned in the story
+SEARCH "person name character mentioned in the story"
+USING HYBRID WITH WEIGHTS (0.5, 0.5)
+OPTIMIZE DEDUPLICATE SEMANTIC
+RETURN TEXT, METADATA
+LIMIT 50
+
+-- Q18. What professions are represented among the characters?
+SEARCH "profession occupation job work career character"
+USING EMBEDDINGS
+OPTIMIZE DEDUPLICATE SEMANTIC
+RETURN TEXT
+LIMIT 50
+
+-- Q19. List all family relationships described in the story
+SEARCH "family relation relative cousin brother wife married grandfather friend"
+USING HYBRID WITH WEIGHTS (0.4, 0.6)
+OPTIMIZE DEDUPLICATE SEMANTIC
+RETURN TEXT, HIGHLIGHTS
+LIMIT 50
+
+-- ────────────────────────────────────────────────────────────
+-- TYPE 6: TEMPORAL / EVOLUTIONARY
+-- ────────────────────────────────────────────────────────────
+
+-- Q20. Events before 2015 in chronological order
+SEARCH "events sequence what happened in the story"
+USING EMBEDDINGS
+WHERE FechaDoc < "2015-01-01"
+OPTIMIZE REORDER CHRONOLOGICAL
+RETURN TEXT, METADATA
+LIMIT 20
+
+-- Q21. Most recent documents in the collection
+SEARCH "library manuscript discovery characters"
+USING EMBEDDINGS
+WHERE FechaDoc >= "2016-01-01"
+OPTIMIZE REORDER CHRONOLOGICAL
+RETURN TEXT, METADATA
+LIMIT 10
+
+-- Q22. Events related to Carmen Vega in chronological order
+SEARCH "Carmen Vega story events relationship secret"
+USING HYBRID WITH WEIGHTS (0.4, 0.6)
+OPTIMIZE REORDER CHRONOLOGICAL
+RETURN TEXT, METADATA
+LIMIT 10
+
+-- ────────────────────────────────────────────────────────────
+-- TYPE 7: PROCEDURAL / INSTRUCTIONAL
+-- ────────────────────────────────────────────────────────────
+
+-- Q23. Steps Elena and Tomás followed to find the manuscript
+SEARCH "steps process search investigation find manuscript how they did it"
+USING EMBEDDINGS
+RERANK "sequence of steps to find the document"
+THRESHOLD GLOBAL 0.65
+OPTIMIZE REORDER CHRONOLOGICAL
+RETURN TEXT, HIGHLIGHTS
+LIMIT 8
+
+-- Q24. How was the manuscript preserved and shared with the public?
+SEARCH "how manuscript preserved digitized shared public exhibition"
+USING EMBEDDINGS
+RERANK "steps to preserve and digitize the manuscript"
+THRESHOLD GLOBAL 0.65
+RETURN TEXT, HIGHLIGHTS
+LIMIT 5
+
+-- ────────────────────────────────────────────────────────────
+-- TYPE 8: MULTI-HOP / CHAINED REASONING
+-- ────────────────────────────────────────────────────────────
+
+-- Q25. Profession of Elena's cousin's husband (3 hops)
+-- HOP 1: Who is Elena's cousin?
+SEARCH "Elena cousin family relation"
+USING HYBRID WITH WEIGHTS (0.3, 0.7)
+THRESHOLD LEXICAL 0.72
+RETURN TEXT, SCORE
+LIMIT 2
+-- -> Lucía Mendoza
+
+-- HOP 2: Who is Lucía's husband?
+SEARCH "Lucía Mendoza married husband"
+USING HYBRID WITH WEIGHTS (0.3, 0.7)
+THRESHOLD LEXICAL 0.70
+RETURN TEXT, SCORE
+LIMIT 2
+-- -> Dr. Fernando Ruiz
+
+-- HOP 3: What is Fernando Ruiz's profession?
+SEARCH "Dr. Fernando Ruiz profession occupation"
+USING HYBRID WITH WEIGHTS (0.3, 0.7)
+THRESHOLD LEXICAL 0.75
+RETURN TEXT, SCORE
+LIMIT 1
+-- -> Professor of archaeology
+
+-- Q26. Who funded the restoration and how is he related to the team? (2 hops)
+-- HOP 1: Who funded the restoration?
+SEARCH "who funded provided money restoration building library"
+USING HYBRID WITH WEIGHTS (0.4, 0.6)
+THRESHOLD GLOBAL 0.72
+RETURN TEXT, SCORE
+LIMIT 2
+-- -> Mayor Roberto Jiménez
+
+-- HOP 2: How is Jiménez connected to the team?
+SEARCH "Roberto Jiménez relationship connection Dr. Ruiz team"
+USING HYBRID WITH WEIGHTS (0.3, 0.7)
+THRESHOLD LEXICAL 0.68
+RETURN TEXT, SCORE
+LIMIT 2
+-- -> Brother-in-law of Dr. Fernando Ruiz
+
+-- Q27. Mentor of the man who entrusted the caretaker with the secret (2 hops)
+-- HOP 1: Who entrusted Martín with the secret?
+SEARCH "who entrusted Martín López secret location manuscript"
+USING HYBRID WITH WEIGHTS (0.3, 0.7)
+THRESHOLD LEXICAL 0.72
+RETURN TEXT
+LIMIT 2
+-- -> Don Ricardo Morales
+
+-- HOP 2: Who was Don Ricardo's mentor?
+SEARCH "Don Ricardo mentor teacher spiritual guide"
+USING HYBRID WITH WEIGHTS (0.4, 0.6)
+RERANK "mentor name of Don Ricardo"
+THRESHOLD GLOBAL 0.75
+RETURN TEXT
+LIMIT 2
+-- -> Fray Antonio Domínguez

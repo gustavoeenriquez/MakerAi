@@ -1,0 +1,60 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{48D7BC94-BF6D-4781-A533-4AB992DD77D5}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="01-HelloChat\HelloChat.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="02-MultiProvider\MultiProvider.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="03-Streaming\Streaming.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="HelloChat">
+        <MSBuild Projects="01-HelloChat\HelloChat.dproj"/>
+    </Target>
+    <Target Name="HelloChat:Clean">
+        <MSBuild Projects="01-HelloChat\HelloChat.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="HelloChat:Make">
+        <MSBuild Projects="01-HelloChat\HelloChat.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MultiProvider">
+        <MSBuild Projects="02-MultiProvider\MultiProvider.dproj"/>
+    </Target>
+    <Target Name="MultiProvider:Clean">
+        <MSBuild Projects="02-MultiProvider\MultiProvider.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MultiProvider:Make">
+        <MSBuild Projects="02-MultiProvider\MultiProvider.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Streaming">
+        <MSBuild Projects="03-Streaming\Streaming.dproj"/>
+    </Target>
+    <Target Name="Streaming:Clean">
+        <MSBuild Projects="03-Streaming\Streaming.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Streaming:Make">
+        <MSBuild Projects="03-Streaming\Streaming.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="HelloChat;MultiProvider;Streaming"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="HelloChat:Clean;MultiProvider:Clean;Streaming:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="HelloChat:Make;MultiProvider:Make;Streaming:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

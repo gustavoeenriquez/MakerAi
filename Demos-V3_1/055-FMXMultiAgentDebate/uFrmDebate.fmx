@@ -1,0 +1,141 @@
+﻿object FrmDebate: TFrmDebate
+  Left = 0
+  Top = 0
+  Caption = 'MakerAI - Multi-Agent Debate'
+  ClientHeight = 680
+  ClientWidth = 860
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  DesignerMasterStyle = 0
+  object LayoutTop: TLayout
+    Align = Top
+    Size.Width = 860.000000000000000000
+    Size.Height = 56.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object LblTema: TLabel
+      Position.X = 8.000000000000000000
+      Position.Y = 18.000000000000000000
+      Size.Width = 110.000000000000000000
+      Size.Height = 20.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Tema del Debate:'
+      TabOrder = 0
+    end
+    object EdTopic: TEdit
+      Position.X = 124.000000000000000000
+      Position.Y = 12.000000000000000000
+      Size.Width = 540.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Text = 'Artificial Intelligence will replace most human jobs by 2040'
+    end
+    object BtnStart: TButton
+      Position.X = 676.000000000000000000
+      Position.Y = 12.000000000000000000
+      Size.Width = 160.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      Text = 'Iniciar Debate'
+      TextSettings.Trimming = None
+      OnClick = BtnStartClick
+    end
+  end
+  object LayoutStatus: TLayout
+    Align = Top
+    Position.Y = 56.000000000000000000
+    Size.Width = 860.000000000000000000
+    Size.Height = 24.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    object LblStatus: TLabel
+      Align = Client
+      Margins.Left = 8.000000000000000000
+      Margins.Right = 8.000000000000000000
+      Position.X = 8.000000000000000000
+      Size.Width = 844.000000000000000000
+      Size.Height = 24.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Listo.'
+      TabOrder = 0
+    end
+  end
+  object LayoutVeredicto: TLayout
+    Align = Bottom
+    Position.Y = 480.000000000000000000
+    Size.Width = 860.000000000000000000
+    Size.Height = 200.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 2
+    object LblVeredicto: TLabel
+      Align = Top
+      Margins.Left = 4.000000000000000000
+      Margins.Top = 4.000000000000000000
+      Margins.Right = 4.000000000000000000
+      Position.X = 4.000000000000000000
+      Position.Y = 4.000000000000000000
+      Size.Width = 852.000000000000000000
+      Size.Height = 20.000000000000000000
+      Size.PlatformDefault = False
+      Font.Style = [fsBold]
+      StyledSettings = [Family, Size, FontColor]
+      Text = 'VEREDICTO FINAL'
+      TabOrder = 0
+    end
+    object MemoVeredicto: TMemo
+      Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+      DataDetectorTypes = []
+      Align = Client
+      Position.Y = 28.000000000000000000
+      ReadOnly = True
+      Size.Width = 860.000000000000000000
+      Size.Height = 172.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Viewport.Width = 856.000000000000000000
+      Viewport.Height = 168.000000000000000000
+    end
+  end
+  object LayoutLog: TLayout
+    Align = Client
+    Position.Y = 80.000000000000000000
+    Size.Width = 860.000000000000000000
+    Size.Height = 400.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 3
+    object LblLog: TLabel
+      Align = Top
+      Margins.Left = 4.000000000000000000
+      Margins.Top = 4.000000000000000000
+      Margins.Right = 4.000000000000000000
+      Position.X = 4.000000000000000000
+      Position.Y = 4.000000000000000000
+      Size.Width = 852.000000000000000000
+      Size.Height = 20.000000000000000000
+      Size.PlatformDefault = False
+      Font.Style = [fsBold]
+      StyledSettings = [Family, Size, FontColor]
+      Text = 'TRANSCRIPCION DEL DEBATE'
+      TabOrder = 0
+    end
+    object MemoLog: TMemo
+      Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+      DataDetectorTypes = []
+      Align = Client
+      Position.Y = 28.000000000000000000
+      ReadOnly = True
+      Size.Width = 860.000000000000000000
+      Size.Height = 372.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Viewport.Width = 856.000000000000000000
+      Viewport.Height = 368.000000000000000000
+    end
+  end
+end
