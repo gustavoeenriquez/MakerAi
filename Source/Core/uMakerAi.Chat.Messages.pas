@@ -255,11 +255,6 @@ Type
 
 implementation
 
-{$IF CompilerVersion < 35}
-uses
-  uJSONHelper;
-{$ENDIF}
-
 { TAiChatMessage }
 
 procedure TAiChatMessage.AddMediaFile(aMediaFile: TAiMediaFile);
