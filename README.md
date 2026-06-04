@@ -16,6 +16,8 @@
 
 ## Free Pascal build from Windows / WSL
 
+Current `fpc` sync baseline: `master` commit `9801cc6b14b90acee01df697980436343cc63617`.
+
 The FPC demo build runs under Linux. On a Windows development machine, use WSL:
 
 ```powershell
