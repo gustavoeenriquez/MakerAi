@@ -449,7 +449,7 @@ type
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Virtual;
     procedure ParseJsonTranscript(jObj: TJSonObject; ResMsg: TAiChatMessage; aMediaFile: TAiMediaFile);
     // Groq code_interpreter: descarga archivos de 'executed_tools' y los agrega a ResMsg.MediaFiles
-    procedure ProcessExecutedTools(const AExecutedToolsJSON: string; ResMsg: TAiChatMessage);
+    procedure ProcessExecutedTools(const AExecutedToolsJSON: string; ResMsg: TAiChatMessage); virtual;
 
     Function ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions; Virtual; // Obtiene la lista de funciones a partir del json de respuesta en modo sincrono
     Procedure DoCallFunction(ToolCall: TAiToolsFunction); Virtual;
