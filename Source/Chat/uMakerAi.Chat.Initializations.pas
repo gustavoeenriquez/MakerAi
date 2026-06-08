@@ -631,11 +631,11 @@ Begin
   Model := 'llama-3.3-70b-versatile';
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens', '32768');
 
-  // gpt-oss-20b: 131K ctx, 65K output, ~1000 t/s, reasoning (include_reasoning API)
+  // gpt-oss-20b: 131K ctx, 65K output, ~1000 t/s, reasoning + code_interpreter (include_reasoning API)
   Model := 'openai/gpt-oss-20b';
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens',    '65536');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ModelCaps',    '[cap_Reasoning]');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'SessionCaps',  '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ModelCaps',    '[cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'SessionCaps',  '[cap_Reasoning, cap_CodeInterpreter]');
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ThinkingLevel', 'tlMedium');
 
   // gpt-oss-120b: 131K ctx, 65K output, ~500 t/s, reasoning + vision (include_reasoning API)

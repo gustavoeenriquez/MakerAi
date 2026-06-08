@@ -56,6 +56,7 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
+        <DCC_UnitSearchPath>..\..\Source\Agents;..\..\Source\Chat;..\..\Source\ChatUI;..\..\Source\Core;..\..\Source\Design;..\..\Source\Embeddings;..\..\Source\MCPClient;..\..\Source\MCPServer;..\..\Source\Packages;..\..\Source\RAG;..\..\Source\Resources;..\..\Source\Tools;..\..\Source\Utils;..\..\Source\LiveChat;..\..\Source\Realtime;..\..\Source\WebSocket</DCC_UnitSearchPath>
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_E>false</DCC_E>

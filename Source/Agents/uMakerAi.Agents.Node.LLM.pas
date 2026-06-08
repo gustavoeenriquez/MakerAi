@@ -58,6 +58,7 @@ type
     FDriverName    : String;
     FModel         : String;
     FApiKey        : String;
+    FServiceURL    : String;
     FSystemPrompt  : String;
     FMaxTokens     : Integer;
     FUseAllTools   : Boolean;
@@ -107,6 +108,9 @@ type
     // API key. Soporta sintaxis @ENV_VAR_NAME para resolución en runtime.
     // Vacío = usa el ApiKey del skill (si está asignado).
     property ApiKey       : String  read FApiKey       write FApiKey;
+    // URL base del servicio (requerida para Azure OpenAI y endpoints personalizados).
+    // Se mapea a Chat.Params.Values['URL']. Vacío = usa el endpoint por defecto del driver.
+    property ServiceURL   : String  read FServiceURL   write FServiceURL;
     // Instrucción de sistema para el LLM.
     // Vacío = usa el SystemPrompt del skill (si está asignado).
     property SystemPrompt : String  read FSystemPrompt write FSystemPrompt;
@@ -140,6 +144,7 @@ begin
   FDriverName     := 'Claude';
   FModel          := '';
   FApiKey         := '';
+  FServiceURL     := '';
   FSystemPrompt   := '';
   FMaxTokens      := 0;
   FUseAllTools    := True;
@@ -352,6 +357,8 @@ begin
     Chat.Params.Values['Asynchronous'] := 'False';
     if FApiKey <> '' then
       Chat.Params.Values['ApiKey'] := FApiKey;
+    if FServiceURL <> '' then
+      Chat.Params.Values['URL'] := FServiceURL;
     if FMaxTokens > 0 then
       Chat.Params.Values['Max_tokens'] := IntToStr(FMaxTokens);
     if FSystemPrompt <> '' then

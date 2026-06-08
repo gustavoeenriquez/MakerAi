@@ -194,8 +194,19 @@ begin
       End;
     End;
 
-    // Groq native code_interpreter — inject {"type":"code_interpreter"} into tools array
-    if cap_CodeInterpreter in ModelConfig.ModelCaps then
+    // Groq compound (Tool_Active=False + cap_CodeInterpreter): el modelo maneja herramientas
+    // internamente, pero sin tool_choice explícito Groq rechaza las llamadas internas con
+    // "Tool choice is none, but model called a tool". Necesita tool_choice:"auto" sin tools array.
+    if (cap_CodeInterpreter in ModelConfig.ModelCaps) and (not Tool_Active) then
+    begin
+      if not Assigned(AJSONObject.GetValue('tool_choice')) then
+        AJSONObject.AddPair('tool_choice', 'auto');
+    end;
+
+    // Groq explicit code_interpreter tool — solo para modelos que requieren declararlo
+    // (gpt-oss-20b, etc.). Los modelos compound lo tienen nativo y rechazan este campo.
+    // Criterio: inyectar solo si Tool_Active=True (compound usa Tool_Active=False).
+    if (cap_CodeInterpreter in ModelConfig.ModelCaps) and Tool_Active then
     begin
       var JExistingTools := AJSONObject.GetValue('tools') as TJSonArray;
       if Assigned(JExistingTools) then
@@ -212,6 +223,12 @@ begin
         JToolsArr.Add(JCodeTool);
         AJSONObject.AddPair('tools', JToolsArr);
       end;
+      // Groq requires tool_choice="auto" when code_interpreter is present.
+      // The function-tools block above uses a TJSONObject cast that silently fails
+      // for the string value "auto", so tool_choice may not have been added yet —
+      // check before adding to avoid duplicate keys.
+      if not Assigned(AJSONObject.GetValue('tool_choice')) then
+        AJSONObject.AddPair('tool_choice', 'auto');
     end;
 
     AJSONObject.AddPair('messages', GetMessages);
@@ -256,10 +273,14 @@ begin
     AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
 
     // Groq docs: reasoning models usan max_completion_tokens (incluye reasoning tokens en el budget)
-    if LModel.StartsWith('openai/gpt-oss') or LModel.StartsWith('qwen/') then
-      AJSONObject.AddPair('max_completion_tokens', TJSONNumber.Create(Max_tokens))
-    else
-      AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+    // Only include when > 0; omitting it lets Groq use the full remaining context automatically.
+    if Max_tokens > 0 then
+    begin
+      if LModel.StartsWith('openai/gpt-oss') or LModel.StartsWith('qwen/') then
+        AJSONObject.AddPair('max_completion_tokens', TJSONNumber.Create(Max_tokens))
+      else
+        AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
+    end;
 
     If Top_p <> 0 then
       AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
