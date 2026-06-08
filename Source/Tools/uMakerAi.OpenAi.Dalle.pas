@@ -500,6 +500,8 @@ begin
   FPrompt := aPrompt;
 
   Client := TNetHTTPClient.Create(nil);
+  Client.ResponseTimeout  := 300000; // 5 min — image gen can be slow
+  Client.ConnectionTimeout := 30000;
   ContentStream := TStringStream.Create('', TEncoding.UTF8);
   FActiveResponseStream := nil;
   JObj := TJSONObject.Create;
@@ -750,6 +752,8 @@ begin
     raise Exception.Create('DALL-E 2 only supports one image for editing.');
 
   Client := TNetHTTPClient.Create(nil);
+  Client.ResponseTimeout  := 300000; // 5 min — image edit can be slow
+  Client.ConnectionTimeout := 30000;
   Body := TMultipartFormData.Create;
   try
     // Im?genes de entrada

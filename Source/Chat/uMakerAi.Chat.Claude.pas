@@ -2661,7 +2661,26 @@ begin
       aMediaFile.Content.CopyFrom(MemStream, 0);
       aMediaFile.Content.Position := 0;
 
-      // Intentar determinar la extensi?n si no la tiene
+      // Use HTTP Content-Type header to fix extension when filename is a .bin fallback
+      var ContentType := Res.GetHeaderValue('Content-Type');
+      // Strip charset/boundary suffix: "audio/wav; charset=utf-8" → "audio/wav"
+      var SemiPos := Pos(';', ContentType);
+      if SemiPos > 0 then
+        ContentType := Trim(Copy(ContentType, 1, SemiPos - 1));
+      if (ContentType <> '') and
+         (not SameText(ContentType, 'application/octet-stream')) and
+         (aMediaFile.FileName.EndsWith('.bin') or aMediaFile.FileName.IsEmpty) then
+      begin
+        var Ext := GetFileExtensionFromMimeType(ContentType);
+        if Ext <> '' then
+        begin
+          if aMediaFile.FileName.IsEmpty then
+            aMediaFile.FileName := aMediaFile.IdFile + '.' + Ext
+          else
+            aMediaFile.FileName := ChangeFileExt(aMediaFile.FileName, '.' + Ext);
+        end;
+      end;
+
       if aMediaFile.FileName.IsEmpty then
         aMediaFile.FileName := aMediaFile.IdFile + '.bin'; // Default
 

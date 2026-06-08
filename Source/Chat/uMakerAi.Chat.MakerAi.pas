@@ -50,7 +50,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON, System.StrUtils,
-  System.Generics.Collections, System.Net.URLClient, System.Net.HttpClient,
+  System.Generics.Collections, System.NetEncoding,
+  System.Net.URLClient, System.Net.HttpClient,
   System.Net.HttpClientComponent, REST.Types, REST.Client,
 
 {$IF CompilerVersion < 35}
@@ -65,10 +66,15 @@ uses
 type
   TAiMakerAiChat = class(TAiChat)
   private
-    FSessionId:   string;
-    FOnProgress:  TProc<string, string, Integer>;
+    FSessionId:          string;
+    FOnProgress:         TProc<string, string, Integer>;
+    FFileReaderSlug:     string;
+    FFileReaderId:       Integer;
+    FPendingMediaParts:  TList<TAiMediaFile>;
     procedure ResetSessionId;
     procedure HandleStreamDone;
+    procedure ParseAndAccumulateMediaParts(AMediaParts: TJSONArray);
+    procedure ClearPendingMediaParts;
   protected
     Function InitChatCompletions: String; Override;
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Override;
@@ -77,6 +83,7 @@ type
     Procedure OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse); Override;
   public
     constructor Create(Sender: TComponent); override;
+    destructor Destroy; override;
     Procedure NewChat; Override;
     class function GetDriverName: string; override;
     class procedure RegisterDefaultParams(Params: TStrings); override;
@@ -86,6 +93,10 @@ type
     //   aFile = nombre del archivo
     //   pct   = porcentaje de avance del paso (0-100)
     property OnProgress: TProc<string, string, Integer> read FOnProgress write FOnProgress;
+    // RAG: slug o ID del knowledge base a conectar vía mk_tools.file_reader.
+    // Si FileReaderSlug <> '' se usa el slug; si FileReaderId > 0 se usa el ID.
+    property FileReaderSlug: string  read FFileReaderSlug write FFileReaderSlug;
+    property FileReaderId:   Integer read FFileReaderId   write FFileReaderId;
   published
   end;
 
@@ -145,12 +156,31 @@ begin
   inherited;
   Url := GlMakerAiUrl;  // sobreescribe el GlOpenAIUrl que pone el base en Create
   ResetSessionId;
+  FPendingMediaParts := TList<TAiMediaFile>.Create;
+  FFileReaderId := 0;
+end;
+
+destructor TAiMakerAiChat.Destroy;
+begin
+  ClearPendingMediaParts;
+  FPendingMediaParts.Free;
+  inherited;
 end;
 
 Procedure TAiMakerAiChat.NewChat;
 begin
   inherited NewChat;
   ResetSessionId;
+  ClearPendingMediaParts;
+end;
+
+procedure TAiMakerAiChat.ClearPendingMediaParts;
+var
+  I: Integer;
+begin
+  for I := 0 to FPendingMediaParts.Count - 1 do
+    FPendingMediaParts[I].Free;
+  FPendingMediaParts.Clear;
 end;
 
 Function TAiMakerAiChat.InitChatCompletions: String;
@@ -168,16 +198,54 @@ begin
   LJson := TJSonObject.ParseJSONValue(Result) as TJSonObject;
   if Assigned(LJson) then
   try
-    // Inject mk_tools so the MakerAI server activates Tavily web search.
-    // Triggered by SessionCaps including cap_WebSearch; ModelCaps must NOT include
-    // cap_WebSearch (to avoid the base class adding web_search_options for OpenAI).
-    if cap_WebSearch in SessionCaps then
+    // Construir mk_tools si alguna cap lo requiere o hay file_reader configurado.
+    var LNeedsMkTools :=
+      (cap_WebSearch      in SessionCaps) or
+      (cap_CodeInterpreter in SessionCaps) or
+      (cap_ComputerUse    in SessionCaps) or
+      (cap_TextEditor     in SessionCaps) or
+      (cap_Shell          in SessionCaps) or
+      (cap_Memory         in SessionCaps) or
+      (FFileReaderSlug <> '') or (FFileReaderId > 0);
+
+    if LNeedsMkTools then
     begin
       LPair := LJson.RemovePair('mk_tools');
       if Assigned(LPair) then LPair.Free;
       var LMkTools := TJSONObject.Create;
-      LMkTools.AddPair('web_search', TJSONBool.Create(True));
+      if cap_WebSearch       in SessionCaps then LMkTools.AddPair('web_search',     TJSONBool.Create(True));
+      if cap_CodeInterpreter in SessionCaps then LMkTools.AddPair('code_execution', TJSONBool.Create(True));
+      if cap_ComputerUse     in SessionCaps then LMkTools.AddPair('computer_use',   TJSONBool.Create(True));
+      if cap_TextEditor      in SessionCaps then LMkTools.AddPair('text_editor',    TJSONBool.Create(True));
+      if cap_Shell           in SessionCaps then LMkTools.AddPair('bash',           TJSONBool.Create(True));
+      if cap_Memory          in SessionCaps then LMkTools.AddPair('memory',         TJSONBool.Create(True));
+      if FFileReaderSlug <> '' then
+      begin
+        var LFR := TJSONObject.Create;
+        LFR.AddPair('encyclopedia_slug', FFileReaderSlug);
+        LMkTools.AddPair('file_reader', LFR);
+      end
+      else if FFileReaderId > 0 then
+      begin
+        var LFR := TJSONObject.Create;
+        LFR.AddPair('encyclopedia_id', TJSONNumber.Create(FFileReaderId));
+        LMkTools.AddPair('file_reader', LFR);
+      end;
       LJson.AddPair('mk_tools', LMkTools);
+    end;
+
+    // reasoning_effort: parámetro top-level para modelos con ThinkingLevel configurado.
+    if ModelConfig.ThinkingLevel <> tlDefault then
+    begin
+      LPair := LJson.RemovePair('reasoning_effort');
+      if Assigned(LPair) then LPair.Free;
+      var sEffort: string;
+      case ModelConfig.ThinkingLevel of
+        tlLow:    sEffort := 'low';
+        tlHigh:   sEffort := 'high';
+      else        sEffort := 'medium'; // tlMedium y cualquier otro
+      end;
+      LJson.AddPair('reasoning_effort', sEffort);
     end;
 
     // Normalize tool_choice: base class serializes it as 'tools_choice' (typo) and
@@ -330,6 +398,67 @@ begin
   MKLog('SEND-END', 'sync result len=' + IntToStr(Length(Result)));
 end;
 
+procedure TAiMakerAiChat.ParseAndAccumulateMediaParts(AMediaParts: TJSONArray);
+var
+  LVal:    TJSONValue;
+  LPart:   TJSONObject;
+  LInner:  TJSONObject;
+  sType, sFilename, sMime, sData, sUrl: string;
+  LBytes:  TBytes;
+  LStream: TMemoryStream;
+  LMF:     TAiMediaFile;
+  IComma:  Integer;
+begin
+  for LVal in AMediaParts do
+  begin
+    LPart := LVal as TJSONObject;
+    if not Assigned(LPart) then Continue;
+    sType := ''; sFilename := ''; sMime := ''; sData := '';
+    LPart.TryGetValue<string>('type', sType);
+
+    if (sType = 'audio') or (sType = 'file') then
+    begin
+      if not LPart.TryGetValue<TJSONObject>(sType, LInner) then Continue;
+      LInner.TryGetValue<string>('filename',  sFilename);
+      LInner.TryGetValue<string>('mime_type', sMime);
+      LInner.TryGetValue<string>('data',      sData);
+    end
+    else if sType = 'image_url' then
+    begin
+      if not LPart.TryGetValue<TJSONObject>('image_url', LInner) then Continue;
+      LInner.TryGetValue<string>('url', sUrl);
+      // data:mime/type;base64,<data>
+      IComma := Pos(',', sUrl);
+      if IComma <= 0 then Continue;
+      sData := Copy(sUrl, IComma + 1, MaxInt);
+      var IMime1 := Pos(':', sUrl);
+      var IMime2 := Pos(';', sUrl);
+      if (IMime1 > 0) and (IMime2 > IMime1) then
+        sMime := Copy(sUrl, IMime1 + 1, IMime2 - IMime1 - 1);
+      sFilename := 'ci_image' + GetFileExtensionFromMimeType(sMime);
+    end
+    else
+      Continue;
+
+    if sData = '' then Continue;
+    LBytes := TNetEncoding.Base64.DecodeStringToBytes(sData);
+    if Length(LBytes) = 0 then Continue;
+
+    LStream := TMemoryStream.Create;
+    try
+      LStream.Write(LBytes[0], Length(LBytes));
+      LStream.Position := 0;
+      LMF := TAiMediaFile.Create;
+      LMF.LoadFromStream(sFilename, LStream);
+      FPendingMediaParts.Add(LMF);
+      MKLog('MEDIA_PART', 'type=' + sType + ' file=' + sFilename +
+        ' size=' + IntToStr(Length(LBytes)));
+    finally
+      LStream.Free;
+    end;
+  end;
+end;
+
 procedure TAiMakerAiChat.HandleStreamDone;
 // Called when [DONE] is received from the server.
 // Builds a fake OpenAI-style response JSON from the accumulated FLastContent and calls
@@ -378,6 +507,15 @@ begin
       FMessages.Add(TempMsg);
       var LHistMsg := TempMsg;
       TempMsg := nil;  // FMessages es owner
+
+      // Transferir archivos acumulados de media_parts (code_execution, etc.)
+      // antes de ParseChat para que MediaFiles.Count sea correcto en OnDataEnd.
+      while FPendingMediaParts.Count > 0 do
+      begin
+        var LMF := FPendingMediaParts[0];
+        FPendingMediaParts.Delete(0);  // remueve sin liberar
+        LHistMsg.AddMediaFile(LMF);    // mensaje toma ownership
+      end;
 
       ParseChat(LFakeJson, LHistMsg);
 
@@ -459,6 +597,20 @@ begin
             end);
           end;
           Continue;
+        end;
+
+        // media_parts: archivos generados por code_execution u otros tools del servidor
+        var LChoicesArr: TJSONArray;
+        var LChoiceDelta: TJSONObject;
+        var LMediaParts: TJSONArray;
+        if LChunk.TryGetValue<TJSONArray>('choices', LChoicesArr) and
+           (LChoicesArr.Count > 0) then
+        begin
+          var LChoice0 := LChoicesArr.Items[0] as TJSONObject;
+          if Assigned(LChoice0) and
+             LChoice0.TryGetValue<TJSONObject>('delta', LChoiceDelta) and
+             LChoiceDelta.TryGetValue<TJSONArray>('media_parts', LMediaParts) then
+            ParseAndAccumulateMediaParts(LMediaParts);
         end;
       finally
         LChunk.Free;
