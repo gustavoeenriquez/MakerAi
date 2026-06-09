@@ -1512,6 +1512,11 @@ begin
           FStreamResponseMsg.Model := jMessage.GetValue<string>('model');
           FStreamResponseMsg.Role := jMessage.GetValue<string>('role');
 
+          // Leer input_tokens desde message_start (Claude streaming no incluye usage en message_stop)
+          var jStartUsage: TJSONObject;
+          if jMessage.TryGetValue<TJSONObject>('usage', jStartUsage) then
+            Self.Prompt_tokens := jStartUsage.GetValue<Integer>('input_tokens', 0);
+
           // Notificar inicio de recepci?n
           if Assigned(OnReceiveData) then
             OnReceiveData(Self, FStreamResponseMsg, jData, 'assistant', '');

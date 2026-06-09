@@ -650,18 +650,55 @@ begin
   end;
 end;
 
+// ─── SECCION 4: MakerAI mk-claude-sonnet + code_execution ────────────────────
+
+procedure Test_MakerAi_ClaudeSonnet_CodeExec;
+var
+  Chat: TAiMakerAiChat;
+  H:    TGroqHelper;
+begin
+  PrintHeader('MAKERAI mk-gpt-oss-20b — code_execution scatter plot (sync)');
+  H    := TGroqHelper.Create;
+  Chat := TAiMakerAiChat.Create(nil);
+  try
+    Chat.ApiKey          := '@MAKERAI_API_KEY';
+    Chat.Model           := 'mk-gpt-oss-20b';
+    Chat.Max_tokens      := 4096;
+    Chat.Asynchronous    := False;   // sync: respuesta JSON completa (no SSE)
+    Chat.ResponseTimeOut := 600000;  // 10 min: code_execution puede tardar
+    Chat.ModelCaps       := [cap_Image, cap_CodeInterpreter];
+    Chat.SessionCaps     := [cap_Image, cap_CodeInterpreter];
+    Chat.Tool_Active     := False;
+    Chat.OnReceiveData    := H.OnData;
+    Chat.OnReceiveDataEnd := H.OnDataEnd;
+    Chat.OnError          := H.OnError;
+    H.Reset;
+    WriteLn('Enviando (sync, code_execution)...');
+    Chat.AddMessageAndRun(
+      'Usa code execution para generar una imagen PNG 400x400 con un scatter plot de ' +
+      '25 puntos aleatorios con colores del arcoiris sobre fondo blanco usando matplotlib. ' +
+      'Devuelve la imagen generada.',
+      'user', []);
+    H.WaitAsync;
+    WriteLn;
+    WriteLn;
+    H.PrintResults;
+  finally
+    Chat.Free;
+    H.Free;
+  end;
+end;
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 begin
   try
-    WriteLn('=== PRUEBAS Groq code_interpreter ===');
+    WriteLn('=== PRUEBA: mk-claude-sonnet code_execution ===');
+
+    Test_MakerAi_ClaudeSonnet_CodeExec;
 
     WriteLn;
-    WriteLn('████ SECCION 3: Groq code_interpreter ████');
-    Test_Groq_GptOss20b_ScatterPlot;  // gpt-oss-20b, scatter plot 200x200 JPG
-
-    WriteLn;
-    WriteLn('=== FIN DE PRUEBAS ===');
+    WriteLn('=== FIN ===');
 
   except
     on E: Exception do

@@ -74,6 +74,7 @@ type
     procedure ResetSessionId;
     procedure HandleStreamDone;
     procedure ParseAndAccumulateMediaParts(AMediaParts: TJSONArray);
+    procedure ExtractMkFileBlocks(ResMsg: TAiChatMessage);
     procedure ClearPendingMediaParts;
   protected
     Function InitChatCompletions: String; Override;
@@ -198,6 +199,31 @@ begin
   LJson := TJSonObject.ParseJSONValue(Result) as TJSonObject;
   if Assigned(LJson) then
   try
+    // Eliminar campos OpenAI no soportados por el routing MKAI/Claude.
+    // frequency_penalty, presence_penalty, n: Claude API los rechaza.
+    // top_p: Claude rechaza si top_p y temperature están presentes simultáneamente.
+    // user: MKAI no lo usa; response_format:text es redundante (default).
+    LPair := LJson.RemovePair('frequency_penalty');
+    if Assigned(LPair) then LPair.Free;
+    LPair := LJson.RemovePair('presence_penalty');
+    if Assigned(LPair) then LPair.Free;
+    LPair := LJson.RemovePair('n');
+    if Assigned(LPair) then LPair.Free;
+    LPair := LJson.RemovePair('user');
+    if Assigned(LPair) then LPair.Free;
+    LPair := LJson.RemovePair('top_p');
+    if Assigned(LPair) then LPair.Free;
+    var LRfObj: TJSONObject;
+    if LJson.TryGetValue<TJSONObject>('response_format', LRfObj) then
+    begin
+      var sRfType: string;
+      if LRfObj.TryGetValue<string>('type', sRfType) and (sRfType = 'text') then
+      begin
+        LPair := LJson.RemovePair('response_format');
+        if Assigned(LPair) then LPair.Free;
+      end;
+    end;
+
     // Construir mk_tools si alguna cap lo requiere o hay file_reader configurado.
     var LNeedsMkTools :=
       (cap_WebSearch      in SessionCaps) or
@@ -211,6 +237,10 @@ begin
     if LNeedsMkTools then
     begin
       LPair := LJson.RemovePair('mk_tools');
+      if Assigned(LPair) then LPair.Free;
+      // MKAI usa mk_tools para web search — el campo web_search_options (OpenAI nativo)
+      // no es reconocido por el servidor y puede interferir con el routing.
+      LPair := LJson.RemovePair('web_search_options');
       if Assigned(LPair) then LPair.Free;
       var LMkTools := TJSONObject.Create;
       if cap_WebSearch       in SessionCaps then LMkTools.AddPair('web_search',     TJSONBool.Create(True));
@@ -352,41 +382,151 @@ var
   LToolCalls: TJSonValue;
   LUsage: TJSonObject;
   LCompletionTokens: Integer;
+  LSavedHandler: TAiChatOnDataEvent;
+  LHasMkFile: Boolean;
 begin
   MKLog('RESPONSE', Copy(jObj.ToJSON, 1, 3000));
 
-  if not jObj.TryGetValue<TJSonArray>('choices', LChoices) or
-     not Assigned(LChoices) or (LChoices.Count = 0) then
+  // Leer content para diagnósticos y detectar bloques mk_file.
+  LContent    := '';
+  LHasMkFile  := False;
+  if jObj.TryGetValue<TJSonArray>('choices', LChoices) and
+     Assigned(LChoices) and (LChoices.Count > 0) then
   begin
-    MKLog('PARSE', 'choices ausente/vacío → skip');
-    Exit;
+    LFirstChoice := LChoices.Items[0] as TJSonObject;
+    if Assigned(LFirstChoice) and
+       LFirstChoice.TryGetValue<TJSonObject>('message', LMessage) and
+       Assigned(LMessage) then
+    begin
+      LMessage.TryGetValue<String>('content', LContent);
+      LHasMkFile := Pos('```mk_file:', LContent) > 0;
+
+      // Diagnóstico: tokens consumidos pero sin contenido ni tool_calls.
+      if LContent.IsEmpty and
+         not LMessage.TryGetValue<TJSonValue>('tool_calls', LToolCalls) then
+      begin
+        LCompletionTokens := 0;
+        if jObj.TryGetValue<TJSonObject>('usage', LUsage) and Assigned(LUsage) then
+          LUsage.TryGetValue<Integer>('completion_tokens', LCompletionTokens);
+        if LCompletionTokens > 0 then
+          MKLog('SERVER-WARN',
+            'content="" + sin tool_calls + completion_tokens=' +
+            IntToStr(LCompletionTokens) +
+            ' — posible bug del servidor: function call generada pero no retornada');
+      end;
+    end;
   end;
 
-  LFirstChoice := LChoices.Items[0] as TJSonObject;
-  if not Assigned(LFirstChoice) or
-     not LFirstChoice.TryGetValue<TJSonObject>('message', LMessage) or
-     not Assigned(LMessage) then
+  if LHasMkFile then
   begin
-    MKLog('PARSE', 'choices[0].message ausente → skip');
-    Exit;
-  end;
+    // Interceptar OnReceiveDataEnd: la base lo disparará con texto crudo.
+    // Preferimos llamarlo nosotros DESPUÉS de extraer los bloques mk_file,
+    // con el prompt ya limpio y los archivos en ResMsg.MediaFiles.
+    LSavedHandler    := OnReceiveDataEnd;
+    OnReceiveDataEnd := nil;
+    try
+      inherited ParseChat(jObj, ResMsg);
+      // ResMsg.Prompt tiene ahora el texto completo (crudo, con el bloque mk_file).
+      MKLog('MK_FILE-DETECT', 'extrayendo bloques mk_file del prompt...');
+      ExtractMkFileBlocks(ResMsg);
+      MKLog('MK_FILE-DONE', IntToStr(ResMsg.MediaFiles.Count) + ' archivo(s) extraído(s)');
+    finally
+      OnReceiveDataEnd := LSavedHandler;
+    end;
+    // Disparar manualmente con texto limpio y MediaFiles poblados.
+    if Assigned(LSavedHandler) then
+      LSavedHandler(Self, ResMsg, jObj, ResMsg.Role, ResMsg.Prompt);
+  end
+  else
+    inherited ParseChat(jObj, ResMsg);
+end;
 
-  // Diagnóstico de posible bug del servidor: completion_tokens > 0 pero
-  // content vacío y sin tool_calls → el servidor consumió tokens sin devolver resultado.
-  LMessage.TryGetValue<String>('content', LContent);
-  if LContent.IsEmpty and
-     not LMessage.TryGetValue<TJSonValue>('tool_calls', LToolCalls) then
+procedure TAiMakerAiChat.ExtractMkFileBlocks(ResMsg: TAiChatMessage);
+const
+  COpenTag  = '```mk_file:';
+  CCloseTag = '```';
+var
+  LText, LResult, LHeader, LFilename, LMime, LB64: string;
+  LPos, LFindPos, LHeaderEnd, LClosePos, LColonPos: Integer;
+  LBytes: TBytes;
+  LStream: TMemoryStream;
+  LMF: TAiMediaFile;
+begin
+  LText := ResMsg.Prompt;
+  if Pos(COpenTag, LText) = 0 then Exit;
+
+  LResult := '';
+  LPos    := 1;
+  LFindPos := Pos(COpenTag, LText);
+  while LFindPos > 0 do
   begin
-    LCompletionTokens := 0;
-    if jObj.TryGetValue<TJSonObject>('usage', LUsage) and Assigned(LUsage) then
-      LUsage.TryGetValue<Integer>('completion_tokens', LCompletionTokens);
-    if LCompletionTokens > 0 then
-      MKLog('SERVER-WARN',
-        'content="" + sin tool_calls + completion_tokens=' + IntToStr(LCompletionTokens) +
-        ' — posible bug del servidor: function call generada pero no retornada');
-  end;
+    LResult := LResult + Copy(LText, LPos, LFindPos - LPos);
 
-  inherited ParseChat(jObj, ResMsg);
+    LHeaderEnd := PosEx(#10, LText, LFindPos);
+    if LHeaderEnd <= 0 then
+    begin
+      LResult := LResult + Copy(LText, LFindPos, MaxInt);
+      LPos := Length(LText) + 1;
+      Break;
+    end;
+
+    LHeader   := TrimRight(Copy(LText, LFindPos + Length(COpenTag),
+                                LHeaderEnd - LFindPos - Length(COpenTag)));
+    LColonPos := Pos(':', LHeader);
+    if LColonPos > 0 then
+    begin
+      LFilename := Copy(LHeader, 1, LColonPos - 1);
+      LMime     := Copy(LHeader, LColonPos + 1, MaxInt);
+    end else
+    begin
+      LFilename := LHeader;
+      LMime     := 'application/octet-stream';
+    end;
+
+    LClosePos := PosEx(CCloseTag, LText, LHeaderEnd + 1);
+    if LClosePos <= 0 then
+    begin
+      // El servidor omitió la etiqueta de cierre — todo lo que queda desde
+      // LHeaderEnd+1 hasta el final es el base64 del archivo.
+      LB64      := Trim(Copy(LText, LHeaderEnd + 1, MaxInt));
+      LPos      := Length(LText) + 1;  // para salir del while
+      LClosePos := Length(LText) + 1;  // indicador de fin de string
+    end
+    else
+      LB64 := Trim(Copy(LText, LHeaderEnd + 1, LClosePos - LHeaderEnd - 1));
+
+    if LB64 <> '' then
+    try
+      LBytes := TNetEncoding.Base64.DecodeStringToBytes(LB64);
+      if Length(LBytes) > 0 then
+      begin
+        LStream := TMemoryStream.Create;
+        try
+          LStream.Write(LBytes[0], Length(LBytes));
+          LStream.Position := 0;
+          LMF := TAiMediaFile.Create;
+          LMF.LoadFromStream(LFilename, LStream);
+          ResMsg.AddMediaFile(LMF);
+          MKLog('MK_FILE', 'extracted ' + LFilename + ' mime=' + LMime +
+            ' bytes=' + IntToStr(Length(LBytes)));
+        finally
+          LStream.Free;
+        end;
+      end;
+    except
+      on E: Exception do
+        MKLog('MK_FILE-ERR', LFilename + ': ' + E.Message);
+    end;
+
+    if LPos > Length(LText) then
+      Break;
+    LPos     := LClosePos + Length(CCloseTag);
+    LFindPos := PosEx(COpenTag, LText, LPos);
+  end;
+  if LPos <= Length(LText) then
+    LResult := LResult + Copy(LText, LPos, MaxInt);
+
+  ResMsg.Prompt := Trim(LResult);
 end;
 
 Function TAiMakerAiChat.InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String;
@@ -519,7 +659,7 @@ begin
 
       ParseChat(LFakeJson, LHistMsg);
 
-      if LHistMsg.Prompt = '' then
+      if (LHistMsg.Prompt = '') and (LHistMsg.MediaFiles.Count = 0) then
         FMessages.Delete(FMessages.Count - 1);
     finally
       if Assigned(TempMsg) then TempMsg.Free;
@@ -551,6 +691,8 @@ begin
   LBuffer := FResponse.DataString;
   FResponse.Clear;
   LDoneReceived := False;
+  if LBuffer <> '' then
+    MKLog('RAW-SSE', Copy(LBuffer, 1, 2000));
 
   while Pos(#10, LBuffer) > 0 do
   begin
