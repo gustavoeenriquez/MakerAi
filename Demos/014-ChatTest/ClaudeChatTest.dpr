@@ -375,10 +375,11 @@ const
 type
   TGroqHelper = class
   public
-    FDone:       TEvent;
-    FResult:     string;
-    FError:      string;
-    FSavedFiles: TStringList;  // paths of saved output files
+    FDone:         TEvent;
+    FResult:       string;
+    FError:        string;
+    FSavedFiles:   TStringList;  // paths of saved output files
+    OutFilePrefix: string;       // prefijo para nombres de archivo (opcional)
     constructor Create;
     destructor  Destroy; override;
     procedure Reset;
@@ -423,14 +424,18 @@ end;
 procedure TGroqHelper.OnDataEnd(const Sender: TObject; aMsg: TAiChatMessage;
   aResponse: TJSonObject; aRole, aText: string);
 var
-  MF: TAiMediaFile;
-  OutPath: string;
+  MF:       TAiMediaFile;
+  OutPath:  string;
+  FName:    string;
 begin
   FResult := aText;
   if Assigned(aMsg) then
     for MF in aMsg.MediaFiles do
     begin
-      OutPath := ExtractFilePath(ParamStr(0)) + MF.FileName;
+      FName := MF.FileName;
+      if OutFilePrefix <> '' then
+        FName := OutFilePrefix + '_' + FName;
+      OutPath := ExtractFilePath(ParamStr(0)) + FName;
       try
         if FSavedFiles.IndexOf(OutPath) < 0 then
         begin
@@ -439,7 +444,7 @@ begin
         end;
       except
         on E: Exception do
-          FSavedFiles.Add('ERROR guardando ' + MF.FileName + ': ' + E.Message);
+          FSavedFiles.Add('ERROR guardando ' + FName + ': ' + E.Message);
       end;
     end;
   FDone.SetEvent;
@@ -650,37 +655,39 @@ begin
   end;
 end;
 
-// ─── SECCION 4: MakerAI mk-claude-sonnet + code_execution ────────────────────
+// ─── SECCION 4: MakerAI code_execution PNG ───────────────────────────────────
 
-procedure Test_MakerAi_ClaudeSonnet_CodeExec;
+const
+  CPromptPng =
+    'Usa code execution para generar una imagen PNG 400x400 con un scatter plot de ' +
+    '25 puntos aleatorios con colores del arcoiris sobre fondo blanco usando matplotlib. ' +
+    'Devuelve SOLO la imagen generada, sin texto adicional.';
+
+procedure Test_MakerAi_CodeExec_Png(const AModel, AOutFile: string);
 var
   Chat: TAiMakerAiChat;
   H:    TGroqHelper;
 begin
-  PrintHeader('MAKERAI mk-gpt-oss-20b — code_execution scatter plot (sync)');
+  PrintHeader('MAKERAI ' + AModel + ' — code_execution scatter plot PNG (sync)');
   H    := TGroqHelper.Create;
   Chat := TAiMakerAiChat.Create(nil);
   try
     Chat.ApiKey          := '@MAKERAI_API_KEY';
-    Chat.Model           := 'mk-gpt-oss-20b';
+    Chat.Model           := AModel;
     Chat.Max_tokens      := 4096;
-    Chat.Asynchronous    := False;   // sync: respuesta JSON completa (no SSE)
-    Chat.ResponseTimeOut := 600000;  // 10 min: code_execution puede tardar
+    Chat.Asynchronous    := False;   // sync: respuesta JSON completa, no SSE
+    Chat.ResponseTimeOut := 600000;  // 10 min
     Chat.ModelCaps       := [cap_Image, cap_CodeInterpreter];
     Chat.SessionCaps     := [cap_Image, cap_CodeInterpreter];
     Chat.Tool_Active     := False;
+    H.OutFilePrefix      := AOutFile;
     Chat.OnReceiveData    := H.OnData;
     Chat.OnReceiveDataEnd := H.OnDataEnd;
     Chat.OnError          := H.OnError;
     H.Reset;
     WriteLn('Enviando (sync, code_execution)...');
-    Chat.AddMessageAndRun(
-      'Usa code execution para generar una imagen PNG 400x400 con un scatter plot de ' +
-      '25 puntos aleatorios con colores del arcoiris sobre fondo blanco usando matplotlib. ' +
-      'Devuelve la imagen generada.',
-      'user', []);
+    Chat.AddMessageAndRun(CPromptPng, 'user', []);
     H.WaitAsync;
-    WriteLn;
     WriteLn;
     H.PrintResults;
   finally
@@ -693,9 +700,10 @@ end;
 
 begin
   try
-    WriteLn('=== PRUEBA: mk-claude-sonnet code_execution ===');
+    WriteLn('=== MAKERAI code_execution PNG — mk-gpt-oss-20b y mk-claude-sonnet ===');
 
-    Test_MakerAi_ClaudeSonnet_CodeExec;
+    Test_MakerAi_CodeExec_Png('mk-gpt-oss-20b',    'scatter_gpt');
+    Test_MakerAi_CodeExec_Png('mk-claude-sonnet',  'scatter_claude');
 
     WriteLn;
     WriteLn('=== FIN ===');

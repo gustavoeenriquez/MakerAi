@@ -75,6 +75,7 @@ type
     procedure HandleStreamDone;
     procedure ParseAndAccumulateMediaParts(AMediaParts: TJSONArray);
     procedure ExtractMkFileBlocks(ResMsg: TAiChatMessage);
+    procedure ExtractImageUrlContent(AContentArr: TJSonArray; ResMsg: TAiChatMessage);
     procedure ClearPendingMediaParts;
   protected
     Function InitChatCompletions: String; Override;
@@ -379,17 +380,21 @@ var
   LFirstChoice: TJSonObject;
   LMessage: TJSonObject;
   LContent: String;
+  LContentArr: TJSonArray;
   LToolCalls: TJSonValue;
   LUsage: TJSonObject;
   LCompletionTokens: Integer;
   LSavedHandler: TAiChatOnDataEvent;
   LHasMkFile: Boolean;
+  LHasImageArr: Boolean;
 begin
   MKLog('RESPONSE', Copy(jObj.ToJSON, 1, 3000));
 
-  // Leer content para diagnósticos y detectar bloques mk_file.
-  LContent    := '';
-  LHasMkFile  := False;
+  LContent     := '';
+  LContentArr  := nil;
+  LHasMkFile   := False;
+  LHasImageArr := False;
+
   if jObj.TryGetValue<TJSonArray>('choices', LChoices) and
      Assigned(LChoices) and (LChoices.Count > 0) then
   begin
@@ -398,42 +403,50 @@ begin
        LFirstChoice.TryGetValue<TJSonObject>('message', LMessage) and
        Assigned(LMessage) then
     begin
-      LMessage.TryGetValue<String>('content', LContent);
-      LHasMkFile := Pos('```mk_file:', LContent) > 0;
-
-      // Diagnóstico: tokens consumidos pero sin contenido ni tool_calls.
-      if LContent.IsEmpty and
-         not LMessage.TryGetValue<TJSonValue>('tool_calls', LToolCalls) then
+      if LMessage.TryGetValue<String>('content', LContent) then
+        LHasMkFile := Pos('```mk_file:', LContent) > 0
+      else if LMessage.TryGetValue<TJSonArray>('content', LContentArr) and
+              Assigned(LContentArr) then
+        LHasImageArr := True   // content es array (p.ej. image_url de mk-claude-sonnet)
+      else
       begin
-        LCompletionTokens := 0;
-        if jObj.TryGetValue<TJSonObject>('usage', LUsage) and Assigned(LUsage) then
-          LUsage.TryGetValue<Integer>('completion_tokens', LCompletionTokens);
-        if LCompletionTokens > 0 then
-          MKLog('SERVER-WARN',
-            'content="" + sin tool_calls + completion_tokens=' +
-            IntToStr(LCompletionTokens) +
-            ' — posible bug del servidor: function call generada pero no retornada');
+        // Diagnóstico: tokens consumidos pero sin content ni tool_calls.
+        if not LMessage.TryGetValue<TJSonValue>('tool_calls', LToolCalls) then
+        begin
+          LCompletionTokens := 0;
+          if jObj.TryGetValue<TJSonObject>('usage', LUsage) and Assigned(LUsage) then
+            LUsage.TryGetValue<Integer>('completion_tokens', LCompletionTokens);
+          if LCompletionTokens > 0 then
+            MKLog('SERVER-WARN',
+              'content="" + sin tool_calls + completion_tokens=' +
+              IntToStr(LCompletionTokens) +
+              ' — posible bug del servidor');
+        end;
       end;
     end;
   end;
 
-  if LHasMkFile then
+  if LHasMkFile or LHasImageArr then
   begin
-    // Interceptar OnReceiveDataEnd: la base lo disparará con texto crudo.
-    // Preferimos llamarlo nosotros DESPUÉS de extraer los bloques mk_file,
-    // con el prompt ya limpio y los archivos en ResMsg.MediaFiles.
     LSavedHandler    := OnReceiveDataEnd;
     OnReceiveDataEnd := nil;
     try
       inherited ParseChat(jObj, ResMsg);
-      // ResMsg.Prompt tiene ahora el texto completo (crudo, con el bloque mk_file).
-      MKLog('MK_FILE-DETECT', 'extrayendo bloques mk_file del prompt...');
-      ExtractMkFileBlocks(ResMsg);
-      MKLog('MK_FILE-DONE', IntToStr(ResMsg.MediaFiles.Count) + ' archivo(s) extraído(s)');
+      if LHasMkFile then
+      begin
+        MKLog('MK_FILE-DETECT', 'extrayendo bloques mk_file del prompt...');
+        ExtractMkFileBlocks(ResMsg);
+        MKLog('MK_FILE-DONE', IntToStr(ResMsg.MediaFiles.Count) + ' archivo(s) extraído(s)');
+      end
+      else
+      begin
+        MKLog('IMAGE_URL', 'extrayendo image_url del content array...');
+        ExtractImageUrlContent(LContentArr, ResMsg);
+        MKLog('IMAGE_URL-DONE', IntToStr(ResMsg.MediaFiles.Count) + ' archivo(s) extraído(s)');
+      end;
     finally
       OnReceiveDataEnd := LSavedHandler;
     end;
-    // Disparar manualmente con texto limpio y MediaFiles poblados.
     if Assigned(LSavedHandler) then
       LSavedHandler(Self, ResMsg, jObj, ResMsg.Role, ResMsg.Prompt);
   end
@@ -527,6 +540,77 @@ begin
     LResult := LResult + Copy(LText, LPos, MaxInt);
 
   ResMsg.Prompt := Trim(LResult);
+end;
+
+// Extrae archivos y texto de un content array OpenAI-style:
+//   [{"type":"image_url","image_url":{"url":"data:mime;base64,XXX"}}, ...]
+//   [{"type":"text","text":"..."}]
+// mk-claude-sonnet devuelve las imágenes generadas en este formato.
+procedure TAiMakerAiChat.ExtractImageUrlContent(AContentArr: TJSonArray;
+  ResMsg: TAiChatMessage);
+var
+  LVal:   TJSonValue;
+  LItem:  TJSonObject;
+  LImgObj: TJSonObject;
+  sType, sUrl, sMime, sB64, sExt, sFileName, sText: string;
+  LColonPos, LB64Start: Integer;
+  LBytes: TBytes;
+  LStream: TMemoryStream;
+  LMF: TAiMediaFile;
+begin
+  if not Assigned(AContentArr) then Exit;
+  for LVal in AContentArr do
+  begin
+    if not (LVal is TJSonObject) then Continue;
+    LItem := TJSonObject(LVal);
+    if not LItem.TryGetValue<String>('type', sType) then Continue;
+
+    if SameText(sType, 'text') then
+    begin
+      if LItem.TryGetValue<String>('text', sText) and (sText <> '') then
+        ResMsg.Prompt := ResMsg.Prompt + sText;
+    end
+    else if SameText(sType, 'image_url') then
+    begin
+      if not LItem.TryGetValue<TJSonObject>('image_url', LImgObj) or
+         not Assigned(LImgObj) then Continue;
+      if not LImgObj.TryGetValue<String>('url', sUrl) then Continue;
+      // sUrl = "data:image/png;base64,iVBOR..."
+      if not sUrl.StartsWith('data:') then Continue;
+      LColonPos := Pos(';base64,', sUrl);
+      if LColonPos <= 0 then Continue;
+      sMime     := Copy(sUrl, 6, LColonPos - 6);
+      LB64Start := LColonPos + 8;
+      sB64      := Copy(sUrl, LB64Start, MaxInt);
+      // Derivar extensión desde el mime-type (image/png → png, image/jpeg → jpg)
+      sExt := LowerCase(Copy(sMime, Pos('/', sMime) + 1, MaxInt));
+      if sExt = 'jpeg' then sExt := 'jpg';
+      if sExt = '' then sExt := 'bin';
+      sFileName := 'image.' + sExt;
+      try
+        LBytes := TNetEncoding.Base64.DecodeStringToBytes(sB64);
+        if Length(LBytes) > 0 then
+        begin
+          LStream := TMemoryStream.Create;
+          try
+            LStream.Write(LBytes[0], Length(LBytes));
+            LStream.Position := 0;
+            LMF := TAiMediaFile.Create;
+            LMF.LoadFromStream(sFileName, LStream);
+            ResMsg.AddMediaFile(LMF);
+            MKLog('IMAGE_URL', 'extracted ' + sFileName + ' mime=' + sMime +
+              ' bytes=' + IntToStr(Length(LBytes)));
+          finally
+            LStream.Free;
+          end;
+        end;
+      except
+        on E: Exception do
+          MKLog('IMAGE_URL-ERR', sFileName + ': ' + E.Message);
+      end;
+    end;
+  end;
+  ResMsg.Prompt := Trim(ResMsg.Prompt);
 end;
 
 Function TAiMakerAiChat.InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String;
