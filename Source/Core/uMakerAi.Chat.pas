@@ -296,7 +296,11 @@ type
     FNewSystemConfigured: Boolean; // True si ModelCaps/SessionCaps fueron asignados explícitamente
     FSanitizerActive: Boolean;
     FOnSanitize: TAiSanitizeEvent;
+    FPersistentMemory:  TComponent;
+    FMemoryTokenBudget: Integer;
+    FAutoStoreMemories: Boolean;
 
+    procedure SetPersistentMemory(AValue: TComponent);
     procedure SetApiKey(const Value: String);
     procedure SetFrequency_penalty(const Value: Double);
     procedure SetLogit_bias(const Value: String);
@@ -580,6 +584,9 @@ type
     property SessionCaps: TAiCapabilities read FSessionCaps write SetSessionCaps; // capacidades deseadas en la sesión
     property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive;
     property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
+    property PersistentMemory:  TComponent read FPersistentMemory write SetPersistentMemory;
+    property MemoryTokenBudget: Integer    read FMemoryTokenBudget write FMemoryTokenBudget default 1500;
+    property AutoStoreMemories: Boolean    read FAutoStoreMemories write FAutoStoreMemories default False;
   end;
 
   // procedure Register;
@@ -588,7 +595,7 @@ procedure LogDebug(const Mensaje: string);
 
 implementation
 
-uses uMakerAi.ParamsRegistry, System.IOUtils;
+uses uMakerAi.ParamsRegistry, System.IOUtils, uMakerAi.Memory.Types;
 
 { TAiChat }
 
@@ -777,6 +784,9 @@ begin
     FResponse.Position := 0;
 
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
+
+    if not Assigned(Res) then
+      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
 
     FResponse.Position := 0;
 
@@ -1427,6 +1437,8 @@ begin
   FResponseTimeOut := 120000;
   FStream_Usage := False; // Envia la estadistica de uso por token
   FTool_choice := 'auto';
+  FMemoryTokenBudget := 1500;
+  FAutoStoreMemories := False;
 end;
 
 function TAiChat.DeleteFile(aMediaFile: TAiMediaFile): String;
@@ -1673,6 +1685,9 @@ begin
     Client.ContentType := 'application/json';
 
     Res := Client.Get(sUrl, Response, Headers);
+
+    if not Assigned(Res) then
+      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
 
     if Res.StatusCode = 200 then
     Begin
@@ -1938,7 +1953,21 @@ procedure TAiChat.Notification(AComponent: TComponent; Operation: TOperation);
 begin
   inherited Notification(AComponent, Operation);
   if Operation = opRemove then
+  begin
     FChatTools.Notification(AComponent, Operation);
+    if AComponent = FPersistentMemory then
+      FPersistentMemory := nil;
+  end;
+end;
+
+procedure TAiChat.SetPersistentMemory(AValue: TComponent);
+begin
+  if FPersistentMemory = AValue then Exit;
+  if Assigned(FPersistentMemory) then
+    FPersistentMemory.RemoveFreeNotification(Self);
+  FPersistentMemory := AValue;
+  if Assigned(FPersistentMemory) then
+    FPersistentMemory.FreeNotification(Self);
 end;
 
 procedure TAiChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
@@ -2544,6 +2573,7 @@ begin
       End;
       TTask.WaitForAll(TaskList);
 
+      var LStopLoop := False;
       For Clave in LFunciones.Keys do
       Begin
         ToolCall := LFunciones[Clave];
@@ -2553,10 +2583,29 @@ begin
         ToolCall.MediaFiles.OwnsObjects := False;
         ToolMsg.Id := FMessages.Count + 1;
         FMessages.Add(ToolMsg);
+        LStopLoop := LStopLoop or ToolCall.StopAgenticLoop;
       End;
 
-      Self.Run(Nil, ResMsg);
-      ResMsg.Content := '';
+      if LStopLoop then
+      Begin
+        // Un handler pidi? detener el loop (tool passthrough: lo ejecuta el
+        // cliente final). Finalizamos el turno con los tool_calls en ResMsg en
+        // vez de reenviar el resultado sint?tico al modelo — modelos como
+        // gpt-oss reintentan la misma tool indefinidamente al ver un 'OK'.
+        FBusy := False;
+        ResMsg.Role := Role;
+        ResMsg.Model := ModelVersion;
+        ResMsg.Tool_calls := sToolCalls;
+        ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aPrompt_tokens;
+        ResMsg.Completion_tokens := ResMsg.Completion_tokens + aCompletion_tokens;
+        ResMsg.Total_tokens := ResMsg.Total_tokens + aTotal_tokens;
+        DoProcessResponse(AskMsg, ResMsg, Respuesta);
+      End
+      else
+      Begin
+        Self.Run(Nil, ResMsg);
+        ResMsg.Content := '';
+      End;
 
     End
     Else
@@ -3470,6 +3519,9 @@ function TAiChat.Run(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
 var
   LSanitizeResult: TSanitizeResult;
   LSanitizeAction: TAiSanitizeAction;
+  LMemory:         IAiPersistentMemory;
+  LMemCtx:         string;
+  LOrigPrompt:     string;
 begin
   if FSanitizerActive and Assigned(AskMsg) and (AskMsg.Role = 'user') and (AskMsg.Prompt <> '') then
   begin
@@ -3494,7 +3546,24 @@ begin
     end;
   end;
 
+  // Inyectar contexto de memoria antes de enviar al LLM
+  LOrigPrompt := '';
+  if Assigned(FPersistentMemory) and Assigned(AskMsg) and (AskMsg.Role = 'user') and
+     Supports(FPersistentMemory, IAiPersistentMemory, LMemory) then
+  begin
+    LOrigPrompt := AskMsg.Prompt;
+    LMemCtx := LMemory.BuildContext(AskMsg.Prompt, FMemoryTokenBudget);
+    if LMemCtx <> '' then
+      AskMsg.Prompt := '--- Contexto de memoria ---' + sLineBreak + LMemCtx +
+                       sLineBreak + '--- Fin del contexto ---' + sLineBreak + sLineBreak +
+                       AskMsg.Prompt;
+  end;
+
   Result := RunNew(AskMsg, ResMsg);
+
+  // Guardar el prompt original en memoria tras recibir respuesta
+  if FAutoStoreMemories and (LOrigPrompt <> '') and Assigned(LMemory) then
+    LMemory.AutoStore(LOrigPrompt, 5);
 end;
 
 function TAiChat.RemoveMesage(Msg: TAiChatMessage): Boolean;

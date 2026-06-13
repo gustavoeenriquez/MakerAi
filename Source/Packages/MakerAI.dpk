@@ -82,6 +82,8 @@ contains
   uMakerAi.Chat.Kimi in '..\Chat\uMakerAi.Chat.Kimi.pas',
   uMakerAi.Chat.LMStudio in '..\Chat\uMakerAi.Chat.LMStudio.pas',
   uMakerAi.Utils.DiffUpdater in '..\Utils\uMakerAi.Utils.DiffUpdater.pas',
+  uMakerAi.Utils.AudioCapture in '..\Utils\uMakerAi.Utils.AudioCapture.pas',
+  uMakerAi.Utils.AudioPlayback in '..\Utils\uMakerAi.Utils.AudioPlayback.pas',
   uMakerAi.Chat.GenericLLM in '..\Chat\uMakerAi.Chat.GenericLLM.pas',
   uMakerAi.Chat.MakerAi in '..\Chat\uMakerAi.Chat.MakerAi.pas',
   UMakerAi.MCPServer.SSE in '..\MCPServer\UMakerAi.MCPServer.SSE.pas',
@@ -128,7 +130,9 @@ contains
   uMakerAi.Realtime.OpenAI in '..\Realtime\uMakerAi.Realtime.OpenAI.pas',
   uMakerAi.Realtime.Gemini in '..\Realtime\uMakerAi.Realtime.Gemini.pas',
   uMakerAi.Realtime.AiConnection in '..\Realtime\uMakerAi.Realtime.AiConnection.pas',
-  uMakerAi.Realtime.MakerAi in '..\Realtime\uMakerAi.Realtime.MakerAi.pas';
+  uMakerAi.Realtime.MakerAi in '..\Realtime\uMakerAi.Realtime.MakerAi.pas',
+  uMakerAi.Memory.Types in '..\Memory\uMakerAi.Memory.Types.pas',
+  uMakerAi.Memory.Decay in '..\Memory\uMakerAi.Memory.Decay.pas';
 
 end.
 
