@@ -448,6 +448,8 @@ type
 
     Procedure ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage); Virtual;
     procedure ParseJsonTranscript(jObj: TJSonObject; ResMsg: TAiChatMessage; aMediaFile: TAiMediaFile);
+    // Groq code_interpreter: descarga archivos de 'executed_tools' y los agrega a ResMsg.MediaFiles
+    procedure ProcessExecutedTools(const AExecutedToolsJSON: string; ResMsg: TAiChatMessage); virtual;
 
     Function ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions; Virtual; // Obtiene la lista de funciones a partir del json de respuesta en modo sincrono
     Procedure DoCallFunction(ToolCall: TAiToolsFunction); Virtual;
@@ -768,7 +770,11 @@ begin
   if Assigned(FTmpToolCallBuffer) then
     FTmpToolCallBuffer.Clear;
 
-  sUrl := FUrl + 'chat/completions';
+  // Si la URL ya incluye 'chat/completions' (ej: Azure con ?api-version=...) usarla tal cual.
+  if FUrl.Contains('chat/completions') then
+    sUrl := FUrl
+  else
+    sUrl := FUrl + 'chat/completions';
 
   Try
     FHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
@@ -807,6 +813,23 @@ begin
         Try
           FBusy := False;
           ParseChat(jObj, ResMsg);
+          // Groq code_interpreter: extrae archivos del campo executed_tools (sync path)
+          // compound-beta: executed_tools al nivel raiz del JSON
+          // gpt-oss-20b: executed_tools anidado en choices[0].message.executed_tools
+          var JExecSync: TJSonValue;
+          if jObj.TryGetValue('executed_tools', JExecSync) then
+            ProcessExecutedTools(JExecSync.ToJSON, ResMsg)
+          else
+          begin
+            var JChoicesSync: TJSonArray;
+            if jObj.TryGetValue<TJSonArray>('choices', JChoicesSync) and (JChoicesSync.Count > 0) then
+            begin
+              var JMsgSync: TJSonObject;
+              if TJSonObject(JChoicesSync.Items[0]).TryGetValue<TJSonObject>('message', JMsgSync) then
+                if JMsgSync.TryGetValue('executed_tools', JExecSync) then
+                  ProcessExecutedTools(JExecSync.ToJSON, ResMsg);
+            end;
+          end;
           Result := FLastContent;
 
         Finally
@@ -1856,6 +1879,8 @@ begin
 
       AJSONObject.AddPair('max_completion_tokens', TJSONNumber.Create(FMax_tokens));
     end
+    else if FUrl.Contains('azure.com') then
+      AJSONObject.AddPair('max_completion_tokens', TJSONNumber.Create(FMax_tokens))
     else
       AJSONObject.AddPair('max_tokens', FMax_tokens);
 
@@ -2046,6 +2071,12 @@ Var
         TempMsg := TAiChatMessage.Create('', FTmpRole);
         try
           ParseChat(FakeResponseObj, TempMsg);
+          // Groq code_interpreter: procesa archivos capturados durante el stream (async path)
+          if FLastExecutedToolsJSON <> '' then
+          begin
+            ProcessExecutedTools(FLastExecutedToolsJSON, TempMsg);
+            FLastExecutedToolsJSON := '';
+          end;
           if sToolCallsStr = '' then
           begin
             TempMsg.Id := FMessages.Count + 1;
@@ -2214,6 +2245,22 @@ Var
                   end;
                 end;
               end;
+            end;
+          end;
+        end
+        else
+        begin
+          // Groq compound-beta: reasoning_content llega como campo completo en choices[0].message
+          // (no como delta incremental) en el evento SSE final antes de [DONE]
+          var JMsgFull: TJSonObject;
+          if jArrChoices.Items[0].TryGetValue<TJSonObject>('message', JMsgFull) then
+          begin
+            var sRCFull: String := '';
+            if JMsgFull.TryGetValue<String>('reasoning_content', sRCFull) and (sRCFull <> '') then
+            begin
+              FLastReasoning := FLastReasoning + sRCFull;
+              if Assigned(FOnReceiveThinking) then
+                FOnReceiveThinking(Self, Nil, jObj, FTmpRole, sRCFull);
             end;
           end;
         end;
@@ -2420,6 +2467,35 @@ begin
       ResMsg.ReasoningContent := sReasoning;
     end;
 
+    // Groq compound-beta: los resultados de ejecucion de codigo llegan como bloques
+    // <output>...</output> dentro del reasoning_content (no hay campo executed_tools separado)
+    if sReasoning <> '' then
+    begin
+      var sRem := sReasoning;
+      var iTagO  := Pos('<output>', sRem);
+      var iTagCl := Pos('</output>', sRem);
+      while (iTagO > 0) and (iTagCl > iTagO) do
+      begin
+        var sBlock := Copy(sRem, iTagO + 8, iTagCl - iTagO - 8);
+        if Trim(sBlock) <> '' then
+        begin
+          var JFakeArr  := TJSonArray.Create;
+          var JFakeTool := TJSonObject.Create;
+          JFakeTool.AddPair('type', 'python');
+          JFakeTool.AddPair('output', sBlock);
+          JFakeArr.AddElement(JFakeTool);
+          try
+            ProcessExecutedTools(JFakeArr.ToJSON, ResMsg);
+          finally
+            JFakeArr.Free;
+          end;
+        end;
+        sRem  := Copy(sRem, iTagCl + 9, MaxInt);
+        iTagO  := Pos('<output>', sRem);
+        iTagCl := Pos('</output>', sRem);
+      end;
+    end;
+
     jMessage.TryGetValue<String>('content', sRes);
 
     If Not Trim(sRes).IsEmpty then
@@ -2539,12 +2615,266 @@ begin
 
       DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
 
+      // gpt-oss-20b (Groq): executed_tools anidado en choices[0].message.executed_tools.
+      // Se extrae aquí, antes de OnDataEnd, para que MediaFiles.Count sea correcto en el callback.
+      // (compound-beta usa root-level executed_tools; ya fue procesado vía reasoning_content más arriba)
+      if ResMsg.MediaFiles.Count = 0 then
+      begin
+        var JChExec: TJSonArray;
+        if jObj.TryGetValue<TJSonArray>('choices', JChExec) and (JChExec.Count > 0) then
+        begin
+          var JMsgExec: TJSonObject;
+          if TJSonObject(JChExec.Items[0]).TryGetValue<TJSonObject>('message', JMsgExec) then
+          begin
+            var JExecVal: TJSonValue;
+            if JMsgExec.TryGetValue('executed_tools', JExecVal) then
+              ProcessExecutedTools(JExecVal.ToJSON, ResMsg);
+          end;
+        end;
+      end;
+
       If Assigned(FOnReceiveDataEnd) then
         FOnReceiveDataEnd(Self, ResMsg, jObj, Role, Respuesta);
     End;
   Finally
     LFunciones.Free;
   End;
+end;
+
+procedure TAiChat.ProcessExecutedTools(const AExecutedToolsJSON: string; ResMsg: TAiChatMessage);
+var
+  JArr: TJSonArray;
+  JItem, JCI, JOutput, JFileObj: TJSonObject;
+  JOutputArr: TJSonArray;
+  JVal, JOutVal: TJSonValue;
+  sOutType, sUrl, sMime, sName: string;
+  LClient: TNetHTTPClient;
+  LStream: TMemoryStream;
+  LMF: TAiMediaFile;
+begin
+  if AExecutedToolsJSON = '' then
+    Exit;
+  JArr := TJSonValue.ParseJSONValue(AExecutedToolsJSON) as TJSonArray;
+  if not Assigned(JArr) then
+    Exit;
+  try
+    LClient := TNetHTTPClient.Create(nil);
+    try
+{$IF CompilerVersion >= 35}
+      LClient.SynchronizeEvents := False;
+{$ENDIF}
+      LClient.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
+      for JVal in JArr do
+      begin
+        JItem := JVal as TJSonObject;
+        if not Assigned(JItem) then
+          Continue;
+        var sToolType: string := '';
+        JItem.TryGetValue<string>('type', sToolType);
+
+        // Groq compound-beta: type='python'
+        // gpt-oss-20b: type='function' (name='python'), output=stdout string plano
+        if (sToolType = 'python') or (sToolType = 'function') then
+        begin
+          var sOutput: string := '';
+          JItem.TryGetValue<string>('output', sOutput);
+          if sOutput <> '' then
+          begin
+            // Marcador genérico FILE_B64_BEGIN:nombre.ext / FILE_B64_END
+            var iB_file := Pos('FILE_B64_BEGIN:', sOutput);
+            var iE_file := Pos('FILE_B64_END', sOutput);
+            if (iB_file > 0) and (iE_file > iB_file) then
+            begin
+              var sAfterBegin := Copy(sOutput, iB_file + Length('FILE_B64_BEGIN:'), MaxInt);
+              var iNL := Pos(#10, sAfterBegin);
+              if iNL = 0 then iNL := Pos(#13, sAfterBegin);
+              var sOutName := 'ci_output.bin';
+              if iNL > 0 then
+                sOutName := Trim(Copy(sAfterBegin, 1, iNL - 1));
+              var iDataStart := iB_file + Length('FILE_B64_BEGIN:') + iNL;
+              var sRaw_f := Copy(sOutput, iDataStart, iE_file - iDataStart);
+              var sClean_f := '';
+              for var ch in sRaw_f do
+                if CharInSet(ch, ['A'..'Z','a'..'z','0'..'9','+','/','=']) then
+                  sClean_f := sClean_f + ch;
+              if sClean_f <> '' then
+              begin
+                var LBytes_f := TNetEncoding.Base64.DecodeStringToBytes(sClean_f);
+                if Length(LBytes_f) > 0 then
+                begin
+                  var LStream_f := TMemoryStream.Create;
+                  try
+                    LStream_f.Write(LBytes_f[0], Length(LBytes_f));
+                    LStream_f.Position := 0;
+                    LMF := TAiMediaFile.Create;
+                    LMF.LoadFromStream(sOutName, LStream_f);
+                    ResMsg.AddMediaFile(LMF);
+                  finally
+                    LStream_f.Free;
+                  end;
+                end;
+              end;
+            end
+            else
+            begin
+              // Marcador legacy WAV_B64_BEGIN/<base64>/WAV_B64_END
+              var iB_py := Pos('WAV_B64_BEGIN', sOutput);
+              var iE_py := Pos('WAV_B64_END',   sOutput);
+              if (iB_py > 0) and (iE_py > iB_py) then
+              begin
+                var sRaw := Copy(sOutput, iB_py + Length('WAV_B64_BEGIN'),
+                                 iE_py - iB_py - Length('WAV_B64_BEGIN'));
+                var sClean := '';
+                for var ch in sRaw do
+                  if CharInSet(ch, ['A'..'Z','a'..'z','0'..'9','+','/','=']) then
+                    sClean := sClean + ch;
+                if sClean <> '' then
+                begin
+                  var LBytes_py := TNetEncoding.Base64.DecodeStringToBytes(sClean);
+                  if Length(LBytes_py) > 0 then
+                  begin
+                    var LStream_py := TMemoryStream.Create;
+                    try
+                      LStream_py.Write(LBytes_py[0], Length(LBytes_py));
+                      LStream_py.Position := 0;
+                      LMF := TAiMediaFile.Create;
+                      LMF.LoadFromStream('ci_output.wav', LStream_py);
+                      ResMsg.AddMediaFile(LMF);
+                    finally
+                      LStream_py.Free;
+                    end;
+                  end;
+                end;
+              end;
+            end;
+          end;
+          Continue;
+        end;
+
+        if sToolType <> 'code_interpreter' then
+          Continue;
+        if not JItem.TryGetValue<TJSonObject>('code_interpreter', JCI) then
+          Continue;
+        if not JCI.TryGetValue<TJSonArray>('outputs', JOutputArr) then
+          Continue;
+        for JOutVal in JOutputArr do
+        begin
+          JOutput := JOutVal as TJSonObject;
+          if not Assigned(JOutput) then
+            Continue;
+          sOutType := '';
+          JOutput.TryGetValue<string>('type', sOutType);
+          sUrl := '';
+          sMime := '';
+          sName := '';
+          // Groq compound-beta: stdout capturado como output de tipo 'text'.
+          // Soporta FILE_B64_BEGIN:nombre.ext/FILE_B64_END (genérico) y WAV_B64_BEGIN (legacy).
+          if sOutType = 'text' then
+          begin
+            var sText: string := '';
+            JOutput.TryGetValue<string>('text', sText);
+            var iB_ft := Pos('FILE_B64_BEGIN:', sText);
+            var iE_ft := Pos('FILE_B64_END', sText);
+            if (iB_ft > 0) and (iE_ft > iB_ft) then
+            begin
+              var sAfterBegin_t := Copy(sText, iB_ft + Length('FILE_B64_BEGIN:'), MaxInt);
+              var iNL_t := Pos(#10, sAfterBegin_t);
+              if iNL_t = 0 then iNL_t := Pos(#13, sAfterBegin_t);
+              var sOutName_t := 'ci_output.bin';
+              if iNL_t > 0 then
+                sOutName_t := Trim(Copy(sAfterBegin_t, 1, iNL_t - 1));
+              var iDataStart_t := iB_ft + Length('FILE_B64_BEGIN:') + iNL_t;
+              var sB64_t := Trim(Copy(sText, iDataStart_t, iE_ft - iDataStart_t));
+              var LBytes_t := TNetEncoding.Base64.DecodeStringToBytes(sB64_t);
+              if Length(LBytes_t) > 0 then
+              begin
+                var LStream_t := TMemoryStream.Create;
+                try
+                  LStream_t.Write(LBytes_t[0], Length(LBytes_t));
+                  LStream_t.Position := 0;
+                  LMF := TAiMediaFile.Create;
+                  LMF.LoadFromStream(sOutName_t, LStream_t);
+                  ResMsg.AddMediaFile(LMF);
+                finally
+                  LStream_t.Free;
+                end;
+              end;
+            end
+            else
+            begin
+              var iB := Pos('WAV_B64_BEGIN', sText);
+              var iE := Pos('WAV_B64_END', sText);
+              if (iB > 0) and (iE > iB) then
+              begin
+                var sB64 := Trim(Copy(sText, iB + Length('WAV_B64_BEGIN'), iE - iB - Length('WAV_B64_BEGIN')));
+                var LBytes := TNetEncoding.Base64.DecodeStringToBytes(sB64);
+                var LStream64 := TMemoryStream.Create;
+                try
+                  LStream64.Write(LBytes[0], Length(LBytes));
+                  LStream64.Position := 0;
+                  LMF := TAiMediaFile.Create;
+                  LMF.LoadFromStream('ci_tone.wav', LStream64);
+                  ResMsg.AddMediaFile(LMF);
+                finally
+                  LStream64.Free;
+                end;
+              end;
+            end;
+            Continue; // text outputs no tienen URL, saltar el bloque de descarga
+          end;
+          // Groq devuelve imagenes, archivos y audio como URLs descargables
+          if (sOutType = 'image') and JOutput.TryGetValue<TJSonObject>('image', JFileObj) then
+          begin
+            JFileObj.TryGetValue<string>('url', sUrl);
+            JFileObj.TryGetValue<string>('type', sMime); // Groq: campo 'type' = MIME
+            sName := 'ci_image';
+          end
+          else if (sOutType = 'file') and JOutput.TryGetValue<TJSonObject>('file', JFileObj) then
+          begin
+            JFileObj.TryGetValue<string>('url', sUrl);
+            JFileObj.TryGetValue<string>('mime_type', sMime);
+            JFileObj.TryGetValue<string>('name', sName);
+          end
+          else if (sOutType = 'audio') and JOutput.TryGetValue<TJSonObject>('audio', JFileObj) then
+          begin
+            JFileObj.TryGetValue<string>('url', sUrl);
+            JFileObj.TryGetValue<string>('type', sMime);
+            sName := 'ci_audio';
+          end;
+          if sUrl = '' then
+            Continue;
+          if sName = '' then
+            sName := 'ci_output';
+          if (ExtractFileExt(sName) = '') and (sMime <> '') then
+          begin
+            var Ext := GetFileExtensionFromMimeType(sMime);
+            if Ext <> '' then
+              sName := sName + '.' + Ext;
+          end;
+          LStream := TMemoryStream.Create;
+          try
+            try
+              var LRes := LClient.Get(sUrl, LStream);
+              if LRes.StatusCode = 200 then
+              begin
+                LStream.Position := 0;
+                LMF := TAiMediaFile.Create;
+                LMF.LoadFromStream(sName, LStream);
+                ResMsg.AddMediaFile(LMF);
+              end;
+            except
+            end;
+          finally
+            LStream.Free;
+          end;
+        end;
+      end;
+    finally
+      LClient.Free;
+    end;
+  finally
+    JArr.Free;
+  end;
 end;
 
 {

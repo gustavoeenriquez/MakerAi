@@ -15,8 +15,6 @@ This folder contains the foundation layer of the MakerAI framework. All provider
 | `uMakerAi.Chat.Messages.pas` | `TAiChatMessage`, `TAiChatMessages`, `TAiToolsFunction`, citations system |
 | `uMakerAi.Chat.Tools.pas` | `IAiToolContext` interface and base tool classes (`TAiSpeechToolBase`, `TAiVisionToolBase`, etc.) |
 | `uMakerAi.Chat.Bridge.pas` | Bridge utilities for chat interoperability |
-| `uMakerAi.Embeddings.pas` | OpenAI-specific embedding implementation (inherits from `uMakerAi.Embeddings.core.pas`) |
-| `uMakerAi.Embeddings.core.pas` | Abstract `TAiEmbeddingsCore` base class for embedding providers |
 | `uMakerAi.Prompts.pas` | Prompt template utilities |
 | `uMakerAi.Version.inc` | Version constants and feature flags - included via `{$I}` directive |
 | `uMakerAi.Utils.*.pas` | Utility helpers (CodeExtractor, PcmToWav, System) |

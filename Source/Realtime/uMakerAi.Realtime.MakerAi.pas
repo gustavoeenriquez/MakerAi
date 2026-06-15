@@ -1,4 +1,4 @@
-// MakerAI Suite — Driver MakerAI Realtime (STT + LLM + TTS)
+﻿// MakerAI Suite — Driver MakerAI Realtime (STT + LLM + TTS)
 // wss://api.cimamaker.com/v1/audio/realtime  (RFC 6455 + subprotocolo "realtime")
 //
 // Conversacion de voz completa en un solo WebSocket:

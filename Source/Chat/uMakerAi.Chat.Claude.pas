@@ -1512,6 +1512,11 @@ begin
           FStreamResponseMsg.Model := jMessage.GetValue<string>('model');
           FStreamResponseMsg.Role := jMessage.GetValue<string>('role');
 
+          // Leer input_tokens desde message_start (Claude streaming no incluye usage en message_stop)
+          var jStartUsage: TJSONObject;
+          if jMessage.TryGetValue<TJSONObject>('usage', jStartUsage) then
+            Self.Prompt_tokens := jStartUsage.GetValue<Integer>('input_tokens', 0);
+
           // Notificar inicio de recepci?n
           if Assigned(OnReceiveData) then
             OnReceiveData(Self, FStreamResponseMsg, jData, 'assistant', '');
@@ -2661,7 +2666,26 @@ begin
       aMediaFile.Content.CopyFrom(MemStream, 0);
       aMediaFile.Content.Position := 0;
 
-      // Intentar determinar la extensi?n si no la tiene
+      // Use HTTP Content-Type header to fix extension when filename is a .bin fallback
+      var ContentType := Res.GetHeaderValue('Content-Type');
+      // Strip charset/boundary suffix: "audio/wav; charset=utf-8" → "audio/wav"
+      var SemiPos := Pos(';', ContentType);
+      if SemiPos > 0 then
+        ContentType := Trim(Copy(ContentType, 1, SemiPos - 1));
+      if (ContentType <> '') and
+         (not SameText(ContentType, 'application/octet-stream')) and
+         (aMediaFile.FileName.EndsWith('.bin') or aMediaFile.FileName.IsEmpty) then
+      begin
+        var Ext := GetFileExtensionFromMimeType(ContentType);
+        if Ext <> '' then
+        begin
+          if aMediaFile.FileName.IsEmpty then
+            aMediaFile.FileName := aMediaFile.IdFile + '.' + Ext
+          else
+            aMediaFile.FileName := ChangeFileExt(aMediaFile.FileName, '.' + Ext);
+        end;
+      end;
+
       if aMediaFile.FileName.IsEmpty then
         aMediaFile.FileName := aMediaFile.IdFile + '.bin'; // Default
 

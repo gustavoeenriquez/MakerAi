@@ -631,11 +631,11 @@ Begin
   Model := 'llama-3.3-70b-versatile';
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens', '32768');
 
-  // gpt-oss-20b: 131K ctx, 65K output, ~1000 t/s, reasoning (include_reasoning API)
+  // gpt-oss-20b: 131K ctx, 65K output, ~1000 t/s, reasoning + code_interpreter (include_reasoning API)
   Model := 'openai/gpt-oss-20b';
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens',    '65536');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ModelCaps',    '[cap_Reasoning]');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'SessionCaps',  '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ModelCaps',    '[cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'SessionCaps',  '[cap_Reasoning, cap_CodeInterpreter]');
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ThinkingLevel', 'tlMedium');
 
   // gpt-oss-120b: 131K ctx, 65K output, ~500 t/s, reasoning + vision (include_reasoning API)
@@ -1424,10 +1424,19 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('MakerAi', 'SessionCaps',  '[cap_Image]');
 
   // --- Modelos de Chat ---
-  // mk-pro: modelo avanzado, vision + file_reader (PDF, DOCX, XLSX, TXT, CSV, HTML)
+  // mk-pro: modelo avanzado (OpenAI-backed), vision + web_search + code_execution + file_reader
   Model := 'mk-pro';
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Image, cap_Pdf]');
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Image, cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[cap_Image, cap_Pdf, cap_WebSearch, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_WebSearch, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'True');
+
+  // mk-claude-sonnet: Claude Sonnet vía MKAI — visión + todos los mk_tools Claude
+  // (web_search, code_execution, computer_use, text_editor, bash, memory, file_reader)
+  Model := 'mk-claude-sonnet';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',
+    '[cap_Image, cap_Pdf, cap_WebSearch, cap_CodeInterpreter, cap_ComputerUse, cap_TextEditor, cap_Shell, cap_Memory]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps',
+    '[cap_Image, cap_Pdf, cap_WebSearch, cap_CodeInterpreter, cap_ComputerUse, cap_TextEditor, cap_Shell, cap_Memory]');
   TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'True');
 
   // mk-gpt-oss-20b: modelo principal de chat, reasoning + vision + file_reader

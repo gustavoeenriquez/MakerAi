@@ -573,6 +573,10 @@ begin
     Result := 'ogg'
   else if SameText(MimeType, 'audio/wav') then
     Result := 'wav'
+  else if SameText(MimeType, 'audio/x-wav') then
+    Result := 'wav'
+  else if SameText(MimeType, 'audio/wave') then
+    Result := 'wav'
   else if SameText(MimeType, 'audio/flac') then
     Result := 'flac'
   else if SameText(MimeType, 'audio/aac') then
