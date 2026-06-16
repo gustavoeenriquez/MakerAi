@@ -293,7 +293,7 @@ begin
       LEffective := Tool_choice;
       if LEffective = '' then LEffective := 'auto';
 
-      LChoiceVal := TJSonValue.ParseJSONValue(LEffective);
+      LChoiceVal := TJSonObject.ParseJSONValue(LEffective); // ParseJSONValue es método de clase de TJSONObject (TJSonValue no lo expone en D10.4)
       if Assigned(LChoiceVal) and (LChoiceVal is TJSonObject) then
         LJson.AddPair('tool_choice', LChoiceVal)
       else
@@ -451,7 +451,20 @@ begin
       LSavedHandler(Self, ResMsg, jObj, ResMsg.Role, ResMsg.Prompt);
   end
   else
+  begin
     inherited ParseChat(jObj, ResMsg);
+    // ISSUE #99 (regresión): en async la clase base delega el cierre del turno al handler
+    // de [DONE] de OnInternalReceiveData. Pero este driver intercepta [DONE] él mismo
+    // (-> HandleStreamDone) y se salta ese handler, así que para contenido plano nadie
+    // dispara FOnReceiveDataEnd/acsFinished y el cliente cuelga (DEADLINE). Lo disparamos
+    // aquí. Guard 'not FPendingToolRun': si la base dejó una continuación tool-calling
+    // diferida (ISSUE #100), NO cerramos el turno a mitad del loop agéntico.
+    if FClient.Asynchronous and (not FPendingToolRun) and Assigned(FOnReceiveDataEnd) then
+    begin
+      DoStateChange(acsFinished, 'Done');
+      FOnReceiveDataEnd(Self, ResMsg, jObj, ResMsg.Role, ResMsg.Prompt);
+    end;
+  end;
 end;
 
 procedure TAiMakerAiChat.ExtractMkFileBlocks(ResMsg: TAiChatMessage);
@@ -900,15 +913,20 @@ var
   LMsg: TAiChatMessage;
 begin
   LBody := Trim(FTmpResponseText);
-
-  // Delegate HTTP-error handling and stream cleanup to the base class.
-  inherited OnRequestCompletedEvent(Sender, aResponse);
+  FTmpResponseText := '';
 
   // Con tools en el request el servidor fuerza una respuesta JSON completa
   // (chat.completion) aunque se haya pedido stream=true. En ese caso el buffer
   // quedo con el JSON integro (sin lineas 'data:' ni [DONE]): procesarlo por
   // ParseChat, que ademas resuelve los tool_calls y dispara OnReceiveDataEnd.
-  if Asynchronous and LBody.StartsWith('{') then
+  //
+  // ISSUE #100: se procesa ANTES de inherited a proposito. Si ParseChat resuelve
+  // tool_calls deja FPendingToolRun=True (continuacion diferida); el inherited base
+  // (que libera el stream y lanza el siguiente round si FPendingToolRun) debe correr
+  // DESPUES para que la continuacion del loop agentico no se pierda.
+  if Asynchronous and Assigned(aResponse) and
+     (aResponse.StatusCode >= 200) and (aResponse.StatusCode <= 299) and
+     LBody.StartsWith('{') then
   begin
     LJObj := TJSONObject.ParseJSONValue(LBody) as TJSONObject;
     if Assigned(LJObj) then
@@ -926,11 +944,9 @@ begin
     end;
   end;
 
-  // Async (stream=true): OnInternalReceiveData processed all SSE chunks;
-  // the [DONE] sentinel already triggered ParseChat via the base class.
-  // Sync (stream=false): InternalRunCompletions called ParseChat directly.
-  // Either way there is nothing left to do — just ensure the buffer is clear.
-  FTmpResponseText := '';
+  // Delegate HTTP-error handling, stream cleanup y la continuacion tool-calling
+  // diferida (FPendingToolRun) a la clase base. Corre al final (ver nota arriba).
+  inherited OnRequestCompletedEvent(Sender, aResponse);
 end;
 
 initialization
