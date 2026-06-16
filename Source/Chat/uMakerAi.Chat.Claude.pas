@@ -1436,7 +1436,17 @@ begin
           FOnReceiveDataEnd(Self, ResMsg, jObj, Role, Respuesta);
       end
       else
-        Self.Run(Nil, ResMsg);
+      begin
+        // ISSUE #100: en async este ParseChat corre DENTRO del callback de recepción
+        // (OnInternalReceiveData -> message_stop). Reentrar con Self.Run inicia un POST
+        // nuevo cuyo finally libera el FCurrentPostStream de la petición aún en vuelo -> AV
+        // en THTTPClient.ExecuteHTTPInternal. Se difiere la continuación a
+        // OnRequestCompletedEvent (base), que corre cuando la petición ya liberó su stream.
+        if FClient.Asynchronous then
+          FPendingToolRun := True
+        else
+          Self.Run(Nil, ResMsg);
+      end;
     end
     else
     begin
@@ -1494,6 +1504,7 @@ begin
   if FAbort then
   begin
     FBusy := False;
+    FPendingToolRun := False;
     if Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, nil, nil, 'system', 'abort');
     ClearStreamState;
@@ -1892,6 +1903,7 @@ begin
         DoError('Claude Stream Error: ' + ErrMsg, nil);
         ClearStreamState;
         FBusy := False;
+        FPendingToolRun := False;
       end;
 
     finally

@@ -396,6 +396,11 @@ type
     FTmpToolCallBuffer: TObjectDictionary<Integer, TJSonObject>;
     FLastExecutedToolsJSON: string; // Groq code_interpreter: executed_tools top-level field
     FCurrentPostStream: TStringStream;
+    // ISSUE #100: continuación tool-calling diferida en modo asíncrono.
+    // Se marca en ParseChat y se ejecuta en OnRequestCompletedEvent para NO reentrar
+    // al THTTPClient desde su propio callback de recepción (evita el AV en
+    // THTTPClient.ExecuteHTTPInternal al liberar el FSourceStream de la petición en vuelo).
+    FPendingToolRun: Boolean;
     FThinking_tokens: Integer;
     FCached_tokens: Integer;
 
@@ -1439,6 +1444,7 @@ begin
   FTool_choice := 'auto';
   FMemoryTokenBudget := 1500;
   FAutoStoreMemories := False;
+  FPendingToolRun := False;
 end;
 
 function TAiChat.DeleteFile(aMediaFile: TAiMediaFile): String;
@@ -2100,10 +2106,18 @@ Var
           end
           else
           begin
-            DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
+            // ISSUE #99/#100: si ParseChat dejó una continuación tool-calling diferida
+            // (FPendingToolRun=True), el turno NO ha terminado: el evento final y el
+            // acsFinished se emitirán al llegar la respuesta sin tools (hoja del ciclo).
+            // Solo finalizamos aquí cuando NO hay continuación (p.ej. passthrough por
+            // StopAgenticLoop, donde los tool_calls se entregan al cliente final).
+            if not FPendingToolRun then
+            begin
+              DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
 
-            if Assigned(FOnReceiveDataEnd) then
-              FOnReceiveDataEnd(Self, GetLastMessage, Nil, FTmpRole, '');
+              if Assigned(FOnReceiveDataEnd) then
+                FOnReceiveDataEnd(Self, GetLastMessage, Nil, FTmpRole, '');
+            end;
           end;
         finally
           if Assigned(TempMsg) then
@@ -2114,7 +2128,10 @@ Var
       end;
 
       FLastReasoning := ''; // Limpiar para el próximo round o próxima petición
-      FBusy := False;
+      // ISSUE #100: si hay continuación tool-calling diferida, el turno sigue activo:
+      // no liberar FBusy aquí (el siguiente Run lo gestiona).
+      if not FPendingToolRun then
+        FBusy := False;
       Exit;
     End;
 
@@ -2311,6 +2328,7 @@ begin
   If FAbort = True then
   Begin
     FBusy := False;
+    FPendingToolRun := False;
     FTmpToolCallBuffer.Clear;
     FLastReasoning := '';
     If Assigned(FOnReceiveDataEnd) then
@@ -2356,6 +2374,8 @@ end;
 
 procedure TAiChat.OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse);
 begin
+  // En este punto la petición async ya completó por completo: THTTPClient.ExecuteHTTPInternal
+  // terminó (incluido el Seek sobre FSourceStream), por lo que es seguro liberar el stream.
   FreeAndNil(FCurrentPostStream);
 
   If Assigned(aResponse) and ((aResponse.StatusCode < 200) or (aResponse.StatusCode > 299)) then
@@ -2363,17 +2383,42 @@ begin
     // Siempre liberar el estado de ocupado en errores HTTP (ej: 429 rate limit,
     // 500 server error, etc.). Sin esto la app queda colgada indefinidamente.
     FBusy := False;
+    FPendingToolRun := False; // no continuar el ciclo tool-calling tras un error HTTP
     FTmpToolCallBuffer.Clear;
     DoStateChange(acsError, aResponse.ContentAsString);
     if Assigned(FOnError) then
       FOnError(Self, aResponse.ContentAsString, Nil, aResponse);
+    Exit;
   End;
+
+  // ISSUE #100: continuación diferida del ciclo tool-calling en modo asíncrono.
+  // Se difiere fuera del despacho de completado (TThread.Queue/ForceQueue) para iniciar
+  // el siguiente POST con la petición previa ya destruida y su FSourceStream liberado,
+  // eliminando la reentrancia y la condición de carrera sobre FCurrentPostStream.
+  if FPendingToolRun then
+  begin
+    FPendingToolRun := False;
+{$IF CompilerVersion >= 36}
+    TThread.ForceQueue(nil,
+      procedure
+      begin
+        Self.Run(nil, nil);
+      end);
+{$ELSE}
+    TThread.Queue(nil,
+      procedure
+      begin
+        Self.Run(nil, nil);
+      end);
+{$IFEND}
+  end;
 end;
 
 procedure TAiChat.OnRequestErrorEvent(const Sender: TObject; const AError: string);
 begin
   FreeAndNil(FCurrentPostStream);
   FBusy := False;
+  FPendingToolRun := False;
   FTmpToolCallBuffer.Clear;
   DoStateChange(acsError, AError);
   If Assigned(FOnError) then
@@ -2384,6 +2429,7 @@ procedure TAiChat.OnRequestExceptionEvent(const Sender: TObject; const AError: E
 begin
   FreeAndNil(FCurrentPostStream);
   FBusy := False;
+  FPendingToolRun := False;
   FTmpToolCallBuffer.Clear;
   DoStateChange(acsError, AError.Message);
   If Assigned(FOnError) then
@@ -2603,8 +2649,21 @@ begin
       End
       else
       Begin
-        Self.Run(Nil, ResMsg);
-        ResMsg.Content := '';
+        if FClient.Asynchronous then
+        begin
+          // ISSUE #100: en modo asíncrono NO reentrar al THTTPClient desde su propio
+          // callback de recepción (este código corre dentro de OnInternalReceiveData).
+          // Reentrar inicia un POST nuevo cuyo finally libera el FCurrentPostStream de
+          // la petición aún en vuelo -> AV en THTTPClient.ExecuteHTTPInternal (Seek sobre
+          // FSourceStream liberado). Se difiere la continuación a OnRequestCompletedEvent,
+          // que se ejecuta cuando la petición actual ya terminó de desenrollarse por completo.
+          FPendingToolRun := True;
+        end
+        else
+        begin
+          Self.Run(Nil, ResMsg);
+          ResMsg.Content := '';
+        end;
       End;
 
     End
@@ -2643,7 +2702,12 @@ begin
 
       ResMsg.Prompt := Respuesta;
 
-      DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
+      // ISSUE #99: en modo asíncrono el handler [DONE] de OnInternalReceiveData es el
+      // responsable de DoStateChange(acsFinished) y de disparar FOnReceiveDataEnd. Si
+      // ParseChat también lo hace, el evento (y el cambio de estado) se ejecuta dos veces.
+      // En modo síncrono ParseChat es el único que los dispara, por lo que se conserva.
+      if not FClient.Asynchronous then
+        DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
 
       // gpt-oss-20b (Groq): executed_tools anidado en choices[0].message.executed_tools.
       // Se extrae aquí, antes de OnDataEnd, para que MediaFiles.Count sea correcto en el callback.
@@ -2663,8 +2727,10 @@ begin
         end;
       end;
 
-      If Assigned(FOnReceiveDataEnd) then
-        FOnReceiveDataEnd(Self, ResMsg, jObj, Role, Respuesta);
+      // ISSUE #99: ver nota arriba — en async lo dispara el handler [DONE], no ParseChat.
+      if not FClient.Asynchronous then
+        If Assigned(FOnReceiveDataEnd) then
+          FOnReceiveDataEnd(Self, ResMsg, jObj, Role, Respuesta);
     End;
   Finally
     LFunciones.Free;

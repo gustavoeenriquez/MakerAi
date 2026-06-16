@@ -274,6 +274,9 @@ begin
 
     Res := Client.Get(sUrl, Response, Headers);
 
+    if not Assigned(Res) then
+      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+
     if Res.StatusCode = 200 then
     Begin
       jRes := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
@@ -469,7 +472,13 @@ begin
 
   DoStateChange(acsConnecting, 'Sending request...');
 
-  St := TStringStream.Create('', TEncoding.UTF8);
+  // ISSUE #100: usar FCurrentPostStream (no un St local) para que el stream del POST
+  // sobreviva en async y se libere de forma segura en OnRequestCompletedEvent (base),
+  // en vez de fugarse (el código previo nunca liberaba St en async).
+  if Assigned(FCurrentPostStream) then
+    FreeAndNil(FCurrentPostStream);
+  FCurrentPostStream := TStringStream.Create('', TEncoding.UTF8);
+  St := FCurrentPostStream;
   sUrl := Url + 'api/chat';
 
   Try
@@ -517,9 +526,10 @@ begin
       end;
     End;
   Finally
+    // Sync: liberar aquí (ya se consumió). Async: lo libera OnRequestCompletedEvent
+    // (base) cuando la petición completa, de forma segura (sin fuga ni use-after-free).
     If FClient.Asynchronous = False then
-      St.Free;
-    // Esto no funciona en multiarea, así que se libera cuando no lo es.
+      FreeAndNil(FCurrentPostStream);
   End;
 end;
 
@@ -637,6 +647,7 @@ begin
   if FAbort then
   begin
     FBusy := False;
+    FPendingToolRun := False;
     FTmpToolCallsStr := '';
     FAsyncResMsg := nil; // descartar ResMsg pendiente al abortar
     if Assigned(FOnReceiveDataEnd) then
@@ -727,6 +738,7 @@ begin
     on E: Exception do
     begin
       FBusy := False;
+      FPendingToolRun := False;
       DoError('Error en OnInternalReceiveData (Ollama Stream): ' + E.Message, E);
     end;
   end;
@@ -895,9 +907,16 @@ begin
         FLastContent := '';
         // En modo async, preservar ResMsg entre rounds para que ProcessFinalJsonObject
         // lo reutilice y conserve los MediaFiles agregados durante tool calls.
+        // ISSUE #100: NO reentrar al THTTPClient desde su callback de recepción (este
+        // ParseChat corre dentro de OnInternalReceiveData). Se difiere la continuación a
+        // OnRequestCompletedEvent (base). En sync se reentra directo (seguro).
         if Self.Asynchronous then
+        begin
           FAsyncResMsg := ResMsg;
-        Self.Run(nil, ResMsg);
+          FPendingToolRun := True;
+        end
+        else
+          Self.Run(nil, ResMsg);
       end;
     finally
       LChoicesSimulado.Free;
