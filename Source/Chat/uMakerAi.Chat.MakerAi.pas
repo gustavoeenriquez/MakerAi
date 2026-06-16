@@ -744,9 +744,39 @@ var
   LFakeChoices: TJSONArray;
   LRole: string;
   TempMsg: TAiChatMessage;
+  LToolCallsStr: string;
+  LCombinedTools: TJSONArray;
+  LSortedKeys: TList<Integer>;
 begin
   LRole := FTmpRole;
   if LRole = '' then LRole := 'assistant';
+
+  // El servidor stremea los tool_calls como delta SSE (NO fuerza un JSON completo cuando
+  // hay tools). La clase base los acumuló en FTmpToolCallBuffer durante el stream. Como
+  // este driver intercepta [DONE] y se salta el handler base que normalmente los reconstruye,
+  // lo hacemos aquí para que ParseChat vea las tools y las ejecute; si no, async+tools queda
+  // con respuesta vacía y, tras el cierre, sin continuación (la tool nunca se llama).
+  LToolCallsStr := '';
+  if FTmpToolCallBuffer.Count > 0 then
+  begin
+    LCombinedTools := TJSONArray.Create;
+    try
+      LSortedKeys := TList<Integer>.Create;
+      try
+        for var LKey in FTmpToolCallBuffer.Keys do
+          LSortedKeys.Add(LKey);
+        LSortedKeys.Sort;
+        for var LKey in LSortedKeys do
+          LCombinedTools.Add(FTmpToolCallBuffer[LKey].Clone as TJSONObject);
+      finally
+        LSortedKeys.Free;
+      end;
+      LToolCallsStr := LCombinedTools.ToJSON;
+    finally
+      LCombinedTools.Free;
+      FTmpToolCallBuffer.Clear;
+    end;
+  end;
 
   LFakeJson := TJSONObject.Create;
   try
@@ -763,10 +793,15 @@ begin
     LFakeMsg.AddPair('role', LRole);
     if FLastContent <> '' then
       LFakeMsg.AddPair('content', FLastContent);
+    if LToolCallsStr <> '' then
+      LFakeMsg.AddPair('tool_calls', TJSONArray(TJSONObject.ParseJSONValue(LToolCallsStr)));
 
     LFakeChoice := TJSONObject.Create;
-    LFakeChoice.AddPair('message',       LFakeMsg);
-    LFakeChoice.AddPair('finish_reason', 'stop');
+    LFakeChoice.AddPair('message', LFakeMsg);
+    if LToolCallsStr <> '' then
+      LFakeChoice.AddPair('finish_reason', 'tool_calls')
+    else
+      LFakeChoice.AddPair('finish_reason', 'stop');
 
     LFakeChoices := TJSONArray.Create;
     LFakeChoices.Add(LFakeChoice);
@@ -790,14 +825,19 @@ begin
 
       ParseChat(LFakeJson, LHistMsg);
 
-      if (LHistMsg.Prompt = '') and (LHistMsg.MediaFiles.Count = 0) then
-        FMessages.Delete(FMessages.Count - 1);
+      // Si LHistMsg quedó vacío, removerlo POR REFERENCIA: en la rama de tools, ParseChat
+      // agregó el mensaje assistant-con-tool_calls y el tool-result DESPUÉS, así que el
+      // último de la lista ya no es LHistMsg (un Delete(Count-1) borraría el tool-result).
+      if (LHistMsg.Prompt = '') and (LHistMsg.MediaFiles.Count = 0) and (LHistMsg.Tool_calls = '') then
+        FMessages.Remove(LHistMsg);
     finally
       if Assigned(TempMsg) then TempMsg.Free;
     end;
 
     FLastReasoning := '';
-    FBusy := False;
+    // No liberar FBusy si quedó una continuación tool-calling diferida (#100): el turno sigue.
+    if not FPendingToolRun then
+      FBusy := False;
   finally
     LFakeJson.Free;
   end;
