@@ -2750,7 +2750,7 @@ var
 begin
   if AExecutedToolsJSON = '' then
     Exit;
-  JArr := TJSonValue.ParseJSONValue(AExecutedToolsJSON) as TJSonArray;
+  JArr := TJSonObject.ParseJSONValue(AExecutedToolsJSON) as TJSonArray; // ParseJSONValue es método de clase de TJSONObject (TJSonValue no lo expone en D10.4)
   if not Assigned(JArr) then
     Exit;
   try

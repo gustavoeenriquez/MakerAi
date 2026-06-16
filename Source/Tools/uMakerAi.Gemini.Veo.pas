@@ -39,6 +39,9 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections, System.Threading,
   System.JSON, System.Net.HttpClient, System.Net.URLClient,
+{$IF CompilerVersion < 35}
+  uJSONHelper, // Delphi 10.4: helpers genéricos GetValue<T>/TryGetValue<T> de TJSONObject
+{$ENDIF}
   uMakerAi.chat.Gemini,
   uMakerAi.Core, System.Net.HttpClientComponent;
 

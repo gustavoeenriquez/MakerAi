@@ -322,6 +322,14 @@ implementation
 uses
   IdTCPClient, IdIOHandler, IdExceptionCore;
 
+// GetTickCount64 portable: TThread.GetTickCount64 no existe en Delphi 10.4.
+// TStopwatch (System.Diagnostics) es monótono y está disponible en todas las
+// versiones y plataformas; solo se usa para medir deltas de tiempo (timeouts).
+function MkGetTickCount64: Int64;
+begin
+  Result := Int64(TStopwatch.GetTimeStamp) * Int64(1000) div TStopwatch.Frequency;
+end;
+
 // ---------------------------------------------------------------------------
 // Log a disco para debug de shutdown — solo activo en builds DEBUG
 // ---------------------------------------------------------------------------
@@ -2397,7 +2405,7 @@ begin
   Msg := ParamsObj.GetValue<string>('message', '');
 
   // Cualquier progreso entrante extiende el deadline de espera de CallTool.
-  FLastProgressTick := Int64(TThread.GetTickCount64);
+  FLastProgressTick := MkGetTickCount64;
 
   Handler := nil;
   FProgressLock.Enter;
@@ -2792,7 +2800,7 @@ var
     // Deadline base, extendido si el servidor sigue reportando progreso
     // (un tool vivo no debe morir por timeout mientras avisa que avanza).
     Result := (Sw.ElapsedMilliseconds < ATimeoutMs) or
-      ((Int64(TThread.GetTickCount64) - FLastProgressTick < Int64(ATimeoutMs)) and
+      ((MkGetTickCount64 - FLastProgressTick < Int64(ATimeoutMs)) and
        (Sw.ElapsedMilliseconds < ABS_MAX_WAIT_MS));
   end;
 
