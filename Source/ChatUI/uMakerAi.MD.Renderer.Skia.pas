@@ -189,6 +189,10 @@ type
     function  ImageAtPoint(ADocY, AX: Single; out AURL: string): Boolean;
     function  GetCachedImage(const AURL: string): ISkImage;
 
+    { Media at point — decoded image body OR attachment-card button.
+      Devuelve URL + MIME type para que el host abra/guarde el medio. }
+    function  MediaAtPoint(ADocY, AX: Single; out AURL, AMime: string): Boolean;
+
     property Theme        : TMDTheme               read FTheme        write FTheme;
     property CodeWrap     : Boolean                read FCodeWrap     write FCodeWrap;
     property ContentHeight: Single                 read FContentHeightCache;
@@ -2022,24 +2026,32 @@ begin
   begin
     if Assigned(FOnLoadMedia) then
       FOnLoadMedia(nil, URL, ImgData, MimeType, Handled);
-    if MimeType <> '' then
-      ABlock.MimeType := MimeType;
-    FMimeCache.AddOrSetValue(URL, MimeType);
 
-    { Decode image bytes if applicable }
-    if Handled and (Length(ImgData) > 0) then
+    { Cachear como 'resuelto' SOLO con una respuesta definitiva: el host entregó
+      datos (Handled=True) o no hay host a quien preguntar. Un host asíncrono que
+      aún está descargando retorna Handled=False; en ese caso NO cacheamos, para
+      que la siguiente pasada de layout vuelva a pedir hasta que lleguen los bytes. }
+    if Handled or (not Assigned(FOnLoadMedia)) then
     begin
-      var IsImg := (MimeType = '') or MimeType.StartsWith('image/');
-      if IsImg then
-      try
-        var DecodedImg := TSkImage.MakeFromEncoded(ImgData);
-        if DecodedImg <> nil then
-        begin
-          FImageCache.AddOrSetValue(URL, DecodedImg);
-          Img := DecodedImg;
+      if MimeType <> '' then
+        ABlock.MimeType := MimeType;
+      FMimeCache.AddOrSetValue(URL, MimeType);
+
+      { Decode image bytes if applicable }
+      if Handled and (Length(ImgData) > 0) then
+      begin
+        var IsImg := (MimeType = '') or MimeType.StartsWith('image/');
+        if IsImg then
+        try
+          var DecodedImg := TSkImage.MakeFromEncoded(ImgData);
+          if DecodedImg <> nil then
+          begin
+            FImageCache.AddOrSetValue(URL, DecodedImg);
+            Img := DecodedImg;
+          end;
+        except
+          // ignore decode errors; fall through to card view
         end;
-      except
-        // ignore decode errors; fall through to card view
       end;
     end;
   end
@@ -2264,6 +2276,46 @@ function TAITextMDRenderer.GetCachedImage(const AURL: string): ISkImage;
 begin
   if not FImageCache.TryGetValue(AURL, Result) then
     Result := nil;
+end;
+
+function TAITextMDRenderer.MediaAtPoint(ADocY, AX: Single;
+  out AURL, AMime: string): Boolean;
+var
+  I: Integer;
+  R: TRectF;
+  B: TMDButtonArea;
+begin
+  AURL := '';
+  AMime := '';
+
+  // 1) Cuerpo de una imagen decodificada (thumbnail)
+  for I := 0 to FImageAreas.Count - 1 do
+  begin
+    R := FImageAreas[I].DocRect;
+    if (ADocY >= R.Top) and (ADocY <= R.Bottom) and
+       (AX    >= R.Left) and (AX    <= R.Right) then
+    begin
+      AURL := FImageAreas[I].URL;
+      if (not FMimeCache.TryGetValue(AURL, AMime)) or (AMime = '') then
+        AMime := 'image/';
+      Exit(True);
+    end;
+  end;
+
+  // 2) Botón de una card de adjunto (audio/video/archivo) — lleva URL + MIME
+  for I := 0 to FButtonAreas.Count - 1 do
+  begin
+    B := FButtonAreas[I];
+    if (ADocY >= B.DocY) and (ADocY < B.DocY + B.Height) and
+       (AX    >= B.Left) and (AX    < B.Left + B.Width) then
+    begin
+      AURL  := B.URL;
+      AMime := B.MimeType;
+      Exit(True);
+    end;
+  end;
+
+  Result := False;
 end;
 
 end.
