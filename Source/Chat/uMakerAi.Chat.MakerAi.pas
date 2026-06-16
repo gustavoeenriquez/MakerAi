@@ -640,18 +640,52 @@ begin
     sType := ''; sFilename := ''; sMime := ''; sData := '';
     LPart.TryGetValue<string>('type', sType);
 
-    if (sType = 'audio') or (sType = 'file') then
+    if (sType = 'audio') or (sType = 'video') or (sType = 'file') then
     begin
       if not LPart.TryGetValue<TJSONObject>(sType, LInner) then Continue;
       LInner.TryGetValue<string>('filename',  sFilename);
       LInner.TryGetValue<string>('mime_type', sMime);
       LInner.TryGetValue<string>('data',      sData);
+      // Variante solo-URL (lazy): si no trae base64 pero sí una URL http(s)
+      if (sData = '') then
+      begin
+        sUrl := '';
+        LInner.TryGetValue<string>('url', sUrl);
+        if sUrl.StartsWith('http', True) then
+        begin
+          if sFilename = '' then
+            sFilename := sType + '-' + IntToStr(FPendingMediaParts.Count + 1) +
+                         GetFileExtensionFromMimeType(sMime);
+          LMF := TAiMediaFile.Create;
+          LMF.filename := sFilename;
+          LMF.UrlMedia := sUrl;          // LAZY: descarga al 1er acceso a .Content
+          FPendingMediaParts.Add(LMF);
+          MKLog('MEDIA_PART', 'lazy url ' + sType + ' ' + sFilename + ' <- ' + sUrl);
+          Continue;
+        end;
+      end;
     end
     else if sType = 'image_url' then
     begin
       if not LPart.TryGetValue<TJSONObject>('image_url', LInner) then Continue;
       LInner.TryGetValue<string>('url', sUrl);
-      // data:mime/type;base64,<data>
+
+      // Rama URL LAZY (Pieza S del server: media solo-URL -> http(s), no data:).
+      // SetUrlMedia es puro lazy (Core:1169); baja al 1er acceso a .Content.
+      if sUrl.StartsWith('http', True) then
+      begin
+        sMime := '';
+        LInner.TryGetValue<string>('mime_type', sMime);   // opcional
+        LMF := TAiMediaFile.Create;
+        LMF.filename := 'ci_image-' + IntToStr(FPendingMediaParts.Count + 1) +
+                        GetFileExtensionFromMimeType(sMime);
+        LMF.UrlMedia := sUrl;
+        FPendingMediaParts.Add(LMF);
+        MKLog('MEDIA_PART', 'lazy url ' + LMF.filename + ' <- ' + sUrl);
+        Continue;   // acumulada; saltar el decode base64 compartido de abajo
+      end;
+
+      // data:mime/type;base64,<data>  (rama existente)
       IComma := Pos(',', sUrl);
       if IComma <= 0 then Continue;
       sData := Copy(sUrl, IComma + 1, MaxInt);
@@ -860,9 +894,37 @@ begin
 end;
 
 Procedure TAiMakerAiChat.OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse);
+var
+  LBody: string;
+  LJObj: TJSONObject;
+  LMsg: TAiChatMessage;
 begin
+  LBody := Trim(FTmpResponseText);
+
   // Delegate HTTP-error handling and stream cleanup to the base class.
   inherited OnRequestCompletedEvent(Sender, aResponse);
+
+  // Con tools en el request el servidor fuerza una respuesta JSON completa
+  // (chat.completion) aunque se haya pedido stream=true. En ese caso el buffer
+  // quedo con el JSON integro (sin lineas 'data:' ni [DONE]): procesarlo por
+  // ParseChat, que ademas resuelve los tool_calls y dispara OnReceiveDataEnd.
+  if Asynchronous and LBody.StartsWith('{') then
+  begin
+    LJObj := TJSONObject.ParseJSONValue(LBody) as TJSONObject;
+    if Assigned(LJObj) then
+    try
+      if Assigned(LJObj.GetValue('choices')) then
+      begin
+        MKLog('NOSTREAM-JSON', Copy(LBody, 1, 500));
+        LMsg := TAiChatMessage.Create('', 'assistant');
+        LMsg.Id := FMessages.Count + 1;
+        FMessages.Add(LMsg);
+        ParseChat(LJObj, LMsg);
+      end;
+    finally
+      LJObj.Free;
+    end;
+  end;
 
   // Async (stream=true): OnInternalReceiveData processed all SSE chunks;
   // the [DONE] sentinel already triggered ParseChat via the base class.
