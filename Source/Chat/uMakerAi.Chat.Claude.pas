@@ -866,13 +866,52 @@ begin
 
       if (Trim(Tool_choice) <> '') then
       begin
+        // Anthropic exige tool_choice como OBJETO: {"type":"auto"|"any"|"none"}
+        // o {"type":"tool","name":"x"}. La propiedad suele llegar en formato
+        // OpenAI: "auto"/"none"/"required" (a veces JSON-quoted como '"auto"')
+        // o {"type":"function","function":{"name":"x"}} — aqu? se traduce.
+        // Enviarla cruda produce 400 "tool_choice: Input should be an object".
+        var LChoiceObj: TJSONObject := nil;
+        var LRaw := Trim(Tool_choice);
+        var LVal := TJSONObject.ParseJSONValue(LRaw);
         try
-          jToolChoice := TJSONObject.ParseJSONValue(Tool_choice) as TJSONObject;
-          if Assigned(jToolChoice) then
-            AJSONObject.AddPair('tool_choice', TJSONObject(jToolChoice.Clone));
-        except
-          AJSONObject.AddPair('tool_choice', Tool_choice);
+          if LVal is TJSONObject then
+          begin
+            var LType := TJSONObject(LVal).GetValue<string>('type', '');
+            if SameText(LType, 'function') then
+            begin
+              // Formato OpenAI con funci?n espec?fica → {"type":"tool","name":...}
+              var LName := '';
+              var LFn := TJSONObject(LVal).GetValue<TJSONObject>('function', nil);
+              if Assigned(LFn) then
+                LName := LFn.GetValue<string>('name', '');
+              if LName <> '' then
+              begin
+                LChoiceObj := TJSONObject.Create;
+                LChoiceObj.AddPair('type', 'tool');
+                LChoiceObj.AddPair('name', LName);
+              end;
+            end
+            else
+              LChoiceObj := TJSONObject(LVal.Clone); // ya viene en formato Anthropic
+          end
+          else
+          begin
+            // String simple (con o sin comillas JSON): auto | none | required
+            var LWord := LRaw.Replace('"', '').Trim.ToLower;
+            if LWord = 'required' then
+              LWord := 'any';
+            if (LWord = 'auto') or (LWord = 'any') or (LWord = 'none') then
+            begin
+              LChoiceObj := TJSONObject.Create;
+              LChoiceObj.AddPair('type', LWord);
+            end;
+          end;
+        finally
+          LVal.Free;
         end;
+        if Assigned(LChoiceObj) then
+          AJSONObject.AddPair('tool_choice', LChoiceObj);
       end;
     end
     else
@@ -947,6 +986,9 @@ begin
       FResponse.Clear;
 
       Res := FClient.Post(sUrl, St, FResponse, FHeaders);
+
+      if not Assigned(Res) then
+        raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
 
       if not FClient.Asynchronous then
       begin
@@ -1368,6 +1410,7 @@ begin
       end;
       TTask.WaitForAll(TaskList);
 
+      var LStopLoop := False;
       for Clave in LFunciones.Keys do
       begin
         ToolCall := LFunciones[Clave];
@@ -1377,9 +1420,33 @@ begin
         ToolCall.MediaFiles.OwnsObjects := False;
         ToolMsg.Id := FMessages.Count + 1;
         FMessages.Add(ToolMsg);
+        LStopLoop := LStopLoop or ToolCall.StopAgenticLoop;
       end;
 
-      Self.Run(Nil, ResMsg);
+      if LStopLoop then
+      begin
+        // Un handler pidi? detener el loop agentico (tool passthrough: lo
+        // ejecuta el cliente final). Se finaliza el turno con los tool_calls
+        // en ResMsg en vez de reenviar el resultado sint?tico al modelo.
+        ResMsg.Tool_calls := sToolCalls;
+        DoProcessResponse(AskMsg, ResMsg, Respuesta);
+        FBusy := False;
+        DoStateChange(acsFinished, 'Done');
+        if Assigned(FOnReceiveDataEnd) then
+          FOnReceiveDataEnd(Self, ResMsg, jObj, Role, Respuesta);
+      end
+      else
+      begin
+        // ISSUE #100: en async este ParseChat corre DENTRO del callback de recepción
+        // (OnInternalReceiveData -> message_stop). Reentrar con Self.Run inicia un POST
+        // nuevo cuyo finally libera el FCurrentPostStream de la petición aún en vuelo -> AV
+        // en THTTPClient.ExecuteHTTPInternal. Se difiere la continuación a
+        // OnRequestCompletedEvent (base), que corre cuando la petición ya liberó su stream.
+        if FClient.Asynchronous then
+          FPendingToolRun := True
+        else
+          Self.Run(Nil, ResMsg);
+      end;
     end
     else
     begin
@@ -1437,6 +1504,7 @@ begin
   if FAbort then
   begin
     FBusy := False;
+    FPendingToolRun := False;
     if Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, nil, nil, 'system', 'abort');
     ClearStreamState;
@@ -1835,6 +1903,7 @@ begin
         DoError('Claude Stream Error: ' + ErrMsg, nil);
         ClearStreamState;
         FBusy := False;
+        FPendingToolRun := False;
       end;
 
     finally
@@ -1935,13 +2004,18 @@ begin
   for LMessage in Self.Messages do
   begin
     LMessageObj := TJSONObject.Create;
-    LMessageObj.AddPair('role', LMessage.Role);
+    // Anthropic no acepta role 'tool' (convenci?n OpenAI usada por historiales
+    // externos): los tool_result van dentro de un mensaje 'user'.
+    if SameText(LMessage.Role, 'tool') then
+      LMessageObj.AddPair('role', 'user')
+    else
+      LMessageObj.AddPair('role', LMessage.Role);
     LContentArray := TJSonArray.Create;
 
     // -------------------------------------------------------------------------
-    // CASO 1: Resultado de Herramienta (Role: User)
+    // CASO 1: Resultado de Herramienta (Role: User o 'tool' estilo OpenAI)
     // -------------------------------------------------------------------------
-    if (LMessage.Role = 'user') and (not LMessage.ToolCallId.IsEmpty) then
+    if ((LMessage.Role = 'user') or SameText(LMessage.Role, 'tool')) and (not LMessage.ToolCallId.IsEmpty) then
     begin
       LPartObj := TJSONObject.Create;
       LPartObj.AddPair('type', 'tool_result');
@@ -2042,7 +2116,33 @@ begin
           if Assigned(LToolUseArray) then
           begin
             for var Val in LToolUseArray do
-              LContentArray.Add(Val.Clone as TJSONObject);
+            begin
+              var JTC := Val as TJSONObject;
+              if SameText(JTC.GetValue<string>('type', ''), 'function') then
+              begin
+                // Formato OpenAI {"type":"function","function":{name,arguments}}
+                // (historiales multi-turn externos) → bloque tool_use Anthropic.
+                var JUse := TJSONObject.Create;
+                JUse.AddPair('type', 'tool_use');
+                JUse.AddPair('id', JTC.GetValue<string>('id', ''));
+                var JFn := JTC.GetValue<TJSONObject>('function', nil);
+                if Assigned(JFn) then
+                begin
+                  JUse.AddPair('name', JFn.GetValue<string>('name', ''));
+                  var JArgs := TJSONObject.ParseJSONValue(JFn.GetValue<string>('arguments', '{}'));
+                  if JArgs is TJSONObject then
+                    JUse.AddPair('input', JArgs)
+                  else
+                  begin
+                    JArgs.Free;
+                    JUse.AddPair('input', TJSONObject.Create);
+                  end;
+                end;
+                LContentArray.Add(JUse);
+              end
+              else
+                LContentArray.Add(Val.Clone as TJSONObject);
+            end;
             LToolUseArray.Free;
           end;
         except

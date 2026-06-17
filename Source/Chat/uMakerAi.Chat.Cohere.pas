@@ -299,8 +299,16 @@ begin
       ToolCall.MediaFiles.OwnsObjects := False;
     end;
 
-    // 3. Volver a llamar a Run para obtener la respuesta final
-    Self.Run(nil, nil);
+    // 3. Volver a llamar a Run para obtener la respuesta final.
+    // ISSUE #100: en async este método se invoca desde el callback de recepción
+    // (OnInternalReceiveData -> ProcessStreamBuffer -> message-end). Reentrar con
+    // Self.Run inicia un POST nuevo cuyo finally libera el FCurrentPostStream de la
+    // petición en vuelo -> AV en THTTPClient.ExecuteHTTPInternal. Se difiere a
+    // OnRequestCompletedEvent (base), que corre cuando la petición ya liberó su stream.
+    if FClient.Asynchronous then
+      FPendingToolRun := True
+    else
+      Self.Run(nil, nil);
 
   finally
     ToolCallList.Free;
@@ -356,6 +364,9 @@ begin
 
     // Se pasa el par?metro AHeaders a la llamada GET.
     HttpResponse := Client.Get(FullUrl, ResponseStream, Headers);
+
+    if not Assigned(HttpResponse) then
+      raise Exception.CreateFmt('Connection failed: no response from %s', [FullUrl]);
 
     // 4. Procesar la respuesta (sin cambios)
     if HttpResponse.StatusCode = 200 then
@@ -452,9 +463,12 @@ begin
             LToolCallsValue.Free;
           LMsgObj.AddPair('tool_calls', TJSONArray.Create);
         end;
-        // Cohere permite un 'content' con 'thinking' junto a 'tool_calls'
-        if not LMessage.Prompt.IsEmpty then
-          LMsgObj.AddPair('content', LMessage.Prompt);
+        // La API v2 de Cohere RECHAZA content de tipo 'text' junto a 'tool_calls'
+        // ("messages with non-empty 'tool_calls' cannot contain content items of type
+        // 'text'"). En streaming el modelo suele emitir un preámbulo de texto antes del
+        // tool_call que queda en LMessage.Prompt; ese texto NO debe enviarse en el
+        // mensaje assistant que porta los tool_calls. Se omite el content de texto.
+        // (Solo se admitiría content de tipo 'thinking', que aquí no emitimos.)
 
       end
       else if (LRoleStr = 'tool') then
@@ -600,6 +614,9 @@ begin
 
     Res := FClient.Post(sUrl, St, FResponse, Headers);
 
+    if not Assigned(Res) then
+      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+
     FResponse.Position := 0;
     FLastContent := '';
 
@@ -651,6 +668,7 @@ begin
   if AAbort then
   begin
     FBusy := False;
+    FPendingToolRun := False;
     if Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, nil, nil, 'system', 'abort');
     Exit;
@@ -1096,11 +1114,15 @@ begin
               end;
             end;
 
-            FBusy := False;
+            // ISSUE #100: si hay continuación tool-calling diferida (FPendingToolRun),
+            // el turno sigue activo: no liberar FBusy (lo gestiona el siguiente Run).
+            if not FPendingToolRun then
+              FBusy := False;
           except
             if Assigned(FStreamResponseMsg) then
               FStreamResponseMsg.Free;
             FStreamResponseMsg := nil;
+            FPendingToolRun := False;
             raise;
           end;
         end;

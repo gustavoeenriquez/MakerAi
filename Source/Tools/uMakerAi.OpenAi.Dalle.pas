@@ -528,10 +528,8 @@ begin
           JObj.AddPair('quality', 'hd')
         else
           JObj.AddPair('quality', 'standard');
-        if FStyle = isVivid then
-          JObj.AddPair('style', 'vivid')
-        else
-          JObj.AddPair('style', 'natural');
+        // 'style' fue retirado de la API de OpenAI para dall-e-3 (2026):
+        // enviarlo produce 400 "Unknown parameter: 'style'". Ya no se env?a.
       end;
 
       // ── Familia GPT Image (gpt-image-1/mini/1.5/2/chatgpt-image-latest) ─
@@ -624,14 +622,9 @@ begin
 
     end; // case FModel
 
-    // response_format solo para modelos NO-GPT (dall-e-2, dall-e-3)
-    if not IsGptImageModel then
-    begin
-      if FResponseFormat = irfUrl then
-        JObj.AddPair('response_format', 'url')
-      else
-        JObj.AddPair('response_format', 'b64_json');
-    end;
+    // 'response_format' fue retirado de la API de OpenAI (2026) tambi?n para
+    // dall-e-2/3: enviarlo produce 400 "Unknown parameter". La API decide el
+    // formato y TAiDalleImage.ParseData soporta ambos (b64_json y url).
 
     ContentStream.WriteString(JObj.ToJSON);
     ContentStream.Position := 0;
@@ -1186,10 +1179,7 @@ begin
     else         Body.AddField('size', '1024x1024');
     end;
 
-    if ResponseFormat = irfUrl then
-      Body.AddField('response_format', 'url')
-    else
-      Body.AddField('response_format', 'b64_json');
+    // 'response_format' retirado de la API de OpenAI (2026) — no enviar.
 
     Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
     Res := Client.Post(FUrl + 'images/variations', Body);

@@ -336,22 +336,26 @@ Var
           ParseChat(FakeResponseObj, TempMsg);
           if sToolCallsStr = '' then
           begin
-            // ParseChat (rama else) ya disparó FOnReceiveDataEnd y DoStateChange(acsFinished).
-            // Solo agregamos TempMsg al historial si no está ya (RunNew async no lo agrega).
+            // En async, ParseChat NO dispara FOnReceiveDataEnd/acsFinished (guard
+            // 'if not FClient.Asynchronous' del base, fix #99). El handler [DONE] es
+            // el responsable de emitir el evento final aquí (igual que el base y el
+            // path JSON stream=false de este mismo driver).
             if FMessages.IndexOf(TempMsg) = -1 then
             begin
               TempMsg.Id := FMessages.Count + 1;
               FMessages.Add(TempMsg);
             end;
+            DoStateChange(acsFinished, 'Done');
+            if Assigned(FOnReceiveDataEnd) then
+              FOnReceiveDataEnd(Self, TempMsg, Nil, FTmpRole, FLastContent);
             TempMsg := nil; // propiedad de FMessages
           end
           else
           begin
-            // Tool calls: ParseChat ejecutó las herramientas y Self.Run inició
-            // el segundo round en modo async (stream=true). El segundo round
-            // emitirá sus propios eventos (SSE → [DONE] → FOnReceiveDataEnd).
-            // No ponemos FBusy=False aquí: el segundo round sigue en vuelo
-            // y lo marcará como False cuando termine (BLOQUE DEEPSEEK / [DONE]).
+            // Tool calls: ParseChat (base) ejecutó las herramientas y dejó
+            // FPendingToolRun=True; la continuación (segundo round async) la difiere
+            // OnRequestCompletedEvent del base. El segundo round emitirá su propio
+            // evento final. No ponemos FBusy=False aquí: el turno sigue activo.
             DoStateChange(acsToolCalling, 'Ejecutando tools, segundo round en proceso...');
           end;
         finally
@@ -481,6 +485,7 @@ begin
   If FAbort = True then
   Begin
     FBusy := False;
+    FPendingToolRun := False;
     FTmpToolCallBuffer.Clear;
     FTmpReasoning := '';
     If Assigned(FOnReceiveDataEnd) then
@@ -541,8 +546,9 @@ begin
                 end
                 else
                 begin
-                  // Tool calls: ParseChat ejecutó herramientas y Self.Run inició
-                  // el segundo round async. No disparar evento aquí.
+                  // Tool calls: ParseChat (base) ejecutó herramientas y dejó
+                  // FPendingToolRun=True; el segundo round async lo difiere
+                  // OnRequestCompletedEvent del base. No disparar evento aquí.
                   DoStateChange(acsToolCalling, 'Segundo round en proceso...');
                 end;
               finally

@@ -296,7 +296,11 @@ type
     FNewSystemConfigured: Boolean; // True si ModelCaps/SessionCaps fueron asignados explícitamente
     FSanitizerActive: Boolean;
     FOnSanitize: TAiSanitizeEvent;
+    FPersistentMemory:  TComponent;
+    FMemoryTokenBudget: Integer;
+    FAutoStoreMemories: Boolean;
 
+    procedure SetPersistentMemory(AValue: TComponent);
     procedure SetApiKey(const Value: String);
     procedure SetFrequency_penalty(const Value: Double);
     procedure SetLogit_bias(const Value: String);
@@ -392,6 +396,11 @@ type
     FTmpToolCallBuffer: TObjectDictionary<Integer, TJSonObject>;
     FLastExecutedToolsJSON: string; // Groq code_interpreter: executed_tools top-level field
     FCurrentPostStream: TStringStream;
+    // ISSUE #100: continuación tool-calling diferida en modo asíncrono.
+    // Se marca en ParseChat y se ejecuta en OnRequestCompletedEvent para NO reentrar
+    // al THTTPClient desde su propio callback de recepción (evita el AV en
+    // THTTPClient.ExecuteHTTPInternal al liberar el FSourceStream de la petición en vuelo).
+    FPendingToolRun: Boolean;
     FThinking_tokens: Integer;
     FCached_tokens: Integer;
 
@@ -580,6 +589,9 @@ type
     property SessionCaps: TAiCapabilities read FSessionCaps write SetSessionCaps; // capacidades deseadas en la sesión
     property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive;
     property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
+    property PersistentMemory:  TComponent read FPersistentMemory write SetPersistentMemory;
+    property MemoryTokenBudget: Integer    read FMemoryTokenBudget write FMemoryTokenBudget default 1500;
+    property AutoStoreMemories: Boolean    read FAutoStoreMemories write FAutoStoreMemories default False;
   end;
 
 var
@@ -592,7 +604,7 @@ procedure LogDebug(const Mensaje: string);
 
 implementation
 
-uses uMakerAi.ParamsRegistry, System.IOUtils;
+uses uMakerAi.ParamsRegistry, System.IOUtils, uMakerAi.Memory.Types;
 
 { TAiChat }
 
@@ -791,6 +803,9 @@ begin
     FResponse.Position := 0;
 
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
+
+    if not Assigned(Res) then
+      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
 
     FResponse.Position := 0;
 
@@ -1441,6 +1456,9 @@ begin
   FResponseTimeOut := 120000;
   FStream_Usage := False; // Envia la estadistica de uso por token
   FTool_choice := 'auto';
+  FMemoryTokenBudget := 1500;
+  FAutoStoreMemories := False;
+  FPendingToolRun := False;
 end;
 
 function TAiChat.DeleteFile(aMediaFile: TAiMediaFile): String;
@@ -1688,6 +1706,9 @@ begin
     Client.ContentType := 'application/json';
 
     Res := Client.Get(sUrl, Response, Headers);
+
+    if not Assigned(Res) then
+      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
 
     if Res.StatusCode = 200 then
     Begin
@@ -1957,7 +1978,21 @@ procedure TAiChat.Notification(AComponent: TComponent; Operation: TOperation);
 begin
   inherited Notification(AComponent, Operation);
   if Operation = opRemove then
+  begin
     FChatTools.Notification(AComponent, Operation);
+    if AComponent = FPersistentMemory then
+      FPersistentMemory := nil;
+  end;
+end;
+
+procedure TAiChat.SetPersistentMemory(AValue: TComponent);
+begin
+  if FPersistentMemory = AValue then Exit;
+  if Assigned(FPersistentMemory) then
+    FPersistentMemory.RemoveFreeNotification(Self);
+  FPersistentMemory := AValue;
+  if Assigned(FPersistentMemory) then
+    FPersistentMemory.FreeNotification(Self);
 end;
 
 procedure TAiChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
@@ -2090,10 +2125,18 @@ Var
           end
           else
           begin
-            DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
+            // ISSUE #99/#100: si ParseChat dejó una continuación tool-calling diferida
+            // (FPendingToolRun=True), el turno NO ha terminado: el evento final y el
+            // acsFinished se emitirán al llegar la respuesta sin tools (hoja del ciclo).
+            // Solo finalizamos aquí cuando NO hay continuación (p.ej. passthrough por
+            // StopAgenticLoop, donde los tool_calls se entregan al cliente final).
+            if not FPendingToolRun then
+            begin
+              DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
 
-            if Assigned(FOnReceiveDataEnd) then
-              FOnReceiveDataEnd(Self, GetLastMessage, Nil, FTmpRole, '');
+              if Assigned(FOnReceiveDataEnd) then
+                FOnReceiveDataEnd(Self, GetLastMessage, Nil, FTmpRole, '');
+            end;
           end;
         finally
           if Assigned(TempMsg) then
@@ -2104,7 +2147,10 @@ Var
       end;
 
       FLastReasoning := ''; // Limpiar para el próximo round o próxima petición
-      FBusy := False;
+      // ISSUE #100: si hay continuación tool-calling diferida, el turno sigue activo:
+      // no liberar FBusy aquí (el siguiente Run lo gestiona).
+      if not FPendingToolRun then
+        FBusy := False;
       Exit;
     End;
 
@@ -2301,6 +2347,7 @@ begin
   If FAbort = True then
   Begin
     FBusy := False;
+    FPendingToolRun := False;
     FTmpToolCallBuffer.Clear;
     FLastReasoning := '';
     If Assigned(FOnReceiveDataEnd) then
@@ -2346,6 +2393,8 @@ end;
 
 procedure TAiChat.OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse);
 begin
+  // En este punto la petición async ya completó por completo: THTTPClient.ExecuteHTTPInternal
+  // terminó (incluido el Seek sobre FSourceStream), por lo que es seguro liberar el stream.
   FreeAndNil(FCurrentPostStream);
 
   If Assigned(aResponse) and ((aResponse.StatusCode < 200) or (aResponse.StatusCode > 299)) then
@@ -2353,17 +2402,42 @@ begin
     // Siempre liberar el estado de ocupado en errores HTTP (ej: 429 rate limit,
     // 500 server error, etc.). Sin esto la app queda colgada indefinidamente.
     FBusy := False;
+    FPendingToolRun := False; // no continuar el ciclo tool-calling tras un error HTTP
     FTmpToolCallBuffer.Clear;
     DoStateChange(acsError, aResponse.ContentAsString);
     if Assigned(FOnError) then
       FOnError(Self, aResponse.ContentAsString, Nil, aResponse);
+    Exit;
   End;
+
+  // ISSUE #100: continuación diferida del ciclo tool-calling en modo asíncrono.
+  // Se difiere fuera del despacho de completado (TThread.Queue/ForceQueue) para iniciar
+  // el siguiente POST con la petición previa ya destruida y su FSourceStream liberado,
+  // eliminando la reentrancia y la condición de carrera sobre FCurrentPostStream.
+  if FPendingToolRun then
+  begin
+    FPendingToolRun := False;
+{$IF CompilerVersion >= 36}
+    TThread.ForceQueue(nil,
+      procedure
+      begin
+        Self.Run(nil, nil);
+      end);
+{$ELSE}
+    TThread.Queue(nil,
+      procedure
+      begin
+        Self.Run(nil, nil);
+      end);
+{$IFEND}
+  end;
 end;
 
 procedure TAiChat.OnRequestErrorEvent(const Sender: TObject; const AError: string);
 begin
   FreeAndNil(FCurrentPostStream);
   FBusy := False;
+  FPendingToolRun := False;
   FTmpToolCallBuffer.Clear;
   DoStateChange(acsError, AError);
   If Assigned(FOnError) then
@@ -2374,6 +2448,7 @@ procedure TAiChat.OnRequestExceptionEvent(const Sender: TObject; const AError: E
 begin
   FreeAndNil(FCurrentPostStream);
   FBusy := False;
+  FPendingToolRun := False;
   FTmpToolCallBuffer.Clear;
   DoStateChange(acsError, AError.Message);
   If Assigned(FOnError) then
@@ -2563,6 +2638,7 @@ begin
       End;
       TTask.WaitForAll(TaskList);
 
+      var LStopLoop := False;
       For Clave in LFunciones.Keys do
       Begin
         ToolCall := LFunciones[Clave];
@@ -2572,10 +2648,42 @@ begin
         ToolCall.MediaFiles.OwnsObjects := False;
         ToolMsg.Id := FMessages.Count + 1;
         FMessages.Add(ToolMsg);
+        LStopLoop := LStopLoop or ToolCall.StopAgenticLoop;
       End;
 
-      Self.Run(Nil, ResMsg);
-      ResMsg.Content := '';
+      if LStopLoop then
+      Begin
+        // Un handler pidi? detener el loop (tool passthrough: lo ejecuta el
+        // cliente final). Finalizamos el turno con los tool_calls en ResMsg en
+        // vez de reenviar el resultado sint?tico al modelo — modelos como
+        // gpt-oss reintentan la misma tool indefinidamente al ver un 'OK'.
+        FBusy := False;
+        ResMsg.Role := Role;
+        ResMsg.Model := ModelVersion;
+        ResMsg.Tool_calls := sToolCalls;
+        ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aPrompt_tokens;
+        ResMsg.Completion_tokens := ResMsg.Completion_tokens + aCompletion_tokens;
+        ResMsg.Total_tokens := ResMsg.Total_tokens + aTotal_tokens;
+        DoProcessResponse(AskMsg, ResMsg, Respuesta);
+      End
+      else
+      Begin
+        if FClient.Asynchronous then
+        begin
+          // ISSUE #100: en modo asíncrono NO reentrar al THTTPClient desde su propio
+          // callback de recepción (este código corre dentro de OnInternalReceiveData).
+          // Reentrar inicia un POST nuevo cuyo finally libera el FCurrentPostStream de
+          // la petición aún en vuelo -> AV en THTTPClient.ExecuteHTTPInternal (Seek sobre
+          // FSourceStream liberado). Se difiere la continuación a OnRequestCompletedEvent,
+          // que se ejecuta cuando la petición actual ya terminó de desenrollarse por completo.
+          FPendingToolRun := True;
+        end
+        else
+        begin
+          Self.Run(Nil, ResMsg);
+          ResMsg.Content := '';
+        end;
+      End;
 
     End
     Else
@@ -2613,7 +2721,12 @@ begin
 
       ResMsg.Prompt := Respuesta;
 
-      DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
+      // ISSUE #99: en modo asíncrono el handler [DONE] de OnInternalReceiveData es el
+      // responsable de DoStateChange(acsFinished) y de disparar FOnReceiveDataEnd. Si
+      // ParseChat también lo hace, el evento (y el cambio de estado) se ejecuta dos veces.
+      // En modo síncrono ParseChat es el único que los dispara, por lo que se conserva.
+      if not FClient.Asynchronous then
+        DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
 
       // gpt-oss-20b (Groq): executed_tools anidado en choices[0].message.executed_tools.
       // Se extrae aquí, antes de OnDataEnd, para que MediaFiles.Count sea correcto en el callback.
@@ -2633,8 +2746,10 @@ begin
         end;
       end;
 
-      If Assigned(FOnReceiveDataEnd) then
-        FOnReceiveDataEnd(Self, ResMsg, jObj, Role, Respuesta);
+      // ISSUE #99: ver nota arriba — en async lo dispara el handler [DONE], no ParseChat.
+      if not FClient.Asynchronous then
+        If Assigned(FOnReceiveDataEnd) then
+          FOnReceiveDataEnd(Self, ResMsg, jObj, Role, Respuesta);
     End;
   Finally
     LFunciones.Free;
@@ -2654,7 +2769,7 @@ var
 begin
   if AExecutedToolsJSON = '' then
     Exit;
-  JArr := TJSonValue.ParseJSONValue(AExecutedToolsJSON) as TJSonArray;
+  JArr := TJSonObject.ParseJSONValue(AExecutedToolsJSON) as TJSonArray; // ParseJSONValue es método de clase de TJSONObject (TJSonValue no lo expone en D10.4)
   if not Assigned(JArr) then
     Exit;
   try
@@ -3489,6 +3604,9 @@ function TAiChat.Run(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
 var
   LSanitizeResult: TSanitizeResult;
   LSanitizeAction: TAiSanitizeAction;
+  LMemory:         IAiPersistentMemory;
+  LMemCtx:         string;
+  LOrigPrompt:     string;
 begin
   if FSanitizerActive and Assigned(AskMsg) and (AskMsg.Role = 'user') and (AskMsg.Prompt <> '') then
   begin
@@ -3513,7 +3631,24 @@ begin
     end;
   end;
 
+  // Inyectar contexto de memoria antes de enviar al LLM
+  LOrigPrompt := '';
+  if Assigned(FPersistentMemory) and Assigned(AskMsg) and (AskMsg.Role = 'user') and
+     Supports(FPersistentMemory, IAiPersistentMemory, LMemory) then
+  begin
+    LOrigPrompt := AskMsg.Prompt;
+    LMemCtx := LMemory.BuildContext(AskMsg.Prompt, FMemoryTokenBudget);
+    if LMemCtx <> '' then
+      AskMsg.Prompt := '--- Contexto de memoria ---' + sLineBreak + LMemCtx +
+                       sLineBreak + '--- Fin del contexto ---' + sLineBreak + sLineBreak +
+                       AskMsg.Prompt;
+  end;
+
   Result := RunNew(AskMsg, ResMsg);
+
+  // Guardar el prompt original en memoria tras recibir respuesta
+  if FAutoStoreMemories and (LOrigPrompt <> '') and Assigned(LMemory) then
+    LMemory.AutoStore(LOrigPrompt, 5);
 end;
 
 function TAiChat.RemoveMesage(Msg: TAiChatMessage): Boolean;

@@ -1670,6 +1670,9 @@ begin
     FResponse.Clear;
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
+    if not Assigned(Res) then
+      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+
     if FClient.Asynchronous = False then
     begin
       // ... (L?gica s?ncrona se mantiene igual) ...
@@ -2438,6 +2441,7 @@ begin
   if FAbort then
   begin
     FBusy := False;
+    FPendingToolRun := False;
     FTmpToolCallBuffer.Clear;
     DoStateChange(acsAborted, 'Aborted');
     if Assigned(FOnReceiveDataEnd) then
@@ -2771,19 +2775,12 @@ begin
           if FRecursionNeeded then
           begin
             DoStateChange(acsConnecting, 'Sending tool results...');
-{$IF CompilerVersion >= 36}
-            TThread.ForceQueue(nil,
-              procedure
-              begin
-                Self.Run(nil, nil);
-              end);
-{$ELSE}
-            TThread.Queue(nil,
-              procedure
-              begin
-                Self.Run(nil, nil);
-              end);
-{$ENDIF}
+            // ISSUE #100: diferir la continuación tool-calling a OnRequestCompletedEvent
+            // (base) en lugar de hacer ForceQueue aquí, DENTRO del callback de recepción.
+            // OnRequestCompletedEvent se ejecuta cuando la petición ya completó por completo
+            // y su FSourceStream/FCurrentPostStream se liberó de forma segura, eliminando la
+            // carrera entre el siguiente POST y el Seek final de THTTPClient.ExecuteHTTPInternal.
+            FPendingToolRun := True;
           end
           else
           begin

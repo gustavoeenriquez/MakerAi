@@ -57,6 +57,13 @@ type
   EMCPClientException = class(Exception);
   TMCPStreamMessageEvent = procedure(Sender: TObject; const EventType, Data: string) of object;
 
+  // Callback de progreso de un tool MCP (notifications/progress del servidor).
+  // OJO: se invoca desde el hilo lector SSE — el handler debe ser thread-safe.
+  TMCPToolProgressProc = reference to procedure(AProgress, ATotal: Double; const AMessage: string);
+
+  // Callback de billing: se invoca tras cada CallTool exitoso con el nombre del tool.
+  TMCPToolBillingProc = reference to procedure(const AToolName: string);
+
   TMCPClientCustom = class(TComponent)
   private
     FName: string;
@@ -265,8 +272,21 @@ type
 
     FBuffer: string;
 
+    // --- Progreso de tools (notifications/progress) ---
+    // Un mismo cliente pooled atiende requests concurrentes: el handler se
+    // registra por hilo llamador y CallTool lo asocia al progressToken del call.
+    FProgressLock: TCriticalSection;
+    FThreadProgressHandlers: TDictionary<TThreadID, TMCPToolProgressProc>;
+    FTokenProgressHandlers: TDictionary<string, TMCPToolProgressProc>;
+    FLastProgressTick: Int64; // GetTickCount64 de la ?ltima notificaci?n recibida
+    // --- Billing de tools ---
+    // Mismo patrón por hilo que el progreso. Se invoca con el tool name tras cada
+    // CallTool exitoso para que el router pueda contar y facturar.
+    FThreadBillingHandlers: TDictionary<TThreadID, TMCPToolBillingProc>;
+
     // M?todos internos de procesamiento
     procedure ProcessSSELine(const ALine: string);
+    procedure DispatchProgressNotification(AJson: TJSONObject);
 
     // M?todos de comunicaci?n interna
     function InternalSendRequest(const AMethod: string; AParams: TJSONObject): TJSONObject;
@@ -286,12 +306,29 @@ type
 
     function CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; override;
     function CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject; overload; override;
+
+    // Registra/limpia el handler de progreso para los CallTool que haga ESTE
+    // hilo. CallTool env?a _meta.progressToken y enruta las notifications/progress
+    // del servidor a este handler. Llamar Clear al terminar el request.
+    procedure SetThreadProgressHandler(const AHandler: TMCPToolProgressProc);
+    procedure ClearThreadProgressHandler;
+    // Registra/limpia el handler de billing (invocado tras cada CallTool exitoso).
+    procedure SetThreadBillingHandler(const AHandler: TMCPToolBillingProc);
+    procedure ClearThreadBillingHandler;
   end;
 
 implementation
 
 uses
-  IdTCPClient, IdIOHandler;
+  IdTCPClient, IdIOHandler, IdExceptionCore;
+
+// GetTickCount64 portable: TThread.GetTickCount64 no existe en Delphi 10.4.
+// TStopwatch (System.Diagnostics) es monótono y está disponible en todas las
+// versiones y plataformas; solo se usa para medir deltas de tiempo (timeouts).
+function MkGetTickCount64: Int64;
+begin
+  Result := Int64(TStopwatch.GetTimeStamp) * Int64(1000) div TStopwatch.Frequency;
+end;
 
 // ---------------------------------------------------------------------------
 // Log a disco para debug de shutdown — solo activo en builds DEBUG
@@ -400,7 +437,7 @@ begin
   Result := TStringList.Create;
   Try
     Result.Add('Command=npx');
-    Result.Add('Arguments=@');
+    Result.Add('Arguments=');
     Result.Add('RootDir=' + TPath.GetHomePath); // Un directorio de inicio m?s sensato
     Result.Add('PATH=C:\');
     Result.Add('ApiHeaderName=Authorization');
@@ -788,6 +825,7 @@ end;
 function TMCPClientStdIo.CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
 var
   InitResponse: TJSONObject;
+  WasRunning: Boolean;
 begin
   Result := nil;
   // Serializar llamadas concurrentes al mismo servidor (race condition cuando
@@ -797,6 +835,15 @@ begin
   // a este método no genera interbloqueo.
   FCallLock.Enter;
   try
+    WasRunning := IsServerRunning;
+    if WasRunning then
+    begin
+      // Proceso ya activo (modo bridge/persistente): llamar directamente sin ciclo completo.
+      DoLog(Format('CallTool (persistent): %s', [AToolName]));
+      Result := InternalCallTool(AToolName, AArguments, AExtractedMedia);
+      Exit;
+    end;
+
     DoLog(Format('Executing full cycle for CallTool: %s', [AToolName]));
     InternalStartServerProcess;
     try
@@ -921,12 +968,20 @@ begin
     begin
       FIsRunning := True;
       DoLog(Format('Server process started successfully (PID: %d).', [{$IFDEF MSWINDOWS}FInteractiveProcess.ProcessID{$ELSE}FInteractiveProcess.ProcessHandle{$ENDIF}]));
+      {$IFDEF POSIX}
+      DoLog(Format('[DEBUG] PipeHandles: InputWrite=%d, OutputRead=%d, ErrorRead=%d',
+        [FInteractiveProcess.PipeHandles.InputWrite,
+         FInteractiveProcess.PipeHandles.OutputRead,
+         FInteractiveProcess.PipeHandles.ErrorRead]));
+      DoLog('[DEBUG] IsRunning (post-fork)=' + BoolToStr(FInteractiveProcess.IsRunning, True));
+      {$ENDIF}
 
       // --- CORRECCI?N 2: ARRANCAR EL HILO DE LECTURA ---
       // Sin esto, el cliente es sordo.
       FReadThread := TThread.CreateAnonymousThread(ReadProcessOutput);
       FReadThread.FreeOnTerminate := False; // Lo liberamos nosotros en el Stop
       FReadThread.Start;
+      DoLog('[DEBUG] ReadThread started, handle=' + IntToStr({$IFDEF MSWINDOWS}FReadThread.Handle{$ELSE}FReadThread.ThreadID{$ENDIF}));
     end;
 
   except
@@ -1014,7 +1069,7 @@ begin
     var
     LParams := TJSONObject.Create;
     RequestObj.AddPair('params', LParams);
-    LParams.AddPair('protocolVersion', '2025-06-18');
+    LParams.AddPair('protocolVersion', '2024-11-05');
     var
     LClientInfo := TJSONObject.Create;
     LParams.AddPair('clientInfo', LClientInfo);
@@ -1188,7 +1243,14 @@ var
   ParsedJson: TJSONObject;
 begin
   SetLength(LineBuffer, 0);
-  // DoLog('Read thread started.');
+  DoLog(Format('[DEBUG] ReadThread STARTED. FIsRunning=%s Assigned=%s',
+    [BoolToStr(FIsRunning, True), BoolToStr(Assigned(FInteractiveProcess), True)]));
+  {$IFDEF POSIX}
+  if Assigned(FInteractiveProcess) then
+    DoLog(Format('[DEBUG] ReadThread OutputRead=%d IsRunning=%s',
+      [FInteractiveProcess.PipeHandles.OutputRead,
+       BoolToStr(FInteractiveProcess.IsRunning, True)]));
+  {$ENDIF}
 
   // Mantenemos el bucle mientras el proceso est? vivo y nosotros queramos correr
   while FIsRunning and Assigned(FInteractiveProcess) and FInteractiveProcess.IsRunning do
@@ -2241,6 +2303,11 @@ begin
   FRequestIDCounter := 0;
   FIsConnected := False;
   FAsyncOpDone := True; // no async op in progress yet
+  FProgressLock := TCriticalSection.Create;
+  FThreadProgressHandlers := TDictionary<TThreadID, TMCPToolProgressProc>.Create;
+  FTokenProgressHandlers := TDictionary<string, TMCPToolProgressProc>.Create;
+  FLastProgressTick := 0;
+  FThreadBillingHandlers := TDictionary<TThreadID, TMCPToolBillingProc>.Create;
 end;
 
 destructor TMCPClientSSE.Destroy;
@@ -2266,7 +2333,97 @@ begin
     FreeAndNil(FIncomingMessages);
   end;
 
+  FThreadProgressHandlers.Free;
+  FTokenProgressHandlers.Free;
+  FThreadBillingHandlers.Free;
+  FProgressLock.Free;
+
   inherited;
+end;
+
+procedure TMCPClientSSE.SetThreadProgressHandler(const AHandler: TMCPToolProgressProc);
+begin
+  FProgressLock.Enter;
+  try
+    FThreadProgressHandlers.AddOrSetValue(TThread.Current.ThreadID, AHandler);
+  finally
+    FProgressLock.Leave;
+  end;
+end;
+
+procedure TMCPClientSSE.ClearThreadProgressHandler;
+begin
+  FProgressLock.Enter;
+  try
+    FThreadProgressHandlers.Remove(TThread.Current.ThreadID);
+  finally
+    FProgressLock.Leave;
+  end;
+end;
+
+procedure TMCPClientSSE.SetThreadBillingHandler(const AHandler: TMCPToolBillingProc);
+begin
+  FProgressLock.Enter;
+  try
+    FThreadBillingHandlers.AddOrSetValue(TThread.Current.ThreadID, AHandler);
+  finally
+    FProgressLock.Leave;
+  end;
+end;
+
+procedure TMCPClientSSE.ClearThreadBillingHandler;
+begin
+  FProgressLock.Enter;
+  try
+    FThreadBillingHandlers.Remove(TThread.Current.ThreadID);
+  finally
+    FProgressLock.Leave;
+  end;
+end;
+
+// Se ejecuta en el hilo lector SSE. Resuelve el handler por progressToken y lo
+// invoca. Cualquier excepci?n del handler se absorbe: el progreso es best-effort.
+procedure TMCPClientSSE.DispatchProgressNotification(AJson: TJSONObject);
+var
+  ParamsObj: TJSONObject;
+  TokenVal: TJSONValue;
+  Token, Msg: string;
+  Progress, Total: Double;
+  Handler: TMCPToolProgressProc;
+begin
+  ParamsObj := AJson.GetValue<TJSONObject>('params', nil);
+  if not Assigned(ParamsObj) then
+    Exit;
+
+  TokenVal := ParamsObj.GetValue('progressToken');
+  if not Assigned(TokenVal) then
+    Exit;
+  Token := TokenVal.Value; // TJSONString y TJSONNumber devuelven su representaci?n
+
+  Progress := ParamsObj.GetValue<Double>('progress', 0);
+  Total := ParamsObj.GetValue<Double>('total', 0);
+  Msg := ParamsObj.GetValue<string>('message', '');
+
+  // Cualquier progreso entrante extiende el deadline de espera de CallTool.
+  FLastProgressTick := MkGetTickCount64;
+
+  Handler := nil;
+  FProgressLock.Enter;
+  try
+    FTokenProgressHandlers.TryGetValue(Token, Handler);
+  finally
+    FProgressLock.Leave;
+  end;
+
+  if Assigned(Handler) then
+  begin
+    try
+      Handler(Progress, Total, Msg);
+    except
+      on E: Exception do
+        DoLog('SSE progress handler error: ' + E.Message);
+    end;
+  end;
 end;
 
 // -----------------------------------------------------------------------------
@@ -2321,6 +2478,10 @@ begin
           Sock.ConnectTimeout := 10000;
           Sock.Connect;
           Sock.IOHandler.ReadTimeout := 500;
+          // Resultados de tools pueden ser MUY grandes (im?genes en base64:
+          // varios MB en una sola l?nea SSE). El default de Indy es 16 KB y
+          // ReadLn lanzar?a EIdReadLnMaxLineLengthExceeded matando el stream.
+          Sock.IOHandler.MaxLineLength := MaxInt;
 
           // Send GET — do NOT send Connection: close so the server keeps the
           // TCP link open after the 81-byte handshake for future SSE events.
@@ -2339,19 +2500,19 @@ begin
           until (Line = '') or FStopRequested;
 
           // Stream SSE body lines until stopped or connection lost.
-          // Use CheckForDataOnSource to poll without blocking so FStopRequested
-          // is checked every 100ms — no timeout exceptions needed.
-          Sock.IOHandler.ReadTimeout := 5000;
+          // Use a blocking ReadLn with a short timeout so the OS wakes this
+          // thread immediately when data arrives (no 100ms polling lag on
+          // loaded systems where CheckForDataOnSource can starve).
+          Sock.IOHandler.ReadTimeout := 500;
           while not FStopRequested do
           begin
             try
-              if Sock.IOHandler.CheckForDataOnSource(100) then
-              begin
-                Line := Sock.IOHandler.ReadLn(#10);
-                Line := Line.TrimRight([' ', #13]);
-                ProcessSSELine(Line);
-              end;
+              Line := Sock.IOHandler.ReadLn(#10);
+              Line := Line.TrimRight([' ', #13]);
+              ProcessSSELine(Line);
             except
+              on E: EIdReadTimeout do
+                ; // no data in 500ms — check FStopRequested and retry
               on E: Exception do Break;  // connection closed or read error
             end;
           end;
@@ -2434,7 +2595,15 @@ begin
         else
         begin
           JObj := TJSONObject(LVal);
-          if FIncomingMessages.PushItem(JObj) <> wrSignaled then
+          // Las notificaciones de progreso se despachan aqu? mismo (no entran a
+          // la cola: InternalReceiveJSONResponse las descartar?a por no tener id).
+          if (JObj.GetValue('id') = nil) and
+             SameText(JObj.GetValue<string>('method', ''), 'notifications/progress') then
+          begin
+            DispatchProgressNotification(JObj);
+            JObj.Free;
+          end
+          else if FIncomingMessages.PushItem(JObj) <> wrSignaled then
             JObj.Free;
         end;
       except
@@ -2603,7 +2772,14 @@ begin
     if AMethod.StartsWith('notifications/') then
       Exit(nil);
 
-    Result := InternalReceiveJSONResponse(FRequestIDCounter);
+    // tools/call puede ser long-running (imagen, procesos externos): timeout
+    // configurable via Params['CallToolTimeoutMs'] (default 180 s) que adem?s
+    // se extiende mientras el servidor siga enviando notifications/progress.
+    if AMethod = 'tools/call' then
+      Result := InternalReceiveJSONResponse(FRequestIDCounter,
+        StrToIntDef(GetParamByName('CallToolTimeoutMs'), 180000))
+    else
+      Result := InternalReceiveJSONResponse(FRequestIDCounter);
 
   finally
     Req.Free;
@@ -2611,15 +2787,28 @@ begin
 end;
 
 function TMCPClientSSE.InternalReceiveJSONResponse(AExpectedID: Integer; ATimeoutMs: Cardinal): TJSONObject;
+const
+  // Tope absoluto aunque sigan llegando notificaciones de progreso (10 min).
+  ABS_MAX_WAIT_MS = 600000;
 var
   LJson: TJSONObject;
   Sw: TStopwatch;
   Id: Integer;
+
+  function StillWaiting: Boolean;
+  begin
+    // Deadline base, extendido si el servidor sigue reportando progreso
+    // (un tool vivo no debe morir por timeout mientras avisa que avanza).
+    Result := (Sw.ElapsedMilliseconds < ATimeoutMs) or
+      ((MkGetTickCount64 - FLastProgressTick < Int64(ATimeoutMs)) and
+       (Sw.ElapsedMilliseconds < ABS_MAX_WAIT_MS));
+  end;
+
 begin
   Result := nil;
   Sw := TStopwatch.StartNew;
 
-  while Sw.ElapsedMilliseconds < ATimeoutMs do
+  while StillWaiting do
   begin
     if FIncomingMessages.PopItem(LJson) = wrSignaled then
     begin
@@ -2659,7 +2848,9 @@ end;
 
 function TMCPClientSSE.CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
 var
-  Params, ResultRaw: TJSONObject;
+  Params, ResultRaw, Meta: TJSONObject;
+  Handler: TMCPToolProgressProc;
+  Token: string;
 begin
   Result := nil;
   Params := TJSONObject.Create;
@@ -2667,23 +2858,81 @@ begin
   if Assigned(AArguments) then
     Params.AddPair('arguments', AArguments);
 
+  // Si el hilo llamador registr? un handler de progreso, asociamos un
+  // progressToken a ESTE call y lo enviamos en _meta seg?n el spec MCP.
+  // Fallback: si el tool se ejecuta en un hilo distinto al que registr?
+  // (drivers que procesan los tool-calls en otro hilo) y hay UN ?nico
+  // handler registrado, se usa ese. Con varios handlers concurrentes solo
+  // aplica el match exacto por hilo (evita cross-talk entre requests).
+  Token := '';
+  Handler := nil;
+  FProgressLock.Enter;
+  try
+    if not FThreadProgressHandlers.TryGetValue(TThread.Current.ThreadID, Handler) then
+      if FThreadProgressHandlers.Count = 1 then
+        for Handler in FThreadProgressHandlers.Values do
+          Break;
+  finally
+    FProgressLock.Leave;
+  end;
+  if Assigned(Handler) then
+  begin
+    Token := 'pt-' + TGUID.NewGuid.ToString.Replace('{', '').Replace('}', '').ToLower;
+    FProgressLock.Enter;
+    try
+      FTokenProgressHandlers.Add(Token, Handler);
+    finally
+      FProgressLock.Leave;
+    end;
+    Meta := TJSONObject.Create;
+    Meta.AddPair('progressToken', Token);
+    Params.AddPair('_meta', Meta);
+  end;
+
   if Assigned(AArguments) then
     DoLog(Format('SSE CallTool: %s args=%s', [AToolName, AArguments.ToJSON]))
   else
     DoLog(Format('SSE CallTool: %s (no args)', [AToolName]));
   try
-    ResultRaw := InternalSendRequest('tools/call', Params);
-    if Assigned(ResultRaw) then
+    try
+      ResultRaw := InternalSendRequest('tools/call', Params);
+      if Assigned(ResultRaw) then
+      begin
+        DoLog('SSE CallTool result: ' + ResultRaw.ToJSON);
+        Result := ProcessAndExtractMedia(ResultRaw, AExtractedMedia);
+        ResultRaw.Free;
+        // Notify billing handler (best-effort, same thread fallback as progress)
+        if Assigned(Result) then
+        begin
+          var BillingHandler: TMCPToolBillingProc := nil;
+          FProgressLock.Enter;
+          try
+            if not FThreadBillingHandlers.TryGetValue(TThread.Current.ThreadID, BillingHandler) then
+              if FThreadBillingHandlers.Count = 1 then
+                for BillingHandler in FThreadBillingHandlers.Values do Break;
+          finally
+            FProgressLock.Leave;
+          end;
+          if Assigned(BillingHandler) then
+            try BillingHandler(AToolName); except end;
+        end;
+      end
+      else
+        DoLog('SSE CallTool: nil result (timeout or disconnected)');
+    except
+      on E: Exception do
+        DoLog('SSE CallTool Error: ' + E.Message);
+    end;
+  finally
+    if Token <> '' then
     begin
-      DoLog('SSE CallTool result: ' + ResultRaw.ToJSON);
-      Result := ProcessAndExtractMedia(ResultRaw, AExtractedMedia);
-      ResultRaw.Free;
-    end
-    else
-      DoLog('SSE CallTool: nil result (timeout or disconnected)');
-  except
-    on E: Exception do
-      DoLog('SSE CallTool Error: ' + E.Message);
+      FProgressLock.Enter;
+      try
+        FTokenProgressHandlers.Remove(Token);
+      finally
+        FProgressLock.Leave;
+      end;
+    end;
   end;
 end;
 

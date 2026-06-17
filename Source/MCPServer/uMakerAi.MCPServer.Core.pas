@@ -42,11 +42,23 @@ uses
 
 type
 
+  // Callback de progreso para tools de larga duraci?n (MCP notifications/progress).
+  // AProgress avanza hacia ATotal (convenci?n: ATotal=1.0 y AProgress en 0..1).
+  TAiMCPProgressProc = reference to procedure(AProgress, ATotal: Double; const AMessage: string);
+
+  // Entrega de una notificaci?n JSON-RPC al cliente de una sesi?n (lo implementa
+  // el transporte; en SSE es un push al Outbox de la sesi?n).
+  TAiMCPSendNotificationProc = reference to procedure(const ASessionID, ANotificationJson: string);
+
   TAiAuthContext = record
     IsAuthenticated: Boolean;
     UserID: string;
     UserName: string;
     Roles: TArray<string>;
+    // Asignado por el server en tools/call cuando el request trae _meta.progressToken
+    // y el transporte soporta notificaciones. Los tools lo invocan si Assigned para
+    // emitir notifications/progress sin conocer la sesi?n ni el token.
+    OnProgress: TAiMCPProgressProc;
   end;
 
   // Evento de validación custom (Layer 2).
@@ -201,6 +213,7 @@ type
     FActiveTools: TDictionary<string, IAiMCPTool>;
     FActiveResources: TDictionary<string, IAiMCPResource>;
     FUser: String;
+    FOnSendNotification: TAiMCPSendNotificationProc;
 
     // --- Private Methods ---
     function ParseJSONRequest(const RequestBody: string): TJSONObject;
@@ -210,12 +223,13 @@ type
     function CreateErrorResponse(const RequestID: TValue; ErrorCode: Integer; const ErrorMessage: string): string;
     function ExecuteMethodCall(const MethodName: string; Params: TJSONObject; const SessionID: string; const AAuthContext: TAiAuthContext): TValue;
     function HandleCoreMethod(const Method: string; const Params: TJSONObject): TValue;
-    function HandleToolsMethod(const Method: string; const Params: TJSONObject; const AAuthContext: TAiAuthContext): TValue;
+    function HandleToolsMethod(const Method: string; const Params: TJSONObject; const ASessionID: string; const AAuthContext: TAiAuthContext): TValue;
     function HandleResourcesMethod(const Method: string; const Params: TJSONObject): TValue;
     function Core_Initialize(const Params: TJSONObject): TValue;
     function Core_Ping: TValue;
     function Tools_ListTools: TValue;
-    function Tools_CallTool(const Params: TJSONObject; const AAuthContext: TAiAuthContext): TValue;
+    function Tools_CallTool(const Params: TJSONObject; const ASessionID: string; const AAuthContext: TAiAuthContext): TValue;
+    function BuildProgressNotification(const ATokenJson: string; AProgress, ATotal: Double; const AMessage: string): string;
     function Resources_ListResources: TValue;
     function Resources_ReadResource(const Params: TJSONObject): TValue;
     function Resources_ListTemplates: TValue;
@@ -249,6 +263,9 @@ type
     property CorsEnabled: Boolean read FCorsEnabled write FCorsEnabled;
     property CorsAllowedOrigins: string read FCorsAllowedOrigins write FCorsAllowedOrigins;
     property User: String read FUser write SetUser;
+    // Lo asigna el transporte (SSE) para habilitar notifications/progress.
+    // Si est? nil, los tools simplemente no reciben OnProgress en su AuthContext.
+    property OnSendNotification: TAiMCPSendNotificationProc read FOnSendNotification write FOnSendNotification;
 
   end;
 
@@ -807,7 +824,7 @@ begin
     raise Exception.CreateHelp('Method not specified.', JSONRPC_INVALID_REQUEST);
 
   if StartsText('tools/', MethodName) then
-    Result := HandleToolsMethod(MethodName, Params, AAuthContext)
+    Result := HandleToolsMethod(MethodName, Params, SessionID, AAuthContext)
   else if StartsText('resources/', MethodName) then
     Result := HandleResourcesMethod(MethodName, Params)
   else if (MethodName = 'initialize') or (MethodName = 'ping') then
@@ -826,12 +843,12 @@ begin
     Result := TValue.Empty;
 end;
 
-function TAiMCPLogicServer.HandleToolsMethod(const Method: string; const Params: TJSONObject; const AAuthContext: TAiAuthContext): TValue;
+function TAiMCPLogicServer.HandleToolsMethod(const Method: string; const Params: TJSONObject; const ASessionID: string; const AAuthContext: TAiAuthContext): TValue;
 begin
   if Method = 'tools/list' then
     Result := Tools_ListTools
   else if Method = 'tools/call' then
-    Result := Tools_CallTool(Params, AAuthContext)
+    Result := Tools_CallTool(Params, ASessionID, AAuthContext)
   else
     raise Exception.CreateFmt('Method %s not handled by Tools capability', [Method]);
 end;
@@ -877,6 +894,7 @@ var
   ResultJSON, ToolJSON: TJSONObject;
   ToolsArray: TJSONArray;
   Tool: IAiMCPTool;
+  Schema: TJSONObject;
 begin
   ResultJSON := TJSONObject.Create;
   ToolsArray := TJSONArray.Create;
@@ -886,18 +904,59 @@ begin
     ToolJSON := TJSONObject.Create;
     ToolJSON.AddPair('name', Tool.Name);
     ToolJSON.AddPair('description', Tool.Description);
-    ToolJSON.AddPair('inputSchema', Tool.GetInputSchema);
+    // Clone the schema — AddPair takes ownership and would free the tool's
+    // FInputSchema, corrupting subsequent tools/list calls.
+    Schema := Tool.GetInputSchema;
+    if Assigned(Schema) then
+      ToolJSON.AddPair('inputSchema', TJSONObject(Schema.Clone))
+    else
+      ToolJSON.AddPair('inputSchema', TJSONObject.Create);
     ToolsArray.AddElement(ToolJSON);
   end;
   Result := TValue.From<TJSONObject>(ResultJSON);
 end;
 
-function TAiMCPLogicServer.Tools_CallTool(const Params: TJSONObject; const AAuthContext: TAiAuthContext): TValue;
+// Construye el JSON-RPC de notifications/progress seg?n el spec MCP.
+// ATokenJson es el valor crudo del progressToken ("abc" o 42) para preservar su tipo.
+function TAiMCPLogicServer.BuildProgressNotification(const ATokenJson: string; AProgress, ATotal: Double; const AMessage: string): string;
+var
+  Root, ParamsObj: TJSONObject;
+  TokenVal: TJSONValue;
+begin
+  Root := TJSONObject.Create;
+  try
+    Root.AddPair('jsonrpc', '2.0');
+    Root.AddPair('method', 'notifications/progress');
+    ParamsObj := TJSONObject.Create;
+    Root.AddPair('params', ParamsObj);
+
+    TokenVal := TJSONObject.ParseJSONValue(ATokenJson);
+    if not Assigned(TokenVal) then
+      TokenVal := TJSONString.Create(ATokenJson);
+    ParamsObj.AddPair('progressToken', TokenVal);
+
+    ParamsObj.AddPair('progress', TJSONNumber.Create(AProgress));
+    if ATotal > 0 then
+      ParamsObj.AddPair('total', TJSONNumber.Create(ATotal));
+    if AMessage <> '' then
+      ParamsObj.AddPair('message', AMessage);
+
+    Result := Root.ToJSON;
+  finally
+    Root.Free;
+  end;
+end;
+
+function TAiMCPLogicServer.Tools_CallTool(const Params: TJSONObject; const ASessionID: string; const AAuthContext: TAiAuthContext): TValue;
 var
   ToolName: string;
   Arguments: TJSONObject;
   Tool: IAiMCPTool;
   ResultJSON: TJSONObject;
+  MetaObj: TJSONObject;
+  TokenVal: TJSONValue;
+  TokenJson, SessionForProgress: string;
+  ExecContext: TAiAuthContext;
 begin
   if not Assigned(Params) then
     raise Exception.CreateHelp('Invalid params for tools/call. Expected a JSON object.', JSONRPC_INVALID_PARAMS);
@@ -908,9 +967,35 @@ begin
   if ToolName = '' then
     raise Exception.CreateHelp('Invalid params: Tool "name" not provided in tools/call', JSONRPC_INVALID_PARAMS);
 
+  // Progreso MCP: si el cliente envi? _meta.progressToken y el transporte
+  // soporta notificaciones, el tool recibe OnProgress en su AuthContext.
+  ExecContext := AAuthContext;
+  TokenJson := '';
+  MetaObj := Params.GetValue<TJSONObject>('_meta', nil);
+  if Assigned(MetaObj) then
+  begin
+    TokenVal := MetaObj.GetValue('progressToken');
+    if Assigned(TokenVal) and not(TokenVal is TJSONNull) then
+      TokenJson := TokenVal.ToJSON; // preserva tipo string o number
+  end;
+
+  if (TokenJson <> '') and Assigned(FOnSendNotification) then
+  begin
+    SessionForProgress := ASessionID;
+    ExecContext.OnProgress :=
+      procedure(AProgress, ATotal: Double; const AMessage: string)
+      begin
+        try
+          FOnSendNotification(SessionForProgress, BuildProgressNotification(TokenJson, AProgress, ATotal, AMessage));
+        except
+          // El progreso es best-effort: nunca debe tumbar la ejecuci?n del tool.
+        end;
+      end;
+  end;
+
   if FActiveTools.TryGetValue(ToolName, Tool) then
   begin
-    ResultJSON := Tool.Execute(Arguments, AAuthContext);
+    ResultJSON := Tool.Execute(Arguments, ExecContext);
   end
   else
     raise Exception.CreateFmt('Tool not found: %s', [ToolName]);

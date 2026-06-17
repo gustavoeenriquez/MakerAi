@@ -293,7 +293,7 @@ begin
       LEffective := Tool_choice;
       if LEffective = '' then LEffective := 'auto';
 
-      LChoiceVal := TJSonValue.ParseJSONValue(LEffective);
+      LChoiceVal := TJSonObject.ParseJSONValue(LEffective); // ParseJSONValue es método de clase de TJSONObject (TJSonValue no lo expone en D10.4)
       if Assigned(LChoiceVal) and (LChoiceVal is TJSonObject) then
         LJson.AddPair('tool_choice', LChoiceVal)
       else
@@ -451,7 +451,20 @@ begin
       LSavedHandler(Self, ResMsg, jObj, ResMsg.Role, ResMsg.Prompt);
   end
   else
+  begin
     inherited ParseChat(jObj, ResMsg);
+    // ISSUE #99 (regresión): en async la clase base delega el cierre del turno al handler
+    // de [DONE] de OnInternalReceiveData. Pero este driver intercepta [DONE] él mismo
+    // (-> HandleStreamDone) y se salta ese handler, así que para contenido plano nadie
+    // dispara FOnReceiveDataEnd/acsFinished y el cliente cuelga (DEADLINE). Lo disparamos
+    // aquí. Guard 'not FPendingToolRun': si la base dejó una continuación tool-calling
+    // diferida (ISSUE #100), NO cerramos el turno a mitad del loop agéntico.
+    if FClient.Asynchronous and (not FPendingToolRun) and Assigned(FOnReceiveDataEnd) then
+    begin
+      DoStateChange(acsFinished, 'Done');
+      FOnReceiveDataEnd(Self, ResMsg, jObj, ResMsg.Role, ResMsg.Prompt);
+    end;
+  end;
 end;
 
 procedure TAiMakerAiChat.ExtractMkFileBlocks(ResMsg: TAiChatMessage);
@@ -640,18 +653,52 @@ begin
     sType := ''; sFilename := ''; sMime := ''; sData := '';
     LPart.TryGetValue<string>('type', sType);
 
-    if (sType = 'audio') or (sType = 'file') then
+    if (sType = 'audio') or (sType = 'video') or (sType = 'file') then
     begin
       if not LPart.TryGetValue<TJSONObject>(sType, LInner) then Continue;
       LInner.TryGetValue<string>('filename',  sFilename);
       LInner.TryGetValue<string>('mime_type', sMime);
       LInner.TryGetValue<string>('data',      sData);
+      // Variante solo-URL (lazy): si no trae base64 pero sí una URL http(s)
+      if (sData = '') then
+      begin
+        sUrl := '';
+        LInner.TryGetValue<string>('url', sUrl);
+        if sUrl.StartsWith('http', True) then
+        begin
+          if sFilename = '' then
+            sFilename := sType + '-' + IntToStr(FPendingMediaParts.Count + 1) +
+                         GetFileExtensionFromMimeType(sMime);
+          LMF := TAiMediaFile.Create;
+          LMF.filename := sFilename;
+          LMF.UrlMedia := sUrl;          // LAZY: descarga al 1er acceso a .Content
+          FPendingMediaParts.Add(LMF);
+          MKLog('MEDIA_PART', 'lazy url ' + sType + ' ' + sFilename + ' <- ' + sUrl);
+          Continue;
+        end;
+      end;
     end
     else if sType = 'image_url' then
     begin
       if not LPart.TryGetValue<TJSONObject>('image_url', LInner) then Continue;
       LInner.TryGetValue<string>('url', sUrl);
-      // data:mime/type;base64,<data>
+
+      // Rama URL LAZY (Pieza S del server: media solo-URL -> http(s), no data:).
+      // SetUrlMedia es puro lazy (Core:1169); baja al 1er acceso a .Content.
+      if sUrl.StartsWith('http', True) then
+      begin
+        sMime := '';
+        LInner.TryGetValue<string>('mime_type', sMime);   // opcional
+        LMF := TAiMediaFile.Create;
+        LMF.filename := 'ci_image-' + IntToStr(FPendingMediaParts.Count + 1) +
+                        GetFileExtensionFromMimeType(sMime);
+        LMF.UrlMedia := sUrl;
+        FPendingMediaParts.Add(LMF);
+        MKLog('MEDIA_PART', 'lazy url ' + LMF.filename + ' <- ' + sUrl);
+        Continue;   // acumulada; saltar el decode base64 compartido de abajo
+      end;
+
+      // data:mime/type;base64,<data>  (rama existente)
       IComma := Pos(',', sUrl);
       if IComma <= 0 then Continue;
       sData := Copy(sUrl, IComma + 1, MaxInt);
@@ -697,9 +744,39 @@ var
   LFakeChoices: TJSONArray;
   LRole: string;
   TempMsg: TAiChatMessage;
+  LToolCallsStr: string;
+  LCombinedTools: TJSONArray;
+  LSortedKeys: TList<Integer>;
 begin
   LRole := FTmpRole;
   if LRole = '' then LRole := 'assistant';
+
+  // El servidor stremea los tool_calls como delta SSE (NO fuerza un JSON completo cuando
+  // hay tools). La clase base los acumuló en FTmpToolCallBuffer durante el stream. Como
+  // este driver intercepta [DONE] y se salta el handler base que normalmente los reconstruye,
+  // lo hacemos aquí para que ParseChat vea las tools y las ejecute; si no, async+tools queda
+  // con respuesta vacía y, tras el cierre, sin continuación (la tool nunca se llama).
+  LToolCallsStr := '';
+  if FTmpToolCallBuffer.Count > 0 then
+  begin
+    LCombinedTools := TJSONArray.Create;
+    try
+      LSortedKeys := TList<Integer>.Create;
+      try
+        for var LKey in FTmpToolCallBuffer.Keys do
+          LSortedKeys.Add(LKey);
+        LSortedKeys.Sort;
+        for var LKey in LSortedKeys do
+          LCombinedTools.Add(FTmpToolCallBuffer[LKey].Clone as TJSONObject);
+      finally
+        LSortedKeys.Free;
+      end;
+      LToolCallsStr := LCombinedTools.ToJSON;
+    finally
+      LCombinedTools.Free;
+      FTmpToolCallBuffer.Clear;
+    end;
+  end;
 
   LFakeJson := TJSONObject.Create;
   try
@@ -716,10 +793,15 @@ begin
     LFakeMsg.AddPair('role', LRole);
     if FLastContent <> '' then
       LFakeMsg.AddPair('content', FLastContent);
+    if LToolCallsStr <> '' then
+      LFakeMsg.AddPair('tool_calls', TJSONArray(TJSONObject.ParseJSONValue(LToolCallsStr)));
 
     LFakeChoice := TJSONObject.Create;
-    LFakeChoice.AddPair('message',       LFakeMsg);
-    LFakeChoice.AddPair('finish_reason', 'stop');
+    LFakeChoice.AddPair('message', LFakeMsg);
+    if LToolCallsStr <> '' then
+      LFakeChoice.AddPair('finish_reason', 'tool_calls')
+    else
+      LFakeChoice.AddPair('finish_reason', 'stop');
 
     LFakeChoices := TJSONArray.Create;
     LFakeChoices.Add(LFakeChoice);
@@ -743,14 +825,19 @@ begin
 
       ParseChat(LFakeJson, LHistMsg);
 
-      if (LHistMsg.Prompt = '') and (LHistMsg.MediaFiles.Count = 0) then
-        FMessages.Delete(FMessages.Count - 1);
+      // Si LHistMsg quedó vacío, removerlo POR REFERENCIA: en la rama de tools, ParseChat
+      // agregó el mensaje assistant-con-tool_calls y el tool-result DESPUÉS, así que el
+      // último de la lista ya no es LHistMsg (un Delete(Count-1) borraría el tool-result).
+      if (LHistMsg.Prompt = '') and (LHistMsg.MediaFiles.Count = 0) and (LHistMsg.Tool_calls = '') then
+        FMessages.Remove(LHistMsg);
     finally
       if Assigned(TempMsg) then TempMsg.Free;
     end;
 
     FLastReasoning := '';
-    FBusy := False;
+    // No liberar FBusy si quedó una continuación tool-calling diferida (#100): el turno sigue.
+    if not FPendingToolRun then
+      FBusy := False;
   finally
     LFakeJson.Free;
   end;
@@ -860,15 +947,46 @@ begin
 end;
 
 Procedure TAiMakerAiChat.OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse);
+var
+  LBody: string;
+  LJObj: TJSONObject;
+  LMsg: TAiChatMessage;
 begin
-  // Delegate HTTP-error handling and stream cleanup to the base class.
-  inherited OnRequestCompletedEvent(Sender, aResponse);
-
-  // Async (stream=true): OnInternalReceiveData processed all SSE chunks;
-  // the [DONE] sentinel already triggered ParseChat via the base class.
-  // Sync (stream=false): InternalRunCompletions called ParseChat directly.
-  // Either way there is nothing left to do — just ensure the buffer is clear.
+  LBody := Trim(FTmpResponseText);
   FTmpResponseText := '';
+
+  // Con tools en el request el servidor fuerza una respuesta JSON completa
+  // (chat.completion) aunque se haya pedido stream=true. En ese caso el buffer
+  // quedo con el JSON integro (sin lineas 'data:' ni [DONE]): procesarlo por
+  // ParseChat, que ademas resuelve los tool_calls y dispara OnReceiveDataEnd.
+  //
+  // ISSUE #100: se procesa ANTES de inherited a proposito. Si ParseChat resuelve
+  // tool_calls deja FPendingToolRun=True (continuacion diferida); el inherited base
+  // (que libera el stream y lanza el siguiente round si FPendingToolRun) debe correr
+  // DESPUES para que la continuacion del loop agentico no se pierda.
+  if Asynchronous and Assigned(aResponse) and
+     (aResponse.StatusCode >= 200) and (aResponse.StatusCode <= 299) and
+     LBody.StartsWith('{') then
+  begin
+    LJObj := TJSONObject.ParseJSONValue(LBody) as TJSONObject;
+    if Assigned(LJObj) then
+    try
+      if Assigned(LJObj.GetValue('choices')) then
+      begin
+        MKLog('NOSTREAM-JSON', Copy(LBody, 1, 500));
+        LMsg := TAiChatMessage.Create('', 'assistant');
+        LMsg.Id := FMessages.Count + 1;
+        FMessages.Add(LMsg);
+        ParseChat(LJObj, LMsg);
+      end;
+    finally
+      LJObj.Free;
+    end;
+  end;
+
+  // Delegate HTTP-error handling, stream cleanup y la continuacion tool-calling
+  // diferida (FPendingToolRun) a la clase base. Corre al final (ver nota arriba).
+  inherited OnRequestCompletedEvent(Sender, aResponse);
 end;
 
 initialization

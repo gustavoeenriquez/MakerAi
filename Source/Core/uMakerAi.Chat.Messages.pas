@@ -69,6 +69,12 @@ Type
     AskMsg: TAiChatMessage; // TAiChatMessage que representa la pregunta
     ResMsg: TAiChatMessage; // TAiChatMessage que representa la respuesta
     MediaFiles: TAiMediaFiles; // Archivos extraídos por el tool (ej: imágenes devueltas por MCP)
+    // Si el handler lo pone en True, TAiChat NO contin?a el loop agentico tras
+    // ejecutar las tools de este turno: el tool_call debe retornar al llamador
+    // (caso passthrough: el tool lo ejecuta el cliente final, no este proceso).
+    // Evita que modelos insistentes (gpt-oss) reintenten el tool en bucle al
+    // recibir una respuesta sint?tica tipo 'OK'.
+    StopAgenticLoop: Boolean;
 
     Constructor Create;
     Destructor Destroy; Override;

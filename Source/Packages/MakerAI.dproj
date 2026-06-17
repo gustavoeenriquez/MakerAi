@@ -175,6 +175,8 @@
         <DCCReference Include="..\MCPServer\UMakerAi.MCPServer.Stdio.pas"/>
         <DCCReference Include="..\MCPServer\UMakerAi.MCPServer.Direct.pas"/>
         <DCCReference Include="..\Utils\uMakerAi.Utils.VoiceMonitor.pas"/>
+        <DCCReference Include="..\Utils\uMakerAi.Utils.AudioCapture.pas"/>
+        <DCCReference Include="..\Utils\uMakerAi.Utils.AudioPlayback.pas"/>
         <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.core.pas"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Graph.Builder.pas"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Graph.Core.pas"/>

@@ -48,6 +48,8 @@
 unit uMakerAi.MCPServer.SSE;
 
 {$mode objfpc}{$H+}
+{$modeswitch functionreferences}
+{$modeswitch anonymousfunctions}
 
 interface
 
@@ -57,6 +59,17 @@ uses
   uMakerAi.MCPServer.Core;
 
 type
+  // Callback para rutas HTTP ajenas al protocolo MCP (ni /sse ni /messages):
+  // p.ej. servir archivos estaticos (imagenes generadas) o health checks. Se
+  // invoca para cualquier ruta que de otro modo devolveria 404 — el handler
+  // decide su propia autenticacion. Si pone AHandled := True, debe rellenar
+  // AStatusCode/AStatusText/AContentType/AResponseBody (el body puede contener
+  // bytes binarios); en caso contrario se devuelve 404 Not Found.
+  TAiMCPUnhandledRequestEvent = procedure(const AMethod, APath: string;
+      const AHeaders: TStrings; const ABody: string;
+      var AHandled: Boolean; var AStatusCode: Integer;
+      var AStatusText, AContentType, AResponseBody: string) of object;
+
   // Forward declarations
   TAiMCPSSEServer  = class;
   TSseClientThread = class;
@@ -122,9 +135,10 @@ type
   // -------------------------------------------------------------------------
   TAiMCPSSEServer = class(TAiMCPServer)
   private
-    FAcceptThread  : TSseAcceptThread;
-    FSessionsLock  : TCriticalSection;
-    FSessions      : TStringList; // key=SessionID, Object=TAiSSESession
+    FAcceptThread       : TSseAcceptThread;
+    FSessionsLock       : TCriticalSection;
+    FSessions           : TStringList; // key=SessionID, Object=TAiSSESession
+    FOnUnhandledRequest : TAiMCPUnhandledRequestEvent;
 
     function GenerateSessionID: string;
 
@@ -143,6 +157,11 @@ type
     // Procesa un request JSON-RPC y pone la respuesta en el outbox de la sesion
     procedure ProcessAndEnqueue(const ASessionID, ARequestJSON: string);
 
+    // Envia una notificacion JSON-RPC arbitraria por el canal SSE de una
+    // sesion (best-effort: si la sesion no existe o no esta activa, se
+    // descarta). El core la usa para entregar notifications/progress.
+    procedure PushNotification(const ASessionID, ANotificationJson: string);
+
   published
     property Port;
     property Endpoint;
@@ -151,6 +170,10 @@ type
     property ApiKey;
     property ServerName;
     property OnValidateRequest;
+    // Rutas HTTP fuera de /sse y /messages (archivos estaticos, health checks).
+    // Se invoca cuando la ruta no corresponde al protocolo MCP, antes del 404.
+    property OnUnhandledRequest: TAiMCPUnhandledRequestEvent
+        read FOnUnhandledRequest write FOnUnhandledRequest;
   end;
 
 implementation
@@ -453,7 +476,13 @@ begin
 
   SendHTTPResponse(202, 'Accepted', 'application/json', '{}');
 
-  // Procesar async: pone respuesta en el outbox de la sesion
+  // 202 ya enviado: el cliente no espera la respuesta por HTTP sino por el
+  // canal SSE. Cada POST corre en su propio TSseClientThread efimero, asi que
+  // ProcessAndEnqueue puede ejecutarse de forma sincrona aqui sin bloquear ni
+  // la conexion SSE ni otros POST — equivale al patron async/TTask del puerto
+  // Delphi. Las notifications/progress que el core emita durante la ejecucion
+  // (p.ej. tools/call de larga duracion) viajan por OnSendNotification →
+  // PushNotification → outbox de la sesion.
   FServer.ProcessAndEnqueue(SessionID, ABody);
 end;
 
@@ -471,6 +500,11 @@ var
   Buf         : array of Byte;
   P1, P2      : Integer;
   Rest        : string;
+  Handled     : Boolean;
+  RStatus     : Integer;
+  RStatusText : string;
+  RContentType: string;
+  RBody       : string;
 begin
   Headers := TStringList.Create;
   try
@@ -535,8 +569,26 @@ begin
     end
     else
     begin
-      SendHTTPResponse(404, 'Not Found', 'text/plain',
-          'Endpoint not found');
+      // Ruta ajena al protocolo MCP: ofrecerla al handler de rutas no
+      // gestionadas (estaticos, health checks...) antes de devolver 404.
+      // FOnUnhandledRequest es private de TAiMCPSSEServer, accesible aqui
+      // por estar en la misma unit.
+      Handled := False;
+      if Assigned(FServer.FOnUnhandledRequest) then
+      begin
+        RStatus      := 200;
+        RStatusText  := 'OK';
+        RContentType := 'text/plain';
+        RBody        := '';
+        FServer.FOnUnhandledRequest(Method, Path, Headers, Body,
+            Handled, RStatus, RStatusText, RContentType, RBody);
+      end;
+
+      if Handled then
+        SendHTTPResponse(RStatus, RStatusText, RContentType, RBody)
+      else
+        SendHTTPResponse(404, 'Not Found', 'text/plain',
+            'Endpoint not found');
     end;
 
   finally
@@ -577,6 +629,15 @@ end;
 procedure TAiMCPSSEServer.Start;
 begin
   inherited Start;
+
+  // Habilita notifications/progress: el core delega aqui la entrega por
+  // sesion. Cuando un tool emite progreso (o el core una notificacion),
+  // se encola en el outbox de la sesion correspondiente.
+  FLogicServer.OnSendNotification :=
+    procedure(const ASessionID, ANotificationJson: string)
+    begin
+      PushNotification(ASessionID, ANotificationJson);
+    end;
 
   FAcceptThread := TSseAcceptThread.Create(Self, Port);
   FAcceptThread.FreeOnTerminate := False;
@@ -679,6 +740,30 @@ begin
 
   if Response <> '' then
     Session.EnqueueMessage(Response);
+end;
+
+procedure TAiMCPSSEServer.PushNotification(const ASessionID,
+    ANotificationJson: string);
+var
+  Idx     : Integer;
+  Session : TAiSSESession;
+begin
+  // Bajo el lock de sesiones: la sesion se destruye bajo este mismo lock al
+  // desconectar, asi que aqui sigue viva mientras la tengamos referenciada.
+  // EnqueueMessage toma su propio OutboxLock; no hay inversion de orden porque
+  // ningun camino toma OutboxLock y luego FSessionsLock.
+  FSessionsLock.Enter;
+  try
+    Idx := FSessions.IndexOf(ASessionID);
+    if Idx >= 0 then
+    begin
+      Session := TAiSSESession(FSessions.Objects[Idx]);
+      if Assigned(Session) and Session.Active then
+        Session.EnqueueMessage(ANotificationJson);
+    end;
+  finally
+    FSessionsLock.Leave;
+  end;
 end;
 
 end.

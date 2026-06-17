@@ -410,6 +410,9 @@ begin
     Res := Client.Post(sUrl, St, Response, Headers);
     Response.Position := 0;
 
+    if not Assigned(Res) then
+      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+
 {$IFDEF APIDEBUG}
     Response.SaveToFile('c:\temp\response.txt');
 {$ENDIF}
@@ -808,7 +811,7 @@ begin
     Exit;
   end;
 
-  JArr := TJSonValue.ParseJSONValue(AExecutedToolsJSON) as TJSonArray;
+  JArr := TJSonObject.ParseJSONValue(AExecutedToolsJSON) as TJSonArray; // ParseJSONValue es método de clase de TJSONObject (TJSonValue no lo expone en D10.4)
   if not Assigned(JArr) then
   begin
     inherited ProcessExecutedTools(AExecutedToolsJSON, ResMsg);
