@@ -14,6 +14,7 @@ uses
   System.UITypes, System.IOUtils, System.Rtti,
   FMX.Types, FMX.Controls, FMX.Memo,
   FMX.Dialogs, FMX.Graphics, FMX.Surfaces,
+  FMX.Styles.Objects,
   FMX.Platform, FMX.Forms,
   Skia, FMX.Skia,
   AIChat.Types, AIChat.TempStore, AIChat.ScreenCapture,
@@ -218,6 +219,14 @@ type
     procedure UploadFile;
     procedure CaptureScreen;
 
+    // ── Drag & drop de archivos desde el explorador ─────────────────────────
+    function  DragHasValidFiles(const Data: TDragObject): Boolean;
+    procedure HandleFilesDrop(const Data: TDragObject);
+    procedure MemoDragOver(Sender: TObject; const Data: TDragObject;
+                           const Point: TPointF; var Operation: TDragOperation);
+    procedure MemoDragDrop(Sender: TObject; const Data: TDragObject;
+                           const Point: TPointF);
+
     // ── Voice helpers ──────────────────────────────────────────────────────
     procedure SetThemeDark(AValue: Boolean);
     procedure SetMicVisible(AValue: Boolean);
@@ -242,6 +251,9 @@ type
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState;
                       X, Y: Single); override;
     procedure Resize; override;
+    procedure DragOver(const Data: TDragObject; const Point: TPointF;
+                       var Operation: TDragOperation); override;
+    procedure DragDrop(const Data: TDragObject; const Point: TPointF); override;
 
   public
     constructor Create(AOwner: TComponent); override;
@@ -573,10 +585,18 @@ end;
 // ── Setup ──────────────────────────────────────────────────────────────────────
 
 procedure TAIChatInput.MemoStyleApplied(Sender: TObject);
+var
+  Bg: TFmxObject;
 begin
-  // Remove the TMemo's rectangular background so the Skia-drawn
-  // rounded container shows through without the memo overlapping the corners.
-  FMemo.StylesData['background.Visible'] := False;
+  // Hacer transparente el fondo rectangular del memo para que se vea el
+  // contenedor redondeado dibujado por Skia. Usamos Opacity:=0 y NO Visible:=False:
+  // un elemento de estilo con Visible=False queda excluido del layout de FMX, y el
+  // viewport de texto del memo (dimensionado respecto a 'background') deja de seguir
+  // la altura del control -> el texto se quedaba pegado arriba sin crecer. Con
+  // Opacity:=0 el fondo no se ve pero el layout del memo queda intacto.
+  Bg := FMemo.FindStyleResource('background');
+  if Bg is TActiveStyleObject then
+    TActiveStyleObject(Bg).Opacity := 0;
   // Opt out of style-driven font color so our programmatic color always wins.
   FMemo.StyledSettings := FMemo.StyledSettings - [TStyledSetting.FontColor];
   if FThemeDark then
@@ -591,6 +611,20 @@ begin
   FMemo.Parent                 := Self;
   FMemo.Stored                 := False;
   FMemo.DisableFocusEffect     := True;
+  // WordWrap: el texto se envuelve dentro del ancho del memo (sin scroll
+  // horizontal) y cada linea envuelta cuenta para ContentBounds.Height, que
+  // es lo que UpdateLayout usa para crecer el contenedor verticalmente.
+  FMemo.WordWrap               := True;
+  FMemo.TextSettings.WordWrap  := True;
+  // Anclar a los 4 lados: cuando el contenedor crece (Align=Bottom) el realineo
+  // estira el memo en lugar de revertir la altura que pone UpdateMemoPos. Con
+  // solo [akLeft,akTop] el sistema de anclas dejaba el memo en su tamano original.
+  FMemo.Anchors                := [TAnchorKind.akLeft, TAnchorKind.akTop,
+                                   TAnchorKind.akRight, TAnchorKind.akBottom];
+  // El memo tapa el centro del control; reenviamos su drag-drop al mismo manejo
+  // de archivos para que soltar sobre el area de texto tambien adjunte.
+  FMemo.OnDragOver             := MemoDragOver;
+  FMemo.OnDragDrop             := MemoDragDrop;
   FMemo.OnChange               := MemoChange;
   FMemo.OnKeyDown              := MemoKeyDown;
   FMemo.OnApplyStyleLookup     := MemoStyleApplied;
@@ -1375,6 +1409,64 @@ end;
 begin
 end;
 {$ENDIF}
+
+// ── Drag & drop de archivos ─────────────────────────────────────────────────────
+
+function TAIChatInput.DragHasValidFiles(const Data: TDragObject): Boolean;
+var
+  I  : Integer;
+  Ext: string;
+begin
+  Result := False;
+  if Length(Data.Files) = 0 then Exit;
+  // Sin lista de extensiones configurada se acepta cualquier archivo.
+  if FValidExtensions = '' then Exit(True);
+  for I := 0 to High(Data.Files) do
+  begin
+    Ext := System.IOUtils.TPath.GetExtension(Data.Files[I]).ToLower;
+    if IsExtensionValid(Ext) then Exit(True);
+  end;
+end;
+
+procedure TAIChatInput.HandleFilesDrop(const Data: TDragObject);
+var
+  I: Integer;
+begin
+  // AddAttachment ya valida existencia y extension, y refresca el layout.
+  for I := 0 to High(Data.Files) do
+    AddAttachment(Data.Files[I]);
+end;
+
+procedure TAIChatInput.DragOver(const Data: TDragObject; const Point: TPointF;
+  var Operation: TDragOperation);
+begin
+  if (not FBusy) and DragHasValidFiles(Data) then
+    Operation := TDragOperation.Copy
+  else
+    Operation := TDragOperation.None;
+end;
+
+procedure TAIChatInput.DragDrop(const Data: TDragObject; const Point: TPointF);
+begin
+  if (not FBusy) and (Length(Data.Files) > 0) then
+    HandleFilesDrop(Data);
+end;
+
+procedure TAIChatInput.MemoDragOver(Sender: TObject; const Data: TDragObject;
+  const Point: TPointF; var Operation: TDragOperation);
+begin
+  if (not FBusy) and DragHasValidFiles(Data) then
+    Operation := TDragOperation.Copy
+  else
+    Operation := TDragOperation.None;
+end;
+
+procedure TAIChatInput.MemoDragDrop(Sender: TObject; const Data: TDragObject;
+  const Point: TPointF);
+begin
+  if (not FBusy) and (Length(Data.Files) > 0) then
+    HandleFilesDrop(Data);
+end;
 
 // ── AddBitmapChip ──────────────────────────────────────────────────────────────
 
