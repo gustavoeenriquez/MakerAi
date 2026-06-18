@@ -1,0 +1,87 @@
+﻿object FormComputerUse: TFormComputerUse
+  Left = 0
+  Top = 0
+  Caption = 'MakerAI - Computer Use Test'
+  ClientHeight = 650
+  ClientWidth = 900
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  DesignerMasterStyle = 0
+  object tbTop: TToolBar
+    Size.Width = 900.000000000000000000
+    Size.Height = 44.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object lblProvider: TLabel
+      Position.X = 12.000000000000000000
+      Position.Y = 14.000000000000000000
+      Size.Width = 70.000000000000000000
+      Size.Height = 17.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Proveedor:'
+      TabOrder = 0
+    end
+    object cbProvider: TComboBox
+      Position.X = 86.000000000000000000
+      Position.Y = 10.000000000000000000
+      Size.Width = 160.000000000000000000
+      Size.Height = 24.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+    end
+    object btnRun: TButton
+      Position.X = 258.000000000000000000
+      Position.Y = 9.000000000000000000
+      Size.Width = 110.000000000000000000
+      Size.Height = 26.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      Text = 'Ejecutar'
+      OnClick = btnRunClick
+    end
+    object lblStatus: TLabel
+      Position.X = 384.000000000000000000
+      Position.Y = 14.000000000000000000
+      Size.Width = 500.000000000000000000
+      Size.Height = 17.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+    end
+  end
+  object mePrompt: TMemo
+    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+    DataDetectorTypes = []
+    Align = Top
+    Position.Y = 44.000000000000000000
+    Size.Width = 900.000000000000000000
+    Size.Height = 150.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    Viewport.Width = 896.000000000000000000
+    Viewport.Height = 146.000000000000000000
+  end
+  object splV: TSplitter
+    Align = Top
+    Cursor = crVSplit
+    MinSize = 20.000000000000000000
+    Position.Y = 194.000000000000000000
+    Size.Width = 900.000000000000000000
+    Size.Height = 6.000000000000000000
+    Size.PlatformDefault = False
+  end
+  object meLog: TMemo
+    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+    DataDetectorTypes = []
+    ReadOnly = True
+    Align = Client
+    Size.Width = 900.000000000000000000
+    Size.Height = 450.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 3
+    Viewport.Width = 896.000000000000000000
+    Viewport.Height = 446.000000000000000000
+  end
+end

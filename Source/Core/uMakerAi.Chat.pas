@@ -1485,10 +1485,10 @@ begin
      not (cap_ComputerUse in ModelConfig.ModelCaps) and
      MatchStr(LowerCase(ToolCall.Name),
        ['click_at', 'left_click', 'right_click', 'middle_click', 'double_click',
-        'type_text_at', 'key_combination', 'scroll_at', 'scroll_document',
-        'drag_and_drop', 'hover_at', 'navigate', 'search', 'open_web_browser',
-        'screenshot', 'wait_5_seconds', 'go_back', 'go_forward',
-        'image_edit_at', 'draw_box_at']) then
+        'triple_click', 'type_text_at', 'key_combination', 'hold_key',
+        'scroll_at', 'scroll_document', 'drag_and_drop', 'hover_at',
+        'cursor_position', 'zoom', 'navigate', 'search', 'open_web_browser',
+        'screenshot', 'wait_5_seconds', 'go_back', 'go_forward']) then
   begin
     if Assigned(FOnCallToolFunction) then
       FOnCallToolFunction(Self, ToolCall);

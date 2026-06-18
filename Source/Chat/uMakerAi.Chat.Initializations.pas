@@ -445,6 +445,16 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps', '[cap_GenVideo]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active', 'False');
 
+  // ------- Gemini 2.5 Computer Use -- automatizacion de navegador ------
+  // https://ai.google.dev/gemini-api/docs/computer-use
+  // Modelo dedicado: tool nativo computerUse (environment=ENVIRONMENT_BROWSER).
+  // cap_ComputerUse activa la declaracion del tool y la delegacion en TAiComputerUseTool.
+  Model := 'gemini-2.5-computer-use-preview-10-2025';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Max_Tokens',   '65536');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',    '[cap_Image, cap_ComputerUse]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',  '[cap_Image, cap_ComputerUse]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',  'True');
+
   // deprecated — cierre 17 jun 2026
   // ------- Gemini 2.5 Flash -- 1M ctx, 65K output, multimodal completo ------
   // https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash

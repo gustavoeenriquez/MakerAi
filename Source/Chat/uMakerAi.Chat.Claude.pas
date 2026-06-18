@@ -224,7 +224,8 @@ Const
   // Code Execution (Actualizado seg?n lista de headers de la doc)
   BETA_HDR_CODE = 'code-execution-2025-05-22';
   // Computer Use (Actualizado a la ?ltima versi?n disponible en doc)
-  BETA_HDR_COMPUTER = 'computer-use-2025-01-24';
+  // computer_20251124: Opus 4.8/4.7/4.6, Sonnet 4.6, Opus 4.5 (a?ade acci?n zoom)
+  BETA_HDR_COMPUTER = 'computer-use-2025-11-24';
   // PDFs (Nuevo: Para asegurar soporte nativo si se env?a base64)
   BETA_HDR_PDFS = 'pdfs-2024-09-25';
   // Prompt Caching (?til para CacheSystemPrompt)
@@ -837,12 +838,16 @@ begin
     if cap_ComputerUse in ModelConfig.ModelCaps then
     begin
       JTools := TJSONObject.Create;
-      JTools.AddPair('type', 'computer_20250124');
+      JTools.AddPair('type', 'computer_20251124');
       JTools.AddPair('name', 'computer');
       if Assigned(ChatTools.ComputerUseTool) then
       begin
         JTools.AddPair('display_width_px',  TJSONNumber.Create(ChatTools.ComputerUseTool.ScreenWidth));
         JTools.AddPair('display_height_px', TJSONNumber.Create(ChatTools.ComputerUseTool.ScreenHeight));
+        // enable_zoom: solo v?lido en computer_20251124. Permite a Claude
+        // ampliar una regi?n del screenshot para leer texto peque?o.
+        if ChatTools.ComputerUseTool.EnableZoom then
+          JTools.AddPair('enable_zoom', TJSONBool.Create(True));
       end
       else
       begin
@@ -2568,9 +2573,10 @@ procedure TAiClaudeChat.TranslateClaudeComputerArgs(ToolCall: TAiToolsFunction);
 // TAiComputerUseTool espera: {"x":norm, "y":norm, "text":"...", ...} + ToolCall.Name = acción mapeada
 var
   JArgs, JNew: TJSONObject;
-  JCoord, JStartCoord: TJSONArray;
+  JCoord, JStartCoord, JRegion: TJSONArray;
   Action, MappedName, SText, SDir: string;
   ScrW, ScrH, PxX, PxY, NormX, NormY, Amount: Integer;
+  DDur: Double;
 begin
   JArgs := TJSONObject.ParseJSONValue(ToolCall.Arguments) as TJSONObject;
   if not Assigned(JArgs) then
@@ -2633,19 +2639,48 @@ begin
         JNew.AddPair('y', TJSONNumber.Create(NormY));
       end;
 
-      // Texto o combinación de teclas
+      // Texto / teclas / modificadores: el campo 'text' de Claude cambia de
+      // significado según la acción.
       if JArgs.TryGetValue<string>('text', SText) then
       begin
-        if Action = 'key' then
+        if (Action = 'key') or (Action = 'hold_key') then
           JNew.AddPair('keys', SText)
-        else
+        else if Action = 'type' then
+        begin
           JNew.AddPair('text', SText);
+          // La acci?n 'type' de Claude NO implica Enter ni posici?n: escribe en el
+          // control con foco. Evita el Enter autom?tico (default True en ParseAction).
+          JNew.AddPair('press_enter', TJSONBool.Create(False));
+        end
+        else
+          // En click/scroll/triple_click el 'text' contiene los modificadores
+          JNew.AddPair('modifiers', SText);
       end;
 
-      // Scroll
-      if JArgs.TryGetValue<string>('direction', SDir) then
+      // Duración de hold_key (segundos)
+      if (Action = 'hold_key') and JArgs.TryGetValue<Double>('duration', DDur) then
+        JNew.AddPair('duration', TJSONNumber.Create(DDur));
+
+      // Zoom: region [x1,y1,x2,y2] (px) → x,y + destination_x,destination_y (norm 0-999)
+      if (Action = 'zoom') and JArgs.TryGetValue<TJSONArray>('region', JRegion) and (JRegion.Count >= 4) then
+      begin
+        NormX := Round((JRegion.Items[0] as TJSONNumber).AsInt / ScrW * 1000); if NormX > 999 then NormX := 999;
+        NormY := Round((JRegion.Items[1] as TJSONNumber).AsInt / ScrH * 1000); if NormY > 999 then NormY := 999;
+        JNew.AddPair('x', TJSONNumber.Create(NormX));
+        JNew.AddPair('y', TJSONNumber.Create(NormY));
+        NormX := Round((JRegion.Items[2] as TJSONNumber).AsInt / ScrW * 1000); if NormX > 999 then NormX := 999;
+        NormY := Round((JRegion.Items[3] as TJSONNumber).AsInt / ScrH * 1000); if NormY > 999 then NormY := 999;
+        JNew.AddPair('destination_x', TJSONNumber.Create(NormX));
+        JNew.AddPair('destination_y', TJSONNumber.Create(NormY));
+      end;
+
+      // Scroll: Claude usa 'scroll_direction'/'scroll_amount' (computer_2025xxxx).
+      // Se aceptan tambi?n 'direction'/'amount' por compatibilidad.
+      if JArgs.TryGetValue<string>('scroll_direction', SDir) or
+         JArgs.TryGetValue<string>('direction', SDir) then
         JNew.AddPair('direction', SDir);
-      if JArgs.TryGetValue<Integer>('amount', Amount) then
+      if JArgs.TryGetValue<Integer>('scroll_amount', Amount) or
+         JArgs.TryGetValue<Integer>('amount', Amount) then
         JNew.AddPair('magnitude', TJSONNumber.Create(Amount * 120))
       else if Action = 'scroll' then
         JNew.AddPair('magnitude', TJSONNumber.Create(800));
@@ -2676,12 +2711,11 @@ begin
         TranslateClaudeComputerArgs(ToolCall);
         ToolCall.Response := ChatTools.ComputerUseTool.ProcessToolCall(ToolCall, LScreenshot);
         if Assigned(LScreenshot) then
-        begin
-          if Assigned(ToolCall.ResMsg) then
-            ToolCall.ResMsg.MediaFiles.Add(LScreenshot)
-          else
-            LScreenshot.Free;
-        end;
+          // El screenshot debe ir en ToolCall.MediaFiles: ParseChat lo copia al
+          // ToolMsg ('user' + tool_use_id) que se serializa como tool_result con
+          // bloque image. (Antes iba a ResMsg —mensaje del assistant— y nunca
+          // llegaba al modelo, dejando a Claude "ciego".)
+          ToolCall.MediaFiles.Add(LScreenshot);
       except
         on E: Exception do
         begin
