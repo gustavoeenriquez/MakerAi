@@ -1413,7 +1413,10 @@ begin
         _CreateTask(ToolCall, I); // subrutina local garantiza captura por valor
         Inc(I);
       end;
-      TTask.WaitForAll(TaskList);
+      // Bombear Synchronize/Queue mientras se espera, para no colgar la app si un
+      // tool call accede a la VCL/FMX via TThread.Synchronize (issue #103).
+      while not TTask.WaitForAll(TaskList, 10) do
+        CheckSynchronize(0);
 
       var LStopLoop := False;
       for Clave in LFunciones.Keys do

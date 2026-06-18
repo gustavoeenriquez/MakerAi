@@ -2617,7 +2617,13 @@ begin
         Inc(I);
 
       End;
-      TTask.WaitForAll(TaskList);
+      // No usar TTask.WaitForAll(TaskList) directo: bloquea el hilo llamante sin
+      // bombear la cola de sincronizacion. Si un tool call usa TThread.Synchronize/
+      // TThread.Queue (p.ej. para acceder a la VCL/FMX) y este hilo es el principal,
+      // se produce un deadlock (issue #103). Esperamos con timeout y procesamos los
+      // Synchronize/Queue pendientes; CheckSynchronize es no-op fuera del main thread.
+      while not TTask.WaitForAll(TaskList, 10) do
+        CheckSynchronize(0);
 
       var LStopLoop := False;
       For Clave in LFunciones.Keys do
