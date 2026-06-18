@@ -1657,7 +1657,10 @@ begin
         _CreateTask(ToolCall, I); // subrutina local garantiza captura por valor
         Inc(I);
       End;
-      TTask.WaitForAll(TaskList);
+      // Bombear Synchronize/Queue mientras se espera, para no colgar la app si un
+      // tool call accede a la VCL/FMX via TThread.Synchronize (issue #103).
+      while not TTask.WaitForAll(TaskList, 10) do
+        CheckSynchronize(0);
 
       // Crear los mensajes de respuesta de las herramientas
       For Clave in LFunciones.Keys do
