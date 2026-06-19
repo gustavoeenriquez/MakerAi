@@ -158,7 +158,9 @@ begin
   try
     FServer.Active := True; // bloquea hasta Active := False
   except
-    // Ignorar excepcion al detener
+    on E: Exception do
+      WriteLn('[MCP ERROR] No se pudo iniciar el servidor HTTP en puerto ' +
+        IntToStr(FServer.Port) + ': ' + E.Message);
   end;
 end;
 
