@@ -89,6 +89,10 @@ type
     FWebSearchParams: TAiWebSearchParams;
     FModelConfig: TAiModelConfig;
 
+    FPersistentMemory:  TComponent;
+    FMemoryTokenBudget: Integer;
+    FAutoStoreMemories: Boolean;
+
     // Setters y Getters
     procedure SetDriverName(const Value: String);
     procedure SetModel(const Value: String);
@@ -119,6 +123,9 @@ type
     procedure SetAiFunctions(const Value: TAiFunctions);
     procedure SetSanitizerActive(const Value: Boolean);
     procedure SetOnSanitize(const Value: TAiSanitizeEvent);
+    procedure SetPersistentMemory(const Value: TComponent);
+    procedure SetMemoryTokenBudget(const Value: Integer);
+    procedure SetAutoStoreMemories(const Value: Boolean);
     procedure SetTtsParams(const Value: TAiTtsParams);
     procedure SetTranscriptionParams(const Value: TAiTranscriptionParams);
     procedure SetImageGenParams(const Value: TAiImageGenParams);
@@ -236,6 +243,10 @@ type
     property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive default False;
     property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
 
+    property PersistentMemory:  TComponent read FPersistentMemory  write SetPersistentMemory;
+    property MemoryTokenBudget: Integer    read FMemoryTokenBudget  write SetMemoryTokenBudget default 1500;
+    property AutoStoreMemories: Boolean    read FAutoStoreMemories  write SetAutoStoreMemories default False;
+
     property TtsParams: TAiTtsParams read FTtsParams write SetTtsParams;
     property TranscriptionParams: TAiTranscriptionParams read FTranscriptionParams write SetTranscriptionParams;
     property ImageParams: TAiImageGenParams read FImageGenParams write SetImageGenParams;
@@ -293,6 +304,10 @@ begin
   FVideoGenParams := TAiVideoGenParams.Create;
   FWebSearchParams := TAiWebSearchParams.Create;
   FModelConfig := TAiModelConfig.Create;
+
+  FPersistentMemory  := nil;
+  FMemoryTokenBudget := 1500;
+  FAutoStoreMemories := False;
 end;
 
 destructor TAiChatConnection.Destroy;
@@ -583,6 +598,11 @@ begin
 
   // Inyectar configuración del sanitizador
   AChat.SanitizerActive := Self.FSanitizerActive;
+
+  // Inyectar memoria persistente
+  AChat.PersistentMemory  := Self.FPersistentMemory;
+  AChat.MemoryTokenBudget := Self.FMemoryTokenBudget;
+  AChat.AutoStoreMemories := Self.FAutoStoreMemories;
 
   // Inyectar sub-objetos de parámetros especiales
   AChat.TtsParams.Assign(Self.FTtsParams);
@@ -994,6 +1014,13 @@ begin
       if AComponent = FAiFunctions then
         FChat.AiFunctions := nil;
     end;
+
+    if AComponent = FPersistentMemory then
+    begin
+      FPersistentMemory := nil;
+      if Assigned(FChat) then
+        FChat.PersistentMemory := nil;
+    end;
   end;
 end;
 
@@ -1217,6 +1244,32 @@ begin
   FOnSanitize := Value;
   if Assigned(FChat) then
     FChat.OnSanitize := Value;
+end;
+
+procedure TAiChatConnection.SetPersistentMemory(const Value: TComponent);
+begin
+  if FPersistentMemory = Value then Exit;
+  if Assigned(FPersistentMemory) then
+    FPersistentMemory.RemoveFreeNotification(Self);
+  FPersistentMemory := Value;
+  if Assigned(FPersistentMemory) then
+    FPersistentMemory.FreeNotification(Self);
+  if Assigned(FChat) then
+    FChat.PersistentMemory := Value;
+end;
+
+procedure TAiChatConnection.SetMemoryTokenBudget(const Value: Integer);
+begin
+  FMemoryTokenBudget := Value;
+  if Assigned(FChat) then
+    FChat.MemoryTokenBudget := Value;
+end;
+
+procedure TAiChatConnection.SetAutoStoreMemories(const Value: Boolean);
+begin
+  FAutoStoreMemories := Value;
+  if Assigned(FChat) then
+    FChat.AutoStoreMemories := Value;
 end;
 
 procedure TAiChatConnection.SetTtsParams(const Value: TAiTtsParams);

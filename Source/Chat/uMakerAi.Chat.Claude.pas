@@ -2711,7 +2711,7 @@ begin
     begin
       LScreenshot := nil;
       try
-        TranslateClaudeComputerArgs(ToolCall);
+        ChatTools.ComputerUseTool.TranslateClaudeToolCall(ToolCall);
         ToolCall.Response := ChatTools.ComputerUseTool.ProcessToolCall(ToolCall, LScreenshot);
         if Assigned(LScreenshot) then
           // El screenshot debe ir en ToolCall.MediaFiles: ParseChat lo copia al

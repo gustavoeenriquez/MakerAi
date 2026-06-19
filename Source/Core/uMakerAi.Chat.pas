@@ -2621,9 +2621,16 @@ begin
       // bombear la cola de sincronizacion. Si un tool call usa TThread.Synchronize/
       // TThread.Queue (p.ej. para acceder a la VCL/FMX) y este hilo es el principal,
       // se produce un deadlock (issue #103). Esperamos con timeout y procesamos los
-      // Synchronize/Queue pendientes; CheckSynchronize es no-op fuera del main thread.
+      // Synchronize/Queue pendientes.
+      // OJO: CheckSynchronize NO es no-op fuera del main thread: LANZA excepcion
+      // "CheckSynchronize called from thread X, which is NOT the main thread". En
+      // hilos secundarios (workers Indy de un servicio headless, TTask de agentes)
+      // solo esperamos. Mismo criterio que TMCPClientSSE.WaitForInitialization.
       while not TTask.WaitForAll(TaskList, 10) do
-        CheckSynchronize(0);
+        if TThread.CurrentThread.ThreadID = MainThreadID then
+          CheckSynchronize(0)
+        else
+          Sleep(10);
 
       var LStopLoop := False;
       For Clave in LFunciones.Keys do
