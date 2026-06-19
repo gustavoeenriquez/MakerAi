@@ -350,7 +350,7 @@ begin
   Result := -1;
   if (PipeHandles.InputWrite <> 0) and IsRunning then
   begin
-    Result := Posix.Unistd.__write(PipeHandles.InputWrite, Pointer(Buffer), Count);
+    Result := Posix.Unistd.__write(PipeHandles.InputWrite, @Buffer, Count);
   end;
 end;
 
@@ -359,7 +359,7 @@ begin
   Result := -1;
   if PipeHandles.OutputRead <> 0 then
   begin
-    Result := Posix.Unistd.__read(PipeHandles.OutputRead, Pointer(Buffer), Count);
+    Result := Posix.Unistd.__read(PipeHandles.OutputRead, @Buffer, Count);
     if (Result = -1) and (Errno = EAGAIN) then
       Result := 0;
   end;
@@ -370,7 +370,7 @@ begin
   Result := -1;
   if PipeHandles.ErrorRead <> 0 then
   begin
-    Result := Posix.Unistd.__read(PipeHandles.ErrorRead, Pointer(Buffer), Count);
+    Result := Posix.Unistd.__read(PipeHandles.ErrorRead, @Buffer, Count);
     if (Result = -1) and (Errno = EAGAIN) then
       Result := 0;
   end;
@@ -721,6 +721,11 @@ begin
       Posix.Unistd.__close(PipeIn[0]);
       Posix.Unistd.__close(PipeOut[1]);
       Posix.Unistd.__close(PipeErr[1]);
+
+      // Close all inherited FDs > 2 so the child does not inherit the
+      // parent's listening sockets (e.g. SSE HTTP server ports).
+      for var InheritedFD := 3 to 1023 do
+        Posix.Unistd.__close(InheritedFD);
 
       if ACurrentDirectory <> '' then
         Posix.Unistd.__chdir(PAnsiChar(AnsiString(ACurrentDirectory)));

@@ -697,7 +697,10 @@ begin
     FNoiseLevel := 0;
     FIsSpeaking := False;
     FWakeWordChecked := False;
-    FIsWakeWordValid := False;
+    // Sin verificador de wake word, todo el habla es valida para la IA.
+    // (antes quedaba False y OnSpeechEnd/OnChangeState entregaban el audio
+    // con aIsValidForIA=False, que los consumidores descartan)
+    FIsWakeWordValid := not Assigned(FOnWakeWordCheck);
     if Length(FArrBuf) > 0 then
       FillChar(FArrBuf[0], Length(FArrBuf) * SizeOf(Boolean), 0);
     FFileStream.Clear;
@@ -1077,7 +1080,7 @@ begin
     FCS.Enter;
     try
       FWakeWordChecked := False;
-      FIsWakeWordValid := False;
+      FIsWakeWordValid := not Assigned(FOnWakeWordCheck);  // sin wake word: valido
       FFileStream.Clear;
 
       // *** COPIAR PRE-BUFFER AL INICIO DEL FILESTREAM ***
