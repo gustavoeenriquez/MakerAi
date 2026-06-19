@@ -22,6 +22,12 @@ type
     FSelRect  : TRectF;
     FOverlay  : TRectangle;
     FSelBox   : TRectangle;
+    // Puntos en pixeles fisicos de pantalla (GetCursorPos). Con monitores a
+    // distinta escala DPI las coordenadas logicas del form NO mapean a la
+    // pantalla virtual fisica que usa BitBlt: la captura en un monitor
+    // secundario salia negra.
+    FPhysStart: TPoint;
+    FPhysEnd  : TPoint;
     procedure FormMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Single);
     procedure FormMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Single);
@@ -30,6 +36,8 @@ type
     procedure FormKeyDown(Sender: TObject; var Key: Word; var KeyChar: Char;
       Shift: TShiftState);
     procedure UpdateSelBox;
+  protected
+    procedure DoShow; override;
   public
     constructor Create(AOwner: TComponent); override;
     property Selected : Boolean read FSelected;
@@ -55,7 +63,7 @@ implementation
 
 {$IFDEF MSWINDOWS}
 uses
-  Winapi.Windows;
+  Winapi.Windows, FMX.Platform.Win;
 {$ENDIF}
 {$IFDEF MACOS}
 uses
@@ -70,10 +78,13 @@ begin
   BorderStyle  := TFmxFormBorderStyle.None;
   Transparency := True;
   FormStyle    := TFormStyle.StayOnTop;
-  Left   := 0;
-  Top    := 0;
-  Width  := Round(Screen.Width);
-  Height := Round(Screen.Height);
+  // Cubrir el escritorio virtual completo (multi-monitor, incluye monitores
+  // con origen negativo); Screen.Width solo cubria desde (0,0)
+  var DR := Screen.DesktopRect;
+  Left   := Round(DR.Left);
+  Top    := Round(DR.Top);
+  Width  := Round(DR.Width);
+  Height := Round(DR.Height);
 
   FOverlay             := TRectangle.Create(Self);
   FOverlay.Parent      := Self;
@@ -97,6 +108,25 @@ begin
   Cursor      := crCross;
 end;
 
+procedure TSelectionForm.DoShow;
+{$IFDEF MSWINDOWS}
+var
+  VL, VT, VW, VH: Integer;
+{$ENDIF}
+begin
+  inherited;
+  {$IFDEF MSWINDOWS}
+  // Forzar los limites FISICOS del escritorio virtual via WinAPI: los bounds
+  // logicos de FMX no cubren monitores con origen negativo o escala DPI
+  // distinta (la sombra solo aparecia en el monitor principal)
+  VL := GetSystemMetrics(SM_XVIRTUALSCREEN);
+  VT := GetSystemMetrics(SM_YVIRTUALSCREEN);
+  VW := GetSystemMetrics(SM_CXVIRTUALSCREEN);
+  VH := GetSystemMetrics(SM_CYVIRTUALSCREEN);
+  SetWindowPos(FormToHWND(Self), HWND_TOPMOST, VL, VT, VW, VH, SWP_SHOWWINDOW);
+  {$ENDIF}
+end;
+
 procedure TSelectionForm.UpdateSelBox;
 var
   R: TRectF;
@@ -118,6 +148,10 @@ begin
   begin
     FStartPt        := TPointF.Create(X, Y);
     FEndPt          := FStartPt;
+    {$IFDEF MSWINDOWS}
+    GetCursorPos(FPhysStart);
+    FPhysEnd := FPhysStart;
+    {$ENDIF}
     FDragging       := True;
     FSelBox.Visible := False;
   end;
@@ -140,9 +174,17 @@ begin
   begin
     FEndPt    := TPointF.Create(X, Y);
     FDragging := False;
+    {$IFDEF MSWINDOWS}
+    // SelRect en pixeles fisicos reales: es lo que espera CaptureArea/BitBlt
+    GetCursorPos(FPhysEnd);
+    FSelRect := TRectF.Create(
+      Min(FPhysStart.X, FPhysEnd.X), Min(FPhysStart.Y, FPhysEnd.Y),
+      Max(FPhysStart.X, FPhysEnd.X), Max(FPhysStart.Y, FPhysEnd.Y));
+    {$ELSE}
     FSelRect  := TRectF.Create(
       Min(FStartPt.X, FEndPt.X), Min(FStartPt.Y, FEndPt.Y),
       Max(FStartPt.X, FEndPt.X), Max(FStartPt.Y, FEndPt.Y));
+    {$ENDIF}
     FSelected := (FSelRect.Width > 4) and (FSelRect.Height > 4);
     Close;
   end;

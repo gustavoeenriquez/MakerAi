@@ -12,32 +12,43 @@ uses
 
 type
   TFrmSettings = class(TForm)
-    ToolBar1       : TToolBar;
-    LblTitle       : TLabel;
-    BtnClose       : TButton;
-    TabControl1    : TTabControl;
-    TabGeneral     : TTabItem;
-    LayoutGeneral  : TLayout;
-    LblProvider    : TLabel;
-    CmbProvider    : TComboBox;
-    LblModel       : TLabel;
-    CmbModel       : TComboBox;
-    LblTheme       : TLabel;
-    SwtDark        : TSwitch;
-    LblPromptLabel : TLabel;
-    MemoPrompt     : TMemo;
-    TabApiKeys     : TTabItem;
-    ScrollApiKeys  : TVertScrollBox;
-    LayoutApiKeys  : TLayout;
-    LblKeyHint     : TLabel;
-    LblKeyclaude   : TLabel;
-    EdtKeyClaude   : TEdit;
-    LblKeyOpenAI   : TLabel;
-    EdtKeyOpenAI   : TEdit;
-    LblKeyGemini   : TLabel;
-    EdtKeyGemini   : TEdit;
-    LblKeyGroq     : TLabel;
-    EdtKeyGroq     : TEdit;
+    ToolBar1        : TToolBar;
+    LblTitle        : TLabel;
+    BtnClose        : TButton;
+    TabControl1     : TTabControl;
+    TabGeneral      : TTabItem;
+    LayoutGeneral   : TLayout;
+    LblProvider     : TLabel;
+    CmbProvider     : TComboBox;
+    LblModel        : TLabel;
+    CmbModel        : TComboBox;
+    LblTheme        : TLabel;
+    SwtDark         : TSwitch;
+    LblPromptLabel  : TLabel;
+    MemoPrompt      : TMemo;
+    TabMemory       : TTabItem;
+    LayoutMemory    : TLayout;
+    LblMemoryHint   : TLabel;
+    LblMemoryEnabled: TLabel;
+    SwtMemory       : TSwitch;
+    LblAutoStore    : TLabel;
+    SwtAutoStore    : TSwitch;
+    LblMemoryDb     : TLabel;
+    EdtMemoryPath   : TEdit;
+    LblTokenBudget  : TLabel;
+    EdtTokenBudget  : TEdit;
+    TabApiKeys      : TTabItem;
+    ScrollApiKeys   : TVertScrollBox;
+    LayoutApiKeys   : TLayout;
+    LblKeyHint      : TLabel;
+    LblKeyclaude    : TLabel;
+    EdtKeyClaude    : TEdit;
+    LblKeyOpenAI    : TLabel;
+    EdtKeyOpenAI    : TEdit;
+    LblKeyGemini    : TLabel;
+    EdtKeyGemini    : TEdit;
+    LblKeyGroq      : TLabel;
+    EdtKeyGroq      : TEdit;
     procedure FormCreate(Sender: TObject);
     procedure BtnClose_Click(Sender: TObject);
     procedure CmbProvider_Change(Sender: TObject);
@@ -80,6 +91,12 @@ begin
   // System prompt
   MemoPrompt.Text := AppSettings.SystemPrompt;
 
+  // Memory
+  SwtMemory.IsChecked    := AppSettings.MemoryEnabled;
+  SwtAutoStore.IsChecked := AppSettings.AutoStoreMemories;
+  EdtMemoryPath.Text     := AppSettings.MemoryDbPath;
+  EdtTokenBudget.Text    := AppSettings.MemoryTokenBudget.ToString;
+
   // API keys
   EdtKeyClaude.Text  := AppSettings.ApiKey['Claude'];
   EdtKeyOpenAI.Text  := AppSettings.ApiKey['OpenAI'];
@@ -98,6 +115,13 @@ begin
 
   AppSettings.ThemeDark    := SwtDark.IsChecked;
   AppSettings.SystemPrompt := MemoPrompt.Text;
+
+  AppSettings.MemoryEnabled     := SwtMemory.IsChecked;
+  AppSettings.AutoStoreMemories := SwtAutoStore.IsChecked;
+  AppSettings.MemoryDbPath      := EdtMemoryPath.Text;
+  var Budget: Integer;
+  if TryStrToInt(EdtTokenBudget.Text, Budget) and (Budget > 0) then
+    AppSettings.MemoryTokenBudget := Budget;
 
   AppSettings.ApiKey['Claude'] := EdtKeyClaude.Text;
   AppSettings.ApiKey['OpenAI'] := EdtKeyOpenAI.Text;

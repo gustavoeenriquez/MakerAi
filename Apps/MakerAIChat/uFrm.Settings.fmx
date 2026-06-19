@@ -113,6 +113,88 @@
         end
       end
     end
+    object TabMemory: TTabItem
+      Text = 'Memory'
+      object LayoutMemory: TLayout
+        Align = Client
+        Padding.Left = 16.000000000000000000
+        Padding.Right = 16.000000000000000000
+        Padding.Top = 12.000000000000000000
+        Padding.Bottom = 12.000000000000000000
+        Size.Width = 480.000000000000000000
+        Size.Height = 480.000000000000000000
+        Size.PlatformDefault = False
+        object LblMemoryHint: TLabel
+          Align = Top
+          Size.Width = 448.000000000000000000
+          Size.Height = 48.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 12.000000000000000000
+          Text = 'Activate persistent memory so the agent remembers context across sessions.'
+          WordWrap = True
+        end
+        object LblMemoryEnabled: TLabel
+          Align = Top
+          Size.Width = 448.000000000000000000
+          Size.Height = 24.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 4.000000000000000000
+          Text = 'Enable persistent memory'
+        end
+        object SwtMemory: TSwitch
+          Align = Top
+          Size.Width = 80.000000000000000000
+          Size.Height = 32.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 12.000000000000000000
+        end
+        object LblAutoStore: TLabel
+          Align = Top
+          Size.Width = 448.000000000000000000
+          Size.Height = 24.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 4.000000000000000000
+          Text = 'Auto-store user messages as memories'
+        end
+        object SwtAutoStore: TSwitch
+          Align = Top
+          Size.Width = 80.000000000000000000
+          Size.Height = 32.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 12.000000000000000000
+        end
+        object LblMemoryDb: TLabel
+          Align = Top
+          Size.Width = 448.000000000000000000
+          Size.Height = 24.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 4.000000000000000000
+          Text = 'Memory database path'
+        end
+        object EdtMemoryPath: TEdit
+          Align = Top
+          Size.Width = 448.000000000000000000
+          Size.Height = 36.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 12.000000000000000000
+        end
+        object LblTokenBudget: TLabel
+          Align = Top
+          Size.Width = 448.000000000000000000
+          Size.Height = 24.000000000000000000
+          Size.PlatformDefault = False
+          Margins.Bottom = 4.000000000000000000
+          Text = 'Memory context token budget'
+        end
+        object EdtTokenBudget: TEdit
+          Align = Top
+          Size.Width = 448.000000000000000000
+          Size.Height = 36.000000000000000000
+          Size.PlatformDefault = False
+          KeyboardType = NumbersAndPunctuation
+        end
+      end
+    end
     object TabApiKeys: TTabItem
       Text = 'API Keys'
       object ScrollApiKeys: TVertScrollBox

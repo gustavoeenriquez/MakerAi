@@ -14,7 +14,9 @@ uses
   uMakerAi.Chat.AiConnection,
   uMakerAi.Chat.Messages,
   uMakerAi.Tools.Functions,
-  uMakerAi.Prompts;
+  uMakerAi.Prompts,
+  uMakerAi.Memory,
+  uMakerAi.Memory.Types;
 
 type
   TChatBridge = class
@@ -26,6 +28,7 @@ type
     FChatInput      : TAIChatInput;
     FCurrentMsgIndex: Integer;
     FCurrentConvId  : string;
+    FMemory         : TAiMemory;
 
     // Event signatures must match exactly the types declared in UMakerAi.Chat.pas
     // TAiChatOnDataEvent = procedure(const Sender: TObject; aMsg: TAiChatMessage;
@@ -62,6 +65,7 @@ type
 
     property Connection   : TAiChatConnection read FConn;
     property Prompts      : TAiPrompts        read FPrompts;
+    property Memory       : TAiMemory         read FMemory;
     property CurrentConvId: string            read FCurrentConvId write FCurrentConvId;
     property OnThinking   : TProc<string>     read FOnThinking    write FOnThinking;
   end;
@@ -102,6 +106,8 @@ end;
 
 destructor TChatBridge.Destroy;
 begin
+  FConn.PersistentMemory := nil;
+  FMemory.Free;
   FConn.Free;
   FFunctions.Free;
   FPrompts.Free;
@@ -145,6 +151,18 @@ begin
   FConn.SystemPrompt.Text := AppSettings.SystemPrompt;
   FChatView.ThemeDark    := AppSettings.ThemeDark;
   FChatInput.ThemeDark   := AppSettings.ThemeDark;
+
+  // Reconectar memoria según configuración
+  FConn.PersistentMemory  := nil;
+  FreeAndNil(FMemory);
+  if AppSettings.MemoryEnabled then
+  begin
+    FMemory                      := TAiMemory.Create(nil);
+    FMemory.DbPath               := AppSettings.MemoryDbPath;
+    FConn.PersistentMemory       := FMemory;
+    FConn.MemoryTokenBudget      := AppSettings.MemoryTokenBudget;
+    FConn.AutoStoreMemories      := AppSettings.AutoStoreMemories;
+  end;
 end;
 
 procedure TChatBridge.SendMessage(const AText: string;
