@@ -105,6 +105,16 @@ type
     // de Computer Use. Útil para modelos sin soporte nativo: pasar el resultado a TAiFunctions.
     function GetFunctionDefinitions: string;
 
+    // Translates a native Claude Computer Use tool_call (action + coordinate[px], etc.)
+    // into the x,y-normalized 0-999 format that ParseAction/ProcessToolCall expect, and
+    // maps the action name. Mutates ToolCall.Name and ToolCall.Arguments in place, using
+    // ScreenWidth/ScreenHeight as the pixel reference. This is the single source of truth
+    // for the Claude->tool translation: the Claude driver uses it server-side, and a
+    // client that receives tool_calls from an OpenAI-compatible broker (without going
+    // through the Claude driver) can call it before ProcessToolCall to run Computer Use
+    // locally with identical behavior.
+    procedure TranslateClaudeToolCall(ToolCall: TAiToolsFunction);
+
     // Última acción procesada (se actualiza antes de disparar OnExecuteAction).
     // Útil en OnRequestScreenshot para conocer el contexto, p.ej. CurrentAction.ZoomRect
     // cuando CurrentAction.ActionType = catZoom.
@@ -176,6 +186,131 @@ function TAiComputerUseTool.GetRealRect(GemX1, GemY1, GemX2, GemY2: Integer): TR
 begin
   Result.TopLeft := GetRealPoint(GemX1, GemY1);
   Result.BottomRight := GetRealPoint(GemX2, GemY2);
+end;
+
+procedure TAiComputerUseTool.TranslateClaudeToolCall(ToolCall: TAiToolsFunction);
+// Converts the native Claude Computer Use format to the TAiComputerUseTool format.
+// Claude sends: {"action":"left_click","coordinate":[x_px, y_px], ...}
+// ParseAction expects: {"x":norm, "y":norm, "text":"...", ...} + ToolCall.Name = mapped action.
+var
+  JArgs, JNew: TJSONObject;
+  JCoord, JStartCoord, JRegion: TJSONArray;
+  Action, MappedName, SText, SDir: string;
+  ScrW, ScrH, PxX, PxY, NormX, NormY, Amount: Integer;
+  DDur: Double;
+begin
+  JArgs := TJSONObject.ParseJSONValue(ToolCall.Arguments) as TJSONObject;
+  if not Assigned(JArgs) then
+    Exit;
+  try
+    if not JArgs.TryGetValue<string>('action', Action) then
+      Exit;
+
+    ScrW := FScreenWidth;
+    ScrH := FScreenHeight;
+    if ScrW <= 0 then ScrW := 1920;
+    if ScrH <= 0 then ScrH := 1080;
+
+    // Map Claude action names to TAiComputerUseTool action names
+    if      Action = 'left_click'       then MappedName := 'click_at'
+    else if Action = 'right_click'      then MappedName := 'right_click'
+    else if Action = 'middle_click'     then MappedName := 'middle_click'
+    else if Action = 'double_click'     then MappedName := 'double_click'
+    else if Action = 'left_click_drag'  then MappedName := 'drag_and_drop'
+    else if Action = 'mouse_move'       then MappedName := 'hover_at'
+    else if Action = 'type'             then MappedName := 'type_text_at'
+    else if Action = 'key'              then MappedName := 'key_combination'
+    else if Action = 'scroll'           then MappedName := 'scroll_at'
+    else if Action = 'wait'             then MappedName := 'wait_5_seconds'
+    else MappedName := Action; // screenshot, go_back, go_forward pass through
+
+    ToolCall.Name := MappedName;
+
+    JNew := TJSONObject.Create;
+    try
+      // Drag: start_coordinate = origin (-> x,y); coordinate = destination (-> destination_x,y)
+      if (Action = 'left_click_drag') and
+         JArgs.TryGetValue<TJSONArray>('start_coordinate', JStartCoord) and
+         (JStartCoord.Count >= 2) then
+      begin
+        PxX  := (JStartCoord.Items[0] as TJSONNumber).AsInt;
+        PxY  := (JStartCoord.Items[1] as TJSONNumber).AsInt;
+        NormX := Round(PxX / ScrW * 1000); if NormX > 999 then NormX := 999;
+        NormY := Round(PxY / ScrH * 1000); if NormY > 999 then NormY := 999;
+        JNew.AddPair('x', TJSONNumber.Create(NormX));
+        JNew.AddPair('y', TJSONNumber.Create(NormY));
+
+        if JArgs.TryGetValue<TJSONArray>('coordinate', JCoord) and (JCoord.Count >= 2) then
+        begin
+          NormX := Round((JCoord.Items[0] as TJSONNumber).AsInt / ScrW * 1000);
+          NormY := Round((JCoord.Items[1] as TJSONNumber).AsInt / ScrH * 1000);
+          if NormX > 999 then NormX := 999;
+          if NormY > 999 then NormY := 999;
+          JNew.AddPair('destination_x', TJSONNumber.Create(NormX));
+          JNew.AddPair('destination_y', TJSONNumber.Create(NormY));
+        end;
+      end
+      else if JArgs.TryGetValue<TJSONArray>('coordinate', JCoord) and (JCoord.Count >= 2) then
+      begin
+        PxX  := (JCoord.Items[0] as TJSONNumber).AsInt;
+        PxY  := (JCoord.Items[1] as TJSONNumber).AsInt;
+        NormX := Round(PxX / ScrW * 1000); if NormX > 999 then NormX := 999;
+        NormY := Round(PxY / ScrH * 1000); if NormY > 999 then NormY := 999;
+        JNew.AddPair('x', TJSONNumber.Create(NormX));
+        JNew.AddPair('y', TJSONNumber.Create(NormY));
+      end;
+
+      // Text / keys / modifiers: Claude's 'text' field changes meaning by action.
+      if JArgs.TryGetValue<string>('text', SText) then
+      begin
+        if (Action = 'key') or (Action = 'hold_key') then
+          JNew.AddPair('keys', SText)
+        else if Action = 'type' then
+        begin
+          JNew.AddPair('text', SText);
+          // Claude 'type' implies neither Enter nor a position: it types into the
+          // focused control. Suppress the automatic Enter (ParseAction defaults to True).
+          JNew.AddPair('press_enter', TJSONBool.Create(False));
+        end
+        else
+          // In click/scroll/triple_click the 'text' holds the modifiers
+          JNew.AddPair('modifiers', SText);
+      end;
+
+      // hold_key duration (seconds)
+      if (Action = 'hold_key') and JArgs.TryGetValue<Double>('duration', DDur) then
+        JNew.AddPair('duration', TJSONNumber.Create(DDur));
+
+      // Zoom: region [x1,y1,x2,y2] (px) -> x,y + destination_x,destination_y (norm 0-999)
+      if (Action = 'zoom') and JArgs.TryGetValue<TJSONArray>('region', JRegion) and (JRegion.Count >= 4) then
+      begin
+        NormX := Round((JRegion.Items[0] as TJSONNumber).AsInt / ScrW * 1000); if NormX > 999 then NormX := 999;
+        NormY := Round((JRegion.Items[1] as TJSONNumber).AsInt / ScrH * 1000); if NormY > 999 then NormY := 999;
+        JNew.AddPair('x', TJSONNumber.Create(NormX));
+        JNew.AddPair('y', TJSONNumber.Create(NormY));
+        NormX := Round((JRegion.Items[2] as TJSONNumber).AsInt / ScrW * 1000); if NormX > 999 then NormX := 999;
+        NormY := Round((JRegion.Items[3] as TJSONNumber).AsInt / ScrH * 1000); if NormY > 999 then NormY := 999;
+        JNew.AddPair('destination_x', TJSONNumber.Create(NormX));
+        JNew.AddPair('destination_y', TJSONNumber.Create(NormY));
+      end;
+
+      // Scroll: Claude uses 'scroll_direction'/'scroll_amount'. Accept 'direction'/'amount' too.
+      if JArgs.TryGetValue<string>('scroll_direction', SDir) or
+         JArgs.TryGetValue<string>('direction', SDir) then
+        JNew.AddPair('direction', SDir);
+      if JArgs.TryGetValue<Integer>('scroll_amount', Amount) or
+         JArgs.TryGetValue<Integer>('amount', Amount) then
+        JNew.AddPair('magnitude', TJSONNumber.Create(Amount * 120))
+      else if Action = 'scroll' then
+        JNew.AddPair('magnitude', TJSONNumber.Create(800));
+
+      ToolCall.Arguments := JNew.ToJSON;
+    finally
+      JNew.Free;
+    end;
+  finally
+    JArgs.Free;
+  end;
 end;
 
 function TAiComputerUseTool.ParseAction(ToolCall: TAiToolsFunction; out SafetyReason: string): TAiActionData;
