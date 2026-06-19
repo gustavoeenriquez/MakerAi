@@ -406,6 +406,7 @@ Detailed documentation is available in `Docs/Version 3/`:
 | `uMakerAi-MCP.Server.ES.pdf` | MCP Server guide (Spanish) |
 | `uMakerAi-Agents.ES.pdf` | Agents documentation (Spanish) |
 | `uMakerAi-RAG.ES.pdf` | RAG documentation (Spanish) |
+| `uMakerAi-AudioBridge.md` | Audio bridge for real-time call translation: loopback/mic capture, playback to selectable device, VB-CABLE setup & distribution licensing (Spanish) |
 
 ## Navigation
 

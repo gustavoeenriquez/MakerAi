@@ -122,6 +122,51 @@ Thread safety:
 - Uses `TCriticalSection` for buffer access
 - Events are dispatched via `TThread.Queue` to main thread
 
+### uMakerAi.Utils.AudioCapture
+System audio capture (WASAPI loopback) for translating/transcribing what the PC is playing (Zoom, Meet, YouTube...). Can also capture the microphone via WASAPI.
+
+Key class: `TAiAudioCapture` (TComponent - can be dropped on forms)
+
+Platform support:
+- **Windows**: Full support (WASAPI, Vista+). COM interfaces are declared inline (prefix `IAi*`) - no external dependencies.
+- **Other platforms**: compiles, but `Active := True` fires `OnError`.
+
+Key features:
+- `Source`: `asLoopback` (system playback, default) or `asMicrophone`
+- Delivers PCM16 chunks ready for STT: integrated linear resampling (packet-continuous) and mono downmix (`OutputSampleRate` default 16000, `OutputChannels` default 1; 0 = native)
+- `InjectSilence` (default True): WASAPI loopback delivers no packets while nothing plays; the component injects silent chunks to keep a continuous stream for VAD/streaming STT
+- `Muted` (runtime-changeable): replaces chunks with silence WITHOUT breaking the stream — used to keep the STT from hearing the translator's own TTS while it plays
+- `RealtimeSTT` property: forwards each chunk (mono) to a `TAiRealtimeBase` (same pattern as TAIVoiceMonitor)
+- `GetAudioDevices(aSource)` class function: enumerates WASAPI endpoints (EndpointId + friendly name + IsDefault); use `EndpointId` in `DeviceId` ('' = default device)
+
+Key events:
+- `OnData(Sender, aBuffer: TBytes, aSampleRate, aChannels)` - PCM16 chunk every `ChunkDurationMs` (default 100 ms). The TBytes is a safe copy (can be retained).
+- `OnFormat` - native + effective format, fired when capture starts
+- `OnUpdate` - average sound level per chunk
+- `OnError`
+
+Thread safety: capture runs in a polling thread (~ChunkMs/4); events are dispatched via `TThread.Queue` to the main thread (console apps must call `CheckSynchronize`).
+
+Demo: `Demos/061-LoopbackAudioCapture/AudioCaptureDemo.dpr` (console; records 10 s of system audio to a 16 kHz mono WAV using `uMakerAi.Utils.PcmToWav`).
+
+### uMakerAi.Utils.AudioPlayback
+PCM16 playback to a SELECTABLE WASAPI output device. Symmetric counterpart of `uMakerAi.Utils.AudioCapture`.
+
+Key class: `TAiAudioPlayer` (TComponent)
+
+Use case: route translator TTS — the Spanish translation to my headphones (default device) and the English translation to a virtual cable (e.g. VB-CABLE "CABLE Input") that the meeting app uses as microphone.
+
+Key features:
+- `PlayPCM16(aData, aSampleRate, aChannels)`: enqueues a phrase; phrases play sequentially (no overlap) in a dedicated render thread
+- Automatic conversion to the device mix format (linear resampling + channel mapping). OpenAI TTS `trfPcm` output (PCM16 24 kHz mono) plays directly.
+- `DeviceId` ('' = default output) + `GetPlaybackDevices` class function (delegates to `TAiAudioCapture.GetAudioDevices(asLoopback)`)
+- `OnStateChange(IsPlaying)`: wire to `TAiAudioCapture.Muted` to silence the loopback capture while the own TTS is playing (anti-feedback)
+- `ClearQueue`, `IsPlaying`, `OnError`
+
+Platform support: Windows only (same pattern as AudioCapture; other platforms compile but `Active := True` fires `OnError`).
+
+Demos: `Demos/062-BidirectionalTranslator` (text-only translator) and `Demos/063-VoiceBridgeTranslator` (full voice bridge: loopback -> STT -> translate -> TTS -> headphones, and mic -> STT -> translate -> TTS -> virtual cable). Both require `OPENAI_API_KEY`.
+
 ## Platform Considerations
 
 Windows-specific code uses `{$IFDEF MSWINDOWS}` conditionals. Android uses `{$IFDEF ANDROID}`. When adding new utilities, follow this pattern for cross-platform support.
