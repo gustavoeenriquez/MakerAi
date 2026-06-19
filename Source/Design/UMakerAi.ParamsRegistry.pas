@@ -220,9 +220,17 @@ function TAiChatFactory.CreateDriver(const DriverName: string): TAiChat;
 var
   DriverClass: TAiChatClass;
 begin
-  Result := nil;
-  if FRegisteredClasses.TryGetValue(DriverName, DriverClass) then
-    Result := DriverClass.CreateInstance(Nil);
+  // Driver no registrado: error diagnosticable que lista los drivers disponibles.
+  // La busqueda es case-insensitive; si el driver esperado no aparece en la lista,
+  // suele faltar 'uMakerAi.Chat.Initializations' en el uses (registra todos los drivers).
+  if not FRegisteredClasses.TryGetValue(DriverName, DriverClass) then
+    raise Exception.CreateFmt(
+      'Driver "%s" no esta registrado. Drivers disponibles: [%s]. ' +
+      'Sugerencia: agrega la unidad uMakerAi.Chat.Initializations al uses para ' +
+      'registrar todos los drivers.',
+      [DriverName, String.Join(', ', GetRegisteredDrivers)]);
+
+  Result := DriverClass.CreateInstance(Nil);
 end;
 
 function TAiChatFactory.GetRegisteredDrivers: TArray<string>;
