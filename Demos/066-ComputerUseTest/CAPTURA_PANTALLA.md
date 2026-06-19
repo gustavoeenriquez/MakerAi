@@ -115,9 +115,10 @@ TThread.Synchronize(nil,
 
 ---
 
-## 5. Causa #3: coordenadas — Gemini vs Claude no son iguales
+## 5. Coordenadas — Gemini vs Claude (cómo se concilian)
 
-`TAiComputerUseTool.DenormalizeCoordinate` aplica la fórmula de **Gemini**:
+`TAiComputerUseTool.DenormalizeCoordinate` aplica la fórmula de **Gemini** (espacio
+normalizado 0–999):
 
 ```pascal
 Result := Round((Coord / 1000) * MaxPixels) + Offset;   // 0..999  ->  px físico
@@ -125,22 +126,30 @@ Result := Round((Coord / 1000) * MaxPixels) + Offset;   // 0..999  ->  px físic
 
 - **Gemini** (`gemini-2.5-computer-use`): devuelve siempre **0–999** normalizado,
   independiente de la resolución declarada. La fórmula `/1000 * AreaWidth` es correcta. ✅
-- **Claude** (`computer_20251124`): NO normaliza. Devuelve **píxeles reales sobre la
-  resolución que le declaraste** (`ScreenWidth × ScreenHeight`). Para Claude la
-  conversión correcta es `px_fisico = coord * AreaWidth / ScreenWidth + Offset`,
-  **no** `/1000`.
+- **Claude** (`computer_20251124`): NO normaliza; devuelve **píxeles reales sobre la
+  resolución declarada** (`ScreenWidth × ScreenHeight`). **Pero el driver de Claude lo
+  concilia aguas arriba**: `TAiComputerUseTool.TranslateClaudeToolCall` (lo invoca el
+  driver Claude antes de `ProcessToolCall`) **normaliza los píxeles de Claude a 0–999
+  dividiendo por `ScreenWidth`** antes de que corra `DenormalizeCoordinate`:
 
-Esto significa que, tal como está, los clicks de **Claude se desvían** salvo que
-`ScreenWidth ≈ 1000`. Es un fallo de coordenadas que se confunde con "captura mala":
-la imagen está bien, pero el click cae en otro sitio. Opciones:
+  ```text
+  Claude px (espacio ScreenWidth) --Translate--> norm = px/ScreenWidth*1000 (0..999)
+  norm                           --Denormalize-> px_fis = norm/1000*AreaWidth + Offset
+  ```
 
-1. Declarar a Claude una resolución de ~1000 px de ancho (parche frágil).
-2. **Recomendado:** que `DenormalizeCoordinate` use el divisor correcto según el
-   proveedor — `1000` para Gemini, `ScreenWidth/ScreenHeight` para Claude. Es un
-   arreglo en `uMakerAi.Tools.ComputerUse.pas`, no en el demo.
+  El resultado neto es **`px_fisico = px · AreaWidth / ScreenWidth + Offset`**, que es
+  exactamente la conversión correcta para Claude. **Por tanto los clicks de Claude NO se
+  desvían por este motivo** en el flujo actual. ✅
 
-> Si modificas la librería para esto, avísalo: es un cambio de comportamiento del
-> componente, no del demo.
+> El componente `TAiComputerUseTool` es Gemini-nativo (su `DenormalizeCoordinate` solo
+> implementa `/1000`), pero el driver de Claude adapta las coordenadas con
+> `TranslateClaudeToolCall`, así que ambos proveedores quedan alineados sin tocar
+> `DenormalizeCoordinate`.
+>
+> ⚠️ La causa real de clicks desviados que se observó en runtime **no** fue la fórmula,
+> sino enviar la imagen a una resolución mayor que el límite del servidor (downscale
+> silencioso): por eso el demo envía el screenshot ya reducido a `ScreenWidth × ScreenHeight`
+> (≤1280 px). Ver §1 (regla de oro) y §8.4.
 
 ---
 
@@ -195,8 +204,9 @@ Cuando "la captura falle", revisa en este orden:
    - que `AreaWidth/Height` sea el tamaño físico real;
    - el divisor de `DenormalizeCoordinate` según proveedor (Gemini 1000 vs Claude
      resolución declarada). (§1, §5)
-5. **¿Click desviado solo con Claude, bien con Gemini?** → es el bug del §5
-   (la fórmula `/1000` no aplica a Claude).
+5. **¿Click desviado?** → revisa la coherencia de tamaños (§1) y que la imagen no
+   exceda el límite del servidor (downscale silencioso). Las coordenadas Claude ya
+   se concilian en `TranslateClaudeToolCall` (§5), así que no suelen ser la causa.
 6. **Para aislar:** guarda el screenshot a disco antes de enviarlo
    (`TScreenCapture.SaveToFile` o `Bmp.SaveToFile`) y ábrelo: confirmarás de un
    vistazo si el problema es la imagen (1–3) o las coordenadas (4–5).
@@ -211,5 +221,7 @@ Cuando "la captura falle", revisa en este orden:
   físico real; ambos coherentes.
 - App objetivo en el **monitor primario** (o Área física explícita en multi-monitor).
 - Dibuja el cursor sobre el bitmap (BitBlt no lo trae).
-- Coordenadas: Gemini = 0–999 (`/1000`); Claude = píxeles sobre resolución declarada
-  (`/ScreenWidth`). Hoy la librería solo implementa la de Gemini.
+- Coordenadas: Gemini = 0–999 (`/1000`, nativo del componente); Claude = píxeles sobre
+  la resolución declarada, **conciliados por `TranslateClaudeToolCall`** (normaliza
+  `/ScreenWidth` → 0–999) antes de `DenormalizeCoordinate`. Net: `px·AreaWidth/ScreenWidth`.
+  Ambos proveedores quedan alineados.
