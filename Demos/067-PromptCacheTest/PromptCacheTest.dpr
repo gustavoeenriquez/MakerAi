@@ -102,17 +102,23 @@ begin
       WriteLn(Format('System prompt: %d chars', [Length(Conn.SystemPrompt.Text)]));
       WriteLn('');
 
-      RunOne(Conn, Cap, 'Request 1 (se espera cache_write>0)', 'Di "hola" en una sola palabra.');
+      RunOne(Conn, Cap, 'Request 1 (cache_write>0: escribe system + turno)', 'Di "hola" en una sola palabra.');
       WriteLn('');
       Sleep(1500);
-      RunOne(Conn, Cap, 'Request 2 (se espera cache_read>0)', 'Ahora di "adios" en una sola palabra.');
+      RunOne(Conn, Cap, 'Request 2 (cache_read>0: lee system + turno 1)', 'Ahora di "adios" en una sola palabra.');
+      var LRead2 := Cap.CacheRead;
+      WriteLn('');
+      Sleep(1500);
+      RunOne(Conn, Cap, 'Request 3 (cache_read mayor: prefijo crecio con el turno 2)', 'Y ahora di "gracias" en una sola palabra.');
 
       WriteLn('');
       WriteLn('=== Veredicto ===');
       if Cap.CacheRead > 0 then
-        WriteLn('OK: el system se leyo desde cache en Request 2 (cache_read=' + IntToStr(Cap.CacheRead) + ')')
+        WriteLn('OK: caching efectivo. cache_read Req2=' + IntToStr(LRead2) +
+                ', Req3=' + IntToStr(Cap.CacheRead) +
+                ' (el prefijo cacheado crece con cada turno via auto-cache del ultimo turno).')
       else
-        WriteLn('ATENCION: cache_read=0 en Request 2 (caching no efectivo, revisar)');
+        WriteLn('ATENCION: cache_read=0 (caching no efectivo, revisar)');
     finally
       Conn.Free;
       Cap.Free;

@@ -138,6 +138,7 @@ type
     FCacheSystemPrompt: Boolean;
     FCacheTTL: String;
     FCacheCount: Integer; // breakpoints cache_control usados en el request actual (max 4 en la API)
+    FCacheCtxActive: Boolean; // cacheo de contexto activo en este request (system/tools/ultimo turno)
     FServiceTier: String;
 
     function GetToolJson(aToolFormat: TToolFormat): TJSonArray;
@@ -686,6 +687,7 @@ begin
     // o el flag portable CacheContext (base).
     var
     LDoCache: Boolean := FCacheSystemPrompt or CacheContext;
+    FCacheCtxActive := LDoCache; // visible para GetMessages (auto-cache del ultimo turno)
     SystemPrompt := Self.PrepareSystemMsg;
     if SystemPrompt <> '' then
     begin
@@ -2023,8 +2025,10 @@ var
   bHasContent: Boolean;
   IsCodeExecutionEnabled: Boolean;
   TargetCategories: TAiFileCategories;
+  LLastContent: TJSonArray;
 begin
   Result := TJSonArray.Create;
+  LLastContent := nil; // contenido del ultimo mensaje emitido (auto-cache del ultimo turno)
 
   // Verificamos si el Code Interpreter est? activo
   IsCodeExecutionEnabled := cap_CodeInterpreter in ModelConfig.ModelCaps;
@@ -2345,6 +2349,27 @@ begin
 
     LMessageObj.AddPair('content', LContentArray);
     Result.Add(LMessageObj);
+    LLastContent := LContentArray; // referencia al contenido del ultimo mensaje emitido
+  end;
+
+  // Conveniencia multi-turn: cachea el ultimo turno (su ultimo bloque) para que el
+  // siguiente request lea TODO el historial previo desde cache. Solo si el cacheo de
+  // contexto esta activo, queda presupuesto (<4 breakpoints) y el bloque no fue marcado
+  // manualmente (CacheControl) para no duplicar el breakpoint.
+  if FCacheCtxActive and (FCacheCount < 4) and Assigned(LLastContent) and (LLastContent.Count > 0) then
+  begin
+    var
+    LLastBlock := LLastContent.Items[LLastContent.Count - 1] as TJSONObject;
+    if LLastBlock.GetValue('cache_control') = nil then
+    begin
+      var
+      jCacheLT := TJSONObject.Create;
+      jCacheLT.AddPair('type', 'ephemeral');
+      if FCacheTTL <> '' then
+        jCacheLT.AddPair('ttl', FCacheTTL);
+      LLastBlock.AddPair('cache_control', jCacheLT);
+      Inc(FCacheCount);
+    end;
   end;
 end;
 
