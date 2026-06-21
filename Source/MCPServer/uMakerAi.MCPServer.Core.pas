@@ -225,6 +225,7 @@ type
     function HandleCoreMethod(const Method: string; const Params: TJSONObject): TValue;
     function HandleToolsMethod(const Method: string; const Params: TJSONObject; const ASessionID: string; const AAuthContext: TAiAuthContext): TValue;
     function HandleResourcesMethod(const Method: string; const Params: TJSONObject): TValue;
+    function HandlePromptsMethod(const Method: string; const Params: TJSONObject): TValue;
     function Core_Initialize(const Params: TJSONObject): TValue;
     function Core_Ping: TValue;
     function Tools_ListTools: TValue;
@@ -827,6 +828,8 @@ begin
     Result := HandleToolsMethod(MethodName, Params, SessionID, AAuthContext)
   else if StartsText('resources/', MethodName) then
     Result := HandleResourcesMethod(MethodName, Params)
+  else if StartsText('prompts/', MethodName) then
+    Result := HandlePromptsMethod(MethodName, Params)
   else if (MethodName = 'initialize') or (MethodName = 'ping') then
     Result := HandleCoreMethod(MethodName, Params)
   else
@@ -863,6 +866,23 @@ begin
     Result := Resources_ListTemplates
   else
     raise Exception.CreateFmt('Method %s not handled by Resources capability', [Method]);
+end;
+
+function TAiMCPLogicServer.HandlePromptsMethod(const Method: string; const Params: TJSONObject): TValue;
+var
+  ResultJSON: TJSONObject;
+begin
+  // No exponemos prompts, pero respondemos 'prompts/list' con una lista vacia para no
+  // devolver -32601: clientes reales (p.ej. opencode) descartan el server si este
+  // metodo falla durante el handshake. ISSUE #109.
+  if Method = 'prompts/list' then
+  begin
+    ResultJSON := TJSONObject.Create;
+    ResultJSON.AddPair('prompts', TJSONArray.Create);
+    Result := TValue.From<TJSONObject>(ResultJSON);
+  end
+  else
+    raise Exception.CreateFmt('Method %s not handled by Prompts capability', [Method]);
 end;
 
 function TAiMCPLogicServer.Core_Initialize(const Params: TJSONObject): TValue;
