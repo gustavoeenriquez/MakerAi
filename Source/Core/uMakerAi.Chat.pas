@@ -403,6 +403,7 @@ type
     FPendingToolRun: Boolean;
     FThinking_tokens: Integer;
     FCached_tokens: Integer;
+    FCacheContext: Boolean; // flag portable: cachear el contexto estable (system + tools)
 
     // Devuelve los tipos de archivo que el modelo acepta nativamente (derivado de ModelConfig.ModelCaps)
     function GetModelInputFileTypes: TAiFileCategories;
@@ -532,6 +533,11 @@ type
     Property Temperature: Double read FTemperature write SetTemperature;
     Property Thinking_tokens: Integer read FThinking_tokens write SetThinking_tokens;
     Property Cached_tokens: Integer read FCached_tokens write SetCached_tokens;
+    // Flag portable de prompt caching. Activa el cacheo del contexto estable
+    // (system + tools). En Claude habilita los breakpoints cache_control; en los
+    // providers con caching automatico del servidor (OpenAI, DeepSeek, Kimi, Groq,
+    // Gemini) es no-op porque ya cachean solos.
+    Property CacheContext: Boolean read FCacheContext write FCacheContext;
     Property Top_p: Double read FTop_p write SetTop_p;
     Property Total_tokens: Integer read FTotal_tokens write SetTotal_tokens;
 
@@ -2500,7 +2506,17 @@ begin
     aPrompt_tokens := uso.GetValue<Integer>('prompt_tokens');
     aCompletion_tokens := uso.GetValue<Integer>('completion_tokens');
     aTotal_tokens := uso.GetValue<Integer>('total_tokens');
-    uso.TryGetValue<Integer>('prompt_cache_hit_tokens', aCached_tokens);
+    // Tokens servidos desde cache (prompt caching automatico de los providers
+    // OpenAI-compatibles). DeepSeek usa 'prompt_cache_hit_tokens'; el estandar de
+    // Chat Completions (Kimi/Moonshot, Groq, Mistral, etc.) lo expone en
+    // 'prompt_tokens_details.cached_tokens'.
+    aCached_tokens := 0;
+    if not uso.TryGetValue<Integer>('prompt_cache_hit_tokens', aCached_tokens) then
+    begin
+      var jPromptDetails: TJSonObject;
+      if uso.TryGetValue<TJSonObject>('prompt_tokens_details', jPromptDetails) then
+        jPromptDetails.TryGetValue<Integer>('cached_tokens', aCached_tokens);
+    end;
   end;
 
   AskMsg := GetLastMessage; // Obtiene la pregunta, ya que ResMsg se adiciona a la lista si no hay errores.

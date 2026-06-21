@@ -682,10 +682,14 @@ begin
     // Orden de prefijo: tools -> system -> messages. Reservamos los slots de system y
     // tools antes de construir messages para que tengan prioridad sobre los mensajes.
     FCacheCount := 0;
+    // Caching del contexto estable activo si el usuario puso CacheSystemPrompt (Claude)
+    // o el flag portable CacheContext (base).
+    var
+    LDoCache: Boolean := FCacheSystemPrompt or CacheContext;
     SystemPrompt := Self.PrepareSystemMsg;
     if SystemPrompt <> '' then
     begin
-      if FCacheSystemPrompt then
+      if LDoCache then
       begin
         var
         jSysArr := TJSonArray.Create;
@@ -712,7 +716,7 @@ begin
     // Reserva del slot de tools: si el cacheo esta activo, las definiciones de tools
     // se cachean (breakpoint en el ultimo tool, mas abajo). Se reserva aqui para que
     // los mensajes no consuman ese slot.
-    if FCacheSystemPrompt then
+    if LDoCache then
       Inc(FCacheCount);
 
     AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
@@ -884,7 +888,7 @@ begin
       // Cache de las definiciones de tools: cache_control en el ultimo tool cachea
       // todo el bloque de tools (orden de prefijo tools->system->messages). El slot
       // ya fue reservado en FCacheCount junto al system.
-      if FCacheSystemPrompt then
+      if LDoCache then
       begin
         var
         jToolCache := TJSONObject.Create;
