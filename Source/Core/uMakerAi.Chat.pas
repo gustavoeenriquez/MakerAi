@@ -2322,10 +2322,20 @@ Var
 
 begin
   LogDebug('--OnInternalReceiveData--');
-  if Length(FResponse.DataString) > 500 then
-    LogDebug(Copy(FResponse.DataString, 1, 500) + '...[truncado]')
-  else
-    LogDebug(FResponse.DataString);
+  // ISSUE #108: FResponse es un buffer UTF-8 con bytes TCP crudos. Si un chunk parte
+  // un caracter multibyte (frecuente en idiomas con muchos acentos), DataString lanza
+  // EEncodingError. Los bytes incompletos quedan en FResponse y el proximo chunk
+  // completa el caracter, asi que solo el log necesita proteccion: NO debe abortar el
+  // request escapando del callback.
+  try
+    var LDbgBody := FResponse.DataString;
+    if Length(LDbgBody) > 500 then
+      LogDebug(Copy(LDbgBody, 1, 500) + '...[truncado]')
+    else
+      LogDebug(LDbgBody);
+  except
+    LogDebug('[chunk UTF-8 parcial - log omitido]');
+  end;
 
   If FClient.Asynchronous = False then
     Exit;
