@@ -230,8 +230,6 @@ Const
   BETA_HDR_COMPUTER = 'computer-use-2025-11-24';
   // PDFs (Nuevo: Para asegurar soporte nativo si se env?a base64)
   BETA_HDR_PDFS = 'pdfs-2024-09-25';
-  // Prompt Caching (?til para CacheSystemPrompt)
-  BETA_HDR_PROMPT_CACHING = 'prompt-caching-2024-07-31';
   // Header para Structured Outputs (JSON Schema & Strict Tools)
   BETA_HDR_STRUCTURED_OUTPUTS = 'structured-outputs-2025-11-13';
 
@@ -531,9 +529,7 @@ begin
     if FEnableThinking or (ModelConfig.ThinkingLevel <> tlDefault) then
       BetaFeatures.Add(BETA_HDR_THINKING);
 
-    // 6. Prompt Caching
-    // Siempre ?til agregarlo si vamos a usar cache_control
-    BetaFeatures.Add(BETA_HDR_PROMPT_CACHING);
+    // 6. Prompt Caching: GA, ya no requiere beta header (antes 'prompt-caching-2024-07-31').
 
     // 7. PDFs
     // Agregamos soporte expl?cito para PDFs
