@@ -69,6 +69,14 @@ type
   TAiMCPValidateEvent = procedure(Sender: TObject; const AAuthHeader, ARemoteIP: string;
     out AAuthContext: TAiAuthContext; out AIsValid: Boolean) of object;
 
+  // ISSUE #110: se dispara durante 'initialize' con la identidad del cliente
+  // (clientInfo.name/version + protocolVersion). Poner AAllow:=False rechaza la
+  // conexion devolviendo un error JSON-RPC con AReason. 100% opt-in: si no se asigna
+  // el handler, no cambia nada.
+  TAiMCPClientConnectEvent = procedure(Sender: TObject;
+    const AClientName, AClientVersion, AProtocolVersion: string;
+    var AAllow: Boolean; var AReason: string) of object;
+
   TAiMCPResponseBuilder = class
   private
     FContentArray: TJSONArray;
@@ -214,6 +222,7 @@ type
     FActiveResources: TDictionary<string, IAiMCPResource>;
     FUser: String;
     FOnSendNotification: TAiMCPSendNotificationProc;
+    FOnClientConnect: TAiMCPClientConnectEvent; // ISSUE #110: vetting del cliente en initialize
 
     // --- Private Methods ---
     function ParseJSONRequest(const RequestBody: string): TJSONObject;
@@ -267,6 +276,8 @@ type
     // Lo asigna el transporte (SSE) para habilitar notifications/progress.
     // Si est? nil, los tools simplemente no reciben OnProgress en su AuthContext.
     property OnSendNotification: TAiMCPSendNotificationProc read FOnSendNotification write FOnSendNotification;
+    // ISSUE #110: vetting opt-in del cliente al conectar (initialize).
+    property OnClientConnect: TAiMCPClientConnectEvent read FOnClientConnect write FOnClientConnect;
 
   end;
 
@@ -289,6 +300,8 @@ type
     procedure SetSettingsFile(const Value: String);
     function GetServerName: String;
     procedure SetServerName(const Value: String);
+    function GetOnClientConnect: TAiMCPClientConnectEvent;
+    procedure SetOnClientConnect(const Value: TAiMCPClientConnectEvent);
     procedure SetAiFunctions(const Value: TAiFunctions);
     // Helper: registra una sola funci?n. Al estar en un m?todo separado,
     // cada llamada tiene su propio frame de captura — garantiza que el
@@ -335,6 +348,8 @@ type
     property ApiKey: string read FApiKey write FApiKey;
     // Evento custom para validación avanzada (JWT, OAuth, DB lookup, etc.)
     property OnValidateRequest: TAiMCPValidateEvent read FOnValidateRequest write FOnValidateRequest;
+    // ISSUE #110: vetting opt-in del cliente al recibir 'initialize' (proxy al motor lógico)
+    property OnClientConnect: TAiMCPClientConnectEvent read GetOnClientConnect write SetOnClientConnect;
   end;
 
 implementation
@@ -889,6 +904,35 @@ function TAiMCPLogicServer.Core_Initialize(const Params: TJSONObject): TValue;
 var
   ResultJSON, Capabilities, ToolsCap, ResourcesCap, ServerInfo: TJSONObject;
 begin
+  // ISSUE #110: vetting opt-in del cliente. Si hay handler, se le pasa la identidad
+  // (clientInfo + protocolVersion) y puede rechazar la conexion (AAllow:=False) ->
+  // se lanza excepcion que la capa JSON-RPC convierte en error para el cliente.
+  if Assigned(FOnClientConnect) then
+  begin
+    var LCliName: string := '';
+    var LCliVersion: string := '';
+    var LCliProto: string := '';
+    if Assigned(Params) then
+    begin
+      LCliProto := Params.GetValue<string>('protocolVersion', '');
+      var jClientInfo: TJSONObject;
+      if Params.TryGetValue<TJSONObject>('clientInfo', jClientInfo) and Assigned(jClientInfo) then
+      begin
+        LCliName := jClientInfo.GetValue<string>('name', '');
+        LCliVersion := jClientInfo.GetValue<string>('version', '');
+      end;
+    end;
+    var LAllow: Boolean := True;
+    var LReason: string := '';
+    FOnClientConnect(Self, LCliName, LCliVersion, LCliProto, LAllow, LReason);
+    if not LAllow then
+    begin
+      if Trim(LReason) = '' then
+        LReason := 'Connection rejected by server policy';
+      raise Exception.Create(LReason);
+    end;
+  end;
+
   ResultJSON := TJSONObject.Create;
   ResultJSON.AddPair('protocolVersion', FProtocolVersion);
   Capabilities := TJSONObject.Create;
@@ -1494,6 +1538,16 @@ end;
 function TAiMCPServer.GetServerName: String;
 begin
   Result := FServerName;
+end;
+
+function TAiMCPServer.GetOnClientConnect: TAiMCPClientConnectEvent;
+begin
+  Result := FLogicServer.OnClientConnect;
+end;
+
+procedure TAiMCPServer.SetOnClientConnect(const Value: TAiMCPClientConnectEvent);
+begin
+  FLogicServer.OnClientConnect := Value;
 end;
 
 function TAiMCPServer.GetSettingsFile: String;
