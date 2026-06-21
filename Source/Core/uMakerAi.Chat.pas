@@ -788,6 +788,14 @@ begin
 
     ABody := InitChatCompletions;
 
+    // ISSUE #112: log opt-in del request-body (respeta el mecanismo de logging #88:
+    // LogDebug solo emite si hay handler de log asignado, sin overhead por defecto).
+    // Beneficia a los drivers que usan esta InternalRunCompletions base (GenericLLM,
+    // LMStudio, Kimi, Mistral, Grok, DeepSeek): permite confirmar que el body se
+    // construyo bien localmente aunque llegue vacio al servidor.
+    LogDebug('--Request-Body--');
+    LogDebug('    ' + ABody);
+
     St.WriteString(ABody);
     St.Position := 0;
 
