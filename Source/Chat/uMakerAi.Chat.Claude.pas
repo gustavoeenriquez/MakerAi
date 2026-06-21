@@ -137,6 +137,7 @@ type
     FContextConfig: TClaudeContextConfig;
     FCacheSystemPrompt: Boolean;
     FCacheTTL: String;
+    FCacheCount: Integer; // breakpoints cache_control usados en el request actual (max 4 en la API)
     FServiceTier: String;
 
     function GetToolJson(aToolFormat: TToolFormat): TJSonArray;
@@ -677,6 +678,10 @@ begin
     AJSONObject.AddPair('model', LModel);
 
     // 3. SYSTEM PROMPT
+    // Contador de breakpoints cache_control para este request (la API permite max 4).
+    // Orden de prefijo: tools -> system -> messages. Reservamos los slots de system y
+    // tools antes de construir messages para que tengan prioridad sobre los mensajes.
+    FCacheCount := 0;
     SystemPrompt := Self.PrepareSystemMsg;
     if SystemPrompt <> '' then
     begin
@@ -695,6 +700,7 @@ begin
         if FCacheTTL <> '' then
           jCache.AddPair('ttl', FCacheTTL);
         jSysBlock.AddPair('cache_control', jCache);
+        Inc(FCacheCount); // breakpoint de system (cachea tools+system por el orden de prefijo)
 
         jSysArr.Add(jSysBlock);
         AJSONObject.AddPair('system', jSysArr);
@@ -702,6 +708,12 @@ begin
       else
         AJSONObject.AddPair('system', SystemPrompt);
     end;
+
+    // Reserva del slot de tools: si el cacheo esta activo, las definiciones de tools
+    // se cachean (breakpoint en el ultimo tool, mas abajo). Se reserva aqui para que
+    // los mensajes no consuman ese slot.
+    if FCacheSystemPrompt then
+      Inc(FCacheCount);
 
     AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
     AJSONObject.AddPair('messages', GetMessages);
@@ -868,6 +880,19 @@ begin
     if jArrTools.Count > 0 then
     begin
       AJSONObject.AddPair('tools', jArrTools);
+
+      // Cache de las definiciones de tools: cache_control en el ultimo tool cachea
+      // todo el bloque de tools (orden de prefijo tools->system->messages). El slot
+      // ya fue reservado en FCacheCount junto al system.
+      if FCacheSystemPrompt then
+      begin
+        var
+        jToolCache := TJSONObject.Create;
+        jToolCache.AddPair('type', 'ephemeral');
+        if FCacheTTL <> '' then
+          jToolCache.AddPair('ttl', FCacheTTL);
+        (jArrTools.Items[jArrTools.Count - 1] as TJSONObject).AddPair('cache_control', jToolCache);
+      end;
 
       if (Trim(Tool_choice) <> '') then
       begin
@@ -2096,7 +2121,7 @@ begin
         LPartObj.AddPair('type', 'text');
         LPartObj.AddPair('text', LMessage.Prompt);
 
-        if LMessage.CacheControl then
+        if (LMessage.CacheControl) and (FCacheCount < 4) then
         begin
           var
           jCache := TJSONObject.Create;
@@ -2104,6 +2129,7 @@ begin
           if FCacheTTL <> '' then
             jCache.AddPair('ttl', FCacheTTL);
           LPartObj.AddPair('cache_control', jCache);
+          Inc(FCacheCount);
         end;
 
         LContentArray.Add(LPartObj);
@@ -2173,7 +2199,7 @@ begin
         LPartObj.AddPair('type', 'text');
         LPartObj.AddPair('text', LMessage.Prompt);
 
-        if LMessage.CacheControl then
+        if (LMessage.CacheControl) and (FCacheCount < 4) then
         begin
           var
           jCache := TJSONObject.Create;
@@ -2181,6 +2207,7 @@ begin
           if FCacheTTL <> '' then
             jCache.AddPair('ttl', FCacheTTL);
           LPartObj.AddPair('cache_control', jCache);
+          Inc(FCacheCount);
         end;
 
         LContentArray.Add(LPartObj);
@@ -2288,7 +2315,7 @@ begin
           end;
         end;
 
-        if LMediaFile.CacheControl then
+        if (LMediaFile.CacheControl) and (FCacheCount < 4) then
         begin
           var
           jCache := TJSONObject.Create;
@@ -2296,6 +2323,7 @@ begin
           if FCacheTTL <> '' then
             jCache.AddPair('ttl', FCacheTTL);
           LPartObj.AddPair('cache_control', jCache);
+          Inc(FCacheCount);
         end;
 
         LContentArray.Add(LPartObj);
