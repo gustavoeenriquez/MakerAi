@@ -40,6 +40,7 @@ Specialized guidance exists in subdirectories:
 | `uMakerAI-RAGGraph.docx` | `Source/RAG/uMakerAi.RAG.Graph.Core.pas` |
 | `uMakerAi-MCP.Server.*.docx` | `Source/MCPServer/uMakerAi.MCPServer.Core.pas` |
 | `uMakerAi.ToolFuncions.docx` | `Source/Tools/uMakerAi.Tools.Functions.pas` |
+| `uMakerAi-AudioBridge.md` | `Source/Utils/uMakerAi.Utils.AudioCapture.pas`, `Source/Utils/uMakerAi.Utils.AudioPlayback.pas` |
 
 ## File Formats
 

@@ -17,6 +17,9 @@ type
     class function GetVirtualKey(const KeyName: string): Word;
     class procedure ParseAndExecuteCombo(const Combo: string);
     class procedure SmoothMouseMove(DestX, DestY: Integer);
+    // Presiona las teclas modificadoras y devuelve sus VK para liberarlas luego.
+    class function ModifiersDown(const Mods: string): TArray<Word>;
+    class procedure ModifiersUp(const Keys: TArray<Word>);
   public
     // Ejecuta la acci�n f�sica basada en los datos procesados
     class function Execute(const Action: TAiActionData): TAiActionResult;
@@ -152,12 +155,50 @@ begin
   end;
 end;
 
+class function TAiWindowsExecutor.ModifiersDown(const Mods: string): TArray<Word>;
+var
+  Parts: TArray<string>;
+  Part: string;
+  VK: Word;
+  L: TList<Word>;
+begin
+  L := TList<Word>.Create;
+  try
+    if Trim(Mods) <> '' then
+    begin
+      Parts := Mods.Replace('-', '+').Split(['+']);
+      for Part in Parts do
+      begin
+        VK := GetVirtualKey(Part);
+        if VK <> 0 then
+        begin
+          SendKeyboardInput(VK, False); // Key Down
+          L.Add(VK);
+        end;
+      end;
+    end;
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
+
+class procedure TAiWindowsExecutor.ModifiersUp(const Keys: TArray<Word>);
+var
+  I: Integer;
+begin
+  for I := High(Keys) downto Low(Keys) do
+    SendKeyboardInput(Keys[I], True); // Key Up (orden inverso)
+end;
+
 // -----------------------------------------------------------------------------
 // MAIN EXECUTION LOGIC
 // -----------------------------------------------------------------------------
 class function TAiWindowsExecutor.Execute(const Action: TAiActionData): TAiActionResult;
 var
   I: Integer;
+  Mods: TArray<Word>;
+  Pt: TPoint;
 begin
   Result.Success := True;
   Result.ErrorMessage := '';
@@ -173,33 +214,55 @@ begin
 
       catClick:
       begin
+        Mods := ModifiersDown(Action.Modifiers);
         SmoothMouseMove(Action.X, Action.Y);
         SendMouseInput(MOUSEEVENTF_LEFTDOWN);
         SendMouseInput(MOUSEEVENTF_LEFTUP);
+        ModifiersUp(Mods);
       end;
 
       catRightClick:
       begin
+        Mods := ModifiersDown(Action.Modifiers);
         SmoothMouseMove(Action.X, Action.Y);
         SendMouseInput(MOUSEEVENTF_RIGHTDOWN);
         SendMouseInput(MOUSEEVENTF_RIGHTUP);
+        ModifiersUp(Mods);
       end;
 
       catMiddleClick:
       begin
+        Mods := ModifiersDown(Action.Modifiers);
         SmoothMouseMove(Action.X, Action.Y);
         SendMouseInput(MOUSEEVENTF_MIDDLEDOWN);
         SendMouseInput(MOUSEEVENTF_MIDDLEUP);
+        ModifiersUp(Mods);
       end;
 
       catDoubleClick:
       begin
+        Mods := ModifiersDown(Action.Modifiers);
         SmoothMouseMove(Action.X, Action.Y);
         SendMouseInput(MOUSEEVENTF_LEFTDOWN);
         SendMouseInput(MOUSEEVENTF_LEFTUP);
         Sleep(100); // Pausa t�pica para doble clic
         SendMouseInput(MOUSEEVENTF_LEFTDOWN);
         SendMouseInput(MOUSEEVENTF_LEFTUP);
+        ModifiersUp(Mods);
+      end;
+
+      catTripleClick:
+      begin
+        Mods := ModifiersDown(Action.Modifiers);
+        SmoothMouseMove(Action.X, Action.Y);
+        for I := 1 to 3 do
+        begin
+          SendMouseInput(MOUSEEVENTF_LEFTDOWN);
+          SendMouseInput(MOUSEEVENTF_LEFTUP);
+          if I < 3 then
+            Sleep(80);
+        end;
+        ModifiersUp(Mods);
       end;
 
       catDrag:
@@ -222,6 +285,7 @@ begin
       catScroll:
       begin
         // Mover mouse a posici�n para asegurar que el scroll afecte a la ventana correcta
+        Mods := ModifiersDown(Action.Modifiers);
         SmoothMouseMove(Action.X, Action.Y);
 
         // Magnitude default en Gemini es 800 (WHEEL_DELTA es 120)
@@ -235,17 +299,36 @@ begin
           SendMouseInput(MOUSEEVENTF_HWHEEL, DWORD(-Action.ScrollAmount))
         else if (Action.ScrollDirection = 'right') then
           SendMouseInput(MOUSEEVENTF_HWHEEL, DWORD(Action.ScrollAmount));
+
+        ModifiersUp(Mods);
+      end;
+
+      catCursorPosition:
+      begin
+        GetCursorPos(Pt);
+        Result.CustomOutput := Format('{"x":%d,"y":%d}', [Pt.X, Pt.Y]);
+      end;
+
+      catZoom:
+      begin
+        // No requiere input físico: la región (Action.ZoomRect) se captura ampliada
+        // en el manejador de OnRequestScreenshot vía CurrentAction.ZoomRect.
       end;
 
       // --- TECLADO ---
       catType:
       begin
-        // Si la IA pide click antes, lo hacemos
-        // (Aunque Gemini 2.5 suele separar las acciones, a veces asume que type incluye click)
-        SmoothMouseMove(Action.X, Action.Y);
-        SendMouseInput(MOUSEEVENTF_LEFTDOWN);
-        SendMouseInput(MOUSEEVENTF_LEFTUP);
-        Sleep(50); // Esperar foco
+        // Pre-click SOLO si se especific� una posici�n (Gemini 'type_text_at' la
+        // trae). La acci�n 'type' de Claude NO lleva coordenadas (escribe en el
+        // control con foco) -> llega (0,0); clicar (0,0) quitar�a el foco. Por eso
+        // solo clicamos cuando X/Y != 0.
+        if (Action.X <> 0) or (Action.Y <> 0) then
+        begin
+          SmoothMouseMove(Action.X, Action.Y);
+          SendMouseInput(MOUSEEVENTF_LEFTDOWN);
+          SendMouseInput(MOUSEEVENTF_LEFTUP);
+          Sleep(50); // Esperar foco
+        end;
 
         // Escribir texto Unicode
         for I := 1 to Length(Action.TextToType) do
@@ -262,6 +345,17 @@ begin
       catKeyCombination:
       begin
         ParseAndExecuteCombo(Action.KeyCombo);
+      end;
+
+      catHoldKey:
+      begin
+        // Mantiene la(s) tecla(s) presionada(s) durante HoldDuration segundos.
+        Mods := ModifiersDown(Action.KeyCombo);
+        if Action.HoldDuration > 0 then
+          Sleep(Round(Action.HoldDuration * 1000))
+        else
+          Sleep(1000);
+        ModifiersUp(Mods);
       end;
 
       // --- OTROS ---

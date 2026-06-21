@@ -43,9 +43,11 @@ type
 
     FOnLayoutChanged   : TNotifyEvent;
     FPersistAttachments: Boolean;
+    FOnLoadMedia       : TAITextMDLoadMediaEvent;  // se propaga a cada renderer
 
     procedure EnsureLayout(AIndex: Integer);
     procedure RebuildPositionsFrom(AFromIndex: Integer);
+    procedure SetOnLoadMedia(const AValue: TAITextMDLoadMediaEvent);
 
   public
     constructor Create(const ATheme: TAIChatTheme);
@@ -56,6 +58,10 @@ type
                 AStatus: TChatMessageStatus = TChatMessageStatus.msComplete
               ): TAIChatMessage;
     procedure AppendToken(AIndex: Integer; const AToken: string);
+    // Reemplaza por completo el texto de un mensaje y re-mide (a diferencia de
+    // AppendToken que concatena). Util para placeholders de progreso que luego
+    // se sustituyen por el contenido final.
+    procedure SetText(AIndex: Integer; const AText: string);
     procedure FinishMessage(AIndex: Integer);
     procedure DeleteMessage(AIndex: Integer);
     procedure Clear;
@@ -105,6 +111,10 @@ type
                                               write FOnLayoutChanged;
     property PersistAttachments : Boolean      read FPersistAttachments
                                               write FPersistAttachments;
+    // Callback que provee los bytes de una imagen/archivo markdown (bkMedia).
+    // Se propaga a todos los renderers (presentes y futuros).
+    property OnLoadMedia        : TAITextMDLoadMediaEvent read FOnLoadMedia
+                                              write SetOnLoadMedia;
   end;
 
 implementation
@@ -169,6 +179,7 @@ begin
     begin
       Rdr := TAITextMDRenderer.Create;
       Rdr.Theme := FTheme.MD;
+      Rdr.OnLoadMedia := FOnLoadMedia;
       FRenderers.Add(AIndex, Rdr);
     end;
 
@@ -257,6 +268,18 @@ begin
   Msg := FMessages[AIndex];
   Msg.AppendText(AToken);           // sets MeasuredHeight=-1 → EnsureLayout re-parses
   RebuildPositionsFrom(AIndex);     // O(1) when AIndex = last message
+  if Assigned(FOnLayoutChanged) then FOnLayoutChanged(Self);
+end;
+
+procedure TAIChatVirtualList.SetText(AIndex: Integer; const AText: string);
+var
+  Msg: TAIChatMessage;
+begin
+  if (AIndex < 0) or (AIndex >= FMessages.Count) then Exit;
+  Msg := FMessages[AIndex];
+  Msg.Text := AText;
+  Msg.InvalidateLayout;             // re-mide y re-parsea en EnsureLayout
+  RebuildPositionsFrom(AIndex);
   if Assigned(FOnLayoutChanged) then FOnLayoutChanged(Self);
 end;
 
@@ -558,6 +581,16 @@ function TAIChatVirtualList.GetRenderer(AIndex: Integer): TAITextMDRenderer;
 begin
   if not FRenderers.TryGetValue(AIndex, Result) then
     Result := nil;
+end;
+
+procedure TAIChatVirtualList.SetOnLoadMedia(const AValue: TAITextMDLoadMediaEvent);
+var
+  Rdr: TAITextMDRenderer;
+begin
+  FOnLoadMedia := AValue;
+  // Propagar a los renderers ya creados (mensajes previos al wireup)
+  for Rdr in FRenderers.Values do
+    Rdr.OnLoadMedia := AValue;
 end;
 
 function TAIChatVirtualList.GetMsgDocY(AIndex: Integer): Single;

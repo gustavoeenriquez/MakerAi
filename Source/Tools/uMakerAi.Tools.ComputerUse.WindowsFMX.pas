@@ -18,6 +18,8 @@ type
     class function GetVirtualKey(const KeyName: string): Word;
     class procedure ParseAndExecuteCombo(const Combo: string);
     class procedure SmoothMouseMove(DestX, DestY: Integer);
+    class function ModifiersDown(const Mods: string): TArray<Word>;
+    class procedure ModifiersUp(const Keys: TArray<Word>);
 
     // Helper para dibujar un cursor simulado sobre el Bitmap FMX
     // (Ya que la captura por BitBlt pura no incluye el cursor flotante)
@@ -95,7 +97,7 @@ begin
   else if (K = 'space') then Result := VK_SPACE
   else if (K = 'backspace') then Result := VK_BACK
   else if (K = 'delete') then Result := VK_DELETE
-  else if (K = 'win') or (K = 'windows') or (K = 'meta') then Result := VK_LWIN
+  else if (K = 'win') or (K = 'windows') or (K = 'meta') or (K = 'super') then Result := VK_LWIN
   else if (Length(K) = 1) and (K[1] >= 'a') and (K[1] <= 'z') then
     Result := Ord(UpCase(K[1]))
   else if (Length(K) >= 2) and (K[1] = 'f') then
@@ -132,9 +134,47 @@ begin
   end;
 end;
 
+class function TAiWindowsFMXExecutor.ModifiersDown(const Mods: string): TArray<Word>;
+var
+  Parts: TArray<string>;
+  Part: string;
+  VK: Word;
+  L: TList<Word>;
+begin
+  L := TList<Word>.Create;
+  try
+    if Trim(Mods) <> '' then
+    begin
+      Parts := Mods.Replace('-', '+').Split(['+']);
+      for Part in Parts do
+      begin
+        VK := GetVirtualKey(Part);
+        if VK <> 0 then
+        begin
+          SendKeyboardInput(VK, False);
+          L.Add(VK);
+        end;
+      end;
+    end;
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
+
+class procedure TAiWindowsFMXExecutor.ModifiersUp(const Keys: TArray<Word>);
+var
+  I: Integer;
+begin
+  for I := High(Keys) downto Low(Keys) do
+    SendKeyboardInput(Keys[I], True);
+end;
+
 class function TAiWindowsFMXExecutor.Execute(const Action: TAiActionData): TAiActionResult;
 var
   I: Integer;
+  Mods: TArray<Word>;
+  Pt: TPoint;
 begin
   Result.Success := True;
   Result.ErrorMessage := '';
@@ -145,30 +185,51 @@ begin
       catHover: SmoothMouseMove(Action.X, Action.Y);
 
       catClick: begin
+        Mods := ModifiersDown(Action.Modifiers);
         SmoothMouseMove(Action.X, Action.Y);
         SendMouseInput(MOUSEEVENTF_LEFTDOWN);
         SendMouseInput(MOUSEEVENTF_LEFTUP);
+        ModifiersUp(Mods);
       end;
 
       catRightClick: begin
+        Mods := ModifiersDown(Action.Modifiers);
         SmoothMouseMove(Action.X, Action.Y);
         SendMouseInput(MOUSEEVENTF_RIGHTDOWN);
         SendMouseInput(MOUSEEVENTF_RIGHTUP);
+        ModifiersUp(Mods);
       end;
 
       catMiddleClick: begin
+        Mods := ModifiersDown(Action.Modifiers);
         SmoothMouseMove(Action.X, Action.Y);
         SendMouseInput(MOUSEEVENTF_MIDDLEDOWN);
         SendMouseInput(MOUSEEVENTF_MIDDLEUP);
+        ModifiersUp(Mods);
       end;
 
       catDoubleClick: begin
+        Mods := ModifiersDown(Action.Modifiers);
         SmoothMouseMove(Action.X, Action.Y);
         SendMouseInput(MOUSEEVENTF_LEFTDOWN);
         SendMouseInput(MOUSEEVENTF_LEFTUP);
         Sleep(100);
         SendMouseInput(MOUSEEVENTF_LEFTDOWN);
         SendMouseInput(MOUSEEVENTF_LEFTUP);
+        ModifiersUp(Mods);
+      end;
+
+      catTripleClick: begin
+        Mods := ModifiersDown(Action.Modifiers);
+        SmoothMouseMove(Action.X, Action.Y);
+        for I := 1 to 3 do
+        begin
+          SendMouseInput(MOUSEEVENTF_LEFTDOWN);
+          SendMouseInput(MOUSEEVENTF_LEFTUP);
+          if I < 3 then
+            Sleep(80);
+        end;
+        ModifiersUp(Mods);
       end;
 
       catDrag: begin
@@ -183,6 +244,7 @@ begin
       end;
 
       catScroll: begin
+        Mods := ModifiersDown(Action.Modifiers);
         SmoothMouseMove(Action.X, Action.Y);
         if (Action.ScrollDirection = 'down') then
           SendMouseInput(MOUSEEVENTF_WHEEL, DWORD(-Action.ScrollAmount))
@@ -192,13 +254,29 @@ begin
           SendMouseInput(MOUSEEVENTF_HWHEEL, DWORD(-Action.ScrollAmount))
         else if (Action.ScrollDirection = 'right') then
           SendMouseInput(MOUSEEVENTF_HWHEEL, DWORD(Action.ScrollAmount));
+        ModifiersUp(Mods);
+      end;
+
+      catCursorPosition: begin
+        GetCursorPos(Pt);
+        Result.CustomOutput := Format('{"x":%d,"y":%d}', [Pt.X, Pt.Y]);
+      end;
+
+      catZoom: begin
+        // Sin input físico: la región (CurrentAction.ZoomRect) se captura
+        // ampliada en el manejador de OnRequestScreenshot.
       end;
 
       catType: begin
-        SmoothMouseMove(Action.X, Action.Y);
-        SendMouseInput(MOUSEEVENTF_LEFTDOWN);
-        SendMouseInput(MOUSEEVENTF_LEFTUP);
-        Sleep(50);
+        // Pre-click solo si hay posici�n (Gemini). Claude 'type' llega (0,0) y NO
+        // debe clicar: quitar�a el foco del control donde hay que escribir.
+        if (Action.X <> 0) or (Action.Y <> 0) then
+        begin
+          SmoothMouseMove(Action.X, Action.Y);
+          SendMouseInput(MOUSEEVENTF_LEFTDOWN);
+          SendMouseInput(MOUSEEVENTF_LEFTUP);
+          Sleep(50);
+        end;
         for I := 1 to Length(Action.TextToType) do
           SendUnicodeChar(Action.TextToType[I]);
         if Action.PressEnter then
@@ -210,6 +288,15 @@ begin
       end;
 
       catKeyCombination: ParseAndExecuteCombo(Action.KeyCombo);
+
+      catHoldKey: begin
+        Mods := ModifiersDown(Action.KeyCombo);
+        if Action.HoldDuration > 0 then
+          Sleep(Round(Action.HoldDuration * 1000))
+        else
+          Sleep(1000);
+        ModifiersUp(Mods);
+      end;
 
       catWait: Sleep(5000);
     end;

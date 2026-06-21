@@ -49,10 +49,14 @@ type
     FTtsModel:      string;
     FInstructions:  string;
     FRagId:         string;
+    FStateless:     Boolean;
+    FVadMode:       string;  // '' | 'server' | 'disabled'
     // Eventos adicionales (salida de asistente + audio TTS)
     FOnAssistantText: TAiRealtimeAssistantTextEvent;
     FOnAudioChunk:    TAiRealtimeAudioChunkEvent;
     FOnAudioDone:     TNotifyEvent;
+    FOnSpeechStart:   TNotifyEvent;
+    FOnSpeechEnd:     TNotifyEvent;
     // Callbacks internos del WebSocket
     procedure OnWSFrame(Sender: TObject; Opcode: TAiRealtimeWSOpcode;
       const Data: TBytes; IsFinal: Boolean);
@@ -66,6 +70,8 @@ type
     procedure DoAssistantText(const AText: string);
     procedure DoAudioChunk(const AData: TBytes);
     procedure DoAudioDone;
+    procedure DoSpeechStart;
+    procedure DoSpeechEnd;
   protected
     function  GetTargetSampleRate: Integer; override;
     procedure InternalSendAudio(const ResampledPCM16: TBytes); override;
@@ -88,6 +94,14 @@ type
     property TtsModel:     string read FTtsModel     write FTtsModel;
     property Instructions: string read FInstructions write FInstructions;
     property RagId:        string read FRagId        write FRagId;
+    // Cada commit corre con las instructions frescas, sin historial multi-turn.
+    // Util para sesiones de transformacion pura (traduccion, dictado, etc.)
+    property Stateless:    Boolean read FStateless write FStateless default False;
+    // VAD del servidor: '' o 'disabled' → commit manual del cliente;
+    // 'server' → el servidor detecta turnos (OpenAI turn_detection server_vad,
+    //             threshold 0.5, silence 500ms, prefix 300ms). El cliente NO
+    //             debe enviar type:commit — el servidor lo dispara solo.
+    property VadMode:      string  read FVadMode  write FVadMode;
     // Eventos nuevos — especificos de este driver (texto + audio del asistente)
     property OnAssistantText: TAiRealtimeAssistantTextEvent
       read  FOnAssistantText write FOnAssistantText;
@@ -95,6 +109,9 @@ type
       read  FOnAudioChunk write FOnAudioChunk;
     property OnAudioDone: TNotifyEvent
       read  FOnAudioDone write FOnAudioDone;
+    // Eventos VAD del servidor (speech_start / speech_end de OpenAI)
+    property OnSpeechStart: TNotifyEvent read FOnSpeechStart write FOnSpeechStart;
+    property OnSpeechEnd:   TNotifyEvent read FOnSpeechEnd   write FOnSpeechEnd;
   end;
 
   procedure Register;
@@ -180,6 +197,8 @@ begin
     if FTtsModel     <> '' then JMsg.AddPair('tts_model',    FTtsModel);
     if FInstructions <> '' then JMsg.AddPair('instructions', FInstructions);
     if FRagId        <> '' then JMsg.AddPair('rag_id',       FRagId);
+    if FStateless then JMsg.AddPair('stateless', TJSONBool.Create(True));
+    if FVadMode      <> '' then JMsg.AddPair('vad',          FVadMode);
     FWebSocket.SendText(JMsg.ToJSON);
   finally
     JMsg.Free;
@@ -230,6 +249,12 @@ begin
   else if EventType = 'audio_done' then
     DoAudioDone
 
+  else if EventType = 'speech_start' then
+    DoSpeechStart
+
+  else if EventType = 'speech_end' then
+    DoSpeechEnd
+
   else if EventType = 'error' then
   begin
     ErrMsg := 'Error del servidor MakerAI';
@@ -268,6 +293,24 @@ begin
   if not Assigned(FOnAudioDone) then Exit;
   TThread.Queue(nil, procedure begin
     if Assigned(FOnAudioDone) then FOnAudioDone(Self);
+  end);
+end;
+
+procedure TAiMakerAiRealtimeChat.DoSpeechStart;
+begin
+  MkLog('SPEECH_START');
+  if not Assigned(FOnSpeechStart) then Exit;
+  TThread.Queue(nil, procedure begin
+    if Assigned(FOnSpeechStart) then FOnSpeechStart(Self);
+  end);
+end;
+
+procedure TAiMakerAiRealtimeChat.DoSpeechEnd;
+begin
+  MkLog('SPEECH_END');
+  if not Assigned(FOnSpeechEnd) then Exit;
+  TThread.Queue(nil, procedure begin
+    if Assigned(FOnSpeechEnd) then FOnSpeechEnd(Self);
   end);
 end;
 

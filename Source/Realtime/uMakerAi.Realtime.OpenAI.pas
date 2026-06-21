@@ -1,7 +1,7 @@
 ﻿// MakerAI Suite — Driver OpenAI Realtime STT
 // wss://api.openai.com/v1/realtime  (RFC 6455 + protocolo OpenAI Realtime v1)
 //
-// Modelos soportados: gpt-4o-realtime-preview, gpt-4o-mini-realtime-preview
+// Modelos soportados: gpt-realtime (actual), gpt-4o-mini-realtime-preview
 // Modelos de transcripcion: gpt-4o-transcribe, gpt-4o-mini-transcribe, whisper-1
 // Audio: PCM16, 24kHz, mono, little-endian
 //
@@ -105,7 +105,7 @@ end;
 
 class function TAiOpenAiRealtimeSTT.GetDefaultModel: string;
 begin
-  Result := 'gpt-4o-realtime-preview';
+  Result := 'gpt-realtime';
 end;
 
 function TAiOpenAiRealtimeSTT.GetTargetSampleRate: Integer;
@@ -155,7 +155,7 @@ end;
 
 procedure TAiOpenAiRealtimeSTT.SendSessionUpdate;
 // Esquema actualizado 2026: los campos van anidados bajo session.audio.input.
-// session.type = 'realtime' para gpt-4o-realtime-preview.
+// session.type = 'realtime' para gpt-realtime.
 // modalities sigue al nivel de session (fuera de audio).
 var
   JMsg, JSession, JAudio, JInput, JTranscription, JVAD, JFormat, JNoise: TJSONObject;

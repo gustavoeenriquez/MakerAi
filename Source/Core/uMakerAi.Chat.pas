@@ -403,6 +403,7 @@ type
     FPendingToolRun: Boolean;
     FThinking_tokens: Integer;
     FCached_tokens: Integer;
+    FCacheContext: Boolean; // flag portable: cachear el contexto estable (system + tools)
 
     // Devuelve los tipos de archivo que el modelo acepta nativamente (derivado de ModelConfig.ModelCaps)
     function GetModelInputFileTypes: TAiFileCategories;
@@ -532,6 +533,11 @@ type
     Property Temperature: Double read FTemperature write SetTemperature;
     Property Thinking_tokens: Integer read FThinking_tokens write SetThinking_tokens;
     Property Cached_tokens: Integer read FCached_tokens write SetCached_tokens;
+    // Flag portable de prompt caching. Activa el cacheo del contexto estable
+    // (system + tools). En Claude habilita los breakpoints cache_control; en los
+    // providers con caching automatico del servidor (OpenAI, DeepSeek, Kimi, Groq,
+    // Gemini) es no-op porque ya cachean solos.
+    Property CacheContext: Boolean read FCacheContext write FCacheContext;
     Property Top_p: Double read FTop_p write SetTop_p;
     Property Total_tokens: Integer read FTotal_tokens write SetTotal_tokens;
 
@@ -781,6 +787,14 @@ begin
     // Comienza con las instrucciones iniciales y le adiciona cada 20 mensajes para evitar que se olvide
 
     ABody := InitChatCompletions;
+
+    // ISSUE #112: log opt-in del request-body (respeta el mecanismo de logging #88:
+    // LogDebug solo emite si hay handler de log asignado, sin overhead por defecto).
+    // Beneficia a los drivers que usan esta InternalRunCompletions base (GenericLLM,
+    // LMStudio, Kimi, Mistral, Grok, DeepSeek): permite confirmar que el body se
+    // construyo bien localmente aunque llegue vacio al servidor.
+    LogDebug('--Request-Body--');
+    LogDebug('    ' + ABody);
 
     St.WriteString(ABody);
     St.Position := 0;
@@ -1485,10 +1499,10 @@ begin
      not (cap_ComputerUse in ModelConfig.ModelCaps) and
      MatchStr(LowerCase(ToolCall.Name),
        ['click_at', 'left_click', 'right_click', 'middle_click', 'double_click',
-        'type_text_at', 'key_combination', 'scroll_at', 'scroll_document',
-        'drag_and_drop', 'hover_at', 'navigate', 'search', 'open_web_browser',
-        'screenshot', 'wait_5_seconds', 'go_back', 'go_forward',
-        'image_edit_at', 'draw_box_at']) then
+        'triple_click', 'type_text_at', 'key_combination', 'hold_key',
+        'scroll_at', 'scroll_document', 'drag_and_drop', 'hover_at',
+        'cursor_position', 'zoom', 'navigate', 'search', 'open_web_browser',
+        'screenshot', 'wait_5_seconds', 'go_back', 'go_forward']) then
   begin
     if Assigned(FOnCallToolFunction) then
       FOnCallToolFunction(Self, ToolCall);
@@ -2316,10 +2330,20 @@ Var
 
 begin
   LogDebug('--OnInternalReceiveData--');
-  if Length(FResponse.DataString) > 500 then
-    LogDebug(Copy(FResponse.DataString, 1, 500) + '...[truncado]')
-  else
-    LogDebug(FResponse.DataString);
+  // ISSUE #108: FResponse es un buffer UTF-8 con bytes TCP crudos. Si un chunk parte
+  // un caracter multibyte (frecuente en idiomas con muchos acentos), DataString lanza
+  // EEncodingError. Los bytes incompletos quedan en FResponse y el proximo chunk
+  // completa el caracter, asi que solo el log necesita proteccion: NO debe abortar el
+  // request escapando del callback.
+  try
+    var LDbgBody := FResponse.DataString;
+    if Length(LDbgBody) > 500 then
+      LogDebug(Copy(LDbgBody, 1, 500) + '...[truncado]')
+    else
+      LogDebug(LDbgBody);
+  except
+    LogDebug('[chunk UTF-8 parcial - log omitido]');
+  end;
 
   If FClient.Asynchronous = False then
     Exit;
@@ -2500,7 +2524,17 @@ begin
     aPrompt_tokens := uso.GetValue<Integer>('prompt_tokens');
     aCompletion_tokens := uso.GetValue<Integer>('completion_tokens');
     aTotal_tokens := uso.GetValue<Integer>('total_tokens');
-    uso.TryGetValue<Integer>('prompt_cache_hit_tokens', aCached_tokens);
+    // Tokens servidos desde cache (prompt caching automatico de los providers
+    // OpenAI-compatibles). DeepSeek usa 'prompt_cache_hit_tokens'; el estandar de
+    // Chat Completions (Kimi/Moonshot, Groq, Mistral, etc.) lo expone en
+    // 'prompt_tokens_details.cached_tokens'.
+    aCached_tokens := 0;
+    if not uso.TryGetValue<Integer>('prompt_cache_hit_tokens', aCached_tokens) then
+    begin
+      var jPromptDetails: TJSonObject;
+      if uso.TryGetValue<TJSonObject>('prompt_tokens_details', jPromptDetails) then
+        jPromptDetails.TryGetValue<Integer>('cached_tokens', aCached_tokens);
+    end;
   end;
 
   AskMsg := GetLastMessage; // Obtiene la pregunta, ya que ResMsg se adiciona a la lista si no hay errores.
@@ -2621,9 +2655,16 @@ begin
       // bombear la cola de sincronizacion. Si un tool call usa TThread.Synchronize/
       // TThread.Queue (p.ej. para acceder a la VCL/FMX) y este hilo es el principal,
       // se produce un deadlock (issue #103). Esperamos con timeout y procesamos los
-      // Synchronize/Queue pendientes; CheckSynchronize es no-op fuera del main thread.
+      // Synchronize/Queue pendientes.
+      // OJO: CheckSynchronize NO es no-op fuera del main thread: LANZA excepcion
+      // "CheckSynchronize called from thread X, which is NOT the main thread". En
+      // hilos secundarios (workers Indy de un servicio headless, TTask de agentes)
+      // solo esperamos. Mismo criterio que TMCPClientSSE.WaitForInitialization.
       while not TTask.WaitForAll(TaskList, 10) do
-        CheckSynchronize(0);
+        if TThread.CurrentThread.ThreadID = MainThreadID then
+          CheckSynchronize(0)
+        else
+          Sleep(10);
 
       var LStopLoop := False;
       For Clave in LFunciones.Keys do

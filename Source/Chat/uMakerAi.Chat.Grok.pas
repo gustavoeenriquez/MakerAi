@@ -370,6 +370,9 @@ begin
 
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
+    if not Assigned(Res) then
+      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+
     if Res.StatusCode = 200 then
     begin
       var LParsed := TJSonObject.ParseJSONValue(Res.ContentAsString);

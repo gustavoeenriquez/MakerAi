@@ -1,0 +1,9 @@
+Win64/
+Win32/
+shots/
+__history/
+__recovery/
+*.identcache
+*.local
+*.dproj.local
+*.~*

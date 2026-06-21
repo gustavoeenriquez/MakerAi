@@ -1,0 +1,337 @@
+﻿object FormVoiceBridge: TFormVoiceBridge
+  Left = 0
+  Top = 0
+  Caption = 'VoiceBridge Translator'
+  ClientHeight = 680
+  ClientWidth = 1040
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  DesignerMasterStyle = 0
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  OnCloseQuery = FormCloseQuery
+  object LayMain: TLayout
+    Align = Client
+    Size.Width = 1040.0
+    Size.Height = 680.0
+    Size.PlatformDefault = False
+    object LayTop: TLayout
+      Align = Top
+      Size.Width = 1040.0
+      Size.Height = 116.0
+      Size.PlatformDefault = False
+      object LblLoopback: TLabel
+        Position.X = 4.0
+        Position.Y = 8.0
+        Size.Width = 76.0
+        Size.Height = 18.0
+        Size.PlatformDefault = False
+        AutoSize = False
+        Text = 'Loopback:'
+        TextSettings.HorzAlign = Trailing
+      end
+      object CboLoopback: TComboBox
+        Position.X = 82.0
+        Position.Y = 4.0
+        Size.Width = 376.0
+        Size.Height = 26.0
+        Size.PlatformDefault = False
+        TabOrder = 0
+      end
+      object LblMic: TLabel
+        Position.X = 464.0
+        Position.Y = 8.0
+        Size.Width = 84.0
+        Size.Height = 18.0
+        Size.PlatformDefault = False
+        AutoSize = False
+        Text = 'Micr'#243'fono:'
+        TextSettings.HorzAlign = Trailing
+      end
+      object CboMic: TComboBox
+        Position.X = 550.0
+        Position.Y = 4.0
+        Size.Width = 480.0
+        Size.Height = 26.0
+        Size.PlatformDefault = False
+        TabOrder = 1
+      end
+      object LblTTSLocal: TLabel
+        Position.X = 4.0
+        Position.Y = 40.0
+        Size.Width = 76.0
+        Size.Height = 18.0
+        Size.PlatformDefault = False
+        AutoSize = False
+        Text = 'TTS Local:'
+        TextSettings.HorzAlign = Trailing
+      end
+      object CboTTSLocal: TComboBox
+        Position.X = 82.0
+        Position.Y = 36.0
+        Size.Width = 376.0
+        Size.Height = 26.0
+        Size.PlatformDefault = False
+        TabOrder = 2
+      end
+      object LblTTSReun: TLabel
+        Position.X = 464.0
+        Position.Y = 40.0
+        Size.Width = 84.0
+        Size.Height = 18.0
+        Size.PlatformDefault = False
+        AutoSize = False
+        Text = 'TTS Reuni'#243'n:'
+        TextSettings.HorzAlign = Trailing
+      end
+      object CboTTSReun: TComboBox
+        Position.X = 550.0
+        Position.Y = 36.0
+        Size.Width = 480.0
+        Size.Height = 26.0
+        Size.PlatformDefault = False
+        TabOrder = 3
+      end
+      object LblDe: TLabel
+        Position.X = 4.0
+        Position.Y = 72.0
+        Size.Width = 28.0
+        Size.Height = 18.0
+        Size.PlatformDefault = False
+        AutoSize = False
+        Text = 'De:'
+      end
+      object EdtLangSrc: TEdit
+        Position.X = 34.0
+        Position.Y = 68.0
+        Size.Width = 46.0
+        Size.Height = 26.0
+        Size.PlatformDefault = False
+        TabOrder = 4
+        Text = 'es'
+      end
+      object LblA: TLabel
+        Position.X = 84.0
+        Position.Y = 72.0
+        Size.Width = 20.0
+        Size.Height = 18.0
+        Size.PlatformDefault = False
+        AutoSize = False
+        Text = 'a:'
+      end
+      object EdtLangDst: TEdit
+        Position.X = 106.0
+        Position.Y = 68.0
+        Size.Width = 46.0
+        Size.Height = 26.0
+        Size.PlatformDefault = False
+        TabOrder = 5
+        Text = 'en'
+      end
+      object LblCable: TLabel
+        Position.X = 160.0
+        Position.Y = 72.0
+        Size.Width = 664.0
+        Size.Height = 22.0
+        Size.PlatformDefault = False
+        AutoSize = False
+        Text = 'Verificando VB-CABLE...'
+      end
+      object BtnStart: TButton
+        Position.X = 832.0
+        Position.Y = 64.0
+        Size.Width = 196.0
+        Size.Height = 40.0
+        Size.PlatformDefault = False
+        TabOrder = 6
+        Text = 'INICIAR'
+        OnClick = BtnStartClick
+      end
+    end
+    object RectTopSep: TRectangle
+      Align = Top
+      Size.Width = 1040.0
+      Size.Height = 1.0
+      Size.PlatformDefault = False
+      Fill.Color = xFFC0C0C0
+      Stroke.Kind = None
+    end
+    object LayBottom: TLayout
+      Align = Bottom
+      Size.Width = 1040.0
+      Size.Height = 28.0
+      Size.PlatformDefault = False
+      Padding.Left = 8.0
+      Padding.Right = 8.0
+      object LblStatus: TLabel
+        Align = Client
+        AutoSize = False
+        Text = 'Listo. Configure los dispositivos e inicie el puente.'
+        TextSettings.HorzAlign = Leading
+        TextSettings.VertAlign = Center
+      end
+    end
+    object LayMiddle: TLayout
+      Align = Client
+      Size.Width = 1040.0
+      Size.Height = 535.0
+      Size.PlatformDefault = False
+      object LayYo: TLayout
+        Align = Left
+        Size.Width = 504.0
+        Size.Height = 535.0
+        Size.PlatformDefault = False
+        object RectYoHeader: TRectangle
+          Align = Top
+          Size.Width = 504.0
+          Size.Height = 30.0
+          Size.PlatformDefault = False
+          Fill.Color = xFF1E4D80
+          Stroke.Kind = None
+          object LblYoHeader: TLabel
+            Align = Client
+            AutoSize = False
+            Text = 'YO (Micr'#243'fono)'
+            TextSettings.FontColor = claWhite
+            TextSettings.HorzAlign = Center
+            TextSettings.VertAlign = Center
+          end
+        end
+        object MemoYo: TMemo
+          Align = Client
+          ReadOnly = True
+        end
+      end
+      object RectMiddleSep: TRectangle
+        Align = Left
+        Size.Width = 4.0
+        Size.Height = 535.0
+        Size.PlatformDefault = False
+        Fill.Color = xFFD0D0D0
+        Stroke.Kind = None
+      end
+      object LayEllos: TLayout
+        Align = Client
+        Size.Width = 532.0
+        Size.Height = 535.0
+        Size.PlatformDefault = False
+        object RectEllosHeader: TRectangle
+          Align = Top
+          Size.Width = 532.0
+          Size.Height = 30.0
+          Size.PlatformDefault = False
+          Fill.Color = xFF1A5C3A
+          Stroke.Kind = None
+          object LblEllosHeader: TLabel
+            Align = Client
+            AutoSize = False
+            Text = 'ELLOS (Reuni'#243'n)'
+            TextSettings.FontColor = claWhite
+            TextSettings.HorzAlign = Center
+            TextSettings.VertAlign = Center
+          end
+        end
+        object LaySpeakers: TLayout
+          Align = Top
+          Size.Width = 532.0
+          Size.Height = 144.0
+          Size.PlatformDefault = False
+          Padding.Left = 6.0
+          Padding.Right = 6.0
+          Padding.Top = 4.0
+          Padding.Bottom = 4.0
+          object LaySpk1: TLayout
+            Align = Top
+            Size.Width = 520.0
+            Size.Height = 33.0
+            Size.PlatformDefault = False
+            Padding.Top = 3.0
+            Padding.Bottom = 1.0
+            object LblSpeaker1: TLabel
+              Align = Left
+              AutoSize = False
+              Size.Width = 90.0
+              Size.PlatformDefault = False
+              Text = 'Hablante 1:'
+              TextSettings.VertAlign = Center
+            end
+            object EdtSpeaker1: TEdit
+              Align = Client
+              TextPrompt = 'Nombre del hablante 1 (auto-registrado)'
+              OnChangeTracking = EdtSpeaker1ChangeTracking
+            end
+          end
+          object LaySpk2: TLayout
+            Align = Top
+            Size.Width = 520.0
+            Size.Height = 33.0
+            Size.PlatformDefault = False
+            Padding.Top = 3.0
+            Padding.Bottom = 1.0
+            object LblSpeaker2: TLabel
+              Align = Left
+              AutoSize = False
+              Size.Width = 90.0
+              Size.PlatformDefault = False
+              Text = 'Hablante 2:'
+              TextSettings.VertAlign = Center
+            end
+            object EdtSpeaker2: TEdit
+              Align = Client
+              TextPrompt = 'Nombre del hablante 2 (auto-registrado)'
+              OnChangeTracking = EdtSpeaker2ChangeTracking
+            end
+          end
+          object LaySpk3: TLayout
+            Align = Top
+            Size.Width = 520.0
+            Size.Height = 33.0
+            Size.PlatformDefault = False
+            Padding.Top = 3.0
+            Padding.Bottom = 1.0
+            object LblSpeaker3: TLabel
+              Align = Left
+              AutoSize = False
+              Size.Width = 90.0
+              Size.PlatformDefault = False
+              Text = 'Hablante 3:'
+              TextSettings.VertAlign = Center
+            end
+            object EdtSpeaker3: TEdit
+              Align = Client
+              TextPrompt = 'Nombre del hablante 3 (auto-registrado)'
+              OnChangeTracking = EdtSpeaker3ChangeTracking
+            end
+          end
+          object LaySpk4: TLayout
+            Align = Top
+            Size.Width = 520.0
+            Size.Height = 33.0
+            Size.PlatformDefault = False
+            Padding.Top = 3.0
+            Padding.Bottom = 1.0
+            object LblSpeaker4: TLabel
+              Align = Left
+              AutoSize = False
+              Size.Width = 90.0
+              Size.PlatformDefault = False
+              Text = 'Hablante 4:'
+              TextSettings.VertAlign = Center
+            end
+            object EdtSpeaker4: TEdit
+              Align = Client
+              TextPrompt = 'Nombre del hablante 4 (auto-registrado)'
+              OnChangeTracking = EdtSpeaker4ChangeTracking
+            end
+          end
+        end
+        object MemoEllos: TMemo
+          Align = Client
+          ReadOnly = True
+        end
+      end
+    end
+  end
+end

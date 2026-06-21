@@ -1076,23 +1076,22 @@ begin
     // D. Computer Use
     if (cap_ComputerUse in ModelConfig.ModelCaps) then
     Begin
-      // En Gemini 2.5, Computer Use es una herramienta de primer nivel,
-      // al igual que 'googleSearch' o 'codeExecution'.
+      // En Gemini, Computer Use es una herramienta de primer nivel,
+      // al igual que 'googleSearch' o 'codeExecution'. El campo va en camelCase
+      // ('computerUse') igual que el resto de tools nativos del REST de Gemini.
       var
       JComputerTool := TJSONObject.Create;
       var
       JCompSettings := TJSONObject.Create;
 
-      // La documentación especifica el entorno.
-      // Valores posibles suelen ser 'BROWSER' o 'ENVIRONMENT_BROWSER'.
-      // Usaremos 'only_name' si la API lo infiere, pero mejor ser explícitos.
-      // Si falla con 400, probaremos quitando el par 'environment'.
-      // JCompSettings.AddPair('environment', 'BROWSER');
+      // 'environment' es requerido. ENVIRONMENT_BROWSER es el entorno de
+      // automatización web (gemini-2.5-computer-use-preview / gemini-3-flash).
+      JCompSettings.AddPair('environment', 'ENVIRONMENT_BROWSER');
 
-      // Nota: Si quieres excluir acciones (como drag_and_drop), se configuran aquí.
-      // Por ahora enviamos el objeto vacío o con configuración mínima si es necesario.
+      // Para excluir acciones (p.ej. drag_and_drop) se usaría aquí
+      // 'excludedPredefinedFunctions': [...].
 
-      JComputerTool.AddPair('computer_use', JCompSettings);
+      JComputerTool.AddPair('computerUse', JCompSettings);
 
       JArrTools.Add(JComputerTool);
     End;
@@ -1299,6 +1298,9 @@ begin
     FTmpResponseText := '';
 
     Res := FClient.Post(sUrl, St, FResponse);
+
+    if not Assigned(Res) then
+      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
 
     if FClient.Asynchronous = False then
     begin
@@ -1559,11 +1561,17 @@ begin
     // Procesar audio, links, etc.
     DoProcessResponse(AskMsg, ResMsg, LRespuesta);
 
-    // Eventos Finales
-    DoStateChange(acsFinished, 'Done');
+    // Eventos Finales.
+    // ISSUE #99 (defensivo): en async el evento final lo dispara OnInternalReceiveData,
+    // no ParseChat (que en Gemini solo corre en modo síncrono). El guard evita un doble
+    // disparo si alguna ruta async llegara a invocar ParseChat.
+    if not FClient.Asynchronous then
+    begin
+      DoStateChange(acsFinished, 'Done');
 
-    If Assigned(FOnReceiveDataEnd) then
-      FOnReceiveDataEnd(Self, ResMsg, jObj, LRole, LRespuesta);
+      If Assigned(FOnReceiveDataEnd) then
+        FOnReceiveDataEnd(Self, ResMsg, jObj, LRole, LRespuesta);
+    end;
   End
   // -------------------------------------------------------------------------
   // CASO 2: HAY FUNCIONES (EJECUCIÓN DE HERRAMIENTAS)
@@ -2247,8 +2255,8 @@ begin
   if (cap_ComputerUse in ModelConfig.ModelCaps) and Assigned(ChatTools.ComputerUseTool) then
   begin
     // Lista de acciones conocidas de Gemini 2.5
-    if MatchStr(LowerCase(ToolCall.Name), ['click_at', 'left_click', 'right_click', 'middle_click', 'double_click', 'type_text_at', 'type', 'key_combination', 'scroll_at', 'scroll_document', 'drag_and_drop', 'hover_at', 'mouse_move',
-      'navigate', 'search', 'open_web_browser', 'screenshot', 'wait_5_seconds', 'image_edit_at', 'draw_box_at']) then
+    if MatchStr(LowerCase(ToolCall.Name), ['click_at', 'left_click', 'right_click', 'middle_click', 'double_click', 'triple_click', 'type_text_at', 'type', 'key_combination', 'hold_key', 'scroll_at', 'scroll_document', 'drag_and_drop', 'hover_at', 'mouse_move',
+      'cursor_position', 'zoom', 'navigate', 'search', 'open_web_browser', 'go_back', 'go_forward', 'screenshot', 'wait_5_seconds']) then
     begin
       IsComputerAction := True;
     end;
@@ -3211,6 +3219,30 @@ Var
   LFunction: TAiToolsFunction;
   LName, LArgsStr: String;
   LModelVersion: String;
+
+  // Crea e inicia la task de una tool capturando TC por VALOR (param), seguro en D10.4+.
+  function _GemMakeToolTask(TC: TAiToolsFunction): ITask;
+  begin
+    Result := TTask.Create(
+      procedure
+      begin
+        try
+          DoCallFunction(TC);
+        except
+          on E: Exception do
+          begin
+            TC.Response := '{"error": "' + StringReplace(E.Message, '"', '''', [rfReplaceAll]) + '"}';
+            TThread.Queue(nil,
+              procedure
+              begin
+                DoError('Error Tool: ' + TC.Name, E);
+              end);
+          end;
+        end;
+      end);
+    Result.Start;
+  end;
+
 begin
   if (not FClient.Asynchronous) or AAbort then
     Exit;
@@ -3529,80 +3561,46 @@ begin
           if Assigned(FOnAddMessage) then
             FOnAddMessage(Self, ResMsg, nil, ResMsg.Role, '');
 
-          // Ejecutar Tools en Tarea separada
-          TTask.Run(
-            procedure
-            var
-              LocalFuncs: TAiToolsFunctions;
-              LocalTasks: array of ITask;
-              LocalFn: TAiToolsFunction;
-              TaskIdx: Integer;
-            // Subrutina local: garantiza captura independiente por valor en Delphi 10.4+
-            procedure _CreateLocalTask(TC: TAiToolsFunction; AIdx: Integer);
-            begin
-              LocalTasks[AIdx] := TTask.Create(
-                procedure
-                begin
-                  try
-                    DoCallFunction(TC);
-                  except
-                    on E: Exception do
-                    begin
-                      TC.Response := '{"error": "' + StringReplace(E.Message, '"', '''', [rfReplaceAll]) + '"}';
-                      TThread.Queue(nil,
-                        procedure
-                        begin
-                          DoError('Error Tool: ' + TC.Name, E);
-                        end);
-                    end;
-                  end;
-                end);
-              LocalTasks[AIdx].Start;
-            end;
-            begin
-              LocalFuncs := LFunciones;
-              try
-                SetLength(LocalTasks, LocalFuncs.Count);
-                TaskIdx := 0;
-                for var LocalKey in LocalFuncs.Keys do
-                begin
-                  LocalFn := LocalFuncs[LocalKey];
-                  LocalFn.ResMsg := ResMsg;
-                  LocalFn.AskMsg := AskMsg;
+          // ISSUE #100: ejecutar las tools de forma SÍNCRONA aquí (como Cohere/Ollama/base
+          // con WaitForAll) en vez del TTask.Run asíncrono previo. Ese TTask desacoplaba la
+          // ejecución de tools del ciclo HTTP y, junto con el AAbort temprano, obligaba a un
+          // rendezvous frágil + reentraba Self.Run liberando el FCurrentPostStream en vuelo
+          // (AV). Al ejecutarlas síncronas, terminan ANTES del cierre de la petición, así que
+          // basta marcar FPendingToolRun: la continuación la lanza OnRequestCompletedEvent
+          // (base) cuando el stream ya se liberó de forma segura. La doc oficial confirma que
+          // el stream cierra solo tras finishReason=STOP (sin [DONE]).
+          var LLocalTasks: array of ITask;
+          SetLength(LLocalTasks, LFunciones.Count);
+          var LTaskIdx := 0;
+          for var LLocalKey in LFunciones.Keys do
+          begin
+            LFunction := LFunciones[LLocalKey];
+            LFunction.ResMsg := ResMsg;
+            LFunction.AskMsg := AskMsg;
+            LLocalTasks[LTaskIdx] := _GemMakeToolTask(LFunction); // captura por valor
+            Inc(LTaskIdx);
+          end;
 
-                  _CreateLocalTask(LocalFn, TaskIdx); // subrutina local garantiza captura por valor
-                  Inc(TaskIdx);
-                end;
+          // Bombear Synchronize/Queue mientras se espera, para no colgar la app si un
+          // tool call accede a la VCL/FMX via TThread.Synchronize (issue #103).
+          while not TTask.WaitForAll(LLocalTasks, 10) do
+            CheckSynchronize(0);
 
-                TTask.WaitForAll(LocalTasks);
+          for var LLocalKey in LFunciones.Keys do
+          begin
+            LFunction := LFunciones[LLocalKey];
+            var ToolMsg := TAiChatMessage.Create(LFunction.Response, 'tool', LFunction.Id, LFunction.Name);
+            for var LMF in LFunction.MediaFiles do
+              ToolMsg.AddMediaFile(LMF);
+            LFunction.MediaFiles.OwnsObjects := False;
+            ToolMsg.Id := FMessages.Count + 1;
+            FMessages.Add(ToolMsg);
+          end;
 
-                TThread.Synchronize(nil,
-                  procedure
-                  begin
-                    for var LocalKey in LocalFuncs.Keys do
-                    begin
-                      LocalFn := LocalFuncs[LocalKey];
-                      var
-                      ToolMsg := TAiChatMessage.Create(LocalFn.Response, 'tool', LocalFn.Id, LocalFn.Name);
-                      for var LMF in LocalFn.MediaFiles do
-                        ToolMsg.AddMediaFile(LMF);
-                      LocalFn.MediaFiles.OwnsObjects := False;
-                      ToolMsg.Id := FMessages.Count + 1;
-                      FMessages.Add(ToolMsg);
-                    end;
-                  end);
+          LFunciones.Free;
 
-                // RECURSIÓN
-                TThread.Queue(nil,
-                  procedure
-                  begin
-                    Self.Run(nil, ResMsg);
-                  end);
-
-              finally
-                LocalFuncs.Free;
-              end;
-            end);
+          // Continuación diferida (segundo round) — la lanza OnRequestCompletedEvent base.
+          FPendingToolRun := True;
         end
         else
         begin
@@ -3621,8 +3619,15 @@ begin
             FOnReceiveDataEnd(Self, ResMsg, nil, 'model', FLastContent);
         end;
 
-        // FINALIZAR: Cortar conexión HTTP
-        AAbort := True;
+        // FINALIZAR.
+        // ISSUE #100: si hay continuación tool-calling diferida (FPendingToolRun), NO
+        // abortamos: dejamos que el stream cierre de forma natural tras finishReason=STOP
+        // (confirmado en la doc oficial de Gemini), para que dispare un OnRequestCompletedEvent
+        // LIMPIO (no un OnRequestError por abort) — es ese evento el que lanza el siguiente
+        // round y libera el FCurrentPostStream de forma segura. En el caso final (sin tools)
+        // sí cortamos la conexión.
+        if not FPendingToolRun then
+          AAbort := True;
         jObj.Free;
         Exit;
       end;
@@ -3635,15 +3640,16 @@ end;
 
 procedure TAiGeminiChat.OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse);
 begin
-  // Si ya se procesó el final en el stream (finishReason detectado), FBusy será False.
-  if not FBusy then
-    Exit;
+  // Si el stream terminó HTTP-wise pero NO detectamos finishReason antes (FBusy sigue True),
+  // forzamos el cierre/finalización aquí.
+  if FBusy then
+    InternalCompleteRequest;
 
-  // Si llegamos aquí, el stream terminó HTTP-wise pero no detectamos finishReason antes.
-  // Forzamos el cierre.
-  InternalCompleteRequest;
-
-  // Llamamos al padre por si acaso tiene lógica genérica
+  // ISSUE #100: SIEMPRE delegar al base. Su OnRequestCompletedEvent libera el
+  // FCurrentPostStream de forma segura y, si quedó FPendingToolRun=True (continuación
+  // tool-calling diferida), lanza el siguiente round vía ForceQueue/Queue. Antes este
+  // método hacía 'if not FBusy then Exit' y se saltaba el inherited, dejando la
+  // continuación sin disparar.
   inherited OnRequestCompletedEvent(Sender, aResponse);
 end;
 

@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{765621C0-8601-4BC4-9725-6C339EE4929A}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="ComputerUseTest.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="ComputerUseTest01.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="ComputerUseTest">
+        <MSBuild Projects="ComputerUseTest.dproj"/>
+    </Target>
+    <Target Name="ComputerUseTest:Clean">
+        <MSBuild Projects="ComputerUseTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ComputerUseTest:Make">
+        <MSBuild Projects="ComputerUseTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ComputerUseTest01">
+        <MSBuild Projects="ComputerUseTest01.dproj"/>
+    </Target>
+    <Target Name="ComputerUseTest01:Clean">
+        <MSBuild Projects="ComputerUseTest01.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ComputerUseTest01:Make">
+        <MSBuild Projects="ComputerUseTest01.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="ComputerUseTest;ComputerUseTest01"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="ComputerUseTest:Clean;ComputerUseTest01:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="ComputerUseTest:Make;ComputerUseTest01:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

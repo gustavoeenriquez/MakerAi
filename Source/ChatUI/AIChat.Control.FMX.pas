@@ -1030,7 +1030,21 @@ begin
 
   if Idx >= 0 then
   begin
-    if FList.HitTest(DocX, DocY, Msg, Hit) then
+    // Botones Open/Copy/Save de la card de medio (markdown): cursor de mano.
+    // FList.HitTest no los conoce — se detectan via el renderer markdown, igual
+    // que en MouseDown (ButtonAreaAtPoint).
+    var HovBtn := False;
+    var HovRdr := FList.GetRenderer(Idx);
+    if HovRdr <> nil then
+    begin
+      var HBArea: TMDButtonArea;
+      HovBtn := HovRdr.ButtonAreaAtPoint(RendererY(Idx, DocY),
+                                         RendererX(Idx, DocX), HBArea);
+    end;
+
+    if HovBtn then
+      Cursor := crHandPoint
+    else if FList.HitTest(DocX, DocY, Msg, Hit) then
     begin
       if Hit.Kind = TChatHitKind.hkAttachment then
         FHoveredAttach := Hit.AttachIndex;

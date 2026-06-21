@@ -66,6 +66,9 @@ type
     property CorsAllowedOrigins;
     property ApiKey;
     property OnValidateRequest;
+    // ISSUE #110: vetting del cliente en initialize + gate de sesion en tools/resources/prompts
+    property OnClientConnect;
+    property OnUnauthorizedRequest;
   end;
 
 procedure Register;
@@ -161,7 +164,11 @@ begin
 
   AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Origin'] := AllowedOrigin;
   AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Methods'] := 'POST, GET, OPTIONS';
-  AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Headers'] := 'Content-Type, X-Session-ID';
+  // ISSUE #110: aceptamos Mcp-Session-Id (estandar MCP) ademas de X-Session-ID (legacy),
+  // y la exponemos para que clientes de navegador puedan leer la sesion emitida.
+  AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Headers'] :=
+    'Content-Type, X-Session-ID, Mcp-Session-Id, Authorization, X-API-Key';
+  AResponseInfo.CustomHeaders.Values['Access-Control-Expose-Headers'] := 'Mcp-Session-Id';
   AResponseInfo.CustomHeaders.Values['Access-Control-Max-Age'] := IntToStr(CORS_MAX_AGE_SECONDS);
 end;
 
@@ -251,13 +258,21 @@ end;
 
 procedure TAiMCPHttpServer.HandlePostRequest(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo; const AAuthContext: TAiAuthContext);
 var
-  RequestBody, ResponseBody, SessionID: string;
+  RequestBody, ResponseBody, SessionID, IssuedSessionID: string;
 begin
   try
     RequestBody := ReadStringFromStream(ARequestInfo.PostStream, -1, IndyTextEncoding_UTF8);
-    SessionID := ARequestInfo.RawHeaders.Values['X-Session-ID'];
+    // ISSUE #110: Mcp-Session-Id (estandar MCP) con fallback a X-Session-ID (legacy).
+    SessionID := ARequestInfo.RawHeaders.Values['Mcp-Session-Id'];
+    if SessionID = '' then
+      SessionID := ARequestInfo.RawHeaders.Values['X-Session-ID'];
 
-    ResponseBody := FLogicServer.ExecuteRequest(RequestBody, SessionID, AAuthContext);
+    // Overload con gate de sesion (Parte B). Si fue un 'initialize' exitoso con el
+    // gating activo, IssuedSessionID trae el Mcp-Session-Id a devolver al cliente.
+    ResponseBody := FLogicServer.ExecuteRequest(RequestBody, SessionID, AAuthContext, IssuedSessionID);
+
+    if IssuedSessionID <> '' then
+      AResponseInfo.CustomHeaders.Values['Mcp-Session-Id'] := IssuedSessionID;
 
     AResponseInfo.ContentType := 'application/json; charset=utf-8';
     AResponseInfo.CharSet := 'utf-8';

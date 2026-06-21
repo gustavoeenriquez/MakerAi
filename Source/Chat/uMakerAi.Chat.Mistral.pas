@@ -245,6 +245,9 @@ begin
   LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)]; // A?adir el Header de autorizaci?n
   LResponse := FClient.Get(LUrl, nil, LHeaders); // A?adir el header a la petici?n
 
+  if not Assigned(LResponse) then
+    raise Exception.CreateFmt('Connection failed: no response from %s', [LUrl]);
+
   if LResponse.StatusCode = 200 then
   begin
     LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
@@ -371,6 +374,9 @@ begin
 
   LUrl := Url + 'files/' + aFileId;
   LResponse := FClient.Get(LUrl);
+
+  if not Assigned(LResponse) then
+    raise Exception.CreateFmt('Connection failed: no response from %s', [LUrl]);
 
   if LResponse.StatusCode = 200 then
   begin

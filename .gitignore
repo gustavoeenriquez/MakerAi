@@ -139,3 +139,22 @@ Source/Packages/hpp/
 *.bat
 *.ps1
 *.cdr
+
+# -------------------------------------------
+# Salidas de test / scratch / herramientas de IA
+# -------------------------------------------
+.claude/
+/demo09_out.txt
+/demo14_err.txt
+/demo14_run.txt
+/openai_diff.txt
+/ppm_test_out.txt
+/smartdispatch_out.txt
+/smartdispatch_out.txt.err
+/websearch_out.txt
+/encoding_fixes.json
+/historial_cap04.json
+/fix_encoding.py
+/nul
+Demos/014-ChatTest/*.txt
+Demos/014-ChatTest/medios/

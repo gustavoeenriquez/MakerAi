@@ -126,6 +126,7 @@ type
   TAiClaudeChat = Class(TAiChat)
   Private
     FStreamResponseMsg: TAiChatMessage;
+    FAsyncResMsg: TAiChatMessage; // ISSUE #105: ResMsg que RunNew dejo en FMessages (a reconciliar en async)
     FStreamContentBlocks: TObjectDictionary<Integer, TClaudeStreamContentBlock>;
     FStreamBuffer: TStringBuilder;
     FStreamLastEventType: string;
@@ -137,6 +138,8 @@ type
     FContextConfig: TClaudeContextConfig;
     FCacheSystemPrompt: Boolean;
     FCacheTTL: String;
+    FCacheCount: Integer; // breakpoints cache_control usados en el request actual (max 4 en la API)
+    FCacheCtxActive: Boolean; // cacheo de contexto activo en este request (system/tools/ultimo turno)
     FServiceTier: String;
 
     function GetToolJson(aToolFormat: TToolFormat): TJSonArray;
@@ -224,11 +227,10 @@ Const
   // Code Execution (Actualizado seg?n lista de headers de la doc)
   BETA_HDR_CODE = 'code-execution-2025-05-22';
   // Computer Use (Actualizado a la ?ltima versi?n disponible en doc)
-  BETA_HDR_COMPUTER = 'computer-use-2025-01-24';
+  // computer_20251124: Opus 4.8/4.7/4.6, Sonnet 4.6, Opus 4.5 (a?ade acci?n zoom)
+  BETA_HDR_COMPUTER = 'computer-use-2025-11-24';
   // PDFs (Nuevo: Para asegurar soporte nativo si se env?a base64)
   BETA_HDR_PDFS = 'pdfs-2024-09-25';
-  // Prompt Caching (?til para CacheSystemPrompt)
-  BETA_HDR_PROMPT_CACHING = 'prompt-caching-2024-07-31';
   // Header para Structured Outputs (JSON Schema & Strict Tools)
   BETA_HDR_STRUCTURED_OUTPUTS = 'structured-outputs-2025-11-13';
 
@@ -528,9 +530,7 @@ begin
     if FEnableThinking or (ModelConfig.ThinkingLevel <> tlDefault) then
       BetaFeatures.Add(BETA_HDR_THINKING);
 
-    // 6. Prompt Caching
-    // Siempre ?til agregarlo si vamos a usar cache_control
-    BetaFeatures.Add(BETA_HDR_PROMPT_CACHING);
+    // 6. Prompt Caching: GA, ya no requiere beta header (antes 'prompt-caching-2024-07-31').
 
     // 7. PDFs
     // Agregamos soporte expl?cito para PDFs
@@ -676,10 +676,19 @@ begin
     AJSONObject.AddPair('model', LModel);
 
     // 3. SYSTEM PROMPT
+    // Contador de breakpoints cache_control para este request (la API permite max 4).
+    // Orden de prefijo: tools -> system -> messages. Reservamos los slots de system y
+    // tools antes de construir messages para que tengan prioridad sobre los mensajes.
+    FCacheCount := 0;
+    // Caching del contexto estable activo si el usuario puso CacheSystemPrompt (Claude)
+    // o el flag portable CacheContext (base).
+    var
+    LDoCache: Boolean := FCacheSystemPrompt or CacheContext;
+    FCacheCtxActive := LDoCache; // visible para GetMessages (auto-cache del ultimo turno)
     SystemPrompt := Self.PrepareSystemMsg;
     if SystemPrompt <> '' then
     begin
-      if FCacheSystemPrompt then
+      if LDoCache then
       begin
         var
         jSysArr := TJSonArray.Create;
@@ -694,6 +703,7 @@ begin
         if FCacheTTL <> '' then
           jCache.AddPair('ttl', FCacheTTL);
         jSysBlock.AddPair('cache_control', jCache);
+        Inc(FCacheCount); // breakpoint de system (cachea tools+system por el orden de prefijo)
 
         jSysArr.Add(jSysBlock);
         AJSONObject.AddPair('system', jSysArr);
@@ -701,6 +711,12 @@ begin
       else
         AJSONObject.AddPair('system', SystemPrompt);
     end;
+
+    // Reserva del slot de tools: si el cacheo esta activo, las definiciones de tools
+    // se cachean (breakpoint en el ultimo tool, mas abajo). Se reserva aqui para que
+    // los mensajes no consuman ese slot.
+    if LDoCache then
+      Inc(FCacheCount);
 
     AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));
     AJSONObject.AddPair('messages', GetMessages);
@@ -837,12 +853,16 @@ begin
     if cap_ComputerUse in ModelConfig.ModelCaps then
     begin
       JTools := TJSONObject.Create;
-      JTools.AddPair('type', 'computer_20250124');
+      JTools.AddPair('type', 'computer_20251124');
       JTools.AddPair('name', 'computer');
       if Assigned(ChatTools.ComputerUseTool) then
       begin
         JTools.AddPair('display_width_px',  TJSONNumber.Create(ChatTools.ComputerUseTool.ScreenWidth));
         JTools.AddPair('display_height_px', TJSONNumber.Create(ChatTools.ComputerUseTool.ScreenHeight));
+        // enable_zoom: solo v?lido en computer_20251124. Permite a Claude
+        // ampliar una regi?n del screenshot para leer texto peque?o.
+        if ChatTools.ComputerUseTool.EnableZoom then
+          JTools.AddPair('enable_zoom', TJSONBool.Create(True));
       end
       else
       begin
@@ -863,6 +883,19 @@ begin
     if jArrTools.Count > 0 then
     begin
       AJSONObject.AddPair('tools', jArrTools);
+
+      // Cache de las definiciones de tools: cache_control en el ultimo tool cachea
+      // todo el bloque de tools (orden de prefijo tools->system->messages). El slot
+      // ya fue reservado en FCacheCount junto al system.
+      if LDoCache then
+      begin
+        var
+        jToolCache := TJSONObject.Create;
+        jToolCache.AddPair('type', 'ephemeral');
+        if FCacheTTL <> '' then
+          jToolCache.AddPair('ttl', FCacheTTL);
+        (jArrTools.Items[jArrTools.Count - 1] as TJSONObject).AddPair('cache_control', jToolCache);
+      end;
 
       if (Trim(Tool_choice) <> '') then
       begin
@@ -969,7 +1002,13 @@ begin
     FClient.Asynchronous := Self.Asynchronous;
 
     if FClient.Asynchronous then
+    begin
       FStreamResponseMsg := TAiChatMessage.Create('', 'assistant');
+      // ISSUE #105: guardamos el ResMsg de este round. RunNew lo agrega (vacio) a
+      // FMessages tras disparar el POST async; al cerrar la respuesta del stream
+      // reconciliamos su contenido para que la conversacion quede archivada.
+      FAsyncResMsg := ResMsg;
+    end;
 
     ABody := InitChatCompletions;
 
@@ -1873,7 +1912,31 @@ begin
             jSyntheticResponse.Free;
 
             if Assigned(MsgToProcess) and (FMessages.IndexOf(MsgToProcess) = -1) then
+            begin
+              // ISSUE #105: en async el assistant se llena en MsgToProcess (objeto del
+              // stream), pero el historial tiene el ResMsg vacio que agrego RunNew. Si es
+              // la respuesta FINAL (sin tool-loop en curso: FBusy=False), copiamos el
+              // contenido al placeholder para que la conversacion se archive y el modelo
+              // no repita respuestas previas. En el caso de tools, ParseChat ya agrega su
+              // propio mensaje, asi que aqui solo aplica al cierre final.
+              if (not FBusy) and Assigned(FAsyncResMsg) and (FAsyncResMsg <> MsgToProcess) and
+                 (FMessages.IndexOf(FAsyncResMsg) >= 0) then
+              begin
+                FAsyncResMsg.Prompt := MsgToProcess.Prompt;
+                FAsyncResMsg.Role := MsgToProcess.Role;
+                if MsgToProcess.Model <> '' then
+                  FAsyncResMsg.Model := MsgToProcess.Model;
+                FAsyncResMsg.ReasoningContent := MsgToProcess.ReasoningContent;
+                FAsyncResMsg.ThinkingSignature := MsgToProcess.ThinkingSignature;
+                FAsyncResMsg.StopReason := MsgToProcess.StopReason;
+                FAsyncResMsg.Prompt_tokens := MsgToProcess.Prompt_tokens;
+                FAsyncResMsg.Completion_tokens := MsgToProcess.Completion_tokens;
+                FAsyncResMsg.Total_tokens := MsgToProcess.Total_tokens;
+                FAsyncResMsg.Cached_tokens := MsgToProcess.Cached_tokens;
+                FAsyncResMsg := nil; // ya reconciliado
+              end;
               MsgToProcess.Free;
+            end;
 
             // Si ParseChat disparó un Run recursivo por tool calls, FBusy quedó True
             // (puesto por el InternalRunCompletions del nuevo round) y ya llamó
@@ -1989,8 +2052,10 @@ var
   bHasContent: Boolean;
   IsCodeExecutionEnabled: Boolean;
   TargetCategories: TAiFileCategories;
+  LLastContent: TJSonArray;
 begin
   Result := TJSonArray.Create;
+  LLastContent := nil; // contenido del ultimo mensaje emitido (auto-cache del ultimo turno)
 
   // Verificamos si el Code Interpreter est? activo
   IsCodeExecutionEnabled := cap_CodeInterpreter in ModelConfig.ModelCaps;
@@ -2091,7 +2156,7 @@ begin
         LPartObj.AddPair('type', 'text');
         LPartObj.AddPair('text', LMessage.Prompt);
 
-        if LMessage.CacheControl then
+        if (LMessage.CacheControl) and (FCacheCount < 4) then
         begin
           var
           jCache := TJSONObject.Create;
@@ -2099,6 +2164,7 @@ begin
           if FCacheTTL <> '' then
             jCache.AddPair('ttl', FCacheTTL);
           LPartObj.AddPair('cache_control', jCache);
+          Inc(FCacheCount);
         end;
 
         LContentArray.Add(LPartObj);
@@ -2168,7 +2234,7 @@ begin
         LPartObj.AddPair('type', 'text');
         LPartObj.AddPair('text', LMessage.Prompt);
 
-        if LMessage.CacheControl then
+        if (LMessage.CacheControl) and (FCacheCount < 4) then
         begin
           var
           jCache := TJSONObject.Create;
@@ -2176,6 +2242,7 @@ begin
           if FCacheTTL <> '' then
             jCache.AddPair('ttl', FCacheTTL);
           LPartObj.AddPair('cache_control', jCache);
+          Inc(FCacheCount);
         end;
 
         LContentArray.Add(LPartObj);
@@ -2283,7 +2350,7 @@ begin
           end;
         end;
 
-        if LMediaFile.CacheControl then
+        if (LMediaFile.CacheControl) and (FCacheCount < 4) then
         begin
           var
           jCache := TJSONObject.Create;
@@ -2291,6 +2358,7 @@ begin
           if FCacheTTL <> '' then
             jCache.AddPair('ttl', FCacheTTL);
           LPartObj.AddPair('cache_control', jCache);
+          Inc(FCacheCount);
         end;
 
         LContentArray.Add(LPartObj);
@@ -2308,6 +2376,27 @@ begin
 
     LMessageObj.AddPair('content', LContentArray);
     Result.Add(LMessageObj);
+    LLastContent := LContentArray; // referencia al contenido del ultimo mensaje emitido
+  end;
+
+  // Conveniencia multi-turn: cachea el ultimo turno (su ultimo bloque) para que el
+  // siguiente request lea TODO el historial previo desde cache. Solo si el cacheo de
+  // contexto esta activo, queda presupuesto (<4 breakpoints) y el bloque no fue marcado
+  // manualmente (CacheControl) para no duplicar el breakpoint.
+  if FCacheCtxActive and (FCacheCount < 4) and Assigned(LLastContent) and (LLastContent.Count > 0) then
+  begin
+    var
+    LLastBlock := LLastContent.Items[LLastContent.Count - 1] as TJSONObject;
+    if LLastBlock.GetValue('cache_control') = nil then
+    begin
+      var
+      jCacheLT := TJSONObject.Create;
+      jCacheLT.AddPair('type', 'ephemeral');
+      if FCacheTTL <> '' then
+        jCacheLT.AddPair('ttl', FCacheTTL);
+      LLastBlock.AddPair('cache_control', jCacheLT);
+      Inc(FCacheCount);
+    end;
   end;
 end;
 
@@ -2571,9 +2660,10 @@ procedure TAiClaudeChat.TranslateClaudeComputerArgs(ToolCall: TAiToolsFunction);
 // TAiComputerUseTool espera: {"x":norm, "y":norm, "text":"...", ...} + ToolCall.Name = acción mapeada
 var
   JArgs, JNew: TJSONObject;
-  JCoord, JStartCoord: TJSONArray;
+  JCoord, JStartCoord, JRegion: TJSONArray;
   Action, MappedName, SText, SDir: string;
   ScrW, ScrH, PxX, PxY, NormX, NormY, Amount: Integer;
+  DDur: Double;
 begin
   JArgs := TJSONObject.ParseJSONValue(ToolCall.Arguments) as TJSONObject;
   if not Assigned(JArgs) then
@@ -2636,19 +2726,48 @@ begin
         JNew.AddPair('y', TJSONNumber.Create(NormY));
       end;
 
-      // Texto o combinación de teclas
+      // Texto / teclas / modificadores: el campo 'text' de Claude cambia de
+      // significado según la acción.
       if JArgs.TryGetValue<string>('text', SText) then
       begin
-        if Action = 'key' then
+        if (Action = 'key') or (Action = 'hold_key') then
           JNew.AddPair('keys', SText)
-        else
+        else if Action = 'type' then
+        begin
           JNew.AddPair('text', SText);
+          // La acci?n 'type' de Claude NO implica Enter ni posici?n: escribe en el
+          // control con foco. Evita el Enter autom?tico (default True en ParseAction).
+          JNew.AddPair('press_enter', TJSONBool.Create(False));
+        end
+        else
+          // En click/scroll/triple_click el 'text' contiene los modificadores
+          JNew.AddPair('modifiers', SText);
       end;
 
-      // Scroll
-      if JArgs.TryGetValue<string>('direction', SDir) then
+      // Duración de hold_key (segundos)
+      if (Action = 'hold_key') and JArgs.TryGetValue<Double>('duration', DDur) then
+        JNew.AddPair('duration', TJSONNumber.Create(DDur));
+
+      // Zoom: region [x1,y1,x2,y2] (px) → x,y + destination_x,destination_y (norm 0-999)
+      if (Action = 'zoom') and JArgs.TryGetValue<TJSONArray>('region', JRegion) and (JRegion.Count >= 4) then
+      begin
+        NormX := Round((JRegion.Items[0] as TJSONNumber).AsInt / ScrW * 1000); if NormX > 999 then NormX := 999;
+        NormY := Round((JRegion.Items[1] as TJSONNumber).AsInt / ScrH * 1000); if NormY > 999 then NormY := 999;
+        JNew.AddPair('x', TJSONNumber.Create(NormX));
+        JNew.AddPair('y', TJSONNumber.Create(NormY));
+        NormX := Round((JRegion.Items[2] as TJSONNumber).AsInt / ScrW * 1000); if NormX > 999 then NormX := 999;
+        NormY := Round((JRegion.Items[3] as TJSONNumber).AsInt / ScrH * 1000); if NormY > 999 then NormY := 999;
+        JNew.AddPair('destination_x', TJSONNumber.Create(NormX));
+        JNew.AddPair('destination_y', TJSONNumber.Create(NormY));
+      end;
+
+      // Scroll: Claude usa 'scroll_direction'/'scroll_amount' (computer_2025xxxx).
+      // Se aceptan tambi?n 'direction'/'amount' por compatibilidad.
+      if JArgs.TryGetValue<string>('scroll_direction', SDir) or
+         JArgs.TryGetValue<string>('direction', SDir) then
         JNew.AddPair('direction', SDir);
-      if JArgs.TryGetValue<Integer>('amount', Amount) then
+      if JArgs.TryGetValue<Integer>('scroll_amount', Amount) or
+         JArgs.TryGetValue<Integer>('amount', Amount) then
         JNew.AddPair('magnitude', TJSONNumber.Create(Amount * 120))
       else if Action = 'scroll' then
         JNew.AddPair('magnitude', TJSONNumber.Create(800));
@@ -2676,15 +2795,14 @@ begin
     begin
       LScreenshot := nil;
       try
-        TranslateClaudeComputerArgs(ToolCall);
+        ChatTools.ComputerUseTool.TranslateClaudeToolCall(ToolCall);
         ToolCall.Response := ChatTools.ComputerUseTool.ProcessToolCall(ToolCall, LScreenshot);
         if Assigned(LScreenshot) then
-        begin
-          if Assigned(ToolCall.ResMsg) then
-            ToolCall.ResMsg.MediaFiles.Add(LScreenshot)
-          else
-            LScreenshot.Free;
-        end;
+          // El screenshot debe ir en ToolCall.MediaFiles: ParseChat lo copia al
+          // ToolMsg ('user' + tool_use_id) que se serializa como tool_result con
+          // bloque image. (Antes iba a ResMsg —mensaje del assistant— y nunca
+          // llegaba al modelo, dejando a Claude "ciego".)
+          ToolCall.MediaFiles.Add(LScreenshot);
       except
         on E: Exception do
         begin

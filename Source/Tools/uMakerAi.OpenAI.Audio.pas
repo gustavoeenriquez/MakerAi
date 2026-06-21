@@ -39,6 +39,10 @@
 // 04/11/2025 - Implementaci?n completa de streaming para TTS y Transcripci?n con eventos.
 // 04/11/2025 - M?todos de Transcripci?n/Traducci?n devuelven un objeto TTranscriptionResult.
 // 04/11/2025 - Mantenida la l?gica de conversi?n de audio con ffmpeg.
+// 12/06/2026 - Diarizacion completa: response_format=diarized_json real (antes se
+//              degradaba a json y se perdian los hablantes), segmentos con speaker
+//              en TTranscriptionResult (Segments/DiarizedText) y soporte de
+//              known_speakers (AddKnownSpeaker, max 4) para etiquetar con nombres.
 
 unit uMakerAi.OpenAI.Audio;
 
@@ -62,6 +66,18 @@ type
   TAiTranscriptionResponseFormat = (trfJson, trfText, trfSrt, trfVerboseJson, trfVtt, trfDiarizedJson);
   TStreamOperation = (soNone, soSpeech, soTranscription);
 
+  // Segmento de una transcripcion diarizada (tmGpt4oDiarize + trfDiarizedJson).
+  // Speaker es 'A', 'B', 'C'... o el nombre real si se usaron known_speakers.
+  TDiarizedSegment = record
+    Id: string;
+    Speaker: string;
+    Text: string;
+    StartTime: Double; // segundos
+    EndTime: Double;   // segundos
+  end;
+
+  TDiarizedSegments = TArray<TDiarizedSegment>;
+
   // --- Class for Transcription Results ---
   TTranscriptionResult = class
   private
@@ -70,9 +86,13 @@ type
     FDuration: Double;
     FLanguage: string;
     FLogprobs: TJSONArray;
+    FSegments: TDiarizedSegments;
   public
     constructor Create(const AResponse: string; AFormat: TAiTranscriptionResponseFormat);
     destructor Destroy; override;
+    // Texto completo con formato 'Hablante: texto' por linea (diarizacion).
+    // Si no hay segmentos devuelve Text.
+    function DiarizedText: string;
     property Text: string read FText;
     property Duration: Double read FDuration;
     property Language: string read FLanguage;
@@ -80,6 +100,9 @@ type
     { Token-level confidence scores. Populated only when TranscriptionLogprobs=True
       and model is gpt-4o-transcribe or gpt-4o-mini-transcribe. }
     property Logprobs: TJSONArray read FLogprobs;
+    { Segmentos con hablante. Poblado con tmGpt4oDiarize + trfDiarizedJson
+      (tambien con verbose_json de whisper-1, sin campo speaker). }
+    property Segments: TDiarizedSegments read FSegments;
   end;
 
   // --- Events for Streaming ---
@@ -106,6 +129,9 @@ type
     FTranscriptionTemperature: Double;
     FTranscriptionTimestampGranularities: TAiTimestampGranularities;
     FTranscriptionLogprobs: Boolean;
+    // Hablantes conocidos para diarizacion (max 4): nombres + data-URIs de audio
+    FKnownSpeakerNames: TArray<string>;
+    FKnownSpeakerRefs: TArray<string>;
     // Streaming Events
     FOnAudioChunkReceived: TOnAudioChunkReceived;
     FOnSpeechCompleted: TOnSpeechCompleted;
@@ -143,6 +169,14 @@ type
     // --- Speech-to-Text (STT) ---
     function Transcribe(const AAudioFile: TAiMediaFile; const APrompt: string = ''): TTranscriptionResult;
     procedure TranscribeStreamed(const AAudioFile: TAiMediaFile);
+
+    // --- Diarizacion: hablantes conocidos (solo tmGpt4oDiarize, max 4) ---
+    // Registra una muestra de voz (2-10 segundos recomendados) con su nombre;
+    // los segmentos del resultado usaran ese nombre en lugar de 'A', 'B'...
+    procedure AddKnownSpeaker(const aName: string; aAudio: TStream; const aMimeType: string = 'audio/wav'); overload;
+    procedure AddKnownSpeaker(const aName, aFileName: string); overload;
+    procedure ClearKnownSpeakers;
+    function KnownSpeakerCount: Integer;
 
     // --- Translation ---
     function TranslateToEnglish(const AAudioFile: TAiMediaFile; const APrompt: string = ''): TTranscriptionResult;
@@ -244,6 +278,11 @@ end;
 { TTranscriptionResult }
 
 constructor TTranscriptionResult.Create(const AResponse: string; AFormat: TAiTranscriptionResponseFormat);
+var
+  JArr: TJSONArray;
+  JSeg: TJSONObject;
+  I: Integer;
+  IdInt: Int64;
 begin
   inherited Create;
   if AFormat in [trfJson, trfVerboseJson, trfDiarizedJson] then
@@ -255,6 +294,30 @@ begin
       FJsonObject.TryGetValue<Double>('duration', FDuration);
       FJsonObject.TryGetValue<string>('language', FLanguage);
       FJsonObject.TryGetValue<TJSONArray>('logprobs', FLogprobs);
+
+      // Segmentos: diarized_json (con speaker) y verbose_json (sin speaker)
+      if FJsonObject.TryGetValue<TJSONArray>('segments', JArr) then
+      begin
+        SetLength(FSegments, JArr.Count);
+        for I := 0 to JArr.Count - 1 do
+        begin
+          JSeg := JArr.Items[I] as TJSONObject;
+          if not JSeg.TryGetValue<string>('id', FSegments[I].Id) then
+            if JSeg.TryGetValue<Int64>('id', IdInt) then
+              FSegments[I].Id := IntToStr(IdInt);
+          JSeg.TryGetValue<string>('speaker', FSegments[I].Speaker);
+          JSeg.TryGetValue<string>('text', FSegments[I].Text);
+          JSeg.TryGetValue<Double>('start', FSegments[I].StartTime);
+          JSeg.TryGetValue<Double>('end', FSegments[I].EndTime);
+        end;
+      end;
+
+      // diarized_json puede no incluir 'text' global: reconstruirlo
+      if (FText = '') and (Length(FSegments) > 0) then
+      begin
+        for I := 0 to High(FSegments) do
+          FText := FText + IfThen(FText <> '', ' ', '') + Trim(FSegments[I].Text);
+      end;
     end;
   end
   else
@@ -267,6 +330,26 @@ destructor TTranscriptionResult.Destroy;
 begin
   FJsonObject.Free;
   inherited;
+end;
+
+function TTranscriptionResult.DiarizedText: string;
+var
+  I: Integer;
+  SB: TStringBuilder;
+begin
+  if Length(FSegments) = 0 then
+    Exit(FText);
+  SB := TStringBuilder.Create;
+  try
+    for I := 0 to High(FSegments) do
+      if FSegments[I].Speaker <> '' then
+        SB.AppendLine(Format('%s: %s', [FSegments[I].Speaker, Trim(FSegments[I].Text)]))
+      else
+        SB.AppendLine(Trim(FSegments[I].Text));
+    Result := SB.ToString.TrimRight;
+  finally
+    SB.Free;
+  end;
 end;
 
 { TAiAudio }
@@ -379,7 +462,9 @@ begin
     trfSrt:         FormatStr := IfThen(IsWhisper1, 'srt',          'json');
     trfVerboseJson: FormatStr := IfThen(IsWhisper1, 'verbose_json', 'json');
     trfVtt:         FormatStr := IfThen(IsWhisper1, 'vtt',          'json');
-    trfDiarizedJson: FormatStr := 'json';  // the diarize variant handles this via the model name
+    // diarized_json solo existe en gpt-4o-transcribe-diarize; con cualquier
+    // otro modelo se degrada a json (sin hablantes).
+    trfDiarizedJson: FormatStr := IfThen(FTranscriptionModel = tmGpt4oDiarize, 'diarized_json', 'json');
   else
     FormatStr := 'json';
   end;
@@ -394,9 +479,84 @@ begin
       ABody.AddField('timestamp_granularities[]', 'segment');
   end;
 
-  // logprobs: gpt-4o models only — usar include[]=logprobs (no logprobs=true)
-  if IsGpt4oModel and FTranscriptionLogprobs then
+  // logprobs: gpt-4o transcribe/mini only (el modelo diarize NO lo soporta)
+  if IsGpt4oModel and FTranscriptionLogprobs and (FTranscriptionModel <> tmGpt4oDiarize) then
     ABody.AddField('include[]', 'logprobs');
+
+  // Diarizacion: chunking automatico (recomendado por la API para audio largo)
+  // y hablantes conocidos registrados con AddKnownSpeaker (max 4).
+  if FTranscriptionModel = tmGpt4oDiarize then
+  begin
+    ABody.AddField('chunking_strategy', 'auto');
+    for var I := 0 to High(FKnownSpeakerNames) do
+    begin
+      ABody.AddField('known_speaker_names[]', FKnownSpeakerNames[I]);
+      ABody.AddField('known_speaker_references[]', FKnownSpeakerRefs[I]);
+    end;
+  end;
+end;
+
+procedure TAiOpenAiAudio.AddKnownSpeaker(const aName: string; aAudio: TStream; const aMimeType: string);
+var
+  Bytes: TBytes;
+  Ref: string;
+begin
+  if aName = '' then
+    raise EArgumentException.Create('Known speaker name cannot be empty');
+  if Length(FKnownSpeakerNames) >= 4 then
+    raise EInvalidOperation.Create('OpenAI diarization supports a maximum of 4 known speakers');
+  if (aAudio = nil) or (aAudio.Size = 0) then
+    raise EArgumentException.Create('Known speaker audio cannot be empty');
+
+  aAudio.Position := 0;
+  SetLength(Bytes, aAudio.Size);
+  aAudio.ReadBuffer(Bytes[0], aAudio.Size);
+
+  // data-URI sin saltos de linea (EncodeBytesToString inserta CRLF cada 76 chars)
+  Ref := TNetEncoding.Base64.EncodeBytesToString(Bytes);
+  Ref := Ref.Replace(#13, '').Replace(#10, '');
+  Ref := 'data:' + aMimeType + ';base64,' + Ref;
+
+  FKnownSpeakerNames := FKnownSpeakerNames + [aName];
+  FKnownSpeakerRefs := FKnownSpeakerRefs + [Ref];
+end;
+
+procedure TAiOpenAiAudio.AddKnownSpeaker(const aName, aFileName: string);
+var
+  FS: TFileStream;
+  Ext, Mime: string;
+begin
+  Ext := LowerCase(ExtractFileExt(aFileName));
+  if Ext = '.wav' then
+    Mime := 'audio/wav'
+  else if Ext = '.mp3' then
+    Mime := 'audio/mpeg'
+  else if (Ext = '.m4a') or (Ext = '.mp4') then
+    Mime := 'audio/mp4'
+  else if Ext = '.ogg' then
+    Mime := 'audio/ogg'
+  else if Ext = '.flac' then
+    Mime := 'audio/flac'
+  else
+    Mime := 'audio/wav';
+
+  FS := TFileStream.Create(aFileName, fmOpenRead or fmShareDenyWrite);
+  try
+    AddKnownSpeaker(aName, FS, Mime);
+  finally
+    FS.Free;
+  end;
+end;
+
+procedure TAiOpenAiAudio.ClearKnownSpeakers;
+begin
+  FKnownSpeakerNames := nil;
+  FKnownSpeakerRefs := nil;
+end;
+
+function TAiOpenAiAudio.KnownSpeakerCount: Integer;
+begin
+  Result := Length(FKnownSpeakerNames);
 end;
 
 procedure TAiOpenAiAudio.HandleStreamEvent(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
