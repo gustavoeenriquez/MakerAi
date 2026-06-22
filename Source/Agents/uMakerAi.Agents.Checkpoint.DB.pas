@@ -1,4 +1,4 @@
-﻿// IT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
