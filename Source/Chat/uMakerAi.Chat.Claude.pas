@@ -1449,8 +1449,15 @@ begin
       end;
       // Bombear Synchronize/Queue mientras se espera, para no colgar la app si un
       // tool call accede a la VCL/FMX via TThread.Synchronize (issue #103).
+      // OJO: CheckSynchronize SOLO es valido en el hilo principal; en hilos
+      // secundarios (workers Indy de un servicio headless, TTask de agentes)
+      // LANZA excepcion "CheckSynchronize called from thread X". Fuera del main
+      // thread solo esperamos. Mismo criterio que TMCPClientSSE.WaitForInitialization.
       while not TTask.WaitForAll(TaskList, 10) do
-        CheckSynchronize(0);
+        if TThread.CurrentThread.ThreadID = MainThreadID then
+          CheckSynchronize(0)
+        else
+          TThread.Sleep(10);
 
       var LStopLoop := False;
       for Clave in LFunciones.Keys do
