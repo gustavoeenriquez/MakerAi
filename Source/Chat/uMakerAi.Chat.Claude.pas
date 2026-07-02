@@ -126,7 +126,6 @@ type
   TAiClaudeChat = Class(TAiChat)
   Private
     FStreamResponseMsg: TAiChatMessage;
-    FAsyncResMsg: TAiChatMessage; // ISSUE #105: ResMsg que RunNew dejo en FMessages (a reconciliar en async)
     FStreamContentBlocks: TObjectDictionary<Integer, TClaudeStreamContentBlock>;
     FStreamBuffer: TStringBuilder;
     FStreamLastEventType: string;
@@ -1003,11 +1002,10 @@ begin
 
     if FClient.Asynchronous then
     begin
+      // ISSUE #105/#118: el mensaje del assistant se acumula en FStreamResponseMsg durante
+      // el stream y se archiva en FMessages al cerrar (message_stop, ver OnInternalReceiveData).
+      // En async RunNew libera su propio ResMsg tras el POST, por lo que NO lo referenciamos.
       FStreamResponseMsg := TAiChatMessage.Create('', 'assistant');
-      // ISSUE #105: guardamos el ResMsg de este round. RunNew lo agrega (vacio) a
-      // FMessages tras disparar el POST async; al cerrar la respuesta del stream
-      // reconciliamos su contenido para que la conversacion quede archivada.
-      FAsyncResMsg := ResMsg;
     end;
 
     ABody := InitChatCompletions;
@@ -1918,31 +1916,25 @@ begin
           finally
             jSyntheticResponse.Free;
 
+            // ISSUE #105/#118: en async, TAiChat.RunNew LIBERA su ResMsg justo despues de
+            // disparar el POST (ver rama "if FClient.Asynchronous then ResMsg.Free" en
+            // uMakerAi.Chat.pas) y NO lo deja en FMessages. Por eso el intento previo de
+            // reconciliar con FAsyncResMsg nunca funcionaba: apuntaba a un objeto ya
+            // liberado. El mensaje del assistant se construye AQUI en MsgToProcess, asi
+            // que lo archivamos directamente cuando es la respuesta FINAL (sin tool-loop
+            // en curso: FBusy=False y sin tool_calls). Mismo patron que TAiChat/TAiOpenChat.
+            // Si hubo tool_use, ParseChat ya agrego su propio mensaje (assistant + tool),
+            // por lo que aqui MsgToProcess es descartable. Fix propuesto por @martijntonies.
             if Assigned(MsgToProcess) and (FMessages.IndexOf(MsgToProcess) = -1) then
             begin
-              // ISSUE #105: en async el assistant se llena en MsgToProcess (objeto del
-              // stream), pero el historial tiene el ResMsg vacio que agrego RunNew. Si es
-              // la respuesta FINAL (sin tool-loop en curso: FBusy=False), copiamos el
-              // contenido al placeholder para que la conversacion se archive y el modelo
-              // no repita respuestas previas. En el caso de tools, ParseChat ya agrega su
-              // propio mensaje, asi que aqui solo aplica al cierre final.
-              if (not FBusy) and Assigned(FAsyncResMsg) and (FAsyncResMsg <> MsgToProcess) and
-                 (FMessages.IndexOf(FAsyncResMsg) >= 0) then
+              if (not FBusy) and (MsgToProcess.Tool_calls = '') then
               begin
-                FAsyncResMsg.Prompt := MsgToProcess.Prompt;
-                FAsyncResMsg.Role := MsgToProcess.Role;
-                if MsgToProcess.Model <> '' then
-                  FAsyncResMsg.Model := MsgToProcess.Model;
-                FAsyncResMsg.ReasoningContent := MsgToProcess.ReasoningContent;
-                FAsyncResMsg.ThinkingSignature := MsgToProcess.ThinkingSignature;
-                FAsyncResMsg.StopReason := MsgToProcess.StopReason;
-                FAsyncResMsg.Prompt_tokens := MsgToProcess.Prompt_tokens;
-                FAsyncResMsg.Completion_tokens := MsgToProcess.Completion_tokens;
-                FAsyncResMsg.Total_tokens := MsgToProcess.Total_tokens;
-                FAsyncResMsg.Cached_tokens := MsgToProcess.Cached_tokens;
-                FAsyncResMsg := nil; // ya reconciliado
+                MsgToProcess.Id := FMessages.Count + 1;
+                FMessages.Add(MsgToProcess);
+                MsgToProcess := nil; // propiedad transferida a FMessages; no liberar abajo
               end;
-              MsgToProcess.Free;
+              if Assigned(MsgToProcess) then
+                MsgToProcess.Free;
             end;
 
             // Si ParseChat disparó un Run recursivo por tool calls, FBusy quedó True
