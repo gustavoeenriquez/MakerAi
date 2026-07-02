@@ -602,38 +602,67 @@ type
 
   // procedure Register;
 
+var
+  // ISSUE #115: control del log de depuracion. Opt-in: por defecto NO escribe.
+  // El integrador lo activa con TAiChatConnection.EnableDebugLog o poniendo esta
+  // global en True. MakerAiDebugLogPath vacio = <TEMP>\makerai_debug.log.
+  MakerAiDebugLogEnabled: Boolean = False;
+  MakerAiDebugLogPath: string = '';
+
 procedure LogDebug(const Mensaje: string);
 
 implementation
 
-uses uMakerAi.ParamsRegistry, System.IOUtils, uMakerAi.Memory.Types;
+uses uMakerAi.ParamsRegistry, System.IOUtils, System.SyncObjs, uMakerAi.Memory.Types;
 
 { TAiChat }
 
 Const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
 
+var
+  GLogLock: TCriticalSection; // ISSUE #115: serializa las escrituras del log
+
 procedure LogDebug(const Mensaje: string);
 var
-  Archivo: TextFile;
-  RutaLog: string;
-  LOpened: Boolean;
+  FS: TFileStream;
+  Bytes: TBytes;
+  RutaLog, Linea: string;
 begin
-  LOpened := False;
+  // ISSUE #115: opt-in. Por defecto no hace nada (sin coste ni escritura a disco).
+  if not MakerAiDebugLogEnabled then
+    Exit;
   try
-    RutaLog := TPath.Combine(TPath.GetTempPath, 'ialog.txt');
-    AssignFile(Archivo, RutaLog);
-    if FileExists(RutaLog) then
-      Append(Archivo)
+    if MakerAiDebugLogPath <> '' then
+      RutaLog := MakerAiDebugLogPath
     else
-      Rewrite(Archivo);
-    LOpened := True;
-    WriteLn(Archivo, Mensaje);
+      RutaLog := TPath.Combine(TPath.GetTempPath, 'makerai_debug.log');
+
+    // Timestamp ISO con milisegundos + UTF-8 (TextFile perdia lineas con caracteres
+    // fuera de cp1252 y no es thread-safe).
+    Linea := FormatDateTime('yyyy-mm-dd"T"hh:nn:ss.zzz', Now) + '  ' + Mensaje + sLineBreak;
+    Bytes := TEncoding.UTF8.GetBytes(Linea);
+
+    // Serializar: varios chats async pueden llamar desde hilos distintos.
+    GLogLock.Enter;
+    try
+      if TFile.Exists(RutaLog) then
+        FS := TFileStream.Create(RutaLog, fmOpenReadWrite or fmShareDenyWrite)
+      else
+        FS := TFileStream.Create(RutaLog, fmCreate or fmShareDenyWrite);
+      try
+        FS.Seek(Int64(0), soEnd);
+        if Length(Bytes) > 0 then
+          FS.WriteBuffer(Bytes[0], Length(Bytes));
+      finally
+        FS.Free;
+      end;
+    finally
+      GLogLock.Leave;
+    end;
   except
-    // Función de depuración — nunca propaga errores al caller
+    // Funcion de depuracion — nunca propaga errores al caller.
   end;
-  if LOpened then
-    CloseFile(Archivo);
 end;
 
 procedure TAiChat.Abort;
@@ -4291,5 +4320,11 @@ begin
     end;
   end;
 end;
+
+initialization
+  GLogLock := TCriticalSection.Create; // ISSUE #115
+
+finalization
+  GLogLock.Free;
 
 end.
