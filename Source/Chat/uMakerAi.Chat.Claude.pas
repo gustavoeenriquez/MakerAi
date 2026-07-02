@@ -2412,6 +2412,7 @@ var
   I: Integer;
 begin
   Result := TStringList.Create;
+  try // ISSUE #114: si el cuerpo lanza, liberar Result para no fugarlo
 
   // 1. Determinar la URL base
   if aUrl <> '' then
@@ -2472,6 +2473,10 @@ begin
 
   finally
     Client.Free;
+  end;
+  except // ISSUE #114: el camino de error no debe dejar huerfano el Result
+    Result.Free;
+    raise;
   end;
 end;
 
