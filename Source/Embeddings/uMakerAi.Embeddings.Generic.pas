@@ -139,7 +139,7 @@ begin
   sUrl := FUrl.TrimRight(['/']) + '/embeddings';
 
   Client := TNetHTTPClient.Create(nil);
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
   Client.SynchronizeEvents := False;
 {$ENDIF}
   StReq  := TStringStream.Create('', TEncoding.UTF8);

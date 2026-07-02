@@ -386,7 +386,7 @@ begin
   Raise Exception.Create('Actualmente Groq no maneja modelos de embeddings');
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
   Client.SynchronizeEvents := False;
 {$ENDIF}
   St := TStringStream.Create('', TEncoding.UTF8);
@@ -458,7 +458,7 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
   Client.SynchronizeEvents := False;
 {$ENDIF}
   LResponseStream := TMemoryStream.Create;
@@ -632,7 +632,7 @@ begin
   Result := '';
   LClient := TNetHTTPClient.Create(nil);
   try
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
     LClient.SynchronizeEvents := False;
 {$ENDIF}
     LClient.ResponseTimeout := ResponseTimeOut;

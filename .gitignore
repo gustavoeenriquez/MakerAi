@@ -158,3 +158,6 @@ Source/Packages/hpp/
 /nul
 Demos/014-ChatTest/*.txt
 Demos/014-ChatTest/medios/
+
+# Graphify knowledge graph (build artifact) — PR #93 @Pedro-DAS
+graphify-out/

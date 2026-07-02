@@ -186,6 +186,11 @@ type
     procedure RemoveFromMemory(Key: String);
     procedure NewChat;
     procedure Abort;
+    // ISSUE #115: control del log de depuracion (opt-in). Delegan en las globales
+    // MakerAiDebugLogEnabled / MakerAiDebugLogPath de uMakerAi.Chat.
+    procedure EnableDebugLog(const APath: string = '');
+    procedure DisableDebugLog;
+    function IsDebugLogEnabled: Boolean;
     function GetMessages: TJSonArray; virtual;
     function GetDriversNames: TStringList; virtual;
     function GetAvailableDrivers: TArray<string>;
@@ -1408,6 +1413,23 @@ procedure TAiChatConnection.SetComputerUseTool(const Value: TAiComputerUseTool);
 begin
   FChatTools.ComputerUseTool := Value;
   if Assigned(FChat) then FChat.ChatTools.ComputerUseTool := Value;
+end;
+
+// ISSUE #115: API comoda para el log de depuracion (opt-in).
+procedure TAiChatConnection.EnableDebugLog(const APath: string = '');
+begin
+  MakerAiDebugLogPath := APath;   // vacio = <TEMP>\makerai_debug.log
+  MakerAiDebugLogEnabled := True;
+end;
+
+procedure TAiChatConnection.DisableDebugLog;
+begin
+  MakerAiDebugLogEnabled := False;
+end;
+
+function TAiChatConnection.IsDebugLogEnabled: Boolean;
+begin
+  Result := MakerAiDebugLogEnabled;
 end;
 
 end.

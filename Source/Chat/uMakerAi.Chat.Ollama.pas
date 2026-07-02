@@ -255,6 +255,7 @@ Var
   I: Integer;
 begin
   Result := TStringList.Create;
+  try // ISSUE #114: si el cuerpo lanza, liberar Result para no fugarlo
 
   If aUrl <> '' then
     EndPointUrl := aUrl
@@ -262,7 +263,7 @@ begin
     EndPointUrl := GlAIUrl;
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
   Client.SynchronizeEvents := False;
 {$ENDIF}
   Response := TStringStream.Create('', TEncoding.UTF8);
@@ -317,6 +318,10 @@ begin
     Client.Free;
     Response.Free;
   End;
+  except // ISSUE #114: el camino de error no debe dejar huerfano el Result
+    Result.Free;
+    raise;
+  end;
 end;
 
 function TAiOllamaChat.InitChatCompletions: String;

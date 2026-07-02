@@ -355,6 +355,7 @@ var
   LUri: TURI;
 begin
   Result := TStringList.Create;
+  try // ISSUE #114: si el cuerpo lanza, liberar Result para no fugarlo
   Client := TNetHTTPClient.Create(nil);
   ResponseStream := TStringStream.Create('', TEncoding.UTF8);
   try
@@ -410,6 +411,10 @@ begin
   finally
     Client.Free;
     ResponseStream.Free;
+  end;
+  except // ISSUE #114: el camino de error no debe dejar huerfano el Result
+    Result.Free;
+    raise;
   end;
 end;
 
@@ -1285,7 +1290,7 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
   Client.SynchronizeEvents := False;
 {$ENDIF}
   LResponseStream := TMemoryStream.Create;
