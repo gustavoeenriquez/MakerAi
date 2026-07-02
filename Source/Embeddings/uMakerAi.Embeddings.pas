@@ -171,7 +171,7 @@ begin
   end;
 
   Client := TNetHTTPClient.Create(nil);
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
   Client.SynchronizeEvents := False;
 {$ENDIF}
   RequestStream := TStringStream.Create('', TEncoding.UTF8);

@@ -262,7 +262,7 @@ begin
     EndPointUrl := GlAIUrl;
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
   Client.SynchronizeEvents := False;
 {$ENDIF}
   Response := TStringStream.Create('', TEncoding.UTF8);

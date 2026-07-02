@@ -2140,7 +2140,7 @@ var
 begin
   Result := '';
   LHttpClient := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
   LHttpClient.SynchronizeEvents := False;
 {$ENDIF}
   try

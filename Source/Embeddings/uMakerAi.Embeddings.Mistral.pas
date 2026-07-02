@@ -90,7 +90,7 @@ Var
 begin
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
   Client.SynchronizeEvents := False;
 {$ENDIF}
   St := TStringStream.Create('', TEncoding.UTF8);

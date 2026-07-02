@@ -1435,8 +1435,12 @@ begin
 
   FResponse := TStringStream.Create('', TEncoding.UTF8);
   FClient := TNetHTTPClient.Create(Self);
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34} // ISSUE #119: SynchronizeEvents ya existe en 10.4 Sydney.
+  // Sin esto, en 10.4 los eventos del TNetHTTPClient corren en el hilo principal
+  // (SynchronizeEvents=True por defecto) y los tool calls async bloquean la UI.
   FClient.SynchronizeEvents := False;
+{$ENDIF}
+{$IF CompilerVersion >= 35}
   FClient.OnRequestException := Self.OnRequestExceptionEvent;
 {$ENDIF}
   FClient.OnReceiveData := Self.OnInternalReceiveData;
@@ -2803,7 +2807,7 @@ begin
   try
     LClient := TNetHTTPClient.Create(nil);
     try
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
       LClient.SynchronizeEvents := False;
 {$ENDIF}
       LClient.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;

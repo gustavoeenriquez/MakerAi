@@ -371,7 +371,7 @@ begin
   /// PCM: Similar to WAV but containing the raw samples in 24kHz (16-bit signed, low-endian), without the header.
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
   Client.SynchronizeEvents := False;
 {$ENDIF}
   St := TStringStream.Create('', TEncoding.UTF8);
@@ -451,7 +451,7 @@ begin
   sUrl := FUrl + 'audio/transcriptions';
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
   Client.SynchronizeEvents := False;
 {$ENDIF}
   Headers := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
@@ -526,7 +526,7 @@ begin
   sUrl := FUrl + 'audio/translations';
 
   Client := TNetHTTPClient.Create(Nil);
-{$IF CompilerVersion >= 35}
+{$IF CompilerVersion >= 34}
   Client.SynchronizeEvents := False;
 {$ENDIF}
   Headers := [TNetHeader.Create('Authorization', 'Bearer ' + FApiKey)];
