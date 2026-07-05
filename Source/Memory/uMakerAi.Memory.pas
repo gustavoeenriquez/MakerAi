@@ -271,13 +271,14 @@ const
   K = 60; // constante RRF estándar
 var
   Scores: TDictionary<Integer, Double>;
+  ById:   TDictionary<Integer, TMemoryEntry>;
   All:    TObjectList<TMemoryEntry>;
   E:      TMemoryEntry;
   I:      Integer;
   Si, Sj: Integer;
   SA, SB: Double;
 
-  procedure AddRank(AList: TMemoryEntryList; AMatchType: string);
+  procedure AddRank(AList: TMemoryEntryList);
   var
     Rank: Integer;
     Item: TMemoryEntry;
@@ -292,18 +293,35 @@ var
     end;
   end;
 
+  // Dedup por Id: FTS y semántica devuelven OBJETOS distintos para la misma
+  // fila, así que comparar referencias (All.Contains) duplicaba resultados.
+  // El duplicado descartado se libera aquí: el caller pone OwnsObjects=False
+  // en las listas de entrada antes de liberarlas, nadie más lo posee.
+  procedure Merge(AList: TMemoryEntryList);
+  var
+    Item: TMemoryEntry;
+  begin
+    for Item in AList do
+      if not ById.ContainsKey(Item.Id) then
+      begin
+        ById.Add(Item.Id, Item);
+        All.Add(Item);
+      end
+      else
+        Item.Free;
+  end;
+
 begin
   Scores := TDictionary<Integer, Double>.Create;
+  ById   := TDictionary<Integer, TMemoryEntry>.Create;
   All    := TObjectList<TMemoryEntry>.Create(False);
   try
-    AddRank(AFTS,     'fts');
-    AddRank(ASemantic,'semantic');
+    AddRank(AFTS);
+    AddRank(ASemantic);
 
-    // Unir todos los entries únicos
-    for E in AFTS do
-      if not All.Contains(E) then All.Add(E);
-    for E in ASemantic do
-      if not All.Contains(E) then All.Add(E);
+    // Unir todos los entries únicos (por Id)
+    Merge(AFTS);
+    Merge(ASemantic);
 
     // Ordenar por score RRF descendente — selection sort
     for Si := 0 to All.Count - 2 do
@@ -326,8 +344,13 @@ begin
       Result[I].MatchType := 'hybrid';
       Scores.TryGetValue(All[I].Id, Result[I].Score);
     end;
+    // Los que quedaron fuera del límite no van en Result y nadie más los
+    // posee: liberarlos aquí evita la fuga.
+    for I := Length(Result) to All.Count - 1 do
+      All[I].Free;
   finally
     Scores.Free;
+    ById.Free;
     All.Free;
   end;
 end;
@@ -468,6 +491,11 @@ begin
             Result[I].MatchType := 'fts';
             FStorage.UpdateAccessStats(FTSList[I].Id);
           end;
+          // FTSList trae hasta ALimit*2 entradas; las que no pasaron a Result
+          // no las posee nadie más (el finally quita OwnsObjects antes de
+          // liberar la lista): liberarlas aquí evita la fuga.
+          for I := Length(Result) to FTSList.Count - 1 do
+            FTSList[I].Free;
         end
         else
           Result := FuseRRF(FTSList, SemList, ALimit);

@@ -717,7 +717,7 @@ begin
       '       AVG(decay_score) as avg_decay,' +
       '       MIN(created_at) as oldest,' +
       '       MAX(created_at) as newest,' +
-      '       SUM(CASE WHEN expires_at IS NOT NULL AND expires_at < :now THEN 1 ELSE 0 END) as expired' +
+      '       SUM(CASE WHEN expires_at IS NOT NULL AND expires_at <> '''' AND expires_at < :now THEN 1 ELSE 0 END) as expired' +
       ' FROM ' + FTableName +
       ' WHERE namespace = :ns';
     Q.ParamByName('now').AsString := DateToISO8601(Now, False);
@@ -750,8 +750,10 @@ begin
   Q := NewQuery;
   try
     Q.SQL.Text :=
+      // expires_at = '' significa "sin expiración" (Insert lo escribe así cuando
+      // ExpiresAt=0); sin este filtro, '' < :now borraba TODAS las memorias sin TTL.
       'DELETE FROM ' + FTableName +
-      ' WHERE namespace = :ns AND expires_at IS NOT NULL AND expires_at < :now';
+      ' WHERE namespace = :ns AND expires_at IS NOT NULL AND expires_at <> '''' AND expires_at < :now';
     Q.ParamByName('ns').AsString  := ANamespace;
     Q.ParamByName('now').AsString := DateToISO8601(Now, False);
     Q.ExecSQL;
