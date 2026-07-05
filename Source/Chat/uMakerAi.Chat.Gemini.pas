@@ -1112,7 +1112,9 @@ begin
     if Temperature >= 0 then
       JConfig.AddPair('temperature', TJSONNumber.Create(Temperature));
 
-    if Top_p >= 0 then
+    // 0 = no enviar topP (convención de SetTop_p en la base); topP:0 literal
+    // forzaría muestreo casi greedy en lugar del default del servidor.
+    if Top_p > 0 then
       JConfig.AddPair('topP', TJSONNumber.Create(Top_p));
 
     if Max_tokens > 0 then

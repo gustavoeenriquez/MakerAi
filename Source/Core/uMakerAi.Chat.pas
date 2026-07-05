@@ -4037,7 +4037,13 @@ procedure TAiChat.SetTop_p(const Value: Double);
 Var
   TmpVal: Double;
 begin
-  If Value > 1 then
+  // 0 (o negativo) = NO enviar top_p en el payload y dejar que el server aplique
+  // su default. InitChatCompletions ya contempla ese caso (If FTop_p <> 0), pero
+  // el clamp anterior a 0.1 lo hacia inalcanzable; algunos modelos/rutas rechazan
+  // cualquier top_p distinto del suyo (mk-kimi-k2: "only 0.95 is allowed" -> 503).
+  If Value <= 0 then
+    TmpVal := 0
+  Else If Value > 1 then
     TmpVal := 1
   Else If Value < 0.1 then
     TmpVal := 0.1
