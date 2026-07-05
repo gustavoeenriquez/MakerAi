@@ -29,6 +29,9 @@ type
   TAIChatAttachEvent = procedure(Sender: TObject; AMsg: TAIChatMessage;
                          AAttach: TAIChatAttachment) of object;
   TAIChatMsgEvent    = procedure(Sender: TObject; AMsg: TAIChatMessage) of object;
+  // Peticion de leer texto en voz alta (seleccion o mensaje bajo el cursor).
+  // El host implementa el TTS; el item solo aparece si el evento esta asignado.
+  TAIChatSpeakEvent  = procedure(Sender: TObject; const AText: string) of object;
 
   // Forward
   TAIChatView = class;
@@ -95,6 +98,7 @@ type
     FCtxTargetMsg     : Integer;
     FCtxTargetAttach  : Integer;
     FCtxCopySelection : TMenuItem;
+    FCtxSpeak         : TMenuItem;
     FCtxMediaURL      : string;   // media (imagen/archivo) bajo el cursor en el right-click
     FCtxMediaMime     : string;
 
@@ -104,6 +108,7 @@ type
     FOnMediaAction      : TAITextMDMediaActionEvent;
     FOnMessageCopy      : TAIChatMsgEvent;
     FOnConversationCopy : TNotifyEvent;
+    FOnSpeakRequest     : TAIChatSpeakEvent;
 
     // Backward-compat events
     FOnBubbleAvatarClick     : TAIChatBubbleEvent;
@@ -228,6 +233,9 @@ type
     property OnMediaAction           : TAITextMDMediaActionEvent read FOnMediaAction       write FOnMediaAction;
     property OnMessageCopy           : TAIChatMsgEvent      read FOnMessageCopy           write FOnMessageCopy;
     property OnConversationCopy      : TNotifyEvent         read FOnConversationCopy      write FOnConversationCopy;
+    // "Escuchar en voz alta" del menu contextual: copia el texto al portapapeles
+    // y entrega al host la seleccion (o el mensaje) para que lo lea con TTS.
+    property OnSpeakRequest          : TAIChatSpeakEvent    read FOnSpeakRequest          write FOnSpeakRequest;
     // Backward-compat events
     property OnMediaFileDblClick     : TAIChatMediaFileEvent read FOnMediaFileDblClick     write FOnMediaFileDblClick;
     property OnBubbleAvatarClick     : TAIChatBubbleEvent   read FOnBubbleAvatarClick     write FOnBubbleAvatarClick;
@@ -339,6 +347,11 @@ begin
   FCtxCopySelection.Text    := 'Copy Selection';
   FCtxCopySelection.OnClick := ContextMenuClick;
   FContextMenu.AddObject(FCtxCopySelection);
+
+  FCtxSpeak         := TMenuItem.Create(FContextMenu);
+  FCtxSpeak.Text    := 'Escuchar en voz alta';
+  FCtxSpeak.OnClick := ContextMenuClick;
+  FContextMenu.AddObject(FCtxSpeak);
 
   FBubbleProxies := TObjectList<TAIChatBubble>.Create(True);
   FInboundColor  := TAlphaColors.LightGray;
@@ -554,6 +567,10 @@ begin
     FCtxSaveMedia.Enabled  := False;
   end;
   FCtxCopySelection.Enabled := HasActiveSelection;
+  // Solo visible si el host implementa TTS; lee la seleccion o, si no la hay,
+  // el mensaje bajo el cursor.
+  FCtxSpeak.Visible := Assigned(FOnSpeakRequest);
+  FCtxSpeak.Enabled := HasActiveSelection or (AMsgIdx >= 0);
   FContextMenu.PopupComponent := Self;
   AbsPt := LocalToAbsolute(TPointF.Create(X, Y));
   // Walk the parent chain to find the owning form for screen-coord conversion
@@ -589,6 +606,18 @@ begin
   begin
     var SelTxt := GetMultiSelectionText;
     if SelTxt <> '' then DoClipboardSet(SelTxt);
+  end
+  else if Sender = FCtxSpeak then
+  begin
+    var SpkTxt := GetMultiSelectionText;
+    if (SpkTxt = '') and (FCtxTargetMsg >= 0) and
+       (FCtxTargetMsg < FList.Messages.Count) then
+      SpkTxt := FList.Messages[FCtxTargetMsg].Text;
+    if (SpkTxt <> '') and Assigned(FOnSpeakRequest) then
+    begin
+      DoClipboardSet(SpkTxt);   // "copiar y reproducir": tambien queda en el portapapeles
+      FOnSpeakRequest(Self, SpkTxt);
+    end;
   end
   else if Sender = FCtxOpenAttach then
   begin
