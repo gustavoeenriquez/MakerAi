@@ -963,12 +963,12 @@ end;
 
 procedure TAIAgentManager.AddComponentToList(AComponent: TAIAgentsBase);
 begin
-  if AComponent is TAIAgentsNode then
+  if (AComponent is TAIAgentsNode) and Assigned(FNodes) then
   begin
     if FNodes.IndexOf(TAIAgentsNode(AComponent)) = -1 then
       FNodes.Add(TAIAgentsNode(AComponent));
   end
-  else if AComponent is TAIAgentsLink then
+  else if (AComponent is TAIAgentsLink) and Assigned(FLinks) then
   begin
     if FLinks.IndexOf(TAIAgentsLink(AComponent)) = -1 then
       FLinks.Add(TAIAgentsLink(AComponent));
@@ -1115,13 +1115,13 @@ destructor TAIAgentManager.Destroy;
 begin
   FSuspendedSteps.Free;
   FSuspendedStepsLock.Free;
-  FNodes.Free;
-  FLinks.Free;
   FActiveTasks.Free;
   FActiveTasksLock.Free;
   FThreadPool.Free; // --- NUEVO: Liberaci?n del Scheduler ---
   FBlackboard.Free;
   inherited;
+  FreeAndNil(FNodes);
+  FreeAndNil(FLinks);
 end;
 
 procedure TAIAgentManager.DoError(Node: TAIAgentsNode; Link: TAIAgentsLink; E: Exception);
@@ -1545,9 +1545,9 @@ end;
 
 procedure TAIAgentManager.RemoveComponentFromList(AComponent: TAIAgentsBase);
 begin
-  if AComponent is TAIAgentsNode then
+  if (AComponent is TAIAgentsNode) and Assigned(FNodes) then
     FNodes.Remove(TAIAgentsNode(AComponent))
-  else if AComponent is TAIAgentsLink then
+  else if (AComponent is TAIAgentsLink) and Assigned(FLinks) then
     FLinks.Remove(TAIAgentsLink(AComponent));
 end;
 
