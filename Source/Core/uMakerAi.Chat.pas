@@ -367,9 +367,9 @@ type
     procedure SetModelCaps(const Value: TAiCapabilities);
     procedure SetSessionCaps(const Value: TAiCapabilities);
     procedure EnsureNewSystemConfig;
-    function LegacyToModelCaps: TAiCapabilities;
-    function LegacyToSessionCaps: TAiCapabilities;
-    function RunLegacy(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
+    //function LegacyToModelCaps: TAiCapabilities;
+    //function LegacyToSessionCaps: TAiCapabilities;
+    //function RunLegacy(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
     function RunNew(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
     function FileTypeInModelCaps(ACategory: TAiFileCategory): Boolean;
 
@@ -530,8 +530,6 @@ type
     Property Prompt_tokens: Integer read FPrompt_tokens write SetPrompt_tokens;
     Property Seed: Integer read FSeed write SetSeed;
     Property Stop: string read FStop write SetStop;
-    Property Temperature: Double read FTemperature write SetTemperature;
-    Property Thinking_tokens: Integer read FThinking_tokens write SetThinking_tokens;
     Property Cached_tokens: Integer read FCached_tokens write SetCached_tokens;
     // Flag portable de prompt caching. Activa el cacheo del contexto estable
     // (system + tools). En Claude habilita los breakpoints cache_control; en los
@@ -540,6 +538,7 @@ type
     Property CacheContext: Boolean read FCacheContext write FCacheContext;
     Property Top_p: Double read FTop_p write SetTop_p;
     Property Total_tokens: Integer read FTotal_tokens write SetTotal_tokens;
+    Property Thinking_tokens: Integer read FThinking_tokens write SetThinking_tokens;
 
   Published
     Property ApiKey: String read GetApiKey write SetApiKey;
@@ -598,6 +597,7 @@ type
     property PersistentMemory:  TComponent read FPersistentMemory write SetPersistentMemory;
     property MemoryTokenBudget: Integer    read FMemoryTokenBudget write FMemoryTokenBudget default 1500;
     property AutoStoreMemories: Boolean    read FAutoStoreMemories write FAutoStoreMemories default False;
+    Property Temperature: Double read FTemperature write SetTemperature;
   end;
 
   // procedure Register;
@@ -2747,7 +2747,6 @@ begin
         else
         begin
           Self.Run(Nil, ResMsg);
-          ResMsg.Content := '';
         end;
       End;
 
@@ -3121,13 +3120,11 @@ end;
   aMediaFile.Transcription := Trim(sTextoWords + sLineBreak + sTextoSegments);
   aMediaFile.Detail := Trim(sTextoTranscrito);
   ResMsg.Prompt := Trim(ResMsg.Prompt + aMediaFile.Transcription);
-  ResMsg.Content := ResMsg.Content + sLineBreak + aMediaFile.Detail;
   End
   Else
   Begin
   aMediaFile.Transcription := sTextoTranscrito;
   ResMsg.Prompt := Trim(ResMsg.Prompt + sLineBreak + sTextoTranscrito);
-  ResMsg.Content := Trim(ResMsg.Content + sLineBreak + sTextoTranscrito);
   End;
 
   ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aInput_tokens;
@@ -3212,8 +3209,6 @@ begin
     ResMsg.Prompt := ResMsg.Prompt + sLineBreak + sTextoTranscrito
   else
     ResMsg.Prompt := sTextoTranscrito;
-
-  ResMsg.Content := ResMsg.Prompt; // Sincronizar Content con Prompt
 
   ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aInput_tokens;
   ResMsg.Completion_tokens := ResMsg.Completion_tokens + aOutput_tokens;
@@ -3998,7 +3993,7 @@ begin
   // stub — new system config is applied via SetModelCaps/SetSessionCaps
 end;
 
-function TAiChat.LegacyToModelCaps: TAiCapabilities;
+{function TAiChat.LegacyToModelCaps: TAiCapabilities;
 begin
   Result := [];
 end;
@@ -4012,6 +4007,7 @@ function TAiChat.RunLegacy(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): Stri
 begin
   Result := RunNew(AskMsg, ResMsg);
 end;
+}
 
 function TAiChat.GetTool_Active: Boolean;
 begin

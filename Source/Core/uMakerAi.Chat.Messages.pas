@@ -118,7 +118,6 @@ Type
     FCacheWrite_tokens: Integer;
     [JSONMarshalled(False)]
     FLock: TCriticalSection;
-    procedure SetContent(const Value: String);
     procedure SetRole(const Value: String);
     procedure SetPrompt(const Value: String);
     procedure SetFunctionName(const Value: String);
@@ -142,7 +141,6 @@ Type
     procedure SetCache_write_tokens(const Value: Integer);
   Protected
     FRole: String;
-    FContent: String;
     FPrompt: String;
     FCompletion_tokens: Integer;
     FTotal_tokens: Integer;
@@ -171,7 +169,6 @@ Type
 
     Property id: Integer Read FId Write SetFId;
     Property Role: String read FRole write SetRole;
-    Property Content: String read FContent write SetContent;
     Property Prompt: String read FPrompt write SetPrompt;
     Property Prompt_tokens: Integer read FPrompt_tokens Write SetPrompt_tokens;
     Property Completion_tokens: Integer read FCompletion_tokens Write SetCompletion_tokens;
@@ -466,16 +463,6 @@ begin
   End;
 end;
 
-procedure TAiChatMessage.SetContent(const Value: String);
-begin
-  FLock.Enter;
-  Try
-    FContent := Value;
-  Finally
-    FLock.Leave;
-  End;
-end;
-
 procedure TAiChatMessage.SetFId(const Value: Integer);
 begin
   FLock.Enter;
@@ -763,10 +750,7 @@ begin
       JItem := TJSONObject.Create;
 
       JItem.AddPair('role', Item.Role);
-      If Trim(Item.Content) <> '' then
-        JItem.AddPair('request', Item.Content)
-      Else
-        JItem.AddPair('prompt', Item.Prompt);
+      JItem.AddPair('prompt', Item.Prompt);
       JArr.Add(JItem);
     End;
     JObj.AddPair('data', JArr);

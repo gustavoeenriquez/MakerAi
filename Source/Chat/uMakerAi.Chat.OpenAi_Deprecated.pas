@@ -1997,13 +1997,11 @@ begin
     aMediaFile.Transcription := Trim(sTextoWords + sLineBreak + sTextoSegments);
     aMediaFile.Detail := Trim(sTextoTranscrito);
     ResMsg.Prompt := Trim(ResMsg.Prompt + aMediaFile.Transcription);
-    ResMsg.Content := ResMsg.Content + sLineBreak + aMediaFile.Detail;
   End
   Else
   Begin
     aMediaFile.Transcription := sTextoTranscrito;
     ResMsg.Prompt := Trim(ResMsg.Prompt + sLineBreak + sTextoTranscrito);
-    ResMsg.Content := Trim(ResMsg.Content + sLineBreak + sTextoTranscrito);
   End;
 
   ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aInput_tokens;
@@ -2137,7 +2135,6 @@ begin
     FLastContent := Trim(FLastContent);
     // Si no se gener� texto (solo una imagen), FLastContent estar� vac�o, lo cual es correcto.
     ResMsg.Prompt := FLastContent;
-    ResMsg.Content := FLastContent;
 
     ResMsg.Role := 'assistant';
     ResMsg.PreviousResponseId := ResponseId;

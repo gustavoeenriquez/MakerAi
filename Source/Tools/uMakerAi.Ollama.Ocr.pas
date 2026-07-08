@@ -174,7 +174,7 @@ begin
             else
               LContent := LResponseJson.GetValue<string>('response', '');
 
-            ResMsg.Content := LContent;
+            ResMsg.Prompt := LContent;
             ResMsg.Role := 'assistant';
             ResMsg.Model := FModel;
 

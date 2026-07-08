@@ -175,8 +175,6 @@
         <DCCReference Include="..\MCPServer\UMakerAi.MCPServer.Stdio.pas"/>
         <DCCReference Include="..\MCPServer\UMakerAi.MCPServer.Direct.pas"/>
         <DCCReference Include="..\Utils\uMakerAi.Utils.VoiceMonitor.pas"/>
-        <DCCReference Include="..\Utils\uMakerAi.Utils.AudioCapture.pas"/>
-        <DCCReference Include="..\Utils\uMakerAi.Utils.AudioPlayback.pas"/>
         <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.core.pas"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Graph.Builder.pas"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Graph.Core.pas"/>
@@ -195,6 +193,8 @@
         <DCCReference Include="..\Chat\uMakerAi.Chat.Kimi.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.LMStudio.pas"/>
         <DCCReference Include="..\Utils\uMakerAi.Utils.DiffUpdater.pas"/>
+        <DCCReference Include="..\Utils\uMakerAi.Utils.AudioCapture.pas"/>
+        <DCCReference Include="..\Utils\uMakerAi.Utils.AudioPlayback.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.GenericLLM.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.MakerAi.pas"/>
         <DCCReference Include="..\MCPServer\UMakerAi.MCPServer.SSE.pas"/>
@@ -231,6 +231,7 @@
         <DCCReference Include="..\Tools\uMakerAi.Ollama.Ocr.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Ollama.Vision.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Gemini.Speech.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.ElevenLabs.Speech.pas"/>
         <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.Client.pas"/>
         <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.SChannel.pas"/>
         <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.OpenSSL.pas"/>
@@ -241,6 +242,8 @@
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.Gemini.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.AiConnection.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.MakerAi.pas"/>
+        <DCCReference Include="..\Memory\uMakerAi.Memory.Types.pas"/>
+        <DCCReference Include="..\Memory\uMakerAi.Memory.Decay.pas"/>
         <None Include="..\RAG\RagGraph_Prompt_Example.md"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

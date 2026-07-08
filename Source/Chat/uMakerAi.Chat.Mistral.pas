@@ -1171,7 +1171,6 @@ begin
 {$ENDIF}
     // 4. Procesar la respuesta
     LResponseStream.Position := 0;
-    ResMsg.Content := LResponse.ContentAsString;
     if LResponse.StatusCode = 200 then
     begin
       LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;

@@ -1611,8 +1611,8 @@ begin
       // -----------------------------
 
       // Retornamos el contenido generado
-      if Assigned(Blackboard.ResMsg) and (Blackboard.ResMsg.Content <> '') then
-        Result := Blackboard.ResMsg.Content
+      if Assigned(Blackboard.ResMsg) and (Blackboard.ResMsg.Prompt <> '') then
+        Result := Blackboard.ResMsg.Prompt
       else if Assigned(FEndNode) then
         Result := FEndNode.Output;
     end;

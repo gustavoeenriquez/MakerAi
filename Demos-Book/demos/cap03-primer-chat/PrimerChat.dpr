@@ -33,7 +33,9 @@ uses
   uMakerAi.Chat.AiConnection,
   // ── Importar el driver activa su auto-registro en el factory ──────────────
   // Solo se necesita importar la unidad; TAiChatConnection lo encuentra por nombre.
+  uMakerAi.Chat.OpenAi,
   uMakerAi.Chat.Groq;      // DriverName = 'Groq'
+
   // uMakerAi.Chat.Claude;  // DriverName = 'Claude'
   // uMakerAi.Chat.OpenAi;  // DriverName = 'OpenAI'
   // uMakerAi.Chat.Gemini;  // DriverName = 'Gemini'

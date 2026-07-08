@@ -346,7 +346,7 @@ begin
           SB.Append(Msg.Prompt).Append(FUserSuffix);
         end
         else if SameText(Msg.Role, 'assistant') then
-          SB.Append(FAsstPrefix).Append(Msg.Content).Append(FAsstSuffix);
+          SB.Append(FAsstPrefix).Append(Msg.Prompt).Append(FAsstSuffix);
       end;
     end
     else
@@ -360,7 +360,7 @@ begin
         if SameText(Msg.Role, 'user') then
           SB.Append(FUserPrefix).Append(Msg.Prompt).Append(FUserSuffix)
         else if SameText(Msg.Role, 'assistant') then
-          SB.Append(FAsstPrefix).Append(Msg.Content).Append(FAsstSuffix);
+          SB.Append(FAsstPrefix).Append(Msg.Prompt).Append(FAsstSuffix);
         // tool / function / system roles are skipped for local inference
       end;
     end;
@@ -399,7 +399,7 @@ begin
         if IsLast then
         begin
           FTmpResponseText := Full.ToString;
-          ResMsg.Content   := FTmpResponseText;
+          ResMsg.Prompt    := FTmpResponseText;
           DoDataEnd(ResMsg, 'assistant', FTmpResponseText);
         end
         else
