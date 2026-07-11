@@ -1,0 +1,13 @@
+﻿object FormMain: TFormMain
+  Left = 0
+  Top = 0
+  Caption = 'MakerAI - Chat + RAG SQLite + Tools + TeeChart'
+  ClientHeight = 760
+  ClientWidth = 1200
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  DesignerMasterStyle = 0
+end
