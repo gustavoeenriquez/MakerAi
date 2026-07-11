@@ -909,6 +909,18 @@ begin
   FWebSearchParams.Free;
   FTmpToolCallBuffer.Free;
   FSystemPrompt.Free;
+  // Liberar tool instances (pueden tener referencias circulares o resources)
+  FreeAndNil(FSpeechTool);
+  FreeAndNil(FImageTool);
+  FreeAndNil(FVideoTool);
+  FreeAndNil(FWebSearchTool);
+  FreeAndNil(FVisionTool);
+  FreeAndNil(FPdfTool);
+  FreeAndNil(FReportTool);
+  FreeAndNil(FShellTool);
+  FreeAndNil(FTextEditorTool);
+  FreeAndNil(FComputerUseTool);
+  FreeAndNil(FAiFunctions);
   NewChat;
   FMessages.Free;
   inherited Destroy;
