@@ -606,6 +606,7 @@ end;
 
 procedure TAiMediaFile.Clear;
 begin
+  if not Assigned(FContent) then FContent := TMemoryStream.Create;
   FContent.Clear;
   FContentLoaded  := False;
   Ffilename       := '';
@@ -682,7 +683,8 @@ begin
     // TODO: manejar redirects y HTTPS (requiere opensslsockets)
     Client.Get(Url, Response);
 
-    FContent.Clear;
+    if not Assigned(FContent) then FContent := TMemoryStream.Create;
+  FContent.Clear;
     Response.Position := 0;
     FContent.CopyFrom(Response, 0);
     FContent.Position  := 0;
@@ -708,6 +710,7 @@ end;
 
 function TAiMediaFile.GetBase64: string;
 begin
+  if not Assigned(FContent) then FContent := TMemoryStream.Create;
   FContent.Position := 0;
   Result := EncodeBase64(FContent.Memory, FContent.Size);
   Result := StringReplace(Result, LineEnding, '', [rfReplaceAll]);
@@ -721,6 +724,7 @@ end;
 
 function TAiMediaFile.GetBytes: Integer;
 begin
+  if not Assigned(FContent) then FContent := TMemoryStream.Create;
   Result := FContent.Size;
 end;
 
@@ -741,7 +745,8 @@ procedure TAiMediaFile.LoadFromFile(aFileName: string);
 begin
   if FileExists(aFileName) then
   begin
-    FContent.Clear;
+    if not Assigned(FContent) then FContent := TMemoryStream.Create;
+  FContent.Clear;
     FContent.LoadFromFile(aFileName);
     FContentLoaded := True;
     FFullFileName  := aFileName;
@@ -756,6 +761,7 @@ var
   LPos: Integer;
 begin
   FUrlMedia := aUrl;
+  if not Assigned(FContent) then FContent := TMemoryStream.Create;
   FContent.Clear;
   GetContent;
 
@@ -782,7 +788,8 @@ begin
   Decoded := DecodeBase64(aBase64);
   St := TBytesStream.Create(Decoded);
   try
-    FContent.Clear;
+    if not Assigned(FContent) then FContent := TMemoryStream.Create;
+  FContent.Clear;
     St.Position := 0;
     FContent.CopyFrom(St, 0);
     FContentLoaded := True;
@@ -798,7 +805,8 @@ procedure TAiMediaFile.LoadFromStream(aFileName: string; Stream: TMemoryStream);
 begin
   if Assigned(Stream) then
   begin
-    FContent.Clear;
+    if not Assigned(FContent) then FContent := TMemoryStream.Create;
+  FContent.Clear;
     Stream.Position := 0;
     FContent.CopyFrom(Stream, 0);
     FContentLoaded := True;
@@ -810,6 +818,7 @@ end;
 
 procedure TAiMediaFile.SaveToFile(aFileName: string);
 begin
+  if not Assigned(FContent) then Exit;
   FContent.SaveToFile(aFileName);
 end;
 
@@ -819,6 +828,7 @@ var
 begin
   St := TStringStream.Create('');
   try
+    if not Assigned(FContent) then FContent := TMemoryStream.Create;
     FContent.Position := 0;
     St.CopyFrom(FContent, 0);
     Result := St.DataString;
