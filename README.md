@@ -444,6 +444,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 - New: `TChatInput.EnterAsSend` property
 - New: **`TAiDatabaseCheckpointer`** — FireDAC-based checkpoint persistence; works with SQLite, PostgreSQL, Firebird, MySQL, SQL Server, and any other FireDAC driver
 - Fix: **D11 Alexandria compatibility** — `TInterlocked.Exchange(Boolean)` (D12-only) replaced with Integer-based atomic; `AddStream(AShareOwnership)` boundary corrected to `CompilerVersion >= 36`; `THashSet<T>` boundary corrected to `CompilerVersion >= 36`
+- Fix: **`ModelCaps` / `SessionCaps` duplicated in the Object Inspector** — `TAiChat` published these at both the root level and inside `ModelConfig`, out of sync with each other. Now there's a single source of truth (`ModelConfig.ModelCaps` / `ModelConfig.SessionCaps`); the root shortcuts still work in code but were moved out of `published`, so the Object Inspector shows the property only once
 
 ### v3.3 (February 2026)
 - New `TAiCapabilities` system (`ModelCaps` / `SessionCaps` / `ThinkingLevel`)

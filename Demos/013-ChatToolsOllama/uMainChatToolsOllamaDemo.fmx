@@ -380,8 +380,6 @@ object Form26: TForm26
     ThinkingLevel = tlDefault
     MediaResolution = mrDefault
     OnStateChange = AiOllamaChat1StateChange
-    ModelCaps = []
-    SessionCaps = []
     keep_alive = '5m'
     Left = 176
     Top = 360
