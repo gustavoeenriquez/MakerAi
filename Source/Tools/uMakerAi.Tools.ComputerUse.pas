@@ -4,6 +4,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON, System.Math, System.StrUtils, System.Types,
+  System.Generics.Collections,
   uMakerAi.Core, uMakerAi.Tools.Functions, uMakerAi.Chat.Messages;
 
 type

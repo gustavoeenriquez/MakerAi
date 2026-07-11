@@ -20015,8 +20015,6 @@ object Form2: TForm2
     voice_format = 'mp3'
     ThinkingLevel = tlDefault
     MediaResolution = mrDefault
-    ModelCaps = []
-    SessionCaps = []
     Store = False
     Truncation = 'disabled'
     Left = 496
@@ -20072,8 +20070,6 @@ object Form2: TForm2
     EnabledFeatures = []
     ThinkingLevel = tlDefault
     MediaResolution = mrDefault
-    ModelCaps = []
-    SessionCaps = []
     Left = 576
     Top = 632
   end
@@ -20117,8 +20113,6 @@ object Form2: TForm2
     EnabledFeatures = []
     ThinkingLevel = tlDefault
     MediaResolution = mrDefault
-    ModelCaps = []
-    SessionCaps = []
     keep_alive = '1m'
     Left = 400
     Top = 600
@@ -20153,8 +20147,6 @@ object Form2: TForm2
     EnabledFeatures = []
     ThinkingLevel = tlDefault
     MediaResolution = mrDefault
-    ModelCaps = []
-    SessionCaps = []
     Left = 464
     Top = 416
   end

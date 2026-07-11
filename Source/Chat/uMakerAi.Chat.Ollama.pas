@@ -810,15 +810,14 @@ begin
 
   // Sincronizar el contenido acumulado durante el streaming (FLastContent) con el ResMsg
   if (FLastContent <> '') then
-    ResMsg.Content := FLastContent
+    ResMsg.Prompt := FLastContent
   else
   begin
-    ResMsg.Content := LContent;
+    ResMsg.Prompt := LContent;
     FLastContent := LContent;
   end;
 
   // Configurar propiedades del mensaje de respuesta
-  ResMsg.Prompt := ResMsg.Content;
   ResMsg.Role := LRole;
   ResMsg.Model := LModel;
   ResMsg.ReasoningContent := LReasoning;
@@ -839,7 +838,7 @@ begin
     // --- CASO A: El modelo solicita ejecutar herramientas ---
 
     // A.1 Guardamos el mensaje del asistente (la petición de tool) en el historial
-    LHistoryToolMsg := TAiChatMessage.Create(ResMsg.Content, LRole);
+    LHistoryToolMsg := TAiChatMessage.Create(ResMsg.Prompt, LRole);
     LHistoryToolMsg.Tool_calls := LToolCallsArray.ToJSON;
     LHistoryToolMsg.Id := FMessages.Count + 1;
     FMessages.Add(LHistoryToolMsg);
@@ -917,7 +916,7 @@ begin
 
         // A.5 Re-ejecutar el Run para que el modelo analice los resultados de las herramientas
         // Limpiamos el ResMsg para recibir la respuesta final
-        ResMsg.Content := '';
+        ResMsg.Prompt := '';
         ResMsg.Tool_calls := '';
         FLastContent := '';
         // En modo async, preservar ResMsg entre rounds para que ProcessFinalJsonObject
@@ -944,11 +943,11 @@ begin
     // --- CASO B: Respuesta de texto normal o final de cadena ---
 
     // B.1 Extracción automática de bloques de código si se solicita
-    if (cap_ExtractCode in SessionCaps) and (ResMsg.Content <> '') then
+    if (cap_ExtractCode in SessionCaps) and (ResMsg.Prompt <> '') then
     begin
       Code := TMarkdownCodeExtractor.Create;
       try
-        CodeFiles := Code.ExtractCodeFiles(ResMsg.Content);
+        CodeFiles := Code.ExtractCodeFiles(ResMsg.Prompt);
         for CodeFile in CodeFiles do
         begin
           St := TStringStream.Create(CodeFile.Code, TEncoding.UTF8);

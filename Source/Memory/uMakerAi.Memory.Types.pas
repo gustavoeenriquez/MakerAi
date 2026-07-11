@@ -115,6 +115,25 @@ type
     ['{A7F3E21C-4D5B-4E8F-9A0C-3B6D7E2F1948}']
     function  BuildContext(const APrompt: string; ATokenBudget: Integer): string;
     procedure AutoStore(const AContent: string; AImportance: Integer);
+    // Notifica un intercambio usuario/asistente completo. Implementaciones que
+    // soporten analisis automatico (ver TAiMemory.Analyzer) acumulan y, al llegar
+    // al umbral configurado, extraen y guardan lo que valga la pena recordar.
+    // No-op por defecto (ver TAiPersistentMemoryBase).
+    procedure NotifyExchange(const AUserPrompt, AAssistantResponse: string);
+  end;
+
+  // Especialización para el Object Inspector (mismo patrón que TAiSpeechToolBase/
+  // TAiImageToolBase en uMakerAi.Chat.Tools.pas): TAiChat.PersistentMemory se tipa
+  // a esta clase en vez de TComponent genérico, así el combo de selección de
+  // componentes filtra solo instancias compatibles y el compilador valida el tipo.
+  // La implementación concreta con storage FireDAC (TAiMemory) vive en
+  // MakerAi.RAG.Drivers.dpk y hereda de esta base, que solo depende de este paquete
+  // core (MakerAI.dpk).
+  TAiPersistentMemoryBase = class(TComponent, IAiPersistentMemory)
+  protected
+    function  BuildContext(const APrompt: string; ATokenBudget: Integer): string; virtual;
+    procedure AutoStore(const AContent: string; AImportance: Integer); virtual;
+    procedure NotifyExchange(const AUserPrompt, AAssistantResponse: string); virtual;
   end;
 
 // Helpers de conversión para TMemoryType
@@ -126,6 +145,21 @@ implementation
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+{ TAiPersistentMemoryBase }
+
+function TAiPersistentMemoryBase.BuildContext(const APrompt: string; ATokenBudget: Integer): string;
+begin
+  Result := '';
+end;
+
+procedure TAiPersistentMemoryBase.AutoStore(const AContent: string; AImportance: Integer);
+begin
+end;
+
+procedure TAiPersistentMemoryBase.NotifyExchange(const AUserPrompt, AAssistantResponse: string);
+begin
+end;
 
 function MemoryTypeToStr(AType: TMemoryType): string;
 const

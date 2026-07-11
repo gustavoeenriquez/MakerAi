@@ -53,6 +53,9 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   System.JSON, System.DateUtils, System.Math, System.IOUtils,
   FireDAC.Comp.Client,
+  uMakerAi.Core,
+  uMakerAi.Chat,
+  uMakerAi.Chat.AiConnection,
   uMakerAi.Memory.Types,
   uMakerAi.Memory.Storage,
   uMakerAi.Memory.Decay,
@@ -64,7 +67,7 @@ type
   TOnMemorySearch = procedure(Sender: TObject; const AQuery: string;
                               const AResults: TMemorySearchResults) of object;
 
-  TAiMemory = class(TComponent, IAiPersistentMemory)
+  TAiMemory = class(TAiPersistentMemoryBase)
   private
     FStorage:     IAiMemoryStorage;
     FContext:     TAiMemoryContext;
@@ -77,12 +80,22 @@ type
     FOnStore:     TOnMemoryStore;
     FOnSearch:    TOnMemorySearch;
 
+    // Analisis automatico de conversacion (extraccion de hechos via LLM barato)
+    FAnalyzer:            TAiChatConnection;
+    FAnalysisInterval:    Integer;
+    FExchangeBuffer:      TStringBuilder;
+    FTurnsSinceAnalysis:  Integer;
+
     procedure SetEmbedder(AValue: TAiEmbeddingsCore);
     procedure SetDbPath(const AValue: string);
     procedure SetConnection(AValue: TFDConnection);
+    procedure SetAnalyzer(AValue: TAiChatConnection);
     procedure EnsureStorage;
     procedure RebuildContext;
     function  FuseRRF(AFTS, ASemantic: TMemoryEntryList; ALimit: Integer): TMemorySearchResults;
+    function  DoAnalyzeAndStore(const AConversationText: string): Integer;
+  protected
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -164,11 +177,24 @@ type
     // Llamar periódicamente (e.g., al inicio de sesión).
     procedure RefreshDecay;
 
-    // ── IAiPersistentMemory ────────────────────────────────────────────────────
-    function  BuildContext(const APrompt: string; ATokenBudget: Integer): string;
-    procedure AutoStore(const AContent: string; AImportance: Integer);
+    // ── IAiPersistentMemory (override de TAiPersistentMemoryBase) ──────────────
+    function  BuildContext(const APrompt: string; ATokenBudget: Integer): string; override;
+    procedure AutoStore(const AContent: string; AImportance: Integer); override;
+    procedure NotifyExchange(const AUserPrompt, AAssistantResponse: string); override;
+
+    // Fuerza el analisis del buffer acumulado ahora mismo, sin esperar a
+    // AnalysisInterval (uso manual: boton "recordar esto", cron, etc.).
+    // Requiere Analyzer asignado. Retorna cuantas memorias se guardaron.
+    function AnalyzeNow: Integer;
 
   published
+    // LLM barato usado para analizar la conversacion y extraer lo que valga la pena
+    // recordar (ver AnalysisInterval / AnalyzeNow). Sin asignar = funcion apagada.
+    property Analyzer: TAiChatConnection read FAnalyzer write SetAnalyzer;
+
+    // Cada cuantos intercambios usuario/asistente se dispara el analisis
+    // automatico. 0 = desactivado (solo queda el disparo manual via AnalyzeNow).
+    property AnalysisInterval: Integer read FAnalysisInterval write FAnalysisInterval default 10;
     // Namespace activo — aísla memorias entre agentes/proyectos
     property Namespace:  string           read FNamespace  write FNamespace;
 
@@ -181,7 +207,7 @@ type
     // Embedder para búsqueda semántica (opcional). Si nil = solo FTS.
     property Embedder:   TAiEmbeddingsCore read FEmbedder  write SetEmbedder;
 
-    // Si True, llama RefreshDecay en cada Store/Recall.
+    // Si True, llama RefreshDecay en cada Recall (Store no lo dispara).
     property AutoDecay:  Boolean          read FAutoDecay  write FAutoDecay default False;
 
     property OnStore:    TOnMemoryStore   read FOnStore    write FOnStore;
@@ -207,11 +233,15 @@ begin
   FNamespace  := 'default';
   FDbPath     := TPath.Combine(TPath.GetHomePath, 'ai_memory.db');
   FAutoDecay  := False;
+  FAnalysisInterval   := 10;
+  FExchangeBuffer     := TStringBuilder.Create;
+  FTurnsSinceAnalysis := 0;
 end;
 
 destructor TAiMemory.Destroy;
 begin
   FContext.Free;
+  FExchangeBuffer.Free;
   // FStorage é interface — se libera solo al salir del scope
   inherited;
 end;
@@ -240,6 +270,23 @@ procedure TAiMemory.SetEmbedder(AValue: TAiEmbeddingsCore);
 begin
   FEmbedder := AValue;
   RebuildContext;
+end;
+
+procedure TAiMemory.SetAnalyzer(AValue: TAiChatConnection);
+begin
+  if FAnalyzer = AValue then Exit;
+  if Assigned(FAnalyzer) then
+    FAnalyzer.RemoveFreeNotification(Self);
+  FAnalyzer := AValue;
+  if Assigned(FAnalyzer) then
+    FAnalyzer.FreeNotification(Self);
+end;
+
+procedure TAiMemory.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if (Operation = opRemove) and (AComponent = FAnalyzer) then
+    FAnalyzer := nil;
 end;
 
 procedure TAiMemory.EnsureStorage;
@@ -567,6 +614,142 @@ end;
 procedure TAiMemory.AutoStore(const AContent: string; AImportance: Integer);
 begin
   Store(AContent, mt_Fact, AImportance);
+end;
+
+// ---------------------------------------------------------------------------
+// Analisis automatico de conversacion (extraccion via LLM barato)
+// ---------------------------------------------------------------------------
+
+procedure TAiMemory.NotifyExchange(const AUserPrompt, AAssistantResponse: string);
+begin
+  if not Assigned(FAnalyzer) then
+    Exit; // funcion apagada por completo sin Analyzer configurado
+
+  FExchangeBuffer.Append('Usuario: ').Append(AUserPrompt).Append(sLineBreak);
+  FExchangeBuffer.Append('Asistente: ').Append(AAssistantResponse).Append(sLineBreak).Append(sLineBreak);
+  Inc(FTurnsSinceAnalysis);
+
+  // El buffer se acumula siempre que hay Analyzer, independientemente de
+  // AnalysisInterval: si el auto-disparo esta apagado (0), igual queda
+  // disponible para un AnalyzeNow manual.
+  if (FAnalysisInterval > 0) and (FTurnsSinceAnalysis >= FAnalysisInterval) then
+    AnalyzeNow;
+end;
+
+function TAiMemory.AnalyzeNow: Integer;
+var
+  LConversationText: string;
+begin
+  Result := 0;
+  if not Assigned(FAnalyzer) or (FExchangeBuffer.Length = 0) then
+    Exit;
+
+  // Snapshot + reset inmediato: si el analisis falla mas abajo, no reintentamos
+  // la misma ventana para siempre (evita crecimiento sin limite del buffer).
+  LConversationText   := FExchangeBuffer.ToString;
+  FExchangeBuffer.Clear;
+  FTurnsSinceAnalysis := 0;
+
+  Result := DoAnalyzeAndStore(LConversationText);
+end;
+
+function TAiMemory.DoAnalyzeAndStore(const AConversationText: string): Integer;
+var
+  LPrompt, LResponse, LJsonText, LTypeStr, LContent, LTags: string;
+  LJsonValue: TJSONValue;
+  LJsonObj: TJSONObject;
+  LMemories: TJSONArray;
+  LItem: TJSONObject;
+  LWorthSaving: Boolean;
+  LImportance, LStart, LEnd, I: Integer;
+begin
+  Result := 0;
+
+  // Extraccion via prompt (no via Response_format:=tiaChatRfJsonSchema): Analyzer
+  // puede ser cualquiera de los 12 providers, incluyendo modelos locales/baratos
+  // (Ollama, LM Studio) donde el modo JSON estricto no siempre esta soportado de
+  // forma confiable, y ademas puede chocar con Tool_Active en algunos providers
+  // (p.ej. Gemini). Se parsea el texto de forma defensiva mas abajo.
+  LPrompt :=
+    'Analiza el siguiente fragmento de conversacion y decide si contiene informacion ' +
+    'que valga la pena recordar a largo plazo: hechos sobre el usuario, preferencias, ' +
+    'decisiones tomadas, soluciones a errores, patrones de trabajo. Ignora saludos, ' +
+    'charla trivial o preguntas puntuales sin informacion reutilizable.' + sLineBreak + sLineBreak +
+    'Responde UNICAMENTE con un objeto JSON (sin texto adicional, sin bloques de codigo ' +
+    'markdown) con esta forma exacta:' + sLineBreak +
+    '{"worth_saving": boolean, "memories": [{"content": string, "type": ' +
+    '"fact"|"preference"|"decision"|"error_fix"|"pattern"|"workflow"|"summary"|"custom", ' +
+    '"importance": 1-10, "tags": "csv"}]}' + sLineBreak +
+    'Si no hay nada memorable, responde {"worth_saving": false, "memories": []}.' +
+    sLineBreak + sLineBreak +
+    'Conversacion:' + sLineBreak + AConversationText;
+
+  try
+    LResponse := FAnalyzer.AddMessageAndRun(LPrompt, 'user', []);
+  except
+    on E: Exception do
+    begin
+      LogDebug('TAiMemory.Analyzer fallo al analizar la conversacion: ' + E.Message);
+      Exit;
+    end;
+  end;
+
+  // Tolerar que el modelo igual envuelva la respuesta en texto/markdown alrededor
+  // del JSON: nos quedamos con lo que hay entre la primera '{' y la ultima '}'.
+  LStart := Pos('{', LResponse);
+  LEnd   := LastDelimiter('}', LResponse);
+  if (LStart = 0) or (LEnd < LStart) then
+  begin
+    LogDebug('TAiMemory.Analyzer: respuesta sin JSON reconocible, se descarta.');
+    Exit;
+  end;
+  LJsonText := Copy(LResponse, LStart, LEnd - LStart + 1);
+
+  LJsonValue := TJSONObject.ParseJSONValue(LJsonText);
+  if not Assigned(LJsonValue) then
+  begin
+    LogDebug('TAiMemory.Analyzer: JSON invalido, se descarta.');
+    Exit;
+  end;
+
+  try
+    if not (LJsonValue is TJSONObject) then
+      Exit;
+    LJsonObj := TJSONObject(LJsonValue);
+
+    LWorthSaving := False;
+    LJsonObj.TryGetValue('worth_saving', LWorthSaving);
+    if not LWorthSaving then
+      Exit;
+
+    LMemories := LJsonObj.GetValue<TJSONArray>('memories');
+    if not Assigned(LMemories) then
+      Exit;
+
+    for I := 0 to LMemories.Count - 1 do
+    begin
+      if not (LMemories.Items[I] is TJSONObject) then
+        Continue;
+      LItem := TJSONObject(LMemories.Items[I]);
+
+      LContent := '';
+      LItem.TryGetValue('content', LContent);
+      if Trim(LContent) = '' then
+        Continue;
+
+      LTypeStr := 'custom';
+      LItem.TryGetValue('type', LTypeStr);
+      LImportance := 5;
+      LItem.TryGetValue('importance', LImportance);
+      LTags := '';
+      LItem.TryGetValue('tags', LTags);
+
+      Store(LContent, StrToMemoryType(LTypeStr), LImportance, LTags);
+      Inc(Result);
+    end;
+  finally
+    LJsonValue.Free;
+  end;
 end;
 
 // ---------------------------------------------------------------------------

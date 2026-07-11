@@ -108,7 +108,6 @@ type
 
     procedure BuildParamsPanel;
     procedure LoadParamsToUI;
-    procedure SyncModelConfig;
     procedure OnParamChatModeChange(Sender: TObject);
     procedure OnParamThinkingLevelChange(Sender: TObject);
     procedure OnParamToolActiveChange(Sender: TObject);
@@ -826,13 +825,9 @@ begin
   finally
     FIgnoreParams := False;
   end;
-  // Keep Connection.ModelConfig and AiChat.ModelConfig in sync
-  SyncModelConfig;
-end;
-
-procedure TFrmMain.SyncModelConfig;
-begin
-  ChatBridge.Connection.AiChat.ModelConfig.Assign(ChatBridge.Connection.ModelConfig);
+  // Connection.ModelConfig.OnChange ya propaga cada asignacion de arriba al
+  // AiChat real (ver TAiChatConnection.ModelConfigChanged); no hace falta
+  // sincronizar a mano.
 end;
 
 procedure TFrmMain.OnParamChatModeChange(Sender: TObject);
@@ -845,14 +840,12 @@ procedure TFrmMain.OnParamThinkingLevelChange(Sender: TObject);
 begin
   if FIgnoreParams then Exit;
   ChatBridge.Connection.ModelConfig.ThinkingLevel := TAiThinkingLevel(FCmbThinkingLevel.ItemIndex);
-  SyncModelConfig;
 end;
 
 procedure TFrmMain.OnParamToolActiveChange(Sender: TObject);
 begin
   if FIgnoreParams then Exit;
   ChatBridge.Connection.ModelConfig.Tool_Active := FChkToolActive.IsChecked;
-  SyncModelConfig;
 end;
 
 procedure TFrmMain.OnParamRespFormatChange(Sender: TObject);
@@ -902,7 +895,6 @@ begin
     if FChkModelCaps[I].IsChecked then
       Include(Caps, TAiCapability(I));
   ChatBridge.Connection.ModelConfig.ModelCaps := Caps;
-  SyncModelConfig;
 end;
 
 procedure TFrmMain.OnParamSessionCapChange(Sender: TObject);
@@ -916,7 +908,6 @@ begin
     if FChkSessionCaps[I].IsChecked then
       Include(Caps, TAiCapability(I));
   ChatBridge.Connection.ModelConfig.SessionCaps := Caps;
-  SyncModelConfig;
 end;
 
 end.

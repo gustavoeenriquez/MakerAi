@@ -448,7 +448,10 @@ begin
   inherited;
   ApiKey := '@CLAUDE_API_KEY';
   FClient.OnReceiveData := Self.OnInternalReceiveData;
-  FClient.ResponseTimeOut := 60000;
+  // Vía propiedad (no FClient directo) para que FResponseTimeOut quede consistente.
+  // 300s: con code_execution nativo Anthropic ejecuta server-side y no envía ni un
+  // byte hasta terminar (generar un Office tarda 50-70s; 60s cortaba a la mitad).
+  ResponseTimeOut := 300000;
 
   FStreamContentBlocks := TObjectDictionary<Integer, TClaudeStreamContentBlock>.Create([doOwnsValues]);
   FStreamBuffer := TStringBuilder.Create;

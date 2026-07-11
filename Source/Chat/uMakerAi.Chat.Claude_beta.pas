@@ -427,7 +427,7 @@ begin
   inherited;
   ApiKey := '@CLAUDE_API_KEY';
   FClient.OnReceiveData := Self.OnInternalReceiveData;
-  FClient.ResponseTimeOut := 60000;
+  ResponseTimeOut := 300000; // code_execution server-side puede tardar >60s sin enviar bytes
 
   FStreamContentBlocks := TDictionary<Integer, TClaudeStreamContentBlock>.Create;
   FStreamBuffer := TStringBuilder.Create;

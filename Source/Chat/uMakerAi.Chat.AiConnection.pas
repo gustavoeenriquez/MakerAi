@@ -41,7 +41,8 @@ uses
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
   System.JSON, Rest.JSON,
   uMakerAi.ParamsRegistry, uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Chat,
-  uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Tools.ComputerUse, uMakerAi.Chat.Tools, uMakerAi.Chat.Messages;
+  uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Tools.ComputerUse, uMakerAi.Chat.Tools, uMakerAi.Chat.Messages,
+  uMakerAi.Memory.Types;
 
 type
   TOnChatModelChangeEvent = procedure(Sender: TObject; const OldChat, NewChat: TAiChat) of object;
@@ -89,7 +90,7 @@ type
     FWebSearchParams: TAiWebSearchParams;
     FModelConfig: TAiModelConfig;
 
-    FPersistentMemory:  TComponent;
+    FPersistentMemory:  TAiPersistentMemoryBase;
     FMemoryTokenBudget: Integer;
     FAutoStoreMemories: Boolean;
 
@@ -101,6 +102,7 @@ type
     function GetLastError: String;
     function GetBusy: Boolean;
     procedure ParamsChanged(Sender: TObject);
+    procedure ModelConfigChanged(Sender: TObject);
 
     procedure SetCompletion_tokens(const Value: integer);
     procedure SetMemory(const Value: TStrings);
@@ -123,7 +125,7 @@ type
     procedure SetAiFunctions(const Value: TAiFunctions);
     procedure SetSanitizerActive(const Value: Boolean);
     procedure SetOnSanitize(const Value: TAiSanitizeEvent);
-    procedure SetPersistentMemory(const Value: TComponent);
+    procedure SetPersistentMemory(const Value: TAiPersistentMemoryBase);
     procedure SetMemoryTokenBudget(const Value: Integer);
     procedure SetAutoStoreMemories(const Value: Boolean);
     procedure SetTtsParams(const Value: TAiTtsParams);
@@ -248,7 +250,7 @@ type
     property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive default False;
     property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
 
-    property PersistentMemory:  TComponent read FPersistentMemory  write SetPersistentMemory;
+    property PersistentMemory:  TAiPersistentMemoryBase read FPersistentMemory  write SetPersistentMemory;
     property MemoryTokenBudget: Integer    read FMemoryTokenBudget  write SetMemoryTokenBudget default 1500;
     property AutoStoreMemories: Boolean    read FAutoStoreMemories  write SetAutoStoreMemories default False;
 
@@ -309,6 +311,7 @@ begin
   FVideoGenParams := TAiVideoGenParams.Create;
   FWebSearchParams := TAiWebSearchParams.Create;
   FModelConfig := TAiModelConfig.Create;
+  FModelConfig.OnChange := ModelConfigChanged;
 
   FPersistentMemory  := nil;
   FMemoryTokenBudget := 1500;
@@ -405,6 +408,15 @@ begin
   begin
     ApplyParamsToChat(FChat, FParams);
   end;
+end;
+
+procedure TAiChatConnection.ModelConfigChanged(Sender: TObject);
+begin
+  // Propaga cambios hechos via Connection.ModelConfig.Xxx := ... (mutacion directa del
+  // sub-objeto) al TAiChat real. SetModelConfig ya cubre la asignacion del objeto completo;
+  // esto cubre el camino que antes requeria un SyncModelConfig manual (ver Apps/MakerAIChat).
+  if Assigned(FChat) then
+    FChat.ModelConfig.Assign(FModelConfig);
 end;
 
 { procedure TAiChatConnection.SetupChatFromDriver;
@@ -1251,7 +1263,7 @@ begin
     FChat.OnSanitize := Value;
 end;
 
-procedure TAiChatConnection.SetPersistentMemory(const Value: TComponent);
+procedure TAiChatConnection.SetPersistentMemory(const Value: TAiPersistentMemoryBase);
 begin
   if FPersistentMemory = Value then Exit;
   if Assigned(FPersistentMemory) then

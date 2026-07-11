@@ -841,7 +841,6 @@ begin
 
       if LFuncionesList.Count > 0 then
       begin
-        ResMsg.Content := LResponseText;
         ResMsg.Prompt := LResponseText;
         ResMsg.Tool_calls := jToolCalls.ToJSon;
 
@@ -858,7 +857,6 @@ begin
 
   // --- 4. Respuesta normal ---
   Self.FLastContent := LResponseText;
-  ResMsg.Content := LResponseText;
   ResMsg.Prompt := LResponseText;
 
   FBusy := False;

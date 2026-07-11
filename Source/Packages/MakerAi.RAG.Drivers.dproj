@@ -141,6 +141,11 @@
         <DCCReference Include="..\RAG\uMakerAi.RAG.Vector.Driver.Postgres.pas"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Vector.Driver.SQLite.pas"/>
         <DCCReference Include="..\RAG\uMakerAi.RAG.Vector.Driver.BinFile.pas"/>
+        <DCCReference Include="..\Agents\uMakerAi.Agents.Checkpoint.DB.pas"/>
+        <DCCReference Include="..\Memory\uMakerAi.Memory.Storage.pas"/>
+        <DCCReference Include="..\Memory\uMakerAi.Memory.Context.pas"/>
+        <DCCReference Include="..\Memory\uMakerAi.Memory.pas"/>
+        <DCCReference Include="..\Memory\uMakerAi.Memory.MCP.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

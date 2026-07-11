@@ -54,7 +54,7 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-  uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Utils.CodeExtractor, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Tools.ComputerUse, uMakerAi.Chat.Tools, uMakerAi.Chat.Sanitizer;
+  uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Utils.CodeExtractor, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Tools.ComputerUse, uMakerAi.Chat.Tools, uMakerAi.Chat.Sanitizer, uMakerAi.Memory.Types;
 
 type
 
@@ -215,15 +215,20 @@ type
     FFormat: String;
     FTool_Active: Boolean;
     FModelExtraBodyParams: String;
+    FOnChange: TNotifyEvent;
     procedure SetModelCaps(const Value: TAiCapabilities);
     procedure SetSessionCaps(const Value: TAiCapabilities);
     procedure SetThinkingLevel(const Value: TAiThinkingLevel);
     procedure SetFormat(const Value: String);
     procedure SetTool_Active(const Value: Boolean);
     procedure SetModelExtraBodyParams(const Value: String);
+    procedure Changed;
   public
     constructor Create;
     procedure Assign(Source: TPersistent); override;
+    // Notifica al owner (p.ej. TAiChatConnection.ModelConfigChanged) cuando cambia
+    // cualquier capacidad/param, para que pueda propagar el cambio al TAiChat real.
+    property OnChange: TNotifyEvent read FOnChange write FOnChange;
   published
     property ModelCaps: TAiCapabilities read FModelCaps write SetModelCaps;
     property SessionCaps: TAiCapabilities read FSessionCaps write SetSessionCaps;
@@ -290,17 +295,16 @@ type
     FEnabledFeatures: TAiChatMediaSupports;
     FPdfTool: TAiPdfToolBase;
     FReportTool: TAiReportToolBase;
-    // Nuevo sistema de orquestación (v3.3)
-    FModelCaps: TAiCapabilities; // capacidades nativas del modelo
-    FSessionCaps: TAiCapabilities; // capacidades deseadas en la sesión
+    // Nuevo sistema de orquestación (v3.3) — ModelCaps/SessionCaps viven en FModelConfig;
+    // la raíz (GetModelCaps/GetSessionCaps más abajo) delega en él, sin campos espejo.
     FNewSystemConfigured: Boolean; // True si ModelCaps/SessionCaps fueron asignados explícitamente
     FSanitizerActive: Boolean;
     FOnSanitize: TAiSanitizeEvent;
-    FPersistentMemory:  TComponent;
+    FPersistentMemory:  TAiPersistentMemoryBase;
     FMemoryTokenBudget: Integer;
     FAutoStoreMemories: Boolean;
 
-    procedure SetPersistentMemory(AValue: TComponent);
+    procedure SetPersistentMemory(AValue: TAiPersistentMemoryBase);
     procedure SetApiKey(const Value: String);
     procedure SetFrequency_penalty(const Value: Double);
     procedure SetLogit_bias(const Value: String);
@@ -364,12 +368,14 @@ type
     procedure SetPdfTool(const Value: TAiPdfToolBase);
     procedure SetReportTool(const Value: TAiReportToolBase);
     // Nuevo sistema de orquestación (v3.3)
+    function GetModelCaps: TAiCapabilities;
+    function GetSessionCaps: TAiCapabilities;
     procedure SetModelCaps(const Value: TAiCapabilities);
     procedure SetSessionCaps(const Value: TAiCapabilities);
     procedure EnsureNewSystemConfig;
-    function LegacyToModelCaps: TAiCapabilities;
-    function LegacyToSessionCaps: TAiCapabilities;
-    function RunLegacy(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
+    //function LegacyToModelCaps: TAiCapabilities;
+    //function LegacyToSessionCaps: TAiCapabilities;
+    //function RunLegacy(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
     function RunNew(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
     function FileTypeInModelCaps(ACategory: TAiFileCategory): Boolean;
 
@@ -518,6 +524,11 @@ type
     Property LastError: String read FLastError write SetLastError;
     // Backward-compatible shortcut para drivers (apunta a FModelConfig.FTool_Active)
     Property Tool_Active: Boolean read GetTool_Active write SetTool_Active;
+    // Backward-compatible shortcuts de codigo (apuntan a FModelConfig.ModelCaps/SessionCaps).
+    // No published: la via visible en el Object Inspector es ModelConfig.ModelCaps/SessionCaps
+    // (unica, evita el duplicado confuso raiz+ModelConfig). Siguen siendo asignables en codigo.
+    Property ModelCaps: TAiCapabilities read GetModelCaps write SetModelCaps;
+    Property SessionCaps: TAiCapabilities read GetSessionCaps write SetSessionCaps;
     // ── Propiedades de estado (solo lectura en runtime) ──────────────────────────────────
     Property Busy: Boolean Read FBusy;
     Property LastPrompt: String Read FLastPrompt;
@@ -530,8 +541,6 @@ type
     Property Prompt_tokens: Integer read FPrompt_tokens write SetPrompt_tokens;
     Property Seed: Integer read FSeed write SetSeed;
     Property Stop: string read FStop write SetStop;
-    Property Temperature: Double read FTemperature write SetTemperature;
-    Property Thinking_tokens: Integer read FThinking_tokens write SetThinking_tokens;
     Property Cached_tokens: Integer read FCached_tokens write SetCached_tokens;
     // Flag portable de prompt caching. Activa el cacheo del contexto estable
     // (system + tools). En Claude habilita los breakpoints cache_control; en los
@@ -540,6 +549,7 @@ type
     Property CacheContext: Boolean read FCacheContext write FCacheContext;
     Property Top_p: Double read FTop_p write SetTop_p;
     Property Total_tokens: Integer read FTotal_tokens write SetTotal_tokens;
+    Property Thinking_tokens: Integer read FThinking_tokens write SetThinking_tokens;
 
   Published
     Property ApiKey: String read GetApiKey write SetApiKey;
@@ -590,14 +600,12 @@ type
     property ShellTool: TAiShell read GetShellTool write SetShellTool;
     Property TextEditorTool: TAiTextEditorTool read GetTextEditorTool write SetTextEditorTool;
     property ComputerUseTool: TAiComputerUseTool read GetComputerUseTool write SetComputerUseTool;
-    // Nuevo sistema de orquestación (v3.3)
-    property ModelCaps: TAiCapabilities read FModelCaps write SetModelCaps; // capacidades nativas del modelo
-    property SessionCaps: TAiCapabilities read FSessionCaps write SetSessionCaps; // capacidades deseadas en la sesión
     property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive;
     property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
-    property PersistentMemory:  TComponent read FPersistentMemory write SetPersistentMemory;
+    property PersistentMemory:  TAiPersistentMemoryBase read FPersistentMemory write SetPersistentMemory;
     property MemoryTokenBudget: Integer    read FMemoryTokenBudget write FMemoryTokenBudget default 1500;
     property AutoStoreMemories: Boolean    read FAutoStoreMemories write FAutoStoreMemories default False;
+    Property Temperature: Double read FTemperature write SetTemperature;
   end;
 
   // procedure Register;
@@ -613,7 +621,7 @@ procedure LogDebug(const Mensaje: string);
 
 implementation
 
-uses uMakerAi.ParamsRegistry, System.IOUtils, System.SyncObjs, uMakerAi.Memory.Types;
+uses uMakerAi.ParamsRegistry, System.IOUtils, System.SyncObjs;
 
 { TAiChat }
 
@@ -1386,34 +1394,64 @@ begin
   FModelExtraBodyParams := '';
 end;
 
+procedure TAiModelConfig.Changed;
+begin
+  if Assigned(FOnChange) then
+    FOnChange(Self);
+end;
+
 procedure TAiModelConfig.SetModelCaps(const Value: TAiCapabilities);
 begin
-  FModelCaps := Value;
+  if FModelCaps <> Value then
+  begin
+    FModelCaps := Value;
+    Changed;
+  end;
 end;
 
 procedure TAiModelConfig.SetSessionCaps(const Value: TAiCapabilities);
 begin
-  FSessionCaps := Value;
+  if FSessionCaps <> Value then
+  begin
+    FSessionCaps := Value;
+    Changed;
+  end;
 end;
 
 procedure TAiModelConfig.SetThinkingLevel(const Value: TAiThinkingLevel);
 begin
-  FThinkingLevel := Value;
+  if FThinkingLevel <> Value then
+  begin
+    FThinkingLevel := Value;
+    Changed;
+  end;
 end;
 
 procedure TAiModelConfig.SetFormat(const Value: String);
 begin
-  FFormat := Value;
+  if FFormat <> Value then
+  begin
+    FFormat := Value;
+    Changed;
+  end;
 end;
 
 procedure TAiModelConfig.SetTool_Active(const Value: Boolean);
 begin
-  FTool_Active := Value;
+  if FTool_Active <> Value then
+  begin
+    FTool_Active := Value;
+    Changed;
+  end;
 end;
 
 procedure TAiModelConfig.SetModelExtraBodyParams(const Value: String);
 begin
-  FModelExtraBodyParams := Value;
+  if FModelExtraBodyParams <> Value then
+  begin
+    FModelExtraBodyParams := Value;
+    Changed;
+  end;
 end;
 
 procedure TAiModelConfig.Assign(Source: TPersistent);
@@ -2018,7 +2056,7 @@ begin
   end;
 end;
 
-procedure TAiChat.SetPersistentMemory(AValue: TComponent);
+procedure TAiChat.SetPersistentMemory(AValue: TAiPersistentMemoryBase);
 begin
   if FPersistentMemory = AValue then Exit;
   if Assigned(FPersistentMemory) then
@@ -2747,7 +2785,6 @@ begin
         else
         begin
           Self.Run(Nil, ResMsg);
-          ResMsg.Content := '';
         end;
       End;
 
@@ -3121,13 +3158,11 @@ end;
   aMediaFile.Transcription := Trim(sTextoWords + sLineBreak + sTextoSegments);
   aMediaFile.Detail := Trim(sTextoTranscrito);
   ResMsg.Prompt := Trim(ResMsg.Prompt + aMediaFile.Transcription);
-  ResMsg.Content := ResMsg.Content + sLineBreak + aMediaFile.Detail;
   End
   Else
   Begin
   aMediaFile.Transcription := sTextoTranscrito;
   ResMsg.Prompt := Trim(ResMsg.Prompt + sLineBreak + sTextoTranscrito);
-  ResMsg.Content := Trim(ResMsg.Content + sLineBreak + sTextoTranscrito);
   End;
 
   ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aInput_tokens;
@@ -3212,8 +3247,6 @@ begin
     ResMsg.Prompt := ResMsg.Prompt + sLineBreak + sTextoTranscrito
   else
     ResMsg.Prompt := sTextoTranscrito;
-
-  ResMsg.Content := ResMsg.Prompt; // Sincronizar Content con Prompt
 
   ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aInput_tokens;
   ResMsg.Completion_tokens := ResMsg.Completion_tokens + aOutput_tokens;
@@ -3673,6 +3706,7 @@ var
   LMemory:         IAiPersistentMemory;
   LMemCtx:         string;
   LOrigPrompt:     string;
+  LMemWrapper:     string;
 begin
   if FSanitizerActive and Assigned(AskMsg) and (AskMsg.Role = 'user') and (AskMsg.Prompt <> '') then
   begin
@@ -3697,24 +3731,67 @@ begin
     end;
   end;
 
-  // Inyectar contexto de memoria antes de enviar al LLM
+  // Inyectar contexto de memoria antes de enviar al LLM. Best-effort: un fallo del
+  // storage de memoria (SQLite bloqueada, disco lleno, etc.) no debe tumbar la
+  // llamada al chat, solo se pierde el contexto de memoria de este turno.
   LOrigPrompt := '';
+  LMemWrapper := '';
   if Assigned(FPersistentMemory) and Assigned(AskMsg) and (AskMsg.Role = 'user') and
      Supports(FPersistentMemory, IAiPersistentMemory, LMemory) then
   begin
-    LOrigPrompt := AskMsg.Prompt;
-    LMemCtx := LMemory.BuildContext(AskMsg.Prompt, FMemoryTokenBudget);
-    if LMemCtx <> '' then
-      AskMsg.Prompt := '--- Contexto de memoria ---' + sLineBreak + LMemCtx +
-                       sLineBreak + '--- Fin del contexto ---' + sLineBreak + sLineBreak +
-                       AskMsg.Prompt;
+    try
+      LOrigPrompt := AskMsg.Prompt;
+      LMemCtx := LMemory.BuildContext(AskMsg.Prompt, FMemoryTokenBudget);
+      if LMemCtx <> '' then
+      begin
+        LMemWrapper := '--- Contexto de memoria ---' + sLineBreak + LMemCtx +
+                        sLineBreak + '--- Fin del contexto ---' + sLineBreak + sLineBreak;
+        AskMsg.Prompt := LMemWrapper + AskMsg.Prompt;
+      end;
+    except
+      on E: Exception do
+      begin
+        LogDebug('PersistentMemory.BuildContext fallo, se continua sin contexto de memoria: ' + E.Message);
+        LMemWrapper := '';
+      end;
+    end;
   end;
 
   Result := RunNew(AskMsg, ResMsg);
 
-  // Guardar el prompt original en memoria tras recibir respuesta
+  // Quitar el bloque de contexto de memoria del historial: ya viajo en el body de
+  // esta request, no lo dejamos "horneado" en AskMsg.Prompt para los turnos futuros
+  // (se re-enviaria completo en cada turno subsiguiente, ademas de la inyeccion fresca
+  // de ese turno). Solo se quita el prefijo exacto que agregamos arriba; lo que RunNew
+  // haya sumado despues (p.ej. transcripcion de audio de Fase 1) se preserva intacto.
+  if (LMemWrapper <> '') and Assigned(AskMsg) and AskMsg.Prompt.StartsWith(LMemWrapper) then
+    AskMsg.Prompt := Copy(AskMsg.Prompt, Length(LMemWrapper) + 1, MaxInt);
+
+  // Guardar el prompt original en memoria tras recibir respuesta. Best-effort.
   if FAutoStoreMemories and (LOrigPrompt <> '') and Assigned(LMemory) then
-    LMemory.AutoStore(LOrigPrompt, 5);
+  begin
+    try
+      LMemory.AutoStore(LOrigPrompt, 5);
+    except
+      on E: Exception do
+        LogDebug('PersistentMemory.AutoStore fallo: ' + E.Message);
+    end;
+  end;
+
+  // Notificar el intercambio completo para analisis automatico (ver TAiMemory.Analyzer
+  // / AnalysisInterval). Independiente de AutoStoreMemories: si no hay Analyzer
+  // configurado del lado de la implementacion, NotifyExchange es un no-op. En modo
+  // Asynchronous, Result puede llegar vacio (la respuesta real llega por callback),
+  // por lo que el analisis de ese turno se degrada a solo el prompt del usuario.
+  if (LOrigPrompt <> '') and Assigned(LMemory) then
+  begin
+    try
+      LMemory.NotifyExchange(LOrigPrompt, Result);
+    except
+      on E: Exception do
+        LogDebug('PersistentMemory.NotifyExchange fallo: ' + E.Message);
+    end;
+  end;
 end;
 
 function TAiChat.RemoveMesage(Msg: TAiChatMessage): Boolean;
@@ -3979,16 +4056,24 @@ begin
   FChatTools.ReportTool := Value;
 end;
 
+function TAiChat.GetModelCaps: TAiCapabilities;
+begin
+  Result := FModelConfig.ModelCaps;
+end;
+
+function TAiChat.GetSessionCaps: TAiCapabilities;
+begin
+  Result := FModelConfig.SessionCaps;
+end;
+
 procedure TAiChat.SetModelCaps(const Value: TAiCapabilities);
 begin
-  FModelCaps := Value;
   FModelConfig.ModelCaps := Value;
   FNewSystemConfigured := True;
 end;
 
 procedure TAiChat.SetSessionCaps(const Value: TAiCapabilities);
 begin
-  FSessionCaps := Value;
   FModelConfig.SessionCaps := Value;
   FNewSystemConfigured := True;
 end;
@@ -3998,7 +4083,7 @@ begin
   // stub — new system config is applied via SetModelCaps/SetSessionCaps
 end;
 
-function TAiChat.LegacyToModelCaps: TAiCapabilities;
+{function TAiChat.LegacyToModelCaps: TAiCapabilities;
 begin
   Result := [];
 end;
@@ -4012,6 +4097,7 @@ function TAiChat.RunLegacy(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): Stri
 begin
   Result := RunNew(AskMsg, ResMsg);
 end;
+}
 
 function TAiChat.GetTool_Active: Boolean;
 begin

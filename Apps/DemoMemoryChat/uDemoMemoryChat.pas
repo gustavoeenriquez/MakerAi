@@ -111,6 +111,7 @@ end;
 procedure RunDemo;
 var
   Conn            : TAiChatConnection;
+  AnalyzerConn    : TAiChatConnection;
   Memory          : TAiMemory;
   Provider, Model : string;
   DbPath          : string;
@@ -154,8 +155,9 @@ begin
   PrintLine;
 
   // ── Inicializar memoria ────────────────────────────────────────────────────
-  Memory := TAiMemory.Create(nil);
-  Conn   := TAiChatConnection.Create(nil);
+  Memory       := TAiMemory.Create(nil);
+  Conn         := TAiChatConnection.Create(nil);
+  AnalyzerConn := TAiChatConnection.Create(nil);
   try
     Memory.DbPath  := DbPath;
     Memory.Namespace := 'demo';
@@ -174,6 +176,14 @@ begin
     Conn.MemoryTokenBudget := 1500;
     Conn.AutoStoreMemories := True;
 
+    // ── LLM analizador (barato/rápido) para extracción automática de memorias ──
+    AnalyzerConn.DriverName := 'Groq';
+    AnalyzerConn.Model      := 'llama-3.1-8b-instant';
+    AnalyzerConn.Params.Values['ApiKey']       := ReadApiKey('Groq');
+    AnalyzerConn.Params.Values['Asynchronous'] := 'False';
+    Memory.Analyzer         := AnalyzerConn;
+    Memory.AnalysisInterval := 3; // cada 3 intercambios, para probar rápido
+
     NextImportance := 5;
     DebugMode      := False;
 
@@ -184,13 +194,15 @@ begin
     PrintLine;
     PrintColor('  AutoStore: ON  |  TokenBudget: 1500', 32);
     PrintLine;
+    PrintColor('  Analyzer : Groq / llama-3.1-8b-instant  |  AnalysisInterval: 3', 32);
+    PrintLine;
     PrintSep;
     PrintLine;
 
     ShowStats(Memory);
     PrintLine;
     PrintLine('Comandos: /quit /new /stats /memories [query] /store <texto>');
-    PrintLine('          /importance N  /debug');
+    PrintLine('          /importance N  /debug  /analyze');
     PrintLine;
 
     // ── REPL ──────────────────────────────────────────────────────────────
@@ -222,6 +234,14 @@ begin
       begin
         DebugMode := not DebugMode;
         PrintColor(Format('  Debug mode: %s', [BoolToStr(DebugMode, True)]), 33);
+        PrintLine;
+        Continue;
+      end;
+
+      if Input = '/analyze' then
+      begin
+        var N := Memory.AnalyzeNow;
+        PrintColor(Format('  Analyzer → %d memoria(s) extraída(s) del buffer acumulado', [N]), 33);
         PrintLine;
         Continue;
       end;
@@ -300,7 +320,9 @@ begin
 
   finally
     Conn.PersistentMemory := nil;
+    Memory.Analyzer       := nil;
     Conn.Free;
+    AnalyzerConn.Free;
     Memory.Free;
   end;
 

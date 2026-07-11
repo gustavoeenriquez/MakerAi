@@ -713,11 +713,11 @@ begin
   try
     Q.SQL.Text :=
       'SELECT COUNT(*) as total,' +
-      '       AVG(importance) as avg_imp,' +
-      '       AVG(decay_score) as avg_decay,' +
+      '       COALESCE(AVG(importance), 0) as avg_imp,' +
+      '       COALESCE(AVG(decay_score), 0) as avg_decay,' +
       '       MIN(created_at) as oldest,' +
       '       MAX(created_at) as newest,' +
-      '       SUM(CASE WHEN expires_at IS NOT NULL AND expires_at <> '''' AND expires_at < :now THEN 1 ELSE 0 END) as expired' +
+      '       COALESCE(SUM(CASE WHEN expires_at IS NOT NULL AND expires_at <> '''' AND expires_at < :now THEN 1 ELSE 0 END), 0) as expired' +
       ' FROM ' + FTableName +
       ' WHERE namespace = :ns';
     Q.ParamByName('now').AsString := DateToISO8601(Now, False);

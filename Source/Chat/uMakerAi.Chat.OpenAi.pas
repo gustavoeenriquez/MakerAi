@@ -1533,7 +1533,6 @@ begin
 
     // 3. Finalizar procesamiento del mensaje de texto
     ResMsg.Prompt := FLastContent;
-    ResMsg.Content := FLastContent;
     ResMsg.PreviousResponseId := FResponseId;
 
     // 4. Ejecutar Tools est?ndar (Functions) si las hay
@@ -1649,6 +1648,7 @@ begin
   FAbort := False;
   FLastError := '';
   FResponseStatus := '';
+  FLastContent := ''; // limpia el acumulado del turno anterior (streaming lee delta a delta)
 
   // 1. Asegurar que el mensaje del USUARIO est? en el historial
   if FMessages.IndexOf(AskMsg) < 0 then
@@ -1937,7 +1937,6 @@ begin
                 begin
                   CaptureResMsg.MediaFiles.Add(VideoMedia);
                   CaptureResMsg.Prompt := Format('Video generated successfully.', []);
-                  CaptureResMsg.Content := CaptureResMsg.Prompt;
 
                   DoStateChange(acsFinished, 'Video Ready');
                   if Assigned(FOnReceiveDataEnd) then
@@ -2823,6 +2822,11 @@ begin
               if JResp.TryGetValue<string>('model', DeltaVal) then
                 FinalMsg.Model := DeltaVal;
             end;
+
+            // --- Persistir el texto acumulado en el mensaje (antes solo viajaba
+            // como parámetro del evento OnReceiveDataEnd, sin quedar en Prompt) ---
+            if Assigned(FinalMsg) then
+              FinalMsg.Prompt := FLastContent;
 
             // --- Extracci?n de c?digo a archivos (MarkdownCodeExtractor) ---
             If cap_ExtractCode in ModelConfig.SessionCaps then
