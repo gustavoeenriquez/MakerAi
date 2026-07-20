@@ -2175,6 +2175,8 @@ begin
     FChatTools.Notification(AComponent, Operation);
     if AComponent = FPersistentMemory then
       FPersistentMemory := nil;
+    if AComponent = FAiFunctions then
+      FAiFunctions := nil;
   end;
 end;
 
@@ -3924,7 +3926,12 @@ end;
 
 procedure TAiChat.SetAiFunctions(const Value: TAiFunctions);
 begin
+  if FAiFunctions = Value then Exit;
+  if Assigned(FAiFunctions) then
+    FAiFunctions.RemoveFreeNotification(Self);
   FAiFunctions := Value;
+  if Assigned(FAiFunctions) then
+    FAiFunctions.FreeNotification(Self);
 end;
 
 procedure TAiChat.SetApiKey(const Value: String);

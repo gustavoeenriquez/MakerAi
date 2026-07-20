@@ -261,14 +261,23 @@ end;
 procedure TAiMemory.SetConnection(AValue: TFDConnection);
 begin
   if FConnection = AValue then Exit;
+  if Assigned(FConnection) then
+    FConnection.RemoveFreeNotification(Self);
   FConnection := AValue;
+  if Assigned(FConnection) then
+    FConnection.FreeNotification(Self);
   FStorage    := nil;
   FreeAndNil(FContext);
 end;
 
 procedure TAiMemory.SetEmbedder(AValue: TAiEmbeddingsCore);
 begin
+  if FEmbedder = AValue then Exit;
+  if Assigned(FEmbedder) then
+    FEmbedder.RemoveFreeNotification(Self);
   FEmbedder := AValue;
+  if Assigned(FEmbedder) then
+    FEmbedder.FreeNotification(Self);
   RebuildContext;
 end;
 
@@ -285,8 +294,27 @@ end;
 procedure TAiMemory.Notification(AComponent: TComponent; Operation: TOperation);
 begin
   inherited;
-  if (Operation = opRemove) and (AComponent = FAnalyzer) then
-    FAnalyzer := nil;
+  if Operation = opRemove then
+  begin
+    if AComponent = FAnalyzer then
+      FAnalyzer := nil;
+
+    if AComponent = FConnection then
+    begin
+      // El storage retiene la conexion: invalidarlo tambien, o quedaria
+      // apuntando a un TFDConnection destruido
+      FConnection := nil;
+      FStorage := nil;
+      FreeAndNil(FContext);
+    end;
+
+    if AComponent = FEmbedder then
+    begin
+      // El contexto retiene el embedder: reconstruir sin el (queda solo FTS)
+      FEmbedder := nil;
+      RebuildContext;
+    end;
+  end;
 end;
 
 procedure TAiMemory.EnsureStorage;
