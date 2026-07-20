@@ -207,6 +207,12 @@ type
   end;
 
   // ── Configuración unificada del modelo (ModelCaps/SessionCaps/ThinkingLevel/Format/Tool_Active) ──
+
+  // Campos de TAiModelConfig que el usuario puede "fijar" explicitamente.
+  // Un campo fijado (pinned) NO se actualiza desde el registry al cambiar de modelo.
+  TAiModelConfigField = (mcfModelCaps, mcfSessionCaps, mcfToolActive, mcfThinkingLevel);
+  TAiModelConfigFields = set of TAiModelConfigField;
+
   TAiModelConfig = class(TPersistent)
   private
     FModelCaps: TAiCapabilities;
@@ -216,6 +222,7 @@ type
     FTool_Active: Boolean;
     FModelExtraBodyParams: String;
     FOnChange: TNotifyEvent;
+    FUserFields: TAiModelConfigFields;
     procedure SetModelCaps(const Value: TAiCapabilities);
     procedure SetSessionCaps(const Value: TAiCapabilities);
     procedure SetThinkingLevel(const Value: TAiThinkingLevel);
@@ -223,12 +230,29 @@ type
     procedure SetTool_Active(const Value: Boolean);
     procedure SetModelExtraBodyParams(const Value: String);
     procedure Changed;
+    function GetUserConfigured: Boolean;
+    procedure SetUserConfigured(const Value: Boolean);
   public
     constructor Create;
     procedure Assign(Source: TPersistent); override;
+    // Aplica los params del registry (strings 'ModelCaps', 'SessionCaps',
+    // 'Tool_Active', 'ThinkingLevel') SOLO sobre los campos que el usuario no
+    // fijo explicitamente. No marca campos ni dispara OnChange: es el canal
+    // automatico. Es el UNICO camino por el que el registry llega a estos 4
+    // campos (v3.5: ya no viajan por Params/RTTI en TAiChatConnection).
+    procedure ApplyAutoParams(AParams: TStrings);
+    // Parsers de los strings del registry al tipo nativo
+    class function StringToCaps(const S: String): TAiCapabilities; static;
+    class function StringToThinkingLevel(const S: String): TAiThinkingLevel; static;
     // Notifica al owner (p.ej. TAiChatConnection.ModelConfigChanged) cuando cambia
     // cualquier capacidad/param, para que pueda propagar el cambio al TAiChat real.
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
+    // Campos fijados explicitamente por el usuario (Object Inspector o codigo).
+    // Los setters marcan su campo automaticamente; ApplyAutoParams los respeta.
+    property UserFields: TAiModelConfigFields read FUserFields write FUserFields;
+    // True si hay algun campo fijado. Asignar False despina todos (vuelve al
+    // registry en el proximo refresh); True fija todos.
+    property UserConfigured: Boolean read GetUserConfigured write SetUserConfigured;
   published
     property ModelCaps: TAiCapabilities read FModelCaps write SetModelCaps;
     property SessionCaps: TAiCapabilities read FSessionCaps write SetSessionCaps;
@@ -1405,6 +1429,7 @@ begin
   if FModelCaps <> Value then
   begin
     FModelCaps := Value;
+    Include(FUserFields, mcfModelCaps); // configuracion explicita: el registry ya no actualiza este campo
     Changed;
   end;
 end;
@@ -1414,6 +1439,7 @@ begin
   if FSessionCaps <> Value then
   begin
     FSessionCaps := Value;
+    Include(FUserFields, mcfSessionCaps); // configuracion explicita: el registry ya no actualiza este campo
     Changed;
   end;
 end;
@@ -1423,6 +1449,7 @@ begin
   if FThinkingLevel <> Value then
   begin
     FThinkingLevel := Value;
+    Include(FUserFields, mcfThinkingLevel); // configuracion explicita: el registry ya no actualiza este campo
     Changed;
   end;
 end;
@@ -1441,6 +1468,7 @@ begin
   if FTool_Active <> Value then
   begin
     FTool_Active := Value;
+    Include(FUserFields, mcfToolActive); // configuracion explicita: el registry ya no actualiza este campo
     Changed;
   end;
 end;
@@ -1467,9 +1495,99 @@ begin
     FFormat := Src.FFormat;
     FTool_Active := Src.FTool_Active;
     FModelExtraBodyParams := Src.FModelExtraBodyParams;
+    FUserFields := Src.FUserFields;
   end
   else
     inherited;
+end;
+
+function TAiModelConfig.GetUserConfigured: Boolean;
+begin
+  Result := FUserFields <> [];
+end;
+
+procedure TAiModelConfig.SetUserConfigured(const Value: Boolean);
+begin
+  if Value then
+    FUserFields := [mcfModelCaps, mcfSessionCaps, mcfToolActive, mcfThinkingLevel]
+  else
+    FUserFields := [];
+end;
+
+class function TAiModelConfig.StringToCaps(const S: String): TAiCapabilities;
+var
+  Item: String;
+  OrdVal: Integer;
+begin
+  Result := [];
+  for Item in S.Trim([' ', '[', ']']).Split([',']) do
+  begin
+    if Trim(Item) = '' then
+      Continue;
+    OrdVal := GetEnumValue(TypeInfo(TAiCapability), Trim(Item));
+    if OrdVal >= 0 then
+      Include(Result, TAiCapability(OrdVal));
+  end;
+end;
+
+class function TAiModelConfig.StringToThinkingLevel(const S: String): TAiThinkingLevel;
+var
+  OrdVal: Integer;
+begin
+  Result := tlDefault;
+  OrdVal := GetEnumValue(TypeInfo(TAiThinkingLevel), Trim(S));
+  if OrdVal >= 0 then
+    Result := TAiThinkingLevel(OrdVal);
+end;
+
+procedure TAiModelConfig.ApplyAutoParams(AParams: TStrings);
+var
+  S: String;
+begin
+  if not Assigned(AParams) then
+    Exit;
+
+  // Escritura directa a los campos: sin marcar UserFields y sin OnChange —
+  // este es el canal AUTOMATICO (registry). Semantica determinista:
+  //   campo NO fijado = valor del registry para el modelo actual,
+  //   o default del tipo si el registry no define la clave.
+  // El "else default" evita valores stale al cambiar de modelo o al despinear
+  // (mismo leak que se documento para Groq con ThinkingLevel/Format).
+  if not(mcfModelCaps in FUserFields) then
+  begin
+    S := AParams.Values['ModelCaps'];
+    if S <> '' then
+      FModelCaps := StringToCaps(S)
+    else
+      FModelCaps := [];
+  end;
+
+  if not(mcfSessionCaps in FUserFields) then
+  begin
+    S := AParams.Values['SessionCaps'];
+    if S <> '' then
+      FSessionCaps := StringToCaps(S)
+    else
+      FSessionCaps := [];
+  end;
+
+  if not(mcfToolActive in FUserFields) then
+  begin
+    S := AParams.Values['Tool_Active'].Trim.ToLower;
+    if S <> '' then
+      FTool_Active := (S = 'true') or (S = '1') or (S = 'yes') or (S = 't')
+    else
+      FTool_Active := True; // default del constructor
+  end;
+
+  if not(mcfThinkingLevel in FUserFields) then
+  begin
+    S := AParams.Values['ThinkingLevel'];
+    if S <> '' then
+      FThinkingLevel := StringToThinkingLevel(S)
+    else
+      FThinkingLevel := tlDefault;
+  end;
 end;
 
 procedure TAiChat.AddToMemory(Key, Value: String);

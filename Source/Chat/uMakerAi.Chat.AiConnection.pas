@@ -93,6 +93,14 @@ type
     FPersistentMemory:  TAiPersistentMemoryBase;
     FMemoryTokenBudget: Integer;
     FAutoStoreMemories: Boolean;
+    FInternalParamsUpdate: Boolean; // guard: ediciones internas de FParams no re-disparan ParamsChanged
+
+    // v3.5 — Canal tipado: ModelCaps/SessionCaps/Tool_Active/ThinkingLevel ya no
+    // viajan por Params/RTTI; su unico canal es ModelConfig (+ registry via
+    // ApplyAutoParams). Estos helpers sostienen esa regla.
+    procedure StripModelConfigKeys(AParams: TStrings);
+    procedure MigrateModelConfigParams(AParams: TStrings);
+    procedure ApplyModelConfigToChat(AChat: TAiChat);
 
     // Setters y Getters
     procedure SetDriverName(const Value: String);
@@ -404,6 +412,9 @@ end;
 
 procedure TAiChatConnection.ParamsChanged(Sender: TObject);
 begin
+  if FInternalParamsUpdate then
+    Exit; // edicion interna (migracion de claves tipadas): no re-aplicar
+
   if Assigned(FChat) then
   begin
     ApplyParamsToChat(FChat, FParams);
@@ -416,7 +427,103 @@ begin
   // sub-objeto) al TAiChat real. SetModelConfig ya cubre la asignacion del objeto completo;
   // esto cubre el camino que antes requeria un SyncModelConfig manual (ver Apps/MakerAIChat).
   if Assigned(FChat) then
-    FChat.ModelConfig.Assign(FModelConfig);
+    ApplyModelConfigToChat(FChat);
+end;
+
+// Copia la configuracion explicita del usuario al chat y completa los campos
+// NO fijados con los valores del registry para el driver/modelo actual.
+// Este es el UNICO camino por el que ModelCaps/SessionCaps/Tool_Active/
+// ThinkingLevel llegan al chat (v3.5: eliminados del canal Params/RTTI).
+procedure TAiChatConnection.ApplyModelConfigToChat(AChat: TAiChat);
+var
+  LRegParams: TStringList;
+begin
+  if not Assigned(AChat) then
+    Exit;
+
+  AChat.ModelConfig.Assign(FModelConfig); // intencion explicita (con marcas UserFields)
+
+  if (FDriverName <> '') and TAiChatFactory.Instance.HasDriver(FDriverName) then
+  begin
+    LRegParams := TStringList.Create;
+    try
+      TAiChatFactory.Instance.GetDriverParams(FDriverName, FModel, LRegParams, False);
+      AChat.ModelConfig.ApplyAutoParams(LRegParams); // registry rellena lo no fijado
+    finally
+      LRegParams.Free;
+    end;
+  end;
+end;
+
+// Retira las 4 claves tipadas de una lista de params (p.ej. la vista del registry)
+// para que nunca entren a FParams ni pasen por la inyeccion RTTI.
+procedure TAiChatConnection.StripModelConfigKeys(AParams: TStrings);
+const
+  Keys: array [0 .. 3] of string = ('ModelCaps', 'SessionCaps', 'Tool_Active', 'ThinkingLevel');
+var
+  K: string;
+  I: integer;
+begin
+  if not Assigned(AParams) then
+    Exit;
+  for K in Keys do
+  begin
+    I := AParams.IndexOfName(K);
+    if I >= 0 then
+      AParams.Delete(I);
+  end;
+end;
+
+// Compatibilidad hacia atras: si el usuario (DFM viejo o codigo) escribio las
+// claves tipadas en Params, se interpretan como configuracion EXPLICITA:
+// se aplican a ModelConfig, se fijan (UserFields) y se retiran de Params.
+// La clave presente fija el campo aunque el valor coincida con el actual
+// (ej: agentes escriben SessionCaps=[] para forzar caps vacios).
+procedure TAiChatConnection.MigrateModelConfigParams(AParams: TStrings);
+var
+  I: integer;
+  Val: string;
+begin
+  if not Assigned(AParams) then
+    Exit;
+
+  FInternalParamsUpdate := True;
+  try
+    I := AParams.IndexOfName('ModelCaps');
+    if I >= 0 then
+    begin
+      FModelConfig.ModelCaps := TAiModelConfig.StringToCaps(AParams.ValueFromIndex[I]);
+      FModelConfig.UserFields := FModelConfig.UserFields + [mcfModelCaps];
+      AParams.Delete(I);
+    end;
+
+    I := AParams.IndexOfName('SessionCaps');
+    if I >= 0 then
+    begin
+      FModelConfig.SessionCaps := TAiModelConfig.StringToCaps(AParams.ValueFromIndex[I]);
+      FModelConfig.UserFields := FModelConfig.UserFields + [mcfSessionCaps];
+      AParams.Delete(I);
+    end;
+
+    I := AParams.IndexOfName('Tool_Active');
+    if I >= 0 then
+    begin
+      Val := AParams.ValueFromIndex[I].Trim.ToLower;
+      FModelConfig.Tool_Active := (Val = 'true') or (Val = '1') or (Val = 'yes') or (Val = 't');
+      FModelConfig.UserFields := FModelConfig.UserFields + [mcfToolActive];
+      AParams.Delete(I);
+    end;
+
+    I := AParams.IndexOfName('ThinkingLevel');
+    if I >= 0 then
+    begin
+      FModelConfig.ThinkingLevel := TAiModelConfig.StringToThinkingLevel(AParams.ValueFromIndex[I]);
+      FModelConfig.UserFields := FModelConfig.UserFields + [mcfThinkingLevel];
+      AParams.Delete(I);
+    end;
+  finally
+    FInternalParamsUpdate := False;
+  end;
 end;
 
 { procedure TAiChatConnection.SetupChatFromDriver;
@@ -544,17 +651,26 @@ begin
       // 1. Obtener los par�metros oficiales del registro (Nivel 1, 2 y 3)
       TAiChatFactory.Instance.GetDriverParams(FDriverName, FModel, LRegistryParams, ShouldExpand);
 
+      // v3.5: ModelCaps/SessionCaps/Tool_Active/ThinkingLevel NO viajan por Params.
+      // Se retiran de la vista del registro antes del merge; llegan al chat via
+      // ApplyModelConfigToChat (canal tipado ModelConfig + ApplyAutoParams).
+      StripModelConfigKeys(LRegistryParams);
+
       // 2. Sincronizaci�n inteligente:
       // En lugar de un Merge simple, vamos a asegurarnos de que FParams refleje
       // la estructura del nuevo modelo.
 
       FParams.BeginUpdate;
       try
-        // Si quieres que el Registro sea la fuente de verdad absoluta al cambiar de modelo:
-        // FParams.Assign(LRegistryParams);
-
-        // Si prefieres mantener lo que el usuario escribi� en el Object Inspector
-        // pero inyectar lo nuevo del registro:
+        // OJO: MergeParams actualiza FParams con los valores del registro; las
+        // claves que el registro trae para el driver/modelo actual SOBREESCRIBEN
+        // lo que hubiera en FParams (necesario para que el cambio de modelo
+        // refresque Max_Tokens, ModelCaps, etc. y no queden valores del modelo
+        // anterior). Las claves que el registro no conoce se conservan.
+        // Para personalizacion durable usar:
+        //   - TAiChatFactory.Instance.RegisterUserParam(...)  (nivel usuario del registro)
+        //   - Connection.ModelConfig.ModelCaps/SessionCaps    (explicito; ApplyParamsToChat
+        //     lo respeta via UserConfigured y el registry ya no lo pisa)
         MergeParams(LRegistryParams, FParams);
       finally
         FParams.EndUpdate;
@@ -604,6 +720,10 @@ begin
   if not Assigned(AChat) then
     Exit;
 
+  // v3.5: si Params trae claves tipadas (DFM viejo o codigo del usuario), se
+  // migran a ModelConfig como configuracion explicita y se retiran de Params.
+  MigrateModelConfigParams(AParams);
+
   // 1. ASIGNACIONES DIRECTAS DE ESTRUCTURA (Prioridad v1.5)
   AChat.AiFunctions := Self.AiFunctions;
 
@@ -627,7 +747,9 @@ begin
   AChat.ImageParams.Assign(Self.FImageGenParams);
   AChat.VideoParams.Assign(Self.FVideoGenParams);
   AChat.WebSearchParams.Assign(Self.FWebSearchParams);
-  AChat.ModelConfig.Assign(Self.FModelConfig);
+
+  // Canal tipado: config explicita del usuario + registry para lo no fijado
+  ApplyModelConfigToChat(AChat);
 
   // Contexto base
   AChat.Memory.Text := Self.Memory.Text;
@@ -647,6 +769,13 @@ begin
       ParamValue := AParams.Values[ParamName].Trim;
 
       if ParamName.IsEmpty then
+        Continue;
+
+      // v3.5: las claves tipadas NUNCA se inyectan por RTTI (su unico canal es
+      // ModelConfig). Tras StripModelConfigKeys/MigrateModelConfigParams no
+      // deberian estar aqui; este skip es la red de seguridad.
+      if SameText(ParamName, 'ModelCaps') or SameText(ParamName, 'SessionCaps') or
+         SameText(ParamName, 'Tool_Active') or SameText(ParamName, 'ThinkingLevel') then
         Continue;
 
       // Buscar primero en el objeto principal, luego en sub-objetos TPersistent (2-level RTTI)
@@ -992,10 +1121,11 @@ function TAiChatConnection.MergeParams(Origin, Destination: TStrings): TStrings;
 var
   I: integer;
 begin
+  // Origin (registro) manda: actualiza la clave si existe o la agrega si no,
+  // sin duplicarla. Destination conserva solo las claves que Origin no trae.
   Result := Destination;
   for I := 0 to Origin.Count - 1 do
   begin
-    // Esto actualiza si existe o a�ade si no existe, sin duplicar la clave
     Destination.Values[Origin.Names[I]] := Origin.ValueFromIndex[I];
   end;
 end;
