@@ -1084,8 +1084,10 @@ end;
 
 function TAiChat.AddMessageAndRun(aPrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): String;
 begin
-  InternalAddMessage(aPrompt, aRole, aMediaFiles);
-  Result := Run(Nil, Nil);
+  // Pasar el mensaje recien creado a Run: con Nil, el sanitizador y la memoria
+  // persistente (que exigen Assigned(AskMsg) y Role='user') nunca se activaban
+  // por esta via, que es la API principal. RunNew no lo re-agrega (guard IndexOf).
+  Result := Run(InternalAddMessage(aPrompt, aRole, aMediaFiles), Nil);
 end;
 
 function TAiChat.AddMessageAndRunMsg(aPrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): TAiChatMessage;
@@ -1101,8 +1103,10 @@ end;
 
 function TAiChat.AddMessageAndRun(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String;
 begin
-  InternalAddMessage(aPrompt, aRole, aToolCallId, aFunctionName);
-  Result := Run(Nil, Nil);
+  // Mismo criterio que el overload principal: pasar el mensaje a Run.
+  // Las guardas de sanitizador/memoria filtran por Role='user', asi que
+  // los mensajes 'tool' de esta via no activan nada indebido.
+  Result := Run(InternalAddMessage(aPrompt, aRole, aToolCallId, aFunctionName), Nil);
 end;
 
 { TAiChatTools }
@@ -4417,7 +4421,10 @@ begin
   try
     try
       DoStateChange(acsReasoning, 'Analizando solicitud...');
-      InternalRunCompletions(LDispatchMsg, nil);
+      // AskMsg = LTempUsr (ya esta en el FMessages temporal): los drivers hacen
+      // AskMsg.Id := ... si no esta en la lista, y con nil eso era una AV que
+      // el except de RunNew convertia en respuesta vacia silenciosa.
+      InternalRunCompletions(LDispatchMsg, LTempUsr);
     except
       on E: Exception do
       begin

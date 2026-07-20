@@ -2579,6 +2579,10 @@ begin
     FUseReorderABC := TAiSearchOptions(Source).UseReorderABC;
     FBM25Weight := TAiSearchOptions(Source).BM25Weight;
     FEmbeddingWeight := TAiSearchOptions(Source).EmbeddingWeight;
+    // Sin estas dos, THRESHOLD SEMANTIC/LEXICAL de VQL se parseaban pero se
+    // perdian justo aqui al aplicar las TempOptions de ExecuteVQL
+    FMinAbsoluteScoreEmbedding := TAiSearchOptions(Source).MinAbsoluteScoreEmbedding;
+    FMinAbsoluteScoreBM25 := TAiSearchOptions(Source).MinAbsoluteScoreBM25;
     Changed;
   end
   else
