@@ -97,7 +97,6 @@ type
   TAiMemorySQLiteStorage = class(TInterfacedObject, IAiMemoryStorage)
   private
     FConn:      TFDConnection;
-    FOwnsConn:  Boolean;
     FTableName: string;
 
     function  NewQuery: TFDQuery;
@@ -109,10 +108,8 @@ type
     function  StrToEmbedding(const AStr: string): TArray<Double>;
     function  CosineSimilarity(const A, B: TArray<Double>): Double;
   public
-    // Crea su propia conexión SQLite en ADbPath
+    // Crea su propia conexión SQLite en ADbPath (la conexión es propia y se libera aquí)
     constructor CreateWithPath(const ADbPath: string);
-    // Reutiliza una conexión FireDAC existente (no la libera)
-    constructor CreateWithConnection(AConn: TFDConnection);
     destructor Destroy; override;
 
     // IAiMemoryStorage
@@ -160,7 +157,6 @@ constructor TAiMemorySQLiteStorage.CreateWithPath(const ADbPath: string);
 begin
   inherited Create;
   FTableName := 'ai_memories';
-  FOwnsConn  := True;
   FConn      := TFDConnection.Create(nil);
   FConn.DriverName            := 'SQLite';
   FConn.Params.Values['Database'] := ADbPath;
@@ -172,20 +168,9 @@ begin
   CreateSchema;
 end;
 
-constructor TAiMemorySQLiteStorage.CreateWithConnection(AConn: TFDConnection);
-begin
-  inherited Create;
-  FTableName := 'ai_memories';
-  FOwnsConn  := False;
-  FConn      := AConn;
-  EnsureConnected;
-  CreateSchema;
-end;
-
 destructor TAiMemorySQLiteStorage.Destroy;
 begin
-  if FOwnsConn then
-    FConn.Free;
+  FConn.Free;
   inherited;
 end;
 
