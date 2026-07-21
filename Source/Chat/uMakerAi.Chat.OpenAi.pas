@@ -2853,6 +2853,28 @@ begin
             if Assigned(FinalMsg) then
               FinalMsg.Prompt := FLastContent;
 
+            // --- Paridad con modo sincrono: consolidar en el mensaje final la
+            // media que los handlers de function calling adjuntaron durante el
+            // turno via ToolCall.ResMsg (mensajes assistant intermedios de las
+            // rondas de tools). Sin esto, aMsg.MediaFiles llegaba vacio al
+            // OnReceiveDataEnd en async. Es seguro: los mensajes assistant
+            // serializan solo texto hacia la API (AddMessageToInput), asi que
+            // mover la media no cambia los requests siguientes. La media de los
+            // mensajes 'tool' NO se toca (esa si se reenvia al modelo). ---
+            if Assigned(FinalMsg) then
+            begin
+              for var LI := FMessages.Count - 1 downto 0 do
+              begin
+                var LPrev := FMessages[LI];
+                if LPrev.Role = 'user' then
+                  Break; // inicio del turno actual
+                if (LPrev = FinalMsg) or (LPrev.Role <> 'assistant') then
+                  Continue;
+                for var LJ := LPrev.MediaFiles.Count - 1 downto 0 do
+                  FinalMsg.AddMediaFile(LPrev.MediaFiles.Extract(LPrev.MediaFiles[LJ]));
+              end;
+            end;
+
             // --- Extracci?n de c?digo a archivos (MarkdownCodeExtractor) ---
             If cap_ExtractCode in ModelConfig.SessionCaps then
             Begin
