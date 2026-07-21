@@ -317,6 +317,17 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active',     'False');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ResponseTimeOut', '36000');
 
+  // Resto de la familia gpt-image visible en /v1/models (jul 2026). Sin estas
+  // entradas heredan los defaults del driver (ModelCaps=[cap_Image]) -> gap
+  // vacio -> la peticion sale por /responses -> "model was not found".
+  for Model in ['chatgpt-image-latest', 'gpt-image-1-mini', 'gpt-image-2-2026-04-21'] do
+  begin
+    TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',       '[]');
+    TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps',     '[cap_GenImage]');
+    TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active',     'False');
+    TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ResponseTimeOut', '36000');
+  end;
+
   // ------- Audio TTS -- ModelCaps=[]: usa endpoint TTS dedicado ------
   // Gap=[cap_GenAudio] activa InternalRunSpeechGeneration
   // https://platform.openai.com/docs/guides/audio
