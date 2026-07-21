@@ -111,6 +111,7 @@ type
     function GetBusy: Boolean;
     procedure ParamsChanged(Sender: TObject);
     procedure ModelConfigChanged(Sender: TObject);
+    procedure ChatToolsChanged(Sender: TObject);
 
     procedure SetCompletion_tokens(const Value: integer);
     procedure SetMemory(const Value: TStrings);
@@ -142,31 +143,6 @@ type
     procedure SetVideoGenParams(const Value: TAiVideoGenParams);
     procedure SetWebSearchParams(const Value: TAiWebSearchParams);
     procedure SetModelConfig(const Value: TAiModelConfig);
-
-    // Atajos directos para ChatTools — permiten asignar en el IDE sin necesidad
-    // de código en el formulario. Las propiedades directas de TComponent resuelven
-    // referencias forward en el DFM/FMX correctamente; ChatTools.XxxTool (sub-objeto
-    // TPersistent) no garantiza la resolución de referencias forward.
-    procedure SetSpeechTool(const Value: TAiSpeechToolBase);
-    function  GetSpeechTool: TAiSpeechToolBase;
-    procedure SetImageTool(const Value: TAiImageToolBase);
-    function  GetImageTool: TAiImageToolBase;
-    procedure SetVisionTool(const Value: TAiVisionToolBase);
-    function  GetVisionTool: TAiVisionToolBase;
-    procedure SetVideoTool(const Value: TAiVideoToolBase);
-    function  GetVideoTool: TAiVideoToolBase;
-    procedure SetPdfTool(const Value: TAiPdfToolBase);
-    function  GetPdfTool: TAiPdfToolBase;
-    procedure SetWebSearchTool(const Value: TAiWebSearchToolBase);
-    function  GetWebSearchTool: TAiWebSearchToolBase;
-    procedure SetReportTool(const Value: TAiReportToolBase);
-    function  GetReportTool: TAiReportToolBase;
-    procedure SetShellTool(const Value: TAiShell);
-    function  GetShellTool: TAiShell;
-    procedure SetTextEditorTool(const Value: TAiTextEditorTool);
-    function  GetTextEditorTool: TAiTextEditorTool;
-    procedure SetComputerUseTool(const Value: TAiComputerUseTool);
-    function  GetComputerUseTool: TAiComputerUseTool;
 
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
@@ -269,18 +245,11 @@ type
     property WebSearchParams: TAiWebSearchParams read FWebSearchParams write SetWebSearchParams;
     property ModelConfig: TAiModelConfig read FModelConfig write SetModelConfig;
 
-    // Atajos directos para ChatTools. Equivalentes a ChatTools.XxxTool pero
-    // resuelven referencias forward en DFM/FMX — basta asignarlos en el IDE.
-    property SpeechTool:       TAiSpeechToolBase    read GetSpeechTool      write SetSpeechTool;
-    property ImageTool:        TAiImageToolBase     read GetImageTool       write SetImageTool;
-    property VisionTool:       TAiVisionToolBase    read GetVisionTool      write SetVisionTool;
-    property VideoTool:        TAiVideoToolBase     read GetVideoTool       write SetVideoTool;
-    property PdfTool:          TAiPdfToolBase       read GetPdfTool         write SetPdfTool;
-    property WebSearchTool:    TAiWebSearchToolBase read GetWebSearchTool   write SetWebSearchTool;
-    property ReportTool:       TAiReportToolBase    read GetReportTool      write SetReportTool;
-    property ShellTool:        TAiShell             read GetShellTool       write SetShellTool;
-    property TextEditorTool:   TAiTextEditorTool    read GetTextEditorTool  write SetTextEditorTool;
-    property ComputerUseTool:  TAiComputerUseTool   read GetComputerUseTool write SetComputerUseTool;
+    // v3.5: los atajos raiz (SpeechTool, ImageTool, ...) fueron eliminados.
+    // TODAS las herramientas se asignan via ChatTools.XxxTool — misma superficie
+    // en TAiChat y TAiChatConnection. El streaming DFM/FMX resuelve las
+    // referencias a componentes de sub-objetos TPersistent via fixups.
+    property ChatTools: TAiChatTools read FChatTools;
 
   end;
 
@@ -303,6 +272,7 @@ begin
   inherited;
   FChat := nil;
   FChatTools := TAiChatTools.Create(Self);
+  FChatTools.OnChange := ChatToolsChanged;
   FSystemPrompt := TStringList.Create;
   FMemory := TStringList.Create;
   FMessagesOwn := TAiChatMessages.Create;
@@ -1461,100 +1431,13 @@ begin
     FChat.ModelConfig.Assign(Value);
 end;
 
-// ---------------------------------------------------------------------------
-// Atajos directos para ChatTools
-// FChatTools.SetXxxTool ya llama Value.FreeNotification(FOwner) internamente,
-// y TAiChatConnection.Notification ya gestiona opRemove sobre FChatTools.
-// ---------------------------------------------------------------------------
-
-function TAiChatConnection.GetSpeechTool: TAiSpeechToolBase;
-begin Result := FChatTools.SpeechTool; end;
-
-procedure TAiChatConnection.SetSpeechTool(const Value: TAiSpeechToolBase);
+// Propaga mutaciones de Connection.ChatTools.XxxTool al TAiChat vivo
+// (mismo patron que ModelConfigChanged). FChatTools.SetXxxTool ya llama
+// Value.FreeNotification(FOwner) y Notification gestiona opRemove.
+procedure TAiChatConnection.ChatToolsChanged(Sender: TObject);
 begin
-  FChatTools.SpeechTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.SpeechTool := Value;
-end;
-
-function TAiChatConnection.GetImageTool: TAiImageToolBase;
-begin Result := FChatTools.ImageTool; end;
-
-procedure TAiChatConnection.SetImageTool(const Value: TAiImageToolBase);
-begin
-  FChatTools.ImageTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.ImageTool := Value;
-end;
-
-function TAiChatConnection.GetVisionTool: TAiVisionToolBase;
-begin Result := FChatTools.VisionTool; end;
-
-procedure TAiChatConnection.SetVisionTool(const Value: TAiVisionToolBase);
-begin
-  FChatTools.VisionTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.VisionTool := Value;
-end;
-
-function TAiChatConnection.GetVideoTool: TAiVideoToolBase;
-begin Result := FChatTools.VideoTool; end;
-
-procedure TAiChatConnection.SetVideoTool(const Value: TAiVideoToolBase);
-begin
-  FChatTools.VideoTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.VideoTool := Value;
-end;
-
-function TAiChatConnection.GetPdfTool: TAiPdfToolBase;
-begin Result := FChatTools.PdfTool; end;
-
-procedure TAiChatConnection.SetPdfTool(const Value: TAiPdfToolBase);
-begin
-  FChatTools.PdfTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.PdfTool := Value;
-end;
-
-function TAiChatConnection.GetWebSearchTool: TAiWebSearchToolBase;
-begin Result := FChatTools.WebSearchTool; end;
-
-procedure TAiChatConnection.SetWebSearchTool(const Value: TAiWebSearchToolBase);
-begin
-  FChatTools.WebSearchTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.WebSearchTool := Value;
-end;
-
-function TAiChatConnection.GetReportTool: TAiReportToolBase;
-begin Result := FChatTools.ReportTool; end;
-
-procedure TAiChatConnection.SetReportTool(const Value: TAiReportToolBase);
-begin
-  FChatTools.ReportTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.ReportTool := Value;
-end;
-
-function TAiChatConnection.GetShellTool: TAiShell;
-begin Result := FChatTools.ShellTool; end;
-
-procedure TAiChatConnection.SetShellTool(const Value: TAiShell);
-begin
-  FChatTools.ShellTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.ShellTool := Value;
-end;
-
-function TAiChatConnection.GetTextEditorTool: TAiTextEditorTool;
-begin Result := FChatTools.TextEditorTool; end;
-
-procedure TAiChatConnection.SetTextEditorTool(const Value: TAiTextEditorTool);
-begin
-  FChatTools.TextEditorTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.TextEditorTool := Value;
-end;
-
-function TAiChatConnection.GetComputerUseTool: TAiComputerUseTool;
-begin Result := FChatTools.ComputerUseTool; end;
-
-procedure TAiChatConnection.SetComputerUseTool(const Value: TAiComputerUseTool);
-begin
-  FChatTools.ComputerUseTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.ComputerUseTool := Value;
+  if Assigned(FChat) then
+    FChat.ChatTools.Assign(FChatTools);
 end;
 
 // ISSUE #115: API comoda para el log de depuracion (opt-in).

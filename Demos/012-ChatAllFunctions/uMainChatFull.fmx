@@ -11291,9 +11291,9 @@ object Form2: TForm2
     OnReceiveData = AiConnReceiveData
     OnReceiveDataEnd = AiConnReceiveDataEnd
     OnError = AiConnError
-    ShellTool = AiShell1
-    TextEditorTool = AiTextEditorTool1
-    ComputerUseTool = AiComputerUseTool1
+    ChatTools.ShellTool = AiShell1
+    ChatTools.TextEditorTool = AiTextEditorTool1
+    ChatTools.ComputerUseTool = AiComputerUseTool1
     Left = 328
     Top = 272
   end

@@ -89,6 +89,7 @@ type
   TAiChatTools = class(TPersistent)
   private
     FOwner: TComponent;
+    FOnChange: TNotifyEvent;
     FSpeechTool: TAiSpeechToolBase;
     FImageTool: TAiImageToolBase;
     FVideoTool: TAiVideoToolBase;
@@ -109,11 +110,15 @@ type
     procedure SetShellTool(const Value: TAiShell);
     procedure SetTextEditorTool(const Value: TAiTextEditorTool);
     procedure SetComputerUseTool(const Value: TAiComputerUseTool);
+    procedure Changed;
   public
     constructor Create(AOwner: TComponent);
     destructor Destroy; override;
     procedure Assign(Source: TPersistent); override;
     procedure Notification(AComponent: TComponent; Operation: TOperation);
+    // Notifica al owner (p.ej. TAiChatConnection.ChatToolsChanged) cuando cambia
+    // cualquier tool, para propagar la mutacion al TAiChat vivo.
+    property OnChange: TNotifyEvent read FOnChange write FOnChange;
   published
     property SpeechTool: TAiSpeechToolBase read FSpeechTool write SetSpeechTool;
     property ImageTool: TAiImageToolBase read FImageTool write SetImageTool;
@@ -375,22 +380,9 @@ type
     procedure SetOnReceiveThinking(const Value: TAiChatOnDataEvent);
     procedure SetThinking_tokens(const Value: Integer);
     procedure SetCached_tokens(const Value: Integer);
-    procedure SetShellTool(const Value: TAiShell);
-    function  GetShellTool: TAiShell;
-    procedure SetTextEditorTool(const Value: TAiTextEditorTool);
-    function  GetTextEditorTool: TAiTextEditorTool;
-    procedure SetComputerUseTool(const Value: TAiComputerUseTool);
-    function  GetComputerUseTool: TAiComputerUseTool;
     procedure SetSanitizerActive(const Value: Boolean);
     procedure SetOnSanitize(const Value: TAiSanitizeEvent);
-    procedure SetSpeechTool(const Value: TAiSpeechToolBase);
-    procedure SetImageTool(const Value: TAiImageToolBase);
-    procedure SetVideoTool(const Value: TAiVideoToolBase);
-    procedure SetWebSearchTool(const Value: TAiWebSearchToolBase);
-    procedure SetVisionTool(const Value: TAiVisionToolBase);
     procedure SetEnabledFeatures(const Value: TAiChatMediaSupports);
-    procedure SetPdfTool(const Value: TAiPdfToolBase);
-    procedure SetReportTool(const Value: TAiReportToolBase);
     // Nuevo sistema de orquestación (v3.3)
     function GetModelCaps: TAiCapabilities;
     function GetSessionCaps: TAiCapabilities;
@@ -621,9 +613,8 @@ type
     property WebSearchParams: TAiWebSearchParams read FWebSearchParams;
     property ModelConfig: TAiModelConfig read FModelConfig; // configuración unificada del modelo (v3.3)
     property OnStateChange: TAiStateChangeEvent read FOnStateChange write FOnStateChange;
-    property ShellTool: TAiShell read GetShellTool write SetShellTool;
-    Property TextEditorTool: TAiTextEditorTool read GetTextEditorTool write SetTextEditorTool;
-    property ComputerUseTool: TAiComputerUseTool read GetComputerUseTool write SetComputerUseTool;
+    // v3.5: los atajos raiz ShellTool/TextEditorTool/ComputerUseTool fueron
+    // eliminados — TODAS las herramientas viven unicamente en ChatTools.XxxTool
     property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive;
     property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
     property PersistentMemory:  TAiPersistentMemoryBase read FPersistentMemory write SetPersistentMemory;
@@ -1177,6 +1168,12 @@ begin
     inherited;
 end;
 
+procedure TAiChatTools.Changed;
+begin
+  if Assigned(FOnChange) then
+    FOnChange(Self);
+end;
+
 procedure TAiChatTools.SetSpeechTool(const Value: TAiSpeechToolBase);
 begin
   if FSpeechTool <> Value then
@@ -1184,6 +1181,7 @@ begin
     FSpeechTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1194,6 +1192,7 @@ begin
     FImageTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1204,6 +1203,7 @@ begin
     FVideoTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1214,6 +1214,7 @@ begin
     FWebSearchTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1224,6 +1225,7 @@ begin
     FVisionTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1234,6 +1236,7 @@ begin
     FPdfTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1244,6 +1247,7 @@ begin
     FReportTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1254,6 +1258,7 @@ begin
     FShellTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1264,6 +1269,7 @@ begin
     FTextEditorTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1274,6 +1280,7 @@ begin
     FComputerUseTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -4115,74 +4122,9 @@ begin
   FCached_tokens := Value;
 end;
 
-function TAiChat.GetShellTool: TAiShell;
-begin
-  Result := FChatTools.FShellTool;
-end;
-
-procedure TAiChat.SetShellTool(const Value: TAiShell);
-begin
-  FChatTools.ShellTool := Value;
-end;
-
-function TAiChat.GetTextEditorTool: TAiTextEditorTool;
-begin
-  Result := FChatTools.FTextEditorTool;
-end;
-
-procedure TAiChat.SetTextEditorTool(const Value: TAiTextEditorTool);
-begin
-  FChatTools.TextEditorTool := Value;
-end;
-
-function TAiChat.GetComputerUseTool: TAiComputerUseTool;
-begin
-  Result := FChatTools.FComputerUseTool;
-end;
-
-procedure TAiChat.SetComputerUseTool(const Value: TAiComputerUseTool);
-begin
-  FChatTools.ComputerUseTool := Value;
-end;
-
-procedure TAiChat.SetSpeechTool(const Value: TAiSpeechToolBase);
-begin
-  FChatTools.SpeechTool := Value;
-end;
-
-procedure TAiChat.SetImageTool(const Value: TAiImageToolBase);
-begin
-  FChatTools.ImageTool := Value;
-end;
-
-procedure TAiChat.SetVideoTool(const Value: TAiVideoToolBase);
-begin
-  FChatTools.VideoTool := Value;
-end;
-
-procedure TAiChat.SetWebSearchTool(const Value: TAiWebSearchToolBase);
-begin
-  FChatTools.WebSearchTool := Value;
-end;
-
-procedure TAiChat.SetVisionTool(const Value: TAiVisionToolBase);
-begin
-  FChatTools.VisionTool := Value;
-end;
-
 procedure TAiChat.SetEnabledFeatures(const Value: TAiChatMediaSupports);
 begin
   FEnabledFeatures := Value;
-end;
-
-procedure TAiChat.SetPdfTool(const Value: TAiPdfToolBase);
-begin
-  FChatTools.PdfTool := Value;
-end;
-
-procedure TAiChat.SetReportTool(const Value: TAiReportToolBase);
-begin
-  FChatTools.ReportTool := Value;
 end;
 
 function TAiChat.GetModelCaps: TAiCapabilities;

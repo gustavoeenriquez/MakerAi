@@ -366,11 +366,11 @@ object Form26: TForm26
     OnCallToolFunction = AiOllamaChat1CallToolFunction
     Url = 'http://localhost:11434/'
     ResponseTimeOut = 120000
-    SpeechTool = AiGeminiSpeechTool1
-    ImageTool = AiDalleImageTool1
-    VideoTool = AiSoraVideoTool1
-    WebSearchTool = AiGeminiWebSearchTool1
-    PdfTool = AiOllamaPdfTool1
+    ChatTools.SpeechTool = AiGeminiSpeechTool1
+    ChatTools.ImageTool = AiDalleImageTool1
+    ChatTools.VideoTool = AiSoraVideoTool1
+    ChatTools.WebSearchTool = AiGeminiWebSearchTool1
+    ChatTools.PdfTool = AiOllamaPdfTool1
     Stream_Usage = False
     NativeInputFiles = []
     NativeOutputFiles = []

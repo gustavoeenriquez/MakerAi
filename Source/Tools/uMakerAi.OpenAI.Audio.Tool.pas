@@ -34,7 +34,7 @@
 // para ser usado como ChatTool en el orquestador de TAiChat (Run / SpeechTool).
 //
 // Uso:
-//   AiChat.SpeechTool := TAiOpenAiSpeechTool.Create(Self);
+//   AiChat.ChatTools.SpeechTool := TAiOpenAiSpeechTool.Create(Self);
 //   (TAiOpenAiSpeechTool(AiChat.SpeechTool)).ApiKey := '@OPENAI_API_KEY';
 //
 // ExecuteTranscription: convierte audio en texto (STT - Fase 1 del orquestador)
