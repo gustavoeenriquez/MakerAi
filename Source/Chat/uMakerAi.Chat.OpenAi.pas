@@ -2639,6 +2639,18 @@ begin
               ToolCall.Arguments := BufferTool.GetValue<string>('arguments');
               FTmpToolCallBuffer.Remove(OutputIndex); // doOwnsValues libera BufferTool automáticamente
 
+              // Paridad con la via sincrona (ParseChat): pasar ResMsg/AskMsg al
+              // handler. ResMsg = mensaje assistant en construccion (creado en
+              // response.created); AskMsg = ultimo mensaje del usuario. Sin esto
+              // ToolCall.ResMsg llegaba nil en modo streaming.
+              ToolCall.ResMsg := GetLastMessage;
+              for var LIdx := FMessages.Count - 1 downto 0 do
+                if FMessages[LIdx].Role = 'user' then
+                begin
+                  ToolCall.AskMsg := FMessages[LIdx];
+                  Break;
+                end;
+
               DoCallFunction(ToolCall);
 
               var
