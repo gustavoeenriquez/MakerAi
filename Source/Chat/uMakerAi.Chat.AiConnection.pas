@@ -113,6 +113,14 @@ type
     procedure ModelConfigChanged(Sender: TObject);
     procedure ChatToolsChanged(Sender: TObject);
 
+    // Accessors de los atajos de codigo ModelCaps/SessionCaps/Tool_Active
+    function GetModelCaps: TAiCapabilities;
+    procedure SetModelCaps(const Value: TAiCapabilities);
+    function GetSessionCaps: TAiCapabilities;
+    procedure SetSessionCaps(const Value: TAiCapabilities);
+    function GetTool_Active: Boolean;
+    procedure SetTool_Active(const Value: Boolean);
+
     procedure SetCompletion_tokens(const Value: integer);
     procedure SetMemory(const Value: TStrings);
     procedure SetOnAddMessage(const Value: TAiChatOnDataEvent);
@@ -204,6 +212,13 @@ type
     property LastError: String read GetLastError;
     property Busy: Boolean read GetBusy;
     property AiChat: TAiChat read FChat;
+
+    // Atajos de codigo, simetricos con TAiChat: el estado vive en ModelConfig
+    // (estos alias solo delegan y fijan el pin UserFields como el sub-objeto).
+    // No published: el Object Inspector muestra unicamente ModelConfig.*
+    property ModelCaps: TAiCapabilities read GetModelCaps write SetModelCaps;
+    property SessionCaps: TAiCapabilities read GetSessionCaps write SetSessionCaps;
+    property Tool_Active: Boolean read GetTool_Active write SetTool_Active;
 
   published
     property DriverName: String read FDriverName write SetDriverName;
@@ -1438,6 +1453,40 @@ procedure TAiChatConnection.ChatToolsChanged(Sender: TObject);
 begin
   if Assigned(FChat) then
     FChat.ChatTools.Assign(FChatTools);
+end;
+
+// ── Atajos de codigo ModelCaps/SessionCaps/Tool_Active ──────────────────────
+// Delegacion pura a FModelConfig: el setter del sub-objeto marca el pin
+// (UserFields) y dispara OnChange -> ModelConfigChanged -> chat vivo.
+
+function TAiChatConnection.GetModelCaps: TAiCapabilities;
+begin
+  Result := FModelConfig.ModelCaps;
+end;
+
+procedure TAiChatConnection.SetModelCaps(const Value: TAiCapabilities);
+begin
+  FModelConfig.ModelCaps := Value;
+end;
+
+function TAiChatConnection.GetSessionCaps: TAiCapabilities;
+begin
+  Result := FModelConfig.SessionCaps;
+end;
+
+procedure TAiChatConnection.SetSessionCaps(const Value: TAiCapabilities);
+begin
+  FModelConfig.SessionCaps := Value;
+end;
+
+function TAiChatConnection.GetTool_Active: Boolean;
+begin
+  Result := FModelConfig.Tool_Active;
+end;
+
+procedure TAiChatConnection.SetTool_Active(const Value: Boolean);
+begin
+  FModelConfig.Tool_Active := Value;
 end;
 
 // ISSUE #115: API comoda para el log de depuracion (opt-in).
