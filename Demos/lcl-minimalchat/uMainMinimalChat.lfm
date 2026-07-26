@@ -1,0 +1,104 @@
+object FrmMinimalChat: TFrmMinimalChat
+  Left = 300
+  Height = 480
+  Top = 180
+  Width = 640
+  Caption = 'MakerAI FPC - Minimal Chat (Ollama)'
+  ClientHeight = 480
+  ClientWidth = 640
+  Constraints.MinHeight = 360
+  Constraints.MinWidth = 480
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  Position = poScreenCenter
+  LCLVersion = '2.2.0.0'
+  object PnlTop: TPanel
+    Left = 0
+    Height = 64
+    Top = 0
+    Width = 640
+    Align = alTop
+    BevelOuter = bvNone
+    ClientHeight = 64
+    ClientWidth = 640
+    TabOrder = 0
+    object LblUrl: TLabel
+      Left = 12
+      Height = 15
+      Top = 10
+      Width = 26
+      Caption = 'URL:'
+      ParentColor = False
+    end
+    object EdUrl: TEdit
+      Left = 80
+      Height = 23
+      Top = 6
+      Width = 548
+      Anchors = [akTop, akLeft, akRight]
+      TabOrder = 0
+      Text = 'http://127.0.0.1:11434/'
+    end
+    object LblModel: TLabel
+      Left = 12
+      Height = 15
+      Top = 38
+      Width = 44
+      Caption = 'Modelo:'
+      ParentColor = False
+    end
+    object EdModel: TEdit
+      Left = 80
+      Height = 23
+      Top = 34
+      Width = 548
+      Anchors = [akTop, akLeft, akRight]
+      TabOrder = 1
+      Text = 'gemma3:1b'
+    end
+  end
+  object MemoResponse: TMemo
+    Left = 8
+    Height = 268
+    Top = 72
+    Width = 624
+    Anchors = [akTop, akLeft, akRight, akBottom]
+    Font.Height = -12
+    Font.Name = 'Consolas'
+    ParentFont = False
+    ReadOnly = True
+    ScrollBars = ssAutoVertical
+    TabOrder = 1
+    WordWrap = True
+  end
+  object MemoPrompt: TMemo
+    Left = 8
+    Height = 72
+    Top = 348
+    Width = 512
+    Anchors = [akLeft, akRight, akBottom]
+    ScrollBars = ssAutoVertical
+    TabOrder = 2
+    WordWrap = True
+  end
+  object BtnSend: TButton
+    Left = 528
+    Height = 72
+    Top = 348
+    Width = 104
+    Anchors = [akRight, akBottom]
+    Caption = 'Enviar'
+    Default = True
+    OnClick = BtnSendClick
+    TabOrder = 3
+  end
+  object LblStatus: TLabel
+    Left = 8
+    Height = 15
+    Top = 432
+    Width = 624
+    Anchors = [akLeft, akRight, akBottom]
+    Caption = 'Listo.'
+    ParentColor = False
+  end
+end
