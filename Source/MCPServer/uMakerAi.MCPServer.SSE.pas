@@ -251,6 +251,11 @@ end;
 // TSseAcceptThread
 // ---------------------------------------------------------------------------
 
+type
+  // En FPC 3.2.x TSocketServer.GetConnection es protected. Un descendiente
+  // declarado en esta misma unidad da acceso al metodo sin cambiar la RTL.
+  TInetServerAccess = class(TInetServer);
+
 constructor TSseAcceptThread.Create(AServer: TAiMCPSSEServer; APort: Word);
 begin
   inherited Create(True);
@@ -289,7 +294,7 @@ begin
   begin
     try
       // GetConnection bloquea hasta que haya una conexion entrante
-      ClientSocket := FServerSock.GetConnection;
+      ClientSocket := TInetServerAccess(FServerSock).GetConnection;
       if Assigned(ClientSocket) then
       begin
         ClientThread := TSseClientThread.Create(FServer, ClientSocket);

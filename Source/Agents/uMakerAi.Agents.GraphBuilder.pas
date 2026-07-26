@@ -434,6 +434,7 @@ var
   PropInfo: PPropInfo;
   JsonVal:  TJSONData;
   SVal:     string;
+  LOrd:     Integer;   // FPC 3.2.x no admite declaracion inline de variables
 begin
   for I := 0 to AParamsJson.Count - 1 do
   begin
@@ -467,7 +468,7 @@ begin
 
       tkEnumeration:
         begin
-          var LOrd := GetEnumValue(PropInfo^.PropType, SVal);
+          LOrd := GetEnumValue(PropInfo^.PropType, SVal);
           if LOrd >= 0 then
             SetOrdProp(ATool, PropInfo, LOrd);
         end;
