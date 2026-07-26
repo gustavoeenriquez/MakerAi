@@ -1459,11 +1459,15 @@ begin
   end;
   FSuspendedSteps.Free;
   FSuspendedStepsLock.Free;
-  FNodes.Free;
-  FLinks.Free;
   FBusyLock.Free;
   FBlackboard.Free;
+  // ISSUE #121: FNodes/FLinks deben liberarse DESPUES de inherited. TComponent.Destroy
+  // destruye los nodos/links hijos y cada uno dispara Notification(opRemove) ->
+  // RemoveComponentFromList, que tocaria listas ya liberadas (use-after-free).
+  // Las listas no son owning, asi que liberarlas despues no hace doble free.
   inherited;
+  FreeAndNil(FNodes);
+  FreeAndNil(FLinks);
 end;
 
 procedure TAIAgentManager.Abort;
@@ -1473,12 +1477,12 @@ end;
 
 procedure TAIAgentManager.AddComponentToList(AComponent: TAIAgentsBase);
 begin
-  if AComponent is TAIAgentsNode then
+  if (AComponent is TAIAgentsNode) and Assigned(FNodes) then
   begin
     if FNodes.IndexOf(TAIAgentsNode(AComponent)) < 0 then
       FNodes.Add(TAIAgentsNode(AComponent));
   end
-  else if AComponent is TAIAgentsLink then
+  else if (AComponent is TAIAgentsLink) and Assigned(FLinks) then
   begin
     if FLinks.IndexOf(TAIAgentsLink(AComponent)) < 0 then
       FLinks.Add(TAIAgentsLink(AComponent));
@@ -1487,9 +1491,9 @@ end;
 
 procedure TAIAgentManager.RemoveComponentFromList(AComponent: TAIAgentsBase);
 begin
-  if AComponent is TAIAgentsNode then
+  if (AComponent is TAIAgentsNode) and Assigned(FNodes) then
     FNodes.Remove(TAIAgentsNode(AComponent))
-  else if AComponent is TAIAgentsLink then
+  else if (AComponent is TAIAgentsLink) and Assigned(FLinks) then
     FLinks.Remove(TAIAgentsLink(AComponent));
 end;
 
