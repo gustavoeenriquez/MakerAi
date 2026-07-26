@@ -55,6 +55,8 @@ const
   JSONRPC_METHOD_NOT_FOUND = -32601;
   JSONRPC_INVALID_PARAMS   = -32602;
   JSONRPC_INTERNAL_ERROR   = -32603;
+  // Rango reservado a errores del servidor (-32000..-32099). ISSUE #110.
+  JSONRPC_UNAUTHORIZED     = -32001;
   MCP_AUTH_FAILED          = -32001;
 
   MCP_PROTOCOL_VERSION     = '2025-06-18';
@@ -81,6 +83,27 @@ type
       const AAuthHeader, ARemoteIP: string;
       out AAuthContext: TAiAuthContext;
       out AIsValid: Boolean) of object;
+
+  // -------------------------------------------------------------------------
+  // ISSUE #110: se dispara durante 'initialize' con la identidad del cliente
+  // (clientInfo.name/version + protocolVersion). Poner AAllow := False rechaza
+  // la conexion y devuelve un error JSON-RPC con AReason.
+  // 100% opt-in: sin handler asignado el comportamiento no cambia.
+  // -------------------------------------------------------------------------
+  TAiMCPClientConnectEvent = procedure(Sender: TObject;
+      const AClientName, AClientVersion, AProtocolVersion: string;
+      var AAllow: Boolean; var AReason: string) of object;
+
+  // -------------------------------------------------------------------------
+  // ISSUE #110 (Parte B): se dispara cuando un request a tools/, resources/ o
+  // prompts/ llega SIN una sesion autorizada (no se hizo 'initialize' o el
+  // Mcp-Session-Id no es valido). El handler puede permitir la peticion
+  // (AAllow := True) o personalizar el motivo del rechazo (AReason).
+  // Solo se evalua cuando el gating esta activo (hay OnClientConnect asignado).
+  // -------------------------------------------------------------------------
+  TAiMCPUnauthorizedEvent = procedure(Sender: TObject;
+      const ASessionID, AMethod: string;
+      var AAllow: Boolean; var AReason: string) of object;
 
   // -------------------------------------------------------------------------
   // IAiMCPTool - interfaz que deben implementar todas las herramientas MCP
@@ -227,11 +250,28 @@ type
     FCorsAllowedOrigins : string;
     FIsActive           : Boolean;
     FUser               : string;
+    // ISSUE #110: vetting opt-in del cliente al recibir 'initialize'
+    FOnClientConnect    : TAiMCPClientConnectEvent;
+    // ISSUE #110 (Parte B): registro de sesiones autorizadas + gating opt-in
+    FAuthorizedSessions : TStringList;   // Sorted; cada linea es un Mcp-Session-Id
+    FSessionsLock       : TCriticalSection;
+    FOnUnauthorizedRequest : TAiMCPUnauthorizedEvent;
 
     // Registros de tools y recursos: TStringList con OwnsObjects = True
     // Key = nombre, Value = TAiMCPToolHolder o TAiMCPResourceHolder
     FTools     : TStringList;
     FResources : TStringList;
+
+    // ISSUE #110 (Parte B): motor compartido por todos los overloads de
+    // ExecuteRequest. AEnforceSession habilita el gating de sesion (solo lo pide
+    // el transporte HTTP). Tras un 'initialize' exitoso devuelve la sesion
+    // emitida en AIssuedSessionID.
+    function DoExecuteRequest(const ARequestJson, ASessionID: string;
+        const AAuthCtx: TAiAuthContext; AEnforceSession: Boolean;
+        out AIssuedSessionID: string): string;
+    class function RequiresSession(const AMethod: string): Boolean; static;
+    function VetClientConnect(AParams: TJSONObject;
+        out AReason: string): Boolean;
 
     // Metodos internos de despacho
     function ParseJSONRequest(const ARequestBody: string): TJSONObject;
@@ -249,6 +289,7 @@ type
     function HandleResourcesList(const AIDStr: string): string;
     function HandleResourcesRead(AParams: TJSONObject;
         const AIDStr: string): string;
+    function HandlePromptsList(const AIDStr: string): string;
 
   public
     constructor Create;
@@ -265,6 +306,21 @@ type
     function ExecuteRequest(const ARequestJson, ASessionID: string): string; overload;
     function ExecuteRequest(const ARequestJson, ASessionID: string;
         const AAuthCtx: TAiAuthContext): string; overload;
+    // ISSUE #110 (Parte B): overload con gating de sesion, usada por el transporte
+    // HTTP. Si la peticion fue un 'initialize' exitoso, AIssuedSessionID trae el
+    // Mcp-Session-Id que el transporte debe devolver en la cabecera de respuesta.
+    function ExecuteRequest(const ARequestJson, ASessionID: string;
+        const AAuthCtx: TAiAuthContext;
+        out AIssuedSessionID: string): string; overload;
+
+    // --- ISSUE #110 (Parte B): gestion de sesiones autorizadas ---
+    // El gating solo se activa si hay un handler OnClientConnect asignado; sin el
+    // el servidor se comporta exactamente igual que antes.
+    function  SessionEnforcementActive: Boolean;
+    function  IsSessionAuthorized(const ASessionID: string): Boolean;
+    procedure RegisterAuthorizedSession(const ASessionID: string);
+    procedure RemoveAuthorizedSession(const ASessionID: string);
+    function  NewSessionId: string;
 
     property IsActive           : Boolean read FIsActive;
     property Port               : Integer read FPort write FPort;
@@ -275,6 +331,12 @@ type
     property CorsEnabled        : Boolean read FCorsEnabled write FCorsEnabled;
     property CorsAllowedOrigins : string  read FCorsAllowedOrigins write FCorsAllowedOrigins;
     property User               : string  read FUser write FUser;
+    // ISSUE #110: vetting opt-in del cliente al conectar (initialize)
+    property OnClientConnect    : TAiMCPClientConnectEvent
+        read FOnClientConnect write FOnClientConnect;
+    // ISSUE #110 (Parte B): request sin sesion autorizada
+    property OnUnauthorizedRequest : TAiMCPUnauthorizedEvent
+        read FOnUnauthorizedRequest write FOnUnauthorizedRequest;
   end;
 
   // -------------------------------------------------------------------------
@@ -297,6 +359,10 @@ type
     function  GetServerName: string;
     procedure SetServerName(const AValue: string);
     procedure SetAiFunctions(const AValue: TAiFunctions);
+    function  GetOnClientConnect: TAiMCPClientConnectEvent;
+    procedure SetOnClientConnect(const AValue: TAiMCPClientConnectEvent);
+    function  GetOnUnauthorizedRequest: TAiMCPUnauthorizedEvent;
+    procedure SetOnUnauthorizedRequest(const AValue: TAiMCPUnauthorizedEvent);
 
   protected
     FLogicServer : TAiMCPLogicServer;
@@ -334,6 +400,12 @@ type
     property ApiKey           : string  read FApiKey write FApiKey;
     property OnValidateRequest: TAiMCPValidateEvent
         read FOnValidateRequest write FOnValidateRequest;
+    // ISSUE #110: vetting opt-in del cliente en 'initialize' (proxy al motor logico)
+    property OnClientConnect  : TAiMCPClientConnectEvent
+        read GetOnClientConnect write SetOnClientConnect;
+    // ISSUE #110 (Parte B): peticion sin sesion autorizada (proxy al motor logico)
+    property OnUnauthorizedRequest : TAiMCPUnauthorizedEvent
+        read GetOnUnauthorizedRequest write SetOnUnauthorizedRequest;
   end;
 
 
@@ -553,12 +625,21 @@ begin
   FResources := TStringList.Create;
   FResources.OwnsObjects := True;
   FResources.CaseSensitive := False;
+
+  // ISSUE #110 (Parte B): registro de sesiones autorizadas
+  FAuthorizedSessions := TStringList.Create;
+  FAuthorizedSessions.Sorted := True;
+  FAuthorizedSessions.Duplicates := dupIgnore;
+  FAuthorizedSessions.CaseSensitive := True;
+  FSessionsLock := TCriticalSection.Create;
 end;
 
 destructor TAiMCPLogicServer.Destroy;
 begin
   FTools.Free;
   FResources.Free;
+  FAuthorizedSessions.Free;
+  FSessionsLock.Free;
   inherited;
 end;
 
@@ -655,6 +736,46 @@ begin
 end;
 
 // ---- Handlers de metodos MCP ------------------------------------------------
+
+// ISSUE #110: vetting opt-in del cliente en 'initialize'. Devuelve False si el
+// handler rechaza la conexion, y en ese caso AReason trae el motivo.
+// Vive fuera de HandleInitialize para que el dispatcher sepa si la conexion fue
+// aceptada y pueda emitir el Mcp-Session-Id sin estado compartido entre hilos.
+function TAiMCPLogicServer.VetClientConnect(AParams: TJSONObject;
+    out AReason: string): Boolean;
+var
+  jClientInfo : TJSONObject;
+  jData       : TJSONData;
+  LCliName    : string;
+  LCliVersion : string;
+  LCliProto   : string;
+  LAllow      : Boolean;
+begin
+  AReason := '';
+  if not Assigned(FOnClientConnect) then
+    Exit(True);
+
+  LCliName    := '';
+  LCliVersion := '';
+  LCliProto   := '';
+  if Assigned(AParams) then
+  begin
+    LCliProto := AParams.Get('protocolVersion', '');
+    jData := AParams.Find('clientInfo');
+    if Assigned(jData) and (jData.JSONType = jtObject) then
+    begin
+      jClientInfo := TJSONObject(jData);
+      LCliName    := jClientInfo.Get('name', '');
+      LCliVersion := jClientInfo.Get('version', '');
+    end;
+  end;
+
+  LAllow := True;
+  FOnClientConnect(Self, LCliName, LCliVersion, LCliProto, LAllow, AReason);
+  if not LAllow and (Trim(AReason) = '') then
+    AReason := 'Connection rejected by server policy';
+  Result := LAllow;
+end;
 
 function TAiMCPLogicServer.HandleInitialize(AParams: TJSONObject;
     const AIDStr: string): string;
@@ -837,6 +958,25 @@ begin
   end;
 end;
 
+function TAiMCPLogicServer.HandlePromptsList(const AIDStr: string): string;
+var
+  Resp, ResultObj: TJSONObject;
+begin
+  // ISSUE #109: no exponemos prompts en capabilities, pero respondemos
+  // 'prompts/list' con una lista vacia en vez de -32601. Clientes reales
+  // (p.ej. opencode) descartan el servidor si este metodo falla en el handshake.
+  ResultObj := TJSONObject.Create;
+  ResultObj.Add('prompts', TJSONArray.Create);
+
+  Resp := BuildResponseFrame(AIDStr);
+  Resp.Add('result', ResultObj);
+  try
+    Result := Resp.AsJSON;
+  finally
+    Resp.Free;
+  end;
+end;
+
 function TAiMCPLogicServer.HandleResourcesRead(AParams: TJSONObject;
     const AIDStr: string): string;
 var
@@ -908,16 +1048,105 @@ begin
   Result := ExecuteRequest(ARequestJson, ASessionID, EmptyCtx);
 end;
 
+// Overload sin gating: la usan Stdio, Direct y SSE.
 function TAiMCPLogicServer.ExecuteRequest(const ARequestJson,
     ASessionID: string; const AAuthCtx: TAiAuthContext): string;
+var
+  LIssued: string;
+begin
+  Result := DoExecuteRequest(ARequestJson, ASessionID, AAuthCtx, False, LIssued);
+end;
+
+// ISSUE #110 (Parte B): overload con gating de sesion, la usa el transporte HTTP.
+function TAiMCPLogicServer.ExecuteRequest(const ARequestJson,
+    ASessionID: string; const AAuthCtx: TAiAuthContext;
+    out AIssuedSessionID: string): string;
+begin
+  Result := DoExecuteRequest(ARequestJson, ASessionID, AAuthCtx, True,
+      AIssuedSessionID);
+end;
+
+// ---------------------------------------------------------------------------
+// ISSUE #110 (Parte B) — sesiones autorizadas
+// ---------------------------------------------------------------------------
+
+class function TAiMCPLogicServer.RequiresSession(const AMethod: string): Boolean;
+begin
+  // initialize/ping no requieren sesion: initialize es justamente quien la crea.
+  Result := (Pos('tools/', AMethod) = 1) or
+            (Pos('resources/', AMethod) = 1) or
+            (Pos('prompts/', AMethod) = 1);
+end;
+
+function TAiMCPLogicServer.SessionEnforcementActive: Boolean;
+begin
+  // 100% opt-in: el gating solo se activa si se asigno OnClientConnect.
+  Result := Assigned(FOnClientConnect);
+end;
+
+function TAiMCPLogicServer.NewSessionId: string;
+var
+  G: TGUID;
+begin
+  CreateGUID(G);
+  Result := GUIDToString(G);
+  Result := StringReplace(Result, '{', '', [rfReplaceAll]);
+  Result := StringReplace(Result, '}', '', [rfReplaceAll]);
+end;
+
+function TAiMCPLogicServer.IsSessionAuthorized(const ASessionID: string): Boolean;
+begin
+  if Trim(ASessionID) = '' then
+    Exit(False);
+  FSessionsLock.Enter;
+  try
+    Result := FAuthorizedSessions.IndexOf(ASessionID) >= 0;
+  finally
+    FSessionsLock.Leave;
+  end;
+end;
+
+procedure TAiMCPLogicServer.RegisterAuthorizedSession(const ASessionID: string);
+begin
+  if Trim(ASessionID) = '' then
+    Exit;
+  FSessionsLock.Enter;
+  try
+    if FAuthorizedSessions.IndexOf(ASessionID) < 0 then
+      FAuthorizedSessions.Add(ASessionID);
+  finally
+    FSessionsLock.Leave;
+  end;
+end;
+
+procedure TAiMCPLogicServer.RemoveAuthorizedSession(const ASessionID: string);
+var
+  Idx: Integer;
+begin
+  FSessionsLock.Enter;
+  try
+    Idx := FAuthorizedSessions.IndexOf(ASessionID);
+    if Idx >= 0 then
+      FAuthorizedSessions.Delete(Idx);
+  finally
+    FSessionsLock.Leave;
+  end;
+end;
+
+function TAiMCPLogicServer.DoExecuteRequest(const ARequestJson,
+    ASessionID: string; const AAuthCtx: TAiAuthContext;
+    AEnforceSession: Boolean; out AIssuedSessionID: string): string;
 var
   ReqObj  : TJSONObject;
   Method  : string;
   IDStr   : string;
   ParamsNode: TJSONData;
   ParamsObj : TJSONObject;
+  LAllow    : Boolean;
+  LReason   : string;
 begin
   Result := '';
+  AIssuedSessionID := '';
 
   ReqObj := ParseJSONRequest(ARequestJson);
   if not Assigned(ReqObj) then
@@ -946,9 +1175,46 @@ begin
       Exit;
     end;
 
+    // --- ISSUE #110 (Parte B): gate de sesion ---
+    // Solo cuando el transporte lo pide (HTTP) y el gating esta activo (hay
+    // OnClientConnect). tools/, resources/ y prompts/ exigen una sesion creada
+    // antes por un 'initialize' exitoso.
+    if AEnforceSession and SessionEnforcementActive and RequiresSession(Method)
+       and (not IsSessionAuthorized(ASessionID)) then
+    begin
+      LAllow  := False;
+      LReason := 'Unauthorized: se requiere un Mcp-Session-Id valido. ' +
+                 'Llama primero a initialize.';
+      if Assigned(FOnUnauthorizedRequest) then
+        FOnUnauthorizedRequest(Self, ASessionID, Method, LAllow, LReason);
+      if not LAllow then
+      begin
+        if Trim(LReason) = '' then
+          LReason := 'Unauthorized';
+        Exit(CreateErrorResponse(IDStr, JSONRPC_UNAUTHORIZED, LReason));
+      end;
+    end;
+
     // Despacho de metodos
     if (Method = 'initialize') then
-      Result := HandleInitialize(ParamsObj, IDStr)
+    begin
+      // ISSUE #110: vetting del cliente antes de aceptar la conexion.
+      if not VetClientConnect(ParamsObj, LReason) then
+        Exit(CreateErrorResponse(IDStr, JSONRPC_UNAUTHORIZED, LReason));
+
+      Result := HandleInitialize(ParamsObj, IDStr);
+
+      // ISSUE #110 (Parte B): emitir la sesion tras un initialize aceptado.
+      // Se reutiliza el Mcp-Session-Id entrante si vino y sigue siendo valido.
+      if AEnforceSession and SessionEnforcementActive then
+      begin
+        if IsSessionAuthorized(ASessionID) then
+          AIssuedSessionID := ASessionID
+        else
+          AIssuedSessionID := NewSessionId;
+        RegisterAuthorizedSession(AIssuedSessionID);
+      end;
+    end
 
     else if (Method = 'ping') then
       Result := HandlePing(IDStr)
@@ -964,6 +1230,9 @@ begin
 
     else if (Method = 'resources/read') then
       Result := HandleResourcesRead(ParamsObj, IDStr)
+
+    else if (Method = 'prompts/list') then
+      Result := HandlePromptsList(IDStr)
 
     else
       Result := CreateErrorResponse(IDStr, JSONRPC_METHOD_NOT_FOUND,
@@ -1032,6 +1301,26 @@ procedure TAiMCPServer.SetServerName(const AValue: string);
 begin
   FServerName := AValue;
   FLogicServer.ServerName := AValue;
+end;
+
+function TAiMCPServer.GetOnClientConnect: TAiMCPClientConnectEvent;
+begin
+  Result := FLogicServer.OnClientConnect;
+end;
+
+procedure TAiMCPServer.SetOnClientConnect(const AValue: TAiMCPClientConnectEvent);
+begin
+  FLogicServer.OnClientConnect := AValue;
+end;
+
+function TAiMCPServer.GetOnUnauthorizedRequest: TAiMCPUnauthorizedEvent;
+begin
+  Result := FLogicServer.OnUnauthorizedRequest;
+end;
+
+procedure TAiMCPServer.SetOnUnauthorizedRequest(const AValue: TAiMCPUnauthorizedEvent);
+begin
+  FLogicServer.OnUnauthorizedRequest := AValue;
 end;
 
 procedure TAiMCPServer.SetAiFunctions(const AValue: TAiFunctions);

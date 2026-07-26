@@ -46,14 +46,16 @@ This is a **source library** — no standalone build system. Units are included 
 
 ## Demos — Compilación y Estructura
 
-Los 45 demos están en `Demos/`. Cada uno es un `.pas` standalone que se compila directamente con FPC.
+Los 46 demos de consola están en `Demos/`. Cada uno es un `.pas` standalone que se compila directamente con FPC.
 
 ```
 Demos/
-├── *.pas            ← fuente (45 archivos)
+├── *.pas            ← fuente (46 archivos)
+├── lcl-minimalchat/ ← demo GUI (proyecto LCL, no lo tocan los scripts)
 ├── bin/             ← ejecutables compilados
 ├── lib/             ← objetos temporales (.o, .ppu, .a)
-└── build_demos.sh   ← script de compilación
+├── build_demos.sh   ← script de compilación (Linux/macOS)
+└── build_demos.ps1  ← script de compilación (Windows)
 ```
 
 **Compilar todo:**
@@ -63,13 +65,20 @@ cd Demos
 FPC=/ruta/fpc ./build_demos.sh  # FPC específico
 ```
 
+```powershell
+.\build_demos.ps1                      # FPC del PATH o el de C:\lazarus
+.\build_demos.ps1 -Fpc C:\fpc\fpc.exe  # FPC específico
+```
+
 **Limpiar y recompilar:**
 ```bash
-./build_demos.sh clean   # borra bin/ y lib/
+./build_demos.sh clean   # borra bin/ y lib/     (en Windows: -Clean)
 ./build_demos.sh         # recompila desde cero
 ```
 
-El script **no para en errores** — compila los 45 pase lo que pase y al final muestra un reporte OK / FAIL. Útil cuando un demo depende de API keys o drivers que no están disponibles.
+El script **no para en errores** — compila los 46 pase lo que pase y al final muestra un reporte OK / FAIL. Útil cuando un demo depende de API keys o drivers que no están disponibles.
+
+Los demos GUI van en subcarpetas: los scripts compilan todo `Demos/*.pas` como programas independientes y las unidades de un proyecto LCL no lo son.
 
 ### uDemoHelper — Inicialización silenciosa (obligatorio en todo demo)
 
@@ -143,6 +152,10 @@ Two engines: **Vector RAG** (`uMakerAi.RAG.Vectors.pas`) — HNSW + BM25 hybrid 
 ### MCP (to port from Delphi)
 
 Server: HTTP, SSE, StdIO, Direct transports. `TAiFunctions` bridge auto-exposes function collections as MCP tools. Client: `TMCPClientCustom` consumes external MCP servers. Auth: `@ApiKey` header + `OnValidate` event.
+
+**Session gate (ISSUE #110)** — opt-in y solo en el transporte HTTP. Se activa al asignar `OnClientConnect`: ese handler recibe `clientInfo.name/version` + `protocolVersion` durante `initialize` y puede rechazar la conexión. Con el gating activo, un `initialize` aceptado emite un `Mcp-Session-Id` (cabecera de respuesta) que `tools/`, `resources/` y `prompts/` deben reenviar; sin sesión válida se responde `-32001`, previo paso por `OnUnauthorizedRequest` (que puede permitir la petición). `initialize` y `ping` nunca requieren sesión. Sin `OnClientConnect` asignado el servidor se comporta exactamente como antes. Verificado por `Demos/demo_mcp_session_gate.pas`.
+
+**`prompts/list` (ISSUE #109)** — el servidor no expone prompts en `capabilities`, pero responde `prompts/list` con lista vacía en vez de `-32601`: clientes reales descartan el servidor si ese método falla durante el handshake.
 
 ## FPC vs Delphi Translation Table
 

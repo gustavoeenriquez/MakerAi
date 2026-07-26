@@ -271,7 +271,11 @@ begin
   AResponse.SetCustomHeader('Access-Control-Allow-Methods',
       'POST, GET, OPTIONS');
   AResponse.SetCustomHeader('Access-Control-Allow-Headers',
-      'Content-Type, Authorization, X-API-Key, X-Session-ID');
+      'Content-Type, Authorization, X-API-Key, X-Session-ID, Mcp-Session-Id');
+  // ISSUE #110 (Parte B): sin Expose-Headers el navegador no deja leer la sesion
+  // emitida en la respuesta del initialize.
+  AResponse.SetCustomHeader('Access-Control-Expose-Headers',
+      'Mcp-Session-Id');
   AResponse.SetCustomHeader('Access-Control-Max-Age',
       IntToStr(CORS_MAX_AGE_SECONDS));
 end;
@@ -311,17 +315,27 @@ procedure TAiMCPHttpServer.HandlePostRequest(
     var AResponse: TFPHTTPConnectionResponse;
     const AAuthCtx: TAiAuthContext);
 var
-  RequestBody, ResponseBody, SessionID: string;
+  RequestBody, ResponseBody, SessionID, IssuedSessionID: string;
 begin
   try
     // Leer body del POST — en fphttpserver, ARequest.Content es el body como string
     RequestBody := ARequest.Content;
 
-    SessionID := ARequest.GetCustomHeader('X-Session-ID');
+    // ISSUE #110 (Parte B): Mcp-Session-Id es la cabecera estandar del protocolo;
+    // X-Session-ID se mantiene como fallback por compatibilidad.
+    SessionID := ARequest.GetCustomHeader('Mcp-Session-Id');
+    if SessionID = '' then
+      SessionID := ARequest.GetCustomHeader('X-Session-ID');
 
-    ResponseBody := FLogicServer.ExecuteRequest(RequestBody, SessionID, AAuthCtx);
+    ResponseBody := FLogicServer.ExecuteRequest(RequestBody, SessionID, AAuthCtx,
+        IssuedSessionID);
 
     AResponse.ContentType := 'application/json; charset=utf-8';
+
+    // Tras un 'initialize' aceptado, devolver la sesion emitida: el cliente debe
+    // reenviarla en las peticiones a tools/, resources/ y prompts/.
+    if IssuedSessionID <> '' then
+      AResponse.SetCustomHeader('Mcp-Session-Id', IssuedSessionID);
 
     if ResponseBody = '' then
     begin
