@@ -600,10 +600,7 @@ begin
     if ChunkText <> '' then
     begin
       if Assigned(Metadata) then
-      begin
         Metadata.Properties['Posicion'] := I;
-        Metadata.Properties['FechaDoc'] := EncodeDate(Random(20)+2000,Random(11)+1,01);
-      end;
 
       Emb := AddItem(ChunkText, MetaData);
       if Assigned(Emb) then
