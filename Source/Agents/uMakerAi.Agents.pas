@@ -1,4 +1,4 @@
-﻿// MIT License
+// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -260,6 +260,7 @@ type
     // al inicio y salir si retorna False.
     function CheckJoinAndPrepareInput(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink): Boolean;
     procedure Reset;
+    procedure ResetExecutionState;
   public
     constructor Create(aOwner: TComponent); override;
     destructor Destroy; override;
@@ -368,6 +369,7 @@ type
     function SetEntryPoint(const ANodeName: string): TAIAgentManager;
     function SetFinishPoint(const ANodeName: string): TAIAgentManager;
     procedure Compile;
+    procedure ResetExecutionState;
     procedure SaveToStream(AStream: TStream);
     Procedure LoadFromStream(AStream: TStream);
     procedure SaveStateToStream(AStream: TStream);
@@ -416,7 +418,7 @@ procedure Register;
 
 implementation
 
-uses uMakerAi.Agents.EngineRegistry;
+uses uMakerAi.Agents.EngineRegistry, uMakerAi.Agents.Attributes;
 
 {$IF CompilerVersion < 35}
 class function TInterlockedHelper.Exchange(var Target: Boolean; Value: Boolean): Boolean;
@@ -553,6 +555,10 @@ begin
       if not(LProp.IsReadable and LProp.IsWritable and (LProp.Visibility = mvPublished)) then
         Continue;
 
+      // Las propiedades marcadas [TSecret] nunca se escriben a disco (M-05)
+      if LProp.HasAttribute<TSecretAttribute> then
+        Continue;
+
       LValue := LProp.GetValue(ATool);
       if LValue.IsEmpty then
         Continue;
@@ -598,6 +604,11 @@ begin
       LProp := LRttiType.GetProperty(LPair.JsonString.Value);
       if Assigned(LProp) and LProp.IsWritable then
       begin
+        // Un archivo manipulado no puede inyectar credenciales: los valores
+        // entrantes para propiedades [TSecret] se ignoran (M-05)
+        if LProp.HasAttribute<TSecretAttribute> then
+          Continue;
+
         LJsonValue := LPair.JsonValue;
         LValue := TValue.Empty; // Inicializar
 
@@ -1028,9 +1039,10 @@ begin
   if FCompiled then
     Exit;
   try
-    FAbort := False;
-    FBlackboard.Clear;
-
+    // Compile solo valida y construye la estructura (InEdges). El estado de
+    // ejecucion (blackboard, mensajes) NO se toca aqui: limpiarlo liberaba el
+    // AskMsg/ResMsg sembrados por Run antes de la primera corrida (M-03).
+    // Para un reinicio explicito del estado usar ResetExecutionState.
     if not Assigned(FStartNode) then
       raise Exception.Create('StartNode is not assigned.');
     if not Assigned(FEndNode) then
@@ -1082,6 +1094,25 @@ begin
       DoError(nil, nil, E);
       raise;
     end;
+  end;
+end;
+
+procedure TAIAgentManager.ResetExecutionState;
+var
+  Node: TAIAgentsNode;
+  Link: TAIAgentsLink;
+begin
+  // Reinicio explicito del estado de ejecucion, separado de Compile (M-03).
+  // Limpia el blackboard (libera AskMsg/ResMsg) y el estado transitorio de
+  // nodos y links; NO toca la estructura del grafo ni FCompiled.
+  FAbort := False;
+  FBlackboard.Clear;
+  for Node in FNodes do
+    Node.ResetExecutionState;
+  for Link in FLinks do
+  begin
+    Link.Ready := False;
+    Link.NoCycles := 0;
   end;
 end;
 
@@ -2792,163 +2823,6 @@ begin
   end;
 end;
 
-{ procedure TAIAgentsLink.DoExecute(Sender: TAIAgentsNode);
-  var
-  IsOk, Handled: Boolean;
-  NodesToRun: TList<TAIAgentsNode>;
-  Decision: string;
-  TargetNode: TAIAgentsNode;
-  ManualNodes: TList<TAIAgentsNode>;
-  LBlackboardData: TDictionary<string, TValue>;
-  Node: TAIAgentsNode;
-  begin
-  // Validaci?n de seguridad inicial
-  if (FGraph = nil) or FGraph.FAbort then
-  Exit;
-
-  // PASO 1: Ejecutar evento OnExecute para intervenci?n manual (el programador decide en c?digo)
-  Handled := False;
-
-  IsOk := Sender.FError; //Toma el estado de error del nodo como valor inicial;
-
-
-  if Assigned(FOnExecute) then
-  begin
-  try
-  FOnExecute(Sender, Self, IsOk, Handled);
-  except
-  on E: Exception do
-  begin
-  FGraph.DoError(Sender, Self, E);
-  Exit;
-  end;
-  end;
-  end;
-
-  // Si el programador marc? 'Handled' en el evento, se asume que la l?gica
-  // de navegaci?n ya fue gestionada externamente y salimos.
-  if Handled then
-  Exit;
-
-  // PASO 2: Evaluar el resultado de IsOk y manejar fallos o reintentos
-  if not IsOk then
-  begin
-  Inc(FNoCycles);
-  if FNoCycles >= FMaxCycles then
-  begin
-  var E := Exception.CreateFmt('Maximum retry cycles (%d) reached on link "%s" from node "%s". Aborting this path.',
-  [FMaxCycles, Self.Name, Sender.Name]);
-  FGraph.DoError(Sender, Self, E);
-  Exit;
-  end
-  else
-  begin
-  // Si el enlace fall? pero tiene una ruta de escape/error (NextNo), la seguimos.
-  if Assigned(FNextNo) then
-  begin
-  var LTask := TTask.Run(
-  procedure
-  begin
-  if (FGraph <> nil) and not FGraph.FAbort then
-  FNextNo.DoExecute(FSourceNode, Self);
-  end, FGraph.FThreadPool);
-
-  FGraph.FActiveTasksLock.Enter;
-  try
-  FGraph.FActiveTasks.Add(LTask);
-  finally
-  FGraph.FActiveTasksLock.Leave;
-  end;
-  end;
-  Exit;
-  end;
-  end;
-
-  // PASO 3: IsOk es TRUE. Construir la lista de nodos de destino seg?n el modo de enlace.
-  NodesToRun := TList<TAIAgentsNode>.Create;
-  try
-  try
-  case FMode of
-  lmFanout:
-  begin
-  if Assigned(FNextA) then NodesToRun.Add(FNextA);
-  if Assigned(FNextB) then NodesToRun.Add(FNextB);
-  if Assigned(FNextC) then NodesToRun.Add(FNextC);
-  if Assigned(FNextD) then NodesToRun.Add(FNextD);
-  end;
-
-  lmConditional:
-  begin
-  Decision := FGraph.Blackboard.GetString(IfThen(FConditionalKey <> '', FConditionalKey, 'next_route'));
-  if Assigned(FConditionalTargets) and FConditionalTargets.TryGetValue(Decision, TargetNode) and Assigned(TargetNode) then
-  NodesToRun.Add(TargetNode)
-  else if Assigned(FNextNo) then
-  NodesToRun.Add(FNextNo);
-  end;
-
-  lmManual:
-  begin
-  Decision := FGraph.Blackboard.GetString(IfThen(FManualTargetsKey <> '', FManualTargetsKey, 'next_targets'));
-  ManualNodes := TList<TAIAgentsNode>.Create;
-  try
-  BuildManualTargets(Decision, ManualNodes);
-  for Node in ManualNodes do
-  NodesToRun.Add(Node);
-  finally
-  ManualNodes.Free;
-  end;
-  end;
-
-  lmExpression:
-  begin
-  LBlackboardData := FGraph.Blackboard.FData;
-  // Evaluamos expresiones secuencialmente. Se a?ade el primer nodo cuya condici?n se cumpla.
-  if Assigned(FNextA) and (FExpressionA <> '') and EvalCondition(FExpressionA, LBlackboardData) then
-  NodesToRun.Add(FNextA)
-  else if Assigned(FNextB) and (FExpressionB <> '') and EvalCondition(FExpressionB, LBlackboardData) then
-  NodesToRun.Add(FNextB)
-  else if Assigned(FNextC) and (FExpressionC <> '') and EvalCondition(FExpressionC, LBlackboardData) then
-  NodesToRun.Add(FNextC)
-  else if Assigned(FNextD) and (FExpressionD <> '') and EvalCondition(FExpressionD, LBlackboardData) then
-  NodesToRun.Add(FNextD)
-  else if Assigned(FNextNo) then
-  NodesToRun.Add(FNextNo);
-  end;
-  end;
-  except
-  on E: Exception do
-  begin
-  FGraph.DoError(Sender, Self, E);
-  Exit;
-  end;
-  end;
-
-  // ---------------------------------------------------------------------------
-  // PASO 4: Despachar la ejecuci?n a los nodos de destino.
-  // ---------------------------------------------------------------------------
-  if NodesToRun.Count = 0 then
-  Exit;
-
-  if NodesToRun.Count = 1 then
-  begin
-  // Si solo hay un destino, continuamos la ejecuci?n de forma secuencial en este hilo
-  NodesToRun[0].DoExecute(FSourceNode, Self);
-  end
-  else
-  begin
-  // Fork paralelo: Si hay m?ltiples destinos, cada uno se convierte en una tarea del pool
-  for Node in NodesToRun do
-  begin
-  CreateAndQueueTask(Node, FSourceNode, Self);
-  end;
-  end;
-
-  finally
-  NodesToRun.Free;
-  end;
-  end;
-}
-
 procedure TAIAgentsLink.Print(Value: String);
 begin
   if Assigned(FGraph) then
@@ -3043,13 +2917,17 @@ end;
 
 procedure TAIAgentsNode.Reset;
 begin
-  FInEdges.Clear;
-  FJoinInputs.Clear; // --- NUEVO: Limpiar diccionario de join ---
+  FInEdges.Clear; // estructura: se reconstruye en Compile
+  ResetExecutionState;
+end;
+
+procedure TAIAgentsNode.ResetExecutionState;
+begin
+  FJoinInputs.Clear;
   Input     := '';
   Output    := '';
   FError    := False;
   FMsgError := '';
-  // --- Limpiar estado de suspensi?n ---
   FSuspended      := False;
   FSuspendReason  := '';
   FSuspendContext := '';
@@ -3159,8 +3037,8 @@ begin
     begin
       FJoinLock.Enter;
       try
-        // Limpiar siempre después de ejecutar, tanto jmAny como jmAll.
-        // Para jmAll: la limpieza garantiza que el próximo ciclo (retry/loop)
+        // Limpiar siempre despu�s de ejecutar, tanto jmAny como jmAll.
+        // Para jmAll: la limpieza garantiza que el pr�ximo ciclo (retry/loop)
         // espere correctamente todas las entradas antes de disparar de nuevo.
         FJoinInputs.Clear;
       finally

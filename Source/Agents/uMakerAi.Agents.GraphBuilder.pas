@@ -77,7 +77,7 @@ implementation
 
 uses
   System.Rtti, System.TypInfo,
-  uMakerAi.Agents.EngineRegistry;
+  uMakerAi.Agents.EngineRegistry, uMakerAi.Agents.Attributes;
 
 { TGraphBuilder }
 
@@ -318,18 +318,19 @@ begin
 
     LSourcePortId := LSourcePortJson.GetValue<string>(cJsonPortId, LSourceTerminalId);
 
-    if LLink.Mode = lmConditional then
+    // El puerto out_failure es la rama de error en TODOS los modos (M-07):
+    // debe evaluarse antes que el modo, o en lmConditional quedaria registrado
+    // como condicion de valor "out_failure" y el nodo sin salida de fallo.
+    if SameText(LSourcePortId, cPortOutFailure) then
+    begin
+      LLink.NextNo := LTargetNode;
+    end
+    else if LLink.Mode = lmConditional then
     begin
       LLink.AddConditionalTarget(LSourcePortId, LTargetNode);
     end
     else
     begin
-      if SameText(LSourcePortId, cPortOutFailure) then
-      begin
-        LLink.NextNo := LTargetNode;
-      end
-      else
-      begin
         // MEJORA: L�gica de asignaci�n a NextA/B/C/D simplificada y menos repetitiva.
         var
           LNextSlots: array [0 .. 3] of PPointer;
@@ -352,7 +353,6 @@ begin
 
         if not LAssigned then
           LSourceNode.Print(Format('Warning: More than %d standard output ports connected from node %s. Connection to %s ignored.', [Length(LNextSlots), LSourceNode.Name, LTargetNode.Name]));
-      end;
     end;
   end;
 end;
@@ -373,6 +373,11 @@ begin
       LRttiProp := LRttiType.GetProperty(LParamPair.JsonString.Value);
       if Assigned(LRttiProp) and LRttiProp.IsWritable then
       begin
+        // Un JSON manipulado no puede inyectar credenciales: los valores para
+        // propiedades marcadas [TSecret] se ignoran (M-05)
+        if LRttiProp.HasAttribute<TSecretAttribute> then
+          Continue;
+
         LParamValue := LParamPair.JsonValue;
 
         case LRttiProp.PropertyType.TypeKind of

@@ -30,6 +30,7 @@ uses
   System.JSON,
   System.Net.HttpClient,     // IHTTPResponse (para TAiErrorEvent)
   uMakerAi.Agents,
+  uMakerAi.Agents.Attributes, // TSecretAttribute
   uMakerAi.Agents.IAiTool,
   uMakerAi.Agents.ToolRegistry,
   uMakerAi.Agents.Skill,     // TAiSkill
@@ -107,6 +108,8 @@ type
     property Model        : String  read FModel        write FModel;
     // API key. Soporta sintaxis @ENV_VAR_NAME para resolución en runtime.
     // Vacío = usa el ApiKey del skill (si está asignado).
+    // [TSecret]: nunca se serializa a disco ni se acepta desde archivos.
+    [TSecret('apiKey')]
     property ApiKey       : String  read FApiKey       write FApiKey;
     // URL base del servicio (requerida para Azure OpenAI y endpoints personalizados).
     // Se mapea a Chat.Params.Values['URL']. Vacío = usa el endpoint por defecto del driver.
