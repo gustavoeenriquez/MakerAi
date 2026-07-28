@@ -50,6 +50,7 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 032-MCPServerDataSnap | DataSnap integration | HTTP with DataSnap |
 | 035-MCPServerWithTAiFunctions | MCP + function calling | TAiFunctions integration |
 | 036-MCPServerStdIO_AiFunction | Function-based MCP | StdIO with AI functions |
+| 037-MCPServerRAG | RAG semántico vía MCP (SSE default) | `TAiRAGVector` + `TAiOpenAiEmbeddings`, híbrido embeddings+BM25, persistencia `rag_index.mkai` |
 
 ### Video Generation (04x)
 | Demo | Purpose | Provider |

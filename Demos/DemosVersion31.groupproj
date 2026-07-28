@@ -30,6 +30,9 @@
         <Projects Include="035-MCPServerWithTAiFunctions\MCPServerAiFunctions.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="037-MCPServerRAG\MCPServerRAG.dproj">
+            <Dependencies/>
+        </Projects>
         <Projects Include="032-MCP_StdIO_FileManager\McpFileServerSSE.dproj">
             <Dependencies/>
         </Projects>
@@ -299,14 +302,23 @@
     <Target Name="ChatWebList:Make">
         <MSBuild Projects="012-ChatAllFunctions\ChatWebList.dproj" Targets="Make"/>
     </Target>
+    <Target Name="MCPServerRAG">
+        <MSBuild Projects="037-MCPServerRAG\MCPServerRAG.dproj"/>
+    </Target>
+    <Target Name="MCPServerRAG:Clean">
+        <MSBuild Projects="037-MCPServerRAG\MCPServerRAG.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MCPServerRAG:Make">
+        <MSBuild Projects="037-MCPServerRAG\MCPServerRAG.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="MinimalChat;ChatFull;RagUpdateDb;RagVectorQL;Sqlite_RAG;AiMCPServerDemo;McpFileServerStIO;McpFileServerHttp;MCPServerAiFunctions;McpFileServerSSE;MCPDataSnapServer;BasicRAGGraph;RagGraphDemo;VeoDemo;ListAllModels;CompareEmbeddings;ClaudeChatTest;AiAgentDemo;DemoRagDataBase;VoiceMonitorAndWhisperDemo;Dalle_Generar;RagDemoAvance;DocumentManagerDemo;ChatWebList"/>
+        <CallTarget Targets="MinimalChat;ChatFull;RagUpdateDb;RagVectorQL;Sqlite_RAG;AiMCPServerDemo;McpFileServerStIO;McpFileServerHttp;MCPServerAiFunctions;MCPServerRAG;McpFileServerSSE;MCPDataSnapServer;BasicRAGGraph;RagGraphDemo;VeoDemo;ListAllModels;CompareEmbeddings;ClaudeChatTest;AiAgentDemo;DemoRagDataBase;VoiceMonitorAndWhisperDemo;Dalle_Generar;RagDemoAvance;DocumentManagerDemo;ChatWebList"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MinimalChat:Clean;ChatFull:Clean;RagUpdateDb:Clean;RagVectorQL:Clean;Sqlite_RAG:Clean;AiMCPServerDemo:Clean;McpFileServerStIO:Clean;McpFileServerHttp:Clean;MCPServerAiFunctions:Clean;McpFileServerSSE:Clean;MCPDataSnapServer:Clean;BasicRAGGraph:Clean;RagGraphDemo:Clean;VeoDemo:Clean;ListAllModels:Clean;CompareEmbeddings:Clean;ClaudeChatTest:Clean;AiAgentDemo:Clean;DemoRagDataBase:Clean;VoiceMonitorAndWhisperDemo:Clean;Dalle_Generar:Clean;RagDemoAvance:Clean;DocumentManagerDemo:Clean;ChatWebList:Clean"/>
+        <CallTarget Targets="MinimalChat:Clean;ChatFull:Clean;RagUpdateDb:Clean;RagVectorQL:Clean;Sqlite_RAG:Clean;AiMCPServerDemo:Clean;McpFileServerStIO:Clean;McpFileServerHttp:Clean;MCPServerAiFunctions:Clean;MCPServerRAG:Clean;McpFileServerSSE:Clean;MCPDataSnapServer:Clean;BasicRAGGraph:Clean;RagGraphDemo:Clean;VeoDemo:Clean;ListAllModels:Clean;CompareEmbeddings:Clean;ClaudeChatTest:Clean;AiAgentDemo:Clean;DemoRagDataBase:Clean;VoiceMonitorAndWhisperDemo:Clean;Dalle_Generar:Clean;RagDemoAvance:Clean;DocumentManagerDemo:Clean;ChatWebList:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MinimalChat:Make;ChatFull:Make;RagUpdateDb:Make;RagVectorQL:Make;Sqlite_RAG:Make;AiMCPServerDemo:Make;McpFileServerStIO:Make;McpFileServerHttp:Make;MCPServerAiFunctions:Make;McpFileServerSSE:Make;MCPDataSnapServer:Make;BasicRAGGraph:Make;RagGraphDemo:Make;VeoDemo:Make;ListAllModels:Make;CompareEmbeddings:Make;ClaudeChatTest:Make;AiAgentDemo:Make;DemoRagDataBase:Make;VoiceMonitorAndWhisperDemo:Make;Dalle_Generar:Make;RagDemoAvance:Make;DocumentManagerDemo:Make;ChatWebList:Make"/>
+        <CallTarget Targets="MinimalChat:Make;ChatFull:Make;RagUpdateDb:Make;RagVectorQL:Make;Sqlite_RAG:Make;AiMCPServerDemo:Make;McpFileServerStIO:Make;McpFileServerHttp:Make;MCPServerAiFunctions:Make;MCPServerRAG:Make;McpFileServerSSE:Make;MCPDataSnapServer:Make;BasicRAGGraph:Make;RagGraphDemo:Make;VeoDemo:Make;ListAllModels:Make;CompareEmbeddings:Make;ClaudeChatTest:Make;AiAgentDemo:Make;DemoRagDataBase:Make;VoiceMonitorAndWhisperDemo:Make;Dalle_Generar:Make;RagDemoAvance:Make;DocumentManagerDemo:Make;ChatWebList:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>
