@@ -47,6 +47,7 @@ type
     FHttpServer: TIdHTTPServer;
 
     procedure HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+    procedure ParseAuthentication(AContext: TIdContext; const AAuthType, AAuthData: String; var VUsername, VPassword: String; var VHandled: Boolean);
     procedure HandleOptionsRequest(AResponseInfo: TIdHTTPResponseInfo);
     procedure HandleGetRequest(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
     procedure HandlePostRequest(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo; const AAuthContext: TAiAuthContext);
@@ -100,6 +101,17 @@ begin
   FHttpServer := TIdHTTPServer.Create(Self);
   FHttpServer.OnCommandGet := HttpCommand;
   FHttpServer.OnCommandOther := HttpCommand;
+  FHttpServer.OnParseAuthentication := ParseAuthentication;
+end;
+
+procedure TAiMCPHttpServer.ParseAuthentication(AContext: TIdContext; const AAuthType, AAuthData: String;
+  var VUsername, VPassword: String; var VHandled: Boolean);
+begin
+  // Sin este handler, Indy responde 401 a cualquier esquema Authorization
+  // distinto de Basic (p.ej. "Bearer <token>") antes de llegar a HttpCommand.
+  // La validación real ocurre en ValidateRequest sobre el header crudo
+  // (ApiKey / OnValidateRequest); aquí solo evitamos el rechazo prematuro.
+  VHandled := True;
 end;
 
 destructor TAiMCPHttpServer.Destroy;

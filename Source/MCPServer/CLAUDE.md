@@ -156,7 +156,15 @@ Result := TAiMCPResponseBuilder.New
 
 - MCP SSE Server is experimental (intermittent connectivity)
 - Linux compilation requires manual path adjustments
-- No built-in authentication (`OnValidateRequest` event is stubbed)
+
+## Authentication
+
+Two layers in `TAiMCPServer.ValidateRequest` (HTTP and SSE transports enforce it on every endpoint; 401 on failure):
+
+1. **`ApiKey` property** — exact match against `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+2. **`OnValidateRequest` event** — custom validation (Basic login/password, JWT, DB lookup); receives the raw auth header + remote IP and fills `TAiAuthContext`.
+
+Both Indy transports assign `OnParseAuthentication` (`VHandled := True`) so Indy does not reject non-Basic `Authorization` schemes (e.g. `Bearer`) with 401 before the request reaches `ValidateRequest`. Working example with hardcoded credentials: `/Demos/037-MCPServerRAG/`.
 
 ## Documentation
 
