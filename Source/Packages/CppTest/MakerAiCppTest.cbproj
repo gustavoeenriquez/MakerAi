@@ -1,0 +1,56 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</ProjectGuid>
+        <MainSource>main.cpp</MainSource>
+        <Config Condition="'$(Config)'==''">Release</Config>
+        <ProjectVersion>20.0</ProjectVersion>
+        <Base>True</Base>
+        <AppType>Console</AppType>
+        <FrameworkType>None</FrameworkType>
+        <Platform Condition="'$(Platform)'==''">Win64x</Platform>
+        <TargetedPlatforms>512</TargetedPlatforms>
+        <ProjectOutput>.\$(Platform)\$(Config)\</ProjectOutput>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64x' and '$(Base)'=='true') or '$(Base_Win64x)'!=''">
+        <Base_Win64x>true</Base_Win64x>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Release' or '$(Cfg_2)'!=''">
+        <Cfg_2>true</Cfg_2>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64x' and '$(Cfg_2)'=='true') or '$(Cfg_2_Win64x)'!=''">
+        <Cfg_2_Win64x>true</Cfg_2_Win64x>
+        <CfgParent>Cfg_2</CfgParent>
+        <Cfg_2>true</Cfg_2>
+        <Base>true</Base>
+    </PropertyGroup>
+    <!-- Base configuration -->
+    <PropertyGroup Condition="'$(Base)'!=''">
+        <BCC_IncludePath>E:\Delphi\Delphi13\Compo\FMXCompo\AiMaker\Source\Packages\hpp;$(BCC_IncludePath)</BCC_IncludePath>
+        <Defines>WIN32_LEAN_AND_MEAN;$(Defines)</Defines>
+    </PropertyGroup>
+    <ItemGroup>
+        <CppCompile Include="main.cpp">
+            <BuildOrder>1</BuildOrder>
+        </CppCompile>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>CPlusPlusBuilder.Personality.12</Borland.Personality>
+        <Borland.ProjectType>CppConsoleApplication</Borland.ProjectType>
+        <BorlandProject>
+        <Delphi.Personality/>
+        <Deployment/>
+        <Platforms>
+            <Platform value="Win64x">True</Platform>
+        </Platforms>
+        </BorlandProject>
+        <QtProject/>
+    </ProjectExtensions>
+    <Import Project="$(BDS)\bin\CodeGear.Cpp.Targets" Condition="Exists('$(BDS)\bin\CodeGear.Cpp.Targets')"/>
+</Project>
