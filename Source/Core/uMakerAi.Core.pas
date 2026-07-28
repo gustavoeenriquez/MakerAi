@@ -70,7 +70,7 @@ Type
     cap_Pdf,              // modelo entiende PDFs entrantes
     cap_WebSearch,        // modelo puede buscar en la web
     cap_Reasoning,        // modelo tiene razonamiento extendido (CoT)
-    cap_CodeInterpreter,  // modelo puede ejecutar c�digo
+    cap_CodeInterpreter,  // modelo puede ejecutar código
     cap_Memory,           // modelo tiene memoria persistente
     cap_TextEditor,       // modelo puede editar archivos
     cap_ComputerUse,      // modelo puede controlar el ordenador
