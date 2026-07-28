@@ -70,11 +70,9 @@ var
   // Nodos — tecnologias
   NTransformer, NRLHF, NSFT: TAiRagGraphNode;
 
-  Nodes   : TNodeArray;
   I       : Integer;
   GqlRes  : string;
   Path    : TObjectArray;
-  PathNode: TAiRagGraphNode;
   PathEdge: TAiRagGraphEdge;
 
   // Para Match programatico
