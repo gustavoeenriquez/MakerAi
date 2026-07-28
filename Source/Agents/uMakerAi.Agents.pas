@@ -52,6 +52,11 @@ type
   end;
 {$ENDIF}
 
+const
+  // Propiedades de infraestructura del componente que NO son parametros de la
+  // herramienta: se excluyen del blob 'properties' en ambos sentidos (M-04).
+  AI_TOOL_RESERVED_PROPS: array [0 .. 3] of string = ('Name', 'Tag', 'ID', 'Description');
+
 type
 
 {$RTTI INHERIT}
@@ -143,6 +148,27 @@ type
   TAiAgentsToolSample = class(TAiToolBase)
   protected
     procedure Execute(ANode: TAIAgentsNode; const AInput: string; var AOutput: string); override;
+  end;
+
+  // Error estructural del grafo (validacion en GraphBuilder, serializacion
+  // incompleta en SaveToStream, etc.)
+  EAiGraphError = class(Exception);
+
+  // M-04: mapper RTTI publico y unico para los parametros de una tool.
+  // Excluye AI_TOOL_RESERVED_PROPS y respeta [TSecret] en ambos sentidos:
+  // las propiedades secretas no se escriben y sus valores entrantes se ignoran.
+  // FromJSON es tolerante: acepta valores tipados o representados como string
+  // (unifica el mapper del GraphBuilder que leia todo como texto).
+  TAiToolParams = class
+  private
+    class function IsReserved(const APropName: string): Boolean;
+  public
+    class function ToJSON(ATool: TAiToolBase): TJSONObject;
+    class procedure FromJSON(ATool: TAiToolBase; AJson: TJSONObject);
+    // JSON Schema de los parametros editables; las propiedades [TSecret] se
+    // incluyen con "writeOnly": true para que un editor muestre un selector
+    // de credencial en lugar de un campo de texto.
+    class function SchemaOf(AToolClass: TClass): TJSONObject;
   end;
 
   // --- Base Component ---
@@ -314,6 +340,7 @@ type
     FOnStart: TAIAgentsOnStart;
     FDescription: String;
     FAsynchronous: Boolean;
+    FAllowPartialSerialization: Boolean;
     // --- Ejecuci?n durable (checkpoint / suspend-resume) ---
     FCheckpointer:       IAiCheckpointer;
     FCurrentThreadID:    string;
@@ -406,6 +433,11 @@ type
     property TimeoutMs: Cardinal read FTimeoutMs write FTimeoutMs default 60000;
     Property Description: String read FDescription write SetDescription;
     property Asynchronous: Boolean read FAsynchronous write SetAsynchronous default True;
+    // M-06: con False (default), SaveToStream lanza EAiGraphError si un nodo
+    // tiene OnExecute sin Tool (el handler no puede reconstruirse al cargar y
+    // el archivo quedaria "completo" pero inservible). True conserva el
+    // placeholder historico como volcado de diagnostico.
+    property AllowPartialSerialization: Boolean read FAllowPartialSerialization write FAllowPartialSerialization default False;
     property OnSuspend: TAIAgentsOnSuspend read FOnSuspend write SetOnSuspend;
   end;
 
@@ -535,7 +567,19 @@ begin
   end;
 end;
 
-function SerializeToolProperties(ATool: TAiToolBase): TJSONObject;
+{ TAiToolParams }
+
+class function TAiToolParams.IsReserved(const APropName: string): Boolean;
+var
+  S: string;
+begin
+  for S in AI_TOOL_RESERVED_PROPS do
+    if SameText(S, APropName) then
+      Exit(True);
+  Result := False;
+end;
+
+class function TAiToolParams.ToJSON(ATool: TAiToolBase): TJSONObject;
 var
   LContext: TRttiContext;
   LRttiType: TRttiType;
@@ -553,6 +597,10 @@ begin
     begin
       // Solo nos interesan las propiedades que se pueden leer y escribir
       if not(LProp.IsReadable and LProp.IsWritable and (LProp.Visibility = mvPublished)) then
+        Continue;
+
+      // Infraestructura del componente, no parametros de la tool (M-04)
+      if IsReserved(LProp.Name) then
         Continue;
 
       // Las propiedades marcadas [TSecret] nunca se escriben a disco (M-05)
@@ -583,7 +631,7 @@ begin
   end;
 end;
 
-procedure DeserializeToolProperties(ATool: TAiToolBase; APropertiesJSON: TJSONObject);
+class procedure TAiToolParams.FromJSON(ATool: TAiToolBase; AJson: TJSONObject);
 var
   LContext: TRttiContext;
   LRttiType: TRttiType;
@@ -593,17 +641,21 @@ var
   LJsonValue: TJSONValue;
   OrdValue: Integer;
 begin
-  if not Assigned(ATool) or not Assigned(APropertiesJSON) then
+  if not Assigned(ATool) or not Assigned(AJson) then
     Exit;
 
   LContext := TRttiContext.Create;
   try
     LRttiType := LContext.GetType(ATool.ClassType);
-    for LPair in APropertiesJSON do
+    for LPair in AJson do
     begin
       LProp := LRttiType.GetProperty(LPair.JsonString.Value);
       if Assigned(LProp) and LProp.IsWritable then
       begin
+        // Infraestructura del componente: se ignora al leer (M-04)
+        if IsReserved(LProp.Name) then
+          Continue;
+
         // Un archivo manipulado no puede inyectar credenciales: los valores
         // entrantes para propiedades [TSecret] se ignoran (M-05)
         if LProp.HasAttribute<TSecretAttribute> then
@@ -612,21 +664,37 @@ begin
         LJsonValue := LPair.JsonValue;
         LValue := TValue.Empty; // Inicializar
 
+        // Tolerante al origen: acepta el tipo JSON nativo o su representacion
+        // como string (los graph JSON de editores suelen traer todo como texto)
         case LProp.PropertyType.TypeKind of
           tkInteger:
-            LValue := TValue.From<Integer>((LJsonValue as TJSONNumber).AsInt);
+            if LJsonValue is TJSONNumber then
+              LValue := TValue.From<Integer>(TJSONNumber(LJsonValue).AsInt)
+            else
+              LValue := TValue.From<Integer>(StrToIntDef(LJsonValue.Value, 0));
           tkInt64:
-            LValue := TValue.From<Int64>((LJsonValue as TJSONNumber).AsInt64);
+            if LJsonValue is TJSONNumber then
+              LValue := TValue.From<Int64>(TJSONNumber(LJsonValue).AsInt64)
+            else
+              LValue := TValue.From<Int64>(StrToInt64Def(LJsonValue.Value, 0));
           tkFloat:
-            LValue := TValue.From<Double>((LJsonValue as TJSONNumber).AsDouble);
+            if LJsonValue is TJSONNumber then
+              LValue := TValue.From<Double>(TJSONNumber(LJsonValue).AsDouble)
+            else
+              LValue := TValue.From<Double>(StrToFloatDef(LJsonValue.Value, 0.0, TFormatSettings.Invariant));
           tkString, tkUString, tkLString, tkWString:
-            LValue := TValue.From<string>((LJsonValue as TJSONString).Value);
+            LValue := TValue.From<string>(LJsonValue.Value);
           tkEnumeration:
             if LProp.PropertyType.Handle = TypeInfo(Boolean) then
-              LValue := TValue.From<Boolean>((LJsonValue as TJSONBool).AsBoolean)
+            begin
+              if LJsonValue is TJSONBool then
+                LValue := TValue.From<Boolean>(TJSONBool(LJsonValue).AsBoolean)
+              else
+                LValue := TValue.From<Boolean>(SameText(LJsonValue.Value, 'true'));
+            end
             else
             begin
-              OrdValue := GetEnumValue(LProp.PropertyType.Handle, (LJsonValue as TJSONString).Value);
+              OrdValue := GetEnumValue(LProp.PropertyType.Handle, LJsonValue.Value);
               if OrdValue >= 0 then
                 LValue := TValue.FromOrdinal(LProp.PropertyType.Handle, OrdValue);
             end;
@@ -635,6 +703,92 @@ begin
         if not LValue.IsEmpty then
           LProp.SetValue(ATool, LValue);
       end;
+    end;
+  finally
+    LContext.Free;
+  end;
+end;
+
+class function TAiToolParams.SchemaOf(AToolClass: TClass): TJSONObject;
+var
+  LContext: TRttiContext;
+  LRttiType: TRttiType;
+  LProp: TRttiProperty;
+  LPropsObj, LPropSchema: TJSONObject;
+  LEnumArr: TJSONArray;
+  LParamAttr: TToolParameterAttribute;
+  LSecretAttr: TSecretAttribute;
+  LTypeData: PTypeData;
+  i: Integer;
+begin
+  Result := TJSONObject.Create;
+  Result.AddPair('type', 'object');
+  LPropsObj := TJSONObject.Create;
+  Result.AddPair('properties', LPropsObj);
+  if not Assigned(AToolClass) then
+    Exit;
+
+  LContext := TRttiContext.Create;
+  try
+    LRttiType := LContext.GetType(AToolClass);
+    for LProp in LRttiType.GetProperties do
+    begin
+      if not(LProp.IsReadable and LProp.IsWritable and (LProp.Visibility = mvPublished)) then
+        Continue;
+      if IsReserved(LProp.Name) then
+        Continue;
+
+      LPropSchema := TJSONObject.Create;
+
+      case LProp.PropertyType.TypeKind of
+        tkInteger, tkInt64:
+          LPropSchema.AddPair('type', 'integer');
+        tkFloat:
+          LPropSchema.AddPair('type', 'number');
+        tkString, tkUString, tkLString, tkWString:
+          LPropSchema.AddPair('type', 'string');
+        tkEnumeration:
+          if LProp.PropertyType.Handle = TypeInfo(Boolean) then
+            LPropSchema.AddPair('type', 'boolean')
+          else
+          begin
+            LPropSchema.AddPair('type', 'string');
+            LEnumArr := TJSONArray.Create;
+            LTypeData := GetTypeData(LProp.PropertyType.Handle);
+            for i := LTypeData^.MinValue to LTypeData^.MaxValue do
+              LEnumArr.Add(GetEnumName(LProp.PropertyType.Handle, i));
+            LPropSchema.AddPair('enum', LEnumArr);
+          end;
+      else
+        begin
+          // Tipo no soportado por el mapper: no aparece en el schema
+          LPropSchema.Free;
+          Continue;
+        end;
+      end;
+
+      // Metadatos de presentacion del atributo [TToolParameter]
+      LParamAttr := LProp.GetAttribute<TToolParameterAttribute>;
+      if Assigned(LParamAttr) then
+      begin
+        if LParamAttr.DisplayName <> '' then
+          LPropSchema.AddPair('title', LParamAttr.DisplayName);
+        if LParamAttr.Hint <> '' then
+          LPropSchema.AddPair('description', LParamAttr.Hint);
+        if LParamAttr.DefaultValue <> '' then
+          LPropSchema.AddPair('default', LParamAttr.DefaultValue);
+      end;
+
+      // Las [TSecret] SI aparecen en el schema, marcadas writeOnly, para que
+      // un editor muestre un selector de credencial y no un campo de texto
+      LSecretAttr := LProp.GetAttribute<TSecretAttribute>;
+      if Assigned(LSecretAttr) then
+      begin
+        LPropSchema.AddPair('writeOnly', TJSONBool.Create(True));
+        LPropSchema.AddPair('x-credential-type', LSecretAttr.CredentialType);
+      end;
+
+      LPropsObj.AddPair(LProp.Name, LPropSchema);
     end;
   finally
     LContext.Free;
@@ -1315,7 +1469,7 @@ begin
                 var
                 LPropertiesJSON := LToolDataObj.GetValue('properties') as TJSONObject;
                 if Assigned(LPropertiesJSON) then
-                  DeserializeToolProperties(LNode.Tool, LPropertiesJSON);
+                  TAiToolParams.FromJSON(LNode.Tool, LPropertiesJSON);
               end;
             end;
           end;
@@ -1932,6 +2086,15 @@ begin
     LNodesArray := TJSONArray.Create;
     for LNode in FNodes do
     begin
+      // M-06: un OnExecute sin Tool no puede reconstruirse desde el archivo;
+      // por defecto es un error en vez de un placeholder silencioso.
+      if Assigned(LNode.OnExecute) and (not Assigned(LNode.Tool)) and (not FAllowPartialSerialization) then
+      begin
+        LNodesArray.Free;
+        raise EAiGraphError.CreateFmt('Node "%s" has an OnExecute handler that cannot be serialized. ' +
+          'Attach a Tool, or set AllowPartialSerialization := True to write a diagnostic placeholder.', [LNode.Name]);
+      end;
+
       LNodeObj := TJSONObject.Create;
       LNodeObj.AddPair('name', LNode.Name);
       LNodeObj.AddPair('description', LNode.Description);
@@ -1944,7 +2107,7 @@ begin
         var
         LToolDataObj := TJSONObject.Create;
         LToolDataObj.AddPair('className', LNode.Tool.ClassName);
-        LToolDataObj.AddPair('properties', SerializeToolProperties(LNode.Tool));
+        LToolDataObj.AddPair('properties', TAiToolParams.ToJSON(LNode.Tool));
         LNodeObj.AddPair('tool', LToolDataObj);
         // --- FIN DE LA MODIFICACI?N ---
       end
@@ -1953,10 +2116,8 @@ begin
         LNodeObj.AddPair('tool', TJSONNull.Create);
       end;
 
-      // --- MANEJO DE EVENTOS (requiere l?gica adicional) ---
-      // Aqu? guardar?as un identificador del evento. Por ahora, un placeholder.
       if Assigned(LNode.OnExecute) then
-        LNodeObj.AddPair('onExecuteHandler', 'HandlerFor_' + LNode.Name) // Placeholder
+        LNodeObj.AddPair('onExecuteHandler', 'HandlerFor_' + LNode.Name) // Placeholder (solo diagnostico, ver M-06)
       else
         LNodeObj.AddPair('onExecuteHandler', TJSONNull.Create);
 

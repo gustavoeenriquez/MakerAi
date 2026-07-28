@@ -7,8 +7,9 @@ uses
   uMakerAi.Agents;
 
 type
-  // Error estructural del grafo detectado al cargar desde JSON (M-02)
-  EAiGraphError = class(Exception);
+  // Error estructural del grafo (M-02). La declaracion vive en uMakerAi.Agents
+  // (tambien la usa SaveToStream, M-06); este alias preserva compatibilidad.
+  EAiGraphError = uMakerAi.Agents.EAiGraphError;
 
   TGraphBuilder = class
   private
@@ -87,7 +88,7 @@ implementation
 
 uses
   System.Rtti, System.TypInfo,
-  uMakerAi.Agents.EngineRegistry, uMakerAi.Agents.Attributes;
+  uMakerAi.Agents.EngineRegistry;
 
 { TGraphBuilder }
 
@@ -385,68 +386,11 @@ begin
 end;
 
 procedure TGraphBuilder.SetToolParameters(ATool: TAiToolBase; AParamsJson: TJSONObject);
-var
-  LRttiContext: TRttiContext;
-  LRttiType: TRttiType;
-  LRttiProp: TRttiProperty;
-  LParamPair: TJSONPair;
-  LParamValue: TJSONValue;
 begin
-  LRttiContext := TRttiContext.Create;
-  try
-    LRttiType := LRttiContext.GetType(ATool.ClassType);
-    for LParamPair in AParamsJson do
-    begin
-      LRttiProp := LRttiType.GetProperty(LParamPair.JsonString.Value);
-      if Assigned(LRttiProp) and LRttiProp.IsWritable then
-      begin
-        // Un JSON manipulado no puede inyectar credenciales: los valores para
-        // propiedades marcadas [TSecret] se ignoran (M-05)
-        if LRttiProp.HasAttribute<TSecretAttribute> then
-          Continue;
-
-        LParamValue := LParamPair.JsonValue;
-
-        case LRttiProp.PropertyType.TypeKind of
-          tkString, tkUString:
-            LRttiProp.SetValue(ATool, LParamValue.Value);
-          tkInteger, tkInt64:
-            LRttiProp.SetValue(ATool, StrToIntDef(LParamValue.Value, 0));
-          tkFloat:
-            LRttiProp.SetValue(ATool, StrToFloatDef(LParamValue.Value, 0.0, TFormatSettings.Invariant));
-          tkEnumeration:
-            begin
-              if LRttiProp.PropertyType.Handle = TypeInfo(Boolean) then
-              begin
-                var
-                LBoolValue := False;
-                if LParamValue is TJSONTrue then
-                  LBoolValue := True
-                else if LParamValue is TJSONFalse then
-                  LBoolValue := False
-                else
-                  LBoolValue := SameText(LParamValue.Value, 'true');
-                LRttiProp.SetValue(ATool, TValue.From<Boolean>(LBoolValue));
-              end
-              else
-              begin
-                var
-                LOrdinalValue := GetEnumValue(LRttiProp.PropertyType.Handle, LParamValue.Value);
-                if LOrdinalValue <> -1 then
-                begin
-                  var
-                  LEnumValue := TValue.FromOrdinal(LRttiProp.PropertyType.Handle, LOrdinalValue);
-                  if not LEnumValue.IsEmpty then
-                    LRttiProp.SetValue(ATool, LEnumValue);
-                end;
-              end;
-            end;
-        end;
-      end;
-    end;
-  finally
-    LRttiContext.Free;
-  end;
+  // M-04: delega en el mapper unico. TAiToolParams.FromJSON es tolerante a
+  // valores tipados o como string, excluye las propiedades reservadas
+  // (Name/Tag/ID/Description) e ignora las marcadas [TSecret].
+  TAiToolParams.FromJSON(ATool, AParamsJson);
 end;
 
 function TGraphBuilder.FindPortJsonByTerminalId(ANodeJson: TJSONObject; const APortTerminalId: string): TJSONObject;
