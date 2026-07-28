@@ -7,6 +7,9 @@ uses
   uMakerAi.Agents;
 
 type
+  // Error estructural del grafo detectado al cargar desde JSON (M-02)
+  EAiGraphError = class(Exception);
+
   TGraphBuilder = class
   private
   // MEJORA: Constantes para evitar "Magic Strings" y errores de tipeo.
@@ -59,6 +62,7 @@ type
     FJsonGraph: TJSONObject;
     FNodeMap: TDictionary<string, TAIAgentsNode>;
     FNodeJsonMap: TDictionary<string, TJSONObject>;
+    FStrictValidation: Boolean;
 
     procedure ParseNodes;
     procedure ParseEdges;
@@ -71,6 +75,12 @@ type
     destructor Destroy; override;
 
     procedure BuildFromJson(const AJsonString: string);
+
+    // M-02: con True (default) los defectos estructurales del JSON lanzan
+    // EAiGraphError (arista a nodo inexistente, puerto no declarado, exceso
+    // de salidas). Con False se conserva el comportamiento historico de
+    // advertir por el log y continuar (con perdida silenciosa de aristas).
+    property StrictValidation: Boolean read FStrictValidation write FStrictValidation default True;
   end;
 
 implementation
@@ -89,6 +99,7 @@ begin
   FAgents := AAgents;
   FNodeMap := TDictionary<string, TAIAgentsNode>.Create;
   FNodeJsonMap := TDictionary<string, TJSONObject>.Create;
+  FStrictValidation := True;
 end;
 
 destructor TGraphBuilder.Destroy;
@@ -269,14 +280,24 @@ begin
     LSourceTerminalId := LEdgeJson.GetValue<string>(cJsonEdgeSourceTerminal);
 
     if not(FNodeMap.TryGetValue(LSourceNodeId, LSourceNode) and FNodeMap.TryGetValue(LTargetNodeId, LTargetNode)) then
-      Continue; // Or raise an error for an edge pointing to a non-existent node
+    begin
+      if FStrictValidation then
+        raise EAiGraphError.CreateFmt('Edge references a non-existent node (source "%s" -> target "%s").',
+          [LSourceNodeId, LTargetNodeId]);
+      Continue;
+    end;
 
     if not FNodeJsonMap.TryGetValue(LSourceNodeId, LSourceNodeJson) then
       Continue;
 
     LSourcePortJson := FindPortJsonByTerminalId(LSourceNodeJson, LSourceTerminalId);
     if not Assigned(LSourcePortJson) then
+    begin
+      if FStrictValidation then
+        raise EAiGraphError.CreateFmt('Source port "%s" is not declared on node "%s".',
+          [LSourceTerminalId, LSourceNode.Name]);
       Continue;
+    end;
 
     LSourcePortCategory := LSourcePortJson.GetValue<string>(cJsonPortCategory, 'tool');
     if SameText(LSourcePortCategory, cJsonPortCategoryAccessory) then
@@ -352,7 +373,13 @@ begin
         end;
 
         if not LAssigned then
+        begin
+          if FStrictValidation then
+            raise EAiGraphError.CreateFmt('More than %d standard output ports connected from node "%s" (connection to "%s"). ' +
+              'Use lmConditional/lmManual for N-way routing or set StrictValidation:=False to keep the legacy behavior of dropping the edge.',
+              [Length(LNextSlots), LSourceNode.Name, LTargetNode.Name]);
           LSourceNode.Print(Format('Warning: More than %d standard output ports connected from node %s. Connection to %s ignored.', [Length(LNextSlots), LSourceNode.Name, LTargetNode.Name]));
+        end;
     end;
   end;
 end;
