@@ -684,7 +684,7 @@ begin
     Client.Get(Url, Response);
 
     if not Assigned(FContent) then FContent := TMemoryStream.Create;
-  FContent.Clear;
+    FContent.Clear;
     Response.Position := 0;
     FContent.CopyFrom(Response, 0);
     FContent.Position  := 0;
@@ -746,7 +746,7 @@ begin
   if FileExists(aFileName) then
   begin
     if not Assigned(FContent) then FContent := TMemoryStream.Create;
-  FContent.Clear;
+    FContent.Clear;
     FContent.LoadFromFile(aFileName);
     FContentLoaded := True;
     FFullFileName  := aFileName;
@@ -789,7 +789,7 @@ begin
   St := TBytesStream.Create(Decoded);
   try
     if not Assigned(FContent) then FContent := TMemoryStream.Create;
-  FContent.Clear;
+    FContent.Clear;
     St.Position := 0;
     FContent.CopyFrom(St, 0);
     FContentLoaded := True;
@@ -806,7 +806,7 @@ begin
   if Assigned(Stream) then
   begin
     if not Assigned(FContent) then FContent := TMemoryStream.Create;
-  FContent.Clear;
+    FContent.Clear;
     Stream.Position := 0;
     FContent.CopyFrom(Stream, 0);
     FContentLoaded := True;
@@ -818,7 +818,7 @@ end;
 
 procedure TAiMediaFile.SaveToFile(aFileName: string);
 begin
-  if not Assigned(FContent) then Exit;
+  if not Assigned(FContent) then raise Exception.Create('TAiMediaFile.SaveToFile: no content loaded');
   FContent.SaveToFile(aFileName);
 end;
 
