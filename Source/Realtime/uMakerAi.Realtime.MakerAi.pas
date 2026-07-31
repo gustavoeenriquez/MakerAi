@@ -30,15 +30,12 @@ uses
   uMakerAi.Realtime, uMakerAi.Realtime.WebSocket, uMakerAi.WebSocket.Client;
 
 type
-  // Evento para el texto de la respuesta del asistente (LLM output)
-  TAiRealtimeAssistantTextEvent = procedure(Sender: TObject;
-    const AText: string) of object;
+  // Aliases de compatibilidad — los tipos de evento viven ahora en
+  // uMakerAi.Realtime (compartidos por todos los drivers de voz full-duplex)
+  TAiRealtimeAssistantTextEvent = uMakerAi.Realtime.TAiRealtimeAssistantTextEvent;
+  TAiRealtimeAudioChunkEvent    = uMakerAi.Realtime.TAiRealtimeAudioChunkEvent;
 
-  // Evento para fragmentos de audio TTS devueltos por el servidor (PCM16 24kHz)
-  TAiRealtimeAudioChunkEvent = procedure(Sender: TObject;
-    const AData: TBytes) of object;
-
-  TAiMakerAiRealtimeChat = class(TAiRealtimeBase)
+  TAiMakerAiRealtimeChat = class(TAiRealtimeVoiceBase)
   private
     FWebSocket:     TAiRealtimeWSClient;
     FConnectThread: TThread;
@@ -51,10 +48,7 @@ type
     FRagId:         string;
     FStateless:     Boolean;
     FVadMode:       string;  // '' | 'server' | 'disabled'
-    // Eventos adicionales (salida de asistente + audio TTS)
-    FOnAssistantText: TAiRealtimeAssistantTextEvent;
-    FOnAudioChunk:    TAiRealtimeAudioChunkEvent;
-    FOnAudioDone:     TNotifyEvent;
+    // Eventos VAD simplificados (sin parametros, propios de este protocolo)
     FOnSpeechStart:   TNotifyEvent;
     FOnSpeechEnd:     TNotifyEvent;
     // Callbacks internos del WebSocket
@@ -66,10 +60,8 @@ type
     // Procesamiento de eventos del servidor
     procedure ProcessServerEvent(const JObj: TJSONObject);
     procedure SendSessionMessage;
-    // Dispatchers thread-safe para los nuevos eventos
-    procedure DoAssistantText(const AText: string);
-    procedure DoAudioChunk(const AData: TBytes);
-    procedure DoAudioDone;
+    // Dispatchers thread-safe para los eventos VAD simplificados
+    // (DoAssistantText/DoAudioChunk/DoAudioDone se heredan de la base)
     procedure DoSpeechStart;
     procedure DoSpeechEnd;
   protected
@@ -102,13 +94,8 @@ type
     //             threshold 0.5, silence 500ms, prefix 300ms). El cliente NO
     //             debe enviar type:commit — el servidor lo dispara solo.
     property VadMode:      string  read FVadMode  write FVadMode;
-    // Eventos nuevos — especificos de este driver (texto + audio del asistente)
-    property OnAssistantText: TAiRealtimeAssistantTextEvent
-      read  FOnAssistantText write FOnAssistantText;
-    property OnAudioChunk: TAiRealtimeAudioChunkEvent
-      read  FOnAudioChunk write FOnAudioChunk;
-    property OnAudioDone: TNotifyEvent
-      read  FOnAudioDone write FOnAudioDone;
+    // OnAssistantText / OnAudioChunk / OnAudioDone se heredan de
+    // TAiRealtimeVoiceBase (published en la base)
     // Eventos VAD del servidor (speech_start / speech_end de OpenAI)
     property OnSpeechStart: TNotifyEvent read FOnSpeechStart write FOnSpeechStart;
     property OnSpeechEnd:   TNotifyEvent read FOnSpeechEnd   write FOnSpeechEnd;
@@ -264,37 +251,7 @@ begin
   end;
 end;
 
-{ Dispatchers thread-safe para los eventos de audio/texto del asistente }
-
-procedure TAiMakerAiRealtimeChat.DoAssistantText(const AText: string);
-var
-  LText: string;
-begin
-  if not Assigned(FOnAssistantText) then Exit;
-  LText := AText;
-  TThread.Queue(nil, procedure begin
-    if Assigned(FOnAssistantText) then FOnAssistantText(Self, LText);
-  end);
-end;
-
-procedure TAiMakerAiRealtimeChat.DoAudioChunk(const AData: TBytes);
-var
-  LData: TBytes;
-begin
-  if not Assigned(FOnAudioChunk) then Exit;
-  LData := AData; // TBytes es array dinamico: asignacion incrementa refcount
-  TThread.Queue(nil, procedure begin
-    if Assigned(FOnAudioChunk) then FOnAudioChunk(Self, LData);
-  end);
-end;
-
-procedure TAiMakerAiRealtimeChat.DoAudioDone;
-begin
-  if not Assigned(FOnAudioDone) then Exit;
-  TThread.Queue(nil, procedure begin
-    if Assigned(FOnAudioDone) then FOnAudioDone(Self);
-  end);
-end;
+{ Dispatchers thread-safe para los eventos VAD simplificados }
 
 procedure TAiMakerAiRealtimeChat.DoSpeechStart;
 begin

@@ -60,6 +60,32 @@ New universal connector for real-time speech-to-text via WebSocket:
 - Pure-Pascal WebSocket client with native TLS via Windows SChannel — no extra DLLs required
 - Thread-safe PCM16 resampler; supports push-based audio streaming from any source
 
+### Grok Voice — Real-Time Speech-to-Speech (xAI) 🆕
+
+Full-duplex voice conversation with xAI's **Grok Voice** models (`grok-voice-think-fast-2.0`) over a single WebSocket — the user speaks, Grok listens, reasons and answers back with voice:
+
+- **`TAiGrokRealtimeChat`** — complete driver for `wss://api.x.ai/v1/realtime` (OpenAI Realtime-compatible protocol, 24 kHz PCM16)
+- **`TAiRealtimeVoiceBase`** — new base class for full-duplex voice drivers; adds `OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`, `OnAudioDone` (shared with `TAiMakerAiRealtimeChat`)
+- Live user transcription (`OnTranscriptDelta` / `OnTranscriptCompleted`), server VAD, streamed assistant text and TTS audio
+- Session options: `Voice` (eva, ara, rex, sal, leo or custom voice_id), `Instructions`, `ReasoningEffort` (high / none for lower latency), automatic regional language hints (`es`→`es-MX`, `pt`→`pt-BR`)
+- Works through `TAiRealtimeConnection` too — just set `DriverName := 'Grok'`
+
+```pascal
+uses uMakerAi.Realtime.AiConnection, uMakerAi.Realtime.Grok;
+
+Voice := TAiRealtimeConnection.Create(nil);
+Voice.DriverName   := 'Grok';
+Voice.ApiKey       := '@GROK_API_KEY';
+Voice.Language     := 'es';
+Voice.OnTranscriptCompleted := HandleUserText;   // what the user said
+Voice.OnAssistantText       := HandleGrokText;   // what Grok answered
+Voice.OnAudioChunk          := HandleGrokAudio;  // Grok's voice (PCM16 24 kHz)
+Voice.Connect;
+// ... stream microphone audio via Voice.SendAudioChunk(Data) ...
+// For file-based audio (non-continuous), close the turn explicitly:
+// Voice.CommitAudio; TAiGrokRealtimeChat(Voice.Instance).CreateResponse;
+```
+
 ### cmSmartDispatch — Intelligent Chat Routing
 
 New `ChatMode` value for automatic two-pass routing:
@@ -425,6 +451,10 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 ---
 
 ## 🔄 Changelog
+
+### Unreleased (dev)
+- New: **`TAiGrokRealtimeChat`** — xAI Grok Voice speech-to-speech driver (`wss://api.x.ai/v1/realtime`, OpenAI Realtime-compatible, 24 kHz PCM16); live user transcription + streamed assistant text and TTS audio; runtime-tested against the live API
+- New: **`TAiRealtimeVoiceBase`** — shared base for full-duplex voice drivers (`OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`, `OnAudioDone`); `TAiMakerAiRealtimeChat` and `TAiRealtimeConnection` now inherit from it, so voice events flow through the universal connector
 
 ### v3.4 (May 2026)
 - Tested with Delphi 13.1 Florence

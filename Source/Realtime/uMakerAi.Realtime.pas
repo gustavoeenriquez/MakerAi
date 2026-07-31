@@ -40,6 +40,14 @@ type
   TAiRealtimeSpeechEvent = procedure(Sender: TObject;
     AudioMs: Int64; const ItemId: string) of object;
 
+  // Texto del asistente (completo o delta) — drivers de voz full-duplex
+  TAiRealtimeAssistantTextEvent = procedure(Sender: TObject;
+    const AText: string) of object;
+
+  // Fragmento de audio TTS del asistente (PCM16)
+  TAiRealtimeAudioChunkEvent = procedure(Sender: TObject;
+    const AData: TBytes) of object;
+
   TAiRealtimeBase = class;
   TAiRealtimeClass = class of TAiRealtimeBase;
 
@@ -140,6 +148,38 @@ type
     property OnTranscriptDelta:     TAiRealtimeTranscriptDeltaEvent read FOnTranscriptDelta     write FOnTranscriptDelta;
     property OnTranscriptCompleted: TAiRealtimeTranscriptCompletedEvent read FOnTranscriptCompleted write FOnTranscriptCompleted;
     property OnError: TAiRealtimeErrorEvent read FOnError write FOnError;
+  end;
+
+  // -------------------------------------------------------------------
+  // Base para drivers de voz full-duplex (STT + LLM + TTS)
+  // Agrega la salida del asistente: texto (delta y completo) y audio TTS.
+  // Drivers: TAiMakerAiRealtimeChat, TAiGrokRealtimeChat
+  // -------------------------------------------------------------------
+  TAiRealtimeVoiceBase = class(TAiRealtimeBase)
+  private
+    FOnAssistantText:      TAiRealtimeAssistantTextEvent;
+    FOnAssistantTextDelta: TAiRealtimeAssistantTextEvent;
+    FOnAudioChunk:         TAiRealtimeAudioChunkEvent;
+    FOnAudioDone:          TNotifyEvent;
+  protected
+    // Dispatchers thread-safe (via TThread.Queue al hilo principal)
+    procedure DoAssistantText(const AText: string);
+    procedure DoAssistantTextDelta(const ADelta: string);
+    procedure DoAudioChunk(const AData: TBytes);
+    procedure DoAudioDone;
+  published
+    // Texto completo de la respuesta del asistente (al finalizar el turno)
+    property OnAssistantText: TAiRealtimeAssistantTextEvent
+      read FOnAssistantText write FOnAssistantText;
+    // Fragmentos de texto en streaming (drivers que lo soporten)
+    property OnAssistantTextDelta: TAiRealtimeAssistantTextEvent
+      read FOnAssistantTextDelta write FOnAssistantTextDelta;
+    // Audio TTS del asistente en PCM16 (sample rate segun el driver)
+    property OnAudioChunk: TAiRealtimeAudioChunkEvent
+      read FOnAudioChunk write FOnAudioChunk;
+    // Fin del audio del turno actual
+    property OnAudioDone: TNotifyEvent
+      read FOnAudioDone write FOnAudioDone;
   end;
 
 implementation
@@ -343,6 +383,49 @@ begin
     TThread.Queue(nil, procedure begin
       if Assigned(FOnError) then FOnError(Self, ErrorMsg, ErrorCode);
     end);
+end;
+
+{ TAiRealtimeVoiceBase — dispatchers de salida del asistente }
+
+procedure TAiRealtimeVoiceBase.DoAssistantText(const AText: string);
+var
+  LText: string;
+begin
+  if not Assigned(FOnAssistantText) then Exit;
+  LText := AText;
+  TThread.Queue(nil, procedure begin
+    if Assigned(FOnAssistantText) then FOnAssistantText(Self, LText);
+  end);
+end;
+
+procedure TAiRealtimeVoiceBase.DoAssistantTextDelta(const ADelta: string);
+var
+  LDelta: string;
+begin
+  if not Assigned(FOnAssistantTextDelta) then Exit;
+  LDelta := ADelta;
+  TThread.Queue(nil, procedure begin
+    if Assigned(FOnAssistantTextDelta) then FOnAssistantTextDelta(Self, LDelta);
+  end);
+end;
+
+procedure TAiRealtimeVoiceBase.DoAudioChunk(const AData: TBytes);
+var
+  LData: TBytes;
+begin
+  if not Assigned(FOnAudioChunk) then Exit;
+  LData := AData; // TBytes es array dinamico: asignacion incrementa refcount
+  TThread.Queue(nil, procedure begin
+    if Assigned(FOnAudioChunk) then FOnAudioChunk(Self, LData);
+  end);
+end;
+
+procedure TAiRealtimeVoiceBase.DoAudioDone;
+begin
+  if not Assigned(FOnAudioDone) then Exit;
+  TThread.Queue(nil, procedure begin
+    if Assigned(FOnAudioDone) then FOnAudioDone(Self);
+  end);
 end;
 
 end.

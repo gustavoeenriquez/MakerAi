@@ -154,6 +154,7 @@ curl -X POST http://localhost:8080/mcp \
 - `uMakerAi.Realtime.AiConnection.pas` - `TAiRealtimeConnection` universal connector (same pattern as `TAiChatConnection`)
 - `uMakerAi.Realtime.OpenAI.pas` - `TAiOpenAiRealtimeSTT` — WebSocket to `wss://api.openai.com/v1/realtime`, 24 kHz PCM16; full implementation
 - `uMakerAi.Realtime.Gemini.pas` - `TAiGeminiRealtimeSTT` — 16 kHz PCM16; **stub, pendiente implementación**
+- `uMakerAi.Realtime.Grok.pas` - `TAiGrokRealtimeChat` — xAI Grok Voice speech-to-speech, `wss://api.x.ai/v1/realtime`, protocolo compatible OpenAI Realtime, 24 kHz PCM16; implementado, pendiente prueba runtime
 - `uMakerAi.Realtime.WebSocket.pas` - compatibility shim; re-exports `TAiRealtimeWSClient` → `TAiWSClient` (Source/WebSocket/)
 
 **ChatUI (`Source/ChatUI/`)**: FMX visual components

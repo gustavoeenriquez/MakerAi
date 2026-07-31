@@ -8,7 +8,7 @@ The `Source/Realtime/` module provides real-time audio streaming via WebSocket. 
 
 Two types of drivers exist:
 - **STT-only** (OpenAI, Gemini): transcribe user audio → fire `OnTranscriptDelta` / `OnTranscriptCompleted`
-- **Full voice conversation** (MakerAI): STT + LLM + TTS in one WebSocket — also fires `OnAssistantText`, `OnAudioChunk`, `OnAudioDone`
+- **Full voice conversation** (MakerAI, Grok): STT + LLM + TTS in one WebSocket — inherit from `TAiRealtimeVoiceBase`, which adds `OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`, `OnAudioDone`
 
 Demos:
 - Console: `Demos/Console/Demos09-Realtime/01-RealtimeSTT/`
@@ -20,11 +20,12 @@ Demos:
 
 | File | Class | Role |
 |------|-------|------|
-| `uMakerAi.Realtime.pas` | `TAiRealtimeBase`, `TAiRealtimeFactory` | Abstract base + factory |
+| `uMakerAi.Realtime.pas` | `TAiRealtimeBase`, `TAiRealtimeVoiceBase`, `TAiRealtimeFactory` | Abstract bases + factory |
 | `uMakerAi.Realtime.AiConnection.pas` | `TAiRealtimeConnection` | Universal connector (same pattern as `TAiChatConnection`) |
 | `uMakerAi.Realtime.OpenAI.pas` | `TAiOpenAiRealtimeSTT` | OpenAI driver — **complete** |
 | `uMakerAi.Realtime.Gemini.pas` | `TAiGeminiRealtimeSTT` | Gemini driver — **stub, pending** |
 | `uMakerAi.Realtime.MakerAi.pas` | `TAiMakerAiRealtimeChat` | MakerAI driver — **complete** (STT+LLM+TTS) |
+| `uMakerAi.Realtime.Grok.pas` | `TAiGrokRealtimeChat` | xAI Grok Voice driver — speech-to-speech, OpenAI Realtime-compatible protocol — **implemented, pending runtime test** |
 | `uMakerAi.Realtime.WebSocket.pas` | `TAiRealtimeWSClient` (shim → `TAiWSClient`) | Compatibility alias; implementation in `Source/WebSocket/` |
 
 ### Class Hierarchy
@@ -33,8 +34,10 @@ Demos:
 TAiRealtimeBase (abstract)
   ├── TAiOpenAiRealtimeSTT    — wss://api.openai.com/v1/realtime, 24 kHz  (STT only)
   ├── TAiGeminiRealtimeSTT    — 16 kHz [STUB]
-  ├── TAiMakerAiRealtimeChat  — wss://api.cimamaker.com/v1/audio/realtime, 24 kHz  (STT+LLM+TTS)
-  └── TAiRealtimeConnection  — universal connector (wraps concrete driver)
+  └── TAiRealtimeVoiceBase (abstract — adds OnAssistantText/Delta, OnAudioChunk, OnAudioDone)
+        ├── TAiMakerAiRealtimeChat  — wss://api.cimamaker.com/v1/audio/realtime, 24 kHz  (STT+LLM+TTS)
+        ├── TAiGrokRealtimeChat     — wss://api.x.ai/v1/realtime, 24 kHz  (speech-to-speech)
+        └── TAiRealtimeConnection   — universal connector (wraps concrete driver)
 ```
 
 ---
@@ -97,8 +100,12 @@ AiRealtime.OnTranscriptCompleted := HandleTranscript;
 AiRealtime.Connect;
 ```
 
-`DriverName` values: `'OpenAI'`, `'Gemini'` (stub).  
+`DriverName` values: `'OpenAI'`, `'MakerAi'`, `'Grok'`, `'Gemini'` (stub).  
 Changing `DriverName` recreates the internal driver instance.
+
+The connector inherits from `TAiRealtimeVoiceBase`, so it also re-exposes the
+voice events (`OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`,
+`OnAudioDone`); with STT-only drivers those events simply never fire.
 
 ---
 
@@ -132,6 +139,43 @@ Changing `DriverName` recreates the internal driver instance.
 - `FSessionConfigured: Boolean` — guards against sending audio before session ready
 - Session config sent in `OnSessionReady` handler, not in `Connect`
 - `TAiRealtimeWSClient` handles fragmented WebSocket frames automatically
+
+---
+
+## TAiGrokRealtimeChat — xAI Grok Voice driver
+
+**Status:** Complete — runtime-tested against the live API (2026-07-31): STT transcription, assistant text (delta + complete) and TTS audio response all verified. API key env var: `GROK_API_KEY`.
+
+- **Endpoint:** `wss://api.x.ai/v1/realtime?model=<model>` — protocol compatible with OpenAI Realtime
+- **Audio:** PCM16, 24 kHz, mono, base64 over JSON (`input_audio_buffer.append` / `response.output_audio.delta`)
+- **Default model:** `grok-voice-think-fast-2.0` (pinned; `grok-voice-latest` is a moving alias)
+- **Auth:** `Authorization: Bearer` — do **not** send `Sec-WebSocket-Protocol` (Grok reserves the subprotocol slot for ephemeral tokens `xai-client-secret.*`)
+
+### Driver-specific published properties
+
+| Property | Purpose |
+|----------|---------|
+| `Voice` | TTS voice: `eva`, `ara`, `rex`, `sal`, `leo`... or a Custom Voices `voice_id` |
+| `Instructions` | Session system prompt |
+| `ReasoningEffort` | `greHigh` (default) / `greNone` (lower latency) |
+| `IdleTimeoutMs` | Re-engagement timeout when user is silent (0 = omit) |
+
+### Protocol differences vs OpenAI handled by the driver (verified live 2026-07-31)
+
+1. User transcription arrives **cumulative** in `conversation.item.input_audio_transcription.updated` (not `.delta`); the driver diffs against the previous text to keep `OnTranscriptDelta` semantics. The server may rewrite the prefix — the driver then emits the full text as delta.
+2. Grok also emits `...transcription.completed` for **partial** segments with `status: "in_progress"`; only `status: "completed"` fires `OnTranscriptCompleted` (exactly once per utterance).
+3. Assistant spoken text arrives in `response.output_audio_transcript.delta` / `.done` (NOT `response.text.delta`, which the driver also accepts for compat) → `OnAssistantTextDelta` per delta; `.done` carries the authoritative full transcript → `OnAssistantText` fires on `response.done`.
+4. Only `server_vad` (no `semantic_vad`, no `noise_reduction`); `rvmSemanticVad` maps to `server_vad`. Grok's VAD threshold default is 0.85 (constructor sets it).
+5. `language_hint` requires regional BCP-47 for Spanish/Portuguese — driver maps `es`→`es-MX`, `pt`→`pt-BR`.
+6. `input_audio_buffer.speech_started/stopped` ARE emitted → `OnSpeechStarted/Stopped`. Extra events `conversation.created`, `conversation.item.added`, `ping` are ignored harmlessly.
+
+### Burst-send caveat (file audio vs live microphone)
+
+With audio sent faster than real time and then stopped (file upload pattern), the server VAD detects speech start but **never closes the turn** — not even after 3 s of trailing silence/noise. For file-based sends, call `CommitAudio` + `CreateResponse` after streaming the audio; the server then emits `speech_stopped`, `input_audio_buffer.committed`, the final transcription and the response. Continuous microphone streaming (VoiceMonitor) keeps the VAD timeline alive and closes turns automatically.
+
+`CreateResponse` (public method) sends `response.create` — required after `CommitAudio` in `rvmManual` mode, optional forcing mechanism otherwise.
+
+**Phase 2 (not yet implemented):** function calling bridge, native tools (`web_search`, `x_search`, `mcp`), `force_message`, `resumption`, binary/Opus transport, ephemeral tokens.
 
 ---
 
@@ -227,6 +271,10 @@ initialization
 // uMakerAi.Realtime.Gemini.pas
 initialization
   TAiRealtimeFactory.Instance.RegisterDriver('Gemini', TAiGeminiRealtimeSTT);
+
+// uMakerAi.Realtime.Grok.pas
+initialization
+  TAiRealtimeFactory.Instance.RegisterDriver('Grok', TAiGrokRealtimeChat);
 ```
 
 Import the driver unit to activate registration (same pattern as Chat drivers).

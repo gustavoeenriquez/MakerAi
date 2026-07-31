@@ -21,7 +21,10 @@ uses
   uMakerAi.Realtime;
 
 type
-  TAiRealtimeConnection = class(TAiRealtimeBase)
+  // Hereda de TAiRealtimeVoiceBase para re-exponer tambien los eventos de
+  // los drivers de voz full-duplex (OnAssistantText, OnAudioChunk, ...).
+  // Con drivers STT puros esos eventos simplemente nunca se disparan.
+  TAiRealtimeConnection = class(TAiRealtimeVoiceBase)
   private
     FInstance:   TAiRealtimeBase;
     FDriverName: string;
@@ -37,6 +40,11 @@ type
     procedure OnInstTranscriptDelta(Sender: TObject; const Delta: string);
     procedure OnInstTranscriptCompleted(Sender: TObject; const Transcript, ItemId: string);
     procedure OnInstError(Sender: TObject; const ErrorMsg, ErrorCode: string);
+    // Reenviadores de los eventos de voz (solo drivers TAiRealtimeVoiceBase)
+    procedure OnInstAssistantText(Sender: TObject; const AText: string);
+    procedure OnInstAssistantTextDelta(Sender: TObject; const ADelta: string);
+    procedure OnInstAudioChunk(Sender: TObject; const AData: TBytes);
+    procedure OnInstAudioDone(Sender: TObject);
   protected
     function  GetTargetSampleRate: Integer; override;
     procedure InternalSendAudio(const ResampledPCM16: TBytes); override;
@@ -108,6 +116,14 @@ begin
     FInstance.OnTranscriptDelta   := OnInstTranscriptDelta;
     FInstance.OnTranscriptCompleted := OnInstTranscriptCompleted;
     FInstance.OnError             := OnInstError;
+    // Eventos de voz full-duplex (MakerAi, Grok, ...)
+    if FInstance is TAiRealtimeVoiceBase then
+    begin
+      TAiRealtimeVoiceBase(FInstance).OnAssistantText      := OnInstAssistantText;
+      TAiRealtimeVoiceBase(FInstance).OnAssistantTextDelta := OnInstAssistantTextDelta;
+      TAiRealtimeVoiceBase(FInstance).OnAudioChunk         := OnInstAudioChunk;
+      TAiRealtimeVoiceBase(FInstance).OnAudioDone          := OnInstAudioDone;
+    end;
     SyncToInstance;
   except
     on E: Exception do
@@ -226,6 +242,29 @@ procedure TAiRealtimeConnection.OnInstError(Sender: TObject;
   const ErrorMsg, ErrorCode: string);
 begin
   DoError(ErrorMsg, ErrorCode);
+end;
+
+procedure TAiRealtimeConnection.OnInstAssistantText(Sender: TObject;
+  const AText: string);
+begin
+  DoAssistantText(AText);
+end;
+
+procedure TAiRealtimeConnection.OnInstAssistantTextDelta(Sender: TObject;
+  const ADelta: string);
+begin
+  DoAssistantTextDelta(ADelta);
+end;
+
+procedure TAiRealtimeConnection.OnInstAudioChunk(Sender: TObject;
+  const AData: TBytes);
+begin
+  DoAudioChunk(AData);
+end;
+
+procedure TAiRealtimeConnection.OnInstAudioDone(Sender: TObject);
+begin
+  DoAudioDone;
 end;
 
 end.
