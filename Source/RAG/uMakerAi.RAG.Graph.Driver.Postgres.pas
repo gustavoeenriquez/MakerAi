@@ -22,8 +22,10 @@ type
 
     function NewQuery: TFDQuery;
     procedure SetTableName(const Value: String);
+    procedure SetConnection(const Value: TFDConnection);
     function GetPostgresLangConfig: string;
   protected
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     // --- Lectura de Datos Primitivos ---
     function FindNodeDataByID(const ANodeID: string; out ANodeData: TNodeDataRecord): Boolean; override;
     function FindEdgeDataByID(const AEdgeID: string; out AEdgeData: TEdgeDataRecord): Boolean; override;
@@ -56,7 +58,7 @@ type
     constructor Create(AOwner: TComponent); override;
     procedure CreateSchema(const ABaseTableName: string; AVectorDim: Integer);
   published
-    property Connection: TFDConnection read FConnection write FConnection;
+    property Connection: TFDConnection read FConnection write SetConnection;
     property CurrentEntidad: string read FCurrentEntidad write FCurrentEntidad;
     Property TableName: String read FTableName write SetTableName;
     property Language: TAiLanguage read FLanguage write FLanguage default alSpanish;
@@ -79,6 +81,23 @@ begin
   FCurrentEntidad := 'DEFAULT';
   SetTableName('graph_');
   FLanguage := alSpanish;
+end;
+
+procedure TAiRagGraphPostgresDriver.SetConnection(const Value: TFDConnection);
+begin
+  if FConnection = Value then Exit;
+  if Assigned(FConnection) then
+    FConnection.RemoveFreeNotification(Self);
+  FConnection := Value;
+  if Assigned(FConnection) then
+    FConnection.FreeNotification(Self);
+end;
+
+procedure TAiRagGraphPostgresDriver.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if (Operation = opRemove) and (AComponent = FConnection) then
+    FConnection := nil;
 end;
 
 procedure TAiRagGraphPostgresDriver.SetTableName(const Value: String);

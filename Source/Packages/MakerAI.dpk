@@ -129,6 +129,7 @@ contains
   uMakerAi.Realtime in '..\Realtime\uMakerAi.Realtime.pas',
   uMakerAi.Realtime.OpenAI in '..\Realtime\uMakerAi.Realtime.OpenAI.pas',
   uMakerAi.Realtime.Gemini in '..\Realtime\uMakerAi.Realtime.Gemini.pas',
+  uMakerAi.Realtime.Grok in '..\Realtime\uMakerAi.Realtime.Grok.pas',
   uMakerAi.Realtime.AiConnection in '..\Realtime\uMakerAi.Realtime.AiConnection.pas',
   uMakerAi.Realtime.MakerAi in '..\Realtime\uMakerAi.Realtime.MakerAi.pas',
   uMakerAi.Memory.Types in '..\Memory\uMakerAi.Memory.Types.pas',

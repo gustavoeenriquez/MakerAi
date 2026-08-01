@@ -22,10 +22,10 @@ Each inherits from `TAiChat` (defined in Core):
 | `uMakerAi.Chat.Ollama.pas` | `TAiOllamaChat` | Ollama (local models) |
 | `uMakerAi.Chat.LMStudio.pas` | `TAiLMStudioChat` | LM Studio (local OpenAI-compatible) |
 | `uMakerAi.Chat.Groq.pas` | `TAiGroqChat` | Groq inference (llama, qwen, deepseek, voxtral) |
-| `uMakerAi.Chat.DeepSeek.pas` | `TAiDeepSeekChat` | DeepSeek (deepseek-chat, deepseek-reasoner) |
+| `uMakerAi.Chat.DeepSeek.pas` | `TAiDeepSeekChat` | DeepSeek (deepseek-v4-flash, deepseek-v4-pro) |
 | `uMakerAi.Chat.Mistral.pas` | `TAiMistralChat` | Mistral (large, magistral, devstral, voxtral) |
-| `uMakerAi.Chat.Kimi.pas` | `TAiKimiChat` | Kimi/Moonshot (kimi-k2, kimi-k2.5) |
-| `uMakerAi.Chat.Grok.pas` | `TAiGrokChat` | xAI Grok (grok-3, grok-4-fast) |
+| `uMakerAi.Chat.Kimi.pas` | `TAiKimiChat` | Kimi/Moonshot (kimi-k3, kimi-k2.6/k2.7) |
+| `uMakerAi.Chat.Grok.pas` | `TAiGrokChat` | xAI Grok (grok-4.3, grok-4.5, grok-build) |
 | `uMakerAi.Chat.Cohere.pas` | `TCohereChat` | Cohere (command-a, aya-vision) |
 | `uMakerAi.Chat.GenericLLM.pas` | `TAiGenericChat` | Any OpenAI-compatible API |
 
@@ -175,31 +175,44 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 
 ### Claude (Anthropic)
 - `x-anthropic-version` header + beta features via dynamic headers
-- Thinking/reasoning via `EnableThinking` + `ThinkingBudget`; `ThinkingLevel` mapea a presupuesto automático
+- **Thinking por familia (ago 2026, probado runtime):** el driver clasifica el modelo con `IsClaudeAdaptiveOnly` (4.7/4.8/5: budget_tokens y temperature/top_p/top_k devuelven 400) e `IsClaude46` (4.6). En 4.6+ envía `thinking:{type:"adaptive"}` y mapea `ThinkingLevel` → `output_config.effort` (low/medium/high); en ≤4.5 mantiene `{enabled, budget_tokens}`. El header `interleaved-thinking` solo se envía en el camino legacy.
+- `output_format` migrado a `output_config.format` (deprecado API-wide); format y effort comparten el mismo objeto `output_config`
+- Web search: `web_search_20260209` (filtrado dinámico) en 4.6+; `web_search_20250305` en legacy
+- `stop_reason:"refusal"` (clasificadores de opus-5/fable-5): marca `IsRefusal`, parsea `stop_details` (category/explanation) y dispara `OnError`
+- **Fase ago 2026 (probada runtime salvo Fast mode):**
+  - `FastMode` — `speed:"fast"` + beta `fast-mode-2026-02-01`, solo opus-5/4.8 (en otros se ignora con log). OJO: research preview con rate limit propio; requiere cupo del org (la org de prueba tiene 0 TPM asignados → 429)
+  - Mensajes `{role:"system"}` mid-conversation en el historial (preservan el prompt cache): pasan directo en opus-5/4.8/fable/mythos; en modelos sin soporte (sonnet-5, 4.6…) se degradan automáticamente a turno `user` envuelto en `<system-reminder>`. Uso: `AddMessage(texto, 'system')` tras un turno user + `Run(nil)`
+  - `EnableCompaction` — beta `compact-2026-01-12` + `context_management.edits[compact_20260112]` (se fusiona con `FContextConfig` si existe); los bloques `compaction` recibidos se preservan (`FCompactionBlocks`) y se reenvían íntegros al inicio del mensaje assistant correspondiente
+  - `RefusalFallbackModel` — beta `server-side-fallback-2026-06-01` + `fallbacks:[{model}]`: ante un refusal el API reintenta en ese modelo en la misma llamada (único target soportado hoy: `claude-opus-4-8`)
 - Citations (RAG nativo): soporte parcial implementado
 
-**Modelos activos (mayo 2026):**
-- `claude-opus-4-7` — nuevo flagship (lanzado 16 abr 2026), 1M contexto, 128K output, Adaptive Thinking, visión + tools + computer use. `ModelCaps=[cap_Image]`
-- `claude-sonnet-4-6` — mejor relación precio/calidad, 1M contexto, 64K output, Extended Thinking. `ModelCaps=[cap_Image]`
-- `claude-haiku-4-5-20251001` — velocidad/costo, 200K contexto, 64K output. `ModelCaps=[cap_Image]`
+**Modelos activos (ago 2026, todos registrados):**
+- `claude-opus-5` — **RECOMENDADO**, sucesor de 4.8 al mismo precio ($5/$25), thinking activo por defecto, 1M ctx / 128K out
+- `claude-sonnet-5` — mejor precio/calidad, casi-Opus en código/agentes ($3/$15; intro $2/$10 hasta ago 31/2026); tokenizer nuevo ~30% más tokens que 4.6. PROBADO runtime
+- `claude-fable-5` — tope de capacidad ($10/$50); **requiere retención de datos 30 días** (ZDR → 400 en toda petición); thinking siempre activo
+- `claude-opus-4-8`, `claude-opus-4-7` — generaciones Opus 4.x (misma superficie adaptive-only)
+- `claude-sonnet-4-6`, `claude-opus-4-6` — generación anterior (adaptive recomendado, budget deprecado). Opus 4.6 PROBADO runtime con adaptive
+- `claude-haiku-4-5-20251001` — velocidad/costo, 200K ctx; camino legacy budget PROBADO runtime
 
-**Legacy (sin fecha de retiro anunciada):**
-- `claude-opus-4-6` — generación anterior, sigue disponible
-
-**Deprecados — retiro 15 jun 2026:**
-- `claude-sonnet-4-20250514`, `claude-opus-4-20250514` — reemplazar por `claude-sonnet-4-6` / `claude-opus-4-7`
+**Deprecados:** `claude-opus-4-1` (retira 5 ago 2026 → opus-5); `claude-sonnet-4-20250514` / `claude-opus-4-20250514` (TBD)
 
 ### OpenAI
-**Familia GPT-5.x (mayo 2026 — producción actual):**
+**Familia GPT-5.6 (julio 2026 — producción actual):** 1.05M contexto, 128K output, visión + reasoning + tools + prompt caching en toda la familia. El alias `gpt-5.6` enruta a Sol.
+- `gpt-5.6-sol` — Flagship. `ModelCaps=[cap_Image, cap_Reasoning]`, `ThinkingLevel=tlHigh`
+- `gpt-5.6-terra` — Balance costo/capacidad. `ThinkingLevel=tlMedium`
+- `gpt-5.6-luna` — Tier económico (probado runtime ago 2026). `ThinkingLevel=tlLow`
+- Precios jul 30/2026: Luna −80%, Terra −20%; "Fast mode" reemplaza Priority Processing (2.5× velocidad, 2× precio, solo Sol)
+
+**Familia GPT-5.x (mayo 2026):**
 - `gpt-5.4` — Producción estándar, visión + tools, 1M contexto. `ModelCaps=[cap_Image]`
 - `gpt-5.4-mini` — Rápido y económico, visión + tools. `ModelCaps=[cap_Image]`
-- `gpt-5.5` — Flagship, visión + reasoning. `ModelCaps=[cap_Image, cap_Reasoning]`, `ThinkingLevel=tlMedium`
+- `gpt-5.5` — visión + reasoning. `ModelCaps=[cap_Image, cap_Reasoning]`, `ThinkingLevel=tlMedium`
 - `gpt-5.5-pro` — Reasoning intensivo. `ModelCaps=[cap_Image, cap_Reasoning]`, `ThinkingLevel=tlHigh`
 
 **Capacidades multimedia (sin cambios en nombres de modelos):**
 - Generación de imagen: `gpt-image-1` (y `gpt-image-1.5` / `gpt-image-2`) → `SessionCaps=[cap_GenImage]`
 - TTS: `gpt-4o-mini-tts` → `SessionCaps=[cap_GenAudio]`
-- Transcripción: `gpt-4o-transcribe`, `gpt-4o-mini-transcribe`, `whisper-1` → `ModelCaps=[cap_Audio]`
+- Transcripción: `gpt-transcribe` (recomendado, WER 8.98%), `gpt-live-transcribe` (vivo/Realtime), `gpt-4o-transcribe`, `gpt-4o-mini-transcribe`, `whisper-1` → `ModelCaps=[cap_Audio]`
 - Video: Sora → `SessionCaps=[cap_GenVideo]`
 - Web search: `gpt-4o-search-preview` → `ModelCaps=[cap_WebSearch]`, `Tool_Active=False`
 
@@ -207,28 +220,41 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 
 ### Gemini (Google)
 
-**Familia 3.x — modelos activos (mayo 2026):**
-- `gemini-3.1-pro-preview` (GA) — flagship, 2M contexto, visión + audio + video + reasoning (5 niveles thinking) + computer use + tools. `ModelCaps=[cap_Image, cap_Audio, cap_Video, cap_Reasoning]`, `ThinkingLevel=tlHigh`
-- `gemini-3-flash-preview` — balance velocidad/calidad, 1M contexto, reasoning + tools. `ModelCaps=[cap_Image, cap_Audio, cap_Video, cap_Reasoning]`, `ThinkingLevel=tlMedium`
-- `gemini-3.1-flash-lite` (Stable) — económico, 1M contexto, 4 niveles thinking + tools. `ModelCaps=[cap_Image, cap_Audio, cap_Video, cap_Reasoning]`, `ThinkingLevel=tlLow`
+**Familia 3.5/3.6 — actuales (jul 2026, registrados SIN prueba runtime — falta API key):**
+- `gemini-3.5-flash` (GA may 19/2026, alias `gemini-flash-latest`) — flash flagship, frontier agentic/coding; Computer Use tool en public preview para este modelo. `ThinkingLevel=tlMedium`
+- `gemini-3.6-flash` (GA jul 21/2026) — mejor eficiencia de tokens y planificación agéntica, más barato que 3.5 Flash. `ThinkingLevel=tlMedium`
+- `gemini-3.5-flash-lite` (GA jul 21/2026) — baja latencia, subagentes. `ThinkingLevel=tlLow`
+- **Sampling params deprecados en 3.5+/3.6/omni** (jul 21/2026): el driver omite `temperature`/`topP` automáticamente para esos modelos
+- `gemini-3.5-pro` NO existe aún (anunciado en I/O, retrasado — Reuters jul 16)
+
+**Familia 3.x anterior (siguen activos):**
+- `gemini-3.1-pro-preview` — flagship pro, 2M contexto. `ThinkingLevel=tlHigh`
+- `gemini-3-flash-preview`, `gemini-3.1-flash-lite` — generación previa
 
 **Modelos especializados:**
-- `gemini-3.1-flash-image-preview` — generación de imagen nativa vía completions. `ModelCaps=[cap_Image, cap_GenImage]`
-- `gemini-3.1-flash-tts-preview` — TTS dedicado. `SessionCaps=[cap_GenAudio]`
-- `veo-3.1-generate-preview` — generación de video. `SessionCaps=[cap_GenVideo]`
+- Imagen (familia **Nano Banana**, GA may-jun 2026): `gemini-3.1-flash-image` (NB 2, con video-to-image), `gemini-3-pro-image` (NB Pro), `gemini-3.1-flash-lite-image` (NB 2 Lite, ultra-rápido). Los `-preview` previos siguen registrados
+- `gemini-3.1-flash-tts-preview` — TTS; desde jun 17/2026 soporta streaming (`streamGenerateContent`)
+- `veo-3.1-generate-preview` — video. **veo-2.0 y veo-3.0 APAGADOS el 30 jun 2026** (enum del tool conservado por compat de DFMs)
+- `gemini-omni-flash-preview` — video 3-10s 720p (preview jun 30/2026)
+- `gemini-embedding-2` (GA abr 2026) — embedding multimodal, 3072 dims
 
-**Deprecados — cierre 17 jun 2026:**
-- `gemini-2.5-flash`, `gemini-2.5-pro` — reemplazar por modelos de la familia 3.x
+**Apagados/deprecados:**
+- **Imagen 4.0 (`imagen-4.0-*-generate-001`): SHUTDOWN 17 ago 2026**
+- `gemini-2.5-flash`, `gemini-2.5-pro` — cerrados 17 jun 2026
 
 **Otros:**
-- Imagen 4.0 (imagen-4.0): deprecado, cierre 24 jun 2026
 - Grounding nativo: el driver gestiona `groundingSupports` automáticamente
 
 ### Groq (inferencia rápida)
-- Modelos populares: llama-4-scout/maverick (vision), kimi-k2, compound-beta, deepseek-r1, qwen3
-- TTS: `playai-tts`, `playai-tts-arabic`, `voxtral-mini/small` → `SessionCaps=[cap_GenAudio]`
-- Transcripción: `whisper-large-v3/turbo` → `ModelCaps=[cap_Audio]`, `Tool_Active=False`
-- compound-beta/mini: web search + code interpreter nativos, `Tool_Active=False`
+**Actualizado ago 2026, probado runtime 4/4.** Dos sistemas de reasoning MUTUAMENTE excluyentes (gating por prefijo en el driver): `openai/gpt-oss-*` usa `include_reasoning` + `reasoning_effort` low/medium/high; `qwen/*` usa `reasoning_format` parsed/raw/hidden + `reasoning_effort` default/none (sin `parsed` el `<think>` llega crudo en content).
+- Texto: `llama-3.1-8b-instant` (default del driver), `llama-3.3-70b-versatile`
+- Reasoning: `openai/gpt-oss-120b/20b` (probado), `qwen/qwen3.6-27b` (nuevo ago 2026, reemplaza a qwen3-32b — alias registrado; probado)
+- **Groq NO tiene visión actualmente**: llama-4-scout/maverick retirados y gpt-oss-120b es solo texto ("content must be a string" con imágenes — verificado; cap_Image eliminado del registry)
+- RETIRADOS ago 2026: `qwen/qwen3-32b`, `llama-4-scout`, `moonshotai/kimi-k2-instruct(-0905)`
+- Agénticos: `groq/compound`/`-mini` (web search + code execution, `Tool_Active=False`; aliases compound-beta)
+- TTS: `canopylabs/orpheus-v1-english`/`-arabic-saudi` → `SessionCaps=[cap_GenAudio]` (playai-tts eliminado 12/31/25)
+- STT: `whisper-large-v3/turbo` → `ModelCaps=[cap_Audio]`, `Tool_Active=False`
+- Árabe: `allam-2-7b` (4K ctx, sin tools); prompt-guard-2 son clasificadores, no chat
 
 ### Mistral
 **Modelos activos (jun 2026):**
@@ -239,38 +265,54 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - Reasoning dedicado: `magistral-medium/small-latest` → `ModelCaps=[cap_Reasoning]`, `ThinkingLevel=tlMedium` (usa `prompt_mode: 'reasoning'`)
 - Código: `devstral-latest` / `devstral-small-latest` → `ModelCaps=[]` (sin visión)
 - STT: `voxtral-mini/small-latest` → `ModelCaps=[cap_Audio]`, `Tool_Active=False`
-- OCR: `mistral-ocr-latest` → endpoint `/v1/ocr`, `SessionCaps=[cap_Pdf]`, `Tool_Active=False`
+- **TTS: `voxtral-mini-tts-2603`** (mar 2026, PROBADO runtime ago 2026) → `SessionCaps=[cap_GenAudio]` activa `InternalRunNativeSpeechGeneration` (POST `/v1/audio/speech`). El API **exige** `voice` (slug del catálogo `GET /v1/audio/voices`: `en_paul_neutral`/happy/sad…, `gb_oliver_neutral`, `gb_jane_sarcasm`) o `ref_audio`; propiedades `TtsVoice` (default `en_paul_neutral`) y `TtsFormat` (mp3/wav/pcm/flac/opus). Modelo multilingüe con cualquier voz
+- OCR: `mistral-ocr-latest` → endpoint `/v1/ocr`, `SessionCaps=[cap_Pdf]`, `Tool_Active=False`. **OCR 4** (`mistral-ocr-4-0`, jun 2026): el alias ya apunta a él; nueva propiedad `OcrIncludeBlocks` (bloques estructurales con bounding boxes por página) y `pages` acepta rangos (`"0-5"`)
+- Devstral 2 (`devstral-2512`) y Magistral 1.2 (`magistral-*-2509`) cubiertos por los alias `-latest`
 
 **Reasoning en el driver:**
 - Magistral → `prompt_mode: 'reasoning'` (chain-of-thought visible en respuesta)
 - Small 4 / Medium 3.5 → `reasoning_effort: 'low'|'medium'|'high'` según `ThinkingLevel`
 
 ### xAI Grok
-- grok-3: texto + tools (default)
-- grok-3-mini: reasoning ligero (`ThinkingLevel=tlLow`)
-- grok-4-fast-reasoning / grok-4-1-fast-reasoning: vision + reasoning, 2M ctx
-- grok-code-fast-1: reasoning para código, sin visión
-- Imagen: grok-2-image-1212, grok-imagine-image/pro → `SessionCaps=[cap_GenImage]`
-- Video: grok-imagine-video → `SessionCaps=[cap_GenVideo]`
+**Actualizado ago 2026, probado runtime 6/6.** Recambio total del catálogo: la familia actual (grok-4.x, grok-build) **razona siempre** (`reasoning_content` capturado por la base) y NO acepta `frequency/presence/stop` ni `reasoning_effort` (gate por prefijo en el driver); logprobs no soportado en 4.20+.
+- `grok-4.3` [default del driver]: 1M ctx, visión + reasoning (probados). $1.25/$2.50 por M (<200K; 2x sobre 200K)
+- `grok-4.5` [premium]: 500K ctx, visión + reasoning (probados). $2/$6 por M
+- `grok-4.20-0309-reasoning`/`-non-reasoning`/`-multi-agent-0309`: 1M ctx
+- `grok-build-0.1`: coding con reasoning (probado), 256K ctx. $1/$2 por M
+- Imagen: `grok-imagine-image` ($0.02) / `-image-quality` ($0.05) → `SessionCaps=[cap_GenImage]`
+- Video: `grok-imagine-video` ($0.05/s) / `-video-1.5` ($0.08/s) → `SessionCaps=[cap_GenVideo]`. **Implementado y probado**: `InternalRunNativeVideoGeneration` (job asíncrono `POST /videos/generations` + polling `GET /videos/{id}` + descarga del mp4 como `TAiMediaFile`); duración vía propiedad `VideoDurationSeconds` (default 5, máx 15)
+- **RETIRADOS ago 2026**: familia grok-3 completa, grok-4-0709, grok-4-fast-*, grok-4-1*, grok-code-fast-1, grok-2-vision, grok-2-image, grok-imagine-image-pro. Aliases registrados: grok-3/grok-4/grok-4-0709 → grok-4.3; grok-code-fast-1 → grok-build-0.1; grok-2-image(-1212) → grok-imagine-image; -image-pro → -image-quality (probado vía alias)
 
 ### DeepSeek
-- `deepseek-chat` (V3.2): texto + tools, 128K ctx, 32K output
-- `deepseek-reasoner` (R1): reasoning + tools, `ThinkingLevel=tlMedium`
-- Sin visión en la API pública (DeepSeek-VL2 no disponible vía api.deepseek.com)
+**Actualizado ago 2026, probado runtime 4/4 (incl. tools en modo thinking).** V4 (abr 2026) son los únicos modelos en `/v1/models`: 1M ctx / 384K output. El API activa thinking **por defecto** (effort=high); el driver lo controla explícitamente en `InitChatCompletions`: `cap_Reasoning` en `ModelCaps` → `thinking:{type:enabled}` + `reasoning_effort` (tlLow=low, tlMedium=high, tlHigh=max); sin el cap → `thinking:{type:disabled}` (modo rápido/económico). En modo thinking el API ignora temperature/top_p/penalties sin error. Con tools, `reasoning_content` DEBE reenviarse en el historial (400 si falta) — el override `GetMessages` del driver ya lo hace.
+- `deepseek-v4-flash` [default del driver]: 284B (13B act). $0.14/M in miss / $0.0028 hit / $0.28/M out
+- `deepseek-v4-pro`: 1.6T (49B act), razonamiento por defecto vía registry. $0.435/M in / $0.87/M out. Nota: effort low→high (mínimo soportado, ago 2026)
+- `deepseek-chat` y `deepseek-reasoner`: **RETIRADOS oficialmente 24 jul 2026** — aún enrutan a v4-flash (no-thinking/thinking) en gracia; no depender de ellos
+- Sin visión en la API pública
+- OJO: pricing pico 2x anunciado (9:00-12:00 y 14:00-18:00 UTC+8)
 
 ### Kimi (Moonshot AI)
-- `kimi-k2`: texto + tools, 256K ctx (default del driver)
-- `kimi-k2.5`: vision + PDF + reasoning + tools, MoE 1T params activos 32B
-- `kimi-k2-thinking`: reasoning + tools, sin visión
-- `moonshot-v1-*`: legacy, sin tools (`Tool_Active=False`)
-- `moonshot-v1-*-vision-preview`: visión vía base64, sin tools
+**Actualizado ago 2026, probado runtime 4/4.** REGLA CRÍTICA descubierta empíricamente: la familia nueva (k3/k2.6/k2.7) devuelve **400 si el request incluye `top_p`** (solo acepta `temperature`) — el default global `top_p` se eliminó del registry y el constructor fija `Top_p := 0`. Todos los modelos nuevos devuelven `reasoning_content` y necesitan `max_tokens` amplio (con presupuesto corto el razonamiento lo consume y `content` llega vacío con `finish=length`).
+- `kimi-k3` (jul 16/2026): **flagship y default del driver**, 1M ctx, visión + reasoning (probado). Precio plano: $3/M input, $0.30/M cache-hit, $15/M output
+- `kimi-k2.7-code` / `-highspeed`: coding multimodal (probado — genera Delphi correcto)
+- `kimi-k2.6`: visión + texto + tools (probado)
+- `kimi-latest`: alias móvil
+- `kimi-k2.5`: **RETIRA 31 ago 2026** → migrar a kimi-k3
+- `kimi-k2` y `kimi-k2-thinking`: **YA RETIRADOS** del API (entradas eliminadas del registry)
+- `moonshot-v1-*` (+vision-preview): **SUNSET TOTAL 31 ago 2026**
 
 ### Cohere
-- `command-a-03-2025`: texto + tools (flagship, 256K ctx)
-- `command-a-reasoning-08-2025`: reasoning + tools, 32K output
+**Actualizado ago 2026, probado runtime 5/5 (incl. tools).** Los modelos nuevos (a-plus, north, a-reasoning) razonan por defecto: el content trae bloque `type:'thinking'` antes del `text`. El driver lo controla en `InitChatCompletions`: `cap_Reasoning` → `thinking:{enabled}`; sin el cap → `disabled` (modo rápido), EXCEPTO command-a-plus que **no permite disabled** (falla con `INVALID_TOOL_GENERATION`). `ParseChat` y streaming capturan el thinking a `ReasoningContent` / `OnReceiveThinking`. FIX ago 2026: el retorno síncrono con tool calling llegaba vacío — `ExecuteAndRespondToToolCalls` ahora reutiliza el mismo `ResMsg` en el round 2 (patrón de la base `Run(Nil, ResMsg)`).
+- `command-a-plus-05-2026` [FLAGSHIP]: MoE 218B/25B, Apache 2.0, 436K ctx, visión + reasoning siempre activo (probados). $2.5/$10 por M
+- `north-mini-code-1-0`: coding, 436K ctx, razona por defecto (driver manda disabled sin cap_Reasoning; probado)
+- `command-a-03-2025`: texto + tools (288K ctx, default del driver)
+- `command-a-reasoning-08-2025`: reasoning + tools
 - `command-a-vision-07-2025`: visión, **sin tools** (`Tool_Active=False`)
 - `command-a-translate-08-2025`: traducción especializada, sin tools
-- `c4ai-aya-vision-8b/32b`: visión multilingual, sin tools
+- `c4ai-aya-expanse-32b` / `c4ai-aya-vision-32b`: multilingual, sin tools (los 8b YA NO están en el API)
+- `tiny-aya-global/earth/fire/water`: ligeros 8K ctx, sin tools
+- `cohere-transcribe-03-2026`: STT (endpoint transcriptions)
+- Rerank v4.0: `rerank-v4.0-fast`/`-pro` (32K ctx) vía `RerankModel` + método `Rerank()`
 
 ### Ollama
 - Default global: texto puro, sin tools (`Tool_Active=False`, `ModelCaps=[]`)

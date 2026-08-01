@@ -22,7 +22,7 @@
 // Uso:
 //   SearchTool := TAiOpenAiWebSearchTool.Create(Self);
 //   SearchTool.ApiKey := '@OPENAI_API_KEY';
-//   AiConn.WebSearchTool := SearchTool;
+//   AiConn.ChatTools.WebSearchTool := SearchTool;
 //   AiConn.ChatMode := cmWebSearch;
 // -------------------------------------------------------------------------
 

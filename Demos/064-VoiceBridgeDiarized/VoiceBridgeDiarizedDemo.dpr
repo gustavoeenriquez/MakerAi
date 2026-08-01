@@ -58,7 +58,7 @@ const
   TRANSLATOR_APIKEY = '@OPENAI_API_KEY';
 
   STT_APIKEY = '@OPENAI_API_KEY';
-  STT_MODEL = 'gpt-realtime';
+  STT_MODEL = 'gpt-realtime-2.1';
 
   TTS_PCM_RATE = 24000;
   MEETING_DEVICE_HINT = 'CABLE Input';
@@ -665,6 +665,11 @@ begin
   FSTT := TAiOpenAiRealtimeSTT.Create(nil);
   FSTT.ApiKey := STT_APIKEY;
   FSTT.Model := STT_MODEL;
+  // Canal [YO] (un solo hablante): gpt-live-transcribe (ago 2026).
+  // El canal remoto sigue con gpt-4o-transcribe-diarize porque los modelos
+  // nuevos NO soportan diarizacion.
+  FSTT.TranscriptionModel := otmGptLiveTranscribe;
+  FSTT.TranscriptionPrompt := 'Mi voz en una reunion de trabajo traducida';
   FSTT.Language := STT_LANG_LOCAL;
   FSTT.OnSessionReady := SttSessionReady;
   FSTT.OnTranscriptCompleted := SttTranscriptCompleted;

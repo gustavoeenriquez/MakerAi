@@ -40,7 +40,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Threading, System.Generics.Collections, System.IOUtils,
-  System.NetEncoding, System.Net.URLClient, System.Net.HttpClient, System.StrUtils,
+  System.NetEncoding, System.Net.URLClient, System.Net.HttpClient, System.StrUtils, System.Math,
   System.Net.Mime, System.Net.HttpClientComponent, System.JSON, Rest.JSON,
 {$IF CompilerVersion < 35}
   uJSONHelper,
@@ -2138,7 +2138,7 @@ end;
 
 function TAiOpenChat.InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 var
-  LUrl, LModel, LQuality, LSize, LStyle: string;
+  LUrl, LModel, LQuality, LSize: string;
   LBodyJson: TJSonObject;
   LBodyStream: TStringStream;
   LResponseStream: TStringStream;
@@ -2203,25 +2203,19 @@ begin
 
     LBodyJson.AddPair('model', LModel);
     LBodyJson.AddPair('prompt', AskMsg.Prompt);
-    LBodyJson.AddPair('n', TJSONNumber.Create(N));
+    LBodyJson.AddPair('n', TJSONNumber.Create(Max(1, N)));
 
-    // gpt-image-1 y gpt-image-2 no aceptan response_format (siempre devuelven b64_json)
-    if (LModel = 'dall-e-2') or (LModel = 'dall-e-3') then
-      LBodyJson.AddPair('response_format', 'b64_json');
+    // 'response_format' y 'style' fueron RETIRADOS de la API de OpenAI (2026),
+    // tambien para dall-e-2/3: enviarlos produce 400 "Unknown parameter"
+    // (verificado contra api.openai.com jul-2026). La API decide el formato:
+    // la familia gpt-image devuelve b64_json; el parsing de abajo cubre
+    // ademas 'url' por compatibilidad con endpoints OpenAI-compatible.
 
     LBodyJson.AddPair('size', LSize);
 
-    // dall-e-2 no acepta quality ni style
+    // dall-e-2 no acepta quality
     if (LModel <> 'dall-e-2') then
       LBodyJson.AddPair('quality', LQuality);
-
-    // dall-e-3 acepta style
-    if LModel = 'dall-e-3' then
-    begin
-      LStyle := ImageParams.Params.Values['style'];
-      if LStyle = '' then LStyle := 'vivid';
-      LBodyJson.AddPair('style', LStyle);
-    end;
 
     if not User.IsEmpty then
       LBodyJson.AddPair('user', User);
@@ -2268,6 +2262,25 @@ begin
             except
               LNewImageFile.Free;
               raise;
+            end;
+          end
+          else
+          begin
+            // Sin response_format la API puede responder con 'url' (endpoints
+            // OpenAI-compatible / dall-e legado): descargar la imagen
+            var LImgUrl := '';
+            LImageObject.TryGetValue<string>('url', LImgUrl);
+            if LImgUrl <> '' then
+            begin
+              LNewImageFile := TAiMediaFile.Create;
+              try
+                LNewImageFile.LoadFromUrl(LImgUrl);
+                LNewImageFile.Transcription := LRevisedPrompt;
+                ResMsg.MediaFiles.Add(LNewImageFile);
+              except
+                LNewImageFile.Free;
+                raise;
+              end;
             end;
           end;
         end;
@@ -2626,6 +2639,18 @@ begin
               ToolCall.Arguments := BufferTool.GetValue<string>('arguments');
               FTmpToolCallBuffer.Remove(OutputIndex); // doOwnsValues libera BufferTool automáticamente
 
+              // Paridad con la via sincrona (ParseChat): pasar ResMsg/AskMsg al
+              // handler. ResMsg = mensaje assistant en construccion (creado en
+              // response.created); AskMsg = ultimo mensaje del usuario. Sin esto
+              // ToolCall.ResMsg llegaba nil en modo streaming.
+              ToolCall.ResMsg := GetLastMessage;
+              for var LIdx := FMessages.Count - 1 downto 0 do
+                if FMessages[LIdx].Role = 'user' then
+                begin
+                  ToolCall.AskMsg := FMessages[LIdx];
+                  Break;
+                end;
+
               DoCallFunction(ToolCall);
 
               var
@@ -2827,6 +2852,28 @@ begin
             // como parámetro del evento OnReceiveDataEnd, sin quedar en Prompt) ---
             if Assigned(FinalMsg) then
               FinalMsg.Prompt := FLastContent;
+
+            // --- Paridad con modo sincrono: consolidar en el mensaje final la
+            // media que los handlers de function calling adjuntaron durante el
+            // turno via ToolCall.ResMsg (mensajes assistant intermedios de las
+            // rondas de tools). Sin esto, aMsg.MediaFiles llegaba vacio al
+            // OnReceiveDataEnd en async. Es seguro: los mensajes assistant
+            // serializan solo texto hacia la API (AddMessageToInput), asi que
+            // mover la media no cambia los requests siguientes. La media de los
+            // mensajes 'tool' NO se toca (esa si se reenvia al modelo). ---
+            if Assigned(FinalMsg) then
+            begin
+              for var LI := FMessages.Count - 1 downto 0 do
+              begin
+                var LPrev := FMessages[LI];
+                if LPrev.Role = 'user' then
+                  Break; // inicio del turno actual
+                if (LPrev = FinalMsg) or (LPrev.Role <> 'assistant') then
+                  Continue;
+                for var LJ := LPrev.MediaFiles.Count - 1 downto 0 do
+                  FinalMsg.AddMediaFile(LPrev.MediaFiles.Extract(LPrev.MediaFiles[LJ]));
+              end;
+            end;
 
             // --- Extracci?n de c?digo a archivos (MarkdownCodeExtractor) ---
             If cap_ExtractCode in ModelConfig.SessionCaps then

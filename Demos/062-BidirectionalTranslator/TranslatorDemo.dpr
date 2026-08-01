@@ -60,7 +60,7 @@ const
   STT_APIKEY = '@OPENAI_API_KEY';
   // Modelo de la sesion Realtime. OJO: el default del driver
   // (gpt-4o-realtime-preview) fue retirado por OpenAI.
-  STT_MODEL = 'gpt-realtime';
+  STT_MODEL = 'gpt-realtime-2.1';
 
 var
   GConsoleLock: TCriticalSection;
@@ -120,7 +120,17 @@ begin
   FSTT := TAiOpenAiRealtimeSTT.Create(nil);
   FSTT.ApiKey := STT_APIKEY;
   FSTT.Model := STT_MODEL;
+  // gpt-live-transcribe (ago 2026): mejor WER con ruido de fondo, acentos y
+  // terminologia; acepta contexto del dominio (prompt + idiomas esperados)
+  FSTT.TranscriptionModel := otmGptLiveTranscribe;
+  FSTT.TranscriptionPrompt := 'Llamada de trabajo traducida en tiempo real';
   FSTT.Language := aSttLanguage;
+  if aSttLanguage = '' then
+  begin
+    // Autodeteccion guiada: los dos idiomas que puede traer la llamada
+    FSTT.Languages.Add('en');
+    FSTT.Languages.Add('es');
+  end;
   FSTT.OnSessionReady := SttSessionReady;
   FSTT.OnTranscriptCompleted := SttTranscriptCompleted;
   FSTT.OnError := SttError;

@@ -137,6 +137,13 @@ type
     FContextConfig: TClaudeContextConfig;
     FCacheSystemPrompt: Boolean;
     FCacheTTL: String;
+    // Fase ago 2026
+    FFastMode: Boolean;             // speed:"fast" — solo opus-5/opus-4-8
+    FEnableCompaction: Boolean;     // compaction server-side (beta)
+    FRefusalFallbackModel: string;  // fallbacks server-side ante refusal
+    // Bloques compaction recibidos, por mensaje assistant: deben reenviarse
+    // integros para que el API reemplace el historial compactado
+    FCompactionBlocks: TDictionary<TAiChatMessage, string>;
     FCacheCount: Integer; // breakpoints cache_control usados en el request actual (max 4 en la API)
     FCacheCtxActive: Boolean; // cacheo de contexto activo en este request (system/tools/ultimo turno)
     FServiceTier: String;
@@ -203,6 +210,19 @@ type
     property EnableThinking: Boolean read FEnableThinking write SetEnableThinking default False;
     property ThinkingBudget: Integer read FThinkingBudget write SetThinkingBudget default 1024;
     Property ServiceTier: String read FServiceTier write FServiceTier;
+    // Fast mode (research preview): ~2.5x mas tokens/segundo a 2x precio.
+    // Solo claude-opus-5 / claude-opus-4-8 (en otros modelos se ignora)
+    property FastMode: Boolean read FFastMode write FFastMode default False;
+    // Compaction server-side (beta): al acercarse al limite de contexto el
+    // API resume el historial antiguo automaticamente. El driver preserva y
+    // reenvia los bloques compaction en los turnos siguientes
+    property EnableCompaction: Boolean read FEnableCompaction
+      write FEnableCompaction default False;
+    // Si los clasificadores declinan (stop_reason refusal en opus-5/fable),
+    // el API reintenta la MISMA peticion en este modelo dentro de la misma
+    // llamada (ej: 'claude-opus-4-8'). Vacio = sin fallback
+    property RefusalFallbackModel: string read FRefusalFallbackModel
+      write FRefusalFallbackModel;
   End;
 
 procedure Register;
@@ -223,6 +243,10 @@ Const
   BETA_HDR_MEMORY = 'context-management-2025-06-27';
   // Thinking (se mantiene)
   BETA_HDR_THINKING = 'interleaved-thinking-2025-05-14';
+  // Fase ago 2026
+  BETA_HDR_FASTMODE = 'fast-mode-2026-02-01';             // speed:"fast" (opus-5/4.8, research preview)
+  BETA_HDR_COMPACT  = 'compact-2026-01-12';               // compaction server-side
+  BETA_HDR_FALLBACK = 'server-side-fallback-2026-06-01';  // fallbacks ante refusal
   // Code Execution (Actualizado seg?n lista de headers de la doc)
   BETA_HDR_CODE = 'code-execution-2025-05-22';
   // Computer Use (Actualizado a la ?ltima versi?n disponible en doc)
@@ -457,6 +481,7 @@ begin
   FStreamBuffer := TStringBuilder.Create;
   FStreamResponseMsg := nil;
   FContextConfig := TClaudeContextConfig.Create;
+  FCompactionBlocks := TDictionary<TAiChatMessage, string>.Create;
 
   // Valores por defecto
   Model := 'claude-haiku-4-5-20251001';
@@ -476,6 +501,7 @@ begin
   FStreamContentBlocks.Free;
   FStreamBuffer.Free;
   FContextConfig.Free;
+  FCompactionBlocks.Free;
   inherited;
 end;
 
@@ -502,6 +528,46 @@ end;
 
 // --- Header Generation ---
 
+// Familias de modelos segun la superficie de thinking del API (ago 2026):
+// - Adaptive-only (opus 4.7/4.8, familia 5: opus/sonnet/fable/mythos):
+//   budget_tokens y temperature/top_p/top_k devuelven 400. Thinking se pide
+//   con {type:"adaptive"} y la profundidad con output_config.effort.
+// - 4.6 (opus/sonnet): adaptive recomendado (budget deprecado pero funcional),
+//   sampling permitido, effort GA.
+// - Legacy (<=4.5, haiku): thinking {enabled, budget_tokens} clasico.
+function IsClaudeAdaptiveOnly(const AModel: string): Boolean;
+begin
+  Result := AModel.StartsWith('claude-opus-4-7') or
+            AModel.StartsWith('claude-opus-4-8') or
+            AModel.StartsWith('claude-opus-5') or
+            AModel.StartsWith('claude-sonnet-5') or
+            AModel.StartsWith('claude-fable') or
+            AModel.StartsWith('claude-mythos');
+end;
+
+function IsClaude46(const AModel: string): Boolean;
+begin
+  Result := AModel.StartsWith('claude-opus-4-6') or
+            AModel.StartsWith('claude-sonnet-4-6');
+end;
+
+// Fast mode (speed:"fast") solo existe en opus-5 y opus-4-8
+function IsClaudeFastCapable(const AModel: string): Boolean;
+begin
+  Result := AModel.StartsWith('claude-opus-5') or
+            AModel.StartsWith('claude-opus-4-8');
+end;
+
+// Mensajes {role:"system"} dentro de messages[] (mid-conversation, preservan
+// el prompt cache): opus-5, opus-4-8, fable, mythos. NO sonnet-5
+function IsClaudeMidSystemCapable(const AModel: string): Boolean;
+begin
+  Result := AModel.StartsWith('claude-opus-5') or
+            AModel.StartsWith('claude-opus-4-8') or
+            AModel.StartsWith('claude-fable') or
+            AModel.StartsWith('claude-mythos');
+end;
+
 function TAiClaudeChat.GetDynamicHeaders: TNetHeaders;
 var
   BetaFeatures: TList<string>;
@@ -527,10 +593,21 @@ begin
     if cap_ComputerUse in ModelConfig.ModelCaps then
       BetaFeatures.Add(BETA_HDR_COMPUTER);
 
-    // 5. Thinking / Output Config
-    // Se activa si est? habilitado manualmente O si hay un nivel de pensamiento definido
-    if FEnableThinking or (ModelConfig.ThinkingLevel <> tlDefault) then
+    // 5. Thinking: el header interleaved-thinking solo aplica al camino legacy
+    // con budget_tokens (<=4.5). En 4.6+ el thinking adaptativo integra el
+    // interleaving automaticamente y el header sobra.
+    var LBaseModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+    if (FEnableThinking or (ModelConfig.ThinkingLevel <> tlDefault)) and
+       (not IsClaudeAdaptiveOnly(LBaseModel)) and (not IsClaude46(LBaseModel)) then
       BetaFeatures.Add(BETA_HDR_THINKING);
+
+    // 5b. Fase ago 2026: fast mode, compaction y fallbacks (betas)
+    if FFastMode and IsClaudeFastCapable(LBaseModel) then
+      BetaFeatures.Add(BETA_HDR_FASTMODE);
+    if FEnableCompaction then
+      BetaFeatures.Add(BETA_HDR_COMPACT);
+    if FRefusalFallbackModel <> '' then
+      BetaFeatures.Add(BETA_HDR_FALLBACK);
 
     // 6. Prompt Caching: GA, ya no requiere beta header (antes 'prompt-caching-2024-07-31').
 
@@ -600,11 +677,14 @@ Var
   // Variables para nuevas funcionalidades
   jOutputFormat, jMetaData: TJSONObject;
   jSchemaParsed: TJSONValue;
+  LOutputConfig: TJSONObject; // output_config: format (json_schema) y/o effort
 
   // Variables auxiliares para Thinking
   LActualThinkingBudget: Integer;
+  LIs46: Boolean;
 begin
   LActualThinkingBudget := 0;
+  LOutputConfig := nil;
   if User = '' then
     User := 'user';
 
@@ -634,18 +714,19 @@ begin
   if LModel = '' then
     LModel := 'claude-haiku-4-5-20251001';
 
-  // Adaptive Thinking: Anthropic controla internamente el sampling y el razonamiento.
-  // Enviar temperature/top_p/top_k o el bloque thinking causa error 400.
-  // Agregar aquí futuros modelos con Adaptive Thinking cuando Anthropic los anuncie.
-  LIsAdaptiveThinking := LModel.StartsWith('claude-opus-4-7');
+  // Clasificacion por familia (ver IsClaudeAdaptiveOnly / IsClaude46 arriba):
+  // adaptive-only = 4.7/4.8/5 (budget y sampling devuelven 400); 4.6 = adaptive
+  // recomendado; resto = camino legacy con budget_tokens.
+  LIsAdaptiveThinking := IsClaudeAdaptiveOnly(LModel);
+  LIs46 := IsClaude46(LModel);
 
   // ---------------------------------------------------------------------------
-  // 2. C?LCULO DE THINKING BUDGET (Nuevo enfoque sin output_config)
+  // 2. C?LCULO DE THINKING BUDGET (solo camino legacy <=4.5)
   // ---------------------------------------------------------------------------
   if ModelConfig.ThinkingLevel <> tlDefault then
     FEnableThinking := True;
 
-  if FEnableThinking then
+  if FEnableThinking and (not LIsAdaptiveThinking) and (not LIs46) then
   begin
     // Asignar presupuesto seg?n el nivel elegido o usar el manual
     case ModelConfig.ThinkingLevel of
@@ -749,7 +830,10 @@ begin
             jOutputFormat := TJSONObject.Create;
             jOutputFormat.AddPair('type', 'json_schema');
             jOutputFormat.AddPair('schema', jRootSchema); // Usamos el objeto ya modificado
-            AJSONObject.AddPair('output_format', jOutputFormat);
+            // output_format (top-level) esta deprecado API-wide: el canonico
+            // es output_config.format (se agrega al final junto con effort)
+            LOutputConfig := TJSONObject.Create;
+            LOutputConfig.AddPair('format', jOutputFormat);
           end
           else if Assigned(jSchemaParsed) then
             jSchemaParsed.Free;
@@ -760,10 +844,51 @@ begin
     end;
 
     // -------------------------------------------------------------------------
-    // 5. THINKING PARAMETERS (Solo budget, sin output_config)
+    // 5. THINKING PARAMETERS por familia de modelo
     // -------------------------------------------------------------------------
-    if FEnableThinking and not LIsAdaptiveThinking then
+    if LIsAdaptiveThinking or LIs46 then
     begin
+      // Familia 4.6+ : thinking adaptativo (auto-interleaved, sin beta header).
+      // La profundidad se pide con output_config.effort (GA desde 4.6).
+      // En opus-5/fable el thinking ya viene activo por defecto; enviar
+      // {type:"adaptive"} explicito es equivalente e inofensivo.
+      if FEnableThinking then
+      begin
+        var
+        jThink := TJSONObject.Create;
+        jThink.AddPair('type', 'adaptive');
+        AJSONObject.AddPair('thinking', jThink);
+      end;
+
+      if ModelConfig.ThinkingLevel <> tlDefault then
+      begin
+        if not Assigned(LOutputConfig) then
+          LOutputConfig := TJSONObject.Create;
+        case ModelConfig.ThinkingLevel of
+          tlLow:
+            LOutputConfig.AddPair('effort', 'low');
+          tlMedium:
+            LOutputConfig.AddPair('effort', 'medium');
+          tlHigh:
+            LOutputConfig.AddPair('effort', 'high');
+        end;
+      end;
+
+      // Sampling: en 4.7+/5 temperature/top_p/top_k devuelven 400 — nunca se
+      // envian. En 4.6 siguen permitidos, pero solo sin thinking activo.
+      if LIs46 and (not LIsAdaptiveThinking) and (not FEnableThinking) then
+      begin
+        if Self.Temperature > 0 then
+          AJSONObject.AddPair('temperature', TJSONNumber.Create(Self.Temperature))
+        Else if Top_p > 0 then
+          AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
+        if K > 0 then
+          AJSONObject.AddPair('top_k', TJSONNumber.Create(K));
+      end;
+    end
+    else if FEnableThinking then
+    begin
+      // Camino legacy (<=4.5): thinking manual con budget_tokens
       var
       jThink := TJSONObject.Create;
       jThink.AddPair('type', 'enabled');
@@ -773,9 +898,9 @@ begin
       // Temperatura Forzada a 1.0 (Requisito API para thinking)
       AJSONObject.AddPair('temperature', TJSONNumber.Create(1.0));
     end
-    else if not LIsAdaptiveThinking then
+    else
     begin
-      // Modo Est?ndar
+      // Modo Est?ndar legacy
       if Self.Temperature > 0 then
         AJSONObject.AddPair('temperature', TJSONNumber.Create(Self.Temperature))
       Else if Top_p > 0 then
@@ -784,7 +909,10 @@ begin
       if K > 0 then
         AJSONObject.AddPair('top_k', TJSONNumber.Create(K));
     end;
-    // else LIsAdaptiveThinking: Anthropic gestiona sampling y reasoning internamente.
+
+    // output_config acumulado (format de structured outputs y/o effort)
+    if Assigned(LOutputConfig) then
+      AJSONObject.AddPair('output_config', LOutputConfig);
 
     // 6. METADATA & SERVICE TIER
     if (Self.User <> '') and (Self.User <> 'user') then
@@ -797,12 +925,47 @@ begin
     if (FServiceTier <> '') then
       AJSONObject.AddPair('service_tier', FServiceTier);
 
+    // context_management: configuracion del usuario (FContextConfig) y/o
+    // compaction server-side (edits.compact_20260112)
+    var jContext: TJSONObject := nil;
     if not FContextConfig.IsEmpty then
-    begin
-      var
       jContext := FContextConfig.ToJSONObject;
-      if Assigned(jContext) then
-        AJSONObject.AddPair('context_management', jContext);
+    if FEnableCompaction then
+    begin
+      if not Assigned(jContext) then
+        jContext := TJSONObject.Create;
+      var jEdits: TJSonArray := nil;
+      jContext.TryGetValue<TJSonArray>('edits', jEdits);
+      if not Assigned(jEdits) then
+      begin
+        jEdits := TJSonArray.Create;
+        jContext.AddPair('edits', jEdits);
+      end;
+      var jCompact := TJSONObject.Create;
+      jCompact.AddPair('type', 'compact_20260112');
+      jEdits.Add(jCompact);
+    end;
+    if Assigned(jContext) then
+      AJSONObject.AddPair('context_management', jContext);
+
+    // Fast mode (research preview): solo opus-5/opus-4-8; en otros se ignora
+    if FFastMode then
+    begin
+      if IsClaudeFastCapable(LModel) then
+        AJSONObject.AddPair('speed', 'fast')
+      else
+        LogDebug('FastMode ignorado: ' + LModel + ' no lo soporta');
+    end;
+
+    // Fallbacks server-side: si los clasificadores declinan, el API reintenta
+    // la misma peticion en el modelo indicado dentro de la misma llamada
+    if FRefusalFallbackModel <> '' then
+    begin
+      var jFallbacks := TJSonArray.Create;
+      var jFb := TJSONObject.Create;
+      jFb.AddPair('model', FRefusalFallbackModel);
+      jFallbacks.Add(jFb);
+      AJSONObject.AddPair('fallbacks', jFallbacks);
     end;
 
     // 7. TOOLS
@@ -823,7 +986,13 @@ begin
     if cap_WebSearch in ModelConfig.ModelCaps then
     begin
       JTools := TJSONObject.Create;
-      JTools.AddPair('type', 'web_search_20250305');
+      // Desde la familia 4.6 existe web_search_20260209 con filtrado dinamico
+      // (el modelo filtra resultados con codigo antes de que entren al
+      // contexto); los modelos previos siguen con la variante basica
+      if LIsAdaptiveThinking or LIs46 then
+        JTools.AddPair('type', 'web_search_20260209')
+      else
+        JTools.AddPair('type', 'web_search_20250305');
       JTools.AddPair('name', 'web_search');
       jArrTools.Add(JTools);
     end;
@@ -1138,7 +1307,25 @@ begin
 
   ResMsg.StopReason := StopR;
   if StopR = 'refusal' then
+  begin
+    // Los clasificadores de seguridad (opus-5/fable-5) declinan con HTTP 200 +
+    // stop_reason:"refusal" y un objeto stop_details {category, explanation}.
+    // El content puede venir vacio (pre-output) o parcial (mid-stream).
     ResMsg.IsRefusal := True;
+    var LRefusalMsg := 'La peticion fue declinada por los clasificadores de seguridad del modelo';
+    var jStopDetails: TJSONObject := nil;
+    jObj.TryGetValue<TJSONObject>('stop_details', jStopDetails);
+    if Assigned(jStopDetails) then
+    begin
+      var LCategory := jStopDetails.GetValue<string>('category', '');
+      var LExplanation := jStopDetails.GetValue<string>('explanation', '');
+      if LCategory <> '' then
+        LRefusalMsg := LRefusalMsg + ' (categoria: ' + LCategory + ')';
+      if LExplanation <> '' then
+        LRefusalMsg := LRefusalMsg + ': ' + LExplanation;
+    end;
+    DoError(LRefusalMsg, nil);
+  end;
 
   // 2. Parse Usage (CORREGIDO)
   aPrompt_tokens := 0;
@@ -1255,6 +1442,12 @@ begin
           end;
         end;
       end;
+
+      // C2. Bloque de compaction (beta compact-2026-01-12): se guarda integro
+      // asociado al mensaje de respuesta; GetMessages lo reenvia en los
+      // turnos siguientes para que el API reemplace el historial compactado
+      if cType = 'compaction' then
+        FCompactionBlocks.AddOrSetValue(ResMsg, jContentItem.ToJSON);
 
       // D. Code Execution Output
       if (cType = 'tool_result') or (cType = 'code_execution_tool_result') then
@@ -2055,9 +2248,16 @@ var
   IsCodeExecutionEnabled: Boolean;
   TargetCategories: TAiFileCategories;
   LLastContent: TJSonArray;
+  LSupportsMidSystem: Boolean;
 begin
   Result := TJSonArray.Create;
   LLastContent := nil; // contenido del ultimo mensaje emitido (auto-cache del ultimo turno)
+
+  // Mensajes {role:"system"} dentro del historial (mid-conversation): solo
+  // opus-5/4.8/fable/mythos. En modelos sin soporte se degradan a un turno
+  // user envuelto en <system-reminder> (mismo perfil de cache, sin 400)
+  LSupportsMidSystem := IsClaudeMidSystemCapable(
+    TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model));
 
   // Verificamos si el Code Interpreter est? activo
   IsCodeExecutionEnabled := cap_CodeInterpreter in ModelConfig.ModelCaps;
@@ -2078,6 +2278,8 @@ begin
     // externos): los tool_result van dentro de un mensaje 'user'.
     if SameText(LMessage.Role, 'tool') then
       LMessageObj.AddPair('role', 'user')
+    else if SameText(LMessage.Role, 'system') and (not LSupportsMidSystem) then
+      LMessageObj.AddPair('role', 'user') // fallback <system-reminder> (caso 3)
     else
       LMessageObj.AddPair('role', LMessage.Role);
     LContentArray := TJSonArray.Create;
@@ -2141,6 +2343,18 @@ begin
     // -------------------------------------------------------------------------
     else if (LMessage.Role = 'assistant') then
     begin
+      // 0. Bloque de compaction preservado (si este turno lo trajo): debe ir
+      // primero — el API lo usa para reemplazar el historial compactado
+      var LCompactRaw: string;
+      if FCompactionBlocks.TryGetValue(LMessage, LCompactRaw) then
+      begin
+        var LCompactVal := TJSONObject.ParseJSONValue(LCompactRaw);
+        if LCompactVal is TJSONObject then
+          LContentArray.Add(TJSONObject(LCompactVal))
+        else
+          LCompactVal.Free;
+      end;
+
       // A. Thinking Block
       if (FEnableThinking) and (LMessage.ReasoningContent <> '') and (LMessage.ThinkingSignature <> '') then
       begin
@@ -2234,7 +2448,13 @@ begin
       begin
         LPartObj := TJSONObject.Create;
         LPartObj.AddPair('type', 'text');
-        LPartObj.AddPair('text', LMessage.Prompt);
+        // Mensaje system en modelo sin soporte mid-conversation: degradar a
+        // turno user con envoltura <system-reminder> (fallback documentado)
+        if SameText(LMessage.Role, 'system') and (not LSupportsMidSystem) then
+          LPartObj.AddPair('text', '<system-reminder>' + sLineBreak +
+            LMessage.Prompt + sLineBreak + '</system-reminder>')
+        else
+          LPartObj.AddPair('text', LMessage.Prompt);
 
         if (LMessage.CacheControl) and (FCacheCount < 4) then
         begin

@@ -92,6 +92,7 @@ type
     FRerankModel: string; // Propiedad para el modelo de Rerank
 
     FStreamBuffer: string; // Buffer para acumular datos del stream SSE
+    FStreamThinking: string; // Acumula deltas de thinking (a-plus/north/a-reasoning)
     FStreamLastRole: string; // Para guardar el rol ('assistant') recibido en message-start
     FStreamResponseMsg: TAiChatMessage; // Para acumular los datos finales (usage, etc.)
     FStreamingToolCalls: TDictionary<string, TAiToolsFunction>; // Para construir tool calls en streaming
@@ -318,7 +319,10 @@ begin
     if FClient.Asynchronous then
       FPendingToolRun := True
     else
-      Self.Run(nil, nil);
+      // Reutilizar el MISMO ResMsg del round 1 (patron de la base, linea Run(Nil,
+      // ResMsg)): el texto final del round 2 queda en ResMsg.Prompt, que es lo que
+      // RunNew retorna al llamador sincrono. Con nil el resultado llegaba vacio.
+      Self.Run(nil, ResMsg);
 
   finally
     ToolCallList.Free;
@@ -457,6 +461,29 @@ begin
       LJsonObject.AddPair('presence_penalty', TJSONNumber.Create(Self.Presence_penalty));
     if Self.Seed > 0 then
       LJsonObject.AddPair('seed', TJSONNumber.Create(Self.Seed));
+
+    // --- Thinking (ago 2026) ---
+    // command-a-plus, north-mini-* y command-a-reasoning razonan POR DEFECTO
+    // (bloques content type='thinking'). cap_Reasoning lo activa explicitamente;
+    // sin el cap se envia disabled para modo rapido, EXCEPTO command-a-plus que
+    // siempre razona (con disabled el API falla con INVALID_TOOL_GENERATION).
+    if ContainsText(Self.Model, '-reasoning-') or StartsText('command-a-plus', Self.Model) or
+       StartsText('north-', Self.Model) then
+    begin
+      var jThinking := TJSonObject.Create;
+      if cap_Reasoning in ModelConfig.ModelCaps then
+      begin
+        jThinking.AddPair('type', 'enabled');
+        LJsonObject.AddPair('thinking', jThinking);
+      end
+      else if not StartsText('command-a-plus', Self.Model) then
+      begin
+        jThinking.AddPair('type', 'disabled');
+        LJsonObject.AddPair('thinking', jThinking);
+      end
+      else
+        jThinking.Free;
+    end;
 
     // --- 2. CONSTRUCCI?N DEL HISTORIAL DE MENSAJES ('messages') ---
     LMessagesArray := TJSONArray.Create;
@@ -765,6 +792,13 @@ begin
           var LText: string;
           if (jContentValue as TJSonObject).TryGetValue<string>('text', LText) then
             LResponseText := LResponseText + LText;
+        end
+        else if LContentType = 'thinking' then
+        begin
+          // a-plus/north/a-reasoning: razonamiento previo al texto
+          var LThink: string;
+          if (jContentValue as TJSonObject).TryGetValue<string>('thinking', LThink) then
+            ResMsg.ReasoningContent := ResMsg.ReasoningContent + LThink;
         end;
       end;
     end;
@@ -845,7 +879,9 @@ begin
         ResMsg.Tool_calls := jToolCalls.ToJSon;
 
         InternalAddMessage(ResMsg);
-        ExecuteAndRespondToToolCalls(LFuncionesList, nil);
+        // Pasar ResMsg (no nil): el round 2 sincrono lo reutiliza y el texto
+        // final queda en ResMsg.Prompt (valor de retorno de AddMessageAndRun)
+        ExecuteAndRespondToToolCalls(LFuncionesList, ResMsg);
         Exit;
       end;
     finally
@@ -912,6 +948,7 @@ begin
         if LType = 'message-start' then
         begin
           FLastContent := '';
+          FStreamThinking := '';
           FStreamingToolCalls.Clear;
           FStreamingToolCallsByIndex.Clear;
           FStreamingCitations.Clear;
@@ -929,7 +966,17 @@ begin
             begin
               var jContent: TJSonObject;
               if jDeltaMessage.TryGetValue<TJSonObject>('content', jContent) then
+              begin
                 jContent.TryGetValue<string>('text', TextChunk);
+                // Deltas de thinking (a-plus/north/a-reasoning)
+                var ThinkChunk: string := '';
+                if jContent.TryGetValue<string>('thinking', ThinkChunk) and (ThinkChunk <> '') then
+                begin
+                  FStreamThinking := FStreamThinking + ThinkChunk;
+                  if Assigned(OnReceiveThinking) then
+                    OnReceiveThinking(Self, nil, JsonData, FStreamLastRole, ThinkChunk);
+                end;
+              end;
             end;
           end;
 
@@ -1060,6 +1107,8 @@ begin
         begin
           FStreamResponseMsg := TAiChatMessage.Create(FLastContent, FStreamLastRole);
           try
+            if FStreamThinking <> '' then
+              FStreamResponseMsg.ReasoningContent := FStreamThinking;
             FStreamResponseMsg.Citations.Assign(FStreamingCitations);
 
             // Usage del evento final

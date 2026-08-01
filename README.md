@@ -1,4 +1,4 @@
-# MakerAI Suite v3.4 — The AI Ecosystem for Delphi
+# MakerAI Suite v3.5 — The AI Ecosystem for Delphi
 
 🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
 📖 **Manual:** [https://www.gustavoenriquez.com/book-makerai](https://www.gustavoenriquez.com/book-makerai) — available in English and Spanish
@@ -33,7 +33,30 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 ---
 
-## 🚀 What's New in v3.4
+## 🚀 What's New in v3.5
+
+### Typed ModelConfig Channel
+
+Capability configuration now lives in a single typed surface: `ModelConfig.ModelCaps` / `SessionCaps` / `Tool_Active` / `ThinkingLevel` moved out of the string-based Params/RTTI channel, with per-field user pins and transparent compatibility migration — existing code keeps working unchanged.
+
+### Full-Duplex Voice Suite
+
+- **`TAiGrokRealtimeChat`** — xAI Grok Voice speech-to-speech (function calling, session resumption with replay, binary audio transport, ephemeral tokens)
+- **`TAiOpenAiRealtimeTranslate`** — continuous streaming speech translation (one WebSocket per direction; demo 071-VoiceBridgeTranslate)
+- **`TAiRealtimeVoiceBase`** — shared full-duplex base; voice events flow through the universal `TAiRealtimeConnection`
+- **gpt-transcribe / gpt-live-transcribe** — OpenAI's Whisper successors, fully integrated
+
+### August 2026 Provider Refresh — All 9 Cloud Providers, Runtime-Tested
+
+Claude 5 family (adaptive thinking, FastMode, compaction, server-side fallbacks) · Gemini 3.5/3.6 + Nano Banana GA · Mistral Voxtral TTS + OCR 4 · Kimi K3 · DeepSeek V4 (explicit thinking control) · Cohere Command A+ · Groq qwen3.6 · xAI grok-4.3/4.5/build — with retired-model cleanup and compatibility aliases throughout.
+
+### Grok Native Video & Image Generation
+
+`TAiGrokChat` now generates video with grok-imagine (async job + polling + mp4 as `TAiMediaFile`, new `VideoDurationSeconds` property) and images with `grok-imagine-image` — activated by `cmVideoGeneration`/`cmImageGeneration` or the `[cap_GenVideo]`/`[cap_GenImage]` gaps.
+
+---
+
+## What's New in v3.4
 
 ### Delphi 13.1 Florence Support
 
@@ -59,6 +82,53 @@ New universal connector for real-time speech-to-text via WebSocket:
 - **`TAiOpenAiRealtimeSTT`** — full OpenAI Realtime API implementation (24 kHz PCM16, VAD modes, streaming transcription)
 - Pure-Pascal WebSocket client with native TLS via Windows SChannel — no extra DLLs required
 - Thread-safe PCM16 resampler; supports push-based audio streaming from any source
+
+### GPT-Transcribe — Next-Gen OpenAI Transcription (Whisper successors) 🆕
+
+OpenAI's new transcription models (Aug 2026) are fully integrated — better accuracy on real-world audio, accents, numbers, specialized terminology and loud background noise:
+
+| Model | Use case | Word Error Rate |
+|-------|----------|-----------------|
+| `gpt-live-transcribe` | Live low-latency STT (Realtime WebSocket) | 9.60% (vs 11.65% Whisper) |
+| `gpt-transcribe` | Completed files and batch workloads | 8.98% (vs 15.21% Whisper) |
+
+- **`TAiOpenAiRealtimeSTT`** now defaults to `gpt-live-transcribe`, with new context properties: `TranscriptionPrompt` (free-form topic), `TranscriptionKeywords` (domain terms), `Languages` (multi-language guided autodetection) and `LowDelay`
+- **`TAiOpenAiAudio`** gains `tmGptTranscribe` / `tmGptLiveTranscribe` with `TranscriptionKeywords` + `TranscriptionLanguages` for REST/batch transcription
+- Legacy models (`whisper-1`, `gpt-4o-transcribe`) remain available — they're still required for subtitles (SRT/VTT), word timestamps and diarization (`gpt-4o-transcribe-diarize`), which the new models don't support; the components degrade formats safely per model
+- VoiceBridge demos (062–065) migrated: live channels use `gpt-live-transcribe` with contextual prompts and guided language detection; diarized channels stay on `gpt-4o-transcribe-diarize`
+
+### Grok Voice — Real-Time Speech-to-Speech (xAI) 🆕
+
+Full-duplex voice conversation with xAI's **Grok Voice** models (`grok-voice-think-fast-2.0`) over a single WebSocket — the user speaks, Grok listens, reasons and answers back with voice:
+
+- **`TAiGrokRealtimeChat`** — complete driver for `wss://api.x.ai/v1/realtime` (OpenAI Realtime-compatible protocol, 24 kHz PCM16)
+- **`TAiRealtimeVoiceBase`** — new base class for full-duplex voice drivers; adds `OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`, `OnAudioDone` (shared with `TAiMakerAiRealtimeChat`)
+- Live user transcription (`OnTranscriptDelta` / `OnTranscriptCompleted`), server VAD, streamed assistant text and TTS audio
+- **Function calling by voice**: assign a `TAiFunctions` component (local functions + MCP) and Grok invokes your Delphi code mid-conversation — the driver handles the whole round-trip (execution on worker threads, `function_call_output`, continuation)
+- **xAI native tools**: `EnableWebSearch` / `EnableXSearch` — executed server-side by xAI
+- Session options: `Voice` (eva, ara, rex, sal, leo or custom voice_id), `Instructions`, `ReasoningEffort` (high / none for lower latency), `OutputSpeed`, `Keyterms` (transcription biasing), `PronunciationReplace` (TTS corrections), automatic regional language hints (`es`→`es-MX`, `pt`→`pt-BR`)
+- `ForceMessage()` — scripted TTS utterance bypassing the model (IVR prompts, disclosures)
+- **Session resumption**: `EnableResumption` + `ConversationId` — reconnect and the server replays the cached turns (transcripts, tool calls and outputs; 30-min window)
+- **Binary audio transport**: `BinaryAudio := True` — raw PCM over WebSocket binary frames, ~33% less bandwidth than base64
+- **Ephemeral tokens** for mobile/browser clients: `MintEphemeralToken()` on your backend + `EphemeralToken` on the client — the API key never leaves the server
+- **`file_search`** over xAI Collections (`FileSearchCollections`) and remote MCP servers via `CustomToolsJson`
+- Works through `TAiRealtimeConnection` too — just set `DriverName := 'Grok'`
+
+```pascal
+uses uMakerAi.Realtime.AiConnection, uMakerAi.Realtime.Grok;
+
+Voice := TAiRealtimeConnection.Create(nil);
+Voice.DriverName   := 'Grok';
+Voice.ApiKey       := '@GROK_API_KEY';
+Voice.Language     := 'es';
+Voice.OnTranscriptCompleted := HandleUserText;   // what the user said
+Voice.OnAssistantText       := HandleGrokText;   // what Grok answered
+Voice.OnAudioChunk          := HandleGrokAudio;  // Grok's voice (PCM16 24 kHz)
+Voice.Connect;
+// ... stream microphone audio via Voice.SendAudioChunk(Data) ...
+// For file-based audio (non-continuous), close the turn explicitly:
+// Voice.CommitAudio; TAiGrokRealtimeChat(Voice.Instance).CreateResponse;
+```
 
 ### cmSmartDispatch — Intelligent Chat Routing
 
@@ -137,6 +207,12 @@ New `ChatMode` value for automatic two-pass routing:
 │  Shell      │   │  HNSW · BM25 · RRF  │   │  TAiFunctions bridge│
 │  ComputerUse│   │  Rerank · Documents │   └─────────────────────┘
 └─────────────┘   └─────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│  Realtime Voice — parallel WebSocket stack                       │
+│  TAiRealtimeConnection · OpenAI STT · Grok Voice S2S · MakerAI   │
+│  Pure-Pascal RFC 6455 + TLS (SChannel / OpenSSL / Android)       │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -193,6 +269,7 @@ AiConn.ApiKey := '@GEMINI_API_KEY';
 | Video Generation | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Extended Thinking | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ |
 | Speech (TTS/STT) | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ⚠️ |
+| Realtime Voice (WebSocket) | ✅ STT | ❌ | ⚠️ | ✅ S2S | ❌ | ❌ | ❌ |
 | Web Search | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Computer Use | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | RAG (all modes) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -281,6 +358,23 @@ ChatTools bridge the gap between AI reasoning and real-world operations. They ac
 | `TAiComputerUseTool` | Control mouse and keyboard | Claude Computer Use, OpenAI |
 
 Tools follow a common pattern: `SetContext(AiChat)` + `Execute*()`. They can run standalone, as function-call bridges, or as automatic capability bridges.
+
+### 🎙️ Realtime Voice — WebSocket STT & Speech-to-Speech
+
+A parallel component stack for live audio over WebSocket, with the same universal-connector pattern as chat (`TAiRealtimeConnection.DriverName`):
+
+| Driver | Type | Endpoint |
+|--------|------|----------|
+| `TAiOpenAiRealtimeSTT` | STT only — streaming transcription (`gpt-live-transcribe` default) | OpenAI Realtime API |
+| `TAiGrokRealtimeChat` | **Full-duplex speech-to-speech** — the user talks, Grok answers with voice | xAI `wss://api.x.ai/v1/realtime` |
+| `TAiMakerAiRealtimeChat` | STT + LLM + TTS in one socket | MakerAI server |
+| `TAiGeminiRealtimeSTT` | STT (planned) | Gemini Live |
+
+- **`TAiRealtimeVoiceBase`** — shared base for full-duplex drivers: `OnAssistantText[Delta]`, `OnAudioChunk`, `OnAudioDone`, on top of the STT events (`OnTranscriptDelta/Completed`, `OnSpeechStarted/Stopped`)
+- **Voice function calling** (Grok): plug a `TAiFunctions` component and the model invokes your Delphi functions mid-conversation
+- **Session resumption, binary audio transport, ephemeral tokens** for mobile/browser clients (Grok)
+- **Audio pipeline**: `TAIVoiceMonitor` (mic) → thread-safe PCM16 resampler → provider rate (24 kHz); push audio from any source via `SendAudioChunk`
+- **Pure-Pascal WebSocket stack** (`TAiWSClient`, RFC 6455) with pluggable TLS: Windows SChannel (zero DLLs), OpenSSL (Linux/macOS), `javax.net.ssl` (Android)
 
 ### ⚙️ Model Capabilities — TAiCapabilities
 
@@ -379,6 +473,7 @@ API keys are resolved from environment variables using the `@VAR_NAME` conventio
 AiConn.ApiKey := '@OPENAI_API_KEY';    // reads OPENAI_API_KEY from environment
 AiConn.ApiKey := '@CLAUDE_API_KEY';    // reads CLAUDE_API_KEY
 AiConn.ApiKey := '@GEMINI_API_KEY';    // reads GEMINI_API_KEY
+AiConn.ApiKey := '@GROK_API_KEY';      // reads GROK_API_KEY (xAI chat and Grok Voice)
 AiConn.ApiKey := 'sk-...';             // or set a literal key directly
 ```
 
@@ -425,6 +520,36 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 ---
 
 ## 🔄 Changelog
+
+### v3.5.0 (2026-08-01)
+- New: **Typed ModelConfig channel** — `ModelCaps`/`SessionCaps`/`Tool_Active`/`ThinkingLevel` moved out of Params/RTTI into a typed surface with per-field user pins (`UserFields`) and transparent compatibility migration
+- New: **MSSQL driver for RAG Vector** (FireDAC SQL Server)
+- New: **Agents hardening** — strict JSON graph validation, public RTTI mapper `TAiToolParams`, `[TSecret]` attribute, `out_failure` in conditional mode, `Compile` no longer clears the Blackboard
+- New: **ChatTools single surface** with `OnChange` propagation; `ToolCall.ResMsg` available in streaming; media delivered at `OnReceiveDataEnd`
+- Fix: **`LastError` now populated on every error path** — `DoError` assigns `FLastError`, so synchronous callers can diagnose HTTP 4xx/5xx (previously empty string with no exception)
+- New: **Grok video generation** — `TAiGrokChat.InternalRunNativeVideoGeneration` implements the grok-imagine async video job (`POST /videos/generations` + polling + mp4 download as `TAiMediaFile`), with new `VideoDurationSeconds` property; activated via `cmVideoGeneration` or the `[cap_GenVideo]` gap. Runtime-tested (image generation also verified live)
+- New: **xAI Grok Aug 2026** — full catalog turnover: `grok-4.3` (new driver default, 1M ctx, vision + always-on reasoning), `grok-4.5` (premium), `grok-build-0.1` (coding), `grok-imagine-image-quality` and `grok-imagine-video-1.5` registered; entire grok-3/grok-4-fast/4.1 families and grok-2 models retired with compatibility aliases (`grok-3`→`grok-4.3`, etc.). Runtime-tested 6/6
+- New: **Groq Aug 2026** — `qwen/qwen3.6-27b` registered (replaces retired `qwen3-32b`, alias kept) plus `allam-2-7b`; retired entries removed (`llama-4-scout`, `moonshotai/kimi-k2-instruct(-0905)`). Fix: `openai/gpt-oss-120b` is text-only on Groq — `cap_Image` removed (no vision chat model on Groq currently). Runtime-tested 4/4
+- New: **Cohere Aug 2026** — `command-a-plus-05-2026` flagship (436K ctx, vision + always-on reasoning) and `north-mini-code-1-0` registered; thinking-mode control via `cap_Reasoning` (blocks captured into `ReasoningContent`/`OnReceiveThinking`, non-streaming and streaming); Rerank v4.0 and tiny-aya noted; retired 8b Aya entries removed. Fix: synchronous tool-calling return was always empty (second round now reuses the same `ResMsg`). Runtime-tested 5/5
+- New: **DeepSeek V4** — `deepseek-v4-flash` (new driver default) and `deepseek-v4-pro` (1M ctx, 384K output); explicit thinking-mode control (`cap_Reasoning` + `ThinkingLevel` → `thinking`/`reasoning_effort`, disabled otherwise since the API defaults to thinking ON); retired aliases `deepseek-chat`/`deepseek-reasoner` flagged (officially sunset Jul 24, 2026). Runtime-tested 4/4 including tool calling in thinking mode
+- New: **Kimi K3 family** — `kimi-k3` (new driver default, 1M ctx, vision + reasoning), `kimi-k2.7-code`/`-highspeed` and `kimi-k2.6` registered; retired models (`kimi-k2`, `kimi-k2-thinking`) removed and Aug 31 sunsets flagged (`kimi-k2.5`, `moonshot-v1-*`). Fix: the new family rejects `top_p` (400) — removed from Kimi defaults. Runtime-tested 4/4 including K3 vision
+- New: **Mistral Voxtral TTS** — `voxtral-mini-tts-2603` via `POST /v1/audio/speech` (`TtsVoice` from the `/v1/audio/voices` catalog + `TtsFormat`); activated by the `[cap_GenAudio]` gap; runtime-tested. Plus OCR 4 support: `OcrIncludeBlocks` (paragraph-level bounding boxes) and page-range syntax
+- New: **Gemini 3.5/3.6 family registered** (`gemini-3.5-flash` + `gemini-flash-latest` alias, `gemini-3.6-flash`, `gemini-3.5-flash-lite`), Nano Banana GA image models (`gemini-3.1-flash-image`, `gemini-3-pro-image`, `gemini-3.1-flash-lite-image`), `gemini-omni-flash-preview` (video) and `gemini-embedding-2`; the driver omits deprecated sampling params (`temperature`/`topP`) on the 3.5+/3.6/omni family. Veo 2.0/3.0 profiles removed (shut down by Google Jun 30) and Imagen 4.0 shutdown (Aug 17) flagged. *Not runtime-tested — no Gemini API key available*
+- New: Claude driver phase 2 — `FastMode` (`speed:"fast"`, Opus 5/4.8, research preview — requires org quota), mid-conversation `system` messages in the history (cache-preserving on Opus 5/4.8/Fable; auto-degraded to `<system-reminder>` user turns elsewhere), `EnableCompaction` (server-side compaction with compaction-block echo), `RefusalFallbackModel` (server-side fallback on refusals), and `aa_claude-sonnet-5-thinking` / `aa_claude-opus-5-thinking` / `aa_claude-opus-5-agent` profiles; runtime-tested 4/4 (Fast mode blocked only by org quota)
+- New: **Claude 5 family support** — `claude-opus-5`, `claude-sonnet-5`, `claude-fable-5`, plus `claude-opus-4-7`/`claude-opus-4-8` registered; the driver now sends `thinking: {type: "adaptive"}` on the 4.6+ families and maps `ThinkingLevel` → `output_config.effort` (`budget_tokens`/sampling params return 400 on 4.7+ and are only sent on legacy models). Runtime-tested (sonnet-5, opus-4-6 adaptive, haiku legacy)
+- Update: Claude driver — `output_format` migrated to `output_config.format`; web search upgraded to `web_search_20260209` (dynamic filtering) on 4.6+; `stop_reason: "refusal"` now parses `stop_details` and fires `OnError`
+- New: **`TAiOpenAiRealtimeTranslate`** — streaming speech translation via `gpt-realtime-translate` (`wss://api.openai.com/v1/realtime/translations`); continuous stream without VAD/turns; emits translated text (`OnAssistantTextDelta`), translated TTS audio (`OnAudioChunk`) and optional source transcript (`SourceTranscription`); runtime-tested (es→en)
+- New: demo **`071-VoiceBridgeTranslate`** — the 063 voice bridge refactored with `TAiOpenAiRealtimeTranslate`: one WebSocket per direction replaces the STT→LLM→TTS pipeline (lower latency, ~1/3 of the code)
+- New: **GPT-5.6 family registered** (`gpt-5.6-sol` / `-terra` / `-luna` + `gpt-5.6` alias) — 1.05M ctx, vision + reasoning + tools; `gpt-5.6-luna` runtime-tested
+- Update: Realtime session default model → **`gpt-realtime-2.1`** (better alphanumeric recognition and noise handling) in `TAiOpenAiRealtimeSTT` and demos 062–064
+- Update: **`TAiDalle` / `TAiDalleImageTool` default model → `gpt-image-1`** — the `dall-e-2`/`dall-e-3` snapshots were deprecated by OpenAI (May 2026); both remain selectable while the API accepts them
+- New: **OpenAI `gpt-transcribe` / `gpt-live-transcribe`** (Whisper successors, Aug 2026) — `TAiOpenAiAudio` gains `tmGptTranscribe`/`tmGptLiveTranscribe` with `TranscriptionKeywords` + `TranscriptionLanguages`; `TAiOpenAiRealtimeSTT` defaults to `gpt-live-transcribe` with new context props (`TranscriptionPrompt`, `TranscriptionKeywords`, `Languages`, `LowDelay`); both runtime-tested. Registry entries added
+- Update: VoiceBridge demos (062–065) migrated to `gpt-live-transcribe` on live channels (contextual prompt + guided language autodetection); diarized channels stay on `gpt-4o-transcribe-diarize` (new models don't support diarization)
+- New: **`TAiGrokRealtimeChat`** — xAI Grok Voice speech-to-speech driver (`wss://api.x.ai/v1/realtime`, OpenAI Realtime-compatible, 24 kHz PCM16); live user transcription + streamed assistant text and TTS audio; runtime-tested against the live API
+- New: **Voice function calling for Grok Voice** — `AiFunctions` (`TAiFunctions`: local functions + MCP) declared as session tools; automatic tool round-trip (worker-thread execution, `function_call_output`, single continuation `response.create`); `OnCallToolFunction` fallback event; runtime-tested end-to-end
+- New: Grok Voice extras — `EnableWebSearch` / `EnableXSearch` (xAI server-side tools), `OutputSpeed`, `Keyterms`, `PronunciationReplace`, `ForceMessage()` (scripted TTS)
+- New: Grok Voice phase 3 — session resumption with turn replay (`EnableResumption` + `ConversationId`), binary audio transport (`BinaryAudio`), ephemeral tokens (`MintEphemeralToken` + `EphemeralToken`), `file_search` over Collections and remote MCP via `CustomToolsJson`; all runtime-tested except MCP declarations
+- New: **`TAiRealtimeVoiceBase`** — shared base for full-duplex voice drivers (`OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`, `OnAudioDone`); `TAiMakerAiRealtimeChat` and `TAiRealtimeConnection` now inherit from it, so voice events flow through the universal connector
 
 ### v3.4 (May 2026)
 - Tested with Delphi 13.1 Florence

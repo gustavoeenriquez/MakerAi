@@ -89,6 +89,7 @@ type
   TAiChatTools = class(TPersistent)
   private
     FOwner: TComponent;
+    FOnChange: TNotifyEvent;
     FSpeechTool: TAiSpeechToolBase;
     FImageTool: TAiImageToolBase;
     FVideoTool: TAiVideoToolBase;
@@ -109,11 +110,15 @@ type
     procedure SetShellTool(const Value: TAiShell);
     procedure SetTextEditorTool(const Value: TAiTextEditorTool);
     procedure SetComputerUseTool(const Value: TAiComputerUseTool);
+    procedure Changed;
   public
     constructor Create(AOwner: TComponent);
     destructor Destroy; override;
     procedure Assign(Source: TPersistent); override;
     procedure Notification(AComponent: TComponent; Operation: TOperation);
+    // Notifica al owner (p.ej. TAiChatConnection.ChatToolsChanged) cuando cambia
+    // cualquier tool, para propagar la mutacion al TAiChat vivo.
+    property OnChange: TNotifyEvent read FOnChange write FOnChange;
   published
     property SpeechTool: TAiSpeechToolBase read FSpeechTool write SetSpeechTool;
     property ImageTool: TAiImageToolBase read FImageTool write SetImageTool;
@@ -207,6 +212,12 @@ type
   end;
 
   // ── Configuración unificada del modelo (ModelCaps/SessionCaps/ThinkingLevel/Format/Tool_Active) ──
+
+  // Campos de TAiModelConfig que el usuario puede "fijar" explicitamente.
+  // Un campo fijado (pinned) NO se actualiza desde el registry al cambiar de modelo.
+  TAiModelConfigField = (mcfModelCaps, mcfSessionCaps, mcfToolActive, mcfThinkingLevel);
+  TAiModelConfigFields = set of TAiModelConfigField;
+
   TAiModelConfig = class(TPersistent)
   private
     FModelCaps: TAiCapabilities;
@@ -216,6 +227,7 @@ type
     FTool_Active: Boolean;
     FModelExtraBodyParams: String;
     FOnChange: TNotifyEvent;
+    FUserFields: TAiModelConfigFields;
     procedure SetModelCaps(const Value: TAiCapabilities);
     procedure SetSessionCaps(const Value: TAiCapabilities);
     procedure SetThinkingLevel(const Value: TAiThinkingLevel);
@@ -223,12 +235,29 @@ type
     procedure SetTool_Active(const Value: Boolean);
     procedure SetModelExtraBodyParams(const Value: String);
     procedure Changed;
+    function GetUserConfigured: Boolean;
+    procedure SetUserConfigured(const Value: Boolean);
   public
     constructor Create;
     procedure Assign(Source: TPersistent); override;
+    // Aplica los params del registry (strings 'ModelCaps', 'SessionCaps',
+    // 'Tool_Active', 'ThinkingLevel') SOLO sobre los campos que el usuario no
+    // fijo explicitamente. No marca campos ni dispara OnChange: es el canal
+    // automatico. Es el UNICO camino por el que el registry llega a estos 4
+    // campos (v3.5: ya no viajan por Params/RTTI en TAiChatConnection).
+    procedure ApplyAutoParams(AParams: TStrings);
+    // Parsers de los strings del registry al tipo nativo
+    class function StringToCaps(const S: String): TAiCapabilities; static;
+    class function StringToThinkingLevel(const S: String): TAiThinkingLevel; static;
     // Notifica al owner (p.ej. TAiChatConnection.ModelConfigChanged) cuando cambia
     // cualquier capacidad/param, para que pueda propagar el cambio al TAiChat real.
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
+    // Campos fijados explicitamente por el usuario (Object Inspector o codigo).
+    // Los setters marcan su campo automaticamente; ApplyAutoParams los respeta.
+    property UserFields: TAiModelConfigFields read FUserFields write FUserFields;
+    // True si hay algun campo fijado. Asignar False despina todos (vuelve al
+    // registry en el proximo refresh); True fija todos.
+    property UserConfigured: Boolean read GetUserConfigured write SetUserConfigured;
   published
     property ModelCaps: TAiCapabilities read FModelCaps write SetModelCaps;
     property SessionCaps: TAiCapabilities read FSessionCaps write SetSessionCaps;
@@ -351,22 +380,9 @@ type
     procedure SetOnReceiveThinking(const Value: TAiChatOnDataEvent);
     procedure SetThinking_tokens(const Value: Integer);
     procedure SetCached_tokens(const Value: Integer);
-    procedure SetShellTool(const Value: TAiShell);
-    function  GetShellTool: TAiShell;
-    procedure SetTextEditorTool(const Value: TAiTextEditorTool);
-    function  GetTextEditorTool: TAiTextEditorTool;
-    procedure SetComputerUseTool(const Value: TAiComputerUseTool);
-    function  GetComputerUseTool: TAiComputerUseTool;
     procedure SetSanitizerActive(const Value: Boolean);
     procedure SetOnSanitize(const Value: TAiSanitizeEvent);
-    procedure SetSpeechTool(const Value: TAiSpeechToolBase);
-    procedure SetImageTool(const Value: TAiImageToolBase);
-    procedure SetVideoTool(const Value: TAiVideoToolBase);
-    procedure SetWebSearchTool(const Value: TAiWebSearchToolBase);
-    procedure SetVisionTool(const Value: TAiVisionToolBase);
     procedure SetEnabledFeatures(const Value: TAiChatMediaSupports);
-    procedure SetPdfTool(const Value: TAiPdfToolBase);
-    procedure SetReportTool(const Value: TAiReportToolBase);
     // Nuevo sistema de orquestación (v3.3)
     function GetModelCaps: TAiCapabilities;
     function GetSessionCaps: TAiCapabilities;
@@ -597,9 +613,8 @@ type
     property WebSearchParams: TAiWebSearchParams read FWebSearchParams;
     property ModelConfig: TAiModelConfig read FModelConfig; // configuración unificada del modelo (v3.3)
     property OnStateChange: TAiStateChangeEvent read FOnStateChange write FOnStateChange;
-    property ShellTool: TAiShell read GetShellTool write SetShellTool;
-    Property TextEditorTool: TAiTextEditorTool read GetTextEditorTool write SetTextEditorTool;
-    property ComputerUseTool: TAiComputerUseTool read GetComputerUseTool write SetComputerUseTool;
+    // v3.5: los atajos raiz ShellTool/TextEditorTool/ComputerUseTool fueron
+    // eliminados — TODAS las herramientas viven unicamente en ChatTools.XxxTool
     property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive;
     property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
     property PersistentMemory:  TAiPersistentMemoryBase read FPersistentMemory write SetPersistentMemory;
@@ -1060,8 +1075,10 @@ end;
 
 function TAiChat.AddMessageAndRun(aPrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): String;
 begin
-  InternalAddMessage(aPrompt, aRole, aMediaFiles);
-  Result := Run(Nil, Nil);
+  // Pasar el mensaje recien creado a Run: con Nil, el sanitizador y la memoria
+  // persistente (que exigen Assigned(AskMsg) y Role='user') nunca se activaban
+  // por esta via, que es la API principal. RunNew no lo re-agrega (guard IndexOf).
+  Result := Run(InternalAddMessage(aPrompt, aRole, aMediaFiles), Nil);
 end;
 
 function TAiChat.AddMessageAndRunMsg(aPrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): TAiChatMessage;
@@ -1077,8 +1094,10 @@ end;
 
 function TAiChat.AddMessageAndRun(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String;
 begin
-  InternalAddMessage(aPrompt, aRole, aToolCallId, aFunctionName);
-  Result := Run(Nil, Nil);
+  // Mismo criterio que el overload principal: pasar el mensaje a Run.
+  // Las guardas de sanitizador/memoria filtran por Role='user', asi que
+  // los mensajes 'tool' de esta via no activan nada indebido.
+  Result := Run(InternalAddMessage(aPrompt, aRole, aToolCallId, aFunctionName), Nil);
 end;
 
 { TAiChatTools }
@@ -1149,6 +1168,12 @@ begin
     inherited;
 end;
 
+procedure TAiChatTools.Changed;
+begin
+  if Assigned(FOnChange) then
+    FOnChange(Self);
+end;
+
 procedure TAiChatTools.SetSpeechTool(const Value: TAiSpeechToolBase);
 begin
   if FSpeechTool <> Value then
@@ -1156,6 +1181,7 @@ begin
     FSpeechTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1166,6 +1192,7 @@ begin
     FImageTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1176,6 +1203,7 @@ begin
     FVideoTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1186,6 +1214,7 @@ begin
     FWebSearchTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1196,6 +1225,7 @@ begin
     FVisionTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1206,6 +1236,7 @@ begin
     FPdfTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1216,6 +1247,7 @@ begin
     FReportTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1226,6 +1258,7 @@ begin
     FShellTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1236,6 +1269,7 @@ begin
     FTextEditorTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1246,6 +1280,7 @@ begin
     FComputerUseTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
+    Changed;
   end;
 end;
 
@@ -1405,6 +1440,7 @@ begin
   if FModelCaps <> Value then
   begin
     FModelCaps := Value;
+    Include(FUserFields, mcfModelCaps); // configuracion explicita: el registry ya no actualiza este campo
     Changed;
   end;
 end;
@@ -1414,6 +1450,7 @@ begin
   if FSessionCaps <> Value then
   begin
     FSessionCaps := Value;
+    Include(FUserFields, mcfSessionCaps); // configuracion explicita: el registry ya no actualiza este campo
     Changed;
   end;
 end;
@@ -1423,6 +1460,7 @@ begin
   if FThinkingLevel <> Value then
   begin
     FThinkingLevel := Value;
+    Include(FUserFields, mcfThinkingLevel); // configuracion explicita: el registry ya no actualiza este campo
     Changed;
   end;
 end;
@@ -1441,6 +1479,7 @@ begin
   if FTool_Active <> Value then
   begin
     FTool_Active := Value;
+    Include(FUserFields, mcfToolActive); // configuracion explicita: el registry ya no actualiza este campo
     Changed;
   end;
 end;
@@ -1467,9 +1506,99 @@ begin
     FFormat := Src.FFormat;
     FTool_Active := Src.FTool_Active;
     FModelExtraBodyParams := Src.FModelExtraBodyParams;
+    FUserFields := Src.FUserFields;
   end
   else
     inherited;
+end;
+
+function TAiModelConfig.GetUserConfigured: Boolean;
+begin
+  Result := FUserFields <> [];
+end;
+
+procedure TAiModelConfig.SetUserConfigured(const Value: Boolean);
+begin
+  if Value then
+    FUserFields := [mcfModelCaps, mcfSessionCaps, mcfToolActive, mcfThinkingLevel]
+  else
+    FUserFields := [];
+end;
+
+class function TAiModelConfig.StringToCaps(const S: String): TAiCapabilities;
+var
+  Item: String;
+  OrdVal: Integer;
+begin
+  Result := [];
+  for Item in S.Trim([' ', '[', ']']).Split([',']) do
+  begin
+    if Trim(Item) = '' then
+      Continue;
+    OrdVal := GetEnumValue(TypeInfo(TAiCapability), Trim(Item));
+    if OrdVal >= 0 then
+      Include(Result, TAiCapability(OrdVal));
+  end;
+end;
+
+class function TAiModelConfig.StringToThinkingLevel(const S: String): TAiThinkingLevel;
+var
+  OrdVal: Integer;
+begin
+  Result := tlDefault;
+  OrdVal := GetEnumValue(TypeInfo(TAiThinkingLevel), Trim(S));
+  if OrdVal >= 0 then
+    Result := TAiThinkingLevel(OrdVal);
+end;
+
+procedure TAiModelConfig.ApplyAutoParams(AParams: TStrings);
+var
+  S: String;
+begin
+  if not Assigned(AParams) then
+    Exit;
+
+  // Escritura directa a los campos: sin marcar UserFields y sin OnChange —
+  // este es el canal AUTOMATICO (registry). Semantica determinista:
+  //   campo NO fijado = valor del registry para el modelo actual,
+  //   o default del tipo si el registry no define la clave.
+  // El "else default" evita valores stale al cambiar de modelo o al despinear
+  // (mismo leak que se documento para Groq con ThinkingLevel/Format).
+  if not(mcfModelCaps in FUserFields) then
+  begin
+    S := AParams.Values['ModelCaps'];
+    if S <> '' then
+      FModelCaps := StringToCaps(S)
+    else
+      FModelCaps := [];
+  end;
+
+  if not(mcfSessionCaps in FUserFields) then
+  begin
+    S := AParams.Values['SessionCaps'];
+    if S <> '' then
+      FSessionCaps := StringToCaps(S)
+    else
+      FSessionCaps := [];
+  end;
+
+  if not(mcfToolActive in FUserFields) then
+  begin
+    S := AParams.Values['Tool_Active'].Trim.ToLower;
+    if S <> '' then
+      FTool_Active := (S = 'true') or (S = '1') or (S = 'yes') or (S = 't')
+    else
+      FTool_Active := True; // default del constructor
+  end;
+
+  if not(mcfThinkingLevel in FUserFields) then
+  begin
+    S := AParams.Values['ThinkingLevel'];
+    if S <> '' then
+      FThinkingLevel := StringToThinkingLevel(S)
+    else
+      FThinkingLevel := tlDefault;
+  end;
 end;
 
 procedure TAiChat.AddToMemory(Key, Value: String);
@@ -1627,6 +1756,10 @@ end;
 
 procedure TAiChat.DoError(const ErrorMsg: string; E: Exception);
 begin
+  // Los llamadores sincronos (consolas, scripts) no tienen OnError asignado y
+  // RunNew traga la excepcion: LastError es su unica via para ver el detalle.
+  FLastError := ErrorMsg;
+
   DoStateChange(acsError, ErrorMsg);
 
   if Assigned(FOnError) then
@@ -2053,6 +2186,8 @@ begin
     FChatTools.Notification(AComponent, Operation);
     if AComponent = FPersistentMemory then
       FPersistentMemory := nil;
+    if AComponent = FAiFunctions then
+      FAiFunctions := nil;
   end;
 end;
 
@@ -3802,7 +3937,12 @@ end;
 
 procedure TAiChat.SetAiFunctions(const Value: TAiFunctions);
 begin
+  if FAiFunctions = Value then Exit;
+  if Assigned(FAiFunctions) then
+    FAiFunctions.RemoveFreeNotification(Self);
   FAiFunctions := Value;
+  if Assigned(FAiFunctions) then
+    FAiFunctions.FreeNotification(Self);
 end;
 
 procedure TAiChat.SetApiKey(const Value: String);
@@ -3986,74 +4126,9 @@ begin
   FCached_tokens := Value;
 end;
 
-function TAiChat.GetShellTool: TAiShell;
-begin
-  Result := FChatTools.FShellTool;
-end;
-
-procedure TAiChat.SetShellTool(const Value: TAiShell);
-begin
-  FChatTools.ShellTool := Value;
-end;
-
-function TAiChat.GetTextEditorTool: TAiTextEditorTool;
-begin
-  Result := FChatTools.FTextEditorTool;
-end;
-
-procedure TAiChat.SetTextEditorTool(const Value: TAiTextEditorTool);
-begin
-  FChatTools.TextEditorTool := Value;
-end;
-
-function TAiChat.GetComputerUseTool: TAiComputerUseTool;
-begin
-  Result := FChatTools.FComputerUseTool;
-end;
-
-procedure TAiChat.SetComputerUseTool(const Value: TAiComputerUseTool);
-begin
-  FChatTools.ComputerUseTool := Value;
-end;
-
-procedure TAiChat.SetSpeechTool(const Value: TAiSpeechToolBase);
-begin
-  FChatTools.SpeechTool := Value;
-end;
-
-procedure TAiChat.SetImageTool(const Value: TAiImageToolBase);
-begin
-  FChatTools.ImageTool := Value;
-end;
-
-procedure TAiChat.SetVideoTool(const Value: TAiVideoToolBase);
-begin
-  FChatTools.VideoTool := Value;
-end;
-
-procedure TAiChat.SetWebSearchTool(const Value: TAiWebSearchToolBase);
-begin
-  FChatTools.WebSearchTool := Value;
-end;
-
-procedure TAiChat.SetVisionTool(const Value: TAiVisionToolBase);
-begin
-  FChatTools.VisionTool := Value;
-end;
-
 procedure TAiChat.SetEnabledFeatures(const Value: TAiChatMediaSupports);
 begin
   FEnabledFeatures := Value;
-end;
-
-procedure TAiChat.SetPdfTool(const Value: TAiPdfToolBase);
-begin
-  FChatTools.PdfTool := Value;
-end;
-
-procedure TAiChat.SetReportTool(const Value: TAiReportToolBase);
-begin
-  FChatTools.ReportTool := Value;
 end;
 
 function TAiChat.GetModelCaps: TAiCapabilities;
@@ -4299,7 +4374,10 @@ begin
   try
     try
       DoStateChange(acsReasoning, 'Analizando solicitud...');
-      InternalRunCompletions(LDispatchMsg, nil);
+      // AskMsg = LTempUsr (ya esta en el FMessages temporal): los drivers hacen
+      // AskMsg.Id := ... si no esta en la lista, y con nil eso era una AV que
+      // el except de RunNew convertia en respuesta vacia silenciosa.
+      InternalRunCompletions(LDispatchMsg, LTempUsr);
     except
       on E: Exception do
       begin

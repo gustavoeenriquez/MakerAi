@@ -59,7 +59,7 @@ const
   TRANSLATOR_APIKEY = '@OPENAI_API_KEY';
 
   STT_APIKEY = '@OPENAI_API_KEY';
-  STT_MODEL = 'gpt-realtime';
+  STT_MODEL = 'gpt-realtime-2.1';
 
   // El TTS de OpenAI con formato trfPcm devuelve PCM16 a 24 kHz mono
   TTS_PCM_RATE = 24000;
@@ -151,7 +151,10 @@ begin
   FSTT := TAiOpenAiRealtimeSTT.Create(nil);
   FSTT.ApiKey := STT_APIKEY;
   FSTT.Model := STT_MODEL;
-  FSTT.Language := aSttLanguage;
+  // gpt-live-transcribe (ago 2026): mejor WER con ruido de reunion y acentos
+  FSTT.TranscriptionModel := otmGptLiveTranscribe;
+  FSTT.TranscriptionPrompt := 'Reunion de trabajo traducida en tiempo real';
+  FSTT.Language := aSttLanguage; // el driver lo envia como languages[]
   FSTT.OnSessionReady := SttSessionReady;
   FSTT.OnTranscriptCompleted := SttTranscriptCompleted;
   FSTT.OnError := SttError;

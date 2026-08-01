@@ -93,6 +93,14 @@ type
     FPersistentMemory:  TAiPersistentMemoryBase;
     FMemoryTokenBudget: Integer;
     FAutoStoreMemories: Boolean;
+    FInternalParamsUpdate: Boolean; // guard: ediciones internas de FParams no re-disparan ParamsChanged
+
+    // v3.5 — Canal tipado: ModelCaps/SessionCaps/Tool_Active/ThinkingLevel ya no
+    // viajan por Params/RTTI; su unico canal es ModelConfig (+ registry via
+    // ApplyAutoParams). Estos helpers sostienen esa regla.
+    procedure StripModelConfigKeys(AParams: TStrings);
+    procedure MigrateModelConfigParams(AParams: TStrings);
+    procedure ApplyModelConfigToChat(AChat: TAiChat);
 
     // Setters y Getters
     procedure SetDriverName(const Value: String);
@@ -103,6 +111,15 @@ type
     function GetBusy: Boolean;
     procedure ParamsChanged(Sender: TObject);
     procedure ModelConfigChanged(Sender: TObject);
+    procedure ChatToolsChanged(Sender: TObject);
+
+    // Accessors de los atajos de codigo ModelCaps/SessionCaps/Tool_Active
+    function GetModelCaps: TAiCapabilities;
+    procedure SetModelCaps(const Value: TAiCapabilities);
+    function GetSessionCaps: TAiCapabilities;
+    procedure SetSessionCaps(const Value: TAiCapabilities);
+    function GetTool_Active: Boolean;
+    procedure SetTool_Active(const Value: Boolean);
 
     procedure SetCompletion_tokens(const Value: integer);
     procedure SetMemory(const Value: TStrings);
@@ -134,31 +151,6 @@ type
     procedure SetVideoGenParams(const Value: TAiVideoGenParams);
     procedure SetWebSearchParams(const Value: TAiWebSearchParams);
     procedure SetModelConfig(const Value: TAiModelConfig);
-
-    // Atajos directos para ChatTools — permiten asignar en el IDE sin necesidad
-    // de código en el formulario. Las propiedades directas de TComponent resuelven
-    // referencias forward en el DFM/FMX correctamente; ChatTools.XxxTool (sub-objeto
-    // TPersistent) no garantiza la resolución de referencias forward.
-    procedure SetSpeechTool(const Value: TAiSpeechToolBase);
-    function  GetSpeechTool: TAiSpeechToolBase;
-    procedure SetImageTool(const Value: TAiImageToolBase);
-    function  GetImageTool: TAiImageToolBase;
-    procedure SetVisionTool(const Value: TAiVisionToolBase);
-    function  GetVisionTool: TAiVisionToolBase;
-    procedure SetVideoTool(const Value: TAiVideoToolBase);
-    function  GetVideoTool: TAiVideoToolBase;
-    procedure SetPdfTool(const Value: TAiPdfToolBase);
-    function  GetPdfTool: TAiPdfToolBase;
-    procedure SetWebSearchTool(const Value: TAiWebSearchToolBase);
-    function  GetWebSearchTool: TAiWebSearchToolBase;
-    procedure SetReportTool(const Value: TAiReportToolBase);
-    function  GetReportTool: TAiReportToolBase;
-    procedure SetShellTool(const Value: TAiShell);
-    function  GetShellTool: TAiShell;
-    procedure SetTextEditorTool(const Value: TAiTextEditorTool);
-    function  GetTextEditorTool: TAiTextEditorTool;
-    procedure SetComputerUseTool(const Value: TAiComputerUseTool);
-    function  GetComputerUseTool: TAiComputerUseTool;
 
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
@@ -221,6 +213,13 @@ type
     property Busy: Boolean read GetBusy;
     property AiChat: TAiChat read FChat;
 
+    // Atajos de codigo, simetricos con TAiChat: el estado vive en ModelConfig
+    // (estos alias solo delegan y fijan el pin UserFields como el sub-objeto).
+    // No published: el Object Inspector muestra unicamente ModelConfig.*
+    property ModelCaps: TAiCapabilities read GetModelCaps write SetModelCaps;
+    property SessionCaps: TAiCapabilities read GetSessionCaps write SetSessionCaps;
+    property Tool_Active: Boolean read GetTool_Active write SetTool_Active;
+
   published
     property DriverName: String read FDriverName write SetDriverName;
     property Model: String read FModel write SetModel;
@@ -261,18 +260,11 @@ type
     property WebSearchParams: TAiWebSearchParams read FWebSearchParams write SetWebSearchParams;
     property ModelConfig: TAiModelConfig read FModelConfig write SetModelConfig;
 
-    // Atajos directos para ChatTools. Equivalentes a ChatTools.XxxTool pero
-    // resuelven referencias forward en DFM/FMX — basta asignarlos en el IDE.
-    property SpeechTool:       TAiSpeechToolBase    read GetSpeechTool      write SetSpeechTool;
-    property ImageTool:        TAiImageToolBase     read GetImageTool       write SetImageTool;
-    property VisionTool:       TAiVisionToolBase    read GetVisionTool      write SetVisionTool;
-    property VideoTool:        TAiVideoToolBase     read GetVideoTool       write SetVideoTool;
-    property PdfTool:          TAiPdfToolBase       read GetPdfTool         write SetPdfTool;
-    property WebSearchTool:    TAiWebSearchToolBase read GetWebSearchTool   write SetWebSearchTool;
-    property ReportTool:       TAiReportToolBase    read GetReportTool      write SetReportTool;
-    property ShellTool:        TAiShell             read GetShellTool       write SetShellTool;
-    property TextEditorTool:   TAiTextEditorTool    read GetTextEditorTool  write SetTextEditorTool;
-    property ComputerUseTool:  TAiComputerUseTool   read GetComputerUseTool write SetComputerUseTool;
+    // v3.5: los atajos raiz (SpeechTool, ImageTool, ...) fueron eliminados.
+    // TODAS las herramientas se asignan via ChatTools.XxxTool — misma superficie
+    // en TAiChat y TAiChatConnection. El streaming DFM/FMX resuelve las
+    // referencias a componentes de sub-objetos TPersistent via fixups.
+    property ChatTools: TAiChatTools read FChatTools;
 
   end;
 
@@ -295,6 +287,7 @@ begin
   inherited;
   FChat := nil;
   FChatTools := TAiChatTools.Create(Self);
+  FChatTools.OnChange := ChatToolsChanged;
   FSystemPrompt := TStringList.Create;
   FMemory := TStringList.Create;
   FMessagesOwn := TAiChatMessages.Create;
@@ -404,6 +397,9 @@ end;
 
 procedure TAiChatConnection.ParamsChanged(Sender: TObject);
 begin
+  if FInternalParamsUpdate then
+    Exit; // edicion interna (migracion de claves tipadas): no re-aplicar
+
   if Assigned(FChat) then
   begin
     ApplyParamsToChat(FChat, FParams);
@@ -416,7 +412,103 @@ begin
   // sub-objeto) al TAiChat real. SetModelConfig ya cubre la asignacion del objeto completo;
   // esto cubre el camino que antes requeria un SyncModelConfig manual (ver Apps/MakerAIChat).
   if Assigned(FChat) then
-    FChat.ModelConfig.Assign(FModelConfig);
+    ApplyModelConfigToChat(FChat);
+end;
+
+// Copia la configuracion explicita del usuario al chat y completa los campos
+// NO fijados con los valores del registry para el driver/modelo actual.
+// Este es el UNICO camino por el que ModelCaps/SessionCaps/Tool_Active/
+// ThinkingLevel llegan al chat (v3.5: eliminados del canal Params/RTTI).
+procedure TAiChatConnection.ApplyModelConfigToChat(AChat: TAiChat);
+var
+  LRegParams: TStringList;
+begin
+  if not Assigned(AChat) then
+    Exit;
+
+  AChat.ModelConfig.Assign(FModelConfig); // intencion explicita (con marcas UserFields)
+
+  if (FDriverName <> '') and TAiChatFactory.Instance.HasDriver(FDriverName) then
+  begin
+    LRegParams := TStringList.Create;
+    try
+      TAiChatFactory.Instance.GetDriverParams(FDriverName, FModel, LRegParams, False);
+      AChat.ModelConfig.ApplyAutoParams(LRegParams); // registry rellena lo no fijado
+    finally
+      LRegParams.Free;
+    end;
+  end;
+end;
+
+// Retira las 4 claves tipadas de una lista de params (p.ej. la vista del registry)
+// para que nunca entren a FParams ni pasen por la inyeccion RTTI.
+procedure TAiChatConnection.StripModelConfigKeys(AParams: TStrings);
+const
+  Keys: array [0 .. 3] of string = ('ModelCaps', 'SessionCaps', 'Tool_Active', 'ThinkingLevel');
+var
+  K: string;
+  I: integer;
+begin
+  if not Assigned(AParams) then
+    Exit;
+  for K in Keys do
+  begin
+    I := AParams.IndexOfName(K);
+    if I >= 0 then
+      AParams.Delete(I);
+  end;
+end;
+
+// Compatibilidad hacia atras: si el usuario (DFM viejo o codigo) escribio las
+// claves tipadas en Params, se interpretan como configuracion EXPLICITA:
+// se aplican a ModelConfig, se fijan (UserFields) y se retiran de Params.
+// La clave presente fija el campo aunque el valor coincida con el actual
+// (ej: agentes escriben SessionCaps=[] para forzar caps vacios).
+procedure TAiChatConnection.MigrateModelConfigParams(AParams: TStrings);
+var
+  I: integer;
+  Val: string;
+begin
+  if not Assigned(AParams) then
+    Exit;
+
+  FInternalParamsUpdate := True;
+  try
+    I := AParams.IndexOfName('ModelCaps');
+    if I >= 0 then
+    begin
+      FModelConfig.ModelCaps := TAiModelConfig.StringToCaps(AParams.ValueFromIndex[I]);
+      FModelConfig.UserFields := FModelConfig.UserFields + [mcfModelCaps];
+      AParams.Delete(I);
+    end;
+
+    I := AParams.IndexOfName('SessionCaps');
+    if I >= 0 then
+    begin
+      FModelConfig.SessionCaps := TAiModelConfig.StringToCaps(AParams.ValueFromIndex[I]);
+      FModelConfig.UserFields := FModelConfig.UserFields + [mcfSessionCaps];
+      AParams.Delete(I);
+    end;
+
+    I := AParams.IndexOfName('Tool_Active');
+    if I >= 0 then
+    begin
+      Val := AParams.ValueFromIndex[I].Trim.ToLower;
+      FModelConfig.Tool_Active := (Val = 'true') or (Val = '1') or (Val = 'yes') or (Val = 't');
+      FModelConfig.UserFields := FModelConfig.UserFields + [mcfToolActive];
+      AParams.Delete(I);
+    end;
+
+    I := AParams.IndexOfName('ThinkingLevel');
+    if I >= 0 then
+    begin
+      FModelConfig.ThinkingLevel := TAiModelConfig.StringToThinkingLevel(AParams.ValueFromIndex[I]);
+      FModelConfig.UserFields := FModelConfig.UserFields + [mcfThinkingLevel];
+      AParams.Delete(I);
+    end;
+  finally
+    FInternalParamsUpdate := False;
+  end;
 end;
 
 { procedure TAiChatConnection.SetupChatFromDriver;
@@ -544,17 +636,26 @@ begin
       // 1. Obtener los par�metros oficiales del registro (Nivel 1, 2 y 3)
       TAiChatFactory.Instance.GetDriverParams(FDriverName, FModel, LRegistryParams, ShouldExpand);
 
+      // v3.5: ModelCaps/SessionCaps/Tool_Active/ThinkingLevel NO viajan por Params.
+      // Se retiran de la vista del registro antes del merge; llegan al chat via
+      // ApplyModelConfigToChat (canal tipado ModelConfig + ApplyAutoParams).
+      StripModelConfigKeys(LRegistryParams);
+
       // 2. Sincronizaci�n inteligente:
       // En lugar de un Merge simple, vamos a asegurarnos de que FParams refleje
       // la estructura del nuevo modelo.
 
       FParams.BeginUpdate;
       try
-        // Si quieres que el Registro sea la fuente de verdad absoluta al cambiar de modelo:
-        // FParams.Assign(LRegistryParams);
-
-        // Si prefieres mantener lo que el usuario escribi� en el Object Inspector
-        // pero inyectar lo nuevo del registro:
+        // OJO: MergeParams actualiza FParams con los valores del registro; las
+        // claves que el registro trae para el driver/modelo actual SOBREESCRIBEN
+        // lo que hubiera en FParams (necesario para que el cambio de modelo
+        // refresque Max_Tokens, ModelCaps, etc. y no queden valores del modelo
+        // anterior). Las claves que el registro no conoce se conservan.
+        // Para personalizacion durable usar:
+        //   - TAiChatFactory.Instance.RegisterUserParam(...)  (nivel usuario del registro)
+        //   - Connection.ModelConfig.ModelCaps/SessionCaps    (explicito; ApplyParamsToChat
+        //     lo respeta via UserConfigured y el registry ya no lo pisa)
         MergeParams(LRegistryParams, FParams);
       finally
         FParams.EndUpdate;
@@ -604,6 +705,10 @@ begin
   if not Assigned(AChat) then
     Exit;
 
+  // v3.5: si Params trae claves tipadas (DFM viejo o codigo del usuario), se
+  // migran a ModelConfig como configuracion explicita y se retiran de Params.
+  MigrateModelConfigParams(AParams);
+
   // 1. ASIGNACIONES DIRECTAS DE ESTRUCTURA (Prioridad v1.5)
   AChat.AiFunctions := Self.AiFunctions;
 
@@ -627,7 +732,9 @@ begin
   AChat.ImageParams.Assign(Self.FImageGenParams);
   AChat.VideoParams.Assign(Self.FVideoGenParams);
   AChat.WebSearchParams.Assign(Self.FWebSearchParams);
-  AChat.ModelConfig.Assign(Self.FModelConfig);
+
+  // Canal tipado: config explicita del usuario + registry para lo no fijado
+  ApplyModelConfigToChat(AChat);
 
   // Contexto base
   AChat.Memory.Text := Self.Memory.Text;
@@ -647,6 +754,13 @@ begin
       ParamValue := AParams.Values[ParamName].Trim;
 
       if ParamName.IsEmpty then
+        Continue;
+
+      // v3.5: las claves tipadas NUNCA se inyectan por RTTI (su unico canal es
+      // ModelConfig). Tras StripModelConfigKeys/MigrateModelConfigParams no
+      // deberian estar aqui; este skip es la red de seguridad.
+      if SameText(ParamName, 'ModelCaps') or SameText(ParamName, 'SessionCaps') or
+         SameText(ParamName, 'Tool_Active') or SameText(ParamName, 'ThinkingLevel') then
         Continue;
 
       // Buscar primero en el objeto principal, luego en sub-objetos TPersistent (2-level RTTI)
@@ -992,10 +1106,11 @@ function TAiChatConnection.MergeParams(Origin, Destination: TStrings): TStrings;
 var
   I: integer;
 begin
+  // Origin (registro) manda: actualiza la clave si existe o la agrega si no,
+  // sin duplicarla. Destination conserva solo las claves que Origin no trae.
   Result := Destination;
   for I := 0 to Origin.Count - 1 do
   begin
-    // Esto actualiza si existe o a�ade si no existe, sin duplicar la clave
     Destination.Values[Origin.Names[I]] := Origin.ValueFromIndex[I];
   end;
 end;
@@ -1331,100 +1446,47 @@ begin
     FChat.ModelConfig.Assign(Value);
 end;
 
-// ---------------------------------------------------------------------------
-// Atajos directos para ChatTools
-// FChatTools.SetXxxTool ya llama Value.FreeNotification(FOwner) internamente,
-// y TAiChatConnection.Notification ya gestiona opRemove sobre FChatTools.
-// ---------------------------------------------------------------------------
-
-function TAiChatConnection.GetSpeechTool: TAiSpeechToolBase;
-begin Result := FChatTools.SpeechTool; end;
-
-procedure TAiChatConnection.SetSpeechTool(const Value: TAiSpeechToolBase);
+// Propaga mutaciones de Connection.ChatTools.XxxTool al TAiChat vivo
+// (mismo patron que ModelConfigChanged). FChatTools.SetXxxTool ya llama
+// Value.FreeNotification(FOwner) y Notification gestiona opRemove.
+procedure TAiChatConnection.ChatToolsChanged(Sender: TObject);
 begin
-  FChatTools.SpeechTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.SpeechTool := Value;
+  if Assigned(FChat) then
+    FChat.ChatTools.Assign(FChatTools);
 end;
 
-function TAiChatConnection.GetImageTool: TAiImageToolBase;
-begin Result := FChatTools.ImageTool; end;
+// ── Atajos de codigo ModelCaps/SessionCaps/Tool_Active ──────────────────────
+// Delegacion pura a FModelConfig: el setter del sub-objeto marca el pin
+// (UserFields) y dispara OnChange -> ModelConfigChanged -> chat vivo.
 
-procedure TAiChatConnection.SetImageTool(const Value: TAiImageToolBase);
+function TAiChatConnection.GetModelCaps: TAiCapabilities;
 begin
-  FChatTools.ImageTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.ImageTool := Value;
+  Result := FModelConfig.ModelCaps;
 end;
 
-function TAiChatConnection.GetVisionTool: TAiVisionToolBase;
-begin Result := FChatTools.VisionTool; end;
-
-procedure TAiChatConnection.SetVisionTool(const Value: TAiVisionToolBase);
+procedure TAiChatConnection.SetModelCaps(const Value: TAiCapabilities);
 begin
-  FChatTools.VisionTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.VisionTool := Value;
+  FModelConfig.ModelCaps := Value;
 end;
 
-function TAiChatConnection.GetVideoTool: TAiVideoToolBase;
-begin Result := FChatTools.VideoTool; end;
-
-procedure TAiChatConnection.SetVideoTool(const Value: TAiVideoToolBase);
+function TAiChatConnection.GetSessionCaps: TAiCapabilities;
 begin
-  FChatTools.VideoTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.VideoTool := Value;
+  Result := FModelConfig.SessionCaps;
 end;
 
-function TAiChatConnection.GetPdfTool: TAiPdfToolBase;
-begin Result := FChatTools.PdfTool; end;
-
-procedure TAiChatConnection.SetPdfTool(const Value: TAiPdfToolBase);
+procedure TAiChatConnection.SetSessionCaps(const Value: TAiCapabilities);
 begin
-  FChatTools.PdfTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.PdfTool := Value;
+  FModelConfig.SessionCaps := Value;
 end;
 
-function TAiChatConnection.GetWebSearchTool: TAiWebSearchToolBase;
-begin Result := FChatTools.WebSearchTool; end;
-
-procedure TAiChatConnection.SetWebSearchTool(const Value: TAiWebSearchToolBase);
+function TAiChatConnection.GetTool_Active: Boolean;
 begin
-  FChatTools.WebSearchTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.WebSearchTool := Value;
+  Result := FModelConfig.Tool_Active;
 end;
 
-function TAiChatConnection.GetReportTool: TAiReportToolBase;
-begin Result := FChatTools.ReportTool; end;
-
-procedure TAiChatConnection.SetReportTool(const Value: TAiReportToolBase);
+procedure TAiChatConnection.SetTool_Active(const Value: Boolean);
 begin
-  FChatTools.ReportTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.ReportTool := Value;
-end;
-
-function TAiChatConnection.GetShellTool: TAiShell;
-begin Result := FChatTools.ShellTool; end;
-
-procedure TAiChatConnection.SetShellTool(const Value: TAiShell);
-begin
-  FChatTools.ShellTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.ShellTool := Value;
-end;
-
-function TAiChatConnection.GetTextEditorTool: TAiTextEditorTool;
-begin Result := FChatTools.TextEditorTool; end;
-
-procedure TAiChatConnection.SetTextEditorTool(const Value: TAiTextEditorTool);
-begin
-  FChatTools.TextEditorTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.TextEditorTool := Value;
-end;
-
-function TAiChatConnection.GetComputerUseTool: TAiComputerUseTool;
-begin Result := FChatTools.ComputerUseTool; end;
-
-procedure TAiChatConnection.SetComputerUseTool(const Value: TAiComputerUseTool);
-begin
-  FChatTools.ComputerUseTool := Value;
-  if Assigned(FChat) then FChat.ChatTools.ComputerUseTool := Value;
+  FModelConfig.Tool_Active := Value;
 end;
 
 // ISSUE #115: API comoda para el log de depuracion (opt-in).

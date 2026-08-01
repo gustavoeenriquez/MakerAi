@@ -54,10 +54,12 @@ Type
 
   TAiGrokChat = Class(TAiChat)
   Private
+    FVideoDurationSeconds: Integer;
   Protected
     Function InitChatCompletions: String; Override;
     function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
+    function InternalRunNativeVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
 
   Public
     Constructor Create(Sender: TComponent); Override;
@@ -66,6 +68,8 @@ Type
     class procedure RegisterDefaultParams(Params: TStrings); Override;
     class function CreateInstance(Sender: TComponent): TAiChat; Override;
   Published
+    // Duracion del video generado con grok-imagine-video (max 15 seg segun docs xAI)
+    property VideoDurationSeconds: Integer read FVideoDurationSeconds write FVideoDurationSeconds default 5;
   End;
 
 procedure Register;
@@ -91,7 +95,7 @@ class procedure TAiGrokChat.RegisterDefaultParams(Params: TStrings);
 Begin
   Params.Clear;
   Params.Add('ApiKey=@GROK_API_KEY');
-  Params.Add('Model=grok-3');
+  Params.Add('Model=grok-4.3');
   Params.Add('Max_Tokens=4096');
   Params.Add('URL=https://api.x.ai/v1/');
 End;
@@ -105,7 +109,9 @@ constructor TAiGrokChat.Create(Sender: TComponent);
 begin
   inherited;
   ApiKey := '@GROK_API_KEY';
-  Model := 'grok-3';
+  // grok-3 fue retirado del API (ago 2026); grok-4.3 es el modelo de produccion
+  Model := 'grok-4.3';
+  FVideoDurationSeconds := 5;
   Url := GlAIUrl;
 end;
 
@@ -133,11 +139,15 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   If LModel = '' then
-    LModel := 'grok-3';
+    LModel := 'grok-4.3';
 
-  // grok-4 series, grok-3-mini y grok-code-fast-1 prohiben frequency/presence/stop
-  LIsRestrictedModel       := LModel.StartsWith('grok-4') or LModel.StartsWith('grok-3-mini') or (LModel = 'grok-code-fast-1');
-  // reasoning_effort solo es valido en grok-3-mini / grok-3-mini-fast (valores: low, high)
+  // Toda la familia actual (grok-4.x, grok-build) prohibe frequency/presence/stop.
+  // grok-3-mini/grok-code-fast-1 se mantienen por si el usuario apunta a un
+  // endpoint compatible con modelos antiguos.
+  LIsRestrictedModel       := LModel.StartsWith('grok-4') or LModel.StartsWith('grok-build') or
+                              LModel.StartsWith('grok-3-mini') or (LModel = 'grok-code-fast-1');
+  // reasoning_effort solo era valido en grok-3-mini (retirado); la familia actual
+  // razona siempre y NO acepta el parametro
   LSupportsReasoningEffort := LModel.StartsWith('grok-3-mini');
 
   LAsincronico := Self.Asynchronous;
@@ -309,7 +319,7 @@ begin
 
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
   if LModel = '' then
-    LModel := 'grok-3';
+    LModel := 'grok-4.3';
 
   sUrl := Url;
   if not sUrl.EndsWith('/') then
@@ -448,7 +458,7 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   if LModel = '' then
-    LModel := 'grok-2-image'; // Asignar un modelo de imagen por defecto
+    LModel := 'grok-imagine-image'; // Default de imagen (grok-2-image fue retirado)
 
   LUrl := Url + 'images/generations'; // Url base + endpoint
 
@@ -541,6 +551,137 @@ begin
       DoError(FLastError, nil);
     end;
 
+  finally
+    LBodyJson.Free;
+    LBodyStream.Free;
+    FBusy := False;
+  end;
+end;
+
+function TAiGrokChat.InternalRunNativeVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+// grok-imagine-video (ago 2026): job asincrono con polling.
+// POST /v1/videos/generations {model, prompt, duration} -> request_id
+// GET  /v1/videos/{request_id} -> status pending|done|failed|expired + video.url
+// El video final se descarga y se adjunta como TAiMediaFile (mp4) en ResMsg.
+const
+  POLL_INTERVAL_MS = 3000;
+  TIMEOUT_MS       = 300000; // 5 min: un video de 15 seg tarda ~1-3 min
+var
+  LModel, LUrl, LRequestId, LStatus, LVideoUrl: string;
+  LBodyJson, LRespJson, LVideoObj: TJSonObject;
+  LBodyStream: TStringStream;
+  LHeaders: TNetHeaders;
+  LResponse: IHTTPResponse;
+  LNewMediaFile: TAiMediaFile;
+  LElapsed: Integer;
+begin
+  Result := '';
+  FBusy := True;
+  FAbort := False;
+  FLastError := '';
+  FLastContent := '';
+  FLastPrompt := AskMsg.Prompt;
+
+  if AskMsg.Prompt.IsEmpty then
+    raise Exception.Create('Se requiere un prompt para generar un video.');
+
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+  if (LModel = '') or (not LModel.StartsWith('grok-imagine-video')) then
+    LModel := 'grok-imagine-video';
+
+  LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
+  FClient.ContentType := 'application/json';
+
+  LBodyJson := TJSonObject.Create;
+  LBodyStream := TStringStream.Create('', TEncoding.UTF8);
+  try
+    try
+      // 1. Iniciar el job
+      LBodyJson.AddPair('model', LModel);
+      LBodyJson.AddPair('prompt', AskMsg.Prompt);
+      if FVideoDurationSeconds > 0 then
+        LBodyJson.AddPair('duration', TJSONNumber.Create(FVideoDurationSeconds));
+
+      LBodyStream.WriteString(LBodyJson.ToJSON);
+      LBodyStream.Position := 0;
+
+      FResponse.Clear;
+      LResponse := FClient.Post(Url + 'videos/generations', LBodyStream, FResponse, LHeaders);
+      if LResponse.StatusCode <> 200 then
+        raise Exception.CreateFmt('Error iniciando video con Grok: %d, %s',
+          [LResponse.StatusCode, LResponse.ContentAsString(TEncoding.UTF8)]);
+
+      LRespJson := TJSonObject.ParseJSONValue(LResponse.ContentAsString(TEncoding.UTF8)) as TJSonObject;
+      try
+        if not LRespJson.TryGetValue<string>('request_id', LRequestId) then
+          raise Exception.Create('La respuesta de videos/generations no contiene request_id');
+      finally
+        LRespJson.Free;
+      end;
+
+      // 2. Polling hasta done/failed/expired
+      DoStateChange(acsToolExecuting, 'Generando video (job ' + LRequestId + ')...');
+      LElapsed := 0;
+      LStatus := 'pending';
+      LVideoUrl := '';
+      while (LElapsed < TIMEOUT_MS) and not FAbort do
+      begin
+        TThread.Sleep(POLL_INTERVAL_MS);
+        Inc(LElapsed, POLL_INTERVAL_MS);
+
+        FResponse.Clear;
+        LResponse := FClient.Get(Url + 'videos/' + LRequestId, FResponse, LHeaders);
+        if LResponse.StatusCode <> 200 then
+          Continue; // error transitorio de polling: reintentar hasta el timeout
+
+        LRespJson := TJSonObject.ParseJSONValue(LResponse.ContentAsString(TEncoding.UTF8)) as TJSonObject;
+        try
+          if Assigned(LRespJson) then
+          begin
+            LRespJson.TryGetValue<string>('status', LStatus);
+            if (LStatus = 'done') and LRespJson.TryGetValue<TJSonObject>('video', LVideoObj) then
+              LVideoObj.TryGetValue<string>('url', LVideoUrl);
+          end;
+        finally
+          LRespJson.Free;
+        end;
+
+        if (LStatus = 'done') or (LStatus = 'failed') or (LStatus = 'expired') then
+          Break;
+      end;
+
+      if FAbort then
+        Exit;
+      if LStatus <> 'done' then
+        raise Exception.CreateFmt('Generacion de video no completada (status=%s tras %d seg)',
+          [LStatus, LElapsed div 1000]);
+      if LVideoUrl = '' then
+        raise Exception.Create('El job termino en done pero no incluye video.url');
+
+      // 3. Descargar el video y adjuntarlo al mensaje
+      LNewMediaFile := TAiMediaFile.Create;
+      try
+        LNewMediaFile.LoadFromUrl(LVideoUrl);
+        LNewMediaFile.Transcription := AskMsg.Prompt;
+        ResMsg.MediaFiles.Add(LNewMediaFile);
+      except
+        LNewMediaFile.Free;
+        raise;
+      end;
+
+      FLastContent := LVideoUrl;
+      ResMsg.Prompt := LVideoUrl;
+      Result := LVideoUrl;
+
+      if Assigned(FOnReceiveDataEnd) then
+        FOnReceiveDataEnd(Self, ResMsg, nil, 'model', FLastContent);
+    except
+      on E: Exception do
+      begin
+        FLastError := E.Message;
+        DoError(FLastError, E);
+      end;
+    end;
   finally
     LBodyJson.Free;
     LBodyStream.Free;

@@ -1109,12 +1109,21 @@ begin
     LRequest.AddPair('generationConfig', JConfig);
 
     // A. Parámetros Estándar (No perder funcionalidad básica)
-    if Temperature >= 0 then
+    // Sampling params (temperature/topP/topK) DEPRECADOS por Google para la
+    // familia 3.5+/3.6/omni (jul 21/2026): no se envían en esos modelos y el
+    // servidor gestiona el muestreo. En modelos previos se conservan.
+    var LSamplingModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+    var LSamplingOk := not (LSamplingModel.StartsWith('gemini-3.5') or
+                            LSamplingModel.StartsWith('gemini-3.6') or
+                            LSamplingModel.StartsWith('gemini-omni') or
+                            LSamplingModel.StartsWith('gemini-flash-latest'));
+
+    if LSamplingOk and (Temperature >= 0) then
       JConfig.AddPair('temperature', TJSONNumber.Create(Temperature));
 
     // 0 = no enviar topP (convención de SetTop_p en la base); topP:0 literal
     // forzaría muestreo casi greedy en lugar del default del servidor.
-    if Top_p > 0 then
+    if LSamplingOk and (Top_p > 0) then
       JConfig.AddPair('topP', TJSONNumber.Create(Top_p));
 
     if Max_tokens > 0 then

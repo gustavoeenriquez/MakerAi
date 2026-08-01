@@ -62,7 +62,12 @@ type
   TAiTTSVoice = (tvAlloy, tvAsh, tvBallad, tvCoral, tvEcho, tvFable, tvOnyx, tvNova, tvSage, tvShimmer, tvVerse);
   TAiTTSResponseFormat = (trfMp3, trfOpus, trfAac, trfFlac, trfWav, trfPcm);
 
-  TAiTranscriptionModel = (tmWhisper1, tmGpt4oTranscribe, tmGpt4oMiniTranscribe, tmGpt4oDiarize);
+  // tmGptTranscribe (gpt-transcribe) es el recomendado para archivos/batch
+  // (WER 8.98% vs 15.21% de whisper-1); tmGptLiveTranscribe es su variante de
+  // baja latencia. Ambos solo devuelven JSON (sin srt/vtt/verbose_json ni
+  // timestamps) y usan TranscriptionLanguages/TranscriptionKeywords.
+  TAiTranscriptionModel = (tmWhisper1, tmGpt4oTranscribe, tmGpt4oMiniTranscribe,
+    tmGpt4oDiarize, tmGptTranscribe, tmGptLiveTranscribe);
   TAiTranscriptionResponseFormat = (trfJson, trfText, trfSrt, trfVerboseJson, trfVtt, trfDiarizedJson);
   TStreamOperation = (soNone, soSpeech, soTranscription);
 
@@ -129,6 +134,10 @@ type
     FTranscriptionTemperature: Double;
     FTranscriptionTimestampGranularities: TAiTimestampGranularities;
     FTranscriptionLogprobs: Boolean;
+    // Contexto para gpt-transcribe / gpt-live-transcribe
+    FTranscriptionKeywords: TStrings;  // terminos de dominio esperados
+    FTranscriptionLanguages: TStrings; // idiomas esperados (multi); vacio =
+                                       // usa TranscriptionLanguage
     // Hablantes conocidos para diarizacion (max 4): nombres + data-URIs de audio
     FKnownSpeakerNames: TArray<string>;
     FKnownSpeakerRefs: TArray<string>;
@@ -147,6 +156,8 @@ type
     function GetApiKey: string;
     procedure SetApiKey(const Value: string);
     procedure SetUrl(const Value: string);
+    procedure SetTranscriptionKeywords(const Value: TStrings);
+    procedure SetTranscriptionLanguages(const Value: TStrings);
 
   protected
     function ConvertAudioIfNeeded(aMediaFile: TAiMediaFile): Boolean;
@@ -202,6 +213,14 @@ type
       Only valid for tmGpt4oTranscribe and tmGpt4oMiniTranscribe.
       Access the result via TTranscriptionResult.Logprobs. }
     property TranscriptionLogprobs: Boolean read FTranscriptionLogprobs write FTranscriptionLogprobs default False;
+    { Terminos de dominio esperados en el audio (nombres, productos, codigos)
+      — una linea por termino, sin < > ni saltos internos.
+      Solo tmGptTranscribe / tmGptLiveTranscribe. }
+    property TranscriptionKeywords: TStrings read FTranscriptionKeywords write SetTranscriptionKeywords;
+    { Idiomas esperados cuando el audio puede mezclar varios (codigos tipo
+      'es', 'en'; uno por linea). Vacio = usa TranscriptionLanguage.
+      Solo tmGptTranscribe / tmGptLiveTranscribe. }
+    property TranscriptionLanguages: TStrings read FTranscriptionLanguages write SetTranscriptionLanguages;
 
     // --- Streaming Events ---
     property OnAudioChunkReceived: TOnAudioChunkReceived read FOnAudioChunkReceived write FOnAudioChunkReceived;
@@ -367,13 +386,27 @@ begin
   FTranscriptionModel := tmWhisper1;
   FTranscriptionResponseFormat := trfJson;
   FTranscriptionTemperature := 0.0;
+  FTranscriptionKeywords := TStringList.Create;
+  FTranscriptionLanguages := TStringList.Create;
   FCurrentStreamOperation := soNone;
 end;
 
 destructor TAiOpenAiAudio.Destroy;
 begin
   FStreamBuffer.Free;
+  FTranscriptionKeywords.Free;
+  FTranscriptionLanguages.Free;
   inherited;
+end;
+
+procedure TAiOpenAiAudio.SetTranscriptionKeywords(const Value: TStrings);
+begin
+  FTranscriptionKeywords.Assign(Value);
+end;
+
+procedure TAiOpenAiAudio.SetTranscriptionLanguages(const Value: TStrings);
+begin
+  FTranscriptionLanguages.Assign(Value);
 end;
 
 procedure TAiOpenAiAudio.SetApiKey(const Value: string);
@@ -434,28 +467,57 @@ var
   FormatStr: string;
   IsWhisper1: Boolean;
   IsGpt4oModel: Boolean;
+  IsNewModel: Boolean; // gpt-transcribe / gpt-live-transcribe (2026)
+  Idx: Integer;
+  Sent: Boolean;
 begin
   case FTranscriptionModel of
     tmWhisper1:             ModelStr := 'whisper-1';
     tmGpt4oTranscribe:      ModelStr := 'gpt-4o-transcribe';
     tmGpt4oMiniTranscribe:  ModelStr := 'gpt-4o-mini-transcribe';
     tmGpt4oDiarize:         ModelStr := 'gpt-4o-transcribe-diarize';
+    tmGptTranscribe:        ModelStr := 'gpt-transcribe';
+    tmGptLiveTranscribe:    ModelStr := 'gpt-live-transcribe';
   else
     ModelStr := 'whisper-1';
   end;
 
   IsWhisper1   := FTranscriptionModel = tmWhisper1;
   IsGpt4oModel := FTranscriptionModel in [tmGpt4oTranscribe, tmGpt4oMiniTranscribe, tmGpt4oDiarize];
+  IsNewModel   := FTranscriptionModel in [tmGptTranscribe, tmGptLiveTranscribe];
 
   ABody.AddField('model', ModelStr);
   if APrompt <> '' then
     ABody.AddField('prompt', APrompt);
-  if FTranscriptionLanguage <> '' then
+
+  // Idioma(s): los modelos nuevos usan languages[] (array); el resto language
+  if IsNewModel then
+  begin
+    Sent := False;
+    for Idx := 0 to FTranscriptionLanguages.Count - 1 do
+      if Trim(FTranscriptionLanguages[Idx]) <> '' then
+      begin
+        ABody.AddField('languages[]', Trim(FTranscriptionLanguages[Idx]));
+        Sent := True;
+      end;
+    if (not Sent) and (FTranscriptionLanguage <> '') then
+      ABody.AddField('languages[]', FTranscriptionLanguage);
+    // Terminos de dominio para sesgar la transcripcion
+    for Idx := 0 to FTranscriptionKeywords.Count - 1 do
+      if Trim(FTranscriptionKeywords[Idx]) <> '' then
+        ABody.AddField('keywords[]', Trim(FTranscriptionKeywords[Idx]));
+  end
+  else if FTranscriptionLanguage <> '' then
     ABody.AddField('language', FTranscriptionLanguage);
+
   if FTranscriptionTemperature <> 0.0 then
     ABody.AddField('temperature', Format('%f', [FTranscriptionTemperature]));
 
-  // gpt-4o models only support json/text — silently downgrade unsupported formats
+  // gpt-4o models only support json/text — silently downgrade unsupported
+  // formats. gpt-transcribe/gpt-live-transcribe solo devuelven json.
+  if IsNewModel then
+    FormatStr := 'json'
+  else
   case FTranscriptionResponseFormat of
     trfJson:        FormatStr := 'json';
     trfText:        FormatStr := 'text';

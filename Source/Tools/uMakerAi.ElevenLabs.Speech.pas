@@ -36,7 +36,7 @@
 // STT:  POST https://api.elevenlabs.io/v1/speech-to-text
 //
 // Uso como ChatTool:
-//   AiChat.SpeechTool := TAiElevenLabsSpeechTool.Create(Self);
+//   AiChat.ChatTools.SpeechTool := TAiElevenLabsSpeechTool.Create(Self);
 //   (AiChat.SpeechTool as TAiElevenLabsSpeechTool).ApiKey := '@ELEVENLABS_API_KEY';
 //
 // Uso directo:

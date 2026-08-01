@@ -109,7 +109,7 @@ begin
 
   // Conexión universal
   FConn := TAiChatConnection.Create(Self);
-  FConn.ComputerUseTool := FCU;
+  FConn.ChatTools.ComputerUseTool := FCU;
   FConn.OnReceiveDataEnd := DoReceiveEnd;
   FConn.OnError := DoError;
 

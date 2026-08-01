@@ -44,15 +44,13 @@ unit uMakerAi.Memory;
 //   Link    — crea relación entre dos memorias (knowledge graph)
 //   Export / Import — portabilidad JSON
 //
-// Usa la misma conexión FireDAC del proyecto si se asigna (property Connection).
-// Sin conexión asignada, crea su propio archivo SQLite en DbPath.
+// La persistencia es autonoma: crea y gestiona su propio archivo SQLite en DbPath.
 
 interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   System.JSON, System.DateUtils, System.Math, System.IOUtils,
-  FireDAC.Comp.Client,
   uMakerAi.Core,
   uMakerAi.Chat,
   uMakerAi.Chat.AiConnection,
@@ -72,7 +70,6 @@ type
     FStorage:     IAiMemoryStorage;
     FContext:     TAiMemoryContext;
     FEmbedder:    TAiEmbeddingsCore;
-    FConnection:  TFDConnection;
     FNamespace:   string;
     FDbPath:      string;
     FAutoDecay:   Boolean;
@@ -88,7 +85,6 @@ type
 
     procedure SetEmbedder(AValue: TAiEmbeddingsCore);
     procedure SetDbPath(const AValue: string);
-    procedure SetConnection(AValue: TFDConnection);
     procedure SetAnalyzer(AValue: TAiChatConnection);
     procedure EnsureStorage;
     procedure RebuildContext;
@@ -198,11 +194,8 @@ type
     // Namespace activo — aísla memorias entre agentes/proyectos
     property Namespace:  string           read FNamespace  write FNamespace;
 
-    // Ruta al archivo SQLite. Ignorado si Connection está asignada.
+    // Ruta al archivo SQLite donde persisten las memorias.
     property DbPath:     string           read FDbPath     write SetDbPath;
-
-    // Conexión FireDAC externa (opcional). Si se asigna, reutiliza la BD del proyecto.
-    property Connection: TFDConnection    read FConnection write SetConnection;
 
     // Embedder para búsqueda semántica (opcional). Si nil = solo FTS.
     property Embedder:   TAiEmbeddingsCore read FEmbedder  write SetEmbedder;
@@ -258,17 +251,14 @@ begin
   FreeAndNil(FContext);
 end;
 
-procedure TAiMemory.SetConnection(AValue: TFDConnection);
-begin
-  if FConnection = AValue then Exit;
-  FConnection := AValue;
-  FStorage    := nil;
-  FreeAndNil(FContext);
-end;
-
 procedure TAiMemory.SetEmbedder(AValue: TAiEmbeddingsCore);
 begin
+  if FEmbedder = AValue then Exit;
+  if Assigned(FEmbedder) then
+    FEmbedder.RemoveFreeNotification(Self);
   FEmbedder := AValue;
+  if Assigned(FEmbedder) then
+    FEmbedder.FreeNotification(Self);
   RebuildContext;
 end;
 
@@ -285,18 +275,25 @@ end;
 procedure TAiMemory.Notification(AComponent: TComponent; Operation: TOperation);
 begin
   inherited;
-  if (Operation = opRemove) and (AComponent = FAnalyzer) then
-    FAnalyzer := nil;
+  if Operation = opRemove then
+  begin
+    if AComponent = FAnalyzer then
+      FAnalyzer := nil;
+
+    if AComponent = FEmbedder then
+    begin
+      // El contexto retiene el embedder: reconstruir sin el (queda solo FTS)
+      FEmbedder := nil;
+      RebuildContext;
+    end;
+  end;
 end;
 
 procedure TAiMemory.EnsureStorage;
 begin
   if Assigned(FStorage) then Exit;
 
-  if Assigned(FConnection) then
-    FStorage := TAiMemorySQLiteStorage.CreateWithConnection(FConnection)
-  else
-    FStorage := TAiMemorySQLiteStorage.CreateWithPath(FDbPath);
+  FStorage := TAiMemorySQLiteStorage.CreateWithPath(FDbPath);
 
   RebuildContext;
 end;

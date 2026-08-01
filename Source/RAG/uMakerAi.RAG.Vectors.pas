@@ -600,10 +600,7 @@ begin
     if ChunkText <> '' then
     begin
       if Assigned(Metadata) then
-      begin
         Metadata.Properties['Posicion'] := I;
-        Metadata.Properties['FechaDoc'] := EncodeDate(Random(20)+2000,Random(11)+1,01);
-      end;
 
       Emb := AddItem(ChunkText, MetaData);
       if Assigned(Emb) then
@@ -2579,6 +2576,10 @@ begin
     FUseReorderABC := TAiSearchOptions(Source).UseReorderABC;
     FBM25Weight := TAiSearchOptions(Source).BM25Weight;
     FEmbeddingWeight := TAiSearchOptions(Source).EmbeddingWeight;
+    // Sin estas dos, THRESHOLD SEMANTIC/LEXICAL de VQL se parseaban pero se
+    // perdian justo aqui al aplicar las TempOptions de ExecuteVQL
+    FMinAbsoluteScoreEmbedding := TAiSearchOptions(Source).MinAbsoluteScoreEmbedding;
+    FMinAbsoluteScoreBM25 := TAiSearchOptions(Source).MinAbsoluteScoreBM25;
     Changed;
   end
   else

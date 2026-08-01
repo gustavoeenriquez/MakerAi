@@ -45,6 +45,7 @@ contains
   uMakerAi.RAG.Vector.Driver.Postgres in '..\RAG\uMakerAi.RAG.Vector.Driver.Postgres.pas',
   uMakerAi.RAG.Vector.Driver.SQLite in '..\RAG\uMakerAi.RAG.Vector.Driver.SQLite.pas',
   uMakerAi.RAG.Vector.Driver.BinFile in '..\RAG\uMakerAi.RAG.Vector.Driver.BinFile.pas',
+  uMakerAi.RAG.Vector.Driver.MSSQL in '..\RAG\uMakerAi.RAG.Vector.Driver.MSSQL.pas',
   uMakerAi.Agents.Checkpoint.DB in '..\Agents\uMakerAi.Agents.Checkpoint.DB.pas',
   uMakerAi.Memory.Storage in '..\Memory\uMakerAi.Memory.Storage.pas',
   uMakerAi.Memory.Context in '..\Memory\uMakerAi.Memory.Context.pas',

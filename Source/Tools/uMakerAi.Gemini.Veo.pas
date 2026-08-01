@@ -552,6 +552,9 @@ begin
       Result := 'veo-3.1-generate-preview';
     vmVeo3_1_Fast:
       Result := 'veo-3.1-fast-generate-preview';
+    // RETIRADOS por Google el 30 jun 2026: veo-2.0 y veo-3.0 devuelven error
+    // del API. Se conservan en el enum por compatibilidad de DFMs; migrar a
+    // vmVeo3_1 / vmVeo3_1_Fast.
     vmVeo3_0:
       Result := 'veo-3.0-generate-001';
     vmVeo3_0_Fast:

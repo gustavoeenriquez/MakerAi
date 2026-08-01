@@ -71,6 +71,7 @@ type
     // Eventos de Indy
     procedure OnCommandGet(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
     procedure OnCommandOther(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+    procedure OnParseAuthentication(AContext: TIdContext; const AAuthType, AAuthData: String; var VUsername, VPassword: String; var VHandled: Boolean);
 
     // Manejadores espec�ficos
     procedure HandleSSEConnection(AContext: TIdContext; AResponseInfo: TIdHTTPResponseInfo);
@@ -148,6 +149,7 @@ begin
   // Asignamos manejadores
   FHttpServer.OnCommandGet := OnCommandGet;
   FHttpServer.OnCommandOther := OnCommandOther;
+  FHttpServer.OnParseAuthentication := OnParseAuthentication;
 
   // Configuraci?n vital para SSE
   FHttpServer.KeepAlive := True;
@@ -307,6 +309,16 @@ begin
 end;
 
 // Manejador para POST y OPTIONS
+procedure TAiMCPSSEHttpServer.OnParseAuthentication(AContext: TIdContext; const AAuthType, AAuthData: String;
+  var VUsername, VPassword: String; var VHandled: Boolean);
+begin
+  // Sin este handler, Indy responde 401 a cualquier esquema Authorization
+  // distinto de Basic (p.ej. "Bearer <token>") antes de llegar a los handlers.
+  // La validación real ocurre en ValidateRequest sobre el header crudo
+  // (ApiKey / OnValidateRequest); aquí solo evitamos el rechazo prematuro.
+  VHandled := True;
+end;
+
 procedure TAiMCPSSEHttpServer.OnCommandOther(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
 var
   AuthContext: TAiAuthContext;

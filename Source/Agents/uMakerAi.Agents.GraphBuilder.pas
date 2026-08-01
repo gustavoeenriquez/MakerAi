@@ -7,6 +7,10 @@ uses
   uMakerAi.Agents;
 
 type
+  // Error estructural del grafo (M-02). La declaracion vive en uMakerAi.Agents
+  // (tambien la usa SaveToStream, M-06); este alias preserva compatibilidad.
+  EAiGraphError = uMakerAi.Agents.EAiGraphError;
+
   TGraphBuilder = class
   private
   // MEJORA: Constantes para evitar "Magic Strings" y errores de tipeo.
@@ -59,6 +63,7 @@ type
     FJsonGraph: TJSONObject;
     FNodeMap: TDictionary<string, TAIAgentsNode>;
     FNodeJsonMap: TDictionary<string, TJSONObject>;
+    FStrictValidation: Boolean;
 
     procedure ParseNodes;
     procedure ParseEdges;
@@ -71,6 +76,12 @@ type
     destructor Destroy; override;
 
     procedure BuildFromJson(const AJsonString: string);
+
+    // M-02: con True (default) los defectos estructurales del JSON lanzan
+    // EAiGraphError (arista a nodo inexistente, puerto no declarado, exceso
+    // de salidas). Con False se conserva el comportamiento historico de
+    // advertir por el log y continuar (con perdida silenciosa de aristas).
+    property StrictValidation: Boolean read FStrictValidation write FStrictValidation default True;
   end;
 
 implementation
@@ -89,6 +100,7 @@ begin
   FAgents := AAgents;
   FNodeMap := TDictionary<string, TAIAgentsNode>.Create;
   FNodeJsonMap := TDictionary<string, TJSONObject>.Create;
+  FStrictValidation := True;
 end;
 
 destructor TGraphBuilder.Destroy;
@@ -269,14 +281,24 @@ begin
     LSourceTerminalId := LEdgeJson.GetValue<string>(cJsonEdgeSourceTerminal);
 
     if not(FNodeMap.TryGetValue(LSourceNodeId, LSourceNode) and FNodeMap.TryGetValue(LTargetNodeId, LTargetNode)) then
-      Continue; // Or raise an error for an edge pointing to a non-existent node
+    begin
+      if FStrictValidation then
+        raise EAiGraphError.CreateFmt('Edge references a non-existent node (source "%s" -> target "%s").',
+          [LSourceNodeId, LTargetNodeId]);
+      Continue;
+    end;
 
     if not FNodeJsonMap.TryGetValue(LSourceNodeId, LSourceNodeJson) then
       Continue;
 
     LSourcePortJson := FindPortJsonByTerminalId(LSourceNodeJson, LSourceTerminalId);
     if not Assigned(LSourcePortJson) then
+    begin
+      if FStrictValidation then
+        raise EAiGraphError.CreateFmt('Source port "%s" is not declared on node "%s".',
+          [LSourceTerminalId, LSourceNode.Name]);
       Continue;
+    end;
 
     LSourcePortCategory := LSourcePortJson.GetValue<string>(cJsonPortCategory, 'tool');
     if SameText(LSourcePortCategory, cJsonPortCategoryAccessory) then
@@ -318,18 +340,19 @@ begin
 
     LSourcePortId := LSourcePortJson.GetValue<string>(cJsonPortId, LSourceTerminalId);
 
-    if LLink.Mode = lmConditional then
+    // El puerto out_failure es la rama de error en TODOS los modos (M-07):
+    // debe evaluarse antes que el modo, o en lmConditional quedaria registrado
+    // como condicion de valor "out_failure" y el nodo sin salida de fallo.
+    if SameText(LSourcePortId, cPortOutFailure) then
+    begin
+      LLink.NextNo := LTargetNode;
+    end
+    else if LLink.Mode = lmConditional then
     begin
       LLink.AddConditionalTarget(LSourcePortId, LTargetNode);
     end
     else
     begin
-      if SameText(LSourcePortId, cPortOutFailure) then
-      begin
-        LLink.NextNo := LTargetNode;
-      end
-      else
-      begin
         // MEJORA: L�gica de asignaci�n a NextA/B/C/D simplificada y menos repetitiva.
         var
           LNextSlots: array [0 .. 3] of PPointer;
@@ -351,70 +374,23 @@ begin
         end;
 
         if not LAssigned then
+        begin
+          if FStrictValidation then
+            raise EAiGraphError.CreateFmt('More than %d standard output ports connected from node "%s" (connection to "%s"). ' +
+              'Use lmConditional/lmManual for N-way routing or set StrictValidation:=False to keep the legacy behavior of dropping the edge.',
+              [Length(LNextSlots), LSourceNode.Name, LTargetNode.Name]);
           LSourceNode.Print(Format('Warning: More than %d standard output ports connected from node %s. Connection to %s ignored.', [Length(LNextSlots), LSourceNode.Name, LTargetNode.Name]));
-      end;
+        end;
     end;
   end;
 end;
 
 procedure TGraphBuilder.SetToolParameters(ATool: TAiToolBase; AParamsJson: TJSONObject);
-var
-  LRttiContext: TRttiContext;
-  LRttiType: TRttiType;
-  LRttiProp: TRttiProperty;
-  LParamPair: TJSONPair;
-  LParamValue: TJSONValue;
 begin
-  LRttiContext := TRttiContext.Create;
-  try
-    LRttiType := LRttiContext.GetType(ATool.ClassType);
-    for LParamPair in AParamsJson do
-    begin
-      LRttiProp := LRttiType.GetProperty(LParamPair.JsonString.Value);
-      if Assigned(LRttiProp) and LRttiProp.IsWritable then
-      begin
-        LParamValue := LParamPair.JsonValue;
-
-        case LRttiProp.PropertyType.TypeKind of
-          tkString, tkUString:
-            LRttiProp.SetValue(ATool, LParamValue.Value);
-          tkInteger, tkInt64:
-            LRttiProp.SetValue(ATool, StrToIntDef(LParamValue.Value, 0));
-          tkFloat:
-            LRttiProp.SetValue(ATool, StrToFloatDef(LParamValue.Value, 0.0, TFormatSettings.Invariant));
-          tkEnumeration:
-            begin
-              if LRttiProp.PropertyType.Handle = TypeInfo(Boolean) then
-              begin
-                var
-                LBoolValue := False;
-                if LParamValue is TJSONTrue then
-                  LBoolValue := True
-                else if LParamValue is TJSONFalse then
-                  LBoolValue := False
-                else
-                  LBoolValue := SameText(LParamValue.Value, 'true');
-                LRttiProp.SetValue(ATool, TValue.From<Boolean>(LBoolValue));
-              end
-              else
-              begin
-                var
-                LOrdinalValue := GetEnumValue(LRttiProp.PropertyType.Handle, LParamValue.Value);
-                if LOrdinalValue <> -1 then
-                begin
-                  var
-                  LEnumValue := TValue.FromOrdinal(LRttiProp.PropertyType.Handle, LOrdinalValue);
-                  if not LEnumValue.IsEmpty then
-                    LRttiProp.SetValue(ATool, LEnumValue);
-                end;
-              end;
-            end;
-        end;
-      end;
-    end;
-  finally
-    LRttiContext.Free;
-  end;
+  // M-04: delega en el mapper unico. TAiToolParams.FromJSON es tolerante a
+  // valores tipados o como string, excluye las propiedades reservadas
+  // (Name/Tag/ID/Description) e ignora las marcadas [TSecret].
+  TAiToolParams.FromJSON(ATool, AParamsJson);
 end;
 
 function TGraphBuilder.FindPortJsonByTerminalId(ANodeJson: TJSONObject; const APortTerminalId: string): TJSONObject;

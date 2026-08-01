@@ -79,6 +79,21 @@ type
     property DefaultValue: string read FDefaultValue;
   end;
 
+  // ---------------------------------------------------------------------------
+  // 3. ATRIBUTO PARA PROPIEDADES SECRETAS ([TSecret])
+  // Marca una propiedad como secreta: nunca se serializa a disco y cualquier
+  // valor entrante para ella se ignora al deserializar, de modo que un archivo
+  // manipulado no pueda inyectar credenciales. El valor se provee en ejecucion
+  // (almacen de credenciales o variable de entorno con sintaxis @ENV_VAR).
+  // ---------------------------------------------------------------------------
+  TSecretAttribute = class(TCustomAttribute)
+  private
+    FCredentialType: string; // 'apiKey' | 'basic' | 'bearer' | 'hmac' | 'custom'
+  public
+    constructor Create(const ACredentialType: string = 'apiKey');
+    property CredentialType: string read FCredentialType;
+  end;
+
 implementation
 
 { TToolAttribute }
@@ -99,6 +114,14 @@ begin
   FDisplayName := ADisplayName;
   FHint := AHint;
   FDefaultValue := ADefaultValue;
+end;
+
+{ TSecretAttribute }
+
+constructor TSecretAttribute.Create(const ACredentialType: string);
+begin
+  inherited Create;
+  FCredentialType := ACredentialType;
 end;
 
 end.
