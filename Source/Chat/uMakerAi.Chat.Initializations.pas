@@ -1243,7 +1243,13 @@ Begin
 
   // ------------------------- GROK ----------------------------------
   // https://docs.x.ai/developers/models
-  // Ultima actualizacion: Abr 2026
+  // Ultima actualizacion: Ago 2026 (probado runtime)
+  // Familia actual: grok-4.5 / grok-4.3 / grok-4.20 / grok-build + grok-imagine.
+  // Los modelos de texto actuales RAZONAN SIEMPRE (reasoning_content en la
+  // respuesta) y NO aceptan frequency/presence/stop ni reasoning_effort.
+  // logprobs/top_logprobs NO soportados en grok-4.20 y posteriores.
+  // RETIRADOS ago 2026: familia grok-3 completa, grok-4-0709, grok-4-fast-*,
+  // grok-4-1*, grok-code-fast-1, grok-2-vision-1212, grok-2-image-1212.
   // ------------------------- GROK ----------------------------------
 
   // --- Valores globales por defecto para todos los modelos Grok ---
@@ -1252,68 +1258,34 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Grok', 'ModelCaps',   '[]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', 'SessionCaps', '[]');
 
-  // ------- Grok 4.3 (1M ctx, texto + tools) — modelo actual de produccion ------
-  // grok-4.3 hereda defaults (ModelCaps=[], Tool_Active=True)
-  // Restricciones del driver: sin frequency/presence/stop, sin reasoning_effort (grok-4 series)
-  // https://docs.x.ai/developers/models#grok-4.3
-
-  // ------- Grok 3 (131K ctx, texto + tools, sin vision, sin reasoning) ------
-  // grok-3 y grok-3-fast heredan defaults, no necesitan config adicional
-
-  // ------- Grok 3 Mini (131K ctx, texto + reasoning + tools, sin vision) ------
-  // reasoning_effort soportado: 'low' / 'high'
-  Model := 'grok-3-mini';
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',    '[cap_Reasoning]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps',  '[cap_Reasoning]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ThinkingLevel', 'tlLow');
-
-  Model := 'grok-3-mini-fast';
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',    '[cap_Reasoning]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps',  '[cap_Reasoning]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ThinkingLevel', 'tlLow');
-
-  // ------- Grok 2 Vision (vision, texto + tools) ------
-  Model := 'grok-2-vision-1212';
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_Image]');
-
-  // ------- Grok 4 / grok-4-0709 (256K ctx, vision + reasoning siempre activo + tools) ------
-  // grok-4 NO acepta reasoning_effort ni frequency/presence/stop
-  TAiChatFactory.Instance.RegisterCustomModel('Grok', 'grok-4', 'grok-4-0709');
-  Model := 'grok-4-0709';
+  // ------- Grok 4.3 [default del driver] ------
+  // 1M ctx, vision + reasoning siempre activo (probados). $1.25/M in, $2.50/M out (<200K)
+  Model := 'grok-4.3';
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[cap_Image, cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_Image, cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Max_Tokens',  '32000');
 
-  // ------- Grok 4 Fast (2M ctx, vision + tools) ------
-  // https://docs.x.ai/developers/models#grok-4-fast
-  Model := 'grok-4-fast-non-reasoning';
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Max_Tokens',  '32000');
-
-  Model := 'grok-4-fast-reasoning';
+  // ------- Grok 4.5 [premium, recomendado para codigo y chat] ------
+  // 500K ctx, vision + reasoning siempre activo (probados). $2/M in, $6/M out (<200K)
+  Model := 'grok-4.5';
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[cap_Image, cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_Image, cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Max_Tokens',  '32000');
 
-  // ------- Grok 4.1 Fast (2M ctx, vision + tools) ------
-  Model := 'grok-4-1';
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_Image]');
+  // ------- Grok Build (coding, 256K ctx, reasoning siempre activo) ------
+  // $1/M in, $2/M out (<200K). Sin vision confirmada.
+  Model := 'grok-build-0.1';
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Max_Tokens',  '32000');
 
-  Model := 'grok-4-1-fast-non-reasoning';
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Max_Tokens',  '32000');
+  // Aliases de modelos retirados hacia equivalentes actuales
+  TAiChatFactory.Instance.RegisterCustomModel('Grok', 'grok-3',           'grok-4.3');
+  TAiChatFactory.Instance.RegisterCustomModel('Grok', 'grok-4',           'grok-4.3');
+  TAiChatFactory.Instance.RegisterCustomModel('Grok', 'grok-4-0709',      'grok-4.3');
+  TAiChatFactory.Instance.RegisterCustomModel('Grok', 'grok-code-fast-1', 'grok-build-0.1');
 
-  Model := 'grok-4-1-fast-reasoning';
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[cap_Image, cap_Reasoning]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_Image, cap_Reasoning]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Max_Tokens',  '32000');
-
-  // ------- Grok 4.20 (flagship mar 2026, 2M ctx, vision + tools) ------
+  // ------- Grok 4.20 (mar 2026, 1M ctx, vision + tools) ------
   Model := 'grok-4.20-0309-non-reasoning';
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[cap_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_Image]');
@@ -1329,45 +1301,46 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_Image, cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Max_Tokens',  '32000');
 
-  // ------- Grok Code Fast (256K ctx, codigo + reasoning + tools, sin vision) ------
-  Model := 'grok-code-fast-1';
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',    '[cap_Reasoning]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps',  '[cap_Reasoning]');
-
   // ------- Generacion de imagenes ------
   // ModelCaps=[]: usa endpoint dedicado; Gap=[cap_GenImage] activa InternalRunImageGeneration
-  Model := 'grok-2-image-1212';
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_GenImage]');
-  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Tool_Active', 'False');
-
+  // grok-imagine-image $0.02/img; grok-imagine-image-quality $0.05/img
   Model := 'grok-imagine-image';
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_GenImage]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Tool_Active', 'False');
 
-  Model := 'grok-imagine-image-pro';
+  Model := 'grok-imagine-image-quality';
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_GenImage]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Tool_Active', 'False');
 
+  // Aliases de modelos de imagen retirados
+  TAiChatFactory.Instance.RegisterCustomModel('Grok', 'grok-2-image-1212',      'grok-imagine-image');
+  TAiChatFactory.Instance.RegisterCustomModel('Grok', 'grok-2-image',           'grok-imagine-image');
+  TAiChatFactory.Instance.RegisterCustomModel('Grok', 'grok-imagine-image-pro', 'grok-imagine-image-quality');
+
   // ------- Generacion de video ------
   // Gap=[cap_GenVideo] activa InternalRunImageVideoGeneration
+  // grok-imagine-video $0.05/seg; grok-imagine-video-1.5 $0.08/seg
   Model := 'grok-imagine-video';
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_GenVideo]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Tool_Active', 'False');
 
+  Model := 'grok-imagine-video-1.5';
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'Tool_Active', 'False');
+
   // ------- Perfiles personalizados (aa_*) ------
-  // Grok con web search nativo (Agent Tools API - solo grok-4 family)
-  // xAI solo soporta server-side tools en modelos grok-4+
-  TAiChatFactory.Instance.RegisterCustomModel('Grok', 'aa_grok-3-search', 'grok-4-1-fast-reasoning');
+  // Grok con web search nativo (Agent Tools API - grok-4+)
+  TAiChatFactory.Instance.RegisterCustomModel('Grok', 'aa_grok-3-search', 'grok-4.3');
   Model := 'aa_grok-3-search';
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ModelCaps',   '[cap_WebSearch]');
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'SessionCaps', '[cap_WebSearch]');
 
-  // Grok 4 Fast con reasoning alto
-  TAiChatFactory.Instance.RegisterCustomModel('Grok', 'aa_grok-4-fast-high', 'grok-4-fast-reasoning');
+  // Perfil rapido con reasoning (retarget: grok-4-fast-reasoning fue retirado)
+  TAiChatFactory.Instance.RegisterCustomModel('Grok', 'aa_grok-4-fast-high', 'grok-4.20-0309-reasoning');
   Model := 'aa_grok-4-fast-high';
   TAiChatFactory.Instance.RegisterUserParam('Grok', Model, 'ThinkingLevel', 'tlHigh');
 

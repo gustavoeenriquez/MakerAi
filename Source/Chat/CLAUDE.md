@@ -25,7 +25,7 @@ Each inherits from `TAiChat` (defined in Core):
 | `uMakerAi.Chat.DeepSeek.pas` | `TAiDeepSeekChat` | DeepSeek (deepseek-v4-flash, deepseek-v4-pro) |
 | `uMakerAi.Chat.Mistral.pas` | `TAiMistralChat` | Mistral (large, magistral, devstral, voxtral) |
 | `uMakerAi.Chat.Kimi.pas` | `TAiKimiChat` | Kimi/Moonshot (kimi-k3, kimi-k2.6/k2.7) |
-| `uMakerAi.Chat.Grok.pas` | `TAiGrokChat` | xAI Grok (grok-3, grok-4-fast) |
+| `uMakerAi.Chat.Grok.pas` | `TAiGrokChat` | xAI Grok (grok-4.3, grok-4.5, grok-build) |
 | `uMakerAi.Chat.Cohere.pas` | `TCohereChat` | Cohere (command-a, aya-vision) |
 | `uMakerAi.Chat.GenericLLM.pas` | `TAiGenericChat` | Any OpenAI-compatible API |
 
@@ -274,12 +274,14 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - Small 4 / Medium 3.5 → `reasoning_effort: 'low'|'medium'|'high'` según `ThinkingLevel`
 
 ### xAI Grok
-- grok-3: texto + tools (default)
-- grok-3-mini: reasoning ligero (`ThinkingLevel=tlLow`)
-- grok-4-fast-reasoning / grok-4-1-fast-reasoning: vision + reasoning, 2M ctx
-- grok-code-fast-1: reasoning para código, sin visión
-- Imagen: grok-2-image-1212, grok-imagine-image/pro → `SessionCaps=[cap_GenImage]`
-- Video: grok-imagine-video → `SessionCaps=[cap_GenVideo]`
+**Actualizado ago 2026, probado runtime 6/6.** Recambio total del catálogo: la familia actual (grok-4.x, grok-build) **razona siempre** (`reasoning_content` capturado por la base) y NO acepta `frequency/presence/stop` ni `reasoning_effort` (gate por prefijo en el driver); logprobs no soportado en 4.20+.
+- `grok-4.3` [default del driver]: 1M ctx, visión + reasoning (probados). $1.25/$2.50 por M (<200K; 2x sobre 200K)
+- `grok-4.5` [premium]: 500K ctx, visión + reasoning (probados). $2/$6 por M
+- `grok-4.20-0309-reasoning`/`-non-reasoning`/`-multi-agent-0309`: 1M ctx
+- `grok-build-0.1`: coding con reasoning (probado), 256K ctx. $1/$2 por M
+- Imagen: `grok-imagine-image` ($0.02) / `-image-quality` ($0.05) → `SessionCaps=[cap_GenImage]`
+- Video: `grok-imagine-video` ($0.05/s) / `-video-1.5` ($0.08/s) → `SessionCaps=[cap_GenVideo]`
+- **RETIRADOS ago 2026**: familia grok-3 completa, grok-4-0709, grok-4-fast-*, grok-4-1*, grok-code-fast-1, grok-2-vision, grok-2-image, grok-imagine-image-pro. Aliases registrados: grok-3/grok-4/grok-4-0709 → grok-4.3; grok-code-fast-1 → grok-build-0.1; grok-2-image(-1212) → grok-imagine-image; -image-pro → -image-quality (probado vía alias)
 
 ### DeepSeek
 **Actualizado ago 2026, probado runtime 4/4 (incl. tools en modo thinking).** V4 (abr 2026) son los únicos modelos en `/v1/models`: 1M ctx / 384K output. El API activa thinking **por defecto** (effort=high); el driver lo controla explícitamente en `InitChatCompletions`: `cap_Reasoning` en `ModelCaps` → `thinking:{type:enabled}` + `reasoning_effort` (tlLow=low, tlMedium=high, tlHigh=max); sin el cap → `thinking:{type:disabled}` (modo rápido/económico). En modo thinking el API ignora temperature/top_p/penalties sin error. Con tools, `reasoning_content` DEBE reenviarse en el historial (400 si falta) — el override `GetMessages` del driver ya lo hace.

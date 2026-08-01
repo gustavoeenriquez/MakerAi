@@ -91,7 +91,7 @@ class procedure TAiGrokChat.RegisterDefaultParams(Params: TStrings);
 Begin
   Params.Clear;
   Params.Add('ApiKey=@GROK_API_KEY');
-  Params.Add('Model=grok-3');
+  Params.Add('Model=grok-4.3');
   Params.Add('Max_Tokens=4096');
   Params.Add('URL=https://api.x.ai/v1/');
 End;
@@ -105,7 +105,8 @@ constructor TAiGrokChat.Create(Sender: TComponent);
 begin
   inherited;
   ApiKey := '@GROK_API_KEY';
-  Model := 'grok-3';
+  // grok-3 fue retirado del API (ago 2026); grok-4.3 es el modelo de produccion
+  Model := 'grok-4.3';
   Url := GlAIUrl;
 end;
 
@@ -133,11 +134,15 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   If LModel = '' then
-    LModel := 'grok-3';
+    LModel := 'grok-4.3';
 
-  // grok-4 series, grok-3-mini y grok-code-fast-1 prohiben frequency/presence/stop
-  LIsRestrictedModel       := LModel.StartsWith('grok-4') or LModel.StartsWith('grok-3-mini') or (LModel = 'grok-code-fast-1');
-  // reasoning_effort solo es valido en grok-3-mini / grok-3-mini-fast (valores: low, high)
+  // Toda la familia actual (grok-4.x, grok-build) prohibe frequency/presence/stop.
+  // grok-3-mini/grok-code-fast-1 se mantienen por si el usuario apunta a un
+  // endpoint compatible con modelos antiguos.
+  LIsRestrictedModel       := LModel.StartsWith('grok-4') or LModel.StartsWith('grok-build') or
+                              LModel.StartsWith('grok-3-mini') or (LModel = 'grok-code-fast-1');
+  // reasoning_effort solo era valido en grok-3-mini (retirado); la familia actual
+  // razona siempre y NO acepta el parametro
   LSupportsReasoningEffort := LModel.StartsWith('grok-3-mini');
 
   LAsincronico := Self.Asynchronous;
@@ -309,7 +314,7 @@ begin
 
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
   if LModel = '' then
-    LModel := 'grok-3';
+    LModel := 'grok-4.3';
 
   sUrl := Url;
   if not sUrl.EndsWith('/') then
@@ -448,7 +453,7 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   if LModel = '' then
-    LModel := 'grok-2-image'; // Asignar un modelo de imagen por defecto
+    LModel := 'grok-imagine-image'; // Default de imagen (grok-2-image fue retirado)
 
   LUrl := Url + 'images/generations'; // Url base + endpoint
 
