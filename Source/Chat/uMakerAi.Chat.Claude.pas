@@ -502,6 +502,29 @@ end;
 
 // --- Header Generation ---
 
+// Familias de modelos segun la superficie de thinking del API (ago 2026):
+// - Adaptive-only (opus 4.7/4.8, familia 5: opus/sonnet/fable/mythos):
+//   budget_tokens y temperature/top_p/top_k devuelven 400. Thinking se pide
+//   con {type:"adaptive"} y la profundidad con output_config.effort.
+// - 4.6 (opus/sonnet): adaptive recomendado (budget deprecado pero funcional),
+//   sampling permitido, effort GA.
+// - Legacy (<=4.5, haiku): thinking {enabled, budget_tokens} clasico.
+function IsClaudeAdaptiveOnly(const AModel: string): Boolean;
+begin
+  Result := AModel.StartsWith('claude-opus-4-7') or
+            AModel.StartsWith('claude-opus-4-8') or
+            AModel.StartsWith('claude-opus-5') or
+            AModel.StartsWith('claude-sonnet-5') or
+            AModel.StartsWith('claude-fable') or
+            AModel.StartsWith('claude-mythos');
+end;
+
+function IsClaude46(const AModel: string): Boolean;
+begin
+  Result := AModel.StartsWith('claude-opus-4-6') or
+            AModel.StartsWith('claude-sonnet-4-6');
+end;
+
 function TAiClaudeChat.GetDynamicHeaders: TNetHeaders;
 var
   BetaFeatures: TList<string>;
@@ -527,9 +550,12 @@ begin
     if cap_ComputerUse in ModelConfig.ModelCaps then
       BetaFeatures.Add(BETA_HDR_COMPUTER);
 
-    // 5. Thinking / Output Config
-    // Se activa si est? habilitado manualmente O si hay un nivel de pensamiento definido
-    if FEnableThinking or (ModelConfig.ThinkingLevel <> tlDefault) then
+    // 5. Thinking: el header interleaved-thinking solo aplica al camino legacy
+    // con budget_tokens (<=4.5). En 4.6+ el thinking adaptativo integra el
+    // interleaving automaticamente y el header sobra.
+    var LBaseModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+    if (FEnableThinking or (ModelConfig.ThinkingLevel <> tlDefault)) and
+       (not IsClaudeAdaptiveOnly(LBaseModel)) and (not IsClaude46(LBaseModel)) then
       BetaFeatures.Add(BETA_HDR_THINKING);
 
     // 6. Prompt Caching: GA, ya no requiere beta header (antes 'prompt-caching-2024-07-31').
@@ -600,11 +626,14 @@ Var
   // Variables para nuevas funcionalidades
   jOutputFormat, jMetaData: TJSONObject;
   jSchemaParsed: TJSONValue;
+  LOutputConfig: TJSONObject; // output_config: format (json_schema) y/o effort
 
   // Variables auxiliares para Thinking
   LActualThinkingBudget: Integer;
+  LIs46: Boolean;
 begin
   LActualThinkingBudget := 0;
+  LOutputConfig := nil;
   if User = '' then
     User := 'user';
 
@@ -634,18 +663,19 @@ begin
   if LModel = '' then
     LModel := 'claude-haiku-4-5-20251001';
 
-  // Adaptive Thinking: Anthropic controla internamente el sampling y el razonamiento.
-  // Enviar temperature/top_p/top_k o el bloque thinking causa error 400.
-  // Agregar aquí futuros modelos con Adaptive Thinking cuando Anthropic los anuncie.
-  LIsAdaptiveThinking := LModel.StartsWith('claude-opus-4-7');
+  // Clasificacion por familia (ver IsClaudeAdaptiveOnly / IsClaude46 arriba):
+  // adaptive-only = 4.7/4.8/5 (budget y sampling devuelven 400); 4.6 = adaptive
+  // recomendado; resto = camino legacy con budget_tokens.
+  LIsAdaptiveThinking := IsClaudeAdaptiveOnly(LModel);
+  LIs46 := IsClaude46(LModel);
 
   // ---------------------------------------------------------------------------
-  // 2. C?LCULO DE THINKING BUDGET (Nuevo enfoque sin output_config)
+  // 2. C?LCULO DE THINKING BUDGET (solo camino legacy <=4.5)
   // ---------------------------------------------------------------------------
   if ModelConfig.ThinkingLevel <> tlDefault then
     FEnableThinking := True;
 
-  if FEnableThinking then
+  if FEnableThinking and (not LIsAdaptiveThinking) and (not LIs46) then
   begin
     // Asignar presupuesto seg?n el nivel elegido o usar el manual
     case ModelConfig.ThinkingLevel of
@@ -749,7 +779,10 @@ begin
             jOutputFormat := TJSONObject.Create;
             jOutputFormat.AddPair('type', 'json_schema');
             jOutputFormat.AddPair('schema', jRootSchema); // Usamos el objeto ya modificado
-            AJSONObject.AddPair('output_format', jOutputFormat);
+            // output_format (top-level) esta deprecado API-wide: el canonico
+            // es output_config.format (se agrega al final junto con effort)
+            LOutputConfig := TJSONObject.Create;
+            LOutputConfig.AddPair('format', jOutputFormat);
           end
           else if Assigned(jSchemaParsed) then
             jSchemaParsed.Free;
@@ -760,10 +793,51 @@ begin
     end;
 
     // -------------------------------------------------------------------------
-    // 5. THINKING PARAMETERS (Solo budget, sin output_config)
+    // 5. THINKING PARAMETERS por familia de modelo
     // -------------------------------------------------------------------------
-    if FEnableThinking and not LIsAdaptiveThinking then
+    if LIsAdaptiveThinking or LIs46 then
     begin
+      // Familia 4.6+ : thinking adaptativo (auto-interleaved, sin beta header).
+      // La profundidad se pide con output_config.effort (GA desde 4.6).
+      // En opus-5/fable el thinking ya viene activo por defecto; enviar
+      // {type:"adaptive"} explicito es equivalente e inofensivo.
+      if FEnableThinking then
+      begin
+        var
+        jThink := TJSONObject.Create;
+        jThink.AddPair('type', 'adaptive');
+        AJSONObject.AddPair('thinking', jThink);
+      end;
+
+      if ModelConfig.ThinkingLevel <> tlDefault then
+      begin
+        if not Assigned(LOutputConfig) then
+          LOutputConfig := TJSONObject.Create;
+        case ModelConfig.ThinkingLevel of
+          tlLow:
+            LOutputConfig.AddPair('effort', 'low');
+          tlMedium:
+            LOutputConfig.AddPair('effort', 'medium');
+          tlHigh:
+            LOutputConfig.AddPair('effort', 'high');
+        end;
+      end;
+
+      // Sampling: en 4.7+/5 temperature/top_p/top_k devuelven 400 — nunca se
+      // envian. En 4.6 siguen permitidos, pero solo sin thinking activo.
+      if LIs46 and (not LIsAdaptiveThinking) and (not FEnableThinking) then
+      begin
+        if Self.Temperature > 0 then
+          AJSONObject.AddPair('temperature', TJSONNumber.Create(Self.Temperature))
+        Else if Top_p > 0 then
+          AJSONObject.AddPair('top_p', TJSONNumber.Create(Top_p));
+        if K > 0 then
+          AJSONObject.AddPair('top_k', TJSONNumber.Create(K));
+      end;
+    end
+    else if FEnableThinking then
+    begin
+      // Camino legacy (<=4.5): thinking manual con budget_tokens
       var
       jThink := TJSONObject.Create;
       jThink.AddPair('type', 'enabled');
@@ -773,9 +847,9 @@ begin
       // Temperatura Forzada a 1.0 (Requisito API para thinking)
       AJSONObject.AddPair('temperature', TJSONNumber.Create(1.0));
     end
-    else if not LIsAdaptiveThinking then
+    else
     begin
-      // Modo Est?ndar
+      // Modo Est?ndar legacy
       if Self.Temperature > 0 then
         AJSONObject.AddPair('temperature', TJSONNumber.Create(Self.Temperature))
       Else if Top_p > 0 then
@@ -784,7 +858,10 @@ begin
       if K > 0 then
         AJSONObject.AddPair('top_k', TJSONNumber.Create(K));
     end;
-    // else LIsAdaptiveThinking: Anthropic gestiona sampling y reasoning internamente.
+
+    // output_config acumulado (format de structured outputs y/o effort)
+    if Assigned(LOutputConfig) then
+      AJSONObject.AddPair('output_config', LOutputConfig);
 
     // 6. METADATA & SERVICE TIER
     if (Self.User <> '') and (Self.User <> 'user') then
@@ -823,7 +900,13 @@ begin
     if cap_WebSearch in ModelConfig.ModelCaps then
     begin
       JTools := TJSONObject.Create;
-      JTools.AddPair('type', 'web_search_20250305');
+      // Desde la familia 4.6 existe web_search_20260209 con filtrado dinamico
+      // (el modelo filtra resultados con codigo antes de que entren al
+      // contexto); los modelos previos siguen con la variante basica
+      if LIsAdaptiveThinking or LIs46 then
+        JTools.AddPair('type', 'web_search_20260209')
+      else
+        JTools.AddPair('type', 'web_search_20250305');
       JTools.AddPair('name', 'web_search');
       jArrTools.Add(JTools);
     end;
@@ -1138,7 +1221,25 @@ begin
 
   ResMsg.StopReason := StopR;
   if StopR = 'refusal' then
+  begin
+    // Los clasificadores de seguridad (opus-5/fable-5) declinan con HTTP 200 +
+    // stop_reason:"refusal" y un objeto stop_details {category, explanation}.
+    // El content puede venir vacio (pre-output) o parcial (mid-stream).
     ResMsg.IsRefusal := True;
+    var LRefusalMsg := 'La peticion fue declinada por los clasificadores de seguridad del modelo';
+    var jStopDetails: TJSONObject := nil;
+    jObj.TryGetValue<TJSONObject>('stop_details', jStopDetails);
+    if Assigned(jStopDetails) then
+    begin
+      var LCategory := jStopDetails.GetValue<string>('category', '');
+      var LExplanation := jStopDetails.GetValue<string>('explanation', '');
+      if LCategory <> '' then
+        LRefusalMsg := LRefusalMsg + ' (categoria: ' + LCategory + ')';
+      if LExplanation <> '' then
+        LRefusalMsg := LRefusalMsg + ': ' + LExplanation;
+    end;
+    DoError(LRefusalMsg, nil);
+  end;
 
   // 2. Parse Usage (CORREGIDO)
   aPrompt_tokens := 0;

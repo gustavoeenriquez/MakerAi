@@ -923,9 +923,8 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
 
-  // ------- Claude Opus 4.7 (Abr 2026) — nuevo flagship ------
   // ===========================================================================
-  // CLAUDE OPUS 4.6  |  Alias: claude-opus-4-6  [MODELO ACTUAL — MAS INTELIGENTE]
+  // CLAUDE OPUS 4.6  |  Alias: claude-opus-4-6  [generacion anterior]
   // El modelo mas inteligente de Anthropic para agentes complejos y codigo
   // Contexto:     200K tokens (1M tokens beta disponible)
   // Max output:   128K tokens  <- unico modelo con salida de 128K
@@ -934,6 +933,50 @@ Begin
   // Cutoff datos: Ago 2025 (conocimiento fiable: May 2025)
   // ===========================================================================
   Model := 'claude-opus-4-6';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+
+  // ===========================================================================
+  // FAMILIA 4.7/4.8/5 (jul-ago 2026) — thinking ADAPTATIVO OBLIGATORIO
+  // budget_tokens y temperature/top_p/top_k devuelven 400 en estos modelos;
+  // el driver los maneja automaticamente (thinking adaptive + effort).
+  // Todos: 1M contexto, 128K max output, vision + PDF + reasoning + web search.
+  // ===========================================================================
+
+  // CLAUDE OPUS 4.7 — generacion anterior de Opus (alta autonomia)
+  Model := 'claude-opus-4-7';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+
+  // CLAUDE OPUS 4.8 — el Opus 4.x mas capaz (long-horizon, knowledge work)
+  Model := 'claude-opus-4-8';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+
+  // CLAUDE OPUS 5  [MODELO ACTUAL — RECOMENDADO]
+  // Sucesor de Opus 4.8 al mismo precio ($5/$25). Thinking activo por defecto.
+  // Los clasificadores pueden declinar con stop_reason:"refusal" (el driver lo
+  // reporta via OnError).
+  Model := 'claude-opus-5';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+
+  // CLAUDE SONNET 5  [MODELO ACTUAL — MEJOR PRECIO/CALIDAD]
+  // Calidad casi-Opus en codigo/agentes. $3/$15 (intro $2/$10 hasta ago 31/2026).
+  // Tokenizer nuevo: ~30% mas tokens que sonnet-4-6 para el mismo texto.
+  Model := 'claude-sonnet-5';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+
+  // CLAUDE FABLE 5 — tope de capacidad ($10/$50)
+  // OJO: requiere retencion de datos de 30 dias en la organizacion (orgs con
+  // ZDR reciben 400 en TODA peticion); thinking siempre activo.
+  Model := 'claude-fable-5';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');

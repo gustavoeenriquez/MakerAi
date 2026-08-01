@@ -499,6 +499,8 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 ## 🔄 Changelog
 
 ### Unreleased (dev)
+- New: **Claude 5 family support** — `claude-opus-5`, `claude-sonnet-5`, `claude-fable-5`, plus `claude-opus-4-7`/`claude-opus-4-8` registered; the driver now sends `thinking: {type: "adaptive"}` on the 4.6+ families and maps `ThinkingLevel` → `output_config.effort` (`budget_tokens`/sampling params return 400 on 4.7+ and are only sent on legacy models). Runtime-tested (sonnet-5, opus-4-6 adaptive, haiku legacy)
+- Update: Claude driver — `output_format` migrated to `output_config.format`; web search upgraded to `web_search_20260209` (dynamic filtering) on 4.6+; `stop_reason: "refusal"` now parses `stop_details` and fires `OnError`
 - New: **`TAiOpenAiRealtimeTranslate`** — streaming speech translation via `gpt-realtime-translate` (`wss://api.openai.com/v1/realtime/translations`); continuous stream without VAD/turns; emits translated text (`OnAssistantTextDelta`), translated TTS audio (`OnAudioChunk`) and optional source transcript (`SourceTranscription`); runtime-tested (es→en)
 - New: demo **`071-VoiceBridgeTranslate`** — the 063 voice bridge refactored with `TAiOpenAiRealtimeTranslate`: one WebSocket per direction replaces the STT→LLM→TTS pipeline (lower latency, ~1/3 of the code)
 - New: **GPT-5.6 family registered** (`gpt-5.6-sol` / `-terra` / `-luna` + `gpt-5.6` alias) — 1.05M ctx, vision + reasoning + tools; `gpt-5.6-luna` runtime-tested

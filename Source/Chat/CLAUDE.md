@@ -175,19 +175,21 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 
 ### Claude (Anthropic)
 - `x-anthropic-version` header + beta features via dynamic headers
-- Thinking/reasoning via `EnableThinking` + `ThinkingBudget`; `ThinkingLevel` mapea a presupuesto automático
+- **Thinking por familia (ago 2026, probado runtime):** el driver clasifica el modelo con `IsClaudeAdaptiveOnly` (4.7/4.8/5: budget_tokens y temperature/top_p/top_k devuelven 400) e `IsClaude46` (4.6). En 4.6+ envía `thinking:{type:"adaptive"}` y mapea `ThinkingLevel` → `output_config.effort` (low/medium/high); en ≤4.5 mantiene `{enabled, budget_tokens}`. El header `interleaved-thinking` solo se envía en el camino legacy.
+- `output_format` migrado a `output_config.format` (deprecado API-wide); format y effort comparten el mismo objeto `output_config`
+- Web search: `web_search_20260209` (filtrado dinámico) en 4.6+; `web_search_20250305` en legacy
+- `stop_reason:"refusal"` (clasificadores de opus-5/fable-5): marca `IsRefusal`, parsea `stop_details` (category/explanation) y dispara `OnError`
 - Citations (RAG nativo): soporte parcial implementado
 
-**Modelos activos (mayo 2026):**
-- `claude-opus-4-7` — nuevo flagship (lanzado 16 abr 2026), 1M contexto, 128K output, Adaptive Thinking, visión + tools + computer use. `ModelCaps=[cap_Image]`
-- `claude-sonnet-4-6` — mejor relación precio/calidad, 1M contexto, 64K output, Extended Thinking. `ModelCaps=[cap_Image]`
-- `claude-haiku-4-5-20251001` — velocidad/costo, 200K contexto, 64K output. `ModelCaps=[cap_Image]`
+**Modelos activos (ago 2026, todos registrados):**
+- `claude-opus-5` — **RECOMENDADO**, sucesor de 4.8 al mismo precio ($5/$25), thinking activo por defecto, 1M ctx / 128K out
+- `claude-sonnet-5` — mejor precio/calidad, casi-Opus en código/agentes ($3/$15; intro $2/$10 hasta ago 31/2026); tokenizer nuevo ~30% más tokens que 4.6. PROBADO runtime
+- `claude-fable-5` — tope de capacidad ($10/$50); **requiere retención de datos 30 días** (ZDR → 400 en toda petición); thinking siempre activo
+- `claude-opus-4-8`, `claude-opus-4-7` — generaciones Opus 4.x (misma superficie adaptive-only)
+- `claude-sonnet-4-6`, `claude-opus-4-6` — generación anterior (adaptive recomendado, budget deprecado). Opus 4.6 PROBADO runtime con adaptive
+- `claude-haiku-4-5-20251001` — velocidad/costo, 200K ctx; camino legacy budget PROBADO runtime
 
-**Legacy (sin fecha de retiro anunciada):**
-- `claude-opus-4-6` — generación anterior, sigue disponible
-
-**Deprecados — retiro 15 jun 2026:**
-- `claude-sonnet-4-20250514`, `claude-opus-4-20250514` — reemplazar por `claude-sonnet-4-6` / `claude-opus-4-7`
+**Deprecados:** `claude-opus-4-1` (retira 5 ago 2026 → opus-5); `claude-sonnet-4-20250514` / `claude-opus-4-20250514` (TBD)
 
 ### OpenAI
 **Familia GPT-5.6 (julio 2026 — producción actual):** 1.05M contexto, 128K output, visión + reasoning + tools + prompt caching en toda la familia. El alias `gpt-5.6` enruta a Sol.
