@@ -500,6 +500,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 
 ### Unreleased (dev)
 - New: **`TAiOpenAiRealtimeTranslate`** — streaming speech translation via `gpt-realtime-translate` (`wss://api.openai.com/v1/realtime/translations`); continuous stream without VAD/turns; emits translated text (`OnAssistantTextDelta`), translated TTS audio (`OnAudioChunk`) and optional source transcript (`SourceTranscription`); runtime-tested (es→en)
+- New: demo **`071-VoiceBridgeTranslate`** — the 063 voice bridge refactored with `TAiOpenAiRealtimeTranslate`: one WebSocket per direction replaces the STT→LLM→TTS pipeline (lower latency, ~1/3 of the code)
 - New: **GPT-5.6 family registered** (`gpt-5.6-sol` / `-terra` / `-luna` + `gpt-5.6` alias) — 1.05M ctx, vision + reasoning + tools; `gpt-5.6-luna` runtime-tested
 - Update: Realtime session default model → **`gpt-realtime-2.1`** (better alphanumeric recognition and noise handling) in `TAiOpenAiRealtimeSTT` and demos 062–064
 - Update: **`TAiDalle` / `TAiDalleImageTool` default model → `gpt-image-1`** — the `dall-e-2`/`dall-e-3` snapshots were deprecated by OpenAI (May 2026); both remain selectable while the API accepts them

@@ -166,7 +166,7 @@ The new models accept context config (verified live 2026-08-01): `TranscriptionP
   - `session.closed` → `OnAssistantText` (full) + `OnAudioDone`
 - `TargetLanguage` ('en', 'es', ...) sent as `audio.output.language` in session.update (sent right after connect; `session.created/updated` fire `OnSessionReady` once)
 - `Disconnect` sends `session.close` before closing the socket
-- Natural upgrade path for the VoiceBridge demos: replaces the STT→LLM→TTS pipeline with a single socket per direction
+- Demo: `Demos/071-VoiceBridgeTranslate` — the 063 voice bridge refactored to a single socket per direction (STT→LLM→TTS pipeline replaced entirely)
 
 ---
 
