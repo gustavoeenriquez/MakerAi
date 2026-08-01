@@ -67,7 +67,14 @@ Full-duplex voice conversation with xAI's **Grok Voice** models (`grok-voice-thi
 - **`TAiGrokRealtimeChat`** — complete driver for `wss://api.x.ai/v1/realtime` (OpenAI Realtime-compatible protocol, 24 kHz PCM16)
 - **`TAiRealtimeVoiceBase`** — new base class for full-duplex voice drivers; adds `OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`, `OnAudioDone` (shared with `TAiMakerAiRealtimeChat`)
 - Live user transcription (`OnTranscriptDelta` / `OnTranscriptCompleted`), server VAD, streamed assistant text and TTS audio
-- Session options: `Voice` (eva, ara, rex, sal, leo or custom voice_id), `Instructions`, `ReasoningEffort` (high / none for lower latency), automatic regional language hints (`es`→`es-MX`, `pt`→`pt-BR`)
+- **Function calling by voice**: assign a `TAiFunctions` component (local functions + MCP) and Grok invokes your Delphi code mid-conversation — the driver handles the whole round-trip (execution on worker threads, `function_call_output`, continuation)
+- **xAI native tools**: `EnableWebSearch` / `EnableXSearch` — executed server-side by xAI
+- Session options: `Voice` (eva, ara, rex, sal, leo or custom voice_id), `Instructions`, `ReasoningEffort` (high / none for lower latency), `OutputSpeed`, `Keyterms` (transcription biasing), `PronunciationReplace` (TTS corrections), automatic regional language hints (`es`→`es-MX`, `pt`→`pt-BR`)
+- `ForceMessage()` — scripted TTS utterance bypassing the model (IVR prompts, disclosures)
+- **Session resumption**: `EnableResumption` + `ConversationId` — reconnect and the server replays the cached turns (transcripts, tool calls and outputs; 30-min window)
+- **Binary audio transport**: `BinaryAudio := True` — raw PCM over WebSocket binary frames, ~33% less bandwidth than base64
+- **Ephemeral tokens** for mobile/browser clients: `MintEphemeralToken()` on your backend + `EphemeralToken` on the client — the API key never leaves the server
+- **`file_search`** over xAI Collections (`FileSearchCollections`) and remote MCP servers via `CustomToolsJson`
 - Works through `TAiRealtimeConnection` too — just set `DriverName := 'Grok'`
 
 ```pascal
@@ -454,6 +461,9 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 
 ### Unreleased (dev)
 - New: **`TAiGrokRealtimeChat`** — xAI Grok Voice speech-to-speech driver (`wss://api.x.ai/v1/realtime`, OpenAI Realtime-compatible, 24 kHz PCM16); live user transcription + streamed assistant text and TTS audio; runtime-tested against the live API
+- New: **Voice function calling for Grok Voice** — `AiFunctions` (`TAiFunctions`: local functions + MCP) declared as session tools; automatic tool round-trip (worker-thread execution, `function_call_output`, single continuation `response.create`); `OnCallToolFunction` fallback event; runtime-tested end-to-end
+- New: Grok Voice extras — `EnableWebSearch` / `EnableXSearch` (xAI server-side tools), `OutputSpeed`, `Keyterms`, `PronunciationReplace`, `ForceMessage()` (scripted TTS)
+- New: Grok Voice phase 3 — session resumption with turn replay (`EnableResumption` + `ConversationId`), binary audio transport (`BinaryAudio`), ephemeral tokens (`MintEphemeralToken` + `EphemeralToken`), `file_search` over Collections and remote MCP via `CustomToolsJson`; all runtime-tested except MCP declarations
 - New: **`TAiRealtimeVoiceBase`** — shared base for full-duplex voice drivers (`OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`, `OnAudioDone`); `TAiMakerAiRealtimeChat` and `TAiRealtimeConnection` now inherit from it, so voice events flow through the universal connector
 
 ### v3.4 (May 2026)

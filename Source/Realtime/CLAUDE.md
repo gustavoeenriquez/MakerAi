@@ -159,6 +159,35 @@ voice events (`OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`,
 | `Instructions` | Session system prompt |
 | `ReasoningEffort` | `greHigh` (default) / `greNone` (lower latency) |
 | `IdleTimeoutMs` | Re-engagement timeout when user is silent (0 = omit) |
+| `OutputSpeed` | TTS playback speed 0.7–1.5 (0 = server default) |
+| `AiFunctions` | `TAiFunctions` component — local functions + MCP declared as session tools |
+| `OnCallToolFunction` | Fallback tool handler when `AiFunctions` doesn't handle the call (synchronized to main thread) |
+| `EnableWebSearch` / `EnableXSearch` | xAI native server-side tools |
+| `Keyterms` | Up to 100 domain terms for transcription biasing |
+| `PronunciationReplace` | `Phrase=SpokenAs` TTS corrections (case-insensitive, whole word) |
+
+### Function calling (verified live 2026-07-31)
+
+Assign `AiFunctions` (or `OnCallToolFunction`). The driver declares the tools in `session.update` (flat OpenAI Responses format via `GetTools(tfOpenAIResponses)` — exactly what Grok expects) and handles the round-trip automatically:
+
+1. `response.function_call_arguments.done` → executes the call on its own thread (never blocks the WebSocket reader); `TAiFunctions.DoCallFunction` first, then the `OnCallToolFunction` fallback (via `TThread.Synchronize`).
+2. Sends `conversation.item.create` (`function_call_output` with `call_id`) per call.
+3. Sends ONE `response.create` only after ALL pending calls finished AND the tool turn's `response.done` arrived (xAI requirement) — guarded by `TInterlocked.CompareExchange`.
+4. Grok may speak *before* calling the tool ("let me check..."); the driver carries that text so the final `OnAssistantText` contains the full turn (pre-tools + post-tools). `OnAudioDone` fires only on the final response.
+
+`ForceMessage(Text, Interruptible)` (public) sends a scripted TTS utterance bypassing the model (`conversation.item.create` with `item.type: force_message`) — IVR prompts, legal disclosures.
+
+### Phase 3 features (verified live 2026-08-01)
+
+| Feature | API | Notes |
+|---------|-----|-------|
+| Session resumption | `EnableResumption` + `ConversationId` (public r/w) | `resumption:{enabled:true}` in session.update; id captured from `conversation.created`; reconnect appends `?conversation_id=`. Cached turns (user, assistant, tool calls/outputs) replay as `conversation.item.added` events (doc says `.created` — verified it's `.added`). History expires after 30 min |
+| Binary audio transport | `BinaryAudio: Boolean` | `audio.input/output.transport: "binary"`; input sent via `SendBinary` (raw PCM frames), output arrives as WS binary frames (handled in `OnWSFrame`, replaces `response.output_audio.delta`). ~33% less bandwidth. JSON events stay text |
+| Ephemeral tokens | `EphemeralToken` property + `MintEphemeralToken(ApiKey, Seconds)` class function | Minted via `POST /v1/realtime/client_secrets` (token value starts with `xai-realtime-client-secret-`); passed as WS subprotocol `xai-client-secret.<token>` (driver auto-prefixes); ApiKey NOT sent. For mobile/browser clients — mint on your backend, hand the token to the client |
+| file_search tool | `FileSearchCollections` (vector_store_ids) + `FileSearchMaxResults` | xAI Collections; server-side |
+| Custom/MCP tools | `CustomToolsJson: TStrings` | Raw JSON object or array appended to session tools — covers `{"type":"mcp","server_url":...}` and future shapes |
+
+**Still pending:** Opus codec (no native Delphi encoder — binary PCM already removes the base64 overhead), continuous-microphone VAD validation, `Demos09-Realtime/02-GrokVoice` demo.
 
 ### Protocol differences vs OpenAI handled by the driver (verified live 2026-07-31)
 
@@ -175,7 +204,7 @@ With audio sent faster than real time and then stopped (file upload pattern), th
 
 `CreateResponse` (public method) sends `response.create` — required after `CommitAudio` in `rvmManual` mode, optional forcing mechanism otherwise.
 
-**Phase 2 (not yet implemented):** function calling bridge, native tools (`web_search`, `x_search`, `mcp`), `force_message`, `resumption`, binary/Opus transport, ephemeral tokens.
+Phase 3 (resumption, binary transport, ephemeral tokens, file_search/mcp declarations) — see the phase 3 table below.
 
 ---
 
