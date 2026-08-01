@@ -179,6 +179,11 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - `output_format` migrado a `output_config.format` (deprecado API-wide); format y effort comparten el mismo objeto `output_config`
 - Web search: `web_search_20260209` (filtrado dinámico) en 4.6+; `web_search_20250305` en legacy
 - `stop_reason:"refusal"` (clasificadores de opus-5/fable-5): marca `IsRefusal`, parsea `stop_details` (category/explanation) y dispara `OnError`
+- **Fase ago 2026 (probada runtime salvo Fast mode):**
+  - `FastMode` — `speed:"fast"` + beta `fast-mode-2026-02-01`, solo opus-5/4.8 (en otros se ignora con log). OJO: research preview con rate limit propio; requiere cupo del org (la org de prueba tiene 0 TPM asignados → 429)
+  - Mensajes `{role:"system"}` mid-conversation en el historial (preservan el prompt cache): pasan directo en opus-5/4.8/fable/mythos; en modelos sin soporte (sonnet-5, 4.6…) se degradan automáticamente a turno `user` envuelto en `<system-reminder>`. Uso: `AddMessage(texto, 'system')` tras un turno user + `Run(nil)`
+  - `EnableCompaction` — beta `compact-2026-01-12` + `context_management.edits[compact_20260112]` (se fusiona con `FContextConfig` si existe); los bloques `compaction` recibidos se preservan (`FCompactionBlocks`) y se reenvían íntegros al inicio del mensaje assistant correspondiente
+  - `RefusalFallbackModel` — beta `server-side-fallback-2026-06-01` + `fallbacks:[{model}]`: ante un refusal el API reintenta en ese modelo en la misma llamada (único target soportado hoy: `claude-opus-4-8`)
 - Citations (RAG nativo): soporte parcial implementado
 
 **Modelos activos (ago 2026, todos registrados):**
@@ -215,21 +220,29 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 
 ### Gemini (Google)
 
-**Familia 3.x — modelos activos (mayo 2026):**
-- `gemini-3.1-pro-preview` (GA) — flagship, 2M contexto, visión + audio + video + reasoning (5 niveles thinking) + computer use + tools. `ModelCaps=[cap_Image, cap_Audio, cap_Video, cap_Reasoning]`, `ThinkingLevel=tlHigh`
-- `gemini-3-flash-preview` — balance velocidad/calidad, 1M contexto, reasoning + tools. `ModelCaps=[cap_Image, cap_Audio, cap_Video, cap_Reasoning]`, `ThinkingLevel=tlMedium`
-- `gemini-3.1-flash-lite` (Stable) — económico, 1M contexto, 4 niveles thinking + tools. `ModelCaps=[cap_Image, cap_Audio, cap_Video, cap_Reasoning]`, `ThinkingLevel=tlLow`
+**Familia 3.5/3.6 — actuales (jul 2026, registrados SIN prueba runtime — falta API key):**
+- `gemini-3.5-flash` (GA may 19/2026, alias `gemini-flash-latest`) — flash flagship, frontier agentic/coding; Computer Use tool en public preview para este modelo. `ThinkingLevel=tlMedium`
+- `gemini-3.6-flash` (GA jul 21/2026) — mejor eficiencia de tokens y planificación agéntica, más barato que 3.5 Flash. `ThinkingLevel=tlMedium`
+- `gemini-3.5-flash-lite` (GA jul 21/2026) — baja latencia, subagentes. `ThinkingLevel=tlLow`
+- **Sampling params deprecados en 3.5+/3.6/omni** (jul 21/2026): el driver omite `temperature`/`topP` automáticamente para esos modelos
+- `gemini-3.5-pro` NO existe aún (anunciado en I/O, retrasado — Reuters jul 16)
+
+**Familia 3.x anterior (siguen activos):**
+- `gemini-3.1-pro-preview` — flagship pro, 2M contexto. `ThinkingLevel=tlHigh`
+- `gemini-3-flash-preview`, `gemini-3.1-flash-lite` — generación previa
 
 **Modelos especializados:**
-- `gemini-3.1-flash-image-preview` — generación de imagen nativa vía completions. `ModelCaps=[cap_Image, cap_GenImage]`
-- `gemini-3.1-flash-tts-preview` — TTS dedicado. `SessionCaps=[cap_GenAudio]`
-- `veo-3.1-generate-preview` — generación de video. `SessionCaps=[cap_GenVideo]`
+- Imagen (familia **Nano Banana**, GA may-jun 2026): `gemini-3.1-flash-image` (NB 2, con video-to-image), `gemini-3-pro-image` (NB Pro), `gemini-3.1-flash-lite-image` (NB 2 Lite, ultra-rápido). Los `-preview` previos siguen registrados
+- `gemini-3.1-flash-tts-preview` — TTS; desde jun 17/2026 soporta streaming (`streamGenerateContent`)
+- `veo-3.1-generate-preview` — video. **veo-2.0 y veo-3.0 APAGADOS el 30 jun 2026** (enum del tool conservado por compat de DFMs)
+- `gemini-omni-flash-preview` — video 3-10s 720p (preview jun 30/2026)
+- `gemini-embedding-2` (GA abr 2026) — embedding multimodal, 3072 dims
 
-**Deprecados — cierre 17 jun 2026:**
-- `gemini-2.5-flash`, `gemini-2.5-pro` — reemplazar por modelos de la familia 3.x
+**Apagados/deprecados:**
+- **Imagen 4.0 (`imagen-4.0-*-generate-001`): SHUTDOWN 17 ago 2026**
+- `gemini-2.5-flash`, `gemini-2.5-pro` — cerrados 17 jun 2026
 
 **Otros:**
-- Imagen 4.0 (imagen-4.0): deprecado, cierre 24 jun 2026
 - Grounding nativo: el driver gestiona `groundingSupports` automáticamente
 
 ### Groq (inferencia rápida)
@@ -247,7 +260,9 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - Reasoning dedicado: `magistral-medium/small-latest` → `ModelCaps=[cap_Reasoning]`, `ThinkingLevel=tlMedium` (usa `prompt_mode: 'reasoning'`)
 - Código: `devstral-latest` / `devstral-small-latest` → `ModelCaps=[]` (sin visión)
 - STT: `voxtral-mini/small-latest` → `ModelCaps=[cap_Audio]`, `Tool_Active=False`
-- OCR: `mistral-ocr-latest` → endpoint `/v1/ocr`, `SessionCaps=[cap_Pdf]`, `Tool_Active=False`
+- **TTS: `voxtral-mini-tts-2603`** (mar 2026, PROBADO runtime ago 2026) → `SessionCaps=[cap_GenAudio]` activa `InternalRunNativeSpeechGeneration` (POST `/v1/audio/speech`). El API **exige** `voice` (slug del catálogo `GET /v1/audio/voices`: `en_paul_neutral`/happy/sad…, `gb_oliver_neutral`, `gb_jane_sarcasm`) o `ref_audio`; propiedades `TtsVoice` (default `en_paul_neutral`) y `TtsFormat` (mp3/wav/pcm/flac/opus). Modelo multilingüe con cualquier voz
+- OCR: `mistral-ocr-latest` → endpoint `/v1/ocr`, `SessionCaps=[cap_Pdf]`, `Tool_Active=False`. **OCR 4** (`mistral-ocr-4-0`, jun 2026): el alias ya apunta a él; nueva propiedad `OcrIncludeBlocks` (bloques estructurales con bounding boxes por página) y `pages` acepta rangos (`"0-5"`)
+- Devstral 2 (`devstral-2512`) y Magistral 1.2 (`magistral-*-2509`) cubiertos por los alias `-latest`
 
 **Reasoning en el driver:**
 - Magistral → `prompt_mode: 'reasoning'` (chain-of-thought visible en respuesta)

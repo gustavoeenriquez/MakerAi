@@ -479,7 +479,55 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ThinkingLevel', 'tlLow');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',   'True');
 
+  // ------- Familia Gemini 3.5/3.6 (may-jul 2026, GA) ------
+  // Sampling params (temperature/topP/topK) deprecados en esta familia:
+  // el driver los omite automaticamente.
+
+  // gemini-3.5-flash -- flash flagship GA (may 19/2026); alias gemini-flash-latest.
+  // Computer Use tool en public preview para este modelo (cap_ComputerUse
+  // opt-in del usuario, no por defecto)
+  Model := 'gemini-3.5-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Max_Tokens',   '65536');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',
+    '[cap_Image, cap_Audio, cap_Video, cap_Pdf, cap_WebSearch, cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',
+    '[cap_Image, cap_Audio, cap_Video, cap_Pdf, cap_WebSearch, cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ThinkingLevel', 'tlMedium');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',   'True');
+
+  // gemini-flash-latest -- alias movil que apunta al flash GA mas reciente
+  Model := 'gemini-flash-latest';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Max_Tokens',   '65536');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',
+    '[cap_Image, cap_Audio, cap_Video, cap_Pdf, cap_WebSearch, cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',
+    '[cap_Image, cap_Audio, cap_Video, cap_Pdf, cap_WebSearch, cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ThinkingLevel', 'tlMedium');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',   'True');
+
+  // gemini-3.6-flash -- GA (jul 21/2026): mejor eficiencia de tokens y
+  // planificacion agentica, mas barato que 3.5 Flash
+  Model := 'gemini-3.6-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Max_Tokens',   '65536');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',
+    '[cap_Image, cap_Audio, cap_Video, cap_Pdf, cap_WebSearch, cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',
+    '[cap_Image, cap_Audio, cap_Video, cap_Pdf, cap_WebSearch, cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ThinkingLevel', 'tlMedium');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',   'True');
+
+  // gemini-3.5-flash-lite -- GA (jul 21/2026): baja latencia, subagentes
+  Model := 'gemini-3.5-flash-lite';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Max_Tokens',   '65536');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',
+    '[cap_Image, cap_Audio, cap_Video, cap_Pdf, cap_WebSearch, cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',
+    '[cap_Image, cap_Audio, cap_Video, cap_Pdf, cap_WebSearch, cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ThinkingLevel', 'tlLow');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',   'True');
+
   // ------- Gemini 3.1 Flash TTS Preview -- TTS nueva generacion ------
+  // Desde jun 17/2026 soporta streaming via streamGenerateContent
   Model := 'gemini-3.1-flash-tts-preview';
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',       '[]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',     '[cap_GenAudio]');
@@ -491,8 +539,35 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps', '[cap_Image, cap_GenImage]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active', 'False');
 
+  // ------- Familia Nano Banana GA (may-jun 2026) ------
+  // OJO: los Imagen 4.0 (imagen-4.0-*-generate-001) se APAGAN el 17 ago 2026.
+  // Nano Banana 2 (GA del flash-image, may 28/2026); soporta video-to-image
+  Model := 'gemini-3.1-flash-image';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',   '[cap_Image, cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps', '[cap_Image, cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active', 'False');
+
+  // Nano Banana Pro (GA may 28/2026)
+  Model := 'gemini-3-pro-image';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',   '[cap_Image, cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps', '[cap_Image, cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active', 'False');
+
+  // Nano Banana 2 Lite (GA jun 30/2026): imagen ultra-rapida y economica
+  Model := 'gemini-3.1-flash-lite-image';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',   '[cap_Image, cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps', '[cap_Image, cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active', 'False');
+
   // ------- Veo 3.1 -- video nueva generacion ------
+  // OJO: veo-2.0 y veo-3.0 fueron APAGADOS el 30 jun 2026 — usar solo 3.1
   Model := 'veo-3.1-generate-preview';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active', 'False');
+
+  // ------- Gemini Omni Flash (preview jun 30/2026) -- video 3-10s 720p ------
+  Model := 'gemini-omni-flash-preview';
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',   '[]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps', '[cap_GenVideo]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active', 'False');
@@ -609,19 +684,9 @@ Begin
   // ModelCaps=[cap_Image]: acepta imagen de entrada
   // SessionCaps agrega cap_GenVideo: Gap activa InternalRunImageVideoGeneration
   // https://ai.google.dev/gemini-api/docs/video
-  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_veo-2.0-generate-001', 'veo-2.0-generate-001');
-  Model := 'aa_veo-2.0-generate-001';
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',    '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',  '[cap_Image, cap_GenVideo]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',  'False');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Asynchronous', 'False');
-
-  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_veo-3.0-generate-preview', 'veo-3.0-generate-preview');
-  Model := 'aa_veo-3.0-generate-preview';
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',    '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',  '[cap_Image, cap_GenVideo]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',  'False');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Asynchronous', 'False');
+  // RETIRADOS: veo-2.0-generate-001 y veo-3.0-generate-preview fueron APAGADOS
+  // por Google el 30 jun 2026 — los perfiles aa_veo-2.0/aa_veo-3.0 se eliminan
+  // del registro; usar aa_veo-3.1-generate-preview.
 
   TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_veo-3.1-generate-preview', 'veo-3.1-generate-preview');
   Model := 'aa_veo-3.1-generate-preview';
@@ -1027,6 +1092,31 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
 
+  // 5. Sonnet 5 — Thinking profundo (mejor precio/calidad de la familia 5)
+  //    El driver envia thinking adaptive + output_config.effort=high
+  BaseName := 'aa_claude-sonnet-5-thinking';
+  TAiChatFactory.Instance.RegisterCustomModel('Claude', BaseName, 'claude-sonnet-5');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ThinkingLevel', 'tlHigh');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'Max_Tokens', '32000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+
+  // 6. Opus 5 — Thinking profundo (maxima capacidad de la linea Opus)
+  BaseName := 'aa_claude-opus-5-thinking';
+  TAiChatFactory.Instance.RegisterCustomModel('Claude', BaseName, 'claude-opus-5');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ThinkingLevel', 'tlHigh');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'Max_Tokens', '64000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+
+  // 7. Opus 5 — Agentes (tool calling + TextEditor + Shell habilitados)
+  BaseName := 'aa_claude-opus-5-agent';
+  TAiChatFactory.Instance.RegisterCustomModel('Claude', BaseName, 'claude-opus-5');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'Tool_Active', 'True');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'Max_Tokens', '32000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch, cap_TextEditor, cap_Shell]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch, cap_TextEditor, cap_Shell]');
+
 
   // ------------------------- MISTRAL ----------------------------------
   // https://docs.mistral.ai/getting-started/models
@@ -1121,7 +1211,18 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'SessionCaps', '[cap_Audio]');
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'False');
 
+  // ------- Voxtral TTS (mar 23/2026) -- texto a voz con clonado zero-shot ------
+  // Gap [cap_GenAudio] activa InternalRunNativeSpeechGeneration del driver
+  // (POST /v1/audio/speech). Formatos: mp3/wav/pcm/flac/opus (TtsFormat)
+  Model := 'voxtral-mini-tts-2603';
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'SessionCaps', '[cap_GenAudio]');
+  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'Tool_Active', 'False');
+
   // ------- OCR: mistral-ocr ------
+  // OCR 4 (mistral-ocr-4-0) desde jun 23/2026: mistral-ocr-latest apunta a el.
+  // Nuevo: OcrIncludeBlocks (bloques estructurales con bounding boxes) y el
+  // parametro pages acepta rangos ("0-5", "0,2-4")
   // ModelCaps=[] intencionalmente: crea Gap=[cap_Pdf] para que RunNew active la Fase 1
   // (InternalRunPDFDescription → endpoint /v1/ocr). TAiMistralChat.InternalRunCompletions
   // detecta el modelo OCR-only y omite la Fase 3 (chat completions no soportado).
@@ -1623,6 +1724,9 @@ Begin
   // Gemini - text-embedding-004 deprecado (shutdown Jan 2026); usar text-embedding-005
   TAiEmbeddingFactory.Instance.RegisterUserParam('Gemini', 'text-embedding-004', 'Dimensions', '768');
   TAiEmbeddingFactory.Instance.RegisterUserParam('Gemini', 'text-embedding-005', 'Dimensions', '768');
+  // gemini-embedding-2 (GA abr 22/2026): multimodal (texto + imagen via File
+  // Search); 3072 dims por defecto (MRL permite truncar). SIN prueba runtime
+  TAiEmbeddingFactory.Instance.RegisterUserParam('Gemini', 'gemini-embedding-2', 'Dimensions', '3072');
 
   // Cohere - modelos de embeddings
   TAiEmbeddingFactory.Instance.RegisterUserParam('Cohere', 'embed-multilingual-v3.0', 'Dimensions', '1024');

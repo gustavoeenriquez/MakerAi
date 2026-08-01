@@ -137,6 +137,13 @@ type
     FContextConfig: TClaudeContextConfig;
     FCacheSystemPrompt: Boolean;
     FCacheTTL: String;
+    // Fase ago 2026
+    FFastMode: Boolean;             // speed:"fast" — solo opus-5/opus-4-8
+    FEnableCompaction: Boolean;     // compaction server-side (beta)
+    FRefusalFallbackModel: string;  // fallbacks server-side ante refusal
+    // Bloques compaction recibidos, por mensaje assistant: deben reenviarse
+    // integros para que el API reemplace el historial compactado
+    FCompactionBlocks: TDictionary<TAiChatMessage, string>;
     FCacheCount: Integer; // breakpoints cache_control usados en el request actual (max 4 en la API)
     FCacheCtxActive: Boolean; // cacheo de contexto activo en este request (system/tools/ultimo turno)
     FServiceTier: String;
@@ -203,6 +210,19 @@ type
     property EnableThinking: Boolean read FEnableThinking write SetEnableThinking default False;
     property ThinkingBudget: Integer read FThinkingBudget write SetThinkingBudget default 1024;
     Property ServiceTier: String read FServiceTier write FServiceTier;
+    // Fast mode (research preview): ~2.5x mas tokens/segundo a 2x precio.
+    // Solo claude-opus-5 / claude-opus-4-8 (en otros modelos se ignora)
+    property FastMode: Boolean read FFastMode write FFastMode default False;
+    // Compaction server-side (beta): al acercarse al limite de contexto el
+    // API resume el historial antiguo automaticamente. El driver preserva y
+    // reenvia los bloques compaction en los turnos siguientes
+    property EnableCompaction: Boolean read FEnableCompaction
+      write FEnableCompaction default False;
+    // Si los clasificadores declinan (stop_reason refusal en opus-5/fable),
+    // el API reintenta la MISMA peticion en este modelo dentro de la misma
+    // llamada (ej: 'claude-opus-4-8'). Vacio = sin fallback
+    property RefusalFallbackModel: string read FRefusalFallbackModel
+      write FRefusalFallbackModel;
   End;
 
 procedure Register;
@@ -223,6 +243,10 @@ Const
   BETA_HDR_MEMORY = 'context-management-2025-06-27';
   // Thinking (se mantiene)
   BETA_HDR_THINKING = 'interleaved-thinking-2025-05-14';
+  // Fase ago 2026
+  BETA_HDR_FASTMODE = 'fast-mode-2026-02-01';             // speed:"fast" (opus-5/4.8, research preview)
+  BETA_HDR_COMPACT  = 'compact-2026-01-12';               // compaction server-side
+  BETA_HDR_FALLBACK = 'server-side-fallback-2026-06-01';  // fallbacks ante refusal
   // Code Execution (Actualizado seg?n lista de headers de la doc)
   BETA_HDR_CODE = 'code-execution-2025-05-22';
   // Computer Use (Actualizado a la ?ltima versi?n disponible en doc)
@@ -457,6 +481,7 @@ begin
   FStreamBuffer := TStringBuilder.Create;
   FStreamResponseMsg := nil;
   FContextConfig := TClaudeContextConfig.Create;
+  FCompactionBlocks := TDictionary<TAiChatMessage, string>.Create;
 
   // Valores por defecto
   Model := 'claude-haiku-4-5-20251001';
@@ -476,6 +501,7 @@ begin
   FStreamContentBlocks.Free;
   FStreamBuffer.Free;
   FContextConfig.Free;
+  FCompactionBlocks.Free;
   inherited;
 end;
 
@@ -525,6 +551,23 @@ begin
             AModel.StartsWith('claude-sonnet-4-6');
 end;
 
+// Fast mode (speed:"fast") solo existe en opus-5 y opus-4-8
+function IsClaudeFastCapable(const AModel: string): Boolean;
+begin
+  Result := AModel.StartsWith('claude-opus-5') or
+            AModel.StartsWith('claude-opus-4-8');
+end;
+
+// Mensajes {role:"system"} dentro de messages[] (mid-conversation, preservan
+// el prompt cache): opus-5, opus-4-8, fable, mythos. NO sonnet-5
+function IsClaudeMidSystemCapable(const AModel: string): Boolean;
+begin
+  Result := AModel.StartsWith('claude-opus-5') or
+            AModel.StartsWith('claude-opus-4-8') or
+            AModel.StartsWith('claude-fable') or
+            AModel.StartsWith('claude-mythos');
+end;
+
 function TAiClaudeChat.GetDynamicHeaders: TNetHeaders;
 var
   BetaFeatures: TList<string>;
@@ -557,6 +600,14 @@ begin
     if (FEnableThinking or (ModelConfig.ThinkingLevel <> tlDefault)) and
        (not IsClaudeAdaptiveOnly(LBaseModel)) and (not IsClaude46(LBaseModel)) then
       BetaFeatures.Add(BETA_HDR_THINKING);
+
+    // 5b. Fase ago 2026: fast mode, compaction y fallbacks (betas)
+    if FFastMode and IsClaudeFastCapable(LBaseModel) then
+      BetaFeatures.Add(BETA_HDR_FASTMODE);
+    if FEnableCompaction then
+      BetaFeatures.Add(BETA_HDR_COMPACT);
+    if FRefusalFallbackModel <> '' then
+      BetaFeatures.Add(BETA_HDR_FALLBACK);
 
     // 6. Prompt Caching: GA, ya no requiere beta header (antes 'prompt-caching-2024-07-31').
 
@@ -874,12 +925,47 @@ begin
     if (FServiceTier <> '') then
       AJSONObject.AddPair('service_tier', FServiceTier);
 
+    // context_management: configuracion del usuario (FContextConfig) y/o
+    // compaction server-side (edits.compact_20260112)
+    var jContext: TJSONObject := nil;
     if not FContextConfig.IsEmpty then
-    begin
-      var
       jContext := FContextConfig.ToJSONObject;
-      if Assigned(jContext) then
-        AJSONObject.AddPair('context_management', jContext);
+    if FEnableCompaction then
+    begin
+      if not Assigned(jContext) then
+        jContext := TJSONObject.Create;
+      var jEdits: TJSonArray := nil;
+      jContext.TryGetValue<TJSonArray>('edits', jEdits);
+      if not Assigned(jEdits) then
+      begin
+        jEdits := TJSonArray.Create;
+        jContext.AddPair('edits', jEdits);
+      end;
+      var jCompact := TJSONObject.Create;
+      jCompact.AddPair('type', 'compact_20260112');
+      jEdits.Add(jCompact);
+    end;
+    if Assigned(jContext) then
+      AJSONObject.AddPair('context_management', jContext);
+
+    // Fast mode (research preview): solo opus-5/opus-4-8; en otros se ignora
+    if FFastMode then
+    begin
+      if IsClaudeFastCapable(LModel) then
+        AJSONObject.AddPair('speed', 'fast')
+      else
+        LogDebug('FastMode ignorado: ' + LModel + ' no lo soporta');
+    end;
+
+    // Fallbacks server-side: si los clasificadores declinan, el API reintenta
+    // la misma peticion en el modelo indicado dentro de la misma llamada
+    if FRefusalFallbackModel <> '' then
+    begin
+      var jFallbacks := TJSonArray.Create;
+      var jFb := TJSONObject.Create;
+      jFb.AddPair('model', FRefusalFallbackModel);
+      jFallbacks.Add(jFb);
+      AJSONObject.AddPair('fallbacks', jFallbacks);
     end;
 
     // 7. TOOLS
@@ -1356,6 +1442,12 @@ begin
           end;
         end;
       end;
+
+      // C2. Bloque de compaction (beta compact-2026-01-12): se guarda integro
+      // asociado al mensaje de respuesta; GetMessages lo reenvia en los
+      // turnos siguientes para que el API reemplace el historial compactado
+      if cType = 'compaction' then
+        FCompactionBlocks.AddOrSetValue(ResMsg, jContentItem.ToJSON);
 
       // D. Code Execution Output
       if (cType = 'tool_result') or (cType = 'code_execution_tool_result') then
@@ -2156,9 +2248,16 @@ var
   IsCodeExecutionEnabled: Boolean;
   TargetCategories: TAiFileCategories;
   LLastContent: TJSonArray;
+  LSupportsMidSystem: Boolean;
 begin
   Result := TJSonArray.Create;
   LLastContent := nil; // contenido del ultimo mensaje emitido (auto-cache del ultimo turno)
+
+  // Mensajes {role:"system"} dentro del historial (mid-conversation): solo
+  // opus-5/4.8/fable/mythos. En modelos sin soporte se degradan a un turno
+  // user envuelto en <system-reminder> (mismo perfil de cache, sin 400)
+  LSupportsMidSystem := IsClaudeMidSystemCapable(
+    TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model));
 
   // Verificamos si el Code Interpreter est? activo
   IsCodeExecutionEnabled := cap_CodeInterpreter in ModelConfig.ModelCaps;
@@ -2179,6 +2278,8 @@ begin
     // externos): los tool_result van dentro de un mensaje 'user'.
     if SameText(LMessage.Role, 'tool') then
       LMessageObj.AddPair('role', 'user')
+    else if SameText(LMessage.Role, 'system') and (not LSupportsMidSystem) then
+      LMessageObj.AddPair('role', 'user') // fallback <system-reminder> (caso 3)
     else
       LMessageObj.AddPair('role', LMessage.Role);
     LContentArray := TJSonArray.Create;
@@ -2242,6 +2343,18 @@ begin
     // -------------------------------------------------------------------------
     else if (LMessage.Role = 'assistant') then
     begin
+      // 0. Bloque de compaction preservado (si este turno lo trajo): debe ir
+      // primero — el API lo usa para reemplazar el historial compactado
+      var LCompactRaw: string;
+      if FCompactionBlocks.TryGetValue(LMessage, LCompactRaw) then
+      begin
+        var LCompactVal := TJSONObject.ParseJSONValue(LCompactRaw);
+        if LCompactVal is TJSONObject then
+          LContentArray.Add(TJSONObject(LCompactVal))
+        else
+          LCompactVal.Free;
+      end;
+
       // A. Thinking Block
       if (FEnableThinking) and (LMessage.ReasoningContent <> '') and (LMessage.ThinkingSignature <> '') then
       begin
@@ -2335,7 +2448,13 @@ begin
       begin
         LPartObj := TJSONObject.Create;
         LPartObj.AddPair('type', 'text');
-        LPartObj.AddPair('text', LMessage.Prompt);
+        // Mensaje system en modelo sin soporte mid-conversation: degradar a
+        // turno user con envoltura <system-reminder> (fallback documentado)
+        if SameText(LMessage.Role, 'system') and (not LSupportsMidSystem) then
+          LPartObj.AddPair('text', '<system-reminder>' + sLineBreak +
+            LMessage.Prompt + sLineBreak + '</system-reminder>')
+        else
+          LPartObj.AddPair('text', LMessage.Prompt);
 
         if (LMessage.CacheControl) and (FCacheCount < 4) then
         begin
