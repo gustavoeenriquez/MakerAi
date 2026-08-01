@@ -246,10 +246,15 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - Grounding nativo: el driver gestiona `groundingSupports` automáticamente
 
 ### Groq (inferencia rápida)
-- Modelos populares: llama-4-scout/maverick (vision), kimi-k2, compound-beta, deepseek-r1, qwen3
-- TTS: `playai-tts`, `playai-tts-arabic`, `voxtral-mini/small` → `SessionCaps=[cap_GenAudio]`
-- Transcripción: `whisper-large-v3/turbo` → `ModelCaps=[cap_Audio]`, `Tool_Active=False`
-- compound-beta/mini: web search + code interpreter nativos, `Tool_Active=False`
+**Actualizado ago 2026, probado runtime 4/4.** Dos sistemas de reasoning MUTUAMENTE excluyentes (gating por prefijo en el driver): `openai/gpt-oss-*` usa `include_reasoning` + `reasoning_effort` low/medium/high; `qwen/*` usa `reasoning_format` parsed/raw/hidden + `reasoning_effort` default/none (sin `parsed` el `<think>` llega crudo en content).
+- Texto: `llama-3.1-8b-instant` (default del driver), `llama-3.3-70b-versatile`
+- Reasoning: `openai/gpt-oss-120b/20b` (probado), `qwen/qwen3.6-27b` (nuevo ago 2026, reemplaza a qwen3-32b — alias registrado; probado)
+- **Groq NO tiene visión actualmente**: llama-4-scout/maverick retirados y gpt-oss-120b es solo texto ("content must be a string" con imágenes — verificado; cap_Image eliminado del registry)
+- RETIRADOS ago 2026: `qwen/qwen3-32b`, `llama-4-scout`, `moonshotai/kimi-k2-instruct(-0905)`
+- Agénticos: `groq/compound`/`-mini` (web search + code execution, `Tool_Active=False`; aliases compound-beta)
+- TTS: `canopylabs/orpheus-v1-english`/`-arabic-saudi` → `SessionCaps=[cap_GenAudio]` (playai-tts eliminado 12/31/25)
+- STT: `whisper-large-v3/turbo` → `ModelCaps=[cap_Audio]`, `Tool_Active=False`
+- Árabe: `allam-2-7b` (4K ctx, sin tools); prompt-guard-2 son clasificadores, no chat
 
 ### Mistral
 **Modelos activos (jun 2026):**

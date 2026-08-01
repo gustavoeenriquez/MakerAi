@@ -738,7 +738,7 @@ Begin
 
   // ------------------------- GROQ ----------------------------------
   // https://console.groq.com/docs/models
-  // Ultima actualizacion: Abr 2026
+  // Ultima actualizacion: Ago 2026 (probado runtime)
   // ------------------------- GROQ ----------------------------------
 
   // --- Valores globales por defecto para todos los modelos Groq ---
@@ -765,11 +765,14 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'SessionCaps',  '[cap_Reasoning, cap_CodeInterpreter]');
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ThinkingLevel', 'tlMedium');
 
-  // gpt-oss-120b: 131K ctx, 65K output, ~500 t/s, reasoning + vision (include_reasoning API)
+  // gpt-oss-120b: 131K ctx, 65K output, ~500 t/s, reasoning (include_reasoning API)
+  // OJO ago 2026: NO acepta imagenes ("content must be a string") — verificado
+  // runtime; cap_Image eliminado. Con llama-4-scout retirado, Groq NO tiene
+  // modelo de chat con vision actualmente.
   Model := 'openai/gpt-oss-120b';
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens',    '65536');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ModelCaps',    '[cap_Reasoning, cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'SessionCaps',  '[cap_Reasoning, cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ModelCaps',    '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'SessionCaps',  '[cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ThinkingLevel', 'tlMedium');
 
   // gpt-oss-safeguard-20b: 131K ctx, 65K output, ~1000 t/s, moderacion/seguridad
@@ -778,41 +781,41 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens', '65536');
 
   // ------- Modelos de razonamiento ------
-  // qwen3-32b: 131K ctx, 40K output, reasoning nativo (reasoning_format API)
+  // qwen3.6-27b (ago 2026): 131K ctx, reasoning nativo (reasoning_format API).
+  // Mismo contrato que el retirado qwen3-32b (verificado runtime): sin params deja
+  // <think> crudo en content; 'parsed' -> campo message.reasoning; effort 'none' apaga.
   // reasoning_format: 'parsed' (message.reasoning), 'raw' (<think> tags), 'hidden' (solo resp)
   // reasoning_effort: 'default' (thinking activo), 'none' (non-thinking)
-  // Temperatura recomendada: 0.6 (thinking), 0.7 (non-thinking)
-  Model := 'qwen/qwen3-32b';
+  Model := 'qwen/qwen3.6-27b';
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens',    '40960');
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ModelCaps',    '[cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'SessionCaps',  '[cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ThinkingLevel', 'tlMedium');
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Format',        'parsed');
 
+  // RETIRADO ago 2026: qwen/qwen3-32b — alias hacia qwen3.6-27b para codigo previo
+  TAiChatFactory.Instance.RegisterCustomModel('Groq', 'qwen/qwen3-32b', 'qwen/qwen3.6-27b');
+
   // DEPRECATED 10/02/25 — usar llama-3.3-70b-versatile
   // deepseek-r1-distill-llama-70b eliminado
-  // DEPRECATED 07/14/25 — reemplazado por qwen/qwen3-32b
+  // DEPRECATED 07/14/25 — reemplazado por qwen (hoy qwen3.6-27b)
   // qwen-qwq-32b eliminado
-  // DEPRECATED 04/14/25 — reemplazado por qwen/qwen3-32b
-  // deepseek-r1-distill-qwen-32b eliminado
 
-  // ------- Modelos con vision ------
-  // llama-4-scout: 131K ctx, 8K output, vision (max 5 imgs, 20MB/URL, 4MB base64) + tools (~750 t/s)
-  Model := 'meta-llama/llama-4-scout-17b-16e-instruct';
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens',  '8192');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ModelCaps',   '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'SessionCaps', '[cap_Image]');
+  // ------- Vision ------
+  // RETIRADOS: llama-4-scout (ago 2026) y llama-4-maverick (03/09/26).
+  // Groq NO tiene modelo de chat con vision actualmente (gpt-oss-120b es solo texto).
 
-  // DEPRECATED 03/09/26 — usar meta-llama/llama-4-scout-17b-16e-instruct o openai/gpt-oss-120b
-  // meta-llama/llama-4-maverick-17b-128e-instruct eliminado
+  // RETIRADOS 04/15/26: moonshotai/kimi-k2-instruct y kimi-k2-instruct-0905
+  // (usar openai/gpt-oss-120b, o el driver Kimi nativo con kimi-k3)
 
-  // kimi-k2: 131K ctx, 16K output, agentic tools  (DEPRECATING 04/15/26 -> usar openai/gpt-oss-120b)
-  Model := 'moonshotai/kimi-k2-instruct';
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens', '16384');
+  // ------- Arabe ------
+  // allam-2-7b: 4K ctx, bilingue arabe/ingles (SDAIA), sin tools
+  Model := 'allam-2-7b';
+  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens',  '4000');
+  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Tool_Active', 'False');
 
-  // kimi-k2-instruct-0905: 262K ctx (mayor en GroqCloud), 16K output  (DEPRECATING 04/15/26)
-  Model := 'moonshotai/kimi-k2-instruct-0905';
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens', '16384');
+  // meta-llama/llama-prompt-guard-2-22m/-86m: clasificadores de seguridad de
+  // prompts (512 ctx) — no son modelos de chat, no se registran
 
   // ------- Sistemas agentes con herramientas integradas ------
   // Compound: sistemas agenticos server-side con web search + code execution + browser automation
