@@ -111,8 +111,8 @@ type
   // Modelos soportados
   // Nota: gpt-image-2 NO soporta streaming (SupportsStreaming = False para ese modelo)
   TAiImageModel = (
-    imDallE2,             // dall-e-2
-    imDallE3,             // dall-e-3
+    imDallE2,             // dall-e-2 (DEPRECADO por OpenAI may 2026 — migrar a gpt-image-*)
+    imDallE3,             // dall-e-3 (DEPRECADO por OpenAI may 2026 — migrar a gpt-image-*)
     imGptImage1,          // gpt-image-1
     imGptImage1Mini,      // gpt-image-1-mini  (m?s r?pido y econ?mico)
     imGptImage15,         // gpt-image-1.5
@@ -228,7 +228,10 @@ type
     property ApiKey: string read GetApiKey write SetApiKey;
     property Prompt: string read FPrompt;
     property User: string read FUser write FUser;
-    property Model: TAiImageModel read FModel write SetModel default TAiImageModel.imDallE3;
+    // Default gpt-image-1 desde ago 2026: los snapshots dall-e-2/3 fueron
+    // deprecados por OpenAI (may 2026). imDallE2/imDallE3 siguen disponibles
+    // para quien los seleccione explicitamente mientras el API los acepte.
+    property Model: TAiImageModel read FModel write SetModel default TAiImageModel.imGptImage1;
     property Quality: TAiImageQuality read FQuality write SetQuality default TAiImageQuality.iqAuto;
     property Style: TAiImageStyle read FStyle write SetStyle default TAiImageStyle.isVivid;
     property ResponseFormat: TAiImageResponseFormat read FResponseFormat write SetResponseFormat;
@@ -299,7 +302,7 @@ type
   published
     property ApiKey            : string               read GetApiKey            write SetApiKey;
     property Url               : string               read GetUrl               write SetUrl;
-    property Model             : TAiImageModel        read GetModel             write SetModel        default imDallE3;
+    property Model             : TAiImageModel        read GetModel             write SetModel        default imGptImage1;
     property Quality           : TAiImageQuality      read GetQuality           write SetQuality      default iqAuto;
     property Style             : TAiImageStyle        read GetStyle             write SetStyle        default isVivid;
     property OutputFormat      : TAiImageOutputFormat read GetOutputFormat      write SetOutputFormat default ifPng;
@@ -406,7 +409,7 @@ begin
   inherited;
   FUrl := GlOpenAIUrl;
   FUser := 'user';
-  FModel := imDallE3;
+  FModel := imGptImage1; // dall-e-3 deprecado por OpenAI (may 2026)
   FQuality := iqAuto;
   FStyle := isVivid;
   FResponseFormat := TAiImageResponseFormat.irfUrl;

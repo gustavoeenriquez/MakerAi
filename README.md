@@ -60,6 +60,20 @@ New universal connector for real-time speech-to-text via WebSocket:
 - Pure-Pascal WebSocket client with native TLS via Windows SChannel — no extra DLLs required
 - Thread-safe PCM16 resampler; supports push-based audio streaming from any source
 
+### GPT-Transcribe — Next-Gen OpenAI Transcription (Whisper successors) 🆕
+
+OpenAI's new transcription models (Aug 2026) are fully integrated — better accuracy on real-world audio, accents, numbers, specialized terminology and loud background noise:
+
+| Model | Use case | Word Error Rate |
+|-------|----------|-----------------|
+| `gpt-live-transcribe` | Live low-latency STT (Realtime WebSocket) | 9.60% (vs 11.65% Whisper) |
+| `gpt-transcribe` | Completed files and batch workloads | 8.98% (vs 15.21% Whisper) |
+
+- **`TAiOpenAiRealtimeSTT`** now defaults to `gpt-live-transcribe`, with new context properties: `TranscriptionPrompt` (free-form topic), `TranscriptionKeywords` (domain terms), `Languages` (multi-language guided autodetection) and `LowDelay`
+- **`TAiOpenAiAudio`** gains `tmGptTranscribe` / `tmGptLiveTranscribe` with `TranscriptionKeywords` + `TranscriptionLanguages` for REST/batch transcription
+- Legacy models (`whisper-1`, `gpt-4o-transcribe`) remain available — they're still required for subtitles (SRT/VTT), word timestamps and diarization (`gpt-4o-transcribe-diarize`), which the new models don't support; the components degrade formats safely per model
+- VoiceBridge demos (062–065) migrated: live channels use `gpt-live-transcribe` with contextual prompts and guided language detection; diarized channels stay on `gpt-4o-transcribe-diarize`
+
 ### Grok Voice — Real-Time Speech-to-Speech (xAI) 🆕
 
 Full-duplex voice conversation with xAI's **Grok Voice** models (`grok-voice-think-fast-2.0`) over a single WebSocket — the user speaks, Grok listens, reasons and answers back with voice:
@@ -170,6 +184,12 @@ New `ChatMode` value for automatic two-pass routing:
 │  Shell      │   │  HNSW · BM25 · RRF  │   │  TAiFunctions bridge│
 │  ComputerUse│   │  Rerank · Documents │   └─────────────────────┘
 └─────────────┘   └─────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│  Realtime Voice — parallel WebSocket stack                       │
+│  TAiRealtimeConnection · OpenAI STT · Grok Voice S2S · MakerAI   │
+│  Pure-Pascal RFC 6455 + TLS (SChannel / OpenSSL / Android)       │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -226,6 +246,7 @@ AiConn.ApiKey := '@GEMINI_API_KEY';
 | Video Generation | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Extended Thinking | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ |
 | Speech (TTS/STT) | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ⚠️ |
+| Realtime Voice (WebSocket) | ✅ STT | ❌ | ⚠️ | ✅ S2S | ❌ | ❌ | ❌ |
 | Web Search | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Computer Use | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | RAG (all modes) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -314,6 +335,23 @@ ChatTools bridge the gap between AI reasoning and real-world operations. They ac
 | `TAiComputerUseTool` | Control mouse and keyboard | Claude Computer Use, OpenAI |
 
 Tools follow a common pattern: `SetContext(AiChat)` + `Execute*()`. They can run standalone, as function-call bridges, or as automatic capability bridges.
+
+### 🎙️ Realtime Voice — WebSocket STT & Speech-to-Speech
+
+A parallel component stack for live audio over WebSocket, with the same universal-connector pattern as chat (`TAiRealtimeConnection.DriverName`):
+
+| Driver | Type | Endpoint |
+|--------|------|----------|
+| `TAiOpenAiRealtimeSTT` | STT only — streaming transcription (`gpt-live-transcribe` default) | OpenAI Realtime API |
+| `TAiGrokRealtimeChat` | **Full-duplex speech-to-speech** — the user talks, Grok answers with voice | xAI `wss://api.x.ai/v1/realtime` |
+| `TAiMakerAiRealtimeChat` | STT + LLM + TTS in one socket | MakerAI server |
+| `TAiGeminiRealtimeSTT` | STT (planned) | Gemini Live |
+
+- **`TAiRealtimeVoiceBase`** — shared base for full-duplex drivers: `OnAssistantText[Delta]`, `OnAudioChunk`, `OnAudioDone`, on top of the STT events (`OnTranscriptDelta/Completed`, `OnSpeechStarted/Stopped`)
+- **Voice function calling** (Grok): plug a `TAiFunctions` component and the model invokes your Delphi functions mid-conversation
+- **Session resumption, binary audio transport, ephemeral tokens** for mobile/browser clients (Grok)
+- **Audio pipeline**: `TAIVoiceMonitor` (mic) → thread-safe PCM16 resampler → provider rate (24 kHz); push audio from any source via `SendAudioChunk`
+- **Pure-Pascal WebSocket stack** (`TAiWSClient`, RFC 6455) with pluggable TLS: Windows SChannel (zero DLLs), OpenSSL (Linux/macOS), `javax.net.ssl` (Android)
 
 ### ⚙️ Model Capabilities — TAiCapabilities
 
@@ -412,6 +450,7 @@ API keys are resolved from environment variables using the `@VAR_NAME` conventio
 AiConn.ApiKey := '@OPENAI_API_KEY';    // reads OPENAI_API_KEY from environment
 AiConn.ApiKey := '@CLAUDE_API_KEY';    // reads CLAUDE_API_KEY
 AiConn.ApiKey := '@GEMINI_API_KEY';    // reads GEMINI_API_KEY
+AiConn.ApiKey := '@GROK_API_KEY';      // reads GROK_API_KEY (xAI chat and Grok Voice)
 AiConn.ApiKey := 'sk-...';             // or set a literal key directly
 ```
 
@@ -460,6 +499,12 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 ## 🔄 Changelog
 
 ### Unreleased (dev)
+- New: **`TAiOpenAiRealtimeTranslate`** — streaming speech translation via `gpt-realtime-translate` (`wss://api.openai.com/v1/realtime/translations`); continuous stream without VAD/turns; emits translated text (`OnAssistantTextDelta`), translated TTS audio (`OnAudioChunk`) and optional source transcript (`SourceTranscription`); runtime-tested (es→en)
+- New: **GPT-5.6 family registered** (`gpt-5.6-sol` / `-terra` / `-luna` + `gpt-5.6` alias) — 1.05M ctx, vision + reasoning + tools; `gpt-5.6-luna` runtime-tested
+- Update: Realtime session default model → **`gpt-realtime-2.1`** (better alphanumeric recognition and noise handling) in `TAiOpenAiRealtimeSTT` and demos 062–064
+- Update: **`TAiDalle` / `TAiDalleImageTool` default model → `gpt-image-1`** — the `dall-e-2`/`dall-e-3` snapshots were deprecated by OpenAI (May 2026); both remain selectable while the API accepts them
+- New: **OpenAI `gpt-transcribe` / `gpt-live-transcribe`** (Whisper successors, Aug 2026) — `TAiOpenAiAudio` gains `tmGptTranscribe`/`tmGptLiveTranscribe` with `TranscriptionKeywords` + `TranscriptionLanguages`; `TAiOpenAiRealtimeSTT` defaults to `gpt-live-transcribe` with new context props (`TranscriptionPrompt`, `TranscriptionKeywords`, `Languages`, `LowDelay`); both runtime-tested. Registry entries added
+- Update: VoiceBridge demos (062–065) migrated to `gpt-live-transcribe` on live channels (contextual prompt + guided language autodetection); diarized channels stay on `gpt-4o-transcribe-diarize` (new models don't support diarization)
 - New: **`TAiGrokRealtimeChat`** — xAI Grok Voice speech-to-speech driver (`wss://api.x.ai/v1/realtime`, OpenAI Realtime-compatible, 24 kHz PCM16); live user transcription + streamed assistant text and TTS audio; runtime-tested against the live API
 - New: **Voice function calling for Grok Voice** — `AiFunctions` (`TAiFunctions`: local functions + MCP) declared as session tools; automatic tool round-trip (worker-thread execution, `function_call_output`, single continuation `response.create`); `OnCallToolFunction` fallback event; runtime-tested end-to-end
 - New: Grok Voice extras — `EnableWebSearch` / `EnableXSearch` (xAI server-side tools), `OutputSpeed`, `Keyterms`, `PronunciationReplace`, `ForceMessage()` (scripted TTS)

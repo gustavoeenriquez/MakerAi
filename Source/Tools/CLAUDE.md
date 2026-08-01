@@ -49,6 +49,7 @@ The `Source/Tools/` directory contains capability components that extend LLM fun
 - `uMakerAi.OpenAI.Audio.pas` - Modern OpenAI audio (`TAiOpenAiAudio`)
   - TTS with streaming (`OnAudioChunkReceived`)
   - Transcription with GPT-4o support and diarization
+  - **gpt-transcribe / gpt-live-transcribe** (2026, verified live): `tmGptTranscribe` (recommended for files/batch, WER 8.98%) and `tmGptLiveTranscribe`; context via `TranscriptionKeywords` (`keywords[]`) and `TranscriptionLanguages` (`languages[]`, replaces singular `language`); these models only return JSON — srt/vtt/verbose_json/timestamps silently degrade to json (keep whisper-1 if you need subtitles/timestamps); diarization stays on `tmGpt4oDiarize`
   - **Diarization** (verified Jun 2026): `TranscriptionModel := tmGpt4oDiarize` + `TranscriptionResponseFormat := trfDiarizedJson` -> `TTranscriptionResult.Segments` (array of `TDiarizedSegment`: Speaker/Text/StartTime/EndTime) and `DiarizedText` ("Speaker: text" per line). Optional named speakers: `AddKnownSpeaker(aName, aWavFileOrStream)` (max 4, 2-10 s voice sample) makes segments use real names instead of 'A'/'B'. Notes: the diarize model does not support logprobs (auto-excluded); `chunking_strategy=auto` is sent automatically; segments work with bilingual audio.
 
 - `uMakerAi.Gemini.Speech.pas` - Gemini TTS (`TAiGeminiSpeechTool`)

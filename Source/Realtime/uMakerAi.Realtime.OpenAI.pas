@@ -1,8 +1,16 @@
 ﻿// MakerAI Suite — Driver OpenAI Realtime STT
 // wss://api.openai.com/v1/realtime  (RFC 6455 + protocolo OpenAI Realtime v1)
 //
-// Modelos soportados: gpt-realtime (actual), gpt-4o-mini-realtime-preview
-// Modelos de transcripcion: gpt-4o-transcribe, gpt-4o-mini-transcribe, whisper-1
+// Modelos soportados: gpt-realtime-2.1 (default — mejor reconocimiento
+//   alfanumerico y manejo de ruido/silencios), gpt-realtime-2.1-mini
+//   (mas rapido/economico), gpt-realtime (anterior)
+// Modelos de transcripcion:
+//   gpt-live-transcribe (default — baja latencia, WER 9.60% vs 11.65% whisper)
+//   gpt-transcribe (turnos confirmados; usa turnos previos como contexto)
+//   gpt-4o-transcribe, gpt-4o-mini-transcribe, whisper-1 (legacy)
+// Los modelos nuevos aceptan contexto: TranscriptionPrompt (tema libre),
+// TranscriptionKeywords (terminos de dominio), Languages (multi-idioma) y
+// LowDelay (parciales mas rapidos a costa de precision).
 // Audio: PCM16, 24kHz, mono, little-endian
 //
 // Autor: Gustavo Enriquez
@@ -19,9 +27,11 @@ uses
 
 type
   TAiOpenAiTranscriptionModel = (
-    otmGpt4oTranscribe,     // gpt-4o-transcribe (recomendado)
-    otmGpt4oMiniTranscribe, // gpt-4o-mini-transcribe (mas rapido/economico)
-    otmWhisper1             // whisper-1 (compatibilidad legacy)
+    otmGpt4oTranscribe,     // gpt-4o-transcribe (generacion anterior)
+    otmGpt4oMiniTranscribe, // gpt-4o-mini-transcribe (anterior, economico)
+    otmWhisper1,            // whisper-1 (compatibilidad legacy)
+    otmGptLiveTranscribe,   // gpt-live-transcribe (recomendado para vivo)
+    otmGptTranscribe        // gpt-transcribe (turnos confirmados + contexto)
   );
 
   TAiOpenAiRealtimeSTT = class(TAiRealtimeBase)
@@ -30,6 +40,14 @@ type
     FConnectThread:      TThread; // hilo de conexion — esperado antes de liberar FWebSocket
     FTranscriptionModel: TAiOpenAiTranscriptionModel;
     FSessionConfigured:  Boolean;
+    // Contexto de transcripcion (solo modelos gpt-live-transcribe/gpt-transcribe)
+    FTranscriptionPrompt:   string;   // descripcion libre del tema/entorno
+    FTranscriptionKeywords: TStrings; // terminos de dominio esperados
+    FLanguages:             TStrings; // idiomas esperados (multi); si esta
+                                      // vacio se usa Language (de la base)
+    FLowDelay:              Boolean;  // delay:'low' — solo gpt-live-transcribe
+    procedure SetTranscriptionKeywords(const Value: TStrings);
+    procedure SetLanguages(const Value: TStrings);
     procedure OnWSFrame(Sender: TObject; Opcode: TAiRealtimeWSOpcode;
       const Data: TBytes; IsFinal: Boolean);
     procedure OnWSConnected(Sender: TObject);
@@ -56,7 +74,69 @@ type
     property TranscriptionModel: TAiOpenAiTranscriptionModel
       read  FTranscriptionModel
       write FTranscriptionModel
-      default otmGpt4oTranscribe;
+      default otmGptLiveTranscribe;
+    // Contexto libre de la grabacion (tema, entorno) — mejora la precision.
+    // Solo gpt-live-transcribe / gpt-transcribe
+    property TranscriptionPrompt: string
+      read FTranscriptionPrompt write FTranscriptionPrompt;
+    // Terminos de dominio esperados (nombres, productos, codigos) — una linea
+    // por termino, sin < > ni saltos. Solo modelos nuevos
+    property TranscriptionKeywords: TStrings
+      read FTranscriptionKeywords write SetTranscriptionKeywords;
+    // Idiomas esperados cuando el audio puede mezclar varios (codigos BCP-47,
+    // uno por linea). Vacio = se usa Language. Solo modelos nuevos
+    property Languages: TStrings read FLanguages write SetLanguages;
+    // Parciales mas rapidos a costa de precision (solo gpt-live-transcribe)
+    property LowDelay: Boolean read FLowDelay write FLowDelay default False;
+  end;
+
+  // -------------------------------------------------------------------------
+  // Traduccion de voz en streaming continuo (gpt-realtime-translate, may 2026)
+  // wss://api.openai.com/v1/realtime/translations
+  //
+  // A diferencia del Realtime normal NO hay VAD ni turnos: se envia audio de
+  // forma continua (incluidos los silencios) y el servidor emite en paralelo:
+  //   session.input_transcript.delta  -> OnTranscriptDelta   (idioma origen)
+  //   session.output_transcript.delta -> OnAssistantTextDelta (texto traducido)
+  //   session.output_audio.delta      -> OnAudioChunk (TTS traducido, PCM16 24k)
+  // Al desconectar se envia session.close; session.closed dispara
+  // OnAssistantText (texto traducido completo) + OnAudioDone.
+  // -------------------------------------------------------------------------
+  TAiOpenAiRealtimeTranslate = class(TAiRealtimeVoiceBase)
+  private
+    FWebSocket:         TAiRealtimeWSClient;
+    FConnectThread:     TThread;
+    FSessionConfigured: Boolean;
+    FTargetLanguage:    string;  // idioma de salida ('es', 'en', ...)
+    FTranslatedText:    string;  // acumulado del transcript traducido
+    FSourceTranscription: Boolean; // emitir tambien el transcript origen
+    procedure OnWSFrame(Sender: TObject; Opcode: TAiRealtimeWSOpcode;
+      const Data: TBytes; IsFinal: Boolean);
+    procedure OnWSConnected(Sender: TObject);
+    procedure OnWSDisconnected(Sender: TObject);
+    procedure OnWSError(Sender: TObject; const ErrorMsg: string);
+    procedure ProcessServerEvent(const JObj: TJSONObject);
+    procedure SendSessionUpdate;
+  protected
+    function  GetTargetSampleRate: Integer; override;
+    procedure InternalSendAudio(const ResampledPCM16: TBytes); override;
+    procedure InternalConnect;    override;
+    procedure InternalDisconnect; override;
+    // Sin buffer de turnos: commit y clear no aplican al stream continuo
+    procedure InternalCommitAudio; override;
+    procedure InternalClearAudio;  override;
+  public
+    constructor Create(AOwner: TComponent); override;
+    destructor  Destroy; override;
+    class function GetDriverName:   string; override;
+    class function GetDefaultModel: string; override;
+  published
+    // Idioma al que se traduce el audio entrante (codigo ISO: 'es', 'en'...)
+    property TargetLanguage: string read FTargetLanguage write FTargetLanguage;
+    // Emitir tambien la transcripcion en el idioma ORIGEN via
+    // OnTranscriptDelta (por defecto el endpoint solo entrega la traduccion)
+    property SourceTranscription: Boolean read FSourceTranscription
+      write FSourceTranscription default False;
   end;
 
   Procedure Register;
@@ -64,9 +144,22 @@ type
 implementation
 
 
+const
+  CTRANSLATE_WSS = 'wss://api.openai.com/v1/realtime/translations';
+  CTRANSLATE_LOG = ''; // ruta de log diagnostico; '' para deshabilitar
+
+procedure TrLog(const AMsg: string);
+begin
+  if CTRANSLATE_LOG = '' then Exit;
+  try
+    TFile.AppendAllText(CTRANSLATE_LOG,
+      FormatDateTime('hh:nn:ss.zzz', Now) + ' ' + AMsg + sLineBreak);
+  except end;
+end;
+
 procedure Register;
 begin
-  RegisterComponents('MakerAI', [TAiOpenAiRealtimeSTT]);
+  RegisterComponents('MakerAI', [TAiOpenAiRealtimeSTT, TAiOpenAiRealtimeTranslate]);
 end;
 
 { TAiOpenAiRealtimeSTT }
@@ -74,9 +167,12 @@ end;
 constructor TAiOpenAiRealtimeSTT.Create(AOwner: TComponent);
 begin
   inherited;
-  FTranscriptionModel := otmGpt4oTranscribe;
+  FTranscriptionModel := otmGptLiveTranscribe;
   FSessionConfigured  := False;
   FConnectThread      := nil;
+  FLowDelay           := False;
+  FTranscriptionKeywords := TStringList.Create;
+  FLanguages             := TStringList.Create;
   FWebSocket          := TAiRealtimeWSClient.Create;
   FWebSocket.OnFrame       := OnWSFrame;
   FWebSocket.OnConnected   := OnWSConnected;
@@ -95,7 +191,19 @@ begin
     FreeAndNil(FConnectThread);
   end;
   FWebSocket.Free;
+  FTranscriptionKeywords.Free;
+  FLanguages.Free;
   inherited;
+end;
+
+procedure TAiOpenAiRealtimeSTT.SetTranscriptionKeywords(const Value: TStrings);
+begin
+  FTranscriptionKeywords.Assign(Value);
+end;
+
+procedure TAiOpenAiRealtimeSTT.SetLanguages(const Value: TStrings);
+begin
+  FLanguages.Assign(Value);
 end;
 
 class function TAiOpenAiRealtimeSTT.GetDriverName: string;
@@ -105,7 +213,7 @@ end;
 
 class function TAiOpenAiRealtimeSTT.GetDefaultModel: string;
 begin
-  Result := 'gpt-realtime';
+  Result := 'gpt-realtime-2.1';
 end;
 
 function TAiOpenAiRealtimeSTT.GetTargetSampleRate: Integer;
@@ -116,10 +224,12 @@ end;
 function TAiOpenAiRealtimeSTT.TranscriptionModelStr: string;
 begin
   case FTranscriptionModel of
+    otmGpt4oTranscribe:     Result := 'gpt-4o-transcribe';
     otmGpt4oMiniTranscribe: Result := 'gpt-4o-mini-transcribe';
     otmWhisper1:            Result := 'whisper-1';
+    otmGptTranscribe:       Result := 'gpt-transcribe';
   else
-    Result := 'gpt-4o-transcribe';
+    Result := 'gpt-live-transcribe';
   end;
 end;
 
@@ -159,6 +269,8 @@ procedure TAiOpenAiRealtimeSTT.SendSessionUpdate;
 // modalities sigue al nivel de session (fuera de audio).
 var
   JMsg, JSession, JAudio, JInput, JTranscription, JVAD, JFormat, JNoise: TJSONObject;
+  JLanguages, JKeywords: TJSONArray;
+  I: Integer;
 begin
   JMsg     := TJSONObject.Create;
   JSession := TJSONObject.Create;
@@ -174,10 +286,45 @@ begin
   JFormat.AddPair('rate', TJSONNumber.Create(24000));
   JInput.AddPair('format', JFormat);
 
-  // Modelo de transcripcion e idioma
+  // Modelo de transcripcion + contexto
   JTranscription := TJSONObject.Create;
   JTranscription.AddPair('model', TranscriptionModelStr);
-  if Language <> '' then
+  if FTranscriptionModel in [otmGptLiveTranscribe, otmGptTranscribe] then
+  begin
+    // Modelos nuevos: languages (array), prompt, keywords y delay
+    JLanguages := nil;
+    if FLanguages.Count > 0 then
+    begin
+      JLanguages := TJSONArray.Create;
+      for I := 0 to FLanguages.Count - 1 do
+        if Trim(FLanguages[I]) <> '' then
+          JLanguages.Add(Trim(FLanguages[I]));
+    end
+    else if Language <> '' then
+    begin
+      JLanguages := TJSONArray.Create;
+      JLanguages.Add(Language);
+    end;
+    if Assigned(JLanguages) then
+      JTranscription.AddPair('languages', JLanguages);
+
+    if FTranscriptionPrompt <> '' then
+      JTranscription.AddPair('prompt', FTranscriptionPrompt);
+
+    if FTranscriptionKeywords.Count > 0 then
+    begin
+      JKeywords := TJSONArray.Create;
+      for I := 0 to FTranscriptionKeywords.Count - 1 do
+        if Trim(FTranscriptionKeywords[I]) <> '' then
+          JKeywords.Add(Trim(FTranscriptionKeywords[I]));
+      JTranscription.AddPair('keywords', JKeywords);
+    end;
+
+    if FLowDelay and (FTranscriptionModel = otmGptLiveTranscribe) then
+      JTranscription.AddPair('delay', 'low');
+  end
+  else if Language <> '' then
+    // Modelos legacy: campo language singular
     JTranscription.AddPair('language', Language);
   JInput.AddPair('transcription', JTranscription);
 
@@ -417,8 +564,270 @@ begin
   end;
 end;
 
+{ TAiOpenAiRealtimeTranslate }
+
+constructor TAiOpenAiRealtimeTranslate.Create(AOwner: TComponent);
+begin
+  inherited;
+  FSessionConfigured := False;
+  FConnectThread     := nil;
+  FTargetLanguage    := 'en';
+  FWebSocket         := TAiRealtimeWSClient.Create;
+  FWebSocket.OnFrame        := OnWSFrame;
+  FWebSocket.OnConnected    := OnWSConnected;
+  FWebSocket.OnDisconnected := OnWSDisconnected;
+  FWebSocket.OnError        := OnWSError;
+end;
+
+destructor TAiOpenAiRealtimeTranslate.Destroy;
+begin
+  if IsConnected then InternalDisconnect;
+  if Assigned(FConnectThread) then
+  begin
+    FWebSocket.Disconnect;
+    FConnectThread.WaitFor;
+    FreeAndNil(FConnectThread);
+  end;
+  FWebSocket.Free;
+  inherited;
+end;
+
+class function TAiOpenAiRealtimeTranslate.GetDriverName: string;
+begin
+  Result := 'OpenAiTranslate';
+end;
+
+class function TAiOpenAiRealtimeTranslate.GetDefaultModel: string;
+begin
+  Result := 'gpt-realtime-translate';
+end;
+
+function TAiOpenAiRealtimeTranslate.GetTargetSampleRate: Integer;
+begin
+  Result := 24000; // PCM16 24 kHz mono
+end;
+
+procedure TAiOpenAiRealtimeTranslate.SendSessionUpdate;
+var
+  JMsg, JSession, JAudio, JOutput, JInput, JTranscription: TJSONObject;
+begin
+  JMsg     := TJSONObject.Create;
+  JSession := TJSONObject.Create;
+  JAudio   := TJSONObject.Create;
+  JOutput  := TJSONObject.Create;
+  JMsg.AddPair('type', 'session.update');
+  JOutput.AddPair('language', FTargetLanguage);
+  JAudio.AddPair('output', JOutput);
+  // La transcripcion del idioma origen es opt-in (el default del endpoint es
+  // transcription:null — solo emite la traduccion)
+  if FSourceTranscription then
+  begin
+    JInput := TJSONObject.Create;
+    JTranscription := TJSONObject.Create;
+    JTranscription.AddPair('model', 'gpt-live-transcribe');
+    JInput.AddPair('transcription', JTranscription);
+    JAudio.AddPair('input', JInput);
+  end;
+  JSession.AddPair('audio', JAudio);
+  JMsg.AddPair('session', JSession);
+  try
+    FWebSocket.SendText(JMsg.ToJSON);
+  finally
+    JMsg.Free;
+  end;
+end;
+
+procedure TAiOpenAiRealtimeTranslate.ProcessServerEvent(const JObj: TJSONObject);
+var
+  EventType, Delta, AudioB64: string;
+  ErrMsg, ErrCode: string;
+  JError: TJSONObject;
+begin
+  if not JObj.TryGetValue<string>('type', EventType) then Exit;
+
+  if (EventType = 'session.created') or (EventType = 'session.updated') then
+  begin
+    // El endpoint de traduccion no documenta handshake; si el servidor
+    // confirma la sesion se notifica una sola vez
+    if not FSessionConfigured then
+    begin
+      FSessionConfigured := True;
+      DoSessionReady;
+    end;
+  end
+
+  else if EventType = 'session.input_transcript.delta' then
+  begin
+    Delta := '';
+    JObj.TryGetValue<string>('delta', Delta);
+    if Delta <> '' then
+      DoTranscriptDelta(Delta); // transcripcion en el idioma origen
+  end
+
+  else if EventType = 'session.output_transcript.delta' then
+  begin
+    Delta := '';
+    JObj.TryGetValue<string>('delta', Delta);
+    if Delta <> '' then
+    begin
+      FTranslatedText := FTranslatedText + Delta;
+      DoAssistantTextDelta(Delta); // texto traducido
+    end;
+  end
+
+  else if EventType = 'session.output_audio.delta' then
+  begin
+    AudioB64 := '';
+    if not JObj.TryGetValue<string>('delta', AudioB64) then
+      JObj.TryGetValue<string>('audio', AudioB64); // tolerancia al esquema
+    if AudioB64 <> '' then
+      DoAudioChunk(TNetEncoding.Base64.DecodeStringToBytes(AudioB64));
+  end
+
+  else if EventType = 'session.closed' then
+  begin
+    if FTranslatedText <> '' then
+      DoAssistantText(FTranslatedText);
+    FTranslatedText := '';
+    DoAudioDone;
+  end
+
+  else if EventType = 'error' then
+  begin
+    ErrMsg  := 'Error desconocido';
+    ErrCode := '';
+    JError  := nil;
+    JObj.TryGetValue<TJSONObject>('error', JError);
+    if Assigned(JError) then
+    begin
+      JError.TryGetValue<string>('message', ErrMsg);
+      JError.TryGetValue<string>('code',    ErrCode);
+    end;
+    DoError(ErrMsg, ErrCode);
+  end;
+end;
+
+procedure TAiOpenAiRealtimeTranslate.OnWSConnected(Sender: TObject);
+begin
+  TrLog('WS_CONNECTED');
+  DoConnected;
+  // Configurar el idioma de salida de inmediato: el endpoint acepta audio
+  // desde el primer momento y no exige esperar confirmacion
+  SendSessionUpdate;
+  if not FSessionConfigured then
+  begin
+    FSessionConfigured := True;
+    DoSessionReady;
+  end;
+end;
+
+procedure TAiOpenAiRealtimeTranslate.OnWSDisconnected(Sender: TObject);
+begin
+  TrLog('WS_DISCONNECTED');
+  FSessionConfigured := False;
+  DoDisconnected;
+end;
+
+procedure TAiOpenAiRealtimeTranslate.OnWSError(Sender: TObject;
+  const ErrorMsg: string);
+begin
+  TrLog('WS_ERROR: ' + ErrorMsg);
+  DoError(ErrorMsg, 'websocket_error');
+end;
+
+procedure TAiOpenAiRealtimeTranslate.OnWSFrame(Sender: TObject;
+  Opcode: TAiRealtimeWSOpcode; const Data: TBytes; IsFinal: Boolean);
+var
+  JsonStr: string;
+  JObj:    TJSONObject;
+begin
+  TrLog('FRAME opcode=' + IntToStr(Ord(Opcode)) +
+        ' len=' + IntToStr(Length(Data)) +
+        ' data=' + Copy(TEncoding.UTF8.GetString(Data), 1, 300));
+  if Opcode <> rwsoText then Exit;
+  JsonStr := TEncoding.UTF8.GetString(Data);
+  JObj    := TJSONObject.ParseJSONValue(JsonStr) as TJSONObject;
+  if Assigned(JObj) then
+  try
+    ProcessServerEvent(JObj);
+  finally
+    JObj.Free;
+  end;
+end;
+
+procedure TAiOpenAiRealtimeTranslate.InternalConnect;
+var
+  URL, M: string;
+begin
+  FWebSocket.ExtraHeaders.Values['Authorization'] := 'Bearer ' + ResolvedApiKey;
+  M := Model;
+  if M = '' then M := GetDefaultModel;
+  URL := CTRANSLATE_WSS + '?model=' + M;
+  TrLog('CONNECT url=' + URL + ' lang=' + FTargetLanguage);
+  FConnectThread := TThread.CreateAnonymousThread(procedure begin
+    if not FWebSocket.Connect(URL) then
+      DoError('No se pudo conectar al servidor de traduccion',
+              'connection_failed');
+  end);
+  FConnectThread.FreeOnTerminate := False;
+  FConnectThread.Start;
+end;
+
+procedure TAiOpenAiRealtimeTranslate.InternalDisconnect;
+var
+  JObj: TJSONObject;
+begin
+  // Cierre ordenado del stream: el servidor emite session.closed con lo
+  // pendiente antes de cerrar
+  JObj := TJSONObject.Create;
+  try
+    JObj.AddPair('type', 'session.close');
+    try FWebSocket.SendText(JObj.ToJSON); except end;
+  finally
+    JObj.Free;
+  end;
+  FWebSocket.SendClose(1000, '');
+  FWebSocket.Disconnect;
+  if Assigned(FConnectThread) then
+  begin
+    FConnectThread.WaitFor;
+    FreeAndNil(FConnectThread);
+  end;
+  FSessionConfigured := False;
+  Connected          := False;
+end;
+
+procedure TAiOpenAiRealtimeTranslate.InternalSendAudio(
+  const ResampledPCM16: TBytes);
+var
+  JObj: TJSONObject;
+begin
+  if Length(ResampledPCM16) = 0 then Exit;
+  JObj := TJSONObject.Create;
+  try
+    JObj.AddPair('type',  'session.input_audio_buffer.append');
+    JObj.AddPair('audio',
+      TNetEncoding.Base64.EncodeBytesToString(ResampledPCM16));
+    FWebSocket.SendText(JObj.ToJSON);
+  finally
+    JObj.Free;
+  end;
+end;
+
+procedure TAiOpenAiRealtimeTranslate.InternalCommitAudio;
+begin
+  // Stream continuo sin turnos: no aplica
+end;
+
+procedure TAiOpenAiRealtimeTranslate.InternalClearAudio;
+begin
+  // Stream continuo sin turnos: no aplica
+end;
+
 initialization
   TAiRealtimeFactory.Instance.RegisterDriver(
     TAiOpenAiRealtimeSTT.GetDriverName, TAiOpenAiRealtimeSTT);
+  TAiRealtimeFactory.Instance.RegisterDriver(
+    TAiOpenAiRealtimeTranslate.GetDriverName, TAiOpenAiRealtimeTranslate);
 
 end.

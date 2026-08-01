@@ -451,6 +451,11 @@ begin
 
   FSttMic := TAiOpenAiRealtimeSTT.Create(nil);
   FSttMic.ApiKey                := STT_APIKEY;
+  // Microfono (un solo hablante): gpt-live-transcribe (ago 2026). El canal
+  // remoto sigue diarizado con gpt-4o-transcribe-diarize (los modelos nuevos
+  // no soportan diarizacion).
+  FSttMic.TranscriptionModel    := otmGptLiveTranscribe;
+  FSttMic.TranscriptionPrompt   := 'Mi voz en una reunion de trabajo traducida';
   FSttMic.Language              := EdtLangSrc.Text;
   FSttMic.OnSessionReady        := OnSttSessionReady;
   FSttMic.OnTranscriptCompleted := OnSttTranscript;

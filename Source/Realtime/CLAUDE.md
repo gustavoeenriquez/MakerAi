@@ -22,7 +22,7 @@ Demos:
 |------|-------|------|
 | `uMakerAi.Realtime.pas` | `TAiRealtimeBase`, `TAiRealtimeVoiceBase`, `TAiRealtimeFactory` | Abstract bases + factory |
 | `uMakerAi.Realtime.AiConnection.pas` | `TAiRealtimeConnection` | Universal connector (same pattern as `TAiChatConnection`) |
-| `uMakerAi.Realtime.OpenAI.pas` | `TAiOpenAiRealtimeSTT` | OpenAI driver — **complete** |
+| `uMakerAi.Realtime.OpenAI.pas` | `TAiOpenAiRealtimeSTT`, `TAiOpenAiRealtimeTranslate` | OpenAI drivers — **complete** (STT + streaming translation) |
 | `uMakerAi.Realtime.Gemini.pas` | `TAiGeminiRealtimeSTT` | Gemini driver — **stub, pending** |
 | `uMakerAi.Realtime.MakerAi.pas` | `TAiMakerAiRealtimeChat` | MakerAI driver — **complete** (STT+LLM+TTS) |
 | `uMakerAi.Realtime.Grok.pas` | `TAiGrokRealtimeChat` | xAI Grok Voice driver — speech-to-speech, OpenAI Realtime-compatible protocol — **implemented, pending runtime test** |
@@ -121,8 +121,19 @@ voice events (`OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`,
 
 | Model | Notes |
 |-------|-------|
-| `gpt-4o-realtime-preview` | Default; full quality |
+| `gpt-realtime` | Default session model |
 | `gpt-4o-mini-realtime-preview` | Faster, lower cost |
+
+### Transcription models (`TranscriptionModel` property)
+
+| Enum | Model | Notes |
+|------|-------|-------|
+| `otmGptLiveTranscribe` | `gpt-live-transcribe` | **Default** (2026) — low-latency live STT, WER 9.60% |
+| `otmGptTranscribe` | `gpt-transcribe` | Committed turns; uses prior turns as context |
+| `otmGpt4oTranscribe` / `otmGpt4oMiniTranscribe` | `gpt-4o-transcribe[-mini]` | Previous generation |
+| `otmWhisper1` | `whisper-1` | Legacy |
+
+The new models accept context config (verified live 2026-08-01): `TranscriptionPrompt` (free-form topic), `TranscriptionKeywords` (domain terms, one per line), `Languages` (multi-language list; falls back to base `Language`), `LowDelay` (faster partials, live model only). Legacy models keep the singular `language` field — the driver switches the session.update schema automatically. OpenAI deltas are **incremental** (unlike Grok's cumulative transcript).
 
 ### Internal protocol flow
 
@@ -139,6 +150,23 @@ voice events (`OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`,
 - `FSessionConfigured: Boolean` — guards against sending audio before session ready
 - Session config sent in `OnSessionReady` handler, not in `Connect`
 - `TAiRealtimeWSClient` handles fragmented WebSocket frames automatically
+
+---
+
+## TAiOpenAiRealtimeTranslate — streaming speech translation
+
+**Status:** Complete — runtime-tested (2026-08-01): es→en text + TTS audio verified.
+
+- **Endpoint:** `wss://api.openai.com/v1/realtime/translations?model=gpt-realtime-translate` (unit `uMakerAi.Realtime.OpenAI.pas`, DriverName `'OpenAiTranslate'`)
+- **Continuous stream — no VAD, no turns**: keep appending audio (including silence between phrases); results arrive as they're ready. `CommitAudio`/`ClearAudio` are no-ops.
+- Inherits `TAiRealtimeVoiceBase`; event mapping:
+  - `session.input_transcript.delta` → `OnTranscriptDelta` (source language) — **opt-in** via `SourceTranscription := True` (adds `audio.input.transcription {model: gpt-live-transcribe}`; the endpoint default is transcription:null)
+  - `session.output_transcript.delta` → `OnAssistantTextDelta` (translated text)
+  - `session.output_audio.delta` → `OnAudioChunk` (translated TTS, PCM16 24 kHz)
+  - `session.closed` → `OnAssistantText` (full) + `OnAudioDone`
+- `TargetLanguage` ('en', 'es', ...) sent as `audio.output.language` in session.update (sent right after connect; `session.created/updated` fire `OnSessionReady` once)
+- `Disconnect` sends `session.close` before closing the socket
+- Natural upgrade path for the VoiceBridge demos: replaces the STT→LLM→TTS pipeline with a single socket per direction
 
 ---
 

@@ -190,16 +190,22 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - `claude-sonnet-4-20250514`, `claude-opus-4-20250514` — reemplazar por `claude-sonnet-4-6` / `claude-opus-4-7`
 
 ### OpenAI
-**Familia GPT-5.x (mayo 2026 — producción actual):**
+**Familia GPT-5.6 (julio 2026 — producción actual):** 1.05M contexto, 128K output, visión + reasoning + tools + prompt caching en toda la familia. El alias `gpt-5.6` enruta a Sol.
+- `gpt-5.6-sol` — Flagship. `ModelCaps=[cap_Image, cap_Reasoning]`, `ThinkingLevel=tlHigh`
+- `gpt-5.6-terra` — Balance costo/capacidad. `ThinkingLevel=tlMedium`
+- `gpt-5.6-luna` — Tier económico (probado runtime ago 2026). `ThinkingLevel=tlLow`
+- Precios jul 30/2026: Luna −80%, Terra −20%; "Fast mode" reemplaza Priority Processing (2.5× velocidad, 2× precio, solo Sol)
+
+**Familia GPT-5.x (mayo 2026):**
 - `gpt-5.4` — Producción estándar, visión + tools, 1M contexto. `ModelCaps=[cap_Image]`
 - `gpt-5.4-mini` — Rápido y económico, visión + tools. `ModelCaps=[cap_Image]`
-- `gpt-5.5` — Flagship, visión + reasoning. `ModelCaps=[cap_Image, cap_Reasoning]`, `ThinkingLevel=tlMedium`
+- `gpt-5.5` — visión + reasoning. `ModelCaps=[cap_Image, cap_Reasoning]`, `ThinkingLevel=tlMedium`
 - `gpt-5.5-pro` — Reasoning intensivo. `ModelCaps=[cap_Image, cap_Reasoning]`, `ThinkingLevel=tlHigh`
 
 **Capacidades multimedia (sin cambios en nombres de modelos):**
 - Generación de imagen: `gpt-image-1` (y `gpt-image-1.5` / `gpt-image-2`) → `SessionCaps=[cap_GenImage]`
 - TTS: `gpt-4o-mini-tts` → `SessionCaps=[cap_GenAudio]`
-- Transcripción: `gpt-4o-transcribe`, `gpt-4o-mini-transcribe`, `whisper-1` → `ModelCaps=[cap_Audio]`
+- Transcripción: `gpt-transcribe` (recomendado, WER 8.98%), `gpt-live-transcribe` (vivo/Realtime), `gpt-4o-transcribe`, `gpt-4o-mini-transcribe`, `whisper-1` → `ModelCaps=[cap_Audio]`
 - Video: Sora → `SessionCaps=[cap_GenVideo]`
 - Web search: `gpt-4o-search-preview` → `ModelCaps=[cap_WebSearch]`, `Tool_Active=False`
 

@@ -286,6 +286,33 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active',  'True');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlHigh');
 
+  // --- GPT-5.6 Sol/Terra/Luna (Jul 2026) -- 1.05M ctx, 128K out ---
+  // Toda la familia: vision + reasoning + tools + prompt caching.
+  // Sol = flagship; Terra = balance costo/capacidad; Luna = tier economico.
+  // El alias 'gpt-5.6' enruta a Sol en el API.
+  for Model in ['gpt-5.6', 'gpt-5.6-sol'] do
+  begin
+    TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Max_Tokens',    '32768');
+    TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',    '[cap_Image, cap_Reasoning]');
+    TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps',  '[cap_Image, cap_Reasoning]');
+    TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active',  'True');
+    TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlHigh');
+  end;
+
+  Model := 'gpt-5.6-terra';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Max_Tokens',    '32768');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',    '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps',  '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active',  'True');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlMedium');
+
+  Model := 'gpt-5.6-luna';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Max_Tokens',    '32768');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',    '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps',  '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active',  'True');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlLow');
+
   // ------- Generacion de imagenes ------
   // https://platform.openai.com/docs/guides/images
   // ModelCaps=[]: usa endpoint dedicado; Gap=[cap_GenImage] activa InternalRunImageGeneration
@@ -301,6 +328,8 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active',    'False');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ResponseTimeOut', '36000');
 
+  // DEPRECADOS por OpenAI (may 2026): se mantienen registrados mientras el
+  // API los acepte, pero para proyectos nuevos usar gpt-image-1/1.5/2
   Model := 'dall-e-3';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',   '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps', '[cap_GenImage]');
@@ -340,6 +369,18 @@ Begin
 
   // ------- Transcripcion (STT) -- cap_Audio: procesa audio nativo ------
   // Usar con ChatMode = cmTranscription
+  // gpt-transcribe: recomendado para archivos/batch (WER 8.98% vs 15.21% whisper)
+  Model := 'gpt-transcribe';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',   '[cap_Audio]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps', '[cap_Audio]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active', 'False');
+
+  // gpt-live-transcribe: transcripcion en vivo de baja latencia (Realtime)
+  Model := 'gpt-live-transcribe';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',   '[cap_Audio]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps', '[cap_Audio]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active', 'False');
+
   Model := 'gpt-4o-transcribe';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',   '[cap_Audio]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps', '[cap_Audio]');
