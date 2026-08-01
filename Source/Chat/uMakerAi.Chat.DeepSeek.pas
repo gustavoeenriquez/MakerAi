@@ -91,8 +91,8 @@ class procedure TAiDeepSeekChat.RegisterDefaultParams(Params: TStrings);
 Begin
   Params.Clear;
   Params.Add('ApiKey=@DEEPSEEK_API_KEY');
-  Params.Add('Model=deepseek-chat');
-  Params.Add('Max_Tokens=4096');
+  Params.Add('Model=deepseek-v4-flash');
+  Params.Add('Max_Tokens=8192');
   Params.Add('URL=https://api.deepseek.com/v1/');
 End;
 
@@ -106,7 +106,9 @@ begin
   inherited;
   ApiKey := '@DEEPSEEK_API_KEY';
 
-  Model := 'deepseek-chat';
+  // deepseek-chat/deepseek-reasoner retirados oficialmente el 24 jul 2026;
+  // V4 Flash es el modelo economico de proposito general (1M ctx, 384K out)
+  Model := 'deepseek-v4-flash';
   Url := GlAIUrl;
 end;
 
@@ -173,6 +175,29 @@ begin
     AJSONObject.AddPair('messages', GetMessages);
 
     AJSONObject.AddPair('model', LModel);
+
+    // V4 (abr 2026): el API trae thinking ACTIVADO por defecto con effort=high.
+    // El driver lo controla explicitamente: cap_Reasoning activa el modo thinking
+    // (reasoning_effort segun ThinkingLevel); sin el cap se envia disabled para
+    // conservar el comportamiento rapido/economico tipo deepseek-chat.
+    // En modo thinking el API ignora temperature/top_p/penalties (sin error).
+    if StartsText('deepseek-v4', LModel) then
+    begin
+      var jThinking := TJSonObject.Create;
+      if cap_Reasoning in ModelConfig.ModelCaps then
+      begin
+        jThinking.AddPair('type', 'enabled');
+        case ModelConfig.ThinkingLevel of
+          tlLow:    AJSONObject.AddPair('reasoning_effort', 'low');
+          tlMedium: AJSONObject.AddPair('reasoning_effort', 'high');
+          tlHigh:   AJSONObject.AddPair('reasoning_effort', 'max');
+          // tlDefault: no se envia, el API usa high
+        end;
+      end
+      else
+        jThinking.AddPair('type', 'disabled');
+      AJSONObject.AddPair('thinking', jThinking);
+    end;
 
     AJSONObject.AddPair('temperature', TJSONNumber.Create(Trunc(Temperature * 100) / 100));
     AJSONObject.AddPair('max_tokens', TJSONNumber.Create(Max_tokens));

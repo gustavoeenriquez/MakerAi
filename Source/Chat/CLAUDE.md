@@ -22,9 +22,9 @@ Each inherits from `TAiChat` (defined in Core):
 | `uMakerAi.Chat.Ollama.pas` | `TAiOllamaChat` | Ollama (local models) |
 | `uMakerAi.Chat.LMStudio.pas` | `TAiLMStudioChat` | LM Studio (local OpenAI-compatible) |
 | `uMakerAi.Chat.Groq.pas` | `TAiGroqChat` | Groq inference (llama, qwen, deepseek, voxtral) |
-| `uMakerAi.Chat.DeepSeek.pas` | `TAiDeepSeekChat` | DeepSeek (deepseek-chat, deepseek-reasoner) |
+| `uMakerAi.Chat.DeepSeek.pas` | `TAiDeepSeekChat` | DeepSeek (deepseek-v4-flash, deepseek-v4-pro) |
 | `uMakerAi.Chat.Mistral.pas` | `TAiMistralChat` | Mistral (large, magistral, devstral, voxtral) |
-| `uMakerAi.Chat.Kimi.pas` | `TAiKimiChat` | Kimi/Moonshot (kimi-k2, kimi-k2.5) |
+| `uMakerAi.Chat.Kimi.pas` | `TAiKimiChat` | Kimi/Moonshot (kimi-k3, kimi-k2.6/k2.7) |
 | `uMakerAi.Chat.Grok.pas` | `TAiGrokChat` | xAI Grok (grok-3, grok-4-fast) |
 | `uMakerAi.Chat.Cohere.pas` | `TCohereChat` | Cohere (command-a, aya-vision) |
 | `uMakerAi.Chat.GenericLLM.pas` | `TAiGenericChat` | Any OpenAI-compatible API |
@@ -277,9 +277,12 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - Video: grok-imagine-video → `SessionCaps=[cap_GenVideo]`
 
 ### DeepSeek
-- `deepseek-chat` (V3.2): texto + tools, 128K ctx, 32K output
-- `deepseek-reasoner` (R1): reasoning + tools, `ThinkingLevel=tlMedium`
-- Sin visión en la API pública (DeepSeek-VL2 no disponible vía api.deepseek.com)
+**Actualizado ago 2026, probado runtime 4/4 (incl. tools en modo thinking).** V4 (abr 2026) son los únicos modelos en `/v1/models`: 1M ctx / 384K output. El API activa thinking **por defecto** (effort=high); el driver lo controla explícitamente en `InitChatCompletions`: `cap_Reasoning` en `ModelCaps` → `thinking:{type:enabled}` + `reasoning_effort` (tlLow=low, tlMedium=high, tlHigh=max); sin el cap → `thinking:{type:disabled}` (modo rápido/económico). En modo thinking el API ignora temperature/top_p/penalties sin error. Con tools, `reasoning_content` DEBE reenviarse en el historial (400 si falta) — el override `GetMessages` del driver ya lo hace.
+- `deepseek-v4-flash` [default del driver]: 284B (13B act). $0.14/M in miss / $0.0028 hit / $0.28/M out
+- `deepseek-v4-pro`: 1.6T (49B act), razonamiento por defecto vía registry. $0.435/M in / $0.87/M out. Nota: effort low→high (mínimo soportado, ago 2026)
+- `deepseek-chat` y `deepseek-reasoner`: **RETIRADOS oficialmente 24 jul 2026** — aún enrutan a v4-flash (no-thinking/thinking) en gracia; no depender de ellos
+- Sin visión en la API pública
+- OJO: pricing pico 2x anunciado (9:00-12:00 y 14:00-18:00 UTC+8)
 
 ### Kimi (Moonshot AI)
 **Actualizado ago 2026, probado runtime 4/4.** REGLA CRÍTICA descubierta empíricamente: la familia nueva (k3/k2.6/k2.7) devuelve **400 si el request incluye `top_p`** (solo acepta `temperature`) — el default global `top_p` se eliminó del registry y el constructor fija `Top_p := 0`. Todos los modelos nuevos devuelven `reasoning_content` y necesitan `max_tokens` amplio (con presupuesto corto el razonamiento lo consume y `content` llega vacío con `finish=length`).
