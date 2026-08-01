@@ -83,6 +83,28 @@ GraphBuilder expects this structure:
 
 Port terminals: `out_a`, `out_b`, `out_c`, `out_d`, `out_failure` (maps to NextNo in ALL link modes, including `lmConditional` — fix M-07).
 
+## Reusing a manager across runs
+
+`Compile` validates structure only; it does **not** clear execution state (fix M-03 — clearing there freed the `AskMsg`/`ResMsg` that `Run` seeds beforehand). Since `Compile` also early-exits when `FCompiled` is already `True`, **consecutive `Run(APrompt)` calls on the same instance inherit the previous run's state**: blackboard keys, node `Input`/`Output`/`FError`/`FSuspended`, and link `NoCycles`.
+
+That is the historic behavior and it is preserved. To get a clean run, use the seeding overload:
+
+```pascal
+Manager.Run('prompt',
+  procedure(B: TAIBlackboard)
+  begin
+    B.SetString('cliente_id', '42');   // seeded AFTER the reset, so it survives
+  end);
+```
+
+Guaranteed order: `Compile` -> `ResetExecutionState` -> `ASeed` -> seed `AskMsg`/`ResMsg` -> execute. Seeding before `Run` instead of inside `ASeed` would be wiped by the reset.
+
+`ASeed` may assign `AskMsg` (it is not overwritten if already set). It need not assign `ResMsg` — `Run` always creates a fresh one for the run.
+
+`ResetExecutionState` is also public if you prefer to call it explicitly.
+
+> `TAIBlackboard.SetAskMsg`/`SetResMsg` free the previously stored message before replacing it. Without that, every repeated `Run` leaked the prior `ResMsg`, because `SetValue` only does `AddOrSetValue` and `Clear` was no longer being reached.
+
 ## Execution Status
 
 `TAgentExecutionStatus`: `esUnknown`, `esRunning`, `esCompleted`, `esError`, `esTimeout`, `esAborted`, `esSuspended`

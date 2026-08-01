@@ -1,4 +1,4 @@
-// MIT License
+﻿// MIT License
 //
 // Copyright (c) <year> <copyright holders>
 //
@@ -102,6 +102,11 @@ type
                                  const AReason:    string;
                                  const AContext:   string) of object;
 
+  // Callback de siembra del blackboard para la sobrecarga Run(APrompt, ASeed).
+  // Se invoca DESPUES de ResetExecutionState y ANTES de que Run siembre
+  // AskMsg/ResMsg, de modo que lo sembrado aqui sobrevive a la limpieza.
+  TAiBlackboardSeed = reference to procedure(ABlackboard: TAIBlackboard);
+
   // --- Blackboard ---
   TAIBlackboard = class(TObject)
   private
@@ -110,6 +115,8 @@ type
     function GetResMsg: TAiChatMessage;
     procedure SetAskMsg(const Value: TAiChatMessage);
     procedure SetResMsg(const Value: TAiChatMessage);
+    // Libera la instancia previa almacenada en AKey si difiere de ANew.
+    procedure FreeOwnedObject(const AKey: string; ANew: TObject);
   protected // --- MODIFICADO: protected para acceso desde la misma unidad ---
     FData: TDictionary<string, TValue>;
   public
@@ -403,6 +410,18 @@ type
     procedure LoadStateFromStream(AStream: TStream);
 
     function Run(APrompt: String): String; overload; virtual;
+
+    /// Corrida limpia: descarta el estado de la corrida anterior antes de
+    /// ejecutar. Orden garantizado: Compile -> ResetExecutionState -> ASeed ->
+    /// siembra de AskMsg/ResMsg -> ejecucion.
+    ///
+    /// Usar esta sobrecarga al reutilizar un mismo TAIAgentManager para varias
+    /// corridas: Run(APrompt) conserva el comportamiento historico y arrastra
+    /// el blackboard y el estado de nodos y links de la ejecucion previa.
+    ///
+    /// ASeed puede asignar AskMsg (no se sobrescribe si ya quedo asignado).
+    /// No es necesario que asigne ResMsg: Run lo crea siempre para la corrida.
+    function Run(const APrompt: String; ASeed: TAiBlackboardSeed): String; overload;
 
     function AddMessageAndRun(APrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): String;
     function AddMessageAndRunMsg(APrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): TAiChatMessage;
@@ -1004,8 +1023,31 @@ begin
     Result := ADefault;
 end;
 
+procedure TAIBlackboard.FreeOwnedObject(const AKey: string; ANew: TObject);
+var
+  LOld: TValue;
+begin
+  // El blackboard es dueno de AskMsg/ResMsg: Clear los libera. Pero SetValue
+  // solo hace AddOrSetValue y no libera el objeto anterior, asi que reasignar
+  // sin pasar por Clear perdia la instancia previa. Se notaba al reutilizar un
+  // manager para varias corridas: Run asigna ResMsg incondicionalmente y, desde
+  // que Compile ya no limpia el blackboard (M-03), nada liberaba el anterior.
+  FLock.Enter;
+  try
+    if FData.TryGetValue(AKey, LOld) and LOld.IsObject then
+    begin
+      if (LOld.AsObject <> nil) and (LOld.AsObject <> ANew) then
+        LOld.AsObject.Free;
+      FData.Remove(AKey);
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 procedure TAIBlackboard.SetAskMsg(const Value: TAiChatMessage);
 begin
+  FreeOwnedObject('Sys.AskMsg', Value);
   // SetValue tambi?n es Thread-Safe
   SetValue('Sys.AskMsg', TValue.From(Value));
 end;
@@ -1022,6 +1064,7 @@ end;
 
 procedure TAIBlackboard.SetResMsg(const Value: TAiChatMessage);
 begin
+  FreeOwnedObject('Sys.ResMsg', Value);
   SetValue('Sys.ResMsg', TValue.From(Value));
 end;
 
@@ -1374,8 +1417,17 @@ end;
 function TAIAgentManager.FindNode(const AName: string): TAIAgentsNode;
 var
   i: Integer;
+  Node: TAIAgentsNode;
 begin
   Result := nil;
+
+  // Buscar en los nodos registrados en el grafo (Graph := Self). Cubre el caso
+  // de nodos colocados en un Form/DataModule, cuyo Owner NO es el manager.
+  for Node in FNodes do
+    if SameText(Node.Name, AName) then
+      Exit(Node);
+
+  // Fallback: nodos creados con el manager como Owner antes de asignar Graph
   for i := 0 to ComponentCount - 1 do
     if (Components[i] is TAIAgentsNode) and SameText(Components[i].Name, AName) then
     begin
@@ -1734,6 +1786,28 @@ begin
     FNodes.Remove(TAIAgentsNode(AComponent))
   else if (AComponent is TAIAgentsLink) and Assigned(FLinks) then
     FLinks.Remove(TAIAgentsLink(AComponent));
+end;
+
+function TAIAgentManager.Run(const APrompt: String; ASeed: TAiBlackboardSeed): String;
+begin
+  // Chequeo temprano: si esta ocupado, no tiene sentido limpiar el estado de la
+  // corrida anterior (Run volveria a lanzar con el mismo mensaje).
+  if FBusy <> 0 then
+    raise Exception.Create('The Agent Manager is currently busy.');
+
+  // El orden es lo unico que hace correcta a esta sobrecarga:
+  //   1. Compile valida la estructura y NO toca el estado (M-03).
+  //   2. ResetExecutionState limpia blackboard, nodos y links.
+  //   3. ASeed siembra despues de la limpieza, no antes: al reves se perderia,
+  //      porque Clear libera AskMsg/ResMsg.
+  //   4. Run(APrompt) siembra AskMsg solo si ASeed no lo dejo, y ejecuta.
+  Compile;
+  ResetExecutionState;
+
+  if Assigned(ASeed) then
+    ASeed(FBlackboard);
+
+  Result := Run(APrompt);
 end;
 
 function TAIAgentManager.Run(APrompt: String): String;
@@ -2580,6 +2654,13 @@ begin
     raise Exception.Create('Agent is busy');
 
   try
+    // 0. Asegurar que el grafo este compilado ANTES de restaurar. Tras un
+    // reinicio de la app nunca se ha llamado a Run, asi que InEdges esta
+    // vacio y los joins (jmAll) se dispararian una vez por rama. Compile
+    // resetea NoCycles a 0; RestoreFromSnapshot los reaplica despues, por
+    // eso este orden es obligatorio. Si ya estaba compilado, es un no-op.
+    Compile;
+
     // 1. Cargar checkpoint del disco (si existe)
     LSnap := nil;
     if Assigned(FCheckpointer) then
@@ -3198,8 +3279,8 @@ begin
     begin
       FJoinLock.Enter;
       try
-        // Limpiar siempre despu�s de ejecutar, tanto jmAny como jmAll.
-        // Para jmAll: la limpieza garantiza que el pr�ximo ciclo (retry/loop)
+        // Limpiar siempre después de ejecutar, tanto jmAny como jmAll.
+        // Para jmAll: la limpieza garantiza que el próximo ciclo (retry/loop)
         // espere correctamente todas las entradas antes de disparar de nuevo.
         FJoinInputs.Clear;
       finally
