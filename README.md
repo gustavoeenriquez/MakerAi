@@ -1,4 +1,4 @@
-# MakerAI Suite v3.4 — The AI Ecosystem for Delphi
+# MakerAI Suite v3.5 — The AI Ecosystem for Delphi
 
 🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
 📖 **Manual:** [https://www.gustavoenriquez.com/book-makerai](https://www.gustavoenriquez.com/book-makerai) — available in English and Spanish
@@ -33,7 +33,30 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 ---
 
-## 🚀 What's New in v3.4
+## 🚀 What's New in v3.5
+
+### Typed ModelConfig Channel
+
+Capability configuration now lives in a single typed surface: `ModelConfig.ModelCaps` / `SessionCaps` / `Tool_Active` / `ThinkingLevel` moved out of the string-based Params/RTTI channel, with per-field user pins and transparent compatibility migration — existing code keeps working unchanged.
+
+### Full-Duplex Voice Suite
+
+- **`TAiGrokRealtimeChat`** — xAI Grok Voice speech-to-speech (function calling, session resumption with replay, binary audio transport, ephemeral tokens)
+- **`TAiOpenAiRealtimeTranslate`** — continuous streaming speech translation (one WebSocket per direction; demo 071-VoiceBridgeTranslate)
+- **`TAiRealtimeVoiceBase`** — shared full-duplex base; voice events flow through the universal `TAiRealtimeConnection`
+- **gpt-transcribe / gpt-live-transcribe** — OpenAI's Whisper successors, fully integrated
+
+### August 2026 Provider Refresh — All 9 Cloud Providers, Runtime-Tested
+
+Claude 5 family (adaptive thinking, FastMode, compaction, server-side fallbacks) · Gemini 3.5/3.6 + Nano Banana GA · Mistral Voxtral TTS + OCR 4 · Kimi K3 · DeepSeek V4 (explicit thinking control) · Cohere Command A+ · Groq qwen3.6 · xAI grok-4.3/4.5/build — with retired-model cleanup and compatibility aliases throughout.
+
+### Grok Native Video & Image Generation
+
+`TAiGrokChat` now generates video with grok-imagine (async job + polling + mp4 as `TAiMediaFile`, new `VideoDurationSeconds` property) and images with `grok-imagine-image` — activated by `cmVideoGeneration`/`cmImageGeneration` or the `[cap_GenVideo]`/`[cap_GenImage]` gaps.
+
+---
+
+## What's New in v3.4
 
 ### Delphi 13.1 Florence Support
 
@@ -498,7 +521,12 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 
 ## 🔄 Changelog
 
-### Unreleased (dev)
+### v3.5.0 (2026-08-01)
+- New: **Typed ModelConfig channel** — `ModelCaps`/`SessionCaps`/`Tool_Active`/`ThinkingLevel` moved out of Params/RTTI into a typed surface with per-field user pins (`UserFields`) and transparent compatibility migration
+- New: **MSSQL driver for RAG Vector** (FireDAC SQL Server)
+- New: **Agents hardening** — strict JSON graph validation, public RTTI mapper `TAiToolParams`, `[TSecret]` attribute, `out_failure` in conditional mode, `Compile` no longer clears the Blackboard
+- New: **ChatTools single surface** with `OnChange` propagation; `ToolCall.ResMsg` available in streaming; media delivered at `OnReceiveDataEnd`
+- Fix: **`LastError` now populated on every error path** — `DoError` assigns `FLastError`, so synchronous callers can diagnose HTTP 4xx/5xx (previously empty string with no exception)
 - New: **Grok video generation** — `TAiGrokChat.InternalRunNativeVideoGeneration` implements the grok-imagine async video job (`POST /videos/generations` + polling + mp4 download as `TAiMediaFile`), with new `VideoDurationSeconds` property; activated via `cmVideoGeneration` or the `[cap_GenVideo]` gap. Runtime-tested (image generation also verified live)
 - New: **xAI Grok Aug 2026** — full catalog turnover: `grok-4.3` (new driver default, 1M ctx, vision + always-on reasoning), `grok-4.5` (premium), `grok-build-0.1` (coding), `grok-imagine-image-quality` and `grok-imagine-video-1.5` registered; entire grok-3/grok-4-fast/4.1 families and grok-2 models retired with compatibility aliases (`grok-3`→`grok-4.3`, etc.). Runtime-tested 6/6
 - New: **Groq Aug 2026** — `qwen/qwen3.6-27b` registered (replaces retired `qwen3-32b`, alias kept) plus `allam-2-7b`; retired entries removed (`llama-4-scout`, `moonshotai/kimi-k2-instruct(-0905)`). Fix: `openai/gpt-oss-120b` is text-only on Groq — `cap_Image` removed (no vision chat model on Groq currently). Runtime-tested 4/4

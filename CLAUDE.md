@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MakerAI is an AI orchestration framework for Delphi developers (v3.4). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers, autonomous agents, and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+MakerAI is an AI orchestration framework for Delphi developers (v3.5). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers, autonomous agents, and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+
+**v3.5 highlights (ago 2026):** canal tipado `ModelConfig` (ModelCaps/SessionCaps/Tool_Active/ThinkingLevel fuera de Params/RTTI, con pins por campo y migración de compatibilidad); suite de voz full-duplex (`TAiGrokRealtimeChat` speech-to-speech, `TAiOpenAiRealtimeTranslate`, gpt-transcribe); refresh completo de los 9 providers cloud probado runtime (Claude 5 adaptive, Gemini 3.5/3.6, Voxtral TTS, Kimi K3, DeepSeek V4, Cohere A+, Groq qwen3.6, xAI grok-4.3/4.5); generación de video nativa Grok; `LastError` poblado en todos los paths de error; driver MSSQL para RAG Vector.
 
 **v3.4 highlights:** registro selectivo de drivers restaurado — `TAiChatConnection` ya no fuerza la carga de todos los providers. Cada driver se auto-registra solo cuando se importa explícitamente. Para cargar todos los drivers de una vez, agregar `uMakerAi.Chat.Initializations` al `uses`.
 
@@ -244,7 +246,7 @@ uses uJSONHelper;  // JSON helper for older Delphi versions
 
 ### Feature Flags (uMakerAi.Version.inc)
 
-All `MAKERAI_HAS_*` feature flags are `True` by default (OpenAI, Whisper, Embeddings, Tool Calling, RAG Vector/Graph, MCP, Chat Connection, UI Components, Agents). Platform flags: Windows, Linux, Mobile are `True`; **macOS is `False`** (incomplete). `MAKERAI_API_LEVEL = 30`.
+All `MAKERAI_HAS_*` feature flags are `True` by default (OpenAI, Whisper, Embeddings, Tool Calling, RAG Vector/Graph, MCP, Chat Connection, UI Components, Agents). Platform flags: Windows, Linux, Mobile are `True`; **macOS is `False`** (incomplete). `MAKERAI_API_LEVEL = 35`.
 
 ## Thread Safety Notes
 

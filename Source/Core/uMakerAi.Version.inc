@@ -2,16 +2,16 @@
 // Version Information
 const
   MAKERAI_VERSION_MAJOR    = 3;
-  MAKERAI_VERSION_MINOR    = 4;
+  MAKERAI_VERSION_MINOR    = 5;
   MAKERAI_VERSION_RELEASE  = 0;
   MAKERAI_VERSION_BUILD    = 0;
 
 // Version String Formats
 const
-  MAKERAI_VERSION_SHORT    = '3.4';
-  MAKERAI_VERSION_FULL     = '3.4.0.0';
-  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.4.0.0';
-  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.4 - Realtime STT, SmartDispatch, Delphi 13.1 (May 2026)';
+  MAKERAI_VERSION_SHORT    = '3.5';
+  MAKERAI_VERSION_FULL     = '3.5.0.0';
+  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.5.0.0';
+  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.5 - Typed ModelConfig, Voice Suite, Provider Refresh (Aug 2026)';
 
 // Product Information
 const
@@ -22,7 +22,7 @@ const
 
 // Build Information
 const
-  MAKERAI_BUILD_DATE       = '2026-05-18';
+  MAKERAI_BUILD_DATE       = '2026-08-01';
   MAKERAI_BUILD_TIME       = '12:00:00';
   MAKERAI_BUILD_PLATFORM   = {$IFDEF WIN32}'Win32'{$ENDIF}
                             {$IFDEF WIN64}'Win64'{$ENDIF}
@@ -38,7 +38,7 @@ const
 
 // API Compatibility
 const
-  MAKERAI_API_LEVEL        = 34;        // Internal API level for compatibility
+  MAKERAI_API_LEVEL        = 35;        // Internal API level for compatibility
   MAKERAI_BREAKING_CHANGE  = False;     // True if this version has breaking changes
   MAKERAI_LEGACY_SUPPORT   = True;      // True = Support for v2.x components
 
@@ -146,6 +146,39 @@ const
   - NEW: TAiRealtimeConnection — universal connector for real-time STT (OpenAI WebSocket)
   - NEW: cmSmartDispatch chat mode — two-pass routing with automatic capability bridging
   - NEW: Demo 08-DriverRegistration illustrating driver registration behavior
+
+  Version 3.5.0 (2026-08-01)
+  - NEW: Typed ModelConfig channel — ModelCaps/SessionCaps/Tool_Active/ThinkingLevel
+         moved out of Params/RTTI into a typed surface with per-field user pins
+         (UserFields) and transparent compatibility migration. Single source of
+         truth for capability configuration.
+  - NEW: Full-duplex voice suite — TAiRealtimeVoiceBase shared base;
+         TAiGrokRealtimeChat (xAI Grok Voice speech-to-speech: function calling,
+         session resumption with replay, binary audio, ephemeral tokens);
+         TAiOpenAiRealtimeTranslate (continuous streaming speech translation);
+         gpt-transcribe / gpt-live-transcribe (Whisper successors)
+  - NEW: Grok native video generation — grok-imagine async job (POST
+         /videos/generations + polling + mp4 download as TAiMediaFile),
+         VideoDurationSeconds property; image generation via grok-imagine-image
+  - NEW: August 2026 provider refresh, runtime-tested per provider:
+         Claude 5 family (adaptive thinking, output_config.effort, FastMode,
+         compaction, server-side fallbacks, web_search_20260209), Gemini 3.5/3.6
+         + Nano Banana GA, Mistral Voxtral TTS + OCR 4, Kimi K3 (top_p fix),
+         DeepSeek V4 (explicit thinking control), Cohere Command A+ /
+         north-mini-code (thinking capture), Groq qwen3.6-27b, xAI grok-4.3/4.5/
+         build with full catalog turnover and compatibility aliases
+  - NEW: MSSQL driver for RAG Vector (FireDAC SQL Server)
+  - NEW: Agents hardening (from MakerFlow review): strict JSON graph validation,
+         public RTTI mapper TAiToolParams, [TSecret] attribute, out_failure in
+         conditional mode, Compile no longer clears the Blackboard
+  - NEW: ChatTools single surface with OnChange propagation; ToolCall.ResMsg
+         available in streaming; media delivered at OnReceiveDataEnd
+  - FIX: LastError now populated on every error path (DoError assigns
+         FLastError) — synchronous callers can diagnose HTTP 4xx/5xx
+  - FIX: Cohere synchronous tool-calling returned empty (second round now
+         reuses the same ResMsg, base pattern)
+  - FIX: FreeNotification audit across components; TAiMemory usable without
+         Connection
 
 }
 {******************************************************************************}
