@@ -1467,30 +1467,45 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Kimi', 'Max_Tokens',  '16000');
   TAiChatFactory.Instance.RegisterUserParam('Kimi', 'Tool_Active', 'True');
   TAiChatFactory.Instance.RegisterUserParam('Kimi', 'Temperature', '1');
-  TAiChatFactory.Instance.RegisterUserParam('Kimi', 'top_p', '0.95');
+  // top_p ELIMINADO de los defaults: la familia nueva (k3/k2.6/k2.7) devuelve
+  // 400 si se envia top_p (solo acepta temperature) — verificado runtime ago 2026
   TAiChatFactory.Instance.RegisterUserParam('Kimi', 'ModelCaps',   '[]');
   TAiChatFactory.Instance.RegisterUserParam('Kimi', 'SessionCaps', '[]');
 
-  // ------- Kimi K2.6 (256K ctx, texto + tools, 300 pasos de agente) ------
-  // kimi-k2.6: ultimo modelo, mayor estabilidad en tareas agenticas
-  // kimi-k2.6 hereda defaults globales (Tool_Active=True, ModelCaps=[])
+  // ------- Kimi K3 (jul 16/2026) -- flagship, 1M ctx  [MODELO ACTUAL] ------
+  // Sucesor de la familia K2 (~2.8T MoE). Precio plano en todo el contexto:
+  // $3/M input (cache-miss), $0.30/M cache-hit, $15/M output.
+  Model := 'kimi-k3';
+  TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'Max_Tokens',   '16000');
+  TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'ModelCaps',    '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'SessionCaps',  '[cap_Image, cap_Reasoning]');
 
-  // ------- Kimi K2 (256K ctx, texto + tools) ------
-  // kimi-k2: hereda defaults globales (legacy)
+  // ------- Kimi K2.7 Code (jul 2026) -- coding multimodal ------
+  Model := 'kimi-k2.7-code';
+  TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'ModelCaps',    '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'SessionCaps',  '[cap_Image]');
 
-  // ------- Kimi K2.5 (256K ctx, vision + PDF + reasoning + tools) ------
+  Model := 'kimi-k2.7-code-highspeed';
+  TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'ModelCaps',    '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'SessionCaps',  '[cap_Image]');
+
+  // ------- Kimi K2.6 (256K ctx, vision + texto + tools) ------
+  Model := 'kimi-k2.6';
+  TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'ModelCaps',    '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'SessionCaps',  '[cap_Image]');
+
+  // kimi-latest: alias movil al modelo mas reciente (hereda defaults)
+
+  // ------- Kimi K2.5 -- RETIRA el 31 ago 2026 (migrar a kimi-k3) ------
   Model := 'kimi-k2.5';
   TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'ModelCaps',    '[cap_Image, cap_Pdf, cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'SessionCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'ThinkingLevel', 'tlMedium');
 
-  // ------- Kimi K2 Thinking (256K ctx, reasoning + tools, sin vision) ------
-  Model := 'kimi-k2-thinking';
-  TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'ModelCaps',    '[cap_Reasoning]');
-  TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'SessionCaps',  '[cap_Reasoning]');
-  TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'ThinkingLevel', 'tlMedium');
+  // RETIRADOS del API (jul 2026): kimi-k2 y kimi-k2-thinking ya no existen
+  // en /v1/models — entradas eliminadas del registro.
 
-  // ------- Moonshot V1 Legacy (texto puro, sin tools) ------
+  // ------- Moonshot V1 Legacy -- SUNSET TOTAL el 31 ago 2026 ------
   Model := 'moonshot-v1-8k';
   TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'Max_Tokens',  '4096');
   TAiChatFactory.Instance.RegisterUserParam('Kimi', Model, 'Tool_Active', 'False');

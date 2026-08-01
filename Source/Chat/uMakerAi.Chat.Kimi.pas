@@ -78,8 +78,8 @@ class procedure TAiKimiChat.RegisterDefaultParams(Params: TStrings);
 begin
   Params.Clear;
   Params.Add('ApiKey=@KIMI_API_KEY');
-  Params.Add('Model=kimi-k2');
-  Params.Add('Max_Tokens=4096');
+  Params.Add('Model=kimi-k3');
+  Params.Add('Max_Tokens=16000');
   Params.Add('URL=' + GlAIUrl);
 end;
 
@@ -92,7 +92,11 @@ constructor TAiKimiChat.Create(Sender: TComponent);
 begin
   inherited;
   ApiKey := '@KIMI_API_KEY';
-  Model := 'kimi-k2';
+  // kimi-k2 fue retirado del API (jul 2026); kimi-k3 es el flagship actual
+  Model := 'kimi-k3';
+  // La familia k3/k2.6/k2.7 devuelve 400 si el request incluye top_p (solo
+  // acepta temperature). Top_p=0 hace que la base no lo serialice.
+  Top_p := 0;
   Url := GlAIUrl;
 end;
 

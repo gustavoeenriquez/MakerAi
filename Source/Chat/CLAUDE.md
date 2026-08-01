@@ -282,11 +282,14 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - Sin visión en la API pública (DeepSeek-VL2 no disponible vía api.deepseek.com)
 
 ### Kimi (Moonshot AI)
-- `kimi-k2`: texto + tools, 256K ctx (default del driver)
-- `kimi-k2.5`: vision + PDF + reasoning + tools, MoE 1T params activos 32B
-- `kimi-k2-thinking`: reasoning + tools, sin visión
-- `moonshot-v1-*`: legacy, sin tools (`Tool_Active=False`)
-- `moonshot-v1-*-vision-preview`: visión vía base64, sin tools
+**Actualizado ago 2026, probado runtime 4/4.** REGLA CRÍTICA descubierta empíricamente: la familia nueva (k3/k2.6/k2.7) devuelve **400 si el request incluye `top_p`** (solo acepta `temperature`) — el default global `top_p` se eliminó del registry y el constructor fija `Top_p := 0`. Todos los modelos nuevos devuelven `reasoning_content` y necesitan `max_tokens` amplio (con presupuesto corto el razonamiento lo consume y `content` llega vacío con `finish=length`).
+- `kimi-k3` (jul 16/2026): **flagship y default del driver**, 1M ctx, visión + reasoning (probado). Precio plano: $3/M input, $0.30/M cache-hit, $15/M output
+- `kimi-k2.7-code` / `-highspeed`: coding multimodal (probado — genera Delphi correcto)
+- `kimi-k2.6`: visión + texto + tools (probado)
+- `kimi-latest`: alias móvil
+- `kimi-k2.5`: **RETIRA 31 ago 2026** → migrar a kimi-k3
+- `kimi-k2` y `kimi-k2-thinking`: **YA RETIRADOS** del API (entradas eliminadas del registry)
+- `moonshot-v1-*` (+vision-preview): **SUNSET TOTAL 31 ago 2026**
 
 ### Cohere
 - `command-a-03-2025`: texto + tools (flagship, 256K ctx)
