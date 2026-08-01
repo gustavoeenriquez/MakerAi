@@ -1756,6 +1756,10 @@ end;
 
 procedure TAiChat.DoError(const ErrorMsg: string; E: Exception);
 begin
+  // Los llamadores sincronos (consolas, scripts) no tienen OnError asignado y
+  // RunNew traga la excepcion: LastError es su unica via para ver el detalle.
+  FLastError := ErrorMsg;
+
   DoStateChange(acsError, ErrorMsg);
 
   if Assigned(FOnError) then
