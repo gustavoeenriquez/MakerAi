@@ -280,7 +280,7 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - `grok-4.20-0309-reasoning`/`-non-reasoning`/`-multi-agent-0309`: 1M ctx
 - `grok-build-0.1`: coding con reasoning (probado), 256K ctx. $1/$2 por M
 - Imagen: `grok-imagine-image` ($0.02) / `-image-quality` ($0.05) → `SessionCaps=[cap_GenImage]`
-- Video: `grok-imagine-video` ($0.05/s) / `-video-1.5` ($0.08/s) → `SessionCaps=[cap_GenVideo]`
+- Video: `grok-imagine-video` ($0.05/s) / `-video-1.5` ($0.08/s) → `SessionCaps=[cap_GenVideo]`. **Implementado y probado**: `InternalRunNativeVideoGeneration` (job asíncrono `POST /videos/generations` + polling `GET /videos/{id}` + descarga del mp4 como `TAiMediaFile`); duración vía propiedad `VideoDurationSeconds` (default 5, máx 15)
 - **RETIRADOS ago 2026**: familia grok-3 completa, grok-4-0709, grok-4-fast-*, grok-4-1*, grok-code-fast-1, grok-2-vision, grok-2-image, grok-imagine-image-pro. Aliases registrados: grok-3/grok-4/grok-4-0709 → grok-4.3; grok-code-fast-1 → grok-build-0.1; grok-2-image(-1212) → grok-imagine-image; -image-pro → -image-quality (probado vía alias)
 
 ### DeepSeek
