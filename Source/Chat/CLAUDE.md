@@ -295,11 +295,17 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - `moonshot-v1-*` (+vision-preview): **SUNSET TOTAL 31 ago 2026**
 
 ### Cohere
-- `command-a-03-2025`: texto + tools (flagship, 256K ctx)
-- `command-a-reasoning-08-2025`: reasoning + tools, 32K output
+**Actualizado ago 2026, probado runtime 5/5 (incl. tools).** Los modelos nuevos (a-plus, north, a-reasoning) razonan por defecto: el content trae bloque `type:'thinking'` antes del `text`. El driver lo controla en `InitChatCompletions`: `cap_Reasoning` → `thinking:{enabled}`; sin el cap → `disabled` (modo rápido), EXCEPTO command-a-plus que **no permite disabled** (falla con `INVALID_TOOL_GENERATION`). `ParseChat` y streaming capturan el thinking a `ReasoningContent` / `OnReceiveThinking`. FIX ago 2026: el retorno síncrono con tool calling llegaba vacío — `ExecuteAndRespondToToolCalls` ahora reutiliza el mismo `ResMsg` en el round 2 (patrón de la base `Run(Nil, ResMsg)`).
+- `command-a-plus-05-2026` [FLAGSHIP]: MoE 218B/25B, Apache 2.0, 436K ctx, visión + reasoning siempre activo (probados). $2.5/$10 por M
+- `north-mini-code-1-0`: coding, 436K ctx, razona por defecto (driver manda disabled sin cap_Reasoning; probado)
+- `command-a-03-2025`: texto + tools (288K ctx, default del driver)
+- `command-a-reasoning-08-2025`: reasoning + tools
 - `command-a-vision-07-2025`: visión, **sin tools** (`Tool_Active=False`)
 - `command-a-translate-08-2025`: traducción especializada, sin tools
-- `c4ai-aya-vision-8b/32b`: visión multilingual, sin tools
+- `c4ai-aya-expanse-32b` / `c4ai-aya-vision-32b`: multilingual, sin tools (los 8b YA NO están en el API)
+- `tiny-aya-global/earth/fire/water`: ligeros 8K ctx, sin tools
+- `cohere-transcribe-03-2026`: STT (endpoint transcriptions)
+- Rerank v4.0: `rerank-v4.0-fast`/`-pro` (32K ctx) vía `RerankModel` + método `Rerank()`
 
 ### Ollama
 - Default global: texto puro, sin tools (`Tool_Active=False`, `ModelCaps=[]`)

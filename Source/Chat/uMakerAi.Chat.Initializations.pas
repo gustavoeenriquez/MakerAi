@@ -1370,7 +1370,7 @@ Begin
 
   // ------------------------- COHERE ----------------------------------
   // https://docs.cohere.com/docs/models
-  // Ultima actualizacion: May 2026
+  // Ultima actualizacion: Ago 2026 (probado runtime)
   // ------------------------- COHERE ----------------------------------
 
   // --- Valores globales por defecto para todos los modelos Cohere ---
@@ -1380,8 +1380,22 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Cohere', 'ModelCaps',   '[]');
   TAiChatFactory.Instance.RegisterUserParam('Cohere', 'SessionCaps', '[]');
 
-  // ------- Command A (256K ctx, texto + tools) ------
-  // command-a-03-2025: hereda defaults globales
+  // ------- Command A+ (may 2026) [FLAGSHIP] ------
+  // command-a-plus-05-2026: MoE 218B (25B activos), Apache 2.0, 436K ctx.
+  // Vision + reasoning SIEMPRE activo (content trae bloque 'thinking' antes del
+  // 'text'; enviar thinking disabled falla con INVALID_TOOL_GENERATION).
+  // $2.5/M input, $10/M output.
+  Model := 'command-a-plus-05-2026';
+  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'ModelCaps',   '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'SessionCaps', '[cap_Image, cap_Reasoning]');
+
+  // ------- North Mini Code (436K ctx, coding + tools) ------
+  // north-mini-code-1-0: razona por defecto; sin cap_Reasoning el driver envia
+  // thinking disabled (modo rapido); agregar cap_Reasoning para razonar.
+  // north-mini-code-1-0: hereda defaults globales
+
+  // ------- Command A (288K ctx, texto + tools) ------
+  // command-a-03-2025: hereda defaults globales (default del driver)
 
   // ------- Command A Reasoning (256K ctx, texto + tools + reasoning) ------
   Model := 'command-a-reasoning-08-2025';
@@ -1403,23 +1417,34 @@ Begin
   // command-r7b-12-2024: hereda defaults globales
 
   // ------- Aya Expanse (texto multilingual, sin tools) ------
-  Model := 'c4ai-aya-expanse-8b';
-  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'Max_Tokens',  '4000');
-  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'Tool_Active', 'False');
-
+  // Los 8b (aya-expanse-8b / aya-vision-8b) ya NO estan en /v1/models (ago 2026)
   Model := 'c4ai-aya-expanse-32b';
   TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'Tool_Active', 'False');
 
-  // ------- Aya Vision (vision multilingual, sin tools) ------
-  Model := 'c4ai-aya-vision-8b';
-  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'ModelCaps',   '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'SessionCaps', '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'Tool_Active', 'False');
-
+  // ------- Aya Vision (vision multilingual, sin tools, 16K ctx) ------
   Model := 'c4ai-aya-vision-32b';
   TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'ModelCaps',   '[cap_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'SessionCaps', '[cap_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'Tool_Active', 'False');
+
+  // ------- Tiny Aya (8K ctx, multilingual ligeros, sin tools) ------
+  Model := 'tiny-aya-global';
+  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'Max_Tokens',  '4000');
+  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'Tool_Active', 'False');
+  // tiny-aya-earth / tiny-aya-fire / tiny-aya-water: variantes regionales, misma config
+  Model := 'tiny-aya-earth';
+  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'Max_Tokens',  '4000');
+  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'Tool_Active', 'False');
+  Model := 'tiny-aya-fire';
+  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'Max_Tokens',  '4000');
+  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'Tool_Active', 'False');
+  Model := 'tiny-aya-water';
+  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'Max_Tokens',  '4000');
+  TAiChatFactory.Instance.RegisterUserParam('Cohere', Model, 'Tool_Active', 'False');
+
+  // ------- Rerank v4.0 (ago 2026) ------
+  // rerank-v4.0-fast / rerank-v4.0-pro: 32K ctx (vs 4K de v3.x). Se usan via
+  // TCohereChat.RerankModel + metodo Rerank(); rerank-english-v3.0 sigue activo.
 
   // ------- Audio STT: cohere-transcribe (Mar 2026) ------
   // cap_Audio: procesa audio nativo; usar con ChatMode=cmTranscription
