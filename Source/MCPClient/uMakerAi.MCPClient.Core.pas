@@ -2457,6 +2457,7 @@ begin
     var
       Uri: TURI;
       Host, Path, Line, Request: string;
+      BearerToken, HeaderName, AuthLine: string;
       Port: Integer;
       Sock: TIdTCPClient;
     begin
@@ -2485,10 +2486,23 @@ begin
 
           // Send GET — do NOT send Connection: close so the server keeps the
           // TCP link open after the 81-byte handshake for future SSE events.
+          // La credencial va tambien en el GET del stream SSE: servidores como
+          // mkflowd exigen la clave en TODA peticion, no solo en los POST.
+          AuthLine := '';
+          BearerToken := GetParamByName('ApiBearerToken');
+          if (not BearerToken.IsEmpty) and (BearerToken <> '@MCPBearerToken') then
+          begin
+            HeaderName := GetParamByName('ApiHeaderName');
+            if HeaderName.IsEmpty then
+              HeaderName := 'Authorization';
+            AuthLine := HeaderName + ': Bearer ' + BearerToken + #13#10;
+          end;
+
           Request :=
             'GET ' + Path + ' HTTP/1.1' + #13#10 +
             'Host: ' + Host + ':' + IntToStr(Port) + #13#10 +
             'Accept: text/event-stream' + #13#10 +
+            AuthLine +
             'Cache-Control: no-cache' + #13#10 +
             'Connection: keep-alive' + #13#10 + #13#10;
           Sock.IOHandler.Write(Request);
