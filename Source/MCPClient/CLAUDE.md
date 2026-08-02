@@ -55,6 +55,20 @@ Notas:
 - Claves `_meta` llevan puntos: leerlas con `GetValue(nombre)` exacto, nunca
   variantes por path (`GetValue<T>`).
 
+### MRTR (Multi Round-Trip Requests, spec 2026-07-28)
+
+Si el servidor responde `resultType:'input_required'` en un `tools/call`:
+
+- Con `OnInputRequired` asignado (StdIO y HTTP), el cliente invoca el handler
+  con el mapa `inputRequests`, recoge `inputResponses` y **reintenta** el
+  request original con `inputResponses` + eco literal de `requestState`
+  (máx `MCP_MRTR_MAX_ROUNDS` = 3 rondas; id JSON-RPC nuevo por ronda).
+- Asignar `OnInputRequired` declara la capability `elicitation` en
+  `_meta.clientCapabilities` (la spec prohíbe al server pedir tipos no declarados).
+- Sin handler (o si el handler pone `AHandled=False`), el guard de
+  `ProcessAndExtractMedia` devuelve un error claro en vez de un resultado parcial.
+- El handler es `of object` (sin lambdas); no debe liberar los objetos recibidos.
+
 ## Key Patterns
 
 **Thread-Safe Messaging**: StdIo and SSE use `TThreadedQueue<TJSONObject>` for async response handling.

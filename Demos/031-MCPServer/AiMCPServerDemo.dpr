@@ -44,7 +44,8 @@ uses
   UMakerAi.MCPServer.SSE in '..\..\Source\MCPServer\UMakerAi.MCPServer.SSE.pas',
   uTool.FileAccess in 'uTool.FileAccess.pas',
   uTool.SysInfo in 'uTool.SysInfo.pas',
-  uTool.WorldTime in 'uTool.WorldTime.pas';
+  uTool.WorldTime in 'uTool.WorldTime.pas',
+  uTool.ConfirmDemo in 'uTool.ConfirmDemo.pas';
 
 var
   MCPServer: TAiMCPServer;
@@ -114,14 +115,16 @@ procedure RegisterAllToolsAndResources(ALogicServer: TAiMCPServer);
 begin
   if not Assigned(ALogicServer) then
     Exit;
-  WriteLn('Registering tools...');
+  // stderr: en modo stdio, stdout es exclusivo del protocolo MCP.
+  WriteLn(ErrOutput, 'Registering tools...');
 
   // Reutilizamos tus herramientas existentes sin modificar una sola línea de código
   uTool.FileAccess.RegisterTools(ALogicServer);
   uTool.SysInfo.RegisterTools(ALogicServer);
   uTool.WorldTime.RegisterWorldTimeTool(ALogicServer);
+  uTool.ConfirmDemo.RegisterConfirmDemoTool(ALogicServer);
 
-  WriteLn('Registration complete.');
+  WriteLn(ErrOutput, 'Registration complete.');
 end;
 
 // --- Programa Principal ---

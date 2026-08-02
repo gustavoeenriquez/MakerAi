@@ -68,6 +68,8 @@ const
   // Codigos de error del rango reservado MCP (-32020..-32099)
   MCP_ERROR_HEADER_MISMATCH = -32020;
   MCP_ERROR_UNSUPPORTED_PROTOCOL_VERSION = -32022;
+  // Maximo de rondas del patron MRTR (input_required -> reintento) por tool call
+  MCP_MRTR_MAX_ROUNDS = 3;
 
 type
 
@@ -80,6 +82,15 @@ type
 
   // Callback de billing: se invoca tras cada CallTool exitoso con el nombre del tool.
   TMCPToolBillingProc = reference to procedure(const AToolName: string);
+
+  // MCP 2026-07-28 (patron MRTR): el servidor respondio resultType='input_required'.
+  // El handler debe poblar AInputResponses (mapa id->resultado, p.ej. ElicitResult
+  // {"action":"accept","content":{...}}) a partir de AInputRequests (mapa
+  // id->request; puede ser nil si el servidor solo pide reintento con requestState).
+  // AHandled=False cancela el reintento. Ambos objetos pertenecen al cliente:
+  // NO liberarlos en el handler.
+  TMCPInputRequiredEvent = procedure(Sender: TObject; const AToolName: string;
+    AInputRequests, AInputResponses: TJSONObject; var AHandled: Boolean) of object;
 
   TMCPClientCustom = class(TComponent)
   private
@@ -125,10 +136,16 @@ type
     // '' = sin sondear; MCP_PROTOCOL_VERSION_MODERN = servidor moderno
     // (stateless); MCP_PROTOCOL_LEGACY = servidor con handshake initialize.
     FNegotiatedProtocol: string;
+    // MRTR: handler de elicitation/input_required (opt-in)
+    FOnInputRequired: TMCPInputRequiredEvent;
     function IsModernMode: Boolean;
     function BuildModernMeta: TJSONObject;
     procedure AttachModernMeta(AParams: TJSONObject);
     class function IsModernErrorCode(ACode: Integer): Boolean; static;
+    // MRTR: True si AResult es un InputRequiredResult; extrae inputRequests
+    // (puntero DENTRO de AResult, no liberar) y requestState.
+    class function TryGetInputRequired(AResult: TJSONObject;
+      out AInputRequests: TJSONObject; out ARequestState: string): Boolean; static;
     procedure DoLog(const Msg: string); virtual;
     procedure DoStatusUpdate(const StatusMsg: string); virtual;
     function IsBinaryContentType(const ContentType: string): Boolean;
@@ -194,6 +211,12 @@ type
     property OnLog: TMCPLogEvent read FOnLog write FOnLog;
     property OnStatusUpdate: TMCPStatusEvent read FOnStatusUpdate write FOnStatusUpdate;
     property OnStreamMessage: TMCPStreamMessageEvent read FOnStreamMessage write FOnStreamMessage;
+    // MCP 2026-07-28 (MRTR): si se asigna, el cliente resuelve los
+    // input_required reintentando el tools/call con las respuestas del handler
+    // (max MCP_MRTR_MAX_ROUNDS rondas). Sin handler, un input_required se
+    // reporta como error claro. Asignarlo tambien declara la capability
+    // 'elicitation' en _meta.clientCapabilities.
+    property OnInputRequired: TMCPInputRequiredEvent read FOnInputRequired write FOnInputRequired;
   end;
 
   // --- Implementaci?n del Protocolo STDI/O ---
@@ -744,7 +767,7 @@ end;
 // El llamador toma posesion del objeto devuelto.
 function TMCPClientCustom.BuildModernMeta: TJSONObject;
 var
-  LClientInfo: TJSONObject;
+  LClientInfo, LCaps: TJSONObject;
 begin
   Result := TJSONObject.Create;
   Result.AddPair(MCP_META_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_MODERN);
@@ -752,7 +775,12 @@ begin
   LClientInfo.AddPair('name', 'MakerAI Delphi Client ' + Self.Name);
   LClientInfo.AddPair('version', '3.5');
   Result.AddPair(MCP_META_CLIENT_INFO, LClientInfo);
-  Result.AddPair(MCP_META_CLIENT_CAPABILITIES, TJSONObject.Create);
+  LCaps := TJSONObject.Create;
+  // MRTR: solo declaramos elicitation si hay handler — la spec prohibe al
+  // servidor enviar inputRequests de tipos que el cliente no declaro.
+  if Assigned(FOnInputRequired) then
+    LCaps.AddPair('elicitation', TJSONObject.Create);
+  Result.AddPair(MCP_META_CLIENT_CAPABILITIES, LCaps);
 end;
 
 // Inyecta _meta en los params cuando el modo negociado es moderno. Si el
@@ -789,6 +817,26 @@ end;
 class function TMCPClientCustom.IsModernErrorCode(ACode: Integer): Boolean;
 begin
   Result := (ACode <= -32020) and (ACode >= -32099);
+end;
+
+// MRTR: detecta un InputRequiredResult. AInputRequests apunta DENTRO de
+// AResult (no liberar; invalido tras liberar AResult). ARequestState es el
+// estado opaco que DEBE ecoarse tal cual en el reintento.
+class function TMCPClientCustom.TryGetInputRequired(AResult: TJSONObject;
+  out AInputRequests: TJSONObject; out ARequestState: string): Boolean;
+var
+  V: TJSONValue;
+begin
+  AInputRequests := nil;
+  ARequestState := '';
+  Result := Assigned(AResult) and
+    (AResult.GetValue<string>('resultType', '') = 'input_required');
+  if not Result then
+    Exit;
+  V := AResult.GetValue('inputRequests');
+  if V is TJSONObject then
+    AInputRequests := TJSONObject(V);
+  ARequestState := AResult.GetValue<string>('requestState', '');
 end;
 
 procedure TMCPClientCustom.SetInitialized(const Value: Boolean);
@@ -1337,6 +1385,10 @@ function TMCPClientStdIo.InternalCallTool(const AToolName: string; AArguments: T
 var
   RequestObj, Response: TJSONObject;
   ResultPair: TJSonValue;
+  LRound: Integer;
+  LInputResponses, LReqs, RawResult: TJSONObject;
+  LState: string;
+  LHandled: Boolean;
 begin
   Result := nil;
   if not IsServerRunning then
@@ -1344,48 +1396,98 @@ begin
     FreeAndNil(AArguments);
     Exit;
   end;
-  Inc(FRequestIDCounter);
-  RequestObj := TJSONObject.Create;
+
+  // MCP 2026-07-28 (MRTR): loop de reintento. Si el servidor responde
+  // input_required y hay OnInputRequired, se repite el tools/call con las
+  // inputResponses del handler y el eco de requestState (max N rondas).
+  LInputResponses := nil;
+  LState := '';
   try
-    RequestObj.AddPair('jsonrpc', '2.0');
-    RequestObj.AddPair('id', FRequestIDCounter);
-    RequestObj.AddPair('method', 'tools/call');
-
-    var
-    LParams := TJSONObject.Create;
-    RequestObj.AddPair('params', LParams);
-    LParams.AddPair('name', TJSONString.Create(AToolName));
-    // Clonar AArguments: el caller sigue siendo owner del original
-    if Assigned(AArguments) then
-      LParams.AddPair('arguments', AArguments.Clone as TJSONValue)
-    else
-      LParams.AddPair('arguments', TJSONObject.Create);
-    AttachModernMeta(LParams); // MCP 2026-07-28: _meta en cada request moderno
-
-    DoLog(Format('Calling tool "%s"...', [AToolName]));
-    InternalSendRawMessage(RequestObj.ToJSON);
-
-    // Usar timeout generoso para tool calls: operaciones de red (SMTP, HTTP, SSH)
-    // pueden tardar mucho más que el handshake de inicialización.
-    // Mínimo 60s; si el parámetro Timeout está configurado más alto, usarlo.
-    var LCallTimeout := StrToIntDef(GetParamByName('Timeout'), 60000);
-    if LCallTimeout < 60000 then LCallTimeout := 60000;
-    DoLog(Format('Waiting for tool response (timeout=%dms)...', [LCallTimeout]));
-    Response := InternalReceiveJSONResponse(FRequestIDCounter, Cardinal(LCallTimeout));
-
-    if Assigned(Response) then
+    for LRound := 1 to MCP_MRTR_MAX_ROUNDS do
+    begin
+      Inc(FRequestIDCounter);
+      RequestObj := TJSONObject.Create;
       try
-        if (Response is TJSONObject) and TJSONObject(Response).TryGetValue('result', ResultPair) and (ResultPair is TJSONObject) then
+        RequestObj.AddPair('jsonrpc', '2.0');
+        RequestObj.AddPair('id', FRequestIDCounter);
+        RequestObj.AddPair('method', 'tools/call');
+
+        var
+        LParams := TJSONObject.Create;
+        RequestObj.AddPair('params', LParams);
+        LParams.AddPair('name', TJSONString.Create(AToolName));
+        // Clonar AArguments: el caller sigue siendo owner del original
+        if Assigned(AArguments) then
+          LParams.AddPair('arguments', AArguments.Clone as TJSONValue)
+        else
+          LParams.AddPair('arguments', TJSONObject.Create);
+        AttachModernMeta(LParams); // MCP 2026-07-28: _meta en cada request moderno
+        if Assigned(LInputResponses) then
         begin
-          // Result := TJSONObject(ResultPair.Clone); // Clonar para el llamador
+          LParams.AddPair('inputResponses', LInputResponses);
+          LInputResponses := nil; // ahora es propiedad del request
+        end;
+        if LState <> '' then
+          LParams.AddPair('requestState', LState); // eco literal, sin inspeccionar
+
+        DoLog(Format('Calling tool "%s" (ronda %d)...', [AToolName, LRound]));
+        InternalSendRawMessage(RequestObj.ToJSON);
+
+        // Usar timeout generoso para tool calls: operaciones de red (SMTP, HTTP, SSH)
+        // pueden tardar mucho más que el handshake de inicialización.
+        // Mínimo 60s; si el parámetro Timeout está configurado más alto, usarlo.
+        var LCallTimeout := StrToIntDef(GetParamByName('Timeout'), 60000);
+        if LCallTimeout < 60000 then LCallTimeout := 60000;
+        DoLog(Format('Waiting for tool response (timeout=%dms)...', [LCallTimeout]));
+        Response := InternalReceiveJSONResponse(FRequestIDCounter, Cardinal(LCallTimeout));
+      finally
+        RequestObj.Free;
+      end;
+
+      if not Assigned(Response) then
+        Exit; // timeout o sin respuesta
+
+      try
+        if Response.TryGetValue('result', ResultPair) and (ResultPair is TJSONObject) then
+        begin
+          RawResult := TJSONObject(ResultPair);
+
+          // MRTR: el servidor pide informacion adicional?
+          if TryGetInputRequired(RawResult, LReqs, LState) then
+          begin
+            if Assigned(LReqs) and Assigned(FOnInputRequired) then
+            begin
+              LInputResponses := TJSONObject.Create;
+              LHandled := False;
+              FOnInputRequired(Self, AToolName, LReqs, LInputResponses, LHandled);
+              if not LHandled then
+              begin
+                FreeAndNil(LInputResponses);
+                // Cancelado por el handler: el guard produce un error claro
+                Result := ProcessAndExtractMedia(RawResult, AExtractedMedia);
+                Exit;
+              end;
+              Continue; // reintentar con las respuestas
+            end
+            else if not Assigned(LReqs) then
+              Continue // sin inputRequests: la spec permite reintento inmediato
+            else
+            begin
+              // Sin handler asignado: error claro via el guard
+              Result := ProcessAndExtractMedia(RawResult, AExtractedMedia);
+              Exit;
+            end;
+          end;
+
           // Separa la respuesta de los archivos binarios que pasar?n a la respuesta como mediafiles el el mensaje de respuesta
-          Result := ProcessAndExtractMedia(TJSONObject(ResultPair), AExtractedMedia);
+          Result := ProcessAndExtractMedia(RawResult, AExtractedMedia);
+          Exit;
         end
         else
         begin
           var
             LError: TJSONObject;
-          if (Response is TJSONObject) and TJSONObject(Response).TryGetValue<TJSONObject>('error', LError) then
+          if Response.TryGetValue<TJSONObject>('error', LError) then
           begin
             DoLog(Format('Server error calling "%s": %s', [AToolName, LError.ToJSON]));
             // Devolver el error como resultado para que el LLM pueda informar al usuario
@@ -1394,12 +1496,19 @@ begin
           end
           else
             DoLog(Format('Invalid server response for "%s": %s', [AToolName, Response.ToJSON]));
+          Exit;
         end;
       finally
         Response.Free;
       end;
+    end;
+
+    // Rondas MRTR agotadas sin resultado final
+    DoLog(Format('MRTR: rondas agotadas (%d) para "%s".', [MCP_MRTR_MAX_ROUNDS, AToolName]));
+    Result := TJSONObject.Create;
+    Result.AddPair('error', Format('MCP MRTR: max rounds (%d) exceeded for tool "%s".', [MCP_MRTR_MAX_ROUNDS, AToolName]));
   finally
-    RequestObj.Free;
+    LInputResponses.Free; // solo queda asignado si el loop no lo consumio
   end;
 end;
 
@@ -1862,6 +1971,10 @@ function TMCPClientHttp.CallTool(const AToolName: string; AArguments: TJSONObjec
 var
   LParams: TJSONObject;
   LResultRaw: TJSONObject;
+  LRound: Integer;
+  LInputResponses, LReqs: TJSONObject;
+  LState: string;
+  LHandled: Boolean;
 begin
   Result := nil;
   FLastError := '';
@@ -1869,25 +1982,81 @@ begin
   DoLog(Format('Executing CallTool via HTTP: %s', [AToolName]));
   DoStatusUpdate(Format('Calling tool: %s...', [AToolName]));
 
-  LParams := TJSONObject.Create; // LParams toma la propiedad de AArguments. AArguments no debe ser liberado por el llamador.
+  // Este metodo toma posesion de AArguments (el llamador NO debe liberarlo).
+  // MCP 2026-07-28 (MRTR): loop de reintento con inputResponses + eco de
+  // requestState cuando el servidor responde input_required (max N rondas).
+  LInputResponses := nil;
+  LState := '';
   try
-    LParams.AddPair('name', TJSONString.Create(AToolName));
-    LParams.AddPair('arguments', AArguments); // AArguments es ahora propiedad de LParams
+    try
+      for LRound := 1 to MCP_MRTR_MAX_ROUNDS do
+      begin
+        LParams := TJSONObject.Create;
+        LParams.AddPair('name', TJSONString.Create(AToolName));
+        if Assigned(AArguments) then
+          LParams.AddPair('arguments', AArguments.Clone as TJSONValue)
+        else
+          LParams.AddPair('arguments', TJSONObject.Create);
+        if Assigned(LInputResponses) then
+        begin
+          LParams.AddPair('inputResponses', LInputResponses);
+          LInputResponses := nil; // ahora es propiedad del request
+        end;
+        if LState <> '' then
+          LParams.AddPair('requestState', LState); // eco literal, sin inspeccionar
 
-    LResultRaw := InternalSendRequest('tools/call', LParams); // InternalSendRequest libera LParams
+        LResultRaw := InternalSendRequest('tools/call', LParams); // InternalSendRequest libera LParams
+        if not Assigned(LResultRaw) then
+          Exit;
 
-    if Assigned(LResultRaw) then
-    begin
-      Result := ProcessAndExtractMedia(LResultRaw, AExtractedMedia);
-      FreeAndNil(LResultRaw); // Liberar el resultado RAW despu?s de procesarlo
+        try
+          // MRTR: el servidor pide informacion adicional?
+          if TryGetInputRequired(LResultRaw, LReqs, LState) then
+          begin
+            if Assigned(LReqs) and Assigned(FOnInputRequired) then
+            begin
+              LInputResponses := TJSONObject.Create;
+              LHandled := False;
+              FOnInputRequired(Self, AToolName, LReqs, LInputResponses, LHandled);
+              if not LHandled then
+              begin
+                FreeAndNil(LInputResponses);
+                Result := ProcessAndExtractMedia(LResultRaw, AExtractedMedia); // guard: error claro
+                Exit;
+              end;
+              Continue; // reintentar con las respuestas
+            end
+            else if not Assigned(LReqs) then
+              Continue // sin inputRequests: la spec permite reintento inmediato
+            else
+            begin
+              Result := ProcessAndExtractMedia(LResultRaw, AExtractedMedia); // sin handler: error claro
+              Exit;
+            end;
+          end;
+
+          Result := ProcessAndExtractMedia(LResultRaw, AExtractedMedia);
+          Exit;
+        finally
+          FreeAndNil(LResultRaw); // Liberar el resultado RAW despu?s de procesarlo
+        end;
+      end;
+
+      // Rondas MRTR agotadas sin resultado final
+      DoLog(Format('MRTR: rondas agotadas (%d) para "%s".', [MCP_MRTR_MAX_ROUNDS, AToolName]));
+      Result := TJSONObject.Create;
+      Result.AddPair('error', Format('MCP MRTR: max rounds (%d) exceeded for tool "%s".', [MCP_MRTR_MAX_ROUNDS, AToolName]));
+    except
+      on E: Exception do
+      begin
+        FLastError := Format('Error calling tool "%s": %s', [AToolName, E.Message]);
+        DoLog(FLastError);
+        Result := nil; // Retornar nil en caso de error
+      end;
     end;
-  except
-    on E: Exception do
-    begin
-      FLastError := Format('Error calling tool "%s": %s', [AToolName, E.Message]);
-      DoLog(FLastError);
-      Result := nil; // Retornar nil en caso de error
-    end;
+  finally
+    LInputResponses.Free; // solo queda asignado si el loop no lo consumio
+    AArguments.Free; // posesion de este metodo (antes la consumia LParams; ahora se clona por ronda)
   end;
 
   if Assigned(Result) then

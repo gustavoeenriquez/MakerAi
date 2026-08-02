@@ -59,6 +59,15 @@ type
     // y el transporte soporta notificaciones. Los tools lo invocan si Assigned para
     // emitir notifications/progress sin conocer la sesi?n ni el token.
     OnProgress: TAiMCPProgressProc;
+    // --- MCP 2026-07-28, patron MRTR ---
+    // Si el request tools/call es un reintento MRTR, aqui llegan las respuestas
+    // del cliente a los inputRequests previos (mapa id->resultado, p.ej.
+    // ElicitResult) y el requestState opaco que el tool emitio. InputResponses
+    // pertenece al request: los tools NO deben liberarlo ni retener la
+    // referencia. OJO: requestState viaja por el cliente y debe tratarse como
+    // entrada no confiable (proteger integridad si afecta autorizacion/logica).
+    InputResponses: TJSONObject;
+    RequestState: string;
   end;
 
   // Evento de validación custom (Layer 2).
@@ -1428,6 +1437,13 @@ begin
   // Progreso MCP: si el cliente envi? _meta.progressToken y el transporte
   // soporta notificaciones, el tool recibe OnProgress en su AuthContext.
   ExecContext := AAuthContext;
+
+  // MCP 2026-07-28 (MRTR): si es un reintento, inputResponses/requestState
+  // viajan como hermanos de name/arguments en params y se entregan al tool
+  // via AuthContext. El objeto pertenece al request: el tool no lo libera.
+  ExecContext.InputResponses := Params.GetValue<TJSONObject>('inputResponses', nil);
+  ExecContext.RequestState := Params.GetValue<string>('requestState', '');
+
   TokenJson := '';
   MetaObj := Params.GetValue<TJSONObject>('_meta', nil);
   if Assigned(MetaObj) then

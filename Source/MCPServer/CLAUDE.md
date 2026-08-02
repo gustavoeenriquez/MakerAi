@@ -172,6 +172,21 @@ con `GetValue<T>`/`TryGetValue<T>` (interpretan el punto como path).
 **Regla stdio:** stdout es exclusivo del protocolo; cualquier banner/log del
 servidor debe ir a stderr (ver fix del demo 031).
 
+### MRTR (Multi Round-Trip Requests, spec 2026-07-28)
+
+Un tool puede pedir informacion adicional al usuario (elicitation) devolviendo
+un `InputRequiredResult` en vez de ejecutar:
+
+- El tool devuelve `{resultType:'input_required', inputRequests:{id: ElicitRequest...},
+  requestState:'<opaco>'}` — `DecorateModernResult` respeta el `resultType` existente.
+- En el reintento, el server entrega `params.inputResponses` y `params.requestState`
+  al tool via `AuthContext.InputResponses` (TJSONObject del request — el tool NO lo
+  libera) y `AuthContext.RequestState`.
+- `requestState` viaja por el cliente: es entrada NO confiable. Proteger con
+  HMAC/AEAD si afecta autorizacion; un valor corrupto debe producir rechazo
+  limpio, nunca excepcion interna.
+- Ejemplo completo: `Demos/031-MCPServer/uTool.ConfirmDemo.pas` (tool `confirm_demo`).
+
 ## Demo Projects
 
 | Demo | Location | Description |
