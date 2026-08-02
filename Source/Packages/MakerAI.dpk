@@ -54,6 +54,8 @@ contains
   UMakerAi.Chat in '..\Core\UMakerAi.Chat.pas',
   uMakerAi.Core in '..\Core\uMakerAi.Core.pas',
   uMakerAi.Telemetry in '..\Core\uMakerAi.Telemetry.pas',
+  uMakerAi.A2A.Server in '..\Agents\uMakerAi.A2A.Server.pas',
+  uMakerAi.A2A.Client in '..\Agents\uMakerAi.A2A.Client.pas',
   uMakerAi.Embeddings in '..\Embeddings\uMakerAi.Embeddings.pas',
   uMakerAi.Prompts in '..\Core\uMakerAi.Prompts.pas',
   uMakerAi.Utils.CodeExtractor in '..\Core\uMakerAi.Utils.CodeExtractor.pas',
