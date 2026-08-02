@@ -351,6 +351,9 @@ type
     // --- Ejecuci?n durable (checkpoint / suspend-resume) ---
     FCheckpointer:       IAiCheckpointer;
     FCurrentThreadID:    string;
+    // Telemetria: traceparent del span del grafo en curso. Los nodos corren en
+    // workers del pool (sin contexto por hilo), asi que lo leen de aqui.
+    FRunTraceParent:     string;
     FCheckpointSeq:      Integer;  // protegido por FActiveTasksLock
     FSuspendedSteps:     TObjectList<TAiPendingStep>; // owned
     FSuspendedStepsLock: TCriticalSection;
@@ -469,7 +472,7 @@ procedure Register;
 
 implementation
 
-uses uMakerAi.Agents.EngineRegistry, uMakerAi.Agents.Attributes;
+uses uMakerAi.Agents.EngineRegistry, uMakerAi.Agents.Attributes, uMakerAi.Telemetry;
 
 {$IF CompilerVersion < 35}
 class function TInterlockedHelper.Exchange(var Target: Boolean; Value: Boolean): Boolean;
@@ -1894,6 +1897,13 @@ begin
   var LNewGUID: TGUID;
   CreateGUID(LNewGUID);
   FCurrentThreadID := GUIDToString(LNewGUID);
+
+  // Telemetria: span del run completo del grafo. El cierre ocurre en el
+  // finally de la tarea orquestadora; los nodos se anidan via FRunTraceParent.
+  var LGraphSpan := AiSpanStart('agent.graph ' + Name, skInternal);
+  AiSpanAttr(LGraphSpan, 'agent.graph.name', Name);
+  AiSpanAttr(LGraphSpan, 'agent.run.id', FCurrentThreadID);
+  FRunTraceParent := AiSpanTraceParent(LGraphSpan);
   FCheckpointSeq   := 0;
   FSuspendedStepsLock.Enter;
   try
@@ -1924,6 +1934,7 @@ begin
       // CAMBIO: Variable de tipo Enum
       FinalStatus: TAgentExecutionStatus;
       FinalException: Exception;
+      FinalErrorMsg: String; // Telemetria: copia segura del mensaje de error
       FinalOutput: String;
       HasPendingTasks: Boolean;
       CurrentTask: ITask;
@@ -2005,6 +2016,7 @@ begin
           begin
             Abort; // Detener cualquier nueva ejecuci?n
             FinalException := E;
+            FinalErrorMsg := E.Message;
 
             if E.Message.Contains('timed out') then
               FinalStatus := esTimeout
@@ -2036,6 +2048,15 @@ begin
         // Pasamos el Enum (FinalStatus) en lugar del string
         if Assigned(FOnFinish) then
           FOnFinish(Self, InitialInput, FinalOutput, FinalStatus, FinalException);
+
+        // Telemetria: cierre del span del grafo con el status final
+        AiSpanAttr(LGraphSpan, 'agent.run.status',
+          GetEnumName(TypeInfo(TAgentExecutionStatus), Ord(FinalStatus)));
+        if FinalStatus in [esError, esTimeout] then
+          AiSpanEnd(LGraphSpan, FinalErrorMsg)
+        else
+          AiSpanEnd(LGraphSpan);
+        FRunTraceParent := '';
 
         // Liberar el flag de ocupado
         TInterlocked.Exchange(FBusy, 0);
@@ -3264,10 +3285,26 @@ begin
     FSuspendContext := '';
     FOutput         := '';   // reset para soportar ejecuciones m?ltiples del mismo nodo
 
-    if Assigned(FOnExecute) then
-      FOnExecute(Self, aBeforeNode, aLink, Self.Input, FOutput)
-    else if Assigned(FTool) then
-      FTool.Run(Self, Self.Input, FOutput);
+    // Telemetria: span por nodo, hijo del span del grafo. Los workers del pool
+    // no comparten hilo con el orquestador: el parent viaja explicito.
+    var LNodeSpan := AiSpanStart('agent.node ' + Name, skInternal, FGraph.FRunTraceParent);
+    AiSpanAttr(LNodeSpan, 'agent.node.name', Name);
+    try
+      if Assigned(FOnExecute) then
+        FOnExecute(Self, aBeforeNode, aLink, Self.Input, FOutput)
+      else if Assigned(FTool) then
+        FTool.Run(Self, Self.Input, FOutput);
+
+      if FSuspended then
+        AiSpanAttr(LNodeSpan, 'agent.node.suspended', True);
+      AiSpanEnd(LNodeSpan);
+    except
+      on E: Exception do
+      begin
+        AiSpanEnd(LNodeSpan, E.Message);
+        raise;
+      end;
+    end;
 
     if FOutput = '' then
       FOutput := Input;
