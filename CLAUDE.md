@@ -18,7 +18,15 @@ MakerAI is an AI orchestration framework for Delphi developers (v3.5). It provid
 
 **Git workflow:** `master` is the main/release branch. `dev` is the active development branch. PRs target `master`.
 
-**Testing:** There is no formal test suite or CI/CD pipeline. Testing is done manually via the 18+ demo projects in `Demos/`. When modifying core functionality, verify changes by running relevant demos in the Delphi IDE.
+**Testing:** `Tests/RegressionSuite/` es la suite de regresión del framework (17 casos, in-process, sin API keys, < 1 s). Construida sobre `TAiEvalRunner`; cubre MCP dual-era + MRTR, agentes, A2A 1.0 + federación, guardrails y el propio runner de evals. Ejecutar antes de cada release:
+
+```bash
+msbuild Tests/RegressionSuite/MakerAiRegressionSuite.dproj /p:Config=Release /p:Platform=Win64
+Tests/RegressionSuite/Win64/Release/MakerAiRegressionSuite.exe        # exit 0 = verde
+Tests/RegressionSuite/Win64/Release/MakerAiRegressionSuite.exe --json report.json   # para CI
+```
+
+No hay pipeline CI/CD configurado. Los subsistemas visuales y los proveedores LLM reales se siguen verificando manualmente con los 19+ demos de `Demos/`.
 
 ## Building and Installation
 
@@ -439,4 +447,5 @@ Detailed documentation is available in `Docs/Version 3/`:
 | Directory | Documentation |
 |-----------|---------------|
 | [Demos/](Demos/CLAUDE.md) | Demo projects overview |
+| [Tests/RegressionSuite/](Tests/RegressionSuite/CLAUDE.md) | Suite de regresión (MCP, agentes, A2A, guardrails, evals) |
 | [Docs/](Docs/CLAUDE.md) | Documentation index |
