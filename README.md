@@ -1,4 +1,4 @@
-# MakerAI Suite v3.5 — The AI Ecosystem for Delphi
+# MakerAI Suite v3.6 — The AI Ecosystem for Delphi
 
 🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
 📖 **Manual:** [https://www.gustavoenriquez.com/book-makerai](https://www.gustavoenriquez.com/book-makerai) — available in English and Spanish
@@ -33,7 +33,31 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 ---
 
-## 🚀 What's New in v3.5
+## 🚀 What's New in v3.6
+
+### MCP Specification 2026-07-28 — Stateless, Dual-Era
+
+The Model Context Protocol dropped sessions and the `initialize` handshake. MakerAI implements the new **stateless** revision on both sides *and* keeps talking to legacy peers: clients probe with `server/discover` and fall back automatically; the server serves modern per-request `_meta` requests statelessly while the legacy handshake and session gating keep working. Includes the **MRTR** pattern, so a tool can pause and ask the user for confirmation (`OnInputRequired` on the client, `TAiAuthContext.InputResponses` on the server).
+
+### Observability — OpenTelemetry Tracing
+
+**`TAiTelemetry`** exports OTLP traces to any standard collector (Jaeger, Grafana Tempo, Langfuse, Arize Phoenix) following the **GenAI semantic conventions**. Spans cover chat turns with token usage, tool executions, agent graphs and nodes, RAG retrieval and MCP requests — with W3C `traceparent` propagated through MCP `_meta`, so a client and a server in different processes share one distributed trace. Opt-in, zero overhead when disabled.
+
+### A2A — Agent-to-Agent Protocol (first Delphi implementation)
+
+If MCP is the agent-to-*tool* layer, **A2A** (Linux Foundation) is the agent-to-*agent* layer. `TAiA2AServer` publishes any agent graph as a standard A2A agent (Agent Card + JSON-RPC), `TAiA2AClient` consumes remote agents, and `TAiA2ARemoteAgentTool` **federates**: a node in your graph can delegate its work to a remote agent — including one written in another language or framework. Demo: `072-A2AFederation`.
+
+### Guardrails & Evals
+
+**`TAiGuardrails`** intercepts every tool call before it executes (allowlists, blocklists, forbidden argument patterns, programmatic veto) — blocked calls never run and the LLM gets the reason so it can replan. **`TAiEvalRunner`** brings systematic evaluation: fluent test cases against any target, deterministic checks plus optional LLM-as-judge, with `ToJSON` reports for CI.
+
+### First Automated Regression Suite
+
+`Tests/RegressionSuite/` — 17 in-process cases covering MCP, agents, A2A, guardrails and evals. No API keys, under a second, exit code for CI. Built on `TAiEvalRunner` itself.
+
+---
+
+## What's New in v3.5
 
 ### Typed ModelConfig Channel
 
@@ -528,7 +552,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 
 ## 🔄 Changelog
 
-### Unreleased (dev)
+### v3.6.0 (2026-08-02)
 - New: **Regression suite — `Tests/RegressionSuite/`** — the framework finally has an automated safety net: 17 cases covering MCP dual-era + MRTR, agent graphs, A2A 1.0 + federation, guardrails and the evals runner itself. Fully in-process (spins up its own MCP and A2A servers, plus a legacy-only MCP server to exercise the dual-era fallback), no API keys, runs in under a second. Built **on `TAiEvalRunner`**, so it doubles as the canonical usage example. `--json` writes a CI-friendly report; `--otel` traces every case as an `eval.case` span
 - New: **Guardrails — `TAiGuardrails`** — policy layer that intercepts every tool call *before* execution (the single choke point in `TAiFunctions.DoCallFunction`, so it covers local functions, MCP tools and AutoMCP alike). Strict allowlist and blocklist with wildcard masks, forbidden substring patterns in tool arguments, and a programmatic `OnCheckToolCall` veto; blocked calls never execute and the LLM receives the reason as a JSON error so it can replan. `OnBlocked` for auditing, `BlockedCount` for metrics, and a `guardrail.blocked` span attribute. Assign via `TAiFunctions.Guardrails` (opt-in, zero impact when unassigned)
 - New: **Evals — `TAiEvalRunner`** — lightweight evaluation framework for AI pipelines: fluent test cases (`AddCase('x').Input(...).ExpectContains(...).ExpectRegex(...).ExpectMaxLength(...)`) run against a generic target function, so the same suite can evaluate a `TAiChat`, an agent graph, an MCP tool or an A2A agent. Deterministic checks plus optional **LLM-as-judge** (`ExpectJudge('criteria')` with a `Judge` chat). Reports offer `ToText` for consoles and `ToJSON` for CI, and each case emits an `eval.case` OTel span
