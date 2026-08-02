@@ -24,7 +24,7 @@ But on top of that, MakerAI is a **complete AI application ecosystem** that lets
 
 - **RAG pipelines** (vector and graph-based) with SQL-like query languages (VQL / GQL)
 - **Autonomous Agents** with graph orchestration, checkpoints, and human-in-the-loop approval
-- **MCP Servers and Clients** — expose or consume tools using the Model Context Protocol
+- **MCP Servers and Clients** — expose or consume tools using the Model Context Protocol (dual-era: stateless spec 2026-07-28 + legacy handshake)
 - **Native ChatTools** — bridge AI reasoning with deterministic real-world capabilities (PDF, Vision, Speech, Web Search, Shell, Computer Use)
 - **FMX Visual Components** — drop-in UI for multimodal chat interfaces
 - **Universal Connector** — switch providers at runtime without changing your application code
@@ -328,18 +328,24 @@ Graph-based multi-agent workflows with full thread safety:
 
 ### 🔗 MCP — Model Context Protocol
 
-Full implementation of the MCP standard for both consuming and exposing tools:
+Full **dual-era** implementation of the MCP standard for both consuming and exposing tools: supports the stateless **spec revision 2026-07-28** (per-request `_meta`, `server/discover`, MRTR elicitation) and interoperates automatically with legacy peers that still use the `initialize` handshake.
 
 **MCP Server** — expose Delphi functions as MCP tools, callable by any MCP client (Claude Desktop, AI agents, etc.):
-- Transports: **HTTP**, **SSE** (Server-Sent Events), **StdIO**, **Direct** (in-process)
+- Transports: **HTTP** (Streamable HTTP — stateless per spec 2026-07-28), **StdIO**, **Direct** (in-process), **SSE** (legacy — see deprecation note below)
+- Dual-era per request: modern clients are served stateless (per-request `_meta` identity + `OnClientConnect` vetting); legacy clients keep the `initialize` handshake and `Mcp-Session-Id` session gating
+- **MRTR** (Multi Round-Trip Requests): tools can pause and ask the user for confirmation or data via elicitation (`resultType: "input_required"` + opaque `requestState`) — working example in `Demos/031-MCPServer/uTool.ConfirmDemo.pas`
 - Bridge `TAiFunctions → IAiMCPTool` — any existing `TAiFunctions` component becomes an MCP server instantly
 - API Key authentication, CORS configuration
 - `TAiMCPResponseBuilder` for structured responses (text + files + media)
 - RTTI-based automatic JSON Schema generation from parameter classes
 
 **MCP Client** — consume any external MCP server from your Delphi app:
+- Dual-era probe: tries `server/discover` first and falls back to the legacy handshake automatically; the negotiated mode is exposed in `NegotiatedProtocol`
+- `OnInputRequired` event resolves MRTR elicitations (retry loop with `requestState` echo; assigning the handler declares the `elicitation` capability)
 - Connect to Claude Desktop tools, filesystem servers, database tools, etc.
 - Integrated into `TAiFunctions` component alongside native function definitions
+
+> **⚠️ SSE transport deprecation (spec 2026-07-28):** the classic HTTP+SSE transport (GET `/sse` + POST `/messages`) was formally moved to *Deprecated* state by MCP spec revision 2026-07-28 under the project's feature-lifecycle policy, which mandates a minimum 12-month window. Its **earliest possible removal from the spec is July 2027** — actual removal happens in the first spec revision published after that date, at the maintainers' discretion, and may come later. Removal deletes the transport from future spec revisions only: existing MakerAI SSE endpoints keep working between themselves, but third-party clients (Claude Desktop, official SDKs) will progressively drop it. **Use the HTTP or StdIO transports for anything new.** Note that SSE *as a streaming response format* survives inside Streamable HTTP — only the standalone HTTP+SSE transport is being retired.
 
 ### 🛠️ ChatTools — AI × Deterministic Capabilities
 
@@ -520,6 +526,13 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 ---
 
 ## 🔄 Changelog
+
+### Unreleased (dev)
+- New: **MCP spec 2026-07-28 (stateless) — dual-era support** — the server implements `server/discover`, per-request `_meta` (protocol version, client identity, capabilities), `resultType` + `serverInfo` on every result, `ttlMs`/`cacheScope` cache hints on list results, and the reserved error codes `-32020` (HeaderMismatch) / `-32022` (UnsupportedProtocolVersion with `data.supported`). Modern stateless requests bypass the session gate with per-request `OnClientConnect` vetting; the legacy `initialize` handshake + `Mcp-Session-Id` gating remain fully functional
+- New: **MCP client dual-era probe** — `TMCPClientStdIo` / `TMCPClientHttp` try `server/discover` and fall back to the legacy handshake automatically (`NegotiatedProtocol` exposes the result); modern requests carry `_meta` plus the `MCP-Protocol-Version` / `Mcp-Method` / `Mcp-Name` headers; the StdIO reader now rescues JSON-RPC embedded in noisy stdout lines
+- New: **MRTR (Multi Round-Trip Requests)** — tools can request user input via elicitation: the server plumbs `params.inputResponses` / `params.requestState` into `TAiAuthContext`; the client's new `OnInputRequired` event drives the retry loop (max 3 rounds, opaque `requestState` echo; assigning the handler declares the `elicitation` capability). New demo tool `confirm_demo` in `031-MCPServer`
+- Update: MCP spec alignment — deterministic `tools/list` / `resources/list` ordering (client caching + LLM prompt-cache friendly); unknown tool/resource now returns `-32602` Invalid Params; the 031 demo sends banners to stderr in stdio mode (stdout is protocol-only)
+- Note: the legacy **HTTP+SSE transport is formally Deprecated** by MCP spec 2026-07-28 (earliest removal from the spec: **July 2027**, 12-month minimum window); MakerAI keeps it as frozen legacy — prefer HTTP or StdIO for new work
 
 ### v3.5.0 (2026-08-01)
 - New: **Typed ModelConfig channel** — `ModelCaps`/`SessionCaps`/`Tool_Active`/`ThinkingLevel` moved out of Params/RTTI into a typed surface with per-field user pins (`UserFields`) and transparent compatibility migration
