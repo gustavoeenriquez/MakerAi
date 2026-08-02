@@ -15,6 +15,8 @@ The Agents module implements a graph-based autonomous agent orchestration framew
 | `uMakerAi.Agents.EngineRegistry.pas` | Singleton registries for tool discovery (`TEngineRegistry`, `TAgentHandlerRegistry`) |
 | `uMakerAi.Agents.GraphBuilder.pas` | `TGraphBuilder` parses JSON graph specs into runtime structures. `StrictValidation` (default True) raises `EAiGraphError` on structural defects (edge to missing node, undeclared port, >4 fanout outputs); set False for the legacy warn-and-drop behavior (fix M-02) |
 | `uMakerAi.Agents.DmGenerator.pas` | `TDataModuleGenerator` generates Delphi DataModule code from JSON graphs |
+| `uMakerAi.A2A.Server.pas` | `TAiA2AServer` (MVP spec A2A 1.0): expone un `TAIAgentManager` como agente A2A — Agent Card en `/.well-known/agent-card.json`, JSON-RPC `SendMessage`/`GetTask`/`CancelTask` (+ aliases 0.x); `esSuspended`→`TASK_STATE_INPUT_REQUIRED`; sin streaming (rechaza con UnsupportedOperationError) |
+| `uMakerAi.A2A.Client.pas` | `TAiA2AClient`: consume agentes A2A remotos — `FetchAgentCard`, `SendText` (artifact text + `LastTaskId`/`LastState`), `GetTask`/`CancelTask`. Incluye `TAiA2ARemoteAgentTool` (federacion): asignado como `Tool` de un nodo, delega el input del nodo en un agente A2A remoto; registrado en `TEngineRegistry` |
 
 ## Core Classes
 

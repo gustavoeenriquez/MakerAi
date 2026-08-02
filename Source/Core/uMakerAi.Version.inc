@@ -2,16 +2,16 @@
 // Version Information
 const
   MAKERAI_VERSION_MAJOR    = 3;
-  MAKERAI_VERSION_MINOR    = 5;
+  MAKERAI_VERSION_MINOR    = 6;
   MAKERAI_VERSION_RELEASE  = 0;
   MAKERAI_VERSION_BUILD    = 0;
 
 // Version String Formats
 const
-  MAKERAI_VERSION_SHORT    = '3.5';
-  MAKERAI_VERSION_FULL     = '3.5.0.0';
-  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.5.0.0';
-  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.5 - Typed ModelConfig, Voice Suite, Provider Refresh (Aug 2026)';
+  MAKERAI_VERSION_SHORT    = '3.6';
+  MAKERAI_VERSION_FULL     = '3.6.0.0';
+  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.6.0.0';
+  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.6 - MCP 2026 Stateless, OpenTelemetry, A2A, Guardrails & Evals (Aug 2026)';
 
 // Product Information
 const
@@ -22,7 +22,7 @@ const
 
 // Build Information
 const
-  MAKERAI_BUILD_DATE       = '2026-08-01';
+  MAKERAI_BUILD_DATE       = '2026-08-02';
   MAKERAI_BUILD_TIME       = '12:00:00';
   MAKERAI_BUILD_PLATFORM   = {$IFDEF WIN32}'Win32'{$ENDIF}
                             {$IFDEF WIN64}'Win64'{$ENDIF}
@@ -38,7 +38,7 @@ const
 
 // API Compatibility
 const
-  MAKERAI_API_LEVEL        = 35;        // Internal API level for compatibility
+  MAKERAI_API_LEVEL        = 36;        // Internal API level for compatibility
   MAKERAI_BREAKING_CHANGE  = False;     // True if this version has breaking changes
   MAKERAI_LEGACY_SUPPORT   = True;      // True = Support for v2.x components
 
@@ -180,6 +180,51 @@ const
   - FIX: FreeNotification audit across components; TAiMemory usable without
          Connection
 
+  Version 3.6.0 (2026-08-02)
+  - NEW: MCP specification 2026-07-28 (stateless) with dual-era support.
+         Server implements server/discover, per-request _meta (protocol
+         version, client identity and capabilities), resultType + serverInfo
+         on every result, ttlMs/cacheScope cache hints and the reserved error
+         codes -32020 (HeaderMismatch) / -32022 (UnsupportedProtocolVersion).
+         Modern stateless requests bypass the session gate with per-request
+         OnClientConnect vetting, while the legacy initialize handshake and
+         Mcp-Session-Id gating keep working unchanged. Clients probe with
+         server/discover and fall back automatically (NegotiatedProtocol)
+  - NEW: MRTR (Multi Round-Trip Requests) — tools can request user input via
+         elicitation: server plumbs params.inputResponses / params.requestState
+         into TAiAuthContext; the client's OnInputRequired event drives the
+         retry loop (max 3 rounds, opaque requestState echoed verbatim)
+  - NEW: OpenTelemetry tracing — TAiTelemetry, opt-in OTLP/HTTP JSON exporter
+         (standard collector endpoint localhost:4318; works with Jaeger,
+         Grafana Tempo, Langfuse, Arize Phoenix). Spans follow the GenAI
+         semantic conventions and cover chat turns (model, provider, token
+         usage; sync and async), tool executions, agent graphs and nodes, RAG
+         retrieval and MCP client/server requests, with W3C traceparent
+         propagated through MCP _meta so client and server share one
+         distributed trace. Zero overhead when no instance is enabled
+  - NEW: A2A protocol (Agent-to-Agent, Linux Foundation) — first Delphi
+         implementation of spec 1.0. TAiA2AServer exposes any TAIAgentManager
+         graph as an A2A agent (Agent Card at /.well-known/agent-card.json,
+         JSON-RPC SendMessage/GetTask/CancelTask with 0.x aliases; graph
+         suspension maps to TASK_STATE_INPUT_REQUIRED). TAiA2AClient consumes
+         remote agents, and TAiA2ARemoteAgentTool federates: any graph node can
+         delegate its input to a remote A2A agent
+  - NEW: Guardrails — TAiGuardrails intercepts every tool call before
+         execution at the single choke point (TAiFunctions.DoCallFunction), so
+         it covers local functions, MCP tools and AutoMCP alike. Allowlist and
+         blocklist with wildcard masks, forbidden argument patterns and a
+         programmatic OnCheckToolCall veto; blocked calls never execute and the
+         LLM receives the reason so it can replan
+  - NEW: Evals — TAiEvalRunner, fluent evaluation cases against a generic
+         target function, with deterministic checks plus optional
+         LLM-as-judge; ToText / ToJSON reports and an eval.case span per case
+  - NEW: Regression suite (Tests/RegressionSuite) — 17 in-process cases, no
+         API keys, under a second; the framework's first automated safety net,
+         built on TAiEvalRunner
+  - NEW: Demo 072-A2AFederation showcasing the full A2A stack without an LLM
+  - NOTE: the legacy HTTP+SSE MCP transport is formally Deprecated by spec
+         2026-07-28 (earliest removal July 2027). Prefer HTTP or StdIO
+
 }
 {******************************************************************************}
 
@@ -198,6 +243,10 @@ const
   MAKERAI_HAS_AGENTS           = True;
   MAKERAI_HAS_CHECKPOINTS      = True;  // NEW v3.3: Durable agent execution
   MAKERAI_HAS_CHAT_TOOLS       = True;  // NEW v3.2: ChatTools framework
+  MAKERAI_HAS_TELEMETRY        = True;  // NEW v3.6: OpenTelemetry tracing (TAiTelemetry)
+  MAKERAI_HAS_A2A              = True;  // NEW v3.6: Agent-to-Agent protocol (spec 1.0)
+  MAKERAI_HAS_GUARDRAILS       = True;  // NEW v3.6: Tool-call policy (TAiGuardrails)
+  MAKERAI_HAS_EVALS            = True;  // NEW v3.6: Evaluation framework (TAiEvalRunner)
 
 // Platform Support
 const

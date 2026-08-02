@@ -44,7 +44,9 @@ uses
   UMakerAi.MCPServer.SSE in '..\..\Source\MCPServer\UMakerAi.MCPServer.SSE.pas',
   uTool.FileAccess in 'uTool.FileAccess.pas',
   uTool.SysInfo in 'uTool.SysInfo.pas',
-  uTool.WorldTime in 'uTool.WorldTime.pas';
+  uTool.WorldTime in 'uTool.WorldTime.pas',
+  uTool.ConfirmDemo in 'uTool.ConfirmDemo.pas',
+  uMakerAi.Telemetry in '..\..\Source\Core\uMakerAi.Telemetry.pas';
 
 var
   MCPServer: TAiMCPServer;
@@ -114,14 +116,16 @@ procedure RegisterAllToolsAndResources(ALogicServer: TAiMCPServer);
 begin
   if not Assigned(ALogicServer) then
     Exit;
-  WriteLn('Registering tools...');
+  // stderr: en modo stdio, stdout es exclusivo del protocolo MCP.
+  WriteLn(ErrOutput, 'Registering tools...');
 
   // Reutilizamos tus herramientas existentes sin modificar una sola línea de código
   uTool.FileAccess.RegisterTools(ALogicServer);
   uTool.SysInfo.RegisterTools(ALogicServer);
   uTool.WorldTime.RegisterWorldTimeTool(ALogicServer);
+  uTool.ConfirmDemo.RegisterConfirmDemoTool(ALogicServer);
 
-  WriteLn('Registration complete.');
+  WriteLn(ErrOutput, 'Registration complete.');
 end;
 
 // --- Programa Principal ---
@@ -132,11 +136,11 @@ var
   ShowHelpFlag: Boolean;
   FileSettings: String;
   LoadSettings: Boolean;
+  OtelEnabled: Boolean;
+  Telemetry: TAiTelemetry;
   i: Integer;
 
 begin
-
-  ShowHelp;
 
   // 1. Valores por defecto
   Protocol := 'sse'; // Por defecto SSE en este demo
@@ -144,6 +148,8 @@ begin
   CorsOrigins := '*';
   ShowHelpFlag := False;
   LoadSettings := False;
+  OtelEnabled := False;
+  Telemetry := nil;
 
   MCPServer := nil;
 
@@ -179,6 +185,9 @@ begin
           CorsOrigins := ParamStr(i);
         end;
       end
+      else if Param = '--otel' then
+        // Exporta trazas OpenTelemetry (OTLP/HTTP) al collector local :4318
+        OtelEnabled := True
       else if (Param = '--help') or (Param = '-h') then
         ShowHelpFlag := True;
 
@@ -197,9 +206,27 @@ begin
     Exit;
   end;
 
+  // En modo stdio, stdout es EXCLUSIVO del protocolo MCP (JSON-RPC por linea).
+  // Cualquier texto informativo (banner, estados) debe ir a stderr; de lo
+  // contrario se intercala con las respuestas y rompe el parser del cliente.
+  if not SameText(Protocol, 'stdio') then
+    ShowHelp;
+
   try
     try
-      WriteLn(Format('Starting server with protocol: %s', [Protocol]));
+      if SameText(Protocol, 'stdio') then
+        WriteLn(ErrOutput, Format('Starting server with protocol: %s', [Protocol]))
+      else
+        WriteLn(Format('Starting server with protocol: %s', [Protocol]));
+
+      // Observabilidad opt-in: --otel exporta trazas al collector OTLP local
+      if OtelEnabled then
+      begin
+        Telemetry := TAiTelemetry.Create(nil);
+        Telemetry.ServiceName := 'AiMCPServerDemo';
+        Telemetry.Enabled := True;
+        WriteLn(ErrOutput, 'OpenTelemetry: exportando trazas a ' + Telemetry.Endpoint);
+      end;
 
       // 3. Crear instancia según protocolo
       if SameText(Protocol, 'sse') then
@@ -253,10 +280,13 @@ begin
         else if MCPServer is TAiMCPHttpServer then
           WriteLn(Format('✅ MCP HTTP Server listening on port %d.', [MCPServer.Port]))
         else
-          WriteLn('✅ MCP Stdio Server running.');
+          WriteLn(ErrOutput, 'MCP Stdio Server running.'); // stderr: stdout es solo protocolo
       end;
 
-      WriteLn('Press Ctrl+C to stop.');
+      if SameText(Protocol, 'stdio') then
+        WriteLn(ErrOutput, 'Press Ctrl+C to stop.')
+      else
+        WriteLn('Press Ctrl+C to stop.');
 
       // Bucle infinito
       while True do
@@ -275,6 +305,7 @@ begin
       MCPServer.Stop;
       MCPServer.Free;
     end;
+    Telemetry.Free; // su destructor hace flush de los spans pendientes
   end;
 
 end.

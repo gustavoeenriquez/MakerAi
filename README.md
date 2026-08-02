@@ -1,4 +1,4 @@
-# MakerAI Suite v3.5 — The AI Ecosystem for Delphi
+# MakerAI Suite v3.6 — The AI Ecosystem for Delphi
 
 🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
 📖 **Manual:** [https://www.gustavoenriquez.com/book-makerai](https://www.gustavoenriquez.com/book-makerai) — available in English and Spanish
@@ -24,7 +24,7 @@ But on top of that, MakerAI is a **complete AI application ecosystem** that lets
 
 - **RAG pipelines** (vector and graph-based) with SQL-like query languages (VQL / GQL)
 - **Autonomous Agents** with graph orchestration, checkpoints, and human-in-the-loop approval
-- **MCP Servers and Clients** — expose or consume tools using the Model Context Protocol
+- **MCP Servers and Clients** — expose or consume tools using the Model Context Protocol (dual-era: stateless spec 2026-07-28 + legacy handshake)
 - **Native ChatTools** — bridge AI reasoning with deterministic real-world capabilities (PDF, Vision, Speech, Web Search, Shell, Computer Use)
 - **FMX Visual Components** — drop-in UI for multimodal chat interfaces
 - **Universal Connector** — switch providers at runtime without changing your application code
@@ -33,7 +33,31 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 ---
 
-## 🚀 What's New in v3.5
+## 🚀 What's New in v3.6
+
+### MCP Specification 2026-07-28 — Stateless, Dual-Era
+
+The Model Context Protocol dropped sessions and the `initialize` handshake. MakerAI implements the new **stateless** revision on both sides *and* keeps talking to legacy peers: clients probe with `server/discover` and fall back automatically; the server serves modern per-request `_meta` requests statelessly while the legacy handshake and session gating keep working. Includes the **MRTR** pattern, so a tool can pause and ask the user for confirmation (`OnInputRequired` on the client, `TAiAuthContext.InputResponses` on the server).
+
+### Observability — OpenTelemetry Tracing
+
+**`TAiTelemetry`** exports OTLP traces to any standard collector (Jaeger, Grafana Tempo, Langfuse, Arize Phoenix) following the **GenAI semantic conventions**. Spans cover chat turns with token usage, tool executions, agent graphs and nodes, RAG retrieval and MCP requests — with W3C `traceparent` propagated through MCP `_meta`, so a client and a server in different processes share one distributed trace. Opt-in, zero overhead when disabled.
+
+### A2A — Agent-to-Agent Protocol (first Delphi implementation)
+
+If MCP is the agent-to-*tool* layer, **A2A** (Linux Foundation) is the agent-to-*agent* layer. `TAiA2AServer` publishes any agent graph as a standard A2A agent (Agent Card + JSON-RPC), `TAiA2AClient` consumes remote agents, and `TAiA2ARemoteAgentTool` **federates**: a node in your graph can delegate its work to a remote agent — including one written in another language or framework. Demo: `072-A2AFederation`.
+
+### Guardrails & Evals
+
+**`TAiGuardrails`** intercepts every tool call before it executes (allowlists, blocklists, forbidden argument patterns, programmatic veto) — blocked calls never run and the LLM gets the reason so it can replan. **`TAiEvalRunner`** brings systematic evaluation: fluent test cases against any target, deterministic checks plus optional LLM-as-judge, with `ToJSON` reports for CI.
+
+### First Automated Regression Suite
+
+`Tests/RegressionSuite/` — 17 in-process cases covering MCP, agents, A2A, guardrails and evals. No API keys, under a second, exit code for CI. Built on `TAiEvalRunner` itself.
+
+---
+
+## What's New in v3.5
 
 ### Typed ModelConfig Channel
 
@@ -328,18 +352,24 @@ Graph-based multi-agent workflows with full thread safety:
 
 ### 🔗 MCP — Model Context Protocol
 
-Full implementation of the MCP standard for both consuming and exposing tools:
+Full **dual-era** implementation of the MCP standard for both consuming and exposing tools: supports the stateless **spec revision 2026-07-28** (per-request `_meta`, `server/discover`, MRTR elicitation) and interoperates automatically with legacy peers that still use the `initialize` handshake.
 
 **MCP Server** — expose Delphi functions as MCP tools, callable by any MCP client (Claude Desktop, AI agents, etc.):
-- Transports: **HTTP**, **SSE** (Server-Sent Events), **StdIO**, **Direct** (in-process)
+- Transports: **HTTP** (Streamable HTTP — stateless per spec 2026-07-28), **StdIO**, **Direct** (in-process), **SSE** (legacy — see deprecation note below)
+- Dual-era per request: modern clients are served stateless (per-request `_meta` identity + `OnClientConnect` vetting); legacy clients keep the `initialize` handshake and `Mcp-Session-Id` session gating
+- **MRTR** (Multi Round-Trip Requests): tools can pause and ask the user for confirmation or data via elicitation (`resultType: "input_required"` + opaque `requestState`) — working example in `Demos/031-MCPServer/uTool.ConfirmDemo.pas`
 - Bridge `TAiFunctions → IAiMCPTool` — any existing `TAiFunctions` component becomes an MCP server instantly
 - API Key authentication, CORS configuration
 - `TAiMCPResponseBuilder` for structured responses (text + files + media)
 - RTTI-based automatic JSON Schema generation from parameter classes
 
 **MCP Client** — consume any external MCP server from your Delphi app:
+- Dual-era probe: tries `server/discover` first and falls back to the legacy handshake automatically; the negotiated mode is exposed in `NegotiatedProtocol`
+- `OnInputRequired` event resolves MRTR elicitations (retry loop with `requestState` echo; assigning the handler declares the `elicitation` capability)
 - Connect to Claude Desktop tools, filesystem servers, database tools, etc.
 - Integrated into `TAiFunctions` component alongside native function definitions
+
+> **⚠️ SSE transport deprecation (spec 2026-07-28):** the classic HTTP+SSE transport (GET `/sse` + POST `/messages`) was formally moved to *Deprecated* state by MCP spec revision 2026-07-28 under the project's feature-lifecycle policy, which mandates a minimum 12-month window. Its **earliest possible removal from the spec is July 2027** — actual removal happens in the first spec revision published after that date, at the maintainers' discretion, and may come later. Removal deletes the transport from future spec revisions only: existing MakerAI SSE endpoints keep working between themselves, but third-party clients (Claude Desktop, official SDKs) will progressively drop it. **Use the HTTP or StdIO transports for anything new.** Note that SSE *as a streaming response format* survives inside Streamable HTTP — only the standalone HTTP+SSE transport is being retired.
 
 ### 🛠️ ChatTools — AI × Deterministic Capabilities
 
@@ -516,10 +546,23 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 | `053-DemoAgentesTools` | Agents with integrated tool use |
 | `054-AgentCheckpointDB` | Durable agent execution: suspend/resume with `TAiDatabaseCheckpointer` (SQLite via FireDAC) |
 | `060-AIChatUI` | Next-generation `TAIChatView` + `TAIChatInput` components — full multimodal demo |
+| `072-A2AFederation` | Agent federation over the A2A 1.0 protocol: expose a graph as an A2A agent, consume it, and delegate a local node to a remote agent (no LLM required; `--otel` for tracing) |
 
 ---
 
 ## 🔄 Changelog
+
+### v3.6.0 (2026-08-02)
+- New: **Regression suite — `Tests/RegressionSuite/`** — the framework finally has an automated safety net: 17 cases covering MCP dual-era + MRTR, agent graphs, A2A 1.0 + federation, guardrails and the evals runner itself. Fully in-process (spins up its own MCP and A2A servers, plus a legacy-only MCP server to exercise the dual-era fallback), no API keys, runs in under a second. Built **on `TAiEvalRunner`**, so it doubles as the canonical usage example. `--json` writes a CI-friendly report; `--otel` traces every case as an `eval.case` span
+- New: **Guardrails — `TAiGuardrails`** — policy layer that intercepts every tool call *before* execution (the single choke point in `TAiFunctions.DoCallFunction`, so it covers local functions, MCP tools and AutoMCP alike). Strict allowlist and blocklist with wildcard masks, forbidden substring patterns in tool arguments, and a programmatic `OnCheckToolCall` veto; blocked calls never execute and the LLM receives the reason as a JSON error so it can replan. `OnBlocked` for auditing, `BlockedCount` for metrics, and a `guardrail.blocked` span attribute. Assign via `TAiFunctions.Guardrails` (opt-in, zero impact when unassigned)
+- New: **Evals — `TAiEvalRunner`** — lightweight evaluation framework for AI pipelines: fluent test cases (`AddCase('x').Input(...).ExpectContains(...).ExpectRegex(...).ExpectMaxLength(...)`) run against a generic target function, so the same suite can evaluate a `TAiChat`, an agent graph, an MCP tool or an A2A agent. Deterministic checks plus optional **LLM-as-judge** (`ExpectJudge('criteria')` with a `Judge` chat). Reports offer `ToText` for consoles and `ToJSON` for CI, and each case emits an `eval.case` OTel span
+- New: **A2A protocol (Agent-to-Agent, Linux Foundation) — MVP** — first Delphi implementation of the A2A 1.0 spec: `TAiA2AServer` exposes any `TAIAgentManager` graph as an A2A agent (Agent Card at `/.well-known/agent-card.json`, JSON-RPC `SendMessage`/`GetTask`/`CancelTask` with 0.x method aliases; graph suspension maps to `TASK_STATE_INPUT_REQUIRED` for human-in-the-loop) and `TAiA2AClient` consumes remote A2A agents (`FetchAgentCard`, `SendText`, task lifecycle). No streaming/push yet (declared `false` per spec, `UnsupportedOperationError` on streaming calls). OTel spans `a2a.client`/`a2a.server` included. **Agent federation**: `TAiA2ARemoteAgentTool` lets any graph node delegate its input to a remote A2A agent (assign it as the node's `Tool`). Runtime-tested e2e (card + SendMessage → COMPLETED + GetTask, plus a local graph federating to a remote A2A graph)
+- New: **OpenTelemetry tracing — `TAiTelemetry`** (observability phase 1) — opt-in OTLP/HTTP JSON exporter (standard collector endpoint `localhost:4318`; works with Jaeger, Grafana Tempo, Langfuse, Arize Phoenix). Spans follow the OpenTelemetry **GenAI semantic conventions**: chat turns (`chat <model>` with `gen_ai.request.model`, `gen_ai.system`, `gen_ai.usage.input/output_tokens`, sync and async), tool executions (`execute_tool <name>`), agent graphs (`agent.graph` + `agent.node <name>` nested across pool threads via explicit trace context), RAG retrieval (`rag.search` with top-K/results/hybrid flags), and MCP client/server requests — with W3C `traceparent` propagated through MCP `_meta` (spec 2026-07-28 convention) so client and server processes share one distributed trace. Zero overhead when no `TAiTelemetry` instance is enabled. Demo 031 gains an `--otel` flag. Runtime-tested end-to-end (27 spans, cross-process trace propagation, live OpenAI chat span with token usage)
+- New: **MCP spec 2026-07-28 (stateless) — dual-era support** — the server implements `server/discover`, per-request `_meta` (protocol version, client identity, capabilities), `resultType` + `serverInfo` on every result, `ttlMs`/`cacheScope` cache hints on list results, and the reserved error codes `-32020` (HeaderMismatch) / `-32022` (UnsupportedProtocolVersion with `data.supported`). Modern stateless requests bypass the session gate with per-request `OnClientConnect` vetting; the legacy `initialize` handshake + `Mcp-Session-Id` gating remain fully functional
+- New: **MCP client dual-era probe** — `TMCPClientStdIo` / `TMCPClientHttp` try `server/discover` and fall back to the legacy handshake automatically (`NegotiatedProtocol` exposes the result); modern requests carry `_meta` plus the `MCP-Protocol-Version` / `Mcp-Method` / `Mcp-Name` headers; the StdIO reader now rescues JSON-RPC embedded in noisy stdout lines
+- New: **MRTR (Multi Round-Trip Requests)** — tools can request user input via elicitation: the server plumbs `params.inputResponses` / `params.requestState` into `TAiAuthContext`; the client's new `OnInputRequired` event drives the retry loop (max 3 rounds, opaque `requestState` echo; assigning the handler declares the `elicitation` capability). New demo tool `confirm_demo` in `031-MCPServer`
+- Update: MCP spec alignment — deterministic `tools/list` / `resources/list` ordering (client caching + LLM prompt-cache friendly); unknown tool/resource now returns `-32602` Invalid Params; the 031 demo sends banners to stderr in stdio mode (stdout is protocol-only)
+- Note: the legacy **HTTP+SSE transport is formally Deprecated** by MCP spec 2026-07-28 (earliest removal from the spec: **July 2027**, 12-month minimum window); MakerAI keeps it as frozen legacy — prefer HTTP or StdIO for new work
 
 ### v3.5.0 (2026-08-01)
 - New: **Typed ModelConfig channel** — `ModelCaps`/`SessionCaps`/`Tool_Active`/`ThinkingLevel` moved out of Params/RTTI into a typed surface with per-field user pins (`UserFields`) and transparent compatibility migration

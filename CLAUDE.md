@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MakerAI is an AI orchestration framework for Delphi developers (v3.5). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers, autonomous agents, and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+MakerAI is an AI orchestration framework for Delphi developers (v3.6). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers/clients, A2A agent interoperability, autonomous agents, observability, guardrails and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+
+**v3.6 highlights (ago 2026):** MCP spec **2026-07-28 stateless dual-era** (server/discover + `_meta` por request, con fallback automático al handshake legacy) y patrón **MRTR** (elicitation con reintento); observabilidad **OpenTelemetry** (`TAiTelemetry`, OTLP/HTTP con GenAI semconv, trazas distribuidas vía `traceparent` en `_meta`) instrumentando chat, tools, MCP, agentes y RAG; protocolo **A2A 1.0** (`TAiA2AServer`/`TAiA2AClient`/`TAiA2ARemoteAgentTool` — primera implementación Delphi, con federación de grafos); **`TAiGuardrails`** (política de tool calls en el choke point de `TAiFunctions`) y **`TAiEvalRunner`** (evals con LLM-as-judge opcional); primera **suite de regresión** automatizada en `Tests/RegressionSuite`.
 
 **v3.5 highlights (ago 2026):** canal tipado `ModelConfig` (ModelCaps/SessionCaps/Tool_Active/ThinkingLevel fuera de Params/RTTI, con pins por campo y migración de compatibilidad); suite de voz full-duplex (`TAiGrokRealtimeChat` speech-to-speech, `TAiOpenAiRealtimeTranslate`, gpt-transcribe); refresh completo de los 9 providers cloud probado runtime (Claude 5 adaptive, Gemini 3.5/3.6, Voxtral TTS, Kimi K3, DeepSeek V4, Cohere A+, Groq qwen3.6, xAI grok-4.3/4.5); generación de video nativa Grok; `LastError` poblado en todos los paths de error; driver MSSQL para RAG Vector.
 
@@ -18,7 +20,15 @@ MakerAI is an AI orchestration framework for Delphi developers (v3.5). It provid
 
 **Git workflow:** `master` is the main/release branch. `dev` is the active development branch. PRs target `master`.
 
-**Testing:** There is no formal test suite or CI/CD pipeline. Testing is done manually via the 18+ demo projects in `Demos/`. When modifying core functionality, verify changes by running relevant demos in the Delphi IDE.
+**Testing:** `Tests/RegressionSuite/` es la suite de regresión del framework (17 casos, in-process, sin API keys, < 1 s). Construida sobre `TAiEvalRunner`; cubre MCP dual-era + MRTR, agentes, A2A 1.0 + federación, guardrails y el propio runner de evals. Ejecutar antes de cada release:
+
+```bash
+msbuild Tests/RegressionSuite/MakerAiRegressionSuite.dproj /p:Config=Release /p:Platform=Win64
+Tests/RegressionSuite/Win64/Release/MakerAiRegressionSuite.exe        # exit 0 = verde
+Tests/RegressionSuite/Win64/Release/MakerAiRegressionSuite.exe --json report.json   # para CI
+```
+
+No hay pipeline CI/CD configurado. Los subsistemas visuales y los proveedores LLM reales se siguen verificando manualmente con los 19+ demos de `Demos/`.
 
 ## Building and Installation
 
@@ -439,4 +449,5 @@ Detailed documentation is available in `Docs/Version 3/`:
 | Directory | Documentation |
 |-----------|---------------|
 | [Demos/](Demos/CLAUDE.md) | Demo projects overview |
+| [Tests/RegressionSuite/](Tests/RegressionSuite/CLAUDE.md) | Suite de regresión (MCP, agentes, A2A, guardrails, evals) |
 | [Docs/](Docs/CLAUDE.md) | Documentation index |

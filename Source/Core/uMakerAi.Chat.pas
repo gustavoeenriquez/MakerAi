@@ -54,7 +54,8 @@ uses
 {$IF CompilerVersion < 35}
   uJSONHelper,
 {$ENDIF}
-  uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Utils.CodeExtractor, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Tools.ComputerUse, uMakerAi.Chat.Tools, uMakerAi.Chat.Sanitizer, uMakerAi.Memory.Types;
+  uMakerAi.Tools.Functions, uMakerAi.Core, uMakerAi.Utils.CodeExtractor, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Tools.ComputerUse, uMakerAi.Chat.Tools, uMakerAi.Chat.Sanitizer, uMakerAi.Memory.Types,
+  uMakerAi.Telemetry;
 
 type
 
@@ -407,6 +408,7 @@ type
     FLastReasoning: String;  // Acumula reasoning_content durante streaming SSE
     FLastPrompt: String;
     FLastError: String;
+    FRunSpan: TAiSpan; // Telemetria: span del turno en curso (nil = sin telemetria activa)
     FMessages: TAiChatMessages;
     FResponse_format: TAiChatResponseFormat;
     FResponse: TStringStream;
@@ -1781,12 +1783,31 @@ end;
 
 procedure TAiChat.DoProcessResponse(aLastMsg, aResMsg: TAiChatMessage; var aResponse: String);
 begin
+  // Telemetria: tokens del turno (GenAI semconv). En este punto ParseChat ya
+  // acumulo los contadores en el mensaje de respuesta.
+  if Assigned(FRunSpan) and Assigned(aResMsg) then
+  begin
+    AiSpanAttr(FRunSpan, 'gen_ai.usage.input_tokens', Int64(aResMsg.Prompt_tokens));
+    AiSpanAttr(FRunSpan, 'gen_ai.usage.output_tokens', Int64(aResMsg.Completion_tokens));
+  end;
+
   If Assigned(FOnProcessResponse) then
     FOnProcessResponse(Self, aLastMsg, aResMsg, aResponse);
 end;
 
 procedure TAiChat.DoStateChange(State: TAiChatState; const Description: string);
 begin
+  // Telemetria: acsFinished/acsAborted/acsError marcan el fin real del turno,
+  // tanto en sincrono como en asincrono (el callback de streaming pasa por aqui).
+  if (State in [acsFinished, acsAborted, acsError]) and Assigned(FRunSpan) then
+  begin
+    if State = acsError then
+      AiSpanEnd(FRunSpan, IfThen(Description <> '', Description, 'error'))
+    else
+      AiSpanEnd(FRunSpan, '');
+    FRunSpan := nil;
+  end;
+
   if Assigned(FOnStateChange) then
     FOnStateChange(Self, State, Description);
 end;
@@ -3843,6 +3864,16 @@ var
   LOrigPrompt:     string;
   LMemWrapper:     string;
 begin
+  // Telemetria: un span cubre el turno completo (fases, tool calls, parsing).
+  // Los Run anidados (continuacion tras tool calls) reutilizan el span del turno.
+  if not Assigned(FRunSpan) then
+  begin
+    FRunSpan := AiSpanStart('chat ' + FModel, skClient);
+    AiSpanAttr(FRunSpan, 'gen_ai.operation.name', 'chat');
+    AiSpanAttr(FRunSpan, 'gen_ai.request.model', FModel);
+    AiSpanAttr(FRunSpan, 'gen_ai.system', GetDriverName);
+  end;
+
   if FSanitizerActive and Assigned(AskMsg) and (AskMsg.Role = 'user') and (AskMsg.Prompt <> '') then
   begin
     LSanitizeResult := TSanitizerPipeline.Run(AskMsg.Prompt);
@@ -3926,6 +3957,15 @@ begin
       on E: Exception do
         LogDebug('PersistentMemory.NotifyExchange fallo: ' + E.Message);
     end;
+  end;
+
+  // Telemetria (backstop sincrono): normalmente el span se cierra en
+  // DoStateChange (acsFinished/acsError); esto cubre las salidas tempranas.
+  // En asincrono NO se cierra aqui: el fin real llega por el callback.
+  if (not Asynchronous) and Assigned(FRunSpan) then
+  begin
+    AiSpanEnd(FRunSpan, FLastError);
+    FRunSpan := nil;
   end;
 end;
 

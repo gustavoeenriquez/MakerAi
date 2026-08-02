@@ -15,6 +15,11 @@ The `Source/Tools/` directory contains capability components that extend LLM fun
   - `TFunctionParamsItem` - Parameter definition with `ParamType` (ptString, ptInteger, ptBoolean, etc.)
   - `TMCPClientItem` - MCP server connection management within functions
 
+### Guardrails (política de seguridad)
+- `uMakerAi.Guardrails.pas` — `TAiGuardrails`: se asigna a `TAiFunctions.Guardrails` y se consulta en `DoCallFunction` **antes** de ejecutar cualquier tool (local, MCP o AutoMCP)
+  - Orden de evaluación: `Enabled` → `AllowedTools` (whitelist estricta, comodines `TMask`) → `BlockedTools` → `BlockedArgPatterns` (substrings prohibidos en el JSON de argumentos, case-insensitive) → `OnCheckToolCall` (veto/permiso programático final)
+  - Un bloqueo NO ejecuta el tool: pone `ToolCall.Response` con `{"error":"Blocked by guardrails: ..."}` para que el LLM replantee, dispara `OnBlocked` (auditoría), incrementa `BlockedCount` y marca el span con `guardrail.blocked`
+
 ### Agent Automation Tools
 - `uMakerAi.Tools.Shell.pas` - Interactive shell execution (`TAiShell`)
   - Persistent session via `FSession: TInteractiveProcessInfo`

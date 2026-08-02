@@ -199,6 +199,7 @@
         <DCCReference Include="uTool.FileAccess.pas"/>
         <DCCReference Include="uTool.SysInfo.pas"/>
         <DCCReference Include="uTool.WorldTime.pas"/>
+        <DCCReference Include="uTool.ConfirmDemo.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

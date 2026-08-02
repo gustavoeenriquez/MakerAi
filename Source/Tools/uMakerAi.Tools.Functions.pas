@@ -37,7 +37,7 @@ interface
 
 uses
   System.SysUtils, System.StrUtils, System.Classes, System.Generics.Collections,
-  System.JSON, Rest.JSON, System.IOUtils,
+  System.JSON, Rest.JSON, System.IOUtils, uMakerAi.Guardrails,
   System.Net.HttpClient, System.NetEncoding,
   System.SyncObjs,
   Data.Db,
@@ -314,6 +314,9 @@ type
     // AutoMCP: funciones internas (invisibles al developer, no en FFunctions)
     FAutoMCPFunctions: TFunctionActionItems;
     FAutoMCPLock: TCriticalSection; // serializa llamadas a call_mcp_tool
+    // Guardrails: politica de seguridad de tool calls (opt-in)
+    FGuardrails: TAiGuardrails;
+    procedure SetGuardrails(const Value: TAiGuardrails);
     procedure SetOnMCPStreamMessage(const Value: TMCPStreamMessageEvent);
     procedure SetAutoMCPConfig(const Value: TAutoMCPConfig);
     function IsAutoMCPAllowed(const APkgName: string): Boolean;
@@ -332,6 +335,7 @@ type
 
     procedure DoLog(const Msg: string); virtual;
     procedure DoStatusUpdate(const StatusMsg: string); virtual;
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
 
   Public
     Constructor Create(AOwner: TComponent); Override;
@@ -412,6 +416,11 @@ type
     // Tiene prioridad sobre Allowed/Blocked. AAllow=True por defecto.
     property OnAutoMCPRequest: TAutoMCPRequestEvent read FOnAutoMCPRequest write FOnAutoMCPRequest;
 
+    // Guardrails: si se asigna, cada tool call (local, MCP o AutoMCP) pasa por
+    // la politica ANTES de ejecutarse; un bloqueo se reporta al LLM como error
+    // JSON sin ejecutar el tool.
+    property Guardrails: TAiGuardrails read FGuardrails write SetGuardrails;
+
   End;
 
 
@@ -475,7 +484,7 @@ procedure Register;
 
 implementation
 
-uses uMakerAi.Chat, System.Zip, System.IniFiles;
+uses uMakerAi.Chat, System.Zip, System.IniFiles, uMakerAi.Telemetry;
 
 procedure Register;
 begin
@@ -1370,14 +1379,43 @@ var
   ArgsObject, ResultObject: TJSonObject;
   AExtractedMedia: TObjectList<TAiMediaFile>; // Lista temporal
   MF: TAiMediaFile;
+  LSpan: TAiSpan;
 begin
   Result := False;
 
   AExtractedMedia := TObjectList<TAiMediaFile>.Create;
 
+  // Telemetria: span por ejecucion de tool (GenAI semconv). Se anida
+  // automaticamente al span del turno de chat cuando corre en el mismo hilo.
+  LSpan := AiSpanStart('execute_tool ' + ToolCall.Name);
+  AiSpanAttr(LSpan, 'gen_ai.operation.name', 'execute_tool');
+  AiSpanAttr(LSpan, 'gen_ai.tool.name', ToolCall.Name);
+
   try
     if SameText(Copy(ToolCall.Name, 1, Length('local' + MCP_TOOL_SEP)), 'local' + MCP_TOOL_SEP) then
       ToolCall.Name := Copy(ToolCall.Name, Length('local' + MCP_TOOL_SEP) + 1, Length(ToolCall.Name));
+
+    // Guardrails: politica de seguridad previa a CUALQUIER ejecucion de tool
+    // (local, MCP o AutoMCP). Si bloquea, el tool NO se ejecuta y el LLM
+    // recibe el motivo como error para que pueda replantear su plan.
+    if Assigned(FGuardrails) then
+    begin
+      var LGuardReason: string;
+      if not FGuardrails.CheckToolCall(ToolCall.Name, ToolCall.Arguments, LGuardReason) then
+      begin
+        var LErrObj := TJSonObject.Create;
+        try
+          LErrObj.AddPair('error', 'Blocked by guardrails: ' + LGuardReason);
+          ToolCall.Response := LErrObj.ToJSON;
+        finally
+          LErrObj.Free;
+        end;
+        AiSpanAttr(LSpan, 'guardrail.blocked', True);
+        DoLog('Guardrails bloqueo el tool "' + ToolCall.Name + '": ' + LGuardReason);
+        Result := True; // atendido: se reporta al LLM sin ejecutar el tool
+        Exit;
+      end;
+    end;
 
     PosAt := Pos(MCP_TOOL_SEP, ToolCall.Name);
 
@@ -1502,6 +1540,13 @@ begin
     end;
 
   finally
+    // Telemetria: un ToolCall.Response con '"error"' marca el span como fallido
+    if Result and Assigned(LSpan) and (Pos('"error"', ToolCall.Response) > 0) then
+      AiSpanEnd(LSpan, 'tool returned error response')
+    else if not Result then
+      AiSpanEnd(LSpan, 'tool not found or not handled')
+    else
+      AiSpanEnd(LSpan);
     // Liberamos la lista temporal.
     // Si transferimos los archivos, OwnsObjects estar� en False y no los borrar�.
     // Si fall� algo, OwnsObjects estar� en True y borrar� los temporales para no dejar fugas.
@@ -1515,6 +1560,23 @@ begin
   if Assigned(FOnLog) then
     FOnLog(Self, Msg);
 
+end;
+
+procedure TAiFunctions.SetGuardrails(const Value: TAiGuardrails);
+begin
+  if FGuardrails <> Value then
+  begin
+    FGuardrails := Value;
+    if Assigned(FGuardrails) then
+      FGuardrails.FreeNotification(Self);
+  end;
+end;
+
+procedure TAiFunctions.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if (Operation = opRemove) and (AComponent = FGuardrails) then
+    FGuardrails := nil;
 end;
 
 procedure TAiFunctions.DoStatusUpdate(const StatusMsg: string);

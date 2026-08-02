@@ -268,6 +268,8 @@ procedure Register;
 
 implementation
 
+uses uMakerAi.Telemetry;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiRAGVector]);
@@ -2197,21 +2199,39 @@ end;
 function TAiRAGVector.Search(Prompt: String; aLimit: Integer; aPrecision: Double; aFilter: TAiFilterCriteria): TAiRAGVector;
 var
   Target: TAiEmbeddingNode;
+  LSpan: TAiSpan;
 begin
   // 1. Verificaci�n de Motor de Embeddings
   // Sin esto, no podemos convertir el texto 'Prompt' en n�meros.
   if Not Assigned(FEmbeddings) and Not Assigned(FOnGetEmbedding) then
     Raise Exception.Create('Error: No hay motor de embeddings configurado. Asigne la propiedad Embeddings o el evento OnGetEmbedding.');
 
-  // 2. Vectorizaci�n
-  // CreateEmbeddingNode se encarga de llamar al API de embeddings o al evento
-  Target := CreateEmbeddingNode(Prompt);
+  // Telemetria: el span cubre embedding de la query + retrieval completo
+  LSpan := AiSpanStart('rag.search', skInternal);
+  AiSpanAttr(LSpan, 'rag.top_k', Int64(aLimit));
+  AiSpanAttr(LSpan, 'rag.hybrid.embeddings', FSearchOptions.UseEmbeddings);
+  AiSpanAttr(LSpan, 'rag.hybrid.bm25', FSearchOptions.UseBM25);
   try
-    // 3. Delegaci�n
-    // Llamamos a la sobrecarga principal que busca por Nodo + Filtro Criteria
-    Result := Search(Target, aLimit, aPrecision, aFilter);
-  finally
-    Target.Free;
+    // 2. Vectorizaci�n
+    // CreateEmbeddingNode se encarga de llamar al API de embeddings o al evento
+    Target := CreateEmbeddingNode(Prompt);
+    try
+      // 3. Delegaci�n
+      // Llamamos a la sobrecarga principal que busca por Nodo + Filtro Criteria
+      Result := Search(Target, aLimit, aPrecision, aFilter);
+      if Assigned(Result) then
+        AiSpanAttr(LSpan, 'rag.results', Int64(Result.Count));
+      AiSpanEnd(LSpan);
+      LSpan := nil; // ya consumido: el except no debe volver a tocarlo
+    finally
+      Target.Free;
+    end;
+  except
+    on E: Exception do
+    begin
+      AiSpanEnd(LSpan, E.Message);
+      raise;
+    end;
   end;
 end;
 
