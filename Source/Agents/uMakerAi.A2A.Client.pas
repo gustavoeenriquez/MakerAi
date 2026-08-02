@@ -26,7 +26,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON,
-  System.Net.HttpClient, System.Net.URLClient;
+  System.Net.HttpClient, System.Net.URLClient,
+  uMakerAi.Agents, uMakerAi.Agents.Attributes;
 
 type
   EA2AClientException = class(Exception);
@@ -59,11 +60,30 @@ type
     property Timeout: Integer read FTimeout write FTimeout default 60000;
   end;
 
+  // Federacion de agentes: asignar como Tool de un TAIAgentsNode para que ese
+  // nodo delegue su entrada en un agente A2A remoto. El input del nodo viaja
+  // como mensaje de texto y el output es el texto de los artifacts del task.
+  [TToolAttribute('A2ARemoteAgent', 'Delega la entrada del nodo en un agente A2A remoto y devuelve el texto de sus artifacts', 'A2A')]
+  TAiA2ARemoteAgentTool = class(TAiToolBase)
+  private
+    [TToolParameterAttribute('Agent URL', 'URL base del agente A2A remoto (ej: http://host:8280)', '')]
+    FAgentUrl: string;
+    [TToolParameterAttribute('Timeout ms', 'Timeout de la llamada remota en milisegundos', '60000')]
+    FTimeoutMs: Integer;
+  protected
+    procedure Execute(ANode: TAIAgentsNode; const AInput: string; var AOutput: string); override;
+  public
+    constructor Create(aOwner: TComponent); override;
+  published
+    property AgentUrl: string read FAgentUrl write FAgentUrl;
+    property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs default 60000;
+  end;
+
 procedure Register;
 
 implementation
 
-uses uMakerAi.Telemetry;
+uses uMakerAi.Telemetry, uMakerAi.Agents.EngineRegistry;
 
 procedure Register;
 begin
@@ -267,5 +287,40 @@ begin
   Params.AddPair('id', ATaskId);
   Result := JsonRpcCall('CancelTask', Params);
 end;
+
+{ TAiA2ARemoteAgentTool }
+
+constructor TAiA2ARemoteAgentTool.Create(aOwner: TComponent);
+begin
+  inherited Create(aOwner);
+  FTimeoutMs := 60000;
+end;
+
+procedure TAiA2ARemoteAgentTool.Execute(ANode: TAIAgentsNode; const AInput: string; var AOutput: string);
+var
+  Client: TAiA2AClient;
+  Task: TJSONObject;
+  OutText: string;
+begin
+  if Trim(FAgentUrl) = '' then
+    raise EA2AClientException.Create('TAiA2ARemoteAgentTool: AgentUrl no configurada');
+
+  Client := TAiA2AClient.Create(nil);
+  try
+    Client.Url := FAgentUrl;
+    Client.Timeout := FTimeoutMs;
+    Task := Client.SendText(AInput, OutText);
+    Task.Free;
+    if Client.LastState <> 'TASK_STATE_COMPLETED' then
+      raise EA2AClientException.CreateFmt('El agente A2A remoto termino en %s', [Client.LastState]);
+    AOutput := OutText;
+  finally
+    Client.Free;
+  end;
+end;
+
+initialization
+
+TEngineRegistry.Instance.RegisterTool(TAiA2ARemoteAgentTool, 'uMakerAi.A2A.Client');
 
 end.
