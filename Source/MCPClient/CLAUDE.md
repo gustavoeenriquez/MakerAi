@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Module Overview
 
-MCPClient implements the Model Context Protocol (MCP) client for MakerAI, enabling Delphi applications to consume external MCP servers through multiple transport protocols. This module follows the MCP Specification (2025-06-18).
+MCPClient implements the Model Context Protocol (MCP) client for MakerAI, enabling Delphi applications to consume external MCP servers through multiple transport protocols. This module is **dual-era**: supports the stateless MCP Specification (2026-07-28) with automatic fallback to the legacy handshake spec (2025-06-18).
 
 ## Architecture
 
@@ -27,13 +27,33 @@ TMCPClientCustom (Abstract Base)
 | `TMCPClientSSE` | Real-time streaming | Async HTTP + `TThreadedQueue` message buffer |
 | `TMCPClientMakerAi` | DataSnap servers | Unwraps nested JSON-RPC from DataSnap array |
 
-### MCP Protocol Flow
+### MCP Protocol Flow (dual-era)
 
-1. Send `initialize` request with `protocolVersion: "2025-06-18"`
-2. Receive server capabilities
+El cliente sondea la era del servidor con `server/discover` (StdIO y HTTP):
+
+**Servidor moderno (spec 2026-07-28, stateless):**
+1. `server/discover` responde → `NegotiatedProtocol = '2026-07-28'`
+2. Sin handshake ni `notifications/initialized`; cada request lleva `_meta`
+   (`io.modelcontextprotocol/protocolVersion`, `clientInfo`, `clientCapabilities`)
+   via `AttachModernMeta`. En HTTP se agregan los headers `MCP-Protocol-Version`,
+   `Mcp-Method` y `Mcp-Name`.
+3. `tools/list` / `tools/call` directos.
+
+**Servidor legacy (fallback automatico):**
+1. `server/discover` devuelve error (-32601) o timeout → `NegotiatedProtocol = 'legacy'`
+2. Send `initialize` request (StdIO: `2024-11-05`, HTTP: `2025-06-18`)
 3. Send `notifications/initialized` notification
-4. Call `tools/list` to retrieve available tools
-5. Invoke tools via `tools/call`
+4. `tools/list` / `tools/call` como siempre
+
+Notas:
+- `TMCPClientSSE` queda **legacy a proposito** (el transporte HTTP+SSE esta
+  deprecado en la spec 2026-07-28).
+- Un error del rango MCP reservado (-32020..-32099) identifica servidor
+  moderno (`IsModernErrorCode`) — la sonda no debe caer a legacy ante el.
+- `ReadProcessOutput` (StdIO) rescata JSON-RPC embebido en lineas con ruido
+  (`banner{"jsonrpc"...}`) de servidores que ensucian stdout.
+- Claves `_meta` llevan puntos: leerlas con `GetValue(nombre)` exacto, nunca
+  variantes por path (`GetValue<T>`).
 
 ## Key Patterns
 

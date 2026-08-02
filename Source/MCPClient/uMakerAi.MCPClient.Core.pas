@@ -636,6 +636,19 @@ begin
   if not Assigned(AJsonResult) then
     Exit;
 
+  // MCP 2026-07-28 (patron MRTR): resultType='input_required' significa que el
+  // servidor pide informacion adicional reintentando el request original con
+  // inputResponses — patron aun no soportado por este cliente. Devolvemos un
+  // error claro en vez de un resultado parcial confuso para el LLM.
+  if AJsonResult.GetValue<string>('resultType', '') = 'input_required' then
+  begin
+    DoLog('MCP: el servidor devolvio resultType=input_required (MRTR), patron no soportado por este cliente.');
+    Result := TJSONObject.Create;
+    Result.AddPair('error',
+      'The MCP server requires additional input (MRTR, resultType=input_required), not supported by this client yet.');
+    Exit;
+  end;
+
   if not Assigned(AExtractedMedia) then
   begin
     Result := TJSONObject(AJsonResult.Clone);
