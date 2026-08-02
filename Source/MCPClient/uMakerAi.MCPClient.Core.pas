@@ -52,6 +52,23 @@ uses
   uMakerAi.Utils.System, uMakerAi.Core;
 
 // --- Clase Base Abstracta ---
+const
+  // --- MCP 2026-07-28 (modo stateless / dual-era) ---
+  // Version moderna del protocolo: sin handshake initialize ni sesiones; cada
+  // request viaja con su version e identidad en _meta.
+  MCP_PROTOCOL_VERSION_MODERN = '2026-07-28';
+  // Marcador interno: el servidor respondio como legacy (handshake initialize).
+  MCP_PROTOCOL_LEGACY = 'legacy';
+  // Claves _meta estandarizadas. OJO: llevan puntos en el nombre, por lo que
+  // deben leerse con GetValue(nombre exacto), nunca con variantes por path.
+  MCP_META_PROTOCOL_VERSION = 'io.modelcontextprotocol/protocolVersion';
+  MCP_META_CLIENT_INFO = 'io.modelcontextprotocol/clientInfo';
+  MCP_META_CLIENT_CAPABILITIES = 'io.modelcontextprotocol/clientCapabilities';
+  MCP_META_SERVER_INFO = 'io.modelcontextprotocol/serverInfo';
+  // Codigos de error del rango reservado MCP (-32020..-32099)
+  MCP_ERROR_HEADER_MISMATCH = -32020;
+  MCP_ERROR_UNSUPPORTED_PROTOCOL_VERSION = -32022;
+
 type
 
   EMCPClientException = class(Exception);
@@ -104,6 +121,14 @@ type
     // M?todos para disparar eventos
     FLastError: String;
     FBusy: Boolean;
+    // --- MCP 2026-07-28 (dual-era) ---
+    // '' = sin sondear; MCP_PROTOCOL_VERSION_MODERN = servidor moderno
+    // (stateless); MCP_PROTOCOL_LEGACY = servidor con handshake initialize.
+    FNegotiatedProtocol: string;
+    function IsModernMode: Boolean;
+    function BuildModernMeta: TJSONObject;
+    procedure AttachModernMeta(AParams: TJSONObject);
+    class function IsModernErrorCode(ACode: Integer): Boolean; static;
     procedure DoLog(const Msg: string); virtual;
     procedure DoStatusUpdate(const StatusMsg: string); virtual;
     function IsBinaryContentType(const ContentType: string): Boolean;
@@ -154,6 +179,10 @@ type
     // Si est? disponible despu?s de inicializar, si fall? la inicializaci?n queda en false.
     Property Available: Boolean read FAvailable write SetAvailable;
 
+    // MCP 2026-07-28: version negociada con el servidor tras la sonda dual-era.
+    // Solo lectura informativa ('' = aun sin sondear).
+    property NegotiatedProtocol: string read FNegotiatedProtocol;
+
     Property Params: TStrings read GetParams write SetParams; // Par?metros adicionales en formato ParamName=ParamValue
     Property EnvVars: TStrings read GetEnvVars write SetEnvVars;
     Property URL: String read FURL write SetURL;
@@ -182,6 +211,8 @@ type
     procedure InternalStopServerProcess;
     function InternalInitialize: TJSONObject;
     procedure InternalSendInitializedNotification;
+    // MCP 2026-07-28: sonda dual-era (nil = servidor legacy, caer a initialize)
+    function InternalServerDiscover: TJSONObject;
     function InternalListTools: TJSONObject;
     function InternalCallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
 
@@ -688,6 +719,65 @@ begin
   FEnvVars.Assign(Value);
 end;
 
+// --- MCP 2026-07-28 (modo stateless / dual-era) ---
+
+function TMCPClientCustom.IsModernMode: Boolean;
+begin
+  Result := FNegotiatedProtocol = MCP_PROTOCOL_VERSION_MODERN;
+end;
+
+// Construye el objeto _meta que la spec 2026-07-28 exige en cada request del
+// modo moderno: version de protocolo, identidad y capacidades del cliente.
+// El llamador toma posesion del objeto devuelto.
+function TMCPClientCustom.BuildModernMeta: TJSONObject;
+var
+  LClientInfo: TJSONObject;
+begin
+  Result := TJSONObject.Create;
+  Result.AddPair(MCP_META_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION_MODERN);
+  LClientInfo := TJSONObject.Create;
+  LClientInfo.AddPair('name', 'MakerAI Delphi Client ' + Self.Name);
+  LClientInfo.AddPair('version', '3.5');
+  Result.AddPair(MCP_META_CLIENT_INFO, LClientInfo);
+  Result.AddPair(MCP_META_CLIENT_CAPABILITIES, TJSONObject.Create);
+end;
+
+// Inyecta _meta en los params cuando el modo negociado es moderno. Si el
+// request ya trae _meta (p.ej. progressToken), se agregan las claves faltantes.
+procedure TMCPClientCustom.AttachModernMeta(AParams: TJSONObject);
+var
+  MetaVal: TJSONValue;
+  MetaObj, NewMeta: TJSONObject;
+  i: Integer;
+begin
+  if (not IsModernMode) or (not Assigned(AParams)) then
+    Exit;
+  MetaVal := AParams.GetValue('_meta');
+  if not Assigned(MetaVal) then
+    AParams.AddPair('_meta', BuildModernMeta)
+  else if MetaVal is TJSONObject then
+  begin
+    MetaObj := TJSONObject(MetaVal);
+    if not Assigned(MetaObj.GetValue(MCP_META_PROTOCOL_VERSION)) then
+    begin
+      NewMeta := BuildModernMeta;
+      try
+        for i := 0 to NewMeta.Count - 1 do
+          MetaObj.AddPair(NewMeta.Pairs[i].JsonString.Value, NewMeta.Pairs[i].JsonValue.Clone as TJSONValue);
+      finally
+        NewMeta.Free;
+      end;
+    end;
+  end;
+end;
+
+// Un codigo de error del rango reservado MCP (-32020..-32099) identifica a un
+// servidor moderno: la sonda dual-era NO debe caer a legacy al recibirlo.
+class function TMCPClientCustom.IsModernErrorCode(ACode: Integer): Boolean;
+begin
+  Result := (ACode <= -32020) and (ACode >= -32099);
+end;
+
 procedure TMCPClientCustom.SetInitialized(const Value: Boolean);
 begin
   FInitialized := Value;
@@ -801,18 +891,31 @@ begin
       Exit;
     end;
 
-    // Handshake inicial
-    InitResponse := InternalInitialize;
-    if not Assigned(InitResponse) then
+    // MCP 2026-07-28: sonda dual-era. Si el servidor responde a server/discover
+    // es moderno (stateless, sin handshake); si no, caemos al initialize legacy.
+    InitResponse := InternalServerDiscover;
+    if Assigned(InitResponse) then
     begin
-      DoLog('ListTools: fallo en initialize. Deteniendo servidor.');
-      InternalStopServerProcess;
-      Available := False;
-      Exit;
+      FNegotiatedProtocol := MCP_PROTOCOL_VERSION_MODERN;
+      DoLog('ListTools: servidor moderno (2026-07-28), modo stateless.');
+      InitResponse.Free;
+    end
+    else
+    begin
+      FNegotiatedProtocol := MCP_PROTOCOL_LEGACY;
+      // Handshake inicial legacy
+      InitResponse := InternalInitialize;
+      if not Assigned(InitResponse) then
+      begin
+        DoLog('ListTools: fallo en initialize. Deteniendo servidor.');
+        InternalStopServerProcess;
+        Available := False;
+        Exit;
+      end;
+      InitResponse.Free;
+      InternalSendInitializedNotification;
+      Sleep(200); // Pausa para que el servidor procese la notificación
     end;
-    InitResponse.Free;
-    InternalSendInitializedNotification;
-    Sleep(200); // Pausa para que el servidor procese la notificación
 
     // El servidor queda activo para futuras llamadas
     DoLog('ListTools: conexión persistente establecida.');
@@ -854,18 +957,30 @@ begin
         Exit;
       end;
 
-      // Handshake
-      InitResponse := InternalInitialize;
-      if not Assigned(InitResponse) then
+      // MCP 2026-07-28: sonda dual-era antes del handshake legacy.
+      InitResponse := InternalServerDiscover;
+      if Assigned(InitResponse) then
       begin
-        DoLog('Initialization failed. Aborting CallTool.');
-        FreeAndNil(AArguments); // Liberar los argumentos si no se van a usar
-        Exit;
-      end;
-      InitResponse.Free;
-      InternalSendInitializedNotification;
+        FNegotiatedProtocol := MCP_PROTOCOL_VERSION_MODERN;
+        DoLog('CallTool: servidor moderno (2026-07-28), modo stateless.');
+        InitResponse.Free;
+      end
+      else
+      begin
+        FNegotiatedProtocol := MCP_PROTOCOL_LEGACY;
+        // Handshake legacy
+        InitResponse := InternalInitialize;
+        if not Assigned(InitResponse) then
+        begin
+          DoLog('Initialization failed. Aborting CallTool.');
+          FreeAndNil(AArguments); // Liberar los argumentos si no se van a usar
+          Exit;
+        end;
+        InitResponse.Free;
+        InternalSendInitializedNotification;
 
-      Sleep(200);
+        Sleep(200);
+      end;
 
       // Realizar la llamada real
       Result := InternalCallTool(AToolName, AArguments, AExtractedMedia);
@@ -1104,6 +1219,49 @@ begin
   end;
 end;
 
+// MCP 2026-07-28: sonda dual-era por StdIO. Un servidor moderno responde con
+// un DiscoverResult; uno legacy contesta -32601 (o guarda silencio y vence el
+// timeout), en cuyo caso devolvemos nil y el llamador cae al handshake legacy.
+function TMCPClientStdIo.InternalServerDiscover: TJSONObject;
+var
+  RequestObj, Response, LParams: TJSONObject;
+  ResultPair: TJSonValue;
+  LError: TJSONObject;
+begin
+  Result := nil;
+  if not IsServerRunning then
+    Exit;
+
+  Inc(FRequestIDCounter);
+  RequestObj := TJSONObject.Create;
+  try
+    RequestObj.AddPair('jsonrpc', '2.0');
+    RequestObj.AddPair('id', FRequestIDCounter);
+    RequestObj.AddPair('method', 'server/discover');
+    LParams := TJSONObject.Create;
+    RequestObj.AddPair('params', LParams);
+    LParams.AddPair('_meta', BuildModernMeta);
+
+    DoLog('Sondeando server/discover (dual-era)...');
+    InternalSendRawMessage(RequestObj.ToJSON);
+    Response := InternalReceiveJSONResponse(FRequestIDCounter, 5000);
+
+    if Assigned(Response) then
+      try
+        if Response.TryGetValue('result', ResultPair) and (ResultPair is TJSONObject) then
+          Result := TJSONObject(ResultPair.Clone) // el llamador es duenio
+        else if Response.TryGetValue<TJSONObject>('error', LError) then
+          DoLog('server/discover no soportado o rechazado: ' + LError.ToJSON);
+      finally
+        Response.Free;
+      end
+    else
+      DoLog('server/discover sin respuesta: servidor legacy.');
+  finally
+    RequestObj.Free;
+  end;
+end;
+
 procedure TMCPClientStdIo.InternalSendInitializedNotification;
 var
   NotificationObj: TJSONObject;
@@ -1137,7 +1295,9 @@ begin
     RequestObj.AddPair('jsonrpc', '2.0');
     RequestObj.AddPair('id', FRequestIDCounter);
     RequestObj.AddPair('method', 'tools/list');
-    RequestObj.AddPair('params', TJSONObject.Create);
+    var LListParams := TJSONObject.Create;
+    RequestObj.AddPair('params', LListParams);
+    AttachModernMeta(LListParams); // MCP 2026-07-28: _meta en cada request moderno
 
     InternalSendRawMessage(RequestObj.ToJSON);
     Response := InternalReceiveJSONResponse(FRequestIDCounter);
@@ -1187,6 +1347,7 @@ begin
       LParams.AddPair('arguments', AArguments.Clone as TJSONValue)
     else
       LParams.AddPair('arguments', TJSONObject.Create);
+    AttachModernMeta(LParams); // MCP 2026-07-28: _meta en cada request moderno
 
     DoLog(Format('Calling tool "%s"...', [AToolName]));
     InternalSendRawMessage(RequestObj.ToJSON);
@@ -1289,6 +1450,21 @@ begin
 
         if not CurrentLine.IsEmpty then
         begin
+          // Tolerancia con servidores ruidosos: si el server intercalo texto
+          // informativo sin LF antes de la respuesta (p.ej. un banner que
+          // termina pegado al JSON en la misma linea), rescatamos el JSON-RPC
+          // buscando '{"jsonrpc"' dentro de la linea. Sin esto, la primera
+          // respuesta (la sonda server/discover) puede perderse.
+          if not CurrentLine.StartsWith('{') then
+          begin
+            var LJsonStart := CurrentLine.IndexOf('{"jsonrpc"');
+            if LJsonStart > 0 then
+            begin
+              DoLog('[STDOUT]: ' + CurrentLine.Substring(0, LJsonStart));
+              CurrentLine := CurrentLine.Substring(LJsonStart);
+            end;
+          end;
+
           // Intentar detectar si es JSON
           if CurrentLine.StartsWith('{') then
           begin
@@ -1536,6 +1712,7 @@ begin
   Enabled := False;
   Available := False;
   FTools.Clear;
+  FNegotiatedProtocol := ''; // re-sondear la era del servidor en cada Initialize
 
   DoStatusUpdate('Initializing MCP Client (HTTP)...');
 
@@ -1546,13 +1723,45 @@ begin
     try
       DoLog(Format('Attempting connection to server (Try %d/%d)...', [CurrentAttempt, MAX_RETRIES_ON_FAIL]));
 
-      // 1. Realizar el handshake de inicializaci?n de MCP
-      // Las excepciones de conexi?n se lanzar?n aqu? y ser?n capturadas abajo.
-      InternalPerformMCPInitialize;
-      DoLog('MCP Initialization successful.');
+      // MCP 2026-07-28: sonda dual-era. Un servidor moderno responde a
+      // server/discover; uno legacy devuelve un error JSON-RPC/HTTP
+      // (EMCPClientException) y caemos al handshake initialize. Los errores
+      // de red NO son EMCPClientException y suben al bucle de reintentos.
+      if FNegotiatedProtocol = '' then
+      begin
+        var LProbeParams := TJSONObject.Create;
+        LProbeParams.AddPair('_meta', BuildModernMeta);
+        try
+          var LDiscover := InternalSendRequest('server/discover', LProbeParams);
+          if Assigned(LDiscover) then
+          begin
+            FNegotiatedProtocol := MCP_PROTOCOL_VERSION_MODERN;
+            LDiscover.Free;
+          end;
+        except
+          on E: EMCPClientException do
+          begin
+            FNegotiatedProtocol := MCP_PROTOCOL_LEGACY;
+            DoLog('server/discover no soportado, se usara handshake legacy.');
+          end;
+        end;
+      end;
 
-      // 2. Enviar la notificaci?n de inicializado (no lanza excepci?n, solo logea warnings si falla la POST de la notificaci?n)
-      InternalSendInitializedNotification;
+      if IsModernMode then
+      begin
+        // Modo stateless: sin handshake ni notifications/initialized.
+        DoLog('Servidor moderno (2026-07-28): modo stateless, sin handshake.');
+      end
+      else
+      begin
+        // 1. Realizar el handshake de inicializaci?n de MCP
+        // Las excepciones de conexi?n se lanzar?n aqu? y ser?n capturadas abajo.
+        InternalPerformMCPInitialize;
+        DoLog('MCP Initialization successful.');
+
+        // 2. Enviar la notificaci?n de inicializado (no lanza excepci?n, solo logea warnings si falla la POST de la notificaci?n)
+        InternalSendInitializedNotification;
+      end;
 
       // 3. Obtener la lista de herramientas
       jTools := ListTools;
@@ -1587,6 +1796,7 @@ begin
           if InternalStartLocalServerProcess then // Intentar lanzar el servidor local
           begin
             // ?xito al lanzar el server, el bucle reintentar? la conexi?n
+            FNegotiatedProtocol := ''; // el server recien lanzado puede ser de otra era: re-sondear
             Sleep(2000); // Dar un tiempo extra al server para que est? listo para las conexiones
             Continue; // Volver al inicio del bucle para reintentar la conexi?n
           end
@@ -1914,6 +2124,7 @@ begin
     LRequestObj.AddPair('id', FRequestIDCounter);
     LRequestObj.AddPair('method', AMethod);
     LRequestObj.AddPair('params', AParams); // AParams se convierte en propiedad de LRequestObj
+    AttachModernMeta(AParams); // MCP 2026-07-28: _meta en cada request del modo moderno
 
     // Crear un StringStream para el cuerpo de la solicitud HTTP
     LRequestBodyStream := TStringStream.Create(LRequestObj.ToJSON, TEncoding.UTF8);
@@ -1953,6 +2164,20 @@ begin
         end
         else
           LHeaders := []; // Array vac?o si no hay token
+
+        // MCP 2026-07-28: headers estandar del modo stateless (tambien en la
+        // sonda server/discover, que se envia antes de negociar el modo).
+        if IsModernMode or (AMethod = 'server/discover') then
+        begin
+          LHeaders := LHeaders + [TNetHeader.Create('MCP-Protocol-Version', MCP_PROTOCOL_VERSION_MODERN),
+            TNetHeader.Create('Mcp-Method', AMethod)];
+          if Assigned(AParams) then
+          begin
+            var LToolName := AParams.GetValue<string>('name', '');
+            if LToolName <> '' then
+              LHeaders := LHeaders + [TNetHeader.Create('Mcp-Name', LToolName)];
+          end;
+        end;
 
         // Crear un MemoryStream para recibir la respuesta HTTP
         var

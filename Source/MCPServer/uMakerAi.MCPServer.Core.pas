@@ -257,6 +257,16 @@ type
     function HandlePromptsMethod(const Method: string; const Params: TJSONObject): TValue;
     function Core_Initialize(const Params: TJSONObject): TValue;
     function Core_Ping: TValue;
+    // --- MCP 2026-07-28 (modo stateless / dual-era) ---
+    function Core_ServerDiscover(const Params: TJSONObject): TValue;
+    class function GetRequestMeta(Params: TJSONObject): TJSONObject; static;
+    class function GetModernProtocolVersion(Params: TJSONObject): string; static;
+    class procedure GetClientInfoFromMeta(Params: TJSONObject; out AName, AVersion: string); static;
+    function VetClientAllowed(const AClientName, AClientVersion, AProtocolVersion: string; out AReason: string): Boolean;
+    function CreateErrorResponseWithData(const RequestID: TValue; ErrorCode: Integer;
+      const ErrorMessage: string; AData: TJSONObject): string;
+    procedure DecorateModernResult(AResult: TJSONObject);
+    class procedure AddCacheHints(AResult: TJSONObject; ATtlMs: Integer); static;
     function Tools_ListTools: TValue;
     function Tools_CallTool(const Params: TJSONObject; const ASessionID: string; const AAuthContext: TAiAuthContext): TValue;
     function BuildProgressNotification(const ATokenJson: string; AProgress, ATotal: Double; const AMessage: string): string;
@@ -391,6 +401,22 @@ type
     // ISSUE #110 (Parte B): rechazo de peticiones sin sesion autorizada (proxy al motor lógico)
     property OnUnauthorizedRequest: TAiMCPUnauthorizedEvent read GetOnUnauthorizedRequest write SetOnUnauthorizedRequest;
   end;
+
+const
+  // --- MCP 2026-07-28 (modo stateless / dual-era) ---
+  // Version moderna soportada ademas de la legacy (ProtocolVersion del servidor).
+  MCP_PROTOCOL_VERSION_MODERN = '2026-07-28';
+  // Claves _meta estandarizadas por la spec 2026-07-28. OJO: llevan puntos en el
+  // nombre, por lo que SIEMPRE deben leerse con GetValue(nombre exacto) y nunca
+  // con las variantes por path (GetValue<T>/TryGetValue<T>), que interpretan el
+  // punto como separador de niveles.
+  MCP_META_PROTOCOL_VERSION = 'io.modelcontextprotocol/protocolVersion';
+  MCP_META_CLIENT_INFO = 'io.modelcontextprotocol/clientInfo';
+  MCP_META_CLIENT_CAPABILITIES = 'io.modelcontextprotocol/clientCapabilities';
+  MCP_META_SERVER_INFO = 'io.modelcontextprotocol/serverInfo';
+  // Codigos de error del rango reservado MCP (-32020..-32099)
+  MCP_ERROR_HEADER_MISMATCH = -32020;
+  MCP_ERROR_UNSUPPORTED_PROTOCOL_VERSION = -32022;
 
 implementation
 
@@ -843,34 +869,70 @@ begin
         Exit('');
       end;
 
-      // --- ISSUE #110 (Parte B): gate de sesion ---
-      // Solo cuando el transporte lo pide (HTTP) y el gating esta activo
-      // (hay OnClientConnect). tools/resources/prompts exigen una sesion creada
-      // previamente por un 'initialize' exitoso.
-      if AEnforceSession and SessionEnforcementActive and RequiresSession(MethodName) and
-        (not IsSessionAuthorized(ASessionID)) then
-      begin
-        var LAllow: Boolean := False;
-        var LReason: string := 'Unauthorized: a valid Mcp-Session-Id is required. Call initialize first.';
-        if Assigned(FOnUnauthorizedRequest) then
-          FOnUnauthorizedRequest(Self, ASessionID, MethodName, LAllow, LReason);
-        if not LAllow then
-        begin
-          if Trim(LReason) = '' then
-            LReason := 'Unauthorized';
-          Result := CreateErrorResponse(RequestID, -32001, LReason);
-          Exit;
-        end;
-      end;
-
-      JSONResponse := CreateJSONResponse(RequestID);
-
+      // Los params se extraen antes del gate: el modo moderno (spec 2026-07-28,
+      // stateless) se detecta por _meta['io.modelcontextprotocol/protocolVersion'].
       var
       ParamsValue := JSONRequest.GetValue('params');
       if Assigned(ParamsValue) and (ParamsValue is TJSONObject) then
         Params := ParamsValue as TJSONObject
       else
         Params := nil;
+
+      // --- MCP 2026-07-28: negociacion de version por request ---
+      // Si el cliente declara una version moderna que no soportamos, se responde
+      // UnsupportedProtocolVersionError con la lista de versiones soportadas para
+      // que el cliente reintente con una compatible.
+      var LModernProto: string := GetModernProtocolVersion(Params);
+      if (LModernProto <> '') and (LModernProto <> MCP_PROTOCOL_VERSION_MODERN) then
+      begin
+        var LSupported := TJSONArray.Create;
+        LSupported.Add(MCP_PROTOCOL_VERSION_MODERN);
+        if FProtocolVersion <> MCP_PROTOCOL_VERSION_MODERN then
+          LSupported.Add(FProtocolVersion);
+        var LData := TJSONObject.Create;
+        LData.AddPair('supported', LSupported);
+        LData.AddPair('requested', LModernProto);
+        Result := CreateErrorResponseWithData(RequestID, MCP_ERROR_UNSUPPORTED_PROTOCOL_VERSION,
+          'Unsupported protocol version', LData);
+        Exit;
+      end;
+
+      // --- ISSUE #110 (Parte B): gate de sesion ---
+      // Solo cuando el transporte lo pide (HTTP) y el gating esta activo
+      // (hay OnClientConnect). tools/resources/prompts exigen una sesion creada
+      // previamente por un 'initialize' exitoso. Excepcion (spec 2026-07-28): un
+      // request moderno es stateless y no usa sesiones; el vetting de
+      // OnClientConnect se aplica por request con la identidad que viaja en _meta.
+      if AEnforceSession and SessionEnforcementActive and RequiresSession(MethodName) and
+        (not IsSessionAuthorized(ASessionID)) then
+      begin
+        if LModernProto <> '' then
+        begin
+          var LCliName, LCliVersion, LVetReason: string;
+          GetClientInfoFromMeta(Params, LCliName, LCliVersion);
+          if not VetClientAllowed(LCliName, LCliVersion, LModernProto, LVetReason) then
+          begin
+            Result := CreateErrorResponse(RequestID, -32001, LVetReason);
+            Exit;
+          end;
+        end
+        else
+        begin
+          var LAllow: Boolean := False;
+          var LReason: string := 'Unauthorized: a valid Mcp-Session-Id is required. Call initialize first.';
+          if Assigned(FOnUnauthorizedRequest) then
+            FOnUnauthorizedRequest(Self, ASessionID, MethodName, LAllow, LReason);
+          if not LAllow then
+          begin
+            if Trim(LReason) = '' then
+              LReason := 'Unauthorized';
+            Result := CreateErrorResponse(RequestID, -32001, LReason);
+            Exit;
+          end;
+        end;
+      end;
+
+      JSONResponse := CreateJSONResponse(RequestID);
 
       ExecuteResult := ExecuteMethodCall(MethodName, Params, ASessionID, AAuthContext);
 
@@ -889,7 +951,14 @@ begin
       if ExecuteResult.IsEmpty then
         JSONResponse.AddPair('result', TJSONNull.Create)
       else if ExecuteResult.IsType<TJSONObject> then
-        JSONResponse.AddPair('result', ExecuteResult.AsType<TJSONObject>)
+      begin
+        var LResultObj := ExecuteResult.AsType<TJSONObject>;
+        // MCP 2026-07-28: resultType obligatorio + serverInfo en _meta.
+        // Los clientes legacy ignoran los campos que no conocen, asi que
+        // decorar siempre es inocuo y mantiene una sola ruta de codigo.
+        DecorateModernResult(LResultObj);
+        JSONResponse.AddPair('result', LResultObj);
+      end
       else
         JSONResponse.AddPair('result', TJSONString.Create(ExecuteResult.ToString));
 
@@ -994,7 +1063,7 @@ begin
     Result := HandleResourcesMethod(MethodName, Params)
   else if StartsText('prompts/', MethodName) then
     Result := HandlePromptsMethod(MethodName, Params)
-  else if (MethodName = 'initialize') or (MethodName = 'ping') then
+  else if (MethodName = 'initialize') or (MethodName = 'ping') or (MethodName = 'server/discover') then
     Result := HandleCoreMethod(MethodName, Params)
   else
     raise Exception.CreateFmt('Method [%s] not found.', [MethodName]);
@@ -1006,6 +1075,8 @@ begin
     Result := Core_Initialize(Params)
   else if Method = 'ping' then
     Result := Core_Ping
+  else if Method = 'server/discover' then
+    Result := Core_ServerDiscover(Params)
   else
     Result := TValue.Empty;
 end;
@@ -1043,6 +1114,7 @@ begin
   begin
     ResultJSON := TJSONObject.Create;
     ResultJSON.AddPair('prompts', TJSONArray.Create);
+    AddCacheHints(ResultJSON, 60000); // spec 2026-07-28: prompts/list es CacheableResult
     Result := TValue.From<TJSONObject>(ResultJSON);
   end
   else
@@ -1071,15 +1143,9 @@ begin
         LCliVersion := jClientInfo.GetValue<string>('version', '');
       end;
     end;
-    var LAllow: Boolean := True;
-    var LReason: string := '';
-    FOnClientConnect(Self, LCliName, LCliVersion, LCliProto, LAllow, LReason);
-    if not LAllow then
-    begin
-      if Trim(LReason) = '' then
-        LReason := 'Connection rejected by server policy';
+    var LReason: string;
+    if not VetClientAllowed(LCliName, LCliVersion, LCliProto, LReason) then
       raise Exception.Create(LReason);
-    end;
   end;
 
   ResultJSON := TJSONObject.Create;
@@ -1100,6 +1166,184 @@ end;
 function TAiMCPLogicServer.Core_Ping: TValue;
 begin
   Result := TValue.From<TJSONObject>(TJSONObject.Create);
+end;
+
+// -----------------------------------------------------------------------------
+// --- MCP 2026-07-28 (modo stateless / dual-era) ---
+// -----------------------------------------------------------------------------
+
+// Devuelve el objeto _meta de los params del request, o nil si no viene.
+// El objeto pertenece al request; el llamador NO debe liberarlo.
+class function TAiMCPLogicServer.GetRequestMeta(Params: TJSONObject): TJSONObject;
+var
+  V: TJSONValue;
+begin
+  Result := nil;
+  if Assigned(Params) then
+  begin
+    V := Params.GetValue('_meta');
+    if V is TJSONObject then
+      Result := TJSONObject(V);
+  end;
+end;
+
+// Version de protocolo declarada por el cliente en _meta (modo moderno).
+// Cadena vacia = request legacy (handshake initialize / sin metadatos).
+class function TAiMCPLogicServer.GetModernProtocolVersion(Params: TJSONObject): string;
+var
+  Meta: TJSONObject;
+  V: TJSONValue;
+begin
+  Result := '';
+  Meta := GetRequestMeta(Params);
+  if Assigned(Meta) then
+  begin
+    // GetValue con nombre exacto: la clave lleva puntos y las variantes por
+    // path los interpretarian como separadores de niveles.
+    V := Meta.GetValue(MCP_META_PROTOCOL_VERSION);
+    if V is TJSONString then
+      Result := TJSONString(V).Value;
+  end;
+end;
+
+// Extrae clientInfo.name/version desde _meta (modo moderno).
+class procedure TAiMCPLogicServer.GetClientInfoFromMeta(Params: TJSONObject; out AName, AVersion: string);
+var
+  Meta: TJSONObject;
+  V: TJSONValue;
+begin
+  AName := '';
+  AVersion := '';
+  Meta := GetRequestMeta(Params);
+  if Assigned(Meta) then
+  begin
+    V := Meta.GetValue(MCP_META_CLIENT_INFO);
+    if V is TJSONObject then
+    begin
+      AName := TJSONObject(V).GetValue<string>('name', '');
+      AVersion := TJSONObject(V).GetValue<string>('version', '');
+    end;
+  end;
+end;
+
+// Vetting compartido (ISSUE #110 + modo moderno): consulta OnClientConnect si
+// esta asignado. Devuelve False con AReason cuando el servidor rechaza al cliente.
+function TAiMCPLogicServer.VetClientAllowed(const AClientName, AClientVersion, AProtocolVersion: string;
+  out AReason: string): Boolean;
+var
+  LAllow: Boolean;
+begin
+  AReason := '';
+  Result := True;
+  if not Assigned(FOnClientConnect) then
+    Exit;
+  LAllow := True;
+  FOnClientConnect(Self, AClientName, AClientVersion, AProtocolVersion, LAllow, AReason);
+  if not LAllow then
+  begin
+    if Trim(AReason) = '' then
+      AReason := 'Connection rejected by server policy';
+    Result := False;
+  end;
+end;
+
+// Variante de CreateErrorResponse con objeto 'data' (toma posesion de AData).
+function TAiMCPLogicServer.CreateErrorResponseWithData(const RequestID: TValue; ErrorCode: Integer;
+  const ErrorMessage: string; AData: TJSONObject): string;
+var
+  JSONResponse, ErrorObj: TJSONObject;
+begin
+  JSONResponse := TJSONObject.Create;
+  try
+    JSONResponse.AddPair('jsonrpc', '2.0');
+    ErrorObj := TJSONObject.Create;
+    ErrorObj.AddPair('code', TJSONNumber.Create(ErrorCode));
+    ErrorObj.AddPair('message', ErrorMessage);
+    if Assigned(AData) then
+      ErrorObj.AddPair('data', AData);
+    JSONResponse.AddPair('error', ErrorObj);
+    AddRequestIDToResponse(JSONResponse, RequestID);
+    Result := JSONResponse.ToJSON;
+  finally
+    JSONResponse.Free;
+  end;
+end;
+
+// Anota un result con los campos que exige la spec 2026-07-28: resultType
+// ('complete' salvo que el metodo ya lo haya puesto) y serverInfo dentro de _meta.
+procedure TAiMCPLogicServer.DecorateModernResult(AResult: TJSONObject);
+var
+  MetaVal: TJSONValue;
+  MetaObj, ServerInfo: TJSONObject;
+begin
+  if not Assigned(AResult) then
+    Exit;
+  if not Assigned(AResult.GetValue('resultType')) then
+    AResult.AddPair('resultType', 'complete');
+  MetaVal := AResult.GetValue('_meta');
+  if not Assigned(MetaVal) then
+  begin
+    MetaObj := TJSONObject.Create;
+    AResult.AddPair('_meta', MetaObj);
+  end
+  else if MetaVal is TJSONObject then
+    MetaObj := TJSONObject(MetaVal)
+  else
+    Exit;
+  if not Assigned(MetaObj.GetValue(MCP_META_SERVER_INFO)) then
+  begin
+    ServerInfo := TJSONObject.Create;
+    ServerInfo.AddPair('name', FServerName);
+    ServerInfo.AddPair('version', FServerVersion);
+    MetaObj.AddPair(MCP_META_SERVER_INFO, ServerInfo);
+  end;
+end;
+
+// ttlMs/cacheScope (interfaz CacheableResult de la spec 2026-07-28) en los
+// resultados cacheables: hints de frescura para que el cliente reduzca polling.
+class procedure TAiMCPLogicServer.AddCacheHints(AResult: TJSONObject; ATtlMs: Integer);
+begin
+  if not Assigned(AResult.GetValue('ttlMs')) then
+    AResult.AddPair('ttlMs', TJSONNumber.Create(ATtlMs));
+  if not Assigned(AResult.GetValue('cacheScope')) then
+    AResult.AddPair('cacheScope', 'private');
+end;
+
+// MCP 2026-07-28: discovery sin handshake. Devuelve versiones soportadas,
+// capacidades e identidad del servidor. Tambien funciona como sonda de
+// compatibilidad para clientes dual-era (un servidor legacy responde -32601).
+function TAiMCPLogicServer.Core_ServerDiscover(const Params: TJSONObject): TValue;
+var
+  ResultJSON, Capabilities, MetaObj, ServerInfo: TJSONObject;
+  Versions: TJSONArray;
+  CliName, CliVersion, CliProto, VetReason: string;
+begin
+  // Vetting opt-in con la identidad de _meta: equivalente moderno del vetting
+  // que Core_Initialize aplica en el handshake legacy.
+  CliProto := GetModernProtocolVersion(Params);
+  GetClientInfoFromMeta(Params, CliName, CliVersion);
+  if not VetClientAllowed(CliName, CliVersion, CliProto, VetReason) then
+    raise Exception.Create(VetReason);
+
+  ResultJSON := TJSONObject.Create;
+  ResultJSON.AddPair('resultType', 'complete');
+  Versions := TJSONArray.Create;
+  Versions.Add(MCP_PROTOCOL_VERSION_MODERN);
+  if FProtocolVersion <> MCP_PROTOCOL_VERSION_MODERN then
+    Versions.Add(FProtocolVersion); // la version legacy sigue disponible via initialize
+  ResultJSON.AddPair('supportedVersions', Versions);
+  Capabilities := TJSONObject.Create;
+  Capabilities.AddPair('tools', TJSONObject.Create);
+  Capabilities.AddPair('resources', TJSONObject.Create);
+  ResultJSON.AddPair('capabilities', Capabilities);
+  MetaObj := TJSONObject.Create;
+  ServerInfo := TJSONObject.Create;
+  ServerInfo.AddPair('name', FServerName);
+  ServerInfo.AddPair('version', FServerVersion);
+  MetaObj.AddPair(MCP_META_SERVER_INFO, ServerInfo);
+  ResultJSON.AddPair('_meta', MetaObj);
+  AddCacheHints(ResultJSON, 3600000); // la identidad del servidor cambia poco: 1 hora
+  Result := TValue.From<TJSONObject>(ResultJSON);
 end;
 
 function TAiMCPLogicServer.Tools_ListTools: TValue;
@@ -1126,6 +1370,7 @@ begin
       ToolJSON.AddPair('inputSchema', TJSONObject.Create);
     ToolsArray.AddElement(ToolJSON);
   end;
+  AddCacheHints(ResultJSON, 60000); // spec 2026-07-28: tools/list es CacheableResult
   Result := TValue.From<TJSONObject>(ResultJSON);
 end;
 
@@ -1235,6 +1480,7 @@ begin
     ResourceObj.AddPair('mimeType', Resource.MimeType);
     ResourcesArray.AddElement(ResourceObj);
   end;
+  AddCacheHints(ResultJSON, 60000); // spec 2026-07-28: resources/list es CacheableResult
   Result := TValue.From<TJSONObject>(ResultJSON);
 end;
 
@@ -1274,6 +1520,7 @@ begin
   begin
     raise Exception.CreateFmt('Resource not found: %s', [URI]);
   end;
+  AddCacheHints(ResultJSON, 60000); // spec 2026-07-28: resources/read es CacheableResult
   Result := TValue.From<TJSONObject>(ResultJSON);
 end;
 
@@ -1285,6 +1532,7 @@ begin
   ResultJSON := TJSONObject.Create;
   TemplatesArray := TJSONArray.Create;
   ResultJSON.AddPair('resourceTemplates', TemplatesArray);
+  AddCacheHints(ResultJSON, 60000); // spec 2026-07-28: resources/templates/list es CacheableResult
   Result := TValue.From<TJSONObject>(ResultJSON);
 end;
 

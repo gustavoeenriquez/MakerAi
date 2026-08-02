@@ -136,8 +136,6 @@ var
 
 begin
 
-  ShowHelp;
-
   // 1. Valores por defecto
   Protocol := 'sse'; // Por defecto SSE en este demo
   Port := 8080; // SSE suele usar 8080 u 8000
@@ -197,9 +195,18 @@ begin
     Exit;
   end;
 
+  // En modo stdio, stdout es EXCLUSIVO del protocolo MCP (JSON-RPC por linea).
+  // Cualquier texto informativo (banner, estados) debe ir a stderr; de lo
+  // contrario se intercala con las respuestas y rompe el parser del cliente.
+  if not SameText(Protocol, 'stdio') then
+    ShowHelp;
+
   try
     try
-      WriteLn(Format('Starting server with protocol: %s', [Protocol]));
+      if SameText(Protocol, 'stdio') then
+        WriteLn(ErrOutput, Format('Starting server with protocol: %s', [Protocol]))
+      else
+        WriteLn(Format('Starting server with protocol: %s', [Protocol]));
 
       // 3. Crear instancia según protocolo
       if SameText(Protocol, 'sse') then
@@ -253,10 +260,13 @@ begin
         else if MCPServer is TAiMCPHttpServer then
           WriteLn(Format('✅ MCP HTTP Server listening on port %d.', [MCPServer.Port]))
         else
-          WriteLn('✅ MCP Stdio Server running.');
+          WriteLn(ErrOutput, 'MCP Stdio Server running.'); // stderr: stdout es solo protocolo
       end;
 
-      WriteLn('Press Ctrl+C to stop.');
+      if SameText(Protocol, 'stdio') then
+        WriteLn(ErrOutput, 'Press Ctrl+C to stop.')
+      else
+        WriteLn('Press Ctrl+C to stop.');
 
       // Bucle infinito
       while True do

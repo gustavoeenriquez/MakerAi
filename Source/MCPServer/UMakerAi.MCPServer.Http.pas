@@ -52,6 +52,9 @@ type
     procedure HandleGetRequest(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
     procedure HandlePostRequest(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo; const AAuthContext: TAiAuthContext);
     function VerifyAndSetCORSHeaders(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo): Boolean;
+    // MCP 2026-07-28: valida Mcp-Method/Mcp-Name contra el body JSON-RPC.
+    // Devuelve '' si coinciden (o no aplica) o el JSON de HeaderMismatchError.
+    function CheckHeaderMismatch(const ARequestBody, AHdrMethod, AHdrName: string): string;
 
   public
     constructor Create(AOwner: TComponent); override;
@@ -81,6 +84,7 @@ uses System.StrUtils, IdGlobal, System.JSON;
 const
   HTTP_OK = 200;
   HTTP_NO_CONTENT = 204;
+  HTTP_BAD_REQUEST = 400;
   HTTP_NOT_FOUND = 404; // <-- CAMBIO: A?adida constante para claridad
   HTTP_FORBIDDEN = 403;
   HTTP_METHOD_NOT_ALLOWED = 405;
@@ -178,8 +182,11 @@ begin
   AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Methods'] := 'POST, GET, OPTIONS';
   // ISSUE #110: aceptamos Mcp-Session-Id (estandar MCP) ademas de X-Session-ID (legacy),
   // y la exponemos para que clientes de navegador puedan leer la sesion emitida.
+  // MCP 2026-07-28: se admiten ademas los headers del modo stateless
+  // (MCP-Protocol-Version, Mcp-Method, Mcp-Name).
   AResponseInfo.CustomHeaders.Values['Access-Control-Allow-Headers'] :=
-    'Content-Type, X-Session-ID, Mcp-Session-Id, Authorization, X-API-Key';
+    'Content-Type, X-Session-ID, Mcp-Session-Id, Authorization, X-API-Key, ' +
+    'MCP-Protocol-Version, Mcp-Method, Mcp-Name';
   AResponseInfo.CustomHeaders.Values['Access-Control-Expose-Headers'] := 'Mcp-Session-Id';
   AResponseInfo.CustomHeaders.Values['Access-Control-Max-Age'] := IntToStr(CORS_MAX_AGE_SECONDS);
 end;
@@ -257,6 +264,12 @@ begin
   try
     InfoObj.AddPair('serverName', TJSONString.Create(FLogicServer.ServerName));
     InfoObj.AddPair('protocolVersion', TJSONString.Create(FLogicServer.ProtocolVersion));
+    // MCP 2026-07-28: anunciamos tambien el modo moderno (stateless) soportado.
+    var LVersions := TJSONArray.Create;
+    LVersions.Add(MCP_PROTOCOL_VERSION_MODERN);
+    if FLogicServer.ProtocolVersion <> MCP_PROTOCOL_VERSION_MODERN then
+      LVersions.Add(FLogicServer.ProtocolVersion);
+    InfoObj.AddPair('supportedVersions', LVersions);
     InfoObj.AddPair('status', TJSONString.Create('active'));
 
     AResponseInfo.ResponseNo := HTTP_OK;
@@ -271,9 +284,30 @@ end;
 procedure TAiMCPHttpServer.HandlePostRequest(ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo; const AAuthContext: TAiAuthContext);
 var
   RequestBody, ResponseBody, SessionID, IssuedSessionID: string;
+  HdrMethod, HdrName: string;
 begin
   try
     RequestBody := ReadStringFromStream(ARequestInfo.PostStream, -1, IndyTextEncoding_UTF8);
+
+    // MCP 2026-07-28: si el cliente manda los headers estandar del modo
+    // stateless, deben coincidir con el body (HeaderMismatchError -32020).
+    // Si no vienen (cliente legacy), se acepta el request tal cual.
+    HdrMethod := ARequestInfo.RawHeaders.Values['Mcp-Method'];
+    HdrName := ARequestInfo.RawHeaders.Values['Mcp-Name'];
+    if (HdrMethod <> '') or (HdrName <> '') then
+    begin
+      ResponseBody := CheckHeaderMismatch(RequestBody, HdrMethod, HdrName);
+      if ResponseBody <> '' then
+      begin
+        AResponseInfo.ResponseNo := HTTP_BAD_REQUEST;
+        AResponseInfo.ResponseText := 'Bad Request';
+        AResponseInfo.ContentType := 'application/json; charset=utf-8';
+        AResponseInfo.CharSet := 'utf-8';
+        AResponseInfo.ContentText := ResponseBody;
+        Exit;
+      end;
+    end;
+
     // ISSUE #110: Mcp-Session-Id (estandar MCP) con fallback a X-Session-ID (legacy).
     SessionID := ARequestInfo.RawHeaders.Values['Mcp-Session-Id'];
     if SessionID = '' then
@@ -310,6 +344,59 @@ begin
       AResponseInfo.ContentText := '{"jsonrpc": "2.0", "error": {"code": -32000, "message": "Server error during POST request processing"}, "id": null}';
       AResponseInfo.ContentType := 'application/json';
     end;
+  end;
+end;
+
+function TAiMCPHttpServer.CheckHeaderMismatch(const ARequestBody, AHdrMethod, AHdrName: string): string;
+var
+  Root: TJSONValue;
+  Obj, ParamsObj: TJSONObject;
+  BodyMethod, BodyName, Mismatch: string;
+  IdVal: TJSONValue;
+  ErrResp, ErrObj: TJSONObject;
+begin
+  Result := '';
+  Root := TJSONObject.ParseJSONValue(ARequestBody);
+  if not(Root is TJSONObject) then
+  begin
+    Root.Free;
+    Exit; // body invalido: lo reporta el motor JSON-RPC como parse error
+  end;
+  Obj := TJSONObject(Root);
+  try
+    BodyMethod := Obj.GetValue<string>('method', '');
+    BodyName := '';
+    ParamsObj := Obj.GetValue<TJSONObject>('params', nil);
+    if Assigned(ParamsObj) then
+      BodyName := ParamsObj.GetValue<string>('name', '');
+
+    Mismatch := '';
+    if (AHdrMethod <> '') and not SameStr(AHdrMethod, BodyMethod) then
+      Mismatch := Format('Mcp-Method header (%s) does not match body method (%s)', [AHdrMethod, BodyMethod])
+    else if (AHdrName <> '') and (BodyName <> '') and not SameStr(AHdrName, BodyName) then
+      Mismatch := Format('Mcp-Name header (%s) does not match params.name (%s)', [AHdrName, BodyName]);
+
+    if Mismatch = '' then
+      Exit;
+
+    ErrResp := TJSONObject.Create;
+    try
+      ErrResp.AddPair('jsonrpc', '2.0');
+      ErrObj := TJSONObject.Create;
+      ErrObj.AddPair('code', TJSONNumber.Create(MCP_ERROR_HEADER_MISMATCH));
+      ErrObj.AddPair('message', Mismatch);
+      ErrResp.AddPair('error', ErrObj);
+      IdVal := Obj.GetValue('id');
+      if Assigned(IdVal) then
+        ErrResp.AddPair('id', TJSONValue(IdVal.Clone))
+      else
+        ErrResp.AddPair('id', TJSONNull.Create);
+      Result := ErrResp.ToJSON;
+    finally
+      ErrResp.Free;
+    end;
+  finally
+    Obj.Free;
   end;
 end;
 
