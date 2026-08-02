@@ -978,8 +978,15 @@ begin
       begin
         var
         ErrorCode := JSONRPC_INTERNAL_ERROR;
+        // Spec 2026-07-28: solo un METODO desconocido es -32601; un tool o
+        // resource inexistente es Invalid Params (-32602, antes -32002/-32601).
         if Pos('not found', E.Message) > 0 then
-          ErrorCode := JSONRPC_METHOD_NOT_FOUND;
+        begin
+          if StartsText('Method', E.Message) then
+            ErrorCode := JSONRPC_METHOD_NOT_FOUND
+          else
+            ErrorCode := JSONRPC_INVALID_PARAMS;
+        end;
         if Pos('Invalid params', E.Message) > 0 then
           ErrorCode := JSONRPC_INVALID_PARAMS;
 
@@ -1361,12 +1368,19 @@ var
   ToolsArray: TJSONArray;
   Tool: IAiMCPTool;
   Schema: TJSONObject;
+  Names: TArray<string>;
+  ToolName: string;
 begin
   ResultJSON := TJSONObject.Create;
   ToolsArray := TJSONArray.Create;
   ResultJSON.AddPair('tools', ToolsArray);
-  for Tool in FActiveTools.Values do
+  // Spec 2026-07-28: orden deterministico (por nombre) para que los clientes
+  // puedan cachear la lista y mejorar el hit-rate del prompt cache del LLM.
+  Names := FActiveTools.Keys.ToArray;
+  TArray.Sort<string>(Names);
+  for ToolName in Names do
   begin
+    Tool := FActiveTools[ToolName];
     ToolJSON := TJSONObject.Create;
     ToolJSON.AddPair('name', Tool.Name);
     ToolJSON.AddPair('description', Tool.Description);
@@ -1483,12 +1497,18 @@ var
   ResultJSON, ResourceObj: TJSONObject;
   ResourcesArray: TJSONArray;
   Resource: IAiMCPResource;
+  URIs: TArray<string>;
+  URI: string;
 begin
   ResultJSON := TJSONObject.Create;
   ResourcesArray := TJSONArray.Create;
   ResultJSON.AddPair('resources', ResourcesArray);
-  for Resource in FActiveResources.Values do
+  // Spec 2026-07-28: orden deterministico (por URI), igual que tools/list.
+  URIs := FActiveResources.Keys.ToArray;
+  TArray.Sort<string>(URIs);
+  for URI in URIs do
   begin
+    Resource := FActiveResources[URI];
     ResourceObj := TJSONObject.Create;
     ResourceObj.AddPair('uri', Resource.URI);
     ResourceObj.AddPair('name', Resource.Name);

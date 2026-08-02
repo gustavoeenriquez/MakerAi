@@ -69,6 +69,7 @@ AServer.RegisterTool('my_tool', function: IAiMCPTool begin Result := TMyTool.Cre
 | `uTool.FileAccess.pas` | list_files, read_file, write_file | File operations with path/extension whitelisting |
 | `uTool.SysInfo.pas` | system_info | System metrics (memory, disk, network) |
 | `uTool.WorldTime.pas` | get_city_time | Timezone lookups (placeholder for external API) |
+| `uTool.ConfirmDemo.pas` | confirm_demo | Patron MRTR (spec 2026-07-28): elicitation de confirmacion + requestState |
 
 ## Key Source Locations
 
