@@ -16,6 +16,7 @@ This folder contains the foundation layer of the MakerAI framework. All provider
 | `uMakerAi.Chat.Tools.pas` | `IAiToolContext` interface and base tool classes (`TAiSpeechToolBase`, `TAiVisionToolBase`, etc.) |
 | `uMakerAi.Chat.Bridge.pas` | Bridge utilities for chat interoperability |
 | `uMakerAi.Prompts.pas` | Prompt template utilities |
+| `uMakerAi.Telemetry.pas` | `TAiTelemetry` — OpenTelemetry tracing opt-in (OTLP/HTTP JSON, GenAI semconv); helpers no-op-safe `AiSpanStart`/`AiSpanEnd`/`AiSpanAttr` usados por Chat, Tools y MCP |
 | `uMakerAi.Version.inc` | Version constants and feature flags - included via `{$I}` directive |
 | `uMakerAi.Utils.*.pas` | Utility helpers (CodeExtractor, PcmToWav, System) |
 

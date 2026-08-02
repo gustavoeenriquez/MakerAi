@@ -374,7 +374,7 @@ type
 implementation
 
 uses
-  IdTCPClient, IdIOHandler, IdExceptionCore;
+  IdTCPClient, IdIOHandler, IdExceptionCore, uMakerAi.Telemetry;
 
 // GetTickCount64 portable: TThread.GetTickCount64 no existe en Delphi 10.4.
 // TStopwatch (System.Diagnostics) es monótono y está disponible en todas las
@@ -1389,6 +1389,7 @@ var
   LInputResponses, LReqs, RawResult: TJSONObject;
   LState: string;
   LHandled: Boolean;
+  LSpan: TAiSpan;
 begin
   Result := nil;
   if not IsServerRunning then
@@ -1396,6 +1397,11 @@ begin
     FreeAndNil(AArguments);
     Exit;
   end;
+
+  // Telemetria: un span cubre todas las rondas MRTR de este tool call
+  LSpan := AiSpanStart('mcp.client tools/call', skClient);
+  AiSpanAttr(LSpan, 'mcp.method', 'tools/call');
+  AiSpanAttr(LSpan, 'gen_ai.tool.name', AToolName);
 
   // MCP 2026-07-28 (MRTR): loop de reintento. Si el servidor responde
   // input_required y hay OnInputRequired, se repite el tools/call con las
@@ -1422,6 +1428,13 @@ begin
         else
           LParams.AddPair('arguments', TJSONObject.Create);
         AttachModernMeta(LParams); // MCP 2026-07-28: _meta en cada request moderno
+        // Telemetria: propagar traceparent en _meta (convencion spec 2026-07-28)
+        if Assigned(LSpan) and IsModernMode then
+        begin
+          var LMetaV := LParams.GetValue('_meta');
+          if (LMetaV is TJSONObject) and not Assigned(TJSONObject(LMetaV).GetValue('traceparent')) then
+            TJSONObject(LMetaV).AddPair('traceparent', LSpan.TraceParent);
+        end;
         if Assigned(LInputResponses) then
         begin
           LParams.AddPair('inputResponses', LInputResponses);
@@ -1509,6 +1522,10 @@ begin
     Result.AddPair('error', Format('MCP MRTR: max rounds (%d) exceeded for tool "%s".', [MCP_MRTR_MAX_ROUNDS, AToolName]));
   finally
     LInputResponses.Free; // solo queda asignado si el loop no lo consumio
+    if Assigned(Result) then
+      AiSpanEnd(LSpan)
+    else
+      AiSpanEnd(LSpan, 'no response from MCP server');
   end;
 end;
 
@@ -2293,9 +2310,11 @@ var
   LURL: string;
   LHeaders: TNetHeaders;
   LResponseContent: string; // Para almacenar el contenido de la respuesta
+  LSpan: TAiSpan;
 begin
   FBusy := True;
   FLastError := '';
+  LSpan := nil;
   LRequestObj := TJSONObject.Create;
   try
     // Generar un nuevo ID para la solicitud JSON-RPC
@@ -2307,6 +2326,22 @@ begin
     LRequestObj.AddPair('method', AMethod);
     LRequestObj.AddPair('params', AParams); // AParams se convierte en propiedad de LRequestObj
     AttachModernMeta(AParams); // MCP 2026-07-28: _meta en cada request del modo moderno
+
+    // Telemetria: span del request MCP + propagacion del contexto de traza en
+    // _meta (convencion traceparent de la spec 2026-07-28). Debe ocurrir ANTES
+    // de serializar el body.
+    LSpan := AiSpanStart('mcp.client ' + AMethod, skClient);
+    AiSpanAttr(LSpan, 'mcp.method', AMethod);
+    if Assigned(LSpan) and Assigned(AParams) then
+    begin
+      AiSpanAttr(LSpan, 'gen_ai.tool.name', AParams.GetValue<string>('name', ''));
+      if IsModernMode then
+      begin
+        var LMetaV := AParams.GetValue('_meta');
+        if (LMetaV is TJSONObject) and not Assigned(TJSONObject(LMetaV).GetValue('traceparent')) then
+          TJSONObject(LMetaV).AddPair('traceparent', LSpan.TraceParent);
+      end;
+    end;
 
     // Crear un StringStream para el cuerpo de la solicitud HTTP
     LRequestBodyStream := TStringStream.Create(LRequestObj.ToJSON, TEncoding.UTF8);
@@ -2431,6 +2466,8 @@ begin
       LRequestBodyStream.Free;
     End;
   finally
+    // Telemetria: FLastError vacio = exito; con texto marca el span como error
+    AiSpanEnd(LSpan, FLastError);
     // Liberar el objeto de solicitud JSON-RPC (tambi?n liberar? AParams, del cual se hizo propietario)
     LRequestObj.Free;
     // Liberar el StringStream del cuerpo de la solicitud

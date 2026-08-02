@@ -45,7 +45,8 @@ uses
   uTool.FileAccess in 'uTool.FileAccess.pas',
   uTool.SysInfo in 'uTool.SysInfo.pas',
   uTool.WorldTime in 'uTool.WorldTime.pas',
-  uTool.ConfirmDemo in 'uTool.ConfirmDemo.pas';
+  uTool.ConfirmDemo in 'uTool.ConfirmDemo.pas',
+  uMakerAi.Telemetry in '..\..\Source\Core\uMakerAi.Telemetry.pas';
 
 var
   MCPServer: TAiMCPServer;
@@ -135,6 +136,8 @@ var
   ShowHelpFlag: Boolean;
   FileSettings: String;
   LoadSettings: Boolean;
+  OtelEnabled: Boolean;
+  Telemetry: TAiTelemetry;
   i: Integer;
 
 begin
@@ -145,6 +148,8 @@ begin
   CorsOrigins := '*';
   ShowHelpFlag := False;
   LoadSettings := False;
+  OtelEnabled := False;
+  Telemetry := nil;
 
   MCPServer := nil;
 
@@ -180,6 +185,9 @@ begin
           CorsOrigins := ParamStr(i);
         end;
       end
+      else if Param = '--otel' then
+        // Exporta trazas OpenTelemetry (OTLP/HTTP) al collector local :4318
+        OtelEnabled := True
       else if (Param = '--help') or (Param = '-h') then
         ShowHelpFlag := True;
 
@@ -210,6 +218,15 @@ begin
         WriteLn(ErrOutput, Format('Starting server with protocol: %s', [Protocol]))
       else
         WriteLn(Format('Starting server with protocol: %s', [Protocol]));
+
+      // Observabilidad opt-in: --otel exporta trazas al collector OTLP local
+      if OtelEnabled then
+      begin
+        Telemetry := TAiTelemetry.Create(nil);
+        Telemetry.ServiceName := 'AiMCPServerDemo';
+        Telemetry.Enabled := True;
+        WriteLn(ErrOutput, 'OpenTelemetry: exportando trazas a ' + Telemetry.Endpoint);
+      end;
 
       // 3. Crear instancia según protocolo
       if SameText(Protocol, 'sse') then
@@ -288,6 +305,7 @@ begin
       MCPServer.Stop;
       MCPServer.Free;
     end;
+    Telemetry.Free; // su destructor hace flush de los spans pendientes
   end;
 
 end.

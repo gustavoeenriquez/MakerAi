@@ -475,7 +475,7 @@ procedure Register;
 
 implementation
 
-uses uMakerAi.Chat, System.Zip, System.IniFiles;
+uses uMakerAi.Chat, System.Zip, System.IniFiles, uMakerAi.Telemetry;
 
 procedure Register;
 begin
@@ -1370,10 +1370,17 @@ var
   ArgsObject, ResultObject: TJSonObject;
   AExtractedMedia: TObjectList<TAiMediaFile>; // Lista temporal
   MF: TAiMediaFile;
+  LSpan: TAiSpan;
 begin
   Result := False;
 
   AExtractedMedia := TObjectList<TAiMediaFile>.Create;
+
+  // Telemetria: span por ejecucion de tool (GenAI semconv). Se anida
+  // automaticamente al span del turno de chat cuando corre en el mismo hilo.
+  LSpan := AiSpanStart('execute_tool ' + ToolCall.Name);
+  AiSpanAttr(LSpan, 'gen_ai.operation.name', 'execute_tool');
+  AiSpanAttr(LSpan, 'gen_ai.tool.name', ToolCall.Name);
 
   try
     if SameText(Copy(ToolCall.Name, 1, Length('local' + MCP_TOOL_SEP)), 'local' + MCP_TOOL_SEP) then
@@ -1502,6 +1509,13 @@ begin
     end;
 
   finally
+    // Telemetria: un ToolCall.Response con '"error"' marca el span como fallido
+    if Result and Assigned(LSpan) and (Pos('"error"', ToolCall.Response) > 0) then
+      AiSpanEnd(LSpan, 'tool returned error response')
+    else if not Result then
+      AiSpanEnd(LSpan, 'tool not found or not handled')
+    else
+      AiSpanEnd(LSpan);
     // Liberamos la lista temporal.
     // Si transferimos los archivos, OwnsObjects estar� en False y no los borrar�.
     // Si fall� algo, OwnsObjects estar� en True y borrar� los temporales para no dejar fugas.

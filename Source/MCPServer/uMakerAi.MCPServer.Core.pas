@@ -430,7 +430,7 @@ const
 implementation
 
 uses
-  System.IniFiles, System.JSON.Writers, uMakerAi.MCPServer.Bridge;
+  System.IniFiles, System.JSON.Writers, uMakerAi.MCPServer.Bridge, uMakerAi.Telemetry;
 
 const
   // JSON-RPC 2.0 Error Codes
@@ -853,8 +853,12 @@ var
   MethodName: string;
   IsNotification: Boolean;
   ExecuteResult: TValue;
+  LSpan: TAiSpan;
+  LSpanErr: string;
 begin
   AIssuedSessionID := '';
+  LSpan := nil;
+  LSpanErr := '';
 
   if not FIsActive then
   begin
@@ -892,8 +896,24 @@ begin
       // UnsupportedProtocolVersionError con la lista de versiones soportadas para
       // que el cliente reintente con una compatible.
       var LModernProto: string := GetModernProtocolVersion(Params);
+
+      // Telemetria: si el cliente propago traceparent en _meta (convencion de
+      // la spec 2026-07-28), el span del servidor continua esa traza remota.
+      var LTraceParent: string := '';
+      var LMetaTel := GetRequestMeta(Params);
+      if Assigned(LMetaTel) then
+      begin
+        var VTp := LMetaTel.GetValue('traceparent');
+        if VTp is TJSONString then
+          LTraceParent := TJSONString(VTp).Value;
+      end;
+      LSpan := AiSpanStart('mcp.server ' + MethodName, skServer, LTraceParent);
+      AiSpanAttr(LSpan, 'mcp.method', MethodName);
+      AiSpanAttr(LSpan, 'mcp.modern', LModernProto <> '');
+
       if (LModernProto <> '') and (LModernProto <> MCP_PROTOCOL_VERSION_MODERN) then
       begin
+        LSpanErr := 'Unsupported protocol version: ' + LModernProto;
         var LSupported := TJSONArray.Create;
         LSupported.Add(MCP_PROTOCOL_VERSION_MODERN);
         if FProtocolVersion <> MCP_PROTOCOL_VERSION_MODERN then
@@ -921,6 +941,7 @@ begin
           GetClientInfoFromMeta(Params, LCliName, LCliVersion);
           if not VetClientAllowed(LCliName, LCliVersion, LModernProto, LVetReason) then
           begin
+            LSpanErr := LVetReason;
             Result := CreateErrorResponse(RequestID, -32001, LVetReason);
             Exit;
           end;
@@ -935,6 +956,7 @@ begin
           begin
             if Trim(LReason) = '' then
               LReason := 'Unauthorized';
+            LSpanErr := LReason;
             Result := CreateErrorResponse(RequestID, -32001, LReason);
             Exit;
           end;
@@ -993,10 +1015,12 @@ begin
         if Assigned(JSONRequest) and RequestID.IsEmpty then
           RequestID := ExtractRequestID(JSONRequest);
 
+        LSpanErr := E.Message;
         Result := CreateErrorResponse(RequestID, ErrorCode, E.Message);
       end;
     end;
   finally
+    AiSpanEnd(LSpan, LSpanErr);
     JSONRequest.Free;
     JSONResponse.Free;
   end;
@@ -1483,7 +1507,20 @@ begin
 
   if FActiveTools.TryGetValue(ToolName, Tool) then
   begin
-    ResultJSON := Tool.Execute(Arguments, ExecContext);
+    // Telemetria: span por ejecucion del tool, anidado al span del request
+    var LSpan := AiSpanStart('mcp.tool ' + ToolName);
+    AiSpanAttr(LSpan, 'gen_ai.tool.name', ToolName);
+    AiSpanAttr(LSpan, 'mcp.mrtr.retry', Assigned(ExecContext.InputResponses));
+    try
+      ResultJSON := Tool.Execute(Arguments, ExecContext);
+      AiSpanEnd(LSpan);
+    except
+      on E: Exception do
+      begin
+        AiSpanEnd(LSpan, E.Message);
+        raise;
+      end;
+    end;
   end
   else
     raise Exception.CreateFmt('Tool not found: %s', [ToolName]);
