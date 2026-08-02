@@ -522,6 +522,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 | `053-DemoAgentesTools` | Agents with integrated tool use |
 | `054-AgentCheckpointDB` | Durable agent execution: suspend/resume with `TAiDatabaseCheckpointer` (SQLite via FireDAC) |
 | `060-AIChatUI` | Next-generation `TAIChatView` + `TAIChatInput` components — full multimodal demo |
+| `072-A2AFederation` | Agent federation over the A2A 1.0 protocol: expose a graph as an A2A agent, consume it, and delegate a local node to a remote agent (no LLM required; `--otel` for tracing) |
 
 ---
 

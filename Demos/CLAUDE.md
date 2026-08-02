@@ -63,6 +63,7 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 051-AgentDemo | Agent graph workflows | `TAIAgentManager`, visual orchestration |
 | 052-AgentConsole | Console agent interface | Command-line agent execution |
 | 053-DemoAgentesTools | Agents with tools | Tool integration in agent flows |
+| 072-A2AFederation | Federación de agentes vía protocolo A2A 1.0 (sin LLM) | `TAiA2AServer` expone un grafo (Agent Card + JSON-RPC), `TAiA2AClient` lo consume, `TAiA2ARemoteAgentTool` federa un nodo local al agente remoto; `--otel` para trazas |
 
 ### Audio / Speech (06x)
 | Demo | Purpose | Key Pattern |
