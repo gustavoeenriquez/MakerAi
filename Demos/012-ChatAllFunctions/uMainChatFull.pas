@@ -54,7 +54,7 @@ uses
 
   uMakerAi.Chat.Mistral, uMakerAi.Chat.Ollama, uMakerAi.Chat.Groq, uMakerAi.Chat.Grok, uMakerAi.Whisper,
   uMakerAi.Utils.VoiceMonitor, System.Actions, FMX.ActnList, uMakerAi.RAG.Vectors, uMakerAi.Tools.Functions,
-  uMakerAi.Embeddings.Core, uMakerAi.Embeddings, uMakerAi.MCPServer.Core, uMakerAi.MCPServer.Http,
+  uMakerAi.Embeddings.Core, uMakerAi.Embeddings, uMakerAi.Embeddings.OpenAi, uMakerAi.MCPServer.Core, uMakerAi.MCPServer.Http,
 
   System.ImageList, FMX.ImgList, FMX.TabControl, uMakerAi.Tools.Shell, uMakerAi.Tools.TextEditor, uMakerAi.Chat.Cohere,
   uMakerAi.Utils.DiffUpdater, uMakerAi.Prompts, uMakerAi.Tools.ComputerUse, uMakerAi.Tools.ComputerUse.WindowsFMX, uMakerAi.Chat.Tools;

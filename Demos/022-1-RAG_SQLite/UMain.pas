@@ -47,7 +47,7 @@ uses
   FireDAC.Phys.SQLiteDef, FireDAC.Stan.ExprFuncs, FireDAC.VCLUI.Wait,
   FireDAC.Phys.SQLiteWrapper.Stat, FireDAC.Comp.UI, FireDAC.DApt, Data.DB,
   FireDAC.Comp.Client, Vcl.StdCtrls, uMakerAi.Embeddings.core,
-  uMakerAi.Embeddings, uMakerAi.Chat.OpenAi, Vcl.Samples.Spin,
+  uMakerAi.Embeddings, uMakerAi.Embeddings.OpenAi, uMakerAi.Chat.OpenAi, Vcl.Samples.Spin,
   FireDAC.Stan.Param, FireDAC.DatS, FireDAC.DApt.Intf, FireDAC.Comp.DataSet,
   Vcl.Grids, Vcl.DBGrids, Vcl.ExtCtrls, Vcl.DBCtrls;
 

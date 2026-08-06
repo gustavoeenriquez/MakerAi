@@ -6,7 +6,7 @@ uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   System.Threading, System.Generics.Collections, System.StrUtils, System.Math,
 
-  uMakerAi.Embeddings.core, uMakerAi.Embeddings, uMakerAi.Chat.Ollama,
+  uMakerAi.Embeddings.core, uMakerAi.Embeddings, uMakerAi.Embeddings.Ollama, uMakerAi.Chat.Ollama,
   uMakerAi.rag.Vector.Driver.Postgres,
   uMakerAi.rag.Vectors, uMakerAi.rag.Vectors.Index,
   uMakerAi.RAG.Vectors.VQL, uMakerAi.RAG.MetaData,
@@ -376,7 +376,7 @@ begin
   Application.ProcessMessages;
 
   try
-    LRes := Rag.ExecuteVGQL(LPrompt);
+    LRes := Rag.ExecuteVQL(LPrompt);
 
     if LRes.IsEmpty then
       MemoResponse.Lines.Text := 'No se encontraron resultados que coincidan con los criterios.'

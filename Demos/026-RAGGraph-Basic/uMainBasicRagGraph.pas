@@ -5,7 +5,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, System.JSON,
 
-  uMakerAi.RAG.Graph.Core, uMakerAi.Embeddings.Core, uMakerAi.Embeddings, uMakerAi.Chat.Ollama, uMakerAi.RAG.Vectors,
+  uMakerAi.RAG.Graph.Core, uMakerAi.Embeddings.Core, uMakerAi.Embeddings, uMakerAi.Embeddings.Ollama, uMakerAi.Chat.Ollama, uMakerAi.RAG.Vectors.Index, uMakerAi.RAG.Vectors,
 
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, uMakerAi.RAG.Graph.Builder;
 
@@ -71,13 +71,13 @@ begin
   Steve := RAG.AddNode('id_001', 'PERSONA', 'Steve Jobs');
 
   // Opcional: Añadir propiedades de negocio (Metadatos)
-  Steve.Properties.Add('nacimiento', 1955);
-  Steve.Properties.Add('text', 'Steve Jobs, visionario tecnológico y cofundador de Apple.');
+  Steve.MetaData['nacimiento'] := 1955;
+  Steve.MetaData['text'] := 'Steve Jobs, visionario tecnológico y cofundador de Apple.';
   Steve.text := 'Steve Jobs, visionario tecnológico y cofundador de Apple.'; // Información para el RAG
 
 
   Apple := RAG.AddNode('id_002', 'EMPRESA', 'Apple Inc.');
-  Apple.Properties.Add('industria', 'Tecnología');
+  Apple.MetaData['industria'] := 'Tecnología';
   Apple.text := 'Apple Empresa de tecnología innovadora y creadora del IPhone';
 
   // 2. Crear la SEMÁNTICA  - el vector para búsquedas RAG
@@ -93,7 +93,7 @@ begin
   Relacion := RAG.AddEdge(Steve, Apple, 'edge_001', 'FUNDÓ', 'fue el fundador de');
 
   // Opcional: Cualificar la relación
-  Relacion.Properties.Add('año', 1976);
+  Relacion.MetaData['año'] := 1976;
 
   Relacion.Weight := 0.9; // Alta relevancia
 
