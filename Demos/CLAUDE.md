@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is the Demos directory for the MakerAI 3.x framework. Contains 44 working example projects demonstrating AI integration patterns for Delphi developers. Each demo has its own CLAUDE.md with specific implementation details.
 
-**Estado de compilación (ago 6/2026): 43 de 44 proyectos compilan** en Win64/Release. El único roto es `025-RAGGraph`, que necesita migración al API actual de RAG (`TDictionary<string,Variant>` → `TAiEmbeddingMetaData` en varias firmas, `for-in` vía `InternalDictionary`, firma de `ExecuteMakerGQL`).
+**Estado de compilación (ago 6/2026): los 44 proyectos compilan** en Win64/Release.
 
 ## Building Demos
 

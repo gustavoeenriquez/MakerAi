@@ -210,7 +210,7 @@ type
 
     Function NewQuery: TFDQuery;
     function EmbeddingToString(const AData: TAiEmbeddingData): string;
-    function PropertiesToJSONString(const AProperties: TDictionary<string, Variant>): string;
+    function PropertiesToJSONString(const AProperties: TAiEmbeddingMetaData): string;
     function HydrateNodeFromQuery(AQuery: TFDQuery; AGraph: TAiRagGraph): TAiRagGraphNode;
 
     procedure MatchBuilder_PopulateComboBoxes;
@@ -219,7 +219,7 @@ type
     procedure MatchBuilder_PopulateSuggestions(const SearchText: string);
     procedure MatchBuilder_DisplayMatchResults(const AResults: TArray<TDictionary<string, TObject>>; AShowProperties: Boolean);
     procedure MatchBuilder_DisplaySubgraphResults(const AResults: TArray<TDictionary<string, TObject>>; AShowProperties: Boolean);
-    procedure MatchBuilder_DisplayProperties(AProperties: TDictionary<string, Variant>; AOutput: TStrings; const AIndentation: string);
+    procedure MatchBuilder_DisplayProperties(AProperties: TAiEmbeddingMetaData; AOutput: TStrings; const AIndentation: string);
 
   public
     function ParseJsonToQueryPlan(const AJSONString: string): TQueryPlan;
@@ -336,7 +336,7 @@ Var
   Depth, Limit: Integer;
   Precision: Single;
   Detailed: Boolean;
-  AFilter: TAiEmbeddingMetaData;
+  AFilter: TAiFilterCriteria;
 begin
   Prompt := MemoPrompt.Lines.Text;
   Depth := StrToIntDef(EditDepth.Text, 0);
@@ -345,8 +345,18 @@ begin
   Precision := StrToFloatDef(EditPrecision.Text, 0.5);
 
   // --- opcional se puede filtrar primero para reducir el número de registros ----
-  AFilter := TAiEmbeddingMetaData.Create;
-  AFilter.Data.Values['empresa'] := 'APPLE';
+  // El filtro ya no es un diccionario de metadatos sino un arbol de criterios
+  // (TAiFilterCriteria), que se arma con la API fluida:
+  //
+  //   AFilter := TAiFilterCriteria.Create;
+  //   try
+  //     AFilter.AddEqual('empresa', 'APPLE');
+  //     Res := RAG.SearchText(Prompt, Depth, Detailed, Limit, Precision, AFilter);
+  //   finally
+  //     AFilter.Free;   // el codigo anterior lo creaba y lo perdia sin liberar
+  //   end;
+  //
+  // Tambien existe AFilter.LoadFromMetaData(...) para migrar un metadato viejo.
 
   // no pasamos filtros por a hora
   AFilter := Nil;
@@ -453,10 +463,10 @@ begin
           begin
             Log.Add('  - ' + Node.Name + ' (Tipo: ' + Node.NodeLabel + ')');
 
-            if Detailed and (Node.Properties <> nil) and (Node.Properties.Count > 0) then
+            if Detailed and (Node.MetaData <> nil) and (Node.MetaData.InternalDictionary.Count > 0) then
             begin
               Log.Add('  Propiedades de la entidad:');
-              for PropPair in Node.Properties do
+              for PropPair in Node.MetaData.InternalDictionary do
               begin
                 Log.Add('    • ');
                 Log.Add(PropPair.Key);
@@ -514,7 +524,9 @@ begin
   try
     // 2. Ejecución directa a través del componente RAG
     // Aquí el componente se encarga internamente de llamar al Parser y al Lexer
-    Results := RAG.ExecuteMakerGQL(MemoMakerGQL.Lines.Text, Depth);
+    // La sobrecarga con resultados los devuelve por parametro out; el return
+    // de la funcion es el texto ya formateado de la consulta.
+    RAG.ExecuteMakerGQL(MemoMakerGQL.Lines.Text, Results, Depth);
 
     // 3. Visualización de Resultados
     MemoResults.Lines.Add(Format('Se encontraron %d coincidencias.', [Length(Results)]));
@@ -828,7 +840,7 @@ begin
   Result.Name := AQuery.FieldByName('name').AsString;
 
   if not AQuery.FieldByName('properties').IsNull then
-    JSONStringToProperties(AQuery.FieldByName('properties').AsString, Result.Properties);
+    JSONStringToProperties(AQuery.FieldByName('properties').AsString, Result.MetaData.InternalDictionary);
 
   if not AQuery.FieldByName('embedding').IsNull then
     Result.Data := StringToEmbedding(AQuery.FieldByName('embedding').AsString);
@@ -901,19 +913,19 @@ begin
   end;
 end;
 
-function TMainRagGraphDemo.PropertiesToJSONString(const AProperties: TDictionary<string, Variant>): string;
+function TMainRagGraphDemo.PropertiesToJSONString(const AProperties: TAiEmbeddingMetaData): string;
 var
   JsonObj: TJSONObject;
   Pair: TPair<string, Variant>;
 begin
-  if (AProperties = nil) or (AProperties.Count = 0) then
+  if (AProperties = nil) or (AProperties.InternalDictionary.Count = 0) then
     Exit('{}');
 
   // La lógica es muy similar a la que acabamos de poner en el Core.
   // Podríamos incluso reutilizarla si tuviéramos una unidad de helpers común.
   JsonObj := TJSONObject.Create;
   try
-    for Pair in AProperties do
+    for Pair in AProperties.InternalDictionary do
     begin
       // Para no depender de VariantToJSONValue (que está en el Core),
       // podemos replicar su lógica simple aquí.
@@ -1269,7 +1281,7 @@ begin
     Query.ParamByName('source_node_id').AsString := AEdge.FromNode.ID;
     Query.ParamByName('target_node_id').AsString := AEdge.ToNode.ID;
     Query.ParamByName('weight').AsFloat := AEdge.Weight;
-    Query.ParamByName('properties').AsString := PropertiesToJSONString(AEdge.Properties);
+    Query.ParamByName('properties').AsString := PropertiesToJSONString(AEdge.MetaData);
 
     Query.ExecSQL;
     Handled := True;
@@ -1301,7 +1313,7 @@ begin
     Query.ParamByName('id').AsString := ANode.ID;
     Query.ParamByName('node_label').AsString := ANode.NodeLabel;
     Query.ParamByName('name').AsString := ANode.Name;
-    Query.ParamByName('properties').AsString := PropertiesToJSONString(ANode.Properties);
+    Query.ParamByName('properties').AsString := PropertiesToJSONString(ANode.MetaData);
 
     Query.ExecSQL;
     Handled := True;
@@ -1645,7 +1657,7 @@ begin
             MemoResults.Lines.Add(Format('    [Contexto]: %s', [Node.Text]));
 
           if AShowProperties then
-            MatchBuilder_DisplayProperties(Node.Properties, MemoResults.Lines, '    ');
+            MatchBuilder_DisplayProperties(Node.MetaData, MemoResults.Lines, '    ');
         end
         else if VarName.Value is TAiRagGraphEdge then
         begin
@@ -1657,7 +1669,7 @@ begin
             MemoResults.Lines.Add(Format('    [Relación]: %s', [Edge.Text]));
 
           if AShowProperties then
-            MatchBuilder_DisplayProperties(Edge.Properties, MemoResults.Lines, '    ');
+            MatchBuilder_DisplayProperties(Edge.MetaData, MemoResults.Lines, '    ');
         end
         else if VarName.Value is TStringWrapper then
         begin
@@ -1671,14 +1683,14 @@ begin
     end;
 end;
 
-procedure TMainRagGraphDemo.MatchBuilder_DisplayProperties(AProperties: TDictionary<string, Variant>; AOutput: TStrings; const AIndentation: string);
+procedure TMainRagGraphDemo.MatchBuilder_DisplayProperties(AProperties: TAiEmbeddingMetaData; AOutput: TStrings; const AIndentation: string);
 var
   Pair: TPair<string, Variant>;
 begin
-  if (AProperties = nil) or (AProperties.Count = 0) then
+  if (AProperties = nil) or (AProperties.InternalDictionary.Count = 0) then
     Exit;
 
-  for Pair in AProperties do
+  for Pair in AProperties.InternalDictionary do
   begin
     AOutput.Add(Format('%s• %s: %s', [AIndentation, Pair.Key, VarToStr(Pair.Value)]));
   end;
@@ -1722,7 +1734,7 @@ begin
 
             // Mostrar propiedades si se solicita
             if AShowProperties then
-              MatchBuilder_DisplayProperties(Node.Properties, NodeList, '    ');
+              MatchBuilder_DisplayProperties(Node.MetaData, NodeList, '    ');
           end
 
           // --- PROCESAR ARISTA ---
@@ -1737,7 +1749,7 @@ begin
 
             // Mostrar propiedades si se solicita
             if AShowProperties then
-              MatchBuilder_DisplayProperties(Edge.Properties, EdgeList, '    ');
+              MatchBuilder_DisplayProperties(Edge.MetaData, EdgeList, '    ');
           end;
         end;
       finally

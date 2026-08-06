@@ -45,6 +45,17 @@ msbuild RagGraphDemo.dproj /p:Config=Debug /p:Platform=Win32
 - **MakerGQL** (`ExecuteMakerGQL`): Custom graph query language
 - **LLM Query Planning**: LLM generates `TQueryPlan` JSON for execution
 
+### API actual (migración de ago 2026)
+
+Este demo se migró al API vigente de RAG; si ves código viejo circulando, estas son las equivalencias:
+
+| Antes | Ahora |
+|-------|-------|
+| `Node.Properties` (`TDictionary<string, Variant>`) | `Node.MetaData` (`TAiEmbeddingMetaData`), indexada por defecto: `Node.MetaData['clave'] := valor` |
+| `for P in Node.Properties` | `for P in Node.MetaData.InternalDictionary` |
+| Filtro de búsqueda como `TAiEmbeddingMetaData` | `TAiFilterCriteria`, con API fluida `AddEqual`/`AddGreater`/`AddIn`/`AddBetween`; `LoadFromMetaData` migra uno viejo |
+| `Results := ExecuteMakerGQL(código, Depth)` | `ExecuteMakerGQL(código, Results, Depth)` — los objetos salen por parámetro `out` y el `Result` de la función es el texto formateado |
+
 ### Database Events Pattern
 
 PostgreSQL mode requires implementing callback events:
