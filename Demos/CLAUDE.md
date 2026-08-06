@@ -4,13 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is the Demos directory for the MakerAI 3.x framework. Contains 18+ working example applications demonstrating AI integration patterns for Delphi developers. Each demo has its own CLAUDE.md with specific implementation details.
+This is the Demos directory for the MakerAI 3.x framework. Contains 44 working example projects demonstrating AI integration patterns for Delphi developers. Each demo has its own CLAUDE.md with specific implementation details.
+
+**Estado de compilación (ago 6/2026): 43 de 44 proyectos compilan** en Win64/Release. El único roto es `025-RAGGraph`, que necesita migración al API actual de RAG (`TDictionary<string,Variant>` → `TAiEmbeddingMetaData` en varias firmas, `for-in` vía `InternalDictionary`, firma de `ExecuteMakerGQL`).
 
 ## Building Demos
 
 **IDE:** Delphi 11 Alexandria through 13 Florence (demos require Delphi 11+; the core framework supports 10.4 Sydney minimum)
 
-**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos.
+**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026 e incluye los 44 proyectos; antes le faltaban 18.
+
+> **OJO al editar los `.pas` de los demos:** varios están en **ANSI (Windows-1252) con saltos LF**, no en UTF-8. Guardarlos como UTF-8 destruye todas las tildes de forma silenciosa (compila igual, y `git diff` lo disimula si `core.autocrlf` está activo). Verificar siempre con `git diff --numstat` que solo cambien las líneas que se tocaron.
 
 **Individual build (MSBuild):**
 ```bash
@@ -62,8 +66,16 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 |------|---------|-------------|
 | 051-AgentDemo | Agent graph workflows | `TAIAgentManager`, visual orchestration |
 | 052-AgentConsole | Console agent interface | Command-line agent execution |
-| 053-DemoAgentesTools | Agents with tools | Tool integration in agent flows |
+| 054-AgentCheckpointDB | Durable execution con checkpoints en base de datos | `IAiCheckpointer` + suspend/resume de grafos |
 | 072-A2AFederation | Federación de agentes vía protocolo A2A 1.0 (sin LLM) | `TAiA2AServer` expone un grafo (Agent Card + JSON-RPC), `TAiA2AClient` lo consume, `TAiA2ARemoteAgentTool` federa un nodo local al agente remoto; `--otel` para trazas |
+| 074-A2AOrchestration | Flujos de orquestación A2A (sin LLM) | Pool de managers con `OnAcquireManager` (3 tasks simultáneos), human-in-the-loop con resume por `taskId`, HITL federado que suspende el nodo local, y `blocking=false` + `GetTask` |
+
+### Guardrails, Evals y Memoria (07x)
+| Demo | Purpose | Key Pattern |
+|------|---------|-------------|
+| 073-GuardrailsEvals | Política de tool calls y evals (sin LLM) | `TAiGuardrails` (allow/blocklist, patrón en argumentos, veto programático) verificando que el tool bloqueado **no se ejecuta**, + `TAiEvalRunner` con reporte y exit code |
+| 075-MCPElicitation | Elicitation MCP (MRTR) desde el **cliente** | `TMCPClientHttp.OnInputRequired` respondiendo accept/decline, y qué se ve si nadie atiende el evento; servidor MCP in-process |
+| 076-Memory | Memoria semántica persistente | `TAiMemory` sobre SQLite/FTS5: `Store`/`Search`/`Recall`/`Context`/`Stats` + persistencia. FTS sin API key; híbrido (FTS+semántica con RRF) si hay `OPENAI_API_KEY` |
 
 ### Audio / Speech (06x)
 | Demo | Purpose | Key Pattern |
