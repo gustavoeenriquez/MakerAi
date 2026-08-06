@@ -15,8 +15,8 @@ The Agents module implements a graph-based autonomous agent orchestration framew
 | `uMakerAi.Agents.EngineRegistry.pas` | Singleton registries for tool discovery (`TEngineRegistry`, `TAgentHandlerRegistry`) |
 | `uMakerAi.Agents.GraphBuilder.pas` | `TGraphBuilder` parses JSON graph specs into runtime structures. `StrictValidation` (default True) raises `EAiGraphError` on structural defects (edge to missing node, undeclared port, >4 fanout outputs); set False for the legacy warn-and-drop behavior (fix M-02) |
 | `uMakerAi.Agents.DmGenerator.pas` | `TDataModuleGenerator` generates Delphi DataModule code from JSON graphs |
-| `uMakerAi.A2A.Server.pas` | `TAiA2AServer` (MVP spec A2A 1.0): expone un `TAIAgentManager` como agente A2A — Agent Card en `/.well-known/agent-card.json`, JSON-RPC `SendMessage`/`GetTask`/`CancelTask` (+ aliases 0.x); `esSuspended`→`TASK_STATE_INPUT_REQUIRED`; sin streaming (rechaza con UnsupportedOperationError) |
-| `uMakerAi.A2A.Client.pas` | `TAiA2AClient`: consume agentes A2A remotos — `FetchAgentCard`, `SendText` (artifact text + `LastTaskId`/`LastState`), `GetTask`/`CancelTask`. Incluye `TAiA2ARemoteAgentTool` (federacion): asignado como `Tool` de un nodo, delega el input del nodo en un agente A2A remoto; registrado en `TEngineRegistry` |
+| `uMakerAi.A2A.Server.pas` | `TAiA2AServer` (spec A2A 1.0): expone `TAIAgentManager`(s) como agente A2A — Agent Card en `/.well-known/agent-card.json`, JSON-RPC `SendMessage`/`GetTask`/`CancelTask` (+ aliases 0.x). Pool de managers, ciclo de vida real del task, resume de `input-required`, auth bearer y `traceparent`; sin streaming (rechaza con UnsupportedOperationError) |
+| `uMakerAi.A2A.Client.pas` | `TAiA2AClient`: consume agentes A2A remotos — `FetchAgentCard`, `SendText`/`SendTextEx`, `GetTask`/`CancelTask`; estado normalizado en `LastTaskState` y pregunta del agente en `LastStatusMessage`. Incluye `TAiA2ARemoteAgentTool` (federacion): asignado como `Tool` de un nodo, delega el input del nodo en un agente A2A remoto; registrado en `TEngineRegistry` |
 
 ## Core Classes
 
@@ -150,6 +150,30 @@ AgentManager.OnSuspend := procedure(Sender: TObject; const ThreadID, NodeName,
   ShowMessage('Aprobación requerida: ' + Reason);
 end;
 ```
+
+## A2A: flujos de orquestación
+
+**Concurrencia.** Un `TAIAgentManager` no ejecuta dos grafos a la vez, así que un servidor A2A con un solo manager serializa los tasks (el segundo recibe `AgentBusy`, `-32000`). Para fan-out real asignar `TAiA2AServer.OnAcquireManager`: la fábrica devuelve un grafo nuevo y el servidor mantiene un pool de hasta `MaxConcurrentTasks`. La reserva del slot es atómica (no depende de `Busy`), de modo que dos peticiones simultáneas no se quedan con el mismo manager.
+
+```pascal
+procedure TForm1.AcquireManager(Sender: TObject; var AManager: TAIAgentManager);
+begin
+  AManager := TAIAgentManager.Create(nil);   // el servidor lo libera
+  AManager.AddNode('Uno', NodeExec).AddNode('Dos', NodeExec);
+  AManager.AddEdge('Uno', 'Dos');
+  AManager.SetEntryPoint('Uno').SetFinishPoint('Dos');
+end;
+```
+
+**Ciclo de vida del task.** `SendMessage` con `configuration.blocking = false` (o al vencer `WaitTimeoutMs`) responde con el task en `working`; el cliente sigue con `GetTask`, que refresca el estado desde el grafo vivo. El slot se libera solo al llegar a un estado terminal. Un vencimiento de espera **no** marca `failed`.
+
+> El servidor fuerza `Asynchronous := True` en los managers que conduce: en modo síncrono `Run` haría `Wait(INFINITE)` (ignorando el timeout) y lanzaría excepción en vez de dejar el estado en el blackboard.
+
+**Human-in-the-loop a través de A2A.** Una suspensión (`Node.Suspend`) se publica como `input-required` con la pregunta en `status.message`, y el task conserva su manager. Un `SendMessage` posterior con el mismo `taskId` reanuda el grafo (`ResumeThread`) usando el texto recibido como respuesta humana.
+
+En el lado federado, `TAiA2ARemoteAgentTool` suspende el **nodo local** cuando el agente remoto pide input (`SuspendOnInputRequired`, default `True`) en vez de fallar; al reanudar el nodo local, la respuesta viaja al mismo task remoto. El task remoto pendiente se recuerda en el blackboard bajo `A2A.<NodoName>.PendingTask`.
+
+**Literales de estado.** `StateNaming` elige la forma emitida: `anProto` (`TASK_STATE_COMPLETED`, default) o `anLower` (`completed`). La lectura tolera ambas siempre — usar `TAiA2AClient.LastTaskState` (enum) y no comparar strings.
 
 ## Threading Model
 

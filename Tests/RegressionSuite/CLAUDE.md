@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: < 1 segundo.
 
-## Cobertura actual (17 casos)
+## Cobertura actual (23 casos)
 
 | Área | Casos |
 |------|-------|
@@ -35,6 +35,7 @@ Duración típica: < 1 segundo.
 | MCP MRTR | reintento con `accept`, mensaje de elicitation recibido, sin handler → error explícito |
 | Agentes | grafo secuencial con status final y salida encadenada |
 | A2A 1.0 | Agent Card, `SendMessage` → `TASK_STATE_COMPLETED`, federación (grafo local → agente remoto) |
+| A2A orquestación | pool con 3 tasks simultáneos, human-in-the-loop con resume por `taskId`, human-in-the-loop federado (suspensión del nodo local), `blocking=false` + `GetTask`, tolerancia de literales de estado, cancelar task terminal → `-32002` |
 | Guardrails | blocklist con comodín, allowlist estricta, patrón prohibido en argumentos, veto programático, integración real (el tool bloqueado NO se ejecuta) |
 | Evals | autoprueba del runner (conteo PASS/FAIL) |
 
@@ -44,7 +45,9 @@ Duración típica: < 1 segundo.
 |---------|-----------|
 | `MakerAiRegressionSuite.dpr` | Programa principal: CLI (`--json`, `--otel`), ejecución y exit code |
 | `uRegression.Suites.pas` | Definición de los casos (`DefineCases`) y el *dispatcher* que ejecuta cada escenario contra los componentes reales |
-| `uRegression.Fixtures.pas` | Tools MCP de prueba (`echo_upper`, `confirm_op` con MRTR), servidor MCP "solo legacy" (responde `-32601` a `server/discover`) y handlers `of object` |
+| `uRegression.Fixtures.pas` | Tools MCP de prueba (`echo_upper`, `confirm_op` con MRTR), servidor MCP "solo legacy" (responde `-32601` a `server/discover`) y handlers `of object` (incluye `NodeSuspendOnce` para human-in-the-loop y `AcquireManager` como fábrica del pool A2A) |
+
+Los escenarios A2A de orquestación viven en `RunA2AFlowScenario`, aparte del bloque `a2a:` básico, porque cada uno arma su propia topología (pool, suspensión, no bloqueante).
 
 ## Cómo agregar un caso
 

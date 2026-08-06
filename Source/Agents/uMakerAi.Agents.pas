@@ -439,6 +439,11 @@ type
     function ResumeThread(const AThreadID, ANodeName, AInput: string): Boolean;
     // Lista thread IDs con checkpoints activos (suspendidos o en progreso)
     function GetActiveThreads: TArray<string>;
+    // Nombres de los nodos actualmente suspendidos (human-in-the-loop). Es la
+    // via sincrona para saber QUE nodo pide input: OnSuspend se dispara via
+    // TThread.Queue y en un servidor headless (sin bomba de mensajes ni
+    // CheckSynchronize) podria no llegar nunca.
+    function GetSuspendedNodeNames: TArray<string>;
     property Checkpointer: IAiCheckpointer read FCheckpointer write SetCheckpointer;
   published
     property StartNode: TAIAgentsNode read FStartNode write SetStartNode;
@@ -2445,11 +2450,24 @@ procedure TAIAgentManager.DoNodeSuspended(ANode: TAIAgentsNode;
 var
   LStep: TAiPendingStep;
   LSnap: TAiCheckpointSnapshot;
+  LBeforeName, LLinkName: string;
 begin
+  // OJO: IfThen es una funcion, no un operador: evalua SIEMPRE sus dos ramas.
+  // Con IfThen(Assigned(ABeforeNode), ABeforeNode.Name, '') se leia .Name sobre
+  // nil y reventaba con AV. Pasa cuando suspende un nodo sin arista de entrada
+  // (el StartNode del grafo) o cuando suspende un nodo reanudado, porque
+  // ResumeThread llama DoExecute(nil, nil).
+  LBeforeName := '';
+  if Assigned(ABeforeNode) then
+    LBeforeName := ABeforeNode.Name;
+  LLinkName := '';
+  if Assigned(ALink) then
+    LLinkName := ALink.Name;
+
   LStep := TAiPendingStep.Create(
     ANode.Name,
-    IfThen(Assigned(ABeforeNode), ABeforeNode.Name, ''),
-    IfThen(Assigned(ALink), ALink.Name, ''),
+    LBeforeName,
+    LLinkName,
     ANode.Input,
     'Suspended',
     ANode.SuspendReason,
@@ -2636,6 +2654,30 @@ begin
   for LLink in FLinks do
     if SameText(LLink.Name, AName) then
       Exit(LLink);
+end;
+
+// ---------------------------------------------------------------------------
+// GetSuspendedNodeNames  -- nodos que pidieron input humano
+// ---------------------------------------------------------------------------
+function TAIAgentManager.GetSuspendedNodeNames: TArray<string>;
+var
+  LList: TList<string>;
+  LStep: TAiPendingStep;
+begin
+  LList := TList<string>.Create;
+  try
+    FSuspendedStepsLock.Enter;
+    try
+      for LStep in FSuspendedSteps do
+        if not LList.Contains(LStep.NodeName) then
+          LList.Add(LStep.NodeName);
+    finally
+      FSuspendedStepsLock.Leave;
+    end;
+    Result := LList.ToArray;
+  finally
+    LList.Free;
+  end;
 end;
 
 // ---------------------------------------------------------------------------

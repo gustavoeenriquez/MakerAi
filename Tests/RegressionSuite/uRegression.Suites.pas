@@ -27,6 +27,9 @@ type
     // Escenarios agrupados por area
     function RunMcpScenario(const AScenario: string): string;
     function RunAgentScenario(const AScenario: string): string;
+    // Flujos de orquestacion A2A: pool concurrente, human-in-the-loop,
+    // no bloqueante, tolerancia de literales y cancelacion.
+    function RunA2AFlowScenario(const AScenario: string): string;
     function RunPolicyScenario(const AScenario: string): string;
   public
     constructor Create;
@@ -37,7 +40,7 @@ type
 implementation
 
 uses
-  System.TypInfo,
+  System.TypInfo, System.StrUtils, System.SyncObjs, System.Threading,
   uMakerAi.Core,
   uMakerAi.MCPServer.Core, UMakerAi.MCPServer.Http,
   uMakerAi.MCPClient.Core,
@@ -124,6 +127,46 @@ begin
     .Input('a2a:federation')
     .ExpectContains('esCompleted')
     .ExpectContains('fed>Origen>Uno>Dos');
+
+  // --- A2A: flujos de orquestacion ---
+
+  // Tres tasks simultaneos contra el mismo agente. Con un solo manager dos
+  // habrian recibido AgentBusy; con el pool los tres completan.
+  FRunner.AddCase('a2a.pool.concurrent')
+    .Input('a2a:concurrency')
+    .ExpectEquals('completed=3|failed=0');
+
+  // Human-in-the-loop cruzando A2A: el grafo suspende -> input-required con la
+  // pregunta, y un SendMessage con el mismo taskId lo reanuda hasta completed.
+  FRunner.AddCase('a2a.hitl.resume')
+    .Input('a2a:hitl')
+    .ExpectContains('tsInputRequired')
+    .ExpectContains('aprobacion humana')
+    .ExpectContains('tsCompleted')
+    .ExpectContains('>aprobado');
+
+  // Lo mismo pero federado: el nodo local se suspende en vez de fallar, y al
+  // reanudarlo la respuesta viaja al task remoto y el grafo local termina.
+  FRunner.AddCase('a2a.hitl.federated')
+    .Input('a2a:fedhitl')
+    .ExpectEquals('esSuspended|esCompleted|si>aprobado');
+
+  // blocking=false devuelve el task en working y GetTask lo lleva a terminal
+  // sin que el estado quede mintiendo.
+  FRunner.AddCase('a2a.task.nonblocking')
+    .Input('a2a:nonblocking')
+    .ExpectEquals('tsWorking|tsCompleted|lento>Uno>Dos');
+
+  // Interop: el agente publica los literales en forma JSON-RPC y el cliente los
+  // entiende igual que la forma protobuf.
+  FRunner.AddCase('a2a.state.naming-tolerance')
+    .Input('a2a:naming')
+    .ExpectEquals('completed|tsCompleted|hola>Uno>Dos');
+
+  // Cancelar un task ya terminado es -32002, no un exito silencioso.
+  FRunner.AddCase('a2a.cancel.terminal')
+    .Input('a2a:cancelterm')
+    .ExpectContains('-32002');
 
   // --- Guardrails ---
   FRunner.AddCase('policy.guard.blocklist')
@@ -317,6 +360,12 @@ var
   end;
 
 begin
+  // Los flujos de orquestacion arman su propia topologia (pool, suspension,
+  // no bloqueante) y viven en su propia rutina.
+  if MatchStr(AScenario, ['a2a:concurrency', 'a2a:hitl', 'a2a:fedhitl', 'a2a:nonblocking', 'a2a:naming',
+    'a2a:cancelterm']) then
+    Exit(RunA2AFlowScenario(AScenario));
+
   Result := '';
   Handlers := TFixtureHandlers.Create;
   try
@@ -415,6 +464,279 @@ begin
 
     raise Exception.Create('Escenario de agentes desconocido: ' + AScenario);
   finally
+    Handlers.Free;
+  end;
+end;
+
+// -----------------------------------------------------------------------------
+// A2A: flujos de orquestacion
+// -----------------------------------------------------------------------------
+
+function TRegressionSuite.RunA2AFlowScenario(const AScenario: string): string;
+var
+  Handlers: TFixtureHandlers;
+  Server: TAiA2AServer;
+  Client: TAiA2AClient;
+  Agents, Local: TAIAgentManager;
+  Tool: TAiA2ARemoteAgentTool;
+  Task: TJSONObject;
+  OutText, TaskId, CtxId, Url: string;
+  OkCount, BadCount: Integer;
+  Tasks: TArray<ITask>;
+  I, Waited: Integer;
+  St1, St2: TAiA2ATaskState;
+
+  function StateName(AValue: TAiA2ATaskState): string;
+  begin
+    Result := GetEnumName(TypeInfo(TAiA2ATaskState), Ord(AValue));
+  end;
+
+  procedure WaitGraph(A: TAIAgentManager);
+  begin
+    while A.Busy do
+    begin
+      CheckSynchronize;
+      Sleep(20);
+    end;
+    CheckSynchronize;
+  end;
+
+begin
+  Result := '';
+  Url := Format('http://localhost:%d', [PORT_A2A]);
+  Handlers := TFixtureHandlers.Create;
+  Server := TAiA2AServer.Create(nil);
+  Agents := nil;
+  try
+    Server.Port := PORT_A2A;
+    Server.AgentName := 'Suite Flow Agent';
+
+    // --- Pool: tres tasks simultaneos contra el mismo agente ---
+    if AScenario = 'a2a:concurrency' then
+    begin
+      Server.OnAcquireManager := Handlers.AcquireManager;
+      Server.MaxConcurrentTasks := 3;
+      Server.Active := True;
+
+      OkCount := 0;
+      BadCount := 0;
+      SetLength(Tasks, 3);
+      for I := 0 to 2 do
+        Tasks[I] := TTask.Run(
+          procedure
+          var
+            C: TAiA2AClient;
+            T: TJSONObject;
+            S: string;
+          begin
+            C := TAiA2AClient.Create(nil);
+            try
+              C.Url := Url;
+              try
+                T := C.SendText('p', S);
+                try
+                  if C.LastTaskState = tsCompleted then
+                    TInterlocked.Increment(OkCount)
+                  else
+                    TInterlocked.Increment(BadCount);
+                finally
+                  T.Free;
+                end;
+              except
+                TInterlocked.Increment(BadCount); // AgentBusy o transporte
+              end;
+            finally
+              C.Free;
+            end;
+          end);
+      TTask.WaitForAll(Tasks);
+      Result := Format('completed=%d|failed=%d', [OkCount, BadCount]);
+    end
+
+    // --- Human-in-the-loop directo sobre A2A ---
+    else if AScenario = 'a2a:hitl' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteHitlGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec).AddNode('Espera', Handlers.NodeSuspendOnce);
+      Agents.AddEdge('Uno', 'Espera');
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Espera');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Client := TAiA2AClient.Create(nil);
+      try
+        Client.Url := Url;
+        Task := Client.SendText('hola', OutText);
+        try
+          St1 := Client.LastTaskState;
+          TaskId := Client.LastTaskId;
+          CtxId := Client.LastContextId;
+          Result := StateName(St1) + ' [' + Client.LastStatusMessage + ']';
+        finally
+          Task.Free;
+        end;
+
+        // Mismo taskId => reanudacion del grafo suspendido, no un task nuevo.
+        Task := Client.SendTextEx('ok', TaskId, CtxId, OutText);
+        try
+          Result := Result + '|' + StateName(Client.LastTaskState) + '|' + OutText;
+        finally
+          Task.Free;
+        end;
+      finally
+        Client.Free;
+      end;
+    end
+
+    // --- Human-in-the-loop atravesando una federacion ---
+    else if AScenario = 'a2a:fedhitl' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteFedRemote';
+      Agents.AddNode('Espera', Handlers.NodeSuspendOnce);
+      Agents.SetEntryPoint('Espera').SetFinishPoint('Espera');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Local := TAIAgentManager.Create(nil);
+      try
+        Local.Name := 'SuiteFedLocal';
+        Local.AddNode('Origen', Handlers.NodeExec);
+        Local.AddNode('Delegado', nil);
+        Tool := TAiA2ARemoteAgentTool.Create(Local);
+        Tool.AgentUrl := Url;
+        Local.FindNode('Delegado').Tool := Tool;
+        Local.AddEdge('Origen', 'Delegado');
+        Local.SetEntryPoint('Origen').SetFinishPoint('Delegado');
+
+        Local.Run('fed');
+        WaitGraph(Local);
+        Result := GetEnumName(TypeInfo(TAgentExecutionStatus), Ord(Local.Blackboard.GetStatus));
+
+        // El nodo local quedo suspendido esperando al humano: al reanudarlo la
+        // respuesta viaja al MISMO task remoto.
+        Local.ResumeThread(Local.CurrentThreadID, 'Delegado', 'si');
+        WaitGraph(Local);
+        Result := Result + '|' + GetEnumName(TypeInfo(TAgentExecutionStatus), Ord(Local.Blackboard.GetStatus)) + '|' +
+          Local.EndNode.Output;
+      finally
+        Local.Free;
+      end;
+    end
+
+    // --- blocking=false + GetTask ---
+    else if AScenario = 'a2a:nonblocking' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteSlowGraph';
+      Agents.AddNode('Uno', Handlers.NodeExecSlow).AddNode('Dos', Handlers.NodeExec);
+      Agents.AddEdge('Uno', 'Dos');
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Dos');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Client := TAiA2AClient.Create(nil);
+      try
+        Client.Url := Url;
+        Task := Client.SendTextEx('lento', '', '', OutText, False);
+        try
+          St1 := Client.LastTaskState;
+          TaskId := Client.LastTaskId;
+        finally
+          Task.Free;
+        end;
+
+        St2 := tsUnknown;
+        OutText := '';
+        Waited := 0;
+        while Waited < 10000 do
+        begin
+          Task := Client.GetTask(TaskId);
+          try
+            St2 := Client.LastTaskState;
+            if St2 in [tsCompleted, tsFailed, tsCanceled] then
+            begin
+              OutText := TAiA2AClient.ArtifactsText(Task);
+              Break;
+            end;
+          finally
+            Task.Free;
+          end;
+          Sleep(30);
+          Inc(Waited, 30);
+        end;
+        Result := StateName(St1) + '|' + StateName(St2) + '|' + OutText;
+      finally
+        Client.Free;
+      end;
+    end
+
+    // --- Tolerancia de literales (forma JSON-RPC) ---
+    else if AScenario = 'a2a:naming' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteNamingGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec).AddNode('Dos', Handlers.NodeExec);
+      Agents.AddEdge('Uno', 'Dos');
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Dos');
+      Server.AgentManager := Agents;
+      Server.StateNaming := anLower;
+      Server.Active := True;
+
+      Client := TAiA2AClient.Create(nil);
+      try
+        Client.Url := Url;
+        Task := Client.SendText('hola', OutText);
+        try
+          Result := Client.LastState + '|' + StateName(Client.LastTaskState) + '|' + OutText;
+        finally
+          Task.Free;
+        end;
+      finally
+        Client.Free;
+      end;
+    end
+
+    // --- Cancelar un task ya terminal ---
+    else if AScenario = 'a2a:cancelterm' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteCancelGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Client := TAiA2AClient.Create(nil);
+      try
+        Client.Url := Url;
+        Task := Client.SendText('hola', OutText);
+        try
+          TaskId := Client.LastTaskId;
+        finally
+          Task.Free;
+        end;
+        try
+          Task := Client.CancelTask(TaskId);
+          Task.Free;
+          Result := 'cancelado (inesperado)';
+        except
+          on E: Exception do
+            Result := E.Message;
+        end;
+      finally
+        Client.Free;
+      end;
+    end
+
+    else
+      raise Exception.Create('Escenario A2A de flujo desconocido: ' + AScenario);
+
+    Server.Active := False;
+  finally
+    Server.Free;
+    Agents.Free;
     Handlers.Free;
   end;
 end;

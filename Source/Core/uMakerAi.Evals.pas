@@ -289,7 +289,12 @@ begin
     Item.AddPair('passed', TJSONBool.Create(R.Passed));
     Item.AddPair('durationMs', TJSONNumber.Create(R.DurationMs));
     if not R.Passed then
+    begin
       Item.AddPair('failReason', R.FailReason);
+      // La salida real: sin ella el reporte dice que fallo pero no que se
+      // obtuvo, y hay que reproducir el caso a mano para averiguarlo.
+      Item.AddPair('actual', R.Actual);
+    end;
     Arr.AddElement(Item);
   end;
 end;
