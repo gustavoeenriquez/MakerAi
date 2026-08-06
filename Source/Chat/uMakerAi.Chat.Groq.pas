@@ -294,38 +294,26 @@ begin
     AJSONObject.AddPair('user', User);
     AJSONObject.AddPair('n', TJSONNumber.Create(N));
 
-    // 1. JSON Schema (Structured Outputs)
+    // 1. JSON Schema (Structured Outputs) — ParseJsonSchemaProperty acepta el
+    // schema puro o el wrapper {name, strict, schema} y falla con error claro
+    // si JsonSchema esta vacio (el type solo produce un 400 remoto).
     if (FResponse_format = tiaChatRfJsonSchema) then
     begin
-      var
-      JResponseFormat := TJSonObject.Create;
+      var sSchemaName := 'structured_response';
+      // NOTA: No enviamos "strict": true por defecto para maximizar compatibilidad
+      // con modelos Groq que no soportan constrained decoding completo a�n.
+      var bStrict := False;
+      var JInnerSchema := ParseJsonSchemaProperty(sSchemaName, bStrict);
+
+      var JSchemaWrapper := TJSonObject.Create;
+      JSchemaWrapper.AddPair('name', sSchemaName); // 'name' es OBLIGATORIO en esta estructura
+      if bStrict then
+        JSchemaWrapper.AddPair('strict', TJSONBool.Create(True));
+      JSchemaWrapper.AddPair('schema', JInnerSchema);
+
+      var JResponseFormat := TJSonObject.Create;
       JResponseFormat.AddPair('type', 'json_schema');
-
-      if JsonSchema.Text <> '' then
-      begin
-        Var sShema := StringReplace(JsonSchema.Text,'\n',' ',[rfReplaceAll]);
-
-        var
-        JInnerSchema := TJSonObject.ParseJSONValue(sShema) as TJSonObject;
-        if Assigned(JInnerSchema) then
-        begin
-          // Wrapper para Groq (Estilo OpenAI Classic)
-          var
-          JSchemaWrapper := TJSonObject.Create;
-
-          // 'name' es OBLIGATORIO en esta estructura
-          JSchemaWrapper.AddPair('name', 'structured_response');
-
-          // El esquema va dentro de 'schema'
-          JSchemaWrapper.AddPair('schema', JInnerSchema);
-
-          // NOTA: No enviamos "strict": true por defecto para maximizar compatibilidad
-          // con modelos Groq que no soportan constrained decoding completo a�n.
-
-          JResponseFormat.AddPair('json_schema', JSchemaWrapper);
-        end;
-      end;
-
+      JResponseFormat.AddPair('json_schema', JSchemaWrapper);
       AJSONObject.AddPair('response_format', JResponseFormat);
     end
 

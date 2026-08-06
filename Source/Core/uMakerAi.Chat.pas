@@ -432,6 +432,13 @@ type
     // Devuelve los tipos de archivo que el modelo acepta nativamente (derivado de ModelConfig.ModelCaps)
     function GetModelInputFileTypes: TAiFileCategories;
 
+    // Parsea la propiedad JsonSchema para Response_format=json_schema. Acepta el
+    // schema puro o el wrapper completo {name, strict, schema}; devuelve el schema
+    // interno (propiedad del llamador) y extrae name/strict si vienen en el wrapper.
+    // Lanza excepcion clara si JsonSchema esta vacio o no es un objeto JSON —
+    // emitir solo {"type":"json_schema"} garantiza un 400 remoto criptico.
+    function ParseJsonSchemaProperty(var aSchemaName: string; var aStrict: Boolean): TJSonObject;
+
     Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Virtual;
 
     // Extensión para drivers con delta.content como array tipado (ej: Mistral magistral).
@@ -2086,7 +2093,7 @@ begin
         jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(FTool_choice));
 {$ENDIF}
         If Assigned(jToolChoice) then
-          AJSONObject.AddPair('tools_choice', jToolChoice);
+          AJSONObject.AddPair('tool_choice', jToolChoice);
       End;
     End;
 
@@ -2096,7 +2103,22 @@ begin
 
     If (FResponse_format = tiaChatRfJsonSchema) then
     Begin
-      AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_schema'))
+      // Sin el objeto json_schema {name, schema} los proveedores OpenAI-compatibles
+      // rechazan el request con 400 — el type solo no basta.
+      var sSchemaName := 'structured_response';
+      var bStrict := False; // sin strict por defecto: maxima compatibilidad OpenAI-compatible
+      var JInnerSchema := ParseJsonSchemaProperty(sSchemaName, bStrict);
+
+      var JSchemaWrapper := TJSonObject.Create;
+      JSchemaWrapper.AddPair('name', sSchemaName);
+      if bStrict then
+        JSchemaWrapper.AddPair('strict', TJSONBool.Create(True));
+      JSchemaWrapper.AddPair('schema', JInnerSchema);
+
+      var JResponseFormat := TJSonObject.Create;
+      JResponseFormat.AddPair('type', 'json_schema');
+      JResponseFormat.AddPair('json_schema', JSchemaWrapper);
+      AJSONObject.AddPair('response_format', JResponseFormat);
     End
     Else If { LAsincronico or } (FResponse_format = tiaChatRfJson) then
       AJSONObject.AddPair('response_format', TJSonObject.Create.AddPair('type', 'json_object'))
@@ -4014,6 +4036,34 @@ end;
 procedure TAiChat.SetJsonSchema(const Value: TStrings);
 begin
   FJsonSchema.Assign(Value);
+end;
+
+function TAiChat.ParseJsonSchemaProperty(var aSchemaName: string; var aStrict: Boolean): TJSonObject;
+var
+  JSchemaValue: TJSONValue;
+  JWrapped: TJSONValue;
+begin
+  JSchemaValue := nil;
+  if Trim(FJsonSchema.Text) <> '' then
+    JSchemaValue := TJSonObject.ParseJSONValue(FJsonSchema.Text);
+
+  if not(JSchemaValue is TJSonObject) then
+  begin
+    JSchemaValue.Free;
+    Raise Exception.Create('Response_format = json_schema requiere un objeto JSON valido en la propiedad JsonSchema');
+  end;
+
+  JWrapped := TJSonObject(JSchemaValue).GetValue('schema');
+  if JWrapped is TJSonObject then
+  begin
+    // Wrapper {name, strict, schema}: se extraen las partes
+    Result := TJSonObject(JWrapped.Clone);
+    TJSonObject(JSchemaValue).TryGetValue<string>('name', aSchemaName);
+    TJSonObject(JSchemaValue).TryGetValue<Boolean>('strict', aStrict);
+    JSchemaValue.Free;
+  end
+  else
+    Result := TJSonObject(JSchemaValue);
 end;
 
 procedure TAiChat.SetK(const Value: Integer);

@@ -90,6 +90,10 @@ type
     FWebSearchParams: TAiWebSearchParams;
     FModelConfig: TAiModelConfig;
 
+    // Respuesta estructurada: passthrough al driver (no viajan por Params/RTTI)
+    FResponse_format: TAiChatResponseFormat;
+    FJsonSchema: TStrings;
+
     FPersistentMemory:  TAiPersistentMemoryBase;
     FMemoryTokenBudget: Integer;
     FAutoStoreMemories: Boolean;
@@ -151,6 +155,8 @@ type
     procedure SetVideoGenParams(const Value: TAiVideoGenParams);
     procedure SetWebSearchParams(const Value: TAiWebSearchParams);
     procedure SetModelConfig(const Value: TAiModelConfig);
+    procedure SetResponse_format(const Value: TAiChatResponseFormat);
+    procedure SetJsonSchema(const Value: TStrings);
 
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
@@ -260,6 +266,12 @@ type
     property WebSearchParams: TAiWebSearchParams read FWebSearchParams write SetWebSearchParams;
     property ModelConfig: TAiModelConfig read FModelConfig write SetModelConfig;
 
+    // Respuesta estructurada: con tiaChatRfJsonSchema el schema va en JsonSchema
+    // (schema puro o wrapper completo {name, schema}); llega al driver via
+    // ApplyParamsToChat, igual que SystemPrompt/Memory.
+    property Response_format: TAiChatResponseFormat read FResponse_format write SetResponse_format default tiaChatRfText;
+    property JsonSchema: TStrings read FJsonSchema write SetJsonSchema;
+
     // v3.5: los atajos raiz (SpeechTool, ImageTool, ...) fueron eliminados.
     // TODAS las herramientas se asignan via ChatTools.XxxTool — misma superficie
     // en TAiChat y TAiChatConnection. El streaming DFM/FMX resuelve las
@@ -306,6 +318,10 @@ begin
   FModelConfig := TAiModelConfig.Create;
   FModelConfig.OnChange := ModelConfigChanged;
 
+  FResponse_format := tiaChatRfText;
+  FJsonSchema := TStringList.Create;
+  TStringList(FJsonSchema).OnChange := ParamsChanged; // mutacion directa (JsonSchema.Text := ...) tambien propaga
+
   FPersistentMemory  := nil;
   FMemoryTokenBudget := 1500;
   FAutoStoreMemories := False;
@@ -317,6 +333,7 @@ begin
 
   FChatTools.Free;
   FSystemPrompt.Free;
+  FJsonSchema.Free; // despues de FreeAndNil(FChat): su OnChange=ParamsChanged consulta FChat
   FMemory.Free;
 
   FTtsParams.Free;
@@ -739,6 +756,11 @@ begin
   // Contexto base
   AChat.Memory.Text := Self.Memory.Text;
   AChat.SystemPrompt.Text := Self.SystemPrompt.Text;
+
+  // Respuesta estructurada (passthrough directo; Params/RTTI puede sobreescribir
+  // Response_format mas abajo si el usuario lo fijo explicitamente en Params)
+  AChat.Response_format := FResponse_format;
+  AChat.JsonSchema.Text := FJsonSchema.Text;
 
   // 2. INYECCI�N DIN�MICA V�A PARAMS (RTTI)
   if not Assigned(AParams) or (AParams.Count <= 0) then
@@ -1444,6 +1466,20 @@ begin
   FModelConfig.Assign(Value);
   if Assigned(FChat) then
     FChat.ModelConfig.Assign(Value);
+end;
+
+procedure TAiChatConnection.SetResponse_format(const Value: TAiChatResponseFormat);
+begin
+  FResponse_format := Value;
+  if Assigned(FChat) then
+    FChat.Response_format := Value;
+end;
+
+procedure TAiChatConnection.SetJsonSchema(const Value: TStrings);
+begin
+  FJsonSchema.Assign(Value);
+  if Assigned(FChat) then
+    FChat.JsonSchema.Assign(Value);
 end;
 
 // Propaga mutaciones de Connection.ChatTools.XxxTool al TAiChat vivo
