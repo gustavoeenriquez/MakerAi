@@ -55,7 +55,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON, System.Generics.Collections,
-  System.SyncObjs, System.DateUtils,
+  System.SyncObjs, System.DateUtils, System.Threading,
+  System.Net.HttpClient, System.Net.URLClient,
   IdContext, IdCustomHTTPServer, IdHTTPServer, IdGlobal, IdGlobalProtocols,
   uMakerAi.Agents;
 
@@ -97,6 +98,19 @@ type
     Manager: TAIAgentManager;
     Owned: Boolean; // creado por la fabrica -> lo liberamos nosotros
     InUse: Boolean;
+  end;
+
+  // Config de push notification registrada para un task. La forma de v1.0 es
+  // PLANA: {id, taskId, url, token, authentication:{scheme, credentials}}.
+  TAiA2APushConfig = class
+  public
+    Id: string;
+    TaskId: string;
+    Url: string;
+    Token: string;
+    AuthScheme: string;
+    AuthCredentials: string;
+    function ToJson: TJSONObject;
   end;
 
   TAiA2ATaskInfo = class
@@ -152,7 +166,12 @@ type
     FWireEra: TAiA2AWireEra;
     FPublishExtendedCard: Boolean;
     FCardCacheSeconds: Integer;
+    FAcquireTimeoutMs: Integer;
     FEnableStreaming: Boolean;
+    FEnablePushNotifications: Boolean;
+    FPushConfigs: TObjectList<TAiA2APushConfig>;
+    FPushLock: TCriticalSection;
+    FPoller: TThread;
     // Ultima URL base servida, para poder responder GetExtendedAgentCard sin
     // tener el contexto HTTP delante.
     FLastBaseUrl: string;
@@ -177,12 +196,13 @@ type
     function FindTask(const AId: string): TAiA2ATaskInfo;
     procedure RefreshTask(AInfo: TAiA2ATaskInfo); // exige FTasksLock tomado
     procedure StartTask(AInfo: TAiA2ATaskInfo; const AInput: string);
-    procedure ResumeTask(AInfo: TAiA2ATaskInfo; const AInput: string);
+    procedure ResumeTask(AInfo: TAiA2ATaskInfo; const AInput: string; const AMessageId: string);
     procedure WaitTask(AInfo: TAiA2ATaskInfo);
     procedure PurgeTasks;
     // --- json ---
     function BuildAgentCard(const ABaseUrl: string): TJSONObject;
-    function BuildTaskJson(AInfo: TAiA2ATaskInfo): TJSONObject;
+    // AHistoryLength: -1 todo el historial, 0 ninguno, N los ultimos N.
+    function BuildTaskJson(AInfo: TAiA2ATaskInfo; AHistoryLength: Integer = -1): TJSONObject;
     // Envuelve el Task como SendMessageResponse cuando la era es v1.0.
     function WrapSendMessageResult(ATask: TJSONObject): TJSONObject;
     function WrapSendMessageAsMessage(const AMessageJson: string; ATask: TJSONObject): TJSONObject;
@@ -198,6 +218,13 @@ type
     function DoGetTask(AParams: TJSONObject): TJSONObject;
     function DoCancelTask(AParams: TJSONObject): TJSONObject;
     function DoListTasks(AParams: TJSONObject): TJSONObject;
+    // --- push notifications ---
+    function DoCreatePushConfig(AParams: TJSONObject): TJSONObject;
+    function DoGetPushConfig(AParams: TJSONObject): TJSONObject;
+    function DoListPushConfigs(AParams: TJSONObject): TJSONObject;
+    function DoDeletePushConfig(AParams: TJSONObject): TJSONObject;
+    procedure DeliverPushNotifications(AInfo: TAiA2ATaskInfo);
+    procedure RefreshLiveTasks;
     function EmitState(const ACanonical: string): string;
     function EmitRole(const ACanonical: string): string;
     class function ExtractTextFromParts(AMessage: TJSONObject): string; static;
@@ -244,9 +271,15 @@ type
     property PublishExtendedCard: Boolean read FPublishExtendedCard write FPublishExtendedCard default False;
     // Segundos de Cache-Control/max-age de la Agent Card (SHOULD de la spec).
     property CardCacheSeconds: Integer read FCardCacheSeconds write FCardCacheSeconds default 3600;
+    // Cuanto se espera un hueco del pool antes de devolver AgentBusy.
+    property AcquireTimeoutMs: Integer read FAcquireTimeoutMs write FAcquireTimeoutMs default 10000;
     // Habilita SendStreamingMessage y SubscribeToTask, y lo anuncia en
     // capabilities.streaming. Con False se rechazan con UnsupportedOperation.
     property EnableStreaming: Boolean read FEnableStreaming write FEnableStreaming default True;
+    // Habilita el CRUD de configs y la entrega al webhook, y lo anuncia en
+    // capabilities.pushNotifications.
+    property EnablePushNotifications: Boolean read FEnablePushNotifications
+      write FEnablePushNotifications default True;
     property OnAcquireManager: TAiA2AAcquireManager read FOnAcquireManager write FOnAcquireManager;
     property OnCustomizeCard: TAiA2ACardEvent read FOnCustomizeCard write FOnCustomizeCard;
     property OnAuthorize: TAiA2AAuthEvent read FOnAuthorize write FOnAuthorize;
@@ -368,7 +401,11 @@ begin
   FStateNaming := anProto;
   FWireEra := weV1;
   FCardCacheSeconds := 3600;
+  FAcquireTimeoutMs := 10000;
   FEnableStreaming := True;
+  FEnablePushNotifications := True;
+  FPushConfigs := TObjectList<TAiA2APushConfig>.Create(True);
+  FPushLock := TCriticalSection.Create;
   FTasks := TObjectDictionary<string, TAiA2ATaskInfo>.Create([doOwnsValues]);
   FTasksLock := TCriticalSection.Create;
   FSlots := TObjectList<TAiA2AManagerSlot>.Create(True);
@@ -382,6 +419,8 @@ destructor TAiA2AServer.Destroy;
 begin
   Stop;
   FTasks.Free;
+  FPushConfigs.Free;
+  FPushLock.Free;
   FTasksLock.Free;
   ClearSlots;
   FSlots.Free;
@@ -432,6 +471,32 @@ begin
   FHttpServer.DefaultPort := FPort;
   FHttpServer.Active := True;
   FActive := True;
+
+  // Vigilante de tasks vivos. Solo hace falta para la entrega push: sin el, un
+  // task que termina sin que nadie lo consulte no notifica a su webhook.
+  // Es un TThread y no un TTask a proposito: hace falta poder pararlo de forma
+  // determinista al cerrar. Con TTask no hay handle que esperar y el proceso
+  // se quedaba vivo al terminar.
+  if FEnablePushNotifications and not Assigned(FPoller) then
+  begin
+    FPoller := TThread.CreateAnonymousThread(
+      procedure
+      begin
+        while not TThread.CurrentThread.CheckTerminated do
+        begin
+          Sleep(100);
+          if TThread.CurrentThread.CheckTerminated then
+            Break;
+          try
+            RefreshLiveTasks;
+          except
+            // el vigilante nunca debe tumbar el servidor
+          end;
+        end;
+      end);
+    FPoller.FreeOnTerminate := False;
+    FPoller.Start;
+  end;
 end;
 
 procedure TAiA2AServer.Stop;
@@ -440,6 +505,15 @@ begin
     Exit;
   FHttpServer.Active := False;
   FActive := False;
+
+  // Parar el vigilante de forma determinista: sin esto el destructor libera
+  // los locks mientras el hilo sigue dentro, y el proceso se cuelga al salir.
+  if Assigned(FPoller) then
+  begin
+    FPoller.Terminate;
+    FPoller.WaitFor;
+    FreeAndNil(FPoller);
+  end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -468,8 +542,11 @@ function TAiA2AServer.AcquireSlot: TAiA2AManagerSlot;
 var
   Slot: TAiA2AManagerSlot;
   NewMgr: TAIAgentManager;
+  Esperado: Integer;
 begin
   Result := nil;
+  Esperado := 0;
+  repeat
   FSlotsLock.Enter;
   try
     // El manager de diseno es siempre el slot 0.
@@ -504,10 +581,18 @@ begin
         Exit(Slot);
       end;
     end;
-  finally
-    FSlotsLock.Leave;
-  end;
+    finally
+      FSlotsLock.Leave;
+    end;
+    if Result <> nil then
+      Break;
+    Sleep(25);
+    Inc(Esperado, 25);
+  until Esperado >= FAcquireTimeoutMs;
 
+  // Sin hueco libre: en vez de rechazar de inmediato se espera un poco. Un
+  // pico de concurrencia es normal y los grafos suelen durar poco; devolver
+  // AgentBusy a la primera convierte una espera en un error para el cliente.
   if Result = nil then
     raise EA2AServerError.CreateCode(A2A_ERR_AGENT_BUSY,
       'Agent busy: no free agent slot (MaxConcurrentTasks=' + IntToStr(FMaxConcurrentTasks) + ')');
@@ -636,7 +721,8 @@ begin
   // consulta tenia dos efectos malos: dos snapshots del mismo task salian con
   // timestamps distintos (y los clientes suscritos no podian deduplicarlos), y
   // el TTL de purga, que se mide contra este campo, no vencia nunca.
-  if AInfo.State <> StatusToA2AState(St) then
+  var LCambio := AInfo.State <> StatusToA2AState(St);
+  if LCambio then
   begin
     AInfo.State := StatusToA2AState(St);
     AInfo.UpdatedAt := Now;
@@ -681,6 +767,11 @@ begin
 
   ReleaseSlot(AInfo.Slot);
   AInfo.Slot := nil;
+
+  // Notificar a los webhooks registrados. El POST se hace en un TTask aparte,
+  // asi que esto no bloquea aunque tengamos FTasksLock tomado.
+  if LCambio then
+    DeliverPushNotifications(AInfo);
 end;
 
 procedure TAiA2AServer.StartTask(AInfo: TAiA2ATaskInfo; const AInput: string);
@@ -738,7 +829,7 @@ begin
   end;
 end;
 
-procedure TAiA2AServer.ResumeTask(AInfo: TAiA2ATaskInfo; const AInput: string);
+procedure TAiA2AServer.ResumeTask(AInfo: TAiA2ATaskInfo; const AInput: string; const AMessageId: string);
 var
   Slot: TAiA2AManagerSlot;
   ThreadID, NodeName: string;
@@ -766,6 +857,15 @@ begin
       AInfo.History.Add('user'#9 + AInput);
     finally
       FTasksLock.Leave;
+    end;
+    // El grafo reanudado tiene que ver la metadata del turno NUEVO. Sin esto
+    // un nodo que decide por el messageId repite la decision del turno
+    // anterior: el que se suspendio volvia a suspenderse indefinidamente.
+    if Assigned(Slot.Manager) then
+    begin
+      Slot.Manager.Blackboard.SetString(A2A_BB_MESSAGE_ID, AMessageId);
+      Slot.Manager.Blackboard.SetString(A2A_BB_TASK_ID, AInfo.Id);
+      Slot.Manager.Blackboard.SetString(A2A_BB_CONTEXT_ID, AInfo.ContextId);
     end;
     Slot.Manager.ResumeThread(ThreadID, NodeName, AInput);
   except
@@ -920,7 +1020,7 @@ begin
 
   Caps := TJSONObject.Create;
   Caps.AddPair('streaming', TJSONBool.Create(FEnableStreaming));
-  Caps.AddPair('pushNotifications', TJSONBool.Create(False));
+  Caps.AddPair('pushNotifications', TJSONBool.Create(FEnablePushNotifications));
   Caps.AddPair('extendedAgentCard', TJSONBool.Create(FPublishExtendedCard));
   // stateTransitionHistory no existe en AgentCapabilities de v1.0
   if FWireEra = weV03 then
@@ -1018,7 +1118,7 @@ begin
   end;
 end;
 
-function TAiA2AServer.BuildTaskJson(AInfo: TAiA2ATaskInfo): TJSONObject;
+function TAiA2AServer.BuildTaskJson(AInfo: TAiA2ATaskInfo; AHistoryLength: Integer): TJSONObject;
 var
   StatusObj, Artifact, PartObj, MsgObj: TJSONObject;
   Artifacts, PartsArr, HistArr: TJSONArray;
@@ -1096,7 +1196,13 @@ begin
   Result.AddPair('artifacts', Artifacts);
 
   HistArr := TJSONArray.Create;
-  for I := 0 to AInfo.History.Count - 1 do
+  // historyLength recorta por el final: 0 = sin historial, N = los N ultimos.
+  var LDesde := 0;
+  if AHistoryLength = 0 then
+    LDesde := AInfo.History.Count
+  else if (AHistoryLength > 0) and (AInfo.History.Count > AHistoryLength) then
+    LDesde := AInfo.History.Count - AHistoryLength;
+  for I := LDesde to AInfo.History.Count - 1 do
   begin
     var Line := AInfo.History[I];
     var Sep := Pos(#9, Line);
@@ -1123,10 +1229,11 @@ end;
 
 function TAiA2AServer.DoSendMessage(AParams: TJSONObject): TJSONObject;
 var
-  MsgObj, ConfigObj: TJSONObject;
+  MsgObj, ConfigObj, PushObj, PushParams: TJSONObject;
   InputText, TaskId, ContextId, MessageId: string;
   Info: TAiA2ATaskInfo;
   Blocking: Boolean;
+  LHistLen: Integer;
 begin
   if not(Assigned(FAgentManager) or Assigned(FOnAcquireManager)) then
     raise EA2AServerError.CreateCode(-32603, 'No AgentManager assigned to this A2A server');
@@ -1160,8 +1267,15 @@ begin
   end;
 
   Blocking := True;
+  ConfigObj := nil;
+  LHistLen := -1;
   if Assigned(AParams) and AParams.TryGetValue<TJSONObject>('configuration', ConfigObj) then
+  begin
     Blocking := ConfigObj.GetValue<Boolean>('blocking', True);
+    LHistLen := ConfigObj.GetValue<Integer>('historyLength', -1);
+    if LHistLen < 0 then
+      LHistLen := ConfigObj.GetValue<Integer>('history_length', -1);
+  end;
 
   PurgeTasks;
 
@@ -1185,7 +1299,7 @@ begin
         Format('contextId "%s" does not belong to task "%s"', [ContextId, TaskId]));
 
     if Info.State = A2A_STATE_INPUT_REQUIRED then
-      ResumeTask(Info, InputText)
+      ResumeTask(Info, InputText, MessageId)
     else if IsTerminal(Info.State) then
       // La spec lo exige asi (CORE-SEND-002): continuar un task ya terminal es
       // UnsupportedOperation. Antes se devolvia el task tal cual, por parecer
@@ -1197,6 +1311,22 @@ begin
   begin
     Info := NewTask(ContextId);
     Info.MessageId := MessageId;
+
+    // El webhook puede venir en la propia peticion, no solo por el CRUD:
+    // configuration.taskPushNotificationConfig registra la config para este
+    // task. Es la via que usan los clientes para no hacer dos llamadas.
+    if Assigned(ConfigObj) and ConfigObj.TryGetValue<TJSONObject>('taskPushNotificationConfig', PushObj) then
+    begin
+      PushParams := TJSONObject.Create;
+      try
+        PushParams.AddPair('taskId', Info.Id);
+        PushParams.AddPair('config', TJSONObject(PushObj.Clone));
+        DoCreatePushConfig(PushParams).Free;
+      finally
+        PushParams.Free;
+      end;
+    end;
+
     StartTask(Info, InputText);
   end;
 
@@ -1217,7 +1347,7 @@ begin
   FTasksLock.Enter;
   try
     FLastMessageJson := Info.MessageJson;
-    Result := BuildTaskJson(Info);
+    Result := BuildTaskJson(Info, LHistLen);
   finally
     FTasksLock.Leave;
   end;
@@ -1227,13 +1357,18 @@ function TAiA2AServer.DoGetTask(AParams: TJSONObject): TJSONObject;
 var
   Id: string;
   Info: TAiA2ATaskInfo;
+  LHistLen: Integer;
 begin
   Id := '';
+  LHistLen := -1;
   if Assigned(AParams) then
   begin
     Id := AParams.GetValue<string>('id', '');
     if Id = '' then
       Id := AParams.GetValue<string>('taskId', '');
+    LHistLen := AParams.GetValue<Integer>('historyLength', -1);
+    if LHistLen < 0 then
+      LHistLen := AParams.GetValue<Integer>('history_length', -1);
   end;
 
   FTasksLock.Enter;
@@ -1242,7 +1377,7 @@ begin
     if not Assigned(Info) then
       raise EA2AServerError.CreateCode(A2A_ERR_TASK_NOT_FOUND, 'Task not found: ' + Id);
     RefreshTask(Info); // el estado publicado sale siempre del grafo vivo
-    Result := BuildTaskJson(Info);
+    Result := BuildTaskJson(Info, LHistLen);
   finally
     FTasksLock.Leave;
   end;
@@ -1298,6 +1433,270 @@ begin
     Result.AddPair('pageSize', TJSONNumber.Create(PageSize));
 end;
 
+{ TAiA2APushConfig }
+
+function TAiA2APushConfig.ToJson: TJSONObject;
+var
+  Auth: TJSONObject;
+begin
+  Result := TJSONObject.Create;
+  Result.AddPair('id', Id);
+  Result.AddPair('taskId', TaskId);
+  Result.AddPair('url', Url);
+  if Token <> '' then
+    Result.AddPair('token', Token);
+  if (AuthScheme <> '') or (AuthCredentials <> '') then
+  begin
+    Auth := TJSONObject.Create;
+    Auth.AddPair('scheme', AuthScheme);
+    Auth.AddPair('credentials', AuthCredentials);
+    Result.AddPair('authentication', Auth);
+  end;
+end;
+
+// -----------------------------------------------------------------------------
+// Push notifications
+// -----------------------------------------------------------------------------
+// La forma de v1.0 es PLANA: TaskPushNotificationConfig = {tenant, id, taskId,
+// url, token, authentication}. No hay un objeto pushNotificationConfig anidado
+// como en la era 0.x. Se acepta igualmente el anidado {taskId, config:{...}}
+// porque es lo que mandan varios clientes.
+
+// Lee una clave tolerando las dos convenciones. El binding JSON-RPC usa
+// camelCase, pero varios clientes -el propio TCK entre ellos- mandan los
+// nombres del proto en snake_case.
+function ParamStr2(AParams: TJSONObject; const ACamel, ASnake: string): string;
+begin
+  Result := '';
+  if not Assigned(AParams) then
+    Exit;
+  Result := AParams.GetValue<string>(ACamel, '');
+  if Result = '' then
+    Result := AParams.GetValue<string>(ASnake, '');
+end;
+function TAiA2AServer.DoCreatePushConfig(AParams: TJSONObject): TJSONObject;
+var
+  Cfg: TAiA2APushConfig;
+  Src, AuthObj: TJSONObject;
+  TaskId: string;
+begin
+  if not FEnablePushNotifications then
+    raise EA2AServerError.CreateCode(A2A_ERR_PUSH_NOT_SUPPORTED, 'Push notifications are not supported');
+  if not Assigned(AParams) then
+    raise EA2AServerError.CreateCode(A2A_ERR_INVALID_PARAMS, 'Missing params');
+
+  TaskId := ParamStr2(AParams, 'taskId', 'task_id');
+  // El cuerpo puede venir anidado en 'config' o plano en los propios params
+  if not AParams.TryGetValue<TJSONObject>('config', Src) then
+    Src := AParams;
+  if TaskId = '' then
+    TaskId := ParamStr2(Src, 'taskId', 'task_id');
+  if TaskId = '' then
+    raise EA2AServerError.CreateCode(A2A_ERR_INVALID_PARAMS, 'taskId is required');
+
+  Cfg := TAiA2APushConfig.Create;
+  Cfg.TaskId := TaskId;
+  Cfg.Id := Src.GetValue<string>('id', '');
+  if Cfg.Id = '' then
+    Cfg.Id := NewGuidStr;
+  Cfg.Url := Src.GetValue<string>('url', '');
+  Cfg.Token := Src.GetValue<string>('token', '');
+  if Src.TryGetValue<TJSONObject>('authentication', AuthObj) then
+  begin
+    Cfg.AuthScheme := AuthObj.GetValue<string>('scheme', '');
+    Cfg.AuthCredentials := AuthObj.GetValue<string>('credentials', '');
+  end;
+
+  FPushLock.Enter;
+  try
+    // Registrar de nuevo el mismo id reemplaza: crear duplicados haria que el
+    // webhook recibiera la misma notificacion dos veces.
+    for var I := FPushConfigs.Count - 1 downto 0 do
+      if (FPushConfigs[I].TaskId = Cfg.TaskId) and (FPushConfigs[I].Id = Cfg.Id) then
+        FPushConfigs.Delete(I);
+    FPushConfigs.Add(Cfg);
+    Result := Cfg.ToJson;
+  finally
+    FPushLock.Leave;
+  end;
+end;
+
+function TAiA2AServer.DoGetPushConfig(AParams: TJSONObject): TJSONObject;
+var
+  TaskId, Id: string;
+begin
+  if not FEnablePushNotifications then
+    raise EA2AServerError.CreateCode(A2A_ERR_PUSH_NOT_SUPPORTED, 'Push notifications are not supported');
+  TaskId := '';
+  Id := '';
+  TaskId := ParamStr2(AParams, 'taskId', 'task_id');
+  if Assigned(AParams) then
+    Id := AParams.GetValue<string>('id', '');
+
+  FPushLock.Enter;
+  try
+    for var Cfg in FPushConfigs do
+      if (Cfg.TaskId = TaskId) and (Cfg.Id = Id) then
+        Exit(Cfg.ToJson);
+  finally
+    FPushLock.Leave;
+  end;
+  raise EA2AServerError.CreateCode(A2A_ERR_TASK_NOT_FOUND,
+    Format('No push notification config "%s" for task "%s"', [Id, TaskId]));
+end;
+
+function TAiA2AServer.DoListPushConfigs(AParams: TJSONObject): TJSONObject;
+var
+  TaskId: string;
+  Arr: TJSONArray;
+begin
+  if not FEnablePushNotifications then
+    raise EA2AServerError.CreateCode(A2A_ERR_PUSH_NOT_SUPPORTED, 'Push notifications are not supported');
+  TaskId := '';
+  TaskId := ParamStr2(AParams, 'taskId', 'task_id');
+
+  Arr := TJSONArray.Create;
+  FPushLock.Enter;
+  try
+    for var Cfg in FPushConfigs do
+      if (TaskId = '') or (Cfg.TaskId = TaskId) then
+        Arr.AddElement(Cfg.ToJson);
+  finally
+    FPushLock.Leave;
+  end;
+  Result := TJSONObject.Create;
+  Result.AddPair('configs', Arr);
+end;
+
+function TAiA2AServer.DoDeletePushConfig(AParams: TJSONObject): TJSONObject;
+var
+  TaskId, Id: string;
+begin
+  if not FEnablePushNotifications then
+    raise EA2AServerError.CreateCode(A2A_ERR_PUSH_NOT_SUPPORTED, 'Push notifications are not supported');
+  TaskId := '';
+  Id := '';
+  TaskId := ParamStr2(AParams, 'taskId', 'task_id');
+  if Assigned(AParams) then
+    Id := AParams.GetValue<string>('id', '');
+
+  FPushLock.Enter;
+  try
+    for var I := FPushConfigs.Count - 1 downto 0 do
+      if (FPushConfigs[I].TaskId = TaskId) and (FPushConfigs[I].Id = Id) then
+        FPushConfigs.Delete(I);
+  finally
+    FPushLock.Leave;
+  end;
+  // Delete es IDEMPOTENTE: borrar algo que ya no esta no es un error.
+  Result := TJSONObject.Create;
+end;
+
+// Entrega el estado del task a los webhooks registrados. Se llama al detectar
+// un cambio de estado. El POST va en un TTask aparte: bloquear aqui pararia el
+// refresco del task y, con el lock tomado, todo el registry.
+// Refresca los tasks con ejecucion viva. Hace falta un vigilante activo: la
+// entrega push se dispara al detectar un cambio de estado, y RefreshTask solo
+// corria cuando un cliente preguntaba. Si nadie llamaba a GetTask, el task
+// terminaba y el webhook no se enteraba nunca.
+procedure TAiA2AServer.RefreshLiveTasks;
+var
+  Pair: TPair<string, TAiA2ATaskInfo>;
+  Vivos: TArray<TAiA2ATaskInfo>;
+  Lista: TList<TAiA2ATaskInfo>;
+begin
+  Lista := TList<TAiA2ATaskInfo>.Create;
+  try
+    FTasksLock.Enter;
+    try
+      for Pair in FTasks do
+        if Assigned(Pair.Value.Slot) and not IsTerminal(Pair.Value.State) then
+          Lista.Add(Pair.Value);
+      Vivos := Lista.ToArray;
+      for var Info in Vivos do
+        RefreshTask(Info); // dispara DeliverPushNotifications si cambio
+    finally
+      FTasksLock.Leave;
+    end;
+  finally
+    Lista.Free;
+  end;
+end;
+procedure TAiA2AServer.DeliverPushNotifications(AInfo: TAiA2ATaskInfo);
+var
+  Destinos: TArray<TAiA2APushConfig>;
+  Payload: string;
+  Lista: TList<TAiA2APushConfig>;
+begin
+  if not FEnablePushNotifications then
+    Exit;
+
+  Lista := TList<TAiA2APushConfig>.Create;
+  try
+    FPushLock.Enter;
+    try
+      for var Cfg in FPushConfigs do
+        if Cfg.TaskId = AInfo.Id then
+          Lista.Add(Cfg);
+      Destinos := Lista.ToArray;
+    finally
+      FPushLock.Leave;
+    end;
+  finally
+    Lista.Free;
+  end;
+  if Length(Destinos) = 0 then
+    Exit;
+
+  // El payload NO es el Task desnudo sino un StreamResponse, el mismo oneof
+  // que usa el streaming: {task | message | statusUpdate | artifactUpdate}.
+  // Aqui se manda el snapshot completo, asi que va por el brazo 'task'.
+  var Envuelto := TJSONObject.Create;
+  try
+    Envuelto.AddPair('task', BuildTaskJson(AInfo));
+    Payload := Envuelto.ToJSON;
+  finally
+    Envuelto.Free;
+  end;
+
+  for var Cfg in Destinos do
+  begin
+    var LUrl := Cfg.Url;
+    var LScheme := Cfg.AuthScheme;
+    var LCreds := Cfg.AuthCredentials;
+    var LToken := Cfg.Token;
+    if LUrl = '' then
+      Continue;
+    TTask.Run(
+      procedure
+      var
+        Http: THTTPClient;
+        Body: TStringStream;
+        Headers: TNetHeaders;
+      begin
+        Http := THTTPClient.Create;
+        Body := TStringStream.Create(Payload, TEncoding.UTF8);
+        try
+          Http.ConnectionTimeout := 5000;
+          Http.ResponseTimeout := 5000;
+          Http.ContentType := 'application/json';
+          SetLength(Headers, 0);
+          if LScheme <> '' then
+            Headers := Headers + [TNameValuePair.Create('Authorization', LScheme + ' ' + LCreds)];
+          if LToken <> '' then
+            Headers := Headers + [TNameValuePair.Create('X-A2A-Notification-Token', LToken)];
+          try
+            Http.Post(LUrl, Body, nil, Headers);
+          except
+            // Un webhook caido no puede tumbar la ejecucion del agente.
+          end;
+        finally
+          Body.Free;
+          Http.Free;
+        end;
+      end);
+  end;
+end;
 function TAiA2AServer.DoCancelTask(AParams: TJSONObject): TJSONObject;
 var
   Id: string;
@@ -1483,12 +1882,18 @@ begin
         SameText(Method, 'message/stream') or SameText(Method, 'tasks/resubscribe') then
         // La spec exige UnsupportedOperationError si capabilities.streaming=false
         Result := RpcError(IdVal, A2A_ERR_UNSUPPORTED_OPERATION, 'Streaming not supported by this agent')
-      else if SameText(Method, 'CreateTaskPushNotificationConfig') or SameText(Method, 'GetTaskPushNotificationConfig')
-        or SameText(Method, 'ListTaskPushNotificationConfigs') or SameText(Method, 'DeleteTaskPushNotificationConfig')
-        or Method.ToLower.Contains('pushnotification') then
-        // Con capabilities.pushNotifications=false la spec pide este codigo
-        // concreto, no un MethodNotFound generico.
-        Result := RpcError(IdVal, A2A_ERR_PUSH_NOT_SUPPORTED, 'Push notifications are not supported by this agent')
+      else if SameText(Method, 'CreateTaskPushNotificationConfig') then
+        Result := RpcResult(IdVal, DoCreatePushConfig(Params))
+      else if SameText(Method, 'GetTaskPushNotificationConfig') then
+        Result := RpcResult(IdVal, DoGetPushConfig(Params))
+      else if SameText(Method, 'ListTaskPushNotificationConfigs') then
+        Result := RpcResult(IdVal, DoListPushConfigs(Params))
+      else if SameText(Method, 'DeleteTaskPushNotificationConfig') then
+        Result := RpcResult(IdVal, DoDeletePushConfig(Params))
+      else if Method.ToLower.Contains('pushnotification') then
+        // Variantes que no implementamos: con capabilities.pushNotifications a
+        // false la spec pide este codigo concreto, no un MethodNotFound.
+        Result := RpcError(IdVal, A2A_ERR_PUSH_NOT_SUPPORTED, 'Push notification method not supported')
       else
         Result := RpcError(IdVal, -32601, 'Method not found: ' + Method);
       AiSpanEnd(LSpan);

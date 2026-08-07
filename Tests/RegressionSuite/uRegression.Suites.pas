@@ -192,9 +192,11 @@ begin
 
   // Codigos de error y ErrorInfo exigidos por la spec, medidos con HTTP crudo.
   // Los codigos salen del TCK oficial (seccion 5.4 de la spec).
+  // 'push' comprueba CreateTaskPushNotificationConfig SIN taskId: como las push
+  // notifications si estan implementadas, el error correcto es InvalidParams.
   FRunner.AddCase('a2a.errors.codes')
     .Input('a2a:errorcodes')
-    .ExpectEquals('push=-32003|version=-32009|ctype=-32005|sinmensaje=-32602|terminal=-32004|errorinfo=ok');
+    .ExpectEquals('push=-32602|version=-32009|ctype=-32005|sinmensaje=-32602|terminal=-32004|errorinfo=ok');
 
   // --- Guardrails ---
   FRunner.AddCase('policy.guard.blocklist')
@@ -960,11 +962,6 @@ begin
         end;
         try
           Result := 'push=' + IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
-          // ErrorInfo: data debe ser un ARRAY con @type/domain/reason
-          if (RawObj.GetValue<TJSONObject>('error').GetValue('data') is TJSONArray) then
-            OutText := 'ok'
-          else
-            OutText := 'falta-array';
         finally
           RawObj.Free;
         end;
@@ -981,6 +978,12 @@ begin
         end;
         try
           Result := Result + '|version=' + IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
+          // ErrorInfo va en un ARRAY, y solo en los errores PROPIOS de A2A:
+          // los estandar de JSON-RPC (-32602 y similares) no lo llevan.
+          if (RawObj.GetValue<TJSONObject>('error').GetValue('data') is TJSONArray) then
+            OutText := 'ok'
+          else
+            OutText := 'falta-array';
         finally
           RawObj.Free;
         end;

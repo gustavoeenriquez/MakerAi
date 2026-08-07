@@ -226,7 +226,9 @@ begin
       Server.Port := Port;
       Server.PublishExtendedCard := True;
       Server.OnAcquireManager := Handlers.FabricaManager;
-      Server.MaxConcurrentTasks := 8;
+      // Alto a proposito: un task suspendido en input-required RETIENE su
+      // manager -es el unico que puede reanudarlo- y el TCK crea muchos.
+      Server.MaxConcurrentTasks := 64;
       Server.Active := True;
 
       Writeln('=== DEMO 079: agente SUT conforme al TCK de A2A ===');
