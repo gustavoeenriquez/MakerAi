@@ -444,6 +444,11 @@ type
     // TThread.Queue y en un servidor headless (sin bomba de mensajes ni
     // CheckSynchronize) podria no llegar nunca.
     function GetSuspendedNodeNames: TArray<string>;
+    // Nodos del grafo, en el orden en que se registraron. Hace falta para
+    // publicarlos hacia fuera (p.ej. las skills del Agent Card de A2A):
+    // recorrer los Components del Owner no vale, porque un nodo puesto en
+    // un formulario no tiene al manager como Owner.
+    function GetNodes: TArray<TAIAgentsNode>;
     property Checkpointer: IAiCheckpointer read FCheckpointer write SetCheckpointer;
   published
     property StartNode: TAIAgentsNode read FStartNode write SetStartNode;
@@ -2659,6 +2664,11 @@ end;
 // ---------------------------------------------------------------------------
 // GetSuspendedNodeNames  -- nodos que pidieron input humano
 // ---------------------------------------------------------------------------
+function TAIAgentManager.GetNodes: TArray<TAIAgentsNode>;
+begin
+  Result := FNodes.ToArray;
+end;
+
 function TAIAgentManager.GetSuspendedNodeNames: TArray<string>;
 var
   LList: TList<string>;

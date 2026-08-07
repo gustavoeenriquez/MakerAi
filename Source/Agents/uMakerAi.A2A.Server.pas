@@ -140,6 +140,51 @@ type
     destructor Destroy; override;
   end;
 
+  // ---------------------------------------------------------------------------
+  // Skills declaradas del Agent Card
+  // ---------------------------------------------------------------------------
+  // Una skill A2A es lo que un cliente lee para DECIDIR si este agente le sirve.
+  // No es un punto de entrada: la spec no lleva selector de skill en
+  // SendMessage, asi que las skills describen, no enrutan.
+  //
+  // Por eso NO se derivan de los nodos automaticamente: un grafo normal tiene
+  // nodos llamados 'Nodo1'/'Nodo2' sin descripcion, y publicarlos seria ruido
+  // que ademas insinua una granularidad de invocacion que no existe. Quien
+  // quiera skills utiles las declara aqui; ver tambien PublishNodesAsSkills
+  // para el caso en que los nodos SI traen descripcion en su Tool.
+  TAiA2ASkill = class(TCollectionItem)
+  private
+    FId: string;
+    FTitle: string;
+    FDescription: string;
+    FTags: string;
+  protected
+    function GetDisplayName: string; override;
+  public
+    procedure Assign(Source: TPersistent); override;
+  published
+    property Id: string read FId write FId;
+    // 'Title' y no 'Name': TCollectionItem no tiene Name, pero el campo del
+    // Agent Card se llama 'name'.
+    property Title: string read FTitle write FTitle;
+    property Description: string read FDescription write FDescription;
+    // Separadas por coma. Se emiten como array JSON.
+    property Tags: string read FTags write FTags;
+  end;
+
+  TAiA2ASkills = class(TOwnedCollection)
+  private
+    function GetItem(AIndex: Integer): TAiA2ASkill;
+    procedure SetItem(AIndex: Integer; const Value: TAiA2ASkill);
+  public
+    constructor Create(AOwner: TPersistent);
+    function Add: TAiA2ASkill;
+    // Atajo para declarar una skill en una linea desde codigo.
+    function AddSkill(const AId, ATitle, ADescription: string;
+      const ATags: string = ''): TAiA2ASkill;
+    property Items[AIndex: Integer]: TAiA2ASkill read GetItem write SetItem; default;
+  end;
+
   // Fabrica de managers para el pool. Debe devolver un grafo nuevo y completo
   // (mismo shape que AgentManager); el servidor se hace cargo de liberarlo.
   TAiA2AAcquireManager = procedure(Sender: TObject; var AManager: TAIAgentManager) of object;
@@ -167,6 +212,8 @@ type
     FStateNaming: TAiA2ANaming;
     FWireEra: TAiA2AWireEra;
     FPublishExtendedCard: Boolean;
+    FSkills: TAiA2ASkills;
+    FPublishNodesAsSkills: Boolean;
     FCardCacheSeconds: Integer;
     FAcquireTimeoutMs: Integer;
     FEnableStreaming: Boolean;
@@ -188,6 +235,7 @@ type
     FOnAuthorize: TAiA2AAuthEvent;
     procedure SetActive(const Value: Boolean);
     procedure SetAgentManager(const Value: TAIAgentManager);
+    procedure SetSkills(const Value: TAiA2ASkills);
     procedure HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
     // --- pool ---
     function AcquireSlot: TAiA2AManagerSlot;
@@ -278,6 +326,13 @@ type
     // la publica, asi que para diferenciarla hay que enriquecerla en
     // OnCustomizeCard (que recibe la card antes de publicarse).
     property PublishExtendedCard: Boolean read FPublishExtendedCard write FPublishExtendedCard default False;
+    // Skills declaradas. Si esta vacia se publica una unica skill
+    // 'run-graph' que representa la ejecucion del grafo entero.
+    property Skills: TAiA2ASkills read FSkills write SetSkills;
+    // Anade una skill por nodo del grafo que tenga descripcion (la de su
+    // Tool). Los nodos sin descripcion se omiten a proposito: publicar
+    // 'Nodo1' sin mas no ayuda a nadie a elegir agente.
+    property PublishNodesAsSkills: Boolean read FPublishNodesAsSkills write FPublishNodesAsSkills default False;
     // Segundos de Cache-Control/max-age de la Agent Card (SHOULD de la spec).
     property CardCacheSeconds: Integer read FCardCacheSeconds write FCardCacheSeconds default 3600;
     // Cuanto se espera un hueco del pool antes de devolver AgentBusy.
@@ -348,7 +403,7 @@ procedure Register;
 
 implementation
 
-uses System.Hash, uMakerAi.Telemetry;
+uses System.Hash, System.StrUtils, uMakerAi.Telemetry;
 
 procedure Register;
 begin
@@ -398,6 +453,66 @@ end;
 
 { TAiA2AServer }
 
+// -----------------------------------------------------------------------------
+// Skills declaradas
+// -----------------------------------------------------------------------------
+
+function TAiA2ASkill.GetDisplayName: string;
+begin
+  if FId <> '' then
+    Result := FId
+  else
+    Result := inherited GetDisplayName;
+end;
+
+procedure TAiA2ASkill.Assign(Source: TPersistent);
+begin
+  if Source is TAiA2ASkill then
+  begin
+    FId          := TAiA2ASkill(Source).Id;
+    FTitle       := TAiA2ASkill(Source).Title;
+    FDescription := TAiA2ASkill(Source).Description;
+    FTags        := TAiA2ASkill(Source).Tags;
+  end
+  else
+    inherited Assign(Source);
+end;
+
+constructor TAiA2ASkills.Create(AOwner: TPersistent);
+begin
+  inherited Create(AOwner, TAiA2ASkill);
+end;
+
+function TAiA2ASkills.GetItem(AIndex: Integer): TAiA2ASkill;
+begin
+  Result := TAiA2ASkill(inherited Items[AIndex]);
+end;
+
+procedure TAiA2ASkills.SetItem(AIndex: Integer; const Value: TAiA2ASkill);
+begin
+  inherited Items[AIndex] := Value;
+end;
+
+function TAiA2ASkills.Add: TAiA2ASkill;
+begin
+  Result := TAiA2ASkill(inherited Add);
+end;
+
+function TAiA2ASkills.AddSkill(const AId, ATitle, ADescription: string;
+  const ATags: string): TAiA2ASkill;
+begin
+  Result := Add;
+  Result.Id := AId;
+  Result.Title := ATitle;
+  Result.Description := ADescription;
+  Result.Tags := ATags;
+end;
+
+procedure TAiA2AServer.SetSkills(const Value: TAiA2ASkills);
+begin
+  FSkills.Assign(Value);
+end;
+
 constructor TAiA2AServer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
@@ -413,6 +528,7 @@ begin
   FAcquireTimeoutMs := 10000;
   FEnableStreaming := True;
   FEnablePushNotifications := True;
+  FSkills := TAiA2ASkills.Create(Self);
   FPushConfigs := TObjectList<TAiA2APushConfig>.Create(True);
   FPushLock := TCriticalSection.Create;
   FTasks := TObjectDictionary<string, TAiA2ATaskInfo>.Create([doOwnsValues]);
@@ -427,6 +543,7 @@ end;
 destructor TAiA2AServer.Destroy;
 begin
   Stop;
+  FSkills.Free;
   FTasks.Free;
   FPushConfigs.Free;
   FPushLock.Free;
@@ -1049,14 +1166,58 @@ begin
       Result.AddPair('security', SecArr);
   end;
 
-  // Un unico skill que representa la ejecucion del grafo completo
   Skills := TJSONArray.Create;
-  Skill := TJSONObject.Create;
-  Skill.AddPair('id', 'run-graph');
-  Skill.AddPair('name', LName);
-  Skill.AddPair('description', LDesc);
-  Skill.AddPair('tags', TJSONArray.Create);
-  Skills.AddElement(Skill);
+
+  // 1. Las skills declaradas por el desarrollador mandan.
+  for var I := 0 to FSkills.Count - 1 do
+  begin
+    var LSk := FSkills[I];
+    if Trim(LSk.Id) = '' then
+      Continue; // sin id no es una skill valida
+    Skill := TJSONObject.Create;
+    Skill.AddPair('id', LSk.Id);
+    if LSk.Title <> '' then
+      Skill.AddPair('name', LSk.Title)
+    else
+      Skill.AddPair('name', LSk.Id);
+    Skill.AddPair('description', LSk.Description);
+    var LTags := TJSONArray.Create;
+    for var LTag in SplitString(LSk.Tags, ',') do
+      if Trim(LTag) <> '' then
+        LTags.Add(Trim(LTag));
+    Skill.AddPair('tags', LTags);
+    Skills.AddElement(Skill);
+  end;
+
+  // 2. Nodos con descripcion, solo si se pide. Los que no la tienen se omiten:
+  //    publicar 'Nodo1' sin descripcion no ayuda a elegir agente.
+  if FPublishNodesAsSkills and Assigned(FAgentManager) then
+    for var LNode in FAgentManager.GetNodes do
+    begin
+      if not Assigned(LNode) or not Assigned(LNode.Tool) then
+        Continue;
+      if Trim(LNode.Tool.Description) = '' then
+        Continue;
+      Skill := TJSONObject.Create;
+      Skill.AddPair('id', 'node-' + LNode.Name);
+      Skill.AddPair('name', LNode.Name);
+      Skill.AddPair('description', LNode.Tool.Description);
+      Skill.AddPair('tags', TJSONArray.Create);
+      Skills.AddElement(Skill);
+    end;
+
+  // 3. Si no quedo ninguna, la skill por defecto: ejecutar el grafo entero.
+  //    La Agent Card NUNCA debe salir sin skills.
+  if Skills.Count = 0 then
+  begin
+    Skill := TJSONObject.Create;
+    Skill.AddPair('id', 'run-graph');
+    Skill.AddPair('name', LName);
+    Skill.AddPair('description', LDesc);
+    Skill.AddPair('tags', TJSONArray.Create);
+    Skills.AddElement(Skill);
+  end;
+
   Result.AddPair('skills', Skills);
 
   if Assigned(FOnCustomizeCard) then

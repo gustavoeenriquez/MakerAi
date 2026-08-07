@@ -216,6 +216,20 @@ El cliente normaliza ambas formas con `UnwrapSendMessageResult`, que además sin
 
 El cliente lee la URL de `supportedInterfaces` con fallback al `url` plano de 0.x.
 
+### Skills de la Agent Card
+
+Una skill es lo que un cliente lee para **decidir si este agente le sirve**. No es un punto de entrada: la spec no lleva selector de skill en `SendMessage`, así que las skills describen, no enrutan.
+
+Por eso **no se derivan de los nodos del grafo**. Un grafo normal tiene nodos `Nodo1`/`Nodo2` sin descripción, y publicarlos sería ruido que además insinúa una granularidad de invocación que no existe. Se declaran:
+
+```pascal
+Server.Skills.AddSkill('traducir', 'Traductor', 'Traduce texto', 'idiomas, texto');
+```
+
+`Tags` va separado por comas y se emite como array JSON. Si la colección queda vacía se publica una única skill `run-graph` — la card **nunca** sale sin skills.
+
+`PublishNodesAsSkills := True` añade además un skill por nodo, pero **solo para los nodos cuyo `Tool` trae `Description`**; los demás se omiten a propósito. Para control total sigue estando `OnCustomizeCard`.
+
 > **Los tests de interop deben hablar HTTP crudo.** Los casos `a2a.wire.v1`, `a2a.wire.v03` y `a2a.listtasks` de la suite no usan `TAiA2AClient` a propósito: durante meses los 9 casos A2A pasaron con el formato equivocado porque cliente y servidor compartían el error. Un test que valida contra tu propia implementación no prueba conformidad.
 >
 > Para conformidad real está `Tests/Interop/run_interop.ps1`, que prueba ambas direcciones contra el SDK oficial `a2a-sdk`.

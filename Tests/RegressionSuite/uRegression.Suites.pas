@@ -231,6 +231,17 @@ begin
     .ExpectContains('Blocked by guardrails')
     .ExpectContains('not-executed');
 
+  // --- A2A: skills del Agent Card ---
+  // Las skills se DECLARAN; no se derivan de los nodos. Un grafo normal tiene
+  // nodos 'Nodo1'/'Nodo2' sin descripcion y publicarlos seria ruido.
+  FRunner.AddCase('a2a.card.skills-declared')
+    .Input('a2a:card-skills')
+    .ExpectEquals('2|traducir|resumir|tags=2');
+
+  FRunner.AddCase('a2a.card.skills-default')
+    .Input('a2a:card-skills-default')
+    .ExpectEquals('1|run-graph');
+
   // --- RAG: busqueda sin SearchOptions ---
   // Reventaba con AV: IfThen evalua las dos ramas, asi que
   // IfThen(Assigned(LOptions), LOptions.MinAbsoluteScoreEmbedding, 0.0)
@@ -415,7 +426,8 @@ begin
   // Los flujos de orquestacion arman su propia topologia (pool, suspension,
   // no bloqueante) y viven en su propia rutina.
   if MatchStr(AScenario, ['a2a:concurrency', 'a2a:hitl', 'a2a:fedhitl', 'a2a:nonblocking', 'a2a:naming',
-    'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03', 'a2a:listtasks', 'a2a:errorcodes', 'a2a:agenttool']) then
+    'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03', 'a2a:listtasks', 'a2a:errorcodes', 'a2a:agenttool',
+    'a2a:card-skills', 'a2a:card-skills-default']) then
     Exit(RunA2AFlowScenario(AScenario));
 
   Result := '';
@@ -610,6 +622,68 @@ begin
           end);
       TTask.WaitForAll(Tasks);
       Result := Format('completed=%d|failed=%d', [OkCount, BadCount]);
+    end
+
+    // --- Skills declaradas en la Agent Card ---
+    else if AScenario = 'a2a:card-skills' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteSkillsGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.Skills.AddSkill('traducir', 'Traductor', 'Traduce texto', 'idiomas, texto');
+      Server.Skills.AddSkill('resumir', 'Resumidor', 'Resume documentos');
+      Server.Active := True;
+
+      Http := THTTPClient.Create;
+      try
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+        Card := TJSONObject(TJSONObject.ParseJSONValue(Http.Get(Url + '/.well-known/agent-card.json')
+          .ContentAsString(TEncoding.UTF8)));
+        try
+          var LArr := Card.GetValue('skills') as TJSONArray;
+          Result := IntToStr(LArr.Count);
+          for var K := 0 to LArr.Count - 1 do
+            Result := Result + '|' + (LArr.Items[K] as TJSONObject).GetValue<string>('id');
+          // Los tags separados por coma se emiten como array.
+          Result := Result + '|tags=' +
+            IntToStr(((LArr.Items[0] as TJSONObject).GetValue('tags') as TJSONArray).Count);
+        finally
+          Card.Free;
+        end;
+      finally
+        Http.Free;
+      end;
+    end
+
+    // --- Sin skills declaradas: la card nunca sale vacia ---
+    else if AScenario = 'a2a:card-skills-default' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteSkillsDefGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Http := THTTPClient.Create;
+      try
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+        Card := TJSONObject(TJSONObject.ParseJSONValue(Http.Get(Url + '/.well-known/agent-card.json')
+          .ContentAsString(TEncoding.UTF8)));
+        try
+          var LArr := Card.GetValue('skills') as TJSONArray;
+          Result := IntToStr(LArr.Count) + '|' +
+            (LArr.Items[0] as TJSONObject).GetValue<string>('id');
+        finally
+          Card.Free;
+        end;
+      finally
+        Http.Free;
+      end;
     end
 
     // --- Human-in-the-loop directo sobre A2A ---
