@@ -102,6 +102,7 @@ type
   TAiA2ATaskInfo = class
   public
     Id: string;
+    MessageId: string;  // messageId del mensaje que creo el task
     ContextId: string;
     State: string; // canonico en minusculas: working, completed, ...
     OutputText: string;
@@ -114,6 +115,10 @@ type
     SuspendNode: string;
     SuspendReason: string;
     SuspendContext: string;
+    // Respuesta estructurada que dejo el grafo en el blackboard (ver
+    // A2A_BB_ARTIFACTS / A2A_BB_MESSAGE). Vacias = respuesta de texto normal.
+    ArtifactsJson: string;
+    MessageJson: string;
     History: TStringList; // 'role<TAB>texto'
     constructor Create;
     destructor Destroy; override;
@@ -146,9 +151,12 @@ type
     FStateNaming: TAiA2ANaming;
     FWireEra: TAiA2AWireEra;
     FPublishExtendedCard: Boolean;
+    FCardCacheSeconds: Integer;
     // Ultima URL base servida, para poder responder GetExtendedAgentCard sin
     // tener el contexto HTTP delante.
     FLastBaseUrl: string;
+    // Puente entre DoSendMessage y HandleJsonRpc para el brazo 'message'
+    FLastMessageJson: string;
     FTasks: TObjectDictionary<string, TAiA2ATaskInfo>;
     FTasksLock: TCriticalSection;
     FSlots: TObjectList<TAiA2AManagerSlot>;
@@ -176,6 +184,7 @@ type
     function BuildTaskJson(AInfo: TAiA2ATaskInfo): TJSONObject;
     // Envuelve el Task como SendMessageResponse cuando la era es v1.0.
     function WrapSendMessageResult(ATask: TJSONObject): TJSONObject;
+    function WrapSendMessageAsMessage(const AMessageJson: string; ATask: TJSONObject): TJSONObject;
     function HandleJsonRpc(const ABody, ATraceParent: string): string;
     function RpcError(AId: TJSONValue; ACode: Integer; const AMsg: string): string;
     function RpcResult(AId: TJSONValue; AResult: TJSONObject): string;
@@ -227,6 +236,8 @@ type
     // la publica, asi que para diferenciarla hay que enriquecerla en
     // OnCustomizeCard (que recibe la card antes de publicarse).
     property PublishExtendedCard: Boolean read FPublishExtendedCard write FPublishExtendedCard default False;
+    // Segundos de Cache-Control/max-age de la Agent Card (SHOULD de la spec).
+    property CardCacheSeconds: Integer read FCardCacheSeconds write FCardCacheSeconds default 3600;
     property OnAcquireManager: TAiA2AAcquireManager read FOnAcquireManager write FOnAcquireManager;
     property OnCustomizeCard: TAiA2ACardEvent read FOnCustomizeCard write FOnCustomizeCard;
     property OnAuthorize: TAiA2AAuthEvent read FOnAuthorize write FOnAuthorize;
@@ -263,6 +274,21 @@ const
   A2A_VERSION_HEADER = 'A2A-Version';
   A2A_VERSION = '1.0';
 
+  // --- Canal blackboard <-> A2A -------------------------------------------
+  // El servidor siembra estas claves antes de correr el grafo, para que los
+  // nodos sepan en que conversacion estan:
+  A2A_BB_MESSAGE_ID = 'A2A.MessageId';
+  A2A_BB_TASK_ID = 'A2A.TaskId';
+  A2A_BB_CONTEXT_ID = 'A2A.ContextId';
+  // Y lee estas al terminar, para responder algo mas rico que texto plano:
+  //   A2A.Artifacts -> array JSON de artifacts, se emite tal cual. Permite
+  //                    DataPart, FilePart (bytes o url) y varios artifacts.
+  //   A2A.Message   -> objeto Message JSON. Si esta, SendMessage responde
+  //                    {"message": ...} en vez de {"task": ...}, que es el
+  //                    otro brazo del oneof SendMessageResponse.
+  A2A_BB_ARTIFACTS = 'A2A.Artifacts';
+  A2A_BB_MESSAGE = 'A2A.Message';
+
 // Convierte cualquiera de las dos formas ('TASK_STATE_INPUT_REQUIRED' o
 // 'input-required') al canonico en minusculas. Publica porque el cliente la usa.
 function A2ACanonicalState(const AValue: string): string;
@@ -271,7 +297,7 @@ procedure Register;
 
 implementation
 
-uses uMakerAi.Telemetry;
+uses System.Hash, uMakerAi.Telemetry;
 
 procedure Register;
 begin
@@ -332,6 +358,7 @@ begin
   FMaxTasks := 1000;
   FStateNaming := anProto;
   FWireEra := weV1;
+  FCardCacheSeconds := 3600;
   FTasks := TObjectDictionary<string, TAiA2ATaskInfo>.Create([doOwnsValues]);
   FTasksLock := TCriticalSection.Create;
   FSlots := TObjectList<TAiA2AManagerSlot>.Create(True);
@@ -522,6 +549,25 @@ begin
   Result.AddPair('task', ATask); // toma posesion
 end;
 
+// El otro brazo del oneof: responder con un Message en vez de con un Task,
+// para agentes que contestan de una sin crear tarea.
+function TAiA2AServer.WrapSendMessageAsMessage(const AMessageJson: string; ATask: TJSONObject): TJSONObject;
+var
+  MsgObj: TJSONValue;
+begin
+  MsgObj := TJSONObject.ParseJSONValue(AMessageJson);
+  if not(MsgObj is TJSONObject) then
+  begin
+    MsgObj.Free;
+    Exit(WrapSendMessageResult(ATask)); // JSON invalido: se responde el task
+  end;
+  ATask.Free; // no se usa en esta rama
+  if FWireEra = weV03 then
+    Exit(TJSONObject(MsgObj));
+  Result := TJSONObject.Create;
+  Result.AddPair('message', MsgObj);
+end;
+
 function TAiA2AServer.FindTask(const AId: string): TAiA2ATaskInfo;
 begin
   if not FTasks.TryGetValue(AId, Result) then
@@ -602,6 +648,9 @@ begin
   begin
     if Assigned(Mgr.EndNode) then
       AInfo.OutputText := Mgr.EndNode.Output;
+    // Respuesta estructurada opcional dejada por el grafo
+    AInfo.ArtifactsJson := Mgr.Blackboard.GetString(A2A_BB_ARTIFACTS);
+    AInfo.MessageJson := Mgr.Blackboard.GetString(A2A_BB_MESSAGE);
     if AInfo.OutputText <> '' then
       AInfo.History.Add('agent'#9 + AInfo.OutputText);
   end
@@ -639,8 +688,20 @@ begin
     end;
     // Sobrecarga con siembra: garantiza Compile + ResetExecutionState, sin lo
     // cual un manager reutilizado del pool arrastraria el estado del task
-    // anterior (blackboard, Output de nodos, NoCycles de los links).
-    Slot.Manager.Run(AInput, nil);
+    // anterior (blackboard, Output de nodos, NoCycles de los links). La siembra
+    // corre DESPUES del reset, asi que estos valores sobreviven.
+    var LMsgId := AInfo.MessageId;
+    var LTaskId := AInfo.Id;
+    var LCtxId := AInfo.ContextId;
+    Slot.Manager.Run(AInput,
+      procedure(B: TAIBlackboard)
+      begin
+        // El grafo necesita saber en que conversacion esta: sin esto un nodo
+        // no puede distinguir turnos ni correlacionar con sistemas externos.
+        B.SetString(A2A_BB_MESSAGE_ID, LMsgId);
+        B.SetString(A2A_BB_TASK_ID, LTaskId);
+        B.SetString(A2A_BB_CONTEXT_ID, LCtxId);
+      end);
   except
     on E: Exception do
     begin
@@ -985,6 +1046,19 @@ begin
   end;
   Result.AddPair('status', StatusObj);
 
+  // Si el grafo dejo artifacts estructurados, mandan ellos: permiten DataPart,
+  // FilePart (bytes o url) y varios artifacts, cosa que el texto plano no.
+  Artifacts := nil;
+  if (AInfo.State = A2A_STATE_COMPLETED) and (Trim(AInfo.ArtifactsJson) <> '') then
+    Artifacts := TJSONArray(TJSONObject.ParseJSONValue(AInfo.ArtifactsJson));
+  if not(Artifacts is TJSONArray) then
+  begin
+    Artifacts.Free;
+    Artifacts := nil;
+  end;
+
+  if Artifacts = nil then
+  begin
   Artifacts := TJSONArray.Create;
   if (AInfo.State = A2A_STATE_COMPLETED) and (AInfo.OutputText <> '') then
   begin
@@ -997,6 +1071,7 @@ begin
     PartsArr.AddElement(PartObj);
     Artifact.AddPair('parts', PartsArr);
     Artifacts.AddElement(Artifact);
+  end;
   end;
   Result.AddPair('artifacts', Artifacts);
 
@@ -1029,7 +1104,7 @@ end;
 function TAiA2AServer.DoSendMessage(AParams: TJSONObject): TJSONObject;
 var
   MsgObj, ConfigObj: TJSONObject;
-  InputText, TaskId, ContextId: string;
+  InputText, TaskId, ContextId, MessageId: string;
   Info: TAiA2ATaskInfo;
   Blocking: Boolean;
 begin
@@ -1049,9 +1124,11 @@ begin
   // params, que es como los mandan varios clientes de la era 0.x.
   TaskId := '';
   ContextId := '';
+  MessageId := '';
   if Assigned(MsgObj) then
   begin
     TaskId := MsgObj.GetValue<string>('taskId', '');
+    MessageId := MsgObj.GetValue<string>('messageId', '');
     ContextId := MsgObj.GetValue<string>('contextId', '');
   end;
   if Assigned(AParams) then
@@ -1099,6 +1176,7 @@ begin
   else
   begin
     Info := NewTask(ContextId);
+    Info.MessageId := MessageId;
     StartTask(Info, InputText);
   end;
 
@@ -1118,6 +1196,7 @@ begin
 
   FTasksLock.Enter;
   try
+    FLastMessageJson := Info.MessageJson;
     Result := BuildTaskJson(Info);
   finally
     FTasksLock.Leave;
@@ -1334,6 +1413,7 @@ var
   Method: string;
   IdVal: TJSONValue;
   LSpan: TAiSpan;
+  LTaskJson: TJSONObject;
 begin
   Root := TJSONObject.ParseJSONValue(ABody);
   if not(Root is TJSONObject) then
@@ -1354,7 +1434,16 @@ begin
     try
       // Metodos 1.0 + aliases 0.x (message/send, tasks/get, tasks/cancel)
       if SameText(Method, 'SendMessage') or SameText(Method, 'message/send') then
-        Result := RpcResult(IdVal, WrapSendMessageResult(DoSendMessage(Params)))
+      begin
+        // DoSendMessage deja en FLastMessageJson lo que el grafo haya puesto en
+        // A2A.Message; si hay algo, la respuesta va por el brazo 'message'.
+        FLastMessageJson := '';
+        LTaskJson := DoSendMessage(Params);
+        if FLastMessageJson <> '' then
+          Result := RpcResult(IdVal, WrapSendMessageAsMessage(FLastMessageJson, LTaskJson))
+        else
+          Result := RpcResult(IdVal, WrapSendMessageResult(LTaskJson));
+      end
       else if SameText(Method, 'GetTask') or SameText(Method, 'tasks/get') then
         Result := RpcResult(IdVal, DoGetTask(Params))
       else if SameText(Method, 'CancelTask') or SameText(Method, 'tasks/cancel') then
@@ -1408,7 +1497,7 @@ end;
 
 procedure TAiA2AServer.HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
 var
-  Body, BaseUrl, Scheme, AuthHdr, VerHdr, CtHdr: string;
+  Body, BaseUrl, Scheme, AuthHdr, VerHdr, CtHdr, CardJson, ETag: string;
   Card: TJSONObject;
   Allowed: Boolean;
 begin
@@ -1449,11 +1538,28 @@ begin
     FLastBaseUrl := BaseUrl;
     Card := BuildAgentCard(BaseUrl);
     try
-      AResponseInfo.ResponseNo := 200;
-      AResponseInfo.ContentText := Card.ToJSON;
+      CardJson := Card.ToJSON;
     finally
       Card.Free;
     end;
+
+    // La spec recomienda (SHOULD) que la card sea cacheable: sin esto cada
+    // cliente la vuelve a pedir en cada descubrimiento.
+    ETag := '"' + THashSHA2.GetHashString(CardJson).Substring(0, 32) + '"';
+    AResponseInfo.CustomHeaders.Values['Cache-Control'] :=
+      Format('public, max-age=%d', [FCardCacheSeconds]);
+    AResponseInfo.CustomHeaders.Values['ETag'] := ETag;
+
+    // Revalidacion condicional: si el cliente ya tiene esta version, 304.
+    if SameText(Trim(ARequestInfo.RawHeaders.Values['If-None-Match']), ETag) then
+    begin
+      AResponseInfo.ResponseNo := 304;
+      AResponseInfo.ContentText := '';
+      Exit;
+    end;
+
+    AResponseInfo.ResponseNo := 200;
+    AResponseInfo.ContentText := CardJson;
     Exit;
   end;
 
