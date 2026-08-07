@@ -322,6 +322,7 @@ type
     property Port: Integer read FPort write FPort;
     property Host: string read FHost write FHost;
     property ServerName: string read FServerName write FServerName;
+    property ServerVersion: string read FServerVersion write FServerVersion;
     property ProtocolVersion: string read FProtocolVersion write FProtocolVersion;
     property CorsEnabled: Boolean read FCorsEnabled write FCorsEnabled;
     property CorsAllowedOrigins: string read FCorsAllowedOrigins write FCorsAllowedOrigins;
@@ -355,6 +356,8 @@ type
     procedure SetSettingsFile(const Value: String);
     function GetServerName: String;
     procedure SetServerName(const Value: String);
+    function GetServerVersion: String;
+    procedure SetServerVersion(const Value: String);
     function GetOnClientConnect: TAiMCPClientConnectEvent;
     procedure SetOnClientConnect(const Value: TAiMCPClientConnectEvent);
     function GetOnUnauthorizedRequest: TAiMCPUnauthorizedEvent;
@@ -400,6 +403,8 @@ type
     property SettingsFile: String read GetSettingsFile write SetSettingsFile;
   Published
     Property ServerName: String read GetServerName write SetServerName;
+    // Version que reporta initialize en serverInfo (delega en el motor logico)
+    property ServerVersion: String read GetServerVersion write SetServerVersion;
     property AiFunctions: TAiFunctions read FAiFunctions write SetAiFunctions;
     // Autenticación: Si ApiKey está configurado, valida "Authorization: Bearer <key>" o "X-API-Key: <key>"
     property ApiKey: string read FApiKey write FApiKey;
@@ -2008,6 +2013,16 @@ end;
 function TAiMCPServer.GetServerName: String;
 begin
   Result := FServerName;
+end;
+
+function TAiMCPServer.GetServerVersion: String;
+begin
+  Result := FLogicServer.ServerVersion;
+end;
+
+procedure TAiMCPServer.SetServerVersion(const Value: String);
+begin
+  FLogicServer.ServerVersion := Value;
 end;
 
 function TAiMCPServer.GetOnClientConnect: TAiMCPClientConnectEvent;
