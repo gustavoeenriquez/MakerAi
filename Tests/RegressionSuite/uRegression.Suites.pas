@@ -31,6 +31,7 @@ type
     // no bloqueante, tolerancia de literales y cancelacion.
     function RunA2AFlowScenario(const AScenario: string): string;
     function RunPolicyScenario(const AScenario: string): string;
+    function RunRagScenario(const AScenario: string): string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -49,6 +50,9 @@ uses
   uMakerAi.A2A.Server, uMakerAi.A2A.Client,
   uMakerAi.Tools.Functions, uMakerAi.Chat.Messages,
   uMakerAi.Guardrails,
+  System.IOUtils, uMakerAi.Embeddings.Core,
+  uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
+  uMakerAi.RAG.Vector.Driver.BinFile,
   uRegression.Fixtures;
 
 const
@@ -227,6 +231,15 @@ begin
     .ExpectContains('Blocked by guardrails')
     .ExpectContains('not-executed');
 
+  // --- RAG: busqueda sin SearchOptions ---
+  // Reventaba con AV: IfThen evalua las dos ramas, asi que
+  // IfThen(Assigned(LOptions), LOptions.MinAbsoluteScoreEmbedding, 0.0)
+  // desreferenciaba LOptions aunque fuera nil. Es alcanzable de verdad:
+  // basta con no pasar Options y que el driver no tenga Owner.
+  FRunner.AddCase('rag.search.nil-options')
+    .Input('rag:search-nil-options')
+    .ExpectEquals('1');
+
   // --- Evals (autoprueba del propio runner) ---
   FRunner.AddCase('evals.self-check')
     .Input('policy:evals-self')
@@ -239,6 +252,8 @@ begin
     Result := RunMcpScenario(AScenario)
   else if AScenario.StartsWith('agents:') or AScenario.StartsWith('a2a:') then
     Result := RunAgentScenario(AScenario)
+  else if AScenario.StartsWith('rag:') then
+    Result := RunRagScenario(AScenario)
   else if AScenario.StartsWith('policy:') then
     Result := RunPolicyScenario(AScenario)
   else
@@ -1098,6 +1113,69 @@ end;
 // -----------------------------------------------------------------------------
 // Guardrails y evals
 // -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// RAG
+// -----------------------------------------------------------------------------
+
+function TRegressionSuite.RunRagScenario(const AScenario: string): string;
+var
+  Drv: TAiMkVecDriver;
+  Node, Target: TAiEmbeddingNode;
+  Res: TAiRAGVector;
+  Vec: TAiEmbeddingData;
+  LPath: string;
+  I: Integer;
+begin
+  if AScenario <> 'rag:search-nil-options' then
+    raise Exception.Create('Escenario RAG desconocido: ' + AScenario);
+
+  LPath := TPath.Combine(TPath.GetTempPath, 'makerai_regress_rag.mkai');
+  if TFile.Exists(LPath) then
+    TFile.Delete(LPath);
+
+  SetLength(Vec, 4);
+  for I := 0 to 3 do
+    Vec[I] := 0.5;
+
+  Drv := TAiMkVecDriver.Create(nil);
+  try
+    Drv.Dim := 4;
+    Drv.FilePath := LPath;
+    Drv.Open;
+
+    Node := TAiEmbeddingNode.Create(4);
+    try
+      Node.Tag := 'n1';
+      Node.Text := 'delphi orquesta agentes';
+      Node.Data := Vec;
+      Drv.Add(Node, 'DEFAULT');
+    finally
+      Node.Free;
+    end;
+
+    Target := TAiEmbeddingNode.Create(4);
+    try
+      Target.Text := 'delphi';
+      Target.Data := Vec;
+
+      // Lo que se prueba: Options en nil y driver sin Owner, asi que dentro de
+      // Search LOptions se queda en nil. Antes esto era un AV, no un 0 nodos.
+      Res := Drv.Search(Target, 'DEFAULT', 5, 0, nil, nil);
+      try
+        Result := IntToStr(Res.Items.Count);
+      finally
+        Res.Free;
+      end;
+    finally
+      Target.Free;
+    end;
+  finally
+    Drv.Free;
+    if TFile.Exists(LPath) then
+      TFile.Delete(LPath);
+  end;
+end;
 
 function TRegressionSuite.RunPolicyScenario(const AScenario: string): string;
 var

@@ -601,7 +601,12 @@ begin
 
   J := ANode.MetaData.ToJSON;
   try
-    PropsStr := IfThen(Assigned(J), J.ToJSON, '{}');
+    // IfThen evalua las dos ramas, asi que con J en nil se llamaba a
+    // J.ToJSON igualmente.
+    if Assigned(J) then
+      PropsStr := J.ToJSON
+    else
+      PropsStr := '{}';
   finally
     J.Free;
   end;
@@ -1032,8 +1037,14 @@ begin
 
   if not (DoVector or DoLexical) then Exit;
 
-  MinVec := IfThen(Assigned(LOptions), LOptions.MinAbsoluteScoreEmbedding, 0.0);
-  MinLex := IfThen(Assigned(LOptions), LOptions.MinAbsoluteScoreBM25,      0.0);
+  // IfThen evalua las dos ramas: con LOptions en nil daba AV.
+  MinVec := 0.0;
+  MinLex := 0.0;
+  if Assigned(LOptions) then
+  begin
+    MinVec := LOptions.MinAbsoluteScoreEmbedding;
+    MinLex := LOptions.MinAbsoluteScoreBM25;
+  end;
 
   VecRes := nil;
   LexRes := nil;
@@ -1051,8 +1062,16 @@ begin
         Fused := FuseRRF(VecRes, LexRes, ALimit)
       else
       begin
-        VW := IfThen(Assigned(LOptions), LOptions.EmbeddingWeight, 0.7);
-        LW := IfThen(Assigned(LOptions), LOptions.BM25Weight,      0.3);
+        // OJO: IfThen es una FUNCION, evalua SIEMPRE las dos ramas.
+        // Con LOptions en nil (caso real: ver los Assigned de arriba)
+        // IfThen(Assigned(LOptions), LOptions.X, ...) reventaba con AV.
+        VW := 0.7;
+        LW := 0.3;
+        if Assigned(LOptions) then
+        begin
+          VW := LOptions.EmbeddingWeight;
+          LW := LOptions.BM25Weight;
+        end;
         Fused := FuseWeighted(VecRes, LexRes, VW, LW, ALimit);
       end;
       try
