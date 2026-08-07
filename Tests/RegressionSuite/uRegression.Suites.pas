@@ -183,6 +183,11 @@ begin
     .Input('a2a:wire-v03')
     .ExpectEquals('card.supportedInterfaces=0|card.rootUrl=1|send.result.task=0|send.result.id=1');
 
+  // ListTasks: listado, filtro por estado y GetExtendedAgentCard deshabilitada
+  FRunner.AddCase('a2a.listtasks')
+    .Input('a2a:listtasks')
+    .ExpectEquals('total=2|filtrado=2|inexistente=0|extcard=-32004');
+
   // --- Guardrails ---
   FRunner.AddCase('policy.guard.blocklist')
     .Input('policy:blocklist')
@@ -378,7 +383,7 @@ begin
   // Los flujos de orquestacion arman su propia topologia (pool, suspension,
   // no bloqueante) y viven en su propia rutina.
   if MatchStr(AScenario, ['a2a:concurrency', 'a2a:hitl', 'a2a:fedhitl', 'a2a:nonblocking', 'a2a:naming',
-    'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03']) then
+    'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03', 'a2a:listtasks']) then
     Exit(RunA2AFlowScenario(AScenario));
 
   Result := '';
@@ -824,6 +829,95 @@ begin
         end;
       finally
         Http.Free;
+      end;
+    end
+
+    // --- ListTasks y GetExtendedAgentCard, tambien por HTTP crudo ---
+    else if AScenario = 'a2a:listtasks' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteListGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Client := TAiA2AClient.Create(nil);
+      Http := THTTPClient.Create;
+      try
+        Client.Url := Url;
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+        Http.ContentType := 'application/json';
+
+        // Dos tasks para tener algo que listar
+        for I := 1 to 2 do
+        begin
+          Task := Client.SendText('t' + IntToStr(I), OutText);
+          Task.Free;
+        end;
+
+        // Listado completo
+        Body := TStringStream.Create('{"jsonrpc":"2.0","id":1,"method":"ListTasks","params":{}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          RawObj.TryGetValue<TJSONObject>('result', ResObj);
+          Result := 'total=' + IntToStr(ResObj.GetValue<TJSONArray>('tasks').Count);
+        finally
+          RawObj.Free;
+        end;
+
+        // Filtro por estado: los dos completaron
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":2,"method":"ListTasks","params":{"status":"TASK_STATE_COMPLETED"}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          RawObj.TryGetValue<TJSONObject>('result', ResObj);
+          Result := Result + '|filtrado=' + IntToStr(ResObj.GetValue<TJSONArray>('tasks').Count);
+        finally
+          RawObj.Free;
+        end;
+
+        // Filtro por un contextId que no existe
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":3,"method":"ListTasks","params":{"contextId":"no-existe"}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          RawObj.TryGetValue<TJSONObject>('result', ResObj);
+          Result := Result + '|inexistente=' + IntToStr(ResObj.GetValue<TJSONArray>('tasks').Count);
+        finally
+          RawObj.Free;
+        end;
+
+        // GetExtendedAgentCard sin habilitar -> UnsupportedOperation
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":4,"method":"GetExtendedAgentCard","params":{}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          Result := Result + '|extcard=' +
+            IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
+        finally
+          RawObj.Free;
+        end;
+      finally
+        Http.Free;
+        Client.Free;
       end;
     end
 

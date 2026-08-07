@@ -198,7 +198,21 @@ El cliente normaliza ambas formas con `UnwrapSendMessageResult`, que además sin
 
 El cliente lee la URL de `supportedInterfaces` con fallback al `url` plano de 0.x.
 
-> **Los tests de interop deben hablar HTTP crudo.** Los casos `a2a.wire.v1` y `a2a.wire.v03` de la suite no usan `TAiA2AClient` a propósito: durante meses los 9 casos A2A pasaron con el formato equivocado porque cliente y servidor compartían el error. Un test que valida contra tu propia implementación no prueba conformidad.
+> **Los tests de interop deben hablar HTTP crudo.** Los casos `a2a.wire.v1`, `a2a.wire.v03` y `a2a.listtasks` de la suite no usan `TAiA2AClient` a propósito: durante meses los 9 casos A2A pasaron con el formato equivocado porque cliente y servidor compartían el error. Un test que valida contra tu propia implementación no prueba conformidad.
+>
+> Para conformidad real está `Tests/Interop/run_interop.ps1`, que prueba ambas direcciones contra el SDK oficial `a2a-sdk`.
+
+## Métodos JSON-RPC soportados
+
+| Método | Estado |
+|---|---|
+| `SendMessage` | ✅ (+ alias 0.x `message/send`) |
+| `GetTask` | ✅ (+ `tasks/get`) |
+| `CancelTask` | ✅ (+ `tasks/cancel`) |
+| `ListTasks` | ✅ filtros `contextId` y `status`, paginado por `pageSize`; devuelve `{tasks, totalSize, pageSize}` |
+| `GetExtendedAgentCard` | ✅ si `PublishExtendedCard := True`; si no, `UnsupportedOperationError`. Para diferenciarla de la pública hay que enriquecerla en `OnCustomizeCard` |
+| `SendStreamingMessage`, `SubscribeToTask` | ❌ rechazados con `UnsupportedOperationError` (`capabilities.streaming = false`) |
+| `*TaskPushNotificationConfig` | ❌ no implementados (`capabilities.pushNotifications = false`) |
 
 ## Threading Model
 

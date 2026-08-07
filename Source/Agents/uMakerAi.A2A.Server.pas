@@ -145,6 +145,10 @@ type
     FPublicUrl: string;
     FStateNaming: TAiA2ANaming;
     FWireEra: TAiA2AWireEra;
+    FPublishExtendedCard: Boolean;
+    // Ultima URL base servida, para poder responder GetExtendedAgentCard sin
+    // tener el contexto HTTP delante.
+    FLastBaseUrl: string;
     FTasks: TObjectDictionary<string, TAiA2ATaskInfo>;
     FTasksLock: TCriticalSection;
     FSlots: TObjectList<TAiA2AManagerSlot>;
@@ -178,6 +182,7 @@ type
     function DoSendMessage(AParams: TJSONObject): TJSONObject;
     function DoGetTask(AParams: TJSONObject): TJSONObject;
     function DoCancelTask(AParams: TJSONObject): TJSONObject;
+    function DoListTasks(AParams: TJSONObject): TJSONObject;
     function EmitState(const ACanonical: string): string;
     function EmitRole(const ACanonical: string): string;
     class function ExtractTextFromParts(AMessage: TJSONObject): string; static;
@@ -218,6 +223,10 @@ type
     // lo que emitia MakerAI antes de agosto 2026, para no romper integraciones
     // que ya dependieran de aquella forma.
     property WireEra: TAiA2AWireEra read FWireEra write FWireEra default weV1;
+    // Habilita GetExtendedAgentCard. La card extendida se construye igual que
+    // la publica, asi que para diferenciarla hay que enriquecerla en
+    // OnCustomizeCard (que recibe la card antes de publicarse).
+    property PublishExtendedCard: Boolean read FPublishExtendedCard write FPublishExtendedCard default False;
     property OnAcquireManager: TAiA2AAcquireManager read FOnAcquireManager write FOnAcquireManager;
     property OnCustomizeCard: TAiA2ACardEvent read FOnCustomizeCard write FOnCustomizeCard;
     property OnAuthorize: TAiA2AAuthEvent read FOnAuthorize write FOnAuthorize;
@@ -818,7 +827,7 @@ begin
   Caps := TJSONObject.Create;
   Caps.AddPair('streaming', TJSONBool.Create(False));
   Caps.AddPair('pushNotifications', TJSONBool.Create(False));
-  Caps.AddPair('extendedAgentCard', TJSONBool.Create(False));
+  Caps.AddPair('extendedAgentCard', TJSONBool.Create(FPublishExtendedCard));
   // stateTransitionHistory no existe en AgentCapabilities de v1.0
   if FWireEra = weV03 then
     Caps.AddPair('stateTransitionHistory', TJSONBool.Create(False));
@@ -1119,6 +1128,56 @@ begin
   end;
 end;
 
+// ListTasks (v1.0). Filtra por contextId y/o estado, con paginado simple por
+// pageSize. ListTasksResponse = {tasks, nextPageToken, pageSize, totalSize}.
+function TAiA2AServer.DoListTasks(AParams: TJSONObject): TJSONObject;
+var
+  Pair: TPair<string, TAiA2ATaskInfo>;
+  Arr: TJSONArray;
+  FiltroCtx, FiltroEstado: string;
+  PageSize, Total, Emitidos: Integer;
+begin
+  FiltroCtx := '';
+  FiltroEstado := '';
+  PageSize := 0;
+  if Assigned(AParams) then
+  begin
+    FiltroCtx := AParams.GetValue<string>('contextId', '');
+    // El filtro llega como literal de TaskState; se normaliza para poder
+    // comparar con el estado interno sea cual sea la era del llamante.
+    FiltroEstado := A2ACanonicalState(AParams.GetValue<string>('status', ''));
+    PageSize := AParams.GetValue<Integer>('pageSize', 0);
+  end;
+
+  Arr := TJSONArray.Create;
+  Total := 0;
+  Emitidos := 0;
+  FTasksLock.Enter;
+  try
+    for Pair in FTasks do
+    begin
+      RefreshTask(Pair.Value); // el listado tampoco debe mentir
+      if (FiltroCtx <> '') and (Pair.Value.ContextId <> FiltroCtx) then
+        Continue;
+      if (FiltroEstado <> '') and (Pair.Value.State <> FiltroEstado) then
+        Continue;
+      Inc(Total);
+      if (PageSize > 0) and (Emitidos >= PageSize) then
+        Continue; // se cuenta en totalSize pero no se emite
+      Arr.AddElement(BuildTaskJson(Pair.Value));
+      Inc(Emitidos);
+    end;
+  finally
+    FTasksLock.Leave;
+  end;
+
+  Result := TJSONObject.Create;
+  Result.AddPair('tasks', Arr);
+  Result.AddPair('totalSize', TJSONNumber.Create(Total));
+  if PageSize > 0 then
+    Result.AddPair('pageSize', TJSONNumber.Create(PageSize));
+end;
+
 function TAiA2AServer.DoCancelTask(AParams: TJSONObject): TJSONObject;
 var
   Id: string;
@@ -1242,6 +1301,17 @@ begin
         Result := RpcResult(IdVal, DoGetTask(Params))
       else if SameText(Method, 'CancelTask') or SameText(Method, 'tasks/cancel') then
         Result := RpcResult(IdVal, DoCancelTask(Params))
+      else if SameText(Method, 'ListTasks') or SameText(Method, 'tasks/list') then
+        Result := RpcResult(IdVal, DoListTasks(Params))
+      else if SameText(Method, 'GetExtendedAgentCard') or SameText(Method, 'agent/getExtendedCard') then
+      begin
+        // Solo si el integrador la habilito: la card extendida esta pensada
+        // para clientes ya autenticados, con mas detalle que la publica.
+        if not FPublishExtendedCard then
+          Result := RpcError(IdVal, A2A_ERR_UNSUPPORTED_OPERATION, 'Extended agent card is not configured')
+        else
+          Result := RpcResult(IdVal, BuildAgentCard(FLastBaseUrl));
+      end
       else if SameText(Method, 'SendStreamingMessage') or SameText(Method, 'SubscribeToTask') or
         SameText(Method, 'message/stream') or SameText(Method, 'tasks/resubscribe') then
         // La spec exige UnsupportedOperationError si capabilities.streaming=false
@@ -1312,6 +1382,7 @@ begin
         Scheme := 'http';
       BaseUrl := Scheme + '://' + ARequestInfo.Host + '/';
     end;
+    FLastBaseUrl := BaseUrl;
     Card := BuildAgentCard(BaseUrl);
     try
       AResponseInfo.ResponseNo := 200;
@@ -1324,6 +1395,13 @@ begin
 
   if SameText(ARequestInfo.Command, 'POST') then
   begin
+    // Se recuerda para poder construir la card en GetExtendedAgentCard, que
+    // llega por JSON-RPC y no trae contexto de URL.
+    if FLastBaseUrl = '' then
+      if FPublicUrl <> '' then
+        FLastBaseUrl := FPublicUrl
+      else
+        FLastBaseUrl := 'http://' + ARequestInfo.Host + '/';
     Body := '';
     if Assigned(ARequestInfo.PostStream) then
     begin
