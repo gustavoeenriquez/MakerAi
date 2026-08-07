@@ -316,12 +316,16 @@ entrega, y lo anuncia en la card.
 - `Delete` es idempotente y re-registrar el mismo `id` reemplaza, para que el
   webhook no reciba la misma notificación dos veces.
 
-> **La entrega necesita un vigilante.** Un cambio de estado solo se detectaba
-> cuando un cliente preguntaba; si nadie llamaba a `GetTask`, el task terminaba
-> y el webhook no se enteraba. El servidor arranca un hilo que refresca los
-> tasks vivos cada 100 ms. Es un `TThread` con `Terminate`/`WaitFor` y **no un
-> `TTask`**: con `TTask` no hay handle que esperar, el destructor liberaba los
-> locks con el hilo dentro y el proceso se colgaba al salir.
+> **LIMITACION CONOCIDA en la entrega.** La notificacion se dispara al detectar
+> un cambio de estado, y ese cambio solo se detecta cuando algo refresca el
+> task. En los flujos bloqueantes lo hace `WaitTask`; **con `blocking:false` y
+> sin consultas posteriores el webhook no recibe nada**. Se probaron un hilo de
+> sondeo y un enganche a `TAIAgentManager.OnFinish`, y ninguno entrego en ese
+> escenario: queda pendiente de diagnostico.
+>
+> El TCK pasa `PUSH-DELIVER-*` porque su flujo es bloqueante, asi que la
+> conformidad certificada NO cubre este caso. El demo 080 lo reproduce y falla
+> a proposito con exit code 1.
 
 ## Navigation
 

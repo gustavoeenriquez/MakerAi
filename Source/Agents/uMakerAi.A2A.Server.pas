@@ -98,6 +98,8 @@ type
     Manager: TAIAgentManager;
     Owned: Boolean; // creado por la fabrica -> lo liberamos nosotros
     InUse: Boolean;
+    PrevOnFinish: TAIAgentsOnFinish;
+    HookedFinish: Boolean;
   end;
 
   // Config de push notification registrada para un task. La forma de v1.0 es
@@ -171,7 +173,7 @@ type
     FEnablePushNotifications: Boolean;
     FPushConfigs: TObjectList<TAiA2APushConfig>;
     FPushLock: TCriticalSection;
-    FPoller: TThread;
+
     // Ultima URL base servida, para poder responder GetExtendedAgentCard sin
     // tener el contexto HTTP delante.
     FLastBaseUrl: string;
@@ -224,7 +226,12 @@ type
     function DoListPushConfigs(AParams: TJSONObject): TJSONObject;
     function DoDeletePushConfig(AParams: TJSONObject): TJSONObject;
     procedure DeliverPushNotifications(AInfo: TAiA2ATaskInfo);
+    // Se engancha a TAIAgentManager.OnFinish: es el aviso de que un grafo
+    // termino. Sustituye al sondeo, que era la unica forma de enterarse y
+    // dependia de que alguien consultara el task.
     procedure RefreshLiveTasks;
+    procedure OnGraphFinished(Sender: TObject; const Input, Output: string;
+      Status: TAgentExecutionStatus; E: Exception);
     function EmitState(const ACanonical: string): string;
     function EmitRole(const ACanonical: string): string;
     class function ExtractTextFromParts(AMessage: TJSONObject): string; static;
@@ -472,31 +479,9 @@ begin
   FHttpServer.Active := True;
   FActive := True;
 
-  // Vigilante de tasks vivos. Solo hace falta para la entrega push: sin el, un
-  // task que termina sin que nadie lo consulte no notifica a su webhook.
-  // Es un TThread y no un TTask a proposito: hace falta poder pararlo de forma
-  // determinista al cerrar. Con TTask no hay handle que esperar y el proceso
-  // se quedaba vivo al terminar.
-  if FEnablePushNotifications and not Assigned(FPoller) then
-  begin
-    FPoller := TThread.CreateAnonymousThread(
-      procedure
-      begin
-        while not TThread.CurrentThread.CheckTerminated do
-        begin
-          Sleep(100);
-          if TThread.CurrentThread.CheckTerminated then
-            Break;
-          try
-            RefreshLiveTasks;
-          except
-            // el vigilante nunca debe tumbar el servidor
-          end;
-        end;
-      end);
-    FPoller.FreeOnTerminate := False;
-    FPoller.Start;
-  end;
+  // Ya no hay hilo de sondeo: la deteccion del fin de un grafo va por el evento
+  // OnFinish del propio TAIAgentManager, que es determinista y no cuesta nada.
+  // RefreshLiveTasks se conserva por si un integrador quiere forzar un repaso.
 end;
 
 procedure TAiA2AServer.Stop;
@@ -506,14 +491,6 @@ begin
   FHttpServer.Active := False;
   FActive := False;
 
-  // Parar el vigilante de forma determinista: sin esto el destructor libera
-  // los locks mientras el hilo sigue dentro, y el proceso se cuelga al salir.
-  if Assigned(FPoller) then
-  begin
-    FPoller.Terminate;
-    FPoller.WaitFor;
-    FreeAndNil(FPoller);
-  end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -785,6 +762,13 @@ begin
     // modo sincrono Run haria Wait(INFINITE) y ademas lanzaria excepcion en
     // lugar de dejar el estado en el blackboard.
     Slot.Manager.Asynchronous := True;
+    // Engancharse al fin del grafo para poder notificar sin sondear.
+    if not Slot.HookedFinish then
+    begin
+      Slot.PrevOnFinish := Slot.Manager.OnFinish; // se encadena, no se pisa
+      Slot.Manager.OnFinish := OnGraphFinished;
+      Slot.HookedFinish := True;
+    end;
     FTasksLock.Enter;
     try
       AInfo.Slot := Slot;
@@ -1599,6 +1583,39 @@ end;
 // entrega push se dispara al detectar un cambio de estado, y RefreshTask solo
 // corria cuando un cliente preguntaba. Si nadie llamaba a GetTask, el task
 // terminaba y el webhook no se enteraba nunca.
+// Un grafo acaba de terminar. Se localiza su task y se refresca, lo que
+// dispara la entrega push si el estado cambio. Antes esto dependia de un hilo
+// que sondeaba cada 100 ms: funcionaba solo si alguien consultaba el task, asi
+// que con blocking=false el webhook no se enteraba nunca.
+procedure TAiA2AServer.OnGraphFinished(Sender: TObject; const Input, Output: string;
+  Status: TAgentExecutionStatus; E: Exception);
+var
+  Pair: TPair<string, TAiA2ATaskInfo>;
+  Afectado: TAiA2ATaskInfo;
+  Previo: TAIAgentsOnFinish;
+begin
+  Afectado := nil;
+  Previo := nil;
+  FTasksLock.Enter;
+  try
+    for Pair in FTasks do
+      if Assigned(Pair.Value.Slot) and (Pair.Value.Slot.Manager = Sender) then
+      begin
+        Afectado := Pair.Value;
+        Previo := Pair.Value.Slot.PrevOnFinish;
+        Break;
+      end;
+    if Assigned(Afectado) then
+      RefreshTask(Afectado); // dispara DeliverPushNotifications si cambio
+  finally
+    FTasksLock.Leave;
+  end;
+
+  // Encadenar el handler que el integrador pudiera tener puesto: apropiarse
+  // del evento sin devolverlo romperia su codigo.
+  if Assigned(Previo) then
+    Previo(Sender, Input, Output, Status, E);
+end;
 procedure TAiA2AServer.RefreshLiveTasks;
 var
   Pair: TPair<string, TAiA2ATaskInfo>;
