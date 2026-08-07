@@ -41,6 +41,7 @@ implementation
 
 uses
   System.TypInfo, System.StrUtils, System.SyncObjs, System.Threading,
+  System.Net.HttpClient,
   uMakerAi.Core,
   uMakerAi.MCPServer.Core, UMakerAi.MCPServer.Http,
   uMakerAi.MCPClient.Core,
@@ -167,6 +168,20 @@ begin
   FRunner.AddCase('a2a.cancel.terminal')
     .Input('a2a:cancelterm')
     .ExpectContains('-32002');
+
+  // --- A2A: formato de cable (spec 1.0) ---
+  // Estos casos hablan HTTP CRUDO contra el servidor, sin usar TAiA2AClient.
+  // Es deliberado: los demas casos A2A pasaban con el formato equivocado porque
+  // cliente y servidor compartian el error. Verificado contra a2a-sdk 1.1.2.
+  FRunner.AddCase('a2a.wire.v1')
+    .Input('a2a:wire-v1')
+    .ExpectEquals('card.supportedInterfaces=1|card.rootUrl=0|card.protocolVersion=0|' +
+    'send.result.task=1|send.result.id=0|gettask.id=1|gettask.task=0');
+
+  // La era 0.x sigue disponible para no romper integraciones previas
+  FRunner.AddCase('a2a.wire.v03')
+    .Input('a2a:wire-v03')
+    .ExpectEquals('card.supportedInterfaces=0|card.rootUrl=1|send.result.task=0|send.result.id=1');
 
   // --- Guardrails ---
   FRunner.AddCase('policy.guard.blocklist')
@@ -363,7 +378,7 @@ begin
   // Los flujos de orquestacion arman su propia topologia (pool, suspension,
   // no bloqueante) y viven en su propia rutina.
   if MatchStr(AScenario, ['a2a:concurrency', 'a2a:hitl', 'a2a:fedhitl', 'a2a:nonblocking', 'a2a:naming',
-    'a2a:cancelterm']) then
+    'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03']) then
     Exit(RunA2AFlowScenario(AScenario));
 
   Result := '';
@@ -485,6 +500,10 @@ var
   Tasks: TArray<ITask>;
   I, Waited: Integer;
   St1, St2: TAiA2ATaskState;
+  // Formato de cable: HTTP crudo, sin pasar por TAiA2AClient
+  Http: THTTPClient;
+  Body: TStringStream;
+  Card, RawObj, ResObj: TJSONObject;
 
   function StateName(AValue: TAiA2ATaskState): string;
   begin
@@ -727,6 +746,84 @@ begin
         end;
       finally
         Client.Free;
+      end;
+    end
+
+    // --- Formato de cable, hablando HTTP crudo (sin TAiA2AClient) ---
+    else if AScenario.StartsWith('a2a:wire-') then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteWireGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      if AScenario = 'a2a:wire-v03' then
+        Server.WireEra := weV03
+      else
+        Server.WireEra := weV1;
+      Server.Active := True;
+
+      Http := THTTPClient.Create;
+      try
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+        Http.ContentType := 'application/json';
+
+        // 1. Agent Card cruda
+        Card := TJSONObject(TJSONObject.ParseJSONValue(Http.Get(Url + '/.well-known/agent-card.json')
+          .ContentAsString(TEncoding.UTF8)));
+        try
+          Result := 'card.supportedInterfaces=' + IfThen(Card.GetValue('supportedInterfaces') <> nil, '1', '0');
+          Result := Result + '|card.rootUrl=' + IfThen(Card.GetValue('url') <> nil, '1', '0');
+          if AScenario = 'a2a:wire-v1' then
+            Result := Result + '|card.protocolVersion=' + IfThen(Card.GetValue('protocolVersion') <> nil, '1', '0');
+        finally
+          Card.Free;
+        end;
+
+        // 2. SendMessage crudo: el Task debe ir envuelto en {"task": ...}
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":1,"method":"SendMessage","params":{"message":{"messageId":"m1",' +
+          '"role":"ROLE_USER","parts":[{"text":"wire"}]}}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body)
+            .ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          RawObj.TryGetValue<TJSONObject>('result', ResObj);
+          Result := Result + '|send.result.task=' + IfThen(ResObj.GetValue('task') <> nil, '1', '0');
+          Result := Result + '|send.result.id=' + IfThen(ResObj.GetValue('id') <> nil, '1', '0');
+          if ResObj.GetValue('task') <> nil then
+            TaskId := ResObj.GetValue<TJSONObject>('task').GetValue<string>('id', '')
+          else
+            TaskId := ResObj.GetValue<string>('id', '');
+        finally
+          RawObj.Free;
+        end;
+
+        // 3. GetTask crudo: el Task va DIRECTO, sin wrapper, en ambas eras
+        if AScenario = 'a2a:wire-v1' then
+        begin
+          Body := TStringStream.Create(Format(
+            '{"jsonrpc":"2.0","id":2,"method":"GetTask","params":{"id":"%s"}}', [TaskId]), TEncoding.UTF8);
+          try
+            RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body)
+              .ContentAsString(TEncoding.UTF8)));
+          finally
+            Body.Free;
+          end;
+          try
+            RawObj.TryGetValue<TJSONObject>('result', ResObj);
+            Result := Result + '|gettask.id=' + IfThen(ResObj.GetValue('id') <> nil, '1', '0');
+            Result := Result + '|gettask.task=' + IfThen(ResObj.GetValue('task') <> nil, '1', '0');
+          finally
+            RawObj.Free;
+          end;
+        end;
+      finally
+        Http.Free;
       end;
     end
 

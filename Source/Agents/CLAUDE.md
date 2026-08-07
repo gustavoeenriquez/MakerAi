@@ -175,6 +175,31 @@ En el lado federado, `TAiA2ARemoteAgentTool` suspende el **nodo local** cuando e
 
 **Literales de estado.** `StateNaming` elige la forma emitida: `anProto` (`TASK_STATE_COMPLETED`, default) o `anLower` (`completed`). La lectura tolera ambas siempre — usar `TAiA2AClient.LastTaskState` (enum) y no comparar strings.
 
+> v1.0 pasó de kebab-case a SCREAMING_SNAKE_CASE por conformidad con ProtoJSON, así que **`anProto` es el formato correcto de la spec** y `anLower` el de compatibilidad con la era 0.x. Es al revés de lo que sugiere la intuición.
+
+## Formato de cable: v1.0 vs 0.x
+
+Verificado contra el SDK oficial `a2a-sdk` 1.1.2 (agosto 2026). El SDK 1.x es **proto-first**: los tipos son protobuf y el cable es **protojson**.
+
+`WireEra` (default `weV1`) controla dos diferencias que rompen la interop:
+
+**1. `SendMessage` devuelve el Task envuelto.** `SendMessageResponse` es un *oneof* `{task | message}`:
+
+```jsonc
+{"result": {"task": {...}}}    // v1.0
+{"result": {...campos...}}     // 0.x
+```
+
+**`GetTask` y `CancelTask` NO llevan wrapper** en ninguna era: en el proto son `returns (Task)` y no tienen mensaje de respuesta propio.
+
+El cliente normaliza ambas formas con `UnwrapSendMessageResult`, que además sintetiza un Task cuando el agente responde con `{"message": ...}` (respuesta inmediata sin crear tarea).
+
+**2. La Agent Card cambió de forma.** En v1.0 la raíz **no tiene** `url`, `protocolVersion` ni `preferredTransport`: van dentro de `supportedInterfaces[] = [url, protocolBinding, tenant, protocolVersion]`. Sin eso, un cliente v1.0 no sabe a qué URL hablar. Además `security` se llama `securityRequirements` (con un campo `schemes`) y `capabilities.stateTransitionHistory` ya no existe.
+
+El cliente lee la URL de `supportedInterfaces` con fallback al `url` plano de 0.x.
+
+> **Los tests de interop deben hablar HTTP crudo.** Los casos `a2a.wire.v1` y `a2a.wire.v03` de la suite no usan `TAiA2AClient` a propósito: durante meses los 9 casos A2A pasaron con el formato equivocado porque cliente y servidor compartían el error. Un test que valida contra tu propia implementación no prueba conformidad.
+
 ## Threading Model
 
 - Nodes execute in parallel via TThreadPool

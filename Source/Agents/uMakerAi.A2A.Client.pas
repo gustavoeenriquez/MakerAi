@@ -87,6 +87,9 @@ type
 
     // Extrae el texto de los artifacts de un Task ya obtenido.
     class function ArtifactsText(ATask: TJSONObject): string; static;
+    // Normaliza el result de SendMessage a un objeto con forma de Task,
+    // tolerando el wrapper {task}/{message} de v1.0 y el Task plano de 0.x.
+    class function UnwrapSendMessageResult(ARawResult: TJSONObject): TJSONObject; static;
 
     // Ultimo task enviado (conveniencia)
     property LastTaskId: string read FLastTaskId;
@@ -216,8 +219,10 @@ function TAiA2AClient.FetchAgentCard: TJSONObject;
 var
   Http: THTTPClient;
   Resp: IHTTPResponse;
-  BaseUrl, Content, CardUrl: string;
-  V: TJSONValue;
+  BaseUrl, Content, CardUrl, S: string;
+  V, VCard: TJSONValue;
+  Ifaces: TJSONArray;
+  IfaceObj: TJSONObject;
   LSpan: TAiSpan;
 begin
   Result := nil;
@@ -245,7 +250,25 @@ begin
       Result := TJSONObject(V);
 
       // La card manda sobre la URL base: el endpoint RPC puede no ser la raiz.
-      CardUrl := Result.GetValue<string>('url', '');
+      // En v1.0 la URL vive en supportedInterfaces[]; el campo 'url' de la raiz
+      // es de la era 0.x y ya no existe en el AgentCard de la spec.
+      CardUrl := '';
+      if Result.TryGetValue<TJSONArray>('supportedInterfaces', Ifaces) then
+        for VCard in Ifaces do
+          if VCard is TJSONObject then
+          begin
+            IfaceObj := TJSONObject(VCard);
+            // Nos interesa el binding JSON-RPC; si no dice cual, se acepta.
+            S := IfaceObj.GetValue<string>('protocolBinding', '');
+            if (S = '') or SameText(S, 'JSONRPC') or S.ToUpper.Contains('JSONRPC') then
+            begin
+              CardUrl := IfaceObj.GetValue<string>('url', '');
+              if CardUrl <> '' then
+                Break;
+            end;
+          end;
+      if CardUrl = '' then
+        CardUrl := Result.GetValue<string>('url', ''); // fallback era 0.x
       if CardUrl <> '' then
         FEndpoint := CardUrl;
 
@@ -443,7 +466,7 @@ end;
 function TAiA2AClient.SendTextEx(const AText, ATaskId, AContextId: string; out AOutputText: string; ABlocking: Boolean)
   : TJSONObject;
 var
-  Params, Msg, PartObj, Config: TJSONObject;
+  Params, Msg, PartObj, Config, Raw: TJSONObject;
   Parts: TJSONArray;
   G: TGUID;
 begin
@@ -472,9 +495,57 @@ begin
     Params.AddPair('configuration', Config);
   end;
 
-  Result := JsonRpcCall('SendMessage', Params); // JsonRpcCall libera Params
+  Raw := JsonRpcCall('SendMessage', Params); // JsonRpcCall libera Params
+  try
+    Result := UnwrapSendMessageResult(Raw);
+  finally
+    Raw.Free;
+  end;
   ReadTaskStatus(Result);
   AOutputText := ArtifactsText(Result);
+end;
+
+// El result de SendMessage es un SendMessageResponse: un oneof {task | message}.
+// Esta funcion devuelve SIEMPRE un objeto con forma de Task, para que el resto
+// del cliente no tenga que saber en que era habla el agente remoto.
+//   {"task": {...}}     -> v1.0, el caso normal
+//   {"message": {...}}  -> v1.0, el agente respondio de una sin crear tarea
+//   {...campos task...} -> era 0.x, el Task viajaba plano
+class function TAiA2AClient.UnwrapSendMessageResult(ARawResult: TJSONObject): TJSONObject;
+var
+  Inner, MsgObj, StatusObj, ArtObj: TJSONObject;
+  Parts, Artifacts: TJSONArray;
+begin
+  if not Assigned(ARawResult) then
+    Exit(nil);
+
+  if ARawResult.TryGetValue<TJSONObject>('task', Inner) then
+    Exit(TJSONObject(Inner.Clone));
+
+  if ARawResult.TryGetValue<TJSONObject>('message', MsgObj) then
+  begin
+    // Respuesta inmediata sin tarea: se sintetiza un Task completado con el
+    // texto del mensaje como artifact, para no romper el contrato de SendText.
+    Result := TJSONObject.Create;
+    Result.AddPair('id', MsgObj.GetValue<string>('taskId', ''));
+    Result.AddPair('contextId', MsgObj.GetValue<string>('contextId', ''));
+    StatusObj := TJSONObject.Create;
+    StatusObj.AddPair('state', 'TASK_STATE_COMPLETED');
+    Result.AddPair('status', StatusObj);
+    Artifacts := TJSONArray.Create;
+    if MsgObj.TryGetValue<TJSONArray>('parts', Parts) then
+    begin
+      ArtObj := TJSONObject.Create;
+      ArtObj.AddPair('artifactId', 'inline-message');
+      ArtObj.AddPair('name', 'result');
+      ArtObj.AddPair('parts', TJSONArray(Parts.Clone));
+      Artifacts.AddElement(ArtObj);
+    end;
+    Result.AddPair('artifacts', Artifacts);
+    Exit;
+  end;
+
+  Result := TJSONObject(ARawResult.Clone);
 end;
 
 function TAiA2AClient.SendText(const AText: string; out AOutputText: string): TJSONObject;

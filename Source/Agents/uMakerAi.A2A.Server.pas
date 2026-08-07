@@ -71,10 +71,21 @@ type
   end;
 
   // Forma en que se serializan los enums de la spec:
-  //   anProto -> TASK_STATE_COMPLETED / ROLE_AGENT  (nombres estilo protobuf)
-  //   anLower -> completed / agent                  (nombres estilo JSON-RPC)
+  //   anProto -> TASK_STATE_COMPLETED / ROLE_AGENT  (v1.0: ProtoJSON)
+  //   anLower -> completed / agent                  (era 0.x, kebab-case)
+  // v1.0 paso de kebab-case a SCREAMING_SNAKE_CASE por conformidad con
+  // ProtoJSON, asi que anProto es el correcto y anLower el de compatibilidad.
   // La lectura siempre tolera ambas.
   TAiA2ANaming = (anProto, anLower);
+
+  // Era del formato de cable. Verificado contra a2a-sdk 1.1.2:
+  //   weV1  -> SendMessage devuelve SendMessageResponse, con el Task ENVUELTO
+  //            en {"task": {...}}, y la Agent Card publica supportedInterfaces[].
+  //   weV03 -> el Task viaja plano en result y la card lleva url/protocolVersion
+  //            en la raiz (lo que emitia MakerAI antes de agosto 2026).
+  // OJO: GetTask y CancelTask devuelven el Task DIRECTO en ambas eras; en el
+  // proto son "returns (Task)" y no tienen mensaje de respuesta propio.
+  TAiA2AWireEra = (weV1, weV03);
 
   TAiA2AServer = class;
 
@@ -133,6 +144,7 @@ type
     FApiKey: string;
     FPublicUrl: string;
     FStateNaming: TAiA2ANaming;
+    FWireEra: TAiA2AWireEra;
     FTasks: TObjectDictionary<string, TAiA2ATaskInfo>;
     FTasksLock: TCriticalSection;
     FSlots: TObjectList<TAiA2AManagerSlot>;
@@ -158,6 +170,8 @@ type
     // --- json ---
     function BuildAgentCard(const ABaseUrl: string): TJSONObject;
     function BuildTaskJson(AInfo: TAiA2ATaskInfo): TJSONObject;
+    // Envuelve el Task como SendMessageResponse cuando la era es v1.0.
+    function WrapSendMessageResult(ATask: TJSONObject): TJSONObject;
     function HandleJsonRpc(const ABody, ATraceParent: string): string;
     function RpcError(AId: TJSONValue; ACode: Integer; const AMsg: string): string;
     function RpcResult(AId: TJSONValue; AResult: TJSONObject): string;
@@ -200,6 +214,10 @@ type
     // URL publica a anunciar en la card (util detras de un reverse proxy).
     property PublicUrl: string read FPublicUrl write FPublicUrl;
     property StateNaming: TAiA2ANaming read FStateNaming write FStateNaming default anProto;
+    // Formato de cable. weV1 es el de la spec 1.0 y el default; weV03 reproduce
+    // lo que emitia MakerAI antes de agosto 2026, para no romper integraciones
+    // que ya dependieran de aquella forma.
+    property WireEra: TAiA2AWireEra read FWireEra write FWireEra default weV1;
     property OnAcquireManager: TAiA2AAcquireManager read FOnAcquireManager write FOnAcquireManager;
     property OnCustomizeCard: TAiA2ACardEvent read FOnCustomizeCard write FOnCustomizeCard;
     property OnAuthorize: TAiA2AAuthEvent read FOnAuthorize write FOnAuthorize;
@@ -288,6 +306,7 @@ begin
   FTaskTtlSeconds := 3600;
   FMaxTasks := 1000;
   FStateNaming := anProto;
+  FWireEra := weV1;
   FTasks := TObjectDictionary<string, TAiA2ATaskInfo>.Create([doOwnsValues]);
   FTasksLock := TCriticalSection.Create;
   FSlots := TObjectList<TAiA2AManagerSlot>.Create(True);
@@ -465,6 +484,17 @@ begin
   finally
     FTasksLock.Leave;
   end;
+end;
+
+// v1.0: SendMessage responde un SendMessageResponse, que es un oneof
+// {task | message}. El Task por tanto va ENVUELTO. GetTask y CancelTask no
+// llevan wrapper: en el proto devuelven Task directamente.
+function TAiA2AServer.WrapSendMessageResult(ATask: TJSONObject): TJSONObject;
+begin
+  if FWireEra = weV03 then
+    Exit(ATask);
+  Result := TJSONObject.Create;
+  Result.AddPair('task', ATask); // toma posesion
 end;
 
 function TAiA2AServer.FindTask(const AId: string): TAiA2ATaskInfo;
@@ -761,18 +791,37 @@ begin
     LDesc := FAgentManager.Description;
 
   Result := TJSONObject.Create;
-  Result.AddPair('protocolVersion', '1.0.0');
   Result.AddPair('name', LName);
   Result.AddPair('description', LDesc);
-  Result.AddPair('url', ABaseUrl);
-  Result.AddPair('preferredTransport', 'JSONRPC');
   Result.AddPair('version', FAgentVersion);
+
+  if FWireEra = weV1 then
+  begin
+    // v1.0: la raiz NO tiene url ni protocolVersion ni preferredTransport.
+    // Todo eso vive en supportedInterfaces[], que es lo que un cliente v1.0
+    // consulta para saber a que URL hablar. Sin esto, no sabe donde llamar.
+    var Ifaces := TJSONArray.Create;
+    var Iface := TJSONObject.Create;
+    Iface.AddPair('url', ABaseUrl);
+    Iface.AddPair('protocolBinding', 'JSONRPC'); // es un string, no un enum
+    Iface.AddPair('protocolVersion', '1.0.0');
+    Ifaces.AddElement(Iface);
+    Result.AddPair('supportedInterfaces', Ifaces);
+  end
+  else
+  begin
+    Result.AddPair('protocolVersion', '1.0.0');
+    Result.AddPair('url', ABaseUrl);
+    Result.AddPair('preferredTransport', 'JSONRPC');
+  end;
 
   Caps := TJSONObject.Create;
   Caps.AddPair('streaming', TJSONBool.Create(False));
   Caps.AddPair('pushNotifications', TJSONBool.Create(False));
-  Caps.AddPair('stateTransitionHistory', TJSONBool.Create(False));
   Caps.AddPair('extendedAgentCard', TJSONBool.Create(False));
+  // stateTransitionHistory no existe en AgentCapabilities de v1.0
+  if FWireEra = weV03 then
+    Caps.AddPair('stateTransitionHistory', TJSONBool.Create(False));
   Result.AddPair('capabilities', Caps);
 
   Modes := TJSONArray.Create;
@@ -792,9 +841,20 @@ begin
     Result.AddPair('securitySchemes', Schemes);
     var SecArr := TJSONArray.Create;
     var SecItem := TJSONObject.Create;
-    SecItem.AddPair('bearer', TJSONArray.Create);
+    if FWireEra = weV1 then
+    begin
+      // v1.0: SecurityRequirement tiene un campo 'schemes'
+      var SchemesMap := TJSONObject.Create;
+      SchemesMap.AddPair('bearer', TJSONArray.Create);
+      SecItem.AddPair('schemes', SchemesMap);
+    end
+    else
+      SecItem.AddPair('bearer', TJSONArray.Create);
     SecArr.AddElement(SecItem);
-    Result.AddPair('security', SecArr);
+    if FWireEra = weV1 then
+      Result.AddPair('securityRequirements', SecArr) // renombrado en v1.0
+    else
+      Result.AddPair('security', SecArr);
   end;
 
   // Un unico skill que representa la ejecucion del grafo completo
@@ -1177,7 +1237,7 @@ begin
     try
       // Metodos 1.0 + aliases 0.x (message/send, tasks/get, tasks/cancel)
       if SameText(Method, 'SendMessage') or SameText(Method, 'message/send') then
-        Result := RpcResult(IdVal, DoSendMessage(Params))
+        Result := RpcResult(IdVal, WrapSendMessageResult(DoSendMessage(Params)))
       else if SameText(Method, 'GetTask') or SameText(Method, 'tasks/get') then
         Result := RpcResult(IdVal, DoGetTask(Params))
       else if SameText(Method, 'CancelTask') or SameText(Method, 'tasks/cancel') then
