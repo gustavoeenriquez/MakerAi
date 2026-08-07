@@ -56,7 +56,7 @@ interface
 uses
   System.SysUtils, System.Classes, System.JSON, System.Generics.Collections,
   System.SyncObjs, System.DateUtils,
-  IdContext, IdCustomHTTPServer, IdHTTPServer,
+  IdContext, IdCustomHTTPServer, IdHTTPServer, IdGlobal, IdGlobalProtocols,
   uMakerAi.Agents;
 
 type
@@ -152,6 +152,7 @@ type
     FWireEra: TAiA2AWireEra;
     FPublishExtendedCard: Boolean;
     FCardCacheSeconds: Integer;
+    FEnableStreaming: Boolean;
     // Ultima URL base servida, para poder responder GetExtendedAgentCard sin
     // tener el contexto HTTP delante.
     FLastBaseUrl: string;
@@ -185,6 +186,11 @@ type
     // Envuelve el Task como SendMessageResponse cuando la era es v1.0.
     function WrapSendMessageResult(ATask: TJSONObject): TJSONObject;
     function WrapSendMessageAsMessage(const AMessageJson: string; ATask: TJSONObject): TJSONObject;
+    // --- streaming SSE ---
+    procedure SseWriteEvent(AContext: TIdContext; AId: TJSONValue; APayload: TJSONObject);
+    function StreamStatusEvent(AInfo: TAiA2ATaskInfo): TJSONObject;
+    procedure HandleStreamingRequest(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo;
+      AResponseInfo: TIdHTTPResponseInfo; const AMethod: string; AParams: TJSONObject; AId: TJSONValue);
     function HandleJsonRpc(const ABody, ATraceParent: string): string;
     function RpcError(AId: TJSONValue; ACode: Integer; const AMsg: string): string;
     function RpcResult(AId: TJSONValue; AResult: TJSONObject): string;
@@ -238,6 +244,9 @@ type
     property PublishExtendedCard: Boolean read FPublishExtendedCard write FPublishExtendedCard default False;
     // Segundos de Cache-Control/max-age de la Agent Card (SHOULD de la spec).
     property CardCacheSeconds: Integer read FCardCacheSeconds write FCardCacheSeconds default 3600;
+    // Habilita SendStreamingMessage y SubscribeToTask, y lo anuncia en
+    // capabilities.streaming. Con False se rechazan con UnsupportedOperation.
+    property EnableStreaming: Boolean read FEnableStreaming write FEnableStreaming default True;
     property OnAcquireManager: TAiA2AAcquireManager read FOnAcquireManager write FOnAcquireManager;
     property OnCustomizeCard: TAiA2ACardEvent read FOnCustomizeCard write FOnCustomizeCard;
     property OnAuthorize: TAiA2AAuthEvent read FOnAuthorize write FOnAuthorize;
@@ -359,6 +368,7 @@ begin
   FStateNaming := anProto;
   FWireEra := weV1;
   FCardCacheSeconds := 3600;
+  FEnableStreaming := True;
   FTasks := TObjectDictionary<string, TAiA2ATaskInfo>.Create([doOwnsValues]);
   FTasksLock := TCriticalSection.Create;
   FSlots := TObjectList<TAiA2AManagerSlot>.Create(True);
@@ -622,8 +632,15 @@ begin
   end;
 
   St := Mgr.Blackboard.GetStatus;
-  AInfo.State := StatusToA2AState(St);
-  AInfo.UpdatedAt := Now;
+  // UpdatedAt solo se mueve cuando el estado CAMBIA de verdad. Sellarlo en cada
+  // consulta tenia dos efectos malos: dos snapshots del mismo task salian con
+  // timestamps distintos (y los clientes suscritos no podian deduplicarlos), y
+  // el TTL de purga, que se mide contra este campo, no vencia nunca.
+  if AInfo.State <> StatusToA2AState(St) then
+  begin
+    AInfo.State := StatusToA2AState(St);
+    AInfo.UpdatedAt := Now;
+  end;
 
   if St = esSuspended then
   begin
@@ -902,7 +919,7 @@ begin
   end;
 
   Caps := TJSONObject.Create;
-  Caps.AddPair('streaming', TJSONBool.Create(False));
+  Caps.AddPair('streaming', TJSONBool.Create(FEnableStreaming));
   Caps.AddPair('pushNotifications', TJSONBool.Create(False));
   Caps.AddPair('extendedAgentCard', TJSONBool.Create(FPublishExtendedCard));
   // stateTransitionHistory no existe en AgentCapabilities de v1.0
@@ -1033,7 +1050,10 @@ begin
   if StatusText <> '' then
   begin
     MsgObj := TJSONObject.Create;
-    MsgObj.AddPair('messageId', NewGuidStr);
+    // Determinista a proposito: dos snapshots del MISMO task tienen que salir
+    // identicos. Con un GUID nuevo por llamada, dos clientes suscritos al mismo
+    // task recibian eventos distintos y no podian deduplicar.
+    MsgObj.AddPair('messageId', AInfo.Id + '-status');
     MsgObj.AddPair('role', EmitRole('agent'));
     MsgObj.AddPair('taskId', AInfo.Id);
     MsgObj.AddPair('contextId', AInfo.ContextId);
@@ -1495,9 +1515,207 @@ begin
   end;
 end;
 
+// -----------------------------------------------------------------------------
+// Streaming SSE (binding JSON-RPC)
+// -----------------------------------------------------------------------------
+// Cada evento viaja como una linea 'data:' con el ENVOLTORIO JSON-RPC dentro,
+// segun la seccion 9.4.2 de la spec:
+//     data: {jsonrpc, id, result: <StreamResponse>}
+// OJO: el binding REST manda el StreamResponse desnudo; el de JSON-RPC no.
+// StreamResponse es un oneof: task | message | statusUpdate | artifactUpdate.
+
+procedure TAiA2AServer.SseWriteEvent(AContext: TIdContext; AId: TJSONValue; APayload: TJSONObject);
+var
+  Env: TJSONObject;
+begin
+  Env := TJSONObject.Create;
+  try
+    Env.AddPair('jsonrpc', '2.0');
+    if Assigned(AId) then
+      Env.AddPair('id', TJSONValue(AId.Clone))
+    else
+      Env.AddPair('id', TJSONNull.Create);
+    Env.AddPair('result', APayload); // toma posesion
+    // El doble salto de linea es lo que cierra un evento en SSE
+    AContext.Connection.IOHandler.Write(ToBytes('data: ' + Env.ToJSON + #10#10, IndyTextEncoding_UTF8));
+  finally
+    Env.Free;
+  end;
+end;
+
+function TAiA2AServer.StreamStatusEvent(AInfo: TAiA2ATaskInfo): TJSONObject;
+var
+  Ev, StatusObj: TJSONObject;
+begin
+  StatusObj := TJSONObject.Create;
+  StatusObj.AddPair('state', EmitState(AInfo.State));
+  StatusObj.AddPair('timestamp', DateToISO8601(TTimeZone.Local.ToUniversalTime(AInfo.UpdatedAt), True));
+  Ev := TJSONObject.Create;
+  Ev.AddPair('taskId', AInfo.Id);
+  Ev.AddPair('contextId', AInfo.ContextId);
+  Ev.AddPair('status', StatusObj);
+  Result := TJSONObject.Create;
+  Result.AddPair('statusUpdate', Ev);
+end;
+
+procedure TAiA2AServer.HandleStreamingRequest(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo;
+  AResponseInfo: TIdHTTPResponseInfo; const AMethod: string; AParams: TJSONObject; AId: TJSONValue);
+var
+  Info: TAiA2ATaskInfo;
+  MsgObj, TaskJson, Payload, ArtEv, ArtPayload: TJSONObject;
+  Artifacts: TJSONArray;
+  InputText, TaskId, ContextId, MessageId, EstadoPrevio, Hdr: string;
+  Esperado, I: Integer;
+  Suscripcion: Boolean;
+begin
+  Suscripcion := SameText(AMethod, 'SubscribeToTask') or SameText(AMethod, 'tasks/resubscribe');
+
+  // Resolver el task ANTES de abrir el stream: si hay que devolver un error,
+  // se responde JSON normal. Una vez abierto el SSE ya no se puede.
+  Info := nil;
+  if Suscripcion then
+  begin
+    TaskId := '';
+    if Assigned(AParams) then
+      TaskId := AParams.GetValue<string>('id', '');
+    FTasksLock.Enter;
+    try
+      Info := FindTask(TaskId);
+      if Assigned(Info) then
+        RefreshTask(Info);
+    finally
+      FTasksLock.Leave;
+    end;
+    if Info = nil then
+    begin
+      AResponseInfo.ResponseNo := 200;
+      AResponseInfo.ContentText := RpcError(AId, A2A_ERR_TASK_NOT_FOUND, 'Task not found: ' + TaskId);
+      Exit;
+    end;
+    if IsTerminal(Info.State) then
+    begin
+      // Suscribirse a un task ya terminal es un error segun la spec
+      AResponseInfo.ResponseNo := 200;
+      AResponseInfo.ContentText := RpcError(AId, A2A_ERR_UNSUPPORTED_OPERATION,
+        'Task is already in a terminal state: ' + Info.State);
+      Exit;
+    end;
+  end
+  else
+  begin
+    MsgObj := nil;
+    if Assigned(AParams) then
+      AParams.TryGetValue<TJSONObject>('message', MsgObj);
+    if not Assigned(MsgObj) then
+    begin
+      AResponseInfo.ResponseNo := 200;
+      AResponseInfo.ContentText := RpcError(AId, A2A_ERR_INVALID_PARAMS,
+        'SendStreamingMessage requires a message parameter');
+      Exit;
+    end;
+    InputText := ExtractTextFromParts(MsgObj);
+    ContextId := MsgObj.GetValue<string>('contextId', '');
+    MessageId := MsgObj.GetValue<string>('messageId', '');
+    PurgeTasks;
+    try
+      Info := NewTask(ContextId);
+      Info.MessageId := MessageId;
+      StartTask(Info, InputText);
+    except
+      on E: EA2AServerError do
+      begin
+        AResponseInfo.ResponseNo := 200;
+        AResponseInfo.ContentText := RpcError(AId, E.Code, E.Message);
+        Exit;
+      end;
+    end;
+  end;
+
+  // --- A partir de aqui el stream esta abierto ---
+  Hdr := 'HTTP/1.1 200 OK' + #13#10 + 'Content-Type: text/event-stream; charset=utf-8' + #13#10 +
+    'Cache-Control: no-cache' + #13#10 + 'Connection: keep-alive' + #13#10 +
+    'X-Accel-Buffering: no' + #13#10 + #13#10;
+  AContext.Connection.IOHandler.Write(ToBytes(Hdr, IndyTextEncoding_UTF8));
+  AResponseInfo.HeaderHasBeenWritten := True; // que Indy no escriba los suyos
+
+  // 1. Snapshot inicial del task
+  FTasksLock.Enter;
+  try
+    RefreshTask(Info);
+    EstadoPrevio := Info.State;
+    TaskJson := BuildTaskJson(Info);
+  finally
+    FTasksLock.Leave;
+  end;
+  Payload := TJSONObject.Create;
+  Payload.AddPair('task', TaskJson);
+  SseWriteEvent(AContext, AId, Payload);
+
+  // 2. Seguir la ejecucion y emitir cada cambio de estado
+  Esperado := 0;
+  while (Esperado < FWaitTimeoutMs) and AContext.Connection.Connected do
+  begin
+    Sleep(50);
+    Inc(Esperado, 50);
+
+    FTasksLock.Enter;
+    try
+      RefreshTask(Info);
+      if Info.State <> EstadoPrevio then
+      begin
+        EstadoPrevio := Info.State;
+        Payload := StreamStatusEvent(Info);
+      end
+      else
+        Payload := nil;
+    finally
+      FTasksLock.Leave;
+    end;
+
+    if not Assigned(Payload) then
+      Continue;
+
+    // 3. Al completar, los artifacts van ANTES del status final: es el orden
+    // del ejemplo de la spec y lo que comprueba el test de ordenacion.
+    if EstadoPrevio = A2A_STATE_COMPLETED then
+    begin
+      FTasksLock.Enter;
+      try
+        TaskJson := BuildTaskJson(Info);
+      finally
+        FTasksLock.Leave;
+      end;
+      try
+        if TaskJson.TryGetValue<TJSONArray>('artifacts', Artifacts) then
+          for I := 0 to Artifacts.Count - 1 do
+          begin
+            ArtEv := TJSONObject.Create;
+            ArtEv.AddPair('taskId', Info.Id);
+            ArtEv.AddPair('contextId', Info.ContextId);
+            ArtEv.AddPair('artifact', TJSONObject(Artifacts.Items[I].Clone));
+            ArtEv.AddPair('lastChunk', TJSONBool.Create(I = Artifacts.Count - 1));
+            ArtPayload := TJSONObject.Create;
+            ArtPayload.AddPair('artifactUpdate', ArtEv);
+            SseWriteEvent(AContext, AId, ArtPayload);
+          end;
+      finally
+        TaskJson.Free;
+      end;
+    end;
+
+    SseWriteEvent(AContext, AId, Payload);
+
+    // input-required tambien cierra el stream: la pelota pasa al cliente
+    if IsTerminal(EstadoPrevio) or (EstadoPrevio = A2A_STATE_INPUT_REQUIRED) then
+      Break;
+  end;
+
+  AContext.Connection.Disconnect;
+end;
 procedure TAiA2AServer.HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
 var
-  Body, BaseUrl, Scheme, AuthHdr, VerHdr, CtHdr, CardJson, ETag: string;
+  Body, BaseUrl, Scheme, AuthHdr, VerHdr, CtHdr, CardJson, ETag, PeekMethod: string;
+  PeekRoot: TJSONValue;
   Card: TJSONObject;
   Allowed: Boolean;
 begin
@@ -1607,6 +1825,29 @@ begin
           Free;
         end;
     end;
+    // Los metodos de streaming no responden JSON sino un SSE, asi que se
+    // desvian antes de entrar al despachador normal.
+    if FEnableStreaming then
+    begin
+      PeekRoot := TJSONObject.ParseJSONValue(Body);
+      try
+        if PeekRoot is TJSONObject then
+        begin
+          PeekMethod := TJSONObject(PeekRoot).GetValue<string>('method', '');
+          if SameText(PeekMethod, 'SendStreamingMessage') or SameText(PeekMethod, 'message/stream') or
+            SameText(PeekMethod, 'SubscribeToTask') or SameText(PeekMethod, 'tasks/resubscribe') then
+          begin
+            HandleStreamingRequest(AContext, ARequestInfo, AResponseInfo, PeekMethod,
+              TJSONObject(PeekRoot).GetValue<TJSONObject>('params', nil),
+              TJSONObject(PeekRoot).GetValue('id'));
+            Exit;
+          end;
+        end;
+      finally
+        PeekRoot.Free;
+      end;
+    end;
+
     AResponseInfo.ResponseNo := 200;
     AResponseInfo.ContentText := HandleJsonRpc(Body, ARequestInfo.RawHeaders.Values['traceparent']);
     Exit;

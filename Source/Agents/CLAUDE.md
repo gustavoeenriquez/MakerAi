@@ -177,6 +177,24 @@ En el lado federado, `TAiA2ARemoteAgentTool` suspende el **nodo local** cuando e
 
 > v1.0 pasó de kebab-case a SCREAMING_SNAKE_CASE por conformidad con ProtoJSON, así que **`anProto` es el formato correcto de la spec** y `anLower` el de compatibilidad con la era 0.x. Es al revés de lo que sugiere la intuición.
 
+## Fuentes normativas del protocolo
+
+**No razonar de memoria ni desde la web: el proto manda.**
+
+| Fuente | Estatus |
+|---|---|
+| [`specification/a2a.proto`](https://github.com/a2aproject/A2A/blob/main/specification/a2a.proto) | **Única definición normativa** de todos los objetos y mensajes |
+| `spec/a2a.json` | JSON Schema generado en build, **no versionado y no normativo** |
+| [a2a-protocol.org/latest/specification](https://a2a-protocol.org/latest/specification/) | Prosa derivada del proto; útil para entender, no para dirimir |
+| [`a2aproject/a2a-tck`](https://github.com/a2aproject/a2a-tck) | **TCK oficial de conformidad**; valida JSON-RPC con niveles RFC 2119 (MUST / SHOULD / MAY) |
+
+Atajo práctico para consultar la forma canónica de cualquier mensaje sin leer el proto: instalar `a2a-sdk` (es proto-first) e inspeccionar el descriptor.
+
+```python
+import a2a.types as T
+print([f.name for f in T.SendMessageResponse.DESCRIPTOR.fields])   # ['task', 'message']
+```
+
 ## Formato de cable: v1.0 vs 0.x
 
 Verificado contra el SDK oficial `a2a-sdk` 1.1.2 (agosto 2026). El SDK 1.x es **proto-first**: los tipos son protobuf y el cable es **protojson**.
@@ -211,7 +229,8 @@ El cliente lee la URL de `supportedInterfaces` con fallback al `url` plano de 0.
 | `CancelTask` | ✅ (+ `tasks/cancel`) |
 | `ListTasks` | ✅ filtros `contextId` y `status`, paginado por `pageSize`; devuelve `{tasks, totalSize, pageSize}` |
 | `GetExtendedAgentCard` | ✅ si `PublishExtendedCard := True`; si no, `UnsupportedOperationError`. Para diferenciarla de la pública hay que enriquecerla en `OnCustomizeCard` |
-| `SendStreamingMessage`, `SubscribeToTask` | ❌ rechazados con `UnsupportedOperationError` (`capabilities.streaming = false`) |
+| `SendStreamingMessage` | ✅ SSE (+ alias `message/stream`) |
+| `SubscribeToTask` | ✅ SSE (+ `tasks/resubscribe`); error si el task ya es terminal |
 | `*TaskPushNotificationConfig` | ❌ no implementados (`capabilities.pushNotifications = false`) |
 
 ## Threading Model
@@ -226,6 +245,37 @@ El cliente lee la URL de `supportedInterfaces` con fallback al `url` plano de 0.
 Internal: `uMakerAi.Chat`, `uMakerAi.Core`, `uMakerAi.Chat.Messages`
 
 Framework: `System.Threading`, `System.Bindings.*`, `System.Rtti`, `System.JSON`, `System.SyncObjs`
+
+## Streaming SSE
+
+`EnableStreaming` (default `True`) habilita `SendStreamingMessage` y
+`SubscribeToTask`, y lo anuncia en `capabilities.streaming`.
+
+**El framing depende del binding.** Cada evento va en una línea `data:`, pero:
+
+```jsonc
+// binding JSON-RPC (el nuestro) — CON envoltorio, spec §9.4.2
+data: {"jsonrpc":"2.0","id":1,"result":{ StreamResponse }}
+
+// binding REST — el StreamResponse DESNUDO
+data: {"statusUpdate": { ... }}
+```
+
+`StreamResponse` es un oneof: `task | message | statusUpdate | artifactUpdate`.
+
+**Orden de emisión:** snapshot inicial `task` → `artifactUpdate` (uno por
+artifact, el último con `lastChunk: true`) → `statusUpdate` terminal. Los
+artifacts van **antes** del status final; es el orden del ejemplo de la spec y
+lo que valida el test de ordenación del TCK.
+
+Un stream también se cierra en `input-required`: la pelota pasa al cliente.
+
+> **Los snapshots de un mismo task deben ser idénticos.** Dos clientes
+> suscritos reciben los mismos eventos, así que nada volátil puede colarse en
+> ellos. Dos fallos reales por esto: el `messageId` del status se generaba con
+> un GUID nuevo en cada llamada, y `RefreshTask` sellaba `UpdatedAt := Now` en
+> cada consulta en vez de solo al cambiar de estado. Lo segundo además impedía
+> que venciera el TTL de purga, que se mide contra ese campo.
 
 ## Navigation
 
