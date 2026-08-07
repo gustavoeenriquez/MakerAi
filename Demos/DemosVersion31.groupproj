@@ -126,6 +126,9 @@
         <Projects Include="077-RagPostgresConsole\RagPostgresConsoleDemo.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="078-RagChatOllama\RagChatOllamaDemo.dproj">
+            <Dependencies/>
+        </Projects>
         <Projects Include="090-Varios\CompareEmbeddings\CompareEmbeddings.dproj">
             <Dependencies/>
         </Projects>
@@ -515,6 +518,15 @@
     <Target Name="RagPostgresConsoleDemo:Make">
         <MSBuild Projects="077-RagPostgresConsole\RagPostgresConsoleDemo.dproj" Targets="Make"/>
     </Target>
+    <Target Name="RagChatOllamaDemo">
+        <MSBuild Projects="078-RagChatOllama\RagChatOllamaDemo.dproj"/>
+    </Target>
+    <Target Name="RagChatOllamaDemo:Clean">
+        <MSBuild Projects="078-RagChatOllama\RagChatOllamaDemo.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="RagChatOllamaDemo:Make">
+        <MSBuild Projects="078-RagChatOllama\RagChatOllamaDemo.dproj" Targets="Make"/>
+    </Target>
     <Target Name="CompareEmbeddings">
         <MSBuild Projects="090-Varios\CompareEmbeddings\CompareEmbeddings.dproj"/>
     </Target>
@@ -552,13 +564,13 @@
         <MSBuild Projects="090-Varios\VoiceMonitorAndWhisperDemo\VoiceMonitorAndWhisperDemo.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="MinimalChat;ChatFull;ClaudeChatTest;RagUpdateDb;Sqlite_RAG;RagVectorQL;RagGraphDemo;BasicRAGGraph;DocumentManagerDemo;AiMCPServerDemo;McpFileServerHttp;McpFileServerSSE;McpFileServerStIO;MCPDataSnapServer;MCPServerAiFunctions;MCPServerFileSystem;MCPServerRAG;VeoDemo;AiAgentDemo;AgentConsoleDemo;AgentCheckpointDBDemo;ElevenLabsTTSDemo;AudioCaptureDemo;TranslatorDemo;VoiceBridgeDemo;VoiceBridgeDiarizedDemo;VoiceBridgeUI;ComputerUseServer;ComputerUseTest;ComputerUseTest01;PromptCacheTest;AsyncHistoryTest;McpSessionGateTest;ChatRAGTools;VoiceBridgeTranslateDemo;A2AFederationDemo;GuardrailsEvalsDemo;A2AOrchestrationDemo;MCPElicitationDemo;MemoryDemo;RagPostgresConsoleDemo;CompareEmbeddings;Dalle_Generar;ListAllModels;VoiceMonitorAndWhisperDemo"/>
+        <CallTarget Targets="MinimalChat;ChatFull;ClaudeChatTest;RagUpdateDb;Sqlite_RAG;RagVectorQL;RagGraphDemo;BasicRAGGraph;DocumentManagerDemo;AiMCPServerDemo;McpFileServerHttp;McpFileServerSSE;McpFileServerStIO;MCPDataSnapServer;MCPServerAiFunctions;MCPServerFileSystem;MCPServerRAG;VeoDemo;AiAgentDemo;AgentConsoleDemo;AgentCheckpointDBDemo;ElevenLabsTTSDemo;AudioCaptureDemo;TranslatorDemo;VoiceBridgeDemo;VoiceBridgeDiarizedDemo;VoiceBridgeUI;ComputerUseServer;ComputerUseTest;ComputerUseTest01;PromptCacheTest;AsyncHistoryTest;McpSessionGateTest;ChatRAGTools;VoiceBridgeTranslateDemo;A2AFederationDemo;GuardrailsEvalsDemo;A2AOrchestrationDemo;MCPElicitationDemo;MemoryDemo;RagPostgresConsoleDemo;RagChatOllamaDemo;CompareEmbeddings;Dalle_Generar;ListAllModels;VoiceMonitorAndWhisperDemo"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MinimalChat:Clean;ChatFull:Clean;ClaudeChatTest:Clean;RagUpdateDb:Clean;Sqlite_RAG:Clean;RagVectorQL:Clean;RagGraphDemo:Clean;BasicRAGGraph:Clean;DocumentManagerDemo:Clean;AiMCPServerDemo:Clean;McpFileServerHttp:Clean;McpFileServerSSE:Clean;McpFileServerStIO:Clean;MCPDataSnapServer:Clean;MCPServerAiFunctions:Clean;MCPServerFileSystem:Clean;MCPServerRAG:Clean;VeoDemo:Clean;AiAgentDemo:Clean;AgentConsoleDemo:Clean;AgentCheckpointDBDemo:Clean;ElevenLabsTTSDemo:Clean;AudioCaptureDemo:Clean;TranslatorDemo:Clean;VoiceBridgeDemo:Clean;VoiceBridgeDiarizedDemo:Clean;VoiceBridgeUI:Clean;ComputerUseServer:Clean;ComputerUseTest:Clean;ComputerUseTest01:Clean;PromptCacheTest:Clean;AsyncHistoryTest:Clean;McpSessionGateTest:Clean;ChatRAGTools:Clean;VoiceBridgeTranslateDemo:Clean;A2AFederationDemo:Clean;GuardrailsEvalsDemo:Clean;A2AOrchestrationDemo:Clean;MCPElicitationDemo:Clean;MemoryDemo:Clean;RagPostgresConsoleDemo:Clean;CompareEmbeddings:Clean;Dalle_Generar:Clean;ListAllModels:Clean;VoiceMonitorAndWhisperDemo:Clean"/>
+        <CallTarget Targets="MinimalChat:Clean;ChatFull:Clean;ClaudeChatTest:Clean;RagUpdateDb:Clean;Sqlite_RAG:Clean;RagVectorQL:Clean;RagGraphDemo:Clean;BasicRAGGraph:Clean;DocumentManagerDemo:Clean;AiMCPServerDemo:Clean;McpFileServerHttp:Clean;McpFileServerSSE:Clean;McpFileServerStIO:Clean;MCPDataSnapServer:Clean;MCPServerAiFunctions:Clean;MCPServerFileSystem:Clean;MCPServerRAG:Clean;VeoDemo:Clean;AiAgentDemo:Clean;AgentConsoleDemo:Clean;AgentCheckpointDBDemo:Clean;ElevenLabsTTSDemo:Clean;AudioCaptureDemo:Clean;TranslatorDemo:Clean;VoiceBridgeDemo:Clean;VoiceBridgeDiarizedDemo:Clean;VoiceBridgeUI:Clean;ComputerUseServer:Clean;ComputerUseTest:Clean;ComputerUseTest01:Clean;PromptCacheTest:Clean;AsyncHistoryTest:Clean;McpSessionGateTest:Clean;ChatRAGTools:Clean;VoiceBridgeTranslateDemo:Clean;A2AFederationDemo:Clean;GuardrailsEvalsDemo:Clean;A2AOrchestrationDemo:Clean;MCPElicitationDemo:Clean;MemoryDemo:Clean;RagPostgresConsoleDemo:Clean;RagChatOllamaDemo:Clean;CompareEmbeddings:Clean;Dalle_Generar:Clean;ListAllModels:Clean;VoiceMonitorAndWhisperDemo:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MinimalChat:Make;ChatFull:Make;ClaudeChatTest:Make;RagUpdateDb:Make;Sqlite_RAG:Make;RagVectorQL:Make;RagGraphDemo:Make;BasicRAGGraph:Make;DocumentManagerDemo:Make;AiMCPServerDemo:Make;McpFileServerHttp:Make;McpFileServerSSE:Make;McpFileServerStIO:Make;MCPDataSnapServer:Make;MCPServerAiFunctions:Make;MCPServerFileSystem:Make;MCPServerRAG:Make;VeoDemo:Make;AiAgentDemo:Make;AgentConsoleDemo:Make;AgentCheckpointDBDemo:Make;ElevenLabsTTSDemo:Make;AudioCaptureDemo:Make;TranslatorDemo:Make;VoiceBridgeDemo:Make;VoiceBridgeDiarizedDemo:Make;VoiceBridgeUI:Make;ComputerUseServer:Make;ComputerUseTest:Make;ComputerUseTest01:Make;PromptCacheTest:Make;AsyncHistoryTest:Make;McpSessionGateTest:Make;ChatRAGTools:Make;VoiceBridgeTranslateDemo:Make;A2AFederationDemo:Make;GuardrailsEvalsDemo:Make;A2AOrchestrationDemo:Make;MCPElicitationDemo:Make;MemoryDemo:Make;RagPostgresConsoleDemo:Make;CompareEmbeddings:Make;Dalle_Generar:Make;ListAllModels:Make;VoiceMonitorAndWhisperDemo:Make"/>
+        <CallTarget Targets="MinimalChat:Make;ChatFull:Make;ClaudeChatTest:Make;RagUpdateDb:Make;Sqlite_RAG:Make;RagVectorQL:Make;RagGraphDemo:Make;BasicRAGGraph:Make;DocumentManagerDemo:Make;AiMCPServerDemo:Make;McpFileServerHttp:Make;McpFileServerSSE:Make;McpFileServerStIO:Make;MCPDataSnapServer:Make;MCPServerAiFunctions:Make;MCPServerFileSystem:Make;MCPServerRAG:Make;VeoDemo:Make;AiAgentDemo:Make;AgentConsoleDemo:Make;AgentCheckpointDBDemo:Make;ElevenLabsTTSDemo:Make;AudioCaptureDemo:Make;TranslatorDemo:Make;VoiceBridgeDemo:Make;VoiceBridgeDiarizedDemo:Make;VoiceBridgeUI:Make;ComputerUseServer:Make;ComputerUseTest:Make;ComputerUseTest01:Make;PromptCacheTest:Make;AsyncHistoryTest:Make;McpSessionGateTest:Make;ChatRAGTools:Make;VoiceBridgeTranslateDemo:Make;A2AFederationDemo:Make;GuardrailsEvalsDemo:Make;A2AOrchestrationDemo:Make;MCPElicitationDemo:Make;MemoryDemo:Make;RagPostgresConsoleDemo:Make;RagChatOllamaDemo:Make;CompareEmbeddings:Make;Dalle_Generar:Make;ListAllModels:Make;VoiceMonitorAndWhisperDemo:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

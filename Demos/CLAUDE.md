@@ -77,6 +77,7 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 075-MCPElicitation | Elicitation MCP (MRTR) desde el **cliente** | `TMCPClientHttp.OnInputRequired` respondiendo accept/decline, y qué se ve si nadie atiende el evento; servidor MCP in-process |
 | 076-Memory | Memoria semántica persistente | `TAiMemory` sobre SQLite/FTS5: `Store`/`Search`/`Recall`/`Context`/`Stats` + persistencia. FTS sin API key; híbrido (FTS+semántica con RRF) si hay `OPENAI_API_KEY` |
 | 077-RagPostgresConsole | RAG vectorial sobre PostgreSQL+pgvector, **headless y sin API key** | `TAiRAGVectorPostgresDriver` + `TAiOllamaEmbeddings`: `CreateSchema` con HNSW, indexado incremental, filtro de metadatos en SQL (JSONB+GIN) e híbrido BM25+RRF. Es el único demo que ejercita el stack RAG sin abrir el IDE |
+| 078-RagChatOllama | **RAG completo 100% local**: recupera de pgvector y responde con `TAiOllamaChat` | Cada pregunta se hace con y sin contexto para que se vea la alucinación frente a la respuesta fundamentada. Documenta la trampa de `num_predict` con modelos de razonamiento (qwen3.5 devolvía vacío) |
 
 ### Audio / Speech (06x)
 | Demo | Purpose | Key Pattern |
