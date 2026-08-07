@@ -241,11 +241,27 @@ const
   A2A_STATE_CANCELED = 'canceled';
   A2A_STATE_FAILED = 'failed';
 
-  // Codigos de error JSON-RPC especificos A2A (rango servidor)
+  // Codigos de error JSON-RPC especificos A2A (spec 1.0, seccion 5.4)
+  A2A_ERR_AGENT_BUSY = -32000;
   A2A_ERR_TASK_NOT_FOUND = -32001;
   A2A_ERR_TASK_NOT_CANCELABLE = -32002;
+  A2A_ERR_PUSH_NOT_SUPPORTED = -32003;
   A2A_ERR_UNSUPPORTED_OPERATION = -32004;
-  A2A_ERR_AGENT_BUSY = -32000;
+  A2A_ERR_CONTENT_TYPE_NOT_SUPPORTED = -32005;
+  A2A_ERR_INVALID_AGENT_RESPONSE = -32006;
+  A2A_ERR_EXTENDED_CARD_NOT_CONFIGURED = -32007;
+  A2A_ERR_EXTENSION_SUPPORT_REQUIRED = -32008;
+  A2A_ERR_VERSION_NOT_SUPPORTED = -32009;
+  A2A_ERR_INVALID_PARAMS = -32602;
+
+  // ErrorInfo de google.rpc: la spec exige que error.data sea un ARRAY que lo
+  // contenga, con la convencion ProtoJSON de @type.
+  A2A_ERRORINFO_TYPE = 'type.googleapis.com/google.rpc.ErrorInfo';
+  A2A_ERROR_DOMAIN = 'a2a-protocol.org';
+
+  // Version del protocolo que anunciamos y aceptamos en la cabecera A2A-Version
+  A2A_VERSION_HEADER = 'A2A-Version';
+  A2A_VERSION = '1.0';
 
 // Convierte cualquiera de las dos formas ('TASK_STATE_INPUT_REQUIRED' o
 // 'input-required') al canonico en minusculas. Publica porque el cliente la usa.
@@ -1023,6 +1039,10 @@ begin
   MsgObj := nil;
   if Assigned(AParams) then
     AParams.TryGetValue<TJSONObject>('message', MsgObj);
+  // 'message' es obligatorio: sin el la peticion esta malformada y hay que
+  // rechazarla, no crear un task con texto vacio (CORE-ERR-002).
+  if not Assigned(MsgObj) then
+    raise EA2AServerError.CreateCode(A2A_ERR_INVALID_PARAMS, 'SendMessage requires a "message" parameter');
   InputText := ExtractTextFromParts(MsgObj);
 
   // taskId/contextId viajan en el Message; toleramos verlos tambien sueltos en
@@ -1061,19 +1081,20 @@ begin
     if Info = nil then
       raise EA2AServerError.CreateCode(A2A_ERR_TASK_NOT_FOUND, 'Task not found: ' + TaskId);
 
+    // Si el llamante manda contextId, tiene que ser el del task. Un par
+    // taskId/contextId cruzado es un error, no algo a ignorar (CORE-MULTI-006).
+    if (ContextId <> '') and (Info.ContextId <> ContextId) then
+      raise EA2AServerError.CreateCode(A2A_ERR_INVALID_PARAMS,
+        Format('contextId "%s" does not belong to task "%s"', [ContextId, TaskId]));
+
     if Info.State = A2A_STATE_INPUT_REQUIRED then
       ResumeTask(Info, InputText)
     else if IsTerminal(Info.State) then
-    begin
-      // Nada que continuar: se devuelve el task tal cual, que es mas util para
-      // el llamante que un error de transporte.
-      FTasksLock.Enter;
-      try
-        Exit(BuildTaskJson(Info));
-      finally
-        FTasksLock.Leave;
-      end;
-    end;
+      // La spec lo exige asi (CORE-SEND-002): continuar un task ya terminal es
+      // UnsupportedOperation. Antes se devolvia el task tal cual, por parecer
+      // mas util al llamante; el TCK lo marca como incumplimiento MUST.
+      raise EA2AServerError.CreateCode(A2A_ERR_UNSUPPORTED_OPERATION,
+        Format('Task "%s" is in a terminal state (%s) and cannot be continued', [TaskId, Info.State]));
   end
   else
   begin
@@ -1230,9 +1251,31 @@ end;
 // Capa JSON-RPC / HTTP
 // ---------------------------------------------------------------------------
 
+// Razon canonica de ErrorInfo para cada codigo A2A: el nombre del error en
+// UPPER_SNAKE_CASE y sin el sufijo "Error". Los errores estandar de JSON-RPC
+// (-32600 y siguientes) no llevan razon.
+function A2AReasonForCode(ACode: Integer): string;
+begin
+  case ACode of
+    A2A_ERR_TASK_NOT_FOUND: Result := 'TASK_NOT_FOUND';
+    A2A_ERR_TASK_NOT_CANCELABLE: Result := 'TASK_NOT_CANCELABLE';
+    A2A_ERR_PUSH_NOT_SUPPORTED: Result := 'PUSH_NOTIFICATION_NOT_SUPPORTED';
+    A2A_ERR_UNSUPPORTED_OPERATION: Result := 'UNSUPPORTED_OPERATION';
+    A2A_ERR_CONTENT_TYPE_NOT_SUPPORTED: Result := 'CONTENT_TYPE_NOT_SUPPORTED';
+    A2A_ERR_INVALID_AGENT_RESPONSE: Result := 'INVALID_AGENT_RESPONSE';
+    A2A_ERR_EXTENDED_CARD_NOT_CONFIGURED: Result := 'EXTENDED_AGENT_CARD_NOT_CONFIGURED';
+    A2A_ERR_EXTENSION_SUPPORT_REQUIRED: Result := 'EXTENSION_SUPPORT_REQUIRED';
+    A2A_ERR_VERSION_NOT_SUPPORTED: Result := 'VERSION_NOT_SUPPORTED';
+  else
+    Result := ''; // error estandar de JSON-RPC: sin ErrorInfo
+  end;
+end;
+
 function TAiA2AServer.RpcError(AId: TJSONValue; ACode: Integer; const AMsg: string): string;
 var
-  Resp, Err: TJSONObject;
+  Resp, Err, Info: TJSONObject;
+  Data: TJSONArray;
+  Reason: string;
 begin
   Resp := TJSONObject.Create;
   try
@@ -1240,6 +1283,21 @@ begin
     Err := TJSONObject.Create;
     Err.AddPair('code', TJSONNumber.Create(ACode));
     Err.AddPair('message', AMsg);
+
+    // La spec exige ErrorInfo dentro de un array en error.data para los
+    // errores propios de A2A (seccion 9.5).
+    Reason := A2AReasonForCode(ACode);
+    if Reason <> '' then
+    begin
+      Info := TJSONObject.Create;
+      Info.AddPair('@type', A2A_ERRORINFO_TYPE);
+      Info.AddPair('domain', A2A_ERROR_DOMAIN);
+      Info.AddPair('reason', Reason);
+      Data := TJSONArray.Create;
+      Data.AddElement(Info);
+      Err.AddPair('data', Data);
+    end;
+
     Resp.AddPair('error', Err);
     if Assigned(AId) then
       Resp.AddPair('id', TJSONValue(AId.Clone))
@@ -1308,7 +1366,7 @@ begin
         // Solo si el integrador la habilito: la card extendida esta pensada
         // para clientes ya autenticados, con mas detalle que la publica.
         if not FPublishExtendedCard then
-          Result := RpcError(IdVal, A2A_ERR_UNSUPPORTED_OPERATION, 'Extended agent card is not configured')
+          Result := RpcError(IdVal, A2A_ERR_EXTENDED_CARD_NOT_CONFIGURED, 'Extended agent card is not configured')
         else
           Result := RpcResult(IdVal, BuildAgentCard(FLastBaseUrl));
       end
@@ -1316,6 +1374,12 @@ begin
         SameText(Method, 'message/stream') or SameText(Method, 'tasks/resubscribe') then
         // La spec exige UnsupportedOperationError si capabilities.streaming=false
         Result := RpcError(IdVal, A2A_ERR_UNSUPPORTED_OPERATION, 'Streaming not supported by this agent')
+      else if SameText(Method, 'CreateTaskPushNotificationConfig') or SameText(Method, 'GetTaskPushNotificationConfig')
+        or SameText(Method, 'ListTaskPushNotificationConfigs') or SameText(Method, 'DeleteTaskPushNotificationConfig')
+        or Method.ToLower.Contains('pushnotification') then
+        // Con capabilities.pushNotifications=false la spec pide este codigo
+        // concreto, no un MethodNotFound generico.
+        Result := RpcError(IdVal, A2A_ERR_PUSH_NOT_SUPPORTED, 'Push notifications are not supported by this agent')
       else
         Result := RpcError(IdVal, -32601, 'Method not found: ' + Method);
       AiSpanEnd(LSpan);
@@ -1344,7 +1408,7 @@ end;
 
 procedure TAiA2AServer.HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
 var
-  Body, BaseUrl, Scheme, AuthHdr: string;
+  Body, BaseUrl, Scheme, AuthHdr, VerHdr, CtHdr: string;
   Card: TJSONObject;
   Allowed: Boolean;
 begin
@@ -1395,6 +1459,29 @@ begin
 
   if SameText(ARequestInfo.Command, 'POST') then
   begin
+    // --- Validaciones de cabecera exigidas por la spec (seccion 5.4) ---
+    // Version: si el cliente declara una que no soportamos, hay que rechazarla
+    // con su codigo propio. Ausente = se asume compatible (clientes 0.x).
+    VerHdr := Trim(ARequestInfo.RawHeaders.Values[A2A_VERSION_HEADER]);
+    if (VerHdr <> '') and (not SameText(VerHdr, A2A_VERSION)) and (not VerHdr.StartsWith('1.')) then
+    begin
+      AResponseInfo.ResponseNo := 200;
+      AResponseInfo.ContentText := RpcError(nil, A2A_ERR_VERSION_NOT_SUPPORTED,
+        Format('A2A version "%s" is not supported; this agent speaks %s', [VerHdr, A2A_VERSION]));
+      Exit;
+    end;
+
+    // Content-Type: tiene que ser JSON. Devolver ParseError aqui seria enganoso,
+    // porque el cuerpo puede estar perfectamente bien formado.
+    CtHdr := LowerCase(ARequestInfo.ContentType);
+    if (CtHdr <> '') and (not CtHdr.Contains('json')) then
+    begin
+      AResponseInfo.ResponseNo := 200;
+      AResponseInfo.ContentText := RpcError(nil, A2A_ERR_CONTENT_TYPE_NOT_SUPPORTED,
+        Format('Content-Type "%s" is not supported; use application/json', [ARequestInfo.ContentType]));
+      Exit;
+    end;
+
     // Se recuerda para poder construir la card en GetExtendedAgentCard, que
     // llega por JSON-RPC y no trae contexto de URL.
     if FLastBaseUrl = '' then

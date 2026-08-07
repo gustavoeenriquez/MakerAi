@@ -41,7 +41,7 @@ implementation
 
 uses
   System.TypInfo, System.StrUtils, System.SyncObjs, System.Threading,
-  System.Net.HttpClient,
+  System.Net.HttpClient, System.Net.URLClient,
   uMakerAi.Core,
   uMakerAi.MCPServer.Core, UMakerAi.MCPServer.Http,
   uMakerAi.MCPClient.Core,
@@ -183,10 +183,18 @@ begin
     .Input('a2a:wire-v03')
     .ExpectEquals('card.supportedInterfaces=0|card.rootUrl=1|send.result.task=0|send.result.id=1');
 
-  // ListTasks: listado, filtro por estado y GetExtendedAgentCard deshabilitada
+  // ListTasks: listado, filtro por estado y GetExtendedAgentCard deshabilitada.
+  // -32007 es ExtendedAgentCardNotConfiguredError, el codigo que pide la spec
+  // para este caso concreto (no el -32004 generico de UnsupportedOperation).
   FRunner.AddCase('a2a.listtasks')
     .Input('a2a:listtasks')
-    .ExpectEquals('total=2|filtrado=2|inexistente=0|extcard=-32004');
+    .ExpectEquals('total=2|filtrado=2|inexistente=0|extcard=-32007');
+
+  // Codigos de error y ErrorInfo exigidos por la spec, medidos con HTTP crudo.
+  // Los codigos salen del TCK oficial (seccion 5.4 de la spec).
+  FRunner.AddCase('a2a.errors.codes')
+    .Input('a2a:errorcodes')
+    .ExpectEquals('push=-32003|version=-32009|ctype=-32005|sinmensaje=-32602|terminal=-32004|errorinfo=ok');
 
   // --- Guardrails ---
   FRunner.AddCase('policy.guard.blocklist')
@@ -383,7 +391,7 @@ begin
   // Los flujos de orquestacion arman su propia topologia (pool, suspension,
   // no bloqueante) y viven en su propia rutina.
   if MatchStr(AScenario, ['a2a:concurrency', 'a2a:hitl', 'a2a:fedhitl', 'a2a:nonblocking', 'a2a:naming',
-    'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03', 'a2a:listtasks']) then
+    'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03', 'a2a:listtasks', 'a2a:errorcodes']) then
     Exit(RunA2AFlowScenario(AScenario));
 
   Result := '';
@@ -915,6 +923,119 @@ begin
         finally
           RawObj.Free;
         end;
+      finally
+        Http.Free;
+        Client.Free;
+      end;
+    end
+
+    // --- Codigos de error y ErrorInfo, con HTTP crudo ---
+    else if AScenario = 'a2a:errorcodes' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteErrGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Client := TAiA2AClient.Create(nil);
+      Http := THTTPClient.Create;
+      try
+        Client.Url := Url;
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+
+        // Helper local: postea y devuelve el codigo de error
+        // (se repite el patron por claridad, no hay closures 'of object' aqui)
+        Http.ContentType := 'application/json';
+
+        // Push notifications no soportadas -> -32003, no MethodNotFound
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":1,"method":"CreateTaskPushNotificationConfig","params":{}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          Result := 'push=' + IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
+          // ErrorInfo: data debe ser un ARRAY con @type/domain/reason
+          if (RawObj.GetValue<TJSONObject>('error').GetValue('data') is TJSONArray) then
+            OutText := 'ok'
+          else
+            OutText := 'falta-array';
+        finally
+          RawObj.Free;
+        end;
+
+        // Version no soportada -> -32009
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":2,"method":"GetTask","params":{"id":"x"}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(
+            Http.Post(Url + '/', Body, nil, [TNameValuePair.Create('A2A-Version', '9.9')])
+            .ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          Result := Result + '|version=' + IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
+        finally
+          RawObj.Free;
+        end;
+
+        // Content-Type equivocado -> -32005, no ParseError
+        Http.ContentType := 'text/plain';
+        Body := TStringStream.Create('{"jsonrpc":"2.0","id":3,"method":"GetTask","params":{"id":"x"}}',
+          TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          Result := Result + '|ctype=' + IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
+        finally
+          RawObj.Free;
+        end;
+        Http.ContentType := 'application/json';
+
+        // SendMessage sin 'message' -> InvalidParams
+        Body := TStringStream.Create('{"jsonrpc":"2.0","id":4,"method":"SendMessage","params":{}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          Result := Result + '|sinmensaje=' + IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
+        finally
+          RawObj.Free;
+        end;
+
+        // Continuar un task terminal -> UnsupportedOperation
+        Task := Client.SendText('hola', TaskId);
+        try
+          TaskId := Client.LastTaskId;
+        finally
+          Task.Free;
+        end;
+        Body := TStringStream.Create(Format(
+          '{"jsonrpc":"2.0","id":5,"method":"SendMessage","params":{"message":{"messageId":"m2",' +
+          '"role":"ROLE_USER","taskId":"%s","parts":[{"text":"otra vez"}]}}}', [TaskId]), TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          Result := Result + '|terminal=' + IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
+        finally
+          RawObj.Free;
+        end;
+
+        Result := Result + '|errorinfo=' + OutText;
       finally
         Http.Free;
         Client.Free;
