@@ -231,6 +231,11 @@ begin
     .ExpectContains('Blocked by guardrails')
     .ExpectContains('not-executed');
 
+  // --- A2A: streaming con reanudacion ---
+  FRunner.AddCase('a2a.stream.resume-input-required')
+    .Input('a2a:stream-resume')
+    .ExpectEquals('estado1=input-required|mismoTask=si|estado2=completed');
+
   // --- A2A: skills del Agent Card ---
   // Las skills se DECLARAN; no se derivan de los nodos. Un grafo normal tiene
   // nodos 'Nodo1'/'Nodo2' sin descripcion y publicarlos seria ruido.
@@ -427,7 +432,7 @@ begin
   // no bloqueante) y viven en su propia rutina.
   if MatchStr(AScenario, ['a2a:concurrency', 'a2a:hitl', 'a2a:fedhitl', 'a2a:nonblocking', 'a2a:naming',
     'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03', 'a2a:listtasks', 'a2a:errorcodes', 'a2a:agenttool',
-    'a2a:card-skills', 'a2a:card-skills-default']) then
+    'a2a:card-skills', 'a2a:card-skills-default', 'a2a:stream-resume']) then
     Exit(RunA2AFlowScenario(AScenario));
 
   Result := '';
@@ -622,6 +627,66 @@ begin
           end);
       TTask.WaitForAll(Tasks);
       Result := Format('completed=%d|failed=%d', [OkCount, BadCount]);
+    end
+
+    // --- Streaming: reanudar un task suspendido con el mismo taskId ---
+    // Se habla SSE crudo a proposito, sin TAiA2AClient: es la unica forma de
+    // comprobar que el servidor reanuda de verdad y no abre un task nuevo.
+    else if AScenario = 'a2a:stream-resume' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteStreamResumeGraph';
+      Agents.AddNode('Espera', Handlers.NodeSuspendOnce);
+      Agents.SetEntryPoint('Espera').SetFinishPoint('Espera');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Http := THTTPClient.Create;
+      try
+        Http.ConnectionTimeout := 30000;
+        Http.ResponseTimeout := 30000;
+        Http.ContentType := 'application/json';
+
+        // Turno 1: el grafo se suspende y el stream cierra en input-required.
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":1,"method":"SendStreamingMessage","params":{"message":' +
+          '{"messageId":"s1","role":"ROLE_USER","parts":[{"text":"hola"}]}}}', TEncoding.UTF8);
+        var Sse1: string;
+        try
+          Sse1 := Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8);
+        finally
+          Body.Free;
+        end;
+
+        // El primer evento del stream es el snapshot {"task":{...}}
+        var LLine := Copy(Sse1, Pos('data: ', Sse1) + 6, MaxInt);
+        LLine := Trim(Copy(LLine, 1, Pos(#10, LLine) - 1));
+        var LEv := TJSONObject.ParseJSONValue(LLine) as TJSONObject;
+        try
+          TaskId := (LEv.GetValue('result') as TJSONObject)
+            .GetValue<TJSONObject>('task').GetValue<string>('id');
+        finally
+          LEv.Free;
+        end;
+        Result := 'estado1=' + IfThen(Pos('INPUT_REQUIRED', Sse1) > 0, 'input-required', '?');
+
+        // Turno 2: mismo taskId. Debe REANUDAR el grafo suspendido.
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":2,"method":"SendStreamingMessage","params":{"message":' +
+          '{"messageId":"s2","taskId":"' + TaskId + '","role":"ROLE_USER",' +
+          '"parts":[{"text":"ok"}]}}}', TEncoding.UTF8);
+        var Sse2: string;
+        try
+          Sse2 := Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8);
+        finally
+          Body.Free;
+        end;
+
+        Result := Result + '|mismoTask=' + IfThen(Pos(TaskId, Sse2) > 0, 'si', 'no');
+        Result := Result + '|estado2=' + IfThen(Pos('COMPLETED', Sse2) > 0, 'completed', '?');
+      finally
+        Http.Free;
+      end;
     end
 
     // --- Skills declaradas en la Agent Card ---

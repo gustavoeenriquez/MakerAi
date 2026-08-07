@@ -261,6 +261,9 @@ type
     // --- streaming SSE ---
     procedure SseWriteEvent(AContext: TIdContext; AId: TJSONValue; APayload: TJSONObject);
     function StreamStatusEvent(AInfo: TAiA2ATaskInfo): TJSONObject;
+    // Emite los artifacts del task (solo tiene sentido si completo). Van
+    // ANTES del status final: es el orden del ejemplo de la spec.
+    procedure SseEmitArtifacts(AContext: TIdContext; AId: TJSONValue; AInfo: TAiA2ATaskInfo);
     procedure HandleStreamingRequest(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo;
       AResponseInfo: TIdHTTPResponseInfo; const AMethod: string; AParams: TJSONObject; AId: TJSONValue);
     function HandleJsonRpc(const ABody, ATraceParent: string): string;
@@ -2150,6 +2153,37 @@ begin
   Result.AddPair('statusUpdate', Ev);
 end;
 
+procedure TAiA2AServer.SseEmitArtifacts(AContext: TIdContext; AId: TJSONValue;
+  AInfo: TAiA2ATaskInfo);
+var
+  TaskJson, ArtEv, ArtPayload: TJSONObject;
+  Artifacts: TJSONArray;
+  I: Integer;
+begin
+  FTasksLock.Enter;
+  try
+    TaskJson := BuildTaskJson(AInfo);
+  finally
+    FTasksLock.Leave;
+  end;
+  try
+    if TaskJson.TryGetValue<TJSONArray>('artifacts', Artifacts) then
+      for I := 0 to Artifacts.Count - 1 do
+      begin
+        ArtEv := TJSONObject.Create;
+        ArtEv.AddPair('taskId', AInfo.Id);
+        ArtEv.AddPair('contextId', AInfo.ContextId);
+        ArtEv.AddPair('artifact', TJSONObject(Artifacts.Items[I].Clone));
+        ArtEv.AddPair('lastChunk', TJSONBool.Create(I = Artifacts.Count - 1));
+        ArtPayload := TJSONObject.Create;
+        ArtPayload.AddPair('artifactUpdate', ArtEv);
+        SseWriteEvent(AContext, AId, ArtPayload);
+      end;
+  finally
+    TaskJson.Free;
+  end;
+end;
+
 procedure TAiA2AServer.HandleStreamingRequest(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo;
   AResponseInfo: TIdHTTPResponseInfo; const AMethod: string; AParams: TJSONObject; AId: TJSONValue);
 var
@@ -2208,11 +2242,50 @@ begin
     InputText := ExtractTextFromParts(MsgObj);
     ContextId := MsgObj.GetValue<string>('contextId', '');
     MessageId := MsgObj.GetValue<string>('messageId', '');
+    TaskId    := MsgObj.GetValue<string>('taskId', '');
+    if Assigned(AParams) then
+    begin
+      if TaskId = '' then
+        TaskId := AParams.GetValue<string>('taskId', '');
+      if ContextId = '' then
+        ContextId := AParams.GetValue<string>('contextId', '');
+    end;
     PurgeTasks;
     try
-      Info := NewTask(ContextId);
-      Info.MessageId := MessageId;
-      StartTask(Info, InputText);
+      if TaskId <> '' then
+      begin
+        // Mismo contrato que SendMessage: con taskId se REANUDA, no se abre un
+        // task nuevo. Sin esto un flujo human-in-the-loop por streaming perdia
+        // el grafo suspendido en cada turno y empezaba de cero.
+        FTasksLock.Enter;
+        try
+          Info := FindTask(TaskId);
+          if Assigned(Info) then
+            RefreshTask(Info);
+        finally
+          FTasksLock.Leave;
+        end;
+        if Info = nil then
+          raise EA2AServerError.CreateCode(A2A_ERR_TASK_NOT_FOUND, 'Task not found: ' + TaskId);
+
+        // Un par taskId/contextId cruzado es error, no algo a ignorar.
+        if (ContextId <> '') and (Info.ContextId <> ContextId) then
+          raise EA2AServerError.CreateCode(A2A_ERR_INVALID_PARAMS,
+            Format('contextId "%s" does not belong to task "%s"', [ContextId, TaskId]));
+
+        if Info.State = A2A_STATE_INPUT_REQUIRED then
+          ResumeTask(Info, InputText, MessageId)
+        else if IsTerminal(Info.State) then
+          raise EA2AServerError.CreateCode(A2A_ERR_UNSUPPORTED_OPERATION,
+            Format('Task "%s" is in a terminal state (%s) and cannot be continued',
+              [TaskId, Info.State]));
+      end
+      else
+      begin
+        Info := NewTask(ContextId);
+        Info.MessageId := MessageId;
+        StartTask(Info, InputText);
+      end;
     except
       on E: EA2AServerError do
       begin
@@ -2243,6 +2316,31 @@ begin
   Payload.AddPair('task', TaskJson);
   SseWriteEvent(AContext, AId, Payload);
 
+  // 1b. El task puede haber llegado a su estado final ANTES de este primer
+  // snapshot: un grafo rapido, o un resume que completa enseguida. Entonces no
+  // queda ningun cambio que detectar y el bucle de abajo se quedaria dando
+  // vueltas hasta agotar WaitTimeoutMs con el cliente esperando. Se cierra ya.
+  //
+  // input-required solo cierra si NO es una suscripcion: en
+  // SendStreamingMessage significa "te toca a ti", pero quien hace
+  // SubscribeToTask es un observador y tiene que seguir mirando las
+  // transiciones posteriores.
+  if IsTerminal(EstadoPrevio) or
+    ((EstadoPrevio = A2A_STATE_INPUT_REQUIRED) and not Suscripcion) then
+  begin
+    if EstadoPrevio = A2A_STATE_COMPLETED then
+      SseEmitArtifacts(AContext, AId, Info);
+    FTasksLock.Enter;
+    try
+      Payload := StreamStatusEvent(Info);
+    finally
+      FTasksLock.Leave;
+    end;
+    SseWriteEvent(AContext, AId, Payload);
+    AContext.Connection.Disconnect;
+    Exit;
+  end;
+
   // 2. Seguir la ejecucion y emitir cada cambio de estado
   Esperado := 0;
   while (Esperado < FWaitTimeoutMs) and AContext.Connection.Connected do
@@ -2267,33 +2365,9 @@ begin
     if not Assigned(Payload) then
       Continue;
 
-    // 3. Al completar, los artifacts van ANTES del status final: es el orden
-    // del ejemplo de la spec y lo que comprueba el test de ordenacion.
+    // 3. Al completar, primero los artifacts y luego el status final.
     if EstadoPrevio = A2A_STATE_COMPLETED then
-    begin
-      FTasksLock.Enter;
-      try
-        TaskJson := BuildTaskJson(Info);
-      finally
-        FTasksLock.Leave;
-      end;
-      try
-        if TaskJson.TryGetValue<TJSONArray>('artifacts', Artifacts) then
-          for I := 0 to Artifacts.Count - 1 do
-          begin
-            ArtEv := TJSONObject.Create;
-            ArtEv.AddPair('taskId', Info.Id);
-            ArtEv.AddPair('contextId', Info.ContextId);
-            ArtEv.AddPair('artifact', TJSONObject(Artifacts.Items[I].Clone));
-            ArtEv.AddPair('lastChunk', TJSONBool.Create(I = Artifacts.Count - 1));
-            ArtPayload := TJSONObject.Create;
-            ArtPayload.AddPair('artifactUpdate', ArtEv);
-            SseWriteEvent(AContext, AId, ArtPayload);
-          end;
-      finally
-        TaskJson.Free;
-      end;
-    end;
+      SseEmitArtifacts(AContext, AId, Info);
 
     SseWriteEvent(AContext, AId, Payload);
 

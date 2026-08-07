@@ -282,6 +282,22 @@ artifact, el último con `lastChunk: true`) → `statusUpdate` terminal. Los
 artifacts van **antes** del status final; es el orden del ejemplo de la spec y
 lo que valida el test de ordenación del TCK.
 
+**`SendStreamingMessage` con `taskId` reanuda**, igual que `SendMessage`: mismas
+validaciones (task inexistente → `-32001`, par `taskId`/`contextId` cruzado →
+`-32602`, task terminal → `-32004`). Sin esto un human-in-the-loop por streaming
+abría un task nuevo en cada turno y perdía el grafo suspendido.
+
+> **El estado puede ser final antes del primer snapshot** — un grafo rápido, o un
+> resume que completa enseguida. El seguimiento se hace comparando contra el
+> estado del snapshot, así que en ese caso no queda ningún cambio que detectar y
+> el stream se quedaba abierto hasta agotar `WaitTimeoutMs`. Ahora se cierra en
+> el momento.
+>
+> Con un matiz que cuesta ver: **`input-required` cierra solo si NO es una
+> suscripción**. En `SendStreamingMessage` significa "te toca a ti"; quien hace
+> `SubscribeToTask` es un observador y tiene que seguir viendo las transiciones
+> posteriores. Cerrarle el stream rompe `SUBSCRIBE-TERMINAL` del TCK.
+
 Un stream también se cierra en `input-required`: la pelota pasa al cliente.
 
 > **Los snapshots de un mismo task deben ser idénticos.** Dos clientes
