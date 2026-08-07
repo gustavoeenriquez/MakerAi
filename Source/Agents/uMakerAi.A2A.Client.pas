@@ -40,7 +40,8 @@ interface
 uses
   System.SysUtils, System.Classes, System.JSON,
   System.Net.HttpClient, System.Net.URLClient,
-  uMakerAi.Agents, uMakerAi.Agents.Attributes;
+  uMakerAi.Agents, uMakerAi.Agents.Attributes,
+  uMakerAi.Tools.Functions, uMakerAi.Chat.Messages;
 
 type
   EA2AClientException = class(Exception);
@@ -144,6 +145,44 @@ type
     property ApiKey: string read FApiKey write FApiKey;
   end;
 
+  // Expone un agente A2A remoto como HERRAMIENTA de chat: al asignarle un
+  // TAiFunctions, el LLM puede invocar al agente igual que a cualquier otra
+  // funcion. Complementa a TAiA2ARemoteAgentTool, que hace lo mismo pero para
+  // un nodo de grafo en vez de para un chat.
+  TAiA2AAgentTool = class(TComponent)
+  private
+    FFunctions: TAiFunctions;
+    FAgentUrl: string;
+    FToolName: string;
+    FDescription: string;
+    FApiKey: string;
+    FTimeoutMs: Integer;
+    FItem: TFunctionActionItem;
+    procedure SetFunctions(const Value: TAiFunctions);
+    procedure DoToolAction(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: String; ToolCall: TAiToolsFunction; var Handled: Boolean);
+  protected
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
+  public
+    constructor Create(AOwner: TComponent); override;
+    // Registra la funcion en el TAiFunctions asignado. Se llama solo al
+    // asignar Functions; se expone por si hay que rehacerlo tras cambiar
+    // ToolName o Description en runtime.
+    procedure RegisterTool;
+    // Rellena ToolName y Description desde la Agent Card del agente remoto.
+    // Asi el LLM ve la descripcion que el propio agente publica de si mismo.
+    procedure DiscoverFromCard;
+  published
+    property Functions: TAiFunctions read FFunctions write SetFunctions;
+    property AgentUrl: string read FAgentUrl write FAgentUrl;
+    // Nombre con el que el LLM ve la herramienta. Si se deja vacio se usa
+    // 'ask_remote_agent'.
+    property ToolName: string read FToolName write FToolName;
+    property Description: string read FDescription write FDescription;
+    property ApiKey: string read FApiKey write FApiKey;
+    property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs default 60000;
+  end;
+
 // Normaliza cualquiera de las dos formas del literal ('TASK_STATE_INPUT_REQUIRED'
 // o 'input-required') al enum.
 function A2AParseState(const AValue: string): TAiA2ATaskState;
@@ -156,7 +195,7 @@ uses System.Math, System.StrUtils, uMakerAi.Telemetry, uMakerAi.Agents.EngineReg
 
 procedure Register;
 begin
-  RegisterComponents('MakerAI', [TAiA2AClient]);
+  RegisterComponents('MakerAI', [TAiA2AClient, TAiA2AAgentTool]);
 end;
 
 function A2AParseState(const AValue: string): TAiA2ATaskState;
@@ -668,6 +707,139 @@ begin
   end;
 end;
 
+{ TAiA2AAgentTool }
+
+constructor TAiA2AAgentTool.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  FTimeoutMs := 60000;
+  FToolName := 'ask_remote_agent';
+  FDescription := 'Delega una consulta en un agente remoto especializado y devuelve su respuesta';
+end;
+
+procedure TAiA2AAgentTool.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if (Operation = opRemove) and (AComponent = FFunctions) then
+  begin
+    FFunctions := nil;
+    FItem := nil; // lo destruye la coleccion, aqui solo se suelta la referencia
+  end;
+end;
+
+procedure TAiA2AAgentTool.SetFunctions(const Value: TAiFunctions);
+begin
+  if FFunctions = Value then
+    Exit;
+  FFunctions := Value;
+  if Assigned(FFunctions) then
+  begin
+    FFunctions.FreeNotification(Self);
+    RegisterTool;
+  end;
+end;
+
+procedure TAiA2AAgentTool.RegisterTool;
+var
+  Param: TFunctionParamsItem;
+begin
+  if not Assigned(FFunctions) then
+    Exit;
+  if not Assigned(FItem) then
+    FItem := FFunctions.Functions.Add;
+
+  FItem.FunctionName := FToolName;
+  FItem.Description.Text := FDescription;
+  FItem.Enabled := True;
+  FItem.OnAction := DoToolAction;
+
+  // Un unico parametro: la consulta en lenguaje natural. El agente remoto es
+  // opaco por diseno, asi que no tiene sentido exponerle un schema detallado.
+  if FItem.Parameters.Count = 0 then
+  begin
+    Param := FItem.Parameters.Add;
+    Param.Name := 'query';
+    Param.Description.Text := 'La consulta o instruccion para el agente remoto';
+    Param.ParamType := TToolsParamType.ptString;
+    Param.Required := True;
+  end;
+end;
+
+procedure TAiA2AAgentTool.DiscoverFromCard;
+var
+  Client: TAiA2AClient;
+  Card: TJSONObject;
+begin
+  Client := TAiA2AClient.Create(nil);
+  try
+    Client.Url := FAgentUrl;
+    Client.ApiKey := FApiKey;
+    Client.Timeout := FTimeoutMs;
+    Card := Client.FetchAgentCard;
+    try
+      if FDescription = '' then
+        FDescription := Card.GetValue<string>('description', '')
+      else
+        FDescription := FDescription + ' (' + Card.GetValue<string>('description', '') + ')';
+      RegisterTool;
+    finally
+      Card.Free;
+    end;
+  finally
+    Client.Free;
+  end;
+end;
+
+procedure TAiA2AAgentTool.DoToolAction(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: String; ToolCall: TAiToolsFunction; var Handled: Boolean);
+var
+  Client: TAiA2AClient;
+  Task: TJSONObject;
+  Consulta, Salida: string;
+begin
+  Handled := True;
+  if Trim(FAgentUrl) = '' then
+  begin
+    ToolCall.Response := '{"error":"TAiA2AAgentTool: AgentUrl no configurada"}';
+    Exit;
+  end;
+
+  Consulta := ToolCall.Params.Values['query'];
+  if Consulta = '' then
+    Consulta := ToolCall.Arguments; // ultimo recurso: el JSON crudo
+
+  Client := TAiA2AClient.Create(nil);
+  try
+    Client.Url := FAgentUrl;
+    Client.ApiKey := FApiKey;
+    Client.Timeout := FTimeoutMs;
+    try
+      Task := Client.SendText(Consulta, Salida);
+      try
+        case Client.LastTaskState of
+          tsCompleted:
+            ToolCall.Response := Salida;
+          tsInputRequired:
+            // El agente remoto pide mas datos. Se le devuelve al LLM como
+            // texto: es el LLM quien decide si preguntar al usuario.
+            ToolCall.Response := 'El agente remoto necesita mas informacion: ' + Client.LastStatusMessage;
+        else
+          ToolCall.Response := 'El agente remoto no completo la tarea (' + Client.LastState + '): ' +
+            Client.LastStatusMessage;
+        end;
+      finally
+        Task.Free;
+      end;
+    except
+      on E: Exception do
+        // Un fallo del agente remoto se le cuenta al LLM en vez de romper el
+        // turno de chat: puede reintentar o seguir sin esa informacion.
+        ToolCall.Response := 'Error llamando al agente remoto: ' + E.Message;
+    end;
+  finally
+    Client.Free;
+  end;
+end;
 initialization
 
 TEngineRegistry.Instance.RegisterTool(TAiA2ARemoteAgentTool, 'uMakerAi.A2A.Client');

@@ -231,7 +231,7 @@ El cliente lee la URL de `supportedInterfaces` con fallback al `url` plano de 0.
 | `GetExtendedAgentCard` | ✅ si `PublishExtendedCard := True`; si no, `UnsupportedOperationError`. Para diferenciarla de la pública hay que enriquecerla en `OnCustomizeCard` |
 | `SendStreamingMessage` | ✅ SSE (+ alias `message/stream`) |
 | `SubscribeToTask` | ✅ SSE (+ `tasks/resubscribe`); error si el task ya es terminal |
-| `*TaskPushNotificationConfig` | ❌ no implementados (`capabilities.pushNotifications = false`) |
+| `CreateTaskPushNotificationConfig` etc. | ✅ CRUD completo + entrega al webhook |
 
 ## Threading Model
 
@@ -276,6 +276,52 @@ Un stream también se cierra en `input-required`: la pelota pasa al cliente.
 > un GUID nuevo en cada llamada, y `RefreshTask` sellaba `UpdatedAt := Now` en
 > cada consulta en vez de solo al cambiar de estado. Lo segundo además impedía
 > que venciera el TTL de purga, que se mide contra ese campo.
+
+## Llamar a un agente A2A desde un chat
+
+`TAiA2AAgentTool` expone un agente remoto como **herramienta de chat**: al
+asignarle un `TAiFunctions`, el LLM puede invocarlo igual que a cualquier otra
+función.
+
+```pascal
+AgentTool := TAiA2AAgentTool.Create(Self);
+AgentTool.AgentUrl := 'http://host:8280';
+AgentTool.ToolName := 'preguntar_experto';
+AgentTool.Description := 'Consulta a un agente especializado en normativa';
+AgentTool.Functions := AiFunctions1;   // al asignarlo se registra la función
+```
+
+Es el hermano de `TAiA2ARemoteAgentTool`: aquel federa un **nodo de grafo**,
+este una **conversación**.
+
+`DiscoverFromCard` rellena la descripción desde la Agent Card del agente, de
+modo que el LLM vea la que el propio agente publica de sí mismo.
+
+Los fallos se le cuentan al modelo como texto en vez de romper el turno: si el
+agente remoto cae o pide más datos, el LLM puede reintentar, preguntar al
+usuario o seguir sin esa información. Una excepción abortaría la conversación
+entera por un problema de un colaborador.
+
+## Push notifications
+
+`EnablePushNotifications` (default `True`) habilita el CRUD de configs y la
+entrega, y lo anuncia en la card.
+
+- La config llega por `CreateTaskPushNotificationConfig` **o** dentro de
+  `SendMessage`, en `configuration.taskPushNotificationConfig`.
+- Los parámetros se aceptan en camelCase **y** snake_case: el binding usa
+  camelCase pero varios clientes mandan los nombres del proto.
+- El payload del webhook es un **`StreamResponse`** (brazo `task`), no el Task
+  desnudo. Se envía con `Authorization` si la config trae `authentication`.
+- `Delete` es idempotente y re-registrar el mismo `id` reemplaza, para que el
+  webhook no reciba la misma notificación dos veces.
+
+> **La entrega necesita un vigilante.** Un cambio de estado solo se detectaba
+> cuando un cliente preguntaba; si nadie llamaba a `GetTask`, el task terminaba
+> y el webhook no se enteraba. El servidor arranca un hilo que refresca los
+> tasks vivos cada 100 ms. Es un `TThread` con `Terminate`/`WaitFor` y **no un
+> `TTask`**: con `TTask` no hay handle que esperar, el destructor liberaba los
+> locks con el hilo dentro y el proceso se colgaba al salir.
 
 ## Navigation
 

@@ -194,6 +194,13 @@ begin
   // Los codigos salen del TCK oficial (seccion 5.4 de la spec).
   // 'push' comprueba CreateTaskPushNotificationConfig SIN taskId: como las push
   // notifications si estan implementadas, el error correcto es InvalidParams.
+  // TAiA2AAgentTool: el LLM ve el agente remoto como una funcion mas.
+  // Se invoca el tool directamente (sin LLM) por el mismo choke point que
+  // usaria el modelo, TAiFunctions.DoCallFunction.
+  FRunner.AddCase('a2a.agenttool.chat')
+    .Input('a2a:agenttool')
+    .ExpectEquals('consulta>Uno');
+
   FRunner.AddCase('a2a.errors.codes')
     .Input('a2a:errorcodes')
     .ExpectEquals('push=-32602|version=-32009|ctype=-32005|sinmensaje=-32602|terminal=-32004|errorinfo=ok');
@@ -393,7 +400,7 @@ begin
   // Los flujos de orquestacion arman su propia topologia (pool, suspension,
   // no bloqueante) y viven en su propia rutina.
   if MatchStr(AScenario, ['a2a:concurrency', 'a2a:hitl', 'a2a:fedhitl', 'a2a:nonblocking', 'a2a:naming',
-    'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03', 'a2a:listtasks', 'a2a:errorcodes']) then
+    'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03', 'a2a:listtasks', 'a2a:errorcodes', 'a2a:agenttool']) then
     Exit(RunA2AFlowScenario(AScenario));
 
   Result := '';
@@ -519,6 +526,9 @@ var
   Http: THTTPClient;
   Body: TStringStream;
   Card, RawObj, ResObj: TJSONObject;
+  Funcs: TAiFunctions;
+  AgentTool: TAiA2AAgentTool;
+  ToolCall: TAiToolsFunction;
 
   function StateName(AValue: TAiA2ATaskState): string;
   begin
@@ -1042,6 +1052,35 @@ begin
       finally
         Http.Free;
         Client.Free;
+      end;
+    end
+
+    // --- El agente remoto expuesto como herramienta de chat ---
+    else if AScenario = 'a2a:agenttool' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteToolGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Funcs := TAiFunctions.Create(nil);
+      AgentTool := TAiA2AAgentTool.Create(nil);
+      ToolCall := TAiToolsFunction.Create;
+      try
+        AgentTool.AgentUrl := Url;
+        AgentTool.ToolName := 'preguntar_agente';
+        AgentTool.Functions := Funcs; // al asignarlo se registra la funcion
+
+        ToolCall.Name := 'preguntar_agente';
+        ToolCall.Arguments := '{"query":"consulta"}';
+        Funcs.DoCallFunction(ToolCall);
+        Result := ToolCall.Response;
+      finally
+        ToolCall.Free;
+        AgentTool.Free;
+        Funcs.Free;
       end;
     end
 
