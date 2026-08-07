@@ -196,7 +196,9 @@ type
     // --- tasks ---
     function NewTask(const AContextId: string): TAiA2ATaskInfo;
     function FindTask(const AId: string): TAiA2ATaskInfo;
-    procedure RefreshTask(AInfo: TAiA2ATaskInfo); // exige FTasksLock tomado
+    // AIgnoreBusy: saltarse la comprobacion de Manager.Busy. Solo tiene
+    // sentido desde OnGraphFinished, donde ya se sabe que el grafo acabo.
+    procedure RefreshTask(AInfo: TAiA2ATaskInfo; AIgnoreBusy: Boolean = False); // exige FTasksLock tomado
     procedure StartTask(AInfo: TAiA2ATaskInfo; const AInput: string);
     procedure ResumeTask(AInfo: TAiA2ATaskInfo; const AInput: string; const AMessageId: string);
     procedure WaitTask(AInfo: TAiA2ATaskInfo);
@@ -671,7 +673,7 @@ end;
 // Es la pieza que evita que un task quede mintiendo: mientras la ejecucion siga
 // viva, el estado publicado sale siempre del grafo, no de lo que se anoto al
 // responder el SendMessage.
-procedure TAiA2AServer.RefreshTask(AInfo: TAiA2ATaskInfo);
+procedure TAiA2AServer.RefreshTask(AInfo: TAiA2ATaskInfo; AIgnoreBusy: Boolean);
 var
   Mgr: TAIAgentManager;
   St: TAgentExecutionStatus;
@@ -687,7 +689,10 @@ begin
   if not Assigned(Mgr) then
     Exit;
 
-  if Mgr.Busy then
+  // OJO con el orden del motor: TAIAgentManager dispara OnFinish y solo
+  // DESPUES pone FBusy a 0. Un refresco lanzado desde ese evento veria el
+  // manager como ocupado y se perderia la transicion final.
+  if Mgr.Busy and not AIgnoreBusy then
   begin
     AInfo.State := A2A_STATE_WORKING;
     Exit;
@@ -1606,7 +1611,11 @@ begin
         Break;
       end;
     if Assigned(Afectado) then
-      RefreshTask(Afectado); // dispara DeliverPushNotifications si cambio
+      // AIgnoreBusy: el motor dispara OnFinish ANTES de poner FBusy a 0,
+      // asi que aqui el manager todavia se declara ocupado. Sin esto,
+      // RefreshTask salia por la rama 'sigue trabajando' y nunca detectaba
+      // el paso a completed: el webhook no se enteraba jamas.
+      RefreshTask(Afectado, True);
   finally
     FTasksLock.Leave;
   end;

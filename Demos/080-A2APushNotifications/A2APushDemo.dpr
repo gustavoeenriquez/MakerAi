@@ -53,6 +53,11 @@ type
     FLock: TCriticalSection;
     FAvisos: TList<TAviso>;
     procedure OnPost(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+    // TIdHTTPServer solo sabe de Basic. Si llega un Authorization con otro
+    // esquema (Bearer, por ejemplo) contesta 401 el solo y OnCommandGet ni
+    // se entera. Marcandolo como atendido dejamos pasar la peticion.
+    procedure OnParseAuth(AContext: TIdContext; const AAuthType, AAuthData: string;
+      var VUsername, VPassword: string; var VHandled: Boolean);
   public
     constructor Create(APort: Integer);
     destructor Destroy; override;
@@ -80,6 +85,7 @@ begin
   FHttp.DefaultPort := APort;
   FHttp.OnCommandGet := OnPost;
   FHttp.OnCommandOther := OnPost;
+  FHttp.OnParseAuthentication := OnParseAuth;
   FHttp.Active := True;
 end;
 
@@ -90,6 +96,12 @@ begin
   FAvisos.Free;
   FLock.Free;
   inherited;
+end;
+
+procedure TReceptorWebhook.OnParseAuth(AContext: TIdContext; const AAuthType, AAuthData: string;
+  var VUsername, VPassword: string; var VHandled: Boolean);
+begin
+  VHandled := True;
 end;
 
 procedure TReceptorWebhook.OnPost(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo;

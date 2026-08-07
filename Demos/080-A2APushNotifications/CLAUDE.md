@@ -10,20 +10,16 @@ El streaming SSE sirve cuando el cliente puede quedarse conectado. Las push son 
 
 Levanta un agente A2A (8282) y un receptor de webhook propio (8283) para ver exactamente qué llega.
 
-## ⚠️ Estado: el demo FALLA a propósito
+## Por qué existe este demo
 
-**Este demo no pasa hoy**, y su exit code es 1. No es un error del demo: destapa una limitación real del framework.
+Cubre justo lo que la conformidad certificada **no** cubre: **el TCK pasa `PUSH-DELIVER-*` con un flujo bloqueante**, así que nunca comprueba el caso interesante — que el webhook reciba el aviso con `blocking:false`, sin que nadie consulte el task. Este demo lo verifica de punta a punta y devuelve exit code 1 si no llega.
 
-| Qué | Estado |
-|---|---|
-| CRUD de configuraciones (`Create`/`Get`/`List`/`Delete`, idempotencia) | ✅ funciona |
-| Registrar el webhook dentro de `SendMessage` (`configuration.taskPushNotificationConfig`) | ✅ se registra bien |
-| **Entrega al webhook cuando nadie consulta el task** (`blocking:false`) | ❌ **no llega** |
-| Entrega cuando el flujo es bloqueante o hay un resume | ✅ funciona (es lo que valida el TCK) |
+Escribirlo destapó dos fallos reales, uno en cada lado:
 
-**La causa:** la entrega se dispara al detectar un cambio de estado, y ese cambio solo se detecta cuando algo refresca el task. En los flujos bloqueantes lo hace `WaitTask`; con `blocking:false` no lo hace nadie. Se intentaron dos soluciones —un hilo que sondeaba los tasks vivos, y engancharse a `TAIAgentManager.OnFinish`— y **ninguna de las dos entregó** en este escenario. Queda pendiente de diagnóstico.
+1. **En el framework.** `TAIAgentManager` dispara `OnFinish` y solo *después* pone `FBusy` a 0. El servidor A2A se engancha a ese evento para refrescar el task, pero dentro del handler el manager todavía se declaraba ocupado: `RefreshTask` se iba por la rama "sigue trabajando" y nunca veía el paso a `completed`. La entrega no se disparaba jamás. Arreglado con el parámetro `AIgnoreBusy`.
+2. **En el receptor de este demo.** `TIdHTTPServer` solo entiende autenticación `Basic`. Al llegar un `Authorization: Bearer …` respondía **401 él solo**, sin llegar a `OnCommandGet`. El POST salía bien del framework y moría en la puerta. Se arregla manejando `OnParseAuthentication` y poniendo `VHandled := True` — trampa clásica de Indy, la misma que ya apareció en el demo 037.
 
-Ojo con la consecuencia práctica: **el TCK pasa `PUSH-DELIVER-*` porque su flujo es bloqueante**. La conformidad certificada no cubre este caso, y por eso hace falta este demo.
+Vale la pena quedarse con el detalle: durante un buen rato el síntoma ("el webhook no recibe nada") apuntaba entero al framework, y la mitad del problema estaba en el receptor. El diagnóstico solo se cerró al imprimir el **código de estado** del POST: sin excepción de transporte, un 401 se parece mucho a un envío correcto.
 
 ## Build & Run
 
@@ -31,7 +27,7 @@ Ojo con la consecuencia práctica: **el TCK pasa `PUSH-DELIVER-*` porque su fluj
 A2APushDemo.exe [--port 8282] [--hook-port 8283]
 ```
 
-Exit code 0 si llegaron los dos avisos, 1 si no.
+Exit code 0 si llegaron los dos avisos, 1 si no. Hoy pasa (exit 0).
 
 ## Lo que sí demuestra el demo
 

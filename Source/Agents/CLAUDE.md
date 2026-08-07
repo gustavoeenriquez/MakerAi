@@ -316,16 +316,19 @@ entrega, y lo anuncia en la card.
 - `Delete` es idempotente y re-registrar el mismo `id` reemplaza, para que el
   webhook no reciba la misma notificación dos veces.
 
-> **LIMITACION CONOCIDA en la entrega.** La notificacion se dispara al detectar
-> un cambio de estado, y ese cambio solo se detecta cuando algo refresca el
-> task. En los flujos bloqueantes lo hace `WaitTask`; **con `blocking:false` y
-> sin consultas posteriores el webhook no recibe nada**. Se probaron un hilo de
-> sondeo y un enganche a `TAIAgentManager.OnFinish`, y ninguno entrego en ese
-> escenario: queda pendiente de diagnostico.
->
-> El TCK pasa `PUSH-DELIVER-*` porque su flujo es bloqueante, asi que la
-> conformidad certificada NO cubre este caso. El demo 080 lo reproduce y falla
-> a proposito con exit code 1.
+**La entrega es activa**: no hace falta que nadie consulte el task. El servidor
+engancha `TAIAgentManager.OnFinish` (encadenando el handler previo) y desde ahi
+refresca el task, lo que dispara la entrega. Funciona con `blocking:false`.
+
+> **Cuidado con el orden del motor de grafos.** `TAIAgentManager` dispara
+> `OnFinish` y **solo despues** pone `FBusy` a 0. Un refresco lanzado desde ese
+> evento ve el manager como ocupado, se va por la rama "sigue trabajando" y se
+> pierde la transicion final — el webhook no se entera jamas. Por eso
+> `RefreshTask` tiene el parametro `AIgnoreBusy`, que solo debe usarse desde
+> `OnGraphFinished`, donde ya se sabe que el grafo termino.
+
+El TCK pasa `PUSH-DELIVER-*` con un flujo bloqueante, asi que **no cubre este
+escenario**; lo cubre el demo 080.
 
 ## Navigation
 
