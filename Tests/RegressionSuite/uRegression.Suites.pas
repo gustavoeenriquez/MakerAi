@@ -231,6 +231,14 @@ begin
     .ExpectContains('Blocked by guardrails')
     .ExpectContains('not-executed');
 
+  // --- A2A: autorizacion ---
+  // La card base se sirve sin credenciales (es descubrimiento: ahi es donde el
+  // cliente lee que esquema usar). Y el secreto se compara EXACTO: con
+  // SameText, 'clavesecreta' valia por 'ClaveSecreta'.
+  FRunner.AddCase('a2a.auth.card-public-key-exact')
+    .Input('a2a:auth')
+    .ExpectEquals('card=200|sinclave=401|otrocase=401|conclave=200');
+
   // --- A2A: streaming con reanudacion ---
   FRunner.AddCase('a2a.stream.resume-input-required')
     .Input('a2a:stream-resume')
@@ -432,7 +440,8 @@ begin
   // no bloqueante) y viven en su propia rutina.
   if MatchStr(AScenario, ['a2a:concurrency', 'a2a:hitl', 'a2a:fedhitl', 'a2a:nonblocking', 'a2a:naming',
     'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03', 'a2a:listtasks', 'a2a:errorcodes', 'a2a:agenttool',
-    'a2a:card-skills', 'a2a:card-skills-default', 'a2a:stream-resume']) then
+    'a2a:card-skills', 'a2a:card-skills-default', 'a2a:stream-resume',
+    'a2a:auth']) then
     Exit(RunA2AFlowScenario(AScenario));
 
   Result := '';
@@ -627,6 +636,66 @@ begin
           end);
       TTask.WaitForAll(Tasks);
       Result := Format('completed=%d|failed=%d', [OkCount, BadCount]);
+    end
+
+    // --- Autorizacion por ApiKey ---
+    else if AScenario = 'a2a:auth' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteAuthGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.ApiKey := 'ClaveSecreta';
+      Server.Active := True;
+
+      Http := THTTPClient.Create;
+      try
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+
+        // 1. La card base se lee SIN credenciales: es descubrimiento.
+        Result := 'card=' + IntToStr(Http.Get(Url + '/.well-known/agent-card.json').StatusCode);
+
+        // 2. Un RPC sin credenciales, no.
+        Http.ContentType := 'application/json';
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":1,"method":"GetTask","params":{"taskId":"x"}}', TEncoding.UTF8);
+        try
+          Result := Result + '|sinclave=' + IntToStr(Http.Post(Url + '/', Body).StatusCode);
+        finally
+          Body.Free;
+        end;
+
+        // 3. La clave con otras mayusculas NO vale: el secreto se compara exacto.
+        Http.CustomHeaders['Authorization'] := 'Bearer clavesecreta';
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":2,"method":"GetTask","params":{"taskId":"x"}}', TEncoding.UTF8);
+        try
+          Result := Result + '|otrocase=' + IntToStr(Http.Post(Url + '/', Body).StatusCode);
+        finally
+          Body.Free;
+        end;
+
+        // 4. Con la clave exacta pasa (el task no existe, pero eso ya es 200 +
+        // error RPC). Cliente nuevo a proposito: CustomHeaders de THTTPClient
+        // no reemplaza, acumula, y se enviarian las dos Authorization.
+        Http.Free;
+        Http := THTTPClient.Create;
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+        Http.ContentType := 'application/json';
+        Http.CustomHeaders['Authorization'] := 'Bearer ClaveSecreta';
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":3,"method":"GetTask","params":{"taskId":"x"}}', TEncoding.UTF8);
+        try
+          Result := Result + '|conclave=' + IntToStr(Http.Post(Url + '/', Body).StatusCode);
+        finally
+          Body.Free;
+        end;
+      finally
+        Http.Free;
+      end;
     end
 
     // --- Streaming: reanudar un task suspendido con el mismo taskId ---

@@ -216,6 +216,18 @@ El cliente normaliza ambas formas con `UnwrapSendMessageResult`, que además sin
 
 El cliente lee la URL de `supportedInterfaces` con fallback al `url` plano de 0.x.
 
+### Autorización
+
+`ApiKey` exige `Authorization: Bearer <clave>` (o `X-API-Key`). Sin ella → 401 con `WWW-Authenticate`. `OnAuthorize` permite decidir a mano y siempre se llama.
+
+Dos cosas que costaron encontrar y conviene no volver a romper:
+
+> **`TIdHTTPServer` solo entiende autenticación `Basic`.** Ante un `Authorization: Bearer …` responde **401 él solo** y `HttpCommand` no llega a ejecutarse nunca. Por eso el servidor engancha `OnParseAuthentication` con `VHandled := True`. Sin ese handler la auth por bearer **no funciona en absoluto** — solo pasaba el `X-API-Key`, y el 401 parecía nuestro. Los servidores MCP ya lo hacían; el A2A no. Misma trampa del demo 037 y del 080.
+
+> **La Agent Card base queda fuera de la comprobación de `ApiKey`.** Es un documento de descubrimiento, y es justo donde el cliente lee *qué* esquema de seguridad usar: protegerla es un círculo vicioso. Para datos solo a clientes autenticados está la extended card. `OnAuthorize` sí se sigue llamando sobre ella, por si alguien quiere cerrarla a propósito.
+
+El secreto se compara **exacto**; solo el nombre del esquema va sin distinguir mayúsculas. Con `SameText` sobre la cabecera entera, `clavesecreta` valía por `ClaveSecreta`.
+
 ### Skills de la Agent Card
 
 Una skill es lo que un cliente lee para **decidir si este agente le sirve**. No es un punto de entrada: la spec no lleva selector de skill en `SendMessage`, así que las skills describen, no enrutan.

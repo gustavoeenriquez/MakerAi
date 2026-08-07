@@ -236,6 +236,12 @@ type
     procedure SetActive(const Value: Boolean);
     procedure SetAgentManager(const Value: TAIAgentManager);
     procedure SetSkills(const Value: TAiA2ASkills);
+    // TIdHTTPServer solo entiende autenticacion Basic. Con cualquier otro
+    // esquema (Bearer, que es el que usa A2A) responde 401 el solo y
+    // HttpCommand no llega a ejecutarse nunca. Marcandolo como atendido la
+    // peticion sigue su curso y la autorizacion la decidimos nosotros.
+    procedure ParseAuthentication(AContext: TIdContext; const AAuthType, AAuthData: string;
+      var VUsername, VPassword: string; var VHandled: Boolean);
     procedure HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
     // --- pool ---
     function AcquireSlot: TAiA2AManagerSlot;
@@ -541,6 +547,7 @@ begin
   FHttpServer := TIdHTTPServer.Create(Self);
   FHttpServer.OnCommandGet := HttpCommand;
   FHttpServer.OnCommandOther := HttpCommand;
+  FHttpServer.OnParseAuthentication := ParseAuthentication;
 end;
 
 destructor TAiA2AServer.Destroy;
@@ -2153,6 +2160,13 @@ begin
   Result.AddPair('statusUpdate', Ev);
 end;
 
+procedure TAiA2AServer.ParseAuthentication(AContext: TIdContext;
+  const AAuthType, AAuthData: string; var VUsername, VPassword: string;
+  var VHandled: Boolean);
+begin
+  VHandled := True;
+end;
+
 procedure TAiA2AServer.SseEmitArtifacts(AContext: TIdContext; AId: TJSONValue;
   AInfo: TAiA2ATaskInfo);
 var
@@ -2381,6 +2395,8 @@ end;
 procedure TAiA2AServer.HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
 var
   Body, BaseUrl, Scheme, AuthHdr, VerHdr, CtHdr, CardJson, ETag, PeekMethod: string;
+  Token: string;
+  CardPublica: Boolean;
   PeekRoot: TJSONValue;
   Card: TJSONObject;
   Allowed: Boolean;
@@ -2389,11 +2405,36 @@ begin
   AResponseInfo.CharSet := 'utf-8';
 
   // --- Autorizacion ---
+  // La Agent Card base queda FUERA de la comprobacion de ApiKey: es un
+  // documento de descubrimiento, y es justo donde el cliente lee QUE esquema
+  // de seguridad tiene que usar. Protegerla es un circulo vicioso -para saber
+  // como autenticarse habria que estar ya autenticado- y deja al agente
+  // invisible para cualquier cliente que no traiga la clave de antemano.
+  // Para publicar datos solo a clientes autenticados esta la extended card
+  // (GetExtendedAgentCard), que si pasa por aqui.
+  //
+  // OnAuthorize SI se sigue llamando: si alguien quiere cerrar tambien la
+  // card, es una decision suya y explicita.
+  CardPublica := SameText(ARequestInfo.Command, 'GET') and
+    (SameText(ARequestInfo.URI, '/.well-known/agent-card.json') or
+     SameText(ARequestInfo.URI, '/.well-known/agent.json'));
+
   AuthHdr := ARequestInfo.RawHeaders.Values['Authorization'];
   Allowed := True;
-  if FApiKey <> '' then
-    Allowed := SameText(Trim(AuthHdr), 'Bearer ' + FApiKey) or
-      (ARequestInfo.RawHeaders.Values['X-API-Key'] = FApiKey);
+  if (FApiKey <> '') and not CardPublica then
+  begin
+    Token := Trim(AuthHdr);
+    if StartsText('Bearer ', Token) then
+      Token := Trim(Copy(Token, Length('Bearer ') + 1, MaxInt))
+    else
+      Token := '';
+    // El secreto se compara EXACTO. Con SameText una clave 'AbC' la validaba
+    // 'abc', que es tirar a la basura buena parte de su entropia; solo el
+    // nombre del esquema va sin distinguir mayusculas.
+    Allowed := (Token <> '') and (Token = FApiKey);
+    if not Allowed then
+      Allowed := ARequestInfo.RawHeaders.Values['X-API-Key'] = FApiKey;
+  end;
   if Assigned(FOnAuthorize) then
     FOnAuthorize(Self, AuthHdr, Allowed);
   if not Allowed then
