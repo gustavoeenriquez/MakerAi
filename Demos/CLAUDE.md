@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is the Demos directory for the MakerAI 3.x framework. Contains 44 working example projects demonstrating AI integration patterns for Delphi developers. Each demo has its own CLAUDE.md with specific implementation details.
+This is the Demos directory for the MakerAI 3.x framework. Contains 48 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
 
-**Estado de compilación (ago 6/2026): los 44 proyectos compilan** en Win64/Release.
+**Estado de compilación (ago 7/2026): los 48 proyectos compilan** en Win64/Release.
 
 ## Building Demos
 
 **IDE:** Delphi 11 Alexandria through 13 Florence (demos require Delphi 11+; the core framework supports 10.4 Sydney minimum)
 
-**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026 e incluye los 44 proyectos; antes le faltaban 18.
+**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026 e incluye los 48 proyectos.
 
 > **OJO al editar los `.pas` de los demos:** varios están en **ANSI (Windows-1252) con saltos LF**, no en UTF-8. Guardarlos como UTF-8 destruye todas las tildes de forma silenciosa (compila igual, y `git diff` lo disimula si `core.autocrlf` está activo). Verificar siempre con `git diff --numstat` que solo cambien las líneas que se tocaron.
 
@@ -45,6 +45,8 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 023-RAGVQL | Vector Query Language | VQL semantic search syntax |
 | 025-RAGGraph | Knowledge graph RAG | `TAiGraphRAG`, entity relationships |
 | 026-RAGGraph-Basic | Basic graph RAG | Simplified graph patterns |
+| 027-DocumentManager | Gestor de documentos sobre RAG Graph, 100% local | `TAiRagDocumentManager` + `TAiRagGraph` con `TAiOllamaChat`/`TAiOllamaEmbeddings`; FMX |
+| 070-ChatRAGTools | Chat multi-proveedor + RAG SQLite + tools, todo en un formulario | `TAiChatConnection` con selector de proveedor/modelo, `TAiRAGVector` sobre `TAiRAGVectorSQLiteDriver` (vectorial en Delphi puro, sin `vec0`) y `TAiFunctions` con una función que dibuja series en TeeChart |
 
 ### MCP Servers (03x)
 | Demo | Purpose | Transport |
@@ -69,6 +71,8 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 054-AgentCheckpointDB | Durable execution con checkpoints en base de datos | `IAiCheckpointer` + suspend/resume de grafos |
 | 072-A2AFederation | Federación de agentes vía protocolo A2A 1.0 (sin LLM) | `TAiA2AServer` expone un grafo (Agent Card + JSON-RPC), `TAiA2AClient` lo consume, `TAiA2ARemoteAgentTool` federa un nodo local al agente remoto; `--otel` para trazas |
 | 074-A2AOrchestration | Flujos de orquestación A2A (sin LLM) | Pool de managers con `OnAcquireManager` (3 tasks simultáneos), human-in-the-loop con resume por `taskId`, HITL federado que suspende el nodo local, y `blocking=false` + `GetTask` |
+| 079-A2ASutAgent | **Agente SUT del TCK oficial de A2A**: con él se certifica la implementación (MUST 89/89, SHOULD 8/8) | Despacha por PREFIJO del `messageId` (`tck-artifact-text`, `-file-url`, `tck-input-required`…) y es el ejemplo de cómo emitir **artifacts estructurados** desde un grafo vía blackboard. `--port 9999` |
+| 080-A2APushNotifications | Push notifications A2A: el agente hace POST a tu webhook al terminar | Agente (8282) + receptor de webhook propio (8283) en el mismo proceso, sin claves. Cubre lo que el TCK **no** cubre: la entrega con `blocking:false`, cuando nadie consulta el task |
 
 ### Guardrails, Evals y Memoria (07x)
 | Demo | Purpose | Key Pattern |
@@ -87,14 +91,27 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 062-BidirectionalTranslator | Real-time bidirectional call translator (console, text output) | 2x `TAiAudioCapture` (loopback + mic) -> 2x `TAiOpenAiRealtimeSTT` -> `TAiChatConnection` translation. Requires `OPENAI_API_KEY`. Note: sets `Model := 'gpt-realtime'` (the driver default `gpt-4o-realtime-preview` was retired by OpenAI). Transcription uses `gpt-live-transcribe` (Aug 2026) with `TranscriptionPrompt` + guided autodetect via `Languages` (['en','es']). |
 | 063-VoiceBridgeTranslator | Full voice bridge: speak Spanish, the meeting hears English TTS (and vice versa) | 062 pipeline + `TAiOpenAiAudio.Speech` (trfPcm) + `TAiAudioPlayer` per side: remote TTS -> default device, own TTS -> VB-CABLE ("CABLE Input"; select "CABLE Output" as mic in the meeting). Uses `TAiAudioCapture.Muted` as anti-feedback while own TTS plays. Falls back to default device with a warning if no cable found. STT on `gpt-live-transcribe` (Aug 2026). |
 | 064-VoiceBridgeDiarized | 063 + speaker diarization on the remote channel: each meeting participant gets a stable label and a distinct TTS voice | Remote channel replaces Realtime STT with: local VAD segmenter (level-based, in-demo `TSpeechSegmenter`) -> `Transcribe` with `tmGpt4oDiarize`/`trfDiarizedJson` -> **on-the-fly speaker enrollment** (first time a voice appears, its audio is sliced (2-9 s) and registered via `AddKnownSpeaker` as 'Hablante N' so labels stay consistent across requests; max 4) -> per-speaker translation -> per-speaker TTS voice. Auto-recovers if the API rejects stored speaker samples (clears and re-enrolls). [YO] channel stays on Realtime STT (single speaker, lower latency; `gpt-live-transcribe` since Aug 2026 — the diarized remote channel stays on `gpt-4o-transcribe-diarize` because the new models don't support diarization). |
-
+| 065-VoiceBridgeUI | El puente de voz del 063 con interfaz FMX: selección de dispositivos y control en pantalla | `TAiAudioCapture`/`TAiAudioPlayer` + `TAiOpenAiRealtimeSTT` + `TAiOpenAiAudio` sobre `TAiChatConnection`. **Sin CLAUDE.md propio** |
 | 071-VoiceBridgeTranslate | **Refactor of 063 using `gpt-realtime-translate`**: one WebSocket per direction replaces the whole STT -> LLM-translate -> TTS pipeline | 2x `TAiAudioCapture` -> 2x `TAiOpenAiRealtimeTranslate` (continuous stream, no VAD/turns) -> `TAiAudioPlayer`. The server returns translated text (`OnAssistantTextDelta`) AND translated TTS audio (`OnAudioChunk`, PCM16 24 kHz) in streaming; `SourceTranscription := True` also shows what was heard. Lower latency and ~1/3 of the code vs 063; trade-off: the TTS voice is chosen by the server. Same VB-CABLE setup and `Muted` anti-feedback as 063. |
+
+### Tests runtime de issues y subsistemas (06x)
+
+Consolas con asserts automáticos que reproducen un issue concreto contra APIs reales. No son la suite de regresión (esa vive en `Tests/RegressionSuite/` y no necesita claves); estos **sí requieren API key** y sirven para verificar un fix de punta a punta. **Ninguno tiene CLAUDE.md propio.**
+
+| Demo | Verifica | Requiere |
+|------|----------|----------|
+| 066-ComputerUseTest | Computer Use: 3 proyectos (`ComputerUseTest`, `ComputerUseTest01` y `ComputerUseServer`, este último con loop manual en formato OpenAI contra el servidor cimamaker). Ver `CAPTURA_PANTALLA.md` | según proyecto |
+| 067-PromptCacheTest | Prompt caching de Claude: dos requests con el mismo system prompt grande (>1024 tokens) y `CacheContext`; espera `cache_write>0` y luego `cache_read>0` | `CLAUDE_API_KEY` |
+| 068-AsyncHistoryTest | Issue #105: en asíncrono Claude debe archivar sus respuestas en el historial. Conversación multi-turno donde el último turno debe recordar los previos | `CLAUDE_API_KEY` |
+| 069-McpSessionGateTest | Issue #110: vetting de cliente MCP (`OnClientConnect`) y gate de sesión HTTP por `Mcp-Session-Id`. Levanta un `TAiMCPHttpServer` real y lo prueba como cliente en 4 fases | — (in-process) |
 
 ### Utilities (09x)
 | Demo | Purpose |
 |------|---------|
 | 090-Varios/ListAllModels | List available models across providers |
 | 090-Varios/CompareEmbeddings | Compare embedding quality |
+| 090-Varios/Dalle_Generate | Generación de imágenes (hoy `gpt-image-1`; DALL-E fue retirado) |
+| 090-Varios/VoiceMonitorAndWhisperDemo | `TAiVoiceMonitor` + transcripción con Whisper |
 
 ## Common Runtime Dependencies
 
