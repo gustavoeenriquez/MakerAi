@@ -76,6 +76,7 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 073-GuardrailsEvals | Política de tool calls y evals (sin LLM) | `TAiGuardrails` (allow/blocklist, patrón en argumentos, veto programático) verificando que el tool bloqueado **no se ejecuta**, + `TAiEvalRunner` con reporte y exit code |
 | 075-MCPElicitation | Elicitation MCP (MRTR) desde el **cliente** | `TMCPClientHttp.OnInputRequired` respondiendo accept/decline, y qué se ve si nadie atiende el evento; servidor MCP in-process |
 | 076-Memory | Memoria semántica persistente | `TAiMemory` sobre SQLite/FTS5: `Store`/`Search`/`Recall`/`Context`/`Stats` + persistencia. FTS sin API key; híbrido (FTS+semántica con RRF) si hay `OPENAI_API_KEY` |
+| 077-RagPostgresConsole | RAG vectorial sobre PostgreSQL+pgvector, **headless y sin API key** | `TAiRAGVectorPostgresDriver` + `TAiOllamaEmbeddings`: `CreateSchema` con HNSW, indexado incremental, filtro de metadatos en SQL (JSONB+GIN) e híbrido BM25+RRF. Es el único demo que ejercita el stack RAG sin abrir el IDE |
 
 ### Audio / Speech (06x)
 | Demo | Purpose | Key Pattern |
