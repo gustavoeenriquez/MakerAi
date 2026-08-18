@@ -1,0 +1,49 @@
+﻿object FormAgentChatHITL: TFormAgentChatHITL
+  Left = 0
+  Top = 0
+  Caption = 'Demo 081 - Agente con human-in-the-loop en el chat'
+  ClientHeight = 640
+  ClientWidth = 900
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  DesignerMasterStyle = 0
+  object LayoutTop: TLayout
+    Align = Top
+    Size.Width = 900.000000000000000000
+    Size.Height = 36.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object lblEstado: TLabel
+      Align = Client
+      Margins.Left = 12.000000000000000000
+      Margins.Top = 4.000000000000000000
+      Margins.Right = 12.000000000000000000
+      Margins.Bottom = 4.000000000000000000
+      Size.Width = 876.000000000000000000
+      Size.Height = 28.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Estado: Listo'
+      TabOrder = 0
+    end
+  end
+  object ChatView1: TAIChatView
+    Align = Client
+    Size.Width = 900.000000000000000000
+    Size.Height = 494.000000000000000000
+    Size.PlatformDefault = False
+  end
+  object ChatInput1: TAIChatInput
+    Align = Bottom
+    Position.Y = 530.000000000000000000
+    Size.Width = 900.000000000000000000
+    Size.Height = 110.000000000000000000
+    Size.PlatformDefault = False
+    ImagesVisible = False
+    SoundVisible = False
+    OnSendEvent = ChatInput1SendEvent
+    OnCancel = ChatInput1Cancel
+  end
+end

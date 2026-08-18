@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is the Demos directory for the MakerAI 3.x framework. Contains 48 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
+This is the Demos directory for the MakerAI 3.x framework. Contains 49 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
 
-**Estado de compilación (ago 7/2026): los 48 proyectos compilan** en Win64/Release.
+**Estado de compilación (ago 7/2026): los 48 proyectos compilan** en Win64/Release; el 081 (nuevo, ago 18/2026) también compila.
 
 ## Building Demos
 
 **IDE:** Delphi 11 Alexandria through 13 Florence (demos require Delphi 11+; the core framework supports 10.4 Sydney minimum)
 
-**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026 e incluye los 48 proyectos.
+**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026 e incluye los 49 proyectos.
 
 > **OJO al editar los `.pas` de los demos:** varios están en **ANSI (Windows-1252) con saltos LF**, no en UTF-8. Guardarlos como UTF-8 destruye todas las tildes de forma silenciosa (compila igual, y `git diff` lo disimula si `core.autocrlf` está activo). Verificar siempre con `git diff --numstat` que solo cambien las líneas que se tocaron.
 
@@ -73,6 +73,7 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 074-A2AOrchestration | Flujos de orquestación A2A (sin LLM) | Pool de managers con `OnAcquireManager` (3 tasks simultáneos), human-in-the-loop con resume por `taskId`, HITL federado que suspende el nodo local, y `blocking=false` + `GetTask` |
 | 079-A2ASutAgent | **Agente SUT del TCK oficial de A2A**: con él se certifica la implementación (MUST 89/89, SHOULD 8/8) | Despacha por PREFIJO del `messageId` (`tck-artifact-text`, `-file-url`, `tck-input-required`…) y es el ejemplo de cómo emitir **artifacts estructurados** desde un grafo vía blackboard. `--port 9999` |
 | 080-A2APushNotifications | Push notifications A2A: el agente hace POST a tu webhook al terminar | Agente (8282) + receptor de webhook propio (8283) en el mismo proceso, sin claves. Cubre lo que el TCK **no** cubre: la entrega con `blocking:false`, cuando nadie consulta el task |
+| 081-AgentChatHITL | Human-in-the-loop integrado en el chat, sin ventanas modales (sin LLM) | Grafo con `TAiWaitApprovalTool` que suspende sin bloquear threads; `OnSuspend` publica la pregunta como mensaje del chat y la siguiente respuesta del usuario reanuda con `ResumeThread`; `TAiFileCheckpointer` reanuda incluso tras reiniciar la app. **Primer demo con la UI nueva `TAIChatView`/`TAIChatInput` (Skia)** |
 
 ### Guardrails, Evals y Memoria (07x)
 | Demo | Purpose | Key Pattern |
