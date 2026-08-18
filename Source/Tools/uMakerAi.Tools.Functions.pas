@@ -82,6 +82,7 @@ type
     constructor Create(Collection: TCollection); Override;
     Destructor Destroy; Override;
     function GetNamePath: string; override;
+    procedure Assign(Source: TPersistent); override;
     Function ToJSon(Detail: Boolean = False): TJSonObject;
     procedure SetJSon(Value: TJSonObject);
 
@@ -146,6 +147,7 @@ type
     constructor Create(Collection: TCollection); Override;
     Destructor Destroy; Override;
     function GetNamePath: string; override;
+    procedure Assign(Source: TPersistent); override;
 
     Function ToJSon(Detail: Boolean = False): TJSonObject;
     Procedure SetJSon(Value: TJSonObject);
@@ -223,6 +225,7 @@ type
   public
     constructor Create(Collection: TCollection); override;
     destructor Destroy; override;
+    procedure Assign(Source: TPersistent); override;
     procedure UpdateClientProperties;
     // Propiedad para acceder al objeto cliente real
     property MCPClient: TMCPClientCustom read FMCPClient;
@@ -509,6 +512,31 @@ begin
   FParams.Free;
   FScript.Free;
   inherited;
+end;
+
+// ISSUE #125: ver nota en TFunctionParamsItem.Assign.
+procedure TFunctionActionItem.Assign(Source: TPersistent);
+var
+  Src: TFunctionActionItem;
+begin
+  if Source is TFunctionActionItem then
+  begin
+    Src := TFunctionActionItem(Source);
+    FEnabled := Src.FEnabled;
+    FName := Src.FName;
+    FOnAction := Src.FOnAction;
+    FDefault := Src.FDefault;
+    FDescription.Assign(Src.FDescription);
+    FTagObject := Src.FTagObject;
+    FTag := Src.FTag;
+    FToolType := Src.FToolType;
+    FScript.Assign(Src.FScript);
+    FParams.Assign(Src.FParams);
+    FRawSchemaJson := Src.FRawSchemaJson;
+    Changed(False);
+  end
+  else
+    inherited;
 end;
 
 function TFunctionActionItem.GetDisplayName: string;
@@ -936,6 +964,27 @@ destructor TFunctionParamsItem.Destroy;
 begin
   Description.Free;
   inherited;
+end;
+
+// ISSUE #125: los items de coleccion necesitan Assign para el streaming de
+// formularios/datamodules heredados; sin el, TPersistent.Assign lanza
+// "Cannot assign TFunctionParamsItem to TFunctionParamsItem".
+procedure TFunctionParamsItem.Assign(Source: TPersistent);
+var
+  Src: TFunctionParamsItem;
+begin
+  if Source is TFunctionParamsItem then
+  begin
+    Src := TFunctionParamsItem(Source);
+    FName := Src.FName;
+    FParamType := Src.FParamType;
+    FRequired := Src.FRequired;
+    FDescription.Assign(Src.FDescription);
+    FEnum := Src.FEnum;
+    Changed(False);
+  end
+  else
+    inherited;
 end;
 
 function TFunctionParamsItem.GetDisplayName: string;
@@ -3440,6 +3489,30 @@ begin
   if FOwned and Assigned(FMCPClient) then
     FreeAndNil(FMCPClient);
   inherited;
+end;
+
+// ISSUE #125: ver nota en TFunctionParamsItem.Assign. No se copia FMCPClient:
+// cada item es propietario de su cliente interno (FOwned) y copiar el puntero
+// causaria una doble liberacion; se copian las propiedades proxy y
+// UpdateClientProperties las propaga al cliente real.
+procedure TMCPClientItem.Assign(Source: TPersistent);
+var
+  Src: TMCPClientItem;
+begin
+  if Source is TMCPClientItem then
+  begin
+    Src := TMCPClientItem(Source);
+    FEnabled := Src.FEnabled;
+    FConnected := Src.FConnected;
+    FName := Src.FName;
+    SetTransportType(Src.GetTransportType); // recrea el cliente interno si el tipo difiere
+    FParams.Assign(Src.FParams);   // OnChange propaga a FMCPClient.Params
+    FEnvVars.Assign(Src.FEnvVars); // OnChange propaga a FMCPClient.EnvVars
+    UpdateClientProperties;        // sincroniza nombre/enabled al cliente interno
+    Changed(False);
+  end
+  else
+    inherited;
 end;
 
 function TMCPClientItem.GetConfiguration: string;
