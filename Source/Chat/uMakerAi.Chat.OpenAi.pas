@@ -769,66 +769,64 @@ begin
 JFormatConfig := Nil;
     if FResponse_format = tiaChatRfJsonSchema then
     begin
-      JFormatConfig := TJSonObject.Create;
-      JFormatConfig.AddPair('type', 'json_schema');
+      // El Responses API exige name+schema al mismo nivel que type en text.format
+      // (estructura aplanada, NO sub-objeto json_schema) — sin ellos el request
+      // falla con 400. JsonSchema acepta el schema puro o el wrapper completo
+      // {name, strict, schema}.
+      var sSchemaName := 'structured_response';
+      var bStrict := True;
+      var JInnerSchema := ParseJsonSchemaProperty(sSchemaName, bStrict);
 
-      if JsonSchema.Text <> '' then
+      // A. VALIDACI?N TIPO OBJECT (solo en modo strict, que exige
+      // additionalProperties=false y todas las propiedades en 'required')
+      var sSchemaType := '';
+      if bStrict and JInnerSchema.TryGetValue<string>('type', sSchemaType) and (sSchemaType = 'object') then
       begin
-        // Limpieza b?sica de saltos de l?nea para evitar errores de parseo
-        var sShema := StringReplace(JsonSchema.Text, '\n', ' ', [rfReplaceAll]);
+         // 1. CORRECCI?N: additionalProperties: false es obligatorio
+         if JInnerSchema.GetValue('additionalProperties') = nil then
+           JInnerSchema.AddPair('additionalProperties', TJSONBool.Create(False));
 
-        var JInnerSchema := TJSonObject.ParseJSONValue(sShema) as TJSonObject;
+         // 2. CORRECCI?N: OpenAI Strict exige que TODAS las propiedades est?n en 'required'
+         var JProps: TJSONObject;
+         if JInnerSchema.TryGetValue<TJSONObject>('properties', JProps) then
+         begin
+           var JReq: TJSonArray;
+           // Obtener o crear array 'required'
+           if not JInnerSchema.TryGetValue<TJSonArray>('required', JReq) then
+           begin
+             JReq := TJSonArray.Create;
+             JInnerSchema.AddPair('required', JReq);
+           end;
 
-        if Assigned(JInnerSchema) then
-        begin
-          // A. VALIDACI?N TIPO OBJECT
-          if JInnerSchema.GetValue<string>('type') = 'object' then
-          begin
-             // 1. CORRECCI?N: additionalProperties: false es obligatorio
-             if JInnerSchema.GetValue('additionalProperties') = nil then
-               JInnerSchema.AddPair('additionalProperties', TJSONBool.Create(False));
+           // Recorrer todas las propiedades y asegurarse que est?n en 'required'
+           for var I1 := 0 to JProps.Count - 1 do
+           begin
+             var PropName := JProps.Pairs[I1].JsonString.Value;
+             var Found := False;
 
-             // 2. CORRECCI?N: OpenAI Strict exige que TODAS las propiedades est?n en 'required'
-             var JProps: TJSONObject;
-             if JInnerSchema.TryGetValue<TJSONObject>('properties', JProps) then
+             for var K := 0 to JReq.Count - 1 do
              begin
-               var JReq: TJSonArray;
-               // Obtener o crear array 'required'
-               if not JInnerSchema.TryGetValue<TJSonArray>('required', JReq) then
+               if JReq.Items[K].Value = PropName then
                begin
-                 JReq := TJSonArray.Create;
-                 JInnerSchema.AddPair('required', JReq);
-               end;
-
-               // Recorrer todas las propiedades y asegurarse que est?n en 'required'
-               for var I1 := 0 to JProps.Count - 1 do
-               begin
-                 var PropName := JProps.Pairs[I1].JsonString.Value;
-                 var Found := False;
-
-                 for var K := 0 to JReq.Count - 1 do
-                 begin
-                   if JReq.Items[K].Value = PropName then
-                   begin
-                     Found := True;
-                     Break;
-                   end;
-                 end;
-
-                 // Si falta, lo agregamos para satisfacer a la API
-                 if not Found then
-                   JReq.Add(PropName);
+                 Found := True;
+                 Break;
                end;
              end;
-          end;
 
-          // B. CONFIGURACI?N FINAL (Flattened structure para Responses API)
-          // Estos par?metros van al mismo nivel que "type", NO dentro de un sub-objeto json_schema
-          JFormatConfig.AddPair('name', 'structured_response');
-          JFormatConfig.AddPair('strict', TJSONBool.Create(True));
-          JFormatConfig.AddPair('schema', JInnerSchema);
-        end;
+             // Si falta, lo agregamos para satisfacer a la API
+             if not Found then
+               JReq.Add(PropName);
+           end;
+         end;
       end;
+
+      // B. CONFIGURACI?N FINAL (Flattened structure para Responses API)
+      // Estos par?metros van al mismo nivel que "type", NO dentro de un sub-objeto json_schema
+      JFormatConfig := TJSonObject.Create;
+      JFormatConfig.AddPair('type', 'json_schema');
+      JFormatConfig.AddPair('name', sSchemaName);
+      JFormatConfig.AddPair('strict', TJSONBool.Create(bStrict));
+      JFormatConfig.AddPair('schema', JInnerSchema);
     end
     // 2. Configurar JSON Simple (Para cuando no es Schema estricto)
     else if FResponse_format = tiaChatRfJson then
@@ -2458,7 +2456,14 @@ begin
     Exit;
 
   LogDebug('--OnInternalReceiveData--');
-  LogDebug(FResponse.DataString);
+  // ISSUE #124: el log no debe abortar el stream si el chunk termina en un
+  // caracter UTF-8 incompleto (ver acumulacion protegida mas abajo).
+  try
+    LogDebug(FResponse.DataString);
+  except
+    on EEncodingError do
+      LogDebug('[chunk UTF-8 parcial - log omitido]');
+  end;
 
   AAbort := FAbort;
   if FAbort then
@@ -2475,19 +2480,27 @@ begin
   // ---------------------------------------------------------------------------
   // 1. Acumulaci?n Robusta (UTF-8)
   // ---------------------------------------------------------------------------
-  if FResponse is TStringStream then
-  begin
-    SS := TStringStream(FResponse);
-    if SS.Size > 0 then
+  // ISSUE #124: decodificar ANTES de limpiar. Si el chunk termina en un caracter
+  // UTF-8 incompleto, GetString/DataString lanzan EEncodingError: se sale sin hacer
+  // Clear, los bytes quedan en FResponse y el proximo chunk completa el caracter.
+  try
+    if FResponse is TStringStream then
     begin
-      SetLength(BytesBuffer, SS.Size);
-      SS.Position := 0;
-      SS.Read(BytesBuffer, 0, SS.Size);
-      FTmpResponseText := FTmpResponseText + TEncoding.UTF8.GetString(BytesBuffer);
-    end;
-  end
-  else
-    FTmpResponseText := FTmpResponseText + FResponse.DataString;
+      SS := TStringStream(FResponse);
+      if SS.Size > 0 then
+      begin
+        SetLength(BytesBuffer, SS.Size);
+        SS.Position := 0;
+        SS.Read(BytesBuffer, 0, SS.Size);
+        FTmpResponseText := FTmpResponseText + TEncoding.UTF8.GetString(BytesBuffer);
+      end;
+    end
+    else
+      FTmpResponseText := FTmpResponseText + FResponse.DataString;
+  except
+    on EEncodingError do
+      Exit;
+  end;
 
   FResponse.Clear;
 

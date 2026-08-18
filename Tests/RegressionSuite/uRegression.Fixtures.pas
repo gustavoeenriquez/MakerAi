@@ -77,6 +77,14 @@ type
 
     // Nodo de grafo: encadena el nombre del nodo al input
     procedure NodeExec(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    // Igual pero lento: fuerza solapamiento real entre tasks concurrentes y
+    // deja ver el estado 'working' en el modo no bloqueante.
+    procedure NodeExecSlow(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    // Human-in-the-loop: se suspende la primera vez y en la reanudacion
+    // concatena la respuesta humana.
+    procedure NodeSuspendOnce(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    // Fabrica de managers para el pool del servidor A2A (un grafo nuevo por slot)
+    procedure AcquireManager(Sender: TObject; var AManager: TAIAgentManager);
     // Tool local de TAiFunctions (para la prueba de integracion de guardrails)
     procedure ToolAction(Sender: TObject; FunctionAction: TFunctionActionItem;
       FunctionName: String; ToolCall: TAiToolsFunction; var Handled: Boolean);
@@ -255,6 +263,36 @@ end;
 procedure TFixtureHandlers.NodeExec(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
 begin
   Output := Input + '>' + Node.Name;
+end;
+
+procedure TFixtureHandlers.NodeExecSlow(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+begin
+  Sleep(150);
+  Output := Input + '>' + Node.Name;
+end;
+
+procedure TFixtureHandlers.NodeSuspendOnce(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+const
+  KEY_PREFIX = 'suite.resumed.';
+begin
+  // La marca vive en el blackboard, no en el fixture: ResumeThread reejecuta
+  // este mismo nodo y hay que distinguir la primera pasada de la reanudacion.
+  if Node.Graph.Blackboard.GetString(KEY_PREFIX + Node.Name) = '' then
+  begin
+    Node.Graph.Blackboard.SetString(KEY_PREFIX + Node.Name, '1');
+    Output := Input;
+    Node.Suspend('Se requiere aprobacion humana', 'ctx:' + Input);
+  end
+  else
+    Output := Input + '>aprobado';
+end;
+
+procedure TFixtureHandlers.AcquireManager(Sender: TObject; var AManager: TAIAgentManager);
+begin
+  AManager := TAIAgentManager.Create(nil);
+  AManager.AddNode('Uno', NodeExecSlow).AddNode('Dos', NodeExec);
+  AManager.AddEdge('Uno', 'Dos');
+  AManager.SetEntryPoint('Uno').SetFinishPoint('Dos');
 end;
 
 procedure TFixtureHandlers.ToolAction(Sender: TObject; FunctionAction: TFunctionActionItem;

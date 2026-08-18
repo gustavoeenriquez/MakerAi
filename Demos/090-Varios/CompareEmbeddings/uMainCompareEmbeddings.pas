@@ -38,7 +38,7 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, uMakerAi.Embeddings.core, uMakerAi.Embeddings, uMakerAi.Chat.Ollama;
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, uMakerAi.Embeddings.core, uMakerAi.Embeddings, uMakerAi.Embeddings.Ollama, uMakerAi.Chat.Ollama;
 
 type
   TForm14 = class(TForm)

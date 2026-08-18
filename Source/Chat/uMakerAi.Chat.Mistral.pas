@@ -954,23 +954,20 @@ begin
 
     if FResponse_format = tiaChatRfJsonSchema then
     begin
+      // ParseJsonSchemaProperty acepta el schema puro o el wrapper {name, strict,
+      // schema} y falla con error claro si JsonSchema esta vacio.
+      var sSchemaName := 'json_response';
+      var bStrict := True;
+      var JInnerSchema := ParseJsonSchemaProperty(sSchemaName, bStrict);
+
+      var JSchemaObj := TJSONObject.Create;
+      JSchemaObj.AddPair('name', sSchemaName);
+      JSchemaObj.AddPair('schema', JInnerSchema);
+      JSchemaObj.AddPair('strict', TJSONBool.Create(bStrict));
+
       var JFormatConfig := TJSONObject.Create;
       JFormatConfig.AddPair('type', 'json_schema');
-      var sSchema := Trim(JsonSchema.Text);
-      if sSchema <> '' then
-      begin
-        var JSchemaObj := TJSONObject.Create;
-        var JInnerSchema := TJSONObject.ParseJSONValue(sSchema) as TJSONObject;
-        if Assigned(JInnerSchema) then
-        begin
-          JSchemaObj.AddPair('name', 'json_response');
-          JSchemaObj.AddPair('schema', JInnerSchema);
-          JSchemaObj.AddPair('strict', TJSONBool.Create(True));
-          JFormatConfig.AddPair('json_schema', JSchemaObj);
-        end
-        else
-          JSchemaObj.Free;
-      end;
+      JFormatConfig.AddPair('json_schema', JSchemaObj);
       AJSONObject.AddPair('response_format', JFormatConfig);
     end
     else if FResponse_format = tiaChatRfJson then

@@ -499,10 +499,18 @@ Var
 
 begin
   LogDebug('--OnInternalReceiveData DeepSeek--');
-  if Length(FResponse.DataString) > 500 then
-    LogDebug(Copy(FResponse.DataString, 1, 500) + '...[truncado]')
-  else
-    LogDebug(FResponse.DataString);
+  // ISSUE #124: el log no debe abortar el stream si el chunk termina en un caracter
+  // UTF-8 incompleto; la acumulacion de abajo ya esta protegida por su try/except.
+  try
+    var LDbgBody := FResponse.DataString;
+    if Length(LDbgBody) > 500 then
+      LogDebug(Copy(LDbgBody, 1, 500) + '...[truncado]')
+    else
+      LogDebug(LDbgBody);
+  except
+    on EEncodingError do
+      LogDebug('[chunk UTF-8 parcial - log omitido]');
+  end;
 
   If FClient.Asynchronous = False then Exit;
 

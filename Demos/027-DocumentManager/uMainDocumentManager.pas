@@ -42,7 +42,7 @@ uses
   FMX.Controls.Presentation, FMX.StdCtrls, FMX.Layouts, FMX.Memo,
   FMX.Edit, FMX.Memo.Types, FMX.ScrollBox,
   uMakerAi.Chat, uMakerAi.Chat.Ollama,
-  uMakerAi.Embeddings.core,
+  uMakerAi.Embeddings.core, uMakerAi.Embeddings.Ollama,
   uMakerAi.RAG.Graph.Core,
   uMakerAi.RAG.Graph.Documents;
 

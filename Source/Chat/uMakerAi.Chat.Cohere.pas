@@ -718,7 +718,15 @@ begin
 
   // 1. Acumular los datos recibidos en nuestro buffer.
   // FResponse es el TStringStream de la clase base.
-  FStreamBuffer := FStreamBuffer + FResponse.DataString;
+  // ISSUE #124: decodificar ANTES de limpiar; si el chunk termina en un caracter
+  // UTF-8 incompleto, DataString lanza EEncodingError, se sale sin hacer Clear y
+  // el proximo chunk completa el caracter.
+  try
+    FStreamBuffer := FStreamBuffer + FResponse.DataString;
+  except
+    on EEncodingError do
+      Exit;
+  end;
   FResponse.Clear;
   FResponse.Position := 0;
 

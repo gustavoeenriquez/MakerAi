@@ -18,9 +18,9 @@ uses
 type
   TOpenSSLTransport = class(TInterfacedObject, ITlsTransport)
   private
-    FSocket:    Integer;   // POSIX socket fd; -1 = not connected
+    FSocket:    Integer;    // POSIX socket fd; -1 = not connected
     FHost:      string;
-    FLibSSL:    Pointer;   // handle de dlopen
+    FLibSSL:    NativeUInt; // handle de dlopen (0 = no cargada)
     FCtx:       Pointer;   // SSL_CTX*
     FSSL:       Pointer;   // SSL*
     FConnected: Boolean;
@@ -83,7 +83,7 @@ constructor TOpenSSLTransport.Create;
 begin
   inherited;
   FSocket := -1;
-  FLibSSL := nil;
+  FLibSSL := 0;
   FCtx    := nil;
   FSSL    := nil;
 end;
@@ -99,7 +99,7 @@ end;
 // ---------------------------------------------------------------------------
 procedure TOpenSSLTransport.LoadLibSSL;
 
-  function TryLoad(const AName: string): Pointer;
+  function TryLoad(const AName: string): NativeUInt;
   begin
     Result := dlopen(PAnsiChar(AnsiString(AName)), RTLD_LAZY);
   end;
@@ -110,14 +110,14 @@ procedure TOpenSSLTransport.LoadLibSSL;
   end;
 
 begin
-  if FLibSSL <> nil then Exit;  // ya cargada
+  if FLibSSL <> 0 then Exit;  // ya cargada
 
   FLibSSL := TryLoad('libssl.so.3');
-  if FLibSSL = nil then
+  if FLibSSL = 0 then
     FLibSSL := TryLoad('libssl.so.1.1');
-  if FLibSSL = nil then
+  if FLibSSL = 0 then
     FLibSSL := TryLoad('libssl.dylib');   // macOS (Homebrew / LibreSSL)
-  if FLibSSL = nil then
+  if FLibSSL = 0 then
     raise Exception.Create('OpenSSL no encontrado: instalar libssl3 o libssl1.1');
 
   Bind(FTLS_client_method,        'TLS_client_method');
@@ -139,10 +139,10 @@ end;
 
 procedure TOpenSSLTransport.UnloadLibSSL;
 begin
-  if FLibSSL <> nil then
+  if FLibSSL <> 0 then
   begin
     dlclose(FLibSSL);
-    FLibSSL := nil;
+    FLibSSL := 0;
   end;
 end;
 
@@ -162,7 +162,7 @@ begin
   Hints.ai_socktype := SOCK_STREAM;
 
   PortStr := AnsiString(IntToStr(APort));
-  if getaddrinfo(PAnsiChar(AnsiString(AHost)), PAnsiChar(PortStr), @Hints, Res) <> 0 then
+  if getaddrinfo(PAnsiChar(AnsiString(AHost)), PAnsiChar(PortStr), Hints, Res) <> 0 then
     Exit;
 
   try
@@ -182,7 +182,7 @@ begin
       Cur := Cur^.ai_next;
     end;
   finally
-    freeaddrinfo(Res);
+    freeaddrinfo(Res^);
   end;
 end;
 
@@ -290,8 +290,8 @@ begin
   Result := -1;
   if FSocket < 0 then Exit;
 
-  FD_ZERO(FdSet);
-  FD_SET(FSocket, FdSet);
+  __FD_ZERO(FdSet);
+  __FD_SET(FSocket, FdSet);
   TV.tv_sec  := ATimeoutMs div 1000;
   TV.tv_usec := (ATimeoutMs mod 1000) * 1000;
 

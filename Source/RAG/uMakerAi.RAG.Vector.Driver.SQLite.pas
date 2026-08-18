@@ -1065,8 +1065,14 @@ begin
   DoLexical := Assigned(LOptions) and LOptions.UseBM25 and (Trim(ATarget.Text) <> '');
   if not (DoVector or DoLexical) then Exit;
 
-  MinVec := IfThen(Assigned(LOptions), LOptions.MinAbsoluteScoreEmbedding, 0.0);
-  MinLex := IfThen(Assigned(LOptions), LOptions.MinAbsoluteScoreBM25, 0.0);
+  // IfThen evalua las dos ramas: con LOptions en nil daba AV.
+  MinVec := 0.0;
+  MinLex := 0.0;
+  if Assigned(LOptions) then
+  begin
+    MinVec := LOptions.MinAbsoluteScoreEmbedding;
+    MinLex := LOptions.MinAbsoluteScoreBM25;
+  end;
 
   FB := TSQLiteFilterBuilder.Create;
   VecRes := nil;
@@ -1107,8 +1113,16 @@ begin
         Fused := FuseRRF(VecRes, LexRes, ALimit)
       else
       begin
-        var VW := IfThen(Assigned(LOptions), LOptions.EmbeddingWeight, 0.7);
-        var LW := IfThen(Assigned(LOptions), LOptions.BM25Weight, 0.3);
+        // OJO: IfThen es una FUNCION, evalua SIEMPRE las dos ramas.
+        // Con LOptions en nil (caso real: ver los Assigned de arriba)
+        // IfThen(Assigned(LOptions), LOptions.X, ...) reventaba con AV.
+        var VW: Double := 0.7;
+        var LW: Double := 0.3;
+        if Assigned(LOptions) then
+        begin
+          VW := LOptions.EmbeddingWeight;
+          LW := LOptions.BM25Weight;
+        end;
         Fused := FuseWeighted(VecRes, LexRes, VW, LW, ALimit);
       end;
       try

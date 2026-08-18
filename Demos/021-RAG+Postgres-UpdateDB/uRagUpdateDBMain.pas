@@ -46,7 +46,7 @@ uses
   FireDAC.Phys.Intf, FireDAC.Stan.Def, FireDAC.Stan.Pool, FireDAC.Stan.Async,
   FireDAC.Phys, FireDAC.Phys.PG, FireDAC.Phys.PGDef, FireDAC.FMXUI.Wait,
   Data.DB, FireDAC.Comp.Client,
-  uMakerAi.RAG.Vectors, uMakerAi.Embeddings, uMakerAi.Chat.Ollama, uMakerAi.Core, uMakerAi.Chat,
+  uMakerAi.RAG.Vectors, uMakerAi.Embeddings, uMakerAi.Embeddings.Ollama, uMakerAi.Chat.Ollama, uMakerAi.Core, uMakerAi.Chat,
   uMakerAi.Chat.OpenAi, uMakerAi.Chat.Messages,
 
   FMX.Controls.Presentation, FMX.StdCtrls, FMX.Memo.Types, FMX.ScrollBox, FMX.Memo, FireDAC.Stan.Param, FireDAC.DatS, FireDAC.DApt.Intf,

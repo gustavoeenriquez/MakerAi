@@ -365,26 +365,13 @@ begin
     // 1. Structured Outputs (JSON Schema)
     if FResponse_format = tiaChatRfJsonSchema then
     begin
-      if JsonSchema.Text <> '' then
-      begin
-        try
-          // Ollama espera el esquema DIRECTAMENTE en el parámetro "format".
-          // No requiere wrappers como "json_schema" o "schema".
-          Var sShema := StringReplace(JsonSchema.Text,'\n',' ',[rfReplaceAll]);
-          var
-          JSchema := TJSonObject.ParseJSONValue(sShema);
-
-          if Assigned(JSchema) then
-          begin
-            if JSchema is TJSonObject then
-              AJSONObject.AddPair('format', JSchema as TJSonObject)
-            else
-              JSchema.Free; // Si no es un objeto válido, limpiar
-          end;
-        except
-          // Manejo silencioso de errores de parseo, se enviará sin formato o ignorado
-        end;
-      end;
+      // Ollama espera el esquema DIRECTAMENTE en el parámetro "format" (sin
+      // wrappers). ParseJsonSchemaProperty extrae el schema interno si el usuario
+      // paso el wrapper {name, strict, schema} y falla con error claro si esta vacio.
+      var sSchemaName := '';
+      var bStrict := False;
+      var JInnerSchema := ParseJsonSchemaProperty(sSchemaName, bStrict);
+      AJSONObject.AddPair('format', JInnerSchema);
     end
     // 2. JSON Mode (Simple)
     else if (FResponse_format = tiaChatRfJson) then
@@ -662,7 +649,15 @@ begin
 
   try
     // 1. Acumular el nuevo chunk de datos
-    LChunkStr := FResponse.DataString;
+    // ISSUE #124: si el chunk termina en un caracter UTF-8 incompleto, DataString
+    // lanza EEncodingError; se sale sin hacer Clear y el proximo chunk lo completa
+    // (dejarlo caer al except general abortaria el turno con DoError).
+    try
+      LChunkStr := FResponse.DataString;
+    except
+      on EEncodingError do
+        Exit;
+    end;
     FResponse.Clear;
     FTmpResponseText := FTmpResponseText + LChunkStr;
     LStreamFinished := False;

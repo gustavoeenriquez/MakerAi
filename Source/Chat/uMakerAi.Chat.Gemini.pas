@@ -3266,7 +3266,14 @@ begin
     Exit;
 
   LogDebug('--OnInternalReceiveData--');
-  LogDebug(FResponse.DataString);
+  // ISSUE #124: el log no debe abortar el stream si el chunk termina en un
+  // caracter UTF-8 incompleto (ver lectura protegida mas abajo).
+  try
+    LogDebug(FResponse.DataString);
+  except
+    on EEncodingError do
+      LogDebug('[chunk UTF-8 parcial - log omitido]');
+  end;
 
   // 1. LECTURA DEL STREAM Y ACUMULACIÓN EN BUFFER
   if FResponse.Size > 0 then
@@ -3274,7 +3281,14 @@ begin
     FResponse.Position := 0;
     SetLength(BytesBuffer, FResponse.Size);
     FResponse.ReadBuffer(BytesBuffer[0], FResponse.Size);
-    S := TEncoding.UTF8.GetString(BytesBuffer);
+    // ISSUE #124: si el chunk termina en un caracter UTF-8 incompleto, GetString
+    // lanza EEncodingError: se sale sin vaciar FResponse y el proximo chunk lo completa.
+    try
+      S := TEncoding.UTF8.GetString(BytesBuffer);
+    except
+      on EEncodingError do
+        Exit;
+    end;
     FTmpResponseText := FTmpResponseText + S;
     FResponse.Size := 0;
     FResponse.Position := 0;

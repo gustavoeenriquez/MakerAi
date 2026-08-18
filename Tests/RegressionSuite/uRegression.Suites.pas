@@ -27,7 +27,11 @@ type
     // Escenarios agrupados por area
     function RunMcpScenario(const AScenario: string): string;
     function RunAgentScenario(const AScenario: string): string;
+    // Flujos de orquestacion A2A: pool concurrente, human-in-the-loop,
+    // no bloqueante, tolerancia de literales y cancelacion.
+    function RunA2AFlowScenario(const AScenario: string): string;
     function RunPolicyScenario(const AScenario: string): string;
+    function RunRagScenario(const AScenario: string): string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -37,7 +41,8 @@ type
 implementation
 
 uses
-  System.TypInfo,
+  System.TypInfo, System.StrUtils, System.SyncObjs, System.Threading,
+  System.Net.HttpClient, System.Net.URLClient,
   uMakerAi.Core,
   uMakerAi.MCPServer.Core, UMakerAi.MCPServer.Http,
   uMakerAi.MCPClient.Core,
@@ -45,6 +50,9 @@ uses
   uMakerAi.A2A.Server, uMakerAi.A2A.Client,
   uMakerAi.Tools.Functions, uMakerAi.Chat.Messages,
   uMakerAi.Guardrails,
+  System.IOUtils, uMakerAi.Embeddings.Core,
+  uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
+  uMakerAi.RAG.Vector.Driver.BinFile,
   uRegression.Fixtures;
 
 const
@@ -125,6 +133,82 @@ begin
     .ExpectContains('esCompleted')
     .ExpectContains('fed>Origen>Uno>Dos');
 
+  // --- A2A: flujos de orquestacion ---
+
+  // Tres tasks simultaneos contra el mismo agente. Con un solo manager dos
+  // habrian recibido AgentBusy; con el pool los tres completan.
+  FRunner.AddCase('a2a.pool.concurrent')
+    .Input('a2a:concurrency')
+    .ExpectEquals('completed=3|failed=0');
+
+  // Human-in-the-loop cruzando A2A: el grafo suspende -> input-required con la
+  // pregunta, y un SendMessage con el mismo taskId lo reanuda hasta completed.
+  FRunner.AddCase('a2a.hitl.resume')
+    .Input('a2a:hitl')
+    .ExpectContains('tsInputRequired')
+    .ExpectContains('aprobacion humana')
+    .ExpectContains('tsCompleted')
+    .ExpectContains('>aprobado');
+
+  // Lo mismo pero federado: el nodo local se suspende en vez de fallar, y al
+  // reanudarlo la respuesta viaja al task remoto y el grafo local termina.
+  FRunner.AddCase('a2a.hitl.federated')
+    .Input('a2a:fedhitl')
+    .ExpectEquals('esSuspended|esCompleted|si>aprobado');
+
+  // blocking=false devuelve el task en working y GetTask lo lleva a terminal
+  // sin que el estado quede mintiendo.
+  FRunner.AddCase('a2a.task.nonblocking')
+    .Input('a2a:nonblocking')
+    .ExpectEquals('tsWorking|tsCompleted|lento>Uno>Dos');
+
+  // Interop: el agente publica los literales en forma JSON-RPC y el cliente los
+  // entiende igual que la forma protobuf.
+  FRunner.AddCase('a2a.state.naming-tolerance')
+    .Input('a2a:naming')
+    .ExpectEquals('completed|tsCompleted|hola>Uno>Dos');
+
+  // Cancelar un task ya terminado es -32002, no un exito silencioso.
+  FRunner.AddCase('a2a.cancel.terminal')
+    .Input('a2a:cancelterm')
+    .ExpectContains('-32002');
+
+  // --- A2A: formato de cable (spec 1.0) ---
+  // Estos casos hablan HTTP CRUDO contra el servidor, sin usar TAiA2AClient.
+  // Es deliberado: los demas casos A2A pasaban con el formato equivocado porque
+  // cliente y servidor compartian el error. Verificado contra a2a-sdk 1.1.2.
+  FRunner.AddCase('a2a.wire.v1')
+    .Input('a2a:wire-v1')
+    .ExpectEquals('card.supportedInterfaces=1|card.rootUrl=0|card.protocolVersion=0|' +
+    'send.result.task=1|send.result.id=0|gettask.id=1|gettask.task=0');
+
+  // La era 0.x sigue disponible para no romper integraciones previas
+  FRunner.AddCase('a2a.wire.v03')
+    .Input('a2a:wire-v03')
+    .ExpectEquals('card.supportedInterfaces=0|card.rootUrl=1|send.result.task=0|send.result.id=1');
+
+  // ListTasks: listado, filtro por estado y GetExtendedAgentCard deshabilitada.
+  // -32007 es ExtendedAgentCardNotConfiguredError, el codigo que pide la spec
+  // para este caso concreto (no el -32004 generico de UnsupportedOperation).
+  FRunner.AddCase('a2a.listtasks')
+    .Input('a2a:listtasks')
+    .ExpectEquals('total=2|filtrado=2|inexistente=0|extcard=-32007');
+
+  // Codigos de error y ErrorInfo exigidos por la spec, medidos con HTTP crudo.
+  // Los codigos salen del TCK oficial (seccion 5.4 de la spec).
+  // 'push' comprueba CreateTaskPushNotificationConfig SIN taskId: como las push
+  // notifications si estan implementadas, el error correcto es InvalidParams.
+  // TAiA2AAgentTool: el LLM ve el agente remoto como una funcion mas.
+  // Se invoca el tool directamente (sin LLM) por el mismo choke point que
+  // usaria el modelo, TAiFunctions.DoCallFunction.
+  FRunner.AddCase('a2a.agenttool.chat')
+    .Input('a2a:agenttool')
+    .ExpectEquals('consulta>Uno');
+
+  FRunner.AddCase('a2a.errors.codes')
+    .Input('a2a:errorcodes')
+    .ExpectEquals('push=-32602|version=-32009|ctype=-32005|sinmensaje=-32602|terminal=-32004|errorinfo=ok');
+
   // --- Guardrails ---
   FRunner.AddCase('policy.guard.blocklist')
     .Input('policy:blocklist')
@@ -147,6 +231,39 @@ begin
     .ExpectContains('Blocked by guardrails')
     .ExpectContains('not-executed');
 
+  // --- A2A: autorizacion ---
+  // La card base se sirve sin credenciales (es descubrimiento: ahi es donde el
+  // cliente lee que esquema usar). Y el secreto se compara EXACTO: con
+  // SameText, 'clavesecreta' valia por 'ClaveSecreta'.
+  FRunner.AddCase('a2a.auth.card-public-key-exact')
+    .Input('a2a:auth')
+    .ExpectEquals('card=200|sinclave=401|otrocase=401|conclave=200');
+
+  // --- A2A: streaming con reanudacion ---
+  FRunner.AddCase('a2a.stream.resume-input-required')
+    .Input('a2a:stream-resume')
+    .ExpectEquals('estado1=input-required|mismoTask=si|estado2=completed');
+
+  // --- A2A: skills del Agent Card ---
+  // Las skills se DECLARAN; no se derivan de los nodos. Un grafo normal tiene
+  // nodos 'Nodo1'/'Nodo2' sin descripcion y publicarlos seria ruido.
+  FRunner.AddCase('a2a.card.skills-declared')
+    .Input('a2a:card-skills')
+    .ExpectEquals('2|traducir|resumir|tags=2');
+
+  FRunner.AddCase('a2a.card.skills-default')
+    .Input('a2a:card-skills-default')
+    .ExpectEquals('1|run-graph');
+
+  // --- RAG: busqueda sin SearchOptions ---
+  // Reventaba con AV: IfThen evalua las dos ramas, asi que
+  // IfThen(Assigned(LOptions), LOptions.MinAbsoluteScoreEmbedding, 0.0)
+  // desreferenciaba LOptions aunque fuera nil. Es alcanzable de verdad:
+  // basta con no pasar Options y que el driver no tenga Owner.
+  FRunner.AddCase('rag.search.nil-options')
+    .Input('rag:search-nil-options')
+    .ExpectEquals('1');
+
   // --- Evals (autoprueba del propio runner) ---
   FRunner.AddCase('evals.self-check')
     .Input('policy:evals-self')
@@ -159,6 +276,8 @@ begin
     Result := RunMcpScenario(AScenario)
   else if AScenario.StartsWith('agents:') or AScenario.StartsWith('a2a:') then
     Result := RunAgentScenario(AScenario)
+  else if AScenario.StartsWith('rag:') then
+    Result := RunRagScenario(AScenario)
   else if AScenario.StartsWith('policy:') then
     Result := RunPolicyScenario(AScenario)
   else
@@ -317,6 +436,14 @@ var
   end;
 
 begin
+  // Los flujos de orquestacion arman su propia topologia (pool, suspension,
+  // no bloqueante) y viven en su propia rutina.
+  if MatchStr(AScenario, ['a2a:concurrency', 'a2a:hitl', 'a2a:fedhitl', 'a2a:nonblocking', 'a2a:naming',
+    'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03', 'a2a:listtasks', 'a2a:errorcodes', 'a2a:agenttool',
+    'a2a:card-skills', 'a2a:card-skills-default', 'a2a:stream-resume',
+    'a2a:auth']) then
+    Exit(RunA2AFlowScenario(AScenario));
+
   Result := '';
   Handlers := TFixtureHandlers.Create;
   try
@@ -420,8 +547,843 @@ begin
 end;
 
 // -----------------------------------------------------------------------------
+// A2A: flujos de orquestacion
+// -----------------------------------------------------------------------------
+
+function TRegressionSuite.RunA2AFlowScenario(const AScenario: string): string;
+var
+  Handlers: TFixtureHandlers;
+  Server: TAiA2AServer;
+  Client: TAiA2AClient;
+  Agents, Local: TAIAgentManager;
+  Tool: TAiA2ARemoteAgentTool;
+  Task: TJSONObject;
+  OutText, TaskId, CtxId, Url: string;
+  OkCount, BadCount: Integer;
+  Tasks: TArray<ITask>;
+  I, Waited: Integer;
+  St1, St2: TAiA2ATaskState;
+  // Formato de cable: HTTP crudo, sin pasar por TAiA2AClient
+  Http: THTTPClient;
+  Body: TStringStream;
+  Card, RawObj, ResObj: TJSONObject;
+  Funcs: TAiFunctions;
+  AgentTool: TAiA2AAgentTool;
+  ToolCall: TAiToolsFunction;
+
+  function StateName(AValue: TAiA2ATaskState): string;
+  begin
+    Result := GetEnumName(TypeInfo(TAiA2ATaskState), Ord(AValue));
+  end;
+
+  procedure WaitGraph(A: TAIAgentManager);
+  begin
+    while A.Busy do
+    begin
+      CheckSynchronize;
+      Sleep(20);
+    end;
+    CheckSynchronize;
+  end;
+
+begin
+  Result := '';
+  Url := Format('http://localhost:%d', [PORT_A2A]);
+  Handlers := TFixtureHandlers.Create;
+  Server := TAiA2AServer.Create(nil);
+  Agents := nil;
+  try
+    Server.Port := PORT_A2A;
+    Server.AgentName := 'Suite Flow Agent';
+
+    // --- Pool: tres tasks simultaneos contra el mismo agente ---
+    if AScenario = 'a2a:concurrency' then
+    begin
+      Server.OnAcquireManager := Handlers.AcquireManager;
+      Server.MaxConcurrentTasks := 3;
+      Server.Active := True;
+
+      OkCount := 0;
+      BadCount := 0;
+      SetLength(Tasks, 3);
+      for I := 0 to 2 do
+        Tasks[I] := TTask.Run(
+          procedure
+          var
+            C: TAiA2AClient;
+            T: TJSONObject;
+            S: string;
+          begin
+            C := TAiA2AClient.Create(nil);
+            try
+              C.Url := Url;
+              try
+                T := C.SendText('p', S);
+                try
+                  if C.LastTaskState = tsCompleted then
+                    TInterlocked.Increment(OkCount)
+                  else
+                    TInterlocked.Increment(BadCount);
+                finally
+                  T.Free;
+                end;
+              except
+                TInterlocked.Increment(BadCount); // AgentBusy o transporte
+              end;
+            finally
+              C.Free;
+            end;
+          end);
+      TTask.WaitForAll(Tasks);
+      Result := Format('completed=%d|failed=%d', [OkCount, BadCount]);
+    end
+
+    // --- Autorizacion por ApiKey ---
+    else if AScenario = 'a2a:auth' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteAuthGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.ApiKey := 'ClaveSecreta';
+      Server.Active := True;
+
+      Http := THTTPClient.Create;
+      try
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+
+        // 1. La card base se lee SIN credenciales: es descubrimiento.
+        Result := 'card=' + IntToStr(Http.Get(Url + '/.well-known/agent-card.json').StatusCode);
+
+        // 2. Un RPC sin credenciales, no.
+        Http.ContentType := 'application/json';
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":1,"method":"GetTask","params":{"taskId":"x"}}', TEncoding.UTF8);
+        try
+          Result := Result + '|sinclave=' + IntToStr(Http.Post(Url + '/', Body).StatusCode);
+        finally
+          Body.Free;
+        end;
+
+        // 3. La clave con otras mayusculas NO vale: el secreto se compara exacto.
+        Http.CustomHeaders['Authorization'] := 'Bearer clavesecreta';
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":2,"method":"GetTask","params":{"taskId":"x"}}', TEncoding.UTF8);
+        try
+          Result := Result + '|otrocase=' + IntToStr(Http.Post(Url + '/', Body).StatusCode);
+        finally
+          Body.Free;
+        end;
+
+        // 4. Con la clave exacta pasa (el task no existe, pero eso ya es 200 +
+        // error RPC). Cliente nuevo a proposito: CustomHeaders de THTTPClient
+        // no reemplaza, acumula, y se enviarian las dos Authorization.
+        Http.Free;
+        Http := THTTPClient.Create;
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+        Http.ContentType := 'application/json';
+        Http.CustomHeaders['Authorization'] := 'Bearer ClaveSecreta';
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":3,"method":"GetTask","params":{"taskId":"x"}}', TEncoding.UTF8);
+        try
+          Result := Result + '|conclave=' + IntToStr(Http.Post(Url + '/', Body).StatusCode);
+        finally
+          Body.Free;
+        end;
+      finally
+        Http.Free;
+      end;
+    end
+
+    // --- Streaming: reanudar un task suspendido con el mismo taskId ---
+    // Se habla SSE crudo a proposito, sin TAiA2AClient: es la unica forma de
+    // comprobar que el servidor reanuda de verdad y no abre un task nuevo.
+    else if AScenario = 'a2a:stream-resume' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteStreamResumeGraph';
+      Agents.AddNode('Espera', Handlers.NodeSuspendOnce);
+      Agents.SetEntryPoint('Espera').SetFinishPoint('Espera');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Http := THTTPClient.Create;
+      try
+        Http.ConnectionTimeout := 30000;
+        Http.ResponseTimeout := 30000;
+        Http.ContentType := 'application/json';
+
+        // Turno 1: el grafo se suspende y el stream cierra en input-required.
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":1,"method":"SendStreamingMessage","params":{"message":' +
+          '{"messageId":"s1","role":"ROLE_USER","parts":[{"text":"hola"}]}}}', TEncoding.UTF8);
+        var Sse1: string;
+        try
+          Sse1 := Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8);
+        finally
+          Body.Free;
+        end;
+
+        // El primer evento del stream es el snapshot {"task":{...}}
+        var LLine := Copy(Sse1, Pos('data: ', Sse1) + 6, MaxInt);
+        LLine := Trim(Copy(LLine, 1, Pos(#10, LLine) - 1));
+        var LEv := TJSONObject.ParseJSONValue(LLine) as TJSONObject;
+        try
+          TaskId := (LEv.GetValue('result') as TJSONObject)
+            .GetValue<TJSONObject>('task').GetValue<string>('id');
+        finally
+          LEv.Free;
+        end;
+        Result := 'estado1=' + IfThen(Pos('INPUT_REQUIRED', Sse1) > 0, 'input-required', '?');
+
+        // Turno 2: mismo taskId. Debe REANUDAR el grafo suspendido.
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":2,"method":"SendStreamingMessage","params":{"message":' +
+          '{"messageId":"s2","taskId":"' + TaskId + '","role":"ROLE_USER",' +
+          '"parts":[{"text":"ok"}]}}}', TEncoding.UTF8);
+        var Sse2: string;
+        try
+          Sse2 := Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8);
+        finally
+          Body.Free;
+        end;
+
+        Result := Result + '|mismoTask=' + IfThen(Pos(TaskId, Sse2) > 0, 'si', 'no');
+        Result := Result + '|estado2=' + IfThen(Pos('COMPLETED', Sse2) > 0, 'completed', '?');
+      finally
+        Http.Free;
+      end;
+    end
+
+    // --- Skills declaradas en la Agent Card ---
+    else if AScenario = 'a2a:card-skills' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteSkillsGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.Skills.AddSkill('traducir', 'Traductor', 'Traduce texto', 'idiomas, texto');
+      Server.Skills.AddSkill('resumir', 'Resumidor', 'Resume documentos');
+      Server.Active := True;
+
+      Http := THTTPClient.Create;
+      try
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+        Card := TJSONObject(TJSONObject.ParseJSONValue(Http.Get(Url + '/.well-known/agent-card.json')
+          .ContentAsString(TEncoding.UTF8)));
+        try
+          var LArr := Card.GetValue('skills') as TJSONArray;
+          Result := IntToStr(LArr.Count);
+          for var K := 0 to LArr.Count - 1 do
+            Result := Result + '|' + (LArr.Items[K] as TJSONObject).GetValue<string>('id');
+          // Los tags separados por coma se emiten como array.
+          Result := Result + '|tags=' +
+            IntToStr(((LArr.Items[0] as TJSONObject).GetValue('tags') as TJSONArray).Count);
+        finally
+          Card.Free;
+        end;
+      finally
+        Http.Free;
+      end;
+    end
+
+    // --- Sin skills declaradas: la card nunca sale vacia ---
+    else if AScenario = 'a2a:card-skills-default' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteSkillsDefGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Http := THTTPClient.Create;
+      try
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+        Card := TJSONObject(TJSONObject.ParseJSONValue(Http.Get(Url + '/.well-known/agent-card.json')
+          .ContentAsString(TEncoding.UTF8)));
+        try
+          var LArr := Card.GetValue('skills') as TJSONArray;
+          Result := IntToStr(LArr.Count) + '|' +
+            (LArr.Items[0] as TJSONObject).GetValue<string>('id');
+        finally
+          Card.Free;
+        end;
+      finally
+        Http.Free;
+      end;
+    end
+
+    // --- Human-in-the-loop directo sobre A2A ---
+    else if AScenario = 'a2a:hitl' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteHitlGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec).AddNode('Espera', Handlers.NodeSuspendOnce);
+      Agents.AddEdge('Uno', 'Espera');
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Espera');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Client := TAiA2AClient.Create(nil);
+      try
+        Client.Url := Url;
+        Task := Client.SendText('hola', OutText);
+        try
+          St1 := Client.LastTaskState;
+          TaskId := Client.LastTaskId;
+          CtxId := Client.LastContextId;
+          Result := StateName(St1) + ' [' + Client.LastStatusMessage + ']';
+        finally
+          Task.Free;
+        end;
+
+        // Mismo taskId => reanudacion del grafo suspendido, no un task nuevo.
+        Task := Client.SendTextEx('ok', TaskId, CtxId, OutText);
+        try
+          Result := Result + '|' + StateName(Client.LastTaskState) + '|' + OutText;
+        finally
+          Task.Free;
+        end;
+      finally
+        Client.Free;
+      end;
+    end
+
+    // --- Human-in-the-loop atravesando una federacion ---
+    else if AScenario = 'a2a:fedhitl' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteFedRemote';
+      Agents.AddNode('Espera', Handlers.NodeSuspendOnce);
+      Agents.SetEntryPoint('Espera').SetFinishPoint('Espera');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Local := TAIAgentManager.Create(nil);
+      try
+        Local.Name := 'SuiteFedLocal';
+        Local.AddNode('Origen', Handlers.NodeExec);
+        Local.AddNode('Delegado', nil);
+        Tool := TAiA2ARemoteAgentTool.Create(Local);
+        Tool.AgentUrl := Url;
+        Local.FindNode('Delegado').Tool := Tool;
+        Local.AddEdge('Origen', 'Delegado');
+        Local.SetEntryPoint('Origen').SetFinishPoint('Delegado');
+
+        Local.Run('fed');
+        WaitGraph(Local);
+        Result := GetEnumName(TypeInfo(TAgentExecutionStatus), Ord(Local.Blackboard.GetStatus));
+
+        // El nodo local quedo suspendido esperando al humano: al reanudarlo la
+        // respuesta viaja al MISMO task remoto.
+        Local.ResumeThread(Local.CurrentThreadID, 'Delegado', 'si');
+        WaitGraph(Local);
+        Result := Result + '|' + GetEnumName(TypeInfo(TAgentExecutionStatus), Ord(Local.Blackboard.GetStatus)) + '|' +
+          Local.EndNode.Output;
+      finally
+        Local.Free;
+      end;
+    end
+
+    // --- blocking=false + GetTask ---
+    else if AScenario = 'a2a:nonblocking' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteSlowGraph';
+      Agents.AddNode('Uno', Handlers.NodeExecSlow).AddNode('Dos', Handlers.NodeExec);
+      Agents.AddEdge('Uno', 'Dos');
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Dos');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Client := TAiA2AClient.Create(nil);
+      try
+        Client.Url := Url;
+        Task := Client.SendTextEx('lento', '', '', OutText, False);
+        try
+          St1 := Client.LastTaskState;
+          TaskId := Client.LastTaskId;
+        finally
+          Task.Free;
+        end;
+
+        St2 := tsUnknown;
+        OutText := '';
+        Waited := 0;
+        while Waited < 10000 do
+        begin
+          Task := Client.GetTask(TaskId);
+          try
+            St2 := Client.LastTaskState;
+            if St2 in [tsCompleted, tsFailed, tsCanceled] then
+            begin
+              OutText := TAiA2AClient.ArtifactsText(Task);
+              Break;
+            end;
+          finally
+            Task.Free;
+          end;
+          Sleep(30);
+          Inc(Waited, 30);
+        end;
+        Result := StateName(St1) + '|' + StateName(St2) + '|' + OutText;
+      finally
+        Client.Free;
+      end;
+    end
+
+    // --- Tolerancia de literales (forma JSON-RPC) ---
+    else if AScenario = 'a2a:naming' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteNamingGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec).AddNode('Dos', Handlers.NodeExec);
+      Agents.AddEdge('Uno', 'Dos');
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Dos');
+      Server.AgentManager := Agents;
+      Server.StateNaming := anLower;
+      Server.Active := True;
+
+      Client := TAiA2AClient.Create(nil);
+      try
+        Client.Url := Url;
+        Task := Client.SendText('hola', OutText);
+        try
+          Result := Client.LastState + '|' + StateName(Client.LastTaskState) + '|' + OutText;
+        finally
+          Task.Free;
+        end;
+      finally
+        Client.Free;
+      end;
+    end
+
+    // --- Cancelar un task ya terminal ---
+    else if AScenario = 'a2a:cancelterm' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteCancelGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Client := TAiA2AClient.Create(nil);
+      try
+        Client.Url := Url;
+        Task := Client.SendText('hola', OutText);
+        try
+          TaskId := Client.LastTaskId;
+        finally
+          Task.Free;
+        end;
+        try
+          Task := Client.CancelTask(TaskId);
+          Task.Free;
+          Result := 'cancelado (inesperado)';
+        except
+          on E: Exception do
+            Result := E.Message;
+        end;
+      finally
+        Client.Free;
+      end;
+    end
+
+    // --- Formato de cable, hablando HTTP crudo (sin TAiA2AClient) ---
+    else if AScenario.StartsWith('a2a:wire-') then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteWireGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      if AScenario = 'a2a:wire-v03' then
+        Server.WireEra := weV03
+      else
+        Server.WireEra := weV1;
+      Server.Active := True;
+
+      Http := THTTPClient.Create;
+      try
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+        Http.ContentType := 'application/json';
+
+        // 1. Agent Card cruda
+        Card := TJSONObject(TJSONObject.ParseJSONValue(Http.Get(Url + '/.well-known/agent-card.json')
+          .ContentAsString(TEncoding.UTF8)));
+        try
+          Result := 'card.supportedInterfaces=' + IfThen(Card.GetValue('supportedInterfaces') <> nil, '1', '0');
+          Result := Result + '|card.rootUrl=' + IfThen(Card.GetValue('url') <> nil, '1', '0');
+          if AScenario = 'a2a:wire-v1' then
+            Result := Result + '|card.protocolVersion=' + IfThen(Card.GetValue('protocolVersion') <> nil, '1', '0');
+        finally
+          Card.Free;
+        end;
+
+        // 2. SendMessage crudo: el Task debe ir envuelto en {"task": ...}
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":1,"method":"SendMessage","params":{"message":{"messageId":"m1",' +
+          '"role":"ROLE_USER","parts":[{"text":"wire"}]}}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body)
+            .ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          RawObj.TryGetValue<TJSONObject>('result', ResObj);
+          Result := Result + '|send.result.task=' + IfThen(ResObj.GetValue('task') <> nil, '1', '0');
+          Result := Result + '|send.result.id=' + IfThen(ResObj.GetValue('id') <> nil, '1', '0');
+          if ResObj.GetValue('task') <> nil then
+            TaskId := ResObj.GetValue<TJSONObject>('task').GetValue<string>('id', '')
+          else
+            TaskId := ResObj.GetValue<string>('id', '');
+        finally
+          RawObj.Free;
+        end;
+
+        // 3. GetTask crudo: el Task va DIRECTO, sin wrapper, en ambas eras
+        if AScenario = 'a2a:wire-v1' then
+        begin
+          Body := TStringStream.Create(Format(
+            '{"jsonrpc":"2.0","id":2,"method":"GetTask","params":{"id":"%s"}}', [TaskId]), TEncoding.UTF8);
+          try
+            RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body)
+              .ContentAsString(TEncoding.UTF8)));
+          finally
+            Body.Free;
+          end;
+          try
+            RawObj.TryGetValue<TJSONObject>('result', ResObj);
+            Result := Result + '|gettask.id=' + IfThen(ResObj.GetValue('id') <> nil, '1', '0');
+            Result := Result + '|gettask.task=' + IfThen(ResObj.GetValue('task') <> nil, '1', '0');
+          finally
+            RawObj.Free;
+          end;
+        end;
+      finally
+        Http.Free;
+      end;
+    end
+
+    // --- ListTasks y GetExtendedAgentCard, tambien por HTTP crudo ---
+    else if AScenario = 'a2a:listtasks' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteListGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Client := TAiA2AClient.Create(nil);
+      Http := THTTPClient.Create;
+      try
+        Client.Url := Url;
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+        Http.ContentType := 'application/json';
+
+        // Dos tasks para tener algo que listar
+        for I := 1 to 2 do
+        begin
+          Task := Client.SendText('t' + IntToStr(I), OutText);
+          Task.Free;
+        end;
+
+        // Listado completo
+        Body := TStringStream.Create('{"jsonrpc":"2.0","id":1,"method":"ListTasks","params":{}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          RawObj.TryGetValue<TJSONObject>('result', ResObj);
+          Result := 'total=' + IntToStr(ResObj.GetValue<TJSONArray>('tasks').Count);
+        finally
+          RawObj.Free;
+        end;
+
+        // Filtro por estado: los dos completaron
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":2,"method":"ListTasks","params":{"status":"TASK_STATE_COMPLETED"}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          RawObj.TryGetValue<TJSONObject>('result', ResObj);
+          Result := Result + '|filtrado=' + IntToStr(ResObj.GetValue<TJSONArray>('tasks').Count);
+        finally
+          RawObj.Free;
+        end;
+
+        // Filtro por un contextId que no existe
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":3,"method":"ListTasks","params":{"contextId":"no-existe"}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          RawObj.TryGetValue<TJSONObject>('result', ResObj);
+          Result := Result + '|inexistente=' + IntToStr(ResObj.GetValue<TJSONArray>('tasks').Count);
+        finally
+          RawObj.Free;
+        end;
+
+        // GetExtendedAgentCard sin habilitar -> UnsupportedOperation
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":4,"method":"GetExtendedAgentCard","params":{}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          Result := Result + '|extcard=' +
+            IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
+        finally
+          RawObj.Free;
+        end;
+      finally
+        Http.Free;
+        Client.Free;
+      end;
+    end
+
+    // --- Codigos de error y ErrorInfo, con HTTP crudo ---
+    else if AScenario = 'a2a:errorcodes' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteErrGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Client := TAiA2AClient.Create(nil);
+      Http := THTTPClient.Create;
+      try
+        Client.Url := Url;
+        Http.ConnectionTimeout := 15000;
+        Http.ResponseTimeout := 15000;
+
+        // Helper local: postea y devuelve el codigo de error
+        // (se repite el patron por claridad, no hay closures 'of object' aqui)
+        Http.ContentType := 'application/json';
+
+        // Push notifications no soportadas -> -32003, no MethodNotFound
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":1,"method":"CreateTaskPushNotificationConfig","params":{}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          Result := 'push=' + IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
+        finally
+          RawObj.Free;
+        end;
+
+        // Version no soportada -> -32009
+        Body := TStringStream.Create(
+          '{"jsonrpc":"2.0","id":2,"method":"GetTask","params":{"id":"x"}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(
+            Http.Post(Url + '/', Body, nil, [TNameValuePair.Create('A2A-Version', '9.9')])
+            .ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          Result := Result + '|version=' + IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
+          // ErrorInfo va en un ARRAY, y solo en los errores PROPIOS de A2A:
+          // los estandar de JSON-RPC (-32602 y similares) no lo llevan.
+          if (RawObj.GetValue<TJSONObject>('error').GetValue('data') is TJSONArray) then
+            OutText := 'ok'
+          else
+            OutText := 'falta-array';
+        finally
+          RawObj.Free;
+        end;
+
+        // Content-Type equivocado -> -32005, no ParseError
+        Http.ContentType := 'text/plain';
+        Body := TStringStream.Create('{"jsonrpc":"2.0","id":3,"method":"GetTask","params":{"id":"x"}}',
+          TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          Result := Result + '|ctype=' + IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
+        finally
+          RawObj.Free;
+        end;
+        Http.ContentType := 'application/json';
+
+        // SendMessage sin 'message' -> InvalidParams
+        Body := TStringStream.Create('{"jsonrpc":"2.0","id":4,"method":"SendMessage","params":{}}', TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          Result := Result + '|sinmensaje=' + IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
+        finally
+          RawObj.Free;
+        end;
+
+        // Continuar un task terminal -> UnsupportedOperation
+        Task := Client.SendText('hola', TaskId);
+        try
+          TaskId := Client.LastTaskId;
+        finally
+          Task.Free;
+        end;
+        Body := TStringStream.Create(Format(
+          '{"jsonrpc":"2.0","id":5,"method":"SendMessage","params":{"message":{"messageId":"m2",' +
+          '"role":"ROLE_USER","taskId":"%s","parts":[{"text":"otra vez"}]}}}', [TaskId]), TEncoding.UTF8);
+        try
+          RawObj := TJSONObject(TJSONObject.ParseJSONValue(Http.Post(Url + '/', Body).ContentAsString(TEncoding.UTF8)));
+        finally
+          Body.Free;
+        end;
+        try
+          Result := Result + '|terminal=' + IntToStr(RawObj.GetValue<TJSONObject>('error').GetValue<Integer>('code'));
+        finally
+          RawObj.Free;
+        end;
+
+        Result := Result + '|errorinfo=' + OutText;
+      finally
+        Http.Free;
+        Client.Free;
+      end;
+    end
+
+    // --- El agente remoto expuesto como herramienta de chat ---
+    else if AScenario = 'a2a:agenttool' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteToolGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Funcs := TAiFunctions.Create(nil);
+      AgentTool := TAiA2AAgentTool.Create(nil);
+      ToolCall := TAiToolsFunction.Create;
+      try
+        AgentTool.AgentUrl := Url;
+        AgentTool.ToolName := 'preguntar_agente';
+        AgentTool.Functions := Funcs; // al asignarlo se registra la funcion
+
+        ToolCall.Name := 'preguntar_agente';
+        ToolCall.Arguments := '{"query":"consulta"}';
+        Funcs.DoCallFunction(ToolCall);
+        Result := ToolCall.Response;
+      finally
+        ToolCall.Free;
+        AgentTool.Free;
+        Funcs.Free;
+      end;
+    end
+
+    else
+      raise Exception.Create('Escenario A2A de flujo desconocido: ' + AScenario);
+
+    Server.Active := False;
+  finally
+    Server.Free;
+    Agents.Free;
+    Handlers.Free;
+  end;
+end;
+
+// -----------------------------------------------------------------------------
 // Guardrails y evals
 // -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// RAG
+// -----------------------------------------------------------------------------
+
+function TRegressionSuite.RunRagScenario(const AScenario: string): string;
+var
+  Drv: TAiMkVecDriver;
+  Node, Target: TAiEmbeddingNode;
+  Res: TAiRAGVector;
+  Vec: TAiEmbeddingData;
+  LPath: string;
+  I: Integer;
+begin
+  if AScenario <> 'rag:search-nil-options' then
+    raise Exception.Create('Escenario RAG desconocido: ' + AScenario);
+
+  LPath := TPath.Combine(TPath.GetTempPath, 'makerai_regress_rag.mkai');
+  if TFile.Exists(LPath) then
+    TFile.Delete(LPath);
+
+  SetLength(Vec, 4);
+  for I := 0 to 3 do
+    Vec[I] := 0.5;
+
+  Drv := TAiMkVecDriver.Create(nil);
+  try
+    Drv.Dim := 4;
+    Drv.FilePath := LPath;
+    Drv.Open;
+
+    Node := TAiEmbeddingNode.Create(4);
+    try
+      Node.Tag := 'n1';
+      Node.Text := 'delphi orquesta agentes';
+      Node.Data := Vec;
+      Drv.Add(Node, 'DEFAULT');
+    finally
+      Node.Free;
+    end;
+
+    Target := TAiEmbeddingNode.Create(4);
+    try
+      Target.Text := 'delphi';
+      Target.Data := Vec;
+
+      // Lo que se prueba: Options en nil y driver sin Owner, asi que dentro de
+      // Search LOptions se queda en nil. Antes esto era un AV, no un 0 nodos.
+      Res := Drv.Search(Target, 'DEFAULT', 5, 0, nil, nil);
+      try
+        Result := IntToStr(Res.Items.Count);
+      finally
+        Res.Free;
+      end;
+    finally
+      Target.Free;
+    end;
+  finally
+    Drv.Free;
+    if TFile.Exists(LPath) then
+      TFile.Delete(LPath);
+  end;
+end;
 
 function TRegressionSuite.RunPolicyScenario(const AScenario: string): string;
 var
