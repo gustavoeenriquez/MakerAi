@@ -1734,14 +1734,29 @@ end;
 
 procedure TAiClaudeChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
 var
-  line: string;
+  line, Chunk: string;
 begin
 
   if not FClient.Asynchronous then
     Exit;
 
   LogDebug('-- OnInternalReceiveData--');
-  LogDebug(FResponse.DataString);
+
+  // ISSUE #124 (extiende #108): FResponse acumula bytes TCP crudos en UTF-8; si un
+  // chunk parte un caracter multibyte, DataString lanza EEncodingError. Se decodifica
+  // una sola vez ANTES de limpiar: si falla, los bytes parciales quedan en FResponse
+  // (sin Clear) y el proximo chunk completa el caracter.
+  try
+    Chunk := FResponse.DataString;
+  except
+    on EEncodingError do
+    begin
+      LogDebug('[chunk UTF-8 parcial - reintento con el proximo chunk]');
+      Chunk := '';
+    end;
+  end;
+
+  LogDebug(Chunk);
 
   AAbort := FAbort;
   if FAbort then
@@ -1754,8 +1769,11 @@ begin
     Exit;
   end;
 
-  FStreamBuffer.Append(FResponse.DataString);
-  FResponse.Clear;
+  if Chunk <> '' then
+  begin
+    FStreamBuffer.Append(Chunk);
+    FResponse.Clear;
+  end;
 
   var
   bufferContent := FStreamBuffer.ToString;

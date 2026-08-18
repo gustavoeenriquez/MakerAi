@@ -2456,7 +2456,14 @@ begin
     Exit;
 
   LogDebug('--OnInternalReceiveData--');
-  LogDebug(FResponse.DataString);
+  // ISSUE #124: el log no debe abortar el stream si el chunk termina en un
+  // caracter UTF-8 incompleto (ver acumulacion protegida mas abajo).
+  try
+    LogDebug(FResponse.DataString);
+  except
+    on EEncodingError do
+      LogDebug('[chunk UTF-8 parcial - log omitido]');
+  end;
 
   AAbort := FAbort;
   if FAbort then
@@ -2473,19 +2480,27 @@ begin
   // ---------------------------------------------------------------------------
   // 1. Acumulaci?n Robusta (UTF-8)
   // ---------------------------------------------------------------------------
-  if FResponse is TStringStream then
-  begin
-    SS := TStringStream(FResponse);
-    if SS.Size > 0 then
+  // ISSUE #124: decodificar ANTES de limpiar. Si el chunk termina en un caracter
+  // UTF-8 incompleto, GetString/DataString lanzan EEncodingError: se sale sin hacer
+  // Clear, los bytes quedan en FResponse y el proximo chunk completa el caracter.
+  try
+    if FResponse is TStringStream then
     begin
-      SetLength(BytesBuffer, SS.Size);
-      SS.Position := 0;
-      SS.Read(BytesBuffer, 0, SS.Size);
-      FTmpResponseText := FTmpResponseText + TEncoding.UTF8.GetString(BytesBuffer);
-    end;
-  end
-  else
-    FTmpResponseText := FTmpResponseText + FResponse.DataString;
+      SS := TStringStream(FResponse);
+      if SS.Size > 0 then
+      begin
+        SetLength(BytesBuffer, SS.Size);
+        SS.Position := 0;
+        SS.Read(BytesBuffer, 0, SS.Size);
+        FTmpResponseText := FTmpResponseText + TEncoding.UTF8.GetString(BytesBuffer);
+      end;
+    end
+    else
+      FTmpResponseText := FTmpResponseText + FResponse.DataString;
+  except
+    on EEncodingError do
+      Exit;
+  end;
 
   FResponse.Clear;
 

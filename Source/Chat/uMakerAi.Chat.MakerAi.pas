@@ -859,7 +859,14 @@ begin
     Exit;
   end;
 
-  LBuffer := FResponse.DataString;
+  // ISSUE #124: si el chunk termina en un caracter UTF-8 incompleto, DataString
+  // lanza EEncodingError; se sale sin hacer Clear y el proximo chunk lo completa.
+  try
+    LBuffer := FResponse.DataString;
+  except
+    on EEncodingError do
+      Exit;
+  end;
   FResponse.Clear;
   LDoneReceived := False;
   if LBuffer <> '' then

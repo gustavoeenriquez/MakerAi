@@ -649,7 +649,15 @@ begin
 
   try
     // 1. Acumular el nuevo chunk de datos
-    LChunkStr := FResponse.DataString;
+    // ISSUE #124: si el chunk termina en un caracter UTF-8 incompleto, DataString
+    // lanza EEncodingError; se sale sin hacer Clear y el proximo chunk lo completa
+    // (dejarlo caer al except general abortaria el turno con DoError).
+    try
+      LChunkStr := FResponse.DataString;
+    except
+      on EEncodingError do
+        Exit;
+    end;
     FResponse.Clear;
     FTmpResponseText := FTmpResponseText + LChunkStr;
     LStreamFinished := False;
