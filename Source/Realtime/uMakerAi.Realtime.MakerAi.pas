@@ -77,6 +77,10 @@ type
     // Override: despacha el envio al hilo principal para no bloquear el
     // callback de WaveIn (que no puede llamar a SChannel/sockets directamente).
     procedure SendAudioChunk(const PCM16Data: TBytes); override;
+    // TTS directo en el servidor sin pasar por STT/LLM ({"type":"say"}).
+    // Ideal para saludos deterministas al contestar una llamada; el server
+    // responde con chunks de audio + audio_done y lo anota en el historial.
+    procedure Say(const AText: string);
     class function GetDriverName:   string; override;
     class function GetDefaultModel: string; override;
   published
@@ -108,7 +112,7 @@ implementation
 const
   CMAKERAIREALTIME_WSS  = 'wss://api.cimamaker.com/v1/audio/realtime';
   CMAKERAIREALTIME_SUBP = 'realtime';
-  CMAKERAIREALTIME_LOG  = 'C:\Temp\makerai_ws.log'; // '' para deshabilitar
+  CMAKERAIREALTIME_LOG  = {$IFDEF MSWINDOWS}'C:\Temp\makerai_ws.log'{$ELSE}'/tmp/makerai_ws.log'{$ENDIF}; // '' para deshabilitar
 
 procedure MkLog(const AMsg: string);
 begin
@@ -167,6 +171,22 @@ begin
   Result := 24000;
 end;
 
+procedure TAiMakerAiRealtimeChat.Say(const AText: string);
+var
+  JMsg: TJSONObject;
+begin
+  if (AText = '') or not IsConnected then Exit;
+  JMsg := TJSONObject.Create;
+  try
+    JMsg.AddPair('type', 'say');
+    JMsg.AddPair('text', AText);
+    FWebSocket.SendText(JMsg.ToJSON);
+  finally
+    JMsg.Free;
+  end;
+  MkLog('SAY sent len=' + IntToStr(Length(AText)));
+end;
+
 procedure TAiMakerAiRealtimeChat.SendSessionMessage;
 var
   JMsg:   TJSONObject;
@@ -186,6 +206,7 @@ begin
     if FRagId        <> '' then JMsg.AddPair('rag_id',       FRagId);
     if FStateless then JMsg.AddPair('stateless', TJSONBool.Create(True));
     if FVadMode      <> '' then JMsg.AddPair('vad',          FVadMode);
+    MkLog('SESSION_JSON ' + JMsg.ToJSON);
     FWebSocket.SendText(JMsg.ToJSON);
   finally
     JMsg.Free;
