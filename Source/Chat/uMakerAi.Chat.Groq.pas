@@ -270,6 +270,15 @@ begin
       begin
         // Format explicitamente seteado sin ThinkingLevel (ej: 'hidden' para non-thinking)
         AJSONObject.AddPair('reasoning_format', ModelConfig.Format);
+      end
+      else
+      begin
+        // Sin config explicita = modelo de chat directo: apagar el thinking.
+        // qwen3.6 por defecto vuelca el razonamiento en el content, y a veces
+        // SIN etiquetas <think> (parsed no basta: solo separa lo etiquetado).
+        // reasoning_effort none suprime el thinking por completo.
+        AJSONObject.AddPair('reasoning_format', 'parsed');
+        AJSONObject.AddPair('reasoning_effort', 'none');
       end;
     end;
     // Otros modelos (llama, mistral, kimi, etc.): sin params de reasoning
