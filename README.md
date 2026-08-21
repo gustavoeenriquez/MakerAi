@@ -218,7 +218,7 @@ New `ChatMode` value for automatic two-pass routing:
 ┌──────────────────────────────▼───────────────────────────────────┐
 │  Native Provider Drivers  (direct API access, full fidelity)     │
 │  OpenAI · Claude · Gemini · Grok · Mistral · DeepSeek · Kimi    │
-│  Groq · Cohere · Ollama · LM Studio · GenericLLM                │
+│  GLM · Groq · Cohere · Ollama · LM Studio · GenericLLM          │
 └──────────────────────────────┬───────────────────────────────────┘
                                │
      ┌─────────────────────────┼────────────────────────┐
@@ -250,15 +250,16 @@ Full, provider-specific access to every API feature. Use when you need complete 
 
 | Component | Provider | Latest Models |
 |-----------|----------|---------------|
-| `TAiOpenChat` | OpenAI | gpt-5.4, gpt-5.4-mini, gpt-5.5, gpt-image-1 |
-| `TAiClaudeChat` | Anthropic | claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5 |
-| `TAiGeminiChat` | Google | gemini-3.1-pro, gemini-3-flash, gemini-3.1-flash-lite |
-| `TAiGrokChat` | xAI | grok-4-fast, grok-3, grok-code-fast-1 |
-| `TAiMistralChat` | Mistral AI | magistral-medium, devstral, voxtral |
-| `TAiDeepSeekChat` | DeepSeek | deepseek-reasoner, deepseek-chat |
-| `TAiKimiChat` | Moonshot | kimi-k2, kimi-k2.5, kimi-k2-thinking |
-| `TAiGroqChat` | Groq | llama-4-scout, llama-4-maverick, kimi-k2, qwen3 |
-| `TCohereChat` | Cohere | command-a-03-2025, command-a-reasoning, command-a-vision |
+| `TAiOpenChat` | OpenAI | gpt-5.6-sol/-terra/-luna, gpt-5.5, gpt-image-1 |
+| `TAiClaudeChat` | Anthropic | claude-opus-5, claude-sonnet-5, claude-fable-5, claude-haiku-4-5 |
+| `TAiGeminiChat` | Google | gemini-3.5-flash, gemini-3.6-flash, gemini-3.1-pro |
+| `TAiGrokChat` | xAI | grok-4.3, grok-4.5, grok-build, grok-imagine (image/video) |
+| `TAiMistralChat` | Mistral AI | mistral-large/medium/small, magistral, devstral, voxtral (STT/TTS) |
+| `TAiDeepSeekChat` | DeepSeek | deepseek-v4-flash, deepseek-v4-pro |
+| `TAiKimiChat` | Moonshot | kimi-k3, kimi-k2.7-code, kimi-k2.6 |
+| `TAiGLMChat` | GLM (Zhipu / Z.ai) | glm-4.7, glm-5.3, glm-5v-turbo, free tiers: glm-4.7-flash / glm-4.6v-flash |
+| `TAiGroqChat` | Groq | llama-3.3-70b, openai/gpt-oss-120b, qwen3.6, whisper-large-v3 |
+| `TCohereChat` | Cohere | command-a-plus, command-a-03-2025, north-mini-code |
 | `TAiOllamaChat` | Ollama | Any local model |
 | `TAiLMStudioChat` | LM Studio | Any local model |
 | `TAiGenericChat` | OpenAI-compatible | Any OpenAI-API endpoint |
@@ -268,20 +269,25 @@ Provider-agnostic code. Switch models or providers by changing one property:
 
 ```pascal
 AiConn.DriverName := 'OpenAI';
-AiConn.Model := 'gpt-5.2';
+AiConn.Model := 'gpt-5.6';
 AiConn.ApiKey := '@OPENAI_API_KEY';  // resolved from environment variable
 
 // Switch to Gemini without changing anything else
 AiConn.DriverName := 'Gemini';
-AiConn.Model := 'gemini-3.0-flash';
+AiConn.Model := 'gemini-3.6-flash';
 AiConn.ApiKey := '@GEMINI_API_KEY';
+
+// Or to GLM (Zhipu / Z.ai) — glm-4.7-flash is free
+AiConn.DriverName := 'GLM';
+AiConn.Model := 'glm-4.7-flash';
+AiConn.ApiKey := '@GLM_API_KEY';
 ```
 
 ---
 
 ## 📊 Feature Support Matrix
 
-| Feature | OpenAI (gpt-5.2) | Claude (4.6) | Gemini (3.0) | Grok (4) | Mistral | DeepSeek | Ollama |
+| Feature | OpenAI (gpt-5.6) | Claude (5) | Gemini (3.6) | Grok (4.5) | Mistral | DeepSeek | Ollama |
 |:--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | Text Generation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Streaming (SSE) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -551,6 +557,9 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 ---
 
 ## 🔄 Changelog
+
+### Unreleased (dev)
+- New: **GLM driver (Zhipu AI / Z.ai)** — `TAiGLMChat` (`DriverName='GLM'`, `@GLM_API_KEY`), OpenAI-compatible endpoint `https://api.z.ai/api/paas/v4/` (mainland China via the `URL` property). The API ships with thinking ON by default — the driver controls it explicitly (`cap_Reasoning` → `thinking:{enabled}`, disabled otherwise; `glm-5.3` uses forced thinking and is always sent enabled); `reasoning_effort` (`low`/`high`/`max`) sent on glm-5.2/5.3 per `ThinkingLevel`; `reasoning_content` captured in parse and streaming and re-sent in multi-turn history (required by Z.ai). Registered models: `glm-4.7` (driver default), `glm-4.7-flash` (**free**), `glm-4.7-flashx`, `glm-5.3`/`glm-5.2`/`glm-5.1`/`glm-5` (reasoning), `glm-5-turbo`, and vision `glm-5v-turbo`/`glm-4.6v` (native tool calling)/`glm-4.6v-flash` (**free**)/`glm-4.6v-flashx`/`glm-4.5v` (no tools, 16K output). Sampling clamped to the Z.ai ranges (temperature [0,1], top_p [0.01,1], max_tokens ≤131072); `tool_choice` supports only `auto`. Capabilities verified against the official docs; *not runtime-tested yet*
 
 ### v3.6.0 (2026-08-02)
 - New: **Regression suite — `Tests/RegressionSuite/`** — the framework finally has an automated safety net: 17 cases covering MCP dual-era + MRTR, agent graphs, A2A 1.0 + federation, guardrails and the evals runner itself. Fully in-process (spins up its own MCP and A2A servers, plus a legacy-only MCP server to exercise the dual-era fallback), no API keys, runs in under a second. Built **on `TAiEvalRunner`**, so it doubles as the canonical usage example. `--json` writes a CI-friendly report; `--otel` traces every case as an `eval.case` span

@@ -3601,7 +3601,9 @@ begin
           // basta marcar FPendingToolRun: la continuación la lanza OnRequestCompletedEvent
           // (base) cuando el stream ya se liberó de forma segura. La doc oficial confirma que
           // el stream cierra solo tras finishReason=STOP (sin [DONE]).
-          var LLocalTasks: array of ITask;
+          // D11 compat: inline var no acepta tipos anonimos "array of T" (E2029 en 11.x);
+          // TArray<ITask> es tipo nombrado y compila desde D11 en adelante.
+          var LLocalTasks: TArray<ITask>;
           SetLength(LLocalTasks, LFunciones.Count);
           var LTaskIdx := 0;
           for var LLocalKey in LFunciones.Keys do

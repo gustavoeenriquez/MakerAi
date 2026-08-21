@@ -53,6 +53,7 @@ uses
   uMakerAi.Chat.Ollama,
   uMakerAi.Chat.Groq,
   uMakerAi.Chat.DeepSeek,
+  uMakerAi.Chat.GLM,
   uMakerAi.Chat.Kimi,
   uMakerAi.Chat.Grok,
   uMakerAi.Chat.Mistral,
@@ -1471,6 +1472,114 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('DeepSeek', Model, 'ModelCaps',    '[cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('DeepSeek', Model, 'SessionCaps',  '[cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('DeepSeek', Model, 'ThinkingLevel', 'tlMedium');
+
+  // ------------------------- GLM (Zhipu AI / Z.ai) -----------------
+  // https://docs.z.ai/api-reference/llm/chat-completion
+  // Ultima actualizacion: Ago 2026 (capacidades verificadas vs docs oficiales;
+  // registrado SIN prueba runtime)
+  // ------------------------- GLM (Zhipu AI / Z.ai) -----------------
+  // El API trae thinking ACTIVADO por defecto en glm-4.7/5.x; el driver lo
+  // controla explicitamente segun cap_Reasoning (patron DeepSeek V4).
+  // glm-5.3 usa FORCED thinking (no acepta disabled - el driver lo maneja).
+  // reasoning_effort (low/high/max, default max) solo glm-5.2/5.3.
+  // tool_choice: el API solo soporta 'auto'. Salida maxima 128K (16K en 4.5v).
+  // Endpoint internacional api.z.ai; para China continental cambiar URL a
+  // https://open.bigmodel.cn/api/paas/v4/. Sampling acotado: temperature [0,1],
+  // top_p [0.01,1], max_tokens hasta 131072 (clamp en el driver).
+
+  // --- Valores globales por defecto para todos los modelos GLM ---
+  TAiChatFactory.Instance.RegisterUserParam('GLM', 'Max_Tokens',  '8192');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', 'Tool_Active', 'True');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', 'SessionCaps', '[]');
+
+  // ------- GLM-4.7 [default del driver] ------
+  // 200K ctx / 128K out. Balance costo/capacidad: $0.60/M in / $2.20/M out.
+  // Sin cap_Reasoning por defecto = modo rapido (el driver manda disabled);
+  // para razonar agregar ModelCaps [cap_Reasoning]
+  Model := 'glm-4.7';
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'Max_Tokens', '16384');
+
+  // ------- GLM-4.7-Flash (GRATIS) ------
+  // Sin costo para cuentas registradas (incluye cache de input); prototipos
+  Model := 'glm-4.7-flash';
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'Max_Tokens', '16384');
+
+  // ------- GLM-4.7-FlashX (ligero rapido, $0.07/M in / $0.40/M out) ------
+  Model := 'glm-4.7-flashx';
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'Max_Tokens', '16384');
+
+  // ------- GLM-5.3 (ago 14/2026) -- flagship coding open-weights ------
+  // 1M ctx / 128K out. MoE ~744B (40B activos). $1.40/M in / $4.40/M out.
+  // FORCED thinking: no se puede desactivar (el driver siempre manda enabled);
+  // reasoning_effort low/high/max (default max) via ThinkingLevel
+  Model := 'glm-5.3';
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'Max_Tokens',    '32768');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ModelCaps',    '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'SessionCaps',  '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ThinkingLevel', 'tlMedium');
+
+  // ------- GLM-5.2 (jun 2026) -- 1M ctx / 128K out, reasoning_effort ------
+  // $1.40/M in / $4.40/M out
+  Model := 'glm-5.2';
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'Max_Tokens',    '32768');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ModelCaps',    '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'SessionCaps',  '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ThinkingLevel', 'tlMedium');
+
+  // ------- GLM-5.1 (agentes de larga duracion) ------
+  // $1.40/M in / $4.40/M out; sesiones autonomas hasta 8h
+  Model := 'glm-5.1';
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'Max_Tokens',    '32768');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ModelCaps',    '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'SessionCaps',  '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ThinkingLevel', 'tlMedium');
+
+  // ------- GLM-5 (200K ctx / 128K out, deep reasoning) ------
+  // $1.00/M in / $3.20/M out
+  Model := 'glm-5';
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'Max_Tokens',    '32768');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ModelCaps',    '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'SessionCaps',  '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ThinkingLevel', 'tlMedium');
+
+  // ------- GLM-5-Turbo (agentes de alto throughput) ------
+  // 200K ctx / 128K out. $1.20/M in / $4.00/M out. Sin cap_Reasoning por
+  // defecto = el driver manda thinking disabled (respuesta rapida)
+  Model := 'glm-5-turbo';
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'Max_Tokens', '16384');
+
+  // ------- GLM-5V-Turbo (vision + tools + agentes) ------
+  // 200K ctx / 128K out. $1.20/M in / $4.00/M out. Image/video/file input
+  Model := 'glm-5v-turbo';
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ModelCaps',   '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'SessionCaps', '[cap_Image]');
+
+  // ------- GLM-4.6V (vision, 128K ctx) ------
+  // $0.30/M in / $0.90/M out. Primera familia V con function calling NATIVO
+  // (imagenes como parametros de tools)
+  Model := 'glm-4.6v';
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ModelCaps',   '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'SessionCaps', '[cap_Image]');
+
+  // ------- GLM-4.6V-Flash (vision GRATIS, 128K ctx) ------
+  Model := 'glm-4.6v-flash';
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ModelCaps',   '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'SessionCaps', '[cap_Image]');
+
+  // ------- GLM-4.6V-FlashX (vision ligera, $0.04/M in / $0.40/M out) ------
+  Model := 'glm-4.6v-flashx';
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ModelCaps',   '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'SessionCaps', '[cap_Image]');
+
+  // ------- GLM-4.5V (vision open-source ~100B) ------
+  // $0.60/M in / $1.80/M out. Salida maxima 16K. SIN function calling
+  // (el FC nativo en vision llego con 4.6V)
+  Model := 'glm-4.5v';
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'Tool_Active', 'False');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'Max_Tokens',  '8192');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ModelCaps',   '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'SessionCaps', '[cap_Image]');
 
   // ------------------------- KIMI ----------------------------------
   // https://platform.moonshot.ai/docs/api/chat

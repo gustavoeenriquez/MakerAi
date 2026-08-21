@@ -1105,6 +1105,8 @@ var
   TextLen, PropsLen: Cardinal;
   ActiveCount: Int64;
   EntB, IDB, ModB, TxtB, PropB, EmbB: TBytes;
+  // D11 compat: inline var no acepta tipos anonimos "array[..] of" (E2029 en 11.x)
+  Hdr: array [0 .. MKVEC_HEADER_SIZE - 1] of Byte;
 
   procedure ReadBytes(var Dest: TBytes; ALen: Integer);
   begin
@@ -1122,7 +1124,6 @@ begin
     TempStream := TFileStream.Create(TempPath, fmCreate);
     try
       // Header provisional
-      var Hdr: array[0..MKVEC_HEADER_SIZE-1] of Byte;
       FillChar(Hdr, MKVEC_HEADER_SIZE, 0);
       Hdr[0] := MKVEC_MAGIC_0; Hdr[1] := MKVEC_MAGIC_1;
       Hdr[2] := MKVEC_MAGIC_2; Hdr[3] := MKVEC_MAGIC_3;

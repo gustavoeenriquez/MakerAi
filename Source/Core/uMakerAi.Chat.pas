@@ -482,6 +482,18 @@ type
     // Inicializa el json de completions, se saca apaarte porque es complejo
     Function InitChatCompletions: String; Virtual;
 
+    // Familias de modelos que solo aceptan el sampling por defecto: rechazan con
+    // 400 cualquier temperature/top_p/penalties, incluso temperature:0 (verificado
+    // ago/2026 con gpt-5.6-luna en Azure; o1*/o3*/o4* tienen la misma restriccion)
+    Function ModelRequiresDefaultSampling(Const aModel: String): Boolean; Virtual;
+    // Familias que exigen max_completion_tokens en lugar de max_tokens (gpt-5*, o1*/o3*/o4*)
+    Function ModelUsesMaxCompletionTokens(Const aModel: String): Boolean; Virtual;
+    // Extrae error.param de un 400 con code unsupported_parameter/unsupported_value ('' si no aplica)
+    Function ExtractUnsupportedParam(Const aErrorBody: String): String;
+    // Elimina el parametro rechazado del body (max_tokens se renombra a
+    // max_completion_tokens); si no hay cambio devuelve el body original
+    Function RemoveUnsupportedParamFromBody(Const aBody, aParam: String): String;
+
     // Mezcla shallow ModelConfig.ModelExtraBodyParams sobre AJSONObject justo antes
     // de serializar. Silencioso si vacio o JSON invalido. Los drivers con
     // InitChatCompletions propio deben invocarlo antes del ToJSON final.
@@ -869,6 +881,41 @@ begin
       raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
 
     FResponse.Position := 0;
+
+    // Modelos nuevos con restricciones desconocidas (ej: gpt-5.6 rechaza temperature):
+    // ante un 400 unsupported_parameter/unsupported_value se registra en el log, se
+    // quita el parametro ofensivo del body y se reintenta — degradacion con aviso
+    // en vez de fallo silencioso. Solo aplica al camino sincrono.
+    If FClient.Asynchronous = False then
+    Begin
+      var LRetries := 0;
+      While (Res.StatusCode = 400) and (LRetries < 3) do
+      Begin
+        var LParam := ExtractUnsupportedParam(Res.ContentAsString);
+        If LParam = '' then
+          Break;
+
+        var LNewBody := RemoveUnsupportedParamFromBody(ABody, LParam);
+        If LNewBody = ABody then
+          Break; // el parametro no estaba en el body: no hay nada que reintentar
+
+        LogDebug(Format('El modelo "%s" rechazo el parametro "%s" (400 unsupported); reintentando sin el parametro', [Model, LParam]));
+        ABody := LNewBody;
+
+        St.Size := 0;
+        St.WriteString(ABody);
+        St.Position := 0;
+        FResponse.Clear;
+        FResponse.Position := 0;
+
+        Res := FClient.Post(sUrl, St, FResponse, FHeaders);
+        if not Assigned(Res) then
+          raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+        FResponse.Position := 0;
+
+        Inc(LRetries);
+      End;
+    End;
 
     FLastContent := '';
     FLastReasoning := '';
@@ -2147,7 +2194,7 @@ begin
 
       AJSONObject.AddPair('max_completion_tokens', TJSONNumber.Create(FMax_tokens));
     end
-    else if FUrl.Contains('azure.com') then
+    else if FUrl.Contains('azure.com') or ModelUsesMaxCompletionTokens(LModel) then
       AJSONObject.AddPair('max_completion_tokens', TJSONNumber.Create(FMax_tokens))
     else
       AJSONObject.AddPair('max_tokens', FMax_tokens);
@@ -2182,8 +2229,10 @@ begin
       jWebSearchOptions := TJSonObject.Create;
       AJSONObject.AddPair('web_search_options', jWebSearchOptions);
     end
-    Else
+    Else If not ModelRequiresDefaultSampling(LModel) then
     Begin
+      // gpt-5.6*/o1*/o3*/o4* rechazan con 400 estos parametros aunque valgan su
+      // default (incluso temperature:0), por eso se omiten completos para esa familia
       If FTop_p <> 0 then
         AJSONObject.AddPair('top_p', TJSONNumber.Create(FTop_p));
 
@@ -2201,6 +2250,84 @@ begin
   Finally
     AJSONObject.Free;
     Lista.Free;
+  End;
+end;
+
+function TAiChat.ModelRequiresDefaultSampling(Const aModel: String): Boolean;
+Var
+  LModel: String;
+begin
+  LModel := aModel.ToLower;
+  Result := LModel.StartsWith('gpt-5.6') or LModel.StartsWith('o1') or LModel.StartsWith('o3') or LModel.StartsWith('o4');
+end;
+
+function TAiChat.ModelUsesMaxCompletionTokens(Const aModel: String): Boolean;
+Var
+  LModel: String;
+begin
+  LModel := aModel.ToLower;
+  Result := LModel.StartsWith('gpt-5') or LModel.StartsWith('o1') or LModel.StartsWith('o3') or LModel.StartsWith('o4');
+end;
+
+function TAiChat.ExtractUnsupportedParam(Const aErrorBody: String): String;
+Var
+  jObj, jErr: TJSonObject;
+  LCode, LMsg: String;
+begin
+  Result := '';
+  jObj := TJSonObject.ParseJSONValue(aErrorBody) as TJSonObject;
+  If not Assigned(jObj) then
+    Exit;
+  Try
+    If not jObj.TryGetValue<TJSonObject>('error', jErr) then
+      Exit;
+
+    LCode := '';
+    LMsg := '';
+    jErr.TryGetValue<String>('code', LCode);
+    jErr.TryGetValue<String>('message', LMsg);
+
+    // OpenAI/Azure usan unsupported_parameter (max_tokens en gpt-5*) y
+    // unsupported_value (temperature:0 en gpt-5.6/o-series); en ambos casos
+    // error.param trae el nombre del parametro y omitirlo es el degrade correcto
+    If SameText(LCode, 'unsupported_parameter') or SameText(LCode, 'unsupported_value') or LMsg.StartsWith('Unsupported parameter', True) or LMsg.StartsWith('Unsupported value', True) then
+      jErr.TryGetValue<String>('param', Result);
+  Finally
+    jObj.Free;
+  End;
+end;
+
+function TAiChat.RemoveUnsupportedParamFromBody(Const aBody, aParam: String): String;
+Var
+  jBody: TJSonObject;
+  jPair: TJSONPair;
+  LMaxTokens: Integer;
+begin
+  Result := aBody;
+  If aParam = '' then
+    Exit;
+
+  jBody := TJSonObject.ParseJSONValue(aBody) as TJSonObject;
+  If not Assigned(jBody) then
+    Exit;
+  Try
+    If SameText(aParam, 'max_tokens') and jBody.TryGetValue<Integer>('max_tokens', LMaxTokens) then
+    Begin
+      // max_tokens no se elimina: el reemplazo correcto es max_completion_tokens
+      jBody.RemovePair('max_tokens').Free;
+      If not Assigned(jBody.GetValue('max_completion_tokens')) then
+        jBody.AddPair('max_completion_tokens', TJSONNumber.Create(LMaxTokens));
+    End
+    Else
+    Begin
+      jPair := jBody.RemovePair(aParam);
+      If not Assigned(jPair) then
+        Exit; // no estaba en el body: se devuelve el original para que el caller no reintente
+      jPair.Free;
+    End;
+    Result := jBody.ToJSon;
+  Finally
+    jBody.Free;
   End;
 end;
 

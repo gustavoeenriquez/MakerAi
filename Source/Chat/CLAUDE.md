@@ -25,6 +25,7 @@ Each inherits from `TAiChat` (defined in Core):
 | `uMakerAi.Chat.DeepSeek.pas` | `TAiDeepSeekChat` | DeepSeek (deepseek-v4-flash, deepseek-v4-pro) |
 | `uMakerAi.Chat.Mistral.pas` | `TAiMistralChat` | Mistral (large, magistral, devstral, voxtral) |
 | `uMakerAi.Chat.Kimi.pas` | `TAiKimiChat` | Kimi/Moonshot (kimi-k3, kimi-k2.6/k2.7) |
+| `uMakerAi.Chat.GLM.pas` | `TAiGLMChat` | GLM / Zhipu Z.ai (glm-4.7, glm-4.7-flash, glm-5.x, glm-5v/4.6v vision) |
 | `uMakerAi.Chat.Grok.pas` | `TAiGrokChat` | xAI Grok (grok-4.3, grok-4.5, grok-build) |
 | `uMakerAi.Chat.Cohere.pas` | `TCohereChat` | Cohere (command-a, aya-vision) |
 | `uMakerAi.Chat.GenericLLM.pas` | `TAiGenericChat` | Any OpenAI-compatible API |
@@ -300,6 +301,16 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - `kimi-k2.5`: **RETIRA 31 ago 2026** → migrar a kimi-k3
 - `kimi-k2` y `kimi-k2-thinking`: **YA RETIRADOS** del API (entradas eliminadas del registry)
 - `moonshot-v1-*` (+vision-preview): **SUNSET TOTAL 31 ago 2026**
+
+### GLM (Zhipu AI / Z.ai)
+**Registrado ago 2026, capacidades verificadas contra docs oficiales; SIN prueba runtime todavía.** API OpenAI-compatible; endpoint internacional `https://api.z.ai/api/paas/v4/` (China continental: `open.bigmodel.cn/api/paas/v4/` — cambiar `URL`). Key: `@GLM_API_KEY`.
+- **Thinking ACTIVADO por defecto en el API** (glm-4.7/5.x): el driver lo controla explícitamente como DeepSeek V4 — `cap_Reasoning` → `thinking:{enabled}`; sin el cap → `disabled` (modo rápido). **EXCEPCIÓN: `glm-5.3` usa forced thinking y NO acepta disabled** (el driver siempre manda enabled para 5.3, patrón command-a-plus).
+- `reasoning_effort`: valores **low/high/max** (default del API: max), documentado SOLO en glm-5.2/5.3 — el driver lo envía únicamente ahí (mapeo tlLow→low, tlMedium→high, tlHigh→max, igual que DeepSeek).
+- **Z.ai EXIGE reenviar `reasoning_content` en el historial multi-turno** ("remember to return the historical reasoning_content") — el override `GetMessages` del driver lo hace. Captura en parse/streaming: la base.
+- `tool_choice`: el API **solo soporta `'auto'`**. Sampling acotado (clamp en el driver): `temperature` [0,1], `top_p` [0.01,1], `max_tokens` ≤131072 (salida real máx 128K; 16K en 4.5v). No se envían penalties/n/logprobs/seed.
+- Texto: `glm-4.7` [default del driver] (200K ctx, $0.60/$2.20); `glm-4.7-flash` **GRATIS**; `glm-4.7-flashx` ($0.07/$0.40); `glm-5.3` (1M ctx, flagship coding, $1.40/$4.40), `glm-5.2` (1M ctx), `glm-5.1` (agentes 8h), `glm-5` (200K, $1.00/$3.20) → todos `[cap_Reasoning]` `tlMedium`; `glm-5-turbo` (200K, $1.20/$4.00, sin cap = rápido)
+- Visión (image/video/file input, formato OpenAI `image_url`; `video_url`/`file_url` no cableados aún): `glm-5v-turbo` (200K, con tools), `glm-4.6v` ($0.30/$0.90, **primera familia V con function calling nativo**), `glm-4.6v-flash` **GRATIS**, `glm-4.6v-flashx` ($0.04/$0.40) → `[cap_Image]`; `glm-4.5v` → `[cap_Image]` + **`Tool_Active=False`** (sin FC, salida máx 16K)
+- Fase 2 pendiente: GLM-Image (gen), GLM-OCR, GLM-ASR (STT), CogVideoX-3 (video) — endpoints dedicados
 
 ### Cohere
 **Actualizado ago 2026, probado runtime 5/5 (incl. tools).** Los modelos nuevos (a-plus, north, a-reasoning) razonan por defecto: el content trae bloque `type:'thinking'` antes del `text`. El driver lo controla en `InitChatCompletions`: `cap_Reasoning` → `thinking:{enabled}`; sin el cap → `disabled` (modo rápido), EXCEPTO command-a-plus que **no permite disabled** (falla con `INVALID_TOOL_GENERATION`). `ParseChat` y streaming capturan el thinking a `ReasoningContent` / `OnReceiveThinking`. FIX ago 2026: el retorno síncrono con tool calling llegaba vacío — `ExecuteAndRespondToToolCalls` ahora reutiliza el mismo `ResMsg` en el round 2 (patrón de la base `Run(Nil, ResMsg)`).

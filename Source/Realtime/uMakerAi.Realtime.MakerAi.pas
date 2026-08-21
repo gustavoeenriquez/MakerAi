@@ -43,6 +43,8 @@ type
     // Propiedades especificas del driver MakerAI
     FVoice:         string;
     FSttModel:      string;
+    FSttPrompt:     string;  // glosario de dominio para Whisper (campo stt_prompt)
+    FCallerUri:     string;  // identificador del llamante (memoria por llamante)
     FTtsModel:      string;
     FInstructions:  string;
     FRagId:         string;
@@ -87,6 +89,8 @@ type
     // Parametros de sesion (opcionales; todos resueltos por el servidor si se omiten)
     property Voice:        string read FVoice        write FVoice;
     property SttModel:     string read FSttModel     write FSttModel;
+    property SttPrompt:    string read FSttPrompt    write FSttPrompt;
+    property CallerUri:    string read FCallerUri    write FCallerUri;
     property TtsModel:     string read FTtsModel     write FTtsModel;
     property Instructions: string read FInstructions write FInstructions;
     property RagId:        string read FRagId        write FRagId;
@@ -201,6 +205,8 @@ begin
     if Language      <> '' then JMsg.AddPair('language',     Language);
     if FVoice        <> '' then JMsg.AddPair('voice',        FVoice);
     if FSttModel     <> '' then JMsg.AddPair('stt_model',    FSttModel);
+    if FSttPrompt    <> '' then JMsg.AddPair('stt_prompt',   FSttPrompt);
+    if FCallerUri    <> '' then JMsg.AddPair('caller_uri',   FCallerUri);
     if FTtsModel     <> '' then JMsg.AddPair('tts_model',    FTtsModel);
     if FInstructions <> '' then JMsg.AddPair('instructions', FInstructions);
     if FRagId        <> '' then JMsg.AddPair('rag_id',       FRagId);
