@@ -44,6 +44,7 @@ contains
   uMakerAi.Chat.AiConnection in '..\Chat\uMakerAi.Chat.AiConnection.pas',
   uMakerAi.Chat.Claude in '..\Chat\uMakerAi.Chat.Claude.pas',
   uMakerAi.Chat.DeepSeek in '..\Chat\uMakerAi.Chat.DeepSeek.pas',
+  uMakerAi.Chat.GLM in '..\Chat\uMakerAi.Chat.GLM.pas',
   uMakerAi.Chat.Gemini in '..\Chat\uMakerAi.Chat.Gemini.pas',
   uMakerAi.Chat.Grok in '..\Chat\uMakerAi.Chat.Grok.pas',
   uMakerAi.Chat.Groq in '..\Chat\uMakerAi.Chat.Groq.pas',
