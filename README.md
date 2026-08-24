@@ -375,7 +375,7 @@ Full **dual-era** implementation of the MCP standard for both consuming and expo
 - Connect to Claude Desktop tools, filesystem servers, database tools, etc.
 - Integrated into `TAiFunctions` component alongside native function definitions
 
-Optional example using the native HTTP client with [Parallel Search](https://search.parallel.ai/mcp):
+Quick way to try `TMCPClientHttp` against a public MCP server — this example uses [Parallel Search](https://search.parallel.ai/mcp), a **third-party commercial service** (Parallel Web Systems, not affiliated with MakerAI) that exposes `web_search` / `web_fetch` tools over MCP:
 
 ```pascal
 var
@@ -392,7 +392,7 @@ begin
 end;
 ```
 
-Parallel Search is optional and free to use without an API key. When selected, it receives the user-selected search queries and any URLs requested for fetching.
+> **Note:** at the time of writing (Aug 2026) Parallel offers a rate-limited free tier that works without an API key, but **pricing, limits and availability are set by Parallel and may change at any time** — check [their terms](https://parallel.ai/) before relying on it in production. Be aware that your search queries and any fetched URLs are sent to their servers. MakerAI has no relationship with this service; it is shown only as a convenient public endpoint for testing the MCP HTTP client, and any spec-compliant MCP server works the same way.
 
 > **⚠️ SSE transport deprecation (spec 2026-07-28):** the classic HTTP+SSE transport (GET `/sse` + POST `/messages`) was formally moved to *Deprecated* state by MCP spec revision 2026-07-28 under the project's feature-lifecycle policy, which mandates a minimum 12-month window. Its **earliest possible removal from the spec is July 2027** — actual removal happens in the first spec revision published after that date, at the maintainers' discretion, and may come later. Removal deletes the transport from future spec revisions only: existing MakerAI SSE endpoints keep working between themselves, but third-party clients (Claude Desktop, official SDKs) will progressively drop it. **Use the HTTP or StdIO transports for anything new.** Note that SSE *as a streaming response format* survives inside Streamable HTTP — only the standalone HTTP+SSE transport is being retired.
 
