@@ -552,8 +552,51 @@ var
 
     if Msg.Role = 'assistant' then
     begin
-      JUserObj.AddPair('content', Msg.Prompt);
-      TargetArray.Add(JUserObj);
+      // Solo agregar el mensaje de texto si trae contenido (un assistant que
+      // únicamente hizo tool_calls llega con Prompt vacío).
+      if Msg.Prompt.Trim <> '' then
+      begin
+        JUserObj.AddPair('content', Msg.Prompt);
+        TargetArray.Add(JUserObj);
+      end
+      else
+        JUserObj.Free;
+
+      // Historial pass-through de function calling (formato chat-completions:
+      // assistant.tool_calls + mensajes role='tool'). La Responses API exige un
+      // item function_call por cada llamada, con el mismo call_id que después
+      // referencia el function_call_output — sin esto Azure/OpenAI rechazan el
+      // request con "No tool call found for function call output".
+      if Msg.Tool_calls <> '' then
+      begin
+        var JTCParsed := TJSonObject.ParseJSONValue(Msg.Tool_calls);
+        try
+          if JTCParsed is TJSonArray then
+            for var JTCItem in TJSonArray(JTCParsed) do
+              if JTCItem is TJSonObject then
+              begin
+                var JTC := TJSonObject(JTCItem);
+                var JFunc: TJSonObject := nil;
+                JTC.TryGetValue<TJSonObject>('function', JFunc);
+                var JCall := TJSonObject.Create;
+                JCall.AddPair('type', 'function_call');
+                JCall.AddPair('call_id', JTC.GetValue<string>('id', ''));
+                if Assigned(JFunc) then
+                begin
+                  JCall.AddPair('name', JFunc.GetValue<string>('name', ''));
+                  JCall.AddPair('arguments', JFunc.GetValue<string>('arguments', '{}'));
+                end
+                else
+                begin
+                  JCall.AddPair('name', JTC.GetValue<string>('name', ''));
+                  JCall.AddPair('arguments', JTC.GetValue<string>('arguments', '{}'));
+                end;
+                TargetArray.Add(JCall);
+              end;
+        finally
+          JTCParsed.Free;
+        end;
+      end;
       Exit;
     end;
 
