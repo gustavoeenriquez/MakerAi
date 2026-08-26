@@ -32,6 +32,8 @@ type
     function RunA2AFlowScenario(const AScenario: string): string;
     function RunPolicyScenario(const AScenario: string): string;
     function RunRagScenario(const AScenario: string): string;
+    // Serializacion de tool results en la familia OpenAI-compatible
+    function RunChatScenario(const AScenario: string): string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -41,7 +43,7 @@ type
 implementation
 
 uses
-  System.TypInfo, System.StrUtils, System.SyncObjs, System.Threading,
+  System.TypInfo, System.StrUtils, System.SyncObjs, System.Threading, System.NetEncoding,
   System.Net.HttpClient, System.Net.URLClient,
   uMakerAi.Core,
   uMakerAi.MCPServer.Core, UMakerAi.MCPServer.Http,
@@ -264,6 +266,33 @@ begin
     .Input('rag:search-nil-options')
     .ExpectEquals('1');
 
+  // --- Chat: serializacion de tool results (familia OpenAI-compatible) ---
+  // Chat Completions no admite imagenes en role 'tool' de ninguna forma, y
+  // Groq ademas rechaza cualquier array ahi. La media nativa sale como un
+  // mensaje 'user' sintetico DESPUES del grupo de tool results: con tool calls
+  // paralelas, meterlo entre dos 'tool' es un 400.
+  FRunner.AddCase('chat.toolresult.parallel-media')
+    .Input('chat:toolresult-parallel')
+    .ExpectEquals('5|tool|tool|user|imgs=2');
+
+  // Sin cap_Image no se emite nada de media: se cae a la transcripcion que
+  // dejo el bridge de vision.
+  FRunner.AddCase('chat.toolresult.no-vision')
+    .Input('chat:toolresult-novision')
+    .ExpectEquals('2|trans=si|img=no');
+
+  // TAiChat.RunNew ya inyecta la transcripcion en el Prompt del AskMsg, y en
+  // una continuacion el AskMsg ES el mensaje tool: sin guarda, se duplicaba.
+  FRunner.AddCase('chat.toolresult.no-dup-transcription')
+    .Input('chat:toolresult-dup')
+    .ExpectEquals('1');
+
+  // Los adjuntos de texto se inlinean en el propio string del resultado: no
+  // necesitan mensaje extra y antes se perdian enteros.
+  FRunner.AddCase('chat.toolresult.text-inline')
+    .Input('chat:toolresult-text')
+    .ExpectEquals('1|inline=si|string=si');
+
   // --- Evals (autoprueba del propio runner) ---
   FRunner.AddCase('evals.self-check')
     .Input('policy:evals-self')
@@ -278,6 +307,8 @@ begin
     Result := RunAgentScenario(AScenario)
   else if AScenario.StartsWith('rag:') then
     Result := RunRagScenario(AScenario)
+  else if AScenario.StartsWith('chat:') then
+    Result := RunChatScenario(AScenario)
   else if AScenario.StartsWith('policy:') then
     Result := RunPolicyScenario(AScenario)
   else
@@ -1321,6 +1352,163 @@ end;
 // -----------------------------------------------------------------------------
 // Guardrails y evals
 // -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// Chat: serializacion de tool results
+// -----------------------------------------------------------------------------
+
+function TRegressionSuite.RunChatScenario(const AScenario: string): string;
+
+  function NewImage(const AName: string): TAiMediaFile;
+  begin
+    Result := TAiMediaFile.Create;
+    // PNG 1x1 valido
+    Result.LoadFromBase64(AName, 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ' +
+      'AAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+  end;
+
+  function NewText(const AName, AContent: string): TAiMediaFile;
+  begin
+    Result := TAiMediaFile.Create;
+    Result.LoadFromBase64(AName,
+      TNetEncoding.Base64.EncodeBytesToString(TEncoding.UTF8.GetBytes(AContent)));
+  end;
+
+  function RoleOf(AArr: TJSONArray; AIndex: Integer): string;
+  begin
+    Result := (AArr.Items[AIndex] as TJSONObject).GetValue<string>('role');
+  end;
+
+var
+  Msgs: TAiChatMessages;
+  Msg: TAiChatMessage;
+  MF: TAiMediaFile;
+  Arr: TJSONArray;
+  Raw, Content: string;
+  Hits, P: Integer;
+begin
+  Msgs := TAiChatMessages.Create;
+  try
+    if AScenario = 'chat:toolresult-parallel' then
+    begin
+      Msgs.ModelCaps := [cap_Image];
+
+      Msgs.Add(TAiChatMessage.Create('dibuja algo', 'user'));
+
+      Msg := TAiChatMessage.Create('', 'assistant');
+      Msg.Tool_calls := '[{"id":"c1","type":"function","function":{"name":"snap","arguments":"{}"}}]';
+      Msgs.Add(Msg);
+
+      Msg := TAiChatMessage.Create('snapshot 1', 'tool', 'c1', 'snap');
+      Msg.AddMediaFile(NewImage('a.png'));
+      Msgs.Add(Msg);
+
+      Msg := TAiChatMessage.Create('snapshot 2', 'tool', 'c2', 'snap2');
+      Msg.AddMediaFile(NewImage('b.png'));
+      Msgs.Add(Msg);
+
+      Arr := Msgs.ToJSon;
+      try
+        // count | rol[2] | rol[3] | rol[4] | numero de partes image_url
+        Hits := 0;
+        Raw := Arr.ToJSON;
+        P := Pos('"image_url"', Raw);
+        while P > 0 do
+        begin
+          Inc(Hits);
+          P := Pos('"image_url"', Raw, P + 1);
+        end;
+        // cada parte aporta dos apariciones ("type":"image_url" y la clave)
+        Result := Format('%d|%s|%s|%s|imgs=%d',
+          [Arr.Count, RoleOf(Arr, 2), RoleOf(Arr, 3), RoleOf(Arr, 4), Hits div 2]);
+      finally
+        Arr.Free;
+      end;
+    end
+
+    else if AScenario = 'chat:toolresult-novision' then
+    begin
+      Msgs.ModelCaps := []; // modelo sin vision
+
+      Msgs.Add(TAiChatMessage.Create('hola', 'user'));
+
+      Msg := TAiChatMessage.Create('resultado', 'tool', 'c1', 'snap');
+      MF := NewImage('a.png');
+      MF.Procesado := True;
+      MF.Transcription := 'un cuadrado rojo';
+      Msg.AddMediaFile(MF);
+      Msgs.Add(Msg);
+
+      Arr := Msgs.ToJSon;
+      try
+        Raw := Arr.ToJSON;
+        Result := Format('%d|trans=%s|img=%s',
+          [Arr.Count,
+           IfThen(Pos('un cuadrado rojo', Raw) > 0, 'si', 'no'),
+           IfThen(Pos('image_url', Raw) > 0, 'si', 'no')]);
+      finally
+        Arr.Free;
+      end;
+    end
+
+    else if AScenario = 'chat:toolresult-dup' then
+    begin
+      Msgs.ModelCaps := [];
+
+      // Prompt que YA trae la transcripcion inyectada por RunNew
+      Msg := TAiChatMessage.Create('resultado' + sLineBreak + 'un cuadrado rojo',
+        'tool', 'c1', 'snap');
+      MF := NewImage('a.png');
+      MF.Procesado := True;
+      MF.Transcription := 'un cuadrado rojo';
+      Msg.AddMediaFile(MF);
+      Msgs.Add(Msg);
+
+      Arr := Msgs.ToJSon;
+      try
+        Content := (Arr.Items[0] as TJSONObject).GetValue<string>('content');
+        Hits := 0;
+        P := Pos('un cuadrado rojo', Content);
+        while P > 0 do
+        begin
+          Inc(Hits);
+          P := Pos('un cuadrado rojo', Content, P + 1);
+        end;
+        Result := IntToStr(Hits);
+      finally
+        Arr.Free;
+      end;
+    end
+
+    else if AScenario = 'chat:toolresult-text' then
+    begin
+      Msgs.ModelCaps := [cap_Image];
+
+      Msg := TAiChatMessage.Create('lei el archivo', 'tool', 'c1', 'read_file');
+      Msg.AddMediaFile(NewText('datos.txt', 'col_a;col_b' + sLineBreak + '1;2'));
+      Msgs.Add(Msg);
+
+      Arr := Msgs.ToJSon;
+      try
+        Raw := Arr.ToJSON;
+        Result := Format('%d|inline=%s|string=%s',
+          [Arr.Count,
+           IfThen((Pos('col_a;col_b', Raw) > 0) and (Pos('datos.txt', Raw) > 0), 'si', 'no'),
+           IfThen((Arr.Items[0] as TJSONObject).GetValue('content') is TJSONString, 'si', 'no')]);
+      finally
+        Arr.Free;
+      end;
+    end
+
+    else
+      raise Exception.Create('Escenario de chat desconocido: ' + AScenario);
+
+  finally
+    for Msg in Msgs do
+      Msg.Free;
+    Msgs.Free;
+  end;
+end;
 
 // -----------------------------------------------------------------------------
 // RAG

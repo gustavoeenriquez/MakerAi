@@ -20,7 +20,7 @@ MakerAI is an AI orchestration framework for Delphi developers (v3.6). It provid
 
 **Git workflow:** `master` is the main/release branch. `dev` is the active development branch. PRs target `master`.
 
-**Testing:** `Tests/RegressionSuite/` es la suite de regresión del framework (17 casos, in-process, sin API keys, < 1 s). Construida sobre `TAiEvalRunner`; cubre MCP dual-era + MRTR, agentes, A2A 1.0 + federación, guardrails y el propio runner de evals. Ejecutar antes de cada release:
+**Testing:** `Tests/RegressionSuite/` es la suite de regresión del framework (37 casos, in-process, sin API keys, < 1 s). Construida sobre `TAiEvalRunner`; cubre MCP dual-era + MRTR, agentes, A2A 1.0 + federación, guardrails, serialización de tool results y el propio runner de evals. Ejecutar antes de cada release:
 
 ```bash
 msbuild Tests/RegressionSuite/MakerAiRegressionSuite.dproj /p:Config=Release /p:Platform=Win64

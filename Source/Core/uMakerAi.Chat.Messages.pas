@@ -920,12 +920,102 @@ Var
   MediaArr: TAiMediaFilesArray;
   S: String;
   MediaFile: TAiMediaFile;
+  LPendingMedia: TList<TAiMediaFile>; // media nativa de tool results, pendiente de volcar
+  LPendingNames: TStringList; // nombres de las tools que la devolvieron
+  LResult: TJSonArray;
+
+  // Devuelve el contenido de un adjunto de texto como string (UTF-8).
+  function MediaFileAsText(AMediaFile: TAiMediaFile): String;
+  var
+    LTextBytes: TBytes;
+  begin
+    Result := '';
+    if AMediaFile.Content.Size <= 0 then
+      Exit;
+    AMediaFile.Content.Position := 0;
+    SetLength(LTextBytes, AMediaFile.Content.Size);
+    AMediaFile.Content.ReadBuffer(LTextBytes[0], AMediaFile.Content.Size);
+    Result := TEncoding.UTF8.GetString(LTextBytes);
+  end;
+
+  // Vuelca la media nativa acumulada de un grupo de tool results como un mensaje
+  // 'user' sintetico. El contrato de OpenAI exige que TODOS los mensajes 'tool'
+  // vayan pegados al assistant que los pidio (uno por tool_call_id) sin nada
+  // intercalado, asi que esto se llama justo antes del primer mensaje no-'tool'
+  // y al cerrar el bucle, nunca entre dos tool results.
+  procedure FlushToolMedia;
+  var
+    LObj, LPart, LUrlObj, LAudObj: TJSONObject;
+    LArr: TJSonArray;
+    LMF: TAiMediaFile;
+    K: Integer;
+  begin
+    if LPendingMedia.Count = 0 then
+      Exit;
+
+    LArr := TJSonArray.Create;
+    LPart := TJSONObject.Create;
+    LPart.AddPair('type', 'text');
+    LPart.AddPair('text', '[Adjuntos devueltos por la herramienta ' + LPendingNames.CommaText +
+      '. El resultado textual va en el mensaje tool anterior.]');
+    LArr.Add(LPart);
+
+    for K := 0 to LPendingMedia.Count - 1 do
+    begin
+      LMF := LPendingMedia[K];
+      case LMF.FileCategory of
+        Tfc_Image:
+          begin
+            LUrlObj := TJSONObject.Create;
+            LUrlObj.AddPair('url', 'data:' + LMF.MimeType + ';base64,' + LMF.Base64);
+            if LMF.Detail <> '' then
+              LUrlObj.AddPair('detail', LMF.Detail);
+            LPart := TJSONObject.Create;
+            LPart.AddPair('type', 'image_url');
+            LPart.AddPair('image_url', LUrlObj);
+            LArr.Add(LPart);
+          end;
+        Tfc_Audio:
+          begin
+            LAudObj := TJSONObject.Create;
+            LAudObj.AddPair('data', LMF.Base64);
+            LAudObj.AddPair('format', StringReplace(LMF.MimeType, 'audio/', '', [rfReplaceAll]));
+            LPart := TJSONObject.Create;
+            LPart.AddPair('type', 'input_audio');
+            LPart.AddPair('input_audio', LAudObj);
+            LArr.Add(LPart);
+          end;
+      end;
+    end;
+
+    LObj := TJSONObject.Create;
+    LObj.AddPair('role', 'user');
+    LObj.AddPair('content', LArr);
+    LResult.Add(LObj);
+
+    LPendingMedia.Clear;
+    LPendingNames.Clear;
+  end;
+
 begin
   Result := TJSonArray.Create;
+  LResult := Result; // visible para FlushToolMedia
+
+  LPendingMedia := TList<TAiMediaFile>.Create;
+  LPendingNames := TStringList.Create;
+  try
+    LPendingNames.Duplicates := dupIgnore;
+    LPendingNames.Sorted := True;
 
   For I := 0 to Count - 1 do
   Begin
     Msg := Self.Items[I];
+
+    // Cierre del grupo de tool results: la media acumulada sale ANTES de este
+    // mensaje, que ya no es un 'tool'.
+    if not SameText(Msg.FRole, 'tool') then
+      FlushToolMedia;
+
     JObj := TJSONObject.Create;
     JObj.AddPair('role', Msg.FRole);
 
@@ -937,19 +1027,54 @@ begin
 
     // Los mensajes role:'tool' llevan SIEMPRE content string: el contrato
     // OpenAI/Groq rechaza arrays en tool results ("messages[N].content must
-    // be a string"). Un tool result con imagen adjunta (p.ej. el snapshot del
-    // lienzo de un editor agentico) solo lo soportan drivers con serializador
-    // propio (Claude lo emite como content blocks de tool_result); aqui se
-    // degrada a solo-texto, anexando la transcripcion si el pipeline de
-    // vision proceso la imagen.
+    // be a string"), y Chat Completions no admite imagenes en role 'tool' de
+    // ninguna forma. Los drivers con serializador propio si lo resuelven nativo
+    // (Claude: content blocks dentro de tool_result; Gemini: parts extra en el
+    // mismo turno; Ollama: campo images), asi que esto es solo para la familia
+    // OpenAI-compatible:
+    //   - los adjuntos de texto se inlinean en el propio string del resultado;
+    //   - la media nativa (imagen/audio) se acumula y sale despues del grupo
+    //     como un mensaje 'user' sintetico (ver FlushToolMedia);
+    //   - si el modelo no declara la capacidad, se cae a la transcripcion que
+    //     dejo el bridge de vision/audio.
+    // OJO si esto crece: las imagenes de tool results se reenvian en cada turno
+    // siguiente. Si algun dia pesa en tokens, la solucion NO es un flag aqui
+    // sino una poda en TAiChat que honren los cuatro serializadores por igual;
+    // hoy Claude/Gemini/Ollama ya se comportan asi y nadie lo ha reportado.
     if SameText(Msg.FRole, 'tool') then
     begin
       var LToolText := Msg.FPrompt;
+
+      // Adjuntos de texto: inline, sin mensaje extra y sin perdida.
+      for MediaFile in Msg.MediaFiles.GetMediaList([Tfc_Text], False) do
+      begin
+        var LFileText := MediaFileAsText(MediaFile);
+        if LFileText <> '' then
+          LToolText := LToolText + sLineBreak + '[Archivo: ' + MediaFile.Filename + ']' + sLineBreak + LFileText;
+      end;
+
+      // Transcripcion del bridge. TAiChat.RunNew ya la inyecta en el Prompt del
+      // AskMsg, y en una continuacion el AskMsg ES este mensaje tool: sin el
+      // Pos() el texto saldria duplicado.
       var LToolTrans := Msg.GetMediaTranscription;
-      if LToolTrans <> '' then
-        LToolText := LToolText + sLineBreak + '[Descripcion de la imagen adjunta]: ' + LToolTrans;
+      if (LToolTrans <> '') and (Pos(LToolTrans, LToolText) = 0) then
+        LToolText := LToolText + sLineBreak + '[Descripcion del adjunto]: ' + LToolTrans;
+
       JObj.AddPair('content', LToolText);
       Result.Add(JObj);
+
+      // Media nativa -> buffer; la vuelca FlushToolMedia al cerrar el grupo.
+      var LToolNative: TAiFileCategories := [];
+      if cap_Image in FModelCaps then Include(LToolNative, Tfc_Image);
+      if cap_Audio in FModelCaps then Include(LToolNative, Tfc_Audio);
+      if LToolNative <> [] then
+        for MediaFile in Msg.MediaFiles.GetMediaList(LToolNative, False) do
+        begin
+          LPendingMedia.Add(MediaFile);
+          if Msg.FFunctionName <> '' then
+            LPendingNames.Add(Msg.FFunctionName);
+        end;
+
       Continue;
     end;
 
@@ -986,7 +1111,7 @@ begin
               jImgUrl := TJSONObject.Create;
               jImgUrl.AddPair('url', S);
 
-              If Msg.MediaFiles[J].Detail <> '' then // Si define high or low.
+              If MediaFile.Detail <> '' then // Si define high or low.
                 jImgUrl.AddPair('detail', MediaFile.Detail);
 
               JObjImg := TJSONObject.Create;
@@ -1088,6 +1213,14 @@ begin
     // Los drivers que lo requieren (DeepSeek) lo agregan en su propio GetMessages override.
 
     Result.Add(JObj);
+  end;
+
+    // El historial puede terminar en un grupo de tool results (continuacion):
+    // su media sale aqui.
+    FlushToolMedia;
+  finally
+    LPendingMedia.Free;
+    LPendingNames.Free;
   end;
 end;
 

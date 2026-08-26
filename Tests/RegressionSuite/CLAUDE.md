@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: < 1 segundo.
 
-## Cobertura actual (33 casos)
+## Cobertura actual (37 casos)
 
 | Área | Casos |
 |------|-------|
@@ -41,6 +41,7 @@ Duración típica: < 1 segundo.
 | A2A streaming | reanudar un task en `input-required` con `SendStreamingMessage` (SSE crudo) |
 | A2A Agent Card | skills declaradas (con tags) y skill `run-graph` por defecto cuando no hay ninguna |
 | RAG | búsqueda con `Options` en nil sobre el driver `.mkai` (regresión del AV por `IfThen`) |
+| Chat / tool results | serialización OpenAI-compatible: tool calls paralelas con imagen → un solo `user` sintético tras el grupo, modelo sin `cap_Image` → transcripción sin media, transcripción no duplicada, adjunto de texto inline |
 | Evals | autoprueba del runner (conteo PASS/FAIL) |
 
 ## Estructura
