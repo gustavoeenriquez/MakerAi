@@ -1872,7 +1872,12 @@ begin
     LocalToolsObj := TJSonObject.Create;
     var LLocalTools := FFunctions.ToJSon;
     LocalToolsObj.AddPair('tools', LLocalTools);
-    TJsonToolUtils.NormalizeToolsFromSource('local', LocalToolsObj, LAllNormalizedTools); // Usamos 'local' o un nombre vacío
+    // Fuente vacia = SIN prefijo: las funciones locales viajan al proveedor con su
+    // nombre real. El prefijo 'local_99_' confundia a Claude en continuaciones
+    // multi-turn (con el tool_use del historial renombrado, re-ejecutaba la tool en
+    // vez de responder). El dispatch no lo necesita: DoCallFunction resuelve nombres
+    // sin separador como funcion local, y sigue aceptando 'local_99_' legado.
+    TJsonToolUtils.NormalizeToolsFromSource('', LocalToolsObj, LAllNormalizedTools);
 
     // 1b. FUNCIONES INTERNAS DE AUTOMCP (ppm_search, ppm_install, call_mcp_tool)
     // Lazy init: si Active=True pero las funciones aún no existen (ej: Active activado
@@ -1884,7 +1889,9 @@ begin
       var LAutoObj := TJSonObject.Create;
       try
         LAutoObj.AddPair('tools', FAutoMCPFunctions.ToJSon);
-        TJsonToolUtils.NormalizeToolsFromSource('local', LAutoObj, LAllNormalizedTools);
+        // Igual que las locales: sin prefijo (ppm_search/ppm_install/call_mcp_tool
+        // se despachan por nombre limpio en DoCallFunction).
+        TJsonToolUtils.NormalizeToolsFromSource('', LAutoObj, LAllNormalizedTools);
       finally
         LAutoObj.Free;
       end;

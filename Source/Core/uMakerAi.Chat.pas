@@ -427,6 +427,11 @@ type
     FPendingToolRun: Boolean;
     FThinking_tokens: Integer;
     FCached_tokens: Integer;
+    // Contador de tokens de ESCRITURA de cache a nivel de componente, gemelo de
+    // FCached_tokens (lectura). Los drivers que soportan prompt caching lo ACUMULAN
+    // por ronda igual que FPrompt_tokens, para que un bucle de tool calling no
+    // pierda las rondas intermedias. Ver TAiClaudeChat.ParseChat.
+    FCache_write_tokens: Integer;
     FCacheContext: Boolean; // flag portable: cachear el contexto estable (system + tools)
 
     // Devuelve los tipos de archivo que el modelo acepta nativamente (derivado de ModelConfig.ModelCaps)
@@ -579,6 +584,7 @@ type
     Property Seed: Integer read FSeed write SetSeed;
     Property Stop: string read FStop write SetStop;
     Property Cached_tokens: Integer read FCached_tokens write SetCached_tokens;
+    Property Cache_write_tokens: Integer read FCache_write_tokens write FCache_write_tokens;
     // Flag portable de prompt caching. Activa el cacheo del contexto estable
     // (system + tools). En Claude habilita los breakpoints cache_control; en los
     // providers con caching automatico del servidor (OpenAI, DeepSeek, Kimi, Groq,
@@ -3981,16 +3987,16 @@ begin
     if Assigned(ResMsg) then
     begin
       Result := ResMsg.Prompt;
-      if (AskMsg.Role <> 'tool') and (AskMsg.ToolCallId = '') then
+      // La respuesta del assistant se archiva SIEMPRE en el historial, tambien
+      // cuando AskMsg es un tool result (continuacion): antes se liberaba y el
+      // integrador perdia los metadatos del ResMsg (Cache_write_tokens/
+      // Cached_tokens de Claude, ReasoningContent, MediaFiles) porque
+      // GetLastMessage devolvia el mensaje del tool y no el del assistant.
+      if FMessages.IndexOf(ResMsg) = -1 then // guard: evitar doble-add (ej: Cohere ParseChat ya lo agregó)
       begin
-        if FMessages.IndexOf(ResMsg) = -1 then // guard: evitar doble-add (ej: Cohere ParseChat ya lo agregó)
-        begin
-          ResMsg.Id := FMessages.Count + 1;
-          FMessages.Add(ResMsg);
-        end;
-      end
-      else if LOwnsResMsg then
-        FreeAndNil(ResMsg); // respuesta de tool no se agrega al historial: liberar si somos dueños
+        ResMsg.Id := FMessages.Count + 1;
+        FMessages.Add(ResMsg);
+      end;
     end;
 
   except

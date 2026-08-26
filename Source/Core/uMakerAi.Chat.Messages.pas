@@ -935,6 +935,24 @@ begin
     If Msg.FFunctionName <> '' then
       JObj.AddPair('name', Msg.FFunctionName);
 
+    // Los mensajes role:'tool' llevan SIEMPRE content string: el contrato
+    // OpenAI/Groq rechaza arrays en tool results ("messages[N].content must
+    // be a string"). Un tool result con imagen adjunta (p.ej. el snapshot del
+    // lienzo de un editor agentico) solo lo soportan drivers con serializador
+    // propio (Claude lo emite como content blocks de tool_result); aqui se
+    // degrada a solo-texto, anexando la transcripcion si el pipeline de
+    // vision proceso la imagen.
+    if SameText(Msg.FRole, 'tool') then
+    begin
+      var LToolText := Msg.FPrompt;
+      var LToolTrans := Msg.GetMediaTranscription;
+      if LToolTrans <> '' then
+        LToolText := LToolText + sLineBreak + '[Descripcion de la imagen adjunta]: ' + LToolTrans;
+      JObj.AddPair('content', LToolText);
+      Result.Add(JObj);
+      Continue;
+    end;
+
     // Filtra los archivos que el modelo acepta nativamente (derivado de FModelCaps)
     var LNativeTypes: TAiFileCategories := [Tfc_Text];
     if cap_Image in FModelCaps then Include(LNativeTypes, Tfc_Image);

@@ -1342,9 +1342,12 @@ begin
     aCached_tokens := uso.GetValue<Integer>('cache_read_input_tokens', 0);
     ResMsg.Cache_write_tokens := uso.GetValue<Integer>('cache_creation_input_tokens', 0);
 
-    // Nota: Total tokens en Claude suele ser input + output.
-    // Cache creation tokens ya est?n incluidos en input_tokens seg?n la doc.
-    aTotal_tokens := aPrompt_tokens + aCompletion_tokens;
+    // OJO: input_tokens, cache_read_input_tokens y cache_creation_input_tokens
+    // son DISJUNTOS en la API de Anthropic — los cacheados NO estan incluidos en
+    // input_tokens (el comentario anterior afirmaba lo contrario y es falso).
+    // El prompt real del turno es la suma de los tres; quien facture debe sumarlos.
+    aTotal_tokens := aPrompt_tokens + aCompletion_tokens
+                   + aCached_tokens + ResMsg.Cache_write_tokens;
   end;
 
   // 3. Parse Content (Interleaved Blocks)
@@ -1592,10 +1595,15 @@ begin
   // 5. Update Component State & Response Message (AQU? EST? LA CORRECCI?N)
   Self.FLastContent := Respuesta;
 
-  // Actualizar contadores globales del componente
+  // Actualizar contadores globales del componente.
+  // Los de cache se acumulan IGUAL que los de input/output: en un bucle de tool
+  // calling cada ronda es una llamada facturable y el consumidor solo ve el
+  // ultimo mensaje, asi que sin acumular aqui se perdian las rondas 1..N-1.
   Self.Prompt_tokens := Self.Prompt_tokens + aPrompt_tokens;
   Self.Completion_tokens := Self.Completion_tokens + aCompletion_tokens;
   Self.Total_tokens := Self.Total_tokens + aTotal_tokens;
+  Self.Cached_tokens := Self.Cached_tokens + aCached_tokens;
+  Self.Cache_write_tokens := Self.Cache_write_tokens + ResMsg.Cache_write_tokens;
 
   // Actualizar contadores del Mensaje de Respuesta
   ResMsg.Prompt_tokens := aPrompt_tokens;
@@ -1619,8 +1627,16 @@ begin
     Msg.Tool_calls := sToolCalls;
     Msg.ReasoningContent := ResMsg.ReasoningContent;
     Msg.ThinkingSignature := ResMsg.ThinkingSignature;
-    // Asignar tokens tambi?n al mensaje temporal si es necesario,
-    // aunque generalmente se quedan en el ResMsg principal
+    // Los contadores DEBEN copiarse: este mensaje temporal es el que devuelve
+    // GetLastMessage cuando la respuesta trae tool_calls, y es de ahi de donde
+    // el consumidor (broker/facturacion) lee el usage del turno. Sin esto, toda
+    // llamada que termina en tool_calls se facturaba con cache_read/cache_write
+    // en cero aunque Anthropic los hubiera reportado.
+    Msg.Prompt_tokens := aPrompt_tokens;
+    Msg.Completion_tokens := aCompletion_tokens;
+    Msg.Total_tokens := aTotal_tokens;
+    Msg.Cached_tokens := aCached_tokens;
+    Msg.Cache_write_tokens := ResMsg.Cache_write_tokens;
     Msg.Id := FMessages.Count + 1;
     FMessages.Add(Msg);
   end;
