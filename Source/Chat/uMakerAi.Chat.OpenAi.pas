@@ -1135,21 +1135,38 @@ begin
   // D) USO DE TOKENS (Costos, Cach? y Razonamiento)
   if jObj.TryGetValue<TJSonObject>('usage', JUsage) then
   begin
+    var LPrompt: Int64 := 0;
+    var LCompletion: Int64 := 0;
+    var LTotal: Int64 := 0;
+    var LCached: Int64 := 0;
+
     // Totales b?sicos
     if JUsage.TryGetValue<Int64>('input_tokens', TokenCount) then
+    begin
       ResMsg.Prompt_tokens := TokenCount;
+      LPrompt := TokenCount;
+    end;
 
     if JUsage.TryGetValue<Int64>('output_tokens', TokenCount) then
+    begin
       ResMsg.Completion_tokens := TokenCount;
+      LCompletion := TokenCount;
+    end;
 
     if JUsage.TryGetValue<Int64>('total_tokens', TokenCount) then
+    begin
       ResMsg.Total_tokens := TokenCount;
+      LTotal := TokenCount;
+    end;
 
     // Detalles de Entrada: Tokens en Cach? (Ahorro)
     if JUsage.TryGetValue<TJSonObject>('input_tokens_details', JInputDetails) then
     begin
       if JInputDetails.TryGetValue<Int64>('cached_tokens', TokenCount) then
+      begin
         ResMsg.cached_tokens := TokenCount;
+        LCached := TokenCount;
+      end;
     end;
 
     // Detalles de Salida: Tokens de Razonamiento (Thinking)
@@ -1158,6 +1175,17 @@ begin
       if JUsageDetails.TryGetValue<Int64>('reasoning_tokens', TokenCount) then
         ResMsg.Thinking_tokens := TokenCount;
     end;
+
+    // Contadores del COMPONENTE. Este override solo alimentaba ResMsg, y quien
+    // lee los tokens del componente (Prompt_tokens) recibia 0 con cualquier
+    // modelo servido por este driver. La clase base (uMakerAi.Chat.pas, ParseChat)
+    // y TAiClaudeChat.ParseChat si los acumulan; aqui faltaba.
+    // Se ACUMULAN por ronda, como en esos dos, para que un bucle de tool calling
+    // no pierda las rondas intermedias.
+    Self.Prompt_tokens := Self.Prompt_tokens + Integer(LPrompt);
+    Self.Completion_tokens := Self.Completion_tokens + Integer(LCompletion);
+    Self.Total_tokens := Self.Total_tokens + Integer(LTotal);
+    Self.Cached_tokens := Self.Cached_tokens + Integer(LCached);
   end;
 
   // ---------------------------------------------------------------------------
@@ -2882,23 +2910,47 @@ begin
             begin
               if JResp.TryGetValue<TJSonObject>('usage', JUsage) then
               begin
+                var LSPrompt: Int64 := 0;
+                var LSCompletion: Int64 := 0;
+                var LSTotal: Int64 := 0;
+                var LSCached: Int64 := 0;
+
                 // Tokens normales (Usando los nombres de tu clase)
                 if JUsage.TryGetValue<Int64>('total_tokens', TokenCount) then
+                begin
                   FinalMsg.Total_tokens := TokenCount;
+                  LSTotal := TokenCount;
+                end;
                 if JUsage.TryGetValue<Int64>('input_tokens', TokenCount) then
+                begin
                   FinalMsg.Prompt_tokens := TokenCount;
+                  LSPrompt := TokenCount;
+                end;
                 if JUsage.TryGetValue<Int64>('output_tokens', TokenCount) then
+                begin
                   FinalMsg.Completion_tokens := TokenCount;
+                  LSCompletion := TokenCount;
+                end;
 
                 // Tokens Cach?
                 if JUsage.TryGetValue<TJSonObject>('input_tokens_details', JInputDetails) then
                   if JInputDetails.TryGetValue<Int64>('cached_tokens', TokenCount) then
+                  begin
                     FinalMsg.cached_tokens := TokenCount;
+                    LSCached := TokenCount;
+                  end;
 
                 // Tokens Reasoning
                 if JUsage.TryGetValue<TJSonObject>('output_tokens_details', JUsageDetails) then
                   if JUsageDetails.TryGetValue<Int64>('reasoning_tokens', TokenCount) then
                     FinalMsg.Thinking_tokens := TokenCount;
+
+                // Contadores del COMPONENTE, igual que en ParseChat: sin esto, en
+                // streaming el consumo tambien llegaba en cero a quien lo lee.
+                Self.Prompt_tokens := Self.Prompt_tokens + Integer(LSPrompt);
+                Self.Completion_tokens := Self.Completion_tokens + Integer(LSCompletion);
+                Self.Total_tokens := Self.Total_tokens + Integer(LSTotal);
+                Self.Cached_tokens := Self.Cached_tokens + Integer(LSCached);
               end;
               if JResp.TryGetValue<string>('model', DeltaVal) then
                 FinalMsg.Model := DeltaVal;
