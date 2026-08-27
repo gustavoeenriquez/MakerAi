@@ -376,6 +376,21 @@ implementation
 uses
   IdTCPClient, IdIOHandler, IdExceptionCore, uMakerAi.Telemetry;
 
+
+// Un token que ya trae su esquema de autorizacion ("Basic ..." o "Bearer ...")
+// se usa tal cual. Solo se antepone "Bearer " cuando el token viene pelado, que
+// es como se comportaba antes: los tokens existentes no cambian en nada.
+//
+// Hace falta para hablar con servidores MCP que no usan Bearer. Por ejemplo el
+// de contabilidad, que releva la credencial a un DataSnap con HTTP Basic.
+function ValorDeAutorizacion(const AToken: string): string;
+begin
+  if AToken.StartsWith('Basic ', True) or AToken.StartsWith('Bearer ', True) then
+    Result := AToken
+  else
+    Result := 'Bearer ' + AToken;
+end;
+
 // GetTickCount64 portable: TThread.GetTickCount64 no existe en Delphi 10.4.
 // TStopwatch (System.Diagnostics) es monótono y está disponible en todas las
 // versiones y plataformas; solo se usa para medir deltas de tiempo (timeouts).
@@ -2159,7 +2174,7 @@ begin
         HeaderName := GetParamByName('ApiHeaderName');
         if HeaderName.IsEmpty then
           HeaderName := 'Authorization';
-        LHeaders := [TNetHeader.Create(HeaderName, 'Bearer ' + BearerToken)];
+        LHeaders := [TNetHeader.Create(HeaderName, ValorDeAutorizacion(BearerToken))];
       end
       else
         LHeaders := [];
@@ -2264,7 +2279,7 @@ begin
         HeaderName := GetParamByName('ApiHeaderName');
         if HeaderName.IsEmpty then
           HeaderName := 'Authorization';
-        LHeaders := [TNetHeader.Create(HeaderName, 'Bearer ' + BearerToken)];
+        LHeaders := [TNetHeader.Create(HeaderName, ValorDeAutorizacion(BearerToken))];
       end
       else
         LHeaders := [];
@@ -2377,7 +2392,7 @@ begin
           HeaderName := GetParamByName('ApiHeaderName');
           if HeaderName.IsEmpty then
             HeaderName := 'Authorization';
-          LHeaders := [TNetHeader.Create(HeaderName, 'Bearer ' + BearerToken)];
+          LHeaders := [TNetHeader.Create(HeaderName, ValorDeAutorizacion(BearerToken))];
         end
         else
           LHeaders := []; // Array vac?o si no hay token
@@ -2939,7 +2954,7 @@ begin
             HeaderName := GetParamByName('ApiHeaderName');
             if HeaderName.IsEmpty then
               HeaderName := 'Authorization';
-            AuthLine := HeaderName + ': Bearer ' + BearerToken + #13#10;
+            AuthLine := HeaderName + ': ' + ValorDeAutorizacion(BearerToken) + #13#10;
           end;
 
           Request :=
@@ -3214,7 +3229,7 @@ begin
         var
         Token := GetParamByName('ApiBearerToken');
         if (Token <> '') and (Token <> '@MCPBearerToken') then
-          LHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + Token)]
+          LHeaders := [TNetHeader.Create('Authorization', ValorDeAutorizacion(Token))]
         else
           LHeaders := [];
 
