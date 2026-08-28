@@ -983,6 +983,13 @@ begin
       end;
     end;
 
+    // El filtrado dinamico de web_search_20260209 se ejecuta con codigo, asi que
+    // Anthropic AUTO-INYECTA su propio 'code_execution' cuando esa variante esta
+    // presente. Si ademas lo declaramos nosotros, rechaza la peticion entera con
+    // 'Auto-injecting tools would conflict with existing tool names:
+    // [''code_execution'']'. Se anota aqui para no declararlo dos veces.
+    var LAutoInjectsCodeExec := False;
+
     if cap_WebSearch in ModelConfig.ModelCaps then
     begin
       JTools := TJSONObject.Create;
@@ -990,14 +997,20 @@ begin
       // (el modelo filtra resultados con codigo antes de que entren al
       // contexto); los modelos previos siguen con la variante basica
       if LIsAdaptiveThinking or LIs46 then
-        JTools.AddPair('type', 'web_search_20260209')
+      begin
+        JTools.AddPair('type', 'web_search_20260209');
+        LAutoInjectsCodeExec := True;
+      end
       else
         JTools.AddPair('type', 'web_search_20250305');
       JTools.AddPair('name', 'web_search');
       jArrTools.Add(JTools);
     end;
 
-    if cap_CodeInterpreter in ModelConfig.ModelCaps then
+    // Solo se declara si nadie lo va a auto-inyectar. Cuando se omite por eso,
+    // la capacidad NO se pierde: la tool que inyecta Anthropic es un
+    // code_execution real y la cabecera beta se sigue enviando igual.
+    if (cap_CodeInterpreter in ModelConfig.ModelCaps) and (not LAutoInjectsCodeExec) then
     begin
       JTools := TJSONObject.Create;
       JTools.AddPair('type', 'code_execution_20250522');
