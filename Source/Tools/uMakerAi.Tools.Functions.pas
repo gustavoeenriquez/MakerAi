@@ -1576,15 +1576,29 @@ begin
       end
       else
       begin
-        // Cliente no encontrado, deshabilitado o no disponible.
-        // Setear Response para que el driver pueda enviar un tool result válido al LLM.
-        if not Assigned(ClientItem) then
-          ToolCall.Response := Format('{"error":"MCP server ''%s'' not found"}', [ServerName])
-        else if not ClientItem.Enabled then
-          ToolCall.Response := Format('{"error":"MCP server ''%s'' is disabled"}', [ServerName])
+        // El nombre contiene MCP_TOOL_SEP pero NO hay servidor MCP que lo
+        // respalde. Antes de dar el error, se busca por nombre COMPLETO en las
+        // funciones registradas: '_99_' es una convencion interna nuestra, no
+        // una secuencia reservada, y quien declara una tool tiene todo el
+        // derecho a llamarla 'alfa_99_beta'. Sin esta salida, una tool asi
+        // quedaba muda: se respondia 'MCP server not found' y el modelo se
+        // inventaba una explicacion sobre un servidor caido en vez de emitir
+        // el tool_call.
+        Funcion := FFunctions.GetFunction(ToolCall.Name);
+        if Assigned(Funcion) and Assigned(Funcion.OnAction) then
+          Funcion.OnAction(Self, Funcion, ToolCall.Name, ToolCall, Result)
         else
-          ToolCall.Response := Format('{"error":"MCP server ''%s'' is not available"}', [ServerName]);
-        Result := True;
+        begin
+          // Cliente no encontrado, deshabilitado o no disponible.
+          // Setear Response para que el driver pueda enviar un tool result válido al LLM.
+          if not Assigned(ClientItem) then
+            ToolCall.Response := Format('{"error":"MCP server ''%s'' not found"}', [ServerName])
+          else if not ClientItem.Enabled then
+            ToolCall.Response := Format('{"error":"MCP server ''%s'' is disabled"}', [ServerName])
+          else
+            ToolCall.Response := Format('{"error":"MCP server ''%s'' is not available"}', [ServerName]);
+          Result := True;
+        end;
       end;
     end;
 
