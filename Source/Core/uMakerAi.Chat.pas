@@ -2856,6 +2856,7 @@ Var
   jMessage: TJSonObject;
   uso: TJSonObject;
   aPrompt_tokens, aCompletion_tokens, aTotal_tokens, aCached_tokens: Integer;
+  aReasoning_tokens: Integer;
   Role, Respuesta, sReasoning: String;
   ToolMsg, AskMsg: TAiChatMessage;
   // Msg: TAiChatMessage;
@@ -2903,6 +2904,7 @@ begin
   aPrompt_tokens := 0;
   aCompletion_tokens := 0;
   aTotal_tokens := 0;
+  aReasoning_tokens := 0;
   if Assigned(jObj.GetValue('model')) then
     ModelVersion := jObj.GetValue('model').Value;
   uso := jObj.GetValue('usage') as TJSonObject;
@@ -2921,6 +2923,20 @@ begin
       var jPromptDetails: TJSonObject;
       if uso.TryGetValue<TJSonObject>('prompt_tokens_details', jPromptDetails) then
         jPromptDetails.TryGetValue<Integer>('cached_tokens', aCached_tokens);
+    end;
+
+    // Tokens de razonamiento de los modelos que piensan antes de responder
+    // (GLM, DeepSeek, gpt-oss...). El estandar de Chat Completions los expone
+    // en 'completion_tokens_details.reasoning_tokens'; algunos proveedores los
+    // dejan sueltos en la raiz del usage, asi que se prueban los dos sitios.
+    // OJO: ya vienen SUMADOS dentro de completion_tokens. Esto solo sirve para
+    // poder reportarlos por separado; no se restan de la salida ni se facturan
+    // dos veces.
+    if not uso.TryGetValue<Integer>('reasoning_tokens', aReasoning_tokens) then
+    begin
+      var jComplDetails: TJSonObject;
+      if uso.TryGetValue<TJSonObject>('completion_tokens_details', jComplDetails) then
+        jComplDetails.TryGetValue<Integer>('reasoning_tokens', aReasoning_tokens);
     end;
   end;
 
@@ -2993,6 +3009,7 @@ begin
   FPrompt_tokens := FPrompt_tokens + aPrompt_tokens;
   FCompletion_tokens := FCompletion_tokens + aCompletion_tokens;
   FTotal_tokens := FTotal_tokens + aTotal_tokens;
+  FThinking_tokens := FThinking_tokens + aReasoning_tokens;
 
   if sToolCalls.IsEmpty then // Si es una respuesta normal adiciona los datos al ResMsg
   Begin
@@ -3004,6 +3021,7 @@ begin
     ResMsg.Completion_tokens := ResMsg.Completion_tokens + aCompletion_tokens;
     ResMsg.Total_tokens := ResMsg.Total_tokens + aTotal_tokens;
     ResMsg.Cached_tokens := ResMsg.Cached_tokens + aCached_tokens;
+    ResMsg.Thinking_tokens := ResMsg.Thinking_tokens + aReasoning_tokens;
     DoProcessResponse(AskMsg, ResMsg, Respuesta);
   End
   Else // Si tiene toolcall lo adiciona y ejecuta nuevamente el run para obtener la respuesta
@@ -3079,6 +3097,7 @@ begin
         ResMsg.Prompt_tokens := ResMsg.Prompt_tokens + aPrompt_tokens;
         ResMsg.Completion_tokens := ResMsg.Completion_tokens + aCompletion_tokens;
         ResMsg.Total_tokens := ResMsg.Total_tokens + aTotal_tokens;
+        ResMsg.Thinking_tokens := ResMsg.Thinking_tokens + aReasoning_tokens;
         DoProcessResponse(AskMsg, ResMsg, Respuesta);
       End
       else
