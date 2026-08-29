@@ -297,8 +297,6 @@ type
     FCompletion_tokens: Integer;
     FTotal_tokens: Integer;
     FPrompt_tokens: Integer;
-    FStreamPromptTokens: Integer;     // Tokens captured from streaming usage chunks (reset after each [DONE])
-    FStreamCompletionTokens: Integer;
     FUrl: String;
     FResponseTimeOut: Integer;
     FOnInitChat: TAiChatOnInitChatEvent;
@@ -406,6 +404,15 @@ type
     FTools: TStrings;
     FLastContent: String;
     FLastReasoning: String;  // Acumula reasoning_content durante streaming SSE
+    // Usage real visto en los chunks SSE, para inyectarlo en el cierre sintetico
+    // del stream. Protected y no private: los drivers que reimplementan su propio
+    // handler SSE (DeepSeek) tienen que poder rellenarlos, o el usage sale a cero.
+    FStreamPromptTokens: Integer;     // Tokens captured from streaming usage chunks (reset after each [DONE])
+    FStreamCompletionTokens: Integer;
+    // finish_reason real del proveedor, visto en el ultimo chunk con choices.
+    // El cierre sintetico fabricaba un 'stop' fijo, asi que una respuesta
+    // cortada por max_tokens se presentaba al consumidor como un final limpio.
+    FStreamFinishReason: String;
     FLastPrompt: String;
     FLastError: String;
     FRunSpan: TAiSpan; // Telemetria: span del turno en curso (nil = sin telemetria activa)
@@ -2481,7 +2488,11 @@ Var
           FakeMsg.AddPair('tool_calls', TJSonArray(TJSonObject.ParseJSONValue(sToolCallsStr)));
 
         FakeChoice.AddPair('message', FakeMsg);
-        FakeChoice.AddPair('finish_reason', 'stop');
+        if FStreamFinishReason <> '' then
+          FakeChoice.AddPair('finish_reason', FStreamFinishReason)
+        else
+          FakeChoice.AddPair('finish_reason', 'stop');
+        FStreamFinishReason := '';  // como los contadores: un turno sin dato no hereda el anterior
         FakeChoicesArr.Add(FakeChoice);
         FakeResponseObj.AddPair('choices', FakeChoicesArr);
 
@@ -2570,6 +2581,11 @@ Var
       jArrChoices := jObj.GetValue<TJSonArray>('choices');
       if (jArrChoices <> nil) and (jArrChoices.Count > 0) then
       begin
+        // Se queda el finish_reason real del proveedor para el cierre sintetico.
+        var sChunkFinish: string := '';
+        if jArrChoices.Items[0].TryGetValue<string>('finish_reason', sChunkFinish) and (sChunkFinish <> '') then
+          FStreamFinishReason := sChunkFinish;
+
         Delta := jArrChoices.Items[0].GetValue<TJSonObject>('delta');
         if Assigned(Delta) then
         begin
@@ -3001,6 +3017,12 @@ begin
 
     var LFinishR: string := '';
     JItem.TryGetValue<String>('finish_reason', LFinishR);
+    // El dato se leia solo para decidir el fallback de reasoning y se tiraba: la
+    // propiedad ResMsg.FinishReason existia pero nadie la escribia por esta ruta,
+    // asi que el consumidor no podia distinguir un final limpio de una respuesta
+    // cortada por max_tokens. Vacio no se propaga, para no pisar lo ya leido.
+    if LFinishR <> '' then
+      ResMsg.FinishReason := LFinishR;
 
     If Not Trim(sRes).IsEmpty then
       Respuesta := Trim(Respuesta + sLineBreak + sRes)

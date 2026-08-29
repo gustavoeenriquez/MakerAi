@@ -246,6 +246,11 @@ end;
 function TAiDeepSeekChat.InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String;
 begin
   FTmpReasoning := ''; // Resetear antes de cada nueva petición
+  // A cero en cada peticion: sin esto un turno sin usage en sus chunks
+  // heredaria los contadores del turno anterior e inflaria el consumo.
+  FStreamPromptTokens := 0;
+  FStreamCompletionTokens := 0;
+  FStreamFinishReason := '';
   Result := inherited InternalRunCompletions(ResMsg, AskMsg);
 end;
 
@@ -333,10 +338,13 @@ Var
         FakeResponseObj.AddPair('id', 'stream-' + IntToStr(TThread.GetTickCount));
         FakeResponseObj.AddPair('model', Model);
         FakeUsage := TJSonObject.Create;
-        FakeUsage.AddPair('prompt_tokens', TJSONNumber.Create(0));
-        FakeUsage.AddPair('completion_tokens', TJSONNumber.Create(0));
-        FakeUsage.AddPair('total_tokens', TJSONNumber.Create(0));
+        // Los tokens vistos en el stream, no ceros: ver la captura en ProcessLine.
+        FakeUsage.AddPair('prompt_tokens', TJSONNumber.Create(FStreamPromptTokens));
+        FakeUsage.AddPair('completion_tokens', TJSONNumber.Create(FStreamCompletionTokens));
+        FakeUsage.AddPair('total_tokens', TJSONNumber.Create(FStreamPromptTokens + FStreamCompletionTokens));
         FakeResponseObj.AddPair('usage', FakeUsage);
+        FStreamPromptTokens := 0;
+        FStreamCompletionTokens := 0;
         FakeChoicesArr := TJSonArray.Create;
         FakeChoice := TJSonObject.Create;
         FakeMsg := TJSonObject.Create;
@@ -348,7 +356,11 @@ Var
         if sToolCallsStr <> '' then
           FakeMsg.AddPair('tool_calls', TJSonArray(TJSonObject.ParseJSONValue(sToolCallsStr)));
         FakeChoice.AddPair('message', FakeMsg);
-        FakeChoice.AddPair('finish_reason', 'stop');
+        if FStreamFinishReason <> '' then
+          FakeChoice.AddPair('finish_reason', FStreamFinishReason)
+        else
+          FakeChoice.AddPair('finish_reason', 'stop');
+        FStreamFinishReason := '';
         FakeChoicesArr.Add(FakeChoice);
         FakeResponseObj.AddPair('choices', FakeChoicesArr);
         TempMsg := TAiChatMessage.Create('', FTmpRole);
@@ -410,6 +422,11 @@ Var
       jArrChoices := jObj.GetValue<TJSonArray>('choices');
       if (jArrChoices <> nil) and (jArrChoices.Count > 0) then
       begin
+        // Se queda el finish_reason real del proveedor para el cierre sintetico.
+        var sChunkFinish: string := '';
+        if jArrChoices.Items[0].TryGetValue<string>('finish_reason', sChunkFinish) and (sChunkFinish <> '') then
+          FStreamFinishReason := sChunkFinish;
+
         Delta := jArrChoices.Items[0].GetValue<TJSonObject>('delta');
         if Assigned(Delta) then
         begin
@@ -491,6 +508,19 @@ Var
             end;
           end;
         end;
+      end;
+
+      // Usage real del turno. Llega en un chunk con choices vacio, justo antes
+      // de [DONE], asi que se lee a nivel raiz y NO dentro del if de choices.
+      // Sin esto el cierre sintetico de abajo rellenaba ceros y todo el trafico
+      // DeepSeek en streaming se contabilizaba (y se facturaba) a cero.
+      var JStreamUsage: TJSonObject;
+      if jObj.TryGetValue<TJSonObject>('usage', JStreamUsage) and Assigned(JStreamUsage) then
+      begin
+        var aIn  := JStreamUsage.GetValue<Integer>('prompt_tokens', 0);
+        var aOut := JStreamUsage.GetValue<Integer>('completion_tokens', 0);
+        if aIn  > 0 then FStreamPromptTokens     := aIn;
+        if aOut > 0 then FStreamCompletionTokens := aOut;
       end;
     Finally
       jObj.Free;
