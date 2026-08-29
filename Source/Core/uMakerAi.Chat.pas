@@ -2991,16 +2991,28 @@ begin
 
     jMessage.TryGetValue<String>('content', sRes);
 
-    If Not Trim(sRes).IsEmpty then
-      Respuesta := Trim(Respuesta + sLineBreak + sRes)
-    Else
-      Respuesta := Trim(Respuesta + sLineBreak + sReasoning);
-
+    // Se leen ANTES de decidir el contenido: ambos condicionan si el
+    // razonamiento puede hacer de respuesta.
     sToolCalls := '';
     If jMessage.TryGetValue<TJSonValue>('tool_calls', JToolCallsValue) and Assigned(JToolCallsValue) and (JToolCallsValue is TJSonArray) then
     Begin
       sToolCalls := TJSonArray(JToolCallsValue).Format;
     End;
+
+    var LFinishR: string := '';
+    JItem.TryGetValue<String>('finish_reason', LFinishR);
+
+    If Not Trim(sRes).IsEmpty then
+      Respuesta := Trim(Respuesta + sLineBreak + sRes)
+    Else if sToolCalls.IsEmpty and (not SameText(LFinishR, 'length')) then
+      // Sin 'content': hay razonadores que responden SOLO en reasoning, y para
+      // esos el razonamiento SI es la respuesta. Pero no en dos casos:
+      //   - hay tool_calls: la respuesta del turno es la llamada, no el monologo.
+      //   - finish_reason 'length': la generacion se corto a media frase, asi que
+      //     el razonamiento esta incompleto y no es una respuesta.
+      // Sin estos dos frenos, el cliente recibia el monologo interno del modelo
+      // (habitualmente en ingles) como si fuera la contestacion al usuario.
+      Respuesta := Trim(Respuesta + sLineBreak + sReasoning);
   End;
 
   Respuesta := Trim(Respuesta);
