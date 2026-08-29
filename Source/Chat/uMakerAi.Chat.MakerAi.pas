@@ -71,6 +71,14 @@ type
     FFileReaderSlug:     string;
     FFileReaderId:       Integer;
     FPendingMediaParts:  TList<TAiMediaFile>;
+    // Usage REAL visto en los chunks SSE. El cierre sintetico del stream
+    // rellenaba usage con ceros fijos, asi que con streaming los contadores de
+    // tokens de TODA la aplicacion quedaban a cero (la CLI mostraba 0 en
+    // /tokens y no habia forma de medir consumo). El servidor SI lo manda, en
+    // el penultimo chunk; solo habia que quedarselo.
+    FStreamPromptTok:    Integer;
+    FStreamComplTok:     Integer;
+    FStreamTotalTok:     Integer;
     procedure ResetSessionId;
     procedure HandleStreamDone;
     procedure ParseAndAccumulateMediaParts(AMediaParts: TJSONArray);
@@ -628,6 +636,11 @@ end;
 
 Function TAiMakerAiChat.InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String;
 begin
+  // A cero en cada peticion: si un turno no trae usage en sus chunks, sin esto
+  // se reutilizaria el del turno anterior y el consumo saldria inflado.
+  FStreamPromptTok := 0;
+  FStreamComplTok  := 0;
+  FStreamTotalTok  := 0;
   MKLog('SEND', 'URL=' + Url + ' Model=' + Model +
     ' Async=' + BoolToStr(Asynchronous, True) +
     ' Tools=' + BoolToStr(Tool_Active, True));
@@ -784,9 +797,10 @@ begin
     LFakeJson.AddPair('model', Model);
 
     LFakeUsage := TJSONObject.Create;
-    LFakeUsage.AddPair('prompt_tokens',     TJSONNumber.Create(0));
-    LFakeUsage.AddPair('completion_tokens', TJSONNumber.Create(0));
-    LFakeUsage.AddPair('total_tokens',      TJSONNumber.Create(0));
+    // Los del stream, no ceros: ver FStreamPromptTok.
+    LFakeUsage.AddPair('prompt_tokens',     TJSONNumber.Create(FStreamPromptTok));
+    LFakeUsage.AddPair('completion_tokens', TJSONNumber.Create(FStreamComplTok));
+    LFakeUsage.AddPair('total_tokens',      TJSONNumber.Create(FStreamTotalTok));
     LFakeJson.AddPair('usage', LFakeUsage);
 
     LFakeMsg := TJSONObject.Create;
@@ -898,6 +912,16 @@ begin
       LChunk := TJSONObject.ParseJSONValue(LJsonStr) as TJSONObject;
       if Assigned(LChunk) then
       try
+        // usage: llega en el penultimo chunk del stream. Se guarda el ultimo
+        // visto, que es el acumulado del turno.
+        var LUsage: TJSONObject;
+        if LChunk.TryGetValue<TJSONObject>('usage', LUsage) and Assigned(LUsage) then
+        begin
+          LUsage.TryGetValue<Integer>('prompt_tokens',     FStreamPromptTok);
+          LUsage.TryGetValue<Integer>('completion_tokens', FStreamComplTok);
+          LUsage.TryGetValue<Integer>('total_tokens',      FStreamTotalTok);
+        end;
+
         if LChunk.TryGetValue<TJSONObject>('mk_progress', LProgress) then
         begin
           LStep := ''; LFile := ''; LPct := 0;
