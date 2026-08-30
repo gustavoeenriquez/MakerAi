@@ -53,6 +53,12 @@ type
     FDriverName: String;
     FModel: String;
     FParams: TStrings;
+    // Vista cacheada del registro para el par driver/modelo actual. Evita
+    // releer el registro global en cada asignacion a Params. Se invalida por
+    // clave (driver|modelo|expansion) y por version del registro.
+    FRegCache: TStringList;
+    FRegCacheKey: String;
+    FRegCacheVersion: Integer;
     FMessages: TAiChatMessages;
     FMessagesOwn: TAiChatMessages; // Instancia de mensajes que poseemos
     // FInitialInstructions: TStrings;
@@ -331,6 +337,8 @@ destructor TAiChatConnection.Destroy;
 begin
   FreeAndNil(FChat);  // nil before freeing FSystemPrompt/FMemory/FParams (OnChange=ParamsChanged checks FChat)
 
+  FRegCache.Free;
+
   FChatTools.Free;
   FSystemPrompt.Free;
   FJsonSchema.Free; // despues de FreeAndNil(FChat): su OnChange=ParamsChanged consulta FChat
@@ -399,9 +407,20 @@ begin
   if FModel <> Value then
   begin
     FModel := Value;
-    // Params.Values['model'] := FModel;
-    TAiChatFactory.Instance.RegisterUserParam(FDriverName, FModel, 'Model', FModel);
-
+    // Antes, aqui se hacia:
+    //   TAiChatFactory.Instance.RegisterUserParam(FDriverName, FModel, 'Model', FModel);
+    // es decir, se ESCRIBIA en el registro GLOBAL en cada cambio de modelo, solo
+    // para que ese valor volviera luego en GetDriverParams y ganara al
+    // 'Model=<default>' que trae RegisterDefaultParams del driver.
+    //
+    // Era estado de ESTA conexion viajando por una variable global: en un
+    // servidor con varios requests simultaneos, esa escritura corre a la vez que
+    // las lecturas de otros hilos sobre las mismas estructuras, sin ninguna
+    // sincronizacion. Medido con el caso conn.concurrent.setup de la suite:
+    // 1 de cada 320.000 montajes terminaba en EInvalidPointer.
+    //
+    // El modelo se impone ahora al final de UpdateAndApplyParams, sobre FParams,
+    // que es local a la conexion. Mismo efecto, sin tocar el registro global.
     UpdateAndApplyParams;
   end;
 end;
@@ -634,6 +653,8 @@ procedure TAiChatConnection.UpdateAndApplyParams;
 var
   LRegistryParams: TStringList;
   ShouldExpand: Boolean;
+  LCacheKey: String;
+  LRegVersion: Integer;
 begin
   if csLoading in ComponentState then
     Exit;
@@ -648,15 +669,37 @@ begin
   begin
     // Seguridad: No expandir claves API en tiempo de dise�o
     ShouldExpand := not(csDesigning in ComponentState);
-    LRegistryParams := TStringList.Create;
-    try
-      // 1. Obtener los par�metros oficiales del registro (Nivel 1, 2 y 3)
-      TAiChatFactory.Instance.GetDriverParams(FDriverName, FModel, LRegistryParams, ShouldExpand);
+
+    // Vista del registro CACHEADA por conexion.
+    //
+    // Este metodo se llama en CADA asignacion a Params (ParamsChanged), o sea
+    // unas ocho veces por request en un servidor, y cada llamada releia el
+    // registro global entero. Ahora se relee solo cuando cambia el driver, el
+    // modelo, el modo de expansion o la version del registro (que solo sube en
+    // las registraciones del arranque). El resto son aciertos de cache.
+    LCacheKey := FDriverName + '|' + FModel + '|' + BoolToStr(ShouldExpand, True);
+    LRegVersion := TAiChatFactory.Instance.Version;
+    if (not Assigned(FRegCache)) or (FRegCacheKey <> LCacheKey) or
+       (FRegCacheVersion <> LRegVersion) then
+    begin
+      if not Assigned(FRegCache) then
+        FRegCache := TStringList.Create;
+      TAiChatFactory.Instance.GetDriverParams(FDriverName, FModel, FRegCache, ShouldExpand);
 
       // v3.5: ModelCaps/SessionCaps/Tool_Active/ThinkingLevel NO viajan por Params.
       // Se retiran de la vista del registro antes del merge; llegan al chat via
       // ApplyModelConfigToChat (canal tipado ModelConfig + ApplyAutoParams).
-      StripModelConfigKeys(LRegistryParams);
+      StripModelConfigKeys(FRegCache);
+
+      FRegCacheKey     := LCacheKey;
+      FRegCacheVersion := LRegVersion;
+    end;
+
+    // Se trabaja sobre una COPIA: MergeParams puede modificar la lista de
+    // origen, y la cacheada tiene que quedar intacta para el proximo acierto.
+    LRegistryParams := TStringList.Create;
+    try
+      LRegistryParams.Assign(FRegCache);
 
       // 2. Sincronizaci�n inteligente:
       // En lugar de un Merge simple, vamos a asegurarnos de que FParams refleje
@@ -674,6 +717,14 @@ begin
         //   - Connection.ModelConfig.ModelCaps/SessionCaps    (explicito; ApplyParamsToChat
         //     lo respeta via UserConfigured y el registry ya no lo pisa)
         MergeParams(LRegistryParams, FParams);
+
+        // El modelo es estado de ESTA conexion. Se impone DESPUES del merge
+        // porque el registro trae 'Model=<default del driver>' (nivel 1,
+        // RegisterDefaultParams) y si no se pisaria el modelo pedido. Antes esto
+        // se resolvia escribiendo el modelo en el registro global desde
+        // SetModel; ver la nota alli.
+        if FModel <> '' then
+          FParams.Values['Model'] := FModel;
       finally
         FParams.EndUpdate;
       end;

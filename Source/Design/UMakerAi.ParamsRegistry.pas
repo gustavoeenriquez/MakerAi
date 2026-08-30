@@ -37,7 +37,7 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.Generics.Collections,
-  System.Generics.Defaults,
+  System.Generics.Defaults, System.SyncObjs,
   UMakerAi.Chat, uMakerAi.Embeddings;
 
 type
@@ -54,10 +54,19 @@ type
 
     FCustomModels: TDictionary<string, String>; // DriverName -> TStringList
 
+    // Contador que sube en CADA mutacion del registro. Permite a los
+    // consumidores cachear la vista del registro y saber, con una comparacion
+    // de enteros, si su copia sigue vigente. Se toca poquisimo: las
+    // registraciones ocurren al arrancar.
+    FVersion: Integer;
+
     // Funci?n interna para crear la clave compuesta.
     class function GetCompositeKey(const DriverName, ModelName: string): string; static;
+    procedure BumpVersion;
 
   public
+    // Version actual del registro (ver FVersion).
+    function Version: Integer;
     constructor Create;
     destructor Destroy; override;
     class function Instance: TAiChatFactory;
@@ -127,6 +136,16 @@ begin
     Result := DriverName + '@' + ModelName;
 end;
 
+procedure TAiChatFactory.BumpVersion;
+begin
+  TInterlocked.Increment(FVersion);
+end;
+
+function TAiChatFactory.Version: Integer;
+begin
+  Result := TInterlocked.CompareExchange(FVersion, 0, 0); // lectura atomica
+end;
+
 constructor TAiChatFactory.Create;
 begin
   inherited;
@@ -155,12 +174,14 @@ end;
 procedure TAiChatFactory.RegisterDriver(AClass: TAiChatClass);
 begin
   FRegisteredClasses.AddOrSetValue(AClass.GetDriverName, AClass);
+  BumpVersion; // invalida las vistas cacheadas del registro
 end;
 
 procedure TAiChatFactory.RegisterDriver(AClass: TAiChatClass; const ADriverName: string);
 begin
   if ADriverName <> '' then
     FRegisteredClasses.AddOrSetValue(ADriverName, AClass);
+  BumpVersion; // invalida las vistas cacheadas del registro
 end;
 
 procedure TAiChatFactory.GetDriverParams(const DriverName, ModelName: string; Params: TStrings; ExpandVariables: Boolean);
@@ -253,6 +274,7 @@ begin
   begin
     UserParamList.Clear;
   end;
+  BumpVersion; // invalida las vistas cacheadas del registro
 end;
 
 // Versi?n principal para registrar un par?metro de un modelo espec?fico.
@@ -268,6 +290,7 @@ begin
     FUserParams.Add(Key, UserParamList);
   end;
   UserParamList.Values[ParamName] := ParamValue;
+  BumpVersion; // invalida las vistas cacheadas del registro
 end;
 
 // Sobrecarga para registrar un par?metro a nivel de Driver.
@@ -275,6 +298,7 @@ procedure TAiChatFactory.RegisterUserParam(const DriverName, ParamName, ParamVal
 begin
   // Llama a la versi?n principal con un ModelName vac?o.
   RegisterUserParam(DriverName, '', ParamName, ParamValue);
+  BumpVersion; // invalida las vistas cacheadas del registro
 end;
 
 
@@ -298,6 +322,7 @@ begin
 
   FCustomModels.AddOrSetValue(Key, ModelBaseName);  //Adiciona o actualiza el modelo asociado
 
+  BumpVersion; // invalida las vistas cacheadas del registro
 end;
 
 function TAiChatFactory.GetBaseModel(const DriverName, CustomModel: string): string;
@@ -377,6 +402,7 @@ begin
   finally
     KeysToRemove.Free;
   end;
+  BumpVersion; // invalida las vistas cacheadas del registro
 end;
 
 

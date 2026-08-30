@@ -315,7 +315,7 @@ begin
   // Sin red ni API keys: solo el montaje.
   FRunner.AddCase('conn.concurrent.setup')
     .Input('conn:concurrent-setup')
-    .ExpectEquals('hung=0|errors=0');
+    .ExpectEquals('hung=0|errors=0|badmodel=0');
 end;
 
 function TRegressionSuite.Dispatch(const AScenario: string): string;
@@ -1550,7 +1550,7 @@ function TRegressionSuite.RunConnScenario(const AScenario: string): string;
 var
   HILOS, VUELTAS, PLAZO_MS: Integer;
   Tasks: array of ITask;
-  Hechas, Errores, Total, I: Integer;
+  Hechas, Errores, Total, I, ModeloMal: Integer;
   Inicio: Cardinal;
 begin
   if AScenario <> 'conn:concurrent-setup' then
@@ -1564,6 +1564,7 @@ begin
 
   Hechas  := 0;
   Errores := 0;
+  ModeloMal := 0;
   Total   := HILOS * VUELTAS;
   SetLength(Tasks, HILOS);
 
@@ -1604,7 +1605,17 @@ begin
                 Funcs.Functions.AddFunction('get_current_time', True, nil);
                 Conn.AiFunctions := Funcs;  // el paso donde se colgaba en prod
                 if Assigned(Conn.AiChat) then
+                begin
                   Conn.AiChat.Tool_choice := '"auto"';
+                  // El modelo TIENE que haber llegado al driver. Se comprueba
+                  // aqui porque la via por la que llega cambio: antes daba la
+                  // vuelta por el registro global y ahora se impone sobre los
+                  // params locales de la conexion. Si se rompiera, el broker
+                  // llamaria al modelo por defecto del driver en vez de al
+                  // pedido — un fallo silencioso y caro.
+                  if Conn.AiChat.Model <> Modelo then
+                    TInterlocked.Increment(ModeloMal);
+                end;
               finally
                 Conn.AiFunctions := nil;
                 Funcs.Free;
@@ -1643,12 +1654,14 @@ begin
 
   // Detalle a consola: el veredicto del runner es un si/no, y aqui lo que
   // interesa es CUANTO y POR QUE.
-  Writeln(Format('      [conn] hilos=%d vueltas=%d -> ok=%d errores=%d colgadas=%d',
-    [HILOS, VUELTAS, Hechas, Errores, Total - Hechas - Errores]));
+  ModeloMal := TInterlocked.CompareExchange(ModeloMal, 0, 0);
+  Writeln(Format('      [conn] hilos=%d vueltas=%d -> ok=%d errores=%d colgadas=%d modelo_mal=%d',
+    [HILOS, VUELTAS, Hechas, Errores, Total - Hechas - Errores, ModeloMal]));
   if FConnFirstError <> '' then
     Writeln('      [conn] primer fallo: ' + FConnFirstError);
 
-  Result := Format('hung=%d|errors=%d', [Total - Hechas - Errores, Errores]);
+  Result := Format('hung=%d|errors=%d|badmodel=%d',
+    [Total - Hechas - Errores, Errores, ModeloMal]);
 end;
 
 // -----------------------------------------------------------------------------
