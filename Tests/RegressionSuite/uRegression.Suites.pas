@@ -22,6 +22,7 @@ type
   TRegressionSuite = class
   private
     FRunner: TAiEvalRunner;
+    FConnFirstError: string; // primer fallo del escenario de concurrencia
     procedure DefineCases;
     function Dispatch(const AScenario: string): string;
     // Escenarios agrupados por area
@@ -34,6 +35,10 @@ type
     function RunRagScenario(const AScenario: string): string;
     // Serializacion de tool results en la familia OpenAI-compatible
     function RunChatScenario(const AScenario: string): string;
+    // Montaje CONCURRENTE de conexiones, tal y como lo hace un servidor que
+    // atiende varios requests a la vez. Sin red: solo ejercita el camino
+    // DriverName/Model/Params/AiFunctions, que pasa por el registro global.
+    function RunConnScenario(const AScenario: string): string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -51,6 +56,10 @@ uses
   uMakerAi.Agents,
   uMakerAi.A2A.Server, uMakerAi.A2A.Client,
   uMakerAi.Tools.Functions, uMakerAi.Chat.Messages,
+  // Montaje de conexiones concurrente: la unidad de Initializations es la que
+  // registra los drivers reales en la factoria (sin ella no hay 'Groq' ni
+  // 'Claude' que resolver).
+  uMakerAi.Chat.AiConnection, uMakerAi.Chat.Initializations,
   uMakerAi.Guardrails,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
@@ -297,6 +306,16 @@ begin
   FRunner.AddCase('evals.self-check')
     .Input('policy:evals-self')
     .ExpectEquals('2|1');
+
+  // --- Montaje concurrente de conexiones ---
+  // Reproduce lo que hace un servidor HTTP con varios requests a la vez: cada
+  // uno crea su TAiChatConnection y fija DriverName/Model/Params/AiFunctions.
+  // Ese camino escribe en el registro global (SetModel -> RegisterUserParam) y
+  // lo lee (UpdateAndApplyParams -> GetDriverParams) desde todos los hilos.
+  // Sin red ni API keys: solo el montaje.
+  FRunner.AddCase('conn.concurrent.setup')
+    .Input('conn:concurrent-setup')
+    .ExpectEquals('hung=0|errors=0');
 end;
 
 function TRegressionSuite.Dispatch(const AScenario: string): string;
@@ -311,6 +330,8 @@ begin
     Result := RunChatScenario(AScenario)
   else if AScenario.StartsWith('policy:') then
     Result := RunPolicyScenario(AScenario)
+  else if AScenario.StartsWith('conn:') then
+    Result := RunConnScenario(AScenario)
   else
     raise Exception.Create('Escenario desconocido: ' + AScenario);
 end;
@@ -1508,6 +1529,126 @@ begin
       Msg.Free;
     Msgs.Free;
   end;
+end;
+
+// -----------------------------------------------------------------------------
+// Montaje concurrente de conexiones
+// -----------------------------------------------------------------------------
+// Reproduce, SIN RED, lo que hace un servidor HTTP atendiendo varios requests a
+// la vez: cada request crea su TAiChatConnection y fija DriverName, Model,
+// Params y AiFunctions. Ese camino ESCRIBE en el registro global
+// (SetModel -> TAiChatFactory.RegisterUserParam) y lo LEE
+// (UpdateAndApplyParams -> GetDriverParams) desde todos los hilos a la vez.
+//
+// El fallo que se busca no es una excepcion sino un CUELGUE: si las estructuras
+// del registro se corrompen, un hilo se queda girando y su iteracion no termina
+// nunca. Por eso no se usa TTask.WaitForAll sin limite (colgaria la suite
+// entera): se cuentan las iteraciones completadas contra un plazo maximo y lo
+// que falte se reporta como 'hung'.
+// -----------------------------------------------------------------------------
+function TRegressionSuite.RunConnScenario(const AScenario: string): string;
+var
+  HILOS, VUELTAS, PLAZO_MS: Integer;
+  Tasks: array of ITask;
+  Hechas, Errores, Total, I: Integer;
+  Inicio: Cardinal;
+begin
+  if AScenario <> 'conn:concurrent-setup' then
+    raise Exception.Create('Escenario conn desconocido: ' + AScenario);
+
+  // Ajustables por entorno para poder apretar la carrera sin recompilar.
+  // Los valores por defecto mantienen la suite rapida (decimas de segundo).
+  HILOS    := StrToIntDef(GetEnvironmentVariable('MAKERAI_CONN_THREADS'), 8);
+  VUELTAS  := StrToIntDef(GetEnvironmentVariable('MAKERAI_CONN_ITERS'), 60);
+  PLAZO_MS := StrToIntDef(GetEnvironmentVariable('MAKERAI_CONN_DEADLINE_MS'), 30000);
+
+  Hechas  := 0;
+  Errores := 0;
+  Total   := HILOS * VUELTAS;
+  SetLength(Tasks, HILOS);
+
+  for I := 0 to HILOS - 1 do
+    Tasks[I] := TTask.Run(
+      procedure
+      var
+        K, Sel: Integer;
+        Conn: TAiChatConnection;
+        Funcs: TAiFunctions;
+        Driver, Modelo: string;
+      begin
+        for K := 1 to VUELTAS do
+        begin
+          try
+            // Se rotan tres drivers reales para que el registro reciba claves
+            // distintas ademas de repetidas (Add + rehash, no solo update).
+            Sel := K mod 3;
+            case Sel of
+              0: begin Driver := 'Groq';   Modelo := 'qwen/qwen3.6-27b'; end;
+              1: begin Driver := 'Claude'; Modelo := 'claude-haiku-4-5-20251001'; end;
+            else  begin Driver := 'GLM';    Modelo := 'glm-4.7'; end;
+            end;
+
+            Conn := TAiChatConnection.Create(nil);
+            try
+              Conn.DriverName := Driver;   // -> UpdateAndApplyParams (lee)
+              Conn.Model      := Modelo;   // -> RegisterUserParam (ESCRIBE) + lee
+
+              Conn.Params.Values['ApiKey']          := 'sk-de-prueba';
+              Conn.Params.Values['Temperature']     := '1';
+              Conn.Params.Values['Max_tokens']      := '400';
+              Conn.Params.Values['Tool_Active']     := 'True';
+              Conn.Params.Values['ResponseTimeOut'] := '840000';
+
+              Funcs := TAiFunctions.Create(nil);
+              try
+                Funcs.Functions.AddFunction('get_current_time', True, nil);
+                Conn.AiFunctions := Funcs;  // el paso donde se colgaba en prod
+                if Assigned(Conn.AiChat) then
+                  Conn.AiChat.Tool_choice := '"auto"';
+              finally
+                Conn.AiFunctions := nil;
+                Funcs.Free;
+              end;
+            finally
+              Conn.Free;
+            end;
+
+            TInterlocked.Increment(Hechas);
+          except
+            on E: Exception do
+            begin
+              TInterlocked.Increment(Errores);
+              // El primer fallo es el que importa: dice QUE se rompe. Los
+              // siguientes suelen ser danos colaterales del mismo destrozo.
+              TMonitor.Enter(Self);
+              try
+                if FConnFirstError = '' then
+                  FConnFirstError := E.ClassName + ': ' + E.Message;
+              finally
+                TMonitor.Exit(Self);
+              end;
+            end;
+          end;
+        end;
+      end);
+
+  Inicio := TThread.GetTickCount;
+  while (TInterlocked.CompareExchange(Hechas, 0, 0) +
+         TInterlocked.CompareExchange(Errores, 0, 0) < Total) and
+        (TThread.GetTickCount - Inicio < PLAZO_MS) do
+    TThread.Sleep(20);
+
+  Hechas  := TInterlocked.CompareExchange(Hechas, 0, 0);
+  Errores := TInterlocked.CompareExchange(Errores, 0, 0);
+
+  // Detalle a consola: el veredicto del runner es un si/no, y aqui lo que
+  // interesa es CUANTO y POR QUE.
+  Writeln(Format('      [conn] hilos=%d vueltas=%d -> ok=%d errores=%d colgadas=%d',
+    [HILOS, VUELTAS, Hechas, Errores, Total - Hechas - Errores]));
+  if FConnFirstError <> '' then
+    Writeln('      [conn] primer fallo: ' + FConnFirstError);
+
+  Result := Format('hung=%d|errors=%d', [Total - Hechas - Errores, Errores]);
 end;
 
 // -----------------------------------------------------------------------------
