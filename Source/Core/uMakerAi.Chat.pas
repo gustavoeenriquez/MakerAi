@@ -318,6 +318,14 @@ type
     FWebSearchParams: TAiWebSearchParams;
     FModelConfig: TAiModelConfig;
     FOnStateChange: TAiStateChangeEvent;
+    // Se dispara al FINAL de los tres handlers de fin de peticion HTTP
+    // (completado / error / excepcion). Es la ultima linea de codigo que toca
+    // este objeto en el ciclo de una peticion asincrona: la RTL solo ejecuta
+    // despues TBaseAsyncResult.Complete + _Release, que ya no lo referencian.
+    // Un integrador que libere el TAiChat desde otro hilo DEBE esperar a este
+    // evento; hacerlo en OnReceiveDataEnd libera el objeto mientras el hilo de
+    // despacho asincrono todavia va a volver a entrar aqui (use-after-free).
+    FOnHttpRequestDone: TNotifyEvent;
     FChatTools: TAiChatTools;
     FChatMode: TAiChatMode;
     FEnabledFeatures: TAiChatMediaSupports;
@@ -600,6 +608,12 @@ type
     Property Top_p: Double read FTop_p write SetTop_p;
     Property Total_tokens: Integer read FTotal_tokens write SetTotal_tokens;
     Property Thinking_tokens: Integer read FThinking_tokens write SetThinking_tokens;
+    // True entre el momento en que ParseChat difiere una continuacion del ciclo
+    // tool-calling y el arranque del siguiente POST (ver ISSUE #100). Lo consulta
+    // el integrador para distinguir "ronda intermedia, viene otra respuesta" de
+    // "turno terminado": sin este dato, un OnReceiveDataEnd cuyo ultimo mensaje es
+    // un tool result es ambiguo (passthrough por StopAgenticLoop vs continuacion).
+    Property PendingToolRun: Boolean read FPendingToolRun;
 
   Published
     Property ApiKey: String read GetApiKey write SetApiKey;
@@ -647,6 +661,8 @@ type
     property WebSearchParams: TAiWebSearchParams read FWebSearchParams;
     property ModelConfig: TAiModelConfig read FModelConfig; // configuración unificada del modelo (v3.3)
     property OnStateChange: TAiStateChangeEvent read FOnStateChange write FOnStateChange;
+    // Ver comentario en FOnHttpRequestDone: punto seguro para liberar el objeto.
+    property OnHttpRequestDone: TNotifyEvent read FOnHttpRequestDone write FOnHttpRequestDone;
     // v3.5: los atajos raiz ShellTool/TextEditorTool/ComputerUseTool fueron
     // eliminados — TODAS las herramientas viven unicamente en ChatTools.XxxTool
     property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive;
@@ -2801,6 +2817,10 @@ end;
 
 procedure TAiChat.OnRequestCompletedEvent(const Sender: TObject; const aResponse: IHTTPResponse);
 begin
+  // El try/finally garantiza que FOnHttpRequestDone se emita por TODAS las salidas
+  // (incluido el Exit del error HTTP): es la senal con la que el integrador sabe
+  // que ya puede liberar este objeto sin cortarle las piernas al hilo asincrono.
+  try
   // En este punto la petición async ya completó por completo: THTTPClient.ExecuteHTTPInternal
   // terminó (incluido el Seek sobre FSourceStream), por lo que es seguro liberar el stream.
   FreeAndNil(FCurrentPostStream);
@@ -2825,42 +2845,65 @@ begin
   if FPendingToolRun then
   begin
     FPendingToolRun := False;
-{$IF CompilerVersion >= 36}
-    TThread.ForceQueue(nil,
+    // REVISION 2026-08-30: la continuacion se difiere a un task del pool, NO a la
+    // cola del hilo principal. TThread.Queue/ForceQueue solo se drenan si alguien
+    // llama a CheckSynchronize; un servidor headless (daemon Linux sin bucle de
+    // mensajes, que es como se integra esta libreria en un broker) nunca lo hace,
+    // asi que el ciclo tool-calling asincrono se quedaba encolado para siempre y
+    // el turno moria por timeout. Un task cumple el mismo objetivo que perseguia
+    // el ForceQueue — arrancar el siguiente POST fuera del despacho de completado,
+    // con FCurrentPostStream ya liberado unas lineas mas arriba — sin depender de
+    // que el integrador bombee mensajes.
+    TTask.Run(
       procedure
       begin
-        Self.Run(nil, nil);
+        try
+          Self.Run(nil, nil);
+        except
+          on E: Exception do
+            // Sin esto la excepcion muere dentro del task y el turno queda colgado
+            // hasta el timeout del integrador, sin ninguna pista del motivo.
+            DoError('Error en la continuacion tool-calling: ' + E.Message, E);
+        end;
       end);
-{$ELSE}
-    TThread.Queue(nil,
-      procedure
-      begin
-        Self.Run(nil, nil);
-      end);
-{$IFEND}
+  end;
+
+  finally
+    if Assigned(FOnHttpRequestDone) then
+      FOnHttpRequestDone(Self);
   end;
 end;
 
 procedure TAiChat.OnRequestErrorEvent(const Sender: TObject; const AError: string);
 begin
-  FreeAndNil(FCurrentPostStream);
-  FBusy := False;
-  FPendingToolRun := False;
-  FTmpToolCallBuffer.Clear;
-  DoStateChange(acsError, AError);
-  If Assigned(FOnError) then
-    FOnError(Self, AError, Nil, Nil);
+  try
+    FreeAndNil(FCurrentPostStream);
+    FBusy := False;
+    FPendingToolRun := False;
+    FTmpToolCallBuffer.Clear;
+    DoStateChange(acsError, AError);
+    If Assigned(FOnError) then
+      FOnError(Self, AError, Nil, Nil);
+  finally
+    if Assigned(FOnHttpRequestDone) then
+      FOnHttpRequestDone(Self);
+  end;
 end;
 
 procedure TAiChat.OnRequestExceptionEvent(const Sender: TObject; const AError: Exception);
 begin
-  FreeAndNil(FCurrentPostStream);
-  FBusy := False;
-  FPendingToolRun := False;
-  FTmpToolCallBuffer.Clear;
-  DoStateChange(acsError, AError.Message);
-  If Assigned(FOnError) then
-    FOnError(Self, AError.Message, AError, Nil);
+  try
+    FreeAndNil(FCurrentPostStream);
+    FBusy := False;
+    FPendingToolRun := False;
+    FTmpToolCallBuffer.Clear;
+    DoStateChange(acsError, AError.Message);
+    If Assigned(FOnError) then
+      FOnError(Self, AError.Message, AError, Nil);
+  finally
+    if Assigned(FOnHttpRequestDone) then
+      FOnHttpRequestDone(Self);
+  end;
 end;
 
 procedure TAiChat.ParseChat(jObj: TJSonObject; ResMsg: TAiChatMessage);
