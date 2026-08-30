@@ -116,6 +116,55 @@ type
 
 implementation
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Serializacion de las factorias (2026-08-30)
+//
+// Las dos factorias son singletons globales cuyos diccionarios se LEEN y
+// ESCRIBEN desde varios hilos a la vez en cualquier integrador multihilo (un
+// servidor HTTP atendiendo requests concurrentes), y no tenian ninguna
+// sincronizacion.
+//
+// El caso real: TAiChatConnection.SetModel llama a RegisterUserParam en CADA
+// request (registra 'Model'), lo que puede provocar un Add al diccionario y su
+// rehash completo; a la vez, otros hilos estan dentro de GetDriverParams
+// recorriendo esas mismas estructuras. Un lector que cae en medio de un rehash
+// se queda dando vueltas en el sondeo de buckets: el request no vuelve nunca y
+// el hilo se queda girando. Medido en produccion (MKAIServer, 2026-08-30): dos
+// requests colgados para siempre, uno de los hilos en estado R.
+//
+// TMonitor es REENTRANTE, asi que un metodo que llame a otro de la misma
+// factoria (o un constructor de driver que consulte el registro desde dentro de
+// CreateDriver) no se autobloquea.
+//
+// El guard ata el lock al AMBITO: una sola linea al principio de cada metodo,
+// sin try/finally, y se libera al salir por cualquier via (incluida excepcion).
+// ─────────────────────────────────────────────────────────────────────────────
+type
+  ILockGuard = interface
+    ['{6B1F2C64-7C3D-4E88-9E1A-2F5A9C0D77B1}']
+  end;
+
+  TLockGuard = class(TInterfacedObject, ILockGuard)
+  private
+    FObj: TObject;
+  public
+    constructor Create(AObj: TObject);
+    destructor Destroy; override;
+  end;
+
+constructor TLockGuard.Create(AObj: TObject);
+begin
+  inherited Create;
+  FObj := AObj;
+  TMonitor.Enter(FObj);
+end;
+
+destructor TLockGuard.Destroy;
+begin
+  TMonitor.Exit(FObj);
+  inherited;
+end;
+
 { TAiChatFactory }
 
 // Funci?n interna para crear la clave
@@ -154,11 +203,13 @@ end;
 
 procedure TAiChatFactory.RegisterDriver(AClass: TAiChatClass);
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   FRegisteredClasses.AddOrSetValue(AClass.GetDriverName, AClass);
 end;
 
 procedure TAiChatFactory.RegisterDriver(AClass: TAiChatClass; const ADriverName: string);
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   if ADriverName <> '' then
     FRegisteredClasses.AddOrSetValue(ADriverName, AClass);
 end;
@@ -168,32 +219,75 @@ var
   DriverClass: TAiChatClass;
   UserParamList: TStringList;
   I: Integer;
-  EnvVarName, EnvVarValue, Key: String;
+  EnvVarName, EnvVarValue: String;
+
+  // Copia bajo lock la lista del registro. Devuelve nil si la clave no existe;
+  // el llamador libera. Se copia en vez de recorrer la original porque el
+  // recorrido tiene que hacerse YA SIN el lock.
+  function Snapshot(const AKey: string): TStringList;
+  var
+    LSrc: TStringList;
+  begin
+    Result := nil;
+    TMonitor.Enter(Self);
+    try
+      if FUserParams.TryGetValue(AKey, LSrc) and Assigned(LSrc) then
+      begin
+        Result := TStringList.Create;
+        Result.Assign(LSrc);
+      end;
+    finally
+      TMonitor.Exit(Self);
+    end;
+  end;
+
+  function LookupClass(const AName: string): TAiChatClass;
+  begin
+    TMonitor.Enter(Self);
+    try
+      if not FRegisteredClasses.TryGetValue(AName, Result) then
+        Result := nil;
+    finally
+      TMonitor.Exit(Self);
+    end;
+  end;
+
 begin
+  // REGLA: el lock cubre SOLO el acceso a las estructuras del registro, y NUNCA
+  // se sostiene mientras se llama a codigo ajeno. RegisterDefaultParams es codigo
+  // del driver y ApplyParamsToChat (el llamador habitual) esta dentro de RTTI,
+  // que tiene su propio lock global. Sostener ambos en ordenes distintos desde
+  // dos hilos produce un interbloqueo: medido en produccion el 2026-08-30, con
+  // todos los requests parados en 'Conn.AiFunctions := AFuncs'.
   Params.Clear;
 
   // Nivel 1: Cargar par?metros por defecto desde la clase del driver
-  if FRegisteredClasses.TryGetValue(DriverName, DriverClass) then
+  DriverClass := LookupClass(DriverName);
+  if Assigned(DriverClass) then
     DriverClass.RegisterDefaultParams(Params);
 
   Params.Text := Trim(Params.Text); // Elimina el ?ltimo LineBreak
 
   // Nivel 2: Fusionar con par?metros personalizados del DRIVER
-  Key := GetCompositeKey(DriverName, '');
-  if FUserParams.TryGetValue(Key, UserParamList) then
-  begin
-    For I := 0 to UserParamList.Count - 1 do
-      Params.Values[UserParamList.Names[I]] := UserParamList.ValueFromIndex[I];
+  UserParamList := Snapshot(GetCompositeKey(DriverName, ''));
+  try
+    if Assigned(UserParamList) then
+      For I := 0 to UserParamList.Count - 1 do
+        Params.Values[UserParamList.Names[I]] := UserParamList.ValueFromIndex[I];
+  finally
+    UserParamList.Free;
   end;
 
   // Nivel 3: Fusionar con par?metros personalizados del MODELO (si se especifica)
   if not ModelName.IsEmpty then
   begin
-    Key := GetCompositeKey(DriverName, ModelName);
-    if FUserParams.TryGetValue(Key, UserParamList) then
-    begin
-      For I := 0 to UserParamList.Count - 1 do
-        Params.Values[UserParamList.Names[I]] := UserParamList.ValueFromIndex[I];
+    UserParamList := Snapshot(GetCompositeKey(DriverName, ModelName));
+    try
+      if Assigned(UserParamList) then
+        For I := 0 to UserParamList.Count - 1 do
+          Params.Values[UserParamList.Names[I]] := UserParamList.ValueFromIndex[I];
+    finally
+      UserParamList.Free;
     end;
   end;
 
@@ -219,11 +313,21 @@ end;
 function TAiChatFactory.CreateDriver(const DriverName: string): TAiChat;
 var
   DriverClass: TAiChatClass;
+  LFound: Boolean;
 begin
+  // Igual que en GetDriverParams: el lock cubre la consulta, NO la construccion.
+  // El constructor del driver entra en RTTI y puede reentrar en la factoria.
+  TMonitor.Enter(Self);
+  try
+    LFound := FRegisteredClasses.TryGetValue(DriverName, DriverClass);
+  finally
+    TMonitor.Exit(Self);
+  end;
+
   // Driver no registrado: error diagnosticable que lista los drivers disponibles.
   // La busqueda es case-insensitive; si el driver esperado no aparece en la lista,
   // suele faltar 'uMakerAi.Chat.Initializations' en el uses (registra todos los drivers).
-  if not FRegisteredClasses.TryGetValue(DriverName, DriverClass) then
+  if not LFound then
     raise Exception.CreateFmt(
       'Driver "%s" no esta registrado. Drivers disponibles: [%s]. ' +
       'Sugerencia: agrega la unidad uMakerAi.Chat.Initializations al uses para ' +
@@ -235,11 +339,13 @@ end;
 
 function TAiChatFactory.GetRegisteredDrivers: TArray<string>;
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   Result := FRegisteredClasses.Keys.ToArray;
 end;
 
 function TAiChatFactory.HasDriver(const DriverName: string): Boolean;
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   Result := FRegisteredClasses.ContainsKey(DriverName);
 end;
 
@@ -248,6 +354,7 @@ var
   UserParamList: TStringList;
   Key: string;
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   Key := GetCompositeKey(DriverName, ModelName);
   if FUserParams.TryGetValue(Key, UserParamList) then
   begin
@@ -261,6 +368,7 @@ var
   UserParamList: TStringList;
   Key: string;
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   Key := GetCompositeKey(DriverName, ModelName);
   if not FUserParams.TryGetValue(Key, UserParamList) then
   begin
@@ -287,6 +395,7 @@ procedure TAiChatFactory.RegisterCustomModel(const DriverName, CustomModelName, 
 var
   Key : String;
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   // Verifica que ModelName no est? vac?o
   if CustomModelName.IsEmpty then
     raise Exception.Create('CustomModelName cannot be empty when registering a custom model.');
@@ -304,6 +413,7 @@ function TAiChatFactory.GetBaseModel(const DriverName, CustomModel: string): str
 var
   CompositeKey: string;
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   // Crea la clave compuesta
   CompositeKey := GetCompositeKey(DriverName, CustomModel);
 
@@ -319,6 +429,7 @@ var
   CustomModel: string;
   CompositeKey: string;
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   // Recorre el diccionario y filtra los CustomModels para el DriverName dado
   var List: TList<string> := TList<string>.Create;
   try
@@ -342,6 +453,7 @@ function TAiChatFactory.HasCustomModel(const DriverName, CustomModelName: string
 var
   CompositeKey: string;
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   // Crea la clave compuesta
   CompositeKey := GetCompositeKey(DriverName, CustomModelName);
 
@@ -354,6 +466,7 @@ var
   CompositeKey: string;
   KeysToRemove: TList<string>;
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
 
   // Crea una lista para almacenar las claves que se van a eliminar
   KeysToRemove := TList<string>.Create;
@@ -415,11 +528,13 @@ end;
 
 procedure TAiEmbeddingFactory.RegisterDriver(AClass: TAiEmbeddingsClass);
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   FRegisteredClasses.AddOrSetValue(AClass.GetDriverName, AClass);
 end;
 
 procedure TAiEmbeddingFactory.RegisterDriver(AClass: TAiEmbeddingsClass; const ADriverName: string);
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   if ADriverName <> '' then
     FRegisteredClasses.AddOrSetValue(ADriverName, AClass);
 end;
@@ -429,32 +544,68 @@ var
   DriverClass: TAiEmbeddingsClass;
   UserParamList: TStringList;
   I: Integer;
-  EnvVarName, EnvVarValue, Key: String;
+  EnvVarName, EnvVarValue: String;
+
+  // Mismo criterio que en TAiChatFactory: el lock cubre SOLO el acceso a las
+  // estructuras, nunca la llamada a codigo del driver (ver nota alli).
+  function Snapshot(const AKey: string): TStringList;
+  var
+    LSrc: TStringList;
+  begin
+    Result := nil;
+    TMonitor.Enter(Self);
+    try
+      if FUserParams.TryGetValue(AKey, LSrc) and Assigned(LSrc) then
+      begin
+        Result := TStringList.Create;
+        Result.Assign(LSrc);
+      end;
+    finally
+      TMonitor.Exit(Self);
+    end;
+  end;
+
+  function LookupClass(const AName: string): TAiEmbeddingsClass;
+  begin
+    TMonitor.Enter(Self);
+    try
+      if not FRegisteredClasses.TryGetValue(AName, Result) then
+        Result := nil;
+    finally
+      TMonitor.Exit(Self);
+    end;
+  end;
+
 begin
   Params.Clear;
 
   // Nivel 1: Par?metros por defecto desde la clase del driver
-  if FRegisteredClasses.TryGetValue(DriverName, DriverClass) then
+  DriverClass := LookupClass(DriverName);
+  if Assigned(DriverClass) then
     DriverClass.RegisterDefaultParams(Params);
 
   Params.Text := Trim(Params.Text);
 
   // Nivel 2: Par?metros personalizados del DRIVER
-  Key := GetCompositeKey(DriverName, '');
-  if FUserParams.TryGetValue(Key, UserParamList) then
-  begin
-    for I := 0 to UserParamList.Count - 1 do
-      Params.Values[UserParamList.Names[I]] := UserParamList.ValueFromIndex[I];
+  UserParamList := Snapshot(GetCompositeKey(DriverName, ''));
+  try
+    if Assigned(UserParamList) then
+      for I := 0 to UserParamList.Count - 1 do
+        Params.Values[UserParamList.Names[I]] := UserParamList.ValueFromIndex[I];
+  finally
+    UserParamList.Free;
   end;
 
   // Nivel 3: Par?metros personalizados del MODELO
   if not ModelName.IsEmpty then
   begin
-    Key := GetCompositeKey(DriverName, ModelName);
-    if FUserParams.TryGetValue(Key, UserParamList) then
-    begin
-      for I := 0 to UserParamList.Count - 1 do
-        Params.Values[UserParamList.Names[I]] := UserParamList.ValueFromIndex[I];
+    UserParamList := Snapshot(GetCompositeKey(DriverName, ModelName));
+    try
+      if Assigned(UserParamList) then
+        for I := 0 to UserParamList.Count - 1 do
+          Params.Values[UserParamList.Names[I]] := UserParamList.ValueFromIndex[I];
+    finally
+      UserParamList.Free;
     end;
   end;
 
@@ -477,19 +628,31 @@ end;
 function TAiEmbeddingFactory.CreateDriver(const DriverName: string): TAiEmbeddings;
 var
   DriverClass: TAiEmbeddingsClass;
+  LFound: Boolean;
 begin
+  // El lock cubre la consulta; la construccion queda fuera (ver nota en
+  // TAiChatFactory.CreateDriver).
+  TMonitor.Enter(Self);
+  try
+    LFound := FRegisteredClasses.TryGetValue(DriverName, DriverClass);
+  finally
+    TMonitor.Exit(Self);
+  end;
+
   Result := nil;
-  if FRegisteredClasses.TryGetValue(DriverName, DriverClass) then
+  if LFound then
     Result := DriverClass.CreateInstance(nil);
 end;
 
 function TAiEmbeddingFactory.GetRegisteredDrivers: TArray<string>;
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   Result := FRegisteredClasses.Keys.ToArray;
 end;
 
 function TAiEmbeddingFactory.HasDriver(const DriverName: string): Boolean;
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   Result := FRegisteredClasses.ContainsKey(DriverName);
 end;
 
@@ -498,6 +661,7 @@ var
   UserParamList: TStringList;
   Key: string;
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   Key := GetCompositeKey(DriverName, ModelName);
   if not FUserParams.TryGetValue(Key, UserParamList) then
   begin
@@ -517,6 +681,7 @@ var
   UserParamList: TStringList;
   Key: string;
 begin
+  var LGuard: ILockGuard := TLockGuard.Create(Self); // serializa el acceso al registro
   Key := GetCompositeKey(DriverName, ModelName);
   if FUserParams.TryGetValue(Key, UserParamList) then
     UserParamList.Clear;
