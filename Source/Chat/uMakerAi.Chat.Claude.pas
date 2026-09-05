@@ -126,6 +126,9 @@ type
   TAiClaudeChat = Class(TAiChat)
   Private
     FStreamResponseMsg: TAiChatMessage;
+    // Cache del message_start del stream (ver el comentario en su lectura)
+    FStreamCacheRead: Integer;
+    FStreamCacheWrite: Integer;
     FStreamContentBlocks: TObjectDictionary<Integer, TClaudeStreamContentBlock>;
     FStreamBuffer: TStringBuilder;
     FStreamLastEventType: string;
@@ -1870,10 +1873,19 @@ begin
           FStreamResponseMsg.Model := jMessage.GetValue<string>('model');
           FStreamResponseMsg.Role := jMessage.GetValue<string>('role');
 
-          // Leer input_tokens desde message_start (Claude streaming no incluye usage en message_stop)
+          // Leer input_tokens desde message_start (Claude streaming no incluye usage en message_stop).
+          // Y los de cache: en streaming input_tokens es SOLO lo no cacheado
+          // (con un prefijo de 4.681 tokens cacheados llega input_tokens=6), asi
+          // que sin cache_read/cache_creation el usage del cierre sintetico
+          // decia 6 tokens de entrada y ParseChat no veia ni un token de cache
+          // (medido en MKAIServer el 2026-09-05: prompt_tokens=6 sin details).
           var jStartUsage: TJSONObject;
           if jMessage.TryGetValue<TJSONObject>('usage', jStartUsage) then
+          begin
             Self.Prompt_tokens := jStartUsage.GetValue<Integer>('input_tokens', 0);
+            FStreamCacheRead   := jStartUsage.GetValue<Integer>('cache_read_input_tokens', 0);
+            FStreamCacheWrite  := jStartUsage.GetValue<Integer>('cache_creation_input_tokens', 0);
+          end;
 
           // Notificar inicio de recepci?n
           if Assigned(OnReceiveData) then
@@ -2055,6 +2067,14 @@ begin
             jUsage := TJSONObject.Create;
             jUsage.AddPair('input_tokens', TJSONNumber.Create(Prompt_tokens));
             jUsage.AddPair('output_tokens', TJSONNumber.Create(MsgToProcess.Completion_tokens));
+            // Cache del message_start, con los mismos nombres que la API real:
+            // asi ParseChat los lee por el camino de siempre y los acumula.
+            if FStreamCacheRead > 0 then
+              jUsage.AddPair('cache_read_input_tokens', TJSONNumber.Create(FStreamCacheRead));
+            if FStreamCacheWrite > 0 then
+              jUsage.AddPair('cache_creation_input_tokens', TJSONNumber.Create(FStreamCacheWrite));
+            FStreamCacheRead  := 0;
+            FStreamCacheWrite := 0;
             jSyntheticResponse.AddPair('usage', jUsage);
 
             var
