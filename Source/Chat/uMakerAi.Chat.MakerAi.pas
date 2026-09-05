@@ -79,6 +79,11 @@ type
     FStreamPromptTok:    Integer;
     FStreamComplTok:     Integer;
     FStreamTotalTok:     Integer;
+    // prompt_tokens_details.cached_tokens del stream: el broker SI lo manda
+    // (medido 2026-09-05: 1828 de 1831 en cache), pero el cierre sintetico lo
+    // tiraba y en streaming Cached_tokens quedaba siempre a cero — sin el no
+    // hay forma de saber si la cache del prefijo esta sirviendo o no.
+    FStreamCachedTok:    Integer;
     procedure ResetSessionId;
     procedure HandleStreamDone;
     procedure ParseAndAccumulateMediaParts(AMediaParts: TJSONArray);
@@ -641,6 +646,7 @@ begin
   FStreamPromptTok := 0;
   FStreamComplTok  := 0;
   FStreamTotalTok  := 0;
+  FStreamCachedTok := 0;
   MKLog('SEND', 'URL=' + Url + ' Model=' + Model +
     ' Async=' + BoolToStr(Asynchronous, True) +
     ' Tools=' + BoolToStr(Tool_Active, True));
@@ -801,6 +807,14 @@ begin
     LFakeUsage.AddPair('prompt_tokens',     TJSONNumber.Create(FStreamPromptTok));
     LFakeUsage.AddPair('completion_tokens', TJSONNumber.Create(FStreamComplTok));
     LFakeUsage.AddPair('total_tokens',      TJSONNumber.Create(FStreamTotalTok));
+    // Con la misma forma que el JSON real, para que TAiChat.ParseChat lo lea
+    // por el camino de siempre ('prompt_tokens_details.cached_tokens').
+    if FStreamCachedTok > 0 then
+    begin
+      var LFakeDetails := TJSONObject.Create;
+      LFakeDetails.AddPair('cached_tokens', TJSONNumber.Create(FStreamCachedTok));
+      LFakeUsage.AddPair('prompt_tokens_details', LFakeDetails);
+    end;
     LFakeJson.AddPair('usage', LFakeUsage);
 
     LFakeMsg := TJSONObject.Create;
@@ -920,6 +934,10 @@ begin
           LUsage.TryGetValue<Integer>('prompt_tokens',     FStreamPromptTok);
           LUsage.TryGetValue<Integer>('completion_tokens', FStreamComplTok);
           LUsage.TryGetValue<Integer>('total_tokens',      FStreamTotalTok);
+          var LDetails: TJSONObject;
+          if LUsage.TryGetValue<TJSONObject>('prompt_tokens_details', LDetails) and
+             Assigned(LDetails) then
+            LDetails.TryGetValue<Integer>('cached_tokens', FStreamCachedTok);
         end;
 
         if LChunk.TryGetValue<TJSONObject>('mk_progress', LProgress) then
