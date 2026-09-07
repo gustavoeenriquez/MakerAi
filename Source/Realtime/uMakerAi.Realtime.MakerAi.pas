@@ -1,5 +1,7 @@
 ﻿// MakerAI Suite — Driver MakerAI Realtime (STT + LLM + TTS)
 // wss://api.cimamaker.com/v1/audio/realtime  (RFC 6455 + subprotocolo "realtime")
+// El servidor es MKAIServer, que tambien se despliega on-prem: la propiedad
+// Endpoint apunta a otra instancia (vacia = el SaaS de arriba).
 //
 // Conversacion de voz completa en un solo WebSocket:
 //   1. STT  — el servidor transcribe el audio del usuario (Whisper)
@@ -41,6 +43,7 @@ type
     FConnectThread: TThread;
     FSessionSent:   Boolean;
     // Propiedades especificas del driver MakerAI
+    FEndpoint:      string;  // '' = el SaaS por defecto (ver ResolvedEndpoint)
     FVoice:         string;
     FSttModel:      string;
     FSttPrompt:     string;  // glosario de dominio para Whisper (campo stt_prompt)
@@ -62,6 +65,7 @@ type
     // Procesamiento de eventos del servidor
     procedure ProcessServerEvent(const JObj: TJSONObject);
     procedure SendSessionMessage;
+    function  ResolvedEndpoint: string;
     // Dispatchers thread-safe para los eventos VAD simplificados
     // (DoAssistantText/DoAudioChunk/DoAudioDone se heredan de la base)
     procedure DoSpeechStart;
@@ -86,6 +90,11 @@ type
     class function GetDriverName:   string; override;
     class function GetDefaultModel: string; override;
   published
+    // WebSocket del servidor MKAI. Vacio (default) = wss://api.cimamaker.com/
+    // v1/audio/realtime; se llena solo para una instancia propia (on-prem o
+    // staging). Al quedar vacio por defecto, no se escribe en los DFM que ya
+    // existen y el comportamiento no cambia para nadie.
+    property Endpoint:     string read FEndpoint     write FEndpoint;
     // Parametros de sesion (opcionales; todos resueltos por el servidor si se omiten)
     property Voice:        string read FVoice        write FVoice;
     property SttModel:     string read FSttModel     write FSttModel;
@@ -370,15 +379,27 @@ end;
 
 { Implementacion de metodos abstractos }
 
-procedure TAiMakerAiRealtimeChat.InternalConnect;
+function TAiMakerAiRealtimeChat.ResolvedEndpoint: string;
 begin
-  MkLog('CONNECT url=' + CMAKERAIREALTIME_WSS + ' key_prefix=' +
+  Result := Trim(FEndpoint);
+  if Result = '' then
+    Result := CMAKERAIREALTIME_WSS;
+end;
+
+procedure TAiMakerAiRealtimeChat.InternalConnect;
+var
+  LUrl: string;
+begin
+  // Se resuelve UNA vez: el hilo de conexion no debe volver a leer FEndpoint,
+  // que el usuario podria cambiar mientras tanto.
+  LUrl := ResolvedEndpoint;
+  MkLog('CONNECT url=' + LUrl + ' key_prefix=' +
         Copy(ResolvedApiKey, 1, 8) + '...');
   FWebSocket.ExtraHeaders.Values['Authorization']          := 'Bearer ' + ResolvedApiKey;
   FWebSocket.ExtraHeaders.Values['Sec-WebSocket-Protocol'] := CMAKERAIREALTIME_SUBP;
   FConnectThread := TThread.CreateAnonymousThread(procedure begin
     MkLog('THREAD_CONNECT_START');
-    if not FWebSocket.Connect(CMAKERAIREALTIME_WSS) then
+    if not FWebSocket.Connect(LUrl) then
     begin
       MkLog('CONNECT_FAILED');
       DoError('No se pudo conectar al servidor WebSocket de MakerAI',
