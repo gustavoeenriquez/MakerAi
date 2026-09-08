@@ -831,7 +831,13 @@ begin
       SQL.AppendLine('    raw_score as final_score');
     SQL.AppendLine('  FROM scored');
     SQL.AppendLine(')');
-    SQL.AppendLine('SELECT id, entidad, content, model, properties, embedding, final_score');
+    // embedding::text NO es cosmetico: FireDAC mapea el tipo vector de pgvector a
+    // ftBlob y AsString devuelve los bytes crudos, que StringToEmbedding no sabe
+    // leer (acaba produciendo un vector [0] de un elemento). Los nodos volvian
+    // asi SIN vector, y con ellos cualquier calculo posterior sobre el resultado
+    // (RERANK por coseno, la diversidad de MMR) operaba sobre ceros. Casteado a
+    // texto vuelve como '[0.1,0.2,...]', que es justo lo que espera el parser.
+    SQL.AppendLine('SELECT id, entidad, content, model, properties, embedding::text AS embedding, final_score');
     SQL.AppendLine('FROM final_scored');
     if APrecision > 0 then
       SQL.AppendLine('WHERE final_score >= ' + FloatToStr(APrecision, FS));

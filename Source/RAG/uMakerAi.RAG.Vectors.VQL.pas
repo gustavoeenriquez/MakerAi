@@ -380,6 +380,11 @@ TBinaryOperator = (
     WeightLexical: Double;
     Language: string;
     Fusion: TFusionMode;
+    // Marcan si la clausula venia escrita en el VQL. Sin esto no se puede
+    // distinguir un "FUSION WEIGHTED" explicito del valor por defecto, y quien
+    // ejecuta el request no sabe si puede imponer su propio default.
+    FusionSpecified: Boolean;
+    LanguageSpecified: Boolean;
 
     // WHERE
     // CAMBIO: Ahora usamos Criteria nativo, no MetaData plano
@@ -1711,6 +1716,7 @@ begin
   // 2. Fusion (Solo relevante si el modo es Hybrid)
   if AClause.Fusion <> '' then
   begin
+    FRequest.FusionSpecified := True;
     if SameText(AClause.Fusion, 'RRF') then
       FRequest.Fusion := fmRRF
     else if SameText(AClause.Fusion, 'WEIGHTED') then
@@ -1721,7 +1727,10 @@ begin
 
   // 3. Language — sobrescribe el idioma del motor BM25 cuando se especifica en USING
   if AClause.Language <> '' then
+  begin
     FRequest.Language := AClause.Language;
+    FRequest.LanguageSpecified := True;
+  end;
 end;
 
 procedure TVGQLCompiler.TranslateWhere(AClause: TWhereClause);
@@ -1947,7 +1956,9 @@ begin
   Limit := 10;
   Offset := 0;
   Fusion := fmWeighted;
+  FusionSpecified := False;
   Language := 'spanish';
+  LanguageSpecified := False;
   MmrLambda := 0.7;
 end;
 

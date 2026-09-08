@@ -179,6 +179,7 @@ type
     // VQL advanced post-processing
     function  ApplyMMR(ASource: TAiRAGVector; ALambda: Double; ALimit: Integer): TAiRAGVector;
     procedure ApplyDistinct(AVector: TAiRAGVector; const AField: string);
+    procedure DropNode(AVector: TAiRAGVector; AIndex: Integer);
     procedure ApplyOrderBy(AVector: TAiRAGVector; AFields: TList<TOrderByField>);
     function  BuildExplainOutput(AReq: TVGQLRequest): string;
     function  BuildExtendedContextText(DataVec: TAiRAGVector; AReq: TVGQLRequest): string;
@@ -219,6 +220,8 @@ type
     function ExecuteVQL(const AVqlQuery: string): string; overload;
 
     function ExecuteVQL(const AVqlQuery: string; out AResultVector: TAiRAGVector): string; overload;
+
+    function ExecuteRequest(ARequest: TVGQLRequest; out AResultVector: TAiRAGVector): string;
 
     Function VectorToContextText(DataVec: TAiRAGVector; IncludeMetadata: Boolean; IncludeScore: Boolean): String;
 
@@ -1044,9 +1047,6 @@ var
   AST: TVGQLQuery;
   Compiler: TVGQLCompiler;
   Req: TVGQLRequest;
-  TempOptions: TAiSearchOptions;
-  i: Integer;
-  MMRVector: TAiRAGVector;
 begin
   Result := '';
   AResultVector := nil;
@@ -1078,14 +1078,52 @@ begin
     if not Assigned(Req) then
       Exit;
 
-    // -------------------------------------------------------------------------
-    // EXPLAIN: retorna el plan de ejecucion sin ejecutar la busqueda
-    // -------------------------------------------------------------------------
-    if Req.Explain then
-    begin
-      Result := BuildExplainOutput(Req);
-      Exit;
-    end;
+    Result := ExecuteRequest(Req, AResultVector);
+  finally
+    if Assigned(Req) then
+      Req.Free;
+  end;
+end;
+
+{ Ejecuta un request YA COMPILADO. Es el back-end de ExecuteVQL, expuesto aparte
+  para quien compila el VQL por su cuenta (p.ej. para mapear los errores de
+  parseo a codigos HTTP) y no quiere reimplementar el pipeline: reimplementarlo
+  significa perder en silencio toda clausula que no se copie a mano.
+  El request NO se libera aqui: es del llamador. }
+function TAiRAGVector.ExecuteRequest(ARequest: TVGQLRequest; out AResultVector: TAiRAGVector): string;
+const
+  OVERFETCH_FACTOR = 3;
+  OVERFETCH_MAX    = 100;
+var
+  Req: TVGQLRequest;
+  TempOptions: TAiSearchOptions;
+  i: Integer;
+  MMRVector: TAiRAGVector;
+  SavedEntidad: string;
+  SearchLimit: Integer;
+  NeedsRegen: Boolean;
+begin
+  Result := '';
+  AResultVector := nil;
+  Req := ARequest;
+  if not Assigned(Req) then
+    Exit;
+
+  // ---------------------------------------------------------------------------
+  // EXPLAIN: retorna el plan de ejecucion sin ejecutar la busqueda
+  // ---------------------------------------------------------------------------
+  if Req.Explain then
+  begin
+    Result := BuildExplainOutput(Req);
+    Exit;
+  end;
+
+  // La entidad compilada (clausula MATCH) manda mientras dure esta consulta.
+  // Sin esto MATCH se parseaba, se compilaba y se perdia justo aqui.
+  SavedEntidad := FEntidad;
+  try
+    if Req.Entity <> '' then
+      FEntidad := Req.Entity;
 
     // -------------------------------------------------------------------------
     // 3. BACK-END: CONFIGURACION DINAMICA DEL MOTOR
@@ -1103,8 +1141,12 @@ begin
       TempOptions.UseReorderABC := Req.UseReorderABC and not Req.UseMMR;
       Self.SearchOptions.Assign(TempOptions);
 
-      // Sincronizacion de idioma para BM25 -- ahora funcional via LANGUAGE clause
-      if not Req.Language.IsEmpty then
+      // Sincronizacion de idioma para BM25 -- ahora funcional via LANGUAGE clause.
+      // Solo si el VQL la trae: el valor por defecto del request ('spanish') no
+      // debe pisar el idioma que el consumidor ya configuro en el componente.
+      // OJO: esto afecta al indice BM25 en memoria; un driver SQL tiene su
+      // propio idioma de to_tsvector y hay que fijarlo en el driver.
+      if Req.LanguageSpecified and not Req.Language.IsEmpty then
       begin
         if SameText(Req.Language, 'spanish')    then Self.LexicalLanguage := alSpanish
         else if SameText(Req.Language, 'english')    then Self.LexicalLanguage := alEnglish
@@ -1114,7 +1156,14 @@ begin
       // -----------------------------------------------------------------------
       // 4. EJECUCION DE LA BUSQUEDA VECTORIAL PRINCIPAL
       // -----------------------------------------------------------------------
-      AResultVector := Self.Search(Req.Query, Req.Limit, Req.MinGlobal, Req.Filter);
+      // Reordenar el top-K que ya trajo la busqueda no puede rescatar lo que se
+      // quedo fuera de ese top-K. Cuando hay segunda etapa se traen mas
+      // candidatos y se recorta al LIMIT pedido al final (paso 9b).
+      SearchLimit := Req.Limit;
+      if (Req.RerankQuery <> '') and (SearchLimit > 0) then
+        SearchLimit := Min(SearchLimit * OVERFETCH_FACTOR, OVERFETCH_MAX);
+
+      AResultVector := Self.Search(Req.Query, SearchLimit, Req.MinGlobal, Req.Filter);
 
       // -----------------------------------------------------------------------
       // 5. RERANK (segunda etapa: refinamiento semantico profundo)
@@ -1122,8 +1171,34 @@ begin
       if Assigned(AResultVector) and (Req.RerankQuery <> '') and (AResultVector.Count > 0) then
       begin
         AResultVector.Embeddings := Self.Embeddings;
-        AResultVector.RegenerateAll;
-        AResultVector.BuildIndex;
+
+        // Los nodos que llegan de un driver ya traen su vector, y del mismo modelo
+        // que la coleccion. Regenerarlos era pagar N embeddings por consulta para
+        // reconstruir exactamente lo que ya se tiene. Se regenera solo si hace
+        // falta de verdad: un vector ausente, de magnitud nula (el nodo no
+        // sobrevivio el viaje de vuelta) o de otra dimension no sirve para el
+        // coseno, y rankear con el daria un orden silenciosamente falso.
+        NeedsRegen := False;
+        for i := 0 to AResultVector.Count - 1 do
+          if (Length(AResultVector.Items[i].Data) = 0) or
+             (AResultVector.Items[i].MagnitudeValue <= 0) or
+             (Assigned(FEmbeddings) and (FEmbeddings.Dimensions > 0) and
+              (Length(AResultVector.Items[i].Data) <> FEmbeddings.Dimensions)) then
+          begin
+            NeedsRegen := True;
+            Break;
+          end;
+
+        if (not NeedsRegen) and Assigned(FEmbeddings) and (AResultVector.Model <> '') and
+           (not SameText(AResultVector.Model, FEmbeddings.Model)) then
+          NeedsRegen := True;
+
+        if NeedsRegen then
+        begin
+          AResultVector.RegenerateAll;
+          AResultVector.BuildIndex;
+        end;
+
         AResultVector.Rerank(Req.RerankQuery, Req.RerankRegenerate);
 
         // Re-aplicar THRESHOLD GLOBAL tras el rerank: los nuevos scores
@@ -1131,7 +1206,7 @@ begin
         if Req.MinGlobal > 0 then
           for i := AResultVector.Count - 1 downto 0 do
             if AResultVector.Items[i].Idx < Req.MinGlobal then
-              AResultVector.Items.Delete(i);
+              DropNode(AResultVector, i);
       end;
 
       // -----------------------------------------------------------------------
@@ -1140,7 +1215,13 @@ begin
       if Req.UseMMR and Assigned(AResultVector) and (AResultVector.Count > 1) then
       begin
         MMRVector := ApplyMMR(AResultVector, Req.MmrLambda, AResultVector.Count);
-        AResultVector.Free;  // safe: non-owning list
+        // ApplyMMR devuelve los MISMOS nodos en otro orden, en un vector sin
+        // propiedad. Liberar el original tal cual (que si la tiene, viene de un
+        // driver) destruia los nodos que MMR acababa de seleccionar y dejaba
+        // punteros colgando. Se traspasa la propiedad antes de soltarlo.
+        MMRVector.OwnsObjects   := AResultVector.OwnsObjects;
+        AResultVector.OwnsObjects := False;
+        AResultVector.Free;
         AResultVector := MMRVector;
       end
       // -----------------------------------------------------------------------
@@ -1166,7 +1247,14 @@ begin
       // -----------------------------------------------------------------------
       if Assigned(AResultVector) and (Req.Offset > 0) then
         for i := 1 to Min(Req.Offset, AResultVector.Count) do
-          AResultVector.Items.Delete(0);
+          DropNode(AResultVector, 0);
+
+      // -----------------------------------------------------------------------
+      // 9b. RECORTE AL LIMIT PEDIDO -- cierra la sobre-recuperacion del paso 4
+      // -----------------------------------------------------------------------
+      if Assigned(AResultVector) and (Req.Limit > 0) then
+        while AResultVector.Count > Req.Limit do
+          DropNode(AResultVector, AResultVector.Count - 1);
 
       // -----------------------------------------------------------------------
       // 10. GENERACION DEL OUTPUT FINAL PARA EL LLM
@@ -1183,8 +1271,7 @@ begin
       TempOptions.Free;
     end;
   finally
-    if Assigned(Req) then
-      Req.Free;
+    FEntidad := SavedEntidad;
   end;
 end;
 
@@ -1261,6 +1348,21 @@ begin
   end;
 end;
 
+{ Saca un nodo del resultado liberandolo si el vector es propietario.
+  Items es un TList<> plano: Items.Delete solo quita el puntero, nunca libera.
+  Los drivers devuelven vectores CON propiedad (Create(nil, True)), asi que cada
+  nodo descartado en el post-proceso de VQL (THRESHOLD, DISTINCT, OFFSET, LIMIT)
+  se filtraba en un proceso servidor de vida larga. }
+procedure TAiRAGVector.DropNode(AVector: TAiRAGVector; AIndex: Integer);
+var
+  Node: TAiEmbeddingNode;
+begin
+  Node := AVector.Items[AIndex];
+  AVector.Items.Delete(AIndex);
+  if AVector.OwnsObjects then
+    Node.Free;
+end;
+
 procedure TAiRAGVector.ApplyDistinct(AVector: TAiRAGVector; const AField: string);
 // Keeps only the first occurrence of each unique value of AField.
 // Items missing the field are all kept (treated as distinct).
@@ -1295,7 +1397,7 @@ begin
       end;
 
       if Seen.ContainsKey(StrVal) then
-        AVector.Items.Delete(i)  // duplicate: remove, do not advance i
+        DropNode(AVector, i)  // duplicate: remove, do not advance i
       else
       begin
         Seen.Add(StrVal, True);
