@@ -1163,6 +1163,12 @@ begin
       if (Req.RerankQuery <> '') and (SearchLimit > 0) then
         SearchLimit := Min(SearchLimit * OVERFETCH_FACTOR, OVERFETCH_MAX);
 
+      // OFFSET se aplica sobre el resultado ya traido (paso 9). Sin pedir esas
+      // filas de mas, saltar N devolvia LIMIT-N resultados en vez de LIMIT, o
+      // sea que la segunda pagina salia corta y la ultima, vacia.
+      if (Req.Offset > 0) and (Req.Limit > 0) then
+        SearchLimit := Max(SearchLimit, Req.Limit + Req.Offset);
+
       AResultVector := Self.Search(Req.Query, SearchLimit, Req.MinGlobal, Req.Filter);
 
       // -----------------------------------------------------------------------
