@@ -1139,6 +1139,7 @@ begin
     var LCompletion: Int64 := 0;
     var LTotal: Int64 := 0;
     var LCached: Int64 := 0;
+    var LCacheWrite: Int64 := 0;
 
     // Totales b?sicos
     if JUsage.TryGetValue<Int64>('input_tokens', TokenCount) then
@@ -1167,6 +1168,37 @@ begin
         ResMsg.cached_tokens := TokenCount;
         LCached := TokenCount;
       end;
+
+      // Escritura de cache. Hasta GPT-5.5 era gratis y la Responses API no la
+      // reportaba; desde GPT-5.6 cuesta 1.25x la entrada y llega en este mismo
+      // objeto como 'cache_write_tokens'. Sin leerlo, quien factura ve cero
+      // escrituras siempre y ese gasto no se cobra ni se registra.
+      if JInputDetails.TryGetValue<Int64>('cache_write_tokens', TokenCount) then
+      begin
+        ResMsg.Cache_write_tokens := TokenCount;
+        LCacheWrite := TokenCount;
+      end;
+    end;
+
+    // Los tres contadores se dejan DISJUNTOS antes de salir de aqui.
+    //
+    // En la Responses API 'input_tokens' INCLUYE los cacheados y los de
+    // escritura (medido contra la API: input_tokens 7613 = 3 nuevos + 7610 de
+    // cache_write). Anthropic los reporta separados y TAiClaudeChat los expone
+    // asi, de modo que quien factura SUMA los tres. Dejarlos solapados hace que
+    // los tokens cacheados se cobren dos veces: una a tarifa de entrada
+    // completa y otra a tarifa de cache.
+    //
+    // La resta solo se aplica si de verdad estan contenidos (prompt >= cache).
+    // Si un proveedor ya los diera separados, la condicion no se cumple y no se
+    // toca nada: la correccion no puede volverse en contra.
+    if (LCached + LCacheWrite) > 0 then
+    begin
+      if LPrompt >= (LCached + LCacheWrite) then
+      begin
+        LPrompt := LPrompt - LCached - LCacheWrite;
+        ResMsg.Prompt_tokens := LPrompt;
+      end;
     end;
 
     // Detalles de Salida: Tokens de Razonamiento (Thinking)
@@ -1186,6 +1218,7 @@ begin
     Self.Completion_tokens := Self.Completion_tokens + Integer(LCompletion);
     Self.Total_tokens := Self.Total_tokens + Integer(LTotal);
     Self.Cached_tokens := Self.Cached_tokens + Integer(LCached);
+    Self.Cache_write_tokens := Self.Cache_write_tokens + Integer(LCacheWrite);
   end;
 
   // ---------------------------------------------------------------------------
@@ -2914,6 +2947,7 @@ begin
                 var LSCompletion: Int64 := 0;
                 var LSTotal: Int64 := 0;
                 var LSCached: Int64 := 0;
+                var LSCacheWrite: Int64 := 0;
 
                 // Tokens normales (Usando los nombres de tu clase)
                 if JUsage.TryGetValue<Int64>('total_tokens', TokenCount) then
@@ -2934,11 +2968,32 @@ begin
 
                 // Tokens Cach?
                 if JUsage.TryGetValue<TJSonObject>('input_tokens_details', JInputDetails) then
+                begin
                   if JInputDetails.TryGetValue<Int64>('cached_tokens', TokenCount) then
                   begin
                     FinalMsg.cached_tokens := TokenCount;
                     LSCached := TokenCount;
                   end;
+                  // Escritura de cache (GPT-5.6+). Ver el comentario largo en
+                  // ParseChat: sin esto el gasto de escribir cache no se cobra.
+                  if JInputDetails.TryGetValue<Int64>('cache_write_tokens', TokenCount) then
+                  begin
+                    FinalMsg.Cache_write_tokens := TokenCount;
+                    LSCacheWrite := TokenCount;
+                  end;
+                end;
+
+                // Disjuntos, igual que en ParseChat: 'input_tokens' de la
+                // Responses API incluye los cacheados y los de escritura, y
+                // quien factura suma los tres.
+                if (LSCached + LSCacheWrite) > 0 then
+                begin
+                  if LSPrompt >= (LSCached + LSCacheWrite) then
+                  begin
+                    LSPrompt := LSPrompt - LSCached - LSCacheWrite;
+                    FinalMsg.Prompt_tokens := LSPrompt;
+                  end;
+                end;
 
                 // Tokens Reasoning
                 if JUsage.TryGetValue<TJSonObject>('output_tokens_details', JUsageDetails) then
@@ -2951,6 +3006,7 @@ begin
                 Self.Completion_tokens := Self.Completion_tokens + Integer(LSCompletion);
                 Self.Total_tokens := Self.Total_tokens + Integer(LSTotal);
                 Self.Cached_tokens := Self.Cached_tokens + Integer(LSCached);
+                Self.Cache_write_tokens := Self.Cache_write_tokens + Integer(LSCacheWrite);
               end;
               if JResp.TryGetValue<string>('model', DeltaVal) then
                 FinalMsg.Model := DeltaVal;

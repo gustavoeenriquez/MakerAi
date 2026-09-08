@@ -2984,6 +2984,24 @@ begin
         jPromptDetails.TryGetValue<Integer>('cached_tokens', aCached_tokens);
     end;
 
+    // Los cacheados van DENTRO de prompt_tokens en todo el dialecto Chat
+    // Completions: DeepSeek lo dice explicito (prompt_tokens = hit + miss) y
+    // los demas lo exponen igual dentro de prompt_tokens_details. Anthropic, en
+    // cambio, los reporta aparte, y TAiClaudeChat los deja asi; quien factura
+    // SUMA prompt + cache, de modo que dejarlos solapados cobra los cacheados
+    // dos veces, una a tarifa completa y otra a tarifa de cache.
+    //
+    // Se restan aqui para que ambos contadores sean disjuntos con
+    // independencia del proveedor. La resta solo se aplica si de verdad estan
+    // contenidos: si alguno ya los diera separados (prompt < cache), no se toca
+    // nada y la correccion no puede volverse en contra.
+    //
+    // No es lo mismo que los reasoning_tokens de mas abajo: aquellos tambien
+    // vienen sumados, pero dentro de completion_tokens y NO se restan a
+    // proposito, porque se reportan aparte sin facturarse por separado.
+    if (aCached_tokens > 0) and (aPrompt_tokens >= aCached_tokens) then
+      aPrompt_tokens := aPrompt_tokens - aCached_tokens;
+
     // Tokens de razonamiento de los modelos que piensan antes de responder
     // (GLM, DeepSeek, gpt-oss...). El estandar de Chat Completions los expone
     // en 'completion_tokens_details.reasoning_tokens'; algunos proveedores los
