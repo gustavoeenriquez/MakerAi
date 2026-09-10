@@ -3,15 +3,15 @@
 const
   MAKERAI_VERSION_MAJOR    = 3;
   MAKERAI_VERSION_MINOR    = 6;
-  MAKERAI_VERSION_RELEASE  = 0;
+  MAKERAI_VERSION_RELEASE  = 1;
   MAKERAI_VERSION_BUILD    = 0;
 
 // Version String Formats
 const
   MAKERAI_VERSION_SHORT    = '3.6';
-  MAKERAI_VERSION_FULL     = '3.6.0.0';
-  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.6.0.0';
-  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.6 - MCP 2026 Stateless, OpenTelemetry, A2A, Guardrails & Evals (Aug 2026)';
+  MAKERAI_VERSION_FULL     = '3.6.1.0';
+  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.6.1.0';
+  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.6.1 - Computer Use refresh (Claude toolset, OpenAI gpt-6-astra), GLM driver, RAG & token-accounting fixes (Sep 2026)';
 
 // Product Information
 const
@@ -22,7 +22,7 @@ const
 
 // Build Information
 const
-  MAKERAI_BUILD_DATE       = '2026-08-02';
+  MAKERAI_BUILD_DATE       = '2026-09-10';
   MAKERAI_BUILD_TIME       = '12:00:00';
   MAKERAI_BUILD_PLATFORM   = {$IFDEF WIN32}'Win32'{$ENDIF}
                             {$IFDEF WIN64}'Win64'{$ENDIF}
@@ -224,6 +224,46 @@ const
   - NEW: Demo 072-A2AFederation showcasing the full A2A stack without an LLM
   - NOTE: the legacy HTTP+SSE MCP transport is formally Deprecated by spec
          2026-07-28 (earliest removal July 2027). Prefer HTTP or StdIO
+
+  Version 3.6.1 (2026-09-10)
+  - FIX: Claude Computer Use was broken, not merely outdated. The driver still
+         declared computer_20251124, a tool type the Anthropic API now rejects
+         for every model. Replaced by computer_toolset_20260801, which also
+         changed shape: it is a toolset entry taking no parameters at all (no
+         name, no display_width_px/display_height_px, no enable_zoom) and needs
+         no beta header. The single computer tool with an action discriminator
+         was exploded into 17 individually named tools, so dispatch now goes by
+         tool_use.name and several arrive per turn. Coordinates come as pixels
+         of the submitted screenshot. Supported only on claude-opus-4-8,
+         claude-opus-5, claude-sonnet-5 and claude-fable-5
+  - NEW: OpenAI Computer Use with gpt-6-astra — Responses API tool "computer"
+         (no parameters), replacing computer_use_preview whose dedicated model
+         was shut down on 2026-07-23. astra sends a BATCH: one computer_call
+         carrying an actions array; the driver runs them in order and answers
+         with a single computer_call_output holding the final screenshot.
+         Implemented on both the synchronous and the streaming paths
+  - FIX: the agentic loop stalled after the first Computer Use step on OpenAI.
+         The continuation condition required an empty FLastContent, but astra
+         emits commentary text in the same turn as the computer_call
+  - NEW: gpt-6-astra registered — 1.05M context, 128K output, vision +
+         reasoning + tools. Note: it accepts xhigh/max reasoning efforts, which
+         TAiThinkingLevel cannot express yet; capped at tlHigh
+  - NEW: GLM driver (Zhipu AI / Z.ai) — TAiGLMChat, OpenAI-compatible endpoint,
+         explicit thinking control and reasoning_content round-tripping.
+         Capabilities verified against the docs; not runtime-tested yet
+  - FIX: RAG on pgvector — OFFSET was trimming instead of paginating, and the
+         vector did not survive the round trip back from the database
+  - FIX: token accounting — cache_write_tokens read on OpenAI with the cache
+         counters kept disjoint; cache_read/cache_creation preserved from
+         message_start when streaming Claude; synthetic stream close no longer
+         discards usage and finish_reason
+  - FIX: race condition where the model travelled through the global registry
+         (TAiChatConnection), with a regression case covering it
+  - FIX: tool-calling continuation off the main thread, reasoning no longer
+         leaking into the user-visible answer, and tool-result attachments no
+         longer lost in the OpenAI family
+  - Removed: TAiClaudeChat.TranslateClaudeComputerArgs (dead private code that
+         had diverged from the live translator)
 
 }
 {******************************************************************************}
