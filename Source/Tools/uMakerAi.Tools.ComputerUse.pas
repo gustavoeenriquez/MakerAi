@@ -191,7 +191,9 @@ end;
 
 procedure TAiComputerUseTool.TranslateClaudeToolCall(ToolCall: TAiToolsFunction);
 // Converts the native Claude Computer Use format to the TAiComputerUseTool format.
-// Claude sends: {"action":"left_click","coordinate":[x_px, y_px], ...}
+// Claude (computer_toolset_20260801) sends one tool_use per action, named after it:
+//   name="left_click", input={"coordinate":[x_px, y_px]}
+// Legacy (computer_20251124, single 'computer' tool): input={"action":"left_click", ...}
 // ParseAction expects: {"x":norm, "y":norm, "text":"...", ...} + ToolCall.Name = mapped action.
 var
   JArgs, JNew: TJSONObject;
@@ -204,7 +206,13 @@ begin
   if not Assigned(JArgs) then
     Exit;
   try
+    // computer_toolset_20260801 (ago 2026): el toolset sirve 17 herramientas con
+    // nombre propio (left_click, key, scroll, zoom, screenshot...), de modo que la
+    // accion llega en ToolCall.Name y ya no en un campo 'action'. Se mantiene la
+    // lectura de 'action' para historiales grabados con el formato anterior.
     if not JArgs.TryGetValue<string>('action', Action) then
+      Action := ToolCall.Name;
+    if Action = '' then
       Exit;
 
     ScrW := FScreenWidth;

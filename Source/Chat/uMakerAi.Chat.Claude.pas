@@ -160,7 +160,6 @@ type
     procedure SetEnableMemory(const Value: Boolean);
     procedure SetEnableThinking(const Value: Boolean);
     procedure SetThinkingBudget(const Value: Integer);
-    procedure TranslateClaudeComputerArgs(ToolCall: TAiToolsFunction);
 
   Protected
     Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean); Override;
@@ -252,8 +251,10 @@ Const
   BETA_HDR_FALLBACK = 'server-side-fallback-2026-06-01';  // fallbacks ante refusal
   // Code Execution (Actualizado seg?n lista de headers de la doc)
   BETA_HDR_CODE = 'code-execution-2025-05-22';
-  // Computer Use (Actualizado a la ?ltima versi?n disponible en doc)
-  // computer_20251124: Opus 4.8/4.7/4.6, Sonnet 4.6, Opus 4.5 (a?ade acci?n zoom)
+  // Computer Use: OBSOLETO. El tool actual es computer_toolset_20260801, que no
+  // necesita beta header (el API acepta este y lo ignora). El anterior,
+  // computer_20251124, ya no existe: el API lo rechaza para todos los modelos.
+  // La constante se conserva por compatibilidad de codigo externo; no se envia.
   BETA_HDR_COMPUTER = 'computer-use-2025-11-24';
   // PDFs (Nuevo: Para asegurar soporte nativo si se env?a base64)
   BETA_HDR_PDFS = 'pdfs-2024-09-25';
@@ -592,9 +593,8 @@ begin
     if cap_CodeInterpreter in ModelConfig.ModelCaps then
       BetaFeatures.Add(BETA_HDR_CODE);
 
-    // 4. Computer Use (NUEVO)
-    if cap_ComputerUse in ModelConfig.ModelCaps then
-      BetaFeatures.Add(BETA_HDR_COMPUTER);
+    // 4. Computer Use: computer_toolset_20260801 ya no requiere header beta.
+    //    El antiguo 'computer-use-2025-11-24' se sigue aceptando pero se ignora.
 
     // 5. Thinking: el header interleaved-thinking solo aplica al camino legacy
     // con budget_tokens (<=4.5). En 4.6+ el thinking adaptativo integra el
@@ -1039,23 +1039,19 @@ begin
 
     if cap_ComputerUse in ModelConfig.ModelCaps then
     begin
+      // computer_toolset_20260801 (ago 2026) reemplaza a computer_20251124,
+      // que el API ya rechaza. Es una entrada de tipo 'toolset': NO admite
+      // 'name' ni 'display_width_px'/'display_height_px' ni 'enable_zoom'
+      // (responde "Extra inputs are not permitted"). El modelo deduce las
+      // dimensiones del propio screenshot; ScreenWidth/ScreenHeight del
+      // TAiComputerUseTool siguen usandose, pero solo en local, para
+      // normalizar a 0-999 las coordenadas en pixeles que devuelve Claude.
+      // El toolset sirve 17 herramientas con nombre propio (left_click, key,
+      // scroll, zoom, screenshot...) en vez de un unico tool 'computer' con
+      // campo 'action': el despacho se hace en DoCallFunction por ToolCall.Name.
+      // Nota: zoom ahora esta siempre disponible, ya no depende de EnableZoom.
       JTools := TJSONObject.Create;
-      JTools.AddPair('type', 'computer_20251124');
-      JTools.AddPair('name', 'computer');
-      if Assigned(ChatTools.ComputerUseTool) then
-      begin
-        JTools.AddPair('display_width_px',  TJSONNumber.Create(ChatTools.ComputerUseTool.ScreenWidth));
-        JTools.AddPair('display_height_px', TJSONNumber.Create(ChatTools.ComputerUseTool.ScreenHeight));
-        // enable_zoom: solo v?lido en computer_20251124. Permite a Claude
-        // ampliar una regi?n del screenshot para leer texto peque?o.
-        if ChatTools.ComputerUseTool.EnableZoom then
-          JTools.AddPair('enable_zoom', TJSONBool.Create(True));
-      end
-      else
-      begin
-        JTools.AddPair('display_width_px',  TJSONNumber.Create(1920));
-        JTools.AddPair('display_height_px', TJSONNumber.Create(1080));
-      end;
+      JTools.AddPair('type', 'computer_toolset_20260801');
       jArrTools.Add(JTools);
     end;
 
@@ -2948,139 +2944,36 @@ begin
   end;
 end;
 
-procedure TAiClaudeChat.TranslateClaudeComputerArgs(ToolCall: TAiToolsFunction);
-// Convierte el formato nativo de Claude Computer Use al formato TAiComputerUseTool.
-// Claude envía: {"action":"left_click","coordinate":[x_px, y_px], ...}
-// TAiComputerUseTool espera: {"x":norm, "y":norm, "text":"...", ...} + ToolCall.Name = acción mapeada
+function IsClaudeComputerToolName(const AName: string): Boolean;
+// Miembros de computer_toolset_20260801. El toolset sustituyo al tool unico
+// 'computer' (que discriminaba por el campo 'action') por 17 herramientas con
+// nombre propio. Se acepta ademas 'computer' para historiales anteriores.
+const
+  CComputerTools: array [0 .. 17] of string = ('computer', 'left_click',
+    'right_click', 'middle_click', 'double_click', 'triple_click',
+    'left_click_drag', 'left_mouse_down', 'left_mouse_up', 'mouse_move',
+    'cursor_position', 'key', 'hold_key', 'type', 'scroll', 'wait',
+    'screenshot', 'zoom');
 var
-  JArgs, JNew: TJSONObject;
-  JCoord, JStartCoord, JRegion: TJSONArray;
-  Action, MappedName, SText, SDir: string;
-  ScrW, ScrH, PxX, PxY, NormX, NormY, Amount: Integer;
-  DDur: Double;
+  I: Integer;
 begin
-  JArgs := TJSONObject.ParseJSONValue(ToolCall.Arguments) as TJSONObject;
-  if not Assigned(JArgs) then
-    Exit;
-  try
-    if not JArgs.TryGetValue<string>('action', Action) then
-      Exit;
-
-    ScrW := ChatTools.ComputerUseTool.ScreenWidth;
-    ScrH := ChatTools.ComputerUseTool.ScreenHeight;
-    if ScrW <= 0 then ScrW := 1920;
-    if ScrH <= 0 then ScrH := 1080;
-
-    // Mapeo de nombres de acción Claude → TAiComputerUseTool
-    if      Action = 'left_click'       then MappedName := 'click_at'
-    else if Action = 'right_click'      then MappedName := 'right_click'
-    else if Action = 'middle_click'     then MappedName := 'middle_click'
-    else if Action = 'double_click'     then MappedName := 'double_click'
-    else if Action = 'left_click_drag'  then MappedName := 'drag_and_drop'
-    else if Action = 'mouse_move'       then MappedName := 'hover_at'
-    else if Action = 'type'             then MappedName := 'type_text_at'
-    else if Action = 'key'              then MappedName := 'key_combination'
-    else if Action = 'scroll'           then MappedName := 'scroll_at'
-    else if Action = 'wait'             then MappedName := 'wait_5_seconds'
-    else MappedName := Action; // screenshot, go_back, go_forward pass through
-
-    ToolCall.Name := MappedName;
-
-    JNew := TJSONObject.Create;
-    try
-      // Drag: start_coordinate = origen (→ x,y); coordinate = destino (→ destination_x,y)
-      if (Action = 'left_click_drag') and
-         JArgs.TryGetValue<TJSONArray>('start_coordinate', JStartCoord) and
-         (JStartCoord.Count >= 2) then
-      begin
-        PxX  := (JStartCoord.Items[0] as TJSONNumber).AsInt;
-        PxY  := (JStartCoord.Items[1] as TJSONNumber).AsInt;
-        NormX := Round(PxX / ScrW * 1000); if NormX > 999 then NormX := 999;
-        NormY := Round(PxY / ScrH * 1000); if NormY > 999 then NormY := 999;
-        JNew.AddPair('x', TJSONNumber.Create(NormX));
-        JNew.AddPair('y', TJSONNumber.Create(NormY));
-
-        if JArgs.TryGetValue<TJSONArray>('coordinate', JCoord) and (JCoord.Count >= 2) then
-        begin
-          NormX := Round((JCoord.Items[0] as TJSONNumber).AsInt / ScrW * 1000);
-          NormY := Round((JCoord.Items[1] as TJSONNumber).AsInt / ScrH * 1000);
-          if NormX > 999 then NormX := 999;
-          if NormY > 999 then NormY := 999;
-          JNew.AddPair('destination_x', TJSONNumber.Create(NormX));
-          JNew.AddPair('destination_y', TJSONNumber.Create(NormY));
-        end;
-      end
-      else if JArgs.TryGetValue<TJSONArray>('coordinate', JCoord) and (JCoord.Count >= 2) then
-      begin
-        PxX  := (JCoord.Items[0] as TJSONNumber).AsInt;
-        PxY  := (JCoord.Items[1] as TJSONNumber).AsInt;
-        NormX := Round(PxX / ScrW * 1000); if NormX > 999 then NormX := 999;
-        NormY := Round(PxY / ScrH * 1000); if NormY > 999 then NormY := 999;
-        JNew.AddPair('x', TJSONNumber.Create(NormX));
-        JNew.AddPair('y', TJSONNumber.Create(NormY));
-      end;
-
-      // Texto / teclas / modificadores: el campo 'text' de Claude cambia de
-      // significado según la acción.
-      if JArgs.TryGetValue<string>('text', SText) then
-      begin
-        if (Action = 'key') or (Action = 'hold_key') then
-          JNew.AddPair('keys', SText)
-        else if Action = 'type' then
-        begin
-          JNew.AddPair('text', SText);
-          // La acci?n 'type' de Claude NO implica Enter ni posici?n: escribe en el
-          // control con foco. Evita el Enter autom?tico (default True en ParseAction).
-          JNew.AddPair('press_enter', TJSONBool.Create(False));
-        end
-        else
-          // En click/scroll/triple_click el 'text' contiene los modificadores
-          JNew.AddPair('modifiers', SText);
-      end;
-
-      // Duración de hold_key (segundos)
-      if (Action = 'hold_key') and JArgs.TryGetValue<Double>('duration', DDur) then
-        JNew.AddPair('duration', TJSONNumber.Create(DDur));
-
-      // Zoom: region [x1,y1,x2,y2] (px) → x,y + destination_x,destination_y (norm 0-999)
-      if (Action = 'zoom') and JArgs.TryGetValue<TJSONArray>('region', JRegion) and (JRegion.Count >= 4) then
-      begin
-        NormX := Round((JRegion.Items[0] as TJSONNumber).AsInt / ScrW * 1000); if NormX > 999 then NormX := 999;
-        NormY := Round((JRegion.Items[1] as TJSONNumber).AsInt / ScrH * 1000); if NormY > 999 then NormY := 999;
-        JNew.AddPair('x', TJSONNumber.Create(NormX));
-        JNew.AddPair('y', TJSONNumber.Create(NormY));
-        NormX := Round((JRegion.Items[2] as TJSONNumber).AsInt / ScrW * 1000); if NormX > 999 then NormX := 999;
-        NormY := Round((JRegion.Items[3] as TJSONNumber).AsInt / ScrH * 1000); if NormY > 999 then NormY := 999;
-        JNew.AddPair('destination_x', TJSONNumber.Create(NormX));
-        JNew.AddPair('destination_y', TJSONNumber.Create(NormY));
-      end;
-
-      // Scroll: Claude usa 'scroll_direction'/'scroll_amount' (computer_2025xxxx).
-      // Se aceptan tambi?n 'direction'/'amount' por compatibilidad.
-      if JArgs.TryGetValue<string>('scroll_direction', SDir) or
-         JArgs.TryGetValue<string>('direction', SDir) then
-        JNew.AddPair('direction', SDir);
-      if JArgs.TryGetValue<Integer>('scroll_amount', Amount) or
-         JArgs.TryGetValue<Integer>('amount', Amount) then
-        JNew.AddPair('magnitude', TJSONNumber.Create(Amount * 120))
-      else if Action = 'scroll' then
-        JNew.AddPair('magnitude', TJSONNumber.Create(800));
-
-      ToolCall.Arguments := JNew.ToJSON;
-    finally
-      JNew.Free;
-    end;
-  finally
-    JArgs.Free;
-  end;
+  Result := False;
+  for I := Low(CComputerTools) to High(CComputerTools) do
+    if SameText(AName, CComputerTools[I]) then
+      Exit(True);
 end;
 
 procedure TAiClaudeChat.DoCallFunction(ToolCall: TAiToolsFunction);
 var
   LScreenshot: TAiMediaFile;
 begin
-  // 0. Computer Use nativo de Claude (tool name = 'computer')
-  if (ToolCall.Name = 'computer') and Assigned(ChatTools.ComputerUseTool) then
+  // 0. Computer Use nativo de Claude. Con computer_toolset_20260801 el nombre del
+  //    tool ES la accion (left_click, key, scroll, zoom...), asi que se despacha
+  //    por nombre. Se exige cap_ComputerUse para que nombres genericos como 'type'
+  //    o 'wait' no secuestren funciones de usuario con el mismo nombre.
+  if IsClaudeComputerToolName(ToolCall.Name) and
+     (cap_ComputerUse in ModelConfig.ModelCaps) and
+     Assigned(ChatTools.ComputerUseTool) then
   begin
     if Assigned(FOnCallToolFunction) then
       FOnCallToolFunction(Self, ToolCall);

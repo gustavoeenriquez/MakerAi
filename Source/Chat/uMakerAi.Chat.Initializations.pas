@@ -1025,6 +1025,22 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
 
+  // ------- Computer Use (Claude) ------
+  // https://docs.claude.com/en/docs/agents-and-tools/tool-use/computer-use-tool
+  // Tool actual: computer_toolset_20260801 (ago 2026). Sustituye a computer_20251124,
+  // que el API ya rechaza para TODOS los modelos; los anteriores a opus-4-8 se
+  // quedaron sin computer use (su lista de tools soportados ya no lo incluye).
+  // Verificado contra el API sep 10/2026 — solo lo aceptan:
+  //   claude-opus-4-8, claude-opus-5, claude-sonnet-5, claude-fable-5
+  // NO se activa por defecto: cap_ComputerUse deja que el modelo mueva el raton y
+  // el teclado de la maquina, asi que es opt-in explicito del usuario (mismo
+  // criterio que gemini-3.5-flash). Para habilitarlo, sobreescribir en la app:
+  //   TAiChatFactory.Instance.RegisterUserParam('Claude', 'claude-opus-5',
+  //     'ModelCaps',   '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch, cap_ComputerUse]');
+  //   TAiChatFactory.Instance.RegisterUserParam('Claude', 'claude-opus-5',
+  //     'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch, cap_ComputerUse]');
+  // (ver Demos/066-ComputerUseTest)
+
   // CLAUDE OPUS 5  [MODELO ACTUAL — RECOMENDADO]
   // Sucesor de Opus 4.8 al mismo precio ($5/$25). Thinking activo por defecto.
   // Los clasificadores pueden declinar con stop_reason:"refusal" (el driver lo
