@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MakerAI is an AI orchestration framework for Delphi developers (v3.6). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, GLM/Z.ai, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers/clients, A2A agent interoperability, autonomous agents, observability, guardrails and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+MakerAI is an AI orchestration framework for Delphi developers (v3.7). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, GLM/Z.ai, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers/clients, A2A agent interoperability, autonomous agents, observability, guardrails and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
 
-**v3.6.1 highlights (sep 2026):** refresco de **Computer Use** en los dos proveedores vivos — Claude estaba **roto** (`computer_20251124` ya lo rechaza el API; ahora `computer_toolset_20260801`, sin parametros y con 17 herramientas nombradas) y OpenAI estrena el tool nativo `computer` con **`gpt-6-astra`**, que manda un **lote** de acciones por turno; ambos APIs convergieron en no declarar dimensiones y devolver coordenadas en pixeles del screenshot. Ademas: driver **GLM** (Zhipu/Z.ai), fixes de RAG sobre pgvector y de contabilidad de tokens/cache.
+**v3.7 highlights (sep 2026):** refresco de **Computer Use** en los dos proveedores vivos — Claude estaba **roto** (`computer_20251124` ya lo rechaza el API; ahora `computer_toolset_20260801`, sin parametros y con 17 herramientas nombradas) y OpenAI estrena el tool nativo `computer` con **`gpt-6-astra`**, que manda un **lote** de acciones por turno; ambos APIs convergieron en no declarar dimensiones y devolver coordenadas en pixeles del screenshot. Ademas: driver **GLM** (Zhipu/Z.ai), fixes de RAG sobre pgvector y de contabilidad de tokens/cache.
 
 **v3.6 highlights (ago 2026):** MCP spec **2026-07-28 stateless dual-era** (server/discover + `_meta` por request, con fallback automático al handshake legacy) y patrón **MRTR** (elicitation con reintento); observabilidad **OpenTelemetry** (`TAiTelemetry`, OTLP/HTTP con GenAI semconv, trazas distribuidas vía `traceparent` en `_meta`) instrumentando chat, tools, MCP, agentes y RAG; protocolo **A2A 1.0** (`TAiA2AServer`/`TAiA2AClient`/`TAiA2ARemoteAgentTool` — primera implementación Delphi, con federación de grafos); **`TAiGuardrails`** (política de tool calls en el choke point de `TAiFunctions`) y **`TAiEvalRunner`** (evals con LLM-as-judge opcional); primera **suite de regresión** automatizada en `Tests/RegressionSuite`.
 
@@ -258,7 +258,7 @@ uses uJSONHelper;  // JSON helper for older Delphi versions
 
 ### Feature Flags (uMakerAi.Version.inc)
 
-All `MAKERAI_HAS_*` feature flags are `True` by default (OpenAI, Whisper, Embeddings, Tool Calling, RAG Vector/Graph, MCP, Chat Connection, UI Components, Agents). Platform flags: Windows, Linux, Mobile are `True`; **macOS is `False`** (incomplete). `MAKERAI_API_LEVEL = 35`.
+All `MAKERAI_HAS_*` feature flags are `True` by default (OpenAI, Whisper, Embeddings, Tool Calling, RAG Vector/Graph, MCP, Chat Connection, UI Components, Agents). Platform flags: Windows, Linux, Mobile are `True`; **macOS is `False`** (incomplete). `MAKERAI_API_LEVEL = 37`.
 
 ## Thread Safety Notes
 

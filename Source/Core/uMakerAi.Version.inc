@@ -2,16 +2,16 @@
 // Version Information
 const
   MAKERAI_VERSION_MAJOR    = 3;
-  MAKERAI_VERSION_MINOR    = 6;
-  MAKERAI_VERSION_RELEASE  = 1;
+  MAKERAI_VERSION_MINOR    = 7;
+  MAKERAI_VERSION_RELEASE  = 0;
   MAKERAI_VERSION_BUILD    = 0;
 
 // Version String Formats
 const
-  MAKERAI_VERSION_SHORT    = '3.6';
-  MAKERAI_VERSION_FULL     = '3.6.1.0';
-  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.6.1.0';
-  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.6.1 - Computer Use refresh (Claude toolset, OpenAI gpt-6-astra), GLM driver, RAG & token-accounting fixes (Sep 2026)';
+  MAKERAI_VERSION_SHORT    = '3.7';
+  MAKERAI_VERSION_FULL     = '3.7.0.0';
+  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.7.0.0';
+  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.7 - Computer Use refresh (Claude toolset, OpenAI gpt-6-astra) & GLM driver (Sep 2026)';
 
 // Product Information
 const
@@ -38,7 +38,7 @@ const
 
 // API Compatibility
 const
-  MAKERAI_API_LEVEL        = 36;        // Internal API level for compatibility
+  MAKERAI_API_LEVEL        = 37;        // Internal API level for compatibility
   MAKERAI_BREAKING_CHANGE  = False;     // True if this version has breaking changes
   MAKERAI_LEGACY_SUPPORT   = True;      // True = Support for v2.x components
 
@@ -225,7 +225,7 @@ const
   - NOTE: the legacy HTTP+SSE MCP transport is formally Deprecated by spec
          2026-07-28 (earliest removal July 2027). Prefer HTTP or StdIO
 
-  Version 3.6.1 (2026-09-10)
+  Version 3.7.0 (2026-09-10)
   - FIX: Claude Computer Use was broken, not merely outdated. The driver still
          declared computer_20251124, a tool type the Anthropic API now rejects
          for every model. Replaced by computer_toolset_20260801, which also
