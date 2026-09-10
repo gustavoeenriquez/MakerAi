@@ -479,11 +479,11 @@ var
     ExtraFileRefs: String;
     IsSpecialAssistant: Boolean;
   begin
-    IsSpecialAssistant := (Msg.Role = 'assistant') and Msg.Prompt.Trim.StartsWith('{') and (ContainsText(Msg.Prompt, '"type":"shell_call"') or ContainsText(Msg.Prompt, '"type":"apply_patch_call"'));
+    IsSpecialAssistant := (Msg.Role = 'assistant') and Msg.Prompt.Trim.StartsWith('{') and (ContainsText(Msg.Prompt, '"type":"shell_call"') or ContainsText(Msg.Prompt, '"type":"apply_patch_call"') or ContainsText(Msg.Prompt, '"type":"computer_call"'));
 
     if (Msg.Role = 'tool') or IsSpecialAssistant then
     begin
-      if Msg.Prompt.Trim.StartsWith('{') and (ContainsText(Msg.Prompt, '"type":"apply_patch_call_output"') or ContainsText(Msg.Prompt, '"type":"shell_call_output"') or ContainsText(Msg.Prompt, '"type":"shell_call"') or
+      if Msg.Prompt.Trim.StartsWith('{') and (ContainsText(Msg.Prompt, '"type":"apply_patch_call_output"') or ContainsText(Msg.Prompt, '"type":"computer_call_output"') or ContainsText(Msg.Prompt, '"type":"computer_call"') or ContainsText(Msg.Prompt, '"type":"shell_call_output"') or ContainsText(Msg.Prompt, '"type":"shell_call"') or
         ContainsText(Msg.Prompt, '"type":"apply_patch_call"')) then
       begin
         JPreBuilt := TJSonObject.ParseJSONValue(Msg.Prompt) as TJSonObject;
@@ -918,6 +918,23 @@ JFormatConfig := Nil;
       JToolsArray.Add(JShellTool);
     end;
 
+    if (cap_ComputerUse in ModelConfig.ModelCaps) then
+    begin
+      if not Assigned(JToolsArray) then
+        JToolsArray := TJSonArray.Create;
+      // Tool 'computer' (gpt-6-astra, ago 2026). NO lleva parametros: ni
+      // display_width/display_height ni environment (el API responde
+      // "Unknown parameter"). El modelo deduce las dimensiones del propio
+      // screenshot, asi que ScreenWidth/ScreenHeight del TAiComputerUseTool
+      // solo se usan en local para normalizar las coordenadas de vuelta.
+      // Sustituye a computer_use_preview, cuyo modelo dedicado se apago el
+      // 23-jul-2026 y que astra ya rechaza.
+      var
+      JComputerTool := TJSonObject.Create;
+      JComputerTool.AddPair('type', 'computer');
+      JToolsArray.Add(JComputerTool);
+    end;
+
     if (cap_GenImage in ModelConfig.ModelCaps) then
     begin
       if not Assigned(JToolsArray) then
@@ -1064,6 +1081,11 @@ var
   NewMsg: TAiChatMessage;
   GeneratedFile: TAiMediaFile;
   WebItem: TAiWebSearchItem;
+  // Computer Use: astra suele emitir texto de comentario JUNTO con el
+  // computer_call (phase='commentary'), asi que FLastContent no queda vacio y
+  // la condicion normal de recursion no dispararia. Esta bandera fuerza el
+  // siguiente ciclo para que la IA vea el screenshot resultante.
+  LComputerCallDone: Boolean;
   // Variables auxiliares para valores num?ricos
   UnixDate: Int64;
   TokenCount: Int64;
@@ -1229,6 +1251,8 @@ begin
   ToolCalls := TObjectList<TAiToolsFunction>.Create;
 
   try
+    LComputerCallDone := False;
+
     // 2. Iterar el array 'output' (Polimorfismo: Messages, Tools, Images)
     if jObj.TryGetValue<TJSonArray>('output', JOutput) then
     begin
@@ -1526,6 +1550,104 @@ begin
           end;
         end
 
+        // --- TIPO: COMPUTER CALL (CONTROL DE PANTALLA) ---
+        // gpt-6-astra manda un LOTE: un unico computer_call con un array 'actions'
+        // (p.ej. keypress[WIN,r] + type 'notepad' + keypress[ENTER]). Se ejecutan en
+        // orden y se responde con UN solo computer_call_output por call_id, con el
+        // screenshot final: el API exige exactamente un output por llamada.
+        else if SType = 'computer_call' then
+        begin
+          if JItem.TryGetValue<String>('call_id', SCallId) then
+          begin
+            // 1. Guardar el call crudo en el historial (cadena User -> Call -> Output)
+            var
+            HistCU := TAiChatMessage.Create(JItem.ToString, 'assistant');
+            HistCU.ToolCallId := SCallId;
+            HistCU.PreviousResponseId := FResponseId;
+            HistCU.Id := Self.Messages.Count + 1;
+            Self.Messages.Add(HistCU);
+
+            LComputerCallDone := True;
+
+            var
+              LShot: TAiMediaFile;
+            LShot := nil;
+            try
+              // 2. Ejecutar TODAS las acciones del lote, en orden
+              var
+                JActions: TJSonArray;
+              if Assigned(ChatTools.ComputerUseTool) and JItem.TryGetValue<TJSonArray>('actions', JActions) then
+              begin
+                for var Ai := 0 to JActions.Count - 1 do
+                begin
+                  var
+                  JAct := JActions.Items[Ai] as TJSonObject;
+                  var
+                  LCU := TAiToolsFunction.Create;
+                  try
+                    LCU.Id := SCallId;
+                    LCU.Name := JAct.GetValue<string>('type', '');
+                    LCU.Arguments := JAct.ToJSON;
+                    ChatTools.ComputerUseTool.TranslateOpenAIToolCall(LCU);
+
+                    if Assigned(FOnCallToolFunction) then
+                      FOnCallToolFunction(Self, LCU);
+
+                    // Solo interesa la foto posterior a la ULTIMA accion: las
+                    // intermedias se descartan para no inflar tokens ni latencia.
+                    FreeAndNil(LShot);
+                    ChatTools.ComputerUseTool.ProcessToolCall(LCU, LShot);
+                  finally
+                    LCU.Free;
+                  end;
+                end;
+
+                // Si el lote no dejo screenshot (accion fallida o denegada por
+                // seguridad), se fuerza uno: el output NO admite quedarse sin
+                // imagen (el API pide exactamente uno de image_url o file_id),
+                // y ademas el modelo necesita ver el estado resultante.
+                if not Assigned(LShot) then
+                begin
+                  var
+                  LSnap := TAiToolsFunction.Create;
+                  try
+                    LSnap.Id := SCallId;
+                    LSnap.Name := 'screenshot';
+                    LSnap.Arguments := '{}';
+                    ChatTools.ComputerUseTool.ProcessToolCall(LSnap, LShot);
+                  finally
+                    LSnap.Free;
+                  end;
+                end;
+              end;
+
+              // 3. Devolver un unico computer_call_output con la imagen final
+              var
+              JCUOut := TJSonObject.Create;
+              try
+                JCUOut.AddPair('type', 'computer_call_output');
+                JCUOut.AddPair('call_id', SCallId);
+                var
+                JShotObj := TJSonObject.Create;
+                JShotObj.AddPair('type', 'computer_screenshot');
+                if Assigned(LShot) then
+                  JShotObj.AddPair('image_url', 'data:' + LShot.MimeType + ';base64,' + LShot.Base64);
+                JCUOut.AddPair('output', JShotObj);
+
+                NewMsg := TAiChatMessage.Create(JCUOut.ToString, 'tool');
+                NewMsg.ToolCallId := SCallId;
+                NewMsg.PreviousResponseId := FResponseId;
+                NewMsg.Id := Self.Messages.Count + 1;
+                Self.Messages.Add(NewMsg);
+              finally
+                JCUOut.Free;
+              end;
+            finally
+              FreeAndNil(LShot);
+            end;
+          end;
+        end
+
         // --- TIPO: APPLY PATCH (EDICI?N DE ARCHIVOS) ---
         else if SType = 'apply_patch_call' then
         begin
@@ -1687,7 +1809,10 @@ begin
       // Si no hubo Function Calls, revisamos si hubo Shell Calls o Patch Calls que agregaron mensajes
       // al historial. Si es as?, debemos hacer recursi?n para que la IA vea el resultado.
       // (Verificamos si el ?ltimo mensaje es de tipo 'tool')
-      if (Self.Messages.Count > 0) and (Self.Messages.Last.Role = 'tool') and (FLastContent = '') then
+      // El computer_call va aparte: se recurre aunque haya texto, porque el
+      // modelo comenta cada paso mientras sigue conduciendo la pantalla.
+      if (Self.Messages.Count > 0) and (Self.Messages.Last.Role = 'tool') and
+         ((FLastContent = '') or LComputerCallDone) then
       begin
         // Recursi?n para que la IA responda al resultado del shell/patch
         Self.Run(Nil, ResMsg);
@@ -2821,6 +2946,97 @@ begin
                     FMessages.Add(ResultMsg);
                     FRecursionNeeded := True;
                   end;
+                end;
+              end;
+            end
+
+            // 2b. Computer Call (control de pantalla)
+            // Mismo contrato que en el camino sincrono: un computer_call trae un
+            // ARRAY 'actions' que se ejecuta en orden, y se responde con UN unico
+            // computer_call_output con el screenshot final.
+            else if (ItemType = 'computer_call') then
+            begin
+              if JItem.TryGetValue<String>('call_id', CallId) and Assigned(ChatTools.ComputerUseTool) then
+              begin
+                // Historial: el call crudo como mensaje del assistant
+                var
+                CUCallMsg := TAiChatMessage.Create(JItem.ToString, 'assistant');
+                CUCallMsg.ToolCallId := CallId;
+                CUCallMsg.PreviousResponseId := FResponseId;
+                CUCallMsg.Id := FMessages.Count + 1;
+                FMessages.Add(CUCallMsg);
+
+                var
+                  LShotS: TAiMediaFile;
+                LShotS := nil;
+                try
+                  var
+                    JActionsS: TJSonArray;
+                  if JItem.TryGetValue<TJSonArray>('actions', JActionsS) then
+                    for var Ai := 0 to JActionsS.Count - 1 do
+                    begin
+                      var
+                      JActS := JActionsS.Items[Ai] as TJSonObject;
+                      var
+                      LCUS := TAiToolsFunction.Create;
+                      try
+                        LCUS.Id := CallId;
+                        LCUS.Name := JActS.GetValue<string>('type', '');
+                        LCUS.Arguments := JActS.ToJSON;
+                        ChatTools.ComputerUseTool.TranslateOpenAIToolCall(LCUS);
+
+                        if Assigned(FOnCallToolFunction) then
+                          FOnCallToolFunction(Self, LCUS);
+
+                        // Solo se conserva la foto de la ULTIMA accion del lote.
+                        FreeAndNil(LShotS);
+                        ChatTools.ComputerUseTool.ProcessToolCall(LCUS, LShotS);
+                      finally
+                        LCUS.Free;
+                      end;
+                    end;
+
+                  // El output exige imagen (uno de image_url o file_id): si el
+                  // lote no dejo ninguna, se fuerza una captura.
+                  if not Assigned(LShotS) then
+                  begin
+                    var
+                    LSnapS := TAiToolsFunction.Create;
+                    try
+                      LSnapS.Id := CallId;
+                      LSnapS.Name := 'screenshot';
+                      LSnapS.Arguments := '{}';
+                      ChatTools.ComputerUseTool.ProcessToolCall(LSnapS, LShotS);
+                    finally
+                      LSnapS.Free;
+                    end;
+                  end;
+
+                  var
+                  JCUOutS := TJSonObject.Create;
+                  try
+                    JCUOutS.AddPair('type', 'computer_call_output');
+                    JCUOutS.AddPair('call_id', CallId);
+                    var
+                    JShotS := TJSonObject.Create;
+                    JShotS.AddPair('type', 'computer_screenshot');
+                    if Assigned(LShotS) then
+                      JShotS.AddPair('image_url', 'data:' + LShotS.MimeType + ';base64,' + LShotS.Base64);
+                    JCUOutS.AddPair('output', JShotS);
+
+                    var
+                    CUResMsg := TAiChatMessage.Create(JCUOutS.ToString, 'tool');
+                    CUResMsg.ToolCallId := CallId;
+                    CUResMsg.PreviousResponseId := FResponseId;
+                    CUResMsg.Id := FMessages.Count + 1;
+                    FMessages.Add(CUResMsg);
+                  finally
+                    JCUOutS.Free;
+                  end;
+
+                  FRecursionNeeded := True;
+                finally
+                  FreeAndNil(LShotS);
                 end;
               end;
             end

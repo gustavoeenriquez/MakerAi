@@ -314,6 +314,30 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active',  'True');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlLow');
 
+  // --- GPT-6 Astra (ago 27/2026) -- 1.05M ctx (272K sin recargo), 128K out ---
+  // https://developers.openai.com/api/docs/models/gpt-6-astra
+  // Vision + reasoning + tools. $10/$50 por 1M ($1 cached). Por encima de 272K
+  // tokens de entrada el input se cobra 2x y el output 1.5x.
+  //
+  // COMPUTER USE: astra trae el tool nativo 'computer' (sustituye al modelo
+  // dedicado computer-use-preview, apagado el 23-jul-2026). NO se activa por
+  // defecto: cap_ComputerUse le da al modelo el raton y el teclado de la
+  // maquina, asi que es opt-in explicito (mismo criterio que Claude y que
+  // gemini-3.5-flash). Para habilitarlo, sobreescribir en la app:
+  //   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'gpt-6-astra',
+  //     'ModelCaps',   '[cap_Image, cap_Reasoning, cap_ComputerUse]');
+  //   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'gpt-6-astra',
+  //     'SessionCaps', '[cap_Image, cap_Reasoning, cap_ComputerUse]');
+  //
+  // OJO: astra acepta reasoning effort 'xhigh' y 'max', que TAiThinkingLevel
+  // (tlDefault/tlLow/tlMedium/tlHigh) todavia no sabe expresar -> tope tlHigh.
+  Model := 'gpt-6-astra';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Max_Tokens',    '32768');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',    '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps',  '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active',  'True');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlHigh');
+
   // ------- Generacion de imagenes ------
   // https://platform.openai.com/docs/guides/images
   // ModelCaps=[]: usa endpoint dedicado; Gap=[cap_GenImage] activa InternalRunImageGeneration
@@ -435,7 +459,6 @@ Begin
   TAiChatFactory.Instance.RegisterCustomModel('OpenAi', 'aa_o4-mini-low', 'o4-mini');
   Model := 'aa_o4-mini-low';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlLow');
-
 
   // ------------------------- GEMINI ----------------------------------
   // https://ai.google.dev/gemini-api/docs/models

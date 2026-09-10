@@ -19,7 +19,7 @@ interface
 
 uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
-  System.JSON, System.Net.HttpClient, System.Math,
+  System.JSON, System.Net.HttpClient, System.Math, System.IOUtils,
   {$IFDEF MSWINDOWS} Winapi.Windows, FMX.Platform.Win, {$ENDIF}
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Surfaces, FMX.Dialogs,
   FMX.StdCtrls, FMX.Controls.Presentation, FMX.ScrollBox, FMX.Memo,
@@ -47,6 +47,8 @@ type
     FCU: TAiComputerUseTool;
     FShotDir: string;   // carpeta donde se guardan los screenshots para depurar
     FShotCount: Integer;
+    FLogFile: string;   // copia del log en disco (para correr sin mirar la GUI)
+    FAutoRun: Boolean;  // -autorun: dispara Ejecutar al mostrarse la ventana
     procedure Log(const S: string);
     procedure SetStatus(const S: string);
     // Captura el área física y la devuelve como JPG escalado a OutW x OutH.
@@ -113,14 +115,19 @@ begin
   FConn.OnReceiveDataEnd := DoReceiveEnd;
   FConn.OnError := DoError;
 
-  // Habilitar cap_ComputerUse en los modelos que vamos a usar
-  // (claude-opus-4-8 trae [cap_Image] por defecto; gemini-2.5-computer-use ya lo trae).
+  // Habilitar cap_ComputerUse en los modelos que vamos a usar. Ninguno lo trae
+  // por defecto a proposito: es la capacidad que le da a la IA el raton y el
+  // teclado reales, asi que el opt-in es del programador.
+  // (gemini-2.5-computer-use es la excepcion: es un modelo dedicado y ya lo trae.)
   TAiChatFactory.Instance.RegisterUserParam('Claude', 'claude-opus-4-8', 'ModelCaps',   '[cap_Image, cap_ComputerUse]');
   TAiChatFactory.Instance.RegisterUserParam('Claude', 'claude-opus-4-8', 'SessionCaps', '[cap_Image, cap_ComputerUse]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'gpt-6-astra', 'ModelCaps',   '[cap_Image, cap_Reasoning, cap_ComputerUse]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'gpt-6-astra', 'SessionCaps', '[cap_Image, cap_Reasoning, cap_ComputerUse]');
 
   cbProvider.Items.Clear;
   cbProvider.Items.Add('Claude');
   cbProvider.Items.Add('Gemini');
+  cbProvider.Items.Add('OpenAI (gpt-6-astra)');
   cbProvider.ItemIndex := 0;
 
   // Carpeta de depuración: cada screenshot enviado a la IA se guarda aquí.
@@ -128,10 +135,51 @@ begin
   ForceDirectories(FShotDir);
   FShotCount := 0;
 
+  // Log a disco, junto al exe. Se reinicia en cada arranque.
+  FLogFile := ExtractFilePath(ParamStr(0)) + 'run.log';
+  try
+    TFile.WriteAllText(FLogFile, '', TEncoding.UTF8);
+  except
+    FLogFile := '';
+  end;
+
   mePrompt.Lines.Text := DEF_PROMPT;
   SetStatus('Listo. Abre la app objetivo y pulsa Ejecutar.');
   Log(Format('Pantalla: %dx%d', [FCU.ScreenWidth, FCU.ScreenHeight]));
   Log('Screenshots guardados en: ' + FShotDir);
+
+  // --- Arranque por linea de comandos (para correr sin tocar la GUI) ---
+  //   -provider=openai|claude|gemini   preselecciona el proveedor
+  //   -prompt=<texto>                  sustituye la tarea por defecto
+  //   -autorun                         pulsa Ejecutar solo, al mostrarse
+  for var Pi := 1 to ParamCount do
+  begin
+    var LP := LowerCase(ParamStr(Pi));
+    if LP.StartsWith('-provider=') then
+    begin
+      var LProv := LP.Substring(Length('-provider='));
+      if LProv = 'claude' then cbProvider.ItemIndex := 0
+      else if LProv = 'gemini' then cbProvider.ItemIndex := 1
+      else if (LProv = 'openai') or (LProv = 'astra') then cbProvider.ItemIndex := 2;
+    end
+    else if LP.StartsWith('-prompt=') then
+      mePrompt.Lines.Text := ParamStr(Pi).Substring(Length('-prompt='))
+    else if LP = '-autorun' then
+      FAutoRun := True;
+  end;
+
+  // El disparo va aqui y no en FormShow: OnShow no esta enganchado en el .fmx,
+  // asi que ese metodo nunca corre. ForceQueue difiere al bucle de mensajes, o
+  // sea cuando la ventana ya esta visible.
+  if FAutoRun then
+  begin
+    FAutoRun := False;
+    TThread.ForceQueue(nil,
+      procedure
+      begin
+        btnRunClick(btnRun);
+      end);
+  end;
 end;
 
 procedure TFormComputerUse.FormShow(Sender: TObject);
@@ -161,14 +209,28 @@ begin
   ShowWindow(H, SW_SHOW);
   SetForegroundWindow(H);
   {$ENDIF}
+
 end;
 
 procedure TFormComputerUse.Log(const S: string);
+var
+  LLine: string;
 begin
+  LLine := FormatDateTime('hh:nn:ss', Now) + '  ' + S;
+
+  // Copia en disco: permite lanzar el demo por linea de comandos y revisar
+  // despues lo que paso sin haber estado mirando la ventana.
+  if FLogFile <> '' then
+  try
+    TFile.AppendAllText(FLogFile, LLine + sLineBreak, TEncoding.UTF8);
+  except
+    // el log nunca debe tumbar la corrida
+  end;
+
   TThread.Queue(nil,
     procedure
     begin
-      meLog.Lines.Add(FormatDateTime('hh:nn:ss', Now) + '  ' + S);
+      meLog.Lines.Add(LLine);
       meLog.GoToTextEnd;
     end);
 end;
@@ -344,6 +406,16 @@ begin
     FConn.DriverName := 'Gemini';
     FConn.Model := 'gemini-2.5-computer-use-preview-10-2025';
     FConn.Params.Values['ApiKey'] := '@GEMINI_API_KEY';
+  end
+  else if cbProvider.ItemIndex = 2 then
+  begin
+    // gpt-6-astra: tool nativo 'computer' via Responses API. A diferencia de
+    // Claude y Gemini, manda un LOTE de acciones por turno (un computer_call
+    // con array 'actions'); el driver las ejecuta en orden y devuelve un unico
+    // screenshot final.
+    FConn.DriverName := 'OpenAi';
+    FConn.Model := 'gpt-6-astra';
+    FConn.Params.Values['ApiKey'] := '@OPENAI_API_KEY';
   end
   else
   begin

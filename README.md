@@ -250,7 +250,7 @@ Full, provider-specific access to every API feature. Use when you need complete 
 
 | Component | Provider | Latest Models |
 |-----------|----------|---------------|
-| `TAiOpenChat` | OpenAI | gpt-5.6-sol/-terra/-luna, gpt-5.5, gpt-image-1 |
+| `TAiOpenChat` | OpenAI | gpt-6-astra, gpt-5.6-sol/-terra/-luna, gpt-5.5, gpt-image-1 |
 | `TAiClaudeChat` | Anthropic | claude-opus-5, claude-sonnet-5, claude-fable-5, claude-haiku-4-5 |
 | `TAiGeminiChat` | Google | gemini-3.5-flash, gemini-3.6-flash, gemini-3.1-pro |
 | `TAiGrokChat` | xAI | grok-4.3, grok-4.5, grok-build, grok-imagine (image/video) |
@@ -287,7 +287,7 @@ AiConn.ApiKey := '@GLM_API_KEY';
 
 ## 📊 Feature Support Matrix
 
-| Feature | OpenAI (gpt-5.6) | Claude (5) | Gemini (3.6) | Grok (4.5) | Mistral | DeepSeek | Ollama |
+| Feature | OpenAI (gpt-6-astra) | Claude (5) | Gemini (3.6) | Grok (4.5) | Mistral | DeepSeek | Ollama |
 |:--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | Text Generation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Streaming (SSE) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -301,12 +301,20 @@ AiConn.ApiKey := '@GLM_API_KEY';
 | Speech (TTS/STT) | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ⚠️ |
 | Realtime Voice (WebSocket) | ✅ STT | ❌ | ⚠️ | ✅ S2S | ❌ | ❌ | ❌ |
 | Web Search | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Computer Use | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Computer Use ¹ | ✅ | ✅ | ⚠️ | ❌ | ❌ | ❌ | ❌ |
 | RAG (all modes) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | MCP Client/Server | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Agents | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 > **Legend:** ✅ Native | ⚠️ Tool-Assisted bridge | ❌ Not Supported
+
+> ¹ **Computer Use is opt-in.** `cap_ComputerUse` hands the model the real mouse and
+> keyboard, so no model enables it by default — you add the capability yourself (see
+> the **Computer Use** section below). Native support: OpenAI
+> `gpt-6-astra`; Claude `claude-opus-4-8` / `-opus-5` / `-sonnet-5` / `-fable-5`.
+> Gemini is marked ⚠️ because the registry still points at the
+> `gemini-2.5-computer-use-preview` model, which has not been re-verified since the
+> 3.5/3.6 generation shipped.
 
 ---
 
@@ -410,9 +418,47 @@ ChatTools bridge the gap between AI reasoning and real-world operations. They ac
 | `IAiVideoTool` | Generate video | Sora, Gemini Veo |
 | `TAiShell` | Execute shell commands | Windows/Linux |
 | `TAiTextEditorTool` | Read/write/patch files | Diff-based editing |
-| `TAiComputerUseTool` | Control mouse and keyboard | Claude Computer Use, OpenAI |
+| `TAiComputerUseTool` | Control mouse and keyboard | Claude `computer_toolset`, OpenAI `computer` (gpt-6-astra) |
 
 Tools follow a common pattern: `SetContext(AiChat)` + `Execute*()`. They can run standalone, as function-call bridges, or as automatic capability bridges.
+
+### 🖱️ Computer Use — Driving the Desktop
+
+`TAiComputerUseTool` lets a model look at the screen and drive the real mouse and
+keyboard. One canonical action model is shared by every provider, so the same
+executors and the same event handlers work regardless of who is driving:
+
+```pascal
+// Opt-in: no model ships with cap_ComputerUse enabled
+TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'gpt-6-astra',
+  'ModelCaps',   '[cap_Image, cap_Reasoning, cap_ComputerUse]');
+TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'gpt-6-astra',
+  'SessionCaps', '[cap_Image, cap_Reasoning, cap_ComputerUse]');
+
+AiConn.ChatTools.ComputerUseTool := MyComputerUseTool;  // + OnExecuteAction / OnRequestScreenshot
+```
+
+| Provider | Tool declared | Action shape |
+|----------|---------------|--------------|
+| OpenAI (`gpt-6-astra`) | `computer` (no parameters) | one `computer_call` carrying an **array of actions** |
+| Claude (opus-4-8 / family 5) | `computer_toolset_20260801` (no parameters) | **17 individually named tools**, several `tool_use` blocks per turn |
+| Gemini | `computerUse` (`ENVIRONMENT_BROWSER`) | one function call per action, coordinates normalised 0–1000 |
+
+The two APIs refreshed in 2026 (OpenAI and Claude) converged independently on the same
+design: the tool declares **no screen dimensions** — the model infers them from the
+screenshot — and coordinates come back as **pixels of the image you sent**.
+`ScreenWidth`/`ScreenHeight` are therefore local-only now: they must match the image you
+actually submit, because that is the divisor used to translate coordinates back to
+physical pixels.
+
+- **Safety**: `OnSafetyConfirmation` gates risky actions (human-in-the-loop); denying
+  is the default when no handler is assigned
+- **Executors**: Windows VCL and FMX (Win32 `SendInput`), both runtime-tested. A macOS
+  executor (CGEvent) is written but has not yet been compiled or tested on macOS
+- **Capture area**: `AreaLeft`/`AreaTop`/`AreaWidth`/`AreaHeight` select a sub-region;
+  multi-monitor works but is still lightly tested
+- **Demo**: `066-ComputerUseTest` — `-provider=openai|claude|gemini`, `-prompt=...`,
+  `-autorun`, and a `run.log` next to the executable
 
 ### 🎙️ Realtime Voice — WebSocket STT & Speech-to-Speech
 
@@ -579,6 +625,10 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 
 ### Unreleased (dev)
 - Fix: **Claude Computer Use was broken, not merely outdated** — the driver still declared `computer_20251124`, a tool type the Anthropic API now rejects for *every* model (`does not match any of the expected tags`). Updated to **`computer_toolset_20260801`**, which changed shape as well as date: it is a *toolset* entry taking **no parameters** at all (no `name`, no `display_width_px`/`display_height_px`, no `enable_zoom` — the API answers *"Extra inputs are not permitted"*) and it needs no beta header. Structurally the single `computer` tool with an `action` discriminator was exploded into **17 individually named tools** (`left_click`, `right_click`, `middle_click`, `double_click`, `triple_click`, `left_click_drag`, `left_mouse_down`, `left_mouse_up`, `mouse_move`, `cursor_position`, `key`, `hold_key`, `type`, `scroll`, `wait`, `screenshot`, `zoom`), so dispatch now goes by `tool_use.name`; Claude emits several of them per turn. Coordinates arrive as **pixels of the submitted screenshot**. Supported only on `claude-opus-4-8`, `claude-opus-5`, `claude-sonnet-5` and `claude-fable-5` — every older model lost computer use entirely. Also removed `TAiClaudeChat.TranslateClaudeComputerArgs`, dead private code that had silently diverged from the live translator
+- New: **OpenAI Computer Use — `gpt-6-astra`** — the Responses API tool `{"type":"computer"}` (no parameters; it replaces `computer_use_preview`, whose dedicated model was shut down on 2026-07-23 and which astra rejects). Unlike Claude and Gemini, astra sends a **batch**: one `computer_call` carrying an `actions` array (e.g. `keypress[WIN,r]` → `type "notepad"` → `keypress[ENTER]`). The driver runs them in order and answers with a **single** `computer_call_output` holding the final screenshot, which is what the API expects per `call_id` — and as a side effect avoids the screenshot amplification the per-action providers suffer. Implemented on **both** the synchronous and the streaming paths, including history serialisation of `computer_call` / `computer_call_output`. New `TAiComputerUseTool.TranslateOpenAIToolCall` keeps the canonical action model in the tool, next to the Claude translator. Runtime-tested end-to-end (screenshot → click → type → screenshot, against a real desktop)
+- Fix: **agentic loop stalled after the first Computer Use step (OpenAI)** — the synchronous continuation condition was `(last message is 'tool') and (FLastContent = '')`, written for shell/patch calls, which never emit commentary. astra *does* emit text (`phase:'commentary'`) in the same turn as the `computer_call`, so `FLastContent` was never empty and the loop stopped after one action. Recursion is now forced when a computer call was processed
+- New: **`gpt-6-astra` registered** — 1.05M context (272K before surcharge), 128K output, vision + reasoning + tools. Note: astra accepts `xhigh` and `max` reasoning efforts, which `TAiThinkingLevel` (`tlDefault`/`tlLow`/`tlMedium`/`tlHigh`) cannot yet express — capped at `tlHigh`
+- Update: **demo `066-ComputerUseTest`** — third provider option (`OpenAI (gpt-6-astra)`), command-line startup (`-provider=`, `-prompt=`, `-autorun`) and a `run.log` next to the executable, so the loop can be exercised without touching the GUI
 - New: **GLM driver (Zhipu AI / Z.ai)** — `TAiGLMChat` (`DriverName='GLM'`, `@GLM_API_KEY`), OpenAI-compatible endpoint `https://api.z.ai/api/paas/v4/` (mainland China via the `URL` property). The API ships with thinking ON by default — the driver controls it explicitly (`cap_Reasoning` → `thinking:{enabled}`, disabled otherwise; `glm-5.3` uses forced thinking and is always sent enabled); `reasoning_effort` (`low`/`high`/`max`) sent on glm-5.2/5.3 per `ThinkingLevel`; `reasoning_content` captured in parse and streaming and re-sent in multi-turn history (required by Z.ai). Registered models: `glm-4.7` (driver default), `glm-4.7-flash` (**free**), `glm-4.7-flashx`, `glm-5.3`/`glm-5.2`/`glm-5.1`/`glm-5` (reasoning), `glm-5-turbo`, and vision `glm-5v-turbo`/`glm-4.6v` (native tool calling)/`glm-4.6v-flash` (**free**)/`glm-4.6v-flashx`/`glm-4.5v` (no tools, 16K output). Sampling clamped to the Z.ai ranges (temperature [0,1], top_p [0.01,1], max_tokens ≤131072); `tool_choice` supports only `auto`. Capabilities verified against the official docs; *not runtime-tested yet*
 
 ### v3.6.0 (2026-08-02)

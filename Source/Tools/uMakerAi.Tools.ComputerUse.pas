@@ -116,6 +116,12 @@ type
     // locally with identical behavior.
     procedure TranslateClaudeToolCall(ToolCall: TAiToolsFunction);
 
+    // Idem para el tool nativo 'computer' de OpenAI (Responses API, gpt-6-astra).
+    // ToolCall.Name debe traer el tipo de accion ('click', 'type', 'scroll'...) y
+    // ToolCall.Arguments el objeto de esa accion. OJO: un computer_call de OpenAI
+    // trae un ARRAY 'actions'; el driver lo recorre y llama aqui una vez por accion.
+    procedure TranslateOpenAIToolCall(ToolCall: TAiToolsFunction);
+
     // Última acción procesada (se actualiza antes de disparar OnExecuteAction).
     // Útil en OnRequestScreenshot para conocer el contexto, p.ej. CurrentAction.ZoomRect
     // cuando CurrentAction.ActionType = catZoom.
@@ -312,6 +318,162 @@ begin
         JNew.AddPair('magnitude', TJSONNumber.Create(Amount * 120))
       else if Action = 'scroll' then
         JNew.AddPair('magnitude', TJSONNumber.Create(800));
+
+      ToolCall.Arguments := JNew.ToJSON;
+    finally
+      JNew.Free;
+    end;
+  finally
+    JArgs.Free;
+  end;
+end;
+
+procedure TAiComputerUseTool.TranslateOpenAIToolCall(ToolCall: TAiToolsFunction);
+// Convierte una accion del tool nativo 'computer' de OpenAI al formato canonico
+// que espera ParseAction/ProcessToolCall (x,y normalizados 0-999).
+// OpenAI manda: name='click', args={"button":"left","x":12,"y":528,"keys":[...]}
+// Las coordenadas vienen en PIXELES de la imagen enviada (igual que Claude), no
+// normalizadas: el tool 'computer' ya no declara display_width/height y el modelo
+// las deduce del propio screenshot.
+var
+  JArgs, JNew, JPt: TJSONObject;
+  JKeys, JPath: TJSONArray;
+  Action, MappedName, SText, SBtn, SDir: string;
+  ScrW, ScrH, ScrollX, ScrollY, Mag, K: Integer;
+
+  function Norm(APx, AMax: Integer): Integer;
+  begin
+    if AMax <= 0 then
+      AMax := 1;
+    Result := Round(APx / AMax * 1000);
+    if Result < 0 then
+      Result := 0;
+    if Result > 999 then
+      Result := 999;
+  end;
+
+  procedure AddXY(const AObj: TJSONObject; const AXName, AYName: string; APxX, APxY: Integer);
+  begin
+    AObj.AddPair(AXName, TJSONNumber.Create(Norm(APxX, ScrW)));
+    AObj.AddPair(AYName, TJSONNumber.Create(Norm(APxY, ScrH)));
+  end;
+
+begin
+  JArgs := TJSONObject.ParseJSONValue(ToolCall.Arguments) as TJSONObject;
+  if not Assigned(JArgs) then
+    JArgs := TJSONObject.Create; // acciones sin campos: screenshot, wait
+  try
+    Action := LowerCase(Trim(ToolCall.Name));
+    if Action = '' then
+      Exit;
+
+    ScrW := FScreenWidth;
+    ScrH := FScreenHeight;
+    if ScrW <= 0 then
+      ScrW := 1920;
+    if ScrH <= 0 then
+      ScrH := 1080;
+
+    // Mapeo de nombres OpenAI -> canonico. 'click' depende del boton: los botones
+    // laterales back/forward del raton son navegacion, no un click posicional.
+    SBtn := '';
+    JArgs.TryGetValue<string>('button', SBtn);
+    SBtn := LowerCase(SBtn);
+
+    if Action = 'click' then
+    begin
+      if SBtn = 'right' then
+        MappedName := 'right_click'
+      else if SBtn = 'wheel' then
+        MappedName := 'middle_click'
+      else if SBtn = 'back' then
+        MappedName := 'go_back'
+      else if SBtn = 'forward' then
+        MappedName := 'go_forward'
+      else
+        MappedName := 'click_at';
+    end
+    else if Action = 'double_click' then MappedName := 'double_click'
+    else if Action = 'move'         then MappedName := 'hover_at'
+    else if Action = 'type'         then MappedName := 'type_text_at'
+    else if Action = 'keypress'     then MappedName := 'key_combination'
+    else if Action = 'scroll'       then MappedName := 'scroll_at'
+    else if Action = 'drag'         then MappedName := 'drag_and_drop'
+    else if Action = 'wait'         then MappedName := 'wait_5_seconds'
+    else MappedName := Action; // screenshot pasa tal cual
+
+    ToolCall.Name := MappedName;
+
+    JNew := TJSONObject.Create;
+    try
+      // Coordenadas simples (click, double_click, move, scroll)
+      if JArgs.GetValue('x') <> nil then
+        AddXY(JNew, 'x', 'y', JArgs.GetValue<Integer>('x'), JArgs.GetValue<Integer>('y'));
+
+      // drag: path = [{x,y}, ...]. El canonico solo tiene origen y destino, asi que
+      // se toman el primer y el ultimo punto; los intermedios se pierden.
+      if (Action = 'drag') and JArgs.TryGetValue<TJSONArray>('path', JPath) and (JPath.Count > 0) then
+      begin
+        JPt := JPath.Items[0] as TJSONObject;
+        AddXY(JNew, 'x', 'y', JPt.GetValue<Integer>('x'), JPt.GetValue<Integer>('y'));
+        JPt := JPath.Items[JPath.Count - 1] as TJSONObject;
+        AddXY(JNew, 'destination_x', 'destination_y', JPt.GetValue<Integer>('x'), JPt.GetValue<Integer>('y'));
+      end;
+
+      // type: escribe en el control con foco, sin Enter implicito ni coordenadas
+      // (mismo criterio que Claude; ParseAction pone press_enter=True por defecto).
+      if (Action = 'type') and JArgs.TryGetValue<string>('text', SText) then
+      begin
+        JNew.AddPair('text', SText);
+        JNew.AddPair('press_enter', TJSONBool.Create(False));
+      end;
+
+      // keypress: keys es un array (["WIN","r"]) -> combo 'WIN+r'.
+      // En click, ese mismo array son los modificadores mantenidos.
+      if JArgs.TryGetValue<TJSONArray>('keys', JKeys) and (JKeys.Count > 0) then
+      begin
+        SText := '';
+        for K := 0 to JKeys.Count - 1 do
+        begin
+          if SText <> '' then
+            SText := SText + '+';
+          SText := SText + JKeys.Items[K].Value;
+        end;
+        if Action = 'keypress' then
+          JNew.AddPair('keys', SText)
+        else
+          JNew.AddPair('modifiers', SText);
+      end;
+
+      // scroll: OpenAI da desplazamiento en pixeles por eje (scroll_x/scroll_y),
+      // el canonico quiere direccion + magnitud. Se toma el eje dominante.
+      if Action = 'scroll' then
+      begin
+        ScrollX := 0;
+        ScrollY := 0;
+        JArgs.TryGetValue<Integer>('scroll_x', ScrollX);
+        JArgs.TryGetValue<Integer>('scroll_y', ScrollY);
+        if Abs(ScrollY) >= Abs(ScrollX) then
+        begin
+          Mag := Abs(ScrollY);
+          if ScrollY < 0 then
+            SDir := 'up'
+          else
+            SDir := 'down';
+        end
+        else
+        begin
+          Mag := Abs(ScrollX);
+          if ScrollX < 0 then
+            SDir := 'left'
+          else
+            SDir := 'right';
+        end;
+        if Mag = 0 then
+          Mag := 800; // sin desplazamiento util: se usa el default de pagina
+        JNew.AddPair('direction', SDir);
+        JNew.AddPair('magnitude', TJSONNumber.Create(Mag));
+      end;
 
       ToolCall.Arguments := JNew.ToJSON;
     finally
