@@ -193,28 +193,31 @@ la edición multi-turno referenciando la imagen anterior.
 
 ---
 
-## 5. Si el broker va a exponer `mk-gpt-image-2.5-*`
+## 5. `mk-gpt-image-2.5-flare` y `mk-gpt-image-2.5-sunburst` ya están registrados
 
-Hay que registrar los alias en MakerAi. Hoy **no están**: el bloque del driver
-`MakerAi` en `Source/Chat/uMakerAi.Chat.Initializations.pas` (~línea 1897) solo
-lista `mk-gpt-image-1`, `mk-gpt-image-1.5`, `mk-gpt-image-1-mini` y
-`mk-gpt-image-2`.
+**Actualizado 16 sep 2026 (commit ff52a43).** Los alias ya están en el bloque
+del driver `MakerAi` de `Source/Chat/uMakerAi.Chat.Initializations.pas`
+(~línea 1897), junto a `mk-gpt-image-1/-1.5/-1-mini/-2`, con `ModelCaps=[]` /
+`SessionCaps=[cap_GenImage]` / `Tool_Active=False`.
 
-Sin esa entrada, el cliente MakerAi calcula gap vacío, manda la petición por
-`/responses` y falla con *"model was not found"*. El registro necesario es:
+**Estos son los nombres públicos que el broker debe exponer, tal cual:**
 
-```pascal
-for Model in ['mk-gpt-image-2.5-flare', 'mk-gpt-image-2.5-sunburst'] do
-begin
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[]');
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_GenImage]');
-  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'False');
-end;
+```
+mk-gpt-image-2.5-flare     ->  gpt-image-2.5-flare
+mk-gpt-image-2.5-sunburst  ->  gpt-image-2.5-sunburst
 ```
 
-**Acción:** decidir los nombres públicos definitivos y avisar a MakerAi para
-añadirlos en el mismo commit que la ruta del servidor. No se registraron ahora
-porque dependen de que el broker realmente los enrute.
+Si el broker prefiere otros nombres, hay que avisar para cambiar el registry:
+sin la entrada correspondiente el cliente MakerAi calcula gap vacío, manda la
+petición por `/responses` y falla con *"model was not found"*.
+
+**Aviso aparte, preexistente:** en el registry **no hay ninguna entrada
+`mk-deepseek-*`**, así que esas rutas heredan los defaults globales del driver
+`MakerAi`, que incluyen `ModelCaps=[cap_Image]`. Para un modelo de solo texto
+eso es incorrecto: declara visión que no existe. Si el broker mantiene rutas
+`mk-deepseek-*`, conviene registrarlas explícitamente con `ModelCaps=[]` (y
+`[cap_Reasoning]` en la variante que razone). No es de este lote; decidir si se
+arregla.
 
 ---
 
@@ -230,4 +233,5 @@ porque dependen de que el broker realmente los enrute.
    transparente exige png/webp, mínimo 1024x1024, n≤8).
 5. Leer `usage` desde la **raíz** de la respuesta de imágenes y facturar por
    `output_tokens`, no por imagen.
-6. Avisar los nombres `mk-gpt-image-2.5-*` para registrarlos en MakerAi.
+6. Exponer los modelos de imagen con los nombres ya registrados en MakerAi:
+   `mk-gpt-image-2.5-flare` y `mk-gpt-image-2.5-sunburst`.
