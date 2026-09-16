@@ -1484,14 +1484,18 @@ Begin
 
   // ------------------------- DEEPSEEK ----------------------------------
   // https://api-docs.deepseek.com/quick_start/pricing
-  // Ultima actualizacion: May 2026
   // ------------------------- DEEPSEEK ----------------------------------
-  // https://api-docs.deepseek.com/ — actualizado ago 2026, probado runtime
+  // https://api-docs.deepseek.com/ — actualizado sep 2026, probado runtime
   // V4 (abr 2026): unicos modelos en /v1/models. 1M ctx / 384K output ambos.
+  // sep 2026: RENOMBRE. Los canonicos son 'deepseek-flash' y 'deepseek-v4-pro'.
+  // 'deepseek-v4-flash' y 'deepseek-v4-flash-vision-exp' siguen aceptados como
+  // alias, pero esos modelos fueron retirados (enrutan al nuevo flash).
+  // v4-pro CONTINUA despues del 14 sep 2026 (aviso oficial), facturacion igual.
   // El API activa thinking por defecto (effort=high); el driver lo controla:
   // cap_Reasoning => thinking enabled + reasoning_effort (tlLow=low, tlMedium=high,
   // tlHigh=max); sin cap_Reasoning el driver envia thinking disabled (modo rapido).
-  // OJO pricing: proximamente tarifa pico 2x (9:00-12:00 y 14:00-18:00 UTC+8).
+  // OJO pricing: la tarifa pico/valle YA ESTA VIGENTE. Fuera de pico se paga la
+  // mitad; horas pico 01:00-04:00 y 06:00-10:00 UTC de lunes a viernes.
 
   // --- Valores globales por defecto para todos los modelos DeepSeek ---
   TAiChatFactory.Instance.RegisterUserParam('DeepSeek', 'Max_Tokens',  '8192');
@@ -1499,15 +1503,22 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('DeepSeek', 'ModelCaps',   '[]');
   TAiChatFactory.Instance.RegisterUserParam('DeepSeek', 'SessionCaps', '[]');
 
-  // ------- DeepSeek V4 Flash [MODELO ACTUAL - default del driver] ------
-  // 284B params (13B activos). $0.14/M in (miss) / $0.0028/M (hit) / $0.28/M out
+  // ------- DeepSeek Flash [MODELO ACTUAL - default del driver] ------
+  // Precio pico: $0.30/M in (miss) / $0.003/M (hit) / $1.20/M out.
+  // Fuera de pico es la MITAD. Horas pico 01:00-04:00 y 06:00-10:00 UTC (L-V).
   // Sin cap_Reasoning por defecto = modo rapido; para razonar agregar
   // ModelCaps [cap_Reasoning] + ThinkingLevel
+  Model := 'deepseek-flash';
+  TAiChatFactory.Instance.RegisterUserParam('DeepSeek', Model, 'Max_Tokens', '65536');
+
+  // Alias legacy: el modelo original fue retirado, el nombre sigue enrutando
+  // al nuevo deepseek-flash. Se mantiene registrado para configuraciones viejas.
   Model := 'deepseek-v4-flash';
   TAiChatFactory.Instance.RegisterUserParam('DeepSeek', Model, 'Max_Tokens', '65536');
 
   // ------- DeepSeek V4 Pro (razonamiento por defecto) ------
-  // 1.6T params (49B activos). $0.435/M in (miss) / $0.87/M out
+  // 1.6T params (49B activos). Precio pico: $1.32/M in (miss) / $0.022/M (hit)
+  // / $3.96/M out; fuera de pico la mitad ($1.98/M out)
   // Nota: en v4-pro el API mapea effort low->high (min soportado, ago 2026)
   Model := 'deepseek-v4-pro';
   TAiChatFactory.Instance.RegisterUserParam('DeepSeek', Model, 'Max_Tokens', '65536');

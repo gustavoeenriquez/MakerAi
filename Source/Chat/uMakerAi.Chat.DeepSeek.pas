@@ -72,6 +72,20 @@ procedure Register;
 
 implementation
 
+// Modelos de la era V4 que aceptan el bloque 'thinking'. Se listan
+// explicitamente porque el API cambio de nombre en sep 2026: el canonico es
+// 'deepseek-flash' y 'deepseek-v4-flash' quedo como alias legacy. Los alias en
+// gracia (deepseek-chat / deepseek-reasoner) tambien enrutan a deepseek-flash
+// y aceptan el parametro (verificado runtime sep-2026). Si el modelo no esta
+// aqui no se envia 'thinking' y manda el default del API (thinking ON).
+function ModelSupportsThinking(const AModel: String): Boolean;
+begin
+  Result := StartsText('deepseek-v4', AModel)      // deepseek-v4-pro / legacy v4-flash
+         or StartsText('deepseek-flash', AModel)   // canonico desde sep 2026
+         or SameText(AModel, 'deepseek-chat')
+         or SameText(AModel, 'deepseek-reasoner');
+end;
+
 Const
   GlAIUrl = 'https://api.deepseek.com/v1/';
 
@@ -91,7 +105,7 @@ class procedure TAiDeepSeekChat.RegisterDefaultParams(Params: TStrings);
 Begin
   Params.Clear;
   Params.Add('ApiKey=@DEEPSEEK_API_KEY');
-  Params.Add('Model=deepseek-v4-flash');
+  Params.Add('Model=deepseek-flash');
   Params.Add('Max_Tokens=8192');
   Params.Add('URL=https://api.deepseek.com/v1/');
 End;
@@ -106,9 +120,10 @@ begin
   inherited;
   ApiKey := '@DEEPSEEK_API_KEY';
 
-  // deepseek-chat/deepseek-reasoner retirados oficialmente el 24 jul 2026;
-  // V4 Flash es el modelo economico de proposito general (1M ctx, 384K out)
-  Model := 'deepseek-v4-flash';
+  // deepseek-chat/deepseek-reasoner retirados oficialmente el 24 jul 2026.
+  // sep 2026: el nombre canonico es 'deepseek-flash'; 'deepseek-v4-flash'
+  // sigue aceptado como alias legacy pero ese modelo fue retirado.
+  Model := 'deepseek-flash';
   Url := GlAIUrl;
 end;
 
@@ -135,7 +150,7 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   If LModel = '' then
-    LModel := 'deepseek-chat';
+    LModel := 'deepseek-flash';
 
   LAsincronico := Self.Asynchronous;
   FClient.Asynchronous := LAsincronico;
@@ -181,7 +196,7 @@ begin
     // (reasoning_effort segun ThinkingLevel); sin el cap se envia disabled para
     // conservar el comportamiento rapido/economico tipo deepseek-chat.
     // En modo thinking el API ignora temperature/top_p/penalties (sin error).
-    if StartsText('deepseek-v4', LModel) then
+    if ModelSupportsThinking(LModel) then
     begin
       var jThinking := TJSonObject.Create;
       if cap_Reasoning in ModelConfig.ModelCaps then

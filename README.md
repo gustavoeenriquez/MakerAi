@@ -273,7 +273,7 @@ Full, provider-specific access to every API feature. Use when you need complete 
 | `TAiGeminiChat` | Google | gemini-3.5-flash, gemini-3.6-flash, gemini-3.1-pro |
 | `TAiGrokChat` | xAI | grok-4.3, grok-4.5, grok-build, grok-imagine (image/video) |
 | `TAiMistralChat` | Mistral AI | mistral-large/medium/small, magistral, devstral, voxtral (STT/TTS) |
-| `TAiDeepSeekChat` | DeepSeek | deepseek-v4-flash, deepseek-v4-pro |
+| `TAiDeepSeekChat` | DeepSeek | deepseek-flash, deepseek-v4-pro |
 | `TAiKimiChat` | Moonshot | kimi-k3, kimi-k2.7-code, kimi-k2.6 |
 | `TAiGLMChat` | GLM (Zhipu / Z.ai) | glm-4.7, glm-5.3, glm-5v-turbo, free tiers: glm-4.7-flash / glm-4.6v-flash |
 | `TAiGroqChat` | Groq | llama-3.3-70b, openai/gpt-oss-120b, qwen3.6, whisper-large-v3 |
