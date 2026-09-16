@@ -2365,7 +2365,7 @@ end;
 
 function TAiOpenChat.InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 var
-  LUrl, LModel, LQuality, LSize: string;
+  LUrl, LModel, LQuality, LSize, LValue: string;
   LBodyJson: TJSonObject;
   LBodyStream: TStringStream;
   LResponseStream: TStringStream;
@@ -2443,6 +2443,29 @@ begin
     // dall-e-2 no acepta quality
     if (LModel <> 'dall-e-2') then
       LBodyJson.AddPair('quality', LQuality);
+
+    // Passthrough de los parámetros exclusivos de la familia gpt-image
+    // (background, output_format, output_compression, moderation). Sirve
+    // sobre todo para gpt-image-2.5-flare/sunburst, que sí devuelven fondo
+    // transparente con canal alpha real -> requiere output_format png/webp.
+    if LModel.StartsWith('gpt-image') or LModel.StartsWith('chatgpt-image') then
+    begin
+      LValue := ImageParams.Params.Values['background'];
+      if LValue <> '' then
+        LBodyJson.AddPair('background', LValue);
+
+      LValue := ImageParams.Params.Values['output_format'];
+      if LValue <> '' then
+        LBodyJson.AddPair('output_format', LValue);
+
+      LValue := ImageParams.Params.Values['output_compression'];
+      if LValue <> '' then
+        LBodyJson.AddPair('output_compression', TJSONNumber.Create(StrToIntDef(LValue, 100)));
+
+      LValue := ImageParams.Params.Values['moderation'];
+      if LValue <> '' then
+        LBodyJson.AddPair('moderation', LValue);
+    end;
 
     if not User.IsEmpty then
       LBodyJson.AddPair('user', User);

@@ -48,6 +48,9 @@
 // 28/04/2026 - gpt-image-2: n limitado a 8 (no 10), background transparent no soportado,
 //              input_fidelity excluido en edits (auto-high-fidelity siempre).
 // 28/04/2026 - Nuevo tama?o is3840x2160 (4K UHD) para gpt-image-2.
+// 16/09/2026 - Familia gpt-image-2.5 (flare/sunburst): calidad xhigh/max,
+//              fondo transparente con alpha real, streaming con parciales.
+//              input_fidelity omitido (no documentado para 2.5).
 
 unit uMakerAi.OpenAi.Dalle;
 
@@ -80,12 +83,16 @@ type
     FOutputFormat: string;
     FQuality: string;
     FSize: string;
+    FGenerationId: string;
     FUsage: TJSONObject;
     function GetImage: TMemoryStream;
   protected
     function Base64ToStream(const ABase64: string): TMemoryStream;
     procedure LoadImageFromUrl(const AUrlFile: string);
     procedure ParseData(JObj: TJSONObject);
+    // La familia gpt-image devuelve background/output_format/size/quality/usage
+    // en la raiz de la respuesta, no dentro de data[]. Completa lo que falte.
+    procedure ParseRootMeta(JObj: TJSONObject);
   public
     constructor Create;
     destructor Destroy; override;
@@ -98,6 +105,8 @@ type
     property OutputFormat: string read FOutputFormat;
     property Quality: string read FQuality;
     property Size: string read FSize;
+    // gpt-image-2.5: identificador de la imagen, util para edicion multi-turno
+    property GenerationId: string read FGenerationId;
     property Usage: TJSONObject read FUsage;
   end;
 
@@ -110,6 +119,8 @@ type
 
   // Modelos soportados
   // Nota: gpt-image-2 NO soporta streaming (SupportsStreaming = False para ese modelo)
+  // La familia gpt-image-2.5 (flare/sunburst) SI soporta streaming, fondo
+  // transparente y los niveles de calidad extra 'xhigh' y 'max'.
   TAiImageModel = (
     imDallE2,             // dall-e-2 (DEPRECADO por OpenAI may 2026 — migrar a gpt-image-*)
     imDallE3,             // dall-e-3 (DEPRECADO por OpenAI may 2026 — migrar a gpt-image-*)
@@ -117,11 +128,15 @@ type
     imGptImage1Mini,      // gpt-image-1-mini  (m?s r?pido y econ?mico)
     imGptImage15,         // gpt-image-1.5
     imGptImage2,          // gpt-image-2       (SIN streaming)
+    imGptImage25Flare,    // gpt-image-2.5-flare    (rapido, calidad alta)
+    imGptImage25Sunburst, // gpt-image-2.5-sunburst (premium, edicion fina)
     imChatGptImageLatest, // chatgpt-image-latest (alias al modelo m?s reciente)
     imSDXL                // SDXL (endpoint personalizado)
   );
 
-  TAiImageQuality    = (iqAuto, iqStandard, iqHD, iqHigh, iqMedium, iqLow);
+  // iqXHigh / iqMax: solo la familia gpt-image-2.5 (flare/sunburst). En el
+  // resto de modelos se degradan a 'high' para no provocar un 400.
+  TAiImageQuality    = (iqAuto, iqStandard, iqHD, iqHigh, iqMedium, iqLow, iqXHigh, iqMax);
   TAiImageBackground = (ibAuto, ibTransparent, ibOpaque);
   TAiImageOutputFormat = (ifPng, ifJpeg, ifWebp);
   TAiImageStyle      = (isVivid, isNatural);
@@ -146,6 +161,9 @@ type
     is1216x832,
     is832x1216,
     // Solo modelos GPT Image
+    // OJO gpt-image-2.5: hay un minimo de pixel budget -> 512x512 se rechaza
+    // con "Requested resolution is below the current minimum pixel budget"
+    // (verificado sep-2026); 1024x1024 en adelante funciona.
     isAuto,
     // gpt-image-2: alta resoluci?n (experimental: >2K)
     is3840x2160  // 4K UHD (m?x pixel budget: 8.294.400)
@@ -212,7 +230,12 @@ type
     function SizeToString(ASize: TAiImageSize): string;
     // Helpers de modelo
     function IsGptImageModel: Boolean;
+    function IsGptImage25Model: Boolean;
     function SupportsStreaming: Boolean;
+    // 'quality' resuelto segun el modelo ('' = no enviar el parametro)
+    function QualityToString: string;
+    // Formato real: jpeg no tiene canal alpha, con fondo transparente -> png
+    function EffectiveOutputFormat: TAiImageOutputFormat;
     function ModelToString: string;
   public
     constructor Create(aOwner: TComponent); override;
@@ -377,8 +400,30 @@ begin
   JObj.TryGetValue<string>('output_format', FOutputFormat);
   JObj.TryGetValue<string>('size', FSize);
   JObj.TryGetValue<string>('quality', FQuality);
+  // gpt-image-2.5 identifica cada imagen para reutilizarla en edits
+  JObj.TryGetValue<string>('generation_id', FGenerationId);
   if JObj.TryGetValue<TJSONObject>('usage', FUsage) then
     FUsage := TJSONObject(FUsage.Clone);
+end;
+
+// A partir de gpt-image-2.5 la respuesta trae background, output_format, size,
+// quality y usage en la RAIZ (verificado contra api.openai.com sep-2026);
+// data[] solo lleva b64_json y generation_id.
+procedure TAiDalleImage.ParseRootMeta(JObj: TJSONObject);
+var
+  LValue: string;
+  LUsage: TJSONObject;
+begin
+  if (FBackground = '') and JObj.TryGetValue<string>('background', LValue) then
+    FBackground := LValue;
+  if (FOutputFormat = '') and JObj.TryGetValue<string>('output_format', LValue) then
+    FOutputFormat := LValue;
+  if (FSize = '') and JObj.TryGetValue<string>('size', LValue) then
+    FSize := LValue;
+  if (FQuality = '') and JObj.TryGetValue<string>('quality', LValue) then
+    FQuality := LValue;
+  if (FUsage = nil) and JObj.TryGetValue<TJSONObject>('usage', LUsage) then
+    FUsage := TJSONObject(LUsage.Clone);
 end;
 
 procedure TAiDalleImage.ParseStreamEvent(JObj: TJSONObject);
@@ -457,13 +502,23 @@ end;
 function TAiDalle.IsGptImageModel: Boolean;
 begin
   Result := FModel in [imGptImage1, imGptImage1Mini, imGptImage15,
-                       imGptImage2, imChatGptImageLatest];
+                       imGptImage2, imGptImage25Flare, imGptImage25Sunburst,
+                       imChatGptImageLatest];
 end;
 
-// gpt-image-2 NO soporta streaming segun la documentacion oficial
+// Familia gpt-image-2.5 (sep 2026): calidad xhigh/max, fondo transparente
+// con alpha real (png/webp) y streaming con imagenes parciales.
+function TAiDalle.IsGptImage25Model: Boolean;
+begin
+  Result := FModel in [imGptImage25Flare, imGptImage25Sunburst];
+end;
+
+// gpt-image-2 NO soporta streaming segun la documentacion oficial.
+// gpt-image-2.5 (flare/sunburst) si lo soporta.
 function TAiDalle.SupportsStreaming: Boolean;
 begin
   Result := FModel in [imGptImage1, imGptImage1Mini, imGptImage15,
+                       imGptImage25Flare, imGptImage25Sunburst,
                        imChatGptImageLatest];
 end;
 
@@ -476,11 +531,38 @@ begin
     imGptImage1Mini:      Result := 'gpt-image-1-mini';
     imGptImage15:         Result := 'gpt-image-1.5';
     imGptImage2:          Result := 'gpt-image-2';
+    imGptImage25Flare:    Result := 'gpt-image-2.5-flare';
+    imGptImage25Sunburst: Result := 'gpt-image-2.5-sunburst';
     imChatGptImageLatest: Result := 'chatgpt-image-latest';
     imSDXL:               Result := 'sdxl';
   else
     Result := 'gpt-image-1';
   end;
+end;
+
+// Mapea TAiImageQuality al valor que acepta cada familia de modelos.
+// Solo gpt-image-2.5 conoce 'xhigh' y 'max'; en el resto se bajan a 'high'.
+function TAiDalle.QualityToString: string;
+begin
+  case FQuality of
+    iqHigh:   Result := 'high';
+    iqMedium: Result := 'medium';
+    iqLow:    Result := 'low';
+    iqXHigh:  if IsGptImage25Model then Result := 'xhigh' else Result := 'high';
+    iqMax:    if IsGptImage25Model then Result := 'max'   else Result := 'high';
+  else
+    Result := ''; // iqAuto / iqStandard / iqHD: la API usa su default
+  end;
+end;
+
+// Con background=transparent la API solo acepta png o webp. Si el usuario
+// dejo jpeg se devuelve png, sin modificar la propiedad publicada.
+function TAiDalle.EffectiveOutputFormat: TAiImageOutputFormat;
+begin
+  if (FBackground = ibTransparent) and (FOutputFormat = ifJpeg) then
+    Result := ifPng
+  else
+    Result := FOutputFormat;
 end;
 
 // ---------------------------------------------------------------------------
@@ -527,7 +609,7 @@ begin
       begin
         JObj.AddPair('model', 'dall-e-3').AddPair('n', TJSONNumber.Create(1));
         JObj.AddPair('size', SizeToString(ASize));
-        if FQuality in [iqHD, iqHigh] then
+        if FQuality in [iqHD, iqHigh, iqXHigh, iqMax] then
           JObj.AddPair('quality', 'hd')
         else
           JObj.AddPair('quality', 'standard');
@@ -535,41 +617,41 @@ begin
         // enviarlo produce 400 "Unknown parameter: 'style'". Ya no se env?a.
       end;
 
-      // ── Familia GPT Image (gpt-image-1/mini/1.5/2/chatgpt-image-latest) ─
-      imGptImage1, imGptImage1Mini, imGptImage15, imGptImage2, imChatGptImageLatest:
+      // ── Familia GPT Image (gpt-image-1/mini/1.5/2/2.5/chatgpt-image-latest) ─
+      imGptImage1, imGptImage1Mini, imGptImage15, imGptImage2,
+      imGptImage25Flare, imGptImage25Sunburst, imChatGptImageLatest:
       begin
         JObj.AddPair('model', ModelToString);
-        // gpt-image-2 soporta n=1..8; resto de la familia hasta 10
-        if FModel = imGptImage2 then
+        // gpt-image-2 soporta n=1..8; resto de la familia hasta 10.
+        // gpt-image-2.5 se trata como 2 (el limite real no esta documentado).
+        if FModel in [imGptImage2, imGptImage25Flare, imGptImage25Sunburst] then
           JObj.AddPair('n', TJSONNumber.Create(Min(8, Max(1, N))))
         else
           JObj.AddPair('n', TJSONNumber.Create(Min(10, Max(1, N))));
         JObj.AddPair('size', SizeToString(ASize));
 
-        case FQuality of
-          iqHigh:   JObj.AddPair('quality', 'high');
-          iqMedium: JObj.AddPair('quality', 'medium');
-          iqLow:    JObj.AddPair('quality', 'low');
-          // iqAuto: no enviar, la API usa su default
-        end;
+        // iqAuto: no enviar, la API usa su default
+        if QualityToString <> '' then
+          JObj.AddPair('quality', QualityToString);
 
         case FBackground of
           ibTransparent:
-            // gpt-image-2 no soporta fondo transparente
+            // gpt-image-2 no soporta fondo transparente; gpt-image-2.5 si,
+            // pero exige output_format png o webp (el default es png).
             if FModel <> imGptImage2 then
               JObj.AddPair('background', 'transparent');
           ibOpaque: JObj.AddPair('background', 'opaque');
           // ibAuto: no enviar
         end;
 
-        case FOutputFormat of
+        case EffectiveOutputFormat of
           ifJpeg: JObj.AddPair('output_format', 'jpeg');
           ifWebp: JObj.AddPair('output_format', 'webp');
           // ifPng: default, no enviar
         end;
 
         // Compresi?n solo para jpeg/webp y cuando se especifica
-        if (FOutputCompression > 0) and (FOutputFormat in [ifJpeg, ifWebp]) then
+        if (FOutputCompression > 0) and (EffectiveOutputFormat in [ifJpeg, ifWebp]) then
           JObj.AddPair('output_compression', TJSONNumber.Create(
             Max(0, Min(100, FOutputCompression))));
 
@@ -741,7 +823,8 @@ begin
     raise Exception.Create('At least one media file must be provided for editing.');
 
   if not (FModel in [imDallE2, imGptImage1, imGptImage1Mini, imGptImage15,
-                     imGptImage2, imChatGptImageLatest]) then
+                     imGptImage2, imGptImage25Flare, imGptImage25Sunburst,
+                     imChatGptImageLatest]) then
     raise Exception.Create('Edit endpoint supports dall-e-2 and all gpt-image-* models.');
 
   if (FModel = imDallE2) and (aMediaFiles.Count > 1) then
@@ -800,34 +883,31 @@ begin
       Body.AddField('model', ModelToString);
       Body.AddField('size', SizeToString(ASize));
 
-      case FQuality of
-        iqHigh:   Body.AddField('quality', 'high');
-        iqMedium: Body.AddField('quality', 'medium');
-        iqLow:    Body.AddField('quality', 'low');
-      end;
+      if QualityToString <> '' then
+        Body.AddField('quality', QualityToString);
 
       case FBackground of
         ibTransparent:
-          // gpt-image-2 no soporta fondo transparente
+          // gpt-image-2 no soporta fondo transparente; gpt-image-2.5 si
           if FModel <> imGptImage2 then
             Body.AddField('background', 'transparent');
         ibOpaque: Body.AddField('background', 'opaque');
       end;
 
-      case FOutputFormat of
+      case EffectiveOutputFormat of
         ifJpeg: Body.AddField('output_format', 'jpeg');
         ifWebp: Body.AddField('output_format', 'webp');
       end;
 
       // gpt-image-2: siempre alta fidelidad autom?ticamente — omitir el par?metro
       // Resto de modelos: controla cu?nto preservar de la imagen original
-      if FModel <> imGptImage2 then
+      if not (FModel in [imGptImage2, imGptImage25Flare, imGptImage25Sunburst]) then
         case FInputFidelity of
           ifdHigh: Body.AddField('input_fidelity', 'high');
           ifdLow:  Body.AddField('input_fidelity', 'low');
         end;
 
-      if (FOutputCompression > 0) and (FOutputFormat in [ifJpeg, ifWebp]) then
+      if (FOutputCompression > 0) and (EffectiveOutputFormat in [ifJpeg, ifWebp]) then
         Body.AddField('output_compression',
           IntToStr(Max(0, Min(100, FOutputCompression))));
 
@@ -995,6 +1075,7 @@ begin
     begin
       FImages[i] := TAiDalleImage.Create;
       FImages[i].ParseData(Data.Items[i] as TJSONObject);
+      FImages[i].ParseRootMeta(JObj);
     end;
   end;
 end;

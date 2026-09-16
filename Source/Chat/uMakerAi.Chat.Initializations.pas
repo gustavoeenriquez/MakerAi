@@ -341,6 +341,18 @@ Begin
   // ------- Generacion de imagenes ------
   // https://platform.openai.com/docs/guides/images
   // ModelCaps=[]: usa endpoint dedicado; Gap=[cap_GenImage] activa InternalRunImageGeneration
+  // Familia gpt-image-2.5 (sep 2026): flare = rapido y de alta calidad,
+  // sunburst = premium para edicion fina. Ambos con fondo transparente real
+  // y calidad xhigh/max. Endpoints: /images/generations y /images/edits.
+  for Model in ['gpt-image-2.5-flare', 'gpt-image-2.5-flare-2026-09-08',
+                'gpt-image-2.5-sunburst', 'gpt-image-2.5-sunburst-2026-09-08'] do
+  begin
+    TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',       '[]');
+    TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps',     '[cap_GenImage]');
+    TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active',     'False');
+    TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ResponseTimeOut', '36000');
+  end;
+
   Model := 'gpt-image-2';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',       '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps',     '[cap_GenImage]');

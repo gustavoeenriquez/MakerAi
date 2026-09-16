@@ -38,8 +38,9 @@ The `Source/Tools/` directory contains capability components that extend LLM fun
 
 ### Media Generation Tools
 - `uMakerAi.OpenAi.Dalle.pas` - Image generation (`TAiDalle`)
-  - Supports dall-e-2, dall-e-3, gpt-image-1
-  - Streaming with `OnPartialImageReceived`, `OnStreamCompleted`
+  - Supports dall-e-2, dall-e-3 (both deprecated) and the whole gpt-image family: `gpt-image-1`, `-1-mini`, `-1.5`, `-2`, `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst`, `chatgpt-image-latest`
+  - **gpt-image-2.5** (sep 2026): only family that takes `quality` = `xhigh`/`max` (`iqXHigh`/`iqMax`, degraded to `high` on older models) and that supports real alpha `background=transparent`; `jpeg` is auto-switched to `png` when transparent; `input_fidelity` is not sent (undocumented for 2.5, same as gpt-image-2); `n` capped at 8 like gpt-image-2
+  - Streaming with `OnPartialImageReceived`, `OnStreamCompleted` (not on `gpt-image-2`; available again on 2.5)
 
 - `uMakerAi.OpenAI.Sora.pas` - Video generation (`TAiSoraGenerator`)
   - Async methods: `GenerateFromText`, `GenerateFromImage`, `RemixVideo`
