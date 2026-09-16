@@ -1894,7 +1894,10 @@ Begin
   end;
 
   // --- Generacion de imagenes ---
-  for Model in ['mk-gpt-image-1', 'mk-gpt-image-1.5', 'mk-gpt-image-1-mini', 'mk-gpt-image-2'] do
+  // La familia 2.5 (flare/sunburst, sep 2026) acepta quality xhigh/max y fondo
+  // transparente con alpha real; el broker traduce el nombre mk- al de OpenAi.
+  for Model in ['mk-gpt-image-1', 'mk-gpt-image-1.5', 'mk-gpt-image-1-mini', 'mk-gpt-image-2',
+                'mk-gpt-image-2.5-flare', 'mk-gpt-image-2.5-sunburst'] do
   begin
     TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[]');
     TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[cap_GenImage]');
