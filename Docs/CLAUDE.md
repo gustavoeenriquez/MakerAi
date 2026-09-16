@@ -48,11 +48,13 @@ Specialized guidance exists in subdirectories:
 `Reportes/` recoge informes escritos desde aplicaciones que consumen el
 framework en produccion. No son documentacion de uso: son hallazgos medidos,
 con su evidencia y como reproducirlos. Utiles porque cazan fallos que el
-compilador no ve y que los demos no ejercitan.
+compilador no ve y que los demos no ejercitan. Tambien van aqui los informes en
+sentido contrario: lo que MakerAi le debe avisar a esas aplicaciones.
 
-| Informe | Origen | Estado |
-|---------|--------|--------|
-| `REPORTE_MKAISERVER_2026-08-29.md` | MKAIServer (broker del SaaS) | Atendido en 36b4379 y aa77522, salvo la verificacion runtime del usage de DeepSeek |
+| Informe | Origen -> destino | Estado |
+|---------|-------------------|--------|
+| `REPORTE_MKAISERVER_2026-08-29.md` | MKAIServer -> MakerAi | Atendido en 36b4379 y aa77522, salvo la verificacion runtime del usage de DeepSeek |
+| `REPORTE_PARA_MKAISERVER_2026-09-16.md` | MakerAi -> MKAIServer | Entregado: acciones tras ca175d0 (gpt-image-2.5) y fca6aba (deepseek-flash); pendiente del lado del broker |
 
 ## File Formats
 
