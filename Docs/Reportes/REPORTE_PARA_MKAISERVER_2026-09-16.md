@@ -211,13 +211,20 @@ Si el broker prefiere otros nombres, hay que avisar para cambiar el registry:
 sin la entrada correspondiente el cliente MakerAi calcula gap vacío, manda la
 petición por `/responses` y falla con *"model was not found"*.
 
-**Aviso aparte, preexistente:** en el registry **no hay ninguna entrada
-`mk-deepseek-*`**, así que esas rutas heredan los defaults globales del driver
-`MakerAi`, que incluyen `ModelCaps=[cap_Image]`. Para un modelo de solo texto
-eso es incorrecto: declara visión que no existe. Si el broker mantiene rutas
-`mk-deepseek-*`, conviene registrarlas explícitamente con `ModelCaps=[]` (y
-`[cap_Reasoning]` en la variante que razone). No es de este lote; decidir si se
-arregla.
+**Arreglado también (mismo commit):** las rutas `mk-deepseek-*` no tenían
+ninguna entrada en el registry, así que heredaban el default global del driver
+`MakerAi`, que incluye `ModelCaps=[cap_Image]` — declaraban una visión que
+DeepSeek no tiene en su API pública. Ahora están registradas:
+
+```
+mk-deepseek-flash      ModelCaps=[]              (modo rapido, sin thinking)
+mk-deepseek-v4-flash   ModelCaps=[]              (alias del anterior)
+mk-deepseek-v4-pro     ModelCaps=[cap_Reasoning] + ThinkingLevel=tlMedium
+```
+
+Son los nombres que se deducen del reporte de agosto (`mk-deepseek-v4-flash` en
+producción) más el renombre de sep 2026. **Si el broker expone otros nombres,
+avisar** para ajustarlos.
 
 ---
 

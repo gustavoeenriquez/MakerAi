@@ -1893,6 +1893,27 @@ Begin
     TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'False');
   end;
 
+  // --- DeepSeek via broker (solo texto) ---
+  // Estas entradas faltaban: sin ellas los modelos heredaban el default global
+  // ModelCaps=[cap_Image] y declaraban una vision que DeepSeek no tiene en su
+  // API publica. 'mk-deepseek-flash' sigue el renombre de sep 2026;
+  // 'mk-deepseek-v4-flash' es el nombre que el broker usaba en produccion y se
+  // mantiene como alias. Sin cap_Reasoning = modo rapido, igual que en el
+  // driver DeepSeek directo.
+  for Model in ['mk-deepseek-flash', 'mk-deepseek-v4-flash'] do
+  begin
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',   '[]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps', '[]');
+    TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active', 'True');
+  end;
+
+  // mk-deepseek-v4-pro: razonamiento por defecto (patron del driver directo)
+  Model := 'mk-deepseek-v4-pro';
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ModelCaps',      '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'SessionCaps',    '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'ThinkingLevel',  'tlMedium');
+  TAiChatFactory.Instance.RegisterUserParam('MakerAi', Model, 'Tool_Active',    'True');
+
   // --- Generacion de imagenes ---
   // La familia 2.5 (flare/sunburst, sep 2026) acepta quality xhigh/max y fondo
   // transparente con alpha real; el broker traduce el nombre mk- al de OpenAi.
