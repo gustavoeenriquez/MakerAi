@@ -2786,9 +2786,26 @@ begin
   if Assigned(FIncomingMessages) then
   begin
     FIncomingMessages.DoShutDown;
+    // OJO con esta guarda: tras DoShutDown y con la cola vacía, PopItem NO
+    // espera y devuelve wrSignaled con el item en nil. En la RTL
+    // (System.Generics.Collections) el bucle de espera ni siquiera se ejecuta
+    // —lo corta el `not FShutDown`— y se sale por
+    // `if (FShutDown and (FQueueSize = 0)) then Exit` con Result todavía en
+    // wrSignaled. Sin el Break, el drenaje es un bucle cerrado infinito: el
+    // destructor nunca retorna y su hilo se queda girando sobre TMonitor,
+    // consumiendo un núcleo entero para siempre.
+    //
+    // Pasó en calera1 el 2026-09-18: 12 hilos acumulados en 4 días, ~7 núcleos
+    // quemados durante una semana con cero peticiones. El perfil mostraba ~70%
+    // en TMonitor y ~15% en PopItem, con este destructor en la pila. El
+    // destructor de TMCPClientStdIo ya tenía la guarda; éste no.
+    // Ver docs/incidents/2026-09-18_hilos_mcp_sse_spin_tmonitor.md (MKAIServer).
     while FIncomingMessages.PopItem(LJson) = wrSignaled do
-      if Assigned(LJson) then
-        LJson.Free;
+    begin
+      if LJson = nil then
+        Break;
+      LJson.Free;
+    end;
     FreeAndNil(FIncomingMessages);
   end;
 

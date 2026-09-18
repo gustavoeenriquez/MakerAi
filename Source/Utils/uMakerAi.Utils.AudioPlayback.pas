@@ -569,7 +569,15 @@ procedure TAiAudioPlayer.ClearQueue;
 var
   Item: TAiAudioPlayItem;
 begin
-  while FQueue.PopItem(Item) = TWaitResult.wrSignaled do; // drena con timeout corto
+  // El QueueSize > 0 es lo que hace que esto termine. Con la cola ya apagada
+  // (DoShutDown) y vacía, PopItem devuelve wrSignaled sin esperar y este bucle
+  // giraría para siempre quemando un núcleo — el mismo fallo que tumbó a
+  // TMCPClientSSE el 2026-09-18. Aquí importa porque StopPlayback recrea la
+  // cola sólo bajo {$IFDEF MSWINDOWS}: fuera de Windows queda apagada y
+  // cualquier ClearQueue posterior entraría en ese bucle.
+  // De paso evita el pinchazo de 100 ms del timeout cuando la cola ya está vacía.
+  while (FQueue.QueueSize > 0) and (FQueue.PopItem(Item) = TWaitResult.wrSignaled) do
+    ;
 end;
 
 class function TAiAudioPlayer.GetPlaybackDevices: TArray<TAiAudioDeviceInfo>;
