@@ -131,6 +131,12 @@ type
     // ToJSon lo usa directamente en lugar de reconstruir desde TFunctionParamsItems.
     // Útil para herramientas con schemas complejos (anyOf, nested objects, etc.)
     FRawSchemaJson: String;
+    // Async tool calling (Responses API, gpt-6-astra en adelante): el modelo
+    // sigue razonando, llamando otras tools o contestando partes
+    // independientes mientras la aplicacion ejecuta ESTA. El resultado se
+    // devuelve despues con su call_id original. Los proveedores que no lo
+    // soportan simplemente no ven el campo.
+    FIsAsync: Boolean;
     procedure SetEnabled(const Value: Boolean);
     procedure SetOnAction(const Value: TFunctionEvent);
     procedure SetDefault(const Value: Boolean);
@@ -155,6 +161,8 @@ type
     Property TagObject: TObject read FTagObject write SetTagObject;
     // Schema JSON completo (alternativa a TFunctionParamsItems para schemas complejos)
     property RawSchemaJson: String read FRawSchemaJson write FRawSchemaJson;
+    // Declara la tool como asincrona ante los proveedores que lo soportan.
+    property IsAsync: Boolean read FIsAsync write FIsAsync;
   published
     property Enabled: Boolean read FEnabled write SetEnabled default True;
     property FunctionName: string read GetDisplayName write SetDisplayName;
@@ -436,12 +444,16 @@ type
     FName: string;
     FDescription: string;
     FInputSchema: TJSonObject; // Siempre clonado y de nuestra propiedad
+    FIsAsync: Boolean;
   public
     constructor Create(const AName, ADescription: string; AInputSchema: TJSonObject);
     destructor Destroy; override;
     property Name: string read FName;
     property Description: string read FDescription;
     property InputSchema: TJSonObject read FInputSchema;
+    // Sobrevive a la normalizacion para poder reemitirse en los formatos que
+    // lo entienden (hoy solo tfOpenAIResponses). Los demas lo ignoran.
+    property IsAsync: Boolean read FIsAsync write FIsAsync;
   end;
 
   TJsonToolUtils = class
@@ -533,6 +545,7 @@ begin
     FScript.Assign(Src.FScript);
     FParams.Assign(Src.FParams);
     FRawSchemaJson := Src.FRawSchemaJson;
+    FIsAsync := Src.FIsAsync;
     Changed(False);
   end
   else
@@ -724,6 +737,11 @@ begin
 
     If Assigned(Params) then
       Fun.AddPair('parameters', Params);
+
+    // Solo se escribe cuando es True: un "async": false explicito no aporta
+    // nada y ensuciaria el schema de los proveedores que no lo conocen.
+    If FIsAsync then
+      Fun.AddPair('async', TJSONBool.Create(True));
 
     Result.AddPair('type', 'function');
     Result.AddPair('function', Fun);
@@ -4141,7 +4159,11 @@ begin
     LInputSchema.AddPair('properties', TJSonObject.Create);
   end;
 
-  AToolList.Add(TNormalizedTool.Create(LName, LDescription, LInputSchema));
+  var LNorm := TNormalizedTool.Create(LName, LDescription, LInputSchema);
+  // 'async' puede venir en la raiz (formato plano de Responses) o dentro de
+  // 'function' (formato clasico); LDataSource ya apunta al sitio correcto.
+  LNorm.IsAsync := LDataSource.GetValue<Boolean>('async', False);
+  AToolList.Add(LNorm);
 end;
 
 class procedure TJsonToolUtils.NormalizeToolsFromSource(const ASourceName: string; ASourceJson: TJSonObject; ANormalizedList: TList<TNormalizedTool>);
@@ -4351,6 +4373,13 @@ begin
   Result := TJSonObject.Create;
   Result.AddPair('type', 'function');
   Result.AddPair('name', ANormalizedTool.Name);
+
+  // Async tool calling: el modelo sigue trabajando mientras la aplicacion
+  // ejecuta esta tool, y el resultado se entrega despues con su call_id.
+  // Solo lo entiende la Responses API de gpt-6-astra en adelante; por eso se
+  // emite aqui y no en los otros formateadores.
+  if ANormalizedTool.IsAsync then
+    Result.AddPair('async', TJSONBool.Create(True));
 
   if not ANormalizedTool.Description.IsEmpty then
     Result.AddPair('description', ANormalizedTool.Description);

@@ -82,6 +82,10 @@ type
     FAllowAutoShell: Boolean;
     FReasoningSummary: TAiReasoningSummary;
     FRecursionNeeded: Boolean;
+    // Ultimo effort que se le mando al servidor en ESTA conversacion. Sirve
+    // para decidir si hay que emitir un 'configuration_update' en vez de
+    // cambiar el reasoning a nivel de peticion, que rompe el prefijo cacheado.
+    FLastEffortSent: TAiThinkingLevel;
 
     procedure SetStore(const Value: Boolean);
     procedure SetTruncation(const Value: String);
@@ -162,6 +166,7 @@ begin
   FVerbosity := '';
   FResponseId := '';
   FResponseStatus := '';
+  FLastEffortSent := tlDefault;
   // URL y ApiKey por defecto
   if ApiKey = '' then
     ApiKey := '@OPENAI_API_KEY';
@@ -465,6 +470,8 @@ var
   StartIndex: Integer; // Variable nueva para control de historial
   LastMsg: TAiChatMessage;
   IsToolLoop: Boolean;
+  LEffortAsConfigUpdate: Boolean; // el effort viaja como item, no a nivel de peticion
+  JConfigUpd: TJSonObject;
 
   // Helper local (SIN CAMBIOS con respecto a la ?ltima correcci?n)
   procedure AddMessageToInput(Msg: TAiChatMessage; TargetArray: TJSonArray);
@@ -714,6 +721,7 @@ begin
     // -------------------------------------------------------------------------
     JInputArray := TJSonArray.Create;
     StartIndex := 0;
+    LEffortAsConfigUpdate := False;
 
     // Verificamos si tenemos un ID de respuesta del turno anterior v?lido.
     // Esto permite usar el cache/contexto del servidor y evitar reenviar historial.
@@ -757,6 +765,33 @@ begin
       end;
     end;
 
+    // -------------------------------------------------------------------------
+    // 2b. CAMBIO DE REASONING EFFORT A MITAD DE CONVERSACION
+    // -------------------------------------------------------------------------
+    // Cambiar 'reasoning.effort' a nivel de peticion altera el prefijo de la
+    // conversacion y tira el prompt caching entero. El item
+    // 'configuration_update' existe justamente para eso: aplica desde aqui en
+    // adelante (hasta que otro lo sustituya) sin tocar el prefijo.
+    //
+    // Solo se emite cuando: (a) continuamos una conversacion viva, (b) el
+    // effort es distinto del ultimo que mandamos y (c) el modelo lo entiende.
+    // El gate (c) es por familia y a proposito: un 'configuration_update'
+    // contra gpt-5.x devuelve 400. Si se da de alta una familia posterior,
+    // hay que anadirla aqui.
+    if (FResponseId <> '') and
+       (ModelConfig.ThinkingLevel <> FLastEffortSent) and
+       (ThinkingLevelToStr(ModelConfig.ThinkingLevel) <> '') and
+       LModel.ToLower.StartsWith('gpt-6') then
+    begin
+      JConfigUpd := TJSonObject.Create;
+      JConfigUpd.AddPair('type', 'configuration_update');
+      JConfigUpd.AddPair('reasoning',
+        TJSonObject.Create(TJSONPair.Create('effort', ThinkingLevelToStr(ModelConfig.ThinkingLevel))));
+      JInputArray.Add(JConfigUpd);
+      LEffortAsConfigUpdate := True;
+    end;
+    FLastEffortSent := ModelConfig.ThinkingLevel;
+
     // Recorremos desde el punto calculado (0 si es nuevo, >0 si es continuaci?n)
     for I := StartIndex to FMessages.Count - 1 do
     begin
@@ -776,17 +811,18 @@ begin
     if FTruncation <> 'disabled' then
       JResult.AddPair('truncation', FTruncation);
 
-    if (ModelConfig.ThinkingLevel <> tlDefault) or (FReasoningSummary <> rsmDefault) then
+    // El effort va a nivel de peticion SALVO que estemos continuando una
+    // conversacion y haya CAMBIADO: en ese caso viaja como item
+    // 'configuration_update' dentro del input (ver mas arriba), que es lo que
+    // permite subirlo o bajarlo sin invalidar el prefijo cacheado.
+    if (not LEffortAsConfigUpdate) and
+       ((ModelConfig.ThinkingLevel <> tlDefault) or (FReasoningSummary <> rsmDefault)) then
     begin
       JReasoning := TJSonObject.Create;
-      Case ModelConfig.ThinkingLevel of
-        tlLow:
-          JReasoning.AddPair('effort', 'low');
-        tlMedium:
-          JReasoning.AddPair('effort', 'medium');
-        tlHigh:
-          JReasoning.AddPair('effort', 'high');
-      End;
+      // Escalera completa: none / minimal / low / medium / high / xhigh / max.
+      // ThinkingLevelToStr devuelve '' para tlDefault, que es "no mandes nada".
+      if ThinkingLevelToStr(ModelConfig.ThinkingLevel) <> '' then
+        JReasoning.AddPair('effort', ThinkingLevelToStr(ModelConfig.ThinkingLevel));
       case FReasoningSummary of
         rsmAuto:
           JReasoning.AddPair('summary', 'auto');
@@ -906,7 +942,19 @@ JFormatConfig := Nil;
 
     // ---- 4. TOOLS -----------------------------------------
     if Tool_Active and Assigned(AiFunctions) then
+    begin
       JToolsArray := GetTools(AiFunctions);
+
+      // 'async' solo lo entiende gpt-6-astra en adelante. El formateador de
+      // Responses es el MISMO para toda la familia OpenAi, asi que sin esta
+      // poda una tool declarada async contra un gpt-5.x se iria con un campo
+      // que ese modelo rechaza. Se limpia aqui, que es el unico punto donde se
+      // conoce el modelo de destino. Anadir aqui las familias posteriores.
+      if Assigned(JToolsArray) and (not LModel.ToLower.StartsWith('gpt-6')) then
+        for var LTIdx := 0 to JToolsArray.Count - 1 do
+          if JToolsArray.Items[LTIdx] is TJSonObject then
+            TJSonObject(JToolsArray.Items[LTIdx]).RemovePair('async').Free;
+    end;
 
     if (cap_Shell in ModelConfig.ModelCaps) then
     begin
@@ -1410,6 +1458,9 @@ begin
             ToolCall.Name := SVal;
           if JItem.TryGetValue<String>('arguments', SVal) then
             ToolCall.Arguments := SVal;
+          // Marca de tool asincrona: el turno NO se bloquea esperando este
+          // resultado, que puede entregarse despues con el mismo call_id.
+          ToolCall.IsAsync := JItem.GetValue<Boolean>('async', False);
 
           ToolCalls.Add(ToolCall);
         end
@@ -2683,6 +2734,7 @@ procedure TAiOpenChat.NewChat;
 begin
   // TODO: DeleteAllUploadedFiles desactivado — OpenAI no persiste archivos entre sesiones
   FResponseId := ''; // Inicia una nueva conversación
+  FLastEffortSent := tlDefault; // el effort no se hereda de la conversacion anterior
   inherited;
 end;
 
@@ -2857,6 +2909,10 @@ begin
                 BufferTool.AddPair('name', FuncName);
                 BufferTool.AddPair('arguments', '');
               end;
+              // La marca async viaja en el item, no en los deltas: hay que
+              // guardarla ya, porque al cerrar el item se lee del buffer.
+              if JItem.GetValue<Boolean>('async', False) then
+                BufferTool.AddPair('async', TJSONBool.Create(True));
               FTmpToolCallBuffer.AddOrSetValue(OutputIndex, BufferTool);
             end
             else if ItemType = 'reasoning' then
@@ -2902,6 +2958,8 @@ begin
               ToolCall.Id := BufferTool.GetValue<string>('call_id');
               ToolCall.Name := ToolName;
               ToolCall.Arguments := BufferTool.GetValue<string>('arguments');
+              ToolCall.IsAsync := BufferTool.GetValue<Boolean>('async', False)
+                                  or JItem.GetValue<Boolean>('async', False);
               FTmpToolCallBuffer.Remove(OutputIndex); // doOwnsValues libera BufferTool automáticamente
 
               // Paridad con la via sincrona (ParseChat): pasar ResMsg/AskMsg al
