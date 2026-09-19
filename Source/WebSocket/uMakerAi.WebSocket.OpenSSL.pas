@@ -33,7 +33,13 @@ type
     FSSL_new:                  function(ctx: Pointer): Pointer; cdecl;
     FSSL_free:                 procedure(ssl: Pointer); cdecl;
     FSSL_set_fd:               function(ssl: Pointer; fd: Integer): Integer; cdecl;
-    FSSL_set_tlsext_host_name: function(ssl: Pointer; name: PAnsiChar): Integer; cdecl;
+    // OJO: SSL_set_tlsext_host_name NO es una funcion exportada por libssl, es
+    // una MACRO de ssl.h sobre SSL_ctrl. Buscarla con dlsym devuelve siempre
+    // nil (comprobado con nm -D sobre libssl.so.3), asi que el SNI se saltaba
+    // en silencio y el handshake moria con "sslv3 alert handshake failure"
+    // contra cualquier host detras de un CDN — que hoy es casi cualquiera.
+    // Se manda por SSL_ctrl, que si esta exportada.
+    FSSL_ctrl:                 function(ssl: Pointer; cmd: Integer; larg: NativeInt; parg: Pointer): NativeInt; cdecl;
     FSSL_connect:              function(ssl: Pointer): Integer; cdecl;
     FSSL_read:                 function(ssl: Pointer; buf: Pointer; num: Integer): Integer; cdecl;
     FSSL_write:                function(ssl: Pointer; buf: Pointer; num: Integer): Integer; cdecl;
@@ -66,6 +72,7 @@ implementation
 {$IF NOT DEFINED(MSWINDOWS) AND NOT DEFINED(ANDROID)}
 
 uses
+  System.StrUtils,
   Posix.Dlfcn,
   Posix.SysSocket,
   Posix.NetDB,
@@ -127,7 +134,7 @@ begin
   Bind(FSSL_new,                  'SSL_new');
   Bind(FSSL_free,                 'SSL_free');
   Bind(FSSL_set_fd,               'SSL_set_fd');
-  Bind(FSSL_set_tlsext_host_name, 'SSL_set_tlsext_host_name');
+  Bind(FSSL_ctrl,                 'SSL_ctrl');
   Bind(FSSL_connect,              'SSL_connect');
   Bind(FSSL_read,                 'SSL_read');
   Bind(FSSL_write,                'SSL_write');
@@ -199,6 +206,8 @@ end;
 //  ITlsTransport implementation
 // ---------------------------------------------------------------------------
 function TOpenSSLTransport.Connect(const AHost: string; APort: Integer): Boolean;
+var
+  LHostAnsi: AnsiString;
 begin
   Result   := False;
   FConnected := False;
@@ -226,13 +235,18 @@ begin
   if FSSL_set_fd(FSSL, FSocket) <> 1 then
     raise Exception.Create('OpenSSL: SSL_set_fd falló');
 
-  // SNI (Server Name Indication)
-  if Assigned(FSSL_set_tlsext_host_name) then
-    FSSL_set_tlsext_host_name(FSSL, PAnsiChar(AnsiString(AHost)));
+  // SNI (Server Name Indication) — via SSL_ctrl, porque la version "bonita"
+  // es una macro y no existe como simbolo. Sin SNI, api.openai.com (y todo lo
+  // que viva tras Cloudflare) corta el handshake con alert 40.
+  // 55 = SSL_CTRL_SET_TLSEXT_HOSTNAME, 0 = TLSEXT_NAMETYPE_host_name.
+  LHostAnsi := AnsiString(AHost);
+  if Assigned(FSSL_ctrl) and (LHostAnsi <> '') then
+    FSSL_ctrl(FSSL, 55, 0, PAnsiChar(LHostAnsi));
 
   // Handshake TLS
   if FSSL_connect(FSSL) <> 1 then
-    raise Exception.Create('OpenSSL: SSL_connect falló — handshake TLS rechazado');
+    raise Exception.Create('OpenSSL: SSL_connect falló — handshake TLS rechazado' +
+      IfThen(Assigned(FSSL_ctrl), '', ' (ademas SSL_ctrl no se pudo enlazar: no habra SNI)'));
 
   FConnected := True;
   Result     := True;

@@ -40,6 +40,13 @@ Full RFC 6455 WebSocket client. Handles:
 - Fragmented messages: reassembled before delivering to caller
 - Background reader thread; events dispatched via `TThread.Queue` (main-thread safe)
 
+> **Gotcha for daemons/servers:** `TThread.Queue` is only drained by
+> `CheckSynchronize`. A console daemon whose main loop is `while Running do
+> Sleep(...)` — such as MKAIServer's `ResApiServer` — never calls it, so
+> **none of these events would ever fire there**. Either pump
+> `CheckSynchronize` in the main loop or give the client a synchronous dispatch
+> path before embedding it in a server.
+
 ### Key methods
 
 ```pascal
@@ -85,9 +92,28 @@ apt install libssl1.1   # Ubuntu 20.04 / Debian 11
 |----------|-----------|--------|
 | Windows Win64 | `TSChannelTransport` | ✅ Tested |
 | Android ARM/ARM64 | `TAndroidSSLTransport` | ⚠️ Compiles, not yet tested on real hardware |
-| Linux64 | `TOpenSSLTransport` | ⚠️ Compiles, not yet tested on real hardware |
+| Linux64 | `TOpenSSLTransport` | ✅ Tested 2026-09-19 (see below) |
 | macOS | `TOpenSSLTransport` | ⚠️ Compiles, not yet tested |
 | iOS | — | ❌ Not implemented |
+
+### Linux64 — tested 2026-09-19
+
+Console client built with the Linux64 compiler and run on a real Ubuntu host
+(libssl.so.3) against `wss://api.openai.com/v1/responses`: TLS handshake, RFC
+6455 upgrade, **2190 text frames** parsed, two full responses, clean exit.
+
+**It did not work before that run.** `SSL_set_tlsext_host_name` is *not* an
+exported symbol — it is a macro in `ssl.h` over `SSL_ctrl` — so `dlsym` always
+returned nil, the `if Assigned(...)` guard skipped SNI **silently**, and the
+handshake died with `sslv3 alert handshake failure` (alert 40) against any host
+behind a CDN, which today is almost any host. Reproduced exactly with
+`openssl s_client -noservername`. Fixed by binding `SSL_ctrl` and calling it
+with `SSL_CTRL_SET_TLSEXT_HOSTNAME` (55) / `TLSEXT_NAMETYPE_host_name` (0).
+
+**Still open for Linux:** `FSSL_CTX_set_verify(FCtx, SSL_VERIFY_NONE, nil)` —
+the certificate is not validated. Fine for a lab probe, not for production
+traffic; it needs `SSL_CTX_set_default_verify_paths` plus `SSL_VERIFY_PEER`
+before this transport carries anything real.
 
 ---
 
