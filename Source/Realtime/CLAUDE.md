@@ -373,6 +373,31 @@ STT.Connect;
 | Connect sequence | Separate `TThread` descendant (`FConnectThread`) |
 | Reader loop | `TAiRealtimeWSReaderThread` on background thread |
 
+### Console apps and services must drain the queue
+
+Because **every** event is dispatched with `TThread.Queue(nil, ...)`, it only
+runs when somebody drains the main-thread queue. A VCL/FMX app does that in its
+message loop; a **console app, a daemon or a Linux service does not**, so unless
+you call `CheckSynchronize` periodically **no event ever fires** — not
+`OnSessionReady`, not `OnTranscriptCompleted`, not even `OnError`.
+
+The failure is confusing: the WebSocket connects, the server accepts the
+upgrade, audio is sent, and the program still concludes it never connected —
+with no error to show for it.
+
+```pascal
+// En vez de Sleep(100) en cualquier espera:
+for I := 1 to 100 do
+begin
+  CheckSynchronize(100);   // System.Classes
+  if Listo then Break;
+end;
+```
+
+Demos 062 and 063 do this. Verified on Linux 2026-09-20: the same program
+times out waiting for the session with `Sleep`, and transcribes correctly with
+`CheckSynchronize`.
+
 ---
 
 ## Known issues / limitations

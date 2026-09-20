@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is the Demos directory for the MakerAI 3.x framework. Contains 49 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
+This is the Demos directory for the MakerAI 3.x framework. Contains 51 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
 
-**Estado de compilación (ago 7/2026): los 48 proyectos compilan** en Win64/Release; el 081 (nuevo, ago 18/2026) también compila.
+**Estado de compilación (ago 7/2026): los 48 proyectos compilan** en Win64/Release; el 081 (ago 18/2026), el 082 y el 083 (sep 20/2026) también compilan; el 082 se corrió en runtime (6/6 PASS) y el 083 en **Linux64** sobre Xvfb con OpenAI y Claude.
 
 ## Building Demos
 
 **IDE:** Delphi 11 Alexandria through 13 Florence (demos require Delphi 11+; the core framework supports 10.4 Sydney minimum)
 
-**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026 e incluye los 49 proyectos.
+**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026 e incluye los 51 proyectos.
 
 > **OJO al editar los `.pas` de los demos:** varios están en **ANSI (Windows-1252) con saltos LF**, no en UTF-8. Guardarlos como UTF-8 destruye todas las tildes de forma silenciosa (compila igual, y `git diff` lo disimula si `core.autocrlf` está activo). Verificar siempre con `git diff --numstat` que solo cambien las líneas que se tocaron.
 
@@ -51,7 +51,7 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 ### MCP Servers (03x)
 | Demo | Purpose | Transport |
 |------|---------|-----------|
-| 031-MCPServer | Multi-protocol server | SSE, HTTP, StdIO |
+| 031-MCPServer | Multi-protocol server. **Compila tambien en Linux64** desde sep 2026: la herramienta `system_info` llamaba a la API de Windows desde el cuerpo de sus funciones y tumbaba el demo entero fuera de Windows | SSE, HTTP, StdIO |
 | 032-MCP_StdIO_FileManager | File manager MCP | StdIO, HTTP, SSE variants |
 | 032-MCPServerDataSnap | DataSnap integration | HTTP with DataSnap |
 | 035-MCPServerWithTAiFunctions | MCP + function calling | TAiFunctions integration |
@@ -95,9 +95,9 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 065-VoiceBridgeUI | El puente de voz del 063 con interfaz FMX: selección de dispositivos y control en pantalla | `TAiAudioCapture`/`TAiAudioPlayer` + `TAiOpenAiRealtimeSTT` + `TAiOpenAiAudio` sobre `TAiChatConnection`. **Sin CLAUDE.md propio** |
 | 071-VoiceBridgeTranslate | **Refactor of 063 using `gpt-realtime-translate`**: one WebSocket per direction replaces the whole STT -> LLM-translate -> TTS pipeline | 2x `TAiAudioCapture` -> 2x `TAiOpenAiRealtimeTranslate` (continuous stream, no VAD/turns) -> `TAiAudioPlayer`. The server returns translated text (`OnAssistantTextDelta`) AND translated TTS audio (`OnAudioChunk`, PCM16 24 kHz) in streaming; `SourceTranscription := True` also shows what was heard. Lower latency and ~1/3 of the code vs 063; trade-off: the TTS voice is chosen by the server. Same VB-CABLE setup and `Muted` anti-feedback as 063. |
 
-### Tests runtime de issues y subsistemas (06x)
+### Tests runtime de issues y subsistemas (06x, 08x)
 
-Consolas con asserts automáticos que reproducen un issue concreto contra APIs reales. No son la suite de regresión (esa vive en `Tests/RegressionSuite/` y no necesita claves); estos **sí requieren API key** y sirven para verificar un fix de punta a punta. **Ninguno tiene CLAUDE.md propio.**
+Consolas con asserts automáticos que reproducen un issue concreto contra APIs reales. No son la suite de regresión (esa vive en `Tests/RegressionSuite/` y no necesita claves); estos **sí requieren API key** y sirven para verificar un fix de punta a punta. **Solo el 082 y el 083 tienen CLAUDE.md propio.**
 
 | Demo | Verifica | Requiere |
 |------|----------|----------|
@@ -105,6 +105,8 @@ Consolas con asserts automáticos que reproducen un issue concreto contra APIs r
 | 067-PromptCacheTest | Prompt caching de Claude: dos requests con el mismo system prompt grande (>1024 tokens) y `CacheContext`; espera `cache_write>0` y luego `cache_read>0` | `CLAUDE_API_KEY` |
 | 068-AsyncHistoryTest | Issue #105: en asíncrono Claude debe archivar sus respuestas en el historial. Conversación multi-turno donde el último turno debe recordar los previos | `CLAUDE_API_KEY` |
 | 069-McpSessionGateTest | Issue #110: vetting de cliente MCP (`OnClientConnect`) y gate de sesión HTTP por `Mcp-Session-Id`. Levanta un `TAiMCPHttpServer` real y lo prueba como cliente en 4 fases | — (in-process) |
+| 083-ComputerUseLinux | **Computer Use en Linux (X11)**: ciclo agéntico real sobre Xvfb con `TAiLinuxExecutor` (xdotool + scrot). Es el 066 pero headless y sin tocar el escritorio del usuario. Compila Linux64; en Win64 solo imprime un aviso. Tiene CLAUDE.md propio | `OPENAI_API_KEY` o `CLAUDE_API_KEY` |
+| 082-ComputerUsePassthru | **Quién ejecuta un `computer_call`**: delegado vía `OnCallToolFunction` (broker headless), sin `ComputerUseTool` asignado, y local con ejecutor simulado — los tres en síncrono y en streaming, porque el driver de OpenAI tiene dos implementaciones. Verifica con asserts y exit code; **no toca la pantalla** (a diferencia del 066). Tiene CLAUDE.md propio | `OPENAI_API_KEY` |
 
 ### Utilities (09x)
 | Demo | Purpose |

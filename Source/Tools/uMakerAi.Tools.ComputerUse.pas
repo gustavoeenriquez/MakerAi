@@ -203,10 +203,121 @@ procedure TAiComputerUseTool.TranslateClaudeToolCall(ToolCall: TAiToolsFunction)
 // ParseAction expects: {"x":norm, "y":norm, "text":"...", ...} + ToolCall.Name = mapped action.
 var
   JArgs, JNew: TJSONObject;
-  JCoord, JStartCoord, JRegion: TJSONArray;
   Action, MappedName, SText, SDir: string;
   ScrW, ScrH, PxX, PxY, NormX, NormY, Amount: Integer;
   DDur: Double;
+  // PxX/PxY se reutilizan como esquina superior izquierda en el caso 'zoom'.
+
+  // Claude manda los arrays UNAS VECES como array JSON y OTRAS como cadena
+  // con el JSON dentro, dentro del MISMO turno:
+  //     "coordinate": [299, 282]     <- las primeras llamadas
+  //     "coordinate": "[299, 400]"   <- a partir de cierto punto
+  // Verificado en runtime contra computer_toolset_20260801 (sep 2026). Con
+  // TryGetValue<TJSONArray> a secas la segunda forma no casa, la coordenada se
+  // pierde y la accion acaba en (0,0): un clic en la esquina de la pantalla.
+  // El modelo entonces se pierde y entra en un bucle de reintentos.
+  // Afecta a 'coordinate', 'start_coordinate' y 'region'.
+  function AsArray(AObj: TJSONObject; const AName: string;
+    out AArr: TJSONArray; out AOwned: Boolean): Boolean;
+  var
+    S: string;
+    V: TJSONValue;
+  begin
+    AOwned := False;
+    AArr := nil;
+    if AObj.TryGetValue<TJSONArray>(AName, AArr) then
+      Exit(True);
+    Result := False;
+    if AObj.TryGetValue<string>(AName, S) then
+    begin
+      S := Trim(S);
+      if S.StartsWith('[') then
+      begin
+        V := TJSONObject.ParseJSONValue(S);
+        if V is TJSONArray then
+        begin
+          AArr := TJSONArray(V);
+          AOwned := True;
+          Result := True;
+        end
+        else
+          V.Free;
+      end;
+    end;
+  end;
+
+  // Item entero de un array, tolerando que venga como numero o como cadena.
+  function ItemInt(AArr: TJSONArray; AIdx: Integer; out AValue: Integer): Boolean;
+  var
+    V: TJSONValue;
+  begin
+    Result := False;
+    AValue := 0;
+    if (AArr = nil) or (AIdx < 0) or (AIdx >= AArr.Count) then
+      Exit;
+    V := AArr.Items[AIdx];
+    if V is TJSONNumber then
+    begin
+      AValue := TJSONNumber(V).AsInt;
+      Result := True;
+    end
+    else
+      Result := TryStrToInt(Trim(V.Value), AValue);
+  end;
+
+  // Punto en pixeles -> normalizado 0-999. True si venia y era legible.
+  function TryGetPointNorm(AObj: TJSONObject; const AName: string;
+    out ANormX, ANormY: Integer): Boolean;
+  var
+    LArr: TJSONArray;
+    LOwned: Boolean;
+    LX, LY: Integer;
+  begin
+    Result := False;
+    ANormX := 0; ANormY := 0;
+    if not AsArray(AObj, AName, LArr, LOwned) then
+      Exit;
+    try
+      if (LArr.Count >= 2) and ItemInt(LArr, 0, LX) and ItemInt(LArr, 1, LY) then
+      begin
+        ANormX := Round(LX / ScrW * 1000); if ANormX > 999 then ANormX := 999;
+        ANormY := Round(LY / ScrH * 1000); if ANormY > 999 then ANormY := 999;
+        Result := True;
+      end;
+    finally
+      if LOwned then
+        LArr.Free;
+    end;
+  end;
+
+  // Region de zoom: [x1,y1,x2,y2] en pixeles -> dos puntos normalizados.
+  function TryGetRectNorm(AObj: TJSONObject; const AName: string;
+    out AX1, AY1, AX2, AY2: Integer): Boolean;
+  var
+    LArr: TJSONArray;
+    LOwned: Boolean;
+    A, B, C, D: Integer;
+  begin
+    Result := False;
+    AX1 := 0; AY1 := 0; AX2 := 0; AY2 := 0;
+    if not AsArray(AObj, AName, LArr, LOwned) then
+      Exit;
+    try
+      if (LArr.Count >= 4) and ItemInt(LArr, 0, A) and ItemInt(LArr, 1, B) and
+         ItemInt(LArr, 2, C) and ItemInt(LArr, 3, D) then
+      begin
+        AX1 := Round(A / ScrW * 1000); if AX1 > 999 then AX1 := 999;
+        AY1 := Round(B / ScrH * 1000); if AY1 > 999 then AY1 := 999;
+        AX2 := Round(C / ScrW * 1000); if AX2 > 999 then AX2 := 999;
+        AY2 := Round(D / ScrH * 1000); if AY2 > 999 then AY2 := 999;
+        Result := True;
+      end;
+    finally
+      if LOwned then
+        LArr.Free;
+    end;
+  end;
+
 begin
   JArgs := TJSONObject.ParseJSONValue(ToolCall.Arguments) as TJSONObject;
   if not Assigned(JArgs) then
@@ -245,32 +356,19 @@ begin
     try
       // Drag: start_coordinate = origin (-> x,y); coordinate = destination (-> destination_x,y)
       if (Action = 'left_click_drag') and
-         JArgs.TryGetValue<TJSONArray>('start_coordinate', JStartCoord) and
-         (JStartCoord.Count >= 2) then
+         TryGetPointNorm(JArgs, 'start_coordinate', NormX, NormY) then
       begin
-        PxX  := (JStartCoord.Items[0] as TJSONNumber).AsInt;
-        PxY  := (JStartCoord.Items[1] as TJSONNumber).AsInt;
-        NormX := Round(PxX / ScrW * 1000); if NormX > 999 then NormX := 999;
-        NormY := Round(PxY / ScrH * 1000); if NormY > 999 then NormY := 999;
         JNew.AddPair('x', TJSONNumber.Create(NormX));
         JNew.AddPair('y', TJSONNumber.Create(NormY));
 
-        if JArgs.TryGetValue<TJSONArray>('coordinate', JCoord) and (JCoord.Count >= 2) then
+        if TryGetPointNorm(JArgs, 'coordinate', NormX, NormY) then
         begin
-          NormX := Round((JCoord.Items[0] as TJSONNumber).AsInt / ScrW * 1000);
-          NormY := Round((JCoord.Items[1] as TJSONNumber).AsInt / ScrH * 1000);
-          if NormX > 999 then NormX := 999;
-          if NormY > 999 then NormY := 999;
           JNew.AddPair('destination_x', TJSONNumber.Create(NormX));
           JNew.AddPair('destination_y', TJSONNumber.Create(NormY));
         end;
       end
-      else if JArgs.TryGetValue<TJSONArray>('coordinate', JCoord) and (JCoord.Count >= 2) then
+      else if TryGetPointNorm(JArgs, 'coordinate', NormX, NormY) then
       begin
-        PxX  := (JCoord.Items[0] as TJSONNumber).AsInt;
-        PxY  := (JCoord.Items[1] as TJSONNumber).AsInt;
-        NormX := Round(PxX / ScrW * 1000); if NormX > 999 then NormX := 999;
-        NormY := Round(PxY / ScrH * 1000); if NormY > 999 then NormY := 999;
         JNew.AddPair('x', TJSONNumber.Create(NormX));
         JNew.AddPair('y', TJSONNumber.Create(NormY));
       end;
@@ -292,19 +390,24 @@ begin
           JNew.AddPair('modifiers', SText);
       end;
 
-      // hold_key duration (seconds)
-      if (Action = 'hold_key') and JArgs.TryGetValue<Double>('duration', DDur) then
-        JNew.AddPair('duration', TJSONNumber.Create(DDur));
+      // hold_key duration (segundos). Igual que las coordenadas, puede llegar
+      // como numero o como cadena ("duration": "1"), asi que se aceptan ambas.
+      if (Action = 'hold_key') then
+      begin
+        if not JArgs.TryGetValue<Double>('duration', DDur) then
+          if JArgs.TryGetValue<string>('duration', SText) then
+            DDur := StrToFloatDef(Trim(SText), -1)
+          else
+            DDur := -1;
+        if DDur >= 0 then
+          JNew.AddPair('duration', TJSONNumber.Create(DDur));
+      end;
 
       // Zoom: region [x1,y1,x2,y2] (px) -> x,y + destination_x,destination_y (norm 0-999)
-      if (Action = 'zoom') and JArgs.TryGetValue<TJSONArray>('region', JRegion) and (JRegion.Count >= 4) then
+      if (Action = 'zoom') and TryGetRectNorm(JArgs, 'region', PxX, PxY, NormX, NormY) then
       begin
-        NormX := Round((JRegion.Items[0] as TJSONNumber).AsInt / ScrW * 1000); if NormX > 999 then NormX := 999;
-        NormY := Round((JRegion.Items[1] as TJSONNumber).AsInt / ScrH * 1000); if NormY > 999 then NormY := 999;
-        JNew.AddPair('x', TJSONNumber.Create(NormX));
-        JNew.AddPair('y', TJSONNumber.Create(NormY));
-        NormX := Round((JRegion.Items[2] as TJSONNumber).AsInt / ScrW * 1000); if NormX > 999 then NormX := 999;
-        NormY := Round((JRegion.Items[3] as TJSONNumber).AsInt / ScrH * 1000); if NormY > 999 then NormY := 999;
+        JNew.AddPair('x', TJSONNumber.Create(PxX));
+        JNew.AddPair('y', TJSONNumber.Create(PxY));
         JNew.AddPair('destination_x', TJSONNumber.Create(NormX));
         JNew.AddPair('destination_y', TJSONNumber.Create(NormY));
       end;
@@ -314,7 +417,9 @@ begin
          JArgs.TryGetValue<string>('direction', SDir) then
         JNew.AddPair('direction', SDir);
       if JArgs.TryGetValue<Integer>('scroll_amount', Amount) or
-         JArgs.TryGetValue<Integer>('amount', Amount) then
+         JArgs.TryGetValue<Integer>('amount', Amount) or
+         (JArgs.TryGetValue<string>('scroll_amount', SText) and TryStrToInt(Trim(SText), Amount)) or
+         (JArgs.TryGetValue<string>('amount', SText) and TryStrToInt(Trim(SText), Amount)) then
         JNew.AddPair('magnitude', TJSONNumber.Create(Amount * 120))
       else if Action = 'scroll' then
         JNew.AddPair('magnitude', TJSONNumber.Create(800));

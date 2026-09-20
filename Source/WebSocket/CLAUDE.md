@@ -40,6 +40,13 @@ Full RFC 6455 WebSocket client. Handles:
 - Fragmented messages: reassembled before delivering to caller
 - Background reader thread; events dispatched via `TThread.Queue` (main-thread safe)
 
+> **Gotcha for daemons/servers:** `TThread.Queue` is only drained by
+> `CheckSynchronize`. A console daemon whose main loop is `while Running do
+> Sleep(...)` — such as MKAIServer's `ResApiServer` — never calls it, so
+> **none of these events would ever fire there**. Either pump
+> `CheckSynchronize` in the main loop or give the client a synchronous dispatch
+> path before embedding it in a server.
+
 ### Key methods
 
 ```pascal
@@ -85,9 +92,55 @@ apt install libssl1.1   # Ubuntu 20.04 / Debian 11
 |----------|-----------|--------|
 | Windows Win64 | `TSChannelTransport` | ✅ Tested |
 | Android ARM/ARM64 | `TAndroidSSLTransport` | ⚠️ Compiles, not yet tested on real hardware |
-| Linux64 | `TOpenSSLTransport` | ⚠️ Compiles, not yet tested on real hardware |
+| Linux64 | `TOpenSSLTransport` | ✅ Tested 2026-09-19 (see below) |
 | macOS | `TOpenSSLTransport` | ⚠️ Compiles, not yet tested |
 | iOS | — | ❌ Not implemented |
+
+### Linux64 — tested 2026-09-19
+
+Console client built with the Linux64 compiler and run on a real Ubuntu host
+(libssl.so.3) against `wss://api.openai.com/v1/responses`: TLS handshake, RFC
+6455 upgrade, **2190 text frames** parsed, two full responses, clean exit.
+
+**It did not work before that run.** `SSL_set_tlsext_host_name` is *not* an
+exported symbol — it is a macro in `ssl.h` over `SSL_ctrl` — so `dlsym` always
+returned nil, the `if Assigned(...)` guard skipped SNI **silently**, and the
+handshake died with `sslv3 alert handshake failure` (alert 40) against any host
+behind a CDN, which today is almost any host. Reproduced exactly with
+`openssl s_client -noservername`. Fixed by binding `SSL_ctrl` and calling it
+with `SSL_CTRL_SET_TLSEXT_HOSTNAME` (55) / `TLSEXT_NAMETYPE_host_name` (0).
+
+### Certificate verification — closed 2026-09-20
+
+The transport used to run with `SSL_VERIFY_NONE`: it did not validate the
+server certificate at all. It now verifies by default.
+
+- **Chain:** `SSL_CTX_set_default_verify_paths` (system CA store) +
+  `SSL_VERIFY_PEER`. Needs the `ca-certificates` package on the host.
+- **Hostname:** `SSL_set1_host`. This part is easy to forget and the reason
+  half-done TLS validation is worse than none: `SSL_VERIFY_PEER` alone checks
+  that the chain is valid, **not that the certificate was issued for the host
+  you dialed**, so a valid certificate for any other domain would sail through.
+- **Escape hatch:** `InsecureSkipVerify := True` restores the old behaviour for
+  endpoints with a self-signed certificate. It is opt-in and off by default.
+- On failure the exception carries the `X509_V` code from
+  `SSL_get_verify_result`, so the cause is visible instead of a generic
+  handshake error.
+
+Verified on a real Ubuntu 26.04 host against badssl.com, 7/7:
+
+| Host | Expected | X509_V |
+|------|----------|--------|
+| `api.openai.com`, `www.google.com` | connects | — |
+| `self-signed.badssl.com` | rejected | 18 (self signed) |
+| `expired.badssl.com` | rejected | 10 (expired) |
+| `untrusted-root.badssl.com` | rejected | 19 (self signed in chain) |
+| `wrong.host.badssl.com` | rejected | **62 (hostname mismatch)** |
+| `self-signed` + `InsecureSkipVerify` | connects | — |
+
+The `wrong.host` row is the one that matters: valid chain, wrong name. It is
+what proves the hostname check is wired, and it is exactly the case that passes
+when only `SSL_VERIFY_PEER` is set.
 
 ---
 

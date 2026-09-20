@@ -75,6 +75,11 @@ Type
     // Evita que modelos insistentes (gpt-oss) reintenten el tool en bucle al
     // recibir una respuesta sint?tica tipo 'OK'.
     StopAgenticLoop: Boolean;
+    // El item 'function_call' de la Responses API viene marcado con async:true
+    // cuando la tool se declaro asincrona. Se propaga para que el llamador
+    // sepa que NO tiene que bloquear el turno esperando este resultado: puede
+    // devolverlo mas tarde referenciando el mismo call_id.
+    IsAsync: Boolean;
 
     Constructor Create;
     Destructor Destroy; Override;
@@ -1387,6 +1392,7 @@ begin
   Self.Arguments := aSource.Arguments;
   Self.&Function := aSource.&Function;
   Self.Response := aSource.Response;
+  Self.IsAsync := aSource.IsAsync;
   Metadata.JsonText := aSource.Metadata.JsonText;
 end;
 

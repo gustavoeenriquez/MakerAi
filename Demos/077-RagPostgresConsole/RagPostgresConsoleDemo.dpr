@@ -60,6 +60,10 @@ uses
   FireDAC.Stan.Error,
   FireDAC.Phys,
   FireDAC.Comp.Client,
+  // Sin esto FireDAC aborta con "Object factory for class ... TFDGUIxWaitCursor"
+  // en cuanto abre la conexion. Es una app de consola, asi que la variante
+  // que toca es ConsoleUI (existe en Windows y en Linux por igual).
+  FireDAC.ConsoleUI.Wait,
   uMakerAi.Embeddings.Core,
   uMakerAi.Embeddings.Ollama,
   uMakerAi.RAG.MetaData,
@@ -279,6 +283,38 @@ procedure CrearEsquema;
 begin
   Writeln('');
   Writeln('== 3. Esquema vectorial ==');
+
+  // Catalogo base. El demo se anuncia como autocontenido, pero daba por hecho
+  // que 'pelicula' y 'genero' ya existian de los demos 021/023: en una base
+  // recien creada moria en la siembra con 'relation "pelicula" does not exist'.
+  // Se crean aqui si faltan, para que arranque contra una base vacia.
+  Conn.ExecSQL(
+    'create table if not exists genero (' +
+    '  id serial primary key,' +
+    '  nombre varchar(80) not null unique)');
+  Conn.ExecSQL(
+    'create table if not exists pelicula (' +
+    '  id serial primary key,' +
+    '  titulo varchar(200) not null,' +
+    '  anio integer,' +
+    '  director varchar(150),' +
+    '  genero_id integer references genero(id),' +
+    '  sinopsis text,' +
+    '  creado timestamp default now())');
+  // Los generos 1..6 son los que referencian las semillas por GeneroId; sin
+  // ellos la insercion viola la clave foranea en una base nueva.
+  Conn.ExecSQL(
+    'insert into genero (id, nombre) values ' +
+    '(1,''Accion''),(2,''Drama''),(3,''Comedia''),' +
+    '(4,''Ciencia ficcion''),(5,''Suspenso''),(6,''Documental'') ' +
+    'on conflict (id) do nothing');
+  // En un bloque DO: 'select setval(...)' devuelve un result set y FireDAC
+  // rechaza ejecutarlo con ExecSQL ("use Open method for SELECT-like commands").
+  Conn.ExecSQL(
+    'do $$ begin perform setval(pg_get_serial_sequence(''genero'',''id''), ' +
+    'greatest((select max(id) from genero), 1)); end $$');
+  Writeln('   catalogo base: tablas genero y pelicula listas');
+
   Driver.CreateSchema(TablaVec, DimEmb);
   Writeln('   tabla ' + TablaVec + ' lista (vector(' + IntToStr(DimEmb) + '), indice HNSW coseno, GIN sobre properties y FTS)');
   Writeln('   nota: no se toca pelicula_vector, que es vector(1536) de OpenAI');

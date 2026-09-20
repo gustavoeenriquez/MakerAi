@@ -33,6 +33,77 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 ---
 
+## 🧪 On `dev` — not yet released
+
+Work merged after v3.7.0. Three items change existing behaviour; they are called out below.
+
+### Computer Use on Linux
+
+`TAiLinuxExecutor` (`Source/Tools/uMakerAi.Tools.ComputerUse.Linux.pas`) drives X11 through
+**xdotool** and captures with **scrot**, covering the 19 canonical actions with the same
+public interface as the Windows and macOS executors. The framework itself needed no change:
+`TAiComputerUseTool` only ever used the RTL and delegates everything to
+`OnExecuteAction` / `OnRequestScreenshot`, so it cross-compiled to Linux64 untouched — what
+was missing was only the executor. Runtime-tested on Xvfb with `gpt-6-astra` and
+`claude-opus-4-8`, driving both a text editor and Chrome. Demo: `083-ComputerUseLinux`.
+
+### Computer Use delegation — handing the call to a remote client
+
+A headless process (a broker on a VPS) can now claim a `computer_call` and forward it to
+whoever actually owns a screen. The contract already existed in the base class and in Claude
+— fill `ToolCall.Response` from `OnCallToolFunction` and the driver does not execute
+locally — but **OpenAI ignored it and Gemini never even fired the event**. Both now honour
+it. For OpenAI the delegation is *atomic over the batch*: `gpt-6-astra` sends an array of
+actions that admits a single `computer_call_output`, so splitting it between a local and a
+remote executor would leave the final screenshot ownerless. Demo: `082-ComputerUsePassthru`.
+
+### ⚠️ TLS certificates are now verified on POSIX
+
+`TOpenSSLTransport` used to run with `SSL_VERIFY_NONE` — it accepted **any** certificate,
+from anyone, and that is the transport the Realtime module uses on Linux and macOS. It now
+verifies the chain against the system CA store **and the hostname** (`SSL_set1_host`;
+`SSL_VERIFY_PEER` alone validates the chain but not that the certificate was issued for the
+host you dialed). Verified against badssl.com, 7/7, including the `wrong.host` case.
+
+> **Breaking**: pointing Realtime at an endpoint with a self-signed certificate (a local LM
+> Studio, an internal proxy) now fails until you set `InsecureSkipVerify := True`.
+
+### ⚠️ Gemini executed no user functions at all
+
+`TAiGeminiChat.DoCallFunction` had its `inherited` commented out and answered
+`'Command <name> not found'` to every non-Computer-Use tool call — and it is the driver's
+only dispatch point. Neither `AiFunctions` nor `OnCallToolFunction` ever ran. Restored.
+
+> **Behaviour change**: tools that silently returned "not found" with Gemini now execute.
+
+### ⚠️ TAiShell crashed on non-English Windows
+
+Shell output was decoded with `TEncoding.UTF8.GetString`, which *validates* its input and
+raises `EEncodingError`. `cmd.exe` writes in the console **OEM** codepage (cp850 on a Spanish
+Windows) and even its own banner carries accents, so the component died on the **first
+command**. Invisible in English (pure ASCII) and on Linux (bash does emit UTF-8). Decoding
+now falls back to the OEM codepage. Two more, found while exercising it on Linux: stderr was
+dropped whenever the sentinel arrived in the same read, and a timeout left the session
+permanently unusable (the `Restart` was written but commented out).
+
+### Also
+
+- **Claude sometimes sends coordinates as a JSON array and sometimes as a string** containing
+  one — *within the same turn*. `TryGetValue<TJSONArray>` missed the second form, the
+  coordinate was lost and the action landed on (0,0): a click in the screen corner, after
+  which the model retried until it ran out of turns. Affected `coordinate`,
+  `start_coordinate` and `region`, i.e. click, double/triple click, drag and zoom.
+- **OpenTelemetry validated against a real collector** for the first time (Jaeger): the trace
+  crosses the A2A boundary, so `traceparent` propagation through `_meta` works. Fixed
+  `otel.scope.version`, hardcoded to `3.5` while the framework was on 3.7.
+- **Demos 031 and 077 now build and run on Linux64** — which also makes FireDAC on Linux a
+  tested path (PostgreSQL 18 + pgvector 0.8.1 through `libpq.so.5`).
+- Documented that the Realtime module needs `CheckSynchronize` in console apps and services:
+  every event is dispatched with `TThread.Queue`, so without a message loop **no event ever
+  fires** — not even `OnError`.
+
+---
+
 ## 🚀 What's New in v3.7
 
 ### Computer Use, Refreshed on Both Live Providers
@@ -471,12 +542,18 @@ physical pixels.
 
 - **Safety**: `OnSafetyConfirmation` gates risky actions (human-in-the-loop); denying
   is the default when no handler is assigned
-- **Executors**: Windows VCL and FMX (Win32 `SendInput`), both runtime-tested. A macOS
-  executor (CGEvent) is written but has not yet been compiled or tested on macOS
+- **Executors**: Windows VCL and FMX (Win32 `SendInput`) and **Linux/X11**
+  (`TAiLinuxExecutor`, xdotool + scrot), all runtime-tested. A macOS executor (CGEvent) is
+  written but has not yet been compiled or tested on macOS. They are interchangeable: an
+  executor is just the pair of handlers, so `TAiComputerUseTool` itself is platform-agnostic
+- **Delegation**: fill `ToolCall.Response` from `OnCallToolFunction` and the driver will not
+  execute locally — a headless process can forward the call to whoever owns a screen
 - **Capture area**: `AreaLeft`/`AreaTop`/`AreaWidth`/`AreaHeight` select a sub-region;
   multi-monitor works but is still lightly tested
-- **Demo**: `066-ComputerUseTest` — `-provider=openai|claude|gemini`, `-prompt=...`,
-  `-autorun`, and a `run.log` next to the executable
+- **Demos**: `066-ComputerUseTest` (Windows, real desktop — `-provider=openai|claude|gemini`,
+  `-prompt=...`, `-autorun`, `run.log` next to the executable), `082-ComputerUsePassthru`
+  (who executes the call: delegated, missing tool, local — self-verifying, does not touch the
+  screen) and `083-ComputerUseLinux` (real agentic loop on Xvfb)
 
 ### 🎙️ Realtime Voice — WebSocket STT & Speech-to-Speech
 
@@ -493,7 +570,7 @@ A parallel component stack for live audio over WebSocket, with the same universa
 - **Voice function calling** (Grok): plug a `TAiFunctions` component and the model invokes your Delphi functions mid-conversation
 - **Session resumption, binary audio transport, ephemeral tokens** for mobile/browser clients (Grok)
 - **Audio pipeline**: `TAIVoiceMonitor` (mic) → thread-safe PCM16 resampler → provider rate (24 kHz); push audio from any source via `SendAudioChunk`
-- **Pure-Pascal WebSocket stack** (`TAiWSClient`, RFC 6455) with pluggable TLS: Windows SChannel (zero DLLs), OpenSSL (Linux/macOS), `javax.net.ssl` (Android)
+- **Pure-Pascal WebSocket stack** (`TAiWSClient`, RFC 6455) with pluggable TLS: Windows SChannel (zero DLLs), OpenSSL (Linux/macOS), `javax.net.ssl` (Android). The POSIX transport verifies the server certificate — chain **and** hostname — with `InsecureSkipVerify` as an explicit opt-out
 
 ### ⚙️ Model Capabilities — TAiCapabilities
 
@@ -636,10 +713,25 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 | `054-AgentCheckpointDB` | Durable agent execution: suspend/resume with `TAiDatabaseCheckpointer` (SQLite via FireDAC) |
 | `060-AIChatUI` | Next-generation `TAIChatView` + `TAIChatInput` components — full multimodal demo |
 | `072-A2AFederation` | Agent federation over the A2A 1.0 protocol: expose a graph as an A2A agent, consume it, and delegate a local node to a remote agent (no LLM required; `--otel` for tracing) |
+| `077-RagPostgresConsole` | Headless vector RAG on PostgreSQL + pgvector with local Ollama embeddings — no API key. Runs on Windows and Linux64 |
+| `082-ComputerUsePassthru` | Who executes a `computer_call`: delegated to a remote client, missing tool, or local. Self-verifying with an exit code; never touches the screen |
+| `083-ComputerUseLinux` | Computer Use on Linux/X11 over Xvfb — the headless counterpart of `066` |
 
 ---
 
 ## 🔄 Changelog
+
+### Unreleased (on `dev`)
+
+- New: **Computer Use on Linux** — `TAiLinuxExecutor` (X11 via xdotool + scrot) covers the 19 canonical actions with the same public interface as the Windows and macOS executors. The framework needed no change: `TAiComputerUseTool` only uses the RTL and delegates through its two events, so it cross-compiled to Linux64 untouched. Runtime-tested on Xvfb with `gpt-6-astra` and `claude-opus-4-8` against a text editor and Chrome. Demo `083-ComputerUseLinux`, plus a repeatable setup script for a headless VPS
+- New: **Computer Use delegation** — OpenAI and Gemini now honour the framework contract (fill `ToolCall.Response` from `OnCallToolFunction` and the driver does not execute locally), which is what lets a headless broker forward the call to a remote client. OpenAI ignored `Response` and executed anyway; Gemini never fired the event at all. For OpenAI the delegation is atomic over the batch, since `gpt-6-astra` sends an array of actions that admits exactly one `computer_call_output`. Without a `TAiComputerUseTool` assigned the synchronous path used to emit an output with no `image_url`, which the API rejects with 400; it now ends the turn and reports through `LastError`. Demo `082-ComputerUsePassthru`
+- Fix: **Claude sends coordinates as an array *and* as a string containing one, within the same turn** — `"coordinate": [299, 282]` in the first calls, `"coordinate": "[299, 400]"` later. `TryGetValue<TJSONArray>` does not match the second form, so the coordinate was lost and the action fell back to (0,0): a click in the screen corner, after which the model retried until the turn ran out. Affected `coordinate`, `start_coordinate`, `region` (zoom) and numeric fields (`"duration": "1"`), i.e. click, double/triple click, drag and zoom. Not a Linux issue — it hit Windows and macOS just the same
+- Fix: **`TAiGeminiChat` executed no user functions** — `DoCallFunction` had its `inherited` commented out and answered `'Command <name> not found'` to every non-Computer-Use tool call, and it is the driver's only dispatch point. Neither `AiFunctions` nor `OnCallToolFunction` ever ran. Present since before v3.3. **Behaviour change**: those tools now execute
+- Fix (security): **`TOpenSSLTransport` did not validate the server certificate** — it ran with `SSL_VERIFY_NONE`, and that is the transport the Realtime module uses on Linux and macOS. Now verifies the chain (system CA store) **and the hostname** via `SSL_set1_host`; `SSL_VERIFY_PEER` on its own checks the chain but not that the certificate was issued for the host you dialed, which is the classic half-done validation. Failures carry the `X509_V` code. Verified against badssl.com 7/7 (self-signed 18, expired 10, untrusted root 19, **hostname mismatch 62**). **Breaking**: self-signed endpoints need `InsecureSkipVerify := True`
+- Fix: **`TAiShell` died on the first command on any non-English Windows** — output was decoded with `TEncoding.UTF8.GetString`, which validates and raises `EEncodingError`, while `cmd.exe` writes in the console OEM codepage (cp850 on a Spanish Windows) and even its banner carries accents. Invisible in English and on Linux. Also: stderr was dropped when the sentinel arrived in the same read (a failing command reported nothing), and a timeout left the session unusable for the life of the process (the `Restart` was written but commented out). Documented that `TimeOut` is an *inactivity* timeout, not a total one
+- Fix: **`otel.scope.version` was hardcoded to `3.5`** with the framework on 3.7 — every span lied about which version produced it. Found while looking at the traces in a real Jaeger for the first time, which also confirmed that the trace **crosses the A2A boundary** (client and server spans share a trace, so `traceparent` propagation through `_meta` works)
+- Fix: **demos `031-MCPServer` and `077-RagPostgresConsole` now build and run on Linux64**. `031` called the Windows API from the body of its `system_info` tool, which took the whole MCP server down outside Windows; `077` needed `FireDAC.ConsoleUI.Wait` and assumed its catalogue tables already existed. Verified end to end on Ubuntu 26.04 — which also makes **FireDAC on Linux a tested path** (PostgreSQL 18.6 + pgvector 0.8.1 through `libpq.so.5`)
+- Docs: the Realtime module needs `CheckSynchronize` in console apps and services — every event is dispatched with `TThread.Queue(nil, ...)`, so without a message loop **no event ever fires**, not even `OnError`, while the WebSocket connects and the audio is sent
 
 ### v3.7.0 (2026-09-10)
 - Fix: **Claude Computer Use was broken, not merely outdated** — the driver still declared `computer_20251124`, a tool type the Anthropic API now rejects for *every* model (`does not match any of the expected tags`). Updated to **`computer_toolset_20260801`**, which changed shape as well as date: it is a *toolset* entry taking **no parameters** at all (no `name`, no `display_width_px`/`display_height_px`, no `enable_zoom` — the API answers *"Extra inputs are not permitted"*) and it needs no beta header. Structurally the single `computer` tool with an `action` discriminator was exploded into **17 individually named tools** (`left_click`, `right_click`, `middle_click`, `double_click`, `triple_click`, `left_click_drag`, `left_mouse_down`, `left_mouse_up`, `mouse_move`, `cursor_position`, `key`, `hold_key`, `type`, `scroll`, `wait`, `screenshot`, `zoom`), so dispatch now goes by `tool_use.name`; Claude emits several of them per turn. Coordinates arrive as **pixels of the submitted screenshot**. Supported only on `claude-opus-4-8`, `claude-opus-5`, `claude-sonnet-5` and `claude-fable-5` — every older model lost computer use entirely. Also removed `TAiClaudeChat.TranslateClaudeComputerArgs`, dead private code that had silently diverged from the live translator

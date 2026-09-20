@@ -82,6 +82,15 @@ type
     FAllowAutoShell: Boolean;
     FReasoningSummary: TAiReasoningSummary;
     FRecursionNeeded: Boolean;
+    // Mensaje 'assistant' donde se va acumulando el texto del stream. Se
+    // fija en 'response.created' porque al cerrar el turno el ultimo
+    // mensaje del historial puede NO ser este (p.ej. un computer_call
+    // crudo delegado), y volcar ahi FLastContent lo destruiria.
+    FStreamTextMsg: TAiChatMessage;
+    // Ultimo effort que se le mando al servidor en ESTA conversacion. Sirve
+    // para decidir si hay que emitir un 'configuration_update' en vez de
+    // cambiar el reasoning a nivel de peticion, que rompe el prefijo cacheado.
+    FLastEffortSent: TAiThinkingLevel;
 
     procedure SetStore(const Value: Boolean);
     procedure SetTruncation(const Value: String);
@@ -162,6 +171,7 @@ begin
   FVerbosity := '';
   FResponseId := '';
   FResponseStatus := '';
+  FLastEffortSent := tlDefault;
   // URL y ApiKey por defecto
   if ApiKey = '' then
     ApiKey := '@OPENAI_API_KEY';
@@ -465,6 +475,8 @@ var
   StartIndex: Integer; // Variable nueva para control de historial
   LastMsg: TAiChatMessage;
   IsToolLoop: Boolean;
+  LEffortAsConfigUpdate: Boolean; // el effort viaja como item, no a nivel de peticion
+  JConfigUpd: TJSonObject;
 
   // Helper local (SIN CAMBIOS con respecto a la ?ltima correcci?n)
   procedure AddMessageToInput(Msg: TAiChatMessage; TargetArray: TJSonArray);
@@ -714,6 +726,7 @@ begin
     // -------------------------------------------------------------------------
     JInputArray := TJSonArray.Create;
     StartIndex := 0;
+    LEffortAsConfigUpdate := False;
 
     // Verificamos si tenemos un ID de respuesta del turno anterior v?lido.
     // Esto permite usar el cache/contexto del servidor y evitar reenviar historial.
@@ -757,6 +770,33 @@ begin
       end;
     end;
 
+    // -------------------------------------------------------------------------
+    // 2b. CAMBIO DE REASONING EFFORT A MITAD DE CONVERSACION
+    // -------------------------------------------------------------------------
+    // Cambiar 'reasoning.effort' a nivel de peticion altera el prefijo de la
+    // conversacion y tira el prompt caching entero. El item
+    // 'configuration_update' existe justamente para eso: aplica desde aqui en
+    // adelante (hasta que otro lo sustituya) sin tocar el prefijo.
+    //
+    // Solo se emite cuando: (a) continuamos una conversacion viva, (b) el
+    // effort es distinto del ultimo que mandamos y (c) el modelo lo entiende.
+    // El gate (c) es por familia y a proposito: un 'configuration_update'
+    // contra gpt-5.x devuelve 400. Si se da de alta una familia posterior,
+    // hay que anadirla aqui.
+    if (FResponseId <> '') and
+       (ModelConfig.ThinkingLevel <> FLastEffortSent) and
+       (ThinkingLevelToStr(ModelConfig.ThinkingLevel) <> '') and
+       LModel.ToLower.StartsWith('gpt-6') then
+    begin
+      JConfigUpd := TJSonObject.Create;
+      JConfigUpd.AddPair('type', 'configuration_update');
+      JConfigUpd.AddPair('reasoning',
+        TJSonObject.Create(TJSONPair.Create('effort', ThinkingLevelToStr(ModelConfig.ThinkingLevel))));
+      JInputArray.Add(JConfigUpd);
+      LEffortAsConfigUpdate := True;
+    end;
+    FLastEffortSent := ModelConfig.ThinkingLevel;
+
     // Recorremos desde el punto calculado (0 si es nuevo, >0 si es continuaci?n)
     for I := StartIndex to FMessages.Count - 1 do
     begin
@@ -776,17 +816,18 @@ begin
     if FTruncation <> 'disabled' then
       JResult.AddPair('truncation', FTruncation);
 
-    if (ModelConfig.ThinkingLevel <> tlDefault) or (FReasoningSummary <> rsmDefault) then
+    // El effort va a nivel de peticion SALVO que estemos continuando una
+    // conversacion y haya CAMBIADO: en ese caso viaja como item
+    // 'configuration_update' dentro del input (ver mas arriba), que es lo que
+    // permite subirlo o bajarlo sin invalidar el prefijo cacheado.
+    if (not LEffortAsConfigUpdate) and
+       ((ModelConfig.ThinkingLevel <> tlDefault) or (FReasoningSummary <> rsmDefault)) then
     begin
       JReasoning := TJSonObject.Create;
-      Case ModelConfig.ThinkingLevel of
-        tlLow:
-          JReasoning.AddPair('effort', 'low');
-        tlMedium:
-          JReasoning.AddPair('effort', 'medium');
-        tlHigh:
-          JReasoning.AddPair('effort', 'high');
-      End;
+      // Escalera completa: none / minimal / low / medium / high / xhigh / max.
+      // ThinkingLevelToStr devuelve '' para tlDefault, que es "no mandes nada".
+      if ThinkingLevelToStr(ModelConfig.ThinkingLevel) <> '' then
+        JReasoning.AddPair('effort', ThinkingLevelToStr(ModelConfig.ThinkingLevel));
       case FReasoningSummary of
         rsmAuto:
           JReasoning.AddPair('summary', 'auto');
@@ -906,7 +947,19 @@ JFormatConfig := Nil;
 
     // ---- 4. TOOLS -----------------------------------------
     if Tool_Active and Assigned(AiFunctions) then
+    begin
       JToolsArray := GetTools(AiFunctions);
+
+      // 'async' solo lo entiende gpt-6-astra en adelante. El formateador de
+      // Responses es el MISMO para toda la familia OpenAi, asi que sin esta
+      // poda una tool declarada async contra un gpt-5.x se iria con un campo
+      // que ese modelo rechaza. Se limpia aqui, que es el unico punto donde se
+      // conoce el modelo de destino. Anadir aqui las familias posteriores.
+      if Assigned(JToolsArray) and (not LModel.ToLower.StartsWith('gpt-6')) then
+        for var LTIdx := 0 to JToolsArray.Count - 1 do
+          if JToolsArray.Items[LTIdx] is TJSonObject then
+            TJSonObject(JToolsArray.Items[LTIdx]).RemovePair('async').Free;
+    end;
 
     if (cap_Shell in ModelConfig.ModelCaps) then
     begin
@@ -1410,6 +1463,9 @@ begin
             ToolCall.Name := SVal;
           if JItem.TryGetValue<String>('arguments', SVal) then
             ToolCall.Arguments := SVal;
+          // Marca de tool asincrona: el turno NO se bloquea esperando este
+          // resultado, que puede entregarse despues con el mismo call_id.
+          ToolCall.IsAsync := JItem.GetValue<Boolean>('async', False);
 
           ToolCalls.Add(ToolCall);
         end
@@ -1567,16 +1623,43 @@ begin
             HistCU.Id := Self.Messages.Count + 1;
             Self.Messages.Add(HistCU);
 
-            LComputerCallDone := True;
-
             var
               LShot: TAiMediaFile;
+            var
+              LDelegated: Boolean;
             LShot := nil;
+            // Lote delegado: nadie lo ejecuta en este proceso. O porque el
+            // interceptor lo reclamo, o porque no hay con que hacerlo aqui.
+            LDelegated := False;
             try
               // 2. Ejecutar TODAS las acciones del lote, en orden
               var
                 JActions: TJSonArray;
-              if Assigned(ChatTools.ComputerUseTool) and JItem.TryGetValue<TJSonArray>('actions', JActions) then
+              if not Assigned(ChatTools.ComputerUseTool) then
+              begin
+                // cap_ComputerUse declara el tool al modelo, asi que el modelo
+                // lo va a usar: sin el componente no hay ejecutor ni captura, y
+                // un computer_call_output sin image_url es un 400 seguro. Se deja
+                // el call crudo en el historial y se corta el turno, avisando,
+                // porque esto es configuracion incompleta: en OpenAI el unico
+                // punto de intercepcion (OnCallToolFunction) vive DENTRO del
+                // recorrido de 'actions', que necesita el componente.
+                LDelegated := True;
+                FLastError := 'computer_call ' + SCallId +
+                  ': cap_ComputerUse esta activo pero ChatTools.ComputerUseTool no '
+                  + 'esta asignado. El turno se corta sin responder al modelo.';
+                DoError(FLastError, nil);
+              end
+              else if not JItem.TryGetValue<TJSonArray>('actions', JActions) then
+              begin
+                // Forma inesperada del item: astra manda siempre un array
+                // 'actions', aunque el lote sea de una sola accion.
+                LDelegated := True;
+                FLastError := 'computer_call ' + SCallId +
+                  ': el item no trae el array "actions" esperado.';
+                DoError(FLastError, nil);
+              end
+              else
               begin
                 for var Ai := 0 to JActions.Count - 1 do
                 begin
@@ -1593,6 +1676,19 @@ begin
                     if Assigned(FOnCallToolFunction) then
                       FOnCallToolFunction(Self, LCU);
 
+                    // Mismo contrato que Claude y que el bridge generico de
+                    // TAiChat: si el interceptor lleno Response, no se ejecuta
+                    // en local. Aqui la delegacion es ATOMICA sobre el lote
+                    // completo: un computer_call es una unidad con un unico
+                    // computer_call_output, y repartir sus acciones entre un
+                    // ejecutor local y uno remoto dejaria el screenshot final
+                    // sin dueño. La primera accion reclamada entrega el resto.
+                    if LCU.Response <> '' then
+                    begin
+                      LDelegated := True;
+                      Break;
+                    end;
+
                     // Solo interesa la foto posterior a la ULTIMA accion: las
                     // intermedias se descartan para no inflar tokens ni latencia.
                     FreeAndNil(LShot);
@@ -1606,7 +1702,7 @@ begin
                 // seguridad), se fuerza uno: el output NO admite quedarse sin
                 // imagen (el API pide exactamente uno de image_url o file_id),
                 // y ademas el modelo necesita ver el estado resultante.
-                if not Assigned(LShot) then
+                if (not LDelegated) and (not Assigned(LShot)) then
                 begin
                   var
                   LSnap := TAiToolsFunction.Create;
@@ -1621,26 +1717,46 @@ begin
                 end;
               end;
 
-              // 3. Devolver un unico computer_call_output con la imagen final
-              var
-              JCUOut := TJSonObject.Create;
-              try
-                JCUOut.AddPair('type', 'computer_call_output');
-                JCUOut.AddPair('call_id', SCallId);
-                var
-                JShotObj := TJSonObject.Create;
-                JShotObj.AddPair('type', 'computer_screenshot');
-                if Assigned(LShot) then
-                  JShotObj.AddPair('image_url', 'data:' + LShot.MimeType + ';base64,' + LShot.Base64);
-                JCUOut.AddPair('output', JShotObj);
+              // 3. Devolver un unico computer_call_output con la imagen final.
+              //    Si el lote se delego no se responde nada y no se marca
+              //    LComputerCallDone: sin output que enviar, recurrir solo
+              //    conseguiria que el modelo reciba dos veces el mismo call.
+              if (not LDelegated) and (not Assigned(LShot)) then
+              begin
+                // El output exige exactamente una imagen (image_url o
+                // file_id). Sin screenshot -- normalmente porque el
+                // TAiComputerUseTool no tiene OnExecuteAction /
+                // OnRequestScreenshot asignados -- enviarlo es un 400
+                // seguro, asi que se corta el turno dejando constancia.
+                FLastError := 'computer_call ' + SCallId +
+                  ': no se pudo capturar la pantalla. Revise OnExecuteAction '
+                  + 'y OnRequestScreenshot del TAiComputerUseTool.';
+                DoError(FLastError, nil);
+              end
+              else if not LDelegated then
+              begin
+                LComputerCallDone := True;
 
-                NewMsg := TAiChatMessage.Create(JCUOut.ToString, 'tool');
-                NewMsg.ToolCallId := SCallId;
-                NewMsg.PreviousResponseId := FResponseId;
-                NewMsg.Id := Self.Messages.Count + 1;
-                Self.Messages.Add(NewMsg);
-              finally
-                JCUOut.Free;
+                var
+                JCUOut := TJSonObject.Create;
+                try
+                  JCUOut.AddPair('type', 'computer_call_output');
+                  JCUOut.AddPair('call_id', SCallId);
+                  var
+                  JShotObj := TJSonObject.Create;
+                  JShotObj.AddPair('type', 'computer_screenshot');
+                  if Assigned(LShot) then
+                    JShotObj.AddPair('image_url', 'data:' + LShot.MimeType + ';base64,' + LShot.Base64);
+                  JCUOut.AddPair('output', JShotObj);
+
+                  NewMsg := TAiChatMessage.Create(JCUOut.ToString, 'tool');
+                  NewMsg.ToolCallId := SCallId;
+                  NewMsg.PreviousResponseId := FResponseId;
+                  NewMsg.Id := Self.Messages.Count + 1;
+                  Self.Messages.Add(NewMsg);
+                finally
+                  JCUOut.Free;
+                end;
               end;
             finally
               FreeAndNil(LShot);
@@ -2683,6 +2799,8 @@ procedure TAiOpenChat.NewChat;
 begin
   // TODO: DeleteAllUploadedFiles desactivado — OpenAI no persiste archivos entre sesiones
   FResponseId := ''; // Inicia una nueva conversación
+  FLastEffortSent := tlDefault; // el effort no se hereda de la conversacion anterior
+  FStreamTextMsg := nil;       // el historial se vacia en inherited
   inherited;
 end;
 
@@ -2811,7 +2929,10 @@ begin
             NewStreamMsg.PreviousResponseId := FResponseId;
             FMessages.Add(NewStreamMsg);
             // Ahora GetLastMessage apuntar? a este nuevo mensaje limpio
-          end;
+            FStreamTextMsg := NewStreamMsg;
+          end
+          else
+            FStreamTextMsg := LastM;
           // ------------------------------------------------------------------
 
           FRecursionNeeded := False;
@@ -2857,6 +2978,10 @@ begin
                 BufferTool.AddPair('name', FuncName);
                 BufferTool.AddPair('arguments', '');
               end;
+              // La marca async viaja en el item, no en los deltas: hay que
+              // guardarla ya, porque al cerrar el item se lee del buffer.
+              if JItem.GetValue<Boolean>('async', False) then
+                BufferTool.AddPair('async', TJSONBool.Create(True));
               FTmpToolCallBuffer.AddOrSetValue(OutputIndex, BufferTool);
             end
             else if ItemType = 'reasoning' then
@@ -2902,6 +3027,8 @@ begin
               ToolCall.Id := BufferTool.GetValue<string>('call_id');
               ToolCall.Name := ToolName;
               ToolCall.Arguments := BufferTool.GetValue<string>('arguments');
+              ToolCall.IsAsync := BufferTool.GetValue<Boolean>('async', False)
+                                  or JItem.GetValue<Boolean>('async', False);
               FTmpToolCallBuffer.Remove(OutputIndex); // doOwnsValues libera BufferTool automáticamente
 
               // Paridad con la via sincrona (ParseChat): pasar ResMsg/AskMsg al
@@ -2979,7 +3106,7 @@ begin
             // computer_call_output con el screenshot final.
             else if (ItemType = 'computer_call') then
             begin
-              if JItem.TryGetValue<String>('call_id', CallId) and Assigned(ChatTools.ComputerUseTool) then
+              if JItem.TryGetValue<String>('call_id', CallId) then
               begin
                 // Historial: el call crudo como mensaje del assistant
                 var
@@ -2991,11 +3118,34 @@ begin
 
                 var
                   LShotS: TAiMediaFile;
+                var
+                  LDelegatedS: Boolean;
                 LShotS := nil;
+                // Lote delegado: no se ejecuta en este proceso (ver el detalle
+                // del contrato en el camino sincrono).
+                LDelegatedS := False;
                 try
                   var
                     JActionsS: TJSonArray;
-                  if JItem.TryGetValue<TJSonArray>('actions', JActionsS) then
+                  if not Assigned(ChatTools.ComputerUseTool) then
+                  begin
+                    // Ver el camino sincrono: sin componente no hay ejecutor ni
+                    // captura, y tampoco punto de intercepcion.
+                    LDelegatedS := True;
+                    FLastError := 'computer_call ' + CallId +
+                      ': cap_ComputerUse esta activo pero ChatTools.ComputerUseTool '
+                      + 'no esta asignado. El turno se corta sin responder al modelo.';
+                    DoError(FLastError, nil);
+                  end
+                  else if not JItem.TryGetValue<TJSonArray>('actions', JActionsS) then
+                  begin
+                    LDelegatedS := True;
+                    FLastError := 'computer_call ' + CallId +
+                      ': el item no trae el array "actions" esperado.';
+                    DoError(FLastError, nil);
+                  end
+                  else
+                  begin
                     for var Ai := 0 to JActionsS.Count - 1 do
                     begin
                       var
@@ -3011,6 +3161,15 @@ begin
                         if Assigned(FOnCallToolFunction) then
                           FOnCallToolFunction(Self, LCUS);
 
+                        // Si el interceptor lleno Response, el lote ENTERO se
+                        // da por delegado: un computer_call tiene un unico
+                        // output y no se puede repartir entre dos ejecutores.
+                        if LCUS.Response <> '' then
+                        begin
+                          LDelegatedS := True;
+                          Break;
+                        end;
+
                         // Solo se conserva la foto de la ULTIMA accion del lote.
                         FreeAndNil(LShotS);
                         ChatTools.ComputerUseTool.ProcessToolCall(LCUS, LShotS);
@@ -3019,45 +3178,60 @@ begin
                       end;
                     end;
 
-                  // El output exige imagen (uno de image_url o file_id): si el
-                  // lote no dejo ninguna, se fuerza una captura.
-                  if not Assigned(LShotS) then
-                  begin
-                    var
-                    LSnapS := TAiToolsFunction.Create;
-                    try
-                      LSnapS.Id := CallId;
-                      LSnapS.Name := 'screenshot';
-                      LSnapS.Arguments := '{}';
-                      ChatTools.ComputerUseTool.ProcessToolCall(LSnapS, LShotS);
-                    finally
-                      LSnapS.Free;
+                    // El output exige imagen (uno de image_url o file_id): si el
+                    // lote no dejo ninguna, se fuerza una captura.
+                    if (not LDelegatedS) and (not Assigned(LShotS)) then
+                    begin
+                      var
+                      LSnapS := TAiToolsFunction.Create;
+                      try
+                        LSnapS.Id := CallId;
+                        LSnapS.Name := 'screenshot';
+                        LSnapS.Arguments := '{}';
+                        ChatTools.ComputerUseTool.ProcessToolCall(LSnapS, LShotS);
+                      finally
+                        LSnapS.Free;
+                      end;
                     end;
                   end;
 
-                  var
-                  JCUOutS := TJSonObject.Create;
-                  try
-                    JCUOutS.AddPair('type', 'computer_call_output');
-                    JCUOutS.AddPair('call_id', CallId);
+                  // Si el lote se delego no se emite output ni se pide
+                  // recursion: no hay nada que devolverle al modelo todavia.
+                  if (not LDelegatedS) and (not Assigned(LShotS)) then
+                  begin
+                    // Ver el camino sincrono: un computer_call_output sin
+                    // imagen es un 400 seguro, mejor cortar el turno.
+                    FLastError := 'computer_call ' + CallId +
+                      ': no se pudo capturar la pantalla. Revise OnExecuteAction '
+                      + 'y OnRequestScreenshot del TAiComputerUseTool.';
+                    DoError(FLastError, nil);
+                  end
+                  else if not LDelegatedS then
+                  begin
                     var
-                    JShotS := TJSonObject.Create;
-                    JShotS.AddPair('type', 'computer_screenshot');
-                    if Assigned(LShotS) then
-                      JShotS.AddPair('image_url', 'data:' + LShotS.MimeType + ';base64,' + LShotS.Base64);
-                    JCUOutS.AddPair('output', JShotS);
+                    JCUOutS := TJSonObject.Create;
+                    try
+                      JCUOutS.AddPair('type', 'computer_call_output');
+                      JCUOutS.AddPair('call_id', CallId);
+                      var
+                      JShotS := TJSonObject.Create;
+                      JShotS.AddPair('type', 'computer_screenshot');
+                      if Assigned(LShotS) then
+                        JShotS.AddPair('image_url', 'data:' + LShotS.MimeType + ';base64,' + LShotS.Base64);
+                      JCUOutS.AddPair('output', JShotS);
 
-                    var
-                    CUResMsg := TAiChatMessage.Create(JCUOutS.ToString, 'tool');
-                    CUResMsg.ToolCallId := CallId;
-                    CUResMsg.PreviousResponseId := FResponseId;
-                    CUResMsg.Id := FMessages.Count + 1;
-                    FMessages.Add(CUResMsg);
-                  finally
-                    JCUOutS.Free;
+                      var
+                      CUResMsg := TAiChatMessage.Create(JCUOutS.ToString, 'tool');
+                      CUResMsg.ToolCallId := CallId;
+                      CUResMsg.PreviousResponseId := FResponseId;
+                      CUResMsg.Id := FMessages.Count + 1;
+                      FMessages.Add(CUResMsg);
+                    finally
+                      JCUOutS.Free;
+                    end;
+
+                    FRecursionNeeded := True;
                   end;
-
-                  FRecursionNeeded := True;
                 finally
                   FreeAndNil(LShotS);
                 end;
@@ -3253,7 +3427,13 @@ begin
 
             // --- Persistir el texto acumulado en el mensaje (antes solo viajaba
             // como parámetro del evento OnReceiveDataEnd, sin quedar en Prompt) ---
-            if Assigned(FinalMsg) then
+            // Se escribe en el mensaje de texto del stream, NO en el ultimo del
+            // historial: si el turno termino con un computer_call delegado, ese
+            // ultimo mensaje lleva el item crudo que el cliente necesita y
+            // volcarle FLastContent (normalmente vacio) lo borraba.
+            if Assigned(FStreamTextMsg) then
+              FStreamTextMsg.Prompt := FLastContent
+            else if Assigned(FinalMsg) then
               FinalMsg.Prompt := FLastContent;
 
             // --- Paridad con modo sincrono: consolidar en el mensaje final la

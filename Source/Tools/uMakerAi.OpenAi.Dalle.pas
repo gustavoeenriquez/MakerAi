@@ -177,6 +177,7 @@ type
     FUrl: string;
     FUser: string;
     FModel: TAiImageModel;
+    FModelName: string;
     FResponseFormat: TAiImageResponseFormat;
     FQuality: TAiImageQuality;
     FStyle: TAiImageStyle;
@@ -255,6 +256,9 @@ type
     // deprecados por OpenAI (may 2026). imDallE2/imDallE3 siguen disponibles
     // para quien los seleccione explicitamente mientras el API los acepte.
     property Model: TAiImageModel read FModel write SetModel default TAiImageModel.imGptImage1;
+    // Nombre exacto que viaja en 'model'. Vacio -> se deriva de Model.
+    // El porque, en ModelToString.
+    property ModelName: string read FModelName write FModelName;
     property Quality: TAiImageQuality read FQuality write SetQuality default TAiImageQuality.iqAuto;
     property Style: TAiImageStyle read FStyle write SetStyle default TAiImageStyle.isVivid;
     property ResponseFormat: TAiImageResponseFormat read FResponseFormat write SetResponseFormat;
@@ -524,6 +528,14 @@ end;
 
 function TAiDalle.ModelToString: string;
 begin
+  // ModelName GANA al enum. El enum decide QUE payload se construye; el nombre
+  // que viaja tiene que ser el id real del catalogo del proveedor. Un endpoint
+  // propio compatible-OpenAI sirve su modelo con SU nombre ('juggernaut-xl-v9'),
+  // no con el de la familia ('sdxl'), y rechaza el segundo con 400 — medido
+  // contra el servicio real el 2026-09-19. Vacio = comportamiento de siempre.
+  if FModelName <> '' then
+    Exit(FModelName);
+
   case FModel of
     imDallE2:             Result := 'dall-e-2';
     imDallE3:             Result := 'dall-e-3';
@@ -672,7 +684,7 @@ begin
       // ── SDXL (endpoint personalizado) ───────────────────────────────────
       imSDXL:
       begin
-        JObj.AddPair('model', 'sdxl');
+        JObj.AddPair('model', ModelToString);
         JObj.AddPair('prompt', Trim(StringReplace(aPrompt, #$D#$A, ' \n', [rfReplaceAll])));
 
         if aNegativePrompt <> '' then

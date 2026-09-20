@@ -91,7 +91,164 @@ procedure RegisterTools(ALogicServer: TAiMCPServer);
 implementation
 
 uses
-  Winapi.Windows;
+{$IFDEF MSWINDOWS}
+  Winapi.Windows
+{$ENDIF}
+{$IFDEF POSIX}
+  Posix.Unistd, Posix.SysStatvfs
+{$ENDIF}
+  ;   // System.Classes ya viene del uses de la interface
+
+// =============================================================================
+//  Helpers de sistema, aislados por plataforma.
+//
+//  El codigo original llamaba a la API de Windows directamente desde el cuerpo
+//  de cada funcion (GetComputerName, GlobalMemoryStatusEx, GetDiskFreeSpaceEx),
+//  asi que este demo no compilaba fuera de Windows: el servidor MCP completo se
+//  quedaba sin Linux por una herramienta de ejemplo. Aqui se concentra lo unico
+//  que cambia; las seis funciones de arriba pasan a ser portables.
+// =============================================================================
+
+type
+  TDiskEntry = record
+    Path: string;
+    TotalGB: Double;
+    FreeGB: Double;
+  end;
+
+function SysHostName: string;
+{$IFDEF MSWINDOWS}
+var
+  LBuf: array [0 .. MAX_COMPUTERNAME_LENGTH] of Char;
+  LSize: DWORD;
+begin
+  Result := '';
+  LSize := MAX_COMPUTERNAME_LENGTH + 1;
+  if GetComputerName(LBuf, LSize) then
+    Result := string(LBuf);
+end;
+{$ELSE}
+var
+  LBuf: array [0 .. 255] of AnsiChar;
+begin
+  Result := '';
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  if gethostname(@LBuf[0], Length(LBuf) - 1) = 0 then
+    Result := string(AnsiString(PAnsiChar(@LBuf[0])));
+end;
+{$ENDIF}
+
+function SysMemoryInfo(out ATotalGB, AAvailGB: Double; out ALoadPct: Integer): Boolean;
+{$IFDEF MSWINDOWS}
+var
+  LMem: TMemoryStatusEx;
+begin
+  ATotalGB := 0; AAvailGB := 0; ALoadPct := 0;
+  FillChar(LMem, SizeOf(LMem), 0);
+  LMem.dwLength := SizeOf(TMemoryStatusEx);
+  Result := GlobalMemoryStatusEx(LMem);
+  if Result then
+  begin
+    ATotalGB := LMem.ullTotalPhys / (1024 * 1024 * 1024);
+    AAvailGB := LMem.ullAvailPhys / (1024 * 1024 * 1024);
+    ALoadPct := LMem.dwMemoryLoad;
+  end;
+end;
+{$ELSE}
+// /proc/meminfo, en kB. Se usa MemAvailable y no MemFree: MemFree ignora la
+// cache reclamable y en Linux siempre parece alarmantemente baja.
+var
+  LLines: TStringList;
+  I, P: Integer;
+  LKey, LVal: string;
+  LTotalKb, LAvailKb: Int64;
+begin
+  ATotalGB := 0; AAvailGB := 0; ALoadPct := 0;
+  Result := False;
+  if not FileExists('/proc/meminfo') then
+    Exit;
+  LTotalKb := 0; LAvailKb := 0;
+  LLines := TStringList.Create;
+  try
+    // OJO: TStringList.LoadFromFile NO sirve con /proc. Esos ficheros son
+    // virtuales y reportan Size = 0, y LoadFromStream se va con ERangeError
+    // ("Range check error") en vez de devolver una lista vacia. Hay que leerlos
+    // con Read() sobre un stream, que si entrega el contenido.
+    var LFS := TFileStream.Create('/proc/meminfo', fmOpenRead or fmShareDenyNone);
+    try
+      var LBuf: TBytes;
+      SetLength(LBuf, 65536);
+      var LRead := LFS.Read(LBuf[0], Length(LBuf));
+      if LRead > 0 then
+        LLines.Text := TEncoding.UTF8.GetString(LBuf, 0, LRead);
+    finally
+      LFS.Free;
+    end;
+    for I := 0 to LLines.Count - 1 do
+    begin
+      P := Pos(':', LLines[I]);
+      if P <= 0 then
+        Continue;
+      LKey := Trim(Copy(LLines[I], 1, P - 1));
+      // Copy con MaxInt desborda al sumar indice+longitud y, con range
+      // checking activo, lanza 'Range check error'. Se acota de verdad.
+      LVal := Trim(Copy(LLines[I], P + 1, Length(LLines[I]) - P));
+      LVal := Trim(StringReplace(LVal, 'kB', '', [rfIgnoreCase]));
+      if SameText(LKey, 'MemTotal') then
+        LTotalKb := StrToInt64Def(LVal, 0)
+      else if SameText(LKey, 'MemAvailable') then
+        LAvailKb := StrToInt64Def(LVal, 0);
+    end;
+  finally
+    LLines.Free;
+  end;
+  if LTotalKb > 0 then
+  begin
+    ATotalGB := LTotalKb / (1024 * 1024);
+    AAvailGB := LAvailKb / (1024 * 1024);
+    ALoadPct := Round((LTotalKb - LAvailKb) * 100 / LTotalKb);
+    Result := True;
+  end;
+end;
+{$ENDIF}
+
+function SysDisks: TArray<TDiskEntry>;
+{$IFDEF MSWINDOWS}
+var
+  LDrive: Char;
+  LRoot: string;
+  LFreeAvail, LTotal, LTotalFree: Int64;
+begin
+  SetLength(Result, 0);
+  for LDrive := 'A' to 'Z' do
+  begin
+    LRoot := LDrive + ':';
+    if GetDriveType(PChar(LRoot)) = DRIVE_FIXED then
+      if GetDiskFreeSpaceEx(PChar(LRoot), LFreeAvail, LTotal, @LTotalFree) then
+      begin
+        SetLength(Result, Length(Result) + 1);
+        Result[High(Result)].Path := LRoot;
+        Result[High(Result)].TotalGB := LTotal / (1024 * 1024 * 1024);
+        Result[High(Result)].FreeGB := LTotalFree / (1024 * 1024 * 1024);
+      end;
+  end;
+end;
+{$ELSE}
+// En POSIX no hay letras de unidad: se informa del sistema de ficheros raiz,
+// que es lo que interesa en un servidor.
+var
+  LSt: _statvfs;
+begin
+  SetLength(Result, 0);
+  if statvfs('/', LSt) = 0 then
+  begin
+    SetLength(Result, 1);
+    Result[0].Path := '/';
+    Result[0].TotalGB := (Double(LSt.f_blocks) * LSt.f_frsize) / (1024 * 1024 * 1024);
+    Result[0].FreeGB := (Double(LSt.f_bavail) * LSt.f_frsize) / (1024 * 1024 * 1024);
+  end;
+end;
+{$ENDIF}
 
 { TSysInfoTool }
 
@@ -191,22 +348,24 @@ end;
 
 function TSysInfoTool.GetBasicInfoAsJson: TJSONObject;
 var
-  ComputerName: array [0 .. MAX_COMPUTERNAME_LENGTH] of Char;
-  Size: DWORD;
+  LName: string;
 begin
   Result := TJSONObject.Create;
-  Size := MAX_COMPUTERNAME_LENGTH + 1;
-  if GetComputerName(ComputerName, Size) then
-    Result.AddPair('computerName', string(ComputerName));
+  LName := SysHostName;
+  if LName <> '' then
+    Result.AddPair('computerName', LName);
 
   var
-  LWinVer := TJSONObject.Create;
-  LWinVer.AddPair('major', TOSVersion.Major);
-  LWinVer.AddPair('minor', TOSVersion.Minor);
-  LWinVer.AddPair('build', TOSVersion.Build);
-  Result.AddPair('windowsVersion', LWinVer);
+  LOsVer := TJSONObject.Create;
+  LOsVer.AddPair('major', TOSVersion.Major);
+  LOsVer.AddPair('minor', TOSVersion.Minor);
+  LOsVer.AddPair('build', TOSVersion.Build);
+  // Antes se llamaba 'windowsVersion'. Corriendo en Linux ese nombre era una
+  // mentira, asi que pasa a 'osVersion' y se acompana del nombre real del SO.
+  Result.AddPair('osVersion', LOsVer);
+  Result.AddPair('osName', TOSVersion.ToString);
 
-{$IFDEF WIN64}
+{$IF Defined(WIN64) or Defined(LINUX64) or Defined(CPUX64)}
   Result.AddPair('architecture', '64-bit');
 {$ELSE}
   Result.AddPair('architecture', '32-bit');
@@ -216,52 +375,44 @@ end;
 
 function TSysInfoTool.GetMemoryInfoAsJson: TJSONObject;
 var
-  MemStatus: TMemoryStatusEx;
+  LTotal, LAvail: Double;
+  LLoad: Integer;
 begin
   Result := TJSONObject.Create;
-  MemStatus.dwLength := SizeOf(TMemoryStatusEx);
-  if GlobalMemoryStatusEx(MemStatus) then
+  if SysMemoryInfo(LTotal, LAvail, LLoad) then
   begin
-    Result.AddPair('totalPhysical_gb', MemStatus.ullTotalPhys / (1024 * 1024 * 1024));
-    Result.AddPair('availablePhysical_gb', MemStatus.ullAvailPhys / (1024 * 1024 * 1024));
-    Result.AddPair('memoryLoad_percent', MemStatus.dwMemoryLoad);
+    Result.AddPair('totalPhysical_gb', LTotal);
+    Result.AddPair('availablePhysical_gb', LAvail);
+    Result.AddPair('memoryLoad_percent', LLoad);
   end;
 end;
 
 function TSysInfoTool.GetDiskInfoAsJson: TJSONArray;
 var
-  Drive: Char;
-  RootPath: string;
-  FreeBytesAvailable, TotalBytes, TotalFreeBytes: Int64;
+  LDisks: TArray<TDiskEntry>;
+  I: Integer;
   LDisk: TJSONObject;
 begin
   Result := TJSONArray.Create;
-  for Drive := 'A' to 'Z' do
+  LDisks := SysDisks;
+  for I := 0 to High(LDisks) do
   begin
-    RootPath := Drive + ':\';
-    if GetDriveType(PChar(RootPath)) = DRIVE_FIXED then
-    begin
-      if GetDiskFreeSpaceEx(PChar(RootPath), FreeBytesAvailable, TotalBytes, @TotalFreeBytes) then
-      begin
-        LDisk := TJSONObject.Create;
-        LDisk.AddPair('drive', RootPath);
-        LDisk.AddPair('total_gb', TotalBytes / (1024 * 1024 * 1024));
-        LDisk.AddPair('free_gb', TotalFreeBytes / (1024 * 1024 * 1024));
-        Result.AddElement(LDisk);
-      end;
-    end;
+    LDisk := TJSONObject.Create;
+    LDisk.AddPair('drive', LDisks[I].Path);
+    LDisk.AddPair('total_gb', LDisks[I].TotalGB);
+    LDisk.AddPair('free_gb', LDisks[I].FreeGB);
+    Result.AddElement(LDisk);
   end;
 end;
 
 function TSysInfoTool.GetNetworkInfoAsJson: TJSONObject;
 var
-  ComputerName: array [0 .. MAX_COMPUTERNAME_LENGTH] of Char;
-  Size: DWORD;
+  LName: string;
 begin
   Result := TJSONObject.Create;
-  Size := MAX_COMPUTERNAME_LENGTH + 1;
-  if GetComputerName(ComputerName, Size) then
-    Result.AddPair('networkName', string(ComputerName));
+  LName := SysHostName;
+  if LName <> '' then
+    Result.AddPair('networkName', LName);
   Result.AddPair('details', 'For more network details, specific APIs are required.');
 end;
 
@@ -289,16 +440,24 @@ end;
 
 function TSysInfoTool.GetBasicInfoAsText: string;
 var
-  ComputerName: array [0 .. MAX_COMPUTERNAME_LENGTH] of Char;
-  Size: DWORD;
+  LName: string;
 begin
   // Código original de GetBasicInfo
   Result := '🖥️ INFORMACIÓN BÁSICA DEL SISTEMA' + sLineBreak + sLineBreak;
-  Size := MAX_COMPUTERNAME_LENGTH + 1;
-  if GetComputerName(ComputerName, Size) then
-    Result := Result + 'Nombre del equipo: ' + string(ComputerName) + sLineBreak;
-  Result := Result + Format('Windows: %d.%d (Build %d)', [TOSVersion.Major, TOSVersion.Minor, TOSVersion.Build]) + sLineBreak;
-{$IFDEF WIN64}
+  LName := SysHostName;
+  if LName <> '' then
+    Result := Result + 'Nombre del equipo: ' + LName + sLineBreak;
+  // TOSVersion.Name en Linux devuelve la cadena entera de uname (kernel, fecha
+  // de compilacion...), que en una linea de resumen queda ilegible: se usa una
+  // etiqueta corta y el detalle va aparte.
+{$IFDEF MSWINDOWS}
+  Result := Result + Format('Windows: %d.%d (Build %d)',
+    [TOSVersion.Major, TOSVersion.Minor, TOSVersion.Build]) + sLineBreak;
+{$ELSE}
+  Result := Result + Format('Linux: kernel %d.%d', [TOSVersion.Major, TOSVersion.Minor]) + sLineBreak;
+{$ENDIF}
+  Result := Result + 'Detalle del SO: ' + TOSVersion.Name + sLineBreak;
+{$IF Defined(WIN64) or Defined(LINUX64) or Defined(CPUX64)}
   Result := Result + 'Arquitectura: 64-bit' + sLineBreak;
 {$ELSE}
   Result := Result + 'Arquitectura: 32-bit' + sLineBreak;
@@ -310,45 +469,38 @@ function TSysInfoTool.GetMemoryInfoAsText: string;
 begin
   // Código original de GetMemoryInfo
   var
-    MemStatus: TMemoryStatusEx;
+    LTotal, LAvail: Double;
+  var
+    LLoad: Integer;
   Result := '💾 INFORMACIÓN DE MEMORIA' + sLineBreak + sLineBreak;
-  MemStatus.dwLength := SizeOf(TMemoryStatusEx);
-  if GlobalMemoryStatusEx(MemStatus) then
+  if SysMemoryInfo(LTotal, LAvail, LLoad) then
   begin
-    Result := Result + Format('Memoria física total: %.2f GB', [MemStatus.ullTotalPhys / (1024 * 1024 * 1024)]) + sLineBreak;
-    Result := Result + Format('Memoria física disponible: %.2f GB', [MemStatus.ullAvailPhys / (1024 * 1024 * 1024)]) + sLineBreak;
-    Result := Result + Format('Uso de memoria: %d%%', [MemStatus.dwMemoryLoad]);
+    Result := Result + Format('Memoria física total: %.2f GB', [LTotal]) + sLineBreak;
+    Result := Result + Format('Memoria física disponible: %.2f GB', [LAvail]) + sLineBreak;
+    Result := Result + Format('Uso de memoria: %d%%', [LLoad]);
   end;
 end;
 
 function TSysInfoTool.GetDiskInfoAsText: string;
 var
-  Drive: Char;
-  RootPath: string;
-  FreeBytesAvailable, TotalBytes, TotalFreeBytes: Int64;
+  LDisks: TArray<TDiskEntry>;
+  I: Integer;
 begin
   Result := '💿 INFORMACIÓN DE DISCOS' + sLineBreak;
-  for Drive := 'A' to 'Z' do
-  begin
-    RootPath := Drive + ':\';
-    if GetDriveType(PChar(RootPath)) = DRIVE_FIXED then
-    begin
-      if GetDiskFreeSpaceEx(PChar(RootPath), FreeBytesAvailable, TotalBytes, @TotalFreeBytes) then
-        Result := Result + sLineBreak + Format('Unidad %s: %.2f GB libres de %.2f GB totales',
-          [RootPath, TotalFreeBytes / (1024 * 1024 * 1024), TotalBytes / (1024 * 1024 * 1024)]);
-    end;
-  end;
+  LDisks := SysDisks;
+  for I := 0 to High(LDisks) do
+    Result := Result + sLineBreak + Format('Unidad %s: %.2f GB libres de %.2f GB totales',
+      [LDisks[I].Path, LDisks[I].FreeGB, LDisks[I].TotalGB]);
 end;
 
 function TSysInfoTool.GetNetworkInfoAsText: string;
   var
-    ComputerName: array [0 .. MAX_COMPUTERNAME_LENGTH] of Char;
-    Size: DWORD;
+    LName: string;
 begin
   Result := '🌐 INFORMACIÓN DE RED' + sLineBreak + sLineBreak;
-  Size := MAX_COMPUTERNAME_LENGTH + 1;
-  if GetComputerName(ComputerName, Size) then
-    Result := Result + 'Nombre de red: ' + string(ComputerName) + sLineBreak;
+  LName := SysHostName;
+  if LName <> '' then
+    Result := Result + 'Nombre de red: ' + LName + sLineBreak;
   Result := Result + 'Nota: Para más detalles de red, se requieren APIs específicas.';
 end;
 

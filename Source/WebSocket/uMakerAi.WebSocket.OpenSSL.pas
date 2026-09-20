@@ -24,6 +24,7 @@ type
     FCtx:       Pointer;   // SSL_CTX*
     FSSL:       Pointer;   // SSL*
     FConnected: Boolean;
+    FInsecureSkipVerify: Boolean;
 
     // Punteros a funciones OpenSSL
     FSSL_CTX_new:              function(method: Pointer): Pointer; cdecl;
@@ -33,10 +34,23 @@ type
     FSSL_new:                  function(ctx: Pointer): Pointer; cdecl;
     FSSL_free:                 procedure(ssl: Pointer); cdecl;
     FSSL_set_fd:               function(ssl: Pointer; fd: Integer): Integer; cdecl;
-    FSSL_set_tlsext_host_name: function(ssl: Pointer; name: PAnsiChar): Integer; cdecl;
+    // OJO: SSL_set_tlsext_host_name NO es una funcion exportada por libssl, es
+    // una MACRO de ssl.h sobre SSL_ctrl. Buscarla con dlsym devuelve siempre
+    // nil (comprobado con nm -D sobre libssl.so.3), asi que el SNI se saltaba
+    // en silencio y el handshake moria con "sslv3 alert handshake failure"
+    // contra cualquier host detras de un CDN — que hoy es casi cualquiera.
+    // Se manda por SSL_ctrl, que si esta exportada.
+    FSSL_ctrl:                 function(ssl: Pointer; cmd: Integer; larg: NativeInt; parg: Pointer): NativeInt; cdecl;
     FSSL_connect:              function(ssl: Pointer): Integer; cdecl;
     FSSL_read:                 function(ssl: Pointer; buf: Pointer; num: Integer): Integer; cdecl;
     FSSL_write:                function(ssl: Pointer; buf: Pointer; num: Integer): Integer; cdecl;
+    // Verificacion de certificado. SSL_VERIFY_PEER valida la CADENA pero NO el
+    // hostname: un certificado valido de otro dominio pasaria el filtro. Para
+    // atar el certificado al host hay que llamar ademas a SSL_set1_host
+    // (exportada desde OpenSSL 1.1.0), que fija el X509_VERIFY_PARAM.
+    FSSL_CTX_set_default_verify_paths: function(ctx: Pointer): Integer; cdecl;
+    FSSL_set1_host:            function(ssl: Pointer; host: PAnsiChar): Integer; cdecl;
+    FSSL_get_verify_result:    function(ssl: Pointer): NativeInt; cdecl;
 
     procedure LoadLibSSL;
     procedure UnloadLibSSL;
@@ -52,6 +66,12 @@ type
     function  SendAll(const AData: TBytes): Boolean;
     function  RecvSome(var ABuf: TBytes; ATimeoutMs: Integer): Integer;
     function  IsConnected: Boolean;
+
+    // Por defecto False: el certificado del servidor SE VALIDA (cadena contra el
+    // almacen de CAs del sistema + hostname). Ponerlo a True solo para pruebas
+    // contra endpoints con certificado propio o caducado; deja la conexion
+    // expuesta a un intermediario.
+    property InsecureSkipVerify: Boolean read FInsecureSkipVerify write FInsecureSkipVerify;
   end;
 
 {$ELSE}
@@ -66,6 +86,7 @@ implementation
 {$IF NOT DEFINED(MSWINDOWS) AND NOT DEFINED(ANDROID)}
 
 uses
+  System.StrUtils,
   Posix.Dlfcn,
   Posix.SysSocket,
   Posix.NetDB,
@@ -76,6 +97,8 @@ uses
 
 const
   SSL_VERIFY_NONE = 0;
+  SSL_VERIFY_PEER = 1;
+  X509_V_OK       = 0;
 
 { TOpenSSLTransport }
 
@@ -127,10 +150,13 @@ begin
   Bind(FSSL_new,                  'SSL_new');
   Bind(FSSL_free,                 'SSL_free');
   Bind(FSSL_set_fd,               'SSL_set_fd');
-  Bind(FSSL_set_tlsext_host_name, 'SSL_set_tlsext_host_name');
+  Bind(FSSL_ctrl,                 'SSL_ctrl');
   Bind(FSSL_connect,              'SSL_connect');
   Bind(FSSL_read,                 'SSL_read');
   Bind(FSSL_write,                'SSL_write');
+  Bind(FSSL_CTX_set_default_verify_paths, 'SSL_CTX_set_default_verify_paths');
+  Bind(FSSL_set1_host,            'SSL_set1_host');
+  Bind(FSSL_get_verify_result,    'SSL_get_verify_result');
 
   if not (Assigned(FSSL_CTX_new) and Assigned(FSSL_connect) and
           Assigned(FSSL_read)    and Assigned(FSSL_write)) then
@@ -199,6 +225,9 @@ end;
 //  ITlsTransport implementation
 // ---------------------------------------------------------------------------
 function TOpenSSLTransport.Connect(const AHost: string; APort: Integer): Boolean;
+var
+  LHostAnsi: AnsiString;
+  LVerify: NativeInt;
 begin
   Result   := False;
   FConnected := False;
@@ -214,8 +243,20 @@ begin
   if FCtx = nil then
     raise Exception.Create('OpenSSL: SSL_CTX_new falló');
 
-  // Sin verificación de certificado (igual que configuración actual de Indy)
-  FSSL_CTX_set_verify(FCtx, SSL_VERIFY_NONE, nil);
+  // Verificacion del certificado del servidor.
+  if FInsecureSkipVerify then
+    FSSL_CTX_set_verify(FCtx, SSL_VERIFY_NONE, nil)
+  else
+  begin
+    // Cadena de confianza: CAs del sistema (/etc/ssl/certs en Debian/Ubuntu).
+    if not Assigned(FSSL_CTX_set_default_verify_paths) then
+      raise Exception.Create('OpenSSL: SSL_CTX_set_default_verify_paths no disponible; ' +
+        'no se puede validar el certificado (usar InsecureSkipVerify para aceptar el riesgo)');
+    if FSSL_CTX_set_default_verify_paths(FCtx) <> 1 then
+      raise Exception.Create('OpenSSL: no se pudo cargar el almacen de CAs del sistema ' +
+        '(instalar ca-certificates)');
+    FSSL_CTX_set_verify(FCtx, SSL_VERIFY_PEER, nil);
+  end;
 
   // Crear sesión SSL
   FSSL := FSSL_new(FCtx);
@@ -226,13 +267,43 @@ begin
   if FSSL_set_fd(FSSL, FSocket) <> 1 then
     raise Exception.Create('OpenSSL: SSL_set_fd falló');
 
-  // SNI (Server Name Indication)
-  if Assigned(FSSL_set_tlsext_host_name) then
-    FSSL_set_tlsext_host_name(FSSL, PAnsiChar(AnsiString(AHost)));
+  // SNI (Server Name Indication) — via SSL_ctrl, porque la version "bonita"
+  // es una macro y no existe como simbolo. Sin SNI, api.openai.com (y todo lo
+  // que viva tras Cloudflare) corta el handshake con alert 40.
+  // 55 = SSL_CTRL_SET_TLSEXT_HOSTNAME, 0 = TLSEXT_NAMETYPE_host_name.
+  LHostAnsi := AnsiString(AHost);
+  if Assigned(FSSL_ctrl) and (LHostAnsi <> '') then
+    FSSL_ctrl(FSSL, 55, 0, PAnsiChar(LHostAnsi));
+
+  // Ata el certificado a ESTE host. Sin esto, SSL_VERIFY_PEER aceptaria un
+  // certificado valido emitido para cualquier otro dominio: la cadena estaria
+  // bien y el nombre no se miraria. Es el fallo clasico de las validaciones a
+  // medias. SSL_set1_host existe desde OpenSSL 1.1.0.
+  if (not FInsecureSkipVerify) and (LHostAnsi <> '') then
+  begin
+    if not Assigned(FSSL_set1_host) then
+      raise Exception.Create('OpenSSL: SSL_set1_host no disponible (libssl < 1.1.0); ' +
+        'sin verificacion de hostname no se puede considerar seguro');
+    if FSSL_set1_host(FSSL, PAnsiChar(LHostAnsi)) <> 1 then
+      raise Exception.CreateFmt('OpenSSL: SSL_set1_host fallo para "%s"', [AHost]);
+  end;
 
   // Handshake TLS
   if FSSL_connect(FSSL) <> 1 then
-    raise Exception.Create('OpenSSL: SSL_connect falló — handshake TLS rechazado');
+  begin
+    // Si el handshake cayo por el certificado, SSL_get_verify_result dice por
+    // que (18 = self signed, 10 = expirado, 62 = hostname no coincide...).
+    LVerify := X509_V_OK;
+    if Assigned(FSSL_get_verify_result) then
+      LVerify := FSSL_get_verify_result(FSSL);
+    if LVerify <> X509_V_OK then
+      raise Exception.CreateFmt(
+        'OpenSSL: certificado de %s rechazado (X509_V code %d). ' +
+        'Si el endpoint usa un certificado propio, poner InsecureSkipVerify := True.',
+        [AHost, LVerify]);
+    raise Exception.Create('OpenSSL: SSL_connect falló — handshake TLS rechazado' +
+      IfThen(Assigned(FSSL_ctrl), '', ' (ademas SSL_ctrl no se pudo enlazar: no habra SNI)'));
+  end;
 
   FConnected := True;
   Result     := True;

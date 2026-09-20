@@ -37,7 +37,11 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON, System.StrUtils, System.Diagnostics,
-  System.Generics.Collections, uMakerAi.Utils.System, uMakerAi.Tools.Functions, uMakerAi.Chat.Messages;
+  System.Generics.Collections, uMakerAi.Utils.System, uMakerAi.Tools.Functions, uMakerAi.Chat.Messages
+{$IFDEF MSWINDOWS}
+  , Winapi.Windows   // GetOEMCP: la codepage real en la que escribe cmd.exe
+{$ENDIF}
+  ;
 
 type
   // Estructura interna del resultado de un comando
@@ -88,6 +92,8 @@ type
     function InternalExecuteCommand(const ACommand: string; TimeOutMs: Cardinal): TShellExecutionResult;
 
     // M?todos espec?ficos por proveedor
+    // Decodifica la salida del shell tolerando que NO sea UTF-8.
+    function DecodeShellBytes(const ABuffer: TBytes; ACount: Integer): string;
     function ExecuteClaudeAction(const CallId: string; JArgs: TJSONObject): string;
     function ExecuteOpenAIAction(const CallId: string; JArgs: TJSONObject): string;
     function ExecuteGenericAction(const CallId: string; JArgs: TJSONObject): string;
@@ -122,6 +128,12 @@ type
 
   published
     property Active: Boolean read FActive write SetActive default False;
+    // OJO: es un timeout de INACTIVIDAD, no de duracion total. Cada trozo de
+    // salida que llega reinicia el reloj, asi que un comando que escribe algo
+    // cada segundo puede correr indefinidamente sin caducar; lo que corta es
+    // que el comando se quede MUDO este tiempo. Al caducar se reinicia la
+    // sesion (se pierden cwd y variables) porque el proceso colgado sigue
+    // ocupando el pipe y dejaria el shell inservible.
     property TimeOut: Cardinal read FTimeOut write FTimeOut default 30000;
     property ShellPath: string read FShellPath write SetShellPath;
     property MaxOutputSize: Integer read FMaxOutputSize write FMaxOutputSize default 20000;
@@ -312,6 +324,41 @@ end;
 // =============================================================================
 // NUCLEO DE EJECUCI?N (Bajo Nivel)
 // =============================================================================
+function TAiShell.DecodeShellBytes(const ABuffer: TBytes; ACount: Integer): string;
+{$IFDEF MSWINDOWS}
+var
+  LEnc: TEncoding;
+{$ENDIF}
+begin
+  if ACount <= 0 then
+    Exit('');
+
+  // El shell NO siempre habla UTF-8. cmd.exe escribe en la codepage OEM de la
+  // consola (cp850 en un Windows en espanol), y TEncoding.UTF8 VALIDA lo que
+  // recibe: ante bytes que no son UTF-8 valido lanza EEncodingError en vez de
+  // sustituir el caracter. Resultado: TAiShell reventaba en el PRIMER comando
+  // en cualquier Windows no ingles, porque hasta el banner de cmd trae acentos.
+  // En ingles no se notaba porque la salida es ASCII puro, y en Linux tampoco
+  // porque bash si emite UTF-8.
+  try
+    Result := TEncoding.UTF8.GetString(ABuffer, 0, ACount);
+  except
+    on EEncodingError do
+    begin
+{$IFDEF MSWINDOWS}
+      LEnc := TEncoding.GetEncoding(GetOEMCP);
+      try
+        Result := LEnc.GetString(ABuffer, 0, ACount);
+      finally
+        LEnc.Free;
+      end;
+{$ELSE}
+      Result := TEncoding.ANSI.GetString(ABuffer, 0, ACount);
+{$ENDIF}
+    end;
+  end;
+end;
+
 function TAiShell.InternalExecuteCommand(const ACommand: string; TimeOutMs: Cardinal): TShellExecutionResult;
 var
   FullCommand, Sentinel: string;
@@ -388,12 +435,44 @@ begin
       BytesRead := FSession.ReadOutput(Buffer[0], Length(Buffer));
       if BytesRead > 0 then
       begin
-        RawStr := TEncoding.UTF8.GetString(Buffer, 0, BytesRead);
+        RawStr := DecodeShellBytes(Buffer, BytesRead);
 
         OutputBuilder.Append(RawStr);
 
         if Pos(Sentinel, OutputBuilder.ToString) > 0 then
+        begin
+          // Drenar STDERR antes de salir. El centinela viaja por STDOUT, y un
+          // comando que solo escribe en STDERR (p.ej. 'ls /no-existe') lo suele
+          // entregar en el mismo instante: si saliesemos aqui sin mas, el pipe
+          // de error no se leeria NUNCA y el error se perderia en silencio.
+          repeat
+            BytesRead := FSession.ReadError(Buffer[0], Length(Buffer));
+            if BytesRead > 0 then
+              ErrorBuilder.Append(DecodeShellBytes(Buffer, BytesRead));
+          until BytesRead <= 0;
+
+          // Si el comando fallo y aun no hay nada en STDERR, puede venir con
+          // unos milisegundos de retraso respecto al centinela: se le da un
+          // margen corto. Solo en ese caso, para no anadir latencia a los
+          // comandos que salieron bien (que son la mayoria).
+          if (ErrorBuilder.Length = 0) and
+             (not ContainsText(OutputBuilder.ToString, 'EC:0 ' + Sentinel)) then
+          begin
+            for var LWait := 1 to 5 do
+            begin
+              Sleep(15);
+              repeat
+                BytesRead := FSession.ReadError(Buffer[0], Length(Buffer));
+                if BytesRead > 0 then
+                  ErrorBuilder.Append(DecodeShellBytes(Buffer, BytesRead));
+              until BytesRead <= 0;
+              if ErrorBuilder.Length > 0 then
+                Break;
+            end;
+          end;
+
           Break;
+        end;
 
         StopWatch.Reset;
         StopWatch.Start;
@@ -403,7 +482,7 @@ begin
       BytesRead := FSession.ReadError(Buffer[0], Length(Buffer));
       if BytesRead > 0 then
       begin
-        RawStr := TEncoding.UTF8.GetString(Buffer, 0, BytesRead);
+        RawStr := DecodeShellBytes(Buffer, BytesRead);
         ErrorBuilder.Append(RawStr);
       end;
 
@@ -413,7 +492,14 @@ begin
     if StopWatch.ElapsedMilliseconds >= TimeOutMs then
     begin
       Result.TimedOut := True;
-      // Restart; // Descomentar si se desea matar sesi?n colgada
+      // Reiniciar la sesion es obligatorio, no opcional: el comando que provoco
+      // el timeout SIGUE corriendo y con el pipe tomado, asi que sin esto todos
+      // los comandos siguientes caducan tambien y la sesion queda inservible
+      // para el resto de la vida del proceso. Verificado en Linux: tras un
+      // 'sleep 20' con TimeOut=3s, hasta un 'echo' devolvia timeout.
+      // El precio es que se pierden el directorio actual y las variables de la
+      // sesion, que es mucho menos malo que un shell muerto.
+      Restart;
     end;
 
     // -------------------------------------------------------------------------

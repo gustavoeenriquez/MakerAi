@@ -145,10 +145,15 @@ procedure Register;
 
 implementation
 
+{$I uMakerAi.Version.inc}
+
 const
   DEF_ENDPOINT = 'http://localhost:4318/v1/traces';
   OTEL_SCOPE_NAME = 'makerai';
-  OTEL_SCOPE_VERSION = '3.5';
+  // Atada a la version real del framework: estaba clavada a '3.5' y seguia
+  // saliendo '3.5' en cada span con el framework ya en 3.7, asi que el visor
+  // mentia sobre que version genero la traza.
+  OTEL_SCOPE_VERSION = MAKERAI_VERSION_SHORT;
 
 procedure Register;
 begin
