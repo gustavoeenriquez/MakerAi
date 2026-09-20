@@ -2282,7 +2282,18 @@ begin
 
   if IsComputerAction then
   begin
-    // 2. Delegar al componente ComputerTool
+    // 2. Oportunidad de interceptar ANTES de ejecutar en local. Es el mismo
+    //    contrato que Claude, OpenAI y el bridge generico de TAiChat: si el
+    //    handler llena Response, la accion se da por ejecutada en otro sitio
+    //    (p.ej. un broker que reenvia el tool_call a su cliente) y aqui no se
+    //    toca la pantalla ni se captura nada.
+    if Assigned(FOnCallToolFunction) then
+      FOnCallToolFunction(Self, ToolCall);
+
+    if ToolCall.Response <> '' then
+      Exit;
+
+    // 3. Delegar al componente ComputerTool
     // Nota: ProcessToolCall es thread-safe siempre que tus eventos lo sean.
     // Como estamos dentro de un TTask (hilo), el evento OnExecuteAction se disparará en un hilo secundario.
     // Asegúrate de usar TThread.Synchronize en tu formulario si tocas la GUI.
@@ -2294,7 +2305,7 @@ begin
       // Asignar la respuesta JSON
       ToolCall.Response := ResponseJson;
 
-      // 3. Guardar la captura en el buffer temporal (Thread-Safe Lock)
+      // 4. Guardar la captura en el buffer temporal (Thread-Safe Lock)
       if Assigned(Screenshot) then
       begin
         TMonitor.Enter(FPendingScreenshots);
@@ -2316,7 +2327,7 @@ begin
   end
   else
   begin
-    // 4. Si no es acción de computadora, usar el comportamiento estándar:
+    // 5. Si no es acción de computadora, usar el comportamiento estándar:
     //    bridge generico de ComputerUse, AiFunctions y, en ultima instancia,
     //    OnCallToolFunction. Antes se respondia 'Command X not found' sin
     //    llamar a inherited, asi que NINGUNA funcion de usuario llegaba a
