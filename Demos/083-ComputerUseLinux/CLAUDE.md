@@ -57,12 +57,48 @@ Cada captura enviada al modelo se guarda además en `shots/` para depurar.
 
 ## Estado verificado
 
-Probado en **WSL2 / Ubuntu 24.04** con Xvfb `:99` a 1280×800, contra la API real:
+**WSL2 / Ubuntu 24.04**, Xvfb `:99` a 1280×800, editor `xedit`, contra la API real:
 
 | Proveedor | Resultado |
 |-----------|-----------|
-| `gpt-6-astra` | 4 acciones, 4 capturas: `screenshot → click_at → type_text_at → screenshot`. Texto escrito correctamente en xedit |
-| `claude-opus-4-8` | 4 acciones, 4 capturas, incluida `zoom`. Claude emite **varios tool_use por turno** (`type_text_at` + `click_at` juntos) y el ejecutor los encadena bien |
+| `gpt-6-astra` | 4 acciones: `screenshot → click_at → type_text_at → screenshot`. Texto escrito correctamente |
+| `claude-opus-4-8` | 4 acciones, incluida `zoom`. Claude emite **varios tool_use por turno** (`type_text_at` + `click_at` juntos) y el ejecutor los encadena bien |
+
+**VPS Ubuntu 24.04** (producción) y **VPS Ubuntu 26.04** (desechable), con navegador. El mismo binario, compilado una vez en Windows, corrió sin recompilar en las tres máquinas.
+
+Matriz de acciones ejercitada con `gpt-6-astra` sobre Chrome/Chromium:
+
+| Acción | Estado | Cómo se comprobó |
+|--------|--------|------------------|
+| `screenshot` | ✅ | En todas las corridas |
+| `click_at` | ✅ | Campos de un formulario |
+| `type_text_at` | ✅ | Texto en los campos, leído de vuelta por el modelo |
+| `double_click` | ✅ | Doble clic sobre una palabra → queda seleccionada |
+| `drag_and_drop` | ✅ | `x=29 y=190 dest=701,190` seleccionó el título entero |
+| `scroll_at` | ✅ | Una sola acción bajó al fondo de una página larga y leyó un texto que no era visible al cargar |
+| `key_combination` | ✅ | `CTRL+l` (barra de direcciones) y `ENTER`; el mapeo a keysyms de X funciona |
+| `go_back` / `go_forward` | ⚠️ | **No existen en el tool de OpenAI.** El modelo lo dijo explícitamente y usó el botón Atrás con un clic. Solo son alcanzables vía Gemini |
+
+Con `claude-opus-4-8` se ejercitaron además `zoom` y `triple_click`, que OpenAI no emite. Siguen **sin ejercitar en runtime**: `hold_key`, `cursor_position`, `middle_click`, `right_click` y `navigate`.
+
+### El bug que destapó esta prueba
+
+Con Claude, el formulario no se rellenaba: el modelo entraba en un bucle de ~100 acciones hasta agotar el timeout y reportaba que "los campos no aceptan el texto". El log crudo (`--provider=claude`, la línea `RAW`) mostró la causa:
+
+```
+✅ left_click args={ "coordinate": [299, 282] }     → click_at x=300 y=282
+❌ left_click args={ "coordinate": "[299, 400]" }   → click_at x=0   y=0
+```
+
+**Claude manda los arrays unas veces como array JSON y otras como cadena con el JSON dentro, dentro del mismo turno.** `TryGetValue<TJSONArray>` no casa con la segunda forma, la coordenada se perdía y la acción caía en (0,0): un clic en la esquina de la pantalla. El modelo se desorientaba y reintentaba sin parar.
+
+Afectaba a `coordinate`, `start_coordinate` y `region` (zoom), y también a numéricos (`"duration": "1"`). Arreglado en `TranslateClaudeToolCall` con extractores que aceptan ambas formas. Tras el fix: **0 clics en (0,0)**, `triple_click` y `zoom` con coordenadas reales, y la tarea completada en 31 acciones.
+
+Es un bug de framework, no de Linux: afectaba igual a Windows y macOS.
+
+### Por qué el demo registra el tool_call crudo
+
+La línea `RAW name=... args={...}` sale de enganchar `OnCallToolFunction` **solo para registrar** (sin tocar `Response`, que delegaría la acción — ver demo 082). Es la única forma de distinguir si una coordenada que falta la omitió el modelo o la perdió la traducción. Sin ese log, el bug de arriba habría sido indistinguible de "el modelo hace clics malos".
 
 ## Por qué xdotool y no libX11
 

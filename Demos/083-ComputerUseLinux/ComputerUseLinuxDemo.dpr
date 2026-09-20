@@ -64,6 +64,7 @@ type
     procedure ExecuteAction(Sender: TObject; const ActionData: TAiActionData;
       var Result: TAiActionResult);
     procedure RequestShot(Sender: TObject; var MediaFile: TAiMediaFile);
+    procedure RawToolCall(Sender: TObject; AiToolCall: TAiToolsFunction);
   end;
 
 procedure Log(const S: string);
@@ -75,8 +76,10 @@ procedure THandlers.ExecuteAction(Sender: TObject; const ActionData: TAiActionDa
   var Result: TAiActionResult);
 begin
   Inc(Actions);
-  Log(Format('ACCION %-18s x=%d y=%d combo="%s" texto="%s"',
-    [ActionData.FunctionName, ActionData.X, ActionData.Y, ActionData.KeyCombo,
+  Log(Format('ACCION %-18s x=%d y=%d dest=%d,%d scroll=%s/%d combo="%s" texto="%s"',
+    [ActionData.FunctionName, ActionData.X, ActionData.Y,
+     ActionData.DestX, ActionData.DestY,
+     ActionData.ScrollDirection, ActionData.ScrollAmount, ActionData.KeyCombo,
      Copy(ActionData.TextToType, 1, 40)]));
 
   Result := TAiLinuxExecutor.Execute(ActionData);
@@ -85,6 +88,17 @@ begin
     Log('   -> FALLO: ' + Result.ErrorMessage)
   else if Result.CustomOutput <> '' then
     Log('   -> ' + StringReplace(Result.CustomOutput, sLineBreak, ' ', [rfReplaceAll]));
+end;
+
+procedure THandlers.RawToolCall(Sender: TObject; AiToolCall: TAiToolsFunction);
+begin
+  // Solo diagnostico: se registra el tool_call TAL CUAL llega del proveedor,
+  // antes de que TranslateXxxToolCall lo pase al formato canonico. Es la unica
+  // forma de ver si una coordenada que falta la omitio el modelo o la perdio la
+  // traduccion. NO se toca Response: llenarlo delegaria la accion y el driver
+  // no la ejecutaria en local (ver demo 082).
+  Log(Format('   RAW name=%s args=%s',
+    [AiToolCall.Name, Copy(AiToolCall.Arguments, 1, 200)]));
 end;
 
 procedure THandlers.RequestShot(Sender: TObject; var MediaFile: TAiMediaFile);
@@ -192,6 +206,7 @@ begin
       LTool.OnRequestScreenshot := LH.RequestShot;
 
       LConn.ChatTools.ComputerUseTool := LTool;
+      LConn.OnCallToolFunction := LH.RawToolCall;
 
       if LProvider = 'claude' then
       begin
