@@ -34,7 +34,8 @@ The `Source/Tools/` directory contains capability components that extend LLM fun
 - `uMakerAi.Tools.ComputerUse.pas` - Computer automation (`TAiComputerUseTool`)
   - Handles Gemini's normalized coordinates (0-1000) conversion to screen pixels
   - Action types: click, drag, type, scroll, navigate, screenshot
-  - Platform implementations in `*.Windows.pas` and `*.WindowsFMX.pas`
+  - **El componente es agnóstico de plataforma**: solo usa RTL y delega TODO en `OnExecuteAction` / `OnRequestScreenshot`. Compila para Linux64 sin cambios (verificado sep 20/2026)
+  - Executors por plataforma, **ninguno en el `.dpk`** (las apps los incluyen directo): `*.Windows.pas` (VCL/GDI), `*.WindowsFMX.pas` (FMX, dibuja el cursor), `*.Mac.pas` (CGEvent, sin probar en hardware) y `*.Linux.pas` (`TAiLinuxExecutor`, X11 vía xdotool + scrot; **probado en runtime** sobre Xvfb con gpt-6-astra y claude-opus-4-8 — ver demo 083)
 
 ### Media Generation Tools
 - `uMakerAi.OpenAi.Dalle.pas` - Image generation (`TAiDalle`)
