@@ -2316,9 +2316,12 @@ begin
   end
   else
   begin
-    // 4. Si no es acción de computadora, usar el comportamiento estándar (AiFunctions o Evento)
-    ToolCall.Response := 'Command '+ToolCall.name+' not found';
-    //inherited DoCallFunction(ToolCall);
+    // 4. Si no es acción de computadora, usar el comportamiento estándar:
+    //    bridge generico de ComputerUse, AiFunctions y, en ultima instancia,
+    //    OnCallToolFunction. Antes se respondia 'Command X not found' sin
+    //    llamar a inherited, asi que NINGUNA funcion de usuario llegaba a
+    //    ejecutarse a traves de este driver.
+    inherited DoCallFunction(ToolCall);
   end;
 end;
 
