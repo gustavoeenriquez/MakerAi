@@ -51,7 +51,7 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 ### MCP Servers (03x)
 | Demo | Purpose | Transport |
 |------|---------|-----------|
-| 031-MCPServer | Multi-protocol server | SSE, HTTP, StdIO |
+| 031-MCPServer | Multi-protocol server. **Compila tambien en Linux64** desde sep 2026: la herramienta `system_info` llamaba a la API de Windows desde el cuerpo de sus funciones y tumbaba el demo entero fuera de Windows | SSE, HTTP, StdIO |
 | 032-MCP_StdIO_FileManager | File manager MCP | StdIO, HTTP, SSE variants |
 | 032-MCPServerDataSnap | DataSnap integration | HTTP with DataSnap |
 | 035-MCPServerWithTAiFunctions | MCP + function calling | TAiFunctions integration |
