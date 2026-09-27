@@ -46,8 +46,18 @@ the fast, cheap decisions that today cost a full LLM round-trip: routing a query
 specialised agent, deciding whether that agent needs its RAG variant, classifying, gating.
 Several questions travel in one request (~700 input tokens at US$0.042 per million). Questions
 are validated locally, 429/529 are retried with backoff, and the model is pinned to
-`jev-1.13.0` so thresholds stay valid. Demo: `084-JevRouter`. Six new regression cases run it
+`jev-1.13.0` so thresholds stay valid. Demo: `084-JevRouter`.
+
+For agent graphs, `TAiJevRouterTool` (`Source/Agents/uMakerAi.Agents.Tools.JevRouter.pas`) is a
+node tool that writes the chosen route to `Blackboard['next_route']`, so an existing
+`lmConditional` link follows it — no engine change. Low confidence or a failing API falls back
+to `NextNo` instead of breaking the graph, and yes/no flags asked in the same call land in the
+blackboard for `lmExpression` or an `OnRoute` handler. Ten new regression cases run all of it
 offline against a fake transport.
+
+**Also fixed:** `lmExpression` parsed numbers with the regional settings only, so on a Windows
+using a decimal comma `'10.25' > 9.5` was compared as text and returned `False`. It now falls
+back to a decimal point.
 
 ### Computer Use on Linux
 

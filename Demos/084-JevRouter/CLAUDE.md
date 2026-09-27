@@ -12,6 +12,7 @@ Jev no es un LLM de chat: no genera texto. Responde preguntas tipadas (Choice / 
 |--------|-------------|
 | **A. Router de agentes** | Una sola llamada por consulta con `dominio` (Choice entre contable/tributario/legal/laboral/general), un Noul `toca_<dominio>` por área (detecta consultas que cruzan dos áreas) y `necesita_fuentes` (Noul: ¿hay que citar norma/tarifa/plazo?). Las reglas y el catálogo de agentes viven en código (`EnrutarConsulta`) |
 | **B. Atajos** | `TAiJev.Choose` y `TAiJev.Noul` para una sola pregunta |
+| **C. Dentro de un grafo** | Nodo `Recepcion` con `TAiJevRouterTool` → link `lmConditional` → un nodo por agente; `NextNo` → `humano`. `OnRoute` convierte `contable` en `contable_rapido` o `contable_normativo` según el flag `fuentes` |
 
 ## Build & Run
 
@@ -29,6 +30,7 @@ Exit code: 0 ok, 2 si falta la API key o hay excepción. Costo: ~700 tokens de e
 | Componente | Unit |
 |------------|------|
 | `TAiJev`, `TAiJevQuestions`, `TAiJevResult` | `Source/Tools/uMakerAi.Jev.pas` |
+| `TAiJevRouterTool` | `Source/Agents/uMakerAi.Agents.Tools.JevRouter.pas` |
 
 ## Notas
 
@@ -36,6 +38,7 @@ Exit code: 0 ok, 2 si falta la API key o hay excepción. Costo: ~700 tokens de e
 - **Por qué no se le pasa a Jev la lista de agentes con sus capacidades para que "elija el mejor":** Jev juzga el *contenido* de la consulta, no conoce los agentes. Las descripciones de `DOMINIOS` son lo que más pesa en el acierto: escribirlas como se le explicarían a una recepcionista.
 - **Choice + un Noul por opción no son redundantes** (lo recomienda la documentación de Jev): el Choice es relativo (cuál de todos), los Nouls son absolutos y son los que revelan que una consulta necesita a dos especialistas.
 - El demo marca `(pide fuentes y no tiene RAG)` cuando la consulta necesita citar normas y el agente de su dominio no tiene RAG (el laboral, en el catálogo de ejemplo). Contar esos casos en producción dice a qué agente vale la pena agregarle RAG.
+- **Bloque C coincide con el A** cuando la pregunta de ruta tiene la misma redacción. Con la genérica "¿Qué ruta o especialista debe atender…?" la nómina bajó a confianza 0.44 y la venta del activo a 0.43, y ambas cayeron a `humano`. La redacción mueve la confianza más que el umbral: fijarla primero y calibrar después.
 - **Umbrales:** la confianza de una misma entrada varía unos puntos entre llamadas. `Model` queda fijo en `jev-1.13.0` (no `jev-latest`) y los umbrales tienen margen.
 - Jev no hace aritmética, no cuenta y no compara fechas de forma fiable: eso va en código.
 

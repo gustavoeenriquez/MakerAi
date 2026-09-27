@@ -50,7 +50,7 @@ type
 implementation
 
 uses
-  System.TypInfo, System.StrUtils, System.SyncObjs, System.Threading, System.NetEncoding,
+  System.TypInfo, System.Rtti, System.StrUtils, System.SyncObjs, System.Threading, System.NetEncoding,
   System.Net.HttpClient, System.Net.URLClient,
   uMakerAi.Core,
   uMakerAi.MCPServer.Core, UMakerAi.MCPServer.Http,
@@ -62,7 +62,7 @@ uses
   // registra los drivers reales en la factoria (sin ella no hay 'Groq' ni
   // 'Claude' que resolver).
   uMakerAi.Chat.AiConnection, uMakerAi.Chat.Initializations,
-  uMakerAi.Guardrails, uMakerAi.Jev,
+  uMakerAi.Guardrails, uMakerAi.Jev, uMakerAi.Agents.Tools.JevRouter,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
   uMakerAi.RAG.Vector.Driver.BinFile,
@@ -345,6 +345,28 @@ begin
   FRunner.AddCase('jev.error.http')
     .Input('jev:http-error')
     .ExpectEquals('status=401|lasterror=si|reintentos=no');
+
+  // TAiJevRouterTool dentro de un grafo real: Router -(lmConditional)->
+  // contable | tributario, con NextNo -> humano; todos desembocan en Fin.
+  FRunner.AddCase('agents.jevrouter.route')
+    .Input('jev:router-route')
+    .ExpectEquals('esCompleted|hola>contable>Fin|choice=contable|conf=0.85|fuentes=0.80|error=no');
+
+  // Confianza bajo MinConfidence: la ruta cae a NextNo aunque haya eleccion
+  FRunner.AddCase('agents.jevrouter.low-confidence')
+    .Input('jev:router-lowconf')
+    .ExpectEquals('esCompleted|hola>humano>Fin|choice=tributario|conf=0.30|fuentes=0.10|error=no');
+
+  // Jev caido (401): el grafo NO falla, toma la ruta de respaldo y deja el error
+  FRunner.AddCase('agents.jevrouter.api-error')
+    .Input('jev:router-error')
+    .ExpectEquals('esCompleted|hola>humano>Fin|choice=|conf=|fuentes=|error=si');
+
+  // lmExpression con punto decimal en un Windows con coma decimal: antes
+  // '10.25 > 9.5' se comparaba como texto y daba False
+  FRunner.AddCase('agents.expression.decimal-point')
+    .Input('agents:expr-decimal')
+    .ExpectEquals('ge=True|gt=True|lt=False');
 end;
 
 function TRegressionSuite.Dispatch(const AScenario: string): string;
@@ -526,6 +548,24 @@ begin
     'a2a:card-skills', 'a2a:card-skills-default', 'a2a:stream-resume',
     'a2a:auth']) then
     Exit(RunA2AFlowScenario(AScenario));
+
+  if AScenario = 'agents:expr-decimal' then
+  begin
+    var Vars := TDictionary<string, TValue>.Create;
+    var OldSep := FormatSettings.DecimalSeparator;
+    try
+      Vars.Add('p', TValue.From<string>('0.85'));
+      Vars.Add('q', TValue.From<string>('10.25'));
+      FormatSettings.DecimalSeparator := ',';
+      Result := 'ge=' + BoolToStr(EvalCondition('p >= 0.7', Vars), True) +
+        '|gt=' + BoolToStr(EvalCondition('q > 9.5', Vars), True) +
+        '|lt=' + BoolToStr(EvalCondition('q < 9.5', Vars), True);
+    finally
+      FormatSettings.DecimalSeparator := OldSep;
+      Vars.Free;
+    end;
+    Exit;
+  end;
 
   Result := '';
   Handlers := TFixtureHandlers.Create;
@@ -1916,6 +1956,67 @@ var
       Result := 'no';
   end;
 
+  // Grafo Router -> contable | tributario (NextNo -> humano) -> Fin, con el
+  // router usando J (TFakeJev) ya cargado con la respuesta del escenario.
+  function RunRouterGraph: string;
+  var
+    Agents: TAIAgentManager;
+    Handlers: TFixtureHandlers;
+    Router: TAiJevRouterTool;
+    Targets: TDictionary<string, string>;
+    BB: TAIBlackboard;
+  begin
+    Agents := TAIAgentManager.Create(nil);
+    Handlers := TFixtureHandlers.Create;
+    try
+      Agents.Name := 'SuiteJevRouter';
+      Agents.AddNode('Router', nil)
+        .AddNode('contable', Handlers.NodeExec)
+        .AddNode('tributario', Handlers.NodeExec)
+        .AddNode('humano', Handlers.NodeExec)
+        .AddNode('Fin', Handlers.NodeExec);
+
+      Router := TAiJevRouterTool.Create(Agents);
+      Router.Jev := J;
+      Router.AddRoute('contable', 'Asientos, PUC, estados financieros');
+      Router.AddRoute('tributario', 'Impuestos, declaraciones, DIAN');
+      Router.AddRoute('general', '');
+      Router.AddFlag('fuentes', 'Exige citar una norma concreta?');
+      Agents.FindNode('Router').Tool := Router;
+
+      Targets := TDictionary<string, string>.Create;
+      try
+        Targets.Add('contable', 'contable');
+        Targets.Add('tributario', 'tributario');
+        Agents.AddConditionalEdge('Router', 'RouterLink', Targets);
+      finally
+        Targets.Free;
+      end;
+      Agents.FindNode('Router').Next.NextNo := Agents.FindNode('humano');
+      Agents.AddEdge('contable', 'Fin').AddEdge('tributario', 'Fin').AddEdge('humano', 'Fin');
+      Agents.SetEntryPoint('Router').SetFinishPoint('Fin');
+
+      Agents.Run('hola');
+      while Agents.Busy do
+      begin
+        CheckSynchronize;
+        Sleep(20);
+      end;
+      CheckSynchronize;
+
+      BB := Agents.Blackboard;
+      Result := GetEnumName(TypeInfo(TAgentExecutionStatus), Ord(BB.GetStatus)) +
+        '|' + Agents.EndNode.Output +
+        '|choice=' + BB.GetString('Router.jev.choice') +
+        '|conf=' + BB.GetString('Router.jev.confidence') +
+        '|fuentes=' + BB.GetString('Router.jev.fuentes') +
+        '|error=' + SiNo(BB.GetString('Router.jev.error') <> '');
+    finally
+      Agents.Free;
+      Handlers.Free;
+    end;
+  end;
+
   // Ejecuta Ask esperando un error de validacion; devuelve 'error' u 'ok'
   function AskFails(AQ: TAiJevQuestions): string;
   begin
@@ -2051,6 +2152,30 @@ begin
           Result := 'status=' + E.StatusCode.ToString + '|lasterror=' +
             SiNo(J.LastError.Contains('401')) + '|reintentos=' + SiNo(J.Calls > 1);
       end;
+    end
+
+    else if AScenario = 'jev:router-route' then
+    begin
+      J.Enqueue(200, '{"model":"jev-1.13.0","answers":{' +
+        '"route":{"type":"choice","choice":"contable","confidence":0.85,' +
+          '"probabilities":{"contable":0.9,"tributario":0.08,"general":0.02}},' +
+        '"fuentes":{"type":"noul","noul":0.8}},"usage":{"input_tokens":400,"output_tokens":30}}');
+      Result := RunRouterGraph;
+    end
+
+    else if AScenario = 'jev:router-lowconf' then
+    begin
+      J.Enqueue(200, '{"model":"jev-1.13.0","answers":{' +
+        '"route":{"type":"choice","choice":"tributario","confidence":0.3,' +
+          '"probabilities":{"contable":0.3,"tributario":0.45,"general":0.25}},' +
+        '"fuentes":{"type":"noul","noul":0.1}},"usage":{"input_tokens":400,"output_tokens":30}}');
+      Result := RunRouterGraph;
+    end
+
+    else if AScenario = 'jev:router-error' then
+    begin
+      J.Enqueue(401, '{"detail":"invalid key"}');
+      Result := RunRouterGraph;
     end
 
     else

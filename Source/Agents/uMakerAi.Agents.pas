@@ -572,8 +572,14 @@ begin
   else
     LLhsStr := LVal.ToString;
 
-  var LLhsIsNum: Boolean := TryStrToFloat(LLhsStr, LLhs);
-  var LRhsIsNum: Boolean := TryStrToFloat(LRhs, LRhsNum);
+  // Primero con la configuracion regional y luego con punto decimal: en un
+  // Windows en espanol '0.7' no parsea con TryStrToFloat a secas y la
+  // comparacion caia a texto. Las expresiones y los valores que escriben las
+  // tools (p.ej. TAiJevRouterTool) usan punto.
+  var LLhsIsNum: Boolean := TryStrToFloat(LLhsStr, LLhs) or
+    TryStrToFloat(LLhsStr, LLhs, TFormatSettings.Invariant);
+  var LRhsIsNum: Boolean := TryStrToFloat(LRhs, LRhsNum) or
+    TryStrToFloat(LRhs, LRhsNum, TFormatSettings.Invariant);
 
   if LLhsIsNum and LRhsIsNum then
   begin

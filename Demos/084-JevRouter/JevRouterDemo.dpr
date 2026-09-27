@@ -19,6 +19,11 @@
 //
 // Bloque B muestra los atajos Choose y Noul para una sola pregunta.
 //
+// Bloque C hace lo mismo DENTRO de un grafo de agentes: un nodo con
+// TAiJevRouterTool escribe la ruta en el blackboard y un link lmConditional
+// la sigue. OnRoute combina la ruta con el flag 'fuentes' para elegir entre
+// el agente contable rapido y el normativo; la confianza baja cae a NextNo.
+//
 // Requiere la variable de entorno TYPESAFE_API_KEY (https://console.typesafe.ai/keys).
 // Costo: ~700 tokens de entrada por consulta a US$0.042 por millon.
 //
@@ -33,13 +38,30 @@ uses
   System.SysUtils,
   System.Classes,
   System.JSON,
-  uMakerAi.Jev in '..\..\Source\Tools\uMakerAi.Jev.pas';
+  System.Generics.Collections,
+  System.StrUtils,
+  uMakerAi.Jev in '..\..\Source\Tools\uMakerAi.Jev.pas',
+  uMakerAi.Agents,
+  uMakerAi.Agents.Tools.JevRouter in '..\..\Source\Agents\uMakerAi.Agents.Tools.JevRouter.pas';
 
 type
   TAgente = record
     Nombre: string;
     Dominio: string;
     ConRag: Boolean;
+  end;
+
+  // Los eventos del framework son 'of object': los handlers viven en una clase
+  TGrafoHandlers = class
+  public
+    // Nodo de agente: en una app real aqui iria el LLM (con o sin RAG)
+    procedure AgenteExec(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink;
+      Input: string; var Output: string);
+    procedure FinExec(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink;
+      Input: string; var Output: string);
+    // contable + flag 'fuentes' alto -> contable_normativo; si no, contable_rapido
+    procedure AjustarRuta(Sender: TObject; ANode: TAIAgentsNode;
+      AResult: TAiJevResult; var ARoute: string);
   end;
 
 const
@@ -178,6 +200,104 @@ begin
   Writeln;
 end;
 
+{ TGrafoHandlers }
+
+procedure TGrafoHandlers.AgenteExec(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink;
+  Input: string; var Output: string);
+begin
+  Output := Format('%s atiende: "%s"', [Node.Name, Input]);
+end;
+
+procedure TGrafoHandlers.FinExec(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink;
+  Input: string; var Output: string);
+begin
+  Output := Input;
+end;
+
+procedure TGrafoHandlers.AjustarRuta(Sender: TObject; ANode: TAIAgentsNode;
+  AResult: TAiJevResult; var ARoute: string);
+begin
+  if ARoute = 'contable' then
+    if AResult['fuentes'].Noul >= UMBRAL_RAG then
+      ARoute := 'contable_normativo'
+    else
+      ARoute := 'contable_rapido';
+end;
+
+// Bloque C: el enrutado dentro de un grafo. El nodo Recepcion no tiene
+// OnExecute: su Tool (TAiJevRouterTool) escribe 'next_route' y el link
+// lmConditional lo sigue. Sin coincidencia o con confianza baja -> NextNo.
+procedure BloqueGrafo(const AConsultas: array of string);
+var
+  Grafo: TAIAgentManager;
+  Handlers: TGrafoHandlers;
+  Router: TAiJevRouterTool;
+  Targets: TDictionary<string, string>;
+  D, C: string;
+  i: Integer;
+begin
+  Writeln('--- C. El mismo enrutado dentro de un grafo de agentes ---');
+  Writeln;
+  Grafo := TAIAgentManager.Create(nil);
+  Handlers := TGrafoHandlers.Create;
+  try
+    Grafo.AddNode('Recepcion', nil).AddNode('humano', Handlers.AgenteExec).AddNode('Fin', Handlers.FinExec);
+    for i := Low(AGENTES) to High(AGENTES) do
+      Grafo.AddNode(AGENTES[i].Nombre, Handlers.AgenteExec);
+
+    Router := TAiJevRouterTool.Create(Grafo);
+    for D in DOMINIOS do
+      Router.AddRoute(Clave(D), Descripcion(D));
+    Router.AddFlag('fuentes', 'Responder bien `consulta` exige citar una norma, articulo, tarifa o plazo concreto?');
+    // Misma pregunta que el bloque A: la redaccion mueve la confianza
+    Router.Instructions := 'Que especialista debe responder `consulta`?';
+    Router.MinConfidence := UMBRAL_DOMINIO;
+    Router.OnRoute := Handlers.AjustarRuta;
+    Grafo.FindNode('Recepcion').Tool := Router;
+
+    // Clave de ruta -> nodo. 'contable' no aparece: OnRoute lo convierte en
+    // contable_rapido o contable_normativo.
+    Targets := TDictionary<string, string>.Create;
+    try
+      for i := Low(AGENTES) to High(AGENTES) do
+        Targets.Add(AGENTES[i].Nombre, AGENTES[i].Nombre);
+      Grafo.AddConditionalEdge('Recepcion', 'Enrutador', Targets);
+    finally
+      Targets.Free;
+    end;
+    Grafo.FindNode('Recepcion').Next.NextNo := Grafo.FindNode('humano');
+    for i := Low(AGENTES) to High(AGENTES) do
+      Grafo.AddEdge(AGENTES[i].Nombre, 'Fin');
+    Grafo.AddEdge('humano', 'Fin');
+    Grafo.SetEntryPoint('Recepcion').SetFinishPoint('Fin');
+
+    for C in AConsultas do
+    begin
+      // Run con semilla: cada consulta arranca con el blackboard limpio
+      Grafo.Run(C, procedure(B: TAIBlackboard) begin end);
+      while Grafo.Busy do
+      begin
+        CheckSynchronize;
+        Sleep(20);
+      end;
+      CheckSynchronize;
+
+      Writeln(Grafo.EndNode.Output);
+      Writeln(Format('  ruta=%s  eleccion=%s  confianza=%s  fuentes=%s%s', [
+        Grafo.Blackboard.GetString('next_route'),
+        Grafo.Blackboard.GetString('Recepcion.jev.choice'),
+        Grafo.Blackboard.GetString('Recepcion.jev.confidence'),
+        Grafo.Blackboard.GetString('Recepcion.jev.fuentes'),
+        IfThen(Grafo.Blackboard.GetString('Recepcion.jev.error') <> '',
+          '  error=' + Grafo.Blackboard.GetString('Recepcion.jev.error'), '')]));
+      Writeln;
+    end;
+  finally
+    Grafo.Free;
+    Handlers.Free;
+  end;
+end;
+
 var
   Jev: TAiJev;
   Preguntas: TAiJevQuestions;
@@ -210,6 +330,18 @@ begin
 
       Writeln(Format('Tokens de entrada del bloque A: %d  (~US$%.5f)',
         [TotalTokens, TotalTokens * 0.042 / 1E6]));
+      Writeln;
+
+      if ParamCount > 0 then
+      begin
+        var Propias: TArray<string>;
+        SetLength(Propias, ParamCount);
+        for i := 1 to ParamCount do
+          Propias[i - 1] := ParamStr(i);
+        BloqueGrafo(Propias);
+      end
+      else
+        BloqueGrafo(CONSULTAS_EJEMPLO);
     finally
       Preguntas.Free;
       Jev.Free;

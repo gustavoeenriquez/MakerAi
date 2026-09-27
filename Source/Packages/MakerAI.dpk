@@ -80,6 +80,7 @@ contains
   uMakerAi.Agents.EngineRegistry in '..\Agents\uMakerAi.Agents.EngineRegistry.pas',
   uMakerAi.Agents.Checkpoint in '..\Agents\uMakerAi.Agents.Checkpoint.pas',
   uMakerAi.Agents.Tools.Approval in '..\Agents\uMakerAi.Agents.Tools.Approval.pas',
+  uMakerAi.Agents.Tools.JevRouter in '..\Agents\uMakerAi.Agents.Tools.JevRouter.pas',
   uMakerAi.Agents.IAiTool in '..\Agents\uMakerAi.Agents.IAiTool.pas',
   uMakerAi.Agents.Tools.MCP in '..\Agents\uMakerAi.Agents.Tools.MCP.pas',
   uMakerAi.Agents.ToolRegistry in '..\Agents\uMakerAi.Agents.ToolRegistry.pas',

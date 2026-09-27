@@ -27,13 +27,14 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: < 1 segundo.
 
-## Cobertura actual (44 casos)
+## Cobertura actual (48 casos)
 
 | Área | Casos |
 |------|-------|
 | MCP dual-era | negociación moderna (2026-07-28), fallback a handshake legacy, `tools/list`, `tools/call` |
 | MCP MRTR | reintento con `accept`, mensaje de elicitation recibido, sin handler → error explícito |
-| Agentes | grafo secuencial con status final y salida encadenada |
+| Agentes | grafo secuencial con status final y salida encadenada; `lmExpression` con punto decimal bajo configuración regional con coma |
+| Agentes + Jev | `TAiJevRouterTool` en un grafo real: ruta elegida, confianza baja → `NextNo`, Jev caído (401) → `NextNo` sin romper el grafo, y las claves `<Nodo>.jev.*` del blackboard |
 | A2A 1.0 | Agent Card, `SendMessage` → `TASK_STATE_COMPLETED`, federación (grafo local → agente remoto) |
 | A2A orquestación | pool con 3 tasks simultáneos, human-in-the-loop con resume por `taskId`, human-in-the-loop federado (suspensión del nodo local), `blocking=false` + `GetTask`, tolerancia de literales de estado, cancelar task terminal → `-32002` |
 | Guardrails | blocklist con comodín, allowlist estricta, patrón prohibido en argumentos, veto programático, integración real (el tool bloqueado NO se ejecuta) |
