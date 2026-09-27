@@ -20,6 +20,18 @@ The `Source/Tools/` directory contains capability components that extend LLM fun
   - Orden de evaluación: `Enabled` → `AllowedTools` (whitelist estricta, comodines `TMask`) → `BlockedTools` → `BlockedArgPatterns` (substrings prohibidos en el JSON de argumentos, case-insensitive) → `OnCheckToolCall` (veto/permiso programático final)
   - Un bloqueo NO ejecuta el tool: pone `ToolCall.Response` con `{"error":"Blocked by guardrails: ..."}` para que el LLM replantee, dispara `OnBlocked` (auditoría), incrementa `BlockedCount` y marca el span con `guardrail.blocked`
 
+### Jev (TypeSafe AI) — decisiones calibradas
+- `uMakerAi.Jev.pas` — `TAiJev`: cliente de `POST https://api.typesafe.ai/v1/systemone`. **No es un driver de chat** (Jev no genera texto): recibe un `state` (texto o JSON) y preguntas tipadas, y devuelve probabilidades calibradas + confianza
+  - Preguntas en `TAiJevQuestions` (`TCollection`, editable en diseño): `AddChoice` (opciones `'clave=descripcion'`, 2 a 255), `AddScore` (niveles ordenados, 2 a 10), `AddNoul` (sí/no, criteria opcional `true=`/`false=`). Se validan **antes** de ir a la red
+  - `Ask(state, preguntas)` → `TAiJevResult` (lo libera el llamador); `R['id'].Choice/.Score/.Noul/.Confidence/.Probability(op)/.Top(n)`. Atajos `Choose` y `Noul` para una sola pregunta
+  - Varias preguntas viajan en **una** llamada: preferir un `TAiJevQuestions` completo a llamadas sueltas
+  - `Model` por defecto `jev-1.13.0` (no `jev-latest`: los umbrales se calibran contra una versión). `ApiKey` por defecto `@TYPESAFE_API_KEY`
+  - Reintenta 429/503/529 con espera exponencial (`MaxRetries`, `RetryDelay`); otros errores lanzan `EAiJevError` (con `StatusCode`), llenan `LastError` y disparan `OnError`. Span de telemetría `jev.ask`
+  - Envía el cuerpo en UTF-8 explícito: con la codificación por defecto la API devuelve 400 ante tildes o `¿`
+  - `DoPost` es virtual: la suite de regresión lo sustituye (`TFakeJev`) para probar sin red
+  - Jev no hace aritmética, no cuenta y no compara fechas de forma fiable: eso va en código. La confianza de una misma entrada varía unos puntos entre llamadas; dejar margen en los umbrales
+  - Demo: `Demos/084-JevRouter`
+
 ### Agent Automation Tools
 - `uMakerAi.Tools.Shell.pas` - Interactive shell execution (`TAiShell`)
   - Persistent session via `FSession: TInteractiveProcessInfo`

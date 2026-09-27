@@ -9,6 +9,7 @@
 //   - Un servidor MCP "solo legacy" (Indy) que responde -32601 a
 //     server/discover, para validar el fallback dual-era del cliente.
 //   - Handlers 'of object' para grafos de agentes y guardrails.
+//   - TFakeJev: TAiJev sin red, con respuestas HTTP encoladas.
 // -----------------------------------------------------------------------------
 
 interface
@@ -16,8 +17,9 @@ interface
 uses
   System.SysUtils, System.Classes, System.JSON, System.NetEncoding,
   IdContext, IdCustomHTTPServer, IdHTTPServer,
+  System.Generics.Collections,
   uMakerAi.MCPServer.Core, uMakerAi.Agents, uMakerAi.Tools.Functions,
-  uMakerAi.Chat.Messages;
+  uMakerAi.Chat.Messages, uMakerAi.Jev;
 
 type
   // --- Tool MCP determinista: devuelve el texto en mayusculas ---
@@ -66,6 +68,24 @@ type
   public
     constructor Create(APort: Integer);
     destructor Destroy; override;
+  end;
+
+  // --- TAiJev sin red ---
+  // Sustituye DoPost: guarda el cuerpo enviado y devuelve las respuestas
+  // encoladas en orden. Sin respuestas encoladas devuelve 500.
+  TFakeJev = class(TAiJev)
+  private
+    FResponses: TQueue<TPair<Integer, string>>;
+    FLastBody: string;
+    FCalls: Integer;
+  protected
+    function DoPost(const ABody: string; out AResponse: string): Integer; override;
+  public
+    constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
+    procedure Enqueue(AStatus: Integer; const ABody: string);
+    property LastBody: string read FLastBody;
+    property Calls: Integer read FCalls;
   end;
 
   // --- Handlers 'of object' para grafos y guardrails ---
@@ -335,6 +355,42 @@ begin
   Resp.AddPair('content', Content);
   AInputResponses.AddPair('user_confirmation', Resp);
   AHandled := True;
+end;
+
+{ TFakeJev }
+
+constructor TFakeJev.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  FResponses := TQueue<TPair<Integer, string>>.Create;
+  RetryDelay := 0; // los reintentos no esperan en la suite
+end;
+
+destructor TFakeJev.Destroy;
+begin
+  FResponses.Free;
+  inherited;
+end;
+
+procedure TFakeJev.Enqueue(AStatus: Integer; const ABody: string);
+begin
+  FResponses.Enqueue(TPair<Integer, string>.Create(AStatus, ABody));
+end;
+
+function TFakeJev.DoPost(const ABody: string; out AResponse: string): Integer;
+var
+  R: TPair<Integer, string>;
+begin
+  Inc(FCalls);
+  FLastBody := ABody;
+  if FResponses.Count = 0 then
+  begin
+    AResponse := '{"detail":"sin respuesta encolada"}';
+    Exit(500);
+  end;
+  R := FResponses.Dequeue;
+  AResponse := R.Value;
+  Result := R.Key;
 end;
 
 end.

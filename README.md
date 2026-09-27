@@ -37,6 +37,18 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 Work merged after v3.7.0. Three items change existing behaviour; they are called out below.
 
+### Jev — calibrated decisions before spending an LLM
+
+`TAiJev` (`Source/Tools/uMakerAi.Jev.pas`) wraps **Jev**, TypeSafe AI's "System One" model.
+Jev does not generate text: it answers typed questions — *Choice*, *Score*, *Noul* (yes/no) —
+with calibrated probabilities and a confidence value your code can threshold. It is meant for
+the fast, cheap decisions that today cost a full LLM round-trip: routing a query to the right
+specialised agent, deciding whether that agent needs its RAG variant, classifying, gating.
+Several questions travel in one request (~700 input tokens at US$0.042 per million). Questions
+are validated locally, 429/529 are retried with backoff, and the model is pinned to
+`jev-1.13.0` so thresholds stay valid. Demo: `084-JevRouter`. Six new regression cases run it
+offline against a fake transport.
+
 ### Computer Use on Linux
 
 `TAiLinuxExecutor` (`Source/Tools/uMakerAi.Tools.ComputerUse.Linux.pas`) drives X11 through

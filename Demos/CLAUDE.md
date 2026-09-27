@@ -84,6 +84,11 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 077-RagPostgresConsole | RAG vectorial sobre PostgreSQL+pgvector, **headless y sin API key** | `TAiRAGVectorPostgresDriver` + `TAiOllamaEmbeddings`: `CreateSchema` con HNSW, indexado incremental, filtro de metadatos en SQL (JSONB+GIN) e híbrido BM25+RRF. Es el único demo que ejercita el stack RAG sin abrir el IDE |
 | 078-RagChatOllama | **RAG completo 100% local**: recupera de pgvector y responde con `TAiOllamaChat` | Cada pregunta se hace con y sin contexto para que se vea la alucinación frente a la respuesta fundamentada. Documenta la trampa de `num_predict` con modelos de razonamiento (qwen3.5 devolvía vacío) |
 
+### Decisiones con Jev (08x)
+| Demo | Purpose | Key Pattern |
+|------|---------|-------------|
+| 084-JevRouter | **Enrutar consultas a agentes especializados** antes de gastar un LLM. Requiere `TYPESAFE_API_KEY`. Tiene CLAUDE.md propio | `TAiJev`: una llamada con Choice (dominio) + Noul por dominio (consultas cruzadas) + Noul `necesita_fuentes` (agente con o sin RAG); reglas y catálogo de agentes en código |
+
 ### Audio / Speech (06x)
 | Demo | Purpose | Key Pattern |
 |------|---------|-------------|

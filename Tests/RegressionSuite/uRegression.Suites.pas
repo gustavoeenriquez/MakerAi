@@ -39,6 +39,8 @@ type
     // atiende varios requests a la vez. Sin red: solo ejercita el camino
     // DriverName/Model/Params/AiFunctions, que pasa por el registro global.
     function RunConnScenario(const AScenario: string): string;
+    // TAiJev (TypeSafe) sin red: forma del request, parseo, reintentos, validacion
+    function RunJevScenario(const AScenario: string): string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -60,7 +62,7 @@ uses
   // registra los drivers reales en la factoria (sin ella no hay 'Groq' ni
   // 'Claude' que resolver).
   uMakerAi.Chat.AiConnection, uMakerAi.Chat.Initializations,
-  uMakerAi.Guardrails,
+  uMakerAi.Guardrails, uMakerAi.Jev,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
   uMakerAi.RAG.Vector.Driver.BinFile,
@@ -316,6 +318,33 @@ begin
   FRunner.AddCase('conn.concurrent.setup')
     .Input('conn:concurrent-setup')
     .ExpectEquals('hung=0|errors=0|badmodel=0');
+
+  // --- Jev (TypeSafe) ---
+  // Sin red: TFakeJev sustituye DoPost. Validan el contrato con la API
+  // (https://docs.typesafe.ai/api), no la calidad del modelo.
+  FRunner.AddCase('jev.request.shape')
+    .Input('jev:request')
+    .ExpectEquals('model=jev-1.13.0|consulta=hola|dominio=choice|contable=Asientos y PUC|general=null|levels=3|noul.true=si|noul.false=no');
+
+  FRunner.AddCase('jev.response.parse')
+    .Input('jev:parse')
+    .ExpectEquals('model=jev-1.13.0|choice=billing|conf=0.81|top2=billing,technical|sales=0.00|score=1.05|nivel1=0.95|noul=0.95|in=318|out=34');
+
+  FRunner.AddCase('jev.retry.transient')
+    .Input('jev:retry')
+    .ExpectEquals('calls=3|choice=billing');
+
+  FRunner.AddCase('jev.retry.exhausted')
+    .Input('jev:retry-exhausted')
+    .ExpectEquals('calls=2|status=429|lasterror=si');
+
+  FRunner.AddCase('jev.validate.local')
+    .Input('jev:validate')
+    .ExpectEquals('una-opcion=error|nombre-repetido=error|score-11=error|sin-preguntas=error|calls=0');
+
+  FRunner.AddCase('jev.error.http')
+    .Input('jev:http-error')
+    .ExpectEquals('status=401|lasterror=si|reintentos=no');
 end;
 
 function TRegressionSuite.Dispatch(const AScenario: string): string;
@@ -332,6 +361,8 @@ begin
     Result := RunPolicyScenario(AScenario)
   else if AScenario.StartsWith('conn:') then
     Result := RunConnScenario(AScenario)
+  else if AScenario.StartsWith('jev:') then
+    Result := RunJevScenario(AScenario)
   else
     raise Exception.Create('Escenario desconocido: ' + AScenario);
 end;
@@ -1847,6 +1878,187 @@ begin
     begin
       Result := Dispatch(AInput);
     end);
+end;
+
+// -----------------------------------------------------------------------------
+// Jev (TypeSafe AI)
+// -----------------------------------------------------------------------------
+
+function TRegressionSuite.RunJevScenario(const AScenario: string): string;
+const
+  // Respuesta tomada de los ejemplos de la documentacion de la API
+  OK_JSON =
+    '{"model":"jev-1.13.0","answers":{' +
+    '"dominio":{"type":"choice","choice":"billing",' +
+      '"probabilities":{"billing":0.88,"technical":0.12,"sales":0.0},"confidence":0.81},' +
+    '"dificultad":{"type":"score","score":1.05,"legend":{"0":"a","1":"b","2":"c"},' +
+      '"probabilities":{"0":0.0,"1":0.95,"2":0.05},"confidence":0.92},' +
+    '"fuentes":{"type":"noul","noul":0.95}},' +
+    '"usage":{"input_tokens":318,"output_tokens":34}}';
+var
+  J: TFakeJev;
+  Q: TAiJevQuestions;
+  R: TAiJevResult;
+  State: TJSONObject;
+  Body, Qs, Crit, Fuentes: TJSONObject;
+  Parsed: TJSONValue;
+
+  function F2(AValue: Double): string;
+  begin
+    Result := FormatFloat('0.00', AValue, TFormatSettings.Invariant);
+  end;
+
+  function SiNo(AValue: Boolean): string;
+  begin
+    if AValue then
+      Result := 'si'
+    else
+      Result := 'no';
+  end;
+
+  // Ejecuta Ask esperando un error de validacion; devuelve 'error' u 'ok'
+  function AskFails(AQ: TAiJevQuestions): string;
+  begin
+    try
+      J.Ask('x', AQ).Free;
+      Result := 'ok';
+    except
+      on E: EAiJevError do
+        Result := 'error';
+    end;
+  end;
+
+begin
+  Result := '';
+  J := TFakeJev.Create(nil);
+  Q := TAiJevQuestions.Create(nil);
+  try
+    Q.AddChoice('dominio', 'Que especialista debe responder `consulta`?',
+      ['contable=Asientos y PUC', 'tributario=Impuestos', 'general']);
+    Q.AddScore('dificultad', 'Que tan dificil es responder `consulta`?',
+      ['Trivial', 'Estandar', 'Experta']);
+    Q.AddNoul('fuentes', 'Exige citar una norma concreta?', 'Depende de una norma');
+
+    if AScenario = 'jev:request' then
+    begin
+      J.Enqueue(200, OK_JSON);
+      State := TJSONObject.Create;
+      try
+        State.AddPair('consulta', 'hola');
+        J.Ask(State, Q).Free;
+      finally
+        State.Free;
+      end;
+      Parsed := TJSONObject.ParseJSONValue(J.LastBody);
+      try
+        Body := Parsed as TJSONObject;
+        Qs := Body.GetValue<TJSONObject>('questions');
+        Crit := Qs.GetValue<TJSONObject>('dominio').GetValue<TJSONObject>('criteria');
+        Fuentes := Qs.GetValue<TJSONObject>('fuentes').GetValue<TJSONObject>('criteria');
+        Result := 'model=' + Body.GetValue<string>('model') +
+          '|consulta=' + Body.GetValue<TJSONObject>('state').GetValue<string>('consulta') +
+          '|dominio=' + Qs.GetValue<TJSONObject>('dominio').GetValue<string>('type') +
+          '|contable=' + Crit.GetValue<string>('contable') +
+          '|general=' + IfThen(Crit.GetValue('general') is TJSONNull, 'null', 'otro') +
+          '|levels=' + Qs.GetValue<TJSONObject>('dificultad').GetValue<TJSONArray>('criteria').Count.ToString +
+          '|noul.true=' + SiNo(Fuentes.GetValue('true') <> nil) +
+          '|noul.false=' + SiNo(Fuentes.GetValue('false') <> nil);
+      finally
+        Parsed.Free;
+      end;
+    end
+
+    else if AScenario = 'jev:parse' then
+    begin
+      J.Enqueue(200, OK_JSON);
+      R := J.Ask('hola', Q);
+      try
+        Result := 'model=' + R.Model +
+          '|choice=' + R['dominio'].Choice +
+          '|conf=' + F2(R['dominio'].Confidence) +
+          '|top2=' + string.Join(',', R['dominio'].Top(2)) +
+          '|sales=' + F2(R['dominio'].Probability('sales')) +
+          '|score=' + F2(R['dificultad'].Score) +
+          '|nivel1=' + F2(R['dificultad'].Probability('1')) +
+          '|noul=' + F2(R['fuentes'].Noul) +
+          '|in=' + R.InputTokens.ToString +
+          '|out=' + R.OutputTokens.ToString;
+      finally
+        R.Free;
+      end;
+    end
+
+    else if AScenario = 'jev:retry' then
+    begin
+      J.Enqueue(429, '{"detail":"rate limit"}');
+      J.Enqueue(529, '{"detail":"overloaded"}');
+      J.Enqueue(200, OK_JSON);
+      R := J.Ask('hola', Q);
+      try
+        Result := 'calls=' + J.Calls.ToString + '|choice=' + R['dominio'].Choice;
+      finally
+        R.Free;
+      end;
+    end
+
+    else if AScenario = 'jev:retry-exhausted' then
+    begin
+      J.MaxRetries := 1;
+      J.Enqueue(429, '{"detail":"rate limit"}');
+      J.Enqueue(429, '{"detail":"rate limit"}');
+      J.Enqueue(200, OK_JSON);
+      try
+        J.Ask('hola', Q).Free;
+        Result := 'sin-error';
+      except
+        on E: EAiJevError do
+          Result := 'calls=' + J.Calls.ToString + '|status=' + E.StatusCode.ToString +
+            '|lasterror=' + SiNo(J.LastError <> '');
+      end;
+    end
+
+    else if AScenario = 'jev:validate' then
+    begin
+      // Ninguno de estos debe llegar a la red
+      Q.Clear;
+      Q.AddChoice('a', 'pregunta', ['unica']);
+      Result := 'una-opcion=' + AskFails(Q);
+
+      Q.Clear;
+      Q.AddNoul('a', 'pregunta');
+      Q.AddNoul('a', 'otra');
+      Result := Result + '|nombre-repetido=' + AskFails(Q);
+
+      Q.Clear;
+      Q.AddScore('a', 'pregunta', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']);
+      Result := Result + '|score-11=' + AskFails(Q);
+
+      Q.Clear;
+      Result := Result + '|sin-preguntas=' + AskFails(Q);
+      Result := Result + '|calls=' + J.Calls.ToString;
+    end
+
+    else if AScenario = 'jev:http-error' then
+    begin
+      J.Enqueue(401, '{"detail":"invalid key"}');
+      J.Enqueue(200, OK_JSON);
+      try
+        J.Ask('hola', Q).Free;
+        Result := 'sin-error';
+      except
+        on E: EAiJevError do
+          // 401 no es transitorio: una sola llamada
+          Result := 'status=' + E.StatusCode.ToString + '|lasterror=' +
+            SiNo(J.LastError.Contains('401')) + '|reintentos=' + SiNo(J.Calls > 1);
+      end;
+    end
+
+    else
+      raise Exception.Create('Escenario jev desconocido: ' + AScenario);
+  finally
+    Q.Free;
+    J.Free;
+  end;
 end;
 
 end.
