@@ -52,7 +52,7 @@ For agent graphs, `TAiJevRouterTool` (`Source/Agents/uMakerAi.Agents.Tools.JevRo
 node tool that writes the chosen route to `Blackboard['next_route']`, so an existing
 `lmConditional` link follows it — no engine change. Low confidence or a failing API falls back
 to `NextNo` instead of breaking the graph, and yes/no flags asked in the same call land in the
-blackboard for `lmExpression` or an `OnRoute` handler. Eighteen new regression cases run all
+blackboard for `lmExpression` or an `OnRoute` handler. Nineteen new regression cases run all
 of it offline against a fake transport.
 
 Two more hand-offs make Jev a drop-in for decisions the framework already takes:
@@ -66,7 +66,10 @@ Two more hand-offs make Jev a drop-in for decisions the framework already takes:
   lists let through; `TAiJevGuardrailClassifier` blocks when P(risk) ≥ 0.5. Lists still catch the
   enumerable (`rm -rf`) for free; Jev catches what no list anticipates — an e-mail carrying a
   password to an outside address, a transfer to an unknown account. Safe calls scored ≤ 0.17 and
-  harmful ones ≥ 0.88 across 13 calibration cases. Fails closed by default.
+  harmful ones ≥ 0.88 across 13 calibration cases. Fails closed by default. Optional **permission
+  categories** (`read`, `write`, `financial`, `system`, …) are judged in the same call: block whole
+  categories, audit each call via `OnCategorized`, and describe domain-named tools with
+  `ToolDescriptions` (20/20 on 20 calibration calls).
 
 - **Input guardrail.** `ChatTools.PromptGuard` (new) checks the user's message *before* it reaches
   the LLM, right after the existing regex sanitizer. `TAiJevPromptGuard` asks in one call about

@@ -145,6 +145,9 @@ type
     // Chat: ultimo error reportado (OnError)
     procedure ChatError(Sender: TObject; const ErrorMsg: string; Exception: Exception;
       const AResponse: IHTTPResponse);
+    // OnCategorized de TAiJevGuardrailClassifier: deja pasar y anota la categoria
+    procedure JevCategorizedAllow(Sender: TObject; const AToolName, AArguments, ACategory: string;
+      AConfidence: Double; var AAllow: Boolean; var AReason: string);
     // OnPromptGuard que deja pasar el mensaje y anota la categoria
     procedure PromptGuardAllow(Sender: TObject; const AVerdict: TAiPromptVerdict;
       var AAction: TAiSanitizeAction);
@@ -340,6 +343,14 @@ procedure TFixtureHandlers.ChatError(Sender: TObject; const ErrorMsg: string; Ex
   const AResponse: IHTTPResponse);
 begin
   LastChatError := ErrorMsg;
+end;
+
+procedure TFixtureHandlers.JevCategorizedAllow(Sender: TObject; const AToolName, AArguments,
+  ACategory: string; AConfidence: Double; var AAllow: Boolean; var AReason: string);
+begin
+  LastGuardCategory := ACategory;
+  AAllow := True;
+  AReason := '';
 end;
 
 procedure TFixtureHandlers.PromptGuardAllow(Sender: TObject; const AVerdict: TAiPromptVerdict;

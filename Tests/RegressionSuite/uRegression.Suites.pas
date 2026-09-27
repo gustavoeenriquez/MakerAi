@@ -415,6 +415,14 @@ begin
     .Input('jev:promptguard-jev')
     .ExpectEquals('categoria=injection|motivo=Jev injection 0.80 >= 0.50|preguntas=4|sin-scope=3|limpio=si');
 
+  // Categorias de permiso en TAiJevGuardrailClassifier: bloquea una categoria
+  // prohibida aunque no sea la mas probable, el riesgo manda primero, la
+  // descripcion de la tool viaja en el state y OnCategorized puede anular
+  FRunner.AddCase('policy.guard.jev-categories')
+    .Input('jev:guard-categories')
+    .ExpectEquals('no-top=blocked:Jev category financial 0.35 >= 0.30 is blocked|lectura=allowed:read|' +
+      'riesgo=blocked:Jev risk 0.90 >= 0.50|descripcion=si|preguntas=2|evento=allowed:write');
+
   // lmExpression con punto decimal en un Windows con coma decimal: antes
   // '10.25 > 9.5' se comparaba como texto y daba False
   FRunner.AddCase('agents.expression.decimal-point')
@@ -2418,6 +2426,63 @@ begin
         end;
       finally
         PG.Free;
+      end;
+    end
+
+    else if AScenario = 'jev:guard-categories' then
+    begin
+      var GC := TAiJevGuardrailClassifier.Create(nil);
+      var H := TFixtureHandlers.Create;
+      try
+        GC.Jev := J;
+        GC.Categories.Add('read=Only reads information');
+        GC.Categories.Add('write=Creates or modifies records');
+        GC.Categories.Add('financial=Moves money');
+        GC.BlockedCategories.Add('financial');
+        GC.CategoryThreshold := 0.3;
+        GC.ToolDescriptions.Add('anular_comprobante=Genera el comprobante de reversion');
+        const RESP_WRITE_FIN =
+          '{"model":"jev-1.13.0","answers":{"risk":{"type":"noul","noul":0.10},' +
+          '"category":{"type":"choice","choice":"write","confidence":0.4,' +
+          '"probabilities":{"read":0.05,"write":0.60,"financial":0.35}}}}';
+        var Reason: string;
+
+        // 'financial' no es la eleccion (write 0.60) pero supera el umbral 0.30
+        J.Enqueue(200, RESP_WRITE_FIN);
+        Result := 'no-top=' + IfThen(GC.CheckToolCall('anular_comprobante', '{"numero":22}', Reason),
+          'allowed', 'blocked') + ':' + Reason;
+        Parsed := TJSONObject.ParseJSONValue(J.LastBody);
+        try
+          var Enviado := Parsed as TJSONObject;
+          var Descripcion := Enviado.GetValue<TJSONObject>('state').GetValue<string>('description', '');
+          var NPreg := Enviado.GetValue<TJSONObject>('questions').Count;
+
+          J.Enqueue(200, '{"model":"jev-1.13.0","answers":{"risk":{"type":"noul","noul":0.05},' +
+            '"category":{"type":"choice","choice":"read","confidence":0.98,' +
+            '"probabilities":{"read":0.99,"write":0.01,"financial":0.00}}}}');
+          Result := Result + '|lectura=' + IfThen(GC.CheckToolCall('get_invoice', '{}', Reason),
+            'allowed', 'blocked') + ':' + GC.LastCategory;
+
+          // El riesgo bloquea aunque la categoria sea inocua
+          J.Enqueue(200, '{"model":"jev-1.13.0","answers":{"risk":{"type":"noul","noul":0.90},' +
+            '"category":{"type":"choice","choice":"read","confidence":0.98,' +
+            '"probabilities":{"read":0.99,"write":0.01,"financial":0.00}}}}');
+          Result := Result + '|riesgo=' + IfThen(GC.CheckToolCall('read_file', '{}', Reason),
+            'allowed', 'blocked') + ':' + Reason;
+
+          Result := Result + '|descripcion=' + SiNo(Descripcion <> '') + '|preguntas=' + NPreg.ToString;
+        finally
+          Parsed.Free;
+        end;
+
+        // OnCategorized anula el bloqueo por categoria
+        GC.OnCategorized := H.JevCategorizedAllow;
+        J.Enqueue(200, RESP_WRITE_FIN);
+        Result := Result + '|evento=' + IfThen(GC.CheckToolCall('anular_comprobante', '{}', Reason),
+          'allowed', 'blocked') + ':' + H.LastGuardCategory;
+      finally
+        GC.Free;
+        H.Free;
       end;
     end
 

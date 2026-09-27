@@ -21,6 +21,11 @@
 //      Se compara con el sanitizador por regex que MakerAI ya trae
 //      (SanitizerActive): la regex atrapa formulas conocidas; Jev, lo demas.
 //
+//   D. Categorias de permiso: el mismo TAiJevGuardrailClassifier clasifica
+//      cada tool call (read / write / delete / financial / external_comm /
+//      system) en la misma llamada que el riesgo, y bloquea las categorias
+//      prohibidas. ToolDescriptions aclara tools con nombre de dominio.
+//
 // Requiere la variable de entorno TYPESAFE_API_KEY (https://console.typesafe.ai/keys).
 // Costo: unos centavos de centavo por corrida.
 // =============================================================================
@@ -169,6 +174,60 @@ begin
   Writeln;
 end;
 
+procedure BloqueCategorias;
+const
+  CATS: array[0..5] of string = (
+    'read=Only reads or queries information; changes nothing',
+    'write=Creates or modifies records, files or settings of the business data',
+    'delete=Deletes records, files or data',
+    'financial=Moves money: payments, transfers, refunds, charges',
+    'external_comm=Sends information outside the company: e-mails, messages, posts, uploads',
+    'system=Runs operating-system commands or changes users, permissions or infrastructure');
+  CALLS: array[0..6] of TLlamada = (
+    (Tool: 'get_invoice';        Args: '{"number":"FV-1033"}'),
+    (Tool: 'save_comprobante';   Args: '{"tipo":"CE","movimientos":[1,2]}'),
+    (Tool: 'anular_comprobante'; Args: '{"tipo":"FV","numero":22}'),
+    (Tool: 'pay_invoice';        Args: '{"invoice":"FP-88","method":"PSE"}'),
+    (Tool: 'send_email';         Args: '{"to":"cliente@empresa.com","subject":"Factura","body":"Adjunta"}'),
+    (Tool: 'upload_to_drive';    Args: '{"file":"balance.xlsx","share_with":"auditor@externo.com"}'),
+    (Tool: 'grant_role';         Args: '{"user":"invitado","role":"admin"}'));
+var
+  Guard: TAiGuardrails;
+  JevGuard: TAiJevGuardrailClassifier;
+  C: string;
+  L: TLlamada;
+  Reason, Decision: string;
+begin
+  Writeln('--- D. Categorias de permiso (financial y system bloqueadas) ---');
+  Writeln;
+  Guard := TAiGuardrails.Create(nil);
+  JevGuard := TAiJevGuardrailClassifier.Create(nil);
+  try
+    for C in CATS do
+      JevGuard.Categories.Add(C);
+    JevGuard.BlockedCategories.Add('financial');
+    JevGuard.BlockedCategories.Add('system');
+    // Sin esto 'anular_comprobante' se lee como 'read' (0.83)
+    JevGuard.ToolDescriptions.Add('anular_comprobante=Anula un comprobante contable: genera el ' +
+      'comprobante de reversion y lo marca como anulado');
+    Guard.Classifier := JevGuard;
+
+    for L in CALLS do
+    begin
+      if Guard.CheckToolCall(L.Tool, L.Args, Reason) then
+        Decision := 'permitido'
+      else
+        Decision := 'BLOQUEADO  ' + Reason;
+      Writeln(Format('  %-19s %-14s %.2f  %s', [L.Tool, JevGuard.LastCategory,
+        JevGuard.LastCategoryConfidence, Decision]));
+    end;
+  finally
+    Guard.Free;
+    JevGuard.Free;
+  end;
+  Writeln;
+end;
+
 begin
   try
     if GetEnvironmentVariable('TYPESAFE_API_KEY') = '' then
@@ -181,6 +240,7 @@ begin
     BloqueGuardrails;
     Writeln;
     BloquePromptGuard;
+    BloqueCategorias;
   except
     on E: Exception do
     begin
