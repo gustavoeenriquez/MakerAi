@@ -92,6 +92,10 @@ From `uMakerAi.Core.pas`:
 
 `TAiEvalRunner.Scorer: TAiEvalScorerBase` + check `ExpectScore('criterio', min = 0.5)` (`ekScore`, agregado al final del enum para no mover ordinales). `Score(criterio, input, salida)` devuelve la probabilidad 0..1 de que la salida cumpla; el check pasa si es ≥ `min`. Un error del scorer falla el check con `scorer error: …` (no lanza). Sin `Scorer` asignado, el check falla con motivo explícito. Implementación con Jev: `TAiJevEvalScorer` (`Source/Tools/uMakerAi.Jev.Evals.pas`).
 
+## Guardrail de entrada (sep 27/2026)
+
+`TAiChatTools.PromptGuard: TAiPromptGuardBase` (en `uMakerAi.Chat.Tools`, con el record `TAiPromptVerdict`: `Allowed`, `Category`, `Score`, `Reason`). `TAiChat.Run` lo consulta para cada mensaje `user` **después** del sanitizador por regex (`SanitizerActive`) y antes de la memoria y del LLM. Si bloquea, dispara `OnPromptGuard(Sender, Verdict, var Action)` con `Action = saBlock` por defecto (mismo `TAiSanitizeAction` que el sanitizador: `saAllow` sigue, `saAllowWrapped` envuelve el prompt con `TSanitizerPipeline`); con `saBlock` llama `DoError` y `Run` devuelve `''` sin tocar la red. Si `CheckPrompt` lanza, `BlockOnError` (default `True`) decide. `TAiChatConnection` propaga `OnPromptGuard` como `OnSanitize`. Implementación con Jev: `TAiJevPromptGuard` (`Source/Tools/uMakerAi.Jev.PromptGuard.pas`).
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for source directory overview and [../../CLAUDE.md](../../CLAUDE.md) for project overview.

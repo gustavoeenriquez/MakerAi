@@ -83,6 +83,8 @@ type
 
   TAiSanitizeAction = (saBlock, saAllow, saAllowWrapped);
   TAiSanitizeEvent = procedure(Sender: TObject; const AResult: TSanitizeResult; var AAction: TAiSanitizeAction) of object;
+  // Guardrail de entrada: AAction llega en saBlock; la app puede permitir o envolver
+  TAiPromptGuardEvent = procedure(Sender: TObject; const AVerdict: TAiPromptVerdict; var AAction: TAiSanitizeAction) of object;
 
   // Agrupa todas las herramientas (tools) del chat en un único objeto persistente.
   // Se asigna a TAiChat.ChatTools y a TAiChatConnection.ChatTools.
@@ -102,6 +104,7 @@ type
     FTextEditorTool: TAiTextEditorTool;
     FComputerUseTool: TAiComputerUseTool;
     FDispatchClassifier: TAiDispatchClassifierBase;
+    FPromptGuard: TAiPromptGuardBase;
     procedure SetSpeechTool(const Value: TAiSpeechToolBase);
     procedure SetImageTool(const Value: TAiImageToolBase);
     procedure SetVideoTool(const Value: TAiVideoToolBase);
@@ -113,6 +116,7 @@ type
     procedure SetTextEditorTool(const Value: TAiTextEditorTool);
     procedure SetComputerUseTool(const Value: TAiComputerUseTool);
     procedure SetDispatchClassifier(const Value: TAiDispatchClassifierBase);
+    procedure SetPromptGuard(const Value: TAiPromptGuardBase);
     procedure Changed;
   public
     constructor Create(AOwner: TComponent);
@@ -136,6 +140,9 @@ type
     // cmSmartDispatch: clasificador rapido que reemplaza el pase 1 por LLM
     // (p.ej. TAiJevDispatchClassifier). Si no decide, se usa el LLM como antes.
     property DispatchClassifier: TAiDispatchClassifierBase read FDispatchClassifier write SetDispatchClassifier;
+    // Guardrail de entrada: revisa el mensaje del usuario antes del LLM
+    // (p.ej. TAiJevPromptGuard). Corre despues del sanitizador por regex.
+    property PromptGuard: TAiPromptGuardBase read FPromptGuard write SetPromptGuard;
   end;
 
   // ── Parámetros TTS (Text-to-Speech) ─────────────────────────────────────────
@@ -341,6 +348,7 @@ type
     FNewSystemConfigured: Boolean; // True si ModelCaps/SessionCaps fueron asignados explícitamente
     FSanitizerActive: Boolean;
     FOnSanitize: TAiSanitizeEvent;
+    FOnPromptGuard: TAiPromptGuardEvent;
     FPersistentMemory:  TAiPersistentMemoryBase;
     FMemoryTokenBudget: Integer;
     FAutoStoreMemories: Boolean;
@@ -678,6 +686,8 @@ type
     // eliminados — TODAS las herramientas viven unicamente en ChatTools.XxxTool
     property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive;
     property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
+    // ChatTools.PromptGuard bloqueo un mensaje; permite cambiar la accion
+    property OnPromptGuard: TAiPromptGuardEvent read FOnPromptGuard write FOnPromptGuard;
     property PersistentMemory:  TAiPersistentMemoryBase read FPersistentMemory write SetPersistentMemory;
     property MemoryTokenBudget: Integer    read FMemoryTokenBudget write FMemoryTokenBudget default 1500;
     property AutoStoreMemories: Boolean    read FAutoStoreMemories write FAutoStoreMemories default False;
@@ -1222,6 +1232,7 @@ begin
     if Assigned(FTextEditorTool) then FTextEditorTool.RemoveFreeNotification(FOwner);
     if Assigned(FComputerUseTool) then FComputerUseTool.RemoveFreeNotification(FOwner);
     if Assigned(FDispatchClassifier) then FDispatchClassifier.RemoveFreeNotification(FOwner);
+    if Assigned(FPromptGuard) then FPromptGuard.RemoveFreeNotification(FOwner);
   end;
   inherited;
 end;
@@ -1241,6 +1252,7 @@ begin
     if AComponent = FTextEditorTool then FTextEditorTool := nil;
     if AComponent = FComputerUseTool then FComputerUseTool := nil;
     if AComponent = FDispatchClassifier then FDispatchClassifier := nil;
+    if AComponent = FPromptGuard then FPromptGuard := nil;
   end;
 end;
 
@@ -1262,6 +1274,7 @@ begin
     TextEditorTool := Src.FTextEditorTool;
     ComputerUseTool := Src.FComputerUseTool;
     DispatchClassifier := Src.FDispatchClassifier;
+    PromptGuard := Src.FPromptGuard;
   end
   else
     inherited;
@@ -1300,6 +1313,17 @@ begin
   if FVideoTool <> Value then
   begin
     FVideoTool := Value;
+    if (Value <> nil) and Assigned(FOwner) then
+      Value.FreeNotification(FOwner);
+    Changed;
+  end;
+end;
+
+procedure TAiChatTools.SetPromptGuard(const Value: TAiPromptGuardBase);
+begin
+  if FPromptGuard <> Value then
+  begin
+    FPromptGuard := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
     Changed;
@@ -4153,6 +4177,7 @@ function TAiChat.Run(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
 var
   LSanitizeResult: TSanitizeResult;
   LSanitizeAction: TAiSanitizeAction;
+  LVerdict:        TAiPromptVerdict;
   LMemory:         IAiPersistentMemory;
   LMemCtx:         string;
   LOrigPrompt:     string;
@@ -4187,6 +4212,45 @@ begin
           ; // continúa sin modificar el prompt
         saAllowWrapped:
           AskMsg.Prompt := LSanitizeResult.WrappedText;
+      end;
+    end;
+  end;
+
+  // Guardrail de entrada semantico (ChatTools.PromptGuard): segunda capa, tras
+  // el sanitizador por regex. Juzga lo que ninguna regex anticipa (inyecciones
+  // reformuladas, credenciales, pedidos daninos, fuera de alcance).
+  if Assigned(FChatTools.FPromptGuard) and Assigned(AskMsg) and (AskMsg.Role = 'user') and
+     (AskMsg.Prompt <> '') then
+  begin
+    FChatTools.FPromptGuard.SetContext(Self);
+    try
+      LVerdict := FChatTools.FPromptGuard.CheckPrompt(AskMsg.Prompt);
+    except
+      on E: Exception do
+      begin
+        LVerdict.Allowed := not FChatTools.FPromptGuard.BlockOnError;
+        LVerdict.Category := 'error';
+        LVerdict.Score := 0;
+        LVerdict.Reason := 'prompt guard unavailable: ' + E.Message;
+      end;
+    end;
+    if not LVerdict.Allowed then
+    begin
+      AiSpanAttr(FRunSpan, 'guardrail.input.category', LVerdict.Category);
+      LSanitizeAction := saBlock; // accion por defecto: bloquear
+      if Assigned(FOnPromptGuard) then
+        FOnPromptGuard(Self, LVerdict, LSanitizeAction);
+      case LSanitizeAction of
+        saBlock:
+        begin
+          DoError('Mensaje bloqueado por el guardrail de entrada: ' + LVerdict.Reason, nil);
+          Result := '';
+          Exit;
+        end;
+        saAllow:
+          ; // continua sin modificar el prompt
+        saAllowWrapped:
+          AskMsg.Prompt := TSanitizerPipeline.Run(AskMsg.Prompt).WrappedText;
       end;
     end;
   end;

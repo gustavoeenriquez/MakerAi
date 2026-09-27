@@ -52,7 +52,7 @@ For agent graphs, `TAiJevRouterTool` (`Source/Agents/uMakerAi.Agents.Tools.JevRo
 node tool that writes the chosen route to `Blackboard['next_route']`, so an existing
 `lmConditional` link follows it — no engine change. Low confidence or a failing API falls back
 to `NextNo` instead of breaking the graph, and yes/no flags asked in the same call land in the
-blackboard for `lmExpression` or an `OnRoute` handler. Sixteen new regression cases run all
+blackboard for `lmExpression` or an `OnRoute` handler. Eighteen new regression cases run all
 of it offline against a fake transport.
 
 Two more hand-offs make Jev a drop-in for decisions the framework already takes:
@@ -67,6 +67,12 @@ Two more hand-offs make Jev a drop-in for decisions the framework already takes:
   enumerable (`rm -rf`) for free; Jev catches what no list anticipates — an e-mail carrying a
   password to an outside address, a transfer to an unknown account. Safe calls scored ≤ 0.17 and
   harmful ones ≥ 0.88 across 13 calibration cases. Fails closed by default.
+
+- **Input guardrail.** `ChatTools.PromptGuard` (new) checks the user's message *before* it reaches
+  the LLM, right after the existing regex sanitizer. `TAiJevPromptGuard` asks in one call about
+  prompt injection, credentials in the message, harmful requests and — given a `Scope` — off-topic
+  questions. On nine test messages the regex caught 1 of 6 problematic ones; Jev caught all 6 and
+  let the greeting and the legitimate questions through. A blocked message never touches the network.
 
 Demo: `085-JevDispatchGuard`.
 

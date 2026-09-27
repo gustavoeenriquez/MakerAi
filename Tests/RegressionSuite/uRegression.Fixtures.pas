@@ -12,6 +12,7 @@
 //   - TFakeJev: TAiJev sin red, con respuestas HTTP encoladas.
 //   - TFakeDispatchClassifier / TFakeImageTool: SmartDispatch sin red.
 //   - TPassageFakeJev: responde segun el pasaje (reranker de RAG sin red).
+//   - TFakePromptGuard: guardrail de entrada con veredicto fijo.
 // -----------------------------------------------------------------------------
 
 interface
@@ -21,7 +22,8 @@ uses
   IdContext, IdCustomHTTPServer, IdHTTPServer,
   System.Generics.Collections,
   uMakerAi.MCPServer.Core, uMakerAi.Agents, uMakerAi.Tools.Functions,
-  uMakerAi.Chat.Messages, uMakerAi.Chat.Tools, uMakerAi.Jev, uMakerAi.Embeddings.core;
+  uMakerAi.Chat.Messages, uMakerAi.Chat.Tools, uMakerAi.Jev, uMakerAi.Embeddings.core,
+  UMakerAi.Chat, System.Net.HttpClient;
 
 type
   // --- Tool MCP determinista: devuelve el texto en mayusculas ---
@@ -102,6 +104,15 @@ type
     function DoPost(const ABody: string; out AResponse: string): Integer; override;
   end;
 
+  // --- Guardrail de entrada sin red ---
+  TFakePromptGuard = class(TAiPromptGuardBase)
+  public
+    Block: Boolean;
+    RaiseError: Boolean;
+    Calls: Integer;
+    function CheckPrompt(const APrompt: string): TAiPromptVerdict; override;
+  end;
+
   // --- SmartDispatch sin red ---
   // Clasificador que responde lo que se le diga y anota con que tags lo llamaron
   TFakeDispatchClassifier = class(TAiDispatchClassifierBase)
@@ -128,7 +139,15 @@ type
     ToolExecuted: Boolean;   // marca si un tool bloqueado llego a ejecutarse
     BlockedFired: Boolean;   // marca si OnBlocked se disparo
     LastElicitMessage: string;
+    LastChatError: string;       // ultimo error reportado por un chat (OnError)
+    LastGuardCategory: string;   // categoria recibida en OnPromptGuard
 
+    // Chat: ultimo error reportado (OnError)
+    procedure ChatError(Sender: TObject; const ErrorMsg: string; Exception: Exception;
+      const AResponse: IHTTPResponse);
+    // OnPromptGuard que deja pasar el mensaje y anota la categoria
+    procedure PromptGuardAllow(Sender: TObject; const AVerdict: TAiPromptVerdict;
+      var AAction: TAiSanitizeAction);
     // Embeddings deterministas sin red: el mismo vector para cualquier texto
     procedure FakeEmbedding(Sender: TObject; const aInput, aUser, aModel, aEncodingFormat: String;
       aDimensions: Integer; var aEmbedding: TAiEmbeddingData);
@@ -317,6 +336,19 @@ end;
 
 { TFixtureHandlers }
 
+procedure TFixtureHandlers.ChatError(Sender: TObject; const ErrorMsg: string; Exception: Exception;
+  const AResponse: IHTTPResponse);
+begin
+  LastChatError := ErrorMsg;
+end;
+
+procedure TFixtureHandlers.PromptGuardAllow(Sender: TObject; const AVerdict: TAiPromptVerdict;
+  var AAction: TAiSanitizeAction);
+begin
+  LastGuardCategory := AVerdict.Category;
+  AAction := saAllow;
+end;
+
 procedure TFixtureHandlers.FakeEmbedding(Sender: TObject; const aInput, aUser, aModel,
   aEncodingFormat: String; aDimensions: Integer; var aEmbedding: TAiEmbeddingData);
 var
@@ -489,6 +521,25 @@ begin
     '"evidence":{"type":"noul","noul":' + Evidence + '},' +
     '"injection":{"type":"noul","noul":' + Injection + '}}}';
   Result := 200;
+end;
+
+{ TFakePromptGuard }
+
+function TFakePromptGuard.CheckPrompt(const APrompt: string): TAiPromptVerdict;
+begin
+  Inc(Calls);
+  if RaiseError then
+    raise Exception.Create('guard caido');
+  Result.Allowed := not Block;
+  Result.Category := '';
+  Result.Score := 0;
+  Result.Reason := '';
+  if Block then
+  begin
+    Result.Category := 'injection';
+    Result.Score := 0.95;
+    Result.Reason := 'fake injection 0.95';
+  end;
 end;
 
 end.

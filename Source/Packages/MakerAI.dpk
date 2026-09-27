@@ -63,6 +63,7 @@ contains
   uMakerAi.Jev.Guardrails in '..\Tools\uMakerAi.Jev.Guardrails.pas',
   uMakerAi.Jev.Evals in '..\Tools\uMakerAi.Jev.Evals.pas',
   uMakerAi.Jev.RAG in '..\Tools\uMakerAi.Jev.RAG.pas',
+  uMakerAi.Jev.PromptGuard in '..\Tools\uMakerAi.Jev.PromptGuard.pas',
   uMakerAi.Evals in '..\Core\uMakerAi.Evals.pas',
   uMakerAi.Embeddings in '..\Embeddings\uMakerAi.Embeddings.pas',
   uMakerAi.Prompts in '..\Core\uMakerAi.Prompts.pas',

@@ -88,6 +88,7 @@ type
     FChatMode: TAiChatMode;
     FSanitizerActive: Boolean;
     FOnSanitize: TAiSanitizeEvent;
+    FOnPromptGuard: TAiPromptGuardEvent;
 
     FTtsParams: TAiTtsParams;
     FTranscriptionParams: TAiTranscriptionParams;
@@ -152,6 +153,7 @@ type
     procedure SetAiFunctions(const Value: TAiFunctions);
     procedure SetSanitizerActive(const Value: Boolean);
     procedure SetOnSanitize(const Value: TAiSanitizeEvent);
+    procedure SetOnPromptGuard(const Value: TAiPromptGuardEvent);
     procedure SetPersistentMemory(const Value: TAiPersistentMemoryBase);
     procedure SetMemoryTokenBudget(const Value: Integer);
     procedure SetAutoStoreMemories(const Value: Boolean);
@@ -260,6 +262,7 @@ type
     property OnStateChange: TAiStateChangeEvent read FOnStateChange write FOnStateChange;
     property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive default False;
     property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
+    property OnPromptGuard: TAiPromptGuardEvent read FOnPromptGuard write SetOnPromptGuard;
 
     property PersistentMemory:  TAiPersistentMemoryBase read FPersistentMemory  write SetPersistentMemory;
     property MemoryTokenBudget: Integer    read FMemoryTokenBudget  write SetMemoryTokenBudget default 1500;
@@ -963,6 +966,7 @@ begin
     AChat.OnError := nil;
     AChat.OnStateChange := nil;
     AChat.OnSanitize := nil;
+    AChat.OnPromptGuard := nil;
 
   end
   else
@@ -979,6 +983,7 @@ begin
     AChat.OnError := Self.OnError;
     AChat.OnStateChange := Self.FOnStateChange;
     AChat.OnSanitize := Self.FOnSanitize;
+    AChat.OnPromptGuard := Self.FOnPromptGuard;
   end;
 end;
 
@@ -1449,6 +1454,13 @@ begin
   FOnSanitize := Value;
   if Assigned(FChat) then
     FChat.OnSanitize := Value;
+end;
+
+procedure TAiChatConnection.SetOnPromptGuard(const Value: TAiPromptGuardEvent);
+begin
+  FOnPromptGuard := Value;
+  if Assigned(FChat) then
+    FChat.OnPromptGuard := Value;
 end;
 
 procedure TAiChatConnection.SetPersistentMemory(const Value: TAiPersistentMemoryBase);

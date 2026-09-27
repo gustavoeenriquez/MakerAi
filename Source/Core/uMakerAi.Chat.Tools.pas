@@ -140,6 +140,28 @@ type
     procedure ExecuteReport(ResMsg, AskMsg: TAiChatMessage); virtual;
   end;
 
+  // Veredicto del guardrail de entrada (ChatTools.PromptGuard)
+  TAiPromptVerdict = record
+    Allowed: Boolean;
+    Category: string; // categoria que bloqueo ('injection', 'sensitive_data', ...); '' si paso
+    Score: Double;    // probabilidad de esa categoria (0..1)
+    Reason: string;
+  end;
+
+  // Guardrail de entrada: revisa el mensaje del usuario ANTES de enviarlo al
+  // LLM, despues del sanitizador por regex (SanitizerActive). La base permite
+  // todo. Si CheckPrompt lanza, BlockOnError decide (True = bloquear).
+  // Implementacion con Jev: TAiJevPromptGuard.
+  TAiPromptGuardBase = class(TAiCustomTool)
+  private
+    FBlockOnError: Boolean;
+  public
+    constructor Create(AOwner: TComponent); override;
+    function CheckPrompt(const APrompt: string): TAiPromptVerdict; virtual;
+  published
+    property BlockOnError: Boolean read FBlockOnError write FBlockOnError default True;
+  end;
+
   // Base para ChatTools.DispatchClassifier. La implementacion por defecto no
   // decide ('') y SmartDispatch sigue con su pase 1 por LLM.
   TAiDispatchClassifierBase = class(TAiCustomTool, IAiDispatchClassifier)
@@ -287,6 +309,22 @@ end;
 
 procedure TAiReportToolBase.ExecuteReport(ResMsg, AskMsg: TAiChatMessage);
 begin
+end;
+
+{ TAiPromptGuardBase }
+
+constructor TAiPromptGuardBase.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  FBlockOnError := True;
+end;
+
+function TAiPromptGuardBase.CheckPrompt(const APrompt: string): TAiPromptVerdict;
+begin
+  Result.Allowed := True;
+  Result.Category := '';
+  Result.Score := 0;
+  Result.Reason := '';
 end;
 
 { TAiDispatchClassifierBase }
