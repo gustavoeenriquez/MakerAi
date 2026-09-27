@@ -10,6 +10,7 @@
 //     server/discover, para validar el fallback dual-era del cliente.
 //   - Handlers 'of object' para grafos de agentes y guardrails.
 //   - TFakeJev: TAiJev sin red, con respuestas HTTP encoladas.
+//   - TFakeDispatchClassifier / TFakeImageTool: SmartDispatch sin red.
 // -----------------------------------------------------------------------------
 
 interface
@@ -19,7 +20,7 @@ uses
   IdContext, IdCustomHTTPServer, IdHTTPServer,
   System.Generics.Collections,
   uMakerAi.MCPServer.Core, uMakerAi.Agents, uMakerAi.Tools.Functions,
-  uMakerAi.Chat.Messages, uMakerAi.Jev;
+  uMakerAi.Chat.Messages, uMakerAi.Chat.Tools, uMakerAi.Jev;
 
 type
   // --- Tool MCP determinista: devuelve el texto en mayusculas ---
@@ -86,6 +87,26 @@ type
     procedure Enqueue(AStatus: Integer; const ABody: string);
     property LastBody: string read FLastBody;
     property Calls: Integer read FCalls;
+  end;
+
+  // --- SmartDispatch sin red ---
+  // Clasificador que responde lo que se le diga y anota con que tags lo llamaron
+  TFakeDispatchClassifier = class(TAiDispatchClassifierBase)
+  public
+    Answer: string;
+    LastTags: string;
+    Calls: Integer;
+  protected
+    function ClassifyDispatch(const APrompt: string; const ATags: TArray<string>): string; override;
+  end;
+
+  // Tool de imagen que solo anota el prompt recibido
+  TFakeImageTool = class(TAiImageToolBase)
+  public
+    LastPrompt: string;
+    Calls: Integer;
+  protected
+    procedure ExecuteImageGeneration(const APrompt: string; ResMsg, AskMsg: TAiChatMessage); override;
   end;
 
   // --- Handlers 'of object' para grafos y guardrails ---
@@ -391,6 +412,25 @@ begin
   R := FResponses.Dequeue;
   AResponse := R.Value;
   Result := R.Key;
+end;
+
+{ TFakeDispatchClassifier }
+
+function TFakeDispatchClassifier.ClassifyDispatch(const APrompt: string;
+  const ATags: TArray<string>): string;
+begin
+  Inc(Calls);
+  LastTags := string.Join(',', ATags);
+  Result := Answer;
+end;
+
+{ TFakeImageTool }
+
+procedure TFakeImageTool.ExecuteImageGeneration(const APrompt: string; ResMsg, AskMsg: TAiChatMessage);
+begin
+  Inc(Calls);
+  LastPrompt := APrompt;
+  ResMsg.Prompt := 'IMG:' + APrompt;
 end;
 
 end.

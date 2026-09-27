@@ -17,7 +17,8 @@ The `Source/Tools/` directory contains capability components that extend LLM fun
 
 ### Guardrails (política de seguridad)
 - `uMakerAi.Guardrails.pas` — `TAiGuardrails`: se asigna a `TAiFunctions.Guardrails` y se consulta en `DoCallFunction` **antes** de ejecutar cualquier tool (local, MCP o AutoMCP)
-  - Orden de evaluación: `Enabled` → `AllowedTools` (whitelist estricta, comodines `TMask`) → `BlockedTools` → `BlockedArgPatterns` (substrings prohibidos en el JSON de argumentos, case-insensitive) → `OnCheckToolCall` (veto/permiso programático final)
+  - Orden de evaluación: `Enabled` → `AllowedTools` (whitelist estricta, comodines `TMask`) → `BlockedTools` → `BlockedArgPatterns` (substrings prohibidos en el JSON de argumentos, case-insensitive) → `Classifier` (juicio semántico, solo para lo que las listas dejaron pasar; si lanza excepción **bloquea**) → `OnCheckToolCall` (veto/permiso programático final)
+  - `Classifier: TAiGuardrailClassifierBase` — clase base abstracta con `CheckToolCall(tool, args, out reason): Boolean`. Implementación con Jev: `TAiJevGuardrailClassifier`
   - Un bloqueo NO ejecuta el tool: pone `ToolCall.Response` con `{"error":"Blocked by guardrails: ..."}` para que el LLM replantee, dispara `OnBlocked` (auditoría), incrementa `BlockedCount` y marca el span con `guardrail.blocked`
 
 ### Jev (TypeSafe AI) — decisiones calibradas
@@ -31,6 +32,9 @@ The `Source/Tools/` directory contains capability components that extend LLM fun
   - `DoPost` es virtual: la suite de regresión lo sustituye (`TFakeJev`) para probar sin red
   - Jev no hace aritmética, no cuenta y no compara fechas de forma fiable: eso va en código. La confianza de una misma entrada varía unos puntos entre llamadas; dejar margen en los umbrales
   - Demo: `Demos/084-JevRouter`
+- `uMakerAi.Jev.SmartDispatch.pas` — `TAiJevDispatchClassifier` para `ChatTools.DispatchClassifier`: reemplaza el pase 1 de `cmSmartDispatch` (un LLM que clasifica) por una Choice a Jev sobre los tags con tool asignada. Si solo queda CHAT no llama a Jev. Con confianza < `MinConfidence` (0.6) devuelve `''` y el chat usa el LLM como antes. Descripciones de tags calibradas (15/15 en español e inglés); `TagDescriptions` (`TAG=descripcion`) las reemplaza
+- `uMakerAi.Jev.Guardrails.pas` — `TAiJevGuardrailClassifier` para `TAiGuardrails.Classifier`: Noul sobre `{tool, arguments}` con `Policy` (vacío = `DEFAULT_POLICY`: borrar/sobrescribir datos, exponer credenciales o datos privados, mover dinero, comandos destructivos); bloquea si P ≥ `BlockThreshold` (0.5). `BlockOnError` (default `True`) bloquea si Jev no responde. `LastRisk` guarda la última probabilidad. Calibrado: seguros ≤ 0.17, peligrosos ≥ 0.88 sobre 13 tool calls
+- Los tres adaptadores (`TAiJevRouterTool`, `TAiJevDispatchClassifier`, `TAiJevGuardrailClassifier`) aceptan un `TAiJev` externo en `Jev` (compartido, o el `TFakeJev` de la suite); si no, crean el suyo con `ApiKey`/`Model`. Demo: `Demos/085-JevDispatchGuard`
 
 ### Agent Automation Tools
 - `uMakerAi.Tools.Shell.pas` - Interactive shell execution (`TAiShell`)

@@ -443,6 +443,24 @@ Se recomienda un modelo de al menos 3b-4b parámetros para resultados confiables
 
 El Paso 1 es una llamada LLM completa (aunque con un contexto mínimo de 2 mensajes y respuesta muy corta ~10-30 tokens). El overhead típico es de 0.5-2 segundos dependiendo del modelo y hardware. Para casos de uso en tiempo real, considerar `cmConversation` con un modelo que soporte function calling nativo.
 
+### Paso 1 sin LLM: `ChatTools.DispatchClassifier`
+
+Desde sep 27/2026 el Paso 1 puede delegarse en un clasificador dedicado, más rápido y barato que una llamada LLM. Se asigna en `ChatTools.DispatchClassifier` (un `TAiDispatchClassifierBase`); la implementación incluida usa el modelo Jev de TypeSafe AI:
+
+```pascal
+uses uMakerAi.Jev.SmartDispatch;
+
+JevDispatch := TAiJevDispatchClassifier.Create(Self);   // ApiKey = '@TYPESAFE_API_KEY'
+AiChat.ChatTools.DispatchClassifier := JevDispatch;
+```
+
+- Solo se le ofrecen los tags cuya tool está asignada; si solo queda CHAT no se consulta.
+- **Tag de tool:** la tool recibe el prompt **original** del usuario (el clasificador no reescribe la petición como hace el LLM en el Paso 1).
+- **CHAT:** se responde con una llamada normal, **con el historial completo** de la conversación (el Paso 1 por LLM responde en un contexto aislado de dos mensajes).
+- Si el clasificador no está seguro (`MinConfidence`, 0.6 por defecto) o falla, el chat hace el Paso 1 por LLM como siempre.
+
+Calibración (jev-1.13.0): 15/15 peticiones en español e inglés, incluida "describe cómo se vería un gato rojo" → CHAT. Demo: `Demos/085-JevDispatchGuard`.
+
 ### Historial de conversación
 
 El historial se mantiene correctamente. Cada intercambio agrega exactamente un par `user/assistant` al historial. El Paso 1 de despacho es transparente — no aparece en el historial visible.
@@ -474,7 +492,9 @@ SmartDispatch despacha exactamente **una herramienta por mensaje**. No hay sopor
 
 | Archivo | Contenido relevante |
 |---------|---------------------|
-| `Source/Core/uMakerAi.Chat.pas` | `InternalRunSmartDispatch`, `BuildSmartDispatchPrompt`, `ParseSmartDispatchResponse` |
+| `Source/Core/uMakerAi.Chat.pas` | `InternalRunSmartDispatch`, `BuildSmartDispatchPrompt`, `ParseSmartDispatchResponse`, `ClassifySmartDispatch`, `RunSmartDispatchTool` |
+| `Source/Core/uMakerAi.Chat.Tools.pas` | `IAiDispatchClassifier`, `TAiDispatchClassifierBase` |
+| `Source/Tools/uMakerAi.Jev.SmartDispatch.pas` | `TAiJevDispatchClassifier` (Paso 1 con Jev) |
 | `Source/Core/uMakerAi.Core.pas` | `TAiChatMode` enum (valor `cmSmartDispatch`) |
 | `Source/Chat/uMakerAi.Chat.AiConnection.pas` | `TAiChatConnection.ChatMode` property |
 | `Source/Chat/uMakerAi.Chat.Tools.pas` | `TAiImageToolBase`, `TAiWebSearchToolBase`, `TAiSpeechToolBase`, `TAiVideoToolBase` |

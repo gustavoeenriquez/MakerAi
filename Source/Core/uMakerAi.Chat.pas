@@ -101,6 +101,7 @@ type
     FShellTool: TAiShell;
     FTextEditorTool: TAiTextEditorTool;
     FComputerUseTool: TAiComputerUseTool;
+    FDispatchClassifier: TAiDispatchClassifierBase;
     procedure SetSpeechTool(const Value: TAiSpeechToolBase);
     procedure SetImageTool(const Value: TAiImageToolBase);
     procedure SetVideoTool(const Value: TAiVideoToolBase);
@@ -111,6 +112,7 @@ type
     procedure SetShellTool(const Value: TAiShell);
     procedure SetTextEditorTool(const Value: TAiTextEditorTool);
     procedure SetComputerUseTool(const Value: TAiComputerUseTool);
+    procedure SetDispatchClassifier(const Value: TAiDispatchClassifierBase);
     procedure Changed;
   public
     constructor Create(AOwner: TComponent);
@@ -131,6 +133,9 @@ type
     property ShellTool: TAiShell read FShellTool write SetShellTool;
     property TextEditorTool: TAiTextEditorTool read FTextEditorTool write SetTextEditorTool;
     property ComputerUseTool: TAiComputerUseTool read FComputerUseTool write SetComputerUseTool;
+    // cmSmartDispatch: clasificador rapido que reemplaza el pase 1 por LLM
+    // (p.ej. TAiJevDispatchClassifier). Si no decide, se usa el LLM como antes.
+    property DispatchClassifier: TAiDispatchClassifierBase read FDispatchClassifier write SetDispatchClassifier;
   end;
 
   // ── Parámetros TTS (Text-to-Speech) ─────────────────────────────────────────
@@ -483,6 +488,12 @@ type
     procedure InternalRunSmartDispatch(ResMsg, AskMsg: TAiChatMessage);
     function BuildSmartDispatchPrompt: String;
     procedure ParseSmartDispatchResponse(const AResponse: String; out ATag, AContent: String);
+    // Tags que SmartDispatch puede usar: los de las tools asignadas + CHAT
+    function SmartDispatchTags: TArray<String>;
+    // Pase 1 con ChatTools.DispatchClassifier. '' = no decidio (usar el LLM)
+    function ClassifySmartDispatch(const APrompt: String): String;
+    // Pase 2 para un tag de tool (IMAGEGEN, VIDEOGEN, TTS, WEBSEARCH)
+    procedure RunSmartDispatchTool(const ATag, AContent: String; ResMsg, AskMsg: TAiChatMessage);
 
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
     function InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Virtual;
@@ -1210,6 +1221,7 @@ begin
     if Assigned(FShellTool)      then FShellTool.RemoveFreeNotification(FOwner);
     if Assigned(FTextEditorTool) then FTextEditorTool.RemoveFreeNotification(FOwner);
     if Assigned(FComputerUseTool) then FComputerUseTool.RemoveFreeNotification(FOwner);
+    if Assigned(FDispatchClassifier) then FDispatchClassifier.RemoveFreeNotification(FOwner);
   end;
   inherited;
 end;
@@ -1228,6 +1240,7 @@ begin
     if AComponent = FShellTool     then FShellTool     := nil;
     if AComponent = FTextEditorTool then FTextEditorTool := nil;
     if AComponent = FComputerUseTool then FComputerUseTool := nil;
+    if AComponent = FDispatchClassifier then FDispatchClassifier := nil;
   end;
 end;
 
@@ -1248,6 +1261,7 @@ begin
     ShellTool      := Src.FShellTool;
     TextEditorTool := Src.FTextEditorTool;
     ComputerUseTool := Src.FComputerUseTool;
+    DispatchClassifier := Src.FDispatchClassifier;
   end
   else
     inherited;
@@ -1286,6 +1300,17 @@ begin
   if FVideoTool <> Value then
   begin
     FVideoTool := Value;
+    if (Value <> nil) and Assigned(FOwner) then
+      Value.FreeNotification(FOwner);
+    Changed;
+  end;
+end;
+
+procedure TAiChatTools.SetDispatchClassifier(const Value: TAiDispatchClassifierBase);
+begin
+  if FDispatchClassifier <> Value then
+  begin
+    FDispatchClassifier := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
     Changed;
@@ -4683,9 +4708,25 @@ var
   LTag               : String;
   LContent           : String;
   LDispatchMsg       : TAiChatMessage;
-  LToolAsk           : TAiChatMessage;
   LDispatchPrompt    : String;
 begin
+  // --- Pase 1 rapido: clasificador dedicado (ChatTools.DispatchClassifier) ---
+  // Si decide, se ahorra la llamada de clasificacion al LLM. Diferencias con el
+  // pase por LLM: la tool recibe el prompt original (el clasificador no lo
+  // reescribe) y CHAT responde con completions normales, CON historial (el
+  // pase por LLM responde en un contexto aislado de dos mensajes).
+  LTag := ClassifySmartDispatch(AskMsg.Prompt);
+  if LTag = 'CHAT' then
+  begin
+    InternalRunCompletions(ResMsg, AskMsg);
+    Exit;
+  end
+  else if LTag <> '' then
+  begin
+    RunSmartDispatchTool(LTag, AskMsg.Prompt, ResMsg, AskMsg);
+    Exit;
+  end;
+
   LSavedSystemPrompt := FSystemPrompt.Text;
   LOnData            := FOnReceiveDataEvent;
   LOnDataEnd         := FOnReceiveDataEnd;
@@ -4744,26 +4785,86 @@ begin
     DoDataEnd(ResMsg, 'assistant', LContent);
   end
   else
-  begin
-    LToolAsk := TAiChatMessage.Create;
-    try
-      LToolAsk.Prompt := LContent;
-      LToolAsk.Role   := 'user';
-      DoStateChange(acsToolExecuting, 'Ejecutando: ' + LTag);
-      if LTag = 'IMAGEGEN' then
-        InternalRunImageGeneration(ResMsg, LToolAsk)
-      else if LTag = 'VIDEOGEN' then
-        InternalRunImageVideoGeneration(ResMsg, LToolAsk)
-      else if LTag = 'TTS' then
-        InternalRunSpeechGeneration(ResMsg, LToolAsk)
-      else if LTag = 'WEBSEARCH' then
-        InternalRunWebSearch(ResMsg, LToolAsk)
-      else
-        InternalRunCompletions(ResMsg, AskMsg);
-    finally
-      LToolAsk.Free;
+    RunSmartDispatchTool(LTag, LContent, ResMsg, AskMsg);
+end;
+
+procedure TAiChat.RunSmartDispatchTool(const ATag, AContent: String; ResMsg, AskMsg: TAiChatMessage);
+var
+  LToolAsk: TAiChatMessage;
+begin
+  LToolAsk := TAiChatMessage.Create;
+  try
+    LToolAsk.Prompt := AContent;
+    LToolAsk.Role   := 'user';
+    DoStateChange(acsToolExecuting, 'Ejecutando: ' + ATag);
+    if ATag = 'IMAGEGEN' then
+      InternalRunImageGeneration(ResMsg, LToolAsk)
+    else if ATag = 'VIDEOGEN' then
+      InternalRunImageVideoGeneration(ResMsg, LToolAsk)
+    else if ATag = 'TTS' then
+      InternalRunSpeechGeneration(ResMsg, LToolAsk)
+    else if ATag = 'WEBSEARCH' then
+      InternalRunWebSearch(ResMsg, LToolAsk)
+    else
+      InternalRunCompletions(ResMsg, AskMsg);
+  finally
+    LToolAsk.Free;
+  end;
+end;
+
+function TAiChat.SmartDispatchTags: TArray<String>;
+var
+  L: TList<String>;
+begin
+  L := TList<String>.Create;
+  try
+    if Assigned(FChatTools.FImageTool) then
+      L.Add('IMAGEGEN');
+    if Assigned(FChatTools.FVideoTool) then
+      L.Add('VIDEOGEN');
+    if Assigned(FChatTools.FSpeechTool) then
+      L.Add('TTS');
+    if Assigned(FChatTools.FWebSearchTool) then
+      L.Add('WEBSEARCH');
+    L.Add('CHAT');
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
+
+function TAiChat.ClassifySmartDispatch(const APrompt: String): String;
+var
+  LClassifier: IAiDispatchClassifier;
+  LTags: TArray<String>;
+  LTag: String;
+begin
+  Result := '';
+  if not Assigned(FChatTools.FDispatchClassifier) or
+     not Supports(FChatTools.FDispatchClassifier, IAiDispatchClassifier, LClassifier) then
+    Exit;
+
+  LTags := SmartDispatchTags;
+  FChatTools.FDispatchClassifier.SetContext(Self);
+  DoStateChange(acsReasoning, 'Clasificando solicitud...');
+  try
+    Result := UpperCase(Trim(LClassifier.ClassifyDispatch(APrompt, LTags)));
+  except
+    // Un clasificador caido no rompe el chat: se vuelve al pase por LLM. No se
+    // dispara OnError (muchas apps lo tratan como fatal); el clasificador
+    // registra su propio error (p.ej. TAiJev.LastError / OnError).
+    on E: Exception do
+    begin
+      DoStateChange(acsReasoning, 'Clasificador no disponible, se usa el LLM: ' + E.Message);
+      Exit('');
     end;
   end;
+
+  // Solo se aceptan tags cuya tool este asignada
+  for LTag in LTags do
+    if LTag = Result then
+      Exit;
+  Result := '';
 end;
 
 function TAiChat.BuildSmartDispatchPrompt: String;

@@ -59,6 +59,8 @@ contains
   uMakerAi.A2A.Client in '..\Agents\uMakerAi.A2A.Client.pas',
   uMakerAi.Guardrails in '..\Tools\uMakerAi.Guardrails.pas',
   uMakerAi.Jev in '..\Tools\uMakerAi.Jev.pas',
+  uMakerAi.Jev.SmartDispatch in '..\Tools\uMakerAi.Jev.SmartDispatch.pas',
+  uMakerAi.Jev.Guardrails in '..\Tools\uMakerAi.Jev.Guardrails.pas',
   uMakerAi.Evals in '..\Core\uMakerAi.Evals.pas',
   uMakerAi.Embeddings in '..\Embeddings\uMakerAi.Embeddings.pas',
   uMakerAi.Prompts in '..\Core\uMakerAi.Prompts.pas',

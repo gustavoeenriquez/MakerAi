@@ -84,6 +84,10 @@ From `uMakerAi.Core.pas`:
 - `GetFileExtensionFromMimeType(MimeType)` - Reverse lookup
 - `StreamToBase64(Stream)` - Converts TMemoryStream to Base64 string
 
+## SmartDispatch: clasificador dedicado (sep 27/2026)
+
+`TAiChatTools.DispatchClassifier: TAiDispatchClassifierBase` (interfaz `IAiDispatchClassifier` en `uMakerAi.Chat.Tools`). Si está asignado, `InternalRunSmartDispatch` le pide el tag antes del pase 1 por LLM (`ClassifySmartDispatch`); solo se aceptan tags cuya tool esté asignada (`SmartDispatchTags`). Tag de tool → `RunSmartDispatchTool` con el **prompt original** (el clasificador no reescribe). `CHAT` → `InternalRunCompletions` normal, **con historial** (el pase por LLM responde en un contexto aislado de dos mensajes). `''` o excepción → pase 1 por LLM como siempre; la excepción no dispara `OnError`, solo `DoStateChange`. Implementación con Jev: `TAiJevDispatchClassifier` (`Source/Tools/uMakerAi.Jev.SmartDispatch.pas`).
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for source directory overview and [../../CLAUDE.md](../../CLAUDE.md) for project overview.

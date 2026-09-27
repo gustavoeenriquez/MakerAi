@@ -52,8 +52,23 @@ For agent graphs, `TAiJevRouterTool` (`Source/Agents/uMakerAi.Agents.Tools.JevRo
 node tool that writes the chosen route to `Blackboard['next_route']`, so an existing
 `lmConditional` link follows it — no engine change. Low confidence or a failing API falls back
 to `NextNo` instead of breaking the graph, and yes/no flags asked in the same call land in the
-blackboard for `lmExpression` or an `OnRoute` handler. Ten new regression cases run all of it
-offline against a fake transport.
+blackboard for `lmExpression` or an `OnRoute` handler. Thirteen new regression cases run all
+of it offline against a fake transport.
+
+Two more hand-offs make Jev a drop-in for decisions the framework already takes:
+
+- **SmartDispatch without the classification LLM call.** `ChatTools.DispatchClassifier` (new,
+  provider-neutral) receives the tags whose tools are assigned; `TAiJevDispatchClassifier` answers
+  with Jev. Tool requests skip one LLM round-trip, and CHAT replies are now generated **with the
+  conversation history** (the LLM pass answered in an isolated two-message context). Unsure or
+  failing → the usual LLM pass. 15/15 on Spanish and English requests.
+- **Semantic guardrails.** `TAiGuardrails.Classifier` (new) judges the tool calls the allow/block
+  lists let through; `TAiJevGuardrailClassifier` blocks when P(risk) ≥ 0.5. Lists still catch the
+  enumerable (`rm -rf`) for free; Jev catches what no list anticipates — an e-mail carrying a
+  password to an outside address, a transfer to an unknown account. Safe calls scored ≤ 0.17 and
+  harmful ones ≥ 0.88 across 13 calibration cases. Fails closed by default.
+
+Demo: `085-JevDispatchGuard`.
 
 **Also fixed:** `lmExpression` parsed numbers with the regional settings only, so on a Windows
 using a decimal comma `'10.25' > 9.5` was compared as text and returned `False`. It now falls

@@ -63,6 +63,8 @@ uses
   // 'Claude' que resolver).
   uMakerAi.Chat.AiConnection, uMakerAi.Chat.Initializations,
   uMakerAi.Guardrails, uMakerAi.Jev, uMakerAi.Agents.Tools.JevRouter,
+  uMakerAi.Jev.SmartDispatch, uMakerAi.Jev.Guardrails, uMakerAi.Chat.Tools,
+  UMakerAi.Chat, uMakerAi.Chat.OpenAi,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
   uMakerAi.RAG.Vector.Driver.BinFile,
@@ -361,6 +363,25 @@ begin
   FRunner.AddCase('agents.jevrouter.api-error')
     .Input('jev:router-error')
     .ExpectEquals('esCompleted|hola>humano>Fin|choice=|conf=|fuentes=|error=si');
+
+  // SmartDispatch con ChatTools.DispatchClassifier sobre un TAiChat real: el
+  // tag decidido por el clasificador va directo a la tool, sin pase por LLM
+  // (la URL apunta a un puerto cerrado: cualquier llamada de red fallaria).
+  FRunner.AddCase('chat.smartdispatch.classifier')
+    .Input('jev:dispatch-chat')
+    .ExpectEquals('tags=IMAGEGEN,CHAT|clasificador=1|imagen=1|prompt=dibuja un gato rojo');
+
+  // TAiJevDispatchClassifier: solo ofrece los tags recibidos, respeta
+  // MinConfidence y no llama a Jev cuando solo queda CHAT
+  FRunner.AddCase('jev.dispatch.classifier')
+    .Input('jev:dispatch')
+    .ExpectEquals('alta=IMAGEGEN|opciones=IMAGEGEN,WEBSEARCH,CHAT|baja=|ultima=IMAGEGEN|solo-chat=CHAT|calls=2');
+
+  // TAiGuardrails.Classifier con TAiJevGuardrailClassifier
+  FRunner.AddCase('policy.guard.jev-classifier')
+    .Input('jev:guard')
+    .ExpectEquals('riesgo=blocked|motivo=Jev risk 0.95 >= 0.50|seguro=allowed|lista=blocked|jev-consultado=no|' +
+      'error-cerrado=blocked|error-abierto=allowed');
 
   // lmExpression con punto decimal en un Windows con coma decimal: antes
   // '10.25 > 9.5' se comparaba como texto y daba False
@@ -2176,6 +2197,104 @@ begin
     begin
       J.Enqueue(401, '{"detail":"invalid key"}');
       Result := RunRouterGraph;
+    end
+
+    else if AScenario = 'jev:dispatch-chat' then
+    begin
+      var Chat := TAiOpenChat.Create(nil);
+      var Cls := TFakeDispatchClassifier.Create(nil);
+      var Img := TFakeImageTool.Create(nil);
+      try
+        Chat.ApiKey := 'sin-red';
+        Chat.Url := 'http://127.0.0.1:1/';
+        Chat.Asynchronous := False;
+        Chat.ChatMode := cmSmartDispatch;
+        Chat.ChatTools.ImageTool := Img;
+        Chat.ChatTools.DispatchClassifier := Cls;
+        Cls.Answer := 'IMAGEGEN';
+        Chat.AddMessageAndRun('dibuja un gato rojo', 'user', []);
+        Result := 'tags=' + Cls.LastTags + '|clasificador=' + Cls.Calls.ToString +
+          '|imagen=' + Img.Calls.ToString + '|prompt=' + Img.LastPrompt;
+      finally
+        Chat.Free;
+        Cls.Free;
+        Img.Free;
+      end;
+    end
+
+    else if AScenario = 'jev:dispatch' then
+    begin
+      var D := TAiJevDispatchClassifier.Create(nil);
+      try
+        D.Jev := J;
+        var Intf: IAiDispatchClassifier;
+        Supports(D, IAiDispatchClassifier, Intf);
+        // Confianza alta: decide
+        J.Enqueue(200, '{"model":"jev-1.13.0","answers":{"tag":{"type":"choice","choice":"IMAGEGEN",' +
+          '"confidence":0.95,"probabilities":{"IMAGEGEN":0.97,"WEBSEARCH":0.02,"CHAT":0.01}}}}');
+        Result := 'alta=' + Intf.ClassifyDispatch('dibuja un gato', ['IMAGEGEN', 'WEBSEARCH', 'CHAT']);
+        Parsed := TJSONObject.ParseJSONValue(J.LastBody);
+        try
+          var Opciones := '';
+          for var Pair in (Parsed as TJSONObject).GetValue<TJSONObject>('questions')
+            .GetValue<TJSONObject>('tag').GetValue<TJSONObject>('criteria') do
+            Opciones := Opciones + IfThen(Opciones <> '', ',', '') + Pair.JsonString.Value;
+          Result := Result + '|opciones=' + Opciones;
+        finally
+          Parsed.Free;
+        end;
+        // Confianza baja: no decide ('') pero recuerda la eleccion
+        J.Enqueue(200, '{"model":"jev-1.13.0","answers":{"tag":{"type":"choice","choice":"IMAGEGEN",' +
+          '"confidence":0.4,"probabilities":{"IMAGEGEN":0.6,"CHAT":0.4}}}}');
+        Result := Result + '|baja=' + Intf.ClassifyDispatch('algo', ['IMAGEGEN', 'CHAT']) +
+          '|ultima=' + D.LastTag;
+        // Solo CHAT: responde sin consultar a Jev
+        Result := Result + '|solo-chat=' + Intf.ClassifyDispatch('hola', ['CHAT']) +
+          '|calls=' + J.Calls.ToString;
+        Intf := nil; // soltar la interfaz antes de liberar el componente
+      finally
+        D.Free;
+      end;
+    end
+
+    else if AScenario = 'jev:guard' then
+    begin
+      var G := TAiGuardrails.Create(nil);
+      var C := TAiJevGuardrailClassifier.Create(nil);
+      try
+        C.Jev := J;
+        G.Classifier := C;
+        var Reason: string;
+        const NOUL_ALTO = '{"model":"jev-1.13.0","answers":{"risk":{"type":"noul","noul":0.95}}}';
+        const NOUL_BAJO = '{"model":"jev-1.13.0","answers":{"risk":{"type":"noul","noul":0.10}}}';
+
+        J.Enqueue(200, NOUL_ALTO);
+        Result := 'riesgo=' + IfThen(G.CheckToolCall('send_email', '{"body":"la clave es X"}', Reason),
+          'allowed', 'blocked') + '|motivo=' + Reason;
+
+        J.Enqueue(200, NOUL_BAJO);
+        Result := Result + '|seguro=' + IfThen(G.CheckToolCall('get_weather', '{"city":"Cali"}', Reason),
+          'allowed', 'blocked');
+
+        // Lo que ya bloquean las listas no llega a Jev
+        var CallsAntes := J.Calls;
+        G.BlockedTools.Add('shell_*');
+        Result := Result + '|lista=' + IfThen(G.CheckToolCall('shell_exec', '{}', Reason), 'allowed', 'blocked') +
+          '|jev-consultado=' + SiNo(J.Calls > CallsAntes);
+        G.BlockedTools.Clear;
+
+        // Jev caido: BlockOnError decide
+        J.Enqueue(401, '{"detail":"invalid key"}');
+        Result := Result + '|error-cerrado=' + IfThen(G.CheckToolCall('read_file', '{}', Reason),
+          'allowed', 'blocked');
+        C.BlockOnError := False;
+        J.Enqueue(401, '{"detail":"invalid key"}');
+        Result := Result + '|error-abierto=' + IfThen(G.CheckToolCall('read_file', '{}', Reason),
+          'allowed', 'blocked');
+      finally
+        G.Free;
+        C.Free;
+      end;
     end
 
     else
