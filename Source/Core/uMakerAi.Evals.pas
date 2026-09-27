@@ -32,6 +32,9 @@ unit uMakerAi.Evals;
 // Checks deterministas: Contains / NotContains / Regex / Equals / MinLength /
 // MaxLength. Check semantico: ExpectJudge('criterio') usa un TAiChat como
 // LLM-as-judge (propiedad Judge) que responde PASS/FAIL contra el criterio.
+// Check calibrado: ExpectScore('criterio', 0.7) usa un TAiEvalScorerBase
+// (propiedad Scorer, p.ej. TAiJevEvalScorer) que devuelve la probabilidad de
+// que la salida cumpla el criterio; pasa si alcanza el minimo.
 //
 // Cada caso emite un span OTel 'eval.case <name>' (via uMakerAi.Telemetry) con
 // el resultado, de modo que los evals quedan trazados junto al resto del
@@ -46,13 +49,22 @@ uses
   uMakerAi.Chat;
 
 type
+  // ekScore va al final: los ordinales anteriores no cambian
   TAiEvalCheckKind = (ekContains, ekNotContains, ekRegex, ekEquals,
-    ekMinLength, ekMaxLength, ekJudge);
+    ekMinLength, ekMaxLength, ekJudge, ekScore);
 
   TAiEvalCheck = class
   public
     Kind: TAiEvalCheckKind;
     Value: string; // texto esperado / patron / criterio del judge / longitud
+    MinScore: Double; // ekScore: probabilidad minima para pasar
+  end;
+
+  // Juez calibrado para ExpectScore: probabilidad (0..1) de que AActual cumpla
+  // ACriteria para el input AInput. Implementacion con Jev: TAiJevEvalScorer.
+  TAiEvalScorerBase = class(TComponent)
+  public
+    function Score(const ACriteria, AInput, AActual: string): Double; virtual; abstract;
   end;
 
   TAiEvalCase = class
@@ -73,6 +85,8 @@ type
     function ExpectMaxLength(ALength: Integer): TAiEvalCase;
     // Criterio semantico evaluado por el LLM judge (propiedad Judge del runner)
     function ExpectJudge(const ACriteria: string): TAiEvalCase;
+    // Criterio semantico con probabilidad calibrada (propiedad Scorer del runner)
+    function ExpectScore(const ACriteria: string; AMinScore: Double = 0.5): TAiEvalCase;
     property CaseName: string read FName;
   end;
 
@@ -108,8 +122,11 @@ type
   private
     FCases: TObjectList<TAiEvalCase>;
     FJudge: TAiChat;
+    FScorer: TAiEvalScorerBase;
     procedure SetJudge(const Value: TAiChat);
+    procedure SetScorer(const Value: TAiEvalScorerBase);
     function RunJudge(const ACriteria, AActual: string; out AReason: string): Boolean;
+    function RunScorer(ACheck: TAiEvalCheck; const AInput, AActual: string; out AReason: string): Boolean;
     function EvaluateCase(ACase: TAiEvalCase; const AActual: string; out AReason: string): Boolean;
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
@@ -128,6 +145,8 @@ type
   published
     // Chat usado como LLM-as-judge para los checks ExpectJudge (opcional)
     property Judge: TAiChat read FJudge write SetJudge;
+    // Juez calibrado para los checks ExpectScore (opcional)
+    property Scorer: TAiEvalScorerBase read FScorer write SetScorer;
   end;
 
 procedure Register;
@@ -209,6 +228,12 @@ end;
 function TAiEvalCase.ExpectJudge(const ACriteria: string): TAiEvalCase;
 begin
   Result := AddCheck(ekJudge, ACriteria);
+end;
+
+function TAiEvalCase.ExpectScore(const ACriteria: string; AMinScore: Double): TAiEvalCase;
+begin
+  Result := AddCheck(ekScore, ACriteria);
+  FChecks.Last.MinScore := AMinScore;
 end;
 
 { TAiEvalReport }
@@ -318,6 +343,47 @@ begin
   inherited;
   if (Operation = opRemove) and (AComponent = FJudge) then
     FJudge := nil;
+  if (Operation = opRemove) and (AComponent = FScorer) then
+    FScorer := nil;
+end;
+
+procedure TAiEvalRunner.SetScorer(const Value: TAiEvalScorerBase);
+begin
+  if FScorer = Value then
+    Exit;
+  if Assigned(FScorer) then
+    FScorer.RemoveFreeNotification(Self);
+  FScorer := Value;
+  if Assigned(FScorer) then
+    FScorer.FreeNotification(Self);
+end;
+
+function TAiEvalRunner.RunScorer(ACheck: TAiEvalCheck; const AInput, AActual: string;
+  out AReason: string): Boolean;
+var
+  P: Double;
+begin
+  Result := False;
+  AReason := '';
+  if not Assigned(FScorer) then
+  begin
+    AReason := 'score check requested but no Scorer assigned';
+    Exit;
+  end;
+  try
+    P := FScorer.Score(ACheck.Value, AInput, AActual);
+  except
+    on E: Exception do
+    begin
+      AReason := 'scorer error: ' + E.Message;
+      Exit;
+    end;
+  end;
+  Result := P >= ACheck.MinScore;
+  if not Result then
+    AReason := Format('score %s < %s (criteria: %s)', [
+      FormatFloat('0.00', P, TFormatSettings.Invariant),
+      FormatFloat('0.00', ACheck.MinScore, TFormatSettings.Invariant), ACheck.Value]);
 end;
 
 procedure TAiEvalRunner.SetJudge(const Value: TAiChat);
@@ -417,6 +483,12 @@ begin
         end;
       ekJudge:
         if not RunJudge(C.Value, AActual, JudgeReason) then
+        begin
+          Result := False;
+          AReason := JudgeReason;
+        end;
+      ekScore:
+        if not RunScorer(C, ACase.FInput, AActual, JudgeReason) then
         begin
           Result := False;
           AReason := JudgeReason;

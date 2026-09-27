@@ -52,7 +52,7 @@ For agent graphs, `TAiJevRouterTool` (`Source/Agents/uMakerAi.Agents.Tools.JevRo
 node tool that writes the chosen route to `Blackboard['next_route']`, so an existing
 `lmConditional` link follows it — no engine change. Low confidence or a failing API falls back
 to `NextNo` instead of breaking the graph, and yes/no flags asked in the same call land in the
-blackboard for `lmExpression` or an `OnRoute` handler. Thirteen new regression cases run all
+blackboard for `lmExpression` or an `OnRoute` handler. Sixteen new regression cases run all
 of it offline against a fake transport.
 
 Two more hand-offs make Jev a drop-in for decisions the framework already takes:
@@ -69,6 +69,17 @@ Two more hand-offs make Jev a drop-in for decisions the framework already takes:
   harmful ones ≥ 0.88 across 13 calibration cases. Fails closed by default.
 
 Demo: `085-JevDispatchGuard`.
+
+And two more for quality and retrieval:
+
+- **Calibrated eval judge.** `TAiEvalRunner.Scorer` (new) answers `ExpectScore('criterion', 0.7)`
+  with the probability that the output meets the criterion — faster and cheaper than an LLM
+  judge, and the bar is set in code. `TAiJevEvalScorer`: passing answers ≥ 0.97, failing ≤ 0.02
+  on 10 calibration pairs.
+- **Semantic reranking for RAG.** `TAiRAGVector.Reranker` (new) replaces the cosine second stage
+  of VQL `RERANK`: `TAiJevRAGReranker` scores each passage for usable evidence and **drops
+  passages that try to instruct the model** (prompt injection). No embeddings are recomputed;
+  if the reranker fails, the search falls back to cosine. Demo: `086-JevEvalsRag`.
 
 **Also fixed:** `lmExpression` parsed numbers with the regional settings only, so on a Windows
 using a decimal comma `'10.25' > 9.5` was compared as text and returned `False`. It now falls

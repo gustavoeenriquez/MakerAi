@@ -89,6 +89,7 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 |------|---------|-------------|
 | 084-JevRouter | **Enrutar consultas a agentes especializados** antes de gastar un LLM. Requiere `TYPESAFE_API_KEY`. Tiene CLAUDE.md propio | `TAiJev`: una llamada con Choice (dominio) + Noul por dominio (consultas cruzadas) + Noul `necesita_fuentes` (agente con o sin RAG); reglas y catálogo de agentes en código. Bloque C: lo mismo dentro de un grafo con `TAiJevRouterTool` + `lmConditional` |
 | 085-JevDispatchGuard | **Jev en SmartDispatch y en Guardrails**. Requiere `TYPESAFE_API_KEY`. Tiene CLAUDE.md propio | `TAiJevDispatchClassifier` (pase 1 de `cmSmartDispatch` sin LLM) y `TAiJevGuardrailClassifier` en `TAiGuardrails.Classifier`: listas para lo enumerable, Jev para el riesgo que ninguna lista anticipa |
+| 086-JevEvalsRag | **Jev en Evals y en RAG**. Requiere `TYPESAFE_API_KEY`. Tiene CLAUDE.md propio | `TAiJevEvalScorer` en `TAiEvalRunner.Scorer` (`ExpectScore`) y `TAiJevRAGReranker` (evidencia por pasaje + descarte de inyecciones) |
 
 ### Audio / Speech (06x)
 | Demo | Purpose | Key Pattern |

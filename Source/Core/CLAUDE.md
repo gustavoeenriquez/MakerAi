@@ -88,6 +88,10 @@ From `uMakerAi.Core.pas`:
 
 `TAiChatTools.DispatchClassifier: TAiDispatchClassifierBase` (interfaz `IAiDispatchClassifier` en `uMakerAi.Chat.Tools`). Si está asignado, `InternalRunSmartDispatch` le pide el tag antes del pase 1 por LLM (`ClassifySmartDispatch`); solo se aceptan tags cuya tool esté asignada (`SmartDispatchTags`). Tag de tool → `RunSmartDispatchTool` con el **prompt original** (el clasificador no reescribe). `CHAT` → `InternalRunCompletions` normal, **con historial** (el pase por LLM responde en un contexto aislado de dos mensajes). `''` o excepción → pase 1 por LLM como siempre; la excepción no dispara `OnError`, solo `DoStateChange`. Implementación con Jev: `TAiJevDispatchClassifier` (`Source/Tools/uMakerAi.Jev.SmartDispatch.pas`).
 
+## Evals: juez calibrado (sep 27/2026)
+
+`TAiEvalRunner.Scorer: TAiEvalScorerBase` + check `ExpectScore('criterio', min = 0.5)` (`ekScore`, agregado al final del enum para no mover ordinales). `Score(criterio, input, salida)` devuelve la probabilidad 0..1 de que la salida cumpla; el check pasa si es ≥ `min`. Un error del scorer falla el check con `scorer error: …` (no lanza). Sin `Scorer` asignado, el check falla con motivo explícito. Implementación con Jev: `TAiJevEvalScorer` (`Source/Tools/uMakerAi.Jev.Evals.pas`).
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for source directory overview and [../../CLAUDE.md](../../CLAUDE.md) for project overview.

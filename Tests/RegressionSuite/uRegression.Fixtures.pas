@@ -11,6 +11,7 @@
 //   - Handlers 'of object' para grafos de agentes y guardrails.
 //   - TFakeJev: TAiJev sin red, con respuestas HTTP encoladas.
 //   - TFakeDispatchClassifier / TFakeImageTool: SmartDispatch sin red.
+//   - TPassageFakeJev: responde segun el pasaje (reranker de RAG sin red).
 // -----------------------------------------------------------------------------
 
 interface
@@ -20,7 +21,7 @@ uses
   IdContext, IdCustomHTTPServer, IdHTTPServer,
   System.Generics.Collections,
   uMakerAi.MCPServer.Core, uMakerAi.Agents, uMakerAi.Tools.Functions,
-  uMakerAi.Chat.Messages, uMakerAi.Chat.Tools, uMakerAi.Jev;
+  uMakerAi.Chat.Messages, uMakerAi.Chat.Tools, uMakerAi.Jev, uMakerAi.Embeddings.core;
 
 type
   // --- Tool MCP determinista: devuelve el texto en mayusculas ---
@@ -89,6 +90,18 @@ type
     property Calls: Integer read FCalls;
   end;
 
+  // --- Reranker de RAG sin red ---
+  // Responde segun el contenido del pasaje (no segun el orden de llegada):
+  // 'NIC 16' -> evidencia 0.95; 'IGNORA' -> inyeccion 0.98; resto -> 0.10.
+  // Con FailAll devuelve 500 (para probar la caida al rerank por coseno).
+  TPassageFakeJev = class(TAiJev)
+  public
+    FailAll: Boolean;
+    Calls: Integer;
+  protected
+    function DoPost(const ABody: string; out AResponse: string): Integer; override;
+  end;
+
   // --- SmartDispatch sin red ---
   // Clasificador que responde lo que se le diga y anota con que tags lo llamaron
   TFakeDispatchClassifier = class(TAiDispatchClassifierBase)
@@ -116,6 +129,9 @@ type
     BlockedFired: Boolean;   // marca si OnBlocked se disparo
     LastElicitMessage: string;
 
+    // Embeddings deterministas sin red: el mismo vector para cualquier texto
+    procedure FakeEmbedding(Sender: TObject; const aInput, aUser, aModel, aEncodingFormat: String;
+      aDimensions: Integer; var aEmbedding: TAiEmbeddingData);
     // Nodo de grafo: encadena el nombre del nodo al input
     procedure NodeExec(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
     // Igual pero lento: fuerza solapamiento real entre tasks concurrentes y
@@ -301,6 +317,16 @@ end;
 
 { TFixtureHandlers }
 
+procedure TFixtureHandlers.FakeEmbedding(Sender: TObject; const aInput, aUser, aModel,
+  aEncodingFormat: String; aDimensions: Integer; var aEmbedding: TAiEmbeddingData);
+var
+  I: Integer;
+begin
+  SetLength(aEmbedding, 4);
+  for I := 0 to 3 do
+    aEmbedding[I] := 0.5;
+end;
+
 procedure TFixtureHandlers.NodeExec(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
 begin
   Output := Input + '>' + Node.Name;
@@ -431,6 +457,38 @@ begin
   Inc(Calls);
   LastPrompt := APrompt;
   ResMsg.Prompt := 'IMG:' + APrompt;
+end;
+
+{ TPassageFakeJev }
+
+function TPassageFakeJev.DoPost(const ABody: string; out AResponse: string): Integer;
+var
+  Body: TJSONValue;
+  Passage: string;
+  Evidence, Injection: string;
+begin
+  Inc(Calls);
+  if FailAll then
+  begin
+    AResponse := '{"detail":"caido"}';
+    Exit(500);
+  end;
+  Body := TJSONObject.ParseJSONValue(ABody);
+  try
+    Passage := (Body as TJSONObject).GetValue<TJSONObject>('state').GetValue<string>('passage', '');
+  finally
+    Body.Free;
+  end;
+  Evidence := '0.10';
+  Injection := '0.05';
+  if Passage.Contains('NIC 16') then
+    Evidence := '0.95';
+  if Passage.Contains('IGNORA') then
+    Injection := '0.98';
+  AResponse := '{"model":"jev-1.13.0","answers":{' +
+    '"evidence":{"type":"noul","noul":' + Evidence + '},' +
+    '"injection":{"type":"noul","noul":' + Injection + '}}}';
+  Result := 200;
 end;
 
 end.

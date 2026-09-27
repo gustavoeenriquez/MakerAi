@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: < 1 segundo.
 
-## Cobertura actual (51 casos)
+## Cobertura actual (54 casos)
 
 | Área | Casos |
 |------|-------|
@@ -36,6 +36,8 @@ Duración típica: < 1 segundo.
 | Agentes | grafo secuencial con status final y salida encadenada; `lmExpression` con punto decimal bajo configuración regional con coma |
 | SmartDispatch + Jev | `ChatTools.DispatchClassifier` sobre un `TAiOpenChat` real (URL a puerto cerrado): el tag va directo a la tool sin pase por LLM; `TAiJevDispatchClassifier` solo ofrece los tags recibidos, respeta `MinConfidence` y no consulta a Jev si solo queda CHAT |
 | Guardrails + Jev | `TAiGuardrails.Classifier` con `TAiJevGuardrailClassifier`: riesgo alto bloquea con motivo, bajo permite, lo que ya bloquean las listas no llega a Jev, `BlockOnError` cerrado/abierto |
+| Evals + Jev | `TAiEvalRunner.Scorer` con `TAiJevEvalScorer`: `ExpectScore` pasa, falla con el puntaje en el motivo, un error de Jev falla el check sin excepción, el input viaja en el state |
+| RAG + Jev | `TAiRAGVector.Reranker` con `TAiJevRAGReranker` en el pipeline VQL real (embeddings falsos vía `TAiEmbeddingsCore.OnGetEmbedding`): ordena por evidencia y descarta el pasaje inyectado; reranker caído → cae al coseno sin excepción |
 | Agentes + Jev | `TAiJevRouterTool` en un grafo real: ruta elegida, confianza baja → `NextNo`, Jev caído (401) → `NextNo` sin romper el grafo, y las claves `<Nodo>.jev.*` del blackboard |
 | A2A 1.0 | Agent Card, `SendMessage` → `TASK_STATE_COMPLETED`, federación (grafo local → agente remoto) |
 | A2A orquestación | pool con 3 tasks simultáneos, human-in-the-loop con resume por `taskId`, human-in-the-loop federado (suspensión del nodo local), `blocking=false` + `GetTask`, tolerancia de literales de estado, cancelar task terminal → `-32002` |
@@ -54,7 +56,7 @@ Duración típica: < 1 segundo.
 |---------|-----------|
 | `MakerAiRegressionSuite.dpr` | Programa principal: CLI (`--json`, `--otel`), ejecución y exit code |
 | `uRegression.Suites.pas` | Definición de los casos (`DefineCases`) y el *dispatcher* que ejecuta cada escenario contra los componentes reales |
-| `uRegression.Fixtures.pas` | `TFakeJev` (TAiJev con respuestas HTTP encoladas), `TFakeDispatchClassifier` y `TFakeImageTool` (SmartDispatch sin red), tools MCP de prueba (`echo_upper`, `confirm_op` con MRTR), servidor MCP "solo legacy" (responde `-32601` a `server/discover`) y handlers `of object` (incluye `NodeSuspendOnce` para human-in-the-loop y `AcquireManager` como fábrica del pool A2A) |
+| `uRegression.Fixtures.pas` | `TFakeJev` (TAiJev con respuestas HTTP encoladas), `TFakeDispatchClassifier` y `TFakeImageTool` (SmartDispatch sin red), `TPassageFakeJev` (responde según el pasaje) y `FakeEmbedding`, tools MCP de prueba (`echo_upper`, `confirm_op` con MRTR), servidor MCP "solo legacy" (responde `-32601` a `server/discover`) y handlers `of object` (incluye `NodeSuspendOnce` para human-in-the-loop y `AcquireManager` como fábrica del pool A2A) |
 
 Los escenarios A2A de orquestación viven en `RunA2AFlowScenario`, aparte del bloque `a2a:` básico, porque cada uno arma su propia topología (pool, suspensión, no bloqueante).
 
