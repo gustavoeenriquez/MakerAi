@@ -66,6 +66,10 @@
 //   Edicion: las imagenes adjuntas al prompt (1 a 3) son la entrada; van como data
 //   URI. qwen-image-edit(-plus/-max) [default: plus], y tambien qwen-image-2.0/3.0 y
 //   wan2.7-image; z-image-turbo no edita. Sin 'size' se conserva la proporcion.
+// - [cap_GenVideo] -> wan (tarea asincrona con consulta cada 5 s). 0 imagenes adjuntas
+//   = texto a video (wan2.6-t2v), 1 = imagen a video (wan2.6-i2v-flash), 2 = primer y
+//   ultimo cuadro (wan2.2-kf2v-flash). VideoParams.Params pasa tal cual al API
+//   (duration, resolution, size, audio, seed...); por defecto 720P.
 // - [cap_GenAudio] -> qwen3-tts-flash por la API nativa (devuelve URL de un WAV).
 //   Voz en TtsParams.Voice (default Cherry), idioma en TtsParams.Language.
 // - [cap_Audio] / cmTranscription -> qwen3-asr-flash por chat/completions con
@@ -94,7 +98,8 @@ Type
     // Modelo para una tarea dedicada: el de la sesion si es de esa familia, si no el default
     Function ModelFor(Const AMarker, ADefault: String): String;
     // POST JSON sincrono (cliente propio: no depende de Asynchronous)
-    Function PostJSON(Const AUrl: String; ABody: TJSonObject): TJSonObject;
+    Function PostJSON(Const AUrl: String; ABody: TJSonObject; AAsyncTask: Boolean = False): TJSonObject;
+    Function GetJSON(Const AUrl: String): TJSonObject;
     Function DownloadMedia(Const AUrl, AFileName: String): TAiMediaFile;
     // Endpoint de la API nativa de DashScope derivado de Url (compatible-mode/v1 -> api/v1)
     Function NativeUrl(Const APath: String): String;
@@ -103,6 +108,9 @@ Type
     Function InitChatCompletions: String; Override;
     // Cuerpo del request de imagen (generar o editar); separado para probarlo sin red
     Function BuildImageRequest(AskMsg: TAiChatMessage): TJSonObject;
+    // Request de video: devuelve el cuerpo y en AEndpoint la ruta (t2v/i2v o kf2v)
+    Function BuildVideoRequest(AskMsg: TAiChatMessage; out AEndpoint: String): TJSonObject;
+    function InternalRunNativeVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunNativeSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
@@ -126,6 +134,11 @@ Const
   GlDefaultTtsModel = 'qwen3-tts-flash';
   GlDefaultAsrModel = 'qwen3-asr-flash';
   GlMediaTimeout = 180000; // una imagen tarda 10-40 s
+  GlDefaultT2VModel = 'wan2.6-t2v';        // ~45 s por 5 s de video, con audio
+  GlDefaultI2VModel = 'wan2.6-i2v-flash';
+  GlDefaultKF2VModel = 'wan2.2-kf2v-flash';
+  GlVideoTimeout = 600000;                 // wan2.7 tarda ~95 s; margen para cola
+  GlVideoPoll = 5000;
 
 procedure Register;
 begin
@@ -309,7 +322,7 @@ begin
   Result := Result + APath;
 end;
 
-function TAiQwenChat.PostJSON(Const AUrl: String; ABody: TJSonObject): TJSonObject;
+function TAiQwenChat.PostJSON(Const AUrl: String; ABody: TJSonObject; AAsyncTask: Boolean): TJSonObject;
 var
   Client: TNetHTTPClient;
   Body: TStringStream;
@@ -324,7 +337,12 @@ begin
 {$ENDIF}
     Client.ResponseTimeout := GlMediaTimeout;
     Client.ContentType := 'application/json';
-    Res := Client.Post(AUrl, Body, nil, [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)]);
+    if AAsyncTask then
+      // Tareas largas (video): el API responde con un task_id para consultar
+      Res := Client.Post(AUrl, Body, nil, [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey),
+        TNetHeader.Create('X-DashScope-Async', 'enable')])
+    else
+      Res := Client.Post(AUrl, Body, nil, [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)]);
     if Res.StatusCode <> 200 then
       raise Exception.CreateFmt('Qwen %d: %s', [Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
     V := TJSonObject.ParseJSONValue(Res.ContentAsString(TEncoding.UTF8));
@@ -336,6 +354,32 @@ begin
     Result := TJSonObject(V);
   finally
     Body.Free;
+    Client.Free;
+  end;
+end;
+
+function TAiQwenChat.GetJSON(Const AUrl: String): TJSonObject;
+var
+  Client: TNetHTTPClient;
+  Res: IHTTPResponse;
+  V: TJSONValue;
+begin
+  Client := TNetHTTPClient.Create(nil);
+  try
+{$IF CompilerVersion >= 34}
+    Client.SynchronizeEvents := False;
+{$ENDIF}
+    Res := Client.Get(AUrl, nil, [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)]);
+    if Res.StatusCode <> 200 then
+      raise Exception.CreateFmt('Qwen %d: %s', [Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
+    V := TJSonObject.ParseJSONValue(Res.ContentAsString(TEncoding.UTF8));
+    if not (V is TJSonObject) then
+    begin
+      V.Free;
+      raise Exception.Create('Qwen: la respuesta no es un objeto JSON');
+    end;
+    Result := TJSonObject(V);
+  finally
     Client.Free;
   end;
 end;
@@ -511,6 +555,178 @@ begin
     DoStateChange(acsFinished, 'Done');
     if Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, ResMsg, jRes, 'assistant', ResMsg.Prompt);
+  finally
+    jBody.Free;
+    jRes.Free;
+    FBusy := False;
+  end;
+end;
+
+function TAiQwenChat.BuildVideoRequest(AskMsg: TAiChatMessage; out AEndpoint: String): TJSonObject;
+// Segun las imagenes adjuntas al prompt:
+//   0 -> texto a video (t2v)        video-generation/video-synthesis, input.prompt
+//   1 -> imagen a video (i2v)       mismo endpoint, input.img_url
+//   2 -> primer y ultimo cuadro     image2video/video-synthesis, first/last_frame_url
+// Un modelo -t2v con imagen pasa a su par -i2v (existen todos: wan2.1/2.2/2.5/2.6/2.7).
+// VideoParams.Params pasa tal cual a 'parameters' (duration, resolution, size, audio,
+// seed, prompt_extend, watermark...), salvo negative_prompt que va en 'input'.
+var
+  jInput, jParams: TJSonObject;
+  LImages: TAiMediaFilesArray;
+  LModel, LKey, LVal: String;
+  I, LInt: Integer;
+
+  function ImageRef(MF: TAiMediaFile): String;
+  begin
+    if (MF.Content.Size = 0) and (MF.UrlMedia <> '') then
+      Result := MF.UrlMedia
+    else
+      Result := 'data:' + MF.MimeType + ';base64,' + MF.Base64;
+  end;
+
+begin
+  if Trim(AskMsg.Prompt) = '' then
+    raise Exception.Create('Se requiere un prompt para generar el video.');
+  LImages := AskMsg.MediaFiles.GetMediaList([Tfc_Image], False);
+  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+
+  case Length(LImages) of
+    0:
+      begin
+        if not ContainsText(LModel, 't2v') then
+          LModel := GlDefaultT2VModel;
+        AEndpoint := 'services/aigc/video-generation/video-synthesis';
+      end;
+    1:
+      begin
+        if ContainsText(LModel, '-t2v') then
+          LModel := StringReplace(LModel, '-t2v', '-i2v', [rfIgnoreCase])
+        else if not ContainsText(LModel, 'i2v') then
+          LModel := GlDefaultI2VModel;
+        AEndpoint := 'services/aigc/video-generation/video-synthesis';
+      end;
+    2:
+      begin
+        if not ContainsText(LModel, 'kf2v') then
+          LModel := GlDefaultKF2VModel;
+        AEndpoint := 'services/aigc/image2video/video-synthesis';
+      end;
+  else
+    raise Exception.CreateFmt('Qwen: el video admite 0 imagenes (texto), 1 (imagen a video) ' +
+      'o 2 (primer y ultimo cuadro); llegaron %d.', [Length(LImages)]);
+  end;
+
+  Result := TJSonObject.Create;
+  try
+    Result.AddPair('model', LModel);
+    jInput := TJSonObject.Create;
+    jInput.AddPair('prompt', AskMsg.Prompt);
+    if Length(LImages) = 1 then
+      jInput.AddPair('img_url', ImageRef(LImages[0]))
+    else if Length(LImages) = 2 then
+    begin
+      jInput.AddPair('first_frame_url', ImageRef(LImages[0]));
+      jInput.AddPair('last_frame_url', ImageRef(LImages[1]));
+    end;
+    Result.AddPair('input', jInput);
+
+    jParams := TJSonObject.Create;
+    Result.AddPair('parameters', jParams);
+    for I := 0 to VideoParams.Params.Count - 1 do
+    begin
+      LKey := Trim(VideoParams.Params.Names[I]);
+      LVal := Trim(VideoParams.Params.ValueFromIndex[I]);
+      if (LKey = '') or (LVal = '') then
+        Continue;
+      if SameText(LKey, 'negative_prompt') then
+        jInput.AddPair('negative_prompt', LVal)
+      else if SameText(LVal, 'true') or SameText(LVal, 'false') then
+        jParams.AddPair(LKey, TJSONBool.Create(SameText(LVal, 'true')))
+      else if TryStrToInt(LVal, LInt) then
+        jParams.AddPair(LKey, TJSONNumber.Create(LInt))
+      else
+        jParams.AddPair(LKey, LVal);
+    end;
+
+    // Sin tamano explicito el API entrega 1080P (el mas caro). Se pide 720P: los
+    // t2v de wan2.5/2.6 lo toman por 'size' (ignoran 'resolution'); el resto por
+    // 'resolution'
+    if (jParams.GetValue('size') = nil) and (jParams.GetValue('resolution') = nil) then
+    begin
+      if (Length(LImages) = 0) and (ContainsText(LModel, 'wan2.5') or ContainsText(LModel, 'wan2.6')) then
+        jParams.AddPair('size', '1280*720')
+      else
+        jParams.AddPair('resolution', '720P');
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+function TAiQwenChat.InternalRunNativeVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+// Tarea asincrona: POST con X-DashScope-Async -> output.task_id; GET api/v1/tasks/{id}
+// hasta SUCCEEDED (output.video_url, mp4 con audio en wan2.5+) o FAILED/CANCELED.
+// El video se descarga a ResMsg.MediaFiles como qwen_video.mp4 (la URL expira en 24 h).
+var
+  jBody, jRes, jTask: TJSonObject;
+  LEndpoint, LTaskId, LStatus, LVideoUrl, LMsg: String;
+  LElapsed: Integer;
+begin
+  Result := '';
+  FBusy := True;
+  FAbort := False;
+  FLastError := '';
+  FLastPrompt := AskMsg.Prompt;
+  jBody := nil;
+  jRes := nil;
+  try
+    jBody := BuildVideoRequest(AskMsg, LEndpoint);
+    DoStateChange(acsConnecting, 'Enviando video (' + jBody.GetValue<String>('model') + ')...');
+    jRes := PostJSON(NativeUrl(LEndpoint), jBody, True);
+    LTaskId := jRes.GetValue<String>('output.task_id', '');
+    if LTaskId = '' then
+      raise Exception.Create('Qwen: la respuesta no trae task_id: ' + Copy(jRes.ToJSON, 1, 300));
+
+    DoStateChange(acsToolExecuting, 'Generando video (tarea ' + LTaskId + ')...');
+    LElapsed := 0;
+    LStatus := '';
+    LVideoUrl := '';
+    LMsg := '';
+    while (LElapsed < GlVideoTimeout) and not FAbort do
+    begin
+      TThread.Sleep(GlVideoPoll);
+      Inc(LElapsed, GlVideoPoll);
+      try
+        jTask := GetJSON(NativeUrl('tasks/' + LTaskId));
+      except
+        Continue; // error transitorio de consulta: reintentar hasta el timeout
+      end;
+      try
+        LStatus := jTask.GetValue<String>('output.task_status', '');
+        LVideoUrl := jTask.GetValue<String>('output.video_url', '');
+        LMsg := jTask.GetValue<String>('output.message', '');
+      finally
+        jTask.Free;
+      end;
+      if (LStatus = 'SUCCEEDED') or (LStatus = 'FAILED') or (LStatus = 'CANCELED') or (LStatus = 'UNKNOWN') then
+        Break;
+    end;
+
+    if FAbort then
+      Exit;
+    if LStatus <> 'SUCCEEDED' then
+      raise Exception.CreateFmt('Qwen: el video no se completo (estado=%s tras %d s, tarea %s) %s',
+        [LStatus, LElapsed div 1000, LTaskId, LMsg]);
+    if LVideoUrl = '' then
+      raise Exception.Create('Qwen: la tarea termino sin video_url (tarea ' + LTaskId + ')');
+
+    ResMsg.MediaFiles.Add(DownloadMedia(LVideoUrl, 'qwen_video.mp4'));
+    if ResMsg.Role = '' then
+      ResMsg.Role := 'assistant';
+    DoStateChange(acsFinished, 'Done');
+    if Assigned(FOnReceiveDataEnd) then
+      FOnReceiveDataEnd(Self, ResMsg, nil, 'assistant', ResMsg.Prompt);
   finally
     jBody.Free;
     jRes.Free;

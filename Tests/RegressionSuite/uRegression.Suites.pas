@@ -348,6 +348,23 @@ begin
     .ExpectEquals('gen=qwen-image-3.0/1024*1024/1|edit=qwen-image-edit-plus/sin-size/data-uri/texto-al-final|' +
       'size=1024*768|4imgs=error|zimage=error');
 
+  // Qwen video: 0 imagenes = t2v (720p por 'size' en wan2.6), 1 = i2v (un -t2v pasa a
+  // -i2v; 720P por 'resolution'), 2 = kf2v (otro endpoint, primer/ultimo cuadro),
+  // 3 = error. VideoParams.Params pasa con su tipo (numero, bool, texto)
+  FRunner.AddCase('chat.qwen.video-request')
+    .Input('chat:qwen-video')
+    .ExpectEquals('t2v=wan2.6-t2v/video-generation/size=1280*720|' +
+      'i2v=wan2.6-i2v/video-generation/img=si/res=720P|' +
+      'kf2v=wan2.2-kf2v-flash/image2video/frames=si|' +
+      '3imgs=error|tipos=3,true,720P,neg-en-input');
+
+  // Conexion: editar C.VideoParams.Params.Values[...] / C.TtsParams despues de crear
+  // el chat no llegaba al chat (solo se copiaban al asignar el objeto entero o al
+  // cambiar Params). Ahora se sincronizan en cada Run / AddMessageAndRun
+  FRunner.AddCase('conn.media-params-sync')
+    .Input('chat:conn-media-sync')
+    .ExpectEquals('video=3|voz=Ethan|imagen=1328*1328');
+
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
     .ExpectEquals('1|inline=si|string=si');
@@ -1577,9 +1594,57 @@ type
   public
     function Request(const AModel: string; AAsync: Boolean; ACaps: TAiCapabilities;
       ALevel: TAiThinkingLevel): TJSONObject;
+    // Resumen del request de video (ver caso chat.qwen.video-request)
+    function VideoReq(const AModel: string; AImages: Integer): string;
     // Resumen del request de imagen: 'modelo/size/partes' o 'error'
     function ImageReq(const AModel, ASize: string; AImages: Integer; AFull: Boolean = False): string;
   end;
+
+function TQwenProbeChat.VideoReq(const AModel: string; AImages: Integer): string;
+var
+  Msg: TAiChatMessage;
+  MF: TAiMediaFile;
+  I: Integer;
+  J: TJSONObject;
+  LEndpoint: string;
+begin
+  Model := AModel;
+  Msg := TAiChatMessage.Create('El faro gira', 'user');
+  try
+    for I := 1 to AImages do
+    begin
+      MF := TAiMediaFile.Create;
+      MF.LoadFromBase64('img.png', 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ' +
+        'AAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+      Msg.MediaFiles.Add(MF);
+    end;
+    try
+      J := BuildVideoRequest(Msg, LEndpoint);
+    except
+      Exit('error');
+    end;
+    try
+      Result := J.GetValue<string>('model') + '/' + IfThen(LEndpoint.Contains('image2video'), 'image2video',
+        IfThen(LEndpoint.Contains('video-generation'), 'video-generation', LEndpoint));
+      case AImages of
+        0: Result := Result + '/size=' + J.GetValue<string>('parameters.size', '-');
+        1: Result := Result + '/img=' + IfThen(J.GetValue<string>('input.img_url', '').StartsWith('data:image/png;base64,'),
+             'si', 'no') + '/res=' + J.GetValue<string>('parameters.resolution', '-');
+        2: Result := Result + '/frames=' + IfThen((J.GetValue<string>('input.first_frame_url', '') <> '') and
+             (J.GetValue<string>('input.last_frame_url', '') <> ''), 'si', 'no');
+      end;
+      if VideoParams.Params.Count > 0 then
+        Result := J.GetValue<TJSONValue>('parameters.duration').ToJSON + ',' +
+          J.GetValue<TJSONValue>('parameters.audio').ToJSON + ',' +
+          J.GetValue<string>('parameters.resolution', '-') + ',' +
+          IfThen(J.GetValue<string>('input.negative_prompt', '') = 'borroso', 'neg-en-input', 'neg-mal');
+    finally
+      J.Free;
+    end;
+  finally
+    Msg.Free;
+  end;
+end;
 
 function TQwenProbeChat.ImageReq(const AModel, ASize: string; AImages: Integer; AFull: Boolean): string;
 var
@@ -1827,6 +1892,46 @@ begin
         '|zimage=' + QI.ImageReq('z-image-turbo', '', 1);
     finally
       QI.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:qwen-video' then
+  begin
+    var QV := TQwenProbeChat.Create(nil);
+    try
+      Result := 't2v=' + QV.VideoReq('qwen3.8-flash', 0) +
+        '|i2v=' + QV.VideoReq('wan2.6-t2v', 1) +
+        '|kf2v=' + QV.VideoReq('wan2.6-t2v', 2) +
+        '|3imgs=' + QV.VideoReq('wan2.6-t2v', 3);
+      QV.VideoParams.Params.Values['duration'] := '3';
+      QV.VideoParams.Params.Values['audio'] := 'true';
+      QV.VideoParams.Params.Values['resolution'] := '720P';
+      QV.VideoParams.Params.Values['negative_prompt'] := 'borroso';
+      Result := Result + '|tipos=' + QV.VideoReq('wan2.7-t2v', 0);
+    finally
+      QV.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:conn-media-sync' then
+  begin
+    var CS := TAiChatConnection.Create(nil);
+    try
+      CS.DriverName := 'Qwen';
+      CS.Model := 'wan2.6-t2v';
+      CS.Params.Values['Url'] := 'http://127.0.0.1:1/'; // puerto cerrado: falla sin red
+      // Se editan DESPUES de que exista el chat, sin reasignar los objetos
+      CS.VideoParams.Params.Values['duration'] := '3';
+      CS.TtsParams.Voice := 'Ethan';
+      CS.ImageParams.Params.Values['size'] := '1328*1328';
+      CS.AddMessageAndRun('Un faro', 'user', []);
+      Result := 'video=' + CS.AiChat.VideoParams.Params.Values['duration'] +
+        '|voz=' + CS.AiChat.TtsParams.Voice +
+        '|imagen=' + CS.AiChat.ImageParams.Params.Values['size'];
+    finally
+      CS.Free;
     end;
     Exit;
   end;

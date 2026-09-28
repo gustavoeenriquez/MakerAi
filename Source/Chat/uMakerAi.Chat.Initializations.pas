@@ -1765,6 +1765,72 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenImage]');
   TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
 
+  // ------- Video (wan) [cap_GenVideo] ------
+  // Tarea asincrona (5 s de video: wan2.6 ~45 s, wan2.7 ~95 s). Imagenes adjuntas:
+  // 0 = texto a video, 1 = imagen a video (un -t2v pasa a su -i2v), 2 = primer y
+  // ultimo cuadro (kf2v). Por defecto 720P; VideoParams.Params pasa al API
+  // (duration 2-15 en wan2.6/2.7; wan2.1/2.2 no admiten duration). wan2.5+ trae audio.
+  Model := 'wan2.6-t2v';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.7-t2v';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.5-t2v-preview';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.2-t2v-plus';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.1-t2v-turbo';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.1-t2v-plus';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.6-i2v-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.6-i2v';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.7-i2v';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.5-i2v-preview';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.2-i2v-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.2-i2v-plus';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.1-i2v-turbo';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.2-kf2v-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.1-kf2v-plus';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+
   // ------- Fase 2: voz (TTS) [cap_GenAudio] -- probados ------
   // Voz en TtsParams.Voice (default Cherry; tambien Ethan...), idioma en
   // TtsParams.Language ('es' o 'Spanish'; vacio = Auto). Devuelve un WAV.

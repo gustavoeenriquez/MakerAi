@@ -169,6 +169,10 @@ type
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     procedure ValideChat;
+    // Copia al chat los sub-objetos de medios (Tts/Transcription/Image/Video/WebSearch).
+    // Hace falta en cada ejecucion: editar C.VideoParams.Params.Values[...] cambia la
+    // copia de la conexion sin pasar por el setter, y el chat ya creado no se enteraba
+    procedure SyncMediaParams;
     procedure UpdateAndApplyParams;
     procedure SetupChatFromDriver;
     procedure ApplyParamsToChat(AChat: TAiChat; AParams: TStrings);
@@ -762,6 +766,17 @@ begin
     raise Exception.Create('A valid DriverName must be specified to create a Chat instance.');
 end;
 
+procedure TAiChatConnection.SyncMediaParams;
+begin
+  if not Assigned(FChat) then
+    Exit;
+  FChat.TtsParams.Assign(FTtsParams);
+  FChat.TranscriptionParams.Assign(FTranscriptionParams);
+  FChat.ImageParams.Assign(FImageGenParams);
+  FChat.VideoParams.Assign(FVideoGenParams);
+  FChat.WebSearchParams.Assign(FWebSearchParams);
+end;
+
 procedure TAiChatConnection.ApplyParamsToChat(AChat: TAiChat; AParams: TStrings);
 var
   LContext: TRttiContext;
@@ -1083,6 +1098,7 @@ end;
 function TAiChatConnection.AddMessageAndRun(aPrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): String;
 begin
   ValideChat;
+  SyncMediaParams;
   Result := FChat.AddMessageAndRun(aPrompt, aRole, aMediaFiles);
 end;
 
@@ -1269,6 +1285,7 @@ end;
 function TAiChatConnection.Run(aMsg: TAiChatMessage = nil): String;
 begin
   ValideChat;
+  SyncMediaParams;
   Result := FChat.Run(aMsg, nil)
 end;
 
