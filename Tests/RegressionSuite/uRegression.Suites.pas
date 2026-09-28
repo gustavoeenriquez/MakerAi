@@ -67,6 +67,7 @@ uses
   uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
   uMakerAi.Jev.ModelRouter,
   UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank,
+  uMakerAi.Realtime, uMakerAi.Realtime.Qwen, uMakerAi.Realtime.AiConnection,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
   uMakerAi.RAG.Vector.Driver.BinFile,
@@ -364,6 +365,22 @@ begin
   FRunner.AddCase('conn.media-params-sync')
     .Input('chat:conn-media-sync')
     .ExpectEquals('video=3|voz=Ethan|imagen=1328*1328');
+
+  // Realtime Qwen sin red: los tres formatos de transcripcion del usuario (stash
+  // acumulado, text+stash con reescritura, delta incremental) salen como deltas;
+  // texto y audio del asistente; error del servidor
+  FRunner.AddCase('realtime.qwen.events')
+    .Input('chat:qwen-rt-events')
+    .ExpectEquals('stash=Hola|.|, esta|final=Hola, esta|' +
+      'reescritura=Hola|.|Hi| there|delta=Hola| mundo|final=Hola mundo|' +
+      'asistente=Hel+lo=Hello.|audio=3|fin=1|error=COMMON_ERROR:Voice no soportada');
+
+  // Realtime Qwen: session.update de cada driver y registro en la fabrica y en
+  // TAiRealtimeConnection (compatibilidad: DriverName crea el driver)
+  FRunner.AddCase('realtime.qwen.session')
+    .Input('chat:qwen-rt-session')
+    .ExpectEquals('chat=pcm16/pcm24/instr/sin-voz/server_vad|manual=null|' +
+      'stt=16000/es|translate=en/Tina|fabrica=Qwen,QwenSTT,QwenTranslate|conexion=16000');
 
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
@@ -1744,6 +1761,101 @@ begin
 end;
 
 type
+  // Expone el procesamiento de eventos y el session.update de los drivers realtime
+  TQwenRtProbe = class(TAiQwenRealtimeChat)
+  public
+    procedure Feed(const AJson: string);
+    function Session: TJSONObject;
+  end;
+
+  TQwenRtSttProbe = class(TAiQwenRealtimeSTT)
+  public
+    function Session: TJSONObject;
+  end;
+
+  TQwenRtTrProbe = class(TAiQwenRealtimeTranslate)
+  public
+    function Session: TJSONObject;
+  end;
+
+  // Recolecta los eventos (llegan por TThread.Queue: hay que drenar la cola)
+  TQwenRtSink = class
+  public
+    Deltas: string;
+    Final, Asist, AsistDeltas, Err: string;
+    Audio, Fin: Integer;
+    procedure Delta(Sender: TObject; const D: string);
+    procedure Done(Sender: TObject; const T, Id: string);
+    procedure AText(Sender: TObject; const T: string);
+    procedure ADelta(Sender: TObject; const T: string);
+    procedure AChunk(Sender: TObject; const D: TBytes);
+    procedure ADone(Sender: TObject);
+    procedure Error(Sender: TObject; const M, C: string);
+  end;
+
+procedure TQwenRtProbe.Feed(const AJson: string);
+var
+  J: TJSONObject;
+begin
+  J := TJSONObject.ParseJSONValue(AJson) as TJSONObject;
+  try
+    ProcessServerEvent(J);
+  finally
+    J.Free;
+  end;
+end;
+
+function TQwenRtProbe.Session: TJSONObject;
+begin
+  Result := BuildSessionUpdate;
+end;
+
+function TQwenRtSttProbe.Session: TJSONObject;
+begin
+  Result := BuildSessionUpdate;
+end;
+
+function TQwenRtTrProbe.Session: TJSONObject;
+begin
+  Result := BuildSessionUpdate;
+end;
+
+procedure TQwenRtSink.Delta(Sender: TObject; const D: string);
+begin
+  Deltas := Deltas + IfThen(Deltas <> '', '|', '') + D;
+end;
+
+procedure TQwenRtSink.Done(Sender: TObject; const T, Id: string);
+begin
+  Final := T;
+end;
+
+procedure TQwenRtSink.AText(Sender: TObject; const T: string);
+begin
+  Asist := T;
+end;
+
+procedure TQwenRtSink.ADelta(Sender: TObject; const T: string);
+begin
+  AsistDeltas := AsistDeltas + IfThen(AsistDeltas <> '', '+', '') + T;
+end;
+
+procedure TQwenRtSink.AChunk(Sender: TObject; const D: TBytes);
+begin
+  Inc(Audio, Length(D));
+end;
+
+procedure TQwenRtSink.ADone(Sender: TObject);
+begin
+  Inc(Fin);
+end;
+
+procedure TQwenRtSink.Error(Sender: TObject; const M, C: string);
+begin
+  Err := C + ':' + M;
+end;
+
+type
   // Expone el parser de streaming comun (protegido en TAiChat). Groq lo usa tal
   // cual; TAiOpenChat NO sirve: sobrescribe OnInternalReceiveData (API Responses).
   TStreamProbeChat = class(TAiGroqChat)
@@ -1932,6 +2044,116 @@ begin
         '|imagen=' + CS.AiChat.ImageParams.Params.Values['size'];
     finally
       CS.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:qwen-rt-events' then
+  begin
+    var RT := TQwenRtProbe.Create(nil);
+    var Sink := TQwenRtSink.Create;
+    try
+      RT.OnTranscriptDelta := Sink.Delta;
+      RT.OnTranscriptCompleted := Sink.Done;
+      RT.OnAssistantText := Sink.AText;
+      RT.OnAssistantTextDelta := Sink.ADelta;
+      RT.OnAudioChunk := Sink.AChunk;
+      RT.OnAudioDone := Sink.ADone;
+      RT.OnError := Sink.Error;
+      // omni: text vacio y stash acumulado
+      RT.Feed('{"type":"conversation.item.input_audio_transcription.delta","item_id":"i1","text":"","stash":"Hola"}');
+      RT.Feed('{"type":"conversation.item.input_audio_transcription.delta","item_id":"i1","text":"","stash":"Hola."}');
+      RT.Feed('{"type":"conversation.item.input_audio_transcription.delta","item_id":"i1","text":"","stash":"Hola."}');
+      RT.Feed('{"type":"conversation.item.input_audio_transcription.delta","item_id":"i1","text":"","stash":"Hola., esta"}');
+      RT.Feed('{"type":"conversation.item.input_audio_transcription.completed","item_id":"i1","transcript":"Hola, esta "}');
+      CheckSynchronize(0);
+      Result := 'stash=' + Sink.Deltas + '|final=' + Sink.Final;
+      // asr: text confirmado + stash pendiente; el servidor reescribe el comienzo
+      Sink.Deltas := '';
+      RT.Feed('{"type":"conversation.item.input_audio_transcription.text","item_id":"i2","text":"","stash":"Hola"}');
+      RT.Feed('{"type":"conversation.item.input_audio_transcription.text","item_id":"i2","text":"","stash":"Hola."}');
+      RT.Feed('{"type":"conversation.item.input_audio_transcription.text","item_id":"i2","text":"","stash":"Hi"}');
+      RT.Feed('{"type":"conversation.item.input_audio_transcription.text","item_id":"i2","text":"Hi","stash":" there"}');
+      CheckSynchronize(0);
+      Result := Result + '|reescritura=' + Sink.Deltas;
+      // traduccion: delta incremental
+      Sink.Deltas := '';
+      RT.Feed('{"type":"conversation.item.input_audio_transcription.delta","item_id":"i3","delta":"Hola"}');
+      RT.Feed('{"type":"conversation.item.input_audio_transcription.delta","item_id":"i3","delta":" mundo"}');
+      RT.Feed('{"type":"conversation.item.input_audio_transcription.completed","item_id":"i3","transcript":"Hola mundo "}');
+      CheckSynchronize(0);
+      Result := Result + '|delta=' + Sink.Deltas + '|final=' + Sink.Final;
+      // asistente: texto por deltas, transcript autoritativo, audio y cierre
+      RT.Feed('{"type":"response.created"}');
+      RT.Feed('{"type":"response.audio_transcript.delta","delta":"Hel"}');
+      RT.Feed('{"type":"response.audio_transcript.delta","delta":"lo"}');
+      RT.Feed('{"type":"response.audio.delta","delta":"AAEC"}');
+      RT.Feed('{"type":"response.audio_transcript.done","transcript":"Hello."}');
+      RT.Feed('{"type":"response.done"}');
+      RT.Feed('{"type":"error","error":{"code":"COMMON_ERROR","message":"Voice no soportada"}}');
+      CheckSynchronize(0);
+      Result := Result + Format('|asistente=%s=%s|audio=%d|fin=%d|error=%s',
+        [Sink.AsistDeltas, Sink.Asist, Sink.Audio, Sink.Fin, Sink.Err]);
+    finally
+      RT.Free;
+      Sink.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:qwen-rt-session' then
+  begin
+    var RC := TQwenRtProbe.Create(nil);
+    var RS := TQwenRtSttProbe.Create(nil);
+    var RTr := TQwenRtTrProbe.Create(nil);
+    var RConn := TAiRealtimeConnection.Create(nil);
+    try
+      RC.Instructions := 'Se breve';
+      var J := RC.Session;
+      try
+        Result := 'chat=' + J.GetValue<string>('session.input_audio_format') + '/' +
+          J.GetValue<string>('session.output_audio_format') + '/' +
+          IfThen(J.GetValue<string>('session.instructions', '') = 'Se breve', 'instr', 'sin-instr') + '/' +
+          IfThen(J.GetValue('session.voice') = nil, 'sin-voz', 'con-voz') + '/' +
+          J.GetValue<string>('session.turn_detection.type');
+      finally
+        J.Free;
+      end;
+      RC.VADMode := rvmManual;
+      J := RC.Session;
+      try
+        Result := Result + '|manual=' + J.GetValue<TJSONValue>('session.turn_detection').ToJSON;
+      finally
+        J.Free;
+      end;
+      RS.Language := 'es';
+      J := RS.Session;
+      try
+        Result := Result + '|stt=' + J.GetValue<TJSONValue>('session.sample_rate').ToJSON + '/' +
+          J.GetValue<string>('session.input_audio_transcription.language');
+      finally
+        J.Free;
+      end;
+      J := RTr.Session;
+      try
+        Result := Result + '|translate=' + J.GetValue<string>('session.translation.language') + '/' +
+          J.GetValue<string>('session.voice');
+      finally
+        J.Free;
+      end;
+      var LNames := '';
+      for var LName in ['Qwen', 'QwenSTT', 'QwenTranslate'] do
+        for var LReg in TAiRealtimeFactory.Instance.DriverNames do
+          if LReg = LName then
+            LNames := LNames + IfThen(LNames <> '', ',', '') + LName;
+      Result := Result + '|fabrica=' + LNames;
+      RConn.DriverName := 'Qwen';
+      Result := Result + '|conexion=' + IntToStr(RConn.TargetSampleRate);
+    finally
+      RC.Free;
+      RS.Free;
+      RTr.Free;
+      RConn.Free;
     end;
     Exit;
   end;
