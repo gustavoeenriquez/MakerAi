@@ -774,7 +774,9 @@ Begin
 
   // ------------------------- GROQ ----------------------------------
   // https://console.groq.com/docs/models
-  // Ultima actualizacion: Ago 2026 (probado runtime)
+  // Ultima actualizacion: Sep 28 2026 — verificado contra GET /models y con
+  // llamadas reales. Groq retiro los llama-3.x (model_not_found): quedan
+  // alias hacia gpt-oss para que el codigo previo siga funcionando.
   // ------------------------- GROQ ----------------------------------
 
   // --- Valores globales por defecto para todos los modelos Groq ---
@@ -786,15 +788,13 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Groq', 'Format',        '');          // Reset reasoning_format al cambiar modelo
 
   // ------- Modelos de produccion -- texto/chat ------
-  // llama-3.1-8b-instant: 131K ctx, 131K output, ultra-rapido (~560 t/s)
-  Model := 'llama-3.1-8b-instant';
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens', '131072');
+  // RETIRADOS sep 2026 (model_not_found, fuera de /models): llama-3.1-8b-instant
+  // y llama-3.3-70b-versatile. Alias al reemplazo mas cercano: el rapido y el
+  // de calidad. Los alias heredan solo los params globales de Groq.
+  TAiChatFactory.Instance.RegisterCustomModel('Groq', 'llama-3.1-8b-instant',    'openai/gpt-oss-20b');
+  TAiChatFactory.Instance.RegisterCustomModel('Groq', 'llama-3.3-70b-versatile', 'openai/gpt-oss-120b');
 
-  // llama-3.3-70b-versatile: 131K ctx, 32K output, alta calidad (~280 t/s)
-  Model := 'llama-3.3-70b-versatile';
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens', '32768');
-
-  // gpt-oss-20b: 131K ctx, 65K output, ~1000 t/s, reasoning + code_interpreter (include_reasoning API)
+  // gpt-oss-20b (default del driver desde sep 2026): 131K ctx, 65K output, ~1000 t/s, reasoning + code_interpreter (include_reasoning API)
   Model := 'openai/gpt-oss-20b';
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens',    '65536');
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ModelCaps',    '[cap_Reasoning, cap_CodeInterpreter]');
@@ -822,12 +822,21 @@ Begin
   // <think> crudo en content; 'parsed' -> campo message.reasoning; effort 'none' apaga.
   // reasoning_format: 'parsed' (message.reasoning), 'raw' (<think> tags), 'hidden' (solo resp)
   // reasoning_effort: 'default' (thinking activo), 'none' (non-thinking)
+  // Max_Tokens: la API rechaza max_completion_tokens > 16384 (400; verificado
+  // sep 28 2026 — antes estaba en 40960 y el modelo no respondia)
   Model := 'qwen/qwen3.6-27b';
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens',    '40960');
+  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens',    '16384');
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ModelCaps',    '[cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'SessionCaps',  '[cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ThinkingLevel', 'tlMedium');
   TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Format',        'parsed');
+
+  // qwen3.8-27b (sep 2026): 131K ctx. Verificado runtime: responde sin
+  // razonamiento visible (ni message.reasoning con 'parsed' ni <think> crudo),
+  // asi que se registra como modelo de chat, sin cap_Reasoning. La API rechaza
+  // max_completion_tokens > 16384 (400 invalid_request_error).
+  Model := 'qwen/qwen3.8-27b';
+  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens', '16384');
 
   // RETIRADO ago 2026: qwen/qwen3-32b — alias hacia qwen3.6-27b para codigo previo
   TAiChatFactory.Instance.RegisterCustomModel('Groq', 'qwen/qwen3-32b', 'qwen/qwen3.6-27b');
@@ -854,24 +863,11 @@ Begin
   // prompts (512 ctx) — no son modelos de chat, no se registran
 
   // ------- Sistemas agentes con herramientas integradas ------
-  // Compound: sistemas agenticos server-side con web search + code execution + browser automation
-  // https://console.groq.com/docs/compound
-  // groq/compound: multiples herramientas iterativas; groq/compound-mini: 1 herramienta (~3x mas rapido)
-  Model := 'groq/compound';
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ModelCaps',   '[cap_WebSearch, cap_CodeInterpreter]');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'SessionCaps', '[cap_WebSearch, cap_CodeInterpreter]');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Tool_Active', 'False');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens',  '8192');
-
-  Model := 'groq/compound-mini';
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'ModelCaps',   '[cap_WebSearch, cap_CodeInterpreter]');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'SessionCaps', '[cap_WebSearch, cap_CodeInterpreter]');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Tool_Active', 'False');
-  TAiChatFactory.Instance.RegisterUserParam('Groq', Model, 'Max_Tokens',  '8192');
-
-  // Aliases para compatibilidad con codigo previo
-  TAiChatFactory.Instance.RegisterCustomModel('Groq', 'compound-beta',      'groq/compound');
-  TAiChatFactory.Instance.RegisterCustomModel('Groq', 'compound-beta-mini', 'groq/compound-mini');
+  // NO DISPONIBLES sep 2026: groq/compound y groq/compound-mini (web search +
+  // code execution server-side) responden model_not_found y no aparecen en
+  // GET /models. Sin alias a proposito: no hay reemplazo con web search, y
+  // redirigirlos cambiaria el comportamiento en silencio. Para ejecutar codigo
+  // queda openai/gpt-oss-20b (cap_CodeInterpreter).
 
   // ------- Audio STT -- cap_Audio: procesa audio nativo ------
   // Usar con ChatMode = cmTranscription

@@ -31,7 +31,7 @@ unit uMakerAi.Jev.ModelRouter;
 //
 // El modelo es el Tier mas barato (Cost) cuyo MaxLevel alcanza el nivel.
 //
-//   Router.Tiers.AddTier('rapido',   'Groq',     'llama-3.1-8b-instant', 0, 0.05);
+//   Router.Tiers.AddTier('rapido',   'Groq',     'openai/gpt-oss-20b',   0, 0.3);
 //   Router.Tiers.AddTier('estandar', 'DeepSeek', 'deepseek-v4-flash',    1, 0.3);
 //   Router.Tiers.AddTier('experto',  'Claude',   'claude-opus-5',        3, 15);
 //   Respuesta := Router.Ask(Conexion, Pregunta);   // enruta, aplica y ejecuta

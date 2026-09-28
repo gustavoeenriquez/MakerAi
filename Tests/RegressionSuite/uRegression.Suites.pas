@@ -2594,7 +2594,7 @@ begin
       var MR := TAiJevModelRouter.Create(nil);
       try
         MR.Jev := J;
-        MR.Tiers.AddTier('rapido', 'Groq', 'llama-3.1-8b-instant', 0, 0.05);
+        MR.Tiers.AddTier('rapido', 'Groq', 'openai/gpt-oss-20b', 0, 0.05);
         MR.Tiers.AddTier('estandar', 'DeepSeek', 'deepseek-v4-flash', 1, 0.3).Params.Add('Max_Tokens=777');
         MR.ConnectionParams.Add('Max_Tokens=100');
         MR.ConnectionParams.Add('Asynchronous=False');
@@ -2634,7 +2634,7 @@ begin
         var Conn := TAiChatConnection.Create(nil);
         try
           Conn.DriverName := 'Groq';
-          Conn.Model := 'llama-3.1-8b-instant';
+          Conn.Model := 'openai/gpt-oss-20b';
           Conn.AddMessage('hola', 'user');
           Conn.AddMessage('hola, en que ayudo?', 'assistant');
           Conn.AddMessage('', 'assistant').Tool_calls := '[{"id":"c1"}]';

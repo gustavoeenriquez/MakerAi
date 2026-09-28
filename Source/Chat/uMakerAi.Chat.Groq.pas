@@ -112,7 +112,7 @@ class procedure TAiGroqChat.RegisterDefaultParams(Params: TStrings);
 Begin
   Params.Clear;
   Params.Add('ApiKey=@GROQ_API_KEY');
-  Params.Add('Model=llama-3.1-8b-instant');
+  Params.Add('Model=openai/gpt-oss-20b'); // los llama-3.x se retiraron en sep 2026
   Params.Add('Max_Tokens=4096');
   Params.Add('URL=https://api.groq.com/openai/v1/');
 End;
@@ -126,7 +126,7 @@ constructor TAiGroqChat.Create(Sender: TComponent);
 begin
   inherited;
   ApiKey := '@GROQ_API_KEY';
-  Model := 'llama-3.1-8b-instant';
+  Model := 'openai/gpt-oss-20b';
   Url := GlAIUrl;
   FReasoningFormat := rfAuto;
   FReasoningEffort := reAuto;
@@ -155,7 +155,7 @@ begin
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
   If LModel = '' then
-    LModel := 'llama-3.1-8b-instant';
+    LModel := 'openai/gpt-oss-20b';
 
   // Las funciones no trabajan en modo ascincrono
   // LAsincronico := Self.Asynchronous and (not Self.Tool_Active);

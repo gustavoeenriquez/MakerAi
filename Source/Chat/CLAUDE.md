@@ -248,11 +248,11 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 
 ### Groq (inferencia rápida)
 **Actualizado ago 2026, probado runtime 4/4.** Dos sistemas de reasoning MUTUAMENTE excluyentes (gating por prefijo en el driver): `openai/gpt-oss-*` usa `include_reasoning` + `reasoning_effort` low/medium/high; `qwen/*` usa `reasoning_format` parsed/raw/hidden + `reasoning_effort` default/none (sin `parsed` el `<think>` llega crudo en content).
-- Texto: `llama-3.1-8b-instant` (default del driver), `llama-3.3-70b-versatile`
+- Texto: `openai/gpt-oss-20b` (default del driver desde sep 2026), `openai/gpt-oss-120b`, `qwen/qwen3.8-27b`. **Retirados sep 2026** (`model_not_found`): `llama-3.1-8b-instant` y `llama-3.3-70b-versatile`, con alias hacia `gpt-oss-20b` y `gpt-oss-120b` para no romper código previo. Los `qwen/qwen3.6|3.8-27b` aceptan como máximo `Max_Tokens=16384` (la API rechaza más con 400); `qwen3.6` estaba registrado con 40960 y no respondía
 - Reasoning: `openai/gpt-oss-120b/20b` (probado), `qwen/qwen3.6-27b` (nuevo ago 2026, reemplaza a qwen3-32b — alias registrado; probado)
 - **Groq NO tiene visión actualmente**: llama-4-scout/maverick retirados y gpt-oss-120b es solo texto ("content must be a string" con imágenes — verificado; cap_Image eliminado del registry)
 - RETIRADOS ago 2026: `qwen/qwen3-32b`, `llama-4-scout`, `moonshotai/kimi-k2-instruct(-0905)`
-- Agénticos: `groq/compound`/`-mini` (web search + code execution, `Tool_Active=False`; aliases compound-beta)
+- Agénticos: `groq/compound`/`-mini` **no disponibles** (sep 2026: `model_not_found` y fuera de `GET /models`); sin alias a propósito, porque no hay reemplazo con web search
 - TTS: `canopylabs/orpheus-v1-english`/`-arabic-saudi` → `SessionCaps=[cap_GenAudio]` (playai-tts eliminado 12/31/25)
 - STT: `whisper-large-v3/turbo` → `ModelCaps=[cap_Audio]`, `Tool_Active=False`
 - Árabe: `allam-2-7b` (4K ctx, sin tools); prompt-guard-2 son clasificadores, no chat
