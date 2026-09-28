@@ -104,7 +104,24 @@ Type
     // Endpoint de la API nativa de DashScope derivado de Url (compatible-mode/v1 -> api/v1)
     Function NativeUrl(Const APath: String): String;
     Procedure FixAudioDataUris(AMessages: TJSonArray);
+    procedure SetTranslateTerms(const Value: TStrings);
   Protected
+    FTranslateTo: String;
+    FTranslateFrom: String;
+    FTranslateDomain: String;
+    FTranslateTerms: TStrings;
+    FCumulativeStream: Boolean; // stream en curso de un qwen-mt acumulativo
+    FCumSent: String;           // texto ya entregado al parser comun
+    FCumPending: String;        // linea SSE incompleta del chunk anterior
+    // Cuerpo para qwen-mt: el API admite UN solo mensaje 'user' (sin system,
+    // historial ni tools) y sin translation_options no traduce: conversa
+    Function BuildTranslationRequest(Const AModel: String; AStream: Boolean): String;
+    // qwen-mt-plus y qwen-mt-turbo emiten en streaming el texto ACUMULADO en cada
+    // chunk (incremental_output no lo cambia); el parser comun los concatena. Se
+    // reescribe cada linea SSE al incremento antes de pasarla a la base.
+    Procedure OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64;
+      var AAbort: Boolean); Override;
+    Function IncrementalSSELine(Const ALine: String): String;
     Function InitChatCompletions: String; Override;
     // Cuerpo del request de imagen (generar o editar); separado para probarlo sin red
     Function BuildImageRequest(AskMsg: TAiChatMessage): TJSonObject;
@@ -119,7 +136,18 @@ Type
     class function GetDriverName: string; Override;
     class procedure RegisterDefaultParams(Params: TStrings); Override;
     class function CreateInstance(Sender: TComponent): TAiChat; Override;
+    Destructor Destroy; Override;
   Published
+    // Traduccion con los modelos qwen-mt-* (se ignoran con cualquier otro modelo).
+    // Idioma destino: nombre en ingles ('English', 'Spanish') o codigo ('en', 'es').
+    // Vacio = English
+    property TranslateTo: String read FTranslateTo write FTranslateTo;
+    // Idioma origen; vacio = 'auto' (deteccion)
+    property TranslateFrom: String read FTranslateFrom write FTranslateFrom;
+    // Contexto del dominio en ingles, p.ej. 'Colombian accounting (PUC)'
+    property TranslateDomain: String read FTranslateDomain write FTranslateDomain;
+    // Glosario, una entrada por linea: termino origen=termino destino
+    property TranslateTerms: TStrings read FTranslateTerms write SetTranslateTerms;
   End;
 
 procedure Register;
@@ -172,6 +200,155 @@ begin
   ApiKey := '@DASHSCOPE_API_KEY';
   Model := GlDefaultModel;
   Url := GlAIUrl;
+  FTranslateTerms := TStringList.Create;
+end;
+
+destructor TAiQwenChat.Destroy;
+begin
+  FTranslateTerms.Free;
+  inherited;
+end;
+
+procedure TAiQwenChat.SetTranslateTerms(const Value: TStrings);
+begin
+  FTranslateTerms.Assign(Value);
+end;
+
+function TAiQwenChat.IncrementalSSELine(Const ALine: String): String;
+var
+  V: TJSONValue;
+  jChoices: TJSonArray;
+  jDelta: TJSonObject;
+  LFull, LInc: String;
+begin
+  Result := ALine;
+  if not StartsText('data:', Trim(ALine)) or ContainsText(ALine, '[DONE]') then
+    Exit;
+  V := TJSonObject.ParseJSONValue(Trim(Copy(Trim(ALine), 6, MaxInt)));
+  try
+    if not (V is TJSonObject) or not TJSonObject(V).TryGetValue<TJSonArray>('choices', jChoices) or
+      (jChoices.Count = 0) or not (jChoices.Items[0] as TJSonObject).TryGetValue<TJSonObject>('delta', jDelta) or
+      not jDelta.TryGetValue<String>('content', LFull) then
+      Exit;
+    // Se entrega lo que excede a lo ya emitido. Si el modelo reescribio un tramo
+    // anterior, ese cambio se pierde: lo emitido no se puede retirar
+    if Length(LFull) > Length(FCumSent) then
+      LInc := Copy(LFull, Length(FCumSent) + 1, MaxInt)
+    else
+      LInc := '';
+    if Length(LFull) > Length(FCumSent) then
+      FCumSent := LFull;
+    jDelta.RemovePair('content').Free;
+    jDelta.AddPair('content', LInc);
+    Result := 'data: ' + V.ToJSON;
+  finally
+    V.Free;
+  end;
+end;
+
+procedure TAiQwenChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64;
+  var AAbort: Boolean);
+var
+  S, LOut, LLine: String;
+  P: Integer;
+begin
+  if not FCumulativeStream or not FClient.Asynchronous then
+  begin
+    inherited;
+    Exit;
+  end;
+  try
+    S := FResponse.DataString;
+  except
+    on EEncodingError do
+      Exit; // caracter UTF-8 partido: el siguiente chunk lo completa
+  end;
+  FResponse.Clear;
+  S := FCumPending + S;
+  LOut := '';
+  P := Pos(#10, S);
+  while P > 0 do
+  begin
+    LLine := Copy(S, 1, P - 1);
+    Delete(S, 1, P);
+    LOut := LOut + IncrementalSSELine(LLine) + #10;
+    P := Pos(#10, S);
+  end;
+  FCumPending := S;
+  if (Trim(S) = '[DONE]') or (Trim(S) = 'data: [DONE]') then
+  begin
+    LOut := LOut + S;
+    FCumPending := '';
+  end;
+  FResponse.WriteString(LOut);
+  inherited;
+end;
+
+function TAiQwenChat.BuildTranslationRequest(Const AModel: String; AStream: Boolean): String;
+var
+  jBody, jMsg, jOpts, jTerm, jStreamOpts: TJSonObject;
+  jMsgs, jTerms: TJSonArray;
+  LMsg: TAiChatMessage;
+  I: Integer;
+begin
+  // El texto a traducir es el ultimo mensaje del usuario; el resto del historial
+  // no se envia (el API rechaza mas de un mensaje)
+  LMsg := nil;
+  for I := Messages.Count - 1 downto 0 do
+    if SameText(Messages[I].Role, 'user') then
+    begin
+      LMsg := Messages[I];
+      Break;
+    end;
+  if (LMsg = nil) or (Trim(LMsg.Prompt) = '') then
+    raise Exception.Create('Qwen: no hay texto que traducir.');
+
+  FCumulativeStream := AStream and (ContainsText(AModel, 'qwen-mt-plus') or ContainsText(AModel, 'qwen-mt-turbo'));
+  FCumSent := '';
+  FCumPending := '';
+
+  jBody := TJSonObject.Create;
+  try
+    jBody.AddPair('model', AModel);
+    jBody.AddPair('stream', TJSONBool.Create(AStream));
+    if AStream then
+    begin
+      jStreamOpts := TJSonObject.Create;
+      jStreamOpts.AddPair('include_usage', TJSONBool.Create(True));
+      jBody.AddPair('stream_options', jStreamOpts);
+    end;
+
+    jMsg := TJSonObject.Create;
+    jMsg.AddPair('role', 'user');
+    jMsg.AddPair('content', LMsg.Prompt);
+    jMsgs := TJSonArray.Create;
+    jMsgs.Add(jMsg);
+    jBody.AddPair('messages', jMsgs);
+
+    jOpts := TJSonObject.Create;
+    jOpts.AddPair('source_lang', IfThen(Trim(FTranslateFrom) = '', 'auto', Trim(FTranslateFrom)));
+    jOpts.AddPair('target_lang', IfThen(Trim(FTranslateTo) = '', 'English', Trim(FTranslateTo)));
+    if Trim(FTranslateDomain) <> '' then
+      jOpts.AddPair('domains', Trim(FTranslateDomain));
+    if FTranslateTerms.Count > 0 then
+    begin
+      jTerms := TJSonArray.Create;
+      for I := 0 to FTranslateTerms.Count - 1 do
+        if Trim(FTranslateTerms.Names[I]) <> '' then
+        begin
+          jTerm := TJSonObject.Create;
+          jTerm.AddPair('source', Trim(FTranslateTerms.Names[I]));
+          jTerm.AddPair('target', Trim(FTranslateTerms.ValueFromIndex[I]));
+          jTerms.Add(jTerm);
+        end;
+      jOpts.AddPair('terms', jTerms);
+    end;
+    jBody.AddPair('translation_options', jOpts);
+
+    Result := StringReplace(jBody.ToJSON, '\/', '/', [rfReplaceAll]);
+  finally
+    jBody.Free;
+  end;
 end;
 
 function TAiQwenChat.IsThinkingOnly(Const AModel: String): Boolean;
@@ -208,6 +385,10 @@ begin
 
   LAsincronico := Self.Asynchronous;
   FClient.Asynchronous := LAsincronico;
+
+  // qwen-mt: request propio (un solo mensaje user + translation_options)
+  if ContainsText(LModel, 'qwen-mt') then
+    Exit(BuildTranslationRequest(LModel, LAsincronico));
 
   AJSONObject := TJSonObject.Create;
   Lista := TStringList.Create;

@@ -1831,6 +1831,29 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenVideo]');
   TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
 
+  // ------- Traduccion de texto (qwen-mt) -- probados ------
+  // El driver manda solo el ultimo mensaje user + translation_options (el API
+  // rechaza system, historial y tools). Idiomas en TranslateTo / TranslateFrom
+  // (Params), glosario en TranslateTerms, dominio en TranslateDomain.
+  // qwen-mt-plus traduce mejor terminos de dominio ("caja menor" -> petty cash);
+  // flash/turbo/lite los aciertan con TranslateTerms o TranslateDomain
+  Model := 'qwen-mt-plus';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'qwen-mt-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'qwen-mt-turbo';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'qwen-mt-lite';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+
   // ------- Fase 2: voz (TTS) [cap_GenAudio] -- probados ------
   // Voz en TtsParams.Voice (default Cherry; tambien Ethan...), idioma en
   // TtsParams.Language ('es' o 'Spanish'; vacio = Auto). Devuelve un WAV.

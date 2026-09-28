@@ -382,6 +382,20 @@ begin
     .ExpectEquals('chat=pcm16/pcm24/instr/sin-voz/server_vad|manual=null|' +
       'stt=16000/es|translate=en/Tina|fabrica=Qwen,QwenSTT,QwenTranslate|conexion=16000');
 
+  // qwen-mt: un solo mensaje user (el ultimo), sin tools ni enable_thinking, con
+  // translation_options (idiomas, dominio, glosario)
+  FRunner.AddCase('chat.qwen.mt-request')
+    .Input('chat:qwen-mt')
+    .ExpectEquals('msgs=1/user/La caja menor|tools=ausente|thinking=ausente|' +
+      'opts=auto>English/Accounting/caja menor=petty cash|defecto=auto>English');
+
+  // qwen-mt-plus/turbo emiten el texto acumulado en cada chunk: el driver lo
+  // convierte a incrementos (con una linea SSE partida entre chunks); flash ya es
+  // incremental y pasa intacto
+  FRunner.AddCase('chat.qwen.mt-cumulative-stream')
+    .Input('chat:qwen-mt-stream')
+    .ExpectEquals('plus=The petty cash|flash=The petty cash');
+
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
     .ExpectEquals('1|inline=si|string=si');
@@ -1611,11 +1625,39 @@ type
   public
     function Request(const AModel: string; AAsync: Boolean; ACaps: TAiCapabilities;
       ALevel: TAiThinkingLevel): TJSONObject;
+    // Request de traduccion (qwen-mt) con historial de tres mensajes
+    function MtRequest(const AModel: string; AAsync: Boolean): TJSONObject;
+    // Alimenta el parser de streaming con SSE crudo, como si llegara de la red
+    procedure FeedSSE(const ASSE: string);
     // Resumen del request de video (ver caso chat.qwen.video-request)
     function VideoReq(const AModel: string; AImages: Integer): string;
     // Resumen del request de imagen: 'modelo/size/partes' o 'error'
     function ImageReq(const AModel, ASize: string; AImages: Integer; AFull: Boolean = False): string;
   end;
+
+function TQwenProbeChat.MtRequest(const AModel: string; AAsync: Boolean): TJSONObject;
+begin
+  Model := AModel;
+  Asynchronous := AAsync;
+  if Messages.Count = 0 then
+  begin
+    Messages.Add(TAiChatMessage.Create('hola', 'user'));
+    Messages.Add(TAiChatMessage.Create('hello', 'assistant'));
+    Messages.Add(TAiChatMessage.Create('La caja menor', 'user'));
+  end;
+  Result := TJSONObject.ParseJSONValue(InitChatCompletions) as TJSONObject;
+end;
+
+procedure TQwenProbeChat.FeedSSE(const ASSE: string);
+var
+  Abort: Boolean;
+begin
+  FClient.Asynchronous := True;
+  FBusy := True;
+  FResponse.WriteString(ASSE);
+  Abort := False;
+  OnInternalReceiveData(nil, 0, 0, Abort);
+end;
 
 function TQwenProbeChat.VideoReq(const AModel: string; AImages: Integer): string;
 var
@@ -2154,6 +2196,80 @@ begin
       RS.Free;
       RTr.Free;
       RConn.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:qwen-mt' then
+  begin
+    var QM := TQwenProbeChat.Create(nil);
+    try
+      QM.TranslateTo := 'English';
+      QM.TranslateDomain := 'Accounting';
+      QM.TranslateTerms.Text := 'caja menor=petty cash';
+      var J := QM.MtRequest('qwen-mt-flash', False);
+      try
+        var jMsgs := J.GetValue<TJSONArray>('messages');
+        Result := Format('msgs=%d/%s/%s', [jMsgs.Count, J.GetValue<string>('messages[0].role'),
+          J.GetValue<string>('messages[0].content')]) +
+          '|tools=' + IfThen(J.GetValue('tools') = nil, 'ausente', 'presente') +
+          '|thinking=' + IfThen(J.GetValue('enable_thinking') = nil, 'ausente', 'presente') +
+          '|opts=' + J.GetValue<string>('translation_options.source_lang') + '>' +
+          J.GetValue<string>('translation_options.target_lang') + '/' +
+          J.GetValue<string>('translation_options.domains') + '/' +
+          J.GetValue<string>('translation_options.terms[0].source') + '=' +
+          J.GetValue<string>('translation_options.terms[0].target');
+      finally
+        J.Free;
+      end;
+      QM.TranslateTo := '';
+      QM.TranslateDomain := '';
+      QM.TranslateTerms.Clear;
+      J := QM.MtRequest('qwen-mt-flash', False);
+      try
+        Result := Result + '|defecto=' + J.GetValue<string>('translation_options.source_lang') + '>' +
+          J.GetValue<string>('translation_options.target_lang');
+      finally
+        J.Free;
+      end;
+    finally
+      QM.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:qwen-mt-stream' then
+  begin
+    Result := '';
+    for var LModel in ['qwen-mt-plus', 'qwen-mt-flash'] do
+    begin
+      var QS := TQwenProbeChat.Create(nil);
+      var HQ := TFixtureHandlers.Create;
+      try
+        QS.OnReceiveDataEnd := HQ.ChatDataEnd;
+        QS.MtRequest(LModel, True).Free; // arma el request: activa (o no) la conversion
+        if LModel = 'qwen-mt-plus' then
+        begin
+          // Acumulado, con la segunda linea partida entre dos chunks
+          QS.FeedSSE('data: {"choices":[{"index":0,"delta":{"content":"The"}}]}'#10#10 +
+            'data: {"choices":[{"index":0,"delta":{"content":"The pe');
+          QS.FeedSSE('tty"}}]}'#10#10 +
+            'data: {"choices":[{"index":0,"delta":{"content":"The petty cash"}}]}'#10#10 +
+            'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}'#10#10 +
+            'data: [DONE]'#10#10);
+        end
+        else
+          QS.FeedSSE('data: {"choices":[{"index":0,"delta":{"content":"The"}}]}'#10#10 +
+            'data: {"choices":[{"index":0,"delta":{"content":" petty"}}]}'#10#10 +
+            'data: {"choices":[{"index":0,"delta":{"content":" cash"}}]}'#10#10 +
+            'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}'#10#10 +
+            'data: [DONE]'#10#10);
+        CheckSynchronize(10);
+        Result := Result + IfThen(Result <> '', '|', '') + Copy(LModel, 9, MaxInt) + '=' + HQ.LastDataEnd;
+      finally
+        QS.Free;
+        HQ.Free;
+      end;
     end;
     Exit;
   end;
