@@ -66,7 +66,7 @@ uses
   uMakerAi.Jev.SmartDispatch, uMakerAi.Jev.Guardrails, uMakerAi.Chat.Tools,
   uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
   uMakerAi.Jev.ModelRouter,
-  UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank,
+  UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank, uMakerAi.Qwen.Voices,
   uMakerAi.Realtime, uMakerAi.Realtime.Qwen, uMakerAi.Realtime.AiConnection,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
@@ -395,6 +395,14 @@ begin
   FRunner.AddCase('chat.qwen.mt-cumulative-stream')
     .Input('chat:qwen-mt-stream')
     .ExpectEquals('plus=The petty cash|flash=The petty cash');
+
+  // Voces propias: TAiQwenVoices con transporte falso (cuerpos de clonar, diseñar,
+  // listar y borrar) y eleccion del modelo TTS por el prefijo del id de la voz
+  FRunner.AddCase('chat.qwen.voices')
+    .Input('chat:qwen-voices')
+    .ExpectEquals('clon=qwen-voice-enrollment/create/qwen3-tts-vc-2026-01-22/data-uri/id=qwen-tts-vc-x|' +
+      'diseno=qwen-voice-design/wav/fallback=wer_too_high/preview=4|lista=2:qwen3-tts-vc-2026-01-22|' +
+      'borrar=qwen-voice-design|tts=qwen3-tts-vc-2026-01-22,qwen3-tts-vd-2026-01-26,qwen3-tts-flash,qwen3-tts-instruct-flash');
 
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
@@ -1625,6 +1633,8 @@ type
   public
     function Request(const AModel: string; AAsync: Boolean; ACaps: TAiCapabilities;
       ALevel: TAiThinkingLevel): TJSONObject;
+    // Modelo TTS que usaria el driver para una voz, con AModel como modelo de sesion
+    function TtsFor(const AModel, AVoice: string): string;
     // Request de traduccion (qwen-mt) con historial de tres mensajes
     function MtRequest(const AModel: string; AAsync: Boolean): TJSONObject;
     // Alimenta el parser de streaming con SSE crudo, como si llegara de la red
@@ -1634,6 +1644,12 @@ type
     // Resumen del request de imagen: 'modelo/size/partes' o 'error'
     function ImageReq(const AModel, ASize: string; AImages: Integer; AFull: Boolean = False): string;
   end;
+
+function TQwenProbeChat.TtsFor(const AModel, AVoice: string): string;
+begin
+  Model := AModel;
+  Result := TtsModelFor(AVoice);
+end;
 
 function TQwenProbeChat.MtRequest(const AModel: string; AAsync: Boolean): TJSONObject;
 begin
@@ -1800,6 +1816,40 @@ begin
     jReq.Free;
     jRes.Free;
   end;
+end;
+
+type
+  // TAiQwenVoices sin red: guarda el ultimo cuerpo y responde segun la accion
+  TQwenFakeVoices = class(TAiQwenVoices)
+  public
+    LastBody: string;
+  protected
+    function Post(const ABody: string): string; override;
+  end;
+
+function TQwenFakeVoices.Post(const ABody: string): string;
+var
+  J: TJSONObject;
+  LAction, LModel: string;
+begin
+  LastBody := ABody;
+  J := TJSONObject.ParseJSONValue(ABody) as TJSONObject;
+  try
+    LAction := J.GetValue<string>('input.action');
+    LModel := J.GetValue<string>('model');
+  finally
+    J.Free;
+  end;
+  if LAction = 'list' then
+    Result := '{"output":{"voice_list":[{"voice":"v1","target_model":"qwen3-tts-vc-2026-01-22","language":"es"},' +
+      '{"voice":"v2","target_model":"qwen3-tts-vc-2026-01-22"}]}}'
+  else if LAction = 'delete' then
+    Result := '{"output":{}}'
+  else if LModel = 'qwen-voice-design' then
+    Result := '{"output":{"voice":"qwen-tts-vd-y","fallback_mode":true,"fallback_reason":"wer_too_high",' +
+      '"preview_audio":{"data":"UklGRg=="}}}'
+  else
+    Result := '{"output":{"voice":"qwen-tts-vc-x"}}';
 end;
 
 type
@@ -2196,6 +2246,55 @@ begin
       RS.Free;
       RTr.Free;
       RConn.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:qwen-voices' then
+  begin
+    var QV := TQwenFakeVoices.Create(nil);
+    var QT := TQwenProbeChat.Create(nil);
+    var MV := TAiMediaFile.Create;
+    var PV := TAiMediaFile.Create;
+    try
+      MV.LoadFromBase64('voz.wav', 'UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=');
+      var LId := QV.CloneVoice(MV, 'prueba', 'es');
+      var J := TJSONObject.ParseJSONValue(QV.LastBody) as TJSONObject;
+      try
+        Result := 'clon=' + J.GetValue<string>('model') + '/' + J.GetValue<string>('input.action') + '/' +
+          J.GetValue<string>('input.target_model') + '/' +
+          IfThen(J.GetValue<string>('input.audio.data').StartsWith('data:audio/wav;base64,UklGR'), 'data-uri', 'sin-uri') +
+          '/id=' + LId;
+      finally
+        J.Free;
+      end;
+      QV.DesignVoice('Voz grave', 'Hola', 'prueba', 'es', PV);
+      J := TJSONObject.ParseJSONValue(QV.LastBody) as TJSONObject;
+      try
+        Result := Result + '|diseno=' + J.GetValue<string>('model') + '/' +
+          J.GetValue<string>('parameters.response_format') + '/fallback=' + QV.LastDesignFallback +
+          '/preview=' + IntToStr(PV.Content.Size);
+      finally
+        J.Free;
+      end;
+      var L := QV.ListVoices(qvkClone);
+      Result := Result + '|lista=' + IntToStr(Length(L)) + ':' + L[0].TargetModel;
+      QV.DeleteVoice('qwen-tts-vd-y');
+      J := TJSONObject.ParseJSONValue(QV.LastBody) as TJSONObject;
+      try
+        Result := Result + '|borrar=' + J.GetValue<string>('model');
+      finally
+        J.Free;
+      end;
+      Result := Result + '|tts=' + QT.TtsFor('qwen3-tts-flash', 'qwen-tts-vc-x') + ',' +
+        QT.TtsFor('qwen3-tts-flash', 'qwen-tts-vd-y') + ',' +
+        QT.TtsFor('qwen3.8-flash', 'Cherry') + ',' +
+        QT.TtsFor('qwen3-tts-instruct-flash', 'Cherry');
+    finally
+      QV.Free;
+      QT.Free;
+      MV.Free;
+      PV.Free;
     end;
     Exit;
   end;

@@ -130,6 +130,8 @@ Type
     function InternalRunNativeVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunNativeSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
+    // Modelo TTS segun la voz (las propias exigen su modelo)
+    Function TtsModelFor(Const AVoice: String): String;
     function InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
   Public
     Constructor Create(Sender: TComponent); Override;
@@ -161,6 +163,8 @@ Const
   GlDefaultEditModel = 'qwen-image-edit-plus'; // el mas rapido editando (~9 s)
   GlDefaultTtsModel = 'qwen3-tts-flash';
   GlDefaultAsrModel = 'qwen3-asr-flash';
+  GlVoiceCloneModel = 'qwen3-tts-vc-2026-01-22';  // voces qwen-tts-vc-* (TAiQwenVoices)
+  GlVoiceDesignModel = 'qwen3-tts-vd-2026-01-26'; // voces qwen-tts-vd-*
   GlMediaTimeout = 180000; // una imagen tarda 10-40 s
   GlDefaultT2VModel = 'wan2.6-t2v';        // ~45 s por 5 s de video, con audio
   GlDefaultI2VModel = 'wan2.6-i2v-flash';
@@ -915,6 +919,18 @@ begin
   end;
 end;
 
+function TAiQwenChat.TtsModelFor(Const AVoice: String): String;
+begin
+  // Una voz propia (TAiQwenVoices) solo funciona con el modelo para el que se
+  // registro: se elige por el prefijo del id si la sesion no lo fija
+  if StartsText('qwen-tts-vc-', AVoice) and not ContainsText(Model, 'tts-vc') then
+    Result := GlVoiceCloneModel
+  else if StartsText('qwen-tts-vd-', AVoice) and not ContainsText(Model, 'tts-vd') then
+    Result := GlVoiceDesignModel
+  else
+    Result := ModelFor('-tts', GlDefaultTtsModel);
+end;
+
 function TAiQwenChat.InternalRunNativeSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 // POST api/v1/services/aigc/multimodal-generation/generation con input {text, voice,
 // language_type} -> output.audio.url (WAV, expira en 24 h)
@@ -949,7 +965,7 @@ begin
     if LLang = '' then
       LLang := 'Auto';
 
-    jBody.AddPair('model', ModelFor('-tts', GlDefaultTtsModel));
+    jBody.AddPair('model', TtsModelFor(LVoice));
     jInput := TJSonObject.Create;
     jInput.AddPair('text', AskMsg.Prompt);
     jInput.AddPair('voice', LVoice);

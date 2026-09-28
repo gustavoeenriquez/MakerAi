@@ -65,6 +65,7 @@ contains
   uMakerAi.Jev.Evals in '..\Tools\uMakerAi.Jev.Evals.pas',
   uMakerAi.Jev.RAG in '..\Tools\uMakerAi.Jev.RAG.pas',
   uMakerAi.Qwen.Rerank in '..\Tools\uMakerAi.Qwen.Rerank.pas',
+  uMakerAi.Qwen.Voices in '..\Tools\uMakerAi.Qwen.Voices.pas',
   uMakerAi.Jev.PromptGuard in '..\Tools\uMakerAi.Jev.PromptGuard.pas',
   uMakerAi.Jev.Batch in '..\Tools\uMakerAi.Jev.Batch.pas',
   uMakerAi.Jev.ModelRouter in '..\Tools\uMakerAi.Jev.ModelRouter.pas',

@@ -1866,6 +1866,18 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenAudio]');
   TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
 
+  // ------- Voces propias (TAiQwenVoices) -- probados ------
+  // Una voz clonada (qwen-tts-vc-*) o diseñada (qwen-tts-vd-*) solo funciona con
+  // su modelo; el driver lo elige por el prefijo de TtsParams.Voice
+  Model := 'qwen3-tts-vc-2026-01-22';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenAudio]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'qwen3-tts-vd-2026-01-26';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenAudio]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+
   // ------- Fase 2: transcripcion (ASR) -- probado ------
   // Usar con ChatMode = cmTranscription: el Prompt viaja como contexto del
   // reconocedor (nombres propios). Un modelo de texto con SessionCaps [cap_Audio]
