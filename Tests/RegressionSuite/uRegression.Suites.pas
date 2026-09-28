@@ -65,6 +65,7 @@ uses
   uMakerAi.Guardrails, uMakerAi.Jev, uMakerAi.Agents.Tools.JevRouter,
   uMakerAi.Jev.SmartDispatch, uMakerAi.Jev.Guardrails, uMakerAi.Chat.Tools,
   uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
+  uMakerAi.Jev.ModelRouter,
   UMakerAi.Chat, uMakerAi.Chat.OpenAi,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
@@ -430,6 +431,14 @@ begin
     .Input('jev:batch')
     .ExpectEquals('etiquetas=urgente,,spam|errores=1|revisar=2|tokens=200|sin-preguntas=error|' +
       'label-invalida=error|estado=si|cancelados=2');
+
+  // TAiJevModelRouter: reglas de nivel en codigo, el tier mas barato que
+  // alcanza, y la migracion del historial al cambiar de proveedor (solo
+  // mensajes de texto; los de tool calls no viajan entre proveedores)
+  FRunner.AddCase('jev.modelrouter.route')
+    .Input('jev:modelrouter')
+    .ExpectEquals('codigo=1:estandar|sensible=2:experto|duda=2:experto|ninguno-alcanza=estandar|' +
+      'migra=DeepSeek,deepseek-v4-flash,2,user>assistant|params=777,False|mismo-proveedor=conserva');
 
   // lmExpression con punto decimal en un Windows con coma decimal: antes
   // '10.25 > 9.5' se comparaba como texto y daba False
@@ -2577,6 +2586,82 @@ begin
       finally
         B.Free;
         H.Free;
+      end;
+    end
+
+    else if AScenario = 'jev:modelrouter' then
+    begin
+      var MR := TAiJevModelRouter.Create(nil);
+      try
+        MR.Jev := J;
+        MR.Tiers.AddTier('rapido', 'Groq', 'llama-3.1-8b-instant', 0, 0.05);
+        MR.Tiers.AddTier('estandar', 'DeepSeek', 'deepseek-v4-flash', 1, 0.3).Params.Add('Max_Tokens=777');
+        MR.ConnectionParams.Add('Max_Tokens=100');
+        MR.ConnectionParams.Add('Asynchronous=False');
+        MR.Tiers.AddTier('caro-nivel-1', 'OpenAi', 'gpt-5.4-mini', 1, 2.0); // alcanza, pero cuesta mas
+        MR.Tiers.AddTier('experto', 'Claude', 'claude-opus-5', 3, 15);
+
+        // tarea, confianza tarea, tarea, dificultad, confianza dificultad, sensible
+        const MR_FMT = '{"model":"jev-1.13.0","answers":{' +
+          '"tarea":{"type":"choice","choice":"%s","confidence":%s,"probabilities":{"%s":0.9}},' +
+          '"dificultad":{"type":"score","score":%s,"confidence":%s,"probabilities":{"0":0.5}},' +
+          '"sensible":{"type":"noul","noul":%s}}}';
+
+        // Codigo trivial: sube al minimo de codigo (1) -> el mas barato de nivel 1
+        J.Enqueue(200, Format(MR_FMT, ['codigo', '0.90', 'codigo', '0.20', '0.90', '0.10']));
+        var RT := MR.Route('invierte un string');
+        Result := 'codigo=' + RT.Level.ToString + ':' + RT.TierName;
+        // Sensible: minimo 2
+        J.Enqueue(200, Format(MR_FMT, ['conversacion', '0.90', 'conversacion', '0.30', '0.90', '0.90']));
+        RT := MR.Route('puedo deducir esto en renta?');
+        Result := Result + '|sensible=' + RT.Level.ToString + ':' + RT.TierName;
+        // Duda sobre la dificultad: sube un nivel (1.2 -> 1 +1 = 2)
+        J.Enqueue(200, Format(MR_FMT, ['redaccion', '0.90', 'redaccion', '1.20', '0.30', '0.10']));
+        RT := MR.Route('algo ambiguo');
+        Result := Result + '|duda=' + RT.Level.ToString + ':' + RT.TierName;
+
+        // Ningun tier alcanza el nivel: el mas capaz disponible
+        var T2 := TAiJevModelTiers.Create(nil);
+        try
+          T2.AddTier('rapido', 'Groq', 'x', 0, 0.05);
+          T2.AddTier('estandar', 'DeepSeek', 'y', 1, 0.3);
+          Result := Result + '|ninguno-alcanza=' + T2.Pick(3).Name;
+        finally
+          T2.Free;
+        end;
+
+        // Migracion: de Groq a DeepSeek con user, assistant y un tool call
+        var Conn := TAiChatConnection.Create(nil);
+        try
+          Conn.DriverName := 'Groq';
+          Conn.Model := 'llama-3.1-8b-instant';
+          Conn.AddMessage('hola', 'user');
+          Conn.AddMessage('hola, en que ayudo?', 'assistant');
+          Conn.AddMessage('', 'assistant').Tool_calls := '[{"id":"c1"}]';
+          Conn.AddMessage('resultado de la tool', 'tool');
+          var Ruta: TAiModelRoute;
+          Ruta.TierName := 'estandar';
+          Ruta.DriverName := 'DeepSeek';
+          Ruta.Model := 'deepseek-v4-flash';
+          MR.Apply(Conn, Ruta);
+          var Roles := '';
+          for var Msg in Conn.Messages do
+            Roles := Roles + IfThen(Roles <> '', '>', '') + Msg.Role;
+          Result := Result + '|migra=' + Conn.DriverName + ',' + Conn.Model + ',' +
+            Conn.Messages.Count.ToString + ',' + Roles + '|params=' + Conn.Params.Values['Max_Tokens'] +
+            ',' + Conn.Params.Values['Asynchronous'];
+
+          // Mismo proveedor: solo cambia el modelo, el chat y su historial siguen
+          var ChatAntes := Conn.Messages;
+          Ruta.Model := 'deepseek-v4-pro';
+          MR.Apply(Conn, Ruta);
+          Result := Result + '|mismo-proveedor=' + IfThen((Conn.Messages = ChatAntes) and
+            (Conn.Messages.Count = 2) and (Conn.Model = 'deepseek-v4-pro'), 'conserva', 'perdio');
+        finally
+          Conn.Free;
+        end;
+      finally
+        MR.Free;
       end;
     end
 

@@ -52,7 +52,7 @@ For agent graphs, `TAiJevRouterTool` (`Source/Agents/uMakerAi.Agents.Tools.JevRo
 node tool that writes the chosen route to `Blackboard['next_route']`, so an existing
 `lmConditional` link follows it — no engine change. Low confidence or a failing API falls back
 to `NextNo` instead of breaking the graph, and yes/no flags asked in the same call land in the
-blackboard for `lmExpression` or an `OnRoute` handler. Twenty new regression cases run all
+blackboard for `lmExpression` or an `OnRoute` handler. Twenty-one new regression cases run all
 of it offline against a fake transport.
 
 Two more hand-offs make Jev a drop-in for decisions the framework already takes:
@@ -94,6 +94,12 @@ And two more for quality and retrieval:
   failing row never stops the batch. Validated by reproducing the prototype: 126 accounting
   entries against 225 chart-of-accounts codes in 4.2 s for US$0.05 — 92.9% overall and **100% on
   the 61% it would book automatically** (confidence ≥ 0.8). Demo: `087-JevBatchLabeling`.
+- **Model routing.** `TAiJevModelRouter` sends each request to the cheapest model that can handle
+  it. Jev describes the request (task, difficulty, sensitivity); readable rules in code pick the
+  tier. Switching provider on a `TAiChatConnection` used to drop the conversation — the router
+  migrates the text history, so a chat can start on Groq and escalate to Claude and still
+  remember the first turn. Live, with Groq → DeepSeek → Claude Sonnet → Opus: 7 of 8 answers
+  judged useful, the trivial ones in under a second. Demo: `088-JevModelRouter`.
 
 **Also fixed:** `lmExpression` parsed numbers with the regional settings only, so on a Windows
 using a decimal comma `'10.25' > 9.5` was compared as text and returned `False`. It now falls

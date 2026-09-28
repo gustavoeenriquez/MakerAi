@@ -65,6 +65,7 @@ contains
   uMakerAi.Jev.RAG in '..\Tools\uMakerAi.Jev.RAG.pas',
   uMakerAi.Jev.PromptGuard in '..\Tools\uMakerAi.Jev.PromptGuard.pas',
   uMakerAi.Jev.Batch in '..\Tools\uMakerAi.Jev.Batch.pas',
+  uMakerAi.Jev.ModelRouter in '..\Tools\uMakerAi.Jev.ModelRouter.pas',
   uMakerAi.Evals in '..\Core\uMakerAi.Evals.pas',
   uMakerAi.Embeddings in '..\Embeddings\uMakerAi.Embeddings.pas',
   uMakerAi.Prompts in '..\Core\uMakerAi.Prompts.pas',
