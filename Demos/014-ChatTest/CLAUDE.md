@@ -93,6 +93,8 @@ The main program includes these test functions that demonstrate different capabi
 - `Test_VisionPDF()` / `Test_VisionPDFJson()` - PDF processing
 - `Test_Thinking()` - Extended thinking mode
 
+**`--groq`** runs `Test_Groq_CodeInterpreter_Sync` / `_Async`: Groq `code_interpreter` with `openai/gpt-oss-20b` (it replaced `groq/compound`, which Groq no longer offers — `model_not_found`, Sep 2026). Verified Sep 28 2026: the **sync** test runs the Python in Groq's sandbox and saves the generated WAV (`ci_output.wav`, 1 s, 44.1 kHz) from `executed_tools`. The **async** test gets the text answer but no file: the Groq driver only parses `executed_tools` from the full response, not from the SSE stream (pre-existing driver limitation, independent of the model).
+
 ## Related Demos
 
 Other demos in `/Demos/` that provide additional context:
