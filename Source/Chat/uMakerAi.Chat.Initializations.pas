@@ -67,6 +67,7 @@ uses
   uMakerAi.Embeddings.Gemini,
   uMakerAi.Embeddings.Ollama,
   uMakerAi.Embeddings.Mistral,
+  uMakerAi.Embeddings.Qwen,
   uMakerAi.Embeddings.Cohere,
   uMakerAi.Embeddings.LMStudio,
   uMakerAi.Embeddings.Generic;
@@ -1681,10 +1682,11 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[cap_Image]');
   TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_Image]');
 
-  // qwen3.8-omni-flash: omnimodal (texto/imagen/audio/video); probado solo con imagen
+  // qwen3.8-omni-flash: omnimodal; probado con imagen y con audio de entrada
+  // (sync y stream; el driver convierte el audio a data URI). Video sin probar
   Model := 'qwen3.8-omni-flash';
-  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[cap_Image]');
-  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[cap_Image, cap_Audio]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_Image, cap_Audio]');
 
   // ------- Texto -- probados (razonamiento hibrido, SIN vision) ------
   // qwen3-max, qwen-plus, qwen-flash, qwen-turbo: usan los globales ([] = rapido)
@@ -1708,6 +1710,64 @@ Begin
   Model := 'qwen3-235b-a22b-thinking-2507';
   TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_Reasoning]');
+
+  // ------- Fase 2: generacion de imagen [cap_GenImage] -- probados ------
+  // Gap [cap_GenImage] -> InternalRunNativeImageGeneration (API nativa, sincrona).
+  // Tamano: ImageParams.Params.Values['size'] (default 1024*1024; qwen-image-plus
+  // solo admite 1328*1328, 1664*928, 928*1664, 1472*1104, 1104*1472)
+  Model := 'qwen-image-3.0';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'qwen-image-3.0-pro';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'qwen-image-2.0';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'qwen-image-2.0-pro';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'qwen-image-max';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'z-image-turbo';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.7-image';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'wan2.7-image-pro';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+
+  // ------- Fase 2: voz (TTS) [cap_GenAudio] -- probados ------
+  // Voz en TtsParams.Voice (default Cherry; tambien Ethan...), idioma en
+  // TtsParams.Language ('es' o 'Spanish'; vacio = Auto). Devuelve un WAV.
+  Model := 'qwen3-tts-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenAudio]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'qwen3-tts-instruct-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenAudio]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+
+  // ------- Fase 2: transcripcion (ASR) -- probado ------
+  // Usar con ChatMode = cmTranscription: el Prompt viaja como contexto del
+  // reconocedor (nombres propios). Un modelo de texto con SessionCaps [cap_Audio]
+  // tambien transcribe con este modelo antes de responder (puente de Fase 1).
+  Model := 'qwen3-asr-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[cap_Audio]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_Audio]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
 
   // ------------------------- KIMI ----------------------------------
   // https://platform.moonshot.ai/docs/api/chat

@@ -55,12 +55,26 @@
 // - tools + stream funcionan (la restriccion de la documentacion no aplica a estos modelos).
 // - Vision formato OpenAI (image_url) en qwen3.8-flash/max, qwen3.7-plus, qwen3-vl-*,
 //   qwen3.8-omni-flash. Imagenes muy pequenas (2x2) se rechazan con 400.
+// - Audio de entrada (omni, asr): el API exige data URI en input_audio.data
+//   ('data:audio/wav;base64,...'); el base64 pelado que arma el serializador comun
+//   responde 400 "URL does not appear to be valid". InitChatCompletions lo reescribe.
+//
+// Fase 2 (sep 2026), por gap de capacidades como el resto de drivers:
+// - [cap_GenImage] -> API nativa multimodal-generation (sincrona, devuelve URLs):
+//   qwen-image-3.0 [default], qwen-image-2.0(-pro), qwen-image-max, z-image-turbo,
+//   wan2.7-image(-pro). Tamano en ImageParams.Params.Values['size'] ('1024*1024').
+// - [cap_GenAudio] -> qwen3-tts-flash por la API nativa (devuelve URL de un WAV).
+//   Voz en TtsParams.Voice (default Cherry), idioma en TtsParams.Language.
+// - [cap_Audio] / cmTranscription -> qwen3-asr-flash por chat/completions con
+//   input_audio. En cmTranscription el Prompt viaja como contexto (nombres propios,
+//   jerga) y mejora la ortografia de lo transcrito.
+// - Embeddings (uMakerAi.Embeddings.Qwen) y rerank (uMakerAi.Qwen.Rerank) van aparte.
 
 interface
 
 uses
   System.SysUtils, System.Classes, System.JSON, System.StrUtils,
-  System.RegularExpressions,
+  System.RegularExpressions, System.NetEncoding,
   System.Net.URLClient, System.Net.HttpClient, System.Net.HttpClientComponent,
 
 {$IF CompilerVersion < 35}
@@ -74,8 +88,19 @@ Type
   Private
     Function IsThinkingOnly(Const AModel: String): Boolean;
     Function IsOpenWeight(Const AModel: String): Boolean;
+    // Modelo para una tarea dedicada: el de la sesion si es de esa familia, si no el default
+    Function ModelFor(Const AMarker, ADefault: String): String;
+    // POST JSON sincrono (cliente propio: no depende de Asynchronous)
+    Function PostJSON(Const AUrl: String; ABody: TJSonObject): TJSonObject;
+    Function DownloadMedia(Const AUrl, AFileName: String): TAiMediaFile;
+    // Endpoint de la API nativa de DashScope derivado de Url (compatible-mode/v1 -> api/v1)
+    Function NativeUrl(Const APath: String): String;
+    Procedure FixAudioDataUris(AMessages: TJSonArray);
   Protected
     Function InitChatCompletions: String; Override;
+    function InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
+    function InternalRunNativeSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
+    function InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
   Public
     Constructor Create(Sender: TComponent); Override;
     class function GetDriverName: string; Override;
@@ -91,6 +116,10 @@ implementation
 Const
   GlAIUrl = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/';
   GlDefaultModel = 'qwen3.8-flash';
+  GlDefaultImageModel = 'qwen-image-3.0';
+  GlDefaultTtsModel = 'qwen3-tts-flash';
+  GlDefaultAsrModel = 'qwen3-asr-flash';
+  GlMediaTimeout = 180000; // una imagen tarda 10-40 s
 
 procedure Register;
 begin
@@ -200,7 +229,9 @@ begin
       End;
     End;
 
-    AJSONObject.AddPair('messages', GetMessages);
+    JArr := GetMessages;
+    FixAudioDataUris(JArr);
+    AJSONObject.AddPair('messages', JArr);
 
     AJSONObject.AddPair('model', LModel);
 
@@ -253,6 +284,351 @@ begin
     AJSONObject.Free;
     Lista.Free;
   End;
+end;
+
+function TAiQwenChat.ModelFor(Const AMarker, ADefault: String): String;
+begin
+  Result := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+  if not ContainsText(Result, AMarker) then
+    Result := ADefault;
+end;
+
+function TAiQwenChat.NativeUrl(Const APath: String): String;
+begin
+  Result := Url;
+  if ContainsText(Result, 'compatible-mode/v1') then
+    Result := StringReplace(Result, 'compatible-mode/v1', 'api/v1', [rfIgnoreCase]);
+  if not Result.EndsWith('/') then
+    Result := Result + '/';
+  Result := Result + APath;
+end;
+
+function TAiQwenChat.PostJSON(Const AUrl: String; ABody: TJSonObject): TJSonObject;
+var
+  Client: TNetHTTPClient;
+  Body: TStringStream;
+  Res: IHTTPResponse;
+  V: TJSONValue;
+begin
+  Client := TNetHTTPClient.Create(nil);
+  Body := TStringStream.Create(ABody.ToJSON, TEncoding.UTF8);
+  try
+{$IF CompilerVersion >= 34}
+    Client.SynchronizeEvents := False;
+{$ENDIF}
+    Client.ResponseTimeout := GlMediaTimeout;
+    Client.ContentType := 'application/json';
+    Res := Client.Post(AUrl, Body, nil, [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)]);
+    if Res.StatusCode <> 200 then
+      raise Exception.CreateFmt('Qwen %d: %s', [Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
+    V := TJSonObject.ParseJSONValue(Res.ContentAsString(TEncoding.UTF8));
+    if not (V is TJSonObject) then
+    begin
+      V.Free;
+      raise Exception.Create('Qwen: la respuesta no es un objeto JSON');
+    end;
+    Result := TJSonObject(V);
+  finally
+    Body.Free;
+    Client.Free;
+  end;
+end;
+
+function TAiQwenChat.DownloadMedia(Const AUrl, AFileName: String): TAiMediaFile;
+var
+  Client: TNetHTTPClient;
+  St: TMemoryStream;
+  Res: IHTTPResponse;
+begin
+  Client := TNetHTTPClient.Create(nil);
+  St := TMemoryStream.Create;
+  try
+{$IF CompilerVersion >= 34}
+    Client.SynchronizeEvents := False;
+{$ENDIF}
+    Client.ResponseTimeout := GlMediaTimeout;
+    Res := Client.Get(AUrl, St);
+    if Res.StatusCode <> 200 then
+      raise Exception.CreateFmt('Qwen: no se pudo descargar %s (%d)', [AFileName, Res.StatusCode]);
+    St.Position := 0;
+    Result := TAiMediaFile.Create;
+    try
+      Result.LoadFromStream(AFileName, St);
+    except
+      Result.Free;
+      raise;
+    end;
+  finally
+    St.Free;
+    Client.Free;
+  end;
+end;
+
+procedure TAiQwenChat.FixAudioDataUris(AMessages: TJSonArray);
+var
+  VMsg, VPart: TJSONValue;
+  jContent: TJSonArray;
+  jAudio: TJSonObject;
+  LData, LFormat: String;
+begin
+  if not Assigned(AMessages) then
+    Exit;
+  for VMsg in AMessages do
+    if (VMsg is TJSonObject) and TJSonObject(VMsg).TryGetValue<TJSonArray>('content', jContent) then
+      for VPart in jContent do
+        if (VPart is TJSonObject) and TJSonObject(VPart).TryGetValue<TJSonObject>('input_audio', jAudio) and
+          jAudio.TryGetValue<String>('data', LData) and not StartsText('data:', LData) and
+          not StartsText('http', LData) then
+        begin
+          LFormat := jAudio.GetValue<String>('format', 'wav');
+          if (LFormat = '') or SameText(LFormat, 'x-wav') then
+            LFormat := 'wav';
+          jAudio.RemovePair('data').Free;
+          jAudio.AddPair('data', 'data:audio/' + LFormat + ';base64,' + LData);
+        end;
+end;
+
+function TAiQwenChat.InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+// POST api/v1/services/aigc/multimodal-generation/generation (sincrono)
+// -> output.choices[].message.content[] con {"image": url}
+var
+  jBody, jInput, jMsg, jPart, jParams, jRes, jItem: TJSonObject;
+  jMsgs, jContent, jChoices, jOut: TJSonArray;
+  VChoice, VItem: TJSONValue;
+  LSize, LUrl: String;
+  LCount: Integer;
+begin
+  Result := '';
+  if Trim(AskMsg.Prompt) = '' then
+    raise Exception.Create('Se requiere un prompt para generar la imagen.');
+  FBusy := True;
+  FLastError := '';
+  FLastPrompt := AskMsg.Prompt;
+  jBody := TJSonObject.Create;
+  jRes := nil;
+  try
+    DoStateChange(acsConnecting, 'Generando imagen...');
+    jBody.AddPair('model', ModelFor('image', GlDefaultImageModel));
+
+    jPart := TJSonObject.Create;
+    jPart.AddPair('text', AskMsg.Prompt);
+    jContent := TJSonArray.Create;
+    jContent.Add(jPart);
+    jMsg := TJSonObject.Create;
+    jMsg.AddPair('role', 'user');
+    jMsg.AddPair('content', jContent);
+    jMsgs := TJSonArray.Create;
+    jMsgs.Add(jMsg);
+    jInput := TJSonObject.Create;
+    jInput.AddPair('messages', jMsgs);
+    jBody.AddPair('input', jInput);
+
+    // Cada familia admite tamanos distintos (qwen-image-plus solo 1328*1328, 1664*928...)
+    LSize := ImageParams.Params.Values['size'];
+    if LSize = '' then
+      LSize := '1024*1024';
+    LSize := StringReplace(LSize, 'x', '*', [rfIgnoreCase]);
+    jParams := TJSonObject.Create;
+    jParams.AddPair('size', LSize);
+    if N > 1 then
+      jParams.AddPair('n', TJSONNumber.Create(N));
+    if ImageParams.Params.Values['negative_prompt'] <> '' then
+      jParams.AddPair('negative_prompt', ImageParams.Params.Values['negative_prompt']);
+    jParams.AddPair('watermark', TJSONBool.Create(SameText(ImageParams.Params.Values['watermark'], 'true')));
+    jBody.AddPair('parameters', jParams);
+
+    jRes := PostJSON(NativeUrl('services/aigc/multimodal-generation/generation'), jBody);
+
+    LCount := 0;
+    if jRes.TryGetValue<TJSonArray>('output.choices', jChoices) then
+      for VChoice in jChoices do
+        if (VChoice is TJSonObject) and TJSonObject(VChoice).TryGetValue<TJSonArray>('message.content', jOut) then
+          for VItem in jOut do
+            if VItem is TJSonObject then
+            begin
+              jItem := TJSonObject(VItem);
+              if jItem.TryGetValue<String>('image', LUrl) then
+              begin
+                Inc(LCount);
+                ResMsg.MediaFiles.Add(DownloadMedia(LUrl, Format('qwen_image_%d.png', [LCount])));
+              end;
+            end;
+    if LCount = 0 then
+      raise Exception.Create('Qwen: la respuesta no trae imagenes: ' + Copy(jRes.ToJSON, 1, 300));
+
+    if ResMsg.Role = '' then
+      ResMsg.Role := 'assistant';
+    DoStateChange(acsFinished, 'Done');
+    if Assigned(FOnReceiveDataEnd) then
+      FOnReceiveDataEnd(Self, ResMsg, jRes, 'assistant', ResMsg.Prompt);
+  finally
+    jBody.Free;
+    jRes.Free;
+    FBusy := False;
+  end;
+end;
+
+function TAiQwenChat.InternalRunNativeSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+// POST api/v1/services/aigc/multimodal-generation/generation con input {text, voice,
+// language_type} -> output.audio.url (WAV, expira en 24 h)
+const
+  // TtsParams.Language admite el codigo ISO; el API quiere el nombre en ingles
+  Codes: array[0..9] of string = ('es', 'en', 'zh', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'ru');
+  Names: array[0..9] of string = ('Spanish', 'English', 'Chinese', 'French', 'German', 'Italian',
+    'Portuguese', 'Japanese', 'Korean', 'Russian');
+var
+  jBody, jInput, jRes: TJSonObject;
+  LVoice, LLang, LUrl, LData: String;
+  I: Integer;
+  MF: TAiMediaFile;
+begin
+  Result := '';
+  if Trim(AskMsg.Prompt) = '' then
+    raise Exception.Create('Se requiere un texto para generar el audio.');
+  FBusy := True;
+  FLastError := '';
+  FLastPrompt := AskMsg.Prompt;
+  jBody := TJSonObject.Create;
+  jRes := nil;
+  try
+    DoStateChange(acsConnecting, 'Generando audio...');
+    LVoice := TtsParams.Voice;
+    if LVoice = '' then
+      LVoice := 'Cherry';
+    LLang := TtsParams.Language;
+    for I := Low(Codes) to High(Codes) do
+      if SameText(LLang, Codes[I]) then
+        LLang := Names[I];
+    if LLang = '' then
+      LLang := 'Auto';
+
+    jBody.AddPair('model', ModelFor('-tts', GlDefaultTtsModel));
+    jInput := TJSonObject.Create;
+    jInput.AddPair('text', AskMsg.Prompt);
+    jInput.AddPair('voice', LVoice);
+    jInput.AddPair('language_type', LLang);
+    jBody.AddPair('input', jInput);
+
+    jRes := PostJSON(NativeUrl('services/aigc/multimodal-generation/generation'), jBody);
+
+    if jRes.TryGetValue<String>('output.audio.url', LUrl) and (LUrl <> '') then
+      MF := DownloadMedia(LUrl, 'qwen_tts.wav')
+    else if jRes.TryGetValue<String>('output.audio.data', LData) and (LData <> '') then
+    begin
+      MF := TAiMediaFile.Create;
+      MF.LoadFromBase64('qwen_tts.wav', LData);
+    end
+    else
+      raise Exception.Create('Qwen: la respuesta no trae audio: ' + Copy(jRes.ToJSON, 1, 300));
+    ResMsg.MediaFiles.Add(MF);
+
+    if ResMsg.Role = '' then
+      ResMsg.Role := 'assistant';
+    DoStateChange(acsFinished, 'Done');
+    if Assigned(FOnReceiveDataEnd) then
+      FOnReceiveDataEnd(Self, ResMsg, jRes, 'assistant', '');
+  finally
+    jBody.Free;
+    jRes.Free;
+    FBusy := False;
+  end;
+end;
+
+function TAiQwenChat.InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
+// qwen3-asr-flash por chat/completions con input_audio (data URI). Dos usos:
+// - cmTranscription: la transcripcion ES la respuesta (ParseJsonTranscript) y el
+//   Prompt viaja como contexto para el reconocedor.
+// - Puente de Fase 1 (un modelo de texto recibe audio): solo se llena
+//   aMediaFile.Transcription; RunNew la inyecta en el prompt y la respuesta final
+//   la da el modelo de chat.
+var
+  jBody, jMsg, jPart, jAudio, jAsr, jRes, jText, jUsage: TJSonObject;
+  jMsgs, jContent: TJSonArray;
+  LMime, LText: String;
+  LIn, LOut, LTotal: Integer;
+  LBridge: Boolean;
+begin
+  Result := '';
+  if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
+    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripcion.');
+  LBridge := ChatMode <> cmTranscription;
+  jBody := TJSonObject.Create;
+  jRes := nil;
+  try
+    DoStateChange(acsConnecting, 'Transcribiendo audio...');
+    jBody.AddPair('model', ModelFor('-asr', GlDefaultAsrModel));
+    jBody.AddPair('stream', TJSONBool.Create(False));
+    jMsgs := TJSonArray.Create;
+    jBody.AddPair('messages', jMsgs);
+
+    if not LBridge and (Trim(AskMsg.Prompt) <> '') then
+    begin
+      jPart := TJSonObject.Create;
+      jPart.AddPair('text', AskMsg.Prompt);
+      jContent := TJSonArray.Create;
+      jContent.Add(jPart);
+      jMsg := TJSonObject.Create;
+      jMsg.AddPair('role', 'system');
+      jMsg.AddPair('content', jContent);
+      jMsgs.Add(jMsg);
+    end;
+
+    LMime := aMediaFile.MimeType;
+    if (LMime = '') or SameText(LMime, 'audio/x-wav') then
+      LMime := 'audio/wav';
+    jAudio := TJSonObject.Create;
+    jAudio.AddPair('data', 'data:' + LMime + ';base64,' + aMediaFile.Base64);
+    jPart := TJSonObject.Create;
+    jPart.AddPair('type', 'input_audio');
+    jPart.AddPair('input_audio', jAudio);
+    jContent := TJSonArray.Create;
+    jContent.Add(jPart);
+    jMsg := TJSonObject.Create;
+    jMsg.AddPair('role', 'user');
+    jMsg.AddPair('content', jContent);
+    jMsgs.Add(jMsg);
+
+    jAsr := TJSonObject.Create;
+    jAsr.AddPair('enable_itn', TJSONBool.Create(False));
+    if TranscriptionParams.Language <> '' then
+      jAsr.AddPair('language', TranscriptionParams.Language);
+    jBody.AddPair('asr_options', jAsr);
+
+    jRes := PostJSON(Url + 'chat/completions', jBody);
+    LText := jRes.GetValue<String>('choices[0].message.content', '');
+    LIn := jRes.GetValue<Integer>('usage.prompt_tokens', 0);
+    LOut := jRes.GetValue<Integer>('usage.completion_tokens', 0);
+    LTotal := jRes.GetValue<Integer>('usage.total_tokens', LIn + LOut);
+
+    if LBridge then
+    begin
+      aMediaFile.Transcription := LText;
+      aMediaFile.Procesado := True;
+      Prompt_tokens := Prompt_tokens + LIn;
+      Completion_tokens := Completion_tokens + LOut;
+      Total_tokens := Total_tokens + LTotal;
+    end
+    else
+    begin
+      // Forma OpenAI de /audio/transcriptions, para reutilizar ParseJsonTranscript
+      jText := TJSonObject.Create;
+      try
+        jText.AddPair('text', LText);
+        jUsage := TJSonObject.Create;
+        jUsage.AddPair('input_tokens', TJSONNumber.Create(LIn));
+        jUsage.AddPair('output_tokens', TJSONNumber.Create(LOut));
+        jUsage.AddPair('total_tokens', TJSONNumber.Create(LTotal));
+        jText.AddPair('usage', jUsage);
+        ParseJsonTranscript(jText, ResMsg, aMediaFile);
+      finally
+        jText.Free;
+      end;
+    end;
+    Result := LText;
+  finally
+    jBody.Free;
+    jRes.Free;
+  end;
 end;
 
 initialization

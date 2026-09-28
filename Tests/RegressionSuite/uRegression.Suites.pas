@@ -66,7 +66,7 @@ uses
   uMakerAi.Jev.SmartDispatch, uMakerAi.Jev.Guardrails, uMakerAi.Chat.Tools,
   uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
   uMakerAi.Jev.ModelRouter,
-  UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen,
+  UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
   uMakerAi.RAG.Vector.Driver.BinFile,
@@ -327,6 +327,18 @@ begin
   FRunner.AddCase('chat.qwen.stream-usage')
     .Input('chat:qwen-stream-usage')
     .ExpectEquals('sync=ausente|async=true');
+
+  // Qwen: el API rechaza el base64 pelado en input_audio.data (400 "URL does not
+  // appear to be valid"); el driver lo reescribe como data URI
+  FRunner.AddCase('chat.qwen.audio-data-uri')
+    .Input('chat:qwen-audio-uri')
+    .ExpectEquals('uri=si|format=wav');
+
+  // TAiQwenRAGReranker con transporte falso: 5 pasajes en lotes de 2 (3 llamadas),
+  // resultados en desorden mapeados por index, instruct y recorte de pasajes
+  FRunner.AddCase('rag.rerank.qwen-batches')
+    .Input('chat:qwen-rerank')
+    .ExpectEquals('llamadas=3|scores=0.0,0.1,0.2,0.3,0.4|instruct=si|recorte=si|tokens=21');
 
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
@@ -1570,6 +1582,49 @@ begin
 end;
 
 type
+  // Reranker de Qwen sin red: responde con score = digito del pasaje / 10 ('d3...'
+  // -> 0.3), en orden inverso para probar el mapeo por index
+  TQwenFakeReranker = class(TAiQwenRAGReranker)
+  public
+    Calls: Integer;
+    SawInstruct, Trimmed: Boolean;
+  protected
+    function Post(const ABody: string): string; override;
+  end;
+
+function TQwenFakeReranker.Post(const ABody: string): string;
+var
+  jReq, jRes, jItem: TJSONObject;
+  jDocs, jResults: TJSONArray;
+  I: Integer;
+  LDoc: string;
+begin
+  Inc(Calls);
+  jReq := TJSONObject.ParseJSONValue(ABody) as TJSONObject;
+  jRes := TJSONObject.Create;
+  try
+    SawInstruct := SawInstruct or (jReq.GetValue<string>('parameters.instruct', '') <> '');
+    jDocs := jReq.GetValue<TJSONArray>('input.documents');
+    jResults := TJSONArray.Create;
+    for I := jDocs.Count - 1 downto 0 do
+    begin
+      LDoc := jDocs.Items[I].Value;
+      Trimmed := Trimmed or (Length(LDoc) = MaxPassageChars);
+      jItem := TJSONObject.Create;
+      jItem.AddPair('index', TJSONNumber.Create(I));
+      jItem.AddPair('relevance_score', TJSONNumber.Create(StrToInt(LDoc[2]) / 10));
+      jResults.Add(jItem);
+    end;
+    jRes.AddPair('output', TJSONObject.Create(TJSONPair.Create('results', jResults)));
+    jRes.AddPair('usage', TJSONObject.Create(TJSONPair.Create('total_tokens', TJSONNumber.Create(7))));
+    Result := jRes.ToJSON;
+  finally
+    jReq.Free;
+    jRes.Free;
+  end;
+end;
+
+type
   // Expone el parser de streaming comun (protegido en TAiChat). Groq lo usa tal
   // cual; TAiOpenChat NO sirve: sobrescribe OnInternalReceiveData (API Responses).
   TStreamProbeChat = class(TAiGroqChat)
@@ -1668,6 +1723,60 @@ begin
           '|async=' + PickQwen(Qw, 'qwen3.8-flash', True, [], tlDefault, 'stream_options.include_usage');
     finally
       Qw.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:qwen-audio-uri' then
+  begin
+    var QA := TQwenProbeChat.Create(nil);
+    try
+      Msg := TAiChatMessage.Create('Que dice?', 'user');
+      MF := TAiMediaFile.Create;
+      // WAV minimo (cabecera RIFF): basta para que el serializador lo trate como audio
+      MF.LoadFromBase64('voz.wav', 'UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=');
+      Msg.MediaFiles.Add(MF);
+      QA.Messages.Add(Msg);
+      QA.Messages.ModelCaps := [cap_Audio];
+      var J := QA.Request('qwen3.8-omni-flash', False, [cap_Audio], tlDefault);
+      try
+        Raw := J.GetValue<TJSONArray>('messages').ToJSON;
+        var LData := '';
+        var LFormat := '';
+        var jAud: TJSONObject := nil;
+        for var VMsg in J.GetValue<TJSONArray>('messages') do
+          for var VPart in (VMsg as TJSONObject).GetValue<TJSONArray>('content') do
+            if (VPart as TJSONObject).TryGetValue<TJSONObject>('input_audio', jAud) then
+            begin
+              LData := jAud.GetValue<string>('data');
+              LFormat := jAud.GetValue<string>('format', '');
+            end;
+        Result := 'uri=' + IfThen(LData.StartsWith('data:audio/wav;base64,UklGR'), 'si', 'no:' + Copy(LData, 1, 30)) +
+          '|format=' + LFormat;
+      finally
+        J.Free;
+      end;
+    finally
+      QA.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:qwen-rerank' then
+  begin
+    var RR := TQwenFakeReranker.Create(nil);
+    try
+      RR.BatchSize := 2;
+      RR.MaxPassageChars := 6;
+      RR.Instruct := 'Retrieve the passage';
+      var Scores := RR.Score('q', ['d0', 'd1', 'd2', 'd3 texto largo que se recorta', 'd4']);
+      var LTxt := '';
+      for var Sc in Scores do
+        LTxt := LTxt + IfThen(LTxt <> '', ',', '') + FormatFloat('0.0', Sc, TFormatSettings.Invariant);
+      Result := Format('llamadas=%d|scores=%s|instruct=%s|recorte=%s|tokens=%d',
+        [RR.Calls, LTxt, IfThen(RR.SawInstruct, 'si', 'no'), IfThen(RR.Trimmed, 'si', 'no'), RR.LastTokens]);
+    finally
+      RR.Free;
     end;
     Exit;
   end;

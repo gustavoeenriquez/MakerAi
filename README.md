@@ -166,6 +166,18 @@ live: `qwen3.8-flash` (default), `qwen3.8-max`, `qwen3.7-plus`, `qwen3-vl-flash`
 `qwen3.8-omni-flash` with vision; `qwen3-max`, `qwen-plus/flash/turbo`, `qwen3-coder-plus/flash`;
 and `qwq-plus`, which only answers when streaming and is registered as asynchronous.
 
+Beyond chat, the same key covers the rest of Model Studio, all tested live from Delphi:
+
+- **Image generation** (`cap_GenImage`): `qwen-image-3.0`, `qwen-image-2.0`, `qwen-image-max`,
+  `z-image-turbo`, `wan2.7-image`. The driver downloads the result into `MediaFiles`.
+- **Text to speech** (`cap_GenAudio`): `qwen3-tts-flash`, voice and language from `TtsParams`.
+- **Transcription**: `qwen3-asr-flash` in `cmTranscription`, where the prompt is passed as
+  context so proper names come out right. A text model with `cap_Audio` in `SessionCaps` uses it
+  to transcribe before answering, and `qwen3.8-omni-flash` understands audio natively.
+- **Embeddings**: `TAiQwenEmbeddings` (driver `Qwen`), `text-embedding-v4` by default.
+- **Rerank**: `TAiQwenRAGReranker` plugs `qwen3-rerank` into `TAiRAGVector.Reranker`, up to 500
+  passages per call, with an optional task instruction.
+
 ### Also
 
 - **Claude sometimes sends coordinates as a JSON array and sometimes as a string** containing
@@ -804,7 +816,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 
 ### Unreleased (on `dev`)
 
-- New: **Qwen driver** (`TAiQwenChat`, Alibaba Model Studio / DashScope, OpenAI-compatible). Always sends `enable_thinking` (the API thinks by default on hybrid models), `ThinkingLevel` → `thinking_budget`, `qwq-plus` registered async (it answers empty without streaming), open-weight models only think when streaming. Runtime-tested: sync, async, reasoning on/off, tools (sync and streaming), vision, qwq-plus. Two new offline regression cases
+- New: **Qwen driver** (`TAiQwenChat`, Alibaba Model Studio / DashScope, OpenAI-compatible). Always sends `enable_thinking` (the API thinks by default on hybrid models), `ThinkingLevel` → `thinking_budget`, `qwq-plus` registered async (it answers empty without streaming), open-weight models only think when streaming. Runtime-tested: sync, async, reasoning on/off, tools (sync and streaming), vision, qwq-plus. Also image generation, TTS and transcription through the capability gap, native audio input on omni models (the API needs a data URI, the driver rewrites it), `TAiQwenEmbeddings` and `TAiQwenRAGReranker` (`qwen3-rerank`, batched above 500 passages). Four new offline regression cases
 - New: **Computer Use on Linux** — `TAiLinuxExecutor` (X11 via xdotool + scrot) covers the 19 canonical actions with the same public interface as the Windows and macOS executors. The framework needed no change: `TAiComputerUseTool` only uses the RTL and delegates through its two events, so it cross-compiled to Linux64 untouched. Runtime-tested on Xvfb with `gpt-6-astra` and `claude-opus-4-8` against a text editor and Chrome. Demo `083-ComputerUseLinux`, plus a repeatable setup script for a headless VPS
 - New: **Computer Use delegation** — OpenAI and Gemini now honour the framework contract (fill `ToolCall.Response` from `OnCallToolFunction` and the driver does not execute locally), which is what lets a headless broker forward the call to a remote client. OpenAI ignored `Response` and executed anyway; Gemini never fired the event at all. For OpenAI the delegation is atomic over the batch, since `gpt-6-astra` sends an array of actions that admits exactly one `computer_call_output`. Without a `TAiComputerUseTool` assigned the synchronous path used to emit an output with no `image_url`, which the API rejects with 400; it now ends the turn and reports through `LastError`. Demo `082-ComputerUsePassthru`
 - Fix: **Claude sends coordinates as an array *and* as a string containing one, within the same turn** — `"coordinate": [299, 282]` in the first calls, `"coordinate": "[299, 400]"` later. `TryGetValue<TJSONArray>` does not match the second form, so the coordinate was lost and the action fell back to (0,0): a click in the screen corner, after which the model retried until the turn ran out. Affected `coordinate`, `start_coordinate`, `region` (zoom) and numeric fields (`"duration": "1"`), i.e. click, double/triple click, drag and zoom. Not a Linux issue — it hit Windows and macOS just the same
