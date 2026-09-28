@@ -27,6 +27,7 @@ Demos:
 | `uMakerAi.Realtime.MakerAi.pas` | `TAiMakerAiRealtimeChat` | MakerAI driver — **complete** (STT+LLM+TTS) |
 | `uMakerAi.Realtime.Grok.pas` | `TAiGrokRealtimeChat` | xAI Grok Voice driver — speech-to-speech, OpenAI Realtime-compatible protocol — **implemented, pending runtime test** |
 | `uMakerAi.Realtime.Qwen.pas` | `TAiQwenRealtimeChat`, `TAiQwenRealtimeSTT`, `TAiQwenRealtimeTranslate` | Alibaba Qwen (DashScope) — voice conversation, live STT and simultaneous translation — **runtime-tested** (2026-09-28) |
+| `uMakerAi.Realtime.QwenTTS.pas` | `TAiQwenRealtimeTTS` | Qwen streaming **text-to-speech** (text in → audio out) — standalone component, not a `TAiRealtimeBase` driver — **runtime-tested** (2026-09-28) |
 | `uMakerAi.Realtime.WebSocket.pas` | `TAiRealtimeWSClient` (shim → `TAiWSClient`) | Compatibility alias; implementation in `Source/WebSocket/` |
 
 ### Class Hierarchy
@@ -266,7 +267,26 @@ Other models work through `Model`: `qwen3.5-omni-flash/plus-realtime`, `qwen3-om
 2. **Voices are per model** and a foreign voice is an error (`Voice 'Cherry' is not supported`): qwen3.8-omni defaults to Tina, qwen3-omni to Cherry. Empty `Voice` = server default. **Exception, translate:** a `session.update` without a voice makes the server fall back to Chelsie, which that model rejects — `QwenTranslate` sends `Tina` by default.
 3. VAD: `server_vad` (`rvmSemanticVad` maps to it); `rvmManual` sends `turn_detection: null` → `CommitAudio` + `CreateResponse`. **The translate model uses `speaker_detection` with 2.5 s of silence**: a turn closes only after ~2.5 s without speech (file tests must trail at least 3 s of silence).
 4. `session.created` and `session.updated` both arrive; `OnSessionReady` fires once.
-5. Not covered: `qwen3-tts-flash-realtime` (text in → audio out does not fit the audio-in base) and `qwen3-s2s-flash-realtime`.
+5. `qwen3-tts-*-realtime` (text in → audio out) is covered by the separate component `TAiQwenRealtimeTTS` (next section). `qwen3-s2s-flash-realtime` is **not available to the tested account**: the server closes the socket right after `session.created`, with or without `session.update`.
+
+## TAiQwenRealtimeTTS — streaming text-to-speech (standalone component)
+
+The realtime hierarchy is audio-in (microphone → server); this goes the other way, so it is a separate `TComponent` (same WebSocket client, same `TThread.Queue` dispatch, same base64 rule). Typical use: speak an LLM answer while it is being generated.
+
+```pascal
+TTS := TAiQwenRealtimeTTS.Create(nil);          // Voice 'Cherry', Mode tmServerCommit
+TTS.OnAudioChunk := HandlePcm24k;               // PCM16 mono 24 kHz, as it is produced
+TTS.Connect;                                    // wait OnSessionReady
+Chat.OnReceiveData    := procedure(...) begin TTS.AppendText(aText) end;  // each LLM delta
+Chat.OnReceiveDataEnd := procedure(...) begin TTS.Finish end;             // flush + OnFinished
+```
+
+- Protocol (verified live): client `session.update {voice, mode, response_format: pcm, sample_rate, language_type, instructions}`, `input_text_buffer.append {text}`, `input_text_buffer.commit`, `session.finish`; server `response.audio.delta`, `response.done` (per utterance), `session.finished`.
+- `Mode`: `tmServerCommit` (server decides when to speak; `Finish` flushes the rest) or `tmCommit` (`Commit` / `Speak` closes each utterance; several responses in one session — verified with 2).
+- Measured latency: first audio **~0.5 s** after the first text fragment; LLM → voice (qwen3.8-flash streaming into the TTS) **2.5 s** from the question to the first audio.
+- Models: `qwen3-tts-flash-realtime` [default], `qwen3-tts-instruct-flash-realtime` (`Instructions`: reading style, e.g. whisper — verified), `qwen3-tts-vc-realtime-2026-01-15` / `qwen3-tts-vd-realtime-2026-01-15` for custom voices. **A custom voice must be created for the realtime model** (`TAiQwenVoices.CloneModel := 'qwen3-tts-vc-realtime-2026-01-15'`); `EffectiveModel` picks the realtime vc/vd model from the voice id prefix.
+- `Language`: ISO code or English name (`es` → `Spanish`); empty = auto.
+- All outputs verified by re-transcribing the audio (fragments, two utterances, LLM answer, instruct, cloned voice).
 
 ---
 

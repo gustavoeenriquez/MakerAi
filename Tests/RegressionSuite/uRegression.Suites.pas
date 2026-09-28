@@ -67,7 +67,7 @@ uses
   uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
   uMakerAi.Jev.ModelRouter,
   UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank, uMakerAi.Qwen.Voices,
-  uMakerAi.Realtime, uMakerAi.Realtime.Qwen, uMakerAi.Realtime.AiConnection,
+  uMakerAi.Realtime, uMakerAi.Realtime.Qwen, uMakerAi.Realtime.AiConnection, uMakerAi.Realtime.QwenTTS,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
   uMakerAi.RAG.Vector.Driver.BinFile,
@@ -403,6 +403,14 @@ begin
     .ExpectEquals('clon=qwen-voice-enrollment/create/qwen3-tts-vc-2026-01-22/data-uri/id=qwen-tts-vc-x|' +
       'diseno=qwen-voice-design/wav/fallback=wer_too_high/preview=4|lista=2:qwen3-tts-vc-2026-01-22|' +
       'borrar=qwen-voice-design|tts=qwen3-tts-vc-2026-01-22,qwen3-tts-vd-2026-01-26,qwen3-tts-flash,qwen3-tts-instruct-flash');
+
+  // TTS realtime de Qwen (texto -> audio) sin red: session.update, modelo elegido
+  // por el prefijo de la voz propia y eventos del servidor
+  FRunner.AddCase('realtime.qwen.tts')
+    .Input('chat:qwen-tts-rt')
+    .ExpectEquals('sesion=commit/Spanish/24000/Ethan/instr|' +
+      'modelos=qwen3-tts-vc-realtime-2026-01-15,qwen3-tts-vd-realtime-2026-01-15,qwen3-tts-flash-realtime,' +
+      'qwen3-tts-vc-realtime-2026-01-15|eventos=listo=1/audio=3/respuestas=2/fin=1/error=Throttling:lento');
 
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
@@ -1819,6 +1827,56 @@ begin
 end;
 
 type
+  // Expone session.update, modelo efectivo y el procesamiento de eventos del TTS realtime
+  TQwenTTSProbe = class(TAiQwenRealtimeTTS)
+  public
+    procedure Feed(const AJson: string);
+    function Session: TJSONObject;
+    function ModelFor(const AModel, AVoice: string): string;
+  end;
+
+  TQwenTTSSink = class
+  public
+    Ready, Resp, Fin, Audio: Integer;
+    Err: string;
+    procedure OnReady(Sender: TObject);
+    procedure OnResp(Sender: TObject);
+    procedure OnFin(Sender: TObject);
+    procedure OnChunk(Sender: TObject; const D: TBytes);
+    procedure OnError(Sender: TObject; const M, C: string);
+  end;
+
+procedure TQwenTTSProbe.Feed(const AJson: string);
+var
+  J: TJSONObject;
+begin
+  J := TJSONObject.ParseJSONValue(AJson) as TJSONObject;
+  try
+    ProcessServerEvent(J);
+  finally
+    J.Free;
+  end;
+end;
+
+function TQwenTTSProbe.Session: TJSONObject;
+begin
+  Result := BuildSessionUpdate;
+end;
+
+function TQwenTTSProbe.ModelFor(const AModel, AVoice: string): string;
+begin
+  Model := AModel;
+  Voice := AVoice;
+  Result := EffectiveModel;
+end;
+
+procedure TQwenTTSSink.OnReady(Sender: TObject); begin Inc(Ready); end;
+procedure TQwenTTSSink.OnResp(Sender: TObject); begin Inc(Resp); end;
+procedure TQwenTTSSink.OnFin(Sender: TObject); begin Inc(Fin); end;
+procedure TQwenTTSSink.OnChunk(Sender: TObject; const D: TBytes); begin Inc(Audio, Length(D)); end;
+procedure TQwenTTSSink.OnError(Sender: TObject; const M, C: string); begin Err := C + ':' + M; end;
+
+type
   // TAiQwenVoices sin red: guarda el ultimo cuerpo y responde segun la accion
   TQwenFakeVoices = class(TAiQwenVoices)
   public
@@ -2246,6 +2304,48 @@ begin
       RS.Free;
       RTr.Free;
       RConn.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:qwen-tts-rt' then
+  begin
+    var TP := TQwenTTSProbe.Create(nil);
+    var TS := TQwenTTSSink.Create;
+    try
+      TP.Mode := tmCommit;
+      TP.Language := 'es';
+      TP.Voice := 'Ethan';
+      TP.Instructions := 'Susurra';
+      var J := TP.Session;
+      try
+        Result := 'sesion=' + J.GetValue<string>('session.mode') + '/' + J.GetValue<string>('session.language_type') +
+          '/' + J.GetValue<TJSONValue>('session.sample_rate').ToJSON + '/' + J.GetValue<string>('session.voice') +
+          IfThen(J.GetValue<string>('session.instructions', '') = 'Susurra', '/instr', '/sin-instr');
+      finally
+        J.Free;
+      end;
+      Result := Result + '|modelos=' + TP.ModelFor('qwen3-tts-flash-realtime', 'qwen-tts-vc-x') + ',' +
+        TP.ModelFor('', 'qwen-tts-vd-y') + ',' + TP.ModelFor('', 'Cherry') + ',' +
+        TP.ModelFor('qwen3-tts-vc-realtime-2026-01-15', 'qwen-tts-vc-x');
+      TP.OnSessionReady := TS.OnReady;
+      TP.OnResponseDone := TS.OnResp;
+      TP.OnFinished := TS.OnFin;
+      TP.OnAudioChunk := TS.OnChunk;
+      TP.OnError := TS.OnError;
+      TP.Feed('{"type":"session.updated"}');
+      TP.Feed('{"type":"session.updated"}'); // el servidor puede repetirlo: un solo OnSessionReady
+      TP.Feed('{"type":"response.audio.delta","delta":"AAEC"}');
+      TP.Feed('{"type":"response.done"}');
+      TP.Feed('{"type":"response.done"}');
+      TP.Feed('{"type":"session.finished"}');
+      TP.Feed('{"type":"error","error":{"code":"Throttling","message":"lento"}}');
+      CheckSynchronize(0);
+      Result := Result + Format('|eventos=listo=%d/audio=%d/respuestas=%d/fin=%d/error=%s',
+        [TS.Ready, TS.Audio, TS.Resp, TS.Fin, TS.Err]);
+    finally
+      TP.Free;
+      TS.Free;
     end;
     Exit;
   end;
