@@ -141,7 +141,11 @@ type
     LastElicitMessage: string;
     LastChatError: string;       // ultimo error reportado por un chat (OnError)
     LastGuardCategory: string;   // categoria recibida en OnPromptGuard
+    LastDataEnd: string;         // texto recibido en OnReceiveDataEnd
 
+    // Chat: texto recibido en OnReceiveDataEnd
+    procedure ChatDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject;
+      aRole, aText: string);
     // Chat: ultimo error reportado (OnError)
     procedure ChatError(Sender: TObject; const ErrorMsg: string; Exception: Exception;
       const AResponse: IHTTPResponse);
@@ -340,6 +344,12 @@ begin
 end;
 
 { TFixtureHandlers }
+
+procedure TFixtureHandlers.ChatDataEnd(const Sender: TObject; aMsg: TAiChatMessage;
+  aResponse: TJSonObject; aRole, aText: string);
+begin
+  LastDataEnd := aText;
+end;
 
 procedure TFixtureHandlers.ChatError(Sender: TObject; const ErrorMsg: string; Exception: Exception;
   const AResponse: IHTTPResponse);

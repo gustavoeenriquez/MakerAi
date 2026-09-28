@@ -96,6 +96,11 @@ From `uMakerAi.Core.pas`:
 
 `TAiChatTools.PromptGuard: TAiPromptGuardBase` (en `uMakerAi.Chat.Tools`, con el record `TAiPromptVerdict`: `Allowed`, `Category`, `Score`, `Reason`). `TAiChat.Run` lo consulta para cada mensaje `user` **después** del sanitizador por regex (`SanitizerActive`) y antes de la memoria y del LLM. Si bloquea, dispara `OnPromptGuard(Sender, Verdict, var Action)` con `Action = saBlock` por defecto (mismo `TAiSanitizeAction` que el sanitizador: `saAllow` sigue, `saAllowWrapped` envuelve el prompt con `TSanitizerPipeline`); con `saBlock` llama `DoError` y `Run` devuelve `''` sin tocar la red. Si `CheckPrompt` lanza, `BlockOnError` (default `True`) decide. `TAiChatConnection` propaga `OnPromptGuard` como `OnSanitize`. Implementación con Jev: `TAiJevPromptGuard` (`Source/Tools/uMakerAi.Jev.PromptGuard.pas`).
 
+## Parser de streaming: dos fixes (sep 28/2026)
+
+- **Texto duplicado en `OnReceiveDataEnd` (asíncrono).** El `[DONE]` arma un mensaje sintético con `content = FLastContent` (ya acumulado por los deltas) y `ParseChat` volvía a sumarle ese content a `FLastContent`: el evento recibía `'Listo'#13#10'Listo'`. Afectaba a todos los drivers del parser común (verificado en vivo: Groq, DeepSeek; tras el fix también Kimi, Grok y Mistral entregan una sola vez). Fix: se restaura `FLastContent` tras `ParseChat` **solo si había content** (sin content, `ParseChat` usa el reasoning como respuesta y eso se conserva). `TAiDeepSeekChat` tiene una copia de `ProcessLine` y lleva el mismo fix. `TAiOpenChat` no pasa por aquí (sobrescribe `OnInternalReceiveData` para la API Responses).
+- **`executed_tools` en el delta.** Groq `code_interpreter` con `gpt-oss` manda `executed_tools` dentro de `choices[0].delta`, en dos chunks por tool con el mismo `index` (primero `arguments`, luego `arguments` + `output`); el parser solo leía el campo en la raíz (formato del retirado `groq/compound`). `MergeStreamExecutedTools` los combina por `index` en `FLastExecutedToolsJSON` y el `[DONE]` los entrega a `ProcessExecutedTools`, como el camino sync.
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for source directory overview and [../../CLAUDE.md](../../CLAUDE.md) for project overview.

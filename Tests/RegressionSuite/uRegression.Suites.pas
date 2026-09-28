@@ -66,7 +66,7 @@ uses
   uMakerAi.Jev.SmartDispatch, uMakerAi.Jev.Guardrails, uMakerAi.Chat.Tools,
   uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
   uMakerAi.Jev.ModelRouter,
-  UMakerAi.Chat, uMakerAi.Chat.OpenAi,
+  UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
   uMakerAi.RAG.Vector.Driver.BinFile,
@@ -304,6 +304,19 @@ begin
 
   // Los adjuntos de texto se inlinean en el propio string del resultado: no
   // necesitan mensaje extra y antes se perdian enteros.
+  // Groq code_interpreter en streaming: executed_tools llega en el delta en dos
+  // chunks por tool (codigo, luego codigo + output). Deben combinarse por index.
+  // Chunks tomados de un SSE real de openai/gpt-oss-20b (sep 2026).
+  FRunner.AddCase('chat.stream.groq-executed-tools')
+    .Input('chat:stream-exec-tools')
+    .ExpectEquals('tools=2|output-0=si|args-0=si|output-1=si');
+
+  // Streaming: OnReceiveDataEnd recibia el texto duplicado ('Listo'#13#10'Listo')
+  // en todos los drivers del parser comun (verificado en vivo con DeepSeek y Groq)
+  FRunner.AddCase('chat.stream.dataend-no-dup')
+    .Input('chat:stream-dataend')
+    .ExpectEquals('Listo');
+
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
     .ExpectEquals('1|inline=si|string=si');
@@ -1527,6 +1540,45 @@ end;
 // Chat: serializacion de tool results
 // -----------------------------------------------------------------------------
 
+type
+  // Expone el parser de streaming comun (protegido en TAiChat). Groq lo usa tal
+  // cual; TAiOpenChat NO sirve: sobrescribe OnInternalReceiveData (API Responses).
+  TStreamProbeChat = class(TAiGroqChat)
+  public
+    procedure Merge(const AJson: string);
+    function Accumulated: string;
+    // Alimenta el parser de streaming con un SSE crudo, como si llegara de la red
+    procedure FeedSSE(const ASSE: string);
+  end;
+
+procedure TStreamProbeChat.FeedSSE(const ASSE: string);
+var
+  Abort: Boolean;
+begin
+  FClient.Asynchronous := True;
+  FBusy := True;
+  FResponse.WriteString(ASSE);
+  Abort := False;
+  OnInternalReceiveData(nil, 0, 0, Abort);
+end;
+
+procedure TStreamProbeChat.Merge(const AJson: string);
+var
+  V: TJSONValue;
+begin
+  V := TJSONObject.ParseJSONValue(AJson);
+  try
+    MergeStreamExecutedTools(V as TJSONArray);
+  finally
+    V.Free;
+  end;
+end;
+
+function TStreamProbeChat.Accumulated: string;
+begin
+  Result := FLastExecutedToolsJSON;
+end;
+
 function TRegressionSuite.RunChatScenario(const AScenario: string): string;
 
   function NewImage(const AName: string): TAiMediaFile;
@@ -1557,6 +1609,55 @@ var
   Raw, Content: string;
   Hits, P: Integer;
 begin
+  if AScenario = 'chat:stream-dataend' then
+  begin
+    var Probe := TStreamProbeChat.Create(nil);
+    var HS := TFixtureHandlers.Create;
+    try
+      Probe.OnReceiveDataEnd := HS.ChatDataEnd;
+      Probe.FeedSSE(
+        'data: {"choices":[{"index":0,"delta":{"role":"assistant","content":""}}]}'#10#10 +
+        'data: {"choices":[{"index":0,"delta":{"content":"Listo"}}]}'#10#10 +
+        'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}'#10#10 +
+        'data: [DONE]'#10#10);
+      CheckSynchronize(10);
+      Result := HS.LastDataEnd;
+    finally
+      Probe.Free;
+      HS.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:stream-exec-tools' then
+  begin
+    var Probe := TStreamProbeChat.Create(nil);
+    try
+      // Chunk 1: solo el codigo
+      Probe.Merge('[{"name":"python","index":0,"type":"function",' +
+        '"arguments":"print(1)","search_results":{"results":null}}]');
+      // Chunk 2: el mismo index con el output del sandbox
+      Probe.Merge('[{"name":"python","index":0,"type":"function","arguments":"print(1)",' +
+        '"output":"FILE_B64_BEGIN:hola.txt\naG9sYSBtdW5kbw==\nFILE_B64_END\n",' +
+        '"search_results":{"results":null}}]');
+      // Una segunda tool, en un solo chunk
+      Probe.Merge('[{"name":"python","index":1,"type":"function","arguments":"print(2)","output":"2"}]');
+      var ExecArr := TJSONObject.ParseJSONValue(Probe.Accumulated) as TJSONArray;
+      try
+        var T0 := ExecArr.Items[0] as TJSONObject;
+        Result := 'tools=' + ExecArr.Count.ToString +
+          '|output-0=' + IfThen(T0.GetValue<string>('output', '').Contains('FILE_B64_BEGIN'), 'si', 'no') +
+          '|args-0=' + IfThen(T0.GetValue<string>('arguments', '') = 'print(1)', 'si', 'no') +
+          '|output-1=' + IfThen((ExecArr.Items[1] as TJSONObject).GetValue<string>('output', '') = '2', 'si', 'no');
+      finally
+        ExecArr.Free;
+      end;
+    finally
+      Probe.Free;
+    end;
+    Exit;
+  end;
+
   Msgs := TAiChatMessages.Create;
   try
     if AScenario = 'chat:toolresult-parallel' then

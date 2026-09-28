@@ -385,7 +385,13 @@ Var
           // puesto FAsynchronous=False y el segundo round salga con stream=false.
           if sToolCallsStr <> '' then
             Self.Asynchronous := True;
+          // Mismo fix que en TAiChat: ParseChat vuelve a sumar a FLastContent el
+          // content del mensaje sintetico (que ES FLastContent) y OnReceiveDataEnd
+          // recibia el texto duplicado. Sin content se conserva el fallback a reasoning.
+          var LStreamedContent := FLastContent;
           ParseChat(FakeResponseObj, TempMsg);
+          if LStreamedContent <> '' then
+            FLastContent := LStreamedContent;
           if sToolCallsStr = '' then
           begin
             // En async, ParseChat NO dispara FOnReceiveDataEnd/acsFinished (guard

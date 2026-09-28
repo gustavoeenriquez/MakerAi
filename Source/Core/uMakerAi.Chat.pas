@@ -542,6 +542,9 @@ type
     procedure ParseJsonTranscript(jObj: TJSonObject; ResMsg: TAiChatMessage; aMediaFile: TAiMediaFile);
     // Groq code_interpreter: descarga archivos de 'executed_tools' y los agrega a ResMsg.MediaFiles
     procedure ProcessExecutedTools(const AExecutedToolsJSON: string; ResMsg: TAiChatMessage); virtual;
+    // Streaming: combina por 'index' los executed_tools de un delta con los ya
+    // acumulados en FLastExecutedToolsJSON (los campos nuevos pisan a los viejos)
+    procedure MergeStreamExecutedTools(ADeltaTools: TJSonArray);
 
     Function ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions; Virtual; // Obtiene la lista de funciones a partir del json de respuesta en modo sincrono
     Procedure DoCallFunction(ToolCall: TAiToolsFunction); Virtual;
@@ -2449,6 +2452,63 @@ begin
     FPersistentMemory.FreeNotification(Self);
 end;
 
+procedure TAiChat.MergeStreamExecutedTools(ADeltaTools: TJSonArray);
+var
+  Acc: TJSonArray;
+  Parsed: TJSonValue;
+  NewItem, OldItem: TJSonObject;
+  Pair: TJSonPair;
+  i, j, NewIdx, OldIdx: Integer;
+  Found: Boolean;
+begin
+  if (ADeltaTools = nil) or (ADeltaTools.Count = 0) then
+    Exit;
+
+  Acc := nil;
+  if FLastExecutedToolsJSON <> '' then
+  begin
+    Parsed := TJSonObject.ParseJSONValue(FLastExecutedToolsJSON);
+    if Parsed is TJSonArray then
+      Acc := TJSonArray(Parsed)
+    else
+      Parsed.Free;
+  end;
+  if Acc = nil then
+    Acc := TJSonArray.Create;
+  try
+    for i := 0 to ADeltaTools.Count - 1 do
+    begin
+      if not (ADeltaTools.Items[i] is TJSonObject) then
+        Continue;
+      NewItem := TJSonObject(ADeltaTools.Items[i]);
+      NewIdx := NewItem.GetValue<Integer>('index', i);
+
+      Found := False;
+      for j := 0 to Acc.Count - 1 do
+      begin
+        OldItem := Acc.Items[j] as TJSonObject;
+        OldIdx := OldItem.GetValue<Integer>('index', j);
+        if OldIdx = NewIdx then
+        begin
+          // El chunk nuevo completa al viejo: sus campos (p.ej. 'output') ganan
+          for Pair in NewItem do
+          begin
+            OldItem.RemovePair(Pair.JsonString.Value).Free;
+            OldItem.AddPair(Pair.JsonString.Value, Pair.JsonValue.Clone as TJSonValue);
+          end;
+          Found := True;
+          Break;
+        end;
+      end;
+      if not Found then
+        Acc.AddElement(NewItem.Clone as TJSonObject);
+    end;
+    FLastExecutedToolsJSON := Acc.ToJSON;
+  finally
+    Acc.Free;
+  end;
+end;
+
 procedure TAiChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
 Var
   jObj, Delta: TJSonObject;
@@ -2563,7 +2623,15 @@ Var
 
         TempMsg := TAiChatMessage.Create('', FTmpRole);
         try
+          // El mensaje sintetico lleva como content el FLastContent ya acumulado por
+          // los deltas, y ParseChat vuelve a sumarle su content a FLastContent: sin
+          // restaurarlo, OnReceiveDataEnd recibia el texto duplicado ('Listo'#13#10'Listo')
+          // en TODOS los drivers que usan este parser en asincrono. Solo si habia
+          // content: sin el, ParseChat usa el reasoning como respuesta y eso se conserva.
+          var LStreamedContent := FLastContent;
           ParseChat(FakeResponseObj, TempMsg);
+          if LStreamedContent <> '' then
+            FLastContent := LStreamedContent;
           // Groq code_interpreter: procesa archivos capturados durante el stream (async path)
           if FLastExecutedToolsJSON <> '' then
           begin
@@ -2756,6 +2824,15 @@ Var
               end;
             end;
           end;
+
+          // Groq code_interpreter (gpt-oss): executed_tools llega en el DELTA, no en
+          // la raiz. Cada tool viene en dos chunks con el mismo index: el primero
+          // trae solo 'arguments' (el codigo) y el segundo repite todo y agrega
+          // 'output' (el stdout del sandbox). Se combinan por index y el [DONE]
+          // entrega el resultado a ProcessExecutedTools, igual que el camino sync.
+          var JDeltaExec: TJSonArray;
+          if Delta.TryGetValue<TJSonArray>('executed_tools', JDeltaExec) then
+            MergeStreamExecutedTools(JDeltaExec);
         end
         else
         begin
