@@ -64,7 +64,7 @@ uses
   uMakerAi.Chat.AiConnection, uMakerAi.Chat.Initializations,
   uMakerAi.Guardrails, uMakerAi.Jev, uMakerAi.Agents.Tools.JevRouter,
   uMakerAi.Jev.SmartDispatch, uMakerAi.Jev.Guardrails, uMakerAi.Chat.Tools,
-  uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard,
+  uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
   UMakerAi.Chat, uMakerAi.Chat.OpenAi,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
@@ -422,6 +422,14 @@ begin
     .Input('jev:guard-categories')
     .ExpectEquals('no-top=blocked:Jev category financial 0.35 >= 0.30 is blocked|lectura=allowed:read|' +
       'riesgo=blocked:Jev risk 0.90 >= 0.50|descripcion=si|preguntas=2|evento=allowed:write');
+
+  // TAiJevBatchLabeler: etiqueta y confianza por fila, una fila con error no
+  // detiene el lote, filas dudosas para revision, tokens sumados, validacion
+  // antes de gastar llamadas, estados JSON tal cual y cancelacion a mitad
+  FRunner.AddCase('jev.batch.labeler')
+    .Input('jev:batch')
+    .ExpectEquals('etiquetas=urgente,,spam|errores=1|revisar=2|tokens=200|sin-preguntas=error|' +
+      'label-invalida=error|estado=si|cancelados=2');
 
   // lmExpression con punto decimal en un Windows con coma decimal: antes
   // '10.25 > 9.5' se comparaba como texto y daba False
@@ -2482,6 +2490,92 @@ begin
           'allowed', 'blocked') + ':' + H.LastGuardCategory;
       finally
         GC.Free;
+        H.Free;
+      end;
+    end
+
+    else if AScenario = 'jev:batch' then
+    begin
+      var B := TAiJevBatchLabeler.Create(nil);
+      var H := TFixtureHandlers.Create;
+      try
+        B.Jev := J;
+        B.Questions.AddChoice('cat', 'Que categoria tiene `item`?', ['spam', 'urgente', 'archivo']);
+        J.Enqueue(200, '{"model":"jev-1.13.0","answers":{"cat":{"type":"choice","choice":"urgente",' +
+          '"confidence":0.95,"probabilities":{"spam":0.01,"urgente":0.97,"archivo":0.02}}},' +
+          '"usage":{"input_tokens":100,"output_tokens":5}}');
+        J.Enqueue(401, '{"detail":"invalid key"}');
+        J.Enqueue(200, '{"model":"jev-1.13.0","answers":{"cat":{"type":"choice","choice":"spam",' +
+          '"confidence":0.40,"probabilities":{"spam":0.60,"urgente":0.10,"archivo":0.30}}},' +
+          '"usage":{"input_tokens":100,"output_tokens":5}}');
+        var Rep := B.Run(['el servidor se cayo', 'x', 'gana un premio']);
+        try
+          Result := 'etiquetas=' + Rep.Items[0].Choice + ',' + Rep.Items[1].Choice + ',' + Rep.Items[2].Choice +
+            '|errores=' + Rep.ErrorCount.ToString +
+            '|revisar=' + IfThen(Length(Rep.NeedsReview) = 1, Rep.NeedsReview[0].Index.ToString, 'otro') +
+            '|tokens=' + Rep.InputTokens.ToString;
+        finally
+          Rep.Free;
+        end;
+
+        // Validacion antes de gastar llamadas
+        var Vacio := TAiJevBatchLabeler.Create(nil);
+        try
+          Vacio.Jev := J;
+          try
+            Vacio.Run(['a']).Free;
+            Result := Result + '|sin-preguntas=ok';
+          except
+            on E: EAiJevError do
+              Result := Result + '|sin-preguntas=error';
+          end;
+        finally
+          Vacio.Free;
+        end;
+        B.LabelQuestion := 'no-existe';
+        try
+          B.Run(['a']).Free;
+          Result := Result + '|label-invalida=ok';
+        except
+          on E: EAiJevError do
+            Result := Result + '|label-invalida=error';
+        end;
+        B.LabelQuestion := '';
+
+        // Estados JSON: viajan tal cual
+        var St := TJSONObject.Create;
+        try
+          St.AddPair('movimiento', 'pago nomina').AddPair('tipo', 'salida');
+          J.Enqueue(200, '{"model":"jev-1.13.0","answers":{"cat":{"type":"choice","choice":"archivo",' +
+            '"confidence":0.9,"probabilities":{"spam":0.0,"urgente":0.05,"archivo":0.95}}}}');
+          B.Run([St]).Free;
+        finally
+          St.Free;
+        end;
+        Parsed := TJSONObject.ParseJSONValue(J.LastBody);
+        try
+          Result := Result + '|estado=' + SiNo((Parsed as TJSONObject).GetValue<TJSONObject>('state')
+            .GetValue<string>('movimiento', '') = 'pago nomina');
+        finally
+          Parsed.Free;
+        end;
+
+        // Cancelacion: OnProgress cancela tras la primera fila
+        B.OnProgress := H.BatchCancelAfterFirst;
+        J.Enqueue(200, '{"model":"jev-1.13.0","answers":{"cat":{"type":"choice","choice":"spam",' +
+          '"confidence":0.9,"probabilities":{"spam":0.95,"urgente":0.0,"archivo":0.05}}}}');
+        Rep := B.Run(['uno', 'dos', 'tres']);
+        try
+          var Canc := 0;
+          for var It in Rep.Items do
+            if It.Error = 'cancelled' then
+              Inc(Canc);
+          Result := Result + '|cancelados=' + Canc.ToString;
+        finally
+          Rep.Free;
+        end;
+      finally
+        B.Free;
         H.Free;
       end;
     end

@@ -1,0 +1,226 @@
+codigo;ruta
+110505;ACTIVO > DISPONIBLE > Caja > Caja general
+110510;ACTIVO > DISPONIBLE > Caja > Cajas menores
+111005;ACTIVO > DISPONIBLE > Bancos > Banco de Bogotá
+111010;ACTIVO > DISPONIBLE > Bancos > Bancolombia
+111015;ACTIVO > DISPONIBLE > Bancos > Davivienda
+111020;ACTIVO > DISPONIBLE > Bancos > BBVA Colombia
+111025;ACTIVO > DISPONIBLE > Bancos > Banco AV Villas
+111030;ACTIVO > DISPONIBLE > Bancos > Banco Occidente
+111095;ACTIVO > DISPONIBLE > Bancos > Otros bancos
+111505;ACTIVO > DISPONIBLE > Remesas en tránsito > Remesas en tránsito
+112005;ACTIVO > DISPONIBLE > Cuentas de ahorro > Cuentas de ahorro nacionales
+112010;ACTIVO > DISPONIBLE > Cuentas de ahorro > Cuentas de ahorro en moneda extranjera
+120505;ACTIVO > INVERSIONES > Inversiones en acciones > Acciones
+121005;ACTIVO > INVERSIONES > Inversiones en cuotas o partes de interés > Cuotas o partes de interés social
+122505;ACTIVO > INVERSIONES > Inversiones en títulos de deuda pública > Bonos de deuda pública
+123005;ACTIVO > INVERSIONES > Inversiones en bonos > Bonos de empresas
+129905;ACTIVO > INVERSIONES > Provisión para inversiones (CR) > Provisión para inversiones
+130505;ACTIVO > DEUDORES > Clientes > Clientes nacionales
+130510;ACTIVO > DEUDORES > Clientes > Clientes del exterior
+131005;ACTIVO > DEUDORES > Cuentas corrientes comerciales > Cuentas corrientes comerciales
+132005;ACTIVO > DEUDORES > Deudores varios > Deudores varios
+132505;ACTIVO > DEUDORES > Cuentas por cobrar a socios y accionistas > Cuentas por cobrar a socios
+133005;ACTIVO > DEUDORES > Anticipos y avances > Anticipos a proveedores
+133010;ACTIVO > DEUDORES > Anticipos y avances > Anticipos a contratistas
+133505;ACTIVO > DEUDORES > Depósitos > Depósitos en garantía
+134505;ACTIVO > DEUDORES > Ingresos por cobrar > Intereses por cobrar
+134510;ACTIVO > DEUDORES > Ingresos por cobrar > Dividendos por cobrar
+135505;ACTIVO > DEUDORES > Retención en la fuente (activo) > Renta y complementarios
+135510;ACTIVO > DEUDORES > Retención en la fuente (activo) > Otras retenciones en la fuente
+136005;ACTIVO > DEUDORES > IVA descontable > IVA descontable
+136505;ACTIVO > DEUDORES > Retención IVA (activo) > Retención IVA
+137005;ACTIVO > DEUDORES > Retención ICA (activo) > Retención ICA
+138005;ACTIVO > DEUDORES > Deudas de difícil cobro > Deudas de difícil cobro
+139905;ACTIVO > DEUDORES > Provisiones (CR) > Provisión deudores
+140505;ACTIVO > INVENTARIOS > Materias primas > Materias primas
+143005;ACTIVO > INVENTARIOS > Productos terminados > Productos terminados
+143505;ACTIVO > INVENTARIOS > Mercancías no fabricadas por la empresa > Mercancías en existencia
+149905;ACTIVO > INVENTARIOS > Provisiones para inventarios (CR) > Provisión inventarios
+150405;ACTIVO > PROPIEDADES PLANTA Y EQUIPO > Terrenos > Terrenos
+150805;ACTIVO > PROPIEDADES PLANTA Y EQUIPO > Construcciones y edificaciones > Edificios
+151605;ACTIVO > PROPIEDADES PLANTA Y EQUIPO > Maquinaria y equipo > Maquinaria y equipo
+152005;ACTIVO > PROPIEDADES PLANTA Y EQUIPO > Equipo de oficina > Muebles y enseres
+152010;ACTIVO > PROPIEDADES PLANTA Y EQUIPO > Equipo de oficina > Equipo de cómputo
+152405;ACTIVO > PROPIEDADES PLANTA Y EQUIPO > Equipo de transporte > Vehículos
+159205;ACTIVO > PROPIEDADES PLANTA Y EQUIPO > Depreciación acumulada (CR) > Depreciación edificios
+159210;ACTIVO > PROPIEDADES PLANTA Y EQUIPO > Depreciación acumulada (CR) > Depreciación maquinaria y equipo
+159215;ACTIVO > PROPIEDADES PLANTA Y EQUIPO > Depreciación acumulada (CR) > Depreciación equipo de oficina
+159220;ACTIVO > PROPIEDADES PLANTA Y EQUIPO > Depreciación acumulada (CR) > Depreciación equipo de transporte
+160505;ACTIVO > INTANGIBLES > Crédito mercantil > Crédito mercantil
+161005;ACTIVO > INTANGIBLES > Marcas > Marcas
+161505;ACTIVO > INTANGIBLES > Patentes > Patentes
+162505;ACTIVO > INTANGIBLES > Licencias > Licencias de software
+169205;ACTIVO > INTANGIBLES > Amortización acumulada (CR) > Amortización intangibles
+170505;ACTIVO > DIFERIDOS > Gastos pagados por anticipado > Seguros pagados por anticipado
+170510;ACTIVO > DIFERIDOS > Gastos pagados por anticipado > Arrendamientos pagados por anticipado
+171005;ACTIVO > DIFERIDOS > Cargos diferidos > Estudios y proyectos
+171010;ACTIVO > DIFERIDOS > Cargos diferidos > Publicidad diferida
+190505;ACTIVO > VALORIZACIONES > De inversiones > Valorización de inversiones
+191005;ACTIVO > VALORIZACIONES > De propiedades planta y equipo > Valorización de inmuebles
+210505;PASIVO > OBLIGACIONES FINANCIERAS > Bancos nacionales > Banco de Bogotá
+210510;PASIVO > OBLIGACIONES FINANCIERAS > Bancos nacionales > Bancolombia
+210515;PASIVO > OBLIGACIONES FINANCIERAS > Bancos nacionales > Davivienda
+210595;PASIVO > OBLIGACIONES FINANCIERAS > Bancos nacionales > Otros bancos nacionales
+211005;PASIVO > OBLIGACIONES FINANCIERAS > Bancos del exterior > Bancos del exterior
+213505;PASIVO > OBLIGACIONES FINANCIERAS > Compromisos de recompra > Compromisos de recompra
+220505;PASIVO > PROVEEDORES > Nacionales > Proveedores nacionales
+221005;PASIVO > PROVEEDORES > Del exterior > Proveedores del exterior
+230505;PASIVO > CUENTAS POR PAGAR > Cuentas corrientes comerciales > Cuentas corrientes comerciales
+231505;PASIVO > CUENTAS POR PAGAR > A contratistas > Cuentas por pagar a contratistas
+232005;PASIVO > CUENTAS POR PAGAR > A vinculados económicos > Cuentas por pagar socios
+233505;PASIVO > CUENTAS POR PAGAR > Costos y gastos por pagar > Honorarios por pagar
+233510;PASIVO > CUENTAS POR PAGAR > Costos y gastos por pagar > Comisiones por pagar
+233515;PASIVO > CUENTAS POR PAGAR > Costos y gastos por pagar > Servicios por pagar
+233520;PASIVO > CUENTAS POR PAGAR > Costos y gastos por pagar > Arrendamientos por pagar
+234005;PASIVO > CUENTAS POR PAGAR > Instalamentos por pagar > Instalamentos por pagar
+234505;PASIVO > CUENTAS POR PAGAR > Acreedores oficiales > Acreedores oficiales
+235505;PASIVO > CUENTAS POR PAGAR > Deudas con accionistas y socios > Deudas con socios
+236005;PASIVO > CUENTAS POR PAGAR > Dividendos o participaciones por pagar > Dividendos por pagar
+236505;PASIVO > CUENTAS POR PAGAR > Retención en la fuente > Salarios y pagos laborales
+236510;PASIVO > CUENTAS POR PAGAR > Retención en la fuente > Honorarios
+236515;PASIVO > CUENTAS POR PAGAR > Retención en la fuente > Servicios
+236520;PASIVO > CUENTAS POR PAGAR > Retención en la fuente > Compras
+236525;PASIVO > CUENTAS POR PAGAR > Retención en la fuente > Rendimientos financieros
+236705;PASIVO > CUENTAS POR PAGAR > Impuesto a las ventas retenido > IVA retenido
+236805;PASIVO > CUENTAS POR PAGAR > Impuesto de industria y comercio retenido > ICA retenido
+237005;PASIVO > CUENTAS POR PAGAR > Retenciones y aportes de nómina > Aportes fondos de pensiones
+237010;PASIVO > CUENTAS POR PAGAR > Retenciones y aportes de nómina > Aportes fondos de cesantías
+237015;PASIVO > CUENTAS POR PAGAR > Retenciones y aportes de nómina > Aportes entidades promotoras de salud
+237020;PASIVO > CUENTAS POR PAGAR > Retenciones y aportes de nómina > Aportes ARL
+237025;PASIVO > CUENTAS POR PAGAR > Retenciones y aportes de nómina > Aportes SENA, ICBF, Cajas compensación
+238005;PASIVO > CUENTAS POR PAGAR > Acreedores varios > Acreedores varios
+240405;PASIVO > IMPUESTOS GRAVÁMENES Y TASAS > De renta y complementarios > Vigencia fiscal corriente
+240805;PASIVO > IMPUESTOS GRAVÁMENES Y TASAS > Impuesto a las ventas por pagar > IVA por pagar
+241205;PASIVO > IMPUESTOS GRAVÁMENES Y TASAS > Impuesto de industria y comercio > ICA por pagar
+241605;PASIVO > IMPUESTOS GRAVÁMENES Y TASAS > Impuesto predial unificado > Impuesto predial
+242405;PASIVO > IMPUESTOS GRAVÁMENES Y TASAS > Impuesto de vehículos > Impuesto de vehículos
+246005;PASIVO > IMPUESTOS GRAVÁMENES Y TASAS > Gravamen a los movimientos financieros > Gravamen movimientos financieros
+250505;PASIVO > OBLIGACIONES LABORALES > Salarios por pagar > Salarios por pagar
+251005;PASIVO > OBLIGACIONES LABORALES > Cesantías consolidadas > Cesantías
+251505;PASIVO > OBLIGACIONES LABORALES > Intereses sobre cesantías > Intereses sobre cesantías
+252005;PASIVO > OBLIGACIONES LABORALES > Prima de servicios > Prima de servicios
+252505;PASIVO > OBLIGACIONES LABORALES > Vacaciones consolidadas > Vacaciones por pagar
+253005;PASIVO > OBLIGACIONES LABORALES > Prestaciones extralegales > Prestaciones extralegales
+260505;PASIVO > PASIVOS ESTIMADOS Y PROVISIONES > Para costos y gastos > Provisión para costos y gastos
+261005;PASIVO > PASIVOS ESTIMADOS Y PROVISIONES > Para obligaciones fiscales > Provisión impuesto de renta
+261505;PASIVO > PASIVOS ESTIMADOS Y PROVISIONES > Para contingencias > Provisión para contingencias
+262005;PASIVO > PASIVOS ESTIMADOS Y PROVISIONES > Para obras de urbanismo > Provisión obras urbanismo
+270505;PASIVO > DIFERIDOS > Ingresos recibidos para terceros > Ingresos recibidos para terceros
+271005;PASIVO > DIFERIDOS > Ingresos recibidos por anticipado > Arrendamientos recibidos por anticipado
+271010;PASIVO > DIFERIDOS > Ingresos recibidos por anticipado > Seguros recibidos por anticipado
+280505;PASIVO > OTROS PASIVOS > Anticipos y avances recibidos > Anticipos de clientes
+281505;PASIVO > OTROS PASIVOS > Depósitos recibidos > Depósitos en garantía recibidos
+289505;PASIVO > OTROS PASIVOS > Otros pasivos > Otros pasivos
+290505;PASIVO > BONOS Y PAPELES COMERCIALES > Bonos en circulación > Bonos ordinarios
+310505;PATRIMONIO > CAPITAL SOCIAL > Capital suscrito y pagado > Capital suscrito y pagado
+311505;PATRIMONIO > CAPITAL SOCIAL > Aportes sociales > Aportes de socios
+320505;PATRIMONIO > SUPERÁVIT DE CAPITAL > Prima en colocación de acciones > Prima en colocación de acciones
+330505;PATRIMONIO > RESERVAS > Reserva legal > Reserva legal
+331005;PATRIMONIO > RESERVAS > Reservas estatutarias > Reservas estatutarias
+331505;PATRIMONIO > RESERVAS > Reservas ocasionales > Reserva para futuras capitalizaciones
+340505;PATRIMONIO > REVALORIZACIÓN DEL PATRIMONIO > Revalorización del patrimonio > Revalorización del patrimonio
+350505;PATRIMONIO > DIVIDENDOS O PARTICIPACIONES DECRETADOS > En acciones > Dividendos en acciones
+351005;PATRIMONIO > DIVIDENDOS O PARTICIPACIONES DECRETADOS > En efectivo > Dividendos en efectivo
+360505;PATRIMONIO > RESULTADOS DEL EJERCICIO > Utilidad del ejercicio > Utilidad del ejercicio
+361005;PATRIMONIO > RESULTADOS DEL EJERCICIO > Pérdida del ejercicio > Pérdida del ejercicio
+370505;PATRIMONIO > RESULTADOS DE EJERCICIOS ANTERIORES > Utilidades acumuladas > Utilidades acumuladas
+371005;PATRIMONIO > RESULTADOS DE EJERCICIOS ANTERIORES > Pérdidas acumuladas > Pérdidas acumuladas
+380505;PATRIMONIO > SUPERÁVIT POR VALORIZACIONES > De inversiones > Superávit por valorización de inversiones
+381005;PATRIMONIO > SUPERÁVIT POR VALORIZACIONES > De propiedades planta y equipo > Superávit por valorización de inmuebles
+410506;INGRESOS > OPERACIONALES > Industria manufacturera > Ventas de productos terminados
+411006;INGRESOS > OPERACIONALES > Comercio al por mayor y al por menor > Ventas de mercancías
+411506;INGRESOS > OPERACIONALES > Servicios > Ingresos por servicios
+412006;INGRESOS > OPERACIONALES > Construcción > Ingresos por contratos de construcción
+413506;INGRESOS > OPERACIONALES > Devoluciones en ventas (DB) > Devoluciones en ventas
+417506;INGRESOS > OPERACIONALES > Descuentos en ventas (DB) > Descuentos en ventas
+420506;INGRESOS > NO OPERACIONALES > Financieros > Intereses
+420510;INGRESOS > NO OPERACIONALES > Financieros > Rendimientos financieros
+420515;INGRESOS > NO OPERACIONALES > Financieros > Diferencia en cambio
+421006;INGRESOS > NO OPERACIONALES > Dividendos y participaciones > Dividendos
+421506;INGRESOS > NO OPERACIONALES > Arrendamientos > Arrendamiento de locales
+422006;INGRESOS > NO OPERACIONALES > Comisiones > Comisiones
+422506;INGRESOS > NO OPERACIONALES > Honorarios > Honorarios
+424506;INGRESOS > NO OPERACIONALES > Utilidad en venta de inversiones > Utilidad en venta de inversiones
+425006;INGRESOS > NO OPERACIONALES > Recuperaciones > Recuperaciones
+425506;INGRESOS > NO OPERACIONALES > Indemnizaciones > Indemnizaciones
+429506;INGRESOS > NO OPERACIONALES > Diversos > Otros ingresos
+510506;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos de personal > Sueldos
+510512;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos de personal > Horas extras y recargos
+510518;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos de personal > Comisiones
+510527;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos de personal > Auxilio de transporte
+510530;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos de personal > Cesantías
+510533;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos de personal > Intereses sobre cesantías
+510536;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos de personal > Prima de servicios
+510539;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos de personal > Vacaciones
+510545;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos de personal > Aportes fondos de pensiones
+510548;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos de personal > Aportes ARL
+510551;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos de personal > Aportes EPS
+510554;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos de personal > Aportes SENA, ICBF, Cajas
+511005;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Honorarios > Honorarios
+511505;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Impuestos > Industria y comercio
+511510;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Impuestos > Predial
+511515;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Impuestos > Vehículos
+511520;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Impuestos > Gravamen movimientos financieros
+512005;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Arrendamientos > Arrendamiento local
+512010;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Arrendamientos > Arrendamiento maquinaria y equipo
+512505;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Contribuciones y afiliaciones > Contribuciones y afiliaciones
+513005;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Seguros > Seguros de bienes
+513010;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Seguros > Seguros de vida colectivos
+513505;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Servicios > Aseo y vigilancia
+513510;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Servicios > Temporales
+513515;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Servicios > Servicios públicos
+513520;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Servicios > Procesamiento electrónico de datos
+514005;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos legales > Notariales y registro
+514010;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos legales > Registro mercantil
+514505;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Mantenimiento y reparaciones > Mantenimiento equipos
+514510;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Mantenimiento y reparaciones > Mantenimiento locales
+515005;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Adecuación e instalación > Adecuación e instalación
+515505;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Gastos de viaje > Gastos de viaje
+516005;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Depreciaciones > Depreciación edificaciones
+516010;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Depreciaciones > Depreciación maquinaria y equipo
+516015;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Depreciaciones > Depreciación equipo de oficina
+516020;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Depreciaciones > Depreciación equipo de cómputo
+516025;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Depreciaciones > Depreciación equipo de transporte
+516505;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Amortizaciones > Amortización intangibles
+516510;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Amortizaciones > Amortización cargos diferidos
+517005;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Provisiones > Provisión deudores
+517010;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Provisiones > Provisión inventarios
+519505;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Diversos (administración) > Elementos de aseo y cafetería
+519510;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Diversos (administración) > Útiles, papelería y fotocopias
+519515;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Diversos (administración) > Combustibles y lubricantes
+519520;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Diversos (administración) > Publicidad, propaganda y promoción
+519525;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Diversos (administración) > Capacitación y bienestar
+519595;GASTOS > OPERACIONALES DE ADMINISTRACIÓN > Diversos (administración) > Otros gastos de administración
+520506;GASTOS > OPERACIONALES DE VENTAS > Gastos de personal (ventas) > Sueldos ventas
+520518;GASTOS > OPERACIONALES DE VENTAS > Gastos de personal (ventas) > Comisiones ventas
+521005;GASTOS > OPERACIONALES DE VENTAS > Honorarios (ventas) > Honorarios ventas
+524505;GASTOS > OPERACIONALES DE VENTAS > Mantenimiento y reparaciones (ventas) > Mantenimiento equipos ventas
+525505;GASTOS > OPERACIONALES DE VENTAS > Gastos de viaje (ventas) > Viáticos ventas
+529505;GASTOS > OPERACIONALES DE VENTAS > Diversos (ventas) > Publicidad y mercadeo
+529510;GASTOS > OPERACIONALES DE VENTAS > Diversos (ventas) > Material POP
+529595;GASTOS > OPERACIONALES DE VENTAS > Diversos (ventas) > Otros gastos de ventas
+530505;GASTOS > NO OPERACIONALES > Financieros > Gastos bancarios
+530510;GASTOS > NO OPERACIONALES > Financieros > Intereses
+530515;GASTOS > NO OPERACIONALES > Financieros > Comisiones bancarias
+530520;GASTOS > NO OPERACIONALES > Financieros > Diferencia en cambio
+531005;GASTOS > NO OPERACIONALES > Pérdida en venta y retiro bienes > Pérdida en venta de activos fijos
+531505;GASTOS > NO OPERACIONALES > Gastos extraordinarios > Gastos extraordinarios
+532005;GASTOS > NO OPERACIONALES > Gastos para ejercicios anteriores > Gastos de ejercicios anteriores
+590505;GASTOS > GANANCIAS Y PÉRDIDAS > Ganancias y pérdidas > Ganancias y pérdidas
+610506;COSTOS DE VENTAS > COSTO DE VENTAS Y DE PRESTACIÓN DE SERVICIOS > De empresas comerciales > Costo de ventas mercancías
+611006;COSTOS DE VENTAS > COSTO DE VENTAS Y DE PRESTACIÓN DE SERVICIOS > De empresas industriales > Costo de ventas productos terminados
+611506;COSTOS DE VENTAS > COSTO DE VENTAS Y DE PRESTACIÓN DE SERVICIOS > De empresas de servicios > Costo de prestación de servicios
+612006;COSTOS DE VENTAS > COSTO DE VENTAS Y DE PRESTACIÓN DE SERVICIOS > De contratos de construcción > Costo de contratos de construcción
+710506;COSTOS DE PRODUCCIÓN O DE OPERACIÓN > MATERIA PRIMA > Materias primas > Materias primas utilizadas
+720506;COSTOS DE PRODUCCIÓN O DE OPERACIÓN > MANO DE OBRA DIRECTA > Salarios > Salarios mano de obra directa
+730506;COSTOS DE PRODUCCIÓN O DE OPERACIÓN > COSTOS INDIRECTOS > Materiales indirectos > Materiales indirectos
+731006;COSTOS DE PRODUCCIÓN O DE OPERACIÓN > COSTOS INDIRECTOS > Mano de obra indirecta > Mano de obra indirecta
+731506;COSTOS DE PRODUCCIÓN O DE OPERACIÓN > COSTOS INDIRECTOS > Servicios públicos planta > Energía eléctrica planta
+732006;COSTOS DE PRODUCCIÓN O DE OPERACIÓN > COSTOS INDIRECTOS > Mantenimiento y reparaciones planta > Mantenimiento maquinaria
+732506;COSTOS DE PRODUCCIÓN O DE OPERACIÓN > COSTOS INDIRECTOS > Depreciaciones planta > Depreciación maquinaria de producción
+810506;CUENTAS DE ORDEN DEUDORAS > DERECHOS CONTINGENTES > Bienes y valores entregados en custodia > Bienes entregados en custodia
+830506;CUENTAS DE ORDEN DEUDORAS > DEUDORAS FISCALES > Activos totales > Activos totales fiscales
+835506;CUENTAS DE ORDEN DEUDORAS > DEUDORAS FISCALES > Diferencias fiscales temporales > Exceso depreciación fiscal
+910506;CUENTAS DE ORDEN ACREEDORAS > RESPONSABILIDADES CONTINGENTES > Bienes y valores recibidos en custodia > Bienes recibidos en custodia
+935506;CUENTAS DE ORDEN ACREEDORAS > ACREEDORAS FISCALES > Diferencias fiscales temporales CR > Diferencias temporales acreedoras

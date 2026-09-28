@@ -1,0 +1,127 @@
+id;flujo;texto;gold;alt
+c001;salida;Pago arriendo oficina principal mes de octubre;512005;
+c002;salida;PAGO PSE EPM FACTURA ENERGIA ACUEDUCTO SEDE;513515;
+c003;salida;CUOTA MANEJO TARJETA DEBITO;530515;530505
+c004;salida;GMF 4X1000;511520;530505
+c005;salida;Honorarios revisor fiscal septiembre;511005;
+c006;salida;Compra resmas de papel, lapiceros y carpetas para la oficina;519510;
+c007;salida;Tanqueo camioneta de reparto estación Terpel;519515;
+c008;salida;Pago nómina quincena empleados administrativos;510506;250505
+c009;salida;Pago planilla PILA aportes pensión empleados;237005;510545
+c010;salida;Pago a Distribuidora Andina SAS factura de mercancía FA-8812 vencida;220505;
+c011;entrada;Abono cliente Ferretería El Tornillo factura FV-1033;130505;
+c012;entrada;Rendimientos cuenta de ahorros Davivienda;420510;420506
+c013;salida;Intereses crédito de tesorería Bancolombia cuota 7;530510;
+c014;salida;Abono a capital préstamo Banco de Bogotá;210505;
+c015;salida;Póliza todo riesgo equipos y edificio, pago anual anticipado;170505;513005
+c016;salida;Servicio de vigilancia privada mes de agosto;513505;
+c017;salida;Compra de 3 portátiles Lenovo para el área contable;152010;
+c018;salida;Licencia anual Microsoft 365 para 10 usuarios;162505;513520
+c019;salida;Pago declaración de IVA bimestre julio-agosto;240805;
+c020;salida;Pago retención en la fuente mes de septiembre formulario 350;236505;236510,236515,236520
+c021;salida;Impuesto de industria y comercio ICA anual Bogotá;241205;511505
+c022;salida;Pago impuesto predial bodega Funza;511510;241605
+c023;salida;Renovación matrícula mercantil Cámara de Comercio;514010;
+c024;salida;Tiquetes aéreos y hotel viaje gerente a Medellín;515505;
+c025;salida;Viáticos vendedor zona costa visita clientes;525505;515505
+c026;salida;Campaña de pauta en Facebook e Instagram para lanzamiento de producto;529505;519520
+c027;salida;Impresión de habladores y exhibidores para puntos de venta;529510;
+c028;salida;Café, azúcar, vasos y jabón para la cocina de la oficina;519505;
+c029;salida;Mantenimiento preventivo aire acondicionado del local;514510;514505
+c030;salida;Reparación de la impresora multifuncional;514505;
+c031;salida;Curso de Excel avanzado para el equipo administrativo;519525;
+c032;salida;Pago a empresa de servicios temporales por personal en misión;513510;
+c033;salida;Notaría 25 autenticación de firmas y escritura;514005;
+c034;salida;Afiliación anual a Fenalco;512505;
+c035;salida;Anticipo 30% a contratista para remodelación de bodega;133010;133005
+c036;salida;Anticipo a proveedor para pedido de materia prima;133005;
+c037;entrada;Anticipo recibido de cliente para fabricación de pedido especial;280505;
+c038;entrada;Aporte de capital socio Juan Pérez;311505;310505
+c039;salida;Pago de dividendos decretados a accionistas;236005;
+c040;salida;Préstamo a socio según acta de junta;132505;
+c041;entrada;Venta de contado de mercancía en almacén;411006;413506
+c042;entrada;Cobro por servicio de consultoría prestado a cliente;411506;130505
+c043;entrada;Arriendo recibido por local comercial que la empresa subarrienda;421506;
+c044;entrada;Comisión recibida por intermediación en venta de terceros;422006;
+c045;entrada;Indemnización pagada por la aseguradora por siniestro de vehículo;425506;
+c046;entrada;Reintegro de provisión de cartera de cliente que finalmente pagó;425006;
+c047;salida;Devolución de dinero a cliente por mercancía defectuosa;413506;
+c048;salida;Pago cesantías a fondo Porvenir;251005;237010
+c049;salida;Pago prima de servicios de junio a empleados;252005;510536
+c050;salida;Liquidación vacaciones auxiliar contable;252505;510539
+c051;salida;Pago intereses a las cesantías enero;251505;510533
+c052;salida;Pago EPS Sanitas aportes de salud;237015;510551
+c053;salida;Pago ARL Sura;237020;510548
+c054;salida;Pago Compensar caja de compensación y parafiscales;237025;510554
+c055;salida;TRANSF A CTA AHORROS PROPIA;112005;
+c056;salida;Reposición caja menor sede norte;110510;
+c057;salida;Compra de acciones de Ecopetrol en bolsa;120505;
+c058;salida;Compra de un camión NPR para distribución;152405;
+c059;salida;Compra de escritorios y sillas ergonómicas;152005;
+c060;salida;Compra de torno CNC para la planta;151605;
+c061;salida;Pago impuesto vehicular camioneta placa XYZ123;511515;242405
+c062;salida;Pago a proveedor en Estados Unidos por importación de repuestos;221005;
+c063;salida;Registro de marca ante la Superintendencia de Industria y Comercio;161005;
+c064;salida;Servicio de hosting y nube AWS mensual;513520;
+c065;salida;Plan de internet y telefonía Claro oficina;513515;
+c066;salida;Comisiones a vendedores por cumplimiento de meta;520518;510518
+c067;salida;Salario del jefe de ventas;520506;
+c068;salida;Honorarios asesoría comercial para estrategia de ventas;521005;511005
+c069;salida;Pago de horas extras dominicales personal de bodega;510512;
+c070;salida;Auxilio de transporte empleados;510527;
+c071;salida;Alquiler de montacargas por una semana;512010;
+c072;salida;Seguro de vida colectivo empleados;513010;
+c073;salida;Instalación de puntos de red y cableado estructurado en oficina nueva;515005;
+c074;salida;Multa de tránsito pagada por fotomulta del vehículo de la empresa;531505;519595
+c075;salida;Ajuste por gasto de 2025 que no se registró en su momento;532005;
+c076;salida;Pago a proveedor extranjero con diferencia por tasa de cambio desfavorable;530520;221005
+c077;entrada;Venta de productos fabricados en nuestra planta a distribuidor;410506;130505
+c078;entrada;Descuento por pronto pago otorgado al cliente Almacenes Éxito;417506;
+c079;entrada;Dividendos recibidos de inversión en sociedad;421006;134510
+c080;entrada;Venta de acciones con ganancia;424506;120505
+c081;entrada;Depósito en garantía recibido de arrendatario;281505;
+c082;salida;Depósito en garantía entregado al arrendador de la bodega;133505;
+c083;entrada;Desembolso crédito Davivienda;210515;
+c084;salida;Pago cuenta de cobro de contratista de obra civil;231505;
+c085;salida;Compra de mercancía para la venta al por mayor;143505;220505
+c086;salida;Compra de harina y azúcar para producción;140505;
+c087;salida;Pago servicio de aseo y cafetería tercerizado;513505;
+c088;salida;PAGO PSE GAS NATURAL VANTI;513515;
+c089;salida;COMISION TRANSFERENCIA INTERBANCARIA ACH;530515;530505
+c090;salida;IVA COMISION BANCARIA;530505;136005,530515
+c091;salida;Energía eléctrica consumida por las máquinas de la planta de producción;731506;513515
+c092;salida;Mantenimiento de la maquinaria de producción;732006;514505
+c093;salida;Salarios de operarios de línea de producción;720506;
+c094;salida;Honorarios abogado proceso laboral;511005;
+c095;salida;Almuerzos de integración de fin de año con empleados;519525;519595
+c096;salida;Pago a proveedor nacional de insumos, factura a 30 días;220505;
+c097;entrada;Recaudo cartera cliente del exterior en dólares;130510;
+c098;salida;Arrendamiento de la bodega pagado por seis meses por adelantado;170510;512005
+c099;salida;Pago de estudio de factibilidad para nueva sede;171005;
+c100;entrada;Diferencia en cambio a favor al monetizar divisas;420515;
+c101;salida;PAGO TARJETA DE CREDITO EMPRESARIAL COMPRAS VARIAS;238005;519595
+c102;salida;Adquisición de terreno para futura planta;150405;
+c103;salida;Pago honorarios pendientes causados el mes anterior a contador externo;233505;511005
+c104;salida;Pago de arriendo causado y no pagado de agosto;233520;512005
+c105;salida;Pago de retención de ICA del bimestre;236805;241205
+c106;salida;Pago impuesto de renta año gravable 2025;240405;
+c107;salida;Gasolina y peajes del mensajero en moto;519515;515505
+c108;salida;Fotocopias y anillados de documentos para licitación;519510;
+c109;salida;Pago a Rappi por domicilios de mensajería;519595;
+c110;salida;Suscripción mensual a software contable en la nube;513520;162505
+c111;salida;Pago a acreedor por préstamo personal que hizo a la empresa;238005;235505
+c112;salida;Paid office rent for October;512005;
+c113;salida;Electricity and water bill for the office;513515;
+c114;salida;Statutory auditor fees for September;511005;
+c115;salida;Paper, pens and folders for the office;519510;
+c116;salida;Private security service for August;513505;
+c117;salida;Bought 3 Lenovo laptops for the accounting team;152010;
+c118;salida;Payment of VAT return for July-August;240805;
+c119;salida;Flights and hotel for the manager's trip to Medellín;515505;
+c120;entrada;Customer payment for invoice FV-1033;130505;
+c121;salida;Preventive maintenance of the shop's air conditioning;514510;514505
+c122;salida;Pension fund contributions via PILA payroll form;237005;510545
+c123;salida;Annual all-risk insurance policy paid in advance;170505;513005
+r001;salida;Comision Bancolombia (Comision bancaria marzo);530515;530505
+r002;salida;Arriendo oficina marzo (Pago arriendo oficina);512005;
+r003;causacion;Factura STC-2451 Suministros Técnicos CIA: soporte técnico de servidores y mantenimiento preventivo de equipos de cómputo;514505;

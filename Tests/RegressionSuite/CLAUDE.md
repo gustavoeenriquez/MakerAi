@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: < 1 segundo.
 
-## Cobertura actual (57 casos)
+## Cobertura actual (58 casos)
 
 | Área | Casos |
 |------|-------|
@@ -37,6 +37,7 @@ Duración típica: < 1 segundo.
 | SmartDispatch + Jev | `ChatTools.DispatchClassifier` sobre un `TAiOpenChat` real (URL a puerto cerrado): el tag va directo a la tool sin pase por LLM; `TAiJevDispatchClassifier` solo ofrece los tags recibidos, respeta `MinConfidence` y no consulta a Jev si solo queda CHAT |
 | Guardrail de entrada | `ChatTools.PromptGuard` sobre un `TAiOpenChat` real (URL a puerto cerrado, SmartDispatch a una tool falsa): bloquea sin tocar la red, permite, `OnPromptGuard` anula el bloqueo, guard caído con `BlockOnError` cerrado/abierto; `TAiJevPromptGuard` prioriza seguridad sobre `out_of_scope` y solo pregunta el alcance con `Scope` |
 | Guardrails + Jev | `TAiGuardrails.Classifier` con `TAiJevGuardrailClassifier`: riesgo alto bloquea con motivo, bajo permite, lo que ya bloquean las listas no llega a Jev, `BlockOnError` cerrado/abierto; categorías de permiso: bloquea una categoría prohibida aunque no sea la elegida, el riesgo manda primero, `ToolDescriptions` viaja en el state, `OnCategorized` anula |
+| Etiquetado masivo | `TAiJevBatchLabeler`: etiqueta/confianza por fila, una fila con error no detiene el lote, filas dudosas, tokens sumados, validación de `Questions` y `LabelQuestion` antes de llamar, estados JSON tal cual, `Cancel` desde `OnProgress` |
 | Evals + Jev | `TAiEvalRunner.Scorer` con `TAiJevEvalScorer`: `ExpectScore` pasa, falla con el puntaje en el motivo, un error de Jev falla el check sin excepción, el input viaja en el state |
 | RAG + Jev | `TAiRAGVector.Reranker` con `TAiJevRAGReranker` en el pipeline VQL real (embeddings falsos vía `TAiEmbeddingsCore.OnGetEmbedding`): ordena por evidencia y descarta el pasaje inyectado; reranker caído → cae al coseno sin excepción |
 | Agentes + Jev | `TAiJevRouterTool` en un grafo real: ruta elegida, confianza baja → `NextNo`, Jev caído (401) → `NextNo` sin romper el grafo, y las claves `<Nodo>.jev.*` del blackboard |
@@ -57,7 +58,7 @@ Duración típica: < 1 segundo.
 |---------|-----------|
 | `MakerAiRegressionSuite.dpr` | Programa principal: CLI (`--json`, `--otel`), ejecución y exit code |
 | `uRegression.Suites.pas` | Definición de los casos (`DefineCases`) y el *dispatcher* que ejecuta cada escenario contra los componentes reales |
-| `uRegression.Fixtures.pas` | `TFakeJev` (TAiJev con respuestas HTTP encoladas), `TFakeDispatchClassifier` y `TFakeImageTool` (SmartDispatch sin red), `TPassageFakeJev` (responde según el pasaje), `FakeEmbedding`, `TFakePromptGuard` y los handlers `ChatError` / `PromptGuardAllow` / `JevCategorizedAllow`, tools MCP de prueba (`echo_upper`, `confirm_op` con MRTR), servidor MCP "solo legacy" (responde `-32601` a `server/discover`) y handlers `of object` (incluye `NodeSuspendOnce` para human-in-the-loop y `AcquireManager` como fábrica del pool A2A) |
+| `uRegression.Fixtures.pas` | `TFakeJev` (TAiJev con respuestas HTTP encoladas), `TFakeDispatchClassifier` y `TFakeImageTool` (SmartDispatch sin red), `TPassageFakeJev` (responde según el pasaje), `FakeEmbedding`, `TFakePromptGuard` y los handlers `ChatError` / `PromptGuardAllow` / `JevCategorizedAllow` / `BatchCancelAfterFirst`, tools MCP de prueba (`echo_upper`, `confirm_op` con MRTR), servidor MCP "solo legacy" (responde `-32601` a `server/discover`) y handlers `of object` (incluye `NodeSuspendOnce` para human-in-the-loop y `AcquireManager` como fábrica del pool A2A) |
 
 Los escenarios A2A de orquestación viven en `RunA2AFlowScenario`, aparte del bloque `a2a:` básico, porque cada uno arma su propia topología (pool, suspensión, no bloqueante).
 

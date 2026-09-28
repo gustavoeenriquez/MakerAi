@@ -23,7 +23,7 @@ uses
   System.Generics.Collections,
   uMakerAi.MCPServer.Core, uMakerAi.Agents, uMakerAi.Tools.Functions,
   uMakerAi.Chat.Messages, uMakerAi.Chat.Tools, uMakerAi.Jev, uMakerAi.Embeddings.core,
-  UMakerAi.Chat, System.Net.HttpClient;
+  UMakerAi.Chat, System.Net.HttpClient, uMakerAi.Jev.Batch;
 
 type
   // --- Tool MCP determinista: devuelve el texto en mayusculas ---
@@ -145,6 +145,8 @@ type
     // Chat: ultimo error reportado (OnError)
     procedure ChatError(Sender: TObject; const ErrorMsg: string; Exception: Exception;
       const AResponse: IHTTPResponse);
+    // OnProgress de TAiJevBatchLabeler: cancela el lote tras la primera fila
+    procedure BatchCancelAfterFirst(Sender: TObject; ADone, ATotal: Integer);
     // OnCategorized de TAiJevGuardrailClassifier: deja pasar y anota la categoria
     procedure JevCategorizedAllow(Sender: TObject; const AToolName, AArguments, ACategory: string;
       AConfidence: Double; var AAllow: Boolean; var AReason: string);
@@ -343,6 +345,12 @@ procedure TFixtureHandlers.ChatError(Sender: TObject; const ErrorMsg: string; Ex
   const AResponse: IHTTPResponse);
 begin
   LastChatError := ErrorMsg;
+end;
+
+procedure TFixtureHandlers.BatchCancelAfterFirst(Sender: TObject; ADone, ATotal: Integer);
+begin
+  if ADone = 1 then
+    TAiJevBatchLabeler(Sender).Cancel;
 end;
 
 procedure TFixtureHandlers.JevCategorizedAllow(Sender: TObject; const AToolName, AArguments,

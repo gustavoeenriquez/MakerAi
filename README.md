@@ -52,7 +52,7 @@ For agent graphs, `TAiJevRouterTool` (`Source/Agents/uMakerAi.Agents.Tools.JevRo
 node tool that writes the chosen route to `Blackboard['next_route']`, so an existing
 `lmConditional` link follows it — no engine change. Low confidence or a failing API falls back
 to `NextNo` instead of breaking the graph, and yes/no flags asked in the same call land in the
-blackboard for `lmExpression` or an `OnRoute` handler. Nineteen new regression cases run all
+blackboard for `lmExpression` or an `OnRoute` handler. Twenty new regression cases run all
 of it offline against a fake transport.
 
 Two more hand-offs make Jev a drop-in for decisions the framework already takes:
@@ -89,6 +89,11 @@ And two more for quality and retrieval:
   of VQL `RERANK`: `TAiJevRAGReranker` scores each passage for usable evidence and **drops
   passages that try to instruct the model** (prompt injection). No embeddings are recomputed;
   if the reranker fails, the search falls back to cosine. Demo: `086-JevEvalsRag`.
+- **Bulk labeling.** `TAiJevBatchLabeler` runs the same questions over many rows in parallel and
+  returns labels, confidence, top-3 suggestions, total cost and the rows worth a human look; a
+  failing row never stops the batch. Validated by reproducing the prototype: 126 accounting
+  entries against 225 chart-of-accounts codes in 4.2 s for US$0.05 — 92.9% overall and **100% on
+  the 61% it would book automatically** (confidence ≥ 0.8). Demo: `087-JevBatchLabeling`.
 
 **Also fixed:** `lmExpression` parsed numbers with the regional settings only, so on a Windows
 using a decimal comma `'10.25' > 9.5` was compared as text and returned `False`. It now falls
