@@ -63,6 +63,9 @@
 // - [cap_GenImage] -> API nativa multimodal-generation (sincrona, devuelve URLs):
 //   qwen-image-3.0 [default], qwen-image-2.0(-pro), qwen-image-max, z-image-turbo,
 //   wan2.7-image(-pro). Tamano en ImageParams.Params.Values['size'] ('1024*1024').
+//   Edicion: las imagenes adjuntas al prompt (1 a 3) son la entrada; van como data
+//   URI. qwen-image-edit(-plus/-max) [default: plus], y tambien qwen-image-2.0/3.0 y
+//   wan2.7-image; z-image-turbo no edita. Sin 'size' se conserva la proporcion.
 // - [cap_GenAudio] -> qwen3-tts-flash por la API nativa (devuelve URL de un WAV).
 //   Voz en TtsParams.Voice (default Cherry), idioma en TtsParams.Language.
 // - [cap_Audio] / cmTranscription -> qwen3-asr-flash por chat/completions con
@@ -98,6 +101,8 @@ Type
     Procedure FixAudioDataUris(AMessages: TJSonArray);
   Protected
     Function InitChatCompletions: String; Override;
+    // Cuerpo del request de imagen (generar o editar); separado para probarlo sin red
+    Function BuildImageRequest(AskMsg: TAiChatMessage): TJSonObject;
     function InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunNativeSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String; Override;
     function InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Override;
@@ -117,6 +122,7 @@ Const
   GlAIUrl = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/';
   GlDefaultModel = 'qwen3.8-flash';
   GlDefaultImageModel = 'qwen-image-3.0';
+  GlDefaultEditModel = 'qwen-image-edit-plus'; // el mas rapido editando (~9 s)
   GlDefaultTtsModel = 'qwen3-tts-flash';
   GlDefaultAsrModel = 'qwen3-asr-flash';
   GlMediaTimeout = 180000; // una imagen tarda 10-40 s
@@ -388,31 +394,48 @@ begin
         end;
 end;
 
-function TAiQwenChat.InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
-// POST api/v1/services/aigc/multimodal-generation/generation (sincrono)
-// -> output.choices[].message.content[] con {"image": url}
+function TAiQwenChat.BuildImageRequest(AskMsg: TAiChatMessage): TJSonObject;
+// Cuerpo de multimodal-generation para generar (solo texto) o editar (1 a 3
+// imagenes adjuntas al prompt, que llegan intactas porque cap_Image no esta en el
+// gap de un modelo de imagen)
 var
-  jBody, jInput, jMsg, jPart, jParams, jRes, jItem: TJSonObject;
-  jMsgs, jContent, jChoices, jOut: TJSonArray;
-  VChoice, VItem: TJSONValue;
-  LSize, LUrl: String;
-  LCount: Integer;
+  jInput, jMsg, jPart, jParams: TJSonObject;
+  jMsgs, jContent: TJSonArray;
+  LSize, LModel: String;
+  LImages: TAiMediaFilesArray;
+  MF: TAiMediaFile;
 begin
-  Result := '';
   if Trim(AskMsg.Prompt) = '' then
     raise Exception.Create('Se requiere un prompt para generar la imagen.');
-  FBusy := True;
-  FLastError := '';
-  FLastPrompt := AskMsg.Prompt;
-  jBody := TJSonObject.Create;
-  jRes := nil;
-  try
-    DoStateChange(acsConnecting, 'Generando imagen...');
-    jBody.AddPair('model', ModelFor('image', GlDefaultImageModel));
+  LImages := AskMsg.MediaFiles.GetMediaList([Tfc_Image], False);
+  if Length(LImages) > 3 then
+    raise Exception.CreateFmt('Qwen: la edicion admite de 1 a 3 imagenes (llegaron %d).', [Length(LImages)]);
+  if Length(LImages) > 0 then
+  begin
+    LModel := ModelFor('image', GlDefaultEditModel);
+    if StartsText('z-image', LModel) then
+      raise Exception.Create('Qwen: ' + LModel + ' solo genera; para editar usa qwen-image-edit-plus, ' +
+        'qwen-image-2.0/3.0 o wan2.7-image.');
+  end
+  else
+    LModel := ModelFor('image', GlDefaultImageModel);
 
+  Result := TJSonObject.Create;
+  try
+    Result.AddPair('model', LModel);
+
+    jContent := TJSonArray.Create;
+    for MF in LImages do
+    begin
+      jPart := TJSonObject.Create;
+      if (MF.Content.Size = 0) and (MF.UrlMedia <> '') then
+        jPart.AddPair('image', MF.UrlMedia)
+      else
+        jPart.AddPair('image', 'data:' + MF.MimeType + ';base64,' + MF.Base64);
+      jContent.Add(jPart);
+    end;
     jPart := TJSonObject.Create;
     jPart.AddPair('text', AskMsg.Prompt);
-    jContent := TJSonArray.Create;
     jContent.Add(jPart);
     jMsg := TJSonObject.Create;
     jMsg.AddPair('role', 'user');
@@ -421,22 +444,49 @@ begin
     jMsgs.Add(jMsg);
     jInput := TJSonObject.Create;
     jInput.AddPair('messages', jMsgs);
-    jBody.AddPair('input', jInput);
+    Result.AddPair('input', jInput);
 
-    // Cada familia admite tamanos distintos (qwen-image-plus solo 1328*1328, 1664*928...)
+    // Cada familia admite tamanos distintos (qwen-image-plus solo 1328*1328, 1664*928...).
+    // Al editar sin tamano explicito el modelo conserva la proporcion del original
+    // (1024x576 -> 1376x768); forzar 1024*1024 la deformaria
     LSize := ImageParams.Params.Values['size'];
-    if LSize = '' then
+    if (LSize = '') and (Length(LImages) = 0) then
       LSize := '1024*1024';
     LSize := StringReplace(LSize, 'x', '*', [rfIgnoreCase]);
     jParams := TJSonObject.Create;
-    jParams.AddPair('size', LSize);
+    if LSize <> '' then
+      jParams.AddPair('size', LSize);
     if N > 1 then
       jParams.AddPair('n', TJSONNumber.Create(N));
     if ImageParams.Params.Values['negative_prompt'] <> '' then
       jParams.AddPair('negative_prompt', ImageParams.Params.Values['negative_prompt']);
     jParams.AddPair('watermark', TJSONBool.Create(SameText(ImageParams.Params.Values['watermark'], 'true')));
-    jBody.AddPair('parameters', jParams);
+    Result.AddPair('parameters', jParams);
+  except
+    Result.Free;
+    raise;
+  end;
+end;
 
+function TAiQwenChat.InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
+// POST api/v1/services/aigc/multimodal-generation/generation (sincrono)
+// -> output.choices[].message.content[] con {"image": url}
+var
+  jBody, jRes, jItem: TJSonObject;
+  jChoices, jOut: TJSonArray;
+  VChoice, VItem: TJSONValue;
+  LUrl: String;
+  LCount: Integer;
+begin
+  Result := '';
+  FBusy := True;
+  FLastError := '';
+  FLastPrompt := AskMsg.Prompt;
+  jBody := nil;
+  jRes := nil;
+  try
+    DoStateChange(acsConnecting, 'Generando imagen...');
+    jBody := BuildImageRequest(AskMsg);
     jRes := PostJSON(NativeUrl('services/aigc/multimodal-generation/generation'), jBody);
 
     LCount := 0;

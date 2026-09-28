@@ -340,6 +340,14 @@ begin
     .Input('chat:qwen-rerank')
     .ExpectEquals('llamadas=3|scores=0.0,0.1,0.2,0.3,0.4|instruct=si|recorte=si|tokens=21');
 
+  // Qwen imagen: sin adjuntos genera (modelo y tamano por defecto); con 1-3
+  // imagenes adjuntas edita (modelo de edicion, data URI, sin forzar tamano);
+  // mas de 3 o z-image-turbo con imagen fallan antes de llamar al API
+  FRunner.AddCase('chat.qwen.image-request')
+    .Input('chat:qwen-image')
+    .ExpectEquals('gen=qwen-image-3.0/1024*1024/1|edit=qwen-image-edit-plus/sin-size/data-uri/texto-al-final|' +
+      'size=1024*768|4imgs=error|zimage=error');
+
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
     .ExpectEquals('1|inline=si|string=si');
@@ -1569,7 +1577,53 @@ type
   public
     function Request(const AModel: string; AAsync: Boolean; ACaps: TAiCapabilities;
       ALevel: TAiThinkingLevel): TJSONObject;
+    // Resumen del request de imagen: 'modelo/size/partes' o 'error'
+    function ImageReq(const AModel, ASize: string; AImages: Integer; AFull: Boolean = False): string;
   end;
+
+function TQwenProbeChat.ImageReq(const AModel, ASize: string; AImages: Integer; AFull: Boolean): string;
+var
+  Msg: TAiChatMessage;
+  MF: TAiMediaFile;
+  I: Integer;
+  J: TJSONObject;
+  jContent: TJSONArray;
+begin
+  Model := AModel;
+  ImageParams.Params.Values['size'] := ASize;
+  Msg := TAiChatMessage.Create('Cambia el color', 'user');
+  try
+    for I := 1 to AImages do
+    begin
+      MF := TAiMediaFile.Create;
+      MF.LoadFromBase64('img.png', 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ' +
+        'AAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+      Msg.MediaFiles.Add(MF);
+    end;
+    try
+      J := BuildImageRequest(Msg);
+    except
+      Exit('error');
+    end;
+    try
+      jContent := J.GetValue<TJSONArray>('input.messages[0].content');
+      Result := J.GetValue<string>('model') + '/' + J.GetValue<string>('parameters.size', 'sin-size');
+      if not AFull then
+        Result := Result + '/' + IntToStr(jContent.Count)
+      else
+      begin
+        Result := Result + '/' + IfThen(jContent.Items[0].GetValue<string>('image', '')
+          .StartsWith('data:image/png;base64,iVBOR'), 'data-uri', 'sin-uri');
+        Result := Result + '/' + IfThen(jContent.Items[jContent.Count - 1].GetValue<string>('text', '') =
+          'Cambia el color', 'texto-al-final', 'texto-mal');
+      end;
+    finally
+      J.Free;
+    end;
+  finally
+    Msg.Free;
+  end;
+end;
 
 function TQwenProbeChat.Request(const AModel: string; AAsync: Boolean; ACaps: TAiCapabilities;
   ALevel: TAiThinkingLevel): TJSONObject;
@@ -1758,6 +1812,21 @@ begin
       end;
     finally
       QA.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:qwen-image' then
+  begin
+    var QI := TQwenProbeChat.Create(nil);
+    try
+      Result := 'gen=' + QI.ImageReq('qwen3.8-flash', '', 0) +
+        '|edit=' + QI.ImageReq('qwen3.8-flash', '', 1, True) +
+        '|size=' + QI.ImageReq('qwen-image-edit-plus', '1024x768', 1).Split(['/'])[1] +
+        '|4imgs=' + QI.ImageReq('qwen-image-edit-plus', '', 4) +
+        '|zimage=' + QI.ImageReq('z-image-turbo', '', 1);
+    finally
+      QI.Free;
     end;
     Exit;
   end;

@@ -1748,6 +1748,23 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenImage]');
   TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
 
+  // ------- Edicion de imagen [cap_GenImage] -- probados ------
+  // Las imagenes adjuntas al prompt (1 a 3) son la entrada. Sin 'size' se
+  // conserva la proporcion del original. qwen-image-2.0/3.0 y wan2.7-image
+  // tambien editan; z-image-turbo no. Tiempos: plus ~9 s, edit ~17 s, max ~40 s
+  Model := 'qwen-image-edit-plus';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'qwen-image-edit';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+  Model := 'qwen-image-edit-max';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_GenImage]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Tool_Active', 'False');
+
   // ------- Fase 2: voz (TTS) [cap_GenAudio] -- probados ------
   // Voz en TtsParams.Voice (default Cherry; tambien Ethan...), idioma en
   // TtsParams.Language ('es' o 'Spanish'; vacio = Auto). Devuelve un WAV.
