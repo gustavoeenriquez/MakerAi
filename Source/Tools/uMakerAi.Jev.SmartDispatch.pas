@@ -39,6 +39,10 @@ uses
 type
   TAiJevDispatchClassifier = class(TAiDispatchClassifierBase)
   private
+    FUsage: TAiJevUsageMeter;
+    FPricePerMillionInput: Double;
+    FPricePerMillionOutput: Double;
+    FOnUsage: TAiJevUsageEvent;
     FJev: TAiJev;
     FOwnJev: TAiJev;
     FApiKey: string;
@@ -51,12 +55,16 @@ type
     procedure SetTagDescriptions(const Value: TStrings);
     function ActiveJev: TAiJev;
     function DescriptionOf(const ATag: string): string;
+    function GetUsage: TAiJevUsage;
   protected
     function ClassifyDispatch(const APrompt: string; const ATags: TArray<string>): string; override;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    // Consumo de Jev acumulado desde Create o ResetUsage (seguro entre hilos)
+    property Usage: TAiJevUsage read GetUsage;
+    procedure ResetUsage;
     // Ultima eleccion de Jev aunque no superara MinConfidence ('' si no se consulto)
     property LastTag: string read FLastTag;
     property LastConfidence: Double read FLastConfidence;
@@ -70,6 +78,13 @@ type
     property MinConfidence: Double read FMinConfidence write FMinConfidence;
     // Opcional: 'TAG=descripcion' para reemplazar la descripcion por defecto de un tag
     property TagDescriptions: TStrings read FTagDescriptions write SetTagDescriptions;
+    // Precios para CostUSD de Usage/OnUsage (US$ por millon de tokens; hoy la
+    // salida no se cobra)
+    property PricePerMillionInput: Double read FPricePerMillionInput write FPricePerMillionInput;
+    property PricePerMillionOutput: Double read FPricePerMillionOutput write FPricePerMillionOutput;
+    // Una vez por operacion con el consumo de esa operacion. Sincrono, en el hilo
+    // que la ejecuto (en un servidor: el de la peticion, para cobrarle al cliente)
+    property OnUsage: TAiJevUsageEvent read FOnUsage write FOnUsage;
   end;
 
 procedure Register;
@@ -86,6 +101,8 @@ end;
 constructor TAiJevDispatchClassifier.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  FUsage := TAiJevUsageMeter.Create;
+  FPricePerMillionInput := JEV_PRICE_PER_MILLION_INPUT;
   FApiKey := '@TYPESAFE_API_KEY';
   FModel := 'jev-1.13.0';
   FMinConfidence := 0.6;
@@ -96,6 +113,7 @@ destructor TAiJevDispatchClassifier.Destroy;
 begin
   FTagDescriptions.Free;
   FOwnJev.Free;
+  FUsage.Free;
   inherited;
 end;
 
@@ -190,6 +208,7 @@ begin
       State.Free;
     end;
     try
+      JevReportResult(Self, R, FUsage, FPricePerMillionInput, FPricePerMillionOutput, FOnUsage);
       FLastTag := R['tag'].Choice;
       FLastConfidence := R['tag'].Confidence;
       if FLastConfidence >= FMinConfidence then
@@ -200,6 +219,16 @@ begin
   finally
     Q.Free;
   end;
+end;
+
+function TAiJevDispatchClassifier.GetUsage: TAiJevUsage;
+begin
+  Result := FUsage.Snapshot(FPricePerMillionInput, FPricePerMillionOutput);
+end;
+
+procedure TAiJevDispatchClassifier.ResetUsage;
+begin
+  FUsage.Reset;
 end;
 
 end.

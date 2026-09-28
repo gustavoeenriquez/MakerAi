@@ -45,7 +45,7 @@ unit uMakerAi.Jev;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.JSON, System.Generics.Collections,
+  System.SysUtils, System.Classes, System.JSON, System.Generics.Collections, System.SyncObjs,
   uMakerAi.Core;
 
 type
@@ -158,7 +158,39 @@ type
     property OutputTokens: Integer read FOutputTokens;
   end;
 
+  // Consumo de Jev: peticiones, tokens y costo. Precio vigente (sep 2026):
+  // US$0.042 por millon de tokens de entrada; la salida no se cobra.
+  TAiJevUsage = record
+    Requests: Int64;
+    InputTokens: Int64;
+    OutputTokens: Int64;
+    CostUSD: Double;
+  end;
+
+  // Se dispara SINCRONO en el hilo que ejecuto la operacion (no por TThread.Queue):
+  // en un servidor ese es el hilo de la peticion, asi que el integrador sabe a
+  // que cliente cargarle el consumo.
+  TAiJevUsageEvent = procedure(Sender: TObject; const AUsage: TAiJevUsage) of object;
+
+  // Acumulador seguro entre hilos (los adaptadores llaman a Jev en paralelo)
+  TAiJevUsageMeter = class
+  private
+    FRequests, FInputTokens, FOutputTokens: Int64;
+  public
+    procedure Add(AResult: TAiJevResult); overload;
+    procedure Add(const AUsage: TAiJevUsage); overload;
+    procedure Reset;
+    // Totales con el costo calculado a los precios dados (US$ por millon)
+    function Snapshot(APricePerMillionInput, APricePerMillionOutput: Double): TAiJevUsage;
+  end;
+
   TAiJev = class(TComponent)
+  private
+    FUsage: TAiJevUsageMeter;
+    FPricePerMillionInput: Double;
+    FPricePerMillionOutput: Double;
+    FOnUsage: TAiJevUsageEvent;
+    function GetUsage: TAiJevUsage;
   private
     FApiKey: string;
     FModel: string;
@@ -193,7 +225,15 @@ type
     function Noul(const AState, AInstructions: string): Double;
 
     property LastError: string read FLastError;
+    // Consumo acumulado de este componente desde que se creo o desde ResetUsage
+    property Usage: TAiJevUsage read GetUsage;
+    procedure ResetUsage;
   published
+    // Precios para CostUSD (US$ por millon de tokens)
+    property PricePerMillionInput: Double read FPricePerMillionInput write FPricePerMillionInput;
+    property PricePerMillionOutput: Double read FPricePerMillionOutput write FPricePerMillionOutput;
+    // Una vez por llamada exitosa a la API, con el consumo de esa llamada
+    property OnUsage: TAiJevUsageEvent read FOnUsage write FOnUsage;
     // '@TYPESAFE_API_KEY' se resuelve con la variable de entorno
     property ApiKey: string read GetApiKey write FApiKey;
     property Model: string read FModel write FModel;
@@ -207,6 +247,19 @@ type
     property Timeout: Integer read FTimeout write FTimeout default 30000;
     property OnError: TAiErrorEvent read FOnError write FOnError;
   end;
+
+const
+  JEV_PRICE_PER_MILLION_INPUT = 0.042;
+
+// Cierra una operacion de un adaptador: suma su consumo al total del adaptador
+// y dispara OnUsage (sincrono, en el hilo del llamador) si hubo peticiones.
+procedure JevReportOperation(ASender: TObject; AOperation, ATotal: TAiJevUsageMeter;
+  APricePerMillionInput, APricePerMillionOutput: Double; AEvent: TAiJevUsageEvent);
+
+// Igual para una operacion de una sola llamada: suma AResult al total del
+// adaptador y dispara OnUsage con el consumo de esa llamada.
+procedure JevReportResult(ASender: TObject; AResult: TAiJevResult; ATotal: TAiJevUsageMeter;
+  APricePerMillionInput, APricePerMillionOutput: Double; AEvent: TAiJevUsageEvent);
 
 procedure Register;
 
@@ -224,6 +277,66 @@ const
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiJev]);
+end;
+
+{ TAiJevUsageMeter }
+
+procedure TAiJevUsageMeter.Add(AResult: TAiJevResult);
+begin
+  if AResult = nil then Exit;
+  TInterlocked.Increment(FRequests);
+  TInterlocked.Add(FInputTokens, Int64(AResult.InputTokens));
+  TInterlocked.Add(FOutputTokens, Int64(AResult.OutputTokens));
+end;
+
+procedure TAiJevUsageMeter.Add(const AUsage: TAiJevUsage);
+begin
+  TInterlocked.Add(FRequests, AUsage.Requests);
+  TInterlocked.Add(FInputTokens, AUsage.InputTokens);
+  TInterlocked.Add(FOutputTokens, AUsage.OutputTokens);
+end;
+
+procedure TAiJevUsageMeter.Reset;
+begin
+  TInterlocked.Exchange(FRequests, 0);
+  TInterlocked.Exchange(FInputTokens, 0);
+  TInterlocked.Exchange(FOutputTokens, 0);
+end;
+
+function TAiJevUsageMeter.Snapshot(APricePerMillionInput, APricePerMillionOutput: Double): TAiJevUsage;
+begin
+  Result.Requests := TInterlocked.Read(FRequests);
+  Result.InputTokens := TInterlocked.Read(FInputTokens);
+  Result.OutputTokens := TInterlocked.Read(FOutputTokens);
+  Result.CostUSD := (Result.InputTokens * APricePerMillionInput +
+    Result.OutputTokens * APricePerMillionOutput) / 1E6;
+end;
+
+procedure JevReportResult(ASender: TObject; AResult: TAiJevResult; ATotal: TAiJevUsageMeter;
+  APricePerMillionInput, APricePerMillionOutput: Double; AEvent: TAiJevUsageEvent);
+var
+  Op: TAiJevUsageMeter;
+begin
+  Op := TAiJevUsageMeter.Create;
+  try
+    Op.Add(AResult);
+    JevReportOperation(ASender, Op, ATotal, APricePerMillionInput, APricePerMillionOutput, AEvent);
+  finally
+    Op.Free;
+  end;
+end;
+
+procedure JevReportOperation(ASender: TObject; AOperation, ATotal: TAiJevUsageMeter;
+  APricePerMillionInput, APricePerMillionOutput: Double; AEvent: TAiJevUsageEvent);
+var
+  U: TAiJevUsage;
+begin
+  U := AOperation.Snapshot(APricePerMillionInput, APricePerMillionOutput);
+  if U.Requests = 0 then
+    Exit;
+  ATotal.Add(U);
+  if Assigned(AEvent) then
+    AEvent(ASender, U);
 end;
 
 // 'clave=descripcion' -> clave, descripcion. Sin '=' la descripcion queda vacia.
@@ -662,12 +775,25 @@ begin
   FMaxRetries := 2;
   FRetryDelay := 500;
   FTimeout := 30000;
+  FUsage := TAiJevUsageMeter.Create;
+  FPricePerMillionInput := JEV_PRICE_PER_MILLION_INPUT;
 end;
 
 destructor TAiJev.Destroy;
 begin
   FQuestions.Free;
+  FUsage.Free;
   inherited;
+end;
+
+function TAiJev.GetUsage: TAiJevUsage;
+begin
+  Result := FUsage.Snapshot(FPricePerMillionInput, FPricePerMillionOutput);
+end;
+
+procedure TAiJev.ResetUsage;
+begin
+  FUsage.Reset;
 end;
 
 function TAiJev.GetApiKey: string;
@@ -795,6 +921,16 @@ begin
     AiSpanAttr(Span, 'gen_ai.usage.input_tokens', Int64(Result.InputTokens));
     AiSpanAttr(Span, 'gen_ai.usage.output_tokens', Int64(Result.OutputTokens));
     AiSpanEnd(Span);
+    FUsage.Add(Result);
+    if Assigned(FOnUsage) then
+    begin
+      var U: TAiJevUsage;
+      U.Requests := 1;
+      U.InputTokens := Result.InputTokens;
+      U.OutputTokens := Result.OutputTokens;
+      U.CostUSD := (U.InputTokens * FPricePerMillionInput + U.OutputTokens * FPricePerMillionOutput) / 1E6;
+      FOnUsage(Self, U);
+    end;
   except
     on E: Exception do
     begin

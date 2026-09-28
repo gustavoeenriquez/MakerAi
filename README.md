@@ -100,6 +100,11 @@ And two more for quality and retrieval:
   migrates the text history, so a chat can start on Groq and escalate to Claude and still
   remember the first turn. Live, with Groq → DeepSeek → Claude Sonnet → Opus: 7 of 8 answers
   judged useful, the trivial ones in under a second. Demo: `088-JevModelRouter`.
+- **Metering for usage-based billing.** `TAiJev` and all eight adapters expose `Usage` (requests,
+  input/output tokens, cost in USD) and an `OnUsage` event fired once per operation — one guard
+  check, one rerank, one batch — on the thread that ran it, so a server can charge the right
+  customer. The parallel reranker reports a single total after joining its calls. Previously only
+  the batch labeler exposed tokens; the other adapters received them and dropped them.
 
 **Also fixed:** `lmExpression` parsed numbers with the regional settings only, so on a Windows
 using a decimal comma `'10.25' > 9.5` was compared as text and returned `False`. It now falls

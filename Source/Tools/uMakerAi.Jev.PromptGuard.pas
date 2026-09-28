@@ -46,6 +46,10 @@ uses
 type
   TAiJevPromptGuard = class(TAiPromptGuardBase)
   private
+    FUsage: TAiJevUsageMeter;
+    FPricePerMillionInput: Double;
+    FPricePerMillionOutput: Double;
+    FOnUsage: TAiJevUsageEvent;
     FJev: TAiJev;
     FOwnJev: TAiJev;
     FApiKey: string;
@@ -61,11 +65,15 @@ type
     FLastScores: TStrings;
     procedure SetJev(const Value: TAiJev);
     function ActiveJev: TAiJev;
+    function GetUsage: TAiJevUsage;
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    // Consumo de Jev acumulado desde Create o ResetUsage (seguro entre hilos)
+    property Usage: TAiJevUsage read GetUsage;
+    procedure ResetUsage;
     function CheckPrompt(const APrompt: string): TAiPromptVerdict; override;
     // Probabilidad de cada categoria preguntada en la ultima revision: 'injection=0.02', ...
     property LastScores: TStrings read FLastScores;
@@ -84,6 +92,13 @@ type
     property SensitiveDataThreshold: Double read FSensitiveDataThreshold write FSensitiveDataThreshold;
     property HarmfulThreshold: Double read FHarmfulThreshold write FHarmfulThreshold;
     property OutOfScopeThreshold: Double read FOutOfScopeThreshold write FOutOfScopeThreshold;
+    // Precios para CostUSD de Usage/OnUsage (US$ por millon de tokens; hoy la
+    // salida no se cobra)
+    property PricePerMillionInput: Double read FPricePerMillionInput write FPricePerMillionInput;
+    property PricePerMillionOutput: Double read FPricePerMillionOutput write FPricePerMillionOutput;
+    // Una vez por operacion con el consumo de esa operacion. Sincrono, en el hilo
+    // que la ejecuto (en un servidor: el de la peticion, para cobrarle al cliente)
+    property OnUsage: TAiJevUsageEvent read FOnUsage write FOnUsage;
   end;
 
 procedure Register;
@@ -112,6 +127,8 @@ end;
 constructor TAiJevPromptGuard.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  FUsage := TAiJevUsageMeter.Create;
+  FPricePerMillionInput := JEV_PRICE_PER_MILLION_INPUT;
   FApiKey := '@TYPESAFE_API_KEY';
   FModel := 'jev-1.13.0';
   FCheckInjection := True;
@@ -128,6 +145,7 @@ destructor TAiJevPromptGuard.Destroy;
 begin
   FLastScores.Free;
   FOwnJev.Free;
+  FUsage.Free;
   inherited;
 end;
 
@@ -196,6 +214,7 @@ begin
       State.Free;
     end;
     try
+      JevReportResult(Self, R, FUsage, FPricePerMillionInput, FPricePerMillionOutput, FOnUsage);
       for i := 0 to Q.Count - 1 do
       begin
         P := R[Q[i].Name].Noul;
@@ -233,6 +252,16 @@ begin
   finally
     Q.Free;
   end;
+end;
+
+function TAiJevPromptGuard.GetUsage: TAiJevUsage;
+begin
+  Result := FUsage.Snapshot(FPricePerMillionInput, FPricePerMillionOutput);
+end;
+
+procedure TAiJevPromptGuard.ResetUsage;
+begin
+  FUsage.Reset;
 end;
 
 end.

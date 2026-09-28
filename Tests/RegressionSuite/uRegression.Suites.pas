@@ -412,6 +412,14 @@ begin
       'modelos=qwen3-tts-vc-realtime-2026-01-15,qwen3-tts-vd-realtime-2026-01-15,qwen3-tts-flash-realtime,' +
       'qwen3-tts-vc-realtime-2026-01-15|eventos=listo=1/audio=3/respuestas=2/fin=1/error=Throttling:lento');
 
+  // Consumo de Jev para cobrar por uso: cada adaptador acumula Usage y dispara un
+  // OnUsage por operacion, en el hilo del llamador. El reranker en paralelo (un
+  // TAiJev por pasaje) da UN evento con el total exacto. Fake: 100 in / 5 out.
+  FRunner.AddCase('jev.usage.adapters')
+    .Input('jev:usage')
+    .ExpectEquals('jev=ev2/2/200/10|guard=ev2/2/200/10/0.0000084|dispatch=1|guardrail=1|eval=1|router=1|' +
+      'rag-par=ev1/6/600/30/hilo=si|rag-ext=ev1/3|batch=ev1/3|reset=0/0|precio=0.0001000');
+
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
     .ExpectEquals('1|inline=si|string=si');
@@ -1827,6 +1835,82 @@ begin
 end;
 
 type
+  // Jev sin red para medir consumo: responde cualquier set de preguntas segun su
+  // tipo y reporta 100 tokens de entrada y 5 de salida por llamada
+  TUsageFakeJev = class(TAiJev)
+  protected
+    function DoPost(const ABody: string; out AResponse: string): Integer; override;
+  end;
+
+  // Acceso a ClassifyDispatch (protegido)
+  TDispatchAccess = class(TAiJevDispatchClassifier);
+
+  // Reranker cuyo TAiJev por llamada paralela es el fake
+  TUsageRAGReranker = class(TAiJevRAGReranker)
+  protected
+    function NewJev: TAiJev; override;
+  end;
+
+  TUsageSink = class
+  public
+    Events: Integer;
+    Last: TAiJevUsage;
+    SameThread: Boolean;
+    CallerThread: TThreadID;
+    procedure OnUsage(Sender: TObject; const AUsage: TAiJevUsage);
+  end;
+
+function TUsageFakeJev.DoPost(const ABody: string; out AResponse: string): Integer;
+var
+  Req, Qs, Q, Crit: TJSONObject;
+  Answers: TJSONObject;
+  P: TJSONPair;
+  Kind, First: string;
+begin
+  Req := TJSONObject.ParseJSONValue(ABody) as TJSONObject;
+  Answers := TJSONObject.Create;
+  try
+    Qs := Req.GetValue<TJSONObject>('questions');
+    for P in Qs do
+    begin
+      Q := P.JsonValue as TJSONObject;
+      Kind := Q.GetValue<string>('type');
+      if Kind = 'choice' then
+      begin
+        First := 'x';
+        if Q.TryGetValue<TJSONObject>('criteria', Crit) and (Crit.Count > 0) then
+          First := Crit.Pairs[0].JsonString.Value;
+        Answers.AddPair(P.JsonString.Value, TJSONObject.ParseJSONValue(
+          '{"type":"choice","choice":"' + First + '","confidence":0.9,"probabilities":{"' + First + '":0.9}}'));
+      end
+      else if Kind = 'score' then
+        Answers.AddPair(P.JsonString.Value, TJSONObject.ParseJSONValue(
+          '{"type":"score","score":0.5,"confidence":0.8,"probabilities":{"0":0.5}}'))
+      else
+        Answers.AddPair(P.JsonString.Value, TJSONObject.ParseJSONValue('{"type":"noul","noul":0.1}'));
+    end;
+    AResponse := '{"model":"jev-1.13.0","usage":{"input_tokens":100,"output_tokens":5},"answers":' +
+      Answers.ToJSON + '}';
+    Result := 200;
+  finally
+    Req.Free;
+    Answers.Free;
+  end;
+end;
+
+function TUsageRAGReranker.NewJev: TAiJev;
+begin
+  Result := TUsageFakeJev.Create(nil);
+end;
+
+procedure TUsageSink.OnUsage(Sender: TObject; const AUsage: TAiJevUsage);
+begin
+  Inc(Events);
+  Last := AUsage;
+  SameThread := TThread.CurrentThread.ThreadID = CallerThread;
+end;
+
+type
   // Expone session.update, modelo efectivo y el procesamiento de eventos del TTS realtime
   TQwenTTSProbe = class(TAiQwenRealtimeTTS)
   public
@@ -3092,6 +3176,113 @@ var
   end;
 
 begin
+  if AScenario = 'jev:usage' then
+  begin
+    var Sink := TUsageSink.Create;
+    var Fmt := function(const U: TAiJevUsage): string
+      begin
+        Result := Format('%d/%d/%d', [U.Requests, U.InputTokens, U.OutputTokens]);
+      end;
+    try
+      Sink.CallerThread := TThread.CurrentThread.ThreadID;
+      // TAiJev directo: un evento por llamada
+      var J0 := TUsageFakeJev.Create(nil);
+      try
+        J0.OnUsage := Sink.OnUsage;
+        J0.Noul('estado', 'Es valido?');
+        J0.Noul('estado', 'Es valido?');
+        Result := 'jev=ev' + IntToStr(Sink.Events) + '/' + Fmt(J0.Usage);
+      finally
+        J0.Free;
+      end;
+      // PromptGuard: una operacion = una llamada
+      Sink.Events := 0;
+      var J1 := TUsageFakeJev.Create(nil);
+      var PG := TAiJevPromptGuard.Create(nil);
+      try
+        PG.Jev := J1;
+        PG.OnUsage := Sink.OnUsage;
+        PG.CheckPrompt('hola');
+        PG.CheckPrompt('otra');
+        Result := Result + '|guard=ev' + IntToStr(Sink.Events) + '/' + Fmt(PG.Usage) + '/' +
+          FormatFloat('0.0000000', PG.Usage.CostUSD, TFormatSettings.Invariant);
+        // ResetUsage y precio
+        PG.ResetUsage;
+        var LReset := Format('%d/%d', [PG.Usage.Requests, PG.Usage.InputTokens]);
+        PG.PricePerMillionInput := 1.0;
+        PG.CheckPrompt('una mas');
+        var LPrecio := FormatFloat('0.0000000', PG.Usage.CostUSD, TFormatSettings.Invariant);
+        // Dispatch, guardrail, eval y router: una llamada cada uno
+        var DC := TAiJevDispatchClassifier.Create(nil);
+        var GC := TAiJevGuardrailClassifier.Create(nil);
+        var ES := TAiJevEvalScorer.Create(nil);
+        var MR := TAiJevModelRouter.Create(nil);
+        try
+          DC.Jev := J1;
+          GC.Jev := J1;
+          ES.Jev := J1;
+          MR.Jev := J1;
+          MR.Tiers.AddTier('rapido', 'Groq', 'openai/gpt-oss-20b', 0, 0.05);
+          MR.Tiers.AddTier('experto', 'Claude', 'claude-opus-5', 3, 15);
+          TDispatchAccess(DC).ClassifyDispatch('pregunta', ['a', 'b']);
+          var LReason: string;
+          GC.CheckToolCall('borrar', '{}', LReason);
+          ES.Score('Es cortes', 'hola', 'buenas');
+          MR.Route('pregunta');
+          Result := Result + Format('|dispatch=%d|guardrail=%d|eval=%d|router=%d',
+            [DC.Usage.Requests, GC.Usage.Requests, ES.Usage.Requests, MR.Usage.Requests]);
+        finally
+          DC.Free;
+          GC.Free;
+          ES.Free;
+          MR.Free;
+        end;
+        // RAG en paralelo: un TAiJev por pasaje, un solo evento con el total
+        Sink.Events := 0;
+        var RP := TUsageRAGReranker.Create(nil);
+        try
+          RP.MaxParallel := 4;
+          RP.OnUsage := Sink.OnUsage;
+          RP.Score('consulta', ['p1', 'p2', 'p3', 'p4', 'p5', 'p6']);
+          Result := Result + '|rag-par=ev' + IntToStr(Sink.Events) + '/' + Fmt(Sink.Last) +
+            '/hilo=' + IfThen(Sink.SameThread, 'si', 'no');
+        finally
+          RP.Free;
+        end;
+        // RAG con Jev externo (en serie)
+        Sink.Events := 0;
+        var RE := TAiJevRAGReranker.Create(nil);
+        try
+          RE.Jev := J1;
+          RE.OnUsage := Sink.OnUsage;
+          RE.Score('consulta', ['p1', 'p2', 'p3']);
+          Result := Result + '|rag-ext=ev' + IntToStr(Sink.Events) + '/' + IntToStr(Sink.Last.Requests);
+        finally
+          RE.Free;
+        end;
+        // Batch: un evento por lote
+        Sink.Events := 0;
+        var BL := TAiJevBatchLabeler.Create(nil);
+        try
+          BL.Jev := J1;
+          BL.OnUsage := Sink.OnUsage;
+          BL.Questions.AddChoice('etiqueta', 'Que es `item`?', ['x', 'y']);
+          BL.Run(['uno', 'dos', 'tres']).Free;
+          Result := Result + '|batch=ev' + IntToStr(Sink.Events) + '/' + IntToStr(Sink.Last.Requests);
+        finally
+          BL.Free;
+        end;
+        Result := Result + '|reset=' + LReset + '|precio=' + LPrecio;
+      finally
+        PG.Free;
+        J1.Free;
+      end;
+    finally
+      Sink.Free;
+    end;
+    Exit;
+  end;
+
   Result := '';
   J := TFakeJev.Create(nil);
   Q := TAiJevQuestions.Create(nil);

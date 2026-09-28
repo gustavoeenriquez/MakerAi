@@ -119,6 +119,10 @@ type
 
   TAiJevModelRouter = class(TComponent)
   private
+    FUsage: TAiJevUsageMeter;
+    FPricePerMillionInput: Double;
+    FPricePerMillionOutput: Double;
+    FOnUsage: TAiJevUsageEvent;
     FJev: TAiJev;
     FOwnJev: TAiJev;
     FApiKey: string;
@@ -136,11 +140,15 @@ type
     procedure SetTiers(const Value: TAiJevModelTiers);
     procedure SetConnectionParams(const Value: TStrings);
     function ActiveJev: TAiJev;
+    function GetUsage: TAiJevUsage;
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    // Consumo de Jev acumulado desde Create o ResetUsage (seguro entre hilos)
+    property Usage: TAiJevUsage read GetUsage;
+    procedure ResetUsage;
     // Solo decide (una llamada a Jev); no toca ninguna conexion
     function Route(const APrompt: string): TAiModelRoute;
     // Pone DriverName/Model en la conexion; migra el historial si cambia de proveedor
@@ -167,6 +175,13 @@ type
     // (el cambio de proveedor recarga los Params por defecto del driver)
     property ConnectionParams: TStrings read FConnectionParams write SetConnectionParams;
     property OnRoute: TAiJevModelRouteEvent read FOnRoute write FOnRoute;
+    // Precios para CostUSD de Usage/OnUsage (US$ por millon de tokens; hoy la
+    // salida no se cobra)
+    property PricePerMillionInput: Double read FPricePerMillionInput write FPricePerMillionInput;
+    property PricePerMillionOutput: Double read FPricePerMillionOutput write FPricePerMillionOutput;
+    // Una vez por operacion con el consumo de esa operacion. Sincrono, en el hilo
+    // que la ejecuto (en un servidor: el de la peticion, para cobrarle al cliente)
+    property OnUsage: TAiJevUsageEvent read FOnUsage write FOnUsage;
   end;
 
 procedure Register;
@@ -283,6 +298,8 @@ end;
 constructor TAiJevModelRouter.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  FUsage := TAiJevUsageMeter.Create;
+  FPricePerMillionInput := JEV_PRICE_PER_MILLION_INPUT;
   FApiKey := '@TYPESAFE_API_KEY';
   FModel := 'jev-1.13.0';
   FTiers := TAiJevModelTiers.Create(Self);
@@ -299,6 +316,7 @@ begin
   FTiers.Free;
   FConnectionParams.Free;
   FOwnJev.Free;
+  FUsage.Free;
   inherited;
 end;
 
@@ -379,6 +397,7 @@ begin
       State.Free;
     end;
     try
+      JevReportResult(Self, R, FUsage, FPricePerMillionInput, FPricePerMillionOutput, FOnUsage);
       Result.Task := R['tarea'].Choice;
       Result.TaskConfidence := R['tarea'].Confidence;
       Result.Difficulty := R['dificultad'].Score;
@@ -493,6 +512,16 @@ function TAiJevModelRouter.Ask(AConnection: TAiChatConnection; const APrompt: st
 begin
   Apply(AConnection, Route(APrompt));
   Result := AConnection.AddMessageAndRun(APrompt, 'user', []);
+end;
+
+function TAiJevModelRouter.GetUsage: TAiJevUsage;
+begin
+  Result := FUsage.Snapshot(FPricePerMillionInput, FPricePerMillionOutput);
+end;
+
+procedure TAiJevModelRouter.ResetUsage;
+begin
+  FUsage.Reset;
 end;
 
 end.

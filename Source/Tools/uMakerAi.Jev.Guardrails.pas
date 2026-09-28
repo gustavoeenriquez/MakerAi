@@ -63,6 +63,10 @@ type
 
   TAiJevGuardrailClassifier = class(TAiGuardrailClassifierBase)
   private
+    FUsage: TAiJevUsageMeter;
+    FPricePerMillionInput: Double;
+    FPricePerMillionOutput: Double;
+    FOnUsage: TAiJevUsageEvent;
     FJev: TAiJev;
     FOwnJev: TAiJev;
     FApiKey: string;
@@ -83,6 +87,7 @@ type
     procedure SetBlockedCategories(const Value: TStrings);
     procedure SetToolDescriptions(const Value: TStrings);
     function ActiveJev: TAiJev;
+    function GetUsage: TAiJevUsage;
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public const
@@ -100,6 +105,9 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    // Consumo de Jev acumulado desde Create o ResetUsage (seguro entre hilos)
+    property Usage: TAiJevUsage read GetUsage;
+    procedure ResetUsage;
     function CheckToolCall(const AToolName, AArguments: string; out AReason: string): Boolean; override;
     // Probabilidad de riesgo del ultimo tool call evaluado (-1 si Jev fallo)
     property LastRisk: Double read FLastRisk;
@@ -125,6 +133,13 @@ type
     // Opcional: 'nombre_tool=descripcion' para tools cuyo nombre no basta
     property ToolDescriptions: TStrings read FToolDescriptions write SetToolDescriptions;
     property OnCategorized: TAiJevToolCategorizedEvent read FOnCategorized write FOnCategorized;
+    // Precios para CostUSD de Usage/OnUsage (US$ por millon de tokens; hoy la
+    // salida no se cobra)
+    property PricePerMillionInput: Double read FPricePerMillionInput write FPricePerMillionInput;
+    property PricePerMillionOutput: Double read FPricePerMillionOutput write FPricePerMillionOutput;
+    // Una vez por operacion con el consumo de esa operacion. Sincrono, en el hilo
+    // que la ejecuto (en un servidor: el de la peticion, para cobrarle al cliente)
+    property OnUsage: TAiJevUsageEvent read FOnUsage write FOnUsage;
   end;
 
 procedure Register;
@@ -146,6 +161,8 @@ end;
 constructor TAiJevGuardrailClassifier.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  FUsage := TAiJevUsageMeter.Create;
+  FPricePerMillionInput := JEV_PRICE_PER_MILLION_INPUT;
   FApiKey := '@TYPESAFE_API_KEY';
   FModel := 'jev-1.13.0';
   FPolicy := '';
@@ -164,6 +181,7 @@ begin
   FBlockedCategories.Free;
   FToolDescriptions.Free;
   FOwnJev.Free;
+  FUsage.Free;
   inherited;
 end;
 
@@ -265,6 +283,7 @@ begin
         State.Free;
       end;
       try
+        JevReportResult(Self, R, FUsage, FPricePerMillionInput, FPricePerMillionOutput, FOnUsage);
         FLastRisk := R['risk'].Noul;
         if UseCategories then
         begin
@@ -315,6 +334,16 @@ begin
 
   if UseCategories and Assigned(FOnCategorized) then
     FOnCategorized(Self, AToolName, AArguments, FLastCategory, FLastCategoryConfidence, Result, AReason);
+end;
+
+function TAiJevGuardrailClassifier.GetUsage: TAiJevUsage;
+begin
+  Result := FUsage.Snapshot(FPricePerMillionInput, FPricePerMillionOutput);
+end;
+
+procedure TAiJevGuardrailClassifier.ResetUsage;
+begin
+  FUsage.Reset;
 end;
 
 end.

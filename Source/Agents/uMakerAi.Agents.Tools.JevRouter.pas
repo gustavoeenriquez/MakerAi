@@ -67,6 +67,10 @@ type
                   'Control')]
   TAiJevRouterTool = class(TAiToolBase)
   private
+    FUsage: TAiJevUsageMeter;
+    FPricePerMillionInput: Double;
+    FPricePerMillionOutput: Double;
+    FOnUsage: TAiJevUsageEvent;
     FJev: TAiJev;
     FOwnJev: TAiJev;
     FApiKey: string;
@@ -81,6 +85,7 @@ type
     FOnRoute: TAiJevRouteEvent;
     procedure SetJev(const Value: TAiJev);
     function ActiveJev: TAiJev;
+    function GetUsage: TAiJevUsage;
   protected
     procedure Execute(ANode: TAIAgentsNode; const AInput: string;
       var AOutput: string); override;
@@ -90,6 +95,9 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    // Consumo de Jev acumulado desde Create o ResetUsage (seguro entre hilos)
+    property Usage: TAiJevUsage read GetUsage;
+    procedure ResetUsage;
 
     // Atajos para armar Routes / Flags desde codigo
     procedure AddRoute(const AKey, ADescription: string);
@@ -136,6 +144,13 @@ type
 
     [TToolParameterAttribute('Confianza minima', 'Por debajo se usa FallbackRoute', '0.5')]
     property MinConfidence: Double read FMinConfidence write FMinConfidence;
+    // Precios para CostUSD de Usage/OnUsage (US$ por millon de tokens; hoy la
+    // salida no se cobra)
+    property PricePerMillionInput: Double read FPricePerMillionInput write FPricePerMillionInput;
+    property PricePerMillionOutput: Double read FPricePerMillionOutput write FPricePerMillionOutput;
+    // Una vez por operacion con el consumo de esa operacion. Sincrono, en el hilo
+    // que la ejecuto (en un servidor: el de la peticion, para cobrarle al cliente)
+    property OnUsage: TAiJevUsageEvent read FOnUsage write FOnUsage;
   end;
 
 implementation
@@ -150,6 +165,8 @@ end;
 constructor TAiJevRouterTool.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  FUsage := TAiJevUsageMeter.Create;
+  FPricePerMillionInput := JEV_PRICE_PER_MILLION_INPUT;
   FApiKey := '@TYPESAFE_API_KEY';
   FModel := 'jev-1.13.0';
   FInputField := 'consulta';
@@ -160,6 +177,7 @@ end;
 destructor TAiJevRouterTool.Destroy;
 begin
   FOwnJev.Free;
+  FUsage.Free;
   inherited;
 end;
 
@@ -285,6 +303,7 @@ begin
         State.Free;
       end;
       try
+        JevReportResult(Self, R, FUsage, FPricePerMillionInput, FPricePerMillionOutput, FOnUsage);
         Ans := R[ROUTE_QUESTION];
         BB.SetString(Prefix + 'choice', Ans.Choice);
         BB.SetString(Prefix + 'confidence', Invariant(Ans.Confidence));
@@ -314,6 +333,16 @@ begin
     end;
   end;
   BB.SetString(FRouteKey, Route);
+end;
+
+function TAiJevRouterTool.GetUsage: TAiJevUsage;
+begin
+  Result := FUsage.Snapshot(FPricePerMillionInput, FPricePerMillionOutput);
+end;
+
+procedure TAiJevRouterTool.ResetUsage;
+begin
+  FUsage.Reset;
 end;
 
 initialization

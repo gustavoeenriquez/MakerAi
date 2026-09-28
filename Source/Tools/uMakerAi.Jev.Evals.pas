@@ -40,6 +40,10 @@ uses
 type
   TAiJevEvalScorer = class(TAiEvalScorerBase)
   private
+    FUsage: TAiJevUsageMeter;
+    FPricePerMillionInput: Double;
+    FPricePerMillionOutput: Double;
+    FOnUsage: TAiJevUsageEvent;
     FJev: TAiJev;
     FOwnJev: TAiJev;
     FApiKey: string;
@@ -47,11 +51,15 @@ type
     FLastScore: Double;
     procedure SetJev(const Value: TAiJev);
     function ActiveJev: TAiJev;
+    function GetUsage: TAiJevUsage;
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    // Consumo de Jev acumulado desde Create o ResetUsage (seguro entre hilos)
+    property Usage: TAiJevUsage read GetUsage;
+    procedure ResetUsage;
     function Score(const ACriteria, AInput, AActual: string): Double; override;
     // Probabilidad del ultimo check evaluado (-1 si aun no se evaluo ninguno)
     property LastScore: Double read FLastScore;
@@ -61,6 +69,13 @@ type
     property Jev: TAiJev read FJev write SetJev;
     property ApiKey: string read FApiKey write FApiKey;
     property Model: string read FModel write FModel;
+    // Precios para CostUSD de Usage/OnUsage (US$ por millon de tokens; hoy la
+    // salida no se cobra)
+    property PricePerMillionInput: Double read FPricePerMillionInput write FPricePerMillionInput;
+    property PricePerMillionOutput: Double read FPricePerMillionOutput write FPricePerMillionOutput;
+    // Una vez por operacion con el consumo de esa operacion. Sincrono, en el hilo
+    // que la ejecuto (en un servidor: el de la peticion, para cobrarle al cliente)
+    property OnUsage: TAiJevUsageEvent read FOnUsage write FOnUsage;
   end;
 
 procedure Register;
@@ -77,6 +92,8 @@ end;
 constructor TAiJevEvalScorer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  FUsage := TAiJevUsageMeter.Create;
+  FPricePerMillionInput := JEV_PRICE_PER_MILLION_INPUT;
   FApiKey := '@TYPESAFE_API_KEY';
   FModel := 'jev-1.13.0';
   FLastScore := -1;
@@ -85,6 +102,7 @@ end;
 destructor TAiJevEvalScorer.Destroy;
 begin
   FOwnJev.Free;
+  FUsage.Free;
   inherited;
 end;
 
@@ -137,6 +155,7 @@ begin
       State.Free;
     end;
     try
+      JevReportResult(Self, R, FUsage, FPricePerMillionInput, FPricePerMillionOutput, FOnUsage);
       Result := R['pass'].Noul;
     finally
       R.Free;
@@ -145,6 +164,16 @@ begin
     Q.Free;
   end;
   FLastScore := Result;
+end;
+
+function TAiJevEvalScorer.GetUsage: TAiJevUsage;
+begin
+  Result := FUsage.Snapshot(FPricePerMillionInput, FPricePerMillionOutput);
+end;
+
+procedure TAiJevEvalScorer.ResetUsage;
+begin
+  FUsage.Reset;
 end;
 
 end.

@@ -42,6 +42,10 @@ uses
 type
   TAiJevRAGReranker = class(TAiRAGRerankerBase)
   private
+    FUsage: TAiJevUsageMeter;
+    FPricePerMillionInput: Double;
+    FPricePerMillionOutput: Double;
+    FOnUsage: TAiJevUsageEvent;
     FJev: TAiJev;
     FOwnJev: TAiJev;
     FApiKey: string;
@@ -53,13 +57,18 @@ type
     FLastInjected: Integer;
     procedure SetJev(const Value: TAiJev);
     function ActiveJev: TAiJev;
-    function NewJev: TAiJev;
-    function ScoreOne(AJev: TAiJev; const AQuery, AText: string): Double;
+    function ScoreOne(AJev: TAiJev; const AQuery, AText: string; AOp: TAiJevUsageMeter): Double;
+    function GetUsage: TAiJevUsage;
   protected
+    // TAiJev para cada llamada en paralelo. Virtual: la suite lo sustituye sin red
+    function NewJev: TAiJev; virtual;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    // Consumo de Jev acumulado desde Create o ResetUsage (seguro entre hilos)
+    property Usage: TAiJevUsage read GetUsage;
+    procedure ResetUsage;
     function Score(const AQuery: string; const ATexts: TArray<string>): TArray<Double>; override;
     // Pasajes descartados por inyeccion en la ultima llamada a Score
     property LastInjected: Integer read FLastInjected;
@@ -75,6 +84,13 @@ type
     property MaxPassageChars: Integer read FMaxPassageChars write FMaxPassageChars default 4000;
     // Llamadas simultaneas (1 = en serie)
     property MaxParallel: Integer read FMaxParallel write FMaxParallel default 4;
+    // Precios para CostUSD de Usage/OnUsage (US$ por millon de tokens; hoy la
+    // salida no se cobra)
+    property PricePerMillionInput: Double read FPricePerMillionInput write FPricePerMillionInput;
+    property PricePerMillionOutput: Double read FPricePerMillionOutput write FPricePerMillionOutput;
+    // Una vez por operacion con el consumo de esa operacion. Sincrono, en el hilo
+    // que la ejecuto (en un servidor: el de la peticion, para cobrarle al cliente)
+    property OnUsage: TAiJevUsageEvent read FOnUsage write FOnUsage;
   end;
 
 procedure Register;
@@ -91,6 +107,8 @@ end;
 constructor TAiJevRAGReranker.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  FUsage := TAiJevUsageMeter.Create;
+  FPricePerMillionInput := JEV_PRICE_PER_MILLION_INPUT;
   FApiKey := '@TYPESAFE_API_KEY';
   FModel := 'jev-1.13.0';
   FDetectInjection := True;
@@ -102,6 +120,7 @@ end;
 destructor TAiJevRAGReranker.Destroy;
 begin
   FOwnJev.Free;
+  FUsage.Free;
   inherited;
 end;
 
@@ -141,7 +160,7 @@ begin
   Result := FOwnJev;
 end;
 
-function TAiJevRAGReranker.ScoreOne(AJev: TAiJev; const AQuery, AText: string): Double;
+function TAiJevRAGReranker.ScoreOne(AJev: TAiJev; const AQuery, AText: string; AOp: TAiJevUsageMeter): Double;
 var
   Q: TAiJevQuestions;
   State: TJSONObject;
@@ -166,6 +185,7 @@ begin
       State.Free;
     end;
     try
+      AOp.Add(R);
       if FDetectInjection and (R['injection'].Noul >= FInjectionThreshold) then
       begin
         TInterlocked.Increment(FLastInjected);
@@ -185,40 +205,58 @@ function TAiJevRAGReranker.Score(const AQuery: string; const ATexts: TArray<stri
 var
   Scores: TArray<Double>;
   Pool: TThreadPool;
+  Op: TAiJevUsageMeter;
   i: Integer;
 begin
   FLastInjected := 0;
   SetLength(Scores, Length(ATexts));
-
-  if Assigned(FJev) or (FMaxParallel <= 1) or (Length(ATexts) <= 1) then
-  begin
-    for i := 0 to High(ATexts) do
-      Scores[i] := ScoreOne(ActiveJev, AQuery, ATexts[i]);
-  end
-  else
-  begin
-    // Pool propio para acotar la concurrencia a MaxParallel
-    Pool := TThreadPool.Create;
-    try
-      Pool.SetMinWorkerThreads(1);
-      Pool.SetMaxWorkerThreads(FMaxParallel);
-      TParallel.For(0, High(ATexts),
-        procedure(AIndex: Integer)
-        var
-          J: TAiJev;
-        begin
-          J := NewJev; // un TAiJev por llamada: el componente no es seguro entre hilos
-          try
-            Scores[AIndex] := ScoreOne(J, AQuery, ATexts[AIndex]);
-          finally
-            J.Free;
-          end;
-        end, Pool);
-    finally
-      Pool.Free;
+  // Un solo OnUsage por Score con el total de todas sus llamadas, en el hilo del
+  // llamador (tras juntar las paralelas); tambien si una llamada fallo
+  Op := TAiJevUsageMeter.Create;
+  try
+    if Assigned(FJev) or (FMaxParallel <= 1) or (Length(ATexts) <= 1) then
+    begin
+      for i := 0 to High(ATexts) do
+        Scores[i] := ScoreOne(ActiveJev, AQuery, ATexts[i], Op);
+    end
+    else
+    begin
+      // Pool propio para acotar la concurrencia a MaxParallel
+      Pool := TThreadPool.Create;
+      try
+        Pool.SetMinWorkerThreads(1);
+        Pool.SetMaxWorkerThreads(FMaxParallel);
+        TParallel.For(0, High(ATexts),
+          procedure(AIndex: Integer)
+          var
+            J: TAiJev;
+          begin
+            J := NewJev; // un TAiJev por llamada: el componente no es seguro entre hilos
+            try
+              Scores[AIndex] := ScoreOne(J, AQuery, ATexts[AIndex], Op);
+            finally
+              J.Free;
+            end;
+          end, Pool);
+      finally
+        Pool.Free;
+      end;
     end;
+  finally
+    JevReportOperation(Self, Op, FUsage, FPricePerMillionInput, FPricePerMillionOutput, FOnUsage);
+    Op.Free;
   end;
   Result := Scores;
+end;
+
+function TAiJevRAGReranker.GetUsage: TAiJevUsage;
+begin
+  Result := FUsage.Snapshot(FPricePerMillionInput, FPricePerMillionOutput);
+end;
+
+procedure TAiJevRAGReranker.ResetUsage;
+begin
+  FUsage.Reset;
 end;
 
 end.

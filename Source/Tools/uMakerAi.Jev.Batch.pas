@@ -79,6 +79,7 @@ type
   TAiJevBatchReport = class
   private
     FItems: TObjectList<TAiJevBatchItem>;
+    FMeter: TAiJevUsageMeter; // consumo de este lote (para OnUsage)
     FInputTokens: Int64;
     FCostUSD: Double;
     FElapsedMs: Int64;
@@ -106,6 +107,9 @@ type
 
   TAiJevBatchLabeler = class(TComponent)
   private
+    FUsage: TAiJevUsageMeter;
+    FPricePerMillionOutput: Double;
+    FOnUsage: TAiJevUsageEvent;
     FJev: TAiJev;
     FApiKey: string;
     FModel: string;
@@ -125,11 +129,15 @@ type
     procedure ProcessItem(AJev: TAiJev; AItem: TAiJevBatchItem; AState: TJSONValue;
       const ALabelQ: string; AReport: TAiJevBatchReport; ATotal: Integer);
     function InternalRun(const AStates: TArray<TJSONValue>; const AInputs: TArray<string>): TAiJevBatchReport;
+    function GetUsage: TAiJevUsage;
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    // Consumo de Jev acumulado desde Create o ResetUsage (seguro entre hilos)
+    property Usage: TAiJevUsage read GetUsage;
+    procedure ResetUsage;
     // Cada texto viaja como {ItemField: texto}. El llamador libera el reporte.
     function Run(const ATexts: TArray<string>): TAiJevBatchReport; overload;
     // Estados JSON ya armados (no toma posesion). El llamador libera el reporte.
@@ -153,6 +161,12 @@ type
     // US$ por millon de tokens de entrada (para CostUSD)
     property PricePerMillion: Double read FPricePerMillion write FPricePerMillion;
     property OnProgress: TAiJevBatchProgressEvent read FOnProgress write FOnProgress;
+    // Precios para CostUSD de Usage/OnUsage (US$ por millon de tokens; hoy la
+    // salida no se cobra)
+    property PricePerMillionOutput: Double read FPricePerMillionOutput write FPricePerMillionOutput;
+    // Una vez por operacion con el consumo de esa operacion. Sincrono, en el hilo
+    // que la ejecuto (en un servidor: el de la peticion, para cobrarle al cliente)
+    property OnUsage: TAiJevUsageEvent read FOnUsage write FOnUsage;
   end;
 
 procedure Register;
@@ -181,11 +195,13 @@ constructor TAiJevBatchReport.Create;
 begin
   inherited Create;
   FItems := TObjectList<TAiJevBatchItem>.Create(True);
+  FMeter := TAiJevUsageMeter.Create;
 end;
 
 destructor TAiJevBatchReport.Destroy;
 begin
   FItems.Free;
+  FMeter.Free;
   inherited;
 end;
 
@@ -255,6 +271,7 @@ end;
 constructor TAiJevBatchLabeler.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  FUsage := TAiJevUsageMeter.Create;
   FApiKey := '@TYPESAFE_API_KEY';
   FModel := 'jev-1.13.0';
   FQuestions := TAiJevQuestions.Create(Self);
@@ -267,6 +284,7 @@ end;
 destructor TAiJevBatchLabeler.Destroy;
 begin
   FQuestions.Free;
+  FUsage.Free;
   inherited;
 end;
 
@@ -334,6 +352,7 @@ begin
       R := AJev.Ask(AState, FQuestions);
       AItem.FResult := R;
       TInterlocked.Add(AReport.FInputTokens, Int64(R.InputTokens));
+      AReport.FMeter.Add(R);
       if ALabelQ <> '' then
       begin
         AItem.FChoice := R[ALabelQ].Choice;
@@ -420,6 +439,8 @@ begin
     Report.FElapsedMs := SW.ElapsedMilliseconds;
     Report.FCancelled := FCancelled;
     Report.FCostUSD := Report.FInputTokens * FPricePerMillion / 1E6;
+    // Un OnUsage por lote. PricePerMillion (historico) es el precio de entrada
+    JevReportOperation(Self, Report.FMeter, FUsage, FPricePerMillion, FPricePerMillionOutput, FOnUsage);
   except
     Report.Free;
     raise;
@@ -457,6 +478,16 @@ begin
     Inputs[i] := AStates[i].ToJSON;
   end;
   Result := InternalRun(States, Inputs);
+end;
+
+function TAiJevBatchLabeler.GetUsage: TAiJevUsage;
+begin
+  Result := FUsage.Snapshot(FPricePerMillion, FPricePerMillionOutput);
+end;
+
+procedure TAiJevBatchLabeler.ResetUsage;
+begin
+  FUsage.Reset;
 end;
 
 end.
