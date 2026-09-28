@@ -154,6 +154,18 @@ now falls back to the OEM codepage. Two more, found while exercising it on Linux
 dropped whenever the sentinel arrived in the same read, and a timeout left the session
 permanently unusable (the `Restart` was written but commented out).
 
+### Qwen — native Alibaba Model Studio driver
+
+`TAiQwenChat` (`Source/Chat/uMakerAi.Chat.Qwen.pas`, driver name `Qwen`) talks to DashScope's
+OpenAI-compatible endpoint (international region by default; key in `DASHSCOPE_API_KEY`).
+Hybrid Qwen models think by default on the API side, so the driver always sends
+`enable_thinking`: off unless `cap_Reasoning` is in `ModelCaps`, with `ThinkingLevel` mapped to
+`thinking_budget`. Thinking-only models (`qwq-plus`, `*-thinking-*`) and open-weight models
+(which only think when streaming) are handled for you. Registered models are the ones tested
+live: `qwen3.8-flash` (default), `qwen3.8-max`, `qwen3.7-plus`, `qwen3-vl-flash`,
+`qwen3.8-omni-flash` with vision; `qwen3-max`, `qwen-plus/flash/turbo`, `qwen3-coder-plus/flash`;
+and `qwq-plus`, which only answers when streaming and is registered as asynchronous.
+
 ### Also
 
 - **Claude sometimes sends coordinates as a JSON array and sometimes as a string** containing
@@ -375,7 +387,7 @@ New `ChatMode` value for automatic two-pass routing:
 ┌──────────────────────────────▼───────────────────────────────────┐
 │  Native Provider Drivers  (direct API access, full fidelity)     │
 │  OpenAI · Claude · Gemini · Grok · Mistral · DeepSeek · Kimi    │
-│  GLM · Groq · Cohere · Ollama · LM Studio · GenericLLM          │
+│  GLM · Qwen · Groq · Cohere · Ollama · LM Studio · GenericLLM   │
 └──────────────────────────────┬───────────────────────────────────┘
                                │
      ┌─────────────────────────┼────────────────────────┐
@@ -415,6 +427,7 @@ Full, provider-specific access to every API feature. Use when you need complete 
 | `TAiDeepSeekChat` | DeepSeek | deepseek-flash, deepseek-v4-pro |
 | `TAiKimiChat` | Moonshot | kimi-k3, kimi-k2.7-code, kimi-k2.6 |
 | `TAiGLMChat` | GLM (Zhipu / Z.ai) | glm-4.7, glm-5.3, glm-5v-turbo, free tiers: glm-4.7-flash / glm-4.6v-flash |
+| `TAiQwenChat` | Qwen (Alibaba Model Studio) | qwen3.8-flash, qwen3.8-max, qwen3.7-plus, qwq-plus, qwen3-coder-plus, qwen3-vl-flash |
 | `TAiGroqChat` | Groq | llama-3.3-70b, openai/gpt-oss-120b, qwen3.6, whisper-large-v3 |
 | `TCohereChat` | Cohere | command-a-plus, command-a-03-2025, north-mini-code |
 | `TAiOllamaChat` | Ollama | Any local model |
@@ -791,6 +804,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 
 ### Unreleased (on `dev`)
 
+- New: **Qwen driver** (`TAiQwenChat`, Alibaba Model Studio / DashScope, OpenAI-compatible). Always sends `enable_thinking` (the API thinks by default on hybrid models), `ThinkingLevel` → `thinking_budget`, `qwq-plus` registered async (it answers empty without streaming), open-weight models only think when streaming. Runtime-tested: sync, async, reasoning on/off, tools (sync and streaming), vision, qwq-plus. Two new offline regression cases
 - New: **Computer Use on Linux** — `TAiLinuxExecutor` (X11 via xdotool + scrot) covers the 19 canonical actions with the same public interface as the Windows and macOS executors. The framework needed no change: `TAiComputerUseTool` only uses the RTL and delegates through its two events, so it cross-compiled to Linux64 untouched. Runtime-tested on Xvfb with `gpt-6-astra` and `claude-opus-4-8` against a text editor and Chrome. Demo `083-ComputerUseLinux`, plus a repeatable setup script for a headless VPS
 - New: **Computer Use delegation** — OpenAI and Gemini now honour the framework contract (fill `ToolCall.Response` from `OnCallToolFunction` and the driver does not execute locally), which is what lets a headless broker forward the call to a remote client. OpenAI ignored `Response` and executed anyway; Gemini never fired the event at all. For OpenAI the delegation is atomic over the batch, since `gpt-6-astra` sends an array of actions that admits exactly one `computer_call_output`. Without a `TAiComputerUseTool` assigned the synchronous path used to emit an output with no `image_url`, which the API rejects with 400; it now ends the turn and reports through `LastError`. Demo `082-ComputerUsePassthru`
 - Fix: **Claude sends coordinates as an array *and* as a string containing one, within the same turn** — `"coordinate": [299, 282]` in the first calls, `"coordinate": "[299, 400]"` later. `TryGetValue<TJSONArray>` does not match the second form, so the coordinate was lost and the action fell back to (0,0): a click in the screen corner, after which the model retried until the turn ran out. Affected `coordinate`, `start_coordinate`, `region` (zoom) and numeric fields (`"duration": "1"`), i.e. click, double/triple click, drag and zoom. Not a Linux issue — it hit Windows and macOS just the same

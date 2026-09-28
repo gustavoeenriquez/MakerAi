@@ -54,6 +54,7 @@ uses
   uMakerAi.Chat.Groq,
   uMakerAi.Chat.DeepSeek,
   uMakerAi.Chat.GLM,
+  uMakerAi.Chat.Qwen,
   uMakerAi.Chat.Kimi,
   uMakerAi.Chat.Grok,
   uMakerAi.Chat.Mistral,
@@ -1638,6 +1639,75 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'Max_Tokens',  '8192');
   TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'ModelCaps',   '[cap_Image]');
   TAiChatFactory.Instance.RegisterUserParam('GLM', Model, 'SessionCaps', '[cap_Image]');
+
+  // ------------------------- QWEN (Alibaba Model Studio) ----------
+  // https://www.alibabacloud.com/help/en/model-studio/models
+  // Registrado sep 28 2026. Todo lo marcado 'probado' se verifico runtime contra
+  // dashscope-intl (Singapur). Key: @DASHSCOPE_API_KEY (atada a su region).
+  // La cuenta expone ~170 modelos (tambien DeepSeek, GLM y Kimi servidos por
+  // Alibaba); aqui se registran los probados. Cualquier otro id funciona con los
+  // params globales asignandolo en Model.
+  // Razonamiento: el driver manda enable_thinking=true solo con cap_Reasoning en
+  // ModelCaps; los hibridos se registran SIN el cap (rapidos) y se activa
+  // agregandolo. ThinkingLevel -> thinking_budget (tlLow 1024, tlMedium 4096,
+  // tlHigh 16384, tlDefault sin limite).
+  // ------------------------- QWEN (Alibaba Model Studio) ----------
+
+  // --- Valores globales por defecto para todos los modelos Qwen ---
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', 'Max_Tokens',  '8192');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', 'Tool_Active', 'True');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', 'ModelCaps',   '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', 'SessionCaps', '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', 'ThinkingLevel', 'tlDefault');
+
+  // ------- Insignia multimodales (texto + imagen) -- probados ------
+  // qwen3.8-flash: default del driver; rapido, vision, razonamiento hibrido, tools+stream
+  Model := 'qwen3.8-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_Image]');
+
+  // qwen3.8-max: el mas capaz; vision, razonamiento hibrido
+  Model := 'qwen3.8-max';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_Image]');
+
+  // qwen3.7-plus: vision, razonamiento hibrido
+  Model := 'qwen3.7-plus';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_Image]');
+
+  // qwen3-vl-flash: vision dedicado
+  Model := 'qwen3-vl-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_Image]');
+
+  // qwen3.8-omni-flash: omnimodal (texto/imagen/audio/video); probado solo con imagen
+  Model := 'qwen3.8-omni-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[cap_Image]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_Image]');
+
+  // ------- Texto -- probados (razonamiento hibrido, SIN vision) ------
+  // qwen3-max, qwen-plus, qwen-flash, qwen-turbo: usan los globales ([] = rapido)
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', 'qwen3-max',  'Max_Tokens', '8192');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', 'qwen-plus',  'Max_Tokens', '8192');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', 'qwen-flash', 'Max_Tokens', '8192');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', 'qwen-turbo', 'Max_Tokens', '8192');
+
+  // ------- Codigo -- probados (no razonan: enable_thinking se ignora) ------
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', 'qwen3-coder-plus',  'Max_Tokens', '8192');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', 'qwen3-coder-flash', 'Max_Tokens', '8192');
+
+  // ------- Solo razonamiento -- probados ------
+  // qwq-plus: SOLO responde en streaming (sin stream devuelve vacio y sin error)
+  Model := 'qwq-plus';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',    '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps',  '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'Asynchronous', 'True');
+
+  // qwen3-235b-a22b-thinking-2507: pesos abiertos, razona con y sin stream
+  Model := 'qwen3-235b-a22b-thinking-2507';
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'ModelCaps',   '[cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Qwen', Model, 'SessionCaps', '[cap_Reasoning]');
 
   // ------------------------- KIMI ----------------------------------
   // https://platform.moonshot.ai/docs/api/chat

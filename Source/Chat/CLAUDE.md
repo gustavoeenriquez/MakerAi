@@ -26,6 +26,7 @@ Each inherits from `TAiChat` (defined in Core):
 | `uMakerAi.Chat.Mistral.pas` | `TAiMistralChat` | Mistral (large, magistral, devstral, voxtral) |
 | `uMakerAi.Chat.Kimi.pas` | `TAiKimiChat` | Kimi/Moonshot (kimi-k3, kimi-k2.6/k2.7) |
 | `uMakerAi.Chat.GLM.pas` | `TAiGLMChat` | GLM / Zhipu Z.ai (glm-4.7, glm-4.7-flash, glm-5.x, glm-5v/4.6v vision) |
+| `uMakerAi.Chat.Qwen.pas` | `TAiQwenChat` | Qwen / Alibaba Model Studio (qwen3.8-flash/max, qwen3.7-plus, qwq-plus, qwen3-coder, qwen3-vl) |
 | `uMakerAi.Chat.Grok.pas` | `TAiGrokChat` | xAI Grok (grok-4.3, grok-4.5, grok-build) |
 | `uMakerAi.Chat.Cohere.pas` | `TCohereChat` | Cohere (command-a, aya-vision) |
 | `uMakerAi.Chat.GenericLLM.pas` | `TAiGenericChat` | Any OpenAI-compatible API |
@@ -313,6 +314,16 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - Texto: `glm-4.7` [default del driver] (200K ctx, $0.60/$2.20); `glm-4.7-flash` **GRATIS**; `glm-4.7-flashx` ($0.07/$0.40); `glm-5.3` (1M ctx, flagship coding, $1.40/$4.40), `glm-5.2` (1M ctx), `glm-5.1` (agentes 8h), `glm-5` (200K, $1.00/$3.20) → todos `[cap_Reasoning]` `tlMedium`; `glm-5-turbo` (200K, $1.20/$4.00, sin cap = rápido)
 - Visión (image/video/file input, formato OpenAI `image_url`; `video_url`/`file_url` no cableados aún): `glm-5v-turbo` (200K, con tools), `glm-4.6v` ($0.30/$0.90, **primera familia V con function calling nativo**), `glm-4.6v-flash` **GRATIS**, `glm-4.6v-flashx` ($0.04/$0.40) → `[cap_Image]`; `glm-4.5v` → `[cap_Image]` + **`Tool_Active=False`** (sin FC, salida máx 16K)
 - Fase 2 pendiente: GLM-Image (gen), GLM-OCR, GLM-ASR (STT), CogVideoX-3 (video) — endpoints dedicados
+
+### Qwen (Alibaba Model Studio / DashScope)
+**Nuevo sep 28 2026, probado runtime (sync, async, razonamiento on/off, tools sync y async, visión, qwq-plus).** API OpenAI-compatible; endpoint internacional (Singapur) `https://dashscope-intl.aliyuncs.com/compatible-mode/v1/` (EE.UU. `dashscope-us…`, China `dashscope.aliyuncs.com…` — cambiar `URL`). Key: `@DASHSCOPE_API_KEY`, **atada a la región donde se creó** (otra región → 401). Cobro pay-as-you-go contra la tarjeta: no hay recarga de saldo.
+- **Razonamiento ACTIVADO por defecto en el API** en los híbridos (qwen3.x, qwen-plus/flash/turbo, qwen3-max, VL, omni). El driver manda SIEMPRE `enable_thinking`: `cap_Reasoning` → true; sin el cap → false (rápido, sin tokens de razonar). Los híbridos se registran sin el cap. `ThinkingLevel` → `thinking_budget` (tlLow 1024, tlMedium 4096, tlHigh 16384; tlDefault sin límite). `reasoning_content` lo captura la base (sync y streaming).
+- Solo-razonamiento (`qwq-*`, `*-thinking-*`): no se les manda `enable_thinking`. **`qwq-plus` solo responde en streaming** (sin stream devuelve vacío y sin error) → registrado `Asynchronous=True`.
+- Pesos abiertos (`qwen3-32b`, `qwen3.6-27b`, `qwen3-235b-a22b…`, detectados por el tamaño en el nombre): `enable_thinking=true` solo en streaming (400 en síncrono) → en síncrono el driver manda false.
+- Streaming: `stream_options.include_usage` para que lleguen los tokens. Tools + stream funcionan. `temperature` acotada a [0, 2).
+- Catálogo (solo lo probado; cualquier otro id de los ~170 de la cuenta funciona con los globales): visión `[cap_Image]` → `qwen3.8-flash` [default], `qwen3.8-max`, `qwen3.7-plus`, `qwen3-vl-flash`, `qwen3.8-omni-flash` (probado solo imagen); texto → `qwen3-max`, `qwen-plus`, `qwen-flash`, `qwen-turbo`; código → `qwen3-coder-plus/flash`; razonamiento `[cap_Reasoning]` → `qwq-plus`, `qwen3-235b-a22b-thinking-2507`.
+- Ojo (general, no de Qwen): cambiar `DriverName` en `TAiChatConnection` deja `Model` vacío, y los params por modelo (p. ej. `cap_Image`) solo se aplican al asignar `Model`. Con el modelo vacío la imagen no se envía.
+- Fase 2 pendiente: embeddings (`text-embedding-v4`), rerank, imagen (wan/qwen-image), TTS/ASR.
 
 ### Cohere
 **Actualizado ago 2026, probado runtime 5/5 (incl. tools).** Los modelos nuevos (a-plus, north, a-reasoning) razonan por defecto: el content trae bloque `type:'thinking'` antes del `text`. El driver lo controla en `InitChatCompletions`: `cap_Reasoning` → `thinking:{enabled}`; sin el cap → `disabled` (modo rápido), EXCEPTO command-a-plus que **no permite disabled** (falla con `INVALID_TOOL_GENERATION`). `ParseChat` y streaming capturan el thinking a `ReasoningContent` / `OnReceiveThinking`. FIX ago 2026: el retorno síncrono con tool calling llegaba vacío — `ExecuteAndRespondToToolCalls` ahora reutiliza el mismo `ResMsg` en el round 2 (patrón de la base `Run(Nil, ResMsg)`).

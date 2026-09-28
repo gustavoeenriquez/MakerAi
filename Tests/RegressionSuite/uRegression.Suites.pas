@@ -66,7 +66,7 @@ uses
   uMakerAi.Jev.SmartDispatch, uMakerAi.Jev.Guardrails, uMakerAi.Chat.Tools,
   uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
   uMakerAi.Jev.ModelRouter,
-  UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq,
+  UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
   uMakerAi.RAG.Vector.Driver.BinFile,
@@ -316,6 +316,17 @@ begin
   FRunner.AddCase('chat.stream.dataend-no-dup')
     .Input('chat:stream-dataend')
     .ExpectEquals('Listo');
+
+  // Qwen (DashScope): los hibridos razonan por defecto en el API, asi que el
+  // driver SIEMPRE manda enable_thinking (false sin cap_Reasoning). qwq/-thinking
+  // no lo reciben; los de pesos abiertos solo razonan en streaming.
+  FRunner.AddCase('chat.qwen.thinking-request')
+    .Input('chat:qwen-thinking')
+    .ExpectEquals('fast=false|reason=true/1024|high=16384|qwq=ausente|open-sync=false|open-async=true');
+
+  FRunner.AddCase('chat.qwen.stream-usage')
+    .Input('chat:qwen-stream-usage')
+    .ExpectEquals('sync=ausente|async=true');
 
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
@@ -1541,6 +1552,24 @@ end;
 // -----------------------------------------------------------------------------
 
 type
+  // Expone el request que arma el driver Qwen (InitChatCompletions es protegido)
+  TQwenProbeChat = class(TAiQwenChat)
+  public
+    function Request(const AModel: string; AAsync: Boolean; ACaps: TAiCapabilities;
+      ALevel: TAiThinkingLevel): TJSONObject;
+  end;
+
+function TQwenProbeChat.Request(const AModel: string; AAsync: Boolean; ACaps: TAiCapabilities;
+  ALevel: TAiThinkingLevel): TJSONObject;
+begin
+  Model := AModel;
+  Asynchronous := AAsync;
+  ModelConfig.ModelCaps := ACaps;
+  ModelConfig.ThinkingLevel := ALevel;
+  Result := TJSONObject.ParseJSONValue(InitChatCompletions) as TJSONObject;
+end;
+
+type
   // Expone el parser de streaming comun (protegido en TAiChat). Groq lo usa tal
   // cual; TAiOpenChat NO sirve: sobrescribe OnInternalReceiveData (API Responses).
   TStreamProbeChat = class(TAiGroqChat)
@@ -1596,6 +1625,19 @@ function TRegressionSuite.RunChatScenario(const AScenario: string): string;
       TNetEncoding.Base64.EncodeBytesToString(TEncoding.UTF8.GetBytes(AContent)));
   end;
 
+  // Valor de AField en el request de Qwen ('ausente' si no se envia)
+  function PickQwen(AChat: TQwenProbeChat; const AModel: string; AAsync: Boolean;
+    ACaps: TAiCapabilities; ALevel: TAiThinkingLevel; const AField: string): string;
+  begin
+    var J := AChat.Request(AModel, AAsync, ACaps, ALevel);
+    try
+      var V := J.FindValue(AField);
+      if V = nil then Result := 'ausente' else Result := V.ToJSON;
+    finally
+      J.Free;
+    end;
+  end;
+
   function RoleOf(AArr: TJSONArray; AIndex: Integer): string;
   begin
     Result := (AArr.Items[AIndex] as TJSONObject).GetValue<string>('role');
@@ -1609,6 +1651,27 @@ var
   Raw, Content: string;
   Hits, P: Integer;
 begin
+  if (AScenario = 'chat:qwen-thinking') or (AScenario = 'chat:qwen-stream-usage') then
+  begin
+    var Qw := TQwenProbeChat.Create(nil);
+    try
+      if AScenario = 'chat:qwen-thinking' then
+        Result := 'fast=' + PickQwen(Qw, 'qwen3.8-flash', False, [], tlDefault, 'enable_thinking') +
+          '|reason=' + PickQwen(Qw, 'qwen3.8-flash', False, [cap_Reasoning], tlLow, 'enable_thinking') +
+          '/' + PickQwen(Qw, 'qwen3.8-flash', False, [cap_Reasoning], tlLow, 'thinking_budget') +
+          '|high=' + PickQwen(Qw, 'qwen3.8-max', True, [cap_Reasoning], tlHigh, 'thinking_budget') +
+          '|qwq=' + PickQwen(Qw, 'qwq-plus', True, [cap_Reasoning], tlDefault, 'enable_thinking') +
+          '|open-sync=' + PickQwen(Qw, 'qwen3-32b', False, [cap_Reasoning], tlDefault, 'enable_thinking') +
+          '|open-async=' + PickQwen(Qw, 'qwen3-32b', True, [cap_Reasoning], tlDefault, 'enable_thinking')
+      else
+        Result := 'sync=' + PickQwen(Qw, 'qwen3.8-flash', False, [], tlDefault, 'stream_options.include_usage') +
+          '|async=' + PickQwen(Qw, 'qwen3.8-flash', True, [], tlDefault, 'stream_options.include_usage');
+    finally
+      Qw.Free;
+    end;
+    Exit;
+  end;
+
   if AScenario = 'chat:stream-dataend' then
   begin
     var Probe := TStreamProbeChat.Create(nil);

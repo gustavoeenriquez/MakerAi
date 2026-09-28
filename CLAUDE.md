@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MakerAI is an AI orchestration framework for Delphi developers (v3.7). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, GLM/Z.ai, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers/clients, A2A agent interoperability, autonomous agents, observability, guardrails and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+MakerAI is an AI orchestration framework for Delphi developers (v3.7). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, GLM/Z.ai, Qwen/Alibaba, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers/clients, A2A agent interoperability, autonomous agents, observability, guardrails and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
 
 **v3.7 highlights (sep 2026):** refresco de **Computer Use** en los dos proveedores vivos — Claude estaba **roto** (`computer_20251124` ya lo rechaza el API; ahora `computer_toolset_20260801`, sin parametros y con 17 herramientas nombradas) y OpenAI estrena el tool nativo `computer` con **`gpt-6-astra`**, que manda un **lote** de acciones por turno; ambos APIs convergieron en no declarar dimensiones y devolver coordenadas en pixeles del screenshot. Ademas: driver **GLM** (Zhipu/Z.ai), fixes de RAG sobre pgvector y de contabilidad de tokens/cache.
 
@@ -22,7 +22,7 @@ MakerAI is an AI orchestration framework for Delphi developers (v3.7). It provid
 
 **Git workflow:** `master` is the main/release branch. `dev` is the active development branch. PRs target `master`.
 
-**Testing:** `Tests/RegressionSuite/` es la suite de regresión del framework (61 casos, in-process, sin API keys, < 1 s). Construida sobre `TAiEvalRunner`; cubre MCP dual-era + MRTR, agentes, A2A 1.0 + federación, guardrails, serialización de tool results y el propio runner de evals. Ejecutar antes de cada release:
+**Testing:** `Tests/RegressionSuite/` es la suite de regresión del framework (63 casos, in-process, sin API keys, < 1 s). Construida sobre `TAiEvalRunner`; cubre MCP dual-era + MRTR, agentes, A2A 1.0 + federación, guardrails, serialización de tool results y el propio runner de evals. Ejecutar antes de cada release:
 
 ```bash
 msbuild Tests/RegressionSuite/MakerAiRegressionSuite.dproj /p:Config=Release /p:Platform=Win64

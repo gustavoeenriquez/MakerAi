@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: < 1 segundo.
 
-## Cobertura actual (61 casos)
+## Cobertura actual (63 casos)
 
 | Área | Casos |
 |------|-------|
@@ -50,6 +50,7 @@ Duración típica: < 1 segundo.
 | A2A Agent Card | skills declaradas (con tags) y skill `run-graph` por defecto cuando no hay ninguna |
 | RAG | búsqueda con `Options` en nil sobre el driver `.mkai` (regresión del AV por `IfThen`) |
 | Streaming | `OnReceiveDataEnd` sin texto duplicado al cerrar el stream (SSE simulado sobre `TAiGroqChat`; falla sin el fix) y `executed_tools` de Groq combinados por `index` desde el delta (chunks de un SSE real de `gpt-oss-20b`) |
+| Qwen (request) | `enable_thinking` siempre presente (false sin `cap_Reasoning`), `thinking_budget` por `ThinkingLevel`, ausente en `qwq-*`, false en pesos abiertos síncronos; `stream_options.include_usage` solo en streaming |
 | Chat / tool results | serialización OpenAI-compatible: tool calls paralelas con imagen → un solo `user` sintético tras el grupo, modelo sin `cap_Image` → transcripción sin media, transcripción no duplicada, adjunto de texto inline |
 | Evals | autoprueba del runner (conteo PASS/FAIL) |
 | Jev (TypeSafe) | forma del request (Choice con opción sin descripción → `null`, Score, Noul con criteria parcial), parseo de las tres respuestas, reintento ante 429/529, reintentos agotados, validación local sin red, 401 sin reintento — con `TFakeJev` (sin red ni API key) |
