@@ -43,7 +43,7 @@ Img := Dalle.Generate('a red panda coding', '', is1024x1024);
 Tool := TAiDalleImageTool.Create(nil);
 Tool.ApiKey := '@OPENAI_API_KEY';
 Tool.Model  := imGptImage2;
-AiConn.ImageTool := Tool;
+AiConn.ChatTools.ImageTool := Tool;
 AiConn.Run('Genera una imagen de un gato astronauta');
 ```
 
@@ -523,9 +523,9 @@ begin
     // Conectar al chat
     AiConn.DriverName  := 'OpenAi';
     AiConn.Model       := 'gpt-image-2';
-    AiConn.ApiKey      := '@OPENAI_API_KEY';
-    AiConn.ImageTool   := Tool;
-    AiConn.Asynchronous := True;
+    AiConn.Params.Values['ApiKey'] := '@OPENAI_API_KEY';
+    AiConn.ChatTools.ImageTool := Tool;
+    AiConn.Params.Values['Asynchronous'] := 'True';
 
     // El chat interpreta el prompt y genera la imagen
     AiConn.OnReceiveDataEnd := procedure(...)
@@ -535,7 +535,7 @@ begin
 
     AiConn.Run('Generate a photorealistic image of a mountain at sunset');
   finally
-    AiConn.ImageTool := nil;
+    AiConn.ChatTools.ImageTool := nil;
     Tool.Free;
     AiConn.Free;
   end;
@@ -558,7 +558,7 @@ begin
   LTool.Dalle := LDalle;       // Inyectar el TAiDalle configurado
   LTool.ImageSize := is1536x1024;
 
-  AiConn.ImageTool := LTool;
+  AiConn.ChatTools.ImageTool := LTool;
   // ...
 
   // Al liberar: LTool libera el TAiDalle interno original (component framework).
@@ -573,7 +573,7 @@ end;
 `TAiDalleImageTool.ExecuteImageGeneration` llama a `TAiDalle.Generate` de forma **bloqueante** dentro del hilo background del framework. Esto requiere que `TAiChatConnection` esté en modo asíncrono:
 
 ```pascal
-AiConn.Asynchronous := True;  // OBLIGATORIO para image generation con tool
+AiConn.Params.Values['Asynchronous'] := 'True';  // OBLIGATORIO para image generation con tool
 // o bien:
 AiConn.Params.Values['Asynchronous'] := 'True';
 ```
@@ -756,9 +756,9 @@ begin
   // Chat: configurar
   AiConn.DriverName   := 'OpenAi';
   AiConn.Model        := 'gpt-image-2';
-  AiConn.ApiKey       := '@OPENAI_API_KEY';
-  AiConn.ImageTool    := Tool;
-  AiConn.Asynchronous := True;  // REQUERIDO para image generation
+  AiConn.Params.Values['ApiKey'] := '@OPENAI_API_KEY';
+  AiConn.ChatTools.ImageTool := Tool;
+  AiConn.Params.Values['Asynchronous'] := 'True';  // REQUERIDO para image generation
 
   AiConn.OnReceiveDataEnd :=
     procedure(Sender: TObject; ResMsg: TAiChatMessage; const Data: string)

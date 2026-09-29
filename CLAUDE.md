@@ -334,8 +334,9 @@ API keys use the `@VAR_NAME` convention. When a key property starts with `@`, th
 **Convention:** Each provider uses `[PROVIDER]_API_KEY` (e.g., `OPENAI_API_KEY`, `CLAUDE_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `KIMI_API_KEY`, `GROK_API_KEY`, `MISTRAL_API_KEY`, `COHERE_API_KEY`). `OLLAMA_API_KEY` is usually empty for local setups.
 
 ```pascal
-AiConnection.ApiKey := '@OPENAI_API_KEY';  // Resolved via GetEnvironmentVariable
-AiConnection.ApiKey := 'sk-...';           // Literal key
+AiConnection.Params.Values['ApiKey'] := '@OPENAI_API_KEY';  // TAiChatConnection: no tiene propiedad ApiKey
+AiOpenChat1.ApiKey := '@OPENAI_API_KEY';                   // drivers directos (TAiChat.ApiKey)
+AiOpenChat1.ApiKey := 'sk-...';                            // Literal key
 ```
 
 ## Error Handling

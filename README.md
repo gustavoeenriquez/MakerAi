@@ -562,17 +562,17 @@ Provider-agnostic code. Switch models or providers by changing one property:
 ```pascal
 AiConn.DriverName := 'OpenAI';
 AiConn.Model := 'gpt-6-sol';         // leave Model empty to get the driver's default
-AiConn.ApiKey := '@OPENAI_API_KEY';  // resolved from environment variable
+AiConn.Params.Values['ApiKey'] := '@OPENAI_API_KEY';  // resolved from the environment variable
 
 // Switch to Gemini without changing anything else
 AiConn.DriverName := 'Gemini';
 AiConn.Model := 'gemini-3.8-flash';
-AiConn.ApiKey := '@GEMINI_API_KEY';
+AiConn.Params.Values['ApiKey'] := '@GEMINI_API_KEY';
 
 // Or to GLM (Zhipu / Z.ai) — glm-4.7-flash is free
 AiConn.DriverName := 'GLM';
 AiConn.Model := 'glm-4.7-flash';
-AiConn.ApiKey := '@GLM_API_KEY';
+AiConn.Params.Values['ApiKey'] := '@GLM_API_KEY';
 ```
 
 ---
@@ -911,14 +911,14 @@ Open `Source/Packages/MakerAiGrp.groupproj` to compile all packages at once.
 
 ### API Keys
 
-API keys are resolved from environment variables using the `@VAR_NAME` convention:
+API keys are resolved from environment variables using the `@VAR_NAME` convention. On `TAiChatConnection` the key goes through `Params` (it has no `ApiKey` property); direct drivers (`TAiOpenChat`, `TAiClaudeChat`...) and `TAiEmbeddingConnection` do have an `ApiKey` property:
 
 ```pascal
-AiConn.ApiKey := '@OPENAI_API_KEY';    // reads OPENAI_API_KEY from environment
-AiConn.ApiKey := '@CLAUDE_API_KEY';    // reads CLAUDE_API_KEY
-AiConn.ApiKey := '@GEMINI_API_KEY';    // reads GEMINI_API_KEY
-AiConn.ApiKey := '@GROK_API_KEY';      // reads GROK_API_KEY (xAI chat and Grok Voice)
-AiConn.ApiKey := 'sk-...';             // or set a literal key directly
+AiConn.Params.Values['ApiKey'] := '@OPENAI_API_KEY';    // reads OPENAI_API_KEY from environment
+AiConn.Params.Values['ApiKey'] := '@CLAUDE_API_KEY';    // reads CLAUDE_API_KEY
+AiConn.Params.Values['ApiKey'] := '@GEMINI_API_KEY';    // reads GEMINI_API_KEY
+AiConn.Params.Values['ApiKey'] := '@GROK_API_KEY';      // reads GROK_API_KEY (xAI chat and Grok Voice)
+AiConn.Params.Values['ApiKey'] := 'sk-...';             // or set a literal key directly
 ```
 
 ### Delphi Version Compatibility
