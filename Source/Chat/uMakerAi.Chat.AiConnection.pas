@@ -847,6 +847,11 @@ begin
       if ParamName.IsEmpty then
         Continue;
 
+      // Alias historico: el catalogo (OpenAI TTS) y el demo 012 usan 'Voice_Format',
+      // pero la propiedad es TtsParams.VoiceFormat; sin esto se ignoraba en silencio
+      if SameText(ParamName, 'Voice_Format') then
+        ParamName := 'VoiceFormat';
+
       // v3.5: las claves tipadas NUNCA se inyectan por RTTI (su unico canal es
       // ModelConfig). Tras StripModelConfigKeys/MigrateModelConfigParams no
       // deberian estar aqui; este skip es la red de seguridad.

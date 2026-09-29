@@ -475,7 +475,8 @@ constructor TAiClaudeChat.Create(Sender: TComponent);
 begin
   inherited;
   ApiKey := '@CLAUDE_API_KEY';
-  FClient.OnReceiveData := Self.OnInternalReceiveData;
+  // OnReceiveData lo asigna la base (TAiChat.ClientReceiveData -> OnInternalReceiveData
+  // virtual); reasignarlo aqui saltaba la marca de peticion en vuelo del destructor
   // Vía propiedad (no FClient directo) para que FResponseTimeOut quede consistente.
   // 300s: con code_execution nativo Anthropic ejecuta server-side y no envía ni un
   // byte hasta terminar (generar un Office tarda 50-70s; 60s cortaba a la mitad).

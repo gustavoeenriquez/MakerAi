@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~3 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s).
 
-## Cobertura actual (75 casos)
+## Cobertura actual (78 casos)
 
 | Área | Casos |
 |------|-------|
@@ -53,6 +53,7 @@ Duración típica: ~3 segundos (los casos con URL a puerto cerrado esperan el re
 | Qwen (request) | `enable_thinking` siempre presente (false sin `cap_Reasoning`), `thinking_budget` por `ThinkingLevel`, ausente en `qwq-*`, false en pesos abiertos síncronos; `stream_options.include_usage` solo en streaming; audio de entrada reescrito como data URI (falla sin el fix); `TAiQwenRAGReranker` con transporte falso: lotes, mapeo por `index`, `instruct`, recorte; request de imagen: genera sin adjuntos, edita con 1-3 (modelo de edición, data URI, sin forzar tamaño), falla con 4 o con `z-image-turbo`; request de video: t2v/i2v/kf2v según las imágenes adjuntas, `-t2v` → `-i2v`, 720p por `size` o `resolution` según familia, tipos de `VideoParams.Params`; traducción `qwen-mt`: un solo mensaje user con `translation_options` (idiomas, dominio, glosario) y streaming acumulado de plus/turbo convertido a incrementos con una línea SSE partida (falla sin el fix); `TAiQwenVoices` con transporte falso (clonar, diseñar con fallback y preview, listar, borrar) y modelo TTS elegido por el prefijo de la voz |
 | Conexión | sub-parámetros de medios (`VideoParams`, `TtsParams`, `ImageParams`) editados después de crear el chat llegan al driver en `AddMessageAndRun` (URL a puerto cerrado; falla sin el fix) |
 | Realtime Qwen | eventos del servidor sin red: los tres formatos de transcripción (stash acumulado, text+stash con reescritura, delta incremental) salen como deltas; texto y audio del asistente, cierre y error; `session.update` de los tres drivers (formatos, VAD manual → null, idioma, voz de traducción) y registro en la fábrica y en `TAiRealtimeConnection`; `TAiQwenRealtimeTTS`: `session.update` (modo, idioma, voz, instrucciones), modelo realtime elegido por el prefijo de la voz propia y eventos (listo una sola vez, audio, respuestas, fin, error) |
+| Ciclo de vida del chat | liberar el chat con una petición asíncrona en vuelo espera a que el cliente HTTP la cierre (cierre simulado desde otro hilo; falla sin el fix) y sin petición libera al instante; `ParseJsonTranscript` en el puente de Fase 1 no escribe la respuesta ni dispara eventos (en `cmTranscription` sí); `Voice`/`Voice_Format` del catálogo y del usuario llegan a `TtsParams` |
 | Chat / tool results | serialización OpenAI-compatible: tool calls paralelas con imagen → un solo `user` sintético tras el grupo, modelo sin `cap_Image` → transcripción sin media, transcripción no duplicada, adjunto de texto inline |
 | Evals | autoprueba del runner (conteo PASS/FAIL) |
 | Jev: consumo | `Usage` y `OnUsage` en `TAiJev` (un evento por llamada) y en PromptGuard, Dispatch, Guardrail, Eval, ModelRouter, RAG y Batch (uno por operación); reranker en paralelo con un `TAiJev` falso por pasaje → un solo evento con el total exacto y en el hilo del llamador; `ResetUsage`; precio configurable |

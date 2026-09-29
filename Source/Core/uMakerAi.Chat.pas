@@ -46,6 +46,7 @@ unit uMakerAi.Chat;
 interface
 
 uses
+  System.SyncObjs,
   System.SysUtils, System.Classes, System.Generics.Collections, System.StrUtils,
   System.Threading, System.TypInfo, System.Types, System.Net.Mime,
   System.NetConsts, System.NetEncoding, System.Net.URLClient,
@@ -415,6 +416,20 @@ type
     function RunNew(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
     function FileTypeInModelCaps(ACategory: TAiFileCategory): Boolean;
 
+  Private
+    // Peticion asincrona en vuelo: se apaga al llegar datos y se enciende cuando
+    // el cliente HTTP termina (completada, error o excepcion). El destructor la
+    // espera: antes, liberar el chat justo despues de OnReceiveDataEnd competia con
+    // OnRequestCompletedEvent (que corre en el hilo HTTP) por FCurrentPostStream y
+    // daba 'Invalid pointer operation' intermitente.
+    FRequestDone: TEvent;
+    // Capa fija entre el cliente HTTP y los metodos virtuales (los drivers los
+    // sobrescriben): marca el inicio y el fin de la peticion para todos por igual
+    procedure ClientReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
+    procedure ClientRequestCompleted(const Sender: TObject; const aResponse: IHTTPResponse);
+    procedure ClientRequestError(const Sender: TObject; const AError: string);
+    procedure ClientRequestException(const Sender: TObject; const AError: Exception);
+    procedure WaitPendingRequest;
   Protected
     FClient: TNetHTTPClient;
     FTmpRole: String;
@@ -710,7 +725,7 @@ procedure LogDebug(const Mensaje: string);
 
 implementation
 
-uses uMakerAi.ParamsRegistry, System.IOUtils, System.SyncObjs;
+uses uMakerAi.ParamsRegistry, System.IOUtils;
 
 { TAiChat }
 
@@ -1773,12 +1788,13 @@ begin
   // (SynchronizeEvents=True por defecto) y los tool calls async bloquean la UI.
   FClient.SynchronizeEvents := False;
 {$ENDIF}
+  FRequestDone := TEvent.Create(nil, True, True, '');
 {$IF CompilerVersion >= 35}
-  FClient.OnRequestException := Self.OnRequestExceptionEvent;
+  FClient.OnRequestException := Self.ClientRequestException;
 {$ENDIF}
-  FClient.OnReceiveData := Self.OnInternalReceiveData;
-  FClient.OnRequestError := Self.OnRequestErrorEvent;
-  FClient.OnRequestCompleted := Self.OnRequestCompletedEvent;
+  FClient.OnReceiveData := Self.ClientReceiveData;
+  FClient.OnRequestError := Self.ClientRequestError;
+  FClient.OnRequestCompleted := Self.ClientRequestCompleted;
   FClient.ResponseTimeOut := 120000;
 
   FModel := 'gpt-5';
@@ -1805,6 +1821,7 @@ end;
 
 destructor TAiChat.Destroy;
 begin
+  WaitPendingRequest;
   FCurrentPostStream.Free;
   FClient.Free;
   FResponse.Free;
@@ -1822,7 +1839,71 @@ begin
   FSystemPrompt.Free;
   NewChat;
   FMessages.Free;
+  FRequestDone.Free;
   inherited;
+end;
+
+procedure TAiChat.ClientReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64;
+  var AAbort: Boolean);
+begin
+  if FClient.Asynchronous then
+    FRequestDone.ResetEvent;
+  OnInternalReceiveData(Sender, AContentLength, AReadCount, AAbort);
+end;
+
+procedure TAiChat.ClientRequestCompleted(const Sender: TObject; const aResponse: IHTTPResponse);
+begin
+  try
+    OnRequestCompletedEvent(Sender, aResponse);
+  finally
+    FRequestDone.SetEvent;
+  end;
+end;
+
+procedure TAiChat.ClientRequestError(const Sender: TObject; const AError: string);
+begin
+  try
+    OnRequestErrorEvent(Sender, AError);
+  finally
+    FRequestDone.SetEvent;
+  end;
+end;
+
+procedure TAiChat.ClientRequestException(const Sender: TObject; const AError: Exception);
+begin
+  try
+    OnRequestExceptionEvent(Sender, AError);
+  finally
+    FRequestDone.SetEvent;
+  end;
+end;
+
+procedure TAiChat.WaitPendingRequest;
+var
+  T0: Cardinal;
+begin
+  if (FRequestDone = nil) or (FRequestDone.WaitFor(0) = wrSignaled) then
+    Exit;
+  // El objeto se esta liberando: el usuario ya no debe recibir eventos, y si el
+  // stream sigue abierto se corta en el proximo chunk
+  FOnReceiveDataEvent := nil;
+  FOnReceiveDataEnd := nil;
+  FOnReceiveThinking := nil;
+  FOnError := nil;
+  FOnStateChange := nil;
+  FOnHttpRequestDone := nil;
+  FOnAddMessage := nil;
+  FOnCallToolFunction := nil;
+  FAbort := True;
+  T0 := TThread.GetTickCount;
+  repeat
+    if FRequestDone.WaitFor(50) = wrSignaled then
+      Break;
+    // Con SynchronizeEvents (Delphi < 10.4) los eventos HTTP corren en el hilo
+    // principal: hay que bombear la cola para que lleguen
+    if TThread.CurrentThread.ThreadID = MainThreadID then
+      CheckSynchronize(0);
+  until TThread.GetTickCount - T0 > 15000;
 end;
 
 procedure TAiChat.DoCallFunction(ToolCall: TAiToolsFunction);
@@ -3792,6 +3873,14 @@ begin
 
   // Marcar como procesado para que no se reenv?e infinitamente en un loop
   aMediaFile.Procesado := True;
+
+  // Fuera de cmTranscription esto es el puente de Fase 1 de RunNew (un modelo de
+  // texto recibe audio): la transcripcion es ENTRADA para el modelo, que responde
+  // despues. Antes se escribia en ResMsg y se disparaba OnReceiveDataEnd con el
+  // texto crudo, antes de la respuesta real (y la respuesta se agregaba despues al
+  // mismo ResMsg). Solo en cmTranscription la transcripcion es la respuesta.
+  if FChatMode <> cmTranscription then
+    Exit;
 
   // Actualizar el mensaje de respuesta (ResMsg)
   if ResMsg.Prompt <> '' then

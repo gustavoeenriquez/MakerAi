@@ -51,7 +51,7 @@ implementation
 
 uses
   System.TypInfo, System.Rtti, System.StrUtils, System.SyncObjs, System.Threading, System.NetEncoding,
-  System.Net.HttpClient, System.Net.URLClient,
+  System.Net.HttpClient, System.Net.URLClient, System.Net.HttpClientComponent,
   uMakerAi.Core,
   uMakerAi.MCPServer.Core, UMakerAi.MCPServer.Http,
   uMakerAi.MCPClient.Core,
@@ -419,6 +419,27 @@ begin
     .Input('jev:usage')
     .ExpectEquals('jev=ev2/2/200/10|guard=ev2/2/200/10/0.0000084|dispatch=1|guardrail=1|eval=1|router=1|' +
       'rag-par=ev1/6/600/30/hilo=si|rag-ext=ev1/3|batch=ev1/3|reset=0/0|precio=0.0001000');
+
+  // Liberar un chat justo despues de OnReceiveDataEnd competia con el cierre de la
+  // peticion asincrona (hilo HTTP) por FCurrentPostStream: 'Invalid pointer
+  // operation' intermitente. El destructor ahora espera a que la peticion cierre.
+  FRunner.AddCase('chat.async.free-waits-request')
+    .Input('chat:async-free')
+    .ExpectEquals('espera=si|cierre-antes-de-liberar=si|sin-peticion=inmediato');
+
+  // ParseJsonTranscript: en el puente de Fase 1 (cmConversation) solo llena la
+  // transcripcion del audio; no toca la respuesta ni dispara eventos. En
+  // cmTranscription la transcripcion es la respuesta
+  FRunner.AddCase('chat.transcript.bridge-mode')
+    .Input('chat:transcript-bridge')
+    .ExpectEquals('puente=eventos:0/respuesta:vacia/audio:hola mundo/procesado:si|' +
+      'transcripcion=eventos:1/respuesta:hola mundo');
+
+  // 'Voice_Format' (clave del catalogo de OpenAI TTS y del demo 012) no llegaba a
+  // TtsParams.VoiceFormat: la propiedad no lleva guion bajo y se ignoraba en silencio
+  FRunner.AddCase('conn.tts-params-keys')
+    .Input('chat:tts-keys')
+    .ExpectEquals('catalogo=alloy/mp3|usuario=nova/wav');
 
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
@@ -2098,7 +2119,36 @@ type
     function Accumulated: string;
     // Alimenta el parser de streaming con un SSE crudo, como si llegara de la red
     procedure FeedSSE(const ASSE: string);
+    // Llama a ParseJsonTranscript (protegido) con una respuesta de /audio/transcriptions
+    procedure Transcript(const AJson: string; ResMsg: TAiChatMessage; MF: TAiMediaFile);
+    // Simula una peticion asincrona en vuelo (ya llegaron datos) y devuelve el
+    // evento de cierre del cliente HTTP, para dispararlo desde otro hilo
+    function StartFakeAsyncRequest: TRequestCompletedEvent;
   end;
+
+procedure TStreamProbeChat.Transcript(const AJson: string; ResMsg: TAiChatMessage; MF: TAiMediaFile);
+var
+  J: TJSONObject;
+begin
+  J := TJSONObject.ParseJSONValue(AJson) as TJSONObject;
+  try
+    ParseJsonTranscript(J, ResMsg, MF);
+  finally
+    J.Free;
+  end;
+end;
+
+function TStreamProbeChat.StartFakeAsyncRequest: TRequestCompletedEvent;
+var
+  Abort: Boolean;
+begin
+  FClient.Asynchronous := True;
+  FCurrentPostStream := TStringStream.Create('{}');
+  Abort := False;
+  // Por el evento del cliente, igual que llega de la red (pasa por la capa del destructor)
+  FClient.OnReceiveData(FClient, 0, 0, Abort);
+  Result := FClient.OnRequestCompleted;
+end;
 
 procedure TStreamProbeChat.FeedSSE(const ASSE: string);
 var
@@ -2573,6 +2623,83 @@ begin
     finally
       RR.Free;
     end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:tts-keys' then
+  begin
+    var CT := TAiChatConnection.Create(nil);
+    try
+      CT.DriverName := 'OpenAi';
+      CT.Model := 'gpt-4o-mini-tts'; // el catalogo registra Voice=alloy y Voice_Format=mp3
+      Result := 'catalogo=' + CT.AiChat.TtsParams.Voice + '/' + CT.AiChat.TtsParams.VoiceFormat;
+      CT.Params.Values['Voice'] := 'nova';
+      CT.Params.Values['Voice_Format'] := 'wav'; // como lo hace el demo 012
+      Result := Result + '|usuario=' + CT.AiChat.TtsParams.Voice + '/' + CT.AiChat.TtsParams.VoiceFormat;
+    finally
+      CT.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:transcript-bridge' then
+  begin
+    Result := '';
+    for var LMode in [cmConversation, cmTranscription] do
+    begin
+      var PT := TStreamProbeChat.Create(nil);
+      var HT := TFixtureHandlers.Create;
+      var RM := TAiChatMessage.Create('', 'assistant');
+      var MA := TAiMediaFile.Create;
+      try
+        PT.ChatMode := LMode;
+        PT.OnReceiveDataEnd := HT.ChatDataEnd;
+        PT.Transcript('{"text":"hola mundo","usage":{"input_tokens":5,"output_tokens":2,"total_tokens":7}}', RM, MA);
+        var LEventos := IfThen(HT.LastDataEnd <> '', '1', '0');
+        if LMode = cmConversation then
+          Result := 'puente=eventos:' + LEventos + '/respuesta:' + IfThen(RM.Prompt = '', 'vacia', RM.Prompt) +
+            '/audio:' + MA.Transcription + '/procesado:' + IfThen(MA.Procesado, 'si', 'no')
+        else
+          Result := Result + '|transcripcion=eventos:' + LEventos + '/respuesta:' + RM.Prompt;
+      finally
+        PT.Free;
+        HT.Free;
+        RM.Free;
+        MA.Free;
+      end;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:async-free' then
+  begin
+    var Probe := TStreamProbeChat.Create(nil);
+    var LCompleted := Probe.StartFakeAsyncRequest;
+    var LCerro := 0;
+    var TH := TThread.CreateAnonymousThread(
+      procedure
+      begin
+        Sleep(300);
+        LCompleted(nil, nil); // el cliente HTTP cierra la peticion en su hilo
+        TInterlocked.Exchange(LCerro, 1);
+      end);
+    TH.FreeOnTerminate := False;
+    TH.Start;
+    try
+      var T0 := TThread.GetTickCount;
+      Probe.Free; // justo despues del ultimo dato, como hace un integrador
+      var LMs := TThread.GetTickCount - T0;
+      Result := 'espera=' + IfThen(LMs >= 250, 'si', 'no:' + IntToStr(LMs) + 'ms') +
+        '|cierre-antes-de-liberar=' + IfThen(TInterlocked.CompareExchange(LCerro, 0, 0) = 1, 'si', 'no');
+    finally
+      TH.WaitFor;
+      TH.Free;
+    end;
+    // Sin peticion en vuelo el destructor no espera nada
+    var Idle := TStreamProbeChat.Create(nil);
+    var T1 := TThread.GetTickCount;
+    Idle.Free;
+    Result := Result + '|sin-peticion=' + IfThen(TThread.GetTickCount - T1 < 100, 'inmediato', 'lento');
     Exit;
   end;
 
