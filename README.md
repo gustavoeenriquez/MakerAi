@@ -187,7 +187,8 @@ Beyond chat, the same key covers the rest of Model Studio, all tested live from 
 - **Realtime** (`TAiRealtimeConnection`, new unit `uMakerAi.Realtime.Qwen`): `DriverName := 'Qwen'`
   for voice conversation, `'QwenSTT'` for live transcription and `'QwenTranslate'` for simultaneous
   translation with a translated voice. Same events as the Grok and OpenAI drivers; nothing in the
-  realtime module changed. `TAiQwenRealtimeTTS` goes the other way — text in, audio out while it
+  realtime module changed. Driver-specific settings (voice, instructions, target language) go in
+  the connector's new `DriverParams`, which works for every realtime driver. `TAiQwenRealtimeTTS` goes the other way — text in, audio out while it
   is generated — so an LLM answer can be spoken as it streams (first audio ~0.5 s after the first
   text; 2.5 s from question to voice with qwen3.8-flash).
 - **Text translation** with `qwen-mt-plus/flash/turbo/lite`: set `TranslateTo` (and optionally
@@ -854,6 +855,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 
 ### Unreleased (on `dev`)
 
+- New: **`TAiRealtimeConnection.DriverParams`** — driver-specific properties (`Voice`, `Instructions`, `TargetLanguage`, `ReasoningEffort`, `Keyterms`...) set through the universal connector as `Property=Value` lines, applied by RTTI on driver creation and on `Connect`. Previously only the base properties reached the driver. Unknown keys are reported through `OnError` (`driver_param`) on connect
 - Fix: **asynchronous answers arrived duplicated in `OnReceiveDataEnd`** (`'Done'#13#10'Done'`) in every driver on the shared streaming parser — the end-of-stream message re-added the accumulated text. `TAiDeepSeekChat` has its own copy of the parser and got the same fix
 - Fix: **Groq `executed_tools` were ignored when streaming** — `gpt-oss` sends them inside `choices[0].delta`, two chunks per tool with the same `index`; the parser only read the top-level field of the retired `groq/compound`. Files generated in the code-interpreter sandbox now arrive in asynchronous mode too
 - Fix: **Groq catalog** — the retired `llama-3.1-8b-instant` (driver default) and `llama-3.3-70b-versatile` are now aliases of `openai/gpt-oss-20b` / `gpt-oss-120b`, the new default is `gpt-oss-20b`, `groq/compound` and `compound-mini` removed, `qwen/qwen3.6-27b` token limit fixed (16384) and `qwen/qwen3.8-27b` added. Demo 014 runs Groq's code interpreter on `gpt-oss-20b` (`--groq`)

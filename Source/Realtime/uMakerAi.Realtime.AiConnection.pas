@@ -9,6 +9,14 @@
 //   VoiceMonitor.RealtimeSTT := RealtimeConn;
 //   RealtimeConn.Connect;
 //
+// Propiedades propias de cada driver (voz, instrucciones, idioma destino...):
+// DriverParams, una por linea 'Propiedad=Valor', se aplica al driver por RTTI
+// al crearlo y al conectar:
+//   RealtimeConn.DriverParams.Values['Voice'] := 'Tina';
+//   RealtimeConn.DriverParams.Values['Instructions'] := 'Responde breve';
+// Lo que no se expresa como texto (AiFunctions, eventos propios) va por
+// (RealtimeConn.Instance as TAiGrokRealtimeChat).
+//
 // Autor: Gustavo Enriquez
 // Email: gustavoeenriquez@gmail.com
 
@@ -17,7 +25,7 @@ unit uMakerAi.Realtime.AiConnection;
 interface
 
 uses
-  System.SysUtils, System.Classes,
+  System.SysUtils, System.Classes, System.Rtti, System.TypInfo,
   uMakerAi.Realtime;
 
 type
@@ -28,9 +36,14 @@ type
   private
     FInstance:   TAiRealtimeBase;
     FDriverName: string;
+    FDriverParams: TStrings;
     procedure SetDriverName(const Value: string);
+    procedure SetDriverParams(const Value: TStrings);
     procedure RecreateInstance;
-    procedure SyncToInstance;
+    // AReportUnknown: al conectar, una clave que el driver no tiene se informa por
+    // OnError (al crear el driver no: DriverParams puede traer claves de otro)
+    procedure SyncToInstance(AReportUnknown: Boolean = False);
+    procedure ApplyDriverParams(AReportUnknown: Boolean);
     // Handlers que reenvian los eventos de FInstance a Self
     procedure OnInstConnected(Sender: TObject);
     procedure OnInstDisconnected(Sender: TObject);
@@ -63,6 +76,11 @@ type
   published
     // Al cambiar DriverName se crea/destruye la instancia interna
     property DriverName: string read FDriverName write SetDriverName;
+    // Propiedades propias del driver, 'Propiedad=Valor' por linea: Voice,
+    // Instructions, TargetLanguage, Mode, ReasoningEffort... Texto, numeros,
+    // enumerados por nombre (greNone, tmCommit), booleanos y listas (TStrings)
+    // con elementos separados por '|'
+    property DriverParams: TStrings read FDriverParams write SetDriverParams;
   end;
 
 implementation
@@ -74,12 +92,103 @@ begin
   inherited;
   FInstance   := nil;
   FDriverName := '';
+  FDriverParams := TStringList.Create;
 end;
 
 destructor TAiRealtimeConnection.Destroy;
 begin
   FreeAndNil(FInstance);
+  FDriverParams.Free;
   inherited;
+end;
+
+procedure TAiRealtimeConnection.SetDriverParams(const Value: TStrings);
+begin
+  FDriverParams.Assign(Value);
+end;
+
+procedure TAiRealtimeConnection.ApplyDriverParams(AReportUnknown: Boolean);
+var
+  Ctx: TRttiContext;
+  T: TRttiType;
+  P: TRttiProperty;
+  I, E: Integer;
+  LName, LVal: string;
+  LInt: Int64;
+  LFloat: Double;
+  LObj: TObject;
+  LOk: Boolean;
+begin
+  if not Assigned(FInstance) or (FDriverParams.Count = 0) then Exit;
+  Ctx := TRttiContext.Create;
+  try
+    T := Ctx.GetType(FInstance.ClassType);
+    for I := 0 to FDriverParams.Count - 1 do
+    begin
+      LName := Trim(FDriverParams.Names[I]);
+      if LName = '' then Continue;
+      LVal := Trim(FDriverParams.ValueFromIndex[I]);
+      P := T.GetProperty(LName);
+      LOk := False;
+      if Assigned(P) then
+        case P.PropertyType.TypeKind of
+          tkUString, tkString, tkWString, tkLString:
+            if P.IsWritable then
+            begin
+              P.SetValue(FInstance, LVal);
+              LOk := True;
+            end;
+          tkInteger, tkInt64:
+            if P.IsWritable and TryStrToInt64(LVal, LInt) then
+            begin
+              if P.PropertyType.TypeKind = tkInteger then
+                P.SetValue(FInstance, TValue.From<Integer>(Integer(LInt)))
+              else
+                P.SetValue(FInstance, LInt);
+              LOk := True;
+            end;
+          tkFloat:
+            if P.IsWritable and TryStrToFloat(LVal, LFloat, TFormatSettings.Invariant) then
+            begin
+              P.SetValue(FInstance, LFloat);
+              LOk := True;
+            end;
+          tkEnumeration:
+            if P.IsWritable then
+            begin
+              if P.PropertyType.Handle = TypeInfo(Boolean) then
+              begin
+                P.SetValue(FInstance, SameText(LVal, 'true') or (LVal = '1'));
+                LOk := True;
+              end
+              else
+              begin
+                E := GetEnumValue(P.PropertyType.Handle, LVal);
+                if E >= 0 then
+                begin
+                  P.SetValue(FInstance, TValue.FromOrdinal(P.PropertyType.Handle, E));
+                  LOk := True;
+                end;
+              end;
+            end;
+          tkClass:
+            begin
+              // TStrings (Keyterms, CustomToolsJson...): elementos separados por '|'
+              LObj := P.GetValue(FInstance).AsObject;
+              if LObj is TStrings then
+              begin
+                TStrings(LObj).Text := StringReplace(LVal, '|', sLineBreak, [rfReplaceAll]);
+                LOk := True;
+              end;
+            end;
+        end;
+      if not LOk and AReportUnknown then
+        DoError(Format('DriverParams: el driver %s no tiene la propiedad "%s" o el valor "%s" no es valido',
+          [FDriverName, LName, LVal]), 'driver_param');
+    end;
+  finally
+    Ctx.Free;
+  end;
 end;
 
 class function TAiRealtimeConnection.GetDriverName: string;
@@ -131,7 +240,7 @@ begin
   end;
 end;
 
-procedure TAiRealtimeConnection.SyncToInstance;
+procedure TAiRealtimeConnection.SyncToInstance(AReportUnknown: Boolean);
 begin
   if not Assigned(FInstance) then Exit;
   FInstance.ApiKey            := ApiKey;
@@ -143,6 +252,7 @@ begin
   FInstance.SilenceDurationMs := SilenceDurationMs;
   FInstance.PrefixPaddingMs   := PrefixPaddingMs;
   FInstance.NoiseReduction    := NoiseReduction;
+  ApplyDriverParams(AReportUnknown);
 end;
 
 function TAiRealtimeConnection.GetModels: TArray<string>;
@@ -165,7 +275,7 @@ begin
   if not Assigned(FInstance) then
     raise EInvalidOperation.Create(
       'TAiRealtimeConnection: DriverName no esta configurado');
-  SyncToInstance;
+  SyncToInstance(True);
   FInstance.Connect;
 end;
 

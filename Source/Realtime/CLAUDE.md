@@ -109,6 +109,20 @@ AiRealtime.Connect;
 `DriverName` values: `'OpenAI'`, `'OpenAiTranslate'`, `'MakerAi'`, `'Grok'`, `'Qwen'`, `'QwenSTT'`, `'QwenTranslate'`, `'Gemini'` (stub).  
 Changing `DriverName` recreates the internal driver instance.
 
+### Driver-specific properties: `DriverParams` (Sep 2026)
+
+The connector only forwards the base properties (`ApiKey`, `Model`, `Language`, VAD...). Everything a driver adds on top — `Voice`, `Instructions`, `TargetLanguage`, `ReasoningEffort`, `Keyterms`, the Qwen `Url`… — goes in **`DriverParams`** (published `TStrings`, one `Property=Value` per line), applied to the driver by RTTI when it is created and again on `Connect`:
+
+```pascal
+AiRealtime.DriverName := 'Qwen';
+AiRealtime.DriverParams.Values['Voice'] := 'Tina';
+AiRealtime.DriverParams.Values['Instructions'] := 'Answer in one sentence.';
+AiRealtime.DriverParams.Values['ReasoningEffort'] := 'greNone';   // Grok: enum by name
+AiRealtime.DriverParams.Values['Keyterms'] := 'PUC|DIAN';         // TStrings: '|' separates items
+```
+
+Strings, integers, floats (invariant), enums by name, booleans and `TStrings` are supported. **A key the driver does not have (or an invalid value) is reported through `OnError` with code `driver_param` on `Connect`** — not when the driver is created, because `DriverParams` may legitimately carry keys for another driver while switching. What cannot be written as text (`AiFunctions`, driver-specific events, `CreateResponse`) is reached through the public `Instance` property: `(AiRealtime.Instance as TAiGrokRealtimeChat).AiFunctions := ...`.
+
 The connector inherits from `TAiRealtimeVoiceBase`, so it also re-exposes the
 voice events (`OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`,
 `OnAudioDone`); with STT-only drivers those events simply never fire.

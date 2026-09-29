@@ -67,7 +67,7 @@ uses
   uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
   uMakerAi.Jev.ModelRouter,
   UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank, uMakerAi.Qwen.Voices,
-  uMakerAi.Realtime, uMakerAi.Realtime.Qwen, uMakerAi.Realtime.AiConnection, uMakerAi.Realtime.QwenTTS,
+  uMakerAi.Realtime, uMakerAi.Realtime.Qwen, uMakerAi.Realtime.AiConnection, uMakerAi.Realtime.QwenTTS, uMakerAi.Realtime.Grok,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
   uMakerAi.RAG.Vector.Driver.BinFile,
@@ -440,6 +440,13 @@ begin
   FRunner.AddCase('conn.tts-params-keys')
     .Input('chat:tts-keys')
     .ExpectEquals('catalogo=alloy/mp3|usuario=nova/wav');
+
+  // TAiRealtimeConnection.DriverParams: propiedades propias del driver por RTTI
+  // (texto, enumerado, lista), al crear el driver y al conectar; al cambiar de
+  // driver no hay falsos errores y una clave desconocida se informa al conectar
+  FRunner.AddCase('realtime.connection.driver-params')
+    .Input('chat:rt-driver-params')
+    .ExpectEquals('qwen=Tina/Se breve|translate=ja/Tina|grok=greNone/2|desconocida=driver_param');
 
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
@@ -1856,6 +1863,20 @@ begin
 end;
 
 type
+  // Recoge el codigo de los errores del conector realtime
+  TRtErrSink = class
+  public
+    Codes: string;
+    procedure OnErr(Sender: TObject; const M, C: string);
+  end;
+
+procedure TRtErrSink.OnErr(Sender: TObject; const M, C: string);
+begin
+  if Pos(C, Codes) = 0 then
+    Codes := Codes + IfThen(Codes <> '', ',', '') + C;
+end;
+
+type
   // Jev sin red para medir consumo: responde cualquier set de preguntas segun su
   // tipo y reporta 100 tokens de entrada y 5 de salida por llamada
   TUsageFakeJev = class(TAiJev)
@@ -2622,6 +2643,53 @@ begin
         [RR.Calls, LTxt, IfThen(RR.SawInstruct, 'si', 'no'), IfThen(RR.Trimmed, 'si', 'no'), RR.LastTokens]);
     finally
       RR.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:rt-driver-params' then
+  begin
+    var RC := TAiRealtimeConnection.Create(nil);
+    var ES := TRtErrSink.Create;
+    try
+      RC.OnError := ES.OnErr;
+      // Antes de elegir driver: se aplican al crearlo
+      RC.DriverParams.Values['Voice'] := 'Tina';
+      RC.DriverParams.Values['Instructions'] := 'Se breve';
+      RC.DriverParams.Values['TargetLanguage'] := 'ja'; // no existe en 'Qwen': sin error al crear
+      RC.DriverName := 'Qwen';
+      Result := 'qwen=' + (RC.Instance as TAiQwenRealtimeChat).Voice + '/' +
+        (RC.Instance as TAiQwenRealtimeChat).Instructions;
+      RC.DriverName := 'QwenTranslate';
+      Result := Result + '|translate=' + (RC.Instance as TAiQwenRealtimeTranslate).TargetLanguage + '/' +
+        (RC.Instance as TAiQwenRealtimeTranslate).Voice;
+      // Grok: enumerado y lista separada por '|'
+      RC.DriverParams.Clear;
+      RC.DriverParams.Values['ReasoningEffort'] := 'greNone';
+      RC.DriverParams.Values['Keyterms'] := 'PUC|DIAN';
+      RC.DriverName := 'Grok';
+      Result := Result + '|grok=' +
+        GetEnumName(TypeInfo(TAiGrokReasoningEffort), Ord((RC.Instance as TAiGrokRealtimeChat).ReasoningEffort)) + '/' +
+        IntToStr((RC.Instance as TAiGrokRealtimeChat).Keyterms.Count);
+      CheckSynchronize(0);
+      var LAntes := ES.Codes; // cambiar de driver no debe haber generado errores
+      // Al conectar se informa la clave desconocida (Url a puerto cerrado: sin red)
+      RC.DriverParams.Clear;
+      RC.DriverParams.Values['Url'] := 'wss://127.0.0.1:1/api-ws/v1/realtime';
+      RC.DriverParams.Values['Voz'] := 'Tina';
+      RC.DriverName := 'Qwen';
+      RC.ApiKey := 'x';
+      RC.Connect;
+      var T0 := TThread.GetTickCount;
+      while (Pos('driver_param', ES.Codes) = 0) and (TThread.GetTickCount - T0 < 3000) do
+        CheckSynchronize(20);
+      RC.Disconnect;
+      Result := Result + '|desconocida=' + IfThen(LAntes = '', '', 'antes:' + LAntes + ';') +
+        IfThen(Pos('driver_param', ES.Codes) > 0, 'driver_param', 'no-informada');
+    finally
+      RC.Free;
+      CheckSynchronize(20);
+      ES.Free;
     end;
     Exit;
   end;
