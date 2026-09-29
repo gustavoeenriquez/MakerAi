@@ -85,7 +85,7 @@ uses
   uMakerAi.Memory, uMakerAi.Memory.Types,
   uMakerAi.Skills.Format, uMakerAi.Prompts, uMakerAi.Agents.Skill, uMakerAi.Agents.Node.LLM,
   uMakerAi.Tools.Skills,
-  uMakerAi.Chat.Gemini, uMakerAi.Gemini.Speech, uMakerAi.Gemini.WebSearch,
+  uMakerAi.Chat.Gemini, uMakerAi.Gemini.Speech, uMakerAi.Gemini.WebSearch, uMakerAi.Chat.Claude, uMakerAi.Chat.MakerAi,
   uRegression.Fixtures;
 
 const
@@ -478,6 +478,35 @@ begin
     .ExpectEquals('3.8/medium=temp=no,level=MEDIUM|3.7/minimal=temp=no,level=LOW|' +
       '3.8/max=temp=no,level=HIGH|3.6=temp=no,level=MEDIUM|3.0=temp=si,level=MEDIUM|' +
       'alias=gemini-3.1-pro-preview,gemini-3.1-flash-image,gemini-3.1-pro-preview');
+
+  // --- tool_choice forzado (todos los drivers leen TAiChat.Tool_choice) ---
+  // Forzar una tool aplica a la primera llamada del turno; en la ronda que
+  // devuelve resultados se lee 'auto'. Antes se reenviaba en cada ronda y el
+  // modelo quedaba obligado a llamar otra tool: con claude-sonnet-5 fueron 231
+  // requests sin fin. 'none' y 'auto' no cambian nunca.
+  FRunner.AddCase('chat.toolchoice.followup')
+    .Input('chat:toolchoice-followup')
+    .ExpectEquals('required|required|auto|auto|none');
+
+  // --- OpenAI (request, sin red) ---
+  // Default gpt-6-sol (sucesor de gpt-5.1, misma franja de precio), tambien
+  // en TAiChatConnection; GPT-6 no acepta effort 'minimal' (la 5.x si): se
+  // pide low; xhigh/max salen tal cual.
+  FRunner.AddCase('chat.openai.request')
+    .Input('chat:openai-request')
+    .ExpectEquals('conn=gpt-6-sol|gpt-6-sol/medium|gpt-6-sol/low|gpt-5.6-luna/minimal|gpt-6-luna/max|' +
+      'makerai=mk-gpt-oss-20b');
+
+  // --- Claude (request, sin red) ---
+  // Generacion sep 2026 (opus-5-5, sonnet-5-5, fable-5-1): forzar una tool
+  // da 400, el driver manda auto; sonnet-5 si acepta 'any', pero solo en la
+  // primera llamada. Escalera de effort: max/xhigh donde existen (xhigh no
+  // en 4.6), minimal -> low. El alias del retirado opus-4-1 va a opus-5-5.
+  FRunner.AddCase('chat.claude.request')
+    .Input('chat:claude-request')
+    .ExpectEquals('s55/required=tc=auto,effort=-|s5/required=tc=any,effort=-|' +
+      's5/required+tool=tc=auto,effort=-|o55/max=tc=auto,effort=max|o5/xhigh=tc=auto,effort=xhigh|' +
+      's46/xhigh=tc=auto,effort=high|o55/minimal=tc=auto,effort=low|alias=claude-opus-5-5');
 
   FRunner.AddCase('chat.qwen.thinking-request')
     .Input('chat:qwen-thinking')
@@ -1842,6 +1871,67 @@ end;
 // -----------------------------------------------------------------------------
 
 type
+  // Expone el request del driver OpenAI (API Responses): 'model/effort'
+  TOpenAiProbeChat = class(TAiOpenChat)
+  public
+    function Req(const AModel: string; ALevel: TAiThinkingLevel): string;
+  end;
+
+function TOpenAiProbeChat.Req(const AModel: string; ALevel: TAiThinkingLevel): string;
+var
+  J: TJSONObject;
+  M, Ef: string;
+begin
+  Messages.Clear;
+  if AModel <> '' then
+    Model := AModel;
+  ModelConfig.ThinkingLevel := ALevel;
+  Messages.Add(TAiChatMessage.Create('hola', 'user'));
+  J := TJSONObject.ParseJSONValue(InitChatCompletions) as TJSONObject;
+  try
+    if not J.TryGetValue<string>('model', M) then M := '-';
+    if not J.TryGetValue<string>('reasoning.effort', Ef) then Ef := '-';
+    Result := M + '/' + Ef;
+  finally
+    J.Free;
+  end;
+end;
+
+type
+  // Expone el request que arma el driver Claude. Devuelve
+  // 'tc=<tool_choice.type>,effort=<output_config.effort>' ('-' si falta).
+  // cap_WebSearch mete una tool (web_search) para que salga tool_choice.
+  TClaudeProbeChat = class(TAiClaudeChat)
+  public
+    function Req(const AModel, AChoice: string; ALevel: TAiThinkingLevel;
+      AToolFollowUp: Boolean = False): string;
+  end;
+
+function TClaudeProbeChat.Req(const AModel, AChoice: string; ALevel: TAiThinkingLevel;
+  AToolFollowUp: Boolean): string;
+var
+  J: TJSONObject;
+  Tc, Ef: string;
+begin
+  Messages.Clear;
+  Model := AModel;
+  Tool_choice := AChoice;
+  ModelConfig.ModelCaps := [cap_WebSearch];
+  ModelConfig.ThinkingLevel := ALevel;
+  Messages.Add(TAiChatMessage.Create('Que hora es?', 'user'));
+  if AToolFollowUp then
+    Messages.Add(TAiChatMessage.Create('{"hora":"10:42"}', 'tool', 'toolu_1', 'hora'));
+  J := TJSONObject.ParseJSONValue(InitChatCompletions) as TJSONObject;
+  try
+    if not J.TryGetValue<string>('tool_choice.type', Tc) then Tc := '-';
+    if not J.TryGetValue<string>('output_config.effort', Ef) then Ef := '-';
+    Result := 'tc=' + Tc + ',effort=' + Ef;
+  finally
+    J.Free;
+  end;
+end;
+
+type
   // Expone el request que arma el driver Gemini (InitChatCompletions es protegido).
   // Devuelve 'temp=si|no,level=<thinkingLevel>' del generationConfig.
   TGeminiProbeChat = class(TAiGeminiChat)
@@ -2457,6 +2547,78 @@ begin
       Sp.Free;
       Conn.Free;
       Gm.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:toolchoice-followup' then
+  begin
+    var Parts := TStringList.Create;
+    var Ch := TAiGroqChat.Create(nil);
+    try
+      Ch.Tool_choice := 'required';
+      Parts.Add(Ch.Tool_choice);                                  // sin historial
+      Ch.Messages.Add(TAiChatMessage.Create('hola', 'user'));
+      Parts.Add(Ch.Tool_choice);                                  // primera llamada
+      Ch.Messages.Add(TAiChatMessage.Create('{"ok":1}', 'tool', 'call_1', 'f'));
+      Parts.Add(Ch.Tool_choice);                                  // ronda de resultados
+      Ch.Tool_choice := '{"type":"function","function":{"name":"f"}}';
+      Parts.Add(Ch.Tool_choice);                                  // funcion concreta
+      Ch.Tool_choice := 'none';
+      Parts.Add(Ch.Tool_choice);                                  // none no cambia
+      Result := String.Join('|', Parts.ToStringArray);
+    finally
+      Ch.Free;
+      Parts.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:openai-request' then
+  begin
+    var Parts := TStringList.Create;
+    var Op := TOpenAiProbeChat.Create(nil);
+    var Conn := TAiChatConnection.Create(nil);
+    try
+      Conn.DriverName := 'OpenAi';
+      Parts.Add('conn=' + Conn.Params.Values['Model']);
+      Parts.Add(Op.Req('', tlMedium));                 // default del driver
+      Parts.Add(Op.Req('gpt-6-sol', tlMinimal));
+      Parts.Add(Op.Req('gpt-5.6-luna', tlMinimal));    // la 5.x si acepta minimal
+      Parts.Add(Op.Req('gpt-6-luna', tlMax));
+      // TAiMakerAiChat hereda de TAiOpenChat pero habla con el broker
+      var Mk := TAiMakerAiChat.Create(nil);
+      try
+        Parts.Add('makerai=' + Mk.Model);
+      finally
+        Mk.Free;
+      end;
+      Result := String.Join('|', Parts.ToStringArray);
+    finally
+      Conn.Free;
+      Op.Free;
+      Parts.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:claude-request' then
+  begin
+    var Parts := TStringList.Create;
+    var Cp := TClaudeProbeChat.Create(nil);
+    try
+      Parts.Add('s55/required=' + Cp.Req('claude-sonnet-5-5', 'required', tlDefault));
+      Parts.Add('s5/required=' + Cp.Req('claude-sonnet-5', 'required', tlDefault));
+      Parts.Add('s5/required+tool=' + Cp.Req('claude-sonnet-5', 'required', tlDefault, True));
+      Parts.Add('o55/max=' + Cp.Req('claude-opus-5-5', 'auto', tlMax));
+      Parts.Add('o5/xhigh=' + Cp.Req('claude-opus-5', 'auto', tlXHigh));
+      Parts.Add('s46/xhigh=' + Cp.Req('claude-sonnet-4-6', 'auto', tlXHigh));
+      Parts.Add('o55/minimal=' + Cp.Req('claude-opus-5-5', 'auto', tlMinimal));
+      Parts.Add('alias=' + TAiChatFactory.Instance.GetBaseModel('Claude', 'claude-opus-4-1'));
+      Result := String.Join('|', Parts.ToStringArray);
+    finally
+      Cp.Free;
+      Parts.Free;
     end;
     Exit;
   end;

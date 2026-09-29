@@ -331,14 +331,39 @@ Begin
   //   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'gpt-6-astra',
   //     'SessionCaps', '[cap_Image, cap_Reasoning, cap_ComputerUse]');
   //
-  // OJO: astra acepta reasoning effort 'xhigh' y 'max', que TAiThinkingLevel
-  // (tlDefault/tlLow/tlMedium/tlHigh) todavia no sabe expresar -> tope tlHigh.
+  // Effort: la familia GPT-6 acepta none/low/medium/high/xhigh/max; desde
+  // v3.8 TAiThinkingLevel los expresa todos (tlXHigh/tlMax).
   Model := 'gpt-6-astra';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Max_Tokens',    '32768');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',    '[cap_Image, cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps',  '[cap_Image, cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active',  'True');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlHigh');
+
+  // --- GPT-6 Sol / Luna (sep 2026) -- 1.05M ctx, 128K out, texto + imagen ---
+  // https://developers.openai.com/api/docs/models/gpt-6-sol (y gpt-6-luna)
+  // Revisado sep 29/2026 contra la doc oficial. Ambos: reasoning.effort
+  // none..max (default medium), function calling, web/file search, code
+  // interpreter, computer use, structured outputs y prompt caching. Por
+  // encima de 272K de entrada: input 2x y output 1.5x.
+  // Sol: codigo y agentes, $2/$10 ($0.2 cached) -- DEFAULT DEL DRIVER desde
+  //      v3.8 (sucesor natural de gpt-5.1 en la misma franja de precio).
+  Model := 'gpt-6-sol';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Max_Tokens',    '32768');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',    '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps',  '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active',  'True');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlMedium');
+
+  // Luna: alto volumen y tareas acotadas, $0.10/$0.50 ($0.01 cached). OJO: por
+  // Chat Completions solo acepta function calling con reasoning_effort=none
+  // (el driver usa Responses API, donde no hay esa restriccion).
+  Model := 'gpt-6-luna';
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Max_Tokens',    '32768');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',    '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps',  '[cap_Image, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active',  'True');
+  TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ThinkingLevel', 'tlLow');
 
   // ------- Generacion de imagenes ------
   // https://platform.openai.com/docs/guides/images
@@ -1044,15 +1069,12 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
 
   // ===========================================================================
-  // CLAUDE OPUS 4.1  |  Alias: claude-opus-4-1  [Legacy]
-  // Contexto:     200K tokens
-  // Max output:   32K tokens
-  // Thinking:     Extended thinking + Adaptive thinking
-  // Precio:       $15 / $75 MTok  (modelo de alto coste)
-  // Cutoff datos: Mar 2025 (conocimiento fiable: Ene 2025)
+  // CLAUDE OPUS 4.1  |  RETIRADO el 5 ago 2026: alias de claude-opus-5-5
+  // (ver el bloque de la generacion sep 2026, mas abajo). Estos params se
+  // aplican al nombre viejo y son los del modelo que ahora lo atiende.
   // ===========================================================================
   Model := 'claude-opus-4-1-20250805';
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '16000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
 
@@ -1168,6 +1190,48 @@ Begin
   // OJO: requiere retencion de datos de 30 dias en la organizacion (orgs con
   // ZDR reciben 400 en TODA peticion); thinking siempre activo.
   Model := 'claude-fable-5';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+
+  // ===========================================================================
+  // GENERACION SEP 2026: OPUS 5.5 / SONNET 5.5 / FABLE 5.1
+  // 1M contexto, 128K output, mismo tokenizer que la familia 5. Cambios que
+  // rompen frente a la familia 5 (el driver los maneja):
+  //  - el thinking NO se puede apagar ({type:"disabled"} = 400); la
+  //    profundidad va por output_config.effort. El driver nunca manda disabled.
+  //  - forzar una tool (tool_choice any/tool) = 400: el driver lo baja a auto.
+  //  - bloques de thinking atados al modelo y a la conversacion.
+  // Revisado sep 29/2026 contra la referencia oficial de modelos.
+  // ===========================================================================
+
+  // CLAUDE OPUS 5.5 — sucesor de Opus 5, MAS BARATO ($4/$20). Effort por
+  // defecto MEDIUM (Opus 5 era high): fijar ThinkingLevel si se necesita mas.
+  Model := 'claude-opus-5-5';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+
+  // CLAUDE SONNET 5.5 — sucesor de Sonnet 5, mismo precio ($2/$10). Acepta
+  // mensajes system a mitad de conversacion (Sonnet 5 no).
+  Model := 'claude-sonnet-5-5';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+
+  // CLAUDE FABLE 5.1 — sucesor de Fable 5, mismo precio ($10/$50). Igual que
+  // Fable 5: retencion de 30 dias obligatoria (ZDR = 400) y thinking siempre
+  // activo.
+  Model := 'claude-fable-5-1';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+
+  // CLAUDE OPUS 4.1 — RETIRADO el 5 ago 2026. Sus nombres quedan como alias
+  // del reemplazo oficial (claude-opus-5-5) para no romper configuraciones.
+  TAiChatFactory.Instance.RegisterCustomModel('Claude', 'claude-opus-4-1-20250805', 'claude-opus-5-5');
+  TAiChatFactory.Instance.RegisterCustomModel('Claude', 'claude-opus-4-1',          'claude-opus-5-5');
+  Model := 'claude-opus-4-1';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');

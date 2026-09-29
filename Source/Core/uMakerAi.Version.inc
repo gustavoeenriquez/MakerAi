@@ -271,7 +271,14 @@ const
          to existing accounts, 2.0 is shut down); 3.7/3.8 registered,
          shut-down models aliased, sampling gated by version. Docs-based,
          not runtime-tested
-  - Regression suite: 98 cases (from 38 in 3.7.0)
+  - FIX: a forced tool_choice (required / named function) was re-sent on
+         every tool round and the agentic loop never ended; it now applies
+         to the first call only (TAiChat.Tool_choice, all drivers)
+  - FIX: TAiOpenChat defaulted to gpt-5 (base constructor); OpenAI default
+         is now gpt-6-sol, gpt-6-sol/luna registered, TAiMakerAiChat keeps
+         mk-gpt-oss-20b. Claude Opus 5.5 / Sonnet 5.5 / Fable 5.1 registered
+         (forced tools sent as auto), claude-opus-4-1 aliased to opus-5-5
+  - Regression suite: 101 cases (from 38 in 3.7.0)
 
   Version 3.7.0 (2026-09-10)
   - FIX: Claude Computer Use was broken, not merely outdated. The driver still

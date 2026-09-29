@@ -188,6 +188,8 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
   - `RefusalFallbackModel` — beta `server-side-fallback-2026-06-01` + `fallbacks:[{model}]`: ante un refusal el API reintenta en ese modelo en la misma llamada (único target soportado hoy: `claude-opus-4-8`)
 - Citations (RAG nativo): soporte parcial implementado
 
+**Generación sep 2026 (revisada sep 29/2026 contra la referencia oficial y probada en vivo):** `claude-opus-5-5` ($4/$20, sucesor MÁS BARATO de Opus 5; effort por defecto **medium**), `claude-sonnet-5-5` ($2/$10) y `claude-fable-5-1` ($10/$50, retención 30 días igual que Fable 5). Cambios que rompen, manejados por el driver: el thinking **no se puede apagar** (el driver nunca manda `disabled`), y **forzar una tool (`tool_choice` any/tool) da 400** → `IsClaudeNoForcedTool` lo baja a `auto` con un `LogDebug`. `claude-sonnet-5-5` sí acepta mensajes `system` a mitad de conversación. Escalera de effort: `tlXHigh` → `xhigh` (solo 4.7+; en 4.6 se pide `high`), `tlMax` → `max`, `tlMinimal`/`tlNone` → `low`. **No hay Haiku 5**: `claude-haiku-4-5` sigue siendo el Haiku actual y queda como default del driver.
+
 **Modelos activos (ago 2026, todos registrados):**
 - `claude-opus-5` — **RECOMENDADO**, sucesor de 4.8 al mismo precio ($5/$25), thinking activo por defecto, 1M ctx / 128K out
 - `claude-sonnet-5` — mejor precio/calidad, casi-Opus en código/agentes ($3/$15; intro $2/$10 hasta ago 31/2026); tokenizer nuevo ~30% más tokens que 4.6. PROBADO runtime
@@ -196,9 +198,11 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - `claude-sonnet-4-6`, `claude-opus-4-6` — generación anterior (adaptive recomendado, budget deprecado). Opus 4.6 PROBADO runtime con adaptive
 - `claude-haiku-4-5-20251001` — velocidad/costo, 200K ctx; camino legacy budget PROBADO runtime
 
-**Deprecados:** `claude-opus-4-1` (retira 5 ago 2026 → opus-5); `claude-sonnet-4-20250514` / `claude-opus-4-20250514` (TBD)
+**Retirados/deprecados:** `claude-opus-4-1` y `claude-opus-4-1-20250805` **RETIRADOS el 5 ago 2026** → alias de `claude-opus-5-5`; `claude-sonnet-4-20250514` / `claude-opus-4-20250514` (TBD)
 
 ### OpenAI
+**Familia GPT-6 (revisada sep 29/2026 contra la doc oficial y probada en vivo):** `gpt-6-astra` ($10/$50, el "general-purpose" de OpenAI), `gpt-6-sol` ($2/$10, código y agentes) y `gpt-6-luna` ($0.10/$0.50, alto volumen). 1.05M ctx / 128K out, texto+imagen, `reasoning.effort` none/low/medium/high/xhigh/max (default medium) — **sin `minimal`**: `OpenAiEffort` lo pide como `low`. **Default del driver: `gpt-6-sol`** (antes `gpt-5.1` en `TAiChatConnection` y, por un bug, **`gpt-5` en el componente directo**: el constructor de `TAiChat` deja `gpt-5` y el `if Model = ''` de `TAiOpenChat` nunca se cumplía; `gpt-5` se apaga el 11 dic 2026). `TAiMakerAiChat` hereda de `TAiOpenChat`: su constructor fija `mk-gpt-oss-20b`, igual que `RegisterDefaultParams`. `gpt-5.1` sigue activo. `ModelRequiresDefaultSampling`/`ModelUsesMaxCompletionTokens` cubren `gpt-6` (camino Chat Completions de Azure/GenericLLM).
+
 **Familia GPT-5.6 (julio 2026 — producción actual):** 1.05M contexto, 128K output, visión + reasoning + tools + prompt caching en toda la familia. El alias `gpt-5.6` enruta a Sol.
 - `gpt-5.6-sol` — Flagship. `ModelCaps=[cap_Image, cap_Reasoning]`, `ThinkingLevel=tlHigh`
 - `gpt-5.6-terra` — Balance costo/capacidad. `ThinkingLevel=tlMedium`

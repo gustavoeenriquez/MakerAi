@@ -35,7 +35,7 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 ## 🚀 What's New in v3.8
 
-Released 2026-09-29. Five items change existing behaviour; they are marked ⚠️ below — two of them
+Released 2026-09-29. Six items change existing behaviour; they are marked ⚠️ below — two of them
 (TLS certificate checks on POSIX and the `IAiMemoryStorage` signature) can require code changes.
 
 ### Jev — calibrated decisions before spending an LLM
@@ -173,6 +173,14 @@ the active namespace. Reported responsibly in #127.
 > **Breaking for custom storages**: the id-based methods of `IAiMemoryStorage` now take the
 > namespace. The bundled SQLite storage is updated; a custom implementation must add the
 > parameter.
+
+### ⚠️ A forced tool_choice applies to the first call only
+
+With `Tool_choice := 'required'` (or a named function) the driver re-sent the forcing on
+every round, including the one that returns tool results, so the model had to call a tool
+again each time and the agentic loop never ended — 231 requests on `claude-sonnet-5` before
+it was killed. `TAiChat.Tool_choice` now reads `auto` in those rounds, which fixes every driver
+at once. The first call of a turn is still forced.
 
 ### ⚠️ TLLMNode.DriverName now defaults to empty
 
@@ -910,6 +918,9 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 ## 🔄 Changelog
 
 ### v3.8.0 (2026-09-29)
+- ⚠️ Fix: **a forced `tool_choice` looped forever** — `required` (or a named function) was re-sent on every round, including the one that returns tool results, so the model had to call a tool again each time: measured on `claude-sonnet-5`, 231 requests until killed. `TAiChat.Tool_choice` now reads `auto` in follow-up rounds, which fixes every driver at once. **Behaviour change**: forcing applies to the first call of a turn only
+- Fix: **`TAiOpenChat` dropped on a form used `gpt-5`**, not the documented default — the base constructor set `gpt-5` and the driver only assigned its own default when the model was empty. The OpenAI default is now **`gpt-6-sol`** (the successor of `gpt-5.1` at the same price point) for both the component and `TAiChatConnection`; `gpt-6-sol` and `gpt-6-luna` registered. `TAiMakerAiChat`, which inherits from it, now defaults to `mk-gpt-oss-20b` like its connection. GPT-6 rejects effort `minimal`; it is sent as `low`. Tested live
+- New: **Claude Opus 5.5, Sonnet 5.5 and Fable 5.1** registered. They reject forced tool use with a 400: the driver sends `auto` instead. `tlXHigh`/`tlMax` now reach Claude as `xhigh`/`max`. `claude-opus-4-1`, retired on 2026-08-05, is now an alias of `claude-opus-5-5`. Tested live. The default stays `claude-haiku-4-5` (still the current Haiku)
 - Fix: **Gemini defaults pointed to models new accounts cannot use** — `gemini-2.5-flash` (driver default) is restricted to accounts that already used the 2.5 family, and the transcription and web-search tools defaulted to `gemini-2.0-flash`, shut down on 2026-06-01. The driver, `TAiGeminiWebSearchTool` and transcription now default to **`gemini-3.8-flash`**, and `TAiGeminiSpeechTool` TTS to **`gemini-3.8-flash-tts`**. `gemini-3.8-flash`, `gemini-3.7-flash` and both 3.8 TTS models registered; `gemini-3-pro-preview` and the three `imagen-4.0-*` (shut down) became aliases of their successors. Sampling is now omitted by **version** (3.5 and later) instead of a name list, which missed 3.7/3.8, and the new effort levels map to what Gemini 3 accepts (`minimal` is rejected by 3.7/3.8). *Checked against the official docs; not runtime-tested (no API key).* Forms saved with the old model keep it
 - ⚠️ Fix (security): **`TAiMemory` enforced namespaces only in searches** — `Get`, `Update`, `Delete`, `Link` and `Unlink` addressed memories by id alone, and ids are sequential, so an agent could read, change or delete another namespace's memories by guessing one, including through the `memory_delete` / `memory_link` MCP tools. `ImportFromJSON` also honoured the `namespace` of the JSON. Every id-based operation now requires the active namespace (a foreign id behaves like a missing one) and imports land in the active namespace. **Breaking for custom storages**: the id-based methods of `IAiMemoryStorage` take the namespace. Reported responsibly in #127
 - New: **Skills in SKILL.md format** — one parser for the whole framework (`uMakerAi.Skills.Format`, with a read-only PPM registry client: semver version resolution, `skill-` prefix fallback, clear errors on a missing package, a non-skill package or an HTML page). **`TAiSkills`** gives any chat with function calling on-demand skills: the model sees a catalog in `use_skill` and loads the instructions it needs; folder skills ship supporting files read with `read_skill_file`, confined to the skill folder. Live 9/9 on OpenAI, Claude and Groq. Guide: `Docs/Version 3/uMakerAi-Skills.EN.md`, demo `091-Skills`

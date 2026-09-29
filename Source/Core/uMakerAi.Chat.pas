@@ -367,6 +367,7 @@ type
     procedure SetStop(const Value: string);
     procedure SetTemperature(const Value: Double);
     procedure SetTool_choice(const Value: string);
+    function GetTool_choice: string;
     procedure SetTop_p(const Value: Double);
     procedure SetUser(const Value: String);
     procedure SetAsynchronous(const Value: Boolean);
@@ -663,7 +664,11 @@ type
     Property K: Integer read FK write SetK;
     // Defaults to 0 si es 0 no se env?a,  entre 0 y 1
     // Property Tools: TStrings read GetTools;
-    Property Tool_choice: string read FTool_choice write SetTool_choice;
+    // Valor configurado ('auto', 'none', 'required', o JSON con una tool).
+    // En los turnos que devuelven resultados de tools, un valor que FUERZA una
+    // tool se lee como 'auto': si se reenviara, el modelo tendria que llamar
+    // otra tool en cada ronda y el loop agentico no terminaria nunca.
+    Property Tool_choice: string read GetTool_choice write SetTool_choice;
     Property User: String read FUser write SetUser;
     Property SystemPrompt: TStrings read FSystemPrompt write SetSystemPrompt;
     Property Completion_tokens: Integer read FCompletion_tokens write SetCompletion_tokens;
@@ -2293,13 +2298,13 @@ begin
         Raise Exception.Create('La propiedad Tools est?n mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
-      If (Trim(FTool_choice) <> '') then
+      If (Trim(Tool_choice) <> '') then
       Begin
 
 {$IF CompilerVersion < 35}
-        jToolChoice := TJSONUtils.ParseAsObject(FTool_choice);
+        jToolChoice := TJSONUtils.ParseAsObject(Tool_choice);
 {$ELSE}
-        jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(FTool_choice));
+        jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
 {$ENDIF}
         If Assigned(jToolChoice) then
           AJSONObject.AddPair('tool_choice', jToolChoice);
@@ -2420,7 +2425,8 @@ Var
   LModel: String;
 begin
   LModel := aModel.ToLower;
-  Result := LModel.StartsWith('gpt-5.6') or LModel.StartsWith('o1') or LModel.StartsWith('o3') or LModel.StartsWith('o4');
+  Result := LModel.StartsWith('gpt-5.6') or LModel.StartsWith('gpt-6') or
+            LModel.StartsWith('o1') or LModel.StartsWith('o3') or LModel.StartsWith('o4');
 end;
 
 function TAiChat.ModelUsesMaxCompletionTokens(Const aModel: String): Boolean;
@@ -2428,7 +2434,8 @@ Var
   LModel: String;
 begin
   LModel := aModel.ToLower;
-  Result := LModel.StartsWith('gpt-5') or LModel.StartsWith('o1') or LModel.StartsWith('o3') or LModel.StartsWith('o4');
+  Result := LModel.StartsWith('gpt-5') or LModel.StartsWith('gpt-6') or
+            LModel.StartsWith('o1') or LModel.StartsWith('o3') or LModel.StartsWith('o4');
 end;
 
 function TAiChat.ExtractUnsupportedParam(Const aErrorBody: String): String;
@@ -4779,6 +4786,27 @@ end;
 procedure TAiChat.SetTool_choice(const Value: string);
 begin
   FTool_choice := Value;
+end;
+
+// tool_choice efectivo del request. Forzar una tool ('required'/'any' o una
+// funcion concreta) aplica a la PRIMERA llamada del turno: en las rondas que
+// devuelven resultados de tools se pide 'auto', o el modelo queda obligado a
+// llamar otra tool cada vez (medido con Claude Sonnet 5: 231 requests en un
+// loop sin fin, fix sep 29 2026). Todos los drivers leen esta propiedad.
+function TAiChat.GetTool_choice: string;
+var
+  LWord: string;
+  LLast: TAiChatMessage;
+begin
+  Result := FTool_choice;
+  LWord := FTool_choice.Replace('"', '').Trim.ToLower;
+  if (LWord = '') or (LWord = 'auto') or (LWord = 'none') then
+    Exit;
+  if (not Assigned(FMessages)) or (FMessages.Count = 0) then
+    Exit;
+  LLast := FMessages[FMessages.Count - 1];
+  if SameText(LLast.Role, 'tool') or (LLast.ToolCallId <> '') then
+    Result := 'auto';
 end;
 
 procedure TAiChat.SetTop_logprobs(const Value: String);
