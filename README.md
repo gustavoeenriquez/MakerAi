@@ -26,6 +26,9 @@ But on top of that, MakerAI is a **complete AI application ecosystem** that lets
 - **Autonomous Agents** with graph orchestration, checkpoints, and human-in-the-loop approval
 - **MCP Servers and Clients** — expose or consume tools using the Model Context Protocol (dual-era: stateless spec 2026-07-28 + legacy handshake)
 - **Native ChatTools** — bridge AI reasoning with deterministic real-world capabilities (PDF, Vision, Speech, Web Search, Shell, Computer Use)
+- **Skills** — reusable instructions in the SKILL.md format (Agent Skills / PPM), loaded on demand by the model
+- **A2A** — expose your agent graphs to other agents and call remote ones (Agent-to-Agent protocol 1.0)
+- **Production controls** — tool-call guardrails, evals, OpenTelemetry tracing, persistent memory, and calibrated decisions with Jev
 - **FMX Visual Components** — drop-in UI for multimodal chat interfaces
 - **Universal Connector** — switch providers at runtime without changing your application code
 
@@ -488,6 +491,7 @@ New `ChatMode` value for automatic two-pass routing:
 │ FMX     │   │ TAIAgentManager    │  │ Property Editors          │
 │ Visual  │   │ TAIBlackboard      │  │ Object Inspector support  │
 │ Comps   │   │ Checkpoint/Approve │  └───────────────────────────┘
+│         │   │ A2A server/client  │
 └────┬────┘   └─────────┬──────────┘
      │                  │
 ┌────▼──────────────────▼──────────────────────────────────────────┐
@@ -508,13 +512,20 @@ New `ChatMode` value for automatic two-pass routing:
 │  PDF/Vision │   │  Vector (VQL)       │   │  Server (HTTP/SSE   │
 │  Speech/STT │   │  Graph (GQL)        │   │  StdIO/Direct)      │
 │  Web Search │   │  PostgreSQL/SQLite  │   │  Client             │
-│  Shell      │   │  HNSW · BM25 · RRF  │   │  TAiFunctions bridge│
-│  ComputerUse│   │  Rerank · Documents │   └─────────────────────┘
+│  Shell      │   │  SQL Server         │   │  TAiFunctions bridge│
+│  ComputerUse│   │  HNSW · BM25 · RRF  │   └─────────────────────┘
+│  Skills     │   │  Rerank · Documents │
 └─────────────┘   └─────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────┐
+│  Cross-cutting: Guardrails · Evals · OpenTelemetry · TAiMemory   │
+│  Jev (calibrated decisions: routing, guards, rerank, labeling)   │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
 │  Realtime Voice — parallel WebSocket stack                       │
-│  TAiRealtimeConnection · OpenAI STT · Grok Voice S2S · MakerAI   │
+│  TAiRealtimeConnection · OpenAI STT/Translate · Grok Voice S2S   │
+│  Qwen voice/STT/translate/TTS · MakerAI                          │
 │  Pure-Pascal RFC 6455 + TLS (SChannel / OpenSSL / Android)       │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -530,9 +541,9 @@ Full, provider-specific access to every API feature. Use when you need complete 
 
 | Component | Provider | Latest Models |
 |-----------|----------|---------------|
-| `TAiOpenChat` | OpenAI | gpt-6-astra, gpt-5.6-sol/-terra/-luna, gpt-5.5, gpt-image-1 |
-| `TAiClaudeChat` | Anthropic | claude-opus-5, claude-sonnet-5, claude-fable-5, claude-haiku-4-5 |
-| `TAiGeminiChat` | Google | gemini-3.5-flash, gemini-3.6-flash, gemini-3.1-pro |
+| `TAiOpenChat` | OpenAI | **gpt-6-sol** (default), gpt-6-luna, gpt-6-astra, gpt-5.6-sol/-terra/-luna, gpt-image-2.5 |
+| `TAiClaudeChat` | Anthropic | claude-opus-5-5, claude-sonnet-5-5, claude-fable-5-1, **claude-haiku-4-5** (default) |
+| `TAiGeminiChat` | Google | **gemini-3.8-flash** (default), gemini-3.7-flash, gemini-3.1-pro, gemini-3.8-flash-tts, Nano Banana |
 | `TAiGrokChat` | xAI | grok-4.3, grok-4.5, grok-build, grok-imagine (image/video) |
 | `TAiMistralChat` | Mistral AI | mistral-large/medium/small, magistral, devstral, voxtral (STT/TTS) |
 | `TAiDeepSeekChat` | DeepSeek | deepseek-flash, deepseek-v4-pro |
@@ -550,12 +561,12 @@ Provider-agnostic code. Switch models or providers by changing one property:
 
 ```pascal
 AiConn.DriverName := 'OpenAI';
-AiConn.Model := 'gpt-5.6';
+AiConn.Model := 'gpt-6-sol';         // leave Model empty to get the driver's default
 AiConn.ApiKey := '@OPENAI_API_KEY';  // resolved from environment variable
 
 // Switch to Gemini without changing anything else
 AiConn.DriverName := 'Gemini';
-AiConn.Model := 'gemini-3.6-flash';
+AiConn.Model := 'gemini-3.8-flash';
 AiConn.ApiKey := '@GEMINI_API_KEY';
 
 // Or to GLM (Zhipu / Z.ai) — glm-4.7-flash is free
@@ -568,7 +579,7 @@ AiConn.ApiKey := '@GLM_API_KEY';
 
 ## 📊 Feature Support Matrix
 
-| Feature | OpenAI (gpt-6-astra) | Claude (5) | Gemini (3.6) | Grok (4.5) | Mistral | DeepSeek | Ollama |
+| Feature | OpenAI (GPT-6) | Claude (5 / 5.5) | Gemini (3.8) | Grok (4.5) | Mistral | DeepSeek | Ollama |
 |:--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | Text Generation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Streaming (SSE) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -594,8 +605,9 @@ AiConn.ApiKey := '@GLM_API_KEY';
 > the **Computer Use** section below). Native support: OpenAI
 > `gpt-6-astra`; Claude `claude-opus-4-8` / `-opus-5` / `-sonnet-5` / `-fable-5`.
 > Gemini is marked ⚠️ because the registry still points at the
-> `gemini-2.5-computer-use-preview` model, which has not been re-verified since the
-> 3.5/3.6 generation shipped.
+> `gemini-2.5-computer-use-preview` model (3.7/3.8 Flash list computer use as a preview
+> tool, not yet wired or tested). The Claude 5.5 / Fable 5.1 models use the same
+> `computer_toolset` but have not been runtime-tested with it yet.
 
 ---
 
@@ -695,8 +707,8 @@ ChatTools bridge the gap between AI reasoning and real-world operations. They ac
 | `IAiVisionTool` | Describe / analyze images | Any vision model |
 | `IAiSpeechTool` | Text-to-speech / speech-to-text | Whisper, Gemini Speech, OpenAI TTS |
 | `IAiWebSearchTool` | Live web search | Gemini Web Search |
-| `IAiImageTool` | Generate images | DALL-E 3, gpt-image-1, Gemini, Grok |
-| `IAiVideoTool` | Generate video | Sora, Gemini Veo |
+| `IAiImageTool` | Generate images | gpt-image-2.5, Gemini (Nano Banana), Grok Imagine, Qwen Image |
+| `IAiVideoTool` | Generate video | Sora, Gemini Veo, Grok Imagine, Qwen Wan |
 | `TAiShell` | Execute shell commands | Windows/Linux |
 | `TAiTextEditorTool` | Read/write/patch files | Diff-based editing |
 | `TAiComputerUseTool` | Control mouse and keyboard | Claude `computer_toolset`, OpenAI `computer` (gpt-6-astra) |
@@ -754,15 +766,56 @@ A parallel component stack for live audio over WebSocket, with the same universa
 | Driver | Type | Endpoint |
 |--------|------|----------|
 | `TAiOpenAiRealtimeSTT` | STT only — streaming transcription (`gpt-live-transcribe` default) | OpenAI Realtime API |
+| `TAiOpenAiRealtimeTranslate` | **Simultaneous translation** — translated text and voice in one stream | OpenAI Realtime API |
 | `TAiGrokRealtimeChat` | **Full-duplex speech-to-speech** — the user talks, Grok answers with voice | xAI `wss://api.x.ai/v1/realtime` |
+| `TAiQwenRealtimeChat` / `…STT` / `…Translate` | Voice conversation, live transcription and simultaneous translation (`DriverName` `Qwen` / `QwenSTT` / `QwenTranslate`) | Alibaba DashScope |
+| `TAiQwenRealtimeTTS` | Streaming text-to-speech: speak an LLM answer while it is generated | Alibaba DashScope |
 | `TAiMakerAiRealtimeChat` | STT + LLM + TTS in one socket | MakerAI server |
 | `TAiGeminiRealtimeSTT` | STT (planned) | Gemini Live |
 
+- **`DriverParams`** on `TAiRealtimeConnection` — driver-specific settings (`Voice`, `Instructions`, `TargetLanguage`…) as `Property=Value` lines, applied to whichever driver is active
 - **`TAiRealtimeVoiceBase`** — shared base for full-duplex drivers: `OnAssistantText[Delta]`, `OnAudioChunk`, `OnAudioDone`, on top of the STT events (`OnTranscriptDelta/Completed`, `OnSpeechStarted/Stopped`)
 - **Voice function calling** (Grok): plug a `TAiFunctions` component and the model invokes your Delphi functions mid-conversation
 - **Session resumption, binary audio transport, ephemeral tokens** for mobile/browser clients (Grok)
 - **Audio pipeline**: `TAIVoiceMonitor` (mic) → thread-safe PCM16 resampler → provider rate (24 kHz); push audio from any source via `SendAudioChunk`
 - **Pure-Pascal WebSocket stack** (`TAiWSClient`, RFC 6455) with pluggable TLS: Windows SChannel (zero DLLs), OpenSSL (Linux/macOS), `javax.net.ssl` (Android). The POSIX transport verifies the server certificate — chain **and** hostname — with `InsecureSkipVerify` as an explicit opt-out
+
+### 🌐 A2A — Agent-to-Agent Protocol
+
+First Delphi implementation of **A2A 1.0** (Linux Foundation), certified against the official TCK (MUST 89/89, SHOULD 8/8):
+
+- **`TAiA2AServer`** exposes any `TAIAgentManager` graph as an A2A agent: Agent Card at `/.well-known/agent-card.json`, `SendMessage` / `GetTask` / `CancelTask` / `ListTasks`, SSE streaming, push notifications, bearer auth, a pool of managers for concurrent tasks, and human-in-the-loop (a suspended node becomes `input-required`)
+- **`TAiA2AClient`** consumes remote agents; **`TAiA2ARemoteAgentTool`** federates a graph node to a remote agent, and **`TAiA2AAgentTool`** exposes a remote agent to a chat as a function
+- Demos: `072-A2AFederation`, `074-A2AOrchestration`, `079-A2ASutAgent`, `080-A2APushNotifications`
+
+### 📚 Skills — Reusable Instructions on Demand
+
+Skills use the **SKILL.md** format (Claude Agent Skills / PPM registry): YAML frontmatter with a name and when to use it, plus Markdown instructions. The same file works in a chat, an agent node or a prompt:
+
+- **`TAiSkills`** — plug it into `TAiFunctions` and the model sees only a one-line catalog in `use_skill`; it loads the instructions it needs, and reads supporting files with `read_skill_file` (confined to the skill folder). Works with any provider that supports function calling
+- **`TAiSkill` + `TLLMNode.Skill`** — a skill as the fixed personality of an agent node
+- **`TAiPrompts.ApplySkill`** — copy a skill into any `SystemPrompt`
+- Load from a folder (`Skills\<name>\SKILL.md`), a file, code, or the PPM registry (`LoadFromPPM('skill-code-review')`)
+- Guide: [`Docs/Version 3/uMakerAi-Skills.EN.md`](Docs/Version%203/uMakerAi-Skills.EN.md) · Demo: `091-Skills`
+
+### 🛡️ Guardrails & Evals
+
+- **`TAiGuardrails`** — assigned to `TAiFunctions.Guardrails`, it checks every tool call (local, MCP or AutoMCP) **before** it runs: allow/block lists with wildcards, forbidden argument patterns, a pluggable semantic `Classifier` and an `OnCheckToolCall` veto. A blocked call never executes; the model gets the reason and can replan
+- **`ChatTools.PromptGuard`** — the input-side guardrail: checks the user's message before it reaches the model
+- **`TAiEvalRunner`** — fluent test cases (`ExpectContains`, `ExpectRegex`, `ExpectEquals`, `ExpectJudge` with an LLM judge, `ExpectScore` with a calibrated scorer) against any target, with text and JSON reports. The framework's own regression suite (101 cases, no API keys) is built on it
+- Demo: `073-GuardrailsEvals`
+
+### 📈 Observability — OpenTelemetry
+
+**`TAiTelemetry`** exports traces over OTLP/HTTP (collector on `localhost:4318`: Jaeger, Grafana Tempo, Langfuse, Arize Phoenix) following the OpenTelemetry **GenAI semantic conventions**: chat turns with token usage, tool executions, agent graphs and nodes, RAG searches, MCP and A2A requests, and skill loads. The W3C `traceparent` travels through MCP `_meta` and A2A, so a call that crosses processes stays in one trace. Zero overhead when disabled. Validated against a real Jaeger.
+
+### 💾 Memory — TAiMemory
+
+Persistent semantic memory on SQLite: FTS5 lexical search, optional embeddings with hybrid RRF fusion, importance and decay, TTL, links between memories, and **namespaces** that isolate agents or projects. `Context(prompt)` builds a memory block ready for the system prompt, and `uMakerAi.Memory.MCP` exposes it as MCP tools. Demo: `076-Memory`.
+
+### 🧭 Jev — Calibrated Decisions
+
+**`TAiJev`** wraps Jev (TypeSafe AI), a model that does not generate text: it answers typed questions (choice, score, yes/no) with **calibrated probabilities**, for the fast and cheap decisions that would otherwise cost a full LLM call. Adapters plug it into the framework: agent routing (`TAiJevRouterTool`), SmartDispatch, tool-call and input guardrails, eval scoring, RAG reranking with injection filtering, bulk labeling (`TAiJevBatchLabeler`) and model routing (`TAiJevModelRouter`, the cheapest model that can handle each request), with usage metering for billing. Needs `TYPESAFE_API_KEY`. Demos `084`–`088`.
 
 ### ⚙️ Model Capabilities — TAiCapabilities
 
@@ -782,9 +835,11 @@ TAiChatFactory.Instance.RegisterUserParam('MyProvider', 'my-model', 'ModelCaps',
 TAiChatFactory.Instance.RegisterUserParam('MyProvider', 'my-model', 'ThinkingLevel', 'tlMedium');
 ```
 
-Available capabilities: `cap_Image`, `cap_Audio`, `cap_Video`, `cap_Pdf`, `cap_Reasoning`, `cap_WebSearch`, `cap_GenImage`, `cap_GenVideo`, `cap_TTS`, `cap_STT`, `cap_ComputerUse`
+Available capabilities:
+- **Input / understanding:** `cap_Image`, `cap_Audio`, `cap_Video`, `cap_Pdf`, `cap_WebSearch`, `cap_Reasoning`, `cap_CodeInterpreter`, `cap_Memory`, `cap_TextEditor`, `cap_ComputerUse`, `cap_Shell`
+- **Output / generation** (a gap activates a ChatTool or a dedicated endpoint): `cap_GenImage`, `cap_GenAudio` (TTS), `cap_GenVideo`, `cap_GenReport`, `cap_ExtractCode`
 
-`ThinkingLevel` controls reasoning depth: `tlLow`, `tlMedium`, `tlHigh`.
+`ThinkingLevel` controls reasoning depth across the full effort ladder: `tlNone`, `tlMinimal`, `tlLow`, `tlMedium`, `tlHigh`, `tlXHigh`, `tlMax` (`tlDefault` = let the provider decide). Each driver maps it to what its models accept — for example Gemini 3 has no `minimal` and cannot turn thinking off, so both are sent as `LOW`.
 
 ### 🎨 FMX Visual Components
 
@@ -848,8 +903,8 @@ Source/WebSocket
 Compile and install in this exact order:
 
 1. `Source/Packages/MakerAI.dpk` — Runtime core (~100 units)
-2. `Source/Packages/MakerAi.RAG.Drivers.dpk` — PostgreSQL/pgvector connector
-3. `Source/Packages/MakerAi.UI.dpk` — FMX visual components
+2. `Source/Packages/MakerAi.RAG.Drivers.dpk` — database back-ends via FireDAC: PostgreSQL/pgvector, SQL Server and SQLite for RAG, graph RAG on PostgreSQL, DB checkpoints for agents, and `TAiMemory`
+3. `Source/Packages/MakerAi.UI.dpk` — FMX visual components (requires Skia)
 4. `Source/Packages/MakerAiDsg.dpk` — Design-time editors (requires VCL + DesignIDE)
 
 Open `Source/Packages/MakerAiGrp.groupproj` to compile all packages at once.
