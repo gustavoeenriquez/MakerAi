@@ -131,6 +131,7 @@ contains
   uMakerAi.Gemini.WebSearch in '..\Tools\uMakerAi.Gemini.WebSearch.pas',
   uMakerAi.OpenAI.WebSearch in '..\Tools\uMakerAi.OpenAI.WebSearch.pas',
   uMakerAi.Tools.Functions in '..\Tools\uMakerAi.Tools.Functions.pas',
+  uMakerAi.Tools.Skills in '..\Tools\uMakerAi.Tools.Skills.pas',
   uMakerAi.Tools.Shell in '..\Tools\uMakerAi.Tools.Shell.pas',
   uMakerAi.Tools.TextEditor in '..\Tools\uMakerAi.Tools.TextEditor.pas',
   uMakerAi.OpenAI.Audio in '..\Tools\uMakerAi.OpenAI.Audio.pas',

@@ -39,6 +39,8 @@ type
     function RunSkillsScenario(const AScenario: string): string;
     // TAiSkill + TLLMNode: precedencia, ConfigureChat y formatos
     function RunSkillAgentScenario(const AScenario, ARegUrl: string): string;
+    // TAiSkills: use_skill / read_skill_file sobre TAiFunctions
+    function RunSkillToolsScenario(const AScenario: string): string;
     // Serializacion de tool results en la familia OpenAI-compatible
     function RunChatScenario(const AScenario: string): string;
     // Montaje CONCURRENTE de conexiones, tal y como lo hace un servidor que
@@ -82,6 +84,7 @@ uses
   FireDAC.Stan.Def, FireDAC.Stan.Async, FireDAC.Phys.SQLite, FireDAC.ConsoleUI.Wait,
   uMakerAi.Memory, uMakerAi.Memory.Types,
   uMakerAi.Skills.Format, uMakerAi.Prompts, uMakerAi.Agents.Skill, uMakerAi.Agents.Node.LLM,
+  uMakerAi.Tools.Skills,
   uRegression.Fixtures;
 
 const
@@ -344,6 +347,37 @@ begin
     .Input('skills:prompts-local')
     .ExpectEquals('2|revisor,traductor|Revisa codigo|Revisa con cuidado|' +
       'Base\n\nRevisa con cuidado|False');
+
+  // --- TAiSkills: skills bajo demanda con use_skill ---
+  // Registro en TAiFunctions: sin skills la funcion existe pero apagada (un
+  // enum vacio es un schema invalido); con skills, el enum trae solo los
+  // habilitados, el catalogo va en la descripcion y read_skill_file no se
+  // ofrece si ningun skill tiene carpeta.
+  FRunner.AddCase('skills.tools.register')
+    .Input('skills:tools-register')
+    .ExpectEquals('False|True|enum|catalogo|sin-read');
+
+  // use_skill por TAiFunctions.DoCallFunction (el camino real del chat):
+  // entrega el skill con su origen, nombre desconocido -> error con la lista,
+  // OnBeforeUseSkill veta, OnSkillLoaded solo cuenta los entregados.
+  FRunner.AddCase('skills.tools.use')
+    .Input('skills:tools-use')
+    .ExpectEquals('ok|notfound|vetado|1');
+
+  // read_skill_file confinado a la carpeta del skill: lee un archivo de apoyo
+  // (tambien por DoCallFunction), use_skill lo lista, y rechaza '..' (dos
+  // formas), rutas absolutas, binarios, archivos grandes, inexistentes y
+  // skills sin carpeta.
+  FRunner.AddCase('skills.tools.files')
+    .Input('skills:tools-files')
+    .ExpectEquals('Detalle X|lista|outside|outside|relative|binary|larger|notfound|nofolder|read');
+
+  // Ciclo de vida: al liberar TAiSkills sus funciones salen de TAiFunctions
+  // (apuntan a sus metodos); liberar primero el TAiFunctions no deja
+  // referencias colgantes.
+  FRunner.AddCase('skills.tools.lifecycle')
+    .Input('skills:tools-lifecycle')
+    .ExpectEquals('1|0|nil|ok');
 
   // --- Skills en agentes: TAiSkill + TLLMNode ---
   // Precedencia nodo/skill (TLLMNode.ResolveConfig), driver|modelo|apikey:
@@ -3532,6 +3566,8 @@ begin
       TDirectory.Delete(Dir, True);
     end;
   end
+  else if AScenario.StartsWith('skills:tools-') then
+    Result := RunSkillToolsScenario(AScenario)
   else if AScenario = 'skills:agent-precedence' then
     Result := RunSkillAgentScenario(AScenario, RegUrl)
   else if AScenario = 'skills:agent-prompt' then
@@ -3542,6 +3578,139 @@ begin
     Result := RunSkillAgentScenario(AScenario, RegUrl)
   else
     raise Exception.Create('Escenario de skills desconocido: ' + AScenario);
+end;
+
+function TRegressionSuite.RunSkillToolsScenario(const AScenario: string): string;
+var
+  Fn: TAiFunctions;
+  Sk: TAiSkills;
+  H: TFixtureHandlers;
+  Parts: TStringList;
+  Root, Dir: string;
+  Big: TBytes;
+
+  function Call(const AFunc, AArgs: string): string;
+  var
+    TC: TAiToolsFunction;
+  begin
+    TC := TAiToolsFunction.Create;
+    try
+      TC.Name := AFunc;
+      TC.Arguments := AArgs;
+      Fn.DoCallFunction(TC);
+      Result := TC.Response;
+    finally
+      TC.Free;
+    end;
+  end;
+
+  function Kind(const AResponse, AKeyword, AName: string): string;
+  begin
+    if Pos(AKeyword, AResponse) > 0 then Result := AName else Result := AResponse;
+  end;
+
+begin
+  Parts := TStringList.Create;
+  H := TFixtureHandlers.Create;
+  Fn := TAiFunctions.Create(nil);
+  Sk := TAiSkills.Create(nil);
+  try
+    if AScenario = 'skills:tools-register' then
+    begin
+      Sk.Functions := Fn;
+      Parts.Add(BoolToStr(Fn.Functions.GetFunction('use_skill').Enabled, True));
+      Sk.AddSkill('correo', 'Usalo al redactar correos', 'Escribe formal.');
+      Sk.AddSkill('sql', 'Usalo con consultas SQL', 'Usa CTEs.');
+      Sk.AddSkill('apagado', 'No deberia verse', 'x').Enabled := False;
+      Parts.Add(BoolToStr(Fn.Functions.GetFunction('use_skill').Enabled, True));
+      Parts.Add(Kind(Fn.GetTools(tfOpenAI), '"enum":["correo","sql"]', 'enum'));
+      if (Sk.Catalog = '- correo: Usalo al redactar correos'#10'- sql: Usalo con consultas SQL') and
+         (Pos('- sql: Usalo con consultas SQL',
+              Fn.Functions.GetFunction('use_skill').Description.Text) > 0) then
+        Parts.Add('catalogo')
+      else
+        Parts.Add(Sk.Catalog);
+      if Pos('read_skill_file', Fn.GetTools(tfOpenAI)) = 0 then
+        Parts.Add('sin-read')
+      else
+        Parts.Add('con-read');
+    end
+    else if AScenario = 'skills:tools-use' then
+    begin
+      Sk.Functions := Fn;
+      Sk.OnBeforeUseSkill := H.SkillVeto;
+      Sk.OnSkillLoaded := H.SkillLoaded;
+      Sk.AddSkill('correo', 'Usalo al redactar correos', 'Escribe formal.');
+      Sk.AddSkill('sql', 'Usalo con consultas SQL', 'Usa CTEs.');
+      Sk.AddSkill('vetado', 'Nunca', 'Secreto');
+      if Call('use_skill', '{"name":"sql"}').StartsWith('<skill name="sql" source="inline">'#10'Usa CTEs.') then
+        Parts.Add('ok')
+      else
+        Parts.Add(Call('use_skill', '{"name":"sql"}'));
+      Parts.Add(Kind(Call('use_skill', '{"name":"nope"}'),
+        'not found. Available skills: correo, sql, vetado', 'notfound'));
+      Parts.Add(Kind(Call('use_skill', '{"name":"vetado"}'), 'is not allowed', 'vetado'));
+      Parts.Add(IntToStr(H.SkillsLoaded));
+    end
+    else if AScenario = 'skills:tools-files' then
+    begin
+      Root := TPath.Combine(TPath.GetTempPath, 'makerai_regress_skilltools');
+      if TDirectory.Exists(Root) then
+        TDirectory.Delete(Root, True);
+      Dir := TPath.Combine(Root, 'guia');
+      TDirectory.CreateDirectory(TPath.Combine(Dir, 'ref'));
+      TFile.WriteAllText(TPath.Combine(Dir, 'SKILL.md'),
+        '---'#10'description: Guia de prueba'#10'---'#10'Lee ref/detalle.md', TEncoding.UTF8);
+      TFile.WriteAllText(TPath.Combine(Dir, 'ref\detalle.md'), 'Detalle X', TEncoding.UTF8);
+      TFile.WriteAllBytes(TPath.Combine(Dir, 'bin.dat'), TBytes.Create(65, 0, 66));
+      SetLength(Big, 200);
+      FillChar(Big[0], Length(Big), Ord('a'));
+      TFile.WriteAllBytes(TPath.Combine(Dir, 'grande.txt'), Big);
+      TFile.WriteAllText(TPath.Combine(Root, 'secreto.txt'), 'no', TEncoding.UTF8);
+      try
+        Sk.MaxFileSize := 100;
+        Sk.Functions := Fn;
+        Sk.LoadFromFolder(Root);
+        Sk.AddSkill('correo', 'Usalo al redactar correos', 'Escribe formal.');
+
+        Parts.Add(Call('read_skill_file', '{"name":"guia","path":"ref/detalle.md"}'));
+        Parts.Add(Kind(Sk.ExecuteUseSkill('guia'), 'ref/detalle.md', 'lista'));
+        Parts.Add(Kind(Sk.ExecuteReadFile('guia', '../secreto.txt'), 'outside the skill folder', 'outside'));
+        Parts.Add(Kind(Sk.ExecuteReadFile('guia', 'ref/../../secreto.txt'), 'outside the skill folder', 'outside'));
+        Parts.Add(Kind(Sk.ExecuteReadFile('guia', TPath.Combine(Root, 'secreto.txt')), 'must be relative', 'relative'));
+        Parts.Add(Kind(Sk.ExecuteReadFile('guia', 'bin.dat'), 'binary files', 'binary'));
+        Parts.Add(Kind(Sk.ExecuteReadFile('guia', 'grande.txt'), 'larger than 100', 'larger'));
+        Parts.Add(Kind(Sk.ExecuteReadFile('guia', 'no.md'), 'not found', 'notfound'));
+        Parts.Add(Kind(Sk.ExecuteReadFile('correo', 'x.md'), 'has no folder', 'nofolder'));
+        Parts.Add(Kind(Fn.GetTools(tfOpenAI), 'read_skill_file', 'read'));
+      finally
+        TDirectory.Delete(Root, True);
+      end;
+    end
+    else if AScenario = 'skills:tools-lifecycle' then
+    begin
+      Sk.Functions := Fn;
+      Sk.AddSkill('correo', 'Usalo al redactar correos', 'Escribe formal.');
+      Parts.Add(IntToStr(Fn.Functions.Count));
+      FreeAndNil(Sk);
+      Parts.Add(IntToStr(Fn.Functions.Count));
+
+      Sk := TAiSkills.Create(nil);
+      Sk.Functions := Fn;
+      Sk.AddSkill('correo', 'Usalo al redactar correos', 'Escribe formal.');
+      FreeAndNil(Fn);
+      if Assigned(Sk.Functions) then Parts.Add('colgante') else Parts.Add('nil');
+      Sk.AddSkill('sql', 'Usalo con consultas SQL', 'Usa CTEs.'); // sin Functions: no debe fallar
+      FreeAndNil(Sk);
+      Parts.Add('ok');
+    end;
+    Result := String.Join('|', Parts.ToStringArray);
+  finally
+    Sk.Free;
+    Fn.Free;
+    H.Free;
+    Parts.Free;
+  end;
 end;
 
 function TRegressionSuite.RunSkillAgentScenario(const AScenario, ARegUrl: string): string;

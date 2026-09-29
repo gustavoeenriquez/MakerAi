@@ -23,7 +23,7 @@ uses
   System.Generics.Collections,
   uMakerAi.MCPServer.Core, uMakerAi.Agents, uMakerAi.Tools.Functions,
   uMakerAi.Chat.Messages, uMakerAi.Chat.Tools, uMakerAi.Jev, uMakerAi.Embeddings.core,
-  UMakerAi.Chat, System.Net.HttpClient, uMakerAi.Jev.Batch;
+  UMakerAi.Chat, System.Net.HttpClient, uMakerAi.Jev.Batch, uMakerAi.Tools.Skills;
 
 type
   // --- Tool MCP determinista: devuelve el texto en mayusculas ---
@@ -158,6 +158,7 @@ type
     LastChatError: string;       // ultimo error reportado por un chat (OnError)
     LastGuardCategory: string;   // categoria recibida en OnPromptGuard
     LastDataEnd: string;         // texto recibido en OnReceiveDataEnd
+    SkillsLoaded: Integer;       // skills entregados por TAiSkills (OnSkillLoaded)
 
     // Chat: texto recibido en OnReceiveDataEnd
     procedure ChatDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject;
@@ -196,6 +197,9 @@ type
     // MRTR: responde la elicitation aceptando
     procedure InputRequired(Sender: TObject; const AToolName: string;
       AInputRequests, AInputResponses: TJSONObject; var AHandled: Boolean);
+    // TAiSkills: veta el skill 'vetado' y cuenta los skills entregados
+    procedure SkillVeto(Sender: TObject; ASkill: TAiSkillItem; var Allow: Boolean);
+    procedure SkillLoaded(Sender: TObject; ASkill: TAiSkillItem);
   end;
 
 implementation
@@ -283,6 +287,18 @@ begin
       Exit(TAiMCPResponseBuilder.New.AddText('CANCELADO:' + AParams.Operation).Build);
   end;
   Result := BuildInputRequired(AParams.Operation);
+end;
+
+{ TFixtureHandlers: TAiSkills }
+
+procedure TFixtureHandlers.SkillVeto(Sender: TObject; ASkill: TAiSkillItem; var Allow: Boolean);
+begin
+  Allow := not SameText(ASkill.Name, 'vetado');
+end;
+
+procedure TFixtureHandlers.SkillLoaded(Sender: TObject; ASkill: TAiSkillItem);
+begin
+  Inc(SkillsLoaded);
 end;
 
 { TFakePPMRegistry }

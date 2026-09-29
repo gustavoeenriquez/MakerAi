@@ -223,6 +223,7 @@
         <DCCReference Include="..\Tools\uMakerAi.Gemini.WebSearch.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.OpenAI.WebSearch.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Tools.Functions.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Tools.Skills.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Tools.Shell.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.Tools.TextEditor.pas"/>
         <DCCReference Include="..\Tools\uMakerAi.OpenAI.Audio.pas"/>
