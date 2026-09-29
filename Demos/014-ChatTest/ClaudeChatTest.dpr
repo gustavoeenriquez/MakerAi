@@ -325,9 +325,12 @@ end;
 // ─── SECCION 3: Groq gpt-oss-20b + code_interpreter ─────────────────────────
 
 const
-  // Groq compound-beta: ejecuta codigo en sandbox, output en reasoning_content (<output>).
-  // Max_Tokens=8192 limita solo el content visible; reasoning_content no tiene esa restriccion.
-  CPromptWav = 'Execute this exact Python code right now and show me the output:'
+  // gpt-oss-20b ejecuta el codigo con la herramienta code_interpreter y el stdout
+  // llega en executed_tools[].output. Antes se usaba groq/compound, que Groq ya no
+  // ofrece (model_not_found, sep 2026). gpt-oss-20b necesita que se le pida la
+  // herramienta explicitamente y que no reescriba el codigo.
+  CPromptWav = 'Use the code_interpreter tool to run the following Python code exactly as written. '
+    + 'Do not modify the code. After it runs, reply with only the word: Done'
     + #10'```python'
     + #10'import numpy as np, struct, io, base64'
     + #10'sr=44100; dur=1; freq=333'
@@ -523,15 +526,14 @@ const
     + #10'plt.close()'
     + #10'```';
 
-// gpt-oss-20b: modelo de razonamiento; embede archivos como base64 en texto (NO usa executed_tools).
-// Para recibir archivos via executed_tools usar groq/compound o groq/compound-mini.
+// Groq code_interpreter con openai/gpt-oss-20b (groq/compound ya no esta
+// disponible, sep 2026). El stdout del sandbox llega en executed_tools[].output.
 procedure ConfigureGroqCodeInterpreter(A: TAiChatConnection);
 begin
   A.DriverName := 'Groq';
-  A.Model      := 'groq/compound';  // usa executed_tools con archivos descargables
+  A.Model      := 'openai/gpt-oss-20b';
   A.Params.Values['ApiKey']          := '@GROQ_API_KEY';
-  A.Params.Values['ResponseTimeOut'] := '120000';
-  // Sin Temperature: compound-beta es agentico y puede ignorar/rechazar este param
+  A.Params.Values['ResponseTimeOut'] := '180000';
 end;
 
 procedure Test_Groq_CodeInterpreter_Sync;
@@ -700,6 +702,17 @@ end;
 
 begin
   try
+    // --groq: pruebas de code_interpreter en Groq (gpt-oss-20b), sync y async
+    if SameText(ParamStr(1), '--groq') then
+    begin
+      WriteLn('=== GROQ code_interpreter — openai/gpt-oss-20b ===');
+      Test_Groq_CodeInterpreter_Sync;
+      Test_Groq_CodeInterpreter_Async;
+      WriteLn;
+      WriteLn('=== FIN ===');
+      Exit;
+    end;
+
     WriteLn('=== MAKERAI code_execution PNG — mk-gpt-oss-20b y mk-claude-sonnet ===');
 
     Test_MakerAi_CodeExec_Png('mk-gpt-oss-20b',    'scatter_gpt');

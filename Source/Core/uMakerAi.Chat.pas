@@ -46,6 +46,7 @@ unit uMakerAi.Chat;
 interface
 
 uses
+  System.SyncObjs,
   System.SysUtils, System.Classes, System.Generics.Collections, System.StrUtils,
   System.Threading, System.TypInfo, System.Types, System.Net.Mime,
   System.NetConsts, System.NetEncoding, System.Net.URLClient,
@@ -83,6 +84,8 @@ type
 
   TAiSanitizeAction = (saBlock, saAllow, saAllowWrapped);
   TAiSanitizeEvent = procedure(Sender: TObject; const AResult: TSanitizeResult; var AAction: TAiSanitizeAction) of object;
+  // Guardrail de entrada: AAction llega en saBlock; la app puede permitir o envolver
+  TAiPromptGuardEvent = procedure(Sender: TObject; const AVerdict: TAiPromptVerdict; var AAction: TAiSanitizeAction) of object;
 
   // Agrupa todas las herramientas (tools) del chat en un único objeto persistente.
   // Se asigna a TAiChat.ChatTools y a TAiChatConnection.ChatTools.
@@ -101,6 +104,8 @@ type
     FShellTool: TAiShell;
     FTextEditorTool: TAiTextEditorTool;
     FComputerUseTool: TAiComputerUseTool;
+    FDispatchClassifier: TAiDispatchClassifierBase;
+    FPromptGuard: TAiPromptGuardBase;
     procedure SetSpeechTool(const Value: TAiSpeechToolBase);
     procedure SetImageTool(const Value: TAiImageToolBase);
     procedure SetVideoTool(const Value: TAiVideoToolBase);
@@ -111,6 +116,8 @@ type
     procedure SetShellTool(const Value: TAiShell);
     procedure SetTextEditorTool(const Value: TAiTextEditorTool);
     procedure SetComputerUseTool(const Value: TAiComputerUseTool);
+    procedure SetDispatchClassifier(const Value: TAiDispatchClassifierBase);
+    procedure SetPromptGuard(const Value: TAiPromptGuardBase);
     procedure Changed;
   public
     constructor Create(AOwner: TComponent);
@@ -131,6 +138,12 @@ type
     property ShellTool: TAiShell read FShellTool write SetShellTool;
     property TextEditorTool: TAiTextEditorTool read FTextEditorTool write SetTextEditorTool;
     property ComputerUseTool: TAiComputerUseTool read FComputerUseTool write SetComputerUseTool;
+    // cmSmartDispatch: clasificador rapido que reemplaza el pase 1 por LLM
+    // (p.ej. TAiJevDispatchClassifier). Si no decide, se usa el LLM como antes.
+    property DispatchClassifier: TAiDispatchClassifierBase read FDispatchClassifier write SetDispatchClassifier;
+    // Guardrail de entrada: revisa el mensaje del usuario antes del LLM
+    // (p.ej. TAiJevPromptGuard). Corre despues del sanitizador por regex.
+    property PromptGuard: TAiPromptGuardBase read FPromptGuard write SetPromptGuard;
   end;
 
   // ── Parámetros TTS (Text-to-Speech) ─────────────────────────────────────────
@@ -336,6 +349,7 @@ type
     FNewSystemConfigured: Boolean; // True si ModelCaps/SessionCaps fueron asignados explícitamente
     FSanitizerActive: Boolean;
     FOnSanitize: TAiSanitizeEvent;
+    FOnPromptGuard: TAiPromptGuardEvent;
     FPersistentMemory:  TAiPersistentMemoryBase;
     FMemoryTokenBudget: Integer;
     FAutoStoreMemories: Boolean;
@@ -353,6 +367,7 @@ type
     procedure SetStop(const Value: string);
     procedure SetTemperature(const Value: Double);
     procedure SetTool_choice(const Value: string);
+    function GetTool_choice: string;
     procedure SetTop_p(const Value: Double);
     procedure SetUser(const Value: String);
     procedure SetAsynchronous(const Value: Boolean);
@@ -402,6 +417,20 @@ type
     function RunNew(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
     function FileTypeInModelCaps(ACategory: TAiFileCategory): Boolean;
 
+  Private
+    // Peticion asincrona en vuelo: se apaga al llegar datos y se enciende cuando
+    // el cliente HTTP termina (completada, error o excepcion). El destructor la
+    // espera: antes, liberar el chat justo despues de OnReceiveDataEnd competia con
+    // OnRequestCompletedEvent (que corre en el hilo HTTP) por FCurrentPostStream y
+    // daba 'Invalid pointer operation' intermitente.
+    FRequestDone: TEvent;
+    // Capa fija entre el cliente HTTP y los metodos virtuales (los drivers los
+    // sobrescriben): marca el inicio y el fin de la peticion para todos por igual
+    procedure ClientReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
+    procedure ClientRequestCompleted(const Sender: TObject; const aResponse: IHTTPResponse);
+    procedure ClientRequestError(const Sender: TObject; const AError: string);
+    procedure ClientRequestException(const Sender: TObject; const AError: Exception);
+    procedure WaitPendingRequest;
   Protected
     FClient: TNetHTTPClient;
     FTmpRole: String;
@@ -483,6 +512,12 @@ type
     procedure InternalRunSmartDispatch(ResMsg, AskMsg: TAiChatMessage);
     function BuildSmartDispatchPrompt: String;
     procedure ParseSmartDispatchResponse(const AResponse: String; out ATag, AContent: String);
+    // Tags que SmartDispatch puede usar: los de las tools asignadas + CHAT
+    function SmartDispatchTags: TArray<String>;
+    // Pase 1 con ChatTools.DispatchClassifier. '' = no decidio (usar el LLM)
+    function ClassifySmartDispatch(const APrompt: String): String;
+    // Pase 2 para un tag de tool (IMAGEGEN, VIDEOGEN, TTS, WEBSEARCH)
+    procedure RunSmartDispatchTool(const ATag, AContent: String; ResMsg, AskMsg: TAiChatMessage);
 
     Function InternalRunCompletions(ResMsg, AskMsg: TAiChatMessage): String; Virtual;
     function InternalRunTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String; Virtual;
@@ -523,6 +558,9 @@ type
     procedure ParseJsonTranscript(jObj: TJSonObject; ResMsg: TAiChatMessage; aMediaFile: TAiMediaFile);
     // Groq code_interpreter: descarga archivos de 'executed_tools' y los agrega a ResMsg.MediaFiles
     procedure ProcessExecutedTools(const AExecutedToolsJSON: string; ResMsg: TAiChatMessage); virtual;
+    // Streaming: combina por 'index' los executed_tools de un delta con los ya
+    // acumulados en FLastExecutedToolsJSON (los campos nuevos pisan a los viejos)
+    procedure MergeStreamExecutedTools(ADeltaTools: TJSonArray);
 
     Function ExtractToolCallFromJson(jChoices: TJSonArray): TAiToolsFunctions; Virtual; // Obtiene la lista de funciones a partir del json de respuesta en modo sincrono
     Procedure DoCallFunction(ToolCall: TAiToolsFunction); Virtual;
@@ -626,7 +664,11 @@ type
     Property K: Integer read FK write SetK;
     // Defaults to 0 si es 0 no se env?a,  entre 0 y 1
     // Property Tools: TStrings read GetTools;
-    Property Tool_choice: string read FTool_choice write SetTool_choice;
+    // Valor configurado ('auto', 'none', 'required', o JSON con una tool).
+    // En los turnos que devuelven resultados de tools, un valor que FUERZA una
+    // tool se lee como 'auto': si se reenviara, el modelo tendria que llamar
+    // otra tool en cada ronda y el loop agentico no terminaria nunca.
+    Property Tool_choice: string read GetTool_choice write SetTool_choice;
     Property User: String read FUser write SetUser;
     Property SystemPrompt: TStrings read FSystemPrompt write SetSystemPrompt;
     Property Completion_tokens: Integer read FCompletion_tokens write SetCompletion_tokens;
@@ -667,6 +709,8 @@ type
     // eliminados — TODAS las herramientas viven unicamente en ChatTools.XxxTool
     property SanitizerActive: Boolean read FSanitizerActive write SetSanitizerActive;
     property OnSanitize: TAiSanitizeEvent read FOnSanitize write SetOnSanitize;
+    // ChatTools.PromptGuard bloqueo un mensaje; permite cambiar la accion
+    property OnPromptGuard: TAiPromptGuardEvent read FOnPromptGuard write FOnPromptGuard;
     property PersistentMemory:  TAiPersistentMemoryBase read FPersistentMemory write SetPersistentMemory;
     property MemoryTokenBudget: Integer    read FMemoryTokenBudget write FMemoryTokenBudget default 1500;
     property AutoStoreMemories: Boolean    read FAutoStoreMemories write FAutoStoreMemories default False;
@@ -686,7 +730,7 @@ procedure LogDebug(const Mensaje: string);
 
 implementation
 
-uses uMakerAi.ParamsRegistry, System.IOUtils, System.SyncObjs;
+uses uMakerAi.ParamsRegistry, System.IOUtils;
 
 { TAiChat }
 
@@ -1210,6 +1254,8 @@ begin
     if Assigned(FShellTool)      then FShellTool.RemoveFreeNotification(FOwner);
     if Assigned(FTextEditorTool) then FTextEditorTool.RemoveFreeNotification(FOwner);
     if Assigned(FComputerUseTool) then FComputerUseTool.RemoveFreeNotification(FOwner);
+    if Assigned(FDispatchClassifier) then FDispatchClassifier.RemoveFreeNotification(FOwner);
+    if Assigned(FPromptGuard) then FPromptGuard.RemoveFreeNotification(FOwner);
   end;
   inherited;
 end;
@@ -1228,6 +1274,8 @@ begin
     if AComponent = FShellTool     then FShellTool     := nil;
     if AComponent = FTextEditorTool then FTextEditorTool := nil;
     if AComponent = FComputerUseTool then FComputerUseTool := nil;
+    if AComponent = FDispatchClassifier then FDispatchClassifier := nil;
+    if AComponent = FPromptGuard then FPromptGuard := nil;
   end;
 end;
 
@@ -1248,6 +1296,8 @@ begin
     ShellTool      := Src.FShellTool;
     TextEditorTool := Src.FTextEditorTool;
     ComputerUseTool := Src.FComputerUseTool;
+    DispatchClassifier := Src.FDispatchClassifier;
+    PromptGuard := Src.FPromptGuard;
   end
   else
     inherited;
@@ -1286,6 +1336,28 @@ begin
   if FVideoTool <> Value then
   begin
     FVideoTool := Value;
+    if (Value <> nil) and Assigned(FOwner) then
+      Value.FreeNotification(FOwner);
+    Changed;
+  end;
+end;
+
+procedure TAiChatTools.SetPromptGuard(const Value: TAiPromptGuardBase);
+begin
+  if FPromptGuard <> Value then
+  begin
+    FPromptGuard := Value;
+    if (Value <> nil) and Assigned(FOwner) then
+      Value.FreeNotification(FOwner);
+    Changed;
+  end;
+end;
+
+procedure TAiChatTools.SetDispatchClassifier(const Value: TAiDispatchClassifierBase);
+begin
+  if FDispatchClassifier <> Value then
+  begin
+    FDispatchClassifier := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
     Changed;
@@ -1721,12 +1793,13 @@ begin
   // (SynchronizeEvents=True por defecto) y los tool calls async bloquean la UI.
   FClient.SynchronizeEvents := False;
 {$ENDIF}
+  FRequestDone := TEvent.Create(nil, True, True, '');
 {$IF CompilerVersion >= 35}
-  FClient.OnRequestException := Self.OnRequestExceptionEvent;
+  FClient.OnRequestException := Self.ClientRequestException;
 {$ENDIF}
-  FClient.OnReceiveData := Self.OnInternalReceiveData;
-  FClient.OnRequestError := Self.OnRequestErrorEvent;
-  FClient.OnRequestCompleted := Self.OnRequestCompletedEvent;
+  FClient.OnReceiveData := Self.ClientReceiveData;
+  FClient.OnRequestError := Self.ClientRequestError;
+  FClient.OnRequestCompleted := Self.ClientRequestCompleted;
   FClient.ResponseTimeOut := 120000;
 
   FModel := 'gpt-5';
@@ -1753,6 +1826,7 @@ end;
 
 destructor TAiChat.Destroy;
 begin
+  WaitPendingRequest;
   FCurrentPostStream.Free;
   FClient.Free;
   FResponse.Free;
@@ -1770,7 +1844,71 @@ begin
   FSystemPrompt.Free;
   NewChat;
   FMessages.Free;
+  FRequestDone.Free;
   inherited;
+end;
+
+procedure TAiChat.ClientReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64;
+  var AAbort: Boolean);
+begin
+  if FClient.Asynchronous then
+    FRequestDone.ResetEvent;
+  OnInternalReceiveData(Sender, AContentLength, AReadCount, AAbort);
+end;
+
+procedure TAiChat.ClientRequestCompleted(const Sender: TObject; const aResponse: IHTTPResponse);
+begin
+  try
+    OnRequestCompletedEvent(Sender, aResponse);
+  finally
+    FRequestDone.SetEvent;
+  end;
+end;
+
+procedure TAiChat.ClientRequestError(const Sender: TObject; const AError: string);
+begin
+  try
+    OnRequestErrorEvent(Sender, AError);
+  finally
+    FRequestDone.SetEvent;
+  end;
+end;
+
+procedure TAiChat.ClientRequestException(const Sender: TObject; const AError: Exception);
+begin
+  try
+    OnRequestExceptionEvent(Sender, AError);
+  finally
+    FRequestDone.SetEvent;
+  end;
+end;
+
+procedure TAiChat.WaitPendingRequest;
+var
+  T0: Cardinal;
+begin
+  if (FRequestDone = nil) or (FRequestDone.WaitFor(0) = wrSignaled) then
+    Exit;
+  // El objeto se esta liberando: el usuario ya no debe recibir eventos, y si el
+  // stream sigue abierto se corta en el proximo chunk
+  FOnReceiveDataEvent := nil;
+  FOnReceiveDataEnd := nil;
+  FOnReceiveThinking := nil;
+  FOnError := nil;
+  FOnStateChange := nil;
+  FOnHttpRequestDone := nil;
+  FOnAddMessage := nil;
+  FOnCallToolFunction := nil;
+  FAbort := True;
+  T0 := TThread.GetTickCount;
+  repeat
+    if FRequestDone.WaitFor(50) = wrSignaled then
+      Break;
+    // Con SynchronizeEvents (Delphi < 10.4) los eventos HTTP corren en el hilo
+    // principal: hay que bombear la cola para que lleguen
+    if TThread.CurrentThread.ThreadID = MainThreadID then
+      CheckSynchronize(0);
+  until TThread.GetTickCount - T0 > 15000;
 end;
 
 procedure TAiChat.DoCallFunction(ToolCall: TAiToolsFunction);
@@ -2160,13 +2298,13 @@ begin
         Raise Exception.Create('La propiedad Tools est?n mal definido, debe ser un JsonArray');
       AJSONObject.AddPair('tools', JArr);
 
-      If (Trim(FTool_choice) <> '') then
+      If (Trim(Tool_choice) <> '') then
       Begin
 
 {$IF CompilerVersion < 35}
-        jToolChoice := TJSONUtils.ParseAsObject(FTool_choice);
+        jToolChoice := TJSONUtils.ParseAsObject(Tool_choice);
 {$ELSE}
-        jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(FTool_choice));
+        jToolChoice := TJSonObject(TJSonArray.ParseJSONValue(Tool_choice));
 {$ENDIF}
         If Assigned(jToolChoice) then
           AJSONObject.AddPair('tool_choice', jToolChoice);
@@ -2287,7 +2425,8 @@ Var
   LModel: String;
 begin
   LModel := aModel.ToLower;
-  Result := LModel.StartsWith('gpt-5.6') or LModel.StartsWith('o1') or LModel.StartsWith('o3') or LModel.StartsWith('o4');
+  Result := LModel.StartsWith('gpt-5.6') or LModel.StartsWith('gpt-6') or
+            LModel.StartsWith('o1') or LModel.StartsWith('o3') or LModel.StartsWith('o4');
 end;
 
 function TAiChat.ModelUsesMaxCompletionTokens(Const aModel: String): Boolean;
@@ -2295,7 +2434,8 @@ Var
   LModel: String;
 begin
   LModel := aModel.ToLower;
-  Result := LModel.StartsWith('gpt-5') or LModel.StartsWith('o1') or LModel.StartsWith('o3') or LModel.StartsWith('o4');
+  Result := LModel.StartsWith('gpt-5') or LModel.StartsWith('gpt-6') or
+            LModel.StartsWith('o1') or LModel.StartsWith('o3') or LModel.StartsWith('o4');
 end;
 
 function TAiChat.ExtractUnsupportedParam(Const aErrorBody: String): String;
@@ -2398,6 +2538,63 @@ begin
   FPersistentMemory := AValue;
   if Assigned(FPersistentMemory) then
     FPersistentMemory.FreeNotification(Self);
+end;
+
+procedure TAiChat.MergeStreamExecutedTools(ADeltaTools: TJSonArray);
+var
+  Acc: TJSonArray;
+  Parsed: TJSonValue;
+  NewItem, OldItem: TJSonObject;
+  Pair: TJSonPair;
+  i, j, NewIdx, OldIdx: Integer;
+  Found: Boolean;
+begin
+  if (ADeltaTools = nil) or (ADeltaTools.Count = 0) then
+    Exit;
+
+  Acc := nil;
+  if FLastExecutedToolsJSON <> '' then
+  begin
+    Parsed := TJSonObject.ParseJSONValue(FLastExecutedToolsJSON);
+    if Parsed is TJSonArray then
+      Acc := TJSonArray(Parsed)
+    else
+      Parsed.Free;
+  end;
+  if Acc = nil then
+    Acc := TJSonArray.Create;
+  try
+    for i := 0 to ADeltaTools.Count - 1 do
+    begin
+      if not (ADeltaTools.Items[i] is TJSonObject) then
+        Continue;
+      NewItem := TJSonObject(ADeltaTools.Items[i]);
+      NewIdx := NewItem.GetValue<Integer>('index', i);
+
+      Found := False;
+      for j := 0 to Acc.Count - 1 do
+      begin
+        OldItem := Acc.Items[j] as TJSonObject;
+        OldIdx := OldItem.GetValue<Integer>('index', j);
+        if OldIdx = NewIdx then
+        begin
+          // El chunk nuevo completa al viejo: sus campos (p.ej. 'output') ganan
+          for Pair in NewItem do
+          begin
+            OldItem.RemovePair(Pair.JsonString.Value).Free;
+            OldItem.AddPair(Pair.JsonString.Value, Pair.JsonValue.Clone as TJSonValue);
+          end;
+          Found := True;
+          Break;
+        end;
+      end;
+      if not Found then
+        Acc.AddElement(NewItem.Clone as TJSonObject);
+    end;
+    FLastExecutedToolsJSON := Acc.ToJSON;
+  finally
+    Acc.Free;
+  end;
 end;
 
 procedure TAiChat.OnInternalReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
@@ -2514,7 +2711,15 @@ Var
 
         TempMsg := TAiChatMessage.Create('', FTmpRole);
         try
+          // El mensaje sintetico lleva como content el FLastContent ya acumulado por
+          // los deltas, y ParseChat vuelve a sumarle su content a FLastContent: sin
+          // restaurarlo, OnReceiveDataEnd recibia el texto duplicado ('Listo'#13#10'Listo')
+          // en TODOS los drivers que usan este parser en asincrono. Solo si habia
+          // content: sin el, ParseChat usa el reasoning como respuesta y eso se conserva.
+          var LStreamedContent := FLastContent;
           ParseChat(FakeResponseObj, TempMsg);
+          if LStreamedContent <> '' then
+            FLastContent := LStreamedContent;
           // Groq code_interpreter: procesa archivos capturados durante el stream (async path)
           if FLastExecutedToolsJSON <> '' then
           begin
@@ -2707,6 +2912,15 @@ Var
               end;
             end;
           end;
+
+          // Groq code_interpreter (gpt-oss): executed_tools llega en el DELTA, no en
+          // la raiz. Cada tool viene en dos chunks con el mismo index: el primero
+          // trae solo 'arguments' (el codigo) y el segundo repite todo y agrega
+          // 'output' (el stdout del sandbox). Se combinan por index y el [DONE]
+          // entrega el resultado a ProcessExecutedTools, igual que el camino sync.
+          var JDeltaExec: TJSonArray;
+          if Delta.TryGetValue<TJSonArray>('executed_tools', JDeltaExec) then
+            MergeStreamExecutedTools(JDeltaExec);
         end
         else
         begin
@@ -3667,6 +3881,14 @@ begin
   // Marcar como procesado para que no se reenv?e infinitamente en un loop
   aMediaFile.Procesado := True;
 
+  // Fuera de cmTranscription esto es el puente de Fase 1 de RunNew (un modelo de
+  // texto recibe audio): la transcripcion es ENTRADA para el modelo, que responde
+  // despues. Antes se escribia en ResMsg y se disparaba OnReceiveDataEnd con el
+  // texto crudo, antes de la respuesta real (y la respuesta se agregaba despues al
+  // mismo ResMsg). Solo en cmTranscription la transcripcion es la respuesta.
+  if FChatMode <> cmTranscription then
+    Exit;
+
   // Actualizar el mensaje de respuesta (ResMsg)
   if ResMsg.Prompt <> '' then
     ResMsg.Prompt := ResMsg.Prompt + sLineBreak + sTextoTranscrito
@@ -4128,6 +4350,7 @@ function TAiChat.Run(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
 var
   LSanitizeResult: TSanitizeResult;
   LSanitizeAction: TAiSanitizeAction;
+  LVerdict:        TAiPromptVerdict;
   LMemory:         IAiPersistentMemory;
   LMemCtx:         string;
   LOrigPrompt:     string;
@@ -4162,6 +4385,45 @@ begin
           ; // continúa sin modificar el prompt
         saAllowWrapped:
           AskMsg.Prompt := LSanitizeResult.WrappedText;
+      end;
+    end;
+  end;
+
+  // Guardrail de entrada semantico (ChatTools.PromptGuard): segunda capa, tras
+  // el sanitizador por regex. Juzga lo que ninguna regex anticipa (inyecciones
+  // reformuladas, credenciales, pedidos daninos, fuera de alcance).
+  if Assigned(FChatTools.FPromptGuard) and Assigned(AskMsg) and (AskMsg.Role = 'user') and
+     (AskMsg.Prompt <> '') then
+  begin
+    FChatTools.FPromptGuard.SetContext(Self);
+    try
+      LVerdict := FChatTools.FPromptGuard.CheckPrompt(AskMsg.Prompt);
+    except
+      on E: Exception do
+      begin
+        LVerdict.Allowed := not FChatTools.FPromptGuard.BlockOnError;
+        LVerdict.Category := 'error';
+        LVerdict.Score := 0;
+        LVerdict.Reason := 'prompt guard unavailable: ' + E.Message;
+      end;
+    end;
+    if not LVerdict.Allowed then
+    begin
+      AiSpanAttr(FRunSpan, 'guardrail.input.category', LVerdict.Category);
+      LSanitizeAction := saBlock; // accion por defecto: bloquear
+      if Assigned(FOnPromptGuard) then
+        FOnPromptGuard(Self, LVerdict, LSanitizeAction);
+      case LSanitizeAction of
+        saBlock:
+        begin
+          DoError('Mensaje bloqueado por el guardrail de entrada: ' + LVerdict.Reason, nil);
+          Result := '';
+          Exit;
+        end;
+        saAllow:
+          ; // continua sin modificar el prompt
+        saAllowWrapped:
+          AskMsg.Prompt := TSanitizerPipeline.Run(AskMsg.Prompt).WrappedText;
       end;
     end;
   end;
@@ -4526,6 +4788,27 @@ begin
   FTool_choice := Value;
 end;
 
+// tool_choice efectivo del request. Forzar una tool ('required'/'any' o una
+// funcion concreta) aplica a la PRIMERA llamada del turno: en las rondas que
+// devuelven resultados de tools se pide 'auto', o el modelo queda obligado a
+// llamar otra tool cada vez (medido con Claude Sonnet 5: 231 requests en un
+// loop sin fin, fix sep 29 2026). Todos los drivers leen esta propiedad.
+function TAiChat.GetTool_choice: string;
+var
+  LWord: string;
+  LLast: TAiChatMessage;
+begin
+  Result := FTool_choice;
+  LWord := FTool_choice.Replace('"', '').Trim.ToLower;
+  if (LWord = '') or (LWord = 'auto') or (LWord = 'none') then
+    Exit;
+  if (not Assigned(FMessages)) or (FMessages.Count = 0) then
+    Exit;
+  LLast := FMessages[FMessages.Count - 1];
+  if SameText(LLast.Role, 'tool') or (LLast.ToolCallId <> '') then
+    Result := 'auto';
+end;
+
 procedure TAiChat.SetTop_logprobs(const Value: String);
 begin
   FTop_logprobs := Value;
@@ -4683,9 +4966,25 @@ var
   LTag               : String;
   LContent           : String;
   LDispatchMsg       : TAiChatMessage;
-  LToolAsk           : TAiChatMessage;
   LDispatchPrompt    : String;
 begin
+  // --- Pase 1 rapido: clasificador dedicado (ChatTools.DispatchClassifier) ---
+  // Si decide, se ahorra la llamada de clasificacion al LLM. Diferencias con el
+  // pase por LLM: la tool recibe el prompt original (el clasificador no lo
+  // reescribe) y CHAT responde con completions normales, CON historial (el
+  // pase por LLM responde en un contexto aislado de dos mensajes).
+  LTag := ClassifySmartDispatch(AskMsg.Prompt);
+  if LTag = 'CHAT' then
+  begin
+    InternalRunCompletions(ResMsg, AskMsg);
+    Exit;
+  end
+  else if LTag <> '' then
+  begin
+    RunSmartDispatchTool(LTag, AskMsg.Prompt, ResMsg, AskMsg);
+    Exit;
+  end;
+
   LSavedSystemPrompt := FSystemPrompt.Text;
   LOnData            := FOnReceiveDataEvent;
   LOnDataEnd         := FOnReceiveDataEnd;
@@ -4744,26 +5043,86 @@ begin
     DoDataEnd(ResMsg, 'assistant', LContent);
   end
   else
-  begin
-    LToolAsk := TAiChatMessage.Create;
-    try
-      LToolAsk.Prompt := LContent;
-      LToolAsk.Role   := 'user';
-      DoStateChange(acsToolExecuting, 'Ejecutando: ' + LTag);
-      if LTag = 'IMAGEGEN' then
-        InternalRunImageGeneration(ResMsg, LToolAsk)
-      else if LTag = 'VIDEOGEN' then
-        InternalRunImageVideoGeneration(ResMsg, LToolAsk)
-      else if LTag = 'TTS' then
-        InternalRunSpeechGeneration(ResMsg, LToolAsk)
-      else if LTag = 'WEBSEARCH' then
-        InternalRunWebSearch(ResMsg, LToolAsk)
-      else
-        InternalRunCompletions(ResMsg, AskMsg);
-    finally
-      LToolAsk.Free;
+    RunSmartDispatchTool(LTag, LContent, ResMsg, AskMsg);
+end;
+
+procedure TAiChat.RunSmartDispatchTool(const ATag, AContent: String; ResMsg, AskMsg: TAiChatMessage);
+var
+  LToolAsk: TAiChatMessage;
+begin
+  LToolAsk := TAiChatMessage.Create;
+  try
+    LToolAsk.Prompt := AContent;
+    LToolAsk.Role   := 'user';
+    DoStateChange(acsToolExecuting, 'Ejecutando: ' + ATag);
+    if ATag = 'IMAGEGEN' then
+      InternalRunImageGeneration(ResMsg, LToolAsk)
+    else if ATag = 'VIDEOGEN' then
+      InternalRunImageVideoGeneration(ResMsg, LToolAsk)
+    else if ATag = 'TTS' then
+      InternalRunSpeechGeneration(ResMsg, LToolAsk)
+    else if ATag = 'WEBSEARCH' then
+      InternalRunWebSearch(ResMsg, LToolAsk)
+    else
+      InternalRunCompletions(ResMsg, AskMsg);
+  finally
+    LToolAsk.Free;
+  end;
+end;
+
+function TAiChat.SmartDispatchTags: TArray<String>;
+var
+  L: TList<String>;
+begin
+  L := TList<String>.Create;
+  try
+    if Assigned(FChatTools.FImageTool) then
+      L.Add('IMAGEGEN');
+    if Assigned(FChatTools.FVideoTool) then
+      L.Add('VIDEOGEN');
+    if Assigned(FChatTools.FSpeechTool) then
+      L.Add('TTS');
+    if Assigned(FChatTools.FWebSearchTool) then
+      L.Add('WEBSEARCH');
+    L.Add('CHAT');
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
+
+function TAiChat.ClassifySmartDispatch(const APrompt: String): String;
+var
+  LClassifier: IAiDispatchClassifier;
+  LTags: TArray<String>;
+  LTag: String;
+begin
+  Result := '';
+  if not Assigned(FChatTools.FDispatchClassifier) or
+     not Supports(FChatTools.FDispatchClassifier, IAiDispatchClassifier, LClassifier) then
+    Exit;
+
+  LTags := SmartDispatchTags;
+  FChatTools.FDispatchClassifier.SetContext(Self);
+  DoStateChange(acsReasoning, 'Clasificando solicitud...');
+  try
+    Result := UpperCase(Trim(LClassifier.ClassifyDispatch(APrompt, LTags)));
+  except
+    // Un clasificador caido no rompe el chat: se vuelve al pase por LLM. No se
+    // dispara OnError (muchas apps lo tratan como fatal); el clasificador
+    // registra su propio error (p.ej. TAiJev.LastError / OnError).
+    on E: Exception do
+    begin
+      DoStateChange(acsReasoning, 'Clasificador no disponible, se usa el LLM: ' + E.Message);
+      Exit('');
     end;
   end;
+
+  // Solo se aceptan tags cuya tool este asignada
+  for LTag in LTags do
+    if LTag = Result then
+      Exit;
+  Result := '';
 end;
 
 function TAiChat.BuildSmartDispatchPrompt: String;

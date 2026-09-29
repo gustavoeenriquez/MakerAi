@@ -475,7 +475,8 @@ constructor TAiClaudeChat.Create(Sender: TComponent);
 begin
   inherited;
   ApiKey := '@CLAUDE_API_KEY';
-  FClient.OnReceiveData := Self.OnInternalReceiveData;
+  // OnReceiveData lo asigna la base (TAiChat.ClientReceiveData -> OnInternalReceiveData
+  // virtual); reasignarlo aqui saltaba la marca de peticion en vuelo del destructor
   // Vía propiedad (no FClient directo) para que FResponseTimeOut quede consistente.
   // 300s: con code_execution nativo Anthropic ejecuta server-side y no envía ni un
   // byte hasta terminar (generar un Office tarda 50-70s; 60s cortaba a la mitad).
@@ -563,13 +564,26 @@ begin
 end;
 
 // Mensajes {role:"system"} dentro de messages[] (mid-conversation, preservan
-// el prompt cache): opus-5, opus-4-8, fable, mythos. NO sonnet-5
+// el prompt cache): opus-5 (y 5.5), opus-4-8, fable, mythos y sonnet-5-5.
+// NO sonnet-5 a secas.
 function IsClaudeMidSystemCapable(const AModel: string): Boolean;
 begin
   Result := AModel.StartsWith('claude-opus-5') or
             AModel.StartsWith('claude-opus-4-8') or
             AModel.StartsWith('claude-fable') or
-            AModel.StartsWith('claude-mythos');
+            AModel.StartsWith('claude-mythos') or
+            AModel.StartsWith('claude-sonnet-5-5');
+end;
+
+// Forzar una tool (tool_choice "any" o {type:"tool"}) devuelve 400 en la
+// generacion de sep 2026: opus-5-5, sonnet-5-5, fable-5-1 y mythos-5-1.
+// Ahi se manda "auto" (el modelo sigue pudiendo llamarla) en lugar del error.
+function IsClaudeNoForcedTool(const AModel: string): Boolean;
+begin
+  Result := AModel.StartsWith('claude-opus-5-5') or
+            AModel.StartsWith('claude-sonnet-5-5') or
+            AModel.StartsWith('claude-fable-5-1') or
+            AModel.StartsWith('claude-mythos-5-1');
 end;
 
 function TAiClaudeChat.GetDynamicHeaders: TNetHeaders;
@@ -867,13 +881,23 @@ begin
       begin
         if not Assigned(LOutputConfig) then
           LOutputConfig := TJSONObject.Create;
+        // Escalera ampliada (v3.8): xhigh existe desde opus-4-7 (en 4.6 no:
+        // se lleva a high) y max desde 4.6. minimal/none no existen en
+        // Claude: se piden como low (en la familia 5.5 no se puede apagar).
         case ModelConfig.ThinkingLevel of
-          tlLow:
+          tlLow, tlMinimal, tlNone:
             LOutputConfig.AddPair('effort', 'low');
           tlMedium:
             LOutputConfig.AddPair('effort', 'medium');
           tlHigh:
             LOutputConfig.AddPair('effort', 'high');
+          tlXHigh:
+            if LIsAdaptiveThinking then
+              LOutputConfig.AddPair('effort', 'xhigh')
+            else
+              LOutputConfig.AddPair('effort', 'high');
+          tlMax:
+            LOutputConfig.AddPair('effort', 'max');
         end;
       end;
 
@@ -1125,6 +1149,18 @@ begin
           end;
         finally
           LVal.Free;
+        end;
+        // Los modelos de sep 2026 rechazan forzar una tool: se degrada a auto
+        if Assigned(LChoiceObj) and IsClaudeNoForcedTool(LModel) then
+        begin
+          var LForced := LChoiceObj.GetValue<string>('type', '');
+          if SameText(LForced, 'any') or SameText(LForced, 'tool') then
+          begin
+            LogDebug('tool_choice "' + LForced + '" no admitido por ' + LModel + ': se envia "auto"');
+            LChoiceObj.Free;
+            LChoiceObj := TJSONObject.Create;
+            LChoiceObj.AddPair('type', 'auto');
+          end;
         end;
         if Assigned(LChoiceObj) then
           AJSONObject.AddPair('tool_choice', LChoiceObj);

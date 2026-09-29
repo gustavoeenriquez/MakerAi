@@ -125,6 +125,10 @@ External persistence requires implementing:
 
 PostgreSQL implementations use pgvector extension for vector similarity.
 
+## Reranker semántico (sep 27/2026)
+
+`TAiRAGVector.Reranker: TAiRAGRerankerBase`. En `ExecuteRequest` (paso 5, `RERANK` en VQL) reemplaza el rerank por coseno: `RerankWith(query, reranker)` pone `Idx := puntaje` y ordena, sin tocar embeddings (tampoco los regenera). Después se descartan los nodos con puntaje negativo (el reranker los marca para eliminarlos siempre, p.ej. inyección de prompt) y, si `MinScore > 0`, los que quedan por debajo. **Si el reranker lanza, la búsqueda no falla: cae al rerank por coseno.** `RerankWith` es público para usarlo fuera de VQL. Contrato de `Score(query, textos)`: un puntaje por texto, en el mismo orden. Implementaciones: `TAiJevRAGReranker` (`Source/Tools/uMakerAi.Jev.RAG.pas`, evidencia + descarte de inyecciones) y `TAiQwenRAGReranker` (`Source/Tools/uMakerAi.Qwen.Rerank.pas`, cross-encoder `qwen3-rerank`, hasta 500 pasajes por llamada).
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for source directory overview and [../../CLAUDE.md](../../CLAUDE.md) for project overview.

@@ -15,6 +15,9 @@ The Agents module implements a graph-based autonomous agent orchestration framew
 | `uMakerAi.Agents.EngineRegistry.pas` | Singleton registries for tool discovery (`TEngineRegistry`, `TAgentHandlerRegistry`) |
 | `uMakerAi.Agents.GraphBuilder.pas` | `TGraphBuilder` parses JSON graph specs into runtime structures. `StrictValidation` (default True) raises `EAiGraphError` on structural defects (edge to missing node, undeclared port, >4 fanout outputs); set False for the legacy warn-and-drop behavior (fix M-02) |
 | `uMakerAi.Agents.DmGenerator.pas` | `TDataModuleGenerator` generates Delphi DataModule code from JSON graphs |
+| `uMakerAi.Agents.Node.LLM.pas` | `TLLMNode`: nodo con LLM y loop ReAct sobre el `TAiToolRegistry`. `ResolveConfig` combina nodo + skill (driver del nodo → del skill → `'Claude'`; el `Model` del skill solo si es del driver efectivo; `SystemPrompt` del skill + el del nodo; `ApiKey` del nodo o del skill) y `ConfigureChat` lo aplica en orden Driver → Model → Params (v3.8: `SetDriverName` reinicia el modelo, así que el orden viejo perdía modelo y clave del skill). `DriverName` es `''` por defecto desde v3.8 |
+| `uMakerAi.Agents.Skill.pas` | `TAiSkill`: config reutilizable de un `TLLMNode`. Dos formatos: SKILL.md (`FromPPM`, `FromFolder`, `FromSkillFile`; parser común de `Source/Core/uMakerAi.Skills.Format.pas`) y JSON propio (`FromJSON`, `FromFile`). `ApiKey` solo desde JSON: un SKILL.md es contenido de terceros. Guía: `Docs/Version 3/uMakerAi-Agents-Skill.md` |
+| `uMakerAi.Agents.Tools.JevRouter.pas` | `TAiJevRouterTool`: tool de nodo que elige la siguiente ruta con Jev (TypeSafe AI) y la escribe en `Blackboard['next_route']` para un link `lmConditional`. Registrada en `TEngineRegistry` como `JevRouter` |
 | `uMakerAi.A2A.Server.pas` | `TAiA2AServer` (spec A2A 1.0): expone `TAIAgentManager`(s) como agente A2A — Agent Card en `/.well-known/agent-card.json`, JSON-RPC `SendMessage`/`GetTask`/`CancelTask` (+ aliases 0.x). Pool de managers, ciclo de vida real del task, resume de `input-required`, auth bearer y `traceparent`; sin streaming (rechaza con UnsupportedOperationError) |
 | `uMakerAi.A2A.Client.pas` | `TAiA2AClient`: consume agentes A2A remotos — `FetchAgentCard`, `SendText`/`SendTextEx`, `GetTask`/`CancelTask`; estado normalizado en `LastTaskState` y pregunta del agente en `LastStatusMessage`. Incluye `TAiA2ARemoteAgentTool` (federacion): asignado como `Tool` de un nodo, delega el input del nodo en un agente A2A remoto; registrado en `TEngineRegistry` |
 
@@ -56,6 +59,32 @@ type
 initialization
   TEngineRegistry.Instance.RegisterTool(TMyTool, 'uMyToolUnit');
 ```
+
+## Enrutar con Jev (`TAiJevRouterTool`)
+
+Un nodo **sin `OnExecute`** con `TAiJevRouterTool` como `Tool` le pregunta a Jev cuál de las `Routes` corresponde a su input y escribe la clave en `Blackboard[RouteKey]` (default `next_route`, que es el `ConditionalKey` por defecto del link). El link `lmConditional` existente hace el resto: **el motor no cambia**.
+
+```pascal
+Router := TAiJevRouterTool.Create(Manager);
+Router.AddRoute('contable',   'Asientos, PUC, NIIF, estados financieros');
+Router.AddRoute('tributario', 'Renta, IVA, retención, DIAN');
+Router.AddRoute('general',    '');
+Router.AddFlag('fuentes', '¿Responder `consulta` exige citar una norma concreta?');
+Manager.FindNode('Recepcion').Tool := Router;
+Manager.AddConditionalEdge('Recepcion', 'Enrutador', Targets);   // clave de ruta -> nodo
+Manager.FindNode('Recepcion').Next.NextNo := Manager.FindNode('humano');
+```
+
+- **Ruta final:** `Choice` si su confianza ≥ `MinConfidence` (0.5); si no, `FallbackRoute`. Con `FallbackRoute` vacío el link cae a `NextNo` (en GraphBuilder, el puerto `out_failure`).
+- **Un Jev caído no tumba el grafo:** el error (red, 401, configuración) queda en `<Nodo>.jev.error`, se usa `FallbackRoute` y el grafo termina `esCompleted`.
+- **Blackboard** (prefijo `<Nodo>.jev.`): `choice`, `confidence`, `top` (3 más probables), un valor por flag y `error`. Los números van con **punto decimal** (`'0.85'`), aptos para `lmExpression` (`Recepcion.jev.fuentes >= 0.5`).
+- **Flags:** Nouls que viajan en la misma llamada que la ruta. `OnRoute(Sender, Node, Result, var Route)` permite combinarlos, p.ej. `contable` + `fuentes` alto → `contable_normativo`.
+- **GraphBuilder:** las claves de ruta son los `idStr` de los puertos de salida del nodo router — nombrar los puertos igual que las `Routes`. `ApiKey` es `[TSecret]` (default `@TYPESAFE_API_KEY`), nunca viaja en el JSON.
+- **La redacción de `Instructions` mueve la confianza.** "¿Qué ruta o especialista debe atender…?" dio 0.44 donde "¿Qué especialista debe responder…?" dio 0.68 (misma consulta, `jev-1.13.0`); la segunda es el default. Calibrar `MinConfidence` después de fijar la redacción.
+- El output del nodo es su input sin cambios: el agente elegido recibe la consulta original.
+- Un `TAiJev` externo se asigna en `Router.Jev` (compartido, o el `TFakeJev` de la suite); si no, la tool crea el suyo con `ApiKey`/`Model`.
+
+**`lmExpression` y el punto decimal (fix sep 27/2026):** `EvalCondition` parseaba los números solo con la configuración regional, así que en un Windows con coma decimal `'10.25' > 9.5` se comparaba como texto y daba `False`. Ahora prueba primero la configuración regional y luego punto decimal (caso `agents.expression.decimal-point`).
 
 ## JSON Graph Format
 

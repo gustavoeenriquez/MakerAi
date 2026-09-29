@@ -9,7 +9,7 @@
 //
 // Uso básico:
 //   Node := TLLMNode.Create(Manager);
-//   Node.DriverName   := 'Claude';
+//   Node.DriverName   := 'Claude';     // vacío = el del skill, o 'Claude'
 //   Node.Model        := 'claude-sonnet-4-5';
 //   Node.ApiKey       := '@CLAUDE_API_KEY';
 //   Node.SystemPrompt := 'Eres un asistente experto en...';
@@ -35,9 +35,22 @@ uses
   uMakerAi.Agents.ToolRegistry,
   uMakerAi.Agents.Skill,     // TAiSkill
   uMakerAi.Chat.Messages,    // TAiToolsFunction
+  uMakerAi.Chat.AiConnection, // TAiChatConnection
   uMakerAi.Tools.Functions;  // TAiFunctions, TFunctionActionItem, TFunctionEvent
 
+const
+  // Driver usado cuando ni el nodo ni el skill fijan uno
+  LLMNODE_DEFAULT_DRIVER = 'Claude';
+
 type
+
+  // Configuración efectiva del chat de un TLLMNode (nodo + skill ya combinados)
+  TLLMNodeConfig = record
+    DriverName  : String;
+    Model       : String;   // '' = default del driver
+    ApiKey      : String;
+    SystemPrompt: String;
+  end;
 
   { TLLMNode -------------------------------------------------------------------
     Nodo de agente con LLM y herramientas del TAiToolRegistry integradas.
@@ -89,20 +102,34 @@ type
     constructor Create(aOwner: TComponent); override;
     destructor Destroy; override;
 
+    // Combina las propiedades del nodo con las del skill (si hay):
+    //   - DriverName: el del nodo; si está vacío, el del skill; si tampoco,
+    //     LLMNODE_DEFAULT_DRIVER ('Claude').
+    //   - Model: el del nodo; si está vacío, el del skill SOLO si ese modelo
+    //     es del driver efectivo (mismo DriverName, o ninguno de los dos fijó
+    //     driver). Un nodo que cambia a 'OpenAI' no hereda 'claude-...'.
+    //   - ApiKey: el del nodo; si está vacío, el del skill.
+    //   - SystemPrompt: el del skill seguido del del nodo.
+    // No toca la red ni crea el chat: sirve para inspeccionar la config.
+    function ResolveConfig: TLLMNodeConfig;
+
+    // Aplica ResolveConfig (y ServiceURL/MaxTokens) a un chat. Es lo que hace
+    // DoExecute antes de cargar las tools; público para poder verificarlo.
+    procedure ConfigureChat(AChat: TAiChatConnection);
+
     // Referencia al registry a usar. nil = TAiToolRegistry.Instance.
     property Registry: TAiToolRegistry read FRegistry write FRegistry;
 
     // Skill de configuración reutilizable.
     // El nodo toma ownership: libera el skill anterior al asignar uno nuevo,
     // y libera el skill activo en el destructor.
-    // Si se asigna un skill:
-    //   - Sus campos se aplican como BASE antes de las props del nodo.
-    //   - Las props explícitas del nodo (no vacías) sobrescriben las del skill.
-    //   - ExtraTools se carga si UseAllTools=False y el skill tiene herramientas.
+    // Cómo se combina con las props del nodo: ver ResolveConfig.
+    // ExtraTools se carga si UseAllTools=False y el skill tiene herramientas.
     property Skill: TAiSkill read FSkill write SetSkill;
   published
     // Nombre del driver LLM: 'OpenAI', 'Claude', 'Gemini', 'Ollama', etc.
-    // Vacío = usa el DriverName del skill (si está asignado).
+    // Vacío (default) = el del skill; sin skill (o sin driver en el skill),
+    // 'Claude'.
     property DriverName   : String  read FDriverName   write FDriverName;
     // Modelo específico del proveedor (vacío = usa el del skill o el default del driver)
     property Model        : String  read FModel        write FModel;
@@ -114,8 +141,8 @@ type
     // URL base del servicio (requerida para Azure OpenAI y endpoints personalizados).
     // Se mapea a Chat.Params.Values['URL']. Vacío = usa el endpoint por defecto del driver.
     property ServiceURL   : String  read FServiceURL   write FServiceURL;
-    // Instrucción de sistema para el LLM.
-    // Vacío = usa el SystemPrompt del skill (si está asignado).
+    // Instrucción de sistema para el LLM. Con skill, se agrega DESPUÉS del
+    // SystemPrompt del skill (ajustes del nodo sobre las instrucciones base).
     property SystemPrompt : String  read FSystemPrompt write FSystemPrompt;
     // Máximo de tokens en la respuesta (0 = usa el default del driver)
     property MaxTokens    : Integer read FMaxTokens    write FMaxTokens default 0;
@@ -129,9 +156,6 @@ procedure Register;
 
 implementation
 
-uses
-  uMakerAi.Chat.AiConnection;   // TAiChatConnection
-
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TLLMNode]);
@@ -144,7 +168,9 @@ end;
 constructor TLLMNode.Create(aOwner: TComponent);
 begin
   inherited Create(aOwner);
-  FDriverName     := 'Claude';
+  // Vacío: así el DriverName de un skill puede aplicarse. Sin skill,
+  // ResolveConfig cae en LLMNODE_DEFAULT_DRIVER, igual que antes.
+  FDriverName     := '';
   FModel          := '';
   FApiKey         := '';
   FServiceURL     := '';
@@ -170,6 +196,83 @@ begin
   if FSkill = Value then Exit;
   FSkill.Free;
   FSkill := Value;
+end;
+
+// ---------------------------------------------------------------------------
+// ResolveConfig: combina nodo + skill (ver la declaración para las reglas)
+// ---------------------------------------------------------------------------
+function TLLMNode.ResolveConfig: TLLMNodeConfig;
+var
+  SkillDriver, SkillModel, SkillPrompt: String;
+begin
+  SkillDriver := '';
+  SkillModel  := '';
+  SkillPrompt := '';
+  Result.ApiKey := FApiKey;
+  if Assigned(FSkill) then
+  begin
+    SkillDriver := Trim(FSkill.DriverName);
+    SkillModel  := Trim(FSkill.Model);
+    SkillPrompt := Trim(FSkill.SystemPrompt);
+    if Result.ApiKey = '' then
+      Result.ApiKey := FSkill.ApiKey;
+  end;
+
+  // Driver
+  if Trim(FDriverName) <> '' then
+    Result.DriverName := Trim(FDriverName)
+  else if SkillDriver <> '' then
+    Result.DriverName := SkillDriver
+  else
+    Result.DriverName := LLMNODE_DEFAULT_DRIVER;
+
+  // Modelo: el del skill solo si es del driver efectivo. Un skill sin driver
+  // (típico de un SKILL.md) aporta su modelo solo si el nodo tampoco fijó
+  // driver: ambos quedan en el default, que es para lo que se escribió.
+  if Trim(FModel) <> '' then
+    Result.Model := Trim(FModel)
+  else if (SkillModel <> '') and
+          (SameText(SkillDriver, Result.DriverName) or
+           ((SkillDriver = '') and (Trim(FDriverName) = ''))) then
+    Result.Model := SkillModel
+  else
+    Result.Model := '';
+
+  // System prompt: instrucciones del skill + ajustes del nodo
+  if (SkillPrompt <> '') and (Trim(FSystemPrompt) <> '') then
+    Result.SystemPrompt := SkillPrompt + sLineBreak + sLineBreak + FSystemPrompt
+  else if SkillPrompt <> '' then
+    Result.SystemPrompt := SkillPrompt
+  else
+    Result.SystemPrompt := FSystemPrompt;
+end;
+
+// ---------------------------------------------------------------------------
+// ConfigureChat: aplica la config efectiva a un chat recién creado.
+// Se calcula entera ANTES de tocar el chat y se aplica en orden
+// Driver -> Model -> Params: SetDriverName reinicia el Model y recarga los
+// Params del driver, así que aplicar el skill y luego el nodo (como antes)
+// perdía el modelo y la ApiKey del skill en cuanto el nodo tenía otro driver.
+// ---------------------------------------------------------------------------
+procedure TLLMNode.ConfigureChat(AChat: TAiChatConnection);
+var
+  Cfg: TLLMNodeConfig;
+begin
+  Cfg := ResolveConfig;
+  AChat.DriverName := Cfg.DriverName;
+  if Cfg.Model <> '' then
+    AChat.Model := Cfg.Model;
+
+  // Parámetros vía TStrings (Asynchronous DEBE ser False en nodos de agente)
+  AChat.Params.Values['Asynchronous'] := 'False';
+  if Cfg.ApiKey <> '' then
+    AChat.Params.Values['ApiKey'] := Cfg.ApiKey;
+  if FServiceURL <> '' then
+    AChat.Params.Values['URL'] := FServiceURL;
+  if FMaxTokens > 0 then
+    AChat.Params.Values['Max_tokens'] := IntToStr(FMaxTokens);
+  if Cfg.SystemPrompt <> '' then
+    AChat.SystemPrompt.Text := Cfg.SystemPrompt;
 end;
 
 // ---------------------------------------------------------------------------
@@ -331,41 +434,11 @@ begin
   Chat      := TAiChatConnection.Create(nil);
   Functions := TAiFunctions.Create(nil);
   try
-    // 1. Aplicar el skill como BASE (si está asignado).
-    //    Sus valores se establecen primero; las props del nodo los sobrescriben
-    //    a continuación si son no-vacías.
-    if Assigned(FSkill) then
-    begin
-      if FSkill.DriverName <> '' then
-        Chat.DriverName := FSkill.DriverName;
-      if FSkill.Model <> '' then
-        Chat.Model := FSkill.Model;
-      if FSkill.ApiKey <> '' then
-        Chat.Params.Values['ApiKey'] := FSkill.ApiKey;
-      if FSkill.SystemPrompt <> '' then
-        Chat.SystemPrompt.Text := FSkill.SystemPrompt;
-    end;
-
-    // 2. Aplicar props explícitas del nodo (tienen prioridad sobre el skill).
-    //    DriverName: override si el nodo tiene valor; si no, conserva el del skill.
-    if FDriverName <> '' then
-      Chat.DriverName := FDriverName;
-    if FModel <> '' then
-      Chat.Model := FModel;
+    // 1. Driver, modelo, credenciales y prompt (nodo + skill)
+    ConfigureChat(Chat);
 
     // Conectar handler de errores para capturar fallos del LLM
     Chat.OnError := InternalOnError;
-
-    // Parámetros vía TStrings (Asynchronous DEBE ser False en nodos de agente)
-    Chat.Params.Values['Asynchronous'] := 'False';
-    if FApiKey <> '' then
-      Chat.Params.Values['ApiKey'] := FApiKey;
-    if FServiceURL <> '' then
-      Chat.Params.Values['URL'] := FServiceURL;
-    if FMaxTokens > 0 then
-      Chat.Params.Values['Max_tokens'] := IntToStr(FMaxTokens);
-    if FSystemPrompt <> '' then
-      Chat.SystemPrompt.Text := FSystemPrompt;
 
     // 3. Cargar herramientas.
     //    - UseAllTools=True  → carga todo el registry (comportamiento original).

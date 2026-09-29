@@ -62,6 +62,14 @@ type
     procedure ExecutePdfAnalysis(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
   end;
 
+  // Clasificador de intencion para cmSmartDispatch: sustituye el pase 1 (un LLM
+  // que clasifica) por un clasificador rapido. Devuelve una de ATags, o '' para
+  // que el chat haga el pase 1 con el LLM como siempre (duda, error, etc.).
+  IAiDispatchClassifier = interface
+    ['{F2D75772-8679-43F9-84C2-5E28E2FB3D07}']
+    function ClassifyDispatch(const APrompt: string; const ATags: TArray<string>): string;
+  end;
+
   IAiReportTool = interface
     ['{B9C0D1E2-F3A4-4B5C-6D7E-8F9A0B1C2D3E}']
     procedure ExecuteReport(ResMsg, AskMsg: TAiChatMessage);
@@ -130,6 +138,35 @@ type
   TAiReportToolBase = class(TAiCustomTool, IAiReportTool)
   Protected
     procedure ExecuteReport(ResMsg, AskMsg: TAiChatMessage); virtual;
+  end;
+
+  // Veredicto del guardrail de entrada (ChatTools.PromptGuard)
+  TAiPromptVerdict = record
+    Allowed: Boolean;
+    Category: string; // categoria que bloqueo ('injection', 'sensitive_data', ...); '' si paso
+    Score: Double;    // probabilidad de esa categoria (0..1)
+    Reason: string;
+  end;
+
+  // Guardrail de entrada: revisa el mensaje del usuario ANTES de enviarlo al
+  // LLM, despues del sanitizador por regex (SanitizerActive). La base permite
+  // todo. Si CheckPrompt lanza, BlockOnError decide (True = bloquear).
+  // Implementacion con Jev: TAiJevPromptGuard.
+  TAiPromptGuardBase = class(TAiCustomTool)
+  private
+    FBlockOnError: Boolean;
+  public
+    constructor Create(AOwner: TComponent); override;
+    function CheckPrompt(const APrompt: string): TAiPromptVerdict; virtual;
+  published
+    property BlockOnError: Boolean read FBlockOnError write FBlockOnError default True;
+  end;
+
+  // Base para ChatTools.DispatchClassifier. La implementacion por defecto no
+  // decide ('') y SmartDispatch sigue con su pase 1 por LLM.
+  TAiDispatchClassifierBase = class(TAiCustomTool, IAiDispatchClassifier)
+  Protected
+    function ClassifyDispatch(const APrompt: string; const ATags: TArray<string>): string; virtual;
   end;
 
 implementation
@@ -272,6 +309,30 @@ end;
 
 procedure TAiReportToolBase.ExecuteReport(ResMsg, AskMsg: TAiChatMessage);
 begin
+end;
+
+{ TAiPromptGuardBase }
+
+constructor TAiPromptGuardBase.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  FBlockOnError := True;
+end;
+
+function TAiPromptGuardBase.CheckPrompt(const APrompt: string): TAiPromptVerdict;
+begin
+  Result.Allowed := True;
+  Result.Category := '';
+  Result.Score := 0;
+  Result.Reason := '';
+end;
+
+{ TAiDispatchClassifierBase }
+
+function TAiDispatchClassifierBase.ClassifyDispatch(const APrompt: string;
+  const ATags: TArray<string>): string;
+begin
+  Result := '';
 end;
 
 end.

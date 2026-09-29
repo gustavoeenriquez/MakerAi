@@ -170,6 +170,9 @@ constructor TAiMakerAiChat.Create(Sender: TComponent);
 begin
   inherited;
   Url := GlMakerAiUrl;  // sobreescribe el GlOpenAIUrl que pone el base en Create
+  // El mismo default que RegisterDefaultParams: sin esto heredaba el modelo
+  // de TAiOpenChat (gpt-5 y luego gpt-6-sol), que el broker no sirve
+  Model := 'mk-gpt-oss-20b';
   ResetSessionId;
   FPendingMediaParts := TList<TAiMediaFile>.Create;
   FFileReaderId := 0;

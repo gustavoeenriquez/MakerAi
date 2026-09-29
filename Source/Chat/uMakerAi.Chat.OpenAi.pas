@@ -154,6 +154,16 @@ uses
 Const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
 
+// reasoning.effort que se envia. La familia GPT-6 acepta none/low/medium/
+// high/xhigh/max pero NO minimal (la 5.x si): ahi tlMinimal se pide como
+// low para no provocar un 400.
+function OpenAiEffort(const AModel: string; ALevel: TAiThinkingLevel): string;
+begin
+  Result := ThinkingLevelToStr(ALevel);
+  if (ALevel = tlMinimal) and AModel.ToLower.StartsWith('gpt-6') then
+    Result := 'low';
+end;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiOpenChat]);
@@ -177,8 +187,11 @@ begin
     ApiKey := '@OPENAI_API_KEY';
   if Url = '' then
     Url := GlOpenAIUrl;
-  if Model = '' then
-    Model := 'gpt-5.1';
+  // gpt-6-sol desde v3.8: sucesor de gpt-5.1 en la misma franja de precio
+  // ($2/$10). Se asigna SIEMPRE: el constructor de TAiChat deja 'gpt-5', asi
+  // que el antiguo "if Model = ''" nunca se cumplia y un TAiOpenChat creado
+  // directamente usaba gpt-5 (que se apaga el 11 dic 2026), no gpt-5.1.
+  Model := 'gpt-6-sol';
 
   FReasoningSummary := rsmDefault;
   // Capacidades configuradas via Initializations.pas (ModelConfig.ModelCaps/SessionCaps)
@@ -276,7 +289,7 @@ class procedure TAiOpenChat.RegisterDefaultParams(Params: TStrings);
 begin
   Params.Clear;
   Params.Add('ApiKey=@OPENAI_API_KEY');
-  Params.Add('Model=gpt-5.1');
+  Params.Add('Model=gpt-6-sol');
   Params.Add('Url=https://api.openai.com/v1/');
 end;
 
@@ -791,7 +804,7 @@ begin
       JConfigUpd := TJSonObject.Create;
       JConfigUpd.AddPair('type', 'configuration_update');
       JConfigUpd.AddPair('reasoning',
-        TJSonObject.Create(TJSONPair.Create('effort', ThinkingLevelToStr(ModelConfig.ThinkingLevel))));
+        TJSonObject.Create(TJSONPair.Create('effort', OpenAiEffort(LModel, ModelConfig.ThinkingLevel))));
       JInputArray.Add(JConfigUpd);
       LEffortAsConfigUpdate := True;
     end;
@@ -827,7 +840,7 @@ begin
       // Escalera completa: none / minimal / low / medium / high / xhigh / max.
       // ThinkingLevelToStr devuelve '' para tlDefault, que es "no mandes nada".
       if ThinkingLevelToStr(ModelConfig.ThinkingLevel) <> '' then
-        JReasoning.AddPair('effort', ThinkingLevelToStr(ModelConfig.ThinkingLevel));
+        JReasoning.AddPair('effort', OpenAiEffort(LModel, ModelConfig.ThinkingLevel));
       case FReasoningSummary of
         rsmAuto:
           JReasoning.AddPair('summary', 'auto');

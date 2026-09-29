@@ -73,19 +73,24 @@ type
     function  Recall(AMinImportance: Integer; const ANamespace: string;
                      ALimit: Integer): TMemoryEntryList;
 
-    function  GetById(AId: Integer): TMemoryEntry;
-    procedure DeleteById(AId: Integer);
-    procedure UpdateAccessStats(AId: Integer);
-    procedure UpdateDecayScore(AId: Integer; AScore: Double);
+    // Operaciones por Id: SIEMPRE acotadas al namespace. Un Id de otro
+    // namespace se comporta igual que uno inexistente (nil / sin efecto),
+    // así el Id no sirve para leer ni modificar memorias ajenas (issue #127).
+    function  GetById(AId: Integer; const ANamespace: string): TMemoryEntry;
+    procedure DeleteById(AId: Integer; const ANamespace: string);
+    procedure UpdateAccessStats(AId: Integer; const ANamespace: string);
+    procedure UpdateDecayScore(AId: Integer; AScore: Double; const ANamespace: string);
     procedure UpdateContent(AId: Integer; const AContent: string;
-                            AImportance: Integer);
+                            AImportance: Integer; const ANamespace: string);
 
     function  Stats(const ANamespace: string): TMemoryStats;
     procedure CleanupExpired(const ANamespace: string);
 
-    // Knowledge graph básico sobre la misma DB
-    procedure LinkEntries(AFromId, AToId: Integer; const ARelation: string);
-    procedure UnlinkEntries(AFromId, AToId: Integer);
+    // Knowledge graph básico sobre la misma DB.
+    // Link/Unlink solo actúan si AMBOS extremos pertenecen a ANamespace.
+    procedure LinkEntries(AFromId, AToId: Integer; const ARelation: string;
+                          const ANamespace: string);
+    procedure UnlinkEntries(AFromId, AToId: Integer; const ANamespace: string);
     function  GetLinks(AId: Integer; const ANamespace: string): TMemoryEntryList;
 
     function  ExportAll(const ANamespace: string): TMemoryEntryList;
@@ -121,16 +126,17 @@ type
                               AMinScore: Double = 0.5): TMemoryEntryList;
     function  Recall(AMinImportance: Integer; const ANamespace: string;
                      ALimit: Integer): TMemoryEntryList;
-    function  GetById(AId: Integer): TMemoryEntry;
-    procedure DeleteById(AId: Integer);
-    procedure UpdateAccessStats(AId: Integer);
-    procedure UpdateDecayScore(AId: Integer; AScore: Double);
+    function  GetById(AId: Integer; const ANamespace: string): TMemoryEntry;
+    procedure DeleteById(AId: Integer; const ANamespace: string);
+    procedure UpdateAccessStats(AId: Integer; const ANamespace: string);
+    procedure UpdateDecayScore(AId: Integer; AScore: Double; const ANamespace: string);
     procedure UpdateContent(AId: Integer; const AContent: string;
-                            AImportance: Integer);
+                            AImportance: Integer; const ANamespace: string);
     function  Stats(const ANamespace: string): TMemoryStats;
     procedure CleanupExpired(const ANamespace: string);
-    procedure LinkEntries(AFromId, AToId: Integer; const ARelation: string);
-    procedure UnlinkEntries(AFromId, AToId: Integer);
+    procedure LinkEntries(AFromId, AToId: Integer; const ARelation: string;
+                          const ANamespace: string);
+    procedure UnlinkEntries(AFromId, AToId: Integer; const ANamespace: string);
     function  GetLinks(AId: Integer; const ANamespace: string): TMemoryEntryList;
     function  ExportAll(const ANamespace: string): TMemoryEntryList;
 
@@ -580,15 +586,17 @@ end;
 // GetById
 // ---------------------------------------------------------------------------
 
-function TAiMemorySQLiteStorage.GetById(AId: Integer): TMemoryEntry;
+function TAiMemorySQLiteStorage.GetById(AId: Integer;
+  const ANamespace: string): TMemoryEntry;
 var
   Q: TFDQuery;
 begin
   Result := nil;
   Q := NewQuery;
   try
-    Q.SQL.Text := 'SELECT * FROM ' + FTableName + ' WHERE id = :id';
+    Q.SQL.Text := 'SELECT * FROM ' + FTableName + ' WHERE id = :id AND namespace = :ns';
     Q.ParamByName('id').AsInteger := AId;
+    Q.ParamByName('ns').AsString  := ANamespace;
     Q.Open;
     if not Q.IsEmpty then
       Result := RowToEntry(Q);
@@ -601,14 +609,16 @@ end;
 // DeleteById
 // ---------------------------------------------------------------------------
 
-procedure TAiMemorySQLiteStorage.DeleteById(AId: Integer);
+procedure TAiMemorySQLiteStorage.DeleteById(AId: Integer;
+  const ANamespace: string);
 var
   Q: TFDQuery;
 begin
   Q := NewQuery;
   try
-    Q.SQL.Text := 'DELETE FROM ' + FTableName + ' WHERE id = :id';
+    Q.SQL.Text := 'DELETE FROM ' + FTableName + ' WHERE id = :id AND namespace = :ns';
     Q.ParamByName('id').AsInteger := AId;
+    Q.ParamByName('ns').AsString  := ANamespace;
     Q.ExecSQL;
   finally
     Q.Free;
@@ -619,7 +629,8 @@ end;
 // UpdateAccessStats — incrementa contador y actualiza accessed_at
 // ---------------------------------------------------------------------------
 
-procedure TAiMemorySQLiteStorage.UpdateAccessStats(AId: Integer);
+procedure TAiMemorySQLiteStorage.UpdateAccessStats(AId: Integer;
+  const ANamespace: string);
 var
   Q: TFDQuery;
 begin
@@ -629,9 +640,10 @@ begin
       'UPDATE ' + FTableName +
       ' SET access_count = access_count + 1,' +
       '     accessed_at  = :acc' +
-      ' WHERE id = :id';
+      ' WHERE id = :id AND namespace = :ns';
     Q.ParamByName('acc').AsString  := DateToISO8601(Now, False);
     Q.ParamByName('id').AsInteger  := AId;
+    Q.ParamByName('ns').AsString   := ANamespace;
     Q.ExecSQL;
   finally
     Q.Free;
@@ -642,16 +654,19 @@ end;
 // UpdateDecayScore
 // ---------------------------------------------------------------------------
 
-procedure TAiMemorySQLiteStorage.UpdateDecayScore(AId: Integer; AScore: Double);
+procedure TAiMemorySQLiteStorage.UpdateDecayScore(AId: Integer; AScore: Double;
+  const ANamespace: string);
 var
   Q: TFDQuery;
 begin
   Q := NewQuery;
   try
     Q.SQL.Text :=
-      'UPDATE ' + FTableName + ' SET decay_score = :score WHERE id = :id';
+      'UPDATE ' + FTableName + ' SET decay_score = :score' +
+      ' WHERE id = :id AND namespace = :ns';
     Q.ParamByName('score').AsFloat  := AScore;
     Q.ParamByName('id').AsInteger   := AId;
+    Q.ParamByName('ns').AsString    := ANamespace;
     Q.ExecSQL;
   finally
     Q.Free;
@@ -663,7 +678,7 @@ end;
 // ---------------------------------------------------------------------------
 
 procedure TAiMemorySQLiteStorage.UpdateContent(AId: Integer;
-  const AContent: string; AImportance: Integer);
+  const AContent: string; AImportance: Integer; const ANamespace: string);
 var
   Q: TFDQuery;
 begin
@@ -672,11 +687,12 @@ begin
     Q.SQL.Text :=
       'UPDATE ' + FTableName +
       ' SET content = :content, importance = :imp, accessed_at = :acc' +
-      ' WHERE id = :id';
+      ' WHERE id = :id AND namespace = :ns';
     Q.ParamByName('content').AsString  := AContent;
     Q.ParamByName('imp').AsInteger     := AImportance;
     Q.ParamByName('acc').AsString      := DateToISO8601(Now, False);
     Q.ParamByName('id').AsInteger      := AId;
+    Q.ParamByName('ns').AsString       := ANamespace;
     Q.ExecSQL;
   finally
     Q.Free;
@@ -752,34 +768,49 @@ end;
 // ---------------------------------------------------------------------------
 
 procedure TAiMemorySQLiteStorage.LinkEntries(AFromId, AToId: Integer;
-  const ARelation: string);
+  const ARelation: string; const ANamespace: string);
 var
   Q: TFDQuery;
 begin
   Q := NewQuery;
   try
+    // INSERT ... SELECT: si alguno de los dos extremos no existe en ANamespace
+    // el SELECT no devuelve filas y no se crea el enlace.
     Q.SQL.Text :=
       'INSERT OR REPLACE INTO ' + FTableName + '_links (from_id, to_id, relation)' +
-      ' VALUES (:from, :to, :rel)';
-    Q.ParamByName('from').AsInteger := AFromId;
-    Q.ParamByName('to').AsInteger   := AToId;
-    Q.ParamByName('rel').AsString   := ARelation;
+      ' SELECT :from, :to, :rel' +
+      ' WHERE EXISTS (SELECT 1 FROM ' + FTableName + ' WHERE id = :from2 AND namespace = :ns)' +
+      '   AND EXISTS (SELECT 1 FROM ' + FTableName + ' WHERE id = :to2   AND namespace = :ns2)';
+    Q.ParamByName('from').AsInteger  := AFromId;
+    Q.ParamByName('to').AsInteger    := AToId;
+    Q.ParamByName('rel').AsString    := ARelation;
+    Q.ParamByName('from2').AsInteger := AFromId;
+    Q.ParamByName('to2').AsInteger   := AToId;
+    Q.ParamByName('ns').AsString     := ANamespace;
+    Q.ParamByName('ns2').AsString    := ANamespace;
     Q.ExecSQL;
   finally
     Q.Free;
   end;
 end;
 
-procedure TAiMemorySQLiteStorage.UnlinkEntries(AFromId, AToId: Integer);
+procedure TAiMemorySQLiteStorage.UnlinkEntries(AFromId, AToId: Integer;
+  const ANamespace: string);
 var
   Q: TFDQuery;
 begin
   Q := NewQuery;
   try
     Q.SQL.Text :=
-      'DELETE FROM ' + FTableName + '_links WHERE from_id=:from AND to_id=:to';
-    Q.ParamByName('from').AsInteger := AFromId;
-    Q.ParamByName('to').AsInteger   := AToId;
+      'DELETE FROM ' + FTableName + '_links WHERE from_id=:from AND to_id=:to' +
+      ' AND EXISTS (SELECT 1 FROM ' + FTableName + ' WHERE id = :from2 AND namespace = :ns)' +
+      ' AND EXISTS (SELECT 1 FROM ' + FTableName + ' WHERE id = :to2   AND namespace = :ns2)';
+    Q.ParamByName('from').AsInteger  := AFromId;
+    Q.ParamByName('to').AsInteger    := AToId;
+    Q.ParamByName('from2').AsInteger := AFromId;
+    Q.ParamByName('to2').AsInteger   := AToId;
+    Q.ParamByName('ns').AsString     := ANamespace;
+    Q.ParamByName('ns2').AsString    := ANamespace;
     Q.ExecSQL;
   finally
     Q.Free;
@@ -802,10 +833,17 @@ begin
       ' SELECT m.* FROM ' + FTableName + ' m' +
       ' JOIN ' + FTableName + '_links l ON m.id = l.from_id' +
       ' WHERE l.to_id = :id2 AND m.namespace = :ns2';
+    // El Id de origen también debe ser del namespace: si no, ni siquiera se
+    // revela que existen enlaces hacia él.
+    Q.SQL.Text :=
+      'SELECT * FROM (' + Q.SQL.Text + ')' +
+      ' WHERE EXISTS (SELECT 1 FROM ' + FTableName + ' WHERE id = :id3 AND namespace = :ns3)';
     Q.ParamByName('id').AsInteger   := AId;
     Q.ParamByName('ns').AsString    := ANamespace;
     Q.ParamByName('id2').AsInteger  := AId;
     Q.ParamByName('ns2').AsString   := ANamespace;
+    Q.ParamByName('id3').AsInteger  := AId;
+    Q.ParamByName('ns3').AsString   := ANamespace;
     Q.Open;
     while not Q.Eof do
     begin

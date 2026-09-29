@@ -26,6 +26,8 @@ Demos:
 | `uMakerAi.Realtime.Gemini.pas` | `TAiGeminiRealtimeSTT` | Gemini driver — **stub, pending** |
 | `uMakerAi.Realtime.MakerAi.pas` | `TAiMakerAiRealtimeChat` | MakerAI driver — **complete** (STT+LLM+TTS) |
 | `uMakerAi.Realtime.Grok.pas` | `TAiGrokRealtimeChat` | xAI Grok Voice driver — speech-to-speech, OpenAI Realtime-compatible protocol — **implemented, pending runtime test** |
+| `uMakerAi.Realtime.Qwen.pas` | `TAiQwenRealtimeChat`, `TAiQwenRealtimeSTT`, `TAiQwenRealtimeTranslate` | Alibaba Qwen (DashScope) — voice conversation, live STT and simultaneous translation — **runtime-tested** (2026-09-28) |
+| `uMakerAi.Realtime.QwenTTS.pas` | `TAiQwenRealtimeTTS` | Qwen streaming **text-to-speech** (text in → audio out) — standalone component, not a `TAiRealtimeBase` driver — **runtime-tested** (2026-09-28) |
 | `uMakerAi.Realtime.WebSocket.pas` | `TAiRealtimeWSClient` (shim → `TAiWSClient`) | Compatibility alias; implementation in `Source/WebSocket/` |
 
 ### Class Hierarchy
@@ -37,6 +39,10 @@ TAiRealtimeBase (abstract)
   └── TAiRealtimeVoiceBase (abstract — adds OnAssistantText/Delta, OnAudioChunk, OnAudioDone)
         ├── TAiMakerAiRealtimeChat  — wss://api.cimamaker.com/v1/audio/realtime, 24 kHz  (STT+LLM+TTS)
         ├── TAiGrokRealtimeChat     — wss://api.x.ai/v1/realtime, 24 kHz  (speech-to-speech)
+        ├── TAiQwenRealtimeBase     — wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime, 16 kHz in / 24 kHz out
+        │     ├── TAiQwenRealtimeChat      'Qwen'          (omni speech-to-speech)
+        │     ├── TAiQwenRealtimeSTT       'QwenSTT'       (live STT)
+        │     └── TAiQwenRealtimeTranslate 'QwenTranslate' (simultaneous translation + voice)
         └── TAiRealtimeConnection   — universal connector (wraps concrete driver)
 ```
 
@@ -100,8 +106,22 @@ AiRealtime.OnTranscriptCompleted := HandleTranscript;
 AiRealtime.Connect;
 ```
 
-`DriverName` values: `'OpenAI'`, `'MakerAi'`, `'Grok'`, `'Gemini'` (stub).  
+`DriverName` values: `'OpenAI'`, `'OpenAiTranslate'`, `'MakerAi'`, `'Grok'`, `'Qwen'`, `'QwenSTT'`, `'QwenTranslate'`, `'Gemini'` (stub).  
 Changing `DriverName` recreates the internal driver instance.
+
+### Driver-specific properties: `DriverParams` (Sep 2026)
+
+The connector only forwards the base properties (`ApiKey`, `Model`, `Language`, VAD...). Everything a driver adds on top — `Voice`, `Instructions`, `TargetLanguage`, `ReasoningEffort`, `Keyterms`, the Qwen `Url`… — goes in **`DriverParams`** (published `TStrings`, one `Property=Value` per line), applied to the driver by RTTI when it is created and again on `Connect`:
+
+```pascal
+AiRealtime.DriverName := 'Qwen';
+AiRealtime.DriverParams.Values['Voice'] := 'Tina';
+AiRealtime.DriverParams.Values['Instructions'] := 'Answer in one sentence.';
+AiRealtime.DriverParams.Values['ReasoningEffort'] := 'greNone';   // Grok: enum by name
+AiRealtime.DriverParams.Values['Keyterms'] := 'PUC|DIAN';         // TStrings: '|' separates items
+```
+
+Strings, integers, floats (invariant), enums by name, booleans and `TStrings` are supported. **A key the driver does not have (or an invalid value) is reported through `OnError` with code `driver_param` on `Connect`** — not when the driver is created, because `DriverParams` may legitimately carry keys for another driver while switching. What cannot be written as text (`AiFunctions`, driver-specific events, `CreateResponse`) is reached through the public `Instance` property: `(AiRealtime.Instance as TAiGrokRealtimeChat).AiFunctions := ...`.
 
 The connector inherits from `TAiRealtimeVoiceBase`, so it also re-exposes the
 voice events (`OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`,
@@ -236,6 +256,54 @@ Phase 3 (resumption, binary transport, ephemeral tokens, file_search/mcp declara
 
 ---
 
+## Qwen drivers — Alibaba Model Studio (DashScope)
+
+**Status:** Complete — runtime-tested through `TAiRealtimeConnection` (2026-09-28): STT, voice conversation (user transcript, assistant text and 9 s of TTS; the audio re-transcribed matches the text) and es→en translation with voice. Added as a new unit only: no change to the base classes, the connector or the WebSocket client. API key: `@DASHSCOPE_API_KEY` (applied when the connector passes an empty `ApiKey`).
+
+- **Endpoint:** `wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime?model=<model>` (`Url` property for other regions), `Authorization: Bearer`. OpenAI Realtime **beta** event names (`response.audio.delta`, `response.audio_transcript.delta/.done`); the GA names are accepted too.
+- **Audio:** input PCM16 mono **16 kHz** for every model (`TargetSampleRate = 16000`; the base resamples from `InputSampleRate`); output PCM16 **24 kHz**.
+- **Base64 without line breaks.** `TNetEncoding.Base64` wraps every 76 chars; DashScope rejects that with *"Illegal base64 character d"* (xAI and OpenAI tolerate it). The driver uses `TBase64Encoding.Create(0)`.
+
+| DriverName | Class | Default model | Events |
+|---|---|---|---|
+| `Qwen` | `TAiQwenRealtimeChat` | `qwen3.8-omni-flash-realtime` | STT events + `OnAssistantTextDelta/Text`, `OnAudioChunk`, `OnAudioDone`. `Instructions` = system prompt |
+| `QwenSTT` | `TAiQwenRealtimeSTT` | `qwen3-asr-flash-realtime` | `OnTranscriptDelta/Completed`. `Language` → `input_audio_transcription.language` |
+| `QwenTranslate` | `TAiQwenRealtimeTranslate` | `qwen3.8-livetranslate-flash-realtime` | source language in `OnTranscriptDelta/Completed`, translation in `OnAssistantTextDelta/Text`, translated voice in `OnAudioChunk`. `TargetLanguage` (default `en`) |
+
+Other models work through `Model`: `qwen3.5-omni-flash/plus-realtime`, `qwen3-omni-flash-realtime`, `qwen3-livetranslate-flash-realtime`, `qwen3.5-livetranslate-flash-realtime`.
+
+### Protocol differences handled by the drivers (verified live)
+
+1. **User transcription arrives in three shapes**, normalized to incremental `OnTranscriptDelta` (if the server rewrites the beginning the full text is emitted, same rule as Grok):
+   - omni: `...input_audio_transcription.delta` with `text: ""` and `stash` = accumulated text;
+   - asr: `...input_audio_transcription.text` with `text` = confirmed + `stash` = pending;
+   - translate: `...input_audio_transcription.delta` with an incremental `delta`.
+2. **Voices are per model** and a foreign voice is an error (`Voice 'Cherry' is not supported`): qwen3.8-omni defaults to Tina, qwen3-omni to Cherry. Empty `Voice` = server default. **Exception, translate:** a `session.update` without a voice makes the server fall back to Chelsie, which that model rejects — `QwenTranslate` sends `Tina` by default.
+3. VAD: `server_vad` (`rvmSemanticVad` maps to it); `rvmManual` sends `turn_detection: null` → `CommitAudio` + `CreateResponse`. **The translate model uses `speaker_detection` with 2.5 s of silence**: a turn closes only after ~2.5 s without speech (file tests must trail at least 3 s of silence).
+4. `session.created` and `session.updated` both arrive; `OnSessionReady` fires once.
+5. `qwen3-tts-*-realtime` (text in → audio out) is covered by the separate component `TAiQwenRealtimeTTS` (next section). `qwen3-s2s-flash-realtime` is **not available to the tested account**: the server closes the socket right after `session.created`, with or without `session.update`.
+
+## TAiQwenRealtimeTTS — streaming text-to-speech (standalone component)
+
+The realtime hierarchy is audio-in (microphone → server); this goes the other way, so it is a separate `TComponent` (same WebSocket client, same `TThread.Queue` dispatch, same base64 rule). Typical use: speak an LLM answer while it is being generated.
+
+```pascal
+TTS := TAiQwenRealtimeTTS.Create(nil);          // Voice 'Cherry', Mode tmServerCommit
+TTS.OnAudioChunk := HandlePcm24k;               // PCM16 mono 24 kHz, as it is produced
+TTS.Connect;                                    // wait OnSessionReady
+Chat.OnReceiveData    := procedure(...) begin TTS.AppendText(aText) end;  // each LLM delta
+Chat.OnReceiveDataEnd := procedure(...) begin TTS.Finish end;             // flush + OnFinished
+```
+
+- Protocol (verified live): client `session.update {voice, mode, response_format: pcm, sample_rate, language_type, instructions}`, `input_text_buffer.append {text}`, `input_text_buffer.commit`, `session.finish`; server `response.audio.delta`, `response.done` (per utterance), `session.finished`.
+- `Mode`: `tmServerCommit` (server decides when to speak; `Finish` flushes the rest) or `tmCommit` (`Commit` / `Speak` closes each utterance; several responses in one session — verified with 2).
+- Measured latency: first audio **~0.5 s** after the first text fragment; LLM → voice (qwen3.8-flash streaming into the TTS) **2.5 s** from the question to the first audio.
+- Models: `qwen3-tts-flash-realtime` [default], `qwen3-tts-instruct-flash-realtime` (`Instructions`: reading style, e.g. whisper — verified), `qwen3-tts-vc-realtime-2026-01-15` / `qwen3-tts-vd-realtime-2026-01-15` for custom voices. **A custom voice must be created for the realtime model** (`TAiQwenVoices.CloneModel := 'qwen3-tts-vc-realtime-2026-01-15'`); `EffectiveModel` picks the realtime vc/vd model from the voice id prefix.
+- `Language`: ISO code or English name (`es` → `Spanish`); empty = auto.
+- All outputs verified by re-transcribing the audio (fragments, two utterances, LLM answer, instruct, cloned voice).
+
+---
+
 ## TAiGeminiRealtimeSTT — Gemini driver (STUB)
 
 **Status:** Skeleton only. All methods raise `ENotImplemented` or are no-ops.
@@ -332,6 +400,12 @@ initialization
 // uMakerAi.Realtime.Grok.pas
 initialization
   TAiRealtimeFactory.Instance.RegisterDriver('Grok', TAiGrokRealtimeChat);
+
+// uMakerAi.Realtime.Qwen.pas — tres drivers
+initialization
+  TAiRealtimeFactory.Instance.RegisterDriver('Qwen', TAiQwenRealtimeChat);
+  TAiRealtimeFactory.Instance.RegisterDriver('QwenSTT', TAiQwenRealtimeSTT);
+  TAiRealtimeFactory.Instance.RegisterDriver('QwenTranslate', TAiQwenRealtimeTranslate);
 ```
 
 Import the driver unit to activate registration (same pattern as Chat drivers).

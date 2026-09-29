@@ -186,6 +186,7 @@ end;
 
 procedure TAiChatFactory.GetDriverParams(const DriverName, ModelName: string; Params: TStrings; ExpandVariables: Boolean);
 var
+  LModel: string;
   DriverClass: TAiChatClass;
   UserParamList: TStringList;
   I: Integer;
@@ -207,10 +208,17 @@ begin
       Params.Values[UserParamList.Names[I]] := UserParamList.ValueFromIndex[I];
   end;
 
-  // Nivel 3: Fusionar con par?metros personalizados del MODELO (si se especifica)
-  if not ModelName.IsEmpty then
+  // Nivel 3: Fusionar con par?metros personalizados del MODELO
+  // Sin ModelName se usa el modelo que resolvieron los niveles 1 y 2 (el default
+  // del driver o el del catalogo). Antes el nivel 3 se saltaba y una conexion sin
+  // Model usaba ese modelo SIN sus parametros (p.ej. Qwen sin cap_Image, Groq sin
+  // razonamiento ni Max_Tokens): Model vacio y Model = default daban otro chat.
+  LModel := ModelName;
+  if LModel.IsEmpty then
+    LModel := Params.Values['Model'];
+  if not LModel.IsEmpty then
   begin
-    Key := GetCompositeKey(DriverName, ModelName);
+    Key := GetCompositeKey(DriverName, LModel);
     if FUserParams.TryGetValue(Key, UserParamList) then
     begin
       For I := 0 to UserParamList.Count - 1 do
@@ -452,6 +460,7 @@ end;
 
 procedure TAiEmbeddingFactory.GetDriverParams(const DriverName, ModelName: string; Params: TStrings; ExpandVariables: Boolean);
 var
+  LModel: string;
   DriverClass: TAiEmbeddingsClass;
   UserParamList: TStringList;
   I: Integer;
@@ -474,9 +483,16 @@ begin
   end;
 
   // Nivel 3: Par?metros personalizados del MODELO
-  if not ModelName.IsEmpty then
+  // Sin ModelName se usa el modelo que resolvieron los niveles 1 y 2 (el default
+  // del driver o el del catalogo). Antes el nivel 3 se saltaba y una conexion sin
+  // Model usaba ese modelo SIN sus parametros (p.ej. Qwen sin cap_Image, Groq sin
+  // razonamiento ni Max_Tokens): Model vacio y Model = default daban otro chat.
+  LModel := ModelName;
+  if LModel.IsEmpty then
+    LModel := Params.Values['Model'];
+  if not LModel.IsEmpty then
   begin
-    Key := GetCompositeKey(DriverName, ModelName);
+    Key := GetCompositeKey(DriverName, LModel);
     if FUserParams.TryGetValue(Key, UserParamList) then
     begin
       for I := 0 to UserParamList.Count - 1 do

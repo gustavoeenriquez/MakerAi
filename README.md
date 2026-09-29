@@ -1,4 +1,4 @@
-# MakerAI Suite v3.7 — The AI Ecosystem for Delphi
+# MakerAI Suite v3.8 — The AI Ecosystem for Delphi
 
 🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
 📖 **Manual:** [https://www.gustavoenriquez.com/book-makerai](https://www.gustavoenriquez.com/book-makerai) — available in English and Spanish
@@ -33,9 +33,83 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 ---
 
-## 🧪 On `dev` — not yet released
+## 🚀 What's New in v3.8
 
-Work merged after v3.7.0. Three items change existing behaviour; they are called out below.
+Released 2026-09-29. Six items change existing behaviour; they are marked ⚠️ below — two of them
+(TLS certificate checks on POSIX and the `IAiMemoryStorage` signature) can require code changes.
+
+### Jev — calibrated decisions before spending an LLM
+
+`TAiJev` (`Source/Tools/uMakerAi.Jev.pas`) wraps **Jev**, TypeSafe AI's "System One" model.
+Jev does not generate text: it answers typed questions — *Choice*, *Score*, *Noul* (yes/no) —
+with calibrated probabilities and a confidence value your code can threshold. It is meant for
+the fast, cheap decisions that today cost a full LLM round-trip: routing a query to the right
+specialised agent, deciding whether that agent needs its RAG variant, classifying, gating.
+Several questions travel in one request (~700 input tokens at US$0.042 per million). Questions
+are validated locally, 429/529 are retried with backoff, and the model is pinned to
+`jev-1.13.0` so thresholds stay valid. Demo: `084-JevRouter`.
+
+For agent graphs, `TAiJevRouterTool` (`Source/Agents/uMakerAi.Agents.Tools.JevRouter.pas`) is a
+node tool that writes the chosen route to `Blackboard['next_route']`, so an existing
+`lmConditional` link follows it — no engine change. Low confidence or a failing API falls back
+to `NextNo` instead of breaking the graph, and yes/no flags asked in the same call land in the
+blackboard for `lmExpression` or an `OnRoute` handler. Twenty-one new regression cases run all
+of it offline against a fake transport.
+
+Two more hand-offs make Jev a drop-in for decisions the framework already takes:
+
+- **SmartDispatch without the classification LLM call.** `ChatTools.DispatchClassifier` (new,
+  provider-neutral) receives the tags whose tools are assigned; `TAiJevDispatchClassifier` answers
+  with Jev. Tool requests skip one LLM round-trip, and CHAT replies are now generated **with the
+  conversation history** (the LLM pass answered in an isolated two-message context). Unsure or
+  failing → the usual LLM pass. 15/15 on Spanish and English requests.
+- **Semantic guardrails.** `TAiGuardrails.Classifier` (new) judges the tool calls the allow/block
+  lists let through; `TAiJevGuardrailClassifier` blocks when P(risk) ≥ 0.5. Lists still catch the
+  enumerable (`rm -rf`) for free; Jev catches what no list anticipates — an e-mail carrying a
+  password to an outside address, a transfer to an unknown account. Safe calls scored ≤ 0.17 and
+  harmful ones ≥ 0.88 across 13 calibration cases. Fails closed by default. Optional **permission
+  categories** (`read`, `write`, `financial`, `system`, …) are judged in the same call: block whole
+  categories, audit each call via `OnCategorized`, and describe domain-named tools with
+  `ToolDescriptions` (20/20 on 20 calibration calls).
+
+- **Input guardrail.** `ChatTools.PromptGuard` (new) checks the user's message *before* it reaches
+  the LLM, right after the existing regex sanitizer. `TAiJevPromptGuard` asks in one call about
+  prompt injection, credentials in the message, harmful requests and — given a `Scope` — off-topic
+  questions. On nine test messages the regex caught 1 of 6 problematic ones; Jev caught all 6 and
+  let the greeting and the legitimate questions through. A blocked message never touches the network.
+
+Demo: `085-JevDispatchGuard`.
+
+And two more for quality and retrieval:
+
+- **Calibrated eval judge.** `TAiEvalRunner.Scorer` (new) answers `ExpectScore('criterion', 0.7)`
+  with the probability that the output meets the criterion — faster and cheaper than an LLM
+  judge, and the bar is set in code. `TAiJevEvalScorer`: passing answers ≥ 0.97, failing ≤ 0.02
+  on 10 calibration pairs.
+- **Semantic reranking for RAG.** `TAiRAGVector.Reranker` (new) replaces the cosine second stage
+  of VQL `RERANK`: `TAiJevRAGReranker` scores each passage for usable evidence and **drops
+  passages that try to instruct the model** (prompt injection). No embeddings are recomputed;
+  if the reranker fails, the search falls back to cosine. Demo: `086-JevEvalsRag`.
+- **Bulk labeling.** `TAiJevBatchLabeler` runs the same questions over many rows in parallel and
+  returns labels, confidence, top-3 suggestions, total cost and the rows worth a human look; a
+  failing row never stops the batch. Validated by reproducing the prototype: 126 accounting
+  entries against 225 chart-of-accounts codes in 4.2 s for US$0.05 — 92.9% overall and **100% on
+  the 61% it would book automatically** (confidence ≥ 0.8). Demo: `087-JevBatchLabeling`.
+- **Model routing.** `TAiJevModelRouter` sends each request to the cheapest model that can handle
+  it. Jev describes the request (task, difficulty, sensitivity); readable rules in code pick the
+  tier. Switching provider on a `TAiChatConnection` used to drop the conversation — the router
+  migrates the text history, so a chat can start on Groq and escalate to Claude and still
+  remember the first turn. Live, with Groq → DeepSeek → Claude Sonnet → Opus: 7 of 8 answers
+  judged useful, the trivial ones in under a second. Demo: `088-JevModelRouter`.
+- **Metering for usage-based billing.** `TAiJev` and all eight adapters expose `Usage` (requests,
+  input/output tokens, cost in USD) and an `OnUsage` event fired once per operation — one guard
+  check, one rerank, one batch — on the thread that ran it, so a server can charge the right
+  customer. The parallel reranker reports a single total after joining its calls. Previously only
+  the batch labeler exposed tokens; the other adapters received them and dropped them.
+
+**Also fixed:** `lmExpression` parsed numbers with the regional settings only, so on a Windows
+using a decimal comma `'10.25' > 9.5` was compared as text and returned `False`. It now falls
+back to a decimal point.
 
 ### Computer Use on Linux
 
@@ -86,8 +160,125 @@ now falls back to the OEM codepage. Two more, found while exercising it on Linux
 dropped whenever the sentinel arrived in the same read, and a timeout left the session
 permanently unusable (the `Restart` was written but commented out).
 
+### ⚠️ TAiMemory: namespaces are now enforced on id-based operations
+
+`TAiMemory` isolated namespaces in its searches, but `Get`, `Update`, `Delete`, `Link` and
+`Unlink` addressed memories by id alone — and ids are sequential, so an agent could read,
+change or delete another namespace's memories by guessing one, including through the
+`memory_delete` / `memory_link` MCP tools. `ImportFromJSON` also honoured the `namespace` field
+of the JSON and could write into another namespace. Every id-based operation now requires the
+active namespace (a foreign id behaves exactly like a missing one), and imports always land in
+the active namespace. Reported responsibly in #127.
+
+> **Breaking for custom storages**: the id-based methods of `IAiMemoryStorage` now take the
+> namespace. The bundled SQLite storage is updated; a custom implementation must add the
+> parameter.
+
+### ⚠️ A forced tool_choice applies to the first call only
+
+With `Tool_choice := 'required'` (or a named function) the driver re-sent the forcing on
+every round, including the one that returns tool results, so the model had to call a tool
+again each time and the agentic loop never ended — 231 requests on `claude-sonnet-5` before
+it was killed. `TAiChat.Tool_choice` now reads `auto` in those rounds, which fixes every driver
+at once. The first call of a turn is still forced.
+
+### ⚠️ TLLMNode.DriverName now defaults to empty
+
+The constructor used to set `DriverName := 'Claude'`, which always overrode the driver of an
+assigned `TAiSkill`. It is now empty and resolves node → skill → `'Claude'`, so a node without
+a skill behaves exactly as before and forms saved with the old default keep `'Claude'`
+explicitly. See the skills section below for the rest of the precedence fix.
+
+### Qwen — native Alibaba Model Studio driver
+
+`TAiQwenChat` (`Source/Chat/uMakerAi.Chat.Qwen.pas`, driver name `Qwen`) talks to DashScope's
+OpenAI-compatible endpoint (international region by default; key in `DASHSCOPE_API_KEY`).
+Hybrid Qwen models think by default on the API side, so the driver always sends
+`enable_thinking`: off unless `cap_Reasoning` is in `ModelCaps`, with `ThinkingLevel` mapped to
+`thinking_budget`. Thinking-only models (`qwq-plus`, `*-thinking-*`) and open-weight models
+(which only think when streaming) are handled for you. Registered models are the ones tested
+live: `qwen3.8-flash` (default), `qwen3.8-max`, `qwen3.7-plus`, `qwen3-vl-flash`,
+`qwen3.8-omni-flash` with vision; `qwen3-max`, `qwen-plus/flash/turbo`, `qwen3-coder-plus/flash`;
+and `qwq-plus`, which only answers when streaming and is registered as asynchronous.
+
+Beyond chat, the same key covers the rest of Model Studio, all tested live from Delphi:
+
+- **Image generation and editing** (`cap_GenImage`): `qwen-image-3.0`, `qwen-image-2.0`,
+  `qwen-image-max`, `z-image-turbo`, `wan2.7-image`. Attach one to three images to the prompt and
+  the same call edits them (`qwen-image-edit-plus` by default), keeping the original aspect ratio
+  unless you set a size. The driver downloads the result into `MediaFiles`.
+- **Video** (`cap_GenVideo`, Wan): text to video, image to video (attach one image) or first
+  and last frame (attach two). 720p by default instead of the API's 1080p; `VideoParams.Params`
+  passes through (duration, audio, seed...). Wan 2.5+ videos come with an audio track.
+- **Text to speech** (`cap_GenAudio`): `qwen3-tts-flash`, voice and language from `TtsParams`.
+- **Transcription**: `qwen3-asr-flash` in `cmTranscription`, where the prompt is passed as
+  context so proper names come out right. A text model with `cap_Audio` in `SessionCaps` uses it
+  to transcribe before answering, and `qwen3.8-omni-flash` understands audio natively.
+- **Realtime** (`TAiRealtimeConnection`, new unit `uMakerAi.Realtime.Qwen`): `DriverName := 'Qwen'`
+  for voice conversation, `'QwenSTT'` for live transcription and `'QwenTranslate'` for simultaneous
+  translation with a translated voice. Same events as the Grok and OpenAI drivers; nothing in the
+  realtime module changed. Driver-specific settings (voice, instructions, target language) go in
+  the connector's new `DriverParams`, which works for every realtime driver. `TAiQwenRealtimeTTS` goes the other way — text in, audio out while it
+  is generated — so an LLM answer can be spoken as it streams (first audio ~0.5 s after the first
+  text; 2.5 s from question to voice with qwen3.8-flash).
+- **Text translation** with `qwen-mt-plus/flash/turbo/lite`: set `TranslateTo` (and optionally
+  `TranslateFrom`, `TranslateDomain`, a `TranslateTerms` glossary) and each message is translated.
+  The driver sends only the latest message, as the API requires, and fixes plus/turbo streaming,
+  which repeats the accumulated text in every chunk.
+Demo `089-QwenShowcase` walks through all of it with one key.
+
+- **Custom voices**: `TAiQwenVoices` clones a voice from a sample or designs one from a text
+  description, and lists or deletes them. Put the returned id in `TtsParams.Voice`; the driver
+  switches to the TTS model that voice requires. Clone only voices you have consent to use.
+- **Embeddings**: `TAiQwenEmbeddings` (driver `Qwen`), `text-embedding-v4` by default.
+- **Rerank**: `TAiQwenRAGReranker` plugs `qwen3-rerank` into `TAiRAGVector.Reranker`, up to 500
+  passages per call, with an optional task instruction.
+
+### Skills — SKILL.md, loaded on demand
+
+MakerAI now speaks **SKILL.md**, the format of Claude's Agent Skills and of the PPM registry's
+`skill` packages: YAML frontmatter (name, when to use it) plus Markdown instructions. One parser
+(`uMakerAi.Skills.Format`) serves the whole framework, from a string, a file, a folder or the
+registry.
+
+- **`TAiSkills`** (new, `Source/Tools/uMakerAi.Tools.Skills.pas`) gives any chat with function
+  calling on-demand skills. The model sees only a one-line-per-skill catalog in the description
+  of `use_skill` and loads the full instructions when it needs them, so dozens of skills cost no
+  tokens until used. Folder-based skills can ship supporting files, read with `read_skill_file`,
+  which is confined to the skill folder (no `..`, absolute paths, links or binaries, never
+  executes anything). Veto and audit events; guardrails apply as to any tool. Live, 9/9 on
+  OpenAI, Claude and Groq: the right skill for each request, none for an unrelated one, and
+  `use_skill` → `read_skill_file` chained when the instructions asked for it.
+- **`TAiSkill.FromPPM` works.** It requested a URL that returns the website's HTML and a JSON
+  format no package publishes; it now downloads the real SKILL.md (`'code-review'` also finds
+  `skill-code-review`). New `FromFolder` / `FromSkillFile`; the JSON format still works for local
+  files. A SKILL.md never supplies an API key.
+- **`TLLMNode` respects its skill.** New `ResolveConfig`: driver from the node, else the skill,
+  else Claude; the skill's model only if it belongs to that driver; the skill's system prompt
+  followed by the node's. Previously the skill's driver was always overridden and switching
+  driver lost the skill's model and key.
+- **`TAiPrompts`** loads local skills (`LoadSkillFromFile`, `LoadSkillsFromFolder`) and
+  `ApplySkill` copies one into any `SystemPrompt`. Registry versions are now picked by semver.
+
+Guides: `Docs/Version 3/uMakerAi-Skills.EN.md` (Spanish: `uMakerAi-Skills.md`). Demo `091-Skills`.
+
 ### Also
 
+- **Every driver on the shared streaming parser returned the answer twice.** In asynchronous
+  mode `OnReceiveDataEnd` received `'Done'#13#10'Done'`: the end of the stream re-added the
+  accumulated text. Affected all drivers built on the common parser (verified on Groq and
+  DeepSeek; Kimi, Grok and Mistral now return it once too).
+- **Files generated by Groq's code interpreter were lost when streaming.** `gpt-oss` sends
+  `executed_tools` inside each delta, in two chunks per tool; the parser only looked at the
+  top level, the format of the retired `groq/compound`. They are now merged and delivered as
+  in the synchronous path.
+- **Groq catalog brought up to date with the API.** `llama-3.1-8b-instant` and
+  `llama-3.3-70b-versatile` no longer exist and were the driver's default, so a Groq connection
+  without an explicit model came back empty. The default is now `openai/gpt-oss-20b`, and both
+  old names are aliases (to `gpt-oss-20b` and `gpt-oss-120b`), so existing code keeps working.
+  `groq/compound` was removed without a replacement. `qwen/qwen3.6-27b` was registered with a
+  token limit the API rejects; fixed, and `qwen/qwen3.8-27b` added. Demo 014 now runs Groq's
+  code interpreter on `gpt-oss-20b` (`--groq`).
 - **Claude sometimes sends coordinates as a JSON array and sometimes as a string** containing
   one — *within the same turn*. `TryGetValue<TJSONArray>` missed the second form, the
   coordinate was lost and the action landed on (0,0): a click in the screen corner, after
@@ -104,7 +295,7 @@ permanently unusable (the `Restart` was written but commented out).
 
 ---
 
-## 🚀 What's New in v3.7
+## What's New in v3.7
 
 ### Computer Use, Refreshed on Both Live Providers
 
@@ -307,7 +498,7 @@ New `ChatMode` value for automatic two-pass routing:
 ┌──────────────────────────────▼───────────────────────────────────┐
 │  Native Provider Drivers  (direct API access, full fidelity)     │
 │  OpenAI · Claude · Gemini · Grok · Mistral · DeepSeek · Kimi    │
-│  GLM · Groq · Cohere · Ollama · LM Studio · GenericLLM          │
+│  GLM · Qwen · Groq · Cohere · Ollama · LM Studio · GenericLLM   │
 └──────────────────────────────┬───────────────────────────────────┘
                                │
      ┌─────────────────────────┼────────────────────────┐
@@ -347,7 +538,8 @@ Full, provider-specific access to every API feature. Use when you need complete 
 | `TAiDeepSeekChat` | DeepSeek | deepseek-flash, deepseek-v4-pro |
 | `TAiKimiChat` | Moonshot | kimi-k3, kimi-k2.7-code, kimi-k2.6 |
 | `TAiGLMChat` | GLM (Zhipu / Z.ai) | glm-4.7, glm-5.3, glm-5v-turbo, free tiers: glm-4.7-flash / glm-4.6v-flash |
-| `TAiGroqChat` | Groq | llama-3.3-70b, openai/gpt-oss-120b, qwen3.6, whisper-large-v3 |
+| `TAiQwenChat` | Qwen (Alibaba Model Studio) | qwen3.8-flash, qwen3.8-max, qwen3.7-plus, qwq-plus, qwen3-coder-plus, qwen3-vl-flash |
+| `TAiGroqChat` | Groq | openai/gpt-oss-20b, openai/gpt-oss-120b, qwen3.8, whisper-large-v3 |
 | `TCohereChat` | Cohere | command-a-plus, command-a-03-2025, north-mini-code |
 | `TAiOllamaChat` | Ollama | Any local model |
 | `TAiLMStudioChat` | LM Studio | Any local model |
@@ -641,6 +833,7 @@ Source/Design
 Source/Embeddings
 Source/MCPClient
 Source/MCPServer
+Source/Memory
 Source/Packages
 Source/RAG
 Source/Realtime
@@ -716,13 +909,44 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 | `077-RagPostgresConsole` | Headless vector RAG on PostgreSQL + pgvector with local Ollama embeddings — no API key. Runs on Windows and Linux64 |
 | `082-ComputerUsePassthru` | Who executes a `computer_call`: delegated to a remote client, missing tool, or local. Self-verifying with an exit code; never touches the screen |
 | `083-ComputerUseLinux` | Computer Use on Linux/X11 over Xvfb — the headless counterpart of `066` |
+| `084-JevRouter` … `088-JevModelRouter` | Jev (TypeSafe AI): agent routing, SmartDispatch and guardrails, evals and RAG reranking, bulk labeling, model routing. Need `TYPESAFE_API_KEY` |
+| `089-QwenShowcase` | Everything Qwen (Alibaba Model Studio) with one key: chat, vision, image editing, voice, translation, embeddings + rerank, realtime |
+| `091-Skills` | SKILL.md skills three ways: on demand in a chat (`TAiSkills`), as the base of an agent node (`TAiSkill`), copied into the prompt (`TAiPrompts.ApplySkill`) |
 
 ---
 
 ## 🔄 Changelog
 
-### Unreleased (on `dev`)
+### v3.8.0 (2026-09-29)
+- ⚠️ Fix: **a forced `tool_choice` looped forever** — `required` (or a named function) was re-sent on every round, including the one that returns tool results, so the model had to call a tool again each time: measured on `claude-sonnet-5`, 231 requests until killed. `TAiChat.Tool_choice` now reads `auto` in follow-up rounds, which fixes every driver at once. **Behaviour change**: forcing applies to the first call of a turn only
+- Fix: **`TAiOpenChat` dropped on a form used `gpt-5`**, not the documented default — the base constructor set `gpt-5` and the driver only assigned its own default when the model was empty. The OpenAI default is now **`gpt-6-sol`** (the successor of `gpt-5.1` at the same price point) for both the component and `TAiChatConnection`; `gpt-6-sol` and `gpt-6-luna` registered. `TAiMakerAiChat`, which inherits from it, now defaults to `mk-gpt-oss-20b` like its connection. GPT-6 rejects effort `minimal`; it is sent as `low`. Tested live
+- New: **Claude Opus 5.5, Sonnet 5.5 and Fable 5.1** registered. They reject forced tool use with a 400: the driver sends `auto` instead. `tlXHigh`/`tlMax` now reach Claude as `xhigh`/`max`. `claude-opus-4-1`, retired on 2026-08-05, is now an alias of `claude-opus-5-5`. Tested live. The default stays `claude-haiku-4-5` (still the current Haiku)
+- Fix: **Gemini defaults pointed to models new accounts cannot use** — `gemini-2.5-flash` (driver default) is restricted to accounts that already used the 2.5 family, and the transcription and web-search tools defaulted to `gemini-2.0-flash`, shut down on 2026-06-01. The driver, `TAiGeminiWebSearchTool` and transcription now default to **`gemini-3.8-flash`**, and `TAiGeminiSpeechTool` TTS to **`gemini-3.8-flash-tts`**. `gemini-3.8-flash`, `gemini-3.7-flash` and both 3.8 TTS models registered; `gemini-3-pro-preview` and the three `imagen-4.0-*` (shut down) became aliases of their successors. Sampling is now omitted by **version** (3.5 and later) instead of a name list, which missed 3.7/3.8, and the new effort levels map to what Gemini 3 accepts (`minimal` is rejected by 3.7/3.8). *Checked against the official docs; not runtime-tested (no API key).* Forms saved with the old model keep it
+- ⚠️ Fix (security): **`TAiMemory` enforced namespaces only in searches** — `Get`, `Update`, `Delete`, `Link` and `Unlink` addressed memories by id alone, and ids are sequential, so an agent could read, change or delete another namespace's memories by guessing one, including through the `memory_delete` / `memory_link` MCP tools. `ImportFromJSON` also honoured the `namespace` of the JSON. Every id-based operation now requires the active namespace (a foreign id behaves like a missing one) and imports land in the active namespace. **Breaking for custom storages**: the id-based methods of `IAiMemoryStorage` take the namespace. Reported responsibly in #127
+- New: **Skills in SKILL.md format** — one parser for the whole framework (`uMakerAi.Skills.Format`, with a read-only PPM registry client: semver version resolution, `skill-` prefix fallback, clear errors on a missing package, a non-skill package or an HTML page). **`TAiSkills`** gives any chat with function calling on-demand skills: the model sees a catalog in `use_skill` and loads the instructions it needs; folder skills ship supporting files read with `read_skill_file`, confined to the skill folder. Live 9/9 on OpenAI, Claude and Groq. Guide: `Docs/Version 3/uMakerAi-Skills.EN.md`, demo `091-Skills`
+- Fix: **`TAiSkill.FromPPM` never worked** — it requested a URL that returns the website's HTML and a JSON format no package publishes. It now downloads the real SKILL.md; new `FromFolder` / `FromSkillFile`, the JSON format still works for local files, and a SKILL.md never supplies an API key
+- ⚠️ Fix: **`TLLMNode` ignored its skill's driver** — the constructor's `DriverName := 'Claude'` always won, and applying the skill before the node lost the skill's model and key whenever the driver changed. New `ResolveConfig` / `ConfigureChat`: driver node → skill → Claude, the skill's model only if it belongs to that driver, skill prompt followed by the node's. `DriverName` now defaults to `''` (no change without a skill)
+- New: **`TAiPrompts` local skills** — `LoadSkillFromFile`, `LoadSkillsFromFolder`, `ApplySkill` (into any `SystemPrompt`) and `SkillDescription`
+- New: **Jev (TypeSafe AI)** — `TAiJev` for calibrated typed decisions (Choice / Score / Noul) and adapters for agent routing (`TAiJevRouterTool`), SmartDispatch (`TAiJevDispatchClassifier`), tool-call and input guardrails (`TAiJevGuardrailClassifier`, `TAiJevPromptGuard`), eval scoring (`TAiJevEvalScorer`), RAG reranking with injection filtering (`TAiJevRAGReranker`), bulk labeling (`TAiJevBatchLabeler`) and model routing (`TAiJevModelRouter`), with usage metering for billing. New provider-neutral hooks: `ChatTools.DispatchClassifier`, `ChatTools.PromptGuard`, `TAiGuardrails.Classifier`, `TAiEvalRunner.Scorer`, `TAiRAGVector.Reranker`. Demos 084–088
+- New: **`TAiThinkingLevel` covers the full effort ladder** (`none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`, the historical values unchanged) — `xhigh`/`max` on `gpt-6-astra` silently fell back to the default. Also **async tool calling** (`TFunctionActionItem.IsAsync`)
+- New: **`gpt-image-2.5` flare/sunburst** (`iqXHigh` / `iqMax` quality, real alpha transparency), `TAiDalle.ModelName` for OpenAI-compatible services that serve a named checkpoint, and `EAiDalleHTTPError` with `StatusCode` and `RetryAfter`
+- Fix: **`deepseek-flash` billed reasoning with `ModelCaps=[]`** — the thinking gate only matched `deepseek-v4*`, so the canonical name let the API default (thinking on) through
+- Fix: **`TOpenSSLTransport` never sent SNI** — `SSL_set_tlsext_host_name` is a macro, not an export, so no host behind a CDN could be reached (alert 40). Now through `SSL_ctrl`
+- Fix: **`TMCPClientSSE` destructor spun forever** on an empty queue after shutdown, burning a core
+- Fix: `TAiVoiceMonitor` compiles outside Windows (Linux64, Android)
+- Docs: `Source/Memory` added to the Library Paths list — packages compile without it, but an app using `TAiMemory` did not
 
+- ⚠️ Behaviour change: **a connection with `DriverName` but no `Model` now gets its default model's catalog parameters** — the registry only applied per-model settings when `Model` was set, so the default model ran without them (Qwen without vision, Groq without reasoning or code interpreter and with an 8192 token limit, Gemini without audio/PDF/search; 9 of 15 drivers differed). An empty `Model` now behaves exactly like setting the driver's default model explicitly. `Model` itself stays empty, so nothing changes in forms
+- New: **`TAiRealtimeConnection.DriverParams`** — driver-specific properties (`Voice`, `Instructions`, `TargetLanguage`, `ReasoningEffort`, `Keyterms`...) set through the universal connector as `Property=Value` lines, applied by RTTI on driver creation and on `Connect`. Previously only the base properties reached the driver. Unknown keys are reported through `OnError` (`driver_param`) on connect
+- Fix: **asynchronous answers arrived duplicated in `OnReceiveDataEnd`** (`'Done'#13#10'Done'`) in every driver on the shared streaming parser — the end-of-stream message re-added the accumulated text. `TAiDeepSeekChat` has its own copy of the parser and got the same fix
+- Fix: **Groq `executed_tools` were ignored when streaming** — `gpt-oss` sends them inside `choices[0].delta`, two chunks per tool with the same `index`; the parser only read the top-level field of the retired `groq/compound`. Files generated in the code-interpreter sandbox now arrive in asynchronous mode too
+- Fix: **Groq catalog** — the retired `llama-3.1-8b-instant` (driver default) and `llama-3.3-70b-versatile` are now aliases of `openai/gpt-oss-20b` / `gpt-oss-120b`, the new default is `gpt-oss-20b`, `groq/compound` and `compound-mini` removed, `qwen/qwen3.6-27b` token limit fixed (16384) and `qwen/qwen3.8-27b` added. Demo 014 runs Groq's code interpreter on `gpt-oss-20b` (`--groq`)
+- Fix: **`Invalid pointer operation` when freeing a chat right after `OnReceiveDataEnd` in asynchronous mode** — the final event fires before the HTTP client closes the request, and closing it (on the HTTP thread) frees the request stream the destructor was freeing at the same time. Intermittent, and it reached `OnError`. The destructor now waits for the request to close (bounded), through a fixed layer between the HTTP client and the drivers' virtual handlers, so every driver is covered. No wait when nothing is in flight
+- Fix: **audio-to-text bridge fired `OnReceiveDataEnd` with the raw transcript** before the model's answer (Cohere, Groq, Mistral, OpenAI) when a text model received audio in conversation mode. Outside `cmTranscription` the transcript is now only input for the model
+- Fix: **`Voice_Format` was silently ignored** — the OpenAI TTS catalog entry and demo 012 use that key, but the property is `TtsParams.VoiceFormat`. Accepted as an alias now
+- Fix: **OpenAI and Mistral embeddings leaked the request JSON on every successful call** (the variable was reused for the response). Measured: +62 KB over 40 calls before, +176 bytes after. `TAiQwenEmbeddings` inherited it
+- New: **Qwen driver** (`TAiQwenChat`, Alibaba Model Studio / DashScope, OpenAI-compatible). Always sends `enable_thinking` (the API thinks by default on hybrid models), `ThinkingLevel` → `thinking_budget`, `qwq-plus` registered async (it answers empty without streaming), open-weight models only think when streaming. Runtime-tested: sync, async, reasoning on/off, tools (sync and streaming), vision, qwq-plus. Also image generation and editing (1–3 attached images, aspect ratio preserved), video with Wan (text, image or first/last frame; 720p by default), three realtime drivers (voice conversation, live STT, simultaneous translation; new unit, no change to the realtime module) plus `TAiQwenRealtimeTTS` for streaming text-to-speech, text translation with `qwen-mt` (glossary, domain, streaming fixed for the models that resend the accumulated text), custom voices (`TAiQwenVoices`: clone, design, list, delete), TTS and transcription through the capability gap, native audio input on omni models (the API needs a data URI, the driver rewrites it), `TAiQwenEmbeddings` and `TAiQwenRAGReranker` (`qwen3-rerank`, batched above 500 passages). Twelve new offline regression cases
+- Fix: **`TAiChatConnection` did not pass media sub-parameters edited in place** — `C.VideoParams.Params.Values['duration'] := '3'`, `C.TtsParams.Voice := ...` or `C.ImageParams.Params.Values['size'] := ...` after the chat existed changed only the connection's copy; they reached the driver only when the whole object was assigned or `Params` changed. Affected every driver. They are now copied on each `Run` / `AddMessageAndRun`. Found when a 3 s Wan video came back at 5 s
 - New: **Computer Use on Linux** — `TAiLinuxExecutor` (X11 via xdotool + scrot) covers the 19 canonical actions with the same public interface as the Windows and macOS executors. The framework needed no change: `TAiComputerUseTool` only uses the RTL and delegates through its two events, so it cross-compiled to Linux64 untouched. Runtime-tested on Xvfb with `gpt-6-astra` and `claude-opus-4-8` against a text editor and Chrome. Demo `083-ComputerUseLinux`, plus a repeatable setup script for a headless VPS
 - New: **Computer Use delegation** — OpenAI and Gemini now honour the framework contract (fill `ToolCall.Response` from `OnCallToolFunction` and the driver does not execute locally), which is what lets a headless broker forward the call to a remote client. OpenAI ignored `Response` and executed anyway; Gemini never fired the event at all. For OpenAI the delegation is atomic over the batch, since `gpt-6-astra` sends an array of actions that admits exactly one `computer_call_output`. Without a `TAiComputerUseTool` assigned the synchronous path used to emit an output with no `image_url`, which the API rejects with 400; it now ends the turn and reports through `LastError`. Demo `082-ComputerUsePassthru`
 - Fix: **Claude sends coordinates as an array *and* as a string containing one, within the same turn** — `"coordinate": [299, 282]` in the first calls, `"coordinate": "[299, 400]"` later. `TryGetValue<TJSONArray>` does not match the second form, so the coordinate was lost and the action fell back to (0,0): a click in the screen corner, after which the model retried until the turn ran out. Affected `coordinate`, `start_coordinate`, `region` (zoom) and numeric fields (`"duration": "1"`), i.e. click, double/triple click, drag and zoom. Not a Linux issue — it hit Windows and macOS just the same

@@ -42,6 +42,7 @@ Specialized guidance exists in subdirectories:
 | `uMakerAi-MCP.Server.*.docx` | `Source/MCPServer/uMakerAi.MCPServer.Core.pas` |
 | `uMakerAi.ToolFuncions.docx` | `Source/Tools/uMakerAi.Tools.Functions.pas` |
 | `uMakerAi-AudioBridge.md` | `Source/Utils/uMakerAi.Utils.AudioCapture.pas`, `Source/Utils/uMakerAi.Utils.AudioPlayback.pas` |
+| `uMakerAi-Skills.md` / `uMakerAi-Skills.EN.md` | `Source/Tools/uMakerAi.Tools.Skills.pas`, `Source/Core/uMakerAi.Skills.Format.pas`, `Source/Agents/uMakerAi.Agents.Skill.pas` |
 
 ## Reportes de campo
 
@@ -55,6 +56,7 @@ sentido contrario: lo que MakerAi le debe avisar a esas aplicaciones.
 |---------|-------------------|--------|
 | `REPORTE_MKAISERVER_2026-08-29.md` | MKAIServer -> MakerAi | Atendido en 36b4379 y aa77522, salvo la verificacion runtime del usage de DeepSeek |
 | `REPORTE_PARA_MKAISERVER_2026-09-16.md` | MakerAi -> MKAIServer | Entregado: acciones tras ca175d0 (gpt-image-2.5) y fca6aba (deepseek-flash); pendiente del lado del broker |
+| `REPORTE_PARA_MKAISERVER_2026-09-20.md` | MakerAi -> MKAIServer | Entregado: como delegar Computer Use a un cliente remoto ahora que OpenAI y Gemini respetan la intercepcion (38eeacf), mas el ejecutor Linux (2e3e3be). Responde al analisis que llego del broker: sus dos puntos eran correctos. Pendiente del lado del broker |
 
 ## File Formats
 

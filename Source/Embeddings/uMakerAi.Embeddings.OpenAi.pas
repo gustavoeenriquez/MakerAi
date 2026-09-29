@@ -83,6 +83,7 @@ Var
   Client: TNetHTTPClient;
   Headers: TNetHeaders;
   jObj: TJSonObject;
+  jResp: TJSONObject; // respuesta aparte: reusar jObj perdia el request (fuga por llamada)
   Res: IHTTPResponse;
   Response: TStringStream;
   St: TStringStream;
@@ -127,8 +128,12 @@ begin
 {$ENDIF}
     if Res.StatusCode = 200 then
     Begin
-      jObj := TJSonObject(TJSonObject.ParseJSONValue(Res.ContentAsString));
-      ParseEmbedding(jObj);
+      jResp := TJSONObject(TJSONObject.ParseJSONValue(Res.ContentAsString));
+      try
+        ParseEmbedding(jResp);
+      finally
+        jResp.Free;
+      end;
       Result := Self.FData;
 
     End

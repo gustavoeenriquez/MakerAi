@@ -2,9 +2,11 @@
 
 ## Propósito
 
-`TAiSkill` es un contenedor de configuración reutilizable para nodos LLM en el sistema de agentes de MakerAI. Encapsula en un único objeto la personalidad de un agente: su system prompt, el driver y modelo sugeridos, la API key, y la lista de herramientas que debe tener disponibles.
+`TAiSkill` es un contenedor de configuración reutilizable para nodos LLM (`TLLMNode`) en el sistema de agentes de MakerAI. Reúne en un único objeto la personalidad de un agente: sus instrucciones (system prompt), el driver y el modelo sugeridos, la API key y la lista de herramientas que debe tener disponibles.
 
-La idea central es separar **qué hace** un nodo (su propósito, su personalidad) de **dónde vive** (en qué grafo, con qué modelo económico, con qué herramientas adicionales). Un skill se define una vez —localmente o en el registry PPM— y se reutiliza en múltiples nodos o proyectos.
+La idea central es separar **qué hace** un nodo (su propósito, su personalidad) de **dónde vive** (en qué grafo, con qué modelo, con qué herramientas adicionales). Un skill se define una vez —en disco o en el registry PPM— y se reutiliza en varios nodos o proyectos.
+
+> **v3.8:** `TAiSkill` entiende el formato **SKILL.md** (el de las Agent Skills y el que publica PPM) además de su JSON propio, `FromPPM` descarga del registry real y la combinación con el nodo se reescribió (ver [Reglas de combinación](#reglas-de-combinación)). Antes de v3.8 `FromPPM` no funcionaba y el `DriverName` del skill nunca se aplicaba.
 
 ---
 
@@ -12,199 +14,177 @@ La idea central es separar **qué hace** un nodo (su propósito, su personalidad
 
 | Archivo | Rol |
 |---|---|
-| `Source/Agents/uMakerAi.Agents.Skill.pas` | Definición de `TAiSkill` |
-| `Source/Agents/uMakerAi.Agents.Node.LLM.pas` | `TLLMNode` con propiedad `Skill` integrada |
+| `Source/Agents/uMakerAi.Agents.Skill.pas` | `TAiSkill` |
+| `Source/Agents/uMakerAi.Agents.Node.LLM.pas` | `TLLMNode` con la propiedad `Skill`, `ResolveConfig` y `ConfigureChat` |
+| `Source/Core/uMakerAi.Skills.Format.pas` | Parser de SKILL.md (`TAiSkillDoc`) y cliente del registry PPM (`TAiPPMClient`), compartido con `TAiPrompts` |
 
 ---
 
-## Clase TAiSkill
+## Formatos
 
-### Declaración
+### 1. SKILL.md (recomendado)
 
-```pascal
-TAiSkill = class
-public
-  constructor Create;
-  destructor Destroy; override;
+Un archivo Markdown con un bloque de *frontmatter* YAML al inicio. Es el formato de las Agent Skills de Claude y el de los paquetes `skill` del registry PPM, así que un mismo archivo sirve en MakerAI, en Claude Code y en PPM.
 
-  procedure Clear;
-  procedure LoadFromJSON(const AJsonStr: String);
-  procedure LoadFromFile(const APath: String);
-  procedure LoadFromPPM(const AName: String; const ABaseUrl: String = '');
+```markdown
+---
+name: revisor-delphi
+description: Revisa código Delphi en busca de errores y malas prácticas.
+model: claude-sonnet-5
+allowed-tools:
+  - filesystem
+  - git
+driver: Claude          # extensión de MakerAI (opcional)
+---
 
-  class function FromJSON(const AJsonStr: String): TAiSkill;
-  class function FromFile(const APath: String): TAiSkill;
-  class function FromPPM(const AName: String; const ABaseUrl: String = ''): TAiSkill;
-
-  property Name        : String      read/write;
-  property Description : String      read/write;
-  property DriverName  : String      read/write;
-  property Model       : String      read/write;
-  property ApiKey      : String      read/write;
-  property SystemPrompt: String      read/write;
-  property ExtraTools  : TStringList read-only;
-end;
+Eres un revisor de código Delphi experto. Analiza el código que te den e
+identifica errores lógicos, fugas de memoria y violaciones de buenas prácticas.
+Responde en español con una lista de hallazgos por severidad.
 ```
 
-### Propiedades
-
-| Propiedad | Tipo | Descripción |
+| Frontmatter | Propiedad | Notas |
 |---|---|---|
-| `Name` | `String` | Identificador del skill. Coincide con el nombre en el registry PPM. |
-| `Description` | `String` | Descripción legible del skill. No se envía al LLM. |
-| `DriverName` | `String` | Driver LLM sugerido: `'OpenAI'`, `'Claude'`, `'Gemini'`, etc. Vacío = no especifica driver. |
-| `Model` | `String` | Nombre del modelo sugerido. Vacío = usa el default del driver. |
-| `ApiKey` | `String` | API key. Soporta la sintaxis `@ENV_VAR` (p.ej. `@CLAUDE_API_KEY`) para resolución en runtime. |
-| `SystemPrompt` | `String` | Instrucción de sistema del skill. Es el principal aporte reutilizable. |
-| `ExtraTools` | `TStringList` | Nombres de herramientas del `TAiToolRegistry` a activar cuando `UseAllTools=False`. |
+| `name` | `Name` | Si falta, se usa el nombre de la carpeta (o del archivo) |
+| `description` | `Description` | Para documentar; no se envía al LLM |
+| `model` | `Model` | Ver [Reglas de combinación](#reglas-de-combinación) |
+| `allowed-tools` | `ExtraTools` | Lista `- x` o en línea `a, b` / `[a, b]` |
+| `driver` | `DriverName` | Extensión de MakerAI; las Agent Skills no la tienen |
+| *cuerpo* | `SystemPrompt` | Todo lo que va después del segundo `---` |
 
----
+**Un SKILL.md nunca aporta `ApiKey`**, aunque traiga una clave `apikey:`. Es contenido que puede venir de terceros (el registry, una carpeta compartida): si pudiera fijar la clave, un skill malicioso pediría `@CUALQUIER_VARIABLE` y el nodo enviaría ese secreto al proveedor.
 
-## Formato JSON del skill
+Los nombres de `allowed-tools` que no existen en el `TAiToolRegistry` se ignoran al cargar las herramientas. Es lo normal con skills escritos para Claude Code, que declaran `Read`, `Grep` o `Bash`.
 
-Un skill se describe con un objeto JSON con los siguientes campos, todos opcionales salvo `name`:
+### 2. JSON propio (archivos del desarrollador)
+
+El formato original de `TAiSkill`. Se mantiene para archivos locales y es el **único** que acepta `apiKey`, porque es un archivo del propio desarrollador.
 
 ```json
 {
-  "name":         "code-reviewer",
-  "description":  "Revisa código en busca de errores, mejoras y malas prácticas",
-  "driverName":   "Claude",
-  "model":        "claude-sonnet-4-6",
-  "apiKey":       "@CLAUDE_API_KEY",
-  "systemPrompt": "Eres un revisor de código experto. Analiza el código que te proporcionen e identifica: errores lógicos, problemas de rendimiento, violaciones de buenas prácticas y posibles bugs. Responde siempre en español con una lista estructurada de hallazgos.",
-  "extraTools":   ["filesystem", "git"]
+  "name":         "sql-expert",
+  "description":  "Experto en SQL",
+  "driverName":   "OpenAI",
+  "model":        "gpt-5.6",
+  "apiKey":       "@OPENAI_API_KEY",
+  "systemPrompt": "Eres un experto en SQL...",
+  "extraTools":   ["database"]
 }
 ```
-
-### Descripción de campos JSON
-
-| Campo JSON | Propiedad Delphi | Obligatorio | Notas |
-|---|---|---|---|
-| `name` | `Name` | Sí | Identificador único del skill |
-| `description` | `Description` | No | Solo para documentación |
-| `driverName` | `DriverName` | No | Si omitido, el nodo usa su propio DriverName |
-| `model` | `Model` | No | Si omitido, el nodo usa su propio Model o el default del driver |
-| `apiKey` | `ApiKey` | No | Si omitido, el nodo usa su propio ApiKey |
-| `systemPrompt` | `SystemPrompt` | No | Si omitido, el nodo usa su propio SystemPrompt |
-| `extraTools` | `ExtraTools` | No | Array de strings con nombres de tools del TAiToolRegistry |
 
 ---
 
 ## Carga de skills
 
-### Desde string JSON (inline)
+| Método | Formato | Origen |
+|---|---|---|
+| `TAiSkill.FromPPM('skill-code-review')` | SKILL.md | Registry PPM |
+| `TAiSkill.FromFolder('Skills\revisor')` | SKILL.md | Carpeta con `SKILL.md` |
+| `TAiSkill.FromSkillFile('Skills\revisor\SKILL.md')` | SKILL.md | Archivo |
+| `TAiSkill.FromFile(ruta)` | según la ruta | Carpeta o `.md` → SKILL.md; otro archivo → JSON |
+| `TAiSkill.FromJSON(texto)` | JSON | Texto en el código |
+| `Skill.LoadFromSkillText(texto)` | SKILL.md | Texto en el código |
 
-```pascal
-var Skill: TAiSkill;
-Skill := TAiSkill.FromJSON('{"name":"translator","systemPrompt":"Traduce al inglés."}');
-```
-
-Útil para skills definidos directamente en código sin archivo externo.
-
-### Desde archivo local
-
-```pascal
-var Skill: TAiSkill;
-Skill := TAiSkill.FromFile('C:\MiApp\Skills\code-reviewer.json');
-```
-
-El archivo debe ser UTF-8. La ruta puede ser absoluta o resuelta por la aplicación.
+Todas lanzan `EAiSkillError` si fallan, con un mensaje que dice qué pasó (archivo inexistente, paquete que no existe, paquete que no es un skill, etc.).
 
 ### Desde el registry PPM
 
 ```pascal
-var Skill: TAiSkill;
-Skill := TAiSkill.FromPPM('code-reviewer');
+Node.Skill := TAiSkill.FromPPM('skill-code-review');
+Node.Skill := TAiSkill.FromPPM('code-review');   // también: se prueba 'skill-code-review'
 ```
 
-Descarga el skill desde `https://ppm.pascalai.org/api/v1/packages/code-reviewer/skill.json`. Se puede sobreescribir la URL base:
+- Registry por defecto: `https://registry.pascalai.org`. Para otro, el segundo parámetro: `FromPPM('mi-skill', 'https://mi-registry.local')`.
+- Sin versión se usa la **mayor versión no retirada** (por semver). Para fijar una: `FromPPM('skill-code-review', '', '1.0.0')`.
+- `Skill.Version` y `Skill.SourcePath` dicen qué se descargó y de dónde.
+- Para ver los skills disponibles: `ppm search --type skill`, o `TAiPrompts.SearchPPM('', 'skill')`.
+
+> Ojo con los nombres: en PPM hay paquetes de tipo `prompt` y de tipo `skill`. `code-reviewer` es un **prompt**, así que `FromPPM('code-reviewer')` falla con *"es de tipo prompt, no un skill"*; el skill equivalente es `skill-code-review`.
+
+`FromPPM` hace una petición HTTP síncrona. Para no bloquear la interfaz, cargar el skill en un hilo y asignarlo después:
 
 ```pascal
-Skill := TAiSkill.FromPPM('code-reviewer', 'https://mi-registry.local/packages/');
+TTask.Run(procedure
+begin
+  var Skill := TAiSkill.FromPPM('skill-code-review');
+  TThread.Queue(nil, procedure
+  begin
+    Node.Skill := Skill;
+  end);
+end);
 ```
 
-### Carga condicional (sin excepción)
+### Desde una carpeta de skills
 
-Las tres variantes de carga lanzan excepción si fallan. Para carga segura:
+```text
+MiApp/
+  Skills/
+    revisor-delphi/
+      SKILL.md
+    sql-expert/
+      SKILL.md
+    traductor.json        ← JSON propio, también válido
+```
 
 ```pascal
-var Skill: TAiSkill;
-Skill := nil;
-try
-  Skill := TAiSkill.FromPPM('code-reviewer');
-except
-  on E: Exception do
-    // skill no disponible, el nodo usará su configuración propia
-end;
-Node.Skill := Skill;  // nil es válido — el nodo funciona sin skill
+NodeA.Skill := TAiSkill.FromFolder('Skills\revisor-delphi');
+NodeB.Skill := TAiSkill.FromFile('Skills\traductor.json');
 ```
 
 ---
 
 ## Integración con TLLMNode
 
-### Propiedad Skill
+`TLLMNode` expone `Skill: TAiSkill` en su sección `public` (no se guarda en el DFM).
 
-`TLLMNode` expone la propiedad `Skill: TAiSkill` en su sección `public`:
-
-```pascal
-property Skill: TAiSkill read FSkill write SetSkill;
-```
-
-**Gestión de memoria:** `TLLMNode` toma ownership del skill. Al asignar un nuevo skill, el anterior se libera automáticamente. El skill activo se libera en el destructor del nodo.
+**Gestión de memoria:** el nodo toma ownership del skill. Al asignar uno nuevo, el anterior se libera; el activo se libera en el destructor del nodo. No compartir la misma instancia entre dos nodos (sería un double-free): cargar una por nodo.
 
 ```pascal
-// Correcto: el nodo toma ownership
-Node.Skill := TAiSkill.FromFile('skills/translator.json');
-
-// Correcto: reemplaza el skill anterior (el anterior se libera)
-Node.Skill := TAiSkill.FromPPM('code-reviewer');
-
-// Correcto: elimina el skill (el nodo funciona solo con sus propias props)
-Node.Skill := nil;
-
-// INCORRECTO: no liberar manualmente un skill asignado al nodo
-// Skill.Free;  ← provocaría double-free
+Node.Skill := TAiSkill.FromFolder('Skills\revisor');   // el nodo es el dueño
+Node.Skill := TAiSkill.FromPPM('skill-code-review');    // libera el anterior
+Node.Skill := nil;                                      // sin skill
+// Skill.Free;  ← NUNCA con un skill asignado a un nodo
 ```
 
 ---
 
-## Reglas de merge (prioridad)
+## Reglas de combinación
 
-Cuando un nodo tiene un skill asignado, la configuración final se calcula en `DoExecute` siguiendo estas reglas:
+`TLLMNode.ResolveConfig` combina las propiedades del nodo con las del skill. `DoExecute` la usa (a través de `ConfigureChat`) para configurar el chat de cada ejecución, y se puede llamar directamente para ver qué configuración va a salir.
 
-### Regla general
-**El skill es la BASE. Las propiedades del nodo son el OVERRIDE.**
+| Campo | Regla |
+|---|---|
+| `DriverName` | El del nodo. Si está vacío, el del skill. Si tampoco hay, `'Claude'`. |
+| `Model` | El del nodo. Si está vacío, el del skill **solo si es del driver efectivo**: mismo `DriverName`, o ninguno de los dos fijó driver. Si no, el default del driver. |
+| `ApiKey` | La del nodo. Si está vacía, la del skill (solo JSON). |
+| `SystemPrompt` | **Se concatenan**: primero el del skill (instrucciones base), después el del nodo (ajustes para ese nodo), separados por una línea en blanco. |
+| `ServiceURL`, `MaxTokens` | Solo del nodo. |
 
-Si una propiedad del nodo tiene valor no-vacío, sobreescribe la del skill. Si está vacía, se usa la del skill.
+> **Cambio de comportamiento en v3.8:** `TLLMNode.DriverName` es `''` por defecto (antes `'Claude'`). Sin skill no cambia nada, porque el resultado sigue siendo `'Claude'`. Con skill, ahora sí se usa el driver del skill; antes el `'Claude'` fijo del constructor lo pisaba siempre. Los DFM existentes guardan `DriverName = 'Claude'` de forma explícita y se comportan como antes.
 
-### Tabla de prioridades
+### Ejemplos
 
-| Campo | Skill (`TAiSkill`) | Nodo (`TLLMNode`) | Resultado |
-|---|---|---|---|
-| `DriverName` | `'Claude'` | `''` (vacío) | `'Claude'` (del skill) |
-| `DriverName` | `'Claude'` | `'OpenAI'` | `'OpenAI'` (del nodo) |
-| `Model` | `'claude-sonnet-4-6'` | `''` | `'claude-sonnet-4-6'` (del skill) |
-| `Model` | `'claude-sonnet-4-6'` | `'claude-haiku-4-5'` | `'claude-haiku-4-5'` (del nodo) |
-| `SystemPrompt` | `'Eres un revisor...'` | `''` | `'Eres un revisor...'` (del skill) |
-| `SystemPrompt` | `'Eres un revisor...'` | `'Contexto extra...'` | `'Contexto extra...'` (del nodo) |
-| `ApiKey` | `'@CLAUDE_API_KEY'` | `''` | `'@CLAUDE_API_KEY'` (del skill) |
+| Skill | Nodo | Resultado |
+|---|---|---|
+| `OpenAI` / `gpt-5.6` / `@K` | vacío | `OpenAI` / `gpt-5.6` / `@K` |
+| `OpenAI` / `gpt-5.6` / `@K` | `DriverName := 'Claude'` | `Claude` / default de Claude / `@K` — el `gpt-5.6` no se hereda |
+| `OpenAI` / `gpt-5.6` | `Model := 'gpt-5.4'` | `OpenAI` / `gpt-5.4` |
+| SKILL.md sin driver, `model: claude-opus-4-6` | vacío | `Claude` / `claude-opus-4-6` |
+| SKILL.md sin driver, `model: claude-opus-4-6` | `DriverName := 'OpenAI'` | `OpenAI` / default de OpenAI |
+| `systemPrompt: "Eres un revisor..."` | `SystemPrompt := 'Revisa solo seguridad.'` | `"Eres un revisor...\n\nRevisa solo seguridad."` |
 
-### Regla para herramientas (ExtraTools)
-
-Las herramientas son **aditivas**, no exclusivas. El comportamiento depende de `UseAllTools`:
+### Herramientas (ExtraTools)
 
 | `UseAllTools` | `Skill.ExtraTools` | Resultado |
 |---|---|---|
-| `True` | cualquiera | Se carga todo el `TAiToolRegistry`. ExtraTools queda implícito. |
-| `False` | vacío | No se cargan herramientas. |
-| `False` | `['filesystem','git']` | Se cargan solo `filesystem` y `git` desde el registry. |
+| `True` (default) | cualquiera | Se carga todo el `TAiToolRegistry` |
+| `False` | vacío | No se cargan herramientas |
+| `False` | `['filesystem','git']` | Solo `filesystem` y `git` (los que existan en el registry) |
 
 ---
 
 ## Ejemplos de uso
 
-### Nodo con skill completo desde PPM
+### Nodo con un skill del registry
 
 ```pascal
 var
@@ -214,152 +194,62 @@ begin
   Manager := TAIAgentManager.Create(nil);
   Node := TLLMNode.Create(Manager);
 
-  // El skill define todo: driver, modelo, system prompt y tools
-  Node.Skill := TAiSkill.FromPPM('code-reviewer');
-
-  // El nodo puede especializar el skill sin perderlo:
-  Node.Model := 'claude-haiku-4-5';  // modelo más barato
-  Node.UseAllTools := False;          // solo usa los ExtraTools del skill
+  Node.Skill := TAiSkill.FromPPM('skill-code-review');   // instrucciones + modelo
+  Node.ApiKey := '@CLAUDE_API_KEY';                      // la clave la pone el nodo
+  Node.SystemPrompt := 'Responde en español.';           // se agrega al del skill
 
   Manager.StartNode := Node;
   Manager.Run('Revisa este código: ' + MiCodigo);
 end;
 ```
 
-### Nodo con skill parcial (solo system prompt)
+### Mismo skill, otro proveedor
 
 ```pascal
-// El skill aporta el system prompt; driver y modelo se configuran en el nodo
-Node.Skill := TAiSkill.FromJSON(
-  '{"name":"sql-expert","systemPrompt":"Eres un experto en SQL..."}'
-);
-Node.DriverName := 'OpenAI';
-Node.Model      := 'gpt-4.1';
+Node.Skill      := TAiSkill.FromFolder('Skills\revisor-delphi');
+Node.DriverName := 'OpenAI';       // el modelo de Claude del skill no se hereda
+Node.Model      := 'gpt-5.6';
 Node.ApiKey     := '@OPENAI_API_KEY';
 ```
 
-### Múltiples nodos, múltiples skills
+### Grafo con varias personalidades
 
 ```pascal
-// Grafo de debate: dos nodos con personalidades distintas
-NodeA.Skill := TAiSkill.FromFile('skills/optimista.json');
-NodeB.Skill := TAiSkill.FromFile('skills/critico.json');
-
-// Ambos usan el mismo driver (configurado en el nodo), distinto system prompt
+NodeA.Skill := TAiSkill.FromFolder('Skills\optimista');
+NodeB.Skill := TAiSkill.FromFolder('Skills\critico');
+// Mismo driver para los dos (configurado en cada nodo), distintas instrucciones
 NodeA.DriverName := 'Claude';
-NodeA.Model      := 'claude-sonnet-4-6';
 NodeB.DriverName := 'Claude';
-NodeB.Model      := 'claude-sonnet-4-6';
 ```
 
-### Skill con herramientas específicas
+### Ver la configuración antes de ejecutar
 
 ```pascal
-// skill.json:
-// { "name":"file-analyst", "systemPrompt":"Analiza archivos...",
-//   "extraTools":["filesystem","search"] }
-
-Node.Skill       := TAiSkill.FromFile('skills/file-analyst.json');
-Node.UseAllTools := False;  // carga solo filesystem y search
+var Cfg := Node.ResolveConfig;
+Writeln(Cfg.DriverName, ' / ', Cfg.Model);
 ```
 
 ---
 
-## Organización recomendada de archivos de skills
+## Relación con otros componentes
 
-```
-MiApp/
-  Skills/
-    code-reviewer.json
-    sql-expert.json
-    translator.json
-    file-analyst.json
-```
-
-Los archivos de skill son portables: el mismo `.json` funciona en cualquier proyecto MakerAI.
+| Componente | Para qué |
+|---|---|
+| `TAiSkill` + `TLLMNode` | La personalidad **fija** de un nodo de agente |
+| `TAiPrompts.LoadSkillFromPPM` | Traer el texto de un skill como plantilla, para usarlo a mano |
+| Skills de la Agent Card A2A (`TAiA2AServer.Skills`) | Describir hacia afuera lo que sabe hacer un agente; no ejecutan nada |
 
 ---
 
-## Integración con PPM (Pascal Package Manager)
+## Thread safety
 
-Los skills se pueden publicar y distribuir como paquetes de tipo `skill` en el registry PPM (`https://ppm.pascalai.org`).
-
-### Estructura del paquete PPM tipo skill
-
-Un paquete skill en PPM expone el archivo `skill.json` en la ruta:
-
-```
-https://ppm.pascalai.org/api/v1/packages/{nombre}/skill.json
-```
-
-### Publicar un skill en PPM
-
-El proceso de publicación sigue el mismo flujo que los paquetes `prompt` y `mcp` del registry PPM. Consultar la documentación de PPM para el proceso completo.
-
-### Descarga automática con `FromPPM`
-
-`TAiSkill.FromPPM` hace una petición HTTP GET síncrona. Si se requiere descarga asíncrona (para no bloquear el hilo principal), cargar el skill en un hilo separado antes de asignarlo al nodo:
-
-```pascal
-TTask.Run(procedure
-begin
-  var Skill := TAiSkill.FromPPM('code-reviewer');
-  TThread.Queue(nil, procedure
-  begin
-    Node.Skill := Skill;
-  end);
-end);
-```
-
----
-
-## Relación con otros componentes de MakerAI
-
-### TAiSkill vs TAiPrompts
-
-| Aspecto | `TAiSkill` | `TAiPrompts` |
-|---|---|---|
-| Propósito | Configuración completa del agente | Gestión de prompts con templates y variables |
-| Contenido | Driver + Model + ApiKey + SystemPrompt + Tools | Prompts con placeholders `<#Variable>` |
-| Uso típico | Definir la personalidad de un nodo LLM | Construir mensajes dinámicos con datos variables |
-| Carga desde PPM | Sí (`skill.json`) | Sí (paquete tipo `prompt`) |
-| Se asigna a | `TLLMNode.Skill` | Consulta directa: `Prompts.GetTemplate(...)` |
-
-Los dos se complementan: el skill define el system prompt estático del agente; `TAiPrompts` construye los mensajes dinámicos que ese agente procesa.
-
-### TAiSkill vs configuración directa en TLLMNode
-
-Usar un skill es equivalente a configurar el nodo directamente, con la ventaja de la reutilización:
-
-```pascal
-// Sin skill (configuración directa):
-Node.DriverName   := 'Claude';
-Node.Model        := 'claude-sonnet-4-6';
-Node.ApiKey       := '@CLAUDE_API_KEY';
-Node.SystemPrompt := 'Eres un revisor de código experto...';
-
-// Con skill (equivalente, pero reutilizable):
-Node.Skill := TAiSkill.FromFile('skills/code-reviewer.json');
-```
-
----
-
-## Consideraciones de thread safety
-
-`TAiSkill` es un objeto de datos simples sin sincronización. Se asume que:
-
-- El skill se configura **antes** de que el grafo de agentes empiece a ejecutar.
-- Durante la ejecución del grafo, el skill no se modifica.
-- Si se requiere cambiar el skill en runtime entre ejecuciones del grafo, hacerlo fuera de cualquier ejecución activa.
-
-`TLLMNode.DoExecute` lee las propiedades del skill de forma inmutable durante la ejecución del nodo. No hay acceso concurrente al mismo skill desde múltiples hilos a menos que se comparta el mismo skill entre múltiples nodos (lo cual es seguro en lectura).
+`TAiSkill` es un objeto de datos sin sincronización. Se configura **antes** de ejecutar el grafo y no se modifica durante la ejecución. `TLLMNode` lo lee sin modificarlo en cada `DoExecute`.
 
 ---
 
 ## Notas de implementación
 
-- `TAiSkill` no hereda de `TPersistent` ni de `TComponent`. No se puede serializar a DFM/FMX. Es un objeto de runtime puro.
-- La propiedad `Skill` de `TLLMNode` es `public` (no `published`) por este motivo.
-- `TAiSkill.FromPPM` usa `THTTPClient` (Delphi nativo), sin dependencia de librerías externas.
-- Los campos `DriverName`, `Model`, `ApiKey` en el skill son **sugerencias**. El nodo siempre tiene la última palabra si sus propias propiedades están configuradas.
-- `ExtraTools` usa `dupIgnore` y `CaseSensitive=False`, por lo que duplicados y variaciones de mayúsculas se normalizan automáticamente.
+- `TAiSkill` no hereda de `TPersistent` ni de `TComponent`: es un objeto de runtime puro, y por eso `TLLMNode.Skill` es `public`.
+- El parser de SKILL.md vive en `uMakerAi.Skills.Format` y es el mismo que usan `TAiPrompts` y el resto del framework. Entiende del YAML lo que usan los skills reales: escalares (con comillas o con comentario `#`), listas y bloques `|` / `>`.
+- `ExtraTools` usa `dupIgnore` y `CaseSensitive=False`.
+- Las pruebas de regresión están en `Tests/RegressionSuite` (casos `skills.*`, sin red: el registry es un servidor falso).

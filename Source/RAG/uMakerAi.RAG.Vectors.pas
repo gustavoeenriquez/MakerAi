@@ -131,6 +131,20 @@ type
     function VariantToJSONValue(const V: Variant): TJSONValue;
   end;
 
+  /// Reranker semantico enchufable en TAiRAGVector.Reranker. Recibe la
+  /// consulta y el texto de cada candidato, y devuelve un puntaje por texto en
+  /// el mismo orden: 0..1 = relevancia; negativo = descartar siempre (p.ej. un
+  /// pasaje con inyeccion de prompt). Implementacion con Jev: TAiJevRAGReranker.
+  TAiRAGRerankerBase = class(TComponent)
+  private
+    FMinScore: Double;
+  public
+    function Score(const AQuery: string; const ATexts: TArray<string>): TArray<Double>; virtual; abstract;
+  published
+    // Tras el rerank se descartan los candidatos por debajo (0 = conservar todos)
+    property MinScore: Double read FMinScore write FMinScore;
+  end;
+
   /// ---------------------------------------------------------------------------
   /// TAiDataVec es la clase base que permite almacenar conjuntos de embeddings
   /// se utiliza tanto para representar bases de datos de embeddings en memoria
@@ -161,6 +175,8 @@ type
     FOwnsObjects: Boolean;
     FOnImportProgress: TOnImportProgress;
     FSearchOptions: TAiSearchOptions;
+    FReranker: TAiRAGRerankerBase;
+    procedure SetReranker(const Value: TAiRAGRerankerBase);
     procedure SetActive(const Value: Boolean);
     procedure SetRagIndex(const Value: TAIEmbeddingIndex);
     procedure SetEmbeddings(const Value: TAiEmbeddingsCore);
@@ -242,6 +258,9 @@ type
     procedure RegenerateAll(const aNewModel: String = ''); virtual;
     procedure Rerank(Target: TAiEmbeddingNode; aAutoRegenerate: Boolean = True); overload;
     procedure Rerank(NewPrompt: String; aAutoRegenerate: Boolean = True); overload;
+    // Reordena con un reranker semantico: Idx := puntaje y orden descendente.
+    // No descarta nodos (los negativos quedan al final); eso lo decide quien llama.
+    procedure RerankWith(const AQuery: String; AReranker: TAiRAGRerankerBase);
     function FilterByMetaData(const aCriteria: TAiEmbeddingMetaData): TAiRAGVector;
 
     Property RagIndex: TAIEmbeddingIndex read FRagIndex write SetRagIndex;
@@ -252,6 +271,9 @@ type
     Property OnDataVecSearch: TOnDataVecSearch read FOnDataVecSearch write SetOnDataVecSearch;
     Property OnGetEmbedding: TOnGetEmbedding read FOnGetEmbedding write FOnGetEmbedding;
     property OnFilterItem: TOnFilterItem read FOnFilterItem write FOnFilterItem;
+    // Segunda etapa semantica para RERANK en VQL (Req.RerankQuery). Si esta
+    // asignado reemplaza el rerank por coseno; si falla, se usa el coseno.
+    property Reranker: TAiRAGRerankerBase read FReranker write SetReranker;
     Property OnImportProgress: TOnImportProgress read FOnImportProgress write FOnImportProgress;
 
     Property Embeddings: TAiEmbeddingsCore read FEmbeddings write SetEmbeddings;
@@ -1174,7 +1196,24 @@ begin
       // -----------------------------------------------------------------------
       // 5. RERANK (segunda etapa: refinamiento semantico profundo)
       // -----------------------------------------------------------------------
-      if Assigned(AResultVector) and (Req.RerankQuery <> '') and (AResultVector.Count > 0) then
+      // 5a. Reranker semantico (TAiRAGVector.Reranker): puntua cada candidato
+      //     contra la consulta sin tocar embeddings. Si falla, sigue el coseno.
+      var SemanticDone := False;
+      if Assigned(FReranker) and Assigned(AResultVector) and (Req.RerankQuery <> '') and
+         (AResultVector.Count > 0) then
+        try
+          AResultVector.RerankWith(Req.RerankQuery, FReranker);
+          for i := AResultVector.Count - 1 downto 0 do
+            if (AResultVector.Items[i].Idx < 0) or
+               ((FReranker.MinScore > 0) and (AResultVector.Items[i].Idx < FReranker.MinScore)) then
+              DropNode(AResultVector, i);
+          SemanticDone := True;
+        except
+          SemanticDone := False; // se cae al rerank por coseno de abajo
+        end;
+
+      if (not SemanticDone) and Assigned(AResultVector) and (Req.RerankQuery <> '') and
+         (AResultVector.Count > 0) then
       begin
         AResultVector.Embeddings := Self.Embeddings;
 
@@ -1359,6 +1398,41 @@ end;
   Los drivers devuelven vectores CON propiedad (Create(nil, True)), asi que cada
   nodo descartado en el post-proceso de VQL (THRESHOLD, DISTINCT, OFFSET, LIMIT)
   se filtraba en un proceso servidor de vida larga. }
+procedure TAiRAGVector.SetReranker(const Value: TAiRAGRerankerBase);
+begin
+  if FReranker = Value then
+    Exit;
+  if Assigned(FReranker) then
+    FReranker.RemoveFreeNotification(Self);
+  FReranker := Value;
+  if Assigned(FReranker) then
+    FReranker.FreeNotification(Self);
+end;
+
+procedure TAiRAGVector.RerankWith(const AQuery: String; AReranker: TAiRAGRerankerBase);
+var
+  Texts: TArray<string>;
+  Scores: TArray<Double>;
+  i: Integer;
+begin
+  if (FItems.Count = 0) or not Assigned(AReranker) then
+    Exit;
+  SetLength(Texts, FItems.Count);
+  for i := 0 to FItems.Count - 1 do
+    Texts[i] := FItems[i].Text;
+  Scores := AReranker.Score(AQuery, Texts);
+  if Length(Scores) <> FItems.Count then
+    raise Exception.CreateFmt('RerankWith: el reranker devolvio %d puntajes para %d candidatos',
+      [Length(Scores), FItems.Count]);
+  for i := 0 to FItems.Count - 1 do
+    FItems[i].Idx := Scores[i];
+  FItems.Sort(TComparer<TAiEmbeddingNode>.Construct(
+    function(const Left, Right: TAiEmbeddingNode): Integer
+    begin
+      Result := CompareValue(Right.Idx, Left.Idx);
+    end));
+end;
+
 procedure TAiRAGVector.DropNode(AVector: TAiRAGVector; AIndex: Integer);
 var
   Node: TAiEmbeddingNode;
@@ -1859,6 +1933,9 @@ begin
     // Verificar si es el Driver de base de datos asignado
     if (AComponent = FDriver) then
       FDriver := nil;
+
+    if (AComponent = FReranker) then
+      FReranker := nil;
   end;
 end;
 

@@ -92,13 +92,24 @@ uses
   System.IOUtils, System.SyncObjs, System.Math, System.Permissions,
   System.Threading, System.Diagnostics,
 
-uMakerAi.Realtime,  uMakerAi.Realtime.OpenAI,
+uMakerAi.Realtime,  uMakerAi.Realtime.OpenAI
 
 {$IFDEF MSWINDOWS}
-  Winapi.Windows, Winapi.MMSystem;
+  , Winapi.Windows, Winapi.MMSystem
 {$ENDIF}
 {$IFDEF ANDROID}
-AndroidApi.JNI.Media, AndroidApi.JNIBridge, AndroidApi.Helpers, FMX.Helpers.Android, AndroidApi.JNI.JavaTypes;
+  , AndroidApi.JNI.Media, AndroidApi.JNIBridge, AndroidApi.Helpers, FMX.Helpers.Android, AndroidApi.JNI.JavaTypes
+{$ENDIF}
+  ;
+
+{$IFNDEF MSWINDOWS}
+// Fuera de Windows no hay captura WaveIn: se declaran los tipos para que la
+// interfaz publica (DeviceID, GetWaveInDevices) sea la misma en todas las plataformas.
+type
+  UINT = Cardinal;
+
+const
+  WAVE_MAPPER = UINT(-1);
 {$ENDIF}
 
 const
@@ -115,13 +126,11 @@ const
 
 type
 
-{$IFDEF MSWINDOWS}
   // Listar los dispositivos de windows disponibles para captura de audio
   TWaveInDeviceInfo = record
     DeviceID: UINT;
     DeviceName: string;
   end;
-{$ENDIF}
 
   TRiffHeader = packed record
     ChunkID: array [0 .. 3] of AnsiChar;
@@ -224,14 +233,14 @@ type
     FOnError: TAIVoiceMonitorOnError;
     FOnWakeWordCheck: TWakeWordCheckEvent;
 
-{$IFDEF MSWINDOWS}
-    FhWaveIn: HWAVEIN;
-    FWaveHdr: TWaveHdr;
     FNoiseLevel: Integer;
     FDeviceID: UINT;
     FWakeWordActive: Boolean;
     FWakeWord: String;
     FOnSpeechEnd: TSpeechEndEvent;
+{$IFDEF MSWINDOWS}
+    FhWaveIn: HWAVEIN;
+    FWaveHdr: TWaveHdr;
 {$ENDIF}
 {$IFDEF ANDROID}
     FAudioRecord: JAudioRecord;
@@ -386,6 +395,16 @@ begin
   end;
 end;
 
+{$ELSE}
+
+class function TAIVoiceMonitor.GetWaveInDevices: TArray<TWaveInDeviceInfo>;
+begin
+  // Sin API WaveIn: solo el dispositivo predeterminado
+  SetLength(Result, 1);
+  Result[0].DeviceID := WAVE_MAPPER;
+  Result[0].DeviceName := 'Predeterminado del Sistema';
+end;
+
 {$ENDIF}
 { TAIVoiceMonitor }
 
@@ -427,9 +446,7 @@ begin
   FWakeWordActive := False;
   FWakeWord := 'andrea';
 
-{$IFDEF MSWINDOWS}
   FDeviceID := WAVE_MAPPER;
-{$ENDIF}
   UpdateAudioBuffers;
 end;
 
@@ -581,9 +598,8 @@ begin
     if Integer(Value) >= NumDevs then
       raise EArgumentOutOfRangeException.CreateFmt('Invalid DeviceID: %d. Valid range is 0 to %d, or WAVE_MAPPER.', [Value, NumDevs - 1]);
   end;
-
-  FDeviceID := Value;
 {$ENDIF}
+  FDeviceID := Value;
 end;
 
 procedure TAIVoiceMonitor.SetOnSpeechEnd(const Value: TSpeechEndEvent);

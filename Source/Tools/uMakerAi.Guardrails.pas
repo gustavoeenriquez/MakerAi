@@ -26,7 +26,11 @@ unit uMakerAi.Guardrails;
 //   4. BlockedArgPatterns          -> substrings prohibidos en los argumentos
 //                                     JSON (case-insensitive; p.ej. 'rm -rf',
 //                                     'DROP TABLE', '..\').
-//   5. OnCheckToolCall             -> veto/permiso programatico final.
+//   5. Classifier                  -> juicio semantico del riesgo de lo que las
+//                                     listas dejaron pasar (p.ej.
+//                                     TAiJevGuardrailClassifier). Si lanza una
+//                                     excepcion, bloquea (falla cerrado).
+//   6. OnCheckToolCall             -> veto/permiso programatico final.
 //
 // Cada bloqueo dispara OnBlocked (auditoria) e incrementa BlockedCount.
 // -----------------------------------------------------------------------------
@@ -46,6 +50,14 @@ type
   TAiGuardrailBlockedEvent = procedure(Sender: TObject;
     const AToolName, AArguments, AReason: string) of object;
 
+  // Clasificador semantico enchufable en TAiGuardrails.Classifier. Solo se
+  // consulta para los tool calls que las listas ya permitieron.
+  TAiGuardrailClassifierBase = class(TComponent)
+  public
+    // True = permitir. Si devuelve False, AReason explica el bloqueo.
+    function CheckToolCall(const AToolName, AArguments: string; out AReason: string): Boolean; virtual; abstract;
+  end;
+
   TAiGuardrails = class(TComponent)
   private
     FEnabled: Boolean;
@@ -55,10 +67,14 @@ type
     FOnCheckToolCall: TAiGuardrailCheckEvent;
     FOnBlocked: TAiGuardrailBlockedEvent;
     FBlockedCount: Int64;
+    FClassifier: TAiGuardrailClassifierBase;
+    procedure SetClassifier(const Value: TAiGuardrailClassifierBase);
     procedure SetAllowedTools(const Value: TStrings);
     procedure SetBlockedTools(const Value: TStrings);
     procedure SetBlockedArgPatterns(const Value: TStrings);
     class function MatchesAny(AList: TStrings; const AValue: string): Boolean; static;
+  protected
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -77,6 +93,8 @@ type
     property BlockedTools: TStrings read FBlockedTools write SetBlockedTools;
     // Substrings prohibidos dentro del JSON de argumentos (case-insensitive)
     property BlockedArgPatterns: TStrings read FBlockedArgPatterns write SetBlockedArgPatterns;
+    // Juicio semantico del riesgo (paso 5); nil = no se usa
+    property Classifier: TAiGuardrailClassifierBase read FClassifier write SetClassifier;
     property OnCheckToolCall: TAiGuardrailCheckEvent read FOnCheckToolCall write FOnCheckToolCall;
     property OnBlocked: TAiGuardrailBlockedEvent read FOnBlocked write FOnBlocked;
   end;
@@ -107,6 +125,24 @@ begin
   FBlockedTools.Free;
   FBlockedArgPatterns.Free;
   inherited;
+end;
+
+procedure TAiGuardrails.SetClassifier(const Value: TAiGuardrailClassifierBase);
+begin
+  if FClassifier = Value then
+    Exit;
+  if Assigned(FClassifier) then
+    FClassifier.RemoveFreeNotification(Self);
+  FClassifier := Value;
+  if Assigned(FClassifier) then
+    FClassifier.FreeNotification(Self);
+end;
+
+procedure TAiGuardrails.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if (Operation = opRemove) and (AComponent = FClassifier) then
+    FClassifier := nil;
 end;
 
 procedure TAiGuardrails.SetAllowedTools(const Value: TStrings);
@@ -179,7 +215,20 @@ begin
       end;
     end;
 
-  // 4. Veto/permiso programatico (puede revertir el veredicto de las listas)
+  // 4. Clasificador semantico: solo para lo que las listas dejaron pasar
+  if Result and Assigned(FClassifier) then
+    try
+      Result := FClassifier.CheckToolCall(AToolName, AArguments, AReason);
+    except
+      on E: Exception do
+      begin
+        // Falla cerrado: sin veredicto no se ejecuta la tool
+        Result := False;
+        AReason := 'guardrail classifier error: ' + E.Message;
+      end;
+    end;
+
+  // 5. Veto/permiso programatico (puede revertir el veredicto anterior)
   if Assigned(FOnCheckToolCall) then
     FOnCheckToolCall(Self, AToolName, AArguments, Result, AReason);
 

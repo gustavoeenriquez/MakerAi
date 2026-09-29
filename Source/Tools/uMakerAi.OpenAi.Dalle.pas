@@ -73,6 +73,21 @@ const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
 
 type
+  // Error HTTP del proveedor. Hereda de Exception y conserva el mensaje de
+  // siempre ('Error Received: <status>, <cuerpo>'), asi que quien capture
+  // Exception no nota nada. Anade lo que el mensaje no dejaba leer: el codigo
+  // HTTP y el Retry-After, para que un broker pueda devolver un 429/503 con su
+  // espera en vez de un error generico.
+  EAiDalleHTTPError = class(Exception)
+  private
+    FStatusCode: Integer;
+    FRetryAfter: string;
+  public
+    constructor CreateHTTP(AStatusCode: Integer; const ABody, ARetryAfter: string);
+    property StatusCode: Integer read FStatusCode;
+    property RetryAfter: string read FRetryAfter;  // '' si el proveedor no lo mando
+  end;
+
   TAiDalleImage = class(TObject)
   private
     FImageStream: TMemoryStream;
@@ -344,6 +359,16 @@ type
 procedure Register;
 
 implementation
+
+{ EAiDalleHTTPError }
+
+constructor EAiDalleHTTPError.CreateHTTP(AStatusCode: Integer;
+  const ABody, ARetryAfter: string);
+begin
+  inherited CreateFmt('Error Received: %d, %s', [AStatusCode, ABody]);
+  FStatusCode := AStatusCode;
+  FRetryAfter := Trim(ARetryAfter);
+end;
 
 procedure Register;
 begin
@@ -792,8 +817,8 @@ begin
         begin
           StreamReader := TStreamReader.Create(ResponseStream, TEncoding.UTF8);
           try
-            raise Exception.CreateFmt('Error Received: %d, %s',
-              [Res.StatusCode, StreamReader.ReadToEnd]);
+            raise EAiDalleHTTPError.CreateHTTP(Res.StatusCode,
+              StreamReader.ReadToEnd, Res.HeaderValue['Retry-After']);
           finally
             StreamReader.Free;
           end;
@@ -942,8 +967,8 @@ begin
       end;
     end
     else
-      raise Exception.CreateFmt('Error Received: %d, %s',
-        [Res.StatusCode, Res.ContentAsString]);
+      raise EAiDalleHTTPError.CreateHTTP(Res.StatusCode,
+        Res.ContentAsString, Res.HeaderValue['Retry-After']);
   finally
     Client.Free;
     Body.Free;
@@ -1292,8 +1317,8 @@ begin
       end;
     end
     else
-      raise Exception.CreateFmt('Error Received: %d, %s',
-        [Res.StatusCode, Res.ContentAsString]);
+      raise EAiDalleHTTPError.CreateHTTP(Res.StatusCode,
+        Res.ContentAsString, Res.HeaderValue['Retry-After']);
   finally
     Client.Free;
     Body.Free;
