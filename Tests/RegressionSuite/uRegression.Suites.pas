@@ -85,6 +85,7 @@ uses
   uMakerAi.Memory, uMakerAi.Memory.Types,
   uMakerAi.Skills.Format, uMakerAi.Prompts, uMakerAi.Agents.Skill, uMakerAi.Agents.Node.LLM,
   uMakerAi.Tools.Skills,
+  uMakerAi.Chat.Gemini, uMakerAi.Gemini.Speech, uMakerAi.Gemini.WebSearch,
   uRegression.Fixtures;
 
 const
@@ -462,6 +463,22 @@ begin
   // Qwen (DashScope): los hibridos razonan por defecto en el API, asi que el
   // driver SIEMPRE manda enable_thinking (false sin cap_Reasoning). qwq/-thinking
   // no lo reciben; los de pesos abiertos solo razonan en streaming.
+  // --- Gemini (request, sin red ni API key) ---
+  // Catalogo sep 2026: el default del driver y de las tools de Gemini ya no es
+  // un modelo apagado o de acceso limitado; el sampling se omite desde 3.5 por
+  // version (3.6, 3.7 y 3.8; si en 3.0); los niveles de la escalera ampliada
+  // se llevan a los que Gemini 3 acepta (minimal/none -> LOW, xhigh/max ->
+  // HIGH; 'minimal' da error en 3.7/3.8); los apagados quedan como alias.
+  FRunner.AddCase('chat.gemini.defaults')
+    .Input('chat:gemini-defaults')
+    .ExpectEquals('driver=gemini-3.8-flash|conn=gemini-3.8-flash|tts=gemini-3.8-flash-tts|' +
+      'stt=gemini-3.8-flash|search=gemini-3.8-flash');
+  FRunner.AddCase('chat.gemini.request')
+    .Input('chat:gemini-request')
+    .ExpectEquals('3.8/medium=temp=no,level=MEDIUM|3.7/minimal=temp=no,level=LOW|' +
+      '3.8/max=temp=no,level=HIGH|3.6=temp=no,level=MEDIUM|3.0=temp=si,level=MEDIUM|' +
+      'alias=gemini-3.1-pro-preview,gemini-3.1-flash-image,gemini-3.1-pro-preview');
+
   FRunner.AddCase('chat.qwen.thinking-request')
     .Input('chat:qwen-thinking')
     .ExpectEquals('fast=false|reason=true/1024|high=16384|qwq=ausente|open-sync=false|open-async=true');
@@ -1825,6 +1842,36 @@ end;
 // -----------------------------------------------------------------------------
 
 type
+  // Expone el request que arma el driver Gemini (InitChatCompletions es protegido).
+  // Devuelve 'temp=si|no,level=<thinkingLevel>' del generationConfig.
+  TGeminiProbeChat = class(TAiGeminiChat)
+  public
+    function Request(const AModel: string; ALevel: TAiThinkingLevel): string;
+  end;
+
+function TGeminiProbeChat.Request(const AModel: string; ALevel: TAiThinkingLevel): string;
+var
+  J, Cfg: TJSONObject;
+  Level: string;
+begin
+  Model := AModel;
+  Temperature := 0.7;
+  ModelConfig.ThinkingLevel := ALevel;
+  if Messages.Count = 0 then
+    Messages.Add(TAiChatMessage.Create('hola', 'user'));
+  J := TJSONObject.ParseJSONValue(InitChatCompletions) as TJSONObject;
+  try
+    Cfg := J.GetValue<TJSONObject>('generationConfig');
+    Level := '';
+    Cfg.TryGetValue<string>('thinkingConfig.thinkingLevel', Level);
+    Result := 'temp=' + IfThen(Assigned(Cfg.FindValue('temperature')), 'si', 'no') +
+      ',level=' + Level;
+  finally
+    J.Free;
+  end;
+end;
+
+type
   // Expone el request que arma el driver Qwen (InitChatCompletions es protegido)
   TQwenProbeChat = class(TAiQwenChat)
   public
@@ -2395,6 +2442,47 @@ var
   Raw, Content: string;
   Hits, P: Integer;
 begin
+  if AScenario = 'chat:gemini-defaults' then
+  begin
+    var Gm := TAiGeminiChat.Create(nil);
+    var Conn := TAiChatConnection.Create(nil);
+    var Sp := TAiGeminiSpeechTool.Create(nil);
+    var Ws := TAiGeminiWebSearchTool.Create(nil);
+    try
+      Conn.DriverName := 'Gemini';
+      Result := 'driver=' + Gm.Model + '|conn=' + Conn.Params.Values['Model'] +
+        '|tts=' + Sp.Model + '|stt=' + Sp.TranscriptionModel + '|search=' + Ws.Model;
+    finally
+      Ws.Free;
+      Sp.Free;
+      Conn.Free;
+      Gm.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:gemini-request' then
+  begin
+    var Parts := TStringList.Create;
+    var Gp := TGeminiProbeChat.Create(nil);
+    try
+      Parts.Add('3.8/medium=' + Gp.Request('gemini-3.8-flash', tlMedium));
+      Parts.Add('3.7/minimal=' + Gp.Request('gemini-3.7-flash', tlMinimal));
+      Parts.Add('3.8/max=' + Gp.Request('gemini-3.8-flash', tlMax));
+      Parts.Add('3.6=' + Gp.Request('gemini-3.6-flash', tlMedium));
+      Parts.Add('3.0=' + Gp.Request('gemini-3-flash-preview', tlMedium));
+      Parts.Add('alias=' +
+        TAiChatFactory.Instance.GetBaseModel('Gemini', 'gemini-3-pro-preview') + ',' +
+        TAiChatFactory.Instance.GetBaseModel('Gemini', 'imagen-4.0-generate-001') + ',' +
+        TAiChatFactory.Instance.GetBaseModel('Gemini', 'aa_gemini-3-pro-fast'));
+      Result := String.Join('|', Parts.ToStringArray);
+    finally
+      Gp.Free;
+      Parts.Free;
+    end;
+    Exit;
+  end;
+
   if (AScenario = 'chat:qwen-thinking') or (AScenario = 'chat:qwen-stream-usage') then
   begin
     var Qw := TQwenProbeChat.Create(nil);

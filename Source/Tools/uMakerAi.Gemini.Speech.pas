@@ -61,7 +61,7 @@ type
     property Completion_tokens: Integer read FCompletion_tokens write FCompletion_tokens;
     property Total_tokens: Integer read FTotal_tokens write FTotal_tokens;
 
-    { Speech-to-Text: modelo multimodal que acepta audio (ej: gemini-2.0-flash) }
+    { Speech-to-Text: modelo multimodal que acepta audio (ej: gemini-3.8-flash) }
     property TranscriptionModel: string read FTranscriptionModel write FTranscriptionModel;
     { Instruccion enviada junto al audio para guiar la transcripcion }
     property TranscriptionPrompt: string read FTranscriptionPrompt write FTranscriptionPrompt;
@@ -83,12 +83,17 @@ begin
   inherited Create(AOwner);
   FApiKey := '@GEMINI_API_KEY';
   FUrl := 'https://generativelanguage.googleapis.com/v1beta/';
-  FModel := 'gemini-2.5-flash-preview-tts';
+  // gemini-3.8-flash-tts (estable, sep 2026). La 2.5 TTS quedó limitada a
+  // cuentas que ya la usaban. Sin prueba runtime: la doc de 3.8 aún admite la
+  // API generateContent que usa este componente (y documenta además la nueva
+  // /interactions).
+  FModel := 'gemini-3.8-flash-tts';
   FVoice := 'Puck';
   FAudioProfile := TStringList.Create;
   FScene := TStringList.Create;
   FDirectorsNotes := TStringList.Create;
-  FTranscriptionModel := 'gemini-2.0-flash';
+  // gemini-2.0-flash se apagó el 1 jun 2026; 3.8 Flash acepta audio de entrada
+  FTranscriptionModel := 'gemini-3.8-flash';
   FTranscriptionPrompt := 'Transcribe this audio accurately.';
 end;
 

@@ -28,7 +28,7 @@ type
     constructor Create(AOwner: TComponent); override;
 
     { Uso est?tico }
-    class function Search(const AApiKey, AQuery: string; const AModel: string = 'gemini-2.0-flash'; const ADynamicThreshold: Single = 0.7): TAiChatMessage;
+    class function Search(const AApiKey, AQuery: string; const AModel: string = 'gemini-3.8-flash'; const ADynamicThreshold: Single = 0.7): TAiChatMessage;
   published
     property ApiKey: string read GetApiKey write FApiKey;
     property Model: string read FModel write FModel;
@@ -52,7 +52,7 @@ begin
   inherited Create(AOwner);
   FApiKey           := '@GEMINI_API_KEY';
   FUrl              := 'https://generativelanguage.googleapis.com/v1beta/';
-  FModel            := 'gemini-2.0-flash';
+  FModel            := 'gemini-3.8-flash';  // gemini-2.0-flash se apagó el 1 jun 2026
   FDynamicThreshold := 0;  // 0 = google_search (todos los modelos)
                             // >0 = google_search_retrieval (solo gemini-1.5-*)
 end;

@@ -476,7 +476,10 @@ Begin
 
   // ------------------------- GEMINI ----------------------------------
   // https://ai.google.dev/gemini-api/docs/models
-  // Ultima actualizacion: May 2026
+  // Ultima actualizacion: Sep 29 2026 (contra la doc oficial, SIN prueba
+  // runtime: no habia API key). Default del driver: gemini-3.8-flash.
+  // La familia 2.5 sigue registrada pero Google la limita a cuentas que ya
+  // la usaban; para un usuario nuevo falla.
   // ------------------------- GEMINI ----------------------------------
 
   // --- Valores globales por defecto para todos los modelos Gemini ---
@@ -564,6 +567,51 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ThinkingLevel', 'tlLow');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',   'True');
 
+  // ------- Familia Gemini 3.7/3.8 (ago-sep 2026, estables) ------
+  // 1M ctx, 65K output; entrada texto/imagen/video/audio/PDF; function calling,
+  // Google Search, code execution, url context, structured output y computer
+  // use (preview). Thinking solo low/medium/high: 'minimal' da error y no se
+  // puede apagar (el driver lleva tlMinimal/tlNone a LOW). Sampling omitido
+  // (familia 3.5+). Sin prueba runtime.
+
+  // gemini-3.8-flash -- estable (sep 2026): DEFAULT DEL DRIVER
+  Model := 'gemini-3.8-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Max_Tokens',   '65536');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',
+    '[cap_Image, cap_Audio, cap_Video, cap_Pdf, cap_WebSearch, cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',
+    '[cap_Image, cap_Audio, cap_Video, cap_Pdf, cap_WebSearch, cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ThinkingLevel', 'tlMedium');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',   'True');
+
+  // gemini-3.7-flash -- estable (ago 2026), orientado a codigo
+  Model := 'gemini-3.7-flash';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Max_Tokens',   '65536');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',
+    '[cap_Image, cap_Audio, cap_Video, cap_Pdf, cap_WebSearch, cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',
+    '[cap_Image, cap_Audio, cap_Video, cap_Pdf, cap_WebSearch, cap_Reasoning, cap_CodeInterpreter]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ThinkingLevel', 'tlMedium');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',   'True');
+
+  // ------- Gemini 3.8 TTS (estables, sep 22 2026) ------
+  // Reemplazo oficial de gemini-2.5-flash-preview-tts. Mismo schema en ambos.
+  // La doc presenta la API nueva /interactions, pero la guia de migracion
+  // sigue cubriendo generateContent, que es lo que usa el driver.
+  Model := 'gemini-3.8-flash-tts';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',       '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',     '[cap_GenAudio]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',     'False');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Voice',           'Sol=Kore,Gustavo=Puck');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ResponseTimeOut', '36000');
+
+  Model := 'gemini-3.8-flash-lite-tts';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',       '[]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',     '[cap_GenAudio]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',     'False');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Voice',           'Sol=Kore,Gustavo=Puck');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ResponseTimeOut', '36000');
+
   // ------- Gemini 3.1 Flash TTS Preview -- TTS nueva generacion ------
   // Desde jun 17/2026 soporta streaming via streamGenerateContent
   Model := 'gemini-3.1-flash-tts-preview';
@@ -620,7 +668,9 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',  '[cap_Image, cap_ComputerUse]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',  'True');
 
-  // deprecated — cierre 17 jun 2026
+  // ------- Familia 2.5: acceso LIMITADO (Google solo la sirve a cuentas que
+  // ya la usaban; sin fecha de apagado). Se conserva para esas cuentas; para
+  // proyectos nuevos usar gemini-3.8-flash.
   // ------- Gemini 2.5 Flash -- 1M ctx, 65K output, multimodal completo ------
   // https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash
   // Entrada: Audio, Video, PDF, Imagenes; WebSearch+CodeInterpreter+Thinking nativos
@@ -650,8 +700,10 @@ Begin
     '[cap_Image, cap_Audio, cap_Video, cap_Pdf, cap_WebSearch, cap_Reasoning, cap_CodeInterpreter]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active', 'True');
 
-  // ------- Gemini 3 Pro Preview -- 1M ctx, razonamiento avanzado ------
-  // https://ai.google.dev/gemini-api/docs/models/gemini-3-pro-preview
+  // ------- Gemini 3 Pro Preview -- APAGADO por Google ------
+  // Queda como alias de gemini-3.1-pro-preview (su sucesor) para no romper
+  // configuraciones existentes: el driver envia el modelo base.
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'gemini-3-pro-preview', 'gemini-3.1-pro-preview');
   Model := 'gemini-3-pro-preview';
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Max_Tokens',   '65536');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',
@@ -687,6 +739,9 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps', '[cap_Image, cap_GenImage]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active', 'False');
 
+  // OJO: gemini-2.5-flash-image se APAGA el 2 oct 2026 (reemplazo oficial:
+  // gemini-3.1-flash-image). Tras esa fecha convertirlo en alias.
+
   // ------- Gemini 3 Pro Image (Nano Banana Pro) -- generacion de imagenes avanzada ------
   // https://ai.google.dev/gemini-api/docs/image-generation
   // Nota: no soporta ThinkingLevel (INVALID_ARGUMENT si se envía)
@@ -699,24 +754,21 @@ Begin
   // ModelCaps=[]: usa endpoint :predict; Gap=[cap_GenImage] activa InternalRunNativeImageGeneration
   // https://ai.google.dev/gemini-api/docs/imagen
   // Params via ImageParams.Params: aspectRatio (1:1 3:4 4:3 9:16 16:9), imageSize (1K 2K), personGeneration
-  // Precios: Fast=$0.02, Standard=$0.04, Ultra=$0.06 por imagen
-  Model := 'imagen-4.0-generate-001';
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',       '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',     '[cap_GenImage]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',     'False');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ResponseTimeOut', '60000');
-
-  Model := 'imagen-4.0-fast-generate-001';
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',       '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',     '[cap_GenImage]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',     'False');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ResponseTimeOut', '60000');
-
-  Model := 'imagen-4.0-ultra-generate-001';
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',       '[]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',     '[cap_GenImage]');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',     'False');
-  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ResponseTimeOut', '120000');
+  // APAGADOS el 17 ago 2026. Los tres nombres quedan como alias de Nano
+  // Banana 2 (gemini-3.1-flash-image) con sus capacidades: la generacion pasa
+  // del endpoint :predict a completions con responseModalities=[IMAGE], y el
+  // codigo existente sigue funcionando. ImageParams.aspectRatio se sigue
+  // enviando (imageConfig); personGeneration puede no aplicar.
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'imagen-4.0-generate-001',       'gemini-3.1-flash-image');
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'imagen-4.0-fast-generate-001',  'gemini-3.1-flash-image');
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'imagen-4.0-ultra-generate-001', 'gemini-3.1-flash-image');
+  for Model in ['imagen-4.0-generate-001', 'imagen-4.0-fast-generate-001', 'imagen-4.0-ultra-generate-001'] do
+  begin
+    TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',       '[cap_Image, cap_GenImage]');
+    TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',     '[cap_Image, cap_GenImage]');
+    TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'Tool_Active',     'False');
+    TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ResponseTimeOut', '120000');
+  end;
 
   // ------- Generacion de video (Veo) ------
   // ModelCaps=[cap_Image]: acepta imagen de entrada
@@ -756,8 +808,29 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',   '[cap_Image, cap_WebSearch]');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps', '[cap_Image, cap_WebSearch]');
 
+  // Los mismos perfiles sobre gemini-3.8-flash (los de 2.5 solo sirven a
+  // cuentas que ya usaban esa familia)
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-3.8-flash-pdf', 'gemini-3.8-flash');
+  Model := 'aa_gemini-3.8-flash-pdf';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',   '[cap_Image, cap_Pdf]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps', '[cap_Image, cap_Pdf]');
+
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-3.8-flash-code-interpreter', 'gemini-3.8-flash');
+  Model := 'aa_gemini-3.8-flash-code-interpreter';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',
+    '[cap_Image, cap_Pdf, cap_CodeInterpreter, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps',
+    '[cap_Image, cap_Pdf, cap_CodeInterpreter, cap_WebSearch]');
+
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-3.8-flash-web-search', 'gemini-3.8-flash');
+  Model := 'aa_gemini-3.8-flash-web-search';
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',   '[cap_Image, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'SessionCaps', '[cap_Image, cap_WebSearch]');
+
   // Gemini 3 Pro: thinking bajo (respuesta rapida, bajo costo de tokens de razonamiento)
-  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-3-pro-fast', 'gemini-3-pro-preview');
+  // gemini-3-pro-preview fue apagado: el perfil apunta a su sucesor (el
+  // alias no se encadena, GetBaseModel resuelve un solo nivel)
+  TAiChatFactory.Instance.RegisterCustomModel('Gemini', 'aa_gemini-3-pro-fast', 'gemini-3.1-pro-preview');
   Model := 'aa_gemini-3-pro-fast';
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ThinkingLevel', 'tlLow');
   TAiChatFactory.Instance.RegisterUserParam('Gemini', Model, 'ModelCaps',

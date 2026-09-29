@@ -222,7 +222,13 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 
 ### Gemini (Google)
 
-**Familia 3.5/3.6 — actuales (jul 2026, registrados SIN prueba runtime — falta API key):**
+**Revisión sep 29/2026 contra la doc oficial (SIN prueba runtime: no hay API key).** Default del driver, de `TAiGeminiSpeechTool` (transcripción) y de `TAiGeminiWebSearchTool`: **`gemini-3.8-flash`**; TTS por defecto: **`gemini-3.8-flash-tts`**.
+- `gemini-3.8-flash` (estable, sep 2026) y `gemini-3.7-flash` (estable, ago 2026, orientado a código): 1M ctx / 65K out, entrada texto/imagen/video/audio/PDF, tools, search, code execution, computer use (preview). **Thinking solo low/medium/high: `minimal` da error y no se puede apagar** — el driver lleva `tlMinimal`/`tlNone` a `LOW` y `tlXHigh`/`tlMax` a `HIGH`
+- TTS `gemini-3.8-flash-tts` y `gemini-3.8-flash-lite-tts` (estables, sep 22/2026; reemplazo oficial de `gemini-2.5-flash-preview-tts`). La doc presenta la API nueva `/v1beta/interactions`; la guía de migración sigue cubriendo `generateContent`, que es lo que usan el driver y `TAiGeminiSpeechTool`. **Verificar en runtime cuando haya key**
+- El gate de sampling compara la **versión** (`GeminiModelVersion` ≥ 3.5), no una lista de nombres: cubre 3.7, 3.8 y los que vengan
+- Sin registrar todavía (API distinta o sin uso en el driver): `gemini-3.5-transcribe`, `gemini-3.8-live`, `gemini-3.5-live-translate-preview`, `gemini-embedding-2-preview`, Lyria, Deep Research, `antigravity-preview-09-2026`
+
+**Familia 3.5/3.6 (jul 2026, registrados SIN prueba runtime):**
 - `gemini-3.5-flash` (GA may 19/2026, alias `gemini-flash-latest`) — flash flagship, frontier agentic/coding; Computer Use tool en public preview para este modelo. `ThinkingLevel=tlMedium`
 - `gemini-3.6-flash` (GA jul 21/2026) — mejor eficiencia de tokens y planificación agéntica, más barato que 3.5 Flash. `ThinkingLevel=tlMedium`
 - `gemini-3.5-flash-lite` (GA jul 21/2026) — baja latencia, subagentes. `ThinkingLevel=tlLow`
@@ -241,8 +247,12 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - `gemini-embedding-2` (GA abr 2026) — embedding multimodal, 3072 dims
 
 **Apagados/deprecados:**
-- **Imagen 4.0 (`imagen-4.0-*-generate-001`): SHUTDOWN 17 ago 2026**
-- `gemini-2.5-flash`, `gemini-2.5-pro` — cerrados 17 jun 2026
+- **Imagen 4.0 (`imagen-4.0-*-generate-001`): SHUTDOWN 17 ago 2026** — los tres nombres quedan como **alias** de `gemini-3.1-flash-image` (Nano Banana 2) con sus caps: pasan de `:predict` a completions con imagen
+- `gemini-3-pro-preview`: **apagado** — alias de `gemini-3.1-pro-preview` (y `aa_gemini-3-pro-fast` apunta directo al sucesor: `GetBaseModel` no encadena alias)
+- `gemini-2.0-flash(-lite)`: apagados 1 jun 2026 (eran el default de las tools de transcripción y búsqueda)
+- **Familia 2.5 (`gemini-2.5-flash`, `-lite`, `-pro`, TTS): NO está apagada, está LIMITADA** a cuentas que ya la usaban (la nota anterior decía "cerrados 17 jun 2026", era incorrecta). Para un usuario nuevo falla, por eso dejó de ser el default. Siguen registrados, con perfiles `aa_gemini-3.8-flash-pdf/-code-interpreter/-web-search` como reemplazo de los `aa_gemini-2.5-*`
+- `gemini-2.5-flash-image`: se apaga el **2 oct 2026** (reemplazo: `gemini-3.1-flash-image`); convertirlo en alias después de esa fecha
+- **Ojo con DFMs existentes**: guardan `Model` con el valor viejo (`gemini-2.0-flash` en las tools); el cambio de default solo afecta a componentes nuevos
 
 **Otros:**
 - Grounding nativo: el driver gestiona `groundingSupports` automáticamente

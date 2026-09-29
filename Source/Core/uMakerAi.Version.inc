@@ -266,7 +266,12 @@ const
          destructor spinning forever, embeddings leaking the request JSON,
          deepseek-flash billed reasoning with ModelCaps=[], Claude coordinates
          sent as a string, otel.scope.version hardcoded
-  - Regression suite: 96 cases (from 38 in 3.7.0)
+  - FIX: Gemini defaults - driver, web search and transcription moved to
+         gemini-3.8-flash and TTS to gemini-3.8-flash-tts (2.5 is restricted
+         to existing accounts, 2.0 is shut down); 3.7/3.8 registered,
+         shut-down models aliased, sampling gated by version. Docs-based,
+         not runtime-tested
+  - Regression suite: 98 cases (from 38 in 3.7.0)
 
   Version 3.7.0 (2026-09-10)
   - FIX: Claude Computer Use was broken, not merely outdated. The driver still

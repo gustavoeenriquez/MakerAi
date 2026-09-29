@@ -151,6 +151,38 @@ begin
   RegisterComponents('MakerAI', [TAiGeminiChat]);
 end;
 
+// Versión numérica de un id 'gemini-X[.Y]-...' ('gemini-3.8-flash' -> 3.8,
+// 'gemini-3-flash-preview' -> 3.0). 0 si el nombre no sigue ese patrón
+// (alias como 'gemini-flash-latest', modelos omni, etc.).
+function GeminiModelVersion(const AModel: string): Double;
+var
+  S, Num: string;
+  I, Dots: Integer;
+begin
+  Result := 0;
+  S := AModel.ToLower;
+  if not S.StartsWith('gemini-') then
+    Exit;
+  Num := '';
+  Dots := 0;
+  for I := Length('gemini-') + 1 to Length(S) do
+  begin
+    if CharInSet(S[I], ['0'..'9']) then
+      Num := Num + S[I]
+    else if (S[I] = '.') and (Dots = 0) and (Num <> '') then
+    begin
+      Num := Num + '.';
+      Inc(Dots);
+    end
+    else
+      Break;
+  end;
+  if Num.EndsWith('.') then
+    Delete(Num, Length(Num), 1);
+  if Num <> '' then
+    Result := StrToFloatDef(Num, 0, TFormatSettings.Invariant);
+end;
+
 { TAiGeminiChat }
 
 class function TAiGeminiChat.GetDriverName: string;
@@ -162,8 +194,10 @@ class procedure TAiGeminiChat.RegisterDefaultParams(Params: TStrings);
 Begin
   Params.Clear;
   Params.Add('ApiKey=@GEMINI_API_KEY');
-  // [V3 UPDATE] Modelo recomendado por defecto actualizado (gemini-2.0-flash deprecado 31 Mar 2026)
-  Params.Add('Model=gemini-2.5-flash');
+  // Default: gemini-3.8-flash (estable, sep 2026). La familia 2.5 sigue viva
+  // pero Google la limita a cuentas que ya la usaban: para un usuario nuevo
+  // un default 2.5 fallaba. Registrado sin prueba runtime (sin API key).
+  Params.Add('Model=gemini-3.8-flash');
   Params.Add('Max_Tokens=8192');
   Params.Add('URL=' + GlAIUrl);
 End;
@@ -248,7 +282,7 @@ constructor TAiGeminiChat.Create(Sender: TComponent);
 begin
   inherited;
   ApiKey := '@GEMINI_API_KEY';
-  Model := 'gemini-2.5-flash';
+  Model := 'gemini-3.8-flash';
   Url := GlAIUrl;
 
   // [V3 UPDATE] Gemini 3 recomienda Temperature 1.0 por defecto para razonamiento
@@ -1110,11 +1144,12 @@ begin
 
     // A. Parámetros Estándar (No perder funcionalidad básica)
     // Sampling params (temperature/topP/topK) DEPRECADOS por Google para la
-    // familia 3.5+/3.6/omni (jul 21/2026): no se envían en esos modelos y el
-    // servidor gestiona el muestreo. En modelos previos se conservan.
+    // familia 3.5 en adelante y omni (jul 21/2026): no se envían en esos modelos
+    // y el servidor gestiona el muestreo. En modelos previos se conservan.
+    // Se compara la versión (no una lista de nombres) para que 3.7, 3.8 y los
+    // que vengan queden cubiertos sin tocar el driver.
     var LSamplingModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
-    var LSamplingOk := not (LSamplingModel.StartsWith('gemini-3.5') or
-                            LSamplingModel.StartsWith('gemini-3.6') or
+    var LSamplingOk := not ((GeminiModelVersion(LSamplingModel) >= 3.5) or
                             LSamplingModel.StartsWith('gemini-omni') or
                             LSamplingModel.StartsWith('gemini-flash-latest'));
 
@@ -1187,15 +1222,18 @@ begin
       var
       JThinking := TJSONObject.Create;
       var
-        LModelName := Model.ToLower;
+        LModelName := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model).ToLower;
 
-      // Gemini 3: usar thinkingLevel string nativo (LOW/MEDIUM/HIGH)
+      // Gemini 3: usar thinkingLevel string nativo (LOW/MEDIUM/HIGH).
+      // El API no permite apagar el razonamiento y 'minimal' da error en
+      // 3.7/3.8, así que los niveles de la escalera ampliada (v3.8) se llevan
+      // al más cercano que el modelo acepta.
       if LModelName.Contains('gemini-3') then
       begin
         case ModelConfig.ThinkingLevel of
-          tlLow:    JThinking.AddPair('thinkingLevel', 'LOW');
-          tlMedium: JThinking.AddPair('thinkingLevel', 'MEDIUM');
-          tlHigh:   JThinking.AddPair('thinkingLevel', 'HIGH');
+          tlLow, tlMinimal, tlNone: JThinking.AddPair('thinkingLevel', 'LOW');
+          tlMedium:                 JThinking.AddPair('thinkingLevel', 'MEDIUM');
+          tlHigh, tlXHigh, tlMax:   JThinking.AddPair('thinkingLevel', 'HIGH');
         else
           JThinking.AddPair('thinkingLevel', 'HIGH'); // Default para Gemini 3
         end;
