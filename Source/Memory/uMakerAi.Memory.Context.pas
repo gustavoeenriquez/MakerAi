@@ -232,7 +232,7 @@ begin
       Result.MemoryIds[Result.MemoryCount - 1] := Entry.Id;
 
       // Actualizar estadísticas de acceso
-      FStorage.UpdateAccessStats(Entry.Id);
+      FStorage.UpdateAccessStats(Entry.Id, ANamespace);
     end;
 
     Result.FormattedText  := Lines.Text.Trim;

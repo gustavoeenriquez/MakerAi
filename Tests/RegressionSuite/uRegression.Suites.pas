@@ -33,6 +33,8 @@ type
     function RunA2AFlowScenario(const AScenario: string): string;
     function RunPolicyScenario(const AScenario: string): string;
     function RunRagScenario(const AScenario: string): string;
+    // TAiMemory: aislamiento entre namespaces en las operaciones por Id
+    function RunMemoryScenario(const AScenario: string): string;
     // Serializacion de tool results en la familia OpenAI-compatible
     function RunChatScenario(const AScenario: string): string;
     // Montaje CONCURRENTE de conexiones, tal y como lo hace un servidor que
@@ -71,6 +73,10 @@ uses
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
   uMakerAi.RAG.Vector.Driver.BinFile,
+  // TAiMemory persiste en SQLite via FireDAC: el driver fisico y el cursor de
+  // consola tienen que estar enlazados en el ejecutable.
+  FireDAC.Stan.Def, FireDAC.Stan.Async, FireDAC.Phys.SQLite, FireDAC.ConsoleUI.Wait,
+  uMakerAi.Memory, uMakerAi.Memory.Types,
   uRegression.Fixtures;
 
 const
@@ -272,6 +278,16 @@ begin
   FRunner.AddCase('a2a.card.skills-default')
     .Input('a2a:card-skills-default')
     .ExpectEquals('1|run-graph');
+
+  // --- TAiMemory: aislamiento de namespaces (issue #127) ---
+  // Las busquedas filtraban por namespace pero las operaciones por Id no: con
+  // un Id ajeno (son enteros consecutivos, basta adivinarlo) se podia leer,
+  // modificar, enlazar y borrar memorias de otro agente. ImportFromJSON ademas
+  // respetaba el "namespace" del JSON y escribia en el de otro.
+  // Salida: get|link|a.contenido|a.total|b.total
+  FRunner.AddCase('memory.namespace.id-isolation')
+    .Input('memory:namespace-id-isolation')
+    .ExpectEquals('nil|0|canario A|1|2');
 
   // --- RAG: busqueda sin SearchOptions ---
   // Reventaba con AV: IfThen evalua las dos ramas, asi que
@@ -607,6 +623,8 @@ begin
     Result := RunAgentScenario(AScenario)
   else if AScenario.StartsWith('rag:') then
     Result := RunRagScenario(AScenario)
+  else if AScenario.StartsWith('memory:') then
+    Result := RunMemoryScenario(AScenario)
   else if AScenario.StartsWith('chat:') then
     Result := RunChatScenario(AScenario)
   else if AScenario.StartsWith('policy:') then
@@ -3172,6 +3190,79 @@ begin
     end;
   finally
     Drv.Free;
+    if TFile.Exists(LPath) then
+      TFile.Delete(LPath);
+  end;
+end;
+
+function TRegressionSuite.RunMemoryScenario(const AScenario: string): string;
+var
+  Mem: TAiMemory;
+  LPath, LGet, LLinks, LContentA: string;
+  IdA, IdB: Integer;
+  Entry: TMemoryEntry;
+  Links: TMemoryEntryList;
+  Import: TJSONArray;
+begin
+  if AScenario <> 'memory:namespace-id-isolation' then
+    raise Exception.Create('Escenario de memoria desconocido: ' + AScenario);
+
+  LPath := TPath.Combine(TPath.GetTempPath, 'makerai_regress_memory.db');
+  if TFile.Exists(LPath) then
+    TFile.Delete(LPath);
+
+  Mem := TAiMemory.Create(nil);
+  try
+    Mem.DbPath := LPath;
+
+    Mem.Namespace := 'agente-a';
+    IdA := Mem.Store('canario A');
+
+    // A partir de aqui todo corre como el agente B, que conoce el Id de A
+    Mem.Namespace := 'agente-b';
+    IdB := Mem.Store('canario B');
+
+    Entry := Mem.Get(IdA);
+    try
+      if Assigned(Entry) then LGet := Entry.Content else LGet := 'nil';
+    finally
+      Entry.Free;
+    end;
+
+    Mem.Update(IdA, 'modificado por B', 10);
+    Mem.Link(IdB, IdA);
+    Links := Mem.Links(IdB);
+    try
+      LLinks := IntToStr(Links.Count);
+    finally
+      Links.Free;
+    end;
+    Mem.Delete(IdA);
+
+    // Un JSON que dice venir de A tiene que acabar en B, no en A
+    Import := TJSONObject.ParseJSONValue(
+      '[{"content":"inyectado por B","namespace":"agente-a","importance":5,' +
+      '"memory_type":"fact","tags":[]}]') as TJSONArray;
+    try
+      Mem.ImportFromJSON(Import);
+    finally
+      Import.Free;
+    end;
+    var TotalB := Mem.Stats.TotalCount;
+
+    // De vuelta en A: su memoria sigue intacta y no le llego nada
+    Mem.Namespace := 'agente-a';
+    Entry := Mem.Get(IdA);
+    try
+      if Assigned(Entry) then LContentA := Entry.Content else LContentA := 'borrada';
+    finally
+      Entry.Free;
+    end;
+
+    Result := LGet + '|' + LLinks + '|' + LContentA + '|' +
+      IntToStr(Mem.Stats.TotalCount) + '|' + IntToStr(TotalB);
+  finally
+    Mem.Free;
     if TFile.Exists(LPath) then
       TFile.Delete(LPath);
   end;

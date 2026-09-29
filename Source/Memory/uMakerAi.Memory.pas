@@ -472,7 +472,7 @@ begin
           Result[I].Entry     := FTSList[I];
           Result[I].Score     := 1.0 - (I * 0.05);
           Result[I].MatchType := 'fts';
-          FStorage.UpdateAccessStats(FTSList[I].Id);
+          FStorage.UpdateAccessStats(FTSList[I].Id, FNamespace);
         end;
       finally
         FTSList.OwnsObjects := False; // ownership transferred to Result entries
@@ -494,7 +494,7 @@ begin
             Result[I].Entry     := SemList[I];
             Result[I].Score     := 1.0 - (I * 0.06);
             Result[I].MatchType := 'semantic';
-            FStorage.UpdateAccessStats(SemList[I].Id);
+            FStorage.UpdateAccessStats(SemList[I].Id, FNamespace);
           end;
         finally
           SemList.Free;
@@ -533,7 +533,7 @@ begin
             Result[I].Entry     := FTSList[I];
             Result[I].Score     := 1.0 - (I * 0.05);
             Result[I].MatchType := 'fts';
-            FStorage.UpdateAccessStats(FTSList[I].Id);
+            FStorage.UpdateAccessStats(FTSList[I].Id, FNamespace);
           end;
           // FTSList trae hasta ALimit*2 entradas; las que no pasaron a Result
           // no las posee nadie más (el finally quita OwnsObjects antes de
@@ -575,7 +575,7 @@ end;
 procedure TAiMemory.Delete(AId: Integer);
 begin
   EnsureStorage;
-  FStorage.DeleteById(AId);
+  FStorage.DeleteById(AId, FNamespace);
 end;
 
 // ---------------------------------------------------------------------------
@@ -756,9 +756,9 @@ end;
 function TAiMemory.Get(AId: Integer): TMemoryEntry;
 begin
   EnsureStorage;
-  Result := FStorage.GetById(AId);
+  Result := FStorage.GetById(AId, FNamespace);
   if Assigned(Result) then
-    FStorage.UpdateAccessStats(AId);
+    FStorage.UpdateAccessStats(AId, FNamespace);
 end;
 
 // ---------------------------------------------------------------------------
@@ -773,12 +773,12 @@ var
   NewImportance: Integer;
 begin
   EnsureStorage;
-  Current := FStorage.GetById(AId);
+  Current := FStorage.GetById(AId, FNamespace);
   if not Assigned(Current) then Exit;
   try
     if AContent <> '' then NewContent := AContent else NewContent := Current.Content;
     if AImportance >= 0 then NewImportance := AImportance else NewImportance := Current.Importance;
-    FStorage.UpdateContent(AId, NewContent, NewImportance);
+    FStorage.UpdateContent(AId, NewContent, NewImportance, FNamespace);
   finally
     Current.Free;
   end;
@@ -803,7 +803,7 @@ begin
       if (E.Importance < AMinImportance) and
          (E.CreatedAt < Cutoff) and
          (TAiMemoryDecay.Compute(E.Importance, E.AccessCount, E.AccessedAt) < 0.2) then
-        FStorage.DeleteById(E.Id);
+        FStorage.DeleteById(E.Id, FNamespace);
     end;
   finally
     AllEntries.Free;
@@ -891,6 +891,9 @@ begin
   begin
     Entry := TMemoryEntry.FromJSON(AData.Items[I] as TJSONObject);
     try
+      // Se importa SIEMPRE al namespace activo: el "namespace" del JSON no
+      // puede usarse para escribir en el de otro agente (issue #127).
+      Entry.Namespace := FNamespace;
       FStorage.StoreEntry(Entry);
     finally
       Entry.Free;
@@ -905,13 +908,13 @@ end;
 procedure TAiMemory.Link(AFromId, AToId: Integer; const ARelation: string);
 begin
   EnsureStorage;
-  FStorage.LinkEntries(AFromId, AToId, ARelation);
+  FStorage.LinkEntries(AFromId, AToId, ARelation, FNamespace);
 end;
 
 procedure TAiMemory.Unlink(AFromId, AToId: Integer);
 begin
   EnsureStorage;
-  FStorage.UnlinkEntries(AFromId, AToId);
+  FStorage.UnlinkEntries(AFromId, AToId, FNamespace);
 end;
 
 function TAiMemory.Links(AId: Integer): TMemoryEntryList;
@@ -937,7 +940,7 @@ begin
     begin
       Score := TAiMemoryDecay.Compute(E.Importance, E.AccessCount, E.AccessedAt);
       if Abs(Score - E.DecayScore) > 0.01 then
-        FStorage.UpdateDecayScore(E.Id, Score);
+        FStorage.UpdateDecayScore(E.Id, Score, FNamespace);
     end;
   finally
     AllEntries.Free;

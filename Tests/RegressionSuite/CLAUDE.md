@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (80 casos)
+## Cobertura actual (81 casos)
 
 | Área | Casos |
 |------|-------|
@@ -49,6 +49,7 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 | A2A streaming | reanudar un task en `input-required` con `SendStreamingMessage` (SSE crudo) |
 | A2A Agent Card | skills declaradas (con tags) y skill `run-graph` por defecto cuando no hay ninguna |
 | RAG | búsqueda con `Options` en nil sobre el driver `.mkai` (regresión del AV por `IfThen`) |
+| Memoria | `TAiMemory` aísla namespaces también en las operaciones por Id (issue #127): desde otro namespace, `Get` no ve la memoria y `Update`/`Link`/`Delete` no la tocan; `ImportFromJSON` ignora el `namespace` del JSON y escribe en el activo (falla sin el fix) |
 | Streaming | `OnReceiveDataEnd` sin texto duplicado al cerrar el stream (SSE simulado sobre `TAiGroqChat`; falla sin el fix) y `executed_tools` de Groq combinados por `index` desde el delta (chunks de un SSE real de `gpt-oss-20b`) |
 | Qwen (request) | `enable_thinking` siempre presente (false sin `cap_Reasoning`), `thinking_budget` por `ThinkingLevel`, ausente en `qwq-*`, false en pesos abiertos síncronos; `stream_options.include_usage` solo en streaming; audio de entrada reescrito como data URI (falla sin el fix); `TAiQwenRAGReranker` con transporte falso: lotes, mapeo por `index`, `instruct`, recorte; request de imagen: genera sin adjuntos, edita con 1-3 (modelo de edición, data URI, sin forzar tamaño), falla con 4 o con `z-image-turbo`; request de video: t2v/i2v/kf2v según las imágenes adjuntas, `-t2v` → `-i2v`, 720p por `size` o `resolution` según familia, tipos de `VideoParams.Params`; traducción `qwen-mt`: un solo mensaje user con `translation_options` (idiomas, dominio, glosario) y streaming acumulado de plus/turbo convertido a incrementos con una línea SSE partida (falla sin el fix); `TAiQwenVoices` con transporte falso (clonar, diseñar con fallback y preview, listar, borrar) y modelo TTS elegido por el prefijo de la voz |
 | Conexión | sub-parámetros de medios (`VideoParams`, `TtsParams`, `ImageParams`) editados después de crear el chat llegan al driver en `AddMessageAndRun` (URL a puerto cerrado; falla sin el fix) |
