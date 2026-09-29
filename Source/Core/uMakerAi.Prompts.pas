@@ -52,6 +52,7 @@ type
     fDescripcion     : String;
     FSkillModel      : String;
     FSkillAllowedTools: String;
+    FSkillDescription: String;
     function GetString: TStrings;
   Protected
     Procedure SetStrings(aValue: TStrings);
@@ -68,6 +69,9 @@ type
     Property SkillModel      : String read FSkillModel       write FSkillModel;
     // Herramientas permitidas, separadas por coma (frontmatter: allowed-tools)
     Property SkillAllowedTools: String read FSkillAllowedTools write FSkillAllowedTools;
+    // Cuándo usar el skill (frontmatter: description). Descripcion, en cambio,
+    // dice de dónde se cargó el item.
+    Property SkillDescription: String read FSkillDescription write FSkillDescription;
   End;
 
   TAiPrompts = class(TComponent)
@@ -77,6 +81,8 @@ type
     function PPMHttpGet(const AUrl: String): String;
     function ConvertPPMTemplate(const AText: String): String;
     function ResolvePPMVersion(const AName, AVersion: String): String;
+    // Crea o actualiza el item AName con el contenido de un skill parseado
+    function StoreSkill(const AName, ADescripcion: String; ADoc: TAiSkillDoc): TAiPromptItem;
   protected
   public
     Constructor Create(aOwner: TComponent); Override;
@@ -106,6 +112,24 @@ type
     // SkillModel y SkillAllowedTools quedan disponibles en el item resultante.
     // AVersion vacío = resuelve la última versión disponible.
     function LoadSkillFromPPM(const AName: String; const AVersion: String = ''): TAiPromptItem;
+
+    // Skills locales (formato SKILL.md, el mismo de PPM y de las Agent Skills).
+    // LoadSkillFromFile: APath es el archivo .md o la carpeta que contiene
+    //   SKILL.md. El item se llama como el 'name' del frontmatter (o la
+    //   carpeta). A diferencia de los métodos PPM, lanza EAiSkillError si el
+    //   archivo no existe: es un error de configuración, no de red.
+    // LoadSkillsFromFolder: carga <AFolder>/SKILL.md y <AFolder>/<sub>/SKILL.md
+    //   (la forma habitual de un directorio de skills). Devuelve cuántos cargó.
+    function LoadSkillFromFile(const APath: String): TAiPromptItem;
+    function LoadSkillsFromFolder(const AFolder: String): Integer;
+
+    // Copia las instrucciones del item ANombre a un SystemPrompt:
+    //   Prompts.ApplySkill('revisor', AiConnection.SystemPrompt);
+    // AAppend=False reemplaza el contenido; True lo agrega al final (separado
+    // por una línea en blanco). Sirve para TAiChat, TAiChatConnection o
+    // cualquier TStrings. Devuelve False si no existe el item.
+    function ApplySkill(const ANombre: String; ASystemPrompt: TStrings;
+      AAppend: Boolean = False): Boolean;
 
   published
     Property Items: TCollection Read FItems Write FItems;
@@ -371,7 +395,6 @@ function TAiPrompts.LoadSkillFromPPM(const AName: String;
   const AVersion: String): TAiPromptItem;
 var
   Doc : TAiSkillDoc;
-  LIdx: Integer;
 begin
   Result := nil;
   Doc := TAiSkillDoc.Create;
@@ -383,22 +406,79 @@ begin
       Exit;
     end;
 
-    // Reusar item existente o crear uno nuevo
-    LIdx := IndexOf(AName);
-    if LIdx >= 0 then
-      Result := TAiPromptItem(FItems.Items[LIdx])
-    else
-    begin
-      Result := TAiPromptItem(FItems.Add);
-      Result.Nombre := AName;
-    end;
-    Result.Descripcion       := 'PPM skill: ' + AName + ' v' + Doc.Version;
-    Result.Strings.Text      := Doc.Body;
-    Result.SkillModel        := Doc.Model;
-    Result.SkillAllowedTools := String.Join(',', Doc.AllowedTools.ToStringArray);
+    Result := StoreSkill(AName, 'PPM skill: ' + AName + ' v' + Doc.Version, Doc);
   finally
     Doc.Free;
   end;
+end;
+
+function TAiPrompts.StoreSkill(const AName, ADescripcion: String;
+  ADoc: TAiSkillDoc): TAiPromptItem;
+var
+  LIdx: Integer;
+begin
+  // Reusar item existente o crear uno nuevo
+  LIdx := IndexOf(AName);
+  if LIdx >= 0 then
+    Result := TAiPromptItem(FItems.Items[LIdx])
+  else
+  begin
+    Result := TAiPromptItem(FItems.Add);
+    Result.Nombre := AName;
+  end;
+  Result.Descripcion       := ADescripcion;
+  Result.Strings.Text      := ADoc.Body;
+  Result.SkillModel        := ADoc.Model;
+  Result.SkillAllowedTools := String.Join(',', ADoc.AllowedTools.ToStringArray);
+  Result.SkillDescription  := ADoc.Description;
+end;
+
+// ---------------------------------------------------------------------------
+// Skills locales
+// ---------------------------------------------------------------------------
+function TAiPrompts.LoadSkillFromFile(const APath: String): TAiPromptItem;
+var
+  Doc: TAiSkillDoc;
+begin
+  Doc := TAiSkillDoc.FromFile(APath);
+  try
+    Result := StoreSkill(Doc.Name, 'Skill: ' + Doc.SourcePath, Doc);
+  finally
+    Doc.Free;
+  end;
+end;
+
+function TAiPrompts.LoadSkillsFromFolder(const AFolder: String): Integer;
+var
+  LFile: String;
+begin
+  Result := 0;
+  for LFile in TAiSkillDoc.FindSkillFiles(AFolder) do
+  begin
+    LoadSkillFromFile(LFile);
+    Inc(Result);
+  end;
+end;
+
+function TAiPrompts.ApplySkill(const ANombre: String; ASystemPrompt: TStrings;
+  AAppend: Boolean): Boolean;
+var
+  LIdx: Integer;
+  LText: String;
+begin
+  Result := False;
+  if not Assigned(ASystemPrompt) then
+    Exit;
+  LIdx := IndexOf(ANombre);
+  if LIdx < 0 then
+    Exit;
+
+  LText := TAiPromptItem(FItems.Items[LIdx]).Strings.Text.Trim;
+  if AAppend and (ASystemPrompt.Text.Trim <> '') then
+    ASystemPrompt.Text := ASystemPrompt.Text.TrimRight + sLineBreak + sLineBreak + LText
+  else
+    ASystemPrompt.Text := LText;
+  Result := True;
 end;
 
 end.

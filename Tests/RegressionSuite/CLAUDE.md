@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (91 casos)
+## Cobertura actual (92 casos)
 
 | Área | Casos |
 |------|-------|
@@ -51,6 +51,7 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 | RAG | búsqueda con `Options` en nil sobre el driver `.mkai` (regresión del AV por `IfThen`) |
 | Memoria | `TAiMemory` aísla namespaces también en las operaciones por Id (issue #127): desde otro namespace, `Get` no ve la memoria y `Update`/`Link`/`Delete` no la tocan; `ImportFromJSON` ignora el `namespace` del JSON y escribe en el activo (falla sin el fix) |
 | Skills (formato) | parser común de SKILL.md (`uMakerAi.Skills.Format`): comillas, comentario `#`, escalar partido en dos líneas, listas `- x` e inline `[a, "b"]`, bloque `>`, Markdown sin frontmatter; carpeta `<dir>/<nombre>/SKILL.md` con el nombre de la carpeta como fallback. Registry PPM falso (puerto 18794): prefijo `skill-` automático, mayor versión por semver sin las retiradas (1.10.0 gana a 1.2.0), `TAiPrompts.LoadSkillFromPPM` por el mismo camino; errores claros ante paquete inexistente, de otro tipo o un 200 con HTML, y `TAiPrompts` devuelve nil sin excepción |
+| Skills (TAiPrompts) | `LoadSkillsFromFolder` carga dos skills e ignora la carpeta sin SKILL.md; nombre del frontmatter o de la carpeta; `SkillDescription`; `ApplySkill` reemplaza y agrega sobre un `TStrings`; nombre inexistente → `False` |
 | Skills (agentes) | `TLLMNode.ResolveConfig`: siete combinaciones nodo/skill (sin skill → Claude; driver/modelo/clave del skill con el nodo vacío; el nodo cambia de driver y no hereda un modelo ajeno; modelo solo del nodo; SKILL.md sin driver; `driver:` del frontmatter sí y `apikey:` no); `SystemPrompt` skill + nodo; `ConfigureChat` sobre una `TAiChatConnection` real deja driver, modelo y clave resueltos también al cambiar de driver (falla con el orden viejo); `TAiSkill` desde JSON, carpeta con SKILL.md y registry falso |
 | Streaming | `OnReceiveDataEnd` sin texto duplicado al cerrar el stream (SSE simulado sobre `TAiGroqChat`; falla sin el fix) y `executed_tools` de Groq combinados por `index` desde el delta (chunks de un SSE real de `gpt-oss-20b`) |
 | Qwen (request) | `enable_thinking` siempre presente (false sin `cap_Reasoning`), `thinking_budget` por `ThinkingLevel`, ausente en `qwq-*`, false en pesos abiertos síncronos; `stream_options.include_usage` solo en streaming; audio de entrada reescrito como data URI (falla sin el fix); `TAiQwenRAGReranker` con transporte falso: lotes, mapeo por `index`, `instruct`, recorte; request de imagen: genera sin adjuntos, edita con 1-3 (modelo de edición, data URI, sin forzar tamaño), falla con 4 o con `z-image-turbo`; request de video: t2v/i2v/kf2v según las imágenes adjuntas, `-t2v` → `-i2v`, 720p por `size` o `resolution` según familia, tipos de `VideoParams.Params`; traducción `qwen-mt`: un solo mensaje user con `translation_options` (idiomas, dominio, glosario) y streaming acumulado de plus/turbo convertido a incrementos con una línea SSE partida (falla sin el fix); `TAiQwenVoices` con transporte falso (clonar, diseñar con fallback y preview, listar, borrar) y modelo TTS elegido por el prefijo de la voz |

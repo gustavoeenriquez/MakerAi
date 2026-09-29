@@ -15,7 +15,8 @@ This folder contains the foundation layer of the MakerAI framework. All provider
 | `uMakerAi.Chat.Messages.pas` | `TAiChatMessage`, `TAiChatMessages`, `TAiToolsFunction`, citations system |
 | `uMakerAi.Chat.Tools.pas` | `IAiToolContext` interface and base tool classes (`TAiSpeechToolBase`, `TAiVisionToolBase`, etc.) |
 | `uMakerAi.Chat.Bridge.pas` | Bridge utilities for chat interoperability |
-| `uMakerAi.Prompts.pas` | Prompt template utilities |
+| `uMakerAi.Prompts.pas` | `TAiPrompts`: plantillas con `<#var>`, prompts y skills de PPM (`LoadFromPPM`, `LoadSkillFromPPM`) y skills locales (`LoadSkillFromFile`, `LoadSkillsFromFolder`); `ApplySkill(nombre, SystemPrompt, Append)` copia las instrucciones a cualquier `TStrings` (sirve igual para `TAiChat` y `TAiChatConnection`, que no heredan uno del otro) |
+| `uMakerAi.Skills.Format.pas` | Parser único de SKILL.md (`TAiSkillDoc`: frontmatter YAML + cuerpo; texto, archivo, carpeta o PPM; `FindSkillFiles`) y cliente de solo lectura del registry PPM (`TAiPPMClient`: versión por semver sin retiradas, prefijo `skill-` ante un 404, error claro ante un 200 con HTML). Lo usan `TAiPrompts`, `TAiSkill` y `TAiSkills` |
 | `uMakerAi.Telemetry.pas` | `TAiTelemetry` — OpenTelemetry tracing opt-in (OTLP/HTTP JSON, GenAI semconv); helpers no-op-safe `AiSpanStart`/`AiSpanEnd`/`AiSpanAttr` usados por Chat, Tools y MCP |
 | `uMakerAi.Evals.pas` | `TAiEvalRunner` — evals con casos fluidos (`ExpectContains`/`Regex`/`Equals`/`MinLength`/`MaxLength`/`Judge`) sobre un target genérico `function(Input): string`; reporte `ToText`/`ToJSON`; LLM-as-judge opcional vía propiedad `Judge`; span `eval.case` por caso |
 | `uMakerAi.Version.inc` | Version constants and feature flags - included via `{$I}` directive |

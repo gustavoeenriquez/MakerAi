@@ -335,6 +335,16 @@ begin
     .Input('skills:ppm-errors')
     .ExpectEquals('notfound|type|html|nil');
 
+  // --- Skills locales en TAiPrompts ---
+  // LoadSkillsFromFolder (2 skills + una carpeta sin SKILL.md), item con el
+  // nombre del frontmatter o de la carpeta, SkillDescription, y ApplySkill
+  // reemplazando y agregando sobre un SystemPrompt; nombre inexistente -> False.
+  // Salida: cargados|nombres|descripcion|reemplazo|agregado|inexistente
+  FRunner.AddCase('skills.prompts.local')
+    .Input('skills:prompts-local')
+    .ExpectEquals('2|revisor,traductor|Revisa codigo|Revisa con cuidado|' +
+      'Base\n\nRevisa con cuidado|False');
+
   // --- Skills en agentes: TAiSkill + TLLMNode ---
   // Precedencia nodo/skill (TLLMNode.ResolveConfig), driver|modelo|apikey:
   //  a) sin skill -> Claude por defecto
@@ -3488,6 +3498,38 @@ begin
     finally
       Prompts.Free;
       Registry.Free;
+    end;
+  end
+  else if AScenario = 'skills:prompts-local' then
+  begin
+    Dir := TPath.Combine(TPath.GetTempPath, 'makerai_regress_prompt_skills');
+    if TDirectory.Exists(Dir) then
+      TDirectory.Delete(Dir, True);
+    TDirectory.CreateDirectory(TPath.Combine(Dir, 'revisor'));
+    TDirectory.CreateDirectory(TPath.Combine(Dir, 'traductor'));
+    TDirectory.CreateDirectory(TPath.Combine(Dir, 'vacia'));
+    TFile.WriteAllText(TPath.Combine(Dir, 'revisor\SKILL.md'),
+      '---'#10'description: Revisa codigo'#10'---'#10'Revisa con cuidado', TEncoding.UTF8);
+    TFile.WriteAllText(TPath.Combine(Dir, 'traductor\SKILL.md'),
+      '---'#10'name: traductor'#10'---'#10'Traduce', TEncoding.UTF8);
+    Prompts := TAiPrompts.Create(nil);
+    Names := TStringList.Create;
+    try
+      Result := IntToStr(Prompts.LoadSkillsFromFolder(Dir));
+      Result := Result + '|' + Prompts.GetNombre(0) + ',' + Prompts.GetNombre(1);
+      Result := Result + '|' + TAiPromptItem(Prompts.Items.Items[0]).SkillDescription;
+      // Names hace de SystemPrompt (cualquier TStrings sirve)
+      Names.Text := 'Base';
+      Prompts.ApplySkill('revisor', Names);
+      Result := Result + '|' + Names.Text.Trim;
+      Names.Text := 'Base';
+      Prompts.ApplySkill('revisor', Names, True);
+      Result := Result + '|' + Names.Text.Trim.Replace(sLineBreak, '\n') + '|' +
+        BoolToStr(Prompts.ApplySkill('no-existe', Names), True);
+    finally
+      Names.Free;
+      Prompts.Free;
+      TDirectory.Delete(Dir, True);
     end;
   end
   else if AScenario = 'skills:agent-precedence' then
