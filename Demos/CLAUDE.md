@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is the Demos directory for the MakerAI 3.x framework. Contains 51 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
+This is the Demos directory for the MakerAI 3.x framework. Contains 58 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
 
 **Estado de compilación (ago 7/2026): los 48 proyectos compilan** en Win64/Release; el 081 (ago 18/2026), el 082 y el 083 (sep 20/2026) también compilan; el 082 se corrió en runtime (6/6 PASS) y el 083 en **Linux64** sobre Xvfb con OpenAI y Claude.
 
@@ -12,7 +12,7 @@ This is the Demos directory for the MakerAI 3.x framework. Contains 51 working e
 
 **IDE:** Delphi 11 Alexandria through 13 Florence (demos require Delphi 11+; the core framework supports 10.4 Sydney minimum)
 
-**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026 e incluye los 51 proyectos.
+**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026; desde sep 29/2026 incluye los 58 proyectos (se sumaron 089-QwenShowcase, que había quedado fuera, y 091-Skills).
 
 > **OJO al editar los `.pas` de los demos:** varios están en **ANSI (Windows-1252) con saltos LF**, no en UTF-8. Guardarlos como UTF-8 destruye todas las tildes de forma silenciosa (compila igual, y `git diff` lo disimula si `core.autocrlf` está activo). Verificar siempre con `git diff --numstat` que solo cambien las líneas que se tocaron.
 
@@ -93,6 +93,11 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 089-QwenShowcase | **Qwen (Alibaba Model Studio)**: chat, visión (generar → editar → describir), voz (TTS, transcripción, omni), traducción `qwen-mt`, embeddings + rerank y tiempo real (LLM → voz, traducción simultánea con `DriverParams`); opcionales `--video` y `--voces`. Requiere `DASHSCOPE_API_KEY`. Tiene CLAUDE.md propio | `TAiQwenChat`, `TAiQwenEmbeddings`, `TAiQwenRAGReranker`, `TAiQwenVoices`, `TAiQwenRealtimeTTS`, `TAiRealtimeConnection` |
 | 087-JevBatchLabeling | **Etiquetado masivo**: 126 movimientos contables contra 225 cuentas del PUC. Requiere `TYPESAFE_API_KEY`. Tiene CLAUDE.md propio | `TAiJevBatchLabeler` en paralelo: 92.9% total, 100% en lo automatizado (conf ≥ 0.8, 61% de las filas), 4.2 s, US$0.05 |
 | 086-JevEvalsRag | **Jev en Evals y en RAG**. Requiere `TYPESAFE_API_KEY`. Tiene CLAUDE.md propio | `TAiJevEvalScorer` en `TAiEvalRunner.Scorer` (`ExpectScore`) y `TAiJevRAGReranker` (evidencia por pasaje + descarte de inyecciones) |
+
+### Skills (09x)
+| Demo | Purpose | Key Pattern |
+|------|---------|-------------|
+| 091-Skills | **Skills en formato SKILL.md** (Agent Skills / PPM) de tres formas: bajo demanda en un chat, como base de un nodo de agente y copiados al prompt. Requiere la key del driver (`--driver`, OpenAI por defecto). Tiene CLAUDE.md propio | `TAiSkills` (`use_skill` + `read_skill_file`: el modelo ve el catálogo y carga el skill que necesita), `TLLMNode` + `TAiSkill` (`ResolveConfig`), `TAiPrompts.ApplySkill` |
 
 ### Audio / Speech (06x)
 | Demo | Purpose | Key Pattern |
