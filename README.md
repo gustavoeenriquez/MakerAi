@@ -35,7 +35,7 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 ## 🧪 On `dev` — not yet released
 
-Work merged after v3.7.0. Three items change existing behaviour; they are called out below.
+Work merged after v3.7.0. Five items change existing behaviour; they are marked ⚠️ below.
 
 ### Jev — calibrated decisions before spending an LLM
 
@@ -159,6 +159,27 @@ now falls back to the OEM codepage. Two more, found while exercising it on Linux
 dropped whenever the sentinel arrived in the same read, and a timeout left the session
 permanently unusable (the `Restart` was written but commented out).
 
+### ⚠️ TAiMemory: namespaces are now enforced on id-based operations
+
+`TAiMemory` isolated namespaces in its searches, but `Get`, `Update`, `Delete`, `Link` and
+`Unlink` addressed memories by id alone — and ids are sequential, so an agent could read,
+change or delete another namespace's memories by guessing one, including through the
+`memory_delete` / `memory_link` MCP tools. `ImportFromJSON` also honoured the `namespace` field
+of the JSON and could write into another namespace. Every id-based operation now requires the
+active namespace (a foreign id behaves exactly like a missing one), and imports always land in
+the active namespace. Reported responsibly in #127.
+
+> **Breaking for custom storages**: the id-based methods of `IAiMemoryStorage` now take the
+> namespace. The bundled SQLite storage is updated; a custom implementation must add the
+> parameter.
+
+### ⚠️ TLLMNode.DriverName now defaults to empty
+
+The constructor used to set `DriverName := 'Claude'`, which always overrode the driver of an
+assigned `TAiSkill`. It is now empty and resolves node → skill → `'Claude'`, so a node without
+a skill behaves exactly as before and forms saved with the old default keep `'Claude'`
+explicitly. See the skills section below for the rest of the precedence fix.
+
 ### Qwen — native Alibaba Model Studio driver
 
 `TAiQwenChat` (`Source/Chat/uMakerAi.Chat.Qwen.pas`, driver name `Qwen`) talks to DashScope's
@@ -203,6 +224,34 @@ Demo `089-QwenShowcase` walks through all of it with one key.
 - **Embeddings**: `TAiQwenEmbeddings` (driver `Qwen`), `text-embedding-v4` by default.
 - **Rerank**: `TAiQwenRAGReranker` plugs `qwen3-rerank` into `TAiRAGVector.Reranker`, up to 500
   passages per call, with an optional task instruction.
+
+### Skills — SKILL.md, loaded on demand
+
+MakerAI now speaks **SKILL.md**, the format of Claude's Agent Skills and of the PPM registry's
+`skill` packages: YAML frontmatter (name, when to use it) plus Markdown instructions. One parser
+(`uMakerAi.Skills.Format`) serves the whole framework, from a string, a file, a folder or the
+registry.
+
+- **`TAiSkills`** (new, `Source/Tools/uMakerAi.Tools.Skills.pas`) gives any chat with function
+  calling on-demand skills. The model sees only a one-line-per-skill catalog in the description
+  of `use_skill` and loads the full instructions when it needs them, so dozens of skills cost no
+  tokens until used. Folder-based skills can ship supporting files, read with `read_skill_file`,
+  which is confined to the skill folder (no `..`, absolute paths, links or binaries, never
+  executes anything). Veto and audit events; guardrails apply as to any tool. Live, 9/9 on
+  OpenAI, Claude and Groq: the right skill for each request, none for an unrelated one, and
+  `use_skill` → `read_skill_file` chained when the instructions asked for it.
+- **`TAiSkill.FromPPM` works.** It requested a URL that returns the website's HTML and a JSON
+  format no package publishes; it now downloads the real SKILL.md (`'code-review'` also finds
+  `skill-code-review`). New `FromFolder` / `FromSkillFile`; the JSON format still works for local
+  files. A SKILL.md never supplies an API key.
+- **`TLLMNode` respects its skill.** New `ResolveConfig`: driver from the node, else the skill,
+  else Claude; the skill's model only if it belongs to that driver; the skill's system prompt
+  followed by the node's. Previously the skill's driver was always overridden and switching
+  driver lost the skill's model and key.
+- **`TAiPrompts`** loads local skills (`LoadSkillFromFile`, `LoadSkillsFromFolder`) and
+  `ApplySkill` copies one into any `SystemPrompt`. Registry versions are now picked by semver.
+
+Guides: `Docs/Version 3/uMakerAi-Skills.EN.md` (Spanish: `uMakerAi-Skills.md`). Demo `091-Skills`.
 
 ### Also
 

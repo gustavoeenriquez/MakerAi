@@ -42,6 +42,7 @@ Specialized guidance exists in subdirectories:
 | `uMakerAi-MCP.Server.*.docx` | `Source/MCPServer/uMakerAi.MCPServer.Core.pas` |
 | `uMakerAi.ToolFuncions.docx` | `Source/Tools/uMakerAi.Tools.Functions.pas` |
 | `uMakerAi-AudioBridge.md` | `Source/Utils/uMakerAi.Utils.AudioCapture.pas`, `Source/Utils/uMakerAi.Utils.AudioPlayback.pas` |
+| `uMakerAi-Skills.md` / `uMakerAi-Skills.EN.md` | `Source/Tools/uMakerAi.Tools.Skills.pas`, `Source/Core/uMakerAi.Skills.Format.pas`, `Source/Agents/uMakerAi.Agents.Skill.pas` |
 
 ## Reportes de campo
 

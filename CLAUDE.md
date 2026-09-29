@@ -422,6 +422,7 @@ Detailed documentation is available in `Docs/Version 3/`:
 | `uMakerAi-Agents.ES.pdf` | Agents documentation (Spanish) |
 | `uMakerAi-RAG.ES.pdf` | RAG documentation (Spanish) |
 | `uMakerAi-AudioBridge.md` | Audio bridge for real-time call translation: loopback/mic capture, playback to selectable device, VB-CABLE setup & distribution licensing (Spanish) |
+| `uMakerAi-Skills.md` / `.EN.md` | Skills en formato SKILL.md: `TAiSkills` (bajo demanda con `use_skill`/`read_skill_file`), `TAiSkill` + `TLLMNode`, `TAiPrompts.ApplySkill`, registry PPM y seguridad |
 
 ## Navigation
 
