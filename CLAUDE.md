@@ -120,12 +120,12 @@ RAG / Agents / MCP                   — higher-level orchestration layers
 | `Source/Design/UMakerAi.ParamsRegistry.pas` | Implemented | `TAiChatFactory`, `TAiEmbeddingFactory` singletons |
 | `Source/Core/uMakerAi.Utils.CodeExtractor.pas` | Implemented | Extract code blocks from Markdown LLM responses |
 | `Source/Core/uMakerAi.Version.inc` | Implemented | Version constants and feature flags |
-| `Source/Tools/uMakerAi.Tools.*.pas` | **Stubs** | Shell, ComputerUse, TextEditor, Functions — to be ported |
-| `Source/Chat/` | **Empty** | All LLM provider drivers — to be ported |
-| `Source/Agents/` | **Empty** | Agent orchestration — to be ported |
-| `Source/RAG/` | **Empty** | Vector + Graph RAG — to be ported |
-| `Source/MCPClient/` | **Empty** | MCP client — to be ported |
-| `Source/MCPServer/` | **Empty** | MCP server — to be ported |
+| `Source/Tools/uMakerAi.Tools.*.pas` | **Implemented** | Shell, ComputerUse, TextEditor, Functions — Fully ported |
+| `Source/Chat/` | **Implemented** | All LLM provider drivers — Fully ported |
+| `Source/Agents/` | **Implemented** | Agent orchestration — Fully ported |
+| `Source/RAG/` | **Implemented** | Vector + Graph RAG — Fully ported |
+| `Source/MCPClient/` | **Implemented** | MCP client — Fully ported |
+| `Source/MCPServer/` | **Implemented** | MCP server — Fully ported |
 
 ### Design Patterns (from Delphi original, apply same patterns in FPC)
 
