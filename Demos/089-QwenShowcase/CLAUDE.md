@@ -33,7 +33,7 @@ Los archivos quedan en `salida/` (ignorada por git): `faro.png`, `faro_verde.png
 
 - **Resultado verificado (sep 28/2026)**, todas las secciones en una corrida: chat (la herramienta se llamó con `{"moneda": "USD"}`; el razonamiento con `tlLow` dio 100000 con ~260 caracteres de razonamiento), la imagen editada solo cambió el color del faro, transcripción exacta ("MakerAI" y "Delphi" gracias al contexto; omni oyó "Make AI" / "Delfi"), traducción "petty cash" / "deductible VAT", embeddings 0.70 para el pasaje correcto contra 0.21 el irrelevante y reranker 0.97, LLM → voz con primer audio a ~1.8 s de la pregunta, traducción simultánea español → inglés con voz, video de 2 s y voz clonada.
 - **Consola y eventos:** todo evento llega por `TThread.Queue`; el demo drena la cola con `CheckSynchronize` en `Esperar`. En una app VCL/FMX no hace falta.
-- **Asignar `Model` después de `DriverName`**: carga los parámetros de ese modelo (por ejemplo `cap_Image`). Con el modelo vacío se usa el default del driver sin esos parámetros.
+- **`Model` se asigna después de `DriverName`** (cambiar de driver lo vacía). Sin `Model` se usa el modelo por defecto del driver con sus parámetros del catálogo; cada sección asigna el suyo.
 - La traducción simultánea recibe el WAV de 24 kHz como si fuera un micrófono (bloques de 100 ms); el conector remuestrea a los 16 kHz del modelo. Este modelo cierra el turno tras ~2.5 s de silencio, por eso se envían 3 s al final.
 - Clonar voces solo con permiso de su dueño. Aquí la muestra es la voz sintética del TTS.
 

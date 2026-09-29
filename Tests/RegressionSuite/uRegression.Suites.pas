@@ -61,7 +61,7 @@ uses
   // Montaje de conexiones concurrente: la unidad de Initializations es la que
   // registra los drivers reales en la factoria (sin ella no hay 'Groq' ni
   // 'Claude' que resolver).
-  uMakerAi.Chat.AiConnection, uMakerAi.Chat.Initializations,
+  uMakerAi.Chat.AiConnection, uMakerAi.Chat.Initializations, uMakerAi.ParamsRegistry,
   uMakerAi.Guardrails, uMakerAi.Jev, uMakerAi.Agents.Tools.JevRouter,
   uMakerAi.Jev.SmartDispatch, uMakerAi.Jev.Guardrails, uMakerAi.Chat.Tools,
   uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
@@ -447,6 +447,14 @@ begin
   FRunner.AddCase('realtime.connection.driver-params')
     .Input('chat:rt-driver-params')
     .ExpectEquals('qwen=Tina/Se breve|translate=ja/Tina|grok=greNone/2|desconocida=driver_param');
+
+  // Model vacio = Model con el default del driver: el registro aplicaba los
+  // parametros propios del modelo solo si Model tenia valor, asi que una conexion
+  // sin Model usaba el modelo por defecto SIN sus caps ni Max_Tokens. Se verifica
+  // en todos los drivers registrados y en la conexion (Qwen, Groq)
+  FRunner.AddCase('conn.empty-model-default-params')
+    .Input('chat:empty-model')
+    .ExpectEquals('drivers=iguales|qwen=cap_Image|groq=65536');
 
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
@@ -2643,6 +2651,36 @@ begin
         [RR.Calls, LTxt, IfThen(RR.SawInstruct, 'si', 'no'), IfThen(RR.Trimmed, 'si', 'no'), RR.LastTokens]);
     finally
       RR.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:empty-model' then
+  begin
+    var LDistintos := '';
+    for var LDrv in TAiChatFactory.Instance.GetRegisteredDrivers do
+    begin
+      var PA := TStringList.Create;
+      var PB := TStringList.Create;
+      try
+        TAiChatFactory.Instance.GetDriverParams(LDrv, '', PA, False);
+        TAiChatFactory.Instance.GetDriverParams(LDrv, PA.Values['Model'], PB, False);
+        if PA.Text <> PB.Text then
+          LDistintos := LDistintos + IfThen(LDistintos <> '', ',', '') + LDrv;
+      finally
+        PA.Free;
+        PB.Free;
+      end;
+    end;
+    Result := 'drivers=' + IfThen(LDistintos = '', 'iguales', 'distintos:' + LDistintos);
+    var CQ := TAiChatConnection.Create(nil);
+    try
+      CQ.DriverName := 'Qwen'; // sin Model
+      Result := Result + '|qwen=' + IfThen(cap_Image in CQ.AiChat.ModelConfig.ModelCaps, 'cap_Image', 'sin-cap_Image');
+      CQ.DriverName := 'Groq';
+      Result := Result + '|groq=' + IntToStr(CQ.AiChat.Max_Tokens);
+    finally
+      CQ.Free;
     end;
     Exit;
   end;

@@ -109,6 +109,10 @@ From `uMakerAi.Core.pas`:
 
 En el puente de Fase 1 de `RunNew` (modelo de texto con `SessionCaps` `[cap_Audio]` en `cmConversation`) la transcripción es **entrada** para el modelo. `ParseJsonTranscript` la escribía además en `ResMsg` y disparaba `OnReceiveDataEnd` con el texto crudo antes de la respuesta real (Cohere, Groq, Mistral, OpenAI). Ahora, fuera de `cmTranscription`, solo llena `MediaFile.Transcription`, `Procesado` y los contadores de tokens. Nota: esos drivers transcriben con el `Model` de la sesión, así que el puente solo aplicaba con configuraciones manuales (modelo de transcripción con `ModelCaps []`). Suite: `chat.transcript.bridge-mode`.
 
+## Model vacío = modelo por defecto con sus parámetros (sep 28/2026)
+
+`TAiChatFactory.GetDriverParams` (y la de embeddings) arma los parámetros en tres niveles: defaults del driver (`RegisterDefaultParams`, incluye `Model=<default>`), los del driver en el catálogo y los del **modelo**. El tercero solo se consultaba si `ModelName` tenía valor, así que una conexión con `DriverName` y sin `Model` usaba el modelo por defecto **sin** sus caps, `Max_Tokens` ni `ThinkingLevel`. Medido: 9 de 15 drivers daban otro chat (Qwen sin visión, Groq sin razonamiento/intérprete y con `Max_Tokens` 8192 en lugar de 65536, Gemini sin audio/PDF/búsqueda, Grok, Kimi, Mistral, MakerAi, DeepSeek, GLM). Ahora, sin `ModelName`, el nivel 3 usa el `Model` que resolvieron los niveles 1 y 2. `TAiChatConnection.Model` sigue vacío (no cambia lo que se guarda en el DFM). **Cambio de comportamiento:** quien usaba solo `DriverName` recibe ahora la configuración del catálogo de su modelo por defecto — la misma que obtenía asignándolo explícitamente. Suite: `conn.empty-model-default-params` (invariante para todos los drivers registrados).
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for source directory overview and [../../CLAUDE.md](../../CLAUDE.md) for project overview.

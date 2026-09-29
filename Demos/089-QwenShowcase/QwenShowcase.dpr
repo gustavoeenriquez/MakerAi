@@ -221,7 +221,7 @@ function Conexion(const AModel: string; AAsync: Boolean = False): TAiChatConnect
 begin
   Result := TAiChatConnection.Create(nil);
   Result.DriverName := 'Qwen';
-  Result.Model := AModel; // asignar Model carga los parametros de ese modelo
+  Result.Model := AModel; // despues de DriverName: cambiar de driver lo vacia
   Result.Params.Values['Asynchronous'] := BoolToStr(AAsync, True);
   Result.OnReceiveDataEnd := Demo.OnFin;
   Result.OnError := Demo.OnError;
