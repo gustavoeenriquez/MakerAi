@@ -2,16 +2,16 @@
 // Version Information
 const
   MAKERAI_VERSION_MAJOR    = 3;
-  MAKERAI_VERSION_MINOR    = 7;
+  MAKERAI_VERSION_MINOR    = 8;
   MAKERAI_VERSION_RELEASE  = 0;
   MAKERAI_VERSION_BUILD    = 0;
 
 // Version String Formats
 const
-  MAKERAI_VERSION_SHORT    = '3.7';
-  MAKERAI_VERSION_FULL     = '3.7.0.0';
-  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.7.0.0';
-  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.7 - Computer Use refresh (Claude toolset, OpenAI gpt-6-astra) & GLM driver (Sep 2026)';
+  MAKERAI_VERSION_SHORT    = '3.8';
+  MAKERAI_VERSION_FULL     = '3.8.0.0';
+  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.8.0.0';
+  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.8 - Jev calibrated decisions, Qwen driver, SKILL.md skills & Computer Use on Linux (Sep 2026)';
 
 // Product Information
 const
@@ -22,7 +22,7 @@ const
 
 // Build Information
 const
-  MAKERAI_BUILD_DATE       = '2026-09-10';
+  MAKERAI_BUILD_DATE       = '2026-09-29';
   MAKERAI_BUILD_TIME       = '12:00:00';
   MAKERAI_BUILD_PLATFORM   = {$IFDEF WIN32}'Win32'{$ENDIF}
                             {$IFDEF WIN64}'Win64'{$ENDIF}
@@ -38,8 +38,8 @@ const
 
 // API Compatibility
 const
-  MAKERAI_API_LEVEL        = 37;        // Internal API level for compatibility
-  MAKERAI_BREAKING_CHANGE  = False;     // True if this version has breaking changes
+  MAKERAI_API_LEVEL        = 38;        // Internal API level for compatibility
+  MAKERAI_BREAKING_CHANGE  = True;      // True if this version has breaking changes (v3.8: TLS on POSIX, IAiMemoryStorage)
   MAKERAI_LEGACY_SUPPORT   = True;      // True = Support for v2.x components
 
 {******************************************************************************}
@@ -225,6 +225,49 @@ const
   - NOTE: the legacy HTTP+SSE MCP transport is formally Deprecated by spec
          2026-07-28 (earliest removal July 2027). Prefer HTTP or StdIO
 
+  Version 3.8.0 (2026-09-29)
+  - BREAKING: TOpenSSLTransport (Realtime on Linux/macOS) now verifies the
+         server certificate chain AND the hostname; it used SSL_VERIFY_NONE.
+         Self-signed endpoints need InsecureSkipVerify := True. It also never
+         sent SNI (SSL_set_tlsext_host_name is a macro, not an export), so it
+         could not reach any host behind a CDN
+  - BREAKING (custom storages only): TAiMemory enforces the namespace on
+         every id-based operation (Get/Update/Delete/Link/Unlink); ids are
+         sequential, so another namespace's memories could be read, changed
+         or deleted, also through the memory_delete/memory_link MCP tools.
+         ImportFromJSON always imports into the active namespace. The
+         id-based methods of IAiMemoryStorage now take the namespace (#127)
+  - BEHAVIOUR: TAiGeminiChat executed no user functions at all (its
+         DoCallFunction answered 'Command X not found'); they now run
+  - BEHAVIOUR: a connection with DriverName and no Model now gets its
+         default model's catalog parameters (caps, Max_Tokens, ThinkingLevel)
+  - BEHAVIOUR: TLLMNode.DriverName defaults to '' and resolves node ->
+         skill -> 'Claude' (the old 'Claude' default overrode every skill)
+  - NEW: Jev (TypeSafe AI) - TAiJev, calibrated typed decisions (Choice /
+         Score / Noul) instead of an LLM round-trip, plus adapters for agent
+         routing (TAiJevRouterTool), SmartDispatch, tool-call and input
+         guardrails, eval scoring, RAG reranking with injection filtering,
+         bulk labeling and model routing; usage metering for billing
+  - NEW: Qwen driver (Alibaba Model Studio) - chat, vision, image generation
+         and editing, Wan video, TTS, ASR, qwen-mt translation, custom voices,
+         embeddings, rerank and three realtime drivers + TAiQwenRealtimeTTS
+  - NEW: Skills in SKILL.md format - uMakerAi.Skills.Format (single parser +
+         PPM registry client), TAiSkills (on-demand skills for any chat via
+         use_skill / read_skill_file), TAiSkill.FromPPM fixed (wrong URL and
+         format), TLLMNode.ResolveConfig, TAiPrompts local skills + ApplySkill
+  - NEW: Computer Use on Linux (TAiLinuxExecutor, X11) and delegation to a
+         remote client honoured by OpenAI and Gemini
+  - NEW: TAiThinkingLevel covers the full effort ladder (minimal..max) and
+         async tool calling (IsAsync); gpt-image-2.5 flare/sunburst;
+         TAiRealtimeConnection.DriverParams; EAiDalleHTTPError
+  - FIX: TAiShell died on non-English Windows (OEM codepage), streaming
+         answers duplicated in OnReceiveDataEnd, Groq executed_tools lost when
+         streaming, freeing an async chat mid-request, TMCPClientSSE
+         destructor spinning forever, embeddings leaking the request JSON,
+         deepseek-flash billed reasoning with ModelCaps=[], Claude coordinates
+         sent as a string, otel.scope.version hardcoded
+  - Regression suite: 96 cases (from 38 in 3.7.0)
+
   Version 3.7.0 (2026-09-10)
   - FIX: Claude Computer Use was broken, not merely outdated. The driver still
          declared computer_20251124, a tool type the Anthropic API now rejects
@@ -287,6 +330,8 @@ const
   MAKERAI_HAS_A2A              = True;  // NEW v3.6: Agent-to-Agent protocol (spec 1.0)
   MAKERAI_HAS_GUARDRAILS       = True;  // NEW v3.6: Tool-call policy (TAiGuardrails)
   MAKERAI_HAS_EVALS            = True;  // NEW v3.6: Evaluation framework (TAiEvalRunner)
+  MAKERAI_HAS_JEV              = True;  // NEW v3.8: Calibrated decisions with Jev (TAiJev)
+  MAKERAI_HAS_SKILLS           = True;  // NEW v3.8: SKILL.md skills (TAiSkills, TAiSkill)
 
 // Platform Support
 const

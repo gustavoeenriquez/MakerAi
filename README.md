@@ -1,4 +1,4 @@
-# MakerAI Suite v3.7 — The AI Ecosystem for Delphi
+# MakerAI Suite v3.8 — The AI Ecosystem for Delphi
 
 🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
 📖 **Manual:** [https://www.gustavoenriquez.com/book-makerai](https://www.gustavoenriquez.com/book-makerai) — available in English and Spanish
@@ -33,9 +33,10 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 ---
 
-## 🧪 On `dev` — not yet released
+## 🚀 What's New in v3.8
 
-Work merged after v3.7.0. Five items change existing behaviour; they are marked ⚠️ below.
+Released 2026-09-29. Five items change existing behaviour; they are marked ⚠️ below — two of them
+(TLS certificate checks on POSIX and the `IAiMemoryStorage` signature) can require code changes.
 
 ### Jev — calibrated decisions before spending an LLM
 
@@ -286,7 +287,7 @@ Guides: `Docs/Version 3/uMakerAi-Skills.EN.md` (Spanish: `uMakerAi-Skills.md`). 
 
 ---
 
-## 🚀 What's New in v3.7
+## What's New in v3.7
 
 ### Computer Use, Refreshed on Both Live Providers
 
@@ -900,12 +901,28 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 | `077-RagPostgresConsole` | Headless vector RAG on PostgreSQL + pgvector with local Ollama embeddings — no API key. Runs on Windows and Linux64 |
 | `082-ComputerUsePassthru` | Who executes a `computer_call`: delegated to a remote client, missing tool, or local. Self-verifying with an exit code; never touches the screen |
 | `083-ComputerUseLinux` | Computer Use on Linux/X11 over Xvfb — the headless counterpart of `066` |
+| `084-JevRouter` … `088-JevModelRouter` | Jev (TypeSafe AI): agent routing, SmartDispatch and guardrails, evals and RAG reranking, bulk labeling, model routing. Need `TYPESAFE_API_KEY` |
+| `089-QwenShowcase` | Everything Qwen (Alibaba Model Studio) with one key: chat, vision, image editing, voice, translation, embeddings + rerank, realtime |
+| `091-Skills` | SKILL.md skills three ways: on demand in a chat (`TAiSkills`), as the base of an agent node (`TAiSkill`), copied into the prompt (`TAiPrompts.ApplySkill`) |
 
 ---
 
 ## 🔄 Changelog
 
-### Unreleased (on `dev`)
+### v3.8.0 (2026-09-29)
+- ⚠️ Fix (security): **`TAiMemory` enforced namespaces only in searches** — `Get`, `Update`, `Delete`, `Link` and `Unlink` addressed memories by id alone, and ids are sequential, so an agent could read, change or delete another namespace's memories by guessing one, including through the `memory_delete` / `memory_link` MCP tools. `ImportFromJSON` also honoured the `namespace` of the JSON. Every id-based operation now requires the active namespace (a foreign id behaves like a missing one) and imports land in the active namespace. **Breaking for custom storages**: the id-based methods of `IAiMemoryStorage` take the namespace. Reported responsibly in #127
+- New: **Skills in SKILL.md format** — one parser for the whole framework (`uMakerAi.Skills.Format`, with a read-only PPM registry client: semver version resolution, `skill-` prefix fallback, clear errors on a missing package, a non-skill package or an HTML page). **`TAiSkills`** gives any chat with function calling on-demand skills: the model sees a catalog in `use_skill` and loads the instructions it needs; folder skills ship supporting files read with `read_skill_file`, confined to the skill folder. Live 9/9 on OpenAI, Claude and Groq. Guide: `Docs/Version 3/uMakerAi-Skills.EN.md`, demo `091-Skills`
+- Fix: **`TAiSkill.FromPPM` never worked** — it requested a URL that returns the website's HTML and a JSON format no package publishes. It now downloads the real SKILL.md; new `FromFolder` / `FromSkillFile`, the JSON format still works for local files, and a SKILL.md never supplies an API key
+- ⚠️ Fix: **`TLLMNode` ignored its skill's driver** — the constructor's `DriverName := 'Claude'` always won, and applying the skill before the node lost the skill's model and key whenever the driver changed. New `ResolveConfig` / `ConfigureChat`: driver node → skill → Claude, the skill's model only if it belongs to that driver, skill prompt followed by the node's. `DriverName` now defaults to `''` (no change without a skill)
+- New: **`TAiPrompts` local skills** — `LoadSkillFromFile`, `LoadSkillsFromFolder`, `ApplySkill` (into any `SystemPrompt`) and `SkillDescription`
+- New: **Jev (TypeSafe AI)** — `TAiJev` for calibrated typed decisions (Choice / Score / Noul) and adapters for agent routing (`TAiJevRouterTool`), SmartDispatch (`TAiJevDispatchClassifier`), tool-call and input guardrails (`TAiJevGuardrailClassifier`, `TAiJevPromptGuard`), eval scoring (`TAiJevEvalScorer`), RAG reranking with injection filtering (`TAiJevRAGReranker`), bulk labeling (`TAiJevBatchLabeler`) and model routing (`TAiJevModelRouter`), with usage metering for billing. New provider-neutral hooks: `ChatTools.DispatchClassifier`, `ChatTools.PromptGuard`, `TAiGuardrails.Classifier`, `TAiEvalRunner.Scorer`, `TAiRAGVector.Reranker`. Demos 084–088
+- New: **`TAiThinkingLevel` covers the full effort ladder** (`none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`, the historical values unchanged) — `xhigh`/`max` on `gpt-6-astra` silently fell back to the default. Also **async tool calling** (`TFunctionActionItem.IsAsync`)
+- New: **`gpt-image-2.5` flare/sunburst** (`iqXHigh` / `iqMax` quality, real alpha transparency), `TAiDalle.ModelName` for OpenAI-compatible services that serve a named checkpoint, and `EAiDalleHTTPError` with `StatusCode` and `RetryAfter`
+- Fix: **`deepseek-flash` billed reasoning with `ModelCaps=[]`** — the thinking gate only matched `deepseek-v4*`, so the canonical name let the API default (thinking on) through
+- Fix: **`TOpenSSLTransport` never sent SNI** — `SSL_set_tlsext_host_name` is a macro, not an export, so no host behind a CDN could be reached (alert 40). Now through `SSL_ctrl`
+- Fix: **`TMCPClientSSE` destructor spun forever** on an empty queue after shutdown, burning a core
+- Fix: `TAiVoiceMonitor` compiles outside Windows (Linux64, Android)
+- Docs: `Source/Memory` added to the Library Paths list — packages compile without it, but an app using `TAiMemory` did not
 
 - ⚠️ Behaviour change: **a connection with `DriverName` but no `Model` now gets its default model's catalog parameters** — the registry only applied per-model settings when `Model` was set, so the default model ran without them (Qwen without vision, Groq without reasoning or code interpreter and with an 8192 token limit, Gemini without audio/PDF/search; 9 of 15 drivers differed). An empty `Model` now behaves exactly like setting the driver's default model explicitly. `Model` itself stays empty, so nothing changes in forms
 - New: **`TAiRealtimeConnection.DriverParams`** — driver-specific properties (`Voice`, `Instructions`, `TargetLanguage`, `ReasoningEffort`, `Keyterms`...) set through the universal connector as `Property=Value` lines, applied by RTTI on driver creation and on `Connect`. Previously only the base properties reached the driver. Unknown keys are reported through `OnError` (`driver_param`) on connect

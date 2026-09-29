@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MakerAI is an AI orchestration framework for Delphi developers (v3.7). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, GLM/Z.ai, Qwen/Alibaba, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers/clients, A2A agent interoperability, autonomous agents, observability, guardrails and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+MakerAI is an AI orchestration framework for Delphi developers (v3.8). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, GLM/Z.ai, Qwen/Alibaba, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers/clients, A2A agent interoperability, autonomous agents, observability, guardrails and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+
+**v3.8 highlights (sep 2026):** **Jev** (TypeSafe AI) para decisiones calibradas sin pasar por un LLM (enrutar agentes, SmartDispatch, guardrails de tools y de entrada, evals, rerank RAG con filtro de inyecciones, etiquetado masivo, enrutador de modelos, medición de consumo); driver **Qwen** (Alibaba) completo; **skills en formato SKILL.md** (`TAiSkills` con `use_skill` bajo demanda para cualquier chat, `TAiSkill`/`TLLMNode` arreglados, parser y cliente PPM comunes); **Computer Use en Linux**. **Cambios de comportamiento (5):** TLS verificado en POSIX (rompe endpoints autofirmados sin `InsecureSkipVerify`), `IAiMemoryStorage` exige el namespace (issue #127, rompe storages propios), Gemini ya ejecuta funciones de usuario, `Model` vacío usa los parámetros del modelo por defecto y `TLLMNode.DriverName` vacío por defecto. `MAKERAI_BREAKING_CHANGE = True`.
 
 **v3.7 highlights (sep 2026):** refresco de **Computer Use** en los dos proveedores vivos — Claude estaba **roto** (`computer_20251124` ya lo rechaza el API; ahora `computer_toolset_20260801`, sin parametros y con 17 herramientas nombradas) y OpenAI estrena el tool nativo `computer` con **`gpt-6-astra`**, que manda un **lote** de acciones por turno; ambos APIs convergieron en no declarar dimensiones y devolver coordenadas en pixeles del screenshot. Ademas: driver **GLM** (Zhipu/Z.ai), fixes de RAG sobre pgvector y de contabilidad de tokens/cache.
 
@@ -259,7 +261,7 @@ uses uJSONHelper;  // JSON helper for older Delphi versions
 
 ### Feature Flags (uMakerAi.Version.inc)
 
-All `MAKERAI_HAS_*` feature flags are `True` by default (OpenAI, Whisper, Embeddings, Tool Calling, RAG Vector/Graph, MCP, Chat Connection, UI Components, Agents). Platform flags: Windows, Linux, Mobile are `True`; **macOS is `False`** (incomplete). `MAKERAI_API_LEVEL = 37`.
+All `MAKERAI_HAS_*` feature flags are `True` by default (OpenAI, Whisper, Embeddings, Tool Calling, RAG Vector/Graph, MCP, Chat Connection, UI Components, Agents). Platform flags: Windows, Linux, Mobile are `True`; **macOS is `False`** (incomplete). `MAKERAI_API_LEVEL = 38`.
 
 ## Thread Safety Notes
 
