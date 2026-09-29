@@ -195,6 +195,8 @@ Beyond chat, the same key covers the rest of Model Studio, all tested live from 
   `TranslateFrom`, `TranslateDomain`, a `TranslateTerms` glossary) and each message is translated.
   The driver sends only the latest message, as the API requires, and fixes plus/turbo streaming,
   which repeats the accumulated text in every chunk.
+Demo `089-QwenShowcase` walks through all of it with one key.
+
 - **Custom voices**: `TAiQwenVoices` clones a voice from a sample or designs one from a text
   description, and lists or deletes them. Put the returned id in `TtsParams.Voice`; the driver
   switches to the TTS model that voice requires. Clone only voices you have consent to use.
