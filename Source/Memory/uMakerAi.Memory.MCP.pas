@@ -398,10 +398,14 @@ end;
 function TAiMemoryDeleteTool.ExecuteWithParams(const Params: TMemDeleteParams;
   const Auth: TAiAuthContext): TJSONObject;
 begin
-  FMemory.Delete(Params.id);
-  Result := TAiMCPResponseBuilder.New
-    .AddText(Format('{"id":%d,"status":"deleted"}', [Params.id]))
-    .Build;
+  if FMemory.Delete(Params.id) then
+    Result := TAiMCPResponseBuilder.New
+      .AddText(Format('{"id":%d,"status":"deleted"}', [Params.id]))
+      .Build
+  else
+    Result := TAiMCPResponseBuilder.New
+      .AddText(Format('{"id":%d,"status":"not_found"}', [Params.id]))
+      .Build;
 end;
 
 // ---------------------------------------------------------------------------
@@ -445,11 +449,16 @@ var
   Rel: string;
 begin
   Rel := IfThen(Params.relation <> '', Params.relation, 'related');
-  FMemory.Link(Params.from_id, Params.to_id, Rel);
-  Result := TAiMCPResponseBuilder.New
-    .AddText(Format('{"from_id":%d,"to_id":%d,"relation":"%s","status":"linked"}',
-                    [Params.from_id, Params.to_id, Rel]))
-    .Build;
+  if FMemory.Link(Params.from_id, Params.to_id, Rel) then
+    Result := TAiMCPResponseBuilder.New
+      .AddText(Format('{"from_id":%d,"to_id":%d,"relation":"%s","status":"linked"}',
+                      [Params.from_id, Params.to_id, Rel]))
+      .Build
+  else
+    Result := TAiMCPResponseBuilder.New
+      .AddText(Format('{"from_id":%d,"to_id":%d,"relation":"%s","status":"not_found"}',
+                      [Params.from_id, Params.to_id, Rel]))
+      .Build;
 end;
 
 // ---------------------------------------------------------------------------

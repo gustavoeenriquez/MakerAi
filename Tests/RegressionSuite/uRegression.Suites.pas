@@ -294,10 +294,12 @@ begin
   // un Id ajeno (son enteros consecutivos, basta adivinarlo) se podia leer,
   // modificar, enlazar y borrar memorias de otro agente. ImportFromJSON ademas
   // respetaba el "namespace" del JSON y escribia en el de otro.
-  // Salida: get|link|a.contenido|a.total|b.total
+  // Delete/Link/Unlink devuelven False sobre un Id ajeno (las tools MCP ya no
+  // responden "deleted"/"linked" sin haber hecho nada) y True sobre los propios.
+  // Salida: get|link|a.contenido|a.total|b.total|ajenos(link,unlink,delete)/propios
   FRunner.AddCase('memory.namespace.id-isolation')
     .Input('memory:namespace-id-isolation')
-    .ExpectEquals('nil|0|canario A|1|2');
+    .ExpectEquals('nil|0|canario A|1|2|FFF/TTT');
 
   // --- Skills: formato SKILL.md (parser comun de uMakerAi.Skills.Format) ---
   // Frontmatter con comillas, comentario '#', escalar partido en dos lineas,
@@ -3575,11 +3577,17 @@ end;
 function TRegressionSuite.RunMemoryScenario(const AScenario: string): string;
 var
   Mem: TAiMemory;
-  LPath, LGet, LLinks, LContentA: string;
-  IdA, IdB: Integer;
+  LPath, LGet, LLinks, LContentA, LRets: string;
+  IdA, IdB, IdB2: Integer;
   Entry: TMemoryEntry;
   Links: TMemoryEntryList;
   Import: TJSONArray;
+
+  function BoolChar(AValue: Boolean): string;
+  begin
+    if AValue then Result := 'T' else Result := 'F';
+  end;
+
 begin
   if AScenario <> 'memory:namespace-id-isolation' then
     raise Exception.Create('Escenario de memoria desconocido: ' + AScenario);
@@ -3607,14 +3615,19 @@ begin
     end;
 
     Mem.Update(IdA, 'modificado por B', 10);
-    Mem.Link(IdB, IdA);
+    // Las operaciones sobre un Id ajeno avisan que no hicieron nada (F);
+    // las mismas sobre Ids propios si responden True (T)
+    LRets := BoolChar(Mem.Link(IdB, IdA));
     Links := Mem.Links(IdB);
     try
       LLinks := IntToStr(Links.Count);
     finally
       Links.Free;
     end;
-    Mem.Delete(IdA);
+    LRets := LRets + BoolChar(Mem.Unlink(IdB, IdA)) + BoolChar(Mem.Delete(IdA));
+    IdB2 := Mem.Store('temporal B');
+    LRets := LRets + '/' + BoolChar(Mem.Link(IdB, IdB2)) +
+      BoolChar(Mem.Unlink(IdB, IdB2)) + BoolChar(Mem.Delete(IdB2));
 
     // Un JSON que dice venir de A tiene que acabar en B, no en A
     Import := TJSONObject.ParseJSONValue(
@@ -3637,7 +3650,7 @@ begin
     end;
 
     Result := LGet + '|' + LLinks + '|' + LContentA + '|' +
-      IntToStr(Mem.Stats.TotalCount) + '|' + IntToStr(TotalB);
+      IntToStr(Mem.Stats.TotalCount) + '|' + IntToStr(TotalB) + '|' + LRets;
   finally
     Mem.Free;
     if TFile.Exists(LPath) then

@@ -87,6 +87,7 @@ type
     procedure SetDbPath(const AValue: string);
     procedure SetAnalyzer(AValue: TAiChatConnection);
     procedure EnsureStorage;
+    function  OwnsEntry(AId: Integer): Boolean;
     procedure RebuildContext;
     function  FuseRRF(AFTS, ASemantic: TMemoryEntryList; ALimit: Integer): TMemorySearchResults;
     function  DoAnalyzeAndStore(const AConversationText: string): Integer;
@@ -122,8 +123,9 @@ type
       ALimit:         Integer = 20
     ): TMemoryEntryList;
 
-    // Elimina la memoria con el Id dado.
-    procedure Delete(AId: Integer);
+    // Elimina la memoria con el Id dado. False si el Id no existe en el
+    // namespace activo (no se borra nada).
+    function Delete(AId: Integer): Boolean;
 
     // Estadísticas del namespace actual.
     function Stats: TMemoryStats;
@@ -164,9 +166,10 @@ type
     // Importa memorias desde un TJSONArray (generado por ExportToJSON).
     procedure ImportFromJSON(AData: TJSONArray);
 
-    // Crea relación dirigida entre dos memorias.
-    procedure Link(AFromId, AToId: Integer; const ARelation: string = 'related');
-    procedure Unlink(AFromId, AToId: Integer);
+    // Crea relación dirigida entre dos memorias. False si alguno de los dos
+    // Ids no existe en el namespace activo (no se toca nada).
+    function Link(AFromId, AToId: Integer; const ARelation: string = 'related'): Boolean;
+    function Unlink(AFromId, AToId: Integer): Boolean;
     function  Links(AId: Integer): TMemoryEntryList;
 
     // Recalcula decay_score de todas las memorias del namespace.
@@ -572,10 +575,12 @@ end;
 // Delete
 // ---------------------------------------------------------------------------
 
-procedure TAiMemory.Delete(AId: Integer);
+function TAiMemory.Delete(AId: Integer): Boolean;
 begin
   EnsureStorage;
-  FStorage.DeleteById(AId, FNamespace);
+  Result := OwnsEntry(AId);
+  if Result then
+    FStorage.DeleteById(AId, FNamespace);
 end;
 
 // ---------------------------------------------------------------------------
@@ -905,16 +910,33 @@ end;
 // Graph
 // ---------------------------------------------------------------------------
 
-procedure TAiMemory.Link(AFromId, AToId: Integer; const ARelation: string);
+function TAiMemory.Link(AFromId, AToId: Integer; const ARelation: string): Boolean;
 begin
   EnsureStorage;
-  FStorage.LinkEntries(AFromId, AToId, ARelation, FNamespace);
+  Result := OwnsEntry(AFromId) and OwnsEntry(AToId);
+  if Result then
+    FStorage.LinkEntries(AFromId, AToId, ARelation, FNamespace);
 end;
 
-procedure TAiMemory.Unlink(AFromId, AToId: Integer);
+function TAiMemory.Unlink(AFromId, AToId: Integer): Boolean;
 begin
   EnsureStorage;
-  FStorage.UnlinkEntries(AFromId, AToId, FNamespace);
+  Result := OwnsEntry(AFromId) and OwnsEntry(AToId);
+  if Result then
+    FStorage.UnlinkEntries(AFromId, AToId, FNamespace);
+end;
+
+// True si el Id existe en el namespace activo. El storage ya filtra por
+// namespace; esto solo sirve para informar al llamador (las tools MCP
+// respondian "deleted"/"linked" aunque la operacion no hiciera nada).
+// No usa Get: no debe contar como acceso.
+function TAiMemory.OwnsEntry(AId: Integer): Boolean;
+var
+  Entry: TMemoryEntry;
+begin
+  Entry := FStorage.GetById(AId, FNamespace);
+  Result := Assigned(Entry);
+  Entry.Free;
 end;
 
 function TAiMemory.Links(AId: Integer): TMemoryEntryList;
