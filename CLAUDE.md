@@ -53,6 +53,7 @@ Add these folders to Delphi Library Path (Tools > Options > Language > Delphi > 
 - `Source/Embeddings`
 - `Source/MCPClient`
 - `Source/MCPServer`
+- `Source/Memory`
 - `Source/Packages`
 - `Source/RAG`
 - `Source/Realtime`
@@ -388,7 +389,7 @@ AiConnection.ApiKey := 'sk-...';           // Literal key
 
 **"Unit not found" compilation errors**
 
-Verify all 12 library paths are added to Delphi Library Path (see [Required Library Paths](#required-library-paths)).
+Verify all 16 library paths are added to Delphi Library Path (see [Required Library Paths](#required-library-paths)).
 
 **API key not resolving**
 

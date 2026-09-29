@@ -19,7 +19,7 @@ This is the main source code directory for MakerAI 3.2, an AI orchestration fram
 Open `Packages/MakerAiGrp.groupproj` to compile all packages.
 
 ### Required Library Paths
-All subdirectories (Agents, Chat, ChatUI, Core, Design, MCPClient, MCPServer, RAG, Realtime, Resources, Tools, Utils, WebSocket) must be in Delphi Library Path.
+All subdirectories (Agents, Chat, ChatUI, Core, Design, Embeddings, MCPClient, MCPServer, Memory, Packages, RAG, Realtime, Resources, Tools, Utils, WebSocket) must be in Delphi Library Path. `Memory` is easy to miss: the packages compile without it (the `.dpk` uses relative paths), but an app that uses `TAiMemory` fails with "File not found: uMakerAi.Memory.dcu".
 
 ## Module Quick Reference
 

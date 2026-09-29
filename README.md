@@ -824,6 +824,7 @@ Source/Design
 Source/Embeddings
 Source/MCPClient
 Source/MCPServer
+Source/Memory
 Source/Packages
 Source/RAG
 Source/Realtime
