@@ -37,6 +37,8 @@ type
     function RunMemoryScenario(const AScenario: string): string;
     // Skills: formato SKILL.md, carpetas y registry PPM (falso, sin red)
     function RunSkillsScenario(const AScenario: string): string;
+    // TAiSkill + TLLMNode: precedencia, ConfigureChat y formatos
+    function RunSkillAgentScenario(const AScenario, ARegUrl: string): string;
     // Serializacion de tool results en la familia OpenAI-compatible
     function RunChatScenario(const AScenario: string): string;
     // Montaje CONCURRENTE de conexiones, tal y como lo hace un servidor que
@@ -79,7 +81,7 @@ uses
   // consola tienen que estar enlazados en el ejecutable.
   FireDAC.Stan.Def, FireDAC.Stan.Async, FireDAC.Phys.SQLite, FireDAC.ConsoleUI.Wait,
   uMakerAi.Memory, uMakerAi.Memory.Types,
-  uMakerAi.Skills.Format, uMakerAi.Prompts,
+  uMakerAi.Skills.Format, uMakerAi.Prompts, uMakerAi.Agents.Skill, uMakerAi.Agents.Node.LLM,
   uRegression.Fixtures;
 
 const
@@ -332,6 +334,41 @@ begin
   FRunner.AddCase('skills.ppm.errors')
     .Input('skills:ppm-errors')
     .ExpectEquals('notfound|type|html|nil');
+
+  // --- Skills en agentes: TAiSkill + TLLMNode ---
+  // Precedencia nodo/skill (TLLMNode.ResolveConfig), driver|modelo|apikey:
+  //  a) sin skill -> Claude por defecto
+  //  b) skill JSON OpenAI/gpt-5.6/@K, nodo vacio -> todo del skill (antes el
+  //     'Claude' fijo del constructor pisaba el driver del skill)
+  //  c) nodo fija Claude -> el gpt-5.6 del skill NO se hereda
+  //  d) nodo fija solo el modelo -> driver del skill + modelo del nodo
+  //  e) SKILL.md sin driver, nodo vacio -> Claude + modelo del skill
+  //  f) SKILL.md sin driver, nodo en OpenAI -> no hereda claude-opus-4-6
+  //  g) SKILL.md con 'driver: Groq' y 'apikey:' -> driver si, clave NO
+  FRunner.AddCase('skills.agent.precedence')
+    .Input('skills:agent-precedence')
+    .ExpectEquals('Claude||;OpenAI|gpt-5.6|@K;Claude||@K;OpenAI|gpt-5.4|@K;' +
+      'Claude|claude-opus-4-6|;OpenAI||;Groq||');
+
+  // SystemPrompt: skill + nodo concatenados; solo uno -> ese
+  FRunner.AddCase('skills.agent.prompt-concat')
+    .Input('skills:agent-prompt')
+    .ExpectEquals('Base\n\nAjuste;Base;Ajuste');
+
+  // ConfigureChat sobre una TAiChatConnection real (sin red): el chat queda
+  // con el driver, el modelo y la ApiKey resueltos. Con el orden viejo
+  // (skill primero, nodo despues) cambiar de driver borraba modelo y clave.
+  FRunner.AddCase('skills.agent.configure-chat')
+    .Input('skills:agent-configure')
+    .ExpectEquals('OpenAI|gpt-5.6|@K|Revisa;Groq||@K|Revisa');
+
+  // Formatos de TAiSkill: JSON local (con apiKey), carpeta con SKILL.md y
+  // registry PPM falso. formato|nombre|driver|modelo|apikey|tools|version
+  FRunner.AddCase('skills.agent.formats')
+    .Input('skills:agent-formats')
+    .ExpectEquals('json|rev|OpenAI|gpt-5.6|@K|git|;' +
+      'md|carpeta||m1||Read,Grep|;' +
+      'md|demo||claude-opus-4-6||Read|1.10.0');
 
   // --- RAG: busqueda sin SearchOptions ---
   // Reventaba con AV: IfThen evalua las dos ramas, asi que
@@ -3453,8 +3490,146 @@ begin
       Registry.Free;
     end;
   end
+  else if AScenario = 'skills:agent-precedence' then
+    Result := RunSkillAgentScenario(AScenario, RegUrl)
+  else if AScenario = 'skills:agent-prompt' then
+    Result := RunSkillAgentScenario(AScenario, RegUrl)
+  else if AScenario = 'skills:agent-configure' then
+    Result := RunSkillAgentScenario(AScenario, RegUrl)
+  else if AScenario = 'skills:agent-formats' then
+    Result := RunSkillAgentScenario(AScenario, RegUrl)
   else
     raise Exception.Create('Escenario de skills desconocido: ' + AScenario);
+end;
+
+function TRegressionSuite.RunSkillAgentScenario(const AScenario, ARegUrl: string): string;
+const
+  SKILL_JSON = '{"name":"rev","driverName":"OpenAI","model":"gpt-5.6",' +
+               '"apiKey":"@K","systemPrompt":"Revisa","extraTools":["git"]}';
+  SKILL_MD   = '---'#10'name: md'#10'model: claude-opus-4-6'#10'---'#10'Revisa';
+var
+  Node: TLLMNode;
+  Chat: TAiChatConnection;
+  Parts: TStringList;
+  Registry: TFakePPMRegistry;
+  Skill: TAiSkill;
+  Dir: string;
+
+  function Cfg(const ANodeDriver, ANodeModel, ASkillJson, ASkillMd: string): string;
+  var
+    C: TLLMNodeConfig;
+  begin
+    Node.DriverName := ANodeDriver;
+    Node.Model := ANodeModel;
+    if ASkillJson <> '' then
+      Node.Skill := TAiSkill.FromJSON(ASkillJson)
+    else if ASkillMd <> '' then
+    begin
+      Node.Skill := TAiSkill.Create;
+      Node.Skill.LoadFromSkillText(ASkillMd);
+    end
+    else
+      Node.Skill := nil;
+    C := Node.ResolveConfig;
+    Result := C.DriverName + '|' + C.Model + '|' + C.ApiKey;
+  end;
+
+  function Describe(S: TAiSkill): string;
+  const
+    FMT: array [TAiSkillFormat] of string = ('none', 'json', 'md');
+  begin
+    Result := FMT[S.Format] + '|' + S.Name + '|' + S.DriverName + '|' + S.Model + '|' +
+      S.ApiKey + '|' + String.Join(',', S.ExtraTools.ToStringArray) + '|' + S.Version;
+  end;
+
+begin
+  Parts := TStringList.Create;
+  Node := TLLMNode.Create(nil);
+  try
+    if AScenario = 'skills:agent-precedence' then
+    begin
+      Parts.Add(Cfg('', '', '', ''));
+      Parts.Add(Cfg('', '', SKILL_JSON, ''));
+      Parts.Add(Cfg('Claude', '', SKILL_JSON, ''));
+      Parts.Add(Cfg('', 'gpt-5.4', SKILL_JSON, ''));
+      Parts.Add(Cfg('', '', '', SKILL_MD));
+      Parts.Add(Cfg('OpenAI', '', '', SKILL_MD));
+      Parts.Add(Cfg('', '', '', '---'#10'driver: Groq'#10'apikey: @SECRETO'#10'---'#10'x'));
+    end
+    else if AScenario = 'skills:agent-prompt' then
+    begin
+      Node.Skill := TAiSkill.FromJSON('{"systemPrompt":"Base"}');
+      Node.SystemPrompt := 'Ajuste';
+      Parts.Add(Node.ResolveConfig.SystemPrompt.Replace(sLineBreak, '\n'));
+      Node.SystemPrompt := '';
+      Parts.Add(Node.ResolveConfig.SystemPrompt);
+      Node.Skill := nil;
+      Node.SystemPrompt := 'Ajuste';
+      Parts.Add(Node.ResolveConfig.SystemPrompt);
+    end
+    else if AScenario = 'skills:agent-configure' then
+    begin
+      Node.Skill := TAiSkill.FromJSON(SKILL_JSON);
+      Chat := TAiChatConnection.Create(nil);
+      try
+        Node.ConfigureChat(Chat);
+        Parts.Add(Chat.DriverName + '|' + Chat.Model + '|' + Chat.Params.Values['ApiKey'] + '|' +
+          Trim(Chat.SystemPrompt.Text));
+      finally
+        Chat.Free;
+      end;
+      Node.DriverName := 'Groq';
+      Chat := TAiChatConnection.Create(nil);
+      try
+        Node.ConfigureChat(Chat);
+        Parts.Add(Chat.DriverName + '|' + Chat.Model + '|' + Chat.Params.Values['ApiKey'] + '|' +
+          Trim(Chat.SystemPrompt.Text));
+      finally
+        Chat.Free;
+      end;
+    end
+    else if AScenario = 'skills:agent-formats' then
+    begin
+      Skill := TAiSkill.FromJSON(SKILL_JSON);
+      try
+        Parts.Add(Describe(Skill));
+      finally
+        Skill.Free;
+      end;
+
+      Dir := TPath.Combine(TPath.GetTempPath, 'makerai_regress_skill_folder\carpeta');
+      TDirectory.CreateDirectory(Dir);
+      TFile.WriteAllText(TPath.Combine(Dir, 'SKILL.md'),
+        '---'#10'model: m1'#10'apiKey: "@NO"'#10'allowed-tools: Read, Grep'#10'---'#10'Hola',
+        TEncoding.UTF8);
+      try
+        Skill := TAiSkill.FromFolder(Dir);
+        try
+          Parts.Add(Describe(Skill));
+        finally
+          Skill.Free;
+        end;
+      finally
+        TDirectory.Delete(TPath.GetDirectoryName(Dir), True);
+      end;
+
+      Registry := TFakePPMRegistry.Create(PORT_PPM);
+      try
+        Skill := TAiSkill.FromPPM('demo', ARegUrl);
+        try
+          Parts.Add(Describe(Skill));
+        finally
+          Skill.Free;
+        end;
+      finally
+        Registry.Free;
+      end;
+    end;
+    Result := String.Join(';', Parts.ToStringArray);
+  finally
+    Node.Free;
+    Parts.Free;
+  end;
 end;
 
 function TRegressionSuite.RunPolicyScenario(const AScenario: string): string;
