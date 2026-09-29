@@ -72,6 +72,7 @@ contains
   uMakerAi.Evals in '..\Core\uMakerAi.Evals.pas',
   uMakerAi.Embeddings in '..\Embeddings\uMakerAi.Embeddings.pas',
   uMakerAi.Prompts in '..\Core\uMakerAi.Prompts.pas',
+  uMakerAi.Skills.Format in '..\Core\uMakerAi.Skills.Format.pas',
   uMakerAi.Utils.CodeExtractor in '..\Core\uMakerAi.Utils.CodeExtractor.pas',
   uMakerAi.Utils.PcmToWav in '..\Core\uMakerAi.Utils.PcmToWav.pas',
   uMakerAi.Utils.System in '..\Core\uMakerAi.Utils.System.pas',

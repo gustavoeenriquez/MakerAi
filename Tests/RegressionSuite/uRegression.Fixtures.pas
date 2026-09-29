@@ -74,6 +74,22 @@ type
     destructor Destroy; override;
   end;
 
+  // --- Registry PPM falso (skills) ---
+  // skill-demo con versiones 1.2.0, 1.10.0 y 2.0.0 (retirada): la buena es
+  // 1.10.0, que solo sale comparando por semver (como texto gana 1.2.0).
+  // 'un-prompt' es de otro tipo. Todo lo que cuelga de /html responde una
+  // pagina HTML con 200, como un sitio web ante una ruta que no es suya.
+  TFakePPMRegistry = class
+  private
+    FHttp: TIdHTTPServer;
+    FRequests: Integer;
+    procedure HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+  public
+    constructor Create(APort: Integer);
+    destructor Destroy; override;
+    property Requests: Integer read FRequests;
+  end;
+
   // --- TAiJev sin red ---
   // Sustituye DoPost: guarda el cuerpo enviado y devuelve las respuestas
   // encoladas en orden. Sin respuestas encoladas devuelve 500.
@@ -267,6 +283,72 @@ begin
       Exit(TAiMCPResponseBuilder.New.AddText('CANCELADO:' + AParams.Operation).Build);
   end;
   Result := BuildInputRequired(AParams.Operation);
+end;
+
+{ TFakePPMRegistry }
+
+constructor TFakePPMRegistry.Create(APort: Integer);
+begin
+  inherited Create;
+  FHttp := TIdHTTPServer.Create(nil);
+  FHttp.OnCommandGet := HttpCommand;
+  FHttp.DefaultPort := APort;
+  FHttp.Active := True;
+end;
+
+destructor TFakePPMRegistry.Destroy;
+begin
+  FHttp.Active := False;
+  FHttp.Free;
+  inherited;
+end;
+
+procedure TFakePPMRegistry.HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo;
+  AResponseInfo: TIdHTTPResponseInfo);
+const
+  SKILL_MD =
+    '---'#10 +
+    'name: demo'#10 +
+    'description: Skill de prueba del registry falso'#10 +
+    'allowed-tools:'#10 +
+    '  - Read'#10 +
+    'model: claude-opus-4-6'#10 +
+    '---'#10 +
+    'Instrucciones de la version 1.10.0'#10;
+var
+  Doc: string;
+begin
+  AtomicIncrement(FRequests);
+  Doc := ARequestInfo.Document;
+  AResponseInfo.CharSet := 'utf-8';
+
+  if Doc.StartsWith('/html') then
+  begin
+    AResponseInfo.ResponseNo := 200;
+    AResponseInfo.ContentType := 'text/html';
+    AResponseInfo.ContentText := '<!DOCTYPE html><html><body>PPM</body></html>';
+    Exit;
+  end;
+
+  AResponseInfo.ContentType := 'application/json';
+  if Doc = '/v1/packages/skill-demo' then
+    AResponseInfo.ContentText :=
+      '{"package":{"name":"skill-demo","type":"skill","versions":[' +
+      '{"version":"1.2.0","yanked":false},{"version":"1.10.0","yanked":false},' +
+      '{"version":"2.0.0","yanked":true}]}}'
+  else if Doc = '/v1/packages/un-prompt' then
+    AResponseInfo.ContentText :=
+      '{"package":{"name":"un-prompt","type":"prompt","versions":[{"version":"1.0.0","yanked":false}]}}'
+  else if Doc = '/v1/packages/skill-demo/1.10.0/skill' then
+  begin
+    AResponseInfo.ContentType := 'text/plain';
+    AResponseInfo.ContentText := SKILL_MD;
+  end
+  else
+  begin
+    AResponseInfo.ResponseNo := 404;
+    AResponseInfo.ContentText := '{"status":"error","message":"Package not found","code":404}';
+  end;
 end;
 
 { TLegacyOnlyMCPServer }

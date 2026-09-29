@@ -35,6 +35,8 @@ type
     function RunRagScenario(const AScenario: string): string;
     // TAiMemory: aislamiento entre namespaces en las operaciones por Id
     function RunMemoryScenario(const AScenario: string): string;
+    // Skills: formato SKILL.md, carpetas y registry PPM (falso, sin red)
+    function RunSkillsScenario(const AScenario: string): string;
     // Serializacion de tool results en la familia OpenAI-compatible
     function RunChatScenario(const AScenario: string): string;
     // Montaje CONCURRENTE de conexiones, tal y como lo hace un servidor que
@@ -77,6 +79,7 @@ uses
   // consola tienen que estar enlazados en el ejecutable.
   FireDAC.Stan.Def, FireDAC.Stan.Async, FireDAC.Phys.SQLite, FireDAC.ConsoleUI.Wait,
   uMakerAi.Memory, uMakerAi.Memory.Types,
+  uMakerAi.Skills.Format, uMakerAi.Prompts,
   uRegression.Fixtures;
 
 const
@@ -85,6 +88,7 @@ const
   PORT_MCP_LEGACY = 18791;
   PORT_A2A        = 18792;
   PORT_A2A_REMOTE = 18793;
+  PORT_PPM        = 18794;
 
 { TRegressionSuite }
 
@@ -288,6 +292,46 @@ begin
   FRunner.AddCase('memory.namespace.id-isolation')
     .Input('memory:namespace-id-isolation')
     .ExpectEquals('nil|0|canario A|1|2');
+
+  // --- Skills: formato SKILL.md (parser comun de uMakerAi.Skills.Format) ---
+  // Frontmatter con comillas, comentario '#', escalar partido en dos lineas,
+  // lista '- x' y bloque '>'. Salida:
+  // name|description|model|tools|extra.notes|cuerpo|HasFrontmatter
+  FRunner.AddCase('skills.format.frontmatter')
+    .Input('skills:format-frontmatter')
+    .ExpectEquals('revisor|Revisa codigo en busca de errores.|claude-opus-4-6|Read,Grep|' +
+      'linea uno linea dos|Cuerpo del skill.|True');
+
+  // allowed-tools en linea, con corchetes y comillas, y cuerpo vacio
+  FRunner.AddCase('skills.format.inline-tools')
+    .Input('skills:format-inline-tools')
+    .ExpectEquals('Read,Bash|');
+
+  // Un Markdown sin frontmatter tambien es un skill: todo es cuerpo
+  FRunner.AddCase('skills.format.no-frontmatter')
+    .Input('skills:format-no-frontmatter')
+    .ExpectEquals('False|# Titulo\nTexto');
+
+  // Carpeta de skills: <carpeta>/<nombre>/SKILL.md. Sin 'name' en el
+  // frontmatter se usa el nombre de la carpeta; las carpetas sin SKILL.md
+  // se ignoran.
+  FRunner.AddCase('skills.format.folder')
+    .Input('skills:format-folder')
+    .ExpectEquals('2|alfa,beta-renombrado');
+
+  // Registry PPM (falso): el nombre sin prefijo se resuelve a 'skill-demo', la
+  // version es la mayor por semver sin contar la retirada (1.10.0, no 1.2.0),
+  // y TAiPrompts.LoadSkillFromPPM usa el mismo camino.
+  FRunner.AddCase('skills.ppm.resolve')
+    .Input('skills:ppm-resolve')
+    .ExpectEquals('1.10.0|demo|Instrucciones de la version 1.10.0|claude-opus-4-6|Read');
+
+  // Errores claros: paquete inexistente, paquete que no es skill y un 200
+  // con HTML (lo que devolvia la URL vieja de TAiSkill.FromPPM, que terminaba
+  // en "JSON invalido"). TAiPrompts conserva su contrato: nil sin excepcion.
+  FRunner.AddCase('skills.ppm.errors')
+    .Input('skills:ppm-errors')
+    .ExpectEquals('notfound|type|html|nil');
 
   // --- RAG: busqueda sin SearchOptions ---
   // Reventaba con AV: IfThen evalua las dos ramas, asi que
@@ -625,6 +669,8 @@ begin
     Result := RunRagScenario(AScenario)
   else if AScenario.StartsWith('memory:') then
     Result := RunMemoryScenario(AScenario)
+  else if AScenario.StartsWith('skills:') then
+    Result := RunSkillsScenario(AScenario)
   else if AScenario.StartsWith('chat:') then
     Result := RunChatScenario(AScenario)
   else if AScenario.StartsWith('policy:') then
@@ -3266,6 +3312,149 @@ begin
     if TFile.Exists(LPath) then
       TFile.Delete(LPath);
   end;
+end;
+
+function TRegressionSuite.RunSkillsScenario(const AScenario: string): string;
+var
+  Doc: TAiSkillDoc;
+  Registry: TFakePPMRegistry;
+  Prompts: TAiPrompts;
+  Item: TAiPromptItem;
+  Dir, RegUrl: string;
+  Files: TArray<string>;
+  Names: TStringList;
+  F: string;
+
+  function ErrorKind(const AName, ARegistry, AKeyword, AKind: string): string;
+  begin
+    try
+      TAiSkillDoc.FromPPM(AName, '', ARegistry).Free;
+      Result := 'sin-error';
+    except
+      on E: EAiSkillError do
+        if Pos(AKeyword, E.Message) > 0 then Result := AKind else Result := E.Message;
+    end;
+  end;
+
+begin
+  RegUrl := 'http://127.0.0.1:' + IntToStr(PORT_PPM);
+
+  if AScenario = 'skills:format-frontmatter' then
+  begin
+    Doc := TAiSkillDoc.Parse(
+      '---'#13#10 +
+      'name: "revisor"'#13#10 +
+      'description: Revisa codigo'#13#10 +
+      '  en busca de errores.'#13#10 +
+      'model: claude-opus-4-6  # opcional'#13#10 +
+      'allowed-tools:'#13#10 +
+      '  - Read'#13#10 +
+      '  - Grep'#13#10 +
+      'notes: >'#13#10 +
+      '  linea uno'#13#10 +
+      '  linea dos'#13#10 +
+      '---'#13#10 +
+      #13#10 +
+      'Cuerpo del skill.'#13#10);
+    try
+      Result := Doc.Name + '|' + Doc.Description + '|' + Doc.Model + '|' +
+        String.Join(',', Doc.AllowedTools.ToStringArray) + '|' +
+        Doc.Extra.Values['notes'] + '|' + Doc.Body + '|' + BoolToStr(Doc.HasFrontmatter, True);
+    finally
+      Doc.Free;
+    end;
+  end
+  else if AScenario = 'skills:format-inline-tools' then
+  begin
+    Doc := TAiSkillDoc.Parse('---'#10'allowed-tools: [Read, "Bash"]'#10'---'#10);
+    try
+      Result := String.Join(',', Doc.AllowedTools.ToStringArray) + '|' + Doc.Body;
+    finally
+      Doc.Free;
+    end;
+  end
+  else if AScenario = 'skills:format-no-frontmatter' then
+  begin
+    Doc := TAiSkillDoc.Parse('# Titulo'#13#10'Texto');
+    try
+      Result := BoolToStr(Doc.HasFrontmatter, True) + '|' + Doc.Body.Replace(#10, '\n');
+    finally
+      Doc.Free;
+    end;
+  end
+  else if AScenario = 'skills:format-folder' then
+  begin
+    Dir := TPath.Combine(TPath.GetTempPath, 'makerai_regress_skills');
+    if TDirectory.Exists(Dir) then
+      TDirectory.Delete(Dir, True);
+    TDirectory.CreateDirectory(TPath.Combine(Dir, 'alfa'));
+    TDirectory.CreateDirectory(TPath.Combine(Dir, 'beta'));
+    TDirectory.CreateDirectory(TPath.Combine(Dir, 'gamma'));
+    TFile.WriteAllText(TPath.Combine(Dir, 'alfa\SKILL.md'),
+      '---'#10'description: sin nombre'#10'---'#10'Uno', TEncoding.UTF8);
+    TFile.WriteAllText(TPath.Combine(Dir, 'beta\SKILL.md'),
+      '---'#10'name: beta-renombrado'#10'---'#10'Dos', TEncoding.UTF8);
+    TFile.WriteAllText(TPath.Combine(Dir, 'gamma\LEEME.md'), 'no es un skill', TEncoding.UTF8);
+    Names := TStringList.Create;
+    try
+      Files := TAiSkillDoc.FindSkillFiles(Dir);
+      for F in Files do
+      begin
+        Doc := TAiSkillDoc.FromFile(F);
+        try
+          Names.Add(Doc.Name);
+        finally
+          Doc.Free;
+        end;
+      end;
+      Result := IntToStr(Length(Files)) + '|' + String.Join(',', Names.ToStringArray);
+    finally
+      Names.Free;
+      TDirectory.Delete(Dir, True);
+    end;
+  end
+  else if AScenario = 'skills:ppm-resolve' then
+  begin
+    Registry := TFakePPMRegistry.Create(PORT_PPM);
+    Prompts := TAiPrompts.Create(nil);
+    try
+      Doc := TAiSkillDoc.FromPPM('demo', '', RegUrl);
+      try
+        Result := Doc.Version + '|' + Doc.Name + '|' + Doc.Body;
+      finally
+        Doc.Free;
+      end;
+      Prompts.PPMRegistryUrl := RegUrl;
+      Item := Prompts.LoadSkillFromPPM('skill-demo');
+      if Assigned(Item) then
+        Result := Result + '|' + Item.SkillModel + '|' + Item.SkillAllowedTools
+      else
+        Result := Result + '|nil';
+    finally
+      Prompts.Free;
+      Registry.Free;
+    end;
+  end
+  else if AScenario = 'skills:ppm-errors' then
+  begin
+    Registry := TFakePPMRegistry.Create(PORT_PPM);
+    Prompts := TAiPrompts.Create(nil);
+    try
+      Result := ErrorKind('nada', RegUrl, 'no encontrado', 'notfound') + '|' +
+        ErrorKind('un-prompt', RegUrl, 'tipo "prompt"', 'type') + '|' +
+        ErrorKind('skill-demo', RegUrl + '/html', 'HTML', 'html');
+      Prompts.PPMRegistryUrl := RegUrl;
+      if Assigned(Prompts.LoadSkillFromPPM('nada')) then
+        Result := Result + '|item'
+      else
+        Result := Result + '|nil';
+    finally
+      Prompts.Free;
+      Registry.Free;
+    end;
+  end
+  else
+    raise Exception.Create('Escenario de skills desconocido: ' + AScenario);
 end;
 
 function TRegressionSuite.RunPolicyScenario(const AScenario: string): string;

@@ -166,6 +166,7 @@
         <DCCReference Include="..\Core\uMakerAi.Core.pas"/>
         <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Prompts.pas"/>
+        <DCCReference Include="..\Core\uMakerAi.Skills.Format.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Utils.CodeExtractor.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Utils.PcmToWav.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Utils.System.pas"/>
