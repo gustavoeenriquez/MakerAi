@@ -826,6 +826,17 @@ begin
 
     // 3. Par?metros de Configuraci?n
     JResult.AddPair('store', FStore);
+
+    // Tope de salida. El Responses API lo llama max_output_tokens (e INCLUYE
+    // los tokens de razonamiento). Hasta 2026-09-30 este driver no lo emitia
+    // nunca y el Max_tokens del componente se ignoraba en silencio: un cliente
+    // pidiendo max_tokens=200 recibia miles de tokens. Solo se emite con valor
+    // explicito (>0): el comportamiento historico era "sin tope", y emitir el
+    // default 3000 del componente cortaria a los razonadores a mitad de cadena
+    // -- quien no quiera tope debe poner Max_tokens en 0.
+    if Max_tokens > 0 then
+      JResult.AddPair('max_output_tokens',
+        TJSONNumber.Create(System.Math.Max(Max_tokens, 16)));
     if FTruncation <> 'disabled' then
       JResult.AddPair('truncation', FTruncation);
 
