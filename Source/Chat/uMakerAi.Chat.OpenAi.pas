@@ -3527,8 +3527,26 @@ begin
         end
 
         // --- G) ERRORES ---
-        else if EventType = 'error' then
-          DoStateChange(acsError, JsonEvent.ToString);
+        // response.failed es el cierre de un turno FALLIDO (trae response.error);
+        // 'error' es el fallo suelto del protocolo. Ambos deben terminar por la
+        // via de error de verdad: DoStateChange(acsError) a secas NO dispara
+        // OnError, asi que el consumidor no se enteraba y esperaba su timeout,
+        // el mismo silencio que tenia response.incomplete.
+        else if (EventType = 'error') or (EventType = 'response.failed') then
+        begin
+          FBusy := False;
+          var LErrMsg := '';
+          if (EventType = 'response.failed') and
+             JsonEvent.TryGetValue<TJSonObject>('response', JResp) then
+          begin
+            var JErrV := JResp.GetValue('error');
+            if Assigned(JErrV) and (JErrV is TJSonObject) then
+              TJSonObject(JErrV).TryGetValue<string>('message', LErrMsg);
+          end;
+          if LErrMsg = '' then
+            LErrMsg := JsonEvent.ToString;
+          DoError(LErrMsg, nil);
+        end;
 
       finally
         JsonEvent.Free;
