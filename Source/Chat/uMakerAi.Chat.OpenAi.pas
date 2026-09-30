@@ -3359,7 +3359,11 @@ begin
         // ---------------------------------------------------------------------
         // F) FINALIZACI?N (METADATOS DE COSTOS, EXTRACTION Y RECURSI?N)
         // ---------------------------------------------------------------------
-        else if EventType = 'response.completed' then
+        // response.incomplete es el cierre de un stream TRUNCADO (max_output_tokens
+        // o content filter): mismo payload que completed, con incomplete_details.
+        // Hasta 2026-09-30 solo se atendia 'completed' y un stream truncado no
+        // disparaba OnReceiveDataEnd: el consumidor esperaba hasta su timeout.
+        else if (EventType = 'response.completed') or (EventType = 'response.incomplete') then
         begin
           if FRecursionNeeded then
           begin
@@ -3447,6 +3451,11 @@ begin
               end;
               if JResp.TryGetValue<string>('model', DeltaVal) then
                 FinalMsg.Model := DeltaVal;
+              // Motivo del truncado, igual que en el modo sincrono (ParseChat).
+              var JIncStream := JResp.GetValue('incomplete_details');
+              if Assigned(JIncStream) and (JIncStream is TJSonObject) and
+                 TJSonObject(JIncStream).TryGetValue<string>('reason', DeltaVal) then
+                FinalMsg.FinishReason := DeltaVal;
             end;
 
             // --- Persistir el texto acumulado en el mensaje (antes solo viajaba
