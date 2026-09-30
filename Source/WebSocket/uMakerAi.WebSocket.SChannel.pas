@@ -365,15 +365,20 @@ begin
 end;
 
 // -----------------------------------------------------------------------
-// Diagnóstico SChannel (escribe a C:\Temp\schannel_diag.txt)
+// Diagnóstico SChannel (solo con MAKERAI_SCHANNEL_DIAG; escribe a C:\Temp\schannel_diag.txt)
 // -----------------------------------------------------------------------
 
 procedure ScDiag(const S: string);
+{$IFDEF MAKERAI_SCHANNEL_DIAG}
 const
   LOG = 'C:\Temp\schannel_diag.txt';
 begin
   try System.IOUtils.TFile.AppendAllText(LOG, S + sLineBreak); except end;
 end;
+{$ELSE}
+begin
+end;
+{$ENDIF}
 
 // -----------------------------------------------------------------------
 // SChannel — handshake TLS

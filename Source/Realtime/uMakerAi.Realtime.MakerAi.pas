@@ -125,7 +125,7 @@ implementation
 const
   CMAKERAIREALTIME_WSS  = 'wss://api.cimamaker.com/v1/audio/realtime';
   CMAKERAIREALTIME_SUBP = 'realtime';
-  CMAKERAIREALTIME_LOG  = {$IFDEF MSWINDOWS}'C:\Temp\makerai_ws.log'{$ELSE}'/tmp/makerai_ws.log'{$ENDIF}; // '' para deshabilitar
+  CMAKERAIREALTIME_LOG  = ''; // debug: 'C:\Temp\makerai_ws.log' (Windows) o '/tmp/makerai_ws.log'
 
 procedure MkLog(const AMsg: string);
 begin

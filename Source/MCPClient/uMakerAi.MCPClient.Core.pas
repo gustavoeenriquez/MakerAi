@@ -400,9 +400,9 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Log a disco para debug de shutdown — solo activo en builds DEBUG
+// Log a disco para debug de shutdown — solo con el define MAKERAI_MCP_SHUTDOWN_LOG
 // ---------------------------------------------------------------------------
-{$IFDEF DEBUG}
+{$IFDEF MAKERAI_MCP_SHUTDOWN_LOG}
 var
   GMCPShutdownLog: string = 'C:\temp\mcp_shutdown.log';
 
@@ -425,7 +425,7 @@ begin
     // silencioso — no queremos AV dentro del logger
   end;
 end;
-{$ENDIF DEBUG}
+{$ENDIF MAKERAI_MCP_SHUTDOWN_LOG}
 
 { TMCPClientCustom }
 
@@ -462,22 +462,22 @@ end;
 
 destructor TMCPClientCustom.Destroy;
 begin
-  {$IFDEF DEBUG} MCPLog('TMCPClientCustom.Destroy BEGIN name=' + FName); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('TMCPClientCustom.Destroy BEGIN name=' + FName); {$ENDIF}
 
   if FOwnsServerProcess then
   begin
-    {$IFDEF DEBUG} MCPLog('  InternalStopLocalServerProcess...'); {$ENDIF}
+    {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  InternalStopLocalServerProcess...'); {$ENDIF}
     InternalStopLocalServerProcess;
-    {$IFDEF DEBUG} MCPLog('  InternalStopLocalServerProcess OK'); {$ENDIF}
+    {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  InternalStopLocalServerProcess OK'); {$ENDIF}
   end;
 
-  {$IFDEF DEBUG} MCPLog('  FTools.Free...'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FTools.Free...'); {$ENDIF}
   FTools.Free;
-  {$IFDEF DEBUG} MCPLog('  FParams.Free...'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FParams.Free...'); {$ENDIF}
   FParams.Free;
-  {$IFDEF DEBUG} MCPLog('  FDisabledFunctions.Free...'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FDisabledFunctions.Free...'); {$ENDIF}
   FDisabledFunctions.Free;
-  {$IFDEF DEBUG} MCPLog('  FEnvVars.Free...'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FEnvVars.Free...'); {$ENDIF}
   FEnvVars.Free;
   FCallLock.Free;
   inherited;
@@ -904,13 +904,13 @@ var
 begin
   // La conexión persistente se cierra aquí automáticamente.
   // No es necesario llamar Disconnect() antes de liberar el componente.
-  {$IFDEF DEBUG} MCPLog('TMCPClientStdIo.Destroy BEGIN name=' + Self.Name); {$ENDIF}
-  {$IFDEF DEBUG} MCPLog('  InternalStopServerProcess...'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('TMCPClientStdIo.Destroy BEGIN name=' + Self.Name); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  InternalStopServerProcess...'); {$ENDIF}
   InternalStopServerProcess;
-  {$IFDEF DEBUG} MCPLog('  InternalStopServerProcess OK'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  InternalStopServerProcess OK'); {$ENDIF}
   if Assigned(FIncomingMessages) then
   begin
-    {$IFDEF DEBUG} MCPLog('  FIncomingMessages.DoShutDown...'); {$ENDIF}
+    {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FIncomingMessages.DoShutDown...'); {$ENDIF}
     FIncomingMessages.DoShutDown;
     while FIncomingMessages.PopItem(LJson) = wrSignaled do
     Begin
@@ -918,13 +918,13 @@ begin
         Break;
       LJson.Free;
     End;
-    {$IFDEF DEBUG} MCPLog('  FreeAndNil(FIncomingMessages)...'); {$ENDIF}
+    {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FreeAndNil(FIncomingMessages)...'); {$ENDIF}
     FreeAndNil(FIncomingMessages);
-    {$IFDEF DEBUG} MCPLog('  FIncomingMessages freed OK'); {$ENDIF}
+    {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FIncomingMessages freed OK'); {$ENDIF}
   end;
-  {$IFDEF DEBUG} MCPLog('TMCPClientStdIo.Destroy END - calling inherited...'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('TMCPClientStdIo.Destroy END - calling inherited...'); {$ENDIF}
   inherited;
-  {$IFDEF DEBUG} MCPLog('TMCPClientStdIo.Destroy inherited OK'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('TMCPClientStdIo.Destroy inherited OK'); {$ENDIF}
 end;
 
 function TMCPClientStdIo.IsServerRunning: Boolean;
@@ -1194,7 +1194,7 @@ begin
   if not FIsRunning and not Assigned(FReadThread) and not Assigned(FInteractiveProcess) then
     Exit;
 
-  {$IFDEF DEBUG} MCPLog('InternalStopServerProcess BEGIN name=' + Self.Name + ' FIsRunning=' + BoolToStr(FIsRunning, True)); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('InternalStopServerProcess BEGIN name=' + Self.Name + ' FIsRunning=' + BoolToStr(FIsRunning, True)); {$ENDIF}
   DoLog('Stopping MCP server process...');
   DoStatusUpdate('Stopping server...');
   try
@@ -1209,25 +1209,25 @@ begin
     //   3. Liberar FInteractiveProcess → ya nadie lo usa.
     if Assigned(FInteractiveProcess) then
     begin
-      {$IFDEF DEBUG} MCPLog('  Terminate process...'); {$ENDIF}
+      {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  Terminate process...'); {$ENDIF}
       FInteractiveProcess.Terminate;  // mata el proceso; el objeto sigue vivo
-      {$IFDEF DEBUG} MCPLog('  Terminate OK'); {$ENDIF}
+      {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  Terminate OK'); {$ENDIF}
     end;
 
     if Assigned(FReadThread) then
     begin
-      {$IFDEF DEBUG} MCPLog('  WaitFor thread...'); {$ENDIF}
+      {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  WaitFor thread...'); {$ENDIF}
       FReadThread.WaitFor;           // thread ya salió (pipe cerrado + FIsRunning=False)
       FreeAndNil(FReadThread);
-      {$IFDEF DEBUG} MCPLog('  Thread freed'); {$ENDIF}
+      {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  Thread freed'); {$ENDIF}
     end;
 
     // Ahora sí es seguro liberar el objeto del proceso
     if Assigned(FInteractiveProcess) then
     begin
-      {$IFDEF DEBUG} MCPLog('  Free FInteractiveProcess...'); {$ENDIF}
+      {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  Free FInteractiveProcess...'); {$ENDIF}
       TUtilsSystem.StopInteractiveProcess(FInteractiveProcess);
-      {$IFDEF DEBUG} MCPLog('  FInteractiveProcess freed'); {$ENDIF}
+      {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FInteractiveProcess freed'); {$ENDIF}
     end;
 
     DoLog('MCP Server stopped.');
