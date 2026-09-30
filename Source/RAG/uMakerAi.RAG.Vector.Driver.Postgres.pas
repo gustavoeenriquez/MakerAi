@@ -114,6 +114,8 @@ procedure Register;
 
 implementation
 
+{$R ..\Resources\uMakerAiRAGDriversIcons.res}  // iconos de paleta del paquete
+
 procedure Register;
 begin
   RegisterComponents('MakerAI.RAG.Drivers', [TAiRAGVectorPostgresDriver]);

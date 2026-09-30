@@ -1,0 +1,10 @@
+//------------------------------------------------------------------------------
+// Iconos de paleta de MakerAi.RAG.Drivers.dpk
+// Generado a partir de gen_icons.py; se enlaza desde uMakerAi.RAG.Vector.Driver.Postgres.pas
+//------------------------------------------------------------------------------
+TAIMEMORY                      BITMAP "icons\TAiMemory_24.bmp"
+TAIRAGVECTORPOSTGRESDRIVER     BITMAP "icons\TAiRAGVectorPostgresDriver_24.bmp"
+TAIRAGVECTORMSSQLDRIVER        BITMAP "icons\TAiRAGVectorMSSQLDriver_24.bmp"
+TAIRAGVECTORSQLITEDRIVER       BITMAP "icons\TAiRAGVectorSQLiteDriver_24.bmp"
+TAIMKVECDRIVER                 BITMAP "icons\TAiMkVecDriver_24.bmp"
+TAIRAGGRAPHPOSTGRESDRIVER      BITMAP "icons\TAiRagGraphPostgresDriver_24.bmp"
