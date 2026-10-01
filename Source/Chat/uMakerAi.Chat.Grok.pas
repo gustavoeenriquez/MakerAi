@@ -130,7 +130,7 @@ Var
   I: Integer;
   LAsincronico: Boolean;
   Res, LModel: String;
-  LIsRestrictedModel, LSupportsReasoningEffort: Boolean;
+  LIsRestrictedModel, LSupportsReasoningEffort, LLegacyReasoningEffort: Boolean;
 begin
 
   If User = '' then
@@ -146,9 +146,13 @@ begin
   // endpoint compatible con modelos antiguos.
   LIsRestrictedModel       := LModel.StartsWith('grok-4') or LModel.StartsWith('grok-build') or
                               LModel.StartsWith('grok-3-mini') or (LModel = 'grok-code-fast-1');
-  // reasoning_effort solo era valido en grok-3-mini (retirado); la familia actual
-  // razona siempre y NO acepta el parametro
-  LSupportsReasoningEffort := LModel.StartsWith('grok-3-mini');
+  // reasoning_effort. Medido contra api.x.ai el 2026-10-01: grok-4.3, 4.6 y 4.7
+  // aceptan low / medium / high / xhigh; grok-build-0.1 lo RECHAZA con 400
+  // ("does not support parameter reasoningEffort"). Antes solo se enviaba a
+  // grok-3-mini y el nivel que pedia el cliente para un grok-4 se perdia en
+  // silencio. grok-3-mini (retirado) solo conocia low/high.
+  LLegacyReasoningEffort   := LModel.StartsWith('grok-3-mini');
+  LSupportsReasoningEffort := LModel.StartsWith('grok-4') or LLegacyReasoningEffort;
 
   LAsincronico := Self.Asynchronous;
 
@@ -160,6 +164,16 @@ begin
   Try
 
     AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
+
+    // En streaming xAI solo manda el bloque usage si se pide (medido el
+    // 2026-09-28): sin esto el turno terminaba con Prompt_tokens =
+    // Completion_tokens = 0 y quien facture por tokens cobraba cero.
+    if LAsincronico then
+    begin
+      var jStreamOpts := TJSonObject.Create;
+      jStreamOpts.AddPair('include_usage', TJSONBool.Create(True));
+      AJSONObject.AddPair('stream_options', jStreamOpts);
+    end;
 
     If Tool_Active and (Trim(GetTools(TToolFormat.tfOpenAI).Text) <> '') then
     Begin
@@ -205,15 +219,26 @@ begin
     if ModelConfig.Format <> '' then
       AJSONObject.AddPair('reasoning_format', ModelConfig.Format); // 'parsed, raw, hidden';
 
-    // reasoning_effort: solo valido en grok-3-mini / grok-3-mini-fast (valores: 'low', 'high')
-    // grok-4 series tiene reasoning siempre activo y NO acepta este parametro
+    // reasoning_effort (ver LSupportsReasoningEffort). Escalera de xAI:
+    // low / medium / high (default) / xhigh. tlNone no existe en xAI (los grok-4
+    // razonan siempre): se manda el minimo, low. tlDefault no envia nada.
     if LSupportsReasoningEffort and (ModelConfig.ThinkingLevel <> tlDefault) then
     begin
-      case ModelConfig.ThinkingLevel of
-        tlLow:  AJSONObject.AddPair('reasoning_effort', 'low');
-        tlHigh: AJSONObject.AddPair('reasoning_effort', 'high');
-        // tlMedium no tiene mapeo en xAI: no enviar, la API usa su default
-      end;
+      if LLegacyReasoningEffort then
+      begin
+        // grok-3-mini solo conocia low/high
+        case ModelConfig.ThinkingLevel of
+          tlNone, tlMinimal, tlLow, tlMedium: AJSONObject.AddPair('reasoning_effort', 'low');
+          tlHigh, tlXHigh, tlMax:             AJSONObject.AddPair('reasoning_effort', 'high');
+        end;
+      end
+      else
+        case ModelConfig.ThinkingLevel of
+          tlNone, tlMinimal, tlLow: AJSONObject.AddPair('reasoning_effort', 'low');
+          tlMedium:                 AJSONObject.AddPair('reasoning_effort', 'medium');
+          tlHigh:                   AJSONObject.AddPair('reasoning_effort', 'high');
+          tlXHigh, tlMax:           AJSONObject.AddPair('reasoning_effort', 'xhigh');
+        end;
     end;
 
     AJSONObject.AddPair('user', User);
@@ -275,6 +300,10 @@ begin
 
     If Seed > 0 then
       AJSONObject.AddPair('seed', TJSONNumber.Create(Seed));
+
+    // Como la clase base: sin esto ModelConfig.ModelExtraBodyParams no llegaba
+    // nunca a Grok porque este override no lo llamaba.
+    ApplyExtraBodyParams(AJSONObject);
 
     Res := UTF8ToString(UTF8Encode(AJSONObject.ToJSON));
 
