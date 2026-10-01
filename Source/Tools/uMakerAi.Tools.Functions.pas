@@ -4004,6 +4004,7 @@ var
   PropName: string;
   I: Integer;
   ExistsInReq: Boolean;
+  TypeV: TJSONValue;
 begin
   if not(ASchema is TJSonObject) then
     Exit;
@@ -4011,7 +4012,13 @@ begin
   JObj := TJSonObject(ASchema);
 
   // Verificamos si es un objeto (tiene propiedades o es type object expl�cito)
-  if (JObj.TryGetValue<TJSonObject>('properties', JProps)) or (JObj.GetValue<string>('type') = 'object') then
+  // 'type' puede ser un ARRAY en JSON Schema (p.ej. ["integer","string"]):
+  // GetValue<string> revienta con TJSONArray (visto 2026-09-30 con las tools
+  // de memoria de MKAIServer contra gpt-6). Lectura tolerante: aqui solo
+  // interesa saber si el nodo es un objeto.
+  TypeV := JObj.GetValue('type');
+  if (JObj.TryGetValue<TJSonObject>('properties', JProps)) or
+     ((TypeV is TJSONString) and (TJSONString(TypeV).Value = 'object')) then
   begin
     // REGLA 1: additionalProperties: false es OBLIGATORIO
     if JObj.GetValue('additionalProperties') <> nil then
