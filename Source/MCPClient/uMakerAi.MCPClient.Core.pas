@@ -319,7 +319,12 @@ type
     FSSEThread: TThread;         // Raw TCP SSE reader thread (replaces TNetHTTPClient async GET)
     FIncomingMessages: TThreadedQueue<TJSONObject>;
     FPostEndpoint: string;
-    FRequestIDCounter: Integer;
+    FRequestIDCounter: Integer;  // solo con AtomicIncrement: el cliente pooled es concurrente
+    // Respuestas que un hilo sacó de la cola pero son de OTRO request en vuelo.
+    // Antes se liberaban: con dos tools/call en paralelo sobre el mismo cliente
+    // la respuesta ajena se perdía y su dueño esperaba CallToolTimeoutMs (180 s).
+    FPendingLock: TCriticalSection;
+    FStashedResponses: TObjectDictionary<Integer, TJSONObject>;
     FIsConnected: Boolean;
     FStopRequested: Boolean;
     FAsyncOpDone: Boolean;       // Set when the SSE thread exits; destructor waits on this
@@ -2760,6 +2765,8 @@ begin
   FSSEThread := nil;
   FIncomingMessages := TThreadedQueue<TJSONObject>.Create(1000, INFINITE, 100);
   FRequestIDCounter := 0;
+  FPendingLock := TCriticalSection.Create;
+  FStashedResponses := TObjectDictionary<Integer, TJSONObject>.Create([doOwnsValues]);
   FIsConnected := False;
   FAsyncOpDone := True; // no async op in progress yet
   FProgressLock := TCriticalSection.Create;
@@ -2809,6 +2816,8 @@ begin
     FreeAndNil(FIncomingMessages);
   end;
 
+  FStashedResponses.Free;  // doOwnsValues: libera las respuestas huérfanas
+  FPendingLock.Free;
   FThreadProgressHandlers.Free;
   FTokenProgressHandlers.Free;
   FThreadBillingHandlers.Free;
@@ -3212,18 +3221,23 @@ var
   Source: TStringStream;
   LHeaders: TNetHeaders;
   LocalClient: TNetHTTPClient;
+  LId: Integer;
 begin
   if FPostEndpoint = '' then
     raise EMCPClientException.Create('Cannot send request: Post Endpoint not initialized.');
 
   Req := TJSONObject.Create;
   try
-    Inc(FRequestIDCounter);
+    // El id va en una variable LOCAL. Antes era Inc(FRequestIDCounter) y luego
+    // se esperaba FRequestIDCounter: con dos tools/call en paralelo (el driver
+    // de Claude lanza una TTask por tool_use) los dos hilos esperaban el id del
+    // segundo y el primero agotaba el timeout.
+    LId := AtomicIncrement(FRequestIDCounter);
     Req.AddPair('jsonrpc', '2.0');
     Req.AddPair('method', AMethod);
 
     if not AMethod.StartsWith('notifications/') then
-      Req.AddPair('id', FRequestIDCounter);
+      Req.AddPair('id', LId);
 
     if Assigned(AParams) then
       Req.AddPair('params', AParams);
@@ -3266,10 +3280,10 @@ begin
     // configurable via Params['CallToolTimeoutMs'] (default 180 s) que adem?s
     // se extiende mientras el servidor siga enviando notifications/progress.
     if AMethod = 'tools/call' then
-      Result := InternalReceiveJSONResponse(FRequestIDCounter,
+      Result := InternalReceiveJSONResponse(LId,
         StrToIntDef(GetParamByName('CallToolTimeoutMs'), 180000))
     else
-      Result := InternalReceiveJSONResponse(FRequestIDCounter);
+      Result := InternalReceiveJSONResponse(LId);
 
   finally
     Req.Free;
@@ -3284,6 +3298,7 @@ var
   LJson: TJSONObject;
   Sw: TStopwatch;
   Id: Integer;
+  WR: TWaitResult;
 
   function StillWaiting: Boolean;
   begin
@@ -3294,27 +3309,73 @@ var
        (Sw.ElapsedMilliseconds < ABS_MAX_WAIT_MS));
   end;
 
+  // Extrae el 'result' (o el mensaje entero si es un error) y libera AJson
+  function TakeResult(AJson: TJSONObject): TJSONObject;
+  var
+    ResVal: TJSONValue;
+  begin
+    if AJson.TryGetValue('result', ResVal) and (ResVal is TJSONObject) then
+      Result := TJSONObject(ResVal.Clone)
+    else
+      Result := TJSONObject(AJson.Clone);
+    AJson.Free;
+  end;
+
+  // ¿Otro hilo ya sacó de la cola la respuesta de ESTE request?
+  function TryTakeStashed(out AJson: TJSONObject): Boolean;
+  begin
+    FPendingLock.Enter;
+    try
+      Result := FStashedResponses.ContainsKey(AExpectedID);
+      if Result then
+        AJson := FStashedResponses.ExtractPair(AExpectedID).Value;
+    finally
+      FPendingLock.Leave;
+    end;
+  end;
+
 begin
   Result := nil;
   Sw := TStopwatch.StartNew;
 
+  // El cliente pooled atiende varios requests a la vez y todos comparten UNA
+  // cola. Quien saca una respuesta ajena la deja en FStashedResponses para su
+  // dueño en vez de liberarla (eso perdía respuestas: ver la declaración).
   while StillWaiting do
   begin
-    if FIncomingMessages.PopItem(LJson) = wrSignaled then
+    if TryTakeStashed(LJson) then
+      Exit(TakeResult(LJson));
+
+    // PopItem espera hasta 100 ms (PopTimeout de la cola). Cualquier otro
+    // resultado que no sea wrSignaled/wrTimeout vuelve al instante: pausa para
+    // no girar en seco.
+    WR := FIncomingMessages.PopItem(LJson);
+    if (WR <> wrSignaled) and (WR <> wrTimeout) then
+      Sleep(10);
+    if WR = wrSignaled then
     begin
-      if LJson.TryGetValue('id', Id) and (Id = AExpectedID) then
+      // Tras DoShutDown con la cola vacía PopItem devuelve wrSignaled con nil
+      // (ver el destructor: así se quemaron núcleos en calera1).
+      if LJson = nil then
+        Break;
+      if LJson.TryGetValue('id', Id) then
       begin
-        var
-          ResVal: TJSonValue;
-        if LJson.TryGetValue('result', ResVal) and (ResVal is TJSONObject) then
-          Result := TJSONObject(ResVal.Clone)
-        else
-          Result := TJSONObject(LJson.Clone);
-        LJson.Free;
-        Exit;
+        if Id = AExpectedID then
+          Exit(TakeResult(LJson));
+        FPendingLock.Enter;
+        try
+          // Tope de higiene: respuestas cuyo dueño ya agotó su timeout nunca
+          // se reclaman. Con 256 pendientes algo va muy mal; se descartan.
+          if FStashedResponses.Count >= 256 then
+            FStashedResponses.Clear;
+          FStashedResponses.AddOrSetValue(Id, LJson);
+        finally
+          FPendingLock.Leave;
+        end;
+        Continue;  // puede haber más en la cola: sin esperar
       end
       else
-        LJson.Free;
+        LJson.Free;  // sin id: una notificación ya despachada por el lector
     end;
 
     if not FIsConnected then
@@ -3322,7 +3383,6 @@ begin
       DoLog(Format('SSE: Connection lost while waiting for response id=%d', [AExpectedID]));
       Break;
     end;
-    Sleep(10);
   end;
   if Result = nil then
     DoLog(Format('SSE: Timeout/nil for response id=%d (waited %dms)', [AExpectedID, Sw.ElapsedMilliseconds]));
