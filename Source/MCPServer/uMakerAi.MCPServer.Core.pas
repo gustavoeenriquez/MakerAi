@@ -347,6 +347,7 @@ type
     FAiFunctions: TAiFunctions;
     FApiKey: string;
     FOnValidateRequest: TAiMCPValidateEvent;
+    FBindAddress: string;
     function GetEndpoint: string;
     function GetPort: Integer;
     procedure SetPort(const Value: Integer);
@@ -392,6 +393,13 @@ type
     procedure LoadSettingsFromFile;
 
     property Port: Integer read GetPort write SetPort;
+    // IP local donde escuchan los transportes de red (SSE/HTTP). Vacía = todas
+    // las interfaces (comportamiento histórico). Si está vacía se usa la
+    // variable de entorno MCP_BIND_ADDRESS, así un servicio se ata a 127.0.0.1
+    // desde su unidad systemd sin recompilar el programa que lo usa.
+    property BindAddress: string read FBindAddress write FBindAddress;
+    // BindAddress o, si está vacía, MCP_BIND_ADDRESS ('' = todas)
+    function EffectiveBindAddress: string;
     property Endpoint: string read GetEndpoint;
     property CorsEnabled: Boolean read FCorsEnabled write FCorsEnabled;
     property CorsAllowedOrigins: string read FCorsAllowedOrigins write FCorsAllowedOrigins;
@@ -2008,6 +2016,13 @@ end;
 function TAiMCPServer.GetPort: Integer;
 begin
   Result := FLogicServer.Port;
+end;
+
+function TAiMCPServer.EffectiveBindAddress: string;
+begin
+  Result := Trim(FBindAddress);
+  if Result = '' then
+    Result := Trim(GetEnvironmentVariable('MCP_BIND_ADDRESS'));
 end;
 
 function TAiMCPServer.GetServerName: String;
