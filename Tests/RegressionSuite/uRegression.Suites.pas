@@ -538,6 +538,15 @@ begin
     .Input('live:overlap')
     .ExpectEquals('usuario=Hola, cual es la capital de Francia? Por favor.|' +
       'asistente=La capital de Francia es Paris.');
+  // Cuento largo (prueba real, oct 2026): el modelo hizo una pausa de 1 s entre
+  // frases y la transcripcion llego 2.5 s despues; con el reloj local solo, el
+  // cuento salia partido. La voz del audio de salida mantiene el turno abierto;
+  // sin voz, el turno queda en espera y se retoma si el modelo sigue sin una
+  // pausa real. Solo un silencio de verdad lo cierra
+  FRunner.AddCase('realtime.openai-live.story')
+    .Input('live:story')
+    .ExpectEquals('con-voz=0|sin-voz-en-espera=0|retomado=0|' +
+      'cuento=Habia una vez un dragon. Los otros dragones se burlaban. Y fue feliz.|turnos=1');
   // Delegacion a Responses: function_call dentro de response.event -> se ejecuta,
   // response.item.create con el resultado y UN response.create cuando la
   // respuesta termino (tambien si termina antes que la funcion)
@@ -5656,7 +5665,9 @@ begin
       P.Feed('{"type":"session.output_audio.delta","delta":"AAEC"}');
       CheckSynchronize(0);
       Result := Result + '|usuario=' + Sink.Turns + '|antes-silencio=' + IntToStr(Length(Sink.AText));
-      P.Clock := 3600; // 2100 ms sin texto del asistente: cierra su turno
+      P.Clock := 3600; // 2100 ms sin texto ni voz: el turno pasa a espera
+      P.Feed('{"type":"session.output_audio.delta","delta":"AAEC"}');
+      P.Clock := 4700; // 1 s en espera sin que el asistente siga: se cierra
       P.Feed('{"type":"session.output_audio.delta","delta":"AAEC"}');
       CheckSynchronize(0);
       Result := Result + '|asistente=' + Sink.AText;
@@ -5683,6 +5694,42 @@ begin
       P.Feed('{"type":"session.closed","reason":"close_requested","usage":{"seconds":26}}');
       CheckSynchronize(0);
       Result := 'usuario=' + Sink.Turns + '|asistente=' + Sink.AText;
+    end
+
+    else if AScenario = 'live:story' then
+    begin
+      P.OnAssistantText := Sink.AFull;
+      P.Clock := 0;
+      P.Feed('{"type":"session.output_transcript.delta","delta":"Habia una vez un dragon.","start_ms":1000,"end_ms":3000}');
+      // 2.5 s sin texto pero el audio sigue con voz: no se cierra
+      P.Clock := 1500;
+      P.Feed('{"type":"session.output_audio.delta","delta":"0AfQB9AH0AfQB9AH0AfQBw=="}');
+      P.Clock := 2500;
+      P.Feed('{"type":"session.output_audio.delta","delta":"0AfQB9AH0AfQB9AH0AfQBw=="}');
+      P.Clock := 4000;
+      P.Feed('{"type":"session.output_audio.delta","delta":"AAEC"}');
+      CheckSynchronize(0);
+      Result := 'con-voz=' + IntToStr(Length(Sink.AText));
+      // 2.1 s sin texto ni voz: el turno queda en espera (no se emite)
+      P.Clock := 4600;
+      P.Feed('{"type":"session.output_audio.delta","delta":"AAEC"}');
+      CheckSynchronize(0);
+      Result := Result + '|sin-voz-en-espera=' + IntToStr(Length(Sink.AText));
+      // Llega la frase siguiente: empezo 1 s despues del final -> mismo turno
+      P.Clock := 5000;
+      P.Feed('{"type":"session.output_transcript.delta","delta":" Los otros dragones se burlaban.","start_ms":4000,"end_ms":6000}');
+      CheckSynchronize(0);
+      Result := Result + '|retomado=' + IntToStr(Length(Sink.AText));
+      P.Clock := 5200;
+      P.Feed('{"type":"session.output_transcript.delta","delta":" Y fue feliz.","start_ms":6200,"end_ms":7000}');
+      // Fin real: 2 s sin texto ni voz, mas 1 s en espera
+      P.Clock := 7300;
+      P.Feed('{"type":"session.output_audio.delta","delta":"AAEC"}');
+      P.Clock := 8400;
+      P.Feed('{"type":"session.output_audio.delta","delta":"AAEC"}');
+      CheckSynchronize(0);
+      Result := Result + '|cuento=' + Sink.AText + '|turnos=' +
+        IntToStr(Length(Sink.AText.Split(['|'])));
     end
 
     else if AScenario = 'live:tools' then

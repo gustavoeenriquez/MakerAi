@@ -37,7 +37,10 @@
 //         el turno en curso sigue sumando;
 //       * un fragmento que empezo antes que el turno actual es transcripcion
 //         atrasada del turno anterior (se espera hasta 1 s);
-//       * el turno del asistente se cierra tras 2 s sin texto nuevo.
+//       * el turno del asistente se cierra tras 2 s sin texto nuevo NI voz
+//         en el audio de salida (los transcripts llegan a rafagas: una pausa
+//         de 1 s entre frases podia verse como 2 s y partir un cuento largo);
+//         si el modelo sigue hablando, el turno se retoma en vez de abrir otro.
 //     No se descartan "mhm"/"aja" (el SDK si): un acuse corto cuenta como turno.
 //   - El audio de salida es un flujo continuo (incluye silencio), sin marcas
 //     de tiempo ni evento de fin: OnAudioDone se dispara solo en session.closed.
@@ -55,7 +58,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON, System.NetEncoding,
-  System.SyncObjs, System.Generics.Collections, System.Diagnostics,
+  System.SyncObjs, System.Generics.Collections, System.Diagnostics, System.Math,
   uMakerAi.Core, uMakerAi.Chat.Messages, uMakerAi.Tools.Functions,
   uMakerAi.Chat.AiConnection,
   uMakerAi.Realtime, uMakerAi.Realtime.WebSocket, uMakerAi.WebSocket.Client;
@@ -159,6 +162,7 @@ type
     FClock:          TStopwatch;
     FPrev, FCur, FBuf: TAiLiveTurn;
     FTimelineMax:    Int64;       // fin del ultimo fragmento (ms de sesion)
+    FVoiceWall:      Int64;       // ultimo audio de salida con voz (NowMs)
     FTranscript:     TStringList; // turnos cerrados 'User: ...' / 'Assistant: ...'
     FDelegatedLines: Integer;     // primera linea no revisada por DelegationContext
     // Hilos de trabajo (funciones y DelegateChat)
@@ -312,6 +316,9 @@ const
   // Reloj local: espera de fragmentos atrasados del turno anterior, y de un
   // turno en curso que dejo de recibir texto mientras el otro habla
   CLATE_FRAGMENT_MS = 1000;
+  // Promedio absoluto PCM16 por encima del cual el audio de salida tiene voz
+  // (el servidor manda silencio digital entre frases)
+  COUTPUT_VOICE_LEVEL = 500;
   // Pedido que recibe DelegateChat: la transcripcion es automatica y la
   // respuesta se dira en voz alta
   CDELEGATE_PROMPT =
@@ -619,6 +626,21 @@ end;
 // Eventos del servidor
 // -----------------------------------------------------------------------------
 
+// Promedio del valor absoluto de las muestras PCM16
+function AudioLevel(const AData: TBytes): Integer;
+var
+  I, N: Integer;
+  Sum: Int64;
+begin
+  N := Length(AData) div 2;
+  if N = 0 then
+    Exit(0);
+  Sum := 0;
+  for I := 0 to N - 1 do
+    Inc(Sum, Abs(PSmallInt(@AData[I * 2])^));
+  Result := Sum div N;
+end;
+
 function TAiOpenAiLiveChat.NowMs: Int64;
 begin
   Result := FClock.ElapsedMilliseconds;
@@ -630,6 +652,7 @@ var
   JSession, JUsage, JCtx, JError: TJSONObject;
   Seconds, Ratio: Double;
   StartMs, EndMs: Int64;
+  Audio: TBytes;
 begin
   if not JObj.TryGetValue<string>('type', EventType) then Exit;
   // El audio de salida llega cada ~100 ms: sirve de reloj para cerrar turnos
@@ -668,7 +691,14 @@ begin
     S := '';
     JObj.TryGetValue<string>('delta', S);
     if S <> '' then
-      DoAudioChunk(TNetEncoding.Base64.DecodeStringToBytes(S));
+    begin
+      Audio := TNetEncoding.Base64.DecodeStringToBytes(S);
+      // El audio llega a ritmo real (los transcripts, a rafagas): mientras
+      // tenga voz, el asistente sigue hablando
+      if AudioLevel(Audio) > COUTPUT_VOICE_LEVEL then
+        FVoiceWall := NowMs;
+      DoAudioChunk(Audio);
+    end;
   end
 
   else if EventType = 'session.delegation.created' then
@@ -798,6 +828,15 @@ begin
 
   AdvanceTimeline(AStartMs);
 
+  // El turno se cerro por inactividad pero el mismo hablante sigue sin una
+  // pausa real (segun la linea de tiempo): retomarlo en vez de abrir otro
+  if (FCur.Speaker = 0) and (FPrev.Speaker = ASpeaker) and
+     (AStartMs < FPrev.EndMs + CASSISTANT_SILENCE_MS) then
+  begin
+    FCur := FPrev;
+    FPrev := Default(TAiLiveTurn);
+  end;
+
   // Transcripcion atrasada del turno anterior
   if (FPrev.Speaker = ASpeaker) and (FCur.Speaker <> 0) and (AStartMs < FCur.StartMs) then
     AppendToTurn(FPrev, ASpeaker, ADelta, AStartMs, AEndMs)
@@ -833,10 +872,14 @@ begin
   if (FBuf.Speaker <> 0) and (T - FCur.Wall >= CLATE_FRAGMENT_MS) then
     PromoteBuffered
   else if (FCur.Speaker = CSPEAKER_ASSISTANT) and (FBuf.Speaker = 0) and
-          (T - FCur.Wall >= CASSISTANT_SILENCE_MS) then
+          (T - Max(FCur.Wall, FVoiceWall) >= CASSISTANT_SILENCE_MS) then
   begin
+    // Sin texto ni voz: el turno pasa a esperar fragmentos atrasados (o a que
+    // el modelo siga) y se cierra si no llegan
     FinishTurn(FPrev);
-    FinishTurn(FCur);
+    FPrev := FCur;
+    FPrev.Wall := T;
+    FCur := Default(TAiLiveTurn);
   end;
 end;
 
@@ -1375,6 +1418,7 @@ begin
   FCur := Default(TAiLiveTurn);
   FBuf := Default(TAiLiveTurn);
   FTimelineMax := 0;
+  FVoiceWall := 0;
   FTranscript.Clear;
   FDelegatedLines := 0;
   FToolLock.Enter;
