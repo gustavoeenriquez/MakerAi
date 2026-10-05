@@ -32,7 +32,7 @@ uses
 
 const
   API_KEY = '@OPENAI_API_KEY';
-  MODEL   = 'gpt-4o-realtime-preview';
+  MODEL   = 'gpt-realtime-2.1';
 
 var
   GDone: Boolean = False;
@@ -79,7 +79,7 @@ begin
   FSTT.SilenceDurationMs  := 600;           // ms de silencio para cortar turno
   FSTT.PrefixPaddingMs    := 300;
   FSTT.NoiseReduction     := rnrNearField;  // headset / auriculares
-  FSTT.TranscriptionModel := otmGpt4oTranscribe;
+  FSTT.TranscriptionModel := otmGptLiveTranscribe;
 
   FSTT.OnConnected         := OnConnected;
   FSTT.OnDisconnected      := OnDisconnected;

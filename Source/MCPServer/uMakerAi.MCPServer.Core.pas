@@ -155,6 +155,8 @@ type
     ['{B1A4D0F8-9A7B-4C6C-8D1F-4B9E3A5F7C1E}']
     function GetName: string;
     function GetDescription: string;
+    // Devuelve un objeto NUEVO en cada llamada: el que llama es su dueno
+    // (TAiMCPToolBase<T> lo genera desde la clase de parametros)
     function GetInputSchema: TJSONObject;
     // function Execute(const Arguments: TJSONObject): string;
     function Execute(const Arguments: TJSONObject; const AuthContext: TAiAuthContext): TJSONObject;
@@ -347,6 +349,7 @@ type
     FAiFunctions: TAiFunctions;
     FApiKey: string;
     FOnValidateRequest: TAiMCPValidateEvent;
+    FBindAddress: string;
     function GetEndpoint: string;
     function GetPort: Integer;
     procedure SetPort(const Value: Integer);
@@ -392,6 +395,13 @@ type
     procedure LoadSettingsFromFile;
 
     property Port: Integer read GetPort write SetPort;
+    // IP local donde escuchan los transportes de red (SSE/HTTP). Vacía = todas
+    // las interfaces (comportamiento histórico). Si está vacía se usa la
+    // variable de entorno MCP_BIND_ADDRESS, así un servicio se ata a 127.0.0.1
+    // desde su unidad systemd sin recompilar el programa que lo usa.
+    property BindAddress: string read FBindAddress write FBindAddress;
+    // BindAddress o, si está vacía, MCP_BIND_ADDRESS ('' = todas)
+    function EffectiveBindAddress: string;
     property Endpoint: string read GetEndpoint;
     property CorsEnabled: Boolean read FCorsEnabled write FCorsEnabled;
     property CorsAllowedOrigins: string read FCorsAllowedOrigins write FCorsAllowedOrigins;
@@ -1413,11 +1423,12 @@ begin
     ToolJSON := TJSONObject.Create;
     ToolJSON.AddPair('name', Tool.Name);
     ToolJSON.AddPair('description', Tool.Description);
-    // Clone the schema — AddPair takes ownership and would free the tool's
-    // FInputSchema, corrupting subsequent tools/list calls.
+    // GetInputSchema devuelve un esquema nuevo (ver IAiMCPTool): AddPair toma
+    // posesion. Clonarlo, como se hacia, perdia el original en cada tools/list
+    // (servidor MCP que crecia en memoria con cada peticion).
     Schema := Tool.GetInputSchema;
     if Assigned(Schema) then
-      ToolJSON.AddPair('inputSchema', TJSONObject(Schema.Clone))
+      ToolJSON.AddPair('inputSchema', Schema)
     else
       ToolJSON.AddPair('inputSchema', TJSONObject.Create);
     ToolsArray.AddElement(ToolJSON);
@@ -2008,6 +2019,13 @@ end;
 function TAiMCPServer.GetPort: Integer;
 begin
   Result := FLogicServer.Port;
+end;
+
+function TAiMCPServer.EffectiveBindAddress: string;
+begin
+  Result := Trim(FBindAddress);
+  if Result = '' then
+    Result := Trim(GetEnvironmentVariable('MCP_BIND_ADDRESS'));
 end;
 
 function TAiMCPServer.GetServerName: String;

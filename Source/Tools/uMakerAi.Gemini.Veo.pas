@@ -714,12 +714,6 @@ begin
       if LResponse.StatusCode <> 200 then
         raise Exception.CreateFmt('Error al iniciar subida de archivo: %d %s', [LResponse.StatusCode, LResponse.StatusText]);
 
-      Var
-      St := TMemoryStream.Create;
-      St.LoadFromStream(LResponse.ContentStream);
-
-      St.Position := 0;
-      St.SaveToFile('c:\temp\responses.txt');
 
       LUploadUrl := LResponse.HeaderValue['X-Goog-Upload-Url'];
       if LUploadUrl = '' then

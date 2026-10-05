@@ -75,6 +75,7 @@ type
     FOwnJev: TAiJev;
     FApiKey: string;
     FModel: string;
+    FUrl: string; // '' = TypeSafe (JEV_DEFAULT_URL)
     FInstructions: string;
     FRoutes: string;
     FFlags: string;
@@ -117,6 +118,9 @@ type
     [TToolParameterAttribute('Modelo', 'Version de Jev; fijarla antes de calibrar MinConfidence',
                              'jev-1.13.0')]
     property Model: string read FModel write FModel;
+    // Servidor System One: '' = TypeSafe; 'http://localhost:11434/v1/' = Ollama
+    // (con Model := 'nimble', 'clef-flash'...). Ignorada si Jev esta asignado
+    property Url: string read FUrl write FUrl;
 
     [TToolParameterAttribute('Rutas', 'Una por linea: clave=descripcion. La clave es el valor que ' +
                              'recibe el link condicional (idStr del puerto en GraphBuilder)', '')]
@@ -208,6 +212,7 @@ begin
   // Se refresca en cada uso: ApiKey/Model pueden cambiar entre ejecuciones
   FOwnJev.ApiKey := FApiKey;
   FOwnJev.Model := FModel;
+  FOwnJev.Url := JevUrlOrDefault(FUrl);
   Result := FOwnJev;
 end;
 
@@ -303,7 +308,7 @@ begin
         State.Free;
       end;
       try
-        JevReportResult(Self, R, FUsage, FPricePerMillionInput, FPricePerMillionOutput, FOnUsage);
+        JevReportResult(Self, R, FUsage, JevAdapterInputPrice(FJev, FUrl, FPricePerMillionInput), FPricePerMillionOutput, FOnUsage);
         Ans := R[ROUTE_QUESTION];
         BB.SetString(Prefix + 'choice', Ans.Choice);
         BB.SetString(Prefix + 'confidence', Invariant(Ans.Confidence));
@@ -337,7 +342,7 @@ end;
 
 function TAiJevRouterTool.GetUsage: TAiJevUsage;
 begin
-  Result := FUsage.Snapshot(FPricePerMillionInput, FPricePerMillionOutput);
+  Result := FUsage.Snapshot(JevAdapterInputPrice(FJev, FUrl, FPricePerMillionInput), FPricePerMillionOutput);
 end;
 
 procedure TAiJevRouterTool.ResetUsage;

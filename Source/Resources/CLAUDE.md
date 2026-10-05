@@ -9,22 +9,36 @@ This folder contains Delphi IDE component palette icons for MakerAI components. 
 ## Structure
 
 - `icons/` - 24x24 BMP bitmap files for each component
-- `uMakerAiResources.rc` - Resource script linking bitmaps to component class names
-- `uMakerAiResources.RES` - Compiled resource file (auto-generated)
+- `gen_icons.py` - generator for the MakerAI-style icons (Python + Pillow); see below
+- `uMakerAiResources.rc` / `.RES` - icons of `MakerAI.dpk`, linked from `uMakerAi.Chat.AiConnection.pas`
+- `uMakerAiUIIcons.rc` / `.RES` - icons of `MakerAi.UI.dpk`, linked from `uMakerAi.UI.ChatList.pas`
+- `uMakerAiRAGDriversIcons.rc` / `.RES` - icons of `MakerAi.RAG.Drivers.dpk`, linked from `uMakerAi.RAG.Vector.Driver.Postgres.pas`
+
+The IDE looks for the bitmap in the package that registers the component, so each
+package links its own `.res`. An icon placed in the wrong `.rc` does not show up.
 
 ## Adding a New Component Icon
 
-1. Create a 24x24 pixel BMP file named `T[ComponentName]_24.bmp` in `icons/`
-2. Add an entry to `uMakerAiResources.rc` in the appropriate category section:
+1. Add an entry to `SPECS` in `gen_icons.py`: package (`core`/`ui`/`rag`), class name,
+   layout and arguments. Layouts: `glyph` (white glyph on tile), `glyphtag` (glyph +
+   short tag), `text2`/`text1` (text lines, like the RAG icons), `bubble` (chat driver
+   monogram), `bridge`, `emb` (embeddings document).
+   Tile color = provider (MAROON = MakerAI/framework). **Keep texts to 2-4 letters**:
+   longer words are unreadable at 24 px.
+2. `python gen_icons.py --preview %TEMP%\icons.png` generates the missing BMPs
+   (`--force` regenerates all generated ones) and an enlarged contact sheet.
+3. Add the line to the package's `.rc` (resource name = class name in UPPERCASE):
    ```
    T[COMPONENTNAME]  BITMAP "icons\T[ComponentName]_24.bmp"
    ```
-   Note: The resource name (left side) must be UPPERCASE and match the class name exactly
-3. Recompile the resource file:
+4. Recompile the resource and then the package:
    ```
    brcc32 uMakerAiResources.rc
    ```
-   (BRCC32 is in Delphi's `bin` directory, e.g., `C:\Program Files (x86)\Embarcadero\Studio\23.0\bin`)
+   (`brcc32` is in `C:\Program Files (x86)\Embarcadero\Studio\37.0\bin`)
+
+The provider icons drawn by hand (OpenAI, Claude, Gemini, ...) are not in `SPECS`
+and are never overwritten by the generator.
 
 ## Naming Convention
 

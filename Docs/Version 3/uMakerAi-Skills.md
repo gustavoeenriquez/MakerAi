@@ -104,7 +104,7 @@ En el IDE: poner un `TAiSkills` en el formulario, asignar `Functions` y `Folder`
 | `AddSkill(nombre, descripción, instrucciones)` | Código |
 | `LoadFromFile(ruta)` | Un `SKILL.md` o la carpeta que lo contiene |
 | `LoadFromFolder(dir)` | Todos los `dir\<nombre>\SKILL.md` (devuelve cuántos) |
-| `LoadFromPPM('skill-code-review')` | Registry PPM (`https://registry.pascalai.org`) |
+| `LoadFromPPM('skill-code-review')` | Registry PPM (`https://registry.cimamaker.com`) |
 | Propiedad `Folder` | Se carga al iniciar la aplicación |
 | Colección `Skills` | Editada en el IDE |
 
@@ -200,4 +200,4 @@ Un skill es texto que el modelo va a **obedecer**. Un skill de terceros (del reg
 | `use_skill` no aparece entre las funciones | No hay skills habilitados (la función se apaga sin skills), o se está mirando en el IDE (se registra en runtime) |
 | `read_skill_file` no aparece | Ningún skill viene de una carpeta (los de `AddSkill` y PPM no tienen archivos de apoyo), o `AllowFileAccess = False` |
 | `EAiSkillError: ... es de tipo "prompt", no un skill` | El paquete de PPM es un prompt: usar `TAiPrompts.LoadFromPPM` o buscar el skill equivalente |
-| `EAiSkillError: La URL devolvió una página HTML...` | El registry configurado no es el de PPM (`https://registry.pascalai.org`) |
+| `EAiSkillError: La URL devolvió una página HTML...` | El registry configurado no es el de PPM (`https://registry.cimamaker.com`) |

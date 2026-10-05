@@ -8,7 +8,7 @@ The `Source/Realtime/` module provides real-time audio streaming via WebSocket. 
 
 Two types of drivers exist:
 - **STT-only** (OpenAI, Gemini): transcribe user audio → fire `OnTranscriptDelta` / `OnTranscriptCompleted`
-- **Full voice conversation** (MakerAI, Grok): STT + LLM + TTS in one WebSocket — inherit from `TAiRealtimeVoiceBase`, which adds `OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`, `OnAudioDone`
+- **Full voice conversation** (MakerAI, Grok, Qwen, OpenAI GPT-Live): STT + LLM + TTS in one WebSocket — inherit from `TAiRealtimeVoiceBase`, which adds `OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`, `OnAudioDone`
 
 Demos:
 - Console: `Demos/Console/Demos09-Realtime/01-RealtimeSTT/`
@@ -23,6 +23,7 @@ Demos:
 | `uMakerAi.Realtime.pas` | `TAiRealtimeBase`, `TAiRealtimeVoiceBase`, `TAiRealtimeFactory` | Abstract bases + factory |
 | `uMakerAi.Realtime.AiConnection.pas` | `TAiRealtimeConnection` | Universal connector (same pattern as `TAiChatConnection`) |
 | `uMakerAi.Realtime.OpenAI.pas` | `TAiOpenAiRealtimeSTT`, `TAiOpenAiRealtimeTranslate` | OpenAI drivers — **complete** (STT + streaming translation) |
+| `uMakerAi.Realtime.OpenAI.Live.pas` | `TAiOpenAiLiveChat` | OpenAI GPT-Live — full-duplex voice with task delegation (Responses or your own chat) — **runtime-tested** (2026-10-05) |
 | `uMakerAi.Realtime.Gemini.pas` | `TAiGeminiRealtimeSTT` | Gemini driver — **stub, pending** |
 | `uMakerAi.Realtime.MakerAi.pas` | `TAiMakerAiRealtimeChat` | MakerAI driver — **complete** (STT+LLM+TTS) |
 | `uMakerAi.Realtime.Grok.pas` | `TAiGrokRealtimeChat` | xAI Grok Voice driver — speech-to-speech, OpenAI Realtime-compatible protocol — **implemented, pending runtime test** |
@@ -39,6 +40,7 @@ TAiRealtimeBase (abstract)
   └── TAiRealtimeVoiceBase (abstract — adds OnAssistantText/Delta, OnAudioChunk, OnAudioDone)
         ├── TAiMakerAiRealtimeChat  — wss://api.cimamaker.com/v1/audio/realtime, 24 kHz  (STT+LLM+TTS)
         ├── TAiGrokRealtimeChat     — wss://api.x.ai/v1/realtime, 24 kHz  (speech-to-speech)
+        ├── TAiOpenAiLiveChat       — wss://api.openai.com/v1/live/sessions, 24/16 kHz  (full-duplex + delegation)
         ├── TAiQwenRealtimeBase     — wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime, 16 kHz in / 24 kHz out
         │     ├── TAiQwenRealtimeChat      'Qwen'          (omni speech-to-speech)
         │     ├── TAiQwenRealtimeSTT       'QwenSTT'       (live STT)
@@ -100,13 +102,13 @@ Same pattern as `TAiChatConnection`. Wraps a concrete driver instance, re-exposi
 AiRealtime := TAiRealtimeConnection.Create(nil);
 AiRealtime.DriverName := 'OpenAI';
 AiRealtime.ApiKey     := '@OPENAI_API_KEY';
-AiRealtime.Model      := 'gpt-4o-realtime-preview';
+AiRealtime.Model      := 'gpt-realtime-2.1';
 AiRealtime.VADMode    := rvmServerVad;
 AiRealtime.OnTranscriptCompleted := HandleTranscript;
 AiRealtime.Connect;
 ```
 
-`DriverName` values: `'OpenAI'`, `'OpenAiTranslate'`, `'MakerAi'`, `'Grok'`, `'Qwen'`, `'QwenSTT'`, `'QwenTranslate'`, `'Gemini'` (stub).  
+`DriverName` values: `'OpenAI'`, `'OpenAiTranslate'`, `'OpenAiLive'`, `'MakerAi'`, `'Grok'`, `'Qwen'`, `'QwenSTT'`, `'QwenTranslate'`, `'Gemini'` (stub).  
 Changing `DriverName` recreates the internal driver instance.
 
 ### Driver-specific properties: `DriverParams` (Sep 2026)
@@ -141,8 +143,11 @@ voice events (`OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`,
 
 | Model | Notes |
 |-------|-------|
-| `gpt-realtime` | Default session model |
-| `gpt-4o-mini-realtime-preview` | Faster, lower cost |
+| `gpt-realtime-2.1` | **Default** session model (Jul 2026) — better alphanumeric recognition and noise/silence handling |
+| `gpt-realtime-2.1-mini` | Faster, lower cost |
+| `gpt-realtime` | Previous generation |
+
+`gpt-4o-realtime-preview` / `gpt-4o-mini-realtime-preview` were retired by OpenAI — do not use them.
 
 ### Transcription models (`TranscriptionModel` property)
 
@@ -150,8 +155,10 @@ voice events (`OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`,
 |------|-------|-------|
 | `otmGptLiveTranscribe` | `gpt-live-transcribe` | **Default** (2026) — low-latency live STT, WER 9.60% |
 | `otmGptTranscribe` | `gpt-transcribe` | Committed turns; uses prior turns as context |
-| `otmGpt4oTranscribe` / `otmGpt4oMiniTranscribe` | `gpt-4o-transcribe[-mini]` | Previous generation |
-| `otmWhisper1` | `whisper-1` | Legacy |
+| `otmGpt4oTranscribe` / `otmGpt4oMiniTranscribe` | `gpt-4o-transcribe[-mini]` | **Deprecated** (2026-08-26), shutdown 2027-02-26 |
+| `otmWhisper1` | `whisper-1` | **Deprecated** (2026-08-26), shutdown 2027-02-26 |
+
+The deprecated values stay in the enum so existing DFM/FMX files keep loading; migrate them to `otmGptLiveTranscribe` or `otmGptTranscribe`.
 
 The new models accept context config (verified live 2026-08-01): `TranscriptionPrompt` (free-form topic), `TranscriptionKeywords` (domain terms, one per line), `Languages` (multi-language list; falls back to base `Language`), `LowDelay` (faster partials, live model only). Legacy models keep the singular `language` field — the driver switches the session.update schema automatically. OpenAI deltas are **incremental** (unlike Grok's cumulative transcript).
 
@@ -187,6 +194,33 @@ The new models accept context config (verified live 2026-08-01): `TranscriptionP
 - `TargetLanguage` ('en', 'es', ...) sent as `audio.output.language` in session.update (sent right after connect; `session.created/updated` fire `OnSessionReady` once)
 - `Disconnect` sends `session.close` before closing the socket
 - Demo: `Demos/071-VoiceBridgeTranslate` — the 063 voice bridge refactored to a single socket per direction (STT→LLM→TTS pipeline replaced entirely)
+
+---
+
+## TAiOpenAiLiveChat — OpenAI GPT-Live (full-duplex voice)
+
+**Status:** runtime-tested against the live API (2026-10-05): conversation, local function through Responses delegation, and client delegation through `DelegateChat`. Unit `uMakerAi.Realtime.OpenAI.Live.pas`, DriverName `'OpenAiLive'`, key `@OPENAI_API_KEY`.
+
+GPT-Live listens while it speaks: audio streams continuously and the model decides when to talk (no VAD, commits or turns; `CommitAudio`/`ClearAudio` are no-ops). Heavy reasoning is **delegated**:
+
+| Mode | Who resolves the task | Use when |
+|---|---|---|
+| `Delegation = ldResponses` (default) | A Responses model run by OpenAI (`DelegationModel`, default `gpt-6-luna`) with `EnableWebSearch`, `AiFunctions`, `CustomToolsJson`, `ToolChoice`, `ReasoningEffort`, `MaxOutputTokens`, `ParallelToolCalls`, `DelegationInstructions` | Best latency (measured ≈ 2 s from delegation to answer, with a local function); OpenAI keeps the full context |
+| `DelegateChat` assigned (forces `ldClient`) | Any `TAiChatConnection` — Claude, Ollama, an agent graph, RAG… | The brain must not be OpenAI (privacy, own data, own agents). Measured ≈ 4.9 s with `gpt-6-luna` |
+| `ldClient` without `DelegateChat` | Your code, in `OnDelegation(DelegationId, Context)`; answer with `AppendCommentary(Text, DelegationId)` | Custom flows |
+
+- **Protocol** (types from the official `openai-python` SDK, `src/openai/types/live`): `wss://api.openai.com/v1/live/sessions`, `Authorization: Bearer`. The model goes in `session.start` (not in the URL); wait for `session.started` before any other command (the driver drops audio until then). Audio: `session.input_audio.append` (base64 without line breaks) / `session.output_audio.delta`.
+- **Voice, audio format and instructions are immutable** after `session.start`. `AudioRate`: `lar24k` (default) or `lar16k`; G.711 8 kHz is not supported by the driver.
+- **Function calling (ldResponses):** `response.event` wraps the Responses stream; on `response.output_item.done` with a `function_call` the driver runs it on its own thread (`AiFunctions.DoCallFunction`, then `OnCallToolFunction` synchronized), sends `response.item.create` (`function_call_output`) and ONE `response.create` once the response that asked for it reached `response.completed` — also when it completes before the function returns. Tracked per `delegation_id`.
+- **Client delegation:** `session.delegation.created` carries only an id, **not the task text**. The driver builds it from the transcript: what `DelegateChat` has not seen yet (it keeps its own history), closed and open turns in timeline order. `DelegateChat` runs on a worker thread, one task at a time (`Asynchronous` is forced to `False` on `Connect`); the answer goes back with `session.commentary.append`, split in ≤ 400-byte UTF-8 chunks (the API caps each append at 500 tokens). Nobody handling a client delegation → `OnError` (`delegation_unhandled`) and a commentary so the model does not wait in silence. With `ldResponses` the server only accepts `delegation_id: null` in appends; the driver enforces it.
+- **Turns.** Transcripts have no turn boundaries and no "done" event, and full-duplex speech overlaps (verified: the model started "La capital" at 6400 ms while the user was still saying "favor." at 6600–6800). Deltas fire on arrival; `OnTranscriptCompleted` / `OnAssistantText` use the timeline (`start_ms`/`end_ms`) with the SDK grouper policy: the turn changes only when the other speaker starts ≥ 500 ms after the current turn's end (overlapping speech waits); a fragment that started before the current turn is a late transcript of the previous one (1 s window); the assistant turn closes after 2 s without text **and without voice in the output audio** (mean |PCM16| > 500). Transcripts arrive in bursts: with the local clock alone a 1 s pause between sentences arrived as > 2 s and a 2-minute story came out split (verified live). A turn closed for inactivity waits 1 s and is **resumed** if the same speaker continues less than 2 s later on the timeline. Unlike the SDK, short acknowledgments ("mhm") are **not** dropped. The local clock (`NowMs`, virtual) is checked on every event — output audio arrives every ~100 ms.
+- **Output audio is a continuous stream including silence**, with no timestamps or end event: `OnAudioDone` fires only on `session.closed`. Measure latency with the first assistant text delta (≈ 0.5 s after the question ended), not with the first audio chunk.
+- **Events run on the main thread.** `TAiWSClient` delivers frames with `TThread.Queue`, so `ProcessServerEvent` runs on the main thread. `Disconnect` sends `session.close` and waits for `session.closed` (`CloseTimeoutMs`, default 5000) **draining the queue**; waiting without draining blocked it until the timeout (measured: 5.0 s → 0.7 s after the fix).
+- **Barge-in is real.** Anything the model hears while speaking — a cough, an "mm", or **its own voice** leaking into the microphone (speakers, loud headphones) — makes it stop. A long story "cut off" in the demo for that reason; with clean input (silence or steady noise) it finishes. With speakers, mute the microphone while the output has voice (`TAiAudioCapture.Muted`, demo 092 "speaker mode") or use `Mute`/`Unmute` (`session.input_audio.mute`).
+- Extra events: `OnUsage(Seconds, ContextRatio)` (cumulative, do not add up), `OnSessionClosed(Reason, Seconds)` (`close_requested`, `expired`, `content`, `remote_hangup`, `connection_lost`), `OnResponseEvent` (raw nested Responses events). Public: `Mute`/`Unmute`, `AppendCommentary`/`AppendThinking`/`AppendInstructions`, `SessionId`, `UsageSeconds`, `CloseReason`.
+- Cost: $0.05 per minute of session, billed per second (plus the delegated model's tokens).
+- Regression suite: `realtime.openai-live.*` (session.start, events, turns, overlap with the real trace, long story with bursty transcripts, tools, client delegation, `DelegateChat` against a closed port).
+- Demo: `Demos/092-GPTLiveVoice` (FMX: microphone, speaker, voice, delegation mode, local functions, speaker mode, interruption diagnostics).
 
 ---
 
@@ -425,7 +459,7 @@ var
 // Setup
 STT := TAiRealtimeConnection.Create(nil);
 STT.DriverName  := 'OpenAI';
-STT.Model       := 'gpt-4o-realtime-preview';
+STT.Model       := 'gpt-realtime-2.1';
 STT.VADMode     := rvmServerVad;
 STT.OnTranscriptDelta     := procedure(Delta: string) begin Write(Delta); end;
 STT.OnTranscriptCompleted := procedure(Text, Id: string) begin WriteLn; WriteLn('→ ', Text); end;

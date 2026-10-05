@@ -149,6 +149,7 @@ contains
   uMakerAi.Realtime.WebSocket in '..\Realtime\uMakerAi.Realtime.WebSocket.pas',
   uMakerAi.Realtime in '..\Realtime\uMakerAi.Realtime.pas',
   uMakerAi.Realtime.OpenAI in '..\Realtime\uMakerAi.Realtime.OpenAI.pas',
+  uMakerAi.Realtime.OpenAI.Live in '..\Realtime\uMakerAi.Realtime.OpenAI.Live.pas',
   uMakerAi.Realtime.Gemini in '..\Realtime\uMakerAi.Realtime.Gemini.pas',
   uMakerAi.Realtime.Grok in '..\Realtime\uMakerAi.Realtime.Grok.pas',
   uMakerAi.Realtime.Qwen in '..\Realtime\uMakerAi.Realtime.Qwen.pas',

@@ -38,7 +38,7 @@ begin
   LClient := THTTPClient.Create;
   try
     try
-      LResp := LClient.Get('https://ppm.pascalai.org/v1/health');
+      LResp := LClient.Get('https://registry.cimamaker.com/v1/health');
       if LResp.StatusCode = 200 then
         OK('Registry accesible. Respuesta: ' + LResp.ContentAsString(TEncoding.UTF8))
       else
@@ -120,7 +120,7 @@ begin
   LClient := THTTPClient.Create;
   try
     try
-      LResp := LClient.Get('https://ppm.pascalai.org/v1/packages/' + AName);
+      LResp := LClient.Get('https://registry.cimamaker.com/v1/packages/' + AName);
       Log('Status: ' + IntToStr(LResp.StatusCode));
       LBody := LResp.ContentAsString(TEncoding.UTF8);
       Log('Body (primeros 400): ' + Copy(LBody, 1, 400));
@@ -171,7 +171,7 @@ begin
   Log('TEST 4 — Download + inspeccion de "' + AName + '"');
 
   // Primero resolver versión manualmente para el test
-  LUrl := Format('https://ppm.pascalai.org/v1/packages/%s/latest/download', [AName]);
+  LUrl := Format('https://registry.cimamaker.com/v1/packages/%s/latest/download', [AName]);
   // Intentar con "latest" como alias
   LTempFile := TPath.Combine(TPath.GetTempPath, AName + '-test.paipkg');
 
@@ -342,7 +342,7 @@ begin
   ReportMemoryLeaksOnShutdown := True;
   try
     Writeln('=== PPM Console Test ===');
-    Writeln('Registry: https://ppm.pascalai.org');
+    Writeln('Registry: https://registry.cimamaker.com');
     Writeln;
 
     TestHealth;

@@ -58,6 +58,10 @@ uses
 
 type
   // --- Enums for API Parameters ---
+  // TTS: tts-1, tts-1-hd y gpt-4o-mini-tts DEPRECADOS por OpenAI el 2026-10-01,
+  // apagado el 2027-01-06. OpenAI recomienda gpt-realtime-2.1-mini (realtime),
+  // que /audio/speech no acepta (404). Default desde v3.9: gpt_4o_mini_tts (el
+  // de mas calidad del endpoint, admite TTSInstructions); antes tts_1.
   TAiTTSModel = (tts_1, tts_1_hd, gpt_4o_mini_tts);
   TAiTTSVoice = (tvAlloy, tvAsh, tvBallad, tvCoral, tvEcho, tvFable, tvOnyx, tvNova, tvSage, tvShimmer, tvVerse);
   TAiTTSResponseFormat = (trfMp3, trfOpus, trfAac, trfFlac, trfWav, trfPcm);
@@ -66,6 +70,13 @@ type
   // (WER 8.98% vs 15.21% de whisper-1); tmGptLiveTranscribe es su variante de
   // baja latencia. Ambos solo devuelven JSON (sin srt/vtt/verbose_json ni
   // timestamps) y usan TranscriptionLanguages/TranscriptionKeywords.
+  // tmWhisper1, tmGpt4oTranscribe, tmGpt4oMiniTranscribe y tmGpt4oDiarize:
+  // DEPRECADOS por OpenAI el 2026-08-26, apagado el 2027-02-26. Los modelos
+  // nuevos NO tienen srt/vtt/verbose_json, timestamps, logprobs, diarizacion
+  // ni traduccion a ingles: esas funciones desaparecen con los modelos viejos.
+  // Default desde v3.9: tmGptTranscribe (antes tmWhisper1). Quien necesite
+  // srt/vtt/timestamps debe fijar tmWhisper1 hasta el apagado; si no, el
+  // formato baja a json y TTranscriptionResult.Warning lo informa.
   TAiTranscriptionModel = (tmWhisper1, tmGpt4oTranscribe, tmGpt4oMiniTranscribe,
     tmGpt4oDiarize, tmGptTranscribe, tmGptLiveTranscribe);
   TAiTranscriptionResponseFormat = (trfJson, trfText, trfSrt, trfVerboseJson, trfVtt, trfDiarizedJson);
@@ -92,6 +103,7 @@ type
     FLanguage: string;
     FLogprobs: TJSONArray;
     FSegments: TDiarizedSegments;
+    FWarning: string;
   public
     constructor Create(const AResponse: string; AFormat: TAiTranscriptionResponseFormat);
     destructor Destroy; override;
@@ -108,6 +120,10 @@ type
     { Segmentos con hablante. Poblado con tmGpt4oDiarize + trfDiarizedJson
       (tambien con verbose_json de whisper-1, sin campo speaker). }
     property Segments: TDiarizedSegments read FSegments;
+    { Avisos sobre lo que se pidio y el modelo no hace (formato degradado a
+      json, timestamps, logprobs o hablantes ignorados) y sobre modelos
+      deprecados. Una linea por aviso; vacio = se hizo todo lo pedido. }
+    property Warning: string read FWarning;
   end;
 
   // --- Events for Streaming ---
@@ -141,6 +157,10 @@ type
     // Hablantes conocidos para diarizacion (max 4): nombres + data-URIs de audio
     FKnownSpeakerNames: TArray<string>;
     FKnownSpeakerRefs: TArray<string>;
+    // Lo que realmente se pidio en el ultimo BuildTranscriptionBody: el
+    // formato puede degradarse a json segun el modelo
+    FLastEffectiveFormat: TAiTranscriptionResponseFormat;
+    FLastWarning: string;
     // Streaming Events
     FOnAudioChunkReceived: TOnAudioChunkReceived;
     FOnSpeechCompleted: TOnSpeechCompleted;
@@ -167,6 +187,9 @@ type
     procedure ProcessTranscriptionStreamBuffer;
     // Helper para construir la petici?n de transcripci?n
     procedure BuildTranscriptionBody(const ABody: TMultipartFormData; const AAudioFile: TAiMediaFile; const APrompt: string = '');
+    // POST multipart de Transcribe y TranslateToEnglish. Virtual para que la
+    // suite de regresion lo sustituya y pruebe sin red.
+    function PostMultipart(const AUrl: string; ABody: TMultipartFormData; out AContent: string): Integer; virtual;
 
   public
     constructor Create(AOwner: TComponent); override;
@@ -190,6 +213,8 @@ type
     function KnownSpeakerCount: Integer;
 
     // --- Translation ---
+    { Traduce el audio a ingles con /audio/translations (solo whisper-1).
+      DEPRECADO: deja de funcionar el 2027-02-26, sin reemplazo anunciado. }
     function TranslateToEnglish(const AAudioFile: TAiMediaFile; const APrompt: string = ''): TTranscriptionResult;
 
   published
@@ -197,14 +222,14 @@ type
     property Url: string read FUrl write SetUrl;
 
     // --- Text-to-Speech Properties ---
-    property TTSModel: TAiTTSModel read FTTSModel write FTTSModel default TAiTTSModel.tts_1;
+    property TTSModel: TAiTTSModel read FTTSModel write FTTSModel default TAiTTSModel.gpt_4o_mini_tts;
     property TTSVoice: TAiTTSVoice read FTTSVoice write FTTSVoice default TAiTTSVoice.tvAlloy;
     property TTSResponseFormat: TAiTTSResponseFormat read FTTSResponseFormat write FTTSResponseFormat default TAiTTSResponseFormat.trfMp3;
     property TTSSpeed: Double read FTTSSpeed write FTTSSpeed;
     property TTSInstructions: string read FTTSInstructions write FTTSInstructions;
 
     // --- Transcription Properties ---
-    property TranscriptionModel: TAiTranscriptionModel read FTranscriptionModel write FTranscriptionModel default TAiTranscriptionModel.tmWhisper1;
+    property TranscriptionModel: TAiTranscriptionModel read FTranscriptionModel write FTranscriptionModel default TAiTranscriptionModel.tmGptTranscribe;
     property TranscriptionResponseFormat: TAiTranscriptionResponseFormat read FTranscriptionResponseFormat write FTranscriptionResponseFormat default TAiTranscriptionResponseFormat.trfJson;
     property TranscriptionLanguage: string read FTranscriptionLanguage write FTranscriptionLanguage;
     property TranscriptionTemperature: Double read FTranscriptionTemperature write FTranscriptionTemperature;
@@ -379,11 +404,11 @@ begin
   FUrl := GlOpenAIUrl;
   FApiKey := '@OPENAI_API_KEY';
   FStreamBuffer := TStringBuilder.Create;
-  FTTSModel := tts_1;
+  FTTSModel := gpt_4o_mini_tts; // v3.9 (antes tts_1); igual que el default publicado
   FTTSVoice := tvAlloy;
   FTTSResponseFormat := trfMp3;
   FTTSSpeed := 1.0;
-  FTranscriptionModel := tmWhisper1;
+  FTranscriptionModel := tmGptTranscribe; // v3.9 (antes tmWhisper1)
   FTranscriptionResponseFormat := trfJson;
   FTranscriptionTemperature := 0.0;
   FTranscriptionKeywords := TStringList.Create;
@@ -462,6 +487,10 @@ begin
 end;
 
 procedure TAiOpenAiAudio.BuildTranscriptionBody(const ABody: TMultipartFormData; const AAudioFile: TAiMediaFile; const APrompt: string = '');
+const
+  // Valor de response_format en la API para cada TAiTranscriptionResponseFormat
+  CFormatNames: array[TAiTranscriptionResponseFormat] of string =
+    ('json', 'text', 'srt', 'verbose_json', 'vtt', 'diarized_json');
 var
   ModelStr : string;
   FormatStr: string;
@@ -470,7 +499,17 @@ var
   IsNewModel: Boolean; // gpt-transcribe / gpt-live-transcribe (2026)
   Idx: Integer;
   Sent: Boolean;
+  Fmt: TAiTranscriptionResponseFormat;
+
+  procedure AddWarning(const AMsg: string);
+  begin
+    if FLastWarning <> '' then
+      FLastWarning := FLastWarning + sLineBreak;
+    FLastWarning := FLastWarning + AMsg;
+  end;
+
 begin
+  FLastWarning := '';
   case FTranscriptionModel of
     tmWhisper1:             ModelStr := 'whisper-1';
     tmGpt4oTranscribe:      ModelStr := 'gpt-4o-transcribe';
@@ -485,6 +524,10 @@ begin
   IsWhisper1   := FTranscriptionModel = tmWhisper1;
   IsGpt4oModel := FTranscriptionModel in [tmGpt4oTranscribe, tmGpt4oMiniTranscribe, tmGpt4oDiarize];
   IsNewModel   := FTranscriptionModel in [tmGptTranscribe, tmGptLiveTranscribe];
+
+  if not IsNewModel then
+    AddWarning(Format('%s esta deprecado por OpenAI y deja de funcionar el ' +
+      '2027-02-26; migrar a gpt-transcribe o gpt-live-transcribe', [ModelStr]));
 
   ABody.AddField('model', ModelStr);
   if APrompt <> '' then
@@ -532,6 +575,16 @@ begin
   end;
   ABody.AddField('response_format', FormatStr);
 
+  // El resultado se interpreta con el formato que realmente se pidio: si se
+  // degrado a json, tratarlo como texto dejaria el JSON crudo en Text
+  FLastEffectiveFormat := trfJson;
+  for Fmt := Low(TAiTranscriptionResponseFormat) to High(TAiTranscriptionResponseFormat) do
+    if CFormatNames[Fmt] = FormatStr then
+      FLastEffectiveFormat := Fmt;
+  if FLastEffectiveFormat <> FTranscriptionResponseFormat then
+    AddWarning(Format('%s no admite response_format=%s; se pidio %s',
+      [ModelStr, CFormatNames[FTranscriptionResponseFormat], FormatStr]));
+
   // timestamp_granularities: whisper-1 only, requires verbose_json
   if IsWhisper1 then
   begin
@@ -539,11 +592,21 @@ begin
       ABody.AddField('timestamp_granularities[]', 'word');
     if tsgSegment in FTranscriptionTimestampGranularities then
       ABody.AddField('timestamp_granularities[]', 'segment');
-  end;
+  end
+  else if FTranscriptionTimestampGranularities <> [] then
+    AddWarning(Format('%s no devuelve timestamps; se ignoro ' +
+      'TranscriptionTimestampGranularities (solo whisper-1)', [ModelStr]));
 
   // logprobs: gpt-4o transcribe/mini only (el modelo diarize NO lo soporta)
   if IsGpt4oModel and FTranscriptionLogprobs and (FTranscriptionModel <> tmGpt4oDiarize) then
-    ABody.AddField('include[]', 'logprobs');
+    ABody.AddField('include[]', 'logprobs')
+  else if FTranscriptionLogprobs then
+    AddWarning(Format('%s no devuelve logprobs; se ignoro TranscriptionLogprobs ' +
+      '(solo gpt-4o-transcribe y gpt-4o-mini-transcribe)', [ModelStr]));
+
+  if (Length(FKnownSpeakerNames) > 0) and (FTranscriptionModel <> tmGpt4oDiarize) then
+    AddWarning(Format('%s no separa hablantes; se ignoraron los hablantes ' +
+      'conocidos (solo gpt-4o-transcribe-diarize)', [ModelStr]));
 
   // Diarizacion: chunking automatico (recomendado por la API para audio largo)
   // y hablantes conocidos registrados con AddKnownSpeaker (max 4).
@@ -895,15 +958,30 @@ begin
   end;
 end;
 
-function TAiOpenAiAudio.Transcribe(const AAudioFile: TAiMediaFile; const APrompt: string = ''): TTranscriptionResult;
+function TAiOpenAiAudio.PostMultipart(const AUrl: string; ABody: TMultipartFormData; out AContent: string): Integer;
 var
   Client: TNetHTTPClient;
-  Body: TMultipartFormData;
   Res: IHTTPResponse;
+begin
+  Client := TNetHTTPClient.Create(nil);
+  try
+    Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
+    Res := Client.Post(AUrl, ABody);
+    AContent := Res.ContentAsString;
+    Result := Res.StatusCode;
+  finally
+    Client.Free;
+  end;
+end;
+
+function TAiOpenAiAudio.Transcribe(const AAudioFile: TAiMediaFile; const APrompt: string = ''): TTranscriptionResult;
+var
+  Body: TMultipartFormData;
+  StatusCode: Integer;
+  Content: string;
   sUrl: string;
 begin
   sUrl := FUrl + 'audio/transcriptions';
-  Client := TNetHTTPClient.Create(nil);
   Body := TMultipartFormData.Create;
   try
     ConvertAudioIfNeeded(AAudioFile);
@@ -916,16 +994,16 @@ begin
     {$ENDIF}
     BuildTranscriptionBody(Body, AAudioFile, APrompt);
 
-    Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
+    StatusCode := PostMultipart(sUrl, Body, Content);
 
-    Res := Client.Post(sUrl, Body);
-
-    if Res.StatusCode = 200 then
-      Result := TTranscriptionResult.Create(Res.ContentAsString, FTranscriptionResponseFormat)
+    if StatusCode = 200 then
+    begin
+      Result := TTranscriptionResult.Create(Content, FLastEffectiveFormat);
+      Result.FWarning := FLastWarning;
+    end
     else
-      raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      raise Exception.CreateFmt('Error Received: %d, %s', [StatusCode, Content]);
   finally
-    Client.Free;
     Body.Free;
   end;
 end;
@@ -982,15 +1060,17 @@ begin
 end;
 
 function TAiOpenAiAudio.TranslateToEnglish(const AAudioFile: TAiMediaFile; const APrompt: string = ''): TTranscriptionResult;
+const
+  CTranslateWarning = 'whisper-1 (unico modelo de /audio/translations) esta ' +
+    'deprecado por OpenAI y deja de funcionar el 2027-02-26; no hay reemplazo anunciado';
 var
-  Client: TNetHTTPClient;
   Body: TMultipartFormData;
-  Res: IHTTPResponse;
+  StatusCode: Integer;
+  Content: string;
   sUrl: string;
   FormatStr: string; // Variable para almacenar el formato
 begin
   sUrl := FUrl + 'audio/translations';
-  Client := TNetHTTPClient.Create(nil);
   Body := TMultipartFormData.Create;
   try
     ConvertAudioIfNeeded(AAudioFile);
@@ -1001,7 +1081,9 @@ begin
     Body.AddStream('file', AAudioFile.Content, AAudioFile.Filename);
     {$ENDIF}
 
-    // El modelo es fijo para traducciones seg?n la API
+    // El modelo es fijo para traducciones segun la API. whisper-1 esta
+    // DEPRECADO (apagado 2027-02-26) y OpenAI no anuncio reemplazo para
+    // /audio/translations: este metodo deja de funcionar en esa fecha.
     Body.AddField('model', 'whisper-1');
 
     if APrompt <> '' then Body.AddField('prompt', APrompt);
@@ -1023,15 +1105,16 @@ begin
 
     Body.AddField('response_format', FormatStr);
 
-    Client.CustomHeaders['Authorization'] := 'Bearer ' + ApiKey;
-    Res := Client.Post(sUrl, Body);
+    StatusCode := PostMultipart(sUrl, Body, Content);
 
-    if Res.StatusCode = 200 then
-      Result := TTranscriptionResult.Create(Res.ContentAsString, FTranscriptionResponseFormat)
+    if StatusCode = 200 then
+    begin
+      Result := TTranscriptionResult.Create(Content, FTranscriptionResponseFormat);
+      Result.FWarning := CTranslateWarning;
+    end
     else
-      raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      raise Exception.CreateFmt('Error Received: %d, %s', [StatusCode, Content]);
   finally
-    Client.Free;
     Body.Free;
   end;
 end;

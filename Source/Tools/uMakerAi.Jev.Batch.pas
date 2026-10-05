@@ -113,6 +113,7 @@ type
     FJev: TAiJev;
     FApiKey: string;
     FModel: string;
+    FUrl: string; // '' = TypeSafe (JEV_DEFAULT_URL)
     FQuestions: TAiJevQuestions;
     FItemField: string;
     FLabelQuestion: string;
@@ -150,6 +151,9 @@ type
     property Jev: TAiJev read FJev write SetJev;
     property ApiKey: string read FApiKey write FApiKey;
     property Model: string read FModel write FModel;
+    // Servidor System One: '' = TypeSafe; 'http://localhost:11434/v1/' = Ollama
+    // (con Model := 'nimble', 'clef-flash'...). Ignorada si Jev esta asignado
+    property Url: string read FUrl write FUrl;
     // Preguntas que se aplican a cada fila
     property Questions: TAiJevQuestions read FQuestions write SetQuestions;
     // Nombre del campo con el que viaja cada texto (Run con textos)
@@ -316,6 +320,7 @@ begin
   Result := TAiJev.Create(nil);
   Result.ApiKey := FApiKey;
   Result.Model := FModel;
+  Result.Url := JevUrlOrDefault(FUrl);
 end;
 
 procedure TAiJevBatchLabeler.Cancel;
@@ -438,9 +443,9 @@ begin
 
     Report.FElapsedMs := SW.ElapsedMilliseconds;
     Report.FCancelled := FCancelled;
-    Report.FCostUSD := Report.FInputTokens * FPricePerMillion / 1E6;
+    Report.FCostUSD := Report.FInputTokens * JevAdapterInputPrice(FJev, FUrl, FPricePerMillion) / 1E6;
     // Un OnUsage por lote. PricePerMillion (historico) es el precio de entrada
-    JevReportOperation(Self, Report.FMeter, FUsage, FPricePerMillion, FPricePerMillionOutput, FOnUsage);
+    JevReportOperation(Self, Report.FMeter, FUsage, JevAdapterInputPrice(FJev, FUrl, FPricePerMillion), FPricePerMillionOutput, FOnUsage);
   except
     Report.Free;
     raise;
@@ -482,7 +487,7 @@ end;
 
 function TAiJevBatchLabeler.GetUsage: TAiJevUsage;
 begin
-  Result := FUsage.Snapshot(FPricePerMillion, FPricePerMillionOutput);
+  Result := FUsage.Snapshot(JevAdapterInputPrice(FJev, FUrl, FPricePerMillion), FPricePerMillionOutput);
 end;
 
 procedure TAiJevBatchLabeler.ResetUsage;

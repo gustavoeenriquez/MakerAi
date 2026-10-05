@@ -1,0 +1,9 @@
+//------------------------------------------------------------------------------
+// Iconos de paleta de MakerAi.UI.dpk
+// Generado a partir de gen_icons.py; se enlaza desde uMakerAi.UI.ChatList.pas
+//------------------------------------------------------------------------------
+TCHATLIST                      BITMAP "icons\TChatList_24.bmp"
+TCHATBUBBLE                    BITMAP "icons\TChatBubble_24.bmp"
+TCHATINPUT                     BITMAP "icons\TChatInput_24.bmp"
+TAICHATVIEW                    BITMAP "icons\TAIChatView_24.bmp"
+TAICHATINPUT                   BITMAP "icons\TAIChatInput_24.bmp"

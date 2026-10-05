@@ -2,27 +2,27 @@
 // Version Information
 const
   MAKERAI_VERSION_MAJOR    = 3;
-  MAKERAI_VERSION_MINOR    = 8;
+  MAKERAI_VERSION_MINOR    = 9;
   MAKERAI_VERSION_RELEASE  = 0;
   MAKERAI_VERSION_BUILD    = 0;
 
 // Version String Formats
 const
-  MAKERAI_VERSION_SHORT    = '3.8';
-  MAKERAI_VERSION_FULL     = '3.8.0.0';
-  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.8.0.0';
-  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.8 - Jev calibrated decisions, Qwen driver, SKILL.md skills & Computer Use on Linux (Sep 2026)';
+  MAKERAI_VERSION_SHORT    = '3.9';
+  MAKERAI_VERSION_FULL     = '3.9.0.0';
+  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.9.0.0';
+  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.9 - OpenAI GPT-Live full-duplex voice, Jev on local Ollama models & MCP leak fixes (Oct 2026)';
 
 // Product Information
 const
   MAKERAI_PRODUCT_NAME     = 'MakerAi Library';
-  MAKERAI_COMPANY_NAME     = 'Gustavo Enrï¿½quez';
-  MAKERAI_COPYRIGHT        = 'Copyright ï¿½ 2024-2026 Gustavo Enrï¿½quez - CimaMaker';
+  MAKERAI_COMPANY_NAME     = 'Gustavo Enríquez';
+  MAKERAI_COPYRIGHT        = 'Copyright © 2024-2026 Gustavo Enríquez - CimaMaker';
   MAKERAI_DESCRIPTION      = 'Advanced AI Integration Library for Delphi';
 
 // Build Information
 const
-  MAKERAI_BUILD_DATE       = '2026-09-29';
+  MAKERAI_BUILD_DATE       = '2026-10-05';
   MAKERAI_BUILD_TIME       = '12:00:00';
   MAKERAI_BUILD_PLATFORM   = {$IFDEF WIN32}'Win32'{$ENDIF}
                             {$IFDEF WIN64}'Win64'{$ENDIF}
@@ -38,8 +38,8 @@ const
 
 // API Compatibility
 const
-  MAKERAI_API_LEVEL        = 38;        // Internal API level for compatibility
-  MAKERAI_BREAKING_CHANGE  = True;      // True if this version has breaking changes (v3.8: TLS on POSIX, IAiMemoryStorage)
+  MAKERAI_API_LEVEL        = 39;        // Internal API level for compatibility
+  MAKERAI_BREAKING_CHANGE  = True;      // True if this version has breaking changes (v3.9: IAiMCPTool.GetInputSchema ownership, OpenAI audio defaults)
   MAKERAI_LEGACY_SUPPORT   = True;      // True = Support for v2.x components
 
 {******************************************************************************}
@@ -225,6 +225,48 @@ const
   - NOTE: the legacy HTTP+SSE MCP transport is formally Deprecated by spec
          2026-07-28 (earliest removal July 2027). Prefer HTTP or StdIO
 
+  Version 3.9.0 (2026-10-05)
+  - BEHAVIOUR: TAiOpenAiAudio and TAiOpenAiSpeechTool default to
+         gpt-transcribe and gpt-4o-mini-tts (were whisper-1 and tts-1, which
+         OpenAI shuts down on 2027-02-26 and 2027-01-06). gpt-transcribe returns
+         JSON only: srt/vtt/verbose_json, timestamps and logprobs downgrade and
+         are reported in TTranscriptionResult.Warning; set tmWhisper1 to keep
+         them until the shutdown. TAIWhisper is unchanged
+  - BEHAVIOUR (custom MCP tools only): IAiMCPTool.GetInputSchema returns a new
+         object owned by the caller, as both built-in implementations already
+         did; tools/list no longer clones it. A custom tool that returned a
+         cached field must return a copy
+  - BEHAVIOUR: the OpenAI Responses driver now sends max_output_tokens from
+         Max_Tokens (it was silently ignored); response.incomplete,
+         response.failed and stream 'error' events now end the turn
+  - NEW: TAiOpenAiLiveChat - OpenAI GPT-Live (gpt-live-1, DriverName
+         'OpenAiLive'): full-duplex voice that listens while it speaks and
+         delegates reasoning to a Responses model (web search, local
+         TAiFunctions and MCP tools) or to any TAiChatConnection (DelegateChat).
+         Turns rebuilt from the session timeline; tested live
+  - NEW: Jev on local models - Ollama 0.35+ serves the same /v1/systemone
+         contract (nimble, tev1, Cloudflare clef/clef-flash). Url on the eight
+         Jev adapters, TAiJev.Ask with images for Clef (PNG/JPEG/WebP), and the
+         TypeSafe default price is no longer charged on other servers
+  - CHANGED: the default PPM registry is https://registry.cimamaker.com
+         (was registry.pascalai.org) in TAiFunctions, TAiPrompts, TAiSkill
+         and the SKILL.md client
+  - NEW: TAiMCPServer.BindAddress (or MCP_BIND_ADDRESS) for SSE/HTTP servers
+  - NEW: palette icons for all 108 components; each package links its own .res
+  - NEW: demo 092-GPTLiveVoice (voice, local functions, RAG over MCP with a
+         read-only guardrail); demo 037 MCP RAG server also runs on PostgreSQL
+  - FIX: memory leaks - an MCP server leaked each tool schema on every
+         tools/list; the MCP client leaked the tools/list response on every
+         Initialize; TAiRealtimeFactory never freed its driver dictionary
+  - FIX: parallel tools/call on a shared TMCPClientSSE lost responses (180 s
+         timeouts); Grok reasoning_effort for grok-4 and usage when streaming;
+         EnforceStrictSchema with union types; Claude code_execution file
+         names; TAiOpenAiAudio.Transcribe left raw JSON in Text; TAiMemory
+         Delete/Link/Unlink return Boolean; no debug logs in C:\Temp
+  - DEPRECATED (OpenAI): whisper-1, gpt-4o-transcribe, gpt-4o-mini-transcribe,
+         gpt-4o-transcribe-diarize, tts-1, tts-1-hd and gpt-4o-mini-tts
+  - Regression suite: 117 cases (from 101 in 3.8.0)
+
   Version 3.8.0 (2026-09-29)
   - BREAKING: TOpenSSLTransport (Realtime on Linux/macOS) now verifies the
          server certificate chain AND the hostname; it used SSL_VERIFY_NONE.
@@ -399,7 +441,7 @@ begin
   else if SameText(FeatureName, 'Agents') then Result := MAKERAI_HAS_AGENTS;
 end;
 
-//Mostrar en el versiï¿½n about dialog
+//Mostrar en el versión about dialog
 procedure TFormAbout.FormShow(Sender: TObject);
 begin
   lblVersion.Caption := MAKERAI_VERSION_STRING;

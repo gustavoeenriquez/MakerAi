@@ -167,6 +167,8 @@ procedure Register;
 
 implementation
 
+{$R ..\Resources\uMakerAiUIIcons.res}  // iconos de paleta del paquete
+
 {$WARN SYMBOL_DEPRECATED OFF}
 
 procedure Register;

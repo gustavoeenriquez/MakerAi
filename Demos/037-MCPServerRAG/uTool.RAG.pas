@@ -3,12 +3,15 @@
 (*
   uTool.RAG  -  Demo 037-MCPServerRAG
 
-  Herramienta MCP que expone un sistema RAG real respaldado por SQL Server:
+  Herramienta MCP que expone un sistema RAG real respaldado por una base de
+  datos (Driver del .ini):
 
-    - TAiRAGVector             : orquestador; con Driver asignado delega la
-                                 busqueda 100% al motor T-SQL
-    - TAiRAGVectorMSSQLDriver  : SQL Server 2025+ (tipo VECTOR nativo,
-                                 VECTOR_DISTANCE coseno + FREETEXTTABLE BM25)
+    - TAiRAGVector               : orquestador; con Driver asignado delega la
+                                   busqueda 100% a la base de datos
+    - TAiRAGVectorMSSQLDriver    : Driver=mssql. SQL Server 2025+ (tipo VECTOR
+                                   nativo, VECTOR_DISTANCE coseno + FREETEXTTABLE BM25)
+    - TAiRAGVectorPostgresDriver : Driver=postgres. PostgreSQL + pgvector (HNSW
+                                   coseno + tsvector); libpq.dll autodetectada
     - TAiOpenAiEmbeddings      : generacion de embeddings client-side
     - Configuracion            : archivo .ini (ver TRagServerConfig / LoadServerConfig)
     - Autenticacion            : login/password QUEMADOS (RAG_LOGIN / RAG_PASSWORD);
@@ -22,7 +25,9 @@
     index_text, index_file, search, list_docs, delete_doc, clear, stats
 
   La conexion a la base de datos es perezosa (EnsureDb): el servidor arranca
-  aunque SQL Server no este disponible y reporta el error por operacion.
+  aunque la base no este disponible y reporta el error por operacion.
+  Los valores de [Database] que empiezan con '@' se leen del entorno
+  (p.ej. Password=@PGPASSWORD), igual que la ApiKey.
   Todas las operaciones se serializan con un TCriticalSection global
   (FireDAC TFDConnection no es thread-safe entre hilos del servidor).
 *)
@@ -45,7 +50,10 @@ type
     Protocol: string;
     Port: Integer;
     // [Database]
+    DbDriver: string;   // mssql | postgres
     DbServer: string;
+    DbPort: Integer;    // 0 = el del driver (postgres: 5432)
+    VendorLib: string;  // postgres: ruta de libpq.dll ('' = autodeteccion)
     DbDatabase: string;
     DbUserName: string;
     DbPassword: string;
@@ -150,22 +158,25 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.Variants,
-  System.SyncObjs, System.NetEncoding, System.IniFiles,
+  System.SyncObjs, System.NetEncoding, System.IniFiles, System.StrUtils,
   FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Error, FireDAC.Stan.Def,
   FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Stan.Param, FireDAC.Phys,
   FireDAC.Phys.Intf, FireDAC.Phys.MSSQL, FireDAC.Phys.MSSQLDef,
+  FireDAC.Phys.PG, FireDAC.Phys.PGDef,
   FireDAC.ConsoleUI.Wait, FireDAC.DApt, Data.DB, FireDAC.Comp.Client,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index, uMakerAi.RAG.MetaData,
-  uMakerAi.RAG.Vector.Driver.MSSQL,
+  uMakerAi.RAG.Vector.Driver.MSSQL, uMakerAi.RAG.Vector.Driver.Postgres,
   uMakerAi.Embeddings.OpenAi;
 
 var
   GLock: TCriticalSection;
   GCfg: TRagServerConfig;
   GAuth: TRagAuth;
-  GDriverLink: TFDPhysMSSQLDriverLink;
+  GMSLink: TFDPhysMSSQLDriverLink;
+  GPGLink: TFDPhysPgDriverLink;
   GConn: TFDConnection;
-  GDriver: TAiRAGVectorMSSQLDriver;
+  GMSDriver: TAiRAGVectorMSSQLDriver;     // Driver=mssql
+  GPGDriver: TAiRAGVectorPostgresDriver;  // Driver=postgres
   GRag: TAiRAGVector;
   GEmb: TAiOpenAiEmbeddings;
   GSchemaReady: Boolean;
@@ -181,6 +192,34 @@ begin
   Result := StrToFloatDef(Ini.ReadString(ASection, AKey, ''), ADefault, TFormatSettings.Invariant);
 end;
 
+// Valores que empiezan con '@' se leen del entorno (Password=@PGPASSWORD)
+function ResolveEnv(const AValue: string): string;
+begin
+  if AValue.StartsWith('@') then
+    Result := GetEnvironmentVariable(AValue.Substring(1))
+  else
+    Result := AValue;
+end;
+
+function IsPostgres: Boolean;
+begin
+  Result := SameText(GCfg.DbDriver, 'postgres') or SameText(GCfg.DbDriver, 'pg');
+end;
+
+// libpq.dll de la instalacion de PostgreSQL mas nueva (como el demo 077)
+function FindLibPq: string;
+var
+  V: Integer;
+begin
+  for V := 18 downto 12 do
+  begin
+    Result := Format('C:\Program Files\PostgreSQL\%d\bin\libpq.dll', [V]);
+    if FileExists(Result) then
+      Exit;
+  end;
+  Result := ''; // FireDAC la busca en el PATH
+end;
+
 function LoadServerConfig(const AFileName: string): TRagServerConfig;
 var
   Ini: TMemIniFile;
@@ -192,7 +231,10 @@ begin
       // Primera ejecucion: generar plantilla editable
       Ini.WriteString('Server', 'Protocol', 'sse');
       Ini.WriteInteger('Server', 'Port', 8080);
+      Ini.WriteString('Database', 'Driver', 'mssql');
       Ini.WriteString('Database', 'Server', 'localhost');
+      Ini.WriteString('Database', 'Port', '');
+      Ini.WriteString('Database', 'VendorLib', '');
       Ini.WriteString('Database', 'Database', 'MakerAiRag');
       Ini.WriteString('Database', 'UserName', 'sa');
       Ini.WriteString('Database', 'Password', '');
@@ -213,10 +255,13 @@ begin
     Result.Protocol := Ini.ReadString('Server', 'Protocol', 'sse');
     Result.Port := Ini.ReadInteger('Server', 'Port', 8080);
 
-    Result.DbServer := Ini.ReadString('Database', 'Server', 'localhost');
-    Result.DbDatabase := Ini.ReadString('Database', 'Database', 'MakerAiRag');
-    Result.DbUserName := Ini.ReadString('Database', 'UserName', '');
-    Result.DbPassword := Ini.ReadString('Database', 'Password', '');
+    Result.DbDriver := LowerCase(Ini.ReadString('Database', 'Driver', 'mssql'));
+    Result.DbServer := ResolveEnv(Ini.ReadString('Database', 'Server', 'localhost'));
+    Result.DbPort := StrToIntDef(Ini.ReadString('Database', 'Port', ''), 0);
+    Result.VendorLib := Ini.ReadString('Database', 'VendorLib', '');
+    Result.DbDatabase := ResolveEnv(Ini.ReadString('Database', 'Database', 'MakerAiRag'));
+    Result.DbUserName := ResolveEnv(Ini.ReadString('Database', 'UserName', ''));
+    Result.DbPassword := ResolveEnv(Ini.ReadString('Database', 'Password', ''));
     Result.OSAuthent := Ini.ReadBool('Database', 'OSAuthent', False);
     Result.TableName := Ini.ReadString('Database', 'TableName', 'rag_docs');
     Result.Entidad := Ini.ReadString('Database', 'Entidad', 'default');
@@ -291,57 +336,110 @@ begin
   GCfg := ACfg;
   GSchemaReady := False;
 
-  GDriverLink := TFDPhysMSSQLDriverLink.Create(nil);
-
   GConn := TFDConnection.Create(nil);
   GConn.LoginPrompt := False;
-  GConn.Params.DriverID := 'MSSQL';
-  GConn.Params.Values['Server'] := ACfg.DbServer;
-  GConn.Params.Database := ACfg.DbDatabase;
-  if ACfg.OSAuthent then
-    GConn.Params.Values['OSAuthent'] := 'Yes'
-  else
-  begin
-    GConn.Params.UserName := ACfg.DbUserName;
-    GConn.Params.Password := ACfg.DbPassword;
-  end;
 
   GEmb := TAiOpenAiEmbeddings.Create(nil);
   GEmb.ApiKey := ACfg.ApiKey;
   GEmb.Model := ACfg.Model;
 
-  GDriver := TAiRAGVectorMSSQLDriver.Create(nil);
-  GDriver.Connection := GConn;
-  GDriver.TableName := ACfg.TableName;
-  GDriver.CurrentEntidad := ACfg.Entidad;
-  GDriver.Language := ParseLanguage(ACfg.Language);
-
   GRag := TAiRAGVector.Create(nil, True);
   GRag.Embeddings := GEmb;
-  GRag.Driver := GDriver;
+
+  if IsPostgres then
+  begin
+    GPGLink := TFDPhysPgDriverLink.Create(nil);
+    if ACfg.VendorLib <> '' then
+      GPGLink.VendorLib := ACfg.VendorLib
+    else
+      GPGLink.VendorLib := FindLibPq;
+    GConn.Params.DriverID := 'PG'; // primero: asignarlo reinicia los demas parametros
+    GConn.Params.Values['Server'] := ACfg.DbServer;
+    GConn.Params.Database := ACfg.DbDatabase;
+    if ACfg.DbPort > 0 then
+      GConn.Params.Values['Port'] := IntToStr(ACfg.DbPort);
+    GConn.Params.UserName := ACfg.DbUserName;
+    GConn.Params.Password := ACfg.DbPassword;
+    GConn.Params.Values['CharacterSet'] := 'UTF8';
+
+    GPGDriver := TAiRAGVectorPostgresDriver.Create(nil);
+    GPGDriver.Connection := GConn;
+    GPGDriver.TableName := ACfg.TableName;
+    GPGDriver.CurrentEntidad := ACfg.Entidad;
+    GPGDriver.Language := ParseLanguage(ACfg.Language);
+    GRag.Driver := GPGDriver;
+  end
+  else
+  begin
+    GMSLink := TFDPhysMSSQLDriverLink.Create(nil);
+    GConn.Params.DriverID := 'MSSQL';
+    GConn.Params.Values['Server'] := ACfg.DbServer;
+    GConn.Params.Database := ACfg.DbDatabase;
+    if ACfg.OSAuthent then
+      GConn.Params.Values['OSAuthent'] := 'Yes'
+    else
+    begin
+      GConn.Params.UserName := ACfg.DbUserName;
+      GConn.Params.Password := ACfg.DbPassword;
+    end;
+
+    GMSDriver := TAiRAGVectorMSSQLDriver.Create(nil);
+    GMSDriver.Connection := GConn;
+    GMSDriver.TableName := ACfg.TableName;
+    GMSDriver.CurrentEntidad := ACfg.Entidad;
+    GMSDriver.Language := ParseLanguage(ACfg.Language);
+    GRag.Driver := GMSDriver;
+  end;
   GRag.Entidad := ACfg.Entidad;
   GRag.SearchOptions.UseEmbeddings := True;
   GRag.SearchOptions.UseBM25 := ACfg.UseBM25;
   GRag.SearchOptions.EmbeddingWeight := ACfg.EmbeddingWeight;
   GRag.SearchOptions.BM25Weight := ACfg.BM25Weight;
 
-  WriteLn(ErrOutput, Format('[rag] SQL Server=%s DB=%s Tabla=%s Entidad=%s Modelo=%s Dim=%d',
-    [ACfg.DbServer, ACfg.DbDatabase, ACfg.TableName, ACfg.Entidad, ACfg.Model, ACfg.Dimensions]));
+  WriteLn(ErrOutput, Format('[rag] Driver=%s Server=%s DB=%s Tabla=%s Entidad=%s Modelo=%s Dim=%d',
+    [IfThen(IsPostgres, 'postgres', 'mssql'), ACfg.DbServer, ACfg.DbDatabase, ACfg.TableName,
+     ACfg.Entidad, ACfg.Model, ACfg.Dimensions]));
 end;
 
 procedure DoneRagEngine;
 begin
   FreeAndNil(GRag);
-  FreeAndNil(GDriver);
+  FreeAndNil(GMSDriver);
+  FreeAndNil(GPGDriver);
   FreeAndNil(GEmb);
   FreeAndNil(GConn);
-  FreeAndNil(GDriverLink);
+  FreeAndNil(GMSLink);
+  FreeAndNil(GPGLink);
   FreeAndNil(GAuth);
   FreeAndNil(GLock);
 end;
 
 // Conexion y esquema perezosos: el servidor arranca aunque la DB no este
 // disponible; cada operacion reporta el error real si sigue caida.
+// Tabla real (el driver de PostgreSQL la pasa a minusculas)
+function RagTable: string;
+begin
+  if IsPostgres then
+    Result := GPGDriver.TableName
+  else
+    Result := GMSDriver.TableName;
+end;
+
+// Expresion SQL del metadato 'doc' (JSON en SQL Server, JSONB en PostgreSQL)
+function DocExpr: string;
+begin
+  if IsPostgres then
+    Result := '(properties->>''doc'')'
+  else
+    Result := 'JSON_VALUE(properties, ''$.doc'')';
+end;
+
+// PostgreSQL trae busqueda de texto (tsvector) siempre
+function FullTextAvailable: Boolean;
+begin
+  Result := IsPostgres or GMSDriver.FullTextAvailable;
+end;
+
 procedure EnsureDb;
 begin
   if not GConn.Connected then
@@ -349,9 +447,12 @@ begin
 
   if not GSchemaReady then
   begin
-    GDriver.CreateSchema(GCfg.TableName, GCfg.Dimensions);
+    if IsPostgres then
+      GPGDriver.CreateSchema(GCfg.TableName, GCfg.Dimensions)
+    else
+      GMSDriver.CreateSchema(GCfg.TableName, GCfg.Dimensions);
     GSchemaReady := True;
-    if not GDriver.FullTextAvailable then
+    if not FullTextAvailable then
       WriteLn(ErrOutput, '[rag] Aviso: Full-Text Search no disponible; busqueda solo vectorial');
   end;
 end;
@@ -368,8 +469,8 @@ begin
   Q := TFDQuery.Create(nil);
   try
     Q.Connection := GConn;
-    Q.SQL.Text := 'DELETE FROM ' + GDriver.TableName +
-      ' WHERE entidad = :ent AND JSON_VALUE(properties, ''$.doc'') = :doc';
+    Q.SQL.Text := 'DELETE FROM ' + RagTable +
+      ' WHERE entidad = :ent AND ' + DocExpr + ' = :doc';
     Q.ParamByName('ent').AsString := GCfg.Entidad;
     Q.ParamByName('doc').AsString := ADoc;
     Q.ExecSQL;
@@ -415,14 +516,14 @@ begin
   inherited;
   FName := 'rag_vector';
   FDescription :=
-    'Sistema RAG (Retrieval-Augmented Generation) sobre SQL Server 2025: ' +
-    'embeddings de OpenAI + BM25 hibrido ejecutados en T-SQL (VECTOR_DISTANCE + FREETEXTTABLE). ' +
+    'Sistema RAG (Retrieval-Augmented Generation) sobre base de datos ' +
+    '(SQL Server 2025 o PostgreSQL + pgvector): embeddings de OpenAI + BM25 hibrido. ' +
     'Operaciones: ' +
-    'index_text (indexa un texto; params: text_content, doc_name, chunk_size, overlap_pct), ' +
-    'index_file (indexa un archivo de texto; params: filepath, doc_name opcional), ' +
-    'search (busqueda semantica; params: query, top_k, min_score), ' +
+    'index_text (indexa un texto; params: textContent, docName, chunkSize, overlapPct), ' +
+    'index_file (indexa un archivo de texto; params: filePath, docName opcional), ' +
+    'search (busqueda semantica; params: query, topK, minScore), ' +
     'list_docs (documentos indexados), ' +
-    'delete_doc (elimina un documento; param: doc_name), ' +
+    'delete_doc (elimina un documento; param: docName), ' +
     'clear (vacia el indice de la entidad), ' +
     'stats (estadisticas). ' +
     'Los datos persisten en la base de datos configurada en el archivo .ini.';
@@ -449,9 +550,9 @@ var
   Chunks: Integer;
 begin
   if P.TextContent.Trim = '' then
-    raise Exception.Create('"text_content" es requerido para index_text');
+    raise Exception.Create('"textContent" es requerido para index_text');
   if P.DocName.Trim = '' then
-    raise Exception.Create('"doc_name" es requerido para index_text');
+    raise Exception.Create('"docName" es requerido para index_text');
 
   Chunks := IndexText(P.TextContent, P.DocName.Trim, P.ChunkSize, P.OverlapPct);
 
@@ -467,7 +568,7 @@ var
   Chunks: Integer;
 begin
   if P.FilePath.Trim = '' then
-    raise Exception.Create('"filepath" es requerido para index_file');
+    raise Exception.Create('"filePath" es requerido para index_file');
   if not TFile.Exists(P.FilePath) then
     raise Exception.CreateFmt('Archivo no encontrado: %s', [P.FilePath]);
 
@@ -548,9 +649,9 @@ begin
   try
     Q.Connection := GConn;
     Q.SQL.Text :=
-      'SELECT ISNULL(JSON_VALUE(properties, ''$.doc''), '''') AS doc, COUNT(*) AS chunks ' +
-      'FROM ' + GDriver.TableName + ' WHERE entidad = :ent ' +
-      'GROUP BY JSON_VALUE(properties, ''$.doc'') ORDER BY 1';
+      'SELECT COALESCE(' + DocExpr + ', '''') AS doc, COUNT(*) AS chunks ' +
+      'FROM ' + RagTable + ' WHERE entidad = :ent ' +
+      'GROUP BY ' + DocExpr + ' ORDER BY 1';
     Q.ParamByName('ent').AsString := GCfg.Entidad;
     Q.Open;
     while not Q.Eof do
@@ -577,7 +678,7 @@ var
   Removed: Integer;
 begin
   if P.DocName.Trim = '' then
-    raise Exception.Create('"doc_name" es requerido para delete_doc');
+    raise Exception.Create('"docName" es requerido para delete_doc');
 
   Removed := RemoveDocChunks(P.DocName.Trim);
 
@@ -594,7 +695,7 @@ begin
   Q := TFDQuery.Create(nil);
   try
     Q.Connection := GConn;
-    Q.SQL.Text := 'DELETE FROM ' + GDriver.TableName + ' WHERE entidad = :ent';
+    Q.SQL.Text := 'DELETE FROM ' + RagTable + ' WHERE entidad = :ent';
     Q.ParamByName('ent').AsString := GCfg.Entidad;
     Q.ExecSQL;
     Cleared := Q.RowsAffected;
@@ -621,8 +722,8 @@ begin
   try
     Q.Connection := GConn;
     Q.SQL.Text :=
-      'SELECT COUNT(*) AS chunks, COUNT(DISTINCT JSON_VALUE(properties, ''$.doc'')) AS docs ' +
-      'FROM ' + GDriver.TableName + ' WHERE entidad = :ent';
+      'SELECT COUNT(*) AS chunks, COUNT(DISTINCT ' + DocExpr + ') AS docs ' +
+      'FROM ' + RagTable + ' WHERE entidad = :ent';
     Q.ParamByName('ent').AsString := GCfg.Entidad;
     Q.Open;
     if not Q.Eof then
@@ -639,10 +740,11 @@ begin
   Result.AddPair('total_docs', TJSONNumber.Create(TotalDocs));
   Result.AddPair('total_chunks', TJSONNumber.Create(TotalChunks));
   Result.AddPair('embedding_model', GEmb.Model);
+  Result.AddPair('driver', IfThen(IsPostgres, 'postgres', 'mssql'));
   Result.AddPair('database', GCfg.DbDatabase);
-  Result.AddPair('table', GDriver.TableName);
+  Result.AddPair('table', RagTable);
   Result.AddPair('entidad', GCfg.Entidad);
-  Result.AddPair('fulltext_available', TJSONBool.Create(GDriver.FullTextAvailable));
+  Result.AddPair('fulltext_available', TJSONBool.Create(FullTextAvailable));
 end;
 
 function TRagTool.ExecuteWithParams(const AParams: TRagParams; const AuthContext: TAiAuthContext): TJSONObject;

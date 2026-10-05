@@ -65,6 +65,7 @@ TAiMCPLogicServer (JSON-RPC engine, tool/resource registry)
 
 **IAiMCPTool** - Tool contract:
 - `GetName`, `GetDescription`, `GetInputSchema`
+- **`GetInputSchema` returns a NEW object on every call and the caller owns it** (`TAiMCPToolBase<T>` generates it from the params class; the Bridge proxy builds it from the `TAiFunctions` item). `Tools_ListTools` adds it to the response without cloning. Until Oct 2026 it was cloned and the original leaked on every `tools/list` (~32 blocks per request on a long-running server; regression case `mcp.initialize.no-leak`). A custom `IAiMCPTool` must not return a cached field
 - `Execute(Arguments: TJSONObject; AuthContext: TAiAuthContext): TJSONObject`
 
 **IAiMCPResource** - Resource contract:

@@ -127,6 +127,7 @@ type
     FOwnJev: TAiJev;
     FApiKey: string;
     FModel: string;
+    FUrl: string; // '' = TypeSafe (JEV_DEFAULT_URL)
     FTiers: TAiJevModelTiers;
     FSensitiveThreshold: Double;
     FSensitiveMinLevel: Integer;
@@ -161,6 +162,9 @@ type
     property Jev: TAiJev read FJev write SetJev;
     property ApiKey: string read FApiKey write FApiKey;
     property Model: string read FModel write FModel;
+    // Servidor System One: '' = TypeSafe; 'http://localhost:11434/v1/' = Ollama
+    // (con Model := 'nimble', 'clef-flash'...). Ignorada si Jev esta asignado
+    property Url: string read FUrl write FUrl;
     property Tiers: TAiJevModelTiers read FTiers write SetTiers;
     property SensitiveThreshold: Double read FSensitiveThreshold write FSensitiveThreshold;
     // Nivel minimo para lo sensible (2 = nunca al modelo mas barato)
@@ -356,6 +360,7 @@ begin
     FOwnJev := TAiJev.Create(nil);
   FOwnJev.ApiKey := FApiKey;
   FOwnJev.Model := FModel;
+  FOwnJev.Url := JevUrlOrDefault(FUrl);
   Result := FOwnJev;
 end;
 
@@ -397,7 +402,7 @@ begin
       State.Free;
     end;
     try
-      JevReportResult(Self, R, FUsage, FPricePerMillionInput, FPricePerMillionOutput, FOnUsage);
+      JevReportResult(Self, R, FUsage, JevAdapterInputPrice(FJev, FUrl, FPricePerMillionInput), FPricePerMillionOutput, FOnUsage);
       Result.Task := R['tarea'].Choice;
       Result.TaskConfidence := R['tarea'].Confidence;
       Result.Difficulty := R['dificultad'].Score;
@@ -516,7 +521,7 @@ end;
 
 function TAiJevModelRouter.GetUsage: TAiJevUsage;
 begin
-  Result := FUsage.Snapshot(FPricePerMillionInput, FPricePerMillionOutput);
+  Result := FUsage.Snapshot(JevAdapterInputPrice(FJev, FUrl, FPricePerMillionInput), FPricePerMillionOutput);
 end;
 
 procedure TAiJevModelRouter.ResetUsage;

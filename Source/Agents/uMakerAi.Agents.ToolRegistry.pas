@@ -306,7 +306,7 @@ constructor TAiToolRegistry.Create;
 begin
   inherited Create;
   FEntries := TList<TAiRegistryEntry>.Create;
-  FPPMBase := 'https://registry.pascalai.org';
+  FPPMBase := 'https://registry.cimamaker.com';
 end;
 
 destructor TAiToolRegistry.Destroy;

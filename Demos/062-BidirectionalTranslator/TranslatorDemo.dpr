@@ -58,8 +58,8 @@ const
   TRANSLATOR_APIKEY = '@OPENAI_API_KEY';
 
   STT_APIKEY = '@OPENAI_API_KEY';
-  // Modelo de la sesion Realtime. OJO: el default del driver
-  // (gpt-4o-realtime-preview) fue retirado por OpenAI.
+  // Modelo de la sesion Realtime (coincide con el default del driver;
+  // se deja explicito para que el demo no cambie si el default cambia).
   STT_MODEL = 'gpt-realtime-2.1';
 
 var

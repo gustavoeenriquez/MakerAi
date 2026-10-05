@@ -27,11 +27,12 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (101 casos)
+## Cobertura actual (117 casos)
 
 | Área | Casos |
 |------|-------|
 | MCP dual-era | negociación moderna (2026-07-28), fallback a handshake legacy, `tools/list`, `tools/call` |
+| MCP fugas | `mcp.initialize.no-leak`: 5 `Initialize` contra el servidor in-process no dejan bloques vivos (mide `GetMemoryManagerState`). Cubre la fuga del cliente (respuesta de `tools/list`) y la del servidor (esquema clonado por tool en cada `tools/list`); falla sin cualquiera de las dos |
 | MCP MRTR | reintento con `accept`, mensaje de elicitation recibido, sin handler → error explícito |
 | Agentes | grafo secuencial con status final y salida encadenada; `lmExpression` con punto decimal bajo configuración regional con coma |
 | SmartDispatch + Jev | `ChatTools.DispatchClassifier` sobre un `TAiOpenChat` real (URL a puerto cerrado): el tag va directo a la tool sin pase por LLM; `TAiJevDispatchClassifier` solo ofrece los tags recibidos, respeta `MinConfidence` y no consulta a Jev si solo queda CHAT |
@@ -66,8 +67,11 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 | Realtime Qwen | eventos del servidor sin red: los tres formatos de transcripción (stash acumulado, text+stash con reescritura, delta incremental) salen como deltas; texto y audio del asistente, cierre y error; `session.update` de los tres drivers (formatos, VAD manual → null, idioma, voz de traducción) y registro en la fábrica y en `TAiRealtimeConnection`; `TAiQwenRealtimeTTS`: `session.update` (modo, idioma, voz, instrucciones), modelo realtime elegido por el prefijo de la voz propia y eventos (listo una sola vez, audio, respuestas, fin, error) |
 | Ciclo de vida del chat | liberar el chat con una petición asíncrona en vuelo espera a que el cliente HTTP la cierre (cierre simulado desde otro hilo; falla sin el fix) y sin petición libera al instante; `ParseJsonTranscript` en el puente de Fase 1 no escribe la respuesta ni dispara eventos (en `cmTranscription` sí); `Voice`/`Voice_Format` del catálogo y del usuario llegan a `TtsParams` |
 | Chat / tool results | serialización OpenAI-compatible: tool calls paralelas con imagen → un solo `user` sintético tras el grupo, modelo sin `cap_Image` → transcripción sin media, transcripción no duplicada, adjunto de texto inline |
+| GPT-Live | `TAiOpenAiLiveChat` con `TLiveProbe` (captura lo enviado, reloj `NowMs` simulado, sin red): `session.start` (modelo en la sesión, delegación a Responses con tools/tool_choice/razonamiento, `DelegateChat` → `client`, fábrica y conector); eventos (deltas, audio, consumo, cierre, error); turnos con la línea de tiempo (fragmento atrasado, cierre por inactividad) la **traza real** de habla superpuesta (falla con la agrupación por orden de llegada) y un cuento largo con transcripts a ráfagas (la voz del audio mantiene el turno; un turno cerrado por inactividad se retoma si el modelo sigue); funciones vía `response.event` con un solo `response.create` también si la respuesta termina antes que la función; delegación `client` (contexto sin repetir lo ya enviado, fragmentos ≤ 400 bytes, `delegation_id` null con Responses, aviso si nadie atiende); `DelegateChat` real contra un puerto cerrado |
+| OpenAI Audio | `TAiOpenAiAudio` con `TFakeOpenAiAudio` (sustituye `PostMultipart`, sin red): formato degradado a json se interpreta como json y queda en `Warning` (falla sin el fix: `Text` con el JSON crudo); timestamps y logprobs ignorados avisados y no enviados; `languages[]`/`keywords[]` sin avisos; `whisper-1` con srt + timestamps sigue igual y avisa la deprecación; `TranslateToEnglish` (solo whisper-1) avisa la deprecación; `audio.defaults`: defaults v3.9 (`gpt-transcribe`, `gpt-4o-mini-tts`) en `TAiOpenAiAudio` y `TAiOpenAiSpeechTool`, con el valor del constructor igual al `default` publicado (RTTI) |
 | Evals | autoprueba del runner (conteo PASS/FAIL) |
 | Jev: consumo | `Usage` y `OnUsage` en `TAiJev` (un evento por llamada) y en PromptGuard, Dispatch, Guardrail, Eval, ModelRouter, RAG y Batch (uno por operación); reranker en paralelo con un `TAiJev` falso por pasaje → un solo evento con el total exacto y en el hilo del llamador; `ResetUsage`; precio configurable |
+| Jev en servidores System One (Ollama) | `jev.systemone.local`: imágenes en el request (`images`, base64 sin saltos que decodifica a los bytes originales, PNG y JPEG reconocidos por los bytes aunque el archivo no tenga extensión), una "imagen" que no es PNG/JPEG/WebP rechazada antes de la red, el precio de TypeSafe no se cobra con `Url` local salvo precio propio, y `JevAdapterInputPrice` toma la `Url` del `Jev` que se usa |
 | Jev (TypeSafe) | forma del request (Choice con opción sin descripción → `null`, Score, Noul con criteria parcial), parseo de las tres respuestas, reintento ante 429/529, reintentos agotados, validación local sin red, 401 sin reintento — con `TFakeJev` (sin red ni API key) |
 
 ## Estructura
@@ -76,7 +80,7 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 |---------|-----------|
 | `MakerAiRegressionSuite.dpr` | Programa principal: CLI (`--json`, `--otel`), ejecución y exit code |
 | `uRegression.Suites.pas` | Definición de los casos (`DefineCases`) y el *dispatcher* que ejecuta cada escenario contra los componentes reales |
-| `uRegression.Fixtures.pas` | `TFakeJev` (TAiJev con respuestas HTTP encoladas), `TFakeDispatchClassifier` y `TFakeImageTool` (SmartDispatch sin red), `TPassageFakeJev` (responde según el pasaje), `FakeEmbedding`, `TFakePromptGuard` y los handlers `ChatError` / `PromptGuardAllow` / `JevCategorizedAllow` / `BatchCancelAfterFirst`, tools MCP de prueba (`echo_upper`, `confirm_op` con MRTR), servidor MCP "solo legacy" (responde `-32601` a `server/discover`) y handlers `of object` (incluye `NodeSuspendOnce` para human-in-the-loop y `AcquireManager` como fábrica del pool A2A) |
+| `uRegression.Fixtures.pas` | `TFakeJev` (TAiJev con respuestas HTTP encoladas), `TFakeDispatchClassifier` y `TFakeImageTool` (SmartDispatch sin red), `TPassageFakeJev` (responde según el pasaje), `FakeEmbedding`, `TFakePromptGuard`, `TFakeOpenAiAudio` (multipart capturado, `FieldValues`) y los handlers `ChatError` / `PromptGuardAllow` / `JevCategorizedAllow` / `BatchCancelAfterFirst`, tools MCP de prueba (`echo_upper`, `confirm_op` con MRTR), servidor MCP "solo legacy" (responde `-32601` a `server/discover`) y handlers `of object` (incluye `NodeSuspendOnce` para human-in-the-loop y `AcquireManager` como fábrica del pool A2A) |
 
 Los escenarios A2A de orquestación viven en `RunA2AFlowScenario`, aparte del bloque `a2a:` básico, porque cada uno arma su propia topología (pool, suspensión, no bloqueante).
 

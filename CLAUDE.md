@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MakerAI is an AI orchestration framework for Delphi developers (v3.8). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, GLM/Z.ai, Qwen/Alibaba, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers/clients, A2A agent interoperability, autonomous agents, observability, guardrails and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+MakerAI is an AI orchestration framework for Delphi developers (v3.9). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, GLM/Z.ai, Qwen/Alibaba, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers/clients, A2A agent interoperability, autonomous agents, observability, guardrails and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+
+**v3.9 highlights (oct 2026):** **OpenAI GPT-Live** (`TAiOpenAiLiveChat`, voz full-duplex que escucha mientras habla y delega el razonamiento a un modelo Responses o a cualquier `TAiChatConnection`; demo 092 con RAG por MCP); **Jev con modelos locales de Ollama** (`/v1/systemone`: nimble, Clef con imágenes; `Url` en los adaptadores, precio 0 fuera de TypeSafe); **3 fugas de memoria** corregidas (servidor MCP en cada `tools/list`, cliente MCP en `Initialize`, `TAiRealtimeFactory`); `TAiMCPServer.BindAddress`; íconos de paleta para los 108 componentes; demo 037 sobre PostgreSQL. **Cambios de comportamiento (3):** audio de OpenAI por defecto `gpt-transcribe`/`gpt-4o-mini-tts` (whisper-1 y tts-1 se apagan), `IAiMCPTool.GetInputSchema` devuelve un objeto del que llama (afecta tools MCP propias que devolvían un campo guardado) y el driver Responses ahora respeta `Max_Tokens`. Deprecados de OpenAI marcados con fecha de apagado. `MAKERAI_API_LEVEL = 39`.
 
 **v3.8 highlights (sep 2026):** **Jev** (TypeSafe AI) para decisiones calibradas sin pasar por un LLM (enrutar agentes, SmartDispatch, guardrails de tools y de entrada, evals, rerank RAG con filtro de inyecciones, etiquetado masivo, enrutador de modelos, medición de consumo); driver **Qwen** (Alibaba) completo; **skills en formato SKILL.md** (`TAiSkills` con `use_skill` bajo demanda para cualquier chat, `TAiSkill`/`TLLMNode` arreglados, parser y cliente PPM comunes); **Computer Use en Linux**. **Cambios de comportamiento (6):** TLS verificado en POSIX (rompe endpoints autofirmados sin `InsecureSkipVerify`), `IAiMemoryStorage` exige el namespace (issue #127, rompe storages propios), Gemini ya ejecuta funciones de usuario, `Model` vacío usa los parámetros del modelo por defecto `TLLMNode.DriverName` vacío por defecto y `tool_choice` forzado solo en la primera llamada (antes loop sin fin). Defaults revisados: Gemini `gemini-3.8-flash`, OpenAI `gpt-6-sol`, Claude sigue en `claude-haiku-4-5`. `MAKERAI_BREAKING_CHANGE = True`.
 
@@ -24,7 +26,7 @@ MakerAI is an AI orchestration framework for Delphi developers (v3.8). It provid
 
 **Git workflow:** `master` is the main/release branch. `dev` is the active development branch. PRs target `master`.
 
-**Testing:** `Tests/RegressionSuite/` es la suite de regresión del framework (101 casos, in-process, sin API keys, ~5 s). Construida sobre `TAiEvalRunner`; cubre MCP dual-era + MRTR, agentes, A2A 1.0 + federación, guardrails, serialización de tool results y el propio runner de evals. Ejecutar antes de cada release:
+**Testing:** `Tests/RegressionSuite/` es la suite de regresión del framework (117 casos, in-process, sin API keys, ~5 s). Construida sobre `TAiEvalRunner`; cubre MCP dual-era + MRTR, agentes, A2A 1.0 + federación, guardrails, serialización de tool results y el propio runner de evals. Ejecutar antes de cada release:
 
 ```bash
 msbuild Tests/RegressionSuite/MakerAiRegressionSuite.dproj /p:Config=Release /p:Platform=Win64
@@ -170,6 +172,7 @@ curl -X POST http://localhost:8080/mcp \
 - `uMakerAi.Realtime.pas` - Abstract base `TAiRealtimeBase` + `TAiRealtimeFactory`; resampler PCM16, VAD modes, thread-safe events
 - `uMakerAi.Realtime.AiConnection.pas` - `TAiRealtimeConnection` universal connector (same pattern as `TAiChatConnection`)
 - `uMakerAi.Realtime.OpenAI.pas` - `TAiOpenAiRealtimeSTT` — WebSocket to `wss://api.openai.com/v1/realtime`, 24 kHz PCM16; full implementation
+- `uMakerAi.Realtime.OpenAI.Live.pas` - `TAiOpenAiLiveChat` — OpenAI GPT-Live (`gpt-live-1`), voz full-duplex; delega el razonamiento a un modelo Responses (default) o a cualquier `TAiChatConnection` (`DelegateChat`); probado runtime
 - `uMakerAi.Realtime.Gemini.pas` - `TAiGeminiRealtimeSTT` — 16 kHz PCM16; **stub, pendiente implementación**
 - `uMakerAi.Realtime.Grok.pas` - `TAiGrokRealtimeChat` — xAI Grok Voice speech-to-speech, `wss://api.x.ai/v1/realtime`, protocolo compatible OpenAI Realtime, 24 kHz PCM16; implementado, pendiente prueba runtime
 - `uMakerAi.Realtime.WebSocket.pas` - compatibility shim; re-exports `TAiRealtimeWSClient` → `TAiWSClient` (Source/WebSocket/)
@@ -261,7 +264,7 @@ uses uJSONHelper;  // JSON helper for older Delphi versions
 
 ### Feature Flags (uMakerAi.Version.inc)
 
-All `MAKERAI_HAS_*` feature flags are `True` by default (OpenAI, Whisper, Embeddings, Tool Calling, RAG Vector/Graph, MCP, Chat Connection, UI Components, Agents). Platform flags: Windows, Linux, Mobile are `True`; **macOS is `False`** (incomplete). `MAKERAI_API_LEVEL = 38`.
+All `MAKERAI_HAS_*` feature flags are `True` by default (OpenAI, Whisper, Embeddings, Tool Calling, RAG Vector/Graph, MCP, Chat Connection, UI Components, Agents). Platform flags: Windows, Linux, Mobile are `True`; **macOS is `False`** (incomplete). `MAKERAI_API_LEVEL = 39`.
 
 ## Thread Safety Notes
 
@@ -334,8 +337,9 @@ API keys use the `@VAR_NAME` convention. When a key property starts with `@`, th
 **Convention:** Each provider uses `[PROVIDER]_API_KEY` (e.g., `OPENAI_API_KEY`, `CLAUDE_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `KIMI_API_KEY`, `GROK_API_KEY`, `MISTRAL_API_KEY`, `COHERE_API_KEY`). `OLLAMA_API_KEY` is usually empty for local setups.
 
 ```pascal
-AiConnection.ApiKey := '@OPENAI_API_KEY';  // Resolved via GetEnvironmentVariable
-AiConnection.ApiKey := 'sk-...';           // Literal key
+AiConnection.Params.Values['ApiKey'] := '@OPENAI_API_KEY';  // TAiChatConnection: no tiene propiedad ApiKey
+AiOpenChat1.ApiKey := '@OPENAI_API_KEY';                   // drivers directos (TAiChat.ApiKey)
+AiOpenChat1.ApiKey := 'sk-...';                            // Literal key
 ```
 
 ## Error Handling

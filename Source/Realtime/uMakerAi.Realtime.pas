@@ -57,10 +57,14 @@ type
   TAiRealtimeFactory = class
   strict private
     class var FInstance: TAiRealtimeFactory;
+  strict private
+    // Campo de instancia: dentro de 'class var' tambien seria de clase y nadie
+    // lo liberaba (fuga reportada al cerrar cualquier app con realtime)
     FDrivers: TDictionary<string, TAiRealtimeClass>;
     constructor Create;
     class destructor ClassDestroy;
   public
+    destructor Destroy; override;
     class function Instance: TAiRealtimeFactory;
     procedure RegisterDriver(const AName: string; AClass: TAiRealtimeClass);
     function  CreateDriver(const AName: string; AOwner: TComponent): TAiRealtimeBase;
@@ -190,6 +194,12 @@ constructor TAiRealtimeFactory.Create;
 begin
   inherited;
   FDrivers := TDictionary<string, TAiRealtimeClass>.Create;
+end;
+
+destructor TAiRealtimeFactory.Destroy;
+begin
+  FDrivers.Free;
+  inherited;
 end;
 
 class destructor TAiRealtimeFactory.ClassDestroy;

@@ -826,6 +826,17 @@ begin
 
     // 3. Par?metros de Configuraci?n
     JResult.AddPair('store', FStore);
+
+    // Tope de salida. El Responses API lo llama max_output_tokens (e INCLUYE
+    // los tokens de razonamiento). Hasta 2026-09-30 este driver no lo emitia
+    // nunca y el Max_tokens del componente se ignoraba en silencio: un cliente
+    // pidiendo max_tokens=200 recibia miles de tokens. Solo se emite con valor
+    // explicito (>0): el comportamiento historico era "sin tope", y emitir el
+    // default 3000 del componente cortaria a los razonadores a mitad de cadena
+    // -- quien no quiera tope debe poner Max_tokens en 0.
+    if Max_tokens > 0 then
+      JResult.AddPair('max_output_tokens',
+        TJSONNumber.Create(System.Math.Max(Max_tokens, 16)));
     if FTruncation <> 'disabled' then
       JResult.AddPair('truncation', FTruncation);
 
@@ -3348,7 +3359,11 @@ begin
         // ---------------------------------------------------------------------
         // F) FINALIZACI?N (METADATOS DE COSTOS, EXTRACTION Y RECURSI?N)
         // ---------------------------------------------------------------------
-        else if EventType = 'response.completed' then
+        // response.incomplete es el cierre de un stream TRUNCADO (max_output_tokens
+        // o content filter): mismo payload que completed, con incomplete_details.
+        // Hasta 2026-09-30 solo se atendia 'completed' y un stream truncado no
+        // disparaba OnReceiveDataEnd: el consumidor esperaba hasta su timeout.
+        else if (EventType = 'response.completed') or (EventType = 'response.incomplete') then
         begin
           if FRecursionNeeded then
           begin
@@ -3436,6 +3451,11 @@ begin
               end;
               if JResp.TryGetValue<string>('model', DeltaVal) then
                 FinalMsg.Model := DeltaVal;
+              // Motivo del truncado, igual que en el modo sincrono (ParseChat).
+              var JIncStream := JResp.GetValue('incomplete_details');
+              if Assigned(JIncStream) and (JIncStream is TJSonObject) and
+                 TJSonObject(JIncStream).TryGetValue<string>('reason', DeltaVal) then
+                FinalMsg.FinishReason := DeltaVal;
             end;
 
             // --- Persistir el texto acumulado en el mensaje (antes solo viajaba
@@ -3507,8 +3527,26 @@ begin
         end
 
         // --- G) ERRORES ---
-        else if EventType = 'error' then
-          DoStateChange(acsError, JsonEvent.ToString);
+        // response.failed es el cierre de un turno FALLIDO (trae response.error);
+        // 'error' es el fallo suelto del protocolo. Ambos deben terminar por la
+        // via de error de verdad: DoStateChange(acsError) a secas NO dispara
+        // OnError, asi que el consumidor no se enteraba y esperaba su timeout,
+        // el mismo silencio que tenia response.incomplete.
+        else if (EventType = 'error') or (EventType = 'response.failed') then
+        begin
+          FBusy := False;
+          var LErrMsg := '';
+          if (EventType = 'response.failed') and
+             JsonEvent.TryGetValue<TJSonObject>('response', JResp) then
+          begin
+            var JErrV := JResp.GetValue('error');
+            if Assigned(JErrV) and (JErrV is TJSonObject) then
+              TJSonObject(JErrV).TryGetValue<string>('message', LErrMsg);
+          end;
+          if LErrMsg = '' then
+            LErrMsg := JsonEvent.ToString;
+          DoError(LErrMsg, nil);
+        end;
 
       finally
         JsonEvent.Free;

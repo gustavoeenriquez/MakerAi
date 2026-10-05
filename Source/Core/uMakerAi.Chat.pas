@@ -446,6 +446,12 @@ type
     // handler SSE (DeepSeek) tienen que poder rellenarlos, o el usage sale a cero.
     FStreamPromptTokens: Integer;     // Tokens captured from streaming usage chunks (reset after each [DONE])
     FStreamCompletionTokens: Integer;
+    // El bloque usage COMPLETO del ultimo chunk que lo trajo (reset tras [DONE]).
+    // Con solo prompt/completion se perdian prompt_tokens_details.cached_tokens,
+    // prompt_cache_hit_tokens y completion_tokens_details.reasoning_tokens: en
+    // streaming nunca llegaban a ParseChat, y en xAI (reasoning aparte de
+    // completion, facturado) eso era la mayor parte del costo.
+    FStreamUsageJSON: string;
     // finish_reason real del proveedor, visto en el ultimo chunk con choices.
     // El cierre sintetico fabricaba un 'stop' fijo, asi que una respuesta
     // cortada por max_tokens se presentaba al consumidor como un final limpio.
@@ -2680,13 +2686,23 @@ Var
         FakeResponseObj.AddPair('id', 'stream-' + IntToStr(TThread.GetTickCount));
         FakeResponseObj.AddPair('model', FModel);
 
-        FakeUsage := TJSonObject.Create;
-        FakeUsage.AddPair('prompt_tokens', TJSONNumber.Create(FStreamPromptTokens));
-        FakeUsage.AddPair('completion_tokens', TJSONNumber.Create(FStreamCompletionTokens));
-        FakeUsage.AddPair('total_tokens', TJSONNumber.Create(FStreamPromptTokens + FStreamCompletionTokens));
+        // El usage tal cual lo mando el proveedor (con sus *_details), para que
+        // ParseChat lo trate igual que en la respuesta sincrona. Si no llego
+        // ninguno, el minimo de siempre.
+        FakeUsage := nil;
+        if FStreamUsageJSON <> '' then
+          FakeUsage := TJSonObject.ParseJSONValue(FStreamUsageJSON) as TJSonObject;
+        if not Assigned(FakeUsage) then
+        begin
+          FakeUsage := TJSonObject.Create;
+          FakeUsage.AddPair('prompt_tokens', TJSONNumber.Create(FStreamPromptTokens));
+          FakeUsage.AddPair('completion_tokens', TJSONNumber.Create(FStreamCompletionTokens));
+          FakeUsage.AddPair('total_tokens', TJSONNumber.Create(FStreamPromptTokens + FStreamCompletionTokens));
+        end;
         FakeResponseObj.AddPair('usage', FakeUsage);
         FStreamPromptTokens := 0;
         FStreamCompletionTokens := 0;
+        FStreamUsageJSON := '';
 
         FakeChoicesArr := TJSonArray.Create;
         FakeChoice := TJSonObject.Create;
@@ -2950,6 +2966,8 @@ Var
         var aOut := JStreamUsage.GetValue<Integer>('completion_tokens', 0);
         if aIn  > 0 then FStreamPromptTokens     := aIn;
         if aOut > 0 then FStreamCompletionTokens := aOut;
+        if (aIn > 0) or (aOut > 0) then
+          FStreamUsageJSON := JStreamUsage.ToJSON;
       end;
 
       // Groq code_interpreter: executed_tools appears at top level before [DONE]

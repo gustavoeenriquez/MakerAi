@@ -1,0 +1,466 @@
+﻿object FormGPTLive: TFormGPTLive
+  Left = 0
+  Top = 0
+  Caption = 'MakerAI '#8212' GPT-Live (voz full-duplex con delegaci'#243'n)'
+  ClientHeight = 720
+  ClientWidth = 1040
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  DesignerMasterStyle = 0
+  object LayConfig: TLayout
+    Align = Top
+    Padding.Left = 8.000000000000000000
+    Padding.Top = 8.000000000000000000
+    Padding.Right = 8.000000000000000000
+    Size.Width = 1040.000000000000000000
+    Size.Height = 150.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object LayRow1: TLayout
+      Align = Top
+      Position.X = 8.000000000000000000
+      Position.Y = 8.000000000000000000
+      Size.Width = 1024.000000000000000000
+      Size.Height = 34.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      object LblMic: TLabel
+        Align = Left
+        Size.Width = 72.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'Micr'#243'fono'
+        TabOrder = 0
+      end
+      object CbxMic: TComboBox
+        Align = Left
+        Margins.Top = 5.000000000000000000
+        Margins.Right = 12.000000000000000000
+        Margins.Bottom = 5.000000000000000000
+        Position.X = 72.000000000000000000
+        Position.Y = 5.000000000000000000
+        Size.Width = 300.000000000000000000
+        Size.Height = 24.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 1
+      end
+      object LblSpeaker: TLabel
+        Align = Left
+        Position.X = 384.000000000000000000
+        Size.Width = 60.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'Parlante'
+        TabOrder = 2
+      end
+      object CbxSpeaker: TComboBox
+        Align = Left
+        Margins.Top = 5.000000000000000000
+        Margins.Right = 12.000000000000000000
+        Margins.Bottom = 5.000000000000000000
+        Position.X = 444.000000000000000000
+        Position.Y = 5.000000000000000000
+        Size.Width = 300.000000000000000000
+        Size.Height = 24.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 3
+      end
+      object LblVoice: TLabel
+        Align = Left
+        Position.X = 756.000000000000000000
+        Size.Width = 36.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'Voz'
+        TabOrder = 4
+      end
+      object CbxVoice: TComboBox
+        Align = Left
+        Margins.Top = 5.000000000000000000
+        Margins.Bottom = 5.000000000000000000
+        Position.X = 792.000000000000000000
+        Position.Y = 5.000000000000000000
+        Size.Width = 120.000000000000000000
+        Size.Height = 24.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 5
+      end
+    end
+    object LayRow2: TLayout
+      Align = Top
+      Position.X = 8.000000000000000000
+      Position.Y = 42.000000000000000000
+      Size.Width = 1024.000000000000000000
+      Size.Height = 34.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      object LblDelegation: TLabel
+        Align = Left
+        Size.Width = 72.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'Delegar a'
+        TabOrder = 0
+      end
+      object CbxDelegation: TComboBox
+        Align = Left
+        Margins.Top = 5.000000000000000000
+        Margins.Right = 12.000000000000000000
+        Margins.Bottom = 5.000000000000000000
+        Position.X = 72.000000000000000000
+        Position.Y = 5.000000000000000000
+        Size.Width = 200.000000000000000000
+        Size.Height = 24.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 1
+      end
+      object LblChatDriver: TLabel
+        Align = Left
+        Position.X = 284.000000000000000000
+        Size.Width = 44.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'Driver'
+        TabOrder = 2
+      end
+      object EdChatDriver: TEdit
+        Touch.InteractiveGestures = [LongTap, DoubleTap]
+        Align = Left
+        TabOrder = 3
+        Position.X = 328.000000000000000000
+        Position.Y = 5.000000000000000000
+        Margins.Top = 5.000000000000000000
+        Margins.Right = 12.000000000000000000
+        Margins.Bottom = 5.000000000000000000
+        Size.Width = 90.000000000000000000
+        Size.Height = 24.000000000000000000
+        Size.PlatformDefault = False
+      end
+      object LblChatModel: TLabel
+        Align = Left
+        Position.X = 430.000000000000000000
+        Size.Width = 52.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'Modelo'
+        TabOrder = 4
+      end
+      object EdChatModel: TEdit
+        Touch.InteractiveGestures = [LongTap, DoubleTap]
+        Align = Left
+        TabOrder = 5
+        Position.X = 482.000000000000000000
+        Position.Y = 5.000000000000000000
+        Margins.Top = 5.000000000000000000
+        Margins.Right = 12.000000000000000000
+        Margins.Bottom = 5.000000000000000000
+        Size.Width = 150.000000000000000000
+        Size.Height = 24.000000000000000000
+        Size.PlatformDefault = False
+      end
+      object ChkWebSearch: TCheckBox
+        Align = Left
+        Position.X = 644.000000000000000000
+        Size.Width = 200.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 6
+        Text = 'B'#250'squeda web (Responses)'
+      end
+    end
+    object LayRow3: TLayout
+      Align = Top
+      Position.X = 8.000000000000000000
+      Position.Y = 76.000000000000000000
+      Size.Width = 1024.000000000000000000
+      Size.Height = 34.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      object LblInstructions: TLabel
+        Align = Left
+        Size.Width = 88.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'Instrucciones'
+        TabOrder = 0
+      end
+      object ChkSpeakerMode: TCheckBox
+        Align = Right
+        Margins.Left = 12.000000000000000000
+        Position.X = 724.000000000000000000
+        Size.Width = 300.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 2
+        Text = 'Modo altavoz (pausar micr'#243'fono mientras habla)'
+      end
+      object EdInstructions: TEdit
+        Touch.InteractiveGestures = [LongTap, DoubleTap]
+        Align = Client
+        TabOrder = 1
+        Margins.Top = 5.000000000000000000
+        Margins.Bottom = 5.000000000000000000
+        Size.Width = 624.000000000000000000
+        Size.Height = 24.000000000000000000
+        Size.PlatformDefault = False
+      end
+    end
+    object LayRow4: TLayout
+      Align = Top
+      Position.X = 8.000000000000000000
+      Position.Y = 110.000000000000000000
+      Size.Width = 1024.000000000000000000
+      Size.Height = 34.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+      object ChkRag: TCheckBox
+        Align = Left
+        Size.Width = 230.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 0
+        Text = 'RAG del demo 037 por MCP'
+      end
+      object LblRagUrl: TLabel
+        Align = Left
+        Position.X = 230.000000000000000000
+        Size.Width = 36.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'URL'
+        TabOrder = 1
+      end
+      object EdRagUrl: TEdit
+        Touch.InteractiveGestures = [LongTap, DoubleTap]
+        Align = Left
+        TabOrder = 2
+        Position.X = 266.000000000000000000
+        Position.Y = 5.000000000000000000
+        Margins.Top = 5.000000000000000000
+        Margins.Right = 12.000000000000000000
+        Margins.Bottom = 5.000000000000000000
+        Size.Width = 260.000000000000000000
+        Size.Height = 24.000000000000000000
+        Size.PlatformDefault = False
+      end
+      object LblRagHint: TLabel
+        Align = Client
+        Size.Width = 486.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'MCPServerRAG.exe --protocol http --port 8093 (Driver=postgres en su .ini; ver CLAUDE.md)'
+        TabOrder = 3
+      end
+    end
+  end
+  object LayButtons: TLayout
+    Align = Top
+    Padding.Left = 8.000000000000000000
+    Padding.Right = 8.000000000000000000
+    Position.Y = 116.000000000000000000
+    Size.Width = 1040.000000000000000000
+    Size.Height = 44.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    object BtnConnect: TButton
+      Align = Left
+      Margins.Top = 6.000000000000000000
+      Margins.Right = 8.000000000000000000
+      Margins.Bottom = 6.000000000000000000
+      Position.X = 8.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 120.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      Text = 'Conectar'
+      OnClick = BtnConnectClick
+    end
+    object BtnMute: TButton
+      Align = Left
+      Margins.Top = 6.000000000000000000
+      Margins.Right = 12.000000000000000000
+      Margins.Bottom = 6.000000000000000000
+      Position.X = 136.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 150.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Text = 'Silenciar micr'#243'fono'
+      OnClick = BtnMuteClick
+    end
+    object PbMicLevel: TProgressBar
+      Align = Left
+      Margins.Top = 14.000000000000000000
+      Margins.Right = 16.000000000000000000
+      Margins.Bottom = 14.000000000000000000
+      Orientation = Horizontal
+      Position.X = 298.000000000000000000
+      Position.Y = 14.000000000000000000
+      Size.Width = 160.000000000000000000
+      Size.Height = 16.000000000000000000
+      Size.PlatformDefault = False
+    end
+    object CircleLight: TCircle
+      Align = Left
+      Margins.Top = 10.000000000000000000
+      Margins.Right = 6.000000000000000000
+      Margins.Bottom = 10.000000000000000000
+      Position.X = 474.000000000000000000
+      Position.Y = 10.000000000000000000
+      Size.Width = 24.000000000000000000
+      Size.Height = 24.000000000000000000
+      Size.PlatformDefault = False
+    end
+    object LblLight: TLabel
+      Align = Left
+      Position.X = 504.000000000000000000
+      Size.Width = 200.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Luz: apagada'
+      TabOrder = 3
+    end
+    object LblStatus: TLabel
+      Align = Client
+      Size.Width = 320.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      TextSettings.HorzAlign = Trailing
+      Text = 'Desconectado'
+      TabOrder = 4
+    end
+  end
+  object LayLive: TLayout
+    Align = Top
+    Padding.Left = 8.000000000000000000
+    Padding.Right = 8.000000000000000000
+    Position.Y = 160.000000000000000000
+    Size.Width = 1040.000000000000000000
+    Size.Height = 52.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 2
+    object LblLiveUser: TLabel
+      Align = Top
+      StyledSettings = [Family, Size, Style]
+      Position.X = 8.000000000000000000
+      Size.Width = 1024.000000000000000000
+      Size.Height = 24.000000000000000000
+      Size.PlatformDefault = False
+      TextSettings.FontColor = claSteelblue
+      TabOrder = 0
+    end
+    object LblLiveAssistant: TLabel
+      Align = Top
+      StyledSettings = [Family, Size, Style]
+      Position.X = 8.000000000000000000
+      Position.Y = 24.000000000000000000
+      Size.Width = 1024.000000000000000000
+      Size.Height = 24.000000000000000000
+      Size.PlatformDefault = False
+      TextSettings.FontColor = claSeagreen
+      TabOrder = 1
+    end
+  end
+  object LayStatusBar: TLayout
+    Align = Bottom
+    Padding.Left = 8.000000000000000000
+    Padding.Right = 8.000000000000000000
+    Position.Y = 694.000000000000000000
+    Size.Width = 1040.000000000000000000
+    Size.Height = 26.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 3
+    object LblUsage: TLabel
+      Align = Client
+      Size.Width = 1024.000000000000000000
+      Size.Height = 26.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Sesi'#243'n: -'
+      TabOrder = 0
+    end
+  end
+  object MemoLog: TMemo
+    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+    DataDetectorTypes = []
+    ReadOnly = True
+    TextSettings.WordWrap = True
+    Align = Bottom
+    Margins.Left = 8.000000000000000000
+    Margins.Right = 8.000000000000000000
+    Position.X = 8.000000000000000000
+    Position.Y = 518.000000000000000000
+    Size.Width = 1024.000000000000000000
+    Size.Height = 176.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 5
+    Viewport.Width = 1020.000000000000000000
+    Viewport.Height = 172.000000000000000000
+  end
+  object Splitter1: TSplitter
+    Align = Bottom
+    Cursor = crVSplit
+    MinSize = 40.000000000000000000
+    Position.Y = 514.000000000000000000
+    Size.Width = 1040.000000000000000000
+    Size.Height = 4.000000000000000000
+    Size.PlatformDefault = False
+  end
+  object LayGuide: TLayout
+    Align = Right
+    Margins.Right = 8.000000000000000000
+    Position.X = 712.000000000000000000
+    Position.Y = 212.000000000000000000
+    Size.Width = 320.000000000000000000
+    Size.Height = 302.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 6
+    object LblGuide: TLabel
+      Align = Top
+      Size.Width = 320.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Gu'#237'a r'#225'pida: qu'#233' preguntar'
+      TabOrder = 0
+    end
+    object MemoGuide: TMemo
+      Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+      DataDetectorTypes = []
+      ReadOnly = True
+      TextSettings.WordWrap = True
+      Align = Client
+      Size.Width = 320.000000000000000000
+      Size.Height = 280.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Viewport.Width = 316.000000000000000000
+      Viewport.Height = 276.000000000000000000
+    end
+  end
+  object MemoConversation: TMemo
+    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+    DataDetectorTypes = []
+    ReadOnly = True
+    TextSettings.WordWrap = True
+    Align = Client
+    Margins.Left = 8.000000000000000000
+    Margins.Right = 8.000000000000000000
+    Size.Width = 1024.000000000000000000
+    Size.Height = 302.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 4
+    Viewport.Width = 1020.000000000000000000
+    Viewport.Height = 298.000000000000000000
+  end
+  object TimerSpeaker: TTimer
+    Enabled = False
+    Interval = 100
+    OnTimer = TimerSpeakerTimer
+    Left = 960
+    Top = 232
+  end
+end

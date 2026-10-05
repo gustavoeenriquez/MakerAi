@@ -241,6 +241,7 @@
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.WebSocket.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.OpenAI.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.OpenAI.Live.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.Gemini.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.Grok.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.AiConnection.pas"/>

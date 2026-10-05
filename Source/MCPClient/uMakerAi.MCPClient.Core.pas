@@ -319,7 +319,12 @@ type
     FSSEThread: TThread;         // Raw TCP SSE reader thread (replaces TNetHTTPClient async GET)
     FIncomingMessages: TThreadedQueue<TJSONObject>;
     FPostEndpoint: string;
-    FRequestIDCounter: Integer;
+    FRequestIDCounter: Integer;  // solo con AtomicIncrement: el cliente pooled es concurrente
+    // Respuestas que un hilo sacó de la cola pero son de OTRO request en vuelo.
+    // Antes se liberaban: con dos tools/call en paralelo sobre el mismo cliente
+    // la respuesta ajena se perdía y su dueño esperaba CallToolTimeoutMs (180 s).
+    FPendingLock: TCriticalSection;
+    FStashedResponses: TObjectDictionary<Integer, TJSONObject>;
     FIsConnected: Boolean;
     FStopRequested: Boolean;
     FAsyncOpDone: Boolean;       // Set when the SSE thread exits; destructor waits on this
@@ -400,9 +405,9 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Log a disco para debug de shutdown — solo activo en builds DEBUG
+// Log a disco para debug de shutdown — solo con el define MAKERAI_MCP_SHUTDOWN_LOG
 // ---------------------------------------------------------------------------
-{$IFDEF DEBUG}
+{$IFDEF MAKERAI_MCP_SHUTDOWN_LOG}
 var
   GMCPShutdownLog: string = 'C:\temp\mcp_shutdown.log';
 
@@ -425,7 +430,7 @@ begin
     // silencioso — no queremos AV dentro del logger
   end;
 end;
-{$ENDIF DEBUG}
+{$ENDIF MAKERAI_MCP_SHUTDOWN_LOG}
 
 { TMCPClientCustom }
 
@@ -462,22 +467,22 @@ end;
 
 destructor TMCPClientCustom.Destroy;
 begin
-  {$IFDEF DEBUG} MCPLog('TMCPClientCustom.Destroy BEGIN name=' + FName); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('TMCPClientCustom.Destroy BEGIN name=' + FName); {$ENDIF}
 
   if FOwnsServerProcess then
   begin
-    {$IFDEF DEBUG} MCPLog('  InternalStopLocalServerProcess...'); {$ENDIF}
+    {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  InternalStopLocalServerProcess...'); {$ENDIF}
     InternalStopLocalServerProcess;
-    {$IFDEF DEBUG} MCPLog('  InternalStopLocalServerProcess OK'); {$ENDIF}
+    {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  InternalStopLocalServerProcess OK'); {$ENDIF}
   end;
 
-  {$IFDEF DEBUG} MCPLog('  FTools.Free...'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FTools.Free...'); {$ENDIF}
   FTools.Free;
-  {$IFDEF DEBUG} MCPLog('  FParams.Free...'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FParams.Free...'); {$ENDIF}
   FParams.Free;
-  {$IFDEF DEBUG} MCPLog('  FDisabledFunctions.Free...'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FDisabledFunctions.Free...'); {$ENDIF}
   FDisabledFunctions.Free;
-  {$IFDEF DEBUG} MCPLog('  FEnvVars.Free...'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FEnvVars.Free...'); {$ENDIF}
   FEnvVars.Free;
   FCallLock.Free;
   inherited;
@@ -565,15 +570,18 @@ begin
 
   Try
     jTools := ListTools;
-
-    If Assigned(jTools) and (jTools.TryGetValue<TJSonValue>('tools', jValue)) and (jValue is TJSonArray) then
-    Begin
-      FTools.Text := jTools.Format;
-      Initialized := True;
-      Enabled := True;
-      Available := True;
-      Result := True;
-    End;
+    try
+      If Assigned(jTools) and (jTools.TryGetValue<TJSonValue>('tools', jValue)) and (jValue is TJSonArray) then
+      Begin
+        FTools.Text := jTools.Format;
+        Initialized := True;
+        Enabled := True;
+        Available := True;
+        Result := True;
+      End;
+    finally
+      jTools.Free; // FTools guarda una copia en texto
+    end;
   Except
     FTools.Clear;
     Initialized := True;
@@ -904,13 +912,13 @@ var
 begin
   // La conexión persistente se cierra aquí automáticamente.
   // No es necesario llamar Disconnect() antes de liberar el componente.
-  {$IFDEF DEBUG} MCPLog('TMCPClientStdIo.Destroy BEGIN name=' + Self.Name); {$ENDIF}
-  {$IFDEF DEBUG} MCPLog('  InternalStopServerProcess...'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('TMCPClientStdIo.Destroy BEGIN name=' + Self.Name); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  InternalStopServerProcess...'); {$ENDIF}
   InternalStopServerProcess;
-  {$IFDEF DEBUG} MCPLog('  InternalStopServerProcess OK'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  InternalStopServerProcess OK'); {$ENDIF}
   if Assigned(FIncomingMessages) then
   begin
-    {$IFDEF DEBUG} MCPLog('  FIncomingMessages.DoShutDown...'); {$ENDIF}
+    {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FIncomingMessages.DoShutDown...'); {$ENDIF}
     FIncomingMessages.DoShutDown;
     while FIncomingMessages.PopItem(LJson) = wrSignaled do
     Begin
@@ -918,13 +926,13 @@ begin
         Break;
       LJson.Free;
     End;
-    {$IFDEF DEBUG} MCPLog('  FreeAndNil(FIncomingMessages)...'); {$ENDIF}
+    {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FreeAndNil(FIncomingMessages)...'); {$ENDIF}
     FreeAndNil(FIncomingMessages);
-    {$IFDEF DEBUG} MCPLog('  FIncomingMessages freed OK'); {$ENDIF}
+    {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FIncomingMessages freed OK'); {$ENDIF}
   end;
-  {$IFDEF DEBUG} MCPLog('TMCPClientStdIo.Destroy END - calling inherited...'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('TMCPClientStdIo.Destroy END - calling inherited...'); {$ENDIF}
   inherited;
-  {$IFDEF DEBUG} MCPLog('TMCPClientStdIo.Destroy inherited OK'); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('TMCPClientStdIo.Destroy inherited OK'); {$ENDIF}
 end;
 
 function TMCPClientStdIo.IsServerRunning: Boolean;
@@ -1194,7 +1202,7 @@ begin
   if not FIsRunning and not Assigned(FReadThread) and not Assigned(FInteractiveProcess) then
     Exit;
 
-  {$IFDEF DEBUG} MCPLog('InternalStopServerProcess BEGIN name=' + Self.Name + ' FIsRunning=' + BoolToStr(FIsRunning, True)); {$ENDIF}
+  {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('InternalStopServerProcess BEGIN name=' + Self.Name + ' FIsRunning=' + BoolToStr(FIsRunning, True)); {$ENDIF}
   DoLog('Stopping MCP server process...');
   DoStatusUpdate('Stopping server...');
   try
@@ -1209,25 +1217,25 @@ begin
     //   3. Liberar FInteractiveProcess → ya nadie lo usa.
     if Assigned(FInteractiveProcess) then
     begin
-      {$IFDEF DEBUG} MCPLog('  Terminate process...'); {$ENDIF}
+      {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  Terminate process...'); {$ENDIF}
       FInteractiveProcess.Terminate;  // mata el proceso; el objeto sigue vivo
-      {$IFDEF DEBUG} MCPLog('  Terminate OK'); {$ENDIF}
+      {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  Terminate OK'); {$ENDIF}
     end;
 
     if Assigned(FReadThread) then
     begin
-      {$IFDEF DEBUG} MCPLog('  WaitFor thread...'); {$ENDIF}
+      {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  WaitFor thread...'); {$ENDIF}
       FReadThread.WaitFor;           // thread ya salió (pipe cerrado + FIsRunning=False)
       FreeAndNil(FReadThread);
-      {$IFDEF DEBUG} MCPLog('  Thread freed'); {$ENDIF}
+      {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  Thread freed'); {$ENDIF}
     end;
 
     // Ahora sí es seguro liberar el objeto del proceso
     if Assigned(FInteractiveProcess) then
     begin
-      {$IFDEF DEBUG} MCPLog('  Free FInteractiveProcess...'); {$ENDIF}
+      {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  Free FInteractiveProcess...'); {$ENDIF}
       TUtilsSystem.StopInteractiveProcess(FInteractiveProcess);
-      {$IFDEF DEBUG} MCPLog('  FInteractiveProcess freed'); {$ENDIF}
+      {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('  FInteractiveProcess freed'); {$ENDIF}
     end;
 
     DoLog('MCP Server stopped.');
@@ -1917,24 +1925,27 @@ begin
         InternalSendInitializedNotification;
       end;
 
-      // 3. Obtener la lista de herramientas
+      // 3. Obtener la lista de herramientas (FTools guarda una copia en texto)
       jTools := ListTools;
-
-      If Assigned(jTools) and (jTools.TryGetValue<TJSonValue>('tools', jValue)) and (jValue is TJSonArray) then
-      Begin
-        FTools.Text := jTools.Format;
-        Enabled := True;
-        Available := True;
-        Result := True; // ?xito
-        Break; // Salir del bucle de reintentos
-      End
-      Else
-      Begin
-        FLastError := 'Failed to retrieve tools list after successful initialization. Server response incomplete.';
-        DoLog(FLastError);
-        // Si el problema no es de conexi?n sino de la respuesta del protocolo, no relanzamos el servidor.
-        Break; // No reintentar relanzando el server, ya est? conectado.
-      End;
+      try
+        If Assigned(jTools) and (jTools.TryGetValue<TJSonValue>('tools', jValue)) and (jValue is TJSonArray) then
+        Begin
+          FTools.Text := jTools.Format;
+          Enabled := True;
+          Available := True;
+          Result := True; // ?xito
+        End
+        Else
+        Begin
+          FLastError := 'Failed to retrieve tools list after successful initialization. Server response incomplete.';
+          DoLog(FLastError);
+        End;
+      finally
+        jTools.Free;
+      end;
+      // Con o sin lista no se reintenta: el servidor ya respondio (si la
+      // respuesta esta incompleta, relanzar el server no la arregla)
+      Break;
     except
       on E: Exception do
       begin
@@ -2760,6 +2771,8 @@ begin
   FSSEThread := nil;
   FIncomingMessages := TThreadedQueue<TJSONObject>.Create(1000, INFINITE, 100);
   FRequestIDCounter := 0;
+  FPendingLock := TCriticalSection.Create;
+  FStashedResponses := TObjectDictionary<Integer, TJSONObject>.Create([doOwnsValues]);
   FIsConnected := False;
   FAsyncOpDone := True; // no async op in progress yet
   FProgressLock := TCriticalSection.Create;
@@ -2809,6 +2822,8 @@ begin
     FreeAndNil(FIncomingMessages);
   end;
 
+  FStashedResponses.Free;  // doOwnsValues: libera las respuestas huérfanas
+  FPendingLock.Free;
   FThreadProgressHandlers.Free;
   FTokenProgressHandlers.Free;
   FThreadBillingHandlers.Free;
@@ -3212,18 +3227,23 @@ var
   Source: TStringStream;
   LHeaders: TNetHeaders;
   LocalClient: TNetHTTPClient;
+  LId: Integer;
 begin
   if FPostEndpoint = '' then
     raise EMCPClientException.Create('Cannot send request: Post Endpoint not initialized.');
 
   Req := TJSONObject.Create;
   try
-    Inc(FRequestIDCounter);
+    // El id va en una variable LOCAL. Antes era Inc(FRequestIDCounter) y luego
+    // se esperaba FRequestIDCounter: con dos tools/call en paralelo (el driver
+    // de Claude lanza una TTask por tool_use) los dos hilos esperaban el id del
+    // segundo y el primero agotaba el timeout.
+    LId := AtomicIncrement(FRequestIDCounter);
     Req.AddPair('jsonrpc', '2.0');
     Req.AddPair('method', AMethod);
 
     if not AMethod.StartsWith('notifications/') then
-      Req.AddPair('id', FRequestIDCounter);
+      Req.AddPair('id', LId);
 
     if Assigned(AParams) then
       Req.AddPair('params', AParams);
@@ -3266,10 +3286,10 @@ begin
     // configurable via Params['CallToolTimeoutMs'] (default 180 s) que adem?s
     // se extiende mientras el servidor siga enviando notifications/progress.
     if AMethod = 'tools/call' then
-      Result := InternalReceiveJSONResponse(FRequestIDCounter,
+      Result := InternalReceiveJSONResponse(LId,
         StrToIntDef(GetParamByName('CallToolTimeoutMs'), 180000))
     else
-      Result := InternalReceiveJSONResponse(FRequestIDCounter);
+      Result := InternalReceiveJSONResponse(LId);
 
   finally
     Req.Free;
@@ -3284,6 +3304,7 @@ var
   LJson: TJSONObject;
   Sw: TStopwatch;
   Id: Integer;
+  WR: TWaitResult;
 
   function StillWaiting: Boolean;
   begin
@@ -3294,27 +3315,73 @@ var
        (Sw.ElapsedMilliseconds < ABS_MAX_WAIT_MS));
   end;
 
+  // Extrae el 'result' (o el mensaje entero si es un error) y libera AJson
+  function TakeResult(AJson: TJSONObject): TJSONObject;
+  var
+    ResVal: TJSONValue;
+  begin
+    if AJson.TryGetValue('result', ResVal) and (ResVal is TJSONObject) then
+      Result := TJSONObject(ResVal.Clone)
+    else
+      Result := TJSONObject(AJson.Clone);
+    AJson.Free;
+  end;
+
+  // ¿Otro hilo ya sacó de la cola la respuesta de ESTE request?
+  function TryTakeStashed(out AJson: TJSONObject): Boolean;
+  begin
+    FPendingLock.Enter;
+    try
+      Result := FStashedResponses.ContainsKey(AExpectedID);
+      if Result then
+        AJson := FStashedResponses.ExtractPair(AExpectedID).Value;
+    finally
+      FPendingLock.Leave;
+    end;
+  end;
+
 begin
   Result := nil;
   Sw := TStopwatch.StartNew;
 
+  // El cliente pooled atiende varios requests a la vez y todos comparten UNA
+  // cola. Quien saca una respuesta ajena la deja en FStashedResponses para su
+  // dueño en vez de liberarla (eso perdía respuestas: ver la declaración).
   while StillWaiting do
   begin
-    if FIncomingMessages.PopItem(LJson) = wrSignaled then
+    if TryTakeStashed(LJson) then
+      Exit(TakeResult(LJson));
+
+    // PopItem espera hasta 100 ms (PopTimeout de la cola). Cualquier otro
+    // resultado que no sea wrSignaled/wrTimeout vuelve al instante: pausa para
+    // no girar en seco.
+    WR := FIncomingMessages.PopItem(LJson);
+    if (WR <> wrSignaled) and (WR <> wrTimeout) then
+      Sleep(10);
+    if WR = wrSignaled then
     begin
-      if LJson.TryGetValue('id', Id) and (Id = AExpectedID) then
+      // Tras DoShutDown con la cola vacía PopItem devuelve wrSignaled con nil
+      // (ver el destructor: así se quemaron núcleos en calera1).
+      if LJson = nil then
+        Break;
+      if LJson.TryGetValue('id', Id) then
       begin
-        var
-          ResVal: TJSonValue;
-        if LJson.TryGetValue('result', ResVal) and (ResVal is TJSONObject) then
-          Result := TJSONObject(ResVal.Clone)
-        else
-          Result := TJSONObject(LJson.Clone);
-        LJson.Free;
-        Exit;
+        if Id = AExpectedID then
+          Exit(TakeResult(LJson));
+        FPendingLock.Enter;
+        try
+          // Tope de higiene: respuestas cuyo dueño ya agotó su timeout nunca
+          // se reclaman. Con 256 pendientes algo va muy mal; se descartan.
+          if FStashedResponses.Count >= 256 then
+            FStashedResponses.Clear;
+          FStashedResponses.AddOrSetValue(Id, LJson);
+        finally
+          FPendingLock.Leave;
+        end;
+        Continue;  // puede haber más en la cola: sin esperar
       end
       else
-        LJson.Free;
+        LJson.Free;  // sin id: una notificación ya despachada por el lector
     end;
 
     if not FIsConnected then
@@ -3322,7 +3389,6 @@ begin
       DoLog(Format('SSE: Connection lost while waiting for response id=%d', [AExpectedID]));
       Break;
     end;
-    Sleep(10);
   end;
   if Result = nil then
     DoLog(Format('SSE: Timeout/nil for response id=%d (waited %dms)', [AExpectedID, Sw.ElapsedMilliseconds]));

@@ -93,7 +93,7 @@ Node.Skill := TAiSkill.FromPPM('skill-code-review');
 Node.Skill := TAiSkill.FromPPM('code-review');   // también: se prueba 'skill-code-review'
 ```
 
-- Registry por defecto: `https://registry.pascalai.org`. Para otro, el segundo parámetro: `FromPPM('mi-skill', 'https://mi-registry.local')`.
+- Registry por defecto: `https://registry.cimamaker.com`. Para otro, el segundo parámetro: `FromPPM('mi-skill', 'https://mi-registry.local')`.
 - Sin versión se usa la **mayor versión no retirada** (por semver). Para fijar una: `FromPPM('skill-code-review', '', '1.0.0')`.
 - `Skill.Version` y `Skill.SourcePath` dicen qué se descargó y de dónde.
 - Para ver los skills disponibles: `ppm search --type skill`, o `TAiPrompts.SearchPPM('', 'skill')`.

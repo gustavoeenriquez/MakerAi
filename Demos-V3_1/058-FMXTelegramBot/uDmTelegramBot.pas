@@ -25,7 +25,7 @@
 // Comandos: /start /help /clear /status /voice /voiceon /voiceoff
 // Admin:    /allow /deny /users /whitelist /openmode
 //
-// PPM registry: https://registry.pascalai.org  (mcp-transcribe, mcp-tts)
+// PPM registry: https://registry.cimamaker.com  (mcp-transcribe, mcp-tts)
 // MCPService:   FMCPToolsURL (default vacio = modo directo)
 // Datos:        %APPDATA%\MakerAI\
 // =============================================================================
@@ -290,7 +290,7 @@ const
     'Pide confirmaci'#243'n antes de operaciones destructivas. ' +
     'Responde siempre en espa'#241'ol.';
 
-  PPM_REGISTRY = 'https://registry.pascalai.org';
+  PPM_REGISTRY = 'https://registry.cimamaker.com';
 
 // =============================================================================
 // Lifecycle

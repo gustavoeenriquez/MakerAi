@@ -128,6 +128,10 @@ procedure TAiMCPHttpServer.Start;
 begin
   inherited Start;
   FHttpServer.DefaultPort := FLogicServer.Port;
+  // Sin BindAddress Indy escucha en todas las interfaces (0.0.0.0)
+  FHttpServer.Bindings.Clear;
+  if EffectiveBindAddress <> '' then
+    FHttpServer.Bindings.Add.SetBinding(EffectiveBindAddress, FLogicServer.Port);
   FHttpServer.Active := True;
 end;
 

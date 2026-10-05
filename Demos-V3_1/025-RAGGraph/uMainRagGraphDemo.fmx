@@ -4632,7 +4632,7 @@
           ''
           '<#texto>')
       end>
-    PPMRegistryUrl = 'https://registry.pascalai.org'
+    PPMRegistryUrl = 'https://registry.cimamaker.com'
     Left = 280
     Top = 512
   end
