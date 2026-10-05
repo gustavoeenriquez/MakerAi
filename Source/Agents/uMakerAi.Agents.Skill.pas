@@ -100,7 +100,7 @@ type
     // Descarga el SKILL.md del registry PPM.
     // AName: nombre del paquete ('skill-code-review'; también acepta
     //   'code-review' y prueba con el prefijo 'skill-').
-    // ARegistryUrl: URL del registry; vacío = https://registry.pascalai.org.
+    // ARegistryUrl: URL del registry; vacío = https://registry.cimamaker.com.
     // AVersion: vacío = la última versión no retirada.
     procedure LoadFromPPM(const AName: String; const ARegistryUrl: String = '';
                           const AVersion: String = '');

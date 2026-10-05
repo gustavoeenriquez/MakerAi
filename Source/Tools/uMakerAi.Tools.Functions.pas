@@ -383,14 +383,14 @@ type
     // Integración con PPM (registry público de herramientas MCP)
     // SearchPPMMCP: busca herramientas MCP en el registry. El llamador libera el TJSONObject.
     function SearchPPMMCP(const AQuery: String; APage: Integer = 1; APerPage: Integer = 20;
-      const ARegistryUrl: String = 'https://registry.pascalai.org'): TJSONObject;
+      const ARegistryUrl: String = 'https://registry.cimamaker.com'): TJSONObject;
 
     // ImportMCPFromPPM: registra una herramienta MCP desde PPM como stub StdIo sin descargar.
     // Útil cuando el binario ya está instalado manualmente; el llamador debe asignar
     // Params['Command'] con la ruta al ejecutable antes de habilitar el item.
     // AVersion vacío = resuelve la última versión disponible.
     function ImportMCPFromPPM(const AName: String; const AVersion: String = '';
-      const ARegistryUrl: String = 'https://registry.pascalai.org'): TMCPClientItem;
+      const ARegistryUrl: String = 'https://registry.cimamaker.com'): TMCPClientItem;
 
     // InstallMCPFromPPM: descarga el .paipkg desde el registry, extrae el binario y
     // registra el cliente StdIo listo para usar.
@@ -399,13 +399,13 @@ type
     // Retorna el TMCPClientItem configurado, o nil si falla.
     function InstallMCPFromPPM(const AName: String; const AVersion: String = '';
       const AInstallDir: String = '';
-      const ARegistryUrl: String = 'https://registry.pascalai.org'): TMCPClientItem;
+      const ARegistryUrl: String = 'https://registry.cimamaker.com'): TMCPClientItem;
 
     // GetMCPSchema: retorna el JSON Schema de una herramienta MCP del registry.
     // El llamador es responsable de liberar el TJSONObject devuelto.
     // AVersion vacío = resuelve la última versión disponible.
     function GetMCPSchema(const AName: String; const AVersion: String = '';
-      const ARegistryUrl: String = 'https://registry.pascalai.org'): TJSONObject;
+      const ARegistryUrl: String = 'https://registry.cimamaker.com'): TJSONObject;
 
     // GetAutoMCPSystemPrompt: retorna un system prompt listo para usar que instruye
     // al LLM a utilizar las herramientas PPM (ppm_search, ppm_install, call_mcp_tool).
@@ -2583,7 +2583,7 @@ begin
   LFn := TFunctionActionItem(FAutoMCPFunctions.Add);
   LFn.FunctionName := 'ppm_search';
   LFn.Description.Text :=
-    'Search for MCP tools in the PPM registry (registry.pascalai.org). ' +
+    'Search for MCP tools in the PPM registry (registry.cimamaker.com). ' +
     'Returns a list of available tools matching the query with their names, ' +
     'descriptions and available functions. Call this before ppm_install.';
   LFn.Enabled := True;
@@ -3151,7 +3151,7 @@ constructor TAutoMCPConfig.Create;
 begin
   inherited Create;
   FActive := False;
-  FRegistryUrl := 'https://registry.pascalai.org';
+  FRegistryUrl := 'https://registry.cimamaker.com';
   FAllowed := TStringList.Create;
   FBlocked := TStringList.Create;
 end;

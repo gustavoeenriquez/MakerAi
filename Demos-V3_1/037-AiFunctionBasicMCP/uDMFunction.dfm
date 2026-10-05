@@ -53,7 +53,7 @@
         ToolType = tt_function
       end>
     MCPClients = <>
-    AutoMCPConfig.RegistryUrl = 'https://registry.pascalai.org'
+    AutoMCPConfig.RegistryUrl = 'https://registry.cimamaker.com'
     Left = 296
     Top = 208
   end

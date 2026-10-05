@@ -1003,6 +1003,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 ## 🔄 Changelog
 
 ### v3.9.0 (2026-10-05)
+- Changed: **the PPM registry moved to `https://registry.cimamaker.com`** — new default in `TAiFunctions` (AutoMCP, PPM search), `TAiPrompts`, `TAiSkill`, the SKILL.md client and the demos. Code that sets `registry.pascalai.org` explicitly keeps working while that host stays up
 - ⚠️ Fix: **the OpenAI Responses driver never sent `max_output_tokens`** — `Max_Tokens` was silently ignored in the whole driver. `response.incomplete` now closes the stream with its finish reason, and `response.failed` / stream `error` events end the turn through the error path instead of leaving the caller waiting for its timeout
 - Fix: **parallel `tools/call` on a shared `TMCPClientSSE` lost responses** (a call waited 180 s and came back empty) — two races on the request id
 - New: **`TAiMCPServer.BindAddress`** (or the `MCP_BIND_ADDRESS` environment variable) binds SSE/HTTP MCP servers to one local IP; they always listened on 0.0.0.0

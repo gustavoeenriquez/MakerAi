@@ -19960,7 +19960,7 @@ object Form2: TForm2
           'Timeout=15000')
         Configuration = '(Properties, Click [...] to edit)'
       end>
-    AutoMCPConfig.RegistryUrl = 'https://registry.pascalai.org'
+    AutoMCPConfig.RegistryUrl = 'https://registry.cimamaker.com'
     Left = 464
     Top = 304
   end
@@ -20019,7 +20019,7 @@ object Form2: TForm2
   end
   object AiPrompts1: TAiPrompts
     Items = <>
-    PPMRegistryUrl = 'https://registry.pascalai.org'
+    PPMRegistryUrl = 'https://registry.cimamaker.com'
     Left = 672
     Top = 424
   end

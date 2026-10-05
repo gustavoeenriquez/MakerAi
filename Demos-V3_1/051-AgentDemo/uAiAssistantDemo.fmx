@@ -173,7 +173,7 @@
           'El mensaje que retorna el compilador es el siguiente:'
           '<#resultado>')
       end>
-    PPMRegistryUrl = 'https://registry.pascalai.org'
+    PPMRegistryUrl = 'https://registry.cimamaker.com'
     Left = 504
     Top = 192
   end

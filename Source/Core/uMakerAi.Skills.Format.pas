@@ -36,7 +36,7 @@ uses
 
 const
   AI_SKILL_FILE_NAME       = 'SKILL.md';
-  AI_PPM_DEFAULT_REGISTRY  = 'https://registry.pascalai.org';
+  AI_PPM_DEFAULT_REGISTRY  = 'https://registry.cimamaker.com';
   AI_PPM_SKILL_PREFIX      = 'skill-';
 
 type

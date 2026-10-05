@@ -7,7 +7,7 @@ program AutoMCP;
 // MakerAI — 06-MCP / 06-AutoMCP
 // =============================================================================
 // AutoMCP: descarga e instala servidores MCP desde el registro PPM
-// (https://registry.pascalai.org) automaticamente.
+// (https://registry.cimamaker.com) automaticamente.
 // El LLM puede usar las herramientas instaladas sin configuracion manual.
 //
 // Conceptos que cubre:
@@ -20,7 +20,7 @@ program AutoMCP;
 //   - TAiChatConnection con herramientas MCP autoinstaladas
 //
 // Paquetes PPM instalados: mcp-calculator (si esta disponible en el registro)
-// Registro PPM: https://registry.pascalai.org
+// Registro PPM: https://registry.cimamaker.com
 // =============================================================================
 
 uses
@@ -41,7 +41,7 @@ const
   DRIVER      = 'Claude';
   MODEL       = 'claude-haiku-4-5-20251001';
   API_KEY     = '@CLAUDE_API_KEY';
-  REGISTRY    = 'https://registry.pascalai.org';
+  REGISTRY    = 'https://registry.cimamaker.com';
   MCP_PACKAGE = 'mcp-calculator';
 
 // =============================================================================

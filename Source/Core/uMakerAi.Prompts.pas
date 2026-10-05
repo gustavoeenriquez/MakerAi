@@ -133,7 +133,7 @@ type
 
   published
     Property Items: TCollection Read FItems Write FItems;
-    // URL del registry PPM. Por defecto: https://registry.pascalai.org
+    // URL del registry PPM. Por defecto: https://registry.cimamaker.com
     property PPMRegistryUrl: String read FPPMRegistryUrl write FPPMRegistryUrl;
   end;
 

@@ -36,7 +36,7 @@
           'Pide confirmaci'#243'n antes de operaciones destructivas.'
           'Responde siempre en espa'#241'ol.')
       end>
-    PPMRegistryUrl = 'https://registry.pascalai.org'
+    PPMRegistryUrl = 'https://registry.cimamaker.com'
     Left = 456
     Top = 224
   end
@@ -81,7 +81,7 @@
         ToolType = tt_function
       end>
     MCPClients = <>
-    PPMRegistryUrl = 'https://registry.pascalai.org'
+    PPMRegistryUrl = 'https://registry.cimamaker.com'
     Left = 296
     Top = 184
   end

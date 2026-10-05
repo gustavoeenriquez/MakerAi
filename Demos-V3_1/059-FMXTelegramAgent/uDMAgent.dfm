@@ -43,7 +43,7 @@
         ToolType = tt_function
       end>
     MCPClients = <>
-    PPMRegistryUrl = 'https://registry.pascalai.org'
+    PPMRegistryUrl = 'https://registry.cimamaker.com'
     Left = 296
     Top = 136
   end
@@ -60,7 +60,7 @@
           'Use tools proactively when the user asks to do something actionable.'
           'Ask for confirmation before destructive operations.')
       end>
-    PPMRegistryUrl = 'https://registry.pascalai.org'
+    PPMRegistryUrl = 'https://registry.cimamaker.com'
     Left = 456
     Top = 136
   end

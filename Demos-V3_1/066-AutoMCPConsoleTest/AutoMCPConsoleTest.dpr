@@ -84,7 +84,7 @@ begin
   FFunctions.OnLog          := OnLog;
   FFunctions.OnStatusUpdate := OnStatus;
   FFunctions.AutoMCPConfig.Active      := True;
-  FFunctions.AutoMCPConfig.RegistryUrl := 'https://registry.pascalai.org';
+  FFunctions.AutoMCPConfig.RegistryUrl := 'https://registry.cimamaker.com';
 
   // TAiChatConnection
   FAiConn := TAiChatConnection.Create(nil);
@@ -157,7 +157,7 @@ begin
   // Instalar
   INFO('Descargando e instalando mcp-postgres...');
   LItem := FFunctions.InstallMCPFromPPM('mcp-postgres', '', '',
-    'https://registry.pascalai.org');
+    'https://registry.cimamaker.com');
 
   if not Assigned(LItem) then
   begin
@@ -341,7 +341,7 @@ begin
   begin
     INFO('Descargando mcp-tts-gemini desde PPM...');
     LItem := FFunctions.InstallMCPFromPPM('mcp-tts-gemini', '', '',
-      'https://registry.pascalai.org');
+      'https://registry.cimamaker.com');
     if not Assigned(LItem) then
     begin
       ERR('InstallMCPFromPPM retornó nil.');

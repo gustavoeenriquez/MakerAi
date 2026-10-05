@@ -104,7 +104,7 @@ In the IDE: drop a `TAiSkills` on the form and set `Functions` and `Folder`, or 
 | `AddSkill(name, description, instructions)` | Code |
 | `LoadFromFile(path)` | A `SKILL.md` or the folder containing it |
 | `LoadFromFolder(dir)` | Every `dir\<name>\SKILL.md` (returns how many) |
-| `LoadFromPPM('skill-code-review')` | PPM registry (`https://registry.pascalai.org`) |
+| `LoadFromPPM('skill-code-review')` | PPM registry (`https://registry.cimamaker.com`) |
 | `Folder` property | Loaded when the application starts |
 | `Skills` collection | Edited in the IDE |
 
@@ -200,6 +200,6 @@ A skill is text the model will **obey**. A third-party skill (from the registry,
 | `use_skill` is not among the functions | No enabled skills (the function is switched off when there are none), or you're looking at design time (it's registered at run time) |
 | `read_skill_file` is not there | No skill comes from a folder (skills from `AddSkill` or PPM have no supporting files), or `AllowFileAccess = False` |
 | `EAiSkillError: ... es de tipo "prompt", no un skill` | The PPM package is a prompt: use `TAiPrompts.LoadFromPPM` or look for the equivalent skill |
-| `EAiSkillError: La URL devolvió una página HTML...` | The configured registry is not PPM's (`https://registry.pascalai.org`) |
+| `EAiSkillError: La URL devolvió una página HTML...` | The configured registry is not PPM's (`https://registry.cimamaker.com`) |
 
 > Error messages from the framework are in Spanish.

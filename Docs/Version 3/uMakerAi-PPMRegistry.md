@@ -33,7 +33,7 @@
 | `pai` | Paquetes de librerías Pascal AI |
 | `clib` | Bindings de librerías C |
 
-**URL oficial del registry:** `https://registry.pascalai.org`
+**URL oficial del registry:** `https://registry.cimamaker.com`
 
 MakerAI se integra con los tipos `prompt` y `mcp` a través de `TAiPrompts` y `TAiFunctions` respectivamente. Los endpoints públicos de búsqueda y descarga **no requieren autenticación**.
 
@@ -53,7 +53,7 @@ URL base del registry PPM. Por defecto apunta al registry oficial. Solo es neces
 
 ```pascal
 // Usar el registry oficial (por defecto, no hace falta asignarlo)
-AiPrompts1.PPMRegistryUrl := 'https://registry.pascalai.org';
+AiPrompts1.PPMRegistryUrl := 'https://registry.cimamaker.com';
 
 // Usar un registry privado interno
 AiPrompts1.PPMRegistryUrl := 'http://mi-servidor-interno:8080';
@@ -248,7 +248,7 @@ function SearchPPMMCP(
   const AQuery: String;
   APage: Integer = 1;
   APerPage: Integer = 20;
-  const ARegistryUrl: String = 'https://registry.pascalai.org'
+  const ARegistryUrl: String = 'https://registry.cimamaker.com'
 ): TJSONObject;
 ```
 
@@ -313,7 +313,7 @@ end;
 function ImportMCPFromPPM(
   const AName: String;
   const AVersion: String = '';
-  const ARegistryUrl: String = 'https://registry.pascalai.org'
+  const ARegistryUrl: String = 'https://registry.cimamaker.com'
 ): TMCPClientItem;
 ```
 
@@ -403,7 +403,7 @@ begin
   LResult := AiPrompts1.SearchPPM(EdtBusqueda.Text, 'prompt', 1, 50);
   if not Assigned(LResult) then
   begin
-    ShowMessage('Error al conectar con registry.pascalai.org');
+    ShowMessage('Error al conectar con registry.cimamaker.com');
     Exit;
   end;
   try
@@ -524,11 +524,11 @@ Los métodos de MakerAI llaman internamente a estos endpoints. Se documentan aqu
 ```pascal
 // uMakerAi.Prompts.pas
 const
-  PPM_DEFAULT_REGISTRY = 'https://registry.pascalai.org';
+  PPM_DEFAULT_REGISTRY = 'https://registry.cimamaker.com';
 
 // uMakerAi.Tools.Functions.pas
 // La URL por defecto se pasa como valor por defecto del parámetro ARegistryUrl:
-//   const ARegistryUrl: String = 'https://registry.pascalai.org'
+//   const ARegistryUrl: String = 'https://registry.cimamaker.com'
 ```
 
 ### Dependencias añadidas
