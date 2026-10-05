@@ -100,7 +100,7 @@ Same pattern as `TAiChatConnection`. Wraps a concrete driver instance, re-exposi
 AiRealtime := TAiRealtimeConnection.Create(nil);
 AiRealtime.DriverName := 'OpenAI';
 AiRealtime.ApiKey     := '@OPENAI_API_KEY';
-AiRealtime.Model      := 'gpt-4o-realtime-preview';
+AiRealtime.Model      := 'gpt-realtime-2.1';
 AiRealtime.VADMode    := rvmServerVad;
 AiRealtime.OnTranscriptCompleted := HandleTranscript;
 AiRealtime.Connect;
@@ -141,8 +141,11 @@ voice events (`OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`,
 
 | Model | Notes |
 |-------|-------|
-| `gpt-realtime` | Default session model |
-| `gpt-4o-mini-realtime-preview` | Faster, lower cost |
+| `gpt-realtime-2.1` | **Default** session model (Jul 2026) — better alphanumeric recognition and noise/silence handling |
+| `gpt-realtime-2.1-mini` | Faster, lower cost |
+| `gpt-realtime` | Previous generation |
+
+`gpt-4o-realtime-preview` / `gpt-4o-mini-realtime-preview` were retired by OpenAI — do not use them.
 
 ### Transcription models (`TranscriptionModel` property)
 
@@ -150,8 +153,10 @@ voice events (`OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`,
 |------|-------|-------|
 | `otmGptLiveTranscribe` | `gpt-live-transcribe` | **Default** (2026) — low-latency live STT, WER 9.60% |
 | `otmGptTranscribe` | `gpt-transcribe` | Committed turns; uses prior turns as context |
-| `otmGpt4oTranscribe` / `otmGpt4oMiniTranscribe` | `gpt-4o-transcribe[-mini]` | Previous generation |
-| `otmWhisper1` | `whisper-1` | Legacy |
+| `otmGpt4oTranscribe` / `otmGpt4oMiniTranscribe` | `gpt-4o-transcribe[-mini]` | **Deprecated** (2026-08-26), shutdown 2027-02-26 |
+| `otmWhisper1` | `whisper-1` | **Deprecated** (2026-08-26), shutdown 2027-02-26 |
+
+The deprecated values stay in the enum so existing DFM/FMX files keep loading; migrate them to `otmGptLiveTranscribe` or `otmGptTranscribe`.
 
 The new models accept context config (verified live 2026-08-01): `TranscriptionPrompt` (free-form topic), `TranscriptionKeywords` (domain terms, one per line), `Languages` (multi-language list; falls back to base `Language`), `LowDelay` (faster partials, live model only). Legacy models keep the singular `language` field — the driver switches the session.update schema automatically. OpenAI deltas are **incremental** (unlike Grok's cumulative transcript).
 
@@ -425,7 +430,7 @@ var
 // Setup
 STT := TAiRealtimeConnection.Create(nil);
 STT.DriverName  := 'OpenAI';
-STT.Model       := 'gpt-4o-realtime-preview';
+STT.Model       := 'gpt-realtime-2.1';
 STT.VADMode     := rvmServerVad;
 STT.OnTranscriptDelta     := procedure(Delta: string) begin Write(Delta); end;
 STT.OnTranscriptCompleted := procedure(Text, Id: string) begin WriteLn; WriteLn('→ ', Text); end;

@@ -160,7 +160,7 @@ var
 begin
   WS := TAiWSClient.Create(TSChannelTransport.Create);
   WS.OnMessage := HandleMessage;
-  WS.Connect('api.openai.com', '/v1/realtime?model=gpt-4o-realtime-preview', 443);
+  WS.Connect('api.openai.com', '/v1/realtime?model=gpt-realtime-2.1', 443);
   // ...
   WS.Disconnect;
   WS.Free;

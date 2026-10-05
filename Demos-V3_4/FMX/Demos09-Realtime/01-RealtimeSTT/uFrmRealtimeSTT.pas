@@ -98,8 +98,8 @@ const
 
 procedure TFrmRealtimeSTT.FormCreate(Sender: TObject);
 begin
-  CbxModel.Items.Add('gpt-4o-realtime-preview');
-  CbxModel.Items.Add('gpt-4o-mini-realtime-preview');
+  CbxModel.Items.Add('gpt-realtime-2.1');
+  CbxModel.Items.Add('gpt-realtime-2.1-mini');
   CbxModel.ItemIndex := 0;
 
   FSTT := TAiOpenAiRealtimeSTT.Create(nil);
@@ -109,7 +109,7 @@ begin
   FSTT.SilenceDurationMs  := 600;
   FSTT.PrefixPaddingMs    := 300;
   FSTT.NoiseReduction     := rnrNearField;
-  FSTT.TranscriptionModel := otmGpt4oTranscribe;
+  FSTT.TranscriptionModel := otmGptLiveTranscribe;
 
   FSTT.OnConnected           := OnSttConnected;
   FSTT.OnDisconnected        := OnSttDisconnected;

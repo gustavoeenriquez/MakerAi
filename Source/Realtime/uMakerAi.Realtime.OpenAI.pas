@@ -7,7 +7,8 @@
 // Modelos de transcripcion:
 //   gpt-live-transcribe (default — baja latencia, WER 9.60% vs 11.65% whisper)
 //   gpt-transcribe (turnos confirmados; usa turnos previos como contexto)
-//   gpt-4o-transcribe, gpt-4o-mini-transcribe, whisper-1 (legacy)
+//   gpt-4o-transcribe, gpt-4o-mini-transcribe, whisper-1 (DEPRECADOS por
+//   OpenAI el 2026-08-26; dejan de funcionar el 2027-02-26)
 // Los modelos nuevos aceptan contexto: TranscriptionPrompt (tema libre),
 // TranscriptionKeywords (terminos de dominio), Languages (multi-idioma) y
 // LowDelay (parciales mas rapidos a costa de precision).
@@ -26,10 +27,13 @@ uses
   uMakerAi.Realtime, uMakerAi.Realtime.WebSocket, uMakerAi.WebSocket.Client;
 
 type
+  // otmGpt4oTranscribe, otmGpt4oMiniTranscribe y otmWhisper1: DEPRECADOS por
+  // OpenAI el 2026-08-26, apagado el 2027-02-26. Se conservan para no romper
+  // DFM/FMX existentes; migrar a otmGptLiveTranscribe u otmGptTranscribe.
   TAiOpenAiTranscriptionModel = (
-    otmGpt4oTranscribe,     // gpt-4o-transcribe (generacion anterior)
-    otmGpt4oMiniTranscribe, // gpt-4o-mini-transcribe (anterior, economico)
-    otmWhisper1,            // whisper-1 (compatibilidad legacy)
+    otmGpt4oTranscribe,     // gpt-4o-transcribe (DEPRECADO, apagado 2027-02-26)
+    otmGpt4oMiniTranscribe, // gpt-4o-mini-transcribe (DEPRECADO, apagado 2027-02-26)
+    otmWhisper1,            // whisper-1 (DEPRECADO, apagado 2027-02-26)
     otmGptLiveTranscribe,   // gpt-live-transcribe (recomendado para vivo)
     otmGptTranscribe        // gpt-transcribe (turnos confirmados + contexto)
   );

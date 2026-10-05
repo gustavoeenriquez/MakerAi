@@ -179,7 +179,7 @@ end;
 - [ ] **Selección explícita de dispositivos en la UI** (loopback, mic, TTS local, TTS reunión) con persistencia. No confiar en el dispositivo predeterminado: el instalador del cable puede cambiarlo (§4.2).
 - [ ] Verificación del cable al arrancar + asistente de instalación (enlace oficial, §4.4).
 - [ ] Aviso de auriculares (o detección de eco: si el mic transcribe lo mismo que el loopback, alertar).
-- [ ] Modelo Realtime STT: usar `'gpt-realtime'` (el default del driver, `gpt-4o-realtime-preview`, fue retirado por OpenAI; ver `uMakerAi.Realtime.OpenAI.GetDefaultModel`).
+- [ ] Modelo Realtime STT: `'gpt-realtime-2.1'`, que ya es el default del driver (ver `uMakerAi.Realtime.OpenAI.GetDefaultModel`). No usar `gpt-4o-realtime-preview`: OpenAI lo retiró.
 - [ ] API keys con la convención `@VAR_DE_ENTORNO` del framework (no hardcodear).
 - [ ] Manejo de errores `OnError` de los 4 componentes de audio + reconexión del STT.
 - [ ] Si el usuario cambia el dispositivo predeterminado en caliente, reiniciar la captura/reproducción afectada (`Active := False/True`).

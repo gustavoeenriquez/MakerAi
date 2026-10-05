@@ -5,7 +5,7 @@
 // Uso tipico:
 //   RealtimeConn.DriverName := 'OpenAI';
 //   RealtimeConn.ApiKey     := '@OPENAI_API_KEY';
-//   RealtimeConn.Model      := 'gpt-4o-realtime-preview';
+//   RealtimeConn.Model      := 'gpt-realtime-2.1';
 //   VoiceMonitor.RealtimeSTT := RealtimeConn;
 //   RealtimeConn.Connect;
 //
