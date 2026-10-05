@@ -3110,6 +3110,33 @@ begin
       aMediaFile.Content.CopyFrom(MemStream, 0);
       aMediaFile.Content.Position := 0;
 
+      // El nombre REAL que el codigo le dio al archivo esta en los metadatos
+      // (GET files/{id} -> "filename"). La heuristica que lo deduce del codigo
+      // Python falla a menudo y deja "generated_file_<id>.ext". Un GET extra
+      // por archivo es despreciable frente a la ejecucion; si falla, queda la
+      // heuristica y el fallback por Content-Type de abajo.
+      try
+        var MetaRes := Client.Get(Url + 'files/' + aMediaFile.IdFile, nil, Headers);
+        if MetaRes.StatusCode = 200 then
+        begin
+          var jMeta := TJSONObject.ParseJSONValue(MetaRes.ContentAsString) as TJSONObject;
+          if Assigned(jMeta) then
+          try
+            var RealName := jMeta.GetValue<string>('filename', '');
+            // Solo el nombre: nunca una ruta del sandbox.
+            var SlashPos := RealName.LastDelimiter('/\');
+            if SlashPos >= 0 then
+              RealName := RealName.Substring(SlashPos + 1);
+            if RealName <> '' then
+              aMediaFile.FileName := RealName;
+          finally
+            jMeta.Free;
+          end;
+        end;
+      except
+        // sin metadatos: se conserva el nombre heuristico
+      end;
+
       // Use HTTP Content-Type header to fix extension when filename is a .bin fallback
       var ContentType := Res.GetHeaderValue('Content-Type');
       // Strip charset/boundary suffix: "audio/wav; charset=utf-8" → "audio/wav"
