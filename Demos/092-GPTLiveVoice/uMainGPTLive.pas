@@ -13,6 +13,13 @@
 // Funciones de ejemplo (TAiFunctions): hora_actual(zona) y luz(habitacion,
 // encendida), que cambia el indicador de la pantalla.
 //
+// RAG por MCP (opcional): el servidor del demo 037 (MCPServerRAG, HTTP) se
+// agrega como cliente MCP del mismo TAiFunctions, asi que su herramienta
+// rag_vector llega al modelo junto con las funciones locales. Un
+// TAiGuardrails deja pasar solo las consultas (search, list_docs, stats): el
+// modelo de voz no puede borrar ni indexar. Ver CLAUDE.md para preparar el 037
+// con PostgreSQL y el documento de ejemplo conocimiento_cafe_la_ceiba.txt.
+//
 // Audio: TAiAudioCapture (microfono, PCM16 24 kHz) -> driver -> TAiAudioPlayer.
 // Con parlantes el microfono oye al asistente: "Modo altavoz" silencia el
 // microfono mientras suena su voz (detectada por la energia del audio que
@@ -32,7 +39,8 @@ uses
   uMakerAi.Core, uMakerAi.Chat.Messages, uMakerAi.Tools.Functions,
   uMakerAi.Chat.AiConnection, uMakerAi.Chat.Initializations,
   uMakerAi.Realtime, uMakerAi.Realtime.OpenAI.Live,
-  uMakerAi.Utils.AudioCapture, uMakerAi.Utils.AudioPlayback;
+  uMakerAi.Utils.AudioCapture, uMakerAi.Utils.AudioPlayback,
+  uMakerAi.MCPClient.Core, uMakerAi.Guardrails;
 
 type
   TFormGPTLive = class(TForm)
@@ -56,6 +64,11 @@ type
     LblInstructions: TLabel;
     EdInstructions: TEdit;
     ChkSpeakerMode: TCheckBox;
+    LayRow4: TLayout;
+    ChkRag: TCheckBox;
+    LblRagUrl: TLabel;
+    EdRagUrl: TEdit;
+    LblRagHint: TLabel;
     LayButtons: TLayout;
     BtnConnect: TButton;
     BtnMute: TButton;
@@ -63,6 +76,9 @@ type
     CircleLight: TCircle;
     LblLight: TLabel;
     LblStatus: TLabel;
+    LayGuide: TLayout;
+    LblGuide: TLabel;
+    MemoGuide: TMemo;
     LayLive: TLayout;
     LblLiveUser: TLabel;
     LblLiveAssistant: TLabel;
@@ -82,6 +98,7 @@ type
     FCapture: TAiAudioCapture;
     FPlayer: TAiAudioPlayer;
     FFunctions: TAiFunctions;
+    FGuard: TAiGuardrails;
     FChat: TAiChatConnection;
     FMicDevices: TArray<TAiAudioDeviceInfo>;
     FSpeakerDevices: TArray<TAiAudioDeviceInfo>;
@@ -98,7 +115,12 @@ type
     procedure LoadDevices;
     procedure SetConnectedUI(AConnected: Boolean);
     procedure SetupFunctions;
+    procedure FillGuide;
+    function SetupRag: Boolean;
     procedure SetLight(const ARoom: string; AOn: Boolean);
+    // Guardrail: el modelo de voz solo puede consultar el RAG
+    procedure GuardCheck(Sender: TObject; const AToolName, AArguments: string;
+      var AAllow: Boolean; var AReason: string);
     // Eventos del driver
     procedure LiveConnected(Sender: TObject);
     procedure LiveDisconnected(Sender: TObject);
@@ -139,6 +161,13 @@ const
   CPRICE_PER_MINUTE = 0.05;
   CVOICES: array[0..9] of string = ('marin', 'cedar', 'alloy', 'ash', 'ballad',
     'coral', 'echo', 'sage', 'shimmer', 'verse');
+  // Credenciales del servidor del demo 037 (quemadas en su uTool.RAG.pas)
+  CRAG_TOKEN = 'admin:MakerAi2026*';
+  CRAG_LIVE_INSTRUCTIONS = ' Para preguntas sobre el Cafe La Ceiba (horarios, ' +
+    'precios, wifi, mascotas, eventos, politicas) consulta la base de conocimiento.';
+  CRAG_BACKEND_INSTRUCTIONS = 'Para preguntas sobre el Cafe La Ceiba usa la ' +
+    'herramienta rag_vector con operation=search y topK=3, y responde solo con lo ' +
+    'que diga el resultado; si no aparece, dilo.';
 
 { TFormGPTLive }
 
@@ -158,6 +187,7 @@ begin
   EdChatModel.Text := 'gpt-6-luna';
   EdInstructions.Text := 'Habla en español, en frases cortas y naturales. ' +
     'Para la hora o las luces de la casa usa las herramientas.';
+  EdRagUrl.Text := 'http://localhost:8093/mcp';
 
   FLive := TAiOpenAiLiveChat.Create(Self);
   FLive.OnConnected := LiveConnected;
@@ -185,6 +215,7 @@ begin
   FPlayer.OnError := PlayerError;
 
   SetupFunctions;
+  FillGuide;
   LoadDevices;
   SetLight('', False);
   SetConnectedUI(False);
@@ -246,6 +277,10 @@ var
   P: TFunctionParamsItem;
 begin
   FFunctions := TAiFunctions.Create(Self);
+  // Todas las llamadas (locales y MCP) pasan por el guardrail
+  FGuard := TAiGuardrails.Create(Self);
+  FGuard.OnCheckToolCall := GuardCheck;
+  FFunctions.Guardrails := FGuard;
 
   Fn := FFunctions.Functions.Add;
   Fn.FunctionName := 'hora_actual';
@@ -275,6 +310,93 @@ begin
   P.Required := True;
 end;
 
+procedure TFormGPTLive.FillGuide;
+begin
+  // Preguntas de ejemplo para recorrer lo que muestra el demo
+  MemoGuide.Lines.Text :=
+    'CONVERSACIÓN' + sLineBreak +
+    '• Hola, ¿cómo estás?' + sLineBreak +
+    '• Explícame en dos frases qué es la fotosíntesis.' + sLineBreak +
+    sLineBreak +
+    'INTERRUMPIR (con auriculares)' + sLineBreak +
+    '• Cuéntame un cuento largo sobre un dragón.' + sLineBreak +
+    '  ...y a mitad: "Espera, mejor que sea sobre un gato".' + sLineBreak +
+    sLineBreak +
+    'FUNCIONES LOCALES' + sLineBreak +
+    '• ¿Qué hora es en Madrid?' + sLineBreak +
+    '• Enciende la luz de la sala.' + sLineBreak +
+    '• Apaga la luz.' + sLineBreak +
+    sLineBreak +
+    'RAG POR MCP (marcar "RAG del demo 037")' + sLineBreak +
+    '• ¿Cuál es la contraseña del wifi del Café La Ceiba?' + sLineBreak +
+    '• ¿A qué hora abren los sábados?' + sLineBreak +
+    '• ¿Cuánto cuesta el capuchino?' + sLineBreak +
+    '• ¿Puedo llevar a mi perro?' + sLineBreak +
+    '• ¿Qué hay los jueves por la tarde?' + sLineBreak +
+    '• ¿Cuánto cuesta la cata de café y cuántos cupos hay?' + sLineBreak +
+    sLineBreak +
+    'GUARDRAIL (debe negarse)' + sLineBreak +
+    '• Borra toda la base de conocimiento.' + sLineBreak +
+    '  El log muestra "Guardrail BLOQUEÓ".' + sLineBreak +
+    sLineBreak +
+    'BÚSQUEDA WEB (marcar "Búsqueda web")' + sLineBreak +
+    '• ¿Qué noticias hay hoy de tecnología?' + sLineBreak +
+    sLineBreak +
+    'DELEGAR A TU CHAT' + sLineBreak +
+    'Elegir "Mi chat (DelegateChat)" y repetir las de funciones o RAG: ' +
+    'responde el modelo de Driver/Modelo. El log muestra la delegación.';
+end;
+
+function TFormGPTLive.SetupRag: Boolean;
+var
+  Item: TMCPClientItem;
+begin
+  // Se arma en cada conexion: la URL pudo cambiar
+  FFunctions.MCPClients.Clear;
+  if not ChkRag.IsChecked then
+    Exit(True);
+  Item := FFunctions.MCPClients.Add;
+  Item.Name := 'cafe'; // la herramienta llega al modelo como cafe_99_rag_vector
+  Item.TransportType := tpHttp;
+  Item.Params.Values['URL'] := Trim(EdRagUrl.Text);
+  Item.Params.Values['ApiBearerToken'] := CRAG_TOKEN;
+  Item.Enabled := True;
+  // Comprobar ahora: si el 037 no esta corriendo, avisar antes de conectar
+  Result := Item.MCPClient.Initialize and Item.MCPClient.Available;
+  if Result then
+    Log('RAG por MCP listo: ' + Item.Params.Values['URL'])
+  else
+  begin
+    Log('No se pudo conectar al servidor RAG (' + Item.Params.Values['URL'] +
+      '). ¿Está corriendo el demo 037 con --protocol http --port 8093?');
+    FFunctions.MCPClients.Clear;
+  end;
+end;
+
+procedure TFormGPTLive.GuardCheck(Sender: TObject; const AToolName, AArguments: string;
+  var AAllow: Boolean; var AReason: string);
+var
+  Args, Msg: string;
+begin
+  if Pos('rag_vector', AToolName) = 0 then
+    Exit; // funciones locales: sin restriccion
+  Args := StringReplace(AArguments, ' ', '', [rfReplaceAll]);
+  AAllow := (Pos('"operation":"search"', Args) > 0) or
+    (Pos('"operation":"list_docs"', Args) > 0) or (Pos('"operation":"stats"', Args) > 0);
+  if not AAllow then
+    AReason := 'el asistente de voz solo puede consultar (search, list_docs, stats)';
+  // Los parametros var no se pueden capturar: el mensaje se arma antes
+  if AAllow then
+    Msg := 'RAG: ' + AArguments
+  else
+    Msg := 'Guardrail BLOQUEÓ: ' + AArguments;
+  TThread.Queue(nil,
+    procedure
+    begin
+      Log(Msg);
+    end);
+end;
+
 procedure TFormGPTLive.SetLight(const ARoom: string; AOn: Boolean);
 begin
   if AOn then
@@ -301,6 +423,8 @@ begin
   EdChatModel.Enabled := not AConnected;
   ChkWebSearch.Enabled := not AConnected;
   EdInstructions.Enabled := not AConnected;
+  ChkRag.Enabled := not AConnected;
+  EdRagUrl.Enabled := not AConnected;
   if not AConnected then
   begin
     FMuted := False;
@@ -329,8 +453,17 @@ begin
     Exit;
   end;
 
+  if not SetupRag then
+    Exit;
   FLive.Voice := CbxVoice.Selected.Text;
   FLive.Instructions := EdInstructions.Text;
+  FLive.DelegationInstructions := '';
+  if ChkRag.IsChecked then
+  begin
+    // El modelo de voz decide cuando delegar; el delegado, como usar la herramienta
+    FLive.Instructions := FLive.Instructions + CRAG_LIVE_INSTRUCTIONS;
+    FLive.DelegationInstructions := CRAG_BACKEND_INSTRUCTIONS;
+  end;
   FLive.EnableWebSearch := ChkWebSearch.IsChecked;
   FLive.AiFunctions := FFunctions;
 
@@ -346,6 +479,8 @@ begin
     FChat.AiFunctions := FFunctions;
     FChat.SystemPrompt.Text := 'Eres el backend de un asistente de voz. ' +
       'Responde con el resultado, breve y sin formato, en el idioma del usuario.';
+    if ChkRag.IsChecked then
+      FChat.SystemPrompt.Add(CRAG_BACKEND_INSTRUCTIONS);
     FLive.DelegateChat := FChat;
     Log(Format('Delegación: DelegateChat (%s / %s)', [FChat.DriverName, FChat.Model]));
   end

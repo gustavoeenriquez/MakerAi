@@ -155,6 +155,8 @@ type
     ['{B1A4D0F8-9A7B-4C6C-8D1F-4B9E3A5F7C1E}']
     function GetName: string;
     function GetDescription: string;
+    // Devuelve un objeto NUEVO en cada llamada: el que llama es su dueno
+    // (TAiMCPToolBase<T> lo genera desde la clase de parametros)
     function GetInputSchema: TJSONObject;
     // function Execute(const Arguments: TJSONObject): string;
     function Execute(const Arguments: TJSONObject; const AuthContext: TAiAuthContext): TJSONObject;
@@ -1421,11 +1423,12 @@ begin
     ToolJSON := TJSONObject.Create;
     ToolJSON.AddPair('name', Tool.Name);
     ToolJSON.AddPair('description', Tool.Description);
-    // Clone the schema — AddPair takes ownership and would free the tool's
-    // FInputSchema, corrupting subsequent tools/list calls.
+    // GetInputSchema devuelve un esquema nuevo (ver IAiMCPTool): AddPair toma
+    // posesion. Clonarlo, como se hacia, perdia el original en cada tools/list
+    // (servidor MCP que crecia en memoria con cada peticion).
     Schema := Tool.GetInputSchema;
     if Assigned(Schema) then
-      ToolJSON.AddPair('inputSchema', TJSONObject(Schema.Clone))
+      ToolJSON.AddPair('inputSchema', Schema)
     else
       ToolJSON.AddPair('inputSchema', TJSONObject.Create);
     ToolsArray.AddElement(ToolJSON);

@@ -133,6 +133,15 @@ begin
     .ExpectContains('echo_upper')
     .ExpectContains('confirm_op');
 
+  // Fugas por peticion MCP (oct 2026), cliente y servidor en el mismo proceso:
+  // el cliente no liberaba la respuesta de tools/list en Initialize, y el
+  // servidor clonaba el esquema de cada tool sin liberar el original (un
+  // servidor MCP crecia ~32 bloques por tools/list). Falla sin cualquiera de
+  // los dos arreglos (medido: 360 bloques en 5 Initialize con solo el primero)
+  FRunner.AddCase('mcp.initialize.no-leak')
+    .Input('mcp:initialize-no-leak')
+    .ExpectEquals('sin-fuga');
+
   FRunner.AddCase('mcp.tools.call')
     .Input('mcp:call-echo')
     .ExpectContains('HOLA MUNDO');
@@ -880,6 +889,18 @@ begin
     .ExpectEquals('ge=True|gt=True|lt=False');
 end;
 
+// Bloques de memoria vivos (FastMM): para detectar fugas por diferencia
+function LiveMemoryBlocks: Int64;
+var
+  St: TMemoryManagerState;
+  I: Integer;
+begin
+  GetMemoryManagerState(St);
+  Result := St.AllocatedMediumBlockCount + St.AllocatedLargeBlockCount;
+  for I := Low(St.SmallBlockTypeStates) to High(St.SmallBlockTypeStates) do
+    Inc(Result, St.SmallBlockTypeStates[I].AllocatedBlockCount);
+end;
+
 function TRegressionSuite.Dispatch(const AScenario: string): string;
 begin
   if AScenario.StartsWith('mcp:') then
@@ -967,6 +988,22 @@ begin
 
       if AScenario = 'mcp:negotiate-modern' then
         Result := Client.NegotiatedProtocol
+
+      else if AScenario = 'mcp:initialize-no-leak' then
+      begin
+        // Bloques vivos antes y despues de 5 Initialize (ya hubo uno: caches
+        // del RTL y del cliente HTTP creadas)
+        var B0 := LiveMemoryBlocks;
+        for var K := 1 to 5 do
+          Client.Initialize;
+        var Delta := LiveMemoryBlocks - B0;
+        // Tolerancia: los hilos del servidor in-process pueden tener algun
+        // bloque en vuelo; la fuga real eran ~200 por llamada
+        if Delta < 50 then
+          Result := 'sin-fuga'
+        else
+          Result := Format('fuga: %d bloques en 5 Initialize', [Delta]);
+      end
 
       else if AScenario = 'mcp:tools-list' then
       begin

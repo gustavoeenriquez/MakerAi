@@ -16,7 +16,7 @@
     Padding.Top = 8.000000000000000000
     Padding.Right = 8.000000000000000000
     Size.Width = 1040.000000000000000000
-    Size.Height = 116.000000000000000000
+    Size.Height = 150.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 0
     object LayRow1: TLayout
@@ -208,6 +208,53 @@
         Size.PlatformDefault = False
       end
     end
+    object LayRow4: TLayout
+      Align = Top
+      Position.X = 8.000000000000000000
+      Position.Y = 110.000000000000000000
+      Size.Width = 1024.000000000000000000
+      Size.Height = 34.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+      object ChkRag: TCheckBox
+        Align = Left
+        Size.Width = 230.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 0
+        Text = 'RAG del demo 037 por MCP'
+      end
+      object LblRagUrl: TLabel
+        Align = Left
+        Position.X = 230.000000000000000000
+        Size.Width = 36.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'URL'
+        TabOrder = 1
+      end
+      object EdRagUrl: TEdit
+        Touch.InteractiveGestures = [LongTap, DoubleTap]
+        Align = Left
+        TabOrder = 2
+        Position.X = 266.000000000000000000
+        Position.Y = 5.000000000000000000
+        Margins.Top = 5.000000000000000000
+        Margins.Right = 12.000000000000000000
+        Margins.Bottom = 5.000000000000000000
+        Size.Width = 260.000000000000000000
+        Size.Height = 24.000000000000000000
+        Size.PlatformDefault = False
+      end
+      object LblRagHint: TLabel
+        Align = Client
+        Size.Width = 486.000000000000000000
+        Size.Height = 34.000000000000000000
+        Size.PlatformDefault = False
+        Text = 'MCPServerRAG.exe --protocol http --port 8093 (Driver=postgres en su .ini; ver CLAUDE.md)'
+        TabOrder = 3
+      end
+    end
   end
   object LayButtons: TLayout
     Align = Top
@@ -362,6 +409,37 @@
     Size.Width = 1040.000000000000000000
     Size.Height = 4.000000000000000000
     Size.PlatformDefault = False
+  end
+  object LayGuide: TLayout
+    Align = Right
+    Margins.Right = 8.000000000000000000
+    Position.X = 712.000000000000000000
+    Position.Y = 212.000000000000000000
+    Size.Width = 320.000000000000000000
+    Size.Height = 302.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 6
+    object LblGuide: TLabel
+      Align = Top
+      Size.Width = 320.000000000000000000
+      Size.Height = 22.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Gu'#237'a r'#225'pida: qu'#233' preguntar'
+      TabOrder = 0
+    end
+    object MemoGuide: TMemo
+      Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+      DataDetectorTypes = []
+      ReadOnly = True
+      TextSettings.WordWrap = True
+      Align = Client
+      Size.Width = 320.000000000000000000
+      Size.Height = 280.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Viewport.Width = 316.000000000000000000
+      Viewport.Height = 276.000000000000000000
+    end
   end
   object MemoConversation: TMemo
     Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]

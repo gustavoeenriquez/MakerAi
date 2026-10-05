@@ -570,15 +570,18 @@ begin
 
   Try
     jTools := ListTools;
-
-    If Assigned(jTools) and (jTools.TryGetValue<TJSonValue>('tools', jValue)) and (jValue is TJSonArray) then
-    Begin
-      FTools.Text := jTools.Format;
-      Initialized := True;
-      Enabled := True;
-      Available := True;
-      Result := True;
-    End;
+    try
+      If Assigned(jTools) and (jTools.TryGetValue<TJSonValue>('tools', jValue)) and (jValue is TJSonArray) then
+      Begin
+        FTools.Text := jTools.Format;
+        Initialized := True;
+        Enabled := True;
+        Available := True;
+        Result := True;
+      End;
+    finally
+      jTools.Free; // FTools guarda una copia en texto
+    end;
   Except
     FTools.Clear;
     Initialized := True;
@@ -1922,24 +1925,27 @@ begin
         InternalSendInitializedNotification;
       end;
 
-      // 3. Obtener la lista de herramientas
+      // 3. Obtener la lista de herramientas (FTools guarda una copia en texto)
       jTools := ListTools;
-
-      If Assigned(jTools) and (jTools.TryGetValue<TJSonValue>('tools', jValue)) and (jValue is TJSonArray) then
-      Begin
-        FTools.Text := jTools.Format;
-        Enabled := True;
-        Available := True;
-        Result := True; // ?xito
-        Break; // Salir del bucle de reintentos
-      End
-      Else
-      Begin
-        FLastError := 'Failed to retrieve tools list after successful initialization. Server response incomplete.';
-        DoLog(FLastError);
-        // Si el problema no es de conexi?n sino de la respuesta del protocolo, no relanzamos el servidor.
-        Break; // No reintentar relanzando el server, ya est? conectado.
-      End;
+      try
+        If Assigned(jTools) and (jTools.TryGetValue<TJSonValue>('tools', jValue)) and (jValue is TJSonArray) then
+        Begin
+          FTools.Text := jTools.Format;
+          Enabled := True;
+          Available := True;
+          Result := True; // ?xito
+        End
+        Else
+        Begin
+          FLastError := 'Failed to retrieve tools list after successful initialization. Server response incomplete.';
+          DoLog(FLastError);
+        End;
+      finally
+        jTools.Free;
+      end;
+      // Con o sin lista no se reintenta: el servidor ya respondio (si la
+      // respuesta esta incompleta, relanzar el server no la arregla)
+      Break;
     except
       on E: Exception do
       begin

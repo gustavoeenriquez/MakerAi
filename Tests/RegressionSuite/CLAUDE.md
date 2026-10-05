@@ -27,11 +27,12 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (114 casos)
+## Cobertura actual (115 casos)
 
 | Área | Casos |
 |------|-------|
 | MCP dual-era | negociación moderna (2026-07-28), fallback a handshake legacy, `tools/list`, `tools/call` |
+| MCP fugas | `mcp.initialize.no-leak`: 5 `Initialize` contra el servidor in-process no dejan bloques vivos (mide `GetMemoryManagerState`). Cubre la fuga del cliente (respuesta de `tools/list`) y la del servidor (esquema clonado por tool en cada `tools/list`); falla sin cualquiera de las dos |
 | MCP MRTR | reintento con `accept`, mensaje de elicitation recibido, sin handler → error explícito |
 | Agentes | grafo secuencial con status final y salida encadenada; `lmExpression` con punto decimal bajo configuración regional con coma |
 | SmartDispatch + Jev | `ChatTools.DispatchClassifier` sobre un `TAiOpenChat` real (URL a puerto cerrado): el tag va directo a la tool sin pase por LLM; `TAiJevDispatchClassifier` solo ofrece los tags recibidos, respeta `MinConfidence` y no consulta a Jev si solo queda CHAT |
