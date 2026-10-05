@@ -36,7 +36,23 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 ---
 
-## 🚀 What's New in v3.8
+## 🚀 What's New in v3.9
+
+### OpenAI GPT-Live — full-duplex voice with delegation
+`TAiOpenAiLiveChat` (`gpt-live-1`, DriverName `OpenAiLive`) listens while it speaks: you can interrupt it, and it hands the heavy thinking to another model — a Responses model run by OpenAI (web search, your `TAiFunctions` and MCP tools executed locally) or **any `TAiChatConnection`** through `DelegateChat` (Claude, Ollama, an agent graph). Conversation turns are rebuilt from the session timeline, so overlapping speech no longer splits answers. Demo `092-GPTLiveVoice`: microphone, speaker, local functions, RAG over MCP with a read-only guardrail, anti-echo speaker mode and a quick guide. Tested live.
+
+### Jev decisions on local models (Ollama)
+Ollama 0.35+ serves the Jev contract at `/v1/systemone` with local decision models — `nimble`, `tev1` and Cloudflare's `clef`/`clef-flash`. `TAiJev` only needs `Url := 'http://localhost:11434/v1/'`; the eight Jev adapters gained `Url`, `TAiJev.Ask` takes images for Clef (PNG/JPEG/WebP), and the TypeSafe price is no longer charged on other servers. Tested with `nimble` (routing, prompt guard, batch labeling) and `clef` 27B on images.
+
+### Memory leaks fixed
+An MCP server leaked every tool schema on each `tools/list` (it grew forever in production), the MCP client leaked the `tools/list` response on each `Initialize`, and `TAiRealtimeFactory` never freed its dictionary.
+
+### ⚠️ Behaviour changes
+- **OpenAI audio defaults:** `TAiOpenAiAudio` / `TAiOpenAiSpeechTool` use `gpt-transcribe` and `gpt-4o-mini-tts` (OpenAI shuts down `whisper-1` on 2027-02-26 and `tts-1` on 2027-01-06). `gpt-transcribe` returns JSON only — srt/vtt/timestamps are reported in `TTranscriptionResult.Warning`; set `tmWhisper1` to keep them until the shutdown.
+- **Custom MCP tools:** `IAiMCPTool.GetInputSchema` returns a new object owned by the caller (what the built-in tools already did). A custom tool that returned a cached field must return a copy.
+- **OpenAI Responses driver:** `Max_Tokens` is now sent as `max_output_tokens` (it was silently ignored), so a low limit can cut answers that used to be complete.
+
+## What came in v3.8
 
 Released 2026-09-29. Six items change existing behaviour; they are marked ⚠️ below — two of them
 (TLS certificate checks on POSIX and the `IAiMemoryStorage` signature) can require code changes.
@@ -986,7 +1002,12 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 
 ## 🔄 Changelog
 
-### Unreleased (dev)
+### v3.9.0 (2026-10-05)
+- ⚠️ Fix: **the OpenAI Responses driver never sent `max_output_tokens`** — `Max_Tokens` was silently ignored in the whole driver. `response.incomplete` now closes the stream with its finish reason, and `response.failed` / stream `error` events end the turn through the error path instead of leaving the caller waiting for its timeout
+- Fix: **parallel `tools/call` on a shared `TMCPClientSSE` lost responses** (a call waited 180 s and came back empty) — two races on the request id
+- New: **`TAiMCPServer.BindAddress`** (or the `MCP_BIND_ADDRESS` environment variable) binds SSE/HTTP MCP servers to one local IP; they always listened on 0.0.0.0
+- Fix: **Grok** — `reasoning_effort` reaches the grok-4 models and streaming returns usage (it came back as zeros)
+- Fix: `EnforceStrictSchema` crashed on JSON Schema union types (`"type": ["integer", "string"]`); Claude `code_execution` files keep their real names
 - New: **palette icons for every component** — 76 were missing (A2A, bridges, realtime, Jev, Qwen, GLM, Cohere, llama.cpp, tools, embeddings…), and the `MakerAi.UI` and `MakerAi.RAG.Drivers` packages had none because only `MakerAI` linked a resource. Each package now links its own `.res`. Generator and category sheet in `Source/Resources/`
 - Fix: **debug logs wrote to `C:\Temp` unconditionally** — the SChannel TLS transport (`schannel_diag.txt`), the Gemini Veo upload (`responses.txt`, which also leaked a stream) and the MakerAI realtime driver; the MCP client shutdown log did so in every Debug build. All off by default (opt-in: `MAKERAI_SCHANNEL_DIAG`, `MAKERAI_MCP_SHUTDOWN_LOG`). `MakerAiGrp.groupproj` now builds in the documented order and demo 059 lost an absolute `E:` path. Reported in #130
 - Fix: **`TAiMemory.Delete`, `Link` and `Unlink` return `Boolean`** — after the namespace isolation of 3.8 an operation on a foreign id does nothing, but the `memory_delete` / `memory_link` MCP tools still answered "deleted"/"linked". They now return `False` (existing calls still compile) and the tools answer `not_found`. `IAiMemoryStorage` is unchanged

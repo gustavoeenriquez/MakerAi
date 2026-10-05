@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MakerAI is an AI orchestration framework for Delphi developers (v3.8). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, GLM/Z.ai, Qwen/Alibaba, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers/clients, A2A agent interoperability, autonomous agents, observability, guardrails and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+MakerAI is an AI orchestration framework for Delphi developers (v3.9). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, GLM/Z.ai, Qwen/Alibaba, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers/clients, A2A agent interoperability, autonomous agents, observability, guardrails and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+
+**v3.9 highlights (oct 2026):** **OpenAI GPT-Live** (`TAiOpenAiLiveChat`, voz full-duplex que escucha mientras habla y delega el razonamiento a un modelo Responses o a cualquier `TAiChatConnection`; demo 092 con RAG por MCP); **Jev con modelos locales de Ollama** (`/v1/systemone`: nimble, Clef con imágenes; `Url` en los adaptadores, precio 0 fuera de TypeSafe); **3 fugas de memoria** corregidas (servidor MCP en cada `tools/list`, cliente MCP en `Initialize`, `TAiRealtimeFactory`); `TAiMCPServer.BindAddress`; íconos de paleta para los 108 componentes; demo 037 sobre PostgreSQL. **Cambios de comportamiento (3):** audio de OpenAI por defecto `gpt-transcribe`/`gpt-4o-mini-tts` (whisper-1 y tts-1 se apagan), `IAiMCPTool.GetInputSchema` devuelve un objeto del que llama (afecta tools MCP propias que devolvían un campo guardado) y el driver Responses ahora respeta `Max_Tokens`. Deprecados de OpenAI marcados con fecha de apagado. `MAKERAI_API_LEVEL = 39`.
 
 **v3.8 highlights (sep 2026):** **Jev** (TypeSafe AI) para decisiones calibradas sin pasar por un LLM (enrutar agentes, SmartDispatch, guardrails de tools y de entrada, evals, rerank RAG con filtro de inyecciones, etiquetado masivo, enrutador de modelos, medición de consumo); driver **Qwen** (Alibaba) completo; **skills en formato SKILL.md** (`TAiSkills` con `use_skill` bajo demanda para cualquier chat, `TAiSkill`/`TLLMNode` arreglados, parser y cliente PPM comunes); **Computer Use en Linux**. **Cambios de comportamiento (6):** TLS verificado en POSIX (rompe endpoints autofirmados sin `InsecureSkipVerify`), `IAiMemoryStorage` exige el namespace (issue #127, rompe storages propios), Gemini ya ejecuta funciones de usuario, `Model` vacío usa los parámetros del modelo por defecto `TLLMNode.DriverName` vacío por defecto y `tool_choice` forzado solo en la primera llamada (antes loop sin fin). Defaults revisados: Gemini `gemini-3.8-flash`, OpenAI `gpt-6-sol`, Claude sigue en `claude-haiku-4-5`. `MAKERAI_BREAKING_CHANGE = True`.
 
@@ -262,7 +264,7 @@ uses uJSONHelper;  // JSON helper for older Delphi versions
 
 ### Feature Flags (uMakerAi.Version.inc)
 
-All `MAKERAI_HAS_*` feature flags are `True` by default (OpenAI, Whisper, Embeddings, Tool Calling, RAG Vector/Graph, MCP, Chat Connection, UI Components, Agents). Platform flags: Windows, Linux, Mobile are `True`; **macOS is `False`** (incomplete). `MAKERAI_API_LEVEL = 38`.
+All `MAKERAI_HAS_*` feature flags are `True` by default (OpenAI, Whisper, Embeddings, Tool Calling, RAG Vector/Graph, MCP, Chat Connection, UI Components, Agents). Platform flags: Windows, Linux, Mobile are `True`; **macOS is `False`** (incomplete). `MAKERAI_API_LEVEL = 39`.
 
 ## Thread Safety Notes
 
