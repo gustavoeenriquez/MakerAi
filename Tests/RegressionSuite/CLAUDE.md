@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (101 casos)
+## Cobertura actual (106 casos)
 
 | Área | Casos |
 |------|-------|
@@ -66,6 +66,7 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 | Realtime Qwen | eventos del servidor sin red: los tres formatos de transcripción (stash acumulado, text+stash con reescritura, delta incremental) salen como deltas; texto y audio del asistente, cierre y error; `session.update` de los tres drivers (formatos, VAD manual → null, idioma, voz de traducción) y registro en la fábrica y en `TAiRealtimeConnection`; `TAiQwenRealtimeTTS`: `session.update` (modo, idioma, voz, instrucciones), modelo realtime elegido por el prefijo de la voz propia y eventos (listo una sola vez, audio, respuestas, fin, error) |
 | Ciclo de vida del chat | liberar el chat con una petición asíncrona en vuelo espera a que el cliente HTTP la cierre (cierre simulado desde otro hilo; falla sin el fix) y sin petición libera al instante; `ParseJsonTranscript` en el puente de Fase 1 no escribe la respuesta ni dispara eventos (en `cmTranscription` sí); `Voice`/`Voice_Format` del catálogo y del usuario llegan a `TtsParams` |
 | Chat / tool results | serialización OpenAI-compatible: tool calls paralelas con imagen → un solo `user` sintético tras el grupo, modelo sin `cap_Image` → transcripción sin media, transcripción no duplicada, adjunto de texto inline |
+| OpenAI Audio | `TAiOpenAiAudio` con `TFakeOpenAiAudio` (sustituye `PostMultipart`, sin red): formato degradado a json se interpreta como json y queda en `Warning` (falla sin el fix: `Text` con el JSON crudo); timestamps y logprobs ignorados avisados y no enviados; `languages[]`/`keywords[]` sin avisos; `whisper-1` con srt + timestamps sigue igual y avisa la deprecación; `TranslateToEnglish` (solo whisper-1) avisa la deprecación |
 | Evals | autoprueba del runner (conteo PASS/FAIL) |
 | Jev: consumo | `Usage` y `OnUsage` en `TAiJev` (un evento por llamada) y en PromptGuard, Dispatch, Guardrail, Eval, ModelRouter, RAG y Batch (uno por operación); reranker en paralelo con un `TAiJev` falso por pasaje → un solo evento con el total exacto y en el hilo del llamador; `ResetUsage`; precio configurable |
 | Jev (TypeSafe) | forma del request (Choice con opción sin descripción → `null`, Score, Noul con criteria parcial), parseo de las tres respuestas, reintento ante 429/529, reintentos agotados, validación local sin red, 401 sin reintento — con `TFakeJev` (sin red ni API key) |
@@ -76,7 +77,7 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 |---------|-----------|
 | `MakerAiRegressionSuite.dpr` | Programa principal: CLI (`--json`, `--otel`), ejecución y exit code |
 | `uRegression.Suites.pas` | Definición de los casos (`DefineCases`) y el *dispatcher* que ejecuta cada escenario contra los componentes reales |
-| `uRegression.Fixtures.pas` | `TFakeJev` (TAiJev con respuestas HTTP encoladas), `TFakeDispatchClassifier` y `TFakeImageTool` (SmartDispatch sin red), `TPassageFakeJev` (responde según el pasaje), `FakeEmbedding`, `TFakePromptGuard` y los handlers `ChatError` / `PromptGuardAllow` / `JevCategorizedAllow` / `BatchCancelAfterFirst`, tools MCP de prueba (`echo_upper`, `confirm_op` con MRTR), servidor MCP "solo legacy" (responde `-32601` a `server/discover`) y handlers `of object` (incluye `NodeSuspendOnce` para human-in-the-loop y `AcquireManager` como fábrica del pool A2A) |
+| `uRegression.Fixtures.pas` | `TFakeJev` (TAiJev con respuestas HTTP encoladas), `TFakeDispatchClassifier` y `TFakeImageTool` (SmartDispatch sin red), `TPassageFakeJev` (responde según el pasaje), `FakeEmbedding`, `TFakePromptGuard`, `TFakeOpenAiAudio` (multipart capturado, `FieldValues`) y los handlers `ChatError` / `PromptGuardAllow` / `JevCategorizedAllow` / `BatchCancelAfterFirst`, tools MCP de prueba (`echo_upper`, `confirm_op` con MRTR), servidor MCP "solo legacy" (responde `-32601` a `server/discover`) y handlers `of object` (incluye `NodeSuspendOnce` para human-in-the-loop y `AcquireManager` como fábrica del pool A2A) |
 
 Los escenarios A2A de orquestación viven en `RunA2AFlowScenario`, aparte del bloque `a2a:` básico, porque cada uno arma su propia topología (pool, suspensión, no bloqueante).
 

@@ -13,6 +13,7 @@
 //   - TFakeDispatchClassifier / TFakeImageTool: SmartDispatch sin red.
 //   - TPassageFakeJev: responde segun el pasaje (reranker de RAG sin red).
 //   - TFakePromptGuard: guardrail de entrada con veredicto fijo.
+//   - TFakeOpenAiAudio: TAiOpenAiAudio sin red (multipart capturado).
 // -----------------------------------------------------------------------------
 
 interface
@@ -23,7 +24,8 @@ uses
   System.Generics.Collections,
   uMakerAi.MCPServer.Core, uMakerAi.Agents, uMakerAi.Tools.Functions,
   uMakerAi.Chat.Messages, uMakerAi.Chat.Tools, uMakerAi.Jev, uMakerAi.Embeddings.core,
-  UMakerAi.Chat, System.Net.HttpClient, uMakerAi.Jev.Batch, uMakerAi.Tools.Skills;
+  UMakerAi.Chat, System.Net.HttpClient, uMakerAi.Jev.Batch, uMakerAi.Tools.Skills,
+  System.Net.Mime, uMakerAi.OpenAI.Audio;
 
 type
   // --- Tool MCP determinista: devuelve el texto en mayusculas ---
@@ -106,6 +108,25 @@ type
     procedure Enqueue(AStatus: Integer; const ABody: string);
     property LastBody: string read FLastBody;
     property Calls: Integer read FCalls;
+  end;
+
+  // --- TAiOpenAiAudio sin red ---
+  // Sustituye PostMultipart: guarda el multipart enviado y devuelve Response
+  // con Status. FieldValues lee un campo del multipart ('a,b' si se repite).
+  TFakeOpenAiAudio = class(TAiOpenAiAudio)
+  private
+    FLastBody: string;
+    FLastUrl: string;
+  protected
+    function PostMultipart(const AUrl: string; ABody: TMultipartFormData;
+      out AContent: string): Integer; override;
+  public
+    Response: string;
+    Status: Integer;
+    constructor Create(AOwner: TComponent); override;
+    function FieldValues(const AName: string): string;
+    property LastBody: string read FLastBody;
+    property LastUrl: string read FLastUrl;
   end;
 
   // --- Reranker de RAG sin red ---
@@ -597,6 +618,54 @@ begin
   R := FResponses.Dequeue;
   AResponse := R.Value;
   Result := R.Key;
+end;
+
+{ TFakeOpenAiAudio }
+
+constructor TFakeOpenAiAudio.Create(AOwner: TComponent);
+begin
+  inherited;
+  Status := 200;
+end;
+
+function TFakeOpenAiAudio.PostMultipart(const AUrl: string;
+  ABody: TMultipartFormData; out AContent: string): Integer;
+var
+  Bytes: TBytes;
+begin
+  FLastUrl := AUrl;
+  ABody.Stream.Position := 0;
+  SetLength(Bytes, ABody.Stream.Size);
+  if Length(Bytes) > 0 then
+    ABody.Stream.ReadBuffer(Bytes[0], Length(Bytes));
+  // El audio de prueba es ASCII: el multipart completo se lee como texto
+  FLastBody := TEncoding.ANSI.GetString(Bytes);
+  AContent := Response;
+  Result := Status;
+end;
+
+function TFakeOpenAiAudio.FieldValues(const AName: string): string;
+var
+  Key: string;
+  P, VStart, VEnd: Integer;
+begin
+  Result := '';
+  Key := 'name="' + AName + '"';
+  P := Pos(Key, FLastBody);
+  while P > 0 do
+  begin
+    VStart := Pos(#13#10#13#10, FLastBody, P);
+    if VStart = 0 then
+      Break;
+    Inc(VStart, 4);
+    VEnd := Pos(#13#10, FLastBody, VStart);
+    if VEnd = 0 then
+      VEnd := Length(FLastBody) + 1;
+    if Result <> '' then
+      Result := Result + ',';
+    Result := Result + Copy(FLastBody, VStart, VEnd - VStart);
+    P := Pos(Key, FLastBody, VEnd);
+  end;
 end;
 
 { TFakeDispatchClassifier }

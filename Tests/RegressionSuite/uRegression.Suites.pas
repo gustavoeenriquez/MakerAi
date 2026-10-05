@@ -49,6 +49,8 @@ type
     function RunConnScenario(const AScenario: string): string;
     // TAiJev (TypeSafe) sin red: forma del request, parseo, reintentos, validacion
     function RunJevScenario(const AScenario: string): string;
+    // TAiOpenAiAudio sin red: formato efectivo, avisos y deprecaciones
+    function RunAudioScenario(const AScenario: string): string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -73,6 +75,7 @@ uses
   uMakerAi.Guardrails, uMakerAi.Jev, uMakerAi.Agents.Tools.JevRouter,
   uMakerAi.Jev.SmartDispatch, uMakerAi.Jev.Guardrails, uMakerAi.Chat.Tools,
   uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
+  uMakerAi.OpenAI.Audio,
   uMakerAi.Jev.ModelRouter,
   UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank, uMakerAi.Qwen.Voices,
   uMakerAi.Realtime, uMakerAi.Realtime.Qwen, uMakerAi.Realtime.AiConnection, uMakerAi.Realtime.QwenTTS, uMakerAi.Realtime.Grok,
@@ -499,6 +502,28 @@ begin
     .ExpectEquals('conn=gpt-6-sol|gpt-6-sol/medium|gpt-6-sol/low|gpt-5.6-luna/minimal|gpt-6-luna/max|' +
       'makerai=mk-gpt-oss-20b');
 
+  // --- OpenAI Audio (transcripcion, sin red) ---
+  // El resultado se interpreta con el formato que realmente se pidio: con
+  // gpt-transcribe + trfText se pide json, y antes Text quedaba con el JSON
+  // crudo (falla sin el fix). Lo pedido y no hecho queda en Warning.
+  FRunner.AddCase('audio.transcribe.degraded-format')
+    .Input('audio:degraded-format')
+    .ExpectEquals('text=hola mundo|sent=json|warn=gpt-transcribe no admite response_format=text; se pidio json');
+  FRunner.AddCase('audio.transcribe.ignored-options')
+    .Input('audio:ignored-options')
+    .ExpectEquals('sent=json|ts=|include=|warnings=2|timestamps=True|logprobs=True');
+  FRunner.AddCase('audio.transcribe.clean')
+    .Input('audio:clean')
+    .ExpectEquals('text=hola|languages[]=es,en|keywords[]=PUC|warn=');
+  // Modelos deprecados (OpenAI 2026-08-26): siguen funcionando con su formato
+  // propio y avisan la fecha de apagado; la traduccion (solo whisper-1) igual.
+  FRunner.AddCase('audio.transcribe.deprecated-model')
+    .Input('audio:deprecated-model')
+    .ExpectEquals('sent=srt|ts=word|srt=True|warnings=1|deprecado=True');
+  FRunner.AddCase('audio.translate.deprecated')
+    .Input('audio:translate')
+    .ExpectEquals('url=translations|model=whisper-1|text=hello|deprecado=True');
+
   // --- Claude (request, sin red) ---
   // Generacion sep 2026 (opus-5-5, sonnet-5-5, fable-5-1): forzar una tool
   // da 400, el driver manda auto; sonnet-5 si acepta 'any', pero solo en la
@@ -808,6 +833,8 @@ begin
     Result := RunConnScenario(AScenario)
   else if AScenario.StartsWith('jev:') then
     Result := RunJevScenario(AScenario)
+  else if AScenario.StartsWith('audio:') then
+    Result := RunAudioScenario(AScenario)
   else
     raise Exception.Create('Escenario desconocido: ' + AScenario);
 end;
@@ -5105,6 +5132,113 @@ begin
   finally
     Q.Free;
     J.Free;
+  end;
+end;
+
+// -----------------------------------------------------------------------------
+// OpenAI Audio (TAiOpenAiAudio) sin red
+// -----------------------------------------------------------------------------
+
+function TRegressionSuite.RunAudioScenario(const AScenario: string): string;
+var
+  A: TFakeOpenAiAudio;
+  Media: TAiMediaFile;
+  MS: TMemoryStream;
+  R: TTranscriptionResult;
+  Bytes: TBytes;
+
+  function WarningCount(const AWarning: string): Integer;
+  begin
+    if AWarning = '' then
+      Exit(0);
+    Result := Length(AWarning.Split([sLineBreak]));
+  end;
+
+begin
+  Result := '';
+  R := nil;
+  A := TFakeOpenAiAudio.Create(nil);
+  Media := TAiMediaFile.Create;
+  MS := TMemoryStream.Create;
+  try
+    // Audio falso en ASCII: .wav no pasa por la conversion con ffmpeg
+    Bytes := TEncoding.ANSI.GetBytes('RIFF-audio-de-prueba');
+    MS.WriteBuffer(Bytes[0], Length(Bytes));
+    MS.Position := 0;
+    Media.LoadFromStream('prueba.wav', MS);
+
+    if AScenario = 'audio:degraded-format' then
+    begin
+      A.TranscriptionModel := tmGptTranscribe;
+      A.TranscriptionResponseFormat := trfText;
+      A.Response := '{"text":"hola mundo","languages":["es"]}';
+      R := A.Transcribe(Media);
+      Result := 'text=' + R.Text + '|sent=' + A.FieldValues('response_format') +
+        '|warn=' + R.Warning;
+    end
+
+    else if AScenario = 'audio:ignored-options' then
+    begin
+      A.TranscriptionModel := tmGptTranscribe;
+      A.TranscriptionResponseFormat := trfJson;
+      A.TranscriptionTimestampGranularities := [tsgWord];
+      A.TranscriptionLogprobs := True;
+      A.Response := '{"text":"hola"}';
+      R := A.Transcribe(Media);
+      Result := 'sent=' + A.FieldValues('response_format') +
+        '|ts=' + A.FieldValues('timestamp_granularities[]') +
+        '|include=' + A.FieldValues('include[]') +
+        '|warnings=' + IntToStr(WarningCount(R.Warning)) +
+        '|timestamps=' + BoolToStr(Pos('timestamps', R.Warning) > 0, True) +
+        '|logprobs=' + BoolToStr(Pos('logprobs', R.Warning) > 0, True);
+    end
+
+    else if AScenario = 'audio:clean' then
+    begin
+      A.TranscriptionModel := tmGptTranscribe;
+      A.TranscriptionResponseFormat := trfJson;
+      A.TranscriptionLanguages.Text := 'es' + sLineBreak + 'en';
+      A.TranscriptionKeywords.Text := 'PUC';
+      A.Response := '{"text":"hola"}';
+      R := A.Transcribe(Media);
+      Result := 'text=' + R.Text +
+        '|languages[]=' + A.FieldValues('languages[]') +
+        '|keywords[]=' + A.FieldValues('keywords[]') +
+        '|warn=' + R.Warning;
+    end
+
+    else if AScenario = 'audio:deprecated-model' then
+    begin
+      A.TranscriptionModel := tmWhisper1;
+      A.TranscriptionResponseFormat := trfSrt;
+      A.TranscriptionTimestampGranularities := [tsgWord];
+      A.Response := '1' + sLineBreak + '00:00:00,000 --> 00:00:01,000' + sLineBreak + 'hola';
+      R := A.Transcribe(Media);
+      Result := 'sent=' + A.FieldValues('response_format') +
+        '|ts=' + A.FieldValues('timestamp_granularities[]') +
+        '|srt=' + BoolToStr(R.Text = A.Response, True) +
+        '|warnings=' + IntToStr(WarningCount(R.Warning)) +
+        '|deprecado=' + BoolToStr(Pos('deprecado', R.Warning) > 0, True);
+    end
+
+    else if AScenario = 'audio:translate' then
+    begin
+      A.TranscriptionResponseFormat := trfJson;
+      A.Response := '{"text":"hello"}';
+      R := A.TranslateToEnglish(Media);
+      Result := 'url=' + IfThen(A.LastUrl.EndsWith('audio/translations'), 'translations', A.LastUrl) +
+        '|model=' + A.FieldValues('model') +
+        '|text=' + R.Text +
+        '|deprecado=' + BoolToStr(Pos('deprecado', R.Warning) > 0, True);
+    end
+
+    else
+      raise Exception.Create('Escenario audio desconocido: ' + AScenario);
+  finally
+    R.Free;
+    MS.Free;
+    Media.Free;
+    A.Free;
   end;
 end;
 

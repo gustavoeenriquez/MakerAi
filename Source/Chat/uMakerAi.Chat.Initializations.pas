@@ -424,6 +424,8 @@ Begin
   // ------- Audio TTS -- ModelCaps=[]: usa endpoint TTS dedicado ------
   // Gap=[cap_GenAudio] activa InternalRunSpeechGeneration
   // https://platform.openai.com/docs/guides/audio
+  // DEPRECADO por OpenAI el 2026-10-01 (junto con tts-1 / tts-1-hd), apagado
+  // el 2027-01-06. OpenAI recomienda gpt-realtime-2.1-mini (realtime).
   Model := 'gpt-4o-mini-tts';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',    '[]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps',  '[cap_GenAudio]');
@@ -445,6 +447,9 @@ Begin
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps', '[cap_Audio]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'Tool_Active', 'False');
 
+  // gpt-4o-transcribe, gpt-4o-mini-transcribe, gpt-4o-transcribe-diarize y
+  // whisper-1: DEPRECADOS por OpenAI el 2026-08-26, apagado el 2027-02-26.
+  // Se mantienen registrados mientras funcionen; migrar a los dos de arriba.
   Model := 'gpt-4o-transcribe';
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'ModelCaps',   '[cap_Audio]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', Model, 'SessionCaps', '[cap_Audio]');

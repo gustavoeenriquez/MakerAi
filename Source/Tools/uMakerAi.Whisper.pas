@@ -36,6 +36,12 @@
 // Whisper mantiene la compatibilidad con la versi?n de Github de whisper opensource
 // el modelo estandar de OpenAi se mueva a uMakerAi.OpenAi.Audio con las nuevas
 // caracteristicas.
+//
+// En la API de OpenAI, whisper-1 esta DEPRECADO (2026-08-26, apagado
+// 2027-02-26) y tts-1 / tts-1-hd tambien (2026-10-01, apagado 2027-01-06).
+// Contra api.openai.com usar Model := 'gpt-transcribe' (solo json, sin
+// timestamps ni srt/vtt). Contra un servidor whisper propio (Url) los
+// defaults siguen siendo validos y por eso no se cambian.
 
 unit uMakerAi.Whisper;
 
