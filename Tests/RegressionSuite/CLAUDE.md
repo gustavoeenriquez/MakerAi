@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (116 casos)
+## Cobertura actual (117 casos)
 
 | Área | Casos |
 |------|-------|
@@ -71,6 +71,7 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 | OpenAI Audio | `TAiOpenAiAudio` con `TFakeOpenAiAudio` (sustituye `PostMultipart`, sin red): formato degradado a json se interpreta como json y queda en `Warning` (falla sin el fix: `Text` con el JSON crudo); timestamps y logprobs ignorados avisados y no enviados; `languages[]`/`keywords[]` sin avisos; `whisper-1` con srt + timestamps sigue igual y avisa la deprecación; `TranslateToEnglish` (solo whisper-1) avisa la deprecación; `audio.defaults`: defaults v3.9 (`gpt-transcribe`, `gpt-4o-mini-tts`) en `TAiOpenAiAudio` y `TAiOpenAiSpeechTool`, con el valor del constructor igual al `default` publicado (RTTI) |
 | Evals | autoprueba del runner (conteo PASS/FAIL) |
 | Jev: consumo | `Usage` y `OnUsage` en `TAiJev` (un evento por llamada) y en PromptGuard, Dispatch, Guardrail, Eval, ModelRouter, RAG y Batch (uno por operación); reranker en paralelo con un `TAiJev` falso por pasaje → un solo evento con el total exacto y en el hilo del llamador; `ResetUsage`; precio configurable |
+| Jev en servidores System One (Ollama) | `jev.systemone.local`: imágenes en el request (`images`, base64 sin saltos que decodifica a los bytes originales, PNG y JPEG reconocidos por los bytes aunque el archivo no tenga extensión), una "imagen" que no es PNG/JPEG/WebP rechazada antes de la red, el precio de TypeSafe no se cobra con `Url` local salvo precio propio, y `JevAdapterInputPrice` toma la `Url` del `Jev` que se usa |
 | Jev (TypeSafe) | forma del request (Choice con opción sin descripción → `null`, Score, Noul con criteria parcial), parseo de las tres respuestas, reintento ante 429/529, reintentos agotados, validación local sin red, 401 sin reintento — con `TFakeJev` (sin red ni API key) |
 
 ## Estructura

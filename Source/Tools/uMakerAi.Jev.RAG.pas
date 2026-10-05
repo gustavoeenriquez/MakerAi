@@ -50,6 +50,7 @@ type
     FOwnJev: TAiJev;
     FApiKey: string;
     FModel: string;
+    FUrl: string; // '' = TypeSafe (JEV_DEFAULT_URL)
     FDetectInjection: Boolean;
     FInjectionThreshold: Double;
     FMaxPassageChars: Integer;
@@ -78,6 +79,9 @@ type
     property Jev: TAiJev read FJev write SetJev;
     property ApiKey: string read FApiKey write FApiKey;
     property Model: string read FModel write FModel;
+    // Servidor System One: '' = TypeSafe; 'http://localhost:11434/v1/' = Ollama
+    // (con Model := 'nimble', 'clef-flash'...). Ignorada si Jev esta asignado
+    property Url: string read FUrl write FUrl;
     property DetectInjection: Boolean read FDetectInjection write FDetectInjection default True;
     property InjectionThreshold: Double read FInjectionThreshold write FInjectionThreshold;
     // Los pasajes se recortan a este largo antes de enviarlos
@@ -147,6 +151,7 @@ begin
   Result := TAiJev.Create(nil);
   Result.ApiKey := FApiKey;
   Result.Model := FModel;
+  Result.Url := JevUrlOrDefault(FUrl);
 end;
 
 function TAiJevRAGReranker.ActiveJev: TAiJev;
@@ -157,6 +162,7 @@ begin
     FOwnJev := TAiJev.Create(nil);
   FOwnJev.ApiKey := FApiKey;
   FOwnJev.Model := FModel;
+  FOwnJev.Url := JevUrlOrDefault(FUrl);
   Result := FOwnJev;
 end;
 
@@ -243,7 +249,7 @@ begin
       end;
     end;
   finally
-    JevReportOperation(Self, Op, FUsage, FPricePerMillionInput, FPricePerMillionOutput, FOnUsage);
+    JevReportOperation(Self, Op, FUsage, JevAdapterInputPrice(FJev, FUrl, FPricePerMillionInput), FPricePerMillionOutput, FOnUsage);
     Op.Free;
   end;
   Result := Scores;
@@ -251,7 +257,7 @@ end;
 
 function TAiJevRAGReranker.GetUsage: TAiJevUsage;
 begin
-  Result := FUsage.Snapshot(FPricePerMillionInput, FPricePerMillionOutput);
+  Result := FUsage.Snapshot(JevAdapterInputPrice(FJev, FUrl, FPricePerMillionInput), FPricePerMillionOutput);
 end;
 
 procedure TAiJevRAGReranker.ResetUsage;

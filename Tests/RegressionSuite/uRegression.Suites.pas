@@ -712,6 +712,15 @@ begin
   // Consumo de Jev para cobrar por uso: cada adaptador acumula Usage y dispara un
   // OnUsage por operacion, en el hilo del llamador. El reranker en paralelo (un
   // TAiJev por pasaje) da UN evento con el total exacto. Fake: 100 in / 5 out.
+  // System One local (Ollama 0.35+, oct 2026): imagenes para Clef (base64 crudo
+  // de PNG/JPEG/WebP, validadas por sus bytes), el precio de TypeSafe no se
+  // cobra en otro servidor salvo precio propio, y un adaptador mira la Url del
+  // Jev que realmente usa
+  FRunner.AddCase('jev.systemone.local')
+    .Input('jev:systemone-local')
+    .ExpectEquals('imagenes=2/png-ok/sin-saltos/state|invalida=rechazada|' +
+      'costo-local=0|costo-typesafe=cobra|precio-propio=cobra|adaptador=0/0.042/0');
+
   FRunner.AddCase('jev.usage.adapters')
     .Input('jev:usage')
     .ExpectEquals('jev=ev2/2/200/10|guard=ev2/2/200/10/0.0000084|dispatch=1|guardrail=1|eval=1|router=1|' +
@@ -4478,6 +4487,83 @@ var
   end;
 
 begin
+  if AScenario = 'jev:systemone-local' then
+  begin
+    var Resp := '{"model":"clef-flash","answers":{"q":{"type":"noul","noul":0.9}},' +
+      '"usage":{"input_tokens":1000,"output_tokens":0}}';
+    var Png: TBytes := [$89, $50, $4E, $47, $0D, $0A, $1A, $0A, 1, 2, 3, 4];
+    var Jpg: TBytes := [$FF, $D8, $FF, $E0, 5, 6, 7];
+    var Txt: TBytes := TEncoding.ASCII.GetBytes('esto no es una imagen');
+    var NewMedia := function(const AName: string; const AData: TBytes): TAiMediaFile
+      var
+        MS: TMemoryStream;
+      begin
+        MS := TMemoryStream.Create;
+        try
+          MS.WriteBuffer(AData[0], Length(AData));
+          MS.Position := 0;
+          Result := TAiMediaFile.Create;
+          Result.LoadFromStream(AName, MS);
+        finally
+          MS.Free;
+        end;
+      end;
+    var M1 := NewMedia('captura.png', Png);
+    var M2 := NewMedia('foto', Jpg); // sin extension: se reconoce por los bytes
+    var M3 := NewMedia('falsa.png', Txt);
+    var LQ := TAiJevQuestions.Create(nil);
+    var JL := TFakeJev.Create(nil);
+    var JT := TFakeJev.Create(nil);
+    try
+      LQ.AddNoul('q', 'Hay un error en pantalla?');
+      JL.Url := 'http://localhost:11434/v1/';
+      JL.Model := 'clef-flash';
+      JL.Enqueue(200, Resp);
+      JL.Ask('Captura enviada por el usuario', [M1, M2], LQ).Free;
+      var LBody := TJSONObject.ParseJSONValue(JL.LastBody) as TJSONObject;
+      try
+        var Imgs := LBody.GetValue('images') as TJSONArray;
+        var First := TNetEncoding.Base64.DecodeStringToBytes(Imgs.Items[0].Value);
+        Result := 'imagenes=' + IntToStr(Imgs.Count) + '/' +
+          IfThen((Length(First) = Length(Png)) and CompareMem(@First[0], @Png[0], Length(Png)), 'png-ok', 'png-distinto') + '/' +
+          IfThen((Pos(#13, Imgs.Items[0].Value) = 0) and (Pos(#10, Imgs.Items[0].Value) = 0), 'sin-saltos', 'con-saltos') + '/' +
+          IfThen(LBody.GetValue('state') <> nil, 'state', 'sin-state');
+      finally
+        LBody.Free;
+      end;
+      // Una "imagen" que no es PNG/JPEG/WebP no sale a la red
+      try
+        JL.Ask('x', [M3], LQ).Free;
+        Result := Result + '|invalida=aceptada';
+      except
+        on E: EAiJevError do
+          Result := Result + '|invalida=' + IfThen(Pos('no es PNG', E.Message) > 0, 'rechazada', E.Message);
+      end;
+      // Precio: el de TypeSafe no se cobra en Ollama; un precio propio si
+      Result := Result + '|costo-local=' + FloatToStr(JL.Usage.CostUSD, TFormatSettings.Invariant);
+      JT.Enqueue(200, Resp);
+      JT.Ask('x', LQ).Free;
+      Result := Result + '|costo-typesafe=' + IfThen(JT.Usage.CostUSD > 0, 'cobra', 'gratis');
+      JL.PricePerMillionInput := 0.5;
+      Result := Result + '|precio-propio=' + IfThen(JL.Usage.CostUSD > 0, 'cobra', 'gratis');
+      JL.PricePerMillionInput := JEV_PRICE_PER_MILLION_INPUT;
+      // Adaptador: la Url que cuenta es la del Jev que usa
+      Result := Result + '|adaptador=' +
+        FloatToStr(JevAdapterInputPrice(JL, '', JEV_PRICE_PER_MILLION_INPUT), TFormatSettings.Invariant) + '/' +
+        FloatToStr(JevAdapterInputPrice(nil, '', JEV_PRICE_PER_MILLION_INPUT), TFormatSettings.Invariant) + '/' +
+        FloatToStr(JevAdapterInputPrice(nil, 'http://localhost:11434/v1/', JEV_PRICE_PER_MILLION_INPUT),
+          TFormatSettings.Invariant);
+    finally
+      JT.Free;
+      JL.Free;
+      LQ.Free;
+      M3.Free;
+      M2.Free;
+      M1.Free;
+    end;
+    Exit;
+  end;
+
   if AScenario = 'jev:usage' then
   begin
     var Sink := TUsageSink.Create;

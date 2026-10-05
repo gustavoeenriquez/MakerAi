@@ -40,6 +40,16 @@ unit uMakerAi.Jev;
 // 'jev-latest') antes de calibrar umbrales, y dejarles margen.
 //
 // DoPost es virtual: la suite de regresion lo sustituye para probar sin red.
+//
+// Otros servidores System One (oct 2026): Ollama 0.35+ expone el mismo
+// contrato en http://localhost:11434/v1/systemone con modelos de decision
+// locales (nimble, tev1, clef, clef-flash). Basta con Url + Model:
+//   Jev.Url := 'http://localhost:11434/v1/'; Jev.Model := 'nimble';
+// Diferencias: Choice y Score admiten de 2 a 26 opciones (el servidor rechaza
+// mas con HTTP 400), requests de hasta 64 KiB, sin API key. Clef y Clef Flash
+// (Ollama 0.35.1+) leen IMAGENES: Ask(State, [Imagen1, ...], Preguntas).
+// El precio por defecto (JEV_PRICE_PER_MILLION_INPUT) solo se cobra cuando
+// Url apunta a TypeSafe; un precio fijado a mano se respeta siempre.
 // -----------------------------------------------------------------------------
 
 interface
@@ -210,14 +220,24 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
-    // Cuerpo JSON del request (valida las preguntas). El llamador libera el resultado.
-    function BuildRequest(AState: TJSONValue; AQuestions: TAiJevQuestions): TJSONObject;
+    // Cuerpo JSON del request (valida las preguntas y las imagenes). El
+    // llamador libera el resultado.
+    function BuildRequest(AState: TJSONValue; AQuestions: TAiJevQuestions): TJSONObject; overload;
+    function BuildRequest(AState: TJSONValue; AQuestions: TAiJevQuestions;
+      const AImages: array of TAiMediaFile): TJSONObject; overload;
 
     // AQuestions = nil usa la propiedad Questions. El llamador libera el resultado.
     // Lanza EAiJevError si la API responde con error (tras OnError y LastError).
     function Ask(const AState: string; AQuestions: TAiJevQuestions = nil): TAiJevResult; overload;
     // State estructurado (objeto o arreglo JSON). No toma posesion de AState.
     function Ask(AState: TJSONValue; AQuestions: TAiJevQuestions = nil): TAiJevResult; overload;
+    // Con imagenes (PNG, JPEG o WebP, compartidas por todas las preguntas y
+    // juzgadas junto con el state). Solo modelos que leen imagenes, como Clef
+    // en Ollama 0.35.1+. No toma posesion de las imagenes.
+    function Ask(const AState: string; const AImages: array of TAiMediaFile;
+      AQuestions: TAiJevQuestions = nil): TAiJevResult; overload;
+    function Ask(AState: TJSONValue; const AImages: array of TAiMediaFile;
+      AQuestions: TAiJevQuestions = nil): TAiJevResult; overload;
 
     // Atajos para una sola pregunta
     function Choose(const AState, AInstructions: string; const AOptions: array of string;
@@ -250,6 +270,18 @@ type
 
 const
   JEV_PRICE_PER_MILLION_INPUT = 0.042;
+  JEV_DEFAULT_URL = 'https://api.typesafe.ai/v1/';
+
+// True si la Url es la de TypeSafe ('' = la de TypeSafe por defecto)
+function JevIsTypeSafeUrl(const AUrl: string): Boolean;
+// '' -> JEV_DEFAULT_URL
+function JevUrlOrDefault(const AUrl: string): string;
+// Precio de entrada efectivo: el precio por defecto de TypeSafe no se cobra en
+// otros servidores (Ollama local, etc.); un precio fijado a mano se respeta.
+function JevEffectiveInputPrice(const AUrl: string; APrice: Double): Double;
+// Igual para un adaptador: la Url que cuenta es la del Jev que realmente usa
+// (el externo si esta asignado, si no la propia del adaptador).
+function JevAdapterInputPrice(AExternalJev: TAiJev; const AUrl: string; APrice: Double): Double;
 
 // Cierra una operacion de un adaptador: suma su consumo al total del adaptador
 // y dispara OnUsage (sincrono, en el hilo del llamador) si hubo peticiones.
@@ -267,7 +299,52 @@ implementation
 
 uses
   System.Math, System.Generics.Defaults, System.Net.HttpClient,
-  System.Net.HttpClientComponent, System.Net.URLClient, uMakerAi.Telemetry;
+  System.Net.HttpClientComponent, System.Net.URLClient, System.NetEncoding,
+  uMakerAi.Telemetry;
+
+function JevIsTypeSafeUrl(const AUrl: string): Boolean;
+begin
+  Result := (Trim(AUrl) = '') or (Pos('typesafe.ai', LowerCase(AUrl)) > 0);
+end;
+
+function JevUrlOrDefault(const AUrl: string): string;
+begin
+  if Trim(AUrl) = '' then
+    Result := JEV_DEFAULT_URL
+  else
+    Result := AUrl;
+end;
+
+function JevEffectiveInputPrice(const AUrl: string; APrice: Double): Double;
+begin
+  if SameValue(APrice, JEV_PRICE_PER_MILLION_INPUT) and not JevIsTypeSafeUrl(AUrl) then
+    Result := 0
+  else
+    Result := APrice;
+end;
+
+function JevAdapterInputPrice(AExternalJev: TAiJev; const AUrl: string; APrice: Double): Double;
+begin
+  if Assigned(AExternalJev) then
+    Result := JevEffectiveInputPrice(AExternalJev.Url, APrice)
+  else
+    Result := JevEffectiveInputPrice(JevUrlOrDefault(AUrl), APrice);
+end;
+
+// Formato real de la imagen por sus bytes iniciales: 'png', 'jpeg', 'webp' o ''
+function JevImageKind(const AData: TBytes): string;
+begin
+  Result := '';
+  if (Length(AData) >= 8) and (AData[0] = $89) and (AData[1] = $50) and
+     (AData[2] = $4E) and (AData[3] = $47) then
+    Result := 'png'
+  else if (Length(AData) >= 3) and (AData[0] = $FF) and (AData[1] = $D8) and (AData[2] = $FF) then
+    Result := 'jpeg'
+  else if (Length(AData) >= 12) and (AData[0] = Ord('R')) and (AData[1] = Ord('I')) and
+     (AData[2] = Ord('F')) and (AData[3] = Ord('F')) and (AData[8] = Ord('W')) and
+     (AData[9] = Ord('E')) and (AData[10] = Ord('B')) and (AData[11] = Ord('P')) then
+    Result := 'webp';
+end;
 
 const
   JEV_MAX_CHOICE_OPTIONS = 255;
@@ -770,7 +847,7 @@ begin
   inherited Create(AOwner);
   FApiKey := '@TYPESAFE_API_KEY';
   FModel := 'jev-1.13.0';
-  FUrl := 'https://api.typesafe.ai/v1/';
+  FUrl := JEV_DEFAULT_URL;
   FQuestions := TAiJevQuestions.Create(Self);
   FMaxRetries := 2;
   FRetryDelay := 500;
@@ -788,7 +865,7 @@ end;
 
 function TAiJev.GetUsage: TAiJevUsage;
 begin
-  Result := FUsage.Snapshot(FPricePerMillionInput, FPricePerMillionOutput);
+  Result := FUsage.Snapshot(JevEffectiveInputPrice(FUrl, FPricePerMillionInput), FPricePerMillionOutput);
 end;
 
 procedure TAiJev.ResetUsage;
@@ -812,18 +889,59 @@ begin
 end;
 
 function TAiJev.BuildRequest(AState: TJSONValue; AQuestions: TAiJevQuestions): TJSONObject;
+begin
+  Result := BuildRequest(AState, AQuestions, []);
+end;
+
+function TAiJev.BuildRequest(AState: TJSONValue; AQuestions: TAiJevQuestions;
+  const AImages: array of TAiMediaFile): TJSONObject;
 var
   Qs: TJSONObject;
+  Imgs: TJSONArray;
+  Encoded: TArray<string>;
+  Data: TBytes;
+  B64: TBase64Encoding;
   i: Integer;
 begin
   if AState = nil then
     raise EAiJevError.Create('Jev: el state no puede ser nil');
   AQuestions.Validate;
 
+  // Imagenes: base64 crudo (sin data URL ni saltos de linea), solo PNG, JPEG
+  // o WebP; se valida por los bytes, no por la extension del archivo
+  SetLength(Encoded, Length(AImages));
+  if Length(AImages) > 0 then
+  begin
+    B64 := TBase64Encoding.Create(0);
+    try
+      for i := 0 to High(AImages) do
+      begin
+        if (AImages[i] = nil) or (AImages[i].Content = nil) or (AImages[i].Content.Size = 0) then
+          raise EAiJevError.CreateFmt('Jev: la imagen %d esta vacia', [i + 1]);
+        SetLength(Data, AImages[i].Content.Size);
+        AImages[i].Content.Position := 0;
+        AImages[i].Content.ReadBuffer(Data[0], Length(Data));
+        if JevImageKind(Data) = '' then
+          raise EAiJevError.CreateFmt('Jev: la imagen %d ("%s") no es PNG, JPEG ni WebP',
+            [i + 1, AImages[i].filename]);
+        Encoded[i] := B64.EncodeBytesToString(Data);
+      end;
+    finally
+      B64.Free;
+    end;
+  end;
+
   Result := TJSONObject.Create;
   try
     Result.AddPair('model', FModel);
     Result.AddPair('state', TJSONValue(AState.Clone));
+    if Length(Encoded) > 0 then
+    begin
+      Imgs := TJSONArray.Create;
+      Result.AddPair('images', Imgs);
+      for i := 0 to High(Encoded) do
+        Imgs.Add(Encoded[i]);
+    end;
     Qs := TJSONObject.Create;
     Result.AddPair('questions', Qs);
     for i := 0 to AQuestions.Count - 1 do
@@ -875,7 +993,26 @@ begin
   end;
 end;
 
+function TAiJev.Ask(const AState: string; const AImages: array of TAiMediaFile;
+  AQuestions: TAiJevQuestions): TAiJevResult;
+var
+  S: TJSONString;
+begin
+  S := TJSONString.Create(AState);
+  try
+    Result := Ask(S, AImages, AQuestions);
+  finally
+    S.Free;
+  end;
+end;
+
 function TAiJev.Ask(AState: TJSONValue; AQuestions: TAiJevQuestions): TAiJevResult;
+begin
+  Result := Ask(AState, [], AQuestions);
+end;
+
+function TAiJev.Ask(AState: TJSONValue; const AImages: array of TAiMediaFile;
+  AQuestions: TAiJevQuestions): TAiJevResult;
 var
   Req: TJSONObject;
   Body, Resp: string;
@@ -889,11 +1026,15 @@ begin
 
   Span := AiSpanStart('jev.ask', skClient);
   try
-    AiSpanAttr(Span, 'gen_ai.system', 'typesafe');
+    if JevIsTypeSafeUrl(FUrl) then
+      AiSpanAttr(Span, 'gen_ai.system', 'typesafe')
+    else
+      AiSpanAttr(Span, 'gen_ai.system', 'systemone'); // Ollama u otro servidor
     AiSpanAttr(Span, 'gen_ai.request.model', FModel);
     AiSpanAttr(Span, 'jev.questions', Int64(AQuestions.Count));
+    AiSpanAttr(Span, 'jev.images', Int64(Length(AImages)));
 
-    Req := BuildRequest(AState, AQuestions);
+    Req := BuildRequest(AState, AQuestions, AImages);
     try
       Body := Req.ToJSON;
     finally
@@ -928,7 +1069,8 @@ begin
       U.Requests := 1;
       U.InputTokens := Result.InputTokens;
       U.OutputTokens := Result.OutputTokens;
-      U.CostUSD := (U.InputTokens * FPricePerMillionInput + U.OutputTokens * FPricePerMillionOutput) / 1E6;
+      U.CostUSD := (U.InputTokens * JevEffectiveInputPrice(FUrl, FPricePerMillionInput) +
+        U.OutputTokens * FPricePerMillionOutput) / 1E6;
       FOnUsage(Self, U);
     end;
   except
