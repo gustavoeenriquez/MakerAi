@@ -16,8 +16,8 @@ const
 // Product Information
 const
   MAKERAI_PRODUCT_NAME     = 'MakerAi Library';
-  MAKERAI_COMPANY_NAME     = 'Gustavo Enrï¿½quez';
-  MAKERAI_COPYRIGHT        = 'Copyright ï¿½ 2024-2026 Gustavo Enrï¿½quez - CimaMaker';
+  MAKERAI_COMPANY_NAME     = 'Gustavo Enríquez';
+  MAKERAI_COPYRIGHT        = 'Copyright © 2024-2026 Gustavo Enríquez - CimaMaker';
   MAKERAI_DESCRIPTION      = 'Advanced AI Integration Library for Delphi';
 
 // Build Information
@@ -248,6 +248,9 @@ const
          contract (nimble, tev1, Cloudflare clef/clef-flash). Url on the eight
          Jev adapters, TAiJev.Ask with images for Clef (PNG/JPEG/WebP), and the
          TypeSafe default price is no longer charged on other servers
+  - CHANGED: the default PPM registry is https://registry.cimamaker.com
+         (was registry.pascalai.org) in TAiFunctions, TAiPrompts, TAiSkill
+         and the SKILL.md client
   - NEW: TAiMCPServer.BindAddress (or MCP_BIND_ADDRESS) for SSE/HTTP servers
   - NEW: palette icons for all 108 components; each package links its own .res
   - NEW: demo 092-GPTLiveVoice (voice, local functions, RAG over MCP with a
@@ -438,7 +441,7 @@ begin
   else if SameText(FeatureName, 'Agents') then Result := MAKERAI_HAS_AGENTS;
 end;
 
-//Mostrar en el versiï¿½n about dialog
+//Mostrar en el versión about dialog
 procedure TFormAbout.FormShow(Sender: TObject);
 begin
   lblVersion.Caption := MAKERAI_VERSION_STRING;
