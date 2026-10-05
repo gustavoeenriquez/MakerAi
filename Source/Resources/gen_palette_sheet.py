@@ -48,7 +48,7 @@ CATEGORIES = [
         'TAiOllamaOcrTool', 'TAiQwenRAGReranker']),
     ('Audio & realtime voice', 'MakerAI', [
         'TAIVoiceMonitor', 'TAiAudioCapture', 'TAiAudioPlayer', 'TAiOpenAiAudio',
-        'TAiOpenAiRealtimeSTT', 'TAiOpenAiRealtimeTranslate', 'TAiGeminiRealtimeSTT',
+        'TAiOpenAiRealtimeSTT', 'TAiOpenAiRealtimeTranslate', 'TAiOpenAiLiveChat', 'TAiGeminiRealtimeSTT',
         'TAiGrokRealtimeChat', 'TAiMakerAiRealtimeChat', 'TAiQwenRealtimeChat',
         'TAiQwenRealtimeSTT', 'TAiQwenRealtimeTTS', 'TAiQwenRealtimeTranslate']),
     ('Embeddings', 'MakerAI', [

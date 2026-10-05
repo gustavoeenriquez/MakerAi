@@ -51,6 +51,9 @@ type
     function RunJevScenario(const AScenario: string): string;
     // TAiOpenAiAudio sin red: formato efectivo, avisos y deprecaciones
     function RunAudioScenario(const AScenario: string): string;
+    // TAiOpenAiLiveChat (GPT-Live) sin red: session.start, eventos, funciones
+    // y delegacion a la aplicacion
+    function RunLiveScenario(const AScenario: string): string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -75,7 +78,7 @@ uses
   uMakerAi.Guardrails, uMakerAi.Jev, uMakerAi.Agents.Tools.JevRouter,
   uMakerAi.Jev.SmartDispatch, uMakerAi.Jev.Guardrails, uMakerAi.Chat.Tools,
   uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
-  uMakerAi.OpenAI.Audio,
+  uMakerAi.OpenAI.Audio, uMakerAi.Realtime.OpenAI.Live,
   uMakerAi.Jev.ModelRouter,
   UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank, uMakerAi.Qwen.Voices,
   uMakerAi.Realtime, uMakerAi.Realtime.Qwen, uMakerAi.Realtime.AiConnection, uMakerAi.Realtime.QwenTTS, uMakerAi.Realtime.Grok,
@@ -502,6 +505,61 @@ begin
     .ExpectEquals('conn=gpt-6-sol|gpt-6-sol/medium|gpt-6-sol/low|gpt-5.6-luna/minimal|gpt-6-luna/max|' +
       'makerai=mk-gpt-oss-20b');
 
+  // --- GPT-Live (TAiOpenAiLiveChat, sin red) ---
+  // session.start: modelo y audio en la sesion (no en la URL), delegacion a
+  // Responses por defecto con tools/tool_choice/razonamiento; DelegateChat
+  // asignado pasa a delegacion 'client'; registro en fabrica y conector
+  FRunner.AddCase('realtime.openai-live.session')
+    .Input('live:session')
+    .ExpectEquals('defecto=session.start/gpt-live-1/24000/sin-voz/responses:gpt-6-luna/sin-tools|' +
+      'config=16000/cedar/Se breve/store|resp=Reglas/low/300/parallel=false/required|' +
+      'tools=web_search,get_time|choice=function:get_time|client=client/sin-responses|' +
+      'conexion=TAiOpenAiLiveChat/cedar');
+  // Los transcripts no marcan turnos: el driver cierra un segmento al cambiar
+  // quien habla y al cerrar la sesion; audio, consumo, cierre y errores
+  FRunner.AddCase('realtime.openai-live.events')
+    .Input('live:events')
+    .ExpectEquals('id=sess_1|deltas=Hola,| ¿qué hora es?|Gracias|turnos=Hola, ¿qué hora es?|Gracias|' +
+      'asistente=Son las| tres.=Son las tres.|audio=2|fin=1|uso=12.5/0.25|cierre=close_requested/13|' +
+      'error=unknown_parameter:Bad');
+  // Caso real (oct 2026): "favor" llego despues de que el asistente empezo
+  // ("La capital"), pero EMPEZO antes: es parte del turno del usuario y no
+  // corta al asistente. El usuario cierra 1 s despues sin mas fragmentos; el
+  // asistente, tras 2 s sin texto (reloj controlado por la suite)
+  FRunner.AddCase('realtime.openai-live.turns')
+    .Input('live:turns')
+    .ExpectEquals('tras-atrasado=0/0|usuario=Hola, por favor|antes-silencio=0|' +
+      'asistente=La capital de Francia es Paris.|registro=User: Hola, por favor/Assistant: La capital de Francia es Paris.');
+  // Traza real de gpt-live-1 (oct 2026): el modelo empezo "La capital" [6400]
+  // mientras el usuario decia "favor." [6600-6800]. Habla superpuesta: el
+  // turno cambia recien cuando el asistente sigue 500 ms despues del fin del
+  // usuario ("." [7400]); antes la respuesta salia partida en dos
+  FRunner.AddCase('realtime.openai-live.overlap')
+    .Input('live:overlap')
+    .ExpectEquals('usuario=Hola, cual es la capital de Francia? Por favor.|' +
+      'asistente=La capital de Francia es Paris.');
+  // Delegacion a Responses: function_call dentro de response.event -> se ejecuta,
+  // response.item.create con el resultado y UN response.create cuando la
+  // respuesta termino (tambien si termina antes que la funcion)
+  FRunner.AddCase('realtime.openai-live.tools')
+    .Input('live:tools')
+    .ExpectEquals('tool=get_time/{"tz":"COT"}|salida=call_1/{"hora":"15:00"}|antes=0|despues=1|' +
+      'repetido=1|orden-inverso=2|fallo=delegation_failed:sin cupo');
+  // Delegacion a la aplicacion: OnDelegation con lo que el chat aun no vio (un
+  // turno enviado abierto no se repite al cerrarse), textos
+  // largos partidos en fragmentos de 400 bytes, delegation_id null con
+  // Responses, y aviso al modelo si nadie atiende la tarea
+  FRunner.AddCase('realtime.openai-live.client')
+    .Input('live:client')
+    .ExpectEquals('id=del_1|ctx1=User: Reserva una mesa/Assistant: Claro, un momento./User: para dos|' +
+      'ctx2=Assistant: Listo.|partes=4/max<=400/del_1/igual|responses=null|' +
+      'sin-manejador=delegation_unhandled/del_9');
+  // DelegateChat: el pedido (transcripcion + instruccion) llega al chat y su
+  // resultado vuelve como session.commentary.append (URL a puerto cerrado)
+  FRunner.AddCase('realtime.openai-live.delegate-chat')
+    .Input('live:delegate-chat')
+    .ExpectEquals('pedido=si|respuesta=del_7/The task');
+
   // --- OpenAI Audio (transcripcion, sin red) ---
   // El resultado se interpreta con el formato que realmente se pidio: con
   // gpt-transcribe + trfText se pide json, y antes Text quedaba con el JSON
@@ -835,6 +893,8 @@ begin
     Result := RunJevScenario(AScenario)
   else if AScenario.StartsWith('audio:') then
     Result := RunAudioScenario(AScenario)
+  else if AScenario.StartsWith('live:') then
+    Result := RunLiveScenario(AScenario)
   else
     raise Exception.Create('Escenario desconocido: ' + AScenario);
 end;
@@ -5239,6 +5299,538 @@ begin
     MS.Free;
     Media.Free;
     A.Free;
+  end;
+end;
+
+// -----------------------------------------------------------------------------
+// GPT-Live (TAiOpenAiLiveChat) sin red
+// -----------------------------------------------------------------------------
+
+type
+  // Captura lo que el driver envia (tambien desde sus hilos) y le inyecta
+  // eventos del servidor
+  TLiveProbe = class(TAiOpenAiLiveChat)
+  private
+    FSentLock: TCriticalSection;
+  protected
+    procedure SendJson(AObj: TJSONObject); override;
+    function NowMs: Int64; override;
+  public
+    Sent: TStringList;
+    Clock: Int64; // reloj local simulado (NowMs)
+    constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
+    procedure Feed(const AJson: string);
+    function Start: TJSONObject;
+    function CountType(const AType: string): Integer;
+    function LastOfType(const AType: string): TJSONObject; // el llamador libera
+    function WaitType(const AType: string; ACount, AMs: Integer): Boolean;
+    class function Split(const AText: string): TArray<string>;
+  end;
+
+  // Recolecta los eventos del driver (llegan por TThread.Queue)
+  TLiveSink = class
+  public
+    Deltas, Turns, ADeltas, AText, Errors, DelegId, DelegCtx, CloseReason, ToolInfo: string;
+    Audio, Done: Integer;
+    UsageSec, UsageRatio, CloseSec: Double;
+    procedure Delta(Sender: TObject; const D: string);
+    procedure Completed(Sender: TObject; const T, Id: string);
+    procedure ADelta(Sender: TObject; const T: string);
+    procedure AFull(Sender: TObject; const T: string);
+    procedure AChunk(Sender: TObject; const D: TBytes);
+    procedure ADone(Sender: TObject);
+    procedure Error(Sender: TObject; const M, C: string);
+    procedure Usage(Sender: TObject; Seconds, ContextRatio: Double);
+    procedure Closed(Sender: TObject; const Reason: string; Seconds: Double);
+    procedure Deleg(Sender: TObject; const DelegationId, Context: string);
+    procedure Tool(Sender: TObject; ToolCall: TAiToolsFunction);
+  end;
+
+constructor TLiveProbe.Create(AOwner: TComponent);
+begin
+  inherited;
+  FSentLock := TCriticalSection.Create;
+  Sent := TStringList.Create;
+end;
+
+destructor TLiveProbe.Destroy;
+begin
+  inherited; // espera los hilos del driver, que pueden seguir enviando
+  Sent.Free;
+  FSentLock.Free;
+end;
+
+procedure TLiveProbe.SendJson(AObj: TJSONObject);
+begin
+  FSentLock.Enter;
+  try
+    Sent.Add(AObj.ToJSON);
+  finally
+    FSentLock.Leave;
+    AObj.Free;
+  end;
+end;
+
+function TLiveProbe.NowMs: Int64;
+begin
+  Result := Clock;
+end;
+
+procedure TLiveProbe.Feed(const AJson: string);
+var
+  J: TJSONObject;
+begin
+  J := TJSONObject.ParseJSONValue(AJson) as TJSONObject;
+  try
+    ProcessServerEvent(J);
+  finally
+    J.Free;
+  end;
+end;
+
+function TLiveProbe.Start: TJSONObject;
+begin
+  Result := BuildSessionStart;
+end;
+
+function TLiveProbe.CountType(const AType: string): Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  FSentLock.Enter;
+  try
+    for I := 0 to Sent.Count - 1 do
+      if Pos('"type":"' + AType + '"', Sent[I]) > 0 then
+        Inc(Result);
+  finally
+    FSentLock.Leave;
+  end;
+end;
+
+function TLiveProbe.LastOfType(const AType: string): TJSONObject;
+var
+  I: Integer;
+begin
+  Result := nil;
+  FSentLock.Enter;
+  try
+    for I := Sent.Count - 1 downto 0 do
+      if Pos('"type":"' + AType + '"', Sent[I]) > 0 then
+        Exit(TJSONObject.ParseJSONValue(Sent[I]) as TJSONObject);
+  finally
+    FSentLock.Leave;
+  end;
+end;
+
+function TLiveProbe.WaitType(const AType: string; ACount, AMs: Integer): Boolean;
+var
+  T0: Cardinal;
+begin
+  // Los hilos del driver sincronizan con el principal: hay que drenar la cola
+  T0 := TThread.GetTickCount;
+  while (CountType(AType) < ACount) and (TThread.GetTickCount - T0 < Cardinal(AMs)) do
+    CheckSynchronize(10);
+  CheckSynchronize(0);
+  Result := CountType(AType) >= ACount;
+end;
+
+class function TLiveProbe.Split(const AText: string): TArray<string>;
+begin
+  Result := SplitForAppend(AText);
+end;
+
+procedure TLiveSink.Delta(Sender: TObject; const D: string);
+begin
+  Deltas := Deltas + IfThen(Deltas <> '', '|', '') + D;
+end;
+
+procedure TLiveSink.Completed(Sender: TObject; const T, Id: string);
+begin
+  Turns := Turns + IfThen(Turns <> '', '|', '') + T;
+end;
+
+procedure TLiveSink.ADelta(Sender: TObject; const T: string);
+begin
+  ADeltas := ADeltas + IfThen(ADeltas <> '', '|', '') + T;
+end;
+
+procedure TLiveSink.AFull(Sender: TObject; const T: string);
+begin
+  AText := AText + IfThen(AText <> '', '|', '') + T;
+end;
+
+procedure TLiveSink.AChunk(Sender: TObject; const D: TBytes);
+begin
+  Inc(Audio);
+end;
+
+procedure TLiveSink.ADone(Sender: TObject);
+begin
+  Inc(Done);
+end;
+
+procedure TLiveSink.Error(Sender: TObject; const M, C: string);
+begin
+  Errors := Errors + IfThen(Errors <> '', ';', '') + C + ':' + M;
+end;
+
+procedure TLiveSink.Usage(Sender: TObject; Seconds, ContextRatio: Double);
+begin
+  UsageSec := Seconds;
+  UsageRatio := ContextRatio;
+end;
+
+procedure TLiveSink.Closed(Sender: TObject; const Reason: string; Seconds: Double);
+begin
+  CloseReason := Reason;
+  CloseSec := Seconds;
+end;
+
+procedure TLiveSink.Deleg(Sender: TObject; const DelegationId, Context: string);
+begin
+  DelegId := DelegationId;
+  DelegCtx := DelegCtx + IfThen(DelegCtx <> '', '#', '') +
+    StringReplace(Context, sLineBreak, '/', [rfReplaceAll]);
+end;
+
+procedure TLiveSink.Tool(Sender: TObject; ToolCall: TAiToolsFunction);
+begin
+  ToolInfo := ToolCall.name + '/' + ToolCall.Arguments;
+  ToolCall.Response := '{"hora":"15:00"}';
+end;
+
+function TRegressionSuite.RunLiveScenario(const AScenario: string): string;
+var
+  P: TLiveProbe;
+  Sink: TLiveSink;
+  J: TJSONObject;
+  Inv: TFormatSettings;
+
+  function Str(AObj: TJSONObject; const APath: string): string;
+  begin
+    if (AObj = nil) or not AObj.TryGetValue<string>(APath, Result) then
+      Result := '';
+  end;
+
+begin
+  Result := '';
+  Inv := TFormatSettings.Invariant;
+  Sink := TLiveSink.Create;
+  P := TLiveProbe.Create(nil);
+  try
+    if AScenario = 'live:session' then
+    begin
+      J := P.Start;
+      try
+        Result := 'defecto=' + Str(J, 'type') + '/' + Str(J, 'session.model') + '/' +
+          Str(J, 'session.audio.format.rate') + '/' +
+          IfThen(J.FindValue('session.audio.output') = nil, 'sin-voz', 'voz') + '/' +
+          Str(J, 'session.delegation.type') + ':' + Str(J, 'session.delegation.responses.model') + '/' +
+          IfThen(J.FindValue('session.delegation.responses.tools') = nil, 'sin-tools', 'tools');
+      finally
+        J.Free;
+      end;
+
+      P.Voice := 'cedar';
+      P.AudioRate := lar16k;
+      P.Instructions := 'Se breve';
+      P.Store := True;
+      P.DelegationInstructions := 'Reglas';
+      P.ReasoningEffort := lreLow;
+      P.MaxOutputTokens := 300;
+      P.ParallelToolCalls := False;
+      P.ToolChoice := 'required';
+      P.EnableWebSearch := True;
+      P.CustomToolsJson.Text :=
+        '{"type":"function","name":"get_time","parameters":{"type":"object","properties":{}}}';
+      J := P.Start;
+      try
+        Result := Result + '|config=' + Str(J, 'session.audio.format.rate') + '/' +
+          Str(J, 'session.audio.output.voice') + '/' + Str(J, 'session.instructions') + '/' +
+          IfThen(Str(J, 'session.store') = 'true', 'store', 'sin-store') +
+          '|resp=' + Str(J, 'session.delegation.responses.instructions') + '/' +
+          Str(J, 'session.delegation.responses.reasoning.effort') + '/' +
+          Str(J, 'session.delegation.responses.max_output_tokens') + '/parallel=' +
+          Str(J, 'session.delegation.responses.parallel_tool_calls') + '/' +
+          Str(J, 'session.delegation.responses.tool_choice');
+        var Tools := J.FindValue('session.delegation.responses.tools') as TJSONArray;
+        Result := Result + '|tools=';
+        for var I := 0 to Tools.Count - 1 do
+        begin
+          var TName := '';
+          if not (Tools.Items[I] as TJSONObject).TryGetValue<string>('name', TName) then
+            TName := (Tools.Items[I] as TJSONObject).GetValue<string>('type');
+          Result := Result + IfThen(I > 0, ',', '') + TName;
+        end;
+      finally
+        J.Free;
+      end;
+
+      P.ToolChoice := 'get_time';
+      J := P.Start;
+      try
+        Result := Result + '|choice=' + Str(J, 'session.delegation.responses.tool_choice.type') + ':' +
+          Str(J, 'session.delegation.responses.tool_choice.name');
+      finally
+        J.Free;
+      end;
+
+      var Conn := TAiChatConnection.Create(nil);
+      try
+        P.DelegateChat := Conn;
+        J := P.Start;
+        try
+          Result := Result + '|client=' + Str(J, 'session.delegation.type') + '/' +
+            IfThen(J.FindValue('session.delegation.responses') = nil, 'sin-responses', 'responses');
+        finally
+          J.Free;
+        end;
+        P.DelegateChat := nil;
+      finally
+        Conn.Free;
+      end;
+
+      var RC := TAiRealtimeConnection.Create(nil);
+      try
+        RC.DriverParams.Values['Voice'] := 'cedar';
+        RC.DriverName := 'OpenAiLive';
+        Result := Result + '|conexion=' + RC.Instance.ClassName + '/' +
+          (RC.Instance as TAiOpenAiLiveChat).Voice;
+      finally
+        RC.Free;
+      end;
+    end
+
+    else if AScenario = 'live:events' then
+    begin
+      P.OnTranscriptDelta := Sink.Delta;
+      P.OnTranscriptCompleted := Sink.Completed;
+      P.OnAssistantTextDelta := Sink.ADelta;
+      P.OnAssistantText := Sink.AFull;
+      P.OnAudioChunk := Sink.AChunk;
+      P.OnAudioDone := Sink.ADone;
+      P.OnError := Sink.Error;
+      P.OnUsage := Sink.Usage;
+      P.OnSessionClosed := Sink.Closed;
+      P.Feed('{"type":"session.started","event_id":"e1","session":{"id":"sess_1","model":"gpt-live-1"}}');
+      P.Feed('{"type":"session.input_transcript.delta","delta":"Hola,","start_ms":0,"end_ms":400}');
+      P.Feed('{"type":"session.input_transcript.delta","delta":" ¿qué hora es?","start_ms":400,"end_ms":900}');
+      P.Feed('{"type":"session.output_transcript.delta","delta":"Son las","start_ms":1000,"end_ms":1300}');
+      P.Feed('{"type":"session.output_audio.delta","delta":"AAEC"}');
+      P.Feed('{"type":"session.output_transcript.delta","delta":" tres.","start_ms":1300,"end_ms":1600}');
+      P.Feed('{"type":"session.output_audio.delta","delta":"AAEC"}');
+      P.Feed('{"type":"session.input_transcript.delta","delta":"Gracias","start_ms":2000,"end_ms":2400}');
+      P.Feed('{"type":"session.usage.updated","usage":{"seconds":12.5},"context_window":{"usage_ratio":0.25}}');
+      P.Feed('{"type":"session.closed","reason":"close_requested","usage":{"seconds":13}}');
+      P.Feed('{"type":"error","error":{"code":"unknown_parameter","message":"Bad","type":"invalid_request_error"}}');
+      CheckSynchronize(0);
+      Result := Format('id=%s|deltas=%s|turnos=%s|asistente=%s=%s|audio=%d|fin=%d|uso=%s/%s|cierre=%s/%s|error=%s',
+        [P.SessionId, Sink.Deltas, Sink.Turns, Sink.ADeltas, Sink.AText, Sink.Audio, Sink.Done,
+         FloatToStr(Sink.UsageSec, Inv), FloatToStr(Sink.UsageRatio, Inv),
+         Sink.CloseReason, FloatToStr(Sink.CloseSec, Inv), Sink.Errors]);
+    end
+
+    else if AScenario = 'live:turns' then
+    begin
+      P.OnTranscriptCompleted := Sink.Completed;
+      P.OnAssistantText := Sink.AFull;
+      P.OnDelegation := Sink.Deleg;
+      P.Delegation := ldClient;
+      P.Clock := 0;
+      P.Feed('{"type":"session.input_transcript.delta","delta":"Hola, por","start_ms":0,"end_ms":500}');
+      P.Clock := 100;
+      P.Feed('{"type":"session.output_transcript.delta","delta":"La capital","start_ms":1000,"end_ms":1300}');
+      P.Clock := 300;
+      P.Feed('{"type":"session.input_transcript.delta","delta":" favor","start_ms":600,"end_ms":900}');
+      P.Clock := 900;
+      P.Feed('{"type":"session.output_audio.delta","delta":"AAEC"}');
+      CheckSynchronize(0);
+      Result := 'tras-atrasado=' + IntToStr(Length(Sink.Turns)) + '/' + IntToStr(Length(Sink.AText));
+      P.Clock := 1400; // 1100 ms sin fragmentos atrasados: cierra el usuario
+      P.Feed('{"type":"session.output_audio.delta","delta":"AAEC"}');
+      P.Clock := 1500;
+      P.Feed('{"type":"session.output_transcript.delta","delta":" de Francia es Paris.","start_ms":1300,"end_ms":2000}');
+      P.Clock := 3000;
+      P.Feed('{"type":"session.output_audio.delta","delta":"AAEC"}');
+      CheckSynchronize(0);
+      Result := Result + '|usuario=' + Sink.Turns + '|antes-silencio=' + IntToStr(Length(Sink.AText));
+      P.Clock := 3600; // 2100 ms sin texto del asistente: cierra su turno
+      P.Feed('{"type":"session.output_audio.delta","delta":"AAEC"}');
+      CheckSynchronize(0);
+      Result := Result + '|asistente=' + Sink.AText;
+      // El registro de turnos (contexto de la proxima delegacion) queda en orden
+      P.Feed('{"type":"session.delegation.created","delegation":{"id":"del_3","target":"client","type":"delegation"}}');
+      CheckSynchronize(0);
+      Result := Result + '|registro=' + Sink.DelegCtx;
+    end
+
+    else if AScenario = 'live:overlap' then
+    begin
+      P.OnTranscriptCompleted := Sink.Completed;
+      P.OnAssistantText := Sink.AFull;
+      P.Feed('{"type":"session.input_transcript.delta","delta":" Hola","start_ms":800,"end_ms":1000}');
+      P.Feed('{"type":"session.input_transcript.delta","delta":", cual es","start_ms":1400,"end_ms":1800}');
+      P.Feed('{"type":"session.input_transcript.delta","delta":" la capital de","start_ms":2400,"end_ms":2800}');
+      P.Feed('{"type":"session.input_transcript.delta","delta":" Francia? Por","start_ms":3200,"end_ms":6200}');
+      P.Feed('{"type":"session.output_transcript.delta","delta":"La capital","start_ms":6400,"end_ms":6600}');
+      P.Feed('{"type":"session.input_transcript.delta","delta":" favor.","start_ms":6600,"end_ms":6800}');
+      P.Feed('{"type":"session.output_transcript.delta","delta":" de","start_ms":6600,"end_ms":6800}');
+      P.Feed('{"type":"session.output_transcript.delta","delta":" Francia","start_ms":6800,"end_ms":7000}');
+      P.Feed('{"type":"session.output_transcript.delta","delta":" es Paris","start_ms":7200,"end_ms":7400}');
+      P.Feed('{"type":"session.output_transcript.delta","delta":".","start_ms":7400,"end_ms":7600}');
+      P.Feed('{"type":"session.closed","reason":"close_requested","usage":{"seconds":26}}');
+      CheckSynchronize(0);
+      Result := 'usuario=' + Sink.Turns + '|asistente=' + Sink.AText;
+    end
+
+    else if AScenario = 'live:tools' then
+    begin
+      P.OnCallToolFunction := Sink.Tool;
+      P.OnError := Sink.Error;
+      P.Feed('{"type":"response.event","delegation_id":"d1","event":{"type":"response.output_item.done",' +
+        '"item":{"type":"function_call","call_id":"call_1","name":"get_time","arguments":"{\"tz\":\"COT\"}"}}}');
+      P.WaitType('response.item.create', 1, 5000);
+      J := P.LastOfType('response.item.create');
+      try
+        Result := 'tool=' + Sink.ToolInfo + '|salida=' + Str(J, 'item.call_id') + '/' + Str(J, 'item.output') +
+          '|antes=' + IntToStr(P.CountType('response.create'));
+      finally
+        J.Free;
+      end;
+      // La respuesta termino: ahora si se continua, una sola vez
+      P.Feed('{"type":"response.event","delegation_id":"d1","event":{"type":"response.completed"}}');
+      Result := Result + '|despues=' + IntToStr(P.CountType('response.create'));
+      P.Feed('{"type":"response.event","delegation_id":"d1","event":{"type":"response.completed"}}');
+      Result := Result + '|repetido=' + IntToStr(P.CountType('response.create'));
+      // Orden inverso: la respuesta termina antes que la funcion (que espera al
+      // hilo principal); la continuacion sale cuando la funcion entrega
+      P.Feed('{"type":"response.event","delegation_id":"d2","event":{"type":"response.output_item.done",' +
+        '"item":{"type":"function_call","call_id":"call_2","name":"get_time","arguments":"{}"}}}');
+      P.Feed('{"type":"response.event","delegation_id":"d2","event":{"type":"response.completed"}}');
+      P.WaitType('response.create', 2, 5000);
+      Result := Result + '|orden-inverso=' + IntToStr(P.CountType('response.create'));
+      P.Feed('{"type":"response.event","delegation_id":"d3","event":{"type":"response.failed",' +
+        '"response":{"error":{"code":"rate_limit","message":"sin cupo"}}}}');
+      CheckSynchronize(0);
+      Result := Result + '|fallo=' + Sink.Errors;
+    end
+
+    else if AScenario = 'live:client' then
+    begin
+      P.Delegation := ldClient;
+      P.OnDelegation := Sink.Deleg;
+      P.Feed('{"type":"session.input_transcript.delta","delta":"Reserva una mesa"}');
+      P.Feed('{"type":"session.output_transcript.delta","delta":"Claro, un momento."}');
+      P.Feed('{"type":"session.input_transcript.delta","delta":"para dos"}');
+      P.Feed('{"type":"session.delegation.created","offset_ms":100,' +
+        '"delegation":{"id":"del_1","target":"client","type":"delegation"}}');
+      CheckSynchronize(0);
+      Result := 'id=' + Sink.DelegId + '|ctx1=' + Sink.DelegCtx;
+      // Segunda delegacion: solo lo nuevo (la linea abierta de antes se cerro)
+      Sink.DelegCtx := '';
+      P.Feed('{"type":"session.output_transcript.delta","delta":"Listo."}');
+      P.Feed('{"type":"session.delegation.created","offset_ms":200,' +
+        '"delegation":{"id":"del_2","target":"client","type":"delegation"}}');
+      CheckSynchronize(0);
+      Result := Result + '|ctx2=' + Sink.DelegCtx;
+
+      // Texto largo (1430 bytes UTF-8): 4 fragmentos de hasta 400 bytes, con el
+      // id de la delegacion
+      var Long := '';
+      for var I := 1 to 60 do
+        Long := Long + IfThen(I > 1, ' ', '') + 'Reservación número ' + IntToStr(I);
+      var Before := P.CountType('session.commentary.append');
+      P.AppendCommentary(Long, 'del_1');
+      var Parts := P.CountType('session.commentary.append') - Before;
+      var MaxBytes := 0;
+      var Ids := '';
+      var Joined := '';
+      for var Part in TLiveProbe.Split(Long) do
+      begin
+        if TEncoding.UTF8.GetByteCount(Part) > MaxBytes then
+          MaxBytes := TEncoding.UTF8.GetByteCount(Part);
+        Joined := Joined + IfThen(Joined <> '', ' ', '') + Part;
+      end;
+      J := P.LastOfType('session.commentary.append');
+      try
+        Ids := Str(J, 'delegation_id');
+      finally
+        J.Free;
+      end;
+      Result := Result + Format('|partes=%d/%s/%s/%s', [Parts,
+        IfThen(MaxBytes <= 400, 'max<=400', 'max=' + IntToStr(MaxBytes)), Ids,
+        IfThen(Joined = Long, 'igual', 'distinto')]);
+
+      // Con delegacion a Responses el servidor solo acepta delegation_id null
+      P.Delegation := ldResponses;
+      P.AppendCommentary('Hola', 'del_1');
+      J := P.LastOfType('session.commentary.append');
+      try
+        Result := Result + '|responses=' + IfThen(J.GetValue('delegation_id') is TJSONNull, 'null', 'valor');
+      finally
+        J.Free;
+      end;
+
+      // Nadie atiende la delegacion: error y aviso al modelo
+      var P2 := TLiveProbe.Create(nil);
+      try
+        P2.Delegation := ldClient;
+        P2.OnError := Sink.Error;
+        P2.Feed('{"type":"session.delegation.created","delegation":{"id":"del_9","target":"client","type":"delegation"}}');
+        CheckSynchronize(0);
+        J := P2.LastOfType('session.commentary.append');
+        try
+          Result := Result + '|sin-manejador=' + Copy(Sink.Errors, 1, Pos(':', Sink.Errors) - 1) + '/' +
+            Str(J, 'delegation_id');
+        finally
+          J.Free;
+        end;
+      finally
+        P2.Free;
+      end;
+    end
+
+    else if AScenario = 'live:delegate-chat' then
+    begin
+      var Conn := TAiChatConnection.Create(nil);
+      try
+        Conn.DriverName := 'OpenAi';
+        Conn.Params.Values['Url'] := 'http://127.0.0.1:1/'; // puerto cerrado: falla sin red
+        Conn.Params.Values['ApiKey'] := 'x';
+        Conn.Params.Values['Asynchronous'] := 'False'; // lo hace Connect
+        P.DelegateChat := Conn;
+        P.Feed('{"type":"session.input_transcript.delta","delta":"¿Qué hora es en Bogotá?"}');
+        P.Feed('{"type":"session.delegation.created","delegation":{"id":"del_7","target":"client","type":"delegation"}}');
+        P.WaitType('session.commentary.append', 1, 15000);
+        var Pedido := False;
+        for var I := 0 to Conn.Messages.Count - 1 do
+          if (Pos('User: ¿Qué hora es en Bogotá?', Conn.Messages[I].Prompt) > 0) and
+             (Pos('delegated', Conn.Messages[I].Prompt) > 0) then
+            Pedido := True;
+        J := P.LastOfType('session.commentary.append');
+        try
+          Result := 'pedido=' + IfThen(Pedido, 'si', 'no') + '|respuesta=';
+          if Assigned(J) then
+            Result := Result + Str(J, 'delegation_id') + '/' + Copy(Str(J, 'content'), 1, 8)
+          else
+            Result := Result + 'ninguna';
+        finally
+          J.Free;
+        end;
+        FreeAndNil(P); // espera el hilo de la delegacion antes de liberar el chat
+      finally
+        Conn.Free;
+      end;
+    end
+
+    else
+      raise Exception.Create('Escenario live desconocido: ' + AScenario);
+  finally
+    P.Free;
+    CheckSynchronize(0);
+    Sink.Free;
   end;
 end;
 

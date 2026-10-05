@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (106 casos)
+## Cobertura actual (113 casos)
 
 | Área | Casos |
 |------|-------|
@@ -66,6 +66,7 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 | Realtime Qwen | eventos del servidor sin red: los tres formatos de transcripción (stash acumulado, text+stash con reescritura, delta incremental) salen como deltas; texto y audio del asistente, cierre y error; `session.update` de los tres drivers (formatos, VAD manual → null, idioma, voz de traducción) y registro en la fábrica y en `TAiRealtimeConnection`; `TAiQwenRealtimeTTS`: `session.update` (modo, idioma, voz, instrucciones), modelo realtime elegido por el prefijo de la voz propia y eventos (listo una sola vez, audio, respuestas, fin, error) |
 | Ciclo de vida del chat | liberar el chat con una petición asíncrona en vuelo espera a que el cliente HTTP la cierre (cierre simulado desde otro hilo; falla sin el fix) y sin petición libera al instante; `ParseJsonTranscript` en el puente de Fase 1 no escribe la respuesta ni dispara eventos (en `cmTranscription` sí); `Voice`/`Voice_Format` del catálogo y del usuario llegan a `TtsParams` |
 | Chat / tool results | serialización OpenAI-compatible: tool calls paralelas con imagen → un solo `user` sintético tras el grupo, modelo sin `cap_Image` → transcripción sin media, transcripción no duplicada, adjunto de texto inline |
+| GPT-Live | `TAiOpenAiLiveChat` con `TLiveProbe` (captura lo enviado, reloj `NowMs` simulado, sin red): `session.start` (modelo en la sesión, delegación a Responses con tools/tool_choice/razonamiento, `DelegateChat` → `client`, fábrica y conector); eventos (deltas, audio, consumo, cierre, error); turnos con la línea de tiempo (fragmento atrasado, cierre por inactividad) y la **traza real** de habla superpuesta (falla con la agrupación por orden de llegada); funciones vía `response.event` con un solo `response.create` también si la respuesta termina antes que la función; delegación `client` (contexto sin repetir lo ya enviado, fragmentos ≤ 400 bytes, `delegation_id` null con Responses, aviso si nadie atiende); `DelegateChat` real contra un puerto cerrado |
 | OpenAI Audio | `TAiOpenAiAudio` con `TFakeOpenAiAudio` (sustituye `PostMultipart`, sin red): formato degradado a json se interpreta como json y queda en `Warning` (falla sin el fix: `Text` con el JSON crudo); timestamps y logprobs ignorados avisados y no enviados; `languages[]`/`keywords[]` sin avisos; `whisper-1` con srt + timestamps sigue igual y avisa la deprecación; `TranslateToEnglish` (solo whisper-1) avisa la deprecación |
 | Evals | autoprueba del runner (conteo PASS/FAIL) |
 | Jev: consumo | `Usage` y `OnUsage` en `TAiJev` (un evento por llamada) y en PromptGuard, Dispatch, Guardrail, Eval, ModelRouter, RAG y Batch (uno por operación); reranker en paralelo con un `TAiJev` falso por pasaje → un solo evento con el total exacto y en el hilo del llamador; `ResetUsage`; precio configurable |

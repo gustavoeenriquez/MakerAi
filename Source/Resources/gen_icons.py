@@ -398,6 +398,7 @@ SPECS = [
     # --- Realtime ---
     ('core', 'TAiOpenAiRealtimeSTT', 'text2', OPENAI, 'OAI', 'STT'),
     ('core', 'TAiOpenAiRealtimeTranslate', 'text2', OPENAI, 'OAI', 'TRAN'),
+    ('core', 'TAiOpenAiLiveChat', 'text2', OPENAI, 'OAI', 'LIVE'),
     ('core', 'TAiOpenAiAudio', 'glyphtag', OPENAI, 'wave', 'OAI'),
     ('core', 'TAiGeminiRealtimeSTT', 'text2', GEMINI, 'GEM', 'STT'),
     ('core', 'TAiGrokRealtimeChat', 'text2', GROK, 'GROK', 'VOX'),

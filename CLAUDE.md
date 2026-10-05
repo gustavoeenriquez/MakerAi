@@ -24,7 +24,7 @@ MakerAI is an AI orchestration framework for Delphi developers (v3.8). It provid
 
 **Git workflow:** `master` is the main/release branch. `dev` is the active development branch. PRs target `master`.
 
-**Testing:** `Tests/RegressionSuite/` es la suite de regresión del framework (106 casos, in-process, sin API keys, ~5 s). Construida sobre `TAiEvalRunner`; cubre MCP dual-era + MRTR, agentes, A2A 1.0 + federación, guardrails, serialización de tool results y el propio runner de evals. Ejecutar antes de cada release:
+**Testing:** `Tests/RegressionSuite/` es la suite de regresión del framework (113 casos, in-process, sin API keys, ~5 s). Construida sobre `TAiEvalRunner`; cubre MCP dual-era + MRTR, agentes, A2A 1.0 + federación, guardrails, serialización de tool results y el propio runner de evals. Ejecutar antes de cada release:
 
 ```bash
 msbuild Tests/RegressionSuite/MakerAiRegressionSuite.dproj /p:Config=Release /p:Platform=Win64
@@ -170,6 +170,7 @@ curl -X POST http://localhost:8080/mcp \
 - `uMakerAi.Realtime.pas` - Abstract base `TAiRealtimeBase` + `TAiRealtimeFactory`; resampler PCM16, VAD modes, thread-safe events
 - `uMakerAi.Realtime.AiConnection.pas` - `TAiRealtimeConnection` universal connector (same pattern as `TAiChatConnection`)
 - `uMakerAi.Realtime.OpenAI.pas` - `TAiOpenAiRealtimeSTT` — WebSocket to `wss://api.openai.com/v1/realtime`, 24 kHz PCM16; full implementation
+- `uMakerAi.Realtime.OpenAI.Live.pas` - `TAiOpenAiLiveChat` — OpenAI GPT-Live (`gpt-live-1`), voz full-duplex; delega el razonamiento a un modelo Responses (default) o a cualquier `TAiChatConnection` (`DelegateChat`); probado runtime
 - `uMakerAi.Realtime.Gemini.pas` - `TAiGeminiRealtimeSTT` — 16 kHz PCM16; **stub, pendiente implementación**
 - `uMakerAi.Realtime.Grok.pas` - `TAiGrokRealtimeChat` — xAI Grok Voice speech-to-speech, `wss://api.x.ai/v1/realtime`, protocolo compatible OpenAI Realtime, 24 kHz PCM16; implementado, pendiente prueba runtime
 - `uMakerAi.Realtime.WebSocket.pas` - compatibility shim; re-exports `TAiRealtimeWSClient` → `TAiWSClient` (Source/WebSocket/)
