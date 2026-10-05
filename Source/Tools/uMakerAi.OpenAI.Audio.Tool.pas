@@ -102,14 +102,14 @@ type
     property Url: string read GetUrl write SetUrl;
 
     { Text-to-Speech }
-    property TTSModel: TAiTTSModel read GetTTSModel write SetTTSModel default tts_1;
+    property TTSModel: TAiTTSModel read GetTTSModel write SetTTSModel default gpt_4o_mini_tts;
     property TTSVoice: TAiTTSVoice read GetTTSVoice write SetTTSVoice default tvAlloy;
     property TTSResponseFormat: TAiTTSResponseFormat read GetTTSResponseFormat write SetTTSResponseFormat default trfMp3;
     property TTSSpeed: Double read GetTTSSpeed write SetTTSSpeed;
     property TTSInstructions: string read GetTTSInstructions write SetTTSInstructions;
 
     { Speech-to-Text }
-    property TranscriptionModel: TAiTranscriptionModel read GetTranscriptionModel write SetTranscriptionModel default tmWhisper1;
+    property TranscriptionModel: TAiTranscriptionModel read GetTranscriptionModel write SetTranscriptionModel default tmGptTranscribe;
     property TranscriptionLanguage: string read GetTranscriptionLanguage write SetTranscriptionLanguage;
     property TranscriptionTemperature: Double read GetTranscriptionTemperature write SetTranscriptionTemperature;
     property TranscriptionTimestampGranularities: TAiTimestampGranularities read GetTranscriptionTimestampGranularities write SetTranscriptionTimestampGranularities;

@@ -78,7 +78,7 @@ uses
   uMakerAi.Guardrails, uMakerAi.Jev, uMakerAi.Agents.Tools.JevRouter,
   uMakerAi.Jev.SmartDispatch, uMakerAi.Jev.Guardrails, uMakerAi.Chat.Tools,
   uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
-  uMakerAi.OpenAI.Audio, uMakerAi.Realtime.OpenAI.Live,
+  uMakerAi.OpenAI.Audio, uMakerAi.OpenAI.Audio.Tool, uMakerAi.Realtime.OpenAI.Live,
   uMakerAi.Jev.ModelRouter,
   UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank, uMakerAi.Qwen.Voices,
   uMakerAi.Realtime, uMakerAi.Realtime.Qwen, uMakerAi.Realtime.AiConnection, uMakerAi.Realtime.QwenTTS, uMakerAi.Realtime.Grok,
@@ -593,6 +593,13 @@ begin
     .ExpectEquals('text=hola|languages[]=es,en|keywords[]=PUC|warn=');
   // Modelos deprecados (OpenAI 2026-08-26): siguen funcionando con su formato
   // propio y avisan la fecha de apagado; la traduccion (solo whisper-1) igual.
+  // v3.9: defaults gpt-transcribe y gpt-4o-mini-tts (whisper-1 y tts-1 se
+  // apagan). El valor del constructor debe coincidir con el 'default'
+  // publicado (si no, el DFM deja de guardar la propiedad y carga otro valor)
+  FRunner.AddCase('audio.defaults')
+    .Input('audio:defaults')
+    .ExpectEquals('audio=gpt_4o_mini_tts/tmGptTranscribe|rtti=ok|' +
+      'tool=gpt_4o_mini_tts/tmGptTranscribe|rtti-tool=ok|envia=gpt-transcribe');
   FRunner.AddCase('audio.transcribe.deprecated-model')
     .Input('audio:deprecated-model')
     .ExpectEquals('sent=srt|ts=word|srt=True|warnings=1|deprecado=True');
@@ -5260,6 +5267,21 @@ var
     Result := Length(AWarning.Split([sLineBreak]));
   end;
 
+  // El valor actual de cada propiedad coincide con su 'default' publicado
+  function RttiDefaultsMatch(AObj: TObject): string;
+  var
+    Prop: string;
+    PI: PPropInfo;
+  begin
+    Result := 'ok';
+    for Prop in ['TTSModel', 'TranscriptionModel'] do
+    begin
+      PI := GetPropInfo(AObj, Prop);
+      if (PI = nil) or (GetOrdProp(AObj, PI) <> PI^.Default) then
+        Exit('distinto:' + Prop);
+    end;
+  end;
+
 begin
   Result := '';
   R := nil;
@@ -5311,6 +5333,24 @@ begin
         '|languages[]=' + A.FieldValues('languages[]') +
         '|keywords[]=' + A.FieldValues('keywords[]') +
         '|warn=' + R.Warning;
+    end
+
+    else if AScenario = 'audio:defaults' then
+    begin
+      A.Response := '{"text":"hola"}';
+      R := A.Transcribe(Media);
+      var T := TAiOpenAiSpeechTool.Create(nil);
+      try
+        Result := 'audio=' + GetEnumName(TypeInfo(TAiTTSModel), Ord(A.TTSModel)) + '/' +
+          GetEnumName(TypeInfo(TAiTranscriptionModel), Ord(A.TranscriptionModel)) +
+          '|rtti=' + RttiDefaultsMatch(A) +
+          '|tool=' + GetEnumName(TypeInfo(TAiTTSModel), Ord(T.TTSModel)) + '/' +
+          GetEnumName(TypeInfo(TAiTranscriptionModel), Ord(T.TranscriptionModel)) +
+          '|rtti-tool=' + RttiDefaultsMatch(T) +
+          '|envia=' + A.FieldValues('model');
+      finally
+        T.Free;
+      end;
     end
 
     else if AScenario = 'audio:deprecated-model' then

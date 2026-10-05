@@ -59,7 +59,9 @@ uses
 type
   // --- Enums for API Parameters ---
   // TTS: tts-1, tts-1-hd y gpt-4o-mini-tts DEPRECADOS por OpenAI el 2026-10-01,
-  // apagado el 2027-01-06. OpenAI recomienda gpt-realtime-2.1-mini (realtime).
+  // apagado el 2027-01-06. OpenAI recomienda gpt-realtime-2.1-mini (realtime),
+  // que /audio/speech no acepta (404). Default desde v3.9: gpt_4o_mini_tts (el
+  // de mas calidad del endpoint, admite TTSInstructions); antes tts_1.
   TAiTTSModel = (tts_1, tts_1_hd, gpt_4o_mini_tts);
   TAiTTSVoice = (tvAlloy, tvAsh, tvBallad, tvCoral, tvEcho, tvFable, tvOnyx, tvNova, tvSage, tvShimmer, tvVerse);
   TAiTTSResponseFormat = (trfMp3, trfOpus, trfAac, trfFlac, trfWav, trfPcm);
@@ -72,6 +74,9 @@ type
   // DEPRECADOS por OpenAI el 2026-08-26, apagado el 2027-02-26. Los modelos
   // nuevos NO tienen srt/vtt/verbose_json, timestamps, logprobs, diarizacion
   // ni traduccion a ingles: esas funciones desaparecen con los modelos viejos.
+  // Default desde v3.9: tmGptTranscribe (antes tmWhisper1). Quien necesite
+  // srt/vtt/timestamps debe fijar tmWhisper1 hasta el apagado; si no, el
+  // formato baja a json y TTranscriptionResult.Warning lo informa.
   TAiTranscriptionModel = (tmWhisper1, tmGpt4oTranscribe, tmGpt4oMiniTranscribe,
     tmGpt4oDiarize, tmGptTranscribe, tmGptLiveTranscribe);
   TAiTranscriptionResponseFormat = (trfJson, trfText, trfSrt, trfVerboseJson, trfVtt, trfDiarizedJson);
@@ -217,14 +222,14 @@ type
     property Url: string read FUrl write SetUrl;
 
     // --- Text-to-Speech Properties ---
-    property TTSModel: TAiTTSModel read FTTSModel write FTTSModel default TAiTTSModel.tts_1;
+    property TTSModel: TAiTTSModel read FTTSModel write FTTSModel default TAiTTSModel.gpt_4o_mini_tts;
     property TTSVoice: TAiTTSVoice read FTTSVoice write FTTSVoice default TAiTTSVoice.tvAlloy;
     property TTSResponseFormat: TAiTTSResponseFormat read FTTSResponseFormat write FTTSResponseFormat default TAiTTSResponseFormat.trfMp3;
     property TTSSpeed: Double read FTTSSpeed write FTTSSpeed;
     property TTSInstructions: string read FTTSInstructions write FTTSInstructions;
 
     // --- Transcription Properties ---
-    property TranscriptionModel: TAiTranscriptionModel read FTranscriptionModel write FTranscriptionModel default TAiTranscriptionModel.tmWhisper1;
+    property TranscriptionModel: TAiTranscriptionModel read FTranscriptionModel write FTranscriptionModel default TAiTranscriptionModel.tmGptTranscribe;
     property TranscriptionResponseFormat: TAiTranscriptionResponseFormat read FTranscriptionResponseFormat write FTranscriptionResponseFormat default TAiTranscriptionResponseFormat.trfJson;
     property TranscriptionLanguage: string read FTranscriptionLanguage write FTranscriptionLanguage;
     property TranscriptionTemperature: Double read FTranscriptionTemperature write FTranscriptionTemperature;
@@ -399,11 +404,11 @@ begin
   FUrl := GlOpenAIUrl;
   FApiKey := '@OPENAI_API_KEY';
   FStreamBuffer := TStringBuilder.Create;
-  FTTSModel := tts_1;
+  FTTSModel := gpt_4o_mini_tts; // v3.9 (antes tts_1); igual que el default publicado
   FTTSVoice := tvAlloy;
   FTTSResponseFormat := trfMp3;
   FTTSSpeed := 1.0;
-  FTranscriptionModel := tmWhisper1;
+  FTranscriptionModel := tmGptTranscribe; // v3.9 (antes tmWhisper1)
   FTranscriptionResponseFormat := trfJson;
   FTranscriptionTemperature := 0.0;
   FTranscriptionKeywords := TStringList.Create;
