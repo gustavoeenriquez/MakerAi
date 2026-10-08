@@ -91,6 +91,9 @@ type
     // para decidir si hay que emitir un 'configuration_update' en vez de
     // cambiar el reasoning a nivel de peticion, que rompe el prefijo cacheado.
     FLastEffortSent: TAiThinkingLevel;
+    // prompt_cache_options.mode (GPT-5.6+): '' = no se envia (default del
+    // proveedor, que es 'implicit'), 'implicit' o 'explicit'.
+    FPromptCacheMode: String;
 
     procedure SetStore(const Value: Boolean);
     procedure SetTruncation(const Value: String);
@@ -142,6 +145,13 @@ type
     property OnShellCommand: TAiShellCommandEvent read FOnShellCommand write FOnShellCommand;
     property AllowAutoShell: Boolean read FAllowAutoShell write FAllowAutoShell default False;
     property ReasoningSummary: TAiReasoningSummary read FReasoningSummary write FReasoningSummary default rsmDefault;
+    // Cache de prompt de GPT-5.6+. En modo 'implicit' (el del proveedor si no
+    // se manda nada) cada peticion ESCRIBE en cache todo el prompt hasta el
+    // ultimo mensaje de usuario y esa escritura cuesta 1.25x la entrada. Para
+    // llamadas de una sola vuelta con contenido distinto cada vez (RAG, NER
+    // por trozos) nunca se reutiliza: 'explicit' sin breakpoints desactiva la
+    // cache y la entrada se paga a 1x. Solo se emite para gpt-5.6+/gpt-6.
+    property PromptCacheMode: String read FPromptCacheMode write FPromptCacheMode;
   end;
 
 procedure Register;
@@ -826,6 +836,13 @@ begin
 
     // 3. Par?metros de Configuraci?n
     JResult.AddPair('store', FStore);
+
+    // prompt_cache_options solo existe desde GPT-5.6: a un modelo anterior no
+    // se le manda (un fallback a gpt-5-nano/mini no debe romperse por esto).
+    if (FPromptCacheMode <> '') and
+       (LModel.ToLower.StartsWith('gpt-5.6') or LModel.ToLower.StartsWith('gpt-6')) then
+      JResult.AddPair('prompt_cache_options',
+        TJSonObject.Create(TJSONPair.Create('mode', FPromptCacheMode)));
 
     // Tope de salida. El Responses API lo llama max_output_tokens (e INCLUYE
     // los tokens de razonamiento). Hasta 2026-09-30 este driver no lo emitia
