@@ -61,7 +61,7 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_UnitSearchPath>$(MSBuildProjectDirectory)\..\Agents;$(MSBuildProjectDirectory)\..\Chat;$(MSBuildProjectDirectory)\..\ChatUI;$(MSBuildProjectDirectory)\..\Core;$(MSBuildProjectDirectory)\..\Design;$(MSBuildProjectDirectory)\..\Embeddings;$(MSBuildProjectDirectory)\..\MCPClient;$(MSBuildProjectDirectory)\..\MCPServer;$(MSBuildProjectDirectory)\..\Packages;$(MSBuildProjectDirectory)\..\RAG;$(MSBuildProjectDirectory)\..\Resources;$(MSBuildProjectDirectory)\..\Tools;$(MSBuildProjectDirectory)\..\Utils;$(MSBuildProjectDirectory)\..\LiveChat;$(MSBuildProjectDirectory)\..\Realtime;$(MSBuildProjectDirectory)\..\WebSocket;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>$(MSBuildProjectDirectory)\..\Agents;$(MSBuildProjectDirectory)\..\Chat;$(MSBuildProjectDirectory)\..\ChatUI;$(MSBuildProjectDirectory)\..\Core;$(MSBuildProjectDirectory)\..\Design;$(MSBuildProjectDirectory)\..\Embeddings;$(MSBuildProjectDirectory)\..\MCPClient;$(MSBuildProjectDirectory)\..\MCPServer;$(MSBuildProjectDirectory)\..\Packages;$(MSBuildProjectDirectory)\..\RAG;$(MSBuildProjectDirectory)\..\Resources;$(MSBuildProjectDirectory)\..\Tools;$(MSBuildProjectDirectory)\..\Utils;$(MSBuildProjectDirectory)\..\Memory;$(MSBuildProjectDirectory)\..\Realtime;$(MSBuildProjectDirectory)\..\WebSocket;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_E>false</DCC_E>
