@@ -105,7 +105,7 @@ procedure Register;
 
 implementation
 
-{$I uMakerAi.Version.inc}
+{$I ..\Core\uMakerAi.Version.inc}
 
 procedure Register;
 begin

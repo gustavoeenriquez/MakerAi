@@ -65,7 +65,7 @@ var
 
 implementation
 
-{$I uMakerAi.Version.inc}
+{$I ..\Core\uMakerAi.Version.inc}
 
 {$R *.dfm}
 

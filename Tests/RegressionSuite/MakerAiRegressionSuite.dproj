@@ -22,7 +22,7 @@
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Winapi;System.Win;$(DCC_Namespace)</DCC_Namespace>
-        <DCC_UnitSearchPath>..\..\Source\Core;..\..\Source\Agents;..\..\Source\Chat;..\..\Source\Tools;..\..\Source\Utils;..\..\Source\Embeddings;..\..\Source\Resources;..\..\Source\MCPClient;..\..\Source\MCPServer;..\..\Source\Memory;..\..\Source\RAG;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\..\Source\Core;..\..\Source\Agents;..\..\Source\Chat;..\..\Source\Tools;..\..\Source\Utils;..\..\Source\Embeddings;..\..\Source\Resources;..\..\Source\MCPClient;..\..\Source\MCPServer;..\..\Source\Memory;..\..\Source\RAG;..\..\Source\Design;..\..\Source\Realtime;..\..\Source\WebSocket;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_Hints>false</DCC_Hints>
         <DCC_Warnings>false</DCC_Warnings>
     </PropertyGroup>
