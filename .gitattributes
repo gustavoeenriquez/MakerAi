@@ -1,11 +1,13 @@
 # Configuración por defecto
 * text=auto
 
-# Archivos de código fuente Delphi (normalizar finales de línea)
-*.pas text
-*.dfm text
-*.dpr text
-*.inc text
+# Archivos de código fuente Delphi: LF en el repo, CRLF al hacer checkout
+# y en el ZIP de GitHub (git archive). RAD Studio exige CRLF (issue #133).
+*.pas text eol=crlf
+*.dfm text eol=crlf
+*.fmx text eol=crlf
+*.dpr text eol=crlf
+*.inc text eol=crlf
 *.txt text
 *.md text
 
