@@ -21,7 +21,7 @@ Build → Compile
 
 ## Testing
 
-No dedicated test framework. Testing via demo projects with HTTP/curl.
+Automated coverage lives in `Tests/RegressionSuite/` (MCP dual-era, MRTR, `tools/list` leak; no API keys). Manual checks use the demo projects with HTTP/curl.
 
 **Run demo server:**
 ```bash
@@ -65,7 +65,7 @@ TAiMCPLogicServer (JSON-RPC engine, tool/resource registry)
 
 **IAiMCPTool** - Tool contract:
 - `GetName`, `GetDescription`, `GetInputSchema`
-- **`GetInputSchema` returns a NEW object on every call and the caller owns it** (`TAiMCPToolBase<T>` generates it from the params class; the Bridge proxy builds it from the `TAiFunctions` item). `Tools_ListTools` adds it to the response without cloning. Until Oct 2026 it was cloned and the original leaked on every `tools/list` (~32 blocks per request on a long-running server; regression case `mcp.initialize.no-leak`). A custom `IAiMCPTool` must not return a cached field
+- **`GetInputSchema` returns a NEW object on every call and the caller owns it** (`TAiMCPToolBase<T>` generates it from the params class; the Bridge proxy builds it from the `TAiFunctions` item). `Tools_ListTools` adds it to the response without cloning (the response takes ownership), so a custom `IAiMCPTool` must not return a cached field. Regression case: `mcp.initialize.no-leak`
 - `Execute(Arguments: TJSONObject; AuthContext: TAiAuthContext): TJSONObject`
 
 **IAiMCPResource** - Resource contract:
@@ -75,7 +75,7 @@ TAiMCPLogicServer (JSON-RPC engine, tool/resource registry)
 
 | Unit | Purpose |
 |------|---------|
-| `uMakerAi.MCPServer.Core.pas` | Core classes, JSON-RPC engine, tool/resource registry (~1,500 lines) |
+| `uMakerAi.MCPServer.Core.pas` | Core classes, JSON-RPC engine, tool/resource registry |
 | `UMakerAi.MCPServer.Http.pas` | HTTP transport with CORS support |
 | `UMakerAi.MCPServer.SSE.pas` | Server-Sent Events transport (session-aware) |
 | `UMakerAi.MCPServer.Stdio.pas` | Standard I/O transport |

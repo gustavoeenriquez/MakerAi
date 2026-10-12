@@ -79,7 +79,7 @@ TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'gpt-6-astra',
 
 - **`IfThen` con enteros** vive en `System.Math` y el de cadenas en `System.StrUtils`. Mezclarlos da `E2250`; el demo usa el de cadenas y resuelve el entero con un `if`.
 - **En asíncrono, `OnReceiveDataEnd` no es el final de todo.** El último tramo del turno sigue corriendo en su hilo, así que el demo espera el evento y añade una gracia de 3 s antes de leer el historial. Sin eso, se lee a medias.
-- **El `.dpr` va en UTF-8 con BOM y CRLF**, como el resto del repo.
+- **El `.dpr` va en UTF-8 con BOM y CRLF.** No todo el repo es así: varios `.pas` de demos están en ANSI (ver `Demos/CLAUDE.md`), así que se conserva la codificación de cada archivo.
 
 ## Archivos
 

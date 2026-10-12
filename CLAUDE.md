@@ -10,15 +10,7 @@ MakerAI is an AI orchestration framework for Delphi developers (v3.9). It provid
 
 **v3.8 highlights (sep 2026):** **Jev** (TypeSafe AI) para decisiones calibradas sin pasar por un LLM (enrutar agentes, SmartDispatch, guardrails de tools y de entrada, evals, rerank RAG con filtro de inyecciones, etiquetado masivo, enrutador de modelos, medición de consumo); driver **Qwen** (Alibaba) completo; **skills en formato SKILL.md** (`TAiSkills` con `use_skill` bajo demanda para cualquier chat, `TAiSkill`/`TLLMNode` arreglados, parser y cliente PPM comunes); **Computer Use en Linux**. **Cambios de comportamiento (6):** TLS verificado en POSIX (rompe endpoints autofirmados sin `InsecureSkipVerify`), `IAiMemoryStorage` exige el namespace (issue #127, rompe storages propios), Gemini ya ejecuta funciones de usuario, `Model` vacío usa los parámetros del modelo por defecto `TLLMNode.DriverName` vacío por defecto y `tool_choice` forzado solo en la primera llamada (antes loop sin fin). Defaults revisados: Gemini `gemini-3.8-flash`, OpenAI `gpt-6-sol`, Claude sigue en `claude-haiku-4-5`. `MAKERAI_BREAKING_CHANGE = True`.
 
-**v3.7 highlights (sep 2026):** refresco de **Computer Use** en los dos proveedores vivos — Claude estaba **roto** (`computer_20251124` ya lo rechaza el API; ahora `computer_toolset_20260801`, sin parametros y con 17 herramientas nombradas) y OpenAI estrena el tool nativo `computer` con **`gpt-6-astra`**, que manda un **lote** de acciones por turno; ambos APIs convergieron en no declarar dimensiones y devolver coordenadas en pixeles del screenshot. Ademas: driver **GLM** (Zhipu/Z.ai), fixes de RAG sobre pgvector y de contabilidad de tokens/cache.
-
-**v3.6 highlights (ago 2026):** MCP spec **2026-07-28 stateless dual-era** (server/discover + `_meta` por request, con fallback automático al handshake legacy) y patrón **MRTR** (elicitation con reintento); observabilidad **OpenTelemetry** (`TAiTelemetry`, OTLP/HTTP con GenAI semconv, trazas distribuidas vía `traceparent` en `_meta`) instrumentando chat, tools, MCP, agentes y RAG; protocolo **A2A 1.0** (`TAiA2AServer`/`TAiA2AClient`/`TAiA2ARemoteAgentTool` — primera implementación Delphi, con federación de grafos); **`TAiGuardrails`** (política de tool calls en el choke point de `TAiFunctions`) y **`TAiEvalRunner`** (evals con LLM-as-judge opcional); primera **suite de regresión** automatizada en `Tests/RegressionSuite`.
-
-**v3.5 highlights (ago 2026):** canal tipado `ModelConfig` (ModelCaps/SessionCaps/Tool_Active/ThinkingLevel fuera de Params/RTTI, con pins por campo y migración de compatibilidad); suite de voz full-duplex (`TAiGrokRealtimeChat` speech-to-speech, `TAiOpenAiRealtimeTranslate`, gpt-transcribe); refresh completo de los 9 providers cloud probado runtime (Claude 5 adaptive, Gemini 3.5/3.6, Voxtral TTS, Kimi K3, DeepSeek V4, Cohere A+, Groq qwen3.6, xAI grok-4.3/4.5); generación de video nativa Grok; `LastError` poblado en todos los paths de error; driver MSSQL para RAG Vector.
-
-**v3.4 highlights:** registro selectivo de drivers restaurado — `TAiChatConnection` ya no fuerza la carga de todos los providers. Cada driver se auto-registra solo cuando se importa explícitamente. Para cargar todos los drivers de una vez, agregar `uMakerAi.Chat.Initializations` al `uses`.
-
-**v3.3 highlights:** nuevo sistema de orquestación `TAiCapabilities` (`ModelCaps`/`SessionCaps`) que unifica y simplifica la configuración de capacidades por modelo; soporte de modelos actualizado para todos los providers (Feb 2026).
+**Estado vigente heredado de versiones anteriores:** cada driver se auto-registra al importar su unidad (para cargarlos todos, `uMakerAi.Chat.Initializations` en el `uses`; `TAiChatConnection` no fuerza la carga); capacidades por `ModelCaps`/`SessionCaps` en el canal tipado `ModelConfig`; Computer Use de Claude con `computer_toolset_20260801` y de OpenAI con el tool `computer`. Historial de v3.3–v3.7: `README.md` § "What's New in v3.7" y anteriores.
 
 **Official Website:** https://makerai.cimamaker.com
 
@@ -26,7 +18,7 @@ MakerAI is an AI orchestration framework for Delphi developers (v3.9). It provid
 
 **Git workflow:** `master` is the main/release branch. `dev` is the active development branch. PRs target `master`.
 
-**Testing:** `Tests/RegressionSuite/` es la suite de regresión del framework (117 casos, in-process, sin API keys, ~5 s). Construida sobre `TAiEvalRunner`; cubre MCP dual-era + MRTR, agentes, A2A 1.0 + federación, guardrails, serialización de tool results y el propio runner de evals. Ejecutar antes de cada release:
+**Testing:** `Tests/RegressionSuite/` es la suite de regresión del framework (in-process, sin API keys, ~5 s). Construida sobre `TAiEvalRunner`; cubre MCP dual-era + MRTR, agentes, A2A 1.0 + federación, guardrails, serialización de tool results y el propio runner de evals. Ejecutar antes de cada release:
 
 ```bash
 msbuild Tests/RegressionSuite/MakerAiRegressionSuite.dproj /p:Config=Release /p:Platform=Win64
@@ -34,13 +26,13 @@ Tests/RegressionSuite/Win64/Release/MakerAiRegressionSuite.exe        # exit 0 =
 Tests/RegressionSuite/Win64/Release/MakerAiRegressionSuite.exe --json report.json   # para CI
 ```
 
-No hay pipeline CI/CD configurado. Los subsistemas visuales y los proveedores LLM reales se siguen verificando manualmente con los 19+ demos de `Demos/`.
+No hay pipeline CI/CD configurado. Los subsistemas visuales y los proveedores LLM reales se siguen verificando manualmente con los demos de `Demos/` (índice en `Demos/CLAUDE.md`).
 
 ## Building and Installation
 
 ### Package Compilation Order
 Compile and install packages in this exact order:
-1. `Source/Packages/MakerAI.dpk` - Runtime core (~98 units)
+1. `Source/Packages/MakerAI.dpk` - Runtime core
 2. `Source/Packages/MakerAi.RAG.Drivers.dpk` - Database connectors (PostgreSQL)
 3. `Source/Packages/MakerAi.UI.dpk` - FMX visual components
 4. `Source/Packages/MakerAiDsg.dpk` - Design-time editors (requires VCL, DesignIDE)
@@ -134,7 +126,7 @@ curl -X POST http://localhost:8080/mcp \
 - `uMakerAi.Core.pas` - Base types: `TAiMediaFile`, `TAiFileCategory`, `TAiChatMediaSupport`, `TAiCapability`, `TAiCapabilities`, chat states
 - `uMakerAi.Chat.pas` - Abstract `TAiChat` base class; incluye `ModelCaps`, `SessionCaps`, `EnsureNewSystemConfig`; orquestador interno `RunNew` (privado — no llamar directamente; usar `AddMessageAndRun` o `Run`)
 - `uMakerAi.Chat.Messages.pas` - Message handling (`TAiChatMessage`, `TAiChatMessages`)
-- `uMakerAi.Embeddings.pas` - Embedding generation
+- `Source/Embeddings/uMakerAi.Embeddings.pas` (outside Core; one unit per provider alongside it) - Embedding generation
 
 **Chat Drivers (`Source/Chat/`)**: LLM-specific implementations
 - `uMakerAi.Chat.AiConnection.pas` - `TAiChatConnection` universal connector (switch providers via `DriverName` property)
@@ -165,7 +157,7 @@ curl -X POST http://localhost:8080/mcp \
 **WebSocket (`Source/WebSocket/`)**: Standalone RFC 6455 WebSocket client (used by Realtime module)
 - `uMakerAi.WebSocket.Client.pas` - `TAiWSClient` — pure-Pascal RFC 6455 + HTTP Upgrade + reader thread; uses `ITlsTransport` interface
 - `uMakerAi.WebSocket.SChannel.pas` - `TSChannelTransport` — TLS via `secur32.dll` (Windows native, zero extra DLLs; tested ✅)
-- `uMakerAi.WebSocket.OpenSSL.pas` - `TOpenSSLTransport` — TLS via `dlopen(libssl.so)` (Linux/macOS; compiles, not yet tested on real hardware)
+- `uMakerAi.WebSocket.OpenSSL.pas` - `TOpenSSLTransport` — TLS via `dlopen(libssl.so)` (Linux/macOS; Linux64 tested on real hardware, see `Source/WebSocket/CLAUDE.md`; macOS not yet tested)
 - `uMakerAi.WebSocket.Android.pas` - `TAndroidSSLTransport` — TLS via `javax.net.ssl.SSLSocketFactory` (JNI; compiles, not yet tested on real hardware)
 
 **Realtime (`Source/Realtime/`)**: Real-time audio streaming (STT via WebSocket)
@@ -174,12 +166,13 @@ curl -X POST http://localhost:8080/mcp \
 - `uMakerAi.Realtime.OpenAI.pas` - `TAiOpenAiRealtimeSTT` — WebSocket to `wss://api.openai.com/v1/realtime`, 24 kHz PCM16; full implementation
 - `uMakerAi.Realtime.OpenAI.Live.pas` - `TAiOpenAiLiveChat` — OpenAI GPT-Live (`gpt-live-1`), voz full-duplex; delega el razonamiento a un modelo Responses (default) o a cualquier `TAiChatConnection` (`DelegateChat`); probado runtime
 - `uMakerAi.Realtime.Gemini.pas` - `TAiGeminiRealtimeSTT` — 16 kHz PCM16; **stub, pendiente implementación**
-- `uMakerAi.Realtime.Grok.pas` - `TAiGrokRealtimeChat` — xAI Grok Voice speech-to-speech, `wss://api.x.ai/v1/realtime`, protocolo compatible OpenAI Realtime, 24 kHz PCM16; implementado, pendiente prueba runtime
+- `uMakerAi.Realtime.Grok.pas` - `TAiGrokRealtimeChat` — xAI Grok Voice speech-to-speech, `wss://api.x.ai/v1/realtime`, protocolo compatible OpenAI Realtime, 24 kHz PCM16; probado runtime (ver `Source/Realtime/CLAUDE.md`)
 - `uMakerAi.Realtime.WebSocket.pas` - compatibility shim; re-exports `TAiRealtimeWSClient` → `TAiWSClient` (Source/WebSocket/)
 
 **ChatUI (`Source/ChatUI/`)**: FMX visual components
-- `TChatList` - Chat container with markdown rendering
-- `TChatInput` - Text/voice/attachment input bar
+- `TAIChatView` (`AIChat.Control.FMX`) / `TAIChatInput` (`AIChat.Input`) - Skia chat UI for new code
+- `TChatList` - Chat container with markdown rendering (deprecated in code: use `TAIChatView`)
+- `TChatInput` - Text/voice/attachment input bar (deprecated in code: use `TAIChatInput`)
 
 ### Key Design Patterns
 
@@ -189,7 +182,7 @@ curl -X POST http://localhost:8080/mcp \
 
 **Chat State Machine**: All chats follow states defined in `TAiChatState` (acsIdle -> acsConnecting -> acsWriting -> acsToolCalling -> acsReasoning -> acsFinished/acsError). Additional states: `acsWaitingForInput` for interactive flows.
 
-**Driver Registration**: Chat drivers register via `uMakerAi.Chat.Initializations.pas` using `TAiChatFactory.Instance.RegisterUserParam()`. Custom drivers inherit from `TAiChat`.
+**Driver Registration**: each driver unit registers its class in its own `initialization` (`TAiChatFactory.Instance.RegisterDriver(TAiXxxChat)`); `uMakerAi.Chat.Initializations.pas` imports every driver unit and registers per-model params with `TAiChatFactory.Instance.RegisterUserParam()`. Custom drivers inherit from `TAiChat`.
 
 **Model Capabilities Configuration (v3.3)**: Model capabilities are configured per-provider and per-model in `uMakerAi.Chat.Initializations.pas` usando el nuevo sistema unificado:
 - `ModelCaps` (`TAiCapabilities`) — capacidades nativas del modelo vía completions (e.g., `[cap_Image, cap_Reasoning]`)
@@ -276,8 +269,8 @@ All `MAKERAI_HAS_*` feature flags are `True` by default (OpenAI, Whisper, Embedd
 | `FLock` | `TAIBlackboard` | Shared state dictionary |
 | `FJoinLock` | `TAIAgentsLink` | Join counter for multi-input nodes |
 | `FActiveTasksLock` | `TAIAgentManager` | Active task count tracking |
-| `FOutputLock` | `TAiMCPServerStdio` | Stdout writes from multiple threads |
-| `FSessionsLock` | `TAiMCPServerSSE` | SSE session list |
+| `FOutputLock` | `TAiMCPStdioServer` | Stdout writes from multiple threads |
+| `FSessionsLock` | `TAiMCPSSEHttpServer` | SSE session list |
 | `FCS` | `TAiVoiceMonitor` | Audio capture state |
 
 ### Thread Queuing
@@ -300,7 +293,7 @@ All `MAKERAI_HAS_*` feature flags are `True` by default (OpenAI, Whisper, Embedd
 
 1. Create `Source/Chat/uMakerAi.Chat.[ProviderName].pas` inheriting from `TAiChat`
 2. Implement required abstract methods for API communication
-3. Register the driver in `uMakerAi.Chat.Initializations.pas`:
+3. Register the class in the unit's `initialization` (`TAiChatFactory.Instance.RegisterDriver(TAiProviderNameChat)`), add the unit to the `uses` of `uMakerAi.Chat.Initializations.pas`, and register its params there (inside `InitChatModels`):
    ```pascal
    TAiChatFactory.Instance.RegisterUserParam('ProviderName', 'Max_Tokens',  '16000');
    TAiChatFactory.Instance.RegisterUserParam('ProviderName', 'Tool_Active', 'True');

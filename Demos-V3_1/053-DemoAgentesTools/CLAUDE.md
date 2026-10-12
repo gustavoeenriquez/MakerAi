@@ -37,7 +37,7 @@ The data module (`TFDataModule`) integrates multiple AI services through MakerAI
 
 - **TAiRAGVector** - Vector store manager with BM25/embedding hybrid search
 - **TAiRAGVectorPostgresDriver** - PostgreSQL pgvector backend
-- **VQL Support** - Vector Query Language via `ExecuteVGQL()`
+- **VQL Support** - Vector Query Language via `ExecuteVQL()`
 
 ### Key Methods in TFDataModule
 

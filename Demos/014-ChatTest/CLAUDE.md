@@ -34,7 +34,7 @@ Connection Layer (TAiChatConnection) - Universal LLM interface, API management
     ↓
 Chat Management (TAiChat) - Message history, context, conversation threads
     ↓
-Core Capabilities (TAiMediaFile, TAiMessage) - Attachments, message types
+Core Capabilities (TAiMediaFile, TAiChatMessage) - Attachments, message types
     ↓
 Tool Framework (ChatTools) - Vision, code execution, web search, file extraction
     ↓
@@ -46,7 +46,7 @@ Knowledge Engines (RAGVector, RAGGraph) - Semantic search, knowledge relationshi
 |--------|------|---------|
 | `uMakerAi.Chat.AiConnection` | Source/Chat/ | Main connector for all LLM operations |
 | `uMakerAi.Chat.Claude` | Source/Chat/ | Anthropic Claude driver |
-| `uMakerAi.Core` | Source/Core/ | Core types (TAiChat, TAiMediaFile, TAiMessage) |
+| `uMakerAi.Core` | Source/Core/ | Core types (`TAiMediaFile`); `TAiChat` lives in `uMakerAi.Chat`, `TAiChatMessage` in `uMakerAi.Chat.Messages` |
 | `uMakerAi.Chat.Tools` | Source/Core/ | Tool/function calling framework |
 | `uMakerAi.RAG.Vectors` | Source/RAG/ | Vector embedding and search |
 | `uMakerAi.Agents` | Source/Agents/ | Agent orchestration |
@@ -93,7 +93,7 @@ The main program includes these test functions that demonstrate different capabi
 - `Test_VisionPDF()` / `Test_VisionPDFJson()` - PDF processing
 - `Test_Thinking()` - Extended thinking mode
 
-**`--groq`** runs `Test_Groq_CodeInterpreter_Sync` / `_Async`: Groq `code_interpreter` with `openai/gpt-oss-20b` (it replaced `groq/compound`, which Groq no longer offers — `model_not_found`, Sep 2026). Verified Sep 28 2026: the **sync** test runs the Python in Groq's sandbox and saves the generated WAV (`ci_output.wav`, 1 s, 44.1 kHz) from `executed_tools`. The **async** test also saves the file since the streaming parser learned to read `executed_tools` from `choices[0].delta` (fix of Sep 28 2026; before it got the text only, and duplicated: `Done Done`).
+**`--groq`** runs `Test_Groq_CodeInterpreter_Sync` / `_Async`: Groq `code_interpreter` with `openai/gpt-oss-20b` (`groq/compound` is no longer offered). Verified Sep 28 2026: both tests run the Python in Groq's sandbox and save the generated WAV (`ci_output.wav`, 1 s, 44.1 kHz) from `executed_tools`; the async one reads them from `choices[0].delta`.
 
 ## Related Demos
 

@@ -23,4 +23,4 @@ See the root `/CLAUDE.md` for complete project documentation including:
 
 ## Related Source
 
-The resource compilation unit is at `Source/Resources/UIResources.res`.
+Compiled resources: component palette icons in `Source/Resources/*.RES` (see `Source/Resources/CLAUDE.md`); FMX UI icons in `Source/ChatUI/UIResources.res`.

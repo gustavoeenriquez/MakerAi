@@ -64,7 +64,7 @@ Rules:
 - Global engine instance (`GlPythonEngine`) is reused across calls
 
 ### uMakerAi.Utils.ScreenCapture
-Cross-platform screen capture for FMX applications.
+Cross-platform screen capture for FMX applications. The unit lives in `Source/ChatUI/`, not in this folder.
 
 Key class: `TScreenCapture` (all static methods)
 

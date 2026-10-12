@@ -11,8 +11,9 @@ Two types of drivers exist:
 - **Full voice conversation** (MakerAI, Grok, Qwen, OpenAI GPT-Live): STT + LLM + TTS in one WebSocket — inherit from `TAiRealtimeVoiceBase`, which adds `OnAssistantText`, `OnAssistantTextDelta`, `OnAudioChunk`, `OnAudioDone`
 
 Demos:
-- Console: `Demos/Console/Demos09-Realtime/01-RealtimeSTT/`
-- FMX: `Demos/FMX/Demos09-Realtime/01-RealtimeSTT/`
+- Console: `Demos-V3_4/Console/Demos09-Realtime/01-RealtimeSTT/`
+- FMX: `Demos-V3_4/FMX/Demos09-Realtime/01-RealtimeSTT/`
+- In `Demos/`: 062/063/071 (OpenAI STT/translate), 089 (Qwen), 092 (GPT-Live)
 
 ## Module Structure
 
@@ -26,7 +27,7 @@ Demos:
 | `uMakerAi.Realtime.OpenAI.Live.pas` | `TAiOpenAiLiveChat` | OpenAI GPT-Live — full-duplex voice with task delegation (Responses or your own chat) — **runtime-tested** (2026-10-05) |
 | `uMakerAi.Realtime.Gemini.pas` | `TAiGeminiRealtimeSTT` | Gemini driver — **stub, pending** |
 | `uMakerAi.Realtime.MakerAi.pas` | `TAiMakerAiRealtimeChat` | MakerAI driver — **complete** (STT+LLM+TTS) |
-| `uMakerAi.Realtime.Grok.pas` | `TAiGrokRealtimeChat` | xAI Grok Voice driver — speech-to-speech, OpenAI Realtime-compatible protocol — **implemented, pending runtime test** |
+| `uMakerAi.Realtime.Grok.pas` | `TAiGrokRealtimeChat` | xAI Grok Voice driver — speech-to-speech, OpenAI Realtime-compatible protocol — **runtime-tested** (2026-07-31/08-01) |
 | `uMakerAi.Realtime.Qwen.pas` | `TAiQwenRealtimeChat`, `TAiQwenRealtimeSTT`, `TAiQwenRealtimeTranslate` | Alibaba Qwen (DashScope) — voice conversation, live STT and simultaneous translation — **runtime-tested** (2026-09-28) |
 | `uMakerAi.Realtime.QwenTTS.pas` | `TAiQwenRealtimeTTS` | Qwen streaming **text-to-speech** (text in → audio out) — standalone component, not a `TAiRealtimeBase` driver — **runtime-tested** (2026-09-28) |
 | `uMakerAi.Realtime.WebSocket.pas` | `TAiRealtimeWSClient` (shim → `TAiWSClient`) | Compatibility alias; implementation in `Source/WebSocket/` |
@@ -286,8 +287,6 @@ With audio sent faster than real time and then stopped (file upload pattern), th
 
 `CreateResponse` (public method) sends `response.create` — required after `CommitAudio` in `rvmManual` mode, optional forcing mechanism otherwise.
 
-Phase 3 (resumption, binary transport, ephemeral tokens, file_search/mcp declarations) — see the phase 3 table below.
-
 ---
 
 ## Qwen drivers — Alibaba Model Studio (DashScope)
@@ -325,8 +324,8 @@ The realtime hierarchy is audio-in (microphone → server); this goes the other 
 TTS := TAiQwenRealtimeTTS.Create(nil);          // Voice 'Cherry', Mode tmServerCommit
 TTS.OnAudioChunk := HandlePcm24k;               // PCM16 mono 24 kHz, as it is produced
 TTS.Connect;                                    // wait OnSessionReady
-Chat.OnReceiveData    := procedure(...) begin TTS.AppendText(aText) end;  // each LLM delta
-Chat.OnReceiveDataEnd := procedure(...) begin TTS.Finish end;             // flush + OnFinished
+Chat.OnReceiveData    := ChatDelta;   // method (events are `of object`) calling TTS.AppendText(aText) on each LLM delta
+Chat.OnReceiveDataEnd := ChatDone;    // method calling TTS.Finish: flush + OnFinished
 ```
 
 - Protocol (verified live): client `session.update {voice, mode, response_format: pcm, sample_rate, language_type, instructions}`, `input_text_buffer.append {text}`, `input_text_buffer.commit`, `session.finish`; server `response.audio.delta`, `response.done` (per utterance), `session.finished`.
@@ -344,7 +343,6 @@ Chat.OnReceiveDataEnd := procedure(...) begin TTS.Finish end;             // flu
 
 - **Planned endpoint:** Gemini Live API WebSocket
 - **Planned audio format:** PCM16, 16 kHz, mono
-- **Implementation target:** v3.5
 
 When implementing:
 1. Override `InternalConnect` — connect to Gemini Live WebSocket
@@ -371,7 +369,7 @@ When implementing:
 |----------|-------------|--------|
 | Windows Win64 | `TSChannelTransport` (`secur32.dll`) | ✅ Tested |
 | Android ARM/ARM64 | `TAndroidSSLTransport` (`javax.net.ssl` via JNI) | ⚠️ Compiles, not yet tested on real hardware |
-| Linux64 | `TOpenSSLTransport` (`libssl.so.3` or `libssl.so.1.1`) | ⚠️ Compiles, not yet tested on real hardware |
+| Linux64 | `TOpenSSLTransport` (`libssl.so.3` or `libssl.so.1.1`) | ✅ Tested 2026-09-19 (see `Source/WebSocket/CLAUDE.md`) |
 | macOS | `TOpenSSLTransport` (`libssl.dylib`) | ⚠️ Compiles, not yet tested |
 | iOS | — | ❌ Not implemented |
 
@@ -461,8 +459,8 @@ STT := TAiRealtimeConnection.Create(nil);
 STT.DriverName  := 'OpenAI';
 STT.Model       := 'gpt-realtime-2.1';
 STT.VADMode     := rvmServerVad;
-STT.OnTranscriptDelta     := procedure(Delta: string) begin Write(Delta); end;
-STT.OnTranscriptCompleted := procedure(Text, Id: string) begin WriteLn; WriteLn('→ ', Text); end;
+STT.OnTranscriptDelta     := Handler.TranscriptDelta;      // procedure(Sender: TObject; const Delta: string) of object
+STT.OnTranscriptCompleted := Handler.TranscriptCompleted;  // procedure(Sender: TObject; const Transcript, ItemId: string) of object
 
 // Connect and stream
 STT.Connect;
@@ -511,7 +509,7 @@ times out waiting for the session with `Sleep`, and transcribes correctly with
 ## Known issues / limitations
 
 - **Gemini driver is a stub** — raises `ENotImplemented` on `Connect`
-- **POSIX not yet tested** — `TOpenSSLTransport` + `TAiWSClient` compile on Linux/macOS but have not been validated on real hardware
+- **POSIX** — Linux64 verified on real hardware (2026-09-19/20, see `Source/WebSocket/CLAUDE.md` and the console section above); macOS compiles but has not been validated
 - **POSIX prerequisite** — Linux requires `libssl3` or `libssl1.1`; macOS requires LibreSSL (system) or OpenSSL (Homebrew)
 - **Android** — `TAndroidSSLTransport` compiles but has not been validated on real hardware
 - **iOS** — `ITlsTransport` not yet implemented

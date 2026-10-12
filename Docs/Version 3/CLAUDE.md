@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Directory Purpose
 
-This directory contains technical documentation for MakerAI v3.2 - an AI orchestration framework for Delphi. The documentation is primarily in Spanish with English versions available for key modules.
+This directory contains technical documentation for MakerAI v3.x - an AI orchestration framework for Delphi. The documentation is primarily in Spanish with English versions available for key modules.
 
 **This is documentation only** - no source code lives here. Source code is in `/Source/`.
 
@@ -34,7 +34,7 @@ Two subdirectories have specialized guides:
 | `uMakerAi-Agents.ES.docx` | Graph-based agent orchestration |
 | `uMakerAi-RAG.ES.docx` | Vector RAG with PostgreSQL/pgvector |
 | `uMakerAI-RAGGraph.docx` | Knowledge graph RAG |
-| `uMakerAi.ToolFunciones.docx` | Function calling system |
+| `uMakerAi.ToolFuncions.docx` | Function calling system |
 | `TAiChatClaude-Guia de Uso.docx` | Claude provider specifics |
 | `TAiChatGemini-Guia de Uso.docx` | Gemini provider specifics |
 
@@ -60,7 +60,8 @@ Documentation files map to source directories:
 ## Translation Notes
 
 Most documentation is Spanish-first. English versions exist for:
-- MCP Server (`uMakerAi-MCP.Server.EN.docx/.pdf`)
+- MCP Server (`MCPServer/uMakerAi-MCP.Server.EN.docx/.pdf`)
+- `uMakerAi-CapabilitySystem.EN.md`, `uMakerAi-Skills.EN.md`, `uMakerAi-Jev-TypeSafe-EN.docx`, `uMakerAi-Qwen-Alibaba-EN.docx`
 
 When referencing documentation for English speakers, prefer the MCPServer English docs or the parent project's `CLAUDE.md` which is in English.
 

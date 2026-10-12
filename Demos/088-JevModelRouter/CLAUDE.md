@@ -38,7 +38,7 @@ Tarda ~2–3 minutos (Sonnet y Opus). Exit code: 0 ok, 2 si falta la API key de 
 ## Notas
 
 - **Resultado verificado (sep 28/2026):** 7 de 8 respuestas útiles (calidad ≥ 0.70). Nivel 0 en Groq 0.4–0.6 s (0.86 y 0.99), nivel 1 en DeepSeek 3.7–5.6 s (0.94–0.96, incluido el access violation que la calibración dejó un nivel abajo), Sonnet ~37 s, Opus 41 s (0.84). La de 0.57 (PostgreSQL vs SQL Server en Sonnet) muy probablemente quedó incompleta por el tope global `Max_Tokens=1200`. Bloque B: Groq → Claude Sonnet con 4 mensajes migrados; la respuesta partió de "tu ferretería mayorista de tornillos" (Jev 0.92).
-- **Groq retiró los `llama-3.x`** (`model_not_found`) aunque siguen registrados en `uMakerAi.Chat.Initializations`; sus modelos de chat activos son `openai/gpt-oss-20b/120b` y `qwen/qwen3.6|3.8-27b`.
+- **Groq retiró los `llama-3.x`** (`model_not_found`); en `uMakerAi.Chat.Initializations` quedan como alias de `openai/gpt-oss-20b`/`-120b`. Sus modelos de chat activos son `openai/gpt-oss-20b/120b` y `qwen/qwen3.6|3.8-27b`.
 - **Claude necesita `Params` propios en el tier** (`ThinkingLevel=tlLow`, `SessionCaps=[cap_Image, cap_Pdf]`): con los defaults (razonamiento adaptativo + búsqueda web) Opus superó el timeout HTTP (~300 s, WinHTTP 12002) en la pregunta de arquitectura; así respondió en 41–91 s.
 - `ConnectionParams` (global) y `Tier.Params` se aplican **después** de asignar `Model`: asignarlo recarga los defaults del modelo (un `Max_Tokens` aplicado antes terminaba en 65536).
 
