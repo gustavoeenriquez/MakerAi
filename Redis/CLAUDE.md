@@ -10,7 +10,7 @@ This `Redis/` directory contains binary dependencies (audio conversion DLLs) for
 - `ConvertToWave32.dll` - 32-bit audio format conversion
 - `ConvertToWave64.dll` - 64-bit audio format conversion
 
-These DLLs are used by MakerAI's voice processing components (`uMakerAi.Utils.VoiceMonitor.pas`, Whisper integration).
+No `.pas`/`.dpr` in the repository references them (no `ConvertToWave` occurrence); they are only for applications that load them explicitly.
 
 ## Main Project Documentation
 

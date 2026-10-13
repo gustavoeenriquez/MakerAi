@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Directory Purpose
 
-This is the documentation root for MakerAI v3.2 - an AI orchestration framework for Delphi. **No source code exists here** - all implementation is in `/Source/`.
+This is the documentation root for MakerAI v3.x (current version in `Source/Core/uMakerAi.Version.inc`) - an AI orchestration framework for Delphi. **No source code exists here** - all implementation is in `/Source/`.
 
 ## Documentation Structure
 
@@ -21,7 +21,8 @@ Docs/
 ## Language
 
 Documentation is primarily in **Spanish**. English versions available for:
-- MCP Server (`MCPServer/uMakerAi-MCP.Server.EN.pdf`)
+- MCP Server (`Version 3/MCPServer/uMakerAi-MCP.Server.EN.pdf`)
+- Capability System, Skills, Jev (TypeSafe) and Qwen (`Version 3/*.EN.md`, `Version 3/*-EN.docx`)
 
 ## Subdirectory CLAUDE.md Files
 

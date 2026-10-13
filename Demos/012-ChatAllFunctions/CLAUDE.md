@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is **MakerAI 3.x**, a comprehensive AI orchestration framework for Delphi developers. It provides unified access to multiple AI providers (OpenAI GPT-5.1, Claude 4.5, Gemini 3.0, local models via Ollama/LM Studio) with support for RAG, Knowledge Graphs, MCP Servers, Agents, and Native Capability Tools.
+This is **MakerAI 3.x**, a comprehensive AI orchestration framework for Delphi developers. It provides unified access to multiple AI providers (OpenAI, Claude, Gemini, local models via Ollama/LM Studio, and others — current models in `Source/Chat/CLAUDE.md`) with support for RAG, Knowledge Graphs, MCP Servers, Agents, and Native Capability Tools.
 
 **Current directory:** Demo 012-ChatAllFunctions - A full-featured chat demo showcasing all framework capabilities.
 
@@ -51,25 +51,25 @@ TAiChatConnection → SetDriver/Model → TAiChat (provider-specific)
 | `Source/Tools/` | ChatTools, native capabilities, media processing |
 | `Source/MCPServer/` | Model Context Protocol server (SSE, StdIO, DataSnap) |
 | `Source/MCPClient/` | MCP client for consuming external servers |
-| `Demos/` | 18 working examples for all major features |
+| `Demos/` | Working examples for all major features (index in `Demos/CLAUDE.md`) |
 
 ### Major Source Files
-- `uMakerAi.Chat.pas` (3099 lines) - Main chat orchestration
+- `uMakerAi.Chat.pas` - Main chat orchestration
 - `uMakerAi.Chat.AiConnection.pas` - Provider-agnostic connection
-- `uMakerAi.Chat.Gemini.pas` (3937 lines) - Largest provider implementation
-- `uMakerAi.RAG.Graph.Core.pas` (4869 lines) - Knowledge graph engine
-- `uMakerAi.Agents.pas` (2890 lines) - Agent orchestration
+- `uMakerAi.Chat.Gemini.pas` - Gemini driver
+- `uMakerAi.RAG.Graph.Core.pas` - Knowledge graph engine
+- `uMakerAi.Agents.pas` - Agent orchestration
 
 ### Design Patterns
 - **Facade:** TAiChatConnection abstracts provider complexity
-- **Factory:** Provider initialization via TAiChatInitialization
+- **Factory:** drivers register with `TAiChatFactory`; `uMakerAi.Chat.Initializations` loads them all
 - **Strategy:** Different implementations per AI provider
 - **Observer:** Event-driven (OnReceiveData, OnCallToolFunction, etc.)
 - **Component:** TComponent-based for Delphi IDE integration
 
 ## Supported AI Providers
 
-OpenAI (GPT-5.1, DALL-E 3, Sora 2, Whisper, TTS), Google Gemini (3.0, Veo 3), Anthropic Claude (4.5, computer use), DeepSeek, Groq, Ollama, LM Studio, Mistral, Kimi, Grok, Cohere
+OpenAI (chat, image generation, Sora, transcription, TTS), Google Gemini (chat, Veo), Anthropic Claude (incl. computer use), DeepSeek, Groq, Ollama, LM Studio, Mistral, Kimi, Grok, Cohere, GLM, Qwen — model IDs in `Source/Chat/CLAUDE.md`
 
 ## Configuration Files
 

@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ChatUI is a Delphi FMX visual components library providing chat interface components for AI applications. Part of the MakerAI framework. All components are registered in the 'MakerAI UI' component palette.
 
+**Current vs deprecated:** `TChatList` and `TChatInput` are marked `deprecated` in code ('Use TAIChatView (AIChat.Control.FMX)' / 'Use TAIChatInput (AIChat.Input)'). New code uses the Skia components `TAIChatView` (`AIChat.Control.FMX.pas`) and `TAIChatInput` (`AIChat.Input.pas`), also in `MakerAi.UI.dpk`; demo 081 is the reference. The sections below document the deprecated components.
+
 ## Components
 
 ### TChatList (`uMakerAi.UI.ChatList.pas`)

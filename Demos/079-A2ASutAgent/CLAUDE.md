@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Demo 079 — **Agente SUT conforme al TCK oficial de A2A**. Es el System Under Test con el que se certifica la implementación, y a la vez el ejemplo de cómo emitir **artifacts estructurados** desde un grafo.
 
-Resultado actual contra [`a2aproject/a2a-tck`](https://github.com/a2aproject/a2a-tck): **MUST 67/67, SHOULD 4/4**.
+Resultado actual contra [`a2aproject/a2a-tck`](https://github.com/a2aproject/a2a-tck): **MUST 89/89, SHOULD 8/8**.
 
 ## Build & Run
 

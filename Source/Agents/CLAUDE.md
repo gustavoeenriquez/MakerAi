@@ -18,7 +18,7 @@ The Agents module implements a graph-based autonomous agent orchestration framew
 | `uMakerAi.Agents.Node.LLM.pas` | `TLLMNode`: nodo con LLM y loop ReAct sobre el `TAiToolRegistry`. `ResolveConfig` combina nodo + skill (driver del nodo → del skill → `'Claude'`; el `Model` del skill solo si es del driver efectivo; `SystemPrompt` del skill + el del nodo; `ApiKey` del nodo o del skill) y `ConfigureChat` lo aplica en orden Driver → Model → Params (v3.8: `SetDriverName` reinicia el modelo, así que el orden viejo perdía modelo y clave del skill). `DriverName` es `''` por defecto desde v3.8 |
 | `uMakerAi.Agents.Skill.pas` | `TAiSkill`: config reutilizable de un `TLLMNode`. Dos formatos: SKILL.md (`FromPPM`, `FromFolder`, `FromSkillFile`; parser común de `Source/Core/uMakerAi.Skills.Format.pas`) y JSON propio (`FromJSON`, `FromFile`). `ApiKey` solo desde JSON: un SKILL.md es contenido de terceros. Guía: `Docs/Version 3/uMakerAi-Agents-Skill.md` |
 | `uMakerAi.Agents.Tools.JevRouter.pas` | `TAiJevRouterTool`: tool de nodo que elige la siguiente ruta con Jev (TypeSafe AI) y la escribe en `Blackboard['next_route']` para un link `lmConditional`. Registrada en `TEngineRegistry` como `JevRouter` |
-| `uMakerAi.A2A.Server.pas` | `TAiA2AServer` (spec A2A 1.0): expone `TAIAgentManager`(s) como agente A2A — Agent Card en `/.well-known/agent-card.json`, JSON-RPC `SendMessage`/`GetTask`/`CancelTask` (+ aliases 0.x). Pool de managers, ciclo de vida real del task, resume de `input-required`, auth bearer y `traceparent`; sin streaming (rechaza con UnsupportedOperationError) |
+| `uMakerAi.A2A.Server.pas` | `TAiA2AServer` (spec A2A 1.0): expone `TAIAgentManager`(s) como agente A2A — Agent Card en `/.well-known/agent-card.json`, JSON-RPC `SendMessage`/`GetTask`/`CancelTask` (+ aliases 0.x). Pool de managers, ciclo de vida real del task, resume de `input-required`, auth bearer y `traceparent`; streaming SSE y push notifications (ver § Streaming SSE y § Push notifications; con `EnableStreaming := False` responde UnsupportedOperationError) |
 | `uMakerAi.A2A.Client.pas` | `TAiA2AClient`: consume agentes A2A remotos — `FetchAgentCard`, `SendText`/`SendTextEx`, `GetTask`/`CancelTask`; estado normalizado en `LastTaskState` y pregunta del agente en `LastStatusMessage`. Incluye `TAiA2ARemoteAgentTool` (federacion): asignado como `Tool` de un nodo, delega el input del nodo en un agente A2A remoto; registrado en `TEngineRegistry` |
 
 ## Core Classes
@@ -84,7 +84,7 @@ Manager.FindNode('Recepcion').Next.NextNo := Manager.FindNode('humano');
 - El output del nodo es su input sin cambios: el agente elegido recibe la consulta original.
 - Un `TAiJev` externo se asigna en `Router.Jev` (compartido, o el `TFakeJev` de la suite); si no, la tool crea el suyo con `ApiKey`/`Model`.
 
-**`lmExpression` y el punto decimal (fix sep 27/2026):** `EvalCondition` parseaba los números solo con la configuración regional, así que en un Windows con coma decimal `'10.25' > 9.5` se comparaba como texto y daba `False`. Ahora prueba primero la configuración regional y luego punto decimal (caso `agents.expression.decimal-point`).
+**`lmExpression` y el punto decimal:** `EvalCondition` interpreta los números primero con la configuración regional y luego con punto decimal, así que `'10.25' > 9.5` compara como número también en un Windows con coma decimal (caso `agents.expression.decimal-point`).
 
 ## JSON Graph Format
 
@@ -174,10 +174,13 @@ AgentManager.ResumeThread(ThreadID, 'NombreDelNodo', 'Aprobado');
 
 **Event for human-in-the-loop UI:**
 ```pascal
-AgentManager.OnSuspend := procedure(Sender: TObject; const ThreadID, NodeName,
-  Reason, Context: string) begin
-  ShowMessage('Aprobación requerida: ' + Reason);
+procedure TForm1.AgentSuspend(Sender: TObject; const AThreadID, ANodeName,
+  AReason, AContext: string);  // TAIAgentsOnSuspend is `of object`; the manager already queues it to the main thread
+begin
+  ShowMessage('Aprobación requerida: ' + AReason);
 end;
+
+AgentManager.OnSuspend := AgentSuspend;
 ```
 
 ## A2A: flujos de orquestación

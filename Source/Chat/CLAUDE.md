@@ -9,16 +9,16 @@ The Chat module contains LLM provider drivers for the MakerAI framework. Each dr
 ## Module Structure
 
 ### Universal Connector
-- `uMakerAi.Chat.AiConnection.pas` - `TAiChatConnection` component that abstracts all provider differences. Set `DriverName` property to switch providers without code changes. Manages tool integration (Shell, TextEditor, ComputerUse, Speech, Video, Vision, WebSearch, Image). `Params` se aplica por RTTI al chat **y a sus sub-objetos** (por eso `Voice` llega a `TtsParams.Voice`); `Voice_Format` (clave del catálogo de OpenAI TTS y del demo 012) es alias de `VoiceFormat` — antes se ignoraba en silencio porque la propiedad no lleva guion bajo. Los sub-objetos de medios (`TtsParams`, `TranscriptionParams`, `ImageParams`, `VideoParams`, `WebSearchParams`) se copian al chat en cada `Run` / `AddMessageAndRun` (`SyncMediaParams`, fix sep 28 2026): antes, editar `C.VideoParams.Params.Values[...]` o `C.TtsParams.Voice` después de crear el chat no llegaba al driver (solo se copiaban al asignar el objeto entero o al cambiar `Params`).
+- `uMakerAi.Chat.AiConnection.pas` - `TAiChatConnection` component that abstracts all provider differences. Set `DriverName` property to switch providers without code changes. Manages tool integration (Shell, TextEditor, ComputerUse, Speech, Video, Vision, WebSearch, Image). `Params` se aplica por RTTI al chat **y a sus sub-objetos** (por eso `Voice` llega a `TtsParams.Voice`); `Voice_Format` (clave del catálogo de OpenAI TTS y del demo 012) es alias de `VoiceFormat` (la propiedad no lleva guion bajo). Los sub-objetos de medios (`TtsParams`, `TranscriptionParams`, `ImageParams`, `VideoParams`, `WebSearchParams`) se copian al chat en cada `Run` / `AddMessageAndRun` (`SyncMediaParams`), así que editar `C.VideoParams.Params.Values[...]` o `C.TtsParams.Voice` después de crear el chat sí llega al driver.
 
 ### Provider Drivers
 Each inherits from `TAiChat` (defined in Core):
 
 | File | Class | Provider |
 |------|-------|----------|
-| `uMakerAi.Chat.OpenAi.pas` | `TAiOpenChat` | OpenAI (GPT-5.5, GPT-5.4, GPT-5.4-mini — familia GPT-5.x) |
-| `uMakerAi.Chat.Claude.pas` | `TAiClaudeChat` | Anthropic Claude (claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5) |
-| `uMakerAi.Chat.Gemini.pas` | `TAiGeminiChat` | Google Gemini (gemini-3.1-pro, gemini-3-flash, gemini-3.1-flash-lite — familia 3.x) |
+| `uMakerAi.Chat.OpenAi.pas` | `TAiOpenChat` | OpenAI (modelos y default en § Provider-Specific Notes › OpenAI) |
+| `uMakerAi.Chat.Claude.pas` | `TAiClaudeChat` | Anthropic Claude (modelos y default en § Provider-Specific Notes › Claude) |
+| `uMakerAi.Chat.Gemini.pas` | `TAiGeminiChat` | Google Gemini (modelos y default en § Provider-Specific Notes › Gemini) |
 | `uMakerAi.Chat.Ollama.pas` | `TAiOllamaChat` | Ollama (local models) |
 | `uMakerAi.Chat.LMStudio.pas` | `TAiLMStudioChat` | LM Studio (local OpenAI-compatible) |
 | `uMakerAi.Chat.Groq.pas` | `TAiGroqChat` | Groq inference (llama, qwen, deepseek, voxtral) |
@@ -32,11 +32,10 @@ Each inherits from `TAiChat` (defined in Core):
 | `uMakerAi.Chat.GenericLLM.pas` | `TAiGenericChat` | Any OpenAI-compatible API |
 
 ### Configuration
-- `uMakerAi.Chat.Initializations.pas` - Driver registration and model capabilities. Uses `TAiChatFactory` to configure `ModelCaps`, `SessionCaps`, `Tool_Active`, `ThinkingLevel` per model. **Última actualización: May 2026.**
+- `uMakerAi.Chat.Initializations.pas` - Imports every driver unit (each one registers itself) and registers the model catalog: `TAiChatFactory` configures `ModelCaps`, `SessionCaps`, `Tool_Active`, `ThinkingLevel` per model (in `InitChatModels`).
 
 ### Legacy (Deprecated)
 - `uMakerAi.Chat.OpenAi_Deprecated.pas`
-- `uMakerAi.Chat.Ollama_old.pas`, `uMakerAi.Chat.Ollama_old1.pas`
 - `uMakerAi.Chat.Claude_beta.pas`
 
 ---
@@ -92,8 +91,8 @@ RegisterUserParam('Driver', Model, 'SessionCaps', '[cap_GenImage]');
 RegisterUserParam('Driver', Model, 'Tool_Active', 'False');
 ```
 
-### Compatibilidad con sistema legacy
-`EnsureNewSystemConfig` traduce automáticamente los params legacy (`NativeInputFiles`, `ChatMediaSupports`, `EnabledFeatures`, `NativeOutputFiles`) al nuevo sistema en el primer `Run`. Los modelos con configuración antigua siguen funcionando sin cambios. Si se asignan `ModelCaps`/`SessionCaps` explícitamente, `FNewSystemConfigured=True` y la traducción automática se omite.
+### Params legacy
+`NativeInputFiles`, `ChatMediaSupports`, `EnabledFeatures` y `NativeOutputFiles` no son API pública ni claves válidas de `RegisterUserParam` (ver `CLAUDE.md` raíz, "API eliminada"): el engine los deriva internamente de `ModelCaps`/`SessionCaps`. `EnsureNewSystemConfig` no traduce configuraciones legacy (es un stub); configurar siempre con `ModelCaps`/`SessionCaps`.
 
 ---
 
@@ -106,9 +105,7 @@ All drivers implement these core methods:
 - `ParseChat()` - Parse provider response into `TAiChatMessage`
 - `GetModels()` - Retrieve available models from API
 
-Streaming drivers additionally implement:
-- `ProcessStreamChunk()` - Handle SSE/streaming response chunks
-- `OnInternalReceiveData` / `OnInternalReceiveDataEnd` - Event callbacks
+Streaming drivers override `OnInternalReceiveData` (the base class parses OpenAI-style SSE lines in `ProcessLine`; the Claude driver adds its own `ProcessStreamChunk`). `OnInternalReceiveDataEnd` is `TAiChatConnection`'s relay handler, not a driver method.
 
 ### Parameter Registry
 Model capabilities are configured via `TAiChatFactory.Instance.RegisterUserParam()`:
@@ -124,9 +121,7 @@ TAiChatFactory.Instance.RegisterUserParam('Ollama', 'qwen3:latest', 'ThinkingLev
 ```
 
 Key parameters:
-- `ModelCaps` / `SessionCaps` — **sistema nuevo v3.3** (preferido)
-- `NativeInputFiles` / `NativeOutputFiles` — físico, legacy (aún soportado)
-- `ChatMediaSupports` / `EnabledFeatures` — lógico, legacy (aún soportado)
+- `ModelCaps` / `SessionCaps` — únicas claves de capacidades (`NativeInputFiles`, `NativeOutputFiles`, `ChatMediaSupports` y `EnabledFeatures` son internos y no se registran)
 - `Tool_Active` — habilita function calling
 - `ThinkingLevel` — nivel de razonamiento (`tlLow`, `tlMedium`, `tlHigh`)
 - `Max_Tokens` — tokens máximos de respuesta
@@ -162,7 +157,7 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 1. Create `uMakerAi.Chat.NewProvider.pas`
 2. Define class inheriting from `TAiChat`
 3. Implement `Run()`, `GetMessages()`, `ParseChat()`, `GetModels()`
-4. Register in `uMakerAi.Chat.Initializations.pas` initialization section
+4. Register the class in the unit's own `initialization` (`TAiChatFactory.Instance.RegisterDriver(TAiNewProviderChat)`) and add the unit to the `uses` of `uMakerAi.Chat.Initializations.pas`
 5. Configure capabilities via `TAiChatFactory.Instance.RegisterUserParam()`:
    ```delphi
    TAiChatFactory.Instance.RegisterUserParam('NewProvider', 'Max_Tokens',  '16000');
@@ -176,7 +171,7 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 ## Provider-Specific Notes
 
 ### Claude (Anthropic)
-- `x-anthropic-version` header + beta features via dynamic headers
+- `anthropic-version` header + beta features via dynamic headers
 - **Thinking por familia (ago 2026, probado runtime):** el driver clasifica el modelo con `IsClaudeAdaptiveOnly` (4.7/4.8/5: budget_tokens y temperature/top_p/top_k devuelven 400) e `IsClaude46` (4.6). En 4.6+ envía `thinking:{type:"adaptive"}` y mapea `ThinkingLevel` → `output_config.effort` (low/medium/high); en ≤4.5 mantiene `{enabled, budget_tokens}`. El header `interleaved-thinking` solo se envía en el camino legacy.
 - `output_format` migrado a `output_config.format` (deprecado API-wide); format y effort comparten el mismo objeto `output_config`
 - Web search: `web_search_20260209` (filtrado dinámico) en 4.6+; `web_search_20250305` en legacy
@@ -302,7 +297,7 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 ### DeepSeek
 **Actualizado ago 2026, probado runtime 4/4 (incl. tools en modo thinking).** V4 (abr 2026) son los únicos modelos en `/v1/models`: 1M ctx / 384K output. El API activa thinking **por defecto** (effort=high); el driver lo controla explícitamente en `InitChatCompletions`: `cap_Reasoning` en `ModelCaps` → `thinking:{type:enabled}` + `reasoning_effort` (tlLow=low, tlMedium=high, tlHigh=max); sin el cap → `thinking:{type:disabled}` (modo rápido/económico). En modo thinking el API ignora temperature/top_p/penalties sin error. Con tools, `reasoning_content` DEBE reenviarse en el historial (400 si falta) — el override `GetMessages` del driver ya lo hace.
 - **RENOMBRE sep 2026 (verificado runtime):** `/v1/models` ya solo lista `deepseek-flash` y `deepseek-v4-pro`. `deepseek-v4-flash` (y `deepseek-v4-flash-vision-exp`) siguen aceptados como alias pero esos modelos **fueron retirados** y enrutan al nuevo flash. El default del driver es ahora `deepseek-flash`; el alias legacy queda registrado para configuraciones viejas.
-  - **TRAMPA:** el gate del bloque `thinking` estaba en `StartsText('deepseek-v4', LModel)`, así que con el nombre canónico `deepseek-flash` NO se enviaba `thinking` y mandaba el default del API (thinking ON) → se facturaban tokens de razonamiento con `ModelCaps=[]`. Ahora se decide en `ModelSupportsThinking()`, que cubre `deepseek-v4*`, `deepseek-flash*` y los alias en gracia
+  - El envío del bloque `thinking` se decide en `ModelSupportsThinking()` (cubre `deepseek-v4*`, `deepseek-flash*` y los alias en gracia), no por prefijo de nombre: un modelo que no entre ahí no recibe `thinking`, el API aplica su default (thinking ON) y factura tokens de razonamiento aunque `ModelCaps=[]`. Al registrar un id nuevo, cubrirlo en `ModelSupportsThinking()`
 - `deepseek-flash` [default del driver]: pico $0.30/M in miss / $0.003 hit / $1.20/M out
 - `deepseek-v4-pro`: 1.6T (49B act), razonamiento por defecto vía registry. Pico $1.32/M in miss / $3.96/M out. **CONTINÚA después del 14 sep 2026** (aviso oficial, facturación sin cambios). Nota: effort low→high (mínimo soportado, ago 2026)
 - `deepseek-chat` y `deepseek-reasoner`: **RETIRADOS oficialmente 24 jul 2026** — aún enrutan a `deepseek-flash` en gracia (verificado sep 2026); no depender de ellos
@@ -336,7 +331,7 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - Pesos abiertos (`qwen3-32b`, `qwen3.6-27b`, `qwen3-235b-a22b…`, detectados por el tamaño en el nombre): `enable_thinking=true` solo en streaming (400 en síncrono) → en síncrono el driver manda false.
 - Streaming: `stream_options.include_usage` para que lleguen los tokens. Tools + stream funcionan. `temperature` acotada a [0, 2).
 - Catálogo (solo lo probado; cualquier otro id de los ~170 de la cuenta funciona con los globales): visión `[cap_Image]` → `qwen3.8-flash` [default], `qwen3.8-max`, `qwen3.7-plus`, `qwen3-vl-flash`, `qwen3.8-omni-flash` (probado solo imagen); texto → `qwen3-max`, `qwen-plus`, `qwen-flash`, `qwen-turbo`; código → `qwen3-coder-plus/flash`; razonamiento `[cap_Reasoning]` → `qwq-plus`, `qwen3-235b-a22b-thinking-2507`.
-- `Model` vacío (fix general sep 28 2026): antes una conexión sin `Model` usaba el modelo por defecto del driver **sin** sus parámetros del catálogo (Qwen sin `cap_Image`: la imagen no se enviaba). Ahora `GetDriverParams` resuelve el nivel del modelo con el default; ver la sección del registro en `Source/Core/CLAUDE.md`.
+- `Model` vacío: `GetDriverParams` aplica los parámetros del catálogo del modelo por defecto (con Qwen, `cap_Image` incluido); ver la sección del registro en `Source/Core/CLAUDE.md`.
 - **Audio de entrada: el API exige data URI** en `input_audio.data` (`data:audio/wav;base64,…`); el base64 pelado del serializador común da 400 *"URL does not appear to be valid"*. `InitChatCompletions` lo reescribe (`FixAudioDataUris`). Con eso `qwen3.8-omni-flash` (`[cap_Image, cap_Audio]`) entiende audio nativo, sync y stream.
 - **Fase 2 (sep 28 2026), probada runtime desde Delphi** — por gap de capacidades, como el resto de drivers. Las tres usan cliente HTTP propio (síncronas aunque `Asynchronous=True`; en asíncrono el resultado llega por `OnReceiveDataEnd` con los media, igual que Grok/Mistral). Si el `Model` de la sesión no es de la familia, se usa el default de la tarea (`ModelFor`), así el puente funciona desde un modelo de chat:
   - `[cap_GenImage]` → API nativa `api/v1/services/aigc/multimodal-generation/generation` (síncrona, devuelve URLs que expiran en 24 h; el driver las descarga como `qwen_image_N.png`). Registrados: `qwen-image-3.0` [default de la tarea], `qwen-image-3.0-pro`, `qwen-image-2.0(-pro)`, `qwen-image-max`, `z-image-turbo` (~6 s), `wan2.7-image(-pro)`. `qwen-image-3.0` tarda ~50 s. Tamaño en `ImageParams.Params.Values['size']` (default `1024*1024`, acepta `1024x1024`); `qwen-image-plus` solo admite 1328*1328, 1664*928, 928*1664, 1472*1104, 1104*1472. También `negative_prompt` y `watermark` en `ImageParams.Params`; `N` > 1 pide varias.
@@ -349,7 +344,6 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
   - Realtime (voz a voz, STT en vivo, traducción simultánea): drivers `Qwen`/`QwenSTT`/`QwenTranslate` en `Source/Realtime/uMakerAi.Realtime.Qwen.pas`; TTS en vivo (texto → audio mientras se genera, p.ej. leer la respuesta de un LLM): componente `TAiQwenRealtimeTTS` en `Source/Realtime/uMakerAi.Realtime.QwenTTS.pas` (ver `Source/Realtime/CLAUDE.md`). `qwen3-s2s-flash-realtime` no está habilitado en la cuenta probada.
   - **Traducción de texto (`qwen-mt-plus/flash/turbo/lite`)**: el API acepta **un solo mensaje `user`** (system → 400 *"Role must be in [user, assistant]"*, historial → 400 *"only one"*, tools → 400) y **sin `translation_options` no traduce: conversa**. Con un modelo `qwen-mt` el driver arma su propio request (`BuildTranslationRequest`): solo el último mensaje del usuario + `translation_options` desde propiedades publicadas (asignables por `Params`): `TranslateTo` (nombre en inglés o código; vacío = English), `TranslateFrom` (vacío = auto), `TranslateDomain` (contexto en inglés) y `TranslateTerms` (glosario `origen=destino`, TStrings: asignarlo en `AiChat` como `TAiQwenChat`). El historial se sigue guardando, así que una conversación de traducciones funciona turno a turno. Calidad medida: `qwen-mt-plus` traduce "caja menor" como *petty cash fund*; `flash` como *smaller box*, y bien con `TranslateDomain` o `TranslateTerms`. **Streaming: `qwen-mt-plus` y `qwen-mt-turbo` mandan el texto ACUMULADO en cada chunk** (`incremental_output` no lo cambia); el parser común los concatenaba y el texto salía repetido. El driver sobrescribe `OnInternalReceiveData` y reescribe cada línea SSE al incremento antes de pasarla a la base (maneja líneas partidas entre chunks). `flash`/`lite` ya son incrementales.
   - **Voces propias** — `Source/Tools/uMakerAi.Qwen.Voices.pas`, `TAiQwenVoices`: `CloneVoice` (muestra de audio → `qwen-voice-enrollment`, modelo destino `qwen3-tts-vc-2026-01-22`), `DesignVoice` (descripción en texto → `qwen-voice-design`, destino `qwen3-tts-vd-2026-01-26`; devuelve preview WAV y `LastDesignFallback` si la descripción no se pudo seguir, p.ej. `wer_too_high`), `ListVoices`, `DeleteVoice` (elige el servicio por el prefijo del id). API `api/v1/services/audio/tts/customization`. El id se usa como `TtsParams.Voice` en el TTS normal (`cap_GenAudio`). **Una voz propia solo funciona con su modelo destino** (`qwen3-tts-flash` la rechaza con *"voice does not exist or is not licensed"*): `TtsModelFor` elige `qwen3-tts-vc-…` / `qwen3-tts-vd-…` por el prefijo `qwen-tts-vc-` / `qwen-tts-vd-` si la sesión no lo fija. Probado en vivo: clonar, diseñar, listar, sintetizar con ambas (el audio retranscrito coincide con el texto) y borrar. Clonar solo con consentimiento del dueño de la voz.
-  - Sin cubrir: (`qwen-mt-*`, `livetranslate`), clonado de voz (`qwen3-tts-vc/vd`).
 
 ### Cohere
 **Actualizado ago 2026, probado runtime 5/5 (incl. tools).** Los modelos nuevos (a-plus, north, a-reasoning) razonan por defecto: el content trae bloque `type:'thinking'` antes del `text`. El driver lo controla en `InitChatCompletions`: `cap_Reasoning` → `thinking:{enabled}`; sin el cap → `disabled` (modo rápido), EXCEPTO command-a-plus que **no permite disabled** (falla con `INVALID_TOOL_GENERATION`). `ParseChat` y streaming capturan el thinking a `ReasoningContent` / `OnReceiveThinking`. FIX ago 2026: el retorno síncrono con tool calling llegaba vacío — `ExecuteAndRespondToToolCalls` ahora reutiliza el mismo `ResMsg` en el round 2 (patrón de la base `Run(Nil, ResMsg)`).

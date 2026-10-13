@@ -13,7 +13,7 @@ BasicRAGGraph is a Delphi VCL demo showcasing MakerAI's graph-based RAG (Retriev
 **Build Steps**:
 1. Open `BasicRAGGraph.dproj`
 2. Ensure MakerAI `/Source/*` directories are in Library Path
-3. Compile packages in order: `MakerAI.dpk` → `MakerAi.RAG.Drivers.dpk` → `MakerAiDsg.dpk` → `MakerAi.UI.dpk`
+3. Compile packages in order: `MakerAI.dpk` → `MakerAi.RAG.Drivers.dpk` → `MakerAi.UI.dpk` → `MakerAiDsg.dpk` (order from the root `CLAUDE.md`)
 4. Build and run
 
 **Runtime Requirements**:
@@ -33,7 +33,7 @@ BasicRAGGraph is a Delphi VCL demo showcasing MakerAI's graph-based RAG (Retriev
 - **Triplets**: Subject → Predicate → Object patterns
 
 ### Search Modes
-1. **Semantic**: Vector-based similarity search using `RAG.Search(prompt, TopK)`
+1. **Semantic**: Vector-based similarity search using `RAG.Search(prompt, Depth, Limit)` (the second argument is the expansion depth, not the result count)
 2. **Structural**: Pattern matching with `TGraphMatchQuery` (MATCH-style clauses)
 3. **Hybrid**: Combined vector + graph traversal via `TQueryPlan`
 
@@ -56,28 +56,29 @@ Node.Text := 'Texto que se vectoriza para el RAG';
 Node.Data := RAG.Embeddings.CreateEmbedding(Node.Text, 'user');
 ```
 
-> El API cambió: los metadatos de un nodo o arista viven en `MetaData`
-> (`TAiEmbeddingMetaData`), no en un `TDictionary<string, Variant>` llamado
-> `Properties`. `MetaData` es una propiedad indexada por defecto, así que
-> `Node.MetaData['clave'] := valor` reemplaza a `Node.Properties.Add(...)`.
-> Para recorrerlo hay que ir por `MetaData.InternalDictionary`.
+> Los metadatos de un nodo o arista viven en `MetaData` (`TAiEmbeddingMetaData`),
+> propiedad indexada por defecto: `Node.MetaData['clave'] := valor`. Para
+> recorrerlos, `MetaData.InternalDictionary`.
 
 **Import from JSON**:
 ```pascal
-GraphBuilder.ImportFromJson(JsonString, RAG, TMergeStrategy.msAddNewOnly);
+GraphBuilder.Graph := RAG;
+GraphBuilder.Process(JsonString, msAddNewOnly);   // returns the number of items inserted
 ```
 
 **Semantic search**:
 ```pascal
-Results := RAG.Search('query text', 10); // Top 10 similar nodes
+Results := RAG.Search('query text', 0, 10); // depth 0, top 10 similar nodes
 ```
 
 **Pattern matching**:
 ```pascal
 Query := TGraphMatchQuery.Create;
-Query.AddNodePattern('person', 'Person', nil);
-Query.AddEdgePattern('person', 'WORKS_AT', 'company', nil);
-Results := RAG.MatchPattern(Query);
+Query.AddNodePattern(PersonPattern);   // TMatchNodePattern
+Query.AddMatchClause(WorksAtClause);   // TMatchClause (edge between two node variables)
+Results := RAG.Match(Query);
+// Same query in MakerGQL:
+// RAG.ExecuteMakerGQL('MATCH (p:Person)-[r:WORKS_AT]->(c:Company) RETURN p, r, c');
 ```
 
 ## Conventions

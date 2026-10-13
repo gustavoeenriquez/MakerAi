@@ -78,7 +78,7 @@ RETURN TEXT, METADATA, SCORE
 LIMIT 10
 ```
 
-Execution flow: `TVGQLLexer` → `TVGQLParser` → `TVGQLQuery` (AST) → `TVGQLCompiler` → `TVGQLRequest` → `TAiRAGVector.ExecuteVGQL()`
+Execution flow: `TVGQLLexer` → `TVGQLParser` → `TVGQLQuery` (AST) → `TVGQLCompiler` → `TVGQLRequest` → `TAiRAGVector.ExecuteVQL()` (internally `ExecuteRequest`)
 
 ### MakerGQL Query Language (Graph)
 

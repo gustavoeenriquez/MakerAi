@@ -28,7 +28,7 @@ Usuario escribe en TAIChatInput
 | Pieza | Uso en el demo |
 |-------|----------------|
 | `TAiWaitApprovalTool` (`uMakerAi.Agents.Tools.Approval`) | Tool de fábrica que suspende el grafo y, al reanudar, deja pasar la respuesta humana como `Output`. `SuspendReason` = pregunta; `ContextKey` = clave del blackboard que viaja como contexto |
-| `TAIAgentManager.OnSuspend` | Puente agente→chat: llega en un thread del pool, se pasa por `TThread.Queue` y se agrega la pregunta con `ChatView1.AddMessage(crAssistant, ...)` |
+| `TAIAgentManager.OnSuspend` | Puente agente→chat: el manager ya lo dispara en el hilo principal (vía `TThread.Queue`) y el handler agrega la pregunta con `ChatView1.AddMessage(crAssistant, ...)` |
 | `TAIAgentManager.ResumeThread(ThreadID, NodeName, Input)` | Puente chat→agente: la siguiente respuesta del usuario reanuda el grafo donde quedó |
 | `TAiFileCheckpointer` (`uMakerAi.Agents.Checkpoint`) | La suspensión sobrevive al cierre de la app (carpeta `Checkpoints` junto al exe). Al arrancar, `GetActiveThreads` detecta hilos pendientes y la próxima respuesta del chat los reanuda |
 | `TAIChatView` / `TAIChatInput` (`AIChat.Control.FMX` / `AIChat.Input`) | La UI de chat **nueva** (Skia). Primer demo que la usa — `TChatList`/`TChatInput` están deprecados |
@@ -38,7 +38,7 @@ Usuario escribe en TAIChatInput
 
 - **`FPendingThreadID`** es el conmutador del chat: si está vacío, el mensaje del usuario inicia una corrida nueva (`Run`); si no, reanuda la suspendida (`ResumeThread`). Es todo el "protocolo".
 - El nombre del nodo a reanudar se conoce por el evento `OnSuspend`; tras un **reinicio de la app** no hay evento, así que el demo usa la constante `NODO_APROBACION` (único nodo que suspende). Con varios nodos de aprobación habría que persistir el nombre (p. ej. en el propio checkpoint via blackboard).
-- `OnSuspend`/`OnFinish` llegan en threads del pool → siempre `TThread.Queue` para tocar la UI. La excepción de `OnFinish` **no** se captura en el closure (se libera al volver): se copia `E.Message` antes.
+- `OnFinish` llega en un thread del pool → `TThread.Queue` para tocar la UI; `OnSuspend` ya llega al hilo principal (el manager lo encola). La excepción de `OnFinish` **no** se captura en el closure (se libera al volver): se copia `E.Message` antes.
 - `OnFinish` también se dispara con `esSuspended`; ese caso se ignora porque `OnSuspend` ya actualizó la UI.
 - Para adjuntos/audio como respuesta humana: `ResumeThread` recibe un string — pasar la ruta o una clave de blackboard (el `aMediaFiles` del `OnSendEvent` está disponible para eso).
 

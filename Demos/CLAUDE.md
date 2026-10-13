@@ -12,7 +12,7 @@ This is the Demos directory for the MakerAI 3.x framework. Contains 59 working e
 
 **IDE:** Delphi 11 Alexandria through 13 Florence (demos require Delphi 11+; the core framework supports 10.4 Sydney minimum)
 
-**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026; desde sep 29/2026 incluye los 58 proyectos (se sumaron 089-QwenShowcase, que había quedado fuera, y 091-Skills); oct 5/2026 se sumó 092-GPTLiveVoice (59).
+**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos (59 proyectos). Un demo nuevo se agrega también al grupo.
 
 > **OJO al editar los `.pas` de los demos:** varios están en **ANSI (Windows-1252) con saltos LF**, no en UTF-8. Guardarlos como UTF-8 destruye todas las tildes de forma silenciosa (compila igual, y `git diff` lo disimula si `core.autocrlf` está activo). Verificar siempre con `git diff --numstat` que solo cambien las líneas que se tocaron.
 
@@ -40,10 +40,10 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 ### RAG Systems (02x)
 | Demo | Purpose | Key Classes |
 |------|---------|-------------|
-| 021-RAG+Postgres-UpdateDB | Vector RAG with PostgreSQL | `TAiVectorRAG`, pgvector |
+| 021-RAG+Postgres-UpdateDB | Vector RAG with PostgreSQL | `TAiRAGVector`, pgvector |
 | 022-1-RAG_SQLite | Vector RAG with SQLite | Lightweight local storage |
 | 023-RAGVQL | Vector Query Language | VQL semantic search syntax |
-| 025-RAGGraph | Knowledge graph RAG | `TAiGraphRAG`, entity relationships |
+| 025-RAGGraph | Knowledge graph RAG | `TAiRagGraph`, entity relationships |
 | 026-RAGGraph-Basic | Basic graph RAG | Simplified graph patterns |
 | 027-DocumentManager | Gestor de documentos sobre RAG Graph, 100% local | `TAiRagDocumentManager` + `TAiRagGraph` con `TAiOllamaChat`/`TAiOllamaEmbeddings`; FMX |
 | 070-ChatRAGTools | Chat multi-proveedor + RAG SQLite + tools, todo en un formulario | `TAiChatConnection` con selector de proveedor/modelo, `TAiRAGVector` sobre `TAiRAGVectorSQLiteDriver` (vectorial en Delphi puro, sin `vec0`) y `TAiFunctions` con una función que dibuja series en TeeChart |
@@ -145,7 +145,7 @@ Each demo subdirectory contains:
 - `*.dproj` - Delphi project file
 - `*.dpr` - Program source
 - `uMain*.pas` / `uMain*.fmx` - Main form
-- `CLAUDE.md` - Demo-specific instructions
+- `CLAUDE.md` - Demo-specific instructions (not every demo has one: 027 and 060-071 don't)
 
 ## Common Code Patterns Across Demos
 
@@ -155,22 +155,28 @@ AiModel.Asynchronous := False;
 Response := AiModel.AddMessageAndRun(Prompt, 'user', []);
 ```
 
-**Streaming with callback:**
+**Streaming with callback** (chat events are `of object`: assign a method — an anonymous procedure does not compile):
 ```pascal
-AiModel.Asynchronous := True;
-AiModel.OnReceiveData := procedure(Sender: TObject; Data: string; IsDone: Boolean)
+procedure TForm1.AiModelReceiveData(const Sender: TObject; aMsg: TAiChatMessage;
+  aResponse: TJSONObject; aRole, aText: string);
 begin
-  TThread.Synchronize(nil, procedure begin Memo1.Text := Memo1.Text + Data; end);
+  TThread.Queue(nil, procedure begin Memo1.Text := Memo1.Text + aText; end);
 end;
+
+AiModel.Asynchronous := True;
+AiModel.OnReceiveData := AiModelReceiveData;
 AiModel.AddMessageAndRun(Prompt, 'user', []);
 ```
 
 **Error handling:**
 ```pascal
-AiModel.OnError := procedure(Sender: TObject; ErrorMsg: string; E: Exception; Resp: IHTTPResponse)
+procedure TForm1.AiModelError(Sender: TObject; const ErrorMsg: string;
+  Exception: Exception; const AResponse: IHTTPResponse);
 begin
   ShowMessage(ErrorMsg);
 end;
+
+AiModel.OnError := AiModelError;
 ```
 
 ## Navigation
