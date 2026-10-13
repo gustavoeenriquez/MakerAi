@@ -197,6 +197,8 @@ type
     procedure AddToMemory(Key, Value: String);
     procedure RemoveFromMemory(Key: String);
     procedure NewChat;
+    // ISSUE #135: pone en 0 los contadores de tokens de la conexion y del chat.
+    procedure ResetTokenCounters;
     procedure Abort;
     // ISSUE #115: control del log de depuracion (opt-in). Delegan en las globales
     // MakerAiDebugLogEnabled / MakerAiDebugLogPath de uMakerAi.Chat.
@@ -1218,6 +1220,15 @@ procedure TAiChatConnection.NewChat;
 begin
   ValideChat;
   FChat.NewChat;
+end;
+
+procedure TAiChatConnection.ResetTokenCounters;
+begin
+  FPrompt_tokens := 0;
+  FCompletion_tokens := 0;
+  FTotal_tokens := 0;
+  if Assigned(FChat) then
+    FChat.ResetTokenCounters;
 end;
 
 function TAiChatConnection.NewMessage(aPrompt, aRole: String): TAiChatMessage;

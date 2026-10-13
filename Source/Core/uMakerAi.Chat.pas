@@ -599,6 +599,9 @@ type
     Procedure AddToMemory(Key, Value: String);
     Procedure RemoveFromMemory(Key: String);
     Procedure NewChat; Virtual;
+    // ISSUE #135: pone en 0 los contadores acumulados de tokens. NewChat no los
+    // toca a proposito: el programador decide si reinicia la sesion o todo.
+    Procedure ResetTokenCounters; Virtual;
     Procedure Abort;
     Class Function GetModels(aApiKey: String; aUrl: String = ''): TStringList; Overload; virtual;
     Function GetModels: TStringList; Overload; Virtual;
@@ -2516,6 +2519,16 @@ begin
     FMessages.Delete(I);
   End;
   FMessages.Clear;
+end;
+
+procedure TAiChat.ResetTokenCounters;
+begin
+  FPrompt_tokens := 0;
+  FCompletion_tokens := 0;
+  FTotal_tokens := 0;
+  FThinking_tokens := 0;
+  FCached_tokens := 0;
+  FCache_write_tokens := 0;
 end;
 
 function TAiChat.NewMessage(aPrompt, aRole: String): TAiChatMessage;

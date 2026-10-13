@@ -762,6 +762,13 @@ begin
     .Input('chat:empty-model')
     .ExpectEquals('drivers=iguales|qwen=cap_Image|groq=65536');
 
+  // Issue #135: NewChat limpia la sesion pero conserva los contadores de tokens
+  // (a veces se quiere el acumulado); ResetTokenCounters los pone en 0 en la
+  // conexion y en el chat sin tocar el historial
+  FRunner.AddCase('conn.reset-token-counters')
+    .Input('chat:reset-tokens')
+    .ExpectEquals('newchat=msgs0/conn30/chat30/think5/cache7|reset=msgs1/conn0/chat0/think0/cache0/write0');
+
   FRunner.AddCase('chat.toolresult.text-inline')
     .Input('chat:toolresult-text')
     .ExpectEquals('1|inline=si|string=si');
@@ -3227,6 +3234,32 @@ begin
       Result := Result + '|groq=' + IntToStr(CQ.AiChat.Max_Tokens);
     finally
       CQ.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:reset-tokens' then
+  begin
+    var CR := TAiChatConnection.Create(nil);
+    try
+      CR.DriverName := 'Groq';
+      CR.Total_tokens := 30;
+      CR.AiChat.Total_tokens := 30;
+      CR.AiChat.Thinking_tokens := 5;
+      CR.AiChat.Cached_tokens := 7;
+      CR.AiChat.Cache_write_tokens := 3;
+      CR.AiChat.AddMessage('hola', 'user');
+      CR.NewChat;
+      Result := Format('newchat=msgs%d/conn%d/chat%d/think%d/cache%d',
+        [CR.AiChat.Messages.Count, CR.Total_tokens, CR.AiChat.Total_tokens,
+         CR.AiChat.Thinking_tokens, CR.AiChat.Cached_tokens]);
+      CR.AiChat.AddMessage('hola', 'user');
+      CR.ResetTokenCounters;
+      Result := Result + Format('|reset=msgs%d/conn%d/chat%d/think%d/cache%d/write%d',
+        [CR.AiChat.Messages.Count, CR.Total_tokens, CR.AiChat.Total_tokens,
+         CR.AiChat.Thinking_tokens, CR.AiChat.Cached_tokens, CR.AiChat.Cache_write_tokens]);
+    finally
+      CR.Free;
     end;
     Exit;
   end;
