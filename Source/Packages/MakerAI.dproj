@@ -155,6 +155,8 @@
         <DCCReference Include="..\Chat\uMakerAi.Chat.AiConnection.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.Claude.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.DeepSeek.pas"/>
+        <DCCReference Include="..\Chat\uMakerAi.Chat.GLM.pas"/>
+        <DCCReference Include="..\Chat\uMakerAi.Chat.Qwen.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.Gemini.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.Grok.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.Groq.pas"/>
@@ -164,6 +166,21 @@
         <DCCReference Include="..\Chat\uMakerAi.Chat.OpenAi.pas"/>
         <DCCReference Include="..\Core\UMakerAi.Chat.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Core.pas"/>
+        <DCCReference Include="..\Core\uMakerAi.Telemetry.pas"/>
+        <DCCReference Include="..\Agents\uMakerAi.A2A.Server.pas"/>
+        <DCCReference Include="..\Agents\uMakerAi.A2A.Client.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Guardrails.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Jev.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Jev.SmartDispatch.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Jev.Guardrails.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Jev.Evals.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Jev.RAG.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Qwen.Rerank.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Qwen.Voices.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Jev.PromptGuard.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Jev.Batch.pas"/>
+        <DCCReference Include="..\Tools\uMakerAi.Jev.ModelRouter.pas"/>
+        <DCCReference Include="..\Core\uMakerAi.Evals.pas"/>
         <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Prompts.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Skills.Format.pas"/>
@@ -185,6 +202,7 @@
         <DCCReference Include="..\Agents\uMakerAi.Agents.EngineRegistry.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.Agents.Checkpoint.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.Agents.Tools.Approval.pas"/>
+        <DCCReference Include="..\Agents\uMakerAi.Agents.Tools.JevRouter.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.Agents.IAiTool.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.Agents.Tools.MCP.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.Agents.ToolRegistry.pas"/>
@@ -214,6 +232,7 @@
         <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Gemini.pas"/>
         <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Ollama.pas"/>
         <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Mistral.pas"/>
+        <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Qwen.pas"/>
         <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Cohere.pas"/>
         <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.LMStudio.pas"/>
         <DCCReference Include="..\Embeddings\uMakerAi.Embeddings.Generic.pas"/>
@@ -244,6 +263,8 @@
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.OpenAI.Live.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.Gemini.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.Grok.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.Qwen.pas"/>
+        <DCCReference Include="..\Realtime\uMakerAi.Realtime.QwenTTS.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.AiConnection.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.MakerAi.pas"/>
         <DCCReference Include="..\Memory\uMakerAi.Memory.Types.pas"/>
@@ -884,6 +905,9 @@
                     <Platform Name="Win64x">
                         <Operation>1</Operation>
                     </Platform>
+                    <Platform Name="WinARM64EC">
+                        <Operation>1</Operation>
+                    </Platform>
                 </DeployClass>
                 <DeployClass Name="ProjectiOSDeviceDebug">
                     <Platform Name="iOSDevice32">
@@ -922,6 +946,10 @@
                         <RemoteDir>Assets</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
+                    <Platform Name="WinARM64EC">
+                        <RemoteDir>Assets</RemoteDir>
+                        <Operation>1</Operation>
+                    </Platform>
                 </DeployClass>
                 <DeployClass Name="UWP_DelphiLogo44">
                     <Platform Name="Win32">
@@ -929,6 +957,10 @@
                         <Operation>1</Operation>
                     </Platform>
                     <Platform Name="Win64">
+                        <RemoteDir>Assets</RemoteDir>
+                        <Operation>1</Operation>
+                    </Platform>
+                    <Platform Name="WinARM64EC">
                         <RemoteDir>Assets</RemoteDir>
                         <Operation>1</Operation>
                     </Platform>
