@@ -39,6 +39,7 @@ type
     FHoveredMessage : Integer;
     FHoveredAttach  : Integer;
     FHoveredCopyBtn : Integer;   // message index whose copy-button is hovered (-1 = none)
+    FHoveredAction  : Integer;   // action index hovered inside FHoveredMessage (-1 = none)
     FCopiedMsg      : Integer;   // message index showing "copied" feedback (-1 = none)
 
     FOnLayoutChanged   : TNotifyEvent;
@@ -87,6 +88,7 @@ type
     // ── Hover / copy-button state ─────────────────────────────────────────────
     procedure SetHovered(AMsgIndex, AAttachIndex: Integer);
     procedure SetHoverCopyBtn(AMsgIndex: Integer);
+    procedure SetHoverAction(AActionIndex: Integer);
     procedure SetCopied(AMsgIndex: Integer);
 
     // ── Accessors for code-copy hit detection ─────────────────────────────────
@@ -106,6 +108,7 @@ type
     property Theme           : TAIChatTheme        read FTheme;
     property HoveredMessage  : Integer             read FHoveredMessage;
     property HoveredCopyBtn  : Integer             read FHoveredCopyBtn;
+    property HoveredAction   : Integer             read FHoveredAction;
     property Painter         : TAIChatBubblePainter read FPainter;
     property OnLayoutChanged    : TNotifyEvent read FOnLayoutChanged
                                               write FOnLayoutChanged;
@@ -511,7 +514,8 @@ begin
                    Rdr, Doc, ShowCopy, HovAttach,
                    {AHovCopyBtn=}  (I = FHoveredCopyBtn),
                    {ACopied=}      (I = FCopiedMsg),
-                   {AIsSelected=}  IsSelected);
+                   {AIsSelected=}  IsSelected,
+                   {AHovAction=}   IfThen(I = FHoveredMessage, FHoveredAction, -1));
   end;
 end;
 
@@ -570,6 +574,11 @@ end;
 procedure TAIChatVirtualList.SetHoverCopyBtn(AMsgIndex: Integer);
 begin
   FHoveredCopyBtn := AMsgIndex;
+end;
+
+procedure TAIChatVirtualList.SetHoverAction(AActionIndex: Integer);
+begin
+  FHoveredAction := AActionIndex;
 end;
 
 procedure TAIChatVirtualList.SetCopied(AMsgIndex: Integer);

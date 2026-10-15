@@ -30,6 +30,8 @@ type
     ChipH       : Single;
     ChipsPerRow : Integer;
     CopyBtnRect : TRectF;   // doc coords
+    ActionRects : TArray<TRectF>;  // one per Message.Actions, doc coords (inside bubble)
+    FooterH     : Single;   // height of the time + footer line
   end;
 
   TAIChatBubblePainter = class
@@ -55,6 +57,10 @@ type
                 ASize: Single; AColor: TAlphaColor;
                 AWidth: Single; AAlign: TSkTextAlign): ISkParagraph;
     function  MeasurePlainH(const AText: string; AWidth, ASize: Single): Single;
+    function  ActionRowsHeight(AMsg: TAIChatMessage; AAvailW: Single;
+                out ARects: TArray<TRectF>): Single;
+    function  FooterText(AMsg: TAIChatMessage): string;
+    function  ActionCaptionWidth(const ACaption: string): Single;
   public
     constructor Create(const ATheme: TAIChatTheme);
     destructor  Destroy; override;
@@ -75,7 +81,7 @@ type
                 ARenderer: TAITextMDRenderer; ADoc: TMDDocument;
                 AShowCopy: Boolean; AHovAttach: Integer;
                 AHovCopyBtn: Boolean = False; ACopied: Boolean = False;
-                AIsSelected: Boolean = False);
+                AIsSelected: Boolean = False; AHovAction: Integer = -1);
 
     // Returns True if (ADocX, ADocY) is inside a code-block copy button of AMsg.
     // AMsgDocY = the message's top DocY (from FDocYPositions).
@@ -105,6 +111,13 @@ const
   TIMESTAMP_GAP = 3;
   AVATAR_R      = 13;
   AVATAR_GAP    = 6;
+  // Action buttons inside the bubble
+  ACT_H         = 30;
+  ACT_PAD_X     = 14;
+  ACT_GAP       = 8;
+  ACT_T_GAP     = 10;    // gap between content and the first action row
+  ACT_FONT      = 13;
+  ACT_RADIUS    = 8;
 
 { ── Internal helpers ─────────────────────────────────────────────────────── }
 
@@ -224,6 +237,57 @@ begin
   Result := Para.Height;
 end;
 
+{ ── Footer and action helpers ─────────────────────────────────────────────── }
+
+function TAIChatBubblePainter.FooterText(AMsg: TAIChatMessage): string;
+begin
+  Result := FormatDateTime('hh:nn', AMsg.Timestamp);
+  if AMsg.Status = TChatMessageStatus.msStreaming then
+    Result := Result + '  •••';
+  if AMsg.Status = TChatMessageStatus.msError then
+    Result := Result + '  !';
+  if AMsg.Footer <> '' then
+    Result := Result + '  ·  ' + AMsg.Footer;
+end;
+
+function TAIChatBubblePainter.ActionCaptionWidth(const ACaption: string): Single;
+var
+  Para: ISkParagraph;
+begin
+  Para := MakePlainParagraph(ACaption, FTheme.MD.FontFamily, ACT_FONT,
+                             TAlphaColors.Black, 4000, TSkTextAlign.Left);
+  Result := Para.LongestLine;
+end;
+
+// Lays out the action buttons in rows (wrapping when they do not fit) and
+// returns the total height of the block (0 if no actions). Rects come back in
+// bubble-relative coords (Left from 0, Top from 0): the caller offsets them.
+function TAIChatBubblePainter.ActionRowsHeight(AMsg: TAIChatMessage;
+  AAvailW: Single; out ARects: TArray<TRectF>): Single;
+var
+  I   : Integer;
+  X, Y: Single;
+  W   : Single;
+begin
+  SetLength(ARects, Length(AMsg.Actions));
+  if Length(ARects) = 0 then Exit(0);
+  X := 0;
+  Y := 0;
+  for I := 0 to High(AMsg.Actions) do
+  begin
+    W := ActionCaptionWidth(AMsg.Actions[I].Caption) + 2 * ACT_PAD_X;
+    if W > AAvailW then W := AAvailW;
+    if (X > 0) and (X + W > AAvailW) then
+    begin
+      X := 0;
+      Y := Y + ACT_H + ACT_GAP;
+    end;
+    ARects[I] := TRectF.Create(X, Y, X + W, Y + ACT_H);
+    X := X + W + ACT_GAP;
+  end;
+  Result := Y + ACT_H;
+end;
+
 { ── Constructor / Destructor ─────────────────────────────────────────────── }
 
 constructor TAIChatBubblePainter.Create(const ATheme: TAIChatTheme);
@@ -306,6 +370,9 @@ var
   ContentH, AttH, BubbleH  : Single;
   SlotH, Pad, ChipH, CW    : Single;
   ACount, CpR              : Integer;
+  ActH, FooterH            : Single;
+  ActRects                 : TArray<TRectF>;
+  I                        : Integer;
 begin
   Pad   := FTheme.BubblePadding;
   ChipH := ChipHeightFor(AMsg);
@@ -360,8 +427,16 @@ begin
             AttachRowsHeight(ACount, CHIP_W, ChipH, CHIP_GAP,
                              BubbleW - 2 * Pad);
 
-  BubbleH := Pad + ContentH + Pad;
-  SlotH   := BubbleH + AttH + TIMESTAMP_GAP + TIMESTAMP_H + FTheme.BubbleMarginV;
+  // Actions (inside the bubble, under the content)
+  ActH := ActionRowsHeight(AMsg, ContentW, ActRects);
+  if ActH > 0 then ActH := ActH + ACT_T_GAP;
+  // Time + footer line (may wrap when the footer is long)
+  FooterH := TIMESTAMP_H;
+  if AMsg.Footer <> '' then
+    FooterH := Max(TIMESTAMP_H,
+      MeasurePlainH(FooterText(AMsg), BubbleW, FTheme.TimestampFontSize));
+  BubbleH := Pad + ContentH + ActH + Pad;
+  SlotH   := BubbleH + AttH + TIMESTAMP_GAP + FooterH + FTheme.BubbleMarginV;
 
   R.SlotRect   := TRectF.Create(0, ADocY, ATotalWidth, ADocY + SlotH);
   R.BubbleRect := TRectF.Create(BubbleLeft, ADocY,
@@ -385,7 +460,14 @@ begin
   end;
   R.ChipW := CHIP_W;
   R.ChipH := ChipH;
-
+  R.FooterH := FooterH;
+  SetLength(R.ActionRects, Length(ActRects));
+  for I := 0 to High(ActRects) do
+    R.ActionRects[I] := TRectF.Create(
+      ContentLeft + ActRects[I].Left,
+      ADocY + Pad + ContentH + ACT_T_GAP + ActRects[I].Top,
+      ContentLeft + ActRects[I].Right,
+      ADocY + Pad + ContentH + ACT_T_GAP + ActRects[I].Bottom);
   R.CopyBtnRect := TRectF.Create(
     BubbleRight - COPY_PAD - COPY_SZ,
     ADocY + COPY_PAD,
@@ -413,7 +495,8 @@ procedure TAIChatBubblePainter.Paint(ACanvas: ISkCanvas; AMsg: TAIChatMessage;
   ADocY, AScreenY, ATotalWidth: Single;
   ARenderer: TAITextMDRenderer; ADoc: TMDDocument;
   AShowCopy: Boolean; AHovAttach: Integer;
-  AHovCopyBtn: Boolean; ACopied: Boolean; AIsSelected: Boolean);
+  AHovCopyBtn: Boolean; ACopied: Boolean; AIsSelected: Boolean;
+  AHovAction: Integer);
 var
   Layout       : TAIChatBubbleLayout;
   ScrollOffset : Single;
@@ -454,9 +537,13 @@ var
   AvatarCX,
   AvatarCY     : Single;
   AX, AY       : Single;
-
+  ActPaint     : ISkPaint;
+  ActScrR      : TRectF;
+  ActBg, ActFg,
+  ActBorder    : TAlphaColor;
+  BgIsLightA   : Boolean;
   procedure AddHit(AKind: TChatHitKind; const ADocRect: TRectF;
-    AAttIdx: Integer = -1; const AURL: string = '');
+    AAttIdx: Integer = -1; const AURL: string = ''; AActIdx: Integer = -1);
   var
     H: TAIChatHitArea;
   begin
@@ -464,6 +551,7 @@ var
     H.DocRect     := ADocRect;
     H.AttachIndex := AAttIdx;
     H.URL         := AURL;
+    H.ActionIndex := AActIdx;
     if HitCount >= Length(HitAreas) then
       SetLength(HitAreas, Max(8, Length(HitAreas) * 2));
     HitAreas[HitCount] := H;
@@ -540,6 +628,72 @@ begin
     AX := Layout.ContentRect.Left + MD_OUTER_PADDING;
     AY := Layout.BubbleRect.Top   + Pad - ScrollOffset;
     Para.Paint(ACanvas, AX, AY);
+  end;
+
+  // ── 2b. Action buttons (inside the bubble, under the content) ──────────
+  BgIsLightA := (FTheme.MD.BgColor and $00FFFFFF) = $00FFFFFF;
+  for I := 0 to High(Layout.ActionRects) do
+  begin
+    if I > High(AMsg.Actions) then Break;
+    ActScrR := TRectF.Create(
+      Layout.ActionRects[I].Left,
+      Layout.ActionRects[I].Top    - ScrollOffset,
+      Layout.ActionRects[I].Right,
+      Layout.ActionRects[I].Bottom - ScrollOffset);
+    case AMsg.Actions[I].Style of
+      TAIChatActionStyle.asPrimary:
+      begin
+        ActBg := $FF5B5BA6; ActFg := TAlphaColors.White; ActBorder := ActBg;
+        if I = AHovAction then ActBg := $FF4A4A90;
+      end;
+      TAIChatActionStyle.asDanger:
+      begin
+        if BgIsLightA then
+        begin
+          ActBg := $FFFDECEC; ActFg := $FFB3261E; ActBorder := $FFE8B4B0;
+          if I = AHovAction then ActBg := $FFF8D7D7;
+        end
+        else
+        begin
+          ActBg := $FF4A2A2A; ActFg := $FFFFB4AB; ActBorder := $FF7A3A3A;
+          if I = AHovAction then ActBg := $FF5A3333;
+        end;
+      end;
+    else
+      if BgIsLightA then
+      begin
+        ActBg := TAlphaColors.White; ActFg := $FF1A1A2E; ActBorder := $FFC8C8D0;
+        if I = AHovAction then ActBg := $FFF0F0F5;
+      end
+      else
+      begin
+        ActBg := $FF3A3A5A; ActFg := TAlphaColors.White; ActBorder := $FF55557A;
+        if I = AHovAction then ActBg := $FF4A4A6A;
+      end;
+    end;
+    if not AMsg.ActionsEnabled then
+    begin
+      // greyed: same shapes, half alpha
+      ActBg     := (ActBg and $00FFFFFF) or $60000000;
+      ActFg     := (ActFg and $00FFFFFF) or $80000000;
+      ActBorder := (ActBorder and $00FFFFFF) or $60000000;
+    end;
+    ActPaint           := TSkPaint.Create;
+    ActPaint.AntiAlias := True;
+    ActPaint.Style     := TSkPaintStyle.Fill;
+    ActPaint.Color     := ActBg;
+    ACanvas.DrawRoundRect(ActScrR, ACT_RADIUS, ACT_RADIUS, ActPaint);
+    ActPaint.Style       := TSkPaintStyle.Stroke;
+    ActPaint.StrokeWidth := 1;
+    ActPaint.Color       := ActBorder;
+    ACanvas.DrawRoundRect(ActScrR, ACT_RADIUS, ACT_RADIUS, ActPaint);
+    Para := MakePlainParagraph(AMsg.Actions[I].Caption, FTheme.MD.FontFamily,
+      ACT_FONT, ActFg, Max(1, ActScrR.Width - 2 * ACT_PAD_X + 4), TSkTextAlign.Center);
+    Para.Paint(ACanvas, ActScrR.Left + ACT_PAD_X - 2,
+      ActScrR.Top + (ACT_H - Para.Height) * 0.5);
+    if AMsg.ActionsEnabled then
+      AddHit(TChatHitKind.hkAction, Layout.ActionRects[I], -1,
+             AMsg.Actions[I].Id, I);
   end;
 
   // ── 3. Attachment chips ───────────────────────────────────────────────────
@@ -647,12 +801,8 @@ begin
     end;
   end;
 
-  // ── 4. Timestamp ─────────────────────────────────────────────────────────
-  TSStr  := FormatDateTime('hh:nn', AMsg.Timestamp);
-  if AMsg.Status = TChatMessageStatus.msStreaming then
-    TSStr := TSStr + '  •••';
-  if AMsg.Status = TChatMessageStatus.msError then
-    TSStr := TSStr + '  !';
+  // ── 4. Timestamp (+ footer) ─────────────────────────────────────────────────────────
+  TSStr   := FooterText(AMsg);
   TSAlign := TSkTextAlign.Left;
   if BubbleIsRight(AMsg.Role) then TSAlign := TSkTextAlign.Right;
 

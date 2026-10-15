@@ -29,14 +29,33 @@ type
 
   // ── Hit area — one clickable region inside a rendered message ────────────
 
-  TChatHitKind = (hkCopyButton, hkAttachment, hkLink, hkText);
+  TChatHitKind = (hkCopyButton, hkAttachment, hkLink, hkText, hkAction);
 
   TAIChatHitArea = record
     Kind        : TChatHitKind;
     DocRect     : TRectF;    // in document (pre-scroll) coordinates
     AttachIndex : Integer;   // hkAttachment: index in Message.Attachments
-    URL         : string;    // hkLink: href; hkCopyButton: message text
+    URL         : string;    // hkLink: href; hkCopyButton: message text; hkAction: action id
+    ActionIndex : Integer;   // hkAction: index in Message.Actions
   end;
+
+  // ── Action — a button rendered inside a message bubble ───────────────────
+  // The host decides what each one means (approve/deny a tool, retry, open a
+  // file, continue a stopped answer...). The view only paints them and raises
+  // OnMessageAction with the id. Actions are persisted with the message so a
+  // reloaded conversation shows what was offered; the host disables them
+  // (Message.ActionsEnabled := False) once they are no longer valid.
+
+  TAIChatActionStyle = (asDefault, asPrimary, asDanger);
+
+  TAIChatAction = record
+    Id      : string;              // what the host receives on click
+    Caption : string;              // what the user sees
+    Style   : TAIChatActionStyle;
+    class function Make(const AId, ACaption: string;
+      AStyle: TAIChatActionStyle = TAIChatActionStyle.asDefault): TAIChatAction; static;
+  end;
+  TAIChatActions = TArray<TAIChatAction>;
 
   // ── Attachment ────────────────────────────────────────────────────────────
 
@@ -85,11 +104,17 @@ type
     FTimestamp  : TDateTime;
     FStatus     : TChatMessageStatus;
     FAttachments: TAIChatAttachments;
+    FFooter     : string;          // small muted line under the bubble, next to the time
+    FActions    : TAIChatActions;  // buttons inside the bubble (see TAIChatAction)
+    FActionsEnabled: Boolean;      // False = painted greyed, clicks ignored
     // Layout cache — computed by renderer, not serialized
     FDocY           : Single;
     FMeasuredHeight : Single;
     FLayoutWidth    : Single;
     FHitAreas       : TArray<TAIChatHitArea>;
+    procedure SetFooter(const AValue: string);
+    procedure SetActions(const AValue: TAIChatActions);
+    procedure SetActionsEnabled(AValue: Boolean);
   public
     constructor Create(ARole: TChatRole; const AText: string = '');
     destructor Destroy; override;
@@ -105,6 +130,9 @@ type
     property Timestamp      : TDateTime          read FTimestamp       write FTimestamp;
     property Status         : TChatMessageStatus read FStatus          write FStatus;
     property Attachments    : TAIChatAttachments read FAttachments;
+    property Footer         : string             read FFooter          write SetFooter;
+    property Actions        : TAIChatActions     read FActions         write SetActions;
+    property ActionsEnabled : Boolean            read FActionsEnabled  write SetActionsEnabled;
     // Layout cache
     property DocY           : Single             read FDocY            write FDocY;
     property MeasuredHeight : Single             read FMeasuredHeight  write FMeasuredHeight;
@@ -386,6 +414,14 @@ end;
 
 // ── TAIChatMessage ────────────────────────────────────────────────────────────
 
+class function TAIChatAction.Make(const AId, ACaption: string;
+  AStyle: TAIChatActionStyle): TAIChatAction;
+begin
+  Result.Id      := AId;
+  Result.Caption := ACaption;
+  Result.Style   := AStyle;
+end;
+
 constructor TAIChatMessage.Create(ARole: TChatRole; const AText: string);
 begin
   inherited Create;
@@ -394,6 +430,7 @@ begin
   FTimestamp   := Now;
   FStatus      := TChatMessageStatus.msComplete;
   FAttachments := TAIChatAttachments.Create(True);
+  FActionsEnabled := True;
   FMeasuredHeight := -1;
   FLayoutWidth    := -1;
 end;
@@ -416,16 +453,52 @@ begin
   FLayoutWidth    := -1;
 end;
 
+procedure TAIChatMessage.SetFooter(const AValue: string);
+begin
+  if FFooter = AValue then Exit;
+  FFooter := AValue;
+  InvalidateLayout;
+end;
+
+procedure TAIChatMessage.SetActions(const AValue: TAIChatActions);
+begin
+  FActions := Copy(AValue);
+  FActionsEnabled := True;
+  InvalidateLayout;
+end;
+
+procedure TAIChatMessage.SetActionsEnabled(AValue: Boolean);
+begin
+  FActionsEnabled := AValue;   // no relayout: same geometry, other colors
+end;
+
 function TAIChatMessage.ToJSON(AIncludeAttachments: Boolean = False): TJSONObject;
 const
   ROLE_NAMES: array[TChatRole] of string = ('user', 'assistant', 'system');
   STATUS_NAMES: array[TChatMessageStatus] of string = ('complete', 'streaming', 'error');
+  ACTION_STYLE_NAMES: array[TAIChatActionStyle] of string = ('default', 'primary', 'danger');
 begin
   Result := TJSONObject.Create;
   Result.AddPair('role',      ROLE_NAMES[FRole]);
   Result.AddPair('text',      FText);
   Result.AddPair('timestamp', FloatToStr(FTimestamp));
   Result.AddPair('status',    STATUS_NAMES[FStatus]);
+  if FFooter <> '' then
+    Result.AddPair('footer', FFooter);
+  if Length(FActions) > 0 then
+  begin
+    var Arr := TJSONArray.Create;
+    for var A in FActions do
+    begin
+      var O := TJSONObject.Create;
+      O.AddPair('id', A.Id);
+      O.AddPair('caption', A.Caption);
+      O.AddPair('style', ACTION_STYLE_NAMES[A.Style]);
+      Arr.AddElement(O);
+    end;
+    Result.AddPair('actions', Arr);
+    Result.AddPair('actions_enabled', TJSONBool.Create(FActionsEnabled));
+  end;
   if AIncludeAttachments then
     Result.AddPair('attachments', FAttachments.ToJSON(True));
 end;
@@ -450,10 +523,29 @@ begin
   var ArrVal := AObj.GetValue('attachments');
   if ArrVal is TJSONArray then
     FAttachments.FromJSON(ArrVal as TJSONArray);
-
+  FFooter := AObj.GetValue<string>('footer', '');
+  FActions := nil;
+  FActionsEnabled := True;
+  var ActVal := AObj.GetValue('actions');
+  if ActVal is TJSONArray then
+  begin
+    for var V in (ActVal as TJSONArray) do
+      if V is TJSONObject then
+      begin
+        var O := V as TJSONObject;
+        var A: TAIChatAction;
+        A.Id      := O.GetValue<string>('id', '');
+        A.Caption := O.GetValue<string>('caption', A.Id);
+        var St := LowerCase(O.GetValue<string>('style', 'default'));
+        if St = 'primary' then A.Style := TAIChatActionStyle.asPrimary
+        else if St = 'danger' then A.Style := TAIChatActionStyle.asDanger
+        else A.Style := TAIChatActionStyle.asDefault;
+        FActions := FActions + [A];
+      end;
+    FActionsEnabled := AObj.GetValue<Boolean>('actions_enabled', True);
+  end;
   InvalidateLayout;
 end;
-
 // ── TAIChatTheme ──────────────────────────────────────────────────────────────
 
 class function TAIChatTheme.Default: TAIChatTheme;

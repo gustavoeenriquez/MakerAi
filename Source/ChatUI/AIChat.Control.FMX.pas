@@ -29,6 +29,10 @@ type
   TAIChatAttachEvent = procedure(Sender: TObject; AMsg: TAIChatMessage;
                          AAttach: TAIChatAttachment) of object;
   TAIChatMsgEvent    = procedure(Sender: TObject; AMsg: TAIChatMessage) of object;
+  // Click en un boton de accion dentro de una burbuja (ver TAIChatAction).
+  // AMsgIndex permite al host deshabilitar/quitar las acciones de ese mensaje.
+  TAIChatActionEvent = procedure(Sender: TObject; AMsg: TAIChatMessage;
+                         AMsgIndex: Integer; const AActionId: string) of object;
   // Peticion de leer texto en voz alta (seleccion o mensaje bajo el cursor).
   // El host implementa el TTS; el item solo aparece si el evento esta asignado.
   TAIChatSpeakEvent  = procedure(Sender: TObject; const AText: string) of object;
@@ -107,6 +111,7 @@ type
     FOnAttachOpen       : TAIChatAttachEvent;
     FOnMediaAction      : TAITextMDMediaActionEvent;
     FOnMessageCopy      : TAIChatMsgEvent;
+    FOnMessageAction    : TAIChatActionEvent;
     FOnConversationCopy : TNotifyEvent;
     FOnSpeakRequest     : TAIChatSpeakEvent;
 
@@ -184,6 +189,12 @@ type
     // Reemplaza el texto completo de un mensaje (placeholder de progreso → final)
     procedure SetMessageText(AMsgIndex: Integer; const AText: string);
     procedure FinishMessage(AMsgIndex: Integer);
+    // Pie discreto bajo la burbuja, junto a la hora ("completa · 1.200 tokens · 4,2 s")
+    procedure SetMessageFooter(AMsgIndex: Integer; const AFooter: string);
+    // Botones dentro de la burbuja; el clic llega por OnMessageAction con el id.
+    // SetMessageActions(idx, []) los quita; DisableMessageActions los deja en gris.
+    procedure SetMessageActions(AMsgIndex: Integer; const AActions: TAIChatActions);
+    procedure DisableMessageActions(AMsgIndex: Integer);
     procedure ClearMessages;
 
     // ── Navigation ───────────────────────────────────────────────────────────
@@ -232,6 +243,7 @@ type
     // la acción (abrir con el visor del sistema, diálogo Guardar como, etc.).
     property OnMediaAction           : TAITextMDMediaActionEvent read FOnMediaAction       write FOnMediaAction;
     property OnMessageCopy           : TAIChatMsgEvent      read FOnMessageCopy           write FOnMessageCopy;
+    property OnMessageAction         : TAIChatActionEvent   read FOnMessageAction         write FOnMessageAction;
     property OnConversationCopy      : TNotifyEvent         read FOnConversationCopy      write FOnConversationCopy;
     // "Escuchar en voz alta" del menu contextual: copia el texto al portapapeles
     // y entrega al host la seleccion (o el mensaje) para que lo lea con TTS.
@@ -830,6 +842,9 @@ begin
         TChatHitKind.hkLink:
           if Assigned(FOnLinkClick) then
             FOnLinkClick(Self, Msg, Hit.URL);
+        TChatHitKind.hkAction:
+          if Msg.ActionsEnabled and Assigned(FOnMessageAction) then
+            FOnMessageAction(Self, Msg, FList.HitTestIndex(DocX, DocY), Hit.URL);
       else
         // hkText — check code-block copy first, then start text selection drag
         begin
@@ -934,9 +949,9 @@ var
   TrackH      : Single;
   ThumbH      : Single;
   Scale       : Single;
+  NewHovAction: Integer;
 begin
   inherited;
-
   // Cancel long-press if finger/mouse drifted
   if FLongPressTimer.Enabled then
   begin
@@ -1056,7 +1071,7 @@ begin
   Idx            := FList.HitTestIndex(DocX, DocY);
   FHoveredMsg    := Idx;
   FHoveredAttach := -1;
-
+  NewHovAction   := -1;
   if Idx >= 0 then
   begin
     // Botones Open/Copy/Save de la card de medio (markdown): cursor de mano.
@@ -1077,8 +1092,10 @@ begin
     begin
       if Hit.Kind = TChatHitKind.hkAttachment then
         FHoveredAttach := Hit.AttachIndex;
+      if Hit.Kind = TChatHitKind.hkAction then
+        NewHovAction := Hit.ActionIndex;
       if Hit.Kind in [TChatHitKind.hkCopyButton, TChatHitKind.hkAttachment,
-                      TChatHitKind.hkLink] then
+                      TChatHitKind.hkLink, TChatHitKind.hkAction] then
         Cursor := crHandPoint
       else if Hit.Kind = TChatHitKind.hkText then
         Cursor := crIBeam
@@ -1092,6 +1109,11 @@ begin
     Cursor := crDefault;
 
   FList.SetHovered(FHoveredMsg, FHoveredAttach);
+  if NewHovAction <> FList.HoveredAction then
+  begin
+    FList.SetHoverAction(NewHovAction);
+    Redraw;
+  end;
 
   // Track hover over the message-level copy button for hover animation
   var NewHovCopy: Integer := -1;
@@ -1285,6 +1307,33 @@ end;
 procedure TAIChatView.FinishMessage(AMsgIndex: Integer);
 begin
   FList.FinishMessage(AMsgIndex);
+end;
+
+procedure TAIChatView.SetMessageFooter(AMsgIndex: Integer; const AFooter: string);
+begin
+  if (AMsgIndex < 0) or (AMsgIndex >= FList.Messages.Count) then Exit;
+  FList.Messages[AMsgIndex].Footer := AFooter;
+  FList.InvalidateMessage(AMsgIndex);
+  if FAutoScroll then ScrollToBottom else Redraw;
+end;
+
+procedure TAIChatView.SetMessageActions(AMsgIndex: Integer;
+  const AActions: TAIChatActions);
+begin
+  if (AMsgIndex < 0) or (AMsgIndex >= FList.Messages.Count) then Exit;
+  FList.Messages[AMsgIndex].Actions := AActions;
+  FList.SetHoverAction(-1);
+  FList.InvalidateMessage(AMsgIndex);
+  if FAutoScroll then ScrollToBottom else Redraw;
+end;
+
+procedure TAIChatView.DisableMessageActions(AMsgIndex: Integer);
+begin
+  if (AMsgIndex < 0) or (AMsgIndex >= FList.Messages.Count) then Exit;
+  FList.Messages[AMsgIndex].ActionsEnabled := False;
+  FList.SetHoverAction(-1);
+  Cursor := crDefault;
+  Redraw;
 end;
 
 procedure TAIChatView.ClearMessages;

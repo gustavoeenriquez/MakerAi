@@ -136,6 +136,38 @@ MAX_MEMO_HEIGHT = 200;
 MIN_FRAME_HEIGHT = 60;
 ```
 
+## TAIChatView (`AIChat.Control.FMX.pas`, Skia): pie y acciones por mensaje (2026-10-15)
+
+`TAIChatView` es el chat actual (lista virtual `AIChat.VirtualList`, pintor
+`AIChat.Bubble`, modelo `AIChat.Types`); `TChatList`/`TChatBubble` de arriba
+son los componentes antiguos. Cada `TAIChatMessage` tiene, ademas de texto y
+adjuntos:
+
+- **`Footer: string`** — linea pequeña y gris bajo la burbuja, a continuacion
+  de la hora (`hh:nn  ·  footer`); puede ocupar varias lineas. Para lo que
+  paso en el turno (tokens, duracion, herramientas) o el resultado de una
+  pregunta. `TAIChatView.SetMessageFooter(idx, texto)`.
+- **`Actions: TAIChatActions`** — botones DENTRO de la burbuja, bajo el
+  contenido: `TAIChatAction.Make(id, caption, asDefault|asPrimary|asDanger)`;
+  se envuelven en filas si no caben. Clic → `OnMessageAction(Sender, Msg,
+  MsgIndex, ActionId)`; el host decide que significa (aprobar/rechazar una
+  tool, continuar, abrir...). `SetMessageActions(idx, [...])` los pone,
+  `SetMessageActions(idx, [])` los quita, `DisableMessageActions(idx)` los deja
+  en gris sin clic (`ActionsEnabled`), que es lo que se hace cuando la pregunta
+  ya se contesto: la burbuja queda como registro.
+- Persisten en el JSON del mensaje (`footer`, `actions[{id,caption,style}]`,
+  `actions_enabled`), asi que una conversacion recargada muestra que se
+  ofrecio y como quedo.
+
+Como esta hecho: `TAIChatBubbleLayout` lleva `ActionRects` (doc coords) y
+`FooterH`; `ComputeLayout` suma `ACT_T_GAP` + filas de `ACT_H` al alto de la
+burbuja y mide el pie con `MeasurePlainH`; `Paint` pinta los botones
+(colores segun claro/oscuro por `MD.BgColor`, hover por `AHovAction`) y
+registra un `hkAction` por boton en `HitAreas` (`URL` = id, `ActionIndex`);
+el control resuelve el clic en `MouseDown` y el hover/cursor en `MouseMove`
+(`TAIChatVirtualList.SetHoverAction`). Regla de la unidad: cualquier variable
+Skia (`ISkPaint`, `ISkParagraph`) va en la seccion `var` externa de `Paint`.
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for source directory overview and [../../CLAUDE.md](../../CLAUDE.md) for project overview.
