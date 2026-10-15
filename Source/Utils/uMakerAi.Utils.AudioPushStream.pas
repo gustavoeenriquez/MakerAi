@@ -78,6 +78,24 @@ type
   { Forward declaration }
   TAudioPushStream = class;
 
+{$IFDEF MSWINDOWS}
+  // Alimenta los buffers de waveOut cuando winmm señala WOM_DONE (CALLBACK_EVENT).
+  // Antes se hacia DENTRO del callback (CALLBACK_FUNCTION), donde waveOutWrite y
+  // waveOutUnprepareHeader estan prohibidos: el callback corre con el candado
+  // interno de winmm y, si a la vez el hilo principal estaba en PushPCMData
+  // (FLock + waveOutWrite) o en Flush (waveOutReset), cada uno esperaba al otro
+  // y la aplicacion entera se colgaba (llamada de Andrea, 2026-10-15).
+  TWaveFeederThread = class(TThread)
+  private
+    FOwner: TAudioPushStream;
+    FEvent: THandle;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AOwner: TAudioPushStream; AEvent: THandle);
+  end;
+{$ENDIF}
+
 {$IFDEF ANDROID}
   TAudioWriterThread = class(TThread)
   private
@@ -113,6 +131,9 @@ type
 {$IFDEF MSWINDOWS}
     FDevice : HWAVEOUT;
     FBuffers: array[0..MAX_BUFFERS - 1] of TWaveBuffer;
+    FDoneEvent: THandle;            // lo señala winmm por cada buffer terminado
+    FFeeder   : TWaveFeederThread;  // vuelve a llenar buffers fuera del contexto de winmm
+    procedure StopFeeder;
     procedure AllocateBuffers;
     procedure FreeBuffers;
 {$ENDIF}
@@ -312,14 +333,26 @@ begin
 end;
 
 { ============================================================================
-  Windows: callback de waveOut
+  Windows: hilo alimentador (CALLBACK_EVENT)
   ============================================================================ }
 {$IFDEF MSWINDOWS}
-procedure WaveOutCallback(hwo: HWAVEOUT; uMsg: UINT; dwInstance: DWORD_PTR;
-  dwParam1, dwParam2: DWORD_PTR); stdcall;
+constructor TWaveFeederThread.Create(AOwner: TAudioPushStream; AEvent: THandle);
 begin
-  if uMsg = WOM_DONE then
-    TAudioPushStream(dwInstance).InternalFeedBuffers;
+  inherited Create(False);
+  FOwner := AOwner;
+  FEvent := AEvent;
+  FreeOnTerminate := False;
+end;
+
+procedure TWaveFeederThread.Execute;
+begin
+  while not Terminated do
+  begin
+    // El tope de 100 ms solo es red de seguridad: el evento llega por buffer
+    WaitForSingleObject(FEvent, 100);
+    if Terminated then Break;
+    FOwner.InternalFeedBuffers;
+  end;
 end;
 {$ENDIF}
 
@@ -419,7 +452,9 @@ begin
   FPendingSize  := 0;
   FOutputDevice := -1;
 {$IFDEF MSWINDOWS}
-  FDevice := 0;
+  FDevice    := 0;
+  FDoneEvent := 0;
+  FFeeder    := nil;
 {$ENDIF}
 {$IFDEF ANDROID}
   FAudioTrack   := nil;
@@ -494,14 +529,21 @@ begin
     else
       DeviceID := UINT(FOutputDevice);
 
+    // Auto-reset: cada WOM_DONE despierta al alimentador una vez
+    FDoneEvent := CreateEvent(nil, False, False, nil);
     Res := waveOutOpen(@FDevice, DeviceID, @WinFmt,
-      DWORD_PTR(@WaveOutCallback), DWORD_PTR(Self),
-      CALLBACK_FUNCTION);
+      DWORD_PTR(FDoneEvent), 0, CALLBACK_EVENT);
 
     if Res <> MMSYSERR_NOERROR then
+    begin
+      CloseHandle(FDoneEvent);
+      FDoneEvent := 0;
+      FDevice := 0;
       raise Exception.CreateFmt('waveOutOpen fallo con error %d', [Res]);
+    end;
 
     AllocateBuffers;
+    FFeeder := TWaveFeederThread.Create(Self, FDoneEvent);
 {$ENDIF}
 
 {$IFDEF ANDROID}
@@ -570,6 +612,8 @@ begin
     FLock.Leave;
   end;
 {$IFDEF MSWINDOWS}
+  // El alimentador se para SIN FLock cogido: puede estar esperandolo
+  StopFeeder;
   // Mismo motivo que en Flush: waveOutReset nunca con FLock cogido
   if FDevice <> 0 then
     waveOutReset(FDevice);
@@ -584,6 +628,11 @@ begin
           waveOutUnprepareHeader(FDevice, @FBuffers[I].Header, SizeOf(TWaveHdr));
       waveOutClose(FDevice);
       FDevice := 0;
+    end;
+    if FDoneEvent <> 0 then
+    begin
+      CloseHandle(FDoneEvent);
+      FDoneEvent := 0;
     end;
     FreeBuffers;
 {$ENDIF}
@@ -720,7 +769,7 @@ begin
   end;
 {$IFDEF MSWINDOWS}
   // waveOutReset FUERA del candado: dispara WOM_DONE por cada buffer en vuelo
-  // y el callback (InternalFeedBuffers) toma FLock. Con el candado cogido se
+  // y el alimentador (InternalFeedBuffers) toma FLock. Con el candado cogido se
   // bloqueaba la aplicacion entera (corte de voz en Andrea, 2026-10-15).
   if FDevice <> 0 then
     waveOutReset(FDevice);
@@ -764,6 +813,16 @@ end;
 { --- Windows: gestion de buffers --- }
 
 {$IFDEF MSWINDOWS}
+procedure TAudioPushStream.StopFeeder;
+begin
+  if FFeeder = nil then Exit;
+  FFeeder.Terminate;
+  if FDoneEvent <> 0 then
+    SetEvent(FDoneEvent);
+  FFeeder.WaitFor;
+  FreeAndNil(FFeeder);
+end;
+
 procedure TAudioPushStream.AllocateBuffers;
 var
   I: Integer;
