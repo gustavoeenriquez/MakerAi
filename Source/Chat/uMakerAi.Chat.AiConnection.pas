@@ -253,6 +253,11 @@ type
     property Completion_tokens: integer read FCompletion_tokens write SetCompletion_tokens;
     property Total_tokens: integer read FTotal_tokens write SetTotal_tokens;
     property Cost_usd: Double read FCost_usd write FCost_usd;
+    // El chat interno del driver activo (nil antes del primer uso). Sus
+    // contadores (Prompt_tokens, Cost_usd...) acumulan TODAS las rondas de un
+    // bucle de tools; los de la conexion solo suman el mensaje final de cada
+    // turno. Quien mida un turno entero debe leer estos.
+    property Chat: TAiChat read FChat;
 
     Property OnReceiveThinking: TAiChatOnDataEvent read FOnReceiveThinking write SetOnReceiveThinking;
     property OnReceiveData: TAiChatOnDataEvent read FOnReceiveData write SetOnReceiveData;
