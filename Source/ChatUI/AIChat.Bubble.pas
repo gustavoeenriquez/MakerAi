@@ -32,6 +32,7 @@ type
     CopyBtnRect : TRectF;   // doc coords
     ActionRects : TArray<TRectF>;  // one per Message.Actions, doc coords (inside bubble)
     FooterH     : Single;   // height of the time + footer line
+    StepsRect   : TRectF;   // steps block, doc coords (empty = no steps)
   end;
 
   TAIChatBubblePainter = class
@@ -61,7 +62,12 @@ type
                 out ARects: TArray<TRectF>): Single;
     function  FooterText(AMsg: TAIChatMessage): string;
     function  ActionCaptionWidth(const ACaption: string): Single;
+    function  StepsBlockHeight(AMsg: TAIChatMessage): Single;
+    function  MakeLineParagraph(const AText, AFamily: string; ASize: Single;
+                AColor: TAlphaColor; AWidth: Single; AAlign: TSkTextAlign): ISkParagraph;
+    function  StepIcon(const AStep: TAIChatStep): string;
   public
+    class function FormatMs(AMs: Int64): string;
     constructor Create(const ATheme: TAIChatTheme);
     destructor  Destroy; override;
 
@@ -118,6 +124,11 @@ const
   ACT_T_GAP     = 10;    // gap between content and the first action row
   ACT_FONT      = 13;
   ACT_RADIUS    = 8;
+  // Steps block (under the content, above the actions)
+  STEP_H        = 22;
+  STEP_T_GAP    = 8;
+  STEP_FONT     = 12.5;
+  STEP_INDENT   = 18;    // rows indented under the header
 
 { ── Internal helpers ─────────────────────────────────────────────────────── }
 
@@ -288,6 +299,65 @@ begin
   Result := Y + ACT_H;
 end;
 
+function TAIChatBubblePainter.MakeLineParagraph(const AText, AFamily: string;
+  ASize: Single; AColor: TAlphaColor; AWidth: Single;
+  AAlign: TSkTextAlign): ISkParagraph;
+var
+  PStyle  : ISkParagraphStyle;
+  TStyle  : ISkTextStyle;
+  Builder : ISkParagraphBuilder;
+  Para    : ISkParagraph;
+begin
+  // One line, trimmed with an ellipsis: for rows of fixed height
+  PStyle := TSkParagraphStyle.Create;
+  PStyle.TextAlign := AAlign;
+  PStyle.MaxLines  := 1;
+  PStyle.Ellipsis  := '…';
+  TStyle := TSkTextStyle.Create;
+  TStyle.Color        := AColor;
+  TStyle.FontSize     := ASize;
+  TStyle.FontFamilies := [AFamily, 'Segoe UI', 'Segoe UI Symbol', 'Arial'];
+  TStyle.FontStyle    := TSkFontStyle.Normal;
+  PStyle.TextStyle    := TStyle;
+  Builder := TSkParagraphBuilder.Create(PStyle);
+  Builder.PushStyle(TStyle);
+  Builder.AddText(AText);
+  Builder.Pop;
+  Para := Builder.Build;
+  Para.Layout(Max(1, AWidth));
+  Result := Para;
+end;
+
+class function TAIChatBubblePainter.FormatMs(AMs: Int64): string;
+begin
+  if AMs <= 0 then Exit('');
+  if AMs < 1000 then
+    Result := IntToStr(AMs) + ' ms'
+  else if AMs < 60000 then
+    Result := FormatFloat('0.0', AMs / 1000) + ' s'
+  else
+    Result := Format('%d min %d s', [AMs div 60000, (AMs mod 60000) div 1000]);
+end;
+
+function TAIChatBubblePainter.StepIcon(const AStep: TAIChatStep): string;
+begin
+  case AStep.Status of
+    TAIChatStepStatus.ssRunning: Result := '⟳';
+    TAIChatStepStatus.ssError  : Result := '✗';
+  else                           Result := '✓';
+  end;
+end;
+
+// Header row always; one row per step when expanded and there is more than
+// one (a single step is shown in the header itself, nothing to expand).
+function TAIChatBubblePainter.StepsBlockHeight(AMsg: TAIChatMessage): Single;
+begin
+  if Length(AMsg.Steps) = 0 then Exit(0);
+  Result := STEP_H;
+  if AMsg.StepsExpanded and (Length(AMsg.Steps) > 1) then
+    Result := Result + Length(AMsg.Steps) * STEP_H;
+end;
+
 { ── Constructor / Destructor ─────────────────────────────────────────────── }
 
 constructor TAIChatBubblePainter.Create(const ATheme: TAIChatTheme);
@@ -370,7 +440,7 @@ var
   ContentH, AttH, BubbleH  : Single;
   SlotH, Pad, ChipH, CW    : Single;
   ACount, CpR              : Integer;
-  ActH, FooterH            : Single;
+  ActH, FooterH, StepsH    : Single;
   ActRects                 : TArray<TRectF>;
   I                        : Integer;
 begin
@@ -427,7 +497,10 @@ begin
             AttachRowsHeight(ACount, CHIP_W, ChipH, CHIP_GAP,
                              BubbleW - 2 * Pad);
 
-  // Actions (inside the bubble, under the content)
+  // Steps block (inside the bubble, under the content)
+  StepsH := StepsBlockHeight(AMsg);
+  if StepsH > 0 then StepsH := StepsH + STEP_T_GAP;
+  // Actions (inside the bubble, under the content and the steps)
   ActH := ActionRowsHeight(AMsg, ContentW, ActRects);
   if ActH > 0 then ActH := ActH + ACT_T_GAP;
   // Time + footer line (may wrap when the footer is long)
@@ -435,7 +508,7 @@ begin
   if AMsg.Footer <> '' then
     FooterH := Max(TIMESTAMP_H,
       MeasurePlainH(FooterText(AMsg), BubbleW, FTheme.TimestampFontSize));
-  BubbleH := Pad + ContentH + ActH + Pad;
+  BubbleH := Pad + ContentH + StepsH + ActH + Pad;
   SlotH   := BubbleH + AttH + TIMESTAMP_GAP + FooterH + FTheme.BubbleMarginV;
 
   R.SlotRect   := TRectF.Create(0, ADocY, ATotalWidth, ADocY + SlotH);
@@ -461,13 +534,18 @@ begin
   R.ChipW := CHIP_W;
   R.ChipH := ChipH;
   R.FooterH := FooterH;
+  if StepsH > 0 then
+    R.StepsRect := TRectF.Create(ContentLeft, ADocY + Pad + ContentH + STEP_T_GAP,
+                                 ContentRight, ADocY + Pad + ContentH + StepsH)
+  else
+    R.StepsRect := TRectF.Empty;
   SetLength(R.ActionRects, Length(ActRects));
   for I := 0 to High(ActRects) do
     R.ActionRects[I] := TRectF.Create(
       ContentLeft + ActRects[I].Left,
-      ADocY + Pad + ContentH + ACT_T_GAP + ActRects[I].Top,
+      ADocY + Pad + ContentH + StepsH + ACT_T_GAP + ActRects[I].Top,
       ContentLeft + ActRects[I].Right,
-      ADocY + Pad + ContentH + ACT_T_GAP + ActRects[I].Bottom);
+      ADocY + Pad + ContentH + StepsH + ACT_T_GAP + ActRects[I].Bottom);
   R.CopyBtnRect := TRectF.Create(
     BubbleRight - COPY_PAD - COPY_SZ,
     ADocY + COPY_PAD,
@@ -542,6 +620,14 @@ var
   ActBg, ActFg,
   ActBorder    : TAlphaColor;
   BgIsLightA   : Boolean;
+  StepY        : Single;
+  StepHdr      : string;
+  StepRun      : TAIChatStep;
+  StepMuted,
+  StepText     : TAlphaColor;
+  StepRows     : Boolean;
+  StepDoneN    : Integer;
+  StepHdrMs    : Int64;
   procedure AddHit(AKind: TChatHitKind; const ADocRect: TRectF;
     AAttIdx: Integer = -1; const AURL: string = ''; AActIdx: Integer = -1);
   var
@@ -628,6 +714,73 @@ begin
     AX := Layout.ContentRect.Left + MD_OUTER_PADDING;
     AY := Layout.BubbleRect.Top   + Pad - ScrollOffset;
     Para.Paint(ACanvas, AX, AY);
+  end;
+
+  // ── 2a. Steps block (inside the bubble, under the content) ─────────────
+  if (Length(AMsg.Steps) > 0) and not Layout.StepsRect.IsEmpty then
+  begin
+    StepMuted := FTheme.TimestampColor;
+    StepText  := (BubbleTextColor(AMsg.Role) and $00FFFFFF) or $B0000000;
+    StepRows  := AMsg.StepsExpanded and (Length(AMsg.Steps) > 1);
+    StepY     := Layout.StepsRect.Top - ScrollOffset;
+    // Header: the running step while something runs; the summary when done
+    StepHdrMs := 0;
+    if AMsg.RunningStep(StepRun) then
+    begin
+      StepHdr := '⟳  ' + StepRun.Caption;
+      if Length(AMsg.Steps) > 1 then
+      begin
+        StepDoneN := 0;
+        for I := 0 to High(AMsg.Steps) do
+          if AMsg.Steps[I].Status <> TAIChatStepStatus.ssRunning then Inc(StepDoneN);
+        StepHdr := StepHdr + Format('  (%d de %d)', [StepDoneN + 1, Length(AMsg.Steps)]);
+      end;
+    end
+    else if Length(AMsg.Steps) = 1 then
+    begin
+      StepHdr := StepIcon(AMsg.Steps[0]) + '  ' + AMsg.Steps[0].Caption;
+      if AMsg.Steps[0].Detail <> '' then StepHdr := StepHdr + ' — ' + AMsg.Steps[0].Detail;
+      StepHdrMs := AMsg.Steps[0].Ms;
+    end
+    else
+    begin
+      if StepRows then StepHdr := '▾  ' else StepHdr := '▸  ';
+      StepHdr := StepHdr + Format('%d pasos', [Length(AMsg.Steps)]);
+      StepHdrMs := AMsg.StepsTotalMs;
+    end;
+    // La duracion va aparte, a la derecha: asi la elipsis del texto largo no
+    // se la come
+    Para := MakeLineParagraph(StepHdr, FTheme.MD.FontFamily, STEP_FONT, StepMuted,
+      Max(1, Layout.StepsRect.Width - IfThen(StepHdrMs > 0, 60, 0)), TSkTextAlign.Left);
+    Para.Paint(ACanvas, Layout.StepsRect.Left, StepY + (STEP_H - Para.Height) * 0.5);
+    if StepHdrMs > 0 then
+    begin
+      Para := MakeLineParagraph(FormatMs(StepHdrMs), FTheme.MD.FontFamily,
+        STEP_FONT, StepMuted, 56, TSkTextAlign.Right);
+      Para.Paint(ACanvas, Layout.StepsRect.Right - 56, StepY + (STEP_H - Para.Height) * 0.5);
+    end;
+    if Length(AMsg.Steps) > 1 then
+      AddHit(TChatHitKind.hkSteps,
+        TRectF.Create(Layout.StepsRect.Left, Layout.StepsRect.Top,
+                      Layout.StepsRect.Right, Layout.StepsRect.Top + STEP_H));
+    if StepRows then
+      for I := 0 to High(AMsg.Steps) do
+      begin
+        StepY := StepY + STEP_H;
+        StepHdr := StepIcon(AMsg.Steps[I]) + '  ' + AMsg.Steps[I].Caption;
+        if AMsg.Steps[I].Detail <> '' then StepHdr := StepHdr + ' — ' + AMsg.Steps[I].Detail;
+        Para := MakeLineParagraph(StepHdr, FTheme.MD.FontFamily, STEP_FONT, StepText,
+          Max(1, Layout.StepsRect.Width - STEP_INDENT - 56), TSkTextAlign.Left);
+        Para.Paint(ACanvas, Layout.StepsRect.Left + STEP_INDENT,
+          StepY + (STEP_H - Para.Height) * 0.5);
+        if AMsg.Steps[I].Ms > 0 then
+        begin
+          Para := MakeLineParagraph(FormatMs(AMsg.Steps[I].Ms), FTheme.MD.FontFamily,
+            STEP_FONT, StepMuted, 54, TSkTextAlign.Right);
+          Para.Paint(ACanvas, Layout.StepsRect.Right - 54,
+            StepY + (STEP_H - Para.Height) * 0.5);
+        end;
+      end;
   end;
 
   // ── 2b. Action buttons (inside the bubble, under the content) ──────────

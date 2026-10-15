@@ -195,6 +195,11 @@ type
     // SetMessageActions(idx, []) los quita; DisableMessageActions los deja en gris.
     procedure SetMessageActions(AMsgIndex: Integer; const AActions: TAIChatActions);
     procedure DisableMessageActions(AMsgIndex: Integer);
+    // Pasos de la tarea (bloque plegable dentro de la burbuja): AddStep al
+    // empezar algo, FinishStep al acabar (id '' = el ultimo en marcha).
+    procedure AddStep(AMsgIndex: Integer; const AId, ACaption: string);
+    procedure FinishStep(AMsgIndex: Integer; const AId: string; AOk: Boolean;
+      AMs: Int64; const ADetail: string = '');
     procedure ClearMessages;
 
     // ── Navigation ───────────────────────────────────────────────────────────
@@ -845,6 +850,14 @@ begin
         TChatHitKind.hkAction:
           if Msg.ActionsEnabled and Assigned(FOnMessageAction) then
             FOnMessageAction(Self, Msg, FList.HitTestIndex(DocX, DocY), Hit.URL);
+        TChatHitKind.hkSteps:
+        begin
+          // Plegar / desplegar el bloque de pasos (cambia el alto del mensaje)
+          Msg.StepsExpanded := not Msg.StepsExpanded;
+          FList.InvalidateMessage(FList.HitTestIndex(DocX, DocY));
+          ClampScroll;
+          Redraw;
+        end;
       else
         // hkText — check code-block copy first, then start text selection drag
         begin
@@ -1095,7 +1108,8 @@ begin
       if Hit.Kind = TChatHitKind.hkAction then
         NewHovAction := Hit.ActionIndex;
       if Hit.Kind in [TChatHitKind.hkCopyButton, TChatHitKind.hkAttachment,
-                      TChatHitKind.hkLink, TChatHitKind.hkAction] then
+                      TChatHitKind.hkLink, TChatHitKind.hkAction,
+                      TChatHitKind.hkSteps] then
         Cursor := crHandPoint
       else if Hit.Kind = TChatHitKind.hkText then
         Cursor := crIBeam
@@ -1323,6 +1337,23 @@ begin
   if (AMsgIndex < 0) or (AMsgIndex >= FList.Messages.Count) then Exit;
   FList.Messages[AMsgIndex].Actions := AActions;
   FList.SetHoverAction(-1);
+  FList.InvalidateMessage(AMsgIndex);
+  if FAutoScroll then ScrollToBottom else Redraw;
+end;
+
+procedure TAIChatView.AddStep(AMsgIndex: Integer; const AId, ACaption: string);
+begin
+  if (AMsgIndex < 0) or (AMsgIndex >= FList.Messages.Count) then Exit;
+  FList.Messages[AMsgIndex].AddStep(AId, ACaption);
+  FList.InvalidateMessage(AMsgIndex);
+  if FAutoScroll then ScrollToBottom else Redraw;
+end;
+
+procedure TAIChatView.FinishStep(AMsgIndex: Integer; const AId: string;
+  AOk: Boolean; AMs: Int64; const ADetail: string);
+begin
+  if (AMsgIndex < 0) or (AMsgIndex >= FList.Messages.Count) then Exit;
+  if not FList.Messages[AMsgIndex].FinishStep(AId, AOk, AMs, ADetail) then Exit;
   FList.InvalidateMessage(AMsgIndex);
   if FAutoScroll then ScrollToBottom else Redraw;
 end;

@@ -29,7 +29,7 @@ type
 
   // ── Hit area — one clickable region inside a rendered message ────────────
 
-  TChatHitKind = (hkCopyButton, hkAttachment, hkLink, hkText, hkAction);
+  TChatHitKind = (hkCopyButton, hkAttachment, hkLink, hkText, hkAction, hkSteps);
 
   TAIChatHitArea = record
     Kind        : TChatHitKind;
@@ -56,6 +56,24 @@ type
       AStyle: TAIChatActionStyle = TAIChatActionStyle.asDefault): TAIChatAction; static;
   end;
   TAIChatActions = TArray<TAIChatAction>;
+
+  // ── Step — one thing the assistant did while producing the message ──────
+  // (a tool call, a sub-task...). Painted as a compact block under the
+  // content: while something runs, "⟳ caption"; when done, "N pasos · 4,2 s"
+  // that expands on click to one row per step with its duration. The host
+  // feeds them from its stream (AddStep / FinishStep); they persist with the
+  // message so a reloaded conversation still tells what happened.
+
+  TAIChatStepStatus = (ssRunning, ssDone, ssError);
+
+  TAIChatStep = record
+    Id      : string;   // host's handle to finish it later
+    Caption : string;   // "Escribir el archivo informe.txt en Documentos"
+    Detail  : string;   // optional note: "denegada", "resultado a spill"...
+    Status  : TAIChatStepStatus;
+    Ms      : Int64;    // duration once finished
+  end;
+  TAIChatSteps = TArray<TAIChatStep>;
 
   // ── Attachment ────────────────────────────────────────────────────────────
 
@@ -107,6 +125,8 @@ type
     FFooter     : string;          // small muted line under the bubble, next to the time
     FActions    : TAIChatActions;  // buttons inside the bubble (see TAIChatAction)
     FActionsEnabled: Boolean;      // False = painted greyed, clicks ignored
+    FSteps      : TAIChatSteps;    // what happened while producing the message
+    FStepsExpanded: Boolean;       // the steps block shows one row per step
     // Layout cache — computed by renderer, not serialized
     FDocY           : Single;
     FMeasuredHeight : Single;
@@ -115,6 +135,8 @@ type
     procedure SetFooter(const AValue: string);
     procedure SetActions(const AValue: TAIChatActions);
     procedure SetActionsEnabled(AValue: Boolean);
+    procedure SetSteps(const AValue: TAIChatSteps);
+    procedure SetStepsExpanded(AValue: Boolean);
   public
     constructor Create(ARole: TChatRole; const AText: string = '');
     destructor Destroy; override;
@@ -133,6 +155,15 @@ type
     property Footer         : string             read FFooter          write SetFooter;
     property Actions        : TAIChatActions     read FActions         write SetActions;
     property ActionsEnabled : Boolean            read FActionsEnabled  write SetActionsEnabled;
+    property Steps          : TAIChatSteps       read FSteps           write SetSteps;
+    property StepsExpanded  : Boolean            read FStepsExpanded   write SetStepsExpanded;
+    // Steps API: AddStep returns the index; FinishStep closes the last running
+    // step with that id ('' = the last running one) and returns False if none.
+    function  AddStep(const AId, ACaption: string): Integer;
+    function  FinishStep(const AId: string; AOk: Boolean; AMs: Int64;
+                const ADetail: string = ''): Boolean;
+    function  RunningStep(out AStep: TAIChatStep): Boolean;
+    function  StepsTotalMs: Int64;
     // Layout cache
     property DocY           : Single             read FDocY            write FDocY;
     property MeasuredHeight : Single             read FMeasuredHeight  write FMeasuredHeight;
@@ -472,11 +503,79 @@ begin
   FActionsEnabled := AValue;   // no relayout: same geometry, other colors
 end;
 
+procedure TAIChatMessage.SetSteps(const AValue: TAIChatSteps);
+begin
+  FSteps := Copy(AValue);
+  InvalidateLayout;
+end;
+
+procedure TAIChatMessage.SetStepsExpanded(AValue: Boolean);
+begin
+  if FStepsExpanded = AValue then Exit;
+  FStepsExpanded := AValue;
+  InvalidateLayout;
+end;
+
+function TAIChatMessage.AddStep(const AId, ACaption: string): Integer;
+var
+  S: TAIChatStep;
+begin
+  S.Id      := AId;
+  S.Caption := ACaption;
+  S.Detail  := '';
+  S.Status  := TAIChatStepStatus.ssRunning;
+  S.Ms      := 0;
+  FSteps := FSteps + [S];
+  Result := High(FSteps);
+  InvalidateLayout;
+end;
+
+function TAIChatMessage.FinishStep(const AId: string; AOk: Boolean; AMs: Int64;
+  const ADetail: string): Boolean;
+var
+  I: Integer;
+begin
+  for I := High(FSteps) downto 0 do
+    if (FSteps[I].Status = TAIChatStepStatus.ssRunning) and
+       ((AId = '') or (FSteps[I].Id = AId)) then
+    begin
+      if AOk then FSteps[I].Status := TAIChatStepStatus.ssDone
+      else        FSteps[I].Status := TAIChatStepStatus.ssError;
+      FSteps[I].Ms     := AMs;
+      FSteps[I].Detail := ADetail;
+      InvalidateLayout;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+function TAIChatMessage.RunningStep(out AStep: TAIChatStep): Boolean;
+var
+  I: Integer;
+begin
+  for I := High(FSteps) downto 0 do
+    if FSteps[I].Status = TAIChatStepStatus.ssRunning then
+    begin
+      AStep := FSteps[I];
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+function TAIChatMessage.StepsTotalMs: Int64;
+var
+  S: TAIChatStep;
+begin
+  Result := 0;
+  for S in FSteps do Result := Result + S.Ms;
+end;
+
 function TAIChatMessage.ToJSON(AIncludeAttachments: Boolean = False): TJSONObject;
 const
   ROLE_NAMES: array[TChatRole] of string = ('user', 'assistant', 'system');
   STATUS_NAMES: array[TChatMessageStatus] of string = ('complete', 'streaming', 'error');
   ACTION_STYLE_NAMES: array[TAIChatActionStyle] of string = ('default', 'primary', 'danger');
+  STEP_STATUS_NAMES: array[TAIChatStepStatus] of string = ('running', 'done', 'error');
 begin
   Result := TJSONObject.Create;
   Result.AddPair('role',      ROLE_NAMES[FRole]);
@@ -498,6 +597,22 @@ begin
     end;
     Result.AddPair('actions', Arr);
     Result.AddPair('actions_enabled', TJSONBool.Create(FActionsEnabled));
+  end;
+  if Length(FSteps) > 0 then
+  begin
+    var Arr := TJSONArray.Create;
+    for var S in FSteps do
+    begin
+      var O := TJSONObject.Create;
+      O.AddPair('id', S.Id);
+      O.AddPair('caption', S.Caption);
+      if S.Detail <> '' then O.AddPair('detail', S.Detail);
+      O.AddPair('status', STEP_STATUS_NAMES[S.Status]);
+      O.AddPair('ms', TJSONNumber.Create(S.Ms));
+      Arr.AddElement(O);
+    end;
+    Result.AddPair('steps', Arr);
+    if FStepsExpanded then Result.AddPair('steps_expanded', TJSONBool.Create(True));
   end;
   if AIncludeAttachments then
     Result.AddPair('attachments', FAttachments.ToJSON(True));
@@ -544,6 +659,24 @@ begin
       end;
     FActionsEnabled := AObj.GetValue<Boolean>('actions_enabled', True);
   end;
+  FSteps := nil;
+  var StVal := AObj.GetValue('steps');
+  if StVal is TJSONArray then
+    for var V in (StVal as TJSONArray) do
+      if V is TJSONObject then
+      begin
+        var O := V as TJSONObject;
+        var S: TAIChatStep;
+        S.Id      := O.GetValue<string>('id', '');
+        S.Caption := O.GetValue<string>('caption', '');
+        S.Detail  := O.GetValue<string>('detail', '');
+        S.Ms      := O.GetValue<Int64>('ms', 0);
+        var Sn := LowerCase(O.GetValue<string>('status', 'done'));
+        if Sn = 'error' then S.Status := TAIChatStepStatus.ssError
+        else S.Status := TAIChatStepStatus.ssDone;   // a reloaded "running" step is over
+        FSteps := FSteps + [S];
+      end;
+  FStepsExpanded := AObj.GetValue<Boolean>('steps_expanded', False);
   InvalidateLayout;
 end;
 // ── TAIChatTheme ──────────────────────────────────────────────────────────────

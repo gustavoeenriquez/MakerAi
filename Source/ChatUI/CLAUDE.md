@@ -155,13 +155,28 @@ adjuntos:
   `SetMessageActions(idx, [])` los quita, `DisableMessageActions(idx)` los deja
   en gris sin clic (`ActionsEnabled`), que es lo que se hace cuando la pregunta
   ya se contesto: la burbuja queda como registro.
+- **`Steps: TAIChatSteps`** — lo que hizo mientras producia el mensaje (una
+  tool, una subtarea): `AddStep(idx, id, caption)` al empezar y
+  `FinishStep(idx, id, ok, ms, detail)` al acabar (id '' = el ultimo en
+  marcha). Bloque bajo el contenido, encima de las acciones: mientras algo
+  corre, "⟳ caption (2 de 3)"; con un solo paso, "✓ caption" y su duracion a
+  la derecha; con varios, "▸ N pasos · total" que se pliega/despliega al clic
+  (`StepsExpanded`, hit `hkSteps`) a una fila por paso con icono (✓ ✗ ⟳),
+  caption — detail y duracion. `FormatMs`: ms por debajo del segundo, "x,x s"
+  hasta el minuto, "m min s s" despues. Filas de una linea con elipsis
+  (`MakeLineParagraph`: `MaxLines=1`, `Ellipsis`).
 - Persisten en el JSON del mensaje (`footer`, `actions[{id,caption,style}]`,
-  `actions_enabled`), asi que una conversacion recargada muestra que se
-  ofrecio y como quedo.
+  `actions_enabled`, `steps[{id,caption,detail,status,ms}]`,
+  `steps_expanded`), asi que una conversacion recargada muestra que se
+  ofrecio, que se hizo y como quedo (un paso guardado "running" se carga
+  como done: ya paso).
 
-Como esta hecho: `TAIChatBubbleLayout` lleva `ActionRects` (doc coords) y
-`FooterH`; `ComputeLayout` suma `ACT_T_GAP` + filas de `ACT_H` al alto de la
-burbuja y mide el pie con `MeasurePlainH`; `Paint` pinta los botones
+Como esta hecho: `TAIChatBubbleLayout` lleva `ActionRects` (doc coords),
+`StepsRect` y `FooterH`; `ComputeLayout` suma el bloque de pasos
+(`StepsBlockHeight` + `STEP_T_GAP`) y `ACT_T_GAP` + filas de `ACT_H` al alto
+de la burbuja y mide el pie con `MeasurePlainH`; los bloques van DEBAJO del
+contenido a proposito: asi `RendererY` (seleccion de texto, copiar codigo) no
+cambia; `Paint` pinta los botones
 (colores segun claro/oscuro por `MD.BgColor`, hover por `AHovAction`) y
 registra un `hkAction` por boton en `HitAreas` (`URL` = id, `ActionIndex`);
 el control resuelve el clic en `MouseDown` y el hover/cursor en `MouseMove`
