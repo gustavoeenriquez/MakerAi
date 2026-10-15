@@ -84,6 +84,7 @@ type
     // tiraba y en streaming Cached_tokens quedaba siempre a cero — sin el no
     // hay forma de saber si la cache del prefijo esta sirviendo o no.
     FStreamCachedTok:    Integer;
+    FStreamCostUsd:      Double;     // usage.cost_usd del ultimo chunk de usage (lo cobrado por el turno)
     procedure ResetSessionId;
     procedure HandleStreamDone;
     procedure ParseAndAccumulateMediaParts(AMediaParts: TJSONArray);
@@ -650,6 +651,7 @@ begin
   FStreamComplTok  := 0;
   FStreamTotalTok  := 0;
   FStreamCachedTok := 0;
+  FStreamCostUsd   := 0;
   MKLog('SEND', 'URL=' + Url + ' Model=' + Model +
     ' Async=' + BoolToStr(Asynchronous, True) +
     ' Tools=' + BoolToStr(Tool_Active, True));
@@ -818,6 +820,8 @@ begin
       LFakeDetails.AddPair('cached_tokens', TJSONNumber.Create(FStreamCachedTok));
       LFakeUsage.AddPair('prompt_tokens_details', LFakeDetails);
     end;
+    if FStreamCostUsd > 0 then
+      LFakeUsage.AddPair('cost_usd', TJSONNumber.Create(FStreamCostUsd));
     LFakeJson.AddPair('usage', LFakeUsage);
 
     LFakeMsg := TJSONObject.Create;
@@ -941,6 +945,7 @@ begin
           if LUsage.TryGetValue<TJSONObject>('prompt_tokens_details', LDetails) and
              Assigned(LDetails) then
             LDetails.TryGetValue<Integer>('cached_tokens', FStreamCachedTok);
+          LUsage.TryGetValue<Double>('cost_usd', FStreamCostUsd);
         end;
 
         if LChunk.TryGetValue<TJSONObject>('mk_progress', LProgress) then

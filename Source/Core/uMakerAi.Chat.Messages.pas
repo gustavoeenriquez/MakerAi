@@ -121,6 +121,7 @@ Type
     FFinishReason: String;
     FCached_tokens: Integer;
     FCacheWrite_tokens: Integer;
+    FCost_usd: Double;   // lo cobrado por esta respuesta (usage.cost_usd del broker); 0 si el proveedor no lo dice
     [JSONMarshalled(False)]
     FLock: TCriticalSection;
     procedure SetRole(const Value: String);
@@ -181,6 +182,7 @@ Type
     Property Thinking_tokens: Integer read FThinking_tokens write SetThinking_tokens;
     Property Cached_tokens: Integer read FCached_tokens write SetCached_tokens;
     Property Cache_write_tokens: Integer read FCacheWrite_tokens write SetCache_write_tokens;
+    Property Cost_usd: Double read FCost_usd write FCost_usd;
 
     Property Model: String read FModel write SetModel;
     Property ToolCallId: String read FToolCallId write SetToolCallId;

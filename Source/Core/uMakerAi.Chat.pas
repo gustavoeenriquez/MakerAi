@@ -482,6 +482,11 @@ type
     // por ronda igual que FPrompt_tokens, para que un bucle de tool calling no
     // pierda las rondas intermedias. Ver TAiClaudeChat.ParseChat.
     FCache_write_tokens: Integer;
+    // Dinero acumulado de la sesion (usage.cost_usd que manda el broker de
+    // MakerAI en cada respuesta: lo cobrado, con cache y descuentos ya
+    // aplicados). Los proveedores que no lo mandan lo dejan en 0. Se acumula
+    // por ronda como los tokens, asi que un bucle de tools lo suma entero.
+    FCost_usd: Double;
     FCacheContext: Boolean; // flag portable: cachear el contexto estable (system + tools)
 
     // Devuelve los tipos de archivo que el modelo acepta nativamente (derivado de ModelConfig.ModelCaps)
@@ -647,6 +652,7 @@ type
     Property Stop: string read FStop write SetStop;
     Property Cached_tokens: Integer read FCached_tokens write SetCached_tokens;
     Property Cache_write_tokens: Integer read FCache_write_tokens write FCache_write_tokens;
+    Property Cost_usd: Double read FCost_usd write FCost_usd;
     // Flag portable de prompt caching. Activa el cacheo del contexto estable
     // (system + tools). En Claude habilita los breakpoints cache_control; en los
     // providers con caching automatico del servidor (OpenAI, DeepSeek, Kimi, Groq,
@@ -2529,6 +2535,7 @@ begin
   FThinking_tokens := 0;
   FCached_tokens := 0;
   FCache_write_tokens := 0;
+  FCost_usd := 0;
 end;
 
 function TAiChat.NewMessage(aPrompt, aRole: String): TAiChatMessage;
@@ -3161,6 +3168,7 @@ Var
   uso: TJSonObject;
   aPrompt_tokens, aCompletion_tokens, aTotal_tokens, aCached_tokens: Integer;
   aReasoning_tokens: Integer;
+  aCost_usd: Double;
   Role, Respuesta, sReasoning: String;
   ToolMsg, AskMsg: TAiChatMessage;
   // Msg: TAiChatMessage;
@@ -3209,12 +3217,15 @@ begin
   aCompletion_tokens := 0;
   aTotal_tokens := 0;
   aReasoning_tokens := 0;
+  aCost_usd := 0;
   if Assigned(jObj.GetValue('model')) then
     ModelVersion := jObj.GetValue('model').Value;
   uso := jObj.GetValue('usage') as TJSonObject;
   if Assigned(uso) then
   begin
     aPrompt_tokens := uso.GetValue<Integer>('prompt_tokens');
+    // Dinero cobrado por esta llamada (solo el broker de MakerAI lo manda)
+    uso.TryGetValue<Double>('cost_usd', aCost_usd);
     aCompletion_tokens := uso.GetValue<Integer>('completion_tokens');
     aTotal_tokens := uso.GetValue<Integer>('total_tokens');
     // Tokens servidos desde cache (prompt caching automatico de los providers
@@ -3350,6 +3361,7 @@ begin
   FCompletion_tokens := FCompletion_tokens + aCompletion_tokens;
   FTotal_tokens := FTotal_tokens + aTotal_tokens;
   FThinking_tokens := FThinking_tokens + aReasoning_tokens;
+  FCost_usd := FCost_usd + aCost_usd;
 
   if sToolCalls.IsEmpty then // Si es una respuesta normal adiciona los datos al ResMsg
   Begin
@@ -3362,6 +3374,7 @@ begin
     ResMsg.Total_tokens := ResMsg.Total_tokens + aTotal_tokens;
     ResMsg.Cached_tokens := ResMsg.Cached_tokens + aCached_tokens;
     ResMsg.Thinking_tokens := ResMsg.Thinking_tokens + aReasoning_tokens;
+    ResMsg.Cost_usd := ResMsg.Cost_usd + aCost_usd;
     DoProcessResponse(AskMsg, ResMsg, Respuesta);
   End
   Else // Si tiene toolcall lo adiciona y ejecuta nuevamente el run para obtener la respuesta

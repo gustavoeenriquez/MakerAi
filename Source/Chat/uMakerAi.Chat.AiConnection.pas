@@ -67,6 +67,7 @@ type
     FPrompt_tokens: integer;
     FCompletion_tokens: integer;
     FTotal_tokens: integer;
+    FCost_usd: Double;   // dinero cobrado por el broker (usage.cost_usd), acumulado como los tokens
 
     // Eventos
     FOnReceiveData: TAiChatOnDataEvent;
@@ -251,6 +252,7 @@ type
     property Prompt_tokens: integer read FPrompt_tokens write SetPrompt_tokens;
     property Completion_tokens: integer read FCompletion_tokens write SetCompletion_tokens;
     property Total_tokens: integer read FTotal_tokens write SetTotal_tokens;
+    property Cost_usd: Double read FCost_usd write FCost_usd;
 
     Property OnReceiveThinking: TAiChatOnDataEvent read FOnReceiveThinking write SetOnReceiveThinking;
     property OnReceiveData: TAiChatOnDataEvent read FOnReceiveData write SetOnReceiveData;
@@ -1227,6 +1229,7 @@ begin
   FPrompt_tokens := 0;
   FCompletion_tokens := 0;
   FTotal_tokens := 0;
+  FCost_usd := 0;
   if Assigned(FChat) then
     FChat.ResetTokenCounters;
 end;
@@ -1273,6 +1276,7 @@ begin
     Prompt_tokens := Prompt_tokens + aMsg.Prompt_tokens;
     Completion_tokens := Completion_tokens + aMsg.Completion_tokens;
     Total_tokens := Total_tokens + aMsg.Total_tokens;
+    FCost_usd := FCost_usd + aMsg.Cost_usd;
   end;
 
   If Assigned(FOnReceiveDataEnd) then
