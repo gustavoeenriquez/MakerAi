@@ -53,6 +53,7 @@ type
     FRagId:         string;
     FStateless:     Boolean;
     FVadMode:       string;  // '' | 'server' | 'disabled'
+    FExtraSessionJson: string;  // objeto JSON cuyos pares se añaden al mensaje de sesion (p.ej. {"local_agent":true})
     // Eventos VAD simplificados (sin parametros, propios de este protocolo)
     FOnSpeechStart:   TNotifyEvent;
     FOnSpeechEnd:     TNotifyEvent;
@@ -111,6 +112,10 @@ type
     //             threshold 0.5, silence 500ms, prefix 300ms). El cliente NO
     //             debe enviar type:commit — el servidor lo dispara solo.
     property VadMode:      string  read FVadMode  write FVadMode;
+    // Pares extra del mensaje "session" (un objeto JSON): lo que el servidor
+    // entienda y este driver no modele aun (p.ej. {"local_agent":true,
+    // "local_conversation":"voz"} para que atienda el equipo del usuario).
+    property ExtraSessionJson: string read FExtraSessionJson write FExtraSessionJson;
     // OnAssistantText / OnAudioChunk / OnAudioDone se heredan de
     // TAiRealtimeVoiceBase (published en la base)
     // Eventos VAD del servidor (speech_start / speech_end de OpenAI)
@@ -221,6 +226,17 @@ begin
     if FRagId        <> '' then JMsg.AddPair('rag_id',       FRagId);
     if FStateless then JMsg.AddPair('stateless', TJSONBool.Create(True));
     if FVadMode      <> '' then JMsg.AddPair('vad',          FVadMode);
+    if Trim(FExtraSessionJson) <> '' then
+    begin
+      var JExtra := TJSONObject.ParseJSONValue(FExtraSessionJson) as TJSONObject;
+      if Assigned(JExtra) then
+      try
+        for var Par in JExtra do
+          JMsg.AddPair(Par.JsonString.Value, Par.JsonValue.Clone as TJSONValue);
+      finally
+        JExtra.Free;
+      end;
+    end;
     MkLog('SESSION_JSON ' + JMsg.ToJSON);
     FWebSocket.SendText(JMsg.ToJSON);
   finally
