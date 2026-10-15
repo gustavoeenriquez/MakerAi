@@ -102,6 +102,7 @@ type
     FIsPlaying  : Boolean;
     FIsStarted  : Boolean;
     FIsPaused   : Boolean;
+    FResetting: Boolean;   // waveOutReset en curso: el callback no toca los buffers
     FLock       : TCriticalSection;
     FPendingPCM : TBytes;
     FPendingSize: Integer;
@@ -563,14 +564,21 @@ begin
   try
     if not FIsStarted then
       Exit;
-
     FIsPlaying := False;
-    FIsStarted := False;
-
+    FIsStarted := False;   // el callback sale sin tocar nada a partir de aqui
+  finally
+    FLock.Leave;
+  end;
+{$IFDEF MSWINDOWS}
+  // Mismo motivo que en Flush: waveOutReset nunca con FLock cogido
+  if FDevice <> 0 then
+    waveOutReset(FDevice);
+{$ENDIF}
+  FLock.Enter;
+  try
 {$IFDEF MSWINDOWS}
     if FDevice <> 0 then
     begin
-      waveOutReset(FDevice);
       for I := 0 to MAX_BUFFERS - 1 do
         if (FBuffers[I].Header.dwFlags and WHDR_PREPARED) <> 0 then
           waveOutUnprepareHeader(FDevice, @FBuffers[I].Header, SizeOf(TWaveHdr));
@@ -579,7 +587,6 @@ begin
     end;
     FreeBuffers;
 {$ENDIF}
-
 {$IFDEF ANDROID}
     FStopWriter := True;
     if Assigned(FDataReady) then
@@ -704,23 +711,33 @@ begin
   try
     if not FIsStarted then
       Exit;
-
     FPendingSize := 0;
-
+{$IFDEF MSWINDOWS}
+    FResetting := True;
+{$ENDIF}
+  finally
+    FLock.Leave;
+  end;
+{$IFDEF MSWINDOWS}
+  // waveOutReset FUERA del candado: dispara WOM_DONE por cada buffer en vuelo
+  // y el callback (InternalFeedBuffers) toma FLock. Con el candado cogido se
+  // bloqueaba la aplicacion entera (corte de voz en Andrea, 2026-10-15).
+  if FDevice <> 0 then
+    waveOutReset(FDevice);
+{$ENDIF}
+  FLock.Enter;
+  try
 {$IFDEF MSWINDOWS}
     if FDevice <> 0 then
-    begin
-      waveOutReset(FDevice);
       for I := 0 to MAX_BUFFERS - 1 do
       begin
         if (FBuffers[I].Header.dwFlags and WHDR_PREPARED) <> 0 then
           waveOutUnprepareHeader(FDevice, @FBuffers[I].Header, SizeOf(TWaveHdr));
         FBuffers[I].Header.dwFlags := 0;
       end;
-    end;
     FIsPaused := False;
+    FResetting := False;
 {$ENDIF}
-
 {$IFDEF ANDROID}
     if Assigned(FAudioTrack) then
     begin
@@ -894,9 +911,8 @@ begin
 {$IFDEF MSWINDOWS}
   FLock.Enter;
   try
-    if (not FIsStarted) or (FDevice = 0) or FIsPaused then
+    if (not FIsStarted) or (FDevice = 0) or FIsPaused or FResetting then
       Exit;
-
     for I := 0 to MAX_BUFFERS - 1 do
     begin
       if (FBuffers[I].Header.dwFlags and WHDR_DONE) <> 0 then
