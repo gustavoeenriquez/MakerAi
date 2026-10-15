@@ -127,6 +127,8 @@ type
     FActionsEnabled: Boolean;      // False = painted greyed, clicks ignored
     FSteps      : TAIChatSteps;    // what happened while producing the message
     FStepsExpanded: Boolean;       // the steps block shows one row per step
+    FMergeBase  : string;          // text before the last merged segment
+    FSealed     : Boolean;         // nothing else merges into this message
     // Layout cache — computed by renderer, not serialized
     FDocY           : Single;
     FMeasuredHeight : Single;
@@ -157,6 +159,12 @@ type
     property ActionsEnabled : Boolean            read FActionsEnabled  write SetActionsEnabled;
     property Steps          : TAIChatSteps       read FSteps           write SetSteps;
     property StepsExpanded  : Boolean            read FStepsExpanded   write SetStepsExpanded;
+    // Merge of consecutive messages (TAIChatView.MergeConsecutive), not serialized:
+    // MergeBase = text that was there before the last merged segment (separator
+    // included), so SetText replaces only the new segment. Sealed = never merge
+    // anything else into this message.
+    property MergeBase      : string             read FMergeBase       write FMergeBase;
+    property Sealed         : Boolean            read FSealed          write FSealed;
     // Steps API: AddStep returns the index; FinishStep closes the last running
     // step with that id ('' = the last running one) and returns False if none.
     function  AddStep(const AId, ACaption: string): Integer;

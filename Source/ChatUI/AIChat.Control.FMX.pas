@@ -64,6 +64,7 @@ type
     FScrollOffset : Single;
     FAutoScroll   : Boolean;
     FThemeDark    : Boolean;
+    FMergeConsecutive: Boolean;
 
     // Hover state
     FHoveredMsg    : Integer;
@@ -175,6 +176,9 @@ type
     procedure KeyDown  (var AKey: Word; var AKeyChar: WideChar;
                         AShift: TShiftState); override;
 
+    function  TryMerge(ARole: TChatRole; const AText: string;
+                AStreaming: Boolean): TAIChatMessage;
+
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -200,6 +204,9 @@ type
     procedure AddStep(AMsgIndex: Integer; const AId, ACaption: string);
     procedure FinishStep(AMsgIndex: Integer; const AId: string; AOk: Boolean;
       AMs: Int64; const ADetail: string = '');
+    // Con MergeConsecutive, lo siguiente del mismo rol ira en burbuja nueva
+    // (p. ej. una peticion de permiso que no debe mezclarse con la respuesta).
+    procedure SealLastMessage;
     procedure ClearMessages;
 
     // ── Navigation ───────────────────────────────────────────────────────────
@@ -234,6 +241,13 @@ type
     property ThemeDark          : Boolean      read FThemeDark           write SetThemeDark          default False;
     property PersistAttachments : Boolean      read GetPersistAttachments write SetPersistAttachments default False;
     property AutoScroll         : Boolean      read FAutoScroll           write FAutoScroll           default True;
+    // Un mensaje de usuario o asistente que llega justo despues de otro del
+    // mismo rol se une a esa burbuja (separado por un parrafo) en vez de abrir
+    // otra. No se une a una burbuja con botones, a una sellada
+    // (SealLastMessage) ni a mensajes de sistema; los indices siguen valiendo:
+    // AddMessage/BeginAssistantMessage devuelven la burbuja unida, que es
+    // MessageCount - 1, y SetMessageText sobre ella cambia solo el tramo nuevo.
+    property MergeConsecutive   : Boolean      read FMergeConsecutive     write FMergeConsecutive     default True;
     property InboundColor       : TAlphaColor  read FInboundColor         write SetInboundColor       default TAlphaColors.LightGray;
     property OutboundColor      : TAlphaColor  read FOutboundColor        write SetOutboundColor      default TAlphaColors.LightGreen;
     property AttachmentPopupMenu: TPopupMenu   read FAttachmentPopupMenu  write FAttachmentPopupMenu;
@@ -304,6 +318,7 @@ begin
   FThemeDark    := False;
   FScrollOffset := 0;
   FAutoScroll   := True;
+  FMergeConsecutive := True;
   FHoveredMsg   := -1;
   FHoveredAttach:= -1;
   FSBDragging   := False;
@@ -1248,15 +1263,50 @@ end;
 
 { ── Public message API ───────────────────────────────────────────────────── }
 
+// Une el mensaje nuevo al ultimo si es del mismo rol; nil si toca burbuja nueva
+function TAIChatView.TryMerge(ARole: TChatRole; const AText: string;
+  AStreaming: Boolean): TAIChatMessage;
+var
+  Idx : Integer;
+  Last: TAIChatMessage;
+  Base: string;
+begin
+  Result := nil;
+  if not FMergeConsecutive then Exit;
+  if not (ARole in [TChatRole.crUser, TChatRole.crAssistant]) then Exit;
+  Idx := FList.Messages.Count - 1;
+  if Idx < 0 then Exit;
+  Last := FList.Messages[Idx];
+  if (Last.Role <> ARole) or Last.Sealed or (Length(Last.Actions) > 0) then Exit;
+
+  Base := Last.Text.TrimRight;
+  if Base <> '' then Base := Base + #10#10;
+  Last.MergeBase := Base;
+  Last.Footer    := '';          // el pie del tramo anterior ya no describe la burbuja
+  Last.Timestamp := Now;
+  if AStreaming then
+    Last.Status := TChatMessageStatus.msStreaming;
+  FList.SetText(Idx, AText);     // = Base + AText
+  Result := Last;
+end;
+
 function TAIChatView.AddMessage(ARole: TChatRole;
   const AText: string): TAIChatMessage;
 begin
-  Result := FList.AddMessage(ARole, AText);
+  Result := TryMerge(ARole, AText, False);
+  if Result = nil then
+    Result := FList.AddMessage(ARole, AText);
 end;
 
 function TAIChatView.AddUserMessage(const AText: string): TAIChatMessage;
 begin
-  Result := FList.AddMessage(TChatRole.crUser, AText);
+  Result := AddMessage(TChatRole.crUser, AText);
+end;
+
+procedure TAIChatView.SealLastMessage;
+begin
+  if FList.Messages.Count > 0 then
+    FList.Messages[FList.Messages.Count - 1].Sealed := True;
 end;
 
 function TAIChatView.AddUserMessage(const AText: string;
@@ -1266,7 +1316,11 @@ var
   F  : TAiMediaFile;
   Att: TAIChatAttachment;
 begin
-  Result := FList.AddMessage(TChatRole.crUser, AText);
+  // Con adjuntos va siempre en burbuja propia: los adjuntos son de la burbuja
+  if Assigned(AMediaFiles) and (AMediaFiles.Count > 0) then
+    Result := FList.AddMessage(TChatRole.crUser, AText)
+  else
+    Result := AddMessage(TChatRole.crUser, AText);
   if Assigned(AMediaFiles) and (AMediaFiles.Count > 0) then
   begin
     for I := 0 to AMediaFiles.Count - 1 do
@@ -1304,8 +1358,10 @@ end;
 function TAIChatView.BeginAssistantMessage: TAIChatMessage;
 begin
   FAutoScroll := True;
-  Result := FList.AddMessage(TChatRole.crAssistant, '',
-                              TChatMessageStatus.msStreaming);
+  Result := TryMerge(TChatRole.crAssistant, '', True);
+  if Result = nil then
+    Result := FList.AddMessage(TChatRole.crAssistant, '',
+                                TChatMessageStatus.msStreaming);
 end;
 
 procedure TAIChatView.AppendToken(AMsgIndex: Integer; const AToken: string);

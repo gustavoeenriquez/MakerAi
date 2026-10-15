@@ -87,7 +87,20 @@ type
   // Wire AActivate to TAIVoiceMonitor.Active in the host form.
   TAIChatMicToggleEvent = procedure(Sender: TObject; AActivate: Boolean) of object;
 
-  TAIChatBtnKind = (bkNone, bkMenu, bkSend, bkMic);
+  // State of the call button (voice call with a realtime component).
+  // The input moves to csConnecting on click; the host reports the rest
+  // with the NotifyCall* methods from its realtime event handlers.
+  TAIChatCallState = (csOff, csConnecting, csListening, csUserTalking, csAITalking);
+
+  // Fired when the user clicks the call button: AActivate=True = start the call
+  // (connect the realtime component), False = hang up (disconnect it).
+  TAIChatCallToggleEvent = procedure(Sender: TObject; AActivate: Boolean) of object;
+
+  // During a call the mic button mutes/unmutes: AMuted=True = stop sending the
+  // microphone to the realtime component (the call stays open).
+  TAIChatCallMuteEvent = procedure(Sender: TObject; AMuted: Boolean) of object;
+
+  TAIChatBtnKind = (bkNone, bkMenu, bkSend, bkMic, bkCall);
 
   TAIChatChipState = record
     Attachment     : TAIChatAttachment;  // owned
@@ -138,6 +151,7 @@ type
     FBtnMenuRect : TRectF;
     FBtnSendRect : TRectF;
     FBtnMicRect  : TRectF;   // Empty when MicVisible=False
+    FBtnCallRect : TRectF;   // Empty when CallVisible=False
 
     // ── Interaction state ──────────────────────────────────────────────────
     FHovBtn      : TAIChatBtnKind;
@@ -153,6 +167,13 @@ type
     FMicState        : TAIChatVoiceState;
     FSoundLevel      : Int64;
     FMaxSoundSeen    : Int64;
+
+    // ── Call state ─────────────────────────────────────────────────────────
+    FCallVisible     : Boolean;
+    FCallState       : TAIChatCallState;
+    FCallMuted       : Boolean;
+    FOnCallToggle    : TAIChatCallToggleEvent;
+    FOnCallMute      : TAIChatCallMuteEvent;
 
     // ── Properties backing ─────────────────────────────────────────────────
     FBusy             : Boolean;
@@ -188,7 +209,9 @@ type
                              const AGlyph: string; ABg, AFg: TAlphaColor;
                              AFontSz: Single);
     procedure DrawMicIcon(const ACanvas: ISkCanvas; const ARect: TRectF);
+    procedure DrawCallButton(const ACanvas: ISkCanvas);
     procedure DrawSoundBar(const ACanvas: ISkCanvas);
+    function  RightButtonsLeft: Single;
 
     // ── Layout ─────────────────────────────────────────────────────────────
     procedure ComputeLayout;
@@ -230,6 +253,9 @@ type
     // ── Voice helpers ──────────────────────────────────────────────────────
     procedure SetThemeDark(AValue: Boolean);
     procedure SetMicVisible(AValue: Boolean);
+    procedure SetCallVisible(AValue: Boolean);
+    procedure SetCallState(AValue: TAIChatCallState);
+    procedure SetCallMuted(AValue: Boolean);
     procedure SetUseSoundMonitor(AValue: Boolean);
     function  MicStateColor: TAlphaColor;
 
@@ -273,7 +299,24 @@ type
     procedure NotifyVoiceError;
     procedure NotifyVoiceAITalking(AIsAITalking: Boolean);
 
-    property MicState : TAIChatVoiceState read FMicState;
+    // ── Call notifications (wire to the realtime component) ─────────────────
+    // Call them from the main thread (TThread.Queue from the realtime events):
+    //   OnConnected / OnSessionReady -> NotifyCallConnected
+    //   OnDisconnected, OnError, colgar -> NotifyCallEnded
+    //   OnSpeechStarted / OnSpeechStopped -> NotifyCallUserSpeaking(True/False)
+    //   audio de la respuesta empieza / el reproductor se vacia
+    //                               -> NotifyCallAITalking(True/False)
+    procedure NotifyCallConnecting;
+    procedure NotifyCallConnected;
+    procedure NotifyCallEnded;
+    procedure NotifyCallUserSpeaking(ASpeaking: Boolean);
+    procedure NotifyCallAITalking(ATalking: Boolean);
+
+    property MicState  : TAIChatVoiceState read FMicState;
+    // csOff = no call; anything else = in a call (the button hangs up)
+    property CallState : TAIChatCallState  read FCallState write SetCallState;
+    // Mic muted during the call (the mic button toggles it; reset on NotifyCallEnded)
+    property CallMuted : Boolean           read FCallMuted write SetCallMuted;
 
   published
     property Busy            : Boolean read FBusy            write SetBusy            default False;
@@ -283,12 +326,17 @@ type
     property PromptText      : string  read GetPromptText    write SetPromptText;
     property MicVisible      : Boolean read FMicVisible      write SetMicVisible      default False;
     property UseSoundMonitor : Boolean read FUseSoundMonitor write SetUseSoundMonitor default False;
+    // Call button, left of the mic (or of send when the mic is hidden)
+    property CallVisible     : Boolean read FCallVisible     write SetCallVisible     default False;
     property ImagesVisible   : Boolean read FImagesVisible   write FImagesVisible     default True;
     property SoundVisible    : Boolean read FSoundVisible    write FSoundVisible      default True;
     property VoiceMonitor    : TAIVoiceMonitor      read FVoiceMonitor     write SetVoiceMonitor;
     property OnSendEvent     : TAIChatInputSendEvent read FOnSend  write FOnSend;
     property OnCancel        : TNotifyEvent          read FOnCancel write FOnCancel;
     property OnMicToggle     : TAIChatMicToggleEvent read FOnMicToggle write FOnMicToggle;
+    property OnCallToggle    : TAIChatCallToggleEvent read FOnCallToggle write FOnCallToggle;
+    // In a call the mic button stops dictating and mutes/unmutes the call instead
+    property OnCallMute      : TAIChatCallMuteEvent   read FOnCallMute   write FOnCallMute;
     property OnTranscriptText: TChatTranscriptEvent  read FOnTranscriptText write FOnTranscriptText;
   end;
 
@@ -555,6 +603,8 @@ begin
   FMicState        := TAIChatVoiceState.vsOff;
   FSoundLevel      := 0;
   FMaxSoundSeen    := 0;
+  FCallVisible     := False;
+  FCallState       := TAIChatCallState.csOff;
   FTempStore       := TAIChatTempStore.Create;
   Height           := ACI_MIN_MEMO + ACI_BOTTOM_H;
   HitTest          := True;
@@ -686,6 +736,21 @@ begin
   else
     FBtnMicRect := TRectF.Empty;
 
+  // Call button (left of mic, or of send when the mic is hidden)
+  if FCallVisible then
+  begin
+    if FMicVisible then
+      FBtnCallRect := TRectF.Create(
+        FBtnMicRect.Left - ACI_MIC_GAP - ACI_BTN_SZ, CY - ACI_BTN_SZ / 2,
+        FBtnMicRect.Left - ACI_MIC_GAP,              CY + ACI_BTN_SZ / 2)
+    else
+      FBtnCallRect := TRectF.Create(
+        FBtnSendRect.Left - ACI_MIC_GAP - ACI_BTN_SZ, CY - ACI_BTN_SZ / 2,
+        FBtnSendRect.Left - ACI_MIC_GAP,              CY + ACI_BTN_SZ / 2);
+  end
+  else
+    FBtnCallRect := TRectF.Empty;
+
   // + button (leftmost, always)
   FBtnMenuRect := TRectF.Create(
     ACI_PAD,               CY - ACI_BTN_SZ / 2,
@@ -784,6 +849,84 @@ begin
                    TPointF.Create(CX + W*0.15, CY + W*0.30), Paint);
 end;
 
+function TAIChatInput.RightButtonsLeft: Single;
+begin
+  if not FBtnCallRect.IsEmpty then
+    Result := FBtnCallRect.Left
+  else if not FBtnMicRect.IsEmpty then
+    Result := FBtnMicRect.Left
+  else
+    Result := FBtnSendRect.Left;
+end;
+
+// Telefono: auricular (icono "call" de Material, 24x24) — gris para llamar;
+// en llamada, fondo rojo y auricular girado (colgar) con un aro del estado:
+// naranja conectando, verde hablas tu, azul habla la IA.
+procedure TAIChatInput.DrawCallButton(const ACanvas: ISkCanvas);
+const
+  PHONE_SVG = 'M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 ' +
+              '1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 ' +
+              '1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 ' +
+              '2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z';
+var
+  Paint   : ISkPaint;
+  Bg, Fg, Ring: TAlphaColor;
+  InCall  : Boolean;
+  R       : TRectF;
+  S       : Single;
+begin
+  if FBtnCallRect.IsEmpty then Exit;
+  InCall := FCallState <> TAIChatCallState.csOff;
+  Paint           := TSkPaint.Create;
+  Paint.AntiAlias := True;
+
+  if InCall then
+  begin
+    Bg := IfThen(FPressBtn = TAIChatBtnKind.bkCall, CLR_STOP_PRE, CLR_STOP);
+    Fg := CLR_WHITE;
+    case FCallState of
+      TAIChatCallState.csConnecting : Ring := CLR_MIC_PREP;
+      TAIChatCallState.csUserTalking: Ring := CLR_MIC_LIST;
+      TAIChatCallState.csAITalking  : Ring := CLR_MIC_AI;
+    else
+      Ring := 0;
+    end;
+    if Ring <> 0 then
+    begin
+      R := FBtnCallRect;
+      R.Inflate(2.5, 2.5);
+      Paint.Style       := TSkPaintStyle.Stroke;
+      Paint.StrokeWidth := 2;
+      Paint.Color       := Ring;
+      ACanvas.DrawOval(R, Paint);
+    end;
+  end
+  else
+  begin
+    if FPressBtn = TAIChatBtnKind.bkCall then Bg := FPalette.BtnPre
+    else if FHovBtn = TAIChatBtnKind.bkCall then Bg := FPalette.BtnHov
+    else Bg := FPalette.Btn;
+    Fg := FPalette.Gray;
+  end;
+
+  Paint.Style := TSkPaintStyle.Fill;
+  Paint.Color := Bg;
+  ACanvas.DrawOval(FBtnCallRect, Paint);
+
+  S := FBtnCallRect.Width * 0.55 / 24;
+  ACanvas.Save;
+  try
+    ACanvas.Translate(FBtnCallRect.CenterPoint.X, FBtnCallRect.CenterPoint.Y);
+    if InCall then ACanvas.Rotate(135);
+    ACanvas.Scale(S, S);
+    ACanvas.Translate(-12, -12);
+    Paint.Color := Fg;
+    ACanvas.DrawPath(TSkPath.Create(PHONE_SVG), Paint);
+  finally
+    ACanvas.Restore;
+  end;
+end;
+
 procedure TAIChatInput.DrawSoundBar(const ACanvas: ISkCanvas);
 var
   Paint     : ISkPaint;
@@ -792,9 +935,9 @@ var
   Level     : Single;
   BarL, BarR, BarCY: Single;
 begin
-  // Bar spans the horizontal space between + button and mic button
+  // Bar spans the horizontal space between + button and the right-hand buttons
   BarL  := FBtnMenuRect.Right + 8;
-  BarR  := FBtnMicRect.Left  - 8;
+  BarR  := RightButtonsLeft  - 8;
   if BarR <= BarL + 10 then Exit;
 
   BarCY := Height - ACI_BOTTOM_H / 2;
@@ -990,10 +1133,18 @@ begin
   end;
   PaintCircleBtn(ACanvas, FBtnSendRect, SendGlyph, SendBg, SendFg, 16);
 
+  // Call button (when CallVisible)
+  if FCallVisible then
+    DrawCallButton(ACanvas);
+
   // Mic button (when MicVisible)
   if FMicVisible and not FBtnMicRect.IsEmpty then
   begin
-    MicBg := MicStateColor;
+    // En llamada el boton es "silenciar": verde = te escucha, rojo tachado = no
+    if FCallState <> TAIChatCallState.csOff then
+      MicBg := IfThen(FCallMuted, CLR_STOP, CLR_MIC_LIST)
+    else
+      MicBg := MicStateColor;
 
     OverlayPaint           := TSkPaint.Create;
     OverlayPaint.AntiAlias := True;
@@ -1015,6 +1166,25 @@ begin
 
     // White mic icon on top
     DrawMicIcon(ACanvas, FBtnMicRect);
+
+    // Silenciado en llamada: raya diagonal (con borde del color de fondo)
+    if (FCallState <> TAIChatCallState.csOff) and FCallMuted then
+    begin
+      OverlayPaint.Style       := TSkPaintStyle.Stroke;
+      OverlayPaint.StrokeCap   := TSkStrokeCap.Round;
+      OverlayPaint.StrokeWidth := 4;
+      OverlayPaint.Color       := MicBg;
+      ACanvas.DrawLine(
+        TPointF.Create(FBtnMicRect.Left + FBtnMicRect.Width * 0.25, FBtnMicRect.Top + FBtnMicRect.Height * 0.25),
+        TPointF.Create(FBtnMicRect.Right - FBtnMicRect.Width * 0.25, FBtnMicRect.Bottom - FBtnMicRect.Height * 0.25),
+        OverlayPaint);
+      OverlayPaint.StrokeWidth := 2;
+      OverlayPaint.Color       := CLR_WHITE;
+      ACanvas.DrawLine(
+        TPointF.Create(FBtnMicRect.Left + FBtnMicRect.Width * 0.25, FBtnMicRect.Top + FBtnMicRect.Height * 0.25),
+        TPointF.Create(FBtnMicRect.Right - FBtnMicRect.Width * 0.25, FBtnMicRect.Bottom - FBtnMicRect.Height * 0.25),
+        OverlayPaint);
+    end;
 
     // Animated sound bar between + and mic when monitoring
     if FUseSoundMonitor then
@@ -1071,7 +1241,9 @@ begin
   else if FBtnSendRect.Contains(Pt) then
     FPressBtn := TAIChatBtnKind.bkSend
   else if FMicVisible and (not FBtnMicRect.IsEmpty) and FBtnMicRect.Contains(Pt) then
-    FPressBtn := TAIChatBtnKind.bkMic;
+    FPressBtn := TAIChatBtnKind.bkMic
+  else if FCallVisible and (not FBtnCallRect.IsEmpty) and FBtnCallRect.Contains(Pt) then
+    FPressBtn := TAIChatBtnKind.bkCall;
   if FPressBtn <> TAIChatBtnKind.bkNone then Redraw;
 end;
 
@@ -1092,7 +1264,9 @@ begin
   else if FBtnSendRect.Contains(Pt) then
     NewHov := TAIChatBtnKind.bkSend
   else if FMicVisible and (not FBtnMicRect.IsEmpty) and FBtnMicRect.Contains(Pt) then
-    NewHov := TAIChatBtnKind.bkMic;
+    NewHov := TAIChatBtnKind.bkMic
+  else if FCallVisible and (not FBtnCallRect.IsEmpty) and FBtnCallRect.Contains(Pt) then
+    NewHov := TAIChatBtnKind.bkCall;
 
   if NewHov = TAIChatBtnKind.bkNone then
     for I := 0 to High(FChips) do
@@ -1137,12 +1311,34 @@ begin
       DoSend;
   end
   else if (Prev = TAIChatBtnKind.bkMic) and FMicVisible and
+          (not FBtnMicRect.IsEmpty) and FBtnMicRect.Contains(Pt) and
+          (FCallState <> TAIChatCallState.csOff) then
+  begin
+    // En llamada el microfono no dicta: silencia o reactiva la llamada
+    FCallMuted := not FCallMuted;
+    if Assigned(FOnCallMute) then
+      FOnCallMute(Self, FCallMuted);
+  end
+  else if (Prev = TAIChatBtnKind.bkMic) and FMicVisible and
           (not FBtnMicRect.IsEmpty) and FBtnMicRect.Contains(Pt) then
   begin
     NewActive := not FUseSoundMonitor;
     SetUseSoundMonitor(NewActive);
     if Assigned(FOnMicToggle) then
       FOnMicToggle(Self, NewActive);
+  end
+  else if (Prev = TAIChatBtnKind.bkCall) and FCallVisible and
+          (not FBtnCallRect.IsEmpty) and FBtnCallRect.Contains(Pt) then
+  begin
+    // Llamar pasa a "conectando" y el host confirma con NotifyCallConnected;
+    // colgar vuelve a csOff ya, sin esperar a que el realtime cierre.
+    NewActive := FCallState = TAIChatCallState.csOff;
+    if NewActive then
+      FCallState := TAIChatCallState.csConnecting
+    else
+      FCallState := TAIChatCallState.csOff;
+    if Assigned(FOnCallToggle) then
+      FOnCallToggle(Self, NewActive);
   end
   else
   begin
@@ -1603,6 +1799,68 @@ begin
   else
     FMicState := TAIChatVoiceState.vsListening;
   Redraw;
+end;
+
+// ── Call ───────────────────────────────────────────────────────────────────────
+
+procedure TAIChatInput.SetCallVisible(AValue: Boolean);
+begin
+  if FCallVisible = AValue then Exit;
+  FCallVisible := AValue;
+  if not AValue then
+    FBtnCallRect := TRectF.Empty;
+  ComputeLayout;
+  Redraw;
+end;
+
+procedure TAIChatInput.SetCallState(AValue: TAIChatCallState);
+begin
+  if FCallState = AValue then Exit;
+  FCallState := AValue;
+  Redraw;
+end;
+
+procedure TAIChatInput.NotifyCallConnecting;
+begin
+  SetCallState(TAIChatCallState.csConnecting);
+end;
+
+procedure TAIChatInput.NotifyCallConnected;
+begin
+  SetCallState(TAIChatCallState.csListening);
+end;
+
+procedure TAIChatInput.NotifyCallEnded;
+begin
+  FCallMuted := False;   // la proxima llamada empieza escuchando
+  SetCallState(TAIChatCallState.csOff);
+  Redraw;
+end;
+
+procedure TAIChatInput.SetCallMuted(AValue: Boolean);
+begin
+  if FCallMuted = AValue then Exit;
+  FCallMuted := AValue;
+  Redraw;
+end;
+
+// Los avisos de voz llegan tambien despues de colgar: no reabren la llamada
+procedure TAIChatInput.NotifyCallUserSpeaking(ASpeaking: Boolean);
+begin
+  if FCallState = TAIChatCallState.csOff then Exit;
+  if ASpeaking then
+    SetCallState(TAIChatCallState.csUserTalking)
+  else if FCallState = TAIChatCallState.csUserTalking then
+    SetCallState(TAIChatCallState.csListening);
+end;
+
+procedure TAIChatInput.NotifyCallAITalking(ATalking: Boolean);
+begin
+  if FCallState = TAIChatCallState.csOff then Exit;
+  if ATalking then
+    SetCallState(TAIChatCallState.csAITalking)
+  else if FCallState = TAIChatCallState.csAITalking then
+    SetCallState(TAIChatCallState.csListening);
 end;
 
 // ── Public API ─────────────────────────────────────────────────────────────────

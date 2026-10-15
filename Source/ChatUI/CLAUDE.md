@@ -171,6 +171,28 @@ adjuntos:
   ofrecio, que se hizo y como quedo (un paso guardado "running" se carga
   como done: ya paso).
 
+**Mensajes seguidos del mismo rol se unen** (`TAIChatView.MergeConsecutive`,
+default True): `AddMessage`/`AddUserMessage`/`BeginAssistantMessage` de
+usuario o asistente justo detras de otro del mismo rol lo añaden a esa
+burbuja separado por un parrafo (borra su pie y actualiza la hora). No se une
+a una burbuja con `Actions`, a una sellada con `SealLastMessage` (p. ej. antes
+de una peticion de permiso), ni a mensajes de sistema; un mensaje de usuario
+con adjuntos va siempre aparte. Los indices siguen valiendo
+(`MessageCount - 1` = la burbuja unida) y `SetMessageText` sobre ella cambia
+solo el ultimo tramo: `TAIChatMessage.MergeBase` guarda el texto anterior
+(no se serializa). `LoadFromJSON` no une nada.
+
+**Llamada de voz en `TAIChatInput`**: `CallVisible` pinta un telefono a la
+izquierda del microfono (o de enviar). Clic → `OnCallToggle(Sender,
+AActivate)` y el estado pasa a `csConnecting` (colgar = `csOff` al
+instante). El host lo enlaza con el realtime con `NotifyCallConnecting`,
+`NotifyCallConnected` (OnSessionReady), `NotifyCallEnded` (OnDisconnected /
+error / colgar), `NotifyCallUserSpeaking(bool)` y `NotifyCallAITalking(bool)`;
+en llamada el boton es rojo con el auricular girado y un aro de estado
+(naranja conectando, verde hablas tu, azul habla la IA). Durante la llamada
+el microfono NO dicta: silencia (`OnCallMute(Sender, AMuted)`, `CallMuted`;
+verde = escucha, rojo tachado = silenciado; `NotifyCallEnded` lo reinicia).
+
 Como esta hecho: `TAIChatBubbleLayout` lleva `ActionRects` (doc coords),
 `StepsRect` y `FooterH`; `ComputeLayout` suma el bloque de pasos
 (`StepsBlockHeight` + `STEP_T_GAP`) y `ACT_T_GAP` + filas de `ACT_H` al alto

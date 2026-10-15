@@ -280,7 +280,7 @@ var
 begin
   if (AIndex < 0) or (AIndex >= FMessages.Count) then Exit;
   Msg := FMessages[AIndex];
-  Msg.Text := AText;
+  Msg.Text := Msg.MergeBase + AText;  // en un mensaje unido solo cambia el ultimo tramo
   Msg.InvalidateLayout;             // re-mide y re-parsea en EnsureLayout
   RebuildPositionsFrom(AIndex);
   if Assigned(FOnLayoutChanged) then FOnLayoutChanged(Self);
@@ -293,6 +293,9 @@ begin
   if (AIndex < 0) or (AIndex >= FMessages.Count) then Exit;
   Msg        := FMessages[AIndex];
   Msg.Status := TChatMessageStatus.msComplete;
+  // Tramo unido que no llego a escribir nada: fuera el separador colgante
+  if (Msg.MergeBase <> '') and (Msg.Text = Msg.MergeBase) then
+    Msg.Text := Msg.Text.TrimRight;
   Msg.InvalidateLayout;
   RebuildPositionsFrom(AIndex);
   if Assigned(FOnLayoutChanged) then FOnLayoutChanged(Self);
