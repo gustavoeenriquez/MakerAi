@@ -14,6 +14,7 @@
 //   Cliente → {type:"audio",  data:"<base64 PCM16>"}           (chunks de voz)
 //   Cliente → {type:"commit"}                                   (fin de turno)
 //   Servidor→ {type:"user_text",      text:"..."}               → OnTranscriptCompleted
+//   Servidor→ {type:"assistant_delta", text:"..."}              → OnAssistantTextDelta (frase a frase, al sonar)
 //   Servidor→ {type:"assistant_text", text:"..."}               → OnAssistantText
 //   Servidor→ {type:"audio",          data:"<base64 PCM16>"}    → OnAudioChunk
 //   Servidor→ {type:"audio_done"}                               → OnAudioDone
@@ -272,6 +273,15 @@ begin
     JObj.TryGetValue<string>('text', AText);
     if AText <> '' then
       DoAssistantText(AText);
+  end
+
+  else if EventType = 'assistant_delta' then
+  begin
+    // Una frase de la respuesta, cuando empieza a sonar (servidor >= 2026-10-15)
+    AText := '';
+    JObj.TryGetValue<string>('text', AText);
+    if AText <> '' then
+      DoAssistantTextDelta(AText);
   end
 
   else if EventType = 'audio' then
