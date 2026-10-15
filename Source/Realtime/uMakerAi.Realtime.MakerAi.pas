@@ -275,6 +275,23 @@ begin
       DoAssistantText(AText);
   end
 
+  else if EventType = 'assistant_text_delta' then
+  begin
+    // Motor live: transcripcion de lo que la voz va diciendo, palabra a palabra
+    AText := '';
+    JObj.TryGetValue<string>('text', AText);
+    if AText <> '' then
+      DoAssistantTextDelta(AText);
+  end
+
+  else if EventType = 'user_text_delta' then
+  begin
+    AText := '';
+    JObj.TryGetValue<string>('text', AText);
+    if AText <> '' then
+      DoTranscriptDelta(AText);
+  end
+
   else if EventType = 'assistant_delta' then
   begin
     // Una frase de la respuesta, cuando empieza a sonar (servidor >= 2026-10-15)
