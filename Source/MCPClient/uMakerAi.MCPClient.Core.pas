@@ -374,6 +374,11 @@ type
     // Registra/limpia el handler de billing (invocado tras cada CallTool exitoso).
     procedure SetThreadBillingHandler(const AHandler: TMCPToolBillingProc);
     procedure ClearThreadBillingHandler;
+
+    // False cuando el stream SSE se corto (el servidor se reinicio o cerro la
+    // conexion). Un cliente asi ya no recibe respuestas: quien lo tenga en un
+    // pool debe descartarlo y crear otro, o cada tools/call esperara el timeout.
+    property IsConnected: Boolean read FIsConnected;
   end;
 
 implementation
