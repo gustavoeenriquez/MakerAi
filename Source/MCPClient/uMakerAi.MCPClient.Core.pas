@@ -3257,22 +3257,47 @@ begin
       // y no garantiza orden si se mezcla con el stream.
       // Mejor pr?ctica: Crear un cliente ligero para el POST s?ncrono.
 
-      LocalClient := TNetHTTPClient.Create(nil);
-      try
-        LocalClient.ContentType := 'application/json';
-        LocalClient.ConnectionTimeout := 10000;
-        LocalClient.ResponseTimeout := 15000;
+      var
+      Token := GetParamByName('ApiBearerToken');
+      if (Token <> '') and (Token <> '@MCPBearerToken') then
+        LHeaders := [TNetHeader.Create('Authorization', ValorDeAutorizacion(Token))]
+      else
+        LHeaders := [];
 
-        var
-        Token := GetParamByName('ApiBearerToken');
-        if (Token <> '') and (Token <> '@MCPBearerToken') then
-          LHeaders := [TNetHeader.Create('Authorization', ValorDeAutorizacion(Token))]
-        else
-          LHeaders := [];
-
-        LocalClient.Post(FPostEndpoint, Source, nil, LHeaders);
-      finally
-        LocalClient.Free;
+      // Reintento ante fallo de CONEXION (no ante una respuesta HTTP de error).
+      // Justo despues de que el proceso cliente se reinicia, el servidor MCP
+      // puede cortar un POST sin responder (libcurl "Error 52 ... Empty reply
+      // from server") mientras aun arrastra las sesiones SSE del proceso
+      // anterior; sin reintento, Initialize fallaba en tools/list y la peticion
+      // salia sin herramientas. Solo metodos repetibles sin efectos: un
+      // tools/call cortado pudo ejecutarse ya y repetirlo duplicaria escrituras.
+      var
+      MaxAttempts: Integer := 3;
+      if AMethod = 'tools/call' then
+        MaxAttempts := 1;
+      for var Attempt := 1 to MaxAttempts do
+      begin
+        LocalClient := TNetHTTPClient.Create(nil);
+        try
+          LocalClient.ContentType := 'application/json';
+          LocalClient.ConnectionTimeout := 10000;
+          LocalClient.ResponseTimeout := 15000;
+          try
+            Source.Position := 0;
+            LocalClient.Post(FPostEndpoint, Source, nil, LHeaders);
+            Break;
+          except
+            on E: ENetHTTPClientException do
+            begin
+              if Attempt >= MaxAttempts then
+                raise;
+              DoLog(Format('SSE: POST %s fallo (%s), reintento %d', [AMethod, E.Message, Attempt]));
+              Sleep(300 * Attempt);
+            end;
+          end;
+        finally
+          LocalClient.Free;
+        end;
       end;
 
     finally
