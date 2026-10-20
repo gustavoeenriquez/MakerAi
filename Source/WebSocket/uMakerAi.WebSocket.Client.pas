@@ -122,6 +122,7 @@ type
 implementation
 
 uses
+  uMakerAi.WebSocket.Plain,
 {$IFDEF MSWINDOWS}
   uMakerAi.WebSocket.SChannel;
 {$ELSEIF DEFINED(ANDROID)}
@@ -638,8 +639,12 @@ begin
     end;
   end;
 
-  // Crear transporte TLS para la plataforma actual
+  // ws:// = TCP plano; wss:// = TLS de la plataforma. Abrir TLS contra un
+  // servidor ws:// (HTTP plano) deja el handshake sin respuesta para siempre.
   try
+    if not FUseSSL then
+      FTransport := TPlainTransport.Create
+    else
 {$IFDEF MSWINDOWS}
     FTransport := TSChannelTransport.Create;
 {$ELSEIF DEFINED(ANDROID)}
@@ -656,12 +661,23 @@ begin
     end;
   end;
 
-  // TCP + TLS
-  if not FTransport.Connect(FHost, FPort) then
-  begin
-    HandleError('TLS connect fallido: ' + FHost + ':' + IntToStr(FPort));
-    FTransport := nil;
-    Exit;
+  // TCP (+ TLS). Los transportes avisan los fallos con excepciones: sin este
+  // try, la excepcion mataba el hilo de conexion en silencio (sin OnError)
+  try
+    if not FTransport.Connect(FHost, FPort) then
+    begin
+      HandleError('TLS connect fallido: ' + FHost + ':' + IntToStr(FPort));
+      FTransport := nil;
+      Exit;
+    end;
+  except
+    on E: Exception do
+    begin
+      HandleError(E.Message);
+      FTransport.Disconnect;
+      FTransport := nil;
+      Exit;
+    end;
   end;
 
   // HTTP WebSocket upgrade

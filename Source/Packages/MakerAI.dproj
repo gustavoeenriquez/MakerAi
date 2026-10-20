@@ -256,6 +256,7 @@
         <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.Client.pas"/>
         <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.SChannel.pas"/>
         <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.OpenSSL.pas"/>
+        <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.Plain.pas"/>
         <DCCReference Include="..\WebSocket\uMakerAi.WebSocket.Android.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.WebSocket.pas"/>
         <DCCReference Include="..\Realtime\uMakerAi.Realtime.pas"/>

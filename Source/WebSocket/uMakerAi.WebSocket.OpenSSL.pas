@@ -99,6 +99,18 @@ const
   SSL_VERIFY_NONE = 0;
   SSL_VERIFY_PEER = 1;
   X509_V_OK       = 0;
+  // Plazo de connect() y del handshake TLS: un servidor que no contesta (p. ej.
+  // HTTP plano en el puerto) da error en vez de colgar el hilo para siempre
+  CONNECT_TIMEOUT_SEC = 10;
+
+procedure SetSockTimeout(Fd, Option, Seconds: Integer);
+var
+  TV: timeval;
+begin
+  TV.tv_sec  := Seconds;
+  TV.tv_usec := 0;
+  setsockopt(Fd, SOL_SOCKET, Option, TV, SizeOf(TV));
+end;
 
 { TOpenSSLTransport }
 
@@ -198,6 +210,8 @@ begin
       SockFd := Posix.SysSocket.socket(Cur^.ai_family, Cur^.ai_socktype, Cur^.ai_protocol);
       if SockFd >= 0 then
       begin
+        // En Linux SO_SNDTIMEO tambien acota connect()
+        SetSockTimeout(SockFd, SO_SNDTIMEO, CONNECT_TIMEOUT_SEC);
         if Posix.SysSocket.connect(SockFd, Cur^.ai_addr^, Cur^.ai_addrlen) = 0 then
         begin
           FSocket := SockFd;
@@ -288,7 +302,9 @@ begin
       raise Exception.CreateFmt('OpenSSL: SSL_set1_host fallo para "%s"', [AHost]);
   end;
 
-  // Handshake TLS
+  // Handshake TLS, con plazo de lectura; despues las lecturas vuelven a ser
+  // sin plazo (RecvRaw ya espera con select)
+  SetSockTimeout(FSocket, SO_RCVTIMEO, CONNECT_TIMEOUT_SEC);
   if FSSL_connect(FSSL) <> 1 then
   begin
     // Si el handshake cayo por el certificado, SSL_get_verify_result dice por
@@ -305,6 +321,7 @@ begin
       IfThen(Assigned(FSSL_ctrl), '', ' (ademas SSL_ctrl no se pudo enlazar: no habra SNI)'));
   end;
 
+  SetSockTimeout(FSocket, SO_RCVTIMEO, 0);
   FConnected := True;
   Result     := True;
 end;

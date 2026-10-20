@@ -167,6 +167,7 @@ curl -X POST http://localhost:8080/mcp \
 - `uMakerAi.WebSocket.SChannel.pas` - `TSChannelTransport` — TLS via `secur32.dll` (Windows native, zero extra DLLs; tested ✅)
 - `uMakerAi.WebSocket.OpenSSL.pas` - `TOpenSSLTransport` — TLS via `dlopen(libssl.so)` (Linux/macOS; compiles, not yet tested on real hardware)
 - `uMakerAi.WebSocket.Android.pas` - `TAndroidSSLTransport` — TLS via `javax.net.ssl.SSLSocketFactory` (JNI; compiles, not yet tested on real hardware)
+- `uMakerAi.WebSocket.Plain.pas` - `TPlainTransport` — TCP sin cifrado para `ws://` (Windows ws2_32 / POSIX). Antes `ws://` abría TLS igual y contra un servidor HTTP plano el handshake quedaba colgado sin error
 
 **Realtime (`Source/Realtime/`)**: Real-time audio streaming (STT via WebSocket)
 - `uMakerAi.Realtime.pas` - Abstract base `TAiRealtimeBase` + `TAiRealtimeFactory`; resampler PCM16, VAD modes, thread-safe events

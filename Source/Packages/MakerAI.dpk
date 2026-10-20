@@ -145,6 +145,7 @@ contains
   uMakerAi.WebSocket.Client in '..\WebSocket\uMakerAi.WebSocket.Client.pas',
   uMakerAi.WebSocket.SChannel in '..\WebSocket\uMakerAi.WebSocket.SChannel.pas',
   uMakerAi.WebSocket.OpenSSL in '..\WebSocket\uMakerAi.WebSocket.OpenSSL.pas',
+  uMakerAi.WebSocket.Plain in '..\WebSocket\uMakerAi.WebSocket.Plain.pas',
   uMakerAi.WebSocket.Android in '..\WebSocket\uMakerAi.WebSocket.Android.pas',
   uMakerAi.Realtime.WebSocket in '..\Realtime\uMakerAi.Realtime.WebSocket.pas',
   uMakerAi.Realtime in '..\Realtime\uMakerAi.Realtime.pas',

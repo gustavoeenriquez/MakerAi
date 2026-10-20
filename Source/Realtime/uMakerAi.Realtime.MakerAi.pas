@@ -451,14 +451,25 @@ begin
   FWebSocket.ExtraHeaders.Values['Sec-WebSocket-Protocol'] := CMAKERAIREALTIME_SUBP;
   FConnectThread := TThread.CreateAnonymousThread(procedure begin
     MkLog('THREAD_CONNECT_START');
-    if not FWebSocket.Connect(LUrl) then
-    begin
-      MkLog('CONNECT_FAILED');
-      DoError('No se pudo conectar al servidor WebSocket de MakerAI',
-              'connection_failed');
-    end
-    else
-      MkLog('THREAD_CONNECT_END');
+    try
+      if not FWebSocket.Connect(LUrl) then
+      begin
+        MkLog('CONNECT_FAILED');
+        DoError('No se pudo conectar al servidor WebSocket de MakerAI',
+                'connection_failed');
+      end
+      else
+        MkLog('THREAD_CONNECT_END');
+    except
+      // Una excepcion aqui moria con el hilo: la sesion quedaba sin conectar
+      // y sin ningun aviso al usuario del componente
+      on E: Exception do
+      begin
+        MkLog('CONNECT_EXCEPTION: ' + E.Message);
+        DoError('No se pudo conectar al servidor WebSocket de MakerAI: ' + E.Message,
+                'connection_failed');
+      end;
+    end;
   end);
   FConnectThread.FreeOnTerminate := False;
   FConnectThread.Start;
