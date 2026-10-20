@@ -88,7 +88,11 @@ type
     // TTS directo en el servidor sin pasar por STT/LLM ({"type":"say"}).
     // Ideal para saludos deterministas al contestar una llamada; el server
     // responde con chunks de audio + audio_done y lo anota en el historial.
-    procedure Say(const AText: string);
+    // AAudio=False: el servidor registra el texto como turno del asistente
+    // (historial, transcript; en live avisa a GPT-Live) SIN sintetizarlo ni
+    // cobrar TTS, y responde audio_done al instante. Para un saludo que el
+    // cliente ya reprodujo pregrabado.
+    procedure Say(const AText: string; AAudio: Boolean = True);
     class function GetDriverName:   string; override;
     class function GetDefaultModel: string; override;
   published
@@ -190,7 +194,7 @@ begin
   Result := 24000;
 end;
 
-procedure TAiMakerAiRealtimeChat.Say(const AText: string);
+procedure TAiMakerAiRealtimeChat.Say(const AText: string; AAudio: Boolean);
 var
   JMsg: TJSONObject;
 begin
@@ -199,11 +203,16 @@ begin
   try
     JMsg.AddPair('type', 'say');
     JMsg.AddPair('text', AText);
+    if not AAudio then
+      JMsg.AddPair('audio', TJSONFalse.Create);
     FWebSocket.SendText(JMsg.ToJSON);
   finally
     JMsg.Free;
   end;
-  MkLog('SAY sent len=' + IntToStr(Length(AText)));
+  if AAudio then
+    MkLog('SAY sent len=' + IntToStr(Length(AText)))
+  else
+    MkLog('SAY sent len=' + IntToStr(Length(AText)) + ' (sin audio)');
 end;
 
 procedure TAiMakerAiRealtimeChat.SendSessionMessage;
