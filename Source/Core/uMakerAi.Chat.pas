@@ -427,6 +427,9 @@ type
     // OnRequestCompletedEvent (que corre en el hilo HTTP) por FCurrentPostStream y
     // daba 'Invalid pointer operation' intermitente.
     FRequestDone: TEvent;
+    // Hilo que entrega los datos de la peticion en vuelo (ClientReceiveData).
+    // WaitPreviousRequest no espera si la llamada sale de ese mismo hilo.
+    FHttpThreadId: TThreadID;
     // Capa fija entre el cliente HTTP y los metodos virtuales (los drivers los
     // sobrescriben): marca el inicio y el fin de la peticion para todos por igual
     procedure ClientReceiveData(const Sender: TObject; AContentLength, AReadCount: Int64; var AAbort: Boolean);
@@ -585,6 +588,14 @@ type
     Function PrepareSystemMsg: String; Virtual; // Crea el primer mensaje del chat para system, para configurar el asistente
     Procedure DoProcessMediaFile(aPrompt: String; aAiMediaFile: TAiMediaFile; Var Respuesta: String; Var Procesado: Boolean);
     Function AddMessageAndRun(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String; Overload;
+    // Antes de una peticion nueva: espera a que el cliente HTTP cierre la
+    // anterior. OnReceiveDataEnd sale con el ultimo chunk, ANTES de ese cierre,
+    // y el cierre (hilo HTTP) libera FCurrentPostStream: si el integrador lanza
+    // la siguiente pregunta enseguida, liberaba el stream de la NUEVA peticion
+    // ('Stream read error' intermitente, demo 094). No espera si se llama desde
+    // el hilo que esta entregando la peticion anterior (Run dentro de
+    // OnReceiveDataEnd): se esperaria a si mismo.
+    procedure WaitPreviousRequest;
     // Implementaci?n de IAiToolContext
     procedure DoData(Msg: TAiChatMessage; const Role, Text: string; aResponse: TJSonObject = nil);
     procedure DoDataEnd(Msg: TAiChatMessage; const Role, Text: string; aResponse: TJSonObject = nil);
@@ -1893,7 +1904,10 @@ procedure TAiChat.ClientReceiveData(const Sender: TObject; AContentLength, ARead
   var AAbort: Boolean);
 begin
   if FClient.Asynchronous then
+  begin
+    FHttpThreadId := TThread.CurrentThread.ThreadID;
     FRequestDone.ResetEvent;
+  end;
   OnInternalReceiveData(Sender, AContentLength, AReadCount, AAbort);
 end;
 
@@ -1922,6 +1936,23 @@ begin
   finally
     FRequestDone.SetEvent;
   end;
+end;
+
+procedure TAiChat.WaitPreviousRequest;
+var
+  T0: Cardinal;
+begin
+  if (FRequestDone = nil) or (FRequestDone.WaitFor(0) = wrSignaled) then
+    Exit;
+  if TThread.CurrentThread.ThreadID = FHttpThreadId then
+    Exit;
+  T0 := TThread.GetTickCount;
+  repeat
+    if FRequestDone.WaitFor(50) = wrSignaled then
+      Break;
+    if TThread.CurrentThread.ThreadID = MainThreadID then
+      CheckSynchronize(0);
+  until TThread.GetTickCount - T0 > 15000;
 end;
 
 procedure TAiChat.WaitPendingRequest;
@@ -4445,6 +4476,8 @@ var
   LOrigPrompt:     string;
   LMemWrapper:     string;
 begin
+  WaitPreviousRequest;
+
   // Telemetria: un span cubre el turno completo (fases, tool calls, parsing).
   // Los Run anidados (continuacion tras tool calls) reutilizan el span del turno.
   if not Assigned(FRunSpan) then

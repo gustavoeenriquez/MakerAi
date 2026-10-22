@@ -481,8 +481,10 @@ type
     class procedure CleanInputSchema(ASchema: TJSonObject);
 
     class procedure CleanJsonTree(AValue: TJSONValue);
-    class procedure EnforceStrictSchema(ASchema: TJSONValue);
   public
+    // Lleva un JSON Schema al modo strict de OpenAI: additionalProperties=false y todas
+    // las propiedades en required, en cada objeto (properties, items, anyOf/oneOf/allOf, $defs)
+    class procedure EnforceStrictSchema(ASchema: TJSONValue);
 
     // Sobrecarga con detecci�n autom�tica del formato de entrada
     class function MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; ATargetJson: TJSonObject; AOutputFormat: TToolFormat): TJSonObject; overload;
@@ -4057,6 +4059,31 @@ begin
         EnforceStrictSchema(JProps.Pairs[I].JsonValue);
       end;
     end;
+  end;
+
+  // Esquemas anidados que no cuelgan de 'properties': antes no se recorrian y un
+  // arreglo de objetos ({"type":"array","items":{"type":"object",...}}) llegaba sin
+  // additionalProperties: la API Responses respondia 400 "Invalid schema ...
+  // In context=('properties', 'puntos', 'items')" (demo 070, GraficarSerie).
+  var LSub := JObj.GetValue('items');
+  if LSub is TJSonArray then
+    for var LItem in TJSonArray(LSub) do
+      EnforceStrictSchema(LItem)
+  else if Assigned(LSub) then
+    EnforceStrictSchema(LSub);
+  for var LKey in ['anyOf', 'oneOf', 'allOf'] do
+  begin
+    LSub := JObj.GetValue(LKey);
+    if LSub is TJSonArray then
+      for var LItem in TJSonArray(LSub) do
+        EnforceStrictSchema(LItem);
+  end;
+  for var LKey in ['$defs', 'definitions'] do
+  begin
+    LSub := JObj.GetValue(LKey);
+    if LSub is TJSonObject then
+      for var LPair in TJSonObject(LSub) do
+        EnforceStrictSchema(LPair.JsonValue);
   end;
 end;
 

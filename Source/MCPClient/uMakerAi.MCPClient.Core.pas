@@ -355,6 +355,10 @@ type
     // Control del stream
     procedure StartEventStream;
     procedure StopEventStream;
+    // Stream SSE sobre https: por THTTPClient (libcurl, TLS del sistema).
+    // El socket crudo de Indy no hace TLS y la OpenSSL de Indy no carga la
+    // libssl 3 de las distribuciones actuales.
+    procedure RunTlsEventStream(const AURL: string);
 
   public
     constructor Create(AOwner: TComponent); override;
@@ -2942,8 +2946,31 @@ begin
   FStopRequested := False;
   FAsyncOpDone := False;
 
-  DoLog('SSE: Starting raw TCP SSE stream to ' + LURL);
   FIsConnected := True;
+
+  if SameText(TURI.Create(LURL).Scheme, 'https') then
+  begin
+    DoLog('SSE: Starting TLS SSE stream to ' + LURL);
+    FSSEThread := TThread.CreateAnonymousThread(
+      procedure
+      begin
+        try
+          RunTlsEventStream(LURL);
+          DoLog('SSE: Stream ended (TLS)');
+        except
+          on E: Exception do
+            DoLog('SSE: TLS connection error: ' + E.Message);
+        end;
+        FIsConnected := False;
+        FAsyncOpDone := True;
+      end
+    );
+    FSSEThread.FreeOnTerminate := True;
+    FSSEThread.Start;
+    Exit;
+  end;
+
+  DoLog('SSE: Starting raw TCP SSE stream to ' + LURL);
 
   // Use a raw Indy TCP connection so we read ALL bytes regardless of
   // Content-Length (some MCP server binaries incorrectly set Content-Length
@@ -3043,6 +3070,110 @@ begin
   );
   FSSEThread.FreeOnTerminate := True;
   FSSEThread.Start;
+end;
+
+type
+  // Destino del GET del stream TLS: no guarda nada, parte en lineas lo que
+  // llega y se las pasa a ProcessSSELine. Decodifica UTF-8 por linea completa
+  // para no partir un caracter multibyte entre dos bloques de libcurl.
+  TSSELineSink = class(TStream)
+  private
+    FPending: TBytes;
+    FSize: Int64;
+    FOnLine: TProc<string>;
+  public
+    constructor Create(const AOnLine: TProc<string>);
+    function Read(var Buffer; Count: Longint): Longint; override;
+    function Write(const Buffer; Count: Longint): Longint; override;
+    function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
+  end;
+
+constructor TSSELineSink.Create(const AOnLine: TProc<string>);
+begin
+  inherited Create;
+  FOnLine := AOnLine;
+end;
+
+function TSSELineSink.Read(var Buffer; Count: Longint): Longint;
+begin
+  Result := 0;
+end;
+
+function TSSELineSink.Seek(const Offset: Int64; Origin: TSeekOrigin): Int64;
+begin
+  if Origin = soBeginning then
+    Result := Offset
+  else
+    Result := FSize;
+end;
+
+function TSSELineSink.Write(const Buffer; Count: Longint): Longint;
+var
+  Start, I, Old: Integer;
+  Line: string;
+begin
+  Result := Count;
+  if Count <= 0 then
+    Exit;
+  Inc(FSize, Count);
+  Old := Length(FPending);
+  SetLength(FPending, Old + Count);
+  Move(Buffer, FPending[Old], Count);
+  Start := 0;
+  for I := 0 to High(FPending) do
+    if FPending[I] = 10 then
+    begin
+      Line := TEncoding.UTF8.GetString(FPending, Start, I - Start);
+      FOnLine(Line.TrimRight([' ', #13]));
+      Start := I + 1;
+    end;
+  if Start > 0 then
+    FPending := Copy(FPending, Start, MaxInt);
+end;
+
+procedure TMCPClientSSE.RunTlsEventStream(const AURL: string);
+var
+  Http: THTTPClient;
+  Sink: TSSELineSink;
+  Headers: TNetHeaders;
+  BearerToken, HeaderName: string;
+  Resp: IHTTPResponse;
+begin
+  Http := THTTPClient.Create;
+  Sink := TSSELineSink.Create(
+    procedure(ALine: string)
+    begin
+      ProcessSSELine(ALine);
+    end);
+  try
+    Http.ConnectionTimeout := 10000;
+    // En Linux es CURLOPT_TIMEOUT (tope TOTAL, no de inactividad): con el
+    // default de 60 s el stream moriria al minuto. 0 = sin tope.
+    Http.ResponseTimeout := 0;
+    Http.ReceiveDataCallback :=
+      procedure(const Sender: TObject; AContentLength: Int64; AReadCount: Int64;
+        var AAbort: Boolean)
+      begin
+        AAbort := FStopRequested;
+      end;
+    Headers := [TNetHeader.Create('Accept', 'text/event-stream'),
+                TNetHeader.Create('Cache-Control', 'no-cache')];
+    // La credencial tambien en el GET del stream (igual que el camino TCP)
+    BearerToken := GetParamByName('ApiBearerToken');
+    if (not BearerToken.IsEmpty) and (BearerToken <> '@MCPBearerToken') then
+    begin
+      HeaderName := GetParamByName('ApiHeaderName');
+      if HeaderName.IsEmpty then
+        HeaderName := 'Authorization';
+      Headers := Headers + [TNetHeader.Create(HeaderName, ValorDeAutorizacion(BearerToken))];
+    end;
+    Resp := Http.Get(AURL, Sink, Headers);
+    if (Resp <> nil) and (Resp.StatusCode <> 200) then
+      DoLog(Format('SSE: el servidor respondio %d al abrir el stream', [Resp.StatusCode]));
+  finally
+    Sink.Free;
+    Http.Free;
+  end;
 end;
 
 procedure TMCPClientSSE.StopEventStream;

@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (131 casos)
+## Cobertura actual (133 casos)
 
 | Área | Casos |
 |------|-------|
@@ -72,6 +72,8 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 | Evals | autoprueba del runner (conteo PASS/FAIL) |
 | Puentes de entrada (oct 22/2026) | `chat.bridge.speechtool-dataend`: con un SpeechTool en `ChatTools` y `SessionCaps` `[cap_Audio]`, el integrador recibe un solo `OnReceiveDataEnd` (la respuesta del modelo, que sí recibe el audio transcrito) y la herramienta corre síncrona dentro del puente (falla sin el fix: dos eventos, el primero con el texto crudo) |
 | Herramientas del sistema (oct 22/2026) | `tools.shell.security-chaining`: `TAiShell` revisa cada tramo del comando (`&`, `|`, `;`, salto de línea) contra la lista; en lista permitida rechaza redirecciones y `$( )`; en lista bloqueada reconoce `d^el`, `/bin/rm` y `del.exe` (nada se ejecuta: `OnCommand` marca `Handled`; falla sin el fix). `tools.applypatch.create-file`: el texto de un `create_file` V4A (`V4ACreateFileText`) |
+| Esquema strict de OpenAI (oct 22/2026) | `tools.strict-schema.nested`: `EnforceStrictSchema` pone `additionalProperties=false` y `required` completo también en los objetos de `items`, `anyOf` y `$defs` (antes solo bajaba por `properties`: un arreglo de objetos daba 400; demo 070) |
+| Peticiones encadenadas (oct 22/2026) | `chat.async.next-waits-previous`: con una petición asíncrona en vuelo (cerrada desde otro hilo a los 300 ms), `WaitPreviousRequest` espera su cierre; desde el mismo hilo que la entrega no espera (falla sin el fix) |
 | Memoria: analizador (oct 22/2026) | `memory.analyzer.stateless`: dos `AnalyzeNow` contra el servidor OpenAI falso dejan al `Analyzer` con 2 mensajes, no 4 (falla sin el fix) |
 | Jev: consumo | `Usage` y `OnUsage` en `TAiJev` (un evento por llamada) y en PromptGuard, Dispatch, Guardrail, Eval, ModelRouter, RAG y Batch (uno por operación); reranker en paralelo con un `TAiJev` falso por pasaje → un solo evento con el total exacto y en el hilo del llamador; `ResetUsage`; precio configurable |
 | Jev en servidores System One (Ollama) | `jev.systemone.local`: imágenes en el request (`images`, base64 sin saltos que decodifica a los bytes originales, PNG y JPEG reconocidos por los bytes aunque el archivo no tenga extensión), una "imagen" que no es PNG/JPEG/WebP rechazada antes de la red, el precio de TypeSafe no se cobra con `Url` local salvo precio propio, y `JevAdapterInputPrice` toma la `Url` del `Jev` que se usa |

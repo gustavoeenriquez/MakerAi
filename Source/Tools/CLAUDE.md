@@ -10,6 +10,7 @@ The `Source/Tools/` directory contains capability components that extend LLM fun
 
 ### Function Calling System
 - `uMakerAi.Tools.Functions.pas` - Core function calling infrastructure
+  - **Modo strict de OpenAI (fix oct 22/2026).** `TJsonToolUtils.EnforceStrictSchema` (ahora público) pone `additionalProperties=false` y todas las propiedades en `required` en cada objeto del esquema: `properties`, y también `items`, `anyOf`/`oneOf`/`allOf` y `$defs`/`definitions`. Antes solo bajaba por `properties`, así que un parámetro arreglo de objetos (`RawSchemaJson` con `items: {type: object}`) hacía responder a la API Responses `400 Invalid schema ... In context=('properties', 'puntos', 'items')` (demo 070, `GraficarSerie`). Suite: `tools.strict-schema.nested`
   - `TAiFunctions` - Component for defining callable functions with parameters
   - `TFunctionActionItem` - Individual function definition with `FunctionName`, `Description`, `Parameters`
   - `TFunctionParamsItem` - Parameter definition with `ParamType` (ptString, ptInteger, ptBoolean, etc.)

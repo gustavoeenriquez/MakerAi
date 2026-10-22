@@ -130,6 +130,10 @@ Varias propiedades de `TAiChat` dejaron de publicarse (`NativeInputFiles`, `Nati
 
 En la Fase 1 de `RunNew` (audio, imagen o PDF que el modelo no lee: gap de `SessionCaps − ModelCaps`), el `SpeechTool`/`VisionTool`/`PdfTool` de `ChatTools` reportaba su resultado como si fuera la respuesta: `ResMsg.Prompt := transcripción` y `ReportDataEnd`. En asíncrono ese `DataEnd` iba encolado y la UI cerraba el turno con el texto crudo; la respuesta real del modelo llegaba después a una burbuja ya cerrada (demo 095). Ahora `RunNew` marca `FInInputBridge` mientras corre el puente: `GetAsynchronous` devuelve `False` (la herramienta trabaja en línea, que es lo que la Fase 1 necesita: terminar antes de llamar al modelo), `DoData`/`DoDataEnd` ignoran lo que reporta, y `ResMsg.Prompt` se restaura al salir. El resultado sigue llegando por `MF.Transcription`. Suite: `chat.bridge.speechtool-dataend`.
 
+## Petición nueva justo después de OnReceiveDataEnd (oct 22/2026)
+
+`OnReceiveDataEnd` sale con el último chunk, **antes** de que el cliente HTTP cierre la petición, y ese cierre (hilo HTTP) hace `FreeAndNil(FCurrentPostStream)`. Si el integrador lanzaba la siguiente pregunta enseguida (una consola que pregunta en serie: demo 094, 60 ms después), el POST nuevo dejaba su stream en `FCurrentPostStream` y el cierre tardío de la petición anterior lo liberaba mientras se enviaba: **`Stream read error` intermitente**. Ahora `Run` empieza con `WaitPreviousRequest` (protegido): espera, hasta 15 s, a que `FRequestDone` se encienda. No espera si la llamada sale del mismo hilo que entrega la petición anterior (`FHttpThreadId`, anotado en `ClientReceiveData`): un `Run` dentro de `OnReceiveDataEnd` se esperaría a sí mismo; ahí queda el comportamiento de antes. La continuación del tool-calling (un `TTask` lanzado desde `OnRequestCompletedEvent`) espera unos milisegundos, hasta el `SetEvent` del `finally`. Suite: `chat.async.next-waits-previous`.
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for source directory overview and [../../CLAUDE.md](../../CLAUDE.md) for project overview.

@@ -764,6 +764,13 @@ begin
   // Liberar un chat justo despues de OnReceiveDataEnd competia con el cierre de la
   // peticion asincrona (hilo HTTP) por FCurrentPostStream: 'Invalid pointer
   // operation' intermitente. El destructor ahora espera a que la peticion cierre.
+  // Una peticion nueva espera a que el cliente HTTP cierre la anterior: el cierre
+  // liberaba el stream de la peticion nueva ('Stream read error', demo 094). Desde el
+  // hilo que entrega la peticion anterior no espera (Run dentro de OnReceiveDataEnd).
+  FRunner.AddCase('chat.async.next-waits-previous')
+    .Input('chat:async-next')
+    .ExpectEquals('espera=si|cierre-antes=si|mismo-hilo=inmediato');
+
   FRunner.AddCase('chat.async.free-waits-request')
     .Input('chat:async-free')
     .ExpectEquals('espera=si|cierre-antes-de-liberar=si|sin-peticion=inmediato');
@@ -791,6 +798,13 @@ begin
   FRunner.AddCase('memory.analyzer.stateless')
     .Input('chat:memory-analyzer')
     .ExpectEquals('mensajes=2|llamadas=2');
+
+  // Modo strict de OpenAI (formato Responses): additionalProperties=false y required
+  // completos tambien en los objetos de un arreglo ('items'), en anyOf y en $defs.
+  // Antes solo se recorria 'properties' y GraficarSerie del demo 070 daba 400.
+  FRunner.AddCase('tools.strict-schema.nested')
+    .Input('chat:strict-nested')
+    .ExpectEquals('raiz=false/puntos,titulo,alt|items=false/fecha,valor|anyof=false/x|defs=false/y');
 
   FRunner.AddCase('tools.applypatch.create-file')
     .Input('chat:v4a-create')
@@ -2927,7 +2941,13 @@ type
     // Simula una peticion asincrona en vuelo (ya llegaron datos) y devuelve el
     // evento de cierre del cliente HTTP, para dispararlo desde otro hilo
     function StartFakeAsyncRequest: TRequestCompletedEvent;
+    procedure EsperarPrevia;
   end;
+
+procedure TStreamProbeChat.EsperarPrevia;
+begin
+  WaitPreviousRequest;
+end;
 
 procedure TStreamProbeChat.Transcript(const AJson: string; ResMsg: TAiChatMessage; MF: TAiMediaFile);
 var
@@ -3766,6 +3786,34 @@ begin
     Exit;
   end;
 
+  if AScenario = 'chat:strict-nested' then
+  begin
+    var JS := TJSONObject.ParseJSONValue(
+      '{"type":"object","properties":{"titulo":{"type":"string"},' +
+      '"puntos":{"type":"array","items":{"type":"object","properties":{"fecha":{"type":"string"},"valor":{"type":"number"}}}},' +
+      '"alt":{"anyOf":[{"type":"object","properties":{"x":{"type":"string"}}},{"type":"null"}]}},' +
+      '"required":["puntos"],"$defs":{"d":{"type":"object","properties":{"y":{"type":"number"}}}}}') as TJSONObject;
+    try
+      TJsonToolUtils.EnforceStrictSchema(JS);
+      var Desc: TFunc<TJSONObject, string> := function(O: TJSONObject): string
+        var R: TJSONArray; I: Integer;
+        begin
+          Result := O.GetValue('additionalProperties').ToJSON + '/';
+          if O.TryGetValue<TJSONArray>('required', R) then
+            for I := 0 to R.Count - 1 do
+              Result := Result + IfThen(I > 0, ',', '') + R.Items[I].Value;
+        end;
+      var JProps := JS.GetValue<TJSONObject>('properties');
+      Result := 'raiz=' + Desc(JS) +
+        '|items=' + Desc(JProps.GetValue<TJSONObject>('puntos').GetValue<TJSONObject>('items')) +
+        '|anyof=' + Desc(TJSONObject(JProps.GetValue<TJSONObject>('alt').GetValue<TJSONArray>('anyOf').Items[0])) +
+        '|defs=' + Desc(JS.GetValue<TJSONObject>('$defs').GetValue<TJSONObject>('d'));
+    finally
+      JS.Free;
+    end;
+    Exit;
+  end;
+
   if AScenario = 'chat:v4a-create' then
   begin
     Result := V4ACreateFileText('*** Begin Patch' + #10 + '@@' + #10 + '+# Inventario' + #10 + '+' + #10 +
@@ -3876,6 +3924,58 @@ begin
         RM.Free;
         MA.Free;
       end;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:async-next' then
+  begin
+    var ProbeN := TStreamProbeChat.Create(nil);
+    try
+      // La peticion anterior la "entrega" otro hilo, como el cliente HTTP real
+      var LCerrar: TRequestCompletedEvent := nil;
+      var LCerroN := 0;
+      var THN := TThread.CreateAnonymousThread(
+        procedure
+        begin
+          LCerrar := ProbeN.StartFakeAsyncRequest();
+          Sleep(300);
+          // La bandera va ANTES: el cierre enciende el evento y la espera puede
+          // despertar antes de que este hilo alcance la linea siguiente
+          TInterlocked.Exchange(LCerroN, 1);
+          LCerrar(nil, nil);
+        end);
+      THN.FreeOnTerminate := False;
+      THN.Start;
+      Sleep(100);   // el hilo ya marco la peticion en vuelo
+      var T0N := TThread.GetTickCount;
+      ProbeN.EsperarPrevia;
+      var MsN := TThread.GetTickCount - T0N;
+      Result := 'espera=' + IfThen(MsN >= 150, 'si', 'no:' + IntToStr(MsN) + 'ms') +
+        '|cierre-antes=' + IfThen(TInterlocked.CompareExchange(LCerroN, 0, 0) = 1, 'si', 'no');
+      THN.WaitFor;
+      THN.Free;
+
+      // Desde el mismo hilo que entrega la peticion: no se espera a si mismo
+      var LMismo := '';
+      var THM := TThread.CreateAnonymousThread(
+        procedure
+        begin
+          var LIgnorar: TRequestCompletedEvent := ProbeN.StartFakeAsyncRequest();
+          var T0M := TThread.GetTickCount;
+          ProbeN.EsperarPrevia;
+          LMismo := IfThen(TThread.GetTickCount - T0M < 100, 'inmediato', 'espero');
+        end);
+      THM.FreeOnTerminate := False;
+      THM.Start;
+      THM.WaitFor;
+      THM.Free;
+      Result := Result + '|mismo-hilo=' + LMismo;
+    finally
+      // la segunda peticion falsa nunca se cerro: se cierra para que el destructor no espere
+      var LFin: TRequestCompletedEvent := ProbeN.StartFakeAsyncRequest();
+      LFin(nil, nil);
+      ProbeN.Free;
     end;
     Exit;
   end;
