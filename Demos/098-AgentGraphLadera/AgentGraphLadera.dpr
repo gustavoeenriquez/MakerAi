@@ -279,11 +279,18 @@ var
   Rutas: TDictionary<string, string>;
   Texto, Resultado: string;
   ConLLM: Boolean;
+var
+  BufSalida: array [0 .. 0] of Byte;
+
 begin
   {$IFDEF MSWINDOWS}
   SetConsoleOutputCP(CP_UTF8);
   SetTextCodePage(Output, CP_UTF8);
   {$ENDIF}
+  // Salida a un pipe (grabaciones, logs): el RTL la junta en bloques de 128 bytes y
+  // el streaming se veria de golpe. Con un buffer de 1 byte cada caracter sale al
+  // escribirlo (en una consola real ya se vaciaba en cada Write).
+  SetTextBuf(Output, BufSalida, 1);
   ConLLM := not HasFlag('--sin-llm') and (GetEnvironmentVariable('OPENAI_API_KEY') <> '');
   Pedido := TPedido.Create;
   Grafo := TAIAgentManager.Create(nil);

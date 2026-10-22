@@ -75,6 +75,22 @@ type
     procedure AddLog(const S: string);
     procedure ChatAppend(const S: string);
     function ParseFecha(const S: string; aIndex: Integer): TDateTime;
+    // Prueba automatica / grabacion de video, sin teclado ni mouse:
+    //   --driver OpenAi --model gpt-6-sol --prueba [--tecleo] [--pausa ms] [--tamano 1600x900] [--marcas archivo] "pregunta" ...
+    procedure IniciarPrueba;
+    procedure PasoPrueba(Sender: TObject);
+  private
+    FPrueba: TStringList;
+    FTimerPrueba: TTimer;
+    FTecleo: Boolean;
+    FPausaMs: Integer;
+    FFinTurno: Cardinal;
+    FEscribiendo: string;
+    FTecleadas: Integer;      // letras de FEscribiendo ya escritas en el memo
+    FMarcas: string;          // archivo de marcas para el montaje del video
+    FTurno: Integer;
+    FCargaRAG: Cardinal;      // "@rag archivo": el texto ya esta en el prompt; se indexa al vencer
+    procedure Marcar(const ANombre: string);
   public
   end;
 
@@ -86,7 +102,7 @@ implementation
 {$R *.fmx}
 
 const
-  CHART_DT_FMT = 'dd/mm hh:nn';
+  CHART_DT_FMT = 'dd/mm';
 
 // =============================================================================
 //  Creacion del form
@@ -99,10 +115,12 @@ begin
   AddLog('Listo. Selecciona proveedor y modelo, escribe un prompt y pulsa Enviar.');
   AddLog('Tools disponibles para la IA: GetFechaHora, GraficarSerie.');
   AddLog('RAG local en SQLite: ' + FDConn.Params.Database);
+  IniciarPrueba;
 end;
 
 procedure TFormMain.FormDestroy(Sender: TObject);
 begin
+  FPrueba.Free;
   try
     if Assigned(FDConn) then
       FDConn.Connected := False;
@@ -207,7 +225,10 @@ begin
   FSerie := TLineSeries.Create(Chart1);
   Chart1.AddSeries(FSerie);
   FSerie.XValues.DateTime := True;
+  FSerie.Pointer.Visible := True;          // un punto por dato
+  Chart1.Legend.Visible := False;          // una sola serie: el titulo basta
   Chart1.BottomAxis.DateTimeFormat := CHART_DT_FMT;
+  Chart1.BottomAxis.Increment := 1;        // una marca por dia
 
   tabLog := Tab.Add;
   tabLog.Text := 'Log';
@@ -338,9 +359,11 @@ begin
     Exit;
 
   AiConn.DriverName := Trim(ComboDriver.Selected.Text);
-  // habilitar tools y streaming para este demo
-  AiConn.Params.Values['Tool_Active'] := 'True';
+  // herramientas por el canal tipado (no por Params) y streaming
+  AiConn.Tool_Active := True;
   AiConn.Params.Values['Asynchronous'] := 'True';
+  // el chat es un TMemo: sin Markdown, los ** se verian tal cual
+  AiConn.SystemPrompt.Text := 'Responde en español, breve y en texto plano, sin Markdown.';
 
   try
     List := AiConn.GetModels;
@@ -478,9 +501,11 @@ begin
         MemoChat.Lines.Text := MemoChat.Lines.Text + aText;
 
       ChatAppend(sLineBreak + sLineBreak);
+      // Prompt_tokens son solo los tokens nuevos; los del cache van aparte
       if Assigned(aMsg) then
-        AddLog(Format('Tokens -> prompt:%d  completion:%d  total:%d  (%s)',
-          [aMsg.Prompt_tokens, aMsg.Completion_tokens, aMsg.Total_tokens, aMsg.Model]));
+        AddLog(Format('Tokens -> prompt:%d (cache:%d)  completion:%d  total:%d  (%s)',
+          [aMsg.Prompt_tokens + aMsg.Cached_tokens + aMsg.Cache_write_tokens, aMsg.Cached_tokens,
+           aMsg.Completion_tokens, aMsg.Total_tokens, aMsg.Model]));
       BtnSend.Enabled := True;
     end);
 end;
@@ -499,12 +524,17 @@ end;
 //  Funciones (tools) llamadas por la IA
 // =============================================================================
 procedure TFormMain.FuncGetFechaHora(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+var
+  LAhora: string;
 begin
-  ToolCall.Response := FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Now);
+  LAhora := FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Now);
+  ToolCall.Response := LAhora;
+  // El log se escribe despues, en el hilo principal: con el valor copiado, no con
+  // ToolCall (para entonces el chat ya pudo liberarlo y el log salia vacio)
   TThread.Queue(nil,
     procedure
     begin
-      AddLog('Tool GetFechaHora -> ' + ToolCall.Response);
+      AddLog('Tool GetFechaHora -> ' + LAhora);
     end);
   Handled := True;
 end;
@@ -513,11 +543,8 @@ procedure TFormMain.FuncGraficarSerie(Sender: TObject; FunctionAction: TFunction
 var
   jObj: TJSONObject;
   jPuntos: TJSONArray;
-  jVal: TJSONValue;
-  jPto: TJSONObject;
-  LTitulo, LFecha: string;
-  LValor: Double;
-  i, LCount: Integer;
+  LTitulo: string;
+  LCount: Integer;
 begin
   Handled := True;
   jObj := TJSONObject.ParseJSONValue(ToolCall.Arguments) as TJSONObject;
@@ -569,11 +596,162 @@ begin
 
     ToolCall.Response := Format('OK, grafica generada con %d puntos.', [LCount]);
   finally
-    // mantener variables tocadas para evitar hints
-    jVal := nil; jPto := nil; i := 0; LFecha := ''; LValor := 0;
-    if (jVal = nil) and (jPto = nil) and (i = 0) and (LFecha = '') and (LValor = 0) then ;
     jObj.Free;
   end;
+end;
+
+// =============================================================================
+//  Prueba automatica (la usa la grabacion de los videos de la serie)
+// =============================================================================
+procedure TFormMain.IniciarPrueba;
+var
+  I, K: Integer;
+  Arg, Valor: string;
+begin
+  I := 1;
+  while I <= ParamCount do
+  begin
+    Arg := ParamStr(I);
+    if I < ParamCount then
+      Valor := ParamStr(I + 1)
+    else
+      Valor := '';
+    if SameText(Arg, '--driver') then
+    begin
+      K := ComboDriver.Items.IndexOf(Valor);
+      if K >= 0 then
+        ComboDriver.ItemIndex := K;   // OnChange carga los modelos del proveedor
+      Inc(I);
+    end
+    else if SameText(Arg, '--model') then
+    begin
+      K := ComboModel.Items.IndexOf(Valor);
+      if K < 0 then
+        K := ComboModel.Items.Add(Valor);
+      ComboModel.ItemIndex := K;
+      Inc(I);
+    end
+    else if SameText(Arg, '--pausa') then
+    begin
+      FPausaMs := StrToIntDef(Valor, 0);
+      Inc(I);
+    end
+    else if SameText(Arg, '--tamano') then
+    begin
+      ClientWidth := StrToIntDef(Valor.Split(['x'])[0], ClientWidth);
+      ClientHeight := StrToIntDef(Valor.Split(['x'])[1], ClientHeight);
+      Inc(I);
+    end
+    else if SameText(Arg, '--marcas') then
+    begin
+      FMarcas := Valor;
+      Inc(I);
+    end
+    else if SameText(Arg, '--tecleo') then
+      FTecleo := True
+    else if not SameText(Arg, '--prueba') then
+    begin
+      if not Assigned(FPrueba) then
+        FPrueba := TStringList.Create;
+      FPrueba.Add(Arg);
+    end;
+    Inc(I);
+  end;
+  if not Assigned(FPrueba) then
+    Exit;
+  MemoPrompt.Lines.Clear;
+  FFinTurno := TThread.GetTickCount + 1500;
+  FTimerPrueba := TTimer.Create(Self);
+  FTimerPrueba.Interval := 50;
+  FTimerPrueba.OnTimer := PasoPrueba;
+end;
+
+procedure TFormMain.PasoPrueba(Sender: TObject);
+var
+  Pregunta: string;
+begin
+  // Envia cada pregunta como si la escribiera el usuario, una tras otra
+  if not BtnSend.Enabled then
+  begin
+    FFinTurno := 0;
+    Exit;
+  end;
+  if FFinTurno = 0 then
+  begin
+    FFinTurno := TThread.GetTickCount;
+    if FTurno > 0 then
+      Marcar('fin' + IntToStr(FTurno));
+  end;
+
+  // "@rag archivo": el texto se ve un momento en el prompt, se indexa como con el
+  // boton y queda marcado "Usar RAG" para las preguntas siguientes
+  if FCargaRAG <> 0 then
+  begin
+    if TThread.GetTickCount < FCargaRAG then
+      Exit;
+    FCargaRAG := 0;
+    BtnLoadRAGClick(BtnLoadRAG);
+    ChkUseRAG.IsChecked := True;
+    Tab.ActiveTab := tabLog;
+    Marcar('rag' + IntToStr(FTurno));
+    FFinTurno := TThread.GetTickCount;
+    Exit;
+  end;
+
+  if FEscribiendo <> '' then
+  begin
+    if FTecleadas < FEscribiendo.Length then
+    begin
+      Inc(FTecleadas);
+      MemoPrompt.Lines.Text := FEscribiendo.Substring(0, FTecleadas);
+    end
+    else if Int64(TThread.GetTickCount) - Int64(FFinTurno) > 700 then
+    begin
+      FEscribiendo := '';
+      Marcar('envio' + IntToStr(FTurno));
+      BtnSendClick(BtnSend);
+    end;
+    Exit;
+  end;
+
+  if Int64(TThread.GetTickCount) - Int64(FFinTurno) < FPausaMs then
+    Exit;
+  if FPrueba.Count = 0 then
+  begin
+    FTimerPrueba.Enabled := False;
+    Close;
+    Exit;
+  end;
+  Pregunta := FPrueba[0];
+  FPrueba.Delete(0);
+  Inc(FTurno);
+  Marcar('q' + IntToStr(FTurno));
+  if Pregunta.StartsWith('@rag ') then
+  begin
+    MemoPrompt.Lines.Text := TFile.ReadAllText(Pregunta.Substring(5).Trim, TEncoding.UTF8);
+    FCargaRAG := TThread.GetTickCount + 2500;
+  end
+  else if FTecleo then
+  begin
+    FEscribiendo := Pregunta;
+    FTecleadas := 0;
+    MemoPrompt.Lines.Clear;
+    FFinTurno := TThread.GetTickCount + Cardinal(Pregunta.Length) * 50;
+  end
+  else
+  begin
+    MemoPrompt.Lines.Text := Pregunta;
+    Marcar('envio' + IntToStr(FTurno));
+    BtnSendClick(BtnSend);
+  end;
+end;
+
+procedure TFormMain.Marcar(const ANombre: string);
+begin
+  // Hora UTC en ms: grabar_ventana.py la convierte a segundos del video (tiempos.json)
+  if FMarcas <> '' then
+    TFile.AppendAllText(FMarcas, Format('%s'#9'%d'#13#10,
+      [ANombre, Round((TTimeZone.Local.ToUniversalTime(Now) - UnixDateDelta) * MSecsPerDay)]));
 end;
 
 // =============================================================================
@@ -597,7 +775,9 @@ function TFormMain.ParseFecha(const S: string; aIndex: Integer): TDateTime;
 var
   d: TDateTime;
 begin
-  if (S <> '') and TryISO8601ToDate(S, d, False) then
+  // ReturnUTC = True: la fecha tal como llega. Con False la convertia a hora local
+  // y "2026-10-19" caia el 18 a las 19:00 (UTC-5)
+  if (S <> '') and TryISO8601ToDate(S, d, True) then
     Exit(d);
   if (S <> '') and TryStrToDateTime(S, d) then
     Exit(d);

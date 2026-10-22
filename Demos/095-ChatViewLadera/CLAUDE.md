@@ -14,6 +14,8 @@ Demo 095: chat FMX con `TAIChatView` y `TAIChatInput`, con imágenes, PDF y voz.
 
 ## Detalles que muerden
 
+- **El pie suma el caché.** Los contadores del framework son disjuntos: `Prompt_tokens` son los tokens nuevos y `Cached_tokens`/`Cache_write_tokens` los del caché. El pie muestra la suma y aparte cuántos vinieron del caché; con solo `Prompt_tokens` un turno con imagen cacheada decía "3 tokens de entrada" (oct 22/2026).
+
 - **Orden del `uses`.** `AIChat.Types` también declara un `TAIChatMessage`, y Delphi no distingue mayúsculas. Va antes de `uMakerAi.Chat.Messages` para que gane el del framework.
 - **Adjuntos.** `TAIChatInput` libera `aMediaFiles` y `aAudioStream` al volver de `OnSendEvent`. `ToMediaFileArray` devuelve copias, y el audio se copia en un `TAiMediaFile`.
 - **Hilo aparte.** `AddMessageAndRun` corre en un `TTask` porque el puente de audio es síncrono, y sin el hilo la ventana se congela mientras transcribe.
@@ -25,6 +27,8 @@ ChatViewLadera.exe --prueba "pregunta" "@C:\ruta\bolsa.png|¿Qué café es este?
 ```
 
 Envía cada pregunta como si la escribiera el usuario (`@ruta|texto` adjunta un archivo). Al final guarda una captura del chat con `MakeScreenshot` y cierra. No mueve el mouse ni el teclado del escritorio.
+
+Para grabar video (skill `videos-delphi`, con `grabar_ventana.py`): `--tecleo` escribe la pregunta letra a letra en el input, `--pausa ms` espera tras cada respuesta y antes de cerrar, `--tamano 1440x1000` fija el área cliente y `--marcas archivo` anota (hora UTC en ms) cuándo se teclea, se envía y termina cada turno, para que el montaje corte las escenas.
 
 ## Probado (oct 22/2026)
 

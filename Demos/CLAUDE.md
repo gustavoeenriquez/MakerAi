@@ -189,6 +189,8 @@ AiConn.ModelCaps := [cap_Image];
 AiConn.OnError := AiConnError;            // metodo del formulario (TAiErrorEvent)
 ```
 
+**Demos de consola con streaming:** cuando la salida va a un pipe (grabaciones, logs, `capturar_consola.py` del skill de videos), el RTL la junta en bloques de 128 bytes y el streaming se ve de golpe. Los demos 093-099 ponen al arrancar `SetTextBuf(Output, BufSalida, 1)` (global `BufSalida: array [0 .. 0] of Byte`). `TTextRec(Output).FlushFunc := InOutFunc` no funciona en Delphi 13.
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for project overview, build instructions, and architecture details.

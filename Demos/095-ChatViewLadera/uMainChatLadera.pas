@@ -23,7 +23,7 @@
 interface
 
 uses
-  System.SysUtils, System.StrUtils, System.Types, System.UITypes, System.Classes, System.IOUtils,
+  System.SysUtils, System.StrUtils, System.DateUtils, System.Types, System.UITypes, System.Classes, System.IOUtils,
   System.JSON, System.Threading, System.Diagnostics, System.Net.HttpClient,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.StdCtrls,
   FMX.Layouts, FMX.ListBox, FMX.Controls.Presentation,
@@ -81,13 +81,22 @@ type
     procedure MostrarTranscripcion;
     procedure SetEstado(const AText: string);
     function CarpetaDatos: string;
-    // Prueba automatica: --prueba "pregunta" "@archivo|pregunta" ... --captura x.png
+    // Prueba automatica: --prueba "pregunta" "@archivo|pregunta" ... [--captura x.png]
+    // Para grabar video: [--tecleo] [--pausa ms] [--tamano 1440x1000] [--marcas archivo]
     procedure IniciarPrueba;
     procedure PasoPrueba(Sender: TObject);
   private
     FPrueba: TStringList;
     FCaptura: string;
     FTimerPrueba: TTimer;
+    FTecleo: Boolean;          // escribe la pregunta letra a letra en el input
+    FPausaMs: Integer;         // espera tras cada respuesta (y antes de cerrar)
+    FFinTurno: Cardinal;       // cuando termino la ultima respuesta
+    FEscribiendo: string;      // pregunta que se esta tecleando
+    FArchivoPendiente: string; // adjunto de la pregunta que se esta tecleando
+    FMarcas: string;           // archivo de marcas para el montaje del video
+    FTurno: Integer;
+    procedure Marcar(const ANombre: string);
   end;
 
 var
@@ -301,10 +310,19 @@ procedure TFormChatLadera.AlTerminar(const Sender: TObject; aMsg: TAiChatMessage
   aRole, aText: string);
 var
   Pie: string;
+  Entrada: Integer;
 begin
   if Assigned(aMsg) then
-    Pie := Format('%d tokens de entrada · %d de salida · %.1f s',
-      [aMsg.Prompt_tokens, aMsg.Completion_tokens, FReloj.ElapsedMilliseconds / 1000])
+  begin
+    // Los contadores del framework son disjuntos: Prompt_tokens son los nuevos y
+    // Cached_tokens/Cache_write_tokens los del cache. La entrada es la suma; si
+    // solo se mostrara Prompt_tokens, un turno con cache saldria con "3 tokens".
+    Entrada := aMsg.Prompt_tokens + aMsg.Cached_tokens + aMsg.Cache_write_tokens;
+    Pie := Format('%d tokens de entrada', [Entrada]);
+    if aMsg.Cached_tokens > 0 then
+      Pie := Pie + Format(' (%d en caché)', [aMsg.Cached_tokens]);
+    Pie := Pie + Format(' · %d de salida · %.1f s', [aMsg.Completion_tokens, FReloj.ElapsedMilliseconds / 1000]);
+  end
   else
     Pie := Format('%.1f s', [FReloj.ElapsedMilliseconds / 1000]);
   TThread.Queue(nil,
@@ -442,6 +460,25 @@ begin
       FCaptura := ParamStr(I + 1);
       Inc(I);
     end
+    else if SameText(ParamStr(I), '--pausa') and (I < ParamCount) then
+    begin
+      FPausaMs := StrToIntDef(ParamStr(I + 1), 0);
+      Inc(I);
+    end
+    else if SameText(ParamStr(I), '--tamano') and (I < ParamCount) then
+    begin
+      // "1440x1000": tamano del area cliente (para que el video no se agrande)
+      ClientWidth := StrToIntDef(ParamStr(I + 1).Split(['x'])[0], ClientWidth);
+      ClientHeight := StrToIntDef(ParamStr(I + 1).Split(['x'])[1], ClientHeight);
+      Inc(I);
+    end
+    else if SameText(ParamStr(I), '--marcas') and (I < ParamCount) then
+    begin
+      FMarcas := ParamStr(I + 1);
+      Inc(I);
+    end
+    else if SameText(ParamStr(I), '--tecleo') then
+      FTecleo := True
     else if not SameText(ParamStr(I), '--prueba') then
     begin
       if not Assigned(FPrueba) then
@@ -453,19 +490,68 @@ begin
   if not Assigned(FPrueba) then
     Exit;
   FTimerPrueba := TTimer.Create(Self);
-  FTimerPrueba.Interval := 1000;
+  FTimerPrueba.Interval := 50;
+  FFinTurno := TThread.GetTickCount + 1500;   // que se vea la ventana antes de la primera pregunta
   FTimerPrueba.OnTimer := PasoPrueba;
 end;
 
 procedure TFormChatLadera.PasoPrueba(Sender: TObject);
+
+  procedure Enviar(const APregunta, AArchivo: string);
+  var
+    Archivos: TAiMediaFiles;
+    MF: TAiMediaFile;
+  begin
+    Archivos := TAiMediaFiles.Create;
+    try
+      if AArchivo <> '' then
+      begin
+        MF := TAiMediaFile.Create;
+        MF.LoadFromFile(AArchivo);
+        Archivos.Add(MF);
+      end;
+      ChatInput1.PromptText := '';
+      ChatInput1.Busy := True;
+      Marcar('envio' + IntToStr(FTurno));
+      ChatInput1SendEvent(ChatInput1, APregunta, Archivos, nil);
+    finally
+      Archivos.Free;
+    end;
+  end;
+
 var
   Linea, Pregunta: string;
-  Archivos: TAiMediaFiles;
-  MF: TAiMediaFile;
 begin
   // Envia cada pregunta como si la escribiera el usuario, una tras otra
   if ChatInput1.Busy then
+  begin
+    FFinTurno := 0;
     Exit;
+  end;
+  if FFinTurno = 0 then
+  begin
+    FFinTurno := TThread.GetTickCount;
+    if FTurno > 0 then
+      Marcar('fin' + IntToStr(FTurno));
+  end;
+
+  // Tecleo en curso: una letra por tic (50 ms)
+  if FEscribiendo <> '' then
+  begin
+    if ChatInput1.PromptText.Length < FEscribiendo.Length then
+      ChatInput1.PromptText := FEscribiendo.Substring(0, ChatInput1.PromptText.Length + 1)
+    else if Int64(TThread.GetTickCount) - Int64(FFinTurno) > 700 then
+    begin
+      Pregunta := FEscribiendo;
+      FEscribiendo := '';
+      Enviar(Pregunta, FArchivoPendiente);
+    end;
+    Exit;
+  end;
+
+  if Int64(TThread.GetTickCount) - Int64(FFinTurno) < FPausaMs then
+    Exit;
+
   if FPrueba.Count = 0 then
   begin
     FTimerPrueba.Enabled := False;
@@ -481,22 +567,32 @@ begin
   end;
   Linea := FPrueba[0];
   FPrueba.Delete(0);
-  Archivos := TAiMediaFiles.Create;
-  try
-    Pregunta := Linea;
-    // "@ruta|pregunta": adjunta un archivo
-    if Linea.StartsWith('@') then
-    begin
-      Pregunta := Linea.Substring(Linea.IndexOf('|') + 1);
-      MF := TAiMediaFile.Create;
-      MF.LoadFromFile(Linea.Substring(1, Linea.IndexOf('|') - 1));
-      Archivos.Add(MF);
-    end;
-    ChatInput1.Busy := True;
-    ChatInput1SendEvent(ChatInput1, Pregunta, Archivos, nil);
-  finally
-    Archivos.Free;
+  Inc(FTurno);
+  Marcar('q' + IntToStr(FTurno));
+  Pregunta := Linea;
+  FArchivoPendiente := '';
+  // "@ruta|pregunta": adjunta un archivo
+  if Linea.StartsWith('@') then
+  begin
+    Pregunta := Linea.Substring(Linea.IndexOf('|') + 1);
+    FArchivoPendiente := Linea.Substring(1, Linea.IndexOf('|') - 1);
   end;
+  if FTecleo and (Pregunta <> '') then
+  begin
+    FEscribiendo := Pregunta;
+    ChatInput1.PromptText := '';
+    FFinTurno := TThread.GetTickCount + Cardinal(Pregunta.Length) * 50;  // pausa corta al terminar de teclear
+  end
+  else
+    Enviar(Pregunta, FArchivoPendiente);
+end;
+
+procedure TFormChatLadera.Marcar(const ANombre: string);
+begin
+  // Hora UTC en ms: grabar_ventana.py la convierte a segundos del video (tiempos.json)
+  if FMarcas <> '' then
+    TFile.AppendAllText(FMarcas, Format('%s'#9'%d'#13#10,
+      [ANombre, Round((TTimeZone.Local.ToUniversalTime(Now) - UnixDateDelta) * MSecsPerDay)]));
 end;
 
 procedure TFormChatLadera.SetEstado(const AText: string);

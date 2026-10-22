@@ -339,6 +339,9 @@ end;
 
 var
   Driver, Model, Key: string;
+var
+  BufSalida: array [0 .. 0] of Byte;
+
 begin
   {$IFDEF MSWINDOWS}
   // Tildes y eñes en la consola
@@ -347,6 +350,10 @@ begin
   SetTextCodePage(Output, CP_UTF8);
   SetTextCodePage(Input, CP_UTF8);
   {$ENDIF}
+  // Salida a un pipe (grabaciones, logs): el RTL la junta en bloques de 128 bytes y
+  // el streaming se veria de golpe. Con un buffer de 1 byte cada caracter sale al
+  // escribirlo (en una consola real ya se vaciaba en cada Write).
+  SetTextBuf(Output, BufSalida, 1);
   ConsoleLock := TCriticalSection.Create;
   Oyente := TOyente.Create;
   Conn := TAiChatConnection.Create(nil);

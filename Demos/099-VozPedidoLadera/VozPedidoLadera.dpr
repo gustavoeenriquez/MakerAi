@@ -405,11 +405,18 @@ var
   Chat: TAiChatConnection;
   Capture: TAiAudioCapture;
   Texto, Audio: string;
+var
+  BufSalida: array [0 .. 0] of Byte;
+
 begin
   {$IFDEF MSWINDOWS}
   SetConsoleOutputCP(CP_UTF8);
   SetTextCodePage(Output, CP_UTF8);
   {$ENDIF}
+  // Salida a un pipe (grabaciones, logs): el RTL la junta en bloques de 128 bytes y
+  // el streaming se veria de golpe. Con un buffer de 1 byte cada caracter sale al
+  // escribirlo (en una consola real ya se vaciaba en cada Write).
+  SetTextBuf(Output, BufSalida, 1);
   if GetEnvironmentVariable('OPENAI_API_KEY') = '' then
   begin
     Writeln('Falta la variable OPENAI_API_KEY.');

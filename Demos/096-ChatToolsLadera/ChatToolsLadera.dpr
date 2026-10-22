@@ -136,11 +136,18 @@ var
   Vigia: TVigia;
   Carpeta, Driver, Key, Respuesta, Tarea: string;
   N: Integer;
+var
+  BufSalida: array [0 .. 0] of Byte;
+
 begin
   {$IFDEF MSWINDOWS}
   SetConsoleOutputCP(CP_UTF8);
   SetTextCodePage(Output, CP_UTF8);
   {$ENDIF}
+  // Salida a un pipe (grabaciones, logs): el RTL la junta en bloques de 128 bytes y
+  // el streaming se veria de golpe. Con un buffer de 1 byte cada caracter sale al
+  // escribirlo (en una consola real ya se vaciaba en cada Write).
+  SetTextBuf(Output, BufSalida, 1);
   Carpeta := TPath.Combine(ExtractFilePath(ParamStr(0)), 'trabajo_ladera');
   ForceDirectories(Carpeta);
   SetCurrentDir(Carpeta);   // la consola y el editor arrancan aqui
@@ -178,7 +185,8 @@ begin
       Conn.Params.Values['Asynchronous'] := 'False';
       Conn.SystemPrompt.Text :=
         'Eres el asistente de operaciones de Café La Ladera. Tu carpeta de trabajo es ' + Carpeta +
-        ' y la consola es cmd.exe de Windows. Responde en español, breve.';
+        ' y la consola es cmd.exe de Windows. Responde en español, breve y en texto plano, ' +
+        'sin Markdown: la respuesta sale en una consola.';
       Conn.ModelCaps := Conn.ModelCaps + [cap_WebSearch, cap_TextEditor, cap_Shell];
       Conn.SessionCaps := Conn.ModelCaps;
       Conn.ChatTools.ShellTool := Shell;

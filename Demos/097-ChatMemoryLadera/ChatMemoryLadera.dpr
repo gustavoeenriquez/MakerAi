@@ -51,7 +51,8 @@ const
     'Nariño Altura 42.000 COP (cítricos, caramelo, acidez alta); Sierra Nevada Orgánico 36.000 COP ' +
     '(chocolate amargo, nuez, acidez baja); Descafeinado Suave 34.000 COP (cacao suave).' + sLineBreak +
     'Si el mensaje trae un bloque "Contexto de memoria", son cosas que el cliente te contó en ' +
-    'visitas anteriores: úsalas con naturalidad. Responde en español, cálido y breve (máximo 5 líneas).';
+    'visitas anteriores: úsalas con naturalidad. Responde en español, cálido y breve (máximo 5 líneas), ' +
+    'en texto plano sin Markdown: la respuesta sale en una consola.';
 
   SESION_1: array [0 .. 2] of string = (
     'Hola, soy Marta. En casa preparo el café en prensa francesa y lo tomo sin azúcar.',
@@ -117,11 +118,18 @@ var
   Analizador, Chat: TAiChatConnection;
   DbPath, Pregunta: string;
   Guardadas: Integer;
+var
+  BufSalida: array [0 .. 0] of Byte;
+
 begin
   {$IFDEF MSWINDOWS}
   SetConsoleOutputCP(CP_UTF8);
   SetTextCodePage(Output, CP_UTF8);
   {$ENDIF}
+  // Salida a un pipe (grabaciones, logs): el RTL la junta en bloques de 128 bytes y
+  // el streaming se veria de golpe. Con un buffer de 1 byte cada caracter sale al
+  // escribirlo (en una consola real ya se vaciaba en cada Write).
+  SetTextBuf(Output, BufSalida, 1);
   if GetEnvironmentVariable('OPENAI_API_KEY') = '' then
   begin
     Writeln('Falta la variable OPENAI_API_KEY.');
