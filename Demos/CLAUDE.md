@@ -12,7 +12,7 @@ This is the Demos directory for the MakerAI 3.x framework. Contains 66 working e
 
 **IDE:** Delphi 11 Alexandria through 13 Florence (demos require Delphi 11+; the core framework supports 10.4 Sydney minimum)
 
-**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026; desde sep 29/2026 incluye los 58 proyectos (se sumaron 089-QwenShowcase, que había quedado fuera, y 091-Skills); oct 5/2026 se sumó 092-GPTLiveVoice (59); oct 22/2026, 093-A2AChatAgentTool (60) y de 094 a 099, los demos de la serie de Café La Ladera (66).
+**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026; desde sep 29/2026 incluye los 58 proyectos (se sumaron 089-QwenShowcase, que había quedado fuera, y 091-Skills); oct 5/2026 se sumó 092-GPTLiveVoice (59); oct 22/2026, 093-A2AChatAgentTool (60) y de 094 a 099, los demos de la serie de Café La Ladera (66); de 100 a 102, más demos de la serie (69).
 
 > **OJO al editar los `.pas` de los demos:** varios están en **ANSI (Windows-1252) con saltos LF**, no en UTF-8. Guardarlos como UTF-8 destruye todas las tildes de forma silenciosa (compila igual, y `git diff` lo disimula si `core.autocrlf` está activo). Verificar siempre con `git diff --numstat` que solo cambien las líneas que se tocaron.
 
@@ -81,6 +81,9 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 097-ChatMemoryLadera | **Serie, ep. 9.** Consola: Marta cuenta sus gustos, el analizador los guarda y en otra sesión, con un chat nuevo, Lucía los recuerda. Tiene CLAUDE.md | `TAiMemory` + `PersistentMemory` + `Analyzer` (`gpt-6-luna`) + embeddings |
 | 098-AgentGraphLadera | **Serie, ep. 13.** Consola: un pedido recorre un grafo con fanout, `jmAll`, `AddExpressionEdge` + `AddFallbackEdge`, `AddConditionalEdge` y un `TLLMNode` que redacta el mensaje (`--sin-llm` sin clave). Tiene CLAUDE.md | API fluida de `TAIAgentManager`, blackboard |
 | 099-VozPedidoLadera | **Serie, ep. 18 (la cima).** Consola: la clienta pide por voz; GPT-Live delega en un chat que llama por A2A al agente de Pedidos, cuyo nodo Inventario está federado en el agente de Bodega. `--audio archivo.pcm` (prueba sin micrófono) y `--texto`. Tiene CLAUDE.md | `TAiOpenAiLiveChat.DelegateChat` + `TAiA2AAgentTool` + `TAiA2AServer` (x2) + `TAiA2ARemoteAgentTool` |
+| 100-MCPLadera | **Serie, ep. 10.** Consola: el mismo `.exe` es servidor MCP por stdio (`--servidor`, para Claude Desktop/Code) y chat que lo lanza como proceso hijo y usa sus herramientas (inventario y precio mayorista); muestra cada `tools/call`. Tiene CLAUDE.md | `TAiMCPStdioServer` + `TAiFunctions.MCPClients` (`tpStdIo`) |
+| 101-SkillsLadera | **Serie, ep. 11.** Consola: tres skills de la tienda (cotización con plantilla, reclamos, ficha de cata) bajo demanda; una petición no carga ninguno. Tiene CLAUDE.md | `TAiSkills` (`use_skill`, `read_skill_file`) |
+| 102-AgenteLadera | **Serie, ep. 12.** Consola: un `TLLMNode` con el skill de reclamos del 101 y dos herramientas atiende a una clienta; un segundo `TLLMNode` revisa la respuesta. Tiene CLAUDE.md | `TLLMNode.Skill` + `Registry` (`RegisterFromTAiFunctions`), API fluida |
 
 ### Guardrails, Evals y Memoria (07x)
 | Demo | Purpose | Key Pattern |
