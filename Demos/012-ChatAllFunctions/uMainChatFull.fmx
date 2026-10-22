@@ -537,7 +537,7 @@ object Form2: TForm2
               Text = 'ModelCaps'
               TabOrder = 40
             end
-            object EditChatMediaSupports: TEdit
+            object EditModelCapsMedia: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
               TabOrder = 41
@@ -549,8 +549,8 @@ object Form2: TForm2
               Size.Width = 194.000000000000000000
               Size.Height = 22.000000000000000000
               Size.PlatformDefault = False
-              OnEnter = EditChatMediaSupportsEnter
-              OnExit = EditChatMediaSupportsExit
+              OnEnter = EditModelCapsEnter
+              OnExit = EditCapsExit
             end
           end
           object ListBoxItem29: TListBoxItem
@@ -575,7 +575,7 @@ object Form2: TForm2
               Text = 'SessionCaps'
               TabOrder = 40
             end
-            object EditEnabledFeatures: TEdit
+            object EditSessionCapsMedia: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
               TabOrder = 41
@@ -587,8 +587,8 @@ object Form2: TForm2
               Size.Width = 194.000000000000000000
               Size.Height = 22.000000000000000000
               Size.PlatformDefault = False
-              OnEnter = EditEnabledFeaturesEnter
-              OnExit = EditEnabledFeaturesExit
+              OnEnter = EditSessionCapsEnter
+              OnExit = EditSessionCapsExit
             end
           end
           object ListBoxItem17: TListBoxItem
@@ -613,7 +613,7 @@ object Form2: TForm2
               Text = 'Model Gen (Native)'
               TabOrder = 40
             end
-            object EditNativeInputFiles: TEdit
+            object EditModelCapsGen: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
               TabOrder = 41
@@ -625,8 +625,8 @@ object Form2: TForm2
               Size.Width = 194.000000000000000000
               Size.Height = 22.000000000000000000
               Size.PlatformDefault = False
-              OnEnter = EditChatMediaSupportsEnter
-              OnExit = EditChatMediaSupportsExit
+              OnEnter = EditModelCapsEnter
+              OnExit = EditCapsExit
             end
           end
           object ListBoxItem18: TListBoxItem
@@ -651,7 +651,7 @@ object Form2: TForm2
               Text = 'Session Gen (Bridge)'
               TabOrder = 40
             end
-            object EditNativeOutputFiles: TEdit
+            object EditSessionCapsGen: TEdit
               Touch.InteractiveGestures = [LongTap, DoubleTap]
               Align = Client
               TabOrder = 41
@@ -663,8 +663,8 @@ object Form2: TForm2
               Size.Width = 194.000000000000000000
               Size.Height = 22.000000000000000000
               Size.PlatformDefault = False
-              OnEnter = EditChatMediaSupportsEnter
-              OnExit = EditChatMediaSupportsExit
+              OnEnter = EditModelCapsEnter
+              OnExit = EditCapsExit
             end
           end
           object ListBoxGroupHeader1: TListBoxGroupHeader
@@ -11271,17 +11271,11 @@ object Form2: TForm2
   end
   object AiConn: TAiChatConnection
     DriverName = 'OpenAi'
-    Model = 'gpt-5.2'
+    Model = 'gpt-6-sol'
     Params.Strings = (
       'ApiKey=@OPENAI_API_KEY'
-      'Model=gpt-5.2'
-      'MaxTokens=4096'
       'Url=https://api.openai.com/v1/'
       'Max_Tokens=8000'
-      'NativeInputFiles=[]'
-      'NativeOutputFiles=[]'
-      'ChatMediaSupports=[]'
-      'Tool_Active=False'
       'Asynchronous=False')
     AiFunctions = AiFunctions1
     Prompt_tokens = 0
@@ -11309,13 +11303,13 @@ object Form2: TForm2
   object AIWhisper1: TAIWhisper
     ApiKey = '@OPENAI_API_KEY'
     Url = 'https://api.openai.com/v1/'
-    Model = 'whisper-1'
+    Model = 'gpt-transcribe'
     Voice = 'nova'
     Format = 'wav'
     Languaje = 'es'
     Speed = 1.000000000000000000
-    ResponseFormat = 'text'
-    Quality = 'tts-1'
+    ResponseFormat = 'json'
+    Quality = 'gpt-4o-mini-tts'
     Left = 688
     Top = 584
   end
@@ -19985,7 +19979,7 @@ object Form2: TForm2
   end
   object AiOpenChat1: TAiOpenChat
     ApiKey = '@OPENAI_API_KEY'
-    Model = 'gpt4-o'
+    Model = 'gpt-6-sol'
     Logprobs = False
     Max_tokens = 300
     N = 1
@@ -20007,10 +20001,6 @@ object Form2: TForm2
     Url = 'https://api.openai.com/v1/'
     ResponseTimeOut = 61000
     Stream_Usage = False
-    NativeInputFiles = []
-    NativeOutputFiles = []
-    ChatMediaSupports = []
-    EnabledFeatures = []
     Voice = 'alloy'
     voice_format = 'mp3'
     ThinkingLevel = tlDefault
@@ -20042,7 +20032,7 @@ object Form2: TForm2
   end
   object AiGeminiChat1: TAiGeminiChat
     ApiKey = '@GEMINI_API_KEY'
-    Model = 'gemini-2.0-flash'
+    Model = 'gemini-3.8-flash'
     Logprobs = False
     Max_tokens = 3000
     N = 1
@@ -20064,10 +20054,6 @@ object Form2: TForm2
     Url = 'https://generativelanguage.googleapis.com/v1beta/'
     ResponseTimeOut = 61000
     Stream_Usage = False
-    NativeInputFiles = []
-    NativeOutputFiles = []
-    ChatMediaSupports = []
-    EnabledFeatures = []
     ThinkingLevel = tlDefault
     MediaResolution = mrDefault
     Left = 576
@@ -20107,10 +20093,6 @@ object Form2: TForm2
     Url = 'http://localhost:11434/'
     ResponseTimeOut = 61000
     Stream_Usage = False
-    NativeInputFiles = []
-    NativeOutputFiles = []
-    ChatMediaSupports = []
-    EnabledFeatures = []
     ThinkingLevel = tlDefault
     MediaResolution = mrDefault
     keep_alive = '1m'
@@ -20141,10 +20123,6 @@ object Form2: TForm2
     Url = 'http://127.0.0.1:7134/v1/'
     ResponseTimeOut = 120000
     Stream_Usage = False
-    NativeInputFiles = []
-    NativeOutputFiles = []
-    ChatMediaSupports = []
-    EnabledFeatures = []
     ThinkingLevel = tlDefault
     MediaResolution = mrDefault
     Left = 464

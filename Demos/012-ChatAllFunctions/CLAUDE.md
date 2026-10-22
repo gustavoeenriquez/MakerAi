@@ -4,9 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is **MakerAI 3.x**, a comprehensive AI orchestration framework for Delphi developers. It provides unified access to multiple AI providers (OpenAI GPT-5.1, Claude 4.5, Gemini 3.0, local models via Ollama/LM Studio) with support for RAG, Knowledge Graphs, MCP Servers, Agents, and Native Capability Tools.
+This is **MakerAI 3.x**, a comprehensive AI orchestration framework for Delphi developers. It provides unified access to multiple AI providers (OpenAI, Claude, Gemini, local models via Ollama/LM Studio) with support for RAG, Knowledge Graphs, MCP Servers, Agents, and Native Capability Tools.
 
 **Current directory:** Demo 012-ChatAllFunctions - A full-featured chat demo showcasing all framework capabilities.
+
+## Estado (oct 22/2026)
+
+- **El formulario no cargaba** ("Property NativeInputFiles does not exist", luego `Logprobs`): traía propiedades que dejaron de publicarse. Ahora `TAiChat.DefineProperties` las lee sin error (aplica `Top_p`, `Seed`, `N`, `Logprobs`, `Tool_Active`, `ThinkingLevel` ≠ `tlDefault`, `Voice`/`voice_format` → `TtsParams`; descarta el resto). Suite: `chat.legacy-form-props`.
+- **Capacidades por el canal tipado:** `ApplyParams` asigna `AiConn.Tool_Active`, `AiConn.ModelConfig.ThinkingLevel`, `AiConn.ModelCaps` y `AiConn.SessionCaps` (antes escribía esas claves en `Params`). El memo de parámetros las muestra arriba.
+- **Edits renombrados** según lo que configuran: `EditModelCapsMedia`/`EditModelCapsGen` (ModelCaps: medios de entrada y generación nativa) y `EditSessionCapsMedia`/`EditSessionCapsGen` (SessionCaps; Gap = SessionCaps − ModelCaps activa los bridges). Antes se llamaban como la API eliminada (`EditChatMediaSupports`, `EditNativeInputFiles`, `EditEnabledFeatures`, `EditNativeOutputFiles`).
+- **Modelos:** conexión `gpt-6-sol`; `AiOpenChat1` `gpt-6-sol`; `AiGeminiChat1` `gemini-3.8-flash` (2.0 apagado). Voz a texto: `AIWhisper1` con `gpt-transcribe` y `ResponseFormat = json` (whisper-1 se apaga en api.openai.com; el demo extrae `text` del JSON).
+- **Endpoints locales:** Ollama `http://localhost:11434/`, GenericLLM `http://localhost:1234/v1/` (antes una IP de la LAN de desarrollo).
+- El archivo `uMainChatFull.pas` está en **Windows-1252**: editarlo preservando la codificación.
 
 ## Build System
 
@@ -69,7 +78,7 @@ TAiChatConnection → SetDriver/Model → TAiChat (provider-specific)
 
 ## Supported AI Providers
 
-OpenAI (GPT-5.1, DALL-E 3, Sora 2, Whisper, TTS), Google Gemini (3.0, Veo 3), Anthropic Claude (4.5, computer use), DeepSeek, Groq, Ollama, LM Studio, Mistral, Kimi, Grok, Cohere
+OpenAI (GPT-6, imagen, Sora, gpt-transcribe, TTS), Google Gemini (3.x, Veo), Anthropic Claude (computer use), DeepSeek, Groq, Ollama, LM Studio, Mistral, Kimi, Grok, Cohere
 
 ## Configuration Files
 

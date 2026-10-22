@@ -240,13 +240,10 @@ object Form8: TForm8
       'TopK=5'
       'BaseURL=http://localhost:11434/'
       'Max_Tokens=8000'
-      'NativeInputFiles=[]'
       'NativeOutupFiles=[]'
-      'ChatMediaSupports=[]'
       'Tool_Active=False'
       'Asynchronous=False'
-      'URL=https://api.openai.com/v1/'
-      'NativeOutputFiles=[]')
+      'URL=https://api.openai.com/v1/')
     Prompt_tokens = 0
     Completion_tokens = 0
     Total_tokens = 0
@@ -299,10 +296,6 @@ object Form8: TForm8
     Url = 'http://localhost:11434/'
     ResponseTimeOut = 61000
     Stream_Usage = False
-    NativeInputFiles = []
-    NativeOutputFiles = []
-    ChatMediaSupports = []
-    EnabledFeatures = []
     ThinkingLevel = tlDefault
     MediaResolution = mrDefault
     keep_alive = '1m'

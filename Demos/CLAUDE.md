@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is the Demos directory for the MakerAI 3.x framework. Contains 59 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
+This is the Demos directory for the MakerAI 3.x framework. Contains 60 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
 
 **Estado de compilación (ago 7/2026): los 48 proyectos compilan** en Win64/Release; el 081 (ago 18/2026), el 082 y el 083 (sep 20/2026) también compilan; el 082 se corrió en runtime (6/6 PASS) y el 083 en **Linux64** sobre Xvfb con OpenAI y Claude.
 
@@ -12,7 +12,7 @@ This is the Demos directory for the MakerAI 3.x framework. Contains 59 working e
 
 **IDE:** Delphi 11 Alexandria through 13 Florence (demos require Delphi 11+; the core framework supports 10.4 Sydney minimum)
 
-**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026; desde sep 29/2026 incluye los 58 proyectos (se sumaron 089-QwenShowcase, que había quedado fuera, y 091-Skills); oct 5/2026 se sumó 092-GPTLiveVoice (59).
+**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026; desde sep 29/2026 incluye los 58 proyectos (se sumaron 089-QwenShowcase, que había quedado fuera, y 091-Skills); oct 5/2026 se sumó 092-GPTLiveVoice (59); oct 22/2026, 093-A2AChatAgentTool (60).
 
 > **OJO al editar los `.pas` de los demos:** varios están en **ANSI (Windows-1252) con saltos LF**, no en UTF-8. Guardarlos como UTF-8 destruye todas las tildes de forma silenciosa (compila igual, y `git diff` lo disimula si `core.autocrlf` está activo). Verificar siempre con `git diff --numstat` que solo cambien las líneas que se tocaron.
 
@@ -74,6 +74,7 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 079-A2ASutAgent | **Agente SUT del TCK oficial de A2A**: con él se certifica la implementación (MUST 89/89, SHOULD 8/8) | Despacha por PREFIJO del `messageId` (`tck-artifact-text`, `-file-url`, `tck-input-required`…) y es el ejemplo de cómo emitir **artifacts estructurados** desde un grafo vía blackboard. `--port 9999` |
 | 080-A2APushNotifications | Push notifications A2A: el agente hace POST a tu webhook al terminar | Agente (8282) + receptor de webhook propio (8283) en el mismo proceso, sin claves. Cubre lo que el TCK **no** cubre: la entrega con `blocking:false`, cuando nadie consulta el task |
 | 081-AgentChatHITL | Human-in-the-loop integrado en el chat, sin ventanas modales (sin LLM) | Grafo con `TAiWaitApprovalTool` que suspende sin bloquear threads; `OnSuspend` publica la pregunta como mensaje del chat y la siguiente respuesta del usuario reanuda con `ResumeThread`; `TAiFileCheckpointer` reanuda incluso tras reiniciar la app. **Primer demo con la UI nueva `TAIChatView`/`TAIChatInput` (Skia)** |
+| 093-A2AChatAgentTool | **Un chat que consulta a un agente A2A como herramienta**. El agente (catálogo de Café La Ladera) es un grafo sin LLM; el chat usa la key del driver (`--driver`, OpenAI por defecto) o `--sin-llm`. Tiene CLAUDE.md propio | `TAiA2AAgentTool` en un `TAiFunctions` (`DiscoverFromCard` toma la descripción de la Agent Card); hermano de `TAiA2ARemoteAgentTool`, que federa un nodo |
 
 ### Guardrails, Evals y Memoria (07x)
 | Demo | Purpose | Key Pattern |
@@ -149,28 +150,37 @@ Each demo subdirectory contains:
 
 ## Common Code Patterns Across Demos
 
+Los eventos de MakerAI son `of object`: se asignan **métodos** del formulario o de una clase, no métodos anónimos (no compila). Las firmas exactas: `TAiChatOnDataEvent` en `Source/Core/uMakerAi.Chat.pas` y `TAiErrorEvent` en `Source/Core/uMakerAi.Core.pas`.
+
 **Synchronous AI call:**
 ```pascal
-AiModel.Asynchronous := False;
-Response := AiModel.AddMessageAndRun(Prompt, 'user', []);
+AiConn.Params.Values['Asynchronous'] := 'False';
+Response := AiConn.AddMessageAndRun(Prompt, 'user', []);
 ```
 
 **Streaming with callback:**
 ```pascal
-AiModel.Asynchronous := True;
-AiModel.OnReceiveData := procedure(Sender: TObject; Data: string; IsDone: Boolean)
+AiConn.Params.Values['Asynchronous'] := 'True';
+AiConn.OnReceiveData := AiConnReceiveData;   // metodo del formulario (TAiChatOnDataEvent)
+AiConn.AddMessageAndRun(Prompt, 'user', []);
+
+procedure TForm1.AiConnReceiveData(const Sender: TObject; aMsg: TAiChatMessage;
+  aResponse: TJSonObject; aRole, aText: string);
 begin
-  TThread.Synchronize(nil, procedure begin Memo1.Text := Memo1.Text + Data; end);
+  TThread.Queue(nil, procedure begin Memo1.Text := Memo1.Text + aText; end);
 end;
-AiModel.AddMessageAndRun(Prompt, 'user', []);
+```
+
+**Tools y capacidades (canal tipado):**
+```pascal
+AiConn.AiFunctions := AiFunctions1;
+AiConn.Tool_Active := True;               // no Params.Values['Tool_Active']
+AiConn.ModelCaps := [cap_Image];
 ```
 
 **Error handling:**
 ```pascal
-AiModel.OnError := procedure(Sender: TObject; ErrorMsg: string; E: Exception; Resp: IHTTPResponse)
-begin
-  ShowMessage(ErrorMsg);
-end;
+AiConn.OnError := AiConnError;            // metodo del formulario (TAiErrorEvent)
 ```
 
 ## Navigation

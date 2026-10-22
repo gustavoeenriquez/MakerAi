@@ -120,13 +120,13 @@ type
     EditVoices: TEdit;
     ListBoxItem7: TListBoxItem;
     Label3: TLabel;
-    EditChatMediaSupports: TEdit;
+    EditModelCapsMedia: TEdit;
     ListBoxItem17: TListBoxItem;
     Label8: TLabel;
-    EditNativeInputFiles: TEdit;
+    EditModelCapsGen: TEdit;
     ListBoxItem18: TListBoxItem;
     Label9: TLabel;
-    EditNativeOutputFiles: TEdit;
+    EditSessionCapsGen: TEdit;
     ListBoxItem19: TListBoxItem;
     Label10: TLabel;
     EditVoiceFormat: TEdit;
@@ -279,7 +279,7 @@ type
     AiOllamaChat1: TAiOllamaChat;
     ListBoxItem29: TListBoxItem;
     Label18: TLabel;
-    EditEnabledFeatures: TEdit;
+    EditSessionCapsMedia: TEdit;
     AiGenericChat1: TAiGenericChat;
 
     procedure ChatInput1SendEvent(Sender: TObject; APrompt: string; aMediaFiles: TAiMediaFiles; aAudioStream: TMemoryStream);
@@ -297,8 +297,8 @@ type
     procedure TrackTemperatureTracking(Sender: TObject);
     procedure ChatInput1Cancel(Sender: TObject);
     procedure ChModelImageChange(Sender: TObject);
-    procedure EditChatMediaSupportsExit(Sender: TObject);
-    procedure EditChatMediaSupportsEnter(Sender: TObject);
+    procedure EditCapsExit(Sender: TObject);
+    procedure EditModelCapsEnter(Sender: TObject);
     procedure ChatInput1TranscriptText(Sender: TObject; aFragmentStream: TMemoryStream; out aTransriptText: string);
     procedure ChEnableListeningChange(Sender: TObject);
     procedure ChEnableWordDetectionChange(Sender: TObject);
@@ -343,8 +343,8 @@ type
     procedure AiComputerUseTool1SafetyConfirmation(Sender: TObject; const Explanation: string; var Allow: Boolean);
     procedure BtnSelectAreaClick(Sender: TObject);
     procedure AiFunctions1Functions3AdicionaFacturaAlERPAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
-    procedure EditEnabledFeaturesEnter(Sender: TObject);
-    procedure EditEnabledFeaturesExit(Sender: TObject);
+    procedure EditSessionCapsEnter(Sender: TObject);
+    procedure EditSessionCapsExit(Sender: TObject);
   private
     FLastBubble: TChatBubble;
     FPrompt_tokens: Integer;
@@ -990,7 +990,9 @@ begin
     if sUrl <> '' then
       AiConn.Params.Values['Url'] := sUrl;
 
-    AiConn.Params.Values['Tool_Active'] := BoolToStr(ChUseTools.IsChecked, True);
+    // Canal tipado (v3.5): Tool_Active, ThinkingLevel, ModelCaps y SessionCaps
+    // van por las propiedades de la conexion, no por Params
+    AiConn.Tool_Active := ChUseTools.IsChecked;
     AiConn.Params.Values['Asynchronous'] := BoolToStr(ChAsincrono.IsChecked, True);
     AiConn.Params.Values['Max_Tokens'] := StrToIntDef(EditMaxTokens.Text, 8000).ToString;
     AiConn.Params.Values['Temperature'] := FloatToStr(TrackTemperature.Value / 10);
@@ -1006,15 +1008,15 @@ begin
     if (FJSonShema <> '') and ChJSonFormat.IsChecked then
       AiConn.Params.Values['JsonSchema'] := FJSonShema;
 
-    AiConn.Params.Values['ThinkingLevel'] := GetEnumName(TypeInfo(TAiThinkingLevel), Max(0, EditThinkingLevel.ItemIndex));
+    AiConn.ModelConfig.ThinkingLevel := TAiThinkingLevel(Max(0, EditThinkingLevel.ItemIndex));
 
     // --- 3. ModelCaps (nuevo sistema v3.3) ---
-    // EditChatMediaSupports -> caps de entrada de medios que el modelo soporta nativamente
-    // EditNativeInputFiles  -> caps de GENERACION nativa del modelo
+    // EditModelCapsMedia -> caps de entrada de medios que el modelo soporta nativamente
+    // EditModelCapsGen  -> caps de GENERACION nativa del modelo
     //                          (e.g., cap_GenImage para Gemini image via completions)
     ModelCaps := '';
 
-    Opt := LowerCase(EditChatMediaSupports.Text);
+    Opt := LowerCase(EditModelCapsMedia.Text);
     if Opt.Contains('image') then AddToSet(ModelCaps, 'cap_Image');
     if Opt.Contains('audio') then AddToSet(ModelCaps, 'cap_Audio');
     if Opt.Contains('video') then AddToSet(ModelCaps, 'cap_Video');
@@ -1027,19 +1029,19 @@ begin
     if ChShellTool.IsChecked       then AddToSet(ModelCaps, 'cap_Shell');
     if ChEditTool.IsChecked        then AddToSet(ModelCaps, 'cap_TextEditor');
 
-    // Generacion nativa del modelo (EditNativeInputFiles repurposado)
-    Opt := LowerCase(EditNativeInputFiles.Text);
+    // Generacion nativa del modelo
+    Opt := LowerCase(EditModelCapsGen.Text);
     if Opt.Contains('image') then AddToSet(ModelCaps, 'cap_GenImage');
     if Opt.Contains('audio') then AddToSet(ModelCaps, 'cap_GenAudio');
     if Opt.Contains('video') then AddToSet(ModelCaps, 'cap_GenVideo');
 
     // --- 4. SessionCaps (nuevo sistema v3.3) ---
-    // EditEnabledFeatures   -> caps de entrada de medios deseados en sesion
-    // EditNativeOutputFiles -> caps de GENERACION deseados
+    // EditSessionCapsMedia   -> caps de entrada de medios deseados en sesion
+    // EditSessionCapsGen -> caps de GENERACION deseados
     //                          Gap = SessionCaps - ModelCaps activa bridge/tool automaticamente
     SessionCaps := '';
 
-    Opt := LowerCase(EditEnabledFeatures.Text);
+    Opt := LowerCase(EditSessionCapsMedia.Text);
     if Opt.Contains('image') then AddToSet(SessionCaps, 'cap_Image');
     if Opt.Contains('audio') then AddToSet(SessionCaps, 'cap_Audio');
     if Opt.Contains('video') then AddToSet(SessionCaps, 'cap_Video');
@@ -1053,7 +1055,7 @@ begin
     if ChEditTool.IsChecked        then AddToSet(SessionCaps, 'cap_TextEditor');
 
     // Generacion deseada en sesion
-    Opt := LowerCase(EditNativeOutputFiles.Text);
+    Opt := LowerCase(EditSessionCapsGen.Text);
     if Opt.Contains('image') then AddToSet(SessionCaps, 'cap_GenImage');
     if Opt.Contains('audio') then AddToSet(SessionCaps, 'cap_GenAudio');
     if Opt.Contains('video') then AddToSet(SessionCaps, 'cap_GenVideo');
@@ -1061,11 +1063,15 @@ begin
     if ChExtractFiles.IsChecked    then AddToSet(SessionCaps, 'cap_ExtractCode');
 
     // --- 5. ASIGNACION FINAL (nuevo sistema v3.3) ---
-    AiConn.Params.Values['ModelCaps']   := '[' + ModelCaps + ']';
-    AiConn.Params.Values['SessionCaps'] := '[' + SessionCaps + ']';
+    AiConn.ModelCaps   := TAiModelConfig.StringToCaps('[' + ModelCaps + ']');
+    AiConn.SessionCaps := TAiModelConfig.StringToCaps('[' + SessionCaps + ']');
 
     // Log visual
     MemoUsedChatParams.Lines.Assign(AiConn.Params);
+    MemoUsedChatParams.Lines.Insert(0, 'SessionCaps: [' + SessionCaps + ']');
+    MemoUsedChatParams.Lines.Insert(0, 'ModelCaps: [' + ModelCaps + ']');
+    MemoUsedChatParams.Lines.Insert(0, 'ThinkingLevel: ' + GetEnumName(TypeInfo(TAiThinkingLevel), Ord(AiConn.ModelConfig.ThinkingLevel)));
+    MemoUsedChatParams.Lines.Insert(0, 'Tool_Active: ' + BoolToStr(AiConn.Tool_Active, True));
     MemoUsedChatParams.Lines.Insert(0, 'Model: ' + AiConn.Model);
     MemoUsedChatParams.Lines.Insert(0, 'Driver: ' + AiConn.DriverName);
 
@@ -1164,14 +1170,14 @@ begin
   ChExtractFiles.IsChecked    := LSessionCaps.Contains('cap_extractcode');
 
   // 4. CAMPOS DE CAPACIDADES DE MEDIOS (Edits)
-  // EditChatMediaSupports -> ModelCaps: input media nativos del modelo
-  // EditNativeInputFiles  -> ModelCaps: generacion nativa (Gemini image, etc.)
-  // EditEnabledFeatures   -> SessionCaps: input media deseado en sesion
-  // EditNativeOutputFiles -> SessionCaps: generacion deseada (Gap activa bridge)
-  EditChatMediaSupports.Text := BuildMediaString(LParams.Values['ModelCaps']);
-  EditNativeInputFiles.Text  := BuildGenString(LParams.Values['ModelCaps']);
-  EditEnabledFeatures.Text   := BuildMediaString(LParams.Values['SessionCaps']);
-  EditNativeOutputFiles.Text := BuildGenString(LParams.Values['SessionCaps']);
+  // EditModelCapsMedia -> ModelCaps: input media nativos del modelo
+  // EditModelCapsGen  -> ModelCaps: generacion nativa (Gemini image, etc.)
+  // EditSessionCapsMedia   -> SessionCaps: input media deseado en sesion
+  // EditSessionCapsGen -> SessionCaps: generacion deseada (Gap activa bridge)
+  EditModelCapsMedia.Text := BuildMediaString(LParams.Values['ModelCaps']);
+  EditModelCapsGen.Text  := BuildGenString(LParams.Values['ModelCaps']);
+  EditSessionCapsMedia.Text   := BuildMediaString(LParams.Values['SessionCaps']);
+  EditSessionCapsGen.Text := BuildGenString(LParams.Values['SessionCaps']);
 
   // Log de confirmacion en la UI
   AddLog(Format('Modelo cargado: %s (%s)', [ModelName, DriverName]));
@@ -1333,7 +1339,20 @@ end;
 procedure TForm2.ChatInput1TranscriptText(Sender: TObject; aFragmentStream: TMemoryStream; out aTransriptText: string);
 begin
   if Assigned(aFragmentStream) and (aFragmentStream.size > 100) then
+  begin
+    // gpt-transcribe (whisper-1 se apaga en api.openai.com) solo responde JSON
     aTransriptText := Trim(AIWhisper1.Transcription(aFragmentStream, 'dummy.wav', 'user'));
+    if aTransriptText.StartsWith('{') then
+    begin
+      var JTrans := TJSONObject.ParseJSONValue(aTransriptText);
+      try
+        if JTrans is TJSONObject then
+          aTransriptText := Trim(TJSONObject(JTrans).GetValue<string>('text', ''));
+      finally
+        JTrans.Free;
+      end;
+    end;
+  end;
 end;
 
 procedure TForm2.ChatList1BeforeAddBubble(Sender: TObject; ABubble: TChatBubble);
@@ -1505,32 +1524,32 @@ begin
   AIVoiceMonitor1.WakeWord := Trim(LowerCase(EditWakeWord.Text));
 end;
 
-procedure TForm2.EditChatMediaSupportsEnter(Sender: TObject);
+procedure TForm2.EditModelCapsEnter(Sender: TObject);
 begin
   if Sender is TEdit then
     InitModelCapabilitiesCombo(Sender as TEdit);
 
   // Ahora incluimos el nuevo campo en la validación de la opción "Any"
-  ChModelAny.Visible := (Sender = EditNativeInputFiles) or (Sender = EditChatMediaSupports) or (Sender = EditEnabledFeatures);
+  ChModelAny.Visible := (Sender = EditModelCapsGen) or (Sender = EditModelCapsMedia) or (Sender = EditSessionCapsMedia);
 end;
 
-procedure TForm2.EditChatMediaSupportsExit(Sender: TObject);
+procedure TForm2.EditCapsExit(Sender: TObject);
 begin
   ModelCapabilitiesCombo.Visible := False;
 end;
 
-procedure TForm2.EditEnabledFeaturesEnter(Sender: TObject);
+procedure TForm2.EditSessionCapsEnter(Sender: TObject);
 begin
   // Inicializamos el combo de selección de capacidades para este Edit
   if Sender is TEdit then
     InitModelCapabilitiesCombo(TEdit(Sender));
 
-  // Al igual que con ChatMediaSupports, permitimos la opción "Any"
+  // Al igual que con ModelCaps, permitimos la opción "Any"
   // para habilitar todas las funciones lógicas de un golpe.
   ChModelAny.Visible := True;
 end;
 
-procedure TForm2.EditEnabledFeaturesExit(Sender: TObject);
+procedure TForm2.EditSessionCapsExit(Sender: TObject);
 begin
   // Ocultamos el panel de selección al salir del foco
   ModelCapabilitiesCombo.Visible := False;
@@ -1578,7 +1597,7 @@ begin
 
   // Ollama: texto puro por defecto, sin herramientas nativas
   AiConn.RegisterUserParam('Ollama', 'Max_Tokens',   '8000');
-  AiConn.RegisterUserParam('Ollama', 'Url',          'http://192.168.3.121:11434/');
+  AiConn.RegisterUserParam('Ollama', 'Url',          'http://localhost:11434/');
   AiConn.RegisterUserParam('Ollama', 'Temperature',  '0.7');
   AiConn.RegisterUserParam('Ollama', 'Asynchronous', 'True');
   AiConn.RegisterUserParam('Ollama', 'Tool_Active',  'False');
@@ -1586,8 +1605,8 @@ begin
   AiConn.RegisterUserParam('Ollama', 'ModelCaps',    '[]');
   AiConn.RegisterUserParam('Ollama', 'SessionCaps',  '[]');
 
-  // GenericLLM: configuracion de endpoint local
-  AiConn.RegisterUserParam('GenericLLM', 'Url',    'http://192.168.3.121:5050/v1/');
+  // GenericLLM: endpoint local compatible con OpenAI (LM Studio, vLLM, llama.cpp...)
+  AiConn.RegisterUserParam('GenericLLM', 'Url',    'http://localhost:1234/v1/');
   AiConn.RegisterUserParam('GenericLLM', 'ApiKey', 'sk-demo-1234567890');
 
 end;

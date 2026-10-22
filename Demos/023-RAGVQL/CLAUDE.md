@@ -63,17 +63,17 @@ Parses the VQL query and renders the compiled `TVGQLRequest` as a human-readable
 ## VQL Syntax Reference
 
 ```sql
-MATCH <entity>            -- target entity / collection name (required)
+MATCH (<entity>)          -- optional; parentheses required, alias with (docs:d). Not used by the search
 SEARCH '<query text>'     -- semantic query (required)
 USING HYBRID              -- search mode: HYBRID | EMBEDDINGS | BM25
-  WEIGHTS(semantic: 0.7, lexical: 0.3)
+  WITH WEIGHTS(0.7, 0.3)  -- semantic, lexical (positional numbers)
   FUSION RRF              -- fusion: RRF | WEIGHTED
 WHERE <metadata_field> = 'value'
   AND date > '2024-01-01'
   AND category IN ('tech', 'science')
   AND score BETWEEN 0.5 AND 1.0
+RERANK '<rerank query>' REGENERATE   -- goes BEFORE THRESHOLD
 THRESHOLD GLOBAL 0.5      -- min score: GLOBAL | SEMANTIC | LEXICAL
-RERANK '<rerank query>' WITH REGENERATE
 OPTIMIZE REORDER ABC      -- Lost-in-Middle reordering
 RETURN TEXT, METADATA, SCORE
 LIMIT 10

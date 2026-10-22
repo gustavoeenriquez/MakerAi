@@ -3,7 +3,8 @@ unit uMCPServerFileSystem_Tool;
 interface
 
 uses
-  System.SysUtils, System.Classes, uMakerAi.Tools.Functions, uMakerAi.MCPServer.Core, UMakerAi.MCPServer.Stdio, uMakerAi.Core, uMakerAi.Chat.Messages;
+  System.SysUtils, System.Classes, System.IOUtils, uMakerAi.Tools.Functions, uMakerAi.MCPServer.Core,
+  UMakerAi.MCPServer.Stdio, uMakerAi.Core, uMakerAi.Chat.Messages;
 
 type
   TFMCPServerFileSystem_Tool = class(TDataModule)
@@ -11,9 +12,12 @@ type
     AiFunctions1: TAiFunctions;
     procedure AiFunctions1Functions0fs_listarAction(Sender: TObject; FunctionAction: TFunctionActionItem; FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
   private
-    { Private declarations }
+    FSandboxDir: string;
   public
-    { Public declarations }
+    // Crea la carpeta sandbox (y un archivo de ejemplo si esta vacia)
+    procedure PrepareSandbox;
+    // Unica carpeta que la tool puede listar
+    property SandboxDir: string read FSandboxDir write FSandboxDir;
   end;
 
 var
@@ -25,48 +29,48 @@ implementation
 
 {$R *.dfm}
 
+procedure TFMCPServerFileSystem_Tool.PrepareSandbox;
+begin
+  if FSandboxDir = '' then
+    FSandboxDir := TPath.Combine(ExtractFilePath(ParamStr(0)), 'sandbox');
+  FSandboxDir := IncludeTrailingPathDelimiter(TPath.GetFullPath(FSandboxDir));
+  ForceDirectories(FSandboxDir);
+  if Length(TDirectory.GetFiles(FSandboxDir)) = 0 then
+    TFile.WriteAllText(FSandboxDir + 'leeme.txt', 'Archivo de ejemplo del sandbox MCP.', TEncoding.UTF8);
+end;
+
 procedure TFMCPServerFileSystem_Tool.AiFunctions1Functions0fs_listarAction(
   Sender: TObject; FunctionAction: TFunctionActionItem;
   FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
 var
-  Filtro, ArchivosListados: String;
-  SearchRec: TSearchRec;
-  Ruta: String;
+  Filtro: string;
+  Archivos: TStringList;
+  Archivo: string;
 begin
-  Filtro := ToolCall.Params.Values['filtro'];
-
-{
-  Ruta := 'D:\Taller\mcpdir\';
-  ArchivosListados := '';
-
-  // Si no hay filtro, usar *.*
+  Handled := True;
+  Filtro := Trim(ToolCall.Params.Values['filtro']);
   if Filtro = '' then
     Filtro := '*.*';
 
-  // Buscar archivos
-  if FindFirst(Ruta + Filtro, faAnyFile, SearchRec) = 0 then
+  // El filtro es solo una mascara de nombre: nada de rutas ni subir de
+  // carpeta. Es lo unico que impide salir del sandbox.
+  if (Pos('..', Filtro) > 0) or (Filtro.IndexOfAny(['\', '/', ':']) >= 0) then
   begin
-    try
-      repeat
-        // Excluir directorios '.' y '..'
-        if (SearchRec.Name <> '.') and (SearchRec.Name <> '..') then
-        begin
-          // Agregar a la lista
-          if ArchivosListados <> '' then
-            ArchivosListados := ArchivosListados + #13#10;
-
-          ArchivosListados := ArchivosListados + SearchRec.Name;
-        end;
-      until FindNext(SearchRec) <> 0;
-    finally
-      FindClose(SearchRec);
-    end;
+    ToolCall.Response := 'Error: el filtro debe ser una mascara de nombre (p.ej. *.txt), sin rutas.';
+    Exit;
   end;
-  }
-  ArchivosListados := 'miarchivo.txt, holamundo.pas';
 
-  ToolCall.Response := ArchivosListados;
-  Handled := True;
+  Archivos := TStringList.Create;
+  try
+    for Archivo in TDirectory.GetFiles(FSandboxDir, Filtro) do
+      Archivos.Add(ExtractFileName(Archivo));
+    if Archivos.Count = 0 then
+      ToolCall.Response := 'No hay archivos que coincidan con ' + Filtro
+    else
+      ToolCall.Response := Archivos.Text;
+  finally
+    Archivos.Free;
+  end;
 end;
 
 end.

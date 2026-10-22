@@ -103,10 +103,10 @@ procedure TForm21.FormCreate(Sender: TObject);
 begin
   // Ejemplo de consulta VQL para orientar al usuario
   MemoPrompt.Lines.Text :=
-    'MATCH documentos'                                     + sLineBreak +
+    'MATCH (documentos)'                                   + sLineBreak +
     'SEARCH ''inteligencia artificial'''                   + sLineBreak +
     'USING HYBRID'                                         + sLineBreak +
-    '  WEIGHTS(semantic: 0.7, lexical: 0.3)'               + sLineBreak +
+    '  WITH WEIGHTS(0.7, 0.3)'                             + sLineBreak +
     '  FUSION RRF'                                         + sLineBreak +
     'WHERE autor = ''Gustavo'''                            + sLineBreak +
     'THRESHOLD GLOBAL 0.5'                                 + sLineBreak +

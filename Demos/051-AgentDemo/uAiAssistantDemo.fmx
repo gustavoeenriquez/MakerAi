@@ -272,10 +272,6 @@ object Form70: TForm70
     Url = 'https://api.openai.com/v1/'
     ResponseTimeOut = 61000
     Stream_Usage = False
-    NativeInputFiles = []
-    NativeOutputFiles = []
-    ChatMediaSupports = [Tcm_WebSearch]
-    EnabledFeatures = [Tcm_WebSearch]
     ThinkingLevel = tlDefault
     MediaResolution = mrDefault
     Truncation = 'disabled'
