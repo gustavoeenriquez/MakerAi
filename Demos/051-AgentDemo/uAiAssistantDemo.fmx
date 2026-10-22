@@ -8,7 +8,6 @@ object Form70: TForm70
   FormFactor.Width = 320
   FormFactor.Height = 480
   FormFactor.Devices = [Desktop]
-  OnCreate = FormCreate
   DesignerMasterStyle = 0
   object Memo1: TMemo
     Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
@@ -86,15 +85,6 @@ object Form70: TForm70
     Text = 'Button2'
     TextSettings.Trimming = None
     OnClick = Button2Click
-  end
-  object Label4: TLabel
-    Position.X = 64.000000000000000000
-    Position.Y = 8.000000000000000000
-    Size.Width = 1018.000000000000000000
-    Size.Height = 17.000000000000000000
-    Size.PlatformDefault = False
-    Text = 'Label4'
-    TabOrder = 76
   end
   object AiPrompts1: TAiPrompts
     Items = <
@@ -176,7 +166,7 @@ object Form70: TForm70
     Left = 504
     Top = 192
   end
-  object AIAgentsManager: TAIAgents
+  object AIAgentsManager: TAIAgentManager
     StartNode = NodoInicio
     EndNode = NodoFinal
     OnPrint = AIChain1Print
@@ -244,13 +234,9 @@ object Form70: TForm70
     Left = 344
     Top = 304
   end
-  object AIAgentsNode1: TAIAgentsNode
-    Left = 440
-    Top = 440
-  end
   object AiOpenChat1: TAiOpenChat
     ApiKey = '@OPENAI_API_KEY'
-    Model = 'gpt-5'
+    Model = 'gpt-6-sol'
     Logprobs = False
     Max_tokens = 3000
     N = 1

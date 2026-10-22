@@ -22,7 +22,7 @@ msbuild AiAgentDemo.dproj /p:Config=Release /p:Platform=Win64
 
 The demo uses three core visual components from `uMakerAi.Agents`:
 
-- **TAIAgentManager** (`TAIAgents`): Orchestrates agent graph execution. Configured with `StartNode`, `EndNode`, `TimeoutMs`, and events (`OnPrint`, `OnFinish`).
+- **TAIAgentManager**: Orchestrates agent graph execution. Configured with `StartNode`, `EndNode`, `TimeoutMs`, and events (`OnPrint`, `OnFinish`).
 
 - **TAIAgentsNode**: Individual processing unit in the graph. Each node has:
   - `OnExecute` handler receiving `(Node, BeforeNode, Link, Input, Output)`
@@ -36,23 +36,18 @@ The demo uses three core visual components from `uMakerAi.Agents`:
   - `Mode`: lmFanout (parallel), lmConditional, lmManual, lmExpression
   - `OnExecute` handler returns `IsOk` to control routing
 
-### Graph Patterns Demonstrated
+### Graph Pattern Demonstrated
 
-1. **Sequential Flow**: `AIGraph1` - StartNode → AiNode → ExecuteNode → EvalNode → EndNode
-   - Generates Delphi console code via AI
-   - Compiles with DCC64
-   - Evaluates compilation result
-   - Loops back to AiNode on error (Link4.NextNo)
+**Parallel fan-out + join** (`AIAgentsManager`): NodoInicio -> (TareaA || TareaB) -> NodoFinal
 
-2. **Parallel Fan-out**: `AIAgentsManager` - NodoInicio → (TareaA || TareaB) → NodoFinal
-   - Uses `AIAgentsLink1` with both NextA and NextB set
-   - NodoFinal has `JoinMode = jmAll` to wait for both branches
+- `AIAgentsLink1` has `NextA = TareaA` and `NextB = TareaB`: both branches run in parallel on pool threads.
+- **TareaA** calls the model (`AiOpenChat1`, `gpt-6-sol`, `@OPENAI_API_KEY`) with the prompt. Without the variable it says so instead of failing.
+- **TareaB** does a local analysis (word and character count) while TareaA waits for the model.
+- **NodoFinal** has `JoinMode = jmAll`: it runs once, with both outputs joined, and shows them in `Memo1`.
 
-### Key Integration Points
+Cleaned up oct 22/2026: TareaA returned a fixed text (the model call was commented out), the unit carried seven handlers of a sequential code-generation graph that the form no longer has (`AiNodeExecute`, `ExcecuteNodeExecute`, `EvalNodeExecute`, `Link4Execute`...), plus an orphan node and a test label. The model was `gpt-5` (shut down Dec 2026). `TAIAgents` (deprecated alias) became `TAIAgentManager`. The form loads; the button run was not exercised in the automated check.
 
-- **TAiOpenChat**: OpenAI chat component for AI interactions
-- **TAiPrompts**: Template-based prompt management with variable substitution (`GetTemplate('name', ['var=value'])`)
-- **TUtilsSystem**: System utilities for command execution (`RunCommandLine`, `ExecuteCommandLine`)
+For a richer graph (fan-out, join, expression, conditional and a `TLLMNode`) see `../098-AgentGraphLadera`.
 
 ### Thread Safety
 

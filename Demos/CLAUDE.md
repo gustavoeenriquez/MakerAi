@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is the Demos directory for the MakerAI 3.x framework. Contains 60 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
+This is the Demos directory for the MakerAI 3.x framework. Contains 66 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
 
 **Estado de compilación (ago 7/2026): los 48 proyectos compilan** en Win64/Release; el 081 (ago 18/2026), el 082 y el 083 (sep 20/2026) también compilan; el 082 se corrió en runtime (6/6 PASS) y el 083 en **Linux64** sobre Xvfb con OpenAI y Claude.
 
@@ -12,7 +12,7 @@ This is the Demos directory for the MakerAI 3.x framework. Contains 60 working e
 
 **IDE:** Delphi 11 Alexandria through 13 Florence (demos require Delphi 11+; the core framework supports 10.4 Sydney minimum)
 
-**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026; desde sep 29/2026 incluye los 58 proyectos (se sumaron 089-QwenShowcase, que había quedado fuera, y 091-Skills); oct 5/2026 se sumó 092-GPTLiveVoice (59); oct 22/2026, 093-A2AChatAgentTool (60).
+**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026; desde sep 29/2026 incluye los 58 proyectos (se sumaron 089-QwenShowcase, que había quedado fuera, y 091-Skills); oct 5/2026 se sumó 092-GPTLiveVoice (59); oct 22/2026, 093-A2AChatAgentTool (60) y de 094 a 099, los demos de la serie de Café La Ladera (66).
 
 > **OJO al editar los `.pas` de los demos:** varios están en **ANSI (Windows-1252) con saltos LF**, no en UTF-8. Guardarlos como UTF-8 destruye todas las tildes de forma silenciosa (compila igual, y `git diff` lo disimula si `core.autocrlf` está activo). Verificar siempre con `git diff --numstat` que solo cambien las líneas que se tocaron.
 
@@ -66,8 +66,8 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 ### Agent Orchestration (05x)
 | Demo | Purpose | Key Pattern |
 |------|---------|-------------|
-| 051-AgentDemo | Agent graph workflows | `TAIAgentManager`, visual orchestration |
-| 052-AgentConsole | Console agent interface | Command-line agent execution |
+| 051-AgentDemo | Fanout + join visual: TareaA llama al modelo y TareaB analiza en local, en paralelo; NodoFinal (`jmAll`) une. Limpiado oct 22/2026 (llamada al modelo real, sin el código muerto, `gpt-6-sol`) | `TAIAgentManager`, visual orchestration |
+| 052-AgentConsole | Console agent interface: condicional y fork/join | El fork/join usa la API fluida (`AddEdge` repetido + `SetJoinMode`) desde oct 22/2026 |
 | 054-AgentCheckpointDB | Durable execution con checkpoints en base de datos | `IAiCheckpointer` + suspend/resume de grafos |
 | 072-A2AFederation | Federación de agentes vía protocolo A2A 1.0 (sin LLM) | `TAiA2AServer` expone un grafo (Agent Card + JSON-RPC), `TAiA2AClient` lo consume, `TAiA2ARemoteAgentTool` federa un nodo local al agente remoto; `--otel` para trazas |
 | 074-A2AOrchestration | Flujos de orquestación A2A (sin LLM) | Pool de managers con `OnAcquireManager` (3 tasks simultáneos), human-in-the-loop con resume por `taskId`, HITL federado que suspende el nodo local, y `blocking=false` + `GetTask` |
@@ -75,6 +75,12 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | 080-A2APushNotifications | Push notifications A2A: el agente hace POST a tu webhook al terminar | Agente (8282) + receptor de webhook propio (8283) en el mismo proceso, sin claves. Cubre lo que el TCK **no** cubre: la entrega con `blocking:false`, cuando nadie consulta el task |
 | 081-AgentChatHITL | Human-in-the-loop integrado en el chat, sin ventanas modales (sin LLM) | Grafo con `TAiWaitApprovalTool` que suspende sin bloquear threads; `OnSuspend` publica la pregunta como mensaje del chat y la siguiente respuesta del usuario reanuda con `ResumeThread`; `TAiFileCheckpointer` reanuda incluso tras reiniciar la app. **Primer demo con la UI nueva `TAIChatView`/`TAIChatInput` (Skia)** |
 | 093-A2AChatAgentTool | **Un chat que consulta a un agente A2A como herramienta**. El agente (catálogo de Café La Ladera) es un grafo sin LLM; el chat usa la key del driver (`--driver`, OpenAI por defecto) o `--sin-llm`. Tiene CLAUDE.md propio | `TAiA2AAgentTool` en un `TAiFunctions` (`DiscoverFromCard` toma la descripción de la Agent Card); hermano de `TAiA2ARemoteAgentTool`, que federa un nodo |
+| 094-ChatStreaming | **Serie Café La Ladera, ep. 3.** Consola: prompt de sistema (Lucía, la barista), streaming con tiempo al primer pedazo, historial que recuerda, `SaveToFile`/`NewChat`/`LoadFromFile`. `--sin-streaming`, `--interactivo`. Tiene CLAUDE.md | `OnReceiveData`/`OnReceiveDataEnd` en una clase (`of object`), `CheckSynchronize` en consola |
+| 095-ChatViewLadera | **Serie, ep. 4 y 5.** FMX con `TAIChatView`/`TAIChatInput`: streaming en burbujas, paso "Pensando", pie con tokens, imágenes y PDF nativos, nota de voz transcrita por el puente de `cap_Audio`, guardar/abrir, cierre seguro a mitad de turno. `--prueba` para probar sin teclado. Tiene CLAUDE.md | `ChatTools.SpeechTool` (`gpt-transcribe`), `SessionCaps := ModelCaps + [cap_Audio]`, orden del `uses` por el choque de `TAIChatMessage` |
+| 096-ChatToolsLadera | **Serie, ep. 7.** Consola: búsqueda web nativa, editor confinado a una carpeta y consola con lista permitida; la última tarea intenta borrar todo y se bloquea. Tiene CLAUDE.md | `cap_WebSearch`/`cap_TextEditor`/`cap_Shell` en `ModelCaps` + `ChatTools.ShellTool`/`TextEditorTool` |
+| 097-ChatMemoryLadera | **Serie, ep. 9.** Consola: Marta cuenta sus gustos, el analizador los guarda y en otra sesión, con un chat nuevo, Lucía los recuerda. Tiene CLAUDE.md | `TAiMemory` + `PersistentMemory` + `Analyzer` (`gpt-6-luna`) + embeddings |
+| 098-AgentGraphLadera | **Serie, ep. 13.** Consola: un pedido recorre un grafo con fanout, `jmAll`, `AddExpressionEdge` + `AddFallbackEdge`, `AddConditionalEdge` y un `TLLMNode` que redacta el mensaje (`--sin-llm` sin clave). Tiene CLAUDE.md | API fluida de `TAIAgentManager`, blackboard |
+| 099-VozPedidoLadera | **Serie, ep. 18 (la cima).** Consola: la clienta pide por voz; GPT-Live delega en un chat que llama por A2A al agente de Pedidos, cuyo nodo Inventario está federado en el agente de Bodega. `--audio archivo.pcm` (prueba sin micrófono) y `--texto`. Tiene CLAUDE.md | `TAiOpenAiLiveChat.DelegateChat` + `TAiA2AAgentTool` + `TAiA2AServer` (x2) + `TAiA2ARemoteAgentTool` |
 
 ### Guardrails, Evals y Memoria (07x)
 | Demo | Purpose | Key Pattern |

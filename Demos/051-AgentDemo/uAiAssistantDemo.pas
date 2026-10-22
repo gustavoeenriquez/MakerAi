@@ -57,19 +57,10 @@ type
     TareaA: TAIAgentsNode;
     NodoFinal: TAIAgentsNode;
     Button2: TButton;
-    AIAgentsManager: TAIAgents;
+    AIAgentsManager: TAIAgentManager;
     AIAgentsLink1: TAIAgentsLink;
-    AIAgentsNode1: TAIAgentsNode;
     AiOpenChat1: TAiOpenChat;
-    Label4: TLabel;
     procedure AIChain1Print(Sender: TObject; Value: string);
-    procedure EndNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
-    procedure AiNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
-    procedure AIChain1End(Sender: TObject; Value: string);
-    procedure ExcecuteNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
-    procedure StartNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
-    procedure EvalNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
-    procedure Link4Execute(Node: TAIAgentsNode; Link: TAIAgentsLink; var IsOk, Handled: Boolean);
     procedure NodoInicioExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
     procedure TareaAExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
     procedure TareaBExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
@@ -78,10 +69,7 @@ type
     procedure AIAgentsLink1Execute(Node: TAIAgentsNode; Link: TAIAgentsLink; var IsOk, Handled: Boolean);
     procedure AIAgentsLink2Execute(Node: TAIAgentsNode; Link: TAIAgentsLink; var IsOk, Handled: Boolean);
     procedure AIAgentsLink3Execute(Node: TAIAgentsNode; Link: TAIAgentsLink; var IsOk, Handled: Boolean);
-    procedure AIAgentsManagerFinish(Sender: TObject; const Input, Output: string; Status: string; E: Exception);
-    procedure FormCreate(Sender: TObject);
   private
-    Procedure clickdellabel(Sender: TObject);
   public
     { Public declarations }
   end;
@@ -111,21 +99,6 @@ begin
 
 end;
 
-procedure TForm70.AIAgentsManagerFinish(Sender: TObject; const Input, Output: string; Status: string; E: Exception);
-begin
-    //Memo1.Lines.Text := Input;
-    //Siempre se dispara incluso en caso de error, el status decide si es correcto
-end;
-
-procedure TForm70.AIChain1End(Sender: TObject; Value: string);
-begin
-  TThread.Synchronize(nil,
-    procedure
-    begin
-      Memo1.Lines.Text := Value;
-    end);
-end;
-
 procedure TForm70.AIChain1Print(Sender: TObject; Value: string);
 begin
   TThread.Synchronize(nil,
@@ -144,185 +117,24 @@ begin
     end);
 end;
 
-procedure TForm70.AiNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
-Var
-  Prompt: String;
-begin
-  Node.Print(Node.Name + '--> Generando código');
-  Prompt := AiPrompts1.GetTemplate('AiPrompt', ['Prompt=' + Input]);
-  // OJO Output := OpenChat.AddMessageAndRun(Prompt, 'user',[]);
-
-  Output := 'Este es el codigo que retorn la IA';
-end;
-
 procedure TForm70.Button2Click(Sender: TObject);
 begin
-  Label4.Text := 'Este es el texto del label';
-
+  Memo1.Lines.Clear;
+  Memo2.Lines.Clear;
   AIAgentsManager.Run(MemoPrompt.Lines.Text);
-end;
-
-procedure TForm70.clickdellabel(Sender: TObject);
-begin
-  Label4.Text := 'este es el evento del label';
-end;
-
-procedure TForm70.EndNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
-Var
-  JObj: TJSonObject;
-  FileName, Codigo, Res: String;
-  Lista: TStringList;
-begin
-  Lista := TStringList.Create;
-  JObj := TJSonObject(TJSonObject.ParseJSONValue(Input));
-  Try
-
-    If JObj.TryGetValue<String>('filename', FileName) and JObj.TryGetValue<String>('codigo', Codigo) then
-    Begin
-      FileName := 'c:\tmp\' + FileName;
-      Output := Codigo;
-      If Not FileExists(FileName) then
-      Begin
-        Node.Print(Node.Name + '--> No se generó el archivo con el código ' + FileName);
-      End
-      Else
-      Begin
-        FileName := ChangeFileExt(FileName, '.exe');
-
-        If Not FileExists(FileName) then
-        Begin
-          Node.Print(Node.Name + '--> No se generó el Ejecutable ' + FileName);
-        End
-        Else
-        Begin
-          Try
-            TUtilsSystem.ExecuteCommandLine(FileName);
-          Except
-            ON E: Exception do
-            Begin
-              Node.Print(Node.Name + '--> Error intentando ejecutar ' + FileName + ' : ' + E.Message);
-              Output := E.Message;
-            End;
-          End;
-        End;
-      End;
-    End
-    Else
-    Begin
-      Output := 'No se encuentra el archivo ' + FileName;
-    End;
-
-    Node.Print(Node.Name + '--> ' + Output);
-
-  Finally
-    JObj.Free;
-    Lista.Free;
-  End;
-end;
-
-procedure TForm70.EvalNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
-begin
-  Node.Print(Node.Name + '--> Evaluando....');
-  // Realmente aquí no se hace nada
-
-end;
-
-procedure TForm70.ExcecuteNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
-Var
-  JObj, JRes: TJSonObject;
-  FileName, Codigo, Res: String;
-  Lista: TStringList;
-begin
-  Node.Print(Node.Name + '--> Compilando....');
-
-  Lista := TStringList.Create;
-  JObj := TJSonObject(TJSonObject.ParseJSONValue(Input));
-  Try
-    If JObj.TryGetValue<String>('filename', FileName) and JObj.TryGetValue<String>('codigo', Codigo) then
-    Begin
-      Node.Print(Node.Name + '--> Compilando ' + FileName + '...');
-      FileName := 'c:\tmp\' + FileName;
-      Lista.Text := Codigo;
-      Lista.SaveToFile(FileName);
-
-      Try
-        Res := TUtilsSystem.RunCommandLine('DCC64 ' + FileName);
-        Node.Print('Mensaje compilación :' + sLineBreak + Res);
-      Except
-        ON E: Exception do
-        Begin
-          Res := E.Message;
-        End;
-      End;
-
-      JRes := TJSonObject.Create;
-      Try
-        JRes.AddPair('filename', FileName);
-        JRes.AddPair('codigo', Codigo);
-        JRes.AddPair('resultado_compilacion', Res);
-        Output := JRes.Format;
-      Finally
-        JRes.Free;
-      End;
-    End
-    Else
-    Begin
-      Output := 'No se encuentra la variable filename o codigo en el json';
-    End;
-
-  Finally
-    JObj.Free;
-    Lista.Free;
-  End;
-end;
-
-procedure TForm70.FormCreate(Sender: TObject);
-begin
-  Label4.OnClick :=  clickdellabel;
-end;
-
-procedure TForm70.Link4Execute(Node: TAIAgentsNode; Link: TAIAgentsLink; var IsOk, Handled: Boolean);
-Var
-  Prompt, Res: String;
-  JObj: TJSonObject;
-  FileName, Codigo, resultado_compilacion: String;
-begin
-
-
-  JObj := TJSonObject(TJSonObject.ParseJSONValue(Node.Output));
-  Try
-    If JObj.TryGetValue<String>('filename', FileName) and JObj.TryGetValue<String>('resultado_compilacion', resultado_compilacion) then
-    Begin
-
-      Prompt := AiPrompts1.GetTemplate('Eval', ['resultado=' + resultado_compilacion]);
-
-      // OJO ChatEval.Messages.Clear; // Limpia la memoria, consume menos tokens
-      // OJO Res := ChatEval.AddMessageAndRun(Prompt, 'user', []);
-
-      If Pos('<ERROR', Res) > 0 then
-      Begin
-        IsOk := False;
-        Link.Print(Node.Name + '--> Error: ' + Res);
-      End
-      Else
-      Begin
-        Link.Print(Node.Name + '--> Compiló correctamente, pasa al nodo final ');
-        IsOk := True;
-      End;
-    End
-    Else
-      IsOk := False;
-  Finally
-    JObj.Free;
-  End;
 end;
 
 procedure TForm70.NodoFinalExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
 begin
-  Node.Print(Node.Name + '--> Finalizando proceso');
-
-  Node.Print(Node.Name + '--> Input '+Input);
-  Node.Print(Node.Name + '--> Output '+Output);
+  // JoinMode = jmAll: llega una vez, con las salidas de las dos ramas juntas
+  Node.Print(Node.Name + '--> Uniendo resultados');
+  Output := Input;
+  var Texto := Output;   // un parametro var no se puede capturar en el metodo anonimo
+  TThread.Queue(nil,
+    procedure
+    begin
+      Memo1.Lines.Text := Texto;
+    end);
 end;
 
 procedure TForm70.NodoInicioExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
@@ -331,29 +143,27 @@ begin
   Output := Input;
 end;
 
-procedure TForm70.StartNodeExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
-begin
-  Node.Print(Node.Name + '--> Inicicando proceso');
-end;
-
 procedure TForm70.TareaAExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
 begin
-  Node.Print(Node.Name + '--> TareaA - Buscando en Internet');
-  //Sleep(1500);
-
-  //Output := AiOpenChat1.AddMessageAndRun(Input,'user',[]);
-  Output := 'Valor encontrado en WEB';
-
-  Node.Print(Node.Name + '--> TareaA - Buscando en Internet '+ Output);
-
+  // Rama A: el modelo responde la pregunta. Corre en un hilo del pool, en
+  // paralelo con la rama B; la llamada sincrona no bloquea la ventana.
+  Node.Print(Node.Name + '--> TareaA - Consultando el modelo');
+  if GetEnvironmentVariable('OPENAI_API_KEY') = '' then
+    Output := 'TareaA: falta la variable OPENAI_API_KEY'
+  else
+  begin
+    AiOpenChat1.NewChat;
+    Output := 'TareaA (modelo): ' + AiOpenChat1.AddMessageAndRun(Input, 'user', []);
+  end;
+  Node.Print(Node.Name + '--> TareaA - Respuesta recibida');
 end;
 
 procedure TForm70.TareaBExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
 begin
-  Node.Print(Node.Name + '--> TareaB');
-  Sleep(500);
-    Output := Input+'  aquí realizó la tarea b';
-
+  // Rama B: un analisis local, sin modelo, mientras la rama A espera la respuesta
+  Node.Print(Node.Name + '--> TareaB - Analisis local');
+  Output := Format('TareaB (local): la pregunta tiene %d palabras y %d caracteres.',
+    [Length(Input.Trim.Split([' ', #13, #10], TStringSplitOptions.ExcludeEmpty)), Length(Input.Trim)]);
 end;
 
 end.

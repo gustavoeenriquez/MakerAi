@@ -250,10 +250,6 @@ begin
 end;
 
 procedure TDemo.RunParallelFlow;
-var
-  ForkLink: TAIAgentsLink;
-  JoinLinkFromA, JoinLinkFromB: TAIAgentsLink;
-  TaskANode, TaskBNode, JoinNode: TAIAgentsNode;
 begin
   Println('--- Starting PARALLEL Flow (Fork/Join) ---');
   Writeln;
@@ -277,38 +273,12 @@ begin
   // 1. Build the nodes
   FAgents.AddNode('Start', StartExec).AddNode('TaskA', ParallelA_Exec).AddNode('TaskB', ParallelB_Exec).AddNode('JoinNode', FinishExec);
 
-  // Cache node lookups for clarity
-  TaskANode := FAgents.FindNode('TaskA');
-  TaskBNode := FAgents.FindNode('TaskB');
-  JoinNode := FAgents.FindNode('JoinNode');
-
-  // 2. Define the "Fork" manually from Start -> (TaskA, TaskB)
-  ForkLink := TAIAgentsLink.Create(FAgents);
-  ForkLink.Name := 'ForkLink';
-  ForkLink.Graph := FAgents;
-  ForkLink.NextA := TaskANode; // Branch 1
-  ForkLink.NextB := TaskBNode; // Branch 2
-  FAgents.FindNode('Start').Next := ForkLink;
-
-  // 3. Define the "Join" manually. Each parallel task needs its own link to the join node.
-  // This is the CRITICAL part that was wrong before.
-  // We cannot use AddEdge because it's too simplistic.
-
-  // Link from TaskA -> JoinNode
-  JoinLinkFromA := TAIAgentsLink.Create(FAgents);
-  JoinLinkFromA.Name := 'JoinLinkFromA';
-  JoinLinkFromA.Graph := FAgents;
-  JoinLinkFromA.NextA := JoinNode;
-  TaskANode.Next := JoinLinkFromA;
-
-  // Link from TaskB -> JoinNode
-  JoinLinkFromB := TAIAgentsLink.Create(FAgents);
-  JoinLinkFromB.Name := 'JoinLinkFromB';
-  JoinLinkFromB.Graph := FAgents;
-  JoinLinkFromB.NextA := JoinNode;
-  TaskBNode.Next := JoinLinkFromB;
-
-  FAgents.FindNode('JoinNode').JoinMode := TJoinMode.jmAll;
+  // 2. Fork: two AddEdge calls from the same node add two parallel branches to
+  //    its outgoing link (fanout). 3. Join: each branch links to JoinNode, and
+  //    jmAll makes JoinNode wait for both.
+  FAgents.AddEdge('Start', 'TaskA').AddEdge('Start', 'TaskB')
+    .AddEdge('TaskA', 'JoinNode').AddEdge('TaskB', 'JoinNode')
+    .SetJoinMode('JoinNode', jmAll);
 
   // 4. Define entry/finish points
   FAgents.SetEntryPoint('Start').SetFinishPoint('JoinNode');
