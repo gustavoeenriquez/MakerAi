@@ -67,12 +67,12 @@ Logical grouping via `loAnd`/`loOr` with nested `AddGroup()`.
 
 SQL-like DSL for vector searches:
 ```sql
-MATCH documents
+MATCH (documents)
 SEARCH 'machine learning algorithms'
-USING HYBRID WEIGHTS(semantic: 0.7, lexical: 0.3) FUSION RRF
+USING HYBRID WITH WEIGHTS(0.7, 0.3) FUSION RRF
 WHERE category = 'tech' AND date > '2024-01-01'
+RERANK 'neural networks' REGENERATE
 THRESHOLD GLOBAL 0.5
-RERANK 'neural networks' WITH REGENERATE
 OPTIMIZE REORDER ABC
 RETURN TEXT, METADATA, SCORE
 LIMIT 10

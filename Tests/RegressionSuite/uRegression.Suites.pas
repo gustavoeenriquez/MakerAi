@@ -83,13 +83,14 @@ uses
   UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank, uMakerAi.Qwen.Voices,
   uMakerAi.Realtime, uMakerAi.Realtime.Qwen, uMakerAi.Realtime.AiConnection, uMakerAi.Realtime.QwenTTS, uMakerAi.Realtime.Grok,
   System.IOUtils, uMakerAi.Embeddings.Core,
-  uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index,
+  uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index, uMakerAi.RAG.Vectors.VQL,
   uMakerAi.RAG.Vector.Driver.BinFile,
   // TAiMemory persiste en SQLite via FireDAC: el driver fisico y el cursor de
   // consola tienen que estar enlazados en el ejecutable.
   FireDAC.Stan.Def, FireDAC.Stan.Async, FireDAC.Phys.SQLite, FireDAC.ConsoleUI.Wait,
   uMakerAi.Memory, uMakerAi.Memory.Types,
   uMakerAi.Skills.Format, uMakerAi.Prompts, uMakerAi.Agents.Skill, uMakerAi.Agents.Node.LLM,
+  uMakerAi.Agents.ToolRegistry,
   uMakerAi.Tools.Skills,
   uMakerAi.Chat.Gemini, uMakerAi.Gemini.Speech, uMakerAi.Gemini.WebSearch, uMakerAi.Chat.Claude, uMakerAi.Chat.MakerAi,
   uRegression.Fixtures;
@@ -101,6 +102,7 @@ const
   PORT_A2A        = 18792;
   PORT_A2A_REMOTE = 18793;
   PORT_PPM        = 18794;
+  PORT_FAKE_LLM   = 18795;
 
 { TRegressionSuite }
 
@@ -164,6 +166,35 @@ begin
   FRunner.AddCase('agents.graph.sequential')
     .Input('agents:graph')
     .ExpectEquals('esCompleted|ping>A>B>C');
+
+  // API fluida: fanout con AddEdge repetido + join jmAll (antes el link se
+  // pisaba y Compile fallaba), lmExpression con fallback y errores claros
+  FRunner.AddCase('agents.fluent.fanout-join')
+    .Input('agents:fluent-fanout')
+    .ExpectEquals('esCompleted|B=1|C=1|D=1|E=1');
+
+  FRunner.AddCase('agents.fluent.expression-fallback')
+    .Input('agents:fluent-expression')
+    .ExpectEquals('20=ping>S>Alto>Fin|2=ping>S>Bajo>Fin|7=ping>S>Medio>Fin');
+
+  // TLLMNode (oct 2026): Graph asignado al crearlo con el manager como Owner,
+  // guardrails propios y ejecucion por el ciclo del nodo base (join jmAll)
+  FRunner.AddCase('agents.llmnode.owner-graph')
+    .Input('agents:llmnode-owner')
+    .ExpectEquals('graph=True|bb=eco:hola|out=eco:hola');
+
+  FRunner.AddCase('agents.llmnode.guardrails')
+    .Input('agents:llmnode-guardrails')
+    .ExpectEquals('libre=1|final:{"eco":"ok"}|bloqueado=0|motivo=True|cuenta=1|nil=True');
+
+  FRunner.AddCase('agents.llmnode.join')
+    .Input('agents:llmnode-join')
+    .ExpectEquals('hits=2|A=1|B=1|status=esCompleted');
+
+  FRunner.AddCase('agents.fluent.errors')
+    .Input('agents:fluent-errors')
+    .ExpectEquals('dup=EAiGraphError|fifth=EAiGraphError|mixed=EAiGraphError|fallback=EAiGraphError|' +
+      'noexpr=EAiGraphError|cond=EAiGraphError|run=esCompleted|joined=1');
 
   // --- A2A (spec 1.0) ---
   FRunner.AddCase('a2a.agent-card')
@@ -437,6 +468,10 @@ begin
   // IfThen(Assigned(LOptions), LOptions.MinAbsoluteScoreEmbedding, 0.0)
   // desreferenciaba LOptions aunque fuera nil. Es alcanzable de verdad:
   // basta con no pasar Options y que el driver no tenga Owner.
+  FRunner.AddCase('rag.vql.samples')
+    .Input('rag:vql-samples')
+    .ExpectEquals('ok|ok|ok|error');
+
   FRunner.AddCase('rag.search.nil-options')
     .Input('rag:search-nil-options')
     .ExpectEquals('1');
@@ -765,6 +800,14 @@ begin
   // Issue #135: NewChat limpia la sesion pero conserva los contadores de tokens
   // (a veces se quiere el acumulado); ResetTokenCounters los pone en 0 en la
   // conexion y en el chat sin tocar el historial
+  FRunner.AddCase('chat.legacy-form-props')
+    .Input('chat:legacy-form-props')
+    .ExpectEquals('carga=ok|model=gpt-6-sol|max=1234|seed=7|top_p=0.5|tools=False|level=tlHigh|voz=nova/wav|tokens=0');
+
+  FRunner.AddCase('conn.typed-pin-equal')
+    .Input('chat:typed-pin-equal')
+    .ExpectEquals('antes=False|despues=True|tras-modelo=True|pin=True');
+
   FRunner.AddCase('conn.reset-token-counters')
     .Input('chat:reset-tokens')
     .ExpectEquals('newchat=msgs0/conn30/chat30/think5/cache7|reset=msgs1/conn0/chat0/think0/cache0/write0');
@@ -1119,6 +1162,30 @@ var
     CheckSynchronize;
   end;
 
+  function CountOf(const AText, ASub: string): Integer;
+  var
+    P: Integer;
+  begin
+    Result := 0;
+    P := Pos(ASub, AText);
+    while P > 0 do
+    begin
+      Inc(Result);
+      P := Pos(ASub, AText, P + Length(ASub));
+    end;
+  end;
+
+  function RaisedClass(AProc: TProc): string;
+  begin
+    Result := 'none';
+    try
+      AProc();
+    except
+      on E: Exception do
+        Result := E.ClassName;
+    end;
+  end;
+
 begin
   // Los flujos de orquestacion arman su propia topologia (pool, suspension,
   // no bloqueante) y viven en su propia rutina.
@@ -1162,6 +1229,188 @@ begin
         WaitGraph(Agents);
         Result := GetEnumName(TypeInfo(TAgentExecutionStatus), Ord(Agents.Blackboard.GetStatus)) +
           '|' + Agents.EndNode.Output;
+      finally
+        Agents.Free;
+      end;
+      Exit;
+    end;
+
+    // API fluida: AddEdge repetido sobre el mismo origen abre ramas (antes
+    // pisaba el link y Compile fallaba con un link huerfano). Tambien cubre
+    // AddNode(nodo existente) y SetJoinMode.
+    if AScenario = 'agents:fluent-fanout' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      try
+        Agents.Name := 'SuiteFluentFanout';
+        var Externo := TAIAgentsNode.Create(nil);   // lo adopta el grafo
+        Externo.Name := 'D';
+        Externo.OnExecute := Handlers.NodeExec;
+        Agents.AddNode('A', Handlers.NodeExec).AddNode('B', Handlers.NodeExec).AddNode('C', Handlers.NodeExec)
+          .AddNode(Externo).AddNode('E', Handlers.NodeExec)
+          .AddEdge('A', 'B').AddEdge('A', 'C').AddEdge('A', 'D')
+          .AddEdge('B', 'E').AddEdge('C', 'E').AddEdge('D', 'E')
+          .SetJoinMode('E', jmAll)
+          .SetEntryPoint('A').SetFinishPoint('E');
+        Agents.Run('ping');
+        WaitGraph(Agents);
+        OutText := Agents.EndNode.Output;
+        Result := GetEnumName(TypeInfo(TAgentExecutionStatus), Ord(Agents.Blackboard.GetStatus)) +
+          Format('|B=%d|C=%d|D=%d|E=%d', [CountOf(OutText, '>B'), CountOf(OutText, '>C'),
+          CountOf(OutText, '>D'), CountOf(OutText, '>E')]);
+      finally
+        Agents.Free;
+      end;
+      Exit;
+    end;
+
+    // lmExpression + fallback con la API fluida: cada corrida siembra 'score'
+    if AScenario = 'agents:fluent-expression' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      try
+        Agents.Name := 'SuiteFluentExpr';
+        Agents.AddNode('S', Handlers.NodeExec).AddNode('Alto', Handlers.NodeExec)
+          .AddNode('Bajo', Handlers.NodeExec).AddNode('Medio', Handlers.NodeExec).AddNode('Fin', Handlers.NodeExec)
+          .AddExpressionEdge('S', 'Alto', 'score > 10')
+          .AddExpressionEdge('S', 'Bajo', 'score < 5')
+          .AddFallbackEdge('S', 'Medio')
+          .AddEdge('Alto', 'Fin').AddEdge('Bajo', 'Fin').AddEdge('Medio', 'Fin')
+          .SetEntryPoint('S').SetFinishPoint('Fin');
+        for var Score in ['20', '2', '7'] do
+        begin
+          Agents.Run('ping',
+            procedure(B: TAIBlackboard)
+            begin
+              B.SetString('score', Score);
+            end);
+          WaitGraph(Agents);
+          if Result <> '' then
+            Result := Result + '|';
+          Result := Result + Score + '=' + Agents.EndNode.Output;
+        end;
+      finally
+        Agents.Free;
+      end;
+      Exit;
+    end;
+
+    // TLLMNode contra un servidor OpenAI-compatible falso (sin claves)
+    if AScenario.StartsWith('agents:llmnode-') then
+    begin
+      var Fake := TFakeOpenAiChatServer.Create(PORT_FAKE_LLM);
+      var Reg := TAiToolRegistry.Create;
+      var Guard: TAiGuardrails := nil;
+      Agents := TAIAgentManager.Create(nil);
+      try
+        Agents.Name := 'SuiteLLM';
+        // Creado con el manager como Owner y SIN AddNode: antes quedaba con
+        // Graph = nil y no publicaba '<Nodo>.output' en el blackboard
+        var Node := TLLMNode.Create(Agents);
+        Node.Name := 'Redactor';
+        Node.DriverName := 'GenericLLM';
+        Node.ServiceURL := Format('http://localhost:%d/v1/', [PORT_FAKE_LLM]);
+        Node.ApiKey := 'suite';
+        Node.Registry := Reg;
+
+        if AScenario = 'agents:llmnode-owner' then
+        begin
+          Agents.StartNode := Node;
+          Agents.EndNode := Node;
+          Agents.Run('hola');
+          WaitGraph(Agents);
+          Result := 'graph=' + BoolToStr(Node.Graph = Agents, True) +
+            '|bb=' + Agents.Blackboard.GetString('Redactor.output') + '|out=' + Node.Output;
+        end
+
+        // Guardrails del nodo: misma politica que un chat. Sin politica la
+        // tool corre; con BlockedTools no corre y el modelo recibe el motivo.
+        else if AScenario = 'agents:llmnode-guardrails' then
+        begin
+          Reg.Register(TSuiteEcoTool.Create);
+          Agents.StartNode := Node;
+          Agents.EndNode := Node;
+          TSuiteEcoTool.Calls := 0;
+          Agents.Run('usa la tool');
+          WaitGraph(Agents);
+          Result := Format('libre=%d|%s', [TSuiteEcoTool.Calls, Node.Output]);
+
+          Guard := TAiGuardrails.Create(nil);
+          Guard.BlockedTools.Add('suite_eco');
+          Node.Guardrails := Guard;
+          TSuiteEcoTool.Calls := 0;
+          Agents.Run('usa la tool',
+            procedure(B: TAIBlackboard)
+            begin
+            end);
+          WaitGraph(Agents);
+          Result := Result + Format('|bloqueado=%d|motivo=%s|cuenta=%d',
+            [TSuiteEcoTool.Calls, BoolToStr(Node.Output.Contains('Blocked by guardrails'), True), Guard.BlockedCount]);
+          // Liberar la politica deja el nodo sin referencia colgante
+          FreeAndNil(Guard);
+          Result := Result + '|nil=' + BoolToStr(Node.Guardrails = nil, True);
+        end
+
+        // Join jmAll sobre un TLLMNode: corre una sola vez con las dos ramas
+        // (ahora hereda la puerta de join y su limpieza del nodo base)
+        else if AScenario = 'agents:llmnode-join' then
+        begin
+          Agents.AddNode('S', Handlers.NodeExec).AddNode('A', Handlers.NodeExec).AddNode('B', Handlers.NodeExec)
+            .AddNode(Node)   // ya es del grafo: AddNode lo acepta sin duplicarlo
+            .AddEdge('S', 'A').AddEdge('S', 'B')
+            .AddEdge('A', 'Redactor').AddEdge('B', 'Redactor')
+            .SetJoinMode('Redactor', jmAll)
+            .SetEntryPoint('S').SetFinishPoint('Redactor');
+          for var Ronda := 1 to 2 do
+          begin
+            Agents.Run('ping',
+              procedure(B: TAIBlackboard)
+              begin
+              end);
+            WaitGraph(Agents);
+          end;
+          Result := Format('hits=%d|A=%d|B=%d|status=%s', [Fake.Hits, CountOf(Node.Output, '>A'),
+            CountOf(Node.Output, '>B'), GetEnumName(TypeInfo(TAgentExecutionStatus), Ord(Agents.Blackboard.GetStatus))]);
+        end
+        else
+          raise Exception.Create('Escenario TLLMNode desconocido: ' + AScenario);
+      finally
+        Agents.Free;
+        Guard.Free;
+        Reg.Free;
+        Fake.Free;
+      end;
+      Exit;
+    end;
+
+    // Errores de construccion: deben ser EAiGraphError y no dejar el grafo roto
+    if AScenario = 'agents:fluent-errors' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      try
+        Agents.Name := 'SuiteFluentErr';
+        for var N in ['A', 'B', 'C', 'D', 'E', 'F', 'R'] do
+          Agents.AddNode(N, Handlers.NodeExec);
+        Agents.AddEdge('A', 'B').AddEdge('A', 'C').AddEdge('A', 'D').AddEdge('A', 'E');
+        Result := 'dup=' + RaisedClass(procedure begin Agents.AddEdge('A', 'B'); end) +
+          '|fifth=' + RaisedClass(procedure begin Agents.AddEdge('A', 'F'); end) +
+          '|mixed=' + RaisedClass(procedure begin Agents.AddExpressionEdge('A', 'F', 'x > 1'); end) +
+          '|fallback=' + RaisedClass(procedure begin Agents.AddFallbackEdge('R', 'F'); end) +
+          '|noexpr=' + RaisedClass(procedure begin Agents.AddExpressionEdge('R', 'F', ' '); end);
+        var Targets := TDictionary<string, string>.Create;
+        try
+          Targets.Add('x', 'F');
+          Result := Result + '|cond=' + RaisedClass(procedure begin Agents.AddConditionalEdge('A', 'CondA', Targets); end);
+        finally
+          Targets.Free;
+        end;
+        // El grafo sigue sano tras los errores: A abre 4 ramas que terminan en F
+        Agents.AddEdge('B', 'F').AddEdge('C', 'F').AddEdge('D', 'F').AddEdge('E', 'F')
+          .SetJoinMode('F', jmAll).SetEntryPoint('A').SetFinishPoint('F');
+        Agents.Run('ping');
+        WaitGraph(Agents);
+        Result := Result + '|run=' + GetEnumName(TypeInfo(TAgentExecutionStatus), Ord(Agents.Blackboard.GetStatus)) +
+          Format('|joined=%d', [CountOf(Agents.EndNode.Output, '>F')]);
       finally
         Agents.Free;
       end;
@@ -3238,6 +3487,78 @@ begin
     Exit;
   end;
 
+  // Setters tipados con el MISMO valor que ya tenia la conexion: deben fijar
+  // el campo. Antes no hacian nada y el registry del driver lo pisaba
+  // (GenericLLM registra Tool_Active=False; la conexion nace con True).
+  // Un .dfm/.fmx guardado antes de v3.5 trae NativeInputFiles, NativeOutputFiles,
+  // ChatMediaSupports y EnabledFeatures. Ya no son propiedades: el formulario
+  // fallaba al cargar ("Property ... does not exist"). Ahora se descartan.
+  if AScenario = 'chat:legacy-form-props' then
+  begin
+    var Txt := TStringStream.Create(
+      'object Chat1: TAiOpenChat' + sLineBreak +
+      '  Model = ''gpt-6-sol''' + sLineBreak +
+      '  NativeInputFiles = []' + sLineBreak +
+      '  NativeOutputFiles = [Tfc_Image]' + sLineBreak +
+      '  ChatMediaSupports = [Tcm_Image, Tcm_Audio]' + sLineBreak +
+      '  EnabledFeatures = []' + sLineBreak +
+      '  Max_tokens = 1234' + sLineBreak +
+      // dejaron de publicarse: se aplican o se descartan
+      '  Logprobs = False' + sLineBreak +
+      '  N = 1' + sLineBreak +
+      '  Seed = 7' + sLineBreak +
+      '  Top_p = 0.500000000000000000' + sLineBreak +
+      '  Tool_Active = False' + sLineBreak +
+      '  ThinkingLevel = tlHigh' + sLineBreak +
+      '  Voice = ''nova''' + sLineBreak +
+      '  voice_format = ''wav''' + sLineBreak +
+      '  MediaResolution = mrDefault' + sLineBreak +
+      '  Prompt_tokens = 10' + sLineBreak +
+      '  Total_tokens = 20' + sLineBreak +
+      '  Thinking_tokens = 0' + sLineBreak +
+      'end', TEncoding.UTF8);
+    var Bin := TMemoryStream.Create;
+    var Ch := TAiOpenChat.Create(nil);
+    try
+      ObjectTextToBinary(Txt, Bin);
+      Bin.Position := 0;
+      try
+        Bin.ReadComponent(Ch);
+        Result := Format('carga=ok|model=%s|max=%d|seed=%d|top_p=%s|tools=%s|level=%s|voz=%s/%s|tokens=%d',
+          [Ch.Model, Ch.Max_tokens, Ch.Seed, FloatToStr(Ch.Top_p, TFormatSettings.Invariant),
+          BoolToStr(Ch.Tool_Active, True), GetEnumName(TypeInfo(TAiThinkingLevel), Ord(Ch.ModelConfig.ThinkingLevel)),
+          Ch.TtsParams.Voice, Ch.TtsParams.VoiceFormat, Ch.Total_tokens]);
+      except
+        on E: Exception do
+          Result := 'carga=' + E.Message;
+      end;
+    finally
+      Ch.Free;
+      Bin.Free;
+      Txt.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:typed-pin-equal' then
+  begin
+    var Conn := TAiChatConnection.Create(nil);
+    try
+      Conn.DriverName := 'GenericLLM';
+      var Antes := BoolToStr(Conn.AiChat.ModelConfig.Tool_Active, True);
+      Conn.Tool_Active := True;           // igual al default de la conexion
+      Conn.ModelCaps := [];               // idem
+      var Despues := BoolToStr(Conn.AiChat.ModelConfig.Tool_Active, True);
+      Conn.Model := 'otro-modelo';        // el registry se vuelve a aplicar
+      Result := Format('antes=%s|despues=%s|tras-modelo=%s|pin=%s', [Antes, Despues,
+        BoolToStr(Conn.AiChat.ModelConfig.Tool_Active, True),
+        BoolToStr(mcfToolActive in Conn.ModelConfig.UserFields, True)]);
+    finally
+      Conn.Free;
+    end;
+    Exit;
+  end;
+
   if AScenario = 'chat:reset-tokens' then
   begin
     var CR := TAiChatConnection.Create(nil);
@@ -3706,6 +4027,46 @@ var
   LPath: string;
   I: Integer;
 begin
+  // Las consultas VQL de ejemplo (demo 023, README, guia de RAG) deben parsear:
+  // durante meses traian 'MATCH documentos' sin parentesis, WEIGHTS con
+  // nombres, 'WITH REGENERATE' y RERANK despues de THRESHOLD, y ninguna corria
+  if AScenario = 'rag:vql-samples' then
+  begin
+    var Muestras: TArray<string> := [
+      // demo 023
+      'MATCH (documentos) SEARCH ''inteligencia artificial'' USING HYBRID WITH WEIGHTS(0.7, 0.3) FUSION RRF ' +
+      'WHERE autor = ''Gustavo'' THRESHOLD GLOBAL 0.5 OPTIMIZE REORDER ABC RETURN TEXT, METADATA, SCORE LIMIT 5',
+      // README
+      'MATCH (documents) SEARCH ''machine learning'' USING HYBRID WITH WEIGHTS(0.7, 0.3) FUSION RRF ' +
+      'WHERE category = ''tech'' AND date > ''2025-01-01'' RERANK ''neural networks'' REGENERATE LIMIT 10',
+      // Source/RAG/CLAUDE.md
+      'MATCH (documents) SEARCH ''machine learning algorithms'' USING HYBRID WITH WEIGHTS(0.7, 0.3) FUSION RRF ' +
+      'WHERE category = ''tech'' AND date > ''2024-01-01'' RERANK ''neural networks'' REGENERATE ' +
+      'THRESHOLD GLOBAL 0.5 OPTIMIZE REORDER ABC RETURN TEXT, METADATA, SCORE LIMIT 10',
+      // la sintaxis vieja de los ejemplos debe seguir fallando (no se acepta en silencio)
+      'MATCH documents SEARCH ''x'' USING HYBRID WEIGHTS(semantic: 0.7, lexical: 0.3) LIMIT 5'];
+    Result := '';
+    for var Q in Muestras do
+    begin
+      var Estado := 'ok';
+      try
+        var Parser := TVGQLParser.Create(Q);
+        try
+          Parser.Parse.Free;
+        finally
+          Parser.Free;
+        end;
+      except
+        on E: Exception do
+          Estado := 'error';
+      end;
+      if Result <> '' then
+        Result := Result + '|';
+      Result := Result + Estado;
+    end;
+    Exit;
+  end;
+
   if AScenario <> 'rag:search-nil-options' then
     raise Exception.Create('Escenario RAG desconocido: ' + AScenario);
 

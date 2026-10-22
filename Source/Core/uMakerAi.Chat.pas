@@ -431,6 +431,9 @@ type
     procedure ClientRequestError(const Sender: TObject; const AError: string);
     procedure ClientRequestException(const Sender: TObject; const AError: Exception);
     procedure WaitPendingRequest;
+    // Lee una propiedad que ya no se publica pero viene en un DFM/FMX viejo:
+    // la aplica si tiene destino actual o la descarta (ver DefineProperties)
+    procedure ReadLegacyProp(Reader: TReader);
   Protected
     FClient: TNetHTTPClient;
     FTmpRole: String;
@@ -589,6 +592,14 @@ type
     procedure DoStateChange(State: TAiChatState; const Description: string = '');
 
     procedure Notification(AComponent: TComponent; Operation: TOperation); Override;
+    // Compatibilidad de formularios: varias propiedades dejaron de publicarse
+    // (NativeInputFiles/NativeOutputFiles/ChatMediaSupports/EnabledFeatures en
+    // v3.5; Logprobs, N, Seed, Top_p, Tool_Active, ThinkingLevel, Voice,
+    // voice_format, MediaResolution y los contadores de tokens al pasar a
+    // publicos), pero los .dfm/.fmx guardados antes las traen y el formulario
+    // no cargaba ("Property ... does not exist"). Se leen sin error; las que
+    // tienen destino actual se aplican y el resto se descarta.
+    procedure DefineProperties(Filer: TFiler); override;
   Public
     Constructor Create(Sender: TComponent); Override;
     Destructor Destroy; Override;
@@ -1609,7 +1620,10 @@ end;
 
 procedure TAiModelConfig.SetModelCaps(const Value: TAiCapabilities);
 begin
-  if FModelCaps <> Value then
+    // Fija el campo aunque el valor no cambie: Conn.Tool_Active := True sobre
+    // una conexion recien creada (default True) no fijaba nada, y al ejecutar
+    // el registry del driver (p.ej. GenericLLM/Claude: False) lo pisaba.
+  if (FModelCaps <> Value) or not (mcfModelCaps in FUserFields) then
   begin
     FModelCaps := Value;
     Include(FUserFields, mcfModelCaps); // configuracion explicita: el registry ya no actualiza este campo
@@ -1619,7 +1633,10 @@ end;
 
 procedure TAiModelConfig.SetSessionCaps(const Value: TAiCapabilities);
 begin
-  if FSessionCaps <> Value then
+    // Fija el campo aunque el valor no cambie: Conn.Tool_Active := True sobre
+    // una conexion recien creada (default True) no fijaba nada, y al ejecutar
+    // el registry del driver (p.ej. GenericLLM/Claude: False) lo pisaba.
+  if (FSessionCaps <> Value) or not (mcfSessionCaps in FUserFields) then
   begin
     FSessionCaps := Value;
     Include(FUserFields, mcfSessionCaps); // configuracion explicita: el registry ya no actualiza este campo
@@ -1629,7 +1646,10 @@ end;
 
 procedure TAiModelConfig.SetThinkingLevel(const Value: TAiThinkingLevel);
 begin
-  if FThinkingLevel <> Value then
+    // Fija el campo aunque el valor no cambie: Conn.Tool_Active := True sobre
+    // una conexion recien creada (default True) no fijaba nada, y al ejecutar
+    // el registry del driver (p.ej. GenericLLM/Claude: False) lo pisaba.
+  if (FThinkingLevel <> Value) or not (mcfThinkingLevel in FUserFields) then
   begin
     FThinkingLevel := Value;
     Include(FUserFields, mcfThinkingLevel); // configuracion explicita: el registry ya no actualiza este campo
@@ -1648,7 +1668,10 @@ end;
 
 procedure TAiModelConfig.SetTool_Active(const Value: Boolean);
 begin
-  if FTool_Active <> Value then
+    // Fija el campo aunque el valor no cambie: Conn.Tool_Active := True sobre
+    // una conexion recien creada (default True) no fijaba nada, y al ejecutar
+    // el registry del driver (p.ej. GenericLLM/Claude: False) lo pisaba.
+  if (FTool_Active <> Value) or not (mcfToolActive in FUserFields) then
   begin
     FTool_Active := Value;
     Include(FUserFields, mcfToolActive); // configuracion explicita: el registry ya no actualiza este campo
@@ -4767,6 +4790,62 @@ end;
 procedure TAiChat.SetCached_tokens(const Value: Integer);
 begin
   FCached_tokens := Value;
+end;
+
+type
+  // Acceso al nombre de la propiedad en curso (TReader.PropName es protegido)
+  TAiLegacyReader = class(TReader);
+
+const
+  AI_CHAT_LEGACY_PROPS: array [0 .. 15] of string = (
+    // eliminadas en v3.5 (capacidades -> ModelConfig.ModelCaps/SessionCaps)
+    'NativeInputFiles', 'NativeOutputFiles', 'ChatMediaSupports', 'EnabledFeatures',
+    // pasaron a publicas o a sub-objetos
+    'Logprobs', 'N', 'Seed', 'Top_p', 'Tool_Active', 'ThinkingLevel',
+    'Voice', 'voice_format', 'MediaResolution',
+    // contadores de ejecucion
+    'Prompt_tokens', 'Total_tokens', 'Thinking_tokens');
+
+procedure TAiChat.DefineProperties(Filer: TFiler);
+var
+  LName: string;
+begin
+  inherited;
+  // Solo lectura (WriteData = nil, HasData = False): nunca se vuelven a escribir
+  for LName in AI_CHAT_LEGACY_PROPS do
+    Filer.DefineProperty(LName, ReadLegacyProp, nil, False);
+end;
+
+procedure TAiChat.ReadLegacyProp(Reader: TReader);
+var
+  LName: string;
+  LLevel: Integer;
+begin
+  LName := TAiLegacyReader(Reader).PropName;
+  if SameText(LName, 'Logprobs') then
+    Logprobs := Reader.ReadBoolean
+  else if SameText(LName, 'N') then
+    N := Reader.ReadInteger
+  else if SameText(LName, 'Seed') then
+    Seed := Reader.ReadInteger
+  else if SameText(LName, 'Top_p') then
+    Top_p := Reader.ReadFloat
+  else if SameText(LName, 'Tool_Active') then
+    Tool_Active := Reader.ReadBoolean
+  else if SameText(LName, 'ThinkingLevel') then
+  begin
+    // Los formularios viejos guardaban tlDefault siempre: aplicarlo fijaria el
+    // campo y el registry dejaria de ajustarlo por modelo
+    LLevel := GetEnumValue(TypeInfo(TAiThinkingLevel), Reader.ReadIdent);
+    if (LLevel >= Ord(Low(TAiThinkingLevel))) and (TAiThinkingLevel(LLevel) <> tlDefault) then
+      FModelConfig.ThinkingLevel := TAiThinkingLevel(LLevel);
+  end
+  else if SameText(LName, 'Voice') then
+    FTtsParams.Voice := Reader.ReadString
+  else if SameText(LName, 'voice_format') then
+    FTtsParams.VoiceFormat := Reader.ReadString
+  else
+    Reader.SkipValue; // capacidades viejas, MediaResolution y contadores
 end;
 
 procedure TAiChat.SetEnabledFeatures(const Value: TAiChatMediaSupports);

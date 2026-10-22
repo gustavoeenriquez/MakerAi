@@ -173,6 +173,13 @@ con `GetValue<T>`/`TryGetValue<T>` (interpretan el punto como path).
 **Regla stdio:** stdout es exclusivo del protocolo; cualquier banner/log del
 servidor debe ir a stderr (ver fix del demo 031).
 
+**Fin del proceso stdio (oct 22/2026):** tras `Start`, el programa principal
+llama `TAiMCPStdioServer.WaitForInputClosed` (bloquea hasta que el cliente
+cierra stdin; `Stop` tambien la libera) y luego `Stop`. Con el viejo
+`while True do Sleep(...)` el proceso quedaba vivo para siempre al cerrarse
+Claude Desktop. `Stop` y el destructor desenganchan el hilo lector, que puede
+seguir bloqueado en `ReadFile`. Ejemplo: demo 036.
+
 ### MRTR (Multi Round-Trip Requests, spec 2026-07-28)
 
 Un tool puede pedir informacion adicional al usuario (elicitation) devolviendo

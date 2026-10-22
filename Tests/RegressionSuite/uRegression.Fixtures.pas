@@ -25,7 +25,7 @@ uses
   uMakerAi.MCPServer.Core, uMakerAi.Agents, uMakerAi.Tools.Functions,
   uMakerAi.Chat.Messages, uMakerAi.Chat.Tools, uMakerAi.Jev, uMakerAi.Embeddings.core,
   UMakerAi.Chat, System.Net.HttpClient, uMakerAi.Jev.Batch, uMakerAi.Tools.Skills,
-  System.Net.Mime, uMakerAi.OpenAI.Audio;
+  System.Net.Mime, uMakerAi.OpenAI.Audio, uMakerAi.Agents.IAiTool;
 
 type
   // --- Tool MCP determinista: devuelve el texto en mayusculas ---
@@ -74,6 +74,41 @@ type
   public
     constructor Create(APort: Integer);
     destructor Destroy; override;
+  end;
+
+  // --- Servidor OpenAI-compatible falso (TLLMNode sin red ni claves) ---
+  // Responde /v1/chat/completions segun lo que llega:
+  //   - con resultado de tool en el historial -> 'final:<contenido del tool>'
+  //   - con tools declaradas (sin resultado)  -> pide la tool 'suite_eco'
+  //   - sin tools                             -> 'eco:<ultimo mensaje user>'
+  // Hits cuenta las peticiones recibidas.
+  TFakeOpenAiChatServer = class
+  private
+    FHttp: TIdHTTPServer;
+    FHits: Integer;
+    procedure HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+    procedure ParseAuthentication(AContext: TIdContext; const AAuthType, AAuthData: String;
+      var VUsername, VPassword: String; var VHandled: Boolean);
+  public
+    constructor Create(APort: Integer);
+    destructor Destroy; override;
+    property Hits: Integer read FHits;
+  end;
+
+  // --- Tool de registry (IAiTool) que cuenta sus ejecuciones ---
+  TSuiteEcoTool = class(TInterfacedObject, IAiTool)
+  private
+    FSchema: TJSONObject;
+  public
+    class var Calls: Integer;
+    constructor Create;
+    destructor Destroy; override;
+    function GetName: String;
+    function GetDescription: String;
+    function GetCategory: String;
+    function GetSchema: TJSONObject;
+    function Execute(const AArgs: TJSONObject): TJSONObject;
+    function IsAvailable: Boolean;
   end;
 
   // --- Registry PPM falso (skills) ---
@@ -460,6 +495,195 @@ begin
   AResponseInfo.ContentType := 'application/json; charset=utf-8';
   AResponseInfo.CharSet := 'utf-8';
   AResponseInfo.ContentText := Out_;
+end;
+
+{ TFakeOpenAiChatServer }
+
+constructor TFakeOpenAiChatServer.Create(APort: Integer);
+begin
+  inherited Create;
+  FHttp := TIdHTTPServer.Create(nil);
+  FHttp.OnCommandGet := HttpCommand;
+  FHttp.OnCommandOther := HttpCommand;
+  // Sin esto Indy responde 401 a "Authorization: Bearer" antes de llegar a
+  // HttpCommand (solo entiende Basic)
+  FHttp.OnParseAuthentication := ParseAuthentication;
+  FHttp.DefaultPort := APort;
+  FHttp.Active := True;
+end;
+
+procedure TFakeOpenAiChatServer.ParseAuthentication(AContext: TIdContext; const AAuthType, AAuthData: String;
+  var VUsername, VPassword: String; var VHandled: Boolean);
+begin
+  VHandled := True;
+end;
+
+destructor TFakeOpenAiChatServer.Destroy;
+begin
+  FHttp.Active := False;
+  FHttp.Free;
+  inherited;
+end;
+
+procedure TFakeOpenAiChatServer.HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo;
+  AResponseInfo: TIdHTTPResponseInfo);
+
+  function ContentText(AMsg: TJSONObject): string;
+  var
+    V: TJSONValue;
+  begin
+    V := AMsg.GetValue('content');
+    if V is TJSONString then
+      Result := TJSONString(V).Value
+    else if Assigned(V) and not (V is TJSONNull) then
+      Result := V.ToJSON
+    else
+      Result := '';
+  end;
+
+var
+  Body, Role, LastUser, ToolResult: string;
+  Req, Msg, Resp, Choice, RespMsg, Call, Fn, Usage: TJSONObject;
+  Msgs, Tools: TJSONArray;
+  HasToolResult: Boolean;
+  I: Integer;
+begin
+  AtomicIncrement(FHits);
+  Body := '';
+  if Assigned(ARequestInfo.PostStream) then
+  begin
+    ARequestInfo.PostStream.Position := 0;
+    with TStringStream.Create('', TEncoding.UTF8) do
+      try
+        CopyFrom(ARequestInfo.PostStream, 0);
+        Body := DataString;
+      finally
+        Free;
+      end;
+  end;
+
+  LastUser := '';
+  ToolResult := '';
+  HasToolResult := False;
+  Tools := nil;
+  Req := TJSONObject.ParseJSONValue(Body) as TJSONObject;
+  try
+    if Assigned(Req) then
+    begin
+      Tools := Req.GetValue('tools') as TJSONArray;
+      Msgs := Req.GetValue('messages') as TJSONArray;
+      if Assigned(Msgs) then
+        for I := 0 to Msgs.Count - 1 do
+        begin
+          Msg := Msgs.Items[I] as TJSONObject;
+          Role := Msg.GetValue<string>('role', '');
+          if Role = 'user' then
+            LastUser := ContentText(Msg)
+          else if Role = 'tool' then
+          begin
+            HasToolResult := True;
+            ToolResult := ContentText(Msg);
+          end;
+        end;
+    end;
+
+    Resp := TJSONObject.Create;
+    try
+      Resp.AddPair('id', 'chatcmpl-suite');
+      Resp.AddPair('object', 'chat.completion');
+      Resp.AddPair('model', 'suite-fake');
+      RespMsg := TJSONObject.Create;
+      RespMsg.AddPair('role', 'assistant');
+      Choice := TJSONObject.Create;
+      Choice.AddPair('index', TJSONNumber.Create(0));
+      if HasToolResult then
+      begin
+        RespMsg.AddPair('content', 'final:' + ToolResult);
+        Choice.AddPair('finish_reason', 'stop');
+      end
+      else if Assigned(Tools) and (Tools.Count > 0) then
+      begin
+        RespMsg.AddPair('content', TJSONNull.Create);
+        Fn := TJSONObject.Create;
+        Fn.AddPair('name', 'suite_eco');
+        Fn.AddPair('arguments', '{"texto":"hola"}');
+        Call := TJSONObject.Create;
+        Call.AddPair('id', 'call_suite_1');
+        Call.AddPair('type', 'function');
+        Call.AddPair('function', Fn);
+        RespMsg.AddPair('tool_calls', TJSONArray.Create(Call));
+        Choice.AddPair('finish_reason', 'tool_calls');
+      end
+      else
+      begin
+        RespMsg.AddPair('content', 'eco:' + LastUser.Trim);
+        Choice.AddPair('finish_reason', 'stop');
+      end;
+      Choice.AddPair('message', RespMsg);
+      Resp.AddPair('choices', TJSONArray.Create(Choice));
+      Usage := TJSONObject.Create;
+      Usage.AddPair('prompt_tokens', TJSONNumber.Create(1));
+      Usage.AddPair('completion_tokens', TJSONNumber.Create(1));
+      Usage.AddPair('total_tokens', TJSONNumber.Create(2));
+      Resp.AddPair('usage', Usage);
+
+      AResponseInfo.ResponseNo := 200;
+      AResponseInfo.ContentType := 'application/json';
+      AResponseInfo.CharSet := 'utf-8';
+      AResponseInfo.ContentText := Resp.ToJSON;
+    finally
+      Resp.Free;
+    end;
+  finally
+    Req.Free;
+  end;
+end;
+
+{ TSuiteEcoTool }
+
+constructor TSuiteEcoTool.Create;
+begin
+  inherited Create;
+  FSchema := TJSONObject.ParseJSONValue(
+    '{"type":"object","properties":{"texto":{"type":"string"}},"required":["texto"]}') as TJSONObject;
+end;
+
+destructor TSuiteEcoTool.Destroy;
+begin
+  FSchema.Free;
+  inherited;
+end;
+
+function TSuiteEcoTool.GetName: String;
+begin
+  Result := 'suite_eco';
+end;
+
+function TSuiteEcoTool.GetDescription: String;
+begin
+  Result := 'Devuelve ok (cuenta sus ejecuciones)';
+end;
+
+function TSuiteEcoTool.GetCategory: String;
+begin
+  Result := 'suite';
+end;
+
+function TSuiteEcoTool.GetSchema: TJSONObject;
+begin
+  Result := FSchema;
+end;
+
+function TSuiteEcoTool.Execute(const AArgs: TJSONObject): TJSONObject;
+begin
+  AtomicIncrement(Calls);
+  Result := TJSONObject.Create;
+  Result.AddPair('eco', 'ok');
+end;
+
+function TSuiteEcoTool.IsAvailable: Boolean;
+begin
+  Result := True;
 end;
 
 { TFixtureHandlers }

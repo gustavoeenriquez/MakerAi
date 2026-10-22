@@ -27,14 +27,14 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (117 casos)
+## Cobertura actual (127 casos)
 
 | Área | Casos |
 |------|-------|
 | MCP dual-era | negociación moderna (2026-07-28), fallback a handshake legacy, `tools/list`, `tools/call` |
 | MCP fugas | `mcp.initialize.no-leak`: 5 `Initialize` contra el servidor in-process no dejan bloques vivos (mide `GetMemoryManagerState`). Cubre la fuga del cliente (respuesta de `tools/list`) y la del servidor (esquema clonado por tool en cada `tools/list`); falla sin cualquiera de las dos |
 | MCP MRTR | reintento con `accept`, mensaje de elicitation recibido, sin handler → error explícito |
-| Agentes | grafo secuencial con status final y salida encadenada; `lmExpression` con punto decimal bajo configuración regional con coma |
+| Agentes | grafo secuencial con status final y salida encadenada; `lmExpression` con punto decimal bajo configuración regional con coma; API fluida: fanout con `AddEdge` repetido + join `jmAll`, `AddExpressionEdge` con `AddFallbackEdge`, y los errores de construcción (`EAiGraphError`); `TLLMNode` contra un servidor OpenAI-compatible falso (`TFakeOpenAiChatServer`): `Graph` con el manager como Owner, `Guardrails` del nodo y join `jmAll` |
 | SmartDispatch + Jev | `ChatTools.DispatchClassifier` sobre un `TAiOpenChat` real (URL a puerto cerrado): el tag va directo a la tool sin pase por LLM; `TAiJevDispatchClassifier` solo ofrece los tags recibidos, respeta `MinConfidence` y no consulta a Jev si solo queda CHAT |
 | Guardrail de entrada | `ChatTools.PromptGuard` sobre un `TAiOpenChat` real (URL a puerto cerrado, SmartDispatch a una tool falsa): bloquea sin tocar la red, permite, `OnPromptGuard` anula el bloqueo, guard caído con `BlockOnError` cerrado/abierto; `TAiJevPromptGuard` prioriza seguridad sobre `out_of_scope` y solo pregunta el alcance con `Scope` |
 | Guardrails + Jev | `TAiGuardrails.Classifier` con `TAiJevGuardrailClassifier`: riesgo alto bloquea con motivo, bajo permite, lo que ya bloquean las listas no llega a Jev, `BlockOnError` cerrado/abierto; categorías de permiso: bloquea una categoría prohibida aunque no sea la elegida, el riesgo manda primero, `ToolDescriptions` viaja en el state, `OnCategorized` anula |

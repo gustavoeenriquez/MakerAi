@@ -515,10 +515,12 @@ end;
 procedure TAiClaudeChat.SetEnableMemory(const Value: Boolean);
 begin
   FEnableMemory := Value;
-  if Value then
-    ModelConfig.ModelCaps := ModelConfig.ModelCaps + [cap_Memory]
-  else
-    ModelConfig.ModelCaps := ModelConfig.ModelCaps - [cap_Memory];
+  // Solo si cambia: asignar ModelCaps lo fija (UserFields) aunque sea igual
+  if Value <> (cap_Memory in ModelConfig.ModelCaps) then
+    if Value then
+      ModelConfig.ModelCaps := ModelConfig.ModelCaps + [cap_Memory]
+    else
+      ModelConfig.ModelCaps := ModelConfig.ModelCaps - [cap_Memory];
 end;
 
 procedure TAiClaudeChat.SetEnableThinking(const Value: Boolean);

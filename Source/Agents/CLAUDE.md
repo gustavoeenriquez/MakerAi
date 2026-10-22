@@ -15,10 +15,10 @@ The Agents module implements a graph-based autonomous agent orchestration framew
 | `uMakerAi.Agents.EngineRegistry.pas` | Singleton registries for tool discovery (`TEngineRegistry`, `TAgentHandlerRegistry`) |
 | `uMakerAi.Agents.GraphBuilder.pas` | `TGraphBuilder` parses JSON graph specs into runtime structures. `StrictValidation` (default True) raises `EAiGraphError` on structural defects (edge to missing node, undeclared port, >4 fanout outputs); set False for the legacy warn-and-drop behavior (fix M-02) |
 | `uMakerAi.Agents.DmGenerator.pas` | `TDataModuleGenerator` generates Delphi DataModule code from JSON graphs |
-| `uMakerAi.Agents.Node.LLM.pas` | `TLLMNode`: nodo con LLM y loop ReAct sobre el `TAiToolRegistry`. `ResolveConfig` combina nodo + skill (driver del nodo → del skill → `'Claude'`; el `Model` del skill solo si es del driver efectivo; `SystemPrompt` del skill + el del nodo; `ApiKey` del nodo o del skill) y `ConfigureChat` lo aplica en orden Driver → Model → Params (v3.8: `SetDriverName` reinicia el modelo, así que el orden viejo perdía modelo y clave del skill). `DriverName` es `''` por defecto desde v3.8 |
+| `uMakerAi.Agents.Node.LLM.pas` | `TLLMNode`: nodo con LLM y loop ReAct sobre el `TAiToolRegistry`. `ResolveConfig` combina nodo + skill (driver del nodo → del skill → `'Claude'`; el `Model` del skill solo si es del driver efectivo; `SystemPrompt` del skill + el del nodo; `ApiKey` del nodo o del skill) y `ConfigureChat` lo aplica en orden Driver → Model → Params (v3.8: `SetDriverName` reinicia el modelo, así que el orden viejo perdía modelo y clave del skill). `DriverName` es `''` por defecto desde v3.8. **Oct 2026:** sobreescribe `ExecuteNode` (no `DoExecute`), así hereda del nodo base join, `OnEnterNode`, span de telemetría, reinicio de estado y limpieza del join; propiedad `Guardrails` (se asigna al `TAiFunctions` interno: cada tool call del nodo pasa por la política); las caps se fijan por el canal tipado. Creado con el manager como Owner ya queda con `Graph` asignado (antes `nil`: no publicaba `<Nodo>.output`) |
 | `uMakerAi.Agents.Skill.pas` | `TAiSkill`: config reutilizable de un `TLLMNode`. Dos formatos: SKILL.md (`FromPPM`, `FromFolder`, `FromSkillFile`; parser común de `Source/Core/uMakerAi.Skills.Format.pas`) y JSON propio (`FromJSON`, `FromFile`). `ApiKey` solo desde JSON: un SKILL.md es contenido de terceros. Guía: `Docs/Version 3/uMakerAi-Agents-Skill.md` |
 | `uMakerAi.Agents.Tools.JevRouter.pas` | `TAiJevRouterTool`: tool de nodo que elige la siguiente ruta con Jev (TypeSafe AI) y la escribe en `Blackboard['next_route']` para un link `lmConditional`. Registrada en `TEngineRegistry` como `JevRouter` |
-| `uMakerAi.A2A.Server.pas` | `TAiA2AServer` (spec A2A 1.0): expone `TAIAgentManager`(s) como agente A2A — Agent Card en `/.well-known/agent-card.json`, JSON-RPC `SendMessage`/`GetTask`/`CancelTask` (+ aliases 0.x). Pool de managers, ciclo de vida real del task, resume de `input-required`, auth bearer y `traceparent`; sin streaming (rechaza con UnsupportedOperationError) |
+| `uMakerAi.A2A.Server.pas` | `TAiA2AServer` (spec A2A 1.0): expone `TAIAgentManager`(s) como agente A2A — Agent Card en `/.well-known/agent-card.json`, JSON-RPC `SendMessage`/`GetTask`/`CancelTask` (+ aliases 0.x). Pool de managers, ciclo de vida real del task, resume de `input-required`, auth bearer y `traceparent`; streaming SSE y push notifications (ver más abajo) |
 | `uMakerAi.A2A.Client.pas` | `TAiA2AClient`: consume agentes A2A remotos — `FetchAgentCard`, `SendText`/`SendTextEx`, `GetTask`/`CancelTask`; estado normalizado en `LastTaskState` y pregunta del agente en `LastStatusMessage`. Incluye `TAiA2ARemoteAgentTool` (federacion): asignado como `Tool` de un nodo, delega el input del nodo en un agente A2A remoto; registrado en `TEngineRegistry` |
 
 ## Core Classes
@@ -38,6 +38,39 @@ The Agents module implements a graph-based autonomous agent orchestration framew
 **TAiToolBase** - Abstract base for node tools. Inherit and implement `Execute(ANode, AInput, var AOutput)`.
 
 **TAiToolParams** - Public RTTI mapper for tool parameters (fix M-04): `ToJSON`/`FromJSON`/`SchemaOf`. Excludes `AI_TOOL_RESERVED_PROPS` (`Name`, `Tag`, `ID`, `Description`) both ways, honors `[TSecret]` (never written; incoming values ignored; `SchemaOf` marks them `writeOnly` + `x-credential-type`). `FromJSON` accepts typed JSON values or their string representation (single mapper — `GraphBuilder.SetToolParameters` delegates here). Serialization notes: `TAIAgentManager.SaveToStream` raises `EAiGraphError` for nodes with `OnExecute` and no `Tool` unless `AllowPartialSerialization := True` (fix M-06).
+
+## API fluida (oct 2026)
+
+Cada nodo tiene **un solo** link de salida con hasta 4 destinos (`NextA..NextD`) más `NextNo` (sin coincidencia / fallo). Las llamadas `Add*Edge` sobre el mismo origen **suman** destinos a ese link.
+
+```pascal
+Manager
+  .AddNode('Entrada', Exec).AddNode('Tecnico', Exec).AddNode('Mercado', Exec)
+  .AddNode(MiLLMNode)                         // nodo ya creado (TLLMNode...): Name asignado; sin Owner lo adopta el grafo
+  .AddToolNode('Router', JevRouterTool)       // nodo que ejecuta una TAiToolBase
+  .AddNode('Consolidar', Exec)
+  .AddEdge('Entrada', 'Tecnico').AddEdge('Entrada', 'Mercado')   // fanout: ramas en paralelo
+  .AddEdge('Tecnico', 'Consolidar').AddEdge('Mercado', 'Consolidar')
+  .SetJoinMode('Consolidar', jmAll)                               // espera todas las ramas
+  .SetEntryPoint('Entrada').SetFinishPoint('Consolidar');
+
+Manager.AddExpressionEdge('S', 'Alto', 'score > 10')   // lmExpression: se evalúan todas
+       .AddExpressionEdge('S', 'Bajo', 'score < 5')
+       .AddFallbackEdge('S', 'Medio');                  // NextNo: ninguna se cumplió
+```
+
+- **Antes** cada `AddEdge` creaba un link nuevo y pisaba `StartNode.Next`; el anterior quedaba huérfano y `Compile` fallaba con "Link ... is not connected from any source node". El map-reduce del capítulo 28 del libro nunca corría.
+- **Errores (`EAiGraphError`):** arista duplicada, quinto destino, mezclar modos en un mismo origen (p.ej. `AddEdge` + `AddExpressionEdge`), `AddConditionalEdge` sobre un nodo que ya tiene link, `AddFallbackEdge` antes de las demás aristas, expresión vacía.
+- `AddConditionalEdge` valida todos los destinos antes de crear el link (antes dejaba un link a medio armar).
+- Para más de 4 ramas: un nodo intermedio.
+- Casos de regresión: `agents.fluent.fanout-join`, `agents.fluent.expression-fallback`, `agents.fluent.errors`.
+
+## Subclases de nodo: `ExecuteNode`
+
+`TAIAgentsNode.DoExecute` resuelve el join, dispara `OnEnterNode`, abre el span `agent.node`, llama a `ExecuteNode(aBeforeNode, aLink, var AOutput)` y luego maneja suspensión, enrutado y limpieza del join. Una subclase sobreescribe **`ExecuteNode`**, no `DoExecute` (por defecto llama `OnExecute` o `Tool.Run`).
+
+- `OnEnterNode` se dispara **después** de la puerta de join (oct 2026): antes saltaba con cada llegada a un nodo `jmAll` aunque no se ejecutara, y el `Input` que dejaba el handler lo pisaba el join.
+- Un nodo o link creado con el manager como `Owner` toma ese manager como `Graph` (`AddComponentToList`).
 
 ## Creating Custom Tools
 

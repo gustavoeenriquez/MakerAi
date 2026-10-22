@@ -36,7 +36,8 @@ uses
   uMakerAi.Agents.Skill,     // TAiSkill
   uMakerAi.Chat.Messages,    // TAiToolsFunction
   uMakerAi.Chat.AiConnection, // TAiChatConnection
-  uMakerAi.Tools.Functions;  // TAiFunctions, TFunctionActionItem, TFunctionEvent
+  uMakerAi.Tools.Functions,  // TAiFunctions, TFunctionActionItem, TFunctionEvent
+  uMakerAi.Guardrails;       // TAiGuardrails
 
 const
   // Driver usado cuando ni el nodo ni el skill fijan uno
@@ -64,8 +65,17 @@ type
       - Asignar uno propio para aislar las herramientas de este nodo
 
     Ciclo de vida de los objetos internos:
-      TAiChatConnection y TAiFunctions se crean y liberan en cada llamada a
-      DoExecute para que no persista estado entre ejecuciones del nodo.
+      TAiChatConnection y TAiFunctions se crean y liberan en cada ejecucion
+      para que no persista estado entre ejecuciones del nodo.
+
+    Ejecucion (oct 2026): sobreescribe ExecuteNode, no DoExecute. Asi hereda
+    del nodo base la puerta de join, OnEnterNode, el span de telemetria, el
+    reinicio de estado, la limpieza de las entradas de join y el enrutado.
+    Antes reimplementaba DoExecute y se saltaba el span y la limpieza del join
+    (un jmAll en un ciclo disparaba de nuevo con las entradas viejas).
+
+    Guardrails: se asignan al TAiFunctions interno, de modo que cada tool call
+    del nodo pasa por la misma politica que en un chat.
   }
   TLLMNode = class(TAIAgentsNode)
   private
@@ -78,13 +88,15 @@ type
     FUseAllTools   : Boolean;
     FRegistry      : TAiToolRegistry;
     FSkill         : TAiSkill;
+    FGuardrails    : TAiGuardrails;
 
-    // Estado temporal válido sólo durante DoExecute (un hilo a la vez por nodo)
+    // Estado temporal válido sólo durante ExecuteNode (un hilo a la vez por nodo)
     FActiveRegistry: TAiToolRegistry;
     // Captura el último error del LLM para re-lanzarlo como excepción
     FLastError     : String;
 
     procedure SetSkill(const Value: TAiSkill);
+    procedure SetGuardrails(const Value: TAiGuardrails);
     procedure LoadRegistryTools(AFunctions: TAiFunctions);
     // Carga en AFunctions sólo las herramientas de AToolNames presentes en el registry
     procedure LoadSkillTools(AFunctions: TAiFunctions; AToolNames: TStrings);
@@ -96,8 +108,9 @@ type
     procedure InternalOnError(Sender: TObject; const ErrorMsg: string;
                               AException: Exception; const AResponse: IHTTPResponse);
   protected
-    procedure DoExecute(aBeforeNode: TAIAgentsNode;
-                        aLink: TAIAgentsLink); override;
+    procedure ExecuteNode(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink;
+                          var AOutput: string); override;
+    procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     constructor Create(aOwner: TComponent); override;
     destructor Destroy; override;
@@ -114,7 +127,7 @@ type
     function ResolveConfig: TLLMNodeConfig;
 
     // Aplica ResolveConfig (y ServiceURL/MaxTokens) a un chat. Es lo que hace
-    // DoExecute antes de cargar las tools; público para poder verificarlo.
+    // ExecuteNode antes de cargar las tools; público para poder verificarlo.
     procedure ConfigureChat(AChat: TAiChatConnection);
 
     // Referencia al registry a usar. nil = TAiToolRegistry.Instance.
@@ -149,6 +162,9 @@ type
     // Si True, inyecta automáticamente todas las herramientas disponibles del registry.
     // Si False y hay un skill con ExtraTools, carga sólo esas herramientas.
     property UseAllTools  : Boolean read FUseAllTools  write FUseAllTools default True;
+    // Politica de seguridad de las tool calls del nodo (opt-in). La misma
+    // instancia puede compartirse entre nodos y chats.
+    property Guardrails   : TAiGuardrails read FGuardrails write SetGuardrails;
   end;
 
 
@@ -338,7 +354,7 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Captura errores del LLM para re-lanzarlos como excepción en DoExecute.
+// Captura errores del LLM para re-lanzarlos como excepción en ExecuteNode.
 // ---------------------------------------------------------------------------
 procedure TLLMNode.InternalOnError(Sender: TObject; const ErrorMsg: string;
   AException: Exception; const AResponse: IHTTPResponse);
@@ -401,29 +417,18 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Punto de entrada principal del nodo. Reemplaza el DoExecute genérico.
-// Crea el chat, carga las herramientas y ejecuta el input del nodo.
+// Trabajo del nodo: crea el chat, carga las herramientas y ejecuta el input.
+// El nodo base ya resolvio el join, disparo OnEnterNode y abrio el span; al
+// volver se encarga de la suspension, el enrutado y la limpieza.
 // El loop ReAct es gestionado internamente por TAiChatConnection.
 // ---------------------------------------------------------------------------
-procedure TLLMNode.DoExecute(aBeforeNode: TAIAgentsNode;
-  aLink: TAIAgentsLink);
+procedure TLLMNode.ExecuteNode(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink;
+  var AOutput: string);
 var
   Chat      : TAiChatConnection;
   Functions : TAiFunctions;
   Response  : String;
 begin
-  // Evaluar logica de join (jmAny / jmAll) y actualizar Self.Input.
-  // Si el nodo no esta listo aun (jmAll esperando mas inputs), salir sin ejecutar.
-  if not CheckJoinAndPrepareInput(aBeforeNode, aLink) then Exit;
-
-  // Disparar OnEnterNode ANTES de la llamada al LLM para que el handler pueda
-  // modificar Self.Input (p.ej. inyectar historial del debate).
-  // Se llama directo (sin Synchronize) porque Self.Input solo lo toca este
-  // worker thread en este momento, y Blackboard ya es thread-safe.
-  // Nota: en apps con UI, el handler debe ser thread-safe (no tocar controles).
-  if Assigned(Self.Graph) and Assigned(Self.Graph.OnEnterNode) then
-    Self.Graph.OnEnterNode(Self.Graph, Self);
-
   // Determinar el registry activo para esta ejecución
   if Assigned(FRegistry) then
     FActiveRegistry := FRegistry
@@ -434,41 +439,34 @@ begin
   Chat      := TAiChatConnection.Create(nil);
   Functions := TAiFunctions.Create(nil);
   try
-    // 1. Driver, modelo, credenciales y prompt (nodo + skill)
+    // Driver, modelo, credenciales y prompt (nodo + skill)
     ConfigureChat(Chat);
 
     // Conectar handler de errores para capturar fallos del LLM
     Chat.OnError := InternalOnError;
 
-    // 3. Cargar herramientas.
-    //    - UseAllTools=True  → carga todo el registry (comportamiento original).
-    //    - UseAllTools=False + Skill.ExtraTools → carga sólo las tools del skill.
+    // Cada tool call del nodo pasa por la politica (bloqueo = texto al modelo)
+    Functions.Guardrails := FGuardrails;
+
+    // Cargar herramientas.
+    //  - UseAllTools=True  → todo el registry.
+    //  - UseAllTools=False + Skill.ExtraTools → sólo las tools del skill.
     if FUseAllTools and (FActiveRegistry.Count > 0) then
-    begin
-      LoadRegistryTools(Functions);
-      Chat.AiFunctions := Functions;
-
-      // Limpiar ModelCaps/SessionCaps: LLMNode usa sólo TAiFunctions.
-      // Sin esto, el driver puede añadir tools built-in (web_search,
-      // code_execution, etc.) que nuestro código no sabe manejar.
-      Chat.Params.Values['ModelCaps']   := '[]';
-      Chat.Params.Values['SessionCaps'] := '[]';
-
-      // Tool_Active debe ser True para que el driver envíe las tools al LLM.
-      // Algunos drivers (Claude, Gemini) lo tienen en False por defecto.
-      Chat.Params.Values['Tool_Active'] := 'True';
-    end
+      LoadRegistryTools(Functions)
     else if Assigned(FSkill) and (FSkill.ExtraTools.Count > 0) then
-    begin
-      // UseAllTools=False pero el skill declara herramientas específicas
       LoadSkillTools(Functions, FSkill.ExtraTools);
-      if Functions.Functions.Count > 0 then
-      begin
-        Chat.AiFunctions := Functions;
-        Chat.Params.Values['ModelCaps']   := '[]';
-        Chat.Params.Values['SessionCaps'] := '[]';
-        Chat.Params.Values['Tool_Active'] := 'True';
-      end;
+
+    if Functions.Functions.Count > 0 then
+    begin
+      Chat.AiFunctions := Functions;
+      // Sin capacidades nativas: el nodo usa sólo TAiFunctions. Si no, el
+      // driver puede añadir tools built-in (web_search, code_execution...)
+      // que este nodo no sabe manejar. Tool_Active hace que el driver envíe
+      // las tools (Claude y Gemini lo traen en False por defecto).
+      // Canal tipado (v3.5): no se escriben en Params.
+      Chat.ModelCaps   := [];
+      Chat.SessionCaps := [];
+      Chat.Tool_Active := True;
     end;
 
     // Ejecutar el input del nodo (el loop de tools es automático)
@@ -478,7 +476,7 @@ begin
     if (Response = '') and (FLastError <> '') then
       raise Exception.Create('[TLLMNode] LLM error: ' + FLastError);
 
-    Self.Output := Response;
+    AOutput := Response;
 
     // Publicar en el Blackboard para que otros nodos puedan leerlo
     if Assigned(Self.Graph) and Assigned(Self.Graph.Blackboard) then
@@ -491,10 +489,25 @@ begin
     Chat.Free;
     FActiveRegistry := nil;
   end;
+end;
 
-  // Enrutar al siguiente link (equivalente al bloque de DoExecute del base class
-  // que no se ejecuta porque TLLMNode sobreescribe DoExecute sin llamar inherited).
-  DoTraverseLinks(aBeforeNode, aLink);
+procedure TLLMNode.SetGuardrails(const Value: TAiGuardrails);
+begin
+  if FGuardrails <> Value then
+  begin
+    if Assigned(FGuardrails) then
+      FGuardrails.RemoveFreeNotification(Self);
+    FGuardrails := Value;
+    if Assigned(FGuardrails) then
+      FGuardrails.FreeNotification(Self);
+  end;
+end;
+
+procedure TLLMNode.Notification(AComponent: TComponent; Operation: TOperation);
+begin
+  inherited;
+  if (Operation = opRemove) and (AComponent = FGuardrails) then
+    FGuardrails := nil;
 end;
 
 initialization

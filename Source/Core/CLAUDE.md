@@ -118,6 +118,14 @@ En el puente de Fase 1 de `RunNew` (modelo de texto con `SessionCaps` `[cap_Audi
 
 `TAiChatFactory.GetDriverParams` (y la de embeddings) arma los parámetros en tres niveles: defaults del driver (`RegisterDefaultParams`, incluye `Model=<default>`), los del driver en el catálogo y los del **modelo**. El tercero solo se consultaba si `ModelName` tenía valor, así que una conexión con `DriverName` y sin `Model` usaba el modelo por defecto **sin** sus caps, `Max_Tokens` ni `ThinkingLevel`. Medido: 9 de 15 drivers daban otro chat (Qwen sin visión, Groq sin razonamiento/intérprete y con `Max_Tokens` 8192 en lugar de 65536, Gemini sin audio/PDF/búsqueda, Grok, Kimi, Mistral, MakerAi, DeepSeek, GLM). Ahora, sin `ModelName`, el nivel 3 usa el `Model` que resolvieron los niveles 1 y 2. `TAiChatConnection.Model` sigue vacío (no cambia lo que se guarda en el DFM). **Cambio de comportamiento:** quien usaba solo `DriverName` recibe ahora la configuración del catálogo de su modelo por defecto — la misma que obtenía asignándolo explícitamente. Suite: `conn.empty-model-default-params` (invariante para todos los drivers registrados).
 
+## Setters tipados fijan aunque el valor sea igual (oct 22/2026)
+
+`TAiModelConfig.SetModelCaps/SetSessionCaps/SetThinkingLevel/SetTool_Active` solo fijaban el campo (`UserFields`) si el valor cambiaba. Una `TAiChatConnection` nace con `Tool_Active = True` y `ModelCaps = []`, así que `Conn.Tool_Active := True` o `Conn.ModelCaps := []` no hacían nada y al ejecutar el registry del driver los pisaba (GenericLLM, Claude y Gemini registran `Tool_Active=False`): **las tools no se enviaban**. Ahora el setter fija siempre y dispara `OnChange` si el valor cambió o el pin es nuevo. Para no fijar sin querer: el constructor de Gemini ya no reasigna `ThinkingLevel := tlDefault`, y `EnableMemory` de Claude solo toca `ModelCaps` si cambia. Suite: `conn.typed-pin-equal`.
+
+## Formularios guardados con versiones viejas (oct 22/2026)
+
+Varias propiedades de `TAiChat` dejaron de publicarse (`NativeInputFiles`, `NativeOutputFiles`, `ChatMediaSupports`, `EnabledFeatures` en v3.5; `Logprobs`, `N`, `Seed`, `Top_p`, `Tool_Active`, `ThinkingLevel`, `Voice`, `voice_format`, `MediaResolution` y los contadores de tokens al pasar a públicas). Un `.dfm`/`.fmx` guardado antes las trae y **no cargaba**: `EReadError "Property ... does not exist"` (le pasaba a los demos 012, 021 y 051). `TAiChat.DefineProperties` las lee sin error: aplica `Top_p`, `Seed`, `N`, `Logprobs`, `Tool_Active`, `ThinkingLevel` (solo si ≠ `tlDefault`, para no fijarlo) y `Voice`/`voice_format` → `TtsParams`; descarta el resto. Nunca se vuelven a escribir. Suite: `chat.legacy-form-props`. **Al quitar una propiedad publicada, agregarla a `AI_CHAT_LEGACY_PROPS`.**
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for source directory overview and [../../CLAUDE.md](../../CLAUDE.md) for project overview.

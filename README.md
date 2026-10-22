@@ -654,10 +654,10 @@ Two complementary retrieval engines with their own query languages:
 - Reranking and Lost-in-the-Middle reordering for LLM context
 - **VQL** (Vector Query Language) — SQL-like DSL for complex retrieval queries:
   ```sql
-  MATCH documents SEARCH 'machine learning'
-  USING HYBRID WEIGHTS(semantic: 0.7, lexical: 0.3) FUSION RRF
+  MATCH (documents) SEARCH 'machine learning'
+  USING HYBRID WITH WEIGHTS(0.7, 0.3) FUSION RRF
   WHERE category = 'tech' AND date > '2025-01-01'
-  RERANK 'neural networks' WITH REGENERATE
+  RERANK 'neural networks' REGENERATE
   LIMIT 10
   ```
 - Drivers: PostgreSQL/pgvector, SQLite, in-memory

@@ -290,7 +290,8 @@ begin
   Temperature := 1.0;
 
   FThinkingBudget := 0;
-  ModelConfig.ThinkingLevel := tlDefault;
+  // ThinkingLevel ya nace en tlDefault; asignarlo aqui lo fijaria (UserFields)
+  // y el registry dejaria de actualizarlo al cambiar de modelo.
   FIncludeThoughts := False;
 
   FThoughtSignatures := TObjectDictionary<TAiChatMessage, TStringList>.Create([doOwnsValues]);

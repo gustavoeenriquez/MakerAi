@@ -60,6 +60,7 @@ type
   private
     FWorkerThread: TStdioWorkerThread;
     FOutputLock: TCriticalSection; // Para escrituras seguras a Stdout desde m?ltiples hilos
+    FInputClosed: TEvent;          // Se enciende cuando el cliente cierra stdin
 
     procedure ProcessRequest(const ARequestJson: string);
     procedure SendResponse(const AResponseJson: string);
@@ -70,6 +71,13 @@ type
 
     procedure Start; Override;
     procedure Stop; Override;
+
+    // Bloquea hasta que el cliente cierre stdin (Claude Desktop al salir o al
+    // reiniciar el servidor). True = se cerro; False = vencio ATimeoutMs.
+    // Es lo que debe hacer el programa principal tras Start, en lugar de un
+    // "while True do Sleep": con el bucle, el proceso quedaba vivo para
+    // siempre cuando el cliente se iba.
+    function WaitForInputClosed(ATimeoutMs: Cardinal = INFINITE): Boolean;
   end;
 
 procedure Register;
@@ -152,6 +160,7 @@ begin
   StdinHandle := GetStdHandle(STD_INPUT_HANDLE);
   SetLength(RawLine, 0);
 {$ENDIF}
+  try
   while not Terminated do
   begin
     try
@@ -200,6 +209,11 @@ begin
       end;
     end;
   end;
+  finally
+    // EOF de stdin o hilo terminado: avisar a quien espera en WaitForInputClosed
+    if Assigned(FServer) and Assigned(FServer.FInputClosed) then
+      FServer.FInputClosed.SetEvent;
+  end;
 end;
 
 
@@ -209,11 +223,16 @@ constructor TAiMCPStdioServer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   FOutputLock := TCriticalSection.Create; // Para proteger Stdout
+  FInputClosed := TEvent.Create(nil, True, False, '');
 end;
 
 destructor TAiMCPStdioServer.Destroy;
 begin
+  // Stop desengancha el hilo lector (puede seguir bloqueado en ReadFile)
+  // antes de liberar el evento que el hilo enciende al salir
+  Stop;
   FOutputLock.Free;
+  FreeAndNil(FInputClosed);
   inherited Destroy;
 end;
 
@@ -226,8 +245,14 @@ begin
   SetConsoleIOToUTF8;
 
   Inherited Start;
+  FInputClosed.ResetEvent;
   FWorkerThread := TStdioWorkerThread.Create(Self);
   FWorkerThread.Start;
+end;
+
+function TAiMCPStdioServer.WaitForInputClosed(ATimeoutMs: Cardinal): Boolean;
+begin
+  Result := FInputClosed.WaitFor(ATimeoutMs) = wrSignaled;
 end;
 
 procedure TAiMCPStdioServer.Stop;
@@ -237,11 +262,16 @@ begin
 
   if Assigned(FWorkerThread) then
   begin
+    // El hilo sobrevive al servidor (ReadFile no se interrumpe): que no lo
+    // vuelva a tocar
+    FWorkerThread.FServer := nil;
     FWorkerThread.Terminate;
     // No llamamos WaitFor: ReadLn(Input) es bloqueante e ininterrumpible.
     // El thread saldr� naturalmente al detectar EOF en stdin.
     FWorkerThread := nil;
   end;
+  // Stop tambien libera a quien espera en WaitForInputClosed
+  FInputClosed.SetEvent;
 
   inherited Stop;
 end;

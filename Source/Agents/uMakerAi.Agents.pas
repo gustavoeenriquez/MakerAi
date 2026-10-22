@@ -284,6 +284,11 @@ type
     procedure SetMsgError(const Value: String);
   protected
     procedure DoExecute(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink); virtual;
+    // Trabajo propio del nodo, ya pasada la puerta de join y dentro del span
+    // de telemetria. Por defecto llama OnExecute o, si no hay, Tool.Run.
+    // Las subclases (TLLMNode) sobreescriben ESTE metodo y no DoExecute, para
+    // heredar join, OnEnterNode, telemetria, suspension, limpieza y enrutado.
+    procedure ExecuteNode(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink; var AOutput: string); virtual;
     // Realiza el enrutamiento al siguiente link tras la ejecucion del nodo.
     // Subclases que sobreescriben DoExecute deben llamar a este metodo al final.
     procedure DoTraverseLinks(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink);
@@ -386,6 +391,9 @@ type
     function  BuildSnapshot: TAiCheckpointSnapshot;
     procedure RestoreFromSnapshot(ASnapshot: TAiCheckpointSnapshot);
     function  FindLink(const AName: string): TAIAgentsLink;
+    function  FindEdgeNodes(const AStartNodeName, AEndNodeName: string; out AStartNode, AEndNode: TAIAgentsNode): Boolean;
+    function  EnsureOutLink(AStartNode: TAIAgentsNode; AMode: TLinkMode; const ALinkName: string): TAIAgentsLink;
+    procedure AppendLinkTarget(ALink: TAIAgentsLink; ATarget: TAIAgentsNode; const AExpression: string);
     procedure AddComponentToList(AComponent: TAIAgentsBase);
     procedure RemoveComponentFromList(AComponent: TAIAgentsBase);
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
@@ -400,9 +408,26 @@ type
 
     procedure SetOnPrintEvent(const APrintProc: TAgentPrintRef);
     procedure ClearGraph;
-    function AddNode(const AName: string; AExecuteProc: TAIAgentsNodeOnExecute): TAIAgentManager;
+    // --- API fluida ---
+    // Cada nodo tiene UN link de salida con hasta 4 destinos (NextA..NextD) y
+    // un camino por defecto/fallo (NextNo). Las llamadas Add*Edge sobre el
+    // mismo origen suman destinos al link existente; mezclar modos en un mismo
+    // origen (p.ej. AddEdge + AddConditionalEdge) lanza EAiGraphError.
+    function AddNode(const AName: string; AExecuteProc: TAIAgentsNodeOnExecute): TAIAgentManager; overload;
+    // Registra un nodo ya creado (p.ej. un TLLMNode). Necesita Name asignado.
+    function AddNode(ANode: TAIAgentsNode): TAIAgentManager; overload;
+    // Nodo que ejecuta una tool (TAiToolBase) en vez de un OnExecute
+    function AddToolNode(const AName: string; ATool: TAiToolBase): TAIAgentManager;
+    // Fanout: llamarla varias veces con el mismo origen abre ramas en paralelo
     function AddEdge(const AStartNodeName, AEndNodeName: string): TAIAgentManager;
     function AddConditionalEdge(const AStartNodeName: string; const AConditionalLinkName: string; AConditionalTargets: TDictionary<string, string>): TAIAgentManager;
+    // lmExpression: cada destino corre si su expresion es verdadera contra el
+    // blackboard; las expresiones se evaluan todas (pueden activarse varias)
+    function AddExpressionEdge(const AStartNodeName, AEndNodeName, AExpression: string): TAIAgentManager;
+    // NextNo del link de salida: ruta sin coincidencia (conditional/expression)
+    // o camino de fallo (fanout). Se llama despues de las demas aristas.
+    function AddFallbackEdge(const AStartNodeName, AEndNodeName: string): TAIAgentManager;
+    function SetJoinMode(const ANodeName: string; AJoinMode: TJoinMode): TAIAgentManager;
     function SetEntryPoint(const ANodeName: string): TAIAgentManager;
     function SetFinishPoint(const ANodeName: string): TAIAgentManager;
     procedure Compile;
@@ -1130,25 +1155,123 @@ begin
   Result := FBusy <> 0;
 end;
 
+function TAIAgentManager.FindEdgeNodes(const AStartNodeName, AEndNodeName: string; out AStartNode, AEndNode: TAIAgentsNode): Boolean;
+begin
+  AStartNode := FindNode(AStartNodeName);
+  AEndNode := FindNode(AEndNodeName);
+  if not Assigned(AStartNode) then
+    raise Exception.CreateFmt('Edge creation failed: Start node "%s" not found.', [AStartNodeName]);
+  if not Assigned(AEndNode) then
+    raise Exception.CreateFmt('Edge creation failed: End node "%s" not found.', [AEndNodeName]);
+  Result := True;
+end;
+
+// Devuelve el link de salida del nodo, creandolo con AMode si no tiene.
+// Antes cada Add*Edge creaba un link nuevo y lo asignaba a StartNode.Next:
+// el anterior quedaba huerfano (sin SourceNode) y Compile fallaba con
+// "Link ... is not connected from any source node", de modo que un fanout
+// escrito con la API fluida (A->B, A->C, A->D) nunca llegaba a correr.
+function TAIAgentManager.EnsureOutLink(AStartNode: TAIAgentsNode; AMode: TLinkMode; const ALinkName: string): TAIAgentsLink;
+begin
+  Result := AStartNode.Next;
+  if Assigned(Result) then
+  begin
+    if Result.Mode <> AMode then
+      raise EAiGraphError.CreateFmt('Node "%s" already has a %s outgoing link; cannot add a %s edge to it. ' +
+        'A node has a single outgoing link: use one mode per source node.',
+        [AStartNode.Name, GetEnumName(TypeInfo(TLinkMode), Ord(Result.Mode)), GetEnumName(TypeInfo(TLinkMode), Ord(AMode))]);
+    Exit;
+  end;
+
+  Result := TAIAgentsLink.Create(Self);
+  Result.Name := ALinkName;
+  Result.Graph := Self;
+  Result.Mode := AMode;
+  AStartNode.Next := Result;
+end;
+
+procedure TAIAgentManager.AppendLinkTarget(ALink: TAIAgentsLink; ATarget: TAIAgentsNode; const AExpression: string);
+var
+  SourceName: string;
+begin
+  if Assigned(ALink.FSourceNode) then
+    SourceName := ALink.FSourceNode.Name
+  else
+    SourceName := ALink.Name;
+
+  if (ALink.NextA = ATarget) or (ALink.NextB = ATarget) or (ALink.NextC = ATarget) or (ALink.NextD = ATarget) then
+    raise EAiGraphError.CreateFmt('Edge "%s" -> "%s" already exists.', [SourceName, ATarget.Name]);
+
+  if not Assigned(ALink.NextA) then
+  begin
+    ALink.NextA := ATarget;
+    ALink.ExpressionA := AExpression;
+  end
+  else if not Assigned(ALink.NextB) then
+  begin
+    ALink.NextB := ATarget;
+    ALink.ExpressionB := AExpression;
+  end
+  else if not Assigned(ALink.NextC) then
+  begin
+    ALink.NextC := ATarget;
+    ALink.ExpressionC := AExpression;
+  end
+  else if not Assigned(ALink.NextD) then
+  begin
+    ALink.NextD := ATarget;
+    ALink.ExpressionD := AExpression;
+  end
+  else
+    raise EAiGraphError.CreateFmt('Node "%s" already has 4 outgoing edges (the maximum of a link). ' +
+      'Add an intermediate node to branch further.', [SourceName]);
+end;
+
 function TAIAgentManager.AddEdge(const AStartNodeName, AEndNodeName: string): TAIAgentManager;
 var
   StartNode, EndNode: TAIAgentsNode;
-  Link: TAIAgentsLink;
 begin
   FCompiled := False;
-  StartNode := FindNode(AStartNodeName);
-  EndNode := FindNode(AEndNodeName);
-  if not Assigned(StartNode) then
-    raise Exception.CreateFmt('Edge creation failed: Start node "%s" not found.', [AStartNodeName]);
-  if not Assigned(EndNode) then
-    raise Exception.CreateFmt('Edge creation failed: End node "%s" not found.', [AEndNodeName]);
+  FindEdgeNodes(AStartNodeName, AEndNodeName, StartNode, EndNode);
+  AppendLinkTarget(EnsureOutLink(StartNode, lmFanout, 'Link_' + AStartNodeName + '_to_' + AEndNodeName), EndNode, '');
+  Result := Self;
+end;
 
-  Link := TAIAgentsLink.Create(Self);
-  Link.Name := 'Link_' + AStartNodeName + '_to_' + AEndNodeName;
-  Link.Graph := Self;
-  Link.Mode := lmFanout;
-  StartNode.Next := Link;
-  Link.NextA := EndNode;
+function TAIAgentManager.AddExpressionEdge(const AStartNodeName, AEndNodeName, AExpression: string): TAIAgentManager;
+var
+  StartNode, EndNode: TAIAgentsNode;
+begin
+  FCompiled := False;
+  if Trim(AExpression) = '' then
+    raise EAiGraphError.CreateFmt('Expression edge "%s" -> "%s" needs an expression; use AddFallbackEdge for the default path.',
+      [AStartNodeName, AEndNodeName]);
+  FindEdgeNodes(AStartNodeName, AEndNodeName, StartNode, EndNode);
+  AppendLinkTarget(EnsureOutLink(StartNode, lmExpression, 'Link_' + AStartNodeName + '_expr'), EndNode, AExpression);
+  Result := Self;
+end;
+
+function TAIAgentManager.AddFallbackEdge(const AStartNodeName, AEndNodeName: string): TAIAgentManager;
+var
+  StartNode, EndNode: TAIAgentsNode;
+begin
+  FCompiled := False;
+  FindEdgeNodes(AStartNodeName, AEndNodeName, StartNode, EndNode);
+  if not Assigned(StartNode.Next) then
+    raise EAiGraphError.CreateFmt('Node "%s" has no outgoing link yet: add its edges before the fallback edge.', [AStartNodeName]);
+  if Assigned(StartNode.Next.NextNo) and (StartNode.Next.NextNo <> EndNode) then
+    raise EAiGraphError.CreateFmt('Node "%s" already has a fallback edge to "%s".', [AStartNodeName, StartNode.Next.NextNo.Name]);
+  StartNode.Next.NextNo := EndNode;
+  Result := Self;
+end;
+
+function TAIAgentManager.SetJoinMode(const ANodeName: string; AJoinMode: TJoinMode): TAIAgentManager;
+var
+  Node: TAIAgentsNode;
+begin
+  Node := FindNode(ANodeName);
+  if not Assigned(Node) then
+    raise Exception.CreateFmt('SetJoinMode failed: node "%s" not found.', [ANodeName]);
+  Node.JoinMode := AJoinMode;
   Result := Self;
 end;
 
@@ -1188,15 +1311,54 @@ begin
   Result := Self;
 end;
 
+function TAIAgentManager.AddNode(ANode: TAIAgentsNode): TAIAgentManager;
+var
+  Existing: TAIAgentsNode;
+begin
+  if not Assigned(ANode) then
+    raise EAiGraphError.Create('AddNode: node is nil.');
+  if ANode.Name = '' then
+    raise EAiGraphError.Create('AddNode: assign the node Name before adding it to the graph.');
+  Existing := FindNode(ANode.Name);
+  if Assigned(Existing) and (Existing <> ANode) then
+    raise Exception.CreateFmt('A node with the name "%s" already exists.', [ANode.Name]);
+
+  FCompiled := False;
+  // Sin dueno, el grafo lo adopta y lo libera con el resto
+  if ANode.Owner = nil then
+    InsertComponent(ANode);
+  ANode.Graph := Self;
+  Result := Self;
+end;
+
+function TAIAgentManager.AddToolNode(const AName: string; ATool: TAiToolBase): TAIAgentManager;
+begin
+  if not Assigned(ATool) then
+    raise EAiGraphError.CreateFmt('AddToolNode "%s": tool is nil.', [AName]);
+  AddNode(AName, nil);
+  if ATool.Owner = nil then
+    InsertComponent(ATool);
+  FindNode(AName).Tool := ATool;
+  Result := Self;
+end;
+
 procedure TAIAgentManager.AddComponentToList(AComponent: TAIAgentsBase);
 begin
+  // Un nodo o link creado con el manager como Owner (TLLMNode.Create(Manager))
+  // entraba a la lista pero quedaba con Graph = nil: no publicaba su salida en
+  // el blackboard ni disparaba OnEnterNode. Si no tiene grafo, este es el suyo.
+  // Se asigna el campo directo: el setter volveria a llamar a este metodo.
   if (AComponent is TAIAgentsNode) and Assigned(FNodes) then
   begin
+    if TAIAgentsNode(AComponent).FGraph = nil then
+      TAIAgentsNode(AComponent).FGraph := Self;
     if FNodes.IndexOf(TAIAgentsNode(AComponent)) = -1 then
       FNodes.Add(TAIAgentsNode(AComponent));
   end
   else if (AComponent is TAIAgentsLink) and Assigned(FLinks) then
   begin
+    if TAIAgentsLink(AComponent).FGraph = nil then
+      TAIAgentsLink(AComponent).FGraph := Self;
     if FLinks.IndexOf(TAIAgentsLink(AComponent)) = -1 then
       FLinks.Add(TAIAgentsLink(AComponent));
   end;
@@ -1212,6 +1374,18 @@ begin
   StartNode := FindNode(AStartNodeName);
   if not Assigned(StartNode) then
     raise Exception.CreateFmt('Conditional edge creation failed: Start node "%s" not found.', [AStartNodeName]);
+  // Antes se reemplazaba el link de salida en silencio y el anterior quedaba
+  // huerfano (Compile fallaba despues con un error poco claro)
+  if Assigned(StartNode.Next) then
+    raise EAiGraphError.CreateFmt('Node "%s" already has an outgoing link ("%s"); a conditional edge must be its only one. ' +
+      'Use AddFallbackEdge for the no-match path.', [AStartNodeName, StartNode.Next.Name]);
+
+  // Validar todos los destinos antes de crear el link, para no dejar un link
+  // a medio armar si alguno no existe
+  for DecisionKey in AConditionalTargets.Keys do
+    if not Assigned(FindNode(AConditionalTargets.Items[DecisionKey])) then
+      raise Exception.CreateFmt('Conditional edge creation failed: Target node "%s" for decision "%s" not found.',
+        [AConditionalTargets.Items[DecisionKey], DecisionKey]);
 
   Link := TAIAgentsLink.Create(Self);
   Link.Name := AConditionalLinkName;
@@ -1222,8 +1396,6 @@ begin
   begin
     TargetNodeName := AConditionalTargets.Items[DecisionKey];
     TargetNode := FindNode(TargetNodeName);
-    if not Assigned(TargetNode) then
-      raise Exception.CreateFmt('Conditional edge creation failed: Target node "%s" for decision "%s" not found.', [TargetNodeName, DecisionKey]);
     Link.AddConditionalTarget(DecisionKey, TargetNode);
   end;
 
@@ -3271,13 +3443,6 @@ begin
   if (FGraph = nil) or FGraph.FAbort then
     Exit;
 
-  if Assigned(FGraph.OnEnterNode) then
-    TThread.Synchronize(nil,
-      procedure
-      begin
-        FGraph.OnEnterNode(FGraph, Self);
-      end);
-
   CanExecute := False;
   // Caso especial: reanudaci?n desde ResumeThread (aBeforeNode=nil, aLink=nil)
   // con nodo join (FInEdges.Count > 1). Saltamos la puerta de join.
@@ -3336,6 +3501,17 @@ begin
   if not CanExecute then
     Exit;
 
+  // OnEnterNode va DESPUES de la puerta de join: antes se disparaba con cada
+  // llegada a un nodo jmAll (aunque no se ejecutara) y el Input que dejaba el
+  // handler lo pisaba el join. Ahora el handler ve y puede ajustar el Input
+  // definitivo (lo que TLLMNode ya hacia por su cuenta).
+  if Assigned(FGraph.OnEnterNode) then
+    TThread.Synchronize(nil,
+      procedure
+      begin
+        FGraph.OnEnterNode(FGraph, Self);
+      end);
+
   try
     // Limpiar estado al inicio de cada ejecuci?n
     FSuspended      := False;
@@ -3348,10 +3524,7 @@ begin
     var LNodeSpan := AiSpanStart('agent.node ' + Name, skInternal, FGraph.FRunTraceParent);
     AiSpanAttr(LNodeSpan, 'agent.node.name', Name);
     try
-      if Assigned(FOnExecute) then
-        FOnExecute(Self, aBeforeNode, aLink, Self.Input, FOutput)
-      else if Assigned(FTool) then
-        FTool.Run(Self, Self.Input, FOutput);
+      ExecuteNode(aBeforeNode, aLink, FOutput);
 
       if FSuspended then
         AiSpanAttr(LNodeSpan, 'agent.node.suspended', True);
@@ -3440,6 +3613,14 @@ begin
     if aBeforeNode <> nil then
       Input := aBeforeNode.Output;
   end;
+end;
+
+procedure TAIAgentsNode.ExecuteNode(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink; var AOutput: string);
+begin
+  if Assigned(FOnExecute) then
+    FOnExecute(Self, aBeforeNode, aLink, Self.Input, AOutput)
+  else if Assigned(FTool) then
+    FTool.Run(Self, Self.Input, AOutput);
 end;
 
 procedure TAIAgentsNode.DoTraverseLinks(aBeforeNode: TAIAgentsNode; aLink: TAIAgentsLink);
