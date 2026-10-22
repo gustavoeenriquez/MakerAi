@@ -687,6 +687,10 @@ begin
     'Conversacion:' + sLineBreak + AConversationText;
 
   try
+    // Cada analisis es independiente: sin NewChat el Analyzer acumulaba todos
+    // los analisis anteriores en su historial y los reenviaba en cada llamada
+    // (costo creciente, y podia volver a extraer memorias de ventanas viejas).
+    FAnalyzer.NewChat;
     LResponse := FAnalyzer.AddMessageAndRun(LPrompt, 'user', []);
   except
     on E: Exception do

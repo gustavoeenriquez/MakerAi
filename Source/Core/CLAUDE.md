@@ -126,6 +126,10 @@ En el puente de Fase 1 de `RunNew` (modelo de texto con `SessionCaps` `[cap_Audi
 
 Varias propiedades de `TAiChat` dejaron de publicarse (`NativeInputFiles`, `NativeOutputFiles`, `ChatMediaSupports`, `EnabledFeatures` en v3.5; `Logprobs`, `N`, `Seed`, `Top_p`, `Tool_Active`, `ThinkingLevel`, `Voice`, `voice_format`, `MediaResolution` y los contadores de tokens al pasar a públicas). Un `.dfm`/`.fmx` guardado antes las trae y **no cargaba**: `EReadError "Property ... does not exist"` (le pasaba a los demos 012, 021 y 051). `TAiChat.DefineProperties` las lee sin error: aplica `Top_p`, `Seed`, `N`, `Logprobs`, `Tool_Active`, `ThinkingLevel` (solo si ≠ `tlDefault`, para no fijarlo) y `Voice`/`voice_format` → `TtsParams`; descarta el resto. Nunca se vuelven a escribir. Suite: `chat.legacy-form-props`. **Al quitar una propiedad publicada, agregarla a `AI_CHAT_LEGACY_PROPS`.**
 
+## Puentes de entrada sin eventos de la herramienta (oct 22/2026)
+
+En la Fase 1 de `RunNew` (audio, imagen o PDF que el modelo no lee: gap de `SessionCaps − ModelCaps`), el `SpeechTool`/`VisionTool`/`PdfTool` de `ChatTools` reportaba su resultado como si fuera la respuesta: `ResMsg.Prompt := transcripción` y `ReportDataEnd`. En asíncrono ese `DataEnd` iba encolado y la UI cerraba el turno con el texto crudo; la respuesta real del modelo llegaba después a una burbuja ya cerrada (demo 095). Ahora `RunNew` marca `FInInputBridge` mientras corre el puente: `GetAsynchronous` devuelve `False` (la herramienta trabaja en línea, que es lo que la Fase 1 necesita: terminar antes de llamar al modelo), `DoData`/`DoDataEnd` ignoran lo que reporta, y `ResMsg.Prompt` se restaura al salir. El resultado sigue llegando por `MF.Transcription`. Suite: `chat.bridge.speechtool-dataend`.
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for source directory overview and [../../CLAUDE.md](../../CLAUDE.md) for project overview.

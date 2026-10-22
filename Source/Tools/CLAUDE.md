@@ -69,10 +69,12 @@ The `Source/Tools/` directory contains capability components that extend LLM fun
 ### Agent Automation Tools
 - `uMakerAi.Tools.Shell.pas` - Interactive shell execution (`TAiShell`)
   - Persistent session via `FSession: TInteractiveProcessInfo`
+  - **`SecurityMode`/`SecurityList` revisan cada tramo del comando (fix oct 22/2026).** Antes solo se miraba el primer token de todo el comando: con `ssmAllowList = [cd, dir]` pasaba `cd /d x && del /f /q *` (lo intentó `gpt-6-sol` en el demo 096) y también `dir & del x`, `echo $(rm x)`; con `ssmBlockList = [del, rm]` pasaban `dir & del x`, `d^el x` y `/bin/rm x`. Ahora el comando se parte en `&`, `|`, `;` y saltos de línea, y cada tramo se compara por su nombre sin comillas, sin `^`, sin ruta ni extensión. En `ssmAllowList` se rechazan además `>`, `<`, `` ` `` y `$(`. Suite: `tools.shell.security-chaining`
   - Auto-detects JSON format from Claude/OpenAI/Generic providers
   - Events: `OnCommand`, `OnConsoleLog`
 
 - `uMakerAi.Tools.TextEditor.pas` - File editing tool (`TAiTextEditorTool`)
+  - **`apply_patch` de OpenAI (`cap_TextEditor`):** `create_file` trae el archivo completo en V4A (líneas con `+`, sin hunks). El driver lo mandaba a `apply_diff` sobre un archivo que no existe y el modelo no podía crear nada; ahora va a `create` con `V4ACreateFileText` (`uMakerAi.Utils.DiffUpdater`). `delete_file` se traduce a `delete`, que este componente no implementa (devuelve error): para permitir o negar borrados, usar `OnBeforeCommand`. Suite: `tools.applypatch.create-file`
   - Commands: `Cmd_View`, `Cmd_Create`, `Cmd_StrReplace`, `Cmd_Insert`, `Cmd_ApplyDiff`
   - Event-based I/O virtualization (can target memory/DB instead of disk)
   - Set `Handled := True` in events to override default file system behavior

@@ -102,7 +102,9 @@ type
     procedure SetSecurityList(const Value: TStringList);
 
     // Devuelve '' si el comando está permitido, o un mensaje de error si está bloqueado.
-    // Compara el primer token del comando (nombre del ejecutable/comando) contra FSecurityList.
+    // Compara el primer token de CADA tramo del comando (separados por & | ; o
+    // salto de linea) contra FSecurityList. En ssmAllowList rechaza ademas las
+    // redirecciones y la sustitucion de comandos.
     function CheckSecurity(const ACommand, ACallId: string): string;
 
     // Handler interno usado por RegisterInFunctions
@@ -240,40 +242,78 @@ begin
 end;
 
 function TAiShell.CheckSecurity(const ACommand, ACallId: string): string;
+
+  // Nombre del comando de un tramo: primer token, sin comillas ni el escape ^
+  // de cmd ("d^el" es del), sin ruta ni extension ("/bin/rm", "del.exe").
+  function CommandName(const ASegment: string): string;
+  var
+    LPos: Integer;
+  begin
+    Result := Trim(ASegment);
+    while (Result <> '') and CharInSet(Result[1], ['(', '@']) do
+      Result := Trim(Copy(Result, 2, MaxInt));
+    LPos := Pos(' ', Result);
+    if LPos > 0 then
+      Result := Copy(Result, 1, LPos - 1);
+    LPos := Pos(#9, Result);
+    if LPos > 0 then
+      Result := Copy(Result, 1, LPos - 1);
+    Result := LowerCase(Result.Replace('"', '').Replace('''', '').Replace('^', ''));
+    Result := Result.Replace('\', '/');
+    LPos := Result.LastIndexOf('/');
+    if LPos >= 0 then
+      Result := Result.Substring(LPos + 1);
+    for var LExt in ['.exe', '.com', '.cmd', '.bat', '.ps1', '.sh'] do
+      if Result.EndsWith(LExt) then
+      begin
+        Result := Result.Substring(0, Result.Length - LExt.Length);
+        Break;
+      end;
+  end;
+
+  function InList(const AName: string): Boolean;
+  var
+    I: Integer;
+  begin
+    Result := False;
+    for I := 0 to FSecurityList.Count - 1 do
+      if SameText(AName, Trim(FSecurityList[I])) then
+        Exit(True);
+  end;
+
 var
-  FirstWord: string;
-  SpacePos: Integer;
-  IsInList: Boolean;
-  I: Integer;
+  LSegments: TArray<string>;
+  LSegment, LName: string;
 begin
   Result := '';
   if FSecurityMode = ssmNone then
     Exit;
 
-  // Extraer el primer token del comando (nombre del ejecutable)
-  FirstWord := Trim(LowerCase(ACommand));
-  SpacePos := Pos(' ', FirstWord);
-  if SpacePos > 0 then
-    FirstWord := Copy(FirstWord, 1, SpacePos - 1);
-
-  // Verificar si el primer token está en la lista
-  IsInList := False;
-  for I := 0 to FSecurityList.Count - 1 do
+  // Antes solo se miraba el primer token de todo el comando: con
+  // ssmAllowList = [dir] pasaba "dir & del /q *", y con ssmBlockList = [del]
+  // pasaban "dir & del x" y "d^el x". Ahora se revisa cada tramo.
+  if (FSecurityMode = ssmAllowList) and
+    (ACommand.Contains('>') or ACommand.Contains('<') or ACommand.Contains('`') or ACommand.Contains('$(')) then
+    Result := 'Security violation: redirections and command substitution are not allowed.'
+  else
   begin
-    if SameText(FirstWord, Trim(FSecurityList[I])) then
+    LSegments := ACommand.Split(['&', '|', ';', #13, #10]);
+    for LSegment in LSegments do
     begin
-      IsInList := True;
-      Break;
+      if Trim(LSegment) = '' then
+        Continue;
+      LName := CommandName(LSegment);
+      case FSecurityMode of
+        ssmBlockList:
+          if InList(LName) then
+            Result := Format('Security violation: command "%s" is blocked.', [LName]);
+        ssmAllowList:
+          if not InList(LName) then
+            Result := Format('Security violation: command "%s" is not in the allowed list.', [LName]);
+      end;
+      if Result <> '' then
+        Break;
     end;
-  end;
-
-  case FSecurityMode of
-    ssmBlockList:
-      if IsInList then
-        Result := Format('Security violation: command "%s" is blocked.', [FirstWord]);
-    ssmAllowList:
-      if not IsInList then
-        Result := Format('Security violation: command "%s" is not in the allowed list.', [FirstWord]);
   end;
 
   if (Result <> '') and Assigned(FOnSecurityViolation) then

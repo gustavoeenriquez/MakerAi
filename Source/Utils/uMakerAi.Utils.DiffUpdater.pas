@@ -78,10 +78,40 @@ type
     function Apply(const OriginalContent: string; const DiffText: string; out NewContent: string; out ErrorMsg: string): Boolean;
   end;
 
+// Contenido de un archivo nuevo a partir del diff V4A de 'create_file' (tool
+// apply_patch de OpenAI): cada linea viene con '+' delante y no hay hunks que
+// aplicar. Ignora encabezados '@@' y '***' por si el modelo los incluye.
+function V4ACreateFileText(const ADiff: string): string;
+
 implementation
 
 uses
   System.StrUtils, System.Math;
+
+function V4ACreateFileText(const ADiff: string): string;
+var
+  Lines, Res: TStringList;
+  Line: string;
+begin
+  Lines := TStringList.Create;
+  Res := TStringList.Create;
+  try
+    Lines.Text := ADiff;
+    for Line in Lines do
+    begin
+      if Line.StartsWith('@@') or Line.StartsWith('***') then
+        Continue;
+      if Line.StartsWith('+') then
+        Res.Add(Line.Substring(1))
+      else
+        Res.Add(Line);
+    end;
+    Result := Res.Text;
+  finally
+    Res.Free;
+    Lines.Free;
+  end;
+end;
 
 { TDiffHunk }
 

@@ -159,7 +159,7 @@ procedure Register;
 implementation
 
 uses
-  System.Generics.Defaults;
+  System.Generics.Defaults, uMakerAi.Utils.DiffUpdater;
 
 Const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
@@ -1861,6 +1861,15 @@ begin
                   begin
                     JCmd.AddPair('command', 'delete');
                     JCmd.AddPair('path', OpPath);
+                  end
+                  // create_file trae el archivo completo en V4A (cada linea con
+                  // '+'): no hay hunks. Antes iba a apply_diff, que leia el
+                  // archivo (no existe) y fallaba: el modelo no podia crear nada.
+                  else if OpType = 'create_file' then
+                  begin
+                    JCmd.AddPair('command', 'create');
+                    JCmd.AddPair('path', OpPath);
+                    JCmd.AddPair('file_text', V4ACreateFileText(OpDiff));
                   end
                   else
                   begin

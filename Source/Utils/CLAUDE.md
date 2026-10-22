@@ -33,6 +33,8 @@ begin
 end;
 ```
 
+`V4ACreateFileText(Diff)`: texto de un archivo nuevo a partir del diff V4A de `create_file` (tool `apply_patch` de OpenAI): quita el `+` de cada línea e ignora `@@` y `***`.
+
 Features:
 - Fuzzy hunk positioning (+/- 20 lines search radius)
 - Tolerates missing/malformed hunk headers (fallback to content-based matching)

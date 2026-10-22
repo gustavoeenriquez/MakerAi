@@ -91,7 +91,7 @@ uses
   uMakerAi.Memory, uMakerAi.Memory.Types,
   uMakerAi.Skills.Format, uMakerAi.Prompts, uMakerAi.Agents.Skill, uMakerAi.Agents.Node.LLM,
   uMakerAi.Agents.ToolRegistry,
-  uMakerAi.Tools.Skills,
+  uMakerAi.Tools.Skills, uMakerAi.Tools.Shell, uMakerAi.Utils.DiffUpdater,
   uMakerAi.Chat.Gemini, uMakerAi.Gemini.Speech, uMakerAi.Gemini.WebSearch, uMakerAi.Chat.Claude, uMakerAi.Chat.MakerAi,
   uRegression.Fixtures;
 
@@ -771,6 +771,39 @@ begin
   // ParseJsonTranscript: en el puente de Fase 1 (cmConversation) solo llena la
   // transcripcion del audio; no toca la respuesta ni dispara eventos. En
   // cmTranscription la transcripcion es la respuesta
+  // Puente de audio con un SpeechTool en ChatTools (TAiOpenAiSpeechTool hace lo
+  // mismo): la herramienta reportaba la transcripcion con ReportDataEnd y la
+  // escribia en ResMsg. El integrador recibia dos OnReceiveDataEnd (el primero
+  // con el texto crudo; en asincrono encolado, y cerraba el turno antes de la
+  // respuesta). Ahora solo llega la respuesta del modelo, que si recibe el audio
+  // transcrito, y la herramienta corre sincrona dentro del puente.
+  // TAiShell: la lista de seguridad miraba solo el primer token de todo el
+  // comando. Con AllowList=[dir,echo] pasaba "dir & del x"; con BlockList=[del,rm]
+  // pasaban "dir & del x", "d^el x" y "/bin/rm x". Ahora se revisa cada tramo, y
+  // en AllowList se rechazan redirecciones y $( ). Nada se ejecuta: OnCommand
+  // marca Handled.
+  // apply_patch de OpenAI: create_file trae el archivo en V4A (lineas con '+',
+  // sin hunks). El driver lo mandaba a apply_diff sobre un archivo inexistente
+  // y el modelo no podia crear archivos. Ahora va a 'create' con este texto.
+  // TAiMemory.Analyzer: cada AnalyzeNow debe ir con el historial limpio. Antes
+  // el Analyzer acumulaba los analisis previos y los reenviaba (2 analisis =
+  // 4 mensajes). Contra el servidor OpenAI falso, sin claves.
+  FRunner.AddCase('memory.analyzer.stateless')
+    .Input('chat:memory-analyzer')
+    .ExpectEquals('mensajes=2|llamadas=2');
+
+  FRunner.AddCase('tools.applypatch.create-file')
+    .Input('chat:v4a-create')
+    .ExpectEquals('# Inventario||- Huila: 24|sin signo');
+
+  FRunner.AddCase('tools.shell.security-chaining')
+    .Input('chat:shell-security')
+    .ExpectEquals('allow=ok,bloq,bloq,bloq,bloq,ok|block=bloq,bloq,bloq,ok,bloq');
+
+  FRunner.AddCase('chat.bridge.speechtool-dataend')
+    .Input('chat:bridge-speechtool')
+    .ExpectEquals('eventos=1|texto=eco:quiero un descafeinado|async-en-puente=False|transcrito=quiero un descafeinado');
+
   FRunner.AddCase('chat.transcript.bridge-mode')
     .Input('chat:transcript-bridge')
     .ExpectEquals('puente=eventos:0/respuesta:vacia/audio:hola mundo/procesado:si|' +
@@ -2831,6 +2864,58 @@ end;
 type
   // Expone el parser de streaming comun (protegido en TAiChat). Groq lo usa tal
   // cual; TAiOpenChat NO sirve: sobrescribe OnInternalReceiveData (API Responses).
+  // SpeechTool falso: hace lo mismo que TAiOpenAiSpeechTool.ExecuteTranscription
+  TSuiteSpeechTool = class(TAiSpeechToolBase)
+  protected
+    procedure ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage); override;
+  public
+    class var AsyncSeen: Boolean;
+  end;
+
+  // OnCommand de TAiShell que no ejecuta nada
+  TSuiteShellProbe = class
+  public
+    procedure OnCommand(Sender: TObject; const Command: string; const CallId: string;
+      var Result: TShellExecutionResult; var Handled: Boolean);
+  end;
+
+  // Cuenta los OnReceiveDataEnd y guarda sus textos
+  TSuiteDataEndCounter = class
+  public
+    Count: Integer;
+    Texts: string;
+    procedure DataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject; aRole, aText: string);
+  end;
+
+procedure TSuiteSpeechTool.ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
+begin
+  AsyncSeen := IsAsync;
+  aMediaFile.Transcription := 'quiero un descafeinado';
+  aMediaFile.Procesado := True;
+  ResMsg.Prompt := aMediaFile.Transcription;
+  ReportDataEnd(ResMsg, 'assistant', aMediaFile.Transcription);
+end;
+
+procedure TSuiteShellProbe.OnCommand(Sender: TObject; const Command: string; const CallId: string;
+  var Result: TShellExecutionResult; var Handled: Boolean);
+begin
+  Result.StdOut := 'ejecutado';
+  Result.StdErr := '';
+  Result.ExitCode := 0;
+  Result.TimedOut := False;
+  Handled := True;
+end;
+
+procedure TSuiteDataEndCounter.DataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject;
+  aRole, aText: string);
+begin
+  Inc(Count);
+  if Texts <> '' then
+    Texts := Texts + ' + ';
+  Texts := Texts + aText.Trim;
+end;
+
+type
   TStreamProbeChat = class(TAiGroqChat)
   public
     procedure Merge(const AJson: string);
@@ -3644,6 +3729,124 @@ begin
       Result := Result + '|usuario=' + CT.AiChat.TtsParams.Voice + '/' + CT.AiChat.TtsParams.VoiceFormat;
     finally
       CT.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:memory-analyzer' then
+  begin
+    var FakeM := TFakeOpenAiChatServer.Create(PORT_FAKE_LLM);
+    var AnM := TAiChatConnection.Create(nil);
+    var MemM := TAiMemory.Create(nil);
+    var DbM := TPath.Combine(TPath.GetTempPath, 'suite_mem_analyzer.db');
+    try
+      if TFile.Exists(DbM) then
+        TFile.Delete(DbM);
+      AnM.DriverName := 'GenericLLM';
+      AnM.Params.Values['URL'] := Format('http://localhost:%d/v1/', [PORT_FAKE_LLM]);
+      AnM.Params.Values['ApiKey'] := 'suite';
+      AnM.Params.Values['Asynchronous'] := 'False';
+      AnM.Tool_Active := False;
+      MemM.Namespace := 'suite';
+      MemM.DbPath := DbM;
+      MemM.Analyzer := AnM;
+      MemM.AnalysisInterval := 0;     // solo AnalyzeNow manual
+      MemM.NotifyExchange('Me gusta el cafe frutal', 'Anotado');
+      MemM.AnalyzeNow;
+      MemM.NotifyExchange('Uso prensa francesa', 'Perfecto');
+      MemM.AnalyzeNow;
+      Result := Format('mensajes=%d|llamadas=%d', [AnM.Messages.Count, FakeM.Hits]);
+    finally
+      MemM.Free;
+      AnM.Free;
+      FakeM.Free;
+      if TFile.Exists(DbM) then
+        TFile.Delete(DbM);
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:v4a-create' then
+  begin
+    Result := V4ACreateFileText('*** Begin Patch' + #10 + '@@' + #10 + '+# Inventario' + #10 + '+' + #10 +
+      '+- Huila: 24' + #10 + 'sin signo').TrimRight.Replace(sLineBreak, '|');
+    Exit;
+  end;
+
+  if AScenario = 'chat:shell-security' then
+  begin
+    var Probe := TSuiteShellProbe.Create;
+    var Sh := TAiShell.Create(nil);
+    try
+      Sh.OnCommand := Probe.OnCommand;
+
+      var Probar: TFunc<TArray<string>, string> :=
+        function(ACmds: TArray<string>): string
+        begin
+          Result := '';
+          for var LCmd in ACmds do
+          begin
+            var LArgs := TJSONObject.Create;
+            try
+              LArgs.AddPair('cmd', LCmd);
+              var LRes := Sh.Execute('suite', LArgs.ToJSON);
+              if Result <> '' then
+                Result := Result + ',';
+              Result := Result + IfThen(LRes.StartsWith('Security violation'), 'bloq', 'ok');
+            finally
+              LArgs.Free;
+            end;
+          end;
+        end;
+
+      Sh.SecurityMode := ssmAllowList;
+      Sh.SecurityList.CommaText := 'dir,echo';
+      Result := 'allow=' + Probar(['dir', 'dir & del x', 'echo hola | del x', 'dir > salida.txt',
+        'echo $(rm x)', 'dir && echo listo']);
+
+      Sh.SecurityMode := ssmBlockList;
+      Sh.SecurityList.CommaText := 'del,rm';
+      Result := Result + '|block=' + Probar(['dir & del x', 'd^el x', '/bin/rm -rf x', 'dir',
+        'echo a; "C:\Windows\System32\del.exe" x']);
+    finally
+      Sh.Free;
+      Probe.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:bridge-speechtool' then
+  begin
+    var FakeB := TFakeOpenAiChatServer.Create(PORT_FAKE_LLM);
+    var ConnB := TAiChatConnection.Create(nil);
+    var ToolB := TSuiteSpeechTool.Create(nil);
+    var CountB := TSuiteDataEndCounter.Create;
+    var WavB := TMemoryStream.Create;
+    try
+      ConnB.DriverName := 'GenericLLM';
+      ConnB.Params.Values['URL'] := Format('http://localhost:%d/v1/', [PORT_FAKE_LLM]);
+      ConnB.Params.Values['ApiKey'] := 'suite';
+      ConnB.Params.Values['Asynchronous'] := 'False';
+      ConnB.Tool_Active := False;
+      ConnB.ModelCaps := [];
+      ConnB.SessionCaps := [cap_Audio];      // gap = [cap_Audio] -> puente
+      ConnB.ChatTools.SpeechTool := ToolB;
+      ConnB.OnReceiveDataEnd := CountB.DataEnd;
+      // La herramienta no lee el audio: basta con que tenga contenido
+      var Bytes := TEncoding.ASCII.GetBytes('RIFF0000WAVEfmt suite-audio-de-prueba');
+      WavB.WriteBuffer(Bytes[0], Length(Bytes));
+      var NotaB := TAiMediaFile.Create;
+      NotaB.LoadFromStream('nota.wav', WavB);
+      TSuiteSpeechTool.AsyncSeen := True;
+      ConnB.AddMessageAndRun('', 'user', [NotaB]);
+      Result := Format('eventos=%d|texto=%s|async-en-puente=%s|transcrito=%s', [CountB.Count, CountB.Texts,
+        BoolToStr(TSuiteSpeechTool.AsyncSeen, True), NotaB.Transcription]);
+    finally
+      ConnB.Free;
+      ToolB.Free;
+      CountB.Free;
+      WavB.Free;
+      FakeB.Free;
     end;
     Exit;
   end;

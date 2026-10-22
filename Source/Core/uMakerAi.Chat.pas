@@ -304,6 +304,9 @@ type
     FUser: String;
     FMax_tokens: Integer;
     FAsynchronous: Boolean;
+    // True mientras corre un puente de entrada de la Fase 1 (transcribir un
+    // audio, describir una imagen o un PDF que el modelo no lee). Ver RunNew.
+    FInInputBridge: Boolean;
     FTop_logprobs: String;
     FModel: String;
     FSystemPrompt: TStrings;
@@ -2004,12 +2007,18 @@ end;
 
 procedure TAiChat.DoData(Msg: TAiChatMessage; const Role, Text: string; aResponse: TJSonObject);
 begin
+  // Lo que reporta una herramienta durante un puente de entrada es insumo para
+  // el modelo, no la respuesta: no se le pasa al usuario
+  if FInInputBridge then
+    Exit;
   if Assigned(FOnReceiveDataEvent) then
     FOnReceiveDataEvent(Self, TAiChatMessage(Msg), aResponse, Role, Text);
 end;
 
 procedure TAiChat.DoDataEnd(Msg: TAiChatMessage; const Role, Text: string; aResponse: TJSonObject);
 begin
+  if FInInputBridge then
+    Exit;
   FBusy := False;
   if Assigned(FOnReceiveDataEnd) then
     FOnReceiveDataEnd(Self, TAiChatMessage(Msg), aResponse, Role, Text);
@@ -2139,7 +2148,9 @@ end;
 
 function TAiChat.GetAsynchronous: Boolean;
 begin
-  Result := Self.Asynchronous;
+  // Un puente de entrada tiene que terminar antes de llamar al modelo: la
+  // herramienta lo ve sincrono y reporta en linea (DoData/DoDataEnd lo ignoran)
+  Result := Self.Asynchronous and not FInInputBridge;
 end;
 
 function TAiChat.GetLastMessage: TAiChatMessage;
@@ -4295,18 +4306,29 @@ begin
             MF.Transcription := LRes;
           end;
           // Prioridad 2: bridge automatico segun gap
+          // El resultado va a MF.Transcription; el SpeechTool/VisionTool lo
+          // reportaba ademas como respuesta (ResMsg.Prompt + OnReceiveDataEnd
+          // con el texto crudo, encolado en asincrono), y la UI cerraba el
+          // turno antes de que contestara el modelo.
           if not MF.Procesado then
           begin
-            case MF.FileCategory of
-              Tfc_Audio:
-                if cap_Audio in Gap then
-                  InternalRunTranscription(MF, ResMsg, AskMsg);
-              Tfc_Image:
-                if cap_Image in Gap then
-                  InternalRunImageDescription(MF, ResMsg, AskMsg);
-              Tfc_Pdf:
-                if cap_Pdf in Gap then
-                  InternalRunPDFDescription(MF, ResMsg, AskMsg);
+            var LBridgePrompt := ResMsg.Prompt;
+            FInInputBridge := True;
+            try
+              case MF.FileCategory of
+                Tfc_Audio:
+                  if cap_Audio in Gap then
+                    InternalRunTranscription(MF, ResMsg, AskMsg);
+                Tfc_Image:
+                  if cap_Image in Gap then
+                    InternalRunImageDescription(MF, ResMsg, AskMsg);
+                Tfc_Pdf:
+                  if cap_Pdf in Gap then
+                    InternalRunPDFDescription(MF, ResMsg, AskMsg);
+              end;
+            finally
+              FInInputBridge := False;
+              ResMsg.Prompt := LBridgePrompt;
             end;
           end;
         end;
