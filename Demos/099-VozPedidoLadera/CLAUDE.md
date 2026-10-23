@@ -33,7 +33,7 @@ VozPedidoLadera.exe --audio pedido.pcm   # voz desde un archivo PCM16 24 kHz mon
 VozPedidoLadera.exe --texto "Quiero 2 bolsas de Huila Reserva para Pitalito"   # sin voz
 ```
 
-El modo `--audio` alimenta `SendAudioChunk` a ritmo real, igual que el micrófono, y no reproduce audio. `--texto` llama directo al chat delegado, para ver la cadena A2A sin voz.
+El modo `--audio` alimenta `SendAudioChunk` a ritmo real, igual que el micrófono, y no reproduce audio. Con `--salida llamada.pcm` guarda las dos voces (clienta y Lucía) en un PCM16 24 kHz mono, alineadas con el reloj de la corrida. Cada voz se suma a la mezcla con su propia posición: la clienta suena seguida desde su primer trozo y Lucía, cuya voz llega más rápido que tiempo real, al llegar o al terminar lo anterior, como en un parlante (episodio 18 de la serie). Con una sola posición para las dos, los trozos de silencio que GPT-Live manda mientras escucha partían la voz de la clienta en pedazos de 100 ms. `--texto` llama directo al chat delegado, para ver la cadena A2A sin voz.
 
 Requiere `OPENAI_API_KEY`. Los dos agentes A2A usan los puertos 8301 y 8302.
 

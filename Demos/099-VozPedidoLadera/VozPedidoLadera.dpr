@@ -22,6 +22,8 @@
 //   VozPedidoLadera.exe                       microfono y parlantes (Enter para salir)
 //   VozPedidoLadera.exe --audio pedido.pcm    voz desde un archivo PCM16 24 kHz mono
 //                                             (prueba sin microfono; no reproduce audio)
+//   ... --salida llamada.pcm                  guarda las dos voces (clienta y Lucia) en un PCM16
+//                                             24 kHz mono, alineadas con el reloj de la corrida
 //   VozPedidoLadera.exe --texto "Quiero 2 bolsas de Huila Reserva para Pitalito"
 //                                             sin voz: el chat delegado directo
 //
@@ -39,6 +41,7 @@ uses
   System.StrUtils,
   System.IOUtils,
   System.Diagnostics,
+  System.Math,
   uMakerAi.Agents,
   uMakerAi.A2A.Server,
   uMakerAi.A2A.Client,
@@ -79,6 +82,10 @@ type
     Delegaciones: Integer;
     SesionLista, Cerrada: Boolean;
     Reloj: TStopwatch;
+    Salida: TFileStream;      // --salida: las voces, para un video o una revision
+    Mezcla: TArray<Integer>;  // las dos voces sumadas, en muestras de 24 kHz
+    FinVoz: array [Boolean] of Int64;   // donde termina lo grabado de cada voz (True = Lucia)
+    procedure GrabarAudio(const AData: TBytes; ALucia: Boolean);
     constructor Create;
     destructor Destroy; override;
     procedure Log(const S: string);
@@ -113,9 +120,45 @@ begin
 end;
 
 destructor TLadera.Destroy;
+var
+  Pcm: TBytes;
+  I: Integer;
 begin
+  if Salida <> nil then
+  begin
+    SetLength(Pcm, Length(Mezcla) * 2);
+    for I := 0 to High(Mezcla) do
+      PSmallInt(@Pcm[I * 2])^ := EnsureRange(Mezcla[I], -32768, 32767);
+    if Length(Pcm) > 0 then
+      Salida.WriteBuffer(Pcm[0], Length(Pcm));
+    Salida.Free;
+  end;
   FLock.Free;
   inherited;
+end;
+
+// Suma una voz a la mezcla donde suena en el tiempo de la corrida. Cada voz
+// lleva su propia posicion: la clienta habla seguido desde su primer trozo y
+// Lucia suena al llegar o al terminar lo anterior, como en un parlante (su voz
+// llega mas rapido que tiempo real). GPT-Live manda audio en silencio mientras
+// escucha: con una sola posicion para las dos voces, esos trozos partian la
+// voz de la clienta.
+procedure TLadera.GrabarAudio(const AData: TBytes; ALucia: Boolean);
+var
+  Inicio: Int64;
+  I, N: Integer;
+begin
+  if (Salida = nil) or (Length(AData) = 0) then
+    Exit;
+  Inicio := FinVoz[ALucia];
+  if ALucia or (Inicio = 0) then
+    Inicio := Max(Inicio, Reloj.ElapsedMilliseconds * 24);
+  N := Length(AData) div 2;
+  if Inicio + N > Length(Mezcla) then
+    SetLength(Mezcla, Inicio + N);   // lo nuevo queda en cero (silencio)
+  for I := 0 to N - 1 do
+    Inc(Mezcla[Inicio + I], PSmallInt(@AData[I * 2])^);
+  FinVoz[ALucia] := Inicio + N;
 end;
 
 procedure TLadera.Log(const S: string);
@@ -301,6 +344,7 @@ end;
 procedure TLadera.VozAudio(Sender: TObject; const AData: TBytes);
 begin
   // La voz de Lucia, a los parlantes (en la prueba con archivo no se reproduce)
+  GrabarAudio(AData, True);
   if Player.Active then
     Player.PlayPCM16(AData, Live.TargetSampleRate, 1);
 end;
@@ -361,6 +405,7 @@ begin
   begin
     Trozo := Copy(Datos, Pos, BLOQUE);
     Live.SendAudioChunk(Trozo);
+    ALadera.GrabarAudio(Trozo, False);   // la voz de la clienta, en su momento
     Inc(Pos, BLOQUE);
     Bombear(100);
   end;
@@ -427,6 +472,8 @@ begin
   Audio := ArgValue('--audio', '');
 
   Ladera := TLadera.Create;
+  if ArgValue('--salida', '') <> '' then
+    Ladera.Salida := TFileStream.Create(ArgValue('--salida', ''), fmCreate);
   Bodega := TAIAgentManager.Create(nil);
   Pedidos := TAIAgentManager.Create(nil);
   SrvBodega := TAiA2AServer.Create(nil);

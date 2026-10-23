@@ -33,6 +33,7 @@ Sin la variable de la clave del driver pasa solo a `--sin-llm`.
 - `PREGUNTAS_EJEMPLO` y no `PREGUNTAS`: Delphi no distingue mayúsculas y chocaba con la variable `Preguntas`.
 - El nodo `Buscar` corre en un hilo del servidor A2A: la consola va con candado (`Log`).
 - La consola se pone en UTF-8 (`SetConsoleOutputCP`/`SetTextCodePage`) para las tildes.
+- El prompt pide texto plano sin Markdown (oct 23/2026): la respuesta sale en una consola y los `**` se veían tal cual (episodio 17).
 - Empresa, productos y precios ficticios.
 
 ## Navigation

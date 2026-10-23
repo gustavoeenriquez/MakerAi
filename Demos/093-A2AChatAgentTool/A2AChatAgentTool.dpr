@@ -292,9 +292,10 @@ begin
         Conn.Params.Values['ApiKey'] := Key;
       Conn.Params.Values['Asynchronous'] := 'False';
       Conn.SystemPrompt.Text :=
-        'Eres el asistente de atención al cliente de Café La Ladera. ' +
+        'Eres Lucía, la asistente de atención al cliente de Café La Ladera. ' +
         'Para cualquier dato de productos, precios o existencias consulta la herramienta catalogo_cafe; ' +
-        'no inventes precios. Responde en español, breve y amable.';
+        'no inventes precios. Responde en español, breve y amable, en texto plano sin Markdown: ' +
+        'la respuesta sale en una consola.';
       Conn.AiFunctions := Funcs;
       Conn.Tool_Active := True;   // canal tipado: el driver envia las tools
       Log(Format('Chat: %s / %s', [Conn.DriverName, Conn.AiChat.Model]));
