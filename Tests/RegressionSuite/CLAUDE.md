@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (133 casos)
+## Cobertura actual (134 casos)
 
 | Área | Casos |
 |------|-------|
@@ -69,7 +69,7 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 | Chat / tool results | serialización OpenAI-compatible: tool calls paralelas con imagen → un solo `user` sintético tras el grupo, modelo sin `cap_Image` → transcripción sin media, transcripción no duplicada, adjunto de texto inline |
 | GPT-Live | `TAiOpenAiLiveChat` con `TLiveProbe` (captura lo enviado, reloj `NowMs` simulado, sin red): `session.start` (modelo en la sesión, delegación a Responses con tools/tool_choice/razonamiento, `DelegateChat` → `client`, fábrica y conector); eventos (deltas, audio, consumo, cierre, error); turnos con la línea de tiempo (fragmento atrasado, cierre por inactividad) la **traza real** de habla superpuesta (falla con la agrupación por orden de llegada) y un cuento largo con transcripts a ráfagas (la voz del audio mantiene el turno; un turno cerrado por inactividad se retoma si el modelo sigue); funciones vía `response.event` con un solo `response.create` también si la respuesta termina antes que la función; delegación `client` (contexto sin repetir lo ya enviado, fragmentos ≤ 400 bytes, `delegation_id` null con Responses, aviso si nadie atiende); `DelegateChat` real contra un puerto cerrado |
 | OpenAI Audio | `TAiOpenAiAudio` con `TFakeOpenAiAudio` (sustituye `PostMultipart`, sin red): formato degradado a json se interpreta como json y queda en `Warning` (falla sin el fix: `Text` con el JSON crudo); timestamps y logprobs ignorados avisados y no enviados; `languages[]`/`keywords[]` sin avisos; `whisper-1` con srt + timestamps sigue igual y avisa la deprecación; `TranslateToEnglish` (solo whisper-1) avisa la deprecación; `audio.defaults`: defaults v3.9 (`gpt-transcribe`, `gpt-4o-mini-tts`) en `TAiOpenAiAudio` y `TAiOpenAiSpeechTool`, con el valor del constructor igual al `default` publicado (RTTI) |
-| Evals | autoprueba del runner (conteo PASS/FAIL) |
+| Evals | autoprueba del runner (conteo PASS/FAIL); el juez de `ExpectJudge` recibe la pregunta del caso y cada juicio empieza en un chat nuevo (`evals.judge.input-stateless`) |
 | Puentes de entrada (oct 22/2026) | `chat.bridge.speechtool-dataend`: con un SpeechTool en `ChatTools` y `SessionCaps` `[cap_Audio]`, el integrador recibe un solo `OnReceiveDataEnd` (la respuesta del modelo, que sí recibe el audio transcrito) y la herramienta corre síncrona dentro del puente (falla sin el fix: dos eventos, el primero con el texto crudo) |
 | Herramientas del sistema (oct 22/2026) | `tools.shell.security-chaining`: `TAiShell` revisa cada tramo del comando (`&`, `|`, `;`, salto de línea) contra la lista; en lista permitida rechaza redirecciones y `$( )`; en lista bloqueada reconoce `d^el`, `/bin/rm` y `del.exe` (nada se ejecuta: `OnCommand` marca `Handled`; falla sin el fix). `tools.applypatch.create-file`: el texto de un `create_file` V4A (`V4ACreateFileText`) |
 | Esquema strict de OpenAI (oct 22/2026) | `tools.strict-schema.nested`: `EnforceStrictSchema` pone `additionalProperties=false` y `required` completo también en los objetos de `items`, `anyOf` y `$defs` (antes solo bajaba por `properties`: un arreglo de objetos daba 400; demo 070) |

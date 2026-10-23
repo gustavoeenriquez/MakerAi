@@ -80,7 +80,7 @@ uses
   uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
   uMakerAi.OpenAI.Audio, uMakerAi.OpenAI.Audio.Tool, uMakerAi.Realtime.OpenAI.Live,
   uMakerAi.Jev.ModelRouter,
-  UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank, uMakerAi.Qwen.Voices,
+  UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.GenericLLM, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank, uMakerAi.Qwen.Voices,
   uMakerAi.Realtime, uMakerAi.Realtime.Qwen, uMakerAi.Realtime.AiConnection, uMakerAi.Realtime.QwenTTS, uMakerAi.Realtime.Grok,
   System.IOUtils, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index, uMakerAi.RAG.Vectors.VQL,
@@ -805,6 +805,13 @@ begin
   FRunner.AddCase('tools.strict-schema.nested')
     .Input('chat:strict-nested')
     .ExpectEquals('raiz=false/puntos,titulo,alt|items=false/fecha,valor|anyof=false/x|defs=false/y');
+
+  // LLM-as-judge: el juez recibe la PREGUNTA del caso (sin ella, un criterio como
+  // "dice que no lo vende" no se puede juzgar) y cada juicio empieza en un chat
+  // nuevo (antes el historial del juez acumulaba los casos anteriores).
+  FRunner.AddCase('evals.judge.input-stateless')
+    .Input('chat:judge-input')
+    .ExpectEquals('preguntas-al-juez=1|pregunta=si');
 
   FRunner.AddCase('tools.applypatch.create-file')
     .Input('chat:v4a-create')
@@ -3786,6 +3793,40 @@ begin
     Exit;
   end;
 
+  if AScenario = 'chat:judge-input' then
+  begin
+    var FakeJ := TFakeOpenAiChatServer.Create(PORT_FAKE_LLM);
+    var Juez := TAiGenericChat.Create(nil);
+    var RunJ := TAiEvalRunner.Create(nil);
+    try
+      Juez.Url := Format('http://localhost:%d/v1/', [PORT_FAKE_LLM]);
+      Juez.ApiKey := 'suite';
+      Juez.Asynchronous := False;
+      RunJ.Judge := Juez;
+      RunJ.AddCase('uno').Input('pregunta-uno').ExpectJudge('criterio');
+      RunJ.AddCase('dos').Input('pregunta-dos').ExpectJudge('criterio');
+      // El juez falso responde "eco:..." (no PASS): los casos fallan, no importa aqui
+      RunJ.Run(function(const AInput: string): string begin Result := 'respuesta a ' + AInput; end).Free;
+      // Sin NewChat el historial del juez guardaba los dos juicios
+      var LUltimo := '';
+      var LUsuario := 0;
+      for var M in Juez.Messages do
+        if M.Role = 'user' then
+        begin
+          Inc(LUsuario);
+          LUltimo := M.Prompt;
+        end;
+      Result := Format('preguntas-al-juez=%d|pregunta=%s', [LUsuario,
+        IfThen(LUltimo.Contains('PREGUNTA: """pregunta-dos"""'), 'si', 'no')]);
+    finally
+      RunJ.Judge := nil;
+      RunJ.Free;
+      Juez.Free;
+      FakeJ.Free;
+    end;
+    Exit;
+  end;
+
   if AScenario = 'chat:strict-nested' then
   begin
     var JS := TJSONObject.ParseJSONValue(
@@ -3989,8 +4030,10 @@ begin
       procedure
       begin
         Sleep(300);
-        LCompleted(nil, nil); // el cliente HTTP cierra la peticion en su hilo
+        // La bandera va ANTES: el cierre enciende el evento y el destructor puede
+        // terminar antes de que este hilo alcance la linea siguiente
         TInterlocked.Exchange(LCerro, 1);
+        LCompleted(nil, nil); // el cliente HTTP cierra la peticion en su hilo
       end);
     TH.FreeOnTerminate := False;
     TH.Start;

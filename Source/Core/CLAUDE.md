@@ -134,6 +134,10 @@ En la Fase 1 de `RunNew` (audio, imagen o PDF que el modelo no lee: gap de `Sess
 
 `OnReceiveDataEnd` sale con el último chunk, **antes** de que el cliente HTTP cierre la petición, y ese cierre (hilo HTTP) hace `FreeAndNil(FCurrentPostStream)`. Si el integrador lanzaba la siguiente pregunta enseguida (una consola que pregunta en serie: demo 094, 60 ms después), el POST nuevo dejaba su stream en `FCurrentPostStream` y el cierre tardío de la petición anterior lo liberaba mientras se enviaba: **`Stream read error` intermitente**. Ahora `Run` empieza con `WaitPreviousRequest` (protegido): espera, hasta 15 s, a que `FRequestDone` se encienda. No espera si la llamada sale del mismo hilo que entrega la petición anterior (`FHttpThreadId`, anotado en `ClientReceiveData`): un `Run` dentro de `OnReceiveDataEnd` se esperaría a sí mismo; ahí queda el comportamiento de antes. La continuación del tool-calling (un `TTask` lanzado desde `OnRequestCompletedEvent`) espera unos milisegundos, hasta el `SetEvent` del `finally`. Suite: `chat.async.next-waits-previous`.
 
+## El juez de los evals no veía la pregunta (oct 22/2026)
+
+`TAiEvalRunner.RunJudge` le mandaba al juez solo el criterio y la respuesta. Un criterio como "dice que no lo vende" no se puede juzgar sin saber qué se preguntó, y el juez (estricto por prompt) fallaba por duda: en el demo 104 rechazó "No, no tenemos café de Etiopía. Solo vendemos..." Ahora el prompt incluye `PREGUNTA` (el `Input` del caso; `ExpectScore` ya lo pasaba al scorer) y el juez hace `NewChat` antes de cada juicio: su historial acumulaba los casos anteriores, el mismo error que tenía el `Analyzer` de `TAiMemory`. Suite: `evals.judge.input-stateless`.
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for source directory overview and [../../CLAUDE.md](../../CLAUDE.md) for project overview.

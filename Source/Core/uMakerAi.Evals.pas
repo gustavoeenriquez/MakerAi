@@ -125,7 +125,7 @@ type
     FScorer: TAiEvalScorerBase;
     procedure SetJudge(const Value: TAiChat);
     procedure SetScorer(const Value: TAiEvalScorerBase);
-    function RunJudge(const ACriteria, AActual: string; out AReason: string): Boolean;
+    function RunJudge(const ACriteria, AInput, AActual: string; out AReason: string): Boolean;
     function RunScorer(ACheck: TAiEvalCheck; const AInput, AActual: string; out AReason: string): Boolean;
     function EvaluateCase(ACase: TAiEvalCase; const AActual: string; out AReason: string): Boolean;
   protected
@@ -410,7 +410,11 @@ end;
 // LLM-as-judge: pregunta al chat si la salida cumple el criterio. La
 // respuesta debe empezar por PASS o FAIL (prompt estricto); cualquier otra
 // cosa se considera fallo del juicio (conservador).
-function TAiEvalRunner.RunJudge(const ACriteria, AActual: string; out AReason: string): Boolean;
+// El juez recibe tambien la PREGUNTA del caso: un criterio como "dice que no
+// lo vende" no se puede juzgar sin saber que se pregunto, y un juez estricto
+// fallaba por duda (oct 2026). Cada juicio empieza en un chat nuevo: antes el
+// historial del juez acumulaba los casos anteriores.
+function TAiEvalRunner.RunJudge(const ACriteria, AInput, AActual: string; out AReason: string): Boolean;
 var
   Prompt, Resp: string;
 begin
@@ -425,9 +429,11 @@ begin
   Prompt :=
     'Eres un evaluador estricto de calidad. Evalua si la RESPUESTA cumple el CRITERIO.' + sLineBreak +
     'CRITERIO: ' + ACriteria + sLineBreak +
+    IfThen(Trim(AInput) <> '', 'PREGUNTA: """' + AInput + '"""' + sLineBreak, '') +
     'RESPUESTA: """' + AActual + '"""' + sLineBreak +
     'Contesta UNICAMENTE con una palabra: PASS si cumple, FAIL si no cumple.';
 
+  FJudge.NewChat;
   Resp := Trim(FJudge.AddMessageAndRun(Prompt, 'user', []));
   if StartsText('PASS', Resp) then
     Result := True
@@ -482,7 +488,7 @@ begin
           AReason := Format('expected at most %s chars, got %d', [C.Value, Length(AActual)]);
         end;
       ekJudge:
-        if not RunJudge(C.Value, AActual, JudgeReason) then
+        if not RunJudge(C.Value, ACase.FInput, AActual, JudgeReason) then
         begin
           Result := False;
           AReason := JudgeReason;
