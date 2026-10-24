@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (134 casos)
+## Cobertura actual (137 casos)
 
 | Área | Casos |
 |------|-------|
@@ -36,6 +36,8 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 | MCP MRTR | reintento con `accept`, mensaje de elicitation recibido, sin handler → error explícito |
 | Agentes | grafo secuencial con status final y salida encadenada; `lmExpression` con punto decimal bajo configuración regional con coma; API fluida: fanout con `AddEdge` repetido + join `jmAll`, `AddExpressionEdge` con `AddFallbackEdge`, y los errores de construcción (`EAiGraphError`); `TLLMNode` contra un servidor OpenAI-compatible falso (`TFakeOpenAiChatServer`): `Graph` con el manager como Owner, `Guardrails` del nodo y join `jmAll` |
 | SmartDispatch + Jev | `ChatTools.DispatchClassifier` sobre un `TAiOpenChat` real (URL a puerto cerrado): el tag va directo a la tool sin pase por LLM; `TAiJevDispatchClassifier` solo ofrece los tags recibidos, respeta `MinConfidence` y no consulta a Jev si solo queda CHAT |
+| Filtro: historial (oct 24/2026) | `chat.filtro.blocked-not-kept`: un mensaje bloqueado por el sanitizador o por el guardrail de entrada no queda en `Messages` (antes viajaba al modelo en el turno siguiente); un mensaje normal que falla por red sí se queda. Sobre `TAiOpenChat` real con URL a puerto cerrado y `TFakePromptGuard` |
+| Sanitizador en español (oct 23/2026) | `chat.sanitizer.spanish`: las fórmulas de inyección en español (ignora tus instrucciones, olvida todo lo anterior, haz caso omiso, a partir de ahora eres un, nuevas instrucciones:, prompt de sistema, borra todos los archivos) se detectan como en inglés, y 8 preguntas normales de un cliente en español pasan (falla sin el fix) |
 | Guardrail de entrada | `ChatTools.PromptGuard` sobre un `TAiOpenChat` real (URL a puerto cerrado, SmartDispatch a una tool falsa): bloquea sin tocar la red, permite, `OnPromptGuard` anula el bloqueo, guard caído con `BlockOnError` cerrado/abierto; `TAiJevPromptGuard` prioriza seguridad sobre `out_of_scope` y solo pregunta el alcance con `Scope` |
 | Guardrails + Jev | `TAiGuardrails.Classifier` con `TAiJevGuardrailClassifier`: riesgo alto bloquea con motivo, bajo permite, lo que ya bloquean las listas no llega a Jev, `BlockOnError` cerrado/abierto; categorías de permiso: bloquea una categoría prohibida aunque no sea la elegida, el riesgo manda primero, `ToolDescriptions` viaja en el state, `OnCategorized` anula |
 | Etiquetado masivo | `TAiJevBatchLabeler`: etiqueta/confianza por fila, una fila con error no detiene el lote, filas dudosas, tokens sumados, validación de `Questions` y `LabelQuestion` antes de llamar, estados JSON tal cual, `Cancel` desde `OnProgress` |
@@ -49,6 +51,7 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 | A2A autorizacion | card base publica, RPC sin clave -> 401, clave con otras mayusculas -> 401 |
 | A2A streaming | reanudar un task en `input-required` con `SendStreamingMessage` (SSE crudo) |
 | A2A Agent Card | skills declaradas (con tags) y skill `run-graph` por defecto cuando no hay ninguna |
+| RAG Graph (oct 23/2026) | `rag.graph.searchtext`: `TAiRagGraph.SearchText` devuelve los nodos encontrados y sus relaciones (antes solo el encabezado; falla sin el fix), sobre un grafo armado con `TAiRagGraphBuilder` y embeddings falsos |
 | RAG | búsqueda con `Options` en nil sobre el driver `.mkai` (regresión del AV por `IfThen`) |
 | Memoria | `TAiMemory` aísla namespaces también en las operaciones por Id (issue #127): desde otro namespace, `Get` no ve la memoria y `Update`/`Link`/`Delete` no la tocan; `ImportFromJSON` ignora el `namespace` del JSON y escribe en el activo (falla sin el fix) |
 | Skills (formato) | parser común de SKILL.md (`uMakerAi.Skills.Format`): comillas, comentario `#`, escalar partido en dos líneas, listas `- x` e inline `[a, "b"]`, bloque `>`, Markdown sin frontmatter; carpeta `<dir>/<nombre>/SKILL.md` con el nombre de la carpeta como fallback. Registry PPM falso (puerto 18794): prefijo `skill-` automático, mayor versión por semver sin las retiradas (1.10.0 gana a 1.2.0), `TAiPrompts.LoadSkillFromPPM` por el mismo camino; errores claros ante paquete inexistente, de otro tipo o un 200 con HTML, y `TAiPrompts` devuelve nil sin excepción |

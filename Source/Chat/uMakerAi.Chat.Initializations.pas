@@ -1339,10 +1339,11 @@ Begin
 
   // mistral-small-latest -> Mistral Small 4 (v26.03), 256K ctx, vision + reasoning_effort + tools
   // Razonamiento configurable via reasoning_effort (low/medium/high); ver driver
+  // Small 4 solo acepta reasoning_effort none|high (oct 2026): sin ThinkingLevel fijado no se envia
+  // (modo rapido); con tlMedium/tlHigh el driver manda high y con tlLow, none.
   Model := 'mistral-small-latest';
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ModelCaps',    '[cap_Image, cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'SessionCaps',  '[cap_Image, cap_Reasoning]');
-  TAiChatFactory.Instance.RegisterUserParam('Mistral', Model, 'ThinkingLevel', 'tlMedium');
 
   // ------- Ministral (edge models) (vision + tools) ------
   // ministral-14b-latest -> 262K ctx, vision + tools

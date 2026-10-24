@@ -995,12 +995,22 @@ begin
         AJSONObject.AddPair('prompt_mode', 'reasoning')
       else
       begin
-        // mistral-small-2603 (Small 4) y mistral-medium-2604 (Medium 3.5)
-        case ModelConfig.ThinkingLevel of
-          tlLow:    AJSONObject.AddPair('reasoning_effort', 'low');
-          tlMedium: AJSONObject.AddPair('reasoning_effort', 'medium');
-          tlHigh:   AJSONObject.AddPair('reasoning_effort', 'high');
-        end;
+        // mistral-small-2603 (Small 4) y mistral-medium-2604 (Medium 3.5).
+        // Small 4 solo acepta none|high (oct 2026: 'medium' devuelve 400, code 3051):
+        // tlLow -> none, tlMedium/tlHigh -> high. Medium 3.5 sigue con low|medium|high.
+        if LModel.StartsWith('mistral-small') then
+        begin
+          case ModelConfig.ThinkingLevel of
+            tlLow:            AJSONObject.AddPair('reasoning_effort', 'none');
+            tlMedium, tlHigh: AJSONObject.AddPair('reasoning_effort', 'high');
+          end;
+        end
+        else
+          case ModelConfig.ThinkingLevel of
+            tlLow:    AJSONObject.AddPair('reasoning_effort', 'low');
+            tlMedium: AJSONObject.AddPair('reasoning_effort', 'medium');
+            tlHigh:   AJSONObject.AddPair('reasoning_effort', 'high');
+          end;
       end;
     end;
 

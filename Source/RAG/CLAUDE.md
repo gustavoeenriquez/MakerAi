@@ -96,6 +96,12 @@ Special commands:
 - `GET CENTRALITY(node)`: Closeness centrality
 - `GET DEGREES TOP n`: Hub detection
 
+**`SearchText` (fix oct 23/2026).** Solo devolvía el encabezado "Contexto extraído del grafo de conocimiento:": el cuerpo había quedado como un esbozo y quien lo usaba (demo 025, o un chat que arma el contexto con él) le pasaba al LLM un contexto vacío. Ahora devuelve `GetContextualizedText` de los nodos encontrados (con sus vecinos hasta `ADepth`) y sus relaciones. Suite: `rag.graph.searchtext`.
+
+**GraphML desde una consola (oct 24/2026).** `SaveToFile(..., gefGraphML)` usa `TXMLDocument`. En una app FMX/VCL el vendor DOM se registra solo; en un programa `{$APPTYPE CONSOLE}` falla con "Microsoft MSXML is not installed" si no se agregan `Xml.Win.msxmldom` al `uses` y `CoInitialize(nil)` al arrancar (ver `Demos/Libro/cap14-grafos/GrafosLadera.dpr`). `gefDOT` y `gefGraphMkai` no lo necesitan.
+
+**Patrones convergentes en MakerGQL.** Dos aristas que llegan al mismo nodo se escriben con flecha invertida: `MATCH (p:Persona)-[:NO_LE_GUSTO]->(a:Acidez)<-[:TIENE_ACIDEZ]-(c:Producto) RETURN c` funciona. La forma con coma reutilizando la variable, `MATCH (c)-[:TIENE_ACIDEZ]->(a), (p)-[:NO_LE_GUSTO]->(a)`, devuelve "No matching subgraphs found" (verificado oct 23/2026; pendiente de revisar).
+
 ## Thread Safety
 
 - `TAiRAGVector` uses `TMultiReadExclusiveWriteSynchronizer` for concurrent access

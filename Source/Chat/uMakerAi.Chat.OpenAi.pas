@@ -3150,6 +3150,103 @@ begin
               end;
             end
 
+            // 2a. Apply Patch (editor de archivos): paridad con el camino sincrono
+            // (ParseChat). En streaming el item llegaba y no se ejecutaba, el turno
+            // quedaba sin apply_patch_call_output y la siguiente peticion fallaba con
+            // "No tool output found for apply patch call" (oct 24/2026, app del
+            // capitulo 12 del libro). Mismo contrato: OnApplyPatch primero y, si
+            // no, ChatTools.TextEditorTool; create_file en V4A va a 'create'.
+            else if (ItemType = 'apply_patch_call') then
+            begin
+              if JItem.TryGetValue<String>('call_id', CallId) then
+              begin
+                var
+                LPatchType := '';
+                var
+                LPatchPath := '';
+                var
+                LPatchDiff := '';
+                var
+                  JPatchOp: TJSonObject;
+                if JItem.TryGetValue<TJSonObject>('operation', JPatchOp) then
+                begin
+                  JPatchOp.TryGetValue<string>('type', LPatchType);
+                  JPatchOp.TryGetValue<string>('path', LPatchPath);
+                  JPatchOp.TryGetValue<string>('diff', LPatchDiff);
+                end;
+                var
+                LPatchStatus := 'failed';
+                var
+                LPatchOutput := '';
+                var
+                LPatchHandled := False;
+                if Assigned(FOnApplyPatch) then
+                begin
+                  try
+                    FOnApplyPatch(Self, LPatchType, LPatchPath, LPatchDiff, CallId, LPatchStatus, LPatchOutput);
+                  except
+                    on E: Exception do
+                    begin
+                      LPatchStatus := 'failed';
+                      LPatchOutput := 'Exception in OnApplyPatch: ' + E.Message;
+                    end;
+                  end;
+                  LPatchHandled := True;
+                end;
+                if (not LPatchHandled) and Assigned(ChatTools.TextEditorTool) then
+                begin
+                  var
+                  JPatchCmd := TJSonObject.Create;
+                  try
+                    if LPatchType = 'delete_file' then
+                    begin
+                      JPatchCmd.AddPair('command', 'delete');
+                      JPatchCmd.AddPair('path', LPatchPath);
+                    end
+                    else if LPatchType = 'create_file' then
+                    begin
+                      JPatchCmd.AddPair('command', 'create');
+                      JPatchCmd.AddPair('path', LPatchPath);
+                      JPatchCmd.AddPair('file_text', V4ACreateFileText(LPatchDiff));
+                    end
+                    else
+                    begin
+                      JPatchCmd.AddPair('command', 'apply_diff');
+                      JPatchCmd.AddPair('path', LPatchPath);
+                      JPatchCmd.AddPair('diff_text', LPatchDiff);
+                    end;
+                    var
+                    LPatchRes := ChatTools.TextEditorTool.Execute(JPatchCmd.ToString);
+                    if LPatchRes.StartsWith('Error') then
+                      LPatchStatus := 'failed'
+                    else
+                      LPatchStatus := 'completed';
+                    LPatchOutput := LPatchRes;
+                  finally
+                    JPatchCmd.Free;
+                  end;
+                end;
+                var
+                JPatchOut := TJSonObject.Create;
+                try
+                  JPatchOut.AddPair('type', 'apply_patch_call_output');
+                  JPatchOut.AddPair('call_id', CallId);
+                  JPatchOut.AddPair('status', LPatchStatus);
+                  if LPatchOutput <> '' then
+                    JPatchOut.AddPair('output', LPatchOutput);
+                  var
+                  LPatchMsg := TAiChatMessage.Create(JPatchOut.ToString, 'tool');
+                  LPatchMsg.ToolCallId := CallId;
+                  LPatchMsg.PreviousResponseId := FResponseId;
+                  LPatchMsg.Id := FMessages.Count + 1;
+                  FMessages.Add(LPatchMsg);
+                finally
+                  JPatchOut.Free;
+                end;
+                FRecursionNeeded := True;
+              end;
+            end
+
             // 2b. Computer Call (control de pantalla)
             // Mismo contrato que en el camino sincrono: un computer_call trae un
             // ARRAY 'actions' que se ejecuta en orden, y se responde con UN unico

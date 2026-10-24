@@ -3409,24 +3409,16 @@ end;
 function TAiRagGraph.SearchText(const APrompt: string; ADepth: Integer; ShowProperties: Boolean; const ALimit: Integer; const APrecision: Double; const AFilter: TAiFilterCriteria): string;
 var
   FoundNodes: TArray<TAiRagGraphNode>;
-  ContextBuilder: TStringBuilder;
 begin
   // Llamamos a Search pasando el AFilter actualizado
   FoundNodes := Self.Search(APrompt, ADepth, ALimit, APrecision, AFilter);
 
   if Length(FoundNodes) = 0 then
-    Exit('No se encontr� informaci�n relevante para: ' + APrompt);
+    Exit('No se encontró información relevante para: ' + APrompt);
 
-  // ... (El resto del c�digo de generaci�n de texto se mantiene igual) ...
-  // Solo copio el inicio para brevedad
-  ContextBuilder := TStringBuilder.Create;
-  try
-    ContextBuilder.AppendLine('Contexto extra�do del grafo de conocimiento:');
-    // ... l�gica de construcci�n de string ...
-    Result := ContextBuilder.ToString;
-  finally
-    ContextBuilder.Free;
-  end;
+  // El contexto son los nodos encontrados (y sus vecinos hasta ADepth), sus fragmentos y las relaciones entre
+  // ellos. Antes esta funcion solo devolvia el encabezado: quien la usaba le pasaba al LLM un contexto vacio.
+  Result := 'Contexto extraído del grafo de conocimiento:' + sLineBreak + GetContextualizedText(FoundNodes);
 end;
 
 procedure TAiRagGraph.LoadFromStream(AStream: TStream);

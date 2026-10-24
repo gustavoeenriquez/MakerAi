@@ -406,6 +406,7 @@ type
     procedure SetThinking_tokens(const Value: Integer);
     procedure SetCached_tokens(const Value: Integer);
     procedure SetSanitizerActive(const Value: Boolean);
+    procedure DiscardBlockedMessage(AskMsg: TAiChatMessage);
     procedure SetOnSanitize(const Value: TAiSanitizeEvent);
     procedure SetEnabledFeatures(const Value: TAiChatMediaSupports);
     // Nuevo sistema de orquestación (v3.3)
@@ -4466,6 +4467,17 @@ begin
   end;
 end;
 
+procedure TAiChat.DiscardBlockedMessage(AskMsg: TAiChatMessage);
+begin
+  // Un mensaje bloqueado por el sanitizador o por el guardrail de entrada NO debe
+  // quedar en el historial: AddMessageAndRun ya lo habia agregado y en el turno
+  // siguiente viajaba al modelo con el resto de la conversacion (oct 24/2026,
+  // encontrado con el demo Demos/Libro/cap08-filtro). Se saca de la lista y se
+  // libera; si no estaba en la lista (Run con un mensaje ajeno) no se toca.
+  if Assigned(AskMsg) and (FMessages.Remove(AskMsg) >= 0) then
+    AskMsg.Free;
+end;
+
 function TAiChat.Run(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): String;
 var
   LSanitizeResult: TSanitizeResult;
@@ -4499,6 +4511,7 @@ begin
       case LSanitizeAction of
         saBlock:
         begin
+          DiscardBlockedMessage(AskMsg);
           DoError('Posible inyección de prompt detectada. Mensaje bloqueado por el sanitizador.', nil);
           Result := '';
           Exit;
@@ -4538,6 +4551,7 @@ begin
       case LSanitizeAction of
         saBlock:
         begin
+          DiscardBlockedMessage(AskMsg);
           DoError('Mensaje bloqueado por el guardrail de entrada: ' + LVerdict.Reason, nil);
           Result := '';
           Exit;

@@ -179,7 +179,7 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - `x-anthropic-version` header + beta features via dynamic headers
 - **Thinking por familia (ago 2026, probado runtime):** el driver clasifica el modelo con `IsClaudeAdaptiveOnly` (4.7/4.8/5: budget_tokens y temperature/top_p/top_k devuelven 400) e `IsClaude46` (4.6). En 4.6+ envía `thinking:{type:"adaptive"}` y mapea `ThinkingLevel` → `output_config.effort` (low/medium/high); en ≤4.5 mantiene `{enabled, budget_tokens}`. El header `interleaved-thinking` solo se envía en el camino legacy.
 - `output_format` migrado a `output_config.format` (deprecado API-wide); format y effort comparten el mismo objeto `output_config`
-- Web search: `web_search_20260209` (filtrado dinámico) en 4.6+; `web_search_20250305` en legacy
+- Web search: `web_search_20260209` (filtrado dinámico) en 4.6+; `web_search_20250305` en legacy. **OJO al costo (medido oct 24/2026):** el registry pone `cap_WebSearch` en `ModelCaps` por defecto y el driver declara la tool en cada llamada: la misma pregunta de 178 tokens en OpenAI cuesta **2.429 tokens de entrada** en `claude-haiku-4-5`; sin la tool (`ModelCaps - [cap_WebSearch]`) baja a 222. Pendiente decidir con Gustavo si el default pasa a opt-in
 - `stop_reason:"refusal"` (clasificadores de opus-5/fable-5): marca `IsRefusal`, parsea `stop_details` (category/explanation) y dispara `OnError`
 - **Fase ago 2026 (probada runtime salvo Fast mode):**
   - `FastMode` — `speed:"fast"` + beta `fast-mode-2026-02-01`, solo opus-5/4.8 (en otros se ignora con log). OJO: research preview con rate limit propio; requiere cupo del org (la org de prueba tiene 0 TPM asignados → 429)
@@ -223,6 +223,8 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 - Web search: `gpt-4o-search-preview` → `ModelCaps=[cap_WebSearch]`, `Tool_Active=False`
 
 **Deprecated (feb 2026):** GPT-4.1, GPT-4o (chat), o3, o4-mini — mantenidos en el código por backward compatibility pero no recomendados para proyectos nuevos.
+
+**`apply_patch` también en streaming (oct 24/2026).** El camino de streaming (`response.output_item.done`) ejecutaba `function_call`, `shell_call` y `computer_call` pero no `apply_patch_call`: con `Asynchronous=True` el item del editor llegaba, no se ejecutaba, el turno quedaba sin `apply_patch_call_output` y la siguiente petición fallaba con `400 No tool output found for apply patch call …` (la app FMX del capítulo 12 del libro; el demo 096, síncrono, nunca lo vio). Ahora el streaming tiene el mismo contrato que `ParseChat`: `OnApplyPatch` primero, si no `ChatTools.TextEditorTool` (`create_file` en V4A → `create`), y el output va al historial con `PreviousResponseId`.
 
 ### Gemini (Google)
 
@@ -287,7 +289,8 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 
 **Reasoning en el driver:**
 - Magistral → `prompt_mode: 'reasoning'` (chain-of-thought visible en respuesta)
-- Small 4 / Medium 3.5 → `reasoning_effort: 'low'|'medium'|'high'` según `ThinkingLevel`
+- Medium 3.5 → `reasoning_effort: 'low'|'medium'|'high'` según `ThinkingLevel`
+- **Small 4 (oct 24/2026, verificado en vivo): el API solo acepta `none|high`** (`medium` → 400 `code 3051`). El driver manda `tlLow` → `none` y `tlMedium`/`tlHigh` → `high`; el registry ya no fija `ThinkingLevel` para `mistral-small-latest` (sin fijar no se envía: modo rápido). Encontrado con el demo `Demos/Libro/cap06-proveedores`
 
 ### xAI Grok
 **Actualizado ago 2026, probado runtime 6/6.** Recambio total del catálogo: la familia actual (grok-4.x, grok-build) **razona siempre** (`reasoning_content` capturado por la base) y NO acepta `frequency/presence/stop` ni `reasoning_effort` (gate por prefijo en el driver); logprobs no soportado en 4.20+.

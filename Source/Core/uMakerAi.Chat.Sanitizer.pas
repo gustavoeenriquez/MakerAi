@@ -111,7 +111,8 @@ function NormalizeHomoglyphs(const AInput: string;
 function NeutralizeFakeMarkers(const AInput: string;
   out ANeutralizedCount: Integer): string;
 
-/// Stage 4: Scan for 14 prompt-injection patterns on normalized text.
+/// Stage 4: Scan for 14 prompt-injection patterns on normalized text
+/// (the text formulas also match their Spanish form).
 /// Non-blocking — returns matches, caller decides what to do.
 function DetectSuspiciousPatterns(const AInput: string): TArray<TSuspiciousMatch>;
 
@@ -252,19 +253,31 @@ const
   end;
 
 begin
+  // Las formulas de texto tienen tambien su forma en espanol (despues del '|'). Son
+  // acotadas a proposito: piden el posesivo ("tus/sus instrucciones") o "anteriores",
+  // para no bloquear preguntas normales ("las instrucciones anteriores del pedido
+  // estaban bien", "olvide mi clave", "elimina el ultimo producto").
   SetLength(SuspiciousPatterns, 14);
   Add(SuspiciousPatterns,  0, spkIgnorePrevious,       'ignore_previous',
-    'ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?)', IC);
+    'ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?)' +
+    '|ignor(a|e|en|ad|ar)\s+(todas\s+)?((tus|sus)\s+(instrucciones|indicaciones|[oó]rdenes|reglas)' +
+    '|las\s+(instrucciones|indicaciones|[oó]rdenes|reglas)\s+(anteriores|previas))', IC);
   Add(SuspiciousPatterns,  1, spkDisregardPrevious,    'disregard_previous',
-    'disregard\s+(all\s+)?(previous|prior|above)', IC);
+    'disregard\s+(all\s+)?(previous|prior|above)' +
+    '|(haz|hagan)\s+caso\s+omiso\s+(de|a)\s+(todo\s+lo\s+anterior|(todas\s+)?(las|tus|sus)\s+(instrucciones|indicaciones|reglas))' +
+    '|descart(a|e|en|ar)\s+(todas\s+)?(las|tus|sus)\s+(instrucciones|indicaciones|reglas)\s+(anteriores|previas)', IC);
   Add(SuspiciousPatterns,  2, spkForgetInstructions,   'forget_instructions',
-    'forget\s+(everything|all|your)\s+(instructions?|rules?|guidelines?)', IC);
+    'forget\s+(everything|all|your)\s+(instructions?|rules?|guidelines?)' +
+    '|olvid(a|e|en|ad|ar)\s+(todo\s+lo\s+anterior|(todas\s+)?(tus|sus|las)\s+(instrucciones|indicaciones|reglas|normas))', IC);
   Add(SuspiciousPatterns,  3, spkYouAreNow,            'you_are_now',
-    'you\s+are\s+now\s+(a|an)\s+', IC);
+    'you\s+are\s+now\s+(a|an)\s+' +
+    '|(a\s+partir\s+de\s+ahora|desde\s+ahora|ahora)\s+(eres|ser[aá]s)\s+(un|una)\s+', IC);
   Add(SuspiciousPatterns,  4, spkNewInstructions,      'new_instructions',
-    'new\s+instructions?:', IC);
+    'new\s+instructions?:' +
+    '|nuevas?\s+instrucci[oó]n(es)?\s*:', IC);
   Add(SuspiciousPatterns,  5, spkSystemOverride,       'system_override',
-    'system\s*:?\s*(prompt|override|command)', IC);
+    'system\s*:?\s*(prompt|override|command)' +
+    '|prompt\s+(de|del)\s+sistema', IC);
   Add(SuspiciousPatterns,  6, spkExecCommand,          'exec_command',
     '\bexec\b.*command\s*=', IC);
   Add(SuspiciousPatterns,  7, spkElevatedFlag,         'elevated_flag',
@@ -272,7 +285,8 @@ begin
   Add(SuspiciousPatterns,  8, spkRmRf,                 'rm_rf',
     'rm\s+-rf', IC);
   Add(SuspiciousPatterns,  9, spkDeleteAll,            'delete_all',
-    'delete\s+all\s+(emails?|files?|data)', IC);
+    'delete\s+all\s+(emails?|files?|data)' +
+    '|(borra|elimina)r?\s+todos?\s+(los\s+|las\s+)?(correos|archivos|datos|registros|mensajes)', IC);
   Add(SuspiciousPatterns, 10, spkSystemTags,           'system_tags',
     '<\/?system>', IC);
   Add(SuspiciousPatterns, 11, spkRoleHeader,           'role_header',
