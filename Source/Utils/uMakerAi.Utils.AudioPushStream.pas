@@ -40,6 +40,7 @@ uses
   , Androidapi.JNIBridge
   , Androidapi.JNI.JavaTypes
   , Androidapi.Helpers
+  , Androidapi.JNI.GraphicsContentViewText  // TJContext (AUDIO_SERVICE)
 {$ENDIF}
 {$IFDEF IOS}
   , iOSapi.AudioToolbox
@@ -965,6 +966,9 @@ var
 {$IF DEFINED(IOS) OR DEFINED(MACOS)}
   I, Filled: Integer;
   AllFree  : Boolean;
+{$ENDIF}
+{$IF NOT (DEFINED(MSWINDOWS) OR DEFINED(IOS) OR DEFINED(MACOS))}
+  LUnused: Integer;  // Android/Linux: sin variables (el bloque var no puede quedar vacio)
 {$ENDIF}
 begin
 {$IFDEF MSWINDOWS}

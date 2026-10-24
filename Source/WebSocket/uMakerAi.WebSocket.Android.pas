@@ -24,9 +24,20 @@ interface
 
 uses
   System.SysUtils,
+  Androidapi.Jni,       // jobject, jbyteArray, jmethodID, PJNIEnv (campos de la clase)
   uMakerAi.WebSocket.Client;
 
 type
+  // Nombres de C de los tipos JNI (Androidapi.Jni los declara como JNIObject...)
+  jobject    = JNIObject;
+  jclass     = JNIClass;
+  jstring    = JNIString;
+  jbyteArray = JNIByteArray;
+  jmethodID  = JNIMethodID;
+  jint       = JNIInt;
+  jvalue     = JNIValue;
+  pjbyte     = PJNIByte;
+
   TAndroidSSLTransport = class(TInterfacedObject, ITlsTransport)
   private
     FConnected:    Boolean;
@@ -67,7 +78,6 @@ implementation
 {$IFDEF ANDROID}
 
 uses
-  Androidapi.Jni,       // jboolean, jbyte, jint, jobject, jclass, jmethodID, jvalue, PJNIEnv …
   Androidapi.JNIBridge; // TJNIResolver
 
 const
@@ -88,7 +98,7 @@ var
   Res:    jint;
 begin
   Result := nil;
-  VM     := TJNIResolver.GetJavaVM;
+  VM     := PJavaVM(System.JavaMachine);
   if VM = nil then Exit;
   // GetEnv devuelve la env del hilo actual si está adjunto
   Res := VM^.GetEnv(VM, @EnvPtr, JNI_VERSION_1_6);
