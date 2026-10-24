@@ -164,9 +164,13 @@ end;
 destructor TAiMCPSSEHttpServer.Destroy;
 begin
   Stop;
-  FHttpServer.Free; // El server debe morir antes que las sesiones
-  FSessions.Free;
-  FSessionsLock.Free;
+  // FreeAndNil, no Free: el inherited Destroy vuelve a llamar a Stop (virtual)
+  // y este Stop tocaria objetos ya liberados. Con nil, el segundo Stop no hace
+  // nada. Solo se notaba al liberar el servidor con el proceso vivo (MakerFlow
+  // lo rehace al cambiar sus herramientas): AV al leer FHttpServer.
+  FreeAndNil(FHttpServer); // El server debe morir antes que las sesiones
+  FreeAndNil(FSessions);
+  FreeAndNil(FSessionsLock);
   inherited;
 end;
 
@@ -211,15 +215,18 @@ end;
 
 procedure TAiMCPSSEHttpServer.Stop;
 begin
-  if FHttpServer.Active then
+  if Assigned(FHttpServer) and FHttpServer.Active then
     FHttpServer.Active := False;
 
-  // Limpiar todas las sesiones activas
-  FSessionsLock.Enter;
-  try
-    FSessions.Clear;
-  finally
-    FSessionsLock.Leave;
+  // Limpiar todas las sesiones activas (en el destructor ya no existen)
+  if Assigned(FSessionsLock) and Assigned(FSessions) then
+  begin
+    FSessionsLock.Enter;
+    try
+      FSessions.Clear;
+    finally
+      FSessionsLock.Leave;
+    end;
   end;
 
   inherited Stop;
