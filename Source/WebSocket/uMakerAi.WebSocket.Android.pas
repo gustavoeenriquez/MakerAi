@@ -114,7 +114,12 @@ function TAndroidSSLTransport.CheckAndClearException(const E: PJNIEnv): Boolean;
 begin
   Result := E^.ExceptionCheck(E) <> 0;
   if Result then
+  begin
+    // Deja la excepcion Java (clase, mensaje y traza) en logcat: sin esto un
+    // fallo de TLS solo dice "TLS connect fallido" y no hay forma de saber por que
+    E^.ExceptionDescribe(E);
     E^.ExceptionClear(E);
+  end;
 end;
 
 // ---------------------------------------------------------------------------
@@ -186,7 +191,8 @@ begin
   if CheckAndClearException(E) or (CSSLFactory = nil) then Exit;
 
   MGetDefault := E^.GetStaticMethodID(E, CSSLFactory,
-    'getDefault', '()Ljavax/net/ssl/SocketFactory;');
+    // Devuelve javax.net.SocketFactory (paquete javax.net, NO javax.net.ssl)
+    'getDefault', '()Ljavax/net/SocketFactory;');
   if CheckAndClearException(E) or (MGetDefault = nil) then
   begin
     E^.DeleteLocalRef(E, CSSLFactory);
