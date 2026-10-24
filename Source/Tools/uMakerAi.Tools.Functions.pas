@@ -485,6 +485,10 @@ type
     // Lleva un JSON Schema al modo strict de OpenAI: additionalProperties=false y todas
     // las propiedades en required, en cada objeto (properties, items, anyOf/oneOf/allOf, $defs)
     class procedure EnforceStrictSchema(ASchema: TJSONValue);
+    // Hay en el esquema un objeto LIBRE (type object sin 'properties')? El modo
+    // strict de la Responses API no lo puede expresar: exige additionalProperties
+    // false y todas las propiedades en required.
+    class function HasFreeFormObject(ASchema: TJSONValue): Boolean;
 
     // Sobrecarga con detecci�n autom�tica del formato de entrada
     class function MergeToolLists(const ASourceName: string; ASourceJson: TJSonObject; ATargetJson: TJSonObject; AOutputFormat: TToolFormat): TJSonObject; overload;
@@ -3999,6 +4003,33 @@ begin
     Exit(tfMCP);
 end;
 
+class function TJsonToolUtils.HasFreeFormObject(ASchema: TJSONValue): Boolean;
+var
+  JObj, JProps: TJSonObject;
+  TypeV, LSub: TJSONValue;
+begin
+  Result := False;
+  if not (ASchema is TJSonObject) then Exit;
+  JObj := TJSonObject(ASchema);
+  TypeV := JObj.GetValue('type');
+  JProps := nil;
+  if JObj.GetValue('properties') is TJSonObject then
+    JProps := TJSonObject(JObj.GetValue('properties'));
+  if (TypeV is TJSONString) and (TJSONString(TypeV).Value = 'object') and (JProps = nil) then
+    Exit(True);
+  if Assigned(JProps) then
+    for var I := 0 to JProps.Count - 1 do
+      if HasFreeFormObject(JProps.Pairs[I].JsonValue) then Exit(True);
+  LSub := JObj.GetValue('items');
+  if LSub is TJSonArray then
+  begin
+    for var LItem in TJSonArray(LSub) do
+      if HasFreeFormObject(LItem) then Exit(True);
+  end
+  else if HasFreeFormObject(LSub) then
+    Exit(True);
+end;
+
 class procedure TJsonToolUtils.EnforceStrictSchema(ASchema: TJSONValue);
 var
   JObj, JProps: TJSonObject;
@@ -4423,6 +4454,17 @@ begin
   begin
     // Clonamos el esquema original para no modificar la referencia base
     LParams := TJSonObject(ANormalizedTool.InputSchema.Clone);
+
+    // Un objeto LIBRE (p. ej. el "args" del MCP de contabilidad: los
+    // parametros dependen de la accion) no cabe en strict: forzarlo daba 400
+    // "Extra required key 'args' supplied", y con properties vacias el modelo
+    // ya no podria mandar nada. Esa tool va SIN strict y con su esquema tal cual.
+    if HasFreeFormObject(LParams) then
+    begin
+      Result.AddPair('parameters', LParams);
+      Result.AddPair('strict', False);
+      Exit;
+    end;
 
     // ---> AQUI LA MAGIA: Forzamos el esquema a cumplir Strict Mode <---
     EnforceStrictSchema(LParams);
