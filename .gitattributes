@@ -31,4 +31,8 @@
 *.ico binary
 *.jpg binary
 *.png binary
-*.gif binary
+*.gif binary*.pdf binary
+*.wav binary
+*.mp3 binary
+*.m4a binary
+*.webp binary
