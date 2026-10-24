@@ -28,6 +28,7 @@
 //   - Condicional: AddConditionalEdge elige por el valor de 'next_route'.
 //   - TLLMNode: el ultimo nodo es un LLM que redacta el mensaje al cliente
 //               (sin OPENAI_API_KEY, o con --sin-llm, lo redacta el codigo).
+//   - --otel: exporta las trazas (OpenTelemetry, OTLP/HTTP) a localhost:4318.
 //
 // Empresa, productos y precios ficticios.
 // =============================================================================
@@ -44,7 +45,8 @@ uses
   System.Generics.Collections,
   uMakerAi.Agents,
   uMakerAi.Agents.Node.LLM,
-  uMakerAi.Chat.Initializations;   // drivers para el TLLMNode
+  uMakerAi.Chat.Initializations,   // drivers para el TLLMNode
+  uMakerAi.Telemetry;
 
 type
   TProducto = record
@@ -279,6 +281,7 @@ var
   Rutas: TDictionary<string, string>;
   Texto, Resultado: string;
   ConLLM: Boolean;
+  Telemetry: TAiTelemetry;
 var
   BufSalida: array [0 .. 0] of Byte;
 
@@ -292,6 +295,15 @@ begin
   // escribirlo (en una consola real ya se vaciaba en cada Write).
   SetTextBuf(Output, BufSalida, 1);
   ConLLM := not HasFlag('--sin-llm') and (GetEnvironmentVariable('OPENAI_API_KEY') <> '');
+  // Con --otel cada pedido deja una traza: el grafo, cada nodo y la llamada al modelo
+  Telemetry := nil;
+  if HasFlag('--otel') then
+  begin
+    Telemetry := TAiTelemetry.Create(nil);
+    Telemetry.ServiceName := 'PedidoLadera';
+    Telemetry.Enabled := True;
+    Writeln('[otel] Exportando trazas a ', Telemetry.Endpoint);
+  end;
   Pedido := TPedido.Create;
   Grafo := TAIAgentManager.Create(nil);
   Rutas := TDictionary<string, string>.Create;
@@ -373,5 +385,6 @@ begin
     Rutas.Free;
     Grafo.Free;
     Pedido.Free;
+    Telemetry.Free;   // exporta los spans pendientes
   end;
 end.
