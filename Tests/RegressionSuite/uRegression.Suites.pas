@@ -77,7 +77,7 @@ uses
   uMakerAi.Chat.AiConnection, uMakerAi.Chat.Initializations, uMakerAi.ParamsRegistry,
   uMakerAi.Guardrails, uMakerAi.Jev, uMakerAi.Agents.Tools.JevRouter,
   uMakerAi.Jev.SmartDispatch, uMakerAi.Jev.Guardrails, uMakerAi.Chat.Tools, uMakerAi.Chat.Sanitizer,
-  uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch,
+  uMakerAi.Jev.Evals, uMakerAi.Jev.RAG, uMakerAi.Jev.PromptGuard, uMakerAi.Jev.Batch, uMakerAi.Telemetry,
   uMakerAi.OpenAI.Audio, uMakerAi.OpenAI.Audio.Tool, uMakerAi.Realtime.OpenAI.Live,
   uMakerAi.Jev.ModelRouter,
   UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.GenericLLM, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank, uMakerAi.Qwen.Voices,
@@ -1027,6 +1027,12 @@ begin
   FRunner.AddCase('agents.expression.decimal-point')
     .Input('agents:expr-decimal')
     .ExpectEquals('ge=True|gt=True|lt=False');
+
+  // Telemetria: un span creado en otro hilo (tool calls en TTask) no encontraba al
+  // span del turno y arrancaba una traza nueva; AiTraceContextEnter hereda el padre
+  FRunner.AddCase('telemetry.task-inherits-trace')
+    .Input('telemetry:task-parent')
+    .ExpectEquals('sin=False|con=True');
 end;
 
 // Bloques de memoria vivos (FastMM): para detectar fugas por diferencia
@@ -1045,7 +1051,7 @@ function TRegressionSuite.Dispatch(const AScenario: string): string;
 begin
   if AScenario.StartsWith('mcp:') then
     Result := RunMcpScenario(AScenario)
-  else if AScenario.StartsWith('agents:') or AScenario.StartsWith('a2a:') then
+  else if AScenario.StartsWith('agents:') or AScenario.StartsWith('a2a:') or AScenario.StartsWith('telemetry:') then
     Result := RunAgentScenario(AScenario)
   else if AScenario.StartsWith('rag:') then
     Result := RunRagScenario(AScenario)
@@ -1268,6 +1274,42 @@ begin
     'a2a:card-skills', 'a2a:card-skills-default', 'a2a:stream-resume',
     'a2a:auth']) then
     Exit(RunA2AFlowScenario(AScenario));
+
+  if AScenario = 'telemetry:task-parent' then
+  begin
+    // Un span padre en este hilo; en un TTask, un span sin contexto (traza nueva) y
+    // otro con AiTraceContextEnter (misma traza que el padre)
+    var Tel := TAiTelemetry.Create(nil);
+    var SinCtx := '';
+    var ConCtx := '';
+    try
+      Tel.Endpoint := 'http://127.0.0.1:9/v1/traces';   // nadie escucha: la exportacion falla en silencio
+      Tel.FlushIntervalMs := 60000;
+      Tel.Enabled := True;
+      var Padre := AiSpanStart('padre');
+      var TraceParent := AiSpanTraceParent(Padre);
+      var TraceId := Padre.TraceId;
+      var Tarea := TTask.Run(
+        procedure
+        begin
+          var S1 := AiSpanStart('hijo-sin-contexto');
+          SinCtx := S1.TraceId;
+          AiSpanEnd(S1);
+          var Ctx := AiTraceContextEnter(TraceParent);
+          var S2 := AiSpanStart('hijo-con-contexto');
+          ConCtx := S2.TraceId;
+          AiSpanEnd(S2);
+          AiTraceContextLeave(Ctx);
+        end);
+      Tarea.Wait(5000);
+      AiSpanEnd(Padre);
+      Result := Format('sin=%s|con=%s', [BoolToStr(SinCtx = TraceId, True), BoolToStr(ConCtx = TraceId, True)]);
+    finally
+      Tel.Enabled := False;
+      Tel.Free;
+    end;
+    Exit;
+  end;
 
   if AScenario = 'agents:expr-decimal' then
   begin

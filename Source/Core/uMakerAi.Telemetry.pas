@@ -119,6 +119,17 @@ type
     // Exporta sincronicamente todo lo pendiente (tests / shutdown).
     procedure Flush;
 
+    // Traceparent W3C del span activo en este hilo, o '' si no hay ninguno.
+    function CurrentTraceParent: string;
+
+    // Hereda una traza en OTRO hilo sin crear spans exportables: los spans que
+    // arranquen en el hilo actual cuelgan del span de ATraceParent hasta que se
+    // llame ContextLeave. Es lo que usa el framework cuando reparte trabajo en
+    // tareas (tool calls en paralelo, continuacion del tool-calling): el padre
+    // se captura en el hilo que despacha y se hereda en el que ejecuta.
+    function ContextEnter(const ATraceParent: string): TAiSpan;
+    procedure ContextLeave(ACtx: TAiSpan);
+
     property DroppedSpans: Int64 read FDroppedSpans;
   published
     property Enabled: Boolean read FEnabled write SetEnabled default False;
@@ -140,6 +151,12 @@ procedure AiSpanAttr(ASpan: TAiSpan; const AKey: string; AValue: Int64); overloa
 procedure AiSpanAttr(ASpan: TAiSpan; const AKey: string; AValue: Boolean); overload;
 // Traceparent del span (o '' si nil) para propagacion (p.ej. _meta MCP)
 function AiSpanTraceParent(ASpan: TAiSpan): string;
+// Traceparent del span activo en el hilo actual ('' si no hay telemetria o span)
+function AiCurrentTraceParent: string;
+// Heredar una traza en un hilo nuevo (ver TAiTelemetry.ContextEnter). Devuelven /
+// toleran nil cuando no hay telemetria activa o el traceparent viene vacio.
+function AiTraceContextEnter(const ATraceParent: string): TAiSpan;
+procedure AiTraceContextLeave(ACtx: TAiSpan);
 
 procedure Register;
 
@@ -463,6 +480,41 @@ begin
   PushThreadSpan(Result);
 end;
 
+function TAiTelemetry.CurrentTraceParent: string;
+var
+  S: TAiSpan;
+begin
+  S := PeekThreadSpan;
+  if Assigned(S) then
+    Result := S.TraceParent
+  else
+    Result := '';
+end;
+
+function TAiTelemetry.ContextEnter(const ATraceParent: string): TAiSpan;
+var
+  RemoteTrace, RemoteSpan: string;
+begin
+  Result := nil;
+  if not ParseTraceParent(ATraceParent, RemoteTrace, RemoteSpan) then
+    Exit;
+  // Un span "fantasma": toma los ids del padre y se apila en este hilo, de modo
+  // que PeekThreadSpan lo devuelva como padre de los spans que arranquen aqui.
+  // No se exporta nunca: ContextLeave lo saca de la pila y lo libera.
+  Result := TAiSpan.Create('(context)', skInternal);
+  Result.FTraceId := RemoteTrace;
+  Result.FSpanId := RemoteSpan;
+  PushThreadSpan(Result);
+end;
+
+procedure TAiTelemetry.ContextLeave(ACtx: TAiSpan);
+begin
+  if not Assigned(ACtx) then
+    Exit;
+  PopThreadSpan(ACtx);
+  ACtx.Free;
+end;
+
 procedure TAiTelemetry.EndSpan(ASpan: TAiSpan; const AErrorMsg: string);
 begin
   if not Assigned(ASpan) then
@@ -676,6 +728,53 @@ begin
     Result := ASpan.TraceParent
   else
     Result := '';
+end;
+
+function AiCurrentTraceParent: string;
+var
+  T: TAiTelemetry;
+begin
+  Result := '';
+  T := TAiTelemetry.Active;
+  if Assigned(T) then
+    try
+      Result := T.CurrentTraceParent;
+    except
+      Result := '';
+    end;
+end;
+
+function AiTraceContextEnter(const ATraceParent: string): TAiSpan;
+var
+  T: TAiTelemetry;
+begin
+  Result := nil;
+  if ATraceParent = '' then
+    Exit;
+  T := TAiTelemetry.Active;
+  if Assigned(T) then
+    try
+      Result := T.ContextEnter(ATraceParent);
+    except
+      Result := nil;
+    end;
+end;
+
+procedure AiTraceContextLeave(ACtx: TAiSpan);
+var
+  T: TAiTelemetry;
+begin
+  if not Assigned(ACtx) then
+    Exit;
+  T := TAiTelemetry.Active;
+  if Assigned(T) then
+    try
+      T.ContextLeave(ACtx);
+    except
+      // best-effort
+    end
+  else
+    ACtx.Free;
 end;
 
 end.

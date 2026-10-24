@@ -224,6 +224,8 @@ acsIdle → acsConnecting → acsReasoning → acsWriting → acsToolCalling →
 
 **Deprecated (feb 2026):** GPT-4.1, GPT-4o (chat), o3, o4-mini — mantenidos en el código por backward compatibility pero no recomendados para proyectos nuevos.
 
+**La traza del turno no se partía en streaming (oct 24/2026).** En el camino de streaming el `function_call` se ejecuta en línea en el hilo HTTP (`response.output_item.done`), y en `ParseChat` las tool calls van a un `TTask` cada una: en ninguno de los dos hilos estaba activo el span `chat` del turno, así que cada `execute_tool` (y lo que colgara de él: un `agent.graph`, `mcp.client`, `rag.search`) salía como **traza aparte** en Jaeger. Ahora los dos caminos heredan `AiSpanTraceParent(FRunSpan)` con `AiTraceContextEnter`/`Leave` (ver `Source/Core/CLAUDE.md`, telemetría). Medido con la app del capítulo 23 del libro: un turno que delega en un grafo pasó de 5 trazas sueltas a una de 14 spans.
+
 **`apply_patch` también en streaming (oct 24/2026).** El camino de streaming (`response.output_item.done`) ejecutaba `function_call`, `shell_call` y `computer_call` pero no `apply_patch_call`: con `Asynchronous=True` el item del editor llegaba, no se ejecutaba, el turno quedaba sin `apply_patch_call_output` y la siguiente petición fallaba con `400 No tool output found for apply patch call …` (la app FMX del capítulo 12 del libro; el demo 096, síncrono, nunca lo vio). Ahora el streaming tiene el mismo contrato que `ParseChat`: `OnApplyPatch` primero, si no `ChatTools.TextEditorTool` (`create_file` en V4A → `create`), y el output va al historial con `PreviousResponseId`.
 
 ### Gemini (Google)

@@ -46,7 +46,8 @@ uses
   uJSONHelper,
 {$ENDIF}
   uMakerAi.ParamsRegistry, uMakerAi.Chat, uMakerAi.Core,
-  uMakerAi.Tools.Functions, uMakerAi.Utils.CodeExtractor, uMakerAi.Utils.System, uMakerAi.Chat.Messages;
+  uMakerAi.Tools.Functions, uMakerAi.Utils.CodeExtractor, uMakerAi.Utils.System, uMakerAi.Chat.Messages,
+  uMakerAi.Telemetry;
 
 type
 
@@ -1186,10 +1187,17 @@ var
 
   // Subrutina local: garantiza captura independiente por valor en Delphi 10.4+
   procedure _CreateTask(TC: TAiToolsFunction; AIdx: Integer);
+  var
+    LTraceParent: string;
   begin
+    // Telemetria: la tarea corre en otro hilo; el span 'execute_tool' hereda el del turno
+    LTraceParent := AiSpanTraceParent(FRunSpan);
     TaskList[AIdx] := TTask.Create(
       procedure
+      var
+        LCtx: TAiSpan;
       begin
+        LCtx := AiTraceContextEnter(LTraceParent);
         try
           DoCallFunction(TC);
         except
@@ -1203,6 +1211,7 @@ var
               end);
           end;
         end;
+        AiTraceContextLeave(LCtx);
       end);
     TaskList[AIdx].Start;
   end;
@@ -3093,7 +3102,14 @@ begin
                   Break;
                 end;
 
-              DoCallFunction(ToolCall);
+              // Telemetria: en streaming esto corre en el hilo HTTP, donde el span del
+              // turno no esta activo; se hereda para que 'execute_tool' cuelgue del chat
+              var LCtx := AiTraceContextEnter(AiSpanTraceParent(FRunSpan));
+              try
+                DoCallFunction(ToolCall);
+              finally
+                AiTraceContextLeave(LCtx);
+              end;
 
               var
               NewMsg := TAiChatMessage.Create(ToolCall.Response, 'tool');

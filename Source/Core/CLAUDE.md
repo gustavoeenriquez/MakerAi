@@ -146,6 +146,10 @@ Las fórmulas de texto de `uMakerAi.Chat.Sanitizer` (etapa 4) solo estaban en in
 
 `AddMessageAndRun` agrega el mensaje antes de `Run`; cuando el sanitizador (`SanitizerActive`) o el guardrail de entrada (`ChatTools.PromptGuard`) lo bloqueaban con `saBlock`, el mensaje **se quedaba en `Messages`** y en el turno siguiente viajaba al modelo con el resto de la conversación (medido con `Demos/Libro/cap08-filtro`: el historial subía 3 → 4 → 5 con dos bloqueos). Ahora `DiscardBlockedMessage` lo saca de la lista y lo libera (solo si estaba en la lista: un `Run` con un mensaje ajeno no lo toca). `saAllow`/`saAllowWrapped` no cambian. Suite: `chat.filtro.blocked-not-kept` (137/137).
 
+## Telemetría: la traza del turno cruza los hilos del framework (oct 24/2026)
+
+`TAiTelemetry` anida por hilo (`PeekThreadSpan`), y `TAiChat` ejecuta las tool calls en un `TTask` por herramienta y la continuación del tool-calling en otro `TTask`: ahí no había span activo, así que cada `execute_tool` (y todo lo que colgara de él: el `agent.graph` de un agente llamado como herramienta, `mcp.client`, `rag.search`) arrancaba **una traza nueva**. En Jaeger un turno de la app del libro salía partido en cinco o seis trazas. Ahora `TAiChat` captura `AiSpanTraceParent(FRunSpan)` en el hilo que despacha y lo hereda dentro de la tarea con `AiTraceContextEnter`/`AiTraceContextLeave` (un span "fantasma" con los ids del padre que se apila en el hilo y no se exporta); `AiCurrentTraceParent` devuelve el traceparent del span activo del hilo. Cualquier código que reparta trabajo en hilos propios puede usar lo mismo. Los nodos de un grafo ya lo hacían a su manera (`FRunTraceParent`). El driver de OpenAI tiene su propio `ParseChat` (otro `_CreateTask`) y ejecuta el `function_call` del streaming en línea en el hilo HTTP: los dos caminos llevan el mismo arreglo. Suite: `telemetry.task-inherits-trace`.
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for source directory overview and [../../CLAUDE.md](../../CLAUDE.md) for project overview.

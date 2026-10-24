@@ -3172,9 +3172,13 @@ begin
     // el ForceQueue — arrancar el siguiente POST fuera del despacho de completado,
     // con FCurrentPostStream ya liberado unas lineas mas arriba — sin depender de
     // que el integrador bombee mensajes.
+    var LTraceParent := AiSpanTraceParent(FRunSpan);   // la continuacion hereda la traza del turno
     TTask.Run(
       procedure
+      var
+        LCtx: TAiSpan;
       begin
+        LCtx := AiTraceContextEnter(LTraceParent);
         try
           Self.Run(nil, nil);
         except
@@ -3183,6 +3187,7 @@ begin
             // hasta el timeout del integrador, sin ninguna pista del motivo.
             DoError('Error en la continuacion tool-calling: ' + E.Message, E);
         end;
+        AiTraceContextLeave(LCtx);
       end);
   end;
 
@@ -3256,10 +3261,18 @@ Var
   // (la asignaci?n LCaptura:=ToolCall dentro del anon-proc corre cuando el task
   // ejecuta, no cuando se crea, por lo que ToolCall pudo haber cambiado)
   procedure _CreateTask(TC: TAiToolsFunction; AIdx: Integer);
+  var
+    LTraceParent: string;
   begin
+    // Telemetria: la tarea corre en otro hilo y ahi el span 'execute_tool' no
+    // encontraria al del turno; se captura aqui y se hereda dentro de la tarea.
+    LTraceParent := AiSpanTraceParent(FRunSpan);
     TaskList[AIdx] := TTask.Create(
       procedure
+      var
+        LCtx: TAiSpan;
       begin
+        LCtx := AiTraceContextEnter(LTraceParent);
         try
           DoCallFunction(TC);
         except
@@ -3273,6 +3286,7 @@ Var
               end);
           end;
         end;
+        AiTraceContextLeave(LCtx);
       end);
     TaskList[AIdx].Start;
   end;
