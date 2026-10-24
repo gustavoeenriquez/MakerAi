@@ -285,6 +285,13 @@ begin
     .Input('a2a:agenttool')
     .ExpectEquals('consulta>Uno');
 
+  // Functions asignado en el Object Inspector: la funcion queda guardada en el .fmx del
+  // TAiFunctions y al cargar RegisterTool debe reutilizarla, no registrar una segunda
+  // con el mismo nombre (el modelo veria dos 'preguntar_agente').
+  FRunner.AddCase('a2a.agenttool.register-once')
+    .Input('a2a:agenttool-once')
+    .ExpectEquals('funciones=1|consulta>Uno');
+
   FRunner.AddCase('a2a.errors.codes')
     .Input('a2a:errorcodes')
     .ExpectEquals('push=-32602|version=-32009|ctype=-32005|sinmensaje=-32602|terminal=-32004|errorinfo=ok');
@@ -1270,7 +1277,7 @@ begin
   // Los flujos de orquestacion arman su propia topologia (pool, suspension,
   // no bloqueante) y viven en su propia rutina.
   if MatchStr(AScenario, ['a2a:concurrency', 'a2a:hitl', 'a2a:fedhitl', 'a2a:nonblocking', 'a2a:naming',
-    'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03', 'a2a:listtasks', 'a2a:errorcodes', 'a2a:agenttool',
+    'a2a:cancelterm', 'a2a:wire-v1', 'a2a:wire-v03', 'a2a:listtasks', 'a2a:errorcodes', 'a2a:agenttool', 'a2a:agenttool-once',
     'a2a:card-skills', 'a2a:card-skills-default', 'a2a:stream-resume',
     'a2a:auth']) then
     Exit(RunA2AFlowScenario(AScenario));
@@ -2367,6 +2374,35 @@ begin
         ToolCall.Arguments := '{"query":"consulta"}';
         Funcs.DoCallFunction(ToolCall);
         Result := ToolCall.Response;
+      finally
+        ToolCall.Free;
+        AgentTool.Free;
+        Funcs.Free;
+      end;
+    end
+    else if AScenario = 'a2a:agenttool-once' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      Agents.Name := 'SuiteToolGraph';
+      Agents.AddNode('Uno', Handlers.NodeExec);
+      Agents.SetEntryPoint('Uno').SetFinishPoint('Uno');
+      Server.AgentManager := Agents;
+      Server.Active := True;
+
+      Funcs := TAiFunctions.Create(nil);
+      AgentTool := TAiA2AAgentTool.Create(nil);
+      ToolCall := TAiToolsFunction.Create;
+      try
+        // La funcion ya esta en el TAiFunctions (como si viniera del .fmx), sin OnAction
+        Funcs.Functions.Add.FunctionName := 'preguntar_agente';
+        AgentTool.AgentUrl := Url;
+        AgentTool.ToolName := 'preguntar_agente';
+        AgentTool.Functions := Funcs; // debe reutilizar la existente
+
+        ToolCall.Name := 'preguntar_agente';
+        ToolCall.Arguments := '{"query":"consulta"}';
+        Funcs.DoCallFunction(ToolCall);
+        Result := Format('funciones=%d|%s', [Funcs.Functions.Count, ToolCall.Response]);
       finally
         ToolCall.Free;
         AgentTool.Free;

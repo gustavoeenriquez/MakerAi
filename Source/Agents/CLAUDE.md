@@ -401,6 +401,18 @@ este una **conversación**.
 `DiscoverFromCard` rellena la descripción desde la Agent Card del agente, de
 modo que el LLM vea la que el propio agente publica de sí mismo.
 
+**Desde el Object Inspector (oct 24/2026).** `Functions`, `AgentUrl`, `ToolName` y
+`Description` se pueden fijar en el formulario. Dos detalles del streaming: (1) el
+`.fmx` guarda `Functions` antes que `ToolName`, así que el registro no se hace en el
+setter mientras carga (`csLoading`) sino en `Loaded`, con todas las propiedades ya
+leídas; (2) al asignar `Functions` en diseño el IDE guarda la función dentro del
+`TAiFunctions`, y al cargar `RegisterTool` la **reutiliza** por nombre en vez de
+registrar una segunda (caso `a2a.agenttool.register-once`). Lo que se guarda en el
+`.fmx` es la función sin `OnAction` (el método es del componente, no del formulario);
+`RegisterTool` lo vuelve a enganchar. `TAiA2ARemoteAgentTool` también está en la
+paleta (`Register`, ícono `TAiA2ARemoteAgentTool_24.bmp`): se suelta en el formulario y
+se asigna como `Tool` del nodo; `Demos/Libro/cap26-federacion` lo tiene en el `.fmx`.
+
 Los fallos se le cuentan al modelo como texto en vez de romper el turno: si el
 agente remoto cae o pide más datos, el LLM puede reintentar, preguntar al
 usuario o seguir sin esa información. Una excepción abortaría la conversación

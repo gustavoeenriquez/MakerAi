@@ -362,6 +362,7 @@ SPECS = [
     ('core', 'TAiA2AClient', 'text2', MAROON, 'A2A', 'CLI'),
     ('core', 'TAiA2AServer', 'text2', MAROON, 'A2A', 'SRV'),
     ('core', 'TAiA2AAgentTool', 'text2', MAROON, 'A2A', 'TOOL'),
+    ('core', 'TAiA2ARemoteAgentTool', 'text2', MAROON, 'A2A', 'NODO'),
     ('core', 'TAiAudioCapture', 'glyph', MAROON, 'mic'),
     ('core', 'TAiAudioPlayer', 'glyph', MAROON, 'speaker'),
     ('core', 'TAiComputerUseTool', 'glyph', MAROON, 'monitor'),

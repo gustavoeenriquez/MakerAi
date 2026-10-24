@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (138 casos)
+## Cobertura actual (139 casos)
 
 | Área | Casos |
 |------|-------|
@@ -37,6 +37,7 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 | Agentes | grafo secuencial con status final y salida encadenada; `lmExpression` con punto decimal bajo configuración regional con coma; API fluida: fanout con `AddEdge` repetido + join `jmAll`, `AddExpressionEdge` con `AddFallbackEdge`, y los errores de construcción (`EAiGraphError`); `TLLMNode` contra un servidor OpenAI-compatible falso (`TFakeOpenAiChatServer`): `Graph` con el manager como Owner, `Guardrails` del nodo y join `jmAll` |
 | SmartDispatch + Jev | `ChatTools.DispatchClassifier` sobre un `TAiOpenChat` real (URL a puerto cerrado): el tag va directo a la tool sin pase por LLM; `TAiJevDispatchClassifier` solo ofrece los tags recibidos, respeta `MinConfidence` y no consulta a Jev si solo queda CHAT |
 | Filtro: historial (oct 24/2026) | `chat.filtro.blocked-not-kept`: un mensaje bloqueado por el sanitizador o por el guardrail de entrada no queda en `Messages` (antes viajaba al modelo en el turno siguiente); un mensaje normal que falla por red sí se queda. Sobre `TAiOpenChat` real con URL a puerto cerrado y `TFakePromptGuard` |
+| A2A en el formulario (oct 24/2026) | `a2a.agenttool.register-once`: `TAiA2AAgentTool.RegisterTool` reutiliza la función que ya está en el `TAiFunctions` con el mismo nombre (la que el IDE guardó en el .fmx al asignar `Functions` en el Object Inspector) en vez de registrar una segunda |
 | Telemetría: hilos (oct 24/2026) | `telemetry.task-inherits-trace`: un span creado dentro de un `TTask` sin contexto arranca una traza nueva; con `AiTraceContextEnter(traceparent del padre)` cuelga de la traza del padre (es lo que hace `TAiChat` al despachar tool calls y la continuación del tool-calling en tareas). Con un `TAiTelemetry` real apuntando a un puerto cerrado |
 | Sanitizador en español (oct 23/2026) | `chat.sanitizer.spanish`: las fórmulas de inyección en español (ignora tus instrucciones, olvida todo lo anterior, haz caso omiso, a partir de ahora eres un, nuevas instrucciones:, prompt de sistema, borra todos los archivos) se detectan como en inglés, y 8 preguntas normales de un cliente en español pasan (falla sin el fix) |
 | Guardrail de entrada | `ChatTools.PromptGuard` sobre un `TAiOpenChat` real (URL a puerto cerrado, SmartDispatch a una tool falsa): bloquea sin tocar la red, permite, `OnPromptGuard` anula el bloqueo, guard caído con `BlockOnError` cerrado/abierto; `TAiJevPromptGuard` prioriza seguridad sobre `out_of_scope` y solo pregunta el alcance con `Scope` |

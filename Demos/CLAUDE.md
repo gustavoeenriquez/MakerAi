@@ -163,6 +163,17 @@ Un proyecto por capítulo, en `Demos/Libro/capNN-tema/`. La app FMX `LaderaApp` 
 | cap12-herramientas-sistema | 12 | Web, `TAiTextEditorTool` confinado, `TAiShell` con lista permitida |
 | cap13-conocimiento | 13 | Manual en `TAiRAGVector` + SQLite, `TAiJevRAGReranker`, VQL; `buscar_en_el_manual`; consola `ConocimientoLadera` |
 | cap14-grafos | 14 | `TAiRagGraph` + `TAiRagGraphBuilder` desde `grafo\tripletas.json`, MakerGQL; consola `GrafosLadera --extraer` |
+| cap15-memoria | 15 | `TAiMemory` (Namespace por cliente, `Analizador` gpt-6-luna), `PersistentMemory`; Nueva = `AnalyzeNow` |
+| cap16-mcp | 16 | Item `bodega` en `AiFunctions1.MCPClients` (stdio); `BodegaLadera.exe --servidor` (= demo 100) compilado en la misma carpeta |
+| cap17-skills | 17 | `TAiSkills` con `skills\` (use_skill / read_skill_file como pasos) |
+| cap19-primer-agente | 19 | Grafo `Reclamos`: `Atencion` y `Revisor` (`TLLMNode`) en el .fmx; `atender_reclamo` |
+| cap20-flujo | 20 | Grafo `Pedidos` de 9 nodos + 9 links + `Redactor`, armado entero en el .fmx; `procesar_pedido` |
+| cap21-aprobacion | 21 | `Aprobacion: TAiWaitApprovalTool`, `TAiFileCheckpointer` en `Documentos\CafeLaLadera\checkpoints`, reanudación desde el chat (otra sesión incluida) |
+| cap22-reglas | 22 | `Guardia: TAiGuardrails` sobre `AiFunctions1` y `Atencion` (anular_* bloqueado, descuento ≤ 15 %); evals en la consola 104 |
+| cap23-observabilidad | 23 | `Telemetria: TAiTelemetry` → Jaeger (una traza por turno) |
+| cap24-recepcion | 24 | `Jev: TAiJev` con `Questions` en el .fmx: Reclamos directo al agente, Persona sin modelo |
+| cap25-entre-agentes | 25 | `BodegaLadera.exe --a2a` publica la bodega como agente A2A (`TAiA2AServer`, :8301, con estado: reservas); `BodegaAgente: TAiA2AAgentTool` en el .fmx (`apartar_en_bodega`); la app arranca el agente si no hay nadie en el puerto |
+| cap26-federacion | 26 | `Inventario.Tool = BodegaRemota` (`TAiA2ARemoteAgentTool`): el nodo lo ejecuta la bodega; `PedidosServer: TAiA2AServer` (:8302) publica el flujo entero (no bloqueante, `INPUT_REQUIRED` + reanudación por `taskId` desde curl); `/esperar N` en `--prueba` |
 
 Los proyectos se generan con scripts `_crear_*.py` que se borran después; los `.pas/.fmx/.dpr` van en UTF-8 con BOM y CRLF. Requieren `OPENAI_API_KEY` (cap 8+ también `TYPESAFE_API_KEY`). El manuscrito vive fuera del repo (`D:\Documentos\LibroIA\manuscript-v4`).
 

@@ -163,6 +163,9 @@ type
       FunctionName: String; ToolCall: TAiToolsFunction; var Handled: Boolean);
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
+    // Al cargar desde el .fmx Functions llega antes que ToolName y Description:
+    // la funcion se registra una vez, con todas las propiedades ya leidas.
+    procedure Loaded; override;
   public
     constructor Create(AOwner: TComponent); override;
     // Registra la funcion en el TAiFunctions asignado. Se llama solo al
@@ -195,7 +198,7 @@ uses System.Math, System.StrUtils, uMakerAi.Telemetry, uMakerAi.Agents.EngineReg
 
 procedure Register;
 begin
-  RegisterComponents('MakerAI', [TAiA2AClient, TAiA2AAgentTool]);
+  RegisterComponents('MakerAI', [TAiA2AClient, TAiA2AAgentTool, TAiA2ARemoteAgentTool]);
 end;
 
 function A2AParseState(const AValue: string): TAiA2ATaskState;
@@ -735,16 +738,33 @@ begin
   if Assigned(FFunctions) then
   begin
     FFunctions.FreeNotification(Self);
-    RegisterTool;
+    if not (csLoading in ComponentState) then
+      RegisterTool;
   end;
+end;
+
+procedure TAiA2AAgentTool.Loaded;
+begin
+  inherited;
+  RegisterTool;
 end;
 
 procedure TAiA2AAgentTool.RegisterTool;
 var
   Param: TFunctionParamsItem;
+  I: Integer;
 begin
   if not Assigned(FFunctions) then
     Exit;
+  // Con Functions asignado en el Object Inspector la funcion ya queda guardada en el
+  // .fmx dentro del TAiFunctions: al cargar hay que reutilizarla, no agregar otra igual
+  if not Assigned(FItem) and (FToolName <> '') then
+    for I := 0 to FFunctions.Functions.Count - 1 do
+      if SameText(FFunctions.Functions.Items[I].FunctionName, FToolName) then
+      begin
+        FItem := FFunctions.Functions.Items[I];
+        Break;
+      end;
   if not Assigned(FItem) then
     FItem := FFunctions.Functions.Add;
 
