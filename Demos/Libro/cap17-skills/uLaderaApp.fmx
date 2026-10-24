@@ -1,0 +1,370 @@
+﻿object FormLadera: TFormLadera
+  Left = 0
+  Top = 0
+  Caption = 'Caf'#233' La Ladera '#183' cap'#237'tulo 17'
+  ClientHeight = 720
+  ClientWidth = 960
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  OnCloseQuery = FormCloseQuery
+  DesignerMasterStyle = 0
+  object LayoutTop: TLayout
+    Align = Top
+    Padding.Left = 8.000000000000000000
+    Padding.Top = 6.000000000000000000
+    Padding.Right = 8.000000000000000000
+    Padding.Bottom = 6.000000000000000000
+    Size.Width = 960.000000000000000000
+    Size.Height = 44.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object ComboDriver: TComboBox
+      Align = Left
+      Position.X = 8.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 130.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      OnChange = ComboDriverChange
+    end
+    object btnNueva: TButton
+      Align = Left
+      Margins.Left = 8.000000000000000000
+      Position.X = 146.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 90.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Text = 'Nueva'
+      OnClick = btnNuevaClick
+    end
+    object btnGuardar: TButton
+      Align = Left
+      Margins.Left = 8.000000000000000000
+      Position.X = 244.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 90.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      Text = 'Guardar'
+      OnClick = btnGuardarClick
+    end
+    object btnAbrir: TButton
+      Align = Left
+      Margins.Left = 8.000000000000000000
+      Position.X = 342.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 90.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+      Text = 'Abrir'
+      OnClick = btnAbrirClick
+    end
+    object lblCliente: TLabel
+      Align = Left
+      Margins.Left = 16.000000000000000000
+      Position.X = 448.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 54.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Cliente:'
+      TabOrder = 5
+    end
+    object edCliente: TEdit
+      Align = Left
+      Position.X = 502.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 110.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 6
+      Text = 'Marta'
+    end
+    object lblEstado: TLabel
+      Align = Client
+      Margins.Left = 16.000000000000000000
+      Size.Width = 512.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Listo'
+      TabOrder = 4
+    end
+  end
+  object ChatView1: TAIChatView
+    Align = Client
+    Size.Width = 960.000000000000000000
+    Size.Height = 566.000000000000000000
+    Size.PlatformDefault = False
+  end
+  object ChatInput1: TAIChatInput
+    Align = Bottom
+    Position.Y = 610.000000000000000000
+    Size.Width = 960.000000000000000000
+    Size.Height = 110.000000000000000000
+    Size.PlatformDefault = False
+    EnterAsSend = True
+    MicVisible = True
+    ValidExtensions = 'jpg,jpeg,png,webp,pdf,wav,mp3,m4a'
+    VoiceMonitor = AIVoiceMonitor1
+    OnSendEvent = ChatInput1SendEvent
+    OnCancel = ChatInput1Cancel
+    OnMicToggle = ChatInput1MicToggle
+  end
+  object AiConn: TAiChatConnection
+    DriverName = 'OpenAi'
+    Model = 'gpt-6-sol'
+    Params.Strings = (
+      'ApiKey=@OPENAI_API_KEY'
+      'Asynchronous=True')
+    SystemPrompt.Strings = (
+      'Eres Luc'#237'a, la barista virtual de Caf'#233' La Ladera, una tienda de caf'#233' de especialidad colombiano.'
+      'Carta (bolsa de 340 g): Huila Reserva 38.000 COP (panela, frutos rojos); Nari'#241'o Altura 42.000 COP (c'#237'tricos, caramelo); Sierra Nevada Org'#225'nico 36.000 COP (chocolate amargo, nuez); Descafeinado Suave 34.000 COP (cacao suave).'
+      'Tienes herramientas: consultar_inventario y calcular_total (la tienda, bolsas de 340 g); las de la bodega (prefijo bodega_) para existencias en kilos y precios mayoristas de ventas a hoteles y restaurantes; buscar_en_el_manual para env'#237'os y tarifas, molienda, Club La Ladera, cambios y devoluciones, tosti'#243'n y atenci'#243'n al cliente; que_sabemos_de para lo que la tienda sabe de un cliente o de un caf'#233' (gustos, compras, notas, acidez) y cafes_por_acidez para buscar caf'#233's por su acidez; b'#250'squeda web, un editor de archivos y la consola cmd.exe de Windows en la carpeta de trabajo. Adem'#225's tienes skills (procedimientos de la tienda): mira el cat'#225'logo y carga con use_skill el que corresponda antes de cotizar al por mayor, contestar un reclamo o escribir una ficha de cata; sigue sus instrucciones al pie de la letra. '#218'salas en vez de adivinar y responde con lo que devuelven. Si te mandan una foto o un PDF, descr'#237'belos.'
+      'Si el mensaje trae un bloque "Contexto de memoria", son cosas que el cliente te cont'#243' en visitas anteriores: '#250'salas con naturalidad, sin repetirlas como una lista.'
+      'Reglas: responde en espa'#241'ol, c'#225'lido y breve. Usa Markdown: negritas y listas cuando ayuden. Solo hablas de caf'#233' y de la tienda; si te preguntan otra cosa, vuelve con amabilidad al caf'#233'. No inventes productos ni precios fuera de la carta.')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    OnReceiveThinking = AiConnReceiveThinking
+    OnReceiveData = AiConnReceiveData
+    OnReceiveDataEnd = AiConnReceiveDataEnd
+    OnError = AiConnError
+    SanitizerActive = True
+    OnSanitize = AiConnSanitize
+    OnPromptGuard = AiConnPromptGuard
+    AiFunctions = AiFunctions1
+    PersistentMemory = Memoria
+    MemoryTokenBudget = 400
+    ChatTools.SpeechTool = SpeechTool
+    ChatTools.ShellTool = Shell
+    ChatTools.TextEditorTool = Editor
+    ChatTools.PromptGuard = JevGuard
+    Left = 840
+    Top = 64
+  end
+  object JevGuard: TAiJevPromptGuard
+    Scope = 'the operations assistant of a Colombian coffee shop: coffees, orders, prices, deliveries, store policies (shipping, grinding, subscription club, returns, roasting, customer service hours), customers and their tastes, supplier invoices, inventory, coffee market prices on the web, and file and console tasks in its work folder'
+    Left = 736
+    Top = 64
+  end
+  object SpeechTool: TAiOpenAiSpeechTool
+    TranscriptionLanguage = 'es'
+    Left = 632
+    Top = 64
+  end
+  object AiFunctions1: TAiFunctions
+    MCPClients = <
+      item
+        Enabled = True
+        Name = 'bodega'
+        TransportType = tpStdIo
+        Params.Strings = (
+          'Command=BodegaLadera.exe'
+          'Arguments=--servidor')
+      end>
+    OnLog = AiFunctions1Log
+    Functions = <
+      item
+        FunctionName = 'consultar_inventario'
+        OnAction = FnConsultarInventario
+        Description.Strings = (
+          'Cu'#225'ntas bolsas de 340 g hay disponibles de un caf'#233' de la carta.')
+        Parameters = <
+          item
+            Name = 'cafe'
+            ParamType = ptString
+            Description.Strings = (
+              'Nombre del caf'#233' tal como est'#225' en la carta (Huila Reserva, Nari'#241'o Altura, Sierra Nevada Org'#225'nico, Descafeinado Suave).')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'calcular_total'
+        OnAction = FnCalcularTotal
+        Description.Strings = (
+          'Cotiza un pedido de un caf'#233': precio por las bolsas m'#225's el env'#237'o a la ciudad. Devuelve subtotal, env'#237'o y total en COP.')
+        Parameters = <
+          item
+            Name = 'cafe'
+            ParamType = ptString
+            Description.Strings = (
+              'Nombre del caf'#233' tal como est'#225' en la carta.')
+            Required = True
+          end
+          item
+            Name = 'bolsas'
+            ParamType = ptInteger
+            Description.Strings = (
+              'N'#250'mero de bolsas de 340 g.')
+            Required = True
+          end
+          item
+            Name = 'ciudad'
+            ParamType = ptString
+            Description.Strings = (
+              'Ciudad de entrega en Colombia.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'buscar_en_el_manual'
+        OnAction = FnBuscarManual
+        Description.Strings = (
+          'Busca en el manual de la tienda: env'#237'os y tarifas, molienda, Club La Ladera (suscripci'#243'n), cambios y devoluciones, tosti'#243'n y frescura, horarios de atenci'#243'n. Devuelve los pasajes relevantes.')
+        Parameters = <
+          item
+            Name = 'pregunta'
+            ParamType = ptString
+            Description.Strings = (
+              'La pregunta del cliente, tal como la hizo.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'que_sabemos_de'
+        OnAction = FnQueSabemosDe
+        Description.Strings = (
+          'Lo que la tienda sabe de un cliente o de un caf'#233': gustos, compras, qu'#233' le gust'#243' y qu'#233' no, c'#243'mo prepara el caf'#233', notas de sabor, acidez. Devuelve hechos del grafo de conocimiento.')
+        Parameters = <
+          item
+            Name = 'nombre'
+            ParamType = ptString
+            Description.Strings = (
+              'Nombre del cliente o del caf'#233' (por ejemplo Marta, Huila Reserva).')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'cafes_por_acidez'
+        OnAction = FnCafesPorAcidez
+        Description.Strings = (
+          'Lista los caf'#233's de la carta que tienen un nivel de acidez dado.')
+        Parameters = <
+          item
+            Name = 'nivel'
+            ParamType = ptString
+            Description.Strings = (
+              'Nivel de acidez: Baja, Alta o Brillante.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end>
+    Left = 424
+    Top = 64
+  end
+  object Shell: TAiShell
+    SecurityMode = ssmAllowList
+    SecurityList.Strings = (
+      'dir'
+      'type'
+      'findstr'
+      'find'
+      'more'
+      'sort'
+      'echo'
+      'cd')
+    OnConsoleLog = ShellConsoleLog
+    OnSecurityViolation = ShellSecurityViolation
+    Left = 320
+    Top = 64
+  end
+  object Editor: TAiTextEditorTool
+    OnBeforeCommand = EditorBeforeCommand
+    Left = 216
+    Top = 64
+  end
+  object AIVoiceMonitor1: TAIVoiceMonitor
+    SensitivityMultiplier = 4.000000000000000000
+    StopSensitivityMultiplier = 2.000000000000000000
+    FragmentSplitRatio = 0.350000000000000000
+    Left = 528
+    Top = 64
+  end
+  object Embeddings: TAiOpenAiEmbeddings
+    Model = 'text-embedding-3-small'
+    Left = 112
+    Top = 128
+  end
+  object FDConn: TFDConnection
+    Params.Strings = (
+      'DriverID=SQLite'
+      'LockingMode=Normal')
+    LoginPrompt = False
+    Left = 216
+    Top = 128
+  end
+  object FDWait: TFDGUIxWaitCursor
+    Provider = 'FMX'
+    Left = 216
+    Top = 192
+  end
+  object RAGDriver: TAiRAGVectorSQLiteDriver
+    Connection = FDConn
+    TableName = 'manual'
+    Left = 320
+    Top = 128
+  end
+  object RAG: TAiRAGVector
+    Left = 424
+    Top = 128
+  end
+  object Reranker: TAiJevRAGReranker
+    Left = 528
+    Top = 128
+  end
+  object Grafo: TAiRagGraph
+    Left = 632
+    Top = 128
+  end
+  object Builder: TAiRagGraphBuilder
+    Graph = Grafo
+    Left = 736
+    Top = 128
+  end
+  object Memoria: TAiMemory
+    Analyzer = Analizador
+    AnalysisInterval = 0
+    Namespace = 'cliente'
+    Embedder = Embeddings
+    Left = 840
+    Top = 128
+  end
+  object Analizador: TAiChatConnection
+    DriverName = 'OpenAi'
+    Model = 'gpt-6-luna'
+    Params.Strings = (
+      'ApiKey=@OPENAI_API_KEY'
+      'Asynchronous=False')
+    Left = 944
+    Top = 128
+  end
+  object Skills: TAiSkills
+    Functions = AiFunctions1
+    OnSkillLoaded = SkillsSkillLoaded
+    Left = 112
+    Top = 192
+  end
+end
