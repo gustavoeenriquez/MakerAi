@@ -1,0 +1,85 @@
+﻿object FormPrimerChat: TFormPrimerChat
+  Left = 0
+  Top = 0
+  Caption = 'Cap'#237'tulo 3 '#183' Caf'#233' La Ladera: el primer chat con Luc'#237'a'
+  ClientHeight = 520
+  ClientWidth = 760
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  DesignerMasterStyle = 0
+  object LayoutRaiz: TLayout
+    Align = Client
+    Padding.Left = 10.000000000000000000
+    Padding.Top = 10.000000000000000000
+    Padding.Right = 10.000000000000000000
+    Padding.Bottom = 10.000000000000000000
+    Size.Width = 760.000000000000000000
+    Size.Height = 520.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object MemoChat: TMemo
+      Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+      DataDetectorTypes = []
+      ReadOnly = True
+      TextSettings.WordWrap = True
+      Align = Client
+      Margins.Bottom = 8.000000000000000000
+      Size.Width = 740.000000000000000000
+      Size.Height = 448.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      Viewport.Width = 736.000000000000000000
+      Viewport.Height = 444.000000000000000000
+    end
+    object LayoutAbajo: TLayout
+      Align = Bottom
+      Position.X = 10.000000000000000000
+      Position.Y = 466.000000000000000000
+      Size.Width = 740.000000000000000000
+      Size.Height = 44.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      object EditPregunta: TEdit
+        Touch.InteractiveGestures = [LongTap, DoubleTap]
+        Align = Client
+        Margins.Right = 8.000000000000000000
+        TabOrder = 0
+        TextPrompt = 'Escribe tu pregunta y pulsa Enter'
+        Size.Width = 622.000000000000000000
+        Size.Height = 44.000000000000000000
+        Size.PlatformDefault = False
+        OnKeyDown = EditPreguntaKeyDown
+      end
+      object btnEnviar: TButton
+        Align = Right
+        Position.X = 630.000000000000000000
+        Size.Width = 110.000000000000000000
+        Size.Height = 44.000000000000000000
+        Size.PlatformDefault = False
+        TabOrder = 1
+        Text = 'Enviar'
+        OnClick = btnEnviarClick
+      end
+    end
+  end
+  object AiConn: TAiChatConnection
+    DriverName = 'OpenAi'
+    Model = 'gpt-6-sol'
+    Params.Strings = (
+      'ApiKey=@OPENAI_API_KEY'
+      'Asynchronous=False')
+    SystemPrompt.Strings = (
+      'Eres Luc'#237'a, la barista virtual de Caf'#233' La Ladera, una tienda de caf'#233' de especialidad colombiano.'
+      'Carta (bolsa de 340 g): Huila Reserva 38.000 COP (panela, frutos rojos); Nari'#241'o Altura 42.000 COP (c'#237'tricos, caramelo); Sierra Nevada Org'#225'nico 36.000 COP (chocolate amargo, nuez); Descafeinado Suave 34.000 COP (cacao suave).'
+      'Reglas: responde en espa'#241'ol, c'#225'lido y breve (m'#225'ximo 4 l'#237'neas). Solo hablas de caf'#233' y de la tienda; si te preguntan otra cosa, vuelve con amabilidad al caf'#233'. No inventes productos ni precios fuera de la carta.')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    Left = 648
+    Top = 24
+  end
+end

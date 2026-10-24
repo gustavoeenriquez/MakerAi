@@ -145,6 +145,27 @@ Consolas con asserts automáticos que reproducen un issue concreto contra APIs r
 | 090-Varios/Dalle_Generate | Generación de imágenes (hoy `gpt-image-1`; DALL-E fue retirado) |
 | 090-Varios/VoiceMonitorAndWhisperDemo | `TAiVoiceMonitor` + transcripción con Whisper |
 
+### Libro "IA con Delphi", edición MakerAI 4.0 (`Demos/Libro/`)
+
+Un proyecto por capítulo, en `Demos/Libro/capNN-tema/`. La app FMX `LaderaApp` (Café La Ladera, Lucía) **crece de capítulo en capítulo** sobre `TAIChatView`/`TAIChatInput`: cada carpeta es la etapa completa de ese capítulo, no un diff. Casi todas traen además una consola con lo mismo "desde código". Todas aceptan `--prueba "pregunta" "@archivo|pregunta" /nueva --captura x.png --registro t.txt` (corridas sin teclado; las capturas y cifras del libro salen de ahí). Las apps hacen `SetCurrentDir` a `Documentos\CafeLaLadera\trabajo`: rutas de `--captura`/`--registro` absolutas.
+
+| Carpeta | Capítulo | Qué agrega |
+|---|---|---|
+| cap03-primer-chat | 3 | Primer chat: consola `PrimerChat` y FMX `PrimerChatForm` |
+| cap04-conversacion | 4 | Historial, streaming asíncrono |
+| cap05-prompts | 5 | `TAiPrompts`, prompt de sistema de Lucía (consola) |
+| cap06-proveedores | 6 | Mismo chat con varios drivers, `ModelCaps` por driver (consola) |
+| cap07-chat-en-pantalla | 7 | Primera etapa de `LaderaApp`: vista, entrada, Nueva/Guardar/Abrir |
+| cap08-filtro | 8 | Sanitizador + `TAiJevPromptGuard` (`Scope`); consola `FiltroLadera` |
+| cap09-sentidos | 9 | Imagen, nota de voz (`SpeechTool`, `VoiceMonitor`), `SessionCaps` |
+| cap10-documentos | 10 | PDF nativo; consola `DocumentosLadera` (OpenAI/Claude/Groq) |
+| cap11-herramientas | 11 | `TAiFunctions` con inventario y total; consola `FuncionesLadera` |
+| cap12-herramientas-sistema | 12 | Web, `TAiTextEditorTool` confinado, `TAiShell` con lista permitida |
+| cap13-conocimiento | 13 | Manual en `TAiRAGVector` + SQLite, `TAiJevRAGReranker`, VQL; `buscar_en_el_manual`; consola `ConocimientoLadera` |
+| cap14-grafos | 14 | `TAiRagGraph` + `TAiRagGraphBuilder` desde `grafo\tripletas.json`, MakerGQL; consola `GrafosLadera --extraer` |
+
+Los proyectos se generan con scripts `_crear_*.py` que se borran después; los `.pas/.fmx/.dpr` van en UTF-8 con BOM y CRLF. Requieren `OPENAI_API_KEY` (cap 8+ también `TYPESAFE_API_KEY`). El manuscrito vive fuera del repo (`D:\Documentos\LibroIA\manuscript-v4`).
+
 ## Common Runtime Dependencies
 
 - **Ollama**: Required for local models (default: `localhost:11434`)

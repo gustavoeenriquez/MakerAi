@@ -1,0 +1,119 @@
+﻿object FormLadera: TFormLadera
+  Left = 0
+  Top = 0
+  Caption = 'Caf'#233' La Ladera '#183' cap'#237'tulo 7'
+  ClientHeight = 720
+  ClientWidth = 960
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  OnCloseQuery = FormCloseQuery
+  DesignerMasterStyle = 0
+  object LayoutTop: TLayout
+    Align = Top
+    Padding.Left = 8.000000000000000000
+    Padding.Top = 6.000000000000000000
+    Padding.Right = 8.000000000000000000
+    Padding.Bottom = 6.000000000000000000
+    Size.Width = 960.000000000000000000
+    Size.Height = 44.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object ComboDriver: TComboBox
+      Align = Left
+      Position.X = 8.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 130.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      OnChange = ComboDriverChange
+    end
+    object btnNueva: TButton
+      Align = Left
+      Margins.Left = 8.000000000000000000
+      Position.X = 146.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 90.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Text = 'Nueva'
+      OnClick = btnNuevaClick
+    end
+    object btnGuardar: TButton
+      Align = Left
+      Margins.Left = 8.000000000000000000
+      Position.X = 244.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 90.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      Text = 'Guardar'
+      OnClick = btnGuardarClick
+    end
+    object btnAbrir: TButton
+      Align = Left
+      Margins.Left = 8.000000000000000000
+      Position.X = 342.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 90.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+      Text = 'Abrir'
+      OnClick = btnAbrirClick
+    end
+    object lblEstado: TLabel
+      Align = Client
+      Margins.Left = 16.000000000000000000
+      Size.Width = 512.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Listo'
+      TabOrder = 4
+    end
+  end
+  object ChatView1: TAIChatView
+    Align = Client
+    Size.Width = 960.000000000000000000
+    Size.Height = 566.000000000000000000
+    Size.PlatformDefault = False
+  end
+  object ChatInput1: TAIChatInput
+    Align = Bottom
+    Position.Y = 610.000000000000000000
+    Size.Width = 960.000000000000000000
+    Size.Height = 110.000000000000000000
+    Size.PlatformDefault = False
+    EnterAsSend = True
+    ImagesVisible = False
+    SoundVisible = False
+    OnSendEvent = ChatInput1SendEvent
+    OnCancel = ChatInput1Cancel
+  end
+  object AiConn: TAiChatConnection
+    DriverName = 'OpenAi'
+    Model = 'gpt-6-sol'
+    Params.Strings = (
+      'ApiKey=@OPENAI_API_KEY'
+      'Asynchronous=True')
+    SystemPrompt.Strings = (
+      'Eres Luc'#237'a, la barista virtual de Caf'#233' La Ladera, una tienda de caf'#233' de especialidad colombiano.'
+      'Carta (bolsa de 340 g): Huila Reserva 38.000 COP (panela, frutos rojos); Nari'#241'o Altura 42.000 COP (c'#237'tricos, caramelo); Sierra Nevada Org'#225'nico 36.000 COP (chocolate amargo, nuez); Descafeinado Suave 34.000 COP (cacao suave).'
+      'Reglas: responde en espa'#241'ol, c'#225'lido y breve (m'#225'ximo 4 l'#237'neas). Usa Markdown: negritas y listas cuando ayuden. Solo hablas de caf'#233' y de la tienda; si te preguntan otra cosa, vuelve con amabilidad al caf'#233'. No inventes productos ni precios fuera de la carta.')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    OnReceiveThinking = AiConnReceiveThinking
+    OnReceiveData = AiConnReceiveData
+    OnReceiveDataEnd = AiConnReceiveDataEnd
+    OnError = AiConnError
+    Left = 840
+    Top = 64
+  end
+end
