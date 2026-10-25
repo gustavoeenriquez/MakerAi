@@ -182,6 +182,14 @@ con adjuntos va siempre aparte. Los indices siguen valiendo
 solo el ultimo tramo: `TAIChatMessage.MergeBase` guarda el texto anterior
 (no se serializa). `LoadFromJSON` no une nada.
 
+**Adjuntos en mensajes del asistente** (oct 25/2026): `AddAssistantMessage(AText,
+AMediaFiles)` muestra una imagen generada, un audio o un archivo producido por
+una herramienta en una burbuja propia del asistente (misma mecanica que
+`AddUserMessage`: `TAIChatAttachment` por archivo, bytes precargados, y nunca se
+une a la burbuja anterior). `AddBubble(..., AInbound = False)` con adjuntos
+antes los ignoraba; ahora pasa por el mismo camino. Encontrado con la app del
+capitulo 31 del libro (`crear_imagen` / `crear_video`).
+
 **Llamada de voz en `TAIChatInput`**: `CallVisible` pinta un telefono a la
 izquierda del microfono (o de enviar). Clic → `OnCallToggle(Sender,
 AActivate)` y el estado pasa a `csConnecting` (colgar = `csOff` al

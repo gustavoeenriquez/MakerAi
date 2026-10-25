@@ -162,6 +162,7 @@ type
     procedure DoCopyConversation;
     procedure DoClipboardSet(const AText: string);
 
+    procedure AttachMediaFiles(AMsg: TAIChatMessage; AMediaFiles: TAiMediaFiles);
   protected
     procedure Draw(const ACanvas: ISkCanvas; const ADest: TRectF;
                    const AOpacity: Single); override;
@@ -231,6 +232,9 @@ type
     // For streaming assistant turns, call FinishMessage(Bubble.MsgIndex) when done.
     function  AddBubble(const AText: string; const AUserName: string;
                 AMediaFiles: TAiMediaFiles; AInbound: Boolean = True): TAIChatBubble;
+    // Assistant message with attachments (generated images, audio, files) in its own bubble.
+    function  AddAssistantMessage(const AText: string;
+                AMediaFiles: TAiMediaFiles): TAIChatMessage;
     procedure Clear;  // alias for ClearMessages
 
     property VirtualList  : TAIChatVirtualList read FList;
@@ -1311,16 +1315,34 @@ end;
 
 function TAIChatView.AddUserMessage(const AText: string;
   AMediaFiles: TAiMediaFiles): TAIChatMessage;
-var
-  I  : Integer;
-  F  : TAiMediaFile;
-  Att: TAIChatAttachment;
 begin
   // Con adjuntos va siempre en burbuja propia: los adjuntos son de la burbuja
   if Assigned(AMediaFiles) and (AMediaFiles.Count > 0) then
     Result := FList.AddMessage(TChatRole.crUser, AText)
   else
     Result := AddMessage(TChatRole.crUser, AText);
+  AttachMediaFiles(Result, AMediaFiles);
+end;
+
+function TAIChatView.AddAssistantMessage(const AText: string;
+  AMediaFiles: TAiMediaFiles): TAIChatMessage;
+begin
+  // Igual que AddUserMessage pero del asistente: una imagen generada, un audio,
+  // un archivo producido por una herramienta. Con adjuntos nunca se fusiona con
+  // la burbuja anterior (MergeConsecutive): los adjuntos son de SU burbuja.
+  if Assigned(AMediaFiles) and (AMediaFiles.Count > 0) then
+    Result := FList.AddMessage(TChatRole.crAssistant, AText)
+  else
+    Result := AddMessage(TChatRole.crAssistant, AText);
+  AttachMediaFiles(Result, AMediaFiles);
+end;
+
+procedure TAIChatView.AttachMediaFiles(AMsg: TAIChatMessage; AMediaFiles: TAiMediaFiles);
+var
+  I  : Integer;
+  F  : TAiMediaFile;
+  Att: TAIChatAttachment;
+begin
   if Assigned(AMediaFiles) and (AMediaFiles.Count > 0) then
   begin
     for I := 0 to AMediaFiles.Count - 1 do
@@ -1328,7 +1350,7 @@ begin
       F   := AMediaFiles[I];
       Att := TAIChatAttachment.Create(F.FullFileName);
       Att.MimeType := F.MimeType;
-      Result.Attachments.Add(Att);
+      AMsg.Attachments.Add(Att);
       // Preload into painter's image cache NOW while the temp file still exists.
       // Also read raw bytes so the attachment can be serialized inline (base64)
       // when PersistAttachments=True — the temp file will be deleted after OnSend.
@@ -1565,6 +1587,8 @@ begin
     // Empty text → streaming assistant message
     if AText = '' then
       BeginAssistantMessage
+    else if Assigned(AMediaFiles) and (AMediaFiles.Count > 0) then
+      AddAssistantMessage(AText, AMediaFiles)   // antes se ignoraban los adjuntos del asistente
     else
       AddMessage(TChatRole.crAssistant, AText);
   end;
