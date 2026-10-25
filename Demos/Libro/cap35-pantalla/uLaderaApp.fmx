@@ -1,0 +1,976 @@
+﻿object FormLadera: TFormLadera
+  Left = 0
+  Top = 0
+  Caption = 'Caf'#233' La Ladera '#183' cap'#237'tulo 35'
+  ClientHeight = 720
+  ClientWidth = 960
+  Position = ScreenCenter
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  OnCloseQuery = FormCloseQuery
+  DesignerMasterStyle = 0
+  object LayoutTop: TLayout
+    Align = Top
+    Padding.Left = 8.000000000000000000
+    Padding.Top = 6.000000000000000000
+    Padding.Right = 8.000000000000000000
+    Padding.Bottom = 6.000000000000000000
+    Size.Width = 960.000000000000000000
+    Size.Height = 44.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 0
+    object ComboDriver: TComboBox
+      Align = Left
+      Position.X = 8.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 130.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 0
+      OnChange = ComboDriverChange
+    end
+    object btnNueva: TButton
+      Align = Left
+      Margins.Left = 8.000000000000000000
+      Position.X = 146.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 90.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      Text = 'Nueva'
+      OnClick = btnNuevaClick
+    end
+    object btnGuardar: TButton
+      Align = Left
+      Margins.Left = 8.000000000000000000
+      Position.X = 244.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 90.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 2
+      Text = 'Guardar'
+      OnClick = btnGuardarClick
+    end
+    object btnAbrir: TButton
+      Align = Left
+      Margins.Left = 8.000000000000000000
+      Position.X = 342.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 90.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 3
+      Text = 'Abrir'
+      OnClick = btnAbrirClick
+    end
+    object lblCliente: TLabel
+      Align = Left
+      Margins.Left = 16.000000000000000000
+      Position.X = 448.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 54.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Cliente:'
+      TabOrder = 5
+    end
+    object edCliente: TEdit
+      Align = Left
+      Position.X = 502.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 110.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 6
+      Text = 'Marta'
+    end
+    object btnLlamar: TButton
+      Align = Left
+      Margins.Left = 8.000000000000000000
+      Position.X = 620.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 100.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 7
+      Text = #55357#56542' Llamar'
+      OnClick = btnLlamarClick
+    end
+    object btnRecorte: TButton
+      Align = Left
+      Margins.Left = 8.000000000000000000
+      Position.X = 728.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 100.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 10
+      Text = #9986' Recorte'
+      OnClick = btnRecorteClick
+    end
+    object lblSesion: TLabel
+      Align = Right
+      Margins.Left = 8.000000000000000000
+      Position.X = 652.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 300.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TextSettings.HorzAlign = Trailing
+      Text = 'sesi'#243'n: 0 tokens'
+      TabOrder = 8
+    end
+    object lblEstado: TLabel
+      Align = Client
+      Margins.Left = 16.000000000000000000
+      Size.Width = 512.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      Text = 'Listo'
+      TabOrder = 4
+    end
+  end
+  object ChatView1: TAIChatView
+    Align = Client
+    Size.Width = 960.000000000000000000
+    Size.Height = 566.000000000000000000
+    Size.PlatformDefault = False
+  end
+  object ChatInput1: TAIChatInput
+    Align = Bottom
+    Position.Y = 610.000000000000000000
+    Size.Width = 960.000000000000000000
+    Size.Height = 110.000000000000000000
+    Size.PlatformDefault = False
+    EnterAsSend = True
+    MicVisible = True
+    ValidExtensions = 'jpg,jpeg,png,webp,pdf,wav,mp3,m4a'
+    VoiceMonitor = AIVoiceMonitor1
+    OnSendEvent = ChatInput1SendEvent
+    OnCancel = ChatInput1Cancel
+    OnMicToggle = ChatInput1MicToggle
+  end
+  object AiConn: TAiChatConnection
+    DriverName = 'OpenAi'
+    Model = 'gpt-6-sol'
+    Params.Strings = (
+      'ApiKey=@OPENAI_API_KEY'
+      'Asynchronous=True')
+    SystemPrompt.Strings = (
+      'Eres Luc'#237'a, la barista virtual de Caf'#233' La Ladera, una tienda de caf'#233' de especialidad colombiano.'
+      'Carta (bolsa de 340 g): Huila Reserva 38.000 COP (panela, frutos rojos); Nari'#241'o Altura 42.000 COP (c'#237'tricos, caramelo); Sierra Nevada Org'#225'nico 36.000 COP (chocolate amargo, nuez); Descafeinado Suave 34.000 COP (cacao suave).'
+      'Tienes herramientas: consultar_inventario y calcular_total (la tienda, bolsas de 340 g; calcular_total es solo para cotizar sin confirmar); procesar_pedido(items, ciudad) para registrar o confirmar un pedido de bolsas (items como ''cantidad nombre, cantidad nombre''): devuelve el mensaje final para el cliente, entr'#233'galo tal cual; aplicar_descuento y anular_pedido cuando el encargado lo pida; las de la bodega (prefijo bodega_) para existencias en kilos y precios mayoristas de ventas a hoteles y restaurantes; buscar_en_el_manual para env'#237'os y tarifas, molienda, Club La Ladera, cambios y devoluciones, tosti'#243'n y atenci'#243'n al cliente; que_sabemos_de para lo que la tienda sabe de un cliente o de un caf'#233' (gustos, compras, notas, acidez) y cafes_por_acidez para buscar caf'#233's por su acidez; b'#250'squeda web, un editor de archivos y la consola cmd.exe de Windows en la carpeta de trabajo. Adem'#225's tienes skills (procedimientos de la tienda): mira el cat'#225'logo y carga con use_skill el que corresponda antes de cotizar al por mayor o escribir una ficha de cata. Si un cliente reclama por un pedido (lleg'#243' mal, equivocado o no lleg'#243'), NO lo contestes t'#250': llama atender_reclamo con el mensaje completo del cliente y entrega su respuesta tal cual, sin agregar nada. '#218'salas en vez de adivinar y responde con lo que devuelven; si una herramienta se bloquea, explica el l'#237'mite sin inventar que se hizo. Si te mandan una foto o un PDF, descr'#237'belos.'
+      'Para el clima de los despachos (si va a llover, a qu'#233' hora, cu'#225'ntos mil'#237'metros) no uses la b'#250'squeda web: busca en el registry un servidor MCP de clima (ppm_search), inst'#225'lalo (ppm_install) y consulta sus datos por hora (call_mcp_tool).'
+      'Tambi'#233'n puedes crear im'#225'genes y videos: crear_imagen(descripcion) genera una imagen (foto de producto, ilustraci'#243'n para redes, empaque) y la muestra en el chat; crear_video(descripcion) genera un video corto de 5 segundos y tarda alrededor de un minuto. Describe en detalle lo que se quiere ver (qu'#233' hay, estilo, fondo, luz) y despu'#233's cu'#233'ntalo en una frase: el archivo ya est'#225' en el chat.'
+      'Si el mensaje trae un bloque "Contexto de memoria", son cosas que el cliente te cont'#243' en visitas anteriores: '#250'salas con naturalidad, sin repetirlas como una lista.'
+      'Reglas: responde en espa'#241'ol, c'#225'lido y breve. Usa Markdown: negritas y listas cuando ayuden. Solo hablas de caf'#233' y de la tienda; si te preguntan otra cosa, vuelve con amabilidad al caf'#233'. No inventes productos ni precios fuera de la carta.')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    OnReceiveThinking = AiConnReceiveThinking
+    OnReceiveData = AiConnReceiveData
+    OnReceiveDataEnd = AiConnReceiveDataEnd
+    OnError = AiConnError
+    SanitizerActive = True
+    OnSanitize = AiConnSanitize
+    OnPromptGuard = AiConnPromptGuard
+    AiFunctions = AiFunctions1
+    PersistentMemory = Memoria
+    MemoryTokenBudget = 400
+    ChatTools.SpeechTool = SpeechTool
+    ChatTools.ShellTool = Shell
+    ChatTools.TextEditorTool = Editor
+    ChatTools.PromptGuard = JevGuard
+    Left = 840
+    Top = 64
+  end
+  object JevGuard: TAiJevPromptGuard
+    Scope = 'the operations assistant of a Colombian coffee shop: coffees, orders, prices, deliveries, discounts and order cancellations requested by the manager, store policies (shipping, grinding, subscription club, returns, roasting, customer service hours), customers and their tastes, supplier invoices, inventory, product photos, illustrations and short videos for the store and its social media, coffee market prices on the web, the weather forecast for deliveries, and file and console tasks in its work folder'
+    Left = 736
+    Top = 64
+  end
+  object SpeechTool: TAiOpenAiSpeechTool
+    TranscriptionLanguage = 'es'
+    Left = 632
+    Top = 64
+  end
+  object AiFunctions1: TAiFunctions
+    MCPClients = <
+      item
+        Enabled = True
+        Name = 'bodega'
+        TransportType = tpStdIo
+        Params.Strings = (
+          'Command=BodegaLadera.exe'
+          'Arguments=--servidor')
+      end>
+    OnLog = AiFunctions1Log
+    AutoMCPConfig.Active = True
+    AutoMCPConfig.Allowed.Strings = (
+      'mcp-openmeteo')
+    OnAutoMCPRequest = AiFunctions1AutoMCPRequest
+    Functions = <
+      item
+        FunctionName = 'consultar_inventario'
+        OnAction = FnConsultarInventario
+        Description.Strings = (
+          'Cu'#225'ntas bolsas de 340 g hay disponibles de un caf'#233' de la carta.')
+        Parameters = <
+          item
+            Name = 'cafe'
+            ParamType = ptString
+            Description.Strings = (
+              'Nombre del caf'#233' tal como est'#225' en la carta (Huila Reserva, Nari'#241'o Altura, Sierra Nevada Org'#225'nico, Descafeinado Suave).')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'calcular_total'
+        OnAction = FnCalcularTotal
+        Description.Strings = (
+          'Cotiza un pedido de un caf'#233': precio por las bolsas m'#225's el env'#237'o a la ciudad. Devuelve subtotal, env'#237'o y total en COP.')
+        Parameters = <
+          item
+            Name = 'cafe'
+            ParamType = ptString
+            Description.Strings = (
+              'Nombre del caf'#233' tal como est'#225' en la carta.')
+            Required = True
+          end
+          item
+            Name = 'bolsas'
+            ParamType = ptInteger
+            Description.Strings = (
+              'N'#250'mero de bolsas de 340 g.')
+            Required = True
+          end
+          item
+            Name = 'ciudad'
+            ParamType = ptString
+            Description.Strings = (
+              'Ciudad de entrega en Colombia.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'buscar_en_el_manual'
+        OnAction = FnBuscarManual
+        Description.Strings = (
+          'Busca en el manual de la tienda: env'#237'os y tarifas, molienda, Club La Ladera (suscripci'#243'n), cambios y devoluciones, tosti'#243'n y frescura, horarios de atenci'#243'n. Devuelve los pasajes relevantes.')
+        Parameters = <
+          item
+            Name = 'pregunta'
+            ParamType = ptString
+            Description.Strings = (
+              'La pregunta del cliente, tal como la hizo.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'crear_imagen'
+        OnAction = FnCrearImagen
+        Description.Strings = (
+          'Crea una imagen con un modelo de imagen (foto de producto, ilustraci'#243'n para redes, empaque) a partir de una descripci'#243'n detallada y la muestra en el chat. Devuelve la ruta del archivo.')
+        Parameters = <
+          item
+            Name = 'descripcion'
+            ParamType = ptString
+            Description.Strings = (
+              'Descripci'#243'n detallada de la imagen: qu'#233' se ve, estilo, fondo, luz, texto si lo hay.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'crear_video'
+        OnAction = FnCrearVideo
+        Description.Strings = (
+          'Crea un video corto (5 segundos) a partir de una descripci'#243'n detallada y lo muestra en el chat. Tarda alrededor de un minuto. Devuelve la ruta del archivo.')
+        Parameters = <
+          item
+            Name = 'descripcion'
+            ParamType = ptString
+            Description.Strings = (
+              'Descripci'#243'n detallada de la escena: qu'#233' se ve, movimiento de c'#225'mara, ambiente.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'que_sabemos_de'
+        OnAction = FnQueSabemosDe
+        Description.Strings = (
+          'Lo que la tienda sabe de un cliente o de un caf'#233': gustos, compras, qu'#233' le gust'#243' y qu'#233' no, c'#243'mo prepara el caf'#233', notas de sabor, acidez. Devuelve hechos del grafo de conocimiento.')
+        Parameters = <
+          item
+            Name = 'nombre'
+            ParamType = ptString
+            Description.Strings = (
+              'Nombre del cliente o del caf'#233' (por ejemplo Marta, Huila Reserva).')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'cafes_por_acidez'
+        OnAction = FnCafesPorAcidez
+        Description.Strings = (
+          'Lista los caf'#233's de la carta que tienen un nivel de acidez dado.')
+        Parameters = <
+          item
+            Name = 'nivel'
+            ParamType = ptString
+            Description.Strings = (
+              'Nivel de acidez: Baja, Alta o Brillante.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'atender_reclamo'
+        OnAction = FnAtenderReclamo
+        Description.Strings = (
+          'Atiende el reclamo de un cliente por un pedido: lo consulta, programa el cambio si fue error de la tienda y redacta la respuesta revisada. Devuelve la respuesta lista para el cliente.')
+        Parameters = <
+          item
+            Name = 'mensaje'
+            ParamType = ptString
+            Description.Strings = (
+              'El mensaje completo del cliente, tal como lo escribi'#243'.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'procesar_pedido'
+        OnAction = FnProcesarPedido
+        Description.Strings = (
+          'Registra y confirma un pedido de bolsas de 340 g: verifica inventario, cotiza, calcula el env'#237'o y decide el despacho. Devuelve el mensaje final para el cliente.')
+        Parameters = <
+          item
+            Name = 'items'
+            ParamType = ptString
+            Description.Strings = (
+              'Los productos, como ''cantidad nombre, cantidad nombre'' (por ejemplo ''2 Huila Reserva, 1 Nari'#241'o Altura'').')
+            Required = True
+          end
+          item
+            Name = 'ciudad'
+            ParamType = ptString
+            Description.Strings = (
+              'Ciudad de entrega en Colombia.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'aplicar_descuento'
+        OnAction = FnAplicarDescuento
+        Description.Strings = (
+          'Fija el porcentaje de descuento de un pedido (reemplaza el que tuviera).')
+        Parameters = <
+          item
+            Name = 'numero'
+            ParamType = ptString
+            Description.Strings = (
+              'N'#250'mero del pedido.')
+            Required = True
+          end
+          item
+            Name = 'porcentaje'
+            ParamType = ptInteger
+            Description.Strings = (
+              'Porcentaje de descuento (entero).')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'anular_pedido'
+        OnAction = FnAnularPedido
+        Description.Strings = (
+          'Anula un pedido y reembolsa el dinero.')
+        Parameters = <
+          item
+            Name = 'numero'
+            ParamType = ptString
+            Description.Strings = (
+              'N'#250'mero del pedido.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end>
+    Guardrails = Guardia
+    Left = 424
+    Top = 64
+  end
+  object Shell: TAiShell
+    SecurityMode = ssmAllowList
+    SecurityList.Strings = (
+      'dir'
+      'type'
+      'findstr'
+      'find'
+      'more'
+      'sort'
+      'echo'
+      'cd')
+    OnConsoleLog = ShellConsoleLog
+    OnSecurityViolation = ShellSecurityViolation
+    Left = 320
+    Top = 64
+  end
+  object Editor: TAiTextEditorTool
+    OnBeforeCommand = EditorBeforeCommand
+    Left = 216
+    Top = 64
+  end
+  object AIVoiceMonitor1: TAIVoiceMonitor
+    SensitivityMultiplier = 4.000000000000000000
+    StopSensitivityMultiplier = 2.000000000000000000
+    FragmentSplitRatio = 0.350000000000000000
+    Left = 528
+    Top = 64
+  end
+  object Embeddings: TAiOpenAiEmbeddings
+    Model = 'text-embedding-3-small'
+    Left = 112
+    Top = 128
+  end
+  object FDConn: TFDConnection
+    Params.Strings = (
+      'DriverID=SQLite'
+      'LockingMode=Normal')
+    LoginPrompt = False
+    Left = 216
+    Top = 128
+  end
+  object FDWait: TFDGUIxWaitCursor
+    Provider = 'FMX'
+    Left = 216
+    Top = 192
+  end
+  object RAGDriver: TAiRAGVectorSQLiteDriver
+    Connection = FDConn
+    TableName = 'manual'
+    Left = 320
+    Top = 128
+  end
+  object RAG: TAiRAGVector
+    Left = 424
+    Top = 128
+  end
+  object Reranker: TAiJevRAGReranker
+    Left = 528
+    Top = 128
+  end
+  object Grafo: TAiRagGraph
+    Left = 632
+    Top = 128
+  end
+  object Builder: TAiRagGraphBuilder
+    Graph = Grafo
+    Left = 736
+    Top = 128
+  end
+  object Memoria: TAiMemory
+    Analyzer = Analizador
+    AnalysisInterval = 0
+    Namespace = 'cliente'
+    Embedder = Embeddings
+    Left = 840
+    Top = 128
+  end
+  object Analizador: TAiChatConnection
+    DriverName = 'OpenAi'
+    Model = 'gpt-6-luna'
+    Params.Strings = (
+      'ApiKey=@OPENAI_API_KEY'
+      'Asynchronous=False')
+    Left = 944
+    Top = 128
+  end
+  object Skills: TAiSkills
+    Functions = AiFunctions1
+    OnSkillLoaded = SkillsSkillLoaded
+    Left = 112
+    Top = 192
+  end
+  object FuncionesReclamo: TAiFunctions
+    Functions = <
+      item
+        FunctionName = 'consultar_pedido'
+        OnAction = FnConsultarPedido
+        Description.Strings = (
+          'Datos de un pedido de Caf'#233' La Ladera: cliente, productos, molienda y entrega.')
+        Parameters = <
+          item
+            Name = 'numero'
+            ParamType = ptString
+            Description.Strings = (
+              'N'#250'mero del pedido.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end
+      item
+        FunctionName = 'programar_cambio'
+        OnAction = FnProgramarCambio
+        Description.Strings = (
+          'Programa el cambio de un pedido equivocado, sin costo para el cliente. Devuelve la gu'#237'a y la fecha de entrega.')
+        Parameters = <
+          item
+            Name = 'numero'
+            ParamType = ptString
+            Description.Strings = (
+              'N'#250'mero del pedido.')
+            Required = True
+          end
+          item
+            Name = 'motivo'
+            ParamType = ptString
+            Description.Strings = (
+              'Qu'#233' sali'#243' mal.')
+            Required = True
+          end>
+        Default = False
+        Tag = 0
+        ToolType = tt_function
+      end>
+    Left = 216
+    Top = 256
+  end
+  object Reclamos: TAIAgentManager
+    StartNode = Atencion
+    EndNode = Revisor
+    OnEnterNode = AgenteEnterNode
+    OnExitNode = AgenteExitNode
+    Left = 320
+    Top = 256
+  end
+  object Atencion: TLLMNode
+    Next = LinkAtencion
+    Graph = Reclamos
+    Guardrails = Guardia
+    DriverName = 'OpenAi'
+    ApiKey = '@OPENAI_API_KEY'
+    SystemPrompt = 'Antes de responder, consulta el pedido y, si fue un error de la tienda, programa el cambio. Usa los datos reales de las herramientas. Texto plano, sin Markdown.'
+    Left = 424
+    Top = 256
+  end
+  object LinkAtencion: TAIAgentsLink
+    NextA = Revisor
+    Graph = Reclamos
+    Left = 528
+    Top = 256
+  end
+  object Revisor: TLLMNode
+    Graph = Reclamos
+    DriverName = 'OpenAi'
+    ApiKey = '@OPENAI_API_KEY'
+    SystemPrompt = 'Revisas la respuesta que otro agente prepar'#243' para una clienta de Caf'#233' La Ladera. Reglas: m'#225'ximo 4 frases, sin emojis, firma "Luc'#237'a, Caf'#233' La Ladera", y debe decir el n'#250'mero de gu'#237'a y el d'#237'a de entrega. Si cumple todo, escribe APROBADA en la primera l'#237'nea y debajo la respuesta tal cual. Si no, escribe CORREGIDA y debajo la versi'#243'n corregida. Texto plano.'
+    UseAllTools = False
+    Left = 632
+    Top = 256
+  end
+  object Pedidos: TAIAgentManager
+    StartNode = Recibir
+    EndNode = Redactor
+    OnEnterNode = AgenteEnterNode
+    OnExitNode = AgenteExitNode
+    OnFinish = PedidosFinish
+    OnSuspend = PedidosSuspend
+    Left = 112
+    Top = 320
+  end
+  object Recibir: TAIAgentsNode
+    Next = LinkRecibir
+    Graph = Pedidos
+    OnExecute = RecibirExecute
+    Left = 216
+    Top = 320
+  end
+  object LinkRecibir: TAIAgentsLink
+    NextA = Inventario
+    NextB = Cotizar
+    NextC = Envio
+    Graph = Pedidos
+    Left = 320
+    Top = 320
+  end
+  object Inventario: TAIAgentsNode
+    Next = LinkInventario
+    Graph = Pedidos
+    Tool = BodegaRemota
+    Left = 424
+    Top = 320
+  end
+  object BodegaRemota: TAiA2ARemoteAgentTool
+    Description = 'Existencias: las responde el agente de bodega'
+    AgentUrl = 'http://localhost:8301'
+    Left = 424
+    Top = 272
+  end
+  object LinkInventario: TAIAgentsLink
+    NextA = Consolidar
+    Graph = Pedidos
+    Left = 528
+    Top = 320
+  end
+  object Cotizar: TAIAgentsNode
+    Next = LinkCotizar
+    Graph = Pedidos
+    OnExecute = CotizarExecute
+    Left = 424
+    Top = 384
+  end
+  object LinkCotizar: TAIAgentsLink
+    NextA = Consolidar
+    Graph = Pedidos
+    Left = 528
+    Top = 384
+  end
+  object Envio: TAIAgentsNode
+    Next = LinkEnvio
+    Graph = Pedidos
+    OnExecute = EnvioExecute
+    Left = 424
+    Top = 448
+  end
+  object LinkEnvio: TAIAgentsLink
+    NextA = Consolidar
+    Graph = Pedidos
+    Left = 528
+    Top = 448
+  end
+  object Consolidar: TAIAgentsNode
+    Next = LinkConsolidar
+    Graph = Pedidos
+    OnExecute = ConsolidarExecute
+    JoinMode = jmAll
+    Left = 632
+    Top = 384
+  end
+  object LinkConsolidar: TAIAgentsLink
+    NextA = Avisar
+    NextNo = Revisar
+    Mode = lmExpression
+    ExpressionA = 'faltantes > 0'
+    Graph = Pedidos
+    Left = 736
+    Top = 384
+  end
+  object Avisar: TAIAgentsNode
+    Next = LinkAvisar
+    Graph = Pedidos
+    OnExecute = AvisarExecute
+    Left = 840
+    Top = 320
+  end
+  object LinkAvisar: TAIAgentsLink
+    NextA = Redactor
+    Graph = Pedidos
+    Left = 944
+    Top = 320
+  end
+  object Despachar: TAIAgentsNode
+    Next = LinkDespachar
+    Graph = Pedidos
+    OnExecute = DespacharExecute
+    Left = 840
+    Top = 448
+  end
+  object LinkDespachar: TAIAgentsLink
+    NextA = Mensajero
+    NextNo = Transportadora
+    Mode = lmExpression
+    ExpressionA = 'es_local = 1'
+    Graph = Pedidos
+    Left = 944
+    Top = 448
+  end
+  object Mensajero: TAIAgentsNode
+    Next = LinkMensajero
+    Graph = Pedidos
+    OnExecute = MensajeroExecute
+    Left = 1048
+    Top = 416
+  end
+  object LinkMensajero: TAIAgentsLink
+    NextA = Redactor
+    Graph = Pedidos
+    Left = 1152
+    Top = 416
+  end
+  object Transportadora: TAIAgentsNode
+    Next = LinkTransportadora
+    Graph = Pedidos
+    OnExecute = TransportadoraExecute
+    Left = 1048
+    Top = 480
+  end
+  object LinkTransportadora: TAIAgentsLink
+    NextA = Redactor
+    Graph = Pedidos
+    Left = 1152
+    Top = 480
+  end
+  object Redactor: TLLMNode
+    Graph = Pedidos
+    DriverName = 'OpenAi'
+    ApiKey = '@OPENAI_API_KEY'
+    SystemPrompt = 'Eres Luc'#237'a, de Caf'#233' La Ladera. Convierte el estado del pedido en un mensaje de WhatsApp para el cliente: c'#225'lido, en espa'#241'ol, m'#225'ximo 3 l'#237'neas, sin inventar datos. Si el encargado aprob'#243', confirma el pedido y di lo que indic'#243' el encargado; si no lo aprob'#243', expl'#237'calo con amabilidad.'
+    UseAllTools = False
+    Left = 1256
+    Top = 448
+  end
+  object Revisar: TAIAgentsNode
+    Next = LinkRevisar
+    Graph = Pedidos
+    OnExecute = RevisarExecute
+    Left = 632
+    Top = 512
+  end
+  object LinkRevisar: TAIAgentsLink
+    NextA = Aprobar
+    NextNo = Despachar
+    Graph = Pedidos
+    Mode = lmExpression
+    ExpressionA = 'grande = 1'
+    Left = 736
+    Top = 512
+  end
+  object Aprobar: TAIAgentsNode
+    Next = LinkAprobar
+    Graph = Pedidos
+    Tool = Aprobacion
+    Left = 840
+    Top = 576
+  end
+  object Aprobacion: TAiWaitApprovalTool
+    SuspendReason = 'Pedido por encima de 200.000 COP: '#191'lo apruebas?'
+    ContextKey = 'resumen'
+    Left = 840
+    Top = 640
+  end
+  object LinkAprobar: TAIAgentsLink
+    NextA = Decidir
+    Graph = Pedidos
+    Left = 944
+    Top = 576
+  end
+  object Decidir: TAIAgentsNode
+    Next = LinkDecidir
+    Graph = Pedidos
+    OnExecute = DecidirExecute
+    Left = 1048
+    Top = 576
+  end
+  object LinkDecidir: TAIAgentsLink
+    NextA = Despachar
+    NextNo = Rechazar
+    Graph = Pedidos
+    Mode = lmExpression
+    ExpressionA = 'aprobado = 1'
+    Left = 1152
+    Top = 576
+  end
+  object Rechazar: TAIAgentsNode
+    Next = LinkRechazar
+    Graph = Pedidos
+    OnExecute = RechazarExecute
+    Left = 1256
+    Top = 576
+  end
+  object LinkRechazar: TAIAgentsLink
+    NextA = Redactor
+    Graph = Pedidos
+    Left = 1256
+    Top = 640
+  end
+  object Guardia: TAiGuardrails
+    BlockedTools.Strings = (
+      'anular_*')
+    OnCheckToolCall = GuardiaCheckToolCall
+    OnBlocked = GuardiaBlocked
+    Left = 112
+    Top = 256
+  end
+  object Telemetria: TAiTelemetry
+    Enabled = True
+    ServiceName = 'LaderaApp'
+    OnLog = TelemetriaLog
+    Left = 112
+    Top = 384
+  end
+  object Jev: TAiJev
+    ApiKey = '@TYPESAFE_API_KEY'
+    Model = 'jev-1.13.0'
+    Questions = <
+      item
+        Name = 'ruta'
+        Instructions = #191'Qu'#233' agente de Caf'#233' La Ladera debe atender `consulta`?'
+        Criteria.Strings = (
+          'Pedidos=Estado, despacho o entrega de un pedido ya hecho, o un pedido nuevo de bolsas de caf'#233
+          'Reclamos=Un producto o una entrega sali'#243' mal y el cliente se queja'
+          'Mayorista=Compras grandes por kilos para hoteles, restaurantes u oficinas'
+          'Carta=Preguntas sobre los caf'#233's de la tienda: sabor, acidez, preparaci'#243'n, precio por bolsa, env'#237'os, molienda, club y pol'#237'ticas'
+          'Contenido=Crear una imagen, una foto de producto, una ilustraci'#243'n o un video para la tienda o las redes'
+          'Persona=Otros temas para el due'#241'o: alianzas, proveedores, prensa, empleo')
+      end
+      item
+        Name = 'urgente'
+        Kind = jqNoul
+        Instructions = #191'El cliente necesita una respuesta urgente?'
+      end>
+    Left = 216
+    Top = 384
+  end
+  object PedidosServer: TAiA2AServer
+    Port = 8302
+    AgentManager = Pedidos
+    AgentName = 'Pedidos de Caf'#233' La Ladera'
+    AgentDescription = 'Verifica existencias en la bodega, cotiza con el env'#237'o, pide aprobaci'#243'n si el pedido es grande y lo despacha'
+    AgentVersion = '1.0'
+    Skills = <
+      item
+        Id = 'pedido'
+        Title = 'Procesar un pedido'
+        Description = 'Recibe "cantidad producto, cantidad producto | ciudad" con los nombres de la carta y devuelve el pedido confirmado, en espera o rechazado'
+        Tags = 'pedidos, cafe, despacho'
+      end>
+    Left = 112
+    Top = 448
+  end
+  object BodegaAgente: TAiA2AAgentTool
+    Functions = AiFunctions1
+    AgentUrl = 'http://localhost:8301'
+    ToolName = 'apartar_en_bodega'
+    Description = 'Aparta en la bodega las bolsas de un pedido y devuelve el n'#250'mero de reserva; lo agotado lo dice. query va con el formato "cantidad producto, cantidad producto" con los nombres de la carta.'
+    Left = 320
+    Top = 384
+  end
+  object Telefono: TAiChatConnection
+    DriverName = 'OpenAi'
+    Model = 'gpt-6-sol'
+    Params.Strings = (
+      'ApiKey=@OPENAI_API_KEY'
+      'Asynchronous=False')
+    SystemPrompt.Strings = (
+      'Eres el sistema de Caf'#233' La Ladera detr'#225's de Luc'#237'a, que atiende el tel'#233'fono. Carta (bolsa de 340 g): Huila Reserva 38.000 COP (panela, frutos rojos); Nari'#241'o Altura 42.000 COP (c'#237'tricos, caramelo); Sierra Nevada Org'#225'nico 36.000 COP (chocolate amargo, nuez); Descafeinado Suave 34.000 COP (cacao suave). Resuelve lo que la clienta pidi'#243' usando las herramientas: apartar_en_bodega para apartar bolsas (query ''cantidad producto, cantidad producto''); procesar_pedido(items, ciudad) para registrar o confirmar un pedido de bolsas (si no dice ciudad, Pitalito), entrega su resultado tal cual; consultar_inventario y calcular_total para existencias y cotizaciones sin confirmar; buscar_en_el_manual para env'#237'os, molienda, club, cambios y tosti'#243'n; que_sabemos_de y cafes_por_acidez para recomendar. Nunca inventes precios, existencias ni reservas. Responde en espa'#241'ol, en una o dos frases, texto plano sin Markdown ni listas: se va a decir en voz alta.')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    OnReceiveDataEnd = TelefonoReceiveDataEnd
+    AiFunctions = AiFunctions1
+    Left = 424
+    Top = 384
+  end
+  object Respaldo: TAiChatConnection
+    DriverName = 'Claude'
+    Model = 'claude-sonnet-5-5'
+    Params.Strings = (
+      'ApiKey=@CLAUDE_API_KEY'
+      'Asynchronous=False')
+    SystemPrompt.Strings = (
+      'Eres Luc'#237'a, la barista virtual de Caf'#233' La Ladera, una tienda de caf'#233' de especialidad colombiano.'
+      'Carta (bolsa de 340 g): Huila Reserva 38.000 COP (panela, frutos rojos); Nari'#241'o Altura 42.000 COP (c'#237'tricos, caramelo); Sierra Nevada Org'#225'nico 36.000 COP (chocolate amargo, nuez); Descafeinado Suave 34.000 COP (cacao suave).'
+      'Tienes herramientas: consultar_inventario y calcular_total (la tienda, bolsas de 340 g; calcular_total es solo para cotizar sin confirmar); procesar_pedido(items, ciudad) para registrar o confirmar un pedido de bolsas (items como ''cantidad nombre, cantidad nombre''): devuelve el mensaje final para el cliente, entr'#233'galo tal cual; aplicar_descuento y anular_pedido cuando el encargado lo pida; las de la bodega (prefijo bodega_) para existencias en kilos y precios mayoristas de ventas a hoteles y restaurantes; buscar_en_el_manual para env'#237'os y tarifas, molienda, Club La Ladera, cambios y devoluciones, tosti'#243'n y atenci'#243'n al cliente; que_sabemos_de para lo que la tienda sabe de un cliente o de un caf'#233' (gustos, compras, notas, acidez) y cafes_por_acidez para buscar caf'#233's por su acidez; b'#250'squeda web, un editor de archivos y la consola cmd.exe de Windows en la carpeta de trabajo. Adem'#225's tienes skills (procedimientos de la tienda): mira el cat'#225'logo y carga con use_skill el que corresponda antes de cotizar al por mayor o escribir una ficha de cata. Si un cliente reclama por un pedido (lleg'#243' mal, equivocado o no lleg'#243'), NO lo contestes t'#250': llama atender_reclamo con el mensaje completo del cliente y entrega su respuesta tal cual, sin agregar nada. '#218'salas en vez de adivinar y responde con lo que devuelven; si una herramienta se bloquea, explica el l'#237'mite sin inventar que se hizo. Si te mandan una foto o un PDF, descr'#237'belos.'
+      'Para el clima de los despachos (si va a llover, a qu'#233' hora, cu'#225'ntos mil'#237'metros) no uses la b'#250'squeda web: busca en el registry un servidor MCP de clima (ppm_search), inst'#225'lalo (ppm_install) y consulta sus datos por hora (call_mcp_tool).'
+      'Tambi'#233'n puedes crear im'#225'genes y videos: crear_imagen(descripcion) genera una imagen (foto de producto, ilustraci'#243'n para redes, empaque) y la muestra en el chat; crear_video(descripcion) genera un video corto de 5 segundos y tarda alrededor de un minuto. Describe en detalle lo que se quiere ver (qu'#233' hay, estilo, fondo, luz) y despu'#233's cu'#233'ntalo en una frase: el archivo ya est'#225' en el chat.'
+      'Si el mensaje trae un bloque "Contexto de memoria", son cosas que el cliente te cont'#243' en visitas anteriores: '#250'salas con naturalidad, sin repetirlas como una lista.'
+      'Reglas: responde en espa'#241'ol, c'#225'lido y breve. Usa Markdown: negritas y listas cuando ayuden. Solo hablas de caf'#233' y de la tienda; si te preguntan otra cosa, vuelve con amabilidad al caf'#233'. No inventes productos ni precios fuera de la carta.')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    AiFunctions = AiFunctions1
+    Left = 320
+    Top = 384
+  end
+  object Ilustrador: TAiChatConnection
+    DriverName = 'OpenAi'
+    Model = 'gpt-image-2.5-flare'
+    Params.Strings = (
+      'ApiKey=@OPENAI_API_KEY'
+      'Asynchronous=False')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    Left = 216
+    Top = 384
+  end
+  object Videasta: TAiChatConnection
+    DriverName = 'Grok'
+    Model = 'grok-imagine-video'
+    Params.Strings = (
+      'ApiKey=@GROK_API_KEY'
+      'Asynchronous=False')
+    Prompt_tokens = 0
+    Completion_tokens = 0
+    Total_tokens = 0
+    Left = 112
+    Top = 384
+  end
+  object Llamada: TAiOpenAiLiveChat
+    ApiKey = '@OPENAI_API_KEY'
+    Model = 'gpt-live-1'
+    InputSampleRate = 24000
+    OnSessionReady = LlamadaSessionReady
+    OnTranscriptCompleted = LlamadaTranscriptCompleted
+    OnError = LlamadaError
+    OnAssistantText = LlamadaAssistantText
+    OnAudioChunk = LlamadaAudioChunk
+    Voice = 'marin'
+    Instructions = 'Eres Luc'#237'a, de Caf'#233' La Ladera, atendiendo el tel'#233'fono. Habla en espa'#241'ol, c'#225'lida y breve, como en una llamada. Para recomendar un caf'#233', apartar, cotizar o confirmar un pedido, o cualquier dato de la tienda, delega: el sistema lo resuelve y te da el resultado; mientras tanto dile a la clienta que lo revisas. No inventes precios, existencias ni n'#250'meros de reserva.'
+    DelegateChat = Telefono
+    OnDelegation = LlamadaDelegation
+    OnUsage = LlamadaUsage
+    OnSessionClosed = LlamadaSessionClosed
+    Left = 528
+    Top = 384
+  end
+  object Microfono: TAiAudioCapture
+    Source = asMicrophone
+    OutputSampleRate = 24000
+    OutputChannels = 1
+    RealtimeSTT = Llamada
+    Left = 528
+    Top = 448
+  end
+  object Parlante: TAiAudioPlayer
+    Left = 632
+    Top = 448
+  end
+end
