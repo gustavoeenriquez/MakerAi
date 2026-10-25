@@ -174,6 +174,8 @@ Un proyecto por capítulo, en `Demos/Libro/capNN-tema/`. La app FMX `LaderaApp` 
 | cap24-recepcion | 24 | `Jev: TAiJev` con `Questions` en el .fmx: Reclamos directo al agente, Persona sin modelo |
 | cap25-entre-agentes | 25 | `BodegaLadera.exe --a2a` publica la bodega como agente A2A (`TAiA2AServer`, :8301, con estado: reservas); `BodegaAgente: TAiA2AAgentTool` en el .fmx (`apartar_en_bodega`); la app arranca el agente si no hay nadie en el puerto |
 | cap26-federacion | 26 | `Inventario.Tool = BodegaRemota` (`TAiA2ARemoteAgentTool`): el nodo lo ejecuta la bodega; `PedidosServer: TAiA2AServer` (:8302) publica el flujo entero (no bloqueante, `INPUT_REQUIRED` + reanudación por `taskId` desde curl); `/esperar N` en `--prueba` |
+| cap27-voz | 27 | `Llamada: TAiOpenAiLiveChat` (GPT-Live, `DelegateChat = Telefono`, un `TAiChatConnection` síncrono con `AiFunctions1`), `Microfono: TAiAudioCapture` (`RealtimeSTT = Llamada`), `Parlante: TAiAudioPlayer`, botón Llamar; `--prueba` con `/llamar archivo.wav`, `/hablar`, `/colgar` (la clienta desde un WAV a ritmo real, sin micrófono) y `--voz x.pcm`; `media\` con las voces TTS; consola `VozLadera` (`--transcribir` gpt-transcribe, `--decir` gpt-4o-mini-tts)
+| cap28-todo-junto | 28 | la app completa (= cap27 + una línea): en `PedidosFinish`, si hay llamada abierta, `Llamada.AppendCommentary` le cuenta a la voz la decisión del encargado; corrida real de 125 s con pedido, pedido grande en espera, aprobación por el chat y aviso por voz
 
 Los proyectos se generan con scripts `_crear_*.py` que se borran después; los `.pas/.fmx/.dpr` van en UTF-8 con BOM y CRLF. Requieren `OPENAI_API_KEY` (cap 8+ también `TYPESAFE_API_KEY`). El manuscrito vive fuera del repo (`D:\Documentos\LibroIA\manuscript-v4`).
 
