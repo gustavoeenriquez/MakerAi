@@ -1,0 +1,17 @@
+﻿[
+  {"subject":{"name":"Huila Reserva","nodeLabel":"Producto","properties":{"precioCOP":38000}},"predicate":{"edgeLabel":"TIENE_NOTA"},"object":{"name":"Panela","nodeLabel":"Nota","properties":{}}},
+  {"subject":{"name":"Huila Reserva","nodeLabel":"Producto","properties":{"precioCOP":38000}},"predicate":{"edgeLabel":"TIENE_NOTA"},"object":{"name":"Frutos rojos","nodeLabel":"Nota","properties":{}}},
+  {"subject":{"name":"Huila Reserva","nodeLabel":"Producto","properties":{"precioCOP":38000}},"predicate":{"edgeLabel":"TIENE_ACIDEZ"},"object":{"name":"Brillante","nodeLabel":"Acidez","properties":{}}},
+  {"subject":{"name":"Nariño Altura","nodeLabel":"Producto","properties":{"precioCOP":42000}},"predicate":{"edgeLabel":"TIENE_NOTA"},"object":{"name":"Cítricos","nodeLabel":"Nota","properties":{}}},
+  {"subject":{"name":"Nariño Altura","nodeLabel":"Producto","properties":{"precioCOP":42000}},"predicate":{"edgeLabel":"TIENE_NOTA"},"object":{"name":"Caramelo","nodeLabel":"Nota","properties":{}}},
+  {"subject":{"name":"Nariño Altura","nodeLabel":"Producto","properties":{"precioCOP":42000}},"predicate":{"edgeLabel":"TIENE_ACIDEZ"},"object":{"name":"Alta","nodeLabel":"Acidez","properties":{}}},
+  {"subject":{"name":"Sierra Nevada Orgánico","nodeLabel":"Producto","properties":{"precioCOP":36000}},"predicate":{"edgeLabel":"TIENE_NOTA"},"object":{"name":"Chocolate amargo","nodeLabel":"Nota","properties":{}}},
+  {"subject":{"name":"Sierra Nevada Orgánico","nodeLabel":"Producto","properties":{"precioCOP":36000}},"predicate":{"edgeLabel":"TIENE_NOTA"},"object":{"name":"Nuez","nodeLabel":"Nota","properties":{}}},
+  {"subject":{"name":"Sierra Nevada Orgánico","nodeLabel":"Producto","properties":{"precioCOP":36000}},"predicate":{"edgeLabel":"TIENE_ACIDEZ"},"object":{"name":"Baja","nodeLabel":"Acidez","properties":{}}},
+  {"subject":{"name":"Descafeinado Suave","nodeLabel":"Producto","properties":{"precioCOP":34000}},"predicate":{"edgeLabel":"TIENE_NOTA"},"object":{"name":"Cacao suave","nodeLabel":"Nota","properties":{}}},
+  {"subject":{"name":"Marta","nodeLabel":"Persona","properties":{}},"predicate":{"edgeLabel":"PREPARA_CON"},"object":{"name":"Prensa francesa","nodeLabel":"Metodo","properties":{}}},
+  {"subject":{"name":"Marta","nodeLabel":"Persona","properties":{}},"predicate":{"edgeLabel":"TOMA_SIN_AZUCAR"},"object":{"name":"Café","nodeLabel":"Producto","properties":{}}},
+  {"subject":{"name":"Marta","nodeLabel":"Persona","properties":{}},"predicate":{"edgeLabel":"LE_GUSTA"},"object":{"name":"Frutal","nodeLabel":"Nota","properties":{}}},
+  {"subject":{"name":"Marta","nodeLabel":"Persona","properties":{}},"predicate":{"edgeLabel":"COMPRO"},"object":{"name":"Nariño Altura","nodeLabel":"Producto","properties":{"precioCOP":42000}}},
+  {"subject":{"name":"Marta","nodeLabel":"Persona","properties":{}},"predicate":{"edgeLabel":"NO_LE_GUSTO"},"object":{"name":"Alta","nodeLabel":"Acidez","properties":{}}}
+]

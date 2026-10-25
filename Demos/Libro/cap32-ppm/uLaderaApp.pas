@@ -1,0 +1,2511 @@
+﻿unit uLaderaApp;
+
+// =============================================================================
+// LIBRO "IA con Delphi" - La app de Cafe La Ladera, etapa del capitulo 32
+// =============================================================================
+// PPM (el registry de paquetes del ecosistema): Lucia consigue herramientas que no tiene. En
+// AiFunctions1, AutoMCPConfig.Active = True expone al modelo tres funciones internas (ppm_search,
+// ppm_install, call_mcp_tool) y AutoMCPConfig.Allowed dice que paquetes puede instalar (aqui solo
+// mcp-openmeteo, el clima). Cuando una clienta pregunta si va a llover para el despacho, Lucia busca en
+// el registry, instala el servidor MCP (un .exe que se descarga a ~\.ppm\mcp y se conecta como cliente
+// stdio en la misma sesion) y lo usa; OnAutoMCPRequest ve cada instalacion antes de que ocurra y los
+// avisos [AutoMCP] de OnLog se muestran como pasos. El prompt del framework (GetAutoMCPSystemPrompt)
+// le explica al modelo el flujo. La consola PPMLadera muestra lo demas: prompts y skills del registry.
+//
+// Imagen y video (capitulo 31): Lucia tambien dibuja. Dos conexiones mas en el formulario, cada una con un modelo
+// que no conversa sino que genera: Ilustrador (OpenAi, gpt-image-2.5-flare) y Videasta (Grok,
+// grok-imagine-video). Su catalogo trae ModelCaps=[] y SessionCaps=[cap_GenImage] / [cap_GenVideo]:
+// ese hueco manda la peticion al endpoint de imagenes (o al job de video, con su espera) en vez de al
+// chat, y el resultado llega como TAiMediaFile en el ultimo mensaje. Lucia las usa como dos
+// herramientas mas, crear_imagen(descripcion) y crear_video(descripcion): el archivo se guarda en
+// Documentos\CafeLaLadera\imagenes y se muestra en el chat en una burbuja propia (AddAssistantMessage).
+// La misma llamada, AddMessageAndRun; lo que cambia es el modelo y, con el, el hueco.
+//
+// Produccion (capitulo 29): la misma app, lista para atender clientes de verdad. Cuatro cosas nuevas y ninguna
+// pieza nueva: (1) errores con reintento y respaldo: si el modelo falla con un error transitorio
+// (red caida, 408, 429, 5xx) el turno se reintenta con espera creciente (1 s, 2 s); si el error no
+// es transitorio (modelo inexistente, clave mala: 4xx) o se agotan los reintentos, responde
+// Respaldo, un segundo TAiChatConnection de OTRO proveedor (Claude) con el mismo prompt de sistema
+// y las mismas herramientas, que recibe el historial en texto; la pregunta y su respuesta se
+// agregan a AiConn para que la conversacion siga; (2) costos: cada turno (de Lucia, de Telefono y
+// del respaldo) se contabiliza: tokens de entrada, en cache y de salida, por modelo y con su tarifa
+// publica; la sesion se ve en la barra; (3) presupuesto: si la conversacion supera los tokens por
+// sesion, la app la cierra sola (memoria + ResetTokenCounters) y empieza otra; (4) tiempo maximo
+// por respuesta (ResponseTimeOut). Las claves siguen en variables de entorno (@OPENAI_API_KEY) y
+// el archivo de --registro guarda tiempos, tokens y pasos, nunca claves.
+// En --prueba: /modelo nombre, /url http://..., /presupuesto N (para provocar los casos).
+//
+// Todo junto (capitulo 28): una llamada recorre todas las piezas: la voz
+// (GPT-Live) delega en Telefono, Telefono llama procesar_pedido, el flujo Pedidos corre con
+// Inventario federado en la bodega (A2A), Revisar manda el pedido grande a Aprobar (checkpoint
+// en disco, pregunta en el chat), el encargado responde por el chat mientras la clienta sigue
+// en la linea, y OnFinish le cuenta la decision a la voz (AppendCommentary) para que Lucia se
+// la diga. Jev recibe, la guardia revisa cada herramienta y la telemetria traza cada paso.
+//
+// La voz: el boton "Llamar" abre una sesion de GPT-Live (Llamada: TAiOpenAiLiveChat). Es
+// voz full-duplex: el modelo escucha mientras habla (se le puede interrumpir), transcribe
+// a la clienta y contesta con su propia voz. No sabe nada de la tienda: cuando hay que
+// hacer algo (recomendar, apartar, cotizar, procesar un pedido) DELEGA en Telefono, un
+// TAiChatConnection normal y sincrono que comparte las herramientas de Lucia (AiFunctions1,
+// con su guardia): la voz le manda la conversacion transcrita, Telefono llama a las
+// herramientas y devuelve texto plano, y la voz lo dice. Microfono (TAiAudioCapture,
+// RealtimeSTT = Llamada) y Parlante (TAiAudioPlayer) son el telefono. Cada turno de la
+// llamada queda en el chat: lo que dijo la clienta, la delegacion con sus pasos y lo que
+// Lucia dijo de verdad. En --prueba, /llamar archivo.wav manda la voz de la clienta desde
+// un archivo PCM16 24 kHz a ritmo real (sin microfono); --voz x.pcm guarda la de Lucia.
+//
+// Federacion: un nodo del flujo de pedidos ya no corre aqui. Inventario tiene como Tool un
+// TAiA2ARemoteAgentTool (BodegaRemota, AgentUrl en el Object Inspector): su entrada viaja
+// como mensaje A2A al agente de bodega (:8301) y su salida es el texto que el agente
+// devuelve; el grafo no nota la diferencia. Consolidar lee esa salida del nodo (un agente
+// remoto no escribe en el blackboard local) y de ahi salen faltantes y numero de reserva.
+// Y el flujo entero se publica a su vez como agente: PedidosServer (TAiA2AServer, :8302)
+// recibe pedidos de cualquier cliente A2A; si el pedido supera el tope, el task queda en
+// input-required (la pregunta tambien aparece en este chat) y un SendMessage con el mismo
+// taskId lo reanuda. OnFinish muestra en el chat lo que llego por A2A.
+//
+// Entre agentes (A2A): la bodega es ahora un AGENTE, no una lista de funciones. Otro
+// proceso (BodegaLadera.exe --a2a) publica un grafo con TAiA2AServer: su tarjeta
+// (/.well-known/agent-card.json) dice quien es y que sabe hacer, y recibe tareas por
+// JSON-RPC (SendMessage -> task -> artifacts). En este formulario, BodegaAgente
+// (TAiA2AAgentTool) lo vuelve una herramienta mas de Lucia: Functions = AiFunctions1,
+// AgentUrl y ToolName en el Object Inspector; al arrancar, DiscoverFromCard lee la tarjeta
+// y suma la descripcion que el agente publica de si mismo. Si el agente no responde, la
+// herramienta se lo cuenta al modelo como texto en vez de romper el turno. Cada consulta
+// se muestra como un paso (la accion de la herramienta va envuelta).
+//
+// La recepcion: antes de gastar un modelo de lenguaje, Jev (TypeSafe AI) decide a quien va
+// cada mensaje y si es urgente. Las preguntas estan en el formulario (Jev.Questions: una
+// Choice con las rutas y un Noul); una llamada de ~200 ms devuelve la ruta con su confianza.
+// Reclamos va directo al agente de reclamos (sin pasar por Lucia); Persona se contesta sin
+// ningun modelo; el resto (Pedidos, Mayorista, Carta) sigue con Lucia como siempre.
+//
+// Observabilidad: un TAiTelemetry en el formulario (Enabled, ServiceName, Endpoint) y todo
+// lo que ya hacia la app deja trazas OpenTelemetry: cada chat (modelo, tokens), cada
+// herramienta, cada llamada MCP, cada grafo y cada nodo, cada busqueda RAG; anidadas en
+// una sola traza por turno. Se exportan por OTLP/HTTP a localhost:4318 (Jaeger, Grafana
+// Tempo, Langfuse, Phoenix...). OnLog muestra cada lote exportado en la barra de estado.
+//
+// Reglas: un TAiGuardrails en el formulario revisa CADA llamada a herramienta antes de
+// ejecutarla, tanto las de Lucia (AiFunctions1.Guardrails) como las del agente de reclamos
+// (Atencion.Guardrails). BlockedTools = anular_* (anular es cosa de personas) y
+// OnCheckToolCall veta un descuento mayor al 15 % leyendo los argumentos. Si bloquea, la
+// herramienta no corre y el modelo recibe el motivo; OnBlocked lo muestra como paso.
+// Los evals de las respuestas de Lucia estan en el demo de consola 104.
+//
+// Aprobacion: un pedido por encima del tope no se despacha sin que lo apruebe el encargado.
+// El flujo pasa por Revisar -> Aprobar (TAiWaitApprovalTool: suspende el grafo) -> Decidir
+// -> Despachar o Rechazar. La pregunta aparece en el chat (OnSuspend), el estado se guarda en
+// disco (TAiFileCheckpointer) y sobrevive al cierre de la app; la siguiente respuesta en el
+// chat reanuda el grafo donde quedo (ResumeThread), incluso en otra sesion.
+//
+// El flujo: el pedido recorre un grafo de diez nodos armado ENTERO en el formulario
+// (TAIAgentsNode con su OnExecute, TAIAgentsLink con NextA..C, jmAll, lmExpression con
+// NextNo como camino por defecto, y un TLLMNode que redacta al final). Lucia lo dispara con
+// la herramienta procesar_pedido(items, ciudad); cada nodo se ve como un paso.
+//
+// El primer agente: un reclamo no lo contesta el chat, lo delega en un grafo de dos nodos
+// que esta en el formulario: Atencion (TLLMNode con el skill respuesta-reclamo y las
+// herramientas consultar_pedido / programar_cambio) y Revisor (TLLMNode sin herramientas,
+// que aprueba o corrige). Lucia lo llama con la herramienta atender_reclamo y entrega la
+// respuesta aprobada. Cada nodo y cada herramienta del agente se ve como un paso.
+//
+// Habilidades: la carpeta skills\ trae tres SKILL.md de la tienda (cotizacion mayorista con
+// su plantilla, respuesta a reclamos, ficha de cata). TAiSkills los ofrece BAJO DEMANDA: el
+// modelo ve solo el catalogo (una linea por skill) y carga el que necesita con use_skill; los
+// archivos de apoyo los lee con read_skill_file. Una pregunta que no es de ningun skill no
+// carga nada. Cada carga se muestra como un paso en la burbuja.
+//
+// Conectores MCP: la bodega es OTRO programa (BodegaLadera.exe --servidor, un servidor MCP
+// por stdio con inventario en kilos y precio mayorista). El item de AiFunctions1.MCPClients
+// lo lanza como proceso hijo y sus herramientas llegan al modelo junto con las locales, con
+// el prefijo del servidor (bodega_99_inventario). OnLog muestra cada tools/call en la burbuja.
+//
+// Memoria: el historial dura lo que dura la conversacion; TAiMemory sobrevive. Cada cliente
+// tiene su Namespace (el cuadro "Cliente"), la memoria vive en SQLite (memoria.db) y en cada
+// turno el chat (PersistentMemory + MemoryTokenBudget) busca lo relevante y lo inyecta antes
+// del prompt. Al cerrar la sesion (boton Nueva), un modelo barato (Analizador, gpt-6-luna)
+// lee la conversacion y decide que vale la pena recordar (AnalyzeNow).
+//
+// La otra cara del conocimiento: un grafo (TAiRagGraph) con las tripletas que el modelo
+// extrajo de la carta y de lo que conto una clienta (grafo\tripletas.json, armado con
+// TAiRagGraphBuilder). Dos herramientas lo consultan: que_sabemos_de (busqueda semantica
+// + vecinos a dos saltos) y cafes_por_acidez (una consulta MakerGQL con parametro).
+//
+// Conocimiento: el manual de la tienda (envios, molienda, club, devoluciones, tostion,
+// atencion) vive en una base vectorial sobre SQLite (TAiRAGVector + TAiRAGVectorSQLiteDriver,
+// embeddings de OpenAI). Se indexa una sola vez, por secciones y con metadatos. El modelo lo
+// consulta con la herramienta buscar_en_el_manual: recuperar (coseno) + reordenar con Jev
+// (TAiJevRAGReranker), que ademas descarta un pasaje con inyeccion de prompt.
+// Sigue todo lo anterior: funciones de la tienda, web, editor y consola con sus limites,
+// sentidos y filtro.
+//
+//   ModelCaps   : lo que el modelo entiende por si mismo (gpt-6-sol: imagen y PDF).
+//   SessionCaps : lo que la sesion pide (ademas, audio).
+//   El hueco (SessionCaps - ModelCaps) lo cubre el framework con un puente
+//   ANTES de llamar al modelo: aqui, ChatTools.SpeechTool transcribe la nota
+//   con gpt-transcribe y el modelo recibe el texto.
+//
+// El filtro del capitulo 8 sigue activo. La llamada corre en un TTask porque
+// el puente es sincrono y sin el hilo la ventana se congelaria al transcribir.
+//
+// Prueba automatica (para el libro, sin tocar el teclado):
+//   LaderaApp.exe --prueba "pregunta" "@media\bolsa.png|que cafe es" "@media\nota.wav|" [--captura x.png] [--registro t.txt]
+// Empresa, productos y precios ficticios.
+// =============================================================================
+
+interface
+
+uses
+  {$IFDEF MSWINDOWS} Winapi.Windows, {$ENDIF}
+  System.SysUtils, System.StrUtils, System.Variants, System.Types, System.UITypes, System.Classes, System.IOUtils,
+  System.JSON, System.Threading, System.Diagnostics, System.Net.HttpClient,
+  FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.StdCtrls,
+  FMX.Layouts, FMX.ListBox, FMX.Edit, FMX.Controls.Presentation,
+  // Primero la UI: AIChat.Types tambien declara un TAIChatMessage y Delphi no
+  // distingue mayusculas; el de uMakerAi.Chat.Messages, que va despues, gana.
+  AIChat.Types,
+  AIChat.Control.FMX,
+  AIChat.Input,
+  uMakerAi.Core,
+  uMakerAi.Chat,
+  uMakerAi.Chat.Messages,
+  uMakerAi.Chat.Sanitizer,
+  uMakerAi.Chat.Tools,
+  uMakerAi.Jev.PromptGuard,
+  uMakerAi.Tools.Functions,
+  uMakerAi.Tools.Shell,
+  uMakerAi.Tools.TextEditor,
+  uMakerAi.Chat.AiConnection,
+  uMakerAi.Chat.Initializations,   // registra todos los drivers
+  uMakerAi.Chat.Grok,              // VideoDurationSeconds del driver de video
+  uMakerAi.OpenAI.Audio,
+  uMakerAi.OpenAI.Audio.Tool,
+  uMakerAi.Utils.VoiceMonitor,
+  // El conocimiento (capitulo 13): embeddings, base vectorial y su driver SQLite (FireDAC embebido)
+  FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Error, FireDAC.UI.Intf, FireDAC.Phys.Intf,
+  FireDAC.Stan.Def, FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Phys, FireDAC.Phys.SQLite,
+  FireDAC.Phys.SQLiteDef, FireDAC.Phys.SQLiteWrapper.Stat, FireDAC.FMXUI.Wait, FireDAC.Comp.UI,
+  FireDAC.DApt, Data.DB, FireDAC.Comp.Client,
+  uMakerAi.Embeddings.Core, uMakerAi.Embeddings.OpenAi,
+  uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index, uMakerAi.RAG.MetaData,
+  uMakerAi.RAG.Vector.Driver.SQLite, uMakerAi.Jev.RAG,
+  uMakerAi.RAG.Graph.Core, uMakerAi.RAG.Graph.Builder,
+  uMakerAi.Memory.Types, uMakerAi.Memory,
+  uMakerAi.Tools.Skills,
+  uMakerAi.Agents, uMakerAi.Agents.Skill, uMakerAi.Agents.ToolRegistry, uMakerAi.Agents.Node.LLM,
+  uMakerAi.Agents.Checkpoint, uMakerAi.Agents.Tools.Approval,
+  uMakerAi.Guardrails,
+  uMakerAi.Telemetry,
+  uMakerAi.Jev,
+  uMakerAi.A2A.Client, uMakerAi.A2A.Server,
+  // La voz (capitulo 27): GPT-Live full-duplex, microfono y parlante
+  uMakerAi.Realtime, uMakerAi.Realtime.OpenAI.Live,
+  uMakerAi.Utils.AudioCapture, uMakerAi.Utils.AudioPlayback;
+
+type
+  TFormLadera = class(TForm)
+    AiConn: TAiChatConnection;
+    JevGuard: TAiJevPromptGuard;
+    SpeechTool: TAiOpenAiSpeechTool;
+    AIVoiceMonitor1: TAIVoiceMonitor;
+    AiFunctions1: TAiFunctions;
+    Shell: TAiShell;
+    Editor: TAiTextEditorTool;
+    Embeddings: TAiOpenAiEmbeddings;
+    FDConn: TFDConnection;
+    FDWait: TFDGUIxWaitCursor;
+    RAGDriver: TAiRAGVectorSQLiteDriver;
+    RAG: TAiRAGVector;
+    Reranker: TAiJevRAGReranker;
+    Grafo: TAiRagGraph;
+    Builder: TAiRagGraphBuilder;
+    Memoria: TAiMemory;
+    Analizador: TAiChatConnection;
+    Skills: TAiSkills;
+    Reclamos: TAIAgentManager;
+    Atencion: TLLMNode;
+    LinkAtencion: TAIAgentsLink;
+    Revisor: TLLMNode;
+    FuncionesReclamo: TAiFunctions;
+    Pedidos: TAIAgentManager;
+    Recibir: TAIAgentsNode;
+    LinkRecibir: TAIAgentsLink;
+    Inventario: TAIAgentsNode;
+    LinkInventario: TAIAgentsLink;
+    Cotizar: TAIAgentsNode;
+    LinkCotizar: TAIAgentsLink;
+    Envio: TAIAgentsNode;
+    LinkEnvio: TAIAgentsLink;
+    Consolidar: TAIAgentsNode;
+    LinkConsolidar: TAIAgentsLink;
+    Avisar: TAIAgentsNode;
+    LinkAvisar: TAIAgentsLink;
+    Despachar: TAIAgentsNode;
+    LinkDespachar: TAIAgentsLink;
+    Mensajero: TAIAgentsNode;
+    LinkMensajero: TAIAgentsLink;
+    Transportadora: TAIAgentsNode;
+    LinkTransportadora: TAIAgentsLink;
+    Redactor: TLLMNode;
+    Revisar: TAIAgentsNode;
+    LinkRevisar: TAIAgentsLink;
+    Aprobar: TAIAgentsNode;
+    Aprobacion: TAiWaitApprovalTool;
+    LinkAprobar: TAIAgentsLink;
+    Decidir: TAIAgentsNode;
+    LinkDecidir: TAIAgentsLink;
+    Rechazar: TAIAgentsNode;
+    LinkRechazar: TAIAgentsLink;
+    Guardia: TAiGuardrails;
+    Telemetria: TAiTelemetry;
+    Jev: TAiJev;
+    BodegaAgente: TAiA2AAgentTool;
+    BodegaRemota: TAiA2ARemoteAgentTool;
+    PedidosServer: TAiA2AServer;
+    Llamada: TAiOpenAiLiveChat;
+    Telefono: TAiChatConnection;
+    Respaldo: TAiChatConnection;
+    Ilustrador: TAiChatConnection;
+    Videasta: TAiChatConnection;
+    Microfono: TAiAudioCapture;
+    Parlante: TAiAudioPlayer;
+    lblCliente: TLabel;
+    edCliente: TEdit;
+    LayoutTop: TLayout;
+    ComboDriver: TComboBox;
+    btnNueva: TButton;
+    btnGuardar: TButton;
+    btnAbrir: TButton;
+    btnLlamar: TButton;
+    lblEstado: TLabel;
+    lblSesion: TLabel;
+    ChatView1: TAIChatView;
+    ChatInput1: TAIChatInput;
+    procedure FormCreate(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
+    procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+    procedure ChatInput1SendEvent(Sender: TObject; APrompt: string; aMediaFiles: TAiMediaFiles;
+      aAudioStream: TMemoryStream);
+    procedure ChatInput1Cancel(Sender: TObject);
+    procedure ChatInput1MicToggle(Sender: TObject; AActivate: Boolean);
+    procedure ComboDriverChange(Sender: TObject);
+    procedure btnNuevaClick(Sender: TObject);
+    procedure btnGuardarClick(Sender: TObject);
+    procedure btnAbrirClick(Sender: TObject);
+    procedure AiConnReceiveThinking(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject;
+      aRole, aText: string);
+    procedure AiConnReceiveData(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject;
+      aRole, aText: string);
+    procedure AiConnReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject;
+      aRole, aText: string);
+    procedure AiConnError(Sender: TObject; const ErrorMsg: string; AException: Exception;
+      const AResponse: IHTTPResponse);
+    procedure AiConnSanitize(Sender: TObject; const AResult: TSanitizeResult; var AAction: TAiSanitizeAction);
+    procedure AiConnPromptGuard(Sender: TObject; const AVerdict: TAiPromptVerdict; var AAction: TAiSanitizeAction);
+    procedure FnConsultarInventario(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure FnCalcularTotal(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure FnBuscarManual(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure FnQueSabemosDe(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure FnCafesPorAcidez(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure AiFunctions1Log(Sender: TObject; const Msg: string);
+    procedure AiFunctions1AutoMCPRequest(Sender: TObject; const APkgName: string; var AAllow: Boolean);
+    procedure SkillsSkillLoaded(Sender: TObject; ASkill: TAiSkillItem);
+    procedure FnAtenderReclamo(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure FnConsultarPedido(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure FnProgramarCambio(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure AgenteEnterNode(Sender: TObject; Node: TAIAgentsNode);
+    procedure FnProcesarPedido(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure RecibirExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    procedure CotizarExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    procedure EnvioExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    procedure ConsolidarExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    procedure AvisarExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    procedure DespacharExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    procedure MensajeroExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    procedure TransportadoraExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    procedure RevisarExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    procedure DecidirExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    procedure RechazarExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+    procedure PedidosSuspend(Sender: TObject; const AThreadID, ANodeName, AReason, AContext: string);
+    procedure FnAplicarDescuento(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure FnAnularPedido(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure GuardiaCheckToolCall(Sender: TObject; const AToolName, AArguments: string; var AAllow: Boolean;
+      var AReason: string);
+    procedure GuardiaBlocked(Sender: TObject; const AToolName, AArguments, AReason: string);
+    procedure TelemetriaLog(Sender: TObject; const AMsg: string);
+    procedure FnCrearImagen(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure FnCrearVideo(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure FnApartarEnBodega(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure TerminarSinLucia(const ATexto, APie: string);
+    function RespuestaDelAgente: string;
+    procedure PedidosFinish(Sender: TObject; const Input, Output: string; Status: TAgentExecutionStatus; E: Exception);
+    procedure AgenteExitNode(Sender: TObject; Node: TAIAgentsNode);
+    procedure SkillLeerArchivo(Sender: TObject; FunctionAction: TFunctionActionItem;
+      FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+    procedure EditorBeforeCommand(Sender: TObject; const Command, Path: string; Args: TJSONObject;
+      var Result: string; var Handled: Boolean);
+    procedure ShellConsoleLog(Sender: TObject; const Command: string; const StdOut, StdErr: string; ExitCode: Integer);
+    procedure ShellSecurityViolation(Sender: TObject; const Command: string; const CallId: string; var AErrorMessage: string);
+    procedure btnLlamarClick(Sender: TObject);
+    procedure LlamadaSessionReady(Sender: TObject);
+    procedure LlamadaTranscriptCompleted(Sender: TObject; const Transcript, ItemId: string);
+    procedure LlamadaAssistantText(Sender: TObject; const AText: string);
+    procedure LlamadaAudioChunk(Sender: TObject; const AData: TBytes);
+    procedure LlamadaDelegation(Sender: TObject; const DelegationId, Context: string);
+    procedure LlamadaError(Sender: TObject; const ErrorMsg, ErrorCode: string);
+    procedure LlamadaSessionClosed(Sender: TObject; const Reason: string; Seconds: Double);
+    procedure LlamadaUsage(Sender: TObject; Seconds, ContextRatio: Double);
+    procedure TelefonoReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject;
+      aRole, aText: string);
+  private
+    FBurbuja: Integer;        // burbuja del asistente que se esta escribiendo
+    FBurbujaUsuario: Integer; // burbuja del ultimo mensaje del usuario (para la transcripcion)
+    FPensando: Boolean;
+    FReloj: TStopwatch;
+    FTarea: ITask;            // el turno en curso (corre fuera del hilo principal)
+    FCerrando: Boolean;
+    FBloqueo: string;
+    FTextoRecibido: Boolean;  // llego algun pedazo por OnReceiveData en este turno
+    FCarpetaTrabajo: string;
+    FCliente: string;         // el cliente de este turno (lo lee el hilo de la peticion)
+    FLlamadasMCP: TStringList; // id JSON-RPC -> llamada, para unir cada tools/call con su respuesta
+    FHerramientasAgente: TAiToolRegistry; // las herramientas del agente Atencion
+    FHiloPendiente: string;    // <> '' cuando el flujo de pedidos espera la respuesta del encargado
+    FReanudando: Boolean;      // el turno en curso es una reanudacion, no una pregunta a Lucia
+    FAccionBodega: TFunctionEvent; // la accion de TAiA2AAgentTool, envuelta para mostrar el paso
+    FProcesoBodega: THandle;       // BodegaLadera.exe --a2a, si lo arranco la app
+    FEnLlamada: Boolean;           // hay una sesion de voz abierta
+    FLlamadaReloj: TStopwatch;     // desde que se marco
+    FDelegacionReloj: TStopwatch;  // desde la ultima delegacion a Telefono
+    FVozArchivo: TBytes;           // --prueba: la voz de la clienta viene de un archivo, no del microfono
+    FVozPos: Integer;
+    FTimerVoz: TTimer;             // manda ese archivo a ritmo real (100 ms por tick) y despues silencio
+    FVozSalida: TFileStream;       // --voz x.pcm: la voz de Lucia, para oirla despues
+    FUltimaClienta: string;        // ultimo turno de la clienta ya mostrado (llega dos veces)
+    FUltimoPrompt: string;         // el texto del turno en curso, para reintentarlo o pasarlo al respaldo
+    FIntento: Integer;             // reintentos hechos en este turno
+    FIntentoEnCurso: Boolean;      // ya se decidio que hacer con el error de este turno (no repetirlo)
+    FSesionEntrada, FSesionCache, FSesionSalida: Integer; // tokens de la sesion: Lucia + Telefono + respaldo
+    FSesionCosto: Double;          // USD estimados con la tarifa publica de cada modelo
+    FPresupuesto: Integer;         // tokens por sesion antes de cerrarla sola
+    procedure ConfigurarConexion(const ADriver: string);
+    procedure TerminarPensando;
+    procedure MostrarTranscripcion;
+    procedure SetEstado(const AText: string);
+    function CarpetaDatos: string;
+    procedure IniciarPrueba;
+    procedure PasoPrueba(Sender: TObject);
+    procedure Registrar(const ALinea: string);
+    procedure PasoHerramienta(const ATitulo, ADetalle: string);
+    procedure PrepararConocimiento;
+    procedure PrepararMemoria;
+    procedure ConectarBodega;
+    procedure CargarSkills;
+    procedure PrepararAgente;
+    procedure PrepararAprobacion;
+    procedure ArrancarBodegaA2A;
+    procedure LanzarBodegaA2A;
+    procedure PublicarPedidos;
+    procedure Llamar(const AArchivo: string);
+    procedure Colgar;
+    procedure HablarArchivo(const AArchivo: string);
+    procedure PasoVoz(Sender: TObject);
+    function IndexarManual: Integer;
+    procedure Contabilizar(const AModelo: string; aMsg: TAiChatMessage);
+    procedure MostrarSesion;
+    procedure Reintentar(const AMotivo: string);
+    procedure ResponderConRespaldo(const AMotivo: string);
+    procedure QuitarPreguntaFallida;
+    procedure RevisarPresupuesto;
+    function CarpetaImagenes: string;
+    procedure MostrarArchivo(const ATexto, ARuta: string);
+  private
+    FPrueba: TStringList;
+    FCaptura, FRegistro: string;
+    FTimerPrueba: TTimer;
+    FFinTurno: Cardinal;
+  end;
+
+var
+  FormLadera: TFormLadera;
+
+implementation
+
+{$R *.fmx}
+
+function ApiKeyFor(const ADriver: string): string;
+begin
+  if MatchText(ADriver, ['Ollama', 'LMStudio', 'GenericLLM']) then
+    Result := ''
+  else if SameText(ADriver, 'OpenAi') then
+    Result := '@OPENAI_API_KEY'
+  else
+    Result := '@' + UpperCase(ADriver) + '_API_KEY';
+end;
+
+const
+  MAX_REINTENTOS = 2;
+
+function CodigoHttp(const AMensaje: string): Integer;
+var
+  P: Integer;
+begin
+  // El driver reporta "Error Received: 404, {...}". Sin codigo (DNS, red caida, puerto cerrado) es 0.
+  Result := 0;
+  P := Pos('Error Received: ', AMensaje);
+  if P > 0 then
+    Result := StrToIntDef(Copy(AMensaje, P + 16, 3), 0);
+end;
+
+function EsTransitorio(ACodigo: Integer): Boolean;
+begin
+  // Vale reintentar: sin respuesta (red), 408 timeout, 409, 429 rate limit, 5xx del servidor.
+  // No vale: 400/401/403/404 (peticion, clave, permiso o modelo equivocados): fallan igual la segunda vez.
+  Result := (ACodigo = 0) or (ACodigo = 408) or (ACodigo = 409) or (ACodigo = 429) or (ACodigo >= 500);
+end;
+
+function TarifaPorMillon(const AModelo: string; out AEntrada, ACache, ASalida: Double): Boolean;
+begin
+  // USD por millon de tokens (listas publicas de cada proveedor, oct 2026): entrada, entrada leida de cache, salida.
+  // Lo que cobra de verdad el proveedor esta en su panel; esto es para ver el orden de magnitud en vivo.
+  Result := True;
+  AEntrada := 0; ACache := 0; ASalida := 0;
+  if AModelo.StartsWith('gpt-6-sol') then begin AEntrada := 2.00; ACache := 0.20; ASalida := 10.00; end
+  else if AModelo.StartsWith('gpt-6-luna') then begin AEntrada := 0.10; ACache := 0.01; ASalida := 0.50; end
+  else if AModelo.StartsWith('claude-sonnet-5') then begin AEntrada := 2.00; ACache := 0.20; ASalida := 10.00; end
+  else if AModelo.StartsWith('claude-haiku-4-5') then begin AEntrada := 1.00; ACache := 0.10; ASalida := 5.00; end
+  else if AModelo.StartsWith('deepseek') then begin AEntrada := 0.30; ACache := 0.003; ASalida := 1.20; end
+  else Result := False;
+end;
+
+{ Arranque }
+
+procedure TFormLadera.FormCreate(Sender: TObject);
+begin
+  FBurbuja := -1;
+  FBurbujaUsuario := -1;
+  // La carpeta donde el editor y la consola pueden trabajar
+  FCarpetaTrabajo := IncludeTrailingPathDelimiter(TPath.Combine(CarpetaDatos, 'trabajo'));
+  ForceDirectories(FCarpetaTrabajo);
+  SetCurrentDir(FCarpetaTrabajo);
+  PrepararConocimiento;
+  PrepararMemoria;
+  FLlamadasMCP := TStringList.Create;
+  ComboDriver.Items.CommaText := 'OpenAi,Claude,Groq,DeepSeek,Mistral,Ollama';
+  ComboDriver.ItemIndex := 0;   // dispara ComboDriverChange -> ConfigurarConexion
+  FPresupuesto := 50000;        // tokens por sesion; --prueba "/presupuesto N" lo cambia
+  // El respaldo lee imagenes y PDF pero no declara busqueda web: Claude la ofrece por defecto y cuesta
+  // tokens. El conjunto completo y en los dos lados: si SessionCaps conservara cap_WebSearch, el hueco
+  // pediria un puente (WebSearchTool) que este driver no tiene y el turno fallaria.
+  Respaldo.ModelCaps := [cap_Image, cap_Pdf, cap_Reasoning];
+  Respaldo.SessionCaps := Respaldo.ModelCaps;
+  // El registro del driver Claude trae Tool_Active = False: con AiFunctions asignado pero sin esto,
+  // el modelo no recibe las herramientas (el prompt se las nombra y las "llama" en texto)
+  Respaldo.Tool_Active := True;
+  // Los generadores: la calidad y el tamano de la imagen viajan en ImageParams (al endpoint
+  // /images/generations); el video de Grok dura lo que diga el driver (5 s por defecto).
+  Ilustrador.ImageParams.Params.Values['quality'] := 'medium';
+  Ilustrador.ImageParams.Params.Values['size'] := '1024x1024';
+  Ilustrador.AiChat.ResponseTimeOut := 180000;         // una imagen puede tardar mas de un minuto
+  (Videasta.AiChat as TAiGrokChat).VideoDurationSeconds := 5;
+  // El prompt del framework para AutoMCP: cuando buscar, como instalar, como llamar (y las reglas
+  // para no buscar en bucle). Se suma al de Lucia una sola vez; AutoMCPConfig esta en el .fmx.
+  AiConn.SystemPrompt.Add(AiFunctions1.GetAutoMCPSystemPrompt);
+  MostrarSesion;
+  ChatView1.AddMessage(TChatRole.crAssistant,
+    '¡Hola! Soy **Lucía**, de Café La Ladera ☕' + sLineBreak + sLineBreak +
+    'Pregúntame por nuestros cafés, mándame una foto o un PDF, o háblame con el micrófono.');
+  ConectarBodega;
+  CargarSkills;
+  PrepararAgente;
+  PrepararAprobacion;
+  ArrancarBodegaA2A;
+  PublicarPedidos;
+  IniciarPrueba;
+end;
+
+procedure TFormLadera.FormDestroy(Sender: TObject);
+begin
+  if FProcesoBodega <> 0 then
+  begin
+    TerminateProcess(FProcesoBodega, 0);   // el agente que arranco la app se va con ella
+    CloseHandle(FProcesoBodega);
+  end;
+  FPrueba.Free;
+  FVozSalida.Free;
+  FLlamadasMCP.Free;
+  FHerramientasAgente.Free;
+end;
+
+procedure TFormLadera.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+begin
+  // Cerrar a mitad de un turno: la tarea todavia usa AiConn (por ejemplo,
+  // transcribiendo la nota de voz). Se desconectan los eventos, se aborta y se
+  // espera a que termine; mientras, CheckSynchronize atiende lo ya encolado.
+  Colgar;                          // si hay una llamada, cierra la sesion de voz (espera session.closed)
+  FCerrando := True;
+  PedidosServer.Active := False;   // deja de recibir pedidos por A2A
+  AIVoiceMonitor1.Active := False;
+  AiConn.OnReceiveThinking := nil;
+  AiConn.OnReceiveData := nil;
+  AiConn.OnReceiveDataEnd := nil;
+  AiConn.OnError := nil;
+  AiConn.Abort;
+  if Assigned(FTarea) then
+    while not FTarea.Wait(50) do
+      CheckSynchronize;
+  CheckSynchronize;
+  CanClose := True;
+end;
+
+procedure TFormLadera.ConfigurarConexion(const ADriver: string);
+var
+  Key: string;
+begin
+  // Cambiar DriverName recrea el chat interno: el historial empieza de cero.
+  AiConn.DriverName := ADriver;
+  // Nunca una llamada sin limite de tiempo: 90 s por respuesta (el minimo del framework es 61 s)
+  AiConn.AiChat.ResponseTimeOut := 90000;
+  Key := ApiKeyFor(ADriver);
+  if Key <> '' then
+    AiConn.Params.Values['ApiKey'] := Key;
+
+  // Lo que el modelo entiende por si mismo (ModelCaps) y lo que la sesion pide
+  // (SessionCaps). Lo que falta lo resuelve el framework antes de llamar al
+  // modelo: aqui, cap_Audio -> transcribir con ChatTools.SpeechTool.
+  // Al fijar ModelCaps se fija el conjunto completo: vacio = el catalogo del modelo.
+  if MatchText(ADriver, ['OpenAi', 'Claude']) then
+    // leen imagenes y PDF, y traen busqueda web, editor y consola nativos
+    AiConn.ModelCaps := [cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch, cap_TextEditor, cap_Shell]
+  else
+    AiConn.ModelCaps := [];                                    // los demas, aqui, solo texto
+  AiConn.SessionCaps := AiConn.ModelCaps + [cap_Audio];        // la sesion ademas escucha
+
+  if Key.StartsWith('@') and (GetEnvironmentVariable(Key.Substring(1)) = '') then
+    SetEstado('Falta la variable ' + Key.Substring(1))
+  else
+    SetEstado(Format('%s / %s', [AiConn.DriverName, AiConn.AiChat.Model]));
+end;
+
+procedure TFormLadera.ComboDriverChange(Sender: TObject);
+begin
+  if ComboDriver.ItemIndex < 0 then
+    Exit;
+  ConfigurarConexion(ComboDriver.Items[ComboDriver.ItemIndex]);
+  ChatView1.ClearMessages;
+end;
+
+{ Un turno: enviar (con adjuntos), recibir, terminar }
+
+procedure TFormLadera.ChatInput1SendEvent(Sender: TObject; APrompt: string; aMediaFiles: TAiMediaFiles;
+  aAudioStream: TMemoryStream);
+var
+  Archivos: TAiMediaFilesArray;
+  Nota: TAiMediaFile;
+begin
+  // aMediaFiles y aAudioStream se liberan al volver de este evento:
+  // ToMediaFileArray devuelve copias, y el audio se copia en un TAiMediaFile.
+  // Hay un pedido suspendido: este mensaje es la respuesta del encargado y reanuda el
+  // grafo donde quedo (en esta sesion o en otra: el estado esta en el checkpoint)
+  if FHiloPendiente <> '' then
+  begin
+    ChatView1.AddUserMessage(APrompt, aMediaFiles);
+    ChatView1.BeginAssistantMessage;
+    FBurbuja := ChatView1.MessageCount - 1;
+    FReloj := TStopwatch.StartNew;
+    FReanudando := True;
+    Registrar('reanudar'#9 + FHiloPendiente + ' <- ' + APrompt);
+    SetEstado('Reanudando el pedido...');
+    if not Pedidos.ResumeThread(FHiloPendiente, 'Aprobar', APrompt) then
+    begin
+      ChatView1.SetMessageText(FBurbuja, '⚠️ No pude reanudar el pedido suspendido.');
+      ChatView1.FinishMessage(FBurbuja);
+      FBurbuja := -1;
+      FReanudando := False;
+      ChatInput1.Busy := False;
+    end;
+    FHiloPendiente := '';
+    Exit;
+  end;
+  // La memoria es por cliente: el cuadro "Cliente" elige el espacio (Namespace)
+  FCliente := edCliente.Text.Trim;
+  Memoria.Namespace := 'cliente-' + FCliente.ToLower;
+  Archivos := aMediaFiles.ToMediaFileArray;
+  if Assigned(aAudioStream) and (aAudioStream.Size > 100) then
+  begin
+    Nota := TAiMediaFile.Create;
+    aAudioStream.Position := 0;
+    Nota.LoadFromStream('nota_de_voz.wav', aAudioStream);
+    Archivos := Archivos + [Nota];
+    if APrompt = '' then
+      APrompt := '🎤 (nota de voz)';
+  end;
+
+  // Para reintentar o pasar al respaldo: solo turnos de texto (con adjuntos no se repite)
+  FUltimoPrompt := IfThen(APrompt.StartsWith('🎤') or (Length(Archivos) > 0), '', APrompt);
+  FIntento := 0;
+  FIntentoEnCurso := False;
+  ChatView1.AddUserMessage(APrompt, aMediaFiles);   // la burbuja muestra los adjuntos
+  FBurbujaUsuario := ChatView1.MessageCount - 1;
+  ChatView1.BeginAssistantMessage;
+  FBurbuja := ChatView1.MessageCount - 1;
+  FPensando := False;
+  FBloqueo := '';
+  FTextoRecibido := False;
+  FReloj := TStopwatch.StartNew;
+  SetEstado('Lucía está escribiendo...');
+
+  // El puente de audio (transcribir) corre antes de la llamada al modelo y es
+  // sincrono: en un hilo aparte la ventana no se congela.
+  FTarea := TTask.Run(
+    procedure
+    var
+      Recuerdos, Ruta: string;
+      Estado: TJSONObject;
+      Decision: TAiJevResult;
+      Confianza, Urgente: Double;
+      Reloj: TStopwatch;
+    begin
+      try
+        // La recepcion (capitulo 24): Jev decide, sin LLM, a quien va el mensaje y si es
+        // urgente. Las preguntas estan en el formulario (Jev.Questions); el state es la consulta.
+        if (APrompt <> '') and not APrompt.StartsWith('🎤') then
+        begin
+          Reloj := TStopwatch.StartNew;
+          Estado := TJSONObject.Create;
+          try
+            Estado.AddPair('consulta', APrompt);
+            Decision := Jev.Ask(Estado);
+            try
+              Ruta := Decision['ruta'].Choice;
+              Confianza := Decision['ruta'].Confidence;
+              Urgente := Decision['urgente'].Noul;
+            finally
+              Decision.Free;
+            end;
+          finally
+            Estado.Free;
+          end;
+          PasoHerramienta('recepción (Jev): ' + Ruta, Format('confianza %.2f · urgente %.2f · %d ms · %d tokens',
+            [Confianza, Urgente, Reloj.ElapsedMilliseconds, Jev.Usage.InputTokens]));
+          if (Confianza < 0.6) or (Ruta = 'Persona') then
+          begin
+            // Ningun agente: lo atiende una persona, y no se gasta ningun modelo
+            TerminarSinLucia('Esto lo atiende directamente el dueño de la tienda. Le paso tu mensaje tal cual y te responde él. 🙏',
+              Format('sin modelo de lenguaje · recepción %.2f · %.1f s', [Confianza, Reloj.ElapsedMilliseconds / 1000]));
+            Exit;
+          end;
+          if Ruta = 'Reclamos' then
+          begin
+            // Directo al agente de reclamos (capitulo 19), sin pasar por el turno de Lucia
+            Reclamos.Run(APrompt, nil);
+            while Reclamos.Busy do
+              Sleep(50);
+            TerminarSinLucia(RespuestaDelAgente, Format('agente Reclamos directo, sin el turno de Lucía · %.1f s',
+              [Reloj.ElapsedMilliseconds / 1000]));
+            Exit;
+          end;
+        end;
+        // Pedidos, Mayorista, Carta: Lucia, como siempre
+        // Lo que la memoria va a inyectar en este turno (el chat lo busca igual por su
+        // cuenta; aqui se muestra en la burbuja para verlo)
+        Recuerdos := Memoria.BuildContext(APrompt, AiConn.MemoryTokenBudget).Trim;
+        if Recuerdos <> '' then
+          PasoHerramienta('memoria de ' + FCliente, Recuerdos.Replace(sLineBreak, ' '));
+        AiConn.AddMessageAndRun(IfThen(APrompt.StartsWith('🎤'), '', APrompt), 'user', Archivos);
+      except
+        on E: Exception do
+        begin
+          var Msg := E.Message;
+          TThread.Queue(nil,
+            procedure
+            begin
+              AiConnError(AiConn, Msg, nil, nil);
+            end);
+        end;
+      end;
+    end);
+end;
+
+procedure TFormLadera.AiConnReceiveThinking(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject;
+  aRole, aText: string);
+begin
+  TThread.Queue(nil,
+    procedure
+    begin
+      if FCerrando then
+        Exit;
+      if (FBurbuja >= 0) and not FPensando then
+      begin
+        FPensando := True;
+        ChatView1.AddStep(FBurbuja, 'pensar', 'Pensando');
+      end;
+    end);
+end;
+
+procedure TFormLadera.TerminarPensando;
+begin
+  if FPensando then
+  begin
+    FPensando := False;
+    ChatView1.FinishStep(FBurbuja, 'pensar', True, FReloj.ElapsedMilliseconds, '');
+  end;
+end;
+
+procedure TFormLadera.AiConnReceiveData(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject;
+  aRole, aText: string);
+begin
+  if aText = '' then
+    Exit;
+  TThread.Queue(nil,
+    procedure
+    begin
+      if FCerrando or (FBurbuja < 0) then
+        Exit;
+      TerminarPensando;
+      FTextoRecibido := True;
+      ChatView1.AppendToken(FBurbuja, aText);
+    end);
+end;
+
+procedure TFormLadera.AiConnReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject;
+  aRole, aText: string);
+var
+  Pie: string;
+  Entrada: Integer;
+begin
+  if Assigned(aMsg) then
+  begin
+    Entrada := aMsg.Prompt_tokens + aMsg.Cached_tokens + aMsg.Cache_write_tokens;
+    Pie := Format('%d tokens de entrada', [Entrada]);
+    if aMsg.Cached_tokens > 0 then
+      Pie := Pie + Format(' (%d en caché)', [aMsg.Cached_tokens]);
+    Pie := Pie + Format(' · %d de salida · %.1f s', [aMsg.Completion_tokens, FReloj.ElapsedMilliseconds / 1000]);
+  end
+  else
+    Pie := Format('%.1f s', [FReloj.ElapsedMilliseconds / 1000]);
+  Contabilizar(AiConn.AiChat.Model, aMsg);
+  TThread.Queue(nil,
+    procedure
+    begin
+      if FCerrando or (FBurbuja < 0) then
+        Exit;
+      TerminarPensando;
+      MostrarTranscripcion;
+      // Tras llamar herramientas, la respuesta final puede llegar completa en aText
+      // sin pasar por OnReceiveData: se pone entera si la burbuja sigue vacia.
+      if (not FTextoRecibido) and (aText <> '') then
+        ChatView1.SetMessageText(FBurbuja, aText);
+      ChatView1.FinishMessage(FBurbuja);
+      ChatView1.SetMessageFooter(FBurbuja, Pie);
+      Registrar('turno'#9 + Pie);
+      FBurbuja := -1;
+      ChatInput1.Busy := False;
+      SetEstado(Format('%s / %s', [AiConn.DriverName, AiConn.AiChat.Model]));
+      RevisarPresupuesto;
+    end);
+end;
+
+procedure TFormLadera.MostrarTranscripcion;
+var
+  I: Integer;
+  Msg: TAiChatMessage;
+  Texto: string;
+begin
+  // Si el usuario mando una nota de voz, su burbuja muestra lo que se entendio
+  for I := AiConn.Messages.Count - 1 downto 0 do
+  begin
+    Msg := AiConn.Messages[I];
+    if Msg.Role <> 'user' then
+      Continue;
+    Texto := Msg.GetMediaTranscription;
+    if (Texto <> '') and (FBurbujaUsuario >= 0) then
+    begin
+      ChatView1.SetMessageText(FBurbujaUsuario, '🎤 ' + Texto.Trim);
+      Registrar('transcripcion'#9 + Texto.Trim);
+    end;
+    Break;
+  end;
+end;
+
+procedure TFormLadera.AiConnError(Sender: TObject; const ErrorMsg: string; AException: Exception;
+  const AResponse: IHTTPResponse);
+var
+  Texto, Motivo: string;
+  Codigo: Integer;
+begin
+  Texto := IfThen(FBloqueo <> '', '🛡️ ' + FBloqueo, '⚠️ ' + ErrorMsg);
+  // El codigo HTTP: en el camino asincrono llega en AResponse; en el sincrono, dentro del mensaje
+  if Assigned(AResponse) then
+    Codigo := AResponse.StatusCode
+  else
+    Codigo := CodigoHttp(ErrorMsg);
+  Motivo := IfThen(Codigo > 0, Format('HTTP %d · ', [Codigo]), 'sin respuesta · ') +
+    Copy(ErrorMsg.Replace(#13, ' ').Replace(#10, ' ').Replace('  ', ' '), 1, 160);
+  TThread.Queue(nil,
+    procedure
+    begin
+      if FCerrando or FIntentoEnCurso then
+        Exit;
+      // Produccion: un error del modelo no termina el turno con un aviso. Si es transitorio se
+      // reintenta con espera creciente; si no, o se agotaron los reintentos, responde el respaldo.
+      // Un mensaje bloqueado por el filtro (FBloqueo) no se reintenta: fue decision, no falla.
+      if (FBloqueo = '') and (FBurbuja >= 0) and (FUltimoPrompt <> '') and not FReanudando then
+      begin
+        Registrar('error'#9 + Motivo);
+        FIntentoEnCurso := True;
+        if EsTransitorio(Codigo) and (FIntento < MAX_REINTENTOS) then
+          Reintentar(Motivo)
+        else
+          ResponderConRespaldo(Motivo);
+        Exit;
+      end;
+      if FBurbuja >= 0 then
+      begin
+        TerminarPensando;
+        ChatView1.SetMessageText(FBurbuja, Texto);
+        ChatView1.FinishMessage(FBurbuja);
+        FBurbuja := -1;
+      end;
+      Registrar('error'#9 + Texto);
+      ChatInput1.Busy := False;
+      SetEstado(IfThen(FBloqueo <> '', 'Mensaje bloqueado', 'Error: ' + ErrorMsg));
+    end);
+end;
+
+procedure TFormLadera.ChatInput1Cancel(Sender: TObject);
+begin
+  AiConn.Abort;
+  if FBurbuja >= 0 then
+  begin
+    TerminarPensando;
+    ChatView1.SetMessageFooter(FBurbuja, 'cancelado');
+    ChatView1.FinishMessage(FBurbuja);
+    FBurbuja := -1;
+  end;
+  ChatInput1.Busy := False;
+  SetEstado('Cancelado');
+end;
+
+procedure TFormLadera.ChatInput1MicToggle(Sender: TObject; AActivate: Boolean);
+begin
+  // El boton del microfono solo cambia su dibujo: el que graba es el monitor.
+  // Cuando el usuario calla, TAIChatInput manda el WAV por OnSendEvent.
+  AIVoiceMonitor1.Active := AActivate;
+end;
+
+{ El filtro (capitulo 8) }
+
+procedure TFormLadera.AiConnSanitize(Sender: TObject; const AResult: TSanitizeResult; var AAction: TAiSanitizeAction);
+var
+  M: TSuspiciousMatch;
+  Nombres: string;
+begin
+  for M in AResult.SuspiciousMatches do
+    Nombres := Nombres + M.PatternName + ' ';
+  FBloqueo := 'Mensaje bloqueado por el sanitizador: fórmula conocida (' + Nombres.Trim + ').';
+end;
+
+procedure TFormLadera.AiConnPromptGuard(Sender: TObject; const AVerdict: TAiPromptVerdict; var AAction: TAiSanitizeAction);
+begin
+  FBloqueo := Format('Mensaje bloqueado por el guardián: `%s` (%.2f).', [AVerdict.Category, AVerdict.Score]);   // en backticks: la burbuja es Markdown
+end;
+
+
+{ Las herramientas de la tienda (capitulo 11). El modelo decide cuando llamarlas;
+  cada OnAction lee los parametros, hace el trabajo y devuelve el resultado en
+  ToolCall.Response. Llegan desde el hilo de la peticion: la UI se toca con Queue. }
+
+function BolsasDe(const ACafe: string): Integer;
+begin
+  // El inventario de hoy (ficticio). En una app real: la base de datos.
+  if ACafe.Contains('Huila') then Exit(24);
+  if ACafe.Contains('Nari') then Exit(10);
+  if ACafe.Contains('Sierra') then Exit(0);
+  if ACafe.Contains('Descaf') then Exit(15);
+  Result := -1;
+end;
+
+function PrecioDe(const ACafe: string): Integer;
+begin
+  if ACafe.Contains('Huila') then Exit(38000);
+  if ACafe.Contains('Nari') then Exit(42000);
+  if ACafe.Contains('Sierra') then Exit(36000);
+  if ACafe.Contains('Descaf') then Exit(34000);
+  Result := 0;
+end;
+
+procedure TFormLadera.PasoHerramienta(const ATitulo, ADetalle: string);
+var
+  Id: string;
+begin
+  // Un paso en la burbuja de Lucia: lo que hizo mientras preparaba la respuesta
+  Id := 'tool' + IntToStr(Random(100000));
+  Registrar('herramienta'#9 + ATitulo + ' -> ' + ADetalle);
+  TThread.Queue(nil,
+    procedure
+    begin
+      if FCerrando or (FBurbuja < 0) then
+        Exit;
+      ChatView1.AddStep(FBurbuja, Id, ATitulo);
+      ChatView1.FinishStep(FBurbuja, Id, True, 0, ADetalle);
+    end);
+end;
+
+procedure TFormLadera.FnConsultarInventario(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+var
+  Cafe: string;
+  Bolsas: Integer;
+begin
+  Handled := True;
+  Cafe := ToolCall.Params.Values['cafe'];
+  Bolsas := BolsasDe(Cafe);
+  if Bolsas < 0 then
+    ToolCall.Response := 'No existe ese café en la carta.'
+  else
+    ToolCall.Response := Format('%s: %d bolsas de 340 g disponibles.', [Cafe, Bolsas]);
+  PasoHerramienta('consultar_inventario(' + Cafe + ')', ToolCall.Response);
+end;
+
+procedure TFormLadera.FnCalcularTotal(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+var
+  Cafe, Ciudad: string;
+  Bolsas, Subtotal, Envio: Integer;
+begin
+  Handled := True;
+  Cafe := ToolCall.Params.Values['cafe'];
+  Bolsas := StrToIntDef(ToolCall.Params.Values['bolsas'], 0);
+  Ciudad := ToolCall.Params.Values['ciudad'];
+  Subtotal := PrecioDe(Cafe) * Bolsas;
+  if SameText(Ciudad, 'Pitalito') then
+    Envio := 5000
+  else
+    Envio := 12000;
+  ToolCall.Response := Format('%d x %s = %d COP; envío a %s: %d COP; total: %d COP.',
+    [Bolsas, Cafe, Subtotal, Ciudad, Envio, Subtotal + Envio]);
+  PasoHerramienta(Format('calcular_total(%s, %d, %s)', [Cafe, Bolsas, Ciudad]), ToolCall.Response);
+end;
+
+
+{ Manos en el sistema (capitulo 12): cada herramienta con su limite }
+
+procedure TFormLadera.EditorBeforeCommand(Sender: TObject; const Command, Path: string; Args: TJSONObject;
+  var Result: string; var Handled: Boolean);
+var
+  Completa: string;
+begin
+  // Rutas relativas se resuelven contra la carpeta de trabajo; lo que termine fuera
+  // (C:\Windows\..., ..\..\) se rechaza sin tocarlo. Y el editor no borra.
+  if TPath.IsPathRooted(Path) then
+    Completa := TPath.GetFullPath(Path)
+  else
+    Completa := TPath.GetFullPath(TPath.Combine(FCarpetaTrabajo, Path));
+  if not Completa.StartsWith(FCarpetaTrabajo, True) then
+  begin
+    Result := 'Error: solo puedes trabajar dentro de la carpeta de trabajo.';
+    Handled := True;
+    PasoHerramienta('editor ' + Command + ' ' + Path, 'BLOQUEADO: fuera de la carpeta de trabajo');
+  end
+  else if SameText(Command, 'delete') then
+  begin
+    Result := 'Error: el editor no tiene permiso para borrar archivos.';
+    Handled := True;
+    PasoHerramienta('editor ' + Command + ' ' + Path, 'BLOQUEADO: el editor no borra');
+  end
+  else
+    PasoHerramienta('editor ' + Command + ' ' + Path, 'ok');
+end;
+
+procedure TFormLadera.ShellConsoleLog(Sender: TObject; const Command: string; const StdOut, StdErr: string;
+  ExitCode: Integer);
+begin
+  PasoHerramienta('consola: ' + Command, Format('salida de %d caracteres', [Length(StdOut)]));
+end;
+
+procedure TFormLadera.ShellSecurityViolation(Sender: TObject; const Command: string; const CallId: string;
+  var AErrorMessage: string);
+begin
+  PasoHerramienta('consola: ' + Command, 'BLOQUEADO: no está en la lista permitida');
+end;
+
+{ El conocimiento (capitulo 13): el manual de la tienda en una base vectorial sobre
+  SQLite. Se indexa una sola vez, por secciones y con metadatos; el modelo lo consulta
+  con la herramienta buscar_en_el_manual y el reranker descarta lo que no responde
+  (o trae una inyeccion). }
+
+procedure TFormLadera.PrepararConocimiento;
+var
+  N: Integer;
+begin
+  // Los componentes estan en el formulario; aqui se conectan entre si.
+  Embeddings.ApiKey := '@OPENAI_API_KEY';
+  RAG.Embeddings := Embeddings;       // quien convierte texto en vectores
+  RAG.Driver := RAGDriver;            // donde se guardan y se buscan (SQLite)
+  FDConn.Params.Database := TPath.Combine(CarpetaDatos, 'conocimiento.db');
+  FDConn.Connected := True;
+  RAGDriver.CreateSchema('manual');   // CREATE TABLE IF NOT EXISTS: la segunda vez no hace nada
+  N := FDConn.ExecSQLScalar('SELECT COUNT(*) FROM manual');
+  if N = 0 then
+    N := IndexarManual;               // solo la primera vez: cada pasaje cuesta una llamada de embeddings
+  Registrar('conocimiento'#9 + Format('%d pasajes en %s', [N, FDConn.Params.Database]));
+
+  // El grafo (capitulo 14): se arma en memoria con las tripletas del archivo. Builder.Graph
+  // esta conectado en el formulario; cada nodo recibe un embedding para la busqueda semantica.
+  Grafo.Embeddings := Embeddings;
+  N := Builder.Process(TFile.ReadAllText(TPath.Combine(ExtractFilePath(ParamStr(0)), 'grafo\tripletas.json'), TEncoding.UTF8));
+  Registrar('grafo'#9 + Format('%d tripletas, %d nodos, %d relaciones', [N, Grafo.NodeCount, Grafo.EdgeCount]));
+end;
+
+function TFormLadera.IndexarManual: Integer;
+var
+  Archivo, L, Titulo, Texto: string;
+  Meta: TAiEmbeddingMetaData;
+
+  procedure Guardar;
+  begin
+    if (Texto.Trim = '') or (Titulo = '') then
+      Exit;
+    Meta['fuente'] := IfThen(Archivo.Contains('foro'), 'foro', 'manual');
+    Meta['seccion'] := Titulo;
+    RAG.AddItem(Titulo + '. ' + Texto.Trim, Meta);   // embedding + fila en SQLite
+    Inc(Result);
+    Texto := '';
+  end;
+
+begin
+  // Cada archivo de manual\ se parte por secciones: un titulo (linea corta sin punto
+  // final) seguido de sus parrafos. Un pasaje por seccion, con su fuente en los metadatos.
+  Result := 0;
+  Meta := TAiEmbeddingMetaData.Create;
+  try
+    for Archivo in TDirectory.GetFiles(TPath.Combine(ExtractFilePath(ParamStr(0)), 'manual'), '*.txt') do
+    begin
+      Titulo := '';
+      Texto := '';
+      for L in TFile.ReadAllLines(Archivo, TEncoding.UTF8) do
+      begin
+        if L.Trim = '' then
+          Continue;
+        if (L.Length < 60) and not L.Trim.EndsWith('.') and not L.Contains(':') then
+        begin
+          Guardar;
+          Titulo := L.Trim;
+        end
+        else if Titulo <> '' then
+          Texto := Texto + L.Trim + ' ';
+      end;
+      Guardar;
+    end;
+  finally
+    Meta.Free;
+  end;
+end;
+
+procedure TFormLadera.FnBuscarManual(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+var
+  Pregunta, Detalle, Respuesta: string;
+  Encontrados: TAiRAGVector;
+  I: Integer;
+  Nodo: TAiEmbeddingNode;
+begin
+  Handled := True;
+  Pregunta := ToolCall.Params.Values['pregunta'];
+  // 1. Recuperar: los pasajes mas parecidos a la pregunta (coseno, en SQLite)
+  Encontrados := RAG.Search(Pregunta, 4, 0.3, nil);
+  try
+    for I := 0 to Encontrados.Count - 1 do
+      Detalle := Detalle + Format('%s %.2f · ', [VarToStr(Encontrados.Items[I].MetaData['seccion']), Encontrados.Items[I].Idx]);
+    // 2. Reordenar con Jev: evidencia por pasaje; una inyeccion de prompt queda en -1
+    try
+      Encontrados.RerankWith(Pregunta, Reranker);
+      Detalle := Detalle + '→ rerank: ';
+    except
+      on E: Exception do
+        Detalle := Detalle + '→ sin reranker (' + E.Message + '): ';
+    end;
+    for I := 0 to Encontrados.Count - 1 do
+    begin
+      Nodo := Encontrados.Items[I];
+      if Nodo.Idx < 0 then
+        Detalle := Detalle + Format('%s descartado · ', [VarToStr(Nodo.MetaData['seccion'])])
+      else
+      begin
+        Detalle := Detalle + Format('%s %.2f · ', [VarToStr(Nodo.MetaData['seccion']), Nodo.Idx]);
+        if Nodo.Idx >= 0.2 then
+          Respuesta := Respuesta + Nodo.Text + sLineBreak;
+      end;
+    end;
+  finally
+    Encontrados.Free;
+  end;
+  if Respuesta = '' then
+    Respuesta := 'El manual no dice nada sobre eso.';
+  ToolCall.Response := Respuesta;
+  PasoHerramienta('buscar_en_el_manual(' + Pregunta + ')', Detalle.TrimRight([' ', '·']));
+end;
+
+{ El grafo (capitulo 14): lo que la tienda sabe de sus cafes y de sus clientes como
+  entidades y relaciones. Una herramienta busca por significado y trae los vecinos;
+  la otra hace una consulta MakerGQL con el parametro que mando el modelo. }
+
+procedure TFormLadera.FnQueSabemosDe(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+var
+  Nombre, Contexto: string;
+begin
+  Handled := True;
+  Nombre := ToolCall.Params.Values['nombre'];
+  // El nodo mas parecido al nombre y todo lo que lo rodea a dos saltos, como texto para el modelo
+  Contexto := Grafo.SearchText(Nombre, 2, False, 1, 0.5);
+  if Contexto.Trim = '' then
+    Contexto := 'El grafo no tiene nada sobre ' + Nombre + '.';
+  ToolCall.Response := Contexto;
+  PasoHerramienta('que_sabemos_de(' + Nombre + ')', Format('%d caracteres de contexto del grafo', [Length(Contexto)]));
+end;
+
+procedure TFormLadera.FnCafesPorAcidez(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+var
+  Nivel, GQL, R: string;
+begin
+  Handled := True;
+  Nivel := ToolCall.Params.Values['nivel'].Trim;
+  if Nivel <> '' then
+    Nivel := UpperCase(Nivel.Substring(0, 1)) + LowerCase(Nivel.Substring(1));   // 'baja' -> 'Baja'
+  // Una consulta de grafo con el parametro del modelo: productos unidos a ese nivel de acidez
+  GQL := Format('MATCH (c:Producto)-[t:TIENE_ACIDEZ]->(a:Acidez) WHERE a.name = ''%s'' RETURN c', [Nivel.Replace('''', '')]);
+  R := Grafo.ExecuteMakerGQL(GQL);
+  ToolCall.Response := R;
+  PasoHerramienta('cafes_por_acidez(' + Nivel + ')', GQL);
+end;
+
+{ La memoria (capitulo 15): lo que cada cliente conto, mas alla de esta conversacion }
+
+procedure TFormLadera.PrepararMemoria;
+begin
+  // Los componentes y sus enlaces (Analyzer, Embedder, PersistentMemory) estan en el
+  // formulario; aqui solo lo que depende de la maquina.
+  Memoria.DbPath := TPath.Combine(CarpetaDatos, 'memoria.db');
+  Analizador.Tool_Active := False;       // el analizador solo lee y resume
+  FCliente := edCliente.Text.Trim;
+end;
+
+{ Conectores (capitulo 16): la bodega como servidor MCP, en otro proceso }
+
+procedure TFormLadera.ConectarBodega;
+var
+  Item: TMCPClientItem;
+  Lista: TJSONObject;
+  Tools: TJSONArray;
+  T: TJSONValue;
+  Nombres: string;
+begin
+  // El item (nombre, transporte stdio, comando) esta en el formulario; aqui solo se
+  // completa la ruta del .exe, que vive junto a la app. Initialize lanza el proceso hijo,
+  // negocia la version del protocolo y pide tools/list.
+  Item := AiFunctions1.MCPClients.Items[0] as TMCPClientItem;
+  Item.Params.Values['Command'] := TPath.Combine(ExtractFilePath(ParamStr(0)), 'BodegaLadera.exe');
+  if Item.MCPClient.Initialize and Item.MCPClient.Available then
+  begin
+    Lista := Item.MCPClient.ListTools;
+    try
+      if Assigned(Lista) and Lista.TryGetValue<TJSONArray>('tools', Tools) then
+        for T in Tools do
+          Nombres := Nombres + IfThen(Nombres = '', '', ', ') + '`' + T.GetValue<string>('name') + '`';
+    finally
+      Lista.Free;
+    end;
+    ChatView1.AddMessage(TChatRole.crAssistant, Format('🔌 Bodega conectada por MCP (`%s`, stdio, protocolo %s): %s.',
+      [Item.Name, Item.MCPClient.NegotiatedProtocol, Nombres]));
+    Registrar('mcp'#9 + Item.Name + ' ' + Item.MCPClient.NegotiatedProtocol + ': ' + Nombres);
+  end
+  else
+    SetEstado('No se pudo arrancar el servidor MCP de la bodega');
+end;
+
+procedure TFormLadera.AiFunctions1Log(Sender: TObject; const Msg: string);
+const
+  ENVIO = 'CLIENT -> SERVER: ';
+  RESPUESTA = 'SERVER -> CLIENT: ';
+var
+  J: TJSONValue;
+  Params, Res: TJSONObject;
+  Contenido: TJSONArray;
+  Id, Texto, Llamada: string;
+  I: Integer;
+begin
+  // AutoMCP (capitulo 32) avisa por aqui lo que busca, instala y llama
+  if Msg.StartsWith('[AutoMCP]') then
+  begin
+    PasoHerramienta('AutoMCP', Msg.Substring(9).Trim);
+    Exit;
+  end;
+  // El trafico JSON-RPC completo pasa por aqui; se muestran solo los tools/call y su resultado
+  if Msg.StartsWith(ENVIO) then
+  begin
+    J := TJSONObject.ParseJSONValue(Msg.Substring(Length(ENVIO)));
+    try
+      if (J is TJSONObject) and (TJSONObject(J).GetValue<string>('method', '') = 'tools/call') then
+      begin
+        Params := TJSONObject(J).GetValue<TJSONObject>('params');
+        TMonitor.Enter(FLlamadasMCP);
+        try
+          FLlamadasMCP.Values[TJSONObject(J).GetValue<string>('id', '')] :=
+            Params.GetValue<string>('name', '') + ' ' + Params.GetValue<TJSONObject>('arguments').ToString;
+        finally
+          TMonitor.Exit(FLlamadasMCP);
+        end;
+      end;
+    finally
+      J.Free;
+    end;
+  end
+  else if Msg.StartsWith(RESPUESTA) then
+  begin
+    J := TJSONObject.ParseJSONValue(Msg.Substring(Length(RESPUESTA)));
+    try
+      if J is TJSONObject then
+      begin
+        Id := TJSONObject(J).GetValue<string>('id', '');
+        TMonitor.Enter(FLlamadasMCP);
+        try
+          I := FLlamadasMCP.IndexOfName(Id);
+          if I >= 0 then
+          begin
+            Llamada := FLlamadasMCP.ValueFromIndex[I];
+            FLlamadasMCP.Delete(I);
+          end;
+        finally
+          TMonitor.Exit(FLlamadasMCP);
+        end;
+        if Llamada <> '' then
+        begin
+          if TJSONObject(J).TryGetValue<TJSONObject>('result', Res) and
+            Res.TryGetValue<TJSONArray>('content', Contenido) and (Contenido.Count > 0) then
+            Texto := TJSONObject(Contenido.Items[0]).GetValue<string>('text', '');
+          PasoHerramienta('MCP bodega: tools/call ' + Llamada, Texto);
+        end;
+      end;
+    finally
+      J.Free;
+    end;
+  end;
+end;
+
+{ Habilidades (capitulo 17): procedimientos de la tienda, cargados solo cuando hacen falta }
+
+procedure TFormLadera.CargarSkills;
+var
+  Nombres: string;
+  I: Integer;
+begin
+  // Skills.Functions = AiFunctions1 esta en el formulario: al cargar la carpeta se registran
+  // dos funciones (use_skill y read_skill_file). La carpeta vive junto al .exe.
+  Skills.Folder := TPath.Combine(ExtractFilePath(ParamStr(0)), 'skills');
+  for I := 0 to Skills.Skills.Count - 1 do
+    Nombres := Nombres + IfThen(Nombres = '', '', ', ') + '`' + Skills.Skills[I].Name + '`';
+  // Para ver cada lectura de archivo, la app envuelve read_skill_file y delega en TAiSkills
+  AiFunctions1.Functions.GetFunction(Skills.ReadFunctionName).OnAction := SkillLeerArchivo;
+  ChatView1.AddMessage(TChatRole.crAssistant, Format('📚 %d skills disponibles (catálogo de %d caracteres): %s.',
+    [Skills.Skills.Count, Skills.Catalog.Length, Nombres]));
+  Registrar('skills'#9 + Format('%d skills, catalogo %d caracteres', [Skills.Skills.Count, Skills.Catalog.Length]));
+end;
+
+procedure TFormLadera.SkillsSkillLoaded(Sender: TObject; ASkill: TAiSkillItem);
+begin
+  // El modelo pidio use_skill: las instrucciones completas entran a la conversacion ahora
+  PasoHerramienta('use_skill ' + ASkill.Name, Format('%d caracteres de instrucciones', [ASkill.Instructions.Text.Length]));
+end;
+
+procedure TFormLadera.SkillLeerArchivo(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+begin
+  Handled := True;
+  try
+    ToolCall.Response := Skills.ExecuteReadFile(ToolCall.Params.Values['name'], ToolCall.Params.Values['path']);
+    PasoHerramienta('read_skill_file ' + ToolCall.Params.Values['name'] + '/' + ToolCall.Params.Values['path'],
+      Format('%d caracteres', [ToolCall.Response.Length]));
+  except
+    on E: Exception do
+    begin
+      ToolCall.Response := 'Error: ' + E.Message;
+      PasoHerramienta('read_skill_file ' + ToolCall.Params.Values['path'], E.Message);
+    end;
+  end;
+end;
+
+{ El primer agente (capitulo 19): dos TLLMNode en el formulario, Atencion -> Revisor }
+
+procedure TFormLadera.PrepararAgente;
+begin
+  // El grafo (Reclamos, Atencion, LinkAtencion, Revisor) esta armado en el formulario:
+  // StartNode/EndNode, Next y NextA en el Object Inspector. Aqui va lo que no se puede
+  // enlazar en diseno: las herramientas (un TAiFunctions normal, via el registro) y el
+  // skill (un SKILL.md leido de la carpeta; el nodo lo libera).
+  FHerramientasAgente := TAiToolRegistry.Create;
+  FHerramientasAgente.RegisterFromTAiFunctions(FuncionesReclamo);
+  Atencion.Registry := FHerramientasAgente;
+  Atencion.Skill := TAiSkill.FromFolder(TPath.Combine(ExtractFilePath(ParamStr(0)), 'skills\respuesta-reclamo'));
+end;
+
+procedure TFormLadera.FnAtenderReclamo(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+var
+  R: string;
+begin
+  // Lucia delega: el grafo corre en su pool de hilos y este hilo (el de la peticion) espera.
+  // Los eventos del grafo vuelven al hilo principal por su cuenta.
+  Handled := True;
+  PasoHerramienta('atender_reclamo → agente Reclamos', 'Atencion → Revisor');
+  Reclamos.Run(ToolCall.Params.Values['mensaje'], nil);
+  while Reclamos.Busy do
+    Sleep(50);
+  R := Reclamos.FindNode('Revisor').Output.Trim;
+  if R.StartsWith('APROBADA') or R.StartsWith('CORREGIDA') then
+    R := R.Substring(R.IndexOf(#10) + 1).Trim;       // la primera linea es el veredicto
+  ToolCall.Response := R;
+end;
+
+procedure TFormLadera.FnConsultarPedido(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+var
+  Numero: string;
+begin
+  Handled := True;
+  Numero := ToolCall.Params.Values['numero'].Trim;
+  if Numero = '1047' then
+    ToolCall.Response := 'Pedido 1047 de Marta Gómez, Medellín: 2 bolsas de Huila Reserva (340 g). ' +
+      'Molienda pedida: en grano. Despachado: molido para prensa francesa (error de empaque). Entregado el 20 de octubre.'
+  else
+    ToolCall.Response := 'No existe el pedido ' + Numero + '.';
+  PasoHerramienta('   consultar_pedido(' + Numero + ')', ToolCall.Response);
+end;
+
+procedure TFormLadera.FnProgramarCambio(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+var
+  Numero: string;
+begin
+  Handled := True;
+  Numero := ToolCall.Params.Values['numero'].Trim;
+  if Numero = '1047' then
+    ToolCall.Response := 'Cambio programado sin costo: 2 bolsas de Huila Reserva en grano. ' +
+      'Guía LAD-55821, sale mañana jueves y llega a Medellín el viernes. La clienta entrega las bolsas molidas al mensajero.'
+  else
+    ToolCall.Response := 'No existe el pedido ' + Numero + '.';
+  PasoHerramienta('   programar_cambio(' + Numero + ', ' + ToolCall.Params.Values['motivo'].Trim + ')', ToolCall.Response);
+end;
+
+procedure TFormLadera.AgenteEnterNode(Sender: TObject; Node: TAIAgentsNode);
+begin
+  // Ya viene sincronizado con el hilo principal
+  PasoHerramienta('→ nodo ' + Node.Name, 'entrada: ' + Node.Input.Replace(sLineBreak, ' '));
+end;
+
+procedure TFormLadera.AgenteExitNode(Sender: TObject; Node: TAIAgentsNode);
+begin
+  PasoHerramienta('   ' + Node.Name + ' terminó', Node.Output.Replace(sLineBreak, ' '));
+end;
+
+{ El flujo (capitulo 20): el pedido por un grafo armado en el formulario }
+
+function Pesos(AValor: Integer): string;
+begin
+  Result := FormatFloat('#,##0', AValor).Replace(',', '.') + ' COP';
+end;
+
+function NotaEncargado(Node: TAIAgentsNode): string;
+begin
+  Result := '';
+  if Node.Graph.Blackboard.GetString('reserva') <> '' then
+    Result := ' Reserva en bodega ' + Node.Graph.Blackboard.GetString('reserva') + '.';
+  if Node.Graph.Blackboard.GetString('respuesta_encargado') <> '' then
+    Result := Result + ' Aprobado por el encargado: "' + Node.Graph.Blackboard.GetString('respuesta_encargado') + '".';
+end;
+
+procedure TFormLadera.FnProcesarPedido(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+begin
+  Handled := True;
+  PasoHerramienta('procesar_pedido → flujo Pedidos', ToolCall.Params.Values['items'] + ' | ' + ToolCall.Params.Values['ciudad']);
+  // Run(texto, nil) arranca con blackboard y estado limpios; las ramas corren en el pool
+  Pedidos.Run(ToolCall.Params.Values['items'] + ' | ' + ToolCall.Params.Values['ciudad'], nil);
+  while Pedidos.Busy do
+    Sleep(50);
+  // Suspendido: el grafo guardo su estado y la pregunta ya esta en el chat (OnSuspend)
+  if Pedidos.Blackboard.GetStatus = esSuspended then
+    ToolCall.Response := 'El pedido supera el tope que puedo confirmar sola y quedó EN ESPERA de la aprobación ' +
+      'del encargado; la pregunta ya le llegó. Dile al cliente que confirmamos en cuanto el encargado responda, sin prometer fecha.'
+  else
+    ToolCall.Response := Pedidos.FindNode('Redactor').Output.Trim;
+end;
+
+procedure TFormLadera.RecibirExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+var
+  Partes: TArray<string>;
+begin
+  // "cantidad producto, cantidad producto | ciudad" -> al blackboard, para todas las ramas
+  Partes := Input.Split(['|']);
+  Node.Graph.Blackboard.SetString('items', Partes[0].Trim);
+  Node.Graph.Blackboard.SetString('ciudad', Partes[1].Trim);
+  Output := Partes[0].Trim;   // a las ramas van solo los productos: es lo que recibe la bodega
+end;
+
+{ Inventario ya no tiene OnExecute: su Tool es BodegaRemota (TAiA2ARemoteAgentTool) y lo
+  ejecuta el agente de bodega en :8301. Lo que el agente responde queda en Node.Output. }
+
+procedure TFormLadera.CotizarExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+var
+  Item, Nombre: string;
+  Subtotal: Integer;
+begin
+  Subtotal := 0;
+  for Item in Node.Graph.Blackboard.GetString('items').Split([',']) do
+  begin
+    Nombre := Item.Trim.Substring(Item.Trim.IndexOf(' ') + 1);
+    Inc(Subtotal, StrToIntDef(Item.Trim.Split([' '])[0], 0) * PrecioDe(Nombre));
+  end;
+  Node.Graph.Blackboard.SetInteger('subtotal', Subtotal);
+  Output := 'subtotal: ' + Pesos(Subtotal);
+end;
+
+procedure TFormLadera.EnvioExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+var
+  Costo: Integer;
+begin
+  if SameText(Node.Graph.Blackboard.GetString('ciudad'), 'Pitalito') then
+    Costo := 5000
+  else
+    Costo := 12000;
+  Node.Graph.Blackboard.SetInteger('envio', Costo);
+  Output := 'envío: ' + Pesos(Costo);
+end;
+
+procedure TFormLadera.ConsolidarExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+var
+  BB: TAIBlackboard;
+  Bodega: string;
+begin
+  // jmAll: corre una sola vez, cuando las tres ramas terminaron. La rama Inventario la
+  // ejecuto el agente de bodega: su respuesta esta en el Output del nodo, no en el blackboard
+  // (un agente remoto no escribe en el blackboard local). De ahi salen faltantes y reserva.
+  BB := Node.Graph.Blackboard;
+  Bodega := Node.Graph.FindNode('Inventario').Output;
+  BB.SetInteger('faltantes', Ord(Bodega.Contains('AGOTADO')));   // lo lee la expresion del link
+  BB.SetString('agotados', '');
+  BB.SetString('reserva', '');
+  if Bodega.Contains('AGOTADO:') then
+    BB.SetString('agotados', Bodega.Substring(Bodega.IndexOf('AGOTADO:') + 8).Trim);
+  if Bodega.StartsWith('RESERVA ') then
+    BB.SetString('reserva', Bodega.Substring(8, Bodega.IndexOf(':') - 8));
+  BB.SetInteger('total', BB.GetInteger('subtotal') + BB.GetInteger('envio'));
+  Output := Format('total %s, faltantes %d, reserva %s', [Pesos(BB.GetInteger('total')), BB.GetInteger('faltantes'),
+    IfThen(BB.GetString('reserva') <> '', BB.GetString('reserva'), 'ninguna')]);
+end;
+
+procedure TFormLadera.AvisarExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+begin
+  Output := Format('Pedido en espera. Productos agotados: %s. Pedido: %s. Ciudad: %s.',
+    [Node.Graph.Blackboard.GetString('agotados'), Node.Graph.Blackboard.GetString('items'),
+     Node.Graph.Blackboard.GetString('ciudad')]);
+end;
+
+procedure TFormLadera.DespacharExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+begin
+  // El link de este nodo es una expresion: es_local = 1 -> Mensajero; si no (NextNo) -> Transportadora
+  Node.Graph.Blackboard.SetInteger('es_local', Ord(SameText(Node.Graph.Blackboard.GetString('ciudad'), 'Pitalito')));
+  Output := 'zona: ' + IfThen(Node.Graph.Blackboard.GetInteger('es_local') = 1, 'local', 'nacional');
+end;
+
+procedure TFormLadera.MensajeroExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+begin
+  Output := Format('Pedido confirmado: %s. Total %s con envío. Entrega hoy con mensajero en %s.',
+    [Node.Graph.Blackboard.GetString('items'), Pesos(Node.Graph.Blackboard.GetInteger('total')),
+     Node.Graph.Blackboard.GetString('ciudad')]) + NotaEncargado(Node);
+end;
+
+procedure TFormLadera.TransportadoraExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+begin
+  Output := Format('Pedido confirmado: %s. Total %s con envío. Sale por transportadora a %s, llega en 2 a 3 días.',
+    [Node.Graph.Blackboard.GetString('items'), Pesos(Node.Graph.Blackboard.GetInteger('total')),
+     Node.Graph.Blackboard.GetString('ciudad')]) + NotaEncargado(Node);
+end;
+
+{ Aprobacion (capitulo 21): el humano en el ciclo, con el estado en disco }
+
+const
+  TOPE_SIN_APROBACION = 200000;   // COP: por encima, decide el encargado
+
+procedure TFormLadera.PrepararAprobacion;
+var
+  Carpeta: string;
+  Pendientes: TArray<string>;
+begin
+  // La suspension va a disco: sobrevive al cierre de la app. Al arrancar, si quedo un
+  // pedido esperando, la proxima respuesta del chat lo reanuda.
+  Carpeta := TPath.Combine(CarpetaDatos, 'checkpoints');
+  ForceDirectories(Carpeta);
+  Pedidos.Checkpointer := TAiFileCheckpointer.Create(Carpeta);
+  Pendientes := Pedidos.GetActiveThreads;
+  if Length(Pendientes) > 0 then
+  begin
+    FHiloPendiente := Pendientes[0];
+    ChatView1.AddMessage(TChatRole.crAssistant, '⏸️ Hay un pedido esperando la aprobación del encargado desde la sesión ' +
+      'anterior (hilo `' + FHiloPendiente + '`). Tu próxima respuesta lo reanuda: **sí** aprueba, cualquier otra cosa lo rechaza.');
+    Registrar('aprobacion'#9'hilo pendiente del checkpoint: ' + FHiloPendiente);
+  end;
+end;
+
+procedure TFormLadera.RevisarExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+var
+  BB: TAIBlackboard;
+begin
+  // El link de este nodo lee 'grande': 1 -> Aprobar (suspende); si no (NextNo) -> Despachar
+  BB := Node.Graph.Blackboard;
+  BB.SetInteger('grande', Ord(BB.GetInteger('total') > TOPE_SIN_APROBACION));
+  BB.SetString('resumen', Format('%s para %s: total %s con envío.', [BB.GetString('items'), BB.GetString('ciudad'), Pesos(BB.GetInteger('total'))]));
+  Output := IfThen(BB.GetInteger('grande') = 1, 'supera ' + Pesos(TOPE_SIN_APROBACION) + ': necesita aprobación', 'dentro del tope');
+end;
+
+procedure TFormLadera.DecidirExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+var
+  R: string;
+  Aprobado: Boolean;
+begin
+  // Input es la respuesta del encargado, tal como la escribio en el chat
+  R := Input.Trim.ToLower;
+  Aprobado := (not R.StartsWith('no')) and (R.StartsWith('sí') or R.StartsWith('si') or R.StartsWith('ok') or
+    R.StartsWith('dale') or (Pos('aprob', R) > 0));
+  Node.Graph.Blackboard.SetInteger('aprobado', Ord(Aprobado));
+  Node.Graph.Blackboard.SetString('respuesta_encargado', Input.Trim);
+  Output := IfThen(Aprobado, 'aprobado', 'no aprobado') + ': "' + Input.Trim + '"';
+end;
+
+procedure TFormLadera.RechazarExecute(Node, BeforeNode: TAIAgentsNode; Link: TAIAgentsLink; Input: string; var Output: string);
+begin
+  Output := Format('Pedido NO aprobado por el encargado ("%s"). Pedido: %s. Ciudad: %s. Total %s. No se despacha.',
+    [Node.Graph.Blackboard.GetString('respuesta_encargado'), Node.Graph.Blackboard.GetString('items'),
+     Node.Graph.Blackboard.GetString('ciudad'), Pesos(Node.Graph.Blackboard.GetInteger('total'))]);
+end;
+
+procedure TFormLadera.PedidosSuspend(Sender: TObject; const AThreadID, ANodeName, AReason, AContext: string);
+begin
+  // Llega en un hilo del pool. La pregunta se vuelve un mensaje del chat; nada queda esperando.
+  TThread.Queue(nil,
+    procedure
+    begin
+      FHiloPendiente := AThreadID;
+      ChatView1.AddMessage(TChatRole.crAssistant, '⏸️ **' + AReason + '**' + sLineBreak + AContext + sLineBreak + sLineBreak +
+        'Responde **sí** para aprobar; cualquier otra respuesta lo rechaza. (El estado quedó guardado: puedes cerrar la app y responder después.)');
+      Registrar('suspendido'#9 + ANodeName + ' ' + AThreadID + ': ' + AReason + ' | ' + AContext);
+    end);
+end;
+
+procedure TFormLadera.PedidosFinish(Sender: TObject; const Input, Output: string; Status: TAgentExecutionStatus; E: Exception);
+var
+  Pie: string;
+begin
+  // Reanudacion desde el chat: la respuesta final va a la burbuja abierta. Corrida que llego
+  // por A2A (PedidosServer) sin turno abierto: se cuenta en el chat como un mensaje mas.
+  // (Si el grafo lo disparo la herramienta procesar_pedido, esta ya espera con Busy.)
+  if Status = esSuspended then
+    Exit;
+  TThread.Queue(nil,
+    procedure
+    begin
+      FHiloPendiente := '';   // termino (por el chat o por A2A): ya no hay nada que reanudar
+      if (FBurbuja < 0) and (Status = esCompleted) and not FCerrando then
+      begin
+        ChatView1.AddMessage(TChatRole.crAssistant, '🌐 **Pedido atendido por A2A** (otro cliente, en `' +
+          'http://localhost:' + IntToStr(PedidosServer.Port) + '`):' + sLineBreak + Output.Trim);
+        Registrar('a2a-servidor'#9 + Output.Trim.Replace(sLineBreak, ' '));
+        Exit;
+      end;
+      if not FReanudando or (FBurbuja < 0) then
+        Exit;
+      FReanudando := False;
+      Pie := Format('reanudado desde el checkpoint · %.1f s', [FReloj.ElapsedMilliseconds / 1000]);
+      ChatView1.SetMessageText(FBurbuja, Pedidos.FindNode('Redactor').Output.Trim);
+      ChatView1.FinishMessage(FBurbuja);
+      ChatView1.SetMessageFooter(FBurbuja, Pie);
+      // Todo junto (capitulo 28): si la clienta sigue en la linea, la voz le cuenta la decision
+      // del encargado. AppendCommentary sin id de delegacion = contexto general de la llamada.
+      if FEnLlamada then
+      begin
+        Llamada.AppendCommentary('El encargado acaba de responder al pedido que estaba en espera. Díselo a la clienta: ' +
+          Pedidos.FindNode('Redactor').Output.Trim);
+        Registrar('voz-aviso'#9'decisión del encargado enviada a la llamada');
+      end;
+      Registrar('turno'#9 + Pie);
+      FBurbuja := -1;
+      ChatInput1.Busy := False;
+      SetEstado(Format('%s / %s', [AiConn.DriverName, AiConn.AiChat.Model]));
+    end);
+end;
+
+{ Reglas (capitulo 22): lo que Lucia no puede hacer sola, decidido ANTES de ejecutar }
+
+const
+  DESCUENTO_MAXIMO = 15;
+
+procedure TFormLadera.FnAplicarDescuento(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+var
+  Porcentaje: Integer;
+begin
+  // Si el guardrail la dejo pasar, el porcentaje ya es <= 15
+  Handled := True;
+  Porcentaje := StrToIntDef(ToolCall.Params.Values['porcentaje'], 0);
+  ToolCall.Response := Format('Descuento del pedido %s fijado en %d %%: nuevo total %s COP.',
+    [ToolCall.Params.Values['numero'], Porcentaje, FormatFloat('#,##0', 76000 * (100 - Porcentaje) / 100).Replace(',', '.')]);
+  PasoHerramienta(Format('aplicar_descuento(%s, %d %%)', [ToolCall.Params.Values['numero'], Porcentaje]), ToolCall.Response);
+end;
+
+procedure TFormLadera.FnAnularPedido(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+begin
+  // Si esto se ejecuta, el guardrail no hizo su trabajo
+  Handled := True;
+  ToolCall.Response := 'Pedido anulado.';
+  PasoHerramienta('anular_pedido(' + ToolCall.Params.Values['numero'] + ')', '¡SE EJECUTÓ! el guardrail no bloqueó');
+end;
+
+procedure TFormLadera.GuardiaCheckToolCall(Sender: TObject; const AToolName, AArguments: string; var AAllow: Boolean;
+  var AReason: string);
+var
+  J: TJSONValue;
+  Porcentaje: Integer;
+begin
+  // Veto en codigo: AArguments es el JSON crudo que mando el modelo (se parsea, no se compara como texto)
+  if AToolName <> 'aplicar_descuento' then
+    Exit;
+  Porcentaje := 0;
+  J := TJSONObject.ParseJSONValue(AArguments);
+  try
+    if J is TJSONObject then
+      Porcentaje := TJSONObject(J).GetValue<Integer>('porcentaje', 0);
+  finally
+    J.Free;
+  end;
+  if Porcentaje > DESCUENTO_MAXIMO then
+  begin
+    AAllow := False;
+    AReason := Format('el descuento máximo que puede aplicar Lucía es %d %%', [DESCUENTO_MAXIMO]);
+  end;
+end;
+
+procedure TFormLadera.GuardiaBlocked(Sender: TObject; const AToolName, AArguments, AReason: string);
+begin
+  PasoHerramienta('🛑 guardrail: ' + AToolName + ' ' + AArguments, 'BLOQUEADO: ' + AReason);
+end;
+
+{ Observabilidad (capitulo 23): el componente esta en el formulario; aqui solo se ve que exporta }
+
+procedure TFormLadera.TelemetriaLog(Sender: TObject; const AMsg: string);
+begin
+  // Llega desde el hilo exportador (lotes cada FlushIntervalMs)
+  Registrar('otel'#9 + AMsg);
+  TThread.Queue(nil,
+    procedure
+    begin
+      if not FCerrando then
+        SetEstado('OTel: ' + AMsg);
+    end);
+end;
+
+{ Entre agentes (capitulo 25): la bodega como agente A2A, otro proceso con su tarjeta }
+
+procedure TFormLadera.LanzarBodegaA2A;
+var
+  SI: TStartupInfo;
+  PI: TProcessInformation;
+  Cmd: string;
+begin
+  // En la vida real el agente ya estaria corriendo en otro servidor y bastaria con su URL.
+  // Aqui, si nadie responde en :8301, la app arranca el .exe de la bodega en modo agente.
+  Cmd := '"' + TPath.Combine(ExtractFilePath(ParamStr(0)), 'BodegaLadera.exe') + '" --a2a';
+  UniqueString(Cmd);
+  FillChar(SI, SizeOf(SI), 0);
+  SI.cb := SizeOf(SI);
+  if CreateProcess(nil, PChar(Cmd), nil, nil, False, CREATE_NO_WINDOW, nil, nil, SI, PI) then
+  begin
+    FProcesoBodega := PI.hProcess;
+    CloseHandle(PI.hThread);
+    Registrar('a2a'#9'BodegaLadera.exe --a2a arrancado por la app');
+  end;
+end;
+
+procedure TFormLadera.ArrancarBodegaA2A;
+var
+  Intentos, I: Integer;
+begin
+  Intentos := 0;
+  while True do
+    try
+      // La tarjeta del agente (/.well-known/agent-card.json): su descripcion se suma a la de
+      // la herramienta, para que el modelo vea lo que el agente dice de si mismo
+      BodegaAgente.DiscoverFromCard;
+      Break;
+    except
+      on E: Exception do
+      begin
+        if Intentos = 0 then
+          LanzarBodegaA2A;
+        Inc(Intentos);
+        if Intentos > 20 then
+        begin
+          SetEstado('Sin agente de bodega en ' + BodegaAgente.AgentUrl + ': ' + E.Message);
+          Exit;
+        end;
+        Sleep(250);
+      end;
+    end;
+  // La funcion ya esta en AiFunctions1 (Functions se asigno en el formulario). Se envuelve su
+  // accion para mostrar cada consulta al agente como un paso en la burbuja.
+  for I := 0 to AiFunctions1.Functions.Count - 1 do
+    if SameText(AiFunctions1.Functions.Items[I].FunctionName, BodegaAgente.ToolName) then
+    begin
+      FAccionBodega := AiFunctions1.Functions.Items[I].OnAction;
+      AiFunctions1.Functions.Items[I].OnAction := FnApartarEnBodega;
+    end;
+  ChatView1.AddMessage(TChatRole.crAssistant, Format('🤝 Bodega por A2A en `%s` (tarjeta leída): herramienta `%s`.',
+    [BodegaAgente.AgentUrl, BodegaAgente.ToolName]));
+  Registrar('a2a'#9 + BodegaAgente.AgentUrl + ' ' + BodegaAgente.ToolName + ': ' + BodegaAgente.Description);
+end;
+
+procedure TFormLadera.FnApartarEnBodega(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+begin
+  // TAiA2AAgentTool manda query como mensaje A2A, espera el task y devuelve el texto de sus artifacts
+  FAccionBodega(Sender, FunctionAction, FunctionName, ToolCall, Handled);
+  PasoHerramienta('A2A ' + FunctionName + '(' + ToolCall.Params.Values['query'] + ')', ToolCall.Response);
+end;
+
+{ Federacion (capitulo 26): el flujo de pedidos, publicado como agente A2A }
+
+procedure TFormLadera.PublicarPedidos;
+begin
+  // AgentManager, nombre, descripcion, skills y puerto estan en el formulario; Active no es
+  // published: se enciende aqui. La tarjeta queda en /.well-known/agent-card.json.
+  try
+    PedidosServer.Active := True;
+    ChatView1.AddMessage(TChatRole.crAssistant, Format('📡 Flujo de pedidos publicado como agente A2A en `http://localhost:%d` ' +
+      '(nodo Inventario federado en `%s`).', [PedidosServer.Port, BodegaRemota.AgentUrl]));
+    Registrar('a2a'#9'PedidosServer en :' + IntToStr(PedidosServer.Port));
+  except
+    on E: Exception do
+      SetEstado('No se pudo publicar el flujo de pedidos: ' + E.Message);
+  end;
+end;
+
+{ La recepcion (capitulo 24): cerrar un turno que no paso por Lucia }
+
+function TFormLadera.RespuestaDelAgente: string;
+begin
+  Result := Reclamos.FindNode('Revisor').Output.Trim;
+  if Result.StartsWith('APROBADA') or Result.StartsWith('CORREGIDA') then
+    Result := Result.Substring(Result.IndexOf(#10) + 1).Trim;
+end;
+
+procedure TFormLadera.TerminarSinLucia(const ATexto, APie: string);
+begin
+  TThread.Queue(nil,
+    procedure
+    begin
+      if FCerrando or (FBurbuja < 0) then
+        Exit;
+      ChatView1.SetMessageText(FBurbuja, ATexto);
+      ChatView1.FinishMessage(FBurbuja);
+      ChatView1.SetMessageFooter(FBurbuja, APie);
+      Registrar('turno'#9 + APie);
+      FBurbuja := -1;
+      ChatInput1.Busy := False;
+      SetEstado(Format('%s / %s', [AiConn.DriverName, AiConn.AiChat.Model]));
+    end);
+end;
+
+{ La voz (capitulo 27): una llamada con GPT-Live. El modelo de voz escucha mientras habla y,
+  cuando hay que hacer algo (recomendar, apartar, cotizar, procesar un pedido), delega en
+  Telefono: un TAiChatConnection normal, sincrono, con las MISMAS herramientas de Lucia
+  (AiFunctions1, con su guardia). La respuesta de Telefono vuelve a la voz, y la voz la dice. }
+
+procedure TFormLadera.btnLlamarClick(Sender: TObject);
+begin
+  if FEnLlamada then
+    Colgar
+  else
+    Llamar('');
+end;
+
+procedure TFormLadera.Llamar(const AArchivo: string);
+begin
+  // Modelo, voz, instrucciones y DelegateChat estan en el formulario; se fijan al conectar y
+  // no cambian con la sesion abierta. El audio entra cuando el servidor dice session.started.
+  FEnLlamada := True;
+  FVozArchivo := nil;
+  if AArchivo <> '' then
+    HablarArchivo(AArchivo);   // la clienta de la prueba: un archivo en vez del microfono
+  btnLlamar.Text := '📴 Colgar';
+  SetEstado('Llamando...');
+  Registrar('llamada'#9'conectando a GPT-Live (' + Llamada.Model + ', voz ' + Llamada.Voice + ')');
+  FLlamadaReloj := TStopwatch.StartNew;
+  Llamada.Connect;
+end;
+
+procedure TFormLadera.Colgar;
+begin
+  if not FEnLlamada then
+    Exit;
+  FEnLlamada := False;
+  Microfono.Active := False;
+  if Assigned(FTimerVoz) then
+    FTimerVoz.Enabled := False;
+  Llamada.Disconnect;        // espera session.closed: motivo y segundos de audio (OnSessionClosed)
+  Parlante.Active := False;
+  btnLlamar.Text := '📞 Llamar';
+end;
+
+procedure TFormLadera.LlamadaSessionReady(Sender: TObject);
+begin
+  // Antes de session.started el servidor no acepta audio: el microfono arranca aqui.
+  // En la prueba automatica la voz de la clienta sale del archivo (PasoVoz, cada 100 ms).
+  if FVozArchivo = nil then
+  begin
+    Parlante.Active := True;
+    Microfono.Active := True;   // RealtimeSTT = Llamada: el audio del microfono va directo al driver
+  end
+  else
+    FTimerVoz.Enabled := True;
+  ChatView1.AddMessage(TChatRole.crAssistant, Format('📞 **En llamada** con GPT-Live (`%s`, voz `%s`). Lo que haya que ' +
+    'resolver lo delega en `Telefono` (%s), que tiene las mismas herramientas de Lucía.', [Llamada.Model, Llamada.Voice, Telefono.Model]));
+  ChatView1.SealLastMessage;   // cada turno de la llamada, en su propia burbuja
+  Registrar('llamada'#9'sesión lista ' + Llamada.SessionId);
+  SetEstado('En llamada');
+end;
+
+procedure TFormLadera.LlamadaTranscriptCompleted(Sender: TObject; const Transcript, ItemId: string);
+begin
+  // Un turno completo de la clienta (la transcripcion la hace el servidor, con el audio). Si el
+  // modelo ya delego con ese texto, la burbuja ya esta (el turno se cierra despues de delegar).
+  Registrar('clienta'#9 + Format('%.1f', [FLlamadaReloj.ElapsedMilliseconds / 1000]) + #9 + Transcript.Trim);
+  if Transcript.Trim = FUltimaClienta then
+    Exit;
+  FUltimaClienta := Transcript.Trim;
+  ChatView1.AddUserMessage('📞 ' + FUltimaClienta);
+end;
+
+procedure TFormLadera.LlamadaAssistantText(Sender: TObject; const AText: string);
+begin
+  // Un turno completo de Lucia hablando: lo que dijo de verdad, no lo que devolvio Telefono
+  ChatView1.AddMessage(TChatRole.crAssistant, '🔊 ' + AText.Trim);
+  ChatView1.SetMessageFooter(ChatView1.MessageCount - 1, Format('voz · %.1f s de llamada', [FLlamadaReloj.ElapsedMilliseconds / 1000]));
+  ChatView1.SealLastMessage;
+  Registrar('lucia-voz'#9 + Format('%.1f', [FLlamadaReloj.ElapsedMilliseconds / 1000]) + #9 + AText.Trim);
+end;
+
+procedure TFormLadera.LlamadaAudioChunk(Sender: TObject; const AData: TBytes);
+begin
+  // La voz de Lucia: PCM16 24 kHz, continua (trae el silencio), al parlante
+  if Parlante.Active then
+    Parlante.PlayPCM16(AData, Llamada.TargetSampleRate, 1);
+  if Assigned(FVozSalida) and (Length(AData) > 0) then
+    FVozSalida.WriteBuffer(AData[0], Length(AData));
+end;
+
+procedure TFormLadera.LlamadaDelegation(Sender: TObject; const DelegationId, Context: string);
+var
+  Linea: string;
+begin
+  // El modelo de voz decidio que esto lo resuelve el sistema: Telefono recibe la conversacion
+  // transcrita (lo que aun no habia visto) y responde con herramientas, en un hilo del driver.
+  // Mientras, la voz sigue hablando con la clienta. Los pasos de Telefono van a esta burbuja.
+  FDelegacionReloj := TStopwatch.StartNew;
+  // Lo que dijo la clienta va primero (su transcripcion completa llega un poco despues)
+  for Linea in Context.Split([sLineBreak, #10]) do
+    if Linea.StartsWith('User: ') then
+    begin
+      FUltimaClienta := Linea.Substring(6).Trim;
+      ChatView1.AddUserMessage('📞 ' + FUltimaClienta);
+    end;
+  if FBurbuja < 0 then
+  begin
+    ChatView1.BeginAssistantMessage;
+    FBurbuja := ChatView1.MessageCount - 1;
+    FTextoRecibido := False;
+  end;
+  PasoHerramienta('delegación → Telefono (' + Telefono.Model + ')', Context.Replace(sLineBreak, ' ⏎ '));
+  Registrar('delegacion'#9 + Format('%.1f', [FLlamadaReloj.ElapsedMilliseconds / 1000]) + #9 + Context.Replace(sLineBreak, ' | '));
+end;
+
+procedure TFormLadera.TelefonoReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject;
+  aRole, aText: string);
+var
+  Pie, Texto: string;
+begin
+  // Telefono termino (sincrono: llega desde el hilo de la delegacion). Lo que devolvio es lo
+  // que la voz va a decir; aqui se muestra con sus pasos, tokens y tiempo.
+  Texto := aText.Trim;
+  if Assigned(aMsg) then
+    Pie := Format('Telefono · %d tokens de entrada · %d de salida · %.1f s', [aMsg.Prompt_tokens + aMsg.Cached_tokens,
+      aMsg.Completion_tokens, FDelegacionReloj.ElapsedMilliseconds / 1000])
+  else
+    Pie := Format('Telefono · %.1f s', [FDelegacionReloj.ElapsedMilliseconds / 1000]);
+  Contabilizar(Telefono.AiChat.Model, aMsg);
+  TThread.Queue(nil,
+    procedure
+    begin
+      if FCerrando or (FBurbuja < 0) then
+        Exit;
+      ChatView1.SetMessageText(FBurbuja, '📲 ' + Texto);
+      ChatView1.FinishMessage(FBurbuja);
+      ChatView1.SetMessageFooter(FBurbuja, Pie);
+      ChatView1.SealLastMessage;
+      Registrar('telefono'#9 + Pie + #9 + Texto);
+      FBurbuja := -1;
+    end);
+end;
+
+procedure TFormLadera.LlamadaError(Sender: TObject; const ErrorMsg, ErrorCode: string);
+begin
+  ChatView1.AddMessage(TChatRole.crAssistant, '⚠️ Voz (' + ErrorCode + '): ' + ErrorMsg);
+  Registrar('voz-error'#9 + ErrorCode + ' ' + ErrorMsg);
+end;
+
+procedure TFormLadera.LlamadaSessionClosed(Sender: TObject; const Reason: string; Seconds: Double);
+begin
+  // El servidor cobra la voz por segundos de audio (unos 0,05 USD por minuto); Telefono se cobra aparte
+  ChatView1.AddMessage(TChatRole.crAssistant, Format('📴 **Llamada terminada** (%s): %.0f s de audio.', [Reason, Seconds]));
+  ChatView1.SealLastMessage;
+  Registrar('llamada'#9 + Format('cerrada %s %.0f s', [Reason, Seconds]));
+  SetEstado(Format('%s / %s', [AiConn.DriverName, AiConn.AiChat.Model]));
+end;
+
+procedure TFormLadera.LlamadaUsage(Sender: TObject; Seconds, ContextRatio: Double);
+begin
+  SetEstado(Format('En llamada · %.0f s de audio', [Seconds]));
+end;
+
+procedure TFormLadera.HablarArchivo(const AArchivo: string);
+begin
+  // La voz de la clienta desde un archivo PCM16 24 kHz mono (o WAV con cabecera de 44 bytes),
+  // a ritmo real: lo mismo que haria el microfono, sin tocar el escritorio
+  FVozArchivo := TFile.ReadAllBytes(AArchivo);
+  if AArchivo.EndsWith('.wav', True) then
+    FVozArchivo := Copy(FVozArchivo, 44, MaxInt);
+  FVozPos := 0;
+  if not Assigned(FTimerVoz) then
+  begin
+    FTimerVoz := TTimer.Create(Self);
+    FTimerVoz.Interval := 100;
+    FTimerVoz.OnTimer := PasoVoz;
+  end;
+  Registrar('clienta-audio'#9 + ExtractFileName(AArchivo) + Format(' (%.1f s)', [Length(FVozArchivo) / 48000]));
+  FTimerVoz.Enabled := FEnLlamada and Llamada.IsConnected;   // si aun no hay sesion, arranca en OnSessionReady
+end;
+
+procedure TFormLadera.PasoVoz(Sender: TObject);
+const
+  BLOQUE = 4800;   // 100 ms a 24 kHz, 16 bits
+var
+  Trozo: TBytes;
+begin
+  // Cada 100 ms, 100 ms de audio; acabado el archivo, silencio: GPT-Live necesita el flujo
+  // continuo para cerrar el turno de la clienta y para seguir hablando
+  if FVozPos < Length(FVozArchivo) then
+  begin
+    Trozo := Copy(FVozArchivo, FVozPos, BLOQUE);
+    Inc(FVozPos, BLOQUE);
+  end
+  else
+  begin
+    SetLength(Trozo, BLOQUE);
+    FillChar(Trozo[0], BLOQUE, 0);
+  end;
+  Llamada.SendAudioChunk(Trozo);
+end;
+
+{ Nueva, Guardar, Abrir }
+
+procedure TFormLadera.btnNuevaClick(Sender: TObject);
+var
+  N: Integer;
+  Lista: TMemoryEntryList;
+  E: TMemoryEntry;
+  Texto: string;
+begin
+  // Cerrar la sesion: el analizador lee la conversacion acumulada y guarda lo que
+  // vale la pena recordar. Es sincrono (un modelo barato, dos o tres segundos).
+  SetEstado('Analizando la conversación...');
+  N := Memoria.AnalyzeNow;
+  AiConn.NewChat;
+  AiConn.ResetTokenCounters;   // los acumulados de la conexion (Prompt_tokens, Completion_tokens, Cost_usd) a cero
+  FSesionEntrada := 0;
+  FSesionCache := 0;
+  FSesionSalida := 0;
+  FSesionCosto := 0;
+  MostrarSesion;
+  ChatView1.ClearMessages;
+  Texto := 'Conversación nueva.';
+  if N > 0 then
+  begin
+    Texto := Texto + Format(' 🧠 De la charla anterior guardé **%d recuerdos**. Lo que recuerdo de %s:', [N, FCliente]);
+    Lista := Memoria.Recall(1, 20);     // todo lo guardado de este cliente, por importancia
+    try
+      for E in Lista do
+        Texto := Texto + sLineBreak + Format('- (%d) %s', [E.Importance, E.Content]);
+    finally
+      Lista.Free;
+    end;
+  end;
+  ChatView1.AddMessage(TChatRole.crAssistant, Texto);
+  Registrar('memoria'#9 + Format('%d recuerdos guardados de %s', [N, FCliente]));
+  SetEstado('Conversación nueva');
+end;
+
+function TFormLadera.CarpetaDatos: string;
+begin
+  Result := TPath.Combine(TPath.GetDocumentsPath, 'CafeLaLadera');
+  ForceDirectories(Result);
+end;
+
+procedure TFormLadera.btnGuardarClick(Sender: TObject);
+var
+  St: TFileStream;
+begin
+  St := TFileStream.Create(TPath.Combine(CarpetaDatos, 'pantalla.json'), fmCreate);
+  try
+    ChatView1.SaveToStream(St);
+  finally
+    St.Free;
+  end;
+  AiConn.Messages.SaveToFile(TPath.Combine(CarpetaDatos, 'historial.json'));
+  SetEstado('Guardado en ' + CarpetaDatos);
+end;
+
+procedure TFormLadera.btnAbrirClick(Sender: TObject);
+var
+  St: TFileStream;
+begin
+  if not FileExists(TPath.Combine(CarpetaDatos, 'historial.json')) then
+  begin
+    SetEstado('No hay conversación guardada');
+    Exit;
+  end;
+  St := TFileStream.Create(TPath.Combine(CarpetaDatos, 'pantalla.json'), fmOpenRead);
+  try
+    ChatView1.ClearMessages;
+    ChatView1.LoadFromStream(St);
+  finally
+    St.Free;
+  end;
+  AiConn.NewChat;
+  AiConn.Messages.LoadFromFile(TPath.Combine(CarpetaDatos, 'historial.json'));
+  SetEstado(Format('Conversación recuperada: %d mensajes', [AiConn.Messages.Count]));
+end;
+
+procedure TFormLadera.SetEstado(const AText: string);
+begin
+  lblEstado.Text := AText;
+end;
+
+{ PPM (capitulo 32): el modelo instala sus propias herramientas, dentro de lo permitido }
+
+procedure TFormLadera.AiFunctions1AutoMCPRequest(Sender: TObject; const APkgName: string; var AAllow: Boolean);
+begin
+  // Se dispara por cada candidato de ppm_search y antes de cada ppm_install. OJO: si el evento esta
+  // conectado, SU decision es la final y Allowed/Blocked del formulario ya no se consultan; por eso
+  // aqui se aplica la lista a mano (y podria ser ademas un dialogo al encargado).
+  AAllow := AiFunctions1.AutoMCPConfig.Allowed.IndexOf(APkgName) >= 0;
+  PasoHerramienta('AutoMCP pide ' + APkgName, IfThen(AAllow, 'permitido: está en AutoMCPConfig.Allowed', 'rechazado: no está en AutoMCPConfig.Allowed'));
+  Registrar('automcp'#9 + APkgName + #9 + IfThen(AAllow, 'permitido', 'rechazado'));
+end;
+
+{ Imagen y video (capitulo 31): dos conexiones con modelos que generan en vez de conversar }
+
+function TFormLadera.CarpetaImagenes: string;
+begin
+  Result := TPath.Combine(CarpetaDatos, 'imagenes');
+  ForceDirectories(Result);
+end;
+
+procedure TFormLadera.MostrarArchivo(const ATexto, ARuta: string);
+begin
+  // Una burbuja del asistente con el archivo adjunto (imagen o video), aparte de la de Lucia
+  TThread.Queue(nil,
+    procedure
+    var
+      Archivos: TAiMediaFiles;
+      MF: TAiMediaFile;
+    begin
+      if FCerrando then
+        Exit;
+      Archivos := TAiMediaFiles.Create;
+      try
+        MF := TAiMediaFile.Create;
+        MF.LoadFromFile(ARuta);
+        Archivos.Add(MF);
+        ChatView1.AddAssistantMessage(ATexto, Archivos);
+      finally
+        Archivos.Free;
+      end;
+    end);
+end;
+
+procedure TFormLadera.FnCrearImagen(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+var
+  Descripcion, Ruta: string;
+  Msg: TAiChatMessage;
+  Reloj: TStopwatch;
+begin
+  Handled := True;
+  Descripcion := ToolCall.Params.Values['descripcion'];
+  // Ilustrador es una conexion normal con un modelo de imagen: ModelCaps=[] y SessionCaps=[cap_GenImage]
+  // (del catalogo), y ese hueco manda AddMessageAndRun a /images/generations. La imagen vuelve como
+  // TAiMediaFile en el ultimo mensaje; el texto de la respuesta es el prompt (revisado si el modelo lo cambio).
+  Reloj := TStopwatch.StartNew;
+  Ilustrador.NewChat;
+  Ilustrador.AddMessageAndRun(Descripcion, 'user', []);
+  Msg := Ilustrador.AiChat.GetLastMessage;
+  if (Ilustrador.LastError <> '') or (not Assigned(Msg)) or (Msg.MediaFiles.Count = 0) then
+  begin
+    ToolCall.Response := 'No se pudo crear la imagen: ' + Ilustrador.LastError;
+    PasoHerramienta('crear_imagen(' + Descripcion + ')', 'falló: ' + Ilustrador.LastError);
+    Exit;
+  end;
+  Ruta := TPath.Combine(CarpetaImagenes, 'imagen_' + FormatDateTime('hhnnss', Now) + '.png');
+  Msg.MediaFiles[0].SaveToFile(Ruta);
+  MostrarArchivo('🖼️ ' + Descripcion, Ruta);
+  PasoHerramienta('crear_imagen(' + Descripcion + ')', Format('%s · %d KB · %.1f s · %s', [Ilustrador.AiChat.Model,
+    Msg.MediaFiles[0].Content.Size div 1024, Reloj.ElapsedMilliseconds / 1000, ExtractFileName(Ruta)]));
+  ToolCall.Response := Format('Imagen creada y ya mostrada en el chat (%.0f s). Archivo: %s', [Reloj.ElapsedMilliseconds / 1000, Ruta]);
+end;
+
+procedure TFormLadera.FnCrearVideo(Sender: TObject; FunctionAction: TFunctionActionItem;
+  FunctionName: string; ToolCall: TAiToolsFunction; var Handled: Boolean);
+var
+  Descripcion, Ruta, Url: string;
+  Msg: TAiChatMessage;
+  Reloj: TStopwatch;
+begin
+  Handled := True;
+  Descripcion := ToolCall.Params.Values['descripcion'];
+  // Videasta: Grok con grok-imagine-video (SessionCaps=[cap_GenVideo]). El driver abre el job, consulta
+  // cada 3 s hasta que termina (alrededor de un minuto por 5 s de video), descarga el MP4 y lo deja como
+  // TAiMediaFile en el mensaje; el texto de la respuesta es la URL temporal del video.
+  Reloj := TStopwatch.StartNew;
+  SetEstado('Generando el video (alrededor de un minuto)...');
+  Videasta.NewChat;
+  Url := Videasta.AddMessageAndRun(Descripcion, 'user', []);
+  Msg := Videasta.AiChat.GetLastMessage;
+  if (Videasta.LastError <> '') or (not Assigned(Msg)) or (Msg.MediaFiles.Count = 0) then
+  begin
+    ToolCall.Response := 'No se pudo crear el video: ' + Videasta.LastError;
+    PasoHerramienta('crear_video(' + Descripcion + ')', 'falló: ' + Videasta.LastError);
+    Exit;
+  end;
+  Ruta := TPath.Combine(CarpetaImagenes, 'video_' + FormatDateTime('hhnnss', Now) + '.mp4');
+  Msg.MediaFiles[0].SaveToFile(Ruta);
+  MostrarArchivo('🎬 ' + Descripcion + sLineBreak + Ruta, Ruta);
+  PasoHerramienta('crear_video(' + Descripcion + ')', Format('%s · %d KB · %.0f s · %s', [Videasta.AiChat.Model,
+    Msg.MediaFiles[0].Content.Size div 1024, Reloj.ElapsedMilliseconds / 1000, ExtractFileName(Ruta)]));
+  ToolCall.Response := Format('Video de 5 segundos creado y ya mostrado en el chat (%.0f s). Archivo: %s', [Reloj.ElapsedMilliseconds / 1000, Ruta]);
+end;
+
+{ Produccion: costos, reintentos, respaldo, presupuesto }
+
+procedure TFormLadera.Contabilizar(const AModelo: string; aMsg: TAiChatMessage);
+var
+  E, C, S: Double;
+begin
+  // Lo que costo este turno, con la tarifa de SU modelo (Lucia, Telefono y el respaldo usan distintos).
+  // Prompt_tokens ya viene sin los tokens de cache; Cache_write_tokens solo lo reporta Claude.
+  if not Assigned(aMsg) then
+    Exit;
+  Inc(FSesionEntrada, aMsg.Prompt_tokens + aMsg.Cache_write_tokens);
+  Inc(FSesionCache, aMsg.Cached_tokens);
+  Inc(FSesionSalida, aMsg.Completion_tokens);
+  if TarifaPorMillon(AModelo, E, C, S) then
+    FSesionCosto := FSesionCosto + (aMsg.Prompt_tokens * E + aMsg.Cache_write_tokens * E * 1.25 +
+      aMsg.Cached_tokens * C + aMsg.Completion_tokens * S) / 1000000;
+  Registrar('costo'#9 + Format('%s'#9'%d entrada'#9'%d caché'#9'%d salida'#9'sesión US$ %.6f',
+    [AModelo, aMsg.Prompt_tokens + aMsg.Cache_write_tokens, aMsg.Cached_tokens, aMsg.Completion_tokens, FSesionCosto]));
+  TThread.Queue(nil,
+    procedure
+    begin
+      MostrarSesion;
+    end);
+end;
+
+procedure TFormLadera.MostrarSesion;
+begin
+  if FCerrando then
+    Exit;
+  lblSesion.Text := Format('sesión: %s entrada (%s en caché) · %s salida · ≈ US$ %.4f',
+    [FormatFloat('#,##0', FSesionEntrada), FormatFloat('#,##0', FSesionCache), FormatFloat('#,##0', FSesionSalida), FSesionCosto]);
+end;
+
+procedure TFormLadera.QuitarPreguntaFallida;
+begin
+  // La pregunta que fallo quedo en el historial (se agrega antes de llamar al modelo):
+  // se quita para no mandarla dos veces en el reintento ni en el respaldo
+  if (AiConn.Messages.Count > 0) and (AiConn.Messages[AiConn.Messages.Count - 1].Role = 'user') then
+    AiConn.Messages.Delete(AiConn.Messages.Count - 1);
+end;
+
+procedure TFormLadera.Reintentar(const AMotivo: string);
+var
+  Espera: Integer;
+begin
+  Inc(FIntento);
+  Espera := 1000 shl (FIntento - 1);   // 1 s, 2 s: espera creciente, para no insistir sobre un servidor saturado
+  PasoHerramienta(Format('reintento %d/%d en %d s', [FIntento, MAX_REINTENTOS, Espera div 1000]), AMotivo);
+  SetEstado(Format('Reintentando (%d/%d)...', [FIntento, MAX_REINTENTOS]));
+  FTarea := TTask.Run(
+    procedure
+    begin
+      Sleep(Espera);
+      if FCerrando then
+        Exit;
+      QuitarPreguntaFallida;
+      FIntentoEnCurso := False;   // el proximo error de este turno se vuelve a decidir
+      try
+        AiConn.AddMessageAndRun(FUltimoPrompt, 'user', []);
+      except
+        on E: Exception do
+        begin
+          var Msg := E.Message;
+          TThread.Queue(nil,
+            procedure
+            begin
+              AiConnError(AiConn, Msg, nil, nil);
+            end);
+        end;
+      end;
+    end);
+end;
+
+procedure TFormLadera.ResponderConRespaldo(const AMotivo: string);
+var
+  Prompt: string;
+begin
+  Prompt := FUltimoPrompt;
+  PasoHerramienta(Format('respaldo → %s / %s', [Respaldo.DriverName, Respaldo.AiChat.Model]), AMotivo);
+  SetEstado('Respondiendo con el respaldo...');
+  FTarea := TTask.Run(
+    procedure
+    var
+      R, Pie: string;
+      Reloj: TStopwatch;
+      Msg: TAiChatMessage;
+      I: Integer;
+    begin
+      Reloj := TStopwatch.StartNew;
+      try
+        QuitarPreguntaFallida;
+        // El respaldo arranca limpio y recibe la conversacion en texto (sin adjuntos ni llamadas a
+        // herramientas), para que "dos de ese" siga teniendo sentido
+        Respaldo.NewChat;
+        for I := 0 to AiConn.Messages.Count - 1 do
+        begin
+          Msg := AiConn.Messages[I];
+          if MatchText(Msg.Role, ['user', 'assistant']) and (Msg.Prompt.Trim <> '') then
+            Respaldo.AddMessage(Msg.Prompt, Msg.Role);
+        end;
+        R := Respaldo.AddMessageAndRun(Prompt, 'user', []);
+        if (R = '') and (Respaldo.LastError <> '') then
+          raise Exception.Create(Respaldo.LastError);
+        Msg := Respaldo.AiChat.GetLastMessage;
+        Contabilizar(Respaldo.AiChat.Model, Msg);
+        // La conversacion sigue en AiConn: pregunta y respuesta se agregan como si fueran suyas
+        AiConn.AddMessage(Prompt, 'user');
+        AiConn.AddMessage(R, 'assistant');
+        Pie := Format('respaldo %s / %s · %d tokens de entrada · %d de salida · %.1f s', [Respaldo.DriverName,
+          Respaldo.AiChat.Model, Msg.Prompt_tokens + Msg.Cached_tokens + Msg.Cache_write_tokens, Msg.Completion_tokens,
+          Reloj.ElapsedMilliseconds / 1000]);
+      except
+        on E: Exception do
+        begin
+          R := '⚠️ Ahora mismo no puedo responder (tampoco el respaldo): ' + Copy(E.Message, 1, 200);
+          Pie := 'el respaldo también falló';
+        end;
+      end;
+      TThread.Queue(nil,
+        procedure
+        begin
+          if FCerrando or (FBurbuja < 0) then
+            Exit;
+          TerminarPensando;
+          ChatView1.SetMessageText(FBurbuja, R);
+          ChatView1.FinishMessage(FBurbuja);
+          ChatView1.SetMessageFooter(FBurbuja, Pie);
+          Registrar('respaldo'#9 + Pie);
+          FBurbuja := -1;
+          FIntentoEnCurso := False;
+          ChatInput1.Busy := False;
+          SetEstado(Format('%s / %s', [AiConn.DriverName, AiConn.AiChat.Model]));
+          RevisarPresupuesto;
+        end);
+    end);
+end;
+
+procedure TFormLadera.RevisarPresupuesto;
+var
+  Total: Integer;
+  Costo: Double;
+begin
+  // El presupuesto es por sesion: al pasarlo, la app cierra la conversacion ella misma (la memoria
+  // guarda lo importante, los contadores vuelven a cero) y sigue en una nueva. No mientras hay una
+  // llamada abierta ni un pedido esperando al encargado.
+  Total := FSesionEntrada + FSesionCache + FSesionSalida;
+  if (FPresupuesto <= 0) or (Total <= FPresupuesto) or FEnLlamada or (FHiloPendiente <> '') then
+    Exit;
+  Costo := FSesionCosto;
+  Registrar('presupuesto'#9 + Format('%d tokens > %d', [Total, FPresupuesto]));
+  btnNuevaClick(nil);
+  ChatView1.AddMessage(TChatRole.crAssistant, Format('⏸️ La conversación anterior llegó a **%s tokens** (≈ US$ %.4f), ' +
+    'más del presupuesto de %s por sesión: la cerré, guardé lo importante en la memoria y seguimos aquí.',
+    [FormatFloat('#,##0', Total), Costo, FormatFloat('#,##0', FPresupuesto)]));
+end;
+
+{ Prueba automatica }
+
+procedure TFormLadera.Registrar(const ALinea: string);
+begin
+  if FRegistro <> '' then
+    TFile.AppendAllText(FRegistro, ALinea + sLineBreak, TEncoding.UTF8);
+end;
+
+procedure TFormLadera.IniciarPrueba;
+var
+  I: Integer;
+begin
+  I := 1;
+  while I <= ParamCount do
+  begin
+    if SameText(ParamStr(I), '--captura') and (I < ParamCount) then
+    begin
+      FCaptura := ParamStr(I + 1);
+      Inc(I);
+    end
+    else if SameText(ParamStr(I), '--registro') and (I < ParamCount) then
+    begin
+      FRegistro := ParamStr(I + 1);
+      Inc(I);
+    end
+    else if SameText(ParamStr(I), '--voz') and (I < ParamCount) then
+    begin
+      FVozSalida := TFileStream.Create(ParamStr(I + 1), fmCreate);   // la voz de Lucia, PCM16 24 kHz mono
+      Inc(I);
+    end
+    else if not SameText(ParamStr(I), '--prueba') then
+    begin
+      if not Assigned(FPrueba) then
+        FPrueba := TStringList.Create;
+      FPrueba.Add(ParamStr(I));
+    end;
+    Inc(I);
+  end;
+  if not Assigned(FPrueba) then
+    Exit;
+  FTimerPrueba := TTimer.Create(Self);
+  FTimerPrueba.Interval := 100;
+  FFinTurno := TThread.GetTickCount + 1500;
+  FTimerPrueba.OnTimer := PasoPrueba;
+end;
+
+procedure TFormLadera.PasoPrueba(Sender: TObject);
+var
+  Linea, Pregunta, Archivo: string;
+  Archivos: TAiMediaFiles;
+  MF: TAiMediaFile;
+begin
+  // Envia cada pregunta como si la escribiera el usuario. "@ruta|pregunta" adjunta un archivo.
+  if ChatInput1.Busy or (TThread.GetTickCount < FFinTurno) then
+    Exit;
+  if FPrueba.Count = 0 then
+  begin
+    FTimerPrueba.Enabled := False;
+    if FCaptura <> '' then
+      with ChatView1.MakeScreenshot do
+      try
+        SaveToFile(FCaptura);
+      finally
+        Free;
+      end;
+    Close;
+    Exit;
+  end;
+  Linea := FPrueba[0];
+  FPrueba.Delete(0);
+  Registrar('accion'#9 + Linea);
+  if SameText(Linea, '/nueva') then
+    btnNuevaClick(nil)
+  else if Linea.StartsWith('/cliente ') then
+    edCliente.Text := Linea.Substring(9).Trim
+  else if Linea.StartsWith('/esperar ') then
+  begin
+    FFinTurno := TThread.GetTickCount + StrToIntDef(Linea.Substring(9).Trim, 1) * 1000;
+    Exit;
+  end
+  else if Linea.StartsWith('/llamar') then
+    Llamar(Linea.Substring(7).Trim)          // /llamar media\voz.wav: la clienta habla desde un archivo
+  else if Linea.StartsWith('/hablar ') then
+    HablarArchivo(Linea.Substring(8).Trim)   // otro turno de la clienta, en la misma llamada
+  else if SameText(Linea, '/colgar') then
+    Colgar
+  else if Linea.StartsWith('/modelo ') then
+  begin
+    AiConn.Model := Linea.Substring(8).Trim;        // p. ej. un modelo que no existe: 404 -> respaldo
+    SetEstado(Format('%s / %s', [AiConn.DriverName, AiConn.AiChat.Model]));
+  end
+  else if Linea.StartsWith('/url ') then
+    AiConn.AiChat.Url := Linea.Substring(5).Trim    // p. ej. un puerto cerrado: sin respuesta -> reintentos
+  else if Linea.StartsWith('/presupuesto ') then
+    FPresupuesto := StrToIntDef(Linea.Substring(13).Trim, FPresupuesto)
+  else
+  begin
+    Pregunta := Linea;
+    Archivo := '';
+    if Linea.StartsWith('@') then
+    begin
+      Pregunta := Linea.Substring(Linea.IndexOf('|') + 1);
+      Archivo := Linea.Substring(1, Linea.IndexOf('|') - 1);
+    end;
+    Archivos := TAiMediaFiles.Create;
+    try
+      if Archivo <> '' then
+      begin
+        MF := TAiMediaFile.Create;
+        MF.LoadFromFile(Archivo);
+        Archivos.Add(MF);
+      end;
+      ChatInput1.PromptText := '';
+      ChatInput1.Busy := True;
+      ChatInput1SendEvent(ChatInput1, Pregunta, Archivos, nil);
+    finally
+      Archivos.Free;
+    end;
+  end;
+  FFinTurno := TThread.GetTickCount + 700;
+end;
+
+end.
