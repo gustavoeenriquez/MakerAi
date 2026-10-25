@@ -858,9 +858,21 @@ begin
     .Input('chat:shell-security')
     .ExpectEquals('allow=ok,bloq,bloq,bloq,bloq,ok|block=bloq,bloq,bloq,ok,bloq');
 
+  // Un tool conserva una referencia debil al chat que lo uso. Reemplazarlo en ChatTools o
+  // liberar el chat deben soltarla (antes: AV en la siguiente llamada directa al tool).
+  FRunner.AddCase('chat.tools.context-released')
+    .Input('chat:tools-context-released')
+    .ExpectEquals('reemplazado=False|activo=True|tras-free=False|ajeno=True');
+
   FRunner.AddCase('chat.bridge.speechtool-dataend')
     .Input('chat:bridge-speechtool')
     .ExpectEquals('eventos=1|texto=eco:quiero un descafeinado|async-en-puente=False|transcrito=quiero un descafeinado');
+
+  // Fase 2 (WebSearchTool como puente de un modelo sin busqueda): el resultado se inyecta en
+  // el prompt y el modelo lo ve; un solo OnReceiveDataEnd (la respuesta del modelo).
+  FRunner.AddCase('chat.bridge.websearch-context')
+    .Input('chat:bridge-websearch')
+    .ExpectEquals('eventos=1|modelo-vio-busqueda=True|respuesta-del-modelo=True');
 
   FRunner.AddCase('chat.transcript.bridge-mode')
     .Input('chat:transcript-bridge')
@@ -3113,6 +3125,14 @@ type
     procedure ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage); override;
   public
     class var AsyncSeen: Boolean;
+    // FContext es la referencia debil al chat que lo uso (ver chat.tools.context-released)
+    function TieneContexto: Boolean;
+  end;
+
+  // WebSearchTool de prueba: devuelve un resultado fijo (ver chat.bridge.websearch-context)
+  TSuiteWebTool = class(TAiWebSearchToolBase)
+  protected
+    procedure ExecuteSearch(const AQuery: string; ResMsg, AskMsg: TAiChatMessage); override;
   end;
 
   // OnCommand de TAiShell que no ejecuta nada
@@ -3130,6 +3150,11 @@ type
     procedure DataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject; aRole, aText: string);
   end;
 
+function TSuiteSpeechTool.TieneContexto: Boolean;
+begin
+  Result := Assigned(FContext);
+end;
+
 procedure TSuiteSpeechTool.ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
 begin
   AsyncSeen := IsAsync;
@@ -3137,6 +3162,12 @@ begin
   aMediaFile.Procesado := True;
   ResMsg.Prompt := aMediaFile.Transcription;
   ReportDataEnd(ResMsg, 'assistant', aMediaFile.Transcription);
+end;
+
+procedure TSuiteWebTool.ExecuteSearch(const AQuery: string; ResMsg, AskMsg: TAiChatMessage);
+begin
+  ResMsg.Prompt := 'resultado-web: ' + AQuery;
+  ReportDataEnd(ResMsg, 'assistant', ResMsg.Prompt);
 end;
 
 procedure TSuiteShellProbe.OnCommand(Sender: TObject; const Command: string; const CallId: string;
@@ -4227,6 +4258,68 @@ begin
     finally
       Sh.Free;
       Probe.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:tools-context-released' then
+  begin
+    // El chat le pone su contexto al tool al usarlo (SetContext(Self)) y es una referencia
+    // debil: al reemplazar el tool en ChatTools o al liberar el chat debe quedar en nil,
+    // o la siguiente llamada directa al tool (ReportState) toca un chat muerto (AV).
+    var Chat := TAiOpenChat.Create(nil);
+    var Tool1 := TSuiteSpeechTool.Create(nil);
+    var Tool2 := TSuiteSpeechTool.Create(nil);
+    var Tool3 := TSuiteSpeechTool.Create(nil);
+    try
+      Chat.ChatTools.SpeechTool := Tool1;
+      Tool1.SetContext(Chat);                       // como hace InternalRunTranscription
+      Chat.ChatTools.SpeechTool := Tool2;           // reemplazo: Tool1 suelta el contexto
+      Tool2.SetContext(Chat);
+      Tool3.SetContext(Chat);                       // Tool3 no esta en ChatTools: lo conserva
+      Result := 'reemplazado=' + BoolToStr(Tool1.TieneContexto, True) +
+        '|activo=' + BoolToStr(Tool2.TieneContexto, True);
+      FreeAndNil(Chat);                             // muere el chat: Tool2 suelta el contexto
+      Result := Result + '|tras-free=' + BoolToStr(Tool2.TieneContexto, True);
+      Tool3.ReleaseContext(nil);                    // otro contexto: no se toca
+      Result := Result + '|ajeno=' + BoolToStr(Tool3.TieneContexto, True);
+      PPointer(@Tool3.FContext)^ := nil;            // limpieza manual: apunta a un chat ya liberado
+    finally
+      Chat.Free;
+      Tool1.Free;
+      Tool2.Free;
+      Tool3.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:bridge-websearch' then
+  begin
+    // Fase 2: lo que trae el WebSearchTool es CONTEXTO para el modelo (antes quedaba solo
+    // en ResMsg.Prompt y la Fase 3 lo pisaba: el modelo contestaba sin verlo). El servidor
+    // falso hace eco del prompt que recibe, asi que la respuesta muestra lo que vio el modelo.
+    var FakeW := TFakeOpenAiChatServer.Create(PORT_FAKE_LLM);
+    var ConnW := TAiChatConnection.Create(nil);
+    var ToolW := TSuiteWebTool.Create(nil);
+    var CountW := TSuiteDataEndCounter.Create;
+    try
+      ConnW.DriverName := 'GenericLLM';
+      ConnW.Params.Values['URL'] := Format('http://localhost:%d/v1/', [PORT_FAKE_LLM]);
+      ConnW.Params.Values['ApiKey'] := 'suite';
+      ConnW.Params.Values['Asynchronous'] := 'False';
+      ConnW.Tool_Active := False;
+      ConnW.ModelCaps := [];
+      ConnW.SessionCaps := [cap_WebSearch];      // gap = [cap_WebSearch] -> puente
+      ConnW.ChatTools.WebSearchTool := ToolW;
+      ConnW.OnReceiveDataEnd := CountW.DataEnd;
+      var R := ConnW.AddMessageAndRun('precio del cafe', 'user', []);
+      Result := Format('eventos=%d|modelo-vio-busqueda=%s|respuesta-del-modelo=%s', [CountW.Count,
+        BoolToStr(Pos('resultado-web: precio del cafe', R) > 0, True), BoolToStr(R.StartsWith('eco:precio del cafe'), True)]);
+    finally
+      ConnW.Free;
+      ToolW.Free;
+      CountW.Free;
+      FakeW.Free;
     end;
     Exit;
   end;

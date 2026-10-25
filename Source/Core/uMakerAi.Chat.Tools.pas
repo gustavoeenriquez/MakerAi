@@ -90,6 +90,11 @@ type
   public
     destructor Destroy; override;
     procedure SetContext(AContext: IAiToolContext); virtual;
+    // Suelta el contexto SOLO si es el indicado: lo llama el chat que lo asigno al
+    // liberarse o al reemplazar el tool (TAiChatTools). FContext es una referencia
+    // debil, asi que sin esto el tool quedaba apuntando a un chat muerto y la
+    // siguiente llamada directa (ReportState/ReportDataEnd) era un AV.
+    procedure ReleaseContext(AContext: IAiToolContext);
   end;
 
   { Especializaciones para el Object Inspector }
@@ -186,6 +191,13 @@ end;
 procedure TAiCustomTool.SetContext(AContext: IAiToolContext);
 begin
   FContext := AContext;
+end;
+
+procedure TAiCustomTool.ReleaseContext(AContext: IAiToolContext);
+begin
+  // Comparacion por puntero y limpieza sin _Release: el chat puede estar a medio destruir
+  if Assigned(FContext) and (Pointer(FContext) = Pointer(AContext)) then
+    PPointer(@FContext)^ := nil;
 end;
 
 function TAiCustomTool.IsAsync: Boolean;

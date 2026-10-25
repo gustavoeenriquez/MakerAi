@@ -409,17 +409,11 @@ end;
 
 procedure TAiGeminiSpeechTool.ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage);
 begin
-  // Si IsAsync=True ya estamos en un hilo background del chat: llamar directo
-  // para evitar un TTask anidado que causaría dangling pointer sobre ResMsg.
-  // Si IsAsync=False estamos en el hilo principal: lanzar task para no bloquearlo.
-  if IsAsync then
-    InternalRunGeminiTTS(AText, ResMsg)
-  else
-    TTask.Run(
-      procedure
-      begin
-        InternalRunGeminiTTS(AText, ResMsg);
-      end);
+  // Siempre en linea (como TAiOpenAiSpeechTool). Con IsAsync=True ya se esta en el hilo
+  // del chat; con IsAsync=False el chat es sincrono y lee ResMsg.Prompt/MediaFiles en
+  // cuanto esto retorna (TAiChat.InternalRunSpeechGeneration): el TTask que habia aqui
+  // devolvia el turno vacio y, si el mensaje se liberaba antes, un puntero colgante.
+  InternalRunGeminiTTS(AText, ResMsg);
 end;
 
 function TAiGeminiSpeechTool.GetApiKey: string;

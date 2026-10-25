@@ -119,11 +119,16 @@ type
     procedure SetDispatchClassifier(const Value: TAiDispatchClassifierBase);
     procedure SetPromptGuard(const Value: TAiPromptGuardBase);
     procedure Changed;
+    // Un tool reemplazado o un chat que muere no deben dejar al tool con el contexto
+    // (referencia debil al chat) colgando: ver TAiCustomTool.ReleaseContext
+    procedure ReleaseToolContext(ATool: TComponent);
   public
     constructor Create(AOwner: TComponent);
     destructor Destroy; override;
     procedure Assign(Source: TPersistent); override;
     procedure Notification(AComponent: TComponent; Operation: TOperation);
+    // Suelta el contexto de todos los tools que apunten al owner (lo llama Destroy)
+    procedure ReleaseContexts;
     // Notifica al owner (p.ej. TAiChatConnection.ChatToolsChanged) cuando cambia
     // cualquier tool, para propagar la mutacion al TAiChat vivo.
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
@@ -1278,8 +1283,31 @@ begin
   FOwner := AOwner;
 end;
 
+procedure TAiChatTools.ReleaseToolContext(ATool: TComponent);
+var
+  LCtx: IAiToolContext;
+begin
+  if (ATool is TAiCustomTool) and Assigned(FOwner) and Supports(FOwner, IAiToolContext, LCtx) then
+    TAiCustomTool(ATool).ReleaseContext(LCtx);
+end;
+
+procedure TAiChatTools.ReleaseContexts;
+begin
+  ReleaseToolContext(FSpeechTool);
+  ReleaseToolContext(FImageTool);
+  ReleaseToolContext(FVideoTool);
+  ReleaseToolContext(FWebSearchTool);
+  ReleaseToolContext(FVisionTool);
+  ReleaseToolContext(FPdfTool);
+  ReleaseToolContext(FReportTool);
+  ReleaseToolContext(FDispatchClassifier);
+  ReleaseToolContext(FPromptGuard);
+end;
+
 destructor TAiChatTools.Destroy;
 begin
+  // El owner (TAiChat) se esta destruyendo: ningun tool debe seguir apuntandolo
+  ReleaseContexts;
   // Eliminar FOwner de la lista FFreeNotifies de cada tool externo antes de
   // que FOwner sea destruido. Si no, SpeechTool.FFreeNotifies quedará con un
   // puntero colgante y llamará Notification sobre memoria liberada → AV.
@@ -1354,6 +1382,7 @@ procedure TAiChatTools.SetSpeechTool(const Value: TAiSpeechToolBase);
 begin
   if FSpeechTool <> Value then
   begin
+    ReleaseToolContext(FSpeechTool);
     FSpeechTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
@@ -1365,6 +1394,7 @@ procedure TAiChatTools.SetImageTool(const Value: TAiImageToolBase);
 begin
   if FImageTool <> Value then
   begin
+    ReleaseToolContext(FImageTool);
     FImageTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
@@ -1376,6 +1406,7 @@ procedure TAiChatTools.SetVideoTool(const Value: TAiVideoToolBase);
 begin
   if FVideoTool <> Value then
   begin
+    ReleaseToolContext(FVideoTool);
     FVideoTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
@@ -1387,6 +1418,7 @@ procedure TAiChatTools.SetPromptGuard(const Value: TAiPromptGuardBase);
 begin
   if FPromptGuard <> Value then
   begin
+    ReleaseToolContext(FPromptGuard);
     FPromptGuard := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
@@ -1398,6 +1430,7 @@ procedure TAiChatTools.SetDispatchClassifier(const Value: TAiDispatchClassifierB
 begin
   if FDispatchClassifier <> Value then
   begin
+    ReleaseToolContext(FDispatchClassifier);
     FDispatchClassifier := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
@@ -1409,6 +1442,7 @@ procedure TAiChatTools.SetWebSearchTool(const Value: TAiWebSearchToolBase);
 begin
   if FWebSearchTool <> Value then
   begin
+    ReleaseToolContext(FWebSearchTool);
     FWebSearchTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
@@ -1420,6 +1454,7 @@ procedure TAiChatTools.SetVisionTool(const Value: TAiVisionToolBase);
 begin
   if FVisionTool <> Value then
   begin
+    ReleaseToolContext(FVisionTool);
     FVisionTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
@@ -1431,6 +1466,7 @@ procedure TAiChatTools.SetPdfTool(const Value: TAiPdfToolBase);
 begin
   if FPdfTool <> Value then
   begin
+    ReleaseToolContext(FPdfTool);
     FPdfTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
@@ -1442,6 +1478,7 @@ procedure TAiChatTools.SetReportTool(const Value: TAiReportToolBase);
 begin
   if FReportTool <> Value then
   begin
+    ReleaseToolContext(FReportTool);
     FReportTool := Value;
     if (Value <> nil) and Assigned(FOwner) then
       Value.FreeNotification(FOwner);
@@ -4393,10 +4430,27 @@ begin
     end;
 
     // --- FASE 2: GROUNDING (excluye SmartDispatch: el routing lo hace el LLM en Fase 3) ---
-    if (FChatMode <> cmSmartDispatch) and (cap_WebSearch in Gap) then
+    // (cmWebSearch no pasa por aqui: en ese modo la busqueda ES la respuesta y la hace la Fase 3)
+    if (FChatMode <> cmSmartDispatch) and (FChatMode <> cmWebSearch) and (cap_WebSearch in Gap) then
     begin
       DoStateChange(acsReasoning, 'Ejecutando Bridge de Busqueda Web...');
-      InternalRunWebSearch(ResMsg, AskMsg);
+      // Puente de ENTRADA, como los de la Fase 1: lo que el WebSearchTool encuentra es
+      // contexto para el modelo de la Fase 3, no la respuesta. Antes el resultado quedaba
+      // solo en ResMsg.Prompt, la Fase 3 lo pisaba con la respuesta del modelo y el modelo
+      // nunca lo veia ("no puedo consultar en tiempo real", con la busqueda ya hecha).
+      var LBridgePrompt := ResMsg.Prompt;
+      var LBusqueda := '';
+      FInInputBridge := True;
+      try
+        InternalRunWebSearch(ResMsg, AskMsg);
+        LBusqueda := ResMsg.Prompt;
+      finally
+        FInInputBridge := False;
+        ResMsg.Prompt := LBridgePrompt;
+      end;
+      if Trim(LBusqueda) <> '' then
+        AskMsg.Prompt := AskMsg.Prompt + sLineBreak + sLineBreak +
+          '[Resultados de búsqueda web (úsalos para responder y cita la fuente)]:' + sLineBreak + LBusqueda;
     end;
 
     // --- FASE 3: ORQUESTACION DE SALIDA ---

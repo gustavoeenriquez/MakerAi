@@ -369,13 +369,12 @@ end;
 
 procedure TAiElevenLabsSpeechTool.ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg: TAiChatMessage);
 begin
-  if IsAsync then
-    InternalRunTTS(AText, ResMsg)
-  else
-    TThread.CreateAnonymousThread(procedure
-    begin
-      InternalRunTTS(AText, ResMsg);
-    end).Start;
+  // Siempre en linea (como TAiOpenAiSpeechTool y como ExecuteTranscription de esta misma
+  // clase). Antes, con IsAsync=False se lanzaba un hilo "para no bloquear": pero un chat
+  // sincrono (o una llamada directa) lee ResMsg.Prompt/MediaFiles en cuanto esto retorna
+  // (TAiChat.InternalRunSpeechGeneration), asi que recibia vacio, y si liberaba el mensaje
+  // antes de que el hilo terminara, AV. Con IsAsync=True ya se esta en el hilo del chat.
+  InternalRunTTS(AText, ResMsg);
 end;
 
 { --- Metodos publicos para uso directo sin chat --- }

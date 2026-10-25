@@ -10,14 +10,16 @@
 // - GitHub: https://github.com/gustavoeenriquez/
 
 // -------------------------------------------------------------------------
-// TAiOpenAiWebSearchTool: Busqueda web via OpenAI (gpt-4o-mini-search-preview)
+// TAiOpenAiWebSearchTool: Busqueda web via OpenAI (API Responses + tool web_search)
 //
 // Implementa IAiWebSearchTool para usarse como WebSearchTool en TAiChat
-// (modos cmWebSearch y cmConversation con cap_WebSearch).
+// (modos cmWebSearch y cmConversation con cap_WebSearch): le da busqueda web
+// a un modelo que no la tiene (DeepSeek, Ollama, Groq...).
 //
-// El modelo gpt-4o-mini-search-preview recibe la consulta como un mensaje
-// de usuario en el endpoint /v1/chat/completions y devuelve la respuesta
-// con citas en el array "annotations" del mensaje de respuesta.
+// La consulta va como 'input' a /v1/responses con tools=[{type:web_search}]
+// (oct 25/2026: los modelos gpt-4o-*-search-preview de chat/completions fueron
+// retirados por OpenAI, model_not_found). Modelo por defecto gpt-6-luna. La
+// respuesta trae el texto y las citas (url_citation) en output[].content[].
 //
 // Uso:
 //   SearchTool := TAiOpenAiWebSearchTool.Create(Self);
@@ -80,7 +82,7 @@ constructor TAiOpenAiWebSearchTool.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   FApiKey := '@OPENAI_API_KEY';
-  FModel  := 'gpt-4o-mini-search-preview';
+  FModel  := 'gpt-6-luna';   // cualquier modelo actual; los *-search-preview fueron retirados
   FUrl    := GL_OPENAI_URL;
 end;
 
@@ -102,12 +104,12 @@ var
   LBody        : TStringStream;
   LResponse    : IHTTPResponse;
   LRespJson    : TJSONObject;
-  LChoices     : TJSONArray;
-  LChoice      : TJSONObject;
-  LMessage     : TJSONObject;
-  LAnnotations : TJSONArray;
+  LChoices     : TJSONArray;   // output[]
+  LChoice      : TJSONValue;   // un item de output
+  LMessage     : TJSONValue;   // un item de content
+  LAnnotations : TJSONArray;   // content[]
   LAnnotation  : TJSONObject;
-  LUrlCit      : TJSONObject;
+  LUrlCit      : TJSONArray;   // annotations[]
   LContent     : string;
   LCitation    : TAiMsgCitation;
   LSource      : TAiCitationSource;
@@ -119,20 +121,20 @@ begin
   LReqJson := TJSONObject.Create;
   try
     try
-      // Request body
+      // Request body: API Responses con la tool nativa web_search. Los modelos
+      // *-search-preview de chat/completions fueron retirados (model_not_found,
+      // verificado oct 25/2026); cualquier modelo actual busca con esta tool.
       LMessages := TJSONArray.Create;
-      LMessages.Add(
-        TJSONObject.Create
-          .AddPair('role', 'user')
-          .AddPair('content', AQuery));
+      LMessages.Add(TJSONObject.Create.AddPair('type', 'web_search'));
       LReqJson.AddPair('model', FModel);
-      LReqJson.AddPair('messages', LMessages);
+      LReqJson.AddPair('input', AQuery);
+      LReqJson.AddPair('tools', LMessages);
 
       LBody := TStringStream.Create(LReqJson.ToJSON, TEncoding.UTF8);
       try
         HTTP.ContentType := 'application/json';
         HTTP.CustomHeaders['Authorization'] := 'Bearer ' + GetApiKey;
-        LResponse := HTTP.Post(FUrl + 'chat/completions', LBody);
+        LResponse := HTTP.Post(FUrl + 'responses', LBody);
       finally
         LBody.Free;
       end;
@@ -152,44 +154,49 @@ begin
       end;
 
       try
-        LChoices := LRespJson.GetValue<TJSONArray>('choices');
+        // Responses: output[] trae web_search_call y uno o mas 'message' cuyo
+        // content[] tiene 'output_text' con text + annotations (url_citation plano:
+        // url, title, start_index, end_index). Se concatena el texto de todos.
+        LContent := '';
+        LChoices := nil;
+        LRespJson.TryGetValue<TJSONArray>('output', LChoices);
         if (not Assigned(LChoices)) or (LChoices.Count = 0) then
-          Exit;
-
-        LChoice  := LChoices.Items[0] as TJSONObject;
-        LMessage := LChoice.GetValue<TJSONObject>('message');
-        if not Assigned(LMessage) then
-          Exit;
-
-        LMessage.TryGetValue<string>('content', LContent);
-        ResMsg.Prompt := LContent;
-
-        // Citas: annotations[] con type = "url_citation"
-        if LMessage.TryGetValue<TJSONArray>('annotations', LAnnotations) then
         begin
-          for I := 0 to LAnnotations.Count - 1 do
+          ReportError('OpenAI WebSearch: respuesta sin output', nil);
+          Exit;
+        end;
+
+        for LChoice in LChoices do
+        begin
+          if LChoice.GetValue<string>('type', '') <> 'message' then
+            Continue;
+          if not LChoice.TryGetValue<TJSONArray>('content', LAnnotations) then
+            Continue;
+          for LMessage in LAnnotations do
           begin
-            LAnnotation := LAnnotations.Items[I] as TJSONObject;
-            if LAnnotation.GetValue<string>('type') <> 'url_citation' then
+            if LMessage.GetValue<string>('type', '') <> 'output_text' then
               Continue;
-
-            LUrlCit := LAnnotation.GetValue<TJSONObject>('url_citation');
-            if not Assigned(LUrlCit) then
-              Continue;
-
-            LCitation := TAiMsgCitation.Create;
-            LUrlCit.TryGetValue<Integer>('start_index', LCitation.StartIndex);
-            LUrlCit.TryGetValue<Integer>('end_index',   LCitation.EndIndex);
-
-            LSource            := TAiCitationSource.Create;
-            LSource.SourceType := cstWeb;
-            LUrlCit.TryGetValue<string>('url',   LSource.DataSource.Url);
-            LUrlCit.TryGetValue<string>('title', LSource.DataSource.Title);
-
-            LCitation.Sources.Add(LSource);
-            ResMsg.Citations.Add(LCitation);
+            LContent := LContent + LMessage.GetValue<string>('text', '');
+            // Citas
+            if LMessage.TryGetValue<TJSONArray>('annotations', LUrlCit) then
+              for I := 0 to LUrlCit.Count - 1 do
+              begin
+                LAnnotation := LUrlCit.Items[I] as TJSONObject;
+                if LAnnotation.GetValue<string>('type', '') <> 'url_citation' then
+                  Continue;
+                LCitation := TAiMsgCitation.Create;
+                LAnnotation.TryGetValue<Integer>('start_index', LCitation.StartIndex);
+                LAnnotation.TryGetValue<Integer>('end_index',   LCitation.EndIndex);
+                LSource            := TAiCitationSource.Create;
+                LSource.SourceType := cstWeb;
+                LAnnotation.TryGetValue<string>('url',   LSource.DataSource.Url);
+                LAnnotation.TryGetValue<string>('title', LSource.DataSource.Title);
+                LCitation.Sources.Add(LSource);
+                ResMsg.Citations.Add(LCitation);
+              end;
           end;
         end;
+        ResMsg.Prompt := LContent;
 
         ReportDataEnd(ResMsg, 'assistant', LContent);
       finally

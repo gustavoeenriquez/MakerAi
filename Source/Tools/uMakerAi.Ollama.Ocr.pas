@@ -173,6 +173,12 @@ begin
               LContent := LMsgResponse.GetValue<string>('content', '')
             else
               LContent := LResponseJson.GetValue<string>('response', '');
+            // deepseek-ocr devuelve sus tokens de control dentro del texto
+            // (<|im_start|>, <|im_end|>, <|grounding|>, <|ref|>...): no son contenido
+            LContent := StringReplace(LContent, '<|im_start|>', '', [rfReplaceAll]);
+            LContent := StringReplace(LContent, '<|im_end|>', '', [rfReplaceAll]);
+            LContent := StringReplace(LContent, '<|grounding|>', '', [rfReplaceAll]);
+            LContent := Trim(LContent);
 
             ResMsg.Prompt := LContent;
             ResMsg.Role := 'assistant';
