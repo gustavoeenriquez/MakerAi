@@ -1,0 +1,8 @@
+[package]
+name = skill-cotizacion-mayorista
+version = 1.0.0
+type = skill
+description = Cotizacion mayorista de Cafe La Ladera: procedimiento y plantilla para hoteles, restaurantes y oficinas
+author = ladera
+license = MIT
+tags = cafe,ladera,cotizacion,mayorista

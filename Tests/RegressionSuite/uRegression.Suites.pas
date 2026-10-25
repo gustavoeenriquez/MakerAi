@@ -91,7 +91,7 @@ uses
   uMakerAi.Memory, uMakerAi.Memory.Types,
   uMakerAi.Skills.Format, uMakerAi.Prompts, uMakerAi.Agents.Skill, uMakerAi.Agents.Node.LLM,
   uMakerAi.Agents.ToolRegistry,
-  uMakerAi.Tools.Skills, uMakerAi.Tools.Shell, uMakerAi.Utils.DiffUpdater,
+  uMakerAi.Tools.Skills, uMakerAi.Tools.Shell, uMakerAi.Utils.DiffUpdater, uMakerAi.Tools.ComputerUse,
   uMakerAi.Chat.Gemini, uMakerAi.Gemini.Speech, uMakerAi.Gemini.WebSearch, uMakerAi.Chat.Claude, uMakerAi.Chat.MakerAi,
   uRegression.Fixtures;
 
@@ -665,6 +665,16 @@ begin
     .ExpectEquals('s55/required=tc=auto,effort=-|s5/required=tc=any,effort=-|' +
       's5/required+tool=tc=auto,effort=-|o55/max=tc=auto,effort=max|o5/xhigh=tc=auto,effort=xhigh|' +
       's46/xhigh=tc=auto,effort=high|o55/minimal=tc=auto,effort=low|alias=claude-opus-5-5');
+
+  // Computer Use con Claude: las acciones de un turno son pasos de UNA secuencia sobre
+  // la pantalla. Antes iban a un TTask cada una (en paralelo y en el orden del
+  // diccionario): dos 'type' mezclaban sus letras en el mismo campo. Ahora, con una
+  // accion de pantalla en el lote, todo el lote corre en serie, en el orden de llegada
+  // y en el hilo que parsea; 'repeat' de key se respeta (3 pulsaciones).
+  FRunner.AddCase('chat.claude.computer-use-sequential')
+    .Input('chat:claude-cu-sequential')
+    .ExpectEquals('acciones=click_at,type_text_at,key_combination,key_combination,key_combination|' +
+      'hilo=mismo|resultados=toolu_a,toolu_b,toolu_c,|run=1');
 
   FRunner.AddCase('chat.qwen.thinking-request')
     .Input('chat:qwen-thinking')
@@ -2471,9 +2481,114 @@ type
   // cap_WebSearch mete una tool (web_search) para que salga tool_choice.
   TClaudeProbeChat = class(TAiClaudeChat)
   public
+    Runs: Integer;
     function Req(const AModel, AChoice: string; ALevel: TAiThinkingLevel;
       AToolFollowUp: Boolean = False): string;
+    // Varios tool_use de Computer Use en un turno: deben ejecutarse EN SERIE, en el
+    // orden de llegada y en el hilo que parsea (antes: un TTask por accion, en paralelo).
+    // Devuelve 'acciones=<orden>|hilo=mismo|otro|resultados=<ids>|run=<veces>'.
+    function CuOrder: string;
+    function Run(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage = nil): string; override;
   end;
+
+  // Ejecutor simulado: anota cada accion y en que hilo llego
+  TCuRecorder = class
+  public
+    Orden: TStringList;
+    Hilo: TThreadID;
+    HiloOk: Boolean;
+    constructor Create;
+    destructor Destroy; override;
+    procedure Ejecutar(Sender: TObject; const ActionData: TAiActionData; var Result: TAiActionResult);
+    procedure Captura(Sender: TObject; var MediaFile: TAiMediaFile);
+  end;
+
+constructor TCuRecorder.Create;
+begin
+  inherited;
+  Orden := TStringList.Create;
+  Hilo := TThread.CurrentThread.ThreadID;
+  HiloOk := True;
+end;
+
+destructor TCuRecorder.Destroy;
+begin
+  Orden.Free;
+  inherited;
+end;
+
+procedure TCuRecorder.Ejecutar(Sender: TObject; const ActionData: TAiActionData; var Result: TAiActionResult);
+begin
+  Orden.Add(ActionData.FunctionName);
+  if TThread.CurrentThread.ThreadID <> Hilo then
+    HiloOk := False;
+  Result.Success := True;
+  Result.ErrorMessage := '';
+  Result.CustomOutput := '';
+end;
+
+procedure TCuRecorder.Captura(Sender: TObject; var MediaFile: TAiMediaFile);
+begin
+  MediaFile := nil;   // sin pantalla: el driver tolera un tool_result sin imagen
+end;
+
+function TClaudeProbeChat.Run(AskMsg: TAiChatMessage; ResMsg: TAiChatMessage): string;
+begin
+  Inc(Runs);   // la continuacion del bucle agentico; aqui no hay red
+  Result := '';
+end;
+
+function TClaudeProbeChat.CuOrder: string;
+var
+  Rec: TCuRecorder;
+  Tool: TAiComputerUseTool;
+  J: TJSONObject;
+  Res: TAiChatMessage;
+  Ids: string;
+begin
+  Rec := TCuRecorder.Create;
+  Tool := TAiComputerUseTool.Create(nil);
+  Res := TAiChatMessage.Create('', 'assistant');
+  try
+    Tool.ScreenWidth := 1280;
+    Tool.ScreenHeight := 800;
+    Tool.AreaWidth := 1280;
+    Tool.AreaHeight := 800;
+    Tool.OnExecuteAction := Rec.Ejecutar;
+    Tool.OnRequestScreenshot := Rec.Captura;
+    ChatTools.ComputerUseTool := Tool;
+    Messages.Clear;
+    Model := 'claude-sonnet-5-5';
+    Asynchronous := False;
+    ModelConfig.ModelCaps := [cap_Image, cap_ComputerUse];
+    Messages.Add(TAiChatMessage.Create('Registra la guia', 'user'));
+    Runs := 0;
+    // Tres acciones de un mismo turno, como las manda computer_toolset_20260801
+    // (la tercera con 'repeat', que antes se ignoraba)
+    J := TJSONObject.ParseJSONValue('{"model":"claude-sonnet-5-5","role":"assistant","stop_reason":"tool_use",' +
+      '"content":[{"type":"tool_use","id":"toolu_a","name":"left_click","input":{"coordinate":[631,179]}},' +
+      '{"type":"tool_use","id":"toolu_b","name":"type","input":{"text":"Marta"}},' +
+      '{"type":"tool_use","id":"toolu_c","name":"key","input":{"text":"BackSpace","repeat":"3"}}],' +
+      '"usage":{"input_tokens":10,"output_tokens":5}}') as TJSONObject;
+    try
+      ParseChat(J, Res);
+    finally
+      J.Free;
+    end;
+    Ids := '';
+    for var M in Messages do
+      if M.ToolCallId <> '' then
+        Ids := Ids + M.ToolCallId + ',';
+    Result := Format('acciones=%s|hilo=%s|resultados=%s|run=%d', [String.Join(',', Rec.Orden.ToStringArray),
+      IfThen(Rec.HiloOk, 'mismo', 'otro'), Ids, Runs]);
+  finally
+    ChatTools.ComputerUseTool := nil;
+    if Messages.IndexOf(Res) < 0 then
+      Res.Free;
+    Tool.Free;
+    Rec.Free;
+  end;
+end;
 
 function TClaudeProbeChat.Req(const AModel, AChoice: string; ALevel: TAiThinkingLevel;
   AToolFollowUp: Boolean): string;
@@ -3224,6 +3339,17 @@ begin
       Conn.Free;
       Op.Free;
       Parts.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:claude-cu-sequential' then
+  begin
+    var Cp := TClaudeProbeChat.Create(nil);
+    try
+      Result := Cp.CuOrder;
+    finally
+      Cp.Free;
     end;
     Exit;
   end;

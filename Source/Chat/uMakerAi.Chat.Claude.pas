@@ -231,6 +231,9 @@ procedure Register;
 
 implementation
 
+// Miembros de computer_toolset_20260801 (definida mas abajo; ParseChat la usa para
+// decidir si un lote de tool calls va en serie)
+function IsClaudeComputerToolName(const AName: string): Boolean; forward;
 
 Const
   GlAIUrl = 'https://api.anthropic.com/v1/';
@@ -1695,32 +1698,85 @@ begin
   try
     if LFunciones.Count > 0 then
     begin
-      NumTasks := LFunciones.Count;
-      SetLength(TaskList, NumTasks);
-      I := 0;
-      for Clave in LFunciones.Keys do
-      begin
-        ToolCall := LFunciones[Clave];
-        ToolCall.ResMsg := ResMsg;
-        ToolCall.AskMsg := AskMsg;
-
-        _CreateTask(ToolCall, I); // subrutina local garantiza captura por valor
-        Inc(I);
-      end;
-      // Bombear Synchronize/Queue mientras se espera, para no colgar la app si un
-      // tool call accede a la VCL/FMX via TThread.Synchronize (issue #103).
-      // OJO: CheckSynchronize SOLO es valido en el hilo principal; en hilos
-      // secundarios (workers Indy de un servicio headless, TTask de agentes)
-      // LANZA excepcion "CheckSynchronize called from thread X". Fuera del main
-      // thread solo esperamos. Mismo criterio que TMCPClientSSE.WaitForInitialization.
-      while not TTask.WaitForAll(TaskList, 10) do
-        if TThread.CurrentThread.ThreadID = MainThreadID then
-          CheckSynchronize(0)
-        else
-          TThread.Sleep(10);
-
+      // Orden de llegada de los tool_use (LFunciones es un TDictionary: sus Keys no
+      // conservan el orden). Las respuestas se archivan en este mismo orden.
       var LStopLoop := False;
-      for Clave in LFunciones.Keys do
+      var LOrden := TList<string>.Create;
+      try
+        for JVal in choices do
+          if (JVal.GetValue<string>('type', '') = 'tool_use') and
+             LFunciones.ContainsKey(JVal.GetValue<string>('id', '')) then
+            LOrden.Add(JVal.GetValue<string>('id'));
+        if LOrden.Count <> LFunciones.Count then
+        begin
+          LOrden.Clear;
+          for Clave in LFunciones.Keys do
+            LOrden.Add(Clave);
+        end;
+
+        // Computer Use: el modelo manda varias acciones por turno (clic, teclear,
+        // captura...) que son PASOS de una misma secuencia sobre una pantalla. En
+        // paralelo se pisan: dos 'type' a la vez mezclan sus letras en el campo con
+        // foco y el clic del campo siguiente cae antes de que termine el anterior
+        // (verificado con claude-sonnet-5-5 sobre Xvfb: "iltoeal sa5Rs io NHSOu.i").
+        // Con una accion de pantalla en el lote, TODO el lote va en serie y en orden.
+        var LSecuencial := False;
+        for Clave in LFunciones.Keys do
+          if IsClaudeComputerToolName(LFunciones[Clave].Name) and
+             (cap_ComputerUse in ModelConfig.ModelCaps) and
+             Assigned(ChatTools.ComputerUseTool) then
+          begin
+            LSecuencial := True;
+            Break;
+          end;
+
+        if LSecuencial then
+        begin
+          for Clave in LOrden do
+          begin
+            ToolCall := LFunciones[Clave];
+            ToolCall.ResMsg := ResMsg;
+            ToolCall.AskMsg := AskMsg;
+            try
+              DoCallFunction(ToolCall);
+            except
+              on E: Exception do
+              begin
+                ToolCall.Response := '{"error": "' + E.Message.Replace('"', '''') + '"}';
+                DoError('Error en herramienta "' + ToolCall.Name + '": ' + E.Message, nil);
+              end;
+            end;
+          end;
+        end
+        else
+        begin
+          NumTasks := LFunciones.Count;
+          SetLength(TaskList, NumTasks);
+          I := 0;
+          for Clave in LOrden do
+          begin
+            ToolCall := LFunciones[Clave];
+            ToolCall.ResMsg := ResMsg;
+            ToolCall.AskMsg := AskMsg;
+
+            _CreateTask(ToolCall, I); // subrutina local garantiza captura por valor
+            Inc(I);
+          end;
+          // Bombear Synchronize/Queue mientras se espera, para no colgar la app si un
+          // tool call accede a la VCL/FMX via TThread.Synchronize (issue #103).
+          // OJO: CheckSynchronize SOLO es valido en el hilo principal; en hilos
+          // secundarios (workers Indy de un servicio headless, TTask de agentes)
+          // LANZA excepcion "CheckSynchronize called from thread X". Fuera del main
+          // thread solo esperamos. Mismo criterio que TMCPClientSSE.WaitForInitialization.
+          while not TTask.WaitForAll(TaskList, 10) do
+            if TThread.CurrentThread.ThreadID = MainThreadID then
+              CheckSynchronize(0)
+            else
+              TThread.Sleep(10);
+        end;
+
+      LStopLoop := False;
+      for Clave in LOrden do
       begin
         ToolCall := LFunciones[Clave];
         ToolMsg := TAiChatMessage.Create(ToolCall.Response, 'user', ToolCall.Id, ToolCall.Name);
@@ -1730,6 +1786,9 @@ begin
         ToolMsg.Id := FMessages.Count + 1;
         FMessages.Add(ToolMsg);
         LStopLoop := LStopLoop or ToolCall.StopAgenticLoop;
+      end;
+      finally
+        LOrden.Free;
       end;
 
       if LStopLoop then

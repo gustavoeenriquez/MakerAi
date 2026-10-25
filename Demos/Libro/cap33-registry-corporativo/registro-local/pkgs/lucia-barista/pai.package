@@ -1,0 +1,9 @@
+[package]
+name = lucia-barista
+version = 1.0.0
+type = prompt
+description = Prompt de sistema de Lucia, la barista virtual de Cafe La Ladera (carta, reglas y tono), con el cliente y el cafe de interes como variables
+author = ladera
+license = MIT
+tags = cafe,ladera,barista,prompt-de-sistema
+variables = cliente,cafe

@@ -84,6 +84,7 @@ The `Source/Tools/` directory contains capability components that extend LLM fun
   - Handles Gemini's normalized coordinates (0-1000) conversion to screen pixels
   - Action types: click, drag, type, scroll, navigate, screenshot
   - **El componente es agnóstico de plataforma**: solo usa RTL y delega TODO en `OnExecuteAction` / `OnRequestScreenshot`. Compila para Linux64 sin cambios (verificado sep 20/2026)
+  - `TAiActionData.Repeats` (oct 25/2026): veces que el ejecutor recibe la misma acción (`key` de Claude con `"repeat": N`, número o cadena); `ProcessToolCall` llama a `OnExecuteAction` N veces y se detiene al primer fallo. Antes `repeat` se ignoraba y vaciar un campo con "BackSpace x100" daba una pulsación. Con Claude, las acciones de un mismo turno corren **en serie y en orden** (ver `Source/Chat/CLAUDE.md`)
   - Executors por plataforma, **ninguno en el `.dpk`** (las apps los incluyen directo): `*.Windows.pas` (VCL/GDI), `*.WindowsFMX.pas` (FMX, dibuja el cursor), `*.Mac.pas` (CGEvent, sin probar en hardware) y `*.Linux.pas` (`TAiLinuxExecutor`, X11 vía xdotool + scrot; **probado en runtime** sobre Xvfb con gpt-6-astra y claude-opus-4-8 — ver demo 083)
 
 ### Media Generation Tools

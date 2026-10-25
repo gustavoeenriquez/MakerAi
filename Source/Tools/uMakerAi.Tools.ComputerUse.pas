@@ -44,6 +44,7 @@ type
     ClearBeforeTyping: Boolean; // Para type_text_at (default true)
     Modifiers: string; // Teclas modificadoras en click/scroll: 'shift', 'ctrl+alt'...
     HoldDuration: Double; // Segundos a mantener la tecla en hold_key (default 1.0)
+    Repeats: Integer; // Veces que se ejecuta la accion ('repeat' de key en Claude; 1 por defecto)
 
     // Datos de Scroll
     ScrollDirection: string; // 'up', 'down', 'left', 'right'
@@ -403,6 +404,19 @@ begin
           JNew.AddPair('duration', TJSONNumber.Create(DDur));
       end;
 
+      // key: 'repeat' (veces), numero o cadena. Sin esto "BackSpace" x100 para vaciar
+      // un campo se quedaba en UNA pulsacion y el modelo daba vueltas (sonnet-5-5, oct 2026).
+      if (Action = 'key') then
+      begin
+        if not JArgs.TryGetValue<Integer>('repeat', Amount) then
+          if JArgs.TryGetValue<string>('repeat', SText) then
+            Amount := StrToIntDef(Trim(SText), 0)
+          else
+            Amount := 0;
+        if Amount > 1 then
+          JNew.AddPair('repeat', TJSONNumber.Create(Amount));
+      end;
+
       // Zoom: region [x1,y1,x2,y2] (px) -> x,y + destination_x,destination_y (norm 0-999)
       if (Action = 'zoom') and TryGetRectNorm(JArgs, 'region', PxX, PxY, NormX, NormY) then
       begin
@@ -607,6 +621,7 @@ begin
   Result.ClearBeforeTyping := True;
   Result.Modifiers := '';
   Result.HoldDuration := 0;
+  Result.Repeats := 1;
   Result.ScrollDirection := '';
   Result.ScrollAmount := 0;
   Result.ZoomRect := TRect.Empty;
@@ -718,6 +733,10 @@ begin
     if not JArgs.TryGetValue<Double>('duration', Result.HoldDuration) then
       Result.HoldDuration := 1.0;
 
+    // Repeticiones (key con 'repeat'): el ejecutor recibe la misma accion N veces
+    if not JArgs.TryGetValue<Integer>('repeat', Result.Repeats) or (Result.Repeats < 1) then
+      Result.Repeats := 1;
+
     // Región de zoom: se construye a partir de (x,y) y (destination_x, destination_y)
     // ya denormalizados a píxeles reales.
     if Result.ActionType = catZoom then
@@ -773,7 +792,12 @@ begin
   if Assigned(FOnExecuteAction) then
   begin
     try
-      FOnExecuteAction(Self, ActionData, ActionResult);
+      for var LVez := 1 to Max(1, ActionData.Repeats) do
+      begin
+        FOnExecuteAction(Self, ActionData, ActionResult);
+        if not ActionResult.Success then
+          Break;
+      end;
     except
       on E: Exception do
       begin

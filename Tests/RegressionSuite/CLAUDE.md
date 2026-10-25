@@ -27,10 +27,11 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (140 casos)
+## Cobertura actual (141 casos)
 
 | Área | Casos |
 |------|-------|
+| Claude: Computer Use en serie (oct 25/2026) | `chat.claude.computer-use-sequential`: tres `tool_use` de `computer_toolset_20260801` en un turno (`left_click`, `type`, `key` con `repeat: "3"`) llegan al ejecutor simulado en serie, en el orden de llegada y en el hilo que parsea, con `repeat` respetado y los `tool_result` en el mismo orden (antes: un `TTask` por acción, en paralelo y en el orden del diccionario; falla sin el fix). `ParseChat` directo sobre un `TClaudeProbeChat` con `Run` anulado, sin red |
 | MCP dual-era | negociación moderna (2026-07-28), fallback a handshake legacy, `tools/list`, `tools/call` |
 | MCP fugas | `mcp.initialize.no-leak`: 5 `Initialize` contra el servidor in-process no dejan bloques vivos (mide `GetMemoryManagerState`). Cubre la fuga del cliente (respuesta de `tools/list`) y la del servidor (esquema clonado por tool en cada `tools/list`); falla sin cualquiera de las dos |
 | MCP MRTR | reintento con `accept`, mensaje de elicitation recibido, sin handler → error explícito |
