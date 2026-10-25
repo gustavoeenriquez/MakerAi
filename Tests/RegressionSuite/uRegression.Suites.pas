@@ -889,6 +889,15 @@ begin
     .Input('chat:typed-pin-equal')
     .ExpectEquals('antes=False|despues=True|tras-modelo=True|pin=True');
 
+  // Un TAiChatConnection cargado desde el .fmx con un Model distinto al default
+  // del driver (Model = 'claude-sonnet-5-5' con DriverName = 'Claude') creaba el
+  // chat con el modelo por defecto: durante la carga UpdateAndApplyParams no corre
+  // (csLoading) y Loaded solo creaba el chat con los Params del formulario, sin
+  // el Model (oct 25/2026, encontrado con el respaldo de Demos/Libro/cap29)
+  FRunner.AddCase('conn.form-model-nondefault')
+    .Input('chat:form-model-nondefault')
+    .ExpectEquals('carga=ok|conn=claude-sonnet-5-5|chat=claude-sonnet-5-5|driver=TAiClaudeChat|async=False');
+
   FRunner.AddCase('conn.reset-token-counters')
     .Input('chat:reset-tokens')
     .ExpectEquals('newchat=msgs0/conn30/chat30/think5/cache7|reset=msgs1/conn0/chat0/think0/cache0/write0');
@@ -3746,6 +3755,38 @@ begin
       Ch.Free;
       Bin.Free;
       Txt.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:form-model-nondefault' then
+  begin
+    var TxtF := TStringStream.Create(
+      'object Respaldo: TAiChatConnection' + sLineBreak +
+      '  DriverName = ''Claude''' + sLineBreak +
+      '  Model = ''claude-sonnet-5-5''' + sLineBreak +
+      '  Params.Strings = (' + sLineBreak +
+      '    ''ApiKey=@CLAUDE_API_KEY''' + sLineBreak +
+      '    ''Asynchronous=False'')' + sLineBreak +
+      '  Prompt_tokens = 0' + sLineBreak +
+      'end', TEncoding.UTF8);
+    var BinF := TMemoryStream.Create;
+    var CF := TAiChatConnection.Create(nil);
+    try
+      ObjectTextToBinary(TxtF, BinF);
+      BinF.Position := 0;
+      try
+        BinF.ReadComponent(CF);
+        Result := Format('carga=ok|conn=%s|chat=%s|driver=%s|async=%s', [CF.Model, CF.AiChat.Model, CF.AiChat.ClassName,
+          BoolToStr(CF.AiChat.Asynchronous, True)]);
+      except
+        on E: Exception do
+          Result := 'carga=' + E.Message;
+      end;
+    finally
+      CF.Free;
+      BinF.Free;
+      TxtF.Free;
     end;
     Exit;
   end;

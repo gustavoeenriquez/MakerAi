@@ -1207,6 +1207,12 @@ end;
 procedure TAiChatConnection.Loaded;
 begin
   inherited;
+  // Durante la carga del formulario SetDriverName y SetModel no aplican nada
+  // (csLoading): aqui se mezclan los parametros del registro con los del .fmx y
+  // se impone el Model guardado ANTES de crear el chat. Sin esto, un Model
+  // distinto al default del driver (Claude con 'claude-sonnet-5-5') se perdia y
+  // el chat nacia con el modelo por defecto (caso conn.form-model-nondefault).
+  UpdateAndApplyParams;
   SetupChatFromDriver;
 end;
 

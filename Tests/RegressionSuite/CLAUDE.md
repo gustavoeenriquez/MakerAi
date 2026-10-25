@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (139 casos)
+## Cobertura actual (140 casos)
 
 | Área | Casos |
 |------|-------|
@@ -67,6 +67,7 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 | Gemini (request) | defaults del driver, de `TAiChatConnection` y de las tools (TTS, transcripción, búsqueda) en `gemini-3.8-flash(-tts)`; sampling omitido por versión (3.6/3.7/3.8 no, 3.0 sí); `tlMinimal` → `LOW` y `tlMax` → `HIGH`; alias de los apagados (`gemini-3-pro-preview`, `imagen-4.0-*`, `aa_gemini-3-pro-fast`) — sin red ni key |
 | Qwen (request) | `enable_thinking` siempre presente (false sin `cap_Reasoning`), `thinking_budget` por `ThinkingLevel`, ausente en `qwq-*`, false en pesos abiertos síncronos; `stream_options.include_usage` solo en streaming; audio de entrada reescrito como data URI (falla sin el fix); `TAiQwenRAGReranker` con transporte falso: lotes, mapeo por `index`, `instruct`, recorte; request de imagen: genera sin adjuntos, edita con 1-3 (modelo de edición, data URI, sin forzar tamaño), falla con 4 o con `z-image-turbo`; request de video: t2v/i2v/kf2v según las imágenes adjuntas, `-t2v` → `-i2v`, 720p por `size` o `resolution` según familia, tipos de `VideoParams.Params`; traducción `qwen-mt`: un solo mensaje user con `translation_options` (idiomas, dominio, glosario) y streaming acumulado de plus/turbo convertido a incrementos con una línea SSE partida (falla sin el fix); `TAiQwenVoices` con transporte falso (clonar, diseñar con fallback y preview, listar, borrar) y modelo TTS elegido por el prefijo de la voz |
 | Conexión | sub-parámetros de medios (`VideoParams`, `TtsParams`, `ImageParams`) editados después de crear el chat llegan al driver en `AddMessageAndRun` (URL a puerto cerrado; falla sin el fix) |
+| Conexión desde el formulario (oct 25/2026) | `conn.form-model-nondefault`: un `TAiChatConnection` leído de un DFM en texto con `DriverName = 'Claude'` y `Model = 'claude-sonnet-5-5'` crea el chat con ese modelo (antes nacía con el default del driver porque `Loaded` no aplicaba los parámetros; falla sin el fix) |
 | Registro de parámetros | con `Model` vacío, cada driver registrado recibe los mismos parámetros que con su modelo por defecto; conexión Qwen sin `Model` con `cap_Image`, Groq con `Max_Tokens` 65536 (falla sin el fix) |
 | Realtime: conector | `DriverParams` aplicado por RTTI al crear el driver (texto), al cambiar de driver sin falsos errores, Grok con enumerado y lista (`Keyterms` con `|`), clave desconocida informada por `OnError` al conectar (`Url` a puerto cerrado, sin red) |
 | Realtime Qwen | eventos del servidor sin red: los tres formatos de transcripción (stash acumulado, text+stash con reescritura, delta incremental) salen como deltas; texto y audio del asistente, cierre y error; `session.update` de los tres drivers (formatos, VAD manual → null, idioma, voz de traducción) y registro en la fábrica y en `TAiRealtimeConnection`; `TAiQwenRealtimeTTS`: `session.update` (modo, idioma, voz, instrucciones), modelo realtime elegido por el prefijo de la voz propia y eventos (listo una sola vez, audio, respuestas, fin, error) |
