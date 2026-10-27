@@ -1,4 +1,4 @@
-# MakerAI Suite v3.8 — The AI Ecosystem for Delphi
+# MakerAI Suite v4.0 — The AI Ecosystem for Delphi
 
 🌐 **Official Website:** [https://makerai.cimamaker.com](https://makerai.cimamaker.com)
 📖 **Manual:** [https://www.gustavoenriquez.com/book-makerai](https://www.gustavoenriquez.com/book-makerai) — available in English and Spanish
@@ -36,7 +36,67 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 ---
 
-## 🚀 What's New in v3.9
+## 🚀 What's New in v4.0
+
+### October 2026 model refresh — checked against the live APIs
+Every provider was compared with what its API actually serves today (not only its docs), and every model we could call was tested live from the Delphi drivers. Retired models stay usable as **aliases of their successors**, so forms and configurations saved with an old name keep working.
+
+| Provider | New models | Retired → now an alias of |
+|----------|------------|---------------------------|
+| Anthropic | **`claude-haiku-5-5`** (1M context, $0.10/$0.50 up to 100K-token prompts) | `claude-sonnet-4-20250514` → `claude-sonnet-5-5`, `claude-opus-4-20250514` → `claude-opus-5-5` |
+| OpenAI | **`gpt-6.1-sol`** ($2/$10), **`gpt-6.1-terra`** ($1/$5) | `o3-pro` → `gpt-5.5-pro`, `o3/o4-mini-deep-research` → `gpt-6.1-sol`, `dall-e-2/3` → `gpt-image-1` |
+| Google | **`gemini-4-argon`**, **`gemini-nano-banana-2.1`**, `gemini-omni-1.1-flash` | `gemini-3.5-flash` → `3.6-flash`, `gemini-3.7-flash` → `3.8-flash`, `gemini-2.5-computer-use-preview` → `3.8-flash` |
+| Moonshot | **`kimi-k3.1-pro`**, `kimi-k3.1-pro-highspeed` | `kimi-k2.5`, `moonshot-v1-*` → `kimi-k3`; `kimi-latest` → `kimi-k3.1-pro` |
+| Zhipu / Z.ai | **`glm-5.3-flash`**, `glm-5.3-flashx` (multimodal, MIT weights) | — |
+
+Fixes found on the way (each one returned HTTP 400 or used the wrong setting):
+- **Claude Haiku 5.5** was sent down the legacy path (`budget_tokens` + `temperature`); it now uses adaptive thinking with `effort`, accepts mid-conversation `system` messages, and `RefusalFallbackModel` is skipped (Haiku 5.5 has no server-side fallback).
+- **OpenAI:** `tlNone` is sent as `low` to `gpt-6-astra` and `gpt-6.1-sol` (they reject `none`); `gpt-5.x-pro` only accepts `medium`/`high`/`xhigh`, so lower levels go up to `medium` and `tlMax` down to `xhigh`.
+- **Gemini 4 Argon** was routed to the Gemini 2.5 `thinkingBudget` path; the driver now picks `thinkingLevel` by model version.
+- **Kimi:** every current model (k2.6, k2.7, k3, k3.1) accepts only `temperature = 1` and `top_p = 0.95`; the driver no longer sends them.
+- **GLM:** `tlNone`/`tlMinimal`/`tlXHigh`/`tlMax` sent no `reasoning_effort`, so the API used `max`, the most expensive level.
+
+Tested live: Claude 7/7, OpenAI 9/9, Kimi + GLM + DeepSeek 12/13 (`kimi-k3.1-pro-highspeed` answered *engine overloaded*). Gemini was checked against the official docs only (no account).
+
+### MiniMax — new provider
+`TAiMiniMaxChat` (`DriverName = 'MiniMax'`, `@MINIMAX_API_KEY`) on MiniMax's OpenAI-compatible endpoint: `MiniMax-M3` (default; 1M context, image and video input), `MiniMax-M3.1-Flash` (tunable reasoning depth) and the M2.x family. Reasoning comes back in `reasoning_content` (`reasoning_split` is always on) and is re-sent in the history, as MiniMax requires. Thinking follows `cap_Reasoning`, except on M3.1-Flash, which cannot turn it off; `reasoning_effort` is only sent to M3.1-Flash. *Written against the official docs; not runtime-tested yet (no API key).*
+
+### Agents — a complete fluent API
+`AddEdge` now adds targets to an existing link (before it replaced it, so a fluent fan-out only ran its last branch), and the builder gained `AddNode`, `AddToolNode`, `AddExpressionEdge`, `AddFallbackEdge` and `SetJoinMode`, with construction errors raised as `EAiGraphError`. `TLLMNode` runs on the new protected `ExecuteNode`, has its own `Guardrails` and is owned by the manager. Forms saved with older versions load again: properties that are no longer published are read and applied (or dropped) instead of raising `EReadError`.
+
+### Chat UI
+`TAIChatView` messages gain a **footer**, **action buttons** inside the bubble (`OnMessageAction`, e.g. *Approve / Reject*) and collapsible **task steps** with durations (`AddStep` / `FinishStep`), all persisted in the message JSON. Consecutive messages of the same role merge into one bubble (`MergeConsecutive`), `AddAssistantMessage` shows generated images, audio and files, and `TAIChatInput` has a voice-call button wired for realtime sessions.
+
+### Computer Use runs the model's actions in order
+With `computer_toolset_20260801` Claude sends several screen actions per turn that are steps of one sequence; the driver ran them in parallel, so two `type` actions mixed their letters in the same field. A batch with a screen action now runs serially, in arrival order — the same form took 14 actions and 26 s instead of 114 actions and 322 s. `key` honours `repeat`.
+
+### Telemetry — one trace per turn
+Tool calls run in their own tasks, and OpenAI streaming executes functions on the HTTP thread; none of them carried the turn's span, so every `execute_tool` (and an agent graph or MCP call behind it) showed up as a separate trace. `TAiTelemetry.ContextEnter` / `ContextLeave` carry the parent across threads: a turn that delegates to a graph went from 5 loose traces to one trace of 14 spans.
+
+### Production fixes
+- **Bridges actually reach the model:** the web-search result is injected as context (the model used to answer "I can't browse" with the search already done), the input bridges (audio, image, PDF) no longer fire `OnReceiveDataEnd` with the raw tool output, and `TAiOpenAiWebSearchTool` moved to the Responses API (`gpt-4o-mini-search-preview` was retired).
+- **`TAiShell` security list** checks every segment of a chained command (`&`, `|`, `;`, new lines); before, `cd x && del /f /q *` passed an allow-list of `[cd, dir]`.
+- **Prompt filter:** a message blocked by the sanitizer or the prompt guard no longer stays in the history (it reached the model on the next turn), and injection phrases are recognised in Spanish too.
+- **OpenAI:** `apply_patch` works in streaming and can create files; strict schemas are enforced on nested objects and arrays, and tools with a free-form object are sent without `strict` (both were 400s); `PromptCacheMode` → `prompt_cache_options.mode`.
+- **Concurrency:** a new question asked right after `OnReceiveDataEnd` waits for the previous request to close (intermittent *Stream read error*); `TAudioPushStream` no longer deadlocks the app when interrupted mid-playback.
+- **Connections and costs:** a `Model` saved in the form is applied on load even when it is not the driver default; `ResetTokenCounters` (#135); `Cost_usd` accumulates what the MakerAI broker charges per call.
+- **MCP:** the SSE client retries a dropped POST (except `tools/call`), reports `IsConnected`, and streams over `https`; freeing a running `TAiMCPSSEHttpServer` no longer raises an AV.
+- **WebSocket:** `ws://` uses plain TCP (it opened TLS and hung against a plain HTTP server); `wss://` works on Android.
+- **Evals:** the judge receives the case's question and starts a fresh chat for every verdict.
+- **Build:** packages and the regression suite compile without the IDE Library Path (PR #132), and Delphi sources check out with CRLF, also in the GitHub ZIP (#133).
+
+### Demos for the book's 4.0 edition
+`Demos/Libro` holds one project per chapter of *IA con Delphi* 4.0 (chapters 3 to 37: from the first chat to agents, federation, voice, Computer Use and every bridge), and demos `093`–`105` follow the *Café La Ladera* video series (see **Demo Projects** below).
+
+### ⚠️ Behaviour changes
+- **`imagen-4.0-*` aliases now generate with `gemini-nano-banana-2.1`** (before `gemini-3.1-flash-image`, deprecated on 2026-10-06).
+- **Kimi ignores `Temperature` and `Top_p`** — the API only accepts its fixed values, so any other value used to fail.
+- **`gpt-5.x-pro` and `gpt-6-astra` / `gpt-6.1-sol` adjust the requested effort** to the nearest level the model accepts instead of failing.
+- **`TAiShell` in allow-list mode rejects redirections and substitutions** (`>`, `<`, `` ` ``, `$( )`), and checks each segment of a chained command.
+- **`TAiChat.Run` waits up to 15 s for the previous request to close** before starting a new one (it does not wait when called from inside `OnReceiveDataEnd`).
+- **Setting a typed `ModelConfig` field to its current value now pins it** (`Tool_Active := True` was overwritten by the driver registry when it already was `True`).
+
+## What came in v3.9
 
 ### OpenAI GPT-Live — full-duplex voice with delegation
 `TAiOpenAiLiveChat` (`gpt-live-1`, DriverName `OpenAiLive`) listens while it speaks: you can interrupt it, and it hands the heavy thinking to another model — a Responses model run by OpenAI (web search, your `TAiFunctions` and MCP tools executed locally) or **any `TAiChatConnection`** through `DelegateChat` (Claude, Ollama, an agent graph). Conversation turns are rebuilt from the session timeline, so overlapping speech no longer splits answers. Demo `092-GPTLiveVoice`: microphone, speaker, local functions, RAG over MCP with a read-only guardrail, anti-echo speaker mode and a quick guide. Tested live.
@@ -557,14 +617,15 @@ Full, provider-specific access to every API feature. Use when you need complete 
 
 | Component | Provider | Latest Models |
 |-----------|----------|---------------|
-| `TAiOpenChat` | OpenAI | **gpt-6-sol** (default), gpt-6-luna, gpt-6-astra, gpt-5.6-sol/-terra/-luna, gpt-image-2.5 |
-| `TAiClaudeChat` | Anthropic | claude-opus-5-5, claude-sonnet-5-5, claude-fable-5-1, **claude-haiku-4-5** (default) |
-| `TAiGeminiChat` | Google | **gemini-3.8-flash** (default), gemini-3.7-flash, gemini-3.1-pro, gemini-3.8-flash-tts, Nano Banana |
+| `TAiOpenChat` | OpenAI | **gpt-6-sol** (default), gpt-6.1-sol, gpt-6.1-terra, gpt-6-luna, gpt-6-astra, gpt-5.6, gpt-image-2.5 |
+| `TAiClaudeChat` | Anthropic | claude-opus-5-5, claude-sonnet-5-5, claude-fable-5-1, claude-haiku-5-5, **claude-haiku-4-5** (default) |
+| `TAiGeminiChat` | Google | **gemini-3.8-flash** (default), gemini-4-argon, gemini-3.1-pro, gemini-3.8-flash-tts, Nano Banana 2.1 |
 | `TAiGrokChat` | xAI | grok-4.3, grok-4.5, grok-build, grok-imagine (image/video) |
 | `TAiMistralChat` | Mistral AI | mistral-large/medium/small, magistral, devstral, voxtral (STT/TTS) |
 | `TAiDeepSeekChat` | DeepSeek | deepseek-flash, deepseek-v4-pro |
-| `TAiKimiChat` | Moonshot | kimi-k3, kimi-k2.7-code, kimi-k2.6 |
-| `TAiGLMChat` | GLM (Zhipu / Z.ai) | glm-4.7, glm-5.3, glm-5v-turbo, free tiers: glm-4.7-flash / glm-4.6v-flash |
+| `TAiKimiChat` | Moonshot | kimi-k3, kimi-k3.1-pro, kimi-k2.7-code, kimi-k2.6 |
+| `TAiGLMChat` | GLM (Zhipu / Z.ai) | glm-4.7, glm-5.3, glm-5.3-flash, glm-5v-turbo, free tiers: glm-4.7-flash / glm-4.6v-flash |
+| `TAiMiniMaxChat` | MiniMax | **MiniMax-M3** (default), MiniMax-M3.1-Flash, MiniMax-M2.7 |
 | `TAiQwenChat` | Qwen (Alibaba Model Studio) | qwen3.8-flash, qwen3.8-max, qwen3.7-plus, qwq-plus, qwen3-coder-plus, qwen3-vl-flash |
 | `TAiGroqChat` | Groq | openai/gpt-oss-20b, openai/gpt-oss-120b, qwen3.8, whisper-large-v3 |
 | `TCohereChat` | Cohere | command-a-plus, command-a-03-2025, north-mini-code |
@@ -619,17 +680,18 @@ AiConn.Params.Values['ApiKey'] := '@GLM_API_KEY';
 > ¹ **Computer Use is opt-in.** `cap_ComputerUse` hands the model the real mouse and
 > keyboard, so no model enables it by default — you add the capability yourself (see
 > the **Computer Use** section below). Native support: OpenAI
-> `gpt-6-astra`; Claude `claude-opus-4-8` / `-opus-5` / `-sonnet-5` / `-fable-5`.
-> Gemini is marked ⚠️ because the registry still points at the
-> `gemini-2.5-computer-use-preview` model (3.7/3.8 Flash list computer use as a preview
-> tool, not yet wired or tested). The Claude 5.5 / Fable 5.1 models use the same
-> `computer_toolset` but have not been runtime-tested with it yet.
+> `gpt-6-astra`; Claude `claude-opus-4-8` / `-opus-5` / `-sonnet-5` / `-fable-5`, and
+> `claude-sonnet-5-5` (tested live on Xvfb). Gemini is marked ⚠️: the dedicated
+> `gemini-2.5-computer-use-preview` model was shut down and is now an alias of
+> `gemini-3.8-flash`, which lists computer use as a preview tool — not runtime-tested.
+> The other Claude 5.5 / Fable 5.1 / Haiku 5.5 models use the same `computer_toolset`
+> but have not been runtime-tested with it yet.
 
 ---
 
 ## 🎨 Component Palette
 
-Every one of the 108 components has its own palette icon. The tile color identifies the
+Every one of the 109 components has its own palette icon. The tile color identifies the
 provider (maroon = MakerAI framework, black = OpenAI, blue = Gemini, purple = Qwen, teal = Jev…).
 
 ![MakerAI 3.8 component palette](Docs/Version%203/images/social/MakerAI-3.8-palette-1200x675.png)
@@ -997,10 +1059,47 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 | `084-JevRouter` … `088-JevModelRouter` | Jev (TypeSafe AI): agent routing, SmartDispatch and guardrails, evals and RAG reranking, bulk labeling, model routing. Need `TYPESAFE_API_KEY` |
 | `089-QwenShowcase` | Everything Qwen (Alibaba Model Studio) with one key: chat, vision, image editing, voice, translation, embeddings + rerank, realtime |
 | `091-Skills` | SKILL.md skills three ways: on demand in a chat (`TAiSkills`), as the base of an agent node (`TAiSkill`), copied into the prompt (`TAiPrompts.ApplySkill`) |
+| `092-GPTLiveVoice` | OpenAI GPT-Live full-duplex voice: microphone, speaker, delegation to Responses or any `TAiChatConnection`, local functions, RAG over MCP |
+| `093-A2AChatAgentTool` | A chat that calls a remote A2A agent as a tool |
+| `094-ChatStreaming` … `105-EnrutadorLadera` | *Café La Ladera* video series: streaming, `TAIChatView`, ChatTools, memory, agent graph, voice orders, MCP, skills, first agent, approvals, guardrails and model routing |
+| `Libro/cap03` … `Libro/cap37` | One project per chapter of the book *IA con Delphi* (4.0 edition) |
 
 ---
 
 ## 🔄 Changelog
+
+### v4.0.0 (unreleased)
+- New: **MiniMax driver** — `TAiMiniMaxChat` (`DriverName='MiniMax'`, `@MINIMAX_API_KEY`), OpenAI-compatible endpoint `https://api.minimax.io/v1/`. `reasoning_split` always on (reasoning in `reasoning_content`, re-sent in the history), thinking `adaptive`/`disabled` from `cap_Reasoning` (`MiniMax-M3.1-Flash` cannot disable it and is left at the API default), `reasoning_effort` only on M3.1-Flash (`tlNone` → `low`, since `none` is rejected; registry default `tlMedium` instead of the API's `max`), `max_completion_tokens`, `stream_options.include_usage` when streaming, no sampling parameters (ignored by the API). Registered: `MiniMax-M3` (default), `MiniMax-M3.1-Flash`, `MiniMax-M2.7/2.5/2.1(-highspeed)`, `MiniMax-M2`. Package, registry and palette icon. Regression case `chat.minimax.request`. *Not runtime-tested yet (no API key)*
+- ⚠️ Fix: **`claude-haiku-5-5` returned 400** — the driver treated it as a legacy Haiku and sent `thinking.budget_tokens` and `temperature`. It is now adaptive-only (`effort` from `ThinkingLevel`, default `medium`), accepts mid-conversation `system` messages, and `RefusalFallbackModel` is skipped with a log line (Haiku 5.5 has classifiers but no server-side fallback; a fallback list is a 400). Forced `tool_choice` still works on it. Registered and tested live (7/7). The driver default stays `claude-haiku-4-5`
+- Retired (Anthropic): **`claude-sonnet-4-20250514` and `claude-opus-4-20250514`** (and their `-4-0` names) answer `not_found_error`; they are aliases of `claude-sonnet-5-5` / `claude-opus-5-5`
+- New: **`gpt-6.1-sol`** ($2/$10, cache read $0.10) and **`gpt-6.1-terra`** ($1/$5) registered; both reject `temperature`/`top_p`, which the driver already omits for GPT-6. Tested live (9/9)
+- ⚠️ Fix: **OpenAI effort per model** — `gpt-6-astra` and `gpt-6.1-sol` reject `reasoning.effort: none` (400), so `tlNone` is sent as `low`; `gpt-5.2/5.4/5.5-pro` accept only `medium`/`high`/`xhigh` (`gpt-5.5-pro` with `tlLow` was a 400), so lower levels become `medium` and `tlMax` becomes `xhigh`
+- Retired (OpenAI): **`o3-pro`** → alias of `gpt-5.5-pro`; **`o3-deep-research` / `o4-mini-deep-research`** → `gpt-6.1-sol` with web search and code interpreter; **`dall-e-2` / `dall-e-3`** → `gpt-image-1` in the chat driver; `gpt-4o-audio-preview` / `gpt-4o-mini-audio-preview` removed (their `gpt-audio*` successors speak audio only through Chat Completions, while the driver uses the Responses API). `TAiDalleImageTool` with `imDallE2`/`imDallE3` still sends the retired names
+- Fix: **`gemini-4-argon` was sent `thinkingBudget`** — the driver chose the thinking format with `Contains('gemini-3')`, so a 4.x model fell to the Gemini 2.5 path. It now goes by model version (≥ 3 → `thinkingLevel`). `gemini-4-argon` registered (unified 1M window, 32K output per non-streaming call, explicit `cachedContents` unsupported, 20-minute timeout), plus **`gemini-nano-banana-2.1`** and `gemini-omni-1.1-flash`. Deprecated and already rerouted by Google: `gemini-3.5-flash` → `gemini-3.6-flash`, `gemini-3.7-flash` → `gemini-3.8-flash` (now registry aliases); `gemini-2.5-computer-use-preview-10-2025` (shut down) → `gemini-3.8-flash`. ⚠️ The `imagen-4.0-*` aliases now point to Nano Banana 2.1 (`gemini-3.1-flash-image` is deprecated). Note: since 2026-10-26 new **paid** Gemini projects store `generateContent` requests by default (`store=true`); the driver does not send `store`. *Checked against the official docs; not runtime-tested (no Gemini account)*
+- ⚠️ Fix: **Kimi rejected any `Temperature` other than 1** — every current model (`kimi-k2.6`, `k2.7`, `k3`, `k3.1`) accepts only `temperature = 1` and `top_p = 0.95`, but the base request sent the component's value. `TAiKimiChat` now omits sampling for the `kimi-k*` family. New: **`kimi-k3.1-pro`** ($2/$10, 1M, vision + reasoning) and `kimi-k3.1-pro-highspeed` ($4/$20). Retired: `kimi-k2.5`, `kimi-latest` and the six `moonshot-v1-*` → aliases (`kimi-latest` → `kimi-k3.1-pro`, the rest → `kimi-k3`). Tested live
+- Fix: **GLM sent no `reasoning_effort` for `tlNone`/`tlMinimal`/`tlXHigh`/`tlMax`**, so the API used `max` (the most expensive); they now map to `low` / `max`. New: **`glm-5.3-flash`** and `glm-5.3-flashx` (MoE 320B/18B, MIT weights, 1M, native vision, forced thinking like `glm-5.3`). First live test of the GLM driver (text, vision, thinking on and off)
+- New: **fluent agent API completed** — `AddEdge` adds targets to the existing link (it replaced `StartNode.Next`, orphaned the old link and a fluent fan-out ran only its last branch); new `AddNode(node)`, `AddToolNode`, `AddExpressionEdge`, `AddFallbackEdge` (`NextNo`) and `SetJoinMode`; construction errors raise `EAiGraphError`. `TAIAgentsNode.ExecuteNode` is virtual and protected and `TLLMNode` overrides it instead of reimplementing `DoExecute`; `OnEnterNode` runs after the join. `TLLMNode` gains `Guardrails`, gets the manager as `Owner` and sets capabilities through the typed channel
+- ⚠️ Fix: **typed `ModelConfig` setters** (`ModelCaps`, `SessionCaps`, `ThinkingLevel`, `Tool_Active`) pin the field even when the value equals the current one — `Tool_Active := True` was overwritten by the driver registry
+- Fix: **forms saved with older versions raised `EReadError`** (demos 012, 021, 051): `TAiChat.DefineProperties` reads the properties that are no longer published (`NativeInputFiles`, `Logprobs`, `Top_p`, `Voice`…), applies those with a destination and drops the rest. `TAiMCPStdioServer.WaitForInputClosed`; `Stop` releases the reader thread. Sample VQL in the README and guides fixed (it did not parse)
+- Fix: **a `Model` saved in the form was lost on load** — `TAiChatConnection.Loaded` created the chat without it, so `DriverName=Claude` + `Model=claude-sonnet-5-5` started with `claude-haiku-4-5`. Case `conn.form-model-nondefault`
+- Fix: **Claude Computer Use ran the actions of a turn in parallel** and in dictionary order — with `computer_toolset_20260801` two `type` actions mixed their letters and a five-field form took 114 actions and 322 s. A batch with a screen action now runs serially, in arrival order, on the parsing thread (14 actions, 26 s); normal tool calls stay parallel. `TAiComputerUseTool` honours the `repeat` of `key`. Case `chat.claude.computer-use-sequential`
+- Fix: **the trace of a turn was split across threads** — tool calls (one `TTask` each), the tool-calling continuation and OpenAI's streaming function calls did not carry the turn's `chat` span. New `TAiTelemetry.ContextEnter` / `ContextLeave` / `CurrentTraceParent` (helpers `AiTraceContextEnter` / `Leave`); a turn delegating to a graph went from 5 traces to one of 14 spans. Case `telemetry.task-inherits-trace`
+- Fix: **input bridges** — during the Phase 1 bridges (audio, image or PDF the model cannot read) the tool runs synchronously and its `DoData`/`DoDataEnd` are ignored; before, the SpeechTool fired `OnReceiveDataEnd` with the raw transcription and the UI closed the turn before the model answered. **Web search** results are injected as context for the model (they were overwritten by Phase 3) and `cmWebSearch` no longer searches twice. `TAiOpenAiWebSearchTool` moved to `/v1/responses` with `web_search` (default `gpt-6-luna`), since `gpt-4o-mini-search-preview` was retired. ElevenLabs and Gemini TTS generate inline (a synchronous chat returned without audio). Tools release their weak chat reference when replaced or when the chat is freed (AV on the next direct call). `TAiOllamaOcrTool` strips deepseek-ocr control tokens
+- ⚠️ Fix (security): **`TAiShell` checked only the first token** — with an allow-list of `[cd, dir]`, `cd x && del /f /q *` passed. Every segment (`&`, `|`, `;`, new line) is now checked without quotes, `^`, path or extension; in `ssmAllowList` mode `>`, `<`, `` ` `` and `$( )` are rejected
+- Fix: **a blocked message stayed in the history** — a prompt rejected by the sanitizer or the `PromptGuard` reached the model on the next turn (`TAiChat.DiscardBlockedMessage`). The sanitizer recognises injection phrases in Spanish as well
+- Fix (OpenAI): `apply_patch_call` was not executed in **streaming** (*No tool output found for apply patch call*), and `create_file` went to `apply_diff` on a missing file, so the model could not create files; `EnforceStrictSchema` (now public) walks `items`, `anyOf`/`oneOf`/`allOf` and `$defs` (an array of objects was a 400), and tools with a free-form object are sent with `strict: false`. New `PromptCacheMode` → `prompt_cache_options.mode` (GPT-5.6+)
+- Fix: **`Mistral Small 4` only accepts `reasoning_effort` `none`/`high`** — `tlLow` → `none`, `tlMedium`/`tlHigh` → `high` (`medium` was a 400). `TAiRagGraph.SearchText` returned only the header; it now returns the nodes and their neighbours
+- ⚠️ Fix: **`TAiChat.Run` waits (up to 15 s) for the previous HTTP request to close** — its late close freed the new request's stream (intermittent *Stream read error*); it does not wait when called from the thread delivering the previous one. **`TAudioPushStream`** no longer deadlocks: `waveOutReset` is called without the lock and buffers are fed from a thread (`CALLBACK_EVENT`) instead of the winmm callback
+- Fix (evals): **`ExpectJudge` sent the judge only the answer and the criterion**, without the case's question, and reused the judge's history between cases; each verdict now includes the question and starts a new chat
+- Fix (MCP): `TMCPClientSSE` retries a POST dropped by the server (up to 3 times, not `tools/call`), exposes `IsConnected` (false when the SSE stream dropped) and streams over `https` with the credential on the GET too; freeing a running `TAiMCPSSEHttpServer` raised an AV (double `Stop`)
+- Fix (WebSocket): **`ws://` opened TLS anyway** and hung forever against a plain HTTP server — new `uMakerAi.WebSocket.Plain` (`TPlainTransport`, ws2_32 / POSIX); OpenSSL connect and handshake time out after 10 s, and transport exceptions reach `OnError`. **Android:** the WebSocket TLS transport and `TAudioPushStream` compile for Android64, and the JNI signature of `SSLSocketFactory.getDefault` was wrong (every `wss://` failed)
+- New: **`TAIChatView`** — `Footer`, `Actions` (buttons inside the bubble, `OnMessageAction`, `DisableMessageActions`), `Steps` (`AddStep` / `FinishStep`, collapsible with durations), `MergeConsecutive` (consecutive messages of the same role in one bubble), attachments in `AddAssistantMessage`; **`TAIChatInput`** voice-call button (`CallVisible`, `OnCallToggle`, `CallState`, mute while in a call)
+- New: **`ResetTokenCounters`** on `TAiChat` and `TAiChatConnection` (#135); **`Cost_usd`** read from `usage.cost_usd` (MakerAI broker) and accumulated like the tokens; read-only `TAiChatConnection.Chat`
+- New (realtime, MakerAI driver): `ExtraSessionJson`, `OnAssistantTextDelta` / `OnTranscriptDelta` from the live engine, and `Say` with optional audio
+- Fix (A2A): `TAiA2AAgentTool` registers once when set up in the Object Inspector (it registered a second function on load); `TAiA2ARemoteAgentTool` is on the palette
+- Build: **packages and the regression suite compile without the IDE Library Path** (PR #132; `uMakerAi.Version.inc` included by relative path, missing search paths added, `MakerAI.dproj` synced with the `.dpk`); **Delphi sources check out with CRLF**, also in the GitHub ZIP (#133); PDF and audio marked as binary
+- New demos: **`Demos/Libro`** (chapters 3–37 of the 4.0 edition of the book), **`093-A2AChatAgentTool`** and **`094`–`105`** (*Café La Ladera* series); 012, 023, 036, 051 and 052 updated
+- Regression suite: 144 cases (`chat.minimax.request`; `chat.gemini.request` now covers Argon and the new image alias)
 
 ### v3.9.0 (2026-10-05)
 - Changed: **the PPM registry moved to `https://registry.cimamaker.com`** — new default in `TAiFunctions` (AutoMCP, PPM search), `TAiPrompts`, `TAiSkill`, the SKILL.md client and the demos. Code that sets `registry.pascalai.org` explicitly keeps working while that host stays up
