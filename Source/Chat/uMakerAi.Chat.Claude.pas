@@ -589,6 +589,15 @@ begin
   Result := not AModel.StartsWith('claude-haiku-5');
 end;
 
+// Haiku 5.5 SI acepta thinking {type:"disabled"} (con effort high o menor; sin
+// effort va en medium). Opus 5.5, Sonnet 5.5 y Fable lo rechazan con 400. Sin
+// esto "none" se pedia como effort low y Haiku razonaba ~900 tokens por
+// llamada para devolver un JSON de 250 (NER del anonimizador, oct 2026).
+function IsClaudeThinkingOffCapable(const AModel: string): Boolean;
+begin
+  Result := AModel.StartsWith('claude-haiku-5');
+end;
+
 // Forzar una tool (tool_choice "any" o {type:"tool"}) devuelve 400 en la
 // generacion de sep 2026: opus-5-5, sonnet-5-5, fable-5-1 y mythos-5-1.
 // Ahi se manda "auto" (el modelo sigue pudiendo llamarla) en lugar del error.
@@ -883,7 +892,14 @@ begin
       // La profundidad se pide con output_config.effort (GA desde 4.6).
       // En opus-5/fable el thinking ya viene activo por defecto; enviar
       // {type:"adaptive"} explicito es equivalente e inofensivo.
-      if FEnableThinking then
+      if (ModelConfig.ThinkingLevel = tlNone) and IsClaudeThinkingOffCapable(LModel) then
+      begin
+        var
+        jThink := TJSONObject.Create;
+        jThink.AddPair('type', 'disabled');
+        AJSONObject.AddPair('thinking', jThink);
+      end
+      else if FEnableThinking then
       begin
         var
         jThink := TJSONObject.Create;
@@ -891,13 +907,15 @@ begin
         AJSONObject.AddPair('thinking', jThink);
       end;
 
-      if ModelConfig.ThinkingLevel <> tlDefault then
+      if (ModelConfig.ThinkingLevel <> tlDefault) and
+         not ((ModelConfig.ThinkingLevel = tlNone) and IsClaudeThinkingOffCapable(LModel)) then
       begin
         if not Assigned(LOutputConfig) then
           LOutputConfig := TJSONObject.Create;
         // Escalera ampliada (v3.8): xhigh existe desde opus-4-7 (en 4.6 no:
         // se lleva a high) y max desde 4.6. minimal/none no existen en
-        // Claude: se piden como low (en la familia 5.5 no se puede apagar).
+        // Claude: se piden como low (Opus/Sonnet 5.5 no se pueden apagar;
+        // Haiku 5.5 con none se apaga arriba y no llega aqui).
         case ModelConfig.ThinkingLevel of
           tlLow, tlMinimal, tlNone:
             LOutputConfig.AddPair('effort', 'low');
