@@ -156,6 +156,7 @@
         <DCCReference Include="..\Chat\uMakerAi.Chat.Claude.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.DeepSeek.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.GLM.pas"/>
+        <DCCReference Include="..\Chat\uMakerAi.Chat.MiniMax.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.Qwen.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.Gemini.pas"/>
         <DCCReference Include="..\Chat\uMakerAi.Chat.Grok.pas"/>

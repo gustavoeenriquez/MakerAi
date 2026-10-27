@@ -46,6 +46,7 @@ type
   private
   protected
     //function InitChatCompletions: String; override;
+    function ModelRequiresDefaultSampling(const aModel: String): Boolean; override;
   public
     constructor Create(Sender: TComponent); override;
     destructor Destroy; override;
@@ -68,6 +69,14 @@ begin
 end;
 
 { TAiKimiChat }
+
+// Toda la familia kimi-k (k2.6, k2.7, k3, k3.1) solo acepta temperature=1 y
+// top_p=0.95: cualquier otro valor da 400 (verificado oct 27/2026). La base
+// omite entonces el sampling y manda el default del servidor.
+function TAiKimiChat.ModelRequiresDefaultSampling(const aModel: String): Boolean;
+begin
+  Result := StartsText('kimi-k', aModel) or inherited ModelRequiresDefaultSampling(aModel);
+end;
 
 class function TAiKimiChat.GetDriverName: string;
 begin

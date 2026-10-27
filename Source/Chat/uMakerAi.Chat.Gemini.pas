@@ -1229,7 +1229,10 @@ begin
       // El API no permite apagar el razonamiento y 'minimal' da error en
       // 3.7/3.8, así que los niveles de la escalera ampliada (v3.8) se llevan
       // al más cercano que el modelo acepta.
-      if LModelName.Contains('gemini-3') then
+      // Se decide por versión (>= 3) para cubrir gemini-4-argon y los que
+      // vengan: con Contains('gemini-3') un 4.x caía al camino de
+      // thinkingBudget de la 2.5 (en Argon el budget está deprecado).
+      if LModelName.Contains('gemini-3') or (GeminiModelVersion(LModelName) >= 3) then
       begin
         case ModelConfig.ThinkingLevel of
           tlLow, tlMinimal, tlNone: JThinking.AddPair('thinkingLevel', 'LOW');

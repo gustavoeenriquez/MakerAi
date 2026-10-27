@@ -165,14 +165,30 @@ uses
 Const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
 
-// reasoning.effort que se envia. La familia GPT-6 acepta none/low/medium/
-// high/xhigh/max pero NO minimal (la 5.x si): ahi tlMinimal se pide como
-// low para no provocar un 400.
+// reasoning.effort que se envia. La familia GPT-6 NO acepta minimal (la 5.x
+// si): ahi tlMinimal se pide como low para no provocar un 400. Tampoco
+// aceptan 'none' gpt-6-astra ni gpt-6.1-sol (verificado contra el API oct
+// 27/2026: 400 unsupported_value); gpt-6-sol, gpt-6-luna y gpt-6.1-terra si.
 function OpenAiEffort(const AModel: string; ALevel: TAiThinkingLevel): string;
+var
+  LModel: string;
 begin
   Result := ThinkingLevelToStr(ALevel);
-  if (ALevel = tlMinimal) and AModel.ToLower.StartsWith('gpt-6') then
+  LModel := AModel.ToLower;
+  if (ALevel = tlMinimal) and LModel.StartsWith('gpt-6') then
+    Result := 'low'
+  else if (ALevel = tlNone) and
+          (LModel.StartsWith('gpt-6-astra') or LModel.StartsWith('gpt-6.1-sol')) then
     Result := 'low';
+  // gpt-5.x-pro (5.2/5.4/5.5) solo acepta medium/high/xhigh: lo de abajo se
+  // sube a medium y max se baja a xhigh (verificado oct 27/2026).
+  if LModel.StartsWith('gpt-5') and LModel.Contains('-pro') then
+  begin
+    if ALevel in [tlNone, tlMinimal, tlLow] then
+      Result := 'medium'
+    else if ALevel = tlMax then
+      Result := 'xhigh';
+  end;
 end;
 
 procedure Register;

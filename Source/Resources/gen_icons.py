@@ -35,6 +35,7 @@ GROK = (48, 48, 56)
 QWEN = (97, 92, 237)
 COHERE = (57, 89, 77)
 GLM = (40, 72, 190)
+MINIMAX = (226, 58, 88)
 LLAMACPP = (176, 88, 24)
 OLLAMA = (70, 70, 70)
 ELEVEN = (0, 0, 0)
@@ -386,6 +387,7 @@ SPECS = [
     ('core', 'TAiChatWebSearchBridge', 'bridge', 'WEB'),
     # --- Drivers de chat sin icono de marca ---
     ('core', 'TAiGLMChat', 'bubble', GLM, 'GLM'),
+    ('core', 'TAiMiniMaxChat', 'bubble', MINIMAX, 'MM'),
     ('core', 'TAiQwenChat', 'bubble', QWEN, 'QW'),
     ('core', 'TCohereChat', 'bubble', COHERE, 'CO'),
     ('core', 'TAiLlamacppChat', 'bubble', LLAMACPP, 'CPP'),

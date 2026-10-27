@@ -203,10 +203,13 @@ begin
         // (default del API: max). Mismo mapeo que DeepSeek V4.
         if StartsText('glm-5.2', LModel) or StartsText('glm-5.3', LModel) then
         begin
+          // La escalera ampliada (v3.8) se lleva al nivel mas cercano: antes
+          // tlNone/tlMinimal/tlXHigh/tlMax no enviaban nada y el API usaba
+          // max (el mas caro). glm-5.3* no admite apagar el thinking.
           case ModelConfig.ThinkingLevel of
-            tlLow:    AJSONObject.AddPair('reasoning_effort', 'low');
-            tlMedium: AJSONObject.AddPair('reasoning_effort', 'high');
-            tlHigh:   AJSONObject.AddPair('reasoning_effort', 'max');
+            tlNone, tlMinimal, tlLow: AJSONObject.AddPair('reasoning_effort', 'low');
+            tlMedium:                 AJSONObject.AddPair('reasoning_effort', 'high');
+            tlHigh, tlXHigh, tlMax:   AJSONObject.AddPair('reasoning_effort', 'max');
             // tlDefault: no se envia, el API usa max
           end;
         end;

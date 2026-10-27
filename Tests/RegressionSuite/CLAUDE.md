@@ -27,7 +27,7 @@ Win64\Release\MakerAiRegressionSuite.exe --otel
 
 Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el rechazo de Windows, ~2 s cada uno).
 
-## Cobertura actual (143 casos)
+## Cobertura actual (144 casos)
 
 | Área | Casos |
 |------|-------|
@@ -67,7 +67,8 @@ Duración típica: ~5 segundos (los casos con URL a puerto cerrado esperan el re
 | tool_choice | `Tool_choice` forzado (`required` o una función) se lee `auto` en la ronda que devuelve resultados de tools; `auto`/`none` no cambian (antes: loop sin fin, 231 requests con `claude-sonnet-5`) |
 | OpenAI (request) | default `gpt-6-sol` en el driver y en `TAiChatConnection`; GPT-6 sin effort `minimal` (→ `low`), 5.x sí; `tlMax` → `max`; `TAiMakerAiChat` con `mk-gpt-oss-20b` |
 | Claude (request) | generación sep 2026 (sonnet-5-5/opus-5-5): forzar tool → `auto`; `claude-sonnet-5` manda `any` solo en la primera llamada; effort `max`/`xhigh` (no en 4.6 → `high`)/`minimal` → `low`; alias del retirado `claude-opus-4-1` → `claude-opus-5-5` |
-| Gemini (request) | defaults del driver, de `TAiChatConnection` y de las tools (TTS, transcripción, búsqueda) en `gemini-3.8-flash(-tts)`; sampling omitido por versión (3.6/3.7/3.8 no, 3.0 sí); `tlMinimal` → `LOW` y `tlMax` → `HIGH`; alias de los apagados (`gemini-3-pro-preview`, `imagen-4.0-*`, `aa_gemini-3-pro-fast`) — sin red ni key |
+| Gemini (request) | defaults del driver, de `TAiChatConnection` y de las tools (TTS, transcripción, búsqueda) en `gemini-3.8-flash(-tts)`; sampling omitido por versión (3.6/3.7/3.8 no, 3.0 sí); `tlMinimal` → `LOW` y `tlMax` → `HIGH`; `gemini-4-argon` manda `thinkingLevel` (oct 27/2026: antes caía al camino `thinkingBudget`); alias de los apagados (`gemini-3-pro-preview`, `imagen-4.0-*` → `gemini-nano-banana-2.1`, `aa_gemini-3-pro-fast`) — sin red ni key |
+| MiniMax (request) | `chat.minimax.request` (oct 27/2026, driver nuevo sin key): `reasoning_split=true` siempre, sin `temperature`, `max_completion_tokens`; thinking `disabled` sin `cap_Reasoning` (M3) y omitido en M3.1-Flash (400 si se apaga); `reasoning_effort` solo en Flash con `tlNone` → `low`; `stream_options` en streaming; `reasoning_content` reenviado en el historial |
 | Qwen (request) | `enable_thinking` siempre presente (false sin `cap_Reasoning`), `thinking_budget` por `ThinkingLevel`, ausente en `qwq-*`, false en pesos abiertos síncronos; `stream_options.include_usage` solo en streaming; audio de entrada reescrito como data URI (falla sin el fix); `TAiQwenRAGReranker` con transporte falso: lotes, mapeo por `index`, `instruct`, recorte; request de imagen: genera sin adjuntos, edita con 1-3 (modelo de edición, data URI, sin forzar tamaño), falla con 4 o con `z-image-turbo`; request de video: t2v/i2v/kf2v según las imágenes adjuntas, `-t2v` → `-i2v`, 720p por `size` o `resolution` según familia, tipos de `VideoParams.Params`; traducción `qwen-mt`: un solo mensaje user con `translation_options` (idiomas, dominio, glosario) y streaming acumulado de plus/turbo convertido a incrementos con una línea SSE partida (falla sin el fix); `TAiQwenVoices` con transporte falso (clonar, diseñar con fallback y preview, listar, borrar) y modelo TTS elegido por el prefijo de la voz |
 | Conexión | sub-parámetros de medios (`VideoParams`, `TtsParams`, `ImageParams`) editados después de crear el chat llegan al driver en `AddMessageAndRun` (URL a puerto cerrado; falla sin el fix) |
 | Conexión desde el formulario (oct 25/2026) | `conn.form-model-nondefault`: un `TAiChatConnection` leído de un DFM en texto con `DriverName = 'Claude'` y `Model = 'claude-sonnet-5-5'` crea el chat con ese modelo (antes nacía con el default del driver porque `Loaded` no aplicaba los parámetros; falla sin el fix) |

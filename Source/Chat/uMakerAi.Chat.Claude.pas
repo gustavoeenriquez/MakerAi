@@ -552,7 +552,8 @@ begin
             AModel.StartsWith('claude-opus-5') or
             AModel.StartsWith('claude-sonnet-5') or
             AModel.StartsWith('claude-fable') or
-            AModel.StartsWith('claude-mythos');
+            AModel.StartsWith('claude-mythos') or
+            AModel.StartsWith('claude-haiku-5');
 end;
 
 function IsClaude46(const AModel: string): Boolean;
@@ -569,15 +570,23 @@ begin
 end;
 
 // Mensajes {role:"system"} dentro de messages[] (mid-conversation, preservan
-// el prompt cache): opus-5 (y 5.5), opus-4-8, fable, mythos y sonnet-5-5.
-// NO sonnet-5 a secas.
+// el prompt cache): opus-5 (y 5.5), opus-4-8, fable, mythos, sonnet-5-5 y
+// haiku-5-5. NO sonnet-5 a secas.
 function IsClaudeMidSystemCapable(const AModel: string): Boolean;
 begin
   Result := AModel.StartsWith('claude-opus-5') or
             AModel.StartsWith('claude-opus-4-8') or
             AModel.StartsWith('claude-fable') or
             AModel.StartsWith('claude-mythos') or
-            AModel.StartsWith('claude-sonnet-5-5');
+            AModel.StartsWith('claude-sonnet-5-5') or
+            AModel.StartsWith('claude-haiku-5');
+end;
+
+// Haiku 5.5 tiene clasificadores (refusal) pero NO fallback server-side: una
+// lista de fallbacks devuelve 400. Ahi se omite el parametro y su beta.
+function IsClaudeFallbackCapable(const AModel: string): Boolean;
+begin
+  Result := not AModel.StartsWith('claude-haiku-5');
 end;
 
 // Forzar una tool (tool_choice "any" o {type:"tool"}) devuelve 400 en la
@@ -628,7 +637,7 @@ begin
       BetaFeatures.Add(BETA_HDR_FASTMODE);
     if FEnableCompaction then
       BetaFeatures.Add(BETA_HDR_COMPACT);
-    if FRefusalFallbackModel <> '' then
+    if (FRefusalFallbackModel <> '') and IsClaudeFallbackCapable(LBaseModel) then
       BetaFeatures.Add(BETA_HDR_FALLBACK);
 
     // 6. Prompt Caching: GA, ya no requiere beta header (antes 'prompt-caching-2024-07-31').
@@ -991,7 +1000,9 @@ begin
 
     // Fallbacks server-side: si los clasificadores declinan, el API reintenta
     // la misma peticion en el modelo indicado dentro de la misma llamada
-    if FRefusalFallbackModel <> '' then
+    if (FRefusalFallbackModel <> '') and not IsClaudeFallbackCapable(LModel) then
+      LogDebug('RefusalFallbackModel ignorado: ' + LModel + ' no admite fallbacks')
+    else if FRefusalFallbackModel <> '' then
     begin
       var jFallbacks := TJSonArray.Create;
       var jFb := TJSONObject.Create;

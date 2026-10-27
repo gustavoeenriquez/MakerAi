@@ -93,6 +93,7 @@ uses
   uMakerAi.Agents.ToolRegistry,
   uMakerAi.Tools.Skills, uMakerAi.Tools.Shell, uMakerAi.Utils.DiffUpdater, uMakerAi.Tools.ComputerUse,
   uMakerAi.Chat.Gemini, uMakerAi.Gemini.Speech, uMakerAi.Gemini.WebSearch, uMakerAi.Chat.Claude, uMakerAi.Chat.MakerAi,
+  uMakerAi.Chat.MiniMax,
   uRegression.Fixtures;
 
 const
@@ -542,7 +543,21 @@ begin
     .Input('chat:gemini-request')
     .ExpectEquals('3.8/medium=temp=no,level=MEDIUM|3.7/minimal=temp=no,level=LOW|' +
       '3.8/max=temp=no,level=HIGH|3.6=temp=no,level=MEDIUM|3.0=temp=si,level=MEDIUM|' +
-      'alias=gemini-3.1-pro-preview,gemini-3.1-flash-image,gemini-3.1-pro-preview');
+      '4/low=temp=no,level=LOW|' +
+      'alias=gemini-3.1-pro-preview,gemini-nano-banana-2.1,gemini-3.1-pro-preview');
+
+  // MiniMax (oct 27/2026, driver nuevo sin key para probar en vivo): el request
+  // segun la doc. reasoning_split siempre true, sin temperature (el API la
+  // ignora), max_completion_tokens; thinking disabled sin cap_Reasoning salvo
+  // M3.1-Flash (400 si se apaga); reasoning_effort solo en Flash ('none' da
+  // 400 -> low); stream_options en streaming; reasoning_content reenviado.
+  FRunner.AddCase('chat.minimax.request')
+    .Input('chat:minimax-request')
+    .ExpectEquals('m3=thinking=disabled,effort=-,split=true,temp=no,mct=si,so=no|' +
+      'm3r=thinking=adaptive,effort=-,split=true,temp=no,mct=si,so=no|' +
+      'flash/none=thinking=-,effort=low,split=true,temp=no,mct=si,so=si|' +
+      'flash/max=thinking=adaptive,effort=max,split=true,temp=no,mct=si,so=no|' +
+      'hist=si');
 
   // --- tool_choice forzado (todos los drivers leen TAiChat.Tool_choice) ---
   // Forzar una tool aplica a la primera llamada del turno; en la ronda que
@@ -2657,6 +2672,49 @@ begin
 end;
 
 type
+  // Expone el request que arma el driver MiniMax (InitChatCompletions es
+  // protegido). Devuelve 'thinking=<type|->,effort=<..|->,split=..,temp=si|no,
+  // mct=si|no,so=si|no' (so = stream_options).
+  TMiniMaxProbeChat = class(TAiMiniMaxChat)
+  public
+    function Request(const AModel: string; AAsync: Boolean; ACaps: TAiCapabilities;
+      ALevel: TAiThinkingLevel): string;
+  end;
+
+function TMiniMaxProbeChat.Request(const AModel: string; AAsync: Boolean; ACaps: TAiCapabilities;
+  ALevel: TAiThinkingLevel): string;
+var
+  J: TJSONObject;
+  LThink, LEffort: string;
+  LSplit: Boolean;
+begin
+  Model := AModel;
+  Asynchronous := AAsync;
+  Temperature := 0.3;
+  ModelConfig.ModelCaps := ACaps;
+  ModelConfig.ThinkingLevel := ALevel;
+  if Messages.Count = 0 then
+    Messages.Add(TAiChatMessage.Create('hola', 'user'));
+  J := TJSONObject.ParseJSONValue(InitChatCompletions) as TJSONObject;
+  try
+    // TryGetValue vacia la variable cuando la clave no existe
+    if not J.TryGetValue<string>('thinking.type', LThink) then
+      LThink := '-';
+    if not J.TryGetValue<string>('reasoning_effort', LEffort) then
+      LEffort := '-';
+    LSplit := False;
+    J.TryGetValue<Boolean>('reasoning_split', LSplit);
+    Result := 'thinking=' + LThink + ',effort=' + LEffort +
+      ',split=' + IfThen(LSplit, 'true', 'false') +
+      ',temp=' + IfThen(Assigned(J.FindValue('temperature')), 'si', 'no') +
+      ',mct=' + IfThen(Assigned(J.FindValue('max_completion_tokens')), 'si', 'no') +
+      ',so=' + IfThen(Assigned(J.FindValue('stream_options')), 'si', 'no');
+  finally
+    J.Free;
+  end;
+end;
+
+type
   // Expone el request que arma el driver Qwen (InitChatCompletions es protegido)
   TQwenProbeChat = class(TAiQwenChat)
   public
@@ -3406,6 +3464,34 @@ begin
     Exit;
   end;
 
+  if AScenario = 'chat:minimax-request' then
+  begin
+    var Parts := TStringList.Create;
+    var Mp := TMiniMaxProbeChat.Create(nil);
+    try
+      Parts.Add('m3=' + Mp.Request('MiniMax-M3', False, [], tlDefault));
+      Parts.Add('m3r=' + Mp.Request('MiniMax-M3', False, [cap_Reasoning], tlHigh));
+      Parts.Add('flash/none=' + Mp.Request('MiniMax-M3.1-Flash', True, [], tlNone));
+      Parts.Add('flash/max=' + Mp.Request('MiniMax-M3.1-Flash', False, [cap_Reasoning], tlMax));
+      // El razonamiento de un turno previo se reenvia en el historial
+      var Prev := TAiChatMessage.Create('respuesta', 'assistant');
+      Prev.ReasoningContent := 'pense esto';
+      Mp.Messages.Add(Prev);
+      Mp.Messages.Add(TAiChatMessage.Create('sigue', 'user'));
+      var JMsgs := Mp.GetMessages;
+      try
+        Parts.Add('hist=' + IfThen(JMsgs.ToJSON.Contains('"reasoning_content":"pense esto"'), 'si', 'no'));
+      finally
+        JMsgs.Free;
+      end;
+      Result := String.Join('|', Parts.ToStringArray);
+    finally
+      Mp.Free;
+      Parts.Free;
+    end;
+    Exit;
+  end;
+
   if AScenario = 'chat:gemini-request' then
   begin
     var Parts := TStringList.Create;
@@ -3416,6 +3502,9 @@ begin
       Parts.Add('3.8/max=' + Gp.Request('gemini-3.8-flash', tlMax));
       Parts.Add('3.6=' + Gp.Request('gemini-3.6-flash', tlMedium));
       Parts.Add('3.0=' + Gp.Request('gemini-3-flash-preview', tlMedium));
+      // gemini-4-argon (oct 2026): antes el gate Contains('gemini-3') lo
+      // mandaba al camino thinkingBudget de la 2.5
+      Parts.Add('4/low=' + Gp.Request('gemini-4-argon', tlLow));
       Parts.Add('alias=' +
         TAiChatFactory.Instance.GetBaseModel('Gemini', 'gemini-3-pro-preview') + ',' +
         TAiChatFactory.Instance.GetBaseModel('Gemini', 'imagen-4.0-generate-001') + ',' +
