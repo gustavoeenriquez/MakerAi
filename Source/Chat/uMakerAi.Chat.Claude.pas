@@ -2525,6 +2525,22 @@ begin
       end;
 
       LContentArray.Add(LPartObj);
+
+      // Un archivo de datos que trae la herramienta (Excel, Word, CSV...) entra
+      // al contenedor de code_execution: container_upload en el mismo mensaje
+      // 'user' del tool_result. Ya va subido (auto-upload de los mensajes user).
+      // Sin esto un programa no podia abrir un archivo que una herramienta le
+      // acababa de traer (p. ej. del Drive de la persona).
+      if IsCodeExecutionEnabled then
+        for LMediaFile in LMessage.MediaFiles do
+          if (not LMediaFile.IdFile.IsEmpty) and
+             not (LMediaFile.FileCategory in [Tfc_Image, Tfc_pdf]) then
+          begin
+            var LUpload := TJSONObject.Create;
+            LUpload.AddPair('type', 'container_upload');
+            LUpload.AddPair('file_id', LMediaFile.IdFile);
+            LContentArray.Add(LUpload);
+          end;
     end
 
     // -------------------------------------------------------------------------
