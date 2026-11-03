@@ -50,7 +50,7 @@ const
     'Carta (bolsa de 340 g): Huila Reserva 38.000 COP (panela, frutos rojos); ' +
     'Nariño Altura 42.000 COP (cítricos, caramelo); Sierra Nevada Orgánico 36.000 COP ' +
     '(chocolate amargo, nuez); Descafeinado Suave 34.000 COP (cacao suave).' + sLineBreak +
-    'Reglas: responde en español, cálido y breve (máximo 4 líneas). ' +
+    'Reglas: responde en español, cálido y breve (máximo 4 líneas), en texto plano sin Markdown. ' +
     'Solo hablas de café y de la tienda; si te preguntan otra cosa, vuelve con amabilidad al café. ' +
     'No inventes productos ni precios fuera de la carta.';
 
