@@ -12,6 +12,12 @@
 //   MCPLadera.exe              Chat que lanza el servidor como proceso hijo,
 //                              descubre sus herramientas y las usa. Muestra
 //                              cada tools/call que viaja por stdio.
+//   MCPLadera.exe --trafico    Igual, pero muestra cada mensaje JSON-RPC
+//                              (server/discover, tools/list, tools/call), sin _meta.
+//   MCPLadera.exe --http       El mismo chat con el transporte HTTP: arranca un
+//                              TAiMCPHttpServer en http://127.0.0.1:8390/mcp y se
+//                              conecta con tpHttp. Combina con --trafico.
+//   MCPLadera.exe --servidor-http [--port N]   Solo el servidor HTTP (Enter para salir).
 //
 //   - TAiMCPStdioServer: publica un TAiFunctions (inventario, precio_mayorista).
 //   - MCPClients       : en el TAiFunctions del chat; las herramientas del
@@ -38,6 +44,7 @@ uses
   uMakerAi.Tools.Functions,
   uMakerAi.MCPServer.Core,
   UMakerAi.MCPServer.Stdio,
+  UMakerAi.MCPServer.Http,
   uMakerAi.Chat.AiConnection,
   uMakerAi.Chat.Initializations;   // registra todos los drivers
 
@@ -74,7 +81,11 @@ type
   TTrafico = class
   private
     FPendientes: TStringList;   // ids de tools/call sin respuesta
+    FCompleto: Boolean;         // --trafico: cada mensaje JSON-RPC
+    procedure Mostrar(const AFlecha, AJson: string);
+    procedure McpLogLinea(const Msg: string);
   public
+    property Completo: Boolean read FCompleto write FCompleto;
     constructor Create;
     destructor Destroy; override;
     procedure McpLog(Sender: TObject; const Msg: string);
@@ -192,7 +203,47 @@ begin
   inherited;
 end;
 
+// Un mensaje JSON-RPC en una linea, recortado para la consola
+procedure TTrafico.Mostrar(const AFlecha, AJson: string);
+const
+  MAX = 160;
+var
+  J: TJSONValue;
+  T: string;
+begin
+  J := TJSONObject.ParseJSONValue(AJson);
+  if J = nil then
+    Exit;
+  try
+    // _meta (version del protocolo e identidad del cliente, en cada mensaje) se abrevia
+    // para que en la linea se vea el metodo y su contenido
+    if (J is TJSONObject) and (TJSONObject(J).Values['params'] is TJSONObject) and
+      (TJSONObject(TJSONObject(J).Values['params']).Values['_meta'] <> nil) then
+      TJSONObject(TJSONObject(J).Values['params']).RemovePair('_meta').Free;
+    if (J is TJSONObject) and (TJSONObject(J).Values['result'] is TJSONObject) and
+      (TJSONObject(TJSONObject(J).Values['result']).Values['_meta'] <> nil) then
+      TJSONObject(TJSONObject(J).Values['result']).RemovePair('_meta').Free;
+    T := J.ToString;   // compacto; ToString no escapa las tildes
+  finally
+    J.Free;
+  end;
+  if Length(T) > MAX then
+    T := Copy(T, 1, MAX - 3) + '...';
+  Writeln('   ', AFlecha, ' ', T);
+end;
+
 procedure TTrafico.McpLog(Sender: TObject; const Msg: string);
+begin
+  // Por HTTP las llamadas en paralelo llegan en hilos distintos: una linea a la vez
+  TMonitor.Enter(Self);
+  try
+    McpLogLinea(Msg);
+  finally
+    TMonitor.Exit(Self);
+  end;
+end;
+
+procedure TTrafico.McpLogLinea(const Msg: string);
 const
   ENVIO = 'CLIENT -> SERVER: ';
   RESPUESTA = 'SERVER -> CLIENT: ';
@@ -201,7 +252,21 @@ var
   Params, Res: TJSONObject;
   Contenido: TJSONArray;
   Id, Texto: string;
+  A, B: Integer;
 begin
+  if FCompleto then
+  begin
+    // Stdio: 'CLIENT -> SERVER: {...}'. HTTP: 'CLIENT -> SERVER (HTTP POST to url): {...}', y la
+    // respuesta puede llegar como evento SSE ('data: {...}'): se toma de la primera { a la ultima }
+    if Msg.StartsWith('CLIENT -> SERVER') or Msg.StartsWith('SERVER -> CLIENT') then
+    begin
+      A := Msg.IndexOf('{');
+      B := Msg.LastIndexOf('}');
+      if (A >= 0) and (B > A) then
+        Mostrar(IfThen(Msg.StartsWith('CLIENT'), '[cliente  ->]', '[<- servidor]'), Msg.Substring(A, B - A + 1));
+    end;
+    Exit;
+  end;
   if Msg.StartsWith(ENVIO) then
   begin
     J := TJSONObject.ParseJSONValue(Msg.Substring(Length(ENVIO)));
@@ -304,10 +369,47 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// Servidor HTTP: las mismas funciones, otro transporte (endpoint /mcp)
+// ---------------------------------------------------------------------------
+function CrearServidorHttp(AFunciones: TAiFunctions; APuerto: Integer): TAiMCPHttpServer;
+begin
+  Result := TAiMCPHttpServer.Create(nil);
+  Result.ServerName := 'ladera';
+  Result.Port := APuerto;            // Endpoint: '/mcp' por defecto
+  Result.BindAddress := '127.0.0.1'; // solo este equipo; en la red, la IP del servidor
+  Result.AiFunctions := AFunciones;
+  Result.Start;
+end;
+
+procedure CorrerServidorHttp(APuerto: Integer);
+var
+  Bodega: TBodega;
+  Funciones: TAiFunctions;
+  Servidor: TAiMCPHttpServer;
+begin
+  Bodega := TBodega.Create;
+  Funciones := CrearFunciones(Bodega);
+  Servidor := CrearServidorHttp(Funciones, APuerto);
+  try
+    Writeln(Format('Servidor MCP de Café La Ladera listo: http://127.0.0.1:%d%s (Enter para salir)',
+      [APuerto, Servidor.Endpoint]));
+    Readln;
+    Servidor.Stop;
+  finally
+    Servidor.Free;
+    Funciones.Free;
+    Bodega.Free;
+  end;
+end;
+
+// ---------------------------------------------------------------------------
 // Modo cliente: un chat que usa el servidor como herramienta
 // ---------------------------------------------------------------------------
-procedure CorrerCliente;
+procedure CorrerCliente(AHttp, ATrafico: Boolean; APuerto: Integer);
 var
+  Bodega: TBodega;
+  FuncsServidor: TAiFunctions;
+  ServidorHttp: TAiMCPHttpServer;
   Trafico: TTrafico;
   Funciones: TAiFunctions;
   Servidor: TMCPClientItem;
@@ -325,17 +427,41 @@ begin
   end;
 
   Trafico := TTrafico.Create;
+  Trafico.Completo := ATrafico;
+  Bodega := nil;
+  FuncsServidor := nil;
+  ServidorHttp := nil;
   Funciones := TAiFunctions.Create(nil);
   Chat := TAiChatConnection.Create(nil);
   try
-    // El servidor MCP: este mismo .exe con --servidor, como proceso hijo
+    if AHttp then
+    begin
+      // El servidor HTTP corre aqui mismo; en la vida real estaria en otro equipo
+      Bodega := TBodega.Create;
+      FuncsServidor := CrearFunciones(Bodega);
+      ServidorHttp := CrearServidorHttp(FuncsServidor, APuerto);
+    end;
+
     Funciones.OnLog := Trafico.McpLog;
     Servidor := Funciones.MCPClients.Add;
     Servidor.Name := 'ladera';
-    Servidor.TransportType := tpStdIo;
-    Servidor.Params.Values['Command'] := ParamStr(0);
-    Servidor.Params.Values['Arguments'] := '--servidor';
+    if AHttp then
+    begin
+      // Cliente HTTP: solo la direccion del servidor
+      Servidor.TransportType := tpHttp;
+      Servidor.Params.Values['URL'] := Format('http://127.0.0.1:%d/mcp', [APuerto]);
+    end
+    else
+    begin
+      // El servidor MCP: este mismo .exe con --servidor, como proceso hijo
+      Servidor.TransportType := tpStdIo;
+      Servidor.Params.Values['Command'] := ParamStr(0);
+      Servidor.Params.Values['Arguments'] := '--servidor';
+    end;
     Servidor.Enabled := True;
+    // TAiFunctions conecta su OnLog al cliente al primer tools/call; aqui desde el arranque,
+    // para ver tambien initialize y tools/list
+    Servidor.MCPClient.OnLog := Trafico.McpLog;
     if not (Servidor.MCPClient.Initialize and Servidor.MCPClient.Available) then
     begin
       Writeln('No se pudo arrancar el servidor MCP.');
@@ -343,7 +469,7 @@ begin
       Exit;
     end;
 
-    Writeln('Servidor MCP "ladera" (stdio). Herramientas que publica:');
+    Writeln('Servidor MCP "ladera" (', IfThen(AHttp, Servidor.Params.Values['URL'], 'stdio'), '). Herramientas que publica:');
     Lista := Servidor.MCPClient.ListTools;
     try
       if Assigned(Lista) and Lista.TryGetValue<TJSONArray>('tools', Tools) then
@@ -378,6 +504,11 @@ begin
     Chat.AiFunctions := nil;
     Chat.Free;
     Funciones.Free;   // cierra stdin del hijo: el servidor termina solo
+    if Assigned(ServidorHttp) then
+      ServidorHttp.Stop;
+    ServidorHttp.Free;
+    FuncsServidor.Free;
+    Bodega.Free;
     Trafico.Free;
   end;
 end;
@@ -392,13 +523,25 @@ begin
       Exit(True);
 end;
 
+function ArgValue(const AName, ADefault: string): string;
+var
+  I: Integer;
+begin
+  Result := ADefault;
+  for I := 1 to ParamCount - 1 do
+    if SameText(ParamStr(I), AName) then
+      Exit(ParamStr(I + 1));
+end;
+
 var
   BufSalida: array [0 .. 0] of Byte;
+  Puerto: Integer;
 
 begin
   FmtCOP := TFormatSettings.Create('es-CO');
   FmtCOP.ThousandSeparator := '.';
   try
+    Puerto := StrToIntDef(ArgValue('--port', '8390'), 8390);
     if HasFlag('--servidor') then
     begin
       {$IFDEF MSWINDOWS}
@@ -415,7 +558,10 @@ begin
       // Salida a un pipe (grabaciones, logs): el RTL la junta en bloques de 128 bytes.
       // Con un buffer de 1 byte cada caracter sale al escribirlo.
       SetTextBuf(Output, BufSalida, 1);
-      CorrerCliente;
+      if HasFlag('--servidor-http') then
+        CorrerServidorHttp(Puerto)
+      else
+        CorrerCliente(HasFlag('--http'), HasFlag('--trafico'), Puerto);
     end;
   except
     on E: Exception do
