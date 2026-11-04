@@ -14,6 +14,7 @@ Demo 104: guardrails y evals para Lucía. Es la base del episodio 15 de la serie
 ```bash
 GuardrailsLadera.exe                # guardrails + evals
 GuardrailsLadera.exe --solo-evals   # solo los evals
+GuardrailsLadera.exe --solo-evals --detalle   # además, la pregunta de cada caso y lo que respondió Lucía
 ```
 
 Requiere `OPENAI_API_KEY`.
@@ -22,7 +23,7 @@ Requiere `OPENAI_API_KEY`.
 
 Con `gpt-6-sol`:
 - **Guardrails.** El 10 % se aplicó; el 30 % y la anulación se bloquearon (2 llamadas) y Lucía explicó el límite.
-- **Evals.** 4/4 en dos corridas seguidas.
+- **Evals.** 4/4 en dos corridas seguidas. Nov 4/2026, con `--detalle`: 4/4 ("No, no vendemos café de Etiopía. Tenemos Huila Reserva, Nariño Altura...").
 
 La prueba encontró un bug del framework, ya corregido. El juez de `ExpectJudge` no recibía la pregunta del caso y rechazó "No, no tenemos café de Etiopía. Solo vendemos...". Además, su historial acumulaba los casos anteriores. Ahora recibe la pregunta y empieza cada juicio en un chat nuevo (caso de la suite `evals.judge.input-stateless`).
 

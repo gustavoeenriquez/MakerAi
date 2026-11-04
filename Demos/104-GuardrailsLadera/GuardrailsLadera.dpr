@@ -18,7 +18,8 @@
 //   - TAiGuardrails: BlockedTools (anular_*) + OnCheckToolCall (veto en código).
 //   - TAiEvalRunner: AddCase + ExpectContains/NotContains/MaxLength/Judge.
 //
-// Uso: GuardrailsLadera.exe [--solo-evals]
+// Uso: GuardrailsLadera.exe [--solo-evals] [--detalle]
+//   --detalle: en los evals imprime la pregunta de cada caso y lo que respondió Lucía
 // Requiere OPENAI_API_KEY. Empresa, clientes, pedidos y precios ficticios.
 // =============================================================================
 
@@ -221,6 +222,8 @@ end;
 // ---------------------------------------------------------------------------
 // B. Evals
 // ---------------------------------------------------------------------------
+function HasFlag(const AName: string): Boolean; forward;
+
 function BloqueEvals: Boolean;
 var
   Runner: TAiEvalRunner;
@@ -261,6 +264,13 @@ begin
       begin
         Lucia.NewChat;   // cada caso en una conversación nueva
         Result := Lucia.AddMessageAndRun(AInput, 'user', []);
+        if HasFlag('--detalle') then
+        begin
+          // Lo que el corredor le pregunta a Lucía y lo que ella responde (lo que luego revisa el caso)
+          Writeln('Pregunta: ', AInput);
+          Writeln('Lucía: ', AdjustLineBreaks(Result.Trim).Replace(sLineBreak, sLineBreak + '       '));
+          Writeln;
+        end;
       end);
     try
       Writeln(Reporte.ToText.Trim);
