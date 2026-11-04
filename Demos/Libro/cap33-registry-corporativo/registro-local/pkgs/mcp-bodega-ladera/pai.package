@@ -1,0 +1,19 @@
+[package]
+name = mcp-bodega-ladera
+version = 1.0.0
+type = mcp
+description = Bodega de Cafe La Ladera: kilos en existencia de cada cafe (inventario) y precio mayorista de un pedido (precio_mayorista). Servidor MCP hecho en Delphi con TAiMCPStdioServer (demo 100)
+author = ladera
+license = MIT
+tags = cafe,coffee,ladera,bodega,warehouse,inventario,inventory,existencias,stock,precio,price,mayorista,wholesale,kilos
+
+[mcp]
+runtime = binary
+entrypoint = MCPLadera.exe
+protocol = stdio
+schema = mcp-bodega-ladera.tool
+
+[platform]
+windows = true
+linux = false
+macos = false

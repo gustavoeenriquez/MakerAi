@@ -164,3 +164,6 @@ graphify-out/
 
 # Notas internas del registry PPM (contienen credenciales; nunca versionar)
 /ppm/readmeppm.txt
+
+# Registry PPM corporativo local (cap 33): paquetes subidos
+Demos/Libro/cap33-registry-corporativo/registro-local/storage/

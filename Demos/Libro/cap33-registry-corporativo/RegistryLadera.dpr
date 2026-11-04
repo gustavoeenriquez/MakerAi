@@ -10,6 +10,9 @@
 //   --prompt     TAiPrompts contra el corporativo: SearchPPM, LoadFromPPM('lucia-barista') y una
 //                respuesta real de gpt-6-sol con ese prompt de sistema
 //   --skill      TAiSkills.LoadFromPPM('skill-cotizacion-mayorista', url corporativa)
+//   --automcp    AutoMCP contra el corporativo (AutoMCPConfig.RegistryUrl): Lucia busca, instala y
+//                usa mcp-bodega-ladera (el servidor MCP del demo 100, publicado como paquete), solo
+//                dentro de AutoMCPConfig.Allowed. Requiere OPENAI_API_KEY
 //   (sin argumentos: todo). REGISTRY_LADERA = URL del corporativo (default http://127.0.0.1:8766).
 // Empresa, productos y precios ficticios.
 // =============================================================================
@@ -31,7 +34,8 @@ uses
   uMakerAi.Chat.Initializations,
   uMakerAi.Prompts,
   uMakerAi.Tools.Functions,
-  uMakerAi.Tools.Skills;
+  uMakerAi.Tools.Skills,
+  uMakerAi.Guardrails;
 
 var
   BufSalida: array [0 .. 0] of Byte;
@@ -173,6 +177,85 @@ begin
   end;
 end;
 
+{ ---------------------------------------------------------------------------- D: AutoMCP }
+
+type
+  TOyente = class
+    procedure Log(Sender: TObject; const Msg: string);
+    procedure Revisar(Sender: TObject; const AToolName, AArguments: string; var AAllow: Boolean; var AReason: string);
+    procedure Instalar(Sender: TObject; const APkgName: string; var AAllow: Boolean);
+  end;
+
+procedure TOyente.Log(Sender: TObject; const Msg: string);
+begin
+  if Msg.StartsWith('[AutoMCP]') then
+    Writeln('  ' + Msg);
+end;
+
+procedure TOyente.Revisar(Sender: TObject; const AToolName, AArguments: string; var AAllow: Boolean; var AReason: string);
+begin
+  Writeln('  [tool] ' + AToolName + ' ' + Resumen(AArguments, 150));
+  AAllow := True;
+end;
+
+procedure TOyente.Instalar(Sender: TObject; const APkgName: string; var AAllow: Boolean);
+begin
+  // Con el evento conectado, SU decision es la final: aqui se aplica Allowed a mano (como en el cap 32)
+  AAllow := (Sender as TAiFunctions).AutoMCPConfig.Allowed.IndexOf(APkgName) >= 0;
+  Writeln('  [OnAutoMCPRequest] "' + APkgName + '": ' + IfThen(AAllow, 'permitido (está en Allowed)', 'rechazado (no está en Allowed)'));
+end;
+
+procedure AutoMCPCorporativo;
+const
+  PREGUNTA = '¿Cuántos kilos de Huila Reserva nos quedan en la bodega?';
+var
+  Fn: TAiFunctions;
+  G: TAiGuardrails;
+  Oy: TOyente;
+  Conn: TAiChatConnection;
+  R: string;
+  Reloj: TStopwatch;
+begin
+  Titulo('D. AutoMCP contra el registry corporativo: la bodega de la empresa');
+  if GetEnvironmentVariable('OPENAI_API_KEY') = '' then
+  begin
+    Writeln('  (sin OPENAI_API_KEY)');
+    Exit;
+  end;
+  Fn := TAiFunctions.Create(nil);
+  G := TAiGuardrails.Create(nil);
+  Oy := TOyente.Create;
+  Conn := nil;
+  try
+    G.OnCheckToolCall := Oy.Revisar;
+    Fn.Guardrails := G;
+    Fn.OnLog := Oy.Log;
+    Fn.OnAutoMCPRequest := Oy.Instalar;
+    Fn.AutoMCPConfig.RegistryUrl := Corporativo;        // el mismo AutoMCP del cap 32, otro registry
+    Fn.AutoMCPConfig.Allowed.Add('mcp-bodega-ladera');
+    Fn.AutoMCPConfig.Active := True;                    // ppm_search, ppm_install y call_mcp_tool
+    Writeln('  AutoMCPConfig.RegistryUrl = ' + Fn.AutoMCPConfig.RegistryUrl);
+    Conn := TAiChatConnection.Create(nil);
+    Conn.DriverName := 'OpenAi';
+    Conn.Model := 'gpt-6-sol';
+    Conn.Params.Values['ApiKey'] := '@OPENAI_API_KEY';
+    Conn.Params.Values['Asynchronous'] := 'False';
+    Conn.AiFunctions := Fn;
+    Conn.Tool_Active := True;
+    Conn.SystemPrompt.Text := 'Eres Lucía, la barista virtual de Café La Ladera (Pitalito, Huila, Colombia). ' +
+      'Responde en español, breve, en texto plano.' + sLineBreak + Fn.GetAutoMCPSystemPrompt;
+    Writeln('  pregunta: ' + PREGUNTA);
+    Reloj := TStopwatch.StartNew;
+    R := Conn.AddMessageAndRun(PREGUNTA, 'user', []);
+    Writeln(Format('  Lucía (%.1f s): %s', [Reloj.ElapsedMilliseconds / 1000, Resumen(R, 400)]));
+  finally
+    Conn.Free;
+    Fn.Free;
+    G.Free;
+    Oy.Free;
+  end;
+end;
+
 var
   Todo: Boolean;
 
@@ -186,13 +269,15 @@ begin
   if Corporativo = '' then
     Corporativo := 'http://127.0.0.1:8766';
   try
-    Todo := not (Tiene('--salud') or Tiene('--prompt') or Tiene('--skill'));
+    Todo := not (Tiene('--salud') or Tiene('--prompt') or Tiene('--skill') or Tiene('--automcp'));
     if Todo or Tiene('--salud') then
       SaludDeLosDos;
     if Todo or Tiene('--prompt') then
       Prompt;
     if Todo or Tiene('--skill') then
       Skill;
+    if Todo or Tiene('--automcp') then
+      AutoMCPCorporativo;
   except
     on E: Exception do
       Writeln(E.ClassName + ': ' + E.Message);

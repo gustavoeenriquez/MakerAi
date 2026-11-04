@@ -9,6 +9,8 @@
 //
 //   MCPLadera.exe --servidor   Servidor MCP por stdio. Es lo que se configura en
 //                              Claude Desktop o en Claude Code (ver CLAUDE.md).
+//   MCPLadera.exe --protocol stdio   Lo mismo: asi lo arranca InstallMCPFromPPM
+//                              cuando el .exe viene de un paquete PPM.
 //   MCPLadera.exe              Chat que lanza el servidor como proceso hijo,
 //                              descubre sus herramientas y las usa. Muestra
 //                              cada tools/call que viaja por stdio.
@@ -542,7 +544,9 @@ begin
   FmtCOP.ThousandSeparator := '.';
   try
     Puerto := StrToIntDef(ArgValue('--port', '8390'), 8390);
-    if HasFlag('--servidor') then
+    // --protocol stdio: el argumento con que TAiFunctions.InstallMCPFromPPM arranca un MCP
+    // instalado desde un registry PPM (paquete mcp-bodega-ladera, ver CLAUDE.md)
+    if HasFlag('--servidor') or SameText(ArgValue('--protocol', ''), 'stdio') then
     begin
       {$IFDEF MSWINDOWS}
       SetTextCodePage(ErrOutput, CP_UTF8);   // stdout lo maneja el servidor

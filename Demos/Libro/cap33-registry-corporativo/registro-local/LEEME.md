@@ -12,7 +12,9 @@
 
 3. En el entorno, `PPM_DB_PASS` (la del usuario de PostgreSQL) y `PPM_SECRET_KEY`
    (cualquier cadena larga al azar). Luego `iniciar_registry.cmd`: el registry queda en
-   http://127.0.0.1:8766 (`GET /v1/health`).
+   http://127.0.0.1:8766 (`GET /v1/health`). Escucha solo en esta máquina (`PPM_HOST=127.0.0.1`);
+   para abrirlo a la red de la empresa, `PPM_HOST=0.0.0.0`. Sin nginx delante, el mismo
+   `PPMServer` entrega los `.paipkg` (ruta `/files/`).
 
 4. Crear la cuenta y la clave de publicación (una sola vez):
 
@@ -27,7 +29,13 @@
        cd pkgs\lucia-barista
        ppm publish
 
-6. Desde Delphi, `RegistryLadera.exe` (o `REGISTRY_LADERA=http://...` para otra URL).
+   `pkgs\mcp-bodega-ladera` es el servidor MCP del demo 100 como paquete: antes de publicarlo,
+   copiar ahí `Demos@-MCPLadera\Win64\Release\MCPLadera.exe` (el manifiesto lo declara como
+   `entrypoint`; `InstallMCPFromPPM` lo arranca con `--protocol stdio`).
+
+6. Desde Delphi, `RegistryLadera.exe` (o `REGISTRY_LADERA=http://...` para otra URL). Con
+   `--automcp`, Lucía busca la bodega en el registry corporativo, instala `mcp-bodega-ladera` y
+   responde con sus existencias.
 
 En producción (capítulo 33): Linux, `systemd`, nginx con TLS delante del puerto interno, y el
 archivo de entorno con permisos 600. Café La Ladera: empresa, productos y precios ficticios.

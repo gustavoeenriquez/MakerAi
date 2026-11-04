@@ -58,3 +58,7 @@ Con `gpt-6-sol`:
 - En modo servidor stdout es el canal JSON-RPC: nada de `Writeln`; los mensajes van a `ErrOutput`.
 - `Normalizar` quita tildes: el modelo puede escribir "Narino".
 - Empresa, productos, existencias y precios ficticios.
+
+## Como paquete PPM (desde 2026-11-04)
+
+`MCPLadera.exe --protocol stdio` equivale a `--servidor`: es el argumento con que `TAiFunctions.InstallMCPFromPPM` (y AutoMCP) arrancan un MCP instalado desde un registry. El paquete `mcp-bodega-ladera` (`Demos/Libro/cap33-registry-corporativo/registro-local/pkgs/`) lleva este `.exe`; `RegistryLadera --automcp` lo instala desde el registry corporativo y Lucia lo usa.
