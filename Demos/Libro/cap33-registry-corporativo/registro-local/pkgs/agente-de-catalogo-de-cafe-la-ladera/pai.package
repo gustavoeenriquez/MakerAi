@@ -1,0 +1,10 @@
+[package]
+name = agente-de-catalogo-de-cafe-la-ladera
+version = 1.0.0
+type = agent
+description = Precios, notas de cata y existencias de los cafés de Café La Ladera
+tags = a2a,agent,cafe,catalog,catalogo,coffee,inventario,precios,prices,stock
+
+[agent]
+url = http://127.0.0.1:8293
+card = agent-card.json

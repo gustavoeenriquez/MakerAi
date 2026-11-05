@@ -6,6 +6,7 @@
        psql -U postgres -d ppm_ladera -f sql\schema.sql
        psql -U postgres -d ppm_ladera -f sql\migration_001_skill_type.sql
        psql -U postgres -d ppm_ladera -f sql\migration_002_skill_name.sql
+       psql -U postgres -d ppm_ladera -f sql\migration_003_agent_type.sql
 
 2. `PPMServer.exe` (Win64) compilado desde `server/PPMServer.dproj` del repo
    https://github.com/gustavoeenriquez/ppm, copiado a esta carpeta.
@@ -32,6 +33,11 @@
    `pkgs\mcp-bodega-ladera` es el servidor MCP del demo 100 como paquete: antes de publicarlo,
    copiar ahí `Demos@-MCPLadera\Win64\Release\MCPLadera.exe` (el manifiesto lo declara como
    `entrypoint`; `InstallMCPFromPPM` lo arranca con `--protocol stdio`).
+
+   `pkgs\agente-de-catalogo-de-cafe-la-ladera` es un agente A2A (paquete `agent`, solo su Agent
+   Card): se arma con el agente corriendo (`Demos\093-A2AChatAgentTool` con `--solo-agente`) y
+   `ppm publish --desde-url http://127.0.0.1:8293` desde esa carpeta. Base creada antes de
+   2026-11-05: aplicar también `sql\migration_003_agent_type.sql`.
 
 6. Desde Delphi, `RegistryLadera.exe` (o `REGISTRY_LADERA=http://...` para otra URL). Con
    `--automcp`, Lucía busca la bodega en el registry corporativo, instala `mcp-bodega-ladera` y

@@ -322,6 +322,7 @@ type
     FAutoMCPConfig: TAutoMCPConfig;
     FOnAutoMCPRequest: TAutoMCPRequestEvent;
     FInstalledPackages: TStringList; // paquetes ya instalados en esta sesión
+    FInstalledAgents: TStringList;   // agentes A2A instalados por AutoMCP en esta sesión
     // AutoMCP: funciones internas (invisibles al developer, no en FFunctions)
     FAutoMCPFunctions: TFunctionActionItems;
     FAutoMCPLock: TCriticalSection; // serializa llamadas a call_mcp_tool
@@ -342,6 +343,10 @@ type
     procedure InternalAutoMCP_PpmSearch(ToolCall: TAiToolsFunction);
     procedure InternalAutoMCP_PpmInstall(ToolCall: TAiToolsFunction);
     procedure InternalAutoMCP_CallMcpTool(ToolCall: TAiToolsFunction);
+    // AutoMCP con agentes A2A (paquetes PPM de tipo 'agent')
+    procedure InternalAutoMCP_CallAgent(ToolCall: TAiToolsFunction);
+    function InstallAgentInternal(const AName, AVersion, ARegistryUrl: String; AEnabled: Boolean): String;
+    function PPMPackageType(const AName, ARegistryUrl: String): String;
   Protected
 
     procedure DoLog(const Msg: string); virtual;
@@ -407,6 +412,21 @@ type
     function GetMCPSchema(const AName: String; const AVersion: String = '';
       const ARegistryUrl: String = 'https://registry.cimamaker.com'): TJSONObject;
 
+    // Agentes A2A en el registry PPM (paquetes de tipo 'agent', desde 2026-11-05).
+    // A2A define la Agent Card (/.well-known/agent-card.json) pero no como encontrar
+    // la URL de un agente: el registry hace de catalogo.
+    // SearchPPMAgents: GET /v1/a2a/discover. El llamador libera el TJSONObject.
+    function SearchPPMAgents(const AQuery: String; APage: Integer = 1; APerPage: Integer = 20;
+      const ARegistryUrl: String = 'https://registry.cimamaker.com'): TJSONObject;
+    // GetAgentCardFromPPM: la Agent Card publicada de un agente. El llamador la libera.
+    function GetAgentCardFromPPM(const AName: String; const AVersion: String = '';
+      const ARegistryUrl: String = 'https://registry.cimamaker.com'): TJSONObject;
+    // InstallAgentFromPPM: toma la Agent Card del registry y deja el agente como una
+    // funcion mas de este TAiFunctions (un TAiA2AAgentTool: requiere uMakerAi.A2A.Client
+    // en el uses del proyecto). Devuelve '' si quedo listo o el motivo del fallo.
+    function InstallAgentFromPPM(const AName: String; const AVersion: String = '';
+      const ARegistryUrl: String = 'https://registry.cimamaker.com'): String;
+
     // GetAutoMCPSystemPrompt: retorna un system prompt listo para usar que instruye
     // al LLM a utilizar las herramientas PPM (ppm_search, ppm_install, call_mcp_tool).
     // El desarrollador debe asignarlo manualmente al SystemPrompt del componente de chat.
@@ -433,6 +453,19 @@ type
     property Guardrails: TAiGuardrails read FGuardrails write SetGuardrails;
 
   End;
+
+  // Paquetes PPM de tipo 'agent' (agentes A2A). TAiFunctions no conoce el protocolo
+  // A2A: uMakerAi.A2A.Client registra su manejador en el initialization
+  // (RegisterPPMAgentHandler). Sin manejador, AutoMCP no ofrece agentes.
+  TAiPPMAgentHandler = class abstract
+  public
+    // Deja el agente listo en AOwner. AEnabled = False: no se publica como funcion del
+    // chat (AutoMCP lo usa por call_agent). Devuelve '' o el mensaje de error.
+    function Install(AOwner: TAiFunctions; const AName, AUrl, ADescription: String;
+      AEnabled: Boolean): String; virtual; abstract;
+    // Manda AMessage al agente instalado y devuelve su respuesta (o el error) en texto.
+    function Call(AOwner: TAiFunctions; const AName, AMessage: String): String; virtual; abstract;
+  end;
 
 
   // Es necesario normalizar los formatos de llamado a las funciones seg�n el driver
@@ -502,6 +535,12 @@ type
   end;
 
 procedure Register;
+
+// Registra el manejador de paquetes 'agent' (toma posesion; nil lo quita).
+procedure RegisterPPMAgentHandler(AHandler: TAiPPMAgentHandler);
+function PPMAgentHandler: TAiPPMAgentHandler;
+// URL del agente segun su Agent Card: supportedInterfaces[].url (A2A 1.0) o url (0.x).
+function A2ACardUrl(ACard: TJSONObject): String;
 
 implementation
 
@@ -1428,6 +1467,7 @@ begin
   FAutoMCPConfig := TAutoMCPConfig.Create;
   FAutoMCPConfig.FOnActiveChanged := OnAutoMCPActiveChanged;
   FInstalledPackages := TStringList.Create;
+  FInstalledAgents := TStringList.Create;
   FAutoMCPFunctions := TFunctionActionItems.Create(Self, TFunctionActionItem);
   FAutoMCPLock := TCriticalSection.Create;
 end;
@@ -1438,6 +1478,7 @@ begin
   FMCPClients.Free;
   FAutoMCPConfig.Free;
   FInstalledPackages.Free;
+  FInstalledAgents.Free;
   FAutoMCPFunctions.Free;
   FAutoMCPLock.Free;
   inherited;
@@ -1513,6 +1554,12 @@ begin
       else if SameText(ToolCall.Name, 'call_mcp_tool') then
       begin
         InternalAutoMCP_CallMcpTool(ToolCall);
+        Result := True;
+        Exit;
+      end
+      else if SameText(ToolCall.Name, 'call_agent') and (PPMAgentHandler <> nil) then
+      begin
+        InternalAutoMCP_CallAgent(ToolCall);
         Result := True;
         Exit;
       end;
@@ -2554,7 +2601,7 @@ begin
   begin
     if FAutoMCPFunctions.Count = 0 then
       CreateInternalPPMFunctions;
-    DoLog('[AutoMCP] Activado. Funciones: ppm_search, ppm_install, call_mcp_tool.');
+    DoLog('[AutoMCP] Activado. Funciones: ppm_search, ppm_install, call_mcp_tool' + IfThen(PPMAgentHandler <> nil, ', call_agent', '') + '.');
   end
   else
   begin
@@ -2575,7 +2622,7 @@ begin
   if FAutoMCPFunctions.Count > 0 then Exit; // ya inicializado
 
   CreateInternalPPMFunctions;
-  DoLog('[AutoMCP] Inicializado manualmente. Funciones: ppm_search, ppm_install, call_mcp_tool.');
+  DoLog('[AutoMCP] Inicializado manualmente. Funciones: ppm_search, ppm_install, call_mcp_tool' + IfThen(PPMAgentHandler <> nil, ', call_agent', '') + '.');
 end;
 
 procedure TAiFunctions.CreateInternalPPMFunctions;
@@ -2591,7 +2638,9 @@ begin
   LFn.Description.Text :=
     'Search for MCP tools in the PPM registry (registry.cimamaker.com). ' +
     'Returns a list of available tools matching the query with their names, ' +
-    'descriptions and available functions. Call this before ppm_install.';
+    'descriptions and available functions. Call this before ppm_install.' +
+    IfThen((PPMAgentHandler <> nil), ' It also lists A2A agents (other AI agents running as services) ' +
+    'that can handle the request; use them with ppm_install and call_agent.', '');
   LFn.Enabled := True;
   LParam := TFunctionParamsItem(LFn.Parameters.Add);
   LParam.Name := 'query';
@@ -2642,6 +2691,27 @@ begin
   LParam.Description.Text := 'JSON string with the function arguments (e.g.: {"query":"pascal","limit":10})';
   LParam.ParamType := ptString;
   LParam.Required := True;
+
+  // --- call_agent (solo con manejador A2A: uMakerAi.A2A.Client en el proyecto) ---
+  if (PPMAgentHandler <> nil) then
+  begin
+    LFn := TFunctionActionItem(FAutoMCPFunctions.Add);
+    LFn.FunctionName := 'call_agent';
+    LFn.Description.Text :=
+      'Send a request in natural language to an installed A2A agent (another AI agent running ' +
+      'as a service) and get its answer. Install it first with ppm_install.';
+    LFn.Enabled := True;
+    LParam := TFunctionParamsItem(LFn.Parameters.Add);
+    LParam.Name := 'agent_name';
+    LParam.Description.Text := 'Exact PPM package name of the installed agent';
+    LParam.ParamType := ptString;
+    LParam.Required := True;
+    LParam := TFunctionParamsItem(LFn.Parameters.Add);
+    LParam.Name := 'message';
+    LParam.Description.Text := 'The request for the agent, in natural language, with all the data it needs';
+    LParam.ParamType := ptString;
+    LParam.Required := True;
+  end;
 end;
 
 procedure TAiFunctions.InternalAutoMCP_PpmSearch(ToolCall: TAiToolsFunction);
@@ -2669,6 +2739,42 @@ begin
   begin
     ToolCall.Response := 'No se pudo conectar con el registry PPM. Verifica la conexión a Internet.';
     Exit;
+  end;
+
+  // Agentes A2A del registry (paquetes 'agent'), con la misma politica Allowed/Blocked
+  var LAgentsText := '';
+  if (PPMAgentHandler <> nil) then
+  begin
+    var LAg := SearchPPMAgents(LQuery, 1, 10, FAutoMCPConfig.RegistryUrl);
+    if Assigned(LAg) then
+    try
+      var LAgArr: TJSONArray;
+      if LAg.TryGetValue<TJSONArray>('agents', LAgArr) then
+        for var LAV in LAgArr do
+          if LAV is TJSONObject then
+          begin
+            var LAName := TJSONObject(LAV).GetValue<string>('name', '');
+            if (LAName = '') or not IsAutoMCPAllowed(LAName) then
+              Continue;
+            var LSkills := '';
+            var LCard: TJSONObject;
+            var LSkArr: TJSONArray;
+            if TJSONObject(LAV).TryGetValue<TJSONObject>('card', LCard) and
+               LCard.TryGetValue<TJSONArray>('skills', LSkArr) then
+              for var LSk in LSkArr do
+                if LSk is TJSONObject then
+                begin
+                  if LSkills <> '' then LSkills := LSkills + '; ';
+                  LSkills := LSkills + TJSONObject(LSk).GetValue<string>('name', '') + ': ' +
+                    TJSONObject(LSk).GetValue<string>('description', '');
+                end;
+            LAgentsText := LAgentsText + Format('• %s (agente A2A): %s%s', [LAName,
+              TJSONObject(LAV).GetValue<string>('description', ''),
+              IfThen(LSkills <> '', ' · skills: ' + LSkills, '')]) + sLineBreak;
+          end;
+    finally
+      LAg.Free;
+    end;
   end;
 
   LSb := TStringBuilder.Create;
@@ -2703,6 +2809,8 @@ begin
         ToolCall.Response := LHeader + sLineBreak + LSb.ToString +
           sLineBreak + 'Para usar una herramienta: llama ppm_install("<nombre>"), luego call_mcp_tool.';
       end
+      else if LAgentsText <> '' then
+        ToolCall.Response := ''
       else if LFiltered > 0 then
         ToolCall.Response := Format(
           'Se encontraron %d herramientas para "%s" pero todas están bloqueadas por la política AutoMCP.',
@@ -2710,8 +2818,13 @@ begin
       else
         ToolCall.Response := Format('No se encontraron herramientas para "%s" en el registry PPM.', [LQuery]);
     end
-    else
+    else if LAgentsText = '' then
       ToolCall.Response := Format('No se encontraron herramientas para "%s" en el registry PPM.', [LQuery]);
+    if LAgentsText <> '' then
+      ToolCall.Response := IfThen(ToolCall.Response <> '', ToolCall.Response + sLineBreak + sLineBreak, '') +
+        'Agentes A2A para "' + LQuery + '" (otros agentes que atienden la consulta en lenguaje natural):' +
+        sLineBreak + LAgentsText + sLineBreak +
+        'Para usar un agente: llama ppm_install("<nombre>"), luego call_agent con agent_name y message.';
   finally
     LSb.Free;
     LResult.Free;
@@ -2758,6 +2871,34 @@ begin
   // Registrar el intento ANTES de instalarlo para evitar bucles infinitos en caso de error
   if FInstalledPackages.IndexOf(LowerCase(LToolName)) < 0 then
     FInstalledPackages.Add(LowerCase(LToolName));
+
+  // Un agente A2A (paquete 'agent') no se descarga: se toma su Agent Card y queda listo
+  // para call_agent. Solo si hay manejador y el nombre no es un cliente MCP ya registrado.
+  if (PPMAgentHandler <> nil) and not Assigned(FMCPClients.GetClientByName(LToolName)) and
+     ((FInstalledAgents.IndexOf(LowerCase(LToolName)) >= 0) or
+      SameText(PPMPackageType(LToolName, FAutoMCPConfig.RegistryUrl), 'agent')) then
+  begin
+    var LErr := '';
+    if (FInstalledAgents.IndexOf(LowerCase(LToolName)) < 0) or LForce then
+      LErr := InstallAgentInternal(LToolName, '', FAutoMCPConfig.RegistryUrl, False);
+    if LErr <> '' then
+    begin
+      DoLog('[AutoMCP] agente "' + LToolName + '": ' + LErr);
+      var LJErr := TJSONObject.Create;
+      try
+        LJErr.AddPair('ok', TJSONBool.Create(False)).AddPair('error', LErr);
+        ToolCall.Response := LJErr.ToJSON;
+      finally
+        LJErr.Free;
+      end;
+      Exit;
+    end;
+    DoLog('[AutoMCP] agente A2A "' + LToolName + '" listo');
+    ToolCall.Response := Format(
+      '{"ok":true,"message":"Agente A2A ''%s'' listo. ACCIÓN REQUERIDA: llama AHORA call_agent con agent_name=''%s'' y message=la consulta en lenguaje natural con todos los datos. NO llames ppm_search."}',
+      [LToolName, LToolName]);
+    Exit;
+  end;
 
   // Si ya está registrado: reutilizar salvo que force=true
   LItem := FMCPClients.GetClientByName(LToolName);
@@ -2992,6 +3133,9 @@ begin
     LSb.AppendLine('  1. Llama a ppm_search con palabras clave para encontrar la herramienta adecuada.');
     LSb.AppendLine('  2. Llama a ppm_install con el nombre exacto del paquete para instalarlo.');
     LSb.AppendLine('  3. Llama a call_mcp_tool con el nombre del tool, la función y los argumentos JSON.');
+    if (PPMAgentHandler <> nil) then
+      LSb.AppendLine('  Si ppm_search devuelve un agente A2A (otro agente que atiende en lenguaje natural): ' +
+        'ppm_install con su nombre y luego call_agent con agent_name y message.');
     LSb.AppendLine;
     LSb.AppendLine('Convenciones:');
     LSb.AppendLine('- Los nombres de paquetes siguen el patrón mcp-<servicio> (ej: mcp-github, mcp-postgres).');
@@ -3350,6 +3494,162 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Agentes A2A en el registry PPM (paquetes de tipo 'agent')
+// ---------------------------------------------------------------------------
+
+var
+  GPPMAgentHandler: TAiPPMAgentHandler = nil;
+
+procedure RegisterPPMAgentHandler(AHandler: TAiPPMAgentHandler);
+begin
+  if GPPMAgentHandler <> AHandler then
+    GPPMAgentHandler.Free;
+  GPPMAgentHandler := AHandler;
+end;
+
+function PPMAgentHandler: TAiPPMAgentHandler;
+begin
+  Result := GPPMAgentHandler;
+end;
+
+function A2ACardUrl(ACard: TJSONObject): String;
+var
+  LIfaces: TJSONArray;
+  LV: TJSONValue;
+  LBinding: String;
+begin
+  Result := '';
+  if not Assigned(ACard) then
+    Exit;
+  if ACard.TryGetValue<TJSONArray>('supportedInterfaces', LIfaces) then
+    for LV in LIfaces do
+      if LV is TJSONObject then
+      begin
+        LBinding := TJSONObject(LV).GetValue<string>('protocolBinding', '');
+        if (LBinding = '') or LBinding.ToUpper.Contains('JSONRPC') then
+        begin
+          Result := TJSONObject(LV).GetValue<string>('url', '');
+          if Result <> '' then
+            Exit;
+        end;
+      end;
+  Result := ACard.GetValue<string>('url', '');
+end;
+
+function TAiFunctions.SearchPPMAgents(const AQuery: String; APage, APerPage: Integer;
+  const ARegistryUrl: String): TJSONObject;
+var
+  LBody: String;
+  LV: TJSONValue;
+begin
+  Result := nil;
+  LBody := PPMHttpGetStr(Format('%s/v1/a2a/discover?q=%s&page=%d&per_page=%d',
+    [ARegistryUrl, TNetEncoding.URL.Encode(AQuery), APage, APerPage]));
+  if LBody = '' then
+    Exit;
+  LV := TJSONObject.ParseJSONValue(LBody);
+  if LV is TJSONObject then
+    Result := TJSONObject(LV)
+  else
+    LV.Free;
+end;
+
+function TAiFunctions.GetAgentCardFromPPM(const AName, AVersion, ARegistryUrl: String): TJSONObject;
+var
+  LVersion, LBody: String;
+  LV: TJSONValue;
+begin
+  Result := nil;
+  LVersion := PPMResolveVersion(ARegistryUrl, AName, AVersion);
+  if LVersion = '' then
+    Exit;
+  LBody := PPMHttpGetStr(Format('%s/v1/packages/%s/%s/card', [ARegistryUrl, AName, LVersion]));
+  if LBody = '' then
+    Exit;
+  LV := TJSONObject.ParseJSONValue(LBody);
+  if LV is TJSONObject then
+    Result := TJSONObject(LV)
+  else
+    LV.Free;
+end;
+
+function TAiFunctions.PPMPackageType(const AName, ARegistryUrl: String): String;
+var
+  LBody: String;
+  LV: TJSONValue;
+  LPkg: TJSONObject;
+begin
+  Result := '';
+  LBody := PPMHttpGetStr(ARegistryUrl + '/v1/packages/' + AName);
+  if LBody = '' then
+    Exit;
+  LV := TJSONObject.ParseJSONValue(LBody);
+  try
+    if (LV is TJSONObject) and TJSONObject(LV).TryGetValue<TJSONObject>('package', LPkg) then
+      Result := LPkg.GetValue<string>('type', '');
+  finally
+    LV.Free;
+  end;
+end;
+
+function TAiFunctions.InstallAgentInternal(const AName, AVersion, ARegistryUrl: String;
+  AEnabled: Boolean): String;
+var
+  LCard: TJSONObject;
+  LUrl: String;
+begin
+  if not (PPMAgentHandler <> nil) then
+    Exit('No hay manejador de agentes A2A: agrega uMakerAi.A2A.Client al uses del proyecto');
+  LCard := GetAgentCardFromPPM(AName, AVersion, ARegistryUrl);
+  if not Assigned(LCard) then
+    Exit(Format('No se encontró la Agent Card de "%s" en %s', [AName, ARegistryUrl]));
+  try
+    LUrl := A2ACardUrl(LCard);
+    if LUrl = '' then
+      Exit(Format('La Agent Card de "%s" no trae la URL del agente', [AName]));
+    Result := PPMAgentHandler.Install(Self, AName, LUrl, LCard.GetValue<string>('description', ''), AEnabled);
+    if Result = '' then
+    begin
+      if FInstalledAgents.IndexOf(LowerCase(AName)) < 0 then
+        FInstalledAgents.Add(LowerCase(AName));
+      DoLog(Format('InstallPPM: agente A2A "%s" en %s', [AName, LUrl]));
+    end;
+  finally
+    LCard.Free;
+  end;
+end;
+
+function TAiFunctions.InstallAgentFromPPM(const AName, AVersion, ARegistryUrl: String): String;
+begin
+  Result := InstallAgentInternal(AName, AVersion, ARegistryUrl, True);
+end;
+
+procedure TAiFunctions.InternalAutoMCP_CallAgent(ToolCall: TAiToolsFunction);
+var
+  LName, LMsg: String;
+begin
+  LName := '';
+  LMsg := '';
+  var LArgs := TJSONObject.ParseJSONValue(ToolCall.Arguments) as TJSONObject;
+  if Assigned(LArgs) then
+  try
+    LArgs.TryGetValue<string>('agent_name', LName);
+    LArgs.TryGetValue<string>('message', LMsg);
+  finally
+    LArgs.Free;
+  end;
+  LName := Trim(LName);
+  if FInstalledAgents.IndexOf(LowerCase(LName)) < 0 then
+  begin
+    ToolCall.Response := Format('{"error":"El agente ''%s'' no está instalado. Usa ppm_install primero."}', [LName]);
+    Exit;
+  end;
+  DoLog(Format('[AutoMCP] call_agent: %s', [LName]));
+  DoStatusUpdate(Format('Consultando al agente %s...', [LName]));
+  ToolCall.Response := PPMAgentHandler.Call(Self, LName, LMsg);
+end;
 
 function TAiFunctions.SearchPPMMCP(const AQuery: String; APage, APerPage: Integer;
   const ARegistryUrl: String): TJSONObject;
@@ -4719,5 +5019,11 @@ begin
 
   Result := ATargetJson;
 end;
+
+initialization
+
+finalization
+
+RegisterPPMAgentHandler(nil);
 
 end.

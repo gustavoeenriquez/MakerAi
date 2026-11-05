@@ -24,6 +24,15 @@
 //   A2AChatAgentTool.exe "pregunta libre"              en lugar de las de ejemplo
 //   --port 8293                                        puerto del agente A2A
 //
+// Descubrir el agente en un registry PPM (desde 2026-11-05):
+//   A2AChatAgentTool.exe --solo-agente [--segundos N]  solo el agente (Enter o N s para
+//                       salir): es lo que se publica con
+//                       ppm publish --desde-url http://127.0.0.1:8293
+//   A2AChatAgentTool.exe --ppm [url]                   el chat NO conoce la URL del agente:
+//                       AutoMCP lo busca en el registry (url, o REGISTRY_LADERA, o
+//                       http://127.0.0.1:8766), lo instala desde su Agent Card publicada
+//                       y le pregunta con call_agent. Solo dentro de AutoMCPConfig.Allowed.
+//
 // Empresa, productos y precios ficticios.
 // =============================================================================
 
@@ -40,6 +49,7 @@ uses
   uMakerAi.A2A.Client,
   uMakerAi.Chat.Messages,
   uMakerAi.Tools.Functions,
+  uMakerAi.Guardrails,
   uMakerAi.Chat.AiConnection,
   uMakerAi.Chat.Initializations;   // registra todos los drivers
 
@@ -130,6 +140,47 @@ begin
   Output := Input + ' (Fuente: catálogo de Café La Ladera; precios con IVA, envío no incluido.)';
 end;
 
+const
+  // El paquete que publica ppm publish --desde-url con la Agent Card de este agente
+  // (el nombre sale del name de la card)
+  PAQUETE_AGENTE = 'agente-de-catalogo-de-cafe-la-ladera';
+
+type
+  // Lo que se ve en la consola con --ppm: cada llamada (guardrail), los avisos de
+  // AutoMCP y la decision de instalar
+  TOyente = class
+    procedure Avisar(Sender: TObject; const Msg: string);
+    procedure Revisar(Sender: TObject; const AToolName, AArguments: string; var AAllow: Boolean; var AReason: string);
+    procedure Instalar(Sender: TObject; const APkgName: string; var AAllow: Boolean);
+  end;
+
+function Resumen(const ATexto: string; AMax: Integer = 150): string;
+begin
+  Result := ATexto.Replace(#13, ' ').Replace(#10, ' ').Trim;
+  if Length(Result) > AMax then
+    Result := Copy(Result, 1, AMax) + '…';
+end;
+
+procedure TOyente.Avisar(Sender: TObject; const Msg: string);
+begin
+  if Msg.StartsWith('[AutoMCP]') then
+    Log('  ' + Msg);
+end;
+
+procedure TOyente.Revisar(Sender: TObject; const AToolName, AArguments: string; var AAllow: Boolean; var AReason: string);
+begin
+  Log('  [tool] ' + AToolName + ' ' + Resumen(AArguments));
+  AAllow := True;
+end;
+
+procedure TOyente.Instalar(Sender: TObject; const APkgName: string; var AAllow: Boolean);
+begin
+  // Con el evento conectado SU decision es la final: aqui se aplica Allowed a mano
+  AAllow := (Sender as TAiFunctions).AutoMCPConfig.Allowed.IndexOf(APkgName) >= 0;
+  Log('  [OnAutoMCPRequest] "' + APkgName + '": ' + IfThen(AAllow, 'permitido (está en Allowed)',
+    'rechazado (no está en Allowed)'));
+end;
+
 function ArgValue(const AName, ADefault: string): string;
 var
   I: Integer;
@@ -161,7 +212,13 @@ begin
   begin
     if ParamStr(I).StartsWith('--') then
     begin
-      if not SameText(ParamStr(I), '--sin-llm') then
+      // opciones sin valor; --ppm puede llevarlo (una URL) o no
+      if SameText(ParamStr(I), '--ppm') then
+      begin
+        if (I < ParamCount) and ParamStr(I + 1).StartsWith('http') then
+          Inc(I);
+      end
+      else if not (SameText(ParamStr(I), '--sin-llm') or SameText(ParamStr(I), '--solo-agente')) then
         Inc(I); // salta el valor de la opcion
     end
     else
@@ -203,8 +260,10 @@ var
   AgentTool: TAiA2AAgentTool;
   Conn: TAiChatConnection;
   Port: Integer;
-  Driver, Model, Key, Url, Respuesta: string;
-  SinLLM: Boolean;
+  Driver, Model, Key, Url, Respuesta, Registry: string;
+  SinLLM, PorPPM: Boolean;
+  Guardia: TAiGuardrails;
+  Oyente: TOyente;
   Preguntas: TArray<string>;
   Pregunta: string;
 var
@@ -227,6 +286,8 @@ begin
   Funcs := TAiFunctions.Create(nil);
   AgentTool := TAiA2AAgentTool.Create(nil);
   Conn := TAiChatConnection.Create(nil);
+  Guardia := TAiGuardrails.Create(nil);
+  Oyente := TOyente.Create;
   try
     try
       Port := StrToIntDef(ArgValue('--port', '8293'), 8293);
@@ -242,19 +303,53 @@ begin
       Server.AgentName := 'Agente de Catálogo de Café La Ladera';
       Server.AgentDescription := 'Precios, notas de cata y existencias de los cafés de Café La Ladera';
       Server.Skills.AddSkill('catalogo', 'Catálogo de productos',
-        'Responde precios, notas de cata y existencias de cada café', 'cafe, precios, inventario');
+        'Responde precios, notas de cata y existencias de cada café', 'cafe, precios, inventario, catalogo, coffee, prices, catalog, stock');
       Server.Port := Port;
       Server.Active := True;
       Log('Agente A2A en ' + Url + '  (Agent Card: ' + Url + '/.well-known/agent-card.json)');
 
-      // --- 2. La herramienta: el agente remoto visto desde el chat ---------
-      AgentTool.AgentUrl := Url;
-      AgentTool.ToolName := 'catalogo_cafe';
-      AgentTool.Description := 'Consulta el catálogo de Café La Ladera. Úsala para precios, existencias o recomendaciones';
-      AgentTool.Functions := Funcs;  // al asignarlo registra la funcion
-      AgentTool.DiscoverFromCard;    // suma la descripcion que publica el agente
-      Log('Herramienta para el modelo: ' + AgentTool.ToolName + ' - ' + AgentTool.Description);
-      Log('');
+      // --solo-agente: solo el servicio (para publicarlo con ppm publish --desde-url)
+      if HasFlag('--solo-agente') then
+      begin
+        Log('Solo el agente: ' + IfThen(ArgValue('--segundos', '') <> '', 'se cierra en ' + ArgValue('--segundos', '') + ' s',
+          'Enter para salir'));
+        if ArgValue('--segundos', '') <> '' then
+          Sleep(StrToIntDef(ArgValue('--segundos', ''), 60) * 1000)
+        else
+          Readln;
+        Exit;
+      end;
+
+      PorPPM := HasFlag('--ppm');
+      if not PorPPM then
+      begin
+        // --- 2. La herramienta: el agente remoto visto desde el chat ---------
+        AgentTool.AgentUrl := Url;
+        AgentTool.ToolName := 'catalogo_cafe';
+        AgentTool.Description := 'Consulta el catálogo de Café La Ladera. Úsala para precios, existencias o recomendaciones';
+        AgentTool.Functions := Funcs;  // al asignarlo registra la funcion
+        AgentTool.DiscoverFromCard;    // suma la descripcion que publica el agente
+        Log('Herramienta para el modelo: ' + AgentTool.ToolName + ' - ' + AgentTool.Description);
+        Log('');
+      end
+      else
+      begin
+        // --- 2'. Sin URL: el agente se descubre en el registry PPM -----------
+        Registry := ArgValue('--ppm', '');
+        if not Registry.StartsWith('http') then
+          Registry := GetEnvironmentVariable('REGISTRY_LADERA');
+        if Registry = '' then
+          Registry := 'http://127.0.0.1:8766';
+        Guardia.OnCheckToolCall := Oyente.Revisar;
+        Funcs.Guardrails := Guardia;
+        Funcs.OnLog := Oyente.Avisar;
+        Funcs.OnAutoMCPRequest := Oyente.Instalar;
+        Funcs.AutoMCPConfig.RegistryUrl := Registry;          // donde buscar
+        Funcs.AutoMCPConfig.Allowed.Add(PAQUETE_AGENTE);      // lo unico que se puede instalar
+        Funcs.AutoMCPConfig.Active := True;                   // ppm_search, ppm_install, call_mcp_tool y call_agent
+        Log('El chat no conoce la URL del catálogo: lo busca en el registry ' + Registry);
+        Log('');
+      end;
 
       Pregunta := PreguntaLibre;
       if Pregunta <> '' then
@@ -274,6 +369,11 @@ begin
         SinLLM := True;
       end;
 
+      if SinLLM and PorPPM then
+      begin
+        Log('--ppm necesita un modelo (es el modelo quien busca e instala el agente).');
+        Exit;
+      end;
       if SinLLM then
       begin
         for Pregunta in Preguntas do
@@ -291,11 +391,19 @@ begin
       if Key <> '' then
         Conn.Params.Values['ApiKey'] := Key;
       Conn.Params.Values['Asynchronous'] := 'False';
-      Conn.SystemPrompt.Text :=
-        'Eres Lucía, la asistente de atención al cliente de Café La Ladera. ' +
-        'Para cualquier dato de productos, precios o existencias consulta la herramienta catalogo_cafe; ' +
-        'no inventes precios. Responde en español, breve y amable, en texto plano sin Markdown: ' +
-        'la respuesta sale en una consola.';
+      if PorPPM then
+        Conn.SystemPrompt.Text :=
+          'Eres Lucía, la asistente de atención al cliente de Café La Ladera. ' +
+          'Los datos de productos, precios y existencias los tiene el agente de catálogo de la tienda: ' +
+          'búscalo en el registry, instálalo y pregúntale; no inventes precios. Responde en español, breve ' +
+          'y amable, en texto plano sin Markdown: la respuesta sale en una consola.' + sLineBreak +
+          Funcs.GetAutoMCPSystemPrompt
+      else
+        Conn.SystemPrompt.Text :=
+          'Eres Lucía, la asistente de atención al cliente de Café La Ladera. ' +
+          'Para cualquier dato de productos, precios o existencias consulta la herramienta catalogo_cafe; ' +
+          'no inventes precios. Responde en español, breve y amable, en texto plano sin Markdown: ' +
+          'la respuesta sale en una consola.';
       Conn.AiFunctions := Funcs;
       Conn.Tool_Active := True;   // canal tipado: el driver envia las tools
       Log(Format('Chat: %s / %s', [Conn.DriverName, Conn.AiChat.Model]));
@@ -318,6 +426,9 @@ begin
   finally
     Server.Active := False;
     Conn.Free;
+    Funcs.Guardrails := nil;
+    Guardia.Free;
+    Oyente.Free;
     AgentTool.Free;
     Funcs.Free;
     Server.Free;

@@ -23,6 +23,22 @@ A2AChatAgentTool.exe --port 8293                   # puerto del agente A2A
 
 Sin la variable de la clave del driver pasa solo a `--sin-llm`.
 
+## Descubrir el agente en un registry PPM (nov 5/2026)
+
+A2A define la tarjeta (`/.well-known/agent-card.json`) pero no cómo encontrar la URL de un agente. PPM hace de catálogo: los paquetes de tipo `agent` llevan la Agent Card.
+
+```bash
+A2AChatAgentTool.exe --solo-agente [--segundos N]   # solo el agente en 8293
+ppm publish --desde-url http://127.0.0.1:8293       # (en otra consola) arma el paquete con su card y lo publica
+A2AChatAgentTool.exe --ppm [url]                    # el chat NO conoce la URL: AutoMCP lo busca e instala
+```
+
+- `--ppm` usa `AutoMCPConfig` (`RegistryUrl` = la URL dada, `REGISTRY_LADERA` o `http://127.0.0.1:8766`; `Allowed` = `agente-de-catalogo-de-cafe-la-ladera`; `OnAutoMCPRequest` y guardrail que muestran cada paso). El modelo llama `ppm_search` (que ahora lista también agentes A2A), `ppm_install` (para un paquete `agent` toma la card y registra un `TAiA2AAgentTool`) y `call_agent`.
+- El agente sigue corriendo en este mismo proceso (es "el servicio de la empresa"); el chat solo sabe dónde está el registry.
+- El paquete publicado está en `Demos/Libro/cap33-registry-corporativo/registro-local/pkgs/agente-de-catalogo-de-cafe-la-ladera` (lo generó `ppm publish --desde-url`).
+- Probado con gpt-6-sol: "¿Tienen el Nariño Altura? Quiero 2 bolsas" → `ppm_search` (permite el agente, rechaza `mcp-bodega-ladera`), `ppm_install`, `call_agent` y "por 2 pagarías 84.000 COP".
+- La skill del agente lleva etiquetas en inglés (`coffee, prices, catalog, stock`): el modelo a veces busca en inglés.
+
 ## Probado (oct 22/2026)
 
 - `--sin-llm`: el agente responde por A2A y la herramienta devuelve el texto.

@@ -175,6 +175,9 @@ type
     // Rellena ToolName y Description desde la Agent Card del agente remoto.
     // Asi el LLM ve la descripcion que el propio agente publica de si mismo.
     procedure DiscoverFromCard;
+    // Manda AText al agente remoto y devuelve su respuesta en texto (o, si no
+    // termina bien, el motivo). Es lo que hace la funcion cuando la llama el LLM.
+    function Ask(const AText: string): string;
   published
     property Functions: TAiFunctions read FFunctions write SetFunctions;
     property AgentUrl: string read FAgentUrl write FAgentUrl;
@@ -827,24 +830,34 @@ begin
   Consulta := ToolCall.Params.Values['query'];
   if Consulta = '' then
     Consulta := ToolCall.Arguments; // ultimo recurso: el JSON crudo
+  ToolCall.Response := Ask(Consulta);
+end;
 
+function TAiA2AAgentTool.Ask(const AText: string): string;
+var
+  Client: TAiA2AClient;
+  Task: TJSONObject;
+  Salida: string;
+begin
+  if Trim(FAgentUrl) = '' then
+    Exit('{"error":"TAiA2AAgentTool: AgentUrl no configurada"}');
   Client := TAiA2AClient.Create(nil);
   try
     Client.Url := FAgentUrl;
     Client.ApiKey := FApiKey;
     Client.Timeout := FTimeoutMs;
     try
-      Task := Client.SendText(Consulta, Salida);
+      Task := Client.SendText(AText, Salida);
       try
         case Client.LastTaskState of
           tsCompleted:
-            ToolCall.Response := Salida;
+            Result := Salida;
           tsInputRequired:
             // El agente remoto pide mas datos. Se le devuelve al LLM como
             // texto: es el LLM quien decide si preguntar al usuario.
-            ToolCall.Response := 'El agente remoto necesita mas informacion: ' + Client.LastStatusMessage;
+            Result := 'El agente remoto necesita mas informacion: ' + Client.LastStatusMessage;
         else
-          ToolCall.Response := 'El agente remoto no completo la tarea (' + Client.LastState + '): ' +
+          Result := 'El agente remoto no completo la tarea (' + Client.LastState + '): ' +
             Client.LastStatusMessage;
         end;
       finally
@@ -854,14 +867,95 @@ begin
       on E: Exception do
         // Un fallo del agente remoto se le cuenta al LLM en vez de romper el
         // turno de chat: puede reintentar o seguir sin esa informacion.
-        ToolCall.Response := 'Error llamando al agente remoto: ' + E.Message;
+        Result := 'Error llamando al agente remoto: ' + E.Message;
     end;
   finally
     Client.Free;
   end;
 end;
+
+{ TAiA2APPMAgentHandler }
+
+// Agentes A2A instalados desde el registry PPM (paquetes de tipo 'agent'):
+// TAiFunctions.InstallAgentFromPPM y AutoMCP (ppm_install + call_agent) terminan aqui.
+// Cada agente es un TAiA2AAgentTool cuyo dueno es el TAiFunctions.
+type
+  TAiA2APPMAgentHandler = class(TAiPPMAgentHandler)
+  private
+    class function NombreFuncion(const APkg: string): string; static;
+    class function Buscar(AOwner: TAiFunctions; const AName: string): TAiA2AAgentTool; static;
+  public
+    function Install(AOwner: TAiFunctions; const AName, AUrl, ADescription: String;
+      AEnabled: Boolean): String; override;
+    function Call(AOwner: TAiFunctions; const AName, AMessage: String): String; override;
+  end;
+
+// 'catalogo-cafe-la-ladera' -> 'catalogo_cafe_la_ladera': un nombre de funcion valido
+class function TAiA2APPMAgentHandler.NombreFuncion(const APkg: string): string;
+var
+  C: Char;
+begin
+  Result := '';
+  for C in LowerCase(APkg) do
+    if CharInSet(C, ['a'..'z', '0'..'9']) then
+      Result := Result + C
+    else
+      Result := Result + '_';
+end;
+
+class function TAiA2APPMAgentHandler.Buscar(AOwner: TAiFunctions; const AName: string): TAiA2AAgentTool;
+var
+  I: Integer;
+begin
+  Result := nil;
+  for I := 0 to AOwner.ComponentCount - 1 do
+    if (AOwner.Components[I] is TAiA2AAgentTool) and
+       SameText(TAiA2AAgentTool(AOwner.Components[I]).ToolName, NombreFuncion(AName)) then
+      Exit(TAiA2AAgentTool(AOwner.Components[I]));
+end;
+
+function TAiA2APPMAgentHandler.Install(AOwner: TAiFunctions; const AName, AUrl, ADescription: String;
+  AEnabled: Boolean): String;
+var
+  T: TAiA2AAgentTool;
+  Clave: string;
+begin
+  Result := '';
+  T := Buscar(AOwner, AName);
+  if not Assigned(T) then
+    T := TAiA2AAgentTool.Create(AOwner);
+  T.AgentUrl := AUrl;
+  T.ToolName := NombreFuncion(AName);
+  T.Description := ADescription;
+  // Si el agente pide autenticacion, la clave NUNCA viene del paquete: sale del
+  // entorno de quien lo instala (PPM_AGENT_KEY_<NOMBRE>, p.ej. PPM_AGENT_KEY_CATALOGO_CAFE_LA_LADERA)
+  Clave := GetEnvironmentVariable('PPM_AGENT_KEY_' + UpperCase(NombreFuncion(AName)));
+  if Clave <> '' then
+    T.ApiKey := Clave;
+  if T.Functions = AOwner then
+    T.RegisterTool
+  else
+    T.Functions := AOwner;       // registra la funcion en AOwner
+  AOwner.SetFunctionEnable(T.ToolName, AEnabled);
+end;
+
+function TAiA2APPMAgentHandler.Call(AOwner: TAiFunctions; const AName, AMessage: String): String;
+var
+  T: TAiA2AAgentTool;
+begin
+  T := Buscar(AOwner, AName);
+  if not Assigned(T) then
+    Exit(Format('{"error":"El agente ''%s'' no está instalado"}', [AName]));
+  Result := T.Ask(AMessage);
+end;
 initialization
 
 TEngineRegistry.Instance.RegisterTool(TAiA2ARemoteAgentTool, 'uMakerAi.A2A.Client');
+// Paquetes PPM de tipo 'agent': TAiFunctions.InstallAgentFromPPM y AutoMCP (call_agent)
+RegisterPPMAgentHandler(TAiA2APPMAgentHandler.Create);
+
+finalization
+
+RegisterPPMAgentHandler(nil);
 
 end.

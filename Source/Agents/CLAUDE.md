@@ -418,6 +418,18 @@ agente remoto cae o pide más datos, el LLM puede reintentar, preguntar al
 usuario o seguir sin esa información. Una excepción abortaría la conversación
 entera por un problema de un colaborador.
 
+## Descubrir agentes A2A en un registry PPM (nov 5/2026)
+
+A2A define la Agent Card pero no cómo encontrar la URL de un agente. El registry PPM tiene el tipo de paquete **`agent`**: un `agent-card.json` más el `pai.package` (`[agent] url`). No trae código: el agente ya corre como servicio.
+
+- **Publicar:** `ppm publish --desde-url http://host:puerto` baja `/.well-known/agent-card.json` del agente vivo y arma el paquete (nombre, versión, descripción y tags de la card). El registry valida la card al publicar (name, description, URL http(s) y skills) y la indexa: `GET /v1/a2a/discover?q=` busca en nombre, descripción y skills (cualquier palabra, ordenado por relevancia); `GET /v1/packages/:n/:v/card` la devuelve.
+- **Desarrollador:** `TAiFunctions.InstallAgentFromPPM(nombre, '', registry)` toma la card y deja el agente como una función más (`TAiA2AAgentTool`, dueño el `TAiFunctions`). `SearchPPMAgents` y `GetAgentCardFromPPM` para buscar y leer.
+- **AutoMCP:** con `uMakerAi.A2A.Client` en el proyecto, `ppm_search` lista también agentes, `ppm_install` reconoce un paquete `agent` y aparece `call_agent(agent_name, message)`. Las mismas `Allowed`/`Blocked`/`OnAutoMCPRequest` y los guardrails.
+- **Desacople:** `uMakerAi.Tools.Functions` no conoce A2A. Declara `TAiPPMAgentHandler` (abstracto) y `RegisterPPMAgentHandler`; `uMakerAi.A2A.Client` registra `TAiA2APPMAgentHandler` en su `initialization`. Sin esa unidad, AutoMCP no ofrece agentes.
+- **Autenticación:** la clave nunca va en el paquete. Si el agente la pide, sale del entorno de quien instala: `PPM_AGENT_KEY_<NOMBRE>` (p. ej. `PPM_AGENT_KEY_AGENTE_DE_CATALOGO_DE_CAFE_LA_LADERA`).
+- `TAiA2AAgentTool.Ask(texto)`: lo que hace la función cuando la llama el LLM, ahora público.
+- Ejemplo: demo 093 `--ppm`.
+
 ## Push notifications
 
 `EnablePushNotifications` (default `True`) habilita el CRUD de configs y la
