@@ -200,7 +200,6 @@ un `InputRequiredResult` en vez de ejecutar:
 | Demo | Location | Description |
 |------|----------|-------------|
 | 031-MCPServer | `/Demos/031-MCPServer/` | Multi-protocol showcase with FileAccess, SysInfo, WorldTime tools |
-| 035-MCPServerWithTAiFunctions | `/Demos/035-MCPServerWithTAiFunctions/` | TAiFunctions bridge integration |
 | 036-MCPServerStdIO_AiFunction | `/Demos/036-MCPServerStdIO_AiFunction/` | StdIO + TAiFunctions |
 
 ## Known Issues

@@ -37,8 +37,6 @@ Located in `/Demos/`:
 | Demo | Description | Command |
 |------|-------------|---------|
 | `031-MCPServer` | Multi-protocol showcase | `AiMCPServerDemo.exe --protocol {sse\|http\|stdio} --port 8080` |
-| `032-MCPServerDataSnap` | DataSnap integration | |
-| `035-MCPServerWithTAiFunctions` | TAiFunctions integration | HTTP on port 3000 |
 | `036-MCPServerStdIO_AiFunction` | StdIO + functions | |
 
 ## Testing the Server

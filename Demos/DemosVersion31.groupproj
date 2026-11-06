@@ -3,9 +3,6 @@
         <ProjectGuid>{F23F6AFA-4622-42DC-863E-7308F69E56AA}</ProjectGuid>
     </PropertyGroup>
     <ItemGroup>
-        <Projects Include="010-Minimalchat\MinimalChat.dproj">
-            <Dependencies/>
-        </Projects>
         <Projects Include="012-ChatAllFunctions\ChatFull.dproj">
             <Dependencies/>
         </Projects>
@@ -42,12 +39,6 @@
         <Projects Include="032-MCP_StdIO_FileManager\McpFileServerStIO.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="032-MCPServerDataSnap\MCPDataSnapServer.dproj">
-            <Dependencies/>
-        </Projects>
-        <Projects Include="035-MCPServerWithTAiFunctions\MCPServerAiFunctions.dproj">
-            <Dependencies/>
-        </Projects>
         <Projects Include="036-MCPServerStdIO_AiFunction\MCPServerFileSystem.dproj">
             <Dependencies/>
         </Projects>
@@ -72,16 +63,7 @@
         <Projects Include="061-LoopbackAudioCapture\AudioCaptureDemo.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="062-BidirectionalTranslator\TranslatorDemo.dproj">
-            <Dependencies/>
-        </Projects>
-        <Projects Include="063-VoiceBridgeTranslator\VoiceBridgeDemo.dproj">
-            <Dependencies/>
-        </Projects>
         <Projects Include="064-VoiceBridgeDiarized\VoiceBridgeDiarizedDemo.dproj">
-            <Dependencies/>
-        </Projects>
-        <Projects Include="065-VoiceBridgeUI\VoiceBridgeUI.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="066-ComputerUseTest\ComputerUseServer.dproj">
@@ -227,15 +209,6 @@
             <Default.Personality/>
         </BorlandProject>
     </ProjectExtensions>
-    <Target Name="MinimalChat">
-        <MSBuild Projects="010-Minimalchat\MinimalChat.dproj"/>
-    </Target>
-    <Target Name="MinimalChat:Clean">
-        <MSBuild Projects="010-Minimalchat\MinimalChat.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="MinimalChat:Make">
-        <MSBuild Projects="010-Minimalchat\MinimalChat.dproj" Targets="Make"/>
-    </Target>
     <Target Name="ChatFull">
         <MSBuild Projects="012-ChatAllFunctions\ChatFull.dproj"/>
     </Target>
@@ -344,24 +317,6 @@
     <Target Name="McpFileServerStIO:Make">
         <MSBuild Projects="032-MCP_StdIO_FileManager\McpFileServerStIO.dproj" Targets="Make"/>
     </Target>
-    <Target Name="MCPDataSnapServer">
-        <MSBuild Projects="032-MCPServerDataSnap\MCPDataSnapServer.dproj"/>
-    </Target>
-    <Target Name="MCPDataSnapServer:Clean">
-        <MSBuild Projects="032-MCPServerDataSnap\MCPDataSnapServer.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="MCPDataSnapServer:Make">
-        <MSBuild Projects="032-MCPServerDataSnap\MCPDataSnapServer.dproj" Targets="Make"/>
-    </Target>
-    <Target Name="MCPServerAiFunctions">
-        <MSBuild Projects="035-MCPServerWithTAiFunctions\MCPServerAiFunctions.dproj"/>
-    </Target>
-    <Target Name="MCPServerAiFunctions:Clean">
-        <MSBuild Projects="035-MCPServerWithTAiFunctions\MCPServerAiFunctions.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="MCPServerAiFunctions:Make">
-        <MSBuild Projects="035-MCPServerWithTAiFunctions\MCPServerAiFunctions.dproj" Targets="Make"/>
-    </Target>
     <Target Name="MCPServerFileSystem">
         <MSBuild Projects="036-MCPServerStdIO_AiFunction\MCPServerFileSystem.dproj"/>
     </Target>
@@ -434,24 +389,6 @@
     <Target Name="AudioCaptureDemo:Make">
         <MSBuild Projects="061-LoopbackAudioCapture\AudioCaptureDemo.dproj" Targets="Make"/>
     </Target>
-    <Target Name="TranslatorDemo">
-        <MSBuild Projects="062-BidirectionalTranslator\TranslatorDemo.dproj"/>
-    </Target>
-    <Target Name="TranslatorDemo:Clean">
-        <MSBuild Projects="062-BidirectionalTranslator\TranslatorDemo.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="TranslatorDemo:Make">
-        <MSBuild Projects="062-BidirectionalTranslator\TranslatorDemo.dproj" Targets="Make"/>
-    </Target>
-    <Target Name="VoiceBridgeDemo">
-        <MSBuild Projects="063-VoiceBridgeTranslator\VoiceBridgeDemo.dproj"/>
-    </Target>
-    <Target Name="VoiceBridgeDemo:Clean">
-        <MSBuild Projects="063-VoiceBridgeTranslator\VoiceBridgeDemo.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="VoiceBridgeDemo:Make">
-        <MSBuild Projects="063-VoiceBridgeTranslator\VoiceBridgeDemo.dproj" Targets="Make"/>
-    </Target>
     <Target Name="VoiceBridgeDiarizedDemo">
         <MSBuild Projects="064-VoiceBridgeDiarized\VoiceBridgeDiarizedDemo.dproj"/>
     </Target>
@@ -460,15 +397,6 @@
     </Target>
     <Target Name="VoiceBridgeDiarizedDemo:Make">
         <MSBuild Projects="064-VoiceBridgeDiarized\VoiceBridgeDiarizedDemo.dproj" Targets="Make"/>
-    </Target>
-    <Target Name="VoiceBridgeUI">
-        <MSBuild Projects="065-VoiceBridgeUI\VoiceBridgeUI.dproj"/>
-    </Target>
-    <Target Name="VoiceBridgeUI:Clean">
-        <MSBuild Projects="065-VoiceBridgeUI\VoiceBridgeUI.dproj" Targets="Clean"/>
-    </Target>
-    <Target Name="VoiceBridgeUI:Make">
-        <MSBuild Projects="065-VoiceBridgeUI\VoiceBridgeUI.dproj" Targets="Make"/>
     </Target>
     <Target Name="ComputerUseServer">
         <MSBuild Projects="066-ComputerUseTest\ComputerUseServer.dproj"/>
@@ -876,13 +804,13 @@
         <MSBuild Projects="090-Varios\VoiceMonitorAndWhisperDemo\VoiceMonitorAndWhisperDemo.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="MinimalChat;ChatFull;ClaudeChatTest;RagUpdateDb;Sqlite_RAG;RagVectorQL;RagGraphDemo;BasicRAGGraph;DocumentManagerDemo;AiMCPServerDemo;McpFileServerHttp;McpFileServerSSE;McpFileServerStIO;MCPDataSnapServer;MCPServerAiFunctions;MCPServerFileSystem;MCPServerRAG;VeoDemo;AiAgentDemo;AgentConsoleDemo;AgentCheckpointDBDemo;ElevenLabsTTSDemo;AudioCaptureDemo;TranslatorDemo;VoiceBridgeDemo;VoiceBridgeDiarizedDemo;VoiceBridgeUI;ComputerUseServer;ComputerUseTest;ComputerUseTest01;PromptCacheTest;AsyncHistoryTest;McpSessionGateTest;ChatRAGTools;VoiceBridgeTranslateDemo;A2AFederationDemo;GuardrailsEvalsDemo;A2AOrchestrationDemo;MCPElicitationDemo;MemoryDemo;RagPostgresConsoleDemo;RagChatOllamaDemo;A2ASutAgentDemo;A2APushDemo;AgentChatHITL;ComputerUsePassthruDemo;ComputerUseLinuxDemo;JevRouterDemo;JevDispatchGuardDemo;JevEvalsRagDemo;JevBatchLabelingDemo;JevModelRouterDemo;QwenShowcase;SkillsDemo;GPTLiveVoice;A2AChatAgentTool;ChatStreaming;ChatViewLadera;ChatToolsLadera;ChatMemoryLadera;AgentGraphLadera;VozPedidoLadera;MCPLadera;SkillsLadera;AgenteLadera;AprobacionLadera;GuardrailsLadera;EnrutadorLadera;CompareEmbeddings;Dalle_Generar;ListAllModels;VoiceMonitorAndWhisperDemo"/>
+        <CallTarget Targets="ChatFull;ClaudeChatTest;RagUpdateDb;Sqlite_RAG;RagVectorQL;RagGraphDemo;BasicRAGGraph;DocumentManagerDemo;AiMCPServerDemo;McpFileServerHttp;McpFileServerSSE;McpFileServerStIO;MCPServerFileSystem;MCPServerRAG;VeoDemo;AiAgentDemo;AgentConsoleDemo;AgentCheckpointDBDemo;ElevenLabsTTSDemo;AudioCaptureDemo;VoiceBridgeDiarizedDemo;ComputerUseServer;ComputerUseTest;ComputerUseTest01;PromptCacheTest;AsyncHistoryTest;McpSessionGateTest;ChatRAGTools;VoiceBridgeTranslateDemo;A2AFederationDemo;GuardrailsEvalsDemo;A2AOrchestrationDemo;MCPElicitationDemo;MemoryDemo;RagPostgresConsoleDemo;RagChatOllamaDemo;A2ASutAgentDemo;A2APushDemo;AgentChatHITL;ComputerUsePassthruDemo;ComputerUseLinuxDemo;JevRouterDemo;JevDispatchGuardDemo;JevEvalsRagDemo;JevBatchLabelingDemo;JevModelRouterDemo;QwenShowcase;SkillsDemo;GPTLiveVoice;A2AChatAgentTool;ChatStreaming;ChatViewLadera;ChatToolsLadera;ChatMemoryLadera;AgentGraphLadera;VozPedidoLadera;MCPLadera;SkillsLadera;AgenteLadera;AprobacionLadera;GuardrailsLadera;EnrutadorLadera;CompareEmbeddings;Dalle_Generar;ListAllModels;VoiceMonitorAndWhisperDemo"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MinimalChat:Clean;ChatFull:Clean;ClaudeChatTest:Clean;RagUpdateDb:Clean;Sqlite_RAG:Clean;RagVectorQL:Clean;RagGraphDemo:Clean;BasicRAGGraph:Clean;DocumentManagerDemo:Clean;AiMCPServerDemo:Clean;McpFileServerHttp:Clean;McpFileServerSSE:Clean;McpFileServerStIO:Clean;MCPDataSnapServer:Clean;MCPServerAiFunctions:Clean;MCPServerFileSystem:Clean;MCPServerRAG:Clean;VeoDemo:Clean;AiAgentDemo:Clean;AgentConsoleDemo:Clean;AgentCheckpointDBDemo:Clean;ElevenLabsTTSDemo:Clean;AudioCaptureDemo:Clean;TranslatorDemo:Clean;VoiceBridgeDemo:Clean;VoiceBridgeDiarizedDemo:Clean;VoiceBridgeUI:Clean;ComputerUseServer:Clean;ComputerUseTest:Clean;ComputerUseTest01:Clean;PromptCacheTest:Clean;AsyncHistoryTest:Clean;McpSessionGateTest:Clean;ChatRAGTools:Clean;VoiceBridgeTranslateDemo:Clean;A2AFederationDemo:Clean;GuardrailsEvalsDemo:Clean;A2AOrchestrationDemo:Clean;MCPElicitationDemo:Clean;MemoryDemo:Clean;RagPostgresConsoleDemo:Clean;RagChatOllamaDemo:Clean;A2ASutAgentDemo:Clean;A2APushDemo:Clean;AgentChatHITL:Clean;ComputerUsePassthruDemo:Clean;ComputerUseLinuxDemo:Clean;JevRouterDemo:Clean;JevDispatchGuardDemo:Clean;JevEvalsRagDemo:Clean;JevBatchLabelingDemo:Clean;JevModelRouterDemo:Clean;QwenShowcase:Clean;SkillsDemo:Clean;GPTLiveVoice:Clean;A2AChatAgentTool:Clean;ChatStreaming:Clean;ChatViewLadera:Clean;ChatToolsLadera:Clean;ChatMemoryLadera:Clean;AgentGraphLadera:Clean;VozPedidoLadera:Clean;MCPLadera:Clean;SkillsLadera:Clean;AgenteLadera:Clean;AprobacionLadera:Clean;GuardrailsLadera:Clean;EnrutadorLadera:Clean;CompareEmbeddings:Clean;Dalle_Generar:Clean;ListAllModels:Clean;VoiceMonitorAndWhisperDemo:Clean"/>
+        <CallTarget Targets="ChatFull:Clean;ClaudeChatTest:Clean;RagUpdateDb:Clean;Sqlite_RAG:Clean;RagVectorQL:Clean;RagGraphDemo:Clean;BasicRAGGraph:Clean;DocumentManagerDemo:Clean;AiMCPServerDemo:Clean;McpFileServerHttp:Clean;McpFileServerSSE:Clean;McpFileServerStIO:Clean;MCPServerFileSystem:Clean;MCPServerRAG:Clean;VeoDemo:Clean;AiAgentDemo:Clean;AgentConsoleDemo:Clean;AgentCheckpointDBDemo:Clean;ElevenLabsTTSDemo:Clean;AudioCaptureDemo:Clean;VoiceBridgeDiarizedDemo:Clean;ComputerUseServer:Clean;ComputerUseTest:Clean;ComputerUseTest01:Clean;PromptCacheTest:Clean;AsyncHistoryTest:Clean;McpSessionGateTest:Clean;ChatRAGTools:Clean;VoiceBridgeTranslateDemo:Clean;A2AFederationDemo:Clean;GuardrailsEvalsDemo:Clean;A2AOrchestrationDemo:Clean;MCPElicitationDemo:Clean;MemoryDemo:Clean;RagPostgresConsoleDemo:Clean;RagChatOllamaDemo:Clean;A2ASutAgentDemo:Clean;A2APushDemo:Clean;AgentChatHITL:Clean;ComputerUsePassthruDemo:Clean;ComputerUseLinuxDemo:Clean;JevRouterDemo:Clean;JevDispatchGuardDemo:Clean;JevEvalsRagDemo:Clean;JevBatchLabelingDemo:Clean;JevModelRouterDemo:Clean;QwenShowcase:Clean;SkillsDemo:Clean;GPTLiveVoice:Clean;A2AChatAgentTool:Clean;ChatStreaming:Clean;ChatViewLadera:Clean;ChatToolsLadera:Clean;ChatMemoryLadera:Clean;AgentGraphLadera:Clean;VozPedidoLadera:Clean;MCPLadera:Clean;SkillsLadera:Clean;AgenteLadera:Clean;AprobacionLadera:Clean;GuardrailsLadera:Clean;EnrutadorLadera:Clean;CompareEmbeddings:Clean;Dalle_Generar:Clean;ListAllModels:Clean;VoiceMonitorAndWhisperDemo:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MinimalChat:Make;ChatFull:Make;ClaudeChatTest:Make;RagUpdateDb:Make;Sqlite_RAG:Make;RagVectorQL:Make;RagGraphDemo:Make;BasicRAGGraph:Make;DocumentManagerDemo:Make;AiMCPServerDemo:Make;McpFileServerHttp:Make;McpFileServerSSE:Make;McpFileServerStIO:Make;MCPDataSnapServer:Make;MCPServerAiFunctions:Make;MCPServerFileSystem:Make;MCPServerRAG:Make;VeoDemo:Make;AiAgentDemo:Make;AgentConsoleDemo:Make;AgentCheckpointDBDemo:Make;ElevenLabsTTSDemo:Make;AudioCaptureDemo:Make;TranslatorDemo:Make;VoiceBridgeDemo:Make;VoiceBridgeDiarizedDemo:Make;VoiceBridgeUI:Make;ComputerUseServer:Make;ComputerUseTest:Make;ComputerUseTest01:Make;PromptCacheTest:Make;AsyncHistoryTest:Make;McpSessionGateTest:Make;ChatRAGTools:Make;VoiceBridgeTranslateDemo:Make;A2AFederationDemo:Make;GuardrailsEvalsDemo:Make;A2AOrchestrationDemo:Make;MCPElicitationDemo:Make;MemoryDemo:Make;RagPostgresConsoleDemo:Make;RagChatOllamaDemo:Make;A2ASutAgentDemo:Make;A2APushDemo:Make;AgentChatHITL:Make;ComputerUsePassthruDemo:Make;ComputerUseLinuxDemo:Make;JevRouterDemo:Make;JevDispatchGuardDemo:Make;JevEvalsRagDemo:Make;JevBatchLabelingDemo:Make;JevModelRouterDemo:Make;QwenShowcase:Make;SkillsDemo:Make;GPTLiveVoice:Make;A2AChatAgentTool:Make;ChatStreaming:Make;ChatViewLadera:Make;ChatToolsLadera:Make;ChatMemoryLadera:Make;AgentGraphLadera:Make;VozPedidoLadera:Make;MCPLadera:Make;SkillsLadera:Make;AgenteLadera:Make;AprobacionLadera:Make;GuardrailsLadera:Make;EnrutadorLadera:Make;CompareEmbeddings:Make;Dalle_Generar:Make;ListAllModels:Make;VoiceMonitorAndWhisperDemo:Make"/>
+        <CallTarget Targets="ChatFull:Make;ClaudeChatTest:Make;RagUpdateDb:Make;Sqlite_RAG:Make;RagVectorQL:Make;RagGraphDemo:Make;BasicRAGGraph:Make;DocumentManagerDemo:Make;AiMCPServerDemo:Make;McpFileServerHttp:Make;McpFileServerSSE:Make;McpFileServerStIO:Make;MCPServerFileSystem:Make;MCPServerRAG:Make;VeoDemo:Make;AiAgentDemo:Make;AgentConsoleDemo:Make;AgentCheckpointDBDemo:Make;ElevenLabsTTSDemo:Make;AudioCaptureDemo:Make;VoiceBridgeDiarizedDemo:Make;ComputerUseServer:Make;ComputerUseTest:Make;ComputerUseTest01:Make;PromptCacheTest:Make;AsyncHistoryTest:Make;McpSessionGateTest:Make;ChatRAGTools:Make;VoiceBridgeTranslateDemo:Make;A2AFederationDemo:Make;GuardrailsEvalsDemo:Make;A2AOrchestrationDemo:Make;MCPElicitationDemo:Make;MemoryDemo:Make;RagPostgresConsoleDemo:Make;RagChatOllamaDemo:Make;A2ASutAgentDemo:Make;A2APushDemo:Make;AgentChatHITL:Make;ComputerUsePassthruDemo:Make;ComputerUseLinuxDemo:Make;JevRouterDemo:Make;JevDispatchGuardDemo:Make;JevEvalsRagDemo:Make;JevBatchLabelingDemo:Make;JevModelRouterDemo:Make;QwenShowcase:Make;SkillsDemo:Make;GPTLiveVoice:Make;A2AChatAgentTool:Make;ChatStreaming:Make;ChatViewLadera:Make;ChatToolsLadera:Make;ChatMemoryLadera:Make;AgentGraphLadera:Make;VozPedidoLadera:Make;MCPLadera:Make;SkillsLadera:Make;AgenteLadera:Make;AprobacionLadera:Make;GuardrailsLadera:Make;EnrutadorLadera:Make;CompareEmbeddings:Make;Dalle_Generar:Make;ListAllModels:Make;VoiceMonitorAndWhisperDemo:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

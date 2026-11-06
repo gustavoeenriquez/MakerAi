@@ -167,7 +167,7 @@ Key features:
 
 Platform support: Windows only (same pattern as AudioCapture; other platforms compile but `Active := True` fires `OnError`).
 
-Demos: `Demos/062-BidirectionalTranslator` (text-only translator) and `Demos/063-VoiceBridgeTranslator` (full voice bridge: loopback -> STT -> translate -> TTS -> headphones, and mic -> STT -> translate -> TTS -> virtual cable). Both require `OPENAI_API_KEY`.
+Demos: `Demos/071-VoiceBridgeTranslate` (voice bridge on `gpt-realtime-translate`) and `Demos/064-VoiceBridgeDiarized`. The original pipeline demos, `DeprecatedDemos/Demos/062-BidirectionalTranslator` (text-only translator) and `DeprecatedDemos/Demos/063-VoiceBridgeTranslator` (full voice bridge: loopback -> STT -> translate -> TTS -> headphones, and mic -> STT -> translate -> TTS -> virtual cable). Both require `OPENAI_API_KEY`.
 
 ## Platform Considerations
 

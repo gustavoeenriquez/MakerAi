@@ -1043,7 +1043,6 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 
 | Demo | Description |
 |------|-------------|
-| `010-Minimalchat` | Minimal chat with Ollama and TAiChatConnection |
 | `012-ChatAllFunctions` | Full-featured multimodal chat (images, audio, streaming, tools) |
 | `012-ChatWebList` | Chat with web-based content list |
 | `021-RAG+Postgres-UpdateDB` | Build a vector RAG database with PostgreSQL/pgvector |
@@ -1054,9 +1053,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 | `027-DocumentManager` | Document ingestion and management |
 | `031-MCPServer` | Multi-protocol MCP server (HTTP, SSE, StdIO) |
 | `032-MCP_StdIO_FileManager` | File manager exposed via MCP StdIO |
-| `032-MCPServerDataSnap` | MCP server using DataSnap transport |
 | `034-MCPServer_Http_FileManager` | File manager via MCP HTTP |
-| `035-MCPServerWithTAiFunctions` | TAiFunctions bridge to MCP |
 | `036-MCPServerStdIO_AiFunction` | StdIO MCP server with AI functions |
 | `041-GeminiVeo` | Video generation with Google Veo |
 | `051-AgentDemo` | Visual agent graph builder and runner |

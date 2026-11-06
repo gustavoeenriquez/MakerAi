@@ -6,7 +6,7 @@
         <Projects Include="MakerAIChat.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="..\..\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj">
+        <Projects Include="..\..\DeprecatedDemos\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\DemoReAct\DemoReact.dproj">
@@ -30,13 +30,13 @@
         <MSBuild Projects="MakerAIChat.dproj" Targets="Make"/>
     </Target>
     <Target Name="ChatFull">
-        <MSBuild Projects="..\..\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj"/>
+        <MSBuild Projects="..\..\DeprecatedDemos\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj"/>
     </Target>
     <Target Name="ChatFull:Clean">
-        <MSBuild Projects="..\..\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj" Targets="Clean"/>
+        <MSBuild Projects="..\..\DeprecatedDemos\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj" Targets="Clean"/>
     </Target>
     <Target Name="ChatFull:Make">
-        <MSBuild Projects="..\..\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj" Targets="Make"/>
+        <MSBuild Projects="..\..\DeprecatedDemos\Demos-V3_1\012-ChatAllFunctions\ChatFull.dproj" Targets="Make"/>
     </Target>
     <Target Name="DemoReact">
         <MSBuild Projects="C:\Users\genri\OneDrive\Documentos\Embarcadero\Studio\Projects\DemoReAct\DemoReact.dproj"/>

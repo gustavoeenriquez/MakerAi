@@ -12,13 +12,13 @@ This is the Demos directory for the MakerAI 3.x framework. Contains 66 working e
 
 **IDE:** Delphi 11 Alexandria through 13 Florence (demos require Delphi 11+; the core framework supports 10.4 Sydney minimum)
 
-**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026; desde sep 29/2026 incluye los 58 proyectos (se sumaron 089-QwenShowcase, que había quedado fuera, y 091-Skills); oct 5/2026 se sumó 092-GPTLiveVoice (59); oct 22/2026, 093-A2AChatAgentTool (60) y de 094 a 099, los demos de la serie de Café La Ladera (66); de 100 a 105, más demos de la serie (72).
+**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026; desde sep 29/2026 incluye los 58 proyectos (se sumaron 089-QwenShowcase, que había quedado fuera, y 091-Skills); oct 5/2026 se sumó 092-GPTLiveVoice (59); oct 22/2026, 093-A2AChatAgentTool (60) y de 094 a 099, los demos de la serie de Café La Ladera (66); de 100 a 105, más demos de la serie (72). Nov 6/2026, limpieza para la v4.0: 010, 032-MCPServerDataSnap, 035, 062, 063 y 065 pasaron a `../DeprecatedDemos/Demos/` (66).
 
 > **OJO al editar los `.pas` de los demos:** varios están en **ANSI (Windows-1252) con saltos LF**, no en UTF-8. Guardarlos como UTF-8 destruye todas las tildes de forma silenciosa (compila igual, y `git diff` lo disimula si `core.autocrlf` está activo). Verificar siempre con `git diff --numstat` que solo cambien las líneas que se tocaron.
 
 **Individual build (MSBuild):**
 ```bash
-msbuild 010-Minimalchat/MinimalChat.dproj /p:Config=Release /p:Platform=Win64
+msbuild 094-ChatStreaming/ChatStreaming.dproj /p:Config=Release /p:Platform=Win64
 ```
 
 **Build all demos:**
@@ -33,7 +33,6 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 ### Chat Integration (01x)
 | Demo | Purpose | Key Pattern |
 |------|---------|-------------|
-| 010-Minimalchat | Basic FMX chat | `TAiOllamaChat` direct + `TAiChatConnection` factory |
 | 012-ChatAllFunctions | Full-featured chat | Multimodal (images, audio), streaming, tool calls |
 | 014-ChatTest | Claude-specific testing | Claude API integration |
 
@@ -53,8 +52,6 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 |------|---------|-----------|
 | 031-MCPServer | Multi-protocol server. **Compila tambien en Linux64** desde sep 2026: la herramienta `system_info` llamaba a la API de Windows desde el cuerpo de sus funciones y tumbaba el demo entero fuera de Windows | SSE, HTTP, StdIO |
 | 032-MCP_StdIO_FileManager | File manager MCP | StdIO, HTTP, SSE variants |
-| 032-MCPServerDataSnap | DataSnap integration | HTTP with DataSnap |
-| 035-MCPServerWithTAiFunctions | MCP + function calling | TAiFunctions integration |
 | 036-MCPServerStdIO_AiFunction | Function-based MCP | StdIO with AI functions |
 | 037-MCPServerRAG | RAG semántico vía MCP (SSE default) | `TAiRAGVector` + `TAiOpenAiEmbeddings`, híbrido embeddings+BM25 sobre SQL Server 2025 o **PostgreSQL + pgvector** (`Driver` en el ini; postgres probado en runtime oct 2026) |
 
@@ -117,10 +114,7 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 |------|---------|-------------|
 | 060-ElevenLabsTTS | Text-to-speech | ElevenLabs API |
 | 061-LoopbackAudioCapture | Capture system playback audio (console) | `TAiAudioCapture` (WASAPI loopback) -> 16 kHz mono WAV |
-| 062-BidirectionalTranslator | Real-time bidirectional call translator (console, text output) | 2x `TAiAudioCapture` (loopback + mic) -> 2x `TAiOpenAiRealtimeSTT` -> `TAiChatConnection` translation. Requires `OPENAI_API_KEY`. Session model `gpt-realtime-2.1` (also the driver default since Aug 2026). Transcription uses `gpt-live-transcribe` (Aug 2026) with `TranscriptionPrompt` + guided autodetect via `Languages` (['en','es']). |
-| 063-VoiceBridgeTranslator | Full voice bridge: speak Spanish, the meeting hears English TTS (and vice versa) | 062 pipeline + `TAiOpenAiAudio.Speech` (trfPcm) + `TAiAudioPlayer` per side: remote TTS -> default device, own TTS -> VB-CABLE ("CABLE Input"; select "CABLE Output" as mic in the meeting). Uses `TAiAudioCapture.Muted` as anti-feedback while own TTS plays. Falls back to default device with a warning if no cable found. STT on `gpt-live-transcribe` (Aug 2026). |
 | 064-VoiceBridgeDiarized | 063 + speaker diarization on the remote channel: each meeting participant gets a stable label and a distinct TTS voice | Remote channel replaces Realtime STT with: local VAD segmenter (level-based, in-demo `TSpeechSegmenter`) -> `Transcribe` with `tmGpt4oDiarize`/`trfDiarizedJson` -> **on-the-fly speaker enrollment** (first time a voice appears, its audio is sliced (2-9 s) and registered via `AddKnownSpeaker` as 'Hablante N' so labels stay consistent across requests; max 4) -> per-speaker translation -> per-speaker TTS voice. Auto-recovers if the API rejects stored speaker samples (clears and re-enrolls). [YO] channel stays on Realtime STT (single speaker, lower latency; `gpt-live-transcribe` since Aug 2026 — the diarized remote channel stays on `gpt-4o-transcribe-diarize` because the new models don't support diarization). |
-| 065-VoiceBridgeUI | El puente de voz del 063 con interfaz FMX: selección de dispositivos y control en pantalla | `TAiAudioCapture`/`TAiAudioPlayer` + `TAiOpenAiRealtimeSTT` + `TAiOpenAiAudio` sobre `TAiChatConnection`. **Sin CLAUDE.md propio** |
 | 092-GPTLiveVoice | **OpenAI GPT-Live**: conversación de voz full-duplex (se le puede interrumpir) con delegación a Responses o a tu propio chat. FMX. Requiere `OPENAI_API_KEY`. Tiene CLAUDE.md propio | `TAiAudioCapture` (micrófono) → `TAiOpenAiLiveChat` → `TAiAudioPlayer`; `TAiFunctions` (hora, luz que cambia en pantalla); `DelegateChat` opcional; RAG del 037 por MCP con `TAiGuardrails` de solo lectura; "Modo altavoz" anti-eco por energía del audio de salida, diagnóstico de lo que el modelo oyó mientras hablaba y guía rápida de preguntas. Probado en vivo |
 | 071-VoiceBridgeTranslate | **Refactor of 063 using `gpt-realtime-translate`**: one WebSocket per direction replaces the whole STT -> LLM-translate -> TTS pipeline | 2x `TAiAudioCapture` -> 2x `TAiOpenAiRealtimeTranslate` (continuous stream, no VAD/turns) -> `TAiAudioPlayer`. The server returns translated text (`OnAssistantTextDelta`) AND translated TTS audio (`OnAudioChunk`, PCM16 24 kHz) in streaming; `SourceTranscription := True` also shows what was heard. Lower latency and ~1/3 of the code vs 063; trade-off: the TTS voice is chosen by the server. Same VB-CABLE setup and `Muted` anti-feedback as 063. |
 

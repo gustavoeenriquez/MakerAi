@@ -2,7 +2,7 @@
 
 **Unidades:** `Source/Utils/uMakerAi.Utils.AudioCapture.pas` · `Source/Utils/uMakerAi.Utils.AudioPlayback.pas`
 **Componentes:** `TAiAudioCapture` · `TAiAudioPlayer`
-**Demos:** `Demos/061-LoopbackAudioCapture` · `Demos/062-BidirectionalTranslator` · `Demos/063-VoiceBridgeTranslator`
+**Demos:** `Demos/061-LoopbackAudioCapture` · `Demos/064-VoiceBridgeDiarized` · `Demos/071-VoiceBridgeTranslate` (los originales 062 y 063 están en `DeprecatedDemos/Demos/`)
 **Plataforma:** Windows (WASAPI, Vista+). Sin drivers ni DLLs adicionales (el cable virtual es opcional, ver §4).
 
 ---
@@ -204,8 +204,8 @@ El Realtime STT no diariza. Para etiquetar a los participantes remotos se usa el
 | Demo | Qué muestra |
 |------|-------------|
 | `061-LoopbackAudioCapture` | Captura loopback básica → WAV 16 kHz mono |
-| `062-BidirectionalTranslator` | Traductor bidireccional con salida de TEXTO (loopback + mic → STT → traducción) |
-| `063-VoiceBridgeTranslator` | Puente de voz completo: TTS hacia auriculares y hacia `CABLE Input`, anti-realimentación con `Muted`, detección del cable y modo prueba sin cable |
+| `DeprecatedDemos/Demos/062-BidirectionalTranslator` (obsoleto) | Traductor bidireccional con salida de TEXTO (loopback + mic → STT → traducción) |
+| `DeprecatedDemos/Demos/063-VoiceBridgeTranslator` (obsoleto) | Puente de voz completo: TTS hacia auriculares y hacia `CABLE Input`, anti-realimentación con `Muted`, detección del cable y modo prueba sin cable |
 | `064-VoiceBridgeDiarized` | Puente de voz con diarización: VAD local + `gpt-4o-transcribe-diarize`, auto-registro de hablantes (etiquetas estables) y una voz TTS distinta por participante |
 
 Requisitos de los demos 062/063/064: variable de entorno `OPENAI_API_KEY`.
