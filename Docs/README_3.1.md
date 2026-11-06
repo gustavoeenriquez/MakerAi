@@ -4,7 +4,7 @@
 
 [![GitHub Stars](https://img.shields.io/github/stars/gustavoeenriquez/MakerAi?style=social)](https://github.com/gustavoeenriquez/MakerAi)
 [![GitHub Issues](https://img.shields.io/github/issues/gustavoeenriquez/MakerAi)](https://github.com/gustavoeenriquez/MakerAi/issues)
-[![License](https://img.shields.io/github/license/gustavoeenriquez/MakerAi)](LICENSE.txt)
+[![License](https://img.shields.io/github/license/gustavoeenriquez/MakerAi)](../LICENSE.txt)
 [![Telegram](https://img.shields.io/badge/Join-Telegram%20Chat-blue.svg)](https://t.me/+7LaihFwqgsk1ZjQx)
 [![Delphi Supported Versions](https://img.shields.io/badge/Delphi%20Support-11%20Alexandria%20to%2013%20Florence-blue.svg)](https://www.embarcadero.com/products/delphi)
 
@@ -278,4 +278,4 @@ Contributions are welcome. Please open an issue or submit a pull request on GitH
 
 ## 📜 License
 
-This project is licensed under the MIT License. See the [LICENSE.txt](LICENSE.txt) file for details.
+This project is licensed under the MIT License. See the [LICENSE.txt](../LICENSE.txt) file for details.
