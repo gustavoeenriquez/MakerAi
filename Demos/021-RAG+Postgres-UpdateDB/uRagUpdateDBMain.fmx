@@ -230,10 +230,10 @@ object Form8: TForm8
   end
   object AiChatConnection1: TAiChatConnection
     DriverName = 'OpenAi'
-    Model = 'gpt-4o'
+    Model = 'gpt-6-sol'
     Params.Strings = (
       'ApiKey=@OPENAI_API_KEY'
-      'Model=gpt-4o'
+      'Model=gpt-6-sol'
       'MaxTokens=4096'
       'Temperature=1.1'
       'TopP=1.0'
@@ -262,13 +262,13 @@ object Form8: TForm8
   object AIWhisper1: TAIWhisper
     ApiKey = '@OPENAI_API_KEY'
     Url = 'https://api.openai.com/v1/'
-    Model = 'whisper-1'
+    Model = 'gpt-transcribe'
     Voice = 'nova'
     Format = 'mp3'
     Languaje = 'es'
     Speed = 1.000000000000000000
-    ResponseFormat = 'text'
-    Quality = 'tts-1'
+    ResponseFormat = 'json'
+    Quality = 'gpt-4o-mini-tts'
     Left = 968
     Top = 632
   end

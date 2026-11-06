@@ -211,11 +211,11 @@ begin
       if LProvider = 'claude' then
       begin
         LConn.DriverName := 'Claude';
-        LConn.Model := 'claude-opus-4-8';
+        LConn.Model := 'claude-opus-5-5';
         LConn.Params.Values['ApiKey'] := '@CLAUDE_API_KEY';
-        TAiChatFactory.Instance.RegisterUserParam('Claude', 'claude-opus-4-8',
+        TAiChatFactory.Instance.RegisterUserParam('Claude', 'claude-opus-5-5',
           'ModelCaps', '[cap_Image, cap_ComputerUse]');
-        TAiChatFactory.Instance.RegisterUserParam('Claude', 'claude-opus-4-8',
+        TAiChatFactory.Instance.RegisterUserParam('Claude', 'claude-opus-5-5',
           'SessionCaps', '[cap_Image, cap_ComputerUse]');
       end
       else

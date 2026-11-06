@@ -88,7 +88,7 @@ begin
     Conn := TAiChatConnection.Create(nil);
     try
       Conn.DriverName := 'Claude';
-      Conn.Model := 'claude-opus-4-8';
+      Conn.Model := 'claude-haiku-5-5';
       Conn.Params.Values['ApiKey'] := '@CLAUDE_API_KEY';
       Conn.Params.Values['Asynchronous'] := 'False';
       Conn.Params.Values['Max_Tokens'] := '300';
@@ -98,7 +98,7 @@ begin
       Conn.OnReceiveDataEnd := Cap.OnEnd;
       Conn.OnError := Cap.OnError;
 
-      WriteLn('Modelo: claude-opus-4-8  | CacheContext=True');
+      WriteLn('Modelo: ' + Conn.Model + '  | CacheContext=True');
       WriteLn(Format('System prompt: %d chars', [Length(Conn.SystemPrompt.Text)]));
       WriteLn('');
 

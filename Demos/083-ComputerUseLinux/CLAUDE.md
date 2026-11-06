@@ -59,6 +59,8 @@ Cada captura enviada al modelo se guarda además en `shots/` para depurar.
 
 **WSL2 / Ubuntu 24.04**, Xvfb `:99` a 1280×800, editor `xedit`, contra la API real:
 
+> Desde nov 2026 el demo usa `claude-opus-5-5` (también acepta `computer_toolset_20260801`); la prueba de abajo se hizo con `claude-opus-4-8` y no se ha repetido con el modelo nuevo.
+
 | Proveedor | Resultado |
 |-----------|-----------|
 | `gpt-6-astra` | 4 acciones: `screenshot → click_at → type_text_at → screenshot`. Texto escrito correctamente |

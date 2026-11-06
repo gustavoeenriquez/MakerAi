@@ -118,9 +118,10 @@ begin
   // Habilitar cap_ComputerUse en los modelos que vamos a usar. Ninguno lo trae
   // por defecto a proposito: es la capacidad que le da a la IA el raton y el
   // teclado reales, asi que el opt-in es del programador.
-  // (gemini-2.5-computer-use es la excepcion: es un modelo dedicado y ya lo trae.)
-  TAiChatFactory.Instance.RegisterUserParam('Claude', 'claude-opus-4-8', 'ModelCaps',   '[cap_Image, cap_ComputerUse]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', 'claude-opus-4-8', 'SessionCaps', '[cap_Image, cap_ComputerUse]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', 'claude-opus-5-5', 'ModelCaps',   '[cap_Image, cap_ComputerUse]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', 'claude-opus-5-5', 'SessionCaps', '[cap_Image, cap_ComputerUse]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', 'gemini-3.8-flash', 'ModelCaps',   '[cap_Image, cap_Reasoning, cap_ComputerUse]');
+  TAiChatFactory.Instance.RegisterUserParam('Gemini', 'gemini-3.8-flash', 'SessionCaps', '[cap_Image, cap_Reasoning, cap_ComputerUse]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'gpt-6-astra', 'ModelCaps',   '[cap_Image, cap_Reasoning, cap_ComputerUse]');
   TAiChatFactory.Instance.RegisterUserParam('OpenAi', 'gpt-6-astra', 'SessionCaps', '[cap_Image, cap_Reasoning, cap_ComputerUse]');
 
@@ -404,7 +405,7 @@ begin
   if cbProvider.ItemIndex = 1 then
   begin
     FConn.DriverName := 'Gemini';
-    FConn.Model := 'gemini-2.5-computer-use-preview-10-2025';
+    FConn.Model := 'gemini-3.8-flash';
     FConn.Params.Values['ApiKey'] := '@GEMINI_API_KEY';
   end
   else if cbProvider.ItemIndex = 2 then
@@ -420,7 +421,7 @@ begin
   else
   begin
     FConn.DriverName := 'Claude';
-    FConn.Model := 'claude-opus-4-8';
+    FConn.Model := 'claude-opus-5-5';
     FConn.Params.Values['ApiKey'] := '@CLAUDE_API_KEY';
   end;
 

@@ -90,7 +90,7 @@ begin
     Conn := TAiChatConnection.Create(nil);
     try
       Conn.DriverName := 'Claude';
-      Conn.Model := 'claude-opus-4-8';
+      Conn.Model := 'claude-haiku-5-5';
       Conn.Params.Values['ApiKey'] := '@CLAUDE_API_KEY';
       Conn.Params.Values['Asynchronous'] := 'True';
       Conn.Params.Values['Max_Tokens'] := '200';
@@ -98,7 +98,7 @@ begin
       Conn.OnReceiveDataEnd := H.OnEnd;
       Conn.OnError := H.OnError;
 
-      WriteLn('=== ISSUE #105: historial en async (claude-opus-4-8) ===');
+      WriteLn('=== ISSUE #105: historial en async (' + Conn.Model + ') ===');
       WriteLn('');
       RunTurn(Conn, H, 'Mi color favorito es azul. Responde solo: ok.');
       RunTurn(Conn, H, 'Mi numero de la suerte es 42. Responde solo: ok.');

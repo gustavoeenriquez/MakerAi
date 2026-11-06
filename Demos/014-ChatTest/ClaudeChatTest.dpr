@@ -118,7 +118,7 @@ end;
 procedure ConfigureClaude(A: TAiChatConnection);
 begin
   A.DriverName := 'Claude';
-  A.Model      := 'claude-sonnet-4-6';
+  A.Model      := 'claude-sonnet-5-5';
   A.Params.Values['ApiKey']          := '@CLAUDE_API_KEY';
   A.Params.Values['Max_Tokens']      := '8000';
   A.Params.Values['Temperature']     := '0.7';
