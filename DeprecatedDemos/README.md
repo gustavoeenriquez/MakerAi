@@ -21,5 +21,6 @@ the main README is what makes them find the framework, if they still compile.
 | `Demos/062-BidirectionalTranslator` | Call translator: STT -> LLM translation, text output | `Demos/071-VoiceBridgeTranslate` |
 | `Demos/063-VoiceBridgeTranslator` | Voice bridge: STT -> translate -> TTS -> virtual cable | `Demos/071-VoiceBridgeTranslate` (`gpt-realtime-translate`, a third of the code) |
 | `Demos/065-VoiceBridgeUI` | FMX front end for the 063 voice bridge | `Demos/071-VoiceBridgeTranslate` |
+| `Redis/` | Two Delphi-built DLLs, `ConvertToWave32.dll` / `ConvertToWave64.dll` (audio conversion, Dec 2025). Despite the folder name, nothing to do with the Redis database. No code in the repo loads them | Nothing: unused |
 
 Moved here on 2026-11-06, while preparing MakerAI 4.0.
