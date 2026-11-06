@@ -64,6 +64,17 @@ Tested live: Claude 7/7, OpenAI 9/9, Kimi + GLM + DeepSeek 12/13 (`kimi-k3.1-pro
 ### Agents — a complete fluent API
 `AddEdge` now adds targets to an existing link (before it replaced it, so a fluent fan-out only ran its last branch), and the builder gained `AddNode`, `AddToolNode`, `AddExpressionEdge`, `AddFallbackEdge` and `SetJoinMode`, with construction errors raised as `EAiGraphError`. `TLLMNode` runs on the new protected `ExecuteNode`, has its own `Guardrails` and is owned by the manager. Forms saved with older versions load again: properties that are no longer published are read and applied (or dropped) instead of raising `EReadError`.
 
+### PPM — A2A agents as packages, and your own registry
+A2A defines the Agent Card (`/.well-known/agent-card.json`) but not where to find an agent. The PPM registry now works as that catalog: a new package type **`agent`** holds only the agent's card and its URL (`agent-card.json` + `pai.package` with `[agent] url`) — no code, the agent keeps running as a service.
+
+- **Publish** from the live agent: `ppm publish --desde-url http://host:port` reads its card and builds the package. The registry validates the card and indexes name, description and skills (`GET /v1/a2a/discover?q=`, `GET /v1/packages/:name/:version/card`).
+- **In code:** `TAiFunctions.SearchPPMAgents`, `GetAgentCardFromPPM` and `InstallAgentFromPPM` — the agent becomes one more function of the `TAiFunctions` (a `TAiA2AAgentTool`).
+- **AutoMCP:** with `uMakerAi.A2A.Client` in the project, `ppm_search` also lists agents, `ppm_install` recognises an `agent` package, and the model gets **`call_agent(agent_name, message)`**. The same `AutoMCPConfig.Allowed` / `Blocked`, `OnAutoMCPRequest` and guardrails apply.
+- **Keys never travel in the package:** if the agent needs one, it is read from the environment of whoever installs it (`PPM_AGENT_KEY_<NAME>`).
+- **Your own registry:** a company can run PPMServer in its own network with its own MCP servers, skills and agents, and point `AutoMCPConfig.RegistryUrl` at it. Ready-to-run example in `Demos/Libro/cap33-registry-corporativo/registro-local` (a local registry with an MCP server, a skill, a prompt and an A2A agent of *Café La Ladera*).
+- The `agent` type needs PPMServer with `migration_003_agent_type.sql`: available on a self-hosted registry today; **not yet enabled on `registry.cimamaker.com`**.
+- Demo: `093-A2AChatAgentTool --ppm` — the chat does not know the agent's URL; it finds it in the registry, installs it from its card and asks it over A2A.
+
 ### Chat UI
 `TAIChatView` messages gain a **footer**, **action buttons** inside the bubble (`OnMessageAction`, e.g. *Approve / Reject*) and collapsible **task steps** with durations (`AddStep` / `FinishStep`), all persisted in the message JSON. Consecutive messages of the same role merge into one bubble (`MergeConsecutive`), `AddAssistantMessage` shows generated images, audio and files, and `TAIChatInput` has a voice-call button wired for realtime sessions.
 
@@ -878,6 +889,7 @@ First Delphi implementation of **A2A 1.0** (Linux Foundation), certified against
 
 - **`TAiA2AServer`** exposes any `TAIAgentManager` graph as an A2A agent: Agent Card at `/.well-known/agent-card.json`, `SendMessage` / `GetTask` / `CancelTask` / `ListTasks`, SSE streaming, push notifications, bearer auth, a pool of managers for concurrent tasks, and human-in-the-loop (a suspended node becomes `input-required`)
 - **`TAiA2AClient`** consumes remote agents; **`TAiA2ARemoteAgentTool`** federates a graph node to a remote agent, and **`TAiA2AAgentTool`** exposes a remote agent to a chat as a function
+- **Discovery through PPM:** agents published as `agent` packages are found and installed by name (`InstallAgentFromPPM`) or by the model itself with AutoMCP (`call_agent`) — see *PPM — A2A agents as packages* above
 - Demos: `072-A2AFederation`, `074-A2AOrchestration`, `079-A2ASutAgent`, `080-A2APushNotifications`
 
 ### 📚 Skills — Reusable Instructions on Demand
@@ -1060,7 +1072,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 | `089-QwenShowcase` | Everything Qwen (Alibaba Model Studio) with one key: chat, vision, image editing, voice, translation, embeddings + rerank, realtime |
 | `091-Skills` | SKILL.md skills three ways: on demand in a chat (`TAiSkills`), as the base of an agent node (`TAiSkill`), copied into the prompt (`TAiPrompts.ApplySkill`) |
 | `092-GPTLiveVoice` | OpenAI GPT-Live full-duplex voice: microphone, speaker, delegation to Responses or any `TAiChatConnection`, local functions, RAG over MCP |
-| `093-A2AChatAgentTool` | A chat that calls a remote A2A agent as a tool |
+| `093-A2AChatAgentTool` | A chat that calls a remote A2A agent as a tool; `--ppm` discovers it in a PPM registry (AutoMCP + `call_agent`), `--solo-agente` serves it for `ppm publish --desde-url` |
 | `094-ChatStreaming` … `105-EnrutadorLadera` | *Café La Ladera* video series: streaming, `TAIChatView`, ChatTools, memory, agent graph, voice orders, MCP, skills, first agent, approvals, guardrails and model routing |
 | `Libro/cap03` … `Libro/cap37` | One project per chapter of the book *IA con Delphi* (4.0 edition) |
 
@@ -1069,6 +1081,11 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 ## 🔄 Changelog
 
 ### v4.0.0 (unreleased)
+- New: **A2A agents as PPM packages** — package type `agent` (Agent Card + URL, no code). `TAiFunctions.SearchPPMAgents` / `GetAgentCardFromPPM` / `InstallAgentFromPPM`; AutoMCP lists agents in `ppm_search`, installs them with `ppm_install` and adds `call_agent` when `uMakerAi.A2A.Client` is in the project (`TAiPPMAgentHandler` keeps `uMakerAi.Tools.Functions` free of A2A). Allowed/Blocked, `OnAutoMCPRequest` and guardrails apply; an agent key comes only from `PPM_AGENT_KEY_<NAME>`. `TAiA2AAgentTool.Ask` is now public. Needs PPMServer with `migration_003_agent_type.sql` (not yet on `registry.cimamaker.com`)
+- New: **company registry example** — `Demos/Libro/cap33-registry-corporativo/registro-local`: PPMServer on `127.0.0.1:8766` with the *Café La Ladera* packages (`mcp-bodega-ladera` = demo 100's MCP server, a skill, a prompt and the A2A catalog agent); `RegistryLadera --automcp` points AutoMCP at it
+- New: demo `093` `--ppm [url]` (the chat discovers the agent in the registry) and `--solo-agente [--segundos N]`; demo `100` `--trafico` (every JSON-RPC message) and `--http` (`TAiMCPHttpServer` + `tpHttp`), `--protocol stdio` for `InstallMCPFromPPM`; demo `104` `--detalle` (question and answer of each eval)
+- Fix: **Claude Haiku 5.5 with `ThinkingLevel = tlNone` now turns thinking off** (`thinking: disabled`); it was sent as effort `low`, which only applies to Opus/Sonnet 5.5 and Fable — a 250-token JSON answer went from ~1,200 to ~300 output tokens
+- Fix: **Claude `code_execution`** — a data file returned by a tool (Excel, Word…) now reaches the sandbox (`container_upload` next to the `tool_result`); before, only images and PDFs did
 - New: **MiniMax driver** — `TAiMiniMaxChat` (`DriverName='MiniMax'`, `@MINIMAX_API_KEY`), OpenAI-compatible endpoint `https://api.minimax.io/v1/`. `reasoning_split` always on (reasoning in `reasoning_content`, re-sent in the history), thinking `adaptive`/`disabled` from `cap_Reasoning` (`MiniMax-M3.1-Flash` cannot disable it and is left at the API default), `reasoning_effort` only on M3.1-Flash (`tlNone` → `low`, since `none` is rejected; registry default `tlMedium` instead of the API's `max`), `max_completion_tokens`, `stream_options.include_usage` when streaming, no sampling parameters (ignored by the API). Registered: `MiniMax-M3` (default), `MiniMax-M3.1-Flash`, `MiniMax-M2.7/2.5/2.1(-highspeed)`, `MiniMax-M2`. Package, registry and palette icon. Regression case `chat.minimax.request`. *Not runtime-tested yet (no API key)*
 - ⚠️ Fix: **`claude-haiku-5-5` returned 400** — the driver treated it as a legacy Haiku and sent `thinking.budget_tokens` and `temperature`. It is now adaptive-only (`effort` from `ThinkingLevel`, default `medium`), accepts mid-conversation `system` messages, and `RefusalFallbackModel` is skipped with a log line (Haiku 5.5 has classifiers but no server-side fallback; a fallback list is a 400). Forced `tool_choice` still works on it. Registered and tested live (7/7). The driver default stays `claude-haiku-4-5`
 - Retired (Anthropic): **`claude-sonnet-4-20250514` and `claude-opus-4-20250514`** (and their `-4-0` names) answer `not_found_error`; they are aliases of `claude-sonnet-5-5` / `claude-opus-5-5`
