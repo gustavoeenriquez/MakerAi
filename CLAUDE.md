@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MakerAI is an AI orchestration framework for Delphi developers (v3.9). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, GLM/Z.ai, Qwen/Alibaba, MiniMax, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers/clients, A2A agent interoperability, autonomous agents, observability, guardrails and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+MakerAI is an AI orchestration framework for Delphi developers (v4.0 en preparación; `Version.inc` sigue en 3.9.0 / `MAKERAI_API_LEVEL = 39` hasta publicarla). It provides components for integrating multiple LLM providers (OpenAI, Claude, Gemini, Ollama, Groq, DeepSeek, Kimi, GLM/Z.ai, Qwen/Alibaba, MiniMax, Grok, Mistral, Cohere, LM Studio, GenericLLM), RAG systems (vector and graph-based), MCP servers/clients, A2A agent interoperability, autonomous agents, observability, guardrails and native ChatTools into Delphi applications. Supports Delphi 10.4 Sydney through 13 Florence (limited: 10.4 Sydney; full support: 11 Alexandria+).
+
+**v4.0 highlights (nov 2026, sin publicar):** revisión de modelos de oct 2026 contra los APIs vivos (`claude-haiku-5-5`, `gpt-6.1-sol`/`terra`, `gemini-4-argon`, `gemini-nano-banana-2.1`, Kimi K3.1, GLM-5.3 Flash; los retirados quedan como alias de su sucesor) con fixes de thinking/effort por proveedor; driver **MiniMax** (`TAiMiniMaxChat`, sin prueba runtime); **API fluida de agentes completa** (`AddEdge` agrega destinos, `AddNode`/`AddToolNode`/`AddExpressionEdge`/`AddFallbackEdge`/`SetJoinMode`, `EAiGraphError`); **agentes A2A como paquetes PPM** (tipo `agent`, `call_agent` en AutoMCP, solo en registries privados); `TAIChatView` con footer, botones de acción y pasos; Computer Use ejecuta en orden las acciones de un lote; una traza OTel por turno (`TAiTelemetry.ContextEnter`/`ContextLeave`); fixes de producción (puentes, `TAiShell`, filtro de prompts, MCP SSE, `ws://`). **Limpieza de la 4.0:** demos viejos en `DeprecatedDemos/`, consolas de prueba en `Tests/Integration/`, `TChatList`/`TChatBubble`/`TChatInput` obsoletos (ningún demo los usa), novedades 3.4-3.9 movidas del README a `Docs/WHATS-NEW-3.x.md`. Cambios de comportamiento: ver README.
 
 **v3.9 highlights (oct 2026):** **OpenAI GPT-Live** (`TAiOpenAiLiveChat`, voz full-duplex que escucha mientras habla y delega el razonamiento a un modelo Responses o a cualquier `TAiChatConnection`; demo 092 con RAG por MCP); **Jev con modelos locales de Ollama** (`/v1/systemone`: nimble, Clef con imágenes; `Url` en los adaptadores, precio 0 fuera de TypeSafe); **3 fugas de memoria** corregidas (servidor MCP en cada `tools/list`, cliente MCP en `Initialize`, `TAiRealtimeFactory`); `TAiMCPServer.BindAddress`; íconos de paleta para los 108 componentes; demo 037 sobre PostgreSQL. **Cambios de comportamiento (3):** audio de OpenAI por defecto `gpt-transcribe`/`gpt-4o-mini-tts` (whisper-1 y tts-1 se apagan), `IAiMCPTool.GetInputSchema` devuelve un objeto del que llama (afecta tools MCP propias que devolvían un campo guardado) y el driver Responses ahora respeta `Max_Tokens`. Deprecados de OpenAI marcados con fecha de apagado. `MAKERAI_API_LEVEL = 39`.
 
@@ -67,7 +69,7 @@ Add these folders to Delphi Library Path (Tools > Options > Language > Delphi > 
 - `Source/WebSocket`
 
 ### Running Demos
-Open `Demos/DemosVersion31.groupproj` in Delphi IDE to access all demo projects.
+Open `Demos/DemosVersion31.groupproj` in Delphi IDE to access all demo projects. `DeprecatedDemos/` holds demos from earlier versions, kept only for reference (not maintained, not in the group).
 
 ### Testing MCP Servers
 ```bash
@@ -106,8 +108,8 @@ curl -X POST http://localhost:8080/mcp \
        │                  │                  │
 ┌──────v──────┐  ┌────────v────────┐  ┌──────v──────────────┐
 │  ChatUI     │  │  Agents         │  │  Design-Time (Dsg)  │
-│  TChatList  │  │  TAIAgentManager│  │  Property editors   │
-│  TChatInput │  │  TAIBlackboard  │  │  VCL + DesignIDE    │
+│ TAIChatView │  │  TAIAgentManager│  │  Property editors   │
+│ TAIChatInput│  │  TAIBlackboard  │  │  VCL + DesignIDE    │
 └──────┬──────┘  └────────┬────────┘  └──────┬──────────────┘
        │                  │                  │
 ┌──────v──────────────────v──────────────────v────────────────┐
@@ -138,7 +140,7 @@ curl -X POST http://localhost:8080/mcp \
 
 **Chat Drivers (`Source/Chat/`)**: LLM-specific implementations
 - `uMakerAi.Chat.AiConnection.pas` - `TAiChatConnection` universal connector (switch providers via `DriverName` property)
-- Provider-specific drivers: `TAiOpenChat`, `TAiClaudeChat`, `TAiGeminiChat`, `TAiOllamaChat`, `TAiGroqChat`, `TAiDeepSeekChat`, `TAiKimiChat`, `TAiGrokChat`, `TAiMistralChat`, `TCohereChat`, `TAiLMStudioChat`, `TAiGenericChat`
+- Provider-specific drivers: `TAiOpenChat`, `TAiClaudeChat`, `TAiGeminiChat`, `TAiOllamaChat`, `TAiGroqChat`, `TAiDeepSeekChat`, `TAiKimiChat`, `TAiGrokChat`, `TAiMistralChat`, `TAiQwenChat`, `TAiGLMChat`, `TAiMiniMaxChat`, `TCohereChat`, `TAiLMStudioChat`, `TAiGenericChat`
 - `uMakerAi.Chat.Initializations.pas` - Driver registration and default model parameters via `TAiChatFactory`
 
 **Agents (`Source/Agents/`)**: Autonomous agent framework
@@ -158,7 +160,7 @@ curl -X POST http://localhost:8080/mcp \
 
 **Tools (`Source/Tools/`)**: Capabilities framework
 - `uMakerAi.Tools.Functions.pas` - Function calling system (`TAiFunctions`, `TAiToolsFunction`)
-- Provider tools: Whisper (STT), DALL-E, Sora (video), Veo (video via Gemini)
+- Provider tools: OpenAI speech (`gpt-transcribe`, `gpt-4o-mini-tts`), Whisper (local server), `gpt-image`, Gemini Nano Banana, Veo (video via Gemini), Grok Imagine (Sora fue apagado por OpenAI; su clase queda solo por compatibilidad)
 - Agent tools: `TAiShell`, `TAiTextEditorTool`, `TAiComputerUseTool`
 - Tool interfaces: `IAiPdfTool`, `IAiVisionTool`, `IAiSpeechTool`, `IAiWebSearchTool`
 
@@ -179,8 +181,9 @@ curl -X POST http://localhost:8080/mcp \
 - `uMakerAi.Realtime.WebSocket.pas` - compatibility shim; re-exports `TAiRealtimeWSClient` → `TAiWSClient` (Source/WebSocket/)
 
 **ChatUI (`Source/ChatUI/`)**: FMX visual components
-- `TChatList` - Chat container with markdown rendering
-- `TChatInput` - Text/voice/attachment input bar
+- `TAIChatView` - Skia-native virtualized chat renderer (Markdown, code blocks, attachments, footer, action buttons, task steps)
+- `TAIChatInput` - Text/voice/attachment input bar with voice-call button
+- `TChatList` / `TChatBubble` / `TChatInput` - **deprecated** since 4.0, kept only so old apps compile (see [Source/ChatUI/CLAUDE.md](Source/ChatUI/CLAUDE.md))
 
 ### Key Design Patterns
 
