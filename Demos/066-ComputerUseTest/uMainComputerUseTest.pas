@@ -26,7 +26,7 @@ uses
   FMX.Memo.Types, FMX.ListBox, FMX.Layouts, FMX.Edit,
   uMakerAi.Core, uMakerAi.Chat.Messages, uMakerAi.Chat.AiConnection,
   uMakerAi.Tools.ComputerUse, uMakerAi.Tools.ComputerUse.WindowsFMX,
-  uMakerAi.Utils.ScreenCapture, uMakerAi.ParamsRegistry,
+  AIChat.ScreenCapture, uMakerAi.ParamsRegistry,
   uMakerAi.Chat.Initializations; // registra todos los drivers (Claude, Gemini, ...)
 
 type

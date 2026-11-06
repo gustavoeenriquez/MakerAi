@@ -17,6 +17,18 @@ This is **MakerAI 3.x**, a comprehensive AI orchestration framework for Delphi d
 - **Endpoints locales:** Ollama `http://localhost:11434/`, GenericLLM `http://localhost:1234/v1/` (antes una IP de la LAN de desarrollo).
 - El archivo `uMainChatFull.pas` está en **Windows-1252**: editarlo preservando la codificación.
 
+## UI de chat nueva (nov 6/2026)
+
+- `ChatView1: TAIChatView` y `ChatInput1: TAIChatInput` (`AIChat.Control.FMX` / `AIChat.Input`, Skia) reemplazan a `TChatList`/`TChatInput`, marcados `deprecated`.
+- Se usa la API explícita, **no** `AddBubble`: en el componente nuevo `AInbound = True` es el usuario y el demo viejo lo usaba al revés, así que los roles salían cruzados. Usuario: `AddUserMessage(Prompt, MediaFiles)`. Streaming: `BeginAssistantMessage` + `AppendToken(FAssistantIdx, ...)` y `FinishMessage` en `AiConnReceiveDataEnd`. Imágenes/audio generados: `AddAssistantMessage('', aMsg.MediaFiles)`. Búsqueda web y transcripciones: `AddMessage(TChatRole.crAssistant, ...)`.
+- `FAssistantIdx` arranca en -1 en `FormCreate` (los campos del formulario empiezan en 0, que es un índice válido).
+- Abrir un adjunto: `OnAttachmentOpen` → `TUtilsSystem.ShellOpenFile`. Reemplaza el menú Copy / Save to File / Show Media, que dependía de `TChatList.ActiveMediaFile` (no existe en la vista nueva).
+- `ChatView1AttachmentOpen` recibe `AIChat.Types.TAIChatMessage` **calificado**: sin calificar, `TAiChatMessage` es el de `uMakerAi.Chat.Messages` (va después en el `uses`).
+- `BtnSelectArea` usa `TScreenCapture.SelectArea` de `AIChat.ScreenCapture`: el `TSelectionForm` nuevo no tiene `Execute(var Rect)`, así que ya no arranca mostrando el área anterior.
+- `ComboDriverChange` tenía un `ShowMessage(AiConn.Params.Text)` de depuración que mostraba la API key resuelta del entorno en cada cambio de driver. Quitado.
+- Las sesiones `.mkchat` guardadas con la UI vieja no se cargan en la nueva (otro formato de la parte visual).
+- Compila y el formulario carga; **sin prueba de una conversación real** (FMX, hay que probarlo en el IDE).
+
 ## Build System
 
 This is a Delphi project using MSBuild. Source files are `.pas` (Pascal units), `.dproj` (project files), `.dpk` (package definitions), and `.fmx` (FireMonkey forms).

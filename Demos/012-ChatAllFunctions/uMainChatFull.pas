@@ -41,12 +41,12 @@ uses
   System.StrUtils, System.TypInfo, System.Math, System.Generics.Collections,
   System.Net.HttpClientComponent,
 
-  uMakerAi.UI.ChatBubble, uMakerAi.UI.ChatInput, uMakerAi.Core, uMakerAi.Chat,
-  uMakerAi.Utils.System, uMakerAi.UI.ChatList, uMakerAi.Chat.AiConnection,
+  AIChat.Types, AIChat.Control.FMX, AIChat.Input, uMakerAi.Core, uMakerAi.Chat,
+  uMakerAi.Utils.System, uMakerAi.Chat.AiConnection,
   uMakerAi.Chat.OpenAi, uMakerAi.Chat.Initializations, uMakerAi.Chat.Messages,
   uMakerAi.Chat.DeepSeek, uMakerAi.Chat.Claude, uMakerAi.Chat.Gemini,
   uMakerAi.Chat.Kimi, uMakerAi.Chat.LMStudio, uMakerAi.OpenAi.Sora,
-  uMakerAi.Chat.GenericLLM, uMakerAi.Utils.ScreenCapture,
+  uMakerAi.Chat.GenericLLM, AIChat.ScreenCapture,
 
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Memo.Types, FMX.Layouts,
   FMX.Styles.Objects, FMX.Platform, FMX.ScrollBox, FMX.Memo, FMX.Edit, FMX.StdCtrls,
@@ -64,15 +64,11 @@ type
   TSafetyState = (stWaiting, stAllow, stDeny); // estados del proceso safety de computer use
 
   TForm2 = class(TForm)
-    PopupMenu1: TPopupMenu;
-    MnuCopy: TMenuItem;
-    MnuSave: TMenuItem;
-    MnuPlay: TMenuItem;
     SaveDialog1: TSaveDialog;
     AiConn: TAiChatConnection;
     MainLayout: TLayout;
     MainChatLayout: TLayout;
-    ChatList1: TChatList;
+    ChatView1: TAIChatView;
     Layout3: TLayout;
     Layout2: TLayout;
 
@@ -213,7 +209,7 @@ type
     AiOpenAiEmbeddings1: TAiOpenAiEmbeddings;
     Layout1: TLayout;
     LblLog: TLabel;
-    ChatInput1: TChatInput;
+    ChatInput1: TAIChatInput;
     AniIndicator1: TAniIndicator;
     ac_LoadMCPConfig: TAction;
     BtnLoadMcpServerConfig: TButton;
@@ -283,11 +279,8 @@ type
     AiGenericChat1: TAiGenericChat;
 
     procedure ChatInput1SendEvent(Sender: TObject; APrompt: string; aMediaFiles: TAiMediaFiles; aAudioStream: TMemoryStream);
-    procedure ChatList1MediaFileDblClick(Sender: TObject; const ABubble: TChatBubble; const AMediaFile: TAiMediaFile);
-    procedure ChatList1BeforeAddBubble(Sender: TObject; ABubble: TChatBubble);
-    procedure MnuCopyClick(Sender: TObject);
-    procedure MnuSaveClick(Sender: TObject);
-    procedure MnuPlayClick(Sender: TObject);
+    // TAIChatMessage de AIChat.Types (la vista); sin calificar seria el de MakerAI
+    procedure ChatView1AttachmentOpen(Sender: TObject; AMsg: AIChat.Types.TAIChatMessage; AAttach: TAIChatAttachment);
     procedure AiConnReceiveDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
     procedure AiConnReceiveData(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSONObject; aRole, aText: string);
     procedure AiConnError(Sender: TObject; const ErrorMsg: string; Exception: Exception; const aResponse: IHTTPResponse);
@@ -346,7 +339,7 @@ type
     procedure EditSessionCapsEnter(Sender: TObject);
     procedure EditSessionCapsExit(Sender: TObject);
   private
-    FLastBubble: TChatBubble;
+    FAssistantIdx: Integer; // burbuja del asistente que se esta escribiendo (-1 = ninguna)
     FPrompt_tokens: Integer;
     FCompletion_tokens: Integer;
     FTotal_tokens: Integer;
@@ -357,7 +350,6 @@ type
     FNoImage: Integer; // Temporal para la captura de la imagen;
     FSafetyState: TSafetyState; // Estado del safety de computer use
 
-    Function CopyToClipBoard(AMediaFile: TAiMediaFile): Boolean;
     Procedure AssignModel(Const DriverName, ModelName: String);
     Procedure InitModelCapabilitiesCombo(Edit: TEdit);
     Procedure AssignAiConnParams;
@@ -480,7 +472,7 @@ begin
       if Assigned(LUIStream) then
       begin
         LUIStream.Position := 0;
-        ChatList1.LoadFromStream(LUIStream);
+        ChatView1.LoadFromStream(LUIStream);
       end;
 
       if Assigned(LHistoryStream) then
@@ -578,7 +570,8 @@ end;
 procedure TForm2.ac_NewChatExecute(Sender: TObject);
 begin
   AiConn.NewChat;
-  ChatList1.Clear;
+  ChatView1.Clear;
+  FAssistantIdx := -1;
   AiRAGVector1.Clear;
   MemoThinking.Lines.Clear;
 end;
@@ -600,7 +593,7 @@ begin
       LHistoryStream := TMemoryStream.Create;
       try
         // 1. Guardar cada parte en su propio stream en memoria
-        ChatList1.SaveToStream(LUIStream);
+        ChatView1.SaveToStream(LUIStream);
         AiConn.Messages.SaveToStream(LHistoryStream);
 
         // 2. Crear el archivo de destino
@@ -742,12 +735,12 @@ begin
   TThread.Queue(nil,
     procedure
     begin
-      If Assigned(FLastBubble) then
-        FLastBubble.AppendText(aText)
-      Else
-        FLastBubble := ChatList1.AddBubble(aText, aRole, Nil);
-
-      ChatList1.RecalcSize;
+      if FAssistantIdx < 0 then
+      begin
+        ChatView1.BeginAssistantMessage;
+        FAssistantIdx := ChatView1.MessageCount - 1;
+      end;
+      ChatView1.AppendToken(FAssistantIdx, aText);
     end);
 end;
 
@@ -785,44 +778,31 @@ begin
   TThread.Queue(nil,
     procedure
     begin
-      if Not ChAsincrono.IsChecked then
-        FLastBubble := ChatList1.AddBubble(aText, aRole, aMsg.MediaFiles)
-      else
-      Begin
+      // Sincrono: la respuesta llega entera aqui. Asincrono: el texto ya se
+      // escribio en FAssistantIdx con AppendToken (AiConnReceiveData).
+      if (not ChAsincrono.IsChecked) and (aText <> '') then
+        ChatView1.AddMessage(TChatRole.crAssistant, aText)
+      else if FAssistantIdx >= 0 then
+        ChatView1.FinishMessage(FAssistantIdx);
+      FAssistantIdx := ChatView1.MessageCount - 1;
 
-        If aMsg.MediaFiles.Count > 0 then
-        Begin
-          // If Assigned(FLastBubble) then
-          // FLastBubble.AddContent('', aMsg.MediaFiles)
-          // Else
-          FLastBubble := ChatList1.AddBubble('', aRole, aMsg.MediaFiles);
-        End;
-      End;
+      // Imagenes, audio o archivos generados: burbuja propia del asistente
+      if aMsg.MediaFiles.Count > 0 then
+      begin
+        ChatView1.AddAssistantMessage('', aMsg.MediaFiles);
+        FAssistantIdx := ChatView1.MessageCount - 1;
+      end;
 
-      // Adiciona el detalle de la búsqueda web, info adicional de fuentes
+      // Adiciona el detalle de la busqueda web, info adicional de fuentes
       If Assigned(aMsg.WebSearchResponse) and (aMsg.WebSearchResponse.annotations.Count > 0) then
-      Begin
-        Var
-        WebRes := WebSearchToString(aMsg.WebSearchResponse);
-        If Assigned(FLastBubble) then
-          FLastBubble.AppendText(WebRes);
-      End;
+        ChatView1.AddMessage(TChatRole.crAssistant, WebSearchToString(aMsg.WebSearchResponse));
 
-      // Adiciona la transcripción en (traanscripciones o generación de imagenes)
-
+      // Adiciona la transcripcion (transcripciones o generacion de imagenes)
       For Var MF in aMsg.MediaFiles do
-      Begin
-
         If MF.Transcription <> '' then
-        Begin
-          If Assigned(FLastBubble) then
-            FLastBubble.AppendText(MF.Transcription)
-          else
-            FLastBubble := ChatList1.AddBubble(MF.Transcription, aRole, Nil);
-        End;
-      End;
+          ChatView1.AddMessage(TChatRole.crAssistant, MF.Transcription);
 
-      FLastBubble := Nil;
+      FAssistantIdx := -1;
     end);
 
   TTask.Run(
@@ -1307,8 +1287,8 @@ begin
 
   End;
 
-  FLastBubble := Nil;
-  ChatList1.AddBubble(APrompt, 'Usuario', aMediaFiles, False);
+  FAssistantIdx := -1;
+  ChatView1.AddUserMessage(APrompt, aMediaFiles);
 
   TTask.Run(
     procedure
@@ -1355,15 +1335,12 @@ begin
   end;
 end;
 
-procedure TForm2.ChatList1BeforeAddBubble(Sender: TObject; ABubble: TChatBubble);
+procedure TForm2.ChatView1AttachmentOpen(Sender: TObject; AMsg: AIChat.Types.TAIChatMessage; AAttach: TAIChatAttachment);
 begin
-  ABubble.MoreOptionsVisible := False;
-  ABubble.HeaderVisible := False;
-end;
-
-procedure TForm2.ChatList1MediaFileDblClick(Sender: TObject; const ABubble: TChatBubble; const AMediaFile: TAiMediaFile);
-begin
-  ShowMessage(AMediaFile.FileName);
+  if TFile.Exists(AAttach.LocalPath) then
+    TUtilsSystem.ShellOpenFile(AAttach.LocalPath)
+  else
+    ShowMessage('El archivo ya no esta disponible: ' + AAttach.DisplayName);
 end;
 
 procedure TForm2.ChEditToolChange(Sender: TObject);
@@ -1430,8 +1407,6 @@ begin
     Cursor := crHourGlass;
     EditURL.Text := '';
 
-    ShowMessage(AiConn.Params.Text);
-
     List := AiConn.GetModels;
     Try
       List.Sort;
@@ -1454,69 +1429,6 @@ begin
     ModelName := ComboModels.Text;
     AssignModel(DriverName, ModelName);
   End;
-end;
-
-function TForm2.CopyToClipBoard(AMediaFile: TAiMediaFile): Boolean;
-var
-  ClipboardSvc: IFMXClipboardService;
-  LBitmap: FMX.Graphics.TBitMap;
-  LText: string;
-begin
-  Result := False;
-  if not TPlatformServices.Current.SupportsPlatformService(IFMXClipboardService, IInterface(ClipboardSvc)) then
-    Exit; // No hay servicio de portapapeles disponible
-
-  // Antes de cualquier operación, asegurarnos de que el stream esté al principio.
-  if Assigned(AMediaFile.Content) then
-    AMediaFile.Content.Position := 0;
-
-  // La lógica de copiado depende de la categoría del archivo
-  case AMediaFile.FileCategory of
-    Tfc_Image:
-      begin
-        if (AMediaFile.Content = nil) or (AMediaFile.Content.size = 0) then
-          Exit;
-        LBitmap := FMX.Graphics.TBitMap.Create;
-        try
-          LBitmap.LoadFromStream(AMediaFile.Content);
-          ClipboardSvc.SetClipboard(LBitmap); // FMX sabe cómo poner un TBitmap en el portapapeles
-          Result := True;
-        finally
-          LBitmap.Free;
-        end;
-      end;
-
-    Tfc_Text, tfc_ExtracttextFile:
-      begin
-        if (AMediaFile.Content = nil) or (AMediaFile.Content.size = 0) then
-          Exit;
-
-        // Leemos el contenido del stream como texto UTF-8 (el más común)
-        var
-        LReader := TStreamReader.Create(AMediaFile.Content, TEncoding.UTF8);
-        try
-          LText := LReader.ReadToEnd;
-          // Usamos TValue.From<string> para pasarlo al portapapeles como texto plano
-          ClipboardSvc.SetClipboard(TValue.From<string>(LText));
-          Result := True;
-        finally
-          LReader.Free;
-        end;
-      end;
-
-    // Para otros tipos de archivo (PDF, DOC, Audio, etc.), el portapapeles estándar
-    // no tiene un formato "nativo" para ellos. La mejor opción es copiar
-    // la RUTA del archivo si existe, o no hacer nada.
-    // En este caso, como el contenido está en un TMemoryStream, no hay una ruta
-    // que podamos copiar que otra aplicación pueda entender.
-    // Por lo tanto, para estos tipos, no hacemos nada y el método devuelve False.
-  else
-    Result := False;
-  end;
-
-  // Volvemos a rebobinar el stream por si se necesita reutilizar después.
-  if Assigned(AMediaFile.Content) then
-    AMediaFile.Content.Position := 0;
 end;
 
 procedure TForm2.EditWakeWordChange(Sender: TObject);
@@ -1559,6 +1471,7 @@ procedure TForm2.FormCreate(Sender: TObject);
 Var
   List: TStringList;
 begin
+  FAssistantIdx := -1;
 
   InitChats;
 
@@ -1817,101 +1730,6 @@ begin
   end;
 end;
 
-procedure TForm2.MnuCopyClick(Sender: TObject);
-var
-  LMediaFile: TAiMediaFile;
-begin
-  LMediaFile := ChatList1.ActiveMediaFile;
-
-  if (LMediaFile <> nil) then
-  begin
-    // Simplemente llamamos al método. ¡Toda la lógica compleja está encapsulada!
-    if CopyToClipBoard(LMediaFile) then
-    begin
-      // Opcional: Notificar al usuario que la copia fue exitosa
-      // ShowMessage('Contenido copiado al portapapeles.');
-    end
-    else
-    begin
-      // Opcional: Notificar si el tipo de archivo no es copiable
-      ShowMessage('Este tipo de archivo no se puede copiar al portapapeles.');
-    end;
-  end;
-end;
-
-procedure TForm2.MnuPlayClick(Sender: TObject);
-var
-  LMediaFile: TAiMediaFile;
-  LTempPath: string;
-  LFileStream: TFileStream;
-  AppService: IFMXApplicationService;
-begin
-  // 1. Obtener el archivo activo desde el TChatList
-  LMediaFile := ChatList1.ActiveMediaFile;
-
-  if LMediaFile = nil then
-  begin
-    ShowMessage('Error: No se ha seleccionado ningún archivo.');
-    Exit;
-  end;
-
-  // 2. Verificar que el archivo tenga contenido para guardar
-  if (LMediaFile.Content = nil) or (LMediaFile.Content.size = 0) then
-  begin
-    ShowMessage('El archivo seleccionado está vacío.');
-    Exit;
-  end;
-
-  // 3. Construir la ruta del archivo temporal
-  try
-    LTempPath := System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetTempPath, LMediaFile.FileName);
-
-    // 4. Guardar el contenido del stream en el archivo temporal
-    LMediaFile.Content.Position := 0; // Siempre rebobinar antes de leer
-    LFileStream := TFileStream.Create(LTempPath, fmCreate);
-    try
-      LFileStream.CopyFrom(LMediaFile.Content, LMediaFile.Content.size);
-    finally
-      LFileStream.Free;
-    end;
-    LMediaFile.Content.Position := 0; // Dejarlo listo para futuras lecturas
-
-    // 5. Usar el servicio de la plataforma para abrir el archivo
-    if TPlatformServices.Current.SupportsPlatformService(IFMXApplicationService, IInterface(AppService)) then
-    begin
-      if not TUtilsSystem.ShellOpenFile(LTempPath) then
-      begin
-        ShowMessage('No se pudo abrir el archivo. Verifique si tiene una aplicación instalada para este tipo de archivo (' + System.IOUtils.TPath.GetExtension(LMediaFile.FileName) + ').');
-      end;
-    end
-    else
-    begin
-      ShowMessage('El servicio para abrir archivos no está disponible en esta plataforma.');
-    end;
-
-  except
-    on E: Exception do
-    begin
-      // Capturar cualquier error durante la creación del archivo
-      ShowMessage('Ocurrió un error al intentar abrir el archivo: ' + E.Message);
-    end;
-  end;
-end;
-
-procedure TForm2.MnuSaveClick(Sender: TObject);
-var
-  LMediaFile: TAiMediaFile;
-begin
-  LMediaFile := ChatList1.ActiveMediaFile;
-
-  if (LMediaFile <> nil) then
-  begin
-    SaveDialog1.FileName := LMediaFile.FileName;
-    If SaveDialog1.Execute then
-      LMediaFile.SaveToFile(SaveDialog1.FileName);
-  end;
-end;
-
 procedure TForm2.TrackTemperatureTracking(Sender: TObject);
 begin
   LblTemperature.Text := 'Temperature: ' + FormatFloat('0.0', TrackTemperature.Value / 10);
@@ -2137,30 +1955,15 @@ end;
 
 procedure TForm2.BtnSelectAreaClick(Sender: TObject);
 var
-  SelRect: TSelectionForm;
   lRect: TRect;
 begin
-  // 1. Inicializar lRect con los valores actuales del componente
-  // Si nunca se ha seleccionado (todo 0), IsEmpty será True y no mostrará nada, lo cual es correcto.
-  if (AiComputerUseTool1.AreaWidth > 0) and (AiComputerUseTool1.AreaHeight > 0) then
+  // Area de la pantalla que el modelo puede ver y operar con Computer Use
+  if TScreenCapture.SelectArea(lRect) then
   begin
-    lRect := TRect.Create(AiComputerUseTool1.AreaLeft, AiComputerUseTool1.AreaTop, AiComputerUseTool1.AreaLeft + AiComputerUseTool1.AreaWidth, AiComputerUseTool1.AreaTop + AiComputerUseTool1.AreaHeight);
-  end
-  else
-    lRect := TRect.Empty;
-
-  SelRect := TSelectionForm.Create(nil);
-  try
-    // 2. Pasamos lRect por referencia (var)
-    if SelRect.Execute(lRect) then
-    begin
-      AiComputerUseTool1.AreaLeft := lRect.Left;
-      AiComputerUseTool1.AreaTop := lRect.Top;
-      AiComputerUseTool1.AreaWidth := lRect.Width;
-      AiComputerUseTool1.AreaHeight := lRect.Height;
-    end;
-  finally
-    SelRect.Free;
+    AiComputerUseTool1.AreaLeft := lRect.Left;
+    AiComputerUseTool1.AreaTop := lRect.Top;
+    AiComputerUseTool1.AreaWidth := lRect.Width;
+    AiComputerUseTool1.AreaHeight := lRect.Height;
   end;
 end;
 

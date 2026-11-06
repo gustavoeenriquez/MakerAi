@@ -1,7 +1,7 @@
 object Form11: TForm11
   Left = 0
   Top = 0
-  Caption = 'Form11'
+  Caption = 'Demo 041 - Gemini Veo: video desde texto, imagenes o un video'
   ClientHeight = 923
   ClientWidth = 1121
   Position = ScreenCenter
@@ -206,8 +206,8 @@ object Form11: TForm11
             '    '#55356#57246#65039'  Si es un VIDEO (de VEO):'
             '        Acci'#243'n: EXTENSI'#211'N DE VIDEO'
             '        VEO continuar'#225' la historia.'
-            '        ('#161'Recuerda que necesita su'
-            '        archivo .veometa asociado!)'
+            '        (Solo videos generados por este'
+            '        demo: sus datos quedan en Documentos\VeoDemo)'
             ''
             ''
             #55357#56764#65039'+'#55357#56764#65039'  Con 2 Im'#225'genes Adjuntas'
@@ -297,17 +297,12 @@ object Form11: TForm11
                 'ados anteriores)'
               TabOrder = 0
             end
-            object ChatList1: TChatList
+            object ChatView1: TAIChatView
               Align = Client
               Size.Width = 778.000000000000000000
               Size.Height = 445.000000000000000000
               Size.PlatformDefault = False
-              TabOrder = 1
-              MaxBubbleWidthPercent = 0.899999976158142100
-              DefaultWordWrap = True
-              AttachmentPopupMenu = PopupMenu1
-              Viewport.Width = 778.000000000000000000
-              Viewport.Height = 445.000000000000000000
+              OnAttachmentOpen = ChatView1AttachmentOpen
             end
           end
           object LayoutLog: TLayout
@@ -362,27 +357,14 @@ object Form11: TForm11
         Size.Height = 212.000000000000000000
         Size.PlatformDefault = False
         TabOrder = 4
-        object ChatInput1: TChatInput
+        object ChatInput1: TAIChatInput
           Align = Client
           Size.Width = 1121.000000000000000000
           Size.Height = 122.000000000000000000
           Size.PlatformDefault = False
-          TabOrder = 4
-          ImagesVisible = False
-          MicVisible = False
-          SoundVisible = False
-          UseSoundMonitor = False
-          ValidExtensions = 'jpg,jpeg,png,bmp,pdf,mp3,wav,mp4,avi'
+          ValidExtensions = 'jpg,jpeg,png,bmp,mp4'
           OnSendEvent = ChatInput1SendEvent
           OnCancel = ChatInput1Cancel
-          OnSlideChange = ChatInput1SlideChange
-          Busy = False
-          object AniIndicator1: TAniIndicator
-            Align = Center
-            Size.Width = 109.000000000000000000
-            Size.Height = 87.000000000000000000
-            Size.PlatformDefault = False
-          end
         end
         object LayoutNegativePrompt: TLayout
           Align = Bottom
@@ -433,26 +415,6 @@ object Form11: TForm11
         end
       end
     end
-  end
-  object PopupMenu1: TPopupMenu
-    Left = 560
-    Top = 384
-    object MnuCopy: TMenuItem
-      Text = 'Copy'
-      OnClick = MnuCopyClick
-    end
-    object MnuSave: TMenuItem
-      Text = 'Save to File'
-      OnClick = MnuSaveClick
-    end
-    object MnuPlay: TMenuItem
-      Text = 'Show Media'
-      OnClick = MnuPlayClick
-    end
-  end
-  object SaveDialog1: TSaveDialog
-    Left = 472
-    Top = 312
   end
   object AiVeo: TAiVeoGenerator
     ApiKey = '@GEMINI_API_KEY'

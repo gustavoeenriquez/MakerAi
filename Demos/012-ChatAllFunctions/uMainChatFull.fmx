@@ -10,22 +10,6 @@ object Form2: TForm2
   FormFactor.Devices = [Desktop]
   OnCreate = FormCreate
   DesignerMasterStyle = 0
-  object PopupMenu1: TPopupMenu
-    Left = 888
-    Top = 384
-    object MnuCopy: TMenuItem
-      Text = 'Copy'
-      OnClick = MnuCopyClick
-    end
-    object MnuSave: TMenuItem
-      Text = 'Save to File'
-      OnClick = MnuSaveClick
-    end
-    object MnuPlay: TMenuItem
-      Text = 'Show Media'
-      OnClick = MnuPlayClick
-    end
-  end
   object SaveDialog1: TSaveDialog
     Options = [ofOverwritePrompt, ofHideReadOnly, ofEnableSizing]
     Left = 928
@@ -1083,7 +1067,7 @@ object Form2: TForm2
           Text = 'Log: '
           TabOrder = 2
         end
-        object ChatInput1: TChatInput
+        object ChatInput1: TAIChatInput
           Align = Bottom
           Margins.Left = 5.000000000000000000
           Margins.Top = 5.000000000000000000
@@ -1093,25 +1077,18 @@ object Form2: TForm2
           Size.Width = 1263.000000000000000000
           Size.Height = 80.000000000000000000
           Size.PlatformDefault = False
-          TabOrder = 0
-          ImagesVisible = False
           MicVisible = False
-          SoundVisible = False
-          UseSoundMonitor = False
           ValidExtensions = 
             'jpg,jpeg,png,bmp,pdf,mp3,wav,mp4,avi,xls,xlsx,wrd,wrdx,ppt,pptx,' +
             ' doc,docx'
           VoiceMonitor = AIVoiceMonitor1
-          Font.Family = 'Courier New'
-          Font.Size = 20.000000000000000000
           OnSendEvent = ChatInput1SendEvent
           OnTranscriptText = ChatInput1TranscriptText
           OnCancel = ChatInput1Cancel
-          Busy = False
-          object AniIndicator1: TAniIndicator
-            Align = Center
-            Visible = False
-          end
+        end
+        object AniIndicator1: TAniIndicator
+          Align = Center
+          Visible = False
         end
         object Layout10: TLayout
           Align = Bottom
@@ -1472,18 +1449,12 @@ object Form2: TForm2
           Size.Height = 628.000000000000000000
           Size.PlatformDefault = False
         end
-        object ChatList1: TChatList
+        object ChatView1: TAIChatView
           Align = Client
-          PopupMenu = PopupMenu1
           Size.Width = 785.000000000000000000
           Size.Height = 628.000000000000000000
           Size.PlatformDefault = False
-          TabOrder = 4
-          MaxBubbleWidthPercent = 0.800000011920929000
-          DefaultWordWrap = True
-          AttachmentPopupMenu = PopupMenu1
-          Viewport.Width = 785.000000000000000000
-          Viewport.Height = 628.000000000000000000
+          OnAttachmentOpen = ChatView1AttachmentOpen
         end
       end
     end

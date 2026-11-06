@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ChatUI is a Delphi FMX visual components library providing chat interface components for AI applications. Part of the MakerAI framework. All components are registered in the 'MakerAI UI' component palette.
 
+> **Componentes actuales: `TAIChatView` (`AIChat.Control.FMX`) y `TAIChatInput` (`AIChat.Input`)**, descritos al final de este archivo. `TChatList`, `TChatBubble`, `TChatInput` y `uMakerAi.Utils.ScreenCapture` (abajo) están marcados `deprecated`. Desde nov 2026 ningún demo de `Demos/` usa los componentes de chat viejos (012 y 041 fueron los últimos) y el 066 pasó a `AIChat.ScreenCapture`; solo los capítulos 35 y 36 del libro (`Demos/Libro`) siguen con `uMakerAi.Utils.ScreenCapture` (usan su `SaveToFile`, que el nuevo no tiene). Al migrar: `AddBubble(..., AInbound)` existe por compatibilidad, pero en la vista nueva `AInbound = True` es el **usuario**; no hay `ActiveMediaFile`, `RecalcSize`, `OnBeforeAddBubble`, `AddStatus` ni `GetAttachments`, y `OnMediaFileDblClick` se declara pero nunca se dispara (usar `OnAttachmentOpen`).
+
 ## Components
 
 ### TChatList (`uMakerAi.UI.ChatList.pas`)

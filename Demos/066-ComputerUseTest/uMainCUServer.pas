@@ -34,7 +34,7 @@ uses
   FMX.Memo.Types, FMX.Layouts,
   uMakerAi.Core, uMakerAi.Chat.Messages,
   uMakerAi.Tools.ComputerUse, uMakerAi.Tools.ComputerUse.WindowsFMX,
-  uMakerAi.Utils.ScreenCapture;
+  AIChat.ScreenCapture;
 
 type
   TFormCUServer = class(TForm)
