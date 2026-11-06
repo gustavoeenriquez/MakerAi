@@ -167,3 +167,6 @@ graphify-out/
 
 # Registry PPM corporativo local (cap 33): paquetes subidos
 Demos/Libro/cap33-registry-corporativo/registro-local/storage/
+
+# Archivos temporales de Office (Word/Excel los crean mientras el documento esta abierto)
+~$*
