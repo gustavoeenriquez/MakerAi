@@ -16,7 +16,7 @@ msbuild ListAllModels.dproj /p:Config=Debug /p:Platform=Win32
 msbuild CompareEmbeddings/CompareEmbeddings.dproj /p:Config=Debug /p:Platform=Win32
 ```
 
-Or open `../../DemosVersion31.groupproj` in RAD Studio IDE.
+Or open `../DemosVersion31.groupproj` in RAD Studio IDE.
 
 ## Demo Projects
 

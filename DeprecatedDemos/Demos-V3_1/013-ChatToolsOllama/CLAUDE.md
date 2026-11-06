@@ -26,7 +26,7 @@ Open `ChatToolsOllamaDemo.dproj` in RAD Studio and press F9.
 - `TAiOllamaChat` — main LLM driver (gemma3:4b)
 - `TAiGeminiWebSearchTool` — WebSearch bridge (Gemini grounding)
 - `TAiGeminiSpeechTool` — TTS bridge (Gemini Speech)
-- `TAiOllamaPdfTool` — PDF bridge (Ollama OCR + Ghostscript)
+- `TAiOllamaOcrTool` (component `AiOllamaPdfTool1`) — PDF bridge (Ollama OCR + Ghostscript)
 - `TAiDalleImageTool` — Image generation bridge (DALL-E)
 - `TAiSoraVideoTool` — Video bridge (not used in this demo)
 - `TAiFunctions` — created programmatically in `InicializarFunciones`

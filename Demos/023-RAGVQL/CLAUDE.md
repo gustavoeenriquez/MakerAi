@@ -22,7 +22,7 @@ msbuild RagVectorQL.dproj /p:Config=Release /p:Platform=Win64
 ## Runtime Requirements
 
 - PostgreSQL with `pgvector` extension — call `PgDriver.CreateSchema(TableName, 1024)` (via `BtnCreateTable`) to initialize the table before first use
-- Ollama at `localhost:11434` — provides both the embedding model (768-dim) and optionally the chat model
+- Ollama at `localhost:11434` — provides both the embedding model (`snowflake-arctic-embed`, 1024-dim — must match `CreateSchema`) and optionally the chat model
 
 ## Architecture
 
@@ -53,7 +53,7 @@ Runs a single-pass vector search with current `rag.SearchOptions` settings. Does
 
 ### 2. VQL search (`BtnBuscarVGQL`)
 ```pascal
-rag.ExecuteVGQL(vqlQueryString)
+rag.ExecuteVQL(vqlQueryString)
 ```
 Full pipeline: Lexer → Parser → AST → Compiler → `TVGQLRequest` → Search → optional RERANK → optional OPTIMIZE.
 
@@ -94,7 +94,7 @@ Errors raise `EVGQLParserError` (lexer/parse) or `EVGQLTranslationError` (compil
 | `TAiSearchOptions` | `uMakerAi.rag.Vectors` | Search mode flags (UseEmbeddings, UseBM25, UseRRF, UseReorderABC, weights) |
 | `TAiEmbeddingMetaData` | `uMakerAi.RAG.MetaData` | Key-value metadata attached to each node |
 | `TAiEmbeddingNode` | `uMakerAi.RAG.Vectors.Index` | Individual vector chunk (Tag, Text, MetaData, embedding) |
-| `TAiFilterCriteria` | `uMakerAi.rag.Vectors` | Recursive filter tree for `SearchText()` |
+| `TAiFilterCriteria` | `uMakerAi.RAG.MetaData` | Recursive filter tree for `SearchText()` |
 | `TVGQLParser` | `uMakerAi.RAG.Vectors.VQL` | Parses VQL text → `TVGQLQuery` AST |
 | `TVGQLCompiler` | `uMakerAi.RAG.Vectors.VQL` | Compiles AST → `TVGQLRequest` |
 

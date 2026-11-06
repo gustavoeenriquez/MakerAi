@@ -25,20 +25,20 @@ This folder contains Spanish-language documentation for the MakerAI RAG (Retriev
 |-----------|---------|
 | `TAiRAGVector` | Core RAG orchestrator for indexing and search |
 | `TAiOllamaEmbeddings` / `TAiOpenAiEmbeddings` | Embedding generation |
-| `TAIAgents` | Agent workflow orchestration for advanced RAG patterns |
+| `TAIAgentManager` | Agent workflow orchestration for advanced RAG patterns (`TAIAgents` is a deprecated alias) |
 | `TAiEmbeddingNode` | Vector representation with `CosineSimilarity` method |
 
 ## RAG Implementation Pattern (PostgreSQL/pgvector)
 
 ```pascal
 // Indexing: AddItemsFromPlainText triggers OnDataVecAddItem event
-RAGVector.AddItemsFromPlainText(TextoCompleto, 512, 80); // chunk_size, overlap
+RAGVector.AddItemsFromPlainText(TextoCompleto, MetaData, 512, 15); // metadata, chunk length, overlap %
 
 // Search: SearchText triggers OnDataVecSearch event
 ContextoRecuperado := RAGVector.SearchText(Pregunta, 5, 0.0); // limit, precision
 ```
 
-Events `OnDataVecAddItem` and `OnDataVecSearch` handle database persistence with pgvector's `<->` operator for cosine distance.
+Events `OnDataVecAddItem` and `OnDataVecSearch` handle database persistence with pgvector's `<=>` operator for cosine distance (`<->` is L2).
 
 ## pgvector Quick Reference
 
@@ -50,7 +50,7 @@ CREATE EXTENSION vector;
 CREATE TABLE items (embedding vector(1024));
 
 -- Cosine distance search
-SELECT * FROM items ORDER BY embedding <-> :query_embedding LIMIT 5;
+SELECT * FROM items ORDER BY embedding <=> :query_embedding LIMIT 5;
 
 -- Create HNSW index (recommended)
 CREATE INDEX ON items USING hnsw (embedding vector_cosine_ops);
@@ -61,7 +61,7 @@ CREATE INDEX ON items USING hnsw (embedding vector_cosine_ops);
 The implementation code for these components is in the parent project:
 - `Source/RAG/uMakerAi.RAG.Vectors.pas` - Vector RAG implementation
 - `Source/RAG/uMakerAi.RAG.Graph.Core.pas` - Knowledge graph RAG
-- `Source/Core/uMakerAi.Embeddings.pas` - Embedding generation
+- `Source/Embeddings/uMakerAi.Embeddings.pas` - Embedding generation
 - `Source/Agents/uMakerAi.Agents.pas` - Agent orchestration
 
 ## Navigation

@@ -38,10 +38,10 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 ### RAG Systems (02x)
 | Demo | Purpose | Key Classes |
 |------|---------|-------------|
-| 021-RAG+Postgres-UpdateDB | Vector RAG with PostgreSQL | `TAiVectorRAG`, pgvector |
+| 021-RAG+Postgres-UpdateDB | Vector RAG with PostgreSQL | `TAiRAGVector`, pgvector |
 | 022-1-RAG_SQLite | Vector RAG with SQLite | Lightweight local storage |
 | 023-RAGVQL | Vector Query Language | VQL semantic search syntax |
-| 025-RAGGraph | Knowledge graph RAG | `TAiGraphRAG`, entity relationships |
+| 025-RAGGraph | Knowledge graph RAG | `TAiRagGraph`, entity relationships |
 | 026-RAGGraph-Basic | Basic graph RAG | Simplified graph patterns |
 | 027-DocumentManager | Gestor de documentos sobre RAG Graph, 100% local | `TAiRagDocumentManager` + `TAiRagGraph` con `TAiOllamaChat`/`TAiOllamaEmbeddings`; FMX |
 | 070-ChatRAGTools | Chat multi-proveedor + RAG SQLite + tools, todo en un formulario | `TAiChatConnection` con selector de proveedor/modelo, `TAiRAGVector` sobre `TAiRAGVectorSQLiteDriver` (vectorial en Delphi puro, sin `vec0`) y `TAiFunctions` con una función que dibuja series en TeeChart |
@@ -192,7 +192,7 @@ Each demo subdirectory contains:
 - `*.dproj` - Delphi project file
 - `*.dpr` - Program source
 - `uMain*.pas` / `uMain*.fmx` - Main form
-- `CLAUDE.md` - Demo-specific instructions
+- `CLAUDE.md` - Demo-specific instructions (not every demo has one: 027 and 060-071 don't)
 
 ## Common Code Patterns Across Demos
 
@@ -204,7 +204,7 @@ AiConn.Params.Values['Asynchronous'] := 'False';
 Response := AiConn.AddMessageAndRun(Prompt, 'user', []);
 ```
 
-**Streaming with callback:**
+**Streaming with callback** (chat events are `of object`: assign a method — an anonymous procedure does not compile):
 ```pascal
 AiConn.Params.Values['Asynchronous'] := 'True';
 AiConn.OnReceiveData := AiConnReceiveData;   // metodo del formulario (TAiChatOnDataEvent)

@@ -8,7 +8,7 @@ This directory contains documentation for the **MakerAI MCP Server** module - a 
 
 ## Source Code Location
 
-The MCPServer source code is located in `/Source/MCPServer/` (6 units, ~2,900 lines):
+The MCPServer source code is located in `/Source/MCPServer/`:
 
 | Unit | Purpose |
 |------|---------|

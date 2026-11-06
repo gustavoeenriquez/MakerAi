@@ -47,7 +47,7 @@ curl http://localhost:8280/.well-known/agent-card.json
 
 - Los estados del task siguen la spec 1.0 (`TASK_STATE_COMPLETED`, `TASK_STATE_INPUT_REQUIRED`...). Una suspensión del grafo (`Node.Suspend`, human-in-the-loop) se publica como `INPUT_REQUIRED`.
 - El servidor acepta también los aliases de método de la era 0.x (`message/send`, `tasks/get`, `tasks/cancel`).
-- Streaming/push notifications no soportados en el MVP (declarados `false` en la card; `SendStreamingMessage` responde `UnsupportedOperationError`).
+- El servidor también admite streaming SSE (`SendStreamingMessage`/`SubscribeToTask`) y push notifications (`EnableStreaming`/`EnablePushNotifications`, ambos `True` por defecto); este demo no los ejercita — ver el demo 080 y `Source/Agents/CLAUDE.md`.
 
 ## Navigation
 

@@ -34,10 +34,10 @@ msbuild RagGraphDemo.dproj /p:Config=Debug /p:Platform=Win32
 | File | Purpose |
 |------|---------|
 | `uMainRagGraphDemo.pas` | Main form with all UI event handlers and database event implementations |
-| `../../Source/RAG/uMakerAi.RAG.Graph.Core.pas` | Core graph types: TAiRagGraphNode, TAiRagGraphEdge, TQueryPlan |
-| `../../Source/RAG/uMakerAi.RAG.Graph.Builder.pas` | JSON triplet parser that populates the graph |
-| `../../Source/RAG/uMakerAi.RAG.Graph.Driver.Postgres.pas` | PostgreSQL driver with pgvector support |
-| `../../Source/RAG/uMakerAi.RAG.Graph.GQL.pas` | MakerGQL query language parser |
+| `../../../Source/RAG/uMakerAi.RAG.Graph.Core.pas` | Core graph types: TAiRagGraphNode, TAiRagGraphEdge, TQueryPlan |
+| `../../../Source/RAG/uMakerAi.RAG.Graph.Builder.pas` | JSON triplet parser that populates the graph |
+| `../../../Source/RAG/uMakerAi.RAG.Graph.Driver.Postgres.pas` | PostgreSQL driver with pgvector support |
+| `../../../Source/RAG/uMakerAi.RAG.Graph.GQL.pas` | MakerGQL query language parser |
 
 ### Data Flow
 

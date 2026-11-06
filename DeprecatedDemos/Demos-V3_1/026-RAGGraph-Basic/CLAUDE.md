@@ -50,9 +50,10 @@ BasicRAGGraph is a Delphi VCL demo showcasing MakerAI's graph-based RAG (Retriev
 
 **Add nodes manually**:
 ```pascal
-Node := RAG.AddNode('Label', 'description text');
-Node.Properties.AddPair('key', 'value');
-Node.SetEmbeddings(EmbeddingsProvider.CreateEmbedding(Node.Description));
+Node := RAG.AddNode('id_001', 'PERSONA', 'Steve Jobs');
+Node.MetaData['nacimiento'] := 1955;   // propiedad indexada por defecto
+Node.Text := 'Texto que se vectoriza para el RAG';
+Node.Data := RAG.Embeddings.CreateEmbedding(Node.Text, 'user');
 ```
 
 **Import from JSON**:

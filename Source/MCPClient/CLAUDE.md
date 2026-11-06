@@ -71,7 +71,7 @@ Si el servidor responde `resultType:'input_required'` en un `tools/call`:
 
 ## Key Patterns
 
-**`ListTools` returns an object the caller owns.** `Initialize` (HTTP and the base used by the other transports) keeps a text copy in `FTools` and frees it; before Oct 2026 it leaked the whole `tools/list` response on every `Initialize` (~228 blocks, seen as `TJSONObject` leaks when closing an app that uses MCP).
+**`ListTools` returns an object the caller owns.** `Initialize` (HTTP and the base used by the other transports) keeps a text copy in `FTools` and frees it; any other caller of `ListTools` must free the result too (regression case `mcp.initialize.no-leak`).
 
 **Thread-Safe Messaging**: StdIo and SSE use `TThreadedQueue<TJSONObject>` for async response handling.
 

@@ -111,7 +111,7 @@ curl -N -H "Authorization: Bearer admin:MakerAi2026*" http://localhost:8094/sse
 
 **Estado de pruebas:** compilación, generación del ini, arranque sin DB, los 3 formatos de credenciales (200) y rechazos (401) en HTTP y SSE están verificados en runtime. **Con `Driver=postgres` la ruta de datos completa está probada** (oct 2026: 4/4 preguntas de control con el fragmento correcto entre los dos primeros). **Limitación conocida:** con `Driver=mssql` la ruta de datos contra SQL Server 2025 real no tiene validación runtime; si aparecen reportes, revisar primero el CAST nvarchar→VECTOR vía parámetro FireDAC y FREETEXTTABLE parametrizado.
 
-La descripción del tool usaba nombres de parámetros en snake_case (`text_content`, `top_k`...) distintos de los del schema (`textContent`, `topK`...); se corrigió en oct 2026 porque confundía al modelo.
+La descripción del tool usa los mismos nombres de parámetros que el schema (`textContent`, `topK`…): nombres distintos en la descripción confunden al modelo.
 
 ## Key Gotchas
 

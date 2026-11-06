@@ -31,7 +31,7 @@ User Query → Embedding Generation (Ollama) → Vector Search (PostgreSQL pgvec
 ```
 
 ### Key Components in uRagUpdateDBMain.pas
-- `TAiOllamaEmbeddings` - Generates 768-dimension embeddings via Ollama
+- `TAiOllamaEmbeddings` - Generates 1024-dimension embeddings via Ollama (`snowflake-arctic-embed`, set in the form)
 - `TAiRAGVector` - RAG system for vector operations (AddData, Search)
 - `TFDConnection/TFDQuery` - FireDAC PostgreSQL connection
 - `TAiOllamaChat` - LLM chat interface for responses
@@ -46,7 +46,7 @@ CREATE TABLE anexos (
   FileName VARCHAR,
   Resumen TEXT,
   FileFormat VARCHAR,
-  embedding vector(768)
+  embedding vector(1024)
 );
 ```
 
@@ -76,7 +76,7 @@ Key callbacks used throughout:
 
 ## Dependencies
 
-- **Delphi 12.2+** (Alexandria/Florence)
+- **Delphi 12.2+** (12 Athens or 13 Florence)
 - **FireDAC** - Database connectivity layer
 - **FMX** - FireMonkey cross-platform UI
 - **PostgreSQL** with **pgvector** extension enabled
@@ -86,7 +86,7 @@ Key callbacks used throughout:
 
 - UI forms use `.pas` (code) + `.fmx` (layout) pairs
 - Async operations use `TTask.Run` from System.Threading
-- Vector similarity uses pgvector's `<->` cosine distance operator
+- Vector similarity uses pgvector's `<->` operator, which is L2 (Euclidean) distance; cosine distance is `<=>` (what `TAiRAGVectorPostgresDriver` uses)
 - Comments and commit messages are in Spanish
 
 ## Navigation
