@@ -1039,39 +1039,129 @@ AiConn.Params.Values['ApiKey'] := 'sk-...';             // or set a literal key 
 
 ## 🗂️ Demo Projects
 
-Open `Demos/DemosVersion31.groupproj` to access all demos.
+Open `Demos/DemosVersion31.groupproj` to load all 66 demo projects in the IDE. Every demo folder has a `CLAUDE.md` (or a section in `Demos/CLAUDE.md`) with what it shows, how to run it and which API keys it needs. Demos from earlier versions that no longer apply live in [`DeprecatedDemos/`](DeprecatedDemos/README.md), for reference only.
 
-| Demo | Description |
-|------|-------------|
-| `012-ChatAllFunctions` | Full-featured multimodal chat (images, audio, streaming, tools) |
-| `012-ChatWebList` | Chat with web-based content list |
-| `021-RAG+Postgres-UpdateDB` | Build a vector RAG database with PostgreSQL/pgvector |
-| `022-1-RAG_SQLite` | Lightweight vector RAG with SQLite |
-| `023-RAGVQL` | VQL query language for semantic search |
-| `025-RAGGraph` | Knowledge graph RAG with GQL queries |
-| `026-RAGGraph-Basic` | Simplified graph RAG patterns |
-| `027-DocumentManager` | Document ingestion and management |
-| `031-MCPServer` | Multi-protocol MCP server (HTTP, SSE, StdIO) |
-| `032-MCP_StdIO_FileManager` | File manager exposed via MCP StdIO |
-| `034-MCPServer_Http_FileManager` | File manager via MCP HTTP |
-| `036-MCPServerStdIO_AiFunction` | StdIO MCP server with AI functions |
+**New to MakerAI?** Start with the *Café La Ladera* series (`094`–`105`): twelve small demos, one per step, from the first streaming chat to a voice order that travels through federated agents. The book projects in `Demos/Libro/` follow the same path chapter by chapter.
+
+### Café La Ladera series (start here)
+
+| Demo | What it shows |
+|------|---------------|
+| `094-ChatStreaming` | Console chat: system prompt, streaming with time to first token, history, save/load the conversation |
+| `095-ChatViewLadera` | FMX chat with `TAIChatView`/`TAIChatInput`: streaming bubbles, reasoning step, token footer, images, PDF and voice notes |
+| `096-ChatToolsLadera` | Native web search, a text editor confined to a folder and an allow-listed shell, including the attempt that gets blocked |
+| `097-ChatMemoryLadera` | `TAiMemory`: the customer's preferences are remembered in a new session with a fresh chat |
+| `098-AgentGraphLadera` | An order through an agent graph: fan-out, `jmAll`, expression and conditional edges, and a `TLLMNode` (`--sin-llm` without a key) |
+| `099-VozPedidoLadera` | The summit: a voice order through GPT-Live, a chat that calls the Orders agent over A2A, whose inventory node is federated to the Warehouse agent |
+| `100-MCPLadera` | The same `.exe` is an MCP stdio server (also for Claude Desktop/Code and as a PPM package) and a chat that launches it and uses its tools |
+| `101-SkillsLadera` | Three SKILL.md skills loaded on demand with `TAiSkills` |
+| `102-AgenteLadera` | A `TLLMNode` with a skill and two tools serves a customer; a second node reviews the answer |
+| `103-AprobacionLadera` | A large order waits for approval, the program exits, and `--responder` resumes it from the checkpoint on disk |
+| `104-GuardrailsLadera` | Guardrails on the agent's tools (maximum discount, blocked cancellation) and evals with a judge model |
+| `105-EnrutadorLadera` | Jev routes each customer message to the right agent, without an LLM, with time and cost. Needs `TYPESAFE_API_KEY` |
+
+### Chat, multimodal and providers
+
+| Demo | What it shows |
+|------|---------------|
+| `012-ChatAllFunctions` | Full-featured multimodal chat: images, audio, streaming and tools across providers |
+| `014-ChatTest` | Console checks of the Claude driver: text, JSON output, JSON Schema, web search, code execution, documents |
 | `041-GeminiVeo` | Video generation with Google Veo |
-| `051-AgentDemo` | Visual agent graph builder and runner |
-| `052-AgentConsole` | Console-based agent execution (conditional and parallel flows) |
-| `053-DemoAgentesTools` | Agents with integrated tool use |
-| `054-AgentCheckpointDB` | Durable agent execution: suspend/resume with `TAiDatabaseCheckpointer` (SQLite via FireDAC) |
-| `060-AIChatUI` | Next-generation `TAIChatView` + `TAIChatInput` components — full multimodal demo |
-| `072-A2AFederation` | Agent federation over the A2A 1.0 protocol: expose a graph as an A2A agent, consume it, and delegate a local node to a remote agent (no LLM required; `--otel` for tracing) |
-| `077-RagPostgresConsole` | Headless vector RAG on PostgreSQL + pgvector with local Ollama embeddings — no API key. Runs on Windows and Linux64 |
-| `082-ComputerUsePassthru` | Who executes a `computer_call`: delegated to a remote client, missing tool, or local. Self-verifying with an exit code; never touches the screen |
-| `083-ComputerUseLinux` | Computer Use on Linux/X11 over Xvfb — the headless counterpart of `066` |
-| `084-JevRouter` … `088-JevModelRouter` | Jev (TypeSafe AI): agent routing, SmartDispatch and guardrails, evals and RAG reranking, bulk labeling, model routing. Need `TYPESAFE_API_KEY` |
 | `089-QwenShowcase` | Everything Qwen (Alibaba Model Studio) with one key: chat, vision, image editing, voice, translation, embeddings + rerank, realtime |
+| `090-Varios/ListAllModels` | Lists the models available from each provider |
+| `090-Varios/CompareEmbeddings` | Compares embedding models side by side |
+| `090-Varios/Dalle_Generate` | Image generation |
+| `090-Varios/VoiceMonitorAndWhisperDemo` | `TAiVoiceMonitor` + speech-to-text |
+
+### RAG and memory
+
+| Demo | What it shows |
+|------|---------------|
+| `021-RAG+Postgres-UpdateDB` | Build a vector RAG database on PostgreSQL + pgvector |
+| `022-1-RAG_SQLite` | Lightweight vector RAG on SQLite |
+| `023-RAGVQL` | VQL, the vector query language |
+| `025-RAGGraph` | Knowledge-graph RAG with GQL queries |
+| `026-RAGGraph-Basic` | The essentials of graph RAG |
+| `027-DocumentManager` | Document manager over graph RAG, 100% local with Ollama |
+| `070-ChatRAGTools` | Multi-provider chat + SQLite RAG + a tool that draws charts, in one form |
+| `076-Memory` | `TAiMemory` on SQLite/FTS5; hybrid search when `OPENAI_API_KEY` is set |
+| `077-RagPostgresConsole` | Headless vector RAG on pgvector with local Ollama embeddings, no API key. Windows and Linux64 |
+| `078-RagChatOllama` | Complete local RAG: pgvector retrieval answered by Ollama, each question with and without context |
+
+### MCP
+
+| Demo | What it shows |
+|------|---------------|
+| `031-MCPServer` | Multi-protocol MCP server (HTTP, SSE, StdIO). Also compiles for Linux64 |
+| `032-MCP_StdIO_FileManager` | File manager MCP server in three projects: StdIO, HTTP and SSE |
+| `036-MCPServerStdIO_AiFunction` | StdIO MCP server built from `TAiFunctions` |
+| `037-MCPServerRAG` | Semantic RAG served over MCP, on SQL Server 2025 or PostgreSQL + pgvector |
+| `075-MCPElicitation` | Client side of MCP elicitation (MRTR) with `OnInputRequired` |
+
+### Agents and A2A
+
+| Demo | What it shows |
+|------|---------------|
+| `051-AgentDemo` | Visual fan-out + join: one task calls the model while another runs locally, in parallel |
+| `052-AgentConsole` | Conditional and fork/join flows with the fluent API |
+| `054-AgentCheckpointDB` | Durable execution: suspend and resume a graph with `TAiDatabaseCheckpointer` |
+| `072-A2AFederation` | A2A 1.0 federation: expose a graph as an agent, consume it, delegate a local node to it (no LLM; `--otel` for tracing) |
+| `074-A2AOrchestration` | A2A orchestration: manager pool, human-in-the-loop, federated HITL, non-blocking tasks |
+| `079-A2ASutAgent` | The agent used to certify MakerAI against the official A2A TCK (MUST 89/89, SHOULD 8/8) |
+| `080-A2APushNotifications` | A2A push notifications: the agent posts to your webhook when it finishes |
+| `081-AgentChatHITL` | Human-in-the-loop inside the chat, without modal windows, resumable after restarting the app |
+| `093-A2AChatAgentTool` | A chat that calls a remote A2A agent as a tool; `--ppm` discovers it in a PPM registry |
+
+### Guardrails, evals and Jev (TypeSafe AI)
+
+| Demo | What it shows |
+|------|---------------|
+| `073-GuardrailsEvals` | `TAiGuardrails` (the blocked tool never runs) and `TAiEvalRunner` with a report and exit code, no LLM |
+| `084-JevRouter` | Route queries to specialized agents before spending an LLM call |
+| `085-JevDispatchGuard` | Jev in SmartDispatch and in tool and input guardrails |
+| `086-JevEvalsRag` | Jev as an eval scorer and as a RAG reranker that discards injections |
+| `087-JevBatchLabeling` | Bulk labeling: 126 accounting entries against 225 ledger accounts in seconds |
+| `088-JevModelRouter` | Send each request to the cheapest model that can handle it |
+
+Demos `084`–`088` need `TYPESAFE_API_KEY`.
+
+### Skills
+
+| Demo | What it shows |
+|------|---------------|
 | `091-Skills` | SKILL.md skills three ways: on demand in a chat (`TAiSkills`), as the base of an agent node (`TAiSkill`), copied into the prompt (`TAiPrompts.ApplySkill`) |
-| `092-GPTLiveVoice` | OpenAI GPT-Live full-duplex voice: microphone, speaker, delegation to Responses or any `TAiChatConnection`, local functions, RAG over MCP |
-| `093-A2AChatAgentTool` | A chat that calls a remote A2A agent as a tool; `--ppm` discovers it in a PPM registry (AutoMCP + `call_agent`), `--solo-agente` serves it for `ppm publish --desde-url` |
-| `094-ChatStreaming` … `105-EnrutadorLadera` | *Café La Ladera* video series: streaming, `TAIChatView`, ChatTools, memory, agent graph, voice orders, MCP, skills, first agent, approvals, guardrails and model routing |
-| `Libro/cap03` … `Libro/cap37` | One project per chapter of the book *IA con Delphi* (4.0 edition) |
+
+### Voice and audio
+
+| Demo | What it shows |
+|------|---------------|
+| `060-ElevenLabsTTS` | Text-to-speech with ElevenLabs |
+| `061-LoopbackAudioCapture` | Capture what the PC is playing (WASAPI loopback) to a WAV file |
+| `064-VoiceBridgeDiarized` | Meeting voice bridge with speaker diarization: a stable label and a distinct voice per participant |
+| `071-VoiceBridgeTranslate` | Live call translation with `gpt-realtime-translate`: speak Spanish, the meeting hears English, and the other way round |
+| `092-GPTLiveVoice` | OpenAI GPT-Live full-duplex voice: interruptible, with delegation to Responses or any `TAiChatConnection`, local functions and RAG over MCP |
+
+### Computer Use
+
+| Demo | What it shows |
+|------|---------------|
+| `066-ComputerUseTest` | Computer Use on the Windows desktop (three projects, including a manual loop against a server) |
+| `082-ComputerUsePassthru` | Who executes a `computer_call`: a remote client, nobody, or a local executor. Self-verifying; never touches the screen |
+| `083-ComputerUseLinux` | Computer Use on Linux/X11 over Xvfb, the headless counterpart of `066` |
+
+### Integration checks against real APIs
+
+Small consoles with asserts that reproduce a specific issue against the live API (they need the provider's key). For the in-process suite without keys, see `Tests/RegressionSuite`.
+
+| Demo | What it checks |
+|------|----------------|
+| `067-PromptCacheTest` | Claude prompt caching: the second request reads from the cache |
+| `068-AsyncHistoryTest` | Issue #105: in async mode Claude archives its answers in the history |
+| `069-McpSessionGateTest` | Issue #110: MCP client vetting and HTTP session gating by `Mcp-Session-Id` (in-process) |
+
+### The book: *Inteligencia Artificial con Delphi* (4.0 edition)
+
+`Demos/Libro/cap03-primer-chat` … `Demos/Libro/cap37-los-demas-puentes`: one folder per chapter, 64 projects in all.
 
 ---
 
@@ -1113,6 +1203,7 @@ Open `Demos/DemosVersion31.groupproj` to access all demos.
 - Fix (A2A): `TAiA2AAgentTool` registers once when set up in the Object Inspector (it registered a second function on load); `TAiA2ARemoteAgentTool` is on the palette
 - Build: **packages and the regression suite compile without the IDE Library Path** (PR #132; `uMakerAi.Version.inc` included by relative path, missing search paths added, `MakerAI.dproj` synced with the `.dpk`); **Delphi sources check out with CRLF**, also in the GitHub ZIP (#133); PDF and audio marked as binary
 - New demos: **`Demos/Libro`** (chapters 3–37 of the 4.0 edition of the book), **`093-A2AChatAgentTool`** and **`094`–`105`** (*Café La Ladera* series); 012, 023, 036, 051 and 052 updated
+- Demos cleanup: the demo sets of 3.1, 3.4 and the previous book edition, plus six demos superseded by newer ones (010, 032-MCPServerDataSnap, 035, 062, 063, 065), moved to [`DeprecatedDemos/`](DeprecatedDemos/README.md); the demo list above is regrouped by topic and covers every project
 - Regression suite: 144 cases (`chat.minimax.request`; `chat.gemini.request` now covers Argon and the new image alias)
 
 ### v3.9.0 (2026-10-05)
