@@ -583,13 +583,14 @@ New `ChatMode` value for automatic two-pass routing:
      │                  │
 ┌────▼──────────────────▼──────────────────────────────────────────┐
 │  TAiChatConnection  — Universal Connector                        │
-│  Switch provider at runtime via DriverName property             │
+│  Switch provider at runtime via DriverName property              │
 └──────────────────────────────┬───────────────────────────────────┘
                                │
 ┌──────────────────────────────▼───────────────────────────────────┐
 │  Native Provider Drivers  (direct API access, full fidelity)     │
-│  OpenAI · Claude · Gemini · Grok · Mistral · DeepSeek · Kimi    │
-│  GLM · Qwen · Groq · Cohere · Ollama · LM Studio · GenericLLM   │
+│  OpenAI · Claude · Gemini · Grok · Mistral · DeepSeek · Kimi     │
+│  GLM · MiniMax · Qwen · Groq · Cohere · Ollama · LM Studio       │
+│  GenericLLM (any OpenAI-compatible endpoint)                     │
 └──────────────────────────────┬───────────────────────────────────┘
                                │
      ┌─────────────────────────┼────────────────────────┐
@@ -612,6 +613,7 @@ New `ChatMode` value for automatic two-pass routing:
 ┌──────────────────────────────────────────────────────────────────┐
 │  Realtime Voice — parallel WebSocket stack                       │
 │  TAiRealtimeConnection · OpenAI STT/Translate · Grok Voice S2S   │
+│  OpenAI GPT-Live (full-duplex voice that delegates the thinking) │
 │  Qwen voice/STT/translate/TTS · MakerAI                          │
 │  Pure-Pascal RFC 6455 + TLS (SChannel / OpenSSL / Android)       │
 └──────────────────────────────────────────────────────────────────┘
@@ -806,12 +808,12 @@ ChatTools bridge the gap between AI reasoning and real-world operations. They ac
 
 | Tool Interface | What it does | Implementations |
 |----------------|-------------|-----------------|
-| `IAiPdfTool` | Extract text from PDFs | Mistral OCR, Ollama OCR |
+| `IAiPdfTool` | Extract text from PDFs | Mistral OCR, Ollama OCR, native PDF parser (`TAiNativePdfTool`, in the `MakerAi.ChatTools` repo) |
 | `IAiVisionTool` | Describe / analyze images | Any vision model |
-| `IAiSpeechTool` | Text-to-speech / speech-to-text | Whisper, Gemini Speech, OpenAI TTS |
-| `IAiWebSearchTool` | Live web search | Gemini Web Search |
+| `IAiSpeechTool` | Text-to-speech / speech-to-text | OpenAI (`gpt-transcribe`, `gpt-4o-mini-tts`), Whisper (local server), Gemini Speech, ElevenLabs |
+| `IAiWebSearchTool` | Live web search | OpenAI (Responses API), Gemini |
 | `IAiImageTool` | Generate images | gpt-image-2.5, Gemini (Nano Banana), Grok Imagine, Qwen Image |
-| `IAiVideoTool` | Generate video | Sora, Gemini Veo, Grok Imagine, Qwen Wan |
+| `IAiVideoTool` | Generate video | Gemini Veo, Grok Imagine, Qwen Wan (OpenAI shut Sora down; its class stays only for compatibility) |
 | `TAiShell` | Execute shell commands | Windows/Linux |
 | `TAiTextEditorTool` | Read/write/patch files | Diff-based editing |
 | `TAiComputerUseTool` | Control mouse and keyboard | Claude `computer_toolset`, OpenAI `computer` (gpt-6-astra) |
@@ -870,6 +872,7 @@ A parallel component stack for live audio over WebSocket, with the same universa
 |--------|------|----------|
 | `TAiOpenAiRealtimeSTT` | STT only — streaming transcription (`gpt-live-transcribe` default) | OpenAI Realtime API |
 | `TAiOpenAiRealtimeTranslate` | **Simultaneous translation** — translated text and voice in one stream | OpenAI Realtime API |
+| `TAiOpenAiLiveChat` | **GPT-Live full-duplex voice** (`gpt-live-1`) — can be interrupted, delegates the thinking to a Responses model or any `TAiChatConnection` (`DelegateChat`) | OpenAI Realtime API |
 | `TAiGrokRealtimeChat` | **Full-duplex speech-to-speech** — the user talks, Grok answers with voice | xAI `wss://api.x.ai/v1/realtime` |
 | `TAiQwenRealtimeChat` / `…STT` / `…Translate` | Voice conversation, live transcription and simultaneous translation (`DriverName` `Qwen` / `QwenSTT` / `QwenTranslate`) | Alibaba DashScope |
 | `TAiQwenRealtimeTTS` | Streaming text-to-speech: speak an LLM answer while it is generated | Alibaba DashScope |
@@ -890,7 +893,7 @@ First Delphi implementation of **A2A 1.0** (Linux Foundation), certified against
 - **`TAiA2AServer`** exposes any `TAIAgentManager` graph as an A2A agent: Agent Card at `/.well-known/agent-card.json`, `SendMessage` / `GetTask` / `CancelTask` / `ListTasks`, SSE streaming, push notifications, bearer auth, a pool of managers for concurrent tasks, and human-in-the-loop (a suspended node becomes `input-required`)
 - **`TAiA2AClient`** consumes remote agents; **`TAiA2ARemoteAgentTool`** federates a graph node to a remote agent, and **`TAiA2AAgentTool`** exposes a remote agent to a chat as a function
 - **Discovery through PPM:** agents published as `agent` packages are found and installed by name (`InstallAgentFromPPM`) or by the model itself with AutoMCP (`call_agent`) — see *PPM — A2A agents as packages* above
-- Demos: `072-A2AFederation`, `074-A2AOrchestration`, `079-A2ASutAgent`, `080-A2APushNotifications`
+- Demos: `072-A2AFederation`, `074-A2AOrchestration`, `079-A2ASutAgent`, `080-A2APushNotifications`, `093-A2AChatAgentTool` (an agent as a chat tool) and `099-VozPedidoLadera` (voice order through federated agents)
 
 ### 📚 Skills — Reusable Instructions on Demand
 
@@ -906,7 +909,7 @@ Skills use the **SKILL.md** format (Claude Agent Skills / PPM registry): YAML fr
 
 - **`TAiGuardrails`** — assigned to `TAiFunctions.Guardrails`, it checks every tool call (local, MCP or AutoMCP) **before** it runs: allow/block lists with wildcards, forbidden argument patterns, a pluggable semantic `Classifier` and an `OnCheckToolCall` veto. A blocked call never executes; the model gets the reason and can replan
 - **`ChatTools.PromptGuard`** — the input-side guardrail: checks the user's message before it reaches the model
-- **`TAiEvalRunner`** — fluent test cases (`ExpectContains`, `ExpectRegex`, `ExpectEquals`, `ExpectJudge` with an LLM judge, `ExpectScore` with a calibrated scorer) against any target, with text and JSON reports. The framework's own regression suite (117 cases, no API keys) is built on it
+- **`TAiEvalRunner`** — fluent test cases (`ExpectContains`, `ExpectRegex`, `ExpectEquals`, `ExpectJudge` with an LLM judge, `ExpectScore` with a calibrated scorer) against any target, with text and JSON reports. The framework's own regression suite (144 cases, no API keys) is built on it
 - Demo: `073-GuardrailsEvals`
 
 ### 📈 Observability — OpenTelemetry
@@ -927,7 +930,7 @@ Introduced in v3.3 and refined in v3.4, the `TAiCapabilities` system replaces al
 
 - **`ModelCaps`** — what the model natively supports (e.g., `[cap_Image, cap_Reasoning]`)
 - **`SessionCaps`** — what the session needs
-- **Gap = SessionCaps − ModelCaps** — any missing capability activates an automatic ChatTool bridge; for example, a text-only model with `cap_GenImage` in `SessionCaps` automatically routes image generation requests through a DALL-E or Gemini bridge
+- **Gap = SessionCaps − ModelCaps** — any missing capability activates an automatic ChatTool bridge; for example, a text-only model with `cap_GenImage` in `SessionCaps` automatically routes image generation requests through a `gpt-image` or Gemini (Nano Banana) bridge
 
 ```pascal
 // Default capabilities for all models of a provider
@@ -947,20 +950,14 @@ Available capabilities:
 
 ### 🎨 FMX Visual Components
 
-Two generations of FireMonkey components for building multimodal chat UIs:
-
-**Next-generation (v3.4) — Skia-native, virtualized, zero FMX child controls:**
+**Current (since v3.4) — Skia-native, virtualized, zero FMX child controls:**
 
 - **`TAIChatView`** — single-canvas virtualized conversation renderer; only visible messages are painted; supports multi-message text selection, dark/light theme, context menu, long-press (mobile), copy-button feedback with timer, and a scrollbar that doesn't interfere with content
 - **`TAIChatInput`** — fully Skia-painted input bar with custom dropdown overlay (no `TPopupMenu` required), voice-mode indicator, file attachment chips, and `TAIVoiceMonitor` integration; layout adapts from 1 to N attachment chips automatically
 
-**Classic components — FMX-layout-based, simpler to subclass:**
+Both work with every provider and with streaming; messages also carry a footer, action buttons and collapsible task steps (see *Chat UI* in What's New).
 
-- **`TChatList`** — scrollable message container with Markdown rendering, code blocks, copy buttons
-- **`TChatBubble`** — individual message bubble (user / assistant / tool)
-- **`TChatInput`** — text input bar with voice recording, file attachment, and send button
-
-Both sets are compatible with all providers and work with streaming responses.
+**Deprecated — classic components:** `TChatList`, `TChatBubble`, `TChatInput` and `uMakerAi.Utils.ScreenCapture` are marked `deprecated` and kept only so existing applications still compile; no demo uses them since 4.0. When migrating, note that `TAIChatView.AddBubble(..., AInbound)` treats `AInbound = True` as the **user** (prefer `AddUserMessage` / `BeginAssistantMessage` + `AppendToken`), and that `ActiveMediaFile` has no equivalent: use `OnAttachmentOpen`. Demos `012-ChatAllFunctions` and `041-GeminiVeo` show the migrated code.
 
 ### 📐 Design-Time Integration
 
@@ -1203,6 +1200,8 @@ Small consoles with asserts that reproduce a specific issue against the live API
 - Build: **packages and the regression suite compile without the IDE Library Path** (PR #132; `uMakerAi.Version.inc` included by relative path, missing search paths added, `MakerAI.dproj` synced with the `.dpk`); **Delphi sources check out with CRLF**, also in the GitHub ZIP (#133); PDF and audio marked as binary
 - New demos: **`Demos/Libro`** (chapters 3–37 of the 4.0 edition of the book), **`093-A2AChatAgentTool`** and **`094`–`105`** (*Café La Ladera* series); 012, 023, 036, 051 and 052 updated
 - Demos cleanup: the demo sets of 3.1, 3.4 and the previous book edition, plus six demos superseded by newer ones (010, 032-MCPServerDataSnap, 035, 062, 063, 065), moved to [`DeprecatedDemos/`](DeprecatedDemos/README.md); the demo list above is regrouped by topic and covers every project; the test consoles 014, 068 and 069 moved to `Tests/Integration/` (`IntegrationTests.groupproj`)
+- Demos `012-ChatAllFunctions` and `041-GeminiVeo` moved to `TAIChatView` / `TAIChatInput` (the last ones on the deprecated `TChatList`); `041` keeps the metadata to extend a video under the MD5 of its content and no longer leaks the result; `012` no longer pops up its connection parameters (with the resolved API key) when the driver changes
+- Demos on current models: `021` (`gpt-transcribe`, `gpt-4o-mini-tts`), Computer Use `066`/`083` (`claude-opus-5-5`, `gemini-3.8-flash`), `067`/`068` (`claude-haiku-5-5`, re-run live)
 - Regression suite: 144 cases (`chat.minimax.request`; `chat.gemini.request` now covers Argon and the new image alias)
 
 ### v3.9.0 (2026-10-05)
