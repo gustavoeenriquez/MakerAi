@@ -428,6 +428,7 @@ A2A define la Agent Card pero no cómo encontrar la URL de un agente. El registr
 - **Desacople:** `uMakerAi.Tools.Functions` no conoce A2A. Declara `TAiPPMAgentHandler` (abstracto) y `RegisterPPMAgentHandler`; `uMakerAi.A2A.Client` registra `TAiA2APPMAgentHandler` en su `initialization`. Sin esa unidad, AutoMCP no ofrece agentes.
 - **Autenticación:** la clave nunca va en el paquete. Si el agente la pide, sale del entorno de quien instala: `PPM_AGENT_KEY_<NOMBRE>` (p. ej. `PPM_AGENT_KEY_AGENTE_DE_CATALOGO_DE_CAFE_LA_LADERA`).
 - `TAiA2AAgentTool.Ask(texto)`: lo que hace la función cuando la llama el LLM, ahora público.
+- **Solo registries privados (2026-11-05, decisión de Gustavo):** PPMServer acepta agentes únicamente con `PPM_ALLOW_AGENTS=1`. Un agente es la URL de un servicio de terceros (no código revisable) y un registry público no puede responder por quien lo opera; con AutoMCP, instalarlo es mandarle las conversaciones. `registry.cimamaker.com` los deja apagados: publicar da 400, `/v1/a2a/discover` devuelve lista vacía y `/v1/health` dice `"agents": false`.
 - Ejemplo: demo 093 `--ppm`.
 
 ## Push notifications

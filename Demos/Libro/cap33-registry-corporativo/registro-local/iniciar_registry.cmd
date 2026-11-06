@@ -13,6 +13,8 @@ set PPM_HOST=127.0.0.1
 set PPM_STORAGE_PATH=%~dp0storage
 set PPM_MAX_UPLOAD_MB=50
 set PPM_VERSION=1.0.0-ladera
+rem Agentes A2A (paquetes "agent"): solo en registries privados como este; el publico no los acepta
+set PPM_ALLOW_AGENTS=1
 if "%PPM_DB_PASS%"=="" echo Falta PPM_DB_PASS en el entorno && exit /b 1
 if "%PPM_SECRET_KEY%"=="" echo Falta PPM_SECRET_KEY en el entorno && exit /b 1
 if not exist "%PPM_STORAGE_PATH%" mkdir "%PPM_STORAGE_PATH%"

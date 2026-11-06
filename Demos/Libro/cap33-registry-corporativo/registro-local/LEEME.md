@@ -37,7 +37,9 @@
    `pkgs\agente-de-catalogo-de-cafe-la-ladera` es un agente A2A (paquete `agent`, solo su Agent
    Card): se arma con el agente corriendo (`Demos\093-A2AChatAgentTool` con `--solo-agente`) y
    `ppm publish --desde-url http://127.0.0.1:8293` desde esa carpeta. Base creada antes de
-   2026-11-05: aplicar también `sql\migration_003_agent_type.sql`.
+   2026-11-05: aplicar también `sql\migration_003_agent_type.sql`. `iniciar_registry.cmd` pone
+   `PPM_ALLOW_AGENTS=1`: los agentes solo se aceptan en un registry privado como este; el público
+   (registry.cimamaker.com) no los acepta.
 
 6. Desde Delphi, `RegistryLadera.exe` (o `REGISTRY_LADERA=http://...` para otra URL). Con
    `--automcp`, Lucía busca la bodega en el registry corporativo, instala `mcp-bodega-ladera` y
