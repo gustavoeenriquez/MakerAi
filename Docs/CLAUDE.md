@@ -15,7 +15,9 @@ Docs/
 │   ├── MCPServer/       ← Model Context Protocol server implementation
 │   ├── RAG/             ← Retrieval-Augmented Generation (vector + graph)
 │   └── PDF/             ← Distribution-ready consolidated PDFs
-└── Reportes/            ← Informes de campo desde consumidores del framework
+├── Reportes/            ← Informes de campo desde consumidores del framework
+├── README_3.1.md        ← README de la v3.1 (histórico)
+└── WHATS-NEW-3.x.md     ← Novedades de la v3.4 a la v3.9 (salieron del README en la 4.0)
 ```
 
 ## Language
