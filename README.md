@@ -1039,7 +1039,7 @@ AiConn.Params.Values['ApiKey'] := 'sk-...';             // or set a literal key 
 
 ## 🗂️ Demo Projects
 
-Open `Demos/DemosVersion31.groupproj` to load all 66 demo projects in the IDE. Every demo folder has a `CLAUDE.md` (or a section in `Demos/CLAUDE.md`) with what it shows, how to run it and which API keys it needs. Demos from earlier versions that no longer apply live in [`DeprecatedDemos/`](DeprecatedDemos/README.md), for reference only.
+Open `Demos/DemosVersion31.groupproj` to load all 63 demo projects in the IDE. Every demo folder has a `CLAUDE.md` (or a section in `Demos/CLAUDE.md`) with what it shows, how to run it and which API keys it needs. Demos from earlier versions that no longer apply live in [`DeprecatedDemos/`](DeprecatedDemos/README.md), for reference only.
 
 **New to MakerAI?** Start with the *Café La Ladera* series (`094`–`105`): twelve small demos, one per step, from the first streaming chat to a voice order that travels through federated agents. The book projects in `Demos/Libro/` follow the same path chapter by chapter.
 
@@ -1065,7 +1065,6 @@ Open `Demos/DemosVersion31.groupproj` to load all 66 demo projects in the IDE. E
 | Demo | What it shows |
 |------|---------------|
 | `012-ChatAllFunctions` | Full-featured multimodal chat: images, audio, streaming and tools across providers |
-| `014-ChatTest` | Console checks of the Claude driver: text, JSON output, JSON Schema, web search, code execution, documents |
 | `041-GeminiVeo` | Video generation with Google Veo |
 | `089-QwenShowcase` | Everything Qwen (Alibaba Model Studio) with one key: chat, vision, image editing, voice, translation, embeddings + rerank, realtime |
 | `090-Varios/ListAllModels` | Lists the models available from each provider |
@@ -1151,13 +1150,13 @@ Demos `084`–`088` need `TYPESAFE_API_KEY`.
 
 ### Integration checks against real APIs
 
+More of these, which used to be demos 014, 068 and 069, now live in [`Tests/Integration/`](Tests/Integration/CLAUDE.md) with their own group project.
+
 Small consoles with asserts that reproduce a specific issue against the live API (they need the provider's key). For the in-process suite without keys, see `Tests/RegressionSuite`.
 
 | Demo | What it checks |
 |------|----------------|
 | `067-PromptCacheTest` | Claude prompt caching: the second request reads from the cache |
-| `068-AsyncHistoryTest` | Issue #105: in async mode Claude archives its answers in the history |
-| `069-McpSessionGateTest` | Issue #110: MCP client vetting and HTTP session gating by `Mcp-Session-Id` (in-process) |
 
 ### The book: *Inteligencia Artificial con Delphi* (4.0 edition)
 
@@ -1203,7 +1202,7 @@ Small consoles with asserts that reproduce a specific issue against the live API
 - Fix (A2A): `TAiA2AAgentTool` registers once when set up in the Object Inspector (it registered a second function on load); `TAiA2ARemoteAgentTool` is on the palette
 - Build: **packages and the regression suite compile without the IDE Library Path** (PR #132; `uMakerAi.Version.inc` included by relative path, missing search paths added, `MakerAI.dproj` synced with the `.dpk`); **Delphi sources check out with CRLF**, also in the GitHub ZIP (#133); PDF and audio marked as binary
 - New demos: **`Demos/Libro`** (chapters 3–37 of the 4.0 edition of the book), **`093-A2AChatAgentTool`** and **`094`–`105`** (*Café La Ladera* series); 012, 023, 036, 051 and 052 updated
-- Demos cleanup: the demo sets of 3.1, 3.4 and the previous book edition, plus six demos superseded by newer ones (010, 032-MCPServerDataSnap, 035, 062, 063, 065), moved to [`DeprecatedDemos/`](DeprecatedDemos/README.md); the demo list above is regrouped by topic and covers every project
+- Demos cleanup: the demo sets of 3.1, 3.4 and the previous book edition, plus six demos superseded by newer ones (010, 032-MCPServerDataSnap, 035, 062, 063, 065), moved to [`DeprecatedDemos/`](DeprecatedDemos/README.md); the demo list above is regrouped by topic and covers every project; the test consoles 014, 068 and 069 moved to `Tests/Integration/` (`IntegrationTests.groupproj`)
 - Regression suite: 144 cases (`chat.minimax.request`; `chat.gemini.request` now covers Argon and the new image alias)
 
 ### v3.9.0 (2026-10-05)

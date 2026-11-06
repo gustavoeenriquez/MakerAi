@@ -1,0 +1,60 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{982AFCC3-1E9D-42C2-8ED4-843010244748}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="014-ChatTest\ClaudeChatTest.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="068-AsyncHistoryTest\AsyncHistoryTest.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="069-McpSessionGateTest\McpSessionGateTest.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="ClaudeChatTest">
+        <MSBuild Projects="014-ChatTest\ClaudeChatTest.dproj"/>
+    </Target>
+    <Target Name="ClaudeChatTest:Clean">
+        <MSBuild Projects="014-ChatTest\ClaudeChatTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ClaudeChatTest:Make">
+        <MSBuild Projects="014-ChatTest\ClaudeChatTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="AsyncHistoryTest">
+        <MSBuild Projects="068-AsyncHistoryTest\AsyncHistoryTest.dproj"/>
+    </Target>
+    <Target Name="AsyncHistoryTest:Clean">
+        <MSBuild Projects="068-AsyncHistoryTest\AsyncHistoryTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="AsyncHistoryTest:Make">
+        <MSBuild Projects="068-AsyncHistoryTest\AsyncHistoryTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="McpSessionGateTest">
+        <MSBuild Projects="069-McpSessionGateTest\McpSessionGateTest.dproj"/>
+    </Target>
+    <Target Name="McpSessionGateTest:Clean">
+        <MSBuild Projects="069-McpSessionGateTest\McpSessionGateTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="McpSessionGateTest:Make">
+        <MSBuild Projects="069-McpSessionGateTest\McpSessionGateTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="ClaudeChatTest;AsyncHistoryTest;McpSessionGateTest"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="ClaudeChatTest:Clean;AsyncHistoryTest:Clean;McpSessionGateTest:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="ClaudeChatTest:Make;AsyncHistoryTest:Make;McpSessionGateTest:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

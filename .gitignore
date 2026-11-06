@@ -156,8 +156,8 @@ Source/Packages/hpp/
 /historial_cap04.json
 /fix_encoding.py
 /nul
-Demos/014-ChatTest/*.txt
-Demos/014-ChatTest/medios/
+Tests/Integration/014-ChatTest/*.txt
+Tests/Integration/014-ChatTest/medios/
 
 # Graphify knowledge graph (build artifact) — PR #93 @Pedro-DAS
 graphify-out/

@@ -34,7 +34,7 @@ Tests/RegressionSuite/Win64/Release/MakerAiRegressionSuite.exe        # exit 0 =
 Tests/RegressionSuite/Win64/Release/MakerAiRegressionSuite.exe --json report.json   # para CI
 ```
 
-No hay pipeline CI/CD configurado. Los subsistemas visuales y los proveedores LLM reales se siguen verificando manualmente con los 19+ demos de `Demos/`.
+Además, `Tests/Integration/` (`IntegrationTests.groupproj`) junta consolas con asserts contra APIs reales (gastan, salvo la 069) y `Tests/Interop/` valida el cable A2A contra el SDK oficial. No hay pipeline CI/CD configurado. Los subsistemas visuales y los proveedores LLM reales se siguen verificando manualmente con los 19+ demos de `Demos/`.
 
 ## Building and Installation
 
@@ -461,4 +461,5 @@ Detailed documentation is available in `Docs/Version 3/`:
 |-----------|---------------|
 | [Demos/](Demos/CLAUDE.md) | Demo projects overview |
 | [Tests/RegressionSuite/](Tests/RegressionSuite/CLAUDE.md) | Suite de regresión (MCP, agentes, A2A, guardrails, evals) |
+| [Tests/Integration/](Tests/Integration/CLAUDE.md) | Pruebas de integración contra APIs reales (antes demos 014, 068 y 069) |
 | [Docs/](Docs/CLAUDE.md) | Documentation index |

@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **MakerAI 3.x** - Enterprise Delphi AI Framework providing unified connectivity to multiple LLM providers (Claude, OpenAI GPT, Gemini, Ollama, LM Studio, Groq, DeepSeek, Mistral, Cohere) with RAG, MCP protocol support, autonomous agents, and native capability tools.
 
+> **Nov 6/2026:** movido de `Demos/` a `Tests/Integration/`. El `begin..end` principal ya no corre lo que describe este párrafo: ejecuta `code_execution` con PNG contra el driver de MakerAI (servidor de producción) y, con `--groq`, `code_interpreter` en Groq. Ver `../CLAUDE.md`.
+
 **This Demo (014-ChatTest)** - Console application testing core Claude chat functionality including text chat, JSON output, JSON Schema validation, web search, code interpretation, document extraction, vision/image analysis, PDF processing, and extended thinking mode.
 
 ## Build & Run

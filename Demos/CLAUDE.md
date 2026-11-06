@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is the Demos directory for the MakerAI 3.x framework. Contains 66 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
+This is the Demos directory for the MakerAI 3.x framework. Contains 63 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
 
 **Estado de compilación (ago 7/2026): los 48 proyectos compilan** en Win64/Release; el 081 (ago 18/2026), el 082 y el 083 (sep 20/2026) también compilan; el 082 se corrió en runtime (6/6 PASS) y el 083 en **Linux64** sobre Xvfb con OpenAI y Claude.
 
@@ -12,7 +12,7 @@ This is the Demos directory for the MakerAI 3.x framework. Contains 66 working e
 
 **IDE:** Delphi 11 Alexandria through 13 Florence (demos require Delphi 11+; the core framework supports 10.4 Sydney minimum)
 
-**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026; desde sep 29/2026 incluye los 58 proyectos (se sumaron 089-QwenShowcase, que había quedado fuera, y 091-Skills); oct 5/2026 se sumó 092-GPTLiveVoice (59); oct 22/2026, 093-A2AChatAgentTool (60) y de 094 a 099, los demos de la serie de Café La Ladera (66); de 100 a 105, más demos de la serie (72). Nov 6/2026, limpieza para la v4.0: 010, 032-MCPServerDataSnap, 035, 062, 063 y 065 pasaron a `../DeprecatedDemos/Demos/` (66).
+**Group project:** Open `DemosVersion31.groupproj` in Delphi IDE to access all demos. El grupo se regeneró en ago 2026; desde sep 29/2026 incluye los 58 proyectos (se sumaron 089-QwenShowcase, que había quedado fuera, y 091-Skills); oct 5/2026 se sumó 092-GPTLiveVoice (59); oct 22/2026, 093-A2AChatAgentTool (60) y de 094 a 099, los demos de la serie de Café La Ladera (66); de 100 a 105, más demos de la serie (72). Nov 6/2026, limpieza para la v4.0: 010, 032-MCPServerDataSnap, 035, 062, 063 y 065 pasaron a `../DeprecatedDemos/Demos/` (66), y las consolas de prueba 014, 068 y 069 a `../Tests/Integration/` (63).
 
 > **OJO al editar los `.pas` de los demos:** varios están en **ANSI (Windows-1252) con saltos LF**, no en UTF-8. Guardarlos como UTF-8 destruye todas las tildes de forma silenciosa (compila igual, y `git diff` lo disimula si `core.autocrlf` está activo). Verificar siempre con `git diff --numstat` que solo cambien las líneas que se tocaron.
 
@@ -34,7 +34,6 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 | Demo | Purpose | Key Pattern |
 |------|---------|-------------|
 | 012-ChatAllFunctions | Full-featured chat | Multimodal (images, audio), streaming, tool calls |
-| 014-ChatTest | Claude-specific testing | Claude API integration |
 
 ### RAG Systems (02x)
 | Demo | Purpose | Key Classes |
@@ -120,14 +119,12 @@ msbuild DemosVersion31.groupproj /t:Build /p:Config=Release /p:Platform=Win64
 
 ### Tests runtime de issues y subsistemas (06x, 08x)
 
-Consolas con asserts automáticos que reproducen un issue concreto contra APIs reales. No son la suite de regresión (esa vive en `Tests/RegressionSuite/` y no necesita claves); estos **sí requieren API key** y sirven para verificar un fix de punta a punta. **Solo el 082 y el 083 tienen CLAUDE.md propio.**
+Consolas con asserts automáticos que reproducen un issue concreto contra APIs reales. No son la suite de regresión (esa vive en `Tests/RegressionSuite/` y no necesita claves); estos **sí requieren API key** y sirven para verificar un fix de punta a punta. **Solo el 082 y el 083 tienen CLAUDE.md propio.** El 014, el 068 y el 069 se movieron a `../Tests/Integration/` en nov 2026; el 066 y el 067 siguen aquí porque el libro los cita.
 
 | Demo | Verifica | Requiere |
 |------|----------|----------|
 | 066-ComputerUseTest | Computer Use: 3 proyectos (`ComputerUseTest`, `ComputerUseTest01` y `ComputerUseServer`, este último con loop manual en formato OpenAI contra el servidor cimamaker). Ver `CAPTURA_PANTALLA.md` | según proyecto |
 | 067-PromptCacheTest | Prompt caching de Claude: dos requests con el mismo system prompt grande (>1024 tokens) y `CacheContext`; espera `cache_write>0` y luego `cache_read>0` | `CLAUDE_API_KEY` |
-| 068-AsyncHistoryTest | Issue #105: en asíncrono Claude debe archivar sus respuestas en el historial. Conversación multi-turno donde el último turno debe recordar los previos | `CLAUDE_API_KEY` |
-| 069-McpSessionGateTest | Issue #110: vetting de cliente MCP (`OnClientConnect`) y gate de sesión HTTP por `Mcp-Session-Id`. Levanta un `TAiMCPHttpServer` real y lo prueba como cliente en 4 fases | — (in-process) |
 | 083-ComputerUseLinux | **Computer Use en Linux (X11)**: ciclo agéntico real sobre Xvfb con `TAiLinuxExecutor` (xdotool + scrot). Es el 066 pero headless y sin tocar el escritorio del usuario. Compila Linux64; en Win64 solo imprime un aviso. Tiene CLAUDE.md propio | `OPENAI_API_KEY` o `CLAUDE_API_KEY` |
 | 082-ComputerUsePassthru | **Quién ejecuta un `computer_call`**: delegado vía `OnCallToolFunction` (broker headless), sin `ComputerUseTool` asignado, y local con ejecutor simulado — los tres en síncrono y en streaming, porque el driver de OpenAI tiene dos implementaciones. Verifica con asserts y exit code; **no toca la pantalla** (a diferencia del 066). Tiene CLAUDE.md propio | `OPENAI_API_KEY` |
 
