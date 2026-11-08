@@ -2214,9 +2214,7 @@ var
   SearchResult: TAiSearchResult;
   //TempResultVec: TAiRAGVector;
   i: Integer;
-  Node: TAiEmbeddingNode;
   Pair: TPair<Double, TAiEmbeddingNode>;
-  RawIndexResults: TRagItems;
 begin
   Result := nil;
   Handled := False;
@@ -2275,21 +2273,9 @@ begin
         else
         begin
           // V�a r�pida: �ndice vectorial (HNSW / Basic)
-          VectorResults := TList<TAiSearchResult>.Create;
-          //TempResultVec
-          RawIndexResults  := FRagIndex.Search(Target, Max(50, aLimit * 5), FSearchOptions.MinAbsoluteScoreEmbedding);  //<<---- Error aqu�
-          try
-            if Assigned(RawIndexResults ) then
-            begin
-              for i := 0 to RawIndexResults.Count - 1 do
-              begin
-                Node := RawIndexResults [i];
-                VectorResults.Add(TAiSearchResult.Create(Node, Node.Idx));
-              end;
-            end;
-          finally
-            RawIndexResults.Free;
-          end;
+          // Each hit with the score the index computed (SearchScored). Rebuilding it from
+          // Node.Idx returned stale scores with TAIBasicEmbeddingIndex, which never writes Idx.
+          VectorResults := FRagIndex.SearchScored(Target, Max(50, aLimit * 5), FSearchOptions.MinAbsoluteScoreEmbedding);
         end;
 
         // Normalizaci�n vectorial [0..1]

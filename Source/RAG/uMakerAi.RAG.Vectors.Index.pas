@@ -142,6 +142,12 @@ Type
     procedure BuildIndex(Points: TRagItems); virtual;
     function Add(Point: TAiEmbeddingNode): Integer; virtual;
     function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems; virtual;
+    /// <summary>
+    /// Search with the score of each hit, without touching the stored nodes. The default
+    /// reads Node.Idx (what HNSW and the euclidean index write); TAIBasicEmbeddingIndex
+    /// returns its own scores, because it never writes Idx (thread-safe search).
+    /// </summary>
+    function SearchScored(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TList<TAiSearchResult>; virtual;
 
     /// <summary>
     /// Limpia el �ndice y lo deja listo para reconstruir
@@ -166,6 +172,7 @@ Type
   public
     procedure BuildIndex(Points: TRagItems); override;
     function Search(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TRagItems; override;
+    function SearchScored(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TList<TAiSearchResult>; override;
 
     /// <summary>
     /// Versi�n thread-safe que NO modifica los nodos originales
@@ -536,6 +543,22 @@ begin
   Result := nil; // Debe ser implementado en clases derivadas
 end;
 
+function TAIEmbeddingIndex.SearchScored(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TList<TAiSearchResult>;
+var
+  Items: TRagItems;
+  Node: TAiEmbeddingNode;
+begin
+  Result := TList<TAiSearchResult>.Create;
+  Items := Search(Target, aLimit, aPrecision);
+  try
+    if Assigned(Items) then
+      for Node in Items do
+        Result.Add(TAiSearchResult.Create(Node, Node.Idx));
+  finally
+    Items.Free;
+  end;
+end;
+
 procedure TAIEmbeddingIndex.Clear;
 begin
   InternalClear;
@@ -655,10 +678,20 @@ begin
   try
     for Res in SafeList do
       Result.Add(Res.Node);
-    // Nota: El score se recuperar� en el motor principal.
+    // Nota: esta via no trae el score (ver SearchScored), solo los nodos.
+    // Nota original: El score se recuperar� en el motor principal.
   finally
     SafeList.Free;
   end;
+end;
+
+function TAIBasicEmbeddingIndex.SearchScored(Target: TAiEmbeddingNode; aLimit: Integer; aPrecision: Double): TList<TAiSearchResult>;
+begin
+  // The scores InternalSearchSafe already computed. Rebuilding them from Node.Idx (as the
+  // engine did) read whatever the last hybrid search or rerank had left there, or zero:
+  // a query could come back with another query's hits and score, and this index alone
+  // returned nothing.
+  Result := InternalSearchSafe(Target, aLimit, aPrecision, DataVec);
 end;
 
 { TAIEuclideanDistanceIndex }

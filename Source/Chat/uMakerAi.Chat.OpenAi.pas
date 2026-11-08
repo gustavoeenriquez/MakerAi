@@ -124,6 +124,11 @@ type
 
     // Factory
     class function GetDriverName: string; Override;
+    /// <summary>
+    /// The model for a media endpoint (speech, images, transcription): the session model if
+    /// its base name contains one of AMarkers, otherwise ADefault.
+    /// </summary>
+    function MediaModel(const AMarkers: array of string; const ADefault: string): string;
     class procedure RegisterDefaultParams(Params: TStrings); Override;
     class function CreateInstance(Sender: TComponent): TAiChat; Override;
 
@@ -2135,6 +2140,17 @@ begin
   end;
 end;
 
+function TAiOpenChat.MediaModel(const AMarkers: array of string; const ADefault: string): string;
+var
+  M: string;
+begin
+  Result := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+  for M in AMarkers do
+    if ContainsText(Result, M) then
+      Exit;
+  Result := ADefault;
+end;
+
 function TAiOpenChat.InternalRunImageVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 var
   // Variables locales para capturar en el thread an?nimo
@@ -2485,7 +2501,10 @@ begin
 
   // 2. Preparar par?metros para la API de TTS
   LUrl := Url + 'audio/speech';
-  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+  // The chat model is not a TTS model: a chat on gpt-6.x that asks for audio (cap_GenAudio
+  // gap) reached this endpoint with its own model and got 404 "Invalid URL". Same rule as
+  // video (sora) and the Qwen/Mistral drivers: keep a TTS model, otherwise the default.
+  LModel := MediaModel(['tts'], 'gpt-4o-mini-tts');
   // 'tts-1'; // O podr?as tener una propiedad espec?fica para el modelo TTS
   LVoice := TtsParams.Voice; // Usamos la propiedad del componente
   LResponseFormat := TtsParams.VoiceFormat; // Usamos la propiedad del componente
@@ -2582,9 +2601,7 @@ begin
       FOnAddMessage(Self, AskMsg, nil, AskMsg.Role, AskMsg.Prompt);
   end;
 
-  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
-  if LModel = '' then
-    LModel := 'gpt-image-1';
+  LModel := MediaModel(['image'], 'gpt-image-1');   // a chat model is not an image model
 
   LUrl := Url + 'images/generations';
 
@@ -2773,7 +2790,7 @@ begin
 
   sUrl := Url + 'audio/transcriptions';
 
-  LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
+  LModel := MediaModel(['transcribe', 'whisper'], 'gpt-transcribe');   // a chat model is not an STT model
 
   Client := TNetHTTPClient.Create(Nil);
 {$IF CompilerVersion >= 34}

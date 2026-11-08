@@ -490,6 +490,13 @@ begin
     .Input('rag:graph-searchtext')
     .ExpectEquals('huila=si|nota=si|relacion=si');
 
+  // Indice basico (TAIBasicIndex): la via rapida del motor tomaba el score de Node.Idx,
+  // que este indice nunca escribe. Devolvia lo que dejo la busqueda anterior (aqui
+  // 'beta' con 0.99, otra consulta) o cero y nada. Ahora SearchScored trae el suyo.
+  FRunner.AddCase('rag.index.basic-score')
+    .Input('rag:basic-index-score')
+    .ExpectEquals('alfa|1.00');
+
   // --- Chat: serializacion de tool results (familia OpenAI-compatible) ---
   // Chat Completions no admite imagenes en role 'tool' de ninguna forma, y
   // Groq ademas rechaza cualquier array ahi. La media nativa sale como un
@@ -885,6 +892,13 @@ begin
 
   // Fase 2 (WebSearchTool como puente de un modelo sin busqueda): el resultado se inyecta en
   // el prompt y el modelo lo ve; un solo OnReceiveDataEnd (la respuesta del modelo).
+  // OpenAI: los endpoints de voz e imagen recibian el modelo de chat de la sesion
+  // (un gpt-6.x pidiendo audio daba 404 "Invalid URL"). Ahora un modelo de chat cae al
+  // modelo por defecto del endpoint; un modelo del endpoint se respeta.
+  FRunner.AddCase('chat.openai.media-model')
+    .Input('chat:openai-media-model')
+    .ExpectEquals('tts=gpt-4o-mini-tts|image=gpt-image-1|propio=gpt-image-2');
+
   FRunner.AddCase('chat.bridge.websearch-context')
     .Input('chat:bridge-websearch')
     .ExpectEquals('eventos=1|modelo-vio-busqueda=True|respuesta-del-modelo=True');
@@ -4382,6 +4396,43 @@ begin
     Exit;
   end;
 
+  if AScenario = 'chat:openai-media-model' then
+  begin
+    var FakeMM := TFakeOpenAiChatServer.Create(PORT_FAKE_LLM);
+    var ChatMM := TAiOpenChat.Create(nil);
+    try
+      ChatMM.Url := Format('http://localhost:%d/v1/', [PORT_FAKE_LLM]);
+      ChatMM.ApiKey := 'suite';
+      ChatMM.Asynchronous := False;
+      ChatMM.Model := 'gpt-6.1-sol';
+      ChatMM.TtsParams.Voice := 'alloy';
+      ChatMM.TtsParams.VoiceFormat := 'mp3';
+      // Lo que se mira es el modelo que llega al endpoint; la respuesta del servidor
+      // falso (un chat) no es audio ni imagen, asi que el driver puede fallar despues.
+      var RunMM := procedure(AMode: TAiChatMode; const APrompt: string)
+        begin
+          ChatMM.ChatMode := AMode;
+          try
+            ChatMM.AddMessageAndRun(APrompt, 'user', []);
+          except
+            on E: Exception do
+              ;
+          end;
+        end;
+      RunMM(cmSpeechGeneration, 'hola');
+      Result := 'tts=' + FakeMM.LastModel;
+      RunMM(cmImageGeneration, 'un gato');
+      Result := Result + '|image=' + FakeMM.LastModel;
+      ChatMM.Model := 'gpt-image-2';
+      RunMM(cmImageGeneration, 'un perro');
+      Result := Result + '|propio=' + FakeMM.LastModel;
+    finally
+      ChatMM.Free;
+      FakeMM.Free;
+    end;
+    Exit;
+  end;
+
   if AScenario = 'chat:bridge-websearch' then
   begin
     // Fase 2: lo que trae el WebSearchTool es CONTEXTO para el modelo (antes quedaba solo
@@ -4918,6 +4969,50 @@ begin
       if Result <> '' then
         Result := Result + '|';
       Result := Result + Estado;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'rag:basic-index-score' then
+  begin
+    var VB := TAiRAGVector.Create(nil, True);
+    try
+      VB.InMemoryIndexType := TAIBasicIndex;
+      VB.SearchOptions.UseBM25 := False;
+      var MkNode := function(const AText: string; const A, B: Double): TAiEmbeddingNode
+        var
+          D: TAiEmbeddingData;
+        begin
+          SetLength(D, 4);
+          D[0] := A;
+          D[1] := B;
+          D[2] := 0;
+          D[3] := 0;
+          Result := TAiEmbeddingNode.Create(4);
+          Result.Text := AText;
+          Result.Data := D;
+        end;
+      VB.AddItem(MkNode('alfa', 1, 0));
+      var NBeta := MkNode('beta', 0, 1);
+      VB.AddItem(NBeta);
+      VB.BuildIndex;
+      NBeta.Idx := 0.99;      // lo que deja en el nodo una busqueda hibrida o un rerank anterior
+      var QB := MkNode('consulta', 1, 0);
+      try
+        var RB := VB.Search(QB, 1, 0, nil);
+        try
+          if (RB = nil) or (RB.Items.Count = 0) then
+            Result := 'vacio'
+          else
+            Result := Format('%s|%.2f', [RB.Items[0].Text, RB.Items[0].Idx], TFormatSettings.Invariant);
+        finally
+          RB.Free;
+        end;
+      finally
+        QB.Free;
+      end;
+    finally
+      VB.Free;
     end;
     Exit;
   end;

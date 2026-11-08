@@ -86,6 +86,8 @@ type
   private
     FHttp: TIdHTTPServer;
     FHits: Integer;
+    FLastPath: string;
+    FLastModel: string;
     procedure HttpCommand(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
     procedure ParseAuthentication(AContext: TIdContext; const AAuthType, AAuthData: String;
       var VUsername, VPassword: String; var VHandled: Boolean);
@@ -93,6 +95,9 @@ type
     constructor Create(APort: Integer);
     destructor Destroy; override;
     property Hits: Integer read FHits;
+    // Ruta y "model" del JSON de la ultima peticion (chat.openai.media-model)
+    property LastPath: string read FLastPath;
+    property LastModel: string read FLastModel;
   end;
 
   // --- Tool de registry (IAiTool) que cuenta sus ejecuciones ---
@@ -560,6 +565,16 @@ begin
       finally
         Free;
       end;
+  end;
+
+  FLastPath := ARequestInfo.Document;
+  FLastModel := '';
+  var LModelJson := TJSONObject.ParseJSONValue(Body);
+  try
+    if LModelJson is TJSONObject then
+      FLastModel := TJSONObject(LModelJson).GetValue<string>('model', '');
+  finally
+    LModelJson.Free;
   end;
 
   LastUser := '';
