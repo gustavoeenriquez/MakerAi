@@ -252,24 +252,24 @@ begin
     if Length(ANode.Data) > 0 then
       Query.SQL.Add(', embedding = EXCLUDED.embedding');
 
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
-    Query.ParamByName('id').AsString := ANode.ID;
-    Query.ParamByName('node_label').AsString := ANode.NodeLabel;
-    Query.ParamByName('name').AsString := ANode.Name;
-    Query.ParamByName('node_text').AsString := ANode.Text;
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
+    Query.ParamByName('id').AsWideString := ANode.ID;
+    Query.ParamByName('node_label').AsWideString := ANode.NodeLabel;
+    Query.ParamByName('name').AsWideString := ANode.Name;
+    Query.ParamByName('node_text').AsWideString := ANode.Text;
 
     // Usamos la serializaci�n JSON del MetaData
     if Assigned(ANode.MetaData) then
     begin
       JProp := ANode.MetaData.ToJSON;
       try
-        Query.ParamByName('properties').AsString := JProp.ToString;
+        Query.ParamByName('properties').AsWideString := JProp.ToString;
       finally
         JProp.Free;
       end;
     end
     else
-      Query.ParamByName('properties').AsString := '{}';
+      Query.ParamByName('properties').AsWideString := '{}';
 
     Query.ExecSQL;
 
@@ -278,8 +278,8 @@ begin
     begin
       // Borrar chunks viejos
       Query.SQL.Text := 'DELETE FROM ' + FChunksTableName + ' WHERE entidad = :entidad AND node_id = :id';
-      Query.ParamByName('entidad').AsString := FCurrentEntidad;
-      Query.ParamByName('id').AsString := ANode.ID;
+      Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
+      Query.ParamByName('id').AsWideString := ANode.ID;
       Query.ExecSQL;
 
       // Insertar chunks nuevos
@@ -287,11 +287,11 @@ begin
 
       for i := 0 to ANode.Chunks.Count - 1 do
       begin
-        Query.ParamByName('entidad').AsString := FCurrentEntidad;
-        Query.ParamByName('id').AsString := ANode.ID;
+        Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
+        Query.ParamByName('id').AsWideString := ANode.ID;
         Query.ParamByName('idx').AsInteger := i;
-        Query.ParamByName('content').AsString := ANode.Chunks[i].Text;
-        Query.ParamByName('emb').AsString := EmbeddingToString(ANode.Chunks[i].Data);
+        Query.ParamByName('content').AsWideString := ANode.Chunks[i].Text;
+        Query.ParamByName('emb').AsWideString := EmbeddingToString(ANode.Chunks[i].Data);
         Query.ExecSQL;
       end;
     end;
@@ -320,26 +320,26 @@ begin
     Query.SQL.Add('  properties = EXCLUDED.properties, ');
     Query.SQL.Add('  node_text = EXCLUDED.node_text');
 
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
-    Query.ParamByName('id').AsString := AEdge.ID;
-    Query.ParamByName('edge_label').AsString := AEdge.EdgeLabel;
-    Query.ParamByName('name').AsString := AEdge.Name;
-    Query.ParamByName('node_text').AsString := AEdge.Text;
-    Query.ParamByName('source_node_id').AsString := AEdge.FromNode.ID;
-    Query.ParamByName('target_node_id').AsString := AEdge.ToNode.ID;
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
+    Query.ParamByName('id').AsWideString := AEdge.ID;
+    Query.ParamByName('edge_label').AsWideString := AEdge.EdgeLabel;
+    Query.ParamByName('name').AsWideString := AEdge.Name;
+    Query.ParamByName('node_text').AsWideString := AEdge.Text;
+    Query.ParamByName('source_node_id').AsWideString := AEdge.FromNode.ID;
+    Query.ParamByName('target_node_id').AsWideString := AEdge.ToNode.ID;
     Query.ParamByName('weight').AsFloat := AEdge.Weight;
 
     if Assigned(AEdge.MetaData) then
     begin
       JProp := AEdge.MetaData.ToJSON;
       try
-        Query.ParamByName('properties').AsString := JProp.ToString;
+        Query.ParamByName('properties').AsWideString := JProp.ToString;
       finally
         JProp.Free;
       end;
     end
     else
-      Query.ParamByName('properties').AsString := '{}';
+      Query.ParamByName('properties').AsWideString := '{}';
 
     Query.ExecSQL;
   finally
@@ -354,8 +354,8 @@ begin
   Query := NewQuery;
   try
     Query.SQL.Text := 'DELETE FROM ' + FNodesTableName + ' WHERE id = :id AND entidad = :entidad';
-    Query.ParamByName('id').AsString := ANodeID;
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('id').AsWideString := ANodeID;
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
     Query.ExecSQL;
   finally
     Query.Free;
@@ -369,8 +369,8 @@ begin
   Query := NewQuery;
   try
     Query.SQL.Text := 'DELETE FROM ' + FEdgesTableName + ' WHERE id = :id AND entidad = :entidad';
-    Query.ParamByName('id').AsString := AEdgeID;
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('id').AsWideString := AEdgeID;
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
     Query.ExecSQL;
   finally
     Query.Free;
@@ -387,8 +387,8 @@ begin
     Query.SQL.Add('SELECT id, node_label, name, node_text, properties, embedding ');
     Query.SQL.Add('FROM ' + FNodesTableName);
     Query.SQL.Add('WHERE id = :id AND entidad = :entidad');
-    Query.ParamByName('id').AsString := ANodeID;
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('id').AsWideString := ANodeID;
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
     Query.Open;
     if not Query.IsEmpty then
     begin
@@ -426,8 +426,8 @@ begin
     Query.SQL.Add('FROM  ' + FEdgesTableName);
     Query.SQL.Add('WHERE id = :id AND entidad = :entidad');
 
-    Query.ParamByName('id').AsString := AEdgeID;
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('id').AsWideString := AEdgeID;
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
     Query.Open;
 
     if not Query.IsEmpty then
@@ -474,8 +474,8 @@ begin
     Query.SQL.Add('WHERE entidad = :entidad');
     Query.SQL.Add('  AND (source_node_id = :node_id OR target_node_id = :node_id)');
 
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
-    Query.ParamByName('node_id').AsString := ANode.ID;
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
+    Query.ParamByName('node_id').AsWideString := ANode.ID;
     Query.Open;
 
     while not Query.Eof do
@@ -650,7 +650,11 @@ begin
   Query := NewQuery;
   SQL := TStringBuilder.Create;
   try
-    SQL.AppendLine('WITH ');
+    // La expansión por vecinos (traversal) se referencia a sí misma: hace falta RECURSIVE
+    if ADepth > 0 then
+      SQL.AppendLine('WITH RECURSIVE ')
+    else
+      SQL.AppendLine('WITH ');
 
     // -----------------------------------------------------------
     // CTE 1: VECTOR SEARCH (NODES + CHUNKS)
@@ -774,7 +778,7 @@ begin
     // --- EXECUTION ---
     Query.SQL.Text := SQL.ToString;
 
-    Query.ParamByName('ent').AsString := FCurrentEntidad;
+    Query.ParamByName('ent').AsWideString := FCurrentEntidad;
     Query.ParamByName('limit').AsInteger := ALimit;
     Query.ParamByName('prelim_limit').AsInteger := ALimit * 4;
 
@@ -791,7 +795,7 @@ begin
 
     if DoLexical then
     begin
-      Query.ParamByName('query').AsString := APrompt;
+      Query.ParamByName('query').AsWideString := APrompt;
       if MinLexicalScore > 0 then
         Query.ParamByName('min_l').AsFloat := MinLexicalScore;
     end;
@@ -904,15 +908,15 @@ begin
     SQL.AppendLine(Format('SELECT DISTINCT id FROM %s', [APlan.ResultVariable]));
 
     Query.SQL.Text := SQL.ToString;
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
     Query.ParamByName('precision').AsFloat := APrecision;
     Query.ParamByName('limit').AsInteger := ALimit;
 
     for i := 0 to High(APlan.Steps) do
     begin
-      Query.ParamByName(Format('step_label_%d', [i])).AsString := APlan.Steps[i].EdgeLabel;
+      Query.ParamByName(Format('step_label_%d', [i])).AsWideString := APlan.Steps[i].EdgeLabel;
       if not APlan.Steps[i].TargetNodeLabel.IsEmpty then
-        Query.ParamByName(Format('target_label_%d', [i])).AsString := APlan.Steps[i].TargetNodeLabel;
+        Query.ParamByName(Format('target_label_%d', [i])).AsWideString := APlan.Steps[i].TargetNodeLabel;
     end;
 
     Query.Open;
@@ -948,9 +952,9 @@ begin
     Query.SQL.Add('  AND node_label = :node_label');
     Query.SQL.Add('  AND name = :name LIMIT 1');
 
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
-    Query.ParamByName('node_label').AsString := ANodeLabel;
-    Query.ParamByName('name').AsString := AName;
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
+    Query.ParamByName('node_label').AsWideString := ANodeLabel;
+    Query.ParamByName('name').AsWideString := AName;
     Query.Open;
 
     if not Query.Eof then
@@ -973,8 +977,8 @@ begin
   try
     Query.SQL.Add('SELECT id FROM ' + FNodesTableName);
     Query.SQL.Add('WHERE entidad = :entidad AND node_label = :node_label');
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
-    Query.ParamByName('node_label').AsString := ALabel;
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
+    Query.ParamByName('node_label').AsWideString := ALabel;
     Query.Open;
 
     while not Query.Eof do
@@ -1004,16 +1008,16 @@ begin
     if SameText(AKey, 'name') then
     begin
       Query.SQL.Text := 'SELECT id FROM ' + FNodesTableName + ' WHERE entidad = :entidad AND name ILIKE :value';
-      Query.ParamByName('value').AsString := VarToStr(AValue);
+      Query.ParamByName('value').AsWideString := VarToStr(AValue);
     end
     else
     begin
       Query.SQL.Text := 'SELECT id FROM ' + FNodesTableName + ' WHERE entidad = :entidad AND properties ->> :key = :value';
-      Query.ParamByName('key').AsString := AKey;
-      Query.ParamByName('value').AsString := VarToStr(AValue);
+      Query.ParamByName('key').AsWideString := AKey;
+      Query.ParamByName('value').AsWideString := VarToStr(AValue);
     end;
 
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
     Query.Open;
 
     while not Query.Eof do
@@ -1046,9 +1050,9 @@ begin
     Query.SQL.Add('  AND UPPER(name) LIKE :search_text');
     Query.SQL.Add('ORDER BY name LIMIT :limit');
 
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
-    Query.ParamByName('node_label').AsString := ANodeLabel;
-    Query.ParamByName('search_text').AsString := '%' + ASearchText.ToUpper + '%';
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
+    Query.ParamByName('node_label').AsWideString := ANodeLabel;
+    Query.ParamByName('search_text').AsWideString := '%' + ASearchText.ToUpper + '%';
     Query.ParamByName('limit').AsInteger := ALimit;
 
     Query.Open;
@@ -1075,7 +1079,7 @@ begin
   LabelList := TStringList.Create;
   try
     Query.SQL.Text := 'SELECT DISTINCT node_label FROM ' + FNodesTableName + ' WHERE entidad = :entidad ORDER BY node_label';
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
     Query.Open;
     while not Query.Eof do
     begin
@@ -1098,7 +1102,7 @@ begin
   LabelList := TStringList.Create;
   try
     Query.SQL.Text := 'SELECT DISTINCT edge_label FROM ' + FEdgesTableName + ' WHERE entidad = :entidad ORDER BY edge_label';
-    Query.ParamByName('entidad').AsString := FCurrentEntidad;
+    Query.ParamByName('entidad').AsWideString := FCurrentEntidad;
     Query.Open;
     while not Query.Eof do
     begin

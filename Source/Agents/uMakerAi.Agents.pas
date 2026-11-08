@@ -1706,7 +1706,7 @@ begin
               if Assigned(LToolClass) and LToolClass.InheritsFrom(TAiToolBase) then
               begin
                 // Creamos la instancia usando el NODO como propietario
-                LNode.Tool := TAiToolBase(LToolClass).Create(LNode);
+                LNode.Tool := TAiToolBase(TComponentClass(LToolClass).Create(LNode));
 
                 // 3. Deserializar las propiedades en la nueva instancia
                 var

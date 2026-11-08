@@ -649,8 +649,8 @@ begin
   Q := NewQuery;
   try
     Q.SQL.Text := 'DELETE FROM ' + FTableName + ' WHERE entidad = :ent AND id = :id';
-    Q.ParamByName('ent').AsString := IfThen(AEntidad = '', FCurrentEntidad, AEntidad);
-    Q.ParamByName('id').AsString := AID;
+    Q.ParamByName('ent').AsWideString := IfThen(AEntidad = '', FCurrentEntidad, AEntidad);
+    Q.ParamByName('id').AsWideString := AID;
     Q.ExecSQL;
   finally
     Q.Free;
@@ -664,7 +664,7 @@ begin
   Q := NewQuery;
   try
     Q.SQL.Text := 'DELETE FROM ' + FTableName + ' WHERE entidad = :ent';
-    Q.ParamByName('ent').AsString := IfThen(AEntidad = '', FCurrentEntidad, AEntidad);
+    Q.ParamByName('ent').AsWideString := IfThen(AEntidad = '', FCurrentEntidad, AEntidad);
     Q.ExecSQL;
   finally
     Q.Free;
