@@ -893,96 +893,96 @@ begin
   try
     // click_at (con modificadores opcionales: shift, ctrl, alt, super)
     JProps := CoordProps;
-    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','Teclas modificadoras opcionales mientras se hace click: shift, ctrl, alt, super (combinables con +)'); JProps.AddPair('modifiers', JP);
-    JArray.AddElement(MakeFn('click_at', 'Click izquierdo en las coordenadas dadas.', JProps, ReqXY));
+    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','Optional modifier keys held during the click: shift, ctrl, alt, super (combine with +)'); JProps.AddPair('modifiers', JP);
+    JArray.AddElement(MakeFn('click_at', 'Left click at the given coordinates.', JProps, ReqXY));
 
     // right_click
-    JArray.AddElement(MakeFn('right_click', 'Click derecho en las coordenadas dadas.', CoordProps, ReqXY));
+    JArray.AddElement(MakeFn('right_click', 'Right click at the given coordinates.', CoordProps, ReqXY));
 
     // middle_click
-    JArray.AddElement(MakeFn('middle_click', 'Click con botón central en las coordenadas dadas.', CoordProps, ReqXY));
+    JArray.AddElement(MakeFn('middle_click', 'Middle click at the given coordinates.', CoordProps, ReqXY));
 
     // double_click
-    JArray.AddElement(MakeFn('double_click', 'Doble click en las coordenadas dadas.', CoordProps, ReqXY));
+    JArray.AddElement(MakeFn('double_click', 'Double click at the given coordinates.', CoordProps, ReqXY));
 
     // triple_click
-    JArray.AddElement(MakeFn('triple_click', 'Triple click en las coordenadas dadas.', CoordProps, ReqXY));
+    JArray.AddElement(MakeFn('triple_click', 'Triple click at the given coordinates.', CoordProps, ReqXY));
 
     // drag_and_drop
     JProps := CoordProps;
-    JP := TJSONObject.Create; JP.AddPair('type','integer'); JP.AddPair('description','X destino del arrastre (normalizado 0-999)'); JProps.AddPair('destination_x', JP);
-    JP := TJSONObject.Create; JP.AddPair('type','integer'); JP.AddPair('description','Y destino del arrastre (normalizado 0-999)'); JProps.AddPair('destination_y', JP);
+    JP := TJSONObject.Create; JP.AddPair('type','integer'); JP.AddPair('description','Drag target X (normalized 0-999)'); JProps.AddPair('destination_x', JP);
+    JP := TJSONObject.Create; JP.AddPair('type','integer'); JP.AddPair('description','Drag target Y (normalized 0-999)'); JProps.AddPair('destination_y', JP);
     JReq := ReqXY; JReq.Add('destination_x'); JReq.Add('destination_y');
-    JArray.AddElement(MakeFn('drag_and_drop', 'Arrastra desde (x,y) hasta (destination_x, destination_y).', JProps, JReq));
+    JArray.AddElement(MakeFn('drag_and_drop', 'Drags from (x,y) to (destination_x, destination_y).', JProps, JReq));
 
     // hover_at
-    JArray.AddElement(MakeFn('hover_at', 'Mueve el cursor a las coordenadas sin hacer click.', CoordProps, ReqXY));
+    JArray.AddElement(MakeFn('hover_at', 'Moves the cursor to the coordinates without clicking.', CoordProps, ReqXY));
 
     // type_text_at
     JProps := CoordProps;
-    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','Texto a escribir'); JProps.AddPair('text', JP);
-    JP := TJSONObject.Create; JP.AddPair('type','boolean'); JP.AddPair('description','Presionar Enter al final (default true)'); JProps.AddPair('press_enter', JP);
+    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','Text to type'); JProps.AddPair('text', JP);
+    JP := TJSONObject.Create; JP.AddPair('type','boolean'); JP.AddPair('description','Press Enter at the end (default true)'); JProps.AddPair('press_enter', JP);
     JReq := ReqXY; JReq.Add('text');
-    JArray.AddElement(MakeFn('type_text_at', 'Hace click en (x,y) y escribe el texto indicado.', JProps, JReq));
+    JArray.AddElement(MakeFn('type_text_at', 'Clicks at (x,y) and types the given text.', JProps, JReq));
 
     // key_combination
     JProps := TJSONObject.Create;
-    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','Combinación de teclas, ej: "Control+S", "Alt+F4"'); JProps.AddPair('keys', JP);
+    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','Key combination, e.g. "Control+S", "Alt+F4"'); JProps.AddPair('keys', JP);
     JReq := TJSONArray.Create; JReq.Add('keys');
-    JArray.AddElement(MakeFn('key_combination', 'Ejecuta una combinación de teclas del sistema.', JProps, JReq));
+    JArray.AddElement(MakeFn('key_combination', 'Presses a system key combination.', JProps, JReq));
 
     // hold_key
     JProps := TJSONObject.Create;
-    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','Tecla(s) a mantener presionada(s), ej: "shift", "ctrl+alt"'); JProps.AddPair('keys', JP);
-    JP := TJSONObject.Create; JP.AddPair('type','number'); JP.AddPair('description','Duración en segundos (default 1.0)'); JProps.AddPair('duration', JP);
+    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','Key(s) to hold down, e.g. "shift", "ctrl+alt"'); JProps.AddPair('keys', JP);
+    JP := TJSONObject.Create; JP.AddPair('type','number'); JP.AddPair('description','Duration in seconds (default 1.0)'); JProps.AddPair('duration', JP);
     JReq := TJSONArray.Create; JReq.Add('keys');
-    JArray.AddElement(MakeFn('hold_key', 'Mantiene una tecla presionada durante los segundos indicados.', JProps, JReq));
+    JArray.AddElement(MakeFn('hold_key', 'Holds a key down for the given number of seconds.', JProps, JReq));
 
     // scroll_at (con modificadores opcionales)
     JProps := CoordProps;
-    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','Dirección: up, down, left, right'); JProps.AddPair('direction', JP);
-    JP := TJSONObject.Create; JP.AddPair('type','integer'); JP.AddPair('description','Cantidad de scroll en píxeles (default 800)'); JProps.AddPair('magnitude', JP);
-    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','Teclas modificadoras opcionales durante el scroll: shift, ctrl, alt, super'); JProps.AddPair('modifiers', JP);
+    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','Direction: up, down, left, right'); JProps.AddPair('direction', JP);
+    JP := TJSONObject.Create; JP.AddPair('type','integer'); JP.AddPair('description','Scroll amount in pixels (default 800)'); JProps.AddPair('magnitude', JP);
+    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','Optional modifier keys held during the scroll: shift, ctrl, alt, super'); JProps.AddPair('modifiers', JP);
     JReq := ReqXY; JReq.Add('direction');
-    JArray.AddElement(MakeFn('scroll_at', 'Realiza scroll en la posición indicada.', JProps, JReq));
+    JArray.AddElement(MakeFn('scroll_at', 'Scrolls at the given position.', JProps, JReq));
 
     // cursor_position
     JProps := TJSONObject.Create;
     JReq := TJSONArray.Create;
-    JArray.AddElement(MakeFn('cursor_position', 'Devuelve la posición actual del cursor (en data como {"x":..,"y":..}).', JProps, JReq));
+    JArray.AddElement(MakeFn('cursor_position', 'Returns the current cursor position (in data as {"x":..,"y":..}).', JProps, JReq));
 
     // zoom (ampliar región: (x,y) esquina superior-izquierda, (destination_x,destination_y) inferior-derecha)
     JProps := CoordProps;
-    JP := TJSONObject.Create; JP.AddPair('type','integer'); JP.AddPair('description','X esquina inferior-derecha de la región (normalizado 0-999)'); JProps.AddPair('destination_x', JP);
-    JP := TJSONObject.Create; JP.AddPair('type','integer'); JP.AddPair('description','Y esquina inferior-derecha de la región (normalizado 0-999)'); JProps.AddPair('destination_y', JP);
+    JP := TJSONObject.Create; JP.AddPair('type','integer'); JP.AddPair('description','X of the lower-right corner of the region (normalized 0-999)'); JProps.AddPair('destination_x', JP);
+    JP := TJSONObject.Create; JP.AddPair('type','integer'); JP.AddPair('description','Y of the lower-right corner of the region (normalized 0-999)'); JProps.AddPair('destination_y', JP);
     JReq := ReqXY; JReq.Add('destination_x'); JReq.Add('destination_y');
-    JArray.AddElement(MakeFn('zoom', 'Amplía una región de la pantalla para inspeccionarla en detalle.', JProps, JReq));
+    JArray.AddElement(MakeFn('zoom', 'Zooms into a region of the screen to inspect it in detail.', JProps, JReq));
 
     // navigate
     JProps := TJSONObject.Create;
-    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','URL a la que navegar'); JProps.AddPair('url', JP);
+    JP := TJSONObject.Create; JP.AddPair('type','string'); JP.AddPair('description','URL to navigate to'); JProps.AddPair('url', JP);
     JReq := TJSONArray.Create; JReq.Add('url');
-    JArray.AddElement(MakeFn('navigate', 'Navega a la URL especificada.', JProps, JReq));
+    JArray.AddElement(MakeFn('navigate', 'Navigates to the given URL.', JProps, JReq));
 
     // screenshot
     JProps := TJSONObject.Create;
     JReq := TJSONArray.Create;
-    JArray.AddElement(MakeFn('screenshot', 'Captura la pantalla actual y la retorna como imagen.', JProps, JReq));
+    JArray.AddElement(MakeFn('screenshot', 'Captures the current screen and returns it as an image.', JProps, JReq));
 
     // wait_5_seconds
     JProps := TJSONObject.Create;
     JReq := TJSONArray.Create;
-    JArray.AddElement(MakeFn('wait_5_seconds', 'Espera 5 segundos para que la UI reaccione.', JProps, JReq));
+    JArray.AddElement(MakeFn('wait_5_seconds', 'Waits 5 seconds for the UI to react.', JProps, JReq));
 
     // go_back
     JProps := TJSONObject.Create;
     JReq := TJSONArray.Create;
-    JArray.AddElement(MakeFn('go_back', 'Navega hacia atrás en el historial.', JProps, JReq));
+    JArray.AddElement(MakeFn('go_back', 'Goes back in the history.', JProps, JReq));
 
     // go_forward
     JProps := TJSONObject.Create;
     JReq := TJSONArray.Create;
-    JArray.AddElement(MakeFn('go_forward', 'Navega hacia adelante en el historial.', JProps, JReq));
+    JArray.AddElement(MakeFn('go_forward', 'Goes forward in the history.', JProps, JReq));
 
     Result := JArray.ToJSON;
   finally

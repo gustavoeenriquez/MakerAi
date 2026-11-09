@@ -2740,7 +2740,7 @@ begin
 
                         ResMsg.MediaFiles.Add(NewVideoFile);
 
-                        ResMsg.Prompt := 'Video generado exitosamente.';
+                        ResMsg.Prompt := 'Video generated successfully.';
                         FLastContent := ResMsg.Prompt;
                       end);
                   end

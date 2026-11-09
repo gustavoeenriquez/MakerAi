@@ -720,7 +720,7 @@ begin
   inherited Create(AOwner);
   FTimeoutMs := 60000;
   FToolName := 'ask_remote_agent';
-  FDescription := 'Delega una consulta en un agente remoto especializado y devuelve su respuesta';
+  FDescription := 'Delegates a request to a specialized remote agent and returns its answer';
 end;
 
 procedure TAiA2AAgentTool.Notification(AComponent: TComponent; Operation: TOperation);
@@ -782,7 +782,7 @@ begin
   begin
     Param := FItem.Parameters.Add;
     Param.Name := 'query';
-    Param.Description.Text := 'La consulta o instruccion para el agente remoto';
+    Param.Description.Text := 'The request or instruction for the remote agent';
     Param.ParamType := TToolsParamType.ptString;
     Param.Required := True;
   end;
@@ -823,7 +823,7 @@ begin
   Handled := True;
   if Trim(FAgentUrl) = '' then
   begin
-    ToolCall.Response := '{"error":"TAiA2AAgentTool: AgentUrl no configurada"}';
+    ToolCall.Response := '{"error":"TAiA2AAgentTool: AgentUrl is not set"}';
     Exit;
   end;
 
@@ -840,7 +840,7 @@ var
   Salida: string;
 begin
   if Trim(FAgentUrl) = '' then
-    Exit('{"error":"TAiA2AAgentTool: AgentUrl no configurada"}');
+    Exit('{"error":"TAiA2AAgentTool: AgentUrl is not set"}');
   Client := TAiA2AClient.Create(nil);
   try
     Client.Url := FAgentUrl;
@@ -855,9 +855,9 @@ begin
           tsInputRequired:
             // El agente remoto pide mas datos. Se le devuelve al LLM como
             // texto: es el LLM quien decide si preguntar al usuario.
-            Result := 'El agente remoto necesita mas informacion: ' + Client.LastStatusMessage;
+            Result := 'The remote agent needs more information: ' + Client.LastStatusMessage;
         else
-          Result := 'El agente remoto no completo la tarea (' + Client.LastState + '): ' +
+          Result := 'The remote agent did not complete the task (' + Client.LastState + '): ' +
             Client.LastStatusMessage;
         end;
       finally
@@ -867,7 +867,7 @@ begin
       on E: Exception do
         // Un fallo del agente remoto se le cuenta al LLM en vez de romper el
         // turno de chat: puede reintentar o seguir sin esa informacion.
-        Result := 'Error llamando al agente remoto: ' + E.Message;
+        Result := 'Error calling the remote agent: ' + E.Message;
     end;
   finally
     Client.Free;

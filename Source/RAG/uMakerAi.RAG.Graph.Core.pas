@@ -2652,8 +2652,8 @@ end;
   end;
 
   // 3. Construir el texto a partir de las aristas recopiladas
-  ContextBuilder.AppendLine('Contexto extra�do del grafo de conocimiento:');
-  ContextBuilder.AppendLine('Se han identificado los siguientes hechos relevantes:');
+  ContextBuilder.AppendLine('Context extracted from the knowledge graph:');
+  ContextBuilder.AppendLine('The following relevant facts were found:');
 
   if RelevantEdges.Count > 0 then
   begin
@@ -3418,7 +3418,7 @@ begin
 
   // El contexto son los nodos encontrados (y sus vecinos hasta ADepth), sus fragmentos y las relaciones entre
   // ellos. Antes esta funcion solo devolvia el encabezado: quien la usaba le pasaba al LLM un contexto vacio.
-  Result := 'Contexto extraído del grafo de conocimiento:' + sLineBreak + GetContextualizedText(FoundNodes);
+  Result := 'Context extracted from the knowledge graph:' + sLineBreak + GetContextualizedText(FoundNodes);
 end;
 
 procedure TAiRagGraph.LoadFromStream(AStream: TStream);

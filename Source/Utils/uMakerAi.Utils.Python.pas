@@ -250,7 +250,7 @@ begin
   Except
     On E: Exception do
     Begin
-      Result := E.Message + sLineBreak + 'Recuerda que todos los script deben retornar un valor en una variable llamada Result';
+      Result := E.Message + sLineBreak + 'Remember: every script must return its value in a variable named Result';
       Raise;
     End;
   end;
@@ -319,7 +319,7 @@ begin
   Except
     On E: Exception do
     Begin
-      Result := E.Message + sLineBreak + 'Recuerda que todos los script deben retornar un valor en una variable llamada result';
+      Result := E.Message + sLineBreak + 'Remember: every script must return its value in a variable named result';
       Raise;
     End;
   end;

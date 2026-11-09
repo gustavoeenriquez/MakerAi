@@ -6,7 +6,8 @@ TAiLocale, por carpeta y por tipo:
 
   exception  primer literal de XxxException/XxxError.Create(Fmt)(...)
   ui         asignaciones a Text/Caption/Hint/TextPrompt/Placeholder
-  prompt     literales que parecen instrucciones a un LLM (Eres/Responde/You are...)
+  prompt     instrucciones a un LLM todavía en español (Eres/Responde/...); los
+             prompts internos se escriben en inglés y no pasan por TAiLocale
 
 Uso:
   python Tests/Localization/hardcoded_strings.py            # resumen por carpeta
@@ -32,7 +33,9 @@ RE_EXC = re.compile(r"\b\w*(?:Exception|Error)\w*\.Create(?:Fmt)?\s*\(\s*(" + LI
 RE_UI = re.compile(r"(\w*)\.(?:Text|Caption|Hint|TextPrompt|Placeholder)\s*:=\s*(" + LIT + ")")
 # Una asignación a SQL.Text o un literal que empieza con SQL no es texto de pantalla
 RE_SQL = re.compile(r"^'\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH|MERGE|EXEC|PRAGMA)\b", re.I)
-RE_PROMPT = re.compile(r"('(?:Eres|Responde|Actúa|Act as|You are|Respond|Answer only|Responde UNICAMENTE)(?:[^']|'')*')")
+# Los prompts internos van en inglés con "responde en el idioma del usuario"
+# (decisión de la v4.0): solo cuenta como pendiente un prompt en español.
+RE_PROMPT = re.compile(r"('(?:Eres|Responde|Actúa|Analiza|Contesta|Tienes acceso)\b(?:[^']|'')*')")
 
 
 def strip_comments(text):
@@ -107,6 +110,9 @@ def scan_file(path):
             if not re.search(r'[^\W\d_]{2}', lit) or lit in prompts:
                 continue
             if m.group(1).upper().endswith('SQL') or RE_SQL.match(lit):
+                continue
+            # Descripciones de tools y system prompt: los lee el modelo, van en inglés
+            if m.group(1).lower().endswith(('description', 'systemprompt')):
                 continue
             hits.append(('ui', lineno, lit))
     return hits

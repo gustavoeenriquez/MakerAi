@@ -427,11 +427,12 @@ begin
   end;
 
   Prompt :=
-    'Eres un evaluador estricto de calidad. Evalua si la RESPUESTA cumple el CRITERIO.' + sLineBreak +
-    'CRITERIO: ' + ACriteria + sLineBreak +
-    IfThen(Trim(AInput) <> '', 'PREGUNTA: """' + AInput + '"""' + sLineBreak, '') +
-    'RESPUESTA: """' + AActual + '"""' + sLineBreak +
-    'Contesta UNICAMENTE con una palabra: PASS si cumple, FAIL si no cumple.';
+    'You are a strict quality evaluator. Decide whether the ANSWER meets the CRITERION ' +
+    '(they may be written in any language).' + sLineBreak +
+    'CRITERION: ' + ACriteria + sLineBreak +
+    IfThen(Trim(AInput) <> '', 'QUESTION: """' + AInput + '"""' + sLineBreak, '') +
+    'ANSWER: """' + AActual + '"""' + sLineBreak +
+    'Reply with ONE word only: PASS if it meets the criterion, FAIL if it does not.';
 
   FJudge.NewChat;
   Resp := Trim(FJudge.AddMessageAndRun(Prompt, 'user', []));

@@ -135,7 +135,7 @@ begin
   if not (jVal is TJSONObject) then
   begin
     jVal.Free;
-    Exit('Error: Argumentos inv?lidos (JSON mal formado).');
+    Exit('Error: Invalid arguments (malformed JSON).');
   end;
 
   jArgs := TJSONObject(jVal);
@@ -155,10 +155,10 @@ begin
 
       // 2. Validar ruta (Seguridad b?sica)
       if not ValidatePath(Path) then
-        Exit('Error: Ruta inv?lida o vac?a.');
+        Exit('Error: Invalid or empty path.');
 
       if (Cmd <> 'create') and (not FileExists(Path)) then
-        Exit('Error: El archivo no existe en la ruta: ' + Path);
+        Exit('Error: The file does not exist at path: ' + Path);
 
       // 3. Despachar comando
       if Cmd = 'view' then
@@ -172,11 +172,11 @@ begin
       else if Cmd = 'apply_diff' then
         Result := Cmd_ApplyDiff(Path, jArgs)
       else
-        Result := 'Error: Comando desconocido "' + Cmd + '"';
+        Result := 'Error: Unknown command "' + Cmd + '"';
 
     except
       on E: Exception do
-        Result := 'Error ejecutando editor (' + Cmd + '): ' + E.Message;
+        Result := 'Error running the editor (' + Cmd + '): ' + E.Message;
     end;
   finally
     jArgs.Free;
@@ -201,7 +201,7 @@ begin
     if TFile.Exists(Path) then
       Result := TFile.ReadAllText(Path, TEncoding.UTF8)
     else
-      raise EFileNotFoundException.Create('Archivo no encontrado: ' + Path);
+      raise EFileNotFoundException.Create('File not found: ' + Path);
   end;
 end;
 
@@ -312,7 +312,7 @@ begin
         EndL := Lines.Count - 1;
 
       if StartL > EndL then
-        Exit('Error: Rango de vista inv?lido (Start > End) o fuera de l?mites.');
+        Exit('Error: Invalid view range (Start > End) or out of bounds.');
 
       ResBuilder := TStringBuilder.Create;
       try
@@ -338,15 +338,15 @@ var
   Content: string;
 begin
   if FileExists(Path) then
-    Exit('Error: El archivo ya existe. Usa "str_replace" o "insert" para modificarlo.');
+    Exit('Error: The file already exists. Use "str_replace" or "insert" to modify it.');
 
   Content := jArgs.GetValue<string>('file_text', '');
 
   if not EnsureDirectory(Path) then
-    Exit('Error: No se pudo crear el directorio para el archivo.');
+    Exit('Error: Could not create the directory for the file.');
 
   SaveFileContent(Path, Content);
-  Result := 'Archivo creado exitosamente.';
+  Result := 'File created successfully.';
 end;
 
 function TAiTextEditorTool.Cmd_StrReplace(const Path: string; const jArgs: TJSONObject): string;
@@ -401,7 +401,7 @@ begin
 
     // Validaci?n de seguridad para evitar crashes
     if (InsertLine < 0) or (InsertLine > Lines.Count) then
-      Exit('Error: N?mero de l?nea ' + IntToStr(InsertLine) + ' fuera de rango.');
+      Exit('Error: Line number ' + IntToStr(InsertLine) + ' is out of range.');
 
     if InsertLine = 0 then
       Lines.Insert(0, NewStr)
@@ -411,7 +411,7 @@ begin
       Lines.Insert(InsertLine, NewStr);
 
     SaveFileContent(Path, Lines.Text);
-    Result := 'Texto insertado exitosamente.';
+    Result := 'Text inserted successfully.';
   finally
     Lines.Free;
   end;
@@ -424,7 +424,7 @@ var
 begin
   DiffText := jArgs.GetValue<string>('diff_text');
   if DiffText = '' then
-    Exit('Error: "diff_text" no puede estar vac?o.');
+    Exit('Error: "diff_text" cannot be empty.');
 
   OriginalContent := LoadFileContent(Path);
 
@@ -433,10 +433,10 @@ begin
     if Applier.Apply(OriginalContent, DiffText, NewContent, ErrorMsg) then
     begin
       SaveFileContent(Path, NewContent);
-      Result := 'Diff aplicado exitosamente.';
+      Result := 'Diff applied successfully.';
     end
     else
-      Result := 'Error al aplicar diff: ' + ErrorMsg;
+      Result := 'Error applying the diff: ' + ErrorMsg;
   finally
     Applier.Free;
   end;

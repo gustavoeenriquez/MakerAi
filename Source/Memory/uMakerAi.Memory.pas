@@ -627,8 +627,8 @@ begin
   if not Assigned(FAnalyzer) then
     Exit; // funcion apagada por completo sin Analyzer configurado
 
-  FExchangeBuffer.Append('Usuario: ').Append(AUserPrompt).Append(sLineBreak);
-  FExchangeBuffer.Append('Asistente: ').Append(AAssistantResponse).Append(sLineBreak).Append(sLineBreak);
+  FExchangeBuffer.Append('User: ').Append(AUserPrompt).Append(sLineBreak);
+  FExchangeBuffer.Append('Assistant: ').Append(AAssistantResponse).Append(sLineBreak).Append(sLineBreak);
   Inc(FTurnsSinceAnalysis);
 
   // El buffer se acumula siempre que hay Analyzer, independientemente de
@@ -673,18 +673,19 @@ begin
   // forma confiable, y ademas puede chocar con Tool_Active en algunos providers
   // (p.ej. Gemini). Se parsea el texto de forma defensiva mas abajo.
   LPrompt :=
-    'Analiza el siguiente fragmento de conversacion y decide si contiene informacion ' +
-    'que valga la pena recordar a largo plazo: hechos sobre el usuario, preferencias, ' +
-    'decisiones tomadas, soluciones a errores, patrones de trabajo. Ignora saludos, ' +
-    'charla trivial o preguntas puntuales sin informacion reutilizable.' + sLineBreak + sLineBreak +
-    'Responde UNICAMENTE con un objeto JSON (sin texto adicional, sin bloques de codigo ' +
-    'markdown) con esta forma exacta:' + sLineBreak +
+    'Analyze the following conversation fragment and decide whether it contains information ' +
+    'worth remembering in the long term: facts about the user, preferences, ' +
+    'decisions made, fixes for errors, work patterns. Ignore greetings, ' +
+    'small talk or one-off questions with no reusable information.' + sLineBreak +
+    'Write the content of each memory in the same language as the conversation.' + sLineBreak + sLineBreak +
+    'Reply ONLY with a JSON object (no extra text, no markdown code ' +
+    'blocks) with exactly this shape:' + sLineBreak +
     '{"worth_saving": boolean, "memories": [{"content": string, "type": ' +
     '"fact"|"preference"|"decision"|"error_fix"|"pattern"|"workflow"|"summary"|"custom", ' +
     '"importance": 1-10, "tags": "csv"}]}' + sLineBreak +
-    'Si no hay nada memorable, responde {"worth_saving": false, "memories": []}.' +
+    'If there is nothing worth remembering, reply {"worth_saving": false, "memories": []}.' +
     sLineBreak + sLineBreak +
-    'Conversacion:' + sLineBreak + AConversationText;
+    'Conversation:' + sLineBreak + AConversationText;
 
   try
     // Cada analisis es independiente: sin NewChat el Analyzer acumulaba todos

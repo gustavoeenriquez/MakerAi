@@ -963,8 +963,8 @@ Var
     LArr := TJSonArray.Create;
     LPart := TJSONObject.Create;
     LPart.AddPair('type', 'text');
-    LPart.AddPair('text', '[Adjuntos devueltos por la herramienta ' + LPendingNames.CommaText +
-      '. El resultado textual va en el mensaje tool anterior.]');
+    LPart.AddPair('text', '[Attachments returned by the tool ' + LPendingNames.CommaText +
+      '. The text result is in the previous tool message.]');
     LArr.Add(LPart);
 
     for K := 0 to LPendingMedia.Count - 1 do

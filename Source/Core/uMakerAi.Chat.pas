@@ -1897,7 +1897,8 @@ begin
   FResponse_format := TAiChatResponseFormat.tiaChatRfText;
   FTemperature := 1;
   FUser := 'user';
-  FSystemPrompt.Text := 'Eres un asistente muy ?til y servicial';
+  // Prompts internos en inglés (v4.0): el modelo contesta en el idioma del usuario
+  FSystemPrompt.Text := 'You are a helpful assistant. Always answer in the same language the user writes in.';
   FMax_tokens := 3000;
   FUrl := GlOpenAIUrl;
   FTop_p := 1;
@@ -4094,7 +4095,7 @@ Var
 begin
   // Si el formato de respuesta es Json, siempre debe llevar en la instrucci?n que el formato sea json
   If Self.Response_format = TAiChatResponseFormat.tiaChatRfJson then
-    S := 'Responde en formato json'
+    S := 'Respond in JSON format.'
   Else
     S := '';
 
@@ -4424,7 +4425,7 @@ begin
     if LTranscriptions <> '' then
     begin
       if AskMsg.Prompt <> '' then
-        AskMsg.Prompt := AskMsg.Prompt + sLineBreak + '[Transcripción de audio]:' + sLineBreak + LTranscriptions
+        AskMsg.Prompt := AskMsg.Prompt + sLineBreak + '[Audio transcription]:' + sLineBreak + LTranscriptions
       else
         AskMsg.Prompt := LTranscriptions;
     end;
@@ -4450,7 +4451,7 @@ begin
       end;
       if Trim(LBusqueda) <> '' then
         AskMsg.Prompt := AskMsg.Prompt + sLineBreak + sLineBreak +
-          '[Resultados de búsqueda web (úsalos para responder y cita la fuente)]:' + sLineBreak + LBusqueda;
+          '[Web search results (use them to answer and cite the source)]:' + sLineBreak + LBusqueda;
     end;
 
     // --- FASE 3: ORQUESTACION DE SALIDA ---
@@ -4645,8 +4646,8 @@ begin
       LMemCtx := LMemory.BuildContext(AskMsg.Prompt, FMemoryTokenBudget);
       if LMemCtx <> '' then
       begin
-        LMemWrapper := '--- Contexto de memoria ---' + sLineBreak + LMemCtx +
-                        sLineBreak + '--- Fin del contexto ---' + sLineBreak + sLineBreak;
+        LMemWrapper := '--- Memory context ---' + sLineBreak + LMemCtx +
+                        sLineBreak + '--- End of context ---' + sLineBreak + sLineBreak;
         AskMsg.Prompt := LMemWrapper + AskMsg.Prompt;
       end;
     except

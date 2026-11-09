@@ -2737,7 +2737,7 @@ begin
   LResult := SearchPPMMCP(LQuery, 1, 20, FAutoMCPConfig.RegistryUrl);
   if not Assigned(LResult) then
   begin
-    ToolCall.Response := 'No se pudo conectar con el registry PPM. Verifica la conexión a Internet.';
+    ToolCall.Response := 'Could not reach the PPM registry. Check the Internet connection.';
     Exit;
   end;
 
@@ -2803,28 +2803,28 @@ begin
       if LShown > 0 then
       begin
         // Insertar encabezado al inicio del resultado
-        var LHeader := Format('Se encontraron %d herramientas para "%s":', [LShown, LQuery]);
+        var LHeader := Format('Found %d tools for "%s":', [LShown, LQuery]);
         if LFiltered > 0 then
-          LHeader := LHeader + Format(' (%d bloqueadas por política)', [LFiltered]);
+          LHeader := LHeader + Format(' (%d blocked by policy)', [LFiltered]);
         ToolCall.Response := LHeader + sLineBreak + LSb.ToString +
-          sLineBreak + 'Para usar una herramienta: llama ppm_install("<nombre>"), luego call_mcp_tool.';
+          sLineBreak + 'To use a tool: call ppm_install("<name>"), then call_mcp_tool.';
       end
       else if LAgentsText <> '' then
         ToolCall.Response := ''
       else if LFiltered > 0 then
         ToolCall.Response := Format(
-          'Se encontraron %d herramientas para "%s" pero todas están bloqueadas por la política AutoMCP.',
+          'Found %d tools for "%s", but all of them are blocked by the AutoMCP policy.',
           [LFiltered, LQuery])
       else
-        ToolCall.Response := Format('No se encontraron herramientas para "%s" en el registry PPM.', [LQuery]);
+        ToolCall.Response := Format('No tools found for "%s" in the PPM registry.', [LQuery]);
     end
     else if LAgentsText = '' then
-      ToolCall.Response := Format('No se encontraron herramientas para "%s" en el registry PPM.', [LQuery]);
+      ToolCall.Response := Format('No tools found for "%s" in the PPM registry.', [LQuery]);
     if LAgentsText <> '' then
       ToolCall.Response := IfThen(ToolCall.Response <> '', ToolCall.Response + sLineBreak + sLineBreak, '') +
-        'Agentes A2A para "' + LQuery + '" (otros agentes que atienden la consulta en lenguaje natural):' +
+        'A2A agents for "' + LQuery + '" (other agents that take the request in natural language):' +
         sLineBreak + LAgentsText + sLineBreak +
-        'Para usar un agente: llama ppm_install("<nombre>"), luego call_agent con agent_name y message.';
+        'To use an agent: call ppm_install("<name>"), then call_agent with agent_name and message.';
   finally
     LSb.Free;
     LResult.Free;
@@ -2895,7 +2895,7 @@ begin
     end;
     DoLog('[AutoMCP] agente A2A "' + LToolName + '" listo');
     ToolCall.Response := Format(
-      '{"ok":true,"message":"Agente A2A ''%s'' listo. ACCIÓN REQUERIDA: llama AHORA call_agent con agent_name=''%s'' y message=la consulta en lenguaje natural con todos los datos. NO llames ppm_search."}',
+      '{"ok":true,"message":"A2A agent ''%s'' ready. REQUIRED ACTION: call call_agent NOW with agent_name=''%s'' and message=the request in natural language with all the data it needs. Do NOT call ppm_search."}',
       [LToolName, LToolName]);
     Exit;
   end;
@@ -2918,7 +2918,7 @@ begin
   if not Assigned(LItem) then
   begin
     ToolCall.Response := Format(
-      '{"ok":false,"error":"No se pudo instalar ''%s''. Verifica el nombre del paquete en PPM y la conexión a internet. No intentes instalar este paquete nuevamente en esta sesión."}',
+      '{"ok":false,"error":"Could not install ''%s''. Check the package name in PPM and the Internet connection. Do not try to install this package again in this session."}',
       [LToolName]);
     Exit;
   end;
@@ -2954,11 +2954,11 @@ begin
 
     if LFuncList <> '' then
       ToolCall.Response := Format(
-        '{"ok":true,"message":"''%s'' listo. ACCIÓN REQUERIDA: llama AHORA call_mcp_tool con tool_name=''%s'' y function_name=uno de [%s] con los argumentos originales. NO llames ppm_search."}',
+        '{"ok":true,"message":"''%s'' ready. REQUIRED ACTION: call call_mcp_tool NOW with tool_name=''%s'' and function_name=one of [%s] with the original arguments. Do NOT call ppm_search."}',
         [LToolName, LToolName, LFuncList])
     else
       ToolCall.Response := Format(
-        '{"ok":true,"message":"''%s'' iniciado. Llama call_mcp_tool con tool_name=''%s'' y los argumentos originales. NO llames ppm_search."}',
+        '{"ok":true,"message":"''%s'' started. Call call_mcp_tool with tool_name=''%s'' and the original arguments. Do NOT call ppm_search."}',
         [LToolName, LToolName]);
   finally
     LFuncNames.Free;
@@ -3013,7 +3013,7 @@ begin
   if not Assigned(LClientItem) then
   begin
     ToolCall.Response := Format(
-      '{"error":"Herramienta ''%s'' no está instalada. Usa ppm_install primero."}',
+      '{"error":"Tool ''%s'' is not installed. Use ppm_install first."}',
       [LToolName]);
     Exit;
   end;
@@ -3024,7 +3024,7 @@ begin
   if not LClientItem.MCPClient.Available then
   begin
     ToolCall.Response := Format(
-      '{"error":"MCP server ''%s'' no está disponible. Puede requerir reinstalación."}',
+      '{"error":"MCP server ''%s'' is not available. It may need to be reinstalled."}',
       [LToolName]);
     Exit;
   end;
@@ -3065,7 +3065,7 @@ begin
       if not LFuncFound and (LValidFuncs.Count > 0) then
       begin
         ToolCall.Response := Format(
-          '{"error":"La función ''%s'' no existe en ''%s''. Nombres válidos: [%s]. Usa uno de estos exactamente."}',
+          '{"error":"Function ''%s'' does not exist in ''%s''. Valid names: [%s]. Use one of them exactly."}',
           [LFuncName, LToolName, LValidFuncs.CommaText]);
         Exit;
       end;
@@ -3089,8 +3089,8 @@ begin
           ToolCall.Response := LResult.ToJson
         else
           ToolCall.Response := Format(
-            '{"error":"MCP server ''%s'' no respondió a la llamada ''+LFuncName+''"}',
-            [LToolName]);
+            '{"error":"MCP server ''%s'' did not answer the call to ''%s''"}',
+            [LToolName, LFuncName]);
 
         // Propagar archivos media extraídos al ToolCall (imágenes, audio, etc.)
         for MF in LExtractedMedia do
@@ -3124,31 +3124,31 @@ begin
   LSb := TStringBuilder.Create;
   try
     LSb.AppendLine(
-      'Tienes acceso al registry PPM (PascalAI Package Manager) con más de 150 ' +
-      'herramientas MCP que cubren GitHub, PostgreSQL, Slack, Jira, Stripe, DuckDB, ' +
-      'Kubernetes, AWS S3, Azure, Kafka, GraphQL y muchas más.');
+      'You have access to the PPM registry (PascalAI Package Manager), with more than 150 ' +
+      'MCP tools covering GitHub, PostgreSQL, Slack, Jira, Stripe, DuckDB, ' +
+      'Kubernetes, AWS S3, Azure, Kafka, GraphQL and many more.');
     LSb.AppendLine;
-    LSb.AppendLine('Cuando el usuario te pida algo que requiere acceso a servicios externos, ' +
-      'actúa de forma AUTÓNOMA siguiendo este flujo sin pedir permiso:');
-    LSb.AppendLine('  1. Llama a ppm_search con palabras clave para encontrar la herramienta adecuada.');
-    LSb.AppendLine('  2. Llama a ppm_install con el nombre exacto del paquete para instalarlo.');
-    LSb.AppendLine('  3. Llama a call_mcp_tool con el nombre del tool, la función y los argumentos JSON.');
+    LSb.AppendLine('When the user asks for something that needs access to external services, ' +
+      'act AUTONOMOUSLY following this flow, without asking for permission:');
+    LSb.AppendLine('  1. Call ppm_search with keywords to find the right tool.');
+    LSb.AppendLine('  2. Call ppm_install with the exact package name to install it.');
+    LSb.AppendLine('  3. Call call_mcp_tool with the tool name, the function and the JSON arguments.');
     if (PPMAgentHandler <> nil) then
-      LSb.AppendLine('  Si ppm_search devuelve un agente A2A (otro agente que atiende en lenguaje natural): ' +
-        'ppm_install con su nombre y luego call_agent con agent_name y message.');
+      LSb.AppendLine('  If ppm_search returns an A2A agent (another agent that takes requests in natural language): ' +
+        'ppm_install with its name, then call_agent with agent_name and message.');
     LSb.AppendLine;
-    LSb.AppendLine('Convenciones:');
-    LSb.AppendLine('- Los nombres de paquetes siguen el patrón mcp-<servicio> (ej: mcp-github, mcp-postgres).');
-    LSb.AppendLine('- Los argumentos de call_mcp_tool deben ser un JSON válido como string.');
-    LSb.AppendLine('- Responde en el mismo idioma que el usuario.');
-    LSb.AppendLine('- Para herramientas de audio/TTS: solicita siempre formato WAV si el tool lo soporta (parámetro format="wav" o similar). Solo usa MP3 u otros formatos si WAV no está disponible.');
+    LSb.AppendLine('Conventions:');
+    LSb.AppendLine('- Package names follow the pattern mcp-<service> (e.g. mcp-github, mcp-postgres).');
+    LSb.AppendLine('- The arguments of call_mcp_tool must be valid JSON passed as a string.');
+    LSb.AppendLine('- Always answer in the same language the user writes in.');
+    LSb.AppendLine('- For audio/TTS tools: always ask for WAV if the tool supports it (format="wav" or similar). Use MP3 or other formats only if WAV is not available.');
     LSb.AppendLine;
-    LSb.AppendLine('REGLAS CRÍTICAS DE EJECUCIÓN (obligatorias):');
-    LSb.AppendLine('- Ejecuta las herramientas de forma SECUENCIAL, una a la vez. Espera siempre el resultado de call_mcp_tool antes de llamar a cualquier otra herramienta.');
-    LSb.AppendLine('- Si ya tienes una herramienta ACTIVA que puede resolver la tarea, úsala DIRECTAMENTE. NO llames a ppm_search ni ppm_install en paralelo mientras call_mcp_tool está en ejecución.');
-    LSb.AppendLine('- NUNCA llames ppm_search después de que call_mcp_tool ejecutó la operación (exitosa o con error). ppm_search solo sirve para descubrir herramientas nuevas, no para reintentar.');
-    LSb.AppendLine('- Si call_mcp_tool devuelve un error de red, autenticación, credenciales o permisos: reporta el error directamente al usuario. NO busques herramientas alternativas.');
-    LSb.AppendLine('- Si call_mcp_tool devuelve "función no encontrada": usa los nombres válidos que indica el error y reintenta UNA vez. Si sigue fallando, reporta al usuario.');
+    LSb.AppendLine('CRITICAL EXECUTION RULES (mandatory):');
+    LSb.AppendLine('- Run tools SEQUENTIALLY, one at a time. Always wait for the result of call_mcp_tool before calling any other tool.');
+    LSb.AppendLine('- If an ACTIVE tool can already solve the task, use it DIRECTLY. Do NOT call ppm_search or ppm_install in parallel while call_mcp_tool is running.');
+    LSb.AppendLine('- NEVER call ppm_search after call_mcp_tool ran the operation (successfully or with an error). ppm_search is only for discovering new tools, not for retrying.');
+    LSb.AppendLine('- If call_mcp_tool returns a network, authentication, credentials or permissions error: report it directly to the user. Do NOT look for alternative tools.');
+    LSb.AppendLine('- If call_mcp_tool returns "function not found": use the valid names given in the error and retry ONCE. If it still fails, report it to the user.');
 
     // Clasificar clientes habilitados: activos (proceso corriendo) vs registrados (proceso no iniciado)
     var LHasActive := False;
@@ -3166,8 +3166,8 @@ begin
     if LHasActive then
     begin
       LSb.AppendLine;
-      LSb.AppendLine('HERRAMIENTAS MCP ACTIVAS (proceso ya corriendo — omite ppm_search y ppm_install, ve directo al paso 3):');
-      LSb.AppendLine('IMPORTANTE: usa EXCLUSIVAMENTE los nombres de función y parámetros indicados aquí. No inventes nombres.');
+      LSb.AppendLine('ACTIVE MCP TOOLS (process already running — skip ppm_search and ppm_install, go straight to step 3):');
+      LSb.AppendLine('IMPORTANT: use ONLY the function and parameter names listed here. Do not invent names.');
       for I := 0 to FMCPClients.Count - 1 do
         if FMCPClients[I].Enabled and FMCPClients[I].MCPClient.Available then
         begin
@@ -3243,7 +3243,7 @@ begin
     if LHasRegistered then
     begin
       LSb.AppendLine;
-      LSb.AppendLine('HERRAMIENTAS MCP REGISTRADAS (binario ya instalado — omite ppm_search, llama ppm_install para iniciar el proceso, luego call_mcp_tool):');
+      LSb.AppendLine('REGISTERED MCP TOOLS (binary already installed — skip ppm_search, call ppm_install to start the process, then call_mcp_tool):');
       for I := 0 to FMCPClients.Count - 1 do
         if FMCPClients[I].Enabled and not FMCPClients[I].MCPClient.Available then
           LSb.AppendLine('- ' + FMCPClients[I].Name);

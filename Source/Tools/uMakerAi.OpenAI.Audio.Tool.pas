@@ -316,7 +316,7 @@ procedure TAiOpenAiSpeechTool.ExecuteSpeechGeneration(const AText: string; ResMs
         LNewFile := TAiMediaFile.Create;
         LNewFile.LoadFromStream('speech.' + TTSFormatExtension, LStream);
         ResMsg.AddMediaFile(LNewFile);
-        ResMsg.Prompt := '[Audio generado]';
+        ResMsg.Prompt := '[Audio generated]';
         ReportDataEnd(ResMsg, 'assistant', '[Audio generado]');
       finally
         LStream.Free;

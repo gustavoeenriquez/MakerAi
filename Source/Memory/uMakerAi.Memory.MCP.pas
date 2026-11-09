@@ -66,64 +66,64 @@ implementation
 
 type
   TMemStoreParams = class
-    [AiMCPSchemaDescription('Contenido de la memoria a guardar')]
+    [AiMCPSchemaDescription('Content of the memory to store')]
     content: string;
 
-    [AiMCPSchemaDescription('Tipo: fact | preference | decision | error_fix | pattern | workflow | summary | custom')]
+    [AiMCPSchemaDescription('Type: fact | preference | decision | error_fix | pattern | workflow | summary | custom')]
     [AiMCPOptional]
     memory_type: string;
 
-    [AiMCPSchemaDescription('Importancia de 1 (baja) a 10 (crítica). Default: 5')]
+    [AiMCPSchemaDescription('Importance from 1 (low) to 10 (critical). Default: 5')]
     [AiMCPOptional]
     importance: Integer;
 
-    [AiMCPSchemaDescription('Tags separados por coma. Ej: delphi,fmx,memoria')]
+    [AiMCPSchemaDescription('Comma-separated tags. E.g.: delphi,fmx,memory')]
     [AiMCPOptional]
     tags: string;
 
-    [AiMCPSchemaDescription('Días hasta expiración. 0 = sin expiración')]
+    [AiMCPSchemaDescription('Days until it expires. 0 = never expires')]
     [AiMCPOptional]
     ttl_days: Integer;
   end;
 
   TMemSearchParams = class
-    [AiMCPSchemaDescription('Texto a buscar en las memorias')]
+    [AiMCPSchemaDescription('Text to search for in the memories')]
     query: string;
 
-    [AiMCPSchemaDescription('Número máximo de resultados. Default: 10')]
+    [AiMCPSchemaDescription('Maximum number of results. Default: 10')]
     [AiMCPOptional]
     limit: Integer;
 
-    [AiMCPSchemaDescription('Modo de búsqueda: fts | semantic | hybrid. Default: hybrid')]
+    [AiMCPSchemaDescription('Search mode: fts | semantic | hybrid. Default: hybrid')]
     [AiMCPOptional]
     mode: string;
   end;
 
   TMemRecallParams = class
-    [AiMCPSchemaDescription('Importancia mínima (1-10). Default: 7')]
+    [AiMCPSchemaDescription('Minimum importance (1-10). Default: 7')]
     [AiMCPOptional]
     min_importance: Integer;
 
-    [AiMCPSchemaDescription('Número máximo de entradas. Default: 20')]
+    [AiMCPSchemaDescription('Maximum number of entries. Default: 20')]
     [AiMCPOptional]
     limit: Integer;
   end;
 
   TMemContextParams = class
-    [AiMCPSchemaDescription('Prompt actual del agente para seleccionar memorias relevantes')]
+    [AiMCPSchemaDescription('Current agent prompt, used to pick the relevant memories')]
     prompt: string;
 
-    [AiMCPSchemaDescription('Presupuesto máximo en tokens. Default: 2000')]
+    [AiMCPSchemaDescription('Maximum token budget. Default: 2000')]
     [AiMCPOptional]
     token_budget: Integer;
 
-    [AiMCPSchemaDescription('Importancia mínima de las memorias a incluir. Default: 1')]
+    [AiMCPSchemaDescription('Minimum importance of the memories to include. Default: 1')]
     [AiMCPOptional]
     min_importance: Integer;
   end;
 
   TMemDeleteParams = class
-    [AiMCPSchemaDescription('Id de la memoria a eliminar')]
+    [AiMCPSchemaDescription('Id of the memory to delete')]
     id: Integer;
   end;
 
@@ -132,23 +132,23 @@ type
   end;
 
   TMemLinkParams = class
-    [AiMCPSchemaDescription('Id de la memoria origen')]
+    [AiMCPSchemaDescription('Id of the source memory')]
     from_id: Integer;
 
-    [AiMCPSchemaDescription('Id de la memoria destino')]
+    [AiMCPSchemaDescription('Id of the target memory')]
     to_id: Integer;
 
-    [AiMCPSchemaDescription('Tipo de relación: related | caused_by | depends_on | contradicts')]
+    [AiMCPSchemaDescription('Relation type: related | caused_by | depends_on | contradicts')]
     [AiMCPOptional]
     relation: string;
   end;
 
   TMemPruneParams = class
-    [AiMCPSchemaDescription('Elimina memorias con importancia menor a este valor. Default: 3')]
+    [AiMCPSchemaDescription('Delete memories with importance below this value. Default: 3')]
     [AiMCPOptional]
     min_importance: Integer;
 
-    [AiMCPSchemaDescription('Elimina memorias con más de N días sin acceso. Default: 90')]
+    [AiMCPSchemaDescription('Delete memories not accessed for more than N days. Default: 90')]
     [AiMCPOptional]
     max_age_days: Integer;
   end;
@@ -247,7 +247,7 @@ begin
   inherited Create;
   FMemory     := AMemory;
   FName       := 'memory_store';
-  FDescription:= 'Guarda una memoria persistente. Evita duplicados automáticamente.';
+  FDescription:= 'Stores a persistent memory. Duplicates are avoided automatically.';
 end;
 
 function TAiMemoryStoreTool.ExecuteWithParams(const Params: TMemStoreParams;
@@ -276,7 +276,7 @@ begin
   inherited Create;
   FMemory      := AMemory;
   FName        := 'memory_search';
-  FDescription := 'Busca memorias por texto (FTS), similitud semántica o híbrido.';
+  FDescription := 'Searches memories by text (FTS), semantic similarity or both (hybrid).';
 end;
 
 function TAiMemorySearchTool.ExecuteWithParams(const Params: TMemSearchParams;
@@ -321,7 +321,7 @@ begin
   inherited Create;
   FMemory      := AMemory;
   FName        := 'memory_recall';
-  FDescription := 'Recupera memorias de alta importancia ordenadas por relevancia.';
+  FDescription := 'Recalls high-importance memories ordered by relevance.';
 end;
 
 function TAiMemoryRecallTool.ExecuteWithParams(const Params: TMemRecallParams;
@@ -357,8 +357,8 @@ begin
   inherited Create;
   FMemory      := AMemory;
   FName        := 'memory_context';
-  FDescription := 'Construye un bloque de contexto con las memorias más relevantes ' +
-                  'para el prompt actual, respetando un token budget.';
+  FDescription := 'Builds a context block with the most relevant memories ' +
+                  'for the current prompt, within a token budget.';
 end;
 
 function TAiMemoryContextTool.ExecuteWithParams(const Params: TMemContextParams;
@@ -392,7 +392,7 @@ begin
   inherited Create;
   FMemory      := AMemory;
   FName        := 'memory_delete';
-  FDescription := 'Elimina una memoria por su Id.';
+  FDescription := 'Deletes a memory by its Id.';
 end;
 
 function TAiMemoryDeleteTool.ExecuteWithParams(const Params: TMemDeleteParams;
@@ -417,8 +417,8 @@ begin
   inherited Create;
   FMemory      := AMemory;
   FName        := 'memory_stats';
-  FDescription := 'Devuelve estadísticas del namespace activo: total, importancia ' +
-                  'promedio, decay promedio, entrada más antigua/reciente.';
+  FDescription := 'Returns statistics of the active namespace: total, average ' +
+                  'importance, average decay, oldest/newest entry.';
 end;
 
 function TAiMemoryStatsTool.ExecuteWithParams(const Params: TMemStatsParams;
@@ -439,8 +439,8 @@ begin
   inherited Create;
   FMemory      := AMemory;
   FName        := 'memory_link';
-  FDescription := 'Crea una relación entre dos memorias. ' +
-                  'Relaciones estándar: related, caused_by, depends_on, contradicts.';
+  FDescription := 'Creates a relation between two memories. ' +
+                  'Standard relations: related, caused_by, depends_on, contradicts.';
 end;
 
 function TAiMemoryLinkTool.ExecuteWithParams(const Params: TMemLinkParams;
@@ -470,8 +470,8 @@ begin
   inherited Create;
   FMemory      := AMemory;
   FName        := 'memory_prune';
-  FDescription := 'Elimina memorias antiguas de baja importancia y decay bajo. ' +
-                  'Útil para limpiar el namespace periódicamente.';
+  FDescription := 'Deletes old memories with low importance and low decay. ' +
+                  'Useful to clean up the namespace periodically.';
 end;
 
 function TAiMemoryPruneTool.ExecuteWithParams(const Params: TMemPruneParams;

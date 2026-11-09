@@ -3461,7 +3461,7 @@ begin
 
                 var
                 ImgMsg := TAiChatMessage.Create('', 'assistant');
-                ImgMsg.Prompt := '[Imagen Generada] ' + ImgPrompt;
+                ImgMsg.Prompt := '[Image Generated] ' + ImgPrompt;
                 ImgMsg.MediaFiles.Add(GenImg);
                 ImgMsg.Id := FMessages.Count + 1;
                 ImgMsg.PreviousResponseId := FResponseId;

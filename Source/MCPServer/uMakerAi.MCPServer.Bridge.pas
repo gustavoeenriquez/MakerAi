@@ -168,7 +168,7 @@ begin
     begin
       // Manejo de errores
       Result := TAiMCPResponseBuilder.New
-        .AddText('Error: La ejecuci?n de la herramienta no devolvi? un resultado exitoso.')
+        .AddText('Error: The tool did not return a successful result.')
         .Build;
     end;
 

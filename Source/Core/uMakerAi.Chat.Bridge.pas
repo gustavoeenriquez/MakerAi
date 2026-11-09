@@ -224,7 +224,7 @@ constructor TAiChatSpeechBridge.Create(AOwner: TComponent);
 begin
   inherited;
   FEngine := TAiBaseChatBridge.Create(nil);
-  FPromptTranscription := 'Transcribe este audio literalmente. Solo el texto.';
+  FPromptTranscription := 'Transcribe this audio verbatim, in its original language. Output only the text.';
 end;
 
 destructor TAiChatSpeechBridge.Destroy;
@@ -254,7 +254,7 @@ procedure TAiChatSpeechBridge.ExecuteSpeechGeneration(const aText: string; ResMs
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg);
   ReportState(acsWriting, 'Delegando generaci�n de voz...');
-  FEngine.TargetChat.AddMessageAndRun('Genera un audio con el siguiente texto: ' + aText, 'user', []);
+  FEngine.TargetChat.AddMessageAndRun('Generate speech audio for the following text: ' + aText, 'user', []);
 end;
 
 { TAiChatVisionBridge }
@@ -262,7 +262,7 @@ constructor TAiChatVisionBridge.Create(AOwner: TComponent);
 begin
   inherited;
   FEngine := TAiBaseChatBridge.Create(nil);
-  FPromptVision := 'Describe esta imagen detalladamente.';
+  FPromptVision := 'Describe this image in detail.';
 end;
 
 destructor TAiChatVisionBridge.Destroy;
@@ -355,7 +355,7 @@ constructor TAiChatDocumentBridge.Create(AOwner: TComponent);
 begin
   inherited;
   FEngine := TAiBaseChatBridge.Create(nil);
-  FPromptDocument := 'Analiza este documento y resume los puntos clave.';
+  FPromptDocument := 'Analyze this document and summarize its key points.';
 end;
 
 destructor TAiChatDocumentBridge.Destroy;

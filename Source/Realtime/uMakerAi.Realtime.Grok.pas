@@ -979,10 +979,10 @@ begin
           end;
           if not Handled then
             ToolCall.Response :=
-              'Error: no hay un manejador para la funcion ' + FuncName;
+              'Error: there is no handler for the function ' + FuncName;
         except
           on E: Exception do
-            ToolCall.Response := 'Error ejecutando ' + FuncName + ': ' + E.Message;
+            ToolCall.Response := 'Error running ' + FuncName + ': ' + E.Message;
         end;
         SendFunctionOutput(CallId, ToolCall.Response);
       finally

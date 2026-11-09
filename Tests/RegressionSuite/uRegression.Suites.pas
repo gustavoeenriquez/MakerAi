@@ -4310,7 +4310,7 @@ begin
           LUltimo := M.Prompt;
         end;
       Result := Format('preguntas-al-juez=%d|pregunta=%s', [LUsuario,
-        IfThen(LUltimo.Contains('PREGUNTA: """pregunta-dos"""'), 'si', 'no')]);
+        IfThen(LUltimo.Contains('QUESTION: """pregunta-dos"""'), 'si', 'no')]);
     finally
       RunJ.Judge := nil;
       RunJ.Free;
