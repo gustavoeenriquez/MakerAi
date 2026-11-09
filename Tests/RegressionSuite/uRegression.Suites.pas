@@ -895,6 +895,13 @@ begin
   // OpenAI: los endpoints de voz e imagen recibian el modelo de chat de la sesion
   // (un gpt-6.x pidiendo audio daba 404 "Invalid URL"). Ahora un modelo de chat cae al
   // modelo por defecto del endpoint; un modelo del endpoint se respeta.
+  // TTS por la conexion: la voz del registry del modelo (gpt-4o-mini-tts: Voice=alloy) llegaba
+  // vacia, porque SyncMediaParams copiaba encima el TtsParams vacio de la conexion (HTTP 400 de
+  // OpenAI); una voz fijada en la conexion sigue mandando
+  FRunner.AddCase('chat.tts.registry-voice')
+    .Input('chat:tts-registry-voice')
+    .ExpectEquals('registry=alloy|propia=nova');
+
   FRunner.AddCase('chat.openai.media-model')
     .Input('chat:openai-media-model')
     .ExpectEquals('tts=gpt-4o-mini-tts|image=gpt-image-1|propio=gpt-image-2');
@@ -4392,6 +4399,50 @@ begin
       Tool1.Free;
       Tool2.Free;
       Tool3.Free;
+    end;
+    Exit;
+  end;
+
+  if AScenario = 'chat:tts-registry-voice' then
+  begin
+    var FakeV := TFakeOpenAiChatServer.Create(PORT_FAKE_LLM);
+    var ConnV := TAiChatConnection.Create(nil);
+    try
+      ConnV.DriverName := 'OpenAi';
+      ConnV.Model := 'gpt-4o-mini-tts';
+      ConnV.Params.Values['URL'] := Format('http://localhost:%d/v1/', [PORT_FAKE_LLM]);
+      ConnV.Params.Values['ApiKey'] := 'suite';
+      ConnV.Params.Values['Asynchronous'] := 'False';
+      ConnV.ChatMode := cmSpeechGeneration;
+      var VoiceOf := function: string
+        begin
+          Result := '';
+          var J := TJSONObject.ParseJSONValue(FakeV.LastBody);
+          try
+            if J is TJSONObject then
+              Result := TJSONObject(J).GetValue<string>('voice', '');
+          finally
+            J.Free;
+          end;
+        end;
+      try
+        ConnV.AddMessageAndRun('hola', 'user', []);
+      except
+        on E: Exception do
+          ;                              // el servidor falso no devuelve audio: se mira el pedido
+      end;
+      Result := 'registry=' + VoiceOf();
+      ConnV.TtsParams.Voice := 'nova';
+      try
+        ConnV.AddMessageAndRun('otra vez', 'user', []);
+      except
+        on E: Exception do
+          ;
+      end;
+      Result := Result + '|propia=' + VoiceOf();
+    finally
+      ConnV.Free;
+      FakeV.Free;
     end;
     Exit;
   end;

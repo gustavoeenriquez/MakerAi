@@ -779,8 +779,21 @@ procedure TAiChatConnection.SyncMediaParams;
 begin
   if not Assigned(FChat) then
     Exit;
-  FChat.TtsParams.Assign(FTtsParams);
-  FChat.TranscriptionParams.Assign(FTranscriptionParams);
+  // TTS y transcripcion: lo vacio en la conexion no pisa lo que el registry del modelo dejo en el
+  // chat (Voice=alloy, Voice_Format=mp3). Con Assign, gpt-4o-mini-tts recibia voice '' (HTTP 400)
+  // salvo que el integrador fijara la voz a mano.
+  if FTtsParams.Voice <> '' then
+    FChat.TtsParams.Voice := FTtsParams.Voice;
+  if FTtsParams.VoiceFormat <> '' then
+    FChat.TtsParams.VoiceFormat := FTtsParams.VoiceFormat;
+  if FTtsParams.Language <> '' then
+    FChat.TtsParams.Language := FTtsParams.Language;
+  if FTranscriptionParams.Language <> '' then
+    FChat.TranscriptionParams.Language := FTranscriptionParams.Language;
+  if FTranscriptionParams.ResponseFormat <> '' then
+    FChat.TranscriptionParams.ResponseFormat := FTranscriptionParams.ResponseFormat;
+  if FTranscriptionParams.TimestampGranularities <> '' then
+    FChat.TranscriptionParams.TimestampGranularities := FTranscriptionParams.TimestampGranularities;
   FChat.ImageParams.Assign(FImageGenParams);
   FChat.VideoParams.Assign(FVideoGenParams);
   FChat.WebSearchParams.Assign(FWebSearchParams);
