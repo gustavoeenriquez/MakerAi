@@ -460,6 +460,9 @@ TBinaryOperator = (
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 { TVGQLLexer }
 
 constructor TVGQLLexer.Create(const AText: string);
@@ -711,7 +714,7 @@ begin
     if Peek.IsLetter or (Peek = '_') then
       Exit(ReadIdentifier)
     else
-      raise Exception.CreateFmt('Error lexico: caracter inesperado "%s" en posicion %d', [Peek, FPos]);
+      raise Exception.CreateFmt(AiStr('rag.gql.lex_error'), [Peek, FPos]);
   end;
 end;
 
@@ -930,7 +933,7 @@ begin
     if Check(tkSearch) then
       Result.Search := ParseSearch
     else
-      raise EVGQLParserError.Create('Se requiere clausula SEARCH');
+      raise EVGQLParserError.Create(AiStr('rag.vql.search_required'));
 
     // USING (opcional)
     if Check(tkUsing) then
@@ -975,7 +978,7 @@ begin
         Next; // Ahora si, consumimos el numero para pasar al siguiente token
       end
       else
-        raise EVGQLParserError.Create('Se requiere un valor numerico para la clausula LIMIT');
+        raise EVGQLParserError.Create(AiStr('rag.vql.limit_number'));
     end;
 
     // OFFSET (opcional) — paginacion
@@ -987,7 +990,7 @@ begin
         Next;
       end
       else
-        raise EVGQLParserError.Create('Se requiere un valor numerico para la clausula OFFSET');
+        raise EVGQLParserError.Create(AiStr('rag.vql.offset_number'));
     end;
 
     // Verificar fin de consulta
@@ -1070,7 +1073,7 @@ begin
       tkBm25:
         Result.Mode := smBM25;
     else
-      raise EVGQLParserError.CreateFmt('Modo USING invalido en %d', [FCurrent.Position]);
+      raise EVGQLParserError.CreateFmt(AiStr('rag.vql.using_mode'), [FCurrent.Position]);
     end;
     Next; // Consumir el modo
 
@@ -1103,7 +1106,7 @@ begin
         Next;
       end
       else
-        raise EVGQLParserError.CreateFmt('Se esperaba un modo de fusion valido (RRF, WEIGHTED) en la posicion %d', [FCurrent.Position]);
+        raise EVGQLParserError.CreateFmt(AiStr('rag.vql.fusion_mode'), [FCurrent.Position]);
     end;
 
     // LANGUAGE identificador — opcional, fija el idioma del motor lexico BM25
@@ -1121,7 +1124,7 @@ begin
         Next;
       end
       else
-        raise EVGQLParserError.CreateFmt('Se esperaba un identificador de idioma despues de LANGUAGE en posicion %d', [FCurrent.Position]);
+        raise EVGQLParserError.CreateFmt(AiStr('rag.vql.language'), [FCurrent.Position]);
     end;
 
   except
@@ -1314,7 +1317,7 @@ begin
             Next;
           end
           else
-            raise EVGQLParserError.CreateFmt('Se esperaba un nombre en la posicion %d', [FCurrent.Position]);
+            raise EVGQLParserError.CreateFmt(AiStr('rag.vql.name_expected'), [FCurrent.Position]);
         end;
 
         IdExpr := TIdentifierExpression.Create;
@@ -1365,7 +1368,7 @@ begin
         Expect(tkRParen, ')');
       end;
   else
-    raise EVGQLParserError.CreateFmt('Expresion invalida en posicion %d: token inesperado "%s"', [FCurrent.Position, FCurrent.Text]);
+    raise EVGQLParserError.CreateFmt(AiStr('rag.vql.invalid_expr'), [FCurrent.Position, FCurrent.Text]);
   end;
 end;
 
@@ -1415,7 +1418,7 @@ begin
       tkSemantic: Result.Scope := tsSemantic;
       tkLexical:  Result.Scope := tsLexical;
     else
-      raise EVGQLParserError.CreateFmt('Scope de THRESHOLD invalido en %d. Use GLOBAL, SEMANTIC o LEXICAL', [FCurrent.Position]);
+      raise EVGQLParserError.CreateFmt(AiStr('rag.vql.threshold_scope'), [FCurrent.Position]);
     end;
     Next; // Consumir el Scope (ej: GLOBAL)
 
@@ -1426,7 +1429,7 @@ begin
       Next; // Ahora si avanzamos al siguiente token
     end
     else
-      raise EVGQLParserError.CreateFmt('Se esperaba un valor numerico para el umbral en la posicion %d', [FCurrent.Position]);
+      raise EVGQLParserError.CreateFmt(AiStr('rag.vql.threshold_number'), [FCurrent.Position]);
 
   except
     Result.Free;
@@ -1464,7 +1467,7 @@ begin
       Result.Mode := omReorderABC;
     end
     else
-      raise EVGQLParserError.CreateFmt('Modo OPTIMIZE invalido en %d. Use: MMR[(lambda)] o REORDER ABC', [FCurrent.Position]);
+      raise EVGQLParserError.CreateFmt(AiStr('rag.vql.optimize_mode'), [FCurrent.Position]);
 
   except
     Result.Free;
@@ -1508,7 +1511,7 @@ begin
     until False;
 
     if Result.Fields.Count = 0 then
-      raise EVGQLParserError.Create('RETURN requiere al menos un campo');
+      raise EVGQLParserError.Create(AiStr('rag.vql.return_field'));
   except
     Result.Free;
     raise;
@@ -1531,7 +1534,7 @@ begin
       Next;
     end
     else
-      raise EVGQLParserError.CreateFmt('Se esperaba un nombre de campo despues de DISTINCT ON en posicion %d', [FCurrent.Position]);
+      raise EVGQLParserError.CreateFmt(AiStr('rag.vql.distinct_field'), [FCurrent.Position]);
   except
     Result.Free;
     raise;
@@ -1558,7 +1561,7 @@ begin
         Next;
       end
       else
-        raise EVGQLParserError.CreateFmt('Se esperaba un nombre de campo en ORDER BY, posicion %d', [FCurrent.Position]);
+        raise EVGQLParserError.CreateFmt(AiStr('rag.vql.order_field'), [FCurrent.Position]);
 
       // Direccion opcional (por defecto ASC)
       if Match(tkDesc) then
@@ -1576,7 +1579,7 @@ begin
     until False;
 
     if Result.Fields.Count = 0 then
-      raise EVGQLParserError.Create('ORDER BY requiere al menos un campo');
+      raise EVGQLParserError.Create(AiStr('rag.vql.order_required'));
   except
     Result.Free;
     raise;
@@ -1592,7 +1595,7 @@ end;
 function TVGQLCompiler.Translate(AQuery: TVGQLQuery): TVGQLRequest;
 begin
   if not Assigned(AQuery) then
-    raise EVGQLTranslationError.Create('AST de consulta nulo');
+    raise EVGQLTranslationError.Create(AiStr('rag.vql.null_ast'));
 
   FRequest := TVGQLRequest.Create;
   try
@@ -1604,7 +1607,7 @@ begin
     if Assigned(AQuery.Search) then
       TranslateSearch(AQuery.Search)
     else
-      raise EVGQLTranslationError.Create('La clausula SEARCH es obligatoria');
+      raise EVGQLTranslationError.Create(AiStr('rag.vql.search_required'));
 
     // 3. USING (Modo y pesos)
     if Assigned(AQuery.UsingClause) then
@@ -1654,7 +1657,7 @@ begin
     on E: Exception do
     begin
       FRequest.Free;
-      raise EVGQLTranslationError.CreateFmt('Error de compilacion VGQL: %s', [E.Message]);
+      raise EVGQLTranslationError.CreateFmt(AiStr('rag.vql.compile_error'), [E.Message]);
     end;
   end;
 end;
@@ -1722,7 +1725,7 @@ begin
     else if SameText(AClause.Fusion, 'WEIGHTED') then
       FRequest.Fusion := fmWeighted
     else
-      raise EVGQLTranslationError.CreateFmt('Modo de fusion desconocido: %s', [AClause.Fusion]);
+      raise EVGQLTranslationError.CreateFmt(AiStr('rag.vql.unknown_fusion'), [AClause.Fusion]);
   end;
 
   // 3. Language — sobrescribe el idioma del motor BM25 cuando se especifica en USING
@@ -1750,7 +1753,7 @@ var
   Lit: TLiteralExpression;
 begin
   if not(AExpr is TLiteralExpression) then
-    raise EVGQLTranslationError.Create('Se esperaba un valor literal (String, Number o Boolean)');
+    raise EVGQLTranslationError.Create(AiStr('rag.vql.literal_expected'));
 
   Lit := TLiteralExpression(AExpr);
   case Lit.LiteralType of
@@ -1806,7 +1809,7 @@ begin
   begin
     Bet := TBetweenExpression(AExpr);
     if not(Bet.Left is TIdentifierExpression) then
-      raise EVGQLTranslationError.Create('BETWEEN requiere un identificador de metadato');
+      raise EVGQLTranslationError.Create(AiStr('rag.vql.between_field'));
 
     ACriteria.AddBetween(TIdentifierExpression(Bet.Left).Name, GetLiteralValue(Bet.Min), GetLiteralValue(Bet.Max));
   end
@@ -1816,7 +1819,7 @@ begin
   begin
     InExp := TInExpression(AExpr);
     if not(InExp.Left is TIdentifierExpression) then
-      raise EVGQLTranslationError.Create('IN requiere un identificador de metadato');
+      raise EVGQLTranslationError.Create(AiStr('rag.vql.in_field'));
 
     FieldName := TIdentifierExpression(InExp.Left).Name;
     VArray := VarArrayCreate([0, InExp.Values.Count - 1], varVariant);
@@ -1834,7 +1837,7 @@ begin
   begin
     Bin := TBinaryExpression(AExpr);
     if not(Bin.Left is TIdentifierExpression) then
-      raise EVGQLTranslationError.Create('El lado izquierdo de la comparacion debe ser un campo');
+      raise EVGQLTranslationError.Create(AiStr('rag.vql.compare_field'));
 
     FieldName := TIdentifierExpression(Bin.Left).Name;
 

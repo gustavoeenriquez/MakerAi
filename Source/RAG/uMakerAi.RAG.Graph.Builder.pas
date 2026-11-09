@@ -74,6 +74,7 @@ procedure Register;
 implementation
 
 uses
+  uMakerAi.Localization,
   System.NetEncoding; // Para Base64 si es necesario
 
 procedure Register;
@@ -237,7 +238,7 @@ var
   LEmbeddings: TAiEmbeddingsCore;
 begin
   if FGraph = nil then
-    raise Exception.Create('Graph property is not assigned to the builder.');
+    raise Exception.Create(AiStr('rag.graph.builder_no_graph'));
 
   LEmbeddings := FGraph.Embeddings;
 
@@ -246,7 +247,7 @@ begin
   NodeLabel := ANodeObject.GetValue<string>('nodeLabel', 'Undefined');
 
   if NodeName.Trim.IsEmpty then
-    raise Exception.Create('Node name cannot be empty.');
+    raise Exception.Create(AiStr('rag.graph.node_name_empty'));
 
   NewProperties := ANodeObject.GetValue<TJSONObject>('properties', nil);
   AdditionalText := ANodeObject.GetValue<string>('text', '');
@@ -345,7 +346,7 @@ var
   Cancel: Boolean;
 begin
   if FGraph = nil then
-    raise Exception.Create('Graph property is not assigned to the builder.');
+    raise Exception.Create(AiStr('rag.graph.builder_no_graph'));
 
   // 1. Obtener motor de embeddings del grafo
   LEmbeddings := FGraph.Embeddings;
@@ -354,7 +355,7 @@ begin
   JsonValue := TJSONObject.ParseJSONValue(AJsonTripletArray);
   try
     if not(JsonValue is TJSONArray) then
-      raise Exception.Create('Input JSON is not a valid JSON array of triplets.');
+      raise Exception.Create(AiStr('rag.graph.triplets_invalid'));
 
     JsonArray := JsonValue as TJSONArray;
 

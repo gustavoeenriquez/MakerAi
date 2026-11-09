@@ -72,8 +72,12 @@ for rel, its in sorted(by_file.items()):
             line = line[:m.start()] + f".CreateFmt(AiStr('{key}'), [{m.group(1)}]);" + m.group(2)
         else:
             rx = re.compile(r'(\.Create(?:Fmt)?\(\s*)' + re.escape(lit))
-            if not rx.search(line):
+            m0 = rx.search(line)
+            if not m0:
                 raise SystemExit(f'{rel}:{it["line"]}: literal no encontrado: {lit}')
+            if line[m0.end():].lstrip().startswith('#'):
+                # 'texto'#13#10'%s': el literal sigue con caracteres pegados
+                raise SystemExit(f'{rel}:{it["line"]}: literal con #nn pegado; ajustarlo a mano')
             line = rx.sub(lambda m: m.group(1) + f"AiStr('{key}')", line, count=1)
         lines[i] = line
     text = '\n'.join(lines)
@@ -82,8 +86,13 @@ for rel, its in sorted(by_file.items()):
         ls = text.split('\n')
         impl = next(i for i, l in enumerate(ls) if l.strip().lower() == 'implementation')
         j = impl + 1
-        while j < len(ls) and (ls[j].strip() == '' or ls[j].strip().startswith('{$') or ls[j].strip().startswith('//')):
+        while j < len(ls) and (ls[j].strip() == '' or ls[j].strip().upper().startswith('{$R ') or ls[j].strip().startswith('//')):
             j += 1
+        if ls[j].strip().upper().startswith('{$IF'):
+            # Un uses dentro de {$IFDEF}/{$IF} no se puede ampliar sin romper la
+            # otra rama: hay que reescribirlo a mano como un solo uses
+            # incondicional con la parte condicional adentro
+            raise SystemExit(f'{rel}: el uses de implementation está bajo una directiva; ajustarlo a mano')
         cr = '\r' if ls[impl].endswith('\r') else ''
         if ls[j].strip().lower() == 'uses':
             ls.insert(j + 1, '  uMakerAi.Localization,' + cr)

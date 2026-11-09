@@ -71,7 +71,7 @@ Procedure Register;
 
 implementation
 
-Uses uMakerAi.Chat;
+Uses uMakerAi.Localization, uMakerAi.Chat;
 
 procedure Register;
 begin
@@ -377,7 +377,7 @@ begin
       end;
     end
     else
-      raise Exception.CreateFmt('Gemini Transcription Error %d: %s',
+      raise Exception.CreateFmt(AiStr('tools.gemini.transcription_error'),
         [LResponse.StatusCode, LResponse.ContentAsString]);
   finally
     LRequestJson.Free;

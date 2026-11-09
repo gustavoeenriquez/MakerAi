@@ -119,15 +119,19 @@ def scan_file(path):
 
 
 RE_TABLE_KEY = re.compile(r"^\s*'([a-z0-9_]+(?:\.[a-z0-9_]+)+)'\s*,", re.M)
-RE_KEY_LIT = re.compile(r"'([a-z0-9_]+(?:\.[a-z0-9_]+)+)'")
+_KEY = r"'([a-z0-9_]+(?:\.[a-z0-9_]+)+)'"
+# Dentro de AiStr/AiFmt/TextIn, o como elemento suelto de un arreglo de claves
+# (una línea que solo tiene el literal, como en MENU_KEYS). Así no cuentan los
+# nombres de atributos de telemetría ('rag.search', 'rag.top_k'...).
+RE_KEY_LIT = re.compile(r"(?:\bAiStr|\bAiFmt|\.TextIn\s*\([^,]*,)\s*\(?\s*" + _KEY + r"|^\s*" + _KEY + r"\s*[,)]")
 
 
 def check_keys():
     """Claves usadas en Source que no están en la tabla base, y claves sin uso.
 
-    Una clave usada es un literal con forma 'prefijo.nombre' cuyo prefijo es uno
-    de los de la tabla (chatui, design, ...): así también cuentan las que van en
-    constantes (MENU_KEYS) y no solo las que van dentro de AiStr/AiFmt.
+    Una clave usada es un literal 'prefijo.nombre' (prefijo de la tabla:
+    chatui, design, core...) pasado a AiStr/AiFmt o escrito solo en una línea,
+    como los elementos de MENU_KEYS.
     """
     base = os.path.join(SOURCE, 'Core', 'uMakerAi.Lang.En.pas')
     table = set(RE_TABLE_KEY.findall(open(base, encoding='utf-8-sig').read()))
@@ -146,7 +150,7 @@ def check_keys():
             text = strip_comments(text.replace('\r\n', '\n'))
             for lineno, line in enumerate(text.split('\n'), 1):
                 for m in RE_KEY_LIT.finditer(line):
-                    key = m.group(1)
+                    key = m.group(1) or m.group(2)
                     if key.split('.')[0] in prefixes:
                         used[key].append(f'Source/{os.path.relpath(path, SOURCE).replace(os.sep, "/")}:{lineno}')
     missing = sorted(k for k in used if k not in table)

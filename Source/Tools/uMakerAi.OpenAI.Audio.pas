@@ -260,6 +260,7 @@ procedure Register;
 implementation
 
 uses
+  uMakerAi.Localization,
 
 {$IFDEF MSWINDOWS}
   Winapi.ShellAPI, Winapi.Windows,
@@ -627,11 +628,11 @@ var
   Ref: string;
 begin
   if aName = '' then
-    raise EArgumentException.Create('Known speaker name cannot be empty');
+    raise EArgumentException.Create(AiStr('tools.openai.speaker_name_empty'));
   if Length(FKnownSpeakerNames) >= 4 then
     raise EInvalidOperation.Create('OpenAI diarization supports a maximum of 4 known speakers');
   if (aAudio = nil) or (aAudio.Size = 0) then
-    raise EArgumentException.Create('Known speaker audio cannot be empty');
+    raise EArgumentException.Create(AiStr('tools.openai.speaker_audio_empty'));
 
   aAudio.Position := 0;
   SetLength(Bytes, aAudio.Size);
@@ -832,7 +833,7 @@ begin
       AOutputStream.Position := 0;
       var
       ErrorMsg := TStreamReader.Create(AOutputStream, TEncoding.UTF8).ReadToEnd;
-      raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, ErrorMsg]);
+      raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, ErrorMsg]);
     end;
   finally
     Client.Free;
@@ -1002,7 +1003,7 @@ begin
       Result.FWarning := FLastWarning;
     end
     else
-      raise Exception.CreateFmt('Error Received: %d, %s', [StatusCode, Content]);
+      raise Exception.CreateFmt(AiStr('core.error_received'), [StatusCode, Content]);
   finally
     Body.Free;
   end;
@@ -1113,7 +1114,7 @@ begin
       Result.FWarning := CTranslateWarning;
     end
     else
-      raise Exception.CreateFmt('Error Received: %d, %s', [StatusCode, Content]);
+      raise Exception.CreateFmt(AiStr('core.error_received'), [StatusCode, Content]);
   finally
     Body.Free;
   end;

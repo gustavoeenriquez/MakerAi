@@ -136,6 +136,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 { TGraphLexer }
 
 constructor TGraphLexer.Create(const AText: string);
@@ -467,7 +470,7 @@ begin
       Result := ReadNumber
     else
       // Error: Carácter desconocido
-      raise Exception.CreateFmt('Error Léxico: Carácter inesperado "%s" en posición %d', [Peek, FPos]);
+      raise Exception.CreateFmt(AiStr('rag.gql.lex_error'), [Peek, FPos]);
   end;
 end;
 
@@ -520,7 +523,7 @@ end;
 procedure TGraphParser.Expect(AKind: TTokenKind);
 begin
   if FCurrent.Kind <> AKind then
-    raise Exception.CreateFmt('Error Sintáctico: Se esperaba %s y se encontró "%s" en posición %d', [GetEnumName(TypeInfo(TTokenKind), Ord(AKind)), FCurrent.Text, FCurrent.Position]);
+    raise Exception.CreateFmt(AiStr('rag.gql.expected'), [GetEnumName(TypeInfo(TTokenKind), Ord(AKind)), FCurrent.Text, FCurrent.Position]);
   Next;
 end;
 
@@ -547,7 +550,7 @@ begin
           tkBoolean:
             ValueList.Add(SameText(FCurrent.Text, 'TRUE')); // Case insensitive
         else
-          raise Exception.CreateFmt('Error: Valor de lista inválido. Se esperaba String, Number o Boolean, se encontró "%s".', [FCurrent.Text]);
+          raise Exception.CreateFmt(AiStr('rag.gql.list_value'), [FCurrent.Text]);
         end;
         Next;
 
@@ -693,7 +696,7 @@ begin
           Next;
         end;
     else
-      raise Exception.CreateFmt('Error: Valor de propiedad no soportado. Se esperaba String, Number, Boolean o Null, se encontró "%s".', [FCurrent.Text]);
+      raise Exception.CreateFmt(AiStr('rag.gql.property_value'), [FCurrent.Text]);
     end;
 
     if FCurrent.Kind = tkComma then
@@ -795,7 +798,7 @@ begin
       Result := TBinaryExpr.Create(L, opIsNull, nil); // Unario: Left es la propiedad
     end
     else
-      raise Exception.Create('Error: Se esperaba NULL o NOT NULL después de IS.');
+      raise Exception.Create(AiStr('rag.gql.is_null'));
     Exit;
   end;
 
@@ -811,7 +814,7 @@ begin
       Exit;
     end
     else
-      raise Exception.Create('Error Sintáctico: Uso inválido de NOT. Se esperaba NOT IN.');
+      raise Exception.Create(AiStr('rag.gql.not_in'));
   end;
 
   // --- Operadores Binarios (IN, LIKE, =, etc.) ---
@@ -905,7 +908,7 @@ begin
         Result := TLiteralExpr.Create(Null);
       end;
   else
-    raise Exception.CreateFmt('Error: Se esperaba una expresión válida en el WHERE. Se encontró "%s".', [FCurrent.Text]);
+    raise Exception.CreateFmt(AiStr('rag.gql.where_expr'), [FCurrent.Text]);
   end;
 end;
 
@@ -915,7 +918,7 @@ begin
 
   // Verificar que haya al menos un elemento
   if FCurrent.Kind = tkEOF then
-    raise Exception.Create('Error: Se esperaba una expresión después de RETURN.');
+    raise Exception.Create(AiStr('rag.gql.return_expr'));
 
   while True do
   begin
@@ -938,7 +941,7 @@ begin
       else if FCurrent.Text = '*' then
         Next // Consumir *
       else
-        raise Exception.Create('Error: Se esperaba una variable o propiedad dentro de la función.');
+        raise Exception.Create(AiStr('rag.gql.function_arg'));
 
       Expect(tkRParen);
     end
@@ -959,7 +962,7 @@ begin
       Next;
     end
     else
-      raise Exception.CreateFmt('Error Sintáctico: Expresión de retorno no válida "%s".', [FCurrent.Text]);
+      raise Exception.CreateFmt(AiStr('rag.gql.invalid_return'), [FCurrent.Text]);
 
     // --- SOPORTE PARA ALIAS "AS" ---
     if (FCurrent.Kind = tkIdentifier) and SameText(FCurrent.Text, 'AS') then
@@ -995,7 +998,7 @@ begin
     else if FCurrent.Kind = tkEdges then
       FCommandType := cmdShowEdges
     else
-      raise Exception.Create('Error Sintáctico: Se esperaba LABELS o EDGES después de SHOW.');
+      raise Exception.Create(AiStr('rag.gql.show'));
     Next; // Avanzamos después del comando show
     Exit;
   end;
@@ -1046,7 +1049,7 @@ begin
       FCommandLimit := StrToIntDef(GetTokenTextAndNext, 10);
     end
     else
-      raise Exception.Create('Error Sintáctico: Se esperaba CENTRALITY o DEGREES después de GET.');
+      raise Exception.Create(AiStr('rag.gql.get'));
     Exit;
   end;
 
@@ -1071,7 +1074,7 @@ begin
       if FCurrent.Kind = tkNumber then
         Result.Depth := Trunc(StrToFloat(GetTokenTextAndNext, TFormatSettings.Invariant))
       else
-        raise Exception.Create('Error: Se esperaba un número después de DEPTH.');
+        raise Exception.Create(AiStr('rag.gql.depth'));
     end;
 
     // 5. WHERE (Opcional)
@@ -1084,7 +1087,7 @@ begin
 
     // 7. Verificación del EOF
     if FCurrent.Kind <> tkEOF then
-      raise Exception.CreateFmt('Error: Sintaxis incorrecta. Se esperaba EOF, se encontró "%s" en posición %d', [FCurrent.Text, FCurrent.Position]);
+      raise Exception.CreateFmt(AiStr('rag.gql.expected_eof'), [FCurrent.Text, FCurrent.Position]);
   except
     Result.Free;
     raise;

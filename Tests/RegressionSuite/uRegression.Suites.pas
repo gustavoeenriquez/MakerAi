@@ -5994,7 +5994,7 @@ begin
         Result := Result + '|invalida=aceptada';
       except
         on E: EAiJevError do
-          Result := Result + '|invalida=' + IfThen(Pos('no es PNG', E.Message) > 0, 'rechazada', E.Message);
+          Result := Result + '|invalida=' + IfThen(Pos('is not PNG', E.Message) > 0, 'rechazada', E.Message);
       end;
       // Precio: el de TypeSafe no se cobra en Ollama; un precio propio si
       Result := Result + '|costo-local=' + FloatToStr(JL.Usage.CostUSD, TFormatSettings.Invariant);

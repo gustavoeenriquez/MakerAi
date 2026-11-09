@@ -108,6 +108,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 const
   GlVoicesUrl = 'https://dashscope-intl.aliyuncs.com/api/v1/services/audio/tts/customization';
 
@@ -160,7 +163,7 @@ begin
     Res := Client.Post(FUrl, Body, nil, [TNetHeader.Create('Authorization', 'Bearer ' + GetApiKey)]);
     Result := Res.ContentAsString(TEncoding.UTF8);
     if Res.StatusCode <> 200 then
-      raise Exception.CreateFmt('Qwen voices %d: %s', [Res.StatusCode, Result]);
+      raise Exception.CreateFmt(AiStr('tools.qwen.voices_http'), [Res.StatusCode, Result]);
   finally
     Body.Free;
     Client.Free;
@@ -185,7 +188,7 @@ begin
   if not (V is TJSONObject) then
   begin
     V.Free;
-    raise Exception.Create('Qwen voices: la respuesta no es un objeto JSON');
+    raise Exception.Create(AiStr('tools.qwen.voices_not_json'));
   end;
   Result := TJSONObject(V);
 end;
@@ -196,7 +199,7 @@ var
   LMime: string;
 begin
   if not Assigned(AAudio) or (AAudio.Content.Size = 0) then
-    raise Exception.Create('Qwen voices: se necesita una muestra de audio con contenido.');
+    raise Exception.Create(AiStr('tools.qwen.voices_sample'));
   LMime := AAudio.MimeType;
   if (LMime = '') or SameText(LMime, 'audio/x-wav') then
     LMime := 'audio/wav';
@@ -213,7 +216,7 @@ begin
   try
     Result := jRes.GetValue<string>('output.voice', '');
     if Result = '' then
-      raise Exception.Create('Qwen voices: la respuesta no trae el id de la voz: ' + Copy(jRes.ToJSON, 1, 300));
+      raise Exception.CreateFmt(AiStr('tools.qwen.voices_no_id'), [Copy(jRes.ToJSON, 1, 300)]);
   finally
     jRes.Free;
   end;
@@ -239,7 +242,7 @@ var
   LB64: string;
 begin
   if Trim(ADescription) = '' then
-    raise Exception.Create('Qwen voices: se necesita la descripcion de la voz.');
+    raise Exception.Create(AiStr('tools.qwen.voices_description'));
   FLastDesignFallback := '';
   jInput := TJSONObject.Create;
   jInput.AddPair('action', 'create');
@@ -255,7 +258,7 @@ begin
   try
     Result := jRes.GetValue<string>('output.voice', '');
     if Result = '' then
-      raise Exception.Create('Qwen voices: la respuesta no trae el id de la voz: ' + Copy(jRes.ToJSON, 1, 300));
+      raise Exception.CreateFmt(AiStr('tools.qwen.voices_no_id'), [Copy(jRes.ToJSON, 1, 300)]);
     if jRes.GetValue<Boolean>('output.fallback_mode', False) then
       FLastDesignFallback := jRes.GetValue<string>('output.fallback_reason', 'fallback');
     if Assigned(APreview) then

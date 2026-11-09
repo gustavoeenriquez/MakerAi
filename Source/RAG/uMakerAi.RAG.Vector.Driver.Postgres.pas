@@ -114,6 +114,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 {$R ..\Resources\uMakerAiRAGDriversIcons.res}  // iconos de paleta del paquete
 
 procedure Register;
@@ -271,7 +274,7 @@ begin
           end;
         end
         else
-          raise Exception.Create('foExistsAny / foExistsAll requiere un array de valores.');
+          raise Exception.Create(AiStr('rag.pg.exists_array'));
       end;
 
     foIn, foNotIn:
@@ -480,7 +483,7 @@ end;
 function TAiRAGVectorPostgresDriver.NewQuery: TFDQuery;
 begin
   if not Assigned(FConnection) then
-    raise Exception.Create('Error Cr�tico: Driver Postgres sin conexi�n asignada.');
+    raise Exception.Create(AiStr('rag.pg.no_connection'));
   Result := TFDQuery.Create(nil);
   Result.Connection := FConnection;
 end;
@@ -853,7 +856,7 @@ begin
       Q.Open;
     except
       on E: Exception do
-        raise Exception.CreateFmt('Postgres Error: %s'#13#10'SQL: %s', [E.Message, FLastSQL]);
+        raise Exception.CreateFmt(AiStr('rag.pg.error') + sLineBreak + 'SQL: %s', [E.Message, FLastSQL]);
     end;
 
     // 7. PROCESAMIENTO DE RESULTADOS

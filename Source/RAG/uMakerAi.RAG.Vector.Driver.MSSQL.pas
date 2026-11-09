@@ -135,6 +135,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI.RAG.Drivers', [TAiRAGVectorMSSQLDriver]);
@@ -421,7 +424,7 @@ end;
 function TAiRAGVectorMSSQLDriver.NewQuery: TFDQuery;
 begin
   if not Assigned(FConnection) then
-    raise Exception.Create('TAiRAGVectorMSSQLDriver: propiedad Connection no asignada.');
+    raise Exception.Create(AiStr('rag.mssql.no_connection'));
   Result := TFDQuery.Create(nil);
   Result.Connection := FConnection;
 end;
@@ -517,7 +520,7 @@ var
   FtsInstalled, HasFtsIndex: Boolean;
 begin
   if (ADim <= 0) or (ADim > 1998) then
-    raise Exception.CreateFmt('Dimensión inválida: %d. SQL Server 2025 soporta VECTOR(1..1998).', [ADim]);
+    raise Exception.CreateFmt(AiStr('rag.mssql.dimension'), [ADim]);
 
   FTableName := ABaseTableName.ToLower;
   FFtsCheckedFor := '';
@@ -885,7 +888,7 @@ begin
       Q.Open;
     except
       on E: Exception do
-        raise Exception.CreateFmt('MSSQL Error: %s'#13#10'SQL: %s', [E.Message, FLastSQL]);
+        raise Exception.CreateFmt(AiStr('rag.mssql.error') + sLineBreak + 'SQL: %s', [E.Message, FLastSQL]);
     end;
 
     // Procesamiento de resultados

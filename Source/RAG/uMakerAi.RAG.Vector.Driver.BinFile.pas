@@ -186,6 +186,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI.RAG.Drivers', [TAiMkVecDriver]);
@@ -357,7 +360,7 @@ begin
   if not Assigned(FStream) and FAutoOpen and (FFilePath <> '') then
     Open;
   if not Assigned(FStream) then
-    raise Exception.Create('TAiMkVecDriver: archivo no abierto. Asigna FilePath y llama a Open().');
+    raise Exception.Create(AiStr('rag.mkvec.not_open'));
 end;
 
 procedure TAiMkVecDriver.Open;
@@ -370,7 +373,7 @@ begin
   try
     if Assigned(FStream) then Exit;
     if FFilePath = '' then
-      raise Exception.Create('TAiMkVecDriver: FilePath vacío.');
+      raise Exception.Create(AiStr('rag.mkvec.no_path'));
 
     FEntryIndex.Clear;
     FEntidadIDs.Clear;
@@ -383,10 +386,10 @@ begin
       FStream.ReadBuffer(Magic, 4);
       if (Magic[0] <> MKVEC_MAGIC_0) or (Magic[1] <> MKVEC_MAGIC_1) or
          (Magic[2] <> MKVEC_MAGIC_2) or (Magic[3] <> MKVEC_MAGIC_3) then
-        raise Exception.CreateFmt('"%s" no es un archivo .mkvec válido.', [FFilePath]);
+        raise Exception.CreateFmt(AiStr('rag.mkvec.invalid_file'), [FFilePath]);
       FStream.ReadBuffer(Version, 2);
       if Version > MKVEC_VERSION then
-        raise Exception.CreateFmt('Versión %d no soportada.', [Version]);
+        raise Exception.CreateFmt(AiStr('rag.mkvec.version'), [Version]);
       FStream.ReadBuffer(DimRead, 4);
       FDim := DimRead;
       RebuildAllIndices;
@@ -563,7 +566,7 @@ var
 begin
   EnsureOpen;
   if FDim <= 0 then
-    raise Exception.Create('Dim debe ser > 0 antes de Add.');
+    raise Exception.Create(AiStr('rag.mkvec.dim'));
 
   LEnt   := IfThen(AEntidad = '', 'DEFAULT', AEntidad);
   LID    := ANode.Tag;

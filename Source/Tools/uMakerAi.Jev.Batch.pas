@@ -178,6 +178,7 @@ procedure Register;
 implementation
 
 uses
+  uMakerAi.Localization,
   System.StrUtils;
 
 procedure Register;
@@ -335,7 +336,7 @@ begin
   if FLabelQuestion <> '' then
   begin
     if FQuestions.Find(FLabelQuestion) = nil then
-      raise EAiJevError.CreateFmt('JevBatch: LabelQuestion "%s" no esta en Questions', [FLabelQuestion]);
+      raise EAiJevError.CreateFmt(AiStr('tools.jev.label_question'), [FLabelQuestion]);
     Exit(FLabelQuestion);
   end;
   for i := 0 to FQuestions.Count - 1 do

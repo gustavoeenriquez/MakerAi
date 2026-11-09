@@ -544,7 +544,7 @@ function A2ACardUrl(ACard: TJSONObject): String;
 
 implementation
 
-uses uMakerAi.Chat, System.Zip, System.IniFiles, uMakerAi.Telemetry;
+uses uMakerAi.Localization, uMakerAi.Chat, System.Zip, System.IniFiles, uMakerAi.Telemetry;
 
 procedure Register;
 begin
@@ -636,7 +636,7 @@ begin
       begin
         Action := TFunctionActionItem(FCollection.Items[I]);
         if (Action <> Self) and (Action is TFunctionActionItem) and (CompareText(Value, Action.FunctionName) = 0) then
-          raise Exception.Create('nombre de la acci�n duplicado');
+          raise Exception.Create(AiStr('tools.fn.duplicate_action'));
       end;
     FName := Value;
     Changed(False);
@@ -657,7 +657,7 @@ end;
 procedure TFunctionActionItem.SetFunctionDoc(const Value: TStrings);
 begin
   If Length(Value.Text) > 1024 then
-    Raise Exception.Create('Supera el l�mite m�ximo de la descripci�n de 1024 caracteres');
+    Raise Exception.Create(AiStr('tools.fn.description_too_long'));
 
   FDescription.Text := Value.Text;
 end;
@@ -907,7 +907,7 @@ Var
   Item: TFunctionActionItem;
 begin
   If Not TFile.Exists(FileName) then
-    Raise Exception.Create('No se encuentra el archivo "' + FileName + '" en el sistema');
+    Raise Exception.CreateFmt(AiStr('tools.fn.file_not_found'), [FileName]);
 
   Lista := TStringStream.Create('', TEncoding.UTF8);
   try
@@ -916,7 +916,7 @@ begin
     if not (LParsed is TJSonArray) then
     begin
       LParsed.Free;
-      Raise Exception.Create('El archivo no contiene un array JSON v�lido');
+      Raise Exception.Create(AiStr('tools.fn.file_not_array'));
     end;
     Funcs := TJSonArray(LParsed);
     try
@@ -1079,7 +1079,7 @@ begin
       begin
         Param := TFunctionParamsItem(FCollection.Items[I]);
         if (Param <> Self) and (Param is TFunctionParamsItem) and (CompareText(Value, Param.FName) = 0) then
-          raise Exception.Create('El nombre del par�metro est� duplicado');
+          raise Exception.Create(AiStr('tools.fn.duplicate_param'));
       end;
     FName := Value;
     Changed(False);
@@ -1387,14 +1387,14 @@ var
   NewItem: TMCPClientItem;
 begin
   if not Assigned(aMCPClient) then
-    raise Exception.Create('Se intent� a�adir un objeto TMCPClient nulo.');
+    raise Exception.Create(AiStr('tools.mcp.client_nil'));
 
   if aMCPClient.Name.Trim.IsEmpty then
-    raise Exception.Create('El TMCPClient debe tener una propiedad Name asignada antes de ser a�adido.');
+    raise Exception.Create(AiStr('tools.mcp.client_no_name'));
 
   // 1. Verificar duplicados
   if Assigned(FMCPClients.GetClientByName(aMCPClient.Name)) then
-    raise Exception.CreateFmt('Ya existe un cliente MCP con el nombre "%s".', [aMCPClient.Name]);
+    raise Exception.CreateFmt(AiStr('tools.mcp.client_exists'), [aMCPClient.Name]);
 
   // Conectar eventos
   aMCPClient.OnStreamMessage := FOnMCPStreamMessage;
@@ -1434,11 +1434,11 @@ var
   NewItem: TMCPClientItem;
 begin
   if not Assigned(aMCPClient) then
-    raise Exception.Create('Se intent� a�adir un objeto TMCPClient nulo.');
+    raise Exception.Create(AiStr('tools.mcp.client_nil'));
   if aMCPClient.Name.Trim.IsEmpty then
-    raise Exception.Create('El TMCPClient debe tener Name asignado.');
+    raise Exception.Create(AiStr('tools.mcp.client_no_name'));
   if Assigned(FMCPClients.GetClientByName(aMCPClient.Name)) then
-    raise Exception.CreateFmt('Ya existe un cliente MCP con el nombre "%s".', [aMCPClient.Name]);
+    raise Exception.CreateFmt(AiStr('tools.mcp.client_exists'), [aMCPClient.Name]);
 
   // Do NOT overwrite the client's existing event handlers — the pooled client
   // already has its log bridge wired from initialization.
@@ -1738,7 +1738,7 @@ begin
     if not (LParsedVal is TJSonArray) then
     begin
       LParsedVal.Free;
-      raise Exception.Create('JSON inv�lido o no es un array');
+      raise Exception.Create(AiStr('tools.fn.invalid_json_array'));
     end;
     JsonArray := TJSonArray(LParsedVal);
 
@@ -1781,7 +1781,7 @@ begin
     on E: Exception do
     begin
       Result.Free;
-      raise Exception.Create('Error al procesar JSON: ' + E.Message);
+      raise Exception.CreateFmt(AiStr('tools.fn.json_error'), [E.Message]);
     end;
   end;
 end;
@@ -4084,7 +4084,7 @@ begin
       tpMakerAi:
         FMCPClient := TMCPClientMakerAi.Create(nil);
     else
-      raise ENotSupportedException.Create('Protocolo MCP no soportado');
+      raise ENotSupportedException.Create(AiStr('tools.mcp.unsupported_protocol'));
     end;
 
     // =========================================================================
@@ -4929,7 +4929,7 @@ begin
   end;
 
   if not ATargetJson.TryGetValue<TJSonArray>('tools', LFinalToolsArray) then
-    raise Exception.Create('Target JSON object does not contain a "tools" array.');
+    raise Exception.Create(AiStr('tools.fn.no_tools_array'));
 
   // 2. Normalizar las herramientas de la fuente a una lista interna
   LNormalizedTools := TObjectList<TNormalizedTool>.Create(True);

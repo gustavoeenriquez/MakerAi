@@ -303,10 +303,12 @@ Type
 
 implementation
 
-{$IF CompilerVersion < 35}
 uses
-  uJSONHelper;
+  uMakerAi.Localization
+{$IF CompilerVersion < 35}
+  , uJSONHelper
 {$ENDIF}
+  ;
 
 { TAiEmbeddingNode }
 
@@ -386,7 +388,7 @@ var
   Sum: Double; // <--- 1. Agregamos variable para acumular
 begin
   if not Assigned(AJSONObject) then
-    raise Exception.Create('AJSONObject no puede ser nil');
+    raise Exception.Create(AiStr('rag.index.json_nil'));
 
   // Crear instancia
   JSONArray := AJSONObject.GetValue<TJSonArray>('data');
@@ -437,7 +439,7 @@ var
   Value: Double;
 begin
   if not Assigned(Val) then
-    raise Exception.Create('Val no puede ser nil');
+    raise Exception.Create(AiStr('rag.index.val_nil'));
 
   Result := TJSonArray.Create;
   for Value in Val.FData do
@@ -449,7 +451,7 @@ var
   i: Integer;
 begin
   if Length(A.FData) <> Length(B.FData) then
-    raise Exception.Create('Los vectores deben ser de la misma longitud');
+    raise Exception.Create(AiStr('rag.index.length_mismatch'));
 
   Result := 0;
   for i := Low(A.FData) to High(A.FData) do
@@ -816,7 +818,7 @@ end;
 function THNSWNode.GetConnections(Level: Integer): TList<Integer>;
 begin
   if (Level < 0) or (Level >= Length(FConnections)) then
-    raise EArgumentOutOfRangeException.CreateFmt('Nivel %d fuera de rango [0..%d]', [Level, Length(FConnections) - 1]);
+    raise EArgumentOutOfRangeException.CreateFmt(AiStr('rag.index.level_range'), [Level, Length(FConnections) - 1]);
 
   Result := FConnections[Level];
 end;
@@ -1110,7 +1112,7 @@ var
   Point: TAiEmbeddingNode;
 begin
   if not Assigned(Points) then
-    raise Exception.Create('THNSWIndex.BuildIndex: Points no puede ser nil');
+    raise Exception.Create(AiStr('rag.index.points_nil'));
 
   // ========================================================================
   // PASO 1: Limpiar el �ndice anterior

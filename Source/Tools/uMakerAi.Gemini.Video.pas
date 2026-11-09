@@ -90,6 +90,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiGeminiVideoTool]);
@@ -221,14 +224,14 @@ begin
     LResponse := HTTP.Post(LUrl, LBody);
 
     if LResponse.StatusCode <> 200 then
-      raise Exception.Create('Error iniciando Veo: ' + LResponse.ContentAsString);
+      raise Exception.CreateFmt(AiStr('tools.veo.start_error'), [LResponse.ContentAsString]);
 
     LJSON := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
     LOpName := LJSON.GetValue<string>('name', '');
     LJSON.Free;
 
     if LOpName.IsEmpty then
-      raise Exception.Create('No se recibi? el nombre de la operaci?n.');
+      raise Exception.Create(AiStr('tools.veo.no_operation'));
 
     // 3. Bucle de Polling
     LPollingUrl := FUrl + LOpName + '?key=' + GetApiKey;
@@ -248,7 +251,7 @@ begin
           if LIsDone then
           begin
             if LJSON.TryGetValue<TJSONObject>('error', LErrorObj) then
-              raise Exception.Create('Error en la operaci?n: ' + LErrorObj.ToJSON);
+              raise Exception.CreateFmt(AiStr('tools.operation_error'), [LErrorObj.ToJSON]);
 
             LVideoUri := LJSON.GetValue<string>('response.generateVideoResponse.generatedSamples[0].video.uri', '');
           end;

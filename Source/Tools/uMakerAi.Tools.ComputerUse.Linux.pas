@@ -84,6 +84,7 @@ implementation
 {$IFDEF LINUX}
 
 uses
+  uMakerAi.Localization,
   Posix.Stdlib;
 
 { TAiLinuxExecutor }
@@ -411,7 +412,7 @@ begin
       LCmd := 'scrot -o ' + Q(LTmp);
 
     if (Sh(WithDisplay(LCmd)) <> 0) or (not TFile.Exists(LTmp)) then
-      raise Exception.Create('scrot no pudo capturar la pantalla (revise DISPLAY y que scrot este instalado)');
+      raise Exception.Create(AiStr('tools.cu.scrot_failed'));
 
     if not Assigned(MediaFile) then
       MediaFile := TAiMediaFile.Create;

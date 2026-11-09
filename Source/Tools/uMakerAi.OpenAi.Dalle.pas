@@ -360,6 +360,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 { EAiDalleHTTPError }
 
 constructor EAiDalleHTTPError.CreateHTTP(AStatusCode: Integer;
@@ -857,15 +860,15 @@ begin
   ClearImages;
 
   if not Assigned(aMediaFiles) or (aMediaFiles.Count = 0) then
-    raise Exception.Create('At least one media file must be provided for editing.');
+    raise Exception.Create(AiStr('tools.dalle.edit_needs_media'));
 
   if not (FModel in [imDallE2, imGptImage1, imGptImage1Mini, imGptImage15,
                      imGptImage2, imGptImage25Flare, imGptImage25Sunburst,
                      imChatGptImageLatest]) then
-    raise Exception.Create('Edit endpoint supports dall-e-2 and all gpt-image-* models.');
+    raise Exception.Create(AiStr('tools.dalle.edit_models'));
 
   if (FModel = imDallE2) and (aMediaFiles.Count > 1) then
-    raise Exception.Create('DALL-E 2 only supports one image for editing.');
+    raise Exception.Create(AiStr('tools.dalle.edit_one_image'));
 
   Client := TNetHTTPClient.Create(nil);
   Client.ResponseTimeout  := 300000; // 5 min — image edit can be slow
@@ -1229,7 +1232,7 @@ var
   Res: IHTTPResponse;
 begin
   if not Assigned(aImage) or (aImage.Content.Size = 0) then
-    raise Exception.Create('Image is required for upscale.');
+    raise Exception.Create(AiStr('tools.dalle.upscale_image'));
 
   Client := TNetHTTPClient.Create(nil);
   Req := TJSONObject.Create;
@@ -1251,7 +1254,7 @@ begin
       TStringStream.Create(Req.ToString, TEncoding.UTF8));
 
     if Res.StatusCode <> 200 then
-      raise Exception.CreateFmt('Upscale error %d: %s',
+      raise Exception.CreateFmt(AiStr('tools.dalle.upscale_error'),
         [Res.StatusCode, Res.ContentAsString]);
 
     FreeAndNil(Req);
@@ -1278,9 +1281,9 @@ begin
   ClearImages;
 
   if not Assigned(aImageFile) then
-    raise Exception.Create('An image file must be provided for variation.');
+    raise Exception.Create(AiStr('tools.dalle.variation_image'));
   if FModel <> imDallE2 then
-    raise Exception.Create('Variation endpoint only supports dall-e-2 model.');
+    raise Exception.Create(AiStr('tools.dalle.variation_model'));
 
   Client := TNetHTTPClient.Create(nil);
   Body := TMultipartFormData.Create;

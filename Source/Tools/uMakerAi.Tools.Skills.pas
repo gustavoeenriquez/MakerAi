@@ -189,6 +189,7 @@ procedure Register;
 implementation
 
 uses
+  uMakerAi.Localization,
   uMakerAi.Telemetry;
 
 const
@@ -481,7 +482,7 @@ end;
 function TAiSkills.AddSkill(const AName, ADescription, AInstructions: string): TAiSkillItem;
 begin
   if Trim(AName) = '' then
-    raise EAiSkillError.Create('TAiSkills.AddSkill: el skill necesita un nombre');
+    raise EAiSkillError.Create(AiStr('tools.skills.name_required'));
   BeginUpdate;
   try
     Result := Find(AName);

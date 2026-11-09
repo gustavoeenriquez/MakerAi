@@ -126,6 +126,7 @@ procedure Register;
 implementation
 
 uses
+  uMakerAi.Localization,
   System.IOUtils, System.NetConsts, System.NetEncoding, REST.JSON;
 
 const
@@ -239,7 +240,7 @@ begin
     end
     else
     begin
-      raise Exception.CreateFmt('Error downloading video file: %d %s', [LResponse.StatusCode, LResponse.ContentAsString(TEncoding.UTF8)]);
+      raise Exception.CreateFmt(AiStr('tools.video_download_error'), [LResponse.StatusCode, LResponse.ContentAsString(TEncoding.UTF8)]);
     end;
   finally
     LHttpClient.Free;
@@ -255,11 +256,11 @@ begin
   // --- VALIDACI�N ---
   // Validamos que el objeto TAiMediaFile tenga la URI del activo de VEO.
   if (not Assigned(AVideoToExtend)) or (AVideoToExtend.UrlMedia.IsEmpty) then
-    raise Exception.Create('To extend a video, you must provide a TAiMediaFile object with its original UrlMedia property set from a previous VEO generation.');
+    raise Exception.Create(AiStr('tools.veo.extend_needs_url'));
 
   // Verificaci�n simple de que parece una URL v�lida
   if not AVideoToExtend.UrlMedia.StartsWith('https') then
-    raise Exception.Create('The UrlMedia property does not appear to be a valid VEO asset URI. It should start with "https".');
+    raise Exception.Create(AiStr('tools.veo.invalid_url'));
 
   VideoUrlMedia := AVideoToExtend.UrlMedia;
 
@@ -304,7 +305,7 @@ var
   LFirstFrameClone, LLastFrameClone: TAiMediaFile;
 begin
   if not Assigned(AFirstFrame) or AFirstFrame.Base64.IsEmpty or not Assigned(ALastFrame) or ALastFrame.Base64.IsEmpty then
-    raise Exception.Create('Both a first and a last frame are required for interpolation.');
+    raise Exception.Create(AiStr('tools.veo.frames_required'));
 
   // Clonamos para la tarea as�ncrona
   LFirstFrameClone := TAiMediaFile.Create;
@@ -367,10 +368,10 @@ var
 begin
   // Validaci�n b�sica antes de crear el hilo
   if not Assigned(AImage) then
-    raise Exception.Create('An image object is required.');
+    raise Exception.Create(AiStr('tools.image_required'));
 
   if AImage.UrlMedia.IsEmpty and AImage.Base64.IsEmpty then
-    raise Exception.Create('The image must have either a Cloud URI (UrlMedia) or Base64 content.');
+    raise Exception.Create(AiStr('tools.veo.image_source'));
 
   // Clonamos el objeto de imagen para garantizar la seguridad de hilos (Thread Safety)
   // ya que la TTask se ejecutar� en paralelo.
@@ -439,7 +440,7 @@ end;
 function TAiVeoGenerator.GenerateFromText(const APrompt: string): ITask;
 begin
   if APrompt.IsEmpty then
-    raise Exception.Create('A non-empty prompt is required.');
+    raise Exception.Create(AiStr('tools.prompt_required'));
 
   Result := TTask.Run(
     procedure
@@ -464,9 +465,9 @@ var
   i: Integer;
 begin
   if Length(AReferenceImages) = 0 then
-    raise Exception.Create('At least one reference image is required.');
+    raise Exception.Create(AiStr('tools.veo.reference_required'));
   if Length(AReferenceImages) > 3 then
-    raise Exception.Create('A maximum of 3 reference images are supported.');
+    raise Exception.Create(AiStr('tools.veo.reference_max'));
 
   // Creamos un array de clones
   SetLength(LClonedImages, Length(AReferenceImages));
@@ -562,7 +563,7 @@ begin
     vmVeo2_0:
       Result := 'veo-2.0-generate-001';
   else
-    raise Exception.Create('Model must be specified. Set the Model property or provide a CustomModelName.');
+    raise Exception.Create(AiStr('tools.veo.model_required'));
   end;
 end;
 
@@ -601,12 +602,12 @@ begin
       end;
 
       if (LResponse.StatusCode <> 200) then
-        raise Exception.CreateFmt('Error starting video generation: %d, %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+        raise Exception.CreateFmt(AiStr('tools.video_start_error'), [LResponse.StatusCode, LResponse.ContentAsString]);
 
       LInitialResponse := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       try
         if not LInitialResponse.TryGetValue<string>('name', LOpName) then
-          raise Exception.Create('Operation name not found in API response.');
+          raise Exception.Create(AiStr('tools.veo.no_operation'));
       finally
         LInitialResponse.Free;
       end;
@@ -624,7 +625,7 @@ begin
 
         LResponse := LHttpClient.Get(PollingUrl, nil, LHeaders);
         if LResponse.StatusCode <> 200 then
-          raise Exception.CreateFmt('Error during polling: %d, %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+          raise Exception.CreateFmt(AiStr('tools.polling_error'), [LResponse.StatusCode, LResponse.ContentAsString]);
 
         LPollingResponse := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
         try
@@ -641,15 +642,15 @@ begin
 
       // --- PASO 3: Procesar la respuesta final ---
       if not Assigned(LFinalResponse) then
-        raise Exception.Create('Operation finished but no final response was captured.');
+        raise Exception.Create(AiStr('tools.veo.no_final_response'));
 
       if LFinalResponse.TryGetValue<TJSONObject>('error', LErrorObj) then
-        raise Exception.Create('Video generation failed: ' + LErrorObj.ToJSON);
+        raise Exception.CreateFmt(AiStr('tools.video_failed'), [LErrorObj.ToJSON]);
 
       var
       LVideoUri := LFinalResponse.GetValue<string>('response.generateVideoResponse.generatedSamples[0].video.uri', '');
       if LVideoUri.IsEmpty then
-        raise Exception.Create('Final response did not contain a video URI.');
+        raise Exception.Create(AiStr('tools.veo.no_video_uri'));
 
       // --- PASO 4: Descargar el video y notificar el �xito ---
       DoProgress('Video generated. Downloading...');
@@ -694,7 +695,7 @@ begin
     LNumBytes := LFileStream.Size;
 
     if LNumBytes = 0 then
-      raise Exception.Create('No se pudo obtener el contenido del archivo para subir.');
+      raise Exception.Create(AiStr('chat.upload_no_content'));
 
     try
       LHeaders := [TNetHeader.Create('X-Goog-Upload-Protocol', 'resumable'), TNetHeader.Create('X-Goog-Upload-Command', 'start'), TNetHeader.Create('X-Goog-Upload-Header-Content-Length', LNumBytes.ToString),
@@ -712,12 +713,12 @@ begin
       end;
 
       if LResponse.StatusCode <> 200 then
-        raise Exception.CreateFmt('Error al iniciar subida de archivo: %d %s', [LResponse.StatusCode, LResponse.StatusText]);
+        raise Exception.CreateFmt(AiStr('tools.upload_start_error'), [LResponse.StatusCode, LResponse.StatusText]);
 
 
       LUploadUrl := LResponse.HeaderValue['X-Goog-Upload-Url'];
       if LUploadUrl = '' then
-        raise Exception.Create('No se recibi� la URL de subida desde la API de Google.');
+        raise Exception.Create(AiStr('tools.google.no_upload_url'));
 
       LFileStream.Position := 0;
       LHeaders := [TNetHeader.Create('Content-Length', LNumBytes.ToString), TNetHeader.Create('X-Goog-Upload-Offset', '0'), TNetHeader.Create('X-Goog-Upload-Command', 'upload, finalize')];
@@ -726,7 +727,7 @@ begin
       LResponse := LHttpClient.Post(LUploadUrl, LFileStream, nil, LHeaders);
 
       if LResponse.StatusCode <> 200 then
-        raise Exception.CreateFmt('Error al subir los bytes del archivo: %d %s'#13#10'%s', [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
+        raise Exception.CreateFmt(AiStr('tools.upload_bytes_error') + sLineBreak + '%s', [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
 
       LUploadResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       if Assigned(LUploadResponseObj) then
@@ -745,7 +746,7 @@ begin
           LUploadResponseObj.Free;
         end;
       if Result = '' then
-        raise Exception.Create('La API subi� el archivo pero no devolvi� una URI.');
+        raise Exception.Create(AiStr('tools.upload_no_uri'));
     finally
       // El stream no se libera aqu� porque es propiedad de TAiMediaFile
     end;
@@ -951,7 +952,7 @@ begin
     LNumBytes := LFileStream.Size;
 
     if LNumBytes = 0 then
-      raise Exception.Create('Cannot upload an empty file.');
+      raise Exception.Create(AiStr('tools.upload_empty'));
 
     // Construir el JSON de metadatos para el inicio
     LJsonBody := TJSONObject.Create;
@@ -983,13 +984,13 @@ begin
     end;
 
     if LResponse.StatusCode <> 200 then
-      raise Exception.CreateFmt('Error initiating upload handshake: %d %s'#13#10'%s',
+      raise Exception.CreateFmt(AiStr('tools.upload_start_error') + sLineBreak + '%s',
         [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
 
     // Obtener la URL de subida de los headers
     LUploadUrl := LResponse.HeaderValue['X-Goog-Upload-Url'];
     if LUploadUrl = '' then
-      raise Exception.Create('Did not receive the X-Goog-Upload-Url header from Google API.');
+      raise Exception.Create(AiStr('tools.google.no_upload_url'));
 
     // --- PASO 2: Subir los bytes del archivo (Payload) ---
     LFileStream.Position := 0;
@@ -1005,7 +1006,7 @@ begin
     LResponse := LHttpClient.Post(LUploadUrl, LFileStream, nil, LHeaders);
 
     if LResponse.StatusCode <> 200 then
-      raise Exception.CreateFmt('Error uploading file bytes: %d %s'#13#10'%s',
+      raise Exception.CreateFmt(AiStr('tools.upload_bytes_error') + sLineBreak + '%s',
         [LResponse.StatusCode, LResponse.StatusText, LResponse.ContentAsString]);
 
     // --- PASO 3: Procesar la respuesta final ---
@@ -1024,17 +1025,17 @@ begin
           aMediaFile.CloudState := CloudState;
 
           if aMediaFile.UrlMedia.IsEmpty then
-            raise Exception.Create('File uploaded but URI is missing in response.');
+            raise Exception.Create(AiStr('tools.upload_no_uri'));
         end
         else
         begin
-          raise Exception.Create('Unexpected JSON format in upload response: "file" object missing.');
+          raise Exception.Create(AiStr('tools.upload_no_file_object'));
         end;
       finally
         LUploadResponseObj.Free;
       end
     else
-      raise Exception.Create('File uploaded but response is not a valid JSON.');
+      raise Exception.Create(AiStr('tools.upload_invalid_json'));
 
   finally
     LHttpClient.Free;

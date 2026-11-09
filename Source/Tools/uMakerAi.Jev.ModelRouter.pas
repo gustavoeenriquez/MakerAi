@@ -192,6 +192,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiJevModelRouter]);
@@ -373,7 +376,7 @@ var
   Reasons: TStringList;
 begin
   if FTiers.Count = 0 then
-    raise EAiJevError.Create('JevModelRouter: no hay Tiers definidos');
+    raise EAiJevError.Create(AiStr('tools.jev.no_tiers'));
 
   Q := TAiJevQuestions.Create(nil);
   Reasons := TStringList.Create;

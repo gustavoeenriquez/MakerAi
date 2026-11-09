@@ -293,7 +293,7 @@ procedure Register;
 
 implementation
 
-uses uMakerAi.Telemetry;
+uses uMakerAi.Localization, uMakerAi.Telemetry;
 
 procedure Register;
 begin
@@ -379,7 +379,7 @@ var
   AddedIndex: NativeInt;
 begin
   if Trim(aText) = '' then
-    raise Exception.Create('El texto no puede estar vac�o');
+    raise Exception.Create(AiStr('rag.text_empty'));
 
   // 1. Generar el Embedding
   if Assigned(FEmbeddings) then
@@ -545,10 +545,10 @@ begin
 
   // --- 1. Validaciones ---
   if aLenChunk <= 10 then
-    raise Exception.Create('El tama�o del Chunk es demasiado peque�o.');
+    raise Exception.Create(AiStr('rag.chunk_too_small'));
 
   if (aOverlapPct < 0) or (aOverlapPct >= 100) then
-    raise Exception.Create('El porcentaje de Overlap debe estar entre 0 y 99.');
+    raise Exception.Create(AiStr('rag.overlap_range'));
 
   // Normalizamos el texto (quitamos espacios extra al inicio/final)
   aText := aText.Trim;
@@ -724,7 +724,7 @@ procedure TAiRAGVector.BuildIndex;
 begin
   // 1. Validaci�n del �ndice Vectorial
   if not Assigned(FRagIndex) then
-    raise Exception.Create('No existe un indice asignado');
+    raise Exception.Create(AiStr('rag.no_index'));
 
   // 2. Construir el �ndice Vectorial (HNSW o Basic)
   FRagIndex.BuildIndex(Self.FItems);
@@ -821,7 +821,7 @@ function TAiRAGVector.Connect(aHost, aPort, aLogin, aPassword: String): Boolean;
 begin
   // esta funci�n no va, est� deprecade
   If not Assigned(FRagIndex) then
-    Raise Exception.Create('No existe un indice asignado');
+    Raise Exception.Create(AiStr('rag.no_index'));
 
   // Result := FRagIndex.Connect(aHost, aPort, aLogin, aPassword);
   FActive := True;
@@ -856,7 +856,7 @@ begin
     aEmbeddings := FEmbeddings;
 
   If aEmbeddings = Nil then
-    Raise Exception.Create('Debe especificar un modelo de embeddings primero');
+    Raise Exception.Create(AiStr('rag.embeddings_model_required'));
 
   Try
     Ar := aEmbeddings.CreateEmbedding(aText, 'user');
@@ -1059,7 +1059,7 @@ begin
   if Assigned(FOnGetEmbedding) then
     FOnGetEmbedding(Self, aInput, aUser, aModel, aEncodingFormat, aDimensions, Result)
   Else
-    raise Exception.Create('El evento OnGetEmbedding no ha sido asignado. No se puede generar el embedding.');
+    raise Exception.Create(AiStr('rag.no_on_get_embedding'));
 
 end;
 
@@ -1422,7 +1422,7 @@ begin
     Texts[i] := FItems[i].Text;
   Scores := AReranker.Score(AQuery, Texts);
   if Length(Scores) <> FItems.Count then
-    raise Exception.CreateFmt('RerankWith: el reranker devolvio %d puntajes para %d candidatos',
+    raise Exception.CreateFmt(AiStr('rag.rerank_count'),
       [Length(Scores), FItems.Count]);
   for i := 0 to FItems.Count - 1 do
     FItems[i].Idx := Scores[i];
@@ -1825,7 +1825,7 @@ Var
   FS: TFileStream;
 begin
   if not FileExists(FileName) then
-    Raise Exception.CreateFmt('El archivo no existe: %s', [FileName]);
+    Raise Exception.CreateFmt(AiStr('rag.file_not_found'), [FileName]);
 
   FS := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
   Try
@@ -1865,7 +1865,7 @@ begin
   if not(JVal is TJSONObject) then
   begin
     JVal.Free;
-    Raise Exception.Create('El formato del archivo no es un objeto JSON v�lido.');
+    Raise Exception.Create(AiStr('rag.file_not_json'));
   end;
 
   JObj := TJSONObject(JVal);
@@ -1953,7 +1953,7 @@ begin
     if aAutoRegenerate then
       RegenerateAll(Target.Model) // Migramos toda la lista al modelo del Target
     else
-      raise Exception.Create('Rerank Error: El modelo del query no coincide y AutoRegenerate est� desactivado.');
+      raise Exception.Create(AiStr('rag.rerank_model_mismatch'));
   end;
 
   // 2. Recalcular puntuaciones (Idx) con el mismo modelo ya garantizado
@@ -2123,7 +2123,7 @@ var
   Target: TAiEmbeddingNode;
 begin
   if Not Assigned(FEmbeddings) and Not Assigned(FOnGetEmbedding) then
-    Raise Exception.Create('Rerank: No hay motor de embeddings configurado.');
+    Raise Exception.Create(AiStr('rag.rerank_no_embeddings'));
 
   // Creamos el nodo temporal para el nuevo prompt
   Target := CreateEmbeddingNode(NewPrompt);
@@ -2158,7 +2158,7 @@ Var
 begin
   // 1. Validaci�n de entrada
   If Not Assigned(Stream) then
-    Raise Exception.Create('El Stream de destino no puede ser nil en SaveToStream.');
+    Raise Exception.Create(AiStr('rag.save_stream_nil'));
 
   // 2. Crear objeto ra�z
   JObj := TJSONObject.Create;
@@ -2224,7 +2224,7 @@ begin
     // Si no hay vector en la pregunta, la b�squeda sem�ntica es imposible.
     // Podr�amos lanzar excepci�n o degradar autom�ticamente a BM25.
     if not FSearchOptions.UseBM25 then
-      raise Exception.Create('Error: La consulta no gener� un vector v�lido. Verifique su motor de embeddings.');
+      raise Exception.Create(AiStr('rag.query_no_vector'));
   end;
 
   // ---------------------------------------------------------------------------
@@ -2260,10 +2260,10 @@ begin
       if FSearchOptions.UseEmbeddings then
       begin
         if not Assigned(FRagIndex) then
-          raise Exception.Create('No existe un �ndice asignado');
+          raise Exception.Create(AiStr('rag.no_index'));
 
         if (FModel <> '') and (Target.Model <> '') and (FModel <> Target.Model) then
-          raise Exception.CreateFmt('Error de Modelo: El vector usa "%s" pero el Query usa "%s"', [FModel, Target.Model]);
+          raise Exception.CreateFmt(AiStr('rag.model_mismatch'), [FModel, Target.Model]);
 
         // Si hay filtro o evento, usamos b�squeda lineal segura
         if ((Assigned(aFilter) and (aFilter.Count > 0)) or Assigned(FOnFilterItem)) then
@@ -2375,7 +2375,7 @@ begin
   // 1. Verificaci�n de Motor de Embeddings
   // Sin esto, no podemos convertir el texto 'Prompt' en n�meros.
   if Not Assigned(FEmbeddings) and Not Assigned(FOnGetEmbedding) then
-    Raise Exception.Create('Error: No hay motor de embeddings configurado. Asigne la propiedad Embeddings o el evento OnGetEmbedding.');
+    Raise Exception.Create(AiStr('rag.no_embeddings'));
 
   // Telemetria: el span cubre embedding de la query + retrieval completo
   LSpan := AiSpanStart('rag.search', skInternal);

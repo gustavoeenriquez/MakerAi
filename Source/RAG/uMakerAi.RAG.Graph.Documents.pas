@@ -215,6 +215,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiRagDocumentManager]);
@@ -390,14 +393,14 @@ end;
 procedure TAiRagDocumentManager.CheckGraphAssigned;
 begin
   if FGraph = nil then
-    raise Exception.Create('Graph property is not assigned to the document manager.');
+    raise Exception.Create(AiStr('rag.graph.docs_no_graph'));
 end;
 
 procedure TAiRagDocumentManager.CheckEmbeddingsAvailable;
 begin
   CheckGraphAssigned;
   if FGraph.Embeddings = nil then
-    raise Exception.Create('Graph.Embeddings is not assigned. An embeddings engine is required.');
+    raise Exception.Create(AiStr('rag.graph.docs_no_embeddings'));
 end;
 
 // ---------------------------------------------------------------------------
@@ -460,10 +463,10 @@ begin
   Result := [];
 
   if AChunkSize <= 10 then
-    raise Exception.Create('Chunk size is too small.');
+    raise Exception.Create(AiStr('rag.chunk_too_small'));
 
   if (AOverlapPct < 0) or (AOverlapPct >= 100) then
-    raise Exception.Create('Overlap percentage must be between 0 and 99.');
+    raise Exception.Create(AiStr('rag.overlap_range'));
 
   TextTrimmed := AText.Trim;
   TotalLen := TextTrimmed.Length;
@@ -690,7 +693,7 @@ begin
   JsonValue := TJSONObject.ParseJSONValue(AJSON);
   try
     if not (JsonValue is TJSONObject) then
-      raise Exception.Create('Input JSON is not a valid JSON object.');
+      raise Exception.Create(AiStr('rag.json_not_object'));
 
     Result := AddDocumentFromJSON(JsonValue as TJSONObject);
   finally
@@ -718,7 +721,7 @@ begin
   DocLabel := AJSONObj.GetValue<string>('label', '');
 
   if DocName.Trim.IsEmpty then
-    raise Exception.Create('Document JSON must have a "name" field.');
+    raise Exception.Create(AiStr('rag.graph.doc_no_name'));
   if DocLabel.Trim.IsEmpty then
     DocLabel := FDefaultDocumentLabel;
 
@@ -792,7 +795,7 @@ begin
   JsonValue := TJSONObject.ParseJSONValue(AJSON);
   try
     if not (JsonValue is TJSONArray) then
-      raise Exception.Create('Input JSON is not a valid JSON array.');
+      raise Exception.Create(AiStr('rag.json_not_array'));
 
     Result := AddDocumentsFromJSONArray(JsonValue as TJSONArray);
   finally
@@ -946,7 +949,7 @@ begin
   Cancel := False;
 
   if FChat = nil then
-    raise Exception.Create('Chat property is not assigned. LLM is required for relationship extraction.');
+    raise Exception.Create(AiStr('rag.graph.no_chat_relations'));
 
   CheckEmbeddingsAvailable;
   LEmbeddings := FGraph.Embeddings;
@@ -1129,7 +1132,7 @@ begin
   Cancel := False;
 
   if FChat = nil then
-    raise Exception.Create('Chat property is not assigned. LLM is required for entity extraction.');
+    raise Exception.Create(AiStr('rag.graph.no_chat_entities'));
 
   CheckEmbeddingsAvailable;
   LEmbeddings := FGraph.Embeddings;
@@ -1280,7 +1283,7 @@ begin
   Cancel := False;
 
   if FChat = nil then
-    raise Exception.Create('Chat property is not assigned. LLM is required for relationship extraction.');
+    raise Exception.Create(AiStr('rag.graph.no_chat_relations'));
 
   CheckEmbeddingsAvailable;
   LEmbeddings := FGraph.Embeddings;
@@ -1630,7 +1633,7 @@ begin
   CheckGraphAssigned;
   Node := FGraph.FindNodeByID(ADocumentID);
   if Node = nil then
-    raise Exception.CreateFmt('Document node not found with ID: %s', [ADocumentID]);
+    raise Exception.CreateFmt(AiStr('rag.graph.doc_not_found'), [ADocumentID]);
   Result := GetDocumentContext(Node);
 end;
 

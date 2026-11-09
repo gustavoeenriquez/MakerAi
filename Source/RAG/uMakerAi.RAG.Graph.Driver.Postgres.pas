@@ -68,6 +68,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI.RAG.Drivers', [TAiRagGraphPostgresDriver]);
@@ -111,7 +114,7 @@ end;
 function TAiRagGraphPostgresDriver.NewQuery: TFDQuery;
 begin
   if not Assigned(FConnection) then
-    raise Exception.Create('La propiedad Connection del Driver no ha sido asignada.');
+    raise Exception.Create(AiStr('rag.driver_no_connection'));
   Result := TFDQuery.Create(nil);
   Result.Connection := FConnection;
 end;
@@ -138,7 +141,7 @@ var
   LangCfg: string;
 begin
   if not Assigned(FConnection) or not FConnection.Connected then
-    raise Exception.Create('La conexi�n a la base de datos no est� activa.');
+    raise Exception.Create(AiStr('rag.connection_inactive'));
 
   Self.TableName := ABaseTableName; // Actualiza las variables internas de nombres
   NodesTableName := FNodesTableName;
@@ -638,7 +641,7 @@ begin
   if DoVector then
   begin
     if not Assigned(Graph.Embeddings) then
-      raise Exception.Create('Graph Search: Embeddings engine needed.');
+      raise Exception.Create(AiStr('rag.graph.no_embeddings'));
     EmbeddingStr := EmbeddingToString(Graph.Embeddings.CreateEmbedding(APrompt, 'user'));
     EmbeddingLiteral := '''' + EmbeddingStr + '''::vector';
   end
@@ -852,7 +855,7 @@ begin
   NodeIDs := TStringList.Create;
   try
     if not Assigned(Graph.Embeddings) then
-      raise Exception.Create('El motor de Embeddings no est� asignado al grafo.');
+      raise Exception.Create(AiStr('rag.graph.no_embeddings_engine'));
 
     QueryEmbedding := Graph.Embeddings.CreateEmbedding(APlan.AnchorPrompt, 'user');
     EmbeddingStr := EmbeddingToString(QueryEmbedding);

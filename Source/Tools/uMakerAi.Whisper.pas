@@ -122,10 +122,12 @@ Procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization
 {$IFDEF MSWINDOWS}
-
-uses Winapi.ShellAPI, Winapi.Windows;
+  , Winapi.ShellAPI, Winapi.Windows
 {$ENDIF}
+  ;
 { TAiAudio }
 
 Const
@@ -415,7 +417,7 @@ begin
     End
     else
     begin
-      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
     end;
 
   Finally
@@ -496,7 +498,7 @@ begin
     End
     else
     begin
-      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
     end;
 
   Finally
@@ -564,7 +566,7 @@ begin
     End
     else
     begin
-      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
     end;
   Finally
     Body.Free;

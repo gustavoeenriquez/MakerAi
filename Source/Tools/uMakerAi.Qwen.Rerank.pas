@@ -90,6 +90,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 const
   GlRerankUrl = 'https://dashscope-intl.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank';
 
@@ -134,7 +137,7 @@ begin
     Res := Client.Post(FUrl, Body, nil, [TNetHeader.Create('Authorization', 'Bearer ' + GetApiKey)]);
     Result := Res.ContentAsString(TEncoding.UTF8);
     if Res.StatusCode <> 200 then
-      raise Exception.CreateFmt('Qwen rerank %d: %s', [Res.StatusCode, Result]);
+      raise Exception.CreateFmt(AiStr('tools.qwen.rerank_http'), [Res.StatusCode, Result]);
   finally
     Body.Free;
     Client.Free;
@@ -176,11 +179,11 @@ begin
     if not (V is TJSONObject) then
     begin
       V.Free;
-      raise Exception.Create('Qwen rerank: la respuesta no es un objeto JSON');
+      raise Exception.Create(AiStr('tools.qwen.rerank_not_json'));
     end;
     jRes := TJSONObject(V);
     if not jRes.TryGetValue<TJSONArray>('output.results', jResults) then
-      raise Exception.Create('Qwen rerank: respuesta sin output.results: ' + Copy(jRes.ToJSON, 1, 300));
+      raise Exception.CreateFmt(AiStr('tools.qwen.rerank_no_results'), [Copy(jRes.ToJSON, 1, 300)]);
     for V in jResults do
       if V is TJSONObject then
       begin

@@ -137,6 +137,7 @@ procedure Register;
 implementation
 
 uses
+  uMakerAi.Localization,
   System.IOUtils, System.NetConsts, System.NetEncoding, REST.JSON, System.Net.Mime;
 
 const
@@ -210,7 +211,7 @@ begin
     end
     else
     begin
-      raise Exception.CreateFmt('Error downloading video content: %d %s', [LResponse.StatusCode, LResponse.ContentAsString(TEncoding.UTF8)]);
+      raise Exception.CreateFmt(AiStr('tools.video_download_error'), [LResponse.StatusCode, LResponse.ContentAsString(TEncoding.UTF8)]);
     end;
   finally
     if Result = nil then
@@ -223,7 +224,7 @@ var
   LImageClone: TAiMediaFile;
 begin
   if not Assigned(AImage) or not Assigned(AImage.Content) or (AImage.Content.Size = 0) then
-    raise Exception.Create('An image with content is required.');
+    raise Exception.Create(AiStr('tools.image_content_required'));
 
   LImageClone := TAiMediaFile.Create;
   LImageClone.Assign(AImage);
@@ -242,7 +243,7 @@ end;
 function TAiSoraGenerator.GenerateFromText(const APrompt: string): ITask;
 begin
   if APrompt.IsEmpty then
-    raise Exception.Create('A non-empty prompt is required.');
+    raise Exception.Create(AiStr('tools.prompt_required'));
 
   Result := TTask.Run(
     procedure
@@ -276,7 +277,7 @@ begin
   case FModel of
     smSora2: Result := 'sora-2';
   else
-    raise Exception.Create('Model must be specified.');
+    raise Exception.Create(AiStr('tools.model_required'));
   end;
 end;
 
@@ -331,12 +332,12 @@ begin
       LResponse := LHttpClient.Post(LUrl, LFormData, nil, LHeaders);
 
       if (LResponse.StatusCode <> 200) then
-        raise Exception.CreateFmt('Error starting video generation: %d, %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+        raise Exception.CreateFmt(AiStr('tools.video_start_error'), [LResponse.StatusCode, LResponse.ContentAsString]);
 
       LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       try
         if not LResponseObj.TryGetValue<string>('id', LVideoJobId) then
-          raise Exception.Create('Video Job ID not found in API response.');
+          raise Exception.Create(AiStr('tools.sora.no_job_id'));
         LResponseObj.TryGetValue<string>('status', LStatus);
       finally
         LResponseObj.Free;
@@ -385,12 +386,12 @@ begin
       end;
 
       if (LResponse.StatusCode <> 200) then
-        raise Exception.CreateFmt('Error starting video remix: %d, %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+        raise Exception.CreateFmt(AiStr('tools.sora.remix_error'), [LResponse.StatusCode, LResponse.ContentAsString]);
 
       LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       try
         if not LResponseObj.TryGetValue<string>('id', LVideoJobId) then
-          raise Exception.Create('New Video Job ID not found in remix API response.');
+          raise Exception.Create(AiStr('tools.sora.no_remix_job_id'));
         LResponseObj.TryGetValue<string>('status', LStatus);
       finally
         LResponseObj.Free;
@@ -433,7 +434,7 @@ begin
 
       LResponse := AHttpClient.Get(LPollingUrl, nil, AHeaders);
       if LResponse.StatusCode <> 200 then
-        raise Exception.CreateFmt('Error during polling status for job %s: %d, %s', [AVideoJobId, LResponse.StatusCode, LResponse.ContentAsString]);
+        raise Exception.CreateFmt(AiStr('tools.sora.polling_error'), [AVideoJobId, LResponse.StatusCode, LResponse.ContentAsString]);
 
       LPollingResponse := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       try
@@ -472,7 +473,7 @@ end;
 function TAiSoraGenerator.RemixVideo(const APrompt: string; const AOriginalVideoId: string): ITask;
 begin
   if APrompt.IsEmpty or AOriginalVideoId.IsEmpty then
-    raise Exception.Create('A prompt and the original video ID are required for remixing.');
+    raise Exception.Create(AiStr('tools.sora.remix_needs'));
 
   Result := TTask.Run(
     procedure
@@ -516,7 +517,7 @@ begin
   case FModel of
     smSora2: Result := 'sora-2';
   else
-    raise Exception.Create('El modelo Sora debe especificarse.');
+    raise Exception.Create(AiStr('tools.model_required'));
   end;
 end;
 
@@ -599,12 +600,12 @@ begin
     LResponse := HTTP.Post(LUrl, LFormData, nil, LHeaders);
 
     if LResponse.StatusCode <> 200 then
-      raise Exception.CreateFmt('Error iniciando Sora: %d, %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('tools.video_start_error'), [LResponse.StatusCode, LResponse.ContentAsString]);
 
     LResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
     try
       if not LResponseObj.TryGetValue<string>('id', LVideoJobId) then
-        raise Exception.Create('ID de job de video no encontrado en la respuesta de la API.');
+        raise Exception.Create(AiStr('tools.sora.no_job_id'));
       LResponseObj.TryGetValue<string>('status', LStatus);
     finally
       LResponseObj.Free;
@@ -624,7 +625,7 @@ begin
       LUrl := OPENAI_API_BASE_URL + 'videos/' + LVideoJobId;
       LResponse := HTTP.Get(LUrl, nil, LHeaders);
       if LResponse.StatusCode <> 200 then
-        raise Exception.CreateFmt('Error en polling del job %s: %d, %s', [LVideoJobId, LResponse.StatusCode, LResponse.ContentAsString]);
+        raise Exception.CreateFmt(AiStr('tools.sora.polling_error'), [LVideoJobId, LResponse.StatusCode, LResponse.ContentAsString]);
 
       LPollingResponse := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       try
@@ -662,7 +663,7 @@ begin
         ReportDataEnd(AResMsg, 'assistant', '[Video generado exitosamente]');
       end
       else
-        raise Exception.CreateFmt('Error descargando video: %d, %s',
+        raise Exception.CreateFmt(AiStr('tools.video_download_error2'),
           [LResponse.StatusCode, LResponse.ContentAsString(TEncoding.UTF8)]);
     finally
       LVideoStream.Free;

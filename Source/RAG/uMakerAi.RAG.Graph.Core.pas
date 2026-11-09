@@ -481,7 +481,7 @@ procedure Register;
 
 implementation
 
-uses uMakerAi.RAG.Graph.GQL;
+uses uMakerAi.Localization, uMakerAi.RAG.Graph.GQL;
 
 procedure Register;
 begin
@@ -3138,7 +3138,7 @@ end;
 function TAiRagGraph.InternalAddEdge(AEdge: TAiRagGraphEdge; AShouldPersist: Boolean): TAiRagGraphEdge;
 begin
   if (AEdge = nil) or (AEdge.OwnerGraph <> Self) or (AEdge.FromNode = nil) or (AEdge.ToNode = nil) then
-    raise Exception.Create('Invalid edge provided to InternalAddEdge.');
+    raise Exception.Create(AiStr('rag.graph.invalid_edge'));
 
   // 1. VERIFICACI�N DE IDENTIDAD (Identity Map)
   if FEdgeRegistry.TryGetValue(AEdge.ID, Result) then
@@ -3178,7 +3178,7 @@ var
   CombinedNameKey: string;
 begin
   if (ANode = nil) or (ANode.OwnerGraph <> Self) then
-    raise Exception.Create('Invalid node provided to InternalAddNode.');
+    raise Exception.Create(AiStr('rag.graph.invalid_node'));
 
   // 1. VERIFICACI�N DE IDENTIDAD (Identity Map)
   // Comprobamos si un nodo con este ID ya est� registrado en memoria.
@@ -3365,7 +3365,7 @@ begin
 
     // Si la b�squeda es h�brida o vectorial, necesitamos embeddings
     if (not Assigned(FEmbeddings)) and (FNodes.SearchOptions.UseEmbeddings) then
-      raise Exception.Create('Graph Search Error: Embeddings property is not assigned.');
+      raise Exception.Create(AiStr('rag.graph.no_embeddings'));
   end;
 
   if FNodes.Count = 0 then
@@ -3455,7 +3455,7 @@ begin
     JsonValue := TJSONObject.ParseJSONValue(SR.ReadToEnd);
     try
       if not(JsonValue is TJSONObject) then
-        raise Exception.Create('Formato JSON inv�lido para el Grafo.');
+        raise Exception.Create(AiStr('rag.graph.invalid_json'));
 
       Root := JsonValue as TJSONObject;
       GraphObj := Root.GetValue<TJSONObject>('graph');
@@ -3726,7 +3726,7 @@ begin
       // --- PASO 1: B�SQUEDA DEL NODO ANCLA ---
       StartNodePattern := AQuery.NodePatternByVariable[AQuery.MatchClauses[0].SourceNodeVar];
       if StartNodePattern = nil then
-        raise Exception.Create('Start node pattern for the first clause is missing.');
+        raise Exception.Create(AiStr('rag.graph.no_start_pattern'));
 
       if not StartNodePattern.NodeLabel.IsEmpty then
         CandidateNodes := Self.FindNodesByLabel(StartNodePattern.NodeLabel)
@@ -4378,7 +4378,7 @@ var
   I, J: Integer;
 begin
   if AStream = nil then
-    raise Exception.Create('Error: El Stream de destino es nil.');
+    raise Exception.Create(AiStr('rag.target_stream_nil'));
 
   StreamWriter := TStreamWriter.Create(AStream, TEncoding.UTF8);
   try

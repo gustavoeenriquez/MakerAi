@@ -298,6 +298,7 @@ procedure Register;
 implementation
 
 uses
+  uMakerAi.Localization,
   System.Math, System.Generics.Defaults, System.Net.HttpClient,
   System.Net.HttpClientComponent, System.Net.URLClient, System.NetEncoding,
   uMakerAi.Telemetry;
@@ -516,16 +517,16 @@ var
   Seen: TDictionary<string, Boolean>;
 begin
   if Trim(FName) = '' then
-    raise EAiJevError.Create('Jev: una pregunta no tiene Name');
+    raise EAiJevError.Create(AiStr('tools.jev.question_no_name'));
   if Trim(FInstructions) = '' then
-    raise EAiJevError.CreateFmt('Jev: la pregunta "%s" no tiene Instructions', [FName]);
+    raise EAiJevError.CreateFmt(AiStr('tools.jev.question_no_instructions'), [FName]);
 
   Lines := CriteriaLines;
   case FKind of
     jqChoice:
       begin
         if (Length(Lines) < 2) or (Length(Lines) > JEV_MAX_CHOICE_OPTIONS) then
-          raise EAiJevError.CreateFmt('Jev: la pregunta "%s" tiene %d opciones; un Choice admite de 2 a %d',
+          raise EAiJevError.CreateFmt(AiStr('tools.jev.choice_count'),
             [FName, Length(Lines), JEV_MAX_CHOICE_OPTIONS]);
         Seen := TDictionary<string, Boolean>.Create;
         try
@@ -533,9 +534,9 @@ begin
           begin
             SplitOption(Line, Key, Desc);
             if Key = '' then
-              raise EAiJevError.CreateFmt('Jev: la pregunta "%s" tiene una opcion sin clave: "%s"', [FName, Line]);
+              raise EAiJevError.CreateFmt(AiStr('tools.jev.option_no_key'), [FName, Line]);
             if Seen.ContainsKey(Key) then
-              raise EAiJevError.CreateFmt('Jev: la pregunta "%s" repite la opcion "%s"', [FName, Key]);
+              raise EAiJevError.CreateFmt(AiStr('tools.jev.option_repeated'), [FName, Key]);
             Seen.Add(Key, True);
           end;
         finally
@@ -544,7 +545,7 @@ begin
       end;
     jqScore:
       if (Length(Lines) < JEV_MIN_SCORE_LEVELS) or (Length(Lines) > JEV_MAX_SCORE_LEVELS) then
-        raise EAiJevError.CreateFmt('Jev: la pregunta "%s" tiene %d niveles; un Score admite de %d a %d',
+        raise EAiJevError.CreateFmt(AiStr('tools.jev.score_levels'),
           [FName, Length(Lines), JEV_MIN_SCORE_LEVELS, JEV_MAX_SCORE_LEVELS]);
     jqNoul:
       ; // criteria opcional
@@ -683,14 +684,14 @@ var
   Seen: TDictionary<string, Boolean>;
 begin
   if Count = 0 then
-    raise EAiJevError.Create('Jev: no hay preguntas');
+    raise EAiJevError.Create(AiStr('tools.jev.no_questions'));
   Seen := TDictionary<string, Boolean>.Create;
   try
     for i := 0 to Count - 1 do
     begin
       Items[i].Validate;
       if Seen.ContainsKey(Items[i].Name) then
-        raise EAiJevError.CreateFmt('Jev: el nombre de pregunta "%s" esta repetido', [Items[i].Name]);
+        raise EAiJevError.CreateFmt(AiStr('tools.jev.question_repeated'), [Items[i].Name]);
       Seen.Add(Items[i].Name, True);
     end;
   finally
@@ -758,7 +759,7 @@ end;
 function TAiJevResult.GetAnswer(const AName: string): TAiJevAnswer;
 begin
   if not FAnswers.TryGetValue(AName, Result) then
-    raise EAiJevError.CreateFmt('Jev: no hay respuesta para la pregunta "%s"', [AName]);
+    raise EAiJevError.CreateFmt(AiStr('tools.jev.no_answer'), [AName]);
 end;
 
 function TAiJevResult.GetCount: Integer;
@@ -782,10 +783,10 @@ begin
   Root := TJSONObject.ParseJSONValue(AJson);
   try
     if not (Root is TJSONObject) then
-      raise EAiJevError.Create('Jev: la respuesta no es un objeto JSON');
+      raise EAiJevError.Create(AiStr('tools.jev.not_json'));
     Obj := TJSONObject(Root);
     if not Obj.TryGetValue<TJSONObject>('answers', Answers) then
-      raise EAiJevError.Create('Jev: la respuesta no trae "answers"');
+      raise EAiJevError.Create(AiStr('tools.jev.no_answers'));
 
     Result := TAiJevResult.Create;
     try
@@ -823,7 +824,7 @@ begin
           A.TryGetValue<Double>('noul', Ans.FNoul);
         end
         else
-          raise EAiJevError.CreateFmt('Jev: tipo de respuesta desconocido "%s" en "%s"', [Kind, Ans.FName]);
+          raise EAiJevError.CreateFmt(AiStr('tools.jev.unknown_type'), [Kind, Ans.FName]);
 
         A.TryGetValue<Double>('confidence', Ans.FConfidence);
         if A.TryGetValue<TJSONObject>('probabilities', Probs) then
@@ -904,7 +905,7 @@ var
   i: Integer;
 begin
   if AState = nil then
-    raise EAiJevError.Create('Jev: el state no puede ser nil');
+    raise EAiJevError.Create(AiStr('tools.jev.state_nil'));
   AQuestions.Validate;
 
   // Imagenes: base64 crudo (sin data URL ni saltos de linea), solo PNG, JPEG
@@ -917,12 +918,12 @@ begin
       for i := 0 to High(AImages) do
       begin
         if (AImages[i] = nil) or (AImages[i].Content = nil) or (AImages[i].Content.Size = 0) then
-          raise EAiJevError.CreateFmt('Jev: la imagen %d esta vacia', [i + 1]);
+          raise EAiJevError.CreateFmt(AiStr('tools.jev.image_empty'), [i + 1]);
         SetLength(Data, AImages[i].Content.Size);
         AImages[i].Content.Position := 0;
         AImages[i].Content.ReadBuffer(Data[0], Length(Data));
         if JevImageKind(Data) = '' then
-          raise EAiJevError.CreateFmt('Jev: la imagen %d ("%s") no es PNG, JPEG ni WebP',
+          raise EAiJevError.CreateFmt(AiStr('tools.jev.image_format'),
             [i + 1, AImages[i].filename]);
         Encoded[i] := B64.EncodeBytesToString(Data);
       end;

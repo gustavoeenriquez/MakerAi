@@ -161,6 +161,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiShell]);
@@ -330,7 +333,7 @@ begin
     StopSession;
   end;
   if Trim(FShellPath) = '' then
-    raise Exception.Create('ShellPath cannot be empty.');
+    raise Exception.Create(AiStr('tools.shell.path_empty'));
   FSession := TUtilsSystem.StartInteractiveProcess(FShellPath, '', FEnvironment);
 end;
 

@@ -129,6 +129,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI.RAG.Drivers', [TAiRAGVectorSQLiteDriver]);
@@ -363,7 +366,7 @@ end;
 function TAiRAGVectorSQLiteDriver.NewQuery: TFDQuery;
 begin
   if not Assigned(FConnection) then
-    raise Exception.Create('TAiRAGVectorSQLiteDriver: propiedad Connection no asignada.');
+    raise Exception.Create(AiStr('rag.sqlite.no_connection'));
   Result := TFDQuery.Create(nil);
   Result.Connection := FConnection;
 end;

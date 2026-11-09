@@ -144,6 +144,7 @@ procedure Register;
 implementation
 
 uses
+  uMakerAi.Localization,
   uMakerAi.Utils.PcmToWav;
 
 const
@@ -338,7 +339,7 @@ begin
       end;
     end
     else
-      raise Exception.CreateFmt('ElevenLabs STT Error %d: %s',
+      raise Exception.CreateFmt(AiStr('tools.elevenlabs.stt_error'),
         [LResponse.StatusCode, LResponse.ContentAsString]);
   finally
     LFormData.Free;
