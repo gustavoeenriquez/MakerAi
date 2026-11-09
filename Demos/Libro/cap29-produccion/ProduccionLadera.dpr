@@ -86,17 +86,6 @@ begin
   Result.SystemPrompt.Text := LUCIA;
 end;
 
-function CodigoHttp(const AMensaje: string): Integer;
-var
-  P: Integer;
-begin
-  // El driver reporta "Error Received: 404, {...}". Sin codigo (DNS, red caida, puerto cerrado) es 0.
-  Result := 0;
-  P := Pos('Error Received: ', AMensaje);
-  if P > 0 then
-    Result := StrToIntDef(Copy(AMensaje, P + 16, 3), 0);
-end;
-
 function EsTransitorio(ACodigo: Integer): Boolean;
 begin
   // Vale reintentar: sin respuesta (red), 408 timeout, 409, 429 rate limit, 5xx del servidor.
@@ -147,7 +136,9 @@ begin
       Writeln(Format('  respondió %s/%s en el intento %d (%.1f s)', [Conn.DriverName, Conn.AiChat.Model, Intento, Reloj.ElapsedMilliseconds / 1000]));
       Exit;
     end;
-    Codigo := CodigoHttp(Error);
+    // El codigo HTTP del ultimo error: LastHttpStatus (MakerAI 4.0). Sin respuesta (DNS, red
+    // caida, puerto cerrado) es 0. El texto del error cambia con el idioma: no se lee de ahi.
+    Codigo := Conn.LastHttpStatus;
     Writeln(Format('  intento %d: %s%s', [Intento, IfThen(Codigo > 0, 'HTTP ' + IntToStr(Codigo) + ' · ', 'sin respuesta · '),
       Copy(Error.Replace(#13, ' ').Replace(#10, ' ').Replace('  ', ' '), 1, 120)]));
     QuitarPreguntaFallida(Conn);

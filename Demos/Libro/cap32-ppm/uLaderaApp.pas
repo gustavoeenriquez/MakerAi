@@ -461,15 +461,15 @@ end;
 const
   MAX_REINTENTOS = 2;
 
-function CodigoHttp(const AMensaje: string): Integer;
-var
-  P: Integer;
+function CodigoHttp(AException: Exception): Integer;
 begin
-  // El driver reporta "Error Received: 404, {...}". Sin codigo (DNS, red caida, puerto cerrado) es 0.
-  Result := 0;
-  P := Pos('Error Received: ', AMensaje);
-  if P > 0 then
-    Result := StrToIntDef(Copy(AMensaje, P + 16, 3), 0);
+  // El driver lanza un EAiHttpError con el codigo (MakerAI 4.0). El texto del
+  // mensaje sale en el idioma activo, asi que no se busca dentro de el.
+  // Sin codigo (DNS, red caida, puerto cerrado) es 0.
+  if AException is EAiHttpError then
+    Result := EAiHttpError(AException).StatusCode
+  else
+    Result := 0;
 end;
 
 function EsTransitorio(ACodigo: Integer): Boolean;
@@ -850,11 +850,11 @@ var
   Codigo: Integer;
 begin
   Texto := IfThen(FBloqueo <> '', '🛡️ ' + FBloqueo, '⚠️ ' + ErrorMsg);
-  // El codigo HTTP: en el camino asincrono llega en AResponse; en el sincrono, dentro del mensaje
+  // El codigo HTTP: en el camino asincrono llega en AResponse; en el sincrono, en la excepcion
   if Assigned(AResponse) then
     Codigo := AResponse.StatusCode
   else
-    Codigo := CodigoHttp(ErrorMsg);
+    Codigo := CodigoHttp(AException);
   Motivo := IfThen(Codigo > 0, Format('HTTP %d · ', [Codigo]), 'sin respuesta · ') +
     Copy(ErrorMsg.Replace(#13, ' ').Replace(#10, ' ').Replace('  ', ' '), 1, 160);
   TThread.Queue(nil,
