@@ -42,6 +42,23 @@ Usuario escribe en TAIChatInput
 - `OnFinish` también se dispara con `esSuspended`; ese caso se ignora porque `OnSuspend` ya actualizó la UI.
 - Para adjuntos/audio como respuesta humana: `ResumeThread` recibe un string — pasar la ruta o una clave de blackboard (el `aMediaFiles` del `OnSendEvent` está disponible para eso).
 
+## Idioma (nov 09/2026, MakerAI 4.0)
+
+El combo de arriba a la derecha cambia `TAiLocale.Language` entre español, inglés y portugués. Arranca en el idioma del sistema o con `--idioma en|es|pt`.
+
+- **Textos del framework** (menú contextual del chat, errores, "N pasos"): ya vienen en las tres tablas.
+- **Textos del demo**: `RegistrarTextos` (en la `initialization`) registra claves `demo081.*` con `TAiLocale.RegisterTable` para cada idioma, y el código los pide con `AiStr`/`AiFmt`. Es el patrón para que una aplicación traduzca sus propios textos.
+- **Lo que cambia en vivo**: título, estado (se guarda la clave en `FEstado`, no el texto, para repintarlo), la pregunta de aprobación (`SuspendReason` del `TAiWaitApprovalTool`) y el saludo si todavía no hay conversación. Los mensajes ya escritos en el chat se quedan como están.
+- La aprobación acepta "sí"/"si", "yes"/"ok" y "sim".
+
+## Prueba automática
+
+```bash
+Win64\Debug\AgentChatHITL.exe --idioma pt --prueba "publique o relatório de vendas" "sim" --captura salida.png
+```
+
+Manda cada mensaje cuando el agente termina con el anterior, guarda una captura de `ChatView1` y cierra. No toca el mouse ni el teclado. Ojo con los checkpoints de corridas anteriores (`Win64\Debug\Checkpoints`): si quedó una tarea suspendida, el primer mensaje la reanuda. Probado nov 09/2026 en pt (aprobar) y en (rechazar).
+
 ## Extensión natural (no incluida)
 
 El mismo grafo servido con `TAiA2AServer` publica la suspensión como task `input-required` y un `SendMessage` con el mismo `taskId` la reanuda — ver demos 074/079/080. Eso permite que el chat sea un cliente remoto (Android/web) del agente que corre en un servidor.

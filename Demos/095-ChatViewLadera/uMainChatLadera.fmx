@@ -68,6 +68,17 @@
       Text = 'Abrir'
       OnClick = btnAbrirClick
     end
+    object ComboIdioma: TComboBox
+      Align = Right
+      Margins.Left = 8.000000000000000000
+      Position.X = 822.000000000000000000
+      Position.Y = 6.000000000000000000
+      Size.Width = 130.000000000000000000
+      Size.Height = 32.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 5
+      OnChange = ComboIdiomaChange
+    end
     object lblEstado: TLabel
       Align = Client
       Margins.Left = 16.000000000000000000

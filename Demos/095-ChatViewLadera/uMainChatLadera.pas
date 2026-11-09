@@ -18,6 +18,12 @@
 //
 // La conexion se arma en codigo (FormCreate) para que se lea completa.
 // Empresa, productos y precios ficticios.
+//
+// Idioma (MakerAI 4.0): el combo de la derecha cambia TAiLocale.Language entre
+// espanol, ingles y portugues (o --idioma es|en|pt). Los textos del framework
+// (menu del chat, botones Copiar/Guardar, errores) ya vienen traducidos; los
+// del demo se registran con TAiLocale.RegisterTable (RegistrarTextos) y se
+// piden con AiStr/AiFmt. Lucia responde en el idioma en que le escriban.
 // =============================================================================
 
 interface
@@ -33,6 +39,7 @@ uses
   AIChat.Control.FMX,
   AIChat.Input,
   uMakerAi.Core,
+  uMakerAi.Localization,
   uMakerAi.Chat,
   uMakerAi.Chat.Messages,
   uMakerAi.Chat.AiConnection,
@@ -49,6 +56,7 @@ type
     btnGuardar: TButton;
     btnAbrir: TButton;
     lblEstado: TLabel;
+    ComboIdioma: TComboBox;
     ChatView1: TAIChatView;
     ChatInput1: TAIChatInput;
     AIVoiceMonitor1: TAIVoiceMonitor;
@@ -63,6 +71,7 @@ type
     procedure btnNuevaClick(Sender: TObject);
     procedure btnGuardarClick(Sender: TObject);
     procedure btnAbrirClick(Sender: TObject);
+    procedure ComboIdiomaChange(Sender: TObject);
   private
     FConn: TAiChatConnection;
     FSpeech: TAiOpenAiSpeechTool;
@@ -72,7 +81,11 @@ type
     FReloj: TStopwatch;
     FTarea: ITask;            // el turno en curso (corre fuera del hilo principal)
     FCerrando: Boolean;
+    FSaludando: Boolean;      // el chat solo tiene el saludo: se rehace al cambiar de idioma
     procedure ConfigurarConexion(const ADriver: string);
+    procedure AplicarIdioma(const ALang: string);
+    procedure Saludar;
+    procedure MostrarModelo;
     procedure AlPensar(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject; aRole, aText: string);
     procedure AlRecibir(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject; aRole, aText: string);
     procedure AlTerminar(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject; aRole, aText: string);
@@ -114,8 +127,79 @@ const
     '(chocolate amargo, nuez); Descafeinado Suave 34.000 COP (cacao suave).' + sLineBreak +
     'Si te mandan una foto, descríbela y relaciónala con el café. Si te mandan un PDF ' +
     '(una factura, una ficha técnica), resume lo importante. Usa Markdown: listas y negritas.' + sLineBreak +
-    'Responde en español, cálido y breve. Solo hablas de café y de la tienda. ' +
+    'Responde en el idioma en que te escriba el cliente, cálido y breve. Solo hablas de café y de la tienda. ' +
     'No inventes productos ni precios fuera de la carta.';
+
+  IDIOMAS: array [0 .. 2] of string = ('es', 'en', 'pt');
+
+// Textos del demo: mismo mecanismo que el framework (pares clave/texto por
+// idioma; una clave que falte cae al ingles)
+procedure RegistrarTextos;
+begin
+  TAiLocale.RegisterTable('en', [
+    'demo095.new',            'New',
+    'demo095.save',           'Save',
+    'demo095.open',           'Open',
+    'demo095.welcome1',       'Hi! I''m **Lucía**, from Café La Ladera ☕',
+    'demo095.welcome2',       'Ask me about our coffees, send me a photo or a PDF, or talk to me with the microphone.',
+    'demo095.missing_var',    'Missing environment variable %s',
+    'demo095.voice_note',     '(voice note)',
+    'demo095.writing',        'Lucía is typing...',
+    'demo095.thinking',       'Thinking',
+    'demo095.tokens_in',      '%d input tokens',
+    'demo095.tokens_cached',  ' (%d cached)',
+    'demo095.tokens_out',     ' · %d output · %.1f s',
+    'demo095.error',          'Error: %s',
+    'demo095.cancelled_note', 'cancelled',
+    'demo095.cancelled',      'Cancelled',
+    'demo095.new_chat',       'New conversation',
+    'demo095.saved',          'Saved in %s',
+    'demo095.nothing_saved',  'There is no saved conversation',
+    'demo095.loaded',         'Conversation restored: %d messages'
+  ]);
+  TAiLocale.RegisterTable('es', [
+    'demo095.new',            'Nueva',
+    'demo095.save',           'Guardar',
+    'demo095.open',           'Abrir',
+    'demo095.welcome1',       '¡Hola! Soy **Lucía**, de Café La Ladera ☕',
+    'demo095.welcome2',       'Pregúntame por nuestros cafés, mándame una foto o un PDF, o háblame con el micrófono.',
+    'demo095.missing_var',    'Falta la variable %s',
+    'demo095.voice_note',     '(nota de voz)',
+    'demo095.writing',        'Lucía está escribiendo...',
+    'demo095.thinking',       'Pensando',
+    'demo095.tokens_in',      '%d tokens de entrada',
+    'demo095.tokens_cached',  ' (%d en caché)',
+    'demo095.tokens_out',     ' · %d de salida · %.1f s',
+    'demo095.error',          'Error: %s',
+    'demo095.cancelled_note', 'cancelado',
+    'demo095.cancelled',      'Cancelado',
+    'demo095.new_chat',       'Conversación nueva',
+    'demo095.saved',          'Guardado en %s',
+    'demo095.nothing_saved',  'No hay conversación guardada',
+    'demo095.loaded',         'Conversación recuperada: %d mensajes'
+  ]);
+  TAiLocale.RegisterTable('pt', [
+    'demo095.new',            'Nova',
+    'demo095.save',           'Salvar',
+    'demo095.open',           'Abrir',
+    'demo095.welcome1',       'Olá! Sou a **Lucía**, do Café La Ladera ☕',
+    'demo095.welcome2',       'Pergunte sobre nossos cafés, mande uma foto ou um PDF, ou fale comigo pelo microfone.',
+    'demo095.missing_var',    'Falta a variável %s',
+    'demo095.voice_note',     '(nota de voz)',
+    'demo095.writing',        'Lucía está digitando...',
+    'demo095.thinking',       'Pensando',
+    'demo095.tokens_in',      '%d tokens de entrada',
+    'demo095.tokens_cached',  ' (%d em cache)',
+    'demo095.tokens_out',     ' · %d de saída · %.1f s',
+    'demo095.error',          'Erro: %s',
+    'demo095.cancelled_note', 'cancelado',
+    'demo095.cancelled',      'Cancelado',
+    'demo095.new_chat',       'Nova conversa',
+    'demo095.saved',          'Salvo em %s',
+    'demo095.nothing_saved',  'Não há conversa salva',
+    'demo095.loaded',         'Conversa recuperada: %d mensagens'
+  ]);
+end;
 
 function ApiKeyFor(const ADriver: string): string;
 begin
@@ -130,6 +214,9 @@ end;
 { TFormChatLadera }
 
 procedure TFormChatLadera.FormCreate(Sender: TObject);
+var
+  LLang: string;
+  I: Integer;
 begin
   FBurbuja := -1;
   FBurbujaUsuario := -1;
@@ -150,10 +237,66 @@ begin
   ComboDriver.ItemIndex := 0;   // dispara ComboDriverChange -> ConfigurarConexion
 
   ChatInput1.ValidExtensions := 'jpg,jpeg,png,webp,pdf,wav,mp3,m4a';
-  ChatView1.AddMessage(TChatRole.crAssistant,
-    '¡Hola! Soy **Lucía**, de Café La Ladera ☕' + sLineBreak + sLineBreak +
-    'Pregúntame por nuestros cafés, mándame una foto o un PDF, o háblame con el micrófono.');
+
+  // Idioma: el del sistema (TAiLocale ya lo detecto), salvo --idioma xx
+  LLang := TAiLocale.PrimaryLanguage(TAiLocale.Language);
+  for I := 1 to ParamCount - 1 do
+    if SameText(ParamStr(I), '--idioma') then
+      LLang := TAiLocale.PrimaryLanguage(ParamStr(I + 1));
+  ComboIdioma.Items.CommaText := 'Español,English,Português';
+  ComboIdioma.ItemIndex := 1; // ingles si el sistema esta en otro idioma
+  for I := 0 to High(IDIOMAS) do
+    if IDIOMAS[I] = LLang then
+      ComboIdioma.ItemIndex := I;   // dispara ComboIdiomaChange -> AplicarIdioma
+  AplicarIdioma(IDIOMAS[ComboIdioma.ItemIndex]);
+
+  Saludar;
   IniciarPrueba;
+end;
+
+procedure TFormChatLadera.ComboIdiomaChange(Sender: TObject);
+begin
+  if ComboIdioma.ItemIndex >= 0 then
+    AplicarIdioma(IDIOMAS[ComboIdioma.ItemIndex]);
+end;
+
+procedure TFormChatLadera.AplicarIdioma(const ALang: string);
+begin
+  // Framework (menu del chat, botones dibujados, errores) y demo a la vez.
+  // El menu contextual de TAIChatView se rehace solo al abrirse.
+  TAiLocale.Language := ALang;
+  btnNueva.Text := AiStr('demo095.new');
+  btnGuardar.Text := AiStr('demo095.save');
+  btnAbrir.Text := AiStr('demo095.open');
+  // La nota de voz se transcribe en el idioma elegido
+  if Assigned(FSpeech) then
+    FSpeech.TranscriptionLanguage := ALang;
+  if Assigned(FConn) and (FConn.DriverName <> '') then
+    MostrarModelo;
+  // Si todavia no hay conversacion, el saludo se rehace en el idioma nuevo
+  if FSaludando and (ChatView1.MessageCount = 1) then
+  begin
+    ChatView1.ClearMessages;
+    Saludar;
+  end;
+end;
+
+procedure TFormChatLadera.Saludar;
+begin
+  ChatView1.AddMessage(TChatRole.crAssistant,
+    AiStr('demo095.welcome1') + sLineBreak + sLineBreak + AiStr('demo095.welcome2'));
+  FSaludando := True;
+end;
+
+procedure TFormChatLadera.MostrarModelo;
+var
+  Key: string;
+begin
+  Key := ApiKeyFor(FConn.DriverName);
+  if Key.StartsWith('@') and (GetEnvironmentVariable(Key.Substring(1)) = '') then
+    SetEstado(AiFmt('demo095.missing_var', [Key.Substring(1)]))
+  else
+    SetEstado(Format('%s / %s', [FConn.DriverName, FConn.AiChat.Model]));
 end;
 
 procedure TFormChatLadera.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
@@ -201,11 +344,7 @@ begin
     FConn.ModelCaps := [cap_Image, cap_Pdf, cap_Reasoning];
   FConn.SessionCaps := FConn.ModelCaps + [cap_Audio];
   FConn.ChatTools.SpeechTool := FSpeech;
-
-  if Key.StartsWith('@') and (GetEnvironmentVariable(Key.Substring(1)) = '') then
-    SetEstado('Falta la variable ' + Key.Substring(1))
-  else
-    SetEstado(Format('%s / %s', [FConn.DriverName, FConn.AiChat.Model]));
+  MostrarModelo;
 end;
 
 procedure TFormChatLadera.ComboDriverChange(Sender: TObject);
@@ -232,16 +371,17 @@ begin
     Nota.LoadFromStream('nota_de_voz.wav', aAudioStream);
     Archivos := Archivos + [Nota];
     if APrompt = '' then
-      APrompt := '🎤 (nota de voz)';
+      APrompt := '🎤 ' + AiStr('demo095.voice_note');
   end;
 
+  FSaludando := False;
   ChatView1.AddUserMessage(APrompt, aMediaFiles);
   FBurbujaUsuario := ChatView1.MessageCount - 1;
   ChatView1.BeginAssistantMessage;
   FBurbuja := ChatView1.MessageCount - 1;
   FPensando := False;
   FReloj := TStopwatch.StartNew;
-  SetEstado('Lucía está escribiendo...');
+  SetEstado(AiStr('demo095.writing'));
 
   // El puente de audio (transcribir) corre antes de la llamada al modelo y
   // es sincrono: en un hilo aparte la ventana no se congela.
@@ -276,7 +416,7 @@ begin
       if (FBurbuja >= 0) and not FPensando then
       begin
         FPensando := True;
-        ChatView1.AddStep(FBurbuja, 'pensar', 'Pensando');
+        ChatView1.AddStep(FBurbuja, 'pensar', AiStr('demo095.thinking'));
       end;
     end);
 end;
@@ -318,10 +458,10 @@ begin
     // Cached_tokens/Cache_write_tokens los del cache. La entrada es la suma; si
     // solo se mostrara Prompt_tokens, un turno con cache saldria con "3 tokens".
     Entrada := aMsg.Prompt_tokens + aMsg.Cached_tokens + aMsg.Cache_write_tokens;
-    Pie := Format('%d tokens de entrada', [Entrada]);
+    Pie := AiFmt('demo095.tokens_in', [Entrada]);
     if aMsg.Cached_tokens > 0 then
-      Pie := Pie + Format(' (%d en caché)', [aMsg.Cached_tokens]);
-    Pie := Pie + Format(' · %d de salida · %.1f s', [aMsg.Completion_tokens, FReloj.ElapsedMilliseconds / 1000]);
+      Pie := Pie + AiFmt('demo095.tokens_cached', [aMsg.Cached_tokens]);
+    Pie := Pie + AiFmt('demo095.tokens_out', [aMsg.Completion_tokens, FReloj.ElapsedMilliseconds / 1000]);
   end
   else
     Pie := Format('%.1f s', [FReloj.ElapsedMilliseconds / 1000]);
@@ -336,7 +476,7 @@ begin
       ChatView1.SetMessageFooter(FBurbuja, Pie);
       FBurbuja := -1;
       ChatInput1.Busy := False;
-      SetEstado(Format('%s / %s', [FConn.DriverName, FConn.AiChat.Model]));
+      MostrarModelo;
     end);
 end;
 
@@ -375,7 +515,7 @@ begin
         FBurbuja := -1;
       end;
       ChatInput1.Busy := False;
-      SetEstado('Error: ' + ErrorMsg);
+      SetEstado(AiFmt('demo095.error', [ErrorMsg]));
     end);
 end;
 
@@ -385,12 +525,12 @@ begin
   if FBurbuja >= 0 then
   begin
     TerminarPensando;
-    ChatView1.SetMessageFooter(FBurbuja, 'cancelado');
+    ChatView1.SetMessageFooter(FBurbuja, AiStr('demo095.cancelled_note'));
     ChatView1.FinishMessage(FBurbuja);
     FBurbuja := -1;
   end;
   ChatInput1.Busy := False;
-  SetEstado('Cancelado');
+  SetEstado(AiStr('demo095.cancelled'));
 end;
 
 procedure TFormChatLadera.ChatInput1MicToggle(Sender: TObject; AActivate: Boolean);
@@ -403,7 +543,7 @@ procedure TFormChatLadera.btnNuevaClick(Sender: TObject);
 begin
   FConn.NewChat;
   ChatView1.ClearMessages;
-  SetEstado('Conversación nueva');
+  SetEstado(AiStr('demo095.new_chat'));
 end;
 
 function TFormChatLadera.CarpetaDatos: string;
@@ -424,7 +564,7 @@ begin
     St.Free;
   end;
   FConn.Messages.SaveToFile(TPath.Combine(CarpetaDatos, 'historial.json'));
-  SetEstado('Guardado en ' + CarpetaDatos);
+  SetEstado(AiFmt('demo095.saved', [CarpetaDatos]));
 end;
 
 procedure TFormChatLadera.btnAbrirClick(Sender: TObject);
@@ -433,7 +573,7 @@ var
 begin
   if not FileExists(TPath.Combine(CarpetaDatos, 'historial.json')) then
   begin
-    SetEstado('No hay conversación guardada');
+    SetEstado(AiStr('demo095.nothing_saved'));
     Exit;
   end;
   St := TFileStream.Create(TPath.Combine(CarpetaDatos, 'pantalla.json'), fmOpenRead);
@@ -445,7 +585,7 @@ begin
   end;
   FConn.NewChat;
   FConn.Messages.LoadFromFile(TPath.Combine(CarpetaDatos, 'historial.json'));
-  SetEstado(Format('Conversación recuperada: %d mensajes', [FConn.Messages.Count]));
+  SetEstado(AiFmt('demo095.loaded', [FConn.Messages.Count]));
 end;
 
 procedure TFormChatLadera.IniciarPrueba;
@@ -477,6 +617,8 @@ begin
       FMarcas := ParamStr(I + 1);
       Inc(I);
     end
+    else if SameText(ParamStr(I), '--idioma') then
+      Inc(I)   // ya se aplico en FormCreate
     else if SameText(ParamStr(I), '--tecleo') then
       FTecleo := True
     else if not SameText(ParamStr(I), '--prueba') then
@@ -599,5 +741,8 @@ procedure TFormChatLadera.SetEstado(const AText: string);
 begin
   lblEstado.Text := AText;
 end;
+
+initialization
+  RegistrarTextos;
 
 end.

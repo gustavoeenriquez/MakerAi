@@ -12,6 +12,18 @@ Demo 095: chat FMX con `TAIChatView` y `TAIChatInput`, con imágenes, PDF y voz.
 - **Guardar y abrir.** Son dos cosas distintas: lo que se ve (`ChatView1.SaveToStream`) y lo que el modelo recuerda (`Messages.SaveToFile`). Se guardan en `Documentos\CafeLaLadera`.
 - **Cerrar a mitad de un turno.** `FormCloseQuery` desconecta los eventos, aborta y espera la tarea (`FTarea.Wait` + `CheckSynchronize`). Sin eso, cerrar mientras se transcribía la nota colgaba la app, porque la tarea seguía usando la conexión ya destruida.
 
+## Idioma (nov 09/2026, MakerAI 4.0)
+
+El combo de la derecha cambia `TAiLocale.Language` entre español, inglés y portugués. Arranca en el idioma del sistema o con `--idioma es|en|pt`.
+
+- **Framework**: el menú contextual del chat, los botones que dibuja el visor (Copiar/Guardar) y los errores ya vienen en las tres tablas.
+- **Demo**: `RegistrarTextos` (en la `initialization`) registra las claves `demo095.*` con `TAiLocale.RegisterTable`: botones, saludo, estado, paso "Pensando", pie de tokens. Es el patrón para que una aplicación traduzca sus propios textos.
+- **Lucía** responde en el idioma en que le escriban: el prompt dice "Responde en el idioma en que te escriba el cliente" (antes, "en español").
+- **Voz**: la nota se transcribe en el idioma elegido (`TranscriptionLanguage`).
+- Cambia en vivo: botones, estado y el saludo si todavía no hay conversación. Los mensajes ya escritos se quedan como están.
+
+Probado nov 09/2026 con `--idioma pt --prueba "Qual café vocês recomendam para quem gosta de chocolate?"`: saludo, respuesta y pie en portugués (`gpt-6-sol`).
+
 ## Detalles que muerden
 
 - **El pie suma el caché.** Los contadores del framework son disjuntos: `Prompt_tokens` son los tokens nuevos y `Cached_tokens`/`Cache_write_tokens` los del caché. El pie muestra la suma y aparte cuántos vinieron del caché; con solo `Prompt_tokens` un turno con imagen cacheada decía "3 tokens de entrada" (oct 22/2026).

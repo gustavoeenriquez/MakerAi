@@ -28,6 +28,18 @@
       Text = 'Estado: Listo'
       TabOrder = 0
     end
+    object ComboIdioma: TComboBox
+      Align = Right
+      Margins.Top = 4.000000000000000000
+      Margins.Right = 12.000000000000000000
+      Margins.Bottom = 4.000000000000000000
+      Position.X = 758.000000000000000000
+      Size.Width = 130.000000000000000000
+      Size.Height = 28.000000000000000000
+      Size.PlatformDefault = False
+      TabOrder = 1
+      OnChange = ComboIdiomaChange
+    end
   end
   object ChatView1: TAIChatView
     Align = Client
