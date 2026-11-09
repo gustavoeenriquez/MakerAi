@@ -388,6 +388,7 @@ type
 implementation
 
 uses
+  uMakerAi.Localization,
   IdTCPClient, IdIOHandler, IdExceptionCore, uMakerAi.Telemetry;
 
 
@@ -1776,7 +1777,7 @@ begin
   end;
 
   if not ATargetJson.TryGetValue<TJSonArray>('tools', LTargetTools) then
-    raise Exception.Create('Target JSON object does not contain a "tools" array.');
+    raise Exception.Create(AiStr('tools.fn.no_tools_array'));
 
   // 3. Iterar sobre cada herramienta en el JSON de origen (Source)
   for i := 0 to LSourceTools.Count - 1 do
@@ -2215,25 +2216,25 @@ begin
         DoLog(Format('SERVER -> CLIENT (HTTP %d): %s', [LHttpResponse.StatusCode, ResponseContent]));
 
         if LHttpResponse.StatusCode <> 200 then
-          raise EMCPClientException.CreateFmt('HTTP initialization failed with status code %d: %s', [LHttpResponse.StatusCode, ResponseContent]);
+          raise EMCPClientException.CreateFmt(AiStr('mcp.client.init_http'), [LHttpResponse.StatusCode, ResponseContent]);
 
         var LResponseVal := TJSONObject.ParseJSONValue(ResponseContent);
         if not (LResponseVal is TJSONObject) then
         begin
           LResponseVal.Free;
-          raise EMCPClientException.Create('Failed to parse JSON initialization response from server.');
+          raise EMCPClientException.Create(AiStr('mcp.client.init_parse'));
         end;
         var LResponseObj := TJSONObject(LResponseVal);
         try
           var
             LResponseID: Integer;
           if not LResponseObj.TryGetValue<Integer>('id', LResponseID) or (LResponseID <> FRequestIDCounter) then
-            raise EMCPClientException.CreateFmt('Mismatched response ID during initialize. Expected %d, got %d. Raw: %s', [FRequestIDCounter, LResponseID, LResponseObj.ToJSON]);
+            raise EMCPClientException.CreateFmt(AiStr('mcp.client.init_id'), [FRequestIDCounter, LResponseID, LResponseObj.ToJSON]);
 
           var
             LErrorObj: TJSONObject;
           if LResponseObj.TryGetValue<TJSONObject>('error', LErrorObj) then
-            raise EMCPClientException.Create('Server returned a JSON-RPC error during initialization: ' + LErrorObj.ToJSON);
+            raise EMCPClientException.CreateFmt(AiStr('mcp.client.init_rpc_error'), [LErrorObj.ToJSON]);
 
           if LResponseObj.TryGetValue('result', LResultPair) and (LResultPair is TJSONObject) then
           begin
@@ -2248,7 +2249,7 @@ begin
           end
           else
           begin
-            raise EMCPClientException.Create('JSON-RPC initialization response is invalid or does not contain a result object.');
+            raise EMCPClientException.Create(AiStr('mcp.client.init_no_result'));
           end;
         finally
           LResponseObj.Free;
@@ -2451,14 +2452,14 @@ begin
 
           // Verificar el c?digo de estado HTTP
           if LHttpResponse.StatusCode <> 200 then
-            raise EMCPClientException.CreateFmt('HTTP request failed with status code %d: %s', [LHttpResponse.StatusCode, LResponseContent]);
+            raise EMCPClientException.CreateFmt(AiStr('mcp.client.http'), [LHttpResponse.StatusCode, LResponseContent]);
 
           // Intentar parsear la respuesta JSON
           var LResponseVal := TJSONObject.ParseJSONValue(LResponseContent);
           if not (LResponseVal is TJSONObject) then
           begin
             LResponseVal.Free;
-            raise EMCPClientException.Create('Failed to parse JSON response from server.');
+            raise EMCPClientException.Create(AiStr('mcp.client.parse'));
           end;
           var LResponseObj := TJSONObject(LResponseVal);
           try
@@ -2466,19 +2467,19 @@ begin
             var
               LResponseID: Integer;
             if not LResponseObj.TryGetValue<Integer>('id', LResponseID) or (LResponseID <> FRequestIDCounter) then
-              raise EMCPClientException.CreateFmt('Mismatched response ID. Expected %d, got %d. Raw: %s', [FRequestIDCounter, LResponseID, LResponseObj.ToJSON]);
+              raise EMCPClientException.CreateFmt(AiStr('mcp.client.id'), [FRequestIDCounter, LResponseID, LResponseObj.ToJSON]);
 
             // Verificar si la respuesta JSON-RPC contiene un error
             var
               LErrorObj: TJSONObject;
             if LResponseObj.TryGetValue<TJSONObject>('error', LErrorObj) then
-              raise EMCPClientException.Create('Server returned a JSON-RPC error: ' + LErrorObj.ToJSON);
+              raise EMCPClientException.CreateFmt(AiStr('mcp.client.rpc_error'), [LErrorObj.ToJSON]);
 
             // Extraer el resultado de la respuesta JSON-RPC y clonarlo para el llamador
             if LResponseObj.TryGetValue('result', LResultPair) and (LResultPair is TJSONObject) then
               Result := TJSONObject(LResultPair.Clone)
             else
-              raise EMCPClientException.Create('JSON-RPC response is invalid or does not contain a result object.');
+              raise EMCPClientException.Create(AiStr('mcp.client.no_result'));
           finally
             // Liberar el objeto JSON de la respuesta
             LResponseObj.Free;
@@ -2680,13 +2681,13 @@ begin
       else if SameText(AHttpVerb, 'POST') then
       begin
         if not Assigned(ABodyStream) then
-          raise EMCPClientException.Create('POST request requires a body stream.');
+          raise EMCPClientException.Create(AiStr('mcp.client.post_body'));
         ABodyStream.Position := 0;
         LResponse := FHttpClient.Post(LURL, ABodyStream, nil, LHeaders);
       end
       else
       begin
-        raise EMCPClientException.CreateFmt('Unsupported HTTP Verb: %s', [AHttpVerb]);
+        raise EMCPClientException.CreateFmt(AiStr('mcp.client.verb'), [AHttpVerb]);
       end;
 
       // 5. Procesar la respuesta del servidor
@@ -2694,24 +2695,24 @@ begin
       DoLog(Format('SERVER -> CLIENT (HTTP %d): %s', [LResponse.StatusCode, LResponseContent]));
 
       if LResponse.StatusCode <> 200 then
-        raise EMCPClientException.CreateFmt('HTTP request failed. Code: %d. Message: %s', [LResponse.StatusCode, LResponseContent]);
+        raise EMCPClientException.CreateFmt(AiStr('mcp.client.http2'), [LResponse.StatusCode, LResponseContent]);
 
       // 6. Parsear el wrapper DataSnap
       var LDataSnapVal := TJSONObject.ParseJSONValue(LResponseContent);
       if not (LDataSnapVal is TJSONObject) then
       begin
         LDataSnapVal.Free;
-        raise EMCPClientException.Create('Failed to parse JSON response (DataSnap wrapper).');
+        raise EMCPClientException.Create(AiStr('mcp.client.datasnap_parse'));
       end;
       LDataSnapResultWrapper := TJSONObject(LDataSnapVal);
 
       // 7. Acceder al array "result"
       if not LDataSnapResultWrapper.TryGetValue<TJSonArray>('result', LDataSnapResultArray) or (LDataSnapResultArray.Count = 0) then
-        raise EMCPClientException.Create('DataSnap "result" array not found or empty.');
+        raise EMCPClientException.Create(AiStr('mcp.client.datasnap_result'));
 
       // 8. CORRECCI?N: El primer elemento del array es un JSONString que contiene el JSON-RPC.
       if not(LDataSnapResultArray.Items[0] is TJSONString) then
-        raise EMCPClientException.Create('First element in DataSnap "result" array is not a JSON string.');
+        raise EMCPClientException.Create(AiStr('mcp.client.datasnap_first'));
 
       var
       LJsonRpcString := (LDataSnapResultArray.Items[0] as TJSONString).Value;
@@ -2721,7 +2722,7 @@ begin
       if not (LJsonRpcVal is TJSONObject) then
       begin
         LJsonRpcVal.Free;
-        raise EMCPClientException.Create('Failed to parse inner JSON-RPC string.');
+        raise EMCPClientException.Create(AiStr('mcp.client.inner_parse'));
       end;
       LJsonRpcObject := TJSONObject(LJsonRpcVal);
 
@@ -2747,9 +2748,9 @@ begin
         var
           LErrorObj: TJSONObject;
         if LJsonRpcObject.TryGetValue<TJSONObject>('error', LErrorObj) then
-          raise EMCPClientException.Create('Server returned a JSON-RPC error: ' + LErrorObj.ToJSON)
+          raise EMCPClientException.CreateFmt(AiStr('mcp.client.rpc_error'), [LErrorObj.ToJSON])
         else
-          raise EMCPClientException.Create('JSON-RPC object does not contain "result" or "error" keys.');
+          raise EMCPClientException.Create(AiStr('mcp.client.no_result_or_error'));
       end;
 
     except
@@ -2939,7 +2940,7 @@ begin
 
   LURL := GetParamByName('URL');
   if LURL.IsEmpty then
-    raise EMCPClientException.Create('URL parameter is missing for SSE client.');
+    raise EMCPClientException.Create(AiStr('mcp.client.sse_url'));
 
   FBuffer := '';
   FPostEndpoint := '';
@@ -3366,7 +3367,7 @@ var
   LId: Integer;
 begin
   if FPostEndpoint = '' then
-    raise EMCPClientException.Create('Cannot send request: Post Endpoint not initialized.');
+    raise EMCPClientException.Create(AiStr('mcp.client.no_endpoint'));
 
   Req := TJSONObject.Create;
   try

@@ -87,6 +87,7 @@ type
 implementation
 
 uses
+  uMakerAi.Localization,
   System.Rtti, System.TypInfo,
   uMakerAi.Agents.EngineRegistry;
 
@@ -96,7 +97,7 @@ constructor TGraphBuilder.Create(AAgents: TAIAgents);
 begin
   inherited Create;
   if not Assigned(AAgents) then
-    raise Exception.Create('TGraphBuilder requires a valid TAIAgents instance.');
+    raise Exception.Create(AiStr('agents.builder.no_agents'));
   FAgents := AAgents;
   FNodeMap := TDictionary<string, TAIAgentsNode>.Create;
   FNodeJsonMap := TDictionary<string, TJSONObject>.Create;
@@ -114,7 +115,7 @@ procedure TGraphBuilder.BuildFromJson(const AJsonString: string);
 begin
   FJsonGraph := TJSONObject.ParseJSONValue(AJsonString) as TJSONObject;
   if not Assigned(FJsonGraph) then
-    raise Exception.Create('Invalid JSON format for graph definition.');
+    raise Exception.Create(AiStr('agents.json.invalid_graph'));
 
   try
     FAgents.ClearGraph;
@@ -186,7 +187,7 @@ var
 begin
   LNodesArray := FJsonGraph.GetValue<TJSONArray>(cJsonNodes);
   if not Assigned(LNodesArray) then
-    raise Exception.CreateFmt('JSON graph must contain a "%s" array.', [cJsonNodes]);
+    raise Exception.CreateFmt(AiStr('agents.json.no_array'), [cJsonNodes]);
 
   for var LJsonValue in LNodesArray do
   begin
@@ -242,7 +243,7 @@ begin
             SetToolParameters(LTool, LParametersJson);
         end
         else
-          raise Exception.CreateFmt('Tool class "%s" not found or not registered.', [LToolClassName]);
+          raise Exception.CreateFmt(AiStr('agents.builder.tool_not_found'), [LToolClassName]);
       end;
 
       // 3.4. Identificar nodos especiales (Start/End)
@@ -283,7 +284,7 @@ begin
     if not(FNodeMap.TryGetValue(LSourceNodeId, LSourceNode) and FNodeMap.TryGetValue(LTargetNodeId, LTargetNode)) then
     begin
       if FStrictValidation then
-        raise EAiGraphError.CreateFmt('Edge references a non-existent node (source "%s" -> target "%s").',
+        raise EAiGraphError.CreateFmt(AiStr('agents.builder.edge_node'),
           [LSourceNodeId, LTargetNodeId]);
       Continue;
     end;
@@ -295,7 +296,7 @@ begin
     if not Assigned(LSourcePortJson) then
     begin
       if FStrictValidation then
-        raise EAiGraphError.CreateFmt('Source port "%s" is not declared on node "%s".',
+        raise EAiGraphError.CreateFmt(AiStr('agents.builder.port'),
           [LSourceTerminalId, LSourceNode.Name]);
       Continue;
     end;
@@ -376,8 +377,7 @@ begin
         if not LAssigned then
         begin
           if FStrictValidation then
-            raise EAiGraphError.CreateFmt('More than %d standard output ports connected from node "%s" (connection to "%s"). ' +
-              'Use lmConditional/lmManual for N-way routing or set StrictValidation:=False to keep the legacy behavior of dropping the edge.',
+            raise EAiGraphError.CreateFmt(AiStr('agents.builder.too_many_ports'),
               [Length(LNextSlots), LSourceNode.Name, LTargetNode.Name]);
           LSourceNode.Print(Format('Warning: More than %d standard output ports connected from node %s. Connection to %s ignored.', [Length(LNextSlots), LSourceNode.Name, LTargetNode.Name]));
         end;

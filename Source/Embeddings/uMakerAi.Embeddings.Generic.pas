@@ -90,6 +90,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 
 procedure Register;
 Begin
@@ -179,7 +182,7 @@ begin
       Result := FData;
     end
     else
-      raise Exception.CreateFmt('GenericEmbeddings error %d: %s',
+      raise Exception.CreateFmt(AiStr('emb.generic_error'),
         [Res.StatusCode, Res.ContentAsString]);
 
   finally

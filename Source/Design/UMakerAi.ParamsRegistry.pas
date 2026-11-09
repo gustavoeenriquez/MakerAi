@@ -125,6 +125,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 { TAiChatFactory }
 
 // Funci?n interna para crear la clave
@@ -321,10 +324,10 @@ var
 begin
   // Verifica que ModelName no est? vac?o
   if CustomModelName.IsEmpty then
-    raise Exception.Create('CustomModelName cannot be empty when registering a custom model.');
+    raise Exception.Create(AiStr('design.registry.custom_name'));
 
   if ModelBaseName.IsEmpty then
-    raise Exception.Create('ModelBaseName cannot be empty when registering a custom model.');
+    raise Exception.Create(AiStr('design.registry.base_name'));
 
   Key := GetCompositeKey(DriverName, CustomModelName);
 

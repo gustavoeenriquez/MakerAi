@@ -68,7 +68,7 @@ procedure Register;
 
 implementation
 
-uses System.Generics.Collections;
+uses uMakerAi.Localization, System.Generics.Collections;
 
 procedure Register;
 begin
@@ -108,7 +108,7 @@ var
 begin
   Result := nil;
   if not IsActive then
-    raise Exception.Create('Direct Connection is not active. Call Start first.');
+    raise Exception.Create(AiStr('mcp.direct.inactive'));
 
   // El due?o de AParams es este m?todo, se libera aqu?.
   // Si AParams es nil, creamos uno vac?o.
@@ -141,7 +141,7 @@ begin
   if not(JsonValue is TJSONObject) then
   begin
     JsonValue.Free;
-    raise Exception.Create('Invalid JSON-RPC response from server logic.');
+    raise Exception.Create(AiStr('mcp.direct.invalid'));
   end;
 
   ResponseJSON := TJSONObject(JsonValue);
@@ -149,7 +149,7 @@ begin
     // Comprobar si hay un error en la respuesta JSON-RPC
     if ResponseJSON.TryGetValue<TJSONObject>('error', ErrorObj) then
     begin
-      raise Exception.CreateFmt('JSON-RPC Error: %s (Code: %d)', [ErrorObj.GetValue<string>('message', 'Unknown'),
+      raise Exception.CreateFmt(AiStr('mcp.direct.rpc_error'), [ErrorObj.GetValue<string>('message', 'Unknown'),
         ErrorObj.GetValue<Integer>('code', 0)]);
     end;
 
@@ -160,7 +160,7 @@ begin
       if ResultValue is TJSONObject then
         Result := TJSONObject(ResultValue.Clone)
       else
-        raise Exception.Create('Unexpected result type in JSON-RPC response.');
+        raise Exception.Create(AiStr('mcp.direct.result_type'));
     end;
   finally
     ResponseJSON.Free;

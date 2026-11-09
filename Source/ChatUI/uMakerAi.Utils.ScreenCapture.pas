@@ -96,6 +96,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 {$IFDEF MSWINDOWS}
 
 class function TScreenCapture.CaptureScreenWindows(const ARect: TRect): FMX.Graphics.TBitmap;
@@ -295,7 +298,7 @@ begin
   // o implementaci�n nativa m�s compleja
   Result := nil;
   // TODO: Implementar captura para Android
-  raise Exception.Create('Screen capture not implemented for Android platform');
+  raise Exception.Create(AiStr('utils.capture.android'));
 end;
 {$ENDIF}
 

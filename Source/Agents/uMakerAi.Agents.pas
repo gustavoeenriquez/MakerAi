@@ -507,7 +507,7 @@ procedure Register;
 
 implementation
 
-uses uMakerAi.Agents.EngineRegistry, uMakerAi.Agents.Attributes, uMakerAi.Telemetry;
+uses uMakerAi.Localization, uMakerAi.Agents.EngineRegistry, uMakerAi.Agents.Attributes, uMakerAi.Telemetry;
 
 {$IF CompilerVersion < 35}
 class function TInterlockedHelper.Exchange(var Target: Boolean; Value: Boolean): Boolean;
@@ -1160,9 +1160,9 @@ begin
   AStartNode := FindNode(AStartNodeName);
   AEndNode := FindNode(AEndNodeName);
   if not Assigned(AStartNode) then
-    raise Exception.CreateFmt('Edge creation failed: Start node "%s" not found.', [AStartNodeName]);
+    raise Exception.CreateFmt(AiStr('agents.edge.start_not_found'), [AStartNodeName]);
   if not Assigned(AEndNode) then
-    raise Exception.CreateFmt('Edge creation failed: End node "%s" not found.', [AEndNodeName]);
+    raise Exception.CreateFmt(AiStr('agents.edge.end_not_found'), [AEndNodeName]);
   Result := True;
 end;
 
@@ -1177,8 +1177,7 @@ begin
   if Assigned(Result) then
   begin
     if Result.Mode <> AMode then
-      raise EAiGraphError.CreateFmt('Node "%s" already has a %s outgoing link; cannot add a %s edge to it. ' +
-        'A node has a single outgoing link: use one mode per source node.',
+      raise EAiGraphError.CreateFmt(AiStr('agents.edge.mode_conflict'),
         [AStartNode.Name, GetEnumName(TypeInfo(TLinkMode), Ord(Result.Mode)), GetEnumName(TypeInfo(TLinkMode), Ord(AMode))]);
     Exit;
   end;
@@ -1200,7 +1199,7 @@ begin
     SourceName := ALink.Name;
 
   if (ALink.NextA = ATarget) or (ALink.NextB = ATarget) or (ALink.NextC = ATarget) or (ALink.NextD = ATarget) then
-    raise EAiGraphError.CreateFmt('Edge "%s" -> "%s" already exists.', [SourceName, ATarget.Name]);
+    raise EAiGraphError.CreateFmt(AiStr('agents.edge.exists'), [SourceName, ATarget.Name]);
 
   if not Assigned(ALink.NextA) then
   begin
@@ -1223,8 +1222,7 @@ begin
     ALink.ExpressionD := AExpression;
   end
   else
-    raise EAiGraphError.CreateFmt('Node "%s" already has 4 outgoing edges (the maximum of a link). ' +
-      'Add an intermediate node to branch further.', [SourceName]);
+    raise EAiGraphError.CreateFmt(AiStr('agents.edge.max_edges'), [SourceName]);
 end;
 
 function TAIAgentManager.AddEdge(const AStartNodeName, AEndNodeName: string): TAIAgentManager;
@@ -1243,7 +1241,7 @@ var
 begin
   FCompiled := False;
   if Trim(AExpression) = '' then
-    raise EAiGraphError.CreateFmt('Expression edge "%s" -> "%s" needs an expression; use AddFallbackEdge for the default path.',
+    raise EAiGraphError.CreateFmt(AiStr('agents.edge.needs_expression'),
       [AStartNodeName, AEndNodeName]);
   FindEdgeNodes(AStartNodeName, AEndNodeName, StartNode, EndNode);
   AppendLinkTarget(EnsureOutLink(StartNode, lmExpression, 'Link_' + AStartNodeName + '_expr'), EndNode, AExpression);
@@ -1257,9 +1255,9 @@ begin
   FCompiled := False;
   FindEdgeNodes(AStartNodeName, AEndNodeName, StartNode, EndNode);
   if not Assigned(StartNode.Next) then
-    raise EAiGraphError.CreateFmt('Node "%s" has no outgoing link yet: add its edges before the fallback edge.', [AStartNodeName]);
+    raise EAiGraphError.CreateFmt(AiStr('agents.edge.fallback_first'), [AStartNodeName]);
   if Assigned(StartNode.Next.NextNo) and (StartNode.Next.NextNo <> EndNode) then
-    raise EAiGraphError.CreateFmt('Node "%s" already has a fallback edge to "%s".', [AStartNodeName, StartNode.Next.NextNo.Name]);
+    raise EAiGraphError.CreateFmt(AiStr('agents.edge.fallback_exists'), [AStartNodeName, StartNode.Next.NextNo.Name]);
   StartNode.Next.NextNo := EndNode;
   Result := Self;
 end;
@@ -1270,7 +1268,7 @@ var
 begin
   Node := FindNode(ANodeName);
   if not Assigned(Node) then
-    raise Exception.CreateFmt('SetJoinMode failed: node "%s" not found.', [ANodeName]);
+    raise Exception.CreateFmt(AiStr('agents.join.node_not_found'), [ANodeName]);
   Node.JoinMode := AJoinMode;
   Result := Self;
 end;
@@ -1287,7 +1285,7 @@ end;
 function TAIAgentManager.AddMessageAndRunMsg(APrompt, aRole: String; aMediaFiles: TAiMediaFilesArray): TAiChatMessage;
 begin
   if FAsynchronous then
-    raise Exception.Create('AddMessageAndRunMsg is only compatible with Asynchronous = False (Synchronous mode).');
+    raise Exception.Create(AiStr('agents.sync_only'));
 
   // Ejecutamos (esto esperar? a terminar)
   AddMessageAndRun(APrompt, aRole, aMediaFiles);
@@ -1302,7 +1300,7 @@ var
 begin
   FCompiled := False;
   if FindNode(AName) <> nil then
-    raise Exception.CreateFmt('A node with the name "%s" already exists.', [AName]);
+    raise Exception.CreateFmt(AiStr('agents.node.exists'), [AName]);
 
   Node := TAIAgentsNode.Create(Self);
   Node.Name := AName;
@@ -1316,12 +1314,12 @@ var
   Existing: TAIAgentsNode;
 begin
   if not Assigned(ANode) then
-    raise EAiGraphError.Create('AddNode: node is nil.');
+    raise EAiGraphError.Create(AiStr('agents.node.nil'));
   if ANode.Name = '' then
-    raise EAiGraphError.Create('AddNode: assign the node Name before adding it to the graph.');
+    raise EAiGraphError.Create(AiStr('agents.node.no_name'));
   Existing := FindNode(ANode.Name);
   if Assigned(Existing) and (Existing <> ANode) then
-    raise Exception.CreateFmt('A node with the name "%s" already exists.', [ANode.Name]);
+    raise Exception.CreateFmt(AiStr('agents.node.exists'), [ANode.Name]);
 
   FCompiled := False;
   // Sin dueno, el grafo lo adopta y lo libera con el resto
@@ -1334,7 +1332,7 @@ end;
 function TAIAgentManager.AddToolNode(const AName: string; ATool: TAiToolBase): TAIAgentManager;
 begin
   if not Assigned(ATool) then
-    raise EAiGraphError.CreateFmt('AddToolNode "%s": tool is nil.', [AName]);
+    raise EAiGraphError.CreateFmt(AiStr('agents.node.tool_nil'), [AName]);
   AddNode(AName, nil);
   if ATool.Owner = nil then
     InsertComponent(ATool);
@@ -1373,18 +1371,17 @@ begin
   FCompiled := False;
   StartNode := FindNode(AStartNodeName);
   if not Assigned(StartNode) then
-    raise Exception.CreateFmt('Conditional edge creation failed: Start node "%s" not found.', [AStartNodeName]);
+    raise Exception.CreateFmt(AiStr('agents.cond.start_not_found'), [AStartNodeName]);
   // Antes se reemplazaba el link de salida en silencio y el anterior quedaba
   // huerfano (Compile fallaba despues con un error poco claro)
   if Assigned(StartNode.Next) then
-    raise EAiGraphError.CreateFmt('Node "%s" already has an outgoing link ("%s"); a conditional edge must be its only one. ' +
-      'Use AddFallbackEdge for the no-match path.', [AStartNodeName, StartNode.Next.Name]);
+    raise EAiGraphError.CreateFmt(AiStr('agents.cond.only_link'), [AStartNodeName, StartNode.Next.Name]);
 
   // Validar todos los destinos antes de crear el link, para no dejar un link
   // a medio armar si alguno no existe
   for DecisionKey in AConditionalTargets.Keys do
     if not Assigned(FindNode(AConditionalTargets.Items[DecisionKey])) then
-      raise Exception.CreateFmt('Conditional edge creation failed: Target node "%s" for decision "%s" not found.',
+      raise Exception.CreateFmt(AiStr('agents.cond.target_not_found'),
         [AConditionalTargets.Items[DecisionKey], DecisionKey]);
 
   Link := TAIAgentsLink.Create(Self);
@@ -1432,9 +1429,9 @@ begin
     // AskMsg/ResMsg sembrados por Run antes de la primera corrida (M-03).
     // Para un reinicio explicito del estado usar ResetExecutionState.
     if not Assigned(FStartNode) then
-      raise Exception.Create('StartNode is not assigned.');
+      raise Exception.Create(AiStr('agents.no_start'));
     if not Assigned(FEndNode) then
-      raise Exception.Create('EndNode is not assigned.');
+      raise Exception.Create(AiStr('agents.no_end'));
 
     StartCount := 0;
     EndCount := 0;
@@ -1447,16 +1444,16 @@ begin
       Node.Reset;
     end;
     if StartCount <> 1 then
-      raise Exception.CreateFmt('Invalid number of StartNode references: %d (expected 1).', [StartCount]);
+      raise Exception.CreateFmt(AiStr('agents.start_refs'), [StartCount]);
     if EndCount <> 1 then
-      raise Exception.CreateFmt('Invalid number of EndNode references: %d (expected 1).', [EndCount]);
+      raise Exception.CreateFmt(AiStr('agents.end_refs'), [EndCount]);
 
     for Link in FLinks do
     begin
       Link.Ready := False;
       Link.NoCycles := 0;
       if not Assigned(Link.FSourceNode) then
-        raise Exception.CreateFmt('Link "%s" is not connected from any source node.', [Link.Name]);
+        raise Exception.CreateFmt(AiStr('agents.link_orphan'), [Link.Name]);
 
       if Assigned(Link.NextA) then
         Link.NextA.FInEdges.Add(Link);
@@ -1588,7 +1585,7 @@ begin
     FOnConfirm(Self, Node, AQuestion, Buttons, AResponse, Result)
   else
   begin
-    DoError(Node, nil, Exception.Create('User confirmation required, but OnConfirm event is not assigned.'));
+    DoError(Node, nil, Exception.Create(AiStr('agents.confirm_required')));
     Result := msAbort;
   end;
 end;
@@ -1659,7 +1656,7 @@ begin
   try
     LJsonValue := TJSONObject.ParseJSONValue(LReader.ReadToEnd);
     if not Assigned(LJsonValue) or not(LJsonValue is TJSONObject) then
-      raise Exception.Create('Invalid JSON format: root is not an object.');
+      raise Exception.Create(AiStr('agents.json.root'));
     LRoot := LJsonValue as TJSONObject;
     try
       // =======================================================================
@@ -1675,9 +1672,9 @@ begin
           LNodeJSON := LJsonValue as TJSONObject;
           LKey := LNodeJSON.GetValue<string>('name', '');
           if LKey = '' then
-            raise Exception.Create('Node found without a name in JSON.');
+            raise Exception.Create(AiStr('agents.json.node_no_name'));
           if LNodeMap.ContainsKey(LKey) then
-            raise Exception.CreateFmt('Duplicate node name found in JSON: "%s"', [LKey]);
+            raise Exception.CreateFmt(AiStr('agents.json.node_duplicate'), [LKey]);
 
           LNode := TAIAgentsNode.Create(Self);
           LNode.Name := LKey;
@@ -1731,9 +1728,9 @@ begin
           LLinkJSON := LJsonValue as TJSONObject;
           LKey := LLinkJSON.GetValue<string>('name', '');
           if LKey = '' then
-            raise Exception.Create('Link found without a name in JSON.');
+            raise Exception.Create(AiStr('agents.json.link_no_name'));
           if LLinkMap.ContainsKey(LKey) then
-            raise Exception.CreateFmt('Duplicate link name found in JSON: "%s"', [LKey]);
+            raise Exception.CreateFmt(AiStr('agents.json.link_duplicate'), [LKey]);
 
           LLink := TAIAgentsLink.Create(Self);
           LLink.Name := LKey;
@@ -1864,7 +1861,7 @@ var
   LLinkMap: TDictionary<string, TAIAgentsLink>; // Mapa temporal para buscar links por nombre
 begin
   if ComponentCount = 0 then
-    raise Exception.Create('Cannot load state into an empty graph. Load the graph structure first.');
+    raise Exception.Create(AiStr('agents.state_empty_graph'));
 
   // Crear mapa de links para una b?squeda r?pida
   LLinkMap := TDictionary<string, TAIAgentsLink>.Create;
@@ -1984,7 +1981,7 @@ begin
   // Chequeo temprano: si esta ocupado, no tiene sentido limpiar el estado de la
   // corrida anterior (Run volveria a lanzar con el mismo mensaje).
   if FBusy <> 0 then
-    raise Exception.Create('The Agent Manager is currently busy.');
+    raise Exception.Create(AiStr('agents.busy'));
 
   // El orden es lo unico que hace correcta a esta sobrecarga:
   //   1. Compile valida la estructura y NO toca el estado (M-03).
@@ -2010,7 +2007,7 @@ begin
 
   // 1. CHEQUEO DE BUSY (Thread safe check simple)
   if FBusy <> 0 then
-    raise Exception.Create('The Agent Manager is currently busy.');
+    raise Exception.Create(AiStr('agents.busy'));
 
   // 2. GESTI?N DE MENSAJES
   // Si no se provey? un mensaje previo, creamos uno nuevo b?sico
@@ -2040,7 +2037,7 @@ begin
         LTask.Wait(INFINITE); // Esperamos a que InternalRun termine
       except
         on E: Exception do
-          raise Exception.Create('Error waiting for agent execution: ' + E.Message);
+          raise Exception.CreateFmt(AiStr('agents.wait_error'), [E.Message]);
       end;
 
       // --- CAMBIO PRINCIPAL AQU? ---
@@ -2049,14 +2046,14 @@ begin
       LStatus := Blackboard.GetStatus;
 
       if LStatus = esError then
-        raise Exception.Create('Execution Failed: ' + Blackboard.GetString('Execution.ErrorMessage'));
+        raise Exception.CreateFmt(AiStr('agents.exec_failed'), [Blackboard.GetString('Execution.ErrorMessage')]);
 
       if LStatus = esTimeout then
-        raise Exception.Create('Execution Timed Out');
+        raise Exception.Create(AiStr('agents.exec_timeout'));
 
       // Opcional: Manejar esAborted expl?citamente si lo deseas
       if LStatus = esAborted then
-        raise Exception.Create('Execution Aborted');
+        raise Exception.Create(AiStr('agents.exec_aborted'));
 
       // -----------------------------
 
@@ -2075,7 +2072,7 @@ var
 begin
   // 1. Verificaci?n de estado ocupado
   if TInterlocked.Exchange(FBusy, 1) <> 0 then
-    raise Exception.Create('Agent is busy (InternalRun check).');
+    raise Exception.Create(AiStr('agents.busy_internal'));
 
   Compile; // Asegura que el grafo est? listo
 
@@ -2178,7 +2175,7 @@ begin
             WaitResult := TTask.WaitForAll(TasksToWaitOn, FTimeoutMs);
 
             if not WaitResult then
-              raise Exception.CreateFmt('Graph execution timed out after %d ms.', [FTimeoutMs]);
+              raise Exception.CreateFmt(AiStr('agents.graph_timeout'), [FTimeoutMs]);
 
           until FAbort;
           // --- FIN DEL BUCLE DE ESPERA DIN?MICA ---
@@ -2374,8 +2371,7 @@ begin
       if Assigned(LNode.OnExecute) and (not Assigned(LNode.Tool)) and (not FAllowPartialSerialization) then
       begin
         LNodesArray.Free;
-        raise EAiGraphError.CreateFmt('Node "%s" has an OnExecute handler that cannot be serialized. ' +
-          'Attach a Tool, or set AllowPartialSerialization := True to write a diagnostic placeholder.', [LNode.Name]);
+        raise EAiGraphError.CreateFmt(AiStr('agents.serialize_handler'), [LNode.Name]);
       end;
 
       LNodeObj := TJSONObject.Create;
@@ -2525,7 +2521,7 @@ function TAIAgentManager.SetEntryPoint(const ANodeName: string): TAIAgentManager
 begin
   Self.StartNode := FindNode(ANodeName);
   if not Assigned(Self.StartNode) then
-    raise Exception.CreateFmt('Entry point node "%s" not found.', [ANodeName]);
+    raise Exception.CreateFmt(AiStr('agents.entry_not_found'), [ANodeName]);
   Result := Self;
 end;
 
@@ -2533,7 +2529,7 @@ function TAIAgentManager.SetFinishPoint(const ANodeName: string): TAIAgentManage
 begin
   Self.EndNode := FindNode(ANodeName);
   if not Assigned(Self.EndNode) then
-    raise Exception.CreateFmt('Finish point node "%s" not found.', [ANodeName]);
+    raise Exception.CreateFmt(AiStr('agents.finish_not_found'), [ANodeName]);
   Result := Self;
 end;
 
@@ -2902,7 +2898,7 @@ begin
   Result := False;
 
   if TInterlocked.Exchange(FBusy, 1) <> 0 then
-    raise Exception.Create('Agent is busy');
+    raise Exception.Create(AiStr('agents.busy_short'));
 
   try
     // 0. Asegurar que el grafo este compilado ANTES de restaurar. Tras un
@@ -2937,7 +2933,7 @@ begin
     if not Assigned(LNode) then
     begin
       TInterlocked.Exchange(FBusy, 0);
-      raise Exception.CreateFmt('Nodo "%s" no encontrado en el grafo', [ANodeName]);
+      raise Exception.CreateFmt(AiStr('agents.node_not_found'), [ANodeName]);
     end;
 
     // 3. Preparar el nodo para reanudaci?n
@@ -3009,7 +3005,7 @@ begin
               if not HasPendingTasks then Break;
               WaitResult := TTask.WaitForAll(TasksToWaitOn, FTimeoutMs);
               if not WaitResult then
-                raise Exception.CreateFmt('Graph execution timed out after %d ms.', [FTimeoutMs]);
+                raise Exception.CreateFmt(AiStr('agents.graph_timeout'), [FTimeoutMs]);
             until FAbort;
 
             if not FAbort then
@@ -3187,7 +3183,7 @@ begin
     if FNoCycles >= FMaxCycles then
     begin
       var
-      E := Exception.CreateFmt('Maximum retry cycles (%d) reached on link "%s" from node "%s". Aborting this path.', [FMaxCycles, Self.Name, Sender.Name]);
+      E := Exception.CreateFmt(AiStr('agents.max_retries'), [FMaxCycles, Self.Name, Sender.Name]);
       FGraph.DoError(Sender, Self, E);
       Exit;
     end

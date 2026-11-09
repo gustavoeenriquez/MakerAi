@@ -223,6 +223,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 { ============================================================================
   macOS: tipos auxiliares � deben estar antes de InitAudioQueue
   ============================================================================ }
@@ -540,7 +543,7 @@ begin
       CloseHandle(FDoneEvent);
       FDoneEvent := 0;
       FDevice := 0;
-      raise Exception.CreateFmt('waveOutOpen fallo con error %d', [Res]);
+      raise Exception.CreateFmt(AiStr('utils.audio.waveout'), [Res]);
     end;
 
     AllocateBuffers;
@@ -875,7 +878,7 @@ begin
   Res := AudioQueueNewOutput(@Desc, AudioQueueOutputCallback, Self,
     nil, nil, 0, FAudioQueue);
   if Res <> 0 then
-    raise Exception.CreateFmt('AudioQueueNewOutput fallo: %d', [Res]);
+    raise Exception.CreateFmt(AiStr('utils.audio.audioqueue'), [Res]);
 
   for I := 0 to MAX_BUFFERS - 1 do
   begin
@@ -1069,7 +1072,7 @@ var
   PCMSize  : Integer;
 begin
   if not ParseWavHeader(WavData, WavDataSize, Fmt, PCMOffset, PCMSize) then
-    raise Exception.Create('Formato WAV invalido o no reconocido');
+    raise Exception.Create(AiStr('utils.audio.wav'));
 
   FLock.Enter;
   try
@@ -1118,7 +1121,7 @@ end;
 procedure TAudioPushStream.PushPCMData(const PCMData: Pointer; PCMSize: Integer);
 begin
   if not FIsStarted then
-    raise Exception.Create('Llamar a Start antes de PushPCMData');
+    raise Exception.Create(AiStr('utils.audio.start_first'));
 
   FLock.Enter;
   try

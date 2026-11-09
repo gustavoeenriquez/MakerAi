@@ -60,6 +60,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 Const
   GlGeminiUrl = 'https://generativelanguage.googleapis.com/v1beta/';
 
@@ -123,7 +126,7 @@ begin
       end;
     end
     else
-      Raise Exception.CreateFmt('Error Gemini Embeddings: %d - %s', [Res.StatusCode, Res.ContentAsString]);
+      Raise Exception.CreateFmt(AiStr('emb.gemini_error'), [Res.StatusCode, Res.ContentAsString]);
   finally
     jRequestRoot.Free;
     Client.Free;

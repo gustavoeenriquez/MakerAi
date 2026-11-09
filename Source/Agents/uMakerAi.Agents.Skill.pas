@@ -142,6 +142,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 { TAiSkill }
 
 constructor TAiSkill.Create;
@@ -201,7 +204,7 @@ begin
   if not (JVal is TJSONObject) then
   begin
     JVal.Free;
-    raise EAiSkillError.CreateFmt('TAiSkill: JSON inválido — no es un objeto: %s',
+    raise EAiSkillError.CreateFmt(AiStr('agents.skill.json'),
                                   [Copy(AJsonStr, 1, 80)]);
   end;
   try
@@ -262,7 +265,7 @@ begin
   end;
 
   if not TFile.Exists(APath) then
-    raise EAiSkillError.CreateFmt('TAiSkill: archivo no encontrado: %s', [APath]);
+    raise EAiSkillError.CreateFmt(AiStr('agents.skill.file'), [APath]);
   LoadFromJSON(TFile.ReadAllText(APath, TEncoding.UTF8));
   FSource := ssFile;
   FSourcePath := APath;

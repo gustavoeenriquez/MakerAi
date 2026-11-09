@@ -105,6 +105,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 {$I ..\Core\uMakerAi.Version.inc}
 
 procedure Register;
@@ -191,7 +194,7 @@ begin
 
   NewEmb := TAiEmbeddingFactory.Instance.CreateDriver(FDriverName);
   if not Assigned(NewEmb) then
-    raise Exception.CreateFmt('Failed to create embedding driver instance for "%s"', [FDriverName]);
+    raise Exception.CreateFmt(AiStr('emb.conn_create_failed'), [FDriverName]);
 
   ApplyParamsToEmbeddings(NewEmb, FParams);
 
@@ -324,7 +327,7 @@ begin
     SetupEmbeddingsFromDriver;
 
   if not Assigned(FEmbeddings) then
-    raise Exception.Create('A valid DriverName must be specified to create an Embeddings instance.');
+    raise Exception.Create(AiStr('emb.conn_driver_required'));
 end;
 
 procedure TAiEmbeddingConnection.Loaded;

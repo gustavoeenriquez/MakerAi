@@ -38,6 +38,7 @@ implementation
 {$IFDEF MSWINDOWS}
 
 uses
+  uMakerAi.Localization,
   Winapi.Windows;
 
 const
@@ -99,6 +100,7 @@ function WsSelect(nfds: Integer; rfds, wfds, efds: Pointer; tv: Pointer): Intege
 {$ELSE}
 
 uses
+  uMakerAi.Localization,
   Posix.SysSocket,
   Posix.NetDB,
   Posix.SysSelect,
@@ -158,7 +160,7 @@ begin
   Hints.ai_protocol := IPPROTO_TCP;
   if WsGetAddrInfo(PAnsiChar(AnsiString(AHost)), PAnsiChar(AnsiString(IntToStr(APort))),
        @Hints, @AddrList) <> 0 then
-    raise Exception.CreateFmt('ws: no se pudo resolver %s', [AHost]);
+    raise Exception.CreateFmt(AiStr('ws.resolve'), [AHost]);
   try
     Addr := AddrList;
     while Addr <> nil do
@@ -179,7 +181,7 @@ begin
     WsFreeAddrInfo(AddrList);
   end;
   if FSocket < 0 then
-    raise Exception.CreateFmt('ws: no se pudo conectar TCP a %s:%d', [AHost, APort]);
+    raise Exception.CreateFmt(AiStr('ws.tcp_connect'), [AHost, APort]);
   FConnected := True;
   Result := True;
 end;
@@ -196,7 +198,7 @@ begin
   Hints.ai_socktype := SOCK_STREAM;
   if getaddrinfo(PAnsiChar(AnsiString(AHost)), PAnsiChar(AnsiString(IntToStr(APort))),
        Hints, Res) <> 0 then
-    raise Exception.CreateFmt('ws: no se pudo resolver %s', [AHost]);
+    raise Exception.CreateFmt(AiStr('ws.resolve'), [AHost]);
   try
     Cur := Res;
     while Cur <> nil do
@@ -221,7 +223,7 @@ begin
     freeaddrinfo(Res^);
   end;
   if FSocket < 0 then
-    raise Exception.CreateFmt('ws: no se pudo conectar TCP a %s:%d', [AHost, APort]);
+    raise Exception.CreateFmt(AiStr('ws.tcp_connect'), [AHost, APort]);
   FConnected := True;
   Result := True;
 end;

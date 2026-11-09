@@ -139,6 +139,9 @@ TAiEmbeddingDataRec = record
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 { TAiEmbeddingsCore }
 
 constructor TAiEmbeddingsCore.Create(aOwner: TComponent);
@@ -155,7 +158,7 @@ var
   LDimensions: Integer;
 begin
   if not Assigned(FOnGetEmbedding) then
-    raise Exception.Create('The OnGetEmbedding event has not been assigned. Cannot generate embedding.');
+    raise Exception.Create(AiStr('rag.no_on_get_embedding'));
 
   // Use parameters if provided, otherwise use property values.
   if aModel <> '' then
@@ -211,7 +214,7 @@ var
   i: Integer;
 begin
   if Length(A) <> Length(B) then
-    raise Exception.Create('Vectors must have the same dimension for dot product.');
+    raise Exception.Create(AiStr('emb.dim_dot'));
 
   Result := 0.0;
   for i := Low(A) to High(A) do
@@ -224,7 +227,7 @@ var
   SumOfSquares: Double;
 begin
   if Length(A) <> Length(B) then
-    raise Exception.Create('Vectors must have the same dimension for Euclidean distance.');
+    raise Exception.Create(AiStr('emb.dim_euclidean'));
 
   SumOfSquares := 0.0;
   for i := 0 to High(A) do
@@ -241,7 +244,7 @@ var
   QueryMag, CandidateMag, Dot: Double;
 begin
   if Length(Candidates) = 0 then
-    raise Exception.Create('The list of candidates cannot be empty.');
+    raise Exception.Create(AiStr('emb.no_candidates'));
 
   bestScore := -2.0; // Iniciar m�s bajo que cualquier similitud coseno posible (-1 a 1).
   Result.Index := -1;
@@ -358,7 +361,7 @@ begin
   begin
     // Ensure all vectors have the same length.
     if Length(Vectors[i]) <> Length(SumVector) then
-      raise Exception.Create('All vectors must have the same dimension to be averaged.');
+      raise Exception.Create(AiStr('emb.dim_average'));
 
     for j := 0 to High(SumVector) do
       SumVector[j] := SumVector[j] + Vectors[i][j];
@@ -415,7 +418,7 @@ var
   i: Integer;
 begin
   if Length(A) <> Length(B) then
-    raise Exception.Create('Vectors must have the same dimension to be added.');
+    raise Exception.Create(AiStr('emb.dim_add'));
 
   SetLength(Result, Length(A));
   for i := 0 to High(A) do
@@ -427,7 +430,7 @@ var
   i: Integer;
 begin
   if Length(A) <> Length(B) then
-    raise Exception.Create('Vectors must have the same dimension to be subtracted.');
+    raise Exception.Create(AiStr('emb.dim_subtract'));
 
   SetLength(Result, Length(A));
   for i := 0 to High(A) do

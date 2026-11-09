@@ -59,6 +59,7 @@ type
 implementation
 
 uses
+  uMakerAi.Localization,
   System.Rtti, System.TypInfo,
   uMakerAi.Agents, uMakerAi.Agents.EngineRegistry;
 
@@ -154,7 +155,7 @@ begin
 
   FJsonGraph := TJSONObject.ParseJSONValue(AJsonString) as TJSONObject;
   if not Assigned(FJsonGraph) then
-    raise Exception.Create('Invalid JSON format for graph definition.');
+    raise Exception.Create(AiStr('agents.json.invalid_graph'));
 
   try
     FBaseClassName := AClassName;
@@ -195,7 +196,7 @@ const
 begin
   LNodesArray := FJsonGraph.GetValue<TJSONArray>('nodes');
   if not Assigned(LNodesArray) then
-    raise Exception.Create('JSON graph must contain a "nodes" array.');
+    raise Exception.Create(AiStr('agents.json.no_nodes'));
 
   // --- PASO 1: Encontrar las coordenadas m�nimas para la normalizaci�n ---
   minX := MaxSingle;

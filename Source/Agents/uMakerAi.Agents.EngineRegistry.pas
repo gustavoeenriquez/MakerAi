@@ -102,7 +102,7 @@ type
 
 implementation
 
-uses System.Rtti;
+uses uMakerAi.Localization, System.Rtti;
 
 // Helper interno para generar los esquemas JSON de los par�metros.
 // No requiere cambios.
@@ -158,7 +158,7 @@ var
   LToolInfo: TToolInfo;
 begin
   if not ToolClass.InheritsFrom(TAiToolBase) then
-    raise Exception.CreateFmt('Cannot register class "%s" because it does not inherit from TAiToolBase.', [ToolClass.ClassName]);
+    raise Exception.CreateFmt(AiStr('agents.registry.not_tool'), [ToolClass.ClassName]);
 
   // Se llena el registro con toda la informaci�n necesaria.
   LToolInfo.ToolClass := ToolClass;

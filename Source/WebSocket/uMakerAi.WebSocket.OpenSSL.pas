@@ -86,6 +86,7 @@ implementation
 {$IF NOT DEFINED(MSWINDOWS) AND NOT DEFINED(ANDROID)}
 
 uses
+  uMakerAi.Localization,
   System.StrUtils,
   Posix.Dlfcn,
   Posix.SysSocket,
@@ -153,7 +154,7 @@ begin
   if FLibSSL = 0 then
     FLibSSL := TryLoad('libssl.dylib');   // macOS (Homebrew / LibreSSL)
   if FLibSSL = 0 then
-    raise Exception.Create('OpenSSL no encontrado: instalar libssl3 o libssl1.1');
+    raise Exception.Create(AiStr('ws.openssl.missing'));
 
   Bind(FTLS_client_method,        'TLS_client_method');
   Bind(FSSL_CTX_new,              'SSL_CTX_new');
@@ -172,7 +173,7 @@ begin
 
   if not (Assigned(FSSL_CTX_new) and Assigned(FSSL_connect) and
           Assigned(FSSL_read)    and Assigned(FSSL_write)) then
-    raise Exception.Create('OpenSSL: símbolos críticos no encontrados en la librería');
+    raise Exception.Create(AiStr('ws.openssl.symbols'));
 end;
 
 procedure TOpenSSLTransport.UnloadLibSSL;
@@ -250,12 +251,12 @@ begin
   LoadLibSSL;
 
   if not TcpConnect(AHost, APort) then
-    raise Exception.CreateFmt('OpenSSL: no se pudo conectar TCP a %s:%d', [AHost, APort]);
+    raise Exception.CreateFmt(AiStr('ws.tcp_connect'), [AHost, APort]);
 
   // Crear contexto SSL
   FCtx := FSSL_CTX_new(FTLS_client_method);
   if FCtx = nil then
-    raise Exception.Create('OpenSSL: SSL_CTX_new falló');
+    raise Exception.Create(AiStr('ws.openssl.ctx_new'));
 
   // Verificacion del certificado del servidor.
   if FInsecureSkipVerify then
@@ -264,22 +265,20 @@ begin
   begin
     // Cadena de confianza: CAs del sistema (/etc/ssl/certs en Debian/Ubuntu).
     if not Assigned(FSSL_CTX_set_default_verify_paths) then
-      raise Exception.Create('OpenSSL: SSL_CTX_set_default_verify_paths no disponible; ' +
-        'no se puede validar el certificado (usar InsecureSkipVerify para aceptar el riesgo)');
+      raise Exception.Create(AiStr('ws.openssl.no_verify_paths'));
     if FSSL_CTX_set_default_verify_paths(FCtx) <> 1 then
-      raise Exception.Create('OpenSSL: no se pudo cargar el almacen de CAs del sistema ' +
-        '(instalar ca-certificates)');
+      raise Exception.Create(AiStr('ws.openssl.no_ca_store'));
     FSSL_CTX_set_verify(FCtx, SSL_VERIFY_PEER, nil);
   end;
 
   // Crear sesión SSL
   FSSL := FSSL_new(FCtx);
   if FSSL = nil then
-    raise Exception.Create('OpenSSL: SSL_new falló');
+    raise Exception.Create(AiStr('ws.openssl.ssl_new'));
 
   // Asociar socket
   if FSSL_set_fd(FSSL, FSocket) <> 1 then
-    raise Exception.Create('OpenSSL: SSL_set_fd falló');
+    raise Exception.Create(AiStr('ws.openssl.set_fd'));
 
   // SNI (Server Name Indication) — via SSL_ctrl, porque la version "bonita"
   // es una macro y no existe como simbolo. Sin SNI, api.openai.com (y todo lo
@@ -296,10 +295,9 @@ begin
   if (not FInsecureSkipVerify) and (LHostAnsi <> '') then
   begin
     if not Assigned(FSSL_set1_host) then
-      raise Exception.Create('OpenSSL: SSL_set1_host no disponible (libssl < 1.1.0); ' +
-        'sin verificacion de hostname no se puede considerar seguro');
+      raise Exception.Create(AiStr('ws.openssl.no_set1_host'));
     if FSSL_set1_host(FSSL, PAnsiChar(LHostAnsi)) <> 1 then
-      raise Exception.CreateFmt('OpenSSL: SSL_set1_host fallo para "%s"', [AHost]);
+      raise Exception.CreateFmt(AiStr('ws.openssl.set1_host'), [AHost]);
   end;
 
   // Handshake TLS, con plazo de lectura; despues las lecturas vuelven a ser
@@ -317,8 +315,8 @@ begin
         'OpenSSL: certificado de %s rechazado (X509_V code %d). ' +
         'Si el endpoint usa un certificado propio, poner InsecureSkipVerify := True.',
         [AHost, LVerify]);
-    raise Exception.Create('OpenSSL: SSL_connect falló — handshake TLS rechazado' +
-      IfThen(Assigned(FSSL_ctrl), '', ' (ademas SSL_ctrl no se pudo enlazar: no habra SNI)'));
+    raise Exception.CreateFmt(AiStr('ws.openssl.connect'),
+      [IfThen(Assigned(FSSL_ctrl), '', AiStr('ws.openssl.no_sni'))]);
   end;
 
   SetSockTimeout(FSocket, SO_RCVTIMEO, 0);

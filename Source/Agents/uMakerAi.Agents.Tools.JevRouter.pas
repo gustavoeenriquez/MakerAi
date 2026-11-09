@@ -159,6 +159,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 function Invariant(AValue: Double): string;
 begin
   Result := FormatFloat('0.00', AValue, TFormatSettings.Invariant);
@@ -264,9 +267,9 @@ begin
           Continue;
         P := Pos('=', Line);
         if P = 0 then
-          raise EAiJevError.CreateFmt('JevRouter: el flag "%s" no tiene la forma nombre=pregunta', [Line]);
+          raise EAiJevError.CreateFmt(AiStr('agents.jevrouter.flag_format'), [Line]);
         if SameText(Trim(Copy(Line, 1, P - 1)), ROUTE_QUESTION) then
-          raise EAiJevError.CreateFmt('JevRouter: "%s" es un nombre reservado para flags', [ROUTE_QUESTION]);
+          raise EAiJevError.CreateFmt(AiStr('agents.jevrouter.reserved'), [ROUTE_QUESTION]);
         Result.AddNoul(Trim(Copy(Line, 1, P - 1)), Trim(Copy(Line, P + 1, MaxInt)));
       end;
     finally

@@ -128,6 +128,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiAudioPlayer]);
@@ -243,7 +246,7 @@ end;
 procedure TAiWasapiPlayThread.RaiseIfFailed(hr: HResult; const aContext: string);
 begin
   if Failed(hr) then
-    raise Exception.CreateFmt('%s fallo (HRESULT=0x%.8x)', [aContext, Cardinal(hr)]);
+    raise Exception.CreateFmt(AiStr('utils.audio.hresult'), [aContext, Cardinal(hr)]);
 end;
 
 function TAiWasapiPlayThread.ConvertItem(const aItem: TAiAudioPlayItem): TArray<Single>;
@@ -356,15 +359,15 @@ begin
           else if IsEqualGUID(pExt.SubFormat, KSDATAFORMAT_SUBTYPE_PCM) then
             FMixFloat := False
           else
-            raise Exception.Create('Formato de mezcla no soportado (SubFormat desconocido)');
+            raise Exception.Create(AiStr('utils.audio.mix_subformat'));
         end
         else
-          raise Exception.CreateFmt('Formato de mezcla no soportado (tag=%d)', [pwfx.wFormatTag]);
+          raise Exception.CreateFmt(AiStr('utils.audio.mix_tag'), [pwfx.wFormatTag]);
 
         if FMixFloat and (FMixBits <> 32) then
-          raise Exception.CreateFmt('Formato float de %d bits no soportado', [FMixBits]);
+          raise Exception.CreateFmt(AiStr('utils.audio.float_bits'), [FMixBits]);
         if (not FMixFloat) and (FMixBits <> 16) and (FMixBits <> 32) then
-          raise Exception.CreateFmt('Formato PCM entero de %d bits no soportado', [FMixBits]);
+          raise Exception.CreateFmt(AiStr('utils.audio.pcm_bits'), [FMixBits]);
 
         // Buffer de 300 ms
         RaiseIfFailed(AudioClient.Initialize(AUDCLNT_SHAREMODE_SHARED, 0, 300 * REFTIMES_PER_MS, 0, pwfx, nil),

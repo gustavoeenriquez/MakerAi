@@ -99,6 +99,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 { TAiDatabaseCheckpointer }
 
 constructor TAiDatabaseCheckpointer.Create(AConnection: TFDConnection;
@@ -106,7 +109,7 @@ constructor TAiDatabaseCheckpointer.Create(AConnection: TFDConnection;
 begin
   inherited Create;
   if not Assigned(AConnection) then
-    raise Exception.Create('TAiDatabaseCheckpointer: Connection no puede ser nil.');
+    raise Exception.Create(AiStr('agents.checkpoint.connection_nil'));
   FConnection := AConnection;
   FTableName  := ATableName;
   FLock       := TCriticalSection.Create;
@@ -121,7 +124,7 @@ end;
 function TAiDatabaseCheckpointer.NewQuery: TFDQuery;
 begin
   if not Assigned(FConnection) then
-    raise Exception.Create('TAiDatabaseCheckpointer: sin conexi?n asignada.');
+    raise Exception.Create(AiStr('agents.checkpoint.no_connection'));
   Result := TFDQuery.Create(nil);
   Result.Connection := FConnection;
 end;

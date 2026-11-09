@@ -79,6 +79,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
 
@@ -115,10 +118,10 @@ begin
 
   // 3. Obtener el array 'data' con validaci?n
   if not JObj.TryGetValue<TJSONArray>('data', JArrData) then
-    raise Exception.Create('La respuesta de la API no contiene el array de datos esperado ("data").');
+    raise Exception.Create(AiStr('emb.no_data'));
 
   if JArrData.Count = 0 then
-    raise Exception.Create('El array de datos ("data") est? vac?o.');
+    raise Exception.Create(AiStr('emb.data_empty'));
 
   // Preparar array para m?ltiples embeddings (aunque solo usemos el primero)
   SetLength(FData, JArrData.Count);
@@ -128,14 +131,14 @@ begin
   begin
     // Validar que sea un objeto
     if not (JVal is TJSONObject) then
-      raise Exception.Create('Formato de ?tem de datos inv?lido en la respuesta JSON.');
+      raise Exception.Create(AiStr('emb.data_item'));
 
     // 5. Obtener el vector de embedding
     if not TJSONObject(JVal).TryGetValue<TJSONArray>('embedding', JArrVector) then
-      raise Exception.Create('No se encontr? el campo "embedding" en los datos de respuesta.');
+      raise Exception.Create(AiStr('emb.no_embedding'));
 
     if JArrVector.Count = 0 then
-      raise Exception.Create('El vector de embedding est? vac?o.');
+      raise Exception.Create(AiStr('emb.vector_empty'));
 
     // 6. Dimensionar y llenar el vector con validaci?n de tipo
     SetLength(Emb, JArrVector.Count);
@@ -220,7 +223,7 @@ begin
       ResponseJSON := TJSONObject.ParseJSONValue(Res.ContentAsString) as TJSONObject;
       try
         if not Assigned(ResponseJSON) then
-          raise Exception.Create('La respuesta de la API no es un JSON v?lido.');
+          raise Exception.Create(AiStr('emb.invalid_json'));
 
         ParseEmbedding(ResponseJSON);
         Result := Self.FData;
@@ -230,7 +233,7 @@ begin
     end
     else
     begin
-      raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
     end;
   finally
     Client.Free;

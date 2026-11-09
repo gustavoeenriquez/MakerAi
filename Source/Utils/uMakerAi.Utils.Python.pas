@@ -155,6 +155,9 @@ Function GetPythonEngine(DllName: String = 'python310.dll'): TPythonEngine;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 Function GetPythonEngine(DllName: String): TPythonEngine;
 Begin
   if not Assigned(GlPythonEngine) then
@@ -204,9 +207,7 @@ class procedure TUtilsPython.CheckArchitecture;
 begin
   if not Is64BitApplication then
   begin
-    raise EPythonArchitectureError.CreateFmt('ERROR DE ARQUITECTURA: La aplicaci�n est� compilada en %s pero Python generalmente se instala en 64 bits.' + sLineBreak + 'SOLUCIONES:' + sLineBreak +
-      '1. Recompile la aplicaci�n para 64 bits (Recomendado)' + sLineBreak + '2. Instale Python 32 bits desde https://www.python.org/downloads/' + sLineBreak + '3. Use la DLL de Python 32 bits (python310-32.dll)' + sLineBreak + sLineBreak +
-      'Para compilar en 64 bits:' + sLineBreak + '- En Delphi: Project > Options > Building > Delphi Compiler > Target platforms > Win64' + sLineBreak + '- Seleccione "Win64" como plataforma de destino', [GetApplicationArchitecture]);
+    raise EPythonArchitectureError.CreateFmt(AiStr('utils.python.arch'), [GetApplicationArchitecture]);
   end;
 end;
 

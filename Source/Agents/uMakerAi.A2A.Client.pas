@@ -197,7 +197,7 @@ procedure Register;
 
 implementation
 
-uses System.Math, System.StrUtils, uMakerAi.Telemetry, uMakerAi.Agents.EngineRegistry;
+uses uMakerAi.Localization, System.Math, System.StrUtils, uMakerAi.Telemetry, uMakerAi.Agents.EngineRegistry;
 
 procedure Register;
 begin
@@ -284,13 +284,13 @@ begin
         Resp := Http.Get(BaseUrl + '/.well-known/agent.json', nil, BuildHeaders(AiSpanTraceParent(LSpan)));
       // alias legacy
       if Resp.StatusCode <> 200 then
-        raise EA2AClientException.CreateFmt('Agent card not found (HTTP %d)', [Resp.StatusCode]);
+        raise EA2AClientException.CreateFmt(AiStr('agents.a2a.card_not_found'), [Resp.StatusCode]);
       Content := Resp.ContentAsString(TEncoding.UTF8);
       V := TJSONObject.ParseJSONValue(Content);
       if not(V is TJSONObject) then
       begin
         V.Free;
-        raise EA2AClientException.Create('Agent card is not a JSON object');
+        raise EA2AClientException.Create(AiStr('agents.a2a.card_not_object'));
       end;
       Result := TJSONObject(V);
 
@@ -404,16 +404,16 @@ begin
       if not(Root is TJSONObject) then
       begin
         Root.Free;
-        raise EA2AClientException.Create('Invalid JSON-RPC response');
+        raise EA2AClientException.Create(AiStr('agents.a2a.invalid_response'));
       end;
       RespObj := TJSONObject(Root);
       try
         if RespObj.TryGetValue<TJSONObject>('error', ErrObj) then
-          raise EA2ARemoteTaskError.Create('A2A error: ' + ErrObj.ToJSON);
+          raise EA2ARemoteTaskError.CreateFmt(AiStr('agents.a2a.error'), [ErrObj.ToJSON]);
         if RespObj.TryGetValue('result', ResultVal) and (ResultVal is TJSONObject) then
           Result := TJSONObject(ResultVal.Clone)
         else
-          raise EA2AClientException.Create('A2A response has no result object');
+          raise EA2AClientException.Create(AiStr('agents.a2a.no_result'));
       finally
         RespObj.Free;
       end;
@@ -660,7 +660,7 @@ var
   Board: TAIBlackboard;
 begin
   if Trim(FAgentUrl) = '' then
-    raise EA2AClientException.Create('TAiA2ARemoteAgentTool: AgentUrl no configurada');
+    raise EA2AClientException.Create(AiStr('agents.a2a.no_url'));
 
   Board := nil;
   if Assigned(ANode) and Assigned(ANode.Graph) then
@@ -695,7 +695,7 @@ begin
       tsInputRequired:
         begin
           if not FSuspendOnInputRequired then
-            raise EA2ARemoteTaskError.CreateFmt('El agente A2A remoto requiere input adicional: %s',
+            raise EA2ARemoteTaskError.CreateFmt(AiStr('agents.a2a.input_required'),
               [Client.LastStatusMessage]);
           // Se recuerda el task remoto y se suspende el nodo local. Al reanudar
           // (ResumeThread) este Execute vuelve a correr y continua alla mismo.
@@ -705,7 +705,7 @@ begin
           ANode.Suspend(Client.LastStatusMessage, 'A2A task ' + Client.LastTaskId + ' @ ' + FAgentUrl);
         end;
     else
-      raise EA2ARemoteTaskError.CreateFmt('El agente A2A remoto termino en %s%s',
+      raise EA2ARemoteTaskError.CreateFmt(AiStr('agents.a2a.ended'),
         [Client.LastState, IfThen(Client.LastStatusMessage <> '', ': ' + Client.LastStatusMessage, '')]);
     end;
   finally

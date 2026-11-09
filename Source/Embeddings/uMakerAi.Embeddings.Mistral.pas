@@ -59,6 +59,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 Const
   GlMistralUrl = 'https://api.mistral.ai/v1/';
 
@@ -139,7 +142,7 @@ begin
     End
     else
     begin
-      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
     end;
 
   Finally

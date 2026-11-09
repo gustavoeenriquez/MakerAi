@@ -202,6 +202,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 const
   CGROKREALTIME_WSS = 'wss://api.x.ai/v1/realtime';
   CGROKREALTIME_LOG = ''; // ruta de log diagnostico; '' para deshabilitar
@@ -325,7 +328,7 @@ begin
         'MintEphemeralToken: HTTP %d — %s', [Resp.StatusCode, Content]);
     JObj := TJSONObject.ParseJSONValue(Content) as TJSONObject;
     if not Assigned(JObj) then
-      raise Exception.Create('MintEphemeralToken: respuesta no es JSON valido');
+      raise Exception.Create(AiStr('realtime.grok.token_json'));
     try
       // El esquema de la respuesta no esta documentado: buscar el token en
       // las ubicaciones tipicas de APIs OpenAI-compatibles

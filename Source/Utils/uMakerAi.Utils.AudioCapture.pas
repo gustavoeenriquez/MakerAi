@@ -191,6 +191,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiAudioCapture]);
@@ -379,7 +382,7 @@ end;
 procedure TAiWasapiCaptureThread.RaiseIfFailed(hr: HResult; const aContext: string);
 begin
   if Failed(hr) then
-    raise Exception.CreateFmt('%s fallo (HRESULT=0x%.8x)', [aContext, Cardinal(hr)]);
+    raise Exception.CreateFmt(AiStr('utils.audio.hresult'), [aContext, Cardinal(hr)]);
 end;
 
 function TAiWasapiCaptureThread.ReadNativeSample(pData: PByte; aIndex: Integer): Single;
@@ -603,15 +606,15 @@ begin
           else if IsEqualGUID(pExt.SubFormat, KSDATAFORMAT_SUBTYPE_PCM) then
             FMixFloat := False
           else
-            raise Exception.Create('Formato de mezcla no soportado (SubFormat desconocido)');
+            raise Exception.Create(AiStr('utils.audio.mix_subformat'));
         end
         else
-          raise Exception.CreateFmt('Formato de mezcla no soportado (tag=%d)', [pwfx.wFormatTag]);
+          raise Exception.CreateFmt(AiStr('utils.audio.mix_tag'), [pwfx.wFormatTag]);
 
         if FMixFloat and (FMixBits <> 32) then
-          raise Exception.CreateFmt('Formato float de %d bits no soportado', [FMixBits]);
+          raise Exception.CreateFmt(AiStr('utils.audio.float_bits'), [FMixBits]);
         if (not FMixFloat) and (FMixBits <> 16) and (FMixBits <> 32) then
-          raise Exception.CreateFmt('Formato PCM entero de %d bits no soportado', [FMixBits]);
+          raise Exception.CreateFmt(AiStr('utils.audio.pcm_bits'), [FMixBits]);
 
         if FSource = asLoopback then
           StreamFlags := AUDCLNT_STREAMFLAGS_LOOPBACK
@@ -638,7 +641,7 @@ begin
       FChunkBytes := (FOutRate * FOutCh * 2 * FChunkMs) div 1000;
       FChunkBytes := FChunkBytes - (FChunkBytes mod (FOutCh * 2)); // alinear a frame
       if FChunkBytes <= 0 then
-        raise Exception.Create('Configuracion de chunk invalida');
+        raise Exception.Create(AiStr('utils.audio.chunk'));
 
       RaiseIfFailed(AudioClient.GetService(IID_IAudioCaptureClient, CaptureClient), 'GetService(IAudioCaptureClient)');
       RaiseIfFailed(AudioClient.Start, 'IAudioClient.Start');
@@ -778,7 +781,7 @@ begin
       Break;
     end;
   if not IsValid then
-    raise EArgumentException.CreateFmt('Invalid output sample rate: %d Hz. Use 0 (native) or a standard rate.', [Value]);
+    raise EArgumentException.CreateFmt(AiStr('utils.audio.out_rate'), [Value]);
 
   FOutputSampleRate := Value;
 end;
@@ -789,7 +792,7 @@ begin
     Exit;
   CheckNotActive('OutputChannels');
   if (Value < 0) or (Value > 2) then
-    raise EArgumentException.Create('OutputChannels must be 0 (native), 1 (mono) or 2 (stereo).');
+    raise EArgumentException.Create(AiStr('utils.audio.out_channels'));
   FOutputChannels := Value;
 end;
 
@@ -799,7 +802,7 @@ begin
     Exit;
   CheckNotActive('ChunkDurationMs');
   if (Value < 20) or (Value > 1000) then
-    raise EArgumentOutOfRangeException.CreateFmt('ChunkDurationMs must be between 20 and 1000 ms. Got: %d', [Value]);
+    raise EArgumentOutOfRangeException.CreateFmt(AiStr('utils.audio.chunk_ms'), [Value]);
   FChunkDurationMs := Value;
 end;
 

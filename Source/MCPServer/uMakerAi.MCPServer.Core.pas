@@ -445,6 +445,7 @@ const
 implementation
 
 uses
+  uMakerAi.Localization,
   System.IniFiles, System.JSON.Writers, uMakerAi.MCPServer.Bridge, uMakerAi.Telemetry;
 
 const
@@ -666,14 +667,14 @@ end;
 procedure TAiMCPLogicServer.RegisterTool(const Name: string; Factory: TAiMCPToolFactory);
 begin
   if FIsActive then
-    raise Exception.Create('Cannot register tools while the server is active.');
+    raise Exception.Create(AiStr('mcp.server.tools_active'));
   FToolFactories.AddOrSetValue(Name, Factory);
 end;
 
 procedure TAiMCPLogicServer.RegisterResource(const URI: string; Factory: TAiMCPResourceFactory);
 begin
   if FIsActive then
-    raise Exception.Create('Cannot register resources while the server is active.');
+    raise Exception.Create(AiStr('mcp.server.resources_active'));
   FResourceFactories.AddOrSetValue(URI, Factory);
 end;
 

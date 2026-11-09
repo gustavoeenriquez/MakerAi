@@ -49,6 +49,41 @@ if missing:
         print('  ', m)
     raise SystemExit(1)
 
+def add_uses(text, rel):
+    """Agrega uMakerAi.Localization al uses de implementation si no está."""
+    if re.search(r'\buMakerAi\.Localization\b', text):
+        return text
+    ls = text.split('\n')
+    impl = next(i for i, l in enumerate(ls) if l.strip().lower() == 'implementation')
+    j = impl + 1
+    # Se saltan blancos, comentarios y directivas que no abren una rama
+    # ({$R *.dfm}, {$WARN ...}); un {$IF...} se revisa abajo
+    while j < len(ls) and (ls[j].strip() == '' or ls[j].strip().startswith('//') or
+                           (ls[j].strip().startswith('{$') and not ls[j].strip().upper().startswith('{$IF'))):
+        j += 1
+    if ls[j].strip().upper().startswith('{$IF'):
+        # ¿El uses está bajo la directiva? Un uses condicional no se puede
+        # ampliar sin romper la otra rama: hay que reescribirlo a mano como un
+        # solo uses incondicional con la parte condicional adentro. Si lo que
+        # sigue a la directiva es código, se agrega un uses propio antes.
+        k = j + 1
+        while k < len(ls) and (ls[k].strip() == '' or ls[k].strip().startswith('{$') or ls[k].strip().startswith('//')):
+            k += 1
+        if k < len(ls) and re.match(r'(?i)uses\b', ls[k].strip()):
+            raise SystemExit(f'{rel}: el uses de implementation está bajo una directiva; ajustarlo a mano')
+        cr = '\r' if ls[impl].endswith('\r') else ''
+        ls[impl + 1:impl + 1] = [cr, 'uses' + cr, '  uMakerAi.Localization;' + cr]
+        return '\n'.join(ls)
+    cr = '\r' if ls[impl].endswith('\r') else ''
+    if ls[j].strip().lower() == 'uses':
+        ls.insert(j + 1, '  uMakerAi.Localization,' + cr)
+    elif ls[j].strip().lower().startswith('uses '):
+        ls[j] = re.sub(r'(?i)^(\s*uses\s+)', r'\1uMakerAi.Localization, ', ls[j], count=1)
+    else:
+        ls[impl + 1:impl + 1] = [cr, 'uses' + cr, '  uMakerAi.Localization;' + cr]
+    return '\n'.join(ls)
+
+
 used_keys = set()
 changed_files = []
 texts = {}  # rel -> (texto modificado, bom)
@@ -65,11 +100,14 @@ for rel, its in sorted(by_file.items()):
         line = lines[i]
         lit = it['lit']
         if it['concat']:
-            rx = re.compile(r'\.Create\(\s*' + re.escape(lit) + r'\s*\+\s*(.*)\);(\s*)$')
+            # 'texto: ' + expr  ->  CreateFmt(AiStr(clave), [expr]); con o sin ';'
+            # al final (antes de un else no lo lleva)
+            rx = re.compile(r'\.Create\(\s*' + re.escape(lit) + r'\s*\+\s*(.*)\)(;?)(\s*)$')
             m = rx.search(line)
-            if not m:
+            if not m or m.group(1).lstrip().startswith("'"):
+                # 'texto' + 'más texto': el mensaje está partido, va a mano
                 raise SystemExit(f'{rel}:{it["line"]}: concatenación no reconocida: {line.strip()}')
-            line = line[:m.start()] + f".CreateFmt(AiStr('{key}'), [{m.group(1)}]);" + m.group(2)
+            line = line[:m.start()] + f".CreateFmt(AiStr('{key}'), [{m.group(1)}]){m.group(2)}" + m.group(3)
         else:
             rx = re.compile(r'(\.Create(?:Fmt)?\(\s*)' + re.escape(lit))
             m0 = rx.search(line)
@@ -80,27 +118,7 @@ for rel, its in sorted(by_file.items()):
                 raise SystemExit(f'{rel}:{it["line"]}: literal con #nn pegado; ajustarlo a mano')
             line = rx.sub(lambda m: m.group(1) + f"AiStr('{key}')", line, count=1)
         lines[i] = line
-    text = '\n'.join(lines)
-    # uses de implementación
-    if not re.search(r'\buMakerAi\.Localization\b', text):
-        ls = text.split('\n')
-        impl = next(i for i, l in enumerate(ls) if l.strip().lower() == 'implementation')
-        j = impl + 1
-        while j < len(ls) and (ls[j].strip() == '' or ls[j].strip().upper().startswith('{$R ') or ls[j].strip().startswith('//')):
-            j += 1
-        if ls[j].strip().upper().startswith('{$IF'):
-            # Un uses dentro de {$IFDEF}/{$IF} no se puede ampliar sin romper la
-            # otra rama: hay que reescribirlo a mano como un solo uses
-            # incondicional con la parte condicional adentro
-            raise SystemExit(f'{rel}: el uses de implementation está bajo una directiva; ajustarlo a mano')
-        cr = '\r' if ls[impl].endswith('\r') else ''
-        if ls[j].strip().lower() == 'uses':
-            ls.insert(j + 1, '  uMakerAi.Localization,' + cr)
-        elif ls[j].strip().lower().startswith('uses '):
-            ls[j] = re.sub(r'(?i)^(\s*uses\s+)', r'\1uMakerAi.Localization, ', ls[j], count=1)
-        else:
-            ls[impl + 1:impl + 1] = [cr, 'uses' + cr, '  uMakerAi.Localization;' + cr]
-        text = '\n'.join(ls)
+    text = add_uses('\n'.join(lines), rel)
     changed_files.append(rel)
     texts[rel] = (text, bom)
     if not dry:
@@ -119,12 +137,10 @@ for rel, old, new in getattr(mp, 'PATCHES', []):
         old, new = old.replace('\n', '\r\n'), new.replace('\n', '\r\n')
     if text.count(old) != 1:
         raise SystemExit(f'{rel}: patch manual con {text.count(old)} coincidencias: {old[:80]}')
-    text = text.replace(old, new)
+    text = add_uses(text.replace(old, new), rel)
     texts[rel] = (text, bom)
     for k in re.findall(r"AiStr\('([^']+)'\)", new):
         used_keys.add(k)
-    if not re.search(r'\buMakerAi\.Localization\b', text):
-        raise SystemExit(f'{rel}: patch manual en una unidad sin uses de Localization')
     if not dry:
         open(path, 'wb').write((b'\xef\xbb\xbf' if bom else b'') + text.encode('utf-8'))
 

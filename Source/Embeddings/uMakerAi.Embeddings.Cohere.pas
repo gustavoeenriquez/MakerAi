@@ -68,6 +68,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 
 procedure Register;
 Begin
@@ -169,7 +172,7 @@ begin
     end
     Else
     begin
-      raise Exception.CreateFmt('Error en Cohere Embed API: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('emb.cohere_error'), [Res.StatusCode, Res.ContentAsString]);
     end;
 
   finally

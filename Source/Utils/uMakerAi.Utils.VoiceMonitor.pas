@@ -338,6 +338,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAIVoiceMonitor]);
@@ -553,7 +556,7 @@ begin
     raise EInvalidOperation.Create('Cannot change BitsPerSample while monitor is active. ' + 'Set Active to False first.');
 
   if not(Value in [8, 16]) then
-    raise EArgumentException.CreateFmt('Invalid bits per sample: %d. ' + 'Valid values are: 8 or 16 bits.', [Value]);
+    raise EArgumentException.CreateFmt(AiStr('utils.voice.bits'), [Value]);
 
   FBitsPerSample := Value;
   UpdateAudioBuffers;
@@ -568,7 +571,7 @@ begin
     raise EInvalidOperation.Create('Cannot change Channels while monitor is active. ' + 'Set Active to False first.');
 
   if not(Value in [1, 2]) then
-    raise EArgumentException.CreateFmt('Invalid number of channels: %d. ' + 'Valid values are: 1 (mono) or 2 (stereo).', [Value]);
+    raise EArgumentException.CreateFmt(AiStr('utils.voice.channels'), [Value]);
 
   FChannels := Value;
   UpdateAudioBuffers;
@@ -596,7 +599,7 @@ begin
     NumDevs := waveInGetNumDevs;
     // Validamos que el ID est� dentro del rango de dispositivos f�sicos disponibles
     if Integer(Value) >= NumDevs then
-      raise EArgumentOutOfRangeException.CreateFmt('Invalid DeviceID: %d. Valid range is 0 to %d, or WAVE_MAPPER.', [Value, NumDevs - 1]);
+      raise EArgumentOutOfRangeException.CreateFmt(AiStr('utils.voice.device'), [Value, NumDevs - 1]);
   end;
 {$ENDIF}
   FDeviceID := Value;
@@ -616,7 +619,7 @@ begin
     raise EInvalidOperation.Create('Cannot change PreBufferDurationMs while monitor is active.');
 
   if (Value < 100) or (Value > 2000) then
-    raise EArgumentOutOfRangeException.CreateFmt('PreBufferDurationMs must be between 100 and 2000 ms. Got: %d', [Value]);
+    raise EArgumentOutOfRangeException.CreateFmt(AiStr('utils.voice.prebuffer'), [Value]);
 
   FPreBufferDurationMs := Value;
   UpdatePreBufferSize;
@@ -677,7 +680,7 @@ begin
       ValidRatesStr := ValidRatesStr + IntToStr(VALID_SAMPLE_RATES[I]);
     end;
 
-    raise EArgumentException.CreateFmt('Invalid sample rate: %d Hz. ' + 'Valid rates are: %s Hz.', [Value, ValidRatesStr]);
+    raise EArgumentException.CreateFmt(AiStr('utils.voice.rate'), [Value, ValidRatesStr]);
   end;
 
   // Asignar el nuevo valor
@@ -1327,11 +1330,11 @@ var
 begin
   // Validaci�n de par�metros
   if not Assigned(PCMStream) then
-    raise EArgumentNilException.Create('PCMStream cannot be nil');
+    raise EArgumentNilException.Create(AiStr('utils.voice.pcm_nil'));
   if not Assigned(WAVStream) then
-    raise EArgumentNilException.Create('WAVStream cannot be nil');
+    raise EArgumentNilException.Create(AiStr('utils.voice.wav_nil'));
   if PCMStream.Size = 0 then
-    raise EArgumentException.Create('PCMStream cannot be empty');
+    raise EArgumentException.Create(AiStr('utils.voice.pcm_empty'));
 
   // Preparar streams
   PCMStream.Position := 0;

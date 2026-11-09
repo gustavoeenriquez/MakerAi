@@ -122,6 +122,7 @@ type
 implementation
 
 uses
+  uMakerAi.Localization,
   uMakerAi.WebSocket.Plain,
 {$IFDEF MSWINDOWS}
   uMakerAi.WebSocket.SChannel;
@@ -375,7 +376,7 @@ begin
     Rest    := Copy(AUrl, 6, MaxInt);
   end
   else
-    raise EArgumentException.Create('URL WebSocket inválida: ' + AUrl);
+    raise EArgumentException.CreateFmt(AiStr('ws.invalid_url'), [AUrl]);
 
   SlashPos := Pos('/', Rest);
   if SlashPos > 0 then
@@ -428,7 +429,7 @@ begin
     // Necesitamos más datos del transporte
     n := FTransport.RecvSome(NewBuf, 5000);
     if n <= 0 then
-      raise Exception.Create('HTTP handshake: conexión cerrada o timeout');
+      raise Exception.Create(AiStr('ws.handshake'));
     if FHandshakeBufLen + n > Length(FHandshakeBuf) then
       SetLength(FHandshakeBuf, FHandshakeBufLen + n + 4096);
     Move(NewBuf[0], FHandshakeBuf[FHandshakeBufLen], n);

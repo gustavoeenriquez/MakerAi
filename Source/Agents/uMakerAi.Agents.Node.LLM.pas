@@ -172,6 +172,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TLLMNode]);
@@ -474,7 +477,7 @@ begin
 
     // Si el LLM reportó un error y la respuesta está vacía, propagarlo
     if (Response = '') and (FLastError <> '') then
-      raise Exception.Create('[TLLMNode] LLM error: ' + FLastError);
+      raise Exception.CreateFmt(AiStr('agents.llm_error'), [FLastError]);
 
     AOutput := Response;
 
