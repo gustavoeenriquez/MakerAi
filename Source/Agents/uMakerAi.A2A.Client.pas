@@ -1,4 +1,4 @@
-// MIT License
+﻿// MIT License
 //
 // MakerAI - Cliente A2A (Agent-to-Agent Protocol, Linux Foundation)
 //
