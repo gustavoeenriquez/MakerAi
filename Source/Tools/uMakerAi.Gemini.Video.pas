@@ -220,7 +220,7 @@ begin
     LBody := TStringStream.Create(LRequest.ToJSON, TEncoding.UTF8);
     HTTP.ContentType := 'application/json';
 
-    ReportState(acsReasoning, 'Iniciando generaci?n de video Veo...');
+    ReportState(acsReasoning, AiStr('state.veo_starting'));
     LResponse := HTTP.Post(LUrl, LBody);
 
     if LResponse.StatusCode <> 200 then
@@ -240,7 +240,7 @@ begin
     while not LIsDone do
     begin
       Sleep(10000); // Esperar 10 segundos
-      ReportState(acsReasoning, 'Procesando video en los servidores de Google...');
+      ReportState(acsReasoning, AiStr('state.veo_processing'));
 
       LResponse := HTTP.Get(LPollingUrl);
       if LResponse.StatusCode = 200 then
@@ -264,7 +264,7 @@ begin
     // 4. Descargar Video Final
     if not LVideoUri.IsEmpty then
     begin
-      ReportState(acsWriting, 'Descargando video generado...');
+      ReportState(acsWriting, AiStr('state.downloading_generated_video'));
       LVideoFile := DownloadVideo(LVideoUri);
       if Assigned(LVideoFile) then
       begin

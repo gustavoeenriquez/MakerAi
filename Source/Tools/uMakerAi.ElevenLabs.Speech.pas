@@ -256,7 +256,7 @@ begin
       HTTP.ContentType := 'application/json';
       LApiHeader := [TNameValuePair.Create('xi-api-key', GetApiKey)];
 
-      ReportState(acsWriting, 'ElevenLabs generando voz...');
+      ReportState(acsWriting, AiStr('state.elevenlabs_tts'));
       LResponse := HTTP.Post(LUrl, LBody, LAudioStream, LApiHeader);
     finally
       LBody.Free;
@@ -356,7 +356,7 @@ begin
   // Llamada directa — ver comentario identico en TAiGeminiSpeechTool.
   // IsAsync=True: ya en hilo background. IsAsync=False: sync, bloquear es correcto.
   try
-    ReportState(acsReasoning, 'Transcribiendo audio con ElevenLabs...');
+    ReportState(acsReasoning, AiStr('state.elevenlabs_stt'));
     LText := InternalRunSTT(aMediaFile);
     aMediaFile.Transcription := LText;
     aMediaFile.Procesado := True;

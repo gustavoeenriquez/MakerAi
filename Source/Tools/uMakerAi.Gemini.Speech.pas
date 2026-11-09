@@ -222,7 +222,7 @@ begin
     LBody := TStringStream.Create(LRequestJson.ToJSON, TEncoding.UTF8);
     try
       HTTP.ContentType := 'application/json';
-      ReportState(acsWriting, 'Gemini generando voz...');
+      ReportState(acsWriting, AiStr('state.gemini_tts'));
       LResponse := HTTP.Post(LUrl, LBody, LPCMStream);
     finally
       LBody.Free;
@@ -395,7 +395,7 @@ begin
   //   Con TTask.Run en sync mode, el caller leía ResMsg.Prompt vacío y aMediaFile
   //   podía liberarse antes de que el TTask terminara → access violation.
   try
-    ReportState(acsReasoning, 'Transcribiendo audio con Gemini...');
+    ReportState(acsReasoning, AiStr('state.gemini_stt'));
     LText := InternalRunGeminiTranscription(aMediaFile);
     aMediaFile.Transcription := LText;
     aMediaFile.Procesado := True;

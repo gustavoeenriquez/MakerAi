@@ -2732,7 +2732,7 @@ begin
   end;
 
   DoLog('[AutoMCP] ppm_search: "' + LQuery + '"');
-  DoStatusUpdate('Buscando "' + LQuery + '" en el registry PPM...');
+  DoStatusUpdate(AiFmt('state.ppm_searching', [LQuery]));
 
   LResult := SearchPPMMCP(LQuery, 1, 20, FAutoMCPConfig.RegistryUrl);
   if not Assigned(LResult) then
@@ -2866,7 +2866,7 @@ begin
   end;
 
   DoLog('[AutoMCP] ppm_install: "' + LToolName + '"' + IfThen(LForce, ' (force)', ''));
-  DoStatusUpdate('Instalando "' + LToolName + '" desde PPM...');
+  DoStatusUpdate(AiFmt('state.ppm_installing', [LToolName]));
 
   // Registrar el intento ANTES de instalarlo para evitar bucles infinitos en caso de error
   if FInstalledPackages.IndexOf(LowerCase(LToolName)) < 0 then
@@ -3007,7 +3007,7 @@ begin
   end;
 
   DoLog(Format('[AutoMCP] call_mcp_tool: %s → %s', [LToolName, LFuncName]));
-  DoStatusUpdate(Format('Ejecutando %s.%s...', [LToolName, LFuncName]));
+  DoStatusUpdate(AiFmt('state.mcp_running', [LToolName, LFuncName]));
 
   LClientItem := FMCPClients.GetClientByName(LToolName);
   if not Assigned(LClientItem) then
@@ -3647,7 +3647,7 @@ begin
     Exit;
   end;
   DoLog(Format('[AutoMCP] call_agent: %s', [LName]));
-  DoStatusUpdate(Format('Consultando al agente %s...', [LName]));
+  DoStatusUpdate(AiFmt('state.asking_agent', [LName]));
   ToolCall.Response := PPMAgentHandler.Call(Self, LName, LMsg);
 end;
 
@@ -3965,7 +3965,7 @@ begin
       if Not Assigned(ClientTools) then
       begin
         // Si ListTools devuelve nil, es un error de conexi�n o protocolo.
-        Raise Exception.Create(Format('[ERR] Fallo de conexi�n para "%s".'#13#10#13#10'Revise la configuraci�n (Command, URL, etc.) y los logs del servidor.', [Self.Name]));
+        Raise Exception.Create(AiFmt('tools.mcp.connect_failed', [Self.Name]));
       end
       Else
       Begin
@@ -3978,7 +3978,7 @@ begin
       on E: Exception do
       begin
         // Capturamos cualquier otra excepci�n
-        Raise Exception.Create(Format('[ERR] Ocurri� una excepci�n al validar "%s".'#13#10#13#10'%s: %s', [Self.Name, E.ClassName, E.Message]));
+        Raise Exception.Create(AiFmt('tools.mcp.validate_error', [Self.Name]) + sLineBreak + sLineBreak + E.ClassName + ': ' + E.Message);
       end;
     end;
   finally

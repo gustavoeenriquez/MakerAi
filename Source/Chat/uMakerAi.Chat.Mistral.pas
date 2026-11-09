@@ -673,7 +673,7 @@ begin
             LNewAudioFile.LoadFromStream('generated_audio.' + FTtsFormat, LResponseStream);
 
           ResMsg.MediaFiles.Add(LNewAudioFile);
-          DoStateChange(acsFinished, 'Done');
+          DoStateChange(acsFinished, AiStr('state.done'));
           if Assigned(FOnReceiveDataEnd) then
             FOnReceiveDataEnd(Self, ResMsg, nil, 'model', '');
         except

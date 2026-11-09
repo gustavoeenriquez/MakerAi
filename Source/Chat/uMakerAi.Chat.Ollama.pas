@@ -465,7 +465,7 @@ begin
   FLastContent := '';
   FLastPrompt := '';
 
-  DoStateChange(acsConnecting, 'Sending request...');
+  DoStateChange(acsConnecting, AiStr('state.sending'));
 
   // ISSUE #100: usar FCurrentPostStream (no un St local) para que el stream del POST
   // sobreviva en async y se libere de forma segura en OnRequestCompletedEvent (base),
@@ -693,7 +693,7 @@ begin
               // Guardamos el string de las herramientas. Ollama suele enviarlas
               // completas en un solo chunk, pero lo sobreescribimos por seguridad.
               FTmpToolCallsStr := LToolCallsArray.ToJSON;
-              DoStateChange(acsToolCalling, 'Tool call detected in stream...');
+              DoStateChange(acsToolCalling, AiStr('state.tool_call_stream'));
             end;
 
             // 2. PROCESAR CONTENIDO
@@ -794,7 +794,7 @@ begin
     // Si no hay mensaje pero el JSON indica que terminó, disparamos el evento de fin
     if JObj.GetValue<Boolean>('done', False) then
     begin
-      DoStateChange(acsFinished, 'Done');
+      DoStateChange(acsFinished, AiStr('state.done'));
       if Assigned(FOnReceiveDataEnd) then
         FOnReceiveDataEnd(Self, ResMsg, JObj, 'assistant', FLastContent);
     end;
@@ -841,7 +841,7 @@ begin
     LHistoryToolMsg.Id := FMessages.Count + 1;
     FMessages.Add(LHistoryToolMsg);
 
-    DoStateChange(acsToolExecuting, 'Executing local tools...');
+    DoStateChange(acsToolExecuting, AiStr('state.local_tools'));
 
     // A.2 Extraer las definiciones de las funciones
     LChoicesSimulado := TJSonArray.Create;
@@ -977,7 +977,7 @@ begin
     end;
 
     // B.4 Finalización y notificación a la UI
-    DoStateChange(acsFinished, 'Done');
+    DoStateChange(acsFinished, AiStr('state.done'));
 
     if Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, ResMsg, JObj, LRole, FLastContent);

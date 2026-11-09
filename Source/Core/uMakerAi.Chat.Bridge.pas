@@ -249,14 +249,14 @@ end;
 procedure TAiChatSpeechBridge.ExecuteTranscription(AMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg, AMediaFile);
-  ReportState(acsReasoning, 'Delegando transcripci�n...');
+  ReportState(acsReasoning, AiStr('state.bridge.transcription'));
   FEngine.TargetChat.AddMessageAndRun(FPromptTranscription, 'user', [AMediaFile]);
 end;
 
 procedure TAiChatSpeechBridge.ExecuteSpeechGeneration(const aText: string; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg);
-  ReportState(acsWriting, 'Delegando generaci�n de voz...');
+  ReportState(acsWriting, AiStr('state.bridge.speech'));
   FEngine.TargetChat.AddMessageAndRun('Generate speech audio for the following text: ' + aText, 'user', []);
 end;
 
@@ -287,7 +287,7 @@ end;
 procedure TAiChatVisionBridge.ExecuteImageDescription(AMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg, AMediaFile);
-  ReportState(acsReasoning, 'Delegando visi�n...');
+  ReportState(acsReasoning, AiStr('state.bridge.vision'));
   FEngine.TargetChat.AddMessageAndRun(FPromptVision, 'user', [AMediaFile]);
 end;
 
@@ -318,7 +318,7 @@ end;
 procedure TAiChatImageBridge.ExecuteImageGeneration(const APrompt: string; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg);
-  ReportState(acsWriting, 'Delegando generaci�n de imagen...');
+  ReportState(acsWriting, AiStr('state.bridge.image'));
   FEngine.TargetChat.AddMessageAndRun(FPromptImage + APrompt, 'user', []);
 end;
 
@@ -349,7 +349,7 @@ end;
 procedure TAiChatVideoBridge.ExecuteVideoGeneration(ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg);
-  ReportState(acsWriting, 'Delegando generaci�n de video...');
+  ReportState(acsWriting, AiStr('state.bridge.video'));
   FEngine.TargetChat.AddMessageAndRun(FPromptVideo + TAiChatMessage(AskMsg).Prompt, 'user', []);
 end;
 
@@ -380,7 +380,7 @@ end;
 procedure TAiChatDocumentBridge.ExecuteDocumentAnalysis(AMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg, AMediaFile);
-  ReportState(acsReasoning, 'Delegando an�lisis de documento...');
+  ReportState(acsReasoning, AiStr('state.bridge.document'));
   FEngine.TargetChat.AddMessageAndRun(FPromptDocument, 'user', [AMediaFile]);
 end;
 
@@ -410,7 +410,7 @@ end;
 procedure TAiChatCodeInterpreterBridge.ExecuteCode(const ACode, ALanguage: string; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg);
-  ReportState(acsWriting, 'Delegando ejecuci�n de c�digo...');
+  ReportState(acsWriting, AiStr('state.bridge.code'));
   FEngine.TargetChat.AddMessageAndRun('Ejecuta o explica este c�digo en ' + ALanguage + ': ' + ACode, 'user', []);
 end;
 
@@ -440,7 +440,7 @@ end;
 procedure TAiChatWebSearchBridge.ExecuteSearch(const AQuery: string; ResMsg, AskMsg: TAiChatMessage);
 begin
   FEngine.PrepareTargetChat(TToolAccess(Self).FContext, ResMsg);
-  ReportState(acsReasoning, 'Delegando b�squeda web...');
+  ReportState(acsReasoning, AiStr('state.bridge.websearch'));
   FEngine.TargetChat.AddMessageAndRun('Busca en internet informaci�n sobre: ' + AQuery, 'user', []);
 end;
 

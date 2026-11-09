@@ -222,7 +222,7 @@ procedure TAIWhisper.ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskM
     LText: string;
   begin
     try
-      ReportState(acsReasoning, 'Transcribiendo audio...');
+      ReportState(acsReasoning, AiStr('state.transcribing'));
       LText := InternalTranscription(aMediaFile.Content, aMediaFile.filename, '');
       aMediaFile.Transcription := LText;
       aMediaFile.Procesado := True;
@@ -248,7 +248,7 @@ procedure TAIWhisper.ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg
     LNewFile: TAiMediaFile;
   begin
     try
-      ReportState(acsWriting, 'Generando voz...');
+      ReportState(acsWriting, AiStr('state.generating_speech'));
       LStream := Speech(AText);
       try
         LNewFile := TAiMediaFile.Create;

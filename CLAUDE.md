@@ -28,6 +28,13 @@ Tests/RegressionSuite/Win64/Release/MakerAiRegressionSuite.exe        # exit 0 =
 Tests/RegressionSuite/Win64/Release/MakerAiRegressionSuite.exe --json report.json   # para CI
 ```
 
+Antes de cada release, además, los textos traducibles (`Tests/Localization/`, ver `Source/Core/CLAUDE.md` › Localización):
+
+```bash
+python Tests/Localization/hardcoded_strings.py --check-keys   # cada AiStr/AiFmt tiene su clave en la tabla base
+python Tests/Localization/hardcoded_strings.py --strict       # exit 1 si quedó un texto escrito a mano
+```
+
 Además, `Tests/Integration/` (`IntegrationTests.groupproj`) junta consolas con asserts contra APIs reales (gastan, salvo la 069) y `Tests/Interop/` valida el cable A2A contra el SDK oficial. No hay pipeline CI/CD configurado. Los subsistemas visuales y los proveedores LLM reales se siguen verificando manualmente con los demos de `Demos/` (índice en `Demos/CLAUDE.md`).
 
 ## Building and Installation

@@ -4,7 +4,9 @@
 Recorre Source/**/*.pas y cuenta los literales que deberían pasar por
 TAiLocale, por carpeta y por tipo:
 
-  exception  primer literal de XxxException/XxxError.Create(Fmt)(...)
+  exception  primer literal de XxxException/XxxError.Create(Fmt)(...), también
+             dentro de un Format(...)
+  state      mensajes de DoStateChange / ReportState / DoStatusUpdate
   ui         asignaciones a Text/Caption/Hint/TextPrompt/Placeholder
   prompt     instrucciones a un LLM todavía en español (Eres/Responde/...); los
              prompts internos se escriben en inglés y no pasan por TAiLocale
@@ -29,7 +31,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 SOURCE = os.path.join(ROOT, 'Source')
 
 LIT = r"'(?:[^']|'')*'"
-RE_EXC = re.compile(r"\b\w*(?:Exception|Error)\w*\.Create(?:Fmt)?\s*\(\s*(" + LIT + ")")
+RE_EXC = re.compile(r"\b\w*(?:Exception|Error)\w*\.Create(?:Fmt)?\s*\(\s*(?:Format\(\s*)?(" + LIT + ")")
+# Mensajes de estado que ve el usuario (OnStateChange / OnStatusUpdate)
+RE_STATE = re.compile(r"\b(?:DoStateChange|ReportState|DoStatusUpdate)\([^']*?(?:Format\(\s*)?(" + LIT + ")")
 RE_UI = re.compile(r"(\w*)\.(?:Text|Caption|Hint|TextPrompt|Placeholder)\s*:=\s*(" + LIT + ")")
 # Una asignación a SQL.Text o un literal que empieza con SQL no es texto de pantalla
 RE_SQL = re.compile(r"^'\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH|MERGE|EXEC|PRAGMA)\b", re.I)
@@ -104,6 +108,9 @@ def scan_file(path):
             lit = m.group(1)
             if len(lit) > 2 and lit not in prompts:  # '' no cuenta
                 hits.append(('exception', lineno, lit))
+        for m in RE_STATE.finditer(line):
+            if re.search(r'[^\W\d_]{2}', m.group(1)):
+                hits.append(('state', lineno, m.group(1)))
         for m in RE_UI.finditer(line):
             lit = m.group(2)
             # sin letras ('(', '<=', ...) son tokens de un parser, no texto
@@ -163,21 +170,44 @@ def check_keys():
     return 1 if missing else 0
 
 
+# Exclusiones a propósito (decisiones de la v4.0):
+#  - componentes y drivers obsoletos o copias viejas: no se traducen
+#  - lo que lee el modelo va en inglés fijo: errores JSON-RPC del servidor MCP
+#    y el "File not found:" que el TextEditor devuelve como resultado de la tool
+#  - los mensajes internos de TAiLocale (no se traducen a sí mismos)
+INTENTIONAL_FILES = re.compile(
+    r'(_Deprecated|_beta)\.pas$|^ChatUI/uMakerAi\.(UI\.Chat\w+|Utils\.ScreenCapture)\.pas$'
+    r'|^MCPServer/uMakerAi\.MCPServer\.Core\.pas$|^Core/uMakerAi\.Localization\.pas$')
+INTENTIONAL_LITS = {('Tools/uMakerAi.Tools.TextEditor.pas', "'File not found: '")}
+
+
+def is_intentional(rel, lit):
+    if INTENTIONAL_FILES.search(rel):
+        # en MCPServer.Core solo los errores; los "Cannot register" sí van por tabla
+        return True
+    return (rel, lit) in INTENTIONAL_LITS
+
+
 def main():
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--list', action='store_true', help='listar cada texto con archivo:línea')
-    ap.add_argument('--kind', choices=['exception', 'ui', 'prompt'], help='filtrar por tipo')
+    ap.add_argument('--kind', choices=['exception', 'ui', 'prompt', 'state'], help='filtrar por tipo')
     ap.add_argument('--folder', help='filtrar por carpeta de Source (p. ej. ChatUI)')
     ap.add_argument('--check-keys', action='store_true',
                     help='verificar que cada clave usada exista en la tabla base (exit 1 si falta alguna)')
+    ap.add_argument('--strict', action='store_true',
+                    help='exit 1 si queda algún texto pendiente (para la checklist de release)')
+    ap.add_argument('--all', action='store_true',
+                    help='incluir también las exclusiones a propósito')
     args = ap.parse_args()
     if args.check_keys:
         return check_keys()
 
     counts = defaultdict(lambda: defaultdict(int))
     listing = []
+    skipped = 0
     for dirpath, _, files in os.walk(SOURCE):
         for name in sorted(files):
             if not name.lower().endswith('.pas') or name.startswith('uMakerAi.Lang.'):
@@ -187,13 +217,17 @@ def main():
             folder = rel.split(os.sep)[0]
             if args.folder and folder.lower() != args.folder.lower():
                 continue
+            relp = rel.replace(os.sep, '/')
             for kind, lineno, lit in scan_file(path):
                 if args.kind and kind != args.kind:
                     continue
+                if not args.all and is_intentional(relp, lit):
+                    skipped += 1
+                    continue
                 counts[folder][kind] += 1
-                listing.append((rel.replace(os.sep, '/'), lineno, kind, lit))
+                listing.append((relp, lineno, kind, lit))
 
-    kinds = ['ui', 'prompt', 'exception']
+    kinds = ['ui', 'state', 'prompt', 'exception']
     print(f"{'Carpeta':<14}" + ''.join(f'{k:>11}' for k in kinds) + f"{'total':>9}")
     tot = defaultdict(int)
     for folder in sorted(counts):
@@ -203,11 +237,14 @@ def main():
         print(f'{folder:<14}' + ''.join(f'{row[k]:>11}' for k in kinds) + f'{sum(row.values()):>9}')
     print(f"{'TOTAL':<14}" + ''.join(f'{tot[k]:>11}' for k in kinds) + f'{sum(tot.values()):>9}')
 
+    if skipped:
+        print(f'(+{skipped} exclusiones a propósito; --all para verlas)')
+
     if args.list:
         print()
         for rel, lineno, kind, lit in listing:
             print(f'Source/{rel}:{lineno}  [{kind}]  {lit[:100]}')
-    return 0
+    return 1 if args.strict and listing else 0
 
 
 if __name__ == '__main__':

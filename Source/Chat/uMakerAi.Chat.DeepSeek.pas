@@ -406,7 +406,7 @@ Var
               TempMsg.Id := FMessages.Count + 1;
               FMessages.Add(TempMsg);
             end;
-            DoStateChange(acsFinished, 'Done');
+            DoStateChange(acsFinished, AiStr('state.done'));
             if Assigned(FOnReceiveDataEnd) then
               FOnReceiveDataEnd(Self, TempMsg, Nil, FTmpRole, FLastContent);
             TempMsg := nil; // propiedad de FMessages
@@ -417,7 +417,7 @@ Var
             // FPendingToolRun=True; la continuación (segundo round async) la difiere
             // OnRequestCompletedEvent del base. El segundo round emitirá su propio
             // evento final. No ponemos FBusy=False aquí: el turno sigue activo.
-            DoStateChange(acsToolCalling, 'Ejecutando tools, segundo round en proceso...');
+            DoStateChange(acsToolCalling, AiStr('state.tools_second_round'));
           end;
         finally
           if Assigned(TempMsg) then TempMsg.Free;
@@ -626,7 +626,7 @@ begin
                     TempMsg.Id := FMessages.Count + 1;
                     FMessages.Add(TempMsg);
                   end;
-                  DoStateChange(acsFinished, 'Done');
+                  DoStateChange(acsFinished, AiStr('state.done'));
                   if Assigned(FOnReceiveDataEnd) then
                     FOnReceiveDataEnd(Self, TempMsg, Nil, FTmpRole, FLastContent);
                   TempMsg := nil; // propiedad de FMessages
@@ -636,7 +636,7 @@ begin
                   // Tool calls: ParseChat (base) ejecutó herramientas y dejó
                   // FPendingToolRun=True; el segundo round async lo difiere
                   // OnRequestCompletedEvent del base. No disparar evento aquí.
-                  DoStateChange(acsToolCalling, 'Segundo round en proceso...');
+                  DoStateChange(acsToolCalling, AiStr('state.second_round'));
                 end;
               finally
                 if Assigned(TempMsg) then TempMsg.Free;

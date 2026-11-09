@@ -1105,7 +1105,7 @@ begin
   begin
     if FChatTools.FVisionTool is TAiCustomTool then
       TAiCustomTool(FChatTools.FVisionTool).SetContext(Self);
-    DoStateChange(acsToolExecuting, 'Analizando imagen con herramienta de visi?n...');
+    DoStateChange(acsToolExecuting, AiStr('state.analyzing_image'));
     LTool.ExecuteImageDescription(aMediaFile, ResMsg, AskMsg);
     if not Asynchronous then
       Result := ResMsg.Prompt;
@@ -1123,7 +1123,7 @@ begin
   begin
     if FChatTools.FImageTool is TAiCustomTool then
       TAiCustomTool(FChatTools.FImageTool).SetContext(Self);
-    DoStateChange(acsToolExecuting, 'Generando imagen...');
+    DoStateChange(acsToolExecuting, AiStr('state.generating_image'));
     LTool.ExecuteImageGeneration(AskMsg.Prompt, ResMsg, AskMsg);
     if not Asynchronous then
       Result := ResMsg.Prompt;
@@ -1141,7 +1141,7 @@ begin
   begin
     if FChatTools.FVideoTool is TAiCustomTool then
       TAiCustomTool(FChatTools.FVideoTool).SetContext(Self);
-    DoStateChange(acsToolExecuting, 'Generando video...');
+    DoStateChange(acsToolExecuting, AiStr('state.generating_video'));
     LTool.ExecuteVideoGeneration(ResMsg, AskMsg);
     if not Asynchronous then
       Result := ResMsg.Prompt;
@@ -1159,7 +1159,7 @@ begin
   begin
     if FChatTools.FPdfTool is TAiCustomTool then
       TAiCustomTool(FChatTools.FPdfTool).SetContext(Self);
-    DoStateChange(acsToolExecuting, 'Analizando documento PDF...');
+    DoStateChange(acsToolExecuting, AiStr('state.analyzing_pdf'));
     LTool.ExecutePdfAnalysis(aMediaFile, ResMsg, AskMsg);
     if not Asynchronous then
       Result := aMediaFile.Transcription;
@@ -1177,7 +1177,7 @@ begin
   begin
     if FChatTools.FSpeechTool is TAiCustomTool then
       TAiCustomTool(FChatTools.FSpeechTool).SetContext(Self);
-    DoStateChange(acsToolExecuting, 'Generando audio con herramienta externa...');
+    DoStateChange(acsToolExecuting, AiStr('state.external_audio'));
     LTool.ExecuteSpeechGeneration(AskMsg.Prompt, ResMsg, AskMsg);
     if not Asynchronous then
       Result := ResMsg.Prompt;
@@ -2871,7 +2871,7 @@ Var
             TempMsg.Id := FMessages.Count + 1;
             FMessages.Add(TempMsg);
 
-            DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
+            DoStateChange(acsFinished, AiStr('state.done')); // <--- ESTADO FINALIZADO
 
             if Assigned(FOnReceiveDataEnd) then
               FOnReceiveDataEnd(Self, TempMsg, Nil, FTmpRole, FLastContent);
@@ -2886,7 +2886,7 @@ Var
             // StopAgenticLoop, donde los tool_calls se entregan al cliente final).
             if not FPendingToolRun then
             begin
-              DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
+              DoStateChange(acsFinished, AiStr('state.done')); // <--- ESTADO FINALIZADO
 
               if Assigned(FOnReceiveDataEnd) then
                 FOnReceiveDataEnd(Self, GetLastMessage, Nil, FTmpRole, '');
@@ -3630,7 +3630,7 @@ begin
       // ParseChat también lo hace, el evento (y el cambio de estado) se ejecuta dos veces.
       // En modo síncrono ParseChat es el único que los dispara, por lo que se conserva.
       if not FClient.Asynchronous then
-        DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
+        DoStateChange(acsFinished, AiStr('state.done')); // <--- ESTADO FINALIZADO
 
       // gpt-oss-20b (Groq): executed_tools anidado en choices[0].message.executed_tools.
       // Se extrae aquí, antes de OnDataEnd, para que MediaFiles.Count sea correcto en el callback.
@@ -4074,7 +4074,7 @@ begin
   DoProcessResponse(AskMsg, ResMsg, sTextoTranscrito);
 
   // C) Notificar cambio de estado a la UI
-  DoStateChange(acsFinished, 'Transcription Completed');
+  DoStateChange(acsFinished, AiStr('state.transcription_done'));
 
   If Self.Asynchronous and Assigned(FOnReceiveDataEvent) then
     FOnReceiveDataEvent(Self, ResMsg, jObj, 'assistant', sTextoTranscrito);
@@ -4434,7 +4434,7 @@ begin
     // (cmWebSearch no pasa por aqui: en ese modo la busqueda ES la respuesta y la hace la Fase 3)
     if (FChatMode <> cmSmartDispatch) and (FChatMode <> cmWebSearch) and (cap_WebSearch in Gap) then
     begin
-      DoStateChange(acsReasoning, 'Ejecutando Bridge de Busqueda Web...');
+      DoStateChange(acsReasoning, AiStr('state.websearch_bridge'));
       // Puente de ENTRADA, como los de la Fase 1: lo que el WebSearchTool encuentra es
       // contexto para el modelo de la Fase 3, no la respuesta. Antes el resultado quedaba
       // solo en ResMsg.Prompt, la Fase 3 lo pisaba con la respuesta del modelo y el modelo
@@ -5270,7 +5270,7 @@ begin
   LDispatchMsg := TAiChatMessage.Create;
   try
     try
-      DoStateChange(acsReasoning, 'Analizando solicitud...');
+      DoStateChange(acsReasoning, AiStr('state.analyzing_request'));
       // AskMsg = LTempUsr (ya esta en el FMessages temporal): los drivers hacen
       // AskMsg.Id := ... si no esta en la lista, y con nil eso era una AV que
       // el except de RunNew convertia en respuesta vacia silenciosa.
@@ -5315,7 +5315,7 @@ begin
   try
     LToolAsk.Prompt := AContent;
     LToolAsk.Role   := 'user';
-    DoStateChange(acsToolExecuting, 'Ejecutando: ' + ATag);
+    DoStateChange(acsToolExecuting, AiFmt('state.executing', [ATag]));
     if ATag = 'IMAGEGEN' then
       InternalRunImageGeneration(ResMsg, LToolAsk)
     else if ATag = 'VIDEOGEN' then
@@ -5365,7 +5365,7 @@ begin
 
   LTags := SmartDispatchTags;
   FChatTools.FDispatchClassifier.SetContext(Self);
-  DoStateChange(acsReasoning, 'Clasificando solicitud...');
+  DoStateChange(acsReasoning, AiStr('state.classifying'));
   try
     Result := UpperCase(Trim(LClassifier.ClassifyDispatch(APrompt, LTags)));
   except
@@ -5374,7 +5374,7 @@ begin
     // registra su propio error (p.ej. TAiJev.LastError / OnError).
     on E: Exception do
     begin
-      DoStateChange(acsReasoning, 'Clasificador no disponible, se usa el LLM: ' + E.Message);
+      DoStateChange(acsReasoning, AiFmt('state.classifier_down', [E.Message]));
       Exit('');
     end;
   end;

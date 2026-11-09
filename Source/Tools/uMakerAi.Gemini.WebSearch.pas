@@ -40,6 +40,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiGeminiWebSearchTool]);
@@ -134,7 +137,7 @@ begin
     LBody := TStringStream.Create(LRequestJson.ToJSON, TEncoding.UTF8);
     try
       HTTP.ContentType := 'application/json';
-      ReportState(acsReasoning, 'Buscando información actualizada en Google...');
+      ReportState(acsReasoning, AiStr('state.google_search'));
       LResponse := HTTP.Post(LUrl, LBody);
     finally
       LBody.Free;

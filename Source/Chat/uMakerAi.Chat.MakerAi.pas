@@ -120,6 +120,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 const
   GlMakerAiUrl = 'https://api.cimamaker.com/v1/';
 
@@ -478,7 +481,7 @@ begin
     // diferida (ISSUE #100), NO cerramos el turno a mitad del loop agéntico.
     if FClient.Asynchronous and (not FPendingToolRun) and Assigned(FOnReceiveDataEnd) then
     begin
-      DoStateChange(acsFinished, 'Done');
+      DoStateChange(acsFinished, AiStr('state.done'));
       FOnReceiveDataEnd(Self, ResMsg, jObj, ResMsg.Role, ResMsg.Prompt);
     end;
   end;

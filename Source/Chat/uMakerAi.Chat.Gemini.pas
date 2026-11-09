@@ -1339,7 +1339,7 @@ begin
   St := TStringStream.Create('', TEncoding.UTF8);
 
   try
-    DoStateChange(acsConnecting, 'Sending request...');
+    DoStateChange(acsConnecting, AiStr('state.sending'));
 
     FClient.ContentType := 'application/json';
     ABody := InitChatCompletions;
@@ -1623,7 +1623,7 @@ begin
     // disparo si alguna ruta async llegara a invocar ParseChat.
     if not FClient.Asynchronous then
     begin
-      DoStateChange(acsFinished, 'Done');
+      DoStateChange(acsFinished, AiStr('state.done'));
 
       If Assigned(FOnReceiveDataEnd) then
         FOnReceiveDataEnd(Self, ResMsg, jObj, LRole, LRespuesta);
@@ -2130,7 +2130,7 @@ begin
     End;
   End;
 
-  DoStateChange(acsFinished, 'Done');
+  DoStateChange(acsFinished, AiStr('state.done'));
 
   if Assigned(FOnReceiveDataEnd) then
     FOnReceiveDataEnd(Self, ResMsg, nil, 'model', FLastContent);
@@ -2779,7 +2779,7 @@ begin
           TThread.Queue(nil,
             procedure
             begin
-              DoStateChange(acsFinished, 'Done');
+              DoStateChange(acsFinished, AiStr('state.done'));
               if Assigned(FOnReceiveDataEnd) then
                 FOnReceiveDataEnd(Self, ResMsg, nil, 'model', FLastContent);
             end);
@@ -2879,7 +2879,7 @@ begin
     LocalResMsg.Id := FMessages.Count + 1;
     FMessages.Add(LocalResMsg);
 
-    DoStateChange(acsToolExecuting, 'Generando audio (TTS)...');
+    DoStateChange(acsToolExecuting, AiStr('state.tts'));
 
     TTask.Run(
       procedure
@@ -2947,7 +2947,7 @@ begin
                         procedure
                         begin
                           FBusy := False;
-                          DoStateChange(acsFinished, 'Done');
+                          DoStateChange(acsFinished, AiStr('state.done'));
                           if Assigned(FOnReceiveDataEnd) then
                             FOnReceiveDataEnd(Self, LocalResMsg, nil, 'model', 'Audio generated successfully');
                         end);
@@ -3232,7 +3232,7 @@ begin
 
         FLastContent := AskMsg.Prompt;
         ResMsg.Prompt := FLastContent;
-        DoStateChange(acsFinished, 'Done');
+        DoStateChange(acsFinished, AiStr('state.done'));
         if Assigned(FOnReceiveDataEnd) then
           FOnReceiveDataEnd(Self, ResMsg, nil, 'model', '');
       end
@@ -3714,7 +3714,7 @@ begin
           if cap_ExtractCode in ModelConfig.SessionCaps then
             InternalExtractCodeFiles(FLastContent, ResMsg);
 
-          DoStateChange(acsFinished, 'Done');
+          DoStateChange(acsFinished, AiStr('state.done'));
           if Assigned(FOnReceiveDataEnd) then
             FOnReceiveDataEnd(Self, ResMsg, nil, 'model', FLastContent);
         end;

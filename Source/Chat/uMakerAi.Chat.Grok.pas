@@ -406,7 +406,7 @@ begin
     FClient.ContentType  := 'application/json';
     FClient.Asynchronous := False;
     FResponse.Clear;
-    DoStateChange(acsConnecting, 'Enviando búsqueda web...');
+    DoStateChange(acsConnecting, AiStr('state.web_search_sending'));
 
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
@@ -650,7 +650,7 @@ begin
       end;
 
       // 2. Polling hasta done/failed/expired
-      DoStateChange(acsToolExecuting, 'Generando video (job ' + LRequestId + ')...');
+      DoStateChange(acsToolExecuting, AiFmt('state.video_job', [LRequestId]));
       LElapsed := 0;
       LStatus := 'pending';
       LVideoUrl := '';

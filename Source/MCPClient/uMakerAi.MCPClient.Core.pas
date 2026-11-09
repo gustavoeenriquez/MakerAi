@@ -622,7 +622,7 @@ begin
     Result := True;
     FOwnsServerProcess := True; // ?ESTE cliente lo inici?!
     DoLog('Local MCP Server started successfully');
-    DoStatusUpdate('Local Server running.');
+    DoStatusUpdate(AiStr('mcp.status.local_running'));
     Sleep(2000);
     DoLog('Brief pause after local server start to allow initialization.');
   end;
@@ -636,19 +636,19 @@ begin
   begin
     DoLog('Stopping local MCP server process because this client owns it...');
     // Mensaje m?s claro
-    DoStatusUpdate('Stopping local server...');
+    DoStatusUpdate(AiStr('mcp.status.local_stopping'));
     try
       TUtilsSystem.StopInteractiveProcess(FServerProcess);
       FServerProcess := nil; // Es importante ponerlo a nil despu?s de detenerlo
       FOwnsServerProcess := False; // Ya no lo poseemos
       DoLog('Local MCP Server stopped.');
-      DoStatusUpdate('Local Server stopped.');
+      DoStatusUpdate(AiStr('mcp.status.local_stopped'));
     except
       on E: Exception do
       begin
         FLastError := 'EXCEPTION during local server stop: ' + E.Message;
         DoLog(FLastError);
-        DoStatusUpdate('Error stopping local server.');
+        DoStatusUpdate(AiStr('mcp.status.local_stop_error'));
       end;
     end;
   end
@@ -1135,7 +1135,7 @@ begin
   InternalStopServerProcess;
 
   DoLog('Starting MCP server process...');
-  DoStatusUpdate('Starting server...');
+  DoStatusUpdate(AiStr('mcp.status.starting'));
   try
     Command := GetParamByName('Command');
     Arguments := GetParamByName('Arguments');
@@ -1214,7 +1214,7 @@ begin
 
   {$IFDEF MAKERAI_MCP_SHUTDOWN_LOG} MCPLog('InternalStopServerProcess BEGIN name=' + Self.Name + ' FIsRunning=' + BoolToStr(FIsRunning, True)); {$ENDIF}
   DoLog('Stopping MCP server process...');
-  DoStatusUpdate('Stopping server...');
+  DoStatusUpdate(AiStr('mcp.status.stopping'));
   try
     FIsRunning := False;
 
@@ -1249,11 +1249,11 @@ begin
     end;
 
     DoLog('MCP Server stopped.');
-    DoStatusUpdate('Server stopped.');
+    DoStatusUpdate(AiStr('mcp.status.stopped'));
   except
     on E: Exception do
     begin
-      DoStatusUpdate('Error stopping server.');
+      DoStatusUpdate(AiStr('mcp.status.stop_error'));
       DoLog('EXCEPTION during server stop: ' + E.Message);
     end;
   end;
@@ -1886,7 +1886,7 @@ begin
   FTools.Clear;
   FNegotiatedProtocol := ''; // re-sondear la era del servidor en cada Initialize
 
-  DoStatusUpdate('Initializing MCP Client (HTTP)...');
+  DoStatusUpdate(AiStr('mcp.status.init_http'));
 
   CurrentAttempt := 0;
   while CurrentAttempt < MAX_RETRIES_ON_FAIL do
@@ -1961,7 +1961,7 @@ begin
       begin
         FLastError := 'MCP HTTP Initialization Failed: ' + E.Message;
         DoLog(FLastError);
-        DoStatusUpdate('Initialization Failed: ' + E.Message);
+        DoStatusUpdate(AiFmt('mcp.status.init_failed', [E.Message]));
 
         // Si es un error de conexi?n (no 200 OK, timeout, etc.) y a?n quedan reintentos
         if (CurrentAttempt < MAX_RETRIES_ON_FAIL) then
@@ -2000,7 +2000,7 @@ var
 begin
   FLastError := '';
   DoLog('Executing ListTools via HTTP...');
-  DoStatusUpdate('Listing tools...');
+  DoStatusUpdate(AiStr('mcp.status.listing'));
 
   LParams := TJSONObject.Create; // Se libera en InternalSendRequest
   try
@@ -2015,9 +2015,9 @@ begin
   end;
 
   if Assigned(Result) then
-    DoStatusUpdate('Tools listed successfully.')
+    DoStatusUpdate(AiStr('mcp.status.listed'))
   else
-    DoStatusUpdate('Failed to list tools: ' + FLastError);
+    DoStatusUpdate(AiFmt('mcp.status.list_failed', [FLastError]));
 end;
 
 function TMCPClientHttp.CallTool(const AToolName: string; AArguments: TJSONObject; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
@@ -2033,7 +2033,7 @@ begin
   FLastError := '';
 
   DoLog(Format('Executing CallTool via HTTP: %s', [AToolName]));
-  DoStatusUpdate(Format('Calling tool: %s...', [AToolName]));
+  DoStatusUpdate(AiFmt('mcp.status.calling', [AToolName]));
 
   // Este metodo toma posesion de AArguments (el llamador NO debe liberarlo).
   // MCP 2026-07-28 (MRTR): loop de reintento con inputResponses + eco de
@@ -2113,9 +2113,9 @@ begin
   end;
 
   if Assigned(Result) then
-    DoStatusUpdate(Format('Tool %s called successfully.', [AToolName]))
+    DoStatusUpdate(AiFmt('mcp.status.called', [AToolName]))
   else
-    DoStatusUpdate(Format('Failed to call tool: %s. Error: %s', [AToolName, FLastError]));
+    DoStatusUpdate(AiFmt('mcp.status.call_failed', [AToolName, FLastError]));
 end;
 
 function TMCPClientHttp.CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
@@ -2494,7 +2494,7 @@ begin
           // Capturar cualquier excepci?n durante el proceso HTTP/JSON, logearla y re-lanzarla
           FLastError := 'EXCEPTION during HTTP request: ' + E.Message;
           DoLog(FLastError);
-          DoStatusUpdate('Network Error: ' + E.Message);
+          DoStatusUpdate(AiFmt('mcp.status.network_error', [E.Message]));
           raise; // Re-lanzar la excepci?n para que el m?todo llamador (ej. Initialize) la maneje
         end;
       end;
@@ -2536,21 +2536,21 @@ function TMCPClientMakerAi.ListTools: TJSONObject;
 begin
   FLastError := '';
   DoLog('Executing ListTools via MakerAI REST client...');
-  DoStatusUpdate('Listing tools...');
+  DoStatusUpdate(AiStr('mcp.status.listing'));
   try
     // La llamada a ListTools no tiene cuerpo y usa el verbo GET.
     Result := InternalSendRequest('listtools', 'GET', nil);
 
     if Assigned(Result) then
-      DoStatusUpdate('Tools listed successfully.')
+      DoStatusUpdate(AiStr('mcp.status.listed'))
     else
-      DoStatusUpdate('Failed to list tools: ' + FLastError);
+      DoStatusUpdate(AiFmt('mcp.status.list_failed', [FLastError]));
   except
     on E: Exception do
     begin
       FLastError := 'Error listing tools: ' + E.Message;
       DoLog(FLastError);
-      DoStatusUpdate('Failed to list tools: ' + E.Message);
+      DoStatusUpdate(AiFmt('mcp.status.list_failed', [E.Message]));
       Result := nil; // Retornar nil en caso de error
     end;
   end;
@@ -2565,7 +2565,7 @@ begin
   Result := nil;
   FLastError := '';
   DoLog(Format('Executing CallTool via MakerAI REST client: %s', [AToolName]));
-  DoStatusUpdate(Format('Calling tool: %s...', [AToolName]));
+  DoStatusUpdate(AiFmt('mcp.status.calling', [AToolName]));
 
   // Construimos el nombre del m?todo para la URL, como en tu ejemplo: 'calltool/calculate'
   LMethodName := 'calltool/' + AToolName;
@@ -2599,9 +2599,9 @@ begin
   // AArguments es liberado por el llamador original, no lo tocamos.
 
   if Assigned(Result) then
-    DoStatusUpdate(Format('Tool %s called successfully.', [AToolName]))
+    DoStatusUpdate(AiFmt('mcp.status.called', [AToolName]))
   else
-    DoStatusUpdate(Format('Failed to call tool: %s. Error: %s', [AToolName, FLastError]));
+    DoStatusUpdate(AiFmt('mcp.status.call_failed', [AToolName, FLastError]));
 end;
 
 function TMCPClientMakerAi.CallTool(const AToolName: string; AArguments: TStrings; AExtractedMedia: TObjectList<TAiMediaFile>): TJSONObject;
@@ -2758,7 +2758,7 @@ begin
       begin
         FLastError := 'EXCEPTION during HTTP request: ' + E.Message;
         DoLog(FLastError);
-        DoStatusUpdate('Network Error: ' + E.Message);
+        DoStatusUpdate(AiFmt('mcp.status.network_error', [E.Message]));
         Result := nil;
       end;
 
@@ -3280,7 +3280,7 @@ var
 begin
   Result := False;
   DoLog(Format('MCP Init START: name=%s url=%s', [Name, GetParamByName('URL')]));
-  DoStatusUpdate('Connecting to MCP via SSE...');
+  DoStatusUpdate(AiStr('mcp.status.sse_connecting'));
 
   StartEventStream;
 
@@ -3336,7 +3336,7 @@ begin
       Available := True;
       Enabled := True;
       Result := True;
-      DoStatusUpdate('SSE Client Initialized Successfully.');
+      DoStatusUpdate(AiStr('mcp.status.sse_ready'));
     end
     else
     begin

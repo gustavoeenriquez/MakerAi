@@ -1412,7 +1412,7 @@ var
   LMediaFile: TAiMediaFile;
   LExt: string;
 begin
-  ReportState(acsToolExecuting, 'Generando imagen con DALL-E...');
+  ReportState(acsToolExecuting, AiStr('state.dalle'));
 
   LDalleImage := FDalle.Generate(APrompt, FDalle.NegativePrompt.Text, FImageSize);
 

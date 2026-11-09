@@ -100,6 +100,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI Tools', [TAiOllamaVisionTool]);
@@ -205,7 +208,7 @@ begin
       if not LActualApiKey.IsEmpty then
         HTTP.CustomHeaders['Authorization'] := 'Bearer ' + LActualApiKey;
 
-      ReportState(acsReasoning, 'Ollama analizando imagen...');
+      ReportState(acsReasoning, AiStr('state.ollama_image'));
       LResponse := HTTP.Post(FUrl + 'api/chat', LBody);
     finally
       LBody.Free;
@@ -232,7 +235,7 @@ begin
         Result := LContent;
 
         ReportDataEnd(ResMsg, 'assistant', LContent, LResponseJson);
-        ReportState(acsFinished, 'Vision completada');
+        ReportState(acsFinished, AiStr('state.vision_done'));
       finally
         LResponseJson.Free;
       end;

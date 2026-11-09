@@ -68,6 +68,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 const
   GL_OPENAI_URL = 'https://api.openai.com/v1/';
 
@@ -115,7 +118,7 @@ var
   LSource      : TAiCitationSource;
   I            : Integer;
 begin
-  ReportState(acsReasoning, 'Buscando en la web...');
+  ReportState(acsReasoning, AiStr('state.web_searching'));
 
   HTTP     := TNetHTTPClient.Create(nil);
   LReqJson := TJSONObject.Create;

@@ -2090,7 +2090,7 @@ begin
     sUrl := Url + '/responses';
 
   try
-    DoStateChange(acsConnecting, 'Sending request...');
+    DoStateChange(acsConnecting, AiStr('state.sending'));
 
     FHeaders := [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)];
     FClient.ContentType := 'application/json';
@@ -2286,7 +2286,7 @@ begin
             TThread.Queue(nil,
               procedure
               begin
-                DoStateChange(acsToolExecuting, Format('Sora Job Started: %s (%s)', [LJobIdStr, LStatStr]));
+                DoStateChange(acsToolExecuting, AiFmt('state.sora_started', [LJobIdStr, LStatStr]));
               end);
           finally
             AsyncJson.Free;
@@ -2344,7 +2344,7 @@ begin
           TThread.Queue(nil,
             procedure
             begin
-              DoStateChange(acsToolExecuting, 'Downloading video...');
+              DoStateChange(acsToolExecuting, AiStr('state.downloading_video'));
             end);
 
           VideoUrl := PollingUrl + '/content';
@@ -2373,7 +2373,7 @@ begin
                   CaptureResMsg.MediaFiles.Add(VideoMedia);
                   CaptureResMsg.Prompt := Format('Video generated successfully.', []);
 
-                  DoStateChange(acsFinished, 'Video Ready');
+                  DoStateChange(acsFinished, AiStr('state.video_ready'));
                   if Assigned(FOnReceiveDataEnd) then
                     FOnReceiveDataEnd(Self, CaptureResMsg, nil, 'assistant', CaptureResMsg.Prompt);
                 end);
@@ -2546,7 +2546,7 @@ begin
 
         ResMsg.MediaFiles.Add(LNewAudioFile);
 
-        DoStateChange(acsFinished, 'Done'); // <--- ESTADO FINALIZADO
+        DoStateChange(acsFinished, AiStr('state.done')); // <--- ESTADO FINALIZADO
         if Assigned(FOnReceiveDataEnd) then
           FOnReceiveDataEnd(Self, ResMsg, nil, 'model', '');
       except
@@ -2745,7 +2745,7 @@ begin
         end;
 
         ResMsg.Prompt := FLastContent;
-        DoStateChange(acsFinished, 'Done');
+        DoStateChange(acsFinished, AiStr('state.done'));
         if Assigned(FOnReceiveDataEnd) then
           FOnReceiveDataEnd(Self, ResMsg, nil, 'model', '');
       end
@@ -2934,7 +2934,7 @@ begin
     FBusy := False;
     FPendingToolRun := False;
     FTmpToolCallBuffer.Clear;
-    DoStateChange(acsAborted, 'Aborted');
+    DoStateChange(acsAborted, AiStr('state.aborted'));
     if Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, nil, nil, 'system', 'abort');
     Exit;
@@ -3029,7 +3029,7 @@ begin
           // ------------------------------------------------------------------
 
           FRecursionNeeded := False;
-          DoStateChange(acsCreated, 'Response ID: ' + FResponseId);
+          DoStateChange(acsCreated, AiFmt('state.response_id', [FResponseId]));
         end
 
         // ---------------------------------------------------------------------
@@ -3060,7 +3060,7 @@ begin
 
             if ItemType = 'function_call' then
             begin
-              DoStateChange(acsToolCalling, 'Detected tool call...');
+              DoStateChange(acsToolCalling, AiStr('state.tool_call_detected'));
               BufferTool := TJSonObject.Create;
               if JItem.TryGetValue<string>('id', ItemId) then
                 BufferTool.AddPair('id', ItemId);
@@ -3078,7 +3078,7 @@ begin
               FTmpToolCallBuffer.AddOrSetValue(OutputIndex, BufferTool);
             end
             else if ItemType = 'reasoning' then
-              DoStateChange(acsReasoning, 'Thinking...');
+              DoStateChange(acsReasoning, AiStr('state.thinking'));
           end;
         end
 
@@ -3114,7 +3114,7 @@ begin
             begin
               var
               ToolName := BufferTool.GetValue<string>('name');
-              DoStateChange(acsToolExecuting, 'Executing: ' + ToolName);
+              DoStateChange(acsToolExecuting, AiFmt('state.executing', [ToolName]));
               var
               ToolCall := TAiToolsFunction.Create;
               ToolCall.Id := BufferTool.GetValue<string>('call_id');
@@ -3540,7 +3540,7 @@ begin
         begin
           if FRecursionNeeded then
           begin
-            DoStateChange(acsConnecting, 'Sending tool results...');
+            DoStateChange(acsConnecting, AiStr('state.sending_tool_results'));
             // ISSUE #100: diferir la continuación tool-calling a OnRequestCompletedEvent
             // (base) en lugar de hacer ForceQueue aquí, DENTRO del callback de recepción.
             // OnRequestCompletedEvent se ejecuta cuando la petición ya completó por completo
@@ -3693,7 +3693,7 @@ begin
             End;
             // --------------------------------------------------------------
 
-            DoStateChange(acsFinished, 'Completed');
+            DoStateChange(acsFinished, AiStr('state.completed'));
             if Assigned(FOnReceiveDataEnd) then
               FOnReceiveDataEnd(Self, FinalMsg, nil, 'assistant', FLastContent);
           end;

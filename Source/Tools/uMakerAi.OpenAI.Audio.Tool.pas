@@ -120,6 +120,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 const
   TTSFormatExtensions: array[TAiTTSResponseFormat] of string = (
     'mp3', 'opus', 'aac', 'flac', 'wav', 'pcm'
@@ -281,7 +284,7 @@ procedure TAiOpenAiSpeechTool.ExecuteTranscription(aMediaFile: TAiMediaFile; Res
     LText: string;
   begin
     try
-      ReportState(acsReasoning, 'Transcribiendo audio...');
+      ReportState(acsReasoning, AiStr('state.transcribing'));
       LResult := FAudio.Transcribe(aMediaFile);
       try
         LText := LResult.Text;
@@ -310,7 +313,7 @@ procedure TAiOpenAiSpeechTool.ExecuteSpeechGeneration(const AText: string; ResMs
     LNewFile: TAiMediaFile;
   begin
     try
-      ReportState(acsWriting, 'Generando voz...');
+      ReportState(acsWriting, AiStr('state.generating_speech'));
       LStream := FAudio.Speech(AText);
       try
         LNewFile := TAiMediaFile.Create;

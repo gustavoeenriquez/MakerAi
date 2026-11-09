@@ -49,6 +49,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiOllamaOcrTool]);
@@ -159,7 +162,7 @@ begin
       if not LActualApiKey.IsEmpty then
         HTTP.CustomHeaders['Authorization'] := 'Bearer ' + LActualApiKey;
 
-      ReportState(acsWriting, 'Ollama analizando imagen...');
+      ReportState(acsWriting, AiStr('state.ollama_image'));
       LResponse := HTTP.Post(LFullUrl, LBody);
 
        if LResponse.StatusCode = 200 then
@@ -189,7 +192,7 @@ begin
             Result := LContent;
 
             ReportDataEnd(ResMsg, 'assistant', LContent, LResponseJson);
-            ReportState(acsFinished, 'OCR Completado');
+            ReportState(acsFinished, AiStr('state.ocr_done'));
           end;
         finally
           LResponseJson.Free;

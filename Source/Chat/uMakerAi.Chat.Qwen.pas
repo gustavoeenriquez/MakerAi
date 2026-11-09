@@ -716,7 +716,7 @@ begin
   jBody := nil;
   jRes := nil;
   try
-    DoStateChange(acsConnecting, 'Generando imagen...');
+    DoStateChange(acsConnecting, AiStr('state.generating_image'));
     jBody := BuildImageRequest(AskMsg);
     jRes := PostJSON(NativeUrl('services/aigc/multimodal-generation/generation'), jBody);
 
@@ -739,7 +739,7 @@ begin
 
     if ResMsg.Role = '' then
       ResMsg.Role := 'assistant';
-    DoStateChange(acsFinished, 'Done');
+    DoStateChange(acsFinished, AiStr('state.done'));
     if Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, ResMsg, jRes, 'assistant', ResMsg.Prompt);
   finally
@@ -868,13 +868,13 @@ begin
   jRes := nil;
   try
     jBody := BuildVideoRequest(AskMsg, LEndpoint);
-    DoStateChange(acsConnecting, 'Enviando video (' + jBody.GetValue<String>('model') + ')...');
+    DoStateChange(acsConnecting, AiFmt('state.video_sending', [jBody.GetValue<String>('model')]));
     jRes := PostJSON(NativeUrl(LEndpoint), jBody, True);
     LTaskId := jRes.GetValue<String>('output.task_id', '');
     if LTaskId = '' then
       raise Exception.CreateFmt(AiStr('chat.qwen.no_task_id'), [Copy(jRes.ToJSON, 1, 300)]);
 
-    DoStateChange(acsToolExecuting, 'Generando video (tarea ' + LTaskId + ')...');
+    DoStateChange(acsToolExecuting, AiFmt('state.video_task', [LTaskId]));
     LElapsed := 0;
     LStatus := '';
     LVideoUrl := '';
@@ -910,7 +910,7 @@ begin
     ResMsg.MediaFiles.Add(DownloadMedia(LVideoUrl, 'qwen_video.mp4'));
     if ResMsg.Role = '' then
       ResMsg.Role := 'assistant';
-    DoStateChange(acsFinished, 'Done');
+    DoStateChange(acsFinished, AiStr('state.done'));
     if Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, ResMsg, nil, 'assistant', ResMsg.Prompt);
   finally
@@ -955,7 +955,7 @@ begin
   jBody := TJSonObject.Create;
   jRes := nil;
   try
-    DoStateChange(acsConnecting, 'Generando audio...');
+    DoStateChange(acsConnecting, AiStr('state.generating_audio'));
     LVoice := TtsParams.Voice;
     if LVoice = '' then
       LVoice := 'Cherry';
@@ -988,7 +988,7 @@ begin
 
     if ResMsg.Role = '' then
       ResMsg.Role := 'assistant';
-    DoStateChange(acsFinished, 'Done');
+    DoStateChange(acsFinished, AiStr('state.done'));
     if Assigned(FOnReceiveDataEnd) then
       FOnReceiveDataEnd(Self, ResMsg, jRes, 'assistant', '');
   finally
@@ -1019,7 +1019,7 @@ begin
   jBody := TJSonObject.Create;
   jRes := nil;
   try
-    DoStateChange(acsConnecting, 'Transcribiendo audio...');
+    DoStateChange(acsConnecting, AiStr('state.transcribing'));
     jBody.AddPair('model', ModelFor('-asr', GlDefaultAsrModel));
     jBody.AddPair('stream', TJSONBool.Create(False));
     jMsgs := TJSonArray.Create;

@@ -596,7 +596,7 @@ begin
 
     // 3. Iniciar generaci�n
     LUrl := OPENAI_API_BASE_URL + 'videos';
-    ReportState(acsReasoning, 'Iniciando generaci�n de video Sora...');
+    ReportState(acsReasoning, AiStr('state.sora_starting'));
     LResponse := HTTP.Post(LUrl, LFormData, nil, LHeaders);
 
     if LResponse.StatusCode <> 200 then
@@ -614,7 +614,7 @@ begin
     // 4. Bucle de Polling
     LPollCount := 0;
     LProgress := 0;
-    ReportState(acsReasoning, Format('Job creado (ID: %s). Estado inicial: %s', [LVideoJobId, LStatus]));
+    ReportState(acsReasoning, AiFmt('state.sora_job', [LVideoJobId, LStatus]));
 
     while True do
     begin
@@ -631,7 +631,7 @@ begin
       try
         LPollingResponse.TryGetValue<string>('status', LStatus);
         LPollingResponse.TryGetValue<Integer>('progress', LProgress);
-        ReportState(acsReasoning, Format('Procesando video... [%d%%] %s', [LProgress, LStatus]));
+        ReportState(acsReasoning, AiFmt('state.sora_progress', [LProgress, LStatus]));
 
         if LStatus.Equals('completed') then
           break
@@ -648,7 +648,7 @@ begin
     end;
 
     // 5. Descargar Video Final
-    ReportState(acsWriting, 'Descargando video generado...');
+    ReportState(acsWriting, AiStr('state.downloading_generated_video'));
     LUrl := OPENAI_API_BASE_URL + 'videos/' + LVideoJobId + '/content';
     LVideoStream := TMemoryStream.Create;
     try

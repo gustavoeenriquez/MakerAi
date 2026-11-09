@@ -1251,7 +1251,7 @@ begin
   sUrl := Url + 'messages';
 
   try
-    DoStateChange(acsConnecting, 'Sending request...');
+    DoStateChange(acsConnecting, AiStr('state.sending'));
 
     FHeaders := GetDynamicHeaders;
     FClient.ContentType := 'application/json';
@@ -1831,7 +1831,7 @@ begin
         ResMsg.Tool_calls := sToolCalls;
         DoProcessResponse(AskMsg, ResMsg, Respuesta);
         FBusy := False;
-        DoStateChange(acsFinished, 'Done');
+        DoStateChange(acsFinished, AiStr('state.done'));
         if Assigned(FOnReceiveDataEnd) then
           FOnReceiveDataEnd(Self, ResMsg, jObj, Role, Respuesta);
       end
@@ -1875,7 +1875,7 @@ begin
       DoProcessResponse(AskMsg, ResMsg, Respuesta);
       ResMsg.Prompt := Respuesta;
       FBusy := False;
-      DoStateChange(acsFinished, 'Done');
+      DoStateChange(acsFinished, AiStr('state.done'));
 
       if Assigned(FOnReceiveDataEnd) then
         FOnReceiveDataEnd(Self, ResMsg, jObj, Role, Respuesta);

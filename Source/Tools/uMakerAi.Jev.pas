@@ -1056,7 +1056,7 @@ begin
     AiSpanAttr(Span, 'jev.retries', Int64(Attempt));
 
     if Status <> 200 then
-      raise EAiJevError.Create(Format('Jev: HTTP %d: %s', [Status, Resp]), Status);
+      raise EAiJevError.Create(AiFmt('tools.jev.http', [Status, Resp]), Status);
 
     Result := TAiJevResult.FromJSON(Resp);
     AiSpanAttr(Span, 'gen_ai.response.model', Result.Model);
