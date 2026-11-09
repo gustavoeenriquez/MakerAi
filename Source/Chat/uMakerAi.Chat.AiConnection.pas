@@ -120,6 +120,7 @@ type
     procedure SetParams(const Value: TStrings);
     procedure SetChat(const Value: TAiChat);
     function GetLastError: String;
+    function GetLastHttpStatus: Integer;
     function GetBusy: Boolean;
     procedure ParamsChanged(Sender: TObject);
     procedure ModelConfigChanged(Sender: TObject);
@@ -231,6 +232,8 @@ type
 
     property Messages: TAiChatMessages read FMessages;
     property LastError: String read GetLastError;
+    // Codigo HTTP del ultimo error del proveedor (0 = sin respuesta HTTP); ver EAiHttpError
+    property LastHttpStatus: Integer read GetLastHttpStatus;
     property Busy: Boolean read GetBusy;
     property AiChat: TAiChat read FChat;
 
@@ -1195,6 +1198,14 @@ begin
     Result := FChat.LastError
   else
     Result := '';
+end;
+
+function TAiChatConnection.GetLastHttpStatus: Integer;
+begin
+  if Assigned(FChat) then
+    Result := FChat.LastHttpStatus
+  else
+    Result := 0;
 end;
 
 function TAiChatConnection.GetLastMessage: TAiChatMessage;

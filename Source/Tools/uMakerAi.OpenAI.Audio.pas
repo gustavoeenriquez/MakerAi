@@ -833,7 +833,7 @@ begin
       AOutputStream.Position := 0;
       var
       ErrorMsg := TStreamReader.Create(AOutputStream, TEncoding.UTF8).ReadToEnd;
-      raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, ErrorMsg]);
+      raise EAiHttpError.CreateStatus(Res.StatusCode, ErrorMsg);
     end;
   finally
     Client.Free;
@@ -1003,7 +1003,7 @@ begin
       Result.FWarning := FLastWarning;
     end
     else
-      raise Exception.CreateFmt(AiStr('core.error_received'), [StatusCode, Content]);
+      raise EAiHttpError.CreateStatus(StatusCode, Content);
   finally
     Body.Free;
   end;
@@ -1114,7 +1114,7 @@ begin
       Result.FWarning := CTranslateWarning;
     end
     else
-      raise Exception.CreateFmt(AiStr('core.error_received'), [StatusCode, Content]);
+      raise EAiHttpError.CreateStatus(StatusCode, Content);
   finally
     Body.Free;
   end;

@@ -315,7 +315,7 @@ begin
     End
     else
     begin
-      Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
+      Raise EAiHttpError.CreateStatus(Res.StatusCode, Res.ContentAsString);
     end;
   Finally
     Client.Free;
@@ -517,7 +517,7 @@ begin
       End
       else
       begin
-        Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
+        Raise EAiHttpError.CreateStatus(Res.StatusCode, Res.ContentAsString);
       end;
     End;
   Finally

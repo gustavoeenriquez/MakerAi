@@ -528,6 +528,13 @@ begin
     .Input('locale:portuguese')
     .ExpectEquals('Copiar mensagem|Copiar mensagem|3 passos|Abrir anexo');
 
+  // Error HTTP de un proveedor: el codigo va en EAiHttpError.StatusCode (el
+  // texto cambia con el idioma; el libro, cap 29, lo leia del mensaje). En
+  // ingles el texto es el de siempre, "Error Received: ...".
+  FRunner.AddCase('locale.http-error-class')
+    .Input('locale:http-error')
+    .ExpectEquals('429|busy|Error Received: 429, busy|Error recibido: 429, busy|si');
+
   // --- Chat: serializacion de tool results (familia OpenAI-compatible) ---
   // Chat Completions no admite imagenes en role 'tool' de ninguna forma, y
   // Groq ademas rechaza cualquier array ahi. La media nativa sale como un
@@ -7572,6 +7579,28 @@ begin
       TAiLocale.NormalizeLanguage('C') + '|' +
       TAiLocale.PrimaryLanguage('en') + '|' +
       TAiLocale.FormatSpecifiers('Error %d: %s (100%%) %0:s %-5.2f');
+  end
+  else if AScenario = 'locale:http-error' then
+  begin
+    Prev := TAiLocale.Language;
+    try
+      TAiLocale.Language := 'en';
+      var LErr: Exception := EAiHttpError.CreateStatus(429, 'busy');
+      try
+        Result := IntToStr(EAiHttpError(LErr).StatusCode) + '|' + EAiHttpError(LErr).ResponseText + '|' + LErr.Message;
+      finally
+        LErr.Free;
+      end;
+      TAiLocale.Language := 'es';
+      LErr := EAiHttpError.CreateStatus(429, 'busy');
+      try
+        Result := Result + '|' + LErr.Message + '|' + IfThen(LErr is EAiHttpError, 'si', 'no');
+      finally
+        LErr.Free;
+      end;
+    finally
+      TAiLocale.Language := Prev;
+    end;
   end
   else if AScenario = 'locale:portuguese' then
   begin

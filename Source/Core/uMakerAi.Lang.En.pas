@@ -158,7 +158,7 @@ const
     'core.audio_required',                'An audio file with content is required for transcription.',
     'core.bridge_no_target',              'Error: the bridge has no target chat assigned.',
     'core.connection_failed',             'Connection failed: no response from %s',
-    'core.error_received',                'Error received: %d, %s',
+    'core.error_received',                'Error Received: %d, %s',
     'core.evals_no_target',               'TAiEvalRunner.Run: no target assigned',
     'core.fork_failed',                   'Failed to fork the process. Error: %s',
     'core.invalid_json_response',         'Error: invalid JSON response: %s',

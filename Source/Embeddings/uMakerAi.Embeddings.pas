@@ -80,7 +80,7 @@ type
 implementation
 
 uses
-  uMakerAi.Localization;
+  uMakerAi.Localization, uMakerAi.Core;
 
 const
   GlOpenAIUrl = 'https://api.openai.com/v1/';
@@ -233,7 +233,7 @@ begin
     end
     else
     begin
-      raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
+      raise EAiHttpError.CreateStatus(Res.StatusCode, Res.ContentAsString);
     end;
   finally
     Client.Free;

@@ -473,6 +473,7 @@ type
     FStreamFinishReason: String;
     FLastPrompt: String;
     FLastError: String;
+    FLastHttpStatus: Integer; // codigo del ultimo EAiHttpError (0 = sin respuesta HTTP)
     FRunSpan: TAiSpan; // Telemetria: span del turno en curso (nil = sin telemetria activa)
     FMessages: TAiChatMessages;
     FResponse_format: TAiChatResponseFormat;
@@ -662,6 +663,9 @@ type
 
     Property Messages: TAiChatMessages read FMessages;
     Property LastError: String read FLastError write SetLastError;
+    // Codigo HTTP del ultimo error del proveedor (EAiHttpError); 0 si el error no
+    // trajo respuesta HTTP (red caida, DNS, puerto cerrado) o no hubo error
+    Property LastHttpStatus: Integer read FLastHttpStatus;
     // Backward-compatible shortcut para drivers (apunta a FModelConfig.FTool_Active)
     Property Tool_Active: Boolean read GetTool_Active write SetTool_Active;
     // Backward-compatible shortcuts de codigo (apuntan a FModelConfig.ModelCaps/SessionCaps).
@@ -956,6 +960,7 @@ begin
   FBusy := True; // Marca como ocupado al sistema
   FAbort := False; // Inicia como no en abort
   FLastError := '';
+  FLastHttpStatus := 0;
   FLastContent := '';
   FLastReasoning := '';
   FLastPrompt := '';
@@ -1082,7 +1087,7 @@ begin
       begin
         FBusy := False;
         DoStateChange(acsError, Res.ContentAsString);
-        Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
+        Raise EAiHttpError.CreateStatus(Res.StatusCode, Res.ContentAsString);
       end;
     End;
   Finally
@@ -2099,6 +2104,11 @@ begin
   // Los llamadores sincronos (consolas, scripts) no tienen OnError asignado y
   // RunNew traga la excepcion: LastError es su unica via para ver el detalle.
   FLastError := ErrorMsg;
+  // El codigo HTTP, sin leerlo del texto (que cambia con el idioma desde la 4.0)
+  if E is EAiHttpError then
+    FLastHttpStatus := EAiHttpError(E).StatusCode
+  else
+    FLastHttpStatus := 0;
 
   DoStateChange(acsError, ErrorMsg);
 
@@ -2316,7 +2326,7 @@ begin
     End
     else
     begin
-      Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
+      Raise EAiHttpError.CreateStatus(Res.StatusCode, Res.ContentAsString);
     end;
   Finally
     Client.Free;

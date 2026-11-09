@@ -275,6 +275,20 @@ Type
     Destructor Destroy; override;
   End;
 
+  // Error HTTP de un proveedor (status <> 200). Desde la 4.0 el mensaje sale en
+  // el idioma activo (TAiLocale), así que el código no se debe sacar del texto:
+  //   if AException is EAiHttpError then Codigo := EAiHttpError(AException).StatusCode;
+  // OnError de TAiChat / TAiChatConnection recibe la excepción original.
+  EAiHttpError = class(Exception)
+  private
+    FStatusCode: Integer;
+    FResponseText: string;
+  public
+    constructor CreateStatus(AStatusCode: Integer; const AResponseText: string);
+    property StatusCode: Integer read FStatusCode;
+    property ResponseText: string read FResponseText;
+  end;
+
   // Partiendo de la extensi?n del archivo obtiene la categoria TAiFileCategori
 function GetContentCategory(FileExtension: string): TAiFileCategory;
 
@@ -305,6 +319,15 @@ uses
   ;
 {$REGION 'Utilidades varias' }
 {$I uMakerAi.Version.inc}
+
+{ EAiHttpError }
+
+constructor EAiHttpError.CreateStatus(AStatusCode: Integer; const AResponseText: string);
+begin
+  inherited Create(AiFmt('core.error_received', [AStatusCode, AResponseText]));
+  FStatusCode := AStatusCode;
+  FResponseText := AResponseText;
+end;
 
 function StrToThinkingLevel(const S: String; out ALevel: TAiThinkingLevel): Boolean;
 var
@@ -1012,7 +1035,7 @@ begin
         FContentLoaded := True;
       End
       else
-        Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
+        Raise EAiHttpError.CreateStatus(Res.StatusCode, Res.ContentAsString);
 
     Finally
       Client.Free;

@@ -61,7 +61,7 @@ procedure Register;
 implementation
 
 uses
-  uMakerAi.Localization;
+  uMakerAi.Localization, uMakerAi.Core;
 
 Const
   GlOllamaUrl = 'http://localhost:11434/';
@@ -148,7 +148,7 @@ begin
     End
     else
     begin
-      Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
+      Raise EAiHttpError.CreateStatus(Res.StatusCode, Res.ContentAsString);
     end;
 
   Finally

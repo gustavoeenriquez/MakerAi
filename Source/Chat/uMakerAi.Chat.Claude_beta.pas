@@ -979,7 +979,7 @@ begin
           end;
         end
         else
-          raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
+          raise EAiHttpError.CreateStatus(Res.StatusCode, Res.ContentAsString);
       end
       else
       begin

@@ -2127,7 +2127,7 @@ begin
         end;
       end
       else
-        Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
+        Raise EAiHttpError.CreateStatus(Res.StatusCode, Res.ContentAsString);
     end;
   finally
     if FClient.Asynchronous = False then
