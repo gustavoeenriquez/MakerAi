@@ -231,6 +231,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 // Miembros de computer_toolset_20260801 (definida mas abajo; ParseChat la usa para
 // decidir si un lote de tool calls va en serie)
 function IsClaudeComputerToolName(const AName: string): Boolean; forward;
@@ -433,7 +436,7 @@ var
   jReq, jRes: TJSONObject;
 begin
   if InputFileId.IsEmpty then
-    raise Exception.Create('InputFileId es requerido');
+    raise Exception.Create(AiStr('chat.input_file_id_required'));
 
   Client := TNetHTTPClient.Create(Nil);
   try
@@ -465,7 +468,7 @@ begin
         end;
       end
       else
-        raise Exception.CreateFmt('Error creando Batch: %d - %s', [Res.StatusCode, Res.ContentAsString]);
+        raise Exception.CreateFmt(AiStr('chat.batch_create_error'), [Res.StatusCode, Res.ContentAsString]);
     finally
       ReqStream.Free;
     end;
@@ -1279,7 +1282,7 @@ begin
       Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
       if not Assigned(Res) then
-        raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+        raise Exception.CreateFmt(AiStr('core.connection_failed'), [sUrl]);
 
       if not FClient.Asynchronous then
       begin
@@ -1298,7 +1301,7 @@ begin
           end;
         end
         else
-          raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+          raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
       end
       else
       begin
@@ -2422,7 +2425,7 @@ begin
 
   Except
     on E: Exception do
-      raise Exception.Create('Error en InternalAddMessage: ' + E.Message);
+      raise Exception.CreateFmt(AiStr('chat.add_message_error'), [E.Message]);
   End;
 end;
 
@@ -2896,7 +2899,7 @@ begin
     else
     begin
       // Manejo de errores HTTP
-      raise Exception.CreateFmt('Error al obtener modelos de Claude: %d - %s', [Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
+      raise Exception.CreateFmt(AiStr('chat.claude.models_error'), [Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
     end;
 
   finally
@@ -2977,7 +2980,7 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
-    raise Exception.Create('Empty file content');
+    raise Exception.Create(AiStr('chat.empty_file_content'));
 
   Client := TNetHTTPClient.Create(Nil);
   ResponseStream := TMemoryStream.Create;
@@ -3009,7 +3012,7 @@ begin
       end;
     end
     else
-      raise Exception.CreateFmt('Upload Error: %d - %s', [Res.StatusCode, Res.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('chat.upload_error'), [Res.StatusCode, Res.ContentAsString]);
   finally
     Body.Free;
     ResponseStream.Free;
@@ -3041,7 +3044,7 @@ begin
       end;
     end
     else
-      raise Exception.Create('Retrieve File Error');
+      raise Exception.Create(AiStr('chat.retrieve_file_error'));
   finally
     Client.Free;
   end;
@@ -3079,7 +3082,7 @@ begin
       end;
     end
     else
-      raise Exception.CreateFmt('RetrieveFileList Error: %d - %s',
+      raise Exception.CreateFmt(AiStr('chat.file_list_error'),
         [Res.StatusCode, Res.ContentAsString]);
   finally
     Client.Free;
@@ -3198,7 +3201,7 @@ var
 begin
   Result := '';
   if (not Assigned(aMediaFile)) or (aMediaFile.IdFile.IsEmpty) then
-    raise Exception.Create('File ID is missing');
+    raise Exception.Create(AiStr('chat.file_id_missing'));
 
   Client := TNetHTTPClient.Create(Nil);
   MemStream := TMemoryStream.Create;
@@ -3269,7 +3272,7 @@ begin
       Result := aMediaFile.IdFile;
     end
     else
-      raise Exception.CreateFmt('Download Error: %d - %s', [Res.StatusCode, Res.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('chat.download_error'), [Res.StatusCode, Res.ContentAsString]);
   finally
     MemStream.Free;
     Client.Free;

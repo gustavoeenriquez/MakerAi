@@ -117,6 +117,7 @@ Convenciones: nombres de caso en `area.subarea.detalle`; los escenarios devuelve
 
 ## Notas
 
+- **La suite corre en inglés**: el constructor de `TRegressionSuite` fija `TAiLocale.Language := 'en'`, así un caso que mira el texto de una excepción del framework no depende del idioma del Windows/Linux donde corre. Al afirmar sobre un mensaje, usar el texto en inglés de `uMakerAi.Lang.En.pas`.
 - Los eventos del framework son `of object` (sin lambdas): los handlers viven en `TFixtureHandlers`.
 - Cada caso emite un span `eval.case <nombre>` cuando se corre con `--otel`, útil para ver la suite completa en Jaeger/Langfuse.
 - La suite no requiere claves de API. Si en el futuro se agregan casos que llamen a proveedores reales, deben omitirse (skip) cuando falte la variable de entorno correspondiente.

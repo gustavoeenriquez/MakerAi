@@ -76,6 +76,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 Const
   GlAIUrl = 'https://api.x.ai/v1/';
 
@@ -184,7 +187,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAI).Text));
 {$ENDIF}
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools est?n mal definido, debe ser un JsonArray');
+        Raise Exception.Create(AiStr('core.tools_not_array'));
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then
@@ -408,7 +411,7 @@ begin
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
     if not Assigned(Res) then
-      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+      raise Exception.CreateFmt(AiStr('core.connection_failed'), [sUrl]);
 
     if Res.StatusCode = 200 then
     begin
@@ -416,7 +419,7 @@ begin
       if not (LParsed is TJSonObject) then
       begin
         LParsed.Free;
-        raise Exception.CreateFmt('Respuesta JSON inválida: %s', [Res.ContentAsString]);
+        raise Exception.CreateFmt(AiStr('core.invalid_json_response'), [Res.ContentAsString]);
       end;
       jRes := TJSonObject(LParsed);
       try
@@ -448,7 +451,7 @@ begin
       end;
     end
     else
-      raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
   finally
     FreeAndNil(jMessages);
     FreeAndNil(jInput);
@@ -480,7 +483,7 @@ begin
 
   // 1. Validaciones y configuraci?n
   if AskMsg.Prompt.IsEmpty then
-    raise Exception.Create('Se requiere un prompt para generar una imagen.');
+    raise Exception.Create(AiStr('chat.image_prompt_required'));
 
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
@@ -610,7 +613,7 @@ begin
   FLastPrompt := AskMsg.Prompt;
 
   if AskMsg.Prompt.IsEmpty then
-    raise Exception.Create('Se requiere un prompt para generar un video.');
+    raise Exception.Create(AiStr('chat.video_prompt_required'));
 
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
   if (LModel = '') or (not LModel.StartsWith('grok-imagine-video')) then
@@ -635,13 +638,13 @@ begin
       FResponse.Clear;
       LResponse := FClient.Post(Url + 'videos/generations', LBodyStream, FResponse, LHeaders);
       if LResponse.StatusCode <> 200 then
-        raise Exception.CreateFmt('Error iniciando video con Grok: %d, %s',
+        raise Exception.CreateFmt(AiStr('chat.grok.video_start_error'),
           [LResponse.StatusCode, LResponse.ContentAsString(TEncoding.UTF8)]);
 
       LRespJson := TJSonObject.ParseJSONValue(LResponse.ContentAsString(TEncoding.UTF8)) as TJSonObject;
       try
         if not LRespJson.TryGetValue<string>('request_id', LRequestId) then
-          raise Exception.Create('La respuesta de videos/generations no contiene request_id');
+          raise Exception.Create(AiStr('chat.grok.no_request_id'));
       finally
         LRespJson.Free;
       end;
@@ -680,10 +683,10 @@ begin
       if FAbort then
         Exit;
       if LStatus <> 'done' then
-        raise Exception.CreateFmt('Generacion de video no completada (status=%s tras %d seg)',
+        raise Exception.CreateFmt(AiStr('chat.grok.video_timeout'),
           [LStatus, LElapsed div 1000]);
       if LVideoUrl = '' then
-        raise Exception.Create('El job termino en done pero no incluye video.url');
+        raise Exception.Create(AiStr('chat.grok.no_video_url'));
 
       // 3. Descargar el video y adjuntarlo al mensaje
       LNewMediaFile := TAiMediaFile.Create;

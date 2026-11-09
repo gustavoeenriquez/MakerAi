@@ -82,6 +82,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 Const
   GlAIUrl = 'https://api.z.ai/api/paas/v4/';
 
@@ -168,7 +171,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
 {$ENDIF}
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools estan mal definido, debe ser un JsonArray');
+        Raise Exception.Create(AiStr('core.tools_not_array'));
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then

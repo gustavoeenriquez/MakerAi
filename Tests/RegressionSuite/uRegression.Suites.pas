@@ -113,6 +113,9 @@ const
 constructor TRegressionSuite.Create;
 begin
   inherited Create;
+  // Textos del framework en inglés: los casos que miran un mensaje de error no
+  // deben depender del idioma del sistema donde corre la suite
+  TAiLocale.Language := 'en';
   FRunner := TAiEvalRunner.Create(nil);
   DefineCases;
 end;
@@ -5386,7 +5389,8 @@ begin
     Registry := TFakePPMRegistry.Create(PORT_PPM);
     Prompts := TAiPrompts.Create(nil);
     try
-      Result := ErrorKind('nada', RegUrl, 'no encontrado', 'notfound') + '|' +
+      // La suite corre en inglés (TAiLocale.Language := 'en' en el constructor)
+      Result := ErrorKind('nada', RegUrl, 'not found', 'notfound') + '|' +
         ErrorKind('un-prompt', RegUrl, 'tipo "prompt"', 'type') + '|' +
         ErrorKind('skill-demo', RegUrl + '/html', 'HTML', 'html');
       Prompts.PPMRegistryUrl := RegUrl;

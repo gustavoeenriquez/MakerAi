@@ -141,6 +141,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 procedure Register;
 begin
   RegisterComponents('MakerAI', [TAiPrompts]);
@@ -236,7 +239,7 @@ begin
     S := Params[I];
     P := Pos('=',S);
     If  p <= 0 then
-      Raise Exception.Create('Los parámetros deben tener la forma Nombre=Valor');
+      Raise Exception.Create(AiStr('core.prompts_param_format'));
 
     Nom := Copy(S, 1, P - 1);
     Val := Copy(S, P + 1, Length(S));

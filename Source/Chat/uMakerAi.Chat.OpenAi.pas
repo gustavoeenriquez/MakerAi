@@ -165,6 +165,7 @@ procedure Register;
 implementation
 
 uses
+  uMakerAi.Localization,
   System.Generics.Defaults, uMakerAi.Utils.DiffUpdater;
 
 Const
@@ -304,7 +305,7 @@ begin
     end;
   end
   else
-    raise Exception.CreateFmt('Error Deleting File (%d): %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+    raise Exception.CreateFmt(AiStr('chat.openai.delete_file_error'), [LResponse.StatusCode, LResponse.ContentAsString]);
 end;
 
 destructor TAiOpenChat.Destroy;
@@ -375,14 +376,14 @@ begin
 
   // 1. Validaciones previas
   if not Assigned(aMediaFile) then
-    raise Exception.Create('El objeto MediaFile no est? asignado.');
+    raise Exception.Create(AiStr('chat.media_not_assigned'));
 
   // Si ya tiene ID, asumimos que ya est? en la nube y no lo subimos de nuevo
   if aMediaFile.IdFile <> '' then
     Exit(aMediaFile.IdFile);
 
   if (aMediaFile.Content.Size = 0) and (aMediaFile.Base64 = '') then
-    raise Exception.Create('El archivo est? vac?o (sin Content ni Base64).');
+    raise Exception.Create(AiStr('chat.media_empty'));
 
   // 2. Preparar URL (asegurar endpoint /files)
   // Nota: Url suele ser 'https://api.openai.com/v1/'
@@ -461,7 +462,7 @@ begin
     else
     begin
       // Manejo de errores detallado
-      raise Exception.CreateFmt('Error Uploading File (%d): %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('chat.openai.upload_file_error'), [LResponse.StatusCode, LResponse.ContentAsString]);
     end;
 
   finally
@@ -2105,7 +2106,7 @@ begin
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
     if not Assigned(Res) then
-      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+      raise Exception.CreateFmt(AiStr('core.connection_failed'), [sUrl]);
 
     if FClient.Asynchronous = False then
     begin
@@ -2126,7 +2127,7 @@ begin
         end;
       end
       else
-        Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+        Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
     end;
   finally
     if FClient.Asynchronous = False then
@@ -2256,7 +2257,7 @@ begin
           AsyncResponse := AsyncClient.Post(EndpointUrl, AsyncFormData, nil, AuthHeader);
 
           if AsyncResponse.StatusCode <> 200 then
-            raise Exception.Create('Error starting Sora: ' + AsyncResponse.ContentAsString);
+            raise Exception.CreateFmt(AiStr('chat.openai.sora_start_error'), [AsyncResponse.ContentAsString]);
 
           AsyncJson := TJSonObject.ParseJSONValue(AsyncResponse.ContentAsString) as TJSonObject;
           try
@@ -2269,7 +2270,7 @@ begin
               if (AsyncJson <> nil) and AsyncJson.TryGetValue<string>('id', LJobId) then
                 PollingUrl := EndpointUrl + '/' + LJobId
               else
-                raise Exception.Create('No video ID returned');
+                raise Exception.Create(AiStr('chat.openai.no_video_id'));
             end
             else
             begin
@@ -2336,7 +2337,7 @@ begin
             end;
 
             if PollCount > 120 then
-              raise Exception.Create('Timeout generating video');
+              raise Exception.Create(AiStr('chat.openai.video_timeout'));
           end;
 
           // --- C. DESCARGAR VIDEO ---
@@ -2380,7 +2381,7 @@ begin
             else
             begin
               VideoMedia.Free;
-              raise Exception.Create('Error downloading content');
+              raise Exception.Create(AiStr('chat.openai.content_download_error'));
             end;
           except
             VideoStream.Free;
@@ -2459,10 +2460,10 @@ begin
         Result := aMediaFile.FileName;
       end
       else
-        raise Exception.Create('El servidor devolvi? un stream vac?o.');
+        raise Exception.Create(AiStr('chat.empty_stream'));
     end
     else
-      raise Exception.CreateFmt('Error downloading file (%d): %s', [LResponse.StatusCode, LResponse.StatusText]);
+      raise Exception.CreateFmt(AiStr('chat.openai.file_download_error'), [LResponse.StatusCode, LResponse.StatusText]);
   finally
     TmpClient.Free;
     LStream.Free;
@@ -2695,7 +2696,7 @@ begin
     begin
       LResponseJson := TJSonObject.ParseJSONValue(LResponseStream.DataString) as TJSonObject;
       if LResponseJson = nil then
-        raise Exception.Create('Error parseando respuesta de generación de imagen.');
+        raise Exception.Create(AiStr('chat.image_parse_error'));
 
       if LResponseJson.TryGetValue<TJSonArray>('data', LDataArray) and (LDataArray.Count > 0) then
       begin
@@ -2786,7 +2787,7 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
-    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripci?n.');
+    raise Exception.Create(AiStr('core.audio_required'));
 
   sUrl := Url + 'audio/transcriptions';
 
@@ -2874,7 +2875,7 @@ begin
       end
       else
       begin
-        Raise Exception.CreateFmt('Error en la transcripci?n: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+        Raise Exception.CreateFmt(AiStr('chat.transcription_error'), [Res.StatusCode, Res.ContentAsString]);
       end;
     end;
 

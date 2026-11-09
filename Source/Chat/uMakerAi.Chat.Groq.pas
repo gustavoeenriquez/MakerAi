@@ -93,6 +93,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 Const
   GlAIUrl = 'https://api.groq.com/openai/v1/';
 
@@ -170,7 +173,7 @@ begin
 
     if (ModelConfig.Format = 'Raw') and (Tool_Active or (Response_format = tiaChatRfJson) or (Response_format = tiaChatRfJsonSchema)) then
     begin
-      Raise Exception.Create('Groq Error: ReasoningFormat no puede ser "raw" cuando se usan Tools o JSON mode. Use "parsed" o "hidden".');
+      Raise Exception.Create(AiStr('chat.groq.raw_reasoning'));
     end;
 
     AJSONObject.AddPair('stream', TJSONBool.Create(LAsincronico));
@@ -183,7 +186,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
 {$ENDIF}
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools est�n mal definido, debe ser un JsonArray');
+        Raise Exception.Create(AiStr('core.tools_not_array'));
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then
@@ -380,7 +383,7 @@ Var
   sUrl: String;
 begin
   // OJO OJO OJO OJO
-  Raise Exception.Create('Actualmente Groq no maneja modelos de embeddings');
+  Raise Exception.Create(AiStr('chat.groq.no_embeddings'));
 
   Client := TNetHTTPClient.Create(Nil);
 {$IF CompilerVersion >= 34}
@@ -408,7 +411,7 @@ begin
     Response.Position := 0;
 
     if not Assigned(Res) then
-      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+      raise Exception.CreateFmt(AiStr('core.connection_failed'), [sUrl]);
 
 {$IFDEF APIDEBUG}
     Response.SaveToFile('c:\temp\response.txt');
@@ -422,7 +425,7 @@ begin
     End
     else
     begin
-      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
     end;
 
   Finally
@@ -449,7 +452,7 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
-    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripci?n.');
+    raise Exception.Create(AiStr('core.audio_required'));
 
   sUrl := Url + 'audio/transcriptions';
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
@@ -512,7 +515,7 @@ begin
       Result := ResMsg.Prompt;
     end
     else
-      raise Exception.CreateFmt('Error en la transcripci?n: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('chat.transcription_error'), [Res.StatusCode, Res.ContentAsString]);
 
   finally
     Body.Free;

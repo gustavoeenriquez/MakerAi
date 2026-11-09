@@ -141,6 +141,7 @@ type
 implementation
 
 uses
+  uMakerAi.Localization,
   System.StrUtils, System.NetEncoding;
 
 const
@@ -421,7 +422,7 @@ begin
     LFile := APath;
 
   if not TFile.Exists(LFile) then
-    raise EAiSkillError.CreateFmt('Skill no encontrado: %s', [LFile]);
+    raise EAiSkillError.CreateFmt(AiStr('core.skill_not_found'), [LFile]);
 
   LoadFromText(TFile.ReadAllText(LFile, TEncoding.UTF8));
   FSource := ssFile;
@@ -443,7 +444,7 @@ var
   Status: Integer;
 begin
   if Trim(AName) = '' then
-    raise EAiSkillError.Create('LoadFromPPM: falta el nombre del skill');
+    raise EAiSkillError.Create(AiStr('core.skill_ppm_name_missing'));
 
   Registry := TAiPPMClient.RegistryOrDefault(ARegistryUrl);
   PkgName := Trim(AName);
@@ -460,7 +461,7 @@ begin
       PkgName := AI_PPM_SKILL_PREFIX + PkgName;
   end;
   if not Assigned(Pkg) then
-    raise EAiSkillError.CreateFmt('Skill "%s" no encontrado en el registry PPM (%s)',
+    raise EAiSkillError.CreateFmt(AiStr('core.skill_ppm_not_found'),
       [AName, Registry]);
   try
     TypeStr := '';
@@ -476,7 +477,7 @@ begin
   if LVersion = '' then
     LVersion := TAiPPMClient.ResolveVersion(Registry, PkgName);
   if LVersion = '' then
-    raise EAiSkillError.CreateFmt('El skill PPM "%s" no tiene versiones disponibles', [PkgName]);
+    raise EAiSkillError.CreateFmt(AiStr('core.skill_ppm_no_versions'), [PkgName]);
 
   Url := Format('%s/v1/packages/%s/%s/skill',
     [Registry, TNetEncoding.URL.Encode(PkgName), TNetEncoding.URL.Encode(LVersion)]);
@@ -584,7 +585,7 @@ begin
       Resp := Client.Get(AUrl);
     except
       on E: Exception do
-        raise EAiSkillError.CreateFmt('No se pudo conectar con el registry PPM (%s): %s',
+        raise EAiSkillError.CreateFmt(AiStr('core.ppm_connect_failed'),
           [AUrl, E.Message]);
     end;
     AStatus := Resp.StatusCode;
@@ -603,7 +604,7 @@ begin
       end;
       if Msg = '' then
         Msg := 'HTTP ' + IntToStr(AStatus);
-      raise EAiSkillError.CreateFmt('Registry PPM: %s (%s)', [Msg, AUrl]);
+      raise EAiSkillError.CreateFmt(AiStr('core.ppm_error'), [Msg, AUrl]);
     end;
 
     // Un 200 con HTML es la página del sitio, no el recurso pedido (URL mal
@@ -629,7 +630,7 @@ begin
   if not (V is TJSONObject) then
   begin
     V.Free;
-    raise EAiSkillError.CreateFmt('Respuesta inesperada del registry PPM para "%s"', [AName]);
+    raise EAiSkillError.CreateFmt(AiStr('core.ppm_unexpected'), [AName]);
   end;
   Result := TJSONObject(V);
 end;
@@ -657,7 +658,7 @@ begin
   if not (V is TJSONObject) then
   begin
     V.Free;
-    raise EAiSkillError.CreateFmt('Respuesta inesperada del registry PPM para "%s"', [AName]);
+    raise EAiSkillError.CreateFmt(AiStr('core.ppm_unexpected'), [AName]);
   end;
   Result := TJSONObject(V);
 end;

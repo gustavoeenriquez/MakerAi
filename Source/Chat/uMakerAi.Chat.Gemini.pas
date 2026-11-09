@@ -142,6 +142,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 Const
   GlAIUrl = 'https://generativelanguage.googleapis.com/v1beta/';
   GlAIUploadUrl = 'https://generativelanguage.googleapis.com/upload/v1beta/';
@@ -233,7 +236,7 @@ begin
     if LResponse.StatusCode = 200 then
       Result := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject
     else
-      raise Exception.CreateFmt('Error RetrieveCache: %d %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('chat.gemini.cache_error'), [LResponse.StatusCode, LResponse.ContentAsString]);
   finally
     LHttpClient.Free;
   end;
@@ -1353,7 +1356,7 @@ begin
     Res := FClient.Post(sUrl, St, FResponse);
 
     if not Assigned(Res) then
-      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+      raise Exception.CreateFmt(AiStr('core.connection_failed'), [sUrl]);
 
     if FClient.Asynchronous = False then
     begin
@@ -2202,7 +2205,7 @@ begin
     LFileStream.Position := 0;
     LNumBytes := LFileStream.Size;
     if LNumBytes = 0 then
-      raise Exception.Create('No se pudo obtener el contenido del archivo para subir.');
+      raise Exception.Create(AiStr('chat.upload_no_content'));
     try
       LHeaders := [TNetHeader.Create('X-Goog-Upload-Protocol', 'resumable'), TNetHeader.Create('X-Goog-Upload-Command', 'start'), TNetHeader.Create('X-Goog-Upload-Header-Content-Length', LNumBytes.ToString),
         TNetHeader.Create('X-Goog-Upload-Header-Content-Type', aMediaFile.MimeType)];
@@ -2217,14 +2220,14 @@ begin
         FreeAndNil(LJsonBody);
       end;
       if LResponse.StatusCode <> 200 then
-        raise Exception.CreateFmt('Error start upload: %d %s', [LResponse.StatusCode, LResponse.StatusText]);
+        raise Exception.CreateFmt(AiStr('chat.gemini.upload_start_error'), [LResponse.StatusCode, LResponse.StatusText]);
       LUploadUrl := LResponse.HeaderValue['X-Goog-Upload-Url'];
       LFileStream.Position := 0;
       LHeaders := [TNetHeader.Create('Content-Length', LNumBytes.ToString), TNetHeader.Create('X-Goog-Upload-Offset', '0'), TNetHeader.Create('X-Goog-Upload-Command', 'upload, finalize')];
       LHttpClient.ContentType := 'application/octet-stream';
       LResponse := LHttpClient.Post(LUploadUrl, LFileStream, nil, LHeaders);
       if LResponse.StatusCode <> 200 then
-        raise Exception.CreateFmt('Error upload bytes: %d', [LResponse.StatusCode]);
+        raise Exception.CreateFmt(AiStr('chat.gemini.upload_bytes_error'), [LResponse.StatusCode]);
       LUploadResponseObj := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       if Assigned(LUploadResponseObj) then
         try
@@ -2257,7 +2260,7 @@ var
 begin
   CloudState := 'UNDEFINED';
   if aMediaFile.CloudName = '' then
-    raise Exception.Create('No CloudName');
+    raise Exception.Create(AiStr('chat.gemini.no_cloud_name'));
   LHttpClient := TNetHTTPClient.Create(Nil);
   try
     LCheckUrl := GlAIUrl + aMediaFile.CloudName + '?key=' + Self.ApiKey;
@@ -2687,7 +2690,7 @@ begin
               begin
                 var
                 ErrMsg := TaskErrorObj.GetValue<string>('message', 'Unknown error');
-                raise Exception.Create('Veo Operation Failed: ' + ErrMsg);
+                raise Exception.CreateFmt(AiStr('chat.gemini.veo_failed'), [ErrMsg]);
               end;
 
               // Extraer URI del video
@@ -2746,14 +2749,14 @@ begin
                   end
                   else
                     // Ahora verás el mensaje de error real si falla de nuevo
-                    raise Exception.CreateFmt('Error downloading generated video: %d %s', [TaskResp.StatusCode, TaskResp.StatusText]);
+                    raise Exception.CreateFmt(AiStr('chat.video_download_error'), [TaskResp.StatusCode, TaskResp.StatusText]);
                 finally
                   LFileStream.Free;
                 end;
               end
               else
               begin
-                raise Exception.Create('API finished but no video URI was found in response.');
+                raise Exception.Create(AiStr('chat.gemini.no_video_uri'));
               end;
             end;
 
@@ -3197,7 +3200,7 @@ begin
     begin
       LResponseJson := TJSonObject.ParseJSONValue(LResponseStream.DataString) as TJSonObject;
       if LResponseJson = nil then
-        raise Exception.Create('Error parseando respuesta de Imagen.');
+        raise Exception.Create(AiStr('chat.image_parse_error'));
 
       if LResponseJson.TryGetValue<TJSonArray>('predictions', LPredictions) and (LPredictions.Count > 0) then
       begin

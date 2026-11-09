@@ -265,6 +265,9 @@ Type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 { TAiChatMessage }
 
 procedure TAiChatMessage.AddMediaFile(aMediaFile: TAiMediaFile);
@@ -352,7 +355,7 @@ begin
   FLock.Enter;
   Try
     If Length(Trim(aBase64)) < 100 then
-      Raise Exception.Create('El Base64 est? vac?o, no se cargar?');
+      Raise Exception.Create(AiStr('core.media_base64_empty'));
 
     If aFileName = '' then // Ver como se asigna un nombre a partir del contenido del stream
       aFileName := 'imagen.jpg';
@@ -373,7 +376,7 @@ begin
   FLock.Enter;
   Try
     If Not FileExists(aFileName) then
-      Raise Exception.Create('El archivo "' + aFileName + '" no se encuentra');
+      Raise Exception.CreateFmt(AiStr('core.media_file_not_found'), [aFileName]);
 
     Media := TAiMediaFile.Create;
     Media.LoadFromFile(aFileName);
@@ -390,7 +393,7 @@ begin
   FLock.Enter;
   Try
     If Stream.Size <= 100 then
-      Raise Exception.Create('El stream est? vac?o');
+      Raise Exception.Create(AiStr('core.media_stream_empty'));
 
     If aFileName = '' then // Ver como se asigna un nombre a partir del contenido del stream
       aFileName := 'imagen.jpg';

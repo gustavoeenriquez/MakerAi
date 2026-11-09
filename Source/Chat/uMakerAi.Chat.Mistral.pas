@@ -226,6 +226,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 Const
   GlAIUrl = 'https://api.mistral.ai/v1/';
 
@@ -252,7 +255,7 @@ begin
   Result := '';
   // MODIFICADO: Comprobar el campo correcto.
   if not Assigned(aMediaFile) or aMediaFile.IDFile.IsEmpty then
-    raise Exception.Create('El TAiMediaFile debe tener un ID de archivo v?lido (en IDFile) para obtener una URL firmada.');
+    raise Exception.Create(AiStr('chat.mistral.signed_url_id'));
 
   // MODIFICADO: Usar el campo correcto para construir la URL.
   LUrl := Url + 'files/' + aMediaFile.IDFile + '/url';
@@ -260,7 +263,7 @@ begin
   LResponse := FClient.Get(LUrl, nil, LHeaders); // A?adir el header a la petici?n
 
   if not Assigned(LResponse) then
-    raise Exception.CreateFmt('Connection failed: no response from %s', [LUrl]);
+    raise Exception.CreateFmt(AiStr('core.connection_failed'), [LUrl]);
 
   if LResponse.StatusCode = 200 then
   begin
@@ -317,7 +320,7 @@ var
 begin
   Result := nil; // Por defecto, devolvemos nil si algo falla.
   if aFileId.IsEmpty then
-    raise Exception.Create('Se requiere un ID de archivo para recuperarlo.');
+    raise Exception.Create(AiStr('chat.file_id_required'));
 
   // 1. Obtener los metadatos primero para saber el nombre del archivo y otros detalles.
   LMetadata := RetrieveFileMetadata(aFileId);
@@ -384,13 +387,13 @@ begin
   Result.Id := '';
 
   if aFileId.IsEmpty then
-    raise Exception.Create('Se requiere un ID de archivo para recuperar sus metadatos.');
+    raise Exception.Create(AiStr('chat.file_id_required_meta'));
 
   LUrl := Url + 'files/' + aFileId;
   LResponse := FClient.Get(LUrl);
 
   if not Assigned(LResponse) then
-    raise Exception.CreateFmt('Connection failed: no response from %s', [LUrl]);
+    raise Exception.CreateFmt(AiStr('core.connection_failed'), [LUrl]);
 
   if LResponse.StatusCode = 200 then
   begin
@@ -460,7 +463,7 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
-    raise Exception.Create('Se necesita un TAiMediaFile con contenido para subir.');
+    raise Exception.Create(AiStr('chat.upload_media_required'));
 
   LUrl := Url + 'files';
   LBody := TMultipartFormData.Create;
@@ -536,7 +539,7 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) or aMediaFile.IDFile.IsEmpty then
-    raise Exception.Create('El TAiMediaFile debe tener un ID de archivo v?lido para ser borrado.');
+    raise Exception.Create(AiStr('chat.mistral.delete_id'));
 
   LUrl := Url + 'files/' + aMediaFile.IDFile;
   LResponse := FClient.Delete(LUrl, nil);
@@ -647,11 +650,11 @@ begin
             var LJsonResp := TJSONObject.ParseJSONValue(
               TEncoding.UTF8.GetString(LRespBytes)) as TJSONObject;
             if not Assigned(LJsonResp) then
-              raise Exception.Create('Respuesta TTS JSON no valida');
+              raise Exception.Create(AiStr('chat.mistral.tts_invalid_json'));
             try
               var LB64 := LJsonResp.GetValue<string>('audio_data', '');
               if LB64 = '' then
-                raise Exception.Create('Respuesta TTS sin audio_data');
+                raise Exception.Create(AiStr('chat.mistral.tts_no_audio'));
               var LAudioBytes := TNetEncoding.Base64.DecodeStringToBytes(LB64);
               var LAudioStream := TMemoryStream.Create;
               try
@@ -912,7 +915,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
 {$ENDIF}
       if Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools est?n mal definido, debe ser un JsonArray');
+        Raise Exception.Create(AiStr('core.tools_not_array'));
       AJSONObject.AddPair('tools', JArr);
 
       if (Trim(Tool_choice) <> '') then
@@ -1183,7 +1186,7 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) then
-    raise Exception.Create('Se requiere un TAiMediaFile para el proceso de OCR.');
+    raise Exception.Create(AiStr('chat.mistral.ocr_media_required'));
 
   FBusy := True;
   FLastError := '';
@@ -1519,7 +1522,7 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
-    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripci?n.');
+    raise Exception.Create(AiStr('core.audio_required'));
 
   sUrl := Url + 'audio/transcriptions';
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
@@ -1582,7 +1585,7 @@ begin
       Result := ResMsg.Prompt;
     end
     else
-      raise Exception.CreateFmt('Error en la transcripci?n: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('chat.transcription_error'), [Res.StatusCode, Res.ContentAsString]);
 
   finally
     Body.Free;

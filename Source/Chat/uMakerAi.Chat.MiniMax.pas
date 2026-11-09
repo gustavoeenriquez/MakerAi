@@ -87,6 +87,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 Const
   GlAIUrl = 'https://api.minimax.io/v1/';
   GlDefaultModel = 'MiniMax-M3';
@@ -173,7 +176,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
 {$ENDIF}
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools estan mal definido, debe ser un JsonArray');
+        Raise Exception.Create(AiStr('core.tools_not_array'));
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then

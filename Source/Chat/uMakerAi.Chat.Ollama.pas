@@ -87,6 +87,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 Const
   GlAIUrl = 'http://localhost:11434/';
 
@@ -276,7 +279,7 @@ begin
     Res := Client.Get(sUrl, Response, Headers);
 
     if not Assigned(Res) then
-      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+      raise Exception.CreateFmt(AiStr('core.connection_failed'), [sUrl]);
 
     if Res.StatusCode = 200 then
     Begin
@@ -312,7 +315,7 @@ begin
     End
     else
     begin
-      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
     end;
   Finally
     Client.Free;
@@ -494,7 +497,7 @@ begin
     If FClient.Asynchronous = False then
     Begin
       if not Assigned(Res) then
-        Raise Exception.Create('Error de conexion: no se recibio respuesta del servidor Ollama')
+        Raise Exception.Create(AiStr('chat.ollama.no_response'))
       else if Res.StatusCode = 200 then
       Begin
         Var
@@ -514,7 +517,7 @@ begin
       End
       else
       begin
-        Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+        Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
       end;
     End;
   Finally
@@ -1005,7 +1008,7 @@ begin
     LResponse := FClient.Post(LUrl, LBodyStream);
 
     if LResponse.StatusCode <> 200 then
-      raise Exception.CreateFmt('Error al copiar el modelo: %d - %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('chat.ollama.copy_error'), [LResponse.StatusCode, LResponse.ContentAsString]);
 
   finally
     LJsonObject.Free;
@@ -1041,7 +1044,7 @@ begin
     LResponse := FClient.Post(LUrl, LBodyStream, LResponseStream);
 
     if LResponse.StatusCode <> 200 then
-      raise Exception.CreateFmt('Error al crear el modelo: %d - %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('chat.ollama.create_error'), [LResponse.StatusCode, LResponse.ContentAsString]);
 
     // Procesar la respuesta en stream (linea por linea)
     LResponseStream.Position := 0;
@@ -1092,7 +1095,7 @@ begin
     LResponse := FClient.Delete(LUrl, LBodyStream);
 
     if LResponse.StatusCode <> 200 then
-      raise Exception.CreateFmt('Error al eliminar el modelo: %d - %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('chat.ollama.delete_error'), [LResponse.StatusCode, LResponse.ContentAsString]);
 
   finally
     LJsonObject.Free;
@@ -1128,7 +1131,7 @@ begin
     LResponse := FClient.Post(LUrl, LBodyStream, LResponseStream);
 
     if LResponse.StatusCode <> 200 then
-      raise Exception.CreateFmt('Error al descargar el modelo: %d - %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('chat.ollama.pull_error'), [LResponse.StatusCode, LResponse.ContentAsString]);
 
     // Procesar la respuesta en stream (linea por linea)
     LResponseStream.Position := 0;
@@ -1188,7 +1191,7 @@ begin
     end
     else
     begin
-      raise Exception.CreateFmt('Error al obtener información del modelo: %d - %s', [LResponse.StatusCode, LResponse.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('chat.ollama.show_error'), [LResponse.StatusCode, LResponse.ContentAsString]);
     end;
 
   finally

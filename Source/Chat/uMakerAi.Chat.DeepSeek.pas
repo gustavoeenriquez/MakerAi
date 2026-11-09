@@ -72,6 +72,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 // Modelos de la era V4 que aceptan el bloque 'thinking'. Se listan
 // explicitamente porque el API cambio de nombre en sep 2026: el canonico es
 // 'deepseek-flash' y 'deepseek-v4-flash' quedo como alias legacy. Los alias en
@@ -171,7 +174,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
 {$ENDIF}
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools están mal definido, debe ser un JsonArray');
+        Raise Exception.Create(AiStr('core.tools_not_array'));
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then

@@ -306,6 +306,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 {$I ..\Core\uMakerAi.Version.inc}
 {$R ..\Resources\uMakerAiResources.res}
 
@@ -617,7 +620,7 @@ begin
 
   NewChat := TAiChatFactory.Instance.CreateDriver(FDriverName);
   if not Assigned(NewChat) then
-    raise Exception.CreateFmt('Failed to create driver instance for "%s"', [FDriverName]);
+    raise Exception.CreateFmt(AiStr('chat.conn_create_failed'), [FDriverName]);
 
   if Assigned(FOnChatModelChange) then
     FOnChatModelChange(Self, OldChat, NewChat);
@@ -772,7 +775,7 @@ begin
   end;
 
   if not Assigned(FChat) then
-    raise Exception.Create('A valid DriverName must be specified to create a Chat instance.');
+    raise Exception.Create(AiStr('chat.conn_driver_required'));
 end;
 
 procedure TAiChatConnection.SyncMediaParams;
@@ -1081,20 +1084,20 @@ var
   LModels: TStringList;
 begin
   if not IsDriverAvailable(aDriverName) then
-    raise Exception.CreateFmt('Driver "%s" not found or is not registered.', [aDriverName]);
+    raise Exception.CreateFmt(AiStr('chat.conn_driver_not_found'), [aDriverName]);
 
   // Valida que el driver y el modelo existan
   LChat := TAiChatFactory.Instance.CreateDriver(aDriverName);
   Try
     if not Assigned(LChat) then
-      raise Exception.CreateFmt('Failed to create an instance for driver "%s".', [aDriverName]);
+      raise Exception.CreateFmt(AiStr('chat.conn_instance_failed'), [aDriverName]);
 
     LModels := LChat.GetModels;
     Try
       LModels.Sort;
 
       If LModels.IndexOf(aModel) < 0 then
-        raise Exception.CreateFmt('Failed to create an instance, model "%s" not found.', [aModel]);
+        raise Exception.CreateFmt(AiStr('chat.conn_model_not_found'), [aModel]);
 
     Finally
       LModels.Free;

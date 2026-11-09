@@ -155,6 +155,7 @@ procedure Register;
 implementation
 
 uses
+  uMakerAi.Localization,
   System.StrUtils, System.IOUtils;
 
 procedure Register;
@@ -381,7 +382,7 @@ begin
     HttpResponse := Client.Get(FullUrl, ResponseStream, Headers);
 
     if not Assigned(HttpResponse) then
-      raise Exception.CreateFmt('Connection failed: no response from %s', [FullUrl]);
+      raise Exception.CreateFmt(AiStr('core.connection_failed'), [FullUrl]);
 
     // 4. Procesar la respuesta (sin cambios)
     if HttpResponse.StatusCode = 200 then
@@ -410,7 +411,7 @@ begin
     end
     else
     begin
-      raise Exception.CreateFmt('Error al obtener la lista de modelos de Cohere: %d - %s', [HttpResponse.StatusCode, HttpResponse.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('chat.cohere.models_error'), [HttpResponse.StatusCode, HttpResponse.ContentAsString]);
     end;
   finally
     Client.Free;
@@ -657,7 +658,7 @@ begin
     Res := FClient.Post(sUrl, St, FResponse, Headers);
 
     if not Assigned(Res) then
-      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+      raise Exception.CreateFmt(AiStr('core.connection_failed'), [sUrl]);
 
     FResponse.Position := 0;
     FLastContent := '';
@@ -681,7 +682,7 @@ begin
         end;
       end
       else
-        raise Exception.CreateFmt('Error en Cohere Chat API: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+        raise Exception.CreateFmt(AiStr('chat.cohere.chat_error'), [Res.StatusCode, Res.ContentAsString]);
     end
     else
       Result := '';
@@ -1227,7 +1228,7 @@ var
 begin
   Result := nil;
   if not Assigned(ADocuments) or (ADocuments.Count = 0) then
-    raise Exception.Create('La lista de documentos para Rerank no puede estar vac?a.');
+    raise Exception.Create(AiStr('chat.cohere.rerank_empty'));
 
   // El endpoint de Rerank es diferente al de Chat
   LUrl := TPath.Combine(System.SysUtils.ExcludeTrailingPathDelimiter(Self.Url), 'rerank');
@@ -1339,7 +1340,7 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
-    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripci?n.');
+    raise Exception.Create(AiStr('core.audio_required'));
 
   sUrl := Url + 'audio/transcriptions';
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
@@ -1390,7 +1391,7 @@ begin
       Result := ResMsg.Prompt;
     end
     else
-      raise Exception.CreateFmt('Error en la transcripci?n: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      raise Exception.CreateFmt(AiStr('chat.transcription_error'), [Res.StatusCode, Res.ContentAsString]);
 
   finally
     Body.Free;

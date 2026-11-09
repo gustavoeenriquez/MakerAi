@@ -297,6 +297,7 @@ function ThinkingLevelToStr(ALevel: TAiThinkingLevel): String;
 implementation
 
 uses
+  uMakerAi.Localization,
   System.Net.URLClient, System.Net.HttpClientComponent
 {$IFDEF LINUX}
   , uMakerAi.Utils.System
@@ -1011,7 +1012,7 @@ begin
         FContentLoaded := True;
       End
       else
-        Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+        Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
 
     Finally
       Client.Free;

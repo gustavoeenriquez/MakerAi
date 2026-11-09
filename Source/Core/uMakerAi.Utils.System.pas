@@ -112,6 +112,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 { TInteractiveProcessInfo }
 
 constructor TInteractiveProcessInfo.Create;
@@ -677,13 +680,13 @@ begin
   Result := TInteractiveProcessInfo.Create;
   try
     if Posix.Unistd.pipe(@PipeIn[0]) <> 0 then
-      raise Exception.Create('Failed to create input pipe. Error: ' + strerror(Errno));
+      raise Exception.CreateFmt(AiStr('core.pipe_input_failed'), [strerror(Errno)]);
 
     if Posix.Unistd.pipe(@PipeOut[0]) <> 0 then
     begin
       Posix.Unistd.__close(PipeIn[0]);
       Posix.Unistd.__close(PipeIn[1]);
-      raise Exception.Create('Failed to create output pipe. Error: ' + strerror(Errno));
+      raise Exception.CreateFmt(AiStr('core.pipe_output_failed'), [strerror(Errno)]);
     end;
 
     if Posix.Unistd.pipe(@PipeErr[0]) <> 0 then
@@ -692,7 +695,7 @@ begin
       Posix.Unistd.__close(PipeIn[1]);
       Posix.Unistd.__close(PipeOut[0]);
       Posix.Unistd.__close(PipeOut[1]);
-      raise Exception.Create('Failed to create error pipe. Error: ' + strerror(Errno));
+      raise Exception.CreateFmt(AiStr('core.pipe_error_failed'), [strerror(Errno)]);
     end;
 
     PID := Posix.Unistd.fork;
@@ -705,7 +708,7 @@ begin
       Posix.Unistd.__close(PipeOut[1]);
       Posix.Unistd.__close(PipeErr[0]);
       Posix.Unistd.__close(PipeErr[1]);
-      raise Exception.Create('Failed to fork process. Error: ' + strerror(Errno));
+      raise Exception.CreateFmt(AiStr('core.fork_failed'), [strerror(Errno)]);
     end;
 
     if PID = 0 then // --- HIJO ---
@@ -819,7 +822,7 @@ begin
     // CORRECCI?N: Usar .ToPointer para obtener el puntero crudo del wrapper.
     Handle := popen(M.AsAnsi(ACommand).ToPointer, 'r');
     if Handle = nil then
-      raise Exception.CreateFmt('Failed to popen command: %s', [ACommand]);
+      raise Exception.CreateFmt(AiStr('core.popen_failed'), [ACommand]);
     try
       while fgets(@Buffer[0], SizeOf(Buffer), Handle) <> nil do
       begin

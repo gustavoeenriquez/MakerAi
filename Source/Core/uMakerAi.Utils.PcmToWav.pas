@@ -102,6 +102,9 @@ function ConvertPCMStreamToWAVStream(const PCMStream: TMemoryStream; out WAVStre
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 function ConvertPCMToWAV(const PCMFilePath, WAVFilePath: string; SampleRate: Cardinal; Channels: Word; BitsPerSample: Word): Boolean;
 var
   PCMFile, WAVFile: TFileStream;
@@ -116,7 +119,7 @@ begin
     // Verificar que el archivo PCM existe
     if not FileExists(PCMFilePath) then
     begin
-      raise Exception.Create('El archivo PCM no existe: ' + PCMFilePath);
+      raise Exception.CreateFmt(AiStr('core.pcm_not_found'), [PCMFilePath]);
     end;
 
     // Abrir archivo PCM

@@ -156,6 +156,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 Const
   GlAIUrl = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/';
   GlDefaultModel = 'qwen3.8-flash';
@@ -305,7 +308,7 @@ begin
       Break;
     end;
   if (LMsg = nil) or (Trim(LMsg.Prompt) = '') then
-    raise Exception.Create('Qwen: no hay texto que traducir.');
+    raise Exception.Create(AiStr('chat.qwen.no_text'));
 
   FCumulativeStream := AStream and (ContainsText(AModel, 'qwen-mt-plus') or ContainsText(AModel, 'qwen-mt-turbo'));
   FCumSent := '';
@@ -417,7 +420,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
 {$ENDIF}
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools estan mal definido, debe ser un JsonArray');
+        Raise Exception.Create(AiStr('core.tools_not_array'));
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then
@@ -529,12 +532,12 @@ begin
     else
       Res := Client.Post(AUrl, Body, nil, [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)]);
     if Res.StatusCode <> 200 then
-      raise Exception.CreateFmt('Qwen %d: %s', [Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
+      raise Exception.CreateFmt(AiStr('chat.qwen.http_error'), [Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
     V := TJSonObject.ParseJSONValue(Res.ContentAsString(TEncoding.UTF8));
     if not (V is TJSonObject) then
     begin
       V.Free;
-      raise Exception.Create('Qwen: la respuesta no es un objeto JSON');
+      raise Exception.Create(AiStr('chat.qwen.not_json'));
     end;
     Result := TJSonObject(V);
   finally
@@ -556,12 +559,12 @@ begin
 {$ENDIF}
     Res := Client.Get(AUrl, nil, [TNetHeader.Create('Authorization', 'Bearer ' + ApiKey)]);
     if Res.StatusCode <> 200 then
-      raise Exception.CreateFmt('Qwen %d: %s', [Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
+      raise Exception.CreateFmt(AiStr('chat.qwen.http_error'), [Res.StatusCode, Res.ContentAsString(TEncoding.UTF8)]);
     V := TJSonObject.ParseJSONValue(Res.ContentAsString(TEncoding.UTF8));
     if not (V is TJSonObject) then
     begin
       V.Free;
-      raise Exception.Create('Qwen: la respuesta no es un objeto JSON');
+      raise Exception.Create(AiStr('chat.qwen.not_json'));
     end;
     Result := TJSonObject(V);
   finally
@@ -584,7 +587,7 @@ begin
     Client.ResponseTimeout := GlMediaTimeout;
     Res := Client.Get(AUrl, St);
     if Res.StatusCode <> 200 then
-      raise Exception.CreateFmt('Qwen: no se pudo descargar %s (%d)', [AFileName, Res.StatusCode]);
+      raise Exception.CreateFmt(AiStr('chat.qwen.download_failed'), [AFileName, Res.StatusCode]);
     St.Position := 0;
     Result := TAiMediaFile.Create;
     try
@@ -635,16 +638,15 @@ var
   MF: TAiMediaFile;
 begin
   if Trim(AskMsg.Prompt) = '' then
-    raise Exception.Create('Se requiere un prompt para generar la imagen.');
+    raise Exception.Create(AiStr('chat.image_prompt_required'));
   LImages := AskMsg.MediaFiles.GetMediaList([Tfc_Image], False);
   if Length(LImages) > 3 then
-    raise Exception.CreateFmt('Qwen: la edicion admite de 1 a 3 imagenes (llegaron %d).', [Length(LImages)]);
+    raise Exception.CreateFmt(AiStr('chat.qwen.edit_image_count'), [Length(LImages)]);
   if Length(LImages) > 0 then
   begin
     LModel := ModelFor('image', GlDefaultEditModel);
     if StartsText('z-image', LModel) then
-      raise Exception.Create('Qwen: ' + LModel + ' solo genera; para editar usa qwen-image-edit-plus, ' +
-        'qwen-image-2.0/3.0 o wan2.7-image.');
+      raise Exception.CreateFmt(AiStr('chat.qwen.generate_only'), [LModel]);
   end
   else
     LModel := ModelFor('image', GlDefaultImageModel);
@@ -733,7 +735,7 @@ begin
               end;
             end;
     if LCount = 0 then
-      raise Exception.Create('Qwen: la respuesta no trae imagenes: ' + Copy(jRes.ToJSON, 1, 300));
+      raise Exception.CreateFmt(AiStr('chat.qwen.no_images'), [Copy(jRes.ToJSON, 1, 300)]);
 
     if ResMsg.Role = '' then
       ResMsg.Role := 'assistant';
@@ -771,7 +773,7 @@ var
 
 begin
   if Trim(AskMsg.Prompt) = '' then
-    raise Exception.Create('Se requiere un prompt para generar el video.');
+    raise Exception.Create(AiStr('chat.video_prompt_required'));
   LImages := AskMsg.MediaFiles.GetMediaList([Tfc_Image], False);
   LModel := TAiChatFactory.Instance.GetBaseModel(GetDriverName, Model);
 
@@ -797,8 +799,7 @@ begin
         AEndpoint := 'services/aigc/image2video/video-synthesis';
       end;
   else
-    raise Exception.CreateFmt('Qwen: el video admite 0 imagenes (texto), 1 (imagen a video) ' +
-      'o 2 (primer y ultimo cuadro); llegaron %d.', [Length(LImages)]);
+    raise Exception.CreateFmt(AiStr('chat.qwen.video_image_count'), [Length(LImages)]);
   end;
 
   Result := TJSonObject.Create;
@@ -871,7 +872,7 @@ begin
     jRes := PostJSON(NativeUrl(LEndpoint), jBody, True);
     LTaskId := jRes.GetValue<String>('output.task_id', '');
     if LTaskId = '' then
-      raise Exception.Create('Qwen: la respuesta no trae task_id: ' + Copy(jRes.ToJSON, 1, 300));
+      raise Exception.CreateFmt(AiStr('chat.qwen.no_task_id'), [Copy(jRes.ToJSON, 1, 300)]);
 
     DoStateChange(acsToolExecuting, 'Generando video (tarea ' + LTaskId + ')...');
     LElapsed := 0;
@@ -901,10 +902,10 @@ begin
     if FAbort then
       Exit;
     if LStatus <> 'SUCCEEDED' then
-      raise Exception.CreateFmt('Qwen: el video no se completo (estado=%s tras %d s, tarea %s) %s',
+      raise Exception.CreateFmt(AiStr('chat.qwen.video_incomplete'),
         [LStatus, LElapsed div 1000, LTaskId, LMsg]);
     if LVideoUrl = '' then
-      raise Exception.Create('Qwen: la tarea termino sin video_url (tarea ' + LTaskId + ')');
+      raise Exception.CreateFmt(AiStr('chat.qwen.no_video_url'), [LTaskId]);
 
     ResMsg.MediaFiles.Add(DownloadMedia(LVideoUrl, 'qwen_video.mp4'));
     if ResMsg.Role = '' then
@@ -947,7 +948,7 @@ var
 begin
   Result := '';
   if Trim(AskMsg.Prompt) = '' then
-    raise Exception.Create('Se requiere un texto para generar el audio.');
+    raise Exception.Create(AiStr('chat.tts_text_required'));
   FBusy := True;
   FLastError := '';
   FLastPrompt := AskMsg.Prompt;
@@ -982,7 +983,7 @@ begin
       MF.LoadFromBase64('qwen_tts.wav', LData);
     end
     else
-      raise Exception.Create('Qwen: la respuesta no trae audio: ' + Copy(jRes.ToJSON, 1, 300));
+      raise Exception.CreateFmt(AiStr('chat.qwen.no_audio'), [Copy(jRes.ToJSON, 1, 300)]);
     ResMsg.MediaFiles.Add(MF);
 
     if ResMsg.Role = '' then
@@ -1013,7 +1014,7 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
-    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripcion.');
+    raise Exception.Create(AiStr('core.audio_required'));
   LBridge := ChatMode <> cmTranscription;
   jBody := TJSonObject.Create;
   jRes := nil;

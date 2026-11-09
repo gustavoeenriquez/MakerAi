@@ -151,6 +151,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 { Hack para acceder a FContext protected }
 type
   TToolAccess = class(TAICustomTool);
@@ -187,7 +190,7 @@ end;
 procedure TAiBaseChatBridge.PrepareTargetChat(AContext: IAiToolContext; AResMsg: TAiChatMessage; AMediaFile: TAiMediaFile);
 begin
   if not Assigned(FTargetChat) then
-    raise Exception.Create('Error: Bridge sin Chat destino asignado.');
+    raise Exception.Create(AiStr('core.bridge_no_target'));
   Self.SetContext(AContext);
   FCurrentResMsg := AResMsg;
   FCurrentMediaFile := AMediaFile;

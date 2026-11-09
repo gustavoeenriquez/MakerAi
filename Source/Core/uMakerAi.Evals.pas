@@ -153,7 +153,7 @@ procedure Register;
 
 implementation
 
-uses uMakerAi.Telemetry;
+uses uMakerAi.Localization, uMakerAi.Telemetry;
 
 const
   MAX_ACTUAL_STORED = 4096;
@@ -515,7 +515,7 @@ var
   LSpan: TAiSpan;
 begin
   if not Assigned(ATarget) then
-    raise Exception.Create('TAiEvalRunner.Run: target no asignado');
+    raise Exception.Create(AiStr('core.evals_no_target'));
 
   Result := TAiEvalReport.Create;
   for ACase in FCases do

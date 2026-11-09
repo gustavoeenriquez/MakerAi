@@ -776,7 +776,7 @@ procedure LogDebug(const Mensaje: string);
 
 implementation
 
-uses uMakerAi.ParamsRegistry, System.IOUtils;
+uses uMakerAi.Localization, uMakerAi.ParamsRegistry, System.IOUtils;
 
 { TAiChat }
 
@@ -887,7 +887,7 @@ Var
 begin
 
   If Not Assigned(aMsg) then
-    Raise Exception.Create('El par?metro aMsg debe estar instanciado');
+    Raise Exception.Create(AiStr('core.msg_required'));
 
   Try
 
@@ -997,7 +997,7 @@ begin
     Res := FClient.Post(sUrl, St, FResponse, FHeaders);
 
     if not Assigned(Res) then
-      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+      raise Exception.CreateFmt(AiStr('core.connection_failed'), [sUrl]);
 
     FResponse.Position := 0;
 
@@ -1029,7 +1029,7 @@ begin
 
         Res := FClient.Post(sUrl, St, FResponse, FHeaders);
         if not Assigned(Res) then
-          raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+          raise Exception.CreateFmt(AiStr('core.connection_failed'), [sUrl]);
         FResponse.Position := 0;
 
         Inc(LRetries);
@@ -1049,7 +1049,7 @@ begin
         if not(LParsed is TJSonObject) then
         begin
           LParsed.Free;
-          raise Exception.CreateFmt('Error: Respuesta JSON inv?lida: %s', [Res.ContentAsString]);
+          raise Exception.CreateFmt(AiStr('core.invalid_json_response'), [Res.ContentAsString]);
         end;
         jObj := TJSonObject(LParsed);
         Try
@@ -1082,7 +1082,7 @@ begin
       begin
         FBusy := False;
         DoStateChange(acsError, Res.ContentAsString);
-        Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+        Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
       end;
     End;
   Finally
@@ -1192,7 +1192,7 @@ var
 begin
   Result := '';
   if not Assigned(aMediaFile) or (aMediaFile.Content.Size = 0) then
-    raise Exception.Create('Se necesita un archivo de audio con contenido para la transcripci?n.');
+    raise Exception.Create(AiStr('core.audio_required'));
   if Assigned(FChatTools.FSpeechTool) and Supports(FChatTools.FSpeechTool, IAiSpeechTool, LTool) then
   begin
     if FChatTools.FSpeechTool is TAiCustomTool then
@@ -1264,7 +1264,7 @@ begin
     Result := Self.GetLastMessage; // Retorna el mensaje
   End
   Else
-    Raise Exception.Create('Esta funci?n no es compatible con el modo asincr?nico')
+    Raise Exception.Create(AiStr('core.async_not_supported'))
 end;
 
 function TAiChat.AddMessageAndRun(aPrompt, aRole: String; aToolCallId: String; aFunctionName: String): String;
@@ -2273,7 +2273,7 @@ begin
     Res := Client.Get(sUrl, Response, Headers);
 
     if not Assigned(Res) then
-      raise Exception.CreateFmt('Connection failed: no response from %s', [sUrl]);
+      raise Exception.CreateFmt(AiStr('core.connection_failed'), [sUrl]);
 
     if Res.StatusCode = 200 then
     Begin
@@ -2282,7 +2282,7 @@ begin
       if not(LParsedModels is TJSonObject) then
       begin
         LParsedModels.Free;
-        raise Exception.CreateFmt('Error: Respuesta JSON inv?lida: %s', [Res.ContentAsString]);
+        raise Exception.CreateFmt(AiStr('core.invalid_json_response'), [Res.ContentAsString]);
       end;
       jRes := TJSonObject(LParsedModels);
       Try
@@ -2316,7 +2316,7 @@ begin
     End
     else
     begin
-      Raise Exception.CreateFmt('Error Received: %d, %s', [Res.StatusCode, Res.ContentAsString]);
+      Raise Exception.CreateFmt(AiStr('core.error_received'), [Res.StatusCode, Res.ContentAsString]);
     end;
   Finally
     Client.Free;
@@ -2414,7 +2414,7 @@ begin
       JArr := TJSonArray(TJSonArray.ParseJSONValue(GetTools(TToolFormat.tfOpenAi).Text));
 {$ENDIF}
       If Not Assigned(JArr) then
-        Raise Exception.Create('La propiedad Tools est?n mal definido, debe ser un JsonArray');
+        Raise Exception.Create(AiStr('core.tools_not_array'));
       AJSONObject.AddPair('tools', JArr);
 
       If (Trim(Tool_choice) <> '') then
@@ -4113,7 +4113,7 @@ begin
     Except
       ON E: Exception do
       Begin
-        Raise Exception.Create('El formato de memoria debe ser Key=Value, no est? bien configurado');
+        Raise Exception.Create(AiStr('core.memory_format'));
       End;
     End;
 
@@ -4371,7 +4371,7 @@ begin
       AskMsg := GetLastMessage;
 
     if not Assigned(AskMsg) then
-      raise Exception.Create('No hay un mensaje valido para procesar en TAiChat.Run');
+      raise Exception.Create(AiStr('core.run_no_message'));
 
     // --- FASE 1: BRIDGE DE ENTRADA (solo cmConversation) ---
     if FChatMode = cmConversation then
@@ -4494,7 +4494,7 @@ begin
       cmSmartDispatch:
         begin
           if FClient.Asynchronous then
-            raise Exception.Create('cmSmartDispatch no soporta modo asincrono. Usa Asynchronous = False.');
+            raise Exception.Create(AiStr('core.smartdispatch_async'));
           InternalRunSmartDispatch(ResMsg, AskMsg);
         end;
     end;
@@ -4764,7 +4764,7 @@ begin
   if not(JSchemaValue is TJSonObject) then
   begin
     JSchemaValue.Free;
-    Raise Exception.Create('Response_format = json_schema requiere un objeto JSON valido en la propiedad JsonSchema');
+    Raise Exception.Create(AiStr('core.json_schema_required'));
   end;
 
   JWrapped := TJSonObject(JSchemaValue).GetValue('schema');
@@ -5169,43 +5169,43 @@ end;
 function TAiChat.InternalRunNativeSpeechGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 begin
   Result := '';
-  raise Exception.Create('Este driver no tiene TTS nativo. Asigna un SpeechTool a ChatTools.');
+  raise Exception.Create(AiStr('core.no_native_tts'));
 end;
 
 function TAiChat.InternalRunNativeTranscription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
 begin
   Result := '';
-  raise Exception.Create('Este driver no tiene transcripción nativa. Asigna un SpeechTool a ChatTools.');
+  raise Exception.Create(AiStr('core.no_native_transcription'));
 end;
 
 function TAiChat.InternalRunNativeImageDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
 begin
   Result := '';
-  raise Exception.Create('Este driver no tiene visi?n nativa. Asigna un VisionTool a ChatTools.');
+  raise Exception.Create(AiStr('core.no_native_vision'));
 end;
 
 function TAiChat.InternalRunNativeImageGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 begin
   Result := '';
-  raise Exception.Create('Este driver no tiene generaci?n de imagen nativa. Asigna un ImageTool a ChatTools.');
+  raise Exception.Create(AiStr('core.no_native_image'));
 end;
 
 function TAiChat.InternalRunNativeVideoGeneration(ResMsg, AskMsg: TAiChatMessage): String;
 begin
   Result := '';
-  raise Exception.Create('Este driver no tiene generaci?n de video nativa. Asigna un VideoTool a ChatTools.');
+  raise Exception.Create(AiStr('core.no_native_video'));
 end;
 
 function TAiChat.InternalRunNativePDFDescription(aMediaFile: TAiMediaFile; ResMsg, AskMsg: TAiChatMessage): String;
 begin
   Result := '';
-  raise Exception.Create('Este driver no tiene soporte PDF nativo. Asigna un PdfTool a ChatTools.');
+  raise Exception.Create(AiStr('core.no_native_pdf'));
 end;
 
 function TAiChat.InternalRunNativeWebSearch(ResMsg, AskMsg: TAiChatMessage): String;
 begin
   Result := '';
-  raise Exception.Create('Este driver no tiene b?squeda web nativa. Asigna un WebSearchTool a ChatTools.');
+  raise Exception.Create(AiStr('core.no_native_websearch'));
 end;
 
 function TAiChat.InternalRunNativeReport(ResMsg, AskMsg: TAiChatMessage): String;
