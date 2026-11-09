@@ -533,7 +533,7 @@ begin
   FPlayThread := TAiWasapiPlayThread.Create(Self);
 {$ELSE}
   FActive := False;
-  DoError('TAiAudioPlayer solo esta disponible en Windows (WASAPI).');
+  DoError(AiStr('utils.err.player_windows_only'));
 {$ENDIF}
 end;
 

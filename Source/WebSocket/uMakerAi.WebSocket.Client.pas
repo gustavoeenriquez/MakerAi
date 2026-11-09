@@ -216,7 +216,7 @@ begin
     begin
       FStopping := True;
       Terminate;
-      FClient.HandleError('WebSocket: frame demasiado grande');
+      FClient.HandleError(AiStr('ws.err.frame_too_large'));
       Exit;
     end;
   end;
@@ -471,7 +471,7 @@ begin
   SendBuf := TEncoding.ASCII.GetBytes(Handshake);
   if not FTransport.SendAll(SendBuf) then
   begin
-    HandleError('HTTP upgrade: envío fallido');
+    HandleError(AiStr('ws.err.upgrade_send'));
     Exit;
   end;
 
@@ -484,7 +484,7 @@ begin
   WsDiag('HTTP Status: ' + StatusLine);
   if Pos('101', StatusLine) = 0 then
   begin
-    HandleError('WS handshake fallido: ' + StatusLine);
+    HandleError(AiFmt('ws.err.handshake_failed', [StatusLine]));
     Exit;
   end;
 
@@ -635,7 +635,7 @@ begin
   except
     on E: Exception do
     begin
-      HandleError('ParseUrl: ' + E.Message);
+      HandleError(AiFmt('ws.err.parse_url', [E.Message]));
       Exit;
     end;
   end;
@@ -657,7 +657,7 @@ begin
   except
     on E: Exception do
     begin
-      HandleError('Transport.Create: ' + E.Message);
+      HandleError(AiFmt('ws.err.transport_create', [E.Message]));
       Exit;
     end;
   end;
@@ -667,7 +667,7 @@ begin
   try
     if not FTransport.Connect(FHost, FPort) then
     begin
-      HandleError('TLS connect fallido: ' + FHost + ':' + IntToStr(FPort));
+      HandleError(AiFmt('ws.err.tls_connect', [FHost, IntToStr(FPort)]));
       FTransport := nil;
       Exit;
     end;
@@ -692,7 +692,7 @@ begin
   except
     on E: Exception do
     begin
-      HandleError('HTTP handshake: ' + E.Message);
+      HandleError(AiFmt('ws.err.http_handshake', [E.Message]));
       FTransport.Disconnect;
       FTransport := nil;
       Exit;

@@ -57,39 +57,7 @@ if missing:
         print('  ', m)
     raise SystemExit(1)
 
-def add_uses(text, rel):
-    """Agrega uMakerAi.Localization al uses de implementation si no está."""
-    if re.search(r'\buMakerAi\.Localization\b', text):
-        return text
-    ls = text.split('\n')
-    impl = next(i for i, l in enumerate(ls) if l.strip().lower() == 'implementation')
-    j = impl + 1
-    # Se saltan blancos, comentarios y directivas que no abren una rama
-    # ({$R *.dfm}, {$WARN ...}); un {$IF...} se revisa abajo
-    while j < len(ls) and (ls[j].strip() == '' or ls[j].strip().startswith('//') or
-                           (ls[j].strip().startswith('{$') and not ls[j].strip().upper().startswith('{$IF'))):
-        j += 1
-    if ls[j].strip().upper().startswith('{$IF'):
-        # ¿El uses está bajo la directiva? Un uses condicional no se puede
-        # ampliar sin romper la otra rama: hay que reescribirlo a mano como un
-        # solo uses incondicional con la parte condicional adentro. Si lo que
-        # sigue a la directiva es código, se agrega un uses propio antes.
-        k = j + 1
-        while k < len(ls) and (ls[k].strip() == '' or ls[k].strip().startswith('{$') or ls[k].strip().startswith('//')):
-            k += 1
-        if k < len(ls) and re.match(r'(?i)uses\b', ls[k].strip()):
-            raise SystemExit(f'{rel}: el uses de implementation está bajo una directiva; ajustarlo a mano')
-        cr = '\r' if ls[impl].endswith('\r') else ''
-        ls[impl + 1:impl + 1] = [cr, 'uses' + cr, '  uMakerAi.Localization;' + cr]
-        return '\n'.join(ls)
-    cr = '\r' if ls[impl].endswith('\r') else ''
-    if ls[j].strip().lower() == 'uses':
-        ls.insert(j + 1, '  uMakerAi.Localization,' + cr)
-    elif ls[j].strip().lower().startswith('uses '):
-        ls[j] = re.sub(r'(?i)^(\s*uses\s+)', r'\1uMakerAi.Localization, ', ls[j], count=1)
-    else:
-        ls[impl + 1:impl + 1] = [cr, 'uses' + cr, '  uMakerAi.Localization;' + cr]
-    return '\n'.join(ls)
+from exc_apply_lib import add_uses
 
 
 used_keys = set()

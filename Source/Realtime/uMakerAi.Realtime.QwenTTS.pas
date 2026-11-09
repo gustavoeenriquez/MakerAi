@@ -112,6 +112,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 const
   CQWENTTS_WSS = 'wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime';
 
@@ -325,7 +328,7 @@ begin
   LUrl := FUrl + '?model=' + EffectiveModel;
   FConnectThread := TThread.CreateAnonymousThread(procedure begin
     if not FWebSocket.Connect(LUrl) then
-      DoError('No se pudo conectar al TTS realtime de Qwen', 'connection_failed');
+      DoError(AiStr('realtime.err.connect_qwen_tts'), 'connection_failed');
   end);
   FConnectThread.FreeOnTerminate := False;
   FConnectThread.Start;

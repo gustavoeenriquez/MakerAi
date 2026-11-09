@@ -835,7 +835,7 @@ begin
   FCaptureThread := TAiWasapiCaptureThread.Create(Self);
 {$ELSE}
   FActive := False;
-  DoError('TAiAudioCapture solo esta disponible en Windows (WASAPI).');
+  DoError(AiStr('utils.err.capture_windows_only'));
 {$ENDIF}
 end;
 

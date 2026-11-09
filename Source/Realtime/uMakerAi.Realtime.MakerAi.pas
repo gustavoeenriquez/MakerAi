@@ -132,6 +132,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 const
   CMAKERAIREALTIME_WSS  = 'wss://api.cimamaker.com/v1/audio/realtime';
   CMAKERAIREALTIME_SUBP = 'realtime';
@@ -455,7 +458,7 @@ begin
       if not FWebSocket.Connect(LUrl) then
       begin
         MkLog('CONNECT_FAILED');
-        DoError('No se pudo conectar al servidor WebSocket de MakerAI',
+        DoError(AiStr('realtime.err.connect_makerai'),
                 'connection_failed');
       end
       else
@@ -466,7 +469,7 @@ begin
       on E: Exception do
       begin
         MkLog('CONNECT_EXCEPTION: ' + E.Message);
-        DoError('No se pudo conectar al servidor WebSocket de MakerAI: ' + E.Message,
+        DoError(AiFmt('realtime.err.connect_makerai_msg', [E.Message]),
                 'connection_failed');
       end;
     end;

@@ -1775,7 +1775,7 @@ begin
               on E: Exception do
               begin
                 ToolCall.Response := '{"error": "' + E.Message.Replace('"', '''') + '"}';
-                DoError('Error en herramienta "' + ToolCall.Name + '": ' + E.Message, nil);
+                DoError(AiFmt('chat.err.tool_named', [ToolCall.Name, E.Message]), nil);
               end;
             end;
           end;
@@ -2353,7 +2353,7 @@ begin
         if Assigned(jError) then
           ErrMsg := jError.GetValue<string>('message', 'Unknown');
 
-        DoError('Claude Stream Error: ' + ErrMsg, nil);
+        DoError(AiFmt('chat.err.claude_stream', [ErrMsg]), nil);
         ClearStreamState;
         FBusy := False;
         FPendingToolRun := False;

@@ -288,8 +288,7 @@ begin
       ReportDataEnd(ResMsg, 'assistant', Result);
     end
     else
-      ReportError(Format('ElevenLabs TTS Error %d: %s',
-        [LResponse.StatusCode, LResponse.ContentAsString]), nil);
+      ReportError(AiFmt('tools.err.elevenlabs_tts', [LResponse.StatusCode, LResponse.ContentAsString]), nil);
 
   finally
     LRequestJson.Free;
@@ -364,7 +363,7 @@ begin
     ReportDataEnd(ResMsg, 'assistant', LText);
   except
     on E: Exception do
-      ReportError('Error en transcripcion ElevenLabs: ' + E.Message, E);
+      ReportError(AiFmt('tools.err.elevenlabs_stt', [E.Message]), E);
   end;
 end;
 

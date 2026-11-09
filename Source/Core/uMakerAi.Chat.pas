@@ -3233,7 +3233,7 @@ begin
           on E: Exception do
             // Sin esto la excepcion muere dentro del task y el turno queda colgado
             // hasta el timeout del integrador, sin ninguna pista del motivo.
-            DoError('Error en la continuacion tool-calling: ' + E.Message, E);
+            DoError(AiFmt('core.err.tool_continuation', [E.Message]), E);
         end;
         AiTraceContextLeave(LCtx);
       end);
@@ -4591,7 +4591,7 @@ begin
         saBlock:
         begin
           DiscardBlockedMessage(AskMsg);
-          DoError('Posible inyección de prompt detectada. Mensaje bloqueado por el sanitizador.', nil);
+          DoError(AiStr('core.err.prompt_injection'), nil);
           Result := '';
           Exit;
         end;
@@ -4631,7 +4631,7 @@ begin
         saBlock:
         begin
           DiscardBlockedMessage(AskMsg);
-          DoError('Mensaje bloqueado por el guardrail de entrada: ' + LVerdict.Reason, nil);
+          DoError(AiFmt('core.err.input_guardrail', [LVerdict.Reason]), nil);
           Result := '';
           Exit;
         end;
@@ -5288,7 +5288,7 @@ begin
     except
       on E: Exception do
       begin
-        DoError('SmartDispatch Pase1: ' + E.Message, E);
+        DoError(AiFmt('core.err.smartdispatch_pass1', [E.Message]), E);
         raise;
       end;
     end;

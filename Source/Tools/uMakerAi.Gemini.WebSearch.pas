@@ -219,7 +219,7 @@ begin
       end;
     end
     else
-      ReportError('Gemini Search Error ' + LResponse.StatusCode.ToString + ': ' + LResponse.ContentAsString, nil);
+      ReportError(AiFmt('tools.err.gemini_search', [LResponse.StatusCode.ToString, LResponse.ContentAsString]), nil);
 
   finally
     LRequestJson.Free;

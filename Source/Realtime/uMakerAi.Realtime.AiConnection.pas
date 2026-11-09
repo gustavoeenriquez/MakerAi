@@ -85,6 +85,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 { TAiRealtimeConnection }
 
 constructor TAiRealtimeConnection.Create(AOwner: TComponent);
@@ -183,8 +186,7 @@ begin
             end;
         end;
       if not LOk and AReportUnknown then
-        DoError(Format('DriverParams: el driver %s no tiene la propiedad "%s" o el valor "%s" no es valido',
-          [FDriverName, LName, LVal]), 'driver_param');
+        DoError(AiFmt('realtime.err.driver_param', [FDriverName, LName, LVal]), 'driver_param');
     end;
   finally
     Ctx.Free;

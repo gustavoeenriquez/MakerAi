@@ -144,15 +144,14 @@ begin
 
       if LResponse.StatusCode <> 200 then
       begin
-        ReportError('OpenAI WebSearch error ' + LResponse.StatusCode.ToString + ': ' +
-                    LResponse.ContentAsString, nil);
+        ReportError(AiFmt('tools.err.openai_search_http', [LResponse.StatusCode.ToString, LResponse.ContentAsString]), nil);
         Exit;
       end;
 
       LRespJson := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
       if not Assigned(LRespJson) then
       begin
-        ReportError('OpenAI WebSearch: respuesta JSON invalida', nil);
+        ReportError(AiStr('tools.err.openai_search_json'), nil);
         Exit;
       end;
 
@@ -165,7 +164,7 @@ begin
         LRespJson.TryGetValue<TJSONArray>('output', LChoices);
         if (not Assigned(LChoices)) or (LChoices.Count = 0) then
         begin
-          ReportError('OpenAI WebSearch: respuesta sin output', nil);
+          ReportError(AiStr('tools.err.openai_search_empty'), nil);
           Exit;
         end;
 
@@ -207,7 +206,7 @@ begin
       end;
     except
       on E: Exception do
-        ReportError('OpenAI WebSearch excepcion: ' + E.Message, E);
+        ReportError(AiFmt('tools.err.openai_search_exc', [E.Message]), E);
     end;
   finally
     HTTP.Free;

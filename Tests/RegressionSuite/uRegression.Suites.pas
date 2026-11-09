@@ -4263,7 +4263,7 @@ begin
           for var M in Chat.Messages do
             if M.Role = 'user' then
               Inc(Usuarios);
-          Result := IfThen((R = '') and H.LastChatError.Contains('bloqueado'), 'bloq/', '') + 'mensajes:' + Usuarios.ToString;
+          Result := IfThen((R = '') and H.LastChatError.Contains('blocked'), 'bloq/', '') + 'mensajes:' + Usuarios.ToString;
         finally
           Chat.Free;
           G.Free;

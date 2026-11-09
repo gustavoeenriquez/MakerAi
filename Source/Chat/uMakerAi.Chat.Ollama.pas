@@ -742,7 +742,7 @@ begin
     begin
       FBusy := False;
       FPendingToolRun := False;
-      DoError('Error en OnInternalReceiveData (Ollama Stream): ' + E.Message, E);
+      DoError(AiFmt('chat.err.ollama_stream', [E.Message]), E);
     end;
   end;
 end;
@@ -879,7 +879,7 @@ begin
                   TThread.Queue(nil,
                     procedure
                     begin
-                      DoError('Function Execution Error: ' + CapturaTool.Name, E);
+                      DoError(AiFmt('chat.err.function_exec', [CapturaTool.Name]), E);
                     end);
                 end;
               end;

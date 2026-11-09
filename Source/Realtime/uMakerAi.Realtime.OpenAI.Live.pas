@@ -304,6 +304,9 @@ procedure Register;
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 const
   CLIVE_WSS = 'wss://api.openai.com/v1/live/sessions';
   CLIVE_DEFAULT_DELEGATION_MODEL = 'gpt-6-luna';
@@ -949,7 +952,7 @@ begin
   else if not Assigned(FOnDelegation) then
   begin
     // Nadie va a contestar: avisar al modelo para que no espere en silencio
-    DoError('Delegacion sin DelegateChat ni OnDelegation', 'delegation_unhandled');
+    DoError(AiStr('realtime.err.delegation_unhandled'), 'delegation_unhandled');
     AppendCommentary('This task cannot be completed: no handler is configured.', Id);
   end;
 end;
@@ -970,12 +973,12 @@ begin
           begin
             Answer := 'The task produced no answer.';
             if FDelegateChat.LastError <> '' then
-              DoError('DelegateChat: ' + FDelegateChat.LastError, 'delegate_chat_error');
+              DoError(AiFmt('realtime.err.delegate_chat', [FDelegateChat.LastError]), 'delegate_chat_error');
           end;
         except
           on E: Exception do
           begin
-            DoError('DelegateChat: ' + E.Message, 'delegate_chat_error');
+            DoError(AiFmt('realtime.err.delegate_chat', [E.Message]), 'delegate_chat_error');
             Answer := 'The task failed: ' + E.Message;
           end;
         end;
@@ -1434,7 +1437,7 @@ begin
     procedure
     begin
       if not FWebSocket.Connect(CLIVE_WSS) then
-        DoError('No se pudo conectar a GPT-Live', 'connection_failed');
+        DoError(AiStr('realtime.err.connect_gptlive'), 'connection_failed');
     end);
   FConnectThread.FreeOnTerminate := False;
   FConnectThread.Start;

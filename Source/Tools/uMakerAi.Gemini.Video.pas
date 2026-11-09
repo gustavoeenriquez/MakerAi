@@ -167,7 +167,7 @@ begin
     try
       InternalRunVeo(LTaskMsg, TAiChatMessage(AskMsg));
     except
-      on E: Exception do ReportError('Error en Veo Tool: ' + E.Message, E);
+      on E: Exception do ReportError(AiFmt('tools.err.veo', [E.Message]), E);
     end;
     // ReportDataEnd ya encol? DoDataEnd(LTaskMsg,...) al hilo principal.
     // Encolamos el Free despu?s para ejecutarse en orden FIFO.

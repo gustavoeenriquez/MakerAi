@@ -297,7 +297,7 @@ procedure TAiOpenAiSpeechTool.ExecuteTranscription(aMediaFile: TAiMediaFile; Res
       ReportDataEnd(ResMsg, 'assistant', LText);
     except
       on E: Exception do
-        ReportError('Error en transcripcion OpenAI: ' + E.Message, E);
+        ReportError(AiFmt('tools.err.openai_stt', [E.Message]), E);
     end;
   end;
 
@@ -326,7 +326,7 @@ procedure TAiOpenAiSpeechTool.ExecuteSpeechGeneration(const AText: string; ResMs
       end;
     except
       on E: Exception do
-        ReportError('Error generando voz OpenAI: ' + E.Message, E);
+        ReportError(AiFmt('tools.err.openai_tts', [E.Message]), E);
     end;
   end;
 

@@ -231,7 +231,7 @@ procedure TAIWhisper.ExecuteTranscription(aMediaFile: TAiMediaFile; ResMsg, AskM
     except
       on E: Exception do
       begin
-        ReportError('Error en transcripci�n Whisper: ' + E.Message, E);
+        ReportError(AiFmt('tools.err.whisper_stt', [E.Message]), E);
       end;
     end;
   end;
@@ -259,7 +259,7 @@ procedure TAIWhisper.ExecuteSpeechGeneration(const AText: string; ResMsg, AskMsg
       end;
     except
       on E: Exception do
-        ReportError('Error generando voz Whisper: ' + E.Message, E);
+        ReportError(AiFmt('tools.err.whisper_tts', [E.Message]), E);
     end;
   end;
 

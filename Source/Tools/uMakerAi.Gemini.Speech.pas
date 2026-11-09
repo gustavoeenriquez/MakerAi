@@ -287,7 +287,7 @@ begin
     begin
       var
       LRes := LResponse.ContentAsString;
-      ReportError('Gemini TTS Error: ' + LRes, nil);
+      ReportError(AiFmt('tools.err.gemini_tts', [LRes]), nil);
     end;
 
   finally
@@ -403,7 +403,7 @@ begin
     ReportDataEnd(ResMsg, 'assistant', LText);
   except
     on E: Exception do
-      ReportError('Error en transcripcion Gemini: ' + E.Message, E);
+      ReportError(AiFmt('tools.err.gemini_stt', [E.Message]), E);
   end;
 end;
 

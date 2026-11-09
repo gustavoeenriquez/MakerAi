@@ -283,7 +283,7 @@ begin
   begin
     aMediaFile.CloudState := 'url-sign-failed';
     FLastError := LResponse.ContentAsString;
-    DoError(Format('Error al obtener URL firmada: %d - %s', [LResponse.StatusCode, FLastError]), nil);
+    DoError(AiFmt('chat.err.mistral_signed_url', [LResponse.StatusCode, FLastError]), nil);
   end;
 end;
 
@@ -368,7 +368,7 @@ begin
       finally
         LStringStream.Free;
       end;
-      DoError(Format('Error al recuperar contenido del archivo: %d - %s', [LResponse.StatusCode, FLastError]), nil);
+      DoError(AiFmt('chat.err.mistral_file_content', [LResponse.StatusCode, FLastError]), nil);
       // Result sigue siendo nil, que es lo que queremos devolver en caso de error.
     end;
   finally
@@ -412,7 +412,7 @@ begin
   else
   begin
     FLastError := LResponse.ContentAsString;
-    DoError(Format('Error al recuperar metadatos del archivo: %d - %s', [LResponse.StatusCode, FLastError]), nil);
+    DoError(AiFmt('chat.err.mistral_file_meta', [LResponse.StatusCode, FLastError]), nil);
   end;
 end;
 
@@ -498,7 +498,7 @@ begin
     else
     begin
       FLastError := LResponse.ContentAsString;
-      DoError(Format('Error al subir archivo: %d - %s', [LResponse.StatusCode, FLastError]), nil);
+      DoError(AiFmt('chat.err.mistral_upload', [LResponse.StatusCode, FLastError]), nil);
     end;
   finally
     LBody.Free;
@@ -560,7 +560,7 @@ begin
   else
   begin
     FLastError := LResponse.ContentAsString;
-    DoError(Format('Error al borrar archivo: %d - %s', [LResponse.StatusCode, FLastError]), nil);
+    DoError(AiFmt('chat.err.mistral_delete', [LResponse.StatusCode, FLastError]), nil);
   end;
 end;
 
@@ -1223,7 +1223,7 @@ begin
       if FileId.IsEmpty then
       begin
         // Reportar error y salir.
-        DoError('No se pudo subir el archivo al API', nil);
+        DoError(AiStr('chat.err.mistral_upload_failed'), nil);
         Exit;
       end;
       aMediaFile.IDFile := FileId; // Asignar el ID al objeto MediaFile.
@@ -1242,7 +1242,7 @@ begin
       if LDataUri.IsEmpty then
       begin
         // GetSignedUrl ya habr? reportado el error.
-        DoError('No se pudo obtener la URL firmada para el archivo con ID: ' + aMediaFile.IDFile, nil);
+        DoError(AiFmt('chat.err.mistral_signed_url_id', [aMediaFile.IDFile]), nil);
         aMediaFile.CloudState := 'ocr-failed: signed-url';
         Exit;
       end;
@@ -1286,7 +1286,7 @@ begin
           else
           begin
             // Manejar el caso en que el n?mero de p?gina no es v?lido (opcional)
-            DoError('N?mero de p?gina no v?lido: ' + PageNumber, nil);
+            DoError(AiFmt('chat.err.mistral_page', [PageNumber]), nil);
           end;
         end;
       end
@@ -1354,7 +1354,7 @@ begin
     begin
       FLastError := LResponse.ContentAsString;
       aMediaFile.CloudState := Format('ocr-failed: http-%d', [LResponse.StatusCode]);
-      DoError(Format('Error en OCR: %d - %s', [LResponse.StatusCode, FLastError]), nil);
+      DoError(AiFmt('chat.err.mistral_ocr', [LResponse.StatusCode, FLastError]), nil);
     end;
 
   finally

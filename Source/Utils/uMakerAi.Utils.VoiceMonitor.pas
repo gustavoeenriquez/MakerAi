@@ -1438,7 +1438,7 @@ begin
   if Res <> MMSYSERR_NOERROR then
   begin
     FhWaveIn := 0;
-    DoError('Error al abrir dispositivo de audio (Code: ' + IntToStr(Res) + ').');
+    DoError(AiFmt('utils.err.voice_open', [IntToStr(Res)]));
     Exit;
   end;
 
@@ -1455,7 +1455,7 @@ begin
     // Si falla, cerramos el dispositivo antes de salir
     waveInClose(FhWaveIn);
     FhWaveIn := 0;
-    DoError('Error al preparar el header de audio: ' + IntToStr(Res));
+    DoError(AiFmt('utils.err.voice_header', [IntToStr(Res)]));
     Exit;
   end;
 
@@ -1467,7 +1467,7 @@ begin
     waveInUnprepareHeader(FhWaveIn, @FWaveHdr, SizeOf(TWaveHdr));
     waveInClose(FhWaveIn);
     FhWaveIn := 0;
-    DoError('Error al a�adir buffer de audio: ' + IntToStr(Res));
+    DoError(AiFmt('utils.err.voice_buffer', [IntToStr(Res)]));
     Exit;
   end;
 
@@ -1480,7 +1480,7 @@ begin
     waveInUnprepareHeader(FhWaveIn, @FWaveHdr, SizeOf(TWaveHdr));
     waveInClose(FhWaveIn);
     FhWaveIn := 0;
-    DoError('Error al iniciar la captura de audio: ' + IntToStr(Res));
+    DoError(AiFmt('utils.err.voice_start', [IntToStr(Res)]));
   end;
 end;
 
@@ -1503,7 +1503,7 @@ begin
   if (Length(AGrantResults) > 0) and (AGrantResults[0] = TPermissionStatus.Granted) then
     StartCaptureAudioAndroid
   else
-    DoError('Permiso para grabar audio denegado.');
+    DoError(AiStr('utils.err.voice_permission'));
 end;
 
 procedure TAIVoiceMonitor.StartCaptureAudioAndroid;
@@ -1523,7 +1523,7 @@ begin
     FAudioRecord := TJAudioRecord.JavaClass.init(AudioSource, FSampleRate, ChannelConfig, AudioFormat, FBufferSize);
     if FAudioRecord.getState <> TJAudioRecord.JavaClass.STATE_INITIALIZED then
     begin
-      DoError('No se pudo inicializar AudioRecord.');
+      DoError(AiStr('utils.err.audiorecord_init'));
       Exit;
     end;
     if Assigned(FCaptureThread) then
@@ -1538,7 +1538,7 @@ begin
     FCaptureThread.Start;
   except
     on E: Exception do
-      DoError('Excepci�n al iniciar captura en Android: ' + E.Message);
+      DoError(AiFmt('utils.err.android_start', [E.Message]));
   end;
 end;
 
@@ -1585,7 +1585,7 @@ begin
         TThread.Queue(nil,
           procedure
           begin
-            DoError('AudioRecord instance was released unexpectedly.');
+            DoError(AiStr('utils.err.audiorecord_released'));
           end);
         Break;
       end;
@@ -1596,7 +1596,7 @@ begin
         TThread.Queue(nil,
           procedure
           begin
-            DoError('AudioRecord is not in recording state.');
+            DoError(AiStr('utils.err.audiorecord_not_recording'));
           end);
         Break;
       end;
@@ -1634,7 +1634,7 @@ begin
                 TThread.Queue(nil,
                   procedure
                   begin
-                    DoError('AudioRecord ERROR_INVALID_OPERATION. Recording stopped.');
+                    DoError(AiStr('utils.err.audiorecord_invalid_op'));
                   end);
                 Break;
               end;
@@ -1645,7 +1645,7 @@ begin
                 TThread.Queue(nil,
                   procedure
                   begin
-                    DoError('AudioRecord ERROR_BAD_VALUE. Invalid parameters.');
+                    DoError(AiStr('utils.err.audiorecord_bad_value'));
                   end);
                 Break;
               end;
@@ -1656,7 +1656,7 @@ begin
                 TThread.Queue(nil,
                   procedure
                   begin
-                    DoError('AudioRecord ERROR_DEAD_OBJECT. Recording stopped.');
+                    DoError(AiStr('utils.err.audiorecord_dead'));
                   end);
                 Break;
               end;
@@ -1670,7 +1670,7 @@ begin
                   TThread.Queue(nil,
                     procedure
                     begin
-                      DoError(Format('Persistent AudioRecord ERROR after %d attempts. Recording stopped.', [ConsecutiveErrors]));
+                      DoError(AiFmt('utils.err.audiorecord_persistent', [ConsecutiveErrors]));
                     end);
                   Break;
                 end
@@ -1688,7 +1688,7 @@ begin
               TThread.Queue(nil,
                 procedure
                 begin
-                  DoError(Format('Unknown AudioRecord error code: %d after %d attempts. Recording stopped.', [BytesRead, ConsecutiveErrors]));
+                  DoError(AiFmt('utils.err.audiorecord_unknown', [BytesRead, ConsecutiveErrors]));
                 end);
               Break;
             end
@@ -1706,7 +1706,7 @@ begin
               procedure
               begin
                 if Assigned(FOnError) then
-                  FOnError(Self, Format('AudioRecord warning: %d errors detected (last code: %d)', [ErrorCount, LastErrorCode]));
+                  FOnError(Self, AiFmt('utils.err.audiorecord_warning', [ErrorCount, LastErrorCode]));
               end);
           end;
         end
@@ -1721,7 +1721,7 @@ begin
             TThread.Queue(nil,
               procedure
               begin
-                DoError('AudioRecord returned 0 bytes too many times. Recording stopped.');
+                DoError(AiStr('utils.err.audiorecord_zero'));
               end);
             Break;
           end;
@@ -1743,7 +1743,7 @@ begin
             TThread.Queue(nil,
               procedure
               begin
-                DoError(Format('Critical exception in audio capture loop: %s. Recording stopped.', [E.Message]));
+                DoError(AiFmt('utils.err.capture_loop_critical', [E.Message]));
               end);
             Break;
           end
@@ -1754,7 +1754,7 @@ begin
               procedure
               begin
                 if Assigned(FOnError) then
-                  FOnError(Self, Format('Exception in audio capture (attempt %d): %s', [ConsecutiveErrors, E.Message]));
+                  FOnError(Self, AiFmt('utils.err.capture_attempt', [ConsecutiveErrors, E.Message]));
               end);
             Sleep(100);
           end;
@@ -1779,7 +1779,7 @@ begin
         if ErrorCount > 0 then
         begin
           if Assigned(FOnError) then
-            FOnError(Self, Format('Audio capture loop ended. Total errors: %d', [ErrorCount]));
+            FOnError(Self, AiFmt('utils.err.capture_loop_ended', [ErrorCount]));
         end;
       end);
   end;

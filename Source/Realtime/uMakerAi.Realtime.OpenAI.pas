@@ -147,6 +147,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 
 const
   CTRANSLATE_WSS = 'wss://api.openai.com/v1/realtime/translations';
@@ -503,7 +506,7 @@ begin
   // para poder esperar su finalizacion antes de liberar FWebSocket
   FConnectThread := TThread.CreateAnonymousThread(procedure begin
     if not FWebSocket.Connect(URL) then
-      DoError('No se pudo conectar al servidor WebSocket', 'connection_failed');
+      DoError(AiStr('realtime.err.connect'), 'connection_failed');
   end);
   FConnectThread.FreeOnTerminate := False;
   FConnectThread.Start;
@@ -770,7 +773,7 @@ begin
   TrLog('CONNECT url=' + URL + ' lang=' + FTargetLanguage);
   FConnectThread := TThread.CreateAnonymousThread(procedure begin
     if not FWebSocket.Connect(URL) then
-      DoError('No se pudo conectar al servidor de traduccion',
+      DoError(AiStr('realtime.err.connect_translate'),
               'connection_failed');
   end);
   FConnectThread.FreeOnTerminate := False;

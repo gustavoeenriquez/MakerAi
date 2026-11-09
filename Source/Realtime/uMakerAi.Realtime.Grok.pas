@@ -814,7 +814,7 @@ begin
   GkLog('CONNECT url=' + URL);
   FConnectThread := TThread.CreateAnonymousThread(procedure begin
     if not FWebSocket.Connect(URL) then
-      DoError('No se pudo conectar al servidor WebSocket de xAI',
+      DoError(AiStr('realtime.err.connect_xai'),
               'connection_failed');
   end);
   FConnectThread.FreeOnTerminate := False;

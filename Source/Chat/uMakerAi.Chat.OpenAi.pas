@@ -1229,7 +1229,7 @@ var
             TThread.Queue(nil,
               procedure
               begin
-                DoError('Function Execution Error: ' + TC.Name, E);
+                DoError(AiFmt('chat.err.function_exec', [TC.Name]), E);
               end);
           end;
         end;
@@ -2394,7 +2394,7 @@ begin
             TThread.Queue(nil,
               procedure
               begin
-                DoError('Sora Error: ' + E.Message, E);
+                DoError(AiFmt('chat.err.sora', [E.Message]), E);
               end);
           end;
         end;

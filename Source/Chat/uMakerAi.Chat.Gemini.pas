@@ -1318,7 +1318,7 @@ begin
         except
           on E: Exception do
             // Opcional: Loguear error o dejar que falle, pero mejor intentamos seguir
-            DoError('Error Auto-Uploading file for Code Interpreter: ' + E.Message, E);
+            DoError(AiFmt('chat.err.gemini_code_upload', [E.Message]), E);
         end;
       end;
     end;
@@ -1439,7 +1439,7 @@ Var
             TThread.Queue(nil,
               procedure
               begin
-                DoError('Error in "' + TC.Name + '"', E);
+                DoError(AiFmt('chat.err.tool_in', [TC.Name]), E);
               end);
           end;
         end;
@@ -1457,12 +1457,12 @@ begin
   begin
     if jObj.TryGetValue<TJSONObject>('promptFeedback', JPromptFeedback) then
     begin
-      DoError('Bloqueado por seguridad: ' + JPromptFeedback.ToJSON, nil);
+      DoError(AiFmt('chat.err.gemini_safety', [JPromptFeedback.ToJSON]), nil);
       Exit;
     end;
     FBusy := False;
     // Si no hay candidatos ni feedback, puede ser un error de estructura o un finishReason raro
-    DoError('La respuesta de Gemini no contiene candidatos válidos.', nil);
+    DoError(AiStr('chat.err.gemini_no_candidates'), nil);
     Exit;
   end;
 
@@ -2614,7 +2614,7 @@ begin
       if not LInitialResponse.TryGetValue<string>('name', LOpName) then
       begin
         FBusy := False;
-        DoError('API Error: No operation name returned in response.', nil);
+        DoError(AiStr('chat.err.gemini_no_operation'), nil);
         Exit;
       end;
     finally
@@ -2664,7 +2664,7 @@ begin
                 TThread.Queue(nil,
                   procedure
                   begin
-                    DoError('Polling Error: ' + TaskResp.StatusText, nil);
+                    DoError(AiFmt('chat.err.polling', [TaskResp.StatusText]), nil);
                   end);
                 Break;
               end;
@@ -2765,7 +2765,7 @@ begin
               TThread.Queue(nil,
                 procedure
                 begin
-                  DoError('Video Generation Task Exception: ' + E.Message, E);
+                  DoError(AiFmt('chat.err.video_task', [E.Message]), E);
                 end);
           end;
         finally
@@ -2963,7 +2963,7 @@ begin
                       procedure
                       begin
                         FBusy := False;
-                        DoError('No audio data received. Check safety settings or prompt.', nil);
+                        DoError(AiStr('chat.err.no_audio'), nil);
                       end);
                   end;
                 end;
@@ -3078,7 +3078,7 @@ begin
           else
           begin
             // Gemini a veces responde SAFETY sin datos de audio
-            DoError('No audio data received. Check safety settings or prompt.', nil);
+            DoError(AiStr('chat.err.no_audio'), nil);
           end;
         end;
       finally
@@ -3088,7 +3088,7 @@ begin
     else
     begin
       FLastError := LErrorResponse;
-      DoError(Format('Error Audio Generation: %d - %s', [LResponse.StatusCode, FLastError]), nil);
+      DoError(AiFmt('chat.err.audio_generation', [LResponse.StatusCode, FLastError]), nil);
     end;
 
   finally
@@ -3312,7 +3312,7 @@ Var
             TThread.Queue(nil,
               procedure
               begin
-                DoError('Error Tool: ' + TC.Name, E);
+                DoError(AiFmt('chat.err.tool', [TC.Name]), E);
               end);
           end;
         end;
@@ -3422,7 +3422,7 @@ begin
       // Raro: Estructura parecía bien balanceada pero falló el parseo.
       // Opcion: Borrar este bloque corrupto para no bloquear, o esperar.
       // En este caso, asumimos corrupción y avanzamos para no colgar el bucle.
-      DoError('JSON Parse Error en chunk asíncrono', nil);
+      DoError(AiStr('chat.err.async_chunk_json'), nil);
       Delete(FTmpResponseText, 1, P_End);
       Continue;
     end;

@@ -199,7 +199,7 @@ begin
         end;
       end
       else
-        ReportError(Format('Ollama HTTP %d: %s', [LResponse.StatusCode, LResponse.ContentAsString]), nil);
+        ReportError(AiFmt('tools.err.ollama_http', [LResponse.StatusCode, LResponse.ContentAsString]), nil);
     finally
       LBody.Free;
     end;

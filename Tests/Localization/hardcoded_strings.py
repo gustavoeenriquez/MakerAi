@@ -8,6 +8,8 @@ TAiLocale, por carpeta y por tipo:
              dentro de un Format(...)
   state      mensajes de DoStateChange / ReportState / DoStatusUpdate
   ui         asignaciones a Text/Caption/Hint/TextPrompt/Placeholder
+  error      primer literal de DoError / ReportError / HandleError / FOnError
+             (mensajes que llegan a OnError)
   prompt     instrucciones a un LLM todavía en español (Eres/Responde/...); los
              prompts internos se escriben en inglés y no pasan por TAiLocale
 
@@ -34,6 +36,9 @@ LIT = r"'(?:[^']|'')*'"
 RE_EXC = re.compile(r"\b\w*(?:Exception|Error)\w*\.Create(?:Fmt)?\s*\(\s*(?:Format\(\s*)?(" + LIT + ")")
 # Mensajes de estado que ve el usuario (OnStateChange / OnStatusUpdate)
 RE_STATE = re.compile(r"\b(?:DoStateChange|ReportState|DoStatusUpdate)\([^']*?(?:Format\(\s*)?(" + LIT + ")")
+# Mensajes de error que llegan al usuario por OnError (DoError, ReportError de
+# las tools, HandleError del WebSocket, FOnError del VoiceMonitor)
+RE_ERR = re.compile(r"\b(?:DoError|ReportError|HandleError|HandleThreadError|FOnError)\s*\(\s*(?:Self\s*,\s*)?(?:Format\(\s*)?(" + LIT + ")")
 RE_UI = re.compile(r"(\w*)\.(?:Text|Caption|Hint|TextPrompt|Placeholder)\s*:=\s*(" + LIT + ")")
 # Una asignación a SQL.Text o un literal que empieza con SQL no es texto de pantalla
 RE_SQL = re.compile(r"^'\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|WITH|MERGE|EXEC|PRAGMA)\b", re.I)
@@ -108,6 +113,9 @@ def scan_file(path):
             lit = m.group(1)
             if len(lit) > 2 and lit not in prompts:  # '' no cuenta
                 hits.append(('exception', lineno, lit))
+        for m in RE_ERR.finditer(line):
+            if re.search(r'[^\W\d_]{2}', m.group(1)):
+                hits.append(('error', lineno, m.group(1)))
         for m in RE_STATE.finditer(line):
             if re.search(r'[^\W\d_]{2}', m.group(1)):
                 hits.append(('state', lineno, m.group(1)))
@@ -193,7 +201,7 @@ def main():
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--list', action='store_true', help='listar cada texto con archivo:línea')
-    ap.add_argument('--kind', choices=['exception', 'ui', 'prompt', 'state'], help='filtrar por tipo')
+    ap.add_argument('--kind', choices=['exception', 'ui', 'prompt', 'state', 'error'], help='filtrar por tipo')
     ap.add_argument('--folder', help='filtrar por carpeta de Source (p. ej. ChatUI)')
     ap.add_argument('--check-keys', action='store_true',
                     help='verificar que cada clave usada exista en la tabla base (exit 1 si falta alguna)')
@@ -227,7 +235,7 @@ def main():
                 counts[folder][kind] += 1
                 listing.append((relp, lineno, kind, lit))
 
-    kinds = ['ui', 'state', 'prompt', 'exception']
+    kinds = ['ui', 'state', 'prompt', 'exception', 'error']
     print(f"{'Carpeta':<14}" + ''.join(f'{k:>11}' for k in kinds) + f"{'total':>9}")
     tot = defaultdict(int)
     for folder in sorted(counts):

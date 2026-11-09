@@ -241,8 +241,7 @@ begin
       end;
     end
     else
-      ReportError(Format('Ollama Vision HTTP %d: %s',
-        [LResponse.StatusCode, LResponse.ContentAsString]), nil);
+      ReportError(AiFmt('tools.err.ollama_vision_http', [LResponse.StatusCode, LResponse.ContentAsString]), nil);
   finally
     LRequestJson.Free;
     HTTP.Free;
