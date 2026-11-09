@@ -39,7 +39,8 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   System.JSon, System.Rtti, System.TypInfo,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.ExtCtrls, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.Grids,
-  uMakerAi.Core, uMakerAi.Tools.Functions, uMakerAi.MCPClient.Core, Vcl.Buttons;
+  uMakerAi.Core, uMakerAi.Tools.Functions, uMakerAi.MCPClient.Core, Vcl.Buttons,
+  uMakerAi.Localization;
 
 type
   TFMCPClientEditor = class(TForm)
@@ -168,7 +169,7 @@ var
   Properties, VarEnv: TStringList;
 begin
   MemoLog.Lines.Clear;
-  MemoLog.Lines.Add('--- Iniciando Test de Conexi�n ---');
+  MemoLog.Lines.Add(AiStr('design.mcp.test_start'));
 
   // 1. Factory: Crear la instancia correcta
   case EditProtocol.ItemIndex of
@@ -194,7 +195,7 @@ begin
       // Validaci�n r�pida para SSE
       if (MCPClient is TMCPClientSSE) and (Pos('http', Properties.Values['URL']) = 0) then
       begin
-        ShowMessage('Error: Para SSE el par�metro "URL" es obligatorio (ej: http://localhost:3000/sse)');
+        ShowMessage(AiStr('design.mcp.sse_url'));
         Exit;
       end;
 
@@ -202,30 +203,30 @@ begin
       MCPClient.Params.Assign(Properties);
       MCPClient.EnvVars.Assign(VarEnv);
 
-      MemoLog.Lines.Add(Format('Protocolo: %s', [GetEnumName(TypeInfo(TToolTransportType), Ord(MCPClient.TransportType))]));
+      MemoLog.Lines.Add(AiFmt('design.mcp.protocol', [GetEnumName(TypeInfo(TToolTransportType), Ord(MCPClient.TransportType))]));
 
       // 5. Inicializar (Conecta, hace Handshake y verifica capacidades)
       // Nota: Si usaste el fix de "CheckSynchronize" en WaitForInitialization, esto no bloquear� la UI.
       if MCPClient.Initialize then
       begin
-        MemoLog.Lines.Add('>> Inicializaci�n Exitosa. Solicitando herramientas...');
+        MemoLog.Lines.Add(AiStr('design.mcp.init_ok'));
 
         // 6. Probar una llamada real (ListTools)
         jTools := MCPClient.ListTools;
         try
           if Assigned(jTools) then
           begin
-            MemoLog.Lines.Add('>> Herramientas recibidas:');
+            MemoLog.Lines.Add(AiStr('design.mcp.tools_received'));
             MemoLog.Lines.Add(jTools.Format(2)); // Formatear bonito
 
             PageControl1.ActivePage := TabLog;
-            ShowMessage('[OK] �Conexi�n Exitosa!' + sLineBreak +
-                        'Se detectaron ' + IntToStr(jTools.GetValue<TJSONArray>('tools').Count) + ' herramientas.');
+            ShowMessage(AiStr('design.mcp.test_ok') + sLineBreak +
+                        AiFmt('design.mcp.tools_found', [jTools.GetValue<TJSONArray>('tools').Count]));
           end
           else
           begin
             PageControl1.ActivePage := TabLog;
-            ShowMessage('[!] Conectado, pero ListTools devolvi� vac�o o nulo.');
+            ShowMessage(AiStr('design.mcp.tools_empty'));
           end;
         finally
           jTools.Free;
@@ -234,15 +235,15 @@ begin
       else
       begin
         PageControl1.ActivePage := TabLog;
-        ShowMessage('[ERR] Error al inicializar el cliente.' + sLineBreak + 'Revisa el Log para m�s detalles.');
+        ShowMessage(AiStr('design.mcp.init_error') + sLineBreak + AiStr('design.mcp.see_log'));
       end;
 
     except
       on E: Exception do
       begin
         PageControl1.ActivePage := TabLog;
-        MemoLog.Lines.Add('EXCEPTION: ' + E.Message);
-        ShowMessage('Excepci�n Cr�tica: ' + E.Message);
+        MemoLog.Lines.Add(AiFmt('design.mcp.exception', [E.Message]));
+        ShowMessage(AiFmt('design.mcp.exception', [E.Message]));
       end;
     end;
   finally
@@ -257,8 +258,18 @@ begin
   sgProperties.ColWidths[0] := 150; // Columna Propiedad
   sgProperties.ColWidths[1] := 250; // Columna Valor
 
-  sgProperties.Cells[0, 0] := 'Properties';
-  sgProperties.Cells[1, 0] := 'Value';
+  sgProperties.Cells[0, 0] := AiStr('design.mcp.col_property');
+  sgProperties.Cells[1, 0] := AiStr('design.mcp.col_value');
+
+  // Textos del formulario en el idioma activo (los del .dfm quedan como respaldo)
+  Caption := AiStr('design.mcp.caption');
+  Label1.Caption := AiStr('design.mcp.transport');
+  lblName.Caption := AiStr('design.mcp.name');
+  BtnTest.Caption := AiStr('design.mcp.test');
+  BtnSetDefaultParams.Caption := AiStr('design.mcp.set_defaults');
+  TabParams.Caption := AiStr('design.mcp.tab_params');
+  TabLog.Caption := AiStr('design.mcp.tab_log');
+  LblStatus.Caption := '   ' + AiFmt('design.mcp.status', ['']);
 
   PageControl1.ActivePage := TabParams;
 end;
@@ -387,7 +398,7 @@ begin
   TThread.Queue(nil,
     procedure
     begin
-      LblStatus.Caption := '   Status: ' + StatusMsg;
+      LblStatus.Caption := '   ' + AiFmt('design.mcp.status', [StatusMsg]);
       Application.processMessages;
     end);
 end;

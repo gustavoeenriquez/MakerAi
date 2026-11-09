@@ -140,6 +140,9 @@ type
     procedure ContextMenuClick(Sender: TObject);
     procedure LongPressTimerFired(Sender: TObject);
     procedure ShowContextAt(AMsgIdx, AAttachIdx: Integer; X, Y: Single);
+    // Textos del menú contextual en el idioma activo (TAiLocale); se llama al
+    // crearlo y antes de cada apertura, así sigue un cambio de idioma
+    procedure ApplyMenuTexts;
     procedure CopyFeedbackTimerFired(Sender: TObject);
 
     function  RendererY(AMsgIdx: Integer; ADocY: Single): Single;
@@ -295,6 +298,7 @@ implementation
 uses
   System.IOUtils,
   FMX.Forms,
+  uMakerAi.Localization,
   uMakerAi.MD.Renderer.Skia
   {$IFDEF MSWINDOWS}
   , Winapi.Windows
@@ -360,34 +364,30 @@ begin
   FContextMenu := TPopupMenu.Create(Self);
 
   FCtxCopyMsg         := TMenuItem.Create(FContextMenu);
-  FCtxCopyMsg.Text    := 'Copy Message';
   FCtxCopyMsg.OnClick := ContextMenuClick;
   FContextMenu.AddObject(FCtxCopyMsg);
 
   FCtxCopyAll         := TMenuItem.Create(FContextMenu);
-  FCtxCopyAll.Text    := 'Copy Conversation';
   FCtxCopyAll.OnClick := ContextMenuClick;
   FContextMenu.AddObject(FCtxCopyAll);
 
   FCtxOpenAttach         := TMenuItem.Create(FContextMenu);
-  FCtxOpenAttach.Text    := 'Open Attachment';
   FCtxOpenAttach.OnClick := ContextMenuClick;
   FContextMenu.AddObject(FCtxOpenAttach);
 
   FCtxSaveMedia          := TMenuItem.Create(FContextMenu);
-  FCtxSaveMedia.Text     := 'Guardar como…';
   FCtxSaveMedia.OnClick  := ContextMenuClick;
   FContextMenu.AddObject(FCtxSaveMedia);
 
   FCtxCopySelection         := TMenuItem.Create(FContextMenu);
-  FCtxCopySelection.Text    := 'Copy Selection';
   FCtxCopySelection.OnClick := ContextMenuClick;
   FContextMenu.AddObject(FCtxCopySelection);
 
   FCtxSpeak         := TMenuItem.Create(FContextMenu);
-  FCtxSpeak.Text    := 'Escuchar en voz alta';
   FCtxSpeak.OnClick := ContextMenuClick;
   FContextMenu.AddObject(FCtxSpeak);
+
+  ApplyMenuTexts;
 
   FBubbleProxies := TObjectList<TAIChatBubble>.Create(True);
   FInboundColor  := TAlphaColors.LightGray;
@@ -575,12 +575,23 @@ begin
   Result := FSelStartMsgIdx >= 0;
 end;
 
+procedure TAIChatView.ApplyMenuTexts;
+begin
+  FCtxCopyMsg.Text       := AiStr('chatui.copy_message');
+  FCtxCopyAll.Text       := AiStr('chatui.copy_conversation');
+  FCtxOpenAttach.Text    := AiStr('chatui.open_attachment'); // ShowContextAt lo cambia sobre un medio
+  FCtxSaveMedia.Text     := AiStr('chatui.save_as');
+  FCtxCopySelection.Text := AiStr('chatui.copy_selection');
+  FCtxSpeak.Text         := AiStr('chatui.speak');
+end;
+
 procedure TAIChatView.ShowContextAt(AMsgIdx, AAttachIdx: Integer; X, Y: Single);
 var
   AbsPt  : TPointF;
   Obj    : TFmxObject;
   F      : TCommonCustomForm;
 begin
+  ApplyMenuTexts;
   FCtxTargetMsg    := AMsgIdx;
   FCtxTargetAttach := AAttachIdx;
   FCtxCopyMsg.Enabled       := AMsgIdx >= 0;
@@ -590,14 +601,13 @@ begin
   begin
     FCtxOpenAttach.Enabled := True;
     if FCtxMediaMime.StartsWith('audio', True) then
-      FCtxOpenAttach.Text := 'Reproducir'
+      FCtxOpenAttach.Text := AiStr('chatui.play')
     else
-      FCtxOpenAttach.Text := 'Abrir';
+      FCtxOpenAttach.Text := AiStr('chatui.open');
     FCtxSaveMedia.Enabled := True;
   end
   else
   begin
-    FCtxOpenAttach.Text    := 'Open Attachment';
     FCtxOpenAttach.Enabled := (AMsgIdx >= 0) and (AAttachIdx >= 0) and
                               Assigned(FOnAttachOpen);
     FCtxSaveMedia.Enabled  := False;
@@ -704,9 +714,9 @@ begin
     for Msg in FList.Messages do
     begin
       case Msg.Role of
-        TChatRole.crUser     : Role := 'User';
-        TChatRole.crAssistant: Role := 'Assistant';
-      else                     Role := 'System';
+        TChatRole.crUser     : Role := AiStr('chatui.role.user');
+        TChatRole.crAssistant: Role := AiStr('chatui.role.assistant');
+      else                     Role := AiStr('chatui.role.system');
       end;
       SB.Append(Role).Append(': ').AppendLine(Msg.Text).AppendLine;
     end;

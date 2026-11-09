@@ -104,7 +104,8 @@ type
 implementation
 
 uses
-  System.IOUtils;
+  System.IOUtils,
+  uMakerAi.Localization;
 
 const
   CHIP_W        = 180;
@@ -745,7 +746,7 @@ begin
     else
     begin
       if StepRows then StepHdr := '▾  ' else StepHdr := '▸  ';
-      StepHdr := StepHdr + Format('%d pasos', [Length(AMsg.Steps)]);
+      StepHdr := StepHdr + AiFmt('chatui.steps_count', [Length(AMsg.Steps)]);
       StepHdrMs := AMsg.StepsTotalMs;
     end;
     // La duracion va aparte, a la derecha: asi la elipsis del texto largo no

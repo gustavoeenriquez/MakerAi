@@ -12,6 +12,7 @@ Uso:
   python Tests/Localization/hardcoded_strings.py            # resumen por carpeta
   python Tests/Localization/hardcoded_strings.py --list     # además archivo:línea
   python Tests/Localization/hardcoded_strings.py --list --kind ui --folder ChatUI
+  python Tests/Localization/hardcoded_strings.py --check-keys   # claves usadas vs tabla base
 
 Ignora comentarios, las tablas uMakerAi.Lang.*.pas y las llamadas que ya
 usan AiStr/AiFmt. Es una heurística para medir el avance de la localización,
@@ -111,6 +112,47 @@ def scan_file(path):
     return hits
 
 
+RE_TABLE_KEY = re.compile(r"^\s*'([a-z0-9_]+(?:\.[a-z0-9_]+)+)'\s*,", re.M)
+RE_KEY_LIT = re.compile(r"'([a-z0-9_]+(?:\.[a-z0-9_]+)+)'")
+
+
+def check_keys():
+    """Claves usadas en Source que no están en la tabla base, y claves sin uso.
+
+    Una clave usada es un literal con forma 'prefijo.nombre' cuyo prefijo es uno
+    de los de la tabla (chatui, design, ...): así también cuentan las que van en
+    constantes (MENU_KEYS) y no solo las que van dentro de AiStr/AiFmt.
+    """
+    base = os.path.join(SOURCE, 'Core', 'uMakerAi.Lang.En.pas')
+    table = set(RE_TABLE_KEY.findall(open(base, encoding='utf-8-sig').read()))
+    prefixes = {k.split('.')[0] for k in table}
+    used = defaultdict(list)
+    for dirpath, _, files in os.walk(SOURCE):
+        for name in sorted(files):
+            if not name.lower().endswith('.pas') or name.startswith('uMakerAi.Lang.'):
+                continue
+            path = os.path.join(dirpath, name)
+            raw = open(path, 'rb').read()
+            try:
+                text = raw.decode('utf-8-sig')
+            except UnicodeDecodeError:
+                text = raw.decode('cp1252')
+            text = strip_comments(text.replace('\r\n', '\n'))
+            for lineno, line in enumerate(text.split('\n'), 1):
+                for m in RE_KEY_LIT.finditer(line):
+                    key = m.group(1)
+                    if key.split('.')[0] in prefixes:
+                        used[key].append(f'Source/{os.path.relpath(path, SOURCE).replace(os.sep, "/")}:{lineno}')
+    missing = sorted(k for k in used if k not in table)
+    unused = sorted(k for k in table if k not in used)
+    print(f'Claves en la tabla base: {len(table)}; usadas en Source: {len(used)}')
+    for k in missing:
+        print(f'FALTA en uMakerAi.Lang.En.pas: {k}  ({used[k][0]})')
+    for k in unused:
+        print(f'sin uso: {k}')
+    return 1 if missing else 0
+
+
 def main():
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -118,7 +160,11 @@ def main():
     ap.add_argument('--list', action='store_true', help='listar cada texto con archivo:línea')
     ap.add_argument('--kind', choices=['exception', 'ui', 'prompt'], help='filtrar por tipo')
     ap.add_argument('--folder', help='filtrar por carpeta de Source (p. ej. ChatUI)')
+    ap.add_argument('--check-keys', action='store_true',
+                    help='verificar que cada clave usada exista en la tabla base (exit 1 si falta alguna)')
     args = ap.parse_args()
+    if args.check_keys:
+        return check_keys()
 
     counts = defaultdict(lambda: defaultdict(int))
     listing = []

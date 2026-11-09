@@ -37,7 +37,8 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Buttons, Vcl.ExtCtrls, Vcl.Imaging.pngimage;
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.Buttons, Vcl.ExtCtrls, Vcl.Imaging.pngimage,
+  uMakerAi.Localization;
 
 type
   TAboutDialog = class(TForm)
@@ -83,6 +84,11 @@ end;
 
 procedure TAboutDialog.FormShow(Sender: TObject);
 begin
+  Caption := AiStr('design.about.caption');
+  Label1.Caption := AiStr('design.about.version');
+  Label2.Caption := AiStr('design.about.copyright');
+  Label3.Caption := AiStr('design.about.description');
+  Label4.Caption := AiStr('design.about.version_info');
   lblVersion.Caption := MAKERAI_VERSION_STRING;
   lblCopyright.Caption := MAKERAI_COPYRIGHT;
   lblDescription.Caption := MAKERAI_DESCRIPTION;

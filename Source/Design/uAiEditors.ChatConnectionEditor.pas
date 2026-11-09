@@ -59,7 +59,8 @@ procedure Register;
 implementation
 
 uses
-  Vcl.Dialogs;
+  Vcl.Dialogs,
+  uMakerAi.Localization;
 
 { TAiChatDriverNamePropertyEditor }
 
@@ -108,7 +109,7 @@ end;
 function TAiChatConnectionComponentEditor.GetVerb(Index: Integer): string;
 begin
   case Index of
-    0: Result := 'Reset Parameters to Defaults';
+    0: Result := AiStr('design.conn.reset_verb');
   else
     Result := '';
   end;
@@ -126,11 +127,11 @@ begin
     0: begin
          try
            Connection.ResetParamsToDefaults;
-           ShowMessage('Parameters reset to defaults for driver: ' + Connection.DriverName);
+           ShowMessage(AiFmt('design.conn.reset_done', [Connection.DriverName]));
            Designer.Modified; // Marca el formulario como modificado
          except
            on E: Exception do
-             ShowMessage('Error resetting parameters: ' + E.Message);
+             ShowMessage(AiFmt('design.conn.reset_error', [E.Message]));
          end;
        end;
   end;

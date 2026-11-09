@@ -203,6 +203,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 const
   OUTER_PADDING = 16;   // px — horizontal + top/bottom margin
   HRULE_HEIGHT  = 17;   // px — space consumed by <hr>
@@ -437,7 +440,7 @@ end;
 function TAITextMDRenderer.DrawCodeBlock(ACanvas: ISkCanvas; ABlock: TMDBlock;
   AX, AY, AWidth: Single): Single;
 const
-  CPY_W      = 52;   // Copy button width
+  CPY_W      = 64;   // Copy button width (cabe "✓ Copiado"; el clic usa el BtnRect guardado)
   CPY_H      = 20;   // Copy button height
   CPY_PAD    = 6;    // margin from block edge
   HSB_H      = 4;    // horizontal scrollbar thumb height
@@ -680,8 +683,8 @@ begin
     BtnPS := TSkParagraphStyle.Create;
     BtnPS.TextStyle := BtnTS;
     BtnB := TSkParagraphBuilder.Create(BtnPS, FFontProvider, True);
-    if IsFeedback then BtnB.AddText(#$2713 + ' Copied')
-    else               BtnB.AddText('Copy');
+    if IsFeedback then BtnB.AddText(#$2713 + ' ' + AiStr('chatui.copied'))
+    else               BtnB.AddText(AiStr('chatui.copy'));
     BtnP := BtnB.Build;
     BtnP.Layout(Max(1, CPY_W - 8));
     BtnP.Paint(ACanvas, BtnRect.Left + 4,
@@ -2162,9 +2165,9 @@ begin
   for A := 0 to 2 do
   begin
     case A of
-      0: begin BtnLabel := 'Open';  BtnAction := TMediaAction.maOpen; end;
-      1: begin BtnLabel := 'Copy';  BtnAction := TMediaAction.maCopy; end;
-      2: begin BtnLabel := 'Save';  BtnAction := TMediaAction.maSave; end;
+      0: begin BtnLabel := AiStr('chatui.open'); BtnAction := TMediaAction.maOpen; end;
+      1: begin BtnLabel := AiStr('chatui.copy'); BtnAction := TMediaAction.maCopy; end;
+      2: begin BtnLabel := AiStr('chatui.save'); BtnAction := TMediaAction.maSave; end;
     else
       BtnLabel := ''; BtnAction := TMediaAction.maOpen;
     end;

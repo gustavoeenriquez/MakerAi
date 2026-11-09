@@ -342,6 +342,9 @@ type
 
 implementation
 
+uses
+  uMakerAi.Localization;
+
 // ── Theme-invariant colors ────────────────────────────────────────────────────
 const
   CLR_SEND      = $FF007AFF;
@@ -404,11 +407,12 @@ begin
 end;
 
 const
-  MENU_LABELS: array[0..ACI_MENU_ITEMS - 1] of string = (
-    'Paste',
-    'Upload file...',
-    'Screenshot...',
-    'Clear attachments');
+  // Claves de TAiLocale de cada opción del menú de adjuntos
+  MENU_KEYS: array[0..ACI_MENU_ITEMS - 1] of string = (
+    'chatui.attach.paste',
+    'chatui.attach.upload',
+    'chatui.attach.screenshot',
+    'chatui.attach.clear');
 
 { ── TAIChatMenuPanel ─────────────────────────────────────────────────────────── }
 
@@ -478,6 +482,7 @@ var
   TxtColor  : TAlphaColor;
   TxtBounds : TRectF;
   TX, TY    : Single;
+  ItemText  : string;
 begin
   ComputeItemRects;
 
@@ -508,10 +513,11 @@ begin
     if ItemEnabled(I) then TxtColor := FInput.FPalette.MenuTxt
     else                   TxtColor := FInput.FPalette.MenuDis;
     Paint.Color := TxtColor;
-    Font.MeasureText(MENU_LABELS[I], TxtBounds, Paint);
+    ItemText := AiStr(MENU_KEYS[I]);
+    Font.MeasureText(ItemText, TxtBounds, Paint);
     TX := IR.Left + ACI_MENU_HPAD;
     TY := IR.CenterPoint.Y - (TxtBounds.Top + TxtBounds.Bottom) / 2;
-    ACanvas.DrawSimpleText(MENU_LABELS[I], TX, TY, Font, Paint);
+    ACanvas.DrawSimpleText(ItemText, TX, TY, Font, Paint);
   end;
 
   ACanvas.Restore;
@@ -1554,9 +1560,10 @@ begin
   Dlg := TOpenDialog.Create(nil);
   try
     Dlg.Filter :=
-      'All supported|*.jpg;*.jpeg;*.png;*.gif;*.bmp;*.webp;*.pdf;*.doc;*.docx;*.txt' +
-      '|Images|*.jpg;*.jpeg;*.png;*.gif;*.bmp;*.webp' +
-      '|PDF|*.pdf|Documents|*.doc;*.docx;*.txt|All files|*.*';
+      AiStr('chatui.filter.supported') + '|*.jpg;*.jpeg;*.png;*.gif;*.bmp;*.webp;*.pdf;*.doc;*.docx;*.txt' +
+      '|' + AiStr('chatui.filter.images') + '|*.jpg;*.jpeg;*.png;*.gif;*.bmp;*.webp' +
+      '|PDF|*.pdf|' + AiStr('chatui.filter.documents') + '|*.doc;*.docx;*.txt' +
+      '|' + AiStr('chatui.filter.all_files') + '|*.*';
     Dlg.Options := Dlg.Options + [TOpenOption.ofAllowMultiSelect];
     if Dlg.Execute then
     begin

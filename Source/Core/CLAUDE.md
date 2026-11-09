@@ -171,7 +171,8 @@ Los textos que ve el usuario o el desarrollador (menús de ChatUI, mensajes de e
 - **Idioma propio de la aplicación**: `TAiLocale.RegisterTable('pt', [...])` (agrega o reemplaza claves).
 - `AiFmt` cae al texto en inglés si una traducción tiene los marcadores mal (no tapa el error original con un `EConvertError`).
 - Los controles que arman textos una sola vez comparan `TAiLocale.ChangeCount` para saber si deben rehacerlos.
-- **Pendientes**: `python Tests/Localization/hardcoded_strings.py [--list] [--kind ui|prompt|exception] [--folder X]` cuenta los literales que faltan por carpeta (nov 09/2026: 28 de UI, 7 prompts, 579 excepciones). Plan por fases: 0 base (hecha), 1 ChatUI + Design, 2 prompts internos, 3 excepciones por módulo, 4 logs y cierre.
+- **Pendientes**: `python Tests/Localization/hardcoded_strings.py [--list] [--kind ui|prompt|exception] [--folder X]` cuenta los literales que faltan por carpeta (nov 09/2026, tras la fase 1: 18 de UI, 7 prompts, 579 excepciones). `--check-keys` verifica que cada clave usada en `Source` (un literal `'prefijo.nombre'` con un prefijo de la tabla, también en constantes como `MENU_KEYS`) exista en la tabla base: exit 1 si falta; correrlo al agregar claves, porque ChatUI y Design no pasan por la suite.
+- **Fases**: 0 base (hecha, e3e0db0); 1 ChatUI + Design (hecha nov 09: menú y textos dibujados de `TAIChatView`, menú y filtro de `TAIChatInput`, editores de diseño; los componentes obsoletos `TChatList`/`TChatBubble`/`TChatInput` NO se traducen); 2 prompts internos; 3 excepciones por módulo; 4 logs y cierre.
 
 ## Navigation
 

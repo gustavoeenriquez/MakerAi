@@ -215,6 +215,10 @@ el control resuelve el clic en `MouseDown` y el hover/cursor en `MouseMove`
 (`TAIChatVirtualList.SetHoverAction`). Regla de la unidad: cualquier variable
 Skia (`ISkPaint`, `ISkParagraph`) va en la seccion `var` externa de `Paint`.
 
+## Textos traducibles (nov 09/2026)
+
+Todo texto visible de `TAIChatView`/`TAIChatInput` sale de `AiStr`/`AiFmt` (`uMakerAi.Localization`, claves `chatui.*` en `Source/Core/uMakerAi.Lang.En.pas` y `.Es.pas`): menú contextual, prefijos de rol de "Copiar conversación", botones dibujados por el renderer (Copiar/Copiado en bloques de código, Abrir/Copiar/Guardar en la tarjeta de medio), "N pasos", menú de adjuntos (`MENU_KEYS`) y filtro del diálogo de archivos. El menú contextual se rehace en cada apertura (`ApplyMenuTexts`) y lo dibujado se pide al pintar, así que un cambio de `TAiLocale.Language` en ejecución se ve sin recrear el control. El botón Copiar del bloque de código pasó de 52 a 64 px de ancho para que quepa "✓ Copiado". Los componentes obsoletos (`TChatList`, `TChatBubble`, `TChatInput`) no se traducen. Al agregar un texto: clave en las dos tablas y `python Tests/Localization/hardcoded_strings.py --check-keys`.
+
 ## Navigation
 
 > See [../CLAUDE.md](../CLAUDE.md) for source directory overview and [../../CLAUDE.md](../../CLAUDE.md) for project overview.
