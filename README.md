@@ -99,6 +99,13 @@ Tool calls run in their own tasks, and OpenAI streaming executes functions on th
 ### Demos for the book's 4.0 edition
 `Demos/Libro` holds one project per chapter of *IA con Delphi* 4.0 (chapters 3 to 37: from the first chat to agents, federation, voice, Computer Use and every bridge), and demos `093`–`105` follow the *Café La Ladera* video series (see **Demo Projects** below).
 
+### English, Spanish and Portuguese
+Chat UI texts, design-time editors, exception messages and status messages now follow the OS language (or `MAKERAI_LANG`, or `TAiLocale.Language := 'pt'` at runtime): English, Spanish and Brazilian Portuguese, 568 texts in `Source/Core/uMakerAi.Lang.*.pas`. Prompts sent to the model stay in English and ask it to answer in the user's language. An application can add its own language with `TAiLocale.RegisterTable`.
+
+> **Portuguese speakers:** the Portuguese texts were not written by a native speaker. If something reads wrong, please open an issue or a pull request — every text is in `Source/Core/uMakerAi.Lang.Pt.pas`, one line per text (keep the key and the `%s`/`%d` markers as they are).
+>
+> **Para quem fala português:** os textos em português não foram escritos por um falante nativo. Se algo soar estranho, abra uma issue ou um pull request — todos os textos estão em `Source/Core/uMakerAi.Lang.Pt.pas`, uma linha por texto (mantenha a chave e os marcadores `%s`/`%d` como estão).
+
 ### ⚠️ Behaviour changes
 - **`imagen-4.0-*` aliases now generate with `gemini-nano-banana-2.1`** (before `gemini-3.1-flash-image`, deprecated on 2026-10-06).
 - **Kimi ignores `Temperature` and `Top_p`** — the API only accepts its fixed values, so any other value used to fail.
