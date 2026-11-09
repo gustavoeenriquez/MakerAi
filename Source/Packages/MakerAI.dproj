@@ -167,6 +167,9 @@
         <DCCReference Include="..\Chat\uMakerAi.Chat.OpenAi.pas"/>
         <DCCReference Include="..\Core\UMakerAi.Chat.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Core.pas"/>
+        <DCCReference Include="..\Core\uMakerAi.Localization.pas"/>
+        <DCCReference Include="..\Core\uMakerAi.Lang.En.pas"/>
+        <DCCReference Include="..\Core\uMakerAi.Lang.Es.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Telemetry.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.A2A.Server.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.A2A.Client.pas"/>

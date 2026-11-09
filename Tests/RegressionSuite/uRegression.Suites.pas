@@ -54,6 +54,8 @@ type
     // TAiOpenAiLiveChat (GPT-Live) sin red: session.start, eventos, funciones
     // y delegacion a la aplicacion
     function RunLiveScenario(const AScenario: string): string;
+    // TAiLocale: tablas completas, cadena de respaldo y normalizacion
+    function RunLocaleScenario(const AScenario: string): string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -94,6 +96,7 @@ uses
   uMakerAi.Tools.Skills, uMakerAi.Tools.Shell, uMakerAi.Utils.DiffUpdater, uMakerAi.Tools.ComputerUse,
   uMakerAi.Chat.Gemini, uMakerAi.Gemini.Speech, uMakerAi.Gemini.WebSearch, uMakerAi.Chat.Claude, uMakerAi.Chat.MakerAi,
   uMakerAi.Chat.MiniMax,
+  uMakerAi.Localization,
   uRegression.Fixtures;
 
 const
@@ -496,6 +499,26 @@ begin
   FRunner.AddCase('rag.index.basic-score')
     .Input('rag:basic-index-score')
     .ExpectEquals('alfa|1.00');
+
+  // --- Localizacion (v4.0): TAiLocale y tablas de idiomas ---
+  // Cada idioma registrado tiene todas las claves del ingles (base), ninguna de
+  // mas y los mismos marcadores de Format. Salida: 'ok' o la lista de problemas.
+  // VA PRIMERO: los casos siguientes registran un idioma de prueba completo.
+  FRunner.AddCase('locale.tables-complete')
+    .Input('locale:tables-complete')
+    .ExpectEquals('ok');
+
+  // Cadena de respaldo: idioma con region -> primario -> ingles -> la clave.
+  // Salida: idioma normalizado | es-CO | fr (cae a en) | clave inexistente |
+  // zz-YY (cae a la tabla 'zz') | TextIn sin cambiar el activo | auto-deteccion
+  FRunner.AddCase('locale.fallback')
+    .Input('locale:fallback')
+    .ExpectEquals('es-co|Copiar mensaje|Copy Message|no.such.key|ZZ Copy Message|Abrir|auto=ok');
+
+  // Normalizacion de codigos de idioma y lectura de marcadores de Format
+  FRunner.AddCase('locale.normalize-specifiers')
+    .Input('locale:normalize-specifiers')
+    .ExpectEquals('es-co|pt-br|pt||en|%d %s %0:s %-5.2f');
 
   // --- Chat: serializacion de tool results (familia OpenAI-compatible) ---
   // Chat Completions no admite imagenes en role 'tool' de ninguna forma, y
@@ -1145,6 +1168,8 @@ begin
     Result := RunAudioScenario(AScenario)
   else if AScenario.StartsWith('live:') then
     Result := RunLiveScenario(AScenario)
+  else if AScenario.StartsWith('locale:') then
+    Result := RunLocaleScenario(AScenario)
   else
     raise Exception.Create('Escenario desconocido: ' + AScenario);
 end;
@@ -7470,6 +7495,77 @@ begin
     CheckSynchronize(0);
     Sink.Free;
   end;
+end;
+
+// -----------------------------------------------------------------------------
+// Localizacion (TAiLocale)
+// -----------------------------------------------------------------------------
+
+function TRegressionSuite.RunLocaleScenario(const AScenario: string): string;
+var
+  Problems, BaseKeys, Pairs: TArray<string>;
+  Prev, Auto, Expected: string;
+  I: Integer;
+begin
+  if AScenario = 'locale:tables-complete' then
+  begin
+    Problems := TAiLocale.Validate;
+    if Length(Problems) = 0 then
+      Result := 'ok'
+    else
+      Result := string.Join('; ', Problems);
+  end
+  else if AScenario = 'locale:fallback' then
+  begin
+    Prev := TAiLocale.Language;
+    try
+      // Idioma de prueba completo (todas las claves del ingles con prefijo),
+      // para no dejar una tabla incompleta registrada en el proceso
+      BaseKeys := TAiLocale.KeysOf(AI_LANG_BASE);
+      SetLength(Pairs, Length(BaseKeys) * 2);
+      for I := 0 to High(BaseKeys) do
+      begin
+        Pairs[I * 2] := BaseKeys[I];
+        Pairs[I * 2 + 1] := 'ZZ ' + TAiLocale.TextIn(AI_LANG_BASE, BaseKeys[I]);
+      end;
+      TAiLocale.RegisterTable('zz', Pairs);
+
+      TAiLocale.Language := 'es_CO.UTF-8';
+      Result := TAiLocale.Language + '|' + AiStr('chatui.copy_message');
+      TAiLocale.Language := 'fr';
+      Result := Result + '|' + AiStr('chatui.copy_message');
+      Result := Result + '|' + AiStr('no.such.key');
+      TAiLocale.Language := 'zz-YY';
+      Result := Result + '|' + AiStr('chatui.copy_message');
+      Result := Result + '|' + TAiLocale.TextIn('es', 'chatui.open');
+
+      // '' = deteccion automatica: MAKERAI_LANG, el sistema o 'en'
+      TAiLocale.Language := '';
+      Auto := TAiLocale.Language;
+      Expected := TAiLocale.NormalizeLanguage(GetEnvironmentVariable(AI_LANG_ENV_VAR));
+      if Expected = '' then
+        Expected := TAiLocale.DetectSystemLanguage;
+      if Expected = '' then
+        Expected := AI_LANG_BASE;
+      if Auto = Expected then
+        Result := Result + '|auto=ok'
+      else
+        Result := Result + '|auto=' + Auto + '<>' + Expected;
+    finally
+      TAiLocale.Language := Prev;
+    end;
+  end
+  else if AScenario = 'locale:normalize-specifiers' then
+  begin
+    Result := TAiLocale.NormalizeLanguage('es_CO.UTF-8') + '|' +
+      TAiLocale.NormalizeLanguage(' PT-BR ') + '|' +
+      TAiLocale.PrimaryLanguage('pt_BR') + '|' +
+      TAiLocale.NormalizeLanguage('C') + '|' +
+      TAiLocale.PrimaryLanguage('en') + '|' +
+      TAiLocale.FormatSpecifiers('Error %d: %s (100%%) %0:s %-5.2f');
+  end
+  else
+    raise Exception.Create('Escenario de localizacion desconocido: ' + AScenario);
 end;
 
 end.
