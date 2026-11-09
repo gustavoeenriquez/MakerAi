@@ -59,6 +59,7 @@ contains
   uMakerAi.Localization in '..\Core\uMakerAi.Localization.pas',
   uMakerAi.Lang.En in '..\Core\uMakerAi.Lang.En.pas',
   uMakerAi.Lang.Es in '..\Core\uMakerAi.Lang.Es.pas',
+  uMakerAi.Lang.Pt in '..\Core\uMakerAi.Lang.Pt.pas',
   uMakerAi.Telemetry in '..\Core\uMakerAi.Telemetry.pas',
   uMakerAi.A2A.Server in '..\Agents\uMakerAi.A2A.Server.pas',
   uMakerAi.A2A.Client in '..\Agents\uMakerAi.A2A.Client.pas',

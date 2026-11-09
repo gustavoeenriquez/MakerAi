@@ -20,7 +20,7 @@ This folder contains the foundation layer of the MakerAI framework. All provider
 | `uMakerAi.Telemetry.pas` | `TAiTelemetry` — OpenTelemetry tracing opt-in (OTLP/HTTP JSON, GenAI semconv); helpers no-op-safe `AiSpanStart`/`AiSpanEnd`/`AiSpanAttr` usados por Chat, Tools y MCP |
 | `uMakerAi.Evals.pas` | `TAiEvalRunner` — evals con casos fluidos (`ExpectContains`/`Regex`/`Equals`/`MinLength`/`MaxLength`/`Judge`) sobre un target genérico `function(Input): string`; reporte `ToText`/`ToJSON`; LLM-as-judge opcional vía propiedad `Judge`; span `eval.case` por caso |
 | `uMakerAi.Localization.pas` | `TAiLocale` + `AiStr`/`AiFmt`: textos del framework por clave e idioma (ver sección *Localización*) |
-| `uMakerAi.Lang.En.pas` / `uMakerAi.Lang.Es.pas` | Tablas de textos: inglés (base, TODAS las claves) y español |
+| `uMakerAi.Lang.En.pas` / `.Es.pas` / `.Pt.pas` | Tablas de textos: inglés (base, TODAS las claves), español y portugués de Brasil (`pt`, nov 09/2026) |
 | `uMakerAi.Version.inc` | Version constants and feature flags - included via `{$I}` directive |
 | `uMakerAi.Utils.*.pas` | Utility helpers (CodeExtractor, PcmToWav, System) |
 
@@ -165,7 +165,7 @@ En la Fase 2 de `RunNew` (modelo sin `cap_WebSearch`, sesión con él, `ChatTool
 
 Los textos que ve el usuario o el desarrollador (menús de ChatUI, mensajes de excepción, prompts internos) se piden por clave: `AiStr('chatui.copy_message')`, `AiFmt('chat.driver_not_found', [ADriver])`. Nada de literales nuevos en el código del framework.
 
-- **Tablas**: una unidad por idioma con un `TArray<string>` de pares clave/texto (`AiLangEn`, `AiLangEs`); `uMakerAi.Localization` las registra en su `initialization`. El inglés es la base y debe tener **todas** las claves; al agregar una clave, agregarla en las dos tablas (la suite falla si falta: `locale.tables-complete`). Mismos marcadores de `Format` en el mismo orden en cada idioma.
+- **Tablas**: una unidad por idioma con un `TArray<string>` de pares clave/texto (`AiLangEn`, `AiLangEs`, `AiLangPt`); `uMakerAi.Localization` las registra en su `initialization`. El inglés es la base y debe tener **todas** las claves; al agregar una clave, agregarla en las tres tablas (la suite falla si falta: `locale.tables-complete`). Mismos marcadores de `Format` en el mismo orden en cada idioma.
 - **Claves**: `<módulo>.<nombre>` en minúsculas con `_` (`chatui.*`, `chat.*`, `rag.*`, `agents.*`, `mcp.*`...).
 - **Idioma**: `MAKERAI_LANG`, si no el del sistema (Windows: `GetUserDefaultUILanguage`; Android: `Locale.getDefault`; resto POSIX: `LC_ALL`/`LC_MESSAGES`/`LANG`; iOS queda en `en`). `TAiLocale.Language := 'es'` lo fija; `''` vuelve a la detección. Respaldo: `pt-br` → `pt` → `en` → la clave.
 - **Idioma propio de la aplicación**: `TAiLocale.RegisterTable('pt', [...])` (agrega o reemplaza claves).

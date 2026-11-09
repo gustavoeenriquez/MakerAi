@@ -170,6 +170,7 @@
         <DCCReference Include="..\Core\uMakerAi.Localization.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Lang.En.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Lang.Es.pas"/>
+        <DCCReference Include="..\Core\uMakerAi.Lang.Pt.pas"/>
         <DCCReference Include="..\Core\uMakerAi.Telemetry.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.A2A.Server.pas"/>
         <DCCReference Include="..\Agents\uMakerAi.A2A.Client.pas"/>

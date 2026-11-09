@@ -523,6 +523,11 @@ begin
     .Input('locale:normalize-specifiers')
     .ExpectEquals('es-co|pt-br|pt||en|%d %s %0:s %-5.2f');
 
+  // Portugués (v4.0): pt-BR y pt_PT caen en la tabla 'pt'; AiFmt con marcadores
+  FRunner.AddCase('locale.portuguese')
+    .Input('locale:portuguese')
+    .ExpectEquals('Copiar mensagem|Copiar mensagem|3 passos|Abrir anexo');
+
   // --- Chat: serializacion de tool results (familia OpenAI-compatible) ---
   // Chat Completions no admite imagenes en role 'tool' de ninguna forma, y
   // Groq ademas rechaza cualquier array ahi. La media nativa sale como un
@@ -7567,6 +7572,19 @@ begin
       TAiLocale.NormalizeLanguage('C') + '|' +
       TAiLocale.PrimaryLanguage('en') + '|' +
       TAiLocale.FormatSpecifiers('Error %d: %s (100%%) %0:s %-5.2f');
+  end
+  else if AScenario = 'locale:portuguese' then
+  begin
+    Prev := TAiLocale.Language;
+    try
+      TAiLocale.Language := 'pt-BR';
+      Result := AiStr('chatui.copy_message');
+      TAiLocale.Language := 'pt_PT';
+      Result := Result + '|' + AiStr('chatui.copy_message') + '|' + AiFmt('chatui.steps_count', [3]);
+      Result := Result + '|' + TAiLocale.TextIn('pt', 'chatui.open_attachment');
+    finally
+      TAiLocale.Language := Prev;
+    end;
   end
   else
     raise Exception.Create('Escenario de localizacion desconocido: ' + AScenario);

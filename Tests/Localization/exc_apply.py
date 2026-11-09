@@ -2,6 +2,9 @@
 
 Uso: python exc_apply.py items.json map_module "Título de la sección"
      [--dry]
+
+El mapa trae, por literal, (clave, inglés, español, portugués): un texto por
+cada tabla uMakerAi.Lang.*.pas que exista, en el orden En, Es, Pt.
 """
 import importlib, json, os, re, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -19,13 +22,18 @@ def norm(lit):
 
 NMAP = {norm(k): v for k, v in mp.M.items()}
 NMANUAL = {norm(k) for k in mp.MANUAL_LITS}
+# Idiomas con tabla, en el orden de los textos del mapa: (clave, en, es, pt)
+LANGS = [l for l in ('En', 'Es', 'Pt')
+         if os.path.exists(os.path.join(SRC, 'Core', f'uMakerAi.Lang.{l}.pas'))]
 DEFS = {}
 for k, v in list(mp.M.items()) + [(None, v) for v in mp.MANUAL.values()]:
-    key, en, es = v
-    if en is not None:
-        if key in DEFS and DEFS[key] != (en, es):
+    key, texts = v[0], tuple(v[1:])
+    if texts[0] is not None:
+        if len(texts) < len(LANGS):
+            raise SystemExit(f'clave {key}: faltan textos; el mapa debe traer {", ".join(LANGS)}')
+        if key in DEFS and DEFS[key] != texts:
             raise SystemExit(f'clave {key} con dos textos distintos')
-        DEFS[key] = (en, es)
+        DEFS[key] = texts
 for k, v in mp.M.items():
     if v[0] not in DEFS:
         raise SystemExit(f'clave {v[0]} sin texto')
@@ -148,7 +156,7 @@ for rel, old, new in getattr(mp, 'PATCHES', []):
 def pas(s):
     return "'" + s.replace("'", "''") + "'"
 
-for lang, idx in (('En', 0), ('Es', 1)):
+for idx, lang in enumerate(LANGS):
     path = os.path.join(SRC, 'Core', f'uMakerAi.Lang.{lang}.pas')
     text = open(path, 'rb').read().decode('utf-8-sig')
     existing = set(re.findall(r"^\s*'([a-z0-9_.]+)',", text, re.M))

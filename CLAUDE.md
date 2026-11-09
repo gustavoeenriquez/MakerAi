@@ -219,7 +219,7 @@ Agents use a directed graph with nodes (`TAIAgentsNode`) and links (`TAIAgentsLi
 | Add Realtime STT provider | `Source/Realtime/uMakerAi.Realtime.pas` (inherit `TAiRealtimeBase`) |
 | Realtime universal connector | `Source/Realtime/uMakerAi.Realtime.AiConnection.pas` |
 | Version/feature flags | `Source/Core/uMakerAi.Version.inc` |
-| Textos traducibles (`AiStr`/`AiFmt`, tablas por idioma) | `Source/Core/uMakerAi.Localization.pas`, `uMakerAi.Lang.En.pas` (base), `uMakerAi.Lang.Es.pas` — ver `Source/Core/CLAUDE.md` › Localización |
+| Textos traducibles (`AiStr`/`AiFmt`, tablas por idioma) | `Source/Core/uMakerAi.Localization.pas`, `uMakerAi.Lang.En.pas` (base), `uMakerAi.Lang.Es.pas`, `uMakerAi.Lang.Pt.pas` — ver `Source/Core/CLAUDE.md` › Localización |
 
 ## Naming Conventions
 

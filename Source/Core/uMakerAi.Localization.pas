@@ -37,7 +37,8 @@
 //
 // Idiomas:
 //   - El inglés ('en') es la tabla base y debe tener TODAS las claves.
-//   - Cada idioma vive en su propia unidad (uMakerAi.Lang.En, uMakerAi.Lang.Es)
+//   - Cada idioma vive en su propia unidad (uMakerAi.Lang.En, uMakerAi.Lang.Es,
+//     uMakerAi.Lang.Pt)
 //     con un arreglo de pares clave/texto. Esta unidad registra las incluidas.
 //   - Un idioma propio se agrega desde la aplicación sin tocar el framework:
 //       TAiLocale.RegisterTable('pt', ['chatui.copy_message', 'Copiar mensagem', ...]);
@@ -131,7 +132,7 @@ uses
   Androidapi.JNI.JavaTypes, Androidapi.Helpers,
 {$ENDIF}
   System.Generics.Defaults,
-  uMakerAi.Lang.En, uMakerAi.Lang.Es;
+  uMakerAi.Lang.En, uMakerAi.Lang.Es, uMakerAi.Lang.Pt;
 
 function AiStr(const AKey: string): string;
 begin
@@ -473,6 +474,7 @@ end;
 initialization
   TAiLocale.RegisterTable('en', AiLangEn);
   TAiLocale.RegisterTable('es', AiLangEs);
+  TAiLocale.RegisterTable('pt', AiLangPt); // portugués de Brasil; pt-BR y pt-PT caen aquí
   TAiLocale.Language := ''; // detección automática
 
 end.
