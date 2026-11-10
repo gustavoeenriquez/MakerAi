@@ -31,6 +31,8 @@ type
     // Flujos de orquestacion A2A: pool concurrente, human-in-the-loop,
     // no bloqueante, tolerancia de literales y cancelacion.
     function RunA2AFlowScenario(const AScenario: string): string;
+    // Ejecutor externo, varios agentes por ruta y BindAddress (2026-11-10)
+    function RunA2AExecScenario(const AScenario: string): string;
     function RunPolicyScenario(const AScenario: string): string;
     function RunRagScenario(const AScenario: string): string;
     // TAiMemory: aislamiento entre namespaces en las operaciones por Id
@@ -298,6 +300,38 @@ begin
   FRunner.AddCase('a2a.agenttool.register-once')
     .Input('a2a:agenttool-once')
     .ExpectEquals('funciones=1|consulta>Uno');
+
+  // --- A2A: ejecutor externo y varios agentes por puerto (2026-11-10) ---
+  // Con Executor el servidor no corre ningun grafo: el host le empuja el
+  // estado. Completa, y un Execute que vuelve sin estado final queda failed
+  // (antes de esto no habia forma de alojar un motor propio).
+  FRunner.AddCase('a2a.executor.complete')
+    .Input('a2a:exec-complete')
+    .ExpectEquals('estado=tsCompleted|texto=eco:hola|mudo=tsFailed');
+
+  // input-required libera el hueco; el siguiente SendMessage con el taskId
+  // llega como Execute con Resume=True, sobre el MISMO task.
+  FRunner.AddCase('a2a.executor.hitl')
+    .Input('a2a:exec-hitl')
+    .ExpectEquals('estado1=tsInputRequired|pregunta=confirmas?|estado2=tsCompleted|texto=resume:si|mismoTask=si');
+
+  // Cancelar un task que el ejecutor tiene en marcha: el host lo detiene y el
+  // reporte tardio no lo resucita. Con MaxConcurrentTasks=1 el segundo task
+  // recibe AgentBusy mientras el primero corre.
+  FRunner.AddCase('a2a.executor.cancel-busy')
+    .Input('a2a:exec-cancel')
+    .ExpectEquals('ocupado=-32000|cancelado=TASK_STATE_CANCELED|tardio=TASK_STATE_CANCELED');
+
+  // AgentPaths: cada agente con su card y su URL; uno desconocido es 404, y
+  // los tasks de un agente no existen para otro (TaskNotFound).
+  FRunner.AddCase('a2a.paths.multi-agent')
+    .Input('a2a:paths')
+    .ExpectEquals('card=Agente uno|url=ok|desconocido=404|texto=uno:hola|ajeno=-32001|propio=ok');
+
+  // BindAddress: atado a 127.0.0.1 sirve por loopback.
+  FRunner.AddCase('a2a.bind-address')
+    .Input('a2a:bind')
+    .ExpectEquals('card=200');
 
   FRunner.AddCase('a2a.errors.codes')
     .Input('a2a:errorcodes')
@@ -1389,6 +1423,10 @@ begin
     'a2a:auth']) then
     Exit(RunA2AFlowScenario(AScenario));
 
+  if MatchStr(AScenario, ['a2a:exec-complete', 'a2a:exec-hitl', 'a2a:exec-cancel',
+    'a2a:paths', 'a2a:bind']) then
+    Exit(RunA2AExecScenario(AScenario));
+
   if AScenario = 'telemetry:task-parent' then
   begin
     // Un span padre en este hilo; en un TTask, un span sin contexto (traza nueva) y
@@ -1730,6 +1768,260 @@ end;
 // -----------------------------------------------------------------------------
 // A2A: flujos de orquestacion
 // -----------------------------------------------------------------------------
+
+type
+  // Ejecutor de prueba: 'eco:' + texto, o con el agente delante si lo hay.
+  // 'mudo' vuelve sin reportar; 'pregunta' pide confirmacion y al reanudar
+  // completa con 'resume:' + respuesta; 'lento' espera a que lo cancelen y
+  // despues reporta igual (el reporte tardio debe ignorarse).
+  TSuiteA2AExecutor = class(TInterfacedObject, IAiA2AExecutor)
+  public
+    Cancelado: TEvent;
+    constructor Create;
+    destructor Destroy; override;
+    procedure Execute(const ARequest: TAiA2AExecRequest; AReport: TAiA2AExecReport);
+    procedure Cancel(const AAgentId, ATaskId: string);
+  end;
+
+  TSuiteA2AResolver = class
+  public
+    procedure Resolve(Sender: TObject; const AAgentId: string; ACard: TJSONObject;
+      var AFound: Boolean);
+  end;
+
+constructor TSuiteA2AExecutor.Create;
+begin
+  inherited Create;
+  Cancelado := TEvent.Create(nil, True, False, '');
+end;
+
+destructor TSuiteA2AExecutor.Destroy;
+begin
+  Cancelado.Free;
+  inherited;
+end;
+
+procedure TSuiteA2AExecutor.Execute(const ARequest: TAiA2AExecRequest;
+  AReport: TAiA2AExecReport);
+begin
+  if ARequest.Resume then
+    AReport(TAiA2AExecUpdate.Completed('resume:' + ARequest.Input))
+  else if ARequest.Input = 'mudo' then
+    // sin reportar nada
+  else if ARequest.Input = 'pregunta' then
+    AReport(TAiA2AExecUpdate.InputRequired('confirmas?'))
+  else if ARequest.Input = 'lento' then
+  begin
+    Cancelado.WaitFor(10000);
+    AReport(TAiA2AExecUpdate.Completed('tarde'));
+  end
+  else if ARequest.AgentId <> '' then
+    AReport(TAiA2AExecUpdate.Completed(ARequest.AgentId + ':' + ARequest.Input))
+  else
+    AReport(TAiA2AExecUpdate.Completed('eco:' + ARequest.Input));
+end;
+
+procedure TSuiteA2AExecutor.Cancel(const AAgentId, ATaskId: string);
+begin
+  Cancelado.SetEvent;
+end;
+
+procedure TSuiteA2AResolver.Resolve(Sender: TObject; const AAgentId: string;
+  ACard: TJSONObject; var AFound: Boolean);
+begin
+  AFound := (AAgentId = 'uno') or (AAgentId = 'dos');
+  if AFound and Assigned(ACard) then
+  begin
+    ACard.RemovePair('name').Free;
+    ACard.AddPair('name', 'Agente ' + AAgentId);
+  end;
+end;
+
+function TRegressionSuite.RunA2AExecScenario(const AScenario: string): string;
+var
+  Server: TAiA2AServer;
+  Client: TAiA2AClient;
+  Exec: TSuiteA2AExecutor;
+  ExecRef: IAiA2AExecutor;
+  Resolver: TSuiteA2AResolver;
+  Task: TJSONObject;
+  OutText, TaskId, CtxId, Url: string;
+  Http: THTTPClient;
+
+  function StateName(AValue: TAiA2ATaskState): string;
+  begin
+    Result := GetEnumName(TypeInfo(TAiA2ATaskState), Ord(AValue));
+  end;
+
+  // JSON-RPC crudo: devuelve el cuerpo de la respuesta
+  function Rpc(const AUrl, ABody: string): TJSONObject;
+  var
+    B: TStringStream;
+    R: IHTTPResponse;
+  begin
+    B := TStringStream.Create(ABody, TEncoding.UTF8);
+    try
+      Http.ContentType := 'application/json';
+      R := Http.Post(AUrl, B);
+      Result := TJSONObject.ParseJSONValue(R.ContentAsString(TEncoding.UTF8)) as TJSONObject;
+    finally
+      B.Free;
+    end;
+  end;
+
+  // Envia un mensaje sin bloquear y devuelve el id del task
+  function SendNoBlock(const AUrl, AText: string): string;
+  var
+    J: TJSONObject;
+  begin
+    J := Rpc(AUrl, '{"jsonrpc":"2.0","id":1,"method":"SendMessage","params":{' +
+      '"message":{"messageId":"m-' + AText + '","role":"ROLE_USER","parts":[{"text":"' +
+      AText + '"}]},"configuration":{"blocking":false}}}');
+    try
+      Result := J.GetValue<string>('result.task.id', '');
+    finally
+      J.Free;
+    end;
+  end;
+
+  function TaskState(const AUrl, AId: string): string;
+  var
+    J: TJSONObject;
+  begin
+    J := Rpc(AUrl, '{"jsonrpc":"2.0","id":2,"method":"GetTask","params":{"id":"' + AId + '"}}');
+    try
+      if Assigned(J.GetValue('error')) then
+        Result := J.GetValue<string>('error.code', '')
+      else
+        Result := J.GetValue<string>('result.status.state', '');
+    finally
+      J.Free;
+    end;
+  end;
+
+begin
+  Result := '';
+  Url := Format('http://localhost:%d', [PORT_A2A]);
+  Server := TAiA2AServer.Create(nil);
+  Exec := TSuiteA2AExecutor.Create;
+  ExecRef := Exec; // el servidor guarda la interfaz: vida por referencias
+  Resolver := TSuiteA2AResolver.Create;
+  Http := THTTPClient.Create;
+  try
+    Http.ConnectionTimeout := 15000;
+    Http.ResponseTimeout := 15000;
+    Server.Port := PORT_A2A;
+    Server.AgentName := 'Suite Exec Agent';
+    Server.Executor := ExecRef;
+
+    if AScenario = 'a2a:exec-complete' then
+    begin
+      Server.Active := True;
+      Client := TAiA2AClient.Create(nil);
+      try
+        Client.Url := Url;
+        Task := Client.SendText('hola', OutText);
+        Task.Free;
+        Result := 'estado=' + StateName(Client.LastTaskState) + '|texto=' + OutText;
+        Task := Client.SendText('mudo', OutText);
+        Task.Free;
+        Result := Result + '|mudo=' + StateName(Client.LastTaskState);
+      finally
+        Client.Free;
+      end;
+    end
+
+    else if AScenario = 'a2a:exec-hitl' then
+    begin
+      Server.Active := True;
+      Client := TAiA2AClient.Create(nil);
+      try
+        Client.Url := Url;
+        Task := Client.SendText('pregunta', OutText);
+        Task.Free;
+        TaskId := Client.LastTaskId;
+        CtxId := Client.LastContextId;
+        Result := 'estado1=' + StateName(Client.LastTaskState) +
+          '|pregunta=' + Client.LastStatusMessage;
+        Task := Client.SendTextEx('si', TaskId, CtxId, OutText);
+        Task.Free;
+        Result := Result + '|estado2=' + StateName(Client.LastTaskState) +
+          '|texto=' + OutText + '|mismoTask=' + IfThen(Client.LastTaskId = TaskId, 'si', 'no');
+      finally
+        Client.Free;
+      end;
+    end
+
+    else if AScenario = 'a2a:exec-cancel' then
+    begin
+      Server.MaxConcurrentTasks := 1;
+      Server.Active := True;
+      TaskId := SendNoBlock(Url + '/', 'lento');
+      // El unico hueco esta ocupado: el siguiente es AgentBusy
+      var J := Rpc(Url + '/', '{"jsonrpc":"2.0","id":3,"method":"SendMessage","params":{' +
+        '"message":{"messageId":"m2","role":"ROLE_USER","parts":[{"text":"hola"}]}}}');
+      try
+        Result := 'ocupado=' + J.GetValue<string>('error.code', 'sin-error');
+      finally
+        J.Free;
+      end;
+      J := Rpc(Url + '/', '{"jsonrpc":"2.0","id":4,"method":"CancelTask","params":{"id":"' + TaskId + '"}}');
+      try
+        Result := Result + '|cancelado=' + J.GetValue<string>('result.status.state', '?');
+      finally
+        J.Free;
+      end;
+      // El ejecutor reporta 'completed' despues de la cancelacion: se ignora
+      Sleep(300);
+      Result := Result + '|tardio=' + TaskState(Url + '/', TaskId);
+    end
+
+    else if AScenario = 'a2a:paths' then
+    begin
+      Server.AgentPaths := True;
+      Server.OnResolveAgent := Resolver.Resolve;
+      Server.Active := True;
+      var Card := TJSONObject.ParseJSONValue(
+        Http.Get(Url + '/uno/.well-known/agent-card.json').ContentAsString(TEncoding.UTF8)) as TJSONObject;
+      try
+        Result := 'card=' + Card.GetValue<string>('name', '?');
+        Result := Result + '|url=' + IfThen(
+          Card.ToJSON.Contains('localhost:' + IntToStr(PORT_A2A) + '/uno/'), 'ok', 'mal');
+      finally
+        Card.Free;
+      end;
+      Result := Result + '|desconocido=' +
+        IntToStr(Http.Get(Url + '/tres/.well-known/agent-card.json').StatusCode);
+      Client := TAiA2AClient.Create(nil);
+      try
+        Client.Url := Url + '/uno';
+        Task := Client.SendText('hola', OutText);
+        Task.Free;
+        TaskId := Client.LastTaskId;
+        Result := Result + '|texto=' + OutText;
+      finally
+        Client.Free;
+      end;
+      Result := Result + '|ajeno=' + TaskState(Url + '/dos/', TaskId);
+      Result := Result + '|propio=' + IfThen(
+        TaskState(Url + '/uno/', TaskId) = 'TASK_STATE_COMPLETED', 'ok', 'mal');
+    end
+
+    else if AScenario = 'a2a:bind' then
+    begin
+      Server.BindAddress := '127.0.0.1';
+      Server.Active := True;
+      Result := 'card=' + IntToStr(Http.Get(Format('http://127.0.0.1:%d/.well-known/agent-card.json',
+        [PORT_A2A])).StatusCode);
+    end;
+  finally
+    Exec.Cancelado.SetEvent; // que ningun Execute quede esperando
+    Http.Free;
+    Server.Free;             // espera a los Execute que sigan vivos
+    Resolver.Free;
+    ExecRef := nil;
+  end;
+end;
 
 function TRegressionSuite.RunA2AFlowScenario(const AScenario: string): string;
 var

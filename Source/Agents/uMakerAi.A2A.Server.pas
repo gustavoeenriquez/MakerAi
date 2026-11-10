@@ -136,6 +136,10 @@ type
     ArtifactsJson: string;
     MessageJson: string;
     History: TStringList; // 'role<TAB>texto'
+    // Agente al que pertenece (AgentPaths); '' = servidor de un solo agente.
+    AgentId: string;
+    // Lo corre un IAiA2AExecutor y ocupa un hueco de MaxConcurrentTasks.
+    ExecActive: Boolean;
     constructor Create;
     destructor Destroy; override;
   end;
@@ -194,6 +198,66 @@ type
   // responde 401. AAuthHeader es el valor crudo de Authorization.
   TAiA2AAuthEvent = procedure(Sender: TObject; const AAuthHeader: string; var AAllow: Boolean) of object;
 
+  // ---------------------------------------------------------------------------
+  // Ejecutor externo (2026-11-10)
+  // ---------------------------------------------------------------------------
+  // Por defecto el servidor corre el grafo de un TAIAgentManager y deduce el
+  // estado mirandolo. Un host que ya tiene su propio motor -un orquestador con
+  // candados, politica, historial, topes de gasto, suspensiones persistidas en
+  // disco- no puede delegar la ejecucion en el manager sin saltarse todo eso.
+  // Con Executor asignado el servidor solo habla A2A: le entrega cada task y el
+  // host le EMPUJA el estado con AReport.
+  //
+  // Contrato:
+  //  - Execute corre en un TTask del servidor y puede bloquear lo que dure el
+  //    task. Debe terminar con un AReport final (completed, failed o
+  //    input-required); si vuelve sin el, el task queda failed.
+  //  - input-required libera el hueco de MaxConcurrentTasks: la suspension la
+  //    guarda el host. El siguiente SendMessage con ese taskId llega como otro
+  //    Execute con Resume=True y el texto nuevo en Input.
+  //  - AReport es seguro desde cualquier hilo. Un AReport sobre un task ya
+  //    terminal (cancelado, por ejemplo) se ignora.
+  //  - Cancel es un aviso: el servidor YA marco el task como canceled (antes de
+  //    llamar, bajo su candado) y todo reporte posterior se ignora. El host
+  //    debe detener la ejecucion o descartar la suspension que guarde.
+  TAiA2AExecRequest = record
+    AgentId: string;   // '' sin AgentPaths
+    TaskId: string;
+    ContextId: string;
+    MessageId: string;
+    Input: string;
+    Resume: Boolean;
+  end;
+
+  TAiA2AExecUpdate = record
+    State: string;          // A2A_STATE_*: completed, failed o input-required
+    // completed: la respuesta; failed: el error; input-required: la pregunta
+    Text: string;
+    // Solo input-required: contexto de la pregunta (se anade al status)
+    Context: string;
+    // Solo completed: respuesta estructurada (mismo formato que A2A_BB_*)
+    ArtifactsJson: string;
+    MessageJson: string;
+    class function Completed(const AText: string): TAiA2AExecUpdate; static;
+    class function Failed(const AError: string): TAiA2AExecUpdate; static;
+    class function InputRequired(const AQuestion: string;
+      const AContext: string = ''): TAiA2AExecUpdate; static;
+  end;
+
+  TAiA2AExecReport = reference to procedure(const AUpdate: TAiA2AExecUpdate);
+
+  IAiA2AExecutor = interface
+    ['{4B7E2C91-6D3A-4F58-A1E9-0C5D8B3F7A26}']
+    procedure Execute(const ARequest: TAiA2AExecRequest; AReport: TAiA2AExecReport);
+    procedure Cancel(const AAgentId, ATaskId: string);
+  end;
+
+  // Varios agentes en un puerto (AgentPaths): se llama con ACard=nil para saber
+  // si el agente existe (AFound) y con la card ya construida para darle su
+  // nombre, descripcion y skills antes de publicarla.
+  TAiA2AResolveAgentEvent = procedure(Sender: TObject; const AAgentId: string;
+    ACard: TJSONObject; var AFound: Boolean) of object;
+
   TAiA2AServer = class(TComponent)
   private
     FHttpServer: TIdHTTPServer;
@@ -224,8 +288,12 @@ type
     // Ultima URL base servida, para poder responder GetExtendedAgentCard sin
     // tener el contexto HTTP delante.
     FLastBaseUrl: string;
-    // Puente entre DoSendMessage y HandleJsonRpc para el brazo 'message'
-    FLastMessageJson: string;
+    FBindAddress: string;
+    FAgentPaths: Boolean;
+    FOnResolveAgent: TAiA2AResolveAgentEvent;
+    FExecutor: IAiA2AExecutor;
+    FExecRunning: Integer;   // tasks del ejecutor ocupando hueco (bajo FTasksLock)
+    FExecThreads: Integer;   // TTasks del ejecutor vivos (interlocked)
     FTasks: TObjectDictionary<string, TAiA2ATaskInfo>;
     FTasksLock: TCriticalSection;
     FSlots: TObjectList<TAiA2AManagerSlot>;
@@ -257,6 +325,11 @@ type
     procedure ResumeTask(AInfo: TAiA2ATaskInfo; const AInput: string; const AMessageId: string);
     procedure WaitTask(AInfo: TAiA2ATaskInfo);
     procedure PurgeTasks;
+    // --- ejecutor externo ---
+    procedure LaunchExec(AInfo: TAiA2ATaskInfo; const AInput, AMessageId: string;
+      AResume: Boolean);
+    procedure ApplyExecUpdate(AInfo: TAiA2ATaskInfo; const AUpdate: TAiA2AExecUpdate); // exige FTasksLock
+    function EffectiveBindAddress: string;
     // --- json ---
     function BuildAgentCard(const ABaseUrl: string): TJSONObject;
     // AHistoryLength: -1 todo el historial, 0 ninguno, N los ultimos N.
@@ -304,8 +377,22 @@ type
     procedure Start;
     procedure Stop;
     property Active: Boolean read FActive write SetActive;
+    // Ver IAiA2AExecutor. Con el asignado no hace falta AgentManager.
+    property Executor: IAiA2AExecutor read FExecutor write FExecutor;
   published
     property Port: Integer read FPort write FPort default 8280;
+    // IP local a la que atarse. Vacia = la variable de entorno
+    // A2A_BIND_ADDRESS y, si tampoco esta, todas las interfaces (lo de antes).
+    // Un servicio detras de un proxy en la misma maquina debe usar 127.0.0.1:
+    // si no, el puerto queda abierto a quien alcance la maquina.
+    property BindAddress: string read FBindAddress write FBindAddress;
+    // Varios agentes en el mismo puerto, cada uno bajo su ruta:
+    //   GET  /<agente>/.well-known/agent-card.json
+    //   POST /<agente>/                 (JSON-RPC)
+    // OnResolveAgent dice cuales existen y personaliza su card. Los tasks
+    // quedan separados por agente (GetTask de otro agente = TaskNotFound).
+    property AgentPaths: Boolean read FAgentPaths write FAgentPaths default False;
+    property OnResolveAgent: TAiA2AResolveAgentEvent read FOnResolveAgent write FOnResolveAgent;
     property AgentManager: TAIAgentManager read FAgentManager write SetAgentManager;
     property AgentName: string read FAgentName write FAgentName;
     property AgentDescription: string read FAgentDescription write FAgentDescription;
@@ -413,6 +500,54 @@ procedure Register;
 implementation
 
 uses System.Hash, System.StrUtils, uMakerAi.Telemetry;
+
+threadvar
+  // Agente de la peticion en curso (AgentPaths) y su URL base publica.
+  GA2AAgent: string;
+  GA2ABaseUrl: string;
+  // Puente entre DoSendMessage y HandleJsonRpc para el brazo 'message'. Era un
+  // campo del servidor: dos SendMessage simultaneos podian cruzarse la
+  // respuesta estructurada (uno devolvia el Message del otro).
+  GA2ALastMessageJson: string;
+
+{ TAiA2AExecUpdate }
+
+class function TAiA2AExecUpdate.Completed(const AText: string): TAiA2AExecUpdate;
+begin
+  Result := Default(TAiA2AExecUpdate);
+  Result.State := A2A_STATE_COMPLETED;
+  Result.Text := AText;
+end;
+
+class function TAiA2AExecUpdate.Failed(const AError: string): TAiA2AExecUpdate;
+begin
+  Result := Default(TAiA2AExecUpdate);
+  Result.State := A2A_STATE_FAILED;
+  Result.Text := AError;
+end;
+
+class function TAiA2AExecUpdate.InputRequired(const AQuestion,
+  AContext: string): TAiA2AExecUpdate;
+begin
+  Result := Default(TAiA2AExecUpdate);
+  Result.State := A2A_STATE_INPUT_REQUIRED;
+  Result.Text := AQuestion;
+  Result.Context := AContext;
+end;
+
+// Un id de agente va en la ruta: nada que pueda escaparse de ella.
+function A2AAgentIdValido(const AId: string): Boolean;
+var
+  C: Char;
+begin
+  Result := (AId <> '') and (Length(AId) <= 64);
+  if Result then
+    for C in AId do
+      if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.']) then
+        Exit(False);
+  if Result and ((AId = '.') or (AId = '..')) then
+    Result := False;
+end;
 
 procedure Register;
 begin
@@ -551,8 +686,18 @@ begin
 end;
 
 destructor TAiA2AServer.Destroy;
+var
+  LEspera: Integer;
 begin
   Stop;
+  // Un TTask del ejecutor todavia vivo llamaria a AReport sobre un servidor
+  // liberado. Se espera a que vuelvan (acotado: el host debe terminarlos).
+  LEspera := 0;
+  while (TInterlocked.CompareExchange(FExecThreads, 0, 0) > 0) and (LEspera < 10000) do
+  begin
+    Sleep(20);
+    Inc(LEspera, 20);
+  end;
   FSkills.Free;
   FTasks.Free;
   FPushConfigs.Free;
@@ -605,6 +750,13 @@ begin
   if FActive then
     Exit;
   FHttpServer.DefaultPort := FPort;
+  FHttpServer.Bindings.Clear;
+  if EffectiveBindAddress <> '' then
+    with FHttpServer.Bindings.Add do
+    begin
+      IP := EffectiveBindAddress;
+      Port := FPort;
+    end;
   FHttpServer.Active := True;
   FActive := True;
 
@@ -729,6 +881,7 @@ begin
   else
     Result.ContextId := NewGuidStr;
   Result.State := A2A_STATE_SUBMITTED;
+  Result.AgentId := GA2AAgent;
   Result.CreatedAt := Now;
   Result.UpdatedAt := Result.CreatedAt;
   FTasksLock.Enter;
@@ -772,6 +925,10 @@ end;
 function TAiA2AServer.FindTask(const AId: string): TAiA2ATaskInfo;
 begin
   if not FTasks.TryGetValue(AId, Result) then
+    Result := nil;
+  // Con varios agentes, el task de otro no existe para este: sin el filtro un
+  // cliente de un agente leeria o cancelaria tasks ajenos con solo su id.
+  if Assigned(Result) and FAgentPaths and (Result.AgentId <> GA2AAgent) then
     Result := nil;
 end;
 
@@ -887,6 +1044,11 @@ procedure TAiA2AServer.StartTask(AInfo: TAiA2ATaskInfo; const AInput: string);
 var
   Slot: TAiA2AManagerSlot;
 begin
+  if Assigned(FExecutor) then
+  begin
+    LaunchExec(AInfo, AInput, AInfo.MessageId, False);
+    Exit;
+  end;
   Slot := AcquireSlot; // lanza AgentBusy si no hay cupo
   try
     // El servidor conduce la ejecucion: necesita que Run retorne de inmediato
@@ -950,6 +1112,11 @@ var
   Slot: TAiA2AManagerSlot;
   ThreadID, NodeName: string;
 begin
+  if Assigned(FExecutor) then
+  begin
+    LaunchExec(AInfo, AInput, AMessageId, True);
+    Exit;
+  end;
   FTasksLock.Enter;
   try
     Slot := AInfo.Slot;
@@ -1007,7 +1174,26 @@ procedure TAiA2AServer.WaitTask(AInfo: TAiA2ATaskInfo);
 var
   Slot: TAiA2AManagerSlot;
   Waited: Integer;
+  LState: string;
 begin
+  if Assigned(FExecutor) then
+  begin
+    // El estado lo empuja el host: basta esperar a que deje de ser working.
+    Waited := 0;
+    repeat
+      FTasksLock.Enter;
+      try
+        LState := AInfo.State;
+      finally
+        FTasksLock.Leave;
+      end;
+      if LState <> A2A_STATE_WORKING then
+        Exit;
+      Sleep(15);
+      Inc(Waited, 15);
+    until Waited >= FWaitTimeoutMs;
+    Exit;
+  end;
   FTasksLock.Enter;
   try
     Slot := AInfo.Slot;
@@ -1030,6 +1216,135 @@ begin
   finally
     FTasksLock.Leave;
   end;
+end;
+
+function TAiA2AServer.EffectiveBindAddress: string;
+begin
+  Result := Trim(FBindAddress);
+  if Result = '' then
+    Result := Trim(GetEnvironmentVariable('A2A_BIND_ADDRESS'));
+end;
+
+// Aplica lo que reporta el ejecutor. Exige FTasksLock tomado.
+procedure TAiA2AServer.ApplyExecUpdate(AInfo: TAiA2ATaskInfo; const AUpdate: TAiA2AExecUpdate);
+var
+  LState: string;
+begin
+  if IsTerminal(AInfo.State) then
+    Exit; // cancelado (o ya cerrado): un reporte tardio no lo resucita
+  LState := A2ACanonicalState(AUpdate.State);
+  if LState = '' then
+    LState := AUpdate.State;
+  if LState = A2A_STATE_WORKING then
+    Exit; // es el estado de partida: nada que publicar
+
+  AInfo.State := LState;
+  AInfo.UpdatedAt := Now;
+  if LState = A2A_STATE_COMPLETED then
+  begin
+    AInfo.OutputText := AUpdate.Text;
+    AInfo.ArtifactsJson := AUpdate.ArtifactsJson;
+    AInfo.MessageJson := AUpdate.MessageJson;
+    if AUpdate.Text <> '' then
+      AInfo.History.Add('agent'#9 + AUpdate.Text);
+  end
+  else if LState = A2A_STATE_INPUT_REQUIRED then
+  begin
+    AInfo.SuspendReason := AUpdate.Text;
+    AInfo.SuspendContext := AUpdate.Context;
+    if AUpdate.Text <> '' then
+      AInfo.History.Add('agent'#9 + AUpdate.Text);
+  end
+  else if LState = A2A_STATE_FAILED then
+  begin
+    AInfo.ErrorText := AUpdate.Text;
+    if AInfo.ErrorText = '' then
+      AInfo.ErrorText := 'Task execution failed';
+  end;
+
+  // Terminal o esperando al humano: deja de ocupar hueco
+  if AInfo.ExecActive and (IsTerminal(LState) or (LState = A2A_STATE_INPUT_REQUIRED)) then
+  begin
+    AInfo.ExecActive := False;
+    Dec(FExecRunning);
+  end;
+  DeliverPushNotifications(AInfo);
+end;
+
+procedure TAiA2AServer.LaunchExec(AInfo: TAiA2ATaskInfo; const AInput,
+  AMessageId: string; AResume: Boolean);
+var
+  LReq: TAiA2AExecRequest;
+  LTaskId: string;
+  LExec: IAiA2AExecutor;
+begin
+  FTasksLock.Enter;
+  try
+    if FExecRunning >= FMaxConcurrentTasks then
+      raise EA2AServerError.CreateCode(A2A_ERR_AGENT_BUSY,
+        'Agent busy: no free execution slot (MaxConcurrentTasks=' +
+        IntToStr(FMaxConcurrentTasks) + ')');
+    Inc(FExecRunning);
+    AInfo.ExecActive := True;
+    AInfo.State := A2A_STATE_WORKING;
+    AInfo.UpdatedAt := Now;
+    AInfo.SuspendReason := '';
+    AInfo.SuspendContext := '';
+    AInfo.History.Add('user'#9 + AInput);
+    LReq.AgentId := AInfo.AgentId;
+    LReq.TaskId := AInfo.Id;
+    LReq.ContextId := AInfo.ContextId;
+    LReq.MessageId := AMessageId;
+    LReq.Input := AInput;
+    LReq.Resume := AResume;
+  finally
+    FTasksLock.Leave;
+  end;
+
+  LTaskId := LReq.TaskId;
+  LExec := FExecutor;
+  TInterlocked.Increment(FExecThreads);
+  TTask.Run(
+    procedure
+    var
+      LReport: TAiA2AExecReport;
+      LInfo: TAiA2ATaskInfo;
+    begin
+      try
+        // Se busca el task por id en cada reporte: si se purgara mientras
+        // tanto, el puntero ya no seria valido.
+        LReport :=
+          procedure(const AUpdate: TAiA2AExecUpdate)
+          var
+            LI: TAiA2ATaskInfo;
+          begin
+            FTasksLock.Enter;
+            try
+              if FTasks.TryGetValue(LTaskId, LI) then
+                ApplyExecUpdate(LI, AUpdate);
+            finally
+              FTasksLock.Leave;
+            end;
+          end;
+        try
+          LExec.Execute(LReq, LReport);
+        except
+          on E: Exception do
+            LReport(TAiA2AExecUpdate.Failed(E.Message));
+        end;
+        // Volvio sin estado final: es un fallo del host, no se deja colgado
+        FTasksLock.Enter;
+        try
+          if FTasks.TryGetValue(LTaskId, LInfo) and (LInfo.State = A2A_STATE_WORKING) then
+            ApplyExecUpdate(LInfo, TAiA2AExecUpdate.Failed(
+              'The executor returned without a final state'));
+        finally
+          FTasksLock.Leave;
+        end;
+      finally
+        TInterlocked.Decrement(FExecThreads);
+      end;
+    end);
 end;
 
 // Descarta tasks terminados vencidos y acota el registry. Sin esto un servidor
@@ -1395,8 +1710,8 @@ var
   Blocking: Boolean;
   LHistLen: Integer;
 begin
-  if not(Assigned(FAgentManager) or Assigned(FOnAcquireManager)) then
-    raise EA2AServerError.CreateCode(-32603, 'No AgentManager assigned to this A2A server');
+  if not(Assigned(FAgentManager) or Assigned(FOnAcquireManager) or Assigned(FExecutor)) then
+    raise EA2AServerError.CreateCode(-32603, 'No AgentManager or Executor assigned to this A2A server');
 
   MsgObj := nil;
   if Assigned(AParams) then
@@ -1506,7 +1821,7 @@ begin
 
   FTasksLock.Enter;
   try
-    FLastMessageJson := Info.MessageJson;
+    GA2ALastMessageJson := Info.MessageJson;
     Result := BuildTaskJson(Info, LHistLen);
   finally
     FTasksLock.Leave;
@@ -1571,6 +1886,8 @@ begin
   try
     for Pair in FTasks do
     begin
+      if FAgentPaths and (Pair.Value.AgentId <> GA2AAgent) then
+        Continue;
       RefreshTask(Pair.Value); // el listado tampoco debe mentir
       if (FiltroCtx <> '') and (Pair.Value.ContextId <> FiltroCtx) then
         Continue;
@@ -1922,6 +2239,31 @@ begin
     FTasksLock.Leave;
   end;
 
+  if Assigned(FExecutor) then
+  begin
+    // Primero se marca y despues se avisa: si el host reportara antes de que
+    // el servidor anotara la cancelacion, el task acabaria completed.
+    FTasksLock.Enter;
+    try
+      if IsTerminal(Info.State) then
+        raise EA2AServerError.CreateCode(A2A_ERR_TASK_NOT_CANCELABLE,
+          'Task ' + Id + ' is already in a terminal state (' + Info.State + ')');
+      if Info.ExecActive then
+      begin
+        Info.ExecActive := False;
+        Dec(FExecRunning);
+      end;
+      Info.State := A2A_STATE_CANCELED;
+      Info.UpdatedAt := Now;
+      DeliverPushNotifications(Info);
+      Result := BuildTaskJson(Info);
+    finally
+      FTasksLock.Leave;
+    end;
+    FExecutor.Cancel(Info.AgentId, Info.Id);
+    Exit;
+  end;
+
   // Aborta SOLO el manager de este task. Con un pool, abortar el manager de
   // diseno cancelaria el task de otro llamante.
   if Assigned(Slot) and Assigned(Slot.Manager) then
@@ -2051,12 +2393,12 @@ begin
       // Metodos 1.0 + aliases 0.x (message/send, tasks/get, tasks/cancel)
       if SameText(Method, 'SendMessage') or SameText(Method, 'message/send') then
       begin
-        // DoSendMessage deja en FLastMessageJson lo que el grafo haya puesto en
-        // A2A.Message; si hay algo, la respuesta va por el brazo 'message'.
-        FLastMessageJson := '';
+        // DoSendMessage deja en GA2ALastMessageJson lo que el grafo haya puesto
+        // en A2A.Message; si hay algo, la respuesta va por el brazo 'message'.
+        GA2ALastMessageJson := '';
         LTaskJson := DoSendMessage(Params);
-        if FLastMessageJson <> '' then
-          Result := RpcResult(IdVal, WrapSendMessageAsMessage(FLastMessageJson, LTaskJson))
+        if GA2ALastMessageJson <> '' then
+          Result := RpcResult(IdVal, WrapSendMessageAsMessage(GA2ALastMessageJson, LTaskJson))
         else
           Result := RpcResult(IdVal, WrapSendMessageResult(LTaskJson));
       end
@@ -2073,7 +2415,19 @@ begin
         if not FPublishExtendedCard then
           Result := RpcError(IdVal, A2A_ERR_EXTENDED_CARD_NOT_CONFIGURED, 'Extended agent card is not configured')
         else
-          Result := RpcResult(IdVal, BuildAgentCard(FLastBaseUrl));
+        begin
+          var LCard: TJSONObject;
+          if GA2ABaseUrl <> '' then
+            LCard := BuildAgentCard(GA2ABaseUrl)
+          else
+            LCard := BuildAgentCard(FLastBaseUrl);
+          if FAgentPaths and Assigned(FOnResolveAgent) then
+          begin
+            var LFound := True;
+            FOnResolveAgent(Self, GA2AAgent, LCard, LFound);
+          end;
+          Result := RpcResult(IdVal, LCard);
+        end;
       end
       else if SameText(Method, 'SendStreamingMessage') or SameText(Method, 'SubscribeToTask') or
         SameText(Method, 'message/stream') or SameText(Method, 'tasks/resubscribe') then
@@ -2400,9 +2754,67 @@ var
   PeekRoot: TJSONValue;
   Card: TJSONObject;
   Allowed: Boolean;
+  LUri, LAgent, LResto: string;
+  LFound: Boolean;
+  LSlash: Integer;
 begin
   AResponseInfo.ContentType := 'application/json; charset=utf-8';
   AResponseInfo.CharSet := 'utf-8';
+
+  // Indy reutiliza hilos entre peticiones: el contexto se limpia siempre.
+  GA2AAgent := '';
+  GA2ABaseUrl := '';
+  GA2ALastMessageJson := '';
+  LUri := ARequestInfo.URI;
+  LAgent := '';
+  if FAgentPaths then
+  begin
+    // /<agente>/<resto>: el primer segmento elige el agente y el resto se
+    // atiende como si fuera la raiz de un servidor de un solo agente.
+    LResto := LUri;
+    while LResto.StartsWith('/') do
+      LResto := LResto.Substring(1);
+    LSlash := LResto.IndexOf('/');
+    if LSlash < 0 then
+    begin
+      LAgent := LResto;
+      LResto := '';
+    end
+    else
+    begin
+      LAgent := LResto.Substring(0, LSlash);
+      LResto := LResto.Substring(LSlash + 1);
+    end;
+    LFound := False;
+    if A2AAgentIdValido(LAgent) and Assigned(FOnResolveAgent) then
+      FOnResolveAgent(Self, LAgent, nil, LFound);
+    if not LFound then
+    begin
+      AResponseInfo.ResponseNo := 404;
+      AResponseInfo.ContentText := '{"error":"agent not found"}';
+      Exit;
+    end;
+    GA2AAgent := LAgent;
+    LUri := '/' + LResto;
+  end;
+
+  // URL base publica del agente (la card la anuncia y GetExtendedAgentCard la
+  // necesita). Detras de un reverse proxy TLS el esquema real llega por
+  // cabecera; sin esto la card anunciaria http:// y el cliente no volveria.
+  if FPublicUrl <> '' then
+    BaseUrl := FPublicUrl
+  else
+  begin
+    Scheme := LowerCase(ARequestInfo.RawHeaders.Values['X-Forwarded-Proto']);
+    if Scheme = '' then
+      Scheme := 'http';
+    BaseUrl := Scheme + '://' + ARequestInfo.Host + '/';
+  end;
+  if not BaseUrl.EndsWith('/') then
+    BaseUrl := BaseUrl + '/';
+  if LAgent <> '' then
+    BaseUrl := BaseUrl + LAgent + '/';
+  GA2ABaseUrl := BaseUrl;
 
   // --- Autorizacion ---
   // La Agent Card base queda FUERA de la comprobacion de ApiKey: es un
@@ -2416,8 +2828,8 @@ begin
   // OnAuthorize SI se sigue llamando: si alguien quiere cerrar tambien la
   // card, es una decision suya y explicita.
   CardPublica := SameText(ARequestInfo.Command, 'GET') and
-    (SameText(ARequestInfo.URI, '/.well-known/agent-card.json') or
-     SameText(ARequestInfo.URI, '/.well-known/agent.json'));
+    (SameText(LUri, '/.well-known/agent-card.json') or
+     SameText(LUri, '/.well-known/agent.json'));
 
   AuthHdr := ARequestInfo.RawHeaders.Values['Authorization'];
   Allowed := True;
@@ -2446,23 +2858,18 @@ begin
   end;
 
   // Agent Card discovery (path 1.0 + alias legacy)
-  if SameText(ARequestInfo.Command, 'GET') and
-    (SameText(ARequestInfo.URI, '/.well-known/agent-card.json') or SameText(ARequestInfo.URI, '/.well-known/agent.json')) then
+  if CardPublica then
   begin
-    if FPublicUrl <> '' then
-      BaseUrl := FPublicUrl
-    else
-    begin
-      // Detras de un reverse proxy TLS el esquema real llega por cabecera; sin
-      // esto la card anunciaria http:// y el cliente no podria volver.
-      Scheme := LowerCase(ARequestInfo.RawHeaders.Values['X-Forwarded-Proto']);
-      if Scheme = '' then
-        Scheme := 'http';
-      BaseUrl := Scheme + '://' + ARequestInfo.Host + '/';
-    end;
-    FLastBaseUrl := BaseUrl;
+    if LAgent = '' then
+      FLastBaseUrl := BaseUrl;
     Card := BuildAgentCard(BaseUrl);
     try
+      // Con varios agentes, cada uno pone su nombre, descripcion y skills
+      if FAgentPaths and Assigned(FOnResolveAgent) then
+      begin
+        LFound := True;
+        FOnResolveAgent(Self, LAgent, Card, LFound);
+      end;
       CardJson := Card.ToJSON;
     finally
       Card.Free;
