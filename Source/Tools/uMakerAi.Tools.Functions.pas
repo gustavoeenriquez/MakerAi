@@ -4026,8 +4026,8 @@ begin
     // Sincronizamos con el m�todo est�ndar de colecciones para que se vea en el TreeView
     inherited SetDisplayName(Value);
 
-    // Si el cliente interno existe, le pasamos el nombre
-    if Assigned(FMCPClient) then
+    // Si el cliente interno existe (y es nuestro), le pasamos el nombre
+    if Assigned(FMCPClient) and FOwned then
       FMCPClient.Name := Value;
 
     Changed(False);
@@ -4046,15 +4046,20 @@ begin
   }
 end;
 
+// Un item PRESTADO (AddBorrowedMCPClient, FOwned=False) nunca escribe en su
+// cliente: lo comparte un pool entre peticiones de varios hilos. Propagar
+// Params/EnvVars/Name hacia el reasignaba el TStringList compartido en cada
+// peticion (Clear+Add) mientras otras lo leian: corrupcion de heap y AV en
+// TObject.Free con peticiones concurrentes (MKAIServer, 2026-11-11).
 procedure TMCPClientItem.OnFParamsChanged(Sender: TObject);
 begin
-  if Assigned(FMCPClient) then
+  if Assigned(FMCPClient) and FOwned then
     FMCPClient.Params.Assign(FParams);
 end;
 
 procedure TMCPClientItem.OnFEnvVarsChanged(Sender: TObject);
 begin
-  if Assigned(FMCPClient) then
+  if Assigned(FMCPClient) and FOwned then
     FMCPClient.EnvVars.Assign(FEnvVars);
 end;
 
@@ -4067,6 +4072,10 @@ end;
 
 procedure TMCPClientItem.SetTransportType(const Value: TToolTransportType);
 begin
+  // Prestado: el transporte es el del cliente del pool; no se libera ni se
+  // recrea un objeto ajeno.
+  if Assigned(FMCPClient) and not FOwned then
+    Exit;
   // Verificamos si realmente cambi� o si el objeto no existe
   if not Assigned(FMCPClient) or (FMCPClient.TransportType <> Value) then
   begin
@@ -4102,8 +4111,8 @@ end;
 
 procedure TMCPClientItem.UpdateClientProperties;
 begin
-  // Asegurarnos de que tenemos un cliente al que transferirle los datos
-  if not Assigned(FMCPClient) then
+  // Asegurarnos de que tenemos un cliente PROPIO al que transferirle los datos
+  if not Assigned(FMCPClient) or not FOwned then
     Exit;
 
   // 1. Transferir el tipo de transporte

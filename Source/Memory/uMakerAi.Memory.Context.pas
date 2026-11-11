@@ -180,6 +180,10 @@ begin
               AddCandidate(Entry, SemScore, True); // Context owns semantic entries
             end;
           finally
+            // Como FTS y Recall: las entradas ya son de Candidates. Sin esto la
+            // lista (OwnsObjects) las liberaba y el finally de Build otra vez:
+            // doble liberacion con cada acierto semantico (AV en TObject.Free).
+            SemanticList.OwnsObjects := False;
             SemanticList.Free;
           end;
         end;
