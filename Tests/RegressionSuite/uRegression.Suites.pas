@@ -1174,6 +1174,12 @@ begin
     .Input('agents:expr-decimal')
     .ExpectEquals('ge=True|gt=True|lt=False');
 
+  // OnSuspend encolado y manager liberado antes de atender la cola: se
+  // descarta en vez de llamar a un manager muerto (AV, bug RS1 de MakerFlow)
+  FRunner.AddCase('agents.suspend.after-free')
+    .Input('agents:suspend-after-free')
+    .ExpectEquals('esSuspended|fired=0');
+
   // Telemetria: un span creado en otro hilo (tool calls en TTask) no encontraba al
   // span del turno y arrancaba una traza nueva; AiTraceContextEnter hereda el padre
   FRunner.AddCase('telemetry.task-inherits-trace')
@@ -1499,6 +1505,36 @@ begin
           '|' + Agents.EndNode.Output;
       finally
         Agents.Free;
+      end;
+      Exit;
+    end;
+
+    // OnSuspend se encola con TThread.Queue. Si el dueño libera el manager
+    // antes de que el hilo principal atienda la cola, la clausura leia Self y
+    // FOnSuspend de memoria liberada (AV en mkflowd con /api/resume inmediato).
+    // Ahora debe descartarse: el contador no sube y no hay excepcion.
+    if AScenario = 'agents:suspend-after-free' then
+    begin
+      Agents := TAIAgentManager.Create(nil);
+      try
+        Agents.AddNode('Espera', Handlers.NodeSuspendOnce);
+        Agents.SetEntryPoint('Espera').SetFinishPoint('Espera');
+        Agents.OnSuspend := Handlers.AgentSuspend;
+        Agents.Run('ping');
+        // Sin CheckSynchronize: el OnSuspend queda en la cola
+        var LDeadline := Now + EncodeTime(0, 0, 5, 0);
+        while Agents.Busy and (Now < LDeadline) do
+          Sleep(20);
+        Result := GetEnumName(TypeInfo(TAgentExecutionStatus), Ord(Agents.Blackboard.GetStatus));
+      finally
+        Agents.Free;
+      end;
+      try
+        CheckSynchronize;
+        Result := Result + '|fired=' + IntToStr(Handlers.SuspendFired);
+      except
+        on E: Exception do
+          Result := Result + '|' + E.ClassName;
       end;
       Exit;
     end;

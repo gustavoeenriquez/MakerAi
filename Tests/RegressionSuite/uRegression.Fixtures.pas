@@ -222,6 +222,10 @@ type
     LastGuardCategory: string;   // categoria recibida en OnPromptGuard
     LastDataEnd: string;         // texto recibido en OnReceiveDataEnd
     SkillsLoaded: Integer;       // skills entregados por TAiSkills (OnSkillLoaded)
+    SuspendFired: Integer;       // veces que llego OnSuspend de un manager
+
+    // Agentes: cuenta los OnSuspend recibidos
+    procedure AgentSuspend(Sender: TObject; const AThreadID, ANodeName, AReason, AContext: string);
 
     // Chat: texto recibido en OnReceiveDataEnd
     procedure ChatDataEnd(const Sender: TObject; aMsg: TAiChatMessage; aResponse: TJSonObject;
@@ -350,6 +354,11 @@ begin
       Exit(TAiMCPResponseBuilder.New.AddText('CANCELADO:' + AParams.Operation).Build);
   end;
   Result := BuildInputRequired(AParams.Operation);
+end;
+
+procedure TFixtureHandlers.AgentSuspend(Sender: TObject; const AThreadID, ANodeName, AReason, AContext: string);
+begin
+  Inc(SuspendFired);
 end;
 
 { TFixtureHandlers: TAiSkills }

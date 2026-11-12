@@ -362,6 +362,10 @@ type
     FCheckpointSeq:      Integer;  // protegido por FActiveTasksLock
     FSuspendedSteps:     TObjectList<TAiPendingStep>; // owned
     FSuspendedStepsLock: TCriticalSection;
+    // Bandera de vida (TAiAgentsAliveFlag) compartida con lo encolado con
+    // TThread.Queue: el destructor la apaga para que un OnSuspend que llega
+    // tarde no lea Self/FOnSuspend de un manager ya liberado
+    FAliveFlag: IInterface;
     FOnSuspend:          TAIAgentsOnSuspend;
     function GetBusy: Boolean;
     procedure SetCheckpointer(const Value: IAiCheckpointer);
@@ -508,6 +512,14 @@ procedure Register;
 implementation
 
 uses uMakerAi.Localization, uMakerAi.Agents.EngineRegistry, uMakerAi.Agents.Attributes, uMakerAi.Telemetry;
+
+type
+  // Ver TAIAgentManager.FAliveFlag. Se lee y se apaga en el hilo principal
+  // (cola de TThread.Queue y destructor del dueño), así que basta un Boolean.
+  TAiAgentsAliveFlag = class(TInterfacedObject)
+  public
+    Alive: Boolean;
+  end;
 
 {$IF CompilerVersion < 35}
 class function TInterlockedHelper.Exchange(var Target: Boolean; Value: Boolean): Boolean;
@@ -1504,6 +1516,9 @@ end;
 constructor TAIAgentManager.Create(aOwner: TComponent);
 begin
   inherited;
+  var LFlag := TAiAgentsAliveFlag.Create;
+  LFlag.Alive := True;
+  FAliveFlag := LFlag;
   FBlackboard := TAIBlackboard.Create;
   FNodes := TList<TAIAgentsNode>.Create;
   FLinks := TList<TAIAgentsLink>.Create;
@@ -1529,6 +1544,9 @@ end;
 
 destructor TAIAgentManager.Destroy;
 begin
+  // Primero: lo ya encolado (OnSuspend) deja de tocar este objeto
+  if Assigned(FAliveFlag) then
+    TAiAgentsAliveFlag(FAliveFlag as TObject).Alive := False;
   FSuspendedSteps.Free;
   FSuspendedStepsLock.Free;
   FActiveTasks.Free;
@@ -2680,10 +2698,18 @@ begin
     var LNodeName   := ANode.Name;
     var LReason     := ANode.SuspendReason;
     var LContext    := ANode.SuspendContext;
+    var LAlive      := FAliveFlag;
+    // La clausura corre cuando el hilo principal atiende la cola: si para
+    // entonces el dueño ya libero el manager (p.ej. un /api/resume inmediato
+    // en MakerFlow), leer Self/FOnSuspend llamaba a basura (AV). Se consulta
+    // la bandera, que sobrevive al manager por conteo de referencias.
     TThread.Queue(nil,
       procedure
       begin
-        FOnSuspend(Self, LThreadID, LNodeName, LReason, LContext);
+        if not TAiAgentsAliveFlag(LAlive as TObject).Alive then
+          Exit;
+        if Assigned(FOnSuspend) then
+          FOnSuspend(Self, LThreadID, LNodeName, LReason, LContext);
       end);
   end;
 end;
