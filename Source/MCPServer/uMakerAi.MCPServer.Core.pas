@@ -324,7 +324,12 @@ type
     property Port: Integer read FPort write FPort;
     property Host: string read FHost write FHost;
     property ServerName: string read FServerName write FServerName;
+    // Version que se reporta en serverInfo. Vacia (default) = la del ejecutable
+    // que aloja el servidor; ver EffectiveServerVersion.
     property ServerVersion: string read FServerVersion write FServerVersion;
+    // La que va de verdad en serverInfo: ServerVersion si se asigno; si no, la
+    // version de producto del ejecutable (Windows) o '1.0.0' si no la hay.
+    function EffectiveServerVersion: string;
     property ProtocolVersion: string read FProtocolVersion write FProtocolVersion;
     property CorsEnabled: Boolean read FCorsEnabled write FCorsEnabled;
     property CorsAllowedOrigins: string read FCorsAllowedOrigins write FCorsAllowedOrigins;
@@ -413,7 +418,8 @@ type
     property SettingsFile: String read GetSettingsFile write SetSettingsFile;
   Published
     Property ServerName: String read GetServerName write SetServerName;
-    // Version que reporta initialize en serverInfo (delega en el motor logico)
+    // Version que reporta serverInfo (delega en el motor logico). Vacia = la del
+    // ejecutable que aloja el servidor (LogicServer.EffectiveServerVersion)
     property ServerVersion: String read GetServerVersion write SetServerVersion;
     property AiFunctions: TAiFunctions read FAiFunctions write SetAiFunctions;
     // Autenticación: Si ApiKey está configurado, valida "Authorization: Bearer <key>" o "X-API-Key: <key>"
@@ -731,10 +737,28 @@ begin
   FPort := 3000;
   FHost := 'localhost';
   FServerName := 'MakerAi-MCPServer';
-  FServerVersion := '1.0.0';
+  FServerVersion := ''; // vacio = version del ejecutable (ver EffectiveServerVersion)
   FProtocolVersion := '2025-03-26';
   FCorsEnabled := True;
   FCorsAllowedOrigins := '*';
+end;
+
+function TAiMCPLogicServer.EffectiveServerVersion: string;
+{$IFDEF MSWINDOWS}
+var
+  LMajor, LMinor, LBuild: Cardinal;
+{$ENDIF}
+begin
+  Result := Trim(FServerVersion);
+  if Result <> '' then
+    Exit;
+  // Sin ServerVersion asignado se informa la version del programa que aloja
+  // el servidor (antes salia siempre '1.0.0', fuera cual fuera el programa)
+{$IFDEF MSWINDOWS}
+  if GetProductVersion(ParamStr(0), LMajor, LMinor, LBuild) then
+    Exit(Format('%d.%d.%d', [LMajor, LMinor, LBuild]));
+{$ENDIF}
+  Result := '1.0.0';
 end;
 
 procedure TAiMCPLogicServer.CreateDefaultSettingsFile;
@@ -1215,7 +1239,7 @@ begin
   ServerInfo := TJSONObject.Create;
   ResultJSON.AddPair('serverInfo', ServerInfo);
   ServerInfo.AddPair('name', FServerName);
-  ServerInfo.AddPair('version', FServerVersion);
+  ServerInfo.AddPair('version', EffectiveServerVersion);
   Result := TValue.From<TJSONObject>(ResultJSON);
 end;
 
@@ -1350,7 +1374,7 @@ begin
   begin
     ServerInfo := TJSONObject.Create;
     ServerInfo.AddPair('name', FServerName);
-    ServerInfo.AddPair('version', FServerVersion);
+    ServerInfo.AddPair('version', EffectiveServerVersion);
     MetaObj.AddPair(MCP_META_SERVER_INFO, ServerInfo);
   end;
 end;
@@ -1395,7 +1419,7 @@ begin
   MetaObj := TJSONObject.Create;
   ServerInfo := TJSONObject.Create;
   ServerInfo.AddPair('name', FServerName);
-  ServerInfo.AddPair('version', FServerVersion);
+  ServerInfo.AddPair('version', EffectiveServerVersion);
   MetaObj.AddPair(MCP_META_SERVER_INFO, ServerInfo);
   ResultJSON.AddPair('_meta', MetaObj);
   AddCacheHints(ResultJSON, 3600000); // la identidad del servidor cambia poco: 1 hora
