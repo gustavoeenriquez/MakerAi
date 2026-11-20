@@ -37,6 +37,15 @@ package links its own `.res`. An icon placed in the wrong `.rc` does not show up
    ```
    (`brcc32` is in `C:\Program Files (x86)\Embarcadero\Studio\37.0\bin`)
 
+5. Add the class to its category in `gen_palette_sheet.py` (it warns about icons without a
+   category) and regenerate the images:
+   ```
+   python gen_palette_sheet.py            # Docs/Version 3/images/MakerAI-Component-Palette.png
+   python gen_palette_sheet.py --social   # Docs/Version 3/images/social/MakerAI-palette-*.png
+   ```
+   Both read the version from `Core/uMakerAi.Version.inc`, so regenerate them after a
+   version bump. Use the user's Python (not `python -I`): Pillow lives in user site-packages.
+
 The provider icons drawn by hand (OpenAI, Claude, Gemini, ...) are not in `SPECS`
 and are never overwritten by the generator.
 

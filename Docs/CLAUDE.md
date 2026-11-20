@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Directory Purpose
 
-This is the documentation root for MakerAI v3.x (current version in `Source/Core/uMakerAi.Version.inc`) - an AI orchestration framework for Delphi. **No source code exists here** - all implementation is in `/Source/`.
+This is the documentation root for MakerAI (v4.0; current version in `Source/Core/uMakerAi.Version.inc`) - an AI orchestration framework for Delphi. **No source code exists here** - all implementation is in `/Source/`.
 
 ## Documentation Structure
 

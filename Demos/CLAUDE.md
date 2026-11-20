@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is the Demos directory for the MakerAI 3.x framework. Contains 63 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
+This is the Demos directory for the MakerAI 4.x framework. Contains 63 working example projects demonstrating AI integration patterns for Delphi developers. La mayoria tiene su propio CLAUDE.md con los detalles de implementacion; los que no, estan marcados abajo.
 
 **Estado de compilación (nov 09/2026, tras la localización de la 4.0): 126 de 127 proyectos compilan** en Win64/Debug (los 63 del grupo y los 64 de `Libro/`); el único que falla es `Libro/cap34-componentes-anexos`, que necesita los repos anexos (`DELPHI_LIBRARIES`, `MAKERAI_CHATTOOLS`). **Idioma:** el 081 y el 095 tienen un combo es/en/pt y `--idioma`, y registran sus propios textos con `TAiLocale.RegisterTable` (ver sus CLAUDE.md). Antes: (ago 7/2026) los 48 proyectos compilaban en Win64/Release; el 081 (ago 18/2026), el 082 y el 083 (sep 20/2026) también compilan; el 082 se corrió en runtime (6/6 PASS) y el 083 en **Linux64** sobre Xvfb con OpenAI y Claude.
 

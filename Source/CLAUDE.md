@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Source Directory Overview
 
-This is the main source code directory for MakerAI 3.x (current version in `Core/uMakerAi.Version.inc`), an AI orchestration framework for Delphi. See individual module CLAUDE.md files for detailed guidance on specific subsystems.
+This is the main source code directory for MakerAI 4.x (current version in `Core/uMakerAi.Version.inc`), an AI orchestration framework for Delphi. See individual module CLAUDE.md files for detailed guidance on specific subsystems.
 
 ## Building
 
@@ -32,7 +32,7 @@ All subdirectories (Agents, Chat, ChatUI, Core, Design, Embeddings, MCPClient, M
 | MCPServer | `uMakerAi.MCPServer.Core.pas` | `TAiMCPServer`, `IAiMCPTool` |
 | MCPClient | `uMakerAi.MCPClient.Core.pas` | `TMCPClientItem`, transport classes |
 | Tools | `uMakerAi.Tools.Functions.pas` | `TAiFunctions`, `TFunctionActionItem` |
-| ChatUI | `uMakerAi.UI.ChatList.pas` | `TChatList`, `TChatBubble`, `TChatInput` |
+| ChatUI | `AIChat.Control.FMX.pas`, `AIChat.Input.pas` | `TAIChatView`, `TAIChatInput` (`TChatList`/`TChatBubble`/`TChatInput` obsoletos) |
 | Realtime | `uMakerAi.Realtime.AiConnection.pas` | `TAiRealtimeConnection`, `TAiRealtimeBase`, `TAiOpenAiRealtimeSTT` |
 | WebSocket | `uMakerAi.WebSocket.Client.pas` | `TAiWSClient`, `ITlsTransport`, `TSChannelTransport`, `TAndroidSSLTransport`, `TOpenSSLTransport` |
 

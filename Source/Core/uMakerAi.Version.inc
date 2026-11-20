@@ -1,17 +1,17 @@
 //uMakerAi.Version;
 // Version Information
 const
-  MAKERAI_VERSION_MAJOR    = 3;
-  MAKERAI_VERSION_MINOR    = 9;
+  MAKERAI_VERSION_MAJOR    = 4;
+  MAKERAI_VERSION_MINOR    = 0;
   MAKERAI_VERSION_RELEASE  = 0;
   MAKERAI_VERSION_BUILD    = 0;
 
 // Version String Formats
 const
-  MAKERAI_VERSION_SHORT    = '3.9';
-  MAKERAI_VERSION_FULL     = '3.9.0.0';
-  MAKERAI_VERSION_STRING   = 'MakerAi Suite v3.9.0.0';
-  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v3.9 - OpenAI GPT-Live full-duplex voice, Jev on local Ollama models & MCP leak fixes (Oct 2026)';
+  MAKERAI_VERSION_SHORT    = '4.0';
+  MAKERAI_VERSION_FULL     = '4.0.0.0';
+  MAKERAI_VERSION_STRING   = 'MakerAi Suite v4.0.0.0';
+  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v4.0 - Fluent agent API, A2A agents in PPM, MiniMax, English/Spanish/Portuguese & Oct 2026 model refresh (Nov 2026)';
 
 // Product Information
 const
@@ -38,8 +38,8 @@ const
 
 // API Compatibility
 const
-  MAKERAI_API_LEVEL        = 39;        // Internal API level for compatibility
-  MAKERAI_BREAKING_CHANGE  = True;      // True if this version has breaking changes (v3.9: IAiMCPTool.GetInputSchema ownership, OpenAI audio defaults)
+  MAKERAI_API_LEVEL        = 40;        // Internal API level for compatibility
+  MAKERAI_BREAKING_CHANGE  = True;      // True if this version has breaking changes (v4.0: Claude web search opt-in, English internal prompts, localized messages)
   MAKERAI_LEGACY_SUPPORT   = True;      // True = Support for v2.x components
 
 {******************************************************************************}
@@ -224,6 +224,52 @@ const
   - NEW: Demo 072-A2AFederation showcasing the full A2A stack without an LLM
   - NOTE: the legacy HTTP+SSE MCP transport is formally Deprecated by spec
          2026-07-28 (earliest removal July 2027). Prefer HTTP or StdIO
+
+  Version 4.0.0 (2026-11-20)
+  - BEHAVIOUR: Claude no longer searches the web by default. cap_WebSearch
+         was removed from every Claude model in the registry (except the
+         aa_claude-opus-4-6-agent / aa_claude-opus-5-agent profiles); add it
+         to ModelCaps and SessionCaps to turn it on. A trivial question on
+         claude-fable-5-2 went from 5,994 input tokens to 30
+  - BEHAVIOUR: internal prompts are in English and ask the model to answer
+         in the user's language (default SystemPrompt, bridges, AutoMCP,
+         evals judge, TAiMemory analyzer, built-in tool descriptions)
+  - BEHAVIOUR: exception, OnError and status messages, the chat UI and the
+         design-time editors follow the OS language (MAKERAI_LANG or
+         TAiLocale.Language): English, Spanish and Portuguese, 653 texts.
+         Compare exception classes, not E.Message; EAiHttpError and
+         LastHttpStatus for provider HTTP errors
+  - BEHAVIOUR: TAiShell checks every segment of a chained command and, in
+         allow-list mode, rejects redirections and substitutions
+  - BEHAVIOUR: TAiChat.Run waits up to 15 s for the previous request to
+         close; typed ModelConfig setters pin the value even when unchanged;
+         Kimi ignores Temperature/Top_p; OpenAI and Claude adjust the effort
+         to a level each model accepts; an MCP server without ServerVersion
+         reports the executable version
+  - NEW: fluent agent API completed (AddEdge adds targets, AddNode,
+         AddToolNode, AddExpressionEdge, AddFallbackEdge, SetJoinMode,
+         EAiGraphError); TLLMNode.Guardrails
+  - NEW: A2A agents as PPM packages (type agent, call_agent in AutoMCP,
+         private registries only); TAiA2AServer Executor, AgentPaths and
+         BindAddress
+  - NEW: MiniMax driver (TAiMiniMaxChat, not runtime-tested yet)
+  - NEW: October 2026 model refresh checked against the live APIs:
+         claude-haiku-5-5, claude-fable-5-2, gpt-6.1-sol/terra,
+         gemini-4-argon, gemini-nano-banana-2.1, kimi-k3.1-pro,
+         glm-5.3-flash; retired models kept as aliases of their successors
+  - NEW: TAIChatView footer, action buttons and task steps; TAIChatInput
+         voice-call button; ResetTokenCounters; Cost_usd
+  - NEW: localization (uMakerAi.Localization, TAiLocale, AiStr/AiFmt)
+  - FIX: Claude Computer Use runs the actions of a turn in order; one OTel
+         trace per turn; input bridges and web search reach the model; MCP
+         SSE retries and IsConnected; ws:// over plain TCP; RAG on Linux
+         PostgreSQL with non-ASCII text; TAIBasicIndex scores; double free in
+         TAiMemoryContext.Build; OnSuspend after the manager is freed
+  - DEPRECATED: TChatList, TChatBubble, TChatInput (use TAIChatView and
+         TAIChatInput)
+  - Demos: Demos/Libro (book 4.0 edition, chapters 3-37) and 093-105
+         (Cafe La Ladera series); old demos moved to DeprecatedDemos/
+  - Regression suite: 158 cases (from 117 in 3.9.0)
 
   Version 3.9.0 (2026-10-05)
   - BEHAVIOUR: TAiOpenAiAudio and TAiOpenAiSpeechTool default to
