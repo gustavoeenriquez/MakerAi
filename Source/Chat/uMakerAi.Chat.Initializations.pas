@@ -1103,9 +1103,17 @@ Begin
   //   Gap = SessionCaps - ModelCaps -> determina que bridges/tools se activan en RunNew
   //   Sin gap (SessionCaps = ModelCaps) -> llamada directa a InternalRunCompletions
   // ===========================================================================
+  // Busqueda web OPT-IN (desde v4.0, nov 2026). Con cap_WebSearch en ModelCaps el
+  // driver declara web_search_20260209 en CADA llamada, y Anthropic le suma su
+  // code_execution: una pregunta trivial pasaba de ~220 a ~2.400 tokens de
+  // entrada en haiku-4-5 y a ~6.000 en fable-5-2. Ningun modelo la trae ya por
+  // defecto (salvo los perfiles aa_*-agent). Para activarla, agregar
+  // cap_WebSearch a ModelCaps Y a SessionCaps (en la conexion o con
+  // RegisterUserParam por modelo); solo en SessionCaps abriria el puente de
+  // busqueda externo (gap) en lugar de la busqueda nativa de Claude.
   TAiChatFactory.Instance.RegisterUserParam('Claude', 'Max_Tokens', '16000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
   TAiChatFactory.Instance.RegisterUserParam('Claude', 'Tool_Active', 'False');
   TAiChatFactory.Instance.RegisterUserParam('Claude', 'Asynchronous', 'False');
 
@@ -1120,8 +1128,8 @@ Begin
   // ===========================================================================
   Model := 'claude-haiku-4-5-20251001';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '16000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // ===========================================================================
   // CLAUDE HAIKU 5.5  |  claude-haiku-5-5  [HAIKU ACTUAL, oct 7 2026]
@@ -1140,8 +1148,8 @@ Begin
   // ===========================================================================
   Model := 'claude-haiku-5-5';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '16000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // ===========================================================================
   // CLAUDE SONNET 4 y OPUS 4 (claude-*-4-20250514)  |  RETIRADOS
@@ -1156,8 +1164,8 @@ Begin
   for Model in ['claude-sonnet-4-20250514', 'claude-sonnet-4-0', 'claude-opus-4-20250514', 'claude-opus-4-0'] do
   begin
     TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
-    TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-    TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+    TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+    TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
   end;
 
   // ===========================================================================
@@ -1167,8 +1175,8 @@ Begin
   // ===========================================================================
   Model := 'claude-opus-4-1-20250805';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // ===========================================================================
   // CLAUDE SONNET 4.5  |  Alias: claude-sonnet-4-5  [Legacy]
@@ -1181,8 +1189,8 @@ Begin
   // ===========================================================================
   Model := 'claude-sonnet-4-5-20250929';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '16000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // ===========================================================================
   // CLAUDE OPUS 4.5  |  Alias: claude-opus-4-5  [Legacy]
@@ -1195,8 +1203,8 @@ Begin
   // ===========================================================================
   Model := 'claude-opus-4-5-20251101';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '16000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // ===========================================================================
   // CLAUDE SONNET 4.6  |  Alias: claude-sonnet-4-6  [MODELO ACTUAL]
@@ -1209,8 +1217,8 @@ Begin
   // ===========================================================================
   Model := 'claude-sonnet-4-6';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // ===========================================================================
   // CLAUDE OPUS 4.6  |  Alias: claude-opus-4-6  [generacion anterior]
@@ -1223,8 +1231,8 @@ Begin
   // ===========================================================================
   Model := 'claude-opus-4-6';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // ===========================================================================
   // FAMILIA 4.7/4.8/5 (jul-ago 2026) — thinking ADAPTATIVO OBLIGATORIO
@@ -1236,14 +1244,14 @@ Begin
   // CLAUDE OPUS 4.7 — generacion anterior de Opus (alta autonomia)
   Model := 'claude-opus-4-7';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // CLAUDE OPUS 4.8 — el Opus 4.x mas capaz (long-horizon, knowledge work)
   Model := 'claude-opus-4-8';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // ------- Computer Use (Claude) ------
   // https://docs.claude.com/en/docs/agents-and-tools/tool-use/computer-use-tool
@@ -1269,24 +1277,24 @@ Begin
   // reporta via OnError).
   Model := 'claude-opus-5';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // CLAUDE SONNET 5  [MODELO ACTUAL — MEJOR PRECIO/CALIDAD]
   // Calidad casi-Opus en codigo/agentes. $3/$15 (intro $2/$10 hasta ago 31/2026).
   // Tokenizer nuevo: ~30% mas tokens que sonnet-4-6 para el mismo texto.
   Model := 'claude-sonnet-5';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // CLAUDE FABLE 5 — tope de capacidad ($10/$50)
   // OJO: requiere retencion de datos de 30 dias en la organizacion (orgs con
   // ZDR reciben 400 en TODA peticion); thinking siempre activo.
   Model := 'claude-fable-5';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // ===========================================================================
   // GENERACION SEP 2026: OPUS 5.5 / SONNET 5.5 / FABLE 5.1
@@ -1303,23 +1311,35 @@ Begin
   // defecto MEDIUM (Opus 5 era high): fijar ThinkingLevel si se necesita mas.
   Model := 'claude-opus-5-5';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // CLAUDE SONNET 5.5 — sucesor de Sonnet 5, mismo precio ($2/$10). Acepta
   // mensajes system a mitad de conversacion (Sonnet 5 no).
   Model := 'claude-sonnet-5-5';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // CLAUDE FABLE 5.1 — sucesor de Fable 5, mismo precio ($10/$50). Igual que
   // Fable 5: retencion de 30 dias obligatoria (ZDR = 400) y thinking siempre
   // activo.
   Model := 'claude-fable-5-1';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
+
+  // CLAUDE FABLE 5.2 (nov 2026) — sucesor de Fable 5.1 y MAS BARATO ($8/$40,
+  // cache read $0.20). 1M contexto / 128K salida. Misma superficie que 5.1:
+  // thinking siempre activo (effort low..max), sin sampling, forzar una tool
+  // = 400 (el driver la baja a auto), computer use solo con el toolset y
+  // retencion de 30 dias obligatoria (ZDR = 400). Nuevo: fast mode GA
+  // ($16/$80, FastMode del driver) y el chequeo de edicion del historial con
+  // bloques de thinking aplica a TODAS las cuentas.
+  Model := 'claude-fable-5-2';
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // CLAUDE OPUS 4.1 — RETIRADO el 5 ago 2026. Sus nombres quedan como alias
   // del reemplazo oficial (claude-opus-5-5) para no romper configuraciones.
@@ -1327,8 +1347,8 @@ Begin
   TAiChatFactory.Instance.RegisterCustomModel('Claude', 'claude-opus-4-1',          'claude-opus-5-5');
   Model := 'claude-opus-4-1';
   TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', Model, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // ===========================================================================
   // PERFILES PERSONALIZADOS CLAUDE (aa_*)
@@ -1345,8 +1365,8 @@ Begin
   TAiChatFactory.Instance.RegisterCustomModel('Claude', BaseName, 'claude-sonnet-4-6');
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ThinkingLevel', 'tlHigh');
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // 2. Opus 4.6 — Thinking profundo (maxima capacidad de razonamiento)
   //    Gap = [] -> InternalRunCompletions con ThinkingLevel=tlHigh activo
@@ -1354,8 +1374,8 @@ Begin
   TAiChatFactory.Instance.RegisterCustomModel('Claude', BaseName, 'claude-opus-4-6');
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ThinkingLevel', 'tlHigh');
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'Max_Tokens', '64000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // 3. Opus 4.6 — Agentes (tool calling + TextEditor + Shell habilitados)
   //    Gap = [] -> InternalRunCompletions con Tool_Active=True
@@ -1373,8 +1393,8 @@ Begin
   TAiChatFactory.Instance.RegisterCustomModel('Claude', BaseName, 'claude-haiku-4-5-20251001');
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'Tool_Active', 'True');
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'Max_Tokens', '8000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // 5. Sonnet 5 — Thinking profundo (mejor precio/calidad de la familia 5)
   //    El driver envia thinking adaptive + output_config.effort=high
@@ -1382,16 +1402,16 @@ Begin
   TAiChatFactory.Instance.RegisterCustomModel('Claude', BaseName, 'claude-sonnet-5');
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ThinkingLevel', 'tlHigh');
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'Max_Tokens', '32000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // 6. Opus 5 — Thinking profundo (maxima capacidad de la linea Opus)
   BaseName := 'aa_claude-opus-5-thinking';
   TAiChatFactory.Instance.RegisterCustomModel('Claude', BaseName, 'claude-opus-5');
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ThinkingLevel', 'tlHigh');
   TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'Max_Tokens', '64000');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
-  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning, cap_WebSearch]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'ModelCaps',  '[cap_Image, cap_Pdf, cap_Reasoning]');
+  TAiChatFactory.Instance.RegisterUserParam('Claude', BaseName, 'SessionCaps', '[cap_Image, cap_Pdf, cap_Reasoning]');
 
   // 7. Opus 5 — Agentes (tool calling + TextEditor + Shell habilitados)
   BaseName := 'aa_claude-opus-5-agent';

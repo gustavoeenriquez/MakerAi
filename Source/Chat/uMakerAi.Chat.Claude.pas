@@ -565,11 +565,15 @@ begin
             AModel.StartsWith('claude-sonnet-4-6');
 end;
 
-// Fast mode (speed:"fast") solo existe en opus-5 y opus-4-8
+// Fast mode (speed:"fast"): opus-5 (y 5.5), opus-4-8 y, desde nov 2026,
+// fable-5-2 / mythos-5-2 (GA, sin beta; aceptan igual el header que manda el
+// driver). En fable-5-1 y anteriores no existe.
 function IsClaudeFastCapable(const AModel: string): Boolean;
 begin
   Result := AModel.StartsWith('claude-opus-5') or
-            AModel.StartsWith('claude-opus-4-8');
+            AModel.StartsWith('claude-opus-4-8') or
+            AModel.StartsWith('claude-fable-5-2') or
+            AModel.StartsWith('claude-mythos-5-2');
 end;
 
 // Mensajes {role:"system"} dentro de messages[] (mid-conversation, preservan
@@ -602,14 +606,17 @@ begin
 end;
 
 // Forzar una tool (tool_choice "any" o {type:"tool"}) devuelve 400 en la
-// generacion de sep 2026: opus-5-5, sonnet-5-5, fable-5-1 y mythos-5-1.
+// generacion de sep 2026: opus-5-5, sonnet-5-5, fable-5-1 y mythos-5-1, y en
+// fable-5-2 / mythos-5-2 (nov 2026).
 // Ahi se manda "auto" (el modelo sigue pudiendo llamarla) en lugar del error.
 function IsClaudeNoForcedTool(const AModel: string): Boolean;
 begin
   Result := AModel.StartsWith('claude-opus-5-5') or
             AModel.StartsWith('claude-sonnet-5-5') or
             AModel.StartsWith('claude-fable-5-1') or
-            AModel.StartsWith('claude-mythos-5-1');
+            AModel.StartsWith('claude-mythos-5-1') or
+            AModel.StartsWith('claude-fable-5-2') or
+            AModel.StartsWith('claude-mythos-5-2');
 end;
 
 function TAiClaudeChat.GetDynamicHeaders: TNetHeaders;

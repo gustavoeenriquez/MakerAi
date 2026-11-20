@@ -43,7 +43,7 @@ Every provider was compared with what its API actually serves today (not only it
 
 | Provider | New models | Retired → now an alias of |
 |----------|------------|---------------------------|
-| Anthropic | **`claude-haiku-5-5`** (1M context, $0.10/$0.50 up to 100K-token prompts) | `claude-sonnet-4-20250514` → `claude-sonnet-5-5`, `claude-opus-4-20250514` → `claude-opus-5-5` |
+| Anthropic | **`claude-haiku-5-5`** (1M context, $0.10/$0.50 up to 100K-token prompts), **`claude-fable-5-2`** ($8/$40, added in November) | `claude-sonnet-4-20250514` → `claude-sonnet-5-5`, `claude-opus-4-20250514` → `claude-opus-5-5` |
 | OpenAI | **`gpt-6.1-sol`** ($2/$10), **`gpt-6.1-terra`** ($1/$5) | `o3-pro` → `gpt-5.5-pro`, `o3/o4-mini-deep-research` → `gpt-6.1-sol`, `dall-e-2/3` → `gpt-image-1` |
 | Google | **`gemini-4-argon`**, **`gemini-nano-banana-2.1`**, `gemini-omni-1.1-flash` | `gemini-3.5-flash` → `3.6-flash`, `gemini-3.7-flash` → `3.8-flash`, `gemini-2.5-computer-use-preview` → `3.8-flash` |
 | Moonshot | **`kimi-k3.1-pro`**, `kimi-k3.1-pro-highspeed` | `kimi-k2.5`, `moonshot-v1-*` → `kimi-k3`; `kimi-latest` → `kimi-k3.1-pro` |
@@ -107,6 +107,7 @@ Chat UI texts, design-time editors, exception messages, `OnError` messages and s
 > **Para quem fala português:** os textos em português não foram escritos por um falante nativo. Se algo soar estranho, abra uma issue ou um pull request — todos os textos estão em `Source/Core/uMakerAi.Lang.Pt.pas`, uma linha por texto (mantenha a chave e os marcadores `%s`/`%d` como estão).
 
 ### ⚠️ Behaviour changes
+- **Claude no longer searches the web by default.** Every Claude model in the registry used to declare `cap_WebSearch`, so the driver sent the web-search tool (and Anthropic added its code-execution tool) on every call: a one-line question cost about 2,400 input tokens on `claude-haiku-4-5` and 6,000 on `claude-fable-5-2`, against 20–30 without it. Web search is now opt-in: add `cap_WebSearch` to both `ModelCaps` and `SessionCaps` (on the connection, or per model with `RegisterUserParam`). The `aa_claude-opus-4-6-agent` and `aa_claude-opus-5-agent` profiles keep it. An app that relied on Claude looking things up on its own must turn it on.
 - **`imagen-4.0-*` aliases now generate with `gemini-nano-banana-2.1`** (before `gemini-3.1-flash-image`, deprecated on 2026-10-06).
 - **Kimi ignores `Temperature` and `Top_p`** — the API only accepts its fixed values, so any other value used to fail.
 - **`gpt-5.x-pro` and `gpt-6-astra` / `gpt-6.1-sol` adjust the requested effort** to the nearest level the model accepts instead of failing.
@@ -190,7 +191,7 @@ Full, provider-specific access to every API feature. Use when you need complete 
 | Component | Provider | Latest Models |
 |-----------|----------|---------------|
 | `TAiOpenChat` | OpenAI | **gpt-6-sol** (default), gpt-6.1-sol, gpt-6.1-terra, gpt-6-luna, gpt-6-astra, gpt-5.6, gpt-image-2.5 |
-| `TAiClaudeChat` | Anthropic | claude-opus-5-5, claude-sonnet-5-5, claude-fable-5-1, claude-haiku-5-5, **claude-haiku-4-5** (default) |
+| `TAiClaudeChat` | Anthropic | claude-opus-5-5, claude-sonnet-5-5, claude-fable-5-2, claude-fable-5-1, claude-haiku-5-5, **claude-haiku-4-5** (default) |
 | `TAiGeminiChat` | Google | **gemini-3.8-flash** (default), gemini-4-argon, gemini-3.1-pro, gemini-3.8-flash-tts, Nano Banana 2.1 |
 | `TAiGrokChat` | xAI | grok-4.3, grok-4.5, grok-build, grok-imagine (image/video) |
 | `TAiMistralChat` | Mistral AI | mistral-large/medium/small, magistral, devstral, voxtral (STT/TTS) |
@@ -726,6 +727,8 @@ Small consoles with asserts that reproduce a specific issue against the live API
 ## 🔄 Changelog
 
 ### v4.0.0 (unreleased)
+- ⚠️ Change (Claude): **web search is opt-in** — `cap_WebSearch` removed from every Claude model and profile in the registry except `aa_claude-opus-4-6-agent` / `aa_claude-opus-5-agent`. With it, each call carried `web_search_20260209` plus Anthropic's auto-injected `code_execution`: measured live, a trivial question on `claude-fable-5-2` went from 5,994 input tokens to 30, and on `claude-haiku-5-5` an opt-in search still works (`cap_WebSearch` in `ModelCaps` and `SessionCaps`)
+- New: **`claude-fable-5-2`** registered ($8/$40, cache read $0.20; 1M context, 128K output) — the successor of Fable 5.1 at a lower price. Forcing a tool is downgraded to `auto` (the API returns 400) and `FastMode` is allowed on it (fast mode is GA there). Tested live (7/7: text, streaming, a forced tool call, image, a mid-conversation `system` message, `tlNone`, fast mode)
 - Fix (memory): **`TAiMemoryContext.Build` freed every semantic hit twice** — the `SearchSemantic` list owns its entries, which had already been handed to the candidate list, so each semantic match ended in an access violation (or a corrupted heap). Present since v3.9. Fix (MCP): a client borrowed from a shared pool (`AddBorrowedMCPClient`) is no longer rewritten (`Params`, `EnvVars`, `Name`) or recreated by its `TAiFunctions` item, so two threads no longer overwrite each other's settings
 - Fix (agents): **`OnSuspend` could call a freed manager** — it is queued to the main thread with `TThread.Queue`, and the closure read `Self`/`OnSuspend` when the queue was served; if the owner freed the manager first (an immediate resume in a server), that was an AV. A queued `OnSuspend` is now dropped once its manager is destroyed. Case `agents.suspend.after-free`
 - ⚠️ Fix (MCP): **`serverInfo.version` was always `1.0.0`** whatever program hosted the server. `ServerVersion` now defaults to empty, which reports the host executable's product version (Windows; `1.0.0` when it has none or on other platforms); an assigned `ServerVersion` is sent as before. `TAiMCPLogicServer.EffectiveServerVersion` returns the value actually sent
