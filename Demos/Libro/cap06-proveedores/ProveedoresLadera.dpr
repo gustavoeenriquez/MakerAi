@@ -54,9 +54,10 @@ begin
   Result.Params.Values['Asynchronous'] := 'False';
   Result.SystemPrompt.Text := PROMPT_SISTEMA;
   // ModelCaps/SessionCaps del conector son lo que TU fijas; vacios, se usa el catalogo del
-  // modelo. Claude trae cap_WebSearch en el catalogo y declara la busqueda web en cada
-  // llamada: unos 2.250 tokens de entrada por pregunta. Esta comparacion es solo de texto,
-  // asi que se fija el conjunto completo vacio (no se puede "restar" del catalogo).
+  // modelo. Esta comparacion es solo de texto, asi que se fija el conjunto completo vacio
+  // (no se puede "restar" del catalogo). Hasta la 3.9 Claude traia cap_WebSearch en el
+  // catalogo y declaraba la busqueda web en cada llamada (unos 2.250 tokens de entrada
+  // por pregunta); desde la 4.0 es opt-in.
   Result.ModelCaps := [];
   Result.SessionCaps := [];
 end;
