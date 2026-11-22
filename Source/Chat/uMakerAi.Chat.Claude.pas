@@ -137,6 +137,7 @@ type
     FEnableMemory: Boolean;
     FEnableThinking: Boolean;
     FThinkingBudget: Integer;
+    FThinkingDisplay: string;
     FContextConfig: TClaudeContextConfig;
     FCacheSystemPrompt: Boolean;
     FCacheTTL: String;
@@ -211,6 +212,10 @@ type
     property EnableMemory: Boolean read FEnableMemory write SetEnableMemory default False;
     property EnableThinking: Boolean read FEnableThinking write SetEnableThinking default False;
     property ThinkingBudget: Integer read FThinkingBudget write SetThinkingBudget default 1024;
+    // thinking.display en el camino adaptativo (4.6+, familia 5): 'summarized' (por defecto) devuelve un
+    // resumen del razonamiento en ReasoningContent; 'omitted' o '' (no se manda) lo dejan vacio en los modelos
+    // donde omitted es el default (4.7+, familia 5, Haiku 5.5). El razonamiento se cobra igual en todos los casos.
+    property ThinkingDisplay: string read FThinkingDisplay write FThinkingDisplay;
     Property ServiceTier: String read FServiceTier write FServiceTier;
     // Fast mode (research preview): ~2.5x mas tokens/segundo a 2x precio.
     // Solo claude-opus-5 / claude-opus-4-8 (en otros modelos se ignora)
@@ -501,6 +506,7 @@ begin
   FEnableMemory := False;
   FEnableThinking := False;
   FThinkingBudget := 1024;
+  FThinkingDisplay := 'summarized';
 
   FCacheSystemPrompt := False;
 
@@ -914,6 +920,10 @@ begin
         var
         jThink := TJSONObject.Create;
         jThink.AddPair('type', 'adaptive');
+        // Sin display, 4.7+ / familia 5 / Haiku 5.5 devuelven los bloques thinking con el texto vacio
+        // ("omitted" es su default): ReasoningContent llegaba vacio aunque se pidiera thinking (nov 2026).
+        if FThinkingDisplay <> '' then
+          jThink.AddPair('display', FThinkingDisplay);
         AJSONObject.AddPair('thinking', jThink);
       end;
 
