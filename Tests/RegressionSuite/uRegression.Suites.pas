@@ -35,6 +35,7 @@ type
     function RunA2AExecScenario(const AScenario: string): string;
     function RunPolicyScenario(const AScenario: string): string;
     function RunRagScenario(const AScenario: string): string;
+    function RunGqlScenario(const AScenario: string): string;
     // TAiMemory: aislamiento entre namespaces en las operaciones por Id
     function RunMemoryScenario(const AScenario: string): string;
     // Skills: formato SKILL.md, carpetas y registry PPM (falso, sin red)
@@ -86,7 +87,7 @@ uses
   uMakerAi.Jev.ModelRouter,
   UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.GenericLLM, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank, uMakerAi.Qwen.Voices,
   uMakerAi.Realtime, uMakerAi.Realtime.Qwen, uMakerAi.Realtime.AiConnection, uMakerAi.Realtime.QwenTTS, uMakerAi.Realtime.Grok,
-  System.IOUtils, uMakerAi.Embeddings.Core,
+  System.IOUtils, System.Variants, uMakerAi.Embeddings.Core,
   uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index, uMakerAi.RAG.Vectors.VQL, uMakerAi.RAG.Graph.Core, uMakerAi.RAG.Graph.Builder,
   uMakerAi.RAG.Vector.Driver.BinFile,
   // TAiMemory persiste en SQLite via FireDAC: el driver fisico y el cursor de
@@ -529,6 +530,47 @@ begin
   FRunner.AddCase('rag.graph.searchtext')
     .Input('rag:graph-searchtext')
     .ExpectEquals('huila=si|nota=si|relacion=si');
+
+  // MakerGQL: arreglos de la fase 1 y sintaxis de la fase 2 (ver RunGqlScenario)
+  FRunner.AddCase('rag.gql.anon')
+    .Input('rag:gql:anon')
+    .ExpectEquals('Alta,Ana');
+
+  FRunner.AddCase('rag.gql.comma')
+    .Input('rag:gql:comma')
+    .ExpectEquals('Alta,Ana,Huila Reserva,Narino Alto|rows=2');
+
+  FRunner.AddCase('rag.gql.depth')
+    .Input('rag:gql:depth')
+    .ExpectEquals('Alta,Ana');
+
+  FRunner.AddCase('rag.gql.compare')
+    .Input('rag:gql:compare')
+    .ExpectEquals('|Huila Reserva,Narino Alto|Huila Reserva,Tolima Suave');
+
+  FRunner.AddCase('rag.gql.params')
+    .Input('rag:gql:params')
+    .ExpectEquals('Baja,Tolima Suave||error:EGQLParserError|Huila Reserva,Tolima Suave');
+
+  FRunner.AddCase('rag.gql.between')
+    .Input('rag:gql:between')
+    .ExpectEquals('Narino Alto|Huila Reserva,Tolima Suave');
+
+  FRunner.AddCase('rag.gql.text')
+    .Input('rag:gql:text')
+    .ExpectEquals('Huila Reserva,Tolima Suave|Narino Alto,Tolima Suave|Huila Reserva');
+
+  FRunner.AddCase('rag.gql.logic')
+    .Input('rag:gql:logic')
+    .ExpectEquals('Narino Alto|Narino Alto');
+
+  FRunner.AddCase('rag.gql.lexer')
+    .Input('rag:gql:lexer')
+    .ExpectEquals('Huila Reserva,Narino Alto,Tolima Suave|Huila Reserva|Ana|error:EGQLParserError|error:EGQLParserError');
+
+  FRunner.AddCase('rag.gql.weight')
+    .Input('rag:gql:weight')
+    .ExpectEquals('Alta,Ana|');
 
   // Indice basico (TAIBasicIndex): la via rapida del motor tomaba el score de Node.Idx,
   // que este indice nunca escribe. Devolvia lo que dejo la busqueda anterior (aqui
@@ -5343,6 +5385,142 @@ end;
 // RAG
 // -----------------------------------------------------------------------------
 
+// MakerGQL (v4.1): un grafo chico de La Ladera y consultas que cubren los arreglos de la
+// fase 1 (nodos anonimos, patrones convergentes, '=' sin excepciones, numeros sin depender
+// del idioma) y lo nuevo de la fase 2 (parametros, BETWEEN, STARTS/ENDS WITH, NOT, XOR,
+// negativos, escapes, comentarios, ;, `nombres`, r.weight). Cada consulta devuelve los
+// nombres de los nodos de todas las filas, sin repetir y ordenados; 'error:<Clase>' si falla.
+function TRegressionSuite.RunGqlScenario(const AScenario: string): string;
+var
+  Handlers: TFixtureHandlers;
+  G: TAiRagGraph;
+  Emb: TAiEmbeddingsCore;
+  Huila, Narino, Tolima, Alta, Baja, Ana: TAiRagGraphNode;
+  Id: string;
+
+  function Q(const ACode: string; const AParams: array of Variant): string;
+  var
+    Rows: TArray<TDictionary<string, TObject>>;
+    Row: TDictionary<string, TObject>;
+    Obj: TObject;
+    Names: TStringList;
+  begin
+    Rows := nil;
+    Names := TStringList.Create;
+    try
+      Names.Sorted := True;
+      Names.Duplicates := dupIgnore;
+      try
+        G.ExecuteMakerGQL(ACode, AParams, Rows);
+        for Row in Rows do
+          for Obj in Row.Values do
+            if Obj is TAiRagGraphNode then
+              Names.Add(TAiRagGraphNode(Obj).Name);
+        Result := String.Join(',', Names.ToStringArray);
+      except
+        on E: Exception do
+          Result := 'error:' + E.ClassName;
+      end;
+    finally
+      TAiRagGraph.FreeGQLResults(Rows);
+      Names.Free;
+    end;
+  end;
+
+  function RowCount(const ACode: string): string;
+  var
+    Rows: TArray<TDictionary<string, TObject>>;
+  begin
+    Rows := nil;
+    try
+      G.ExecuteMakerGQL(ACode, [], Rows);
+      Result := 'rows=' + IntToStr(Length(Rows));
+    finally
+      TAiRagGraph.FreeGQLResults(Rows);
+    end;
+  end;
+
+const
+  CONV = 'MATCH (c:Producto)-[:TIENE_ACIDEZ]->(a:Acidez) WHERE a.name = $nivel RETURN c';
+begin
+  Id := AScenario.Substring(Length('rag:gql:'));
+  Handlers := TFixtureHandlers.Create;
+  G := TAiRagGraph.Create(nil);
+  Emb := TAiEmbeddingsCore.Create(nil);
+  try
+    Emb.Model := 'fake';
+    Emb.Dimensions := 4;
+    Emb.OnGetEmbedding := Handlers.FakeEmbedding;
+    G.Embeddings := Emb;
+
+    Huila := G.AddNode('p1', 'Producto', 'Huila Reserva');
+    Huila.Properties['precio'] := '42000.5'; // texto con punto decimal: se compara como numero en cualquier idioma
+    Huila.Properties['origen'] := 'Huila';
+    Huila.Properties['zona cafetera'] := 'sur';
+    Narino := G.AddNode('p2', 'Producto', 'Narino Alto');
+    Narino.Properties['precio'] := 38000;
+    Narino.Properties['origen'] := 'Narino';
+    Tolima := G.AddNode('p3', 'Producto', 'Tolima Suave');
+    Tolima.Properties['precio'] := 25000.0;
+    Tolima.Properties['origen'] := 'Tolima';
+    Alta := G.AddNode('a1', 'Acidez', 'Alta');
+    Baja := G.AddNode('a2', 'Acidez', 'Baja');
+    Ana := G.AddNode('u1', 'Persona', 'Ana');
+    Ana.Properties['saldo'] := -5;
+    G.AddEdge(Huila, Alta, 'e1', 'TIENE_ACIDEZ', 'tiene');
+    G.AddEdge(Narino, Alta, 'e2', 'TIENE_ACIDEZ', 'tiene');
+    G.AddEdge(Tolima, Baja, 'e3', 'TIENE_ACIDEZ', 'tiene');
+    G.AddEdge(Ana, Alta, 'e4', 'NO_LE_GUSTO', 'no le gusto', 0.8);
+
+    if Id = 'anon' then
+      // Dos nodos sin variable: antes compartian la clave '' y no devolvia nada
+      Result := Q('MATCH (:Persona)-[:NO_LE_GUSTO]->(:Acidez)', [])
+    else if Id = 'comma' then
+      // Patron convergente con coma (antes "No matching subgraphs found") y producto cartesiano
+      Result := Q('MATCH (c:Producto)-[:TIENE_ACIDEZ]->(a), (p:Persona)-[:NO_LE_GUSTO]->(a) RETURN c', []) + '|' +
+        RowCount('MATCH (a:Acidez), (p:Persona)')
+    else if Id = 'depth' then
+      Result := Q('MATCH (p:Persona) DEPTH 1', [])
+    else if Id = 'compare' then
+      // '=' entre texto y numero ya no lanza; el precio en texto '42000.5' compara como numero
+      Result := Q('MATCH (c:Producto) WHERE c.name = 5', []) + '|' +
+        Q('MATCH (c:Producto) WHERE c.precio > 30000', []) + '|' +
+        Q('MATCH (c:Producto) WHERE c.precio IN [42000.5, 25000]', [])
+    else if Id = 'params' then
+      // El valor del parametro no pasa por el lexer: la "inyeccion" se compara como texto literal
+      Result := Q(CONV, ['nivel', 'Baja']) + '|' +
+        Q(CONV, ['nivel', 'Baja'' OR a.name <> ''x']) + '|' +
+        Q(CONV, []) + '|' +
+        Q('MATCH (c:Producto) WHERE c.origen IN $o', ['$o', VarArrayOf(['Huila', 'Tolima'])])
+    else if Id = 'between' then
+      Result := Q('MATCH (c:Producto) WHERE c.precio BETWEEN 30000 AND 40000', []) + '|' +
+        Q('MATCH (c:Producto) WHERE c.precio NOT BETWEEN 30000 AND 40000', [])
+    else if Id = 'text' then
+      // STARTS/ENDS WITH sin distinguir mayusculas; LIKE ya no trata '*' como comodin
+      Result := Q('MATCH (c:Producto) WHERE c.name STARTS WITH ''hui'' OR c.name ENDS WITH ''SUAVE''', []) + '|' +
+        Q('MATCH (c:Producto) WHERE c.name NOT LIKE ''Huila%''', []) + '|' +
+        Q('MATCH (c:Producto) WHERE c.name LIKE ''_uila%'' OR c.name LIKE ''*''', [])
+    else if Id = 'logic' then
+      Result := Q('MATCH (c:Producto) WHERE NOT (c.origen = ''Huila'' OR c.origen = ''Tolima'')', []) + '|' +
+        Q('MATCH (c:Producto) WHERE c.precio > 30000 XOR c.origen = ''Huila''', [])
+    else if Id = 'lexer' then
+      Result := Q('MATCH (c:Producto) /* bloque */ WHERE c.precio > -1 AND c.name <> ''O''''Brien'' // fin' + #10 + ';', []) + '|' +
+        Q('MATCH (c:Producto) WHERE c.`zona cafetera` = ''sur''', []) + '|' +
+        Q('MATCH (p:Persona) WHERE p.saldo < -1', []) + '|' +
+        Q('MATCH (c:Producto) WHERE c.name = ''abierta', []) + '|' +
+        Q('SHOW LABELS basura', [])
+    else if Id = 'weight' then
+      Result := Q('MATCH (p:Persona)-[r:NO_LE_GUSTO]->(a) WHERE r.weight > 0.5', []) + '|' +
+        Q('MATCH (p:Persona)-[r:NO_LE_GUSTO]->(a) WHERE r.weight > 0.9', [])
+    else
+      raise Exception.Create('Escenario GQL desconocido: ' + AScenario);
+  finally
+    G.Free;
+    Emb.Free;
+    Handlers.Free;
+  end;
+end;
+
 function TRegressionSuite.RunRagScenario(const AScenario: string): string;
 var
   Drv: TAiMkVecDriver;
@@ -5352,6 +5530,9 @@ var
   LPath: string;
   I: Integer;
 begin
+  if AScenario.StartsWith('rag:gql:') then
+    Exit(RunGqlScenario(AScenario));
+
   // Las consultas VQL de ejemplo (demo 023, README, guia de RAG) deben parsear:
   // durante meses traian 'MATCH documentos' sin parentesis, WEIGHTS con
   // nombres, 'WITH REGENERATE' y RERANK despues de THRESHOLD, y ninguna corria

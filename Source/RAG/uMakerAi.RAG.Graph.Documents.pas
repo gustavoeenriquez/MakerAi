@@ -196,6 +196,8 @@ type
     function ExecuteGQL(const AGqlQuery: string;
       out AResultObjects: TArray<TDictionary<string, TObject>>;
       ADepth: Integer = 0): string; overload;
+    // Con $parametros: AParams alterna nombre y valor (ver TAiRagGraph.ExecuteMakerGQL)
+    function ExecuteGQL(const AGqlQuery: string; const AParams: array of Variant): string; overload;
 
     // --- Utilidades ---
     function GetAllDocuments: TArray<TAiRagGraphNode>;
@@ -2113,6 +2115,12 @@ function TAiRagDocumentManager.ExecuteGQL(const AGqlQuery: string;
 begin
   CheckGraphAssigned;
   Result := FGraph.ExecuteMakerGQL(AGqlQuery, AResultObjects, ADepth);
+end;
+
+function TAiRagDocumentManager.ExecuteGQL(const AGqlQuery: string; const AParams: array of Variant): string;
+begin
+  CheckGraphAssigned;
+  Result := FGraph.ExecuteMakerGQL(AGqlQuery, AParams);
 end;
 
 // ---------------------------------------------------------------------------

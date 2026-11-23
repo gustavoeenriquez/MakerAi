@@ -55,7 +55,7 @@ type
   // --------- CLASES PARA EL PARSER --------------------------------
 
   { Enumeraciones para el �rbol de Expresiones }
-  TExpressionKind = (ekLiteral, ekProperty, ekBinary);
+  TExpressionKind = (ekLiteral, ekProperty, ekBinary, ekUnary, ekBetween);
 
   TBinaryOp = (
     // L�gicos
@@ -72,8 +72,13 @@ type
     opIn, // Nuevo
     opNotIn, // Nuevo
     opIsNull, // Nuevo
-    opIsNotNull // Nuevo
+    opIsNotNull, // Nuevo
+
+    // v4.1: XOR y prefijo/sufijo de texto (sin distinguir mayúsculas, como CONTAINS)
+    opXor, opStartsWith, opEndsWith
     );
+
+  TUnaryOp = (uoNot, uoNegate);
 
   { Clase base abstracta para expresiones del lenguaje }
   TGraphExpression = class
@@ -104,6 +109,25 @@ type
     Op: TBinaryOp;
     Right: TGraphExpression;
     constructor Create(ALeft: TGraphExpression; AOp: TBinaryOp; ARight: TGraphExpression);
+    destructor Destroy; override;
+  end;
+
+  { Expresión unaria: NOT expr, -expr }
+  TUnaryExpr = class(TGraphExpression)
+  public
+    Op: TUnaryOp;
+    Operand: TGraphExpression;
+    constructor Create(AOp: TUnaryOp; AOperand: TGraphExpression);
+    destructor Destroy; override;
+  end;
+
+  { Rango con extremos incluidos: Value BETWEEN Low AND High }
+  TBetweenExpr = class(TGraphExpression)
+  public
+    Value: TGraphExpression;
+    Low: TGraphExpression;
+    High: TGraphExpression;
+    constructor Create(AValue, ALow, AHigh: TGraphExpression);
     destructor Destroy; override;
   end;
 
@@ -441,6 +465,18 @@ type
 
     function ExecuteMakerGQL(const ACode: string; out AResultObjects: TArray<TDictionary<string, TObject>>; ADepth: Integer = 0): string; Overload;
     function ExecuteMakerGQL(const ACode: string): string; Overload;
+    // Con parámetros: AParams alterna nombre y valor (sin el $), p. ej.
+    //   ExecuteMakerGQL('MATCH (a:Acidez) WHERE a.name = $nivel', ['nivel', Nivel])
+    // El valor nunca pasa por el lexer: es la forma segura de meter texto que llega de un LLM o de un usuario.
+    // Para IN $lista, pasar un VarArrayOf([...]).
+    function ExecuteMakerGQL(const ACode: string; const AParams: array of Variant): string; Overload;
+    function ExecuteMakerGQL(const ACode: string; const AParams: array of Variant; out AResultObjects: TArray<TDictionary<string, TObject>>;
+      ADepth: Integer = 0): string; Overload;
+    function ExecuteMakerGQL(const ACode: string; AParams: TDictionary<string, Variant>; out AResultObjects: TArray<TDictionary<string, TObject>>;
+      ADepth: Integer = 0): string; Overload;
+    // Libera lo que devuelven ExecuteMakerGQL y Match: los diccionarios y los TStringWrapper que
+    // contienen ('type', 'value'...). Los nodos y aristas son del grafo y no se tocan.
+    class procedure FreeGQLResults(var AResults: TArray<TDictionary<string, TObject>>);
 
 
     // todo Implementar Detecci�n de Comunidades (Community Detection) Algoritmo de Louvain
@@ -1002,83 +1038,171 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------------
+// Ayudantes de MakerGQL para comparar valores (independientes del idioma del sistema)
+// ---------------------------------------------------------------------------
+
+function GQLIsNull(const V: Variant): Boolean;
+begin
+  Result := VarIsNull(V) or VarIsEmpty(V);
+end;
+
+function GQLToBool(const V: Variant): Boolean;
+begin
+  if GQLIsNull(V) then
+    Exit(False);
+  try
+    Result := Boolean(V);
+  except
+    Result := False;
+  end;
+end;
+
+// Número de un Variant: numéricos tal cual; textos con punto decimal ('3.5'), sin importar el idioma
+function GQLTryNumber(const V: Variant; out D: Double): Boolean;
+begin
+  Result := False;
+  if GQLIsNull(V) or VarIsType(V, varBoolean) then
+    Exit;
+  if VarIsNumeric(V) or VarIsType(V, varDate) then
+  begin
+    D := V;
+    Exit(True);
+  end;
+  if VarIsStr(V) then
+    Result := TryStrToFloat(Trim(VarToStr(V)), D, TFormatSettings.Invariant);
+end;
+
+function GQLTryDate(const V: Variant; out D: TDateTime): Boolean;
+begin
+  if VarIsType(V, varDate) then
+  begin
+    D := VarToDateTime(V);
+    Exit(True);
+  end;
+  Result := VarIsStr(V) and TryISO8601ToDate(VarToStr(V), D, False);
+end;
+
+function GQLBoolText(const V: Variant): string;
+begin
+  if VarIsType(V, varBoolean) then
+  begin
+    if Boolean(V) then
+      Result := 'true'
+    else
+      Result := 'false';
+  end
+  else
+    Result := LowerCase(Trim(VarToStr(V)));
+end;
+
+// Compara L y R. False si alguno es NULL (no comparables). Orden de intento:
+// fecha (si uno es fecha), booleano (si uno es booleano), número, texto (distingue mayúsculas).
+function GQLCompare(const L, R: Variant; out Cmp: Integer): Boolean;
+var
+  DL, DR: Double;
+  TL, TR: TDateTime;
+begin
+  Cmp := 0;
+  if GQLIsNull(L) or GQLIsNull(R) then
+    Exit(False);
+  Result := True;
+
+  if (VarIsType(L, varDate) or VarIsType(R, varDate)) and GQLTryDate(L, TL) and GQLTryDate(R, TR) then
+  begin
+    if TL < TR then
+      Cmp := -1
+    else if TL > TR then
+      Cmp := 1;
+  end
+  else if VarIsType(L, varBoolean) or VarIsType(R, varBoolean) then
+    Cmp := CompareText(GQLBoolText(L), GQLBoolText(R))
+  else if GQLTryNumber(L, DL) and GQLTryNumber(R, DR) then
+  begin
+    if DL < DR then
+      Cmp := -1
+    else if DL > DR then
+      Cmp := 1;
+  end
+  else
+    Cmp := CompareStr(VarToStr(L), VarToStr(R));
+end;
+
+// Igualdad de MakerGQL: NULL = NULL es verdadero; NULL contra un valor, falso
+function GQLEquals(const L, R: Variant): Boolean;
+var
+  Cmp: Integer;
+begin
+  if GQLIsNull(L) or GQLIsNull(R) then
+    Exit(GQLIsNull(L) and GQLIsNull(R));
+  Result := GQLCompare(L, R, Cmp) and (Cmp = 0);
+end;
+
+// LIKE de SQL: % = cualquier secuencia, _ = un carácter. Sin otros comodines.
+function GQLLikeMatch(const S, P: string): Boolean;
+var
+  SIdx, PIdx, StarP, StarS: Integer;
+begin
+  SIdx := 1;
+  PIdx := 1;
+  StarP := 0;
+  StarS := 0;
+  while SIdx <= Length(S) do
+  begin
+    if (PIdx <= Length(P)) and ((P[PIdx] = '_') or ((P[PIdx] <> '%') and (P[PIdx] = S[SIdx]))) then
+    begin
+      Inc(SIdx);
+      Inc(PIdx);
+    end
+    else if (PIdx <= Length(P)) and (P[PIdx] = '%') then
+    begin
+      StarP := PIdx;
+      StarS := SIdx;
+      Inc(PIdx);
+    end
+    else if StarP > 0 then
+    begin
+      PIdx := StarP + 1;
+      Inc(StarS);
+      SIdx := StarS;
+    end
+    else
+      Exit(False);
+  end;
+  while (PIdx <= Length(P)) and (P[PIdx] = '%') do
+    Inc(PIdx);
+  Result := PIdx > Length(P);
+end;
+
+function GQLInList(const Val, List: Variant): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  if GQLIsNull(Val) then
+    Exit;
+  if VarIsArray(List) then
+  begin
+    for I := VarArrayLowBound(List, 1) to VarArrayHighBound(List, 1) do
+      if GQLEquals(Val, VarArrayGet(List, [I])) then
+        Exit(True);
+  end
+  else
+    Result := GQLEquals(Val, List);
+end;
+
 function TAiRagGraph.EvaluateGraphExpression(AExpr: TGraphExpression; ABoundElements: TDictionary<string, TObject>): Variant;
 var
-  Left, Right: Variant;
+  Left, Right, Lo, Hi: Variant;
   Node: TAiRagGraphNode;
   Edge: TAiRagGraphEdge;
   Obj: TObject;
   B: TBinaryExpr;
-
-  // ------------------------------------------------------------------
-  // NULL / BOOLEAN SAFE
-  // ------------------------------------------------------------------
-  function SafeBool(const V: Variant): Boolean;
-  begin
-    if VarIsNull(V) or VarIsEmpty(V) then
-      Exit(False);
-    try
-      Result := Boolean(V);
-    except
-      Result := False;
-    end;
-  end;
-
-// ------------------------------------------------------------------
-// LIKE / ILIKE (SQL -> Delphi)
-// ------------------------------------------------------------------
-  function MatchLike(const Val, Pat: string; CaseInsensitive: Boolean): Boolean;
-  var
-    P, V: string;
-  begin
-    if Val = '' then
-      Exit(False);
-
-    P := Pat.Replace('%', '*').Replace('_', '?');
-    if CaseInsensitive then
-    begin
-      V := Val.ToLower;
-      P := P.ToLower;
-    end
-    else
-      V := Val;
-
-    try
-      Result := MatchesMask(V, P);
-    except
-      Result := False;
-    end;
-  end;
-
-// ------------------------------------------------------------------
-// IN / NOT IN
-// ------------------------------------------------------------------
-  function CheckInList(const Val, List: Variant): Boolean;
-  var
-    I: Integer;
-    Item: Variant;
-  begin
-    Result := False;
-    if VarIsNull(Val) or VarIsEmpty(Val) then
-      Exit;
-
-    try
-      if VarIsArray(List) then
-      begin
-        for I := VarArrayLowBound(List, 1) to VarArrayHighBound(List, 1) do
-        begin
-          Item := VarArrayGet(List, [I]);
-          if VarToStr(Val) = VarToStr(Item) then
-            Exit(True);
-        end;
-      end
-      else
-        Result := (VarToStr(Val) = VarToStr(List));
-    except
-      Result := False;
-    end;
-  end;
-
+  U: TUnaryExpr;
+  Btw: TBetweenExpr;
+  P: TPropertyExpr;
+  Cmp, CmpLo, CmpHi: Integer;
+  D: Double;
 begin
   if AExpr = nil then
     Exit(True);
@@ -1097,7 +1221,6 @@ begin
     ekProperty:
       begin
         Result := Null;
-        var
         P := TPropertyExpr(AExpr);
 
         if ABoundElements.TryGetValue(P.Variable, Obj) then
@@ -1123,10 +1246,42 @@ begin
               Result := Edge.EdgeLabel
             else if SameText(P.PropertyKey, 'id') then
               Result := Edge.ID
+            else if SameText(P.PropertyKey, 'weight') then
+              Result := Edge.Weight
             else
               Result := Edge.MetaData.Get(P.PropertyKey, Null);
           end;
         end;
+      end;
+
+    // ================================================================
+    // UNARY: NOT, signo negativo
+    // ================================================================
+    ekUnary:
+      begin
+        U := TUnaryExpr(AExpr);
+        Left := EvaluateGraphExpression(U.Operand, ABoundElements);
+        case U.Op of
+          uoNot:
+            Result := not GQLToBool(Left);
+          uoNegate:
+            if GQLTryNumber(Left, D) then
+              Result := -D
+            else
+              Result := Null;
+        end;
+      end;
+
+    // ================================================================
+    // BETWEEN (extremos incluidos)
+    // ================================================================
+    ekBetween:
+      begin
+        Btw := TBetweenExpr(AExpr);
+        Left := EvaluateGraphExpression(Btw.Value, ABoundElements);
+        Lo := EvaluateGraphExpression(Btw.Low, ABoundElements);
+        Hi := EvaluateGraphExpression(Btw.High, ABoundElements);
+        Result := GQLCompare(Left, Lo, CmpLo) and GQLCompare(Left, Hi, CmpHi) and (CmpLo >= 0) and (CmpHi <= 0);
       end;
 
     // ================================================================
@@ -1138,6 +1293,12 @@ begin
 
         Left := EvaluateGraphExpression(B.Left, ABoundElements);
 
+        // AND / OR evalúan el lado derecho solo si hace falta
+        if B.Op = opAnd then
+          Exit(GQLToBool(Left) and GQLToBool(EvaluateGraphExpression(B.Right, ABoundElements)));
+        if B.Op = opOr then
+          Exit(GQLToBool(Left) or GQLToBool(EvaluateGraphExpression(B.Right, ABoundElements)));
+
         // Operadores unarios
         if not(B.Op in [opIsNull, opIsNotNull]) then
           Right := EvaluateGraphExpression(B.Right, ABoundElements)
@@ -1146,76 +1307,47 @@ begin
 
         case B.Op of
           // --- LOGICAL ---
-          opAnd:
-            Result := SafeBool(Left) and SafeBool(Right);
-          opOr:
-            Result := SafeBool(Left) or SafeBool(Right);
+          opXor:
+            Result := GQLToBool(Left) xor GQLToBool(Right);
 
           // --- COMPARISON ---
           opEqual:
-            if VarIsNull(Left) or VarIsNull(Right) then
-              Result := VarIsNull(Left) = VarIsNull(Right)
-            else
-              Result := (Left = Right);
-
+            Result := GQLEquals(Left, Right);
           opNotEqual:
-            try
-              Result := (Left <> Right);
-            except
-              Result := False;
-            end;
-
+            Result := not GQLEquals(Left, Right);
           opGreater:
-            try
-              Result := (Left > Right);
-            except
-              Result := False;
-            end;
+            Result := GQLCompare(Left, Right, Cmp) and (Cmp > 0);
           opGreaterEqual:
-            try
-              Result := (Left >= Right);
-            except
-              Result := False;
-            end;
+            Result := GQLCompare(Left, Right, Cmp) and (Cmp >= 0);
           opLess:
-            try
-              Result := (Left < Right);
-            except
-              Result := False;
-            end;
+            Result := GQLCompare(Left, Right, Cmp) and (Cmp < 0);
           opLessEqual:
-            try
-              Result := (Left <= Right);
-            except
-              Result := False;
-            end;
+            Result := GQLCompare(Left, Right, Cmp) and (Cmp <= 0);
 
-          // --- TEXT ---
+          // --- TEXT (CONTAINS, STARTS/ENDS WITH e ILIKE no distinguen mayúsculas) ---
           opContains:
-            if VarIsNull(Left) or VarIsNull(Right) then
-              Result := False
-            else
-              Result := System.StrUtils.ContainsText(VarToStr(Left), VarToStr(Right));
-
+            Result := not(GQLIsNull(Left) or GQLIsNull(Right)) and ContainsText(VarToStr(Left), VarToStr(Right));
+          opStartsWith:
+            Result := not(GQLIsNull(Left) or GQLIsNull(Right)) and StartsText(VarToStr(Right), VarToStr(Left));
+          opEndsWith:
+            Result := not(GQLIsNull(Left) or GQLIsNull(Right)) and EndsText(VarToStr(Right), VarToStr(Left));
           opLike:
-            Result := MatchLike(VarToStr(Left), VarToStr(Right), False);
-
+            Result := not(GQLIsNull(Left) or GQLIsNull(Right)) and GQLLikeMatch(VarToStr(Left), VarToStr(Right));
           opILike:
-            Result := MatchLike(VarToStr(Left), VarToStr(Right), True);
+            Result := not(GQLIsNull(Left) or GQLIsNull(Right)) and GQLLikeMatch(AnsiLowerCase(VarToStr(Left)),
+              AnsiLowerCase(VarToStr(Right)));
 
           // --- NULL ---
           opIsNull:
-            Result := VarIsNull(Left) or VarIsEmpty(Left);
-
+            Result := GQLIsNull(Left);
           opIsNotNull:
-            Result := not(VarIsNull(Left) or VarIsEmpty(Left));
+            Result := not GQLIsNull(Left);
 
           // --- IN ---
           opIn:
-            Result := CheckInList(Left, Right);
-
+            Result := GQLInList(Left, Right);
           opNotIn:
-            Result := not CheckInList(Left, Right);
+            Result := not GQLInList(Left, Right); // Un valor ausente NO está en la lista
 
         else
           Result := False;
@@ -1430,19 +1562,82 @@ end;
   end;
 }
 
-function TAiRagGraph.ExecuteMakerGQL(const ACode: string): string;
-Var
-  Data: TArray<TDictionary<string, TObject>>;
+class procedure TAiRagGraph.FreeGQLResults(var AResults: TArray<TDictionary<string, TObject>>);
+var
+  Dict: TDictionary<string, TObject>;
+  Obj: TObject;
 begin
-  Result := ExecuteMakerGQL(ACode, Data);
-
-  // 3. �IMPORTANTE! Liberar la memoria de los diccionarios de salida
-  If Assigned(Data) then
-    for var Dict in Data do
+  for Dict in AResults do
+    if Assigned(Dict) then
+    begin
+      for Obj in Dict.Values do
+        if Obj is TStringWrapper then
+          Obj.Free;
       Dict.Free;
+    end;
+  AResults := nil;
 end;
 
-function TAiRagGraph.ExecuteMakerGQL(const ACode: string; out AResultObjects: TArray<TDictionary<string, TObject>>; ADepth: Integer = 0): string;
+function TAiRagGraph.ExecuteMakerGQL(const ACode: string): string;
+var
+  Data: TArray<TDictionary<string, TObject>>;
+begin
+  Data := nil;
+  try
+    Result := ExecuteMakerGQL(ACode, nil, Data, 0);
+  finally
+    FreeGQLResults(Data);
+  end;
+end;
+
+function TAiRagGraph.ExecuteMakerGQL(const ACode: string; out AResultObjects: TArray<TDictionary<string, TObject>>; ADepth: Integer): string;
+begin
+  Result := ExecuteMakerGQL(ACode, nil, AResultObjects, ADepth);
+end;
+
+function TAiRagGraph.ExecuteMakerGQL(const ACode: string; const AParams: array of Variant): string;
+var
+  Data: TArray<TDictionary<string, TObject>>;
+begin
+  Data := nil;
+  try
+    Result := ExecuteMakerGQL(ACode, AParams, Data, 0);
+  finally
+    FreeGQLResults(Data);
+  end;
+end;
+
+function TAiRagGraph.ExecuteMakerGQL(const ACode: string; const AParams: array of Variant; out AResultObjects: TArray<TDictionary<string, TObject>>;
+  ADepth: Integer): string;
+var
+  Params: TDictionary<string, Variant>;
+  Name: string;
+  I: Integer;
+begin
+  AResultObjects := [];
+  if Odd(Length(AParams)) then
+    raise EGQLParserError.CreateAt(AiStr('rag.gql.param_pairs'), 0);
+
+  // Nombres sin distinguir mayúsculas; se acepta 'nivel' o '$nivel'
+  Params := TDictionary<string, Variant>.Create(TIStringComparer.Ordinal);
+  try
+    I := 0;
+    while I < Length(AParams) do
+    begin
+      Name := VarToStr(AParams[I]);
+      if Name.StartsWith('$') then
+        Name := Name.Substring(1);
+      Params.AddOrSetValue(Name, AParams[I + 1]);
+      Inc(I, 2);
+    end;
+    Result := ExecuteMakerGQL(ACode, Params, AResultObjects, ADepth);
+  finally
+    Params.Free;
+  end;
+end;
+
+function TAiRagGraph.ExecuteMakerGQL(const ACode: string; AParams: TDictionary<string, Variant>; out AResultObjects: TArray<TDictionary<string, TObject>>;
+  ADepth: Integer): string;
 var
   Parser: TGraphParser;
   QueryObj: TGraphMatchQuery;
@@ -1493,7 +1688,7 @@ begin
   if ACode.Trim.IsEmpty then
     Exit;
 
-  Parser := TGraphParser.Create(ACode);
+  Parser := TGraphParser.Create(ACode, AParams);
   try
     QueryObj := Parser.Parse;
     try
@@ -3579,13 +3774,11 @@ type
   TMatchState = TDictionary<string, TObject>;
 var
   Results: TObjectList<TDictionary<string, TObject>>;
-  StartNodePattern: TMatchNodePattern;
   InitialState: TMatchState;
-  StartNode: TAiRagGraphNode;
-  CandidateNodes: TArray<TAiRagGraphNode>;
 
-  // --- Variables para la Expansi�n (ADepth > 0) ---
+  // --- Variables para la Expansión (ADepth > 0) ---
   SeedNodesSet: TDictionary<TAiRagGraphNode, Boolean>;
+  SeedList: TList<TAiRagGraphNode>;
   MatchDict: TDictionary<string, TObject>;
   Pair: TPair<string, TObject>;
   ExpandedNodesArray: TArray<TAiRagGraphNode>;
@@ -3595,164 +3788,145 @@ var
   Dict: TDictionary<string, TObject>;
   EdgeSet: TDictionary<TAiRagGraphEdge, Boolean>;
 
+  function CandidatesFor(APattern: TMatchNodePattern): TArray<TAiRagGraphNode>;
+  begin
+    if not APattern.NodeLabel.IsEmpty then
+      Result := Self.FindNodesByLabel(APattern.NodeLabel)
+    else
+      Result := FNodeRegistry.Values.ToArray;
+  end;
+
+  function PatternOf(const AVar: string): TMatchNodePattern;
+  begin
+    Result := AQuery.NodePatternByVariable[AVar];
+    if Result = nil then
+      raise Exception.Create(AiStr('rag.graph.no_start_pattern'));
+  end;
+
   procedure FindMatchesRecursive(AClauseIndex: Integer; ACurrentState: TMatchState);
   var
-    CurrentClause: TMatchClause;
-    TargetNodePattern: TMatchNodePattern;
-    SourceGraphNode, NeighborNode: TAiRagGraphNode;
+    Clause: TMatchClause;
+    Pattern: TMatchNodePattern;
+    SourceObj, TargetObj: TObject;
+    FromNode: TAiRagGraphNode;
     CurrentEdge: TAiRagGraphEdge;
-    NewState: TMatchState;
-    BoundObject: TObject;
-  begin
+    Dir: TGraphDirection;
 
+    // Enlaza AVar con cada candidato de su patrón y sigue en la misma cláusula
+    procedure BindCandidates(const AVar: string; AClauseIndex: Integer; ACurrentState: TMatchState);
+    var
+      Pattern: TMatchNodePattern;
+      Cand: TAiRagGraphNode;
+      NewState: TMatchState;
+    begin
+      Pattern := PatternOf(AVar);
+      for Cand in CandidatesFor(Pattern) do
+        if Pattern.Matches(Cand) then
+        begin
+          NewState := TMatchState.Create(ACurrentState);
+          try
+            NewState.AddOrSetValue(AVar, Cand);
+            FindMatchesRecursive(AClauseIndex, NewState);
+          finally
+            NewState.Free;
+          end;
+        end;
+    end;
+
+    // Prueba una arista de la cláusula. APerspective es la dirección vista desde el ORIGEN
+    // de la cláusula (lo que el patrón -[]->, <-[]- compara); ANeighbor es el extremo por enlazar.
+    procedure TryEdge(AClause: TMatchClause; AEdge: TAiRagGraphEdge; ANeighbor: TAiRagGraphNode; APerspective: TGraphDirection;
+      const ANeighborVar: string; AClauseIndex: Integer; ACurrentState: TMatchState);
+    var
+      BoundObject: TObject;
+      NewState: TMatchState;
+    begin
+      if not(AClause.EdgePattern.Matches(AEdge, APerspective) and PatternOf(ANeighborVar).Matches(ANeighbor)) then
+        Exit;
+      if ACurrentState.TryGetValue(ANeighborVar, BoundObject) and (BoundObject <> ANeighbor) then
+        Exit;
+      if (not AClause.EdgePattern.Variable.IsEmpty) and ACurrentState.TryGetValue(AClause.EdgePattern.Variable, BoundObject) and
+        (BoundObject <> AEdge) then
+        Exit;
+
+      NewState := TMatchState.Create(ACurrentState);
+      try
+        NewState.AddOrSetValue(ANeighborVar, ANeighbor);
+        if not AClause.EdgePattern.Variable.IsEmpty then
+          NewState.AddOrSetValue(AClause.EdgePattern.Variable, AEdge);
+        FindMatchesRecursive(AClauseIndex + 1, NewState);
+      finally
+        NewState.Free;
+      end;
+    end;
+
+  begin
     if AClauseIndex >= AQuery.MatchClauses.Count then
     begin
-      // --- AQU� ENTRA EL WHERE ---
-      if (AQuery.WhereClause = nil) or Boolean(EvaluateGraphExpression(AQuery.WhereClause, ACurrentState)) then
-      begin
-        // Solo si no hay WHERE o si el WHERE devuelve TRUE, aceptamos el resultado
+      // Patrones de nodo sin enlazar (MATCH (a:X), (b:Y) o un nodo suelto): producto cartesiano
+      for Pattern in AQuery.NodePatterns do
+        if not ACurrentState.ContainsKey(Pattern.Variable) then
+        begin
+          BindCandidates(Pattern.Variable, AClauseIndex, ACurrentState);
+          Exit;
+        end;
+
+      // --- AQUÍ ENTRA EL WHERE ---
+      if (AQuery.WhereClause = nil) or GQLToBool(EvaluateGraphExpression(AQuery.WhereClause, ACurrentState)) then
         Results.Add(TMatchState.Create(ACurrentState));
-      end;
       Exit;
     end;
 
-    CurrentClause := AQuery.MatchClauses[AClauseIndex];
-    if not ACurrentState.TryGetValue(CurrentClause.SourceNodeVar, BoundObject) then
-      Exit;
-    SourceGraphNode := BoundObject as TAiRagGraphNode;
-    TargetNodePattern := AQuery.NodePatternByVariable[CurrentClause.TargetNodeVar];
+    Clause := AQuery.MatchClauses[AClauseIndex];
+    Dir := Clause.EdgePattern.Direction;
 
-    if (CurrentClause.EdgePattern.Direction = gdOutgoing) or (CurrentClause.EdgePattern.Direction = gdBoth) then
+    if ACurrentState.TryGetValue(Clause.SourceNodeVar, SourceObj) then
     begin
-      for CurrentEdge in SourceGraphNode.OutgoingEdges do
-      begin
-        NeighborNode := CurrentEdge.ToNode;
-        if CurrentClause.EdgePattern.Matches(CurrentEdge, gdOutgoing) and TargetNodePattern.Matches(NeighborNode) then
-        begin
-          if ACurrentState.TryGetValue(CurrentClause.TargetNodeVar, BoundObject) and (BoundObject <> NeighborNode) then
-            Continue;
-          if (not CurrentClause.EdgePattern.Variable.IsEmpty) and ACurrentState.TryGetValue(CurrentClause.EdgePattern.Variable, BoundObject) and (BoundObject <> CurrentEdge) then
-            Continue;
-
-          NewState := TMatchState.Create(ACurrentState);
-          try
-            NewState.AddOrSetValue(CurrentClause.TargetNodeVar, NeighborNode);
-            if not CurrentClause.EdgePattern.Variable.IsEmpty then
-              NewState.AddOrSetValue(CurrentClause.EdgePattern.Variable, CurrentEdge);
-            FindMatchesRecursive(AClauseIndex + 1, NewState);
-          finally
-            NewState.Free;
-          end;
-        end;
-      end;
-    end;
-
-    if (CurrentClause.EdgePattern.Direction = gdIncoming) or (CurrentClause.EdgePattern.Direction = gdBoth) then
+      // Origen enlazado: se recorre hacia el destino
+      FromNode := SourceObj as TAiRagGraphNode;
+      if Dir in [gdOutgoing, gdBoth] then
+        for CurrentEdge in FromNode.OutgoingEdges do
+          TryEdge(Clause, CurrentEdge, CurrentEdge.ToNode, gdOutgoing, Clause.TargetNodeVar, AClauseIndex, ACurrentState);
+      if Dir in [gdIncoming, gdBoth] then
+        for CurrentEdge in FromNode.IncomingEdges do
+          TryEdge(Clause, CurrentEdge, CurrentEdge.FromNode, gdIncoming, Clause.TargetNodeVar, AClauseIndex, ACurrentState);
+    end
+    else if ACurrentState.TryGetValue(Clause.TargetNodeVar, TargetObj) then
     begin
-      for CurrentEdge in SourceGraphNode.IncomingEdges do
-      begin
-        NeighborNode := CurrentEdge.FromNode;
-        if CurrentClause.EdgePattern.Matches(CurrentEdge, gdIncoming) and TargetNodePattern.Matches(NeighborNode) then
-        begin
-          if ACurrentState.TryGetValue(CurrentClause.TargetNodeVar, BoundObject) and (BoundObject <> NeighborNode) then
-            Continue;
-          if (not CurrentClause.EdgePattern.Variable.IsEmpty) and ACurrentState.TryGetValue(CurrentClause.EdgePattern.Variable, BoundObject) and (BoundObject <> CurrentEdge) then
-            Continue;
-
-          NewState := TMatchState.Create(ACurrentState);
-          try
-            NewState.AddOrSetValue(CurrentClause.TargetNodeVar, NeighborNode);
-            if not CurrentClause.EdgePattern.Variable.IsEmpty then
-              NewState.AddOrSetValue(CurrentClause.EdgePattern.Variable, CurrentEdge);
-            FindMatchesRecursive(AClauseIndex + 1, NewState);
-          finally
-            NewState.Free;
-          end;
-        end;
-      end;
-    end;
+      // Solo el destino enlazado (patrones convergentes: (c)-[]->(a), (p)-[]->(a)):
+      // se recorre al revés. Una arista origen->destino es entrante para el destino.
+      FromNode := TargetObj as TAiRagGraphNode;
+      if Dir in [gdOutgoing, gdBoth] then
+        for CurrentEdge in FromNode.IncomingEdges do
+          TryEdge(Clause, CurrentEdge, CurrentEdge.FromNode, gdOutgoing, Clause.SourceNodeVar, AClauseIndex, ACurrentState);
+      if Dir in [gdIncoming, gdBoth] then
+        for CurrentEdge in FromNode.OutgoingEdges do
+          TryEdge(Clause, CurrentEdge, CurrentEdge.ToNode, gdIncoming, Clause.SourceNodeVar, AClauseIndex, ACurrentState);
+    end
+    else
+      // Ninguno enlazado: el origen de esta cláusula es un ancla nueva
+      BindCandidates(Clause.SourceNodeVar, AClauseIndex, ACurrentState);
   end;
 
 begin
   Result := [];
-  if (AQuery = nil) then
+  if (AQuery = nil) or (AQuery.NodePatterns.Count = 0) then
     Exit;
 
   Results := TObjectList < TDictionary < string, TObject >>.Create(True);
   try
-    // =========================================================================
-    // CASO 1: SOLO NODOS (Sin relaciones/clauses) -> MATCH (n:Persona) ...
-    // =========================================================================
-    if AQuery.MatchClauses.Count = 0 then
-    begin
-      if AQuery.NodePatterns.Count > 0 then
-      begin
-        // Tomamos el primer patr�n (ej: 'p')
-        // Nota: Si hay m�ltiples nodos desconectados MATCH (a), (b) requerir�a producto cartesiano.
-        // Aqu� simplificamos para el caso com�n de un solo nodo desconectado.
-        StartNodePattern := AQuery.NodePatterns[0];
-
-        // 1. Filtrar candidatos iniciales
-        if not StartNodePattern.NodeLabel.IsEmpty then
-          CandidateNodes := Self.FindNodesByLabel(StartNodePattern.NodeLabel)
-        else
-          CandidateNodes := FNodeRegistry.Values.ToArray;
-
-        // 2. Iterar y validar
-        for StartNode in CandidateNodes do
-        begin
-          if StartNodePattern.Matches(StartNode) then
-          begin
-            InitialState := TMatchState.Create;
-            try
-              InitialState.Add(StartNodePattern.Variable, StartNode);
-              // Verificar WHERE para este nodo individual
-              if (AQuery.WhereClause = nil) or Boolean(EvaluateGraphExpression(AQuery.WhereClause, InitialState)) then
-              begin
-                Results.Add(TMatchState.Create(InitialState));
-              end;
-            finally
-              InitialState.Free;
-            end;
-          end;
-        end;
-      end;
-    end
-    // =========================================================================
-    // CASO 2: ESTRUCTURAL (Con relaciones) -> MATCH (a)-[r]->(b)
-    // =========================================================================
-    else
-    begin
-      // --- PASO 1: B�SQUEDA DEL NODO ANCLA ---
-      StartNodePattern := AQuery.NodePatternByVariable[AQuery.MatchClauses[0].SourceNodeVar];
-      if StartNodePattern = nil then
-        raise Exception.Create(AiStr('rag.graph.no_start_pattern'));
-
-      if not StartNodePattern.NodeLabel.IsEmpty then
-        CandidateNodes := Self.FindNodesByLabel(StartNodePattern.NodeLabel)
-      else
-        CandidateNodes := FNodeRegistry.Values.ToArray;
-
-      for StartNode in CandidateNodes do
-      begin
-        if StartNodePattern.Matches(StartNode) then
-        begin
-          InitialState := TMatchState.Create;
-          try
-            InitialState.Add(StartNodePattern.Variable, StartNode);
-            FindMatchesRecursive(0, InitialState);
-          finally
-            InitialState.Free;
-          end;
-        end;
-      end;
+    // El primer ancla es el origen de la primera cláusula (o el primer nodo si no hay aristas)
+    InitialState := TMatchState.Create;
+    try
+      FindMatchesRecursive(0, InitialState);
+    finally
+      InitialState.Free;
     end;
 
-    // --- PASO COM�N: EXPANSI�N DEL SUBGRAFO (si ADepth > 0 y hay resultados) ---
-    // (Este c�digo es id�ntico al anterior, pero se aplica a los resultados de ambos casos)
+    // --- PASO COMÚN: EXPANSIÓN DEL SUBGRAFO (si ADepth > 0 y hay resultados) ---
     if (ADepth > 0) and (Results.Count > 0) then
     begin
-      // 1. Recolectar nodos semilla �nicos
+      // 1. Recolectar nodos semilla únicos
       SeedNodesSet := TDictionary<TAiRagGraphNode, Boolean>.Create;
       try
         for MatchDict in Results do
@@ -3767,13 +3941,18 @@ begin
         if SeedNodesSet.Count > 0 then
         begin
           // 2. Expandir el vecindario
-          ExpandedNodesArray := Self.ExpandNodeList(TList<TAiRagGraphNode>.Create(SeedNodesSet.Keys), ADepth);
+          SeedList := TList<TAiRagGraphNode>.Create(SeedNodesSet.Keys);
+          try
+            ExpandedNodesArray := Self.ExpandNodeList(SeedList, ADepth);
+          finally
+            SeedList.Free;
+          end;
 
           // 3. Construir la salida del subgrafo
           ExpandedResults := TObjectList < TDictionary < string, TObject >>.Create(True);
           EdgeSet := TDictionary<TAiRagGraphEdge, Boolean>.Create;
           try
-            // A�adir Nodos
+            // Añadir Nodos
             for Node in ExpandedNodesArray do
             begin
               Dict := TDictionary<string, TObject>.Create;
@@ -3782,7 +3961,7 @@ begin
               ExpandedResults.Add(Dict);
             end;
 
-            // A�adir Aristas Internas
+            // Añadir Aristas Internas
             var
             NodeSet := TDictionary<TAiRagGraphNode, Boolean>.Create;
             try
@@ -4736,7 +4915,7 @@ begin
   Result := nil;
   for Pattern in FNodePatterns do
   begin
-    if SameText(Pattern.Variable, AVar) then
+    if Pattern.Variable = AVar then
     begin
       Result := Pattern;
       Exit;
@@ -4829,6 +5008,39 @@ destructor TBinaryExpr.Destroy;
 begin
   Left.Free; // La liberaci�n es recursiva
   Right.Free;
+  inherited;
+end;
+
+{ TUnaryExpr }
+constructor TUnaryExpr.Create(AOp: TUnaryOp; AOperand: TGraphExpression);
+begin
+  inherited Create;
+  Kind := ekUnary;
+  Op := AOp;
+  Operand := AOperand;
+end;
+
+destructor TUnaryExpr.Destroy;
+begin
+  Operand.Free;
+  inherited;
+end;
+
+{ TBetweenExpr }
+constructor TBetweenExpr.Create(AValue, ALow, AHigh: TGraphExpression);
+begin
+  inherited Create;
+  Kind := ekBetween;
+  Value := AValue;
+  Low := ALow;
+  High := AHigh;
+end;
+
+destructor TBetweenExpr.Destroy;
+begin
+  Value.Free;
+  Low.Free;
+  High.Free;
   inherited;
 end;
 

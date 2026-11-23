@@ -82,25 +82,27 @@ Execution flow: `TVGQLLexer` → `TVGQLParser` → `TVGQLQuery` (AST) → `TVGQL
 
 ### MakerGQL Query Language (Graph)
 
-MakerGQL — Graph Query Language based on ISO/IEC 39075:2024 (GQL standard):
+MakerGQL — Graph Query Language based on ISO/IEC 39075:2024 (GQL standard). Clause order is fixed: `MATCH` → `DEPTH` → `WHERE` → `RETURN`. The exact grammar (and the block to paste into a system prompt) is `MakerGQL_SystemPrompt.md`; keep it in sync when the parser changes.
 ```gql
 MATCH (p:Persona)-[r:TRABAJA_EN]->(e:Empresa)
-WHERE p.ciudad = 'Madrid' AND e.empleados > 100
-RETURN p, r, e
 DEPTH 2
+WHERE p.ciudad = $ciudad AND e.empleados BETWEEN 100 AND 5000
+RETURN p, r, e
 ```
 
 Special commands:
 - `SHOW LABELS` / `SHOW EDGES`: Introspection
-- `GET SHORTEST PATH`: Dijkstra's algorithm
-- `GET CENTRALITY(node)`: Closeness centrality
+- `SHORTEST PATH (a) TO (b)` (sin `GET`): Dijkstra's algorithm
+- `GET CENTRALITY (node)`: Closeness centrality
 - `GET DEGREES TOP n`: Hub detection
+
+**Revisión de MakerGQL (nov 23/2026, fases 1 y 2 del plan).** Errores corregidos: dos nodos sin variable en un patrón compartían la clave `''` y la consulta no devolvía nada (ahora el parser los nombra `#1`, `#2`…, nombres que el lexer no produce); los patrones con coma solo funcionaban si cada uno arrancaba en una variable ya enlazada (`Match` ahora recorre la cláusula desde el extremo enlazado, o enlaza un ancla nueva, y los patrones de nodo sueltos hacen producto cartesiano); `DEPTH` perdía una `TList` por consulta; `=` lanzaba `EVariantTypeCastError` entre texto y número; las comparaciones y `IN` dependían del separador decimal del Windows (ahora un texto `'42000.5'` compara como número en cualquier idioma, con fechas ISO y booleanos aparte); `LIKE` usaba `MatchesMask` (`[`, `*` y `?` del patrón eran comodines; ahora solo `%` y `_`); `ExecuteMakerGQL(ACode)` liberaba los diccionarios pero no los `TStringWrapper` (`TAiRagGraph.FreeGQLResults` libera ambos); `SHOW LABELS basura` se aceptaba; una cadena sin cerrar se aceptaba. Nuevo: parámetros `$x` (sobrecargas `ExecuteMakerGQL(ACode, ['nombre', valor, ...])` y con `TDictionary<string, Variant>`; el valor no pasa por el lexer, valen en `WHERE`, `{...}`, `IN $lista`, `DEPTH` y `TOP`), `BETWEEN`, `[NOT] STARTS WITH`/`ENDS WITH` (sin distinguir mayúsculas, como `CONTAINS`), `NOT` general y pospuesto (`NOT LIKE`, `NOT BETWEEN`…), `XOR`, negativos, `r.weight` en `WHERE`, escapes (`''`, `\'`, `\n`…), comentarios `//` y `/* */`, `;` final, `` `nombres con espacios` ``, palabras reservadas después del punto (`n.count`) y `EGQLParserError` (hija de `Exception`, con `Position`). `BETWEEN`, `XOR`, `STARTS`, `ENDS` y `WITH` se reconocen por contexto: no son reservadas. Cambio de comportamiento: dos textos numéricos se comparan como números (`'10' > '9'` es verdadero). Suite: `rag.gql.*` (10 casos). Pendiente (fases 3-6): funciones, aritmética, `RETURN` real con `ORDER BY`/`LIMIT`, `WITH`, longitud variable, `OPTIONAL MATCH`, `SHOW SCHEMA` y `SIMILAR TO`.
 
 **`SearchText` (fix oct 23/2026).** Solo devolvía el encabezado "Contexto extraído del grafo de conocimiento:": el cuerpo había quedado como un esbozo y quien lo usaba (demo 025, o un chat que arma el contexto con él) le pasaba al LLM un contexto vacío. Ahora devuelve `GetContextualizedText` de los nodos encontrados (con sus vecinos hasta `ADepth`) y sus relaciones. Suite: `rag.graph.searchtext`.
 
 **GraphML desde una consola (oct 24/2026).** `SaveToFile(..., gefGraphML)` usa `TXMLDocument`. En una app FMX/VCL el vendor DOM se registra solo; en un programa `{$APPTYPE CONSOLE}` falla con "Microsoft MSXML is not installed" si no se agregan `Xml.Win.msxmldom` al `uses` y `CoInitialize(nil)` al arrancar (ver `Demos/Libro/cap14-grafos/GrafosLadera.dpr`). `gefDOT` y `gefGraphMkai` no lo necesitan.
 
-**Patrones convergentes en MakerGQL.** Dos aristas que llegan al mismo nodo se escriben con flecha invertida: `MATCH (p:Persona)-[:NO_LE_GUSTO]->(a:Acidez)<-[:TIENE_ACIDEZ]-(c:Producto) RETURN c` funciona. La forma con coma reutilizando la variable, `MATCH (c)-[:TIENE_ACIDEZ]->(a), (p)-[:NO_LE_GUSTO]->(a)`, devuelve "No matching subgraphs found" (verificado oct 23/2026; pendiente de revisar).
+**Patrones convergentes en MakerGQL.** Dos aristas que llegan al mismo nodo se escriben con flecha invertida, `MATCH (p:Persona)-[:NO_LE_GUSTO]->(a:Acidez)<-[:TIENE_ACIDEZ]-(c:Producto) RETURN c`, o con coma reutilizando la variable, `MATCH (c)-[:TIENE_ACIDEZ]->(a), (p)-[:NO_LE_GUSTO]->(a)`. La forma con coma devolvía "No matching subgraphs found" hasta el arreglo de nov 23/2026 (caso `rag.gql.comma`).
 
 ## Thread Safety
 
