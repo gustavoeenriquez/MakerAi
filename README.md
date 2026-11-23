@@ -762,6 +762,9 @@ Small consoles with asserts that reproduce a specific issue against the live API
 
 ## 🔄 Changelog
 
+### Unreleased (dev)
+- Fix (RAG Graph): **`DeleteNode(AID)` left the neighbour nodes pointing at freed relationships** — it freed the node's relationships without removing them from the node at the other end, so walking that neighbour later read freed memory (MakerGQL `DETACH DELETE` used it). Both `DeleteNode` overloads now delete each relationship with `DeleteEdge`, which removes it from both ends. Also: `DeleteEdge` never told the driver (the PostgreSQL row stayed), `DeleteNode(ANode)` did not tell the driver about the node, and a relationship from a node to itself was freed twice. Regression case `rag.graph.delete`
+
 ### v4.1.0 (2026-11-23)
 - New (Claude): **`ThinkingDisplay`** — adaptive thinking asks for `display: "summarized"`, so `ReasoningContent` is filled on Claude 4.7+, the 5 family and Haiku 5.5 (the API default, `omitted`, returned the thinking blocks empty). `''` sends no field, as in 4.0. Billing does not change
 - New (MakerGQL): **query parameters** — `ExecuteMakerGQL('... WHERE a.name = $nivel', ['nivel', Nivel])` (also a `TDictionary<string, Variant>` overload and `TAiRagDocumentManager.ExecuteGQL(query, params)`). The value never goes through the lexer, so text that comes from a user or a model can no longer change the query. Parameters work in `WHERE`, in pattern properties, in `IN $list` (a `VarArrayOf`), `DEPTH` and `TOP`

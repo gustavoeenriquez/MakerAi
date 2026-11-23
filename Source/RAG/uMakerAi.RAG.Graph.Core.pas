@@ -4070,15 +4070,22 @@ begin
 end;
 
 procedure TAiRagGraph.DeleteEdge(AEdge: TAiRagGraphEdge);
+var
+  EdgeID: string;
 begin
   if AEdge = nil then
     Exit;
+  EdgeID := AEdge.ID;
 
   // Quitar la referencia de los nodos conectados
   AEdge.FromNode.RemoveOutgoingEdge(AEdge);
   AEdge.ToNode.RemoveIncomingEdge(AEdge);
 
-  UnregisterEdge(AEdge);
+  UnregisterEdge(AEdge); // Libera la arista
+
+  // Persistir el borrado (antes solo se borraba en memoria y la fila quedaba en la base)
+  if Assigned(FDriver) then
+    FDriver.DeleteEdge(EdgeID);
 end;
 
 procedure TAiRagGraph.DeleteEdge(AID: string);
@@ -4093,67 +4100,41 @@ procedure TAiRagGraph.DeleteNode(ANode: TAiRagGraphNode);
 var
   Edge: TAiRagGraphEdge;
   EdgesToDelete: TList<TAiRagGraphEdge>;
+  NodeID: string;
 begin
   if ANode = nil then
     Exit;
+  NodeID := ANode.ID;
 
-  // Crear una lista temporal de aristas a borrar para no modificar las listas mientras se iteran
+  // Las aristas se borran una por una con DeleteEdge: salen de las listas del nodo vecino
+  // (antes DeleteNode(AID) las liberaba sin quitarlas de ahí y el vecino quedaba apuntando
+  // a memoria liberada) y se borran también en el driver. Una arista de un nodo a sí mismo
+  // está en las dos listas: se anota una sola vez.
   EdgesToDelete := TList<TAiRagGraphEdge>.Create;
   try
     for Edge in ANode.OutgoingEdges do
-      EdgesToDelete.Add(Edge);
+      if not EdgesToDelete.Contains(Edge) then
+        EdgesToDelete.Add(Edge);
     for Edge in ANode.IncomingEdges do
-      EdgesToDelete.Add(Edge);
-
-    // Borrar todas las aristas conectadas
+      if not EdgesToDelete.Contains(Edge) then
+        EdgesToDelete.Add(Edge);
     for Edge in EdgesToDelete do
       DeleteEdge(Edge);
   finally
     EdgesToDelete.Free;
   end;
 
-  UnregisterNode(ANode);
+  UnregisterNode(ANode); // Libera el nodo
+
+  // Persistir el borrado (antes DeleteNode(ANode) no avisaba al driver; DeleteNode(AID) sí)
+  if Assigned(FDriver) then
+    FDriver.DeleteNode(NodeID);
 end;
 
 procedure TAiRagGraph.DeleteNode(AID: string);
-var
-  Node: TAiRagGraphNode;
 begin
-  Node := FindNodeByID(AID);
-  if Node = nil then
-    Exit;
-
-  // 1. Guardar una referencia a las aristas ANTES de borrarlas en memoria
-  var
-  EdgesToDelete := TList<TAiRagGraphEdge>.Create;
-  EdgesToDelete.AddRange(Node.OutgoingEdges.ToArray);
-  EdgesToDelete.AddRange(Node.IncomingEdges.ToArray);
-
-  try
-    // 2. Realizar la operaci�n en memoria PRIMERO
-    UnregisterNode(Node); // Esto quita el nodo de FNodeRegistry y FNodes
-    // Tambi�n debes desregistrar las aristas conectadas
-    for var Edge in EdgesToDelete do
-      UnregisterEdge(Edge);
-
-    // 3. Persistir el cambio en la BD DESPU�S
-    if Assigned(FDriver) then
-    begin
-      try
-        FDriver.DeleteNode(AID);
-        // Tambi�n necesitar�as un OnGraphDeleteEdge para las aristas
-        // o que OnGraphDeleteNode se encargue de borrar en cascada.
-      except
-        // Si la BD falla, �tenemos que restaurar el estado en memoria!
-        // Esto es complejo: requerir�a volver a a�adir el nodo y las aristas.
-        // Por simplicidad, por ahora solo relanzamos. Una soluci�n completa
-        // requerir�a un patr�n "Unit of Work".
-        raise;
-      end;
-    end;
-  finally
-    EdgesToDelete.Free;
-  end;
+  // Las dos sobrecargas hacen lo mismo
+  DeleteNode(FindNodeByID(AID));
 end;
 
 procedure TAiRagGraph.UnregisterEdge(AEdge: TAiRagGraphEdge);
@@ -6236,9 +6217,7 @@ begin
     for Edge in DelEdges do
     begin
       TouchedEdges.Remove(Edge);
-      if Assigned(FDriver) then
-        FDriver.DeleteEdge(Edge.ID); // DeleteEdge del grafo no avisa al driver
-      Self.DeleteEdge(Edge);
+      Self.DeleteEdge(Edge); // Avisa al driver
       Inc(EdgesDeleted);
     end;
     for Node in DelNodes do
@@ -6249,7 +6228,7 @@ begin
       for Edge in Node.IncomingEdges do
         TouchedEdges.Remove(Edge);
       Inc(EdgesDeleted, Node.OutgoingEdges.Count + Node.IncomingEdges.Count);
-      Self.DeleteNode(Node.ID); // Borra sus relaciones y avisa al driver
+      Self.DeleteNode(Node); // Borra sus relaciones (también en el vecino) y avisa al driver
       Inc(NodesDeleted);
     end;
 

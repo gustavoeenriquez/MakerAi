@@ -88,7 +88,7 @@ uses
   UMakerAi.Chat, uMakerAi.Chat.OpenAi, uMakerAi.Chat.GenericLLM, uMakerAi.Chat.Groq, uMakerAi.Chat.Qwen, uMakerAi.Qwen.Rerank, uMakerAi.Qwen.Voices,
   uMakerAi.Realtime, uMakerAi.Realtime.Qwen, uMakerAi.Realtime.AiConnection, uMakerAi.Realtime.QwenTTS, uMakerAi.Realtime.Grok,
   System.IOUtils, System.Variants, uMakerAi.Embeddings.Core,
-  uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index, uMakerAi.RAG.Vectors.VQL, uMakerAi.RAG.Graph.Core, uMakerAi.RAG.Graph.Builder,
+  uMakerAi.RAG.Vectors, uMakerAi.RAG.Vectors.Index, uMakerAi.RAG.Vectors.VQL, uMakerAi.RAG.Graph.Core, uMakerAi.RAG.Graph.Builder, uMakerAi.RAG.MetaData,
   uMakerAi.RAG.Vector.Driver.BinFile,
   // TAiMemory persiste en SQLite via FireDAC: el driver fisico y el cursor de
   // consola tienen que estar enlazados en el ejecutable.
@@ -527,6 +527,10 @@ begin
 
   // RAG Graph: SearchText solo devolvia el encabezado ("Contexto extraido...")
   // y nunca los nodos encontrados; el LLM recibia un contexto vacio
+  FRunner.AddCase('rag.graph.delete')
+    .Input('rag:graph-delete')
+    .ExpectEquals('b.in=1|edges=1|b.in=0|edges=0|nodes=1|edge:e1,edge:e2,edge:e3,node:a,node:c');
+
   FRunner.AddCase('rag.graph.searchtext')
     .Input('rag:graph-searchtext')
     .ExpectEquals('huila=si|nota=si|relacion=si');
@@ -5496,6 +5500,119 @@ end;
 // RAG
 // -----------------------------------------------------------------------------
 
+type
+  // Driver de grafo falso: no guarda nada y anota los borrados que le llegan ('node:id', 'edge:id')
+  TSuiteGraphDriver = class(TAiRagGraphDriverBase)
+  protected
+    function FindNodeDataByID(const ANodeID: string; out ANodeData: TNodeDataRecord): Boolean; override;
+    function FindEdgeDataByID(const AEdgeID: string; out AEdgeData: TEdgeDataRecord): Boolean; override;
+    procedure GetNodeEdges(ANode: TAiRagGraphNode); override;
+    procedure AddNode(ANode: TAiRagGraphNode); override;
+    procedure AddEdge(AEdge: TAiRagGraphEdge); override;
+    procedure DeleteNode(const ANodeID: string); override;
+    procedure DeleteEdge(const AEdgeID: string); override;
+    function GetUniqueNodeLabels: TArray<string>; override;
+    function GetUniqueEdgeLabels: TArray<string>; override;
+    function FindNodeByName(const AName, ANodeLabel: string): TAiRagGraphNode; override;
+    function FindNodesByLabel(const ALabel: string): TArray<TAiRagGraphNode>; override;
+    function FindNodesByProperty(const AKey: string; const AValue: Variant): TArray<TAiRagGraphNode>; override;
+    function FindNodeNamesByLabel(const ANodeLabel, ASearchText: string; ALimit: Integer): TArray<string>; override;
+    function SearchNodes(const APrompt: string; ADepth, ALimit: Integer; APrecision: Double;
+      AFilter: TAiFilterCriteria = nil): TArray<TAiRagGraphNode>; override;
+    function Query(const APlan: TQueryPlan; ADepth, ALimit: Integer; APrecision: Double): TArray<TAiRagGraphNode>; override;
+  public
+    Log: TStringList;
+    constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
+  end;
+
+constructor TSuiteGraphDriver.Create(AOwner: TComponent);
+begin
+  inherited;
+  Log := TStringList.Create;
+end;
+
+destructor TSuiteGraphDriver.Destroy;
+begin
+  Log.Free;
+  inherited;
+end;
+
+function TSuiteGraphDriver.FindNodeDataByID(const ANodeID: string; out ANodeData: TNodeDataRecord): Boolean;
+begin
+  ANodeData := Default(TNodeDataRecord);
+  Result := False;
+end;
+
+function TSuiteGraphDriver.FindEdgeDataByID(const AEdgeID: string; out AEdgeData: TEdgeDataRecord): Boolean;
+begin
+  AEdgeData := Default(TEdgeDataRecord);
+  Result := False;
+end;
+
+procedure TSuiteGraphDriver.GetNodeEdges(ANode: TAiRagGraphNode);
+begin
+end;
+
+procedure TSuiteGraphDriver.AddNode(ANode: TAiRagGraphNode);
+begin
+end;
+
+procedure TSuiteGraphDriver.AddEdge(AEdge: TAiRagGraphEdge);
+begin
+end;
+
+procedure TSuiteGraphDriver.DeleteNode(const ANodeID: string);
+begin
+  Log.Add('node:' + ANodeID);
+end;
+
+procedure TSuiteGraphDriver.DeleteEdge(const AEdgeID: string);
+begin
+  Log.Add('edge:' + AEdgeID);
+end;
+
+function TSuiteGraphDriver.GetUniqueNodeLabels: TArray<string>;
+begin
+  Result := [];
+end;
+
+function TSuiteGraphDriver.GetUniqueEdgeLabels: TArray<string>;
+begin
+  Result := [];
+end;
+
+function TSuiteGraphDriver.FindNodeByName(const AName, ANodeLabel: string): TAiRagGraphNode;
+begin
+  Result := nil;
+end;
+
+function TSuiteGraphDriver.FindNodesByLabel(const ALabel: string): TArray<TAiRagGraphNode>;
+begin
+  Result := [];
+end;
+
+function TSuiteGraphDriver.FindNodesByProperty(const AKey: string; const AValue: Variant): TArray<TAiRagGraphNode>;
+begin
+  Result := [];
+end;
+
+function TSuiteGraphDriver.FindNodeNamesByLabel(const ANodeLabel, ASearchText: string; ALimit: Integer): TArray<string>;
+begin
+  Result := [];
+end;
+
+function TSuiteGraphDriver.SearchNodes(const APrompt: string; ADepth, ALimit: Integer; APrecision: Double;
+  AFilter: TAiFilterCriteria): TArray<TAiRagGraphNode>;
+begin
+  Result := [];
+end;
+
+function TSuiteGraphDriver.Query(const APlan: TQueryPlan; ADepth, ALimit: Integer; APrecision: Double): TArray<TAiRagGraphNode>;
+begin
+  Result := [];
+end;
+
 // MakerGQL (v4.1): un grafo chico de La Ladera y consultas que cubren los arreglos de la
 // fase 1 (nodos anonimos, patrones convergentes, '=' sin excepciones, numeros sin depender
 // del idioma) y lo nuevo de la fase 2 (parametros, BETWEEN, STARTS/ENDS WITH, NOT, XOR,
@@ -5885,6 +6002,34 @@ var
 begin
   if AScenario.StartsWith('rag:gql:') then
     Exit(RunGqlScenario(AScenario));
+
+  // Borrado de nodos y aristas: DeleteNode(AID) liberaba las aristas sin sacarlas del nodo
+  // vecino (quedaba apuntando a memoria liberada); DeleteNode(ANode) no avisaba al driver;
+  // DeleteEdge no avisaba nunca. Incluye una arista de un nodo a si mismo (esta en sus dos listas).
+  if AScenario = 'rag:graph-delete' then
+  begin
+    var GDrv := TSuiteGraphDriver.Create(nil);
+    var G := TAiRagGraph.Create(nil);
+    try
+      G.Driver := GDrv;
+      var NA := G.AddNode('a', 'X', 'A');
+      var NB := G.AddNode('b', 'X', 'B');
+      var NC := G.AddNode('c', 'X', 'C');
+      G.AddEdge(NA, NB, 'e1', 'R', 'r');
+      G.AddEdge(NC, NB, 'e2', 'R', 'r');
+      G.AddEdge(NA, NA, 'e3', 'R', 'r');
+      G.DeleteNode('a');
+      Result := Format('b.in=%d|edges=%d|', [NB.IncomingEdges.Count, G.EdgeCount]);
+      G.DeleteNode(NC);
+      GDrv.Log.Sort;
+      Result := Result + Format('b.in=%d|edges=%d|nodes=%d|', [NB.IncomingEdges.Count, G.EdgeCount, G.NodeCount]) +
+        GDrv.Log.CommaText;
+    finally
+      G.Free;
+      GDrv.Free;
+    end;
+    Exit;
+  end;
 
   // Las consultas VQL de ejemplo (demo 023, README, guia de RAG) deben parsear:
   // durante meses traian 'MATCH documentos' sin parentesis, WEIGHTS con
