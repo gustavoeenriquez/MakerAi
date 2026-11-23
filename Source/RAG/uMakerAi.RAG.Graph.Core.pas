@@ -55,7 +55,7 @@ type
   // --------- CLASES PARA EL PARSER --------------------------------
 
   { Enumeraciones para el �rbol de Expresiones }
-  TExpressionKind = (ekLiteral, ekProperty, ekBinary, ekUnary, ekBetween, ekVariable, ekFunction, ekAggregate);
+  TExpressionKind = (ekLiteral, ekProperty, ekBinary, ekUnary, ekBetween, ekVariable, ekFunction, ekAggregate, ekPattern);
 
   TBinaryOp = (
     // L�gicos
@@ -154,6 +154,17 @@ type
     destructor Destroy; override;
   end;
 
+  TGraphMatchQuery = class;
+
+  // Patrón como condición: WHERE (p)-[:COMPRO]->(:Cafe), exists(...), EXISTS { MATCH ... WHERE ... }.
+  // Vale True si el patrón tiene al menos una coincidencia con las variables ya enlazadas.
+  TPatternExpr = class(TGraphExpression)
+  public
+    Query: TGraphMatchQuery; // Es dueña
+    constructor Create(AQuery: TGraphMatchQuery);
+    destructor Destroy; override;
+  end;
+
   { Columna de RETURN/WITH: expresión y nombre (el alias o el texto de la expresión) }
   TGQLReturnItem = class
   public
@@ -246,6 +257,7 @@ type
     Variable: string; // El alias del nodo, ej: 'p'
     NodeLabel: string; // La etiqueta a buscar, ej: 'Persona'
     Properties: TDictionary<string, Variant>; // Filtros de propiedades, ej: {'ciudad': 'New York'}
+    Optional: Boolean; // Lo introdujo un OPTIONAL MATCH (no participa en el MATCH principal)
     constructor Create;
     destructor Destroy; override;
     function Matches(ANode: TAiRagGraphNode): Boolean;
@@ -259,8 +271,11 @@ type
     EdgeLabel: string; // La etiqueta a buscar, ej: 'KNOWS'
     Direction: TGraphDirection; // La direcci�n de la relaci�n
     Properties: TDictionary<string, Variant>; // Filtros de propiedades, ej: {'since': 2018}
+    MinHops: Integer; // Longitud variable -[*1..3]->: por defecto 1..1 (un salto)
+    MaxHops: Integer; // -1 = sin máximo (se acota a 10 saltos)
     constructor Create;
     destructor Destroy; override;
+    function IsVariableLength: Boolean;
     // Comprueba si una arista coincide con el patr�n, considerando la direcci�n del recorrido actual
     function Matches(AEdge: TAiRagGraphEdge; AActualDirection: TGraphDirection): Boolean;
   end;
@@ -276,6 +291,24 @@ type
     destructor Destroy; override;
   end;
 
+  { Variable de camino: p = (a)-[...]->(b). Cubre las cláusulas FirstClause..LastClause del MATCH principal. }
+  TGQLPathDef = record
+    Variable: string;
+    StartVar: string;
+    FirstClause: Integer;
+    LastClause: Integer; // -1 si el patrón es un solo nodo
+  end;
+
+  { OPTIONAL MATCH: sus cláusulas, los patrones de nodo nuevos que introdujo y su WHERE }
+  TGQLOptionalMatch = class
+  public
+    Clauses: TObjectList<TMatchClause>; // Es dueña
+    Patterns: TList<TMatchNodePattern>; // No es dueña (son de la consulta)
+    Where: TGraphExpression; // Es dueña
+    constructor Create;
+    destructor Destroy; override;
+  end;
+
   // La consulta completa que contiene todos los patrones de nodos y cl�usulas.
   TGraphMatchQuery = class
   private
@@ -285,6 +318,8 @@ type
     FDepth: Integer; // Es due�o de las cl�usulas
     FProjections: TObjectList<TGQLProjection>;
     FTabular: Boolean;
+    FOptionalParts: TObjectList<TGQLOptionalMatch>;
+    FPaths: TList<TGQLPathDef>;
     function GetNodePatternByVariable(const AVar: string): TMatchNodePattern;
   public
     constructor Create;
@@ -301,6 +336,8 @@ type
     // True: el resultado es una tabla (RETURN con columnas, agregados, DISTINCT, ORDER BY, SKIP, LIMIT o WITH).
     // False: el subgrafo encontrado como texto de contexto, como siempre.
     property Tabular: Boolean read FTabular write FTabular;
+    property OptionalParts: TObjectList<TGQLOptionalMatch> read FOptionalParts;
+    property Paths: TList<TGQLPathDef> read FPaths;
   end;
 
   TStringWrapper = class(TObject)
@@ -315,6 +352,19 @@ type
   public
     Data: Variant;
     constructor CreateValue(const AData: Variant);
+    function Clone: TGQLValue; virtual;
+  end;
+
+  { Camino: p = (a)-[*1..3]->(b), o el tramo de una arista de longitud variable.
+    Value/Data tienen el texto (Huila)-[:TIENE]->(Alta); Nodes y Edges, los elementos en orden. }
+  TGQLPath = class(TGQLValue)
+  public
+    Nodes: TArray<TAiRagGraphNode>;
+    Edges: TArray<TAiRagGraphEdge>;
+    constructor CreatePath(const ANodes: TArray<TAiRagGraphNode>; const AEdges: TArray<TAiRagGraphEdge>);
+    function Clone: TGQLValue; override;
+    function NodeNames: Variant;
+    function EdgeLabels: Variant;
   end;
 
   TNodeDataRecord = record // O usa TJSONObject
@@ -485,6 +535,10 @@ type
     function EvaluateGraphExpression(AExpr: TGraphExpression; ABoundElements: TDictionary<string, TObject>): Variant;
     function EvaluateGQLFunction(AFunc: TFunctionExpr; ABoundElements: TDictionary<string, TObject>): Variant;
     function RunGQLProjection(AStage: TGQLProjection; const AInput: TArray<TDictionary<string, TObject>>): TArray<TDictionary<string, TObject>>;
+    function GQLCandidates(APattern: TMatchNodePattern): TArray<TAiRagGraphNode>;
+    procedure GQLSolve(AQuery: TGraphMatchQuery; AClauses: TList<TMatchClause>; APatterns: TList<TMatchNodePattern>;
+      AWhere: TGraphExpression; AState: TDictionary<string, TObject>; AResults: TObjectList<TDictionary<string, TObject>>;
+      AFirstOnly: Boolean);
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -1317,6 +1371,42 @@ end;
 // MakerGQL: proyección (WITH / RETURN) y resultado en tabla
 // ---------------------------------------------------------------------------
 
+// Etiqueta contra un patrón que puede traer alternativas: 'Persona|Empresa'
+function GQLLabelMatches(const AActual, APattern: string): Boolean;
+var
+  Part: string;
+begin
+  if APattern.IndexOf('|') < 0 then
+    Exit(SameText(AActual, APattern));
+  for Part in APattern.Split(['|']) do
+    if SameText(AActual, Part) then
+      Exit(True);
+  Result := False;
+end;
+
+// Copia una fila de resultado: los nodos y aristas se comparten (son del grafo); los
+// TGQLValue/TGQLPath se clonan, así cada fila es dueña de los suyos.
+function GQLCloneRow(ARow: TDictionary<string, TObject>): TDictionary<string, TObject>;
+var
+  P: TPair<string, TObject>;
+begin
+  Result := TDictionary<string, TObject>.Create;
+  for P in ARow do
+    if P.Value is TGQLValue then
+      Result.Add(P.Key, TGQLValue(P.Value).Clone)
+    else
+      Result.Add(P.Key, P.Value);
+end;
+
+procedure GQLFreeRowValues(ARow: TDictionary<string, TObject>);
+var
+  Obj: TObject;
+begin
+  for Obj in ARow.Values do
+    if Obj is TStringWrapper then
+      Obj.Free;
+end;
+
 // Clave de un valor para agrupar y para DISTINCT (3 y 3.0 son el mismo número)
 function GQLValueKey(const V: Variant): string;
 var
@@ -1487,7 +1577,7 @@ var
     if BoundElement(E, ABind, Obj) then
       Result := Obj // Nodo o arista del grafo: no es dueña
     else if (E is TVariableExpr) and ABind.TryGetValue(TVariableExpr(E).Variable, Obj) and (Obj is TGQLValue) then
-      Result := TGQLValue.CreateValue(TGQLValue(Obj).Data)
+      Result := TGQLValue(Obj).Clone
     else
       Result := TGQLValue.CreateValue(EvaluateGraphExpression(E, ABind));
   end;
@@ -1831,9 +1921,21 @@ begin
   Result := Null;
   N := AFunc.Name;
 
+  // --- Caminos: length(p), nodes(p), relationships(p) ---
+  if ((N = 'length') or (N = 'size') or (N = 'nodes') or (N = 'relationships')) and (AFunc.Args.Count = 1) and
+    (AFunc.Args[0] is TVariableExpr) and ABoundElements.TryGetValue(TVariableExpr(AFunc.Args[0]).Variable, Obj) and
+    (Obj is TGQLPath) then
+  begin
+    if (N = 'length') or (N = 'size') then
+      Exit(Length(TGQLPath(Obj).Edges));
+    if N = 'nodes' then
+      Exit(TGQLPath(Obj).NodeNames);
+    Exit(TGQLPath(Obj).EdgeLabels);
+  end;
+
   // --- Funciones de grafo: trabajan sobre el elemento enlazado a la variable ---
   if (N = 'id') or (N = 'label') or (N = 'labels') or (N = 'type') or (N = 'degree') or (N = 'indegree') or
-    (N = 'outdegree') or (N = 'keys') then
+    (N = 'outdegree') or (N = 'keys') or (N = 'nodes') or (N = 'relationships') then
   begin
     Obj := nil;
     if (AFunc.Args.Count > 0) and (AFunc.Args[0] is TVariableExpr) then
@@ -1883,7 +1985,11 @@ begin
     Exit;
   end;
   if N = 'exists' then
+  begin
+    if AFunc.Args[0].Kind = ekPattern then // exists((a)-[]->(b))
+      Exit(A[0]);
     Exit(not GQLIsNull(A[0]));
+  end;
 
   // Fechas sin argumento
   if (Length(A) = 0) and (N = 'date') then
@@ -2049,6 +2155,8 @@ var
   P: TPropertyExpr;
   Cmp, CmpLo, CmpHi: Integer;
   D, DL, DR: Double;
+  PatRes: TObjectList<TDictionary<string, TObject>>;
+  PatRow: TDictionary<string, TObject>;
 begin
   if AExpr = nil then
     Exit(True);
@@ -2122,6 +2230,23 @@ begin
     // ================================================================
     ekAggregate:
       Result := TAggregateExpr(AExpr).Value;
+
+    // ================================================================
+    // PATRÓN como condición: ¿hay al menos una coincidencia?
+    // ================================================================
+    ekPattern:
+      begin
+        PatRes := TObjectList < TDictionary < string, TObject >>.Create(True);
+        try
+          GQLSolve(TPatternExpr(AExpr).Query, TPatternExpr(AExpr).Query.MatchClauses, TPatternExpr(AExpr).Query.NodePatterns,
+            TPatternExpr(AExpr).Query.WhereClause, ABoundElements, PatRes, True);
+          Result := PatRes.Count > 0;
+        finally
+          for PatRow in PatRes do
+            GQLFreeRowValues(PatRow);
+          PatRes.Free;
+        end;
+      end;
 
     // ================================================================
     // FUNCIÓN
@@ -2579,10 +2704,7 @@ var
     Result := nil;
     if APattern = nil then
       Exit;
-    if not APattern.NodeLabel.IsEmpty then
-      Candidates := Self.FindNodesByLabel(APattern.NodeLabel)
-    else
-      Candidates := FNodeRegistry.Values.ToArray;
+    Candidates := Self.GQLCandidates(APattern);
     for Cand in Candidates do
       if APattern.Matches(Cand) then
         Exit(Cand);
@@ -2778,6 +2900,13 @@ begin
               begin
                 if ContextNodes.IndexOf(TAiRagGraphNode(Pair.Value)) = -1 then
                   ContextNodes.Add(TAiRagGraphNode(Pair.Value));
+              end
+              // Camino (p = ... o arista de longitud variable): todos sus nodos
+              else if Pair.Value is TGQLPath then
+              begin
+                for var PathNode in TGQLPath(Pair.Value).Nodes do
+                  if ContextNodes.IndexOf(PathNode) = -1 then
+                    ContextNodes.Add(PathNode);
               end
               // Caso B: El objeto viene envuelto en un diccionario de tipo (formato nuevo estandarizado)
               // ej: { 'type': 'node', 'element': <TAiRagGraphNode> }
@@ -4698,12 +4827,362 @@ begin
   end;
 end;
 
-function TAiRagGraph.Match(AQuery: TGraphMatchQuery; ADepth: Integer = 0): TArray<TDictionary<string, TObject>>;
+function TAiRagGraph.GQLCandidates(APattern: TMatchNodePattern): TArray<TAiRagGraphNode>;
+var
+  Part: string;
+begin
+  if APattern.NodeLabel.IsEmpty then
+    Result := FNodeRegistry.Values.ToArray
+  else if APattern.NodeLabel.IndexOf('|') < 0 then
+    Result := Self.FindNodesByLabel(APattern.NodeLabel)
+  else
+  begin
+    Result := [];
+    for Part in APattern.NodeLabel.Split(['|']) do
+      Result := Result + Self.FindNodesByLabel(Part);
+  end;
+end;
+
+// Busca las coincidencias de AClauses partiendo de AState (que no se modifica) y agrega a
+// AResults una copia de cada estado completo que cumple AWhere. APatterns son los patrones de
+// nodo de esta parte: los que queden sin enlazar al final se combinan (producto cartesiano).
+// Con AFirstOnly se detiene en la primera coincidencia (patrones dentro de un WHERE).
+procedure TAiRagGraph.GQLSolve(AQuery: TGraphMatchQuery; AClauses: TList<TMatchClause>; APatterns: TList<TMatchNodePattern>;
+  AWhere: TGraphExpression; AState: TDictionary<string, TObject>; AResults: TObjectList<TDictionary<string, TObject>>;
+  AFirstOnly: Boolean);
+const
+  GQL_MAX_HOPS = 10; // Tope de saltos de un patrón *, * .. o *n.. sin máximo
 type
   TMatchState = TDictionary<string, TObject>;
 var
-  Results: TObjectList<TDictionary<string, TObject>>;
-  InitialState: TMatchState;
+  Temps: TObjectList<TObject>; // Tramos de camino creados durante el recorrido
+  NeedEdgeKeys: Boolean; // La consulta tiene variables de camino: se enlaza cada arista como '#e<n>'
+  Done: Boolean;
+
+  function PatternOf(const AVar: string): TMatchNodePattern;
+  begin
+    Result := AQuery.NodePatternByVariable[AVar];
+    if Result = nil then
+      raise Exception.Create(AiStr('rag.graph.no_start_pattern'));
+  end;
+
+  function EdgeKey(AClauseIndex: Integer): string;
+  begin
+    Result := '#e' + IntToStr(AClauseIndex);
+  end;
+
+  // Arma las variables de camino (p = ...) sobre el estado completo
+  procedure BuildPaths(AState: TMatchState);
+  var
+    Def: TGQLPathDef;
+    Nodes: TList<TAiRagGraphNode>;
+    Edges: TList<TAiRagGraphEdge>;
+    Obj, Tgt: TObject;
+    Seg: TGQLPath;
+    I, J: Integer;
+    Path: TGQLPath;
+  begin
+    for Def in AQuery.Paths do
+    begin
+      Nodes := TList<TAiRagGraphNode>.Create;
+      Edges := TList<TAiRagGraphEdge>.Create;
+      try
+        if AState.TryGetValue(Def.StartVar, Obj) and (Obj is TAiRagGraphNode) then
+          Nodes.Add(TAiRagGraphNode(Obj));
+        for I := Def.FirstClause to Def.LastClause do
+        begin
+          if not AState.TryGetValue(EdgeKey(I), Obj) then
+            Continue;
+          if Obj is TAiRagGraphEdge then
+          begin
+            Edges.Add(TAiRagGraphEdge(Obj));
+            if AState.TryGetValue(AQuery.MatchClauses[I].TargetNodeVar, Tgt) and (Tgt is TAiRagGraphNode) then
+              Nodes.Add(TAiRagGraphNode(Tgt));
+          end
+          else if Obj is TGQLPath then
+          begin
+            Seg := TGQLPath(Obj);
+            for J := 0 to High(Seg.Edges) do
+              Edges.Add(Seg.Edges[J]);
+            for J := 1 to High(Seg.Nodes) do
+              Nodes.Add(Seg.Nodes[J]);
+          end;
+        end;
+        Path := TGQLPath.CreatePath(Nodes.ToArray, Edges.ToArray);
+        Temps.Add(Path);
+        AState.AddOrSetValue(Def.Variable, Path);
+      finally
+        Edges.Free;
+        Nodes.Free;
+      end;
+    end;
+  end;
+
+  procedure FindMatchesRecursive(AClauseIndex: Integer; ACurrentState: TMatchState);
+  var
+    Clause: TMatchClause;
+    Pattern: TMatchNodePattern;
+    SourceObj, TargetObj: TObject;
+    FromNode: TAiRagGraphNode;
+    CurrentEdge: TAiRagGraphEdge;
+    Dir: TGraphDirection;
+    Work: TMatchState;
+
+    // Enlaza AVar con cada candidato de su patrón y sigue en la misma cláusula
+    procedure BindCandidates(const AVar: string; AClauseIndex: Integer; ACurrentState: TMatchState);
+    var
+      Pattern: TMatchNodePattern;
+      Cand: TAiRagGraphNode;
+      NewState: TMatchState;
+    begin
+      Pattern := PatternOf(AVar);
+      for Cand in GQLCandidates(Pattern) do
+      begin
+        if Done then
+          Exit;
+        if Pattern.Matches(Cand) then
+        begin
+          NewState := TMatchState.Create(ACurrentState);
+          try
+            NewState.AddOrSetValue(AVar, Cand);
+            FindMatchesRecursive(AClauseIndex, NewState);
+          finally
+            NewState.Free;
+          end;
+        end;
+      end;
+    end;
+
+    // Enlaza el extremo, la arista (o el tramo) y sigue con la cláusula siguiente
+    procedure Advance(AClause: TMatchClause; AEdgeObj: TObject; ANeighbor: TAiRagGraphNode; const ANeighborVar: string;
+      AClauseIndex: Integer; ACurrentState: TMatchState);
+    var
+      BoundObject: TObject;
+      NewState: TMatchState;
+    begin
+      if not PatternOf(ANeighborVar).Matches(ANeighbor) then
+        Exit;
+      if ACurrentState.TryGetValue(ANeighborVar, BoundObject) and (BoundObject <> ANeighbor) then
+        Exit;
+      if (not AClause.EdgePattern.Variable.IsEmpty) and ACurrentState.TryGetValue(AClause.EdgePattern.Variable, BoundObject) and
+        (BoundObject <> AEdgeObj) then
+        Exit;
+
+      NewState := TMatchState.Create(ACurrentState);
+      try
+        NewState.AddOrSetValue(ANeighborVar, ANeighbor);
+        if not AClause.EdgePattern.Variable.IsEmpty then
+          NewState.AddOrSetValue(AClause.EdgePattern.Variable, AEdgeObj);
+        if NeedEdgeKeys then
+          NewState.AddOrSetValue(EdgeKey(AClauseIndex), AEdgeObj);
+        FindMatchesRecursive(AClauseIndex + 1, NewState);
+      finally
+        NewState.Free;
+      end;
+    end;
+
+    // Un salto. APerspective es la dirección vista desde el ORIGEN de la cláusula.
+    procedure TryEdge(AClause: TMatchClause; AEdge: TAiRagGraphEdge; ANeighbor: TAiRagGraphNode; APerspective: TGraphDirection;
+      const ANeighborVar: string; AClauseIndex: Integer; ACurrentState: TMatchState);
+    begin
+      if AClause.EdgePattern.Matches(AEdge, APerspective) then
+        Advance(AClause, AEdge, ANeighbor, ANeighborVar, AClauseIndex, ACurrentState);
+    end;
+
+    // Longitud variable: caminos de MinHops a MaxHops saltos sin repetir aristas.
+    // AReversed: se recorre desde el destino de la cláusula (el tramo se guarda en el orden del patrón).
+    procedure ExpandVariable(AClause: TMatchClause; AStart: TAiRagGraphNode; AReversed: Boolean; const ANeighborVar: string;
+      AClauseIndex: Integer; ACurrentState: TMatchState);
+    var
+      MaxHops: Integer;
+      PathNodes: TList<TAiRagGraphNode>;
+      PathEdges: TList<TAiRagGraphEdge>;
+
+      procedure Emit(AEnd: TAiRagGraphNode);
+      var
+        NA: TArray<TAiRagGraphNode>;
+        EA: TArray<TAiRagGraphEdge>;
+        Seg: TGQLPath;
+        K: Integer;
+        TmpN: TAiRagGraphNode;
+        TmpE: TAiRagGraphEdge;
+      begin
+        NA := PathNodes.ToArray;
+        EA := PathEdges.ToArray;
+        if AReversed then
+        begin
+          for K := 0 to (Length(NA) div 2) - 1 do
+          begin
+            TmpN := NA[K];
+            NA[K] := NA[High(NA) - K];
+            NA[High(NA) - K] := TmpN;
+          end;
+          for K := 0 to (Length(EA) div 2) - 1 do
+          begin
+            TmpE := EA[K];
+            EA[K] := EA[High(EA) - K];
+            EA[High(EA) - K] := TmpE;
+          end;
+        end;
+        Seg := TGQLPath.CreatePath(NA, EA);
+        Temps.Add(Seg);
+        Advance(AClause, Seg, AEnd, ANeighborVar, AClauseIndex, ACurrentState);
+      end;
+
+      procedure Walk(ANode: TAiRagGraphNode; ADepth: Integer);
+      var
+        E: TAiRagGraphEdge;
+        Dir: TGraphDirection;
+
+        procedure Hop(AEdge: TAiRagGraphEdge; ANext: TAiRagGraphNode; APerspective: TGraphDirection);
+        begin
+          if Done or PathEdges.Contains(AEdge) or not AClause.EdgePattern.Matches(AEdge, APerspective) then
+            Exit;
+          PathEdges.Add(AEdge);
+          PathNodes.Add(ANext);
+          try
+            Walk(ANext, ADepth + 1);
+          finally
+            PathEdges.Delete(PathEdges.Count - 1);
+            PathNodes.Delete(PathNodes.Count - 1);
+          end;
+        end;
+
+      begin
+        if Done then
+          Exit;
+        if ADepth >= AClause.EdgePattern.MinHops then
+          Emit(ANode);
+        if ADepth >= MaxHops then
+          Exit;
+        Dir := AClause.EdgePattern.Direction;
+        // Desde el origen se sigue la flecha; desde el destino, al revés
+        if Dir in [gdOutgoing, gdBoth] then
+        begin
+          if AReversed then
+            for E in ANode.IncomingEdges do
+              Hop(E, E.FromNode, gdOutgoing)
+          else
+            for E in ANode.OutgoingEdges do
+              Hop(E, E.ToNode, gdOutgoing);
+        end;
+        if Dir in [gdIncoming, gdBoth] then
+        begin
+          if AReversed then
+            for E in ANode.OutgoingEdges do
+              Hop(E, E.ToNode, gdIncoming)
+          else
+            for E in ANode.IncomingEdges do
+              Hop(E, E.FromNode, gdIncoming);
+        end;
+      end;
+
+    begin
+      MaxHops := AClause.EdgePattern.MaxHops;
+      if MaxHops < 0 then
+        MaxHops := GQL_MAX_HOPS;
+      PathNodes := TList<TAiRagGraphNode>.Create;
+      PathEdges := TList<TAiRagGraphEdge>.Create;
+      try
+        PathNodes.Add(AStart);
+        Walk(AStart, 0);
+      finally
+        PathEdges.Free;
+        PathNodes.Free;
+      end;
+    end;
+
+  begin
+    if Done then
+      Exit;
+
+    if AClauseIndex >= AClauses.Count then
+    begin
+      // Patrones de nodo sin enlazar (MATCH (a:X), (b:Y) o un nodo suelto): producto cartesiano
+      for Pattern in APatterns do
+        if not ACurrentState.ContainsKey(Pattern.Variable) then
+        begin
+          BindCandidates(Pattern.Variable, AClauseIndex, ACurrentState);
+          Exit;
+        end;
+
+      Work := TMatchState.Create(ACurrentState);
+      try
+        if AQuery.Paths.Count > 0 then
+          BuildPaths(Work);
+        // --- AQUÍ ENTRA EL WHERE ---
+        if (AWhere = nil) or GQLToBool(EvaluateGraphExpression(AWhere, Work)) then
+        begin
+          AResults.Add(GQLCloneRow(Work));
+          if AFirstOnly then
+            Done := True;
+        end;
+      finally
+        Work.Free;
+      end;
+      Exit;
+    end;
+
+    Clause := AClauses[AClauseIndex];
+    Dir := Clause.EdgePattern.Direction;
+
+    if ACurrentState.TryGetValue(Clause.SourceNodeVar, SourceObj) and (SourceObj is TAiRagGraphNode) then
+    begin
+      // Origen enlazado: se recorre hacia el destino
+      FromNode := TAiRagGraphNode(SourceObj);
+      if Clause.EdgePattern.IsVariableLength then
+        ExpandVariable(Clause, FromNode, False, Clause.TargetNodeVar, AClauseIndex, ACurrentState)
+      else
+      begin
+        if Dir in [gdOutgoing, gdBoth] then
+          for CurrentEdge in FromNode.OutgoingEdges do
+            TryEdge(Clause, CurrentEdge, CurrentEdge.ToNode, gdOutgoing, Clause.TargetNodeVar, AClauseIndex, ACurrentState);
+        if Dir in [gdIncoming, gdBoth] then
+          for CurrentEdge in FromNode.IncomingEdges do
+            TryEdge(Clause, CurrentEdge, CurrentEdge.FromNode, gdIncoming, Clause.TargetNodeVar, AClauseIndex, ACurrentState);
+      end;
+    end
+    else if ACurrentState.TryGetValue(Clause.TargetNodeVar, TargetObj) and (TargetObj is TAiRagGraphNode) then
+    begin
+      // Solo el destino enlazado (patrones convergentes): se recorre al revés.
+      // Una arista origen->destino es entrante para el destino.
+      FromNode := TAiRagGraphNode(TargetObj);
+      if Clause.EdgePattern.IsVariableLength then
+        ExpandVariable(Clause, FromNode, True, Clause.SourceNodeVar, AClauseIndex, ACurrentState)
+      else
+      begin
+        if Dir in [gdOutgoing, gdBoth] then
+          for CurrentEdge in FromNode.IncomingEdges do
+            TryEdge(Clause, CurrentEdge, CurrentEdge.FromNode, gdOutgoing, Clause.SourceNodeVar, AClauseIndex, ACurrentState);
+        if Dir in [gdIncoming, gdBoth] then
+          for CurrentEdge in FromNode.OutgoingEdges do
+            TryEdge(Clause, CurrentEdge, CurrentEdge.ToNode, gdIncoming, Clause.SourceNodeVar, AClauseIndex, ACurrentState);
+      end;
+    end
+    else
+      // Ninguno enlazado: el origen de esta cláusula es un ancla nueva
+      BindCandidates(Clause.SourceNodeVar, AClauseIndex, ACurrentState);
+  end;
+
+begin
+  Done := False;
+  NeedEdgeKeys := (AQuery.Paths.Count > 0) and (AClauses = TList<TMatchClause>(AQuery.MatchClauses));
+  Temps := TObjectList<TObject>.Create(True);
+  try
+    FindMatchesRecursive(0, AState);
+  finally
+    Temps.Free;
+  end;
+end;
+
+function TAiRagGraph.Match(AQuery: TGraphMatchQuery; ADepth: Integer = 0): TArray<TDictionary<string, TObject>>;
+var
+  Results, NextResults, PartResults: TObjectList<TDictionary<string, TObject>>;
+  MainPatterns: TList<TMatchNodePattern>;
+  InitialState: TDictionary<string, TObject>;
+  Part: TGQLOptionalMatch;
+  Row: TDictionary<string, TObject>;
+  P: TMatchNodePattern;
 
   // --- Variables para la Expansión (ADepth > 0) ---
   SeedNodesSet: TDictionary<TAiRagGraphNode, Boolean>;
@@ -4717,124 +5196,13 @@ var
   Dict: TDictionary<string, TObject>;
   EdgeSet: TDictionary<TAiRagGraphEdge, Boolean>;
 
-  function CandidatesFor(APattern: TMatchNodePattern): TArray<TAiRagGraphNode>;
-  begin
-    if not APattern.NodeLabel.IsEmpty then
-      Result := Self.FindNodesByLabel(APattern.NodeLabel)
-    else
-      Result := FNodeRegistry.Values.ToArray;
-  end;
-
-  function PatternOf(const AVar: string): TMatchNodePattern;
-  begin
-    Result := AQuery.NodePatternByVariable[AVar];
-    if Result = nil then
-      raise Exception.Create(AiStr('rag.graph.no_start_pattern'));
-  end;
-
-  procedure FindMatchesRecursive(AClauseIndex: Integer; ACurrentState: TMatchState);
+  procedure FreeResults(AList: TObjectList<TDictionary<string, TObject>>);
   var
-    Clause: TMatchClause;
-    Pattern: TMatchNodePattern;
-    SourceObj, TargetObj: TObject;
-    FromNode: TAiRagGraphNode;
-    CurrentEdge: TAiRagGraphEdge;
-    Dir: TGraphDirection;
-
-    // Enlaza AVar con cada candidato de su patrón y sigue en la misma cláusula
-    procedure BindCandidates(const AVar: string; AClauseIndex: Integer; ACurrentState: TMatchState);
-    var
-      Pattern: TMatchNodePattern;
-      Cand: TAiRagGraphNode;
-      NewState: TMatchState;
-    begin
-      Pattern := PatternOf(AVar);
-      for Cand in CandidatesFor(Pattern) do
-        if Pattern.Matches(Cand) then
-        begin
-          NewState := TMatchState.Create(ACurrentState);
-          try
-            NewState.AddOrSetValue(AVar, Cand);
-            FindMatchesRecursive(AClauseIndex, NewState);
-          finally
-            NewState.Free;
-          end;
-        end;
-    end;
-
-    // Prueba una arista de la cláusula. APerspective es la dirección vista desde el ORIGEN
-    // de la cláusula (lo que el patrón -[]->, <-[]- compara); ANeighbor es el extremo por enlazar.
-    procedure TryEdge(AClause: TMatchClause; AEdge: TAiRagGraphEdge; ANeighbor: TAiRagGraphNode; APerspective: TGraphDirection;
-      const ANeighborVar: string; AClauseIndex: Integer; ACurrentState: TMatchState);
-    var
-      BoundObject: TObject;
-      NewState: TMatchState;
-    begin
-      if not(AClause.EdgePattern.Matches(AEdge, APerspective) and PatternOf(ANeighborVar).Matches(ANeighbor)) then
-        Exit;
-      if ACurrentState.TryGetValue(ANeighborVar, BoundObject) and (BoundObject <> ANeighbor) then
-        Exit;
-      if (not AClause.EdgePattern.Variable.IsEmpty) and ACurrentState.TryGetValue(AClause.EdgePattern.Variable, BoundObject) and
-        (BoundObject <> AEdge) then
-        Exit;
-
-      NewState := TMatchState.Create(ACurrentState);
-      try
-        NewState.AddOrSetValue(ANeighborVar, ANeighbor);
-        if not AClause.EdgePattern.Variable.IsEmpty then
-          NewState.AddOrSetValue(AClause.EdgePattern.Variable, AEdge);
-        FindMatchesRecursive(AClauseIndex + 1, NewState);
-      finally
-        NewState.Free;
-      end;
-    end;
-
+    D: TDictionary<string, TObject>;
   begin
-    if AClauseIndex >= AQuery.MatchClauses.Count then
-    begin
-      // Patrones de nodo sin enlazar (MATCH (a:X), (b:Y) o un nodo suelto): producto cartesiano
-      for Pattern in AQuery.NodePatterns do
-        if not ACurrentState.ContainsKey(Pattern.Variable) then
-        begin
-          BindCandidates(Pattern.Variable, AClauseIndex, ACurrentState);
-          Exit;
-        end;
-
-      // --- AQUÍ ENTRA EL WHERE ---
-      if (AQuery.WhereClause = nil) or GQLToBool(EvaluateGraphExpression(AQuery.WhereClause, ACurrentState)) then
-        Results.Add(TMatchState.Create(ACurrentState));
-      Exit;
-    end;
-
-    Clause := AQuery.MatchClauses[AClauseIndex];
-    Dir := Clause.EdgePattern.Direction;
-
-    if ACurrentState.TryGetValue(Clause.SourceNodeVar, SourceObj) then
-    begin
-      // Origen enlazado: se recorre hacia el destino
-      FromNode := SourceObj as TAiRagGraphNode;
-      if Dir in [gdOutgoing, gdBoth] then
-        for CurrentEdge in FromNode.OutgoingEdges do
-          TryEdge(Clause, CurrentEdge, CurrentEdge.ToNode, gdOutgoing, Clause.TargetNodeVar, AClauseIndex, ACurrentState);
-      if Dir in [gdIncoming, gdBoth] then
-        for CurrentEdge in FromNode.IncomingEdges do
-          TryEdge(Clause, CurrentEdge, CurrentEdge.FromNode, gdIncoming, Clause.TargetNodeVar, AClauseIndex, ACurrentState);
-    end
-    else if ACurrentState.TryGetValue(Clause.TargetNodeVar, TargetObj) then
-    begin
-      // Solo el destino enlazado (patrones convergentes: (c)-[]->(a), (p)-[]->(a)):
-      // se recorre al revés. Una arista origen->destino es entrante para el destino.
-      FromNode := TargetObj as TAiRagGraphNode;
-      if Dir in [gdOutgoing, gdBoth] then
-        for CurrentEdge in FromNode.IncomingEdges do
-          TryEdge(Clause, CurrentEdge, CurrentEdge.FromNode, gdOutgoing, Clause.SourceNodeVar, AClauseIndex, ACurrentState);
-      if Dir in [gdIncoming, gdBoth] then
-        for CurrentEdge in FromNode.OutgoingEdges do
-          TryEdge(Clause, CurrentEdge, CurrentEdge.ToNode, gdIncoming, Clause.SourceNodeVar, AClauseIndex, ACurrentState);
-    end
-    else
-      // Ninguno enlazado: el origen de esta cláusula es un ancla nueva
-      BindCandidates(Clause.SourceNodeVar, AClauseIndex, ACurrentState);
+    for D in AList do
+      GQLFreeRowValues(D);
+    AList.Free;
   end;
 
 begin
@@ -4844,28 +5212,62 @@ begin
 
   Results := TObjectList < TDictionary < string, TObject >>.Create(True);
   try
-    // El primer ancla es el origen de la primera cláusula (o el primer nodo si no hay aristas)
-    InitialState := TMatchState.Create;
+    // --- MATCH principal (los patrones de OPTIONAL MATCH no participan aquí) ---
+    MainPatterns := TList<TMatchNodePattern>.Create;
+    InitialState := TDictionary<string, TObject>.Create;
     try
-      FindMatchesRecursive(0, InitialState);
+      for P in AQuery.NodePatterns do
+        if not P.Optional then
+          MainPatterns.Add(P);
+      GQLSolve(AQuery, AQuery.MatchClauses, MainPatterns, AQuery.WhereClause, InitialState, Results, False);
     finally
       InitialState.Free;
+      MainPatterns.Free;
+    end;
+
+    // --- OPTIONAL MATCH: cada fila se extiende; si no hay extensión, se conserva tal cual ---
+    for Part in AQuery.OptionalParts do
+    begin
+      NextResults := TObjectList < TDictionary < string, TObject >>.Create(True);
+      try
+        for Row in Results do
+        begin
+          PartResults := TObjectList < TDictionary < string, TObject >>.Create(True);
+          try
+            GQLSolve(AQuery, Part.Clauses, Part.Patterns, Part.Where, Row, PartResults, False);
+            if PartResults.Count = 0 then
+              NextResults.Add(GQLCloneRow(Row))
+            else
+            begin
+              PartResults.OwnsObjects := False;
+              for Dict in PartResults do
+                NextResults.Add(Dict);
+            end;
+          finally
+            PartResults.Free;
+          end;
+        end;
+      except
+        FreeResults(NextResults);
+        raise;
+      end;
+      FreeResults(Results);
+      Results := NextResults;
     end;
 
     // --- PASO COMÚN: EXPANSIÓN DEL SUBGRAFO (si ADepth > 0 y hay resultados) ---
     if (ADepth > 0) and (Results.Count > 0) then
     begin
-      // 1. Recolectar nodos semilla únicos
+      // 1. Recolectar nodos semilla únicos (también los de los caminos)
       SeedNodesSet := TDictionary<TAiRagGraphNode, Boolean>.Create;
       try
         for MatchDict in Results do
-        begin
           for Pair in MatchDict do
-          begin
             if Pair.Value is TAiRagGraphNode then
-              SeedNodesSet.AddOrSetValue(Pair.Value as TAiRagGraphNode, True);
-          end;
-        end;
+              SeedNodesSet.AddOrSetValue(Pair.Value as TAiRagGraphNode, True)
+            else if Pair.Value is TGQLPath then
+              for Node in TGQLPath(Pair.Value).Nodes do
+                SeedNodesSet.AddOrSetValue(Node, True);
 
         if SeedNodesSet.Count > 0 then
         begin
@@ -4881,7 +5283,6 @@ begin
           ExpandedResults := TObjectList < TDictionary < string, TObject >>.Create(True);
           EdgeSet := TDictionary<TAiRagGraphEdge, Boolean>.Create;
           try
-            // Añadir Nodos
             for Node in ExpandedNodesArray do
             begin
               Dict := TDictionary<string, TObject>.Create;
@@ -4890,21 +5291,15 @@ begin
               ExpandedResults.Add(Dict);
             end;
 
-            // Añadir Aristas Internas
             var
             NodeSet := TDictionary<TAiRagGraphNode, Boolean>.Create;
             try
               for Node in ExpandedNodesArray do
                 NodeSet.Add(Node, True);
-
               for Node in ExpandedNodesArray do
-              begin
                 for Edge in Node.OutgoingEdges do
-                begin
                   if NodeSet.ContainsKey(Edge.ToNode) then
                     EdgeSet.AddOrSetValue(Edge, True);
-                end;
-              end;
             finally
               NodeSet.Free;
             end;
@@ -4917,6 +5312,8 @@ begin
               ExpandedResults.Add(Dict);
             end;
 
+            for MatchDict in Results do
+              GQLFreeRowValues(MatchDict);
             Results.Clear;
             for Dict in ExpandedResults do
               Results.Add(Dict);
@@ -5683,7 +6080,7 @@ begin
 
   // 1. Comprobar la etiqueta del nodo (Label)
   // Ignorar si el patr�n no especifica una etiqueta
-  if (not NodeLabel.IsEmpty) and (not SameText(ANode.NodeLabel, NodeLabel)) then
+  if (not NodeLabel.IsEmpty) and (not GQLLabelMatches(ANode.NodeLabel, NodeLabel)) then
     Exit;
 
   // 2. Comprobar todas las propiedades requeridas del patr�n
@@ -5726,6 +6123,8 @@ constructor TMatchEdgePattern.Create;
 begin
   inherited;
   Direction := gdOutgoing; // Direcci�n por defecto
+  MinHops := 1;
+  MaxHops := 1;
   Properties := TDictionary<string, Variant>.Create(TStringComparer.Ordinal);
 end;
 
@@ -5749,7 +6148,7 @@ begin
     Exit;
 
   // 2. Comprobar la etiqueta de la arista (EdgeLabel)
-  if (not EdgeLabel.IsEmpty) and (not SameText(AEdge.EdgeLabel, EdgeLabel)) then
+  if (not EdgeLabel.IsEmpty) and (not GQLLabelMatches(AEdge.EdgeLabel, EdgeLabel)) then
     Exit;
 
   // 3. Comprobar todas las propiedades requeridas del patr�n de b�squeda
@@ -5791,6 +6190,28 @@ begin
   Result := True;
 end;
 
+function TMatchEdgePattern.IsVariableLength: Boolean;
+begin
+  Result := (MinHops <> 1) or (MaxHops <> 1);
+end;
+
+{ TGQLOptionalMatch }
+
+constructor TGQLOptionalMatch.Create;
+begin
+  inherited;
+  Clauses := TObjectList<TMatchClause>.Create(True);
+  Patterns := TList<TMatchNodePattern>.Create;
+end;
+
+destructor TGQLOptionalMatch.Destroy;
+begin
+  Where.Free;
+  Patterns.Free;
+  Clauses.Free;
+  inherited;
+end;
+
 { TMatchClause }
 
 constructor TMatchClause.Create(ASourceNodeVar: string; AEdgePattern: TMatchEdgePattern; ATargetNodeVar: string);
@@ -5815,6 +6236,8 @@ begin
   FNodePatterns := TObjectList<TMatchNodePattern>.Create(True); // Es due�o
   FMatchClauses := TObjectList<TMatchClause>.Create(True); // Es due�o
   FProjections := TObjectList<TGQLProjection>.Create(True);
+  FOptionalParts := TObjectList<TGQLOptionalMatch>.Create(True);
+  FPaths := TList<TGQLPathDef>.Create;
   FDepth := 0;
 end;
 
@@ -5823,6 +6246,8 @@ begin
   if Assigned(FWhereClause) then
     FWhereClause.Free; // Esto disparar� la liberaci�n en cadena de todo el �rbol
 
+  FPaths.Free;
+  FOptionalParts.Free;
   FProjections.Free;
   FNodePatterns.Free;
   FMatchClauses.Free;
@@ -6034,6 +6459,77 @@ constructor TGQLValue.CreateValue(const AData: Variant);
 begin
   inherited Create(GQLToText(AData));
   Data := AData;
+end;
+
+function TGQLValue.Clone: TGQLValue;
+begin
+  Result := TGQLValue.CreateValue(Data);
+end;
+
+{ TGQLPath }
+constructor TGQLPath.CreatePath(const ANodes: TArray<TAiRagGraphNode>; const AEdges: TArray<TAiRagGraphEdge>);
+var
+  SB: TStringBuilder;
+  I: Integer;
+  E: TAiRagGraphEdge;
+begin
+  Nodes := ANodes;
+  Edges := AEdges;
+  SB := TStringBuilder.Create;
+  try
+    for I := 0 to High(Nodes) do
+    begin
+      SB.Append('(').Append(Nodes[I].Name).Append(')');
+      if I <= High(Edges) then
+      begin
+        E := Edges[I];
+        if E.FromNode = Nodes[I] then
+          SB.Append('-[:').Append(E.EdgeLabel).Append(']->')
+        else
+          SB.Append('<-[:').Append(E.EdgeLabel).Append(']-');
+      end;
+    end;
+    inherited CreateValue(SB.ToString);
+  finally
+    SB.Free;
+  end;
+end;
+
+function TGQLPath.Clone: TGQLValue;
+begin
+  Result := TGQLPath.CreatePath(Nodes, Edges);
+end;
+
+function TGQLPath.NodeNames: Variant;
+var
+  I: Integer;
+begin
+  Result := VarArrayCreate([0, Length(Nodes) - 1], varVariant);
+  for I := 0 to High(Nodes) do
+    Result[I] := Nodes[I].Name;
+end;
+
+function TGQLPath.EdgeLabels: Variant;
+var
+  I: Integer;
+begin
+  Result := VarArrayCreate([0, Length(Edges) - 1], varVariant);
+  for I := 0 to High(Edges) do
+    Result[I] := Edges[I].EdgeLabel;
+end;
+
+{ TPatternExpr }
+constructor TPatternExpr.Create(AQuery: TGraphMatchQuery);
+begin
+  inherited Create;
+  Kind := ekPattern;
+  Query := AQuery;
+end;
+
+destructor TPatternExpr.Destroy;
+begin
+  Query.Free;
+  inherited;
 end;
 
 { TBetweenExpr }

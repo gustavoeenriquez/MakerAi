@@ -66,7 +66,8 @@ type
     // Aritmética (el - es tkDash y el * es tkAsterisk)
     tkPlus, // +
     tkSlash, // /
-    tkPercent); // %
+    tkPercent, // %
+    tkPipe); // | (alternativas de etiqueta: [:A|B])
 
   TGraphCommandType = (cmdNone, cmdShowLabels, cmdShowEdges, cmdShortestPath, cmdCentrality, cmdDegrees);
 
@@ -122,7 +123,9 @@ type
     FPrevEnd: Integer; // Posición donde terminó el último token consumido
     FAllowAggregates: Boolean; // Dentro de RETURN/WITH/ORDER BY
     FScope: TList<string>; // Variables con nombre visibles (para RETURN *)
-    FNodeVariables: TDictionary<string, TMatchNodePattern>;
+    FCurOptional: Boolean; // Dentro de un OPTIONAL MATCH
+    FCurNewPatterns: TList<TMatchNodePattern>; // Donde anotar los patrones nuevos del OPTIONAL MATCH
+    FPatternDepth: Integer; // > 0 dentro de un patrón del WHERE
     FCommandType: TGraphCommandType;
     FCommandSourcePattern: TMatchNodePattern;
     FCommandTargetPattern: TMatchNodePattern;
@@ -158,7 +161,10 @@ type
     function ParseValueList: Variant;
     function ParseInList: TGraphExpression;
 
-    procedure ParseMatchClause(AQuery: TGraphMatchQuery);
+    procedure ParseMatchClause(AQuery: TGraphMatchQuery; AClauses: TObjectList<TMatchClause>);
+    function ParseLabelAlternatives: string;
+    function LooksLikePattern: Boolean;
+    function ParsePatternExpr(ABraced: Boolean): TGraphExpression;
     procedure ParseWhereClause(AQuery: TGraphMatchQuery);
     function ParseProjection(AIsReturn: Boolean): TGQLProjection;
     function ParseAggregate(const AName: string; APosition: Integer): TGraphExpression;
@@ -541,6 +547,8 @@ begin
       Single(tkSlash);
     '%':
       Single(tkPercent);
+    '|':
+      Single(tkPipe);
 
     // Operadores Compuestos que empiezan con '<'
     '<':
@@ -641,7 +649,6 @@ begin
   inherited Create;
   FLexer := TGraphLexer.Create(AText);
   FParams := AParams;
-  FNodeVariables := TDictionary<string, TMatchNodePattern>.Create;
   FCommandType := cmdNone;
   FCommandSourcePattern := nil;
   FCommandTargetPattern := nil;
@@ -655,7 +662,6 @@ destructor TGraphParser.Destroy;
 begin
   ClearCommandPatterns;
   FScope.Free;
-  FNodeVariables.Free;
   FLexer.Free;
   inherited;
 end;
@@ -835,6 +841,21 @@ begin
   Result := TLiteralExpr.Create(V);
 end;
 
+function TGraphParser.ParseLabelAlternatives: string;
+begin
+  // :Persona  o  :Persona|Empresa  (también :A|:B, como en Cypher)
+  Result := FCurrent.Text;
+  Expect(tkIdentifier);
+  while FCurrent.Kind = tkPipe do
+  begin
+    Next;
+    if FCurrent.Kind = tkColon then
+      Next;
+    Result := Result + '|' + FCurrent.Text;
+    Expect(tkIdentifier);
+  end;
+end;
+
 function TGraphParser.ParseNode(AQuery: TGraphMatchQuery): TMatchNodePattern;
 var
   VarName, LblName: string;
@@ -847,12 +868,11 @@ begin
   if FCurrent.Kind = tkIdentifier then
     VarName := GetTokenTextAndNext;
 
-  // Etiqueta opcional: (:Persona)
+  // Etiqueta opcional: (:Persona) o (:Persona|Empresa)
   if FCurrent.Kind = tkColon then
   begin
     Next;
-    LblName := FCurrent.Text;
-    Expect(tkIdentifier);
+    LblName := ParseLabelAlternatives;
   end;
 
   // Nodo anónimo: nombre interno único ('#' no lo produce el lexer, así que no choca
@@ -863,8 +883,10 @@ begin
     VarName := '#' + IntToStr(FAnonCount);
   end;
 
-  // Binding o Creación de Variable
-  if FNodeVariables.TryGetValue(VarName, Result) then
+  // Binding o Creación de Variable (en la consulta que se está armando: la principal,
+  // o la de un patrón dentro del WHERE, que tiene sus propios patrones)
+  Result := AQuery.NodePatternByVariable[VarName];
+  if Assigned(Result) then
   begin
     // Reutilizar nodo si existe. Actualizar etiqueta si fue provista.
     if (Result.NodeLabel = '') and (LblName <> '') then
@@ -876,10 +898,12 @@ begin
     Result := TMatchNodePattern.Create;
     Result.Variable := VarName;
     Result.NodeLabel := LblName;
-    FNodeVariables.Add(VarName, Result);
-    if not VarName.StartsWith('#') then
-      FScope.Add(VarName);
+    Result.Optional := FCurOptional;
     AQuery.AddNodePattern(Result);
+    if Assigned(FCurNewPatterns) then
+      FCurNewPatterns.Add(Result);
+    if (FPatternDepth = 0) and not VarName.StartsWith('#') then
+      FScope.Add(VarName);
   end;
 
   // Propiedades opcionales: {name: 'Juan'}
@@ -892,6 +916,7 @@ end;
 function TGraphParser.ParseEdge(out ADirection: TGraphDirection): TMatchEdgePattern;
 var
   Left, Right: Boolean;
+  HopPos: Integer;
 begin
   // Detección de flecha izquierda <-
   Left := (FCurrent.Kind = tkArrowLeft);
@@ -907,16 +932,39 @@ begin
     if FCurrent.Kind = tkIdentifier then
     begin
       Result.Variable := GetTokenTextAndNext;
-      if not FScope.Contains(Result.Variable) then
+      if (FPatternDepth = 0) and not FScope.Contains(Result.Variable) then
         FScope.Add(Result.Variable);
     end;
 
-    // Tipo de relación opcional [:KNOWS]
+    // Tipo de relación opcional [:KNOWS] o [:KNOWS|LIKES]
     if FCurrent.Kind = tkColon then
     begin
       Next;
-      Result.EdgeLabel := FCurrent.Text;
-      Expect(tkIdentifier);
+      Result.EdgeLabel := ParseLabelAlternatives;
+    end;
+
+    // Longitud variable: *, *3, *1..3, *..3, *2..
+    if FCurrent.Kind = tkAsterisk then
+    begin
+      HopPos := FCurrent.Position;
+      Next;
+      Result.MinHops := 1;
+      Result.MaxHops := -1;
+      if FCurrent.Kind in [tkNumber, tkParameter] then
+      begin
+        Result.MinHops := ParseIntegerValue(AiFmt('rag.gql.expected', ['tkNumber', FCurrent.Text, FCurrent.Position]));
+        Result.MaxHops := Result.MinHops; // *3 = exactamente 3
+      end;
+      if FCurrent.Kind = tkDot then
+      begin
+        Next;
+        Expect(tkDot);
+        Result.MaxHops := -1;
+        if FCurrent.Kind in [tkNumber, tkParameter] then
+          Result.MaxHops := ParseIntegerValue(AiFmt('rag.gql.expected', ['tkNumber', FCurrent.Text, FCurrent.Position]));
+      end;
+      if (Result.MinHops < 0) or ((Result.MaxHops >= 0) and (Result.MaxHops < Result.MinHops)) then
+        raise EGQLParserError.CreateAt(AiFmt('rag.gql.hops_range', [Result.MinHops, Result.MaxHops]), HopPos);
     end;
 
     // Propiedades de arista {since: 2020}
@@ -976,14 +1024,32 @@ begin
   AQuery.WhereClause := ParseExpression;
 end;
 
-procedure TGraphParser.ParseMatchClause(AQuery: TGraphMatchQuery);
+procedure TGraphParser.ParseMatchClause(AQuery: TGraphMatchQuery; AClauses: TObjectList<TMatchClause>);
 var
   SrcNode, DstNode: TMatchNodePattern;
   Edge: TMatchEdgePattern;
   Dir: TGraphDirection;
+  PathVar: string;
+  PathPos: Integer;
+  Def: TGQLPathDef;
 begin
+  // 0. Variable de camino opcional: p = (a)-[...]->(b)
+  PathVar := '';
+  if FCurrent.Kind = tkIdentifier then
+  begin
+    PathPos := FCurrent.Position;
+    PathVar := GetTokenTextAndNext;
+    Expect(tkEqual);
+    // Solo en el MATCH principal (los caminos se arman sobre sus cláusulas)
+    if FCurOptional or (FPatternDepth > 0) then
+      raise EGQLParserError.CreateAt(AiFmt('rag.gql.path_optional', [PathVar]), PathPos);
+  end;
+
   // 1. Parsear el nodo inicial del patrón: (a)
   SrcNode := ParseNode(AQuery);
+  Def.Variable := PathVar;
+  Def.StartVar := SrcNode.Variable;
+  Def.FirstClause := AClauses.Count;
 
   // 2. Bucle para relaciones encadenadas.
   // Ejemplo: (a)-[r1]->(b)-[r2]->(c)
@@ -1005,11 +1071,106 @@ begin
 
     // C. Crear la cláusula: "VariableOrigen + PatrónArista + VariableDestino"
     // Nota: TMatchClause toma posesión de la memoria del objeto 'Edge'.
-    AQuery.AddMatchClause(TMatchClause.Create(SrcNode.Variable, Edge, DstNode.Variable));
+    AClauses.Add(TMatchClause.Create(SrcNode.Variable, Edge, DstNode.Variable));
 
     // D. El destino (b) se convierte en el origen de la siguiente conexión
     SrcNode := DstNode;
   end;
+
+  if PathVar <> '' then
+  begin
+    Def.LastClause := AClauses.Count - 1;
+    AQuery.Paths.Add(Def);
+    if not FScope.Contains(PathVar) then
+      FScope.Add(PathVar);
+  end;
+end;
+
+function TGraphParser.LooksLikePattern: Boolean;
+var
+  SavePos, SavePrev: Integer;
+  SaveTok: TToken;
+begin
+  // En un WHERE, '(' puede abrir un paréntesis o un patrón: (p)-[:X]->(...), (:Cafe), (p {a: 1}).
+  // Se mira adelante sin consumir nada.
+  SavePos := FLexer.FPos;
+  SaveTok := FCurrent;
+  SavePrev := FPrevEnd;
+  try
+    Result := False;
+    Next; // (
+    if FCurrent.Kind = tkColon then
+      Exit(True);
+    if FCurrent.Kind = tkIdentifier then
+    begin
+      Next;
+      if FCurrent.Kind in [tkColon, tkLBrace] then
+        Exit(True);
+    end;
+    if FCurrent.Kind = tkRParen then
+    begin
+      Next;
+      if FCurrent.Kind = tkArrowLeft then
+        Exit(True);
+      if FCurrent.Kind = tkDash then
+      begin
+        Next;
+        Exit(FCurrent.Kind = tkLBracket); // (n) - 1 es una resta, (n)-[ es una arista
+      end;
+    end;
+  finally
+    FLexer.FPos := SavePos;
+    FCurrent := SaveTok;
+    FPrevEnd := SavePrev;
+  end;
+end;
+
+function TGraphParser.ParsePatternExpr(ABraced: Boolean): TGraphExpression;
+var
+  Q: TGraphMatchQuery;
+  SaveOptional: Boolean;
+  SaveNew: TList<TMatchNodePattern>;
+begin
+  // Patrón como condición. ABraced: EXISTS { [MATCH] patrón {, patrón} [WHERE expr] }
+  Q := TGraphMatchQuery.Create;
+  SaveOptional := FCurOptional;
+  SaveNew := FCurNewPatterns;
+  FCurOptional := False;
+  FCurNewPatterns := nil;
+  Inc(FPatternDepth);
+  try
+    try
+      if ABraced then
+      begin
+        Expect(tkLBrace);
+        if FCurrent.Kind = tkMatch then
+          Next;
+      end;
+      ParseMatchClause(Q, Q.MatchClauses);
+      while ABraced and (FCurrent.Kind = tkComma) do
+      begin
+        Next;
+        ParseMatchClause(Q, Q.MatchClauses);
+      end;
+      if ABraced then
+      begin
+        if FCurrent.Kind = tkWhere then
+        begin
+          Next;
+          Q.WhereClause := ParseExpression;
+        end;
+        Expect(tkRBrace);
+      end;
+    except
+      Q.Free;
+      raise;
+    end;
+  finally
+    Dec(FPatternDepth);
+    FCurOptional := SaveOptional;
+    FCurNewPatterns := SaveNew;
+  end;
+  Result := TPatternExpr.Create(Q);
 end;
 
 // --- PARSER DE EXPRESIONES (WHERE) ---
@@ -1272,7 +1433,10 @@ var
   TokPos: Integer;
 begin
   case FCurrent.Kind of
-    tkLParen: // Agrupación: (expresión)
+    tkLParen: // Agrupación: (expresión), o un patrón como condición: (p)-[:X]->(:Y)
+      if LooksLikePattern then
+        Result := ParsePatternExpr(False)
+      else
       begin
         Next;
         Result := ParseExpression;
@@ -1295,6 +1459,8 @@ begin
           P := TakePropertyKey;
           Result := TPropertyExpr.Create(V, P);
         end
+        else if (FCurrent.Kind = tkLBrace) and SameText(V, 'EXISTS') then
+          Result := ParsePatternExpr(True)
         else if (FCurrent.Kind = tkLParen) and (SameText(V, 'min') or SameText(V, 'max') or SameText(V, 'collect')) then
           Result := ParseAggregate(V, TokPos)
         else if FCurrent.Kind = tkLParen then
@@ -1342,7 +1508,7 @@ type
   end;
 
 const
-  GQL_FUNCTIONS: array [0 .. 38] of TGQLFunctionInfo = (
+  GQL_FUNCTIONS: array [0 .. 40] of TGQLFunctionInfo = (
     // Texto
     (Name: 'lower'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'upper'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
     (Name: 'trim'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'ltrim'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
@@ -1363,6 +1529,7 @@ const
     (Name: 'labels'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True), (Name: 'type'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True),
     (Name: 'degree'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True), (Name: 'indegree'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True),
     (Name: 'outdegree'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True), (Name: 'keys'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True),
+    (Name: 'nodes'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True), (Name: 'relationships'; MinArgs: 1; MaxArgs: 1; NeedsVariable: True),
     // Listas
     (Name: 'head'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False), (Name: 'last'; MinArgs: 1; MaxArgs: 1; NeedsVariable: False),
     // Fechas
@@ -1613,6 +1780,7 @@ var
   Src, Dst: TMatchNodePattern;
   Stage: TGQLProjection;
   Item: TGQLReturnItem;
+  Part: TGQLOptionalMatch;
 begin
   Result := nil;
   FCommandType := cmdNone;
@@ -1691,11 +1859,11 @@ begin
       Next; // Consumimos MATCH
 
     // --- PARSEO DE CLÁUSULAS MATCH (a)-[]->(b), (c)-[]->(d) ---
-    ParseMatchClause(Result);
+    ParseMatchClause(Result, Result.MatchClauses);
     while FCurrent.Kind = tkComma do // Soporte para múltiples patrones separados por coma
     begin
       Next; // Consumir la coma
-      ParseMatchClause(Result);
+      ParseMatchClause(Result, Result.MatchClauses);
     end;
 
     // 4. DEPTH (Opcional)
@@ -1708,6 +1876,33 @@ begin
     // 5. WHERE (Opcional)
     if FCurrent.Kind = tkWhere then
       ParseWhereClause(Result);
+
+    // 5b. OPTIONAL MATCH patrón {, patrón} [WHERE expr]
+    while IsWord('OPTIONAL') do
+    begin
+      Next;
+      Expect(tkMatch);
+      Part := TGQLOptionalMatch.Create;
+      Result.OptionalParts.Add(Part);
+      FCurOptional := True;
+      FCurNewPatterns := Part.Patterns;
+      try
+        ParseMatchClause(Result, Part.Clauses);
+        while FCurrent.Kind = tkComma do
+        begin
+          Next;
+          ParseMatchClause(Result, Part.Clauses);
+        end;
+      finally
+        FCurOptional := False;
+        FCurNewPatterns := nil;
+      end;
+      if FCurrent.Kind = tkWhere then
+      begin
+        Next;
+        Part.Where := ParseExpression;
+      end;
+    end;
 
     // 6. WITH ... (etapas) y RETURN
     while IsWord('WITH') do

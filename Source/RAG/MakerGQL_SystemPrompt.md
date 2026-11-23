@@ -5,7 +5,8 @@
 > `uMakerAi.RAG.Graph.GQL.pas` (lexer/parser) y `uMakerAi.RAG.Graph.Core.pas` (ejecutor).
 > Actualizado a la sintaxis posterior a la v4.0.0 (BETWEEN, STARTS/ENDS WITH, NOT, XOR,
 > parámetros `$x`, negativos, comentarios, patrones separados por coma, funciones, aritmética,
-> y `RETURN` con columnas, agregados, `DISTINCT`, `ORDER BY`, `SKIP`, `LIMIT` y `WITH`).
+> `RETURN` con columnas, agregados, `DISTINCT`, `ORDER BY`, `SKIP`, `LIMIT` y `WITH`,
+> y patrones: `[:A|B]`, longitud variable `*1..3`, caminos `p = ...`, `OPTIONAL MATCH` y patrones en el `WHERE`).
 
 ---
 
@@ -27,6 +28,7 @@ comando := SHOW LABELS
          | GET DEGREES TOP <entero>
 
 consultaMatch := [MATCH] patron { ',' patron } [DEPTH <entero>] [WHERE expr]
+                 { OPTIONAL MATCH patron { ',' patron } [WHERE expr] }
                  { WITH proyeccion [WHERE expr] } [RETURN proyeccion]
 
 proyeccion := [DISTINCT] ( '*' | item { ',' item } )
@@ -34,13 +36,14 @@ proyeccion := [DISTINCT] ( '*' | item { ',' item } )
 item       := operando [AS alias]          // puede usar agregados
 agregado   := count(*) | count([DISTINCT] x) | sum(x) | avg(x) | min(x) | max(x) | collect(x)
 
-patron := nodo { arista nodo }
+patron := [variableCamino '='] nodo { arista nodo }      // p = (a)-[...]->(b), solo en el MATCH principal
 
-nodo   := '(' [variable] [':' Etiqueta] [ '{' props '}' ] ')'
+nodo   := '(' [variable] [':' Etiqueta {'|' Etiqueta}] [ '{' props '}' ] ')'
 
-arista := '-'  '[' [variable] [':' TIPO] [ '{' props '}' ] ']' '-'     // no dirigida
-        | '-'  '[' ... ']' '->'                                        // saliente
-        | '<-' '[' ... ']' '-'                                         // entrante
+arista := '-'  '[' [variable] [':' TIPO {'|' TIPO}] [saltos] [ '{' props '}' ] ']' '-'     // no dirigida
+        | '-'  '[' ... ']' '->'                                                          // saliente
+        | '<-' '[' ... ']' '-'                                                           // entrante
+saltos := '*' | '*' n | '*' n '..' m | '*' '..' m | '*' n '..'   // longitud variable; sin máximo = 10
 
 props  := clave ':' valor { ',' clave ':' valor }        // clave = identificador SIN comillas
 valor  := 'texto' | "texto" | numero | -numero | TRUE | FALSE | NULL | $parametro
@@ -56,6 +59,8 @@ comparacion := operando OP operando
 operando := termino { ('+' | '-') termino }
 termino  := factor { ('*' | '/' | '%') factor }
 factor   := var.prop | var | funcion '(' [operando {',' operando}] ')' | literal | $parametro
+          | patron                          // como condición: verdadero si hay al menos una coincidencia
+          | EXISTS '{' [MATCH] patron {',' patron} [WHERE expr] '}'
           | '-' factor | '(' expr ')'
 OP := '=' | '<>' | '>' | '>=' | '<' | '<='
 
@@ -91,6 +96,7 @@ no al final de la consulta.
    | Números | `toInteger(x)`, `toFloat(x)`, `abs`, `round(x[, decimales])`, `floor`, `ceil`, `sqrt`, `sign` |
    | Nulos | `coalesce(a, b, ...)` (el primero no nulo), `exists(n.prop)` (= `IS NOT NULL`) |
    | Grafo (reciben la **variable**, no una propiedad) | `id(n)`, `label(n)`, `labels(n)` → lista, `type(r)`, `degree(n)`, `inDegree(n)`, `outDegree(n)`, `keys(n)` → lista de claves |
+   | Caminos (variable `p = ...` o arista de longitud variable `[r*1..3]`) | `length(p)` (saltos), `nodes(p)` → nombres, `relationships(p)` → tipos |
    | Listas | `head(lista)`, `last(lista)`; `x IN lista` (`'Persona' IN labels(n)`, `'rojo' IN split(n.colores, ',')`) |
    | Fechas | `date()`, `date('2026-11-23')`, `datetime()`, `datetime(x)`, `year(x)`, `month(x)`, `day(x)` (aceptan fecha o texto ISO) |
 
@@ -104,7 +110,7 @@ no al final de la consulta.
    Solo admiten literales (texto, número, booleano, NULL) o un `$parametro`.
 6. **`BETWEEN` incluye los extremos** y su `AND` es parte del operador:
    `p.edad BETWEEN 18 AND 30 AND p.activo = TRUE` es válido.
-7. **Sin `OPTIONAL MATCH`, `UNION`, `UNWIND`, ni patrones de longitud variable (`*1..3`).**
+7. **Sin `UNION`, `UNWIND`, `CALL` ni subconsultas fuera de `EXISTS { }`.**
    El lenguaje es **solo lectura**: no existen `CREATE`, `MERGE`, `SET`, `DELETE`.
 8. **Cadenas** con comilla simple o doble. Una comilla dentro del texto se dobla (`'O''Brien'`)
    o se escapa (`'O\'Brien'`); también valen `\\`, `\n` y `\t`.
@@ -167,6 +173,19 @@ Los patrones separados por coma comparten variables: `MATCH (c:Producto)-[:TIENE
 devuelve los productos con algo que la persona evita (lo mismo que la forma con flecha invertida
 `(c:Producto)-[:TIENE]->(a)<-[:EVITA]-(p:Persona)`). Dos patrones **sin variables en común**
 (`MATCH (a:X), (b:Y)`) combinan cada `a` con cada `b`: úsalo solo con conjuntos pequeños.
+
+- **Alternativas:** `-[:COMPRA|VENDE]->`, `(n:Persona|Empresa)`.
+- **Longitud variable:** `-[:CONOCE*1..3]->` (de 1 a 3 saltos), `*2` (exactamente 2), `*` (1 o más, hasta 10),
+  `*0..2` (incluye el propio nodo). No repite aristas dentro del mismo camino. Una variable en la arista
+  (`-[r:CONOCE*1..3]->`) vale como camino: `length(r)`, `nodes(r)`.
+- **Caminos:** `MATCH p = (a:Persona {name:'Ana'})-[:CONOCE*]->(b) RETURN b.name, length(p) AS saltos ORDER BY saltos`.
+  Mostrado en una tabla, un camino se ve como `(Ana)-[:CONOCE]->(Luis)<-[:JEFE_DE]-(Eva)`.
+- **`OPTIONAL MATCH`:** como `MATCH`, pero si no hay coincidencia la fila se conserva con las variables
+  nuevas en `NULL` (`RETURN c.name, f.name` deja la columna vacía; `count(f)` no las cuenta). Su `WHERE`
+  filtra solo la parte opcional. Va después del `WHERE` del `MATCH` principal.
+- **Patrón como condición en el `WHERE`:** `WHERE (c)-[:COMPRO]->(:Cafe)`, `WHERE NOT (c)-[:COMPRO]->()`,
+  `exists((c)-[:COMPRO]->())` o `EXISTS { MATCH (c)-[:COMPRO]->(x) WHERE x.precio > 10 }`. Usa las variables
+  ya enlazadas; las nuevas que aparezcan dentro solo existen ahí.
 
 ### 7. DEPTH
 
@@ -253,6 +272,21 @@ MATCH (c:Producto) RETURN DISTINCT c.origen ORDER BY c.origen
 ```
 
 ```gql
+MATCH p = (f:Finca)-[:PROVEE*1..4]->(t:Tienda)
+RETURN t.name AS tienda, length(p) AS saltos, nodes(p) AS cadena ORDER BY saltos
+```
+
+```gql
+MATCH (c:Cliente)
+OPTIONAL MATCH (c)-[:COMPRO]->(p:Producto)
+RETURN c.name AS cliente, count(p) AS compras ORDER BY compras DESC
+```
+
+```gql
+MATCH (c:Cliente) WHERE NOT (c)-[:COMPRO]->(:Producto {categoria:'Cafe'}) RETURN c.name
+```
+
+```gql
 SHOW LABELS
 ```
 
@@ -265,6 +299,10 @@ SHORTEST PATH (:Persona {name:'Steve Jobs'}) TO (:Ciudad {name:'Cupertino'})
 | ❌ Incorrecto | ✅ Correcto |
 |---|---|
 | `MATCH (a)-->(b)` | `MATCH (a)-[]->(b)` |
+| `-[:A OR B]->` | `-[:A\|B]->` |
+| `-[*1..]->` sin tope en un grafo grande | pon un máximo: `-[*1..4]->` |
+| `OPTIONAL MATCH p = (a)-[*]->(b)` | las variables de camino van en el `MATCH` principal |
+| `WHERE (c)-[:COMPRO]->(x) AND x.precio > 10` | `x` no existe fuera del patrón: `EXISTS { MATCH (c)-[:COMPRO]->(x) WHERE x.precio > 10 }` |
 | `... RETURN p DEPTH 2` | `... DEPTH 2 ... RETURN p` |
 | `WHERE ciudad = 'Madrid'` | `WHERE p.ciudad = 'Madrid'` |
 | `WHERE id(n.name) = 'x'` | `WHERE id(n) = 'x'` (las funciones de grafo reciben la variable) |

@@ -600,6 +600,37 @@ begin
     .ExpectEquals('| acidez | n |/|---|---|/| Alta | 2 |/(1 rows)#False#False#' +
       'error:EGQLParserError#error:EGQLParserError#error:EGQLParserError#error:EGQLParserError');
 
+  FRunner.AddCase('rag.gql.alt')
+    .Input('rag:gql:alt')
+    .ExpectEquals('Alta,Ana,Huila Reserva,Narino Alto#Ana,La Ladera');
+
+  FRunner.AddCase('rag.gql.varlength')
+    .Input('rag:gql:varlength')
+    .ExpectEquals('Cafe Centro,La Ladera,Tostadora Sur#Cafe Centro,Cafe Norte,La Ladera#Cafe Norte,La Ladera#' +
+      'Cafe Centro,La Ladera,Tostadora Sur#' +
+      '| p | hops |/|---|---|/| (La Ladera)-[:PROVEE]->(Tostadora Sur) | 1 |/(1 rows)#error:EGQLParserError');
+
+  FRunner.AddCase('rag.gql.paths')
+    .Input('rag:gql:paths')
+    .ExpectEquals('| tienda | saltos | nodos |/|---|---|---|/| Cafe Centro | 2 | [La Ladera, Tostadora Sur, Cafe Centro] |/' +
+      '| Cafe Norte | 3 | [La Ladera, Tostadora Sur, Cafe Centro, Cafe Norte] |/(2 rows)#' +
+      '| camino |/|---|/| (Huila Reserva)-[:CULTIVADO_EN]->(La Ladera)-[:PROVEE]->(Tostadora Sur) |/(1 rows)#' +
+      '| camino |/|---|/| (Baja)<-[:TIENE_ACIDEZ]-(Tolima Suave) |/(1 rows)#True#error:EGQLParserError');
+
+  FRunner.AddCase('rag.gql.optional')
+    .Input('rag:gql:optional')
+    .ExpectEquals('| cafe | finca |/|---|---|/| Huila Reserva | La Ladera |/| Narino Alto |  |/| Tolima Suave |  |/(3 rows)#' +
+      '| filas | con_finca |/|---|---|/| 3 | 1 |/(1 rows)#' +
+      '| con_finca |/|---|/| 0 |/(1 rows)');
+
+  FRunner.AddCase('rag.gql.exists')
+    .Input('rag:gql:exists')
+    .ExpectEquals('Huila Reserva#Tolima Suave#Huila Reserva#Tolima Suave#Ana#| x |/|---|/| 24999 |/(1 rows)');
+
+  FRunner.AddCase('rag.gql.no-leak')
+    .Input('rag:gql:leak')
+    .ExpectEquals('bloques=0');
+
   FRunner.AddCase('rag.gql.arith')
     .Input('rag:gql:arith')
     .ExpectEquals('Huila Reserva|Tolima Suave|Narino Alto|Huila Reserva|Tolima Suave|Huila Reserva||' +
@@ -5429,7 +5460,9 @@ var
   G: TAiRagGraph;
   Emb: TAiEmbeddingsCore;
   Huila, Narino, Tolima, Alta, Baja, Ana: TAiRagGraphNode;
+  Finca, Tostador, Centro, Norte: TAiRagGraphNode;
   Id: string;
+  I: Integer;
 
   function Q(const ACode: string; const AParams: array of Variant): string;
   var
@@ -5522,6 +5555,16 @@ begin
     G.AddEdge(Narino, Alta, 'e2', 'TIENE_ACIDEZ', 'tiene');
     G.AddEdge(Tolima, Baja, 'e3', 'TIENE_ACIDEZ', 'tiene');
     G.AddEdge(Ana, Alta, 'e4', 'NO_LE_GUSTO', 'no le gusto', 0.8);
+    // Cadena de suministro (fase 5): Huila -> La Ladera -> Tostadora Sur -> Cafe Centro -> Cafe Norte.
+    // Etiquetas propias para no cambiar lo que miden los casos anteriores.
+    Finca := G.AddNode('f1', 'Finca', 'La Ladera');
+    Tostador := G.AddNode('t1', 'Tostador', 'Tostadora Sur');
+    Centro := G.AddNode('s1', 'Tienda', 'Cafe Centro');
+    Norte := G.AddNode('s2', 'Tienda', 'Cafe Norte');
+    G.AddEdge(Huila, Finca, 'e5', 'CULTIVADO_EN', 'cultivado en');
+    G.AddEdge(Finca, Tostador, 'e6', 'PROVEE', 'provee');
+    G.AddEdge(Tostador, Centro, 'e7', 'PROVEE', 'provee');
+    G.AddEdge(Centro, Norte, 'e8', 'PROVEE', 'provee');
 
     if Id = 'anon' then
       // Dos nodos sin variable: antes compartian la clave '' y no devolvia nada
@@ -5615,6 +5658,75 @@ begin
         Tab('MATCH (c:Producto) WITH c', []) + '#' +
         Tab('MATCH (c:Producto) RETURN c.name, c.name', []) + '#' +
         Tab('MATCH (c:Producto) RETURN count(sum(c.precio))', [])
+    else if Id = 'alt' then
+      // Fase 5: alternativas de tipo de arista y de etiqueta de nodo
+      Result := Q('MATCH (x)-[:TIENE_ACIDEZ|NO_LE_GUSTO]->(a:Acidez {name:''Alta''})', []) + '#' +
+        Q('MATCH (x:Persona|Finca)', [])
+    else if Id = 'varlength' then
+      // Fase 5: longitud variable (1..2, sin maximo, exacta, recorrida desde el destino) y rango invalido
+      Result := Q('MATCH (f:Finca)-[:PROVEE*1..2]->(t)', []) + '#' +
+        Q('MATCH (f:Finca)-[:PROVEE*]->(t:Tienda)', []) + '#' +
+        Q('MATCH (f:Finca)-[:PROVEE*3]->(t)', []) + '#' +
+        Q('MATCH (t:Tienda {name:''Cafe Centro''})<-[:PROVEE]-(s), (f:Finca)-[:PROVEE*1..3]->(s)', []) + '#' +
+        Tab('MATCH (t:Tienda {name:''Cafe Centro''})<-[:PROVEE]-(s), p = (f:Finca)-[:PROVEE*1..3]->(s) RETURN p, length(p) AS hops', []) + '#' +
+        Tab('MATCH (f:Finca)-[:PROVEE*3..1]->(t)', [])
+    else if Id = 'paths' then
+      // Fase 5: variables de camino con length/nodes, varias clausulas, flecha entrante, contexto y error
+      Result := Tab('MATCH p = (f:Finca)-[:PROVEE*]->(t:Tienda) RETURN t.name AS tienda, length(p) AS saltos, nodes(p) AS nodos ORDER BY saltos', []) + '#' +
+        Tab('MATCH p = (c:Producto {name:''Huila Reserva''})-[:CULTIVADO_EN]->(f)-[:PROVEE]->(t) RETURN p AS camino', []) + '#' +
+        Tab('MATCH p = (a:Acidez {name:''Baja''})<-[:TIENE_ACIDEZ]-(c) RETURN p AS camino', []) + '#' +
+        BoolToStr(Tab('MATCH p = (f:Finca)-[:PROVEE*3]->(t)', []).Contains('Tostadora Sur'), True) + '#' +
+        Tab('MATCH (c:Producto) OPTIONAL MATCH p = (c)-[:CULTIVADO_EN]->(x) RETURN c.name', [])
+    else if Id = 'optional' then
+      // Fase 5: OPTIONAL MATCH conserva la fila sin extension; count(f) no cuenta los nulos
+      Result := Tab('MATCH (c:Producto) OPTIONAL MATCH (c)-[:CULTIVADO_EN]->(f:Finca) RETURN c.name AS cafe, f.name AS finca ORDER BY cafe', []) + '#' +
+        Tab('MATCH (c:Producto) OPTIONAL MATCH (c)-[:CULTIVADO_EN]->(f) RETURN count(*) AS filas, count(f) AS con_finca', []) + '#' +
+        Tab('MATCH (c:Producto) OPTIONAL MATCH (c)-[:CULTIVADO_EN]->(f) WHERE f.name = ''Otra'' RETURN count(f) AS con_finca', [])
+    else if Id = 'exists' then
+      // Fase 5: patron como condicion en sus cuatro formas; (pr) - 1 sigue siendo una resta
+      Result := Q('MATCH (c:Producto) WHERE (c)-[:CULTIVADO_EN]->(:Finca)', []) + '#' +
+        Q('MATCH (c:Producto) WHERE NOT (c)-[:TIENE_ACIDEZ]->(:Acidez {name:''Alta''})', []) + '#' +
+        Q('MATCH (c:Producto) WHERE exists((c)-[:CULTIVADO_EN]->())', []) + '#' +
+        Q('MATCH (c:Producto) WHERE EXISTS { MATCH (c)-[:TIENE_ACIDEZ]->(a) WHERE a.name = ''Baja'' }', []) + '#' +
+        Q('MATCH (p:Persona) WHERE (p)-[:NO_LE_GUSTO]->(:Acidez)<-[:TIENE_ACIDEZ]-(:Producto {name:''Narino Alto''})', []) + '#' +
+        Tab('MATCH (c:Producto) WITH c.precio AS pr RETURN (pr) - 1 AS x ORDER BY x LIMIT 1', [])
+    else if Id = 'leak' then
+    begin
+      // Caminos, clones de valores, filas de OPTIONAL MATCH, tablas y errores de parseo:
+      // repetir el repertorio no debe dejar bloques vivos (la primera pasada calienta cachés)
+      var Repertorio: TArray<string> := [
+        'MATCH (c:Producto)-[:TIENE_ACIDEZ]->(a), (p:Persona)-[:NO_LE_GUSTO]->(a) RETURN c',
+        'MATCH (p:Persona) DEPTH 2',
+        'MATCH p = (f:Finca)-[:PROVEE*]->(t:Tienda) RETURN t.name, length(p) AS n, nodes(p) AS ns ORDER BY n',
+        'MATCH (t:Tienda {name:''Cafe Centro''})<-[:PROVEE]-(s), p = (f:Finca)-[:PROVEE*1..3]->(s) RETURN p AS camino',
+        'MATCH p = (f:Finca)-[:PROVEE*1..3]->(t) DEPTH 1',
+        'MATCH (c:Producto) OPTIONAL MATCH (c)-[:CULTIVADO_EN]->(f) WITH c, f WHERE f IS NULL RETURN c.name, collect(c.origen) AS o',
+        'MATCH (c:Producto) WHERE EXISTS { MATCH (c)-[:TIENE_ACIDEZ]->(a) WHERE a.name = ''Baja'' } RETURN DISTINCT c.name',
+        'MATCH (c:Producto)-[:TIENE_ACIDEZ]->(a) RETURN a.name, count(*) AS n, sum(c.precio) AS s ORDER BY n DESC SKIP 0 LIMIT 5',
+        'MATCH (c:Producto) WHERE lower(c.name) STARTS WITH ''hu'' AND c.precio * 2 > 1 RETURN c',
+        'SHOW LABELS', 'GET DEGREES TOP 3', 'SHORTEST PATH (:Producto {name:''Huila Reserva''}) TO (:Tienda {name:''Cafe Norte''})',
+        'MATCH (c:Producto) WHERE count(*) > 1', 'MATCH (c:Producto) WHERE c.name = ''abierta',
+        'MATCH (f:Finca)-[:PROVEE*3..1]->(t)', 'MATCH (c) WHERE foo(c.name) = 1'];
+      var Code: string;
+      var Fugas := '';
+      for Code in Repertorio do
+        Tab(Code, []);
+      for var K := 0 to High(Repertorio) do
+      begin
+        var Antes := LiveMemoryBlocks;
+        for I := 1 to 5 do
+          Tab(Repertorio[K], []);
+        var Delta := LiveMemoryBlocks - Antes;
+        // Una fuga pierde al menos un bloque por ejecucion (>= 5 en 5 vueltas); un bloque
+        // suelto es una asignacion unica de la RTL que cae dentro de la primera medicion
+        if Delta >= 5 then
+          Fugas := Fugas + Format(' q%d=%d', [K, Delta]);
+      end;
+      if Fugas = '' then
+        Result := 'bloques=0'
+      else
+        Result := 'fugas:' + Fugas;
+    end
     else
       raise Exception.Create('Escenario GQL desconocido: ' + AScenario);
   finally
