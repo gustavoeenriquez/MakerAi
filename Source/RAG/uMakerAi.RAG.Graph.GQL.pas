@@ -170,6 +170,9 @@ type
     function ParsePatternExpr(ABraced: Boolean): TGraphExpression;
     procedure ParseWhereClause(AQuery: TGraphMatchQuery);
     function ParseProjection(AIsReturn: Boolean): TGQLProjection;
+    function IsWriteKeyword: Boolean;
+    procedure ParseSetItems(AItems: TObjectList<TGQLSetItem>; ARemove: Boolean);
+    function ParseWriteClause: TGQLWriteClause;
     function ParseAggregate(const AName: string; APosition: Integer): TGraphExpression;
     procedure ClearCommandPatterns;
 
@@ -908,7 +911,7 @@ begin
     AQuery.AddNodePattern(Result);
     if Assigned(FCurNewPatterns) then
       FCurNewPatterns.Add(Result);
-    if (FPatternDepth = 0) and not VarName.StartsWith('#') then
+    if (FPatternDepth = 0) and not VarName.StartsWith('#') and not FScope.Contains(VarName) then
       FScope.Add(VarName);
   end;
 
@@ -1804,6 +1807,135 @@ begin
   end;
 end;
 
+function TGraphParser.IsWriteKeyword: Boolean;
+begin
+  Result := IsWord('CREATE') or IsWord('MERGE') or IsWord('SET') or IsWord('REMOVE') or IsWord('DELETE') or
+    IsWord('DETACH');
+end;
+
+procedure TGraphParser.ParseSetItems(AItems: TObjectList<TGQLSetItem>; ARemove: Boolean);
+var
+  It: TGQLSetItem;
+begin
+  // SET n.prop = expr, n:Etiqueta, ...   /   REMOVE n.prop, ...
+  while True do
+  begin
+    It := TGQLSetItem.Create;
+    AItems.Add(It);
+    It.Variable := FCurrent.Text;
+    Expect(tkIdentifier);
+    if (not ARemove) and (FCurrent.Kind = tkColon) then
+    begin
+      Next;
+      It.NewLabel := FCurrent.Text;
+      Expect(tkIdentifier);
+    end
+    else
+    begin
+      Expect(tkDot);
+      It.Key := TakePropertyKey;
+      if not ARemove then
+      begin
+        Expect(tkEqual);
+        It.Expr := ParseExpression;
+      end;
+    end;
+    if FCurrent.Kind = tkComma then
+      Next
+    else
+      Break;
+  end;
+end;
+
+function TGraphParser.ParseWriteClause: TGQLWriteClause;
+var
+  C: TMatchClause;
+  StartPos: Integer;
+begin
+  Result := TGQLWriteClause.Create;
+  try
+    StartPos := FCurrent.Position;
+    if IsWord('CREATE') or IsWord('MERGE') then
+    begin
+      if IsWord('CREATE') then
+        Result.Kind := wkCreate
+      else
+        Result.Kind := wkMerge;
+      Next;
+      // Los patrones a crear o buscar van en su propia consulta: no participan del MATCH.
+      // Las variables ya enlazadas (MATCH, CREATE anterior) se reutilizan al ejecutar.
+      Result.Pattern := TGraphMatchQuery.Create;
+      ParseMatchClause(Result.Pattern, Result.Pattern.MatchClauses);
+      if Result.Kind = wkCreate then
+        while FCurrent.Kind = tkComma do
+        begin
+          Next;
+          ParseMatchClause(Result.Pattern, Result.Pattern.MatchClauses);
+        end;
+      if Result.Pattern.Paths.Count > 0 then
+        raise EGQLParserError.CreateAt(AiFmt('rag.gql.path_optional', [Result.Pattern.Paths[0].Variable]), StartPos);
+      // Una relación nueva necesita un solo tipo, una flecha y un salto
+      for C in Result.Pattern.MatchClauses do
+        if (C.EdgePattern.EdgeLabel = '') or C.EdgePattern.EdgeLabel.Contains('|') or C.EdgePattern.IsVariableLength or
+          (C.EdgePattern.Direction = gdBoth) then
+          raise EGQLParserError.CreateAt(AiStr('rag.gql.create_edge'), StartPos);
+
+      // MERGE ... ON CREATE SET ... ON MATCH SET ...
+      if Result.Kind = wkMerge then
+        while IsWord('ON') do
+        begin
+          Next;
+          if IsWord('CREATE') then
+          begin
+            Next;
+            ExpectWord('SET');
+            ParseSetItems(Result.OnCreate, False);
+          end
+          else
+          begin
+            Expect(tkMatch);
+            ExpectWord('SET');
+            ParseSetItems(Result.OnMatch, False);
+          end;
+        end;
+    end
+    else if IsWord('SET') then
+    begin
+      Result.Kind := wkSet;
+      Next;
+      ParseSetItems(Result.Items, False);
+    end
+    else if IsWord('REMOVE') then
+    begin
+      Result.Kind := wkRemove;
+      Next;
+      ParseSetItems(Result.Items, True);
+    end
+    else
+    begin
+      Result.Kind := wkDelete;
+      if IsWord('DETACH') then
+      begin
+        Result.Detach := True;
+        Next;
+      end;
+      ExpectWord('DELETE');
+      while True do
+      begin
+        Result.DeleteVars.Add(FCurrent.Text);
+        Expect(tkIdentifier);
+        if FCurrent.Kind = tkComma then
+          Next
+        else
+          Break;
+      end;
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
 function TGraphParser.Parse: TGraphMatchQuery;
 var
   TempQuery: TGraphMatchQuery;
@@ -1983,15 +2115,19 @@ begin
   // 3. Consultas MATCH Estándar
   Result := TGraphMatchQuery.Create;
   try
-    if FCurrent.Kind = tkMatch then
-      Next; // Consumimos MATCH
-
-    // --- PARSEO DE CLÁUSULAS MATCH (a)-[]->(b), (c)-[]->(d) ---
-    ParseMatchClause(Result, Result.MatchClauses);
-    while FCurrent.Kind = tkComma do // Soporte para múltiples patrones separados por coma
+    // Una consulta puede empezar con CREATE o MERGE, sin MATCH
+    if not(IsWord('CREATE') or IsWord('MERGE')) then
     begin
-      Next; // Consumir la coma
+      if FCurrent.Kind = tkMatch then
+        Next; // Consumimos MATCH
+
+      // --- PARSEO DE CLÁUSULAS MATCH (a)-[]->(b), (c)-[]->(d) ---
       ParseMatchClause(Result, Result.MatchClauses);
+      while FCurrent.Kind = tkComma do // Soporte para múltiples patrones separados por coma
+      begin
+        Next; // Consumir la coma
+        ParseMatchClause(Result, Result.MatchClauses);
+      end;
     end;
 
     // 4. DEPTH (Opcional)
@@ -2032,6 +2168,10 @@ begin
       end;
     end;
 
+    // 5c. Escritura: CREATE, MERGE, SET, REMOVE, [DETACH] DELETE (en el orden escrito)
+    while IsWriteKeyword do
+      Result.Writes.Add(ParseWriteClause);
+
     // 6. WITH ... (etapas) y RETURN
     while IsWord('WITH') do
     begin
@@ -2050,6 +2190,10 @@ begin
     end
     else if Result.Projections.Count > 0 then
       raise EGQLParserError.CreateAt(AiStr('rag.gql.with_return'), FCurrent.Position);
+
+    for var W in Result.Writes do
+      if (W.Kind = wkDelete) and (Result.Projections.Count > 0) then
+        raise EGQLParserError.CreateAt(AiStr('rag.gql.delete_return'), FCurrent.Position);
 
     // Tabla si hay WITH, o un RETURN que no sea solo variables (RETURN c, p sigue dando el
     // texto de contexto del subgrafo, como antes)

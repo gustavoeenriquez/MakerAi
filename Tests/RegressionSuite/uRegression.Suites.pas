@@ -651,6 +651,29 @@ begin
     .Input('rag:gql:explain')
     .ExpectEquals('True|True|True|True|True|True');
 
+  FRunner.AddCase('rag.gql.write')
+    .Input('rag:gql:write')
+    .ExpectEquals('error:Exception' + '#' +
+      'Nodes created: 1, relationships created: 0, properties set: 0, labels set: 0, nodes deleted: 0, relationships deleted: 0.' + '#' +
+      'Ana,Luis' + '#' +
+      'Nodes created: 0, relationships created: 1, properties set: 0, labels set: 0, nodes deleted: 0, relationships deleted: 0.' + '#' +
+      'Luis,Tolima Suave' + '#' +
+      'Nodes created: 0, relationships created: 0, properties set: 1, labels set: 0, nodes deleted: 0, relationships deleted: 0.' + '#' +
+      'Nodes created: 1, relationships created: 0, properties set: 1, labels set: 0, nodes deleted: 0, relationships deleted: 0.' + '#' +
+      '| n | v |/|---|---|/| Ana | 1 |/| Eva | 0 |/| Luis |  |/(3 rows)' + '#' +
+      'Nodes created: 0, relationships created: 0, properties set: 1, labels set: 1, nodes deleted: 0, relationships deleted: 0./| cafe | precio | l |/|---|---|---|/| Narino Alto | 39000 | Cafe |/(1 rows)' + '#' +
+      'Nodes created: 0, relationships created: 0, properties set: 1, labels set: 0, nodes deleted: 0, relationships deleted: 0./| p |/|---|/|  |/(1 rows)' + '#' +
+      'error:EGQLParserError' + '#' +
+      'Nodes created: 0, relationships created: 0, properties set: 0, labels set: 0, nodes deleted: 1, relationships deleted: 1.' + '#' +
+      'Huila Reserva,Tolima Suave' + '#' +
+      'Nodes created: 0, relationships created: 0, properties set: 0, labels set: 0, nodes deleted: 0, relationships deleted: 1.' + '#' +
+      'Nodes created: 0, relationships created: 0, properties set: 0, labels set: 0, nodes deleted: 1, relationships deleted: 0.' + '#' +
+      'Nodes created: 1, relationships created: 0, properties set: 0, labels set: 0, nodes deleted: 0, relationships deleted: 0.' + '#' +
+      'Cafe Floral' + '#' +
+      'error:EGQLParserError' + '#' +
+      'error:EGQLParserError' + '#' +
+      'error:EGQLParserError');
+
   FRunner.AddCase('rag.gql.no-leak')
     .Input('rag:gql:leak')
     .ExpectEquals('bloques=0');
@@ -5765,6 +5788,33 @@ begin
         BoolToStr(Plan.Contains('RETURN: a.name, n; ORDER BY 1 key(s); LIMIT 3'), True) + '|' +
         BoolToStr(Tab('EXPLAIN SHOW SCHEMA', []).Contains('Command SHOW SCHEMA'), True);
     end
+    else if Id = 'write' then
+    begin
+      // Fase 7: escritura. Apagada por defecto; con AllowWrite crea, fusiona, cambia y borra
+      Result := Tab('CREATE (n:Persona {name:''Luis''})', []) + '#';
+      G.AllowWrite := True;
+      Result := Result +
+        Tab('CREATE (n:Persona {name:''Luis'', edad: 30})', []) + '#' +
+        Q('MATCH (p:Persona) RETURN p', []) + '#' +
+        Tab('MATCH (p:Persona {name:''Luis''}), (c:Producto {name:''Tolima Suave''}) CREATE (p)-[:COMPRO {cantidad: 2}]->(c)', []) + '#' +
+        Q('MATCH (p)-[r:COMPRO]->(c) WHERE r.cantidad = 2', []) + '#' +
+        Tab('MERGE (n:Persona {name:''Ana''}) ON MATCH SET n.visitas = 1 ON CREATE SET n.visitas = 0', []) + '#' +
+        Tab('MERGE (n:Persona {name:''Eva''}) ON MATCH SET n.visitas = 1 ON CREATE SET n.visitas = 0', []) + '#' +
+        Tab('MATCH (p:Persona) RETURN p.name AS n, p.visitas AS v ORDER BY n', []) + '#' +
+        Tab('MATCH (c:Producto {name:''Narino Alto''}) SET c.precio = c.precio + 1000, c:Cafe ' +
+          'RETURN c.name AS cafe, c.precio AS precio, label(c) AS l', []) + '#' +
+        Tab('MATCH (c:Cafe) REMOVE c.precio RETURN c.precio AS p', []) + '#' +
+        Tab('MATCH (c:Cafe) DELETE c', []) + '#' +
+        Tab('MATCH (c:Cafe) DETACH DELETE c', []) + '#' +
+        Q('MATCH (c:Producto)', []) + '#' +
+        Tab('MATCH (p:Persona {name:''Luis''})-[r:COMPRO]->() DELETE r', []) + '#' +
+        Tab('MATCH (p:Persona {name:''Luis''}) DELETE p', []) + '#' +
+        Tab('CREATE (n:Producto {name:''Cafe Floral'', notas:''floral''})', []) + '#' +
+        Q('MATCH (c:Producto) WHERE c SIMILAR TO ''floral'' > 0.9', []) + '#' +
+        Tab('MATCH (p:Persona) DELETE p RETURN p', []) + '#' +
+        Tab('MATCH (a:Persona {name:''Ana''}) CREATE (a)-[:X]-(b:Persona {name:''Z''})', []) + '#' +
+        Tab('MATCH (p:Persona {name:''Ana''}) SET p.id = ''x''', []);
+    end
     else if Id = 'leak' then
     begin
       // Caminos, clones de valores, filas de OPTIONAL MATCH, tablas y errores de parseo:
@@ -5785,21 +5835,30 @@ begin
         'SHOW SCHEMA', 'SHOW PROPERTIES', 'GET COMMUNITIES', 'GET NEIGHBORS (:Finca) DEPTH 2', 'GET CENTRALITY TOP 3',
         'ALL SHORTEST PATHS (:Producto {name:''Huila Reserva''}) TO (:Tienda {name:''Cafe Norte''})',
         'MATCH (c:Producto) WHERE c SIMILAR TO ''chocolate'' RETURN c.name, similarity(c, ''frutal'') AS s',
-        'EXPLAIN MATCH (c:Producto) OPTIONAL MATCH (c)-[*1..2]->(x) RETURN count(x)'];
+        'EXPLAIN MATCH (c:Producto) OPTIONAL MATCH (c)-[*1..2]->(x) RETURN count(x)',
+        // Escritura idempotente (fase 7): el mismo SET una y otra vez no debe dejar memoria viva
+        'MATCH (p:Persona {name:''Ana''}) SET p.visitas = coalesce(p.visitas, 0) + 1 RETURN p.visitas AS v',
+        'MERGE (n:Persona {name:''Ana''}) ON MATCH SET n.vista = true',
+        'MATCH (p:Persona) DELETE p RETURN p'];
+      G.AllowWrite := True;
       var Code: string;
       var Fugas := '';
       for Code in Repertorio do
         Tab(Code, []);
       for var K := 0 to High(Repertorio) do
       begin
-        var Antes := LiveMemoryBlocks;
-        for I := 1 to 5 do
+        // Dos tandas de 10: una fuga pierde al menos un bloque por ejecucion en las DOS.
+        // Las escrituras reconstruyen indices (EndUpdate) y el conteo sube y baja unos
+        // bloques sin crecer con las vueltas (medido: 13 tras 100); eso no es fuga.
+        var A := LiveMemoryBlocks;
+        for I := 1 to 10 do
           Tab(Repertorio[K], []);
-        var Delta := LiveMemoryBlocks - Antes;
-        // Una fuga pierde al menos un bloque por ejecucion (>= 5 en 5 vueltas); un bloque
-        // suelto es una asignacion unica de la RTL que cae dentro de la primera medicion
-        if Delta >= 5 then
-          Fugas := Fugas + Format(' q%d=%d', [K, Delta]);
+        var B := LiveMemoryBlocks;
+        for I := 1 to 10 do
+          Tab(Repertorio[K], []);
+        var C := LiveMemoryBlocks;
+        if (B - A >= 10) and (C - B >= 10) then
+          Fugas := Fugas + Format(' q%d=%d+%d', [K, B - A, C - B]);
       end;
       if Fugas = '' then
         Result := 'bloques=0'

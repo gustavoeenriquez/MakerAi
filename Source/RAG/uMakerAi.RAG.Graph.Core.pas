@@ -307,6 +307,32 @@ type
     destructor Destroy; override;
   end;
 
+  { Escritura (solo con TAiRagGraph.AllowWrite = True) }
+  TGQLWriteKind = (wkCreate, wkMerge, wkSet, wkRemove, wkDelete);
+
+  { SET n.prop = expr, SET n:Etiqueta, REMOVE n.prop }
+  TGQLSetItem = class
+  public
+    Variable: string;
+    Key: string; // Propiedad ('' si se cambia la etiqueta)
+    NewLabel: string; // SET n:Etiqueta
+    Expr: TGraphExpression; // Es dueño; nil en REMOVE
+    destructor Destroy; override;
+  end;
+
+  TGQLWriteClause = class
+  public
+    Kind: TGQLWriteKind;
+    Pattern: TGraphMatchQuery; // CREATE / MERGE (es dueña): patrones a crear o buscar
+    Items: TObjectList<TGQLSetItem>; // SET / REMOVE
+    OnCreate: TObjectList<TGQLSetItem>; // MERGE ... ON CREATE SET
+    OnMatch: TObjectList<TGQLSetItem>; // MERGE ... ON MATCH SET
+    DeleteVars: TList<string>; // [DETACH] DELETE a, b
+    Detach: Boolean;
+    constructor Create;
+    destructor Destroy; override;
+  end;
+
   { Variable de camino: p = (a)-[...]->(b). Cubre las cláusulas FirstClause..LastClause del MATCH principal. }
   TGQLPathDef = record
     Variable: string;
@@ -336,6 +362,7 @@ type
     FTabular: Boolean;
     FOptionalParts: TObjectList<TGQLOptionalMatch>;
     FPaths: TList<TGQLPathDef>;
+    FWrites: TObjectList<TGQLWriteClause>;
     function GetNodePatternByVariable(const AVar: string): TMatchNodePattern;
   public
     constructor Create;
@@ -354,6 +381,8 @@ type
     property Tabular: Boolean read FTabular write FTabular;
     property OptionalParts: TObjectList<TGQLOptionalMatch> read FOptionalParts;
     property Paths: TList<TGQLPathDef> read FPaths;
+    // CREATE / MERGE / SET / REMOVE / DELETE, en orden
+    property Writes: TObjectList<TGQLWriteClause> read FWrites;
   end;
 
   TStringWrapper = class(TObject)
@@ -531,6 +560,7 @@ type
     FNodeNameIndex: TDictionary<string, TAiRagGraphNode>;
     FUpdateCount: Integer;
     FDriver: TAiRagGraphDriverBase;
+    FAllowWrite: Boolean;
 
     function GetNodeCount: Integer;
     function GetEdgeCount: Integer;
@@ -554,6 +584,7 @@ type
     function GQLCandidates(APattern: TMatchNodePattern): TArray<TAiRagGraphNode>;
     function GQLSimilarity(AObj: TObject; const AText: string; var ACacheText: string; var ACache: TAiEmbeddingData): Variant;
     function GQLExplain(AQuery: TGraphMatchQuery; const ACommand: string): string;
+    function GQLApplyWrites(AQuery: TGraphMatchQuery; const ARows: TArray<TDictionary<string, TObject>>): string;
     procedure GQLSolve(AQuery: TGraphMatchQuery; AClauses: TList<TMatchClause>; APatterns: TList<TMatchNodePattern>;
       AWhere: TGraphExpression; AState: TDictionary<string, TObject>; AResults: TObjectList<TDictionary<string, TObject>>;
       AFirstOnly: Boolean);
@@ -656,6 +687,9 @@ type
     property Embeddings: TAiEmbeddingsCore read FEmbeddings write SetEmbeddings;
     property Driver: TAiRagGraphDriverBase read FDriver write SetDriver;
     property SearchOptions: TAiSearchOptions read GetSearchOptions write SetSearchOptions;
+    // MakerGQL puede escribir (CREATE, MERGE, SET, REMOVE, DELETE). Apagado por defecto: el
+    // lenguaje se le expone a modelos; encenderlo solo donde quien consulta puede cambiar el grafo.
+    property AllowWrite: Boolean read FAllowWrite write FAllowWrite default False;
   end;
 
   // Funci�n Helper para convertir TJSONValue a Variant
@@ -1673,6 +1707,22 @@ begin
       ExplainClauses(Part.Clauses, Part.Patterns, '  ');
       if Part.Where <> nil then
         SB.AppendLine('  WHERE: filters the optional part only');
+    end;
+
+    for var W in AQuery.Writes do
+    begin
+      case W.Kind of
+        wkCreate: SB.Append('CREATE');
+        wkMerge: SB.Append('MERGE (find the pattern, create it if missing)');
+        wkSet: SB.Append('SET');
+        wkRemove: SB.Append('REMOVE');
+      else
+        if W.Detach then
+          SB.Append('DETACH DELETE')
+        else
+          SB.Append('DELETE');
+      end;
+      SB.AppendLine(': runs once per row; needs AllowWrite = True');
     end;
 
     if AQuery.Depth > 0 then
@@ -3535,6 +3585,62 @@ begin
       // =========================================================
       // CONSULTA MATCH EST�NDAR (La m�s com�n)
       // =========================================================
+      else if Assigned(QueryObj) and (QueryObj.Writes.Count > 0) then
+      begin
+        // =========================================================
+        // ESCRITURA: CREATE / MERGE / SET / REMOVE / DELETE
+        // =========================================================
+        if not FAllowWrite then
+          raise Exception.Create(AiStr('rag.gql.write_disabled'));
+        if QueryObj.NodePatterns.Count = 0 then
+          Rows := [TDictionary<string, TObject>.Create] // CREATE/MERGE sin MATCH: una fila vacía
+        else
+          Rows := Self.Match(QueryObj, 0);
+        try
+          Line := GQLApplyWrites(QueryObj, Rows);
+          if QueryObj.Projections.Count = 0 then
+          begin
+            // Sin RETURN: solo el resumen (las filas pueden apuntar a lo que se borró)
+            FreeGQLResults(Rows);
+            ResDict := TDictionary<string, TObject>.Create;
+            ResDict.Add('type', TStringWrapper.Create('summary'));
+            ResDict.Add('value', TStringWrapper.Create(Line));
+            AResultObjects := [ResDict];
+            Result := Line;
+          end
+          else if QueryObj.Tabular then
+          begin
+            for Stage in QueryObj.Projections do
+            begin
+              NextRows := RunGQLProjection(Stage, Rows);
+              FreeGQLResults(Rows);
+              Rows := NextRows;
+            end;
+            Result := Line + sLineBreak + GQLRowsToText(QueryObj.Projections.Last, Rows);
+            AResultObjects := Rows;
+            Rows := nil;
+          end
+          else
+          begin
+            // RETURN de variables: el resumen y el subgrafo como texto de contexto
+            ContextNodes := TList<TAiRagGraphNode>.Create;
+            try
+              for ResDict in Rows do
+                for var WPair in ResDict do
+                  if (WPair.Value is TAiRagGraphNode) and (ContextNodes.IndexOf(TAiRagGraphNode(WPair.Value)) = -1) then
+                    ContextNodes.Add(TAiRagGraphNode(WPair.Value));
+              Result := Line + sLineBreak + Self.GraphToContextText(ContextNodes.ToArray);
+            finally
+              ContextNodes.Free;
+            end;
+            AResultObjects := Rows;
+            Rows := nil;
+          end;
+        except
+          FreeGQLResults(Rows);
+          raise;
+        end;
+      end
       else if Assigned(QueryObj) and QueryObj.Tabular then
       begin
         // =========================================================
@@ -5855,6 +5961,322 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------------
+// MakerGQL: escritura (CREATE, MERGE, SET, REMOVE, DELETE). Solo con AllowWrite = True.
+// ---------------------------------------------------------------------------
+
+// Texto que se convierte en embedding: el mismo formato que usa TAiRagGraphBuilder
+// (son datos para indexar, no instrucciones para el modelo)
+function GQLNodeEmbeddingText(ANode: TAiRagGraphNode): string;
+var
+  SB: TStringBuilder;
+  Pair: TPair<string, Variant>;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendFormat('Entidad: %s. Categoria: %s.', [ANode.Name, ANode.NodeLabel]);
+    for Pair in ANode.MetaData.InternalDictionary do
+      SB.AppendFormat(' La propiedad %s tiene el valor %s.', [Pair.Key, GQLToText(Pair.Value)]);
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+function GQLNewID: string;
+begin
+  Result := TGUID.NewGuid.ToString.Replace('{', '').Replace('}', '').ToLower;
+end;
+
+function TAiRagGraph.GQLApplyWrites(AQuery: TGraphMatchQuery; const ARows: TArray<TDictionary<string, TObject>>): string;
+var
+  W: TGQLWriteClause;
+  Row: TDictionary<string, TObject>;
+  NodesCreated, EdgesCreated, PropsSet, LabelsSet, NodesDeleted, EdgesDeleted: Integer;
+  TouchedNodes: TList<TAiRagGraphNode>;
+  TouchedEdges: TList<TAiRagGraphEdge>;
+  DelNodes: TList<TAiRagGraphNode>;
+  DelEdges: TList<TAiRagGraphEdge>;
+  DelVar: string;
+  Obj: TObject;
+  Node: TAiRagGraphNode;
+  Edge: TAiRagGraphEdge;
+  Remaining: Integer;
+
+  procedure TouchNode(ANode: TAiRagGraphNode);
+  begin
+    if not TouchedNodes.Contains(ANode) then
+      TouchedNodes.Add(ANode);
+  end;
+
+  procedure TouchEdge(AEdge: TAiRagGraphEdge);
+  begin
+    if not TouchedEdges.Contains(AEdge) then
+      TouchedEdges.Add(AEdge);
+  end;
+
+  procedure ApplySetItems(AItems: TObjectList<TGQLSetItem>; ARemove: Boolean; ARow: TDictionary<string, TObject>);
+  var
+    It: TGQLSetItem;
+    Target: TObject;
+    V: Variant;
+    D: Double;
+  begin
+    for It in AItems do
+    begin
+      // Una variable sin enlazar (p. ej. de un OPTIONAL MATCH vacío) no hace nada, como en Cypher
+      if not ARow.TryGetValue(It.Variable, Target) or not((Target is TAiRagGraphNode) or (Target is TAiRagGraphEdge)) then
+        Continue;
+
+      if It.NewLabel <> '' then
+      begin
+        if Target is TAiRagGraphNode then
+          TAiRagGraphNode(Target).NodeLabel := It.NewLabel
+        else
+          TAiRagGraphEdge(Target).EdgeLabel := It.NewLabel;
+        Inc(LabelsSet);
+      end
+      else
+      begin
+        if SameText(It.Key, 'id') then
+          raise EGQLParserError.CreateAt(AiStr('rag.gql.set_id'), 0);
+        if ARemove then
+          V := Null
+        else
+          V := EvaluateGraphExpression(It.Expr, ARow);
+
+        if Target is TAiRagGraphNode then
+        begin
+          if SameText(It.Key, 'name') then
+            TAiRagGraphNode(Target).Name := GQLToText(V)
+          else if SameText(It.Key, 'label') then
+            TAiRagGraphNode(Target).NodeLabel := GQLToText(V)
+          else if GQLIsNull(V) then
+            TAiRagGraphNode(Target).MetaData.Remove(It.Key)
+          else
+            TAiRagGraphNode(Target).MetaData[It.Key] := V;
+        end
+        else
+        begin
+          if SameText(It.Key, 'label') then
+            TAiRagGraphEdge(Target).EdgeLabel := GQLToText(V)
+          else if SameText(It.Key, 'weight') then
+          begin
+            if GQLTryNumber(V, D) then
+              TAiRagGraphEdge(Target).Weight := D;
+          end
+          else if GQLIsNull(V) then
+            TAiRagGraphEdge(Target).MetaData.Remove(It.Key)
+          else
+            TAiRagGraphEdge(Target).MetaData[It.Key] := V;
+        end;
+        Inc(PropsSet);
+      end;
+
+      if Target is TAiRagGraphNode then
+        TouchNode(TAiRagGraphNode(Target))
+      else
+        TouchEdge(TAiRagGraphEdge(Target));
+    end;
+  end;
+
+  // Crea lo que falte del patrón: los nodos sin enlazar y todas las relaciones
+  procedure CreatePattern(APattern: TGraphMatchQuery; ARow: TDictionary<string, TObject>);
+  var
+    P: TMatchNodePattern;
+    C: TMatchClause;
+    N: TAiRagGraphNode;
+    E: TAiRagGraphEdge;
+    FromObj, ToObj, Tmp: TObject;
+    Pair: TPair<string, Variant>;
+    ID, Name: string;
+    Weight: Double;
+    V: Variant;
+  begin
+    for P in APattern.NodePatterns do
+    begin
+      if ARow.TryGetValue(P.Variable, Tmp) and (Tmp is TAiRagGraphNode) then
+        Continue; // Ya existe (viene del MATCH o de un MERGE anterior)
+      ID := '';
+      Name := '';
+      if P.Properties.TryGetValue('id', V) then
+        ID := GQLToText(V);
+      if ID = '' then
+        ID := GQLNewID;
+      if P.Properties.TryGetValue('name', V) then
+        Name := GQLToText(V);
+      N := Self.NewNode(ID, P.NodeLabel, Name);
+      try
+        for Pair in P.Properties do
+          if not(SameText(Pair.Key, 'id') or SameText(Pair.Key, 'name') or SameText(Pair.Key, 'label')) and
+            not GQLIsNull(Pair.Value) then
+            N.MetaData[Pair.Key] := Pair.Value;
+        N.Text := GQLNodeEmbeddingText(N);
+        if Assigned(FEmbeddings) then
+        begin
+          N.Model := FEmbeddings.Model;
+          N.Data := FEmbeddings.CreateEmbedding(N.Text, 'user');
+        end;
+      except
+        N.Free;
+        raise;
+      end;
+      N := Self.AddNode(N); // Persiste en el driver; si el id ya existía devuelve ese nodo
+      ARow.AddOrSetValue(P.Variable, N);
+      Inc(NodesCreated);
+    end;
+
+    for C in APattern.MatchClauses do
+    begin
+      if not(ARow.TryGetValue(C.SourceNodeVar, FromObj) and (FromObj is TAiRagGraphNode) and
+        ARow.TryGetValue(C.TargetNodeVar, ToObj) and (ToObj is TAiRagGraphNode)) then
+        Continue;
+      if C.EdgePattern.Direction = gdIncoming then // (a)<-[:R]-(b): la arista va de b a a
+      begin
+        Tmp := FromObj;
+        FromObj := ToObj;
+        ToObj := Tmp;
+      end;
+      Weight := 1.0;
+      if C.EdgePattern.Properties.TryGetValue('weight', V) and not GQLTryNumber(V, Weight) then
+        Weight := 1.0;
+      E := Self.NewEdge(TAiRagGraphNode(FromObj), TAiRagGraphNode(ToObj), GQLNewID, C.EdgePattern.EdgeLabel,
+        C.EdgePattern.EdgeLabel, Weight);
+      for Pair in C.EdgePattern.Properties do
+        if not(SameText(Pair.Key, 'weight') or SameText(Pair.Key, 'id') or SameText(Pair.Key, 'label')) and
+          not GQLIsNull(Pair.Value) then
+          E.MetaData[Pair.Key] := Pair.Value;
+      E := Self.AddEdge(E);
+      if C.EdgePattern.Variable <> '' then
+        ARow.AddOrSetValue(C.EdgePattern.Variable, E);
+      Inc(EdgesCreated);
+    end;
+  end;
+
+  procedure MergePattern(AW: TGQLWriteClause; ARow: TDictionary<string, TObject>);
+  var
+    Found: TObjectList<TDictionary<string, TObject>>;
+    Pair: TPair<string, TObject>;
+    D: TDictionary<string, TObject>;
+  begin
+    // Busca el patrón con las variables ya enlazadas; si no está, lo crea
+    Found := TObjectList < TDictionary < string, TObject >>.Create(True);
+    try
+      GQLSolve(AW.Pattern, AW.Pattern.MatchClauses, AW.Pattern.NodePatterns, nil, ARow, Found, True);
+      if Found.Count > 0 then
+      begin
+        for Pair in Found[0] do
+          if (Pair.Value is TAiRagGraphNode) or (Pair.Value is TAiRagGraphEdge) then
+            ARow.AddOrSetValue(Pair.Key, Pair.Value);
+        ApplySetItems(AW.OnMatch, False, ARow);
+      end
+      else
+      begin
+        CreatePattern(AW.Pattern, ARow);
+        ApplySetItems(AW.OnCreate, False, ARow);
+      end;
+    finally
+      for D in Found do
+        GQLFreeRowValues(D);
+      Found.Free;
+    end;
+  end;
+
+begin
+  NodesCreated := 0;
+  EdgesCreated := 0;
+  PropsSet := 0;
+  LabelsSet := 0;
+  NodesDeleted := 0;
+  EdgesDeleted := 0;
+  TouchedNodes := TList<TAiRagGraphNode>.Create;
+  TouchedEdges := TList<TAiRagGraphEdge>.Create;
+  DelNodes := TList<TAiRagGraphNode>.Create;
+  DelEdges := TList<TAiRagGraphEdge>.Create;
+  BeginUpdate; // Los índices (nombre, etiqueta) se reconstruyen una vez al final
+  try
+    for W in AQuery.Writes do
+      for Row in ARows do
+        case W.Kind of
+          wkCreate:
+            CreatePattern(W.Pattern, Row);
+          wkMerge:
+            MergePattern(W, Row);
+          wkSet:
+            ApplySetItems(W.Items, False, Row);
+          wkRemove:
+            ApplySetItems(W.Items, True, Row);
+          wkDelete:
+            for DelVar in W.DeleteVars do
+              if Row.TryGetValue(DelVar, Obj) then
+              begin
+                if (Obj is TAiRagGraphNode) and not DelNodes.Contains(TAiRagGraphNode(Obj)) then
+                begin
+                  // Sin DETACH, un nodo con relaciones que no se borran también es un error
+                  if not W.Detach then
+                  begin
+                    Remaining := 0;
+                    for Edge in TAiRagGraphNode(Obj).OutgoingEdges do
+                      if not DelEdges.Contains(Edge) then
+                        Inc(Remaining);
+                    for Edge in TAiRagGraphNode(Obj).IncomingEdges do
+                      if not DelEdges.Contains(Edge) then
+                        Inc(Remaining);
+                    if Remaining > 0 then
+                      raise EGQLParserError.CreateAt(AiFmt('rag.gql.delete_edges', [TAiRagGraphNode(Obj).Name, Remaining]), 0);
+                  end;
+                  DelNodes.Add(TAiRagGraphNode(Obj));
+                end
+                else if (Obj is TAiRagGraphEdge) and not DelEdges.Contains(TAiRagGraphEdge(Obj)) then
+                  DelEdges.Add(TAiRagGraphEdge(Obj));
+              end;
+        end;
+
+    // Borrados al final: primero las relaciones (un nodo borrado se lleva las suyas)
+    for Edge in DelEdges do
+    begin
+      TouchedEdges.Remove(Edge);
+      if Assigned(FDriver) then
+        FDriver.DeleteEdge(Edge.ID); // DeleteEdge del grafo no avisa al driver
+      Self.DeleteEdge(Edge);
+      Inc(EdgesDeleted);
+    end;
+    for Node in DelNodes do
+    begin
+      TouchedNodes.Remove(Node);
+      for Edge in Node.OutgoingEdges do
+        TouchedEdges.Remove(Edge);
+      for Edge in Node.IncomingEdges do
+        TouchedEdges.Remove(Edge);
+      Inc(EdgesDeleted, Node.OutgoingEdges.Count + Node.IncomingEdges.Count);
+      Self.DeleteNode(Node.ID); // Borra sus relaciones y avisa al driver
+      Inc(NodesDeleted);
+    end;
+
+    // Lo modificado: embedding nuevo (si hay motor) y guardado en el driver (upsert)
+    for Node in TouchedNodes do
+    begin
+      Node.Text := GQLNodeEmbeddingText(Node);
+      if Assigned(FEmbeddings) then
+        Node.Data := FEmbeddings.CreateEmbedding(Node.Text, 'user');
+      if Assigned(FDriver) then
+        FDriver.AddNode(Node);
+    end;
+    if Assigned(FDriver) then
+      for Edge in TouchedEdges do
+        FDriver.AddEdge(Edge);
+  finally
+    EndUpdate;
+    DelEdges.Free;
+    DelNodes.Free;
+    TouchedEdges.Free;
+    TouchedNodes.Free;
+  end;
+
+  Result := Format('Nodes created: %d, relationships created: %d, properties set: %d, labels set: %d, ' +
+    'nodes deleted: %d, relationships deleted: %d.', [NodesCreated, EdgesCreated, PropsSet, LabelsSet, NodesDeleted, EdgesDeleted]);
+end;
+
 function TAiRagGraph.Match(AQuery: TGraphMatchQuery; ADepth: Integer = 0): TArray<TDictionary<string, TObject>>;
 var
   Results, NextResults, PartResults: TObjectList<TDictionary<string, TObject>>;
@@ -6875,6 +7297,35 @@ begin
   Result := (MinHops <> 1) or (MaxHops <> 1);
 end;
 
+{ TGQLSetItem }
+
+destructor TGQLSetItem.Destroy;
+begin
+  Expr.Free;
+  inherited;
+end;
+
+{ TGQLWriteClause }
+
+constructor TGQLWriteClause.Create;
+begin
+  inherited;
+  Items := TObjectList<TGQLSetItem>.Create(True);
+  OnCreate := TObjectList<TGQLSetItem>.Create(True);
+  OnMatch := TObjectList<TGQLSetItem>.Create(True);
+  DeleteVars := TList<string>.Create;
+end;
+
+destructor TGQLWriteClause.Destroy;
+begin
+  Pattern.Free;
+  DeleteVars.Free;
+  OnMatch.Free;
+  OnCreate.Free;
+  Items.Free;
+  inherited;
+end;
+
 { TGQLOptionalMatch }
 
 constructor TGQLOptionalMatch.Create;
@@ -6918,6 +7369,7 @@ begin
   FProjections := TObjectList<TGQLProjection>.Create(True);
   FOptionalParts := TObjectList<TGQLOptionalMatch>.Create(True);
   FPaths := TList<TGQLPathDef>.Create;
+  FWrites := TObjectList<TGQLWriteClause>.Create(True);
   FDepth := 0;
 end;
 
@@ -6926,6 +7378,7 @@ begin
   if Assigned(FWhereClause) then
     FWhereClause.Free; // Esto disparar� la liberaci�n en cadena de todo el �rbol
 
+  FWrites.Free;
   FPaths.Free;
   FOptionalParts.Free;
   FProjections.Free;

@@ -36,7 +36,10 @@ comando := SHOW LABELS
 
 consultaMatch := [MATCH] patron { ',' patron } [DEPTH <entero>] [WHERE expr]
                  { OPTIONAL MATCH patron { ',' patron } [WHERE expr] }
+                 { escritura }                                   // solo si el grafo la permite (sección 8c)
                  { WITH proyeccion [WHERE expr] } [RETURN proyeccion]
+escritura := CREATE patron {',' patron} | MERGE patron [ON CREATE SET items] [ON MATCH SET items]
+           | SET items | REMOVE var.prop {',' var.prop} | [DETACH] DELETE var {',' var}
 
 proyeccion := [DISTINCT] ( '*' | item { ',' item } )
               [ORDER BY operando [ASC|DESC] { ',' operando [ASC|DESC] }] [SKIP <entero>] [LIMIT <entero>]
@@ -120,7 +123,8 @@ no al final de la consulta.
 6. **`BETWEEN` incluye los extremos** y su `AND` es parte del operador:
    `p.edad BETWEEN 18 AND 30 AND p.activo = TRUE` es válido.
 7. **Sin `UNION`, `UNWIND`, `CALL` ni subconsultas fuera de `EXISTS { }`.**
-   El lenguaje es **solo lectura**: no existen `CREATE`, `MERGE`, `SET`, `DELETE`.
+   Por defecto el lenguaje es **solo lectura**: `CREATE`, `MERGE`, `SET`, `REMOVE` y `DELETE` existen pero
+   la aplicación tiene que habilitarlos (`AllowWrite`); si no, dan error. No los uses salvo que te lo pidan.
 8. **Cadenas** con comilla simple o doble. Una comilla dentro del texto se dobla (`'O''Brien'`)
    o se escapa (`'O\'Brien'`); también valen `\\`, `\n` y `\t`.
 9. **Claves de propiedades dentro de `{}` van sin comillas** y deben ser identificadores válidos.
@@ -236,6 +240,27 @@ Si el grafo tiene embeddings, `c SIMILAR TO 'texto'` compara el significado del 
 para precisión: `MATCH (c:Producto)-[:TIENE_ACIDEZ]->(:Acidez {name:'Baja'}) WHERE c SIMILAR TO 'notas de chocolate'`.
 Para ordenar por parecido: `RETURN c.name, similarity(c, 'chocolate') AS s ORDER BY s DESC LIMIT 5`.
 Úsalo cuando la pregunta describa algo con palabras (sabores, temas, estilos) y no por un valor exacto.
+
+### 8c. Escritura (solo si la aplicación la habilitó)
+
+Si te piden registrar algo en el grafo y la aplicación lo permite:
+
+```gql
+CREATE (c:Cliente {name: $nombre, ciudad: $ciudad})
+MATCH (c:Cliente {name: $cliente}), (p:Producto {name: $producto}) CREATE (c)-[:COMPRO {cantidad: 2}]->(p)
+MERGE (c:Cliente {name: $nombre}) ON CREATE SET c.visitas = 1 ON MATCH SET c.visitas = c.visitas + 1
+MATCH (p:Producto {name: $producto}) SET p.precio = $precio, p:Agotado
+MATCH (p:Producto {name: $producto}) REMOVE p.descuento
+MATCH (c:Cliente {name: $cliente})-[r:COMPRO]->() DELETE r
+MATCH (c:Cliente {name: $cliente}) DETACH DELETE c
+```
+
+- **Usa siempre `$parametros`** para los valores que vienen del usuario.
+- `CREATE` y `MERGE` reutilizan las variables que ya encontró el `MATCH`; una relación nueva lleva un solo tipo y una flecha.
+- **Prefiere `MERGE` a `CREATE`** cuando el nodo puede existir: busca el patrón completo y solo lo crea si no está.
+- `DELETE` falla si el nodo todavía tiene relaciones; `DETACH DELETE` las borra también. **Una consulta con `DELETE` no lleva `RETURN`.**
+- Sin `RETURN`, la respuesta es un resumen (`Nodes created: 1, relationships created: 0, ...`); con `RETURN`, el resumen y después el resultado.
+- `SET n.id = ...` es error (el id no cambia). Los cambios no se deshacen si una cláusula posterior falla.
 
 ### 9. Ejemplos válidos
 
