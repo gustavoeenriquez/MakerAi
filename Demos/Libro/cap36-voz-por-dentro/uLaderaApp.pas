@@ -1225,11 +1225,13 @@ begin
   Nivel := ToolCall.Params.Values['nivel'].Trim;
   if Nivel <> '' then
     Nivel := UpperCase(Nivel.Substring(0, 1)) + LowerCase(Nivel.Substring(1));   // 'baja' -> 'Baja'
-  // Una consulta de grafo con el parametro del modelo: productos unidos a ese nivel de acidez
-  GQL := Format('MATCH (c:Producto)-[t:TIENE_ACIDEZ]->(a:Acidez) WHERE a.name = ''%s'' RETURN c', [Nivel.Replace('''', '')]);
-  R := Grafo.ExecuteMakerGQL(GQL);
+  // Una consulta de grafo con el parametro del modelo: productos unidos a ese nivel de acidez.
+  // El valor viaja aparte ($nivel): nunca pasa por el lexer, asi que una comilla o un OR
+  // que mande el modelo se comparan como texto y no cambian la consulta.
+  GQL := 'MATCH (c:Producto)-[t:TIENE_ACIDEZ]->(a:Acidez) WHERE a.name = $nivel RETURN c';
+  R := Grafo.ExecuteMakerGQL(GQL, ['nivel', Nivel]);
   ToolCall.Response := R;
-  PasoHerramienta('cafes_por_acidez(' + Nivel + ')', GQL);
+  PasoHerramienta('cafes_por_acidez(' + Nivel + ')', GQL + '   ($nivel = ' + Nivel + ')');
 end;
 
 { La memoria (capitulo 15): lo que cada cliente conto, mas alla de esta conversacion }
