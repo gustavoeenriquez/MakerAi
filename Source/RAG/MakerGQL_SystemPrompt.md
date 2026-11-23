@@ -4,7 +4,8 @@
 > `TAiRagGraph.ExecuteMakerGQL()`. Derivado del código de
 > `uMakerAi.RAG.Graph.GQL.pas` (lexer/parser) y `uMakerAi.RAG.Graph.Core.pas` (ejecutor).
 > Actualizado a la sintaxis posterior a la v4.0.0 (BETWEEN, STARTS/ENDS WITH, NOT, XOR,
-> parámetros `$x`, negativos, comentarios, patrones separados por coma, funciones y aritmética).
+> parámetros `$x`, negativos, comentarios, patrones separados por coma, funciones, aritmética,
+> y `RETURN` con columnas, agregados, `DISTINCT`, `ORDER BY`, `SKIP`, `LIMIT` y `WITH`).
 
 ---
 
@@ -25,7 +26,13 @@ comando := SHOW LABELS
          | GET CENTRALITY nodo
          | GET DEGREES TOP <entero>
 
-consultaMatch := [MATCH] patron { ',' patron } [DEPTH <entero>] [WHERE expr] [RETURN items]
+consultaMatch := [MATCH] patron { ',' patron } [DEPTH <entero>] [WHERE expr]
+                 { WITH proyeccion [WHERE expr] } [RETURN proyeccion]
+
+proyeccion := [DISTINCT] ( '*' | item { ',' item } )
+              [ORDER BY operando [ASC|DESC] { ',' operando [ASC|DESC] }] [SKIP <entero>] [LIMIT <entero>]
+item       := operando [AS alias]          // puede usar agregados
+agregado   := count(*) | count([DISTINCT] x) | sum(x) | avg(x) | min(x) | max(x) | collect(x)
 
 patron := nodo { arista nodo }
 
@@ -52,12 +59,11 @@ factor   := var.prop | var | funcion '(' [operando {',' operando}] ')' | literal
           | '-' factor | '(' expr ')'
 OP := '=' | '<>' | '>' | '>=' | '<' | '<='
 
-items  := item { ',' item } ;  item := var | var.prop | * | COUNT(x) | SUM(x) | AVG(x) | literal  [AS alias]
 ```
 
 ### 2. Orden de cláusulas — OBLIGATORIO
 
-`MATCH` → `DEPTH` → `WHERE` → `RETURN`
+`MATCH` → `DEPTH` → `WHERE` → `WITH ...` → `RETURN` → `ORDER BY` → `SKIP` → `LIMIT`
 
 Cualquier otro orden produce error de sintaxis. En particular **`DEPTH` va ANTES de `WHERE`**,
 no al final de la consulta.
@@ -92,14 +98,14 @@ no al final de la consulta.
    `+` suma si ambos lados son números (aunque estén guardados como texto) y si no **concatena**:
    `n.nombre + ' ' + n.apellido`. Dividir por cero da `NULL`.
 
-   **No existen:** `count(...)` en `WHERE`, `startNode/endNode`, `properties(n)`, expresiones regulares (`=~`),
+   **No existen:** agregados en `WHERE` (usa `WITH x, count(*) AS n WHERE n > 1`), `startNode/endNode`, `properties(n)`, expresiones regulares (`=~`),
    `CASE`, `duration`, `rand()`. Para regex usa `STARTS WITH`, `ENDS WITH`, `CONTAINS` o `LIKE`.
 5. **Listas `IN` / `NOT IN` usan corchetes**, no paréntesis: `p.ciudad IN ['Madrid','Bogotá']`.
    Solo admiten literales (texto, número, booleano, NULL) o un `$parametro`.
 6. **`BETWEEN` incluye los extremos** y su `AND` es parte del operador:
    `p.edad BETWEEN 18 AND 30 AND p.activo = TRUE` es válido.
-7. **Sin `LIMIT`, `ORDER BY`, `SKIP`, `DISTINCT`, `OPTIONAL MATCH`, `WITH`, `UNION`, ni patrones de longitud
-   variable (`*1..3`).** El lenguaje es **solo lectura**: no existen `CREATE`, `MERGE`, `SET`, `DELETE`.
+7. **Sin `OPTIONAL MATCH`, `UNION`, `UNWIND`, ni patrones de longitud variable (`*1..3`).**
+   El lenguaje es **solo lectura**: no existen `CREATE`, `MERGE`, `SET`, `DELETE`.
 8. **Cadenas** con comilla simple o doble. Una comilla dentro del texto se dobla (`'O''Brien'`)
    o se escapa (`'O\'Brien'`); también valen `\\`, `\n` y `\t`.
 9. **Claves de propiedades dentro de `{}` van sin comillas** y deben ser identificadores válidos.
@@ -108,9 +114,22 @@ no al final de la consulta.
     LIKE, ILIKE, IN, IS, SUM, AVG, COUNT, DEPTH, SHORTEST, PATH, TO, GET, CENTRALITY, DEGREES, TOP`.
     Después del punto sí se aceptan (`n.count`), `labels(n)` funciona como función,
     y `BETWEEN`, `XOR`, `STARTS`, `ENDS`, `WITH` no son reservadas.
-11. **`RETURN` es opcional y decorativo**: se valida sintácticamente pero no altera el resultado
-    (siempre se devuelve el subgrafo coincidente). `COUNT/SUM/AVG` se parsean pero **no calculan nada**.
-    Prefiere omitir `RETURN` o mantenerlo simple.
+11. **Dos formas de resultado:**
+    - Sin `RETURN`, o con `RETURN` de **solo variables** (`RETURN c`, `RETURN c, a`, `RETURN *`):
+      el subgrafo encontrado como **texto de contexto** (nodos, propiedades y relaciones). Lo mejor para
+      dar contexto a una respuesta. Admite `DEPTH`.
+    - `RETURN` con propiedades, funciones, alias, agregados, `DISTINCT`, `ORDER BY`, `SKIP`, `LIMIT`, o un `WITH`:
+      una **tabla** (Markdown, una fila por resultado, con `(N rows)` al final). Lo mejor para listar, contar,
+      sumar, ordenar o traer los N primeros. `DEPTH` no aplica aquí.
+    - **Agregados y agrupación:** las columnas sin agregado agrupan (`RETURN a.name, count(*)` = una fila por
+      `a.name`). Sin columnas de agrupación, una sola fila (`RETURN count(*)` da 0 si no hay nada).
+      `count(*)` cuenta filas; `count(x)` cuenta valores no nulos; `collect(x)` da la lista.
+    - `ORDER BY` puede usar alias, propiedades o agregados (`ORDER BY count(*) DESC`); los `NULL` van al
+      final en `ASC`. Un nodo se ordena y se muestra por su nombre.
+    - **`WITH`** es una etapa intermedia con la misma sintaxis que `RETURN`; su `WHERE` filtra sobre sus
+      columnas (el `HAVING` de SQL). Después de un `WITH` solo existen sus columnas.
+    - Nombre de columna: el alias, o el texto de la expresión (`c.name`, `count(*)`). Dos columnas con el
+      mismo nombre son error: usa `AS`.
 12. Se admiten comentarios `// ...` y `/* ... */` y un `;` final, pero no son necesarios.
 
 ### 4. Propiedades disponibles
@@ -217,6 +236,23 @@ WHERE coalesce(p.apodo, p.name) STARTS WITH 'Gus' AND year(p.fecha_ingreso) >= 2
 ```
 
 ```gql
+MATCH (c:Producto)-[:TIENE_ACIDEZ]->(a:Acidez)
+RETURN a.name AS acidez, count(*) AS cafes, round(avg(c.precio)) AS precio_medio
+ORDER BY cafes DESC
+```
+
+```gql
+MATCH (p:Persona)-[:TRABAJA_EN]->(e:Empresa)
+WITH e, count(p) AS empleados
+WHERE empleados >= 10
+RETURN e.name AS empresa, empleados ORDER BY empleados DESC LIMIT 5
+```
+
+```gql
+MATCH (c:Producto) RETURN DISTINCT c.origen ORDER BY c.origen
+```
+
+```gql
 SHOW LABELS
 ```
 
@@ -237,7 +273,10 @@ SHORTEST PATH (:Persona {name:'Steve Jobs'}) TO (:Ciudad {name:'Cupertino'})
 | `WHERE substring(n.name, 1, 3) = 'Ana'` | `substring` empieza en 0: `substring(n.name, 0, 3)` |
 | `WHERE p.ciudad IN ('A','B')` | `WHERE p.ciudad IN ['A','B']` |
 | `WHERE p.edad >= 18 AND <= 30` | `WHERE p.edad BETWEEN 18 AND 30` |
-| `MATCH (p) LIMIT 10` | `GET DEGREES TOP 10` u omitir el límite |
+| `MATCH (p) LIMIT 10` | `MATCH (p) RETURN p.name LIMIT 10` (`LIMIT` va dentro de `RETURN`) |
+| `MATCH (p) WHERE count(*) > 2` | `MATCH (p)-[]->(x) WITH p, count(*) AS n WHERE n > 2 RETURN p.name, n` |
+| `RETURN p.name, p.name` | `RETURN p.name AS nombre, p.name AS otro` (columnas con nombre distinto) |
+| `... RETURN p ORDER BY p.name ... DEPTH 2` | `DEPTH` no sirve con una tabla: quítalo o devuelve solo variables |
 | `GET SHORTEST PATH (a) TO (b)` | `SHORTEST PATH (a) TO (b)` |
 | `MATCH (n {"name": "Ana"})` | `MATCH (n {name: 'Ana'})` |
 

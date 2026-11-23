@@ -119,6 +119,9 @@ type
     FCurrent: TToken;
     FParams: TDictionary<string, Variant>; // Parámetros $nombre (no es dueño)
     FAnonCount: Integer;
+    FPrevEnd: Integer; // Posición donde terminó el último token consumido
+    FAllowAggregates: Boolean; // Dentro de RETURN/WITH/ORDER BY
+    FScope: TList<string>; // Variables con nombre visibles (para RETURN *)
     FNodeVariables: TDictionary<string, TMatchNodePattern>;
     FCommandType: TGraphCommandType;
     FCommandSourcePattern: TMatchNodePattern;
@@ -157,7 +160,8 @@ type
 
     procedure ParseMatchClause(AQuery: TGraphMatchQuery);
     procedure ParseWhereClause(AQuery: TGraphMatchQuery);
-    procedure ParseReturnClause(AQuery: TGraphMatchQuery);
+    function ParseProjection(AIsReturn: Boolean): TGQLProjection;
+    function ParseAggregate(const AName: string; APosition: Integer): TGraphExpression;
     procedure ClearCommandPatterns;
 
   public
@@ -643,12 +647,14 @@ begin
   FCommandTargetPattern := nil;
   FCommandLimit := 0;
   FAnonCount := 0;
+  FScope := TList<string>.Create;
   Next;
 end;
 
 destructor TGraphParser.Destroy;
 begin
   ClearCommandPatterns;
+  FScope.Free;
   FNodeVariables.Free;
   FLexer.Free;
   inherited;
@@ -664,6 +670,7 @@ end;
 
 procedure TGraphParser.Next;
 begin
+  FPrevEnd := FLexer.FPos;
   FCurrent := FLexer.NextToken;
 end;
 
@@ -870,6 +877,8 @@ begin
     Result.Variable := VarName;
     Result.NodeLabel := LblName;
     FNodeVariables.Add(VarName, Result);
+    if not VarName.StartsWith('#') then
+      FScope.Add(VarName);
     AQuery.AddNodePattern(Result);
   end;
 
@@ -896,7 +905,11 @@ begin
   try
     // Variable de arista opcional [r]
     if FCurrent.Kind = tkIdentifier then
+    begin
       Result.Variable := GetTokenTextAndNext;
+      if not FScope.Contains(Result.Variable) then
+        FScope.Add(Result.Variable);
+    end;
 
     // Tipo de relación opcional [:KNOWS]
     if FCurrent.Kind = tkColon then
@@ -1282,10 +1295,20 @@ begin
           P := TakePropertyKey;
           Result := TPropertyExpr.Create(V, P);
         end
+        else if (FCurrent.Kind = tkLParen) and (SameText(V, 'min') or SameText(V, 'max') or SameText(V, 'collect')) then
+          Result := ParseAggregate(V, TokPos)
         else if FCurrent.Kind = tkLParen then
           Result := ParseFunctionCall(V, TokPos)
         else
           Result := TVariableExpr.Create(V);
+      end;
+
+    // count(...), sum(...), avg(...): palabras reservadas
+    tkCount, tkSum, tkAvg:
+      begin
+        TokPos := FCurrent.Position;
+        V := GetTokenTextAndNext;
+        Result := ParseAggregate(V, TokPos);
       end;
 
     // labels(n): LABELS es palabra reservada (SHOW LABELS)
@@ -1413,77 +1436,183 @@ begin
   Result := Func;
 end;
 
-Procedure TGraphParser.ParseReturnClause(AQuery: TGraphMatchQuery);
+function TGraphParser.ParseAggregate(const AName: string; APosition: Integer): TGraphExpression;
+var
+  Func: TAggregateFunc;
+  Distinct: Boolean;
+  Arg: TGraphExpression;
+  U: string;
 begin
-  Expect(tkReturn);
+  // Solo en RETURN, WITH y ORDER BY; y sin anidar (count(sum(x)) no tiene sentido)
+  if not FAllowAggregates then
+    raise EGQLParserError.CreateAt(AiFmt('rag.gql.aggregate_context', [AName, APosition]), APosition);
 
-  // Verificar que haya al menos un elemento
-  if FCurrent.Kind in [tkEOF, tkSemicolon] then
-    raise EGQLParserError.CreateAt(AiStr('rag.gql.return_expr'), FCurrent.Position);
+  U := LowerCase(AName);
+  if U = 'count' then
+    Func := agCount
+  else if U = 'sum' then
+    Func := agSum
+  else if U = 'avg' then
+    Func := agAvg
+  else if U = 'min' then
+    Func := agMin
+  else if U = 'max' then
+    Func := agMax
+  else
+    Func := agCollect;
 
-  while True do
+  Expect(tkLParen);
+  Distinct := IsWord('DISTINCT');
+  if Distinct then
+    Next;
+
+  Arg := nil;
+  if (Func = agCount) and (FCurrent.Kind = tkAsterisk) then
+    Next // count(*)
+  else
   begin
-    // --- CASO A: Funciones agregadas (COUNT, SUM, AVG) ---
-    if FCurrent.Kind in [tkCount, tkSum, tkAvg] then
-    begin
-      Next; // Consumir función
-      Expect(tkLParen);
+    FAllowAggregates := False;
+    try
+      Arg := ParseExpression;
+    finally
+      FAllowAggregates := True;
+    end;
+  end;
 
-      // argumento puede ser variable (p), propiedad (p.valor) o * (todo)
-      if FCurrent.Kind = tkIdentifier then
-      begin
-        Next; // Consumir identificador (p)
-        if FCurrent.Kind = tkDot then
-        begin
-          Next; // Consumir el punto
-          TakePropertyKey;
-        end;
-      end
-      else if FCurrent.Kind = tkAsterisk then
-        Next // Consumir *
-      else
-        raise EGQLParserError.CreateAt(AiStr('rag.gql.function_arg'), FCurrent.Position);
+  try
+    Expect(tkRParen);
+  except
+    Arg.Free;
+    raise;
+  end;
+  Result := TAggregateExpr.Create(Func, Arg, Distinct);
+end;
 
-      Expect(tkRParen);
-    end
-    // --- CASO B: Identificador Simple o Acceso a Propiedad ---
-    else if FCurrent.Kind = tkIdentifier then
-    begin
-      Next; // Consumir el identificador
+function TGraphParser.ParseProjection(AIsReturn: Boolean): TGQLProjection;
+var
+  Item: TGQLReturnItem;
+  Order: TGQLOrderItem;
+  StartPos: Integer;
+  Name: string;
+  Other: TGQLReturnItem;
 
-      if FCurrent.Kind = tkDot then
-      begin
-        Next; // Consumir el punto
-        TakePropertyKey;
-      end;
-    end
-    // --- CASO C: Literales, parámetros y RETURN * ---
-    else if FCurrent.Kind in [tkString, tkNumber, tkBoolean, tkNull, tkParameter, tkAsterisk] then
+  function ParseWithAggregates: TGraphExpression;
+  begin
+    FAllowAggregates := True;
+    try
+      Result := ParseExpression;
+    finally
+      FAllowAggregates := False;
+    end;
+  end;
+
+begin
+  Result := TGQLProjection.Create;
+  try
+    Result.IsReturn := AIsReturn;
+
+    if IsWord('DISTINCT') then
     begin
+      Result.Distinct := True;
       Next;
-    end
-    else
-      raise EGQLParserError.CreateAt(AiFmt('rag.gql.invalid_return', [FCurrent.Text]), FCurrent.Position);
-
-    // --- SOPORTE PARA ALIAS "AS" ---
-    if IsWord('AS') then
-    begin
-      Next; // Consumir 'AS'
-      Expect(tkIdentifier); // Consumir alias
     end;
 
-    // --- SEPARADOR: Coma ',' ---
-    if FCurrent.Kind = tkComma then
-      Next // Consumir coma
+    if FCurrent.Kind in [tkEOF, tkSemicolon] then
+      raise EGQLParserError.CreateAt(AiStr('rag.gql.return_expr'), FCurrent.Position);
+
+    if FCurrent.Kind = tkAsterisk then
+    begin
+      // RETURN * / WITH *: todas las variables con nombre visibles en este punto
+      Next;
+      for Name in FScope do
+      begin
+        Item := TGQLReturnItem.Create;
+        Result.Items.Add(Item);
+        Item.Expr := TVariableExpr.Create(Name);
+        Item.Name := Name;
+      end;
+    end
     else
-      Break;
-  end; // Fin del WHILE
+      while True do
+      begin
+        StartPos := FCurrent.Position;
+        Item := TGQLReturnItem.Create;
+        Result.Items.Add(Item);
+        Item.Expr := ParseWithAggregates;
+
+        if IsWord('AS') then
+        begin
+          Next;
+          Item.Name := FCurrent.Text;
+          Expect(tkIdentifier);
+        end
+        else
+          Item.Name := Trim(Copy(FLexer.FText, StartPos, FPrevEnd - StartPos)); // el texto tal cual: c.name, count(*)
+
+        for Other in Result.Items do
+          if (Other <> Item) and SameText(Other.Name, Item.Name) then
+            raise EGQLParserError.CreateAt(AiFmt('rag.gql.duplicate_column', [Item.Name]), StartPos);
+
+        if FCurrent.Kind = tkComma then
+          Next
+        else
+          Break;
+      end;
+
+    // ORDER BY expr [ASC|DESC] {, ...}
+    if IsWord('ORDER') then
+    begin
+      Next;
+      ExpectWord('BY');
+      while True do
+      begin
+        Order := TGQLOrderItem.Create;
+        Result.OrderBy.Add(Order);
+        Order.Expr := ParseWithAggregates;
+        if IsWord('DESC') or IsWord('DESCENDING') then
+        begin
+          Order.Descending := True;
+          Next;
+        end
+        else if IsWord('ASC') or IsWord('ASCENDING') then
+          Next;
+        if FCurrent.Kind = tkComma then
+          Next
+        else
+          Break;
+      end;
+    end;
+
+    if IsWord('SKIP') then
+    begin
+      Next;
+      Result.Skip := ParseIntegerValue(AiFmt('rag.gql.expected', ['tkNumber', FCurrent.Text, FCurrent.Position]));
+    end;
+
+    if IsWord('LIMIT') then
+    begin
+      Next;
+      Result.Limit := ParseIntegerValue(AiFmt('rag.gql.expected', ['tkNumber', FCurrent.Text, FCurrent.Position]));
+    end;
+
+    // WITH ... WHERE: filtra sobre las columnas (n > 1 después de count(*) AS n)
+    if (not AIsReturn) and (FCurrent.Kind = tkWhere) then
+    begin
+      Next;
+      Result.Where := ParseExpression;
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 function TGraphParser.Parse: TGraphMatchQuery;
 var
   TempQuery: TGraphMatchQuery;
   Src, Dst: TMatchNodePattern;
+  Stage: TGQLProjection;
+  Item: TGQLReturnItem;
 begin
   Result := nil;
   FCommandType := cmdNone;
@@ -1580,9 +1709,36 @@ begin
     if FCurrent.Kind = tkWhere then
       ParseWhereClause(Result);
 
-    // 6. RETURN (Opcional)
+    // 6. WITH ... (etapas) y RETURN
+    while IsWord('WITH') do
+    begin
+      Next;
+      Stage := ParseProjection(False);
+      Result.Projections.Add(Stage);
+      // Después de un WITH solo se ven sus columnas
+      FScope.Clear;
+      for Item in Stage.Items do
+        FScope.Add(Item.Name);
+    end;
     if FCurrent.Kind = tkReturn then
-      ParseReturnClause(Result);
+    begin
+      Next;
+      Result.Projections.Add(ParseProjection(True));
+    end
+    else if Result.Projections.Count > 0 then
+      raise EGQLParserError.CreateAt(AiStr('rag.gql.with_return'), FCurrent.Position);
+
+    // Tabla si hay WITH, o un RETURN que no sea solo variables (RETURN c, p sigue dando el
+    // texto de contexto del subgrafo, como antes)
+    Result.Tabular := Result.Projections.Count > 1;
+    if Result.Projections.Count = 1 then
+    begin
+      Stage := Result.Projections[0];
+      Result.Tabular := Stage.Distinct or (Stage.OrderBy.Count > 0) or (Stage.Skip >= 0) or (Stage.Limit >= 0);
+      for Item in Stage.Items do
+        if not((Item.Expr is TVariableExpr) and (TVariableExpr(Item.Expr).Variable = Item.Name)) then
+          Result.Tabular := True;
+    end;
 
     // 7. Fin de la consulta (admite ; final)
     ExpectEnd;

@@ -578,6 +578,28 @@ begin
       'Alta,Ana|Alta|Alta,Baja|Huila Reserva,Narino Alto|Huila Reserva|Huila Reserva|' +
       'error:EGQLParserError|error:EGQLParserError|error:EGQLParserError');
 
+  FRunner.AddCase('rag.gql.return')
+    .Input('rag:gql:return')
+    .ExpectEquals('| c.name | c.precio |/|---|---|/| Huila Reserva | 42000.5 |/| Narino Alto | 38000 |/| Tolima Suave | 25000 |/(3 rows)#' +
+      '| c |/|---|/| Tolima Suave |/| Narino Alto |/(2 rows)#' +
+      'Narino Alto,Tolima Suave#' +
+      '| a.name |/|---|/| Alta |/| Baja |/(2 rows)#' +
+      '| cafe |/|---|/| Narino Alto |/(1 rows)');
+
+  FRunner.AddCase('rag.gql.aggregate')
+    .Input('rag:gql:aggregate')
+    .ExpectEquals('| acidez | n | total | cafes |/|---|---|---|---|/| Alta | 2 | 80000.5 | [Huila Reserva, Narino Alto] |/' +
+      '| Baja | 1 | 25000 | [Tolima Suave] |/(2 rows)#' +
+      '| n | media | minimo | ultimo |/|---|---|---|---|/| 3 | 35000 | 25000 | Tolima Suave |/(1 rows)#' +
+      '| n |/|---|/| 0 |/(1 rows)#' +
+      '| a.name |/|---|/| Alta |/(1 rows)#' +
+      '| niveles |/|---|/| 2 |/(1 rows)');
+
+  FRunner.AddCase('rag.gql.with')
+    .Input('rag:gql:with')
+    .ExpectEquals('| acidez | n |/|---|---|/| Alta | 2 |/(1 rows)#False#False#' +
+      'error:EGQLParserError#error:EGQLParserError#error:EGQLParserError#error:EGQLParserError');
+
   FRunner.AddCase('rag.gql.arith')
     .Input('rag:gql:arith')
     .ExpectEquals('Huila Reserva|Tolima Suave|Narino Alto|Huila Reserva|Tolima Suave|Huila Reserva||' +
@@ -5438,6 +5460,24 @@ var
     end;
   end;
 
+  // Texto del resultado (la tabla) con las lineas unidas por '/'; 'error:<Clase>' si falla
+  function Tab(const ACode: string; const AParams: array of Variant): string;
+  var
+    Rows: TArray<TDictionary<string, TObject>>;
+  begin
+    Rows := nil;
+    try
+      try
+        Result := G.ExecuteMakerGQL(ACode, AParams, Rows).Replace(sLineBreak, '/');
+      except
+        on E: Exception do
+          Result := 'error:' + E.ClassName;
+      end;
+    finally
+      TAiRagGraph.FreeGQLResults(Rows);
+    end;
+  end;
+
   function RowCount(const ACode: string): string;
   var
     Rows: TArray<TDictionary<string, TObject>>;
@@ -5551,6 +5591,30 @@ begin
         Q('MATCH (c:Producto) WHERE -c.precio < -40000', []) + '|' +
         Q('MATCH (c:Producto) WHERE round(c.precio / 1000) = 42 OR round(2.5) = 3 AND c.origen = ''Tolima''', []) + '|' +
         Q('MATCH (c:Producto) WHERE ''P'' + c.precio = ''P42000.5'' OR toString(c.precio) = ''25000''', [])
+    else if Id = 'return' then
+      // Fase 4: columnas con ORDER BY; nodos devueltos como objetos con LIMIT; DISTINCT, SKIP y LIMIT $n
+      Result := Tab('MATCH (c:Producto) RETURN c.name, c.precio ORDER BY c.precio DESC', []) + '#' +
+        Tab('MATCH (c:Producto) RETURN c ORDER BY c.name DESC LIMIT 2', []) + '#' +
+        Q('MATCH (c:Producto) RETURN c ORDER BY c.name DESC LIMIT 2', []) + '#' +
+        Tab('MATCH (c:Producto)-[:TIENE_ACIDEZ]->(a) RETURN DISTINCT a.name ORDER BY a.name', []) + '#' +
+        Tab('MATCH (c:Producto) RETURN c.name AS cafe ORDER BY cafe SKIP 1 LIMIT $n', ['n', 1])
+    else if Id = 'aggregate' then
+      // Fase 4: agrupacion implicita, agregados globales, count sobre nada = 0, ORDER BY con agregado
+      Result := Tab('MATCH (c:Producto)-[:TIENE_ACIDEZ]->(a:Acidez) RETURN a.name AS acidez, count(*) AS n, ' +
+        'sum(c.precio) AS total, collect(c.name) AS cafes ORDER BY n DESC', []) + '#' +
+        Tab('MATCH (c:Producto) RETURN count(*) AS n, round(avg(c.precio)) AS media, min(c.precio) AS minimo, max(c.name) AS ultimo', []) + '#' +
+        Tab('MATCH (c:Producto) WHERE c.precio > 99999 RETURN count(*) AS n', []) + '#' +
+        Tab('MATCH (c:Producto)-[:TIENE_ACIDEZ]->(a) RETURN a.name ORDER BY count(*) DESC LIMIT 1', []) + '#' +
+        Tab('MATCH (c:Producto)-[:TIENE_ACIDEZ]->(a) RETURN count(DISTINCT a) AS niveles', [])
+    else if Id = 'with' then
+      // Fase 4: WITH ... WHERE (el HAVING de SQL); RETURN de variables sigue dando el texto de contexto
+      Result := Tab('MATCH (c:Producto)-[:TIENE_ACIDEZ]->(a:Acidez) WITH a, count(c) AS n WHERE n > 1 RETURN a.name AS acidez, n', []) + '#' +
+        BoolToStr(Tab('MATCH (c:Producto)-[t:TIENE_ACIDEZ]->(a:Acidez) WHERE a.name = ''Baja'' RETURN c', []).StartsWith('|'), True) + '#' +
+        BoolToStr(Tab('MATCH (c:Producto) RETURN *', []).StartsWith('|'), True) + '#' +
+        Tab('MATCH (c:Producto) WHERE count(*) > 1', []) + '#' +
+        Tab('MATCH (c:Producto) WITH c', []) + '#' +
+        Tab('MATCH (c:Producto) RETURN c.name, c.name', []) + '#' +
+        Tab('MATCH (c:Producto) RETURN count(sum(c.precio))', [])
     else
       raise Exception.Create('Escenario GQL desconocido: ' + AScenario);
   finally

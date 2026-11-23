@@ -55,7 +55,7 @@ type
   // --------- CLASES PARA EL PARSER --------------------------------
 
   { Enumeraciones para el �rbol de Expresiones }
-  TExpressionKind = (ekLiteral, ekProperty, ekBinary, ekUnary, ekBetween, ekVariable, ekFunction);
+  TExpressionKind = (ekLiteral, ekProperty, ekBinary, ekUnary, ekBetween, ekVariable, ekFunction, ekAggregate);
 
   TBinaryOp = (
     // L�gicos
@@ -137,6 +137,49 @@ type
     Name: string;
     Args: TObjectList<TGraphExpression>; // Es dueña de los argumentos
     constructor Create(const AName: string);
+    destructor Destroy; override;
+  end;
+
+  { Agregado de RETURN/WITH/ORDER BY: count(*), count(DISTINCT x), sum, avg, min, max, collect.
+    Value lo llena el ejecutor por grupo antes de evaluar la columna. }
+  TAggregateFunc = (agCount, agSum, agAvg, agMin, agMax, agCollect);
+
+  TAggregateExpr = class(TGraphExpression)
+  public
+    Func: TAggregateFunc;
+    Arg: TGraphExpression; // nil = count(*)
+    Distinct: Boolean;
+    Value: Variant;
+    constructor Create(AFunc: TAggregateFunc; AArg: TGraphExpression; ADistinct: Boolean);
+    destructor Destroy; override;
+  end;
+
+  { Columna de RETURN/WITH: expresión y nombre (el alias o el texto de la expresión) }
+  TGQLReturnItem = class
+  public
+    Expr: TGraphExpression;
+    Name: string;
+    destructor Destroy; override;
+  end;
+
+  TGQLOrderItem = class
+  public
+    Expr: TGraphExpression;
+    Descending: Boolean;
+    destructor Destroy; override;
+  end;
+
+  { Una etapa WITH o el RETURN final }
+  TGQLProjection = class
+  public
+    IsReturn: Boolean;
+    Distinct: Boolean;
+    Items: TObjectList<TGQLReturnItem>;
+    OrderBy: TObjectList<TGQLOrderItem>;
+    Skip: Integer; // -1 = sin SKIP
+    Limit: Integer; // -1 = sin LIMIT
+    Where: TGraphExpression; // Solo en WITH (se evalúa sobre las columnas)
+    constructor Create;
     destructor Destroy; override;
   end;
 
@@ -240,6 +283,8 @@ type
     FMatchClauses: TObjectList<TMatchClause>;
     FWhereClause: TGraphExpression;
     FDepth: Integer; // Es due�o de las cl�usulas
+    FProjections: TObjectList<TGQLProjection>;
+    FTabular: Boolean;
     function GetNodePatternByVariable(const AVar: string): TMatchNodePattern;
   public
     constructor Create;
@@ -251,12 +296,25 @@ type
     property NodePatternByVariable[const AVar: string]: TMatchNodePattern read GetNodePatternByVariable;
     property WhereClause: TGraphExpression read FWhereClause write FWhereClause;
     property Depth: Integer read FDepth write FDepth;
+    // Etapas WITH ... y RETURN, en orden
+    property Projections: TObjectList<TGQLProjection> read FProjections;
+    // True: el resultado es una tabla (RETURN con columnas, agregados, DISTINCT, ORDER BY, SKIP, LIMIT o WITH).
+    // False: el subgrafo encontrado como texto de contexto, como siempre.
+    property Tabular: Boolean read FTabular write FTabular;
   end;
 
   TStringWrapper = class(TObject)
   public
     Value: string;
     constructor Create(const AValue: string);
+  end;
+
+  { Valor de una columna en un resultado tabular de MakerGQL: Value tiene el texto (sin depender
+    del idioma) y Data el valor original. FreeGQLResults lo libera como cualquier TStringWrapper. }
+  TGQLValue = class(TStringWrapper)
+  public
+    Data: Variant;
+    constructor CreateValue(const AData: Variant);
   end;
 
   TNodeDataRecord = record // O usa TJSONObject
@@ -426,6 +484,7 @@ type
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     function EvaluateGraphExpression(AExpr: TGraphExpression; ABoundElements: TDictionary<string, TObject>): Variant;
     function EvaluateGQLFunction(AFunc: TFunctionExpr; ABoundElements: TDictionary<string, TObject>): Variant;
+    function RunGQLProjection(AStage: TGQLProjection; const AInput: TArray<TDictionary<string, TObject>>): TArray<TDictionary<string, TObject>>;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -1215,6 +1274,7 @@ end;
 function GQLToText(const V: Variant): string;
 var
   Dt: TDateTime;
+  I: Integer;
 begin
   if GQLIsNull(V) then
     Exit('');
@@ -1228,6 +1288,17 @@ begin
     else
       Exit(FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Dt, TFormatSettings.Invariant));
   end;
+  if VarIsArray(V) then
+  begin
+    Result := '[';
+    for I := VarArrayLowBound(V, 1) to VarArrayHighBound(V, 1) do
+    begin
+      if I > VarArrayLowBound(V, 1) then
+        Result := Result + ', ';
+      Result := Result + GQLToText(V[I]);
+    end;
+    Exit(Result + ']');
+  end;
   if VarIsNumeric(V) then
     Exit(FloatToStr(Double(V), TFormatSettings.Invariant));
   Result := VarToStr(V);
@@ -1240,6 +1311,500 @@ begin
   Result := VarArrayCreate([0, Length(AItems) - 1], varVariant);
   for I := 0 to High(AItems) do
     Result[I] := AItems[I];
+end;
+
+// ---------------------------------------------------------------------------
+// MakerGQL: proyección (WITH / RETURN) y resultado en tabla
+// ---------------------------------------------------------------------------
+
+// Clave de un valor para agrupar y para DISTINCT (3 y 3.0 son el mismo número)
+function GQLValueKey(const V: Variant): string;
+var
+  D: Double;
+begin
+  if GQLIsNull(V) then
+    Result := 'null'
+  else if VarIsType(V, varBoolean) then
+    Result := 'b:' + GQLBoolText(V)
+  else if GQLTryNumber(V, D) and not VarIsStr(V) then
+    Result := 'n:' + FloatToStr(D, TFormatSettings.Invariant)
+  else
+    Result := 's:' + GQLToText(V);
+end;
+
+// Clave de una celda: identidad para nodos y aristas, valor para el resto
+function GQLCellKey(AObj: TObject): string;
+begin
+  if AObj = nil then
+    Result := 'null'
+  else if AObj is TGQLValue then
+    Result := GQLValueKey(TGQLValue(AObj).Data)
+  else
+    Result := 'o:' + IntToHex(NativeUInt(AObj), SizeOf(Pointer) * 2);
+end;
+
+function GQLCellText(AObj: TObject): string;
+begin
+  if AObj = nil then
+    Result := ''
+  else if AObj is TGQLValue then
+    Result := GQLToText(TGQLValue(AObj).Data)
+  else if AObj is TAiRagGraphNode then
+    Result := TAiRagGraphNode(AObj).Name
+  else if AObj is TAiRagGraphEdge then
+    Result := TAiRagGraphEdge(AObj).EdgeLabel
+  else if AObj is TStringWrapper then
+    Result := TStringWrapper(AObj).Value
+  else
+    Result := '';
+end;
+
+// Tabla Markdown (la lee bien un LLM) con las columnas de la última etapa
+function GQLRowsToText(AStage: TGQLProjection; const ARows: TArray<TDictionary<string, TObject>>): string;
+var
+  SB: TStringBuilder;
+  Item: TGQLReturnItem;
+  Row: TDictionary<string, TObject>;
+  Obj: TObject;
+
+  function Esc(const S: string): string;
+  begin
+    Result := S.Replace('|', '\|').Replace(#13#10, ' ').Replace(#10, ' ').Replace(#13, ' ');
+  end;
+
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.Append('|');
+    for Item in AStage.Items do
+      SB.Append(' ').Append(Esc(Item.Name)).Append(' |');
+    SB.AppendLine;
+    SB.Append('|');
+    for Item in AStage.Items do
+      SB.Append('---|');
+    SB.AppendLine;
+    for Row in ARows do
+    begin
+      SB.Append('|');
+      for Item in AStage.Items do
+      begin
+        if not Row.TryGetValue(Item.Name, Obj) then
+          Obj := nil;
+        SB.Append(' ').Append(Esc(GQLCellText(Obj))).Append(' |');
+      end;
+      SB.AppendLine;
+    end;
+    SB.Append('(').Append(Length(ARows)).Append(' rows)');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+type
+  TGQLOutRow = record
+    Row: TDictionary<string, TObject>;
+    Sort: TArray<Variant>;
+    Index: Integer;
+  end;
+
+function TAiRagGraph.RunGQLProjection(AStage: TGQLProjection; const AInput: TArray<TDictionary<string, TObject>>)
+  : TArray<TDictionary<string, TObject>>;
+var
+  Aggs: TList<TAggregateExpr>;
+  Outs: TList<TGQLOutRow>;
+  GroupIdx: TDictionary<string, Integer>;
+  Groups: TObjectList<TList<TDictionary<string, TObject>>>;
+  Group: TList<TDictionary<string, TObject>>;
+  Empty, InRow, First: TDictionary<string, TObject>;
+  CellObj: TObject;
+  Item: TGQLReturnItem;
+  Order: TGQLOrderItem;
+  Agg: TAggregateExpr;
+  OR1: TGQLOutRow;
+  Seen: TDictionary<string, Boolean>;
+  Key: string;
+  HasKeyItems: Boolean;
+  I, FromIdx, ToIdx: Integer;
+
+  procedure FreeRow(ARow: TDictionary<string, TObject>);
+  var
+    A: TArray<TDictionary<string, TObject>>;
+  begin
+    A := [ARow];
+    TAiRagGraph.FreeGQLResults(A);
+  end;
+
+  procedure CollectAggs(E: TGraphExpression);
+  var
+    X: TGraphExpression;
+  begin
+    if E = nil then
+      Exit;
+    case E.Kind of
+      ekAggregate:
+        Aggs.Add(TAggregateExpr(E)); // No se anidan: el parser lo impide
+      ekBinary:
+        begin
+          CollectAggs(TBinaryExpr(E).Left);
+          CollectAggs(TBinaryExpr(E).Right);
+        end;
+      ekUnary:
+        CollectAggs(TUnaryExpr(E).Operand);
+      ekBetween:
+        begin
+          CollectAggs(TBetweenExpr(E).Value);
+          CollectAggs(TBetweenExpr(E).Low);
+          CollectAggs(TBetweenExpr(E).High);
+        end;
+      ekFunction:
+        for X in TFunctionExpr(E).Args do
+          CollectAggs(X);
+    end;
+  end;
+
+  function HasAgg(E: TGraphExpression): Boolean;
+  var
+    Before: Integer;
+  begin
+    Before := Aggs.Count;
+    CollectAggs(E);
+    Result := Aggs.Count > Before;
+    Aggs.Count := Before;
+  end;
+
+  // Variable enlazada a un nodo o arista (no a un valor): se conserva el objeto
+  function BoundElement(E: TGraphExpression; ABind: TDictionary<string, TObject>; out AObj: TObject): Boolean;
+  begin
+    Result := (E is TVariableExpr) and ABind.TryGetValue(TVariableExpr(E).Variable, AObj) and (AObj <> nil) and
+      not(AObj is TStringWrapper);
+  end;
+
+  function MakeCell(E: TGraphExpression; ABind: TDictionary<string, TObject>): TObject;
+  var
+    Obj: TObject;
+  begin
+    if BoundElement(E, ABind, Obj) then
+      Result := Obj // Nodo o arista del grafo: no es dueña
+    else if (E is TVariableExpr) and ABind.TryGetValue(TVariableExpr(E).Variable, Obj) and (Obj is TGQLValue) then
+      Result := TGQLValue.CreateValue(TGQLValue(Obj).Data)
+    else
+      Result := TGQLValue.CreateValue(EvaluateGraphExpression(E, ABind));
+  end;
+
+  // Valor para ordenar: un nodo por su nombre, una arista por su tipo
+  function SortValue(E: TGraphExpression; ABind: TDictionary<string, TObject>): Variant;
+  var
+    Obj: TObject;
+  begin
+    if BoundElement(E, ABind, Obj) then
+      Result := GQLCellText(Obj)
+    else
+      Result := EvaluateGraphExpression(E, ABind);
+  end;
+
+  function ExprKey(E: TGraphExpression; ABind: TDictionary<string, TObject>): string;
+  var
+    Obj: TObject;
+  begin
+    if BoundElement(E, ABind, Obj) then
+      Result := GQLCellKey(Obj)
+    else
+      Result := GQLValueKey(EvaluateGraphExpression(E, ABind));
+  end;
+
+  // Enlaces para ORDER BY: las columnas nuevas tapan a las variables de entrada
+  function Merge(AIn, AOut: TDictionary<string, TObject>): TDictionary<string, TObject>;
+  var
+    P: TPair<string, TObject>;
+  begin
+    Result := TDictionary<string, TObject>.Create(AIn);
+    for P in AOut do
+      Result.AddOrSetValue(P.Key, P.Value);
+  end;
+
+  procedure AddOut(ARow, AIn: TDictionary<string, TObject>);
+  var
+    R: TGQLOutRow;
+    Bind: TDictionary<string, TObject>;
+    J: Integer;
+  begin
+    R.Row := ARow;
+    R.Index := Outs.Count;
+    SetLength(R.Sort, AStage.OrderBy.Count);
+    if AStage.OrderBy.Count > 0 then
+    begin
+      Bind := Merge(AIn, ARow);
+      try
+        for J := 0 to AStage.OrderBy.Count - 1 do
+          R.Sort[J] := SortValue(AStage.OrderBy[J].Expr, Bind);
+      finally
+        Bind.Free;
+      end;
+    end;
+    Outs.Add(R);
+  end;
+
+  function BuildRow(ABind: TDictionary<string, TObject>): TDictionary<string, TObject>;
+  var
+    It: TGQLReturnItem;
+  begin
+    Result := TDictionary<string, TObject>.Create;
+    try
+      for It in AStage.Items do
+        Result.Add(It.Name, MakeCell(It.Expr, ABind));
+    except
+      FreeRow(Result);
+      raise;
+    end;
+  end;
+
+  procedure ComputeAgg(AAgg: TAggregateExpr; ARows: TList<TDictionary<string, TObject>>);
+  var
+    Row: TDictionary<string, TObject>;
+    Obj: TObject;
+    V, Best: Variant;
+    K: string;
+    Seen2: TDictionary<string, Boolean>;
+    Values: TList<Variant>;
+    Count, NumCount, Cmp, J: Integer;
+    Sum, D: Double;
+    Arr: Variant;
+  begin
+    Count := 0;
+    NumCount := 0;
+    Sum := 0;
+    Best := Null;
+    Seen2 := TDictionary<string, Boolean>.Create;
+    Values := TList<Variant>.Create;
+    try
+      for Row in ARows do
+      begin
+        if AAgg.Arg = nil then // count(*)
+        begin
+          Inc(Count);
+          Continue;
+        end;
+        if BoundElement(AAgg.Arg, Row, Obj) then
+        begin
+          V := GQLCellText(Obj);
+          K := GQLCellKey(Obj);
+        end
+        else
+        begin
+          V := EvaluateGraphExpression(AAgg.Arg, Row);
+          if GQLIsNull(V) then
+            Continue;
+          K := GQLValueKey(V);
+        end;
+        if AAgg.Distinct then
+        begin
+          if Seen2.ContainsKey(K) then
+            Continue;
+          Seen2.Add(K, True);
+        end;
+        Inc(Count);
+        case AAgg.Func of
+          agSum, agAvg:
+            if GQLTryNumber(V, D) then
+            begin
+              Sum := Sum + D;
+              Inc(NumCount);
+            end;
+          agMin:
+            if GQLIsNull(Best) or (GQLCompare(V, Best, Cmp) and (Cmp < 0)) then
+              Best := V;
+          agMax:
+            if GQLIsNull(Best) or (GQLCompare(V, Best, Cmp) and (Cmp > 0)) then
+              Best := V;
+          agCollect:
+            Values.Add(V);
+        end;
+      end;
+
+      case AAgg.Func of
+        agCount:
+          AAgg.Value := Count;
+        agSum:
+          AAgg.Value := Sum;
+        agAvg:
+          if NumCount > 0 then
+            AAgg.Value := Sum / NumCount
+          else
+            AAgg.Value := Null;
+        agMin, agMax:
+          AAgg.Value := Best;
+        agCollect:
+          begin
+            Arr := VarArrayCreate([0, Values.Count - 1], varVariant);
+            for J := 0 to Values.Count - 1 do
+              Arr[J] := Values[J];
+            AAgg.Value := Arr;
+          end;
+      end;
+    finally
+      Values.Free;
+      Seen2.Free;
+    end;
+  end;
+
+begin
+  Result := [];
+  Aggs := TList<TAggregateExpr>.Create;
+  Outs := TList<TGQLOutRow>.Create;
+  Empty := TDictionary<string, TObject>.Create;
+  try
+    try
+      for Item in AStage.Items do
+        CollectAggs(Item.Expr);
+      for Order in AStage.OrderBy do
+        CollectAggs(Order.Expr);
+
+      if Aggs.Count = 0 then
+      begin
+        // --- Sin agregados: una fila de salida por fila de entrada ---
+        for InRow in AInput do
+          AddOut(BuildRow(InRow), InRow);
+      end
+      else
+      begin
+        // --- Con agregados: agrupar por las columnas que no agregan ---
+        HasKeyItems := False;
+        for Item in AStage.Items do
+          if not HasAgg(Item.Expr) then
+            HasKeyItems := True;
+
+        GroupIdx := TDictionary<string, Integer>.Create;
+        Groups := TObjectList < TList < TDictionary<string, TObject> >>.Create(True);
+        try
+          for InRow in AInput do
+          begin
+            Key := '';
+            for Item in AStage.Items do
+              if not HasAgg(Item.Expr) then
+                Key := Key + ExprKey(Item.Expr, InRow) + #1;
+            if not GroupIdx.TryGetValue(Key, I) then
+            begin
+              I := Groups.Add(TList < TDictionary < string, TObject >>.Create);
+              GroupIdx.Add(Key, I);
+            end;
+            Groups[I].Add(InRow);
+          end;
+
+          // count(*) sin columnas de agrupación y sin filas: una fila con 0
+          if (Groups.Count = 0) and not HasKeyItems then
+            Groups.Add(TList < TDictionary < string, TObject >>.Create);
+
+          for Group in Groups do
+          begin
+            for Agg in Aggs do
+              ComputeAgg(Agg, Group);
+            if Group.Count > 0 then
+              First := Group[0]
+            else
+              First := Empty;
+            AddOut(BuildRow(First), First);
+          end;
+        finally
+          Groups.Free;
+          GroupIdx.Free;
+        end;
+      end;
+
+      // --- WHERE de WITH (sobre las columnas, antes de ordenar: el HAVING de SQL) ---
+      if Assigned(AStage.Where) then
+        for I := Outs.Count - 1 downto 0 do
+          if not GQLToBool(EvaluateGraphExpression(AStage.Where, Outs[I].Row)) then
+          begin
+            FreeRow(Outs[I].Row);
+            Outs.Delete(I);
+          end;
+
+      // --- DISTINCT ---
+      if AStage.Distinct then
+      begin
+        Seen := TDictionary<string, Boolean>.Create;
+        try
+          for I := 0 to Outs.Count - 1 do
+          begin
+            Key := '';
+            for Item in AStage.Items do
+            begin
+              if not Outs[I].Row.TryGetValue(Item.Name, CellObj) then
+                CellObj := nil;
+              Key := Key + GQLCellKey(CellObj) + #1;
+            end;
+            if Seen.ContainsKey(Key) then
+            begin
+              FreeRow(Outs[I].Row);
+              OR1 := Outs[I];
+              OR1.Row := nil;
+              Outs[I] := OR1;
+            end
+            else
+              Seen.Add(Key, True);
+          end;
+          for I := Outs.Count - 1 downto 0 do
+            if Outs[I].Row = nil then
+              Outs.Delete(I);
+        finally
+          Seen.Free;
+        end;
+      end;
+
+      // --- ORDER BY (NULL va al final en ASC y al principio en DESC; empate: orden de llegada) ---
+      if AStage.OrderBy.Count > 0 then
+        Outs.Sort(TComparer<TGQLOutRow>.Construct(
+          function(const A, B: TGQLOutRow): Integer
+          var
+            J, C: Integer;
+            NA, NB: Boolean;
+          begin
+            for J := 0 to AStage.OrderBy.Count - 1 do
+            begin
+              NA := GQLIsNull(A.Sort[J]);
+              NB := GQLIsNull(B.Sort[J]);
+              if NA and NB then
+                C := 0
+              else if NA then
+                C := 1
+              else if NB then
+                C := -1
+              else if not GQLCompare(A.Sort[J], B.Sort[J], C) then
+                C := 0;
+              if AStage.OrderBy[J].Descending then
+                C := -C;
+              if C <> 0 then
+                Exit(C);
+            end;
+            Result := A.Index - B.Index;
+          end));
+
+      // --- SKIP / LIMIT ---
+      FromIdx := 0;
+      if AStage.Skip > 0 then
+        FromIdx := AStage.Skip;
+      ToIdx := Outs.Count - 1;
+      if (AStage.Limit >= 0) and (FromIdx + AStage.Limit - 1 < ToIdx) then
+        ToIdx := FromIdx + AStage.Limit - 1;
+
+      for I := 0 to Outs.Count - 1 do
+        if (I < FromIdx) or (I > ToIdx) then
+          FreeRow(Outs[I].Row)
+        else
+          Result := Result + [Outs[I].Row];
+      Outs.Clear;
+    except
+      for I := 0 to Outs.Count - 1 do
+        FreeRow(Outs[I].Row);
+      Outs.Clear;
+      raise;
+    end;
+  finally
+    Empty.Free;
+    Outs.Free;
+    Aggs.Free;
+  end;
 end;
 
 function TAiRagGraph.EvaluateGQLFunction(AFunc: TFunctionExpr; ABoundElements: TDictionary<string, TObject>): Variant;
@@ -1546,9 +2111,17 @@ begin
           if Obj is TAiRagGraphNode then
             Result := TAiRagGraphNode(Obj).ID
           else if Obj is TAiRagGraphEdge then
-            Result := TAiRagGraphEdge(Obj).ID;
+            Result := TAiRagGraphEdge(Obj).ID
+          else if Obj is TGQLValue then
+            Result := TGQLValue(Obj).Data; // Columna de un WITH anterior
         end;
       end;
+
+    // ================================================================
+    // AGREGADO: el ejecutor ya dejó el valor del grupo
+    // ================================================================
+    ekAggregate:
+      Result := TAggregateExpr(AExpr).Value;
 
     // ================================================================
     // FUNCIÓN
@@ -1993,6 +2566,10 @@ var
   ContextNodes: TList<TAiRagGraphNode>;
   ContextBuilder: TStringBuilder;
 
+  // Modo tabla
+  Rows, NextRows: TArray<TDictionary<string, TObject>>;
+  Stage: TGQLProjection;
+
   // --- Funci�n auxiliar FindNodeByPattern (se mantiene igual) ---
   function FindNodeByPattern(APattern: TMatchNodePattern): TAiRagGraphNode;
   var
@@ -2156,6 +2733,27 @@ begin
       // =========================================================
       // CONSULTA MATCH EST�NDAR (La m�s com�n)
       // =========================================================
+      else if Assigned(QueryObj) and QueryObj.Tabular then
+      begin
+        // =========================================================
+        // RETURN con columnas, agregados, ORDER BY, LIMIT o WITH: tabla
+        // =========================================================
+        Rows := Self.Match(QueryObj, 0); // DEPTH no aplica a una tabla
+        try
+          for Stage in QueryObj.Projections do
+          begin
+            NextRows := RunGQLProjection(Stage, Rows);
+            FreeGQLResults(Rows);
+            Rows := NextRows;
+          end;
+          Result := GQLRowsToText(QueryObj.Projections.Last, Rows);
+          AResultObjects := Rows;
+          Rows := nil;
+        except
+          FreeGQLResults(Rows);
+          raise;
+        end;
+      end
       else if Assigned(QueryObj) then
       begin
         if QueryObj.Depth > 0 then
@@ -5216,6 +5814,7 @@ begin
   inherited;
   FNodePatterns := TObjectList<TMatchNodePattern>.Create(True); // Es due�o
   FMatchClauses := TObjectList<TMatchClause>.Create(True); // Es due�o
+  FProjections := TObjectList<TGQLProjection>.Create(True);
   FDepth := 0;
 end;
 
@@ -5224,6 +5823,7 @@ begin
   if Assigned(FWhereClause) then
     FWhereClause.Free; // Esto disparar� la liberaci�n en cadena de todo el �rbol
 
+  FProjections.Free;
   FNodePatterns.Free;
   FMatchClauses.Free;
   inherited;
@@ -5378,6 +5978,62 @@ destructor TFunctionExpr.Destroy;
 begin
   Args.Free;
   inherited;
+end;
+
+{ TAggregateExpr }
+constructor TAggregateExpr.Create(AFunc: TAggregateFunc; AArg: TGraphExpression; ADistinct: Boolean);
+begin
+  inherited Create;
+  Kind := ekAggregate;
+  Func := AFunc;
+  Arg := AArg;
+  Distinct := ADistinct;
+  Value := Null;
+end;
+
+destructor TAggregateExpr.Destroy;
+begin
+  Arg.Free;
+  inherited;
+end;
+
+{ TGQLReturnItem }
+destructor TGQLReturnItem.Destroy;
+begin
+  Expr.Free;
+  inherited;
+end;
+
+{ TGQLOrderItem }
+destructor TGQLOrderItem.Destroy;
+begin
+  Expr.Free;
+  inherited;
+end;
+
+{ TGQLProjection }
+constructor TGQLProjection.Create;
+begin
+  inherited;
+  Items := TObjectList<TGQLReturnItem>.Create(True);
+  OrderBy := TObjectList<TGQLOrderItem>.Create(True);
+  Skip := -1;
+  Limit := -1;
+end;
+
+destructor TGQLProjection.Destroy;
+begin
+  Where.Free;
+  OrderBy.Free;
+  Items.Free;
+  inherited;
+end;
+
+{ TGQLValue }
+constructor TGQLValue.CreateValue(const AData: Variant);
+begin
+  inherited Create(GQLToText(AData));
+  Data := AData;
 end;
 
 { TBetweenExpr }
