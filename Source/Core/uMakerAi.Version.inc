@@ -2,16 +2,16 @@
 // Version Information
 const
   MAKERAI_VERSION_MAJOR    = 4;
-  MAKERAI_VERSION_MINOR    = 0;
+  MAKERAI_VERSION_MINOR    = 1;
   MAKERAI_VERSION_RELEASE  = 0;
   MAKERAI_VERSION_BUILD    = 0;
 
 // Version String Formats
 const
-  MAKERAI_VERSION_SHORT    = '4.0';
-  MAKERAI_VERSION_FULL     = '4.0.0.0';
-  MAKERAI_VERSION_STRING   = 'MakerAi Suite v4.0.0.0';
-  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v4.0 - Fluent agent API, A2A agents in PPM, MiniMax, English/Spanish/Portuguese & Oct 2026 model refresh (Nov 2026)';
+  MAKERAI_VERSION_SHORT    = '4.1';
+  MAKERAI_VERSION_FULL     = '4.1.0.0';
+  MAKERAI_VERSION_STRING   = 'MakerAi Suite v4.1.0.0';
+  MAKERAI_VERSION_DISPLAY  = 'MakerAi Suite Library v4.1 - MakerGQL: parameters, functions, aggregates, paths, OPTIONAL MATCH, schema, semantic search and writes (Nov 2026)';
 
 // Product Information
 const
@@ -22,7 +22,7 @@ const
 
 // Build Information
 const
-  MAKERAI_BUILD_DATE       = '2026-10-05';
+  MAKERAI_BUILD_DATE       = '2026-11-23';
   MAKERAI_BUILD_TIME       = '12:00:00';
   MAKERAI_BUILD_PLATFORM   = {$IFDEF WIN32}'Win32'{$ENDIF}
                             {$IFDEF WIN64}'Win64'{$ENDIF}
@@ -38,8 +38,8 @@ const
 
 // API Compatibility
 const
-  MAKERAI_API_LEVEL        = 40;        // Internal API level for compatibility
-  MAKERAI_BREAKING_CHANGE  = True;      // True if this version has breaking changes (v4.0: Claude web search opt-in, English internal prompts, localized messages)
+  MAKERAI_API_LEVEL        = 41;        // Internal API level for compatibility
+  MAKERAI_BREAKING_CHANGE  = True;      // True if this version has breaking changes (v4.1: MakerGQL RETURN with columns returns a table, numeric strings compare as numbers; Claude thinking display)
   MAKERAI_LEGACY_SUPPORT   = True;      // True = Support for v2.x components
 
 {******************************************************************************}
@@ -224,6 +224,32 @@ const
   - NEW: Demo 072-A2AFederation showcasing the full A2A stack without an LLM
   - NOTE: the legacy HTTP+SSE MCP transport is formally Deprecated by spec
          2026-07-28 (earliest removal July 2027). Prefer HTTP or StdIO
+
+  Version 4.1.0 (2026-11-23)
+  - BEHAVIOUR: MakerGQL RETURN shapes the result. A RETURN with properties,
+         functions, aliases, aggregates, DISTINCT, ORDER BY, SKIP, LIMIT or a
+         WITH returns a Markdown table (it was ignored before); no RETURN, or
+         only variables (RETURN c), still returns the subgraph as context text
+  - BEHAVIOUR: MakerGQL compares two numeric strings as numbers ('10' > '9'),
+         independently of the Windows decimal separator; LIKE only treats %
+         and _ as wildcards (not *, ? or [); strings accept \' \" \\ \n \t
+  - BEHAVIOUR: Claude adaptive thinking asks for display "summarized"
+         (ThinkingDisplay, '' restores the old request): ReasoningContent is
+         no longer empty on 4.7+, family 5 and Haiku 5.5
+  - NEW: MakerGQL parameters ($name, ExecuteMakerGQL(ACode, ['name', value])),
+         BETWEEN, STARTS/ENDS WITH, NOT, XOR, arithmetic, 39 functions,
+         aggregates with implicit grouping, ORDER BY/SKIP/LIMIT/DISTINCT, WITH,
+         [:A|B], variable-length relationships, path variables, OPTIONAL
+         MATCH, patterns as conditions and EXISTS subqueries, SHOW SCHEMA, SHOW
+         PROPERTIES, ALL SHORTEST PATHS, GET CENTRALITY TOP, GET COMMUNITIES,
+         GET NEIGHBORS, EXPLAIN, SIMILAR TO / similarity() over the graph
+         embeddings, and writes (CREATE, MERGE, SET, REMOVE, DELETE) behind
+         TAiRagGraph.AllowWrite (False by default); EGQLParserError
+  - FIX: MakerGQL anonymous nodes, comma-separated (converging) patterns,
+         '=' between text and numbers, IN with decimals, DEPTH and
+         ExecuteMakerGQL(ACode) memory leaks, unclosed strings accepted
+  - Demos: the book demos pass the model's value as a $parameter
+  - Regression suite: 184 cases (from 158 in 4.0.0)
 
   Version 4.0.0 (2026-11-20)
   - BEHAVIOUR: Claude no longer searches the web by default. cap_WebSearch

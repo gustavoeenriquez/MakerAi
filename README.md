@@ -36,7 +36,43 @@ Whether you need a simple one-provider integration or a multi-agent, multi-provi
 
 ---
 
-## 🚀 What's New in v4.0
+## 🚀 What's New in v4.1
+
+### MakerGQL grows up
+MakerGQL — the query language of the knowledge graph (`TAiRagGraph.ExecuteMakerGQL`) — went from a small subset to a language a model can actually work with, Cypher-style:
+
+```gql
+SHOW SCHEMA                                   -- labels, counts and which relationship joins which labels
+
+MATCH (c:Producto)-[:TIENE_ACIDEZ]->(a:Acidez)
+WHERE c.precio BETWEEN 20000 AND $maximo AND c SIMILAR TO 'chocolate notes'
+RETURN a.name AS acidity, count(*) AS coffees, round(avg(c.precio)) AS avg_price
+ORDER BY coffees DESC LIMIT 5
+
+MATCH p = (f:Finca)-[:PROVEE*1..4]->(t:Tienda) RETURN t.name, length(p), nodes(p)
+```
+
+- **Parameters** — `ExecuteMakerGQL('... WHERE a.name = $level', ['level', Level])`. The value never goes through the parser, so text coming from a user or a model cannot change the query. The book demos now use them.
+- **Expressions** — `BETWEEN`, `STARTS WITH` / `ENDS WITH`, a general `NOT`, `XOR`, `+ - * / %`, negative numbers, and 39 functions (`lower`, `substring`, `coalesce`, `round`, `toInteger`, `id`, `type`, `degree`, `date`, `year`, …).
+- **Results** — `RETURN` with columns, aliases, aggregates (`count`, `sum`, `avg`, `min`, `max`, `collect`, grouped automatically), `DISTINCT`, `ORDER BY`, `SKIP`, `LIMIT` and `WITH ... WHERE` returns a Markdown table the model reads well.
+- **Patterns** — `[:A|B]`, variable-length relationships (`*1..3`), path variables, `OPTIONAL MATCH`, comma-separated patterns that share variables, and patterns as conditions (`WHERE NOT (c)-[:BOUGHT]->(:Coffee)`, `EXISTS { ... }`).
+- **Commands** — `SHOW SCHEMA`, `SHOW PROPERTIES`, `ALL SHORTEST PATHS`, `GET CENTRALITY TOP n`, `GET COMMUNITIES`, `GET NEIGHBORS`, and `EXPLAIN` to see how a query runs.
+- **Semantic search inside the graph** — `WHERE c SIMILAR TO 'soft coffee with chocolate notes'` and `similarity(c, 'text')` use the embeddings the graph already has.
+- **Writes, off by default** — `CREATE`, `MERGE ... ON CREATE SET ... ON MATCH SET`, `SET`, `REMOVE`, `[DETACH] DELETE`, only with `TAiRagGraph.AllowWrite := True`.
+- `Source/RAG/MakerGQL_SystemPrompt.md` is the block to paste into a model's system prompt: the exact grammar, the functions and the usual mistakes.
+
+Seven bugs fixed on the way (anonymous nodes, comma-separated patterns, `=` between text and numbers, `IN` with decimals on a Spanish Windows, two memory leaks, unclosed strings accepted). 26 regression cases cover the language, including one that checks nothing leaks.
+
+### Claude: the reasoning text is back
+On Claude 4.7+, the 5 family and Haiku 5.5, adaptive thinking returned the thinking blocks empty (the API default display is `omitted`), so `ReasoningContent` stayed empty even with `EnableThinking`. The driver now asks for `summarized` (new property `ThinkingDisplay`; `''` sends nothing, as before). Billing is the same either way.
+
+### ⚠️ Behaviour changes
+- **A MakerGQL `RETURN` with properties, functions, aliases, aggregates, `DISTINCT`, `ORDER BY`, `SKIP`, `LIMIT`, or a `WITH`, returns a table** instead of the subgraph's context text (before, `RETURN` was parsed and ignored). A query without `RETURN`, or one returning only variables (`RETURN c`), is unchanged.
+- **MakerGQL compares two numeric strings as numbers** (`'10' > '9'` is true; it was compared as text) and no longer depends on the Windows decimal separator.
+- **MakerGQL `LIKE` only treats `%` and `_` as wildcards** (`*`, `?` and `[` were wildcards by accident), and strings understand `\'`, `\"`, `\\`, `\n`, `\t` (any other backslash stays as it is).
+- **Claude adaptive thinking requests `display: "summarized"`** — set `ThinkingDisplay := ''` to send nothing, as in 4.0.
+
+## What's New in v4.0
 
 ### October 2026 model refresh — checked against the live APIs
 Every provider was compared with what its API actually serves today (not only its docs), and every model we could call was tested live from the Delphi drivers. Retired models stay usable as **aliases of their successors**, so forms and configurations saved with an old name keep working.
@@ -726,7 +762,8 @@ Small consoles with asserts that reproduce a specific issue against the live API
 
 ## 🔄 Changelog
 
-### Unreleased (dev)
+### v4.1.0 (2026-11-23)
+- New (Claude): **`ThinkingDisplay`** — adaptive thinking asks for `display: "summarized"`, so `ReasoningContent` is filled on Claude 4.7+, the 5 family and Haiku 5.5 (the API default, `omitted`, returned the thinking blocks empty). `''` sends no field, as in 4.0. Billing does not change
 - New (MakerGQL): **query parameters** — `ExecuteMakerGQL('... WHERE a.name = $nivel', ['nivel', Nivel])` (also a `TDictionary<string, Variant>` overload and `TAiRagDocumentManager.ExecuteGQL(query, params)`). The value never goes through the lexer, so text that comes from a user or a model can no longer change the query. Parameters work in `WHERE`, in pattern properties, in `IN $list` (a `VarArrayOf`), `DEPTH` and `TOP`
 - New (MakerGQL): `BETWEEN`, `STARTS WITH` / `ENDS WITH` (case-insensitive, like `CONTAINS`), a general `NOT` and `NOT LIKE` / `NOT BETWEEN` / `NOT CONTAINS`…, `XOR`, negative numbers, `r.weight` in `WHERE`, string escapes (`''`, `\'`, `\n`), `//` and `/* */` comments, a trailing `;`, `` `quoted names` `` and reserved words after the dot (`n.count`). Syntax errors raise `EGQLParserError` (an `Exception` with `Position`). The new words are contextual, not reserved
 - New (MakerGQL): **functions and arithmetic** — text (`lower`/`toLower`, `upper`, `trim`, `substring`, `left`, `right`, `replace`, `split`, `reverse`, `size`, `toString`), numbers (`toInteger`, `toFloat`, `abs`, `round`, `floor`, `ceil`, `sqrt`, `sign`), nulls (`coalesce`, `exists`), graph (`id(n)`, `label(n)`, `labels(n)`, `type(r)`, `degree(n)`, `inDegree`, `outDegree`, `keys(n)`), lists (`head`, `last`, `x IN labels(n)`) and dates (`date`, `datetime`, `year`, `month`, `day`), plus `+ - * / %` with the usual precedence (`+` concatenates when a side is not a number). Unknown functions, wrong argument counts and `id(n.name)` are parse errors that say what is wrong
